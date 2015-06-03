@@ -1,4 +1,4 @@
--R . "Rustre"
+-R . Rustre
 -install none
 Common.v
 Minimp.v
