@@ -117,3 +117,34 @@ Definition translate_node (n: node): class_def :=
                         n.(n_output).(v_name)
                         s.(st_mem)
                         s.(st_instrs)).
+
+(* Define and translate a simple node. *)
+Section TestTranslate.
+  
+  Import List.ListNotations.
+  Open Scope positive.
+  Open Scope list.
+
+  Definition eqns1 : list equation :=
+    [
+      EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))));
+      EqDef 3 (CAexp (Con Cbase 1 false) (Eexp (Econst (Cint 8))));
+      EqDef 4 (CAexp Cbase (Emerge 1 (CAexp (Con Cbase 1 true) (Eexp (Evar 2)))
+                                   (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))))
+    ].
+  
+  Definition node1 : node :=
+    mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
+  
+  Eval cbv in (translate_node node1).
+  
+  Definition prog1 : stmt :=
+    Comp (Ifte 1 (Assign 2 (Const (Cint 7)))
+                 Skip)
+   (Comp (Ifte 1 Skip
+                 (Assign 3 (Const (Cint 8))))
+   (Comp (Ifte 1 (Assign 4 (Var 2))
+                 (Assign 4 (Var 3)))
+         Skip)).
+
+End TestTranslate.
