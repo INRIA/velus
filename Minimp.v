@@ -12,6 +12,7 @@ Inductive exp : Set :=
 
 Inductive stmt : Set :=
   | Assign : ident -> exp -> stmt
+  | AssignSt : ident -> exp -> stmt                           
   | Ifte : ident -> stmt -> stmt -> stmt
   | Step_ap : ident -> ident -> exp -> stmt
   | Comp : stmt -> stmt -> stmt
@@ -50,9 +51,31 @@ Record machine : Set :=
     }.
 
 Definition globalEnv : Set := PositiveMap.t machine.
-*)
-                                            
-Definition memoryEnv : Set := PositiveMap.t step_fun.
+ *)
+
+Module PM := PositiveMap.
+
+Record memoryEnv : Set :=
+  mk_memory {
+      m_values : PM.t const;
+      m_instances : PM.t step_fun
+    }.
+
+Definition add_mem (id: ident) (v: const) (menv: memoryEnv) : memoryEnv :=
+  mk_memory (PM.add id v menv.(m_values))
+            (menv.(m_instances)).
+
+Definition find_mem (id: ident) (menv: memoryEnv) : option const :=
+  PM.find id (menv.(m_values)).
+
+Definition add_object (id: ident) (f: step_fun) (menv: memoryEnv) : memoryEnv :=
+  mk_memory menv.(m_values)
+            (PM.add id f menv.(m_instances)).
+
+Definition find_object (id: ident) (menv: memoryEnv) : option step_fun :=
+  PM.find id (menv.(m_instances)).
+
+
 Definition valueEnv : Set := PositiveMap.t const.
 
 Definition empty: valueEnv := PositiveMap.empty const.
@@ -75,10 +98,15 @@ Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
       exp_eval menv env e v ->
       PositiveMap.add x v env = env' ->
       stmt_eval menv env (Assign x e) (menv, env')
+| Iassignst:
+    forall x e v menv',
+      exp_eval menv env e v ->
+      add_mem x v menv = menv' ->
+      stmt_eval menv env (AssignSt x e) (menv', env)
 | Iapp:
     forall e v o y env' s_fun res_value res_memory,
       exp_eval menv env e v ->
-      PositiveMap.find o menv = Some(s_fun) ->
+      find_object o menv = Some(s_fun) ->
       application menv empty s_fun v (res_value, res_memory) ->
       PositiveMap.add y res_value env  = env' ->
       stmt_eval menv env (Step_ap y o e) (menv, env')
@@ -119,3 +147,4 @@ Inductive run :
       stmt_eval menvInit envInit stmt (menvInter, envInter) ->
       run menvInter envInter stmt n (envFinal, menvFinal) ->
       run menvInit envInit stmt (S n) (envFinal, menvFinal).
+

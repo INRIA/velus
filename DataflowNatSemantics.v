@@ -1,20 +1,16 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
+Require Import SynchronousNat.
 
-
-Inductive value :=
-  | abs
-  | here (v : const).
-Coercion here : const >-> value.
-Definition venv := PositiveMap.t value.
+Definition venv := PM.t value.
 Definition history := nat -> venv.
-Definition global := PositiveMap.t node.
+Definition global := PM.t node.
 
 
 Inductive sem_var (H: history)(x: ident)(n: nat)(c: const): Prop :=
 | Sv: 
-      PositiveMap.find x (H(n)) = Some (here c) ->
+      PM.find x (H(n)) = Some (present c) ->
       sem_var H x n c.
   
 Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
@@ -45,9 +41,9 @@ Inductive sem_laexp (H: history): laexp -> nat -> value -> Prop:=
       sem_laexp H (LAexp ck ce) n c
 | SLabs:
     forall ck ce n,
-      sem_lexp H ce n abs ->
+      sem_lexp H ce n absent ->
       sem_clock H ck n false ->
-      sem_laexp H (LAexp ck ce) n abs
+      sem_laexp H (LAexp ck ce) n absent
 with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
 | Sconst: 
     forall c n,
@@ -65,7 +61,7 @@ with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
     forall s x b b' n,
       sem_var H x n (Cbool b') ->
       ~ (b = b') ->
-      sem_lexp H (Ewhen s x b) n abs.
+      sem_lexp H (Ewhen s x b) n absent.
                
 
 Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
@@ -76,9 +72,9 @@ Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
       sem_caexp H (CAexp ck ce) n c
 | SCabs:
     forall ck ce n,
-      sem_cexp H ce n abs ->
+      sem_cexp H ce n absent ->
       sem_clock H ck n false ->
-      sem_caexp H (CAexp ck ce) n abs
+      sem_caexp H (CAexp ck ce) n absent
 with sem_cexp (H: history): cexp -> nat -> value -> Prop :=
 | Smerge_true:
     forall x t f n c,
@@ -112,11 +108,10 @@ Inductive sem_equation (G: global): history -> equation -> Prop :=
                 /\ sem_lexp H' (Evar input.(v_name)) n vi
                 /\ sem_lexp H' (Evar output.(v_name)) n vo
                 /\ List.Forall (sem_equation G H') eqs) ->
-    sem_equation G H (EqApp x f arg)
-(*| SEqFby : forall H x (v : const) cae,
-    (* First value: we return the value v from x = v fby cae *)
-    (forall n, (forall n', n' < n -> sem_caexp H cae n' abs) -> sem_lexp H (Evar x) n v) ->
-    (* Next values: we return the previous value of cae *)
-    (forall n, exists n' (xv : const), n' < n /\ sem_lexp H (Evar x) n xv /\ sem_caexp H cae n' xv 
-                                       /\ forall n'', n' < n'' < n -> sem_caexp H cae n'' abs) ->
-    sem_equation G H (EqFby x v cae) *).
+      sem_equation G H (EqApp x f arg)
+| SEqFby:
+    forall H x xs v0 lae,
+      (forall n, sem_laexp H lae n (xs n)) ->  (* TODO: Is this reasonable? *)
+      (forall n, exists xs v, sem_lexp H (Evar x) n v
+                           /\ fbyR v0 xs n v) ->
+      sem_equation G H (EqFby x v0 lae).

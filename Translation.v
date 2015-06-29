@@ -92,13 +92,14 @@ Definition translate_eqn (eqn: equation): Compiler unit :=
     | EqDef x (CAexp ck ce) =>
       let s := Control ck (translate_cexp x ce) in
       add_instr s
-    | EqApp x f lae =>
-      let c := translate_laexp lae in
-      o <- new_obj f ;
-      add_instr (Step_ap x o c)
-(*    | EqFby x v (CAexp ck ce) =>
-      let c := translate_cexp ce in
-      let s := Control*)
+    | EqApp x f (LAexp ck le) =>
+      let c := translate_lexp le in
+      o <- new_obj f;
+      add_instr (Control ck (Step_ap x o c))
+    | EqFby x v (LAexp ck le) =>
+      let c := translate_lexp le in
+      let s := Control ck (AssignSt x c) in
+      add_instr s
   end.
 
 Fixpoint translate_eqns (eqns: list equation): Compiler unit :=
@@ -128,7 +129,7 @@ Section TestTranslate.
   Definition eqns1 : list equation :=
     [
       EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))));
-      EqDef 3 (CAexp (Con Cbase 1 false) (Eexp (Econst (Cint 8))));
+      EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
       EqDef 4 (CAexp Cbase (Emerge 1 (CAexp (Con Cbase 1 true) (Eexp (Evar 2)))
                                    (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))))
     ].
@@ -142,7 +143,7 @@ Section TestTranslate.
     Comp (Ifte 1 (Assign 2 (Const (Cint 7)))
                  Skip)
    (Comp (Ifte 1 Skip
-                 (Assign 3 (Const (Cint 8))))
+                 (AssignSt 3 (Var 2)))
    (Comp (Ifte 1 (Assign 4 (Var 2))
                  (Assign 4 (Var 3)))
          Skip)).
