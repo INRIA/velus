@@ -7,4 +7,5 @@ DataflowNatSemantics.v
 DataflowListSemantics.v
 Translation.v
 TranslationNatSemantics.v
+TranslationCorrectness.v
 SynchronousNat.v

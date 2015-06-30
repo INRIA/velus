@@ -66,6 +66,7 @@ COQCHK?="$(COQBIN)coqchk"
 ######################
 
 VFILES:=SynchronousNat.v\
+  TranslationCorrectness.v\
   TranslationNatSemantics.v\
   Translation.v\
   DataflowListSemantics.v\
