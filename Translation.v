@@ -33,6 +33,12 @@ Definition add_instr (stmt: stmt): Compiler unit :=
               s.(st_objs) (Comp stmt s.(st_instrs)), 
      tt).
 
+Definition add_mem (m: ident): Compiler unit :=
+  fun s =>
+    (mk_state s.(st_sym) (m :: s.(st_mem))
+              s.(st_objs) s.(st_instrs),
+     tt).
+
 Definition gensym: Compiler ident :=
   fun s =>
     let fresh := s.(st_sym) in
@@ -99,6 +105,7 @@ Definition translate_eqn (eqn: equation): Compiler unit :=
     | EqFby x v (LAexp ck le) =>
       let c := translate_lexp le in
       let s := Control ck (AssignSt x c) in
+      _ <- add_mem x;
       add_instr s
   end.
 
