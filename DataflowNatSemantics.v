@@ -92,15 +92,15 @@ with sem_cexp (H: history): cexp -> nat -> value -> Prop :=
       sem_cexp H (Eexp e) n c.
 
 
-Inductive sem_equation (G: global): history -> equation -> Prop :=
+Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
 | SEqDef:
-    forall H x cae,
+    forall x cae,
       (forall n, 
        exists v, sem_lexp H (Evar x) n v
               /\ sem_caexp H cae n v) ->
       sem_equation G H (EqDef x cae)
 | SEqApp:
-    forall H x f arg input output eqs,
+    forall x f arg input output eqs,
       PositiveMap.find f G = Some (mk_node f input output eqs) ->
       (exists H' vi vo,
          forall n, sem_laexp H arg n vi
@@ -110,8 +110,12 @@ Inductive sem_equation (G: global): history -> equation -> Prop :=
                 /\ List.Forall (sem_equation G H') eqs) ->
       sem_equation G H (EqApp x f arg)
 | SEqFby:
-    forall H x xs v0 lae,
+    forall x xs v0 lae,
       (forall n, sem_laexp H lae n (xs n)) ->  (* TODO: Is this reasonable? *)
       (forall n, exists xs v, sem_lexp H (Evar x) n v
                            /\ fbyR v0 xs n v) ->
       sem_equation G H (EqFby x v0 lae).
+
+Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
+  List.Forall (sem_equation G H) eqs.
+
