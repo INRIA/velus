@@ -7,8 +7,9 @@ Require Import Rustre.Common.
 (** ** Syntax *)
 
 Inductive exp : Set :=
-  | Var : ident -> exp
-  | Const : const -> exp.
+| Var : ident -> exp
+| State : ident -> exp
+| Const : const -> exp.
 
 Inductive stmt : Set :=
   | Assign : ident -> exp -> stmt
@@ -86,6 +87,10 @@ Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
     forall x v, 
       PositiveMap.find x env = Some(v) -> 
       exp_eval menv env (Var(x)) v
+| estate: 
+    forall x v,
+      find_mem x menv = Some(v) ->
+      exp_eval menv env (State(x)) v
 | econst:
     forall c ,
       exp_eval menv env (Const(c)) c.

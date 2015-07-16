@@ -64,28 +64,6 @@ Definition runCompiler (c: Compiler unit): state :=
   let empty_s := mk_state 1 nil nil Skip in
   fst (c empty_s).
 
-
-Fixpoint translate_lexp (e: lexp): exp :=
-  match e with
-    | Econst c => Const c
-    | Evar x => Var x
-    | Ewhen ae c x => translate_laexp ae
-  end
-with translate_laexp (lae: laexp): exp :=
-  match lae with
-    | LAexp ck e => translate_lexp e
-  end.
-
-Fixpoint translate_cexp (x: ident)(e : cexp): stmt :=
-  match e with
-    | Emerge y t f => Ifte y (translate_caexp x t) (translate_caexp x f)
-    | Eexp l => Assign x (translate_lexp l)
-  end
-with translate_caexp (x: ident)(ae : caexp): stmt :=
-  match ae with
-    | CAexp ck e => translate_cexp x e
-  end.
-
 Fixpoint Control (ck: clock)(s: stmt): stmt :=
   match ck with
     | Cbase => s
@@ -93,32 +71,60 @@ Fixpoint Control (ck: clock)(s: stmt): stmt :=
     | Con ck x false => Control ck (Ifte x Skip s)
   end.
 
-Definition translate_eqn (eqn: equation): Compiler unit :=
-  match eqn with
+Section Translate.
+
+  Variable memories : PS.t.
+
+  Fixpoint translate_lexp (e: lexp): exp :=
+    match e with
+    | Econst c => Const c
+    | Evar x => if PS.mem x memories then State x else Var x
+    | Ewhen ae c x => translate_laexp ae
+    end
+  with translate_laexp (lae: laexp): exp :=
+         match lae with
+         | LAexp ck e => translate_lexp e
+         end.
+
+  Fixpoint translate_cexp (x: ident)(e : cexp): stmt :=
+    match e with
+    | Emerge y t f => Ifte y (translate_caexp x t) (translate_caexp x f)
+    | Eexp l => Assign x (translate_lexp l)
+    end
+  with translate_caexp (x: ident)(ae : caexp): stmt :=
+         match ae with
+         | CAexp ck e => translate_cexp x e
+         end.
+
+  Definition translate_eqn (eqn: equation): Compiler unit :=
+    match eqn with
     | EqDef x (CAexp ck ce) =>
       let s := Control ck (translate_cexp x ce) in
       add_instr s
     | EqApp x f (LAexp ck le) =>
       let c := translate_lexp le in
       o <- new_obj f;
-      add_instr (Control ck (Step_ap x o c))
+        add_instr (Control ck (Step_ap x o c))
     | EqFby x v (LAexp ck le) =>
       let c := translate_lexp le in
       let s := Control ck (AssignSt x c) in
       _ <- add_mem x;
-      add_instr s
-  end.
+        add_instr s
+    end.
 
-Fixpoint translate_eqns (eqns: list equation): Compiler unit :=
-  match eqns with
+  Fixpoint translate_eqns (eqns: list equation): Compiler unit :=
+    match eqns with
     | nil => ret! tt
     | cons eqn eqns =>
       _ <- translate_eqns eqns ;
-      translate_eqn eqn
-  end.
+        translate_eqn eqn
+    end.
+
+End Translate.
 
 Definition translate_node (n: node): class_def :=
-  let s := runCompiler (translate_eqns n.(n_eqs)) in
+  let mems := memories n.(n_eqs) in
+  let s := runCompiler (translate_eqns mems n.(n_eqs)) in
   mk_class n.(n_name)
            s.(st_objs)
            (mk_step_fun n.(n_input).(v_name)
@@ -152,7 +158,7 @@ Section TestTranslate.
    (Comp (Ifte 1 Skip
                  (AssignSt 3 (Var 2)))
    (Comp (Ifte 1 (Assign 4 (Var 2))
-                 (Assign 4 (Var 3)))
+                 (Assign 4 (State 3)))
          Skip)).
 
 End TestTranslate.

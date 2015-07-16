@@ -5,20 +5,7 @@ Require Import Rustre.DataflowSyntax.
 
 (* Working: Tim *)
 
-Require Coq.MSets.MSets.
-
-Module PS := Coq.MSets.MSetPositive.PositiveSet.
-
 (* ** Definitions on dataflow equations *)
-
-Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
-  match eq with
-  | EqFby x _ _ => PS.add x mems
-  | _ => mems
-  end.
-
-Definition memories (eqs: list equation) : PS.t :=
-  List.fold_left memory_eq eqs PS.empty.
 
 Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
   match eq with
@@ -85,6 +72,9 @@ Inductive sch_eqs (memories: PS.t) : PS.t -> PS.t -> list equation -> Prop :=
 (* ** Definitions on imperative statements *)
 
 Require Import Rustre.Minimp.
+Require Import Rustre.Translation.
+Require Import Rustre.DataflowNatSemantics.
+Require Import Rustre.SynchronousNat.
 
 (* TODO:
    - Assume we are given a list of dataflow equations eqs satisfying
@@ -106,14 +96,157 @@ Require Import Rustre.Minimp.
      where a clock is active.
  *)
 
+Lemma pm_in_dec: forall A i m, PM.In (A:=A) i m \/ ~PM.In (A:=A) i m.
+Proof.
+  unfold PM.In.
+  unfold PM.MapsTo.
+  intros A i m.
+  case (PM.find i m).
+  eauto.
+  right; intro; destruct H; discriminate H.
+Qed.
+
+Lemma ps_in_dec: forall i m, PS.In i m \/ ~PS.In i m.
+Proof.
+  intros i m.
+  unfold PS.In.
+  case (PS.mem i m); auto.
+Qed.
+
+Lemma exp_correct:
+  forall H memories lae n c menv env,
+    sem_laexp H lae n (present c) ->
+    (forall i c, PM.find i (H n) = Some (present c) ->
+                 (PS.In i memories -> find_mem i menv = Some c)
+                 /\ (~PS.In i memories -> PM.find i env = Some c)) ->
+    exp_eval menv env (translate_laexp memories lae) c.
+Proof.
+  intros H memories lae n c menv env.
+  (* TODO: is there a better way to do this?: *)
+  apply (laexp_mult (fun l0 : laexp =>
+                       sem_laexp H l0 n c ->
+                       (forall (i : BinNums.positive) (c0 : const),
+                           PM.find i (H n) = Some (present c0) ->
+                           (PS.In i memories -> find_mem i menv = Some c0) /\
+                           (~ PS.In i memories -> PM.find i env = Some c0)) ->
+                       exp_eval menv env (translate_laexp memories l0) c)
+                    (fun l0 : lexp =>
+                       sem_lexp H l0 n c ->
+                       (forall (i : BinNums.positive) (c0 : const),
+                           PM.find i (H n) = Some (present c0) ->
+                           (PS.In i memories -> find_mem i menv = Some c0) /\
+                           (~ PS.In i memories -> PM.find i env = Some c0)) ->
+                       exp_eval menv env (translate_lexp memories l0) c)).
+  (* TODO: How to make this proof shorter? *)
+  - intros ck le IH H1 H2.
+    inversion H1 as [? ? ? ? Hlexp|].
+    apply (IH Hlexp H2).
+  - intros c0 H0 ?.
+    inversion H0.
+    apply econst.
+  - intros.
+    inversion H0.
+    inversion H5.
+    apply H1 in H6.
+    destruct H6.
+    destruct (ps_in_dec i memories) as [Hin | Hout].
+    + unfold translate_lexp.
+      generalize Hin.
+      unfold PS.In.
+      intro Hin'.
+      rewrite Hin'.
+      clear Hin'.
+      apply estate.
+      apply H6.
+      apply Hin.
+    + unfold translate_lexp.
+      generalize Hout.
+      unfold PS.In.
+      intro Hout'.
+      rewrite (Bool.not_true_is_false _ Hout').
+      apply evar.
+      apply H7.
+      apply Hout.
+  - intros.
+    inversion H1.
+    change (exp_eval menv env (translate_laexp memories l) c).
+    apply (H0 H9 H2).
+Qed.
+
+Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
+  exp -> const -> Prop :=
+| evar: 
+    forall x v, 
+      PositiveMap.find x env = Some(v) -> 
+      exp_eval menv env (Var(x)) v
+| econst:
+    forall c ,
+      exp_eval menv env (Const(c)) c.
 
 
+Lemma step_correct:
+  forall eqs : list equation,
+
+    (* assumptions *)
+    sch_eqs (memories eqs) PS.empty (defined eqs) eqs -> (* written = { input } *)
+
+    (* invariant *)
+      forall x,
+             (PS.In x (PS.inter memories written) -> M x = H x (S n))
+          /\ (PS.In x (PS.diff memories written) -> M x = H x n)
+          /\ (PS.In x (PS.diff written memories) ->
+              H x n = present c -> p x = c)
+
+    (* meaning of data-flow equations *)
+
+    (* TODO: replace this with the 'hold semantics' *)
+    sem_equations G H eqs ->
+
+    (* meaning of imperative code; linked by translation function *)
+    s = runCompiler (translate_eqns eqs) ->
+    run M R s.(st_instrs) n (R', M') ->
+
+    s.(st_mem)
+    s.(st_instrs)
+
+    (* missing: assumptions on input:  n.(n_input).(v_name) *)
 
 
+Lemma step_correct:
+  forall eqs : list equation,
+
+    (* assumptions *)
+    sch_eqs (memories eqs) PS.empty (defined eqs) eqs ->
+
+    PS.Subset (memories eqs) mems ->
+    PS.Subset (defined eqs) defs ->
+
+    (* invariant *)
+      forall x,
+             (PS.In x (PS.inter memories written) -> M x = H x (S n))
+          /\ (PS.In x (PS.diff memories written) -> M x = H x n)
+          /\ (PS.In x (PS.diff written memories) ->
+              H x n = present c -> p x = c)  
+
+    (* meaning of data-flow equations *)
+
+               (* TODO: replace this with the 'hold semantics' *)
+     sem_equations G H eqs ->
 
 
+    (* meaning of imperative code; linked by translation function *)
+               let s := runCompiler (translate_eqns eqs) in
+               s.(st_mem)
+                   s.(st_instrs)
 
+             run M R s.(st_instrs) n (R', M')
 
+    (* missing: assumptions on input:  n.(n_input).(v_name) *)
+
+(* Working: *)
+Inductive run :
+  memoryEnv -> valueEnv -> stmt -> nat -> valueEnv * memoryEnv -> Prop :=
+               
 
 
 

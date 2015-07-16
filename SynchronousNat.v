@@ -7,6 +7,9 @@ Inductive value :=
   | present (v : const).
 Coercion present : const >-> value.
 
+Require Coq.MSets.MSets.
+
+Module PS := Coq.MSets.MSetPositive.PositiveSet.
 Module PM := PositiveMap.
 
 Definition stream := nat -> value.
