@@ -96,9 +96,10 @@ Definition translate_eqn (eqn: equation): Compiler unit :=
       let c := translate_laexp lae in
       o <- new_obj f ;
       add_instr (Step_ap x o c)
-(*    | EqFby x v (CAexp ck ce) =>
-      let c := translate_cexp ce in
-      let s := Control*)
+    | EqFby x v (CAexp ck ce) => (* TODO: recheck it, we have "x" both as a local variable and as a state variable *)
+      let c := translate_cexp x ce in
+      let s := Control ck (Assign x (Var x)) in
+      add_instr s
   end.
 
 Fixpoint translate_eqns (eqns: list equation): Compiler unit :=

@@ -4,13 +4,13 @@ Require Import Rustre.Common.
 (** * Dataflow language *)
 
 Inductive clock : Set :=
-| Cbase : clock                           (* base clock *)
-| Con : clock -> ident -> bool -> clock. (* subclock *)
+| Cbase : clock                           (** base clock *)
+| Con : clock -> ident -> bool -> clock.  (** subclock *)
 
 Record var_dec : Set := mk_var { v_name : ident;
                                  v_clock : clock }.
 
-(** ** Syntax *)
+(** **  Syntax  **)
 
 (* TODO: laexp: would be nicer if it were a record *)
 Inductive laexp : Set :=
@@ -28,12 +28,12 @@ with cexp : Type :=
   | Emerge : ident -> caexp -> caexp -> cexp (* currently only binary merge *)
   | Eexp : lexp -> cexp.
 
-(** ** Equations *)
+(** **  Equations  **)
 
 Inductive equation : Type :=
   | EqDef : ident -> caexp -> equation
   | EqApp : ident -> ident -> laexp -> equation
-(*  | EqFby : ident -> const -> caexp -> equation*). (* Lionel added this one *)
+  | EqFby : ident -> const -> caexp -> equation. (* Lionel added this one *)
 
 Record node : Type := mk_node {
   n_name : ident;
