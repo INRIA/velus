@@ -5,43 +5,6 @@ Require Import Rustre.DataflowSyntax.
 
 (* Working: Tim *)
 
-(* ** Definitions on dataflow equations *)
-
-Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
-  match eq with
-  | EqDef x _   => PS.add x defs
-  | EqApp x _ _ => PS.add x defs
-  | EqFby x _ _ => PS.add x defs
-  end.
-
-Definition defined (eqs: list equation) : PS.t :=
-  List.fold_left defined_eq eqs PS.empty.
-
-Fixpoint freevar_lexp' (e: lexp) (fvs: PS.t) : PS.t :=
-  match e with
-    | Econst c => fvs
-    | Evar x => PS.add x fvs
-    | Ewhen ae c x => freevar_laexp' ae fvs
-  end
-with freevar_laexp' (lae: laexp) (fvs: PS.t) : PS.t :=
-  match lae with
-    | LAexp ck e => freevar_lexp' e fvs
-  end.
-
-Fixpoint freevar_caexp' (cae: caexp) (fvs: PS.t) : PS.t :=
-  match cae with
-  | CAexp ck ce => freevar_cexp' ce fvs
-  end
-with freevar_cexp' (ce: cexp) (fvs: PS.t) : PS.t :=
-  match ce with
-  | Emerge x t f => PS.add x (freevar_caexp' f (freevar_caexp' t fvs))
-  | Eexp e => freevar_lexp' e fvs
-  end.
-
-Definition freevar_lexp e := freevar_lexp' e PS.empty.
-Definition freevar_laexp lae := freevar_laexp' lae PS.empty.
-Definition freevar_caexp cae := freevar_caexp' cae PS.empty.
-
 (* TODO: Big question: how do we get from the scheduling property on graphs
                        to this predicate?
          (Membership in memories or not, should follow from the definition
@@ -50,22 +13,25 @@ Inductive sch_eqs (memories: PS.t) : PS.t -> PS.t -> list equation -> Prop :=
 | SchEqDef:
     forall written notwritten x e eqs,
       ~ (PS.In x memories) ->
-      PS.Subset (PS.diff  (freevar_caexp e) memories) written ->
-      PS.Subset (PS.inter (freevar_caexp e) memories) notwritten ->  
+      (forall i, freevar_caexp e i ->
+                 (PS.In i memories -> PS.In i notwritten)
+                 /\ (~PS.In i memories -> PS.In i written)) ->
       sch_eqs memories (PS.add x written) (PS.remove x notwritten) eqs ->
       sch_eqs memories written notwritten (EqDef x e :: eqs)
 | SchEqApp:
     forall written notwritten x f e eqs,
       ~ (PS.In x memories) ->
-      PS.Subset (PS.diff  (freevar_laexp e) memories) written ->
-      PS.Subset (PS.inter (freevar_laexp e) memories) notwritten ->  
+      (forall i, freevar_laexp e i ->
+                 (PS.In i memories -> PS.In i notwritten)
+                 /\ (~PS.In i memories -> PS.In i written)) ->
       sch_eqs memories (PS.add x written) (PS.remove x notwritten) eqs ->
       sch_eqs memories written notwritten (EqApp x f e :: eqs)
 | SchEqFby:
     forall written notwritten x v0 e eqs,
       PS.In x memories ->
-      PS.Subset (PS.diff  (freevar_laexp e) memories) written ->
-      PS.Subset (PS.inter (freevar_laexp e) memories) notwritten ->
+      (forall i, freevar_laexp e i ->
+                 (PS.In i memories -> PS.In i notwritten)
+                 /\ (~PS.In i memories -> PS.In i written)) ->
       sch_eqs memories (PS.add x written) (PS.remove x notwritten) eqs ->
       sch_eqs memories written notwritten (EqFby x v0 e :: eqs).
 
@@ -106,48 +72,54 @@ Proof.
   right; intro; destruct H; discriminate H.
 Qed.
 
-Lemma ps_in_dec: forall i m, PS.In i m \/ ~PS.In i m.
+Lemma ps_in_dec: forall i m, {PS.In i m}+{~PS.In i m}.
 Proof.
   intros i m.
   unfold PS.In.
   case (PS.mem i m); auto.
 Qed.
 
-Lemma exp_correct:
-  forall H memories lae n c menv env,
-    sem_laexp H lae n (present c) ->
+Lemma translate_lexp_correct:
+  forall H memories n c menv env le,
+    sem_lexp H le n (present c) ->
     (forall i c, PM.find i (H n) = Some (present c) ->
+                 freevar_lexp le i ->
                  (PS.In i memories -> find_mem i menv = Some c)
                  /\ (~PS.In i memories -> PM.find i env = Some c)) ->
-    exp_eval menv env (translate_laexp memories lae) c.
+    exp_eval menv env (translate_lexp memories le) c.
 Proof.
-  intros H memories lae n c menv env.
+  intros H memories n c menv env.
   (* TODO: is there a better way to do this?: *)
-  apply (laexp_mult (fun l0 : laexp =>
-                       sem_laexp H l0 n c ->
-                       (forall (i : BinNums.positive) (c0 : const),
-                           PM.find i (H n) = Some (present c0) ->
-                           (PS.In i memories -> find_mem i menv = Some c0) /\
-                           (~ PS.In i memories -> PM.find i env = Some c0)) ->
-                       exp_eval menv env (translate_laexp memories l0) c)
-                    (fun l0 : lexp =>
-                       sem_lexp H l0 n c ->
-                       (forall (i : BinNums.positive) (c0 : const),
-                           PM.find i (H n) = Some (present c0) ->
-                           (PS.In i memories -> find_mem i menv = Some c0) /\
-                           (~ PS.In i memories -> PM.find i env = Some c0)) ->
-                       exp_eval menv env (translate_lexp memories l0) c)).
+  apply (lexp_mult
+           (fun lae : laexp =>
+               sem_laexp H lae n c ->
+               (forall (i : BinNums.positive) (c0 : const),
+                   PM.find i (H n) = Some (present c0) ->
+                   freevar_laexp lae i ->
+                   (PS.In i memories -> find_mem i menv = Some c0) /\
+                   (~ PS.In i memories -> PM.find i env = Some c0)) ->
+               exp_eval menv env (translate_laexp memories lae) c)
+           (fun le : lexp =>
+              sem_lexp H le n c ->
+              (forall (i : BinNums.positive) (c0 : const),
+                  PM.find i (H n) = Some (present c0) ->
+                  freevar_lexp le i ->
+                  (PS.In i memories -> find_mem i menv = Some c0) /\
+                  (~ PS.In i memories -> PM.find i env = Some c0)) ->
+              exp_eval menv env (translate_lexp memories le) c)).
   (* TODO: How to make this proof shorter? *)
-  - intros ck le IH H1 H2.
+  - intros ck l IH H1 H2.
     inversion H1 as [? ? ? ? Hlexp|].
-    apply (IH Hlexp H2).
+    apply (IH Hlexp).
+    intros.
+    apply (H2 _ _ H7 (freeLAexp _ _ _ H8)).
   - intros c0 H0 ?.
     inversion H0.
     apply econst.
   - intros.
     inversion H0.
     inversion H5.
-    apply H1 in H6.
+    apply (fun h => H1 _ _ h (FreeEvar i)) in H6.
     destruct H6.
     destruct (ps_in_dec i memories) as [Hin | Hout].
     + unfold translate_lexp.
@@ -169,20 +141,221 @@ Proof.
       apply Hout.
   - intros.
     inversion H1.
-    change (exp_eval menv env (translate_laexp memories l) c).
-    apply (H0 H9 H2).
+    apply (H0 H9).
+    intros.
+    apply (H2 _ _ H10 (FreeEwhen _ _ _ _ H11)).
 Qed.
 
-Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
-  exp -> const -> Prop :=
-| evar: 
-    forall x v, 
-      PositiveMap.find x env = Some(v) -> 
-      exp_eval menv env (Var(x)) v
-| econst:
-    forall c ,
-      exp_eval menv env (Const(c)) c.
+Lemma translate_laexp_correct:
+  forall H memories lae n c menv env,
+    sem_laexp H lae n (present c) ->
+    (forall i c, PM.find i (H n) = Some (present c) ->
+                 freevar_laexp lae i ->                 
+                 (PS.In i memories -> find_mem i menv = Some c)
+                 /\ (~PS.In i memories -> PM.find i env = Some c)) ->
+    exp_eval menv env (translate_laexp memories lae) c.
+Proof.
+  intros H memories lae n c menv env H1 H2.
+  case_eq lae.
+  intros c0 l H3.
+  change (exp_eval menv env (translate_lexp memories l) c).
+  inversion H1.
+  rewrite H3 in H5.
+  injection H5.
+  intros H8 H9.
+  rewrite H8 in H0.
+  generalize H0 H2.
+  intros.
+  apply (translate_lexp_correct _ _ _ _ _ _ _ H10).
+  intros.
+  apply (H11 _ _ H12).
+  rewrite H3.
+  apply (freeLAexp _ _ _ H13).
+Qed.
 
+Lemma translate_caexp_menv_unchanged:
+  forall memories cae x menv env menv' env',
+    stmt_eval menv env (translate_caexp memories x cae) (menv', env') ->
+    menv = menv'.
+Proof.
+  intros memories cae.
+  apply (caexp_mult
+           (fun c : caexp =>
+              forall (x : ident) (menv : memoryEnv) (env : valueEnv)
+                     (menv' : memoryEnv) (env' : valueEnv),
+                stmt_eval menv env (translate_caexp memories x c) (menv', env') ->
+                menv = menv')
+           (fun c : cexp =>
+              forall (x : ident) (menv : memoryEnv) (env : valueEnv)
+                     (menv' : memoryEnv) (env' : valueEnv),
+                stmt_eval menv env (translate_cexp memories x c) (menv', env') ->
+                menv = menv')).
+  - intros.
+    apply (H _ _ _ _ _ H0).
+  - intros.
+    change (stmt_eval menv env
+                      (Ifte (tovar memories i)
+                              (translate_caexp memories x c)
+                              (translate_caexp memories x c0))
+                      (menv', env')) in H1.
+    inversion H1.
+    apply (H _ _ _ _ _ H8).
+    apply (H0 _ _ _ _ _ H8).
+  - intros.
+    inversion H.
+    reflexivity.
+Qed.
+
+Lemma exp_eval_det:
+  forall menv env e v1 v2,
+    exp_eval menv env e v1 ->
+    exp_eval menv env e v2 ->
+    v1 = v2.
+Proof.
+  induction e;
+    intros v1 v2 H1 H2;
+    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1];
+    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2];
+    rewrite Hv1 in Hv2;
+    ( injection Hv2; trivial ) || apply Hv2.
+Qed.
+    
+Lemma translate_cexp_correct:
+  forall H memories ce n c menv env menv' env' x,
+    sem_cexp H ce n (present c) ->
+    (forall i c, PM.find i (H n) = Some (present c) ->
+                 freevar_cexp ce i ->                 
+                 (PS.In i memories -> find_mem i menv = Some c)
+                 /\ (~PS.In i memories -> PM.find i env = Some c)) ->
+    stmt_eval menv env (translate_cexp memories x ce) (menv', env') ->
+    env' = PM.add x c env.
+Proof.
+  intros H memories ce.
+  apply (cexp_mult
+           (fun cae : caexp =>
+              forall (n : nat) (c0 : const) (menv : memoryEnv) 
+                     (env : PM.t const) (menv' : memoryEnv) (env' : valueEnv) 
+                     (x : ident),
+                sem_caexp H cae n c0 ->
+                (forall (i : BinNums.positive) (c1 : const),
+                    PM.find i (H n) = Some (present c1) ->
+                    freevar_caexp cae i ->
+                    (PS.In i memories -> find_mem i menv = Some c1) /\
+                    (~ PS.In i memories -> PM.find i env = Some c1)) ->
+                stmt_eval menv env (translate_caexp memories x cae) (menv', env') ->
+                env' = PM.add x c0 env)           
+           (fun ce : cexp =>
+              forall (n : nat) (c0 : const) (menv : memoryEnv) 
+                     (env : PM.t const) (menv' : memoryEnv) (env' : valueEnv) 
+                     (x : ident),
+                sem_cexp H ce n c0 ->
+                (forall (i : BinNums.positive) (c1 : const),
+                    PM.find i (H n) = Some (present c1) ->
+                    freevar_cexp ce i ->
+                    (PS.In i memories -> find_mem i menv = Some c1) /\
+                    (~ PS.In i memories -> PM.find i env = Some c1)) ->
+                stmt_eval menv env (translate_cexp memories x ce) (menv', env') ->
+                env' = PM.add x c0 env)).
+  - intros.
+    inversion H1.
+    apply (H0 _ _ menv _ menv' _ _ H6).
+    intros.
+    apply (H2 _ _ H10).
+    apply (FreeCAexp _ _ _ H11).
+    apply H3.
+ - intros.
+    change (stmt_eval menv env
+                      (Ifte (tovar memories i)
+                              (translate_caexp memories x c)
+                              (translate_caexp memories x c0))
+                      (menv', env')) in H4.
+    unfold tovar in H4.
+    destruct (ps_in_dec i memories) as [Hin | Hout].
+   + assert (Hin' := Hin).
+      unfold PS.In in Hin'.
+      rewrite Hin' in H4.
+      inversion H2.
+      * inversion H4.
+        { apply (fun x => H0 _ _ _ _ _ _ _ H11 x H18).
+          intros.
+          apply (H3 _ _ H19 (FreeEmerge_true _ _ _ _ H20)). }
+        { inversion H10.
+          destruct (H3 _ _ H19 (FreeEmerge_cond _ _ _)).
+          apply H20 in Hin.
+          inversion H14.
+          rewrite H23 in Hin.
+          discriminate Hin. }
+      * inversion H4. (* Duplicate proof above with order inversed. *)
+        { inversion H10.
+          destruct (H3 _ _ H19 (FreeEmerge_cond _ _ _)).
+          apply H20 in Hin.
+          inversion H14.
+          rewrite H23 in Hin.
+          discriminate Hin. }
+        { apply (fun x => H1 _ _ _ _ _ _ _ H11 x H18).
+          intros.
+          apply (H3 _ _ H19 (FreeEmerge_false _ _ _ _ H20)). }
+
+   + assert (Hout' := Hout). (* TODO: m.m. of above *)
+      unfold PS.In in Hout'.
+      apply Bool.not_true_is_false in Hout'.
+      rewrite Hout' in H4.
+      inversion H2.
+      * inversion H4.
+        { apply (fun x => H0 _ _ _ _ _ _ _ H11 x H18).
+          intros.
+          apply (H3 _ _ H19 (FreeEmerge_true _ _ _ _ H20)). }
+        { inversion H10.
+          destruct (H3 _ _ H19 (FreeEmerge_cond _ _ _)).
+          apply H21 in Hout.
+          inversion H14.
+          rewrite H23 in Hout.
+          discriminate Hout. }
+      * inversion H4. (* Duplicate proof above with order inversed. *)
+        { inversion H10.
+          destruct (H3 _ _ H19 (FreeEmerge_cond _ _ _)).
+          apply H21 in Hout.
+          inversion H14.
+          rewrite H23 in Hout.
+          discriminate Hout. }
+        { apply (fun x => H1 _ _ _ _ _ _ _ H11 x H18).
+          intros.
+          apply (H3 _ _ H19 (FreeEmerge_false _ _ _ _ H20)). }
+ - intros.
+   inversion H0.
+   apply (translate_lexp_correct _ memories _ _ menv env) in H4.
+   + inversion H2.
+     rewrite (eq_sym H9) in H10.
+     pose proof (exp_eval_det _ _ _ _ _ H4 H10).
+     rewrite H13.
+     rewrite H12.
+     reflexivity.
+   + intros.
+     apply H1.
+     apply H7.
+     apply (FreeEexp _ _ H8).
+Qed.
+
+Lemma translate_caexp_correct:
+  forall H memories cae n c menv env menv' env' x,
+    sem_caexp H cae n (present c) ->
+    (forall i c, PM.find i (H n) = Some (present c) ->
+                 freevar_caexp cae i ->                 
+                 (PS.In i memories -> find_mem i menv = Some c)
+                 /\ (~PS.In i memories -> PM.find i env = Some c)) ->
+    stmt_eval menv env (translate_caexp memories x cae) (menv', env') ->
+    env' = PM.add x c env.
+Proof.
+  induction cae.
+  intros.
+  inversion H0.
+  change (stmt_eval menv env (translate_cexp memories x c0) (menv', env')) in H2.
+  Check (translate_cexp_correct).
+  apply (fun x => translate_cexp_correct _ _ _ _ _ _ _ _ _ _ H5 x H2).
+  intros.
+  apply (H1 _ _ H9).
+  apply (FreeCAexp _ _ _ H10).
+Qed.
 
 Lemma step_correct:
   forall eqs : list equation,

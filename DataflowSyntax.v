@@ -45,8 +45,7 @@ Record node : Type := mk_node {
   n_name : ident;
   n_input : var_dec;
   n_output : var_dec;
-  n_eqs : list equation
-                        }.
+  n_eqs : list equation }.
 
 (** ** Predicates *)
 
@@ -65,6 +64,48 @@ with freevar_laexp' (lae : laexp) (fvs : PS.t) : PS.t :=
     | LAexp ck e => freevar_lexp' e fvs
   end.
 
+(* Definition freevar_lexp e := freevar_lexp' e PS.empty. *)
+(* Definition freevar_laexp lae := freevar_laexp' lae PS.empty. *)
+
+Inductive freevar_lexp : lexp -> ident -> Prop :=
+| FreeEvar: forall x, freevar_lexp (Evar x) x
+| FreeEwhen: forall ae ck cv x,
+    freevar_laexp ae x ->
+    freevar_lexp (Ewhen ae ck cv) x
+with freevar_laexp : laexp -> ident -> Prop :=
+| freeLAexp: forall ck e x,
+    freevar_lexp e x ->
+    freevar_laexp (LAexp ck e) x.
+
+Fixpoint freevar_caexp' (cae: caexp) (fvs: PS.t) : PS.t :=
+  match cae with
+  | CAexp ck ce => freevar_cexp' ce fvs
+  end
+with freevar_cexp' (ce: cexp) (fvs: PS.t) : PS.t :=
+  match ce with
+  | Emerge x t f => PS.add x (freevar_caexp' f (freevar_caexp' t fvs))
+  | Eexp e => freevar_lexp' e fvs
+  end.
+
+(* Definition freevar_caexp cae := freevar_caexp' cae PS.empty. *)
+
+Inductive freevar_cexp : cexp -> ident -> Prop :=
+| FreeEmerge_cond: forall i t f,
+    freevar_cexp (Emerge i t f) i
+| FreeEmerge_true: forall i t f x,
+    freevar_caexp t x ->
+    freevar_cexp (Emerge i t f) x
+| FreeEmerge_false: forall i t f x,
+    freevar_caexp f x ->
+    freevar_cexp (Emerge i t f) x
+| FreeEexp: forall e x,
+    freevar_lexp e x ->
+    freevar_cexp (Eexp e) x
+with freevar_caexp : caexp -> ident -> Prop :=
+| FreeCAexp: forall ck ce x,
+    freevar_cexp ce x ->
+    freevar_caexp (CAexp ck ce) x.
+
 Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
   match eq with
   | EqFby x _ _ => PS.add x mems
@@ -74,6 +115,18 @@ Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
 Definition memories (eqs: list equation) : PS.t :=
   List.fold_left memory_eq eqs PS.empty.
 
+
+Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
+  match eq with
+  | EqDef x _   => PS.add x defs
+  | EqApp x _ _ => PS.add x defs
+  | EqFby x _ _ => PS.add x defs
+  end.
+
+Definition defined (eqs: list equation) : PS.t :=
+  List.fold_left defined_eq eqs PS.empty.
+
 (** The map containing global definitions. *)
 Require Coq.FSets.FMapPositive.
 Definition global := FSets.FMapPositive.PositiveMap.t node.
+

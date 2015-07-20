@@ -64,17 +64,20 @@ Definition runCompiler (c: Compiler unit): state :=
   let empty_s := mk_state 1 nil nil Skip in
   fst (c empty_s).
 
-Fixpoint Control (ck: clock)(s: stmt): stmt :=
-  match ck with
-    | Cbase => s
-    | Con ck x true => Control ck (Ifte x s Skip)
-    | Con ck x false => Control ck (Ifte x Skip s)
-  end.
-
 Section Translate.
 
   Variable memories : PS.t.
 
+  Definition tovar (x: ident) : exp :=
+    if PS.mem x memories then State x else Var x.
+
+  Fixpoint Control (ck: clock)(s: stmt): stmt :=
+    match ck with
+    | Cbase => s
+    | Con ck x true => Control ck (Ifte (tovar x) s Skip)
+    | Con ck x false => Control ck (Ifte (tovar x) Skip s)
+    end.
+  
   Fixpoint translate_lexp (e: lexp): exp :=
     match e with
     | Econst c => Const c
@@ -88,7 +91,7 @@ Section Translate.
 
   Fixpoint translate_cexp (x: ident)(e : cexp): stmt :=
     match e with
-    | Emerge y t f => Ifte y (translate_caexp x t) (translate_caexp x f)
+    | Emerge y t f => Ifte (tovar y) (translate_caexp x t) (translate_caexp x f)
     | Eexp l => Assign x (translate_lexp l)
     end
   with translate_caexp (x: ident)(ae : caexp): stmt :=
@@ -151,14 +154,14 @@ Section TestTranslate.
     mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
   
   Eval cbv in (translate_node node1).
-  
+ 
   Definition prog1 : stmt :=
-    Comp (Ifte 1 (Assign 2 (Const (Cint 7)))
-                 Skip)
-   (Comp (Ifte 1 Skip
-                 (AssignSt 3 (Var 2)))
-   (Comp (Ifte 1 (Assign 4 (Var 2))
-                 (Assign 4 (State 3)))
+    Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7)))
+                       Skip)
+   (Comp (Ifte (Var 1) Skip
+                       (AssignSt 3 (Var 2)))
+   (Comp (Ifte (Var 1) (Assign 4 (Var 2))
+                       (Assign 4 (State 3)))
          Skip)).
 
 End TestTranslate.

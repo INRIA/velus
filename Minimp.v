@@ -14,7 +14,7 @@ Inductive exp : Set :=
 Inductive stmt : Set :=
   | Assign : ident -> exp -> stmt
   | AssignSt : ident -> exp -> stmt                           
-  | Ifte : ident -> stmt -> stmt -> stmt
+  | Ifte : exp -> stmt -> stmt -> stmt
   | Step_ap : ident -> ident -> exp -> stmt
   | Comp : stmt -> stmt -> stmt
   | Skip.
@@ -121,15 +121,15 @@ Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
       stmt_eval menv1 env1 a2 (menv2, env2) ->
       stmt_eval menv env (Comp a1 a2) (menv2, env2)
 | Iifte_true:
-    forall x ifTrue ifFalse env' menv',
-      PositiveMap.find x env = Some(Cbool true) ->
+    forall b ifTrue ifFalse env' menv',
+      exp_eval menv env b (Cbool true) ->
       stmt_eval menv env ifTrue (env', menv') ->
-      stmt_eval menv env (Ifte x ifTrue ifFalse) (env', menv')
+      stmt_eval menv env (Ifte b ifTrue ifFalse) (env', menv')
 | Iifte_false:
-    forall x ifTrue ifFalse env' menv',
-      PositiveMap.find x env = Some(Cbool false) ->
+    forall b ifTrue ifFalse env' menv',
+      exp_eval menv env b (Cbool false) ->
       stmt_eval menv env ifFalse (env', menv') ->
-      stmt_eval menv env (Ifte x ifTrue ifFalse) (env', menv')
+      stmt_eval menv env (Ifte b ifTrue ifFalse) (env', menv')
 
 with application (menv: memoryEnv)(env: valueEnv) : 
        step_fun -> const -> const * memoryEnv -> Prop :=
