@@ -77,6 +77,56 @@ with freevar_laexp : laexp -> ident -> Prop :=
     freevar_lexp e x ->
     freevar_laexp (LAexp ck e) x.
 
+Fixpoint freevar_caexp' (cae: caexp) (fvs: PS.t) : PS.t :=
+  match cae with
+  | CAexp ck ce => freevar_cexp' ce fvs
+  end
+with freevar_cexp' (ce: cexp) (fvs: PS.t) : PS.t :=
+  match ce with
+  | Emerge i t f => PS.add i (freevar_caexp' f (freevar_caexp' t fvs))
+  | Eexp e => freevar_lexp' e fvs
+  end.
+
+(* Definition freevar_caexp cae := freevar_caexp' cae PS.empty. *)
+
+Inductive freevar_cexp : cexp -> ident -> Prop :=
+| FreeEmerge_cond: forall i t f,
+    freevar_cexp (Emerge i t f) i
+| FreeEmerge_true: forall i t f x,
+    freevar_caexp t x ->
+    freevar_cexp (Emerge i t f) x
+| FreeEmerge_false: forall i t f x,
+    freevar_caexp f x ->
+    freevar_cexp (Emerge i t f) x
+| FreeEexp: forall e x,
+    freevar_lexp e x ->
+    freevar_cexp (Eexp e) x
+with freevar_caexp : caexp -> ident -> Prop :=
+| FreeCAexp: forall ck ce x,
+    freevar_cexp ce x ->
+    freevar_caexp (CAexp ck ce) x.
+
+Fixpoint freevar_equation' (eq: equation) (fvs: PS.t) : PS.t :=
+  match eq with
+  | EqDef _ cae => freevar_caexp' cae fvs
+  | EqApp _ f lae => freevar_laexp' lae fvs
+  | EqFby _ v lae => freevar_laexp' lae fvs
+  end.
+
+Inductive freevar_equation : equation -> ident -> Prop :=
+| FreeEqDef:
+    forall x cae i,
+      freevar_caexp cae i ->
+      freevar_equation (EqDef x cae) i
+| FreeEqApp:
+    forall x f lae i,
+      freevar_laexp lae i ->
+      freevar_equation (EqApp x f lae) i
+| FreeEqFby:
+    forall x v lae i,
+      freevar_laexp lae i ->
+      freevar_equation (EqFby x v lae) i.
+
 Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
 Proof.
   unfold PS.In; unfold PS.empty;
@@ -116,35 +166,6 @@ Proof.
   intros H; apply freevar_lexp_in; inversion H; assumption.
 Qed.
 
-Fixpoint freevar_caexp' (cae: caexp) (fvs: PS.t) : PS.t :=
-  match cae with
-  | CAexp ck ce => freevar_cexp' ce fvs
-  end
-with freevar_cexp' (ce: cexp) (fvs: PS.t) : PS.t :=
-  match ce with
-  | Emerge i t f => PS.add i (freevar_caexp' f (freevar_caexp' t fvs))
-  | Eexp e => freevar_lexp' e fvs
-  end.
-
-(* Definition freevar_caexp cae := freevar_caexp' cae PS.empty. *)
-
-Inductive freevar_cexp : cexp -> ident -> Prop :=
-| FreeEmerge_cond: forall i t f,
-    freevar_cexp (Emerge i t f) i
-| FreeEmerge_true: forall i t f x,
-    freevar_caexp t x ->
-    freevar_cexp (Emerge i t f) x
-| FreeEmerge_false: forall i t f x,
-    freevar_caexp f x ->
-    freevar_cexp (Emerge i t f) x
-| FreeEexp: forall e x,
-    freevar_lexp e x ->
-    freevar_cexp (Eexp e) x
-with freevar_caexp : caexp -> ident -> Prop :=
-| FreeCAexp: forall ck ce x,
-    freevar_cexp ce x ->
-    freevar_caexp (CAexp ck ce) x.
-
 Lemma freevar_lexp'_or_acc:
   forall x e S,
     PS.In x (freevar_lexp' e S)
@@ -175,6 +196,14 @@ Proof.
   - constructor.
     apply H; destruct 1.
     apply H; auto.
+Qed.
+
+Lemma freevar_laexp'_or_acc:
+  forall x e S,
+    PS.In x (freevar_laexp' e S)
+    <-> (PS.In x (freevar_laexp' e PS.empty) \/ PS.In x S).
+Proof.
+  destruct e; apply freevar_lexp'_or_acc.
 Qed.
 
 Lemma freevar_cexp'_or_acc:
@@ -309,7 +338,30 @@ Proof.
   - intro H; apply FreeCAexp; apply freevar_cexp_in; apply H.
   - destruct 1; apply freevar_cexp_in; apply H.
 Qed.
-    
+
+Lemma freevar_equation'_or_acc:
+  forall x eq S,
+    PS.In x (freevar_equation' eq S)
+    <-> (PS.In x (freevar_equation' eq PS.empty) \/ PS.In x S).
+Proof.
+  destruct eq; apply freevar_caexp'_or_acc || apply freevar_laexp'_or_acc.
+Qed.
+  
+Lemma freevar_equation_in:
+  forall x eq, PS.In x (freevar_equation' eq PS.empty) <-> freevar_equation eq x.
+Proof.
+  destruct eq. (* TODO: rewrite using ltac *)
+  - constructor.
+    intro H; apply FreeEqDef; apply freevar_caexp_in; apply H.
+    inversion 1; apply freevar_caexp_in; assumption.
+  - constructor.
+    intro H; apply FreeEqApp; apply freevar_laexp_in; apply H.
+    inversion 1; apply freevar_laexp_in; assumption.
+  - constructor.
+    intro H; apply FreeEqFby; apply freevar_laexp_in; apply H.
+    inversion 1; apply freevar_laexp_in; assumption.
+Qed.
+
 
 Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
   match eq with
