@@ -77,13 +77,52 @@ with freevar_laexp : laexp -> ident -> Prop :=
     freevar_lexp e x ->
     freevar_laexp (LAexp ck e) x.
 
+Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
+Proof.
+  unfold PS.In; unfold PS.empty;
+  intros; rewrite PS.mem_Leaf; apply Bool.diff_false_true.
+Qed.
+
+Lemma freevar_lexp_in:
+  forall x e, PS.In x (freevar_lexp' e PS.empty) <-> freevar_lexp e x.
+Proof.
+  intro x.
+  apply (lexp_mult
+           (fun e : laexp =>
+              PS.In x (freevar_laexp' e PS.empty) <-> freevar_laexp e x)
+           (fun e : lexp =>
+              PS.In x (freevar_lexp' e PS.empty) <-> freevar_lexp e x));
+    simpl; constructor; intro H0.
+  - constructor; apply H; assumption.
+  - inversion H0; apply H; assumption.
+  - apply not_In_empty in H0; contradiction.
+  - inversion H0.
+  - apply PS.add_spec in H0.
+    destruct H0 as [H1|H2].
+    rewrite H1; constructor.
+    apply not_In_empty in H2; contradiction.
+  - inversion H0; apply PS.add_spec; left; reflexivity.
+  - apply H in H0; constructor; apply H0.
+  - apply H; inversion H0; assumption.
+Qed.
+
+Lemma freevar_laexp_in:
+  forall x e, PS.In x (freevar_laexp' e PS.empty) <-> freevar_laexp e x.
+Proof.
+  destruct e.
+  simpl.
+  constructor.
+  intros H; apply freevar_lexp_in in H; apply freeLAexp; assumption.
+  intros H; apply freevar_lexp_in; inversion H; assumption.
+Qed.
+
 Fixpoint freevar_caexp' (cae: caexp) (fvs: PS.t) : PS.t :=
   match cae with
   | CAexp ck ce => freevar_cexp' ce fvs
   end
 with freevar_cexp' (ce: cexp) (fvs: PS.t) : PS.t :=
   match ce with
-  | Emerge x t f => PS.add x (freevar_caexp' f (freevar_caexp' t fvs))
+  | Emerge i t f => PS.add i (freevar_caexp' f (freevar_caexp' t fvs))
   | Eexp e => freevar_lexp' e fvs
   end.
 
@@ -105,6 +144,172 @@ with freevar_caexp : caexp -> ident -> Prop :=
 | FreeCAexp: forall ck ce x,
     freevar_cexp ce x ->
     freevar_caexp (CAexp ck ce) x.
+
+Lemma freevar_lexp'_or_acc:
+  forall x e S,
+    PS.In x (freevar_lexp' e S)
+    <-> (PS.In x (freevar_lexp' e PS.empty) \/ PS.In x S).
+Proof.
+  intros x e S.
+  generalize e.
+  apply (lexp_mult
+           (fun e : laexp =>
+              PS.In x (freevar_laexp' e S)
+              <-> (PS.In x (freevar_laexp' e PS.empty) \/ PS.In x S))
+           (fun e : lexp =>
+              PS.In x (freevar_lexp' e S)
+              <-> (PS.In x (freevar_lexp' e PS.empty) \/ PS.In x S))).
+  - trivial.
+  - constructor; auto; destruct 1 as [H|].
+    apply not_In_empty in H; contradiction.
+    assumption.
+  - constructor.
+    + intro H; apply PS.add_spec in H; destruct H as [H1|H1].
+      rewrite H1; left; apply PS.add_spec; auto.
+      right; assumption.
+    + destruct 1.
+      apply PS.add_spec in H; destruct H.
+      rewrite H; apply PS.add_spec; auto.
+      apply not_In_empty in H; contradiction.
+      apply PS.add_spec; auto.
+  - constructor.
+    apply H; destruct 1.
+    apply H; auto.
+Qed.
+
+Lemma freevar_cexp'_or_acc:
+  forall x e S,
+    PS.In x (freevar_cexp' e S)
+    <-> (PS.In x (freevar_cexp' e PS.empty) \/ PS.In x S).
+Proof.
+  intros x.
+  apply (cexp_mult
+           (fun e : caexp =>
+              forall S,
+                (PS.In x (freevar_caexp' e S)
+                 <-> (PS.In x (freevar_caexp' e PS.empty) \/ PS.In x S)))
+           (fun e : cexp =>
+              forall S,
+                (PS.In x (freevar_cexp' e S)
+                 <-> (PS.In x (freevar_cexp' e PS.empty) \/ PS.In x S)))).
+  - trivial.
+  - constructor. (* TODO: automate ! *)
+    intro.
+    simpl in H1.
+    apply PS.add_spec in H1.
+    destruct H1.
+    rewrite H1.
+    left.
+    apply PS.add_spec.
+    auto.
+
+    apply H0 in H1.
+    destruct H1.
+    left.
+    simpl.
+    apply PS.add_spec.
+    right.
+    apply H0.
+    auto.
+
+    apply H in H1.
+    destruct H1.
+    left.
+    simpl.
+    apply PS.add_spec.
+    right.
+    apply H0.
+    right.
+    apply H1.
+    auto.
+
+    destruct 1.
+    simpl.
+    apply PS.add_spec.
+    simpl in H1.
+    apply PS.add_spec in H1.
+    destruct H1.
+    auto.
+    right.
+    
+    apply H0.
+    apply H0 in H1.
+    destruct H1.
+    auto.
+    right.
+    apply H.
+    auto.
+
+    simpl.
+    apply PS.add_spec.
+    right.
+    apply H0.
+    right.
+    apply H.
+    auto.
+  - apply freevar_lexp'_or_acc.
+Qed.
+
+Lemma freevar_caexp'_or_acc:
+  forall x e S,
+    PS.In x (freevar_caexp' e S)
+    <-> (PS.In x (freevar_caexp' e PS.empty) \/ PS.In x S).
+Proof.
+  induction e; apply freevar_cexp'_or_acc.
+Qed.
+
+Lemma freevar_cexp_in:
+  forall x e, PS.In x (freevar_cexp' e PS.empty) <-> freevar_cexp e x.
+Proof.
+  intro x.
+  apply (cexp_mult
+           (fun e : caexp =>
+              PS.In x (freevar_caexp' e PS.empty) <-> freevar_caexp e x)
+           (fun e : cexp =>
+              PS.In x (freevar_cexp' e PS.empty) <-> freevar_cexp e x));
+    simpl; constructor; intro H1.
+  - constructor; apply H; assumption.
+  - apply H; inversion H1; apply H4.
+  - apply PS.add_spec in H1.
+    destruct H1.
+    rewrite H1; constructor.
+    apply freevar_caexp'_or_acc in H1.
+    destruct H1.
+    apply H0 in H1.
+    apply FreeEmerge_false.
+    apply H1.
+    apply FreeEmerge_true.
+    apply H.
+    apply H1.
+  - apply PS.add_spec.
+    inversion H1.
+    + auto.
+    + right.
+      apply freevar_caexp'_or_acc.
+      right.
+      apply H.
+      apply H6.
+    + right.
+      apply freevar_caexp'_or_acc.
+      left.
+      apply H0.
+      apply H6.
+  - apply FreeEexp.
+    apply freevar_lexp_in.
+    apply H1.
+  - apply freevar_lexp_in.
+    inversion H1.
+    apply H0.
+Qed.
+
+Lemma freevar_caexp_in:
+  forall x e, PS.In x (freevar_caexp' e PS.empty) <-> freevar_caexp e x.
+Proof.
+  destruct e; constructor.
+  - intro H; apply FreeCAexp; apply freevar_cexp_in; apply H.
+  - destruct 1; apply freevar_cexp_in; apply H.
+Qed.
+    
 
 Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
   match eq with
