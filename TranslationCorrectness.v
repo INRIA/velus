@@ -4,6 +4,12 @@ Require Import Rustre.DataflowSyntax.
 (** ** Predicates *)
 
 (* Working: Tim *)
+(* Some comments: inversion H  ~>  inversion_clear H to avoid equalities
+                  apply H1. apply H2.  ~>  apply H1, H2.
+                  applying hypotheses from the context  ~> auto can do it
+                  unfold machin in H2 rather than generalize H; unfold machin; intro H'
+                    (even not necessary as Coq can perform apply or rewrite up to some unfolding)
+*)
 
 (* TODO: Big question: how do we get from the scheduling property on graphs
                        to this predicate?
@@ -89,7 +95,24 @@ Lemma translate_lexp_correct:
     exp_eval menv env (translate_lexp memories le) c.
 Proof.
   intros H memories n c menv env.
-  (* TODO: is there a better way to do this?: *)
+  (* TODO: is there a better way to do this?:
+    => Yes (marginally): use [induction ... using ...].
+       but Coq cannot guess the second predicate
+       so either you need to provide it (saving only half the space)
+       or you can use [einduction] and fill it in later. *)
+  induction le using lexp_mult
+  with (P := fun lae =>
+               sem_laexp H lae n c ->
+               (forall i c0,
+                   PM.find i (H n) = Some (present c0) ->
+                   freevar_laexp lae i ->
+                   (PS.In i memories -> find_mem i menv = Some c0) /\
+                   (~ PS.In i memories -> PM.find i env = Some c0)) ->
+               exp_eval menv env (translate_laexp memories lae) c).
+(*
+  einduction le using lexp_mult.
+*)
+(*
   apply (lexp_mult
            (fun lae : laexp =>
                sem_laexp H lae n c ->
@@ -107,43 +130,34 @@ Proof.
                   (PS.In i memories -> find_mem i menv = Some c0) /\
                   (~ PS.In i memories -> PM.find i env = Some c0)) ->
               exp_eval menv env (translate_lexp memories le) c)).
+*)
   (* TODO: How to make this proof shorter? *)
-  - intros ck l IH H1 H2.
-    inversion H1 as [? ? ? ? Hlexp|].
-    apply (IH Hlexp).
+  - intros H1 H2.
+    apply IHle.
+    now inversion_clear H1.
     intros.
-    apply (H2 _ _ H7 (freeLAexp _ _ _ H8)).
-  - intros c0 H0 ?.
-    inversion H0.
+    apply H2; trivial.
+    now apply freeLAexp.
+  - intros H0 ?.
+    inversion_clear H0.
     apply econst.
   - intros.
-    inversion H0.
-    inversion H5.
-    apply (fun h => H1 _ _ h (FreeEvar i)) in H6.
-    destruct H6.
+    inversion_clear H0.
+    inversion_clear H2.
+    apply (fun h => H1 _ _ h (FreeEvar i)) in H0.
+    destruct H0.
     destruct (ps_in_dec i memories) as [Hin | Hout].
     + unfold translate_lexp.
-      generalize Hin.
-      unfold PS.In.
-      intro Hin'.
-      rewrite Hin'.
-      clear Hin'.
-      apply estate.
-      apply H6.
-      apply Hin.
+      rewrite Hin.
+      apply estate; auto.
     + unfold translate_lexp.
-      generalize Hout.
-      unfold PS.In.
-      intro Hout'.
-      rewrite (Bool.not_true_is_false _ Hout').
-      apply evar.
-      apply H7.
-      apply Hout.
+      rewrite (Bool.not_true_is_false _ Hout).
+      apply evar; auto.
   - intros.
-    inversion H1.
-    apply (H0 H9).
+    inversion_clear H0.
+    apply (IHle H3).
     intros.
-    apply (H2 _ _ H10 (FreeEwhen _ _ _ _ H11)).
+    apply (H1 _ _ H0 (FreeEwhen _ _ _ _ H4)).
 Qed.
 
 Lemma translate_laexp_correct:
