@@ -33,7 +33,9 @@ with cexp : Type :=
 Inductive equation : Type :=
   | EqDef : ident -> caexp -> equation
   | EqApp : ident -> ident -> laexp -> equation
-  | EqFby : ident -> const -> caexp -> equation. (* Lionel added this one *)
+  | EqFby : ident -> const -> var_dec -> equation.
+  (* EqFby only on variables to allow for a simpler translation
+     as a name would already exist for the translation without the time shift. *)
 
 Record node : Type := mk_node {
   n_name : ident;
@@ -45,3 +47,5 @@ Record node : Type := mk_node {
 (** The map containing global definitions. *)
 Require Coq.FSets.FMapPositive.
 Definition global := FSets.FMapPositive.PositiveMap.t node.
+
+

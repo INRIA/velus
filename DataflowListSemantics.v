@@ -223,6 +223,6 @@ Inductive sem_equation (G : global) : history -> equation -> Prop :=
        /\ sem_lexp H' (Evar output.(v_name)) vo  (* in the local context, output evaluates to vo *)
        /\ List.Forall (sem_equation G H') eqs) (* in the local context, the equations have correct semantics *)
       -> sem_equation G H (EqApp x f arg)
-  | SEqFby : forall H x v cae,
-      (exists cl, sem_caexp H cae cl /\ sem_lexp H (Evar x) (fby v cl)) ->
-      sem_equation G H (EqFby x v cae).
+  | SEqFby : forall H x v y,
+      (exists cl, sem_var H y.(v_name) cl /\ sem_lexp H (Evar x) (fby v cl)) ->
+      sem_equation G H (EqFby x v y).
