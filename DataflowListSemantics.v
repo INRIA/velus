@@ -200,7 +200,7 @@ Proof. solve_equiv. Qed.
 
 (** **  Semantics of equations  **)
 
-(** Now we need ot take into account the fby operator.
+(** Now we need to take into account the fby operator.
     Version of the paper: head of the list = first instant. *)
 Fixpoint fby (v : const) (s : list value) : list value :=
   match s with
@@ -226,3 +226,133 @@ Inductive sem_equation (G : global) : history -> equation -> Prop :=
   | SEqFby : forall H x v y,
       (exists cl, sem_var H y.(v_name) cl /\ sem_lexp H (Evar x) (fby v cl)) ->
       sem_equation G H (EqFby x v y).
+
+(** ***  Reverse orientation for lists: last instant is first  **)
+
+Fixpoint fby_aux (v0 : const) (s : list value) : list value * const  :=
+  match s with
+  | here v :: s => let '(s', v') := fby_aux v0 s in (here v' :: s', v)
+  | abs :: s => let '(s', v') := fby_aux v0 s in (abs :: s', v')
+  | nil => (nil, v0)
+  end.
+Definition fby_rev v s := fst (fby_aux v s).
+
+Lemma fby_rev_nil : forall v, fby_rev v nil = nil.
+Proof. reflexivity. Qed.
+
+Lemma fby_aux_abs : forall v0 s, fby_aux v0 (abs :: s) = (abs :: fst (fby_aux v0 s), snd (fby_aux v0 s)).
+Proof.
+induction s as [| [| v] s]; simpl in *.
++ reflexivity.
++ destruct (fby_aux v0 s); rewrite IHs; reflexivity.
++ destruct (fby_aux v0 s); simpl. reflexivity.
+Qed.
+
+Corollary fby_rev_cons_abs : forall v0 s, fby_rev v0 (abs :: s) = abs :: fby_rev v0 s.
+Proof. unfold fby_rev. intros. now rewrite fby_aux_abs. Qed.
+
+Lemma fby_rev_next : forall d v0 v s n,
+  List.nth (S n) (fby_rev v0 (v :: s)) (here d) = List.nth n (fby_rev v0 s) (here d).
+Proof. unfold fby_rev. intros d c [| c'] s n; simpl; destruct (fby_aux c s); reflexivity. Qed.
+
+Lemma fby_rev_abs : forall d v s n, List.nth n s (here d) = abs -> List.nth n (fby_rev v s) (here d) = abs.
+Proof.
+intros d v s. induction s as [| v' s]; intros n Hn.
++ assumption.
++ destruct n; simpl.
+  - destruct v'; simpl in *; discriminate || now rewrite fby_rev_cons_abs.
+  - rewrite fby_rev_next. now apply IHs.
+Qed.
+
+Lemma fby_aux_app : forall s1 s2 v s1' s2' v' v'' , fby_aux v s2 = (s2', v') -> fby_aux v' s1 = (s1', v'') ->
+  fby_aux v (s1 ++ s2) = (s1' ++ s2', v'').
+Proof.
+intros s1. induction s1 as [| [| c] s1]; intros s2 v s1' s2' v' v'' Hs2 Hs1.
+* inversion Hs1. subst. simpl. assumption.
+* simpl app. rewrite fby_aux_abs in Hs1 |- *. destruct s1' as [| ? s1']; inversion Hs1.
+  simpl. apply (IHs1 _ _ s1' _ _ v'') in Hs2.
+  + rewrite Hs2. f_equal.
+    - now rewrite H1.
+    - simpl. auto.
+  + subst. apply surjective_pairing.
+* simpl in *. destruct (fby_aux v' s1) eqn:Hs1'.
+  rewrite (IHs1 _ _ _ _ _ _ Hs2 Hs1'). inversion_clear Hs1. simpl. reflexivity.
+Qed.
+
+Corollary fby_rev_last_abs : forall v s, fby_rev v (s ++ abs :: nil) = fby_rev v s ++ abs :: nil.
+Proof. intros. unfold fby_rev. erewrite fby_aux_app; simpl; try reflexivity. apply surjective_pairing. Qed.
+
+(** Equivalence theorem between fby and fby_rev *)
+Theorem fby_fby_rev : forall s v, fby_rev v (rev s) = List.rev (fby v s).
+Proof.
+induction s as [| [| c] s]; intro v; simpl.
+- reflexivity.
+- rewrite fby_rev_last_abs, IHs. reflexivity. 
+- unfold fby_rev. erewrite fby_aux_app; simpl; try reflexivity.
+  rewrite surjective_pairing at 1. rewrite <- IHs. reflexivity.
+Qed.
+
+(* Same semantics as Tim, but is it the right one? Maybe it should be called last? *)
+Fixpoint hold_aux v0 s := 
+  match s with
+  | here v :: s => let '(s', v') := hold_aux v0 s in (here v' :: s', v)
+  | abs :: s => let '(s', v') := hold_aux v0 s in (here v' :: s', v')
+  | nil => (nil, v0)
+  end.
+Definition hold v s := fst (hold_aux v s).
+
+Lemma hold_never_abs : forall d s v n, List.nth n (hold v s) (here d) <> abs.
+Proof.
+unfold hold. intros d s. induction s as [| [| v'] s]; intros v n.
++ destruct n; simpl; discriminate.
++ destruct n as [| n]; simpl.
+  - specialize (IHs v 0). destruct (hold_aux v s) as [l c]. simpl. discriminate.
+  - specialize (IHs v n). destruct (hold_aux v s) as [l c]. simpl in *. assumption.
++ destruct n as [| n]; simpl.
+  - specialize (IHs v 0). destruct (hold_aux v s) as [l c]. simpl. discriminate.
+  - specialize (IHs v n). destruct (hold_aux v s) as [l c]. simpl in *. assumption.
+Qed.
+
+Lemma hold_next : forall d c v s n, List.nth (S n) (hold c (v :: s)) (here d) = List.nth n (hold c s) (here d).
+Proof. unfold hold. intros d c [| c'] s n; simpl; destruct (hold_aux c s); reflexivity. Qed.
+
+Lemma fby_hold_aux_eq_snd : forall v s, snd (fby_aux v s) = snd (hold_aux v s).
+Proof.
+intros v s. induction s as [| [| v'] s]; simpl.
+- reflexivity.
+- destruct (fby_aux v s), (hold_aux v s); simpl in *. assumption.
+- destruct (fby_aux v s), (hold_aux v s); simpl in *. reflexivity.
+Qed.
+
+Lemma fby_hold_aux_equiv_fst : forall d v s n, List.nth n s (here d) <> abs ->
+  List.nth n (fby_rev v s) (here d) = List.nth n (hold v s) (here d).
+Proof.
+intros d v s. induction s as [| [| v'] s]; intros n Hhere.
++ destruct n; simpl; reflexivity.
++ destruct n as [| n]; simpl.
+  - now elim Hhere.
+  - specialize (IHs n Hhere). rewrite fby_rev_cons_abs. simpl. now rewrite IHs, hold_next.
++ destruct n as [| n]; simpl.
+  - unfold fby_rev, hold. simpl. destruct (fby_aux v s) eqn:Hfby, (hold_aux v s) eqn:Hhold; simpl.
+    f_equal. change (snd (l, c) = snd (l0, c0)). rewrite <- Hfby, <- Hhold. apply fby_hold_aux_eq_snd.
+  - specialize (IHs n Hhere). now rewrite fby_rev_next, hold_next, IHs.
+Qed.
+
+(* Maybe we should transform "(exists ...) -> ..." into "forall (... -> ...)" *)
+Inductive sem_equation_rev (G : global) : history -> equation -> Prop :=
+  | SEqDef_rev : forall H x cae,
+      (exists v, sem_lexp H (Evar x) v /\ sem_caexp H cae v) ->
+      sem_equation_rev G H (EqDef x cae)
+  | SEqApp_rev : forall H x f arg input output eqs, (* I did not check this one *)
+      PositiveMap.find f G = Some (mk_node f input output eqs) ->
+      (exists H' vi vo, (* local context (history), input values and output values *)
+          sem_laexp H arg vi (* arg evaluate to vi *)
+       /\ sem_lexp H (Evar x) vo (* x evaluates to vo *)
+       /\ sem_lexp H' (Evar input.(v_name)) vi (* in the local context, input evaluates to vi *)
+       /\ sem_lexp H' (Evar output.(v_name)) vo  (* in the local context, output evaluates to vo *)
+       /\ List.Forall (sem_equation_rev G H') eqs) (* in the local context, the equations have correct semantics *)
+      -> sem_equation_rev G H (EqApp x f arg)
+  | SEqFby_rev : forall H x v y,
+      (exists cl, sem_var H y.(v_name) cl /\ sem_lexp H (Evar x) (fby_rev v cl)) ->
+      sem_equation_rev G H (EqFby x v y).
+
