@@ -80,9 +80,7 @@ Qed.
 
 Lemma ps_in_dec: forall i m, {PS.In i m}+{~PS.In i m}.
 Proof.
-  intros i m.
-  unfold PS.In.
-  case (PS.mem i m); auto.
+  intros i m; unfold PS.In; case (PS.mem i m); auto.
 Qed.
 
 Lemma translate_lexp_correct:
@@ -370,6 +368,35 @@ Proof.
   apply (H1 _ _ H9).
   apply (FreeCAexp _ _ _ H10).
 Qed.
+
+Lemma translate_equation_correct:
+
+      (forall i c, PM.find i (H n) = Some (present c) ->
+                 freevar_equation eq i ->                 
+                 (PS.In i memories -> find_mem i menv = Some c)
+                 /\ (~PS.In i memories -> PM.find i env = Some c)) ->
+
+      stmt_eval menv env (translate_eqn eq)
+
+
+
+(* XXX Working: *)
+Definition translate_eqn (eqn: equation): Compiler unit :=
+    match eqn with
+    | EqDef x (CAexp ck ce) =>
+      let s := Control ck (translate_cexp x ce) in
+      add_instr s
+    | EqApp x f (LAexp ck le) =>
+      let c := translate_lexp le in
+      o <- new_obj f;
+        add_instr (Control ck (Step_ap x o c))
+    | EqFby x v (LAexp ck le) =>
+      let c := translate_lexp le in
+      let s := Control ck (AssignSt x c) in
+      _ <- add_mem x;
+        add_instr s
+    end.
+
 
 Lemma step_correct:
   forall eqs : list equation,
