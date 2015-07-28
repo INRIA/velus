@@ -49,6 +49,9 @@ Record node : Type := mk_node {
 
 (** ** Predicates *)
 
+(* TODO: free variables should include those in clock expressions.
+         use auto for the proofs. *)
+
 Require Coq.MSets.MSets.
 
 Module PS := Coq.MSets.MSetPositive.PositiveSet.
@@ -63,9 +66,6 @@ with freevar_laexp' (lae : laexp) (fvs : PS.t) : PS.t :=
   match lae with
     | LAexp ck e => freevar_lexp' e fvs
   end.
-
-(* Definition freevar_lexp e := freevar_lexp' e PS.empty. *)
-(* Definition freevar_laexp lae := freevar_laexp' lae PS.empty. *)
 
 Inductive freevar_lexp : lexp -> ident -> Prop :=
 | FreeEvar: forall x, freevar_lexp (Evar x) x
@@ -372,6 +372,32 @@ Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
 Definition memories (eqs: list equation) : PS.t :=
   List.fold_left memory_eq eqs PS.empty.
 
+Inductive Is_memory_eq : ident -> equation -> Prop :=
+| MemEqFby: forall x v e, Is_memory_eq x (EqFby x v e).
+
+Definition Is_memory (eqs: list equation) (x: ident) : Prop :=
+  List.Exists (Is_memory_eq x) eqs.
+
+
+
+Fixpoint variable_eq (vars: PS.t) (eq: equation) : PS.t :=
+  match eq with
+  | EqDef x _   => PS.add x vars
+  | EqApp x _ _ => PS.add x vars
+  | EqFby _ _ _ => vars
+  end.
+
+Definition variables (eqs: list equation) : PS.t :=
+  List.fold_left variable_eq eqs PS.empty.
+
+Inductive Is_variable_eq : ident -> equation -> Prop :=
+| VarEqDef: forall x e,   Is_variable_eq x (EqDef x e)
+| VarEqApp: forall x f e, Is_variable_eq x (EqApp x f e).
+
+Definition Is_variable (eqs: list equation) (x: ident) : Prop :=
+  List.Exists (Is_variable_eq x) eqs.
+
+
 
 Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
   match eq with
@@ -382,6 +408,15 @@ Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
 
 Definition defined (eqs: list equation) : PS.t :=
   List.fold_left defined_eq eqs PS.empty.
+
+Inductive Is_defined_eq : ident -> equation -> Prop :=
+| DefEqDef: forall x e,   Is_defined_eq x (EqDef x e)
+| DefEqApp: forall x f e, Is_defined_eq x (EqApp x f e)
+| DefEqFby: forall x v e, Is_defined_eq x (EqFby x v e).
+
+Definition Is_defined (eqs: list equation) (x: ident) : Prop :=
+  List.Exists (Is_defined_eq x) eqs.
+
 
 (** The map containing global definitions. *)
 Require Coq.FSets.FMapPositive.
