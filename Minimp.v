@@ -141,15 +141,15 @@ with application (menv: memoryEnv)(env: valueEnv) :
       application menv env s_fun arg_v (v, res_memory).
 
 Inductive run :
-  memoryEnv -> valueEnv -> stmt -> nat -> valueEnv * memoryEnv -> Prop :=
+  memoryEnv -> valueEnv -> stmt -> nat -> memoryEnv * valueEnv -> Prop :=
 | Run_empty:
     forall menvInit envInit stmt,
-      run menvInit envInit stmt 0 (envInit, menvInit)
+      run menvInit envInit stmt 0 (menvInit, envInit)
 | Run_cons:
     forall menvInit menvInter menvFinal
            envInit envInter envFinal
            stmt n,
       stmt_eval menvInit envInit stmt (menvInter, envInter) ->
-      run menvInter envInter stmt n (envFinal, menvFinal) ->
-      run menvInit envInit stmt (S n) (envFinal, menvFinal).
+      run menvInter envInter stmt n (menvFinal, envFinal) ->
+      run menvInit envInit stmt (S n) (menvFinal, envFinal).
 

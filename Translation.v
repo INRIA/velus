@@ -115,12 +115,14 @@ Section Translate.
         add_instr s
     end.
 
+  (* NB: eqns ordered in reverse order of execution for coherence
+         with Is_well_sch. *)
   Fixpoint translate_eqns (eqns: list equation): Compiler unit :=
     match eqns with
     | nil => ret! tt
     | cons eqn eqns =>
-      _ <- translate_eqns eqns ;
-        translate_eqn eqn
+        _ <- translate_eqn eqn;
+        translate_eqns eqns
     end.
 
 End Translate.
@@ -144,15 +146,15 @@ Section TestTranslate.
 
   Definition eqns1 : list equation :=
     [
-      EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))));
-      EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
       EqDef 4 (CAexp Cbase (Emerge 1 (CAexp (Con Cbase 1 true) (Eexp (Evar 2)))
-                                   (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))))
+                                   (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))));
+      EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
+      EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))))
     ].
   
   Definition node1 : node :=
     mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
-  
+
   Eval cbv in (translate_node node1).
  
   Definition prog1 : stmt :=
@@ -163,5 +165,8 @@ Section TestTranslate.
    (Comp (Ifte (Var 1) (Assign 4 (Var 2))
                        (Assign 4 (State 3)))
          Skip)).
+
+  Lemma prog1_good : (translate_node node1).(c_step).(body) = prog1.
+  Proof eq_refl.
 
 End TestTranslate.
