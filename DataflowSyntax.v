@@ -372,11 +372,11 @@ Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
 Definition memories (eqs: list equation) : PS.t :=
   List.fold_left memory_eq eqs PS.empty.
 
-Inductive Is_memory_eq : ident -> equation -> Prop :=
-| MemEqFby: forall x v e, Is_memory_eq x (EqFby x v e).
+Inductive Is_memory_in_eq : ident -> equation -> Prop :=
+| MemEqFby: forall x v e, Is_memory_in_eq x (EqFby x v e).
 
-Definition Is_memory (eqs: list equation) (x: ident) : Prop :=
-  List.Exists (Is_memory_eq x) eqs.
+Definition Is_memory_in (eqs: list equation) (x: ident) : Prop :=
+  List.Exists (Is_memory_in_eq x) eqs.
 
 
 
@@ -390,12 +390,12 @@ Fixpoint variable_eq (vars: PS.t) (eq: equation) : PS.t :=
 Definition variables (eqs: list equation) : PS.t :=
   List.fold_left variable_eq eqs PS.empty.
 
-Inductive Is_variable_eq : ident -> equation -> Prop :=
-| VarEqDef: forall x e,   Is_variable_eq x (EqDef x e)
-| VarEqApp: forall x f e, Is_variable_eq x (EqApp x f e).
+Inductive Is_variable_in_eq : ident -> equation -> Prop :=
+| VarEqDef: forall x e,   Is_variable_in_eq x (EqDef x e)
+| VarEqApp: forall x f e, Is_variable_in_eq x (EqApp x f e).
 
-Definition Is_variable (eqs: list equation) (x: ident) : Prop :=
-  List.Exists (Is_variable_eq x) eqs.
+Definition Is_variable_in (eqs: list equation) (x: ident) : Prop :=
+  List.Exists (Is_variable_in_eq x) eqs.
 
 
 
@@ -409,13 +409,13 @@ Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
 Definition defined (eqs: list equation) : PS.t :=
   List.fold_left defined_eq eqs PS.empty.
 
-Inductive Is_defined_eq : ident -> equation -> Prop :=
-| DefEqDef: forall x e,   Is_defined_eq x (EqDef x e)
-| DefEqApp: forall x f e, Is_defined_eq x (EqApp x f e)
-| DefEqFby: forall x v e, Is_defined_eq x (EqFby x v e).
+Inductive Is_defined_in_eq : ident -> equation -> Prop :=
+| DefEqDef: forall x e,   Is_defined_in_eq x (EqDef x e)
+| DefEqApp: forall x f e, Is_defined_in_eq x (EqApp x f e)
+| DefEqFby: forall x v e, Is_defined_in_eq x (EqFby x v e).
 
-Definition Is_defined (eqs: list equation) (x: ident) : Prop :=
-  List.Exists (Is_defined_eq x) eqs.
+Definition Is_defined_in (eqs: list equation) (x: ident) : Prop :=
+  List.Exists (Is_defined_in_eq x) eqs.
 
 
 (** The map containing global definitions. *)
