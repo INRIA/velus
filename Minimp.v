@@ -54,8 +54,6 @@ Record machine : Set :=
 Definition globalEnv : Set := PositiveMap.t machine.
  *)
 
-Module PM := PositiveMap.
-
 Record memoryEnv : Set :=
   mk_memory {
       m_values : PM.t const;
@@ -77,15 +75,15 @@ Definition find_object (id: ident) (menv: memoryEnv) : option step_fun :=
   PM.find id (menv.(m_instances)).
 
 
-Definition valueEnv : Set := PositiveMap.t const.
+Definition valueEnv : Set := PM.t const.
 
-Definition empty: valueEnv := PositiveMap.empty const.
+Definition empty: valueEnv := PM.empty const.
 
 Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
   exp -> const -> Prop :=
 | evar: 
     forall x v, 
-      PositiveMap.find x env = Some(v) -> 
+      PM.find x env = Some(v) -> 
       exp_eval menv env (Var(x)) v
 | estate: 
     forall x v,
@@ -101,7 +99,7 @@ Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
 | Iassign:
     forall x e v env',
       exp_eval menv env e v ->
-      PositiveMap.add x v env = env' ->
+      PM.add x v env = env' ->
       stmt_eval menv env (Assign x e) (menv, env')
 | Iassignst:
     forall x e v menv',
@@ -113,7 +111,7 @@ Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
       exp_eval menv env e v ->
       find_object o menv = Some(s_fun) ->
       application menv empty s_fun v (res_value, res_memory) ->
-      PositiveMap.add y res_value env  = env' ->
+      PM.add y res_value env  = env' ->
       stmt_eval menv env (Step_ap y o e) (menv, env')
 | Icomp:
     forall a1 a2 env1 menv1 env2 menv2,
@@ -135,9 +133,9 @@ with application (menv: memoryEnv)(env: valueEnv) :
        step_fun -> const -> const * memoryEnv -> Prop :=
 | Aapp:
     forall s_fun arg_v v res_env res_memory,
-      stmt_eval menv (PositiveMap.add s_fun.(input) arg_v empty)
+      stmt_eval menv (PM.add s_fun.(input) arg_v empty)
            s_fun.(body) (res_memory, res_env) ->
-      PositiveMap.find s_fun.(output) res_env = Some(v) ->
+      PM.find s_fun.(output) res_env = Some(v) ->
       application menv env s_fun arg_v (v, res_memory).
 
 Inductive run :

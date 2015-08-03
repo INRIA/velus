@@ -3,16 +3,22 @@ Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
 Require Import SynchronousNat.
 
-Definition venv := PM.t value.
-Definition history := nat -> venv.
+Definition history := PM.t stream.
 Definition global := PM.t node.
 
-
 Inductive sem_var (H: history)(x: ident)(n: nat)(c: const): Prop :=
-| Sv: 
-      PM.find x (H(n)) = Some (present c) ->
+| Sv:
+    forall xs,
+      PM.find x H = Some xs ->
+      xs n = present c ->
       sem_var H x n c.
-  
+
+Inductive sem_var_value (H: history)(x: ident)(n: nat): value -> Prop :=
+| Svv:
+    forall xs,
+      PM.find x H = Some xs ->
+      sem_var_value H x n (xs n).
+
 Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 | Sbase:
     forall n,
@@ -20,7 +26,7 @@ Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 | Son_tick:
     forall ck x c n,
       sem_clock H ck n true ->
-      sem_var H x n (Cbool c) -> 
+      sem_var H x n (Cbool c) ->
       sem_clock H (Con ck x c) n true
 | Son_abs1:
     forall ck x c n,
@@ -29,7 +35,7 @@ Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 | Son_abs2:
     forall ck x c c' n,
       sem_clock H ck n true ->
-      sem_var H x n (Cbool c') -> 
+      sem_var H x n (Cbool c') ->
       ~ (c = c') ->
       sem_clock H (Con ck x c) n false.
 
@@ -96,7 +102,7 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
 | SEqDef:
     forall x cae,
       (forall n, 
-       exists v, sem_lexp H (Evar x) n v
+       exists v, sem_var H x n v
               /\ sem_caexp H cae n v) ->
       sem_equation G H (EqDef x cae)
 | SEqApp:
@@ -112,9 +118,31 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
 | SEqFby:
     forall x xs v0 lae,
       (forall n, sem_laexp H lae n (xs n)) ->  (* TODO: Is this reasonable? *)
-      (forall n, exists xs v, sem_lexp H (Evar x) n v
+      (forall n, exists xs v, sem_var H x n v
                            /\ fbyR v0 xs n v) ->
       sem_equation G H (EqFby x v0 lae).
+
+Inductive sem_held_equation (H: history) : equation -> nat -> const -> Prop :=
+| SHEqDef:
+    forall x cae n c,
+      sem_var H x n c ->
+      sem_held_equation H (EqDef x cae) n c
+| SHEqApp:
+    forall x f lae n c,
+      sem_var H x n c ->
+      sem_held_equation H (EqApp x f lae) n c
+| SHEqFby0:
+    forall x v0 lae,
+      sem_held_equation H (EqFby x v0 lae) 0 v0
+| SHEqFby_absent:
+    forall x v0 lae n c,
+      sem_var_value H x (S n) absent ->
+      sem_held_equation H (EqFby x v0 lae) n c ->
+      sem_held_equation H (EqFby x v0 lae) (S n) c
+| SHEqFby_present:
+    forall x v0 lae n c,
+      sem_var_value H x (S n) (present c) ->
+      sem_held_equation H (EqFby x v0 lae) (S n) c.
 
 Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
   List.Forall (sem_equation G H) eqs.

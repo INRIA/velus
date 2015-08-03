@@ -1,4 +1,3 @@
-Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
 
@@ -6,11 +5,6 @@ Inductive value :=
   | absent
   | present (v : const).
 Coercion present : const >-> value.
-
-Require Coq.MSets.MSets.
-
-Module PS := Coq.MSets.MSetPositive.PositiveSet.
-Module PM := PositiveMap.
 
 Definition stream := nat -> value.
 Definition cstream := nat -> bool.
