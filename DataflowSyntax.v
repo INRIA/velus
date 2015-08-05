@@ -67,15 +67,15 @@ with free_in_laexp (lae : laexp) (fvs : PS.t) : PS.t :=
     | LAexp ck e => free_in_lexp e fvs
   end.
 
-Inductive Is_free_in_lexp : lexp -> ident -> Prop :=
-| FreeEvar: forall x, Is_free_in_lexp (Evar x) x
+Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
+| FreeEvar: forall x, Is_free_in_lexp x (Evar x)
 | FreeEwhen: forall ae ck cv x,
-    Is_free_in_laexp ae x ->
-    Is_free_in_lexp (Ewhen ae ck cv) x
-with Is_free_in_laexp : laexp -> ident -> Prop :=
+    Is_free_in_laexp x ae ->
+    Is_free_in_lexp x (Ewhen ae ck cv)
+with Is_free_in_laexp : ident -> laexp -> Prop :=
 | freeLAexp: forall ck e x,
-    Is_free_in_lexp e x ->
-    Is_free_in_laexp (LAexp ck e) x.
+    Is_free_in_lexp x e ->
+    Is_free_in_laexp x (LAexp ck e).
 
 Fixpoint free_in_caexp (cae: caexp) (fvs: PS.t) : PS.t :=
   match cae with
@@ -89,22 +89,22 @@ with free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
 
 (* Definition free_in_caexp cae := free_in_caexp' cae PS.empty. *)
 
-Inductive Is_free_in_cexp : cexp -> ident -> Prop :=
+Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
 | FreeEmerge_cond: forall i t f,
-    Is_free_in_cexp (Emerge i t f) i
+    Is_free_in_cexp i (Emerge i t f)
 | FreeEmerge_true: forall i t f x,
-    Is_free_in_caexp t x ->
-    Is_free_in_cexp (Emerge i t f) x
+    Is_free_in_caexp x t ->
+    Is_free_in_cexp x (Emerge i t f)
 | FreeEmerge_false: forall i t f x,
-    Is_free_in_caexp f x ->
-    Is_free_in_cexp (Emerge i t f) x
+    Is_free_in_caexp x f ->
+    Is_free_in_cexp x (Emerge i t f)
 | FreeEexp: forall e x,
-    Is_free_in_lexp e x ->
-    Is_free_in_cexp (Eexp e) x
-with Is_free_in_caexp : caexp -> ident -> Prop :=
+    Is_free_in_lexp x e ->
+    Is_free_in_cexp x (Eexp e)
+with Is_free_in_caexp : ident -> caexp -> Prop :=
 | FreeCAexp: forall ck ce x,
-    Is_free_in_cexp ce x ->
-    Is_free_in_caexp (CAexp ck ce) x.
+    Is_free_in_cexp x ce ->
+    Is_free_in_caexp x (CAexp ck ce).
 
 Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
   match eq with
@@ -113,19 +113,19 @@ Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
   | EqFby _ v lae => free_in_laexp lae fvs
   end.
 
-Inductive Is_free_in_equation : equation -> ident -> Prop :=
+Inductive Is_free_in_equation : ident -> equation -> Prop :=
 | FreeEqDef:
     forall x cae i,
-      Is_free_in_caexp cae i ->
-      Is_free_in_equation (EqDef x cae) i
+      Is_free_in_caexp i cae ->
+      Is_free_in_equation i (EqDef x cae)
 | FreeEqApp:
     forall x f lae i,
-      Is_free_in_laexp lae i ->
-      Is_free_in_equation (EqApp x f lae) i
+      Is_free_in_laexp i lae ->
+      Is_free_in_equation i (EqApp x f lae)
 | FreeEqFby:
     forall x v lae i,
-      Is_free_in_laexp lae i ->
-      Is_free_in_equation (EqFby x v lae) i.
+      Is_free_in_laexp i lae ->
+      Is_free_in_equation i (EqFby x v lae).
 
 Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
 Proof.
@@ -134,14 +134,14 @@ Proof.
 Qed.
 
 Lemma free_in_lexp_in:
-  forall x e, PS.In x (free_in_lexp e PS.empty) <-> Is_free_in_lexp e x.
+  forall x e, PS.In x (free_in_lexp e PS.empty) <-> Is_free_in_lexp x e.
 Proof.
   intro x.
   apply (lexp_mult
            (fun e : laexp =>
-              PS.In x (free_in_laexp e PS.empty) <-> Is_free_in_laexp e x)
+              PS.In x (free_in_laexp e PS.empty) <-> Is_free_in_laexp x e)
            (fun e : lexp =>
-              PS.In x (free_in_lexp e PS.empty) <-> Is_free_in_lexp e x));
+              PS.In x (free_in_lexp e PS.empty) <-> Is_free_in_lexp x e));
     simpl; constructor; intro H0.
   - constructor; apply H; assumption.
   - inversion H0; apply H; assumption.
@@ -157,7 +157,7 @@ Proof.
 Qed.
 
 Lemma free_in_laexp_in:
-  forall x e, PS.In x (free_in_laexp e PS.empty) <-> Is_free_in_laexp e x.
+  forall x e, PS.In x (free_in_laexp e PS.empty) <-> Is_free_in_laexp x e.
 Proof.
   destruct e.
   simpl.
@@ -288,17 +288,17 @@ Proof.
 Qed.
 
 Lemma free_in_cexp_in:
-  forall x e, PS.In x (free_in_cexp e PS.empty) <-> Is_free_in_cexp e x.
+  forall x e, PS.In x (free_in_cexp e PS.empty) <-> Is_free_in_cexp x e.
 Proof.
   intro x.
   apply (cexp_mult
            (fun e : caexp =>
-              PS.In x (free_in_caexp e PS.empty) <-> Is_free_in_caexp e x)
+              PS.In x (free_in_caexp e PS.empty) <-> Is_free_in_caexp x e)
            (fun e : cexp =>
-              PS.In x (free_in_cexp e PS.empty) <-> Is_free_in_cexp e x));
+              PS.In x (free_in_cexp e PS.empty) <-> Is_free_in_cexp x e));
     simpl; constructor; intro H1.
   - constructor; apply H; assumption.
-  - apply H; inversion H1; apply H4.
+  - apply H; inversion H1; apply H3.
   - apply PS.add_spec in H1.
     destruct H1.
     rewrite H1; constructor.
@@ -317,22 +317,22 @@ Proof.
       apply free_in_caexp_or_acc.
       right.
       apply H.
-      apply H6.
+      apply H4.
     + right.
       apply free_in_caexp_or_acc.
       left.
       apply H0.
-      apply H6.
+      apply H4.
   - apply FreeEexp.
     apply free_in_lexp_in.
     apply H1.
   - apply free_in_lexp_in.
     inversion H1.
-    apply H0.
+    apply H2.
 Qed.
 
 Lemma free_in_caexp_in:
-  forall x e, PS.In x (free_in_caexp e PS.empty) <-> Is_free_in_caexp e x.
+  forall x e, PS.In x (free_in_caexp e PS.empty) <-> Is_free_in_caexp x e.
 Proof.
   destruct e; constructor.
   - intro H; apply FreeCAexp; apply free_in_cexp_in; apply H.
@@ -348,7 +348,8 @@ Proof.
 Qed.
 
 Lemma free_in_equation_in:
-  forall x eq, PS.In x (free_in_equation eq PS.empty) <-> Is_free_in_equation eq x.
+  forall x eq, PS.In x (free_in_equation eq PS.empty)
+               <-> Is_free_in_equation x eq.
 Proof.
   destruct eq. (* TODO: rewrite using ltac *)
   - constructor.
@@ -375,7 +376,7 @@ Definition memories (eqs: list equation) : PS.t :=
 Inductive Is_memory_in_eq : ident -> equation -> Prop :=
 | MemEqFby: forall x v e, Is_memory_in_eq x (EqFby x v e).
 
-Definition Is_memory_in (eqs: list equation) (x: ident) : Prop :=
+Definition Is_memory_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_memory_in_eq x) eqs.
 
 Lemma In_fold_left_memory_eq:
@@ -410,7 +411,7 @@ Qed.
 
 Lemma Is_memory_in_memories:
   forall x eqs,
-    PS.In x (memories eqs) <-> Is_memory_in eqs x.
+    PS.In x (memories eqs) <-> Is_memory_in x eqs.
 Proof.
   unfold memories, Is_memory_in.
   induction eqs as [ eq | eq ].
@@ -432,11 +433,11 @@ Proof.
 Qed.
 
 Lemma Is_memory_in_cons:
-  forall eq eqs x, Is_memory_in eqs x -> Is_memory_in (eq :: eqs) x.
+  forall eq eqs x, Is_memory_in x eqs -> Is_memory_in x (eq :: eqs).
 Proof. unfold Is_memory_in; auto using List.Exists_cons. Qed.
 
 Lemma Is_memory_in_dec:
-  forall x eqs, {Is_memory_in eqs x}+{~Is_memory_in eqs x}.
+  forall x eqs, {Is_memory_in x eqs}+{~Is_memory_in x eqs}.
 Proof.
   intros x eqs.
   apply Bool.reflect_dec with (b := PS.mem x (memories eqs)).
@@ -460,7 +461,7 @@ Inductive Is_variable_in_eq : ident -> equation -> Prop :=
 | VarEqDef: forall x e,   Is_variable_in_eq x (EqDef x e)
 | VarEqApp: forall x f e, Is_variable_in_eq x (EqApp x f e).
 
-Definition Is_variable_in (eqs: list equation) (x: ident) : Prop :=
+Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_variable_in_eq x) eqs.
 
 
@@ -480,7 +481,7 @@ Inductive Is_defined_in_eq : ident -> equation -> Prop :=
 | DefEqApp: forall x f e, Is_defined_in_eq x (EqApp x f e)
 | DefEqFby: forall x v e, Is_defined_in_eq x (EqFby x v e).
 
-Definition Is_defined_in (eqs: list equation) (x: ident) : Prop :=
+Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_defined_in_eq x) eqs.
 
 
