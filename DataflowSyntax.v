@@ -260,7 +260,7 @@ Proof.
     destruct H1.
     auto.
     right.
-    
+
     apply H0.
     apply H0 in H1.
     destruct H1.
@@ -346,7 +346,7 @@ Lemma free_in_equation_or_acc:
 Proof.
   destruct eq; apply free_in_caexp_or_acc || apply free_in_laexp_or_acc.
 Qed.
-  
+
 Lemma free_in_equation_in:
   forall x eq, PS.In x (free_in_equation eq PS.empty) <-> Is_free_in_equation eq x.
 Proof.
@@ -363,7 +363,7 @@ Proof.
 Qed.
 
 
-Fixpoint memory_eq (mems: PS.t) (eq: equation) : PS.t :=
+Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
   | EqFby x _ _ => PS.add x mems
   | _ => mems
@@ -378,7 +378,73 @@ Inductive Is_memory_in_eq : ident -> equation -> Prop :=
 Definition Is_memory_in (eqs: list equation) (x: ident) : Prop :=
   List.Exists (Is_memory_in_eq x) eqs.
 
+Lemma In_fold_left_memory_eq:
+  forall x eqs m,
+    PS.In x (List.fold_left memory_eq eqs m)
+    <-> PS.In x (List.fold_left memory_eq eqs PS.empty) \/ PS.In x m.
+Proof.
+  induction eqs as [|eq].
+  - split; auto.
+    destruct 1 as [H|].
+    apply not_In_empty in H; contradiction.
+    auto.
+  - split.
+    + intro H.
+      simpl; rewrite IHeqs.
+      simpl in H; apply IHeqs in H; destruct H; auto.
+      destruct eq; auto.
+      apply PS.add_spec in H.
+      destruct H.
+      rewrite H; left; right; apply PS.add_spec; intuition.
+      intuition.
+    + destruct 1 as [H|H].
+      * simpl in H; rewrite IHeqs in H; apply IHeqs; destruct H; auto.
+        right.
+        destruct eq; try (apply not_In_empty in H; contradiction).
+        simpl; apply PS.add_spec.
+        apply PS.add_spec in H; destruct H;
+        try apply not_In_empty in H; intuition.
+      * apply IHeqs; right; destruct eq; auto.
+        apply PS.add_spec; auto.
+Qed.
 
+Lemma Is_memory_in_memories:
+  forall x eqs,
+    PS.In x (memories eqs) <-> Is_memory_in eqs x.
+Proof.
+  unfold memories, Is_memory_in.
+  induction eqs as [ eq | eq ].
+  - rewrite List.Exists_nil; split; intro H;
+    try apply not_In_empty in H; contradiction.
+  - simpl.
+    rewrite In_fold_left_memory_eq.
+    split.
+    + rewrite List.Exists_cons.
+      destruct 1. intuition.
+      destruct eq; try (apply not_In_empty in H; intuition).
+      simpl in H; apply PS.add_spec in H; destruct H.
+      rewrite H; left; constructor.
+      apply not_In_empty in H; contradiction.
+    + intro H; apply List.Exists_cons in H; destruct H.
+      destruct eq; try inversion H.
+      right; apply PS.add_spec; intuition.
+      left; apply IHeqs; apply H.
+Qed.
+
+Lemma Is_memory_in_cons:
+  forall eq eqs x, Is_memory_in eqs x -> Is_memory_in (eq :: eqs) x.
+Proof. unfold Is_memory_in; auto using List.Exists_cons. Qed.
+
+Lemma Is_memory_in_dec:
+  forall x eqs, {Is_memory_in eqs x}+{~Is_memory_in eqs x}.
+Proof.
+  intros x eqs.
+  apply Bool.reflect_dec with (b := PS.mem x (memories eqs)).
+  apply Bool.iff_reflect.
+  rewrite PS.mem_spec.
+  symmetry.
+  apply Is_memory_in_memories.
+Qed.
 
 Fixpoint variable_eq (vars: PS.t) (eq: equation) : PS.t :=
   match eq with
