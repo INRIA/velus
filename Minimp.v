@@ -13,7 +13,7 @@ Inductive exp : Set :=
 
 Inductive stmt : Set :=
   | Assign : ident -> exp -> stmt
-  | AssignSt : ident -> exp -> stmt                           
+  | AssignSt : ident -> exp -> stmt
   | Ifte : exp -> stmt -> stmt -> stmt
   | Step_ap : ident -> ident -> exp -> stmt
   | Comp : stmt -> stmt -> stmt
@@ -43,7 +43,7 @@ Definition program : Type := list class_def.
 
 (* TODO: I never seem to use/need machines and global
 environment. Joperationnal.v doesn't seem use them either. Yet, that's
-disturbing: where are the compiled ojects, in the memory env? 
+disturbing: where are the compiled ojects, in the memory env?
 
 Record machine : Set :=
   mk_machine {
@@ -81,11 +81,11 @@ Definition empty: valueEnv := PM.empty const.
 
 Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
   exp -> const -> Prop :=
-| evar: 
-    forall x v, 
-      PM.find x env = Some(v) -> 
+| evar:
+    forall x v,
+      PM.find x env = Some(v) ->
       exp_eval menv env (Var(x)) v
-| estate: 
+| estate:
     forall x v,
       find_mem x menv = Some(v) ->
       exp_eval menv env (State(x)) v
@@ -93,8 +93,7 @@ Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
     forall c ,
       exp_eval menv env (Const(c)) c.
 
-  
-Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) : 
+Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
   stmt -> memoryEnv * valueEnv -> Prop :=
 | Iassign:
     forall x e v env',
@@ -121,15 +120,17 @@ Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
 | Iifte_true:
     forall b ifTrue ifFalse env' menv',
       exp_eval menv env b (Cbool true) ->
-      stmt_eval menv env ifTrue (env', menv') ->
-      stmt_eval menv env (Ifte b ifTrue ifFalse) (env', menv')
+      stmt_eval menv env ifTrue (menv', env') ->
+      stmt_eval menv env (Ifte b ifTrue ifFalse) (menv', env')
 | Iifte_false:
     forall b ifTrue ifFalse env' menv',
       exp_eval menv env b (Cbool false) ->
-      stmt_eval menv env ifFalse (env', menv') ->
-      stmt_eval menv env (Ifte b ifTrue ifFalse) (env', menv')
+      stmt_eval menv env ifFalse (menv', env') ->
+      stmt_eval menv env (Ifte b ifTrue ifFalse) (menv', env')
+| Iskip:
+    stmt_eval menv env Skip (menv, env)
 
-with application (menv: memoryEnv)(env: valueEnv) : 
+with application (menv: memoryEnv)(env: valueEnv) :
        step_fun -> const -> const * memoryEnv -> Prop :=
 | Aapp:
     forall s_fun arg_v v res_env res_memory,
