@@ -466,7 +466,7 @@ Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
 
 
 
-Fixpoint defined_eq (defs: PS.t) (eq: equation) : PS.t :=
+Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
   | EqDef x _   => PS.add x defs
   | EqApp x _ _ => PS.add x defs
@@ -484,6 +484,69 @@ Inductive Is_defined_in_eq : ident -> equation -> Prop :=
 Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_defined_in_eq x) eqs.
 
+Lemma In_fold_left_defined_eq:
+  forall x eqs m,
+    PS.In x (List.fold_left defined_eq eqs m)
+    <-> PS.In x (List.fold_left defined_eq eqs PS.empty) \/ PS.In x m.
+Proof.
+  induction eqs as [|eq].
+  - split; auto.
+    destruct 1 as [H|].
+    apply not_In_empty in H; contradiction.
+    auto.
+  - split.
+    + intro H.
+      simpl; rewrite IHeqs.
+      simpl in H; apply IHeqs in H; destruct H; auto.
+      destruct eq;
+      apply PS.add_spec in H;
+      destruct H;
+      try (rewrite H; left; right; apply PS.add_spec); intuition.
+    + destruct 1 as [H|H].
+      * simpl in H; rewrite IHeqs in H; apply IHeqs; destruct H; auto.
+        right.
+        destruct eq;
+        simpl; apply PS.add_spec;
+        apply PS.add_spec in H; destruct H;
+        intuition;
+        apply not_In_empty in H; contradiction.
+      * apply IHeqs; right; destruct eq;
+        apply PS.add_spec; auto.
+Qed.
+
+Lemma Is_defined_in_defined:
+  forall x eqs,
+    PS.In x (defined eqs)
+    <-> Is_defined_in x eqs.
+Proof.
+  unfold defined, Is_defined_in.
+  induction eqs as [ | eq ].
+  - rewrite List.Exists_nil; split; intro H;
+    try apply not_In_empty in H; contradiction.
+  - simpl.
+    rewrite In_fold_left_defined_eq.
+    split.
+    + rewrite List.Exists_cons.
+      destruct 1. intuition.
+      destruct eq;
+      (simpl in H; apply PS.add_spec in H; destruct H;
+       [ rewrite H; left; constructor
+       | apply not_In_empty in H; contradiction]).
+    + intro H; apply List.Exists_cons in H; destruct H.
+      inversion H; destruct eq; (right; apply PS.add_spec; intuition).
+      left; apply IHeqs; apply H.
+Qed.
+
+Lemma Is_defined_in_dec:
+  forall x eqs, {Is_defined_in x eqs}+{~Is_defined_in x eqs}.
+Proof.
+  intros x eqs.
+  apply Bool.reflect_dec with (b := PS.mem x (defined eqs)).
+  apply Bool.iff_reflect.
+  rewrite PS.mem_spec.
+  symmetry.
+  apply Is_defined_in_defined.
+Qed.
 
 (** The map containing global definitions. *)
 Require Coq.FSets.FMapPositive.
