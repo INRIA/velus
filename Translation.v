@@ -38,8 +38,8 @@ Section Translate.
   Fixpoint Control (ck: clock)(s: stmt): stmt :=
     match ck with
     | Cbase => s
-    | Con ck x true => Control ck (Ifte (tovar x) s Skip)
-    | Con ck x false => Control ck (Ifte (tovar x) Skip s)
+    | Con ck x true => Ifte (tovar x) (Control ck s) Skip
+    | Con ck x false => Ifte (tovar x) Skip (Control ck s)
     end.
 
   Fixpoint translate_lexp (e: lexp): exp :=
