@@ -53,7 +53,7 @@ Section Translate.
          | LAexp ck e => translate_lexp e
          end.
 
-  Fixpoint translate_cexp (x: ident)(e : cexp): stmt :=
+  Fixpoint translate_cexp (x: ident)(e : cexp) {struct e}: stmt :=
     match e with
     | Emerge y t f => Ifte (tovar y) (translate_caexp x t) (translate_caexp x f)
     | Eexp l => Assign x (translate_lexp l)
