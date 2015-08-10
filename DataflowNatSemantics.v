@@ -51,10 +51,10 @@ Inductive sem_laexp (H: history): laexp -> nat -> value -> Prop:=
       sem_clock H ck n false ->
       sem_laexp H (LAexp ck ce) n absent
 with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
-| Sconst: 
+| Sconst:
     forall c n,
       sem_lexp H (Econst c) n c
-| Svar: 
+| Svar:
     forall x c n,
       sem_var H x n c ->
       sem_lexp H (Evar x) n c
@@ -68,7 +68,7 @@ with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
       sem_var H x n (Cbool b') ->
       ~ (b = b') ->
       sem_lexp H (Ewhen s x b) n absent.
-               
+
 
 Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
 | SCtick:
@@ -101,7 +101,7 @@ with sem_cexp (H: history): cexp -> nat -> value -> Prop :=
 Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
 | SEqDef:
     forall x cae,
-      (forall n, 
+      (forall n,
        exists v, sem_var H x n v
               /\ sem_caexp H cae n v) ->
       sem_equation G H (EqDef x cae)
@@ -122,28 +122,8 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
                            /\ fbyR v0 xs n v) ->
       sem_equation G H (EqFby x v0 lae).
 
-Inductive sem_held_equation (H: history) : equation -> nat -> const -> Prop :=
-| SHEqDef:
-    forall x cae n c,
-      sem_var H x n c ->
-      sem_held_equation H (EqDef x cae) n c
-| SHEqApp:
-    forall x f lae n c,
-      sem_var H x n c ->
-      sem_held_equation H (EqApp x f lae) n c
-| SHEqFby0:
-    forall x v0 lae,
-      sem_held_equation H (EqFby x v0 lae) 0 v0
-| SHEqFby_absent:
-    forall x v0 lae n c,
-      sem_var_value H x (S n) absent ->
-      sem_held_equation H (EqFby x v0 lae) n c ->
-      sem_held_equation H (EqFby x v0 lae) (S n) c
-| SHEqFby_present:
-    forall x v0 lae n c,
-      sem_var_value H x (S n) (present c) ->
-      sem_held_equation H (EqFby x v0 lae) (S n) c.
-
 Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
   List.Forall (sem_equation G H) eqs.
+
+
 
