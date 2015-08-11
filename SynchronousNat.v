@@ -4,7 +4,7 @@ Require Import Rustre.DataflowSyntax.
 Inductive value :=
   | absent
   | present (v : const).
-Coercion present : const >-> value.
+(* Coercion present : const >-> value. *)
 
 Definition stream := nat -> value.
 Definition cstream := nat -> bool.
@@ -32,10 +32,10 @@ Inductive fbyR (v0: const) (xs: stream) : nat -> value -> Prop :=
       xs n = absent ->
       fbyR v0 xs n absent
 | fbyR_present:
-    forall v n,
+    forall c n,
       xs n <> absent ->
-      holdR v0 xs n v ->
-      fbyR v0 xs n v.
+      holdR v0 xs n c ->
+      fbyR v0 xs n (present c).
 
 Fixpoint hold (v0: const) (xs: stream) (n: nat) : const :=
   match n with
@@ -49,7 +49,7 @@ Fixpoint hold (v0: const) (xs: stream) (n: nat) : const :=
 Definition fby (v0: const) (xs: stream) (n: nat) : value :=
   match xs n with
   | absent => absent
-  | _ => hold v0 xs n
+  | _ => present (hold v0 xs n)
   end.
 
 Lemma hold_rel1: forall v0 xs n, holdR v0 xs n (hold v0 xs n).

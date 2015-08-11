@@ -6,18 +6,12 @@ Require Import SynchronousNat.
 Definition history := PM.t stream.
 Definition global := PM.t node.
 
-Inductive sem_var (H: history)(x: ident)(n: nat)(c: const): Prop :=
+Inductive sem_var (H: history)(x: ident)(n: nat)(v: value): Prop :=
 | Sv:
     forall xs,
       PM.find x H = Some xs ->
-      xs n = present c ->
-      sem_var H x n c.
-
-Inductive sem_var_value (H: history)(x: ident)(n: nat): value -> Prop :=
-| Svv:
-    forall xs,
-      PM.find x H = Some xs ->
-      sem_var_value H x n (xs n).
+      xs n = v ->
+      sem_var H x n v.
 
 Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 | Sbase:
@@ -26,7 +20,7 @@ Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 | Son_tick:
     forall ck x c n,
       sem_clock H ck n true ->
-      sem_var H x n (Cbool c) ->
+      sem_var H x n (present (Cbool c)) ->
       sem_clock H (Con ck x c) n true
 | Son_abs1:
     forall ck x c n,
@@ -35,7 +29,7 @@ Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 | Son_abs2:
     forall ck x c c' n,
       sem_clock H ck n true ->
-      sem_var H x n (Cbool c') ->
+      sem_var H x n (present (Cbool c')) ->
       ~ (c = c') ->
       sem_clock H (Con ck x c) n false.
 
@@ -53,19 +47,19 @@ Inductive sem_laexp (H: history): laexp -> nat -> value -> Prop:=
 with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
 | Sconst:
     forall c n,
-      sem_lexp H (Econst c) n c
+      sem_lexp H (Econst c) n (present c)
 | Svar:
-    forall x c n,
-      sem_var H x n c ->
-      sem_lexp H (Evar x) n c
+    forall x v n,
+      sem_var H x n v ->
+      sem_lexp H (Evar x) n v
 | Swhen_eq:
-    forall s x b n c,
-      sem_var H x n  (Cbool b) ->
-      sem_laexp H s n c ->
-      sem_lexp H (Ewhen s x b) n c
+    forall s x b n v,
+      sem_var H x n (present (Cbool b)) ->
+      sem_laexp H s n v ->
+      sem_lexp H (Ewhen s x b) n v
 | Swhen_abs:
     forall s x b b' n,
-      sem_var H x n (Cbool b') ->
+      sem_var H x n (present (Cbool b')) ->
       ~ (b = b') ->
       sem_lexp H (Ewhen s x b) n absent.
 
@@ -73,9 +67,9 @@ with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
 Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
 | SCtick:
     forall ck ce n c,
-      sem_cexp H ce n c ->
+      sem_cexp H ce n (present c) ->
       sem_clock H ck n true ->
-      sem_caexp H (CAexp ck ce) n c
+      sem_caexp H (CAexp ck ce) n (present c)
 | SCabs:
     forall ck ce n,
       sem_cexp H ce n absent ->
@@ -83,19 +77,19 @@ Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
       sem_caexp H (CAexp ck ce) n absent
 with sem_cexp (H: history): cexp -> nat -> value -> Prop :=
 | Smerge_true:
-    forall x t f n c,
-      sem_var H x n (Cbool true) ->
-      sem_caexp H t n c ->
-      sem_cexp H (Emerge x t f) n c
+    forall x t f n v,
+      sem_var H x n (present (Cbool true)) ->
+      sem_caexp H t n v ->
+      sem_cexp H (Emerge x t f) n v
 | Smerge_false:
-    forall x t f n c,
-      sem_var H x n (Cbool false) ->
-      sem_caexp H f n c ->
-      sem_cexp H (Emerge x t f) n c
+    forall x t f n v,
+      sem_var H x n (present (Cbool false)) ->
+      sem_caexp H f n v ->
+      sem_cexp H (Emerge x t f) n v
 | Sexp:
-    forall e n c,
-      sem_lexp H e n c ->
-      sem_cexp H (Eexp e) n c.
+    forall e n v,
+      sem_lexp H e n v ->
+      sem_cexp H (Eexp e) n v.
 
 
 Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
@@ -110,7 +104,7 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
       PositiveMap.find f G = Some (mk_node f input output eqs) ->
       (exists H' vi vo,
          forall n, sem_laexp H arg n vi
-                /\ sem_lexp H (Evar x) n vo
+                /\ sem_var H x n vo
                 /\ sem_lexp H' (Evar input.(v_name)) n vi
                 /\ sem_lexp H' (Evar output.(v_name)) n vo
                 /\ List.Forall (sem_equation G H') eqs) ->
@@ -124,6 +118,4 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
 
 Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
   List.Forall (sem_equation G H) eqs.
-
-
 
