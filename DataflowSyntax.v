@@ -56,34 +56,54 @@ Require Coq.MSets.MSets.
 
 Module PS := Coq.MSets.MSetPositive.PositiveSet.
 
-Fixpoint free_in_lexp (e : lexp) (fvs : PS.t) : PS.t :=
+Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
+  match ck with
+  | Cbase => fvs
+  | Con ck' x xc => free_in_clock ck' (PS.add x fvs)
+  end.
+
+Inductive Is_free_in_clock : ident -> clock -> Prop :=
+| FreeCon1:
+    forall x ck' xc,
+      Is_free_in_clock x (Con ck' x xc)
+| FreeCon2:
+    forall x y ck' xc,
+      Is_free_in_clock x ck'
+      -> Is_free_in_clock x (Con ck' y xc).
+
+Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
   match e with
-    | Econst c => fvs
-    | Evar x => PS.add x fvs
-    | Ewhen ae c x => free_in_laexp ae fvs
+  | Econst c => fvs
+  | Evar x => PS.add x fvs
+  | Ewhen ae x xc => free_in_laexp ae (PS.add x fvs)
   end
 with free_in_laexp (lae : laexp) (fvs : PS.t) : PS.t :=
   match lae with
-    | LAexp ck e => free_in_lexp e fvs
+  | LAexp ck e => free_in_lexp e (free_in_clock ck fvs)
   end.
 
 Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
 | FreeEvar: forall x, Is_free_in_lexp x (Evar x)
-| FreeEwhen: forall ae ck cv x,
+| FreeEwhen1: forall ae c cv x,
     Is_free_in_laexp x ae ->
-    Is_free_in_lexp x (Ewhen ae ck cv)
+    Is_free_in_lexp x (Ewhen ae c cv)
+| FreeEwhen2: forall ae c cv,
+    Is_free_in_lexp c (Ewhen ae c cv)
 with Is_free_in_laexp : ident -> laexp -> Prop :=
-| freeLAexp: forall ck e x,
+| freeLAexp1: forall ck e x,
     Is_free_in_lexp x e ->
+    Is_free_in_laexp x (LAexp ck e)
+| freeLAexp2: forall ck e x,
+    Is_free_in_clock x ck ->
     Is_free_in_laexp x (LAexp ck e).
 
 Fixpoint free_in_caexp (cae: caexp) (fvs: PS.t) : PS.t :=
   match cae with
-  | CAexp ck ce => free_in_cexp ce fvs
+  | CAexp ck ce => free_in_cexp ce (free_in_clock ck fvs)
   end
 with free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
   match ce with
-  | Emerge i t f => PS.add i (free_in_caexp f (free_in_caexp t fvs))
+  | Emerge i t f => free_in_caexp f (free_in_caexp t (PS.add i fvs))
   | Eexp e => free_in_lexp e fvs
   end.
 
@@ -102,8 +122,11 @@ Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
     Is_free_in_lexp x e ->
     Is_free_in_cexp x (Eexp e)
 with Is_free_in_caexp : ident -> caexp -> Prop :=
-| FreeCAexp: forall ck ce x,
+| FreeCAexp1: forall ck ce x,
     Is_free_in_cexp x ce ->
+    Is_free_in_caexp x (CAexp ck ce)
+| FreeCAexp2: forall ck ce x,
+    Is_free_in_clock x ck ->
     Is_free_in_caexp x (CAexp ck ce).
 
 Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
@@ -127,240 +150,194 @@ Inductive Is_free_in_equation : ident -> equation -> Prop :=
       Is_free_in_laexp i lae ->
       Is_free_in_equation i (EqFby x v lae).
 
+(* TODO: Why isn't this lemma already in the module PS? *)
 Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
 Proof.
   unfold PS.In; unfold PS.empty;
   intros; rewrite PS.mem_Leaf; apply Bool.diff_false_true.
 Qed.
 
-Lemma free_in_lexp_in:
-  forall x e, PS.In x (free_in_lexp e PS.empty) <-> Is_free_in_lexp x e.
+Ltac not_In_empty :=
+  match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.
+
+Lemma free_in_clock_spec:
+  forall x ck m, PS.In x (free_in_clock ck m)
+                 <-> Is_free_in_clock x ck \/ PS.In x m.
 Proof.
-  intro x.
-  apply (lexp_mult
-           (fun e : laexp =>
-              PS.In x (free_in_laexp e PS.empty) <-> Is_free_in_laexp x e)
-           (fun e : lexp =>
-              PS.In x (free_in_lexp e PS.empty) <-> Is_free_in_lexp x e));
-    simpl; constructor; intro H0.
-  - constructor; apply H; assumption.
-  - inversion H0; apply H; assumption.
-  - apply not_In_empty in H0; contradiction.
-  - inversion H0.
-  - apply PS.add_spec in H0.
-    destruct H0 as [H1|H2].
-    rewrite H1; constructor.
-    apply not_In_empty in H2; contradiction.
-  - inversion H0; apply PS.add_spec; left; reflexivity.
-  - apply H in H0; constructor; apply H0.
-  - apply H; inversion H0; assumption.
+  Hint Constructors Is_free_in_clock.
+  induction ck.
+  split; intuition;
+  (match goal with H:Is_free_in_clock _ Cbase |- _ => inversion H end).
+  split; intro H0.
+  apply IHck in H0; destruct H0 as [H0|H0]; try apply PS.add_spec in H0;
+  intuition; subst; intuition.
+  apply IHck; destruct H0 as [H0|H0]; inversion H0;
+  solve [right; apply PS.add_spec; intuition | intuition].
 Qed.
 
-Lemma free_in_laexp_in:
-  forall x e, PS.In x (free_in_laexp e PS.empty) <-> Is_free_in_laexp x e.
+Corollary free_in_clock_spec':
+  forall x ck, PS.In x (free_in_clock ck PS.empty)
+               <-> Is_free_in_clock x ck.
 Proof.
-  destruct e.
-  simpl.
-  constructor.
-  intros H; apply free_in_lexp_in in H; apply freeLAexp; assumption.
-  intros H; apply free_in_lexp_in; inversion H; assumption.
+  intros; pose proof (free_in_clock_spec x ck PS.empty) as H0;
+  intuition not_In_empty.
 Qed.
 
-Lemma free_in_lexp_or_acc:
-  forall x e S,
-    PS.In x (free_in_lexp e S)
-    <-> (PS.In x (free_in_lexp e PS.empty) \/ PS.In x S).
+Lemma free_in_lexp_spec:
+  forall x e m, PS.In x (free_in_lexp e m)
+                <-> Is_free_in_lexp x e \/ PS.In x m.
 Proof.
-  intros x e S.
-  generalize e.
-  apply (lexp_mult
-           (fun e : laexp =>
-              PS.In x (free_in_laexp e S)
-              <-> (PS.In x (free_in_laexp e PS.empty) \/ PS.In x S))
-           (fun e : lexp =>
-              PS.In x (free_in_lexp e S)
-              <-> (PS.In x (free_in_lexp e PS.empty) \/ PS.In x S))).
-  - trivial.
-  - constructor; auto; destruct 1 as [H|].
-    apply not_In_empty in H; contradiction.
-    assumption.
-  - constructor.
-    + intro H; apply PS.add_spec in H; destruct H as [H1|H1].
-      rewrite H1; left; apply PS.add_spec; auto.
-      right; assumption.
-    + destruct 1.
-      apply PS.add_spec in H; destruct H.
-      rewrite H; apply PS.add_spec; auto.
-      apply not_In_empty in H; contradiction.
-      apply PS.add_spec; auto.
-  - constructor.
-    apply H; destruct 1.
-    apply H; auto.
+  Hint Constructors Is_free_in_lexp Is_free_in_laexp.
+  intro x; induction e using lexp_mult
+  with (P:= fun e : laexp =>
+               forall m,
+                 PS.In x (free_in_laexp e m)
+                 <-> (Is_free_in_laexp x e \/ PS.In x m));
+  intro m; (split;
+  [
+    intro H0; try apply IHe in H0
+  | intro H0; try apply IHe
+  ]);
+  try destruct H0 as [H0|H0];
+  try apply free_in_clock_spec in H0;
+  try inversion H0;
+  try apply PS.add_spec;
+  solve [
+      intuition
+    | right; apply free_in_clock_spec; intuition
+    | apply PS.add_spec in H1; destruct H1; subst; intuition
+    | right; apply PS.add_spec; intuition ].
 Qed.
 
-Lemma free_in_laexp_or_acc:
-  forall x e S,
-    PS.In x (free_in_laexp e S)
-    <-> (PS.In x (free_in_laexp e PS.empty) \/ PS.In x S).
+Lemma free_in_lexp_spec':
+  forall x e, PS.In x (free_in_lexp e PS.empty)
+              <-> Is_free_in_lexp x e.
 Proof.
-  destruct e; apply free_in_lexp_or_acc.
+  intros; pose proof (free_in_lexp_spec x e PS.empty);
+  intuition not_In_empty.
 Qed.
 
-Lemma free_in_cexp_or_acc:
-  forall x e S,
-    PS.In x (free_in_cexp e S)
-    <-> (PS.In x (free_in_cexp e PS.empty) \/ PS.In x S).
+Lemma free_in_laexp_spec:
+  forall x e m, PS.In x (free_in_laexp e m)
+                <-> Is_free_in_laexp x e \/ PS.In x m.
 Proof.
-  intros x.
-  apply (cexp_mult
-           (fun e : caexp =>
-              forall S,
-                (PS.In x (free_in_caexp e S)
-                 <-> (PS.In x (free_in_caexp e PS.empty) \/ PS.In x S)))
-           (fun e : cexp =>
-              forall S,
-                (PS.In x (free_in_cexp e S)
-                 <-> (PS.In x (free_in_cexp e PS.empty) \/ PS.In x S)))).
-  - trivial.
-  - constructor. (* TODO: automate ! *)
-    intro.
-    simpl in H1.
-    apply PS.add_spec in H1.
-    destruct H1.
-    rewrite H1.
-    left.
-    apply PS.add_spec.
-    auto.
-
-    apply H0 in H1.
-    destruct H1.
-    left.
-    simpl.
-    apply PS.add_spec.
-    right.
-    apply H0.
-    auto.
-
-    apply H in H1.
-    destruct H1.
-    left.
-    simpl.
-    apply PS.add_spec.
-    right.
-    apply H0.
-    right.
-    apply H1.
-    auto.
-
-    destruct 1.
-    simpl.
-    apply PS.add_spec.
-    simpl in H1.
-    apply PS.add_spec in H1.
-    destruct H1.
-    auto.
-    right.
-
-    apply H0.
-    apply H0 in H1.
-    destruct H1.
-    auto.
-    right.
-    apply H.
-    auto.
-
-    simpl.
-    apply PS.add_spec.
-    right.
-    apply H0.
-    right.
-    apply H.
-    auto.
-  - apply free_in_lexp_or_acc.
+  Hint Constructors Is_free_in_laexp.
+  destruct e; split; intros;
+  repeat progress (match goal with
+                   | H:_ \/ _ |- _ => destruct H as [H|H]
+                   | H:PS.In _ _ |- _ => first [ apply free_in_lexp_spec in H
+                                               | apply free_in_clock_spec in H ]
+                   | |- context [free_in_laexp _ _] => apply free_in_lexp_spec
+                   | H:Is_free_in_laexp _ _ |- _ => inversion_clear H
+                   | _ => solve [right; apply free_in_clock_spec; intuition
+                                | intuition]
+                   end).
 Qed.
 
-Lemma free_in_caexp_or_acc:
-  forall x e S,
-    PS.In x (free_in_caexp e S)
-    <-> (PS.In x (free_in_caexp e PS.empty) \/ PS.In x S).
+Lemma free_in_laexp_spec':
+  forall x e, PS.In x (free_in_laexp e PS.empty)
+              <-> Is_free_in_laexp x e.
 Proof.
-  induction e; apply free_in_cexp_or_acc.
+  intros; pose proof (free_in_laexp_spec x e PS.empty);
+  intuition not_In_empty.
 Qed.
 
-Lemma free_in_cexp_in:
-  forall x e, PS.In x (free_in_cexp e PS.empty) <-> Is_free_in_cexp x e.
+Lemma free_in_cexp_spec:
+  forall x e m, PS.In x (free_in_cexp e m)
+                <-> Is_free_in_cexp x e \/ PS.In x m.
 Proof.
-  intro x.
-  apply (cexp_mult
-           (fun e : caexp =>
-              PS.In x (free_in_caexp e PS.empty) <-> Is_free_in_caexp x e)
-           (fun e : cexp =>
-              PS.In x (free_in_cexp e PS.empty) <-> Is_free_in_cexp x e));
-    simpl; constructor; intro H1.
-  - constructor; apply H; assumption.
-  - apply H; inversion H1; apply H3.
-  - apply PS.add_spec in H1.
-    destruct H1.
-    rewrite H1; constructor.
-    apply free_in_caexp_or_acc in H1.
-    destruct H1.
-    apply H0 in H1.
-    apply FreeEmerge_false.
-    apply H1.
-    apply FreeEmerge_true.
-    apply H.
-    apply H1.
-  - apply PS.add_spec.
-    inversion H1.
-    + auto.
-    + right.
-      apply free_in_caexp_or_acc.
-      right.
-      apply H.
-      apply H4.
-    + right.
-      apply free_in_caexp_or_acc.
-      left.
-      apply H0.
-      apply H4.
-  - apply FreeEexp.
-    apply free_in_lexp_in.
-    apply H1.
-  - apply free_in_lexp_in.
-    inversion H1.
-    apply H2.
+  Hint Constructors Is_free_in_cexp Is_free_in_caexp.
+  intro x;
+    induction e as [c e IHe|i t IHet f IHef|]
+                using cexp_mult
+                with (P:= fun e : caexp =>
+                            forall m,
+                              PS.In x (free_in_caexp e m)
+                              <-> (Is_free_in_caexp x e \/ PS.In x m));
+    intro m; (split; [intro H0; simpl in H0 | intro H0; simpl]);
+    repeat progress (
+             match goal with
+             | H:_\/_ |- _ => destruct H as [H|H]
+             | H:PS.In _ (free_in_cexp _ _) |- _ => apply IHe in H
+             | H:PS.In _ (free_in_caexp _ _) |- _ => apply IHet in H
+                                                     || apply IHef in H
+             | H:PS.In _ (PS.add _ _) |- _ => apply PS.add_spec in H
+             | H:PS.In _ (free_in_lexp _ _) |- _ => apply free_in_lexp_spec in H
+             | H:Is_free_in_caexp _ _ |- _ => inversion_clear H
+             | |- PS.In _ (free_in_cexp _ _) => apply IHe
+             | |- PS.In _ (free_in_caexp _ _) => apply IHet
+                                                       || apply IHef
+             | |- PS.In _ (free_in_lexp _ _) => apply free_in_lexp_spec
+             | _ => apply free_in_clock_spec in H0
+             | _ => intuition
+             end);
+    try (inversion H0; subst);
+    solve [
+        right; apply free_in_clock_spec; intuition
+      | subst; intuition
+      | inversion H0; subst; intuition
+      | right; apply IHet; right; apply PS.add_spec; intuition
+      | right; apply IHet; intuition ] || idtac.
 Qed.
 
-Lemma free_in_caexp_in:
-  forall x e, PS.In x (free_in_caexp e PS.empty) <-> Is_free_in_caexp x e.
+Lemma free_in_cexp_spec':
+  forall x e, PS.In x (free_in_cexp e PS.empty)
+              <-> Is_free_in_cexp x e.
 Proof.
-  destruct e; constructor.
-  - intro H; apply FreeCAexp; apply free_in_cexp_in; apply H.
-  - destruct 1; apply free_in_cexp_in; apply H.
+  intros; pose proof (free_in_cexp_spec x e PS.empty);
+  intuition not_In_empty.
 Qed.
 
-Lemma free_in_equation_or_acc:
-  forall x eq S,
-    PS.In x (free_in_equation eq S)
-    <-> (PS.In x (free_in_equation eq PS.empty) \/ PS.In x S).
+Lemma free_in_caexp_spec:
+  forall x e m, PS.In x (free_in_caexp e m)
+    <-> Is_free_in_caexp x e \/ PS.In x m.
 Proof.
-  destruct eq; apply free_in_caexp_or_acc || apply free_in_laexp_or_acc.
+  Hint Constructors Is_free_in_caexp.
+  destruct e; split; intros;
+  repeat progress (match goal with
+                   | H:_ \/ _ |- _ => destruct H as [H|H]
+                   | H:PS.In _ _ |- _ => first [ apply free_in_cexp_spec in H
+                                               | apply free_in_clock_spec in H ]
+                   | |- context [free_in_caexp _ _] => apply free_in_cexp_spec
+                   | H:Is_free_in_caexp _ _ |- _ => inversion_clear H
+                   | _ => solve [right; apply free_in_clock_spec; intuition
+                                | intuition]
+                   end).
 Qed.
 
-Lemma free_in_equation_in:
+Lemma free_in_caexp_spec':
+  forall x e, PS.In x (free_in_caexp e PS.empty)
+              <-> Is_free_in_caexp x e.
+Proof.
+  intros; rewrite (free_in_caexp_spec x e PS.empty).
+  intuition not_In_empty.
+Qed.
+
+
+Lemma free_in_equation_spec:
+  forall x eq m, PS.In x (free_in_equation eq m)
+                 <-> (Is_free_in_equation x eq \/ PS.In x m).
+Proof.
+  Hint Constructors Is_free_in_equation.
+  destruct eq; split; intro H;
+  repeat progress (match goal with
+                   | H:Is_free_in_equation _ _ |- _ => inversion_clear H
+                   | H:PS.In _ (free_in_equation _ _) |- _ =>
+                                                      apply free_in_caexp_spec in H
+                                                   || apply free_in_laexp_spec in H
+                   | |- PS.In _ (free_in_equation _ _) =>
+                                                      apply free_in_caexp_spec
+                                                   || apply free_in_laexp_spec
+                   | _ => intuition
+                   end).
+Qed.
+
+Lemma free_in_equation_spec':
   forall x eq, PS.In x (free_in_equation eq PS.empty)
                <-> Is_free_in_equation x eq.
 Proof.
-  destruct eq. (* TODO: rewrite using ltac *)
-  - constructor.
-    intro H; apply FreeEqDef; apply free_in_caexp_in; apply H.
-    inversion 1; apply free_in_caexp_in; assumption.
-  - constructor.
-    intro H; apply FreeEqApp; apply free_in_laexp_in; apply H.
-    inversion 1; apply free_in_laexp_in; assumption.
-  - constructor.
-    intro H; apply FreeEqFby; apply free_in_laexp_in; apply H.
-    inversion 1; apply free_in_laexp_in; assumption.
+  intros; rewrite (free_in_equation_spec x eq PS.empty).
+  intuition not_In_empty.
 Qed.
 
 
