@@ -100,7 +100,7 @@ Section TestTranslate.
   Open Scope positive.
   Open Scope list.
 
-  Definition eqns1 : list equation :=
+  Example eqns1 : list equation :=
     [
       EqDef 4 (CAexp Cbase (Emerge 1 (CAexp (Con Cbase 1 true) (Eexp (Evar 2)))
                                    (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))));
@@ -108,12 +108,12 @@ Section TestTranslate.
       EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))))
     ].
 
-  Definition node1 : node :=
+  Example node1 : node :=
     mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
 
   Eval cbv in (translate_node node1).
 
-  Definition prog1 : stmt :=
+  Example prog1 : stmt :=
     Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7)))
                        Skip)
    (Comp (Ifte (Var 1) Skip
@@ -122,7 +122,7 @@ Section TestTranslate.
                        (Assign 4 (State 3)))
          Skip)).
 
-  Lemma prog1_good : (translate_node node1).(c_step).(body) = prog1.
+  Remark prog1_good : (translate_node node1).(c_step).(body) = prog1.
   Proof eq_refl.
 
 End TestTranslate.
