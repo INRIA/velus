@@ -1,46 +1,6 @@
 Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
 
-(** ** Predicates *)
-
-(* Working: Tim *)
-(* Some comments: inversion H  ~>  inversion_clear H to avoid equalities
-                  apply H1. apply H2.  ~>  apply H1, H2.
-                  applying hypotheses from the context  ~> auto can do it
-                  unfold machin in H2 rather than generalize H; unfold machin; intro H'
-                    (even not necessary as Coq can perform apply or rewrite up to some unfolding)
-*)
-
-(* TODO: Big question: how do we get from the scheduling property on graphs
-                       to this predicate?
-         (Membership in memories or not, should follow from the definition
-          of 'memories' above.) *)
-Inductive sch_eqs (memories: PS.t) : PS.t -> PS.t -> list equation -> Prop :=
-| SchEqDef:
-    forall written notwritten x e eqs,
-      ~ (PS.In x memories) ->
-      (forall i, freevar_caexp e i ->
-                 (PS.In i memories -> PS.In i notwritten)
-                 /\ (~PS.In i memories -> PS.In i written)) ->
-      sch_eqs memories (PS.add x written) (PS.remove x notwritten) eqs ->
-      sch_eqs memories written notwritten (EqDef x e :: eqs)
-| SchEqApp:
-    forall written notwritten x f e eqs,
-      ~ (PS.In x memories) ->
-      (forall i, freevar_laexp e i ->
-                 (PS.In i memories -> PS.In i notwritten)
-                 /\ (~PS.In i memories -> PS.In i written)) ->
-      sch_eqs memories (PS.add x written) (PS.remove x notwritten) eqs ->
-      sch_eqs memories written notwritten (EqApp x f e :: eqs)
-| SchEqFby:
-    forall written notwritten x v0 e eqs,
-      PS.In x memories ->
-      (forall i, freevar_laexp e i ->
-                 (PS.In i memories -> PS.In i notwritten)
-                 /\ (~PS.In i memories -> PS.In i written)) ->
-      sch_eqs memories (PS.add x written) (PS.remove x notwritten) eqs ->
-      sch_eqs memories written notwritten (EqFby x v0 e :: eqs).
-
 (* ** Definitions on imperative statements *)
 
 Require Import Rustre.Minimp.
@@ -70,19 +30,15 @@ Require Import Rustre.SynchronousNat.
 
 Lemma pm_in_dec: forall A i m, PM.In (A:=A) i m \/ ~PM.In (A:=A) i m.
 Proof.
-  unfold PM.In.
-  unfold PM.MapsTo.
+  unfold PM.In, PM.MapsTo.
   intros A i m.
   case (PM.find i m).
   eauto.
   right; intro; destruct H; discriminate H.
 Qed.
 
-Lemma ps_in_dec: forall i m, {PS.In i m}+{~PS.In i m}.
-Proof.
-  intros i m; unfold PS.In; case (PS.mem i m); auto.
-Qed.
 
+(*
 Lemma translate_lexp_correct:
   forall H memories n c menv env le,
     sem_lexp H le n (present c) ->
@@ -107,28 +63,6 @@ Proof.
                    (PS.In i memories -> find_mem i menv = Some c0) /\
                    (~ PS.In i memories -> PM.find i env = Some c0)) ->
                exp_eval menv env (translate_laexp memories lae) c).
-(*
-  einduction le using lexp_mult.
-*)
-(*
-  apply (lexp_mult
-           (fun lae : laexp =>
-               sem_laexp H lae n c ->
-               (forall (i : BinNums.positive) (c0 : const),
-                   PM.find i (H n) = Some (present c0) ->
-                   freevar_laexp lae i ->
-                   (PS.In i memories -> find_mem i menv = Some c0) /\
-                   (~ PS.In i memories -> PM.find i env = Some c0)) ->
-               exp_eval menv env (translate_laexp memories lae) c)
-           (fun le : lexp =>
-              sem_lexp H le n c ->
-              (forall (i : BinNums.positive) (c0 : const),
-                  PM.find i (H n) = Some (present c0) ->
-                  freevar_lexp le i ->
-                  (PS.In i memories -> find_mem i menv = Some c0) /\
-                  (~ PS.In i memories -> PM.find i env = Some c0)) ->
-              exp_eval menv env (translate_lexp memories le) c)).
-*)
   (* TODO: How to make this proof shorter? *)
   - intros H1 H2.
     apply IHle.
@@ -162,7 +96,7 @@ Lemma translate_laexp_correct:
   forall H memories lae n c menv env,
     sem_laexp H lae n (present c) ->
     (forall i c, PM.find i (H n) = Some (present c) ->
-                 freevar_laexp lae i ->                 
+                 freevar_laexp lae i ->
                  (PS.In i memories -> find_mem i menv = Some c)
                  /\ (~PS.In i memories -> PM.find i env = Some c)) ->
     exp_eval menv env (translate_laexp memories lae) c.
@@ -218,25 +152,11 @@ Proof.
     reflexivity.
 Qed.
 
-Lemma exp_eval_det:
-  forall menv env e v1 v2,
-    exp_eval menv env e v1 ->
-    exp_eval menv env e v2 ->
-    v1 = v2.
-Proof.
-  induction e;
-    intros v1 v2 H1 H2;
-    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1];
-    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2];
-    rewrite Hv1 in Hv2;
-    ( injection Hv2; trivial ) || apply Hv2.
-Qed.
-    
 Lemma translate_cexp_correct:
   forall H memories ce n c menv env menv' env' x,
     sem_cexp H ce n (present c) ->
     (forall i c, PM.find i (H n) = Some (present c) ->
-                 freevar_cexp ce i ->                 
+                 freevar_cexp ce i ->
                  (PS.In i memories -> find_mem i menv = Some c)
                  /\ (~PS.In i memories -> PM.find i env = Some c)) ->
     stmt_eval menv env (translate_cexp memories x ce) (menv', env') ->
@@ -245,8 +165,8 @@ Proof.
   intros H memories ce.
   apply (cexp_mult
            (fun cae : caexp =>
-              forall (n : nat) (c0 : const) (menv : memoryEnv) 
-                     (env : PM.t const) (menv' : memoryEnv) (env' : valueEnv) 
+              forall (n : nat) (c0 : const) (menv : memoryEnv)
+                     (env : PM.t const) (menv' : memoryEnv) (env' : valueEnv)
                      (x : ident),
                 sem_caexp H cae n c0 ->
                 (forall (i : BinNums.positive) (c1 : const),
@@ -255,10 +175,10 @@ Proof.
                     (PS.In i memories -> find_mem i menv = Some c1) /\
                     (~ PS.In i memories -> PM.find i env = Some c1)) ->
                 stmt_eval menv env (translate_caexp memories x cae) (menv', env') ->
-                env' = PM.add x c0 env)           
+                env' = PM.add x c0 env)
            (fun ce : cexp =>
-              forall (n : nat) (c0 : const) (menv : memoryEnv) 
-                     (env : PM.t const) (menv' : memoryEnv) (env' : valueEnv) 
+              forall (n : nat) (c0 : const) (menv : memoryEnv)
+                     (env : PM.t const) (menv' : memoryEnv) (env' : valueEnv)
                      (x : ident),
                 sem_cexp H ce n c0 ->
                 (forall (i : BinNums.positive) (c1 : const),
@@ -352,7 +272,7 @@ Lemma translate_caexp_correct:
   forall H memories cae n c menv env menv' env' x,
     sem_caexp H cae n (present c) ->
     (forall i c, PM.find i (H n) = Some (present c) ->
-                 freevar_caexp cae i ->                 
+                 freevar_caexp cae i ->
                  (PS.In i memories -> find_mem i menv = Some c)
                  /\ (~PS.In i memories -> PM.find i env = Some c)) ->
     stmt_eval menv env (translate_caexp memories x cae) (menv', env') ->
@@ -368,122 +288,1001 @@ Proof.
   apply (H1 _ _ H9).
   apply (FreeCAexp _ _ _ H10).
 Qed.
+*)
 
-Lemma translate_equation_correct:
+(** ** Predicates *)
 
-      (forall i c, PM.find i (H n) = Some (present c) ->
-                 freevar_equation eq i ->                 
-                 (PS.In i memories -> find_mem i menv = Some c)
-                 /\ (~PS.In i memories -> PM.find i env = Some c)) ->
+(**
+   The list of equations should be in reverse order: the first
+   equation to execute should be the last in the list.
 
-      stmt_eval menv env (translate_eqn eq)
+   The set 'mems' should include any input variables. The relevant
+   clause is written:
+          (PS.In i mems -> ~Is_defined_in i eqs)
+
+   rather than:
+          (PS.In i mems -> ~Is_memory_in i eqs)
+
+   To require that such input variables are not redefined in eqs.
+*)
+Inductive Is_well_sch (mems: PS.t) : list equation -> Prop :=
+| WSchEqDef:
+    forall x e eqs,
+      Is_well_sch mems eqs ->
+      (forall i, Is_free_in_caexp i e ->
+                    (PS.In i mems -> ~Is_defined_in i eqs)
+                 /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+      Is_well_sch mems (EqDef x e :: eqs)
+| WSchEqApp:
+    forall x f e eqs,
+      Is_well_sch mems eqs ->
+      (forall i, Is_free_in_laexp i e ->
+                    (PS.In i mems -> ~Is_defined_in i eqs)
+                 /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+      Is_well_sch mems (EqApp x f e :: eqs)
+| WSchEqFby:
+    forall x v e eqs,
+      Is_well_sch mems eqs ->
+      PS.In x mems ->
+      (forall i, Is_free_in_laexp i e ->
+                    (PS.In i mems -> ~Is_defined_in i eqs)
+                 /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+      Is_well_sch mems (EqFby x v e :: eqs).
+
+Lemma Is_well_sch_cons:
+  forall m eq eqs, Is_well_sch m (eq :: eqs) -> Is_well_sch m eqs.
+Proof. inversion 1; auto. Qed.
+
+Lemma Is_well_sch_free_variable:
+  forall x eq eqs mems,
+    Is_well_sch mems (eq :: eqs)
+    -> Is_free_in_equation x eq
+    -> ~ PS.In x mems
+    -> Is_variable_in x eqs.
+Proof.
+  intros x eq eqs mems Hwsch Hfree Hnim.
+  destruct eq;
+    inversion_clear Hwsch as [? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
+    inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
+    apply Hp in Hc;
+    intuition.
+Qed.
+
+Lemma Is_well_sch_free_variable_in_mems:
+  forall y eq eqs mems,
+    Is_well_sch mems (eq :: eqs)
+    -> Is_free_in_equation y eq
+    -> PS.In y mems
+    -> ~Is_defined_in y eqs.
+Proof.
+  intros x eq eqs mems Hwsch Hfree Hnim.
+  destruct eq;
+    inversion_clear Hwsch as [? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
+    inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
+    apply Hp in Hc;
+    destruct Hc as [Hc0 Hc1];
+    apply Hc0 in Hnim;
+    apply Hnim.
+Qed.
+
+Lemma Is_wsch_is_defined_in:
+  forall x eq eqs mems,
+    Is_well_sch mems (eq :: eqs) ->
+    Is_defined_in x (eq :: eqs) ->
+    Is_defined_in_eq x eq
+    \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
+Proof.
+  intros x eq eqs mems Hwsch Hdef.
+  apply List.Exists_cons in Hdef.
+  destruct (Is_defined_in_eq_dec x eq); intuition.
+Qed.
+
+(* TODO: Write a function to decide
+            {Is_well_sch mems eqs}+{~Is_well_sch mems eqs}
+         and test it on the example programs in DataflowSyntax.v
+*)
+
+Inductive Initial_map_correct_eq : PM.t const -> equation -> Prop :=
+| HIEqDef:
+    forall mems x e, Initial_map_correct_eq mems (EqDef x e)
+| HIEqApp:
+    forall mems x f e, Initial_map_correct_eq mems (EqApp x f e)
+| HIEqFby:
+    forall mems x v e,
+      PM.find x mems = Some v ->
+      Initial_map_correct_eq mems (EqFby x v e).
+
+Definition Initial_map_correct (mems: PM.t const) (eqs: list equation) : Prop :=
+  List.Forall (Initial_map_correct_eq mems) eqs.
+
+Lemma Initial_map_correct_cons:
+  forall m eq eqs,
+    Initial_map_correct m (eq :: eqs) -> Initial_map_correct m eqs.
+Proof. inversion 1; auto. Qed.
+
+Lemma stmt_eval_translate_eqns_cons:
+  forall mems menv env menv' env' eq eqs,
+    stmt_eval menv env (translate_eqns mems (eq :: eqs)) (menv', env')
+    <->
+    (exists menv'' env'',
+        stmt_eval menv env (translate_eqns mems eqs) (menv'', env'')
+        /\ stmt_eval menv'' env'' (translate_eqn mems eq) (menv', env')).
+Proof. (* TODO: redo proof *)
+  split.
+  - intro H.
+    unfold translate_eqns in H.
+    simpl in H.
+    apply stmt_eval_fold_left_shift in H.
+    destruct H as [menv'' H].
+    destruct H as [env'' H].
+    exists menv''. exists env''.
+    destruct H as [H1 H2].
+    split. apply H1.
+    inversion_clear H2.
+    inversion H0.
+    rewrite <- H2.
+    rewrite <- H4.
+    apply H.
+  - intro H.
+    destruct H as [menv'' H].
+    destruct H as [env'' H].
+    destruct H as [H1 H2].
+    unfold translate_eqns.
+    simpl.
+    apply stmt_eval_fold_left_shift.
+    exists menv''. exists env''.
+    split. apply H1.
+    eapply Icomp. apply H2.
+    apply Iskip.
+Qed.
+
+Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: valueEnv)
+  : clock -> Prop :=
+| IsCbase: Is_present_in mems menv env Cbase
+| IsCon:
+    forall ck c v,
+      Is_present_in mems menv env ck
+      -> exp_eval menv env (tovar mems c) (Cbool v)
+      -> Is_present_in mems menv env (Con ck c v).
+
+Lemma exp_eval_tovar_Cbool_dec:
+  forall menv env mems c v,
+    {exp_eval menv env (tovar mems c) (Cbool v)}
+    + {~exp_eval menv env (tovar mems c) (Cbool v)}.
+Proof.
+  Ltac no_match := right; inversion_clear 1; try unfold find_mem in *;
+                   match goal with
+                   | H: PM.find _ _ = _ |- _ => rewrite H in *; discriminate
+                   end.
+  intros menv env mems c v.
+  unfold tovar.
+  destruct (PS.mem c mems).
+  - case_eq (find_mem c menv).
+    + intro c0; destruct c0.
+      * no_match.
+      * destruct b; destruct v; (left; apply estate; assumption) || no_match.
+    + no_match.
+  - case_eq (PM.find c env).
+    + intro c0; destruct c0.
+      * no_match.
+      * destruct b; destruct v; (left; apply evar; assumption) || no_match.
+    + no_match.
+Qed.
+
+Lemma Is_present_in_dec:
+  forall mems menv env ck,
+    {Is_present_in mems menv env ck}+{~Is_present_in mems menv env ck}.
+Proof.
+  intros.
+  induction ck.
+  - left; constructor.
+  - destruct IHck.
+    + destruct (exp_eval_tovar_Cbool_dec menv env mems i b); destruct b;
+      (left; constructor; assumption) || right; inversion_clear 1; auto.
+    + right; inversion_clear 1; auto.
+Qed.
+
+Lemma stmt_eval_Control:
+  forall menv env mems c s menv' env',
+    stmt_eval menv env (Control mems c s) (menv', env')
+    -> (Is_present_in mems menv env c /\  stmt_eval menv env s (menv', env'))
+       \/ (~Is_present_in mems menv env c /\ menv' = menv /\ env' = env).
+Proof.
+  Hint Constructors Is_present_in.
+  intros menv env mems c s menv' env' Hs.
+  induction c.
+  - intuition.
+  - destruct (Is_present_in_dec mems menv env (Con c i b)) as [Hp|Hnp];
+    [ left | right ];
+    destruct b; inversion_clear Hs;
+    try match goal with
+        | H:stmt_eval _ _ (Control _ _ _) _ |- _ => apply IHc in H;
+            destruct H; destruct H
+        | H:stmt_eval _ _ Skip _ |- _ => inversion H
+        end;
+    try match goal with
+        | Hn: ~Is_present_in _ _ _ _, H: Is_present_in _ _ _ _ |- _ =>
+          inversion_clear H; contradiction
+        end;
+    try (inversion_clear Hp;
+         match goal with
+         | H0: exp_eval _ _ _ (Cbool false),
+           H1: exp_eval _ _ _ (Cbool true) |- _ =>
+           discriminate (exp_eval_det _ _ _ _ _ H0 H1)
+         end);
+    try match goal with
+        | Hm: menv = _, He: env = _ |- _ => rewrite Hm, He in *
+        end;
+    auto;
+    contradict Hnp; auto.
+Qed.
+
+Lemma stmt_eval_translate_cexp_menv_inv:
+  forall menv env mems x menv' env' ce,
+    stmt_eval menv env (translate_cexp mems x ce) (menv', env')
+    -> menv' = menv.
+Proof.
+  intros menv env mems x menv' env'.
+  induction ce using cexp_mult
+  with (P := (fun cae : caexp =>
+                stmt_eval menv env (translate_caexp mems x cae) (menv', env') ->
+                menv' = menv));
+  (apply IHce || inversion_clear 1); auto.
+Qed.
+
+Lemma stmt_eval_translate_cexp_env_add:
+  forall menv env mems x menv' env' ce,
+    stmt_eval menv env (translate_cexp mems x ce) (menv', env')
+    -> exists c, env' = PM.add x c env.
+Proof.
+  intros menv env mems x menv' env'.
+  induction ce using cexp_mult
+  with (P := (fun cae : caexp =>
+                stmt_eval menv env (translate_caexp mems x cae) (menv', env') ->
+                exists c, env' = PM.add x c env));
+    (apply IHce || inversion_clear 1); auto.
+  exists v; rewrite <- H1; intuition.
+Qed.
+
+Lemma not_Is_memory_in_eq:
+  forall x eq menv env mems menv' env',
+    ~Is_memory_in_eq x eq
+    -> stmt_eval menv env (translate_eqn mems eq) (menv', env')
+    -> find_mem x menv' = find_mem x menv.
+Proof.
+  intros x eq menv env mems menv' env' Hneq Heval.
+  destruct eq as [y cae|y f lae|y v0 lae].
+  destruct cae.
+  simpl in Heval.
+  apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+  destruct Heval as [Heval1 Heval2].
+  apply stmt_eval_translate_cexp_menv_inv in Heval2.
+  rewrite Heval2. intuition.
+  destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
+  admit. (* TODO: node application *)
+
+  apply not_Is_memory_in_eq_EqFby in Hneq.
+  unfold translate_eqn in Heval.
+  destruct lae.
+  apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+  destruct Heval as [Hipi Heval].
+  inversion_clear Heval.
+  rewrite <- H0.
+  unfold find_mem, add_mem.
+  simpl; rewrite PM.gso; [intuition | apply Hneq].
+  destruct Heval as [Hmenv Henv]; rewrite Hmenv; intuition.
+Qed.
+
+Lemma not_Is_variable_in_eq:
+  forall x eq menv env mems menv' env',
+    ~Is_variable_in_eq x eq
+    -> stmt_eval menv env (translate_eqn mems eq) (menv', env')
+    -> PM.find x env' = PM.find x env.
+Proof.
+  intros x eq menv env mems menv' env' Hnd Heval.
+  destruct eq as [y e|y f e|y v0 e];
+  try apply not_Is_variable_in_eq_EqDef in Hnd.
+  (unfold translate_eqn in Heval;
+   destruct e;
+   apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+   destruct Heval as [Hipi Heval]; [
+     apply stmt_eval_translate_cexp_env_add in Heval;
+     destruct Heval; rewrite H;
+     rewrite PM.gso; [intuition | apply Hnd]
+   | destruct Heval as [Hmenv Henv]; rewrite Henv; intuition]).
+  admit. (* TODO: node application *)
+  simpl in Heval; destruct e.
+  apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+  destruct Heval as [Heval1 Heval2].
+  inversion Heval2; intuition.
+  destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
+Qed.
+
+Lemma stmt_eval_translate_eqns_menv_inv:
+  forall menv env mems eqs menv' env',
+    stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+    -> (forall x, ~Is_memory_in x eqs ->
+                  find_mem x menv' = find_mem x menv).
+Proof.
+  induction eqs as [ |eq].
+  + inversion_clear 1; reflexivity.
+  + intros menv' env' Heval x Hnmem.
+    apply not_Is_memory_in_cons in Hnmem.
+    destruct Hnmem as [H0 H1].
+    apply stmt_eval_translate_eqns_cons in Heval.
+    destruct Heval as [menv'' Heval];
+      destruct Heval as [env'' Heval];
+      destruct Heval as [Heval0 Heval1].
+    apply IHeqs with (x:=x) (2:=H1) in Heval0.
+    apply not_Is_memory_in_eq with (1:=H0) in Heval1.
+    rewrite Heval1, Heval0.
+    reflexivity.
+Qed.
+
+Lemma stmt_eval_translate_eqns_env_inv:
+  forall menv env mems eqs menv' env',
+    stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+    -> (forall x, ~Is_variable_in x eqs ->
+                  PM.find x env' = PM.find x env).
+Proof.
+  induction eqs as [ |eq].
+  + inversion_clear 1; reflexivity.
+  + intros menv' env' Heval x Hndef.
+    apply not_Is_variable_in_cons in Hndef.
+    destruct Hndef as [H0 H1].
+    apply stmt_eval_translate_eqns_cons in Heval.
+    destruct Heval as [menv'' Heval];
+      destruct Heval as [env'' Heval];
+      destruct Heval as [Heval0 Heval1].
+    apply IHeqs with (x:=x) (2:=H1) in Heval0.
+    apply not_Is_variable_in_eq with (1:=H0) in Heval1.
+    rewrite Heval1, Heval0.
+    reflexivity.
+Qed.
+
+Inductive sem_held_equation (H: history) (H': history) : equation -> Prop :=
+| SHEqDef:
+    forall x cae,
+      (forall n c, sem_var H x n (present c) -> sem_var H' x n (present c))
+      -> sem_held_equation H H' (EqDef x cae)
+| SHEqApp:
+    forall x f lae,
+      (forall n c, sem_var H x n (present c) -> sem_var H' x n (present c))
+      -> sem_held_equation H H' (EqApp x f lae)
+| SHEqFby:
+    forall x v0 lae ys,
+      (forall n, sem_laexp H lae n (ys n))
+      -> (forall n c, sem_var H' x n (present c) <-> holdR v0 ys n c)
+      -> sem_held_equation H H' (EqFby x v0 lae).
+
+Definition sem_held_equations
+           (H: history) (H': history) (eqs: list equation) : Prop :=
+  List.Forall (sem_held_equation H H') eqs.
 
 
 
-(* XXX Working: *)
-Definition translate_eqn (eqn: equation): Compiler unit :=
-    match eqn with
-    | EqDef x (CAexp ck ce) =>
-      let s := Control ck (translate_cexp x ce) in
-      add_instr s
-    | EqApp x f (LAexp ck le) =>
-      let c := translate_lexp le in
-      o <- new_obj f;
-        add_instr (Control ck (Step_ap x o c))
-    | EqFby x v (LAexp ck le) =>
-      let c := translate_lexp le in
-      let s := Control ck (AssignSt x c) in
-      _ <- add_mem x;
-        add_instr s
+Lemma holdR_ext:
+  forall xs ys,
+    (forall n, xs n = ys n)
+    -> forall v0 n c,
+      holdR v0 xs n c
+      <-> holdR v0 ys n c.
+Proof.
+  intros xs ys Heq.
+  induction n.
+  - split; inversion 1; constructor.
+  - intro c.
+    split;
+    (inversion 1 as [|? ? Hv Hhold|? ? Hv];
+     (rewrite Heq in Hv || rewrite <- Heq in Hv);
+     [ apply IHn in Hhold; now constructor
+     | apply holdR_present with (1:=Hv) ]).
+Qed.
+
+Lemma fbyR_holdR:
+  forall v0 xs n c,
+    fbyR v0 xs n (present c)
+    -> holdR v0 xs n c.
+Proof.
+  inversion 1; intuition.
+Qed.
+
+Lemma sem_held_equations_corres:
+  forall G H H' eqs,
+    sem_equations G H eqs
+    -> sem_held_equations H H' eqs
+    -> (forall x n c,
+           Is_defined_in x eqs
+           -> sem_var H x n (present c)
+           -> sem_var H' x n (present c)).
+Proof.
+  induction eqs as [|eq]; [inversion 3|].
+  intros Hs Hsh x n c Hdef Hsv.
+  apply Forall_cons2 in Hs; destruct Hs as [Hseq Hseqs];
+  apply Forall_cons2 in Hsh; destruct Hsh as [Hsheq Hsheqs];
+  apply Is_defined_in_cons in Hdef; destruct Hdef as [Hdef|Hdef];
+  [ | destruct Hdef as [Hndef Hdef];
+      apply (IHeqs Hseqs Hsheqs _ _ _ Hdef Hsv) ].
+  destruct eq as [| |y v0 lae]; inversion Hdef; subst;
+  inversion_clear Hsheq as [? ? HH|? ? ? HH|? ? ? ys Hys HH];
+  apply HH; try apply Hsv.
+
+  inversion_clear Hseq as [| |? xs ? ? Hxs Hfby].
+  assert (forall n, xs n = ys n) as Hxsys by
+        (intro n0;
+         specialize Hys with n0;
+         specialize Hxs with n0 (xs n0);
+         apply sem_laexp_det with H n0 lae;
+         (apply Hxs; reflexivity) || apply Hys).
+  apply Hfby in Hsv.
+  rewrite <- (holdR_ext _ _ Hxsys).
+  apply fbyR_holdR with (1:=Hsv).
+Qed.
+
+Section StreamGenerators.
+
+  Variable H: history.
+  Variable arbitrary : stream.
+
+  Definition const_eqb (c1: const) (c2: const) : bool :=
+    match (c1, c2) with
+    | (Cint z1, Cint z2) => BinInt.Z.eqb z1 z2
+    | (Cbool b1, Cbool b2) => Bool.eqb b1 b2
+    | _ => false
     end.
 
+  Definition value_eqb (v1: value) (v2: value) : bool :=
+    match (v1, v2) with
+    | (present c1, present c2) => const_eqb c1 c2
+    | (absent, absent) => true
+    | _ => false
+    end.
 
-Lemma step_correct:
-  forall eqs : list equation,
+  Fixpoint str_clock (ck: clock) (n: nat) : bool :=
+    match ck with
+    | Cbase => true
+    | Con ck' x c => match PM.find x H with
+                     | None => false
+                     | Some xs => andb (str_clock ck' n)
+                                       (value_eqb (xs n) (present (Cbool c)))
+                     end
+    end.
 
-    (* assumptions *)
-    sch_eqs (memories eqs) PS.empty (defined eqs) eqs -> (* written = { input } *)
+  Fixpoint str_lexp (e: lexp) (n: nat) : value :=
+    match e with
+    | Econst c => present c
+    | Evar x => match PM.find x H with
+                | Some xs => xs n
+                | None => absent
+                end
+    | Ewhen e' x c => match PM.find x H with
+                      | Some xs => match xs n with
+                                   | present (Cbool b) =>
+                                     if Bool.eqb b c
+                                     then str_laexp e' n
+                                     else absent
+                                   | _ => absent
+                                   end
+                      | None => absent
+                      end
+    end
+  with str_laexp (e: laexp) (n: nat) : value :=
+    match e with
+    | LAexp ck e => if str_clock ck n then str_lexp e n else absent
+    end.
 
-    (* invariant *)
-      forall x,
-             (PS.In x (PS.inter memories written) -> M x = H x (S n))
-          /\ (PS.In x (PS.diff memories written) -> M x = H x n)
-          /\ (PS.In x (PS.diff written memories) ->
-              H x n = present c -> p x = c)
+  Lemma str_clock_spec:
+    forall ck n c,
+      sem_clock H ck n c
+      -> str_clock ck n = c.
+  Proof.
+    induction ck.
+    inversion 1; intuition.
+    intros n c.
+    inversion_clear 1;
+      repeat progress (simpl;
+         match goal with
+         | H:sem_var _ _ _ _ |- _ => inversion_clear H
+         | H: PM.find _ _ = _ |- _ => rewrite H
+         | H: _ = present (Cbool ?b) |- _ => (rewrite H; destruct b)
+         | H: sem_clock _ _ _ _ |- _ => (apply IHck in H; rewrite H)
+         | H: b <> _ |- _ => (apply Bool.not_true_is_false in H
+                              || apply Bool.not_false_is_true in H;
+                              rewrite H)
+         | _ => (cbv; reflexivity)
+         end).
+    destruct (PM.find i H); cbv; reflexivity.
+  Qed.
 
-    (* meaning of data-flow equations *)
+  Lemma str_lexp_spec:
+    forall e n v,
+      sem_lexp H e n v
+      -> str_lexp e n = v.
+  Proof.
+    induction e using lexp_mult
+    with (P:=fun e => forall n v, sem_laexp H e n v -> str_laexp e n = v);
+    inversion 1;
+    repeat progress (simpl;
+           match goal with
+           | H:sem_lexp _ _ _ _ |- _ => (apply IHe in H; rewrite H)
+           | H:sem_laexp _ _ _ _ |- _ => (apply IHe in H; rewrite H)
+           | H:sem_clock _ _ _ _ |- _ => (apply str_clock_spec in H; rewrite H)
+           | H:sem_var _ _ _ _ |- _ => (inversion_clear H as [xs Hfind Hxsn];
+                                        rewrite Hfind; rewrite Hxsn)
+           | |- (if Bool.eqb ?b1 ?b2 then _ else _) = _ =>
+             try destruct b1; try destruct b2; simpl; intuition
+           | _ => intuition
+           end).
+  Qed.
 
-    (* TODO: replace this with the 'hold semantics' *)
-    sem_equations G H eqs ->
+  Lemma str_laexp_spec:
+    forall e n v,
+      sem_laexp H e n v
+      -> str_laexp e n = v.
+  Proof.
+    inversion_clear 1; simpl;
+    repeat progress
+           match goal with
+           | H:sem_clock _ _ _ _ |- _ => (apply str_clock_spec in H; rewrite H)
+           | H:sem_lexp _ _ _ _ |- _ => (apply str_lexp_spec in H; rewrite H)
+           | _ => intuition
+           end.
+  Qed.
 
-    (* meaning of imperative code; linked by translation function *)
-    s = runCompiler (translate_eqns eqs) ->
-    run M R s.(st_instrs) n (R', M') ->
+End StreamGenerators.
 
-    s.(st_mem)
-    s.(st_instrs)
+(*
+Definition hold_history (H: history) : list equation -> history -> history :=
+  List.fold_left
+    (fun H' eq =>
+       match eq with
+       | EqFby x v0 e => PM.add x (fun n=>present (hold v0 (str_laexp H e) n)) H'
+       | EqApp x _ _ => H
+       | EqDef x _ => H
+       end).
 
-    (* missing: assumptions on input:  n.(n_input).(v_name) *)
+(*
+   eqs = [ EqDef x y; EqFby y (Cint 0) (Econst (Cint 1)) ]
+   eqs' = eqFby x (Cint 0) (Econst (Cint 1)) :: eqs
+
+   Both eqs and eqs' have a coherent semantics (sem_equations G H _),
+   but their respective hold semantics differ (for eqs', x is always present).
+*)
+Lemma sem_held_equations_existence:
+  forall G H eqs,
+    sem_equations G H eqs
+    -> sem_held_equations H (hold_history H eqs H) eqs
+       /\ (forall y n c,
+              sem_var H y n (present c)
+              -> sem_var (hold_history H eqs H) y n (present c)).
+Proof.
+  intros G H eqs Hsem.
+  induction eqs as [|eq].
+  - intuition constructor.
+  - apply Forall_cons2 in Hsem; destruct Hsem as [Hsem Hsems].
+    apply IHeqs in Hsems; clear IHeqs.
+    destruct Hsems as [Hsems Hvars].
+    destruct eq.
+
+    split; [simpl|intuition].
+    apply Forall_cons2; split; [constructor;apply Hvars | intuition].
+
+    split; [simpl|intuition].
+    apply Forall_cons2; split; [constructor;apply Hvars | intuition].
+
+    split.
+    simpl.
+    apply Forall_cons2.
+    split.
+    inversion_clear Hsem.
+    apply SHEqFby with xs.
+    intro n.
+    specialize H0 with n (xs n).
+    apply H0.
+    reflexivity.
+
+    intros n c0.
+    split.
+    inversion_clear 1.
+
+    simpl.
+    Focus 2.
+    intros y n c0.
+    inversion_clear 1.
+    destruct (ident_eq_dec i y) as [Heq|Hneq].
+    rewrite Heq.
+    apply Sv with xs; [ |intuition].
+    rewrite <-H1.
+    simpl.
 
 
-Lemma step_correct:
-  forall eqs : list equation,
+    ~Is_memory_in y eqs
+    -> PM.find y (hold_history eqs H) = PM.find y H
 
-    (* assumptions *)
-    sch_eqs (memories eqs) PS.empty (defined eqs) eqs ->
+    ~Is_memory_in y eqs
+    -> PM.find y (hold_history eqs
 
-    PS.Subset (memories eqs) mems ->
-    PS.Subset (defined eqs) defs ->
+    Focus 2.
+    simpl.
+    rewrite PM.gso.
+    constructor.
 
-    (* invariant *)
-      forall x,
-             (PS.In x (PS.inter memories written) -> M x = H x (S n))
-          /\ (PS.In x (PS.diff memories written) -> M x = H x n)
-          /\ (PS.In x (PS.diff written memories) ->
-              H x n = present c -> p x = c)  
+Lemma sem_held_equations_exist:
+  forall G H eqs,
+    sem_equations G H eqs
+    -> exists H', sem_held_equations H H' eqs.
+Proof.
+  intros G H eqs Hsem.
+  induction eqs as [|eq].
+  - exists H. constructor.
+  - apply Forall_cons2 in Hsem; destruct Hsem as [Hsem Hsems].
+    apply IHeqs in Hsems; clear IHeqs.
+    destruct Hsems as [H' Hsems].
+    exists (hold_history (eq::eqs) H).
+    constructor.
+    Focus 2.
+    Print sem_held_equations.
+    fold sem_held_equations.
+    simpl.
+    apply Hsems.
+    apply IHeqs in H1.
+    constructor.
+    Focus 2.
+    apply IHeqs in H1.
 
-    (* meaning of data-flow equations *)
+    exists H.
+    apply Forall_cons2.
+    split.
+    destruct eq.
+    constructor; intuition.
+    constructor; intuition.
 
-               (* TODO: replace this with the 'hold semantics' *)
-     sem_equations G H eqs ->
+    inversion H0.
+    rewrite <-H2, <-H3, <-H5 in *; clear H2 H3 H5.
+    constructor.
+
+  admit.
+Qed.
+
+Lemma sem_held_value_present:
+  forall H x n c mem_initial,
+    sem_var H x n (present c)
+    -> sem_held_value H mem_initial x n c.
+Proof.
+  intros H x n c mem_initial Hvar.
+  inversion_clear Hvar as [xs Hfind xsn].
+  unfold sem_held_value.
+  intros xs0 v0 Hfindi Hfind'.
+  rewrite Hfind in Hfind'; injection Hfind'; intro Hxss; rewrite <- Hxss in *.
+  induction n.
+  constructor.
+ *)
+
+Definition sem_held_value (H: history) (mems: PM.t const)
+           (x: ident) (n: nat) (c: const) : Prop
+  := forall xs v0, PM.find x mems = Some v0 ->
+                   PM.find x H = Some xs ->
+                   holdR v0 xs n c.
+
+Lemma clock_correct:
+  forall H n memories mem_initial menv env ck,
+    (forall x c, Is_free_in_clock x ck
+                    -> ~PS.In x memories
+                    -> (sem_var H x n (present c)
+                        <-> PM.find x env = Some c))
+    -> (forall x c, Is_free_in_clock x ck
+                    -> PS.In x memories
+                    -> (sem_held_value H mem_initial x n c
+                        <-> find_mem x menv = Some c))
+    -> (sem_clock H ck n true <-> Is_present_in memories menv env ck).
+Proof.
+  Hint Constructors Is_present_in.
+  Hint Constructors sem_clock.
+  Hint Constructors Is_free_in_clock.
+  intros H n memories mem_initial menv env.
+  induction ck as [|? ? x]; [ intuition | ].
+  intros Henv Hmenv.
+  split; intro HH; inversion_clear HH.
+  constructor. apply IHck; auto.
+  destruct (PS.mem x memories) eqn:Hm; unfold tovar; rewrite Hm.
+  rewrite PS.mem_spec in Hm.
+  constructor; apply Hmenv; intuition.
+
+  unfold sem_held_value.
+
+Admitted. (* TODO: Is this lemma provable? *)
+
+Lemma cexp_correct:
+  forall H ce n c x memories mem_initial menv env menv' env',
+    sem_cexp H ce n (present c)
+    -> (forall x c, Is_free_in_cexp x ce
+                    -> ~PS.In x memories
+                    -> (sem_var H x n (present c)
+                        <-> PM.find x env = Some c))
+    -> (forall x c, Is_free_in_cexp x ce
+                    -> PS.In x memories
+                    -> (sem_held_value H mem_initial x n c
+                        <-> find_mem x menv = Some c))
+    -> stmt_eval menv env (translate_cexp memories x ce) (menv', env')
+    -> env' = PM.add x c env.
+Proof.
+  admit. (* TODO: Is this lemma provable? *)
+Qed.
+
+(* Notes:
+   1. The assumption sem_equations must be shown for a set of equations.
+      TODO: lemma showing that a well-typed and well-clocked set of
+            equations has a semantics.
+
+   2. The assumption stmt_eval (translate_eqns mems eqs) implies that an
+      execution exists and thus that exp_eval's evar and estate find some
+      value for each required variable.
+      This is somehow backwards; it should be an obligation to show that
+      an execution exists. This is something assured indirectly in the
+      lemma below where we require not just that evar and estate find
+      some value, but also that it is the correct value.
+*)
+
+Lemma is_step_correct:
+  forall (G: global)
+         (H: history)
+         (input: ident)
+         (mems_v0: PM.t const)
+         (mems: PS.t)
+         (eqs: list equation)
+         (n: nat)
+         (menv: memoryEnv)
+         (menv': memoryEnv)
+         (env: valueEnv)
+         (env': valueEnv),
+
+    (forall x, PM.In x mems_v0 <-> PS.In x mems) (* TODO: just use mems_v0? *)
+    -> Initial_map_correct mems_v0 eqs
+
+    -> Is_well_sch (PS.add input mems) eqs
+
+    -> sem_equations G H eqs
+    -> stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+
+    (* NB: PM.find x env' = Some c -> sem_var H x n (present c)
+           does not hold if PM.find x env = Some arbitrary_c, since
+           x will not be written to when its clock is absent.
+
+           It may just be better to show the direction:
+           sem_var H x n (present c) -> PM.find x env' = Some c
+
+           which is enough if the outputs are only sampled when
+           they are present (normally the case).
+
+           More discussion/context is needed. *)
+    -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
+
+    (* - inputs (assumed) *)
+    -> ~PS.In input mems
+    -> (forall c, sem_var H input n (present c) <-> PM.find input env = Some c)
+
+    (* - unwritten memories (assumed) *)
+    -> (forall x, PM.In x mems_v0 ->
+                  forall c, sem_held_value H mems_v0 x n c
+                            <-> find_mem x menv = Some c)
+
+    (* - locals (shown) *)
+    -> (forall x, Is_variable_in x eqs ->
+                  forall c, sem_var H x n (present c)
+                            <-> PM.find x env' = Some c)
+    (* - written memories (shown) *)
+    /\ (forall x, Is_memory_in x eqs ->
+                  forall c, sem_held_value H mems_v0 x (S n) c
+                            <-> find_mem x menv' = Some c).
+Proof.
+  induction eqs as [|eq].
+  - unfold Is_variable_in, Is_memory_in.
+    split; intros; rewrite List.Exists_nil in *|-; contradiction.
+  - intros n menv menv' env env' Hmems Himc Hwsch Hsem Heval Henv Hin1 Hin2 Humem.
+
+    apply stmt_eval_translate_eqns_cons in Heval.
+    destruct Heval as [menv'' Heval].
+    destruct Heval as [env'' Heval].
+    destruct Heval as [Heval0 Heval1].
+
+    assert (forall x, Is_variable_in x eqs -> PM.find x env = None) as Henv'.
+    intros x Hivi. apply Henv.
+    apply List.Exists_cons_tl; apply Hivi.
+
+    specialize (IHeqs _ _ _ _ _ Hmems
+                      (Initial_map_correct_cons _ _ _ Himc)
+                      (Is_well_sch_cons _ _ _ Hwsch)
+                      (sem_equations_tl _ _ _ _ Hsem)
+                      Heval0 Henv' Hin1 Hin2 Humem).
+    clear Henv'.
+    destruct IHeqs as [IHeqs1 IHeqs2].
+    split.
+    + intros x H0 c.
+      apply Is_variable_in_cons in H0; destruct H0.
+      * destruct eq; inversion H0;
+        rewrite <- H3 in *; clear H0 H3;
+        clear dependent x0; clear dependent e.
+        (* Inductive step for EqDef *)
+        simpl in Heval1.
+        destruct c0.
+        apply stmt_eval_Control in Heval1; destruct Heval1 as [Heval1|Heval1].
+        destruct Heval1 as [H0 H1].
+
+        apply sem_equations_cons with (1:=Hsem).
+        clear Hsem; intros ? Hsem.
+        inversion Hsem.
+        specialize H4 with n.
+        destruct H4; destruct H4.
+        inversion H6.
+        (* sem_clock H c0 n true *)
+        pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ Heval0).
+        (* Testing... *)
+        apply (cexp_correct H c1 n _ x mems mems_v0 _ _ _ _ H9) in H1.
+        (* eliminate the original goal *)
+        rewrite <- H11 in H4.
+        split.
+        { rewrite H1. intro.
+          apply sem_var_det with (1:=H14) in H4; injection H4.
+          intro Hceqc2; rewrite Hceqc2. apply PM.gss. }
+        { (* NB: the converse essentially follows from sem_equations. *)
+          intro. rewrite H1 in H14.
+          rewrite PM.gss in H14. injection H14.
+          intro Hceqc2; rewrite Hceqc2 in H4. exact H4. }
+        clear IHeqs2 Humem H2 Hsem H9 H12 H13 Himc H0 H1.
+        intros x2 c3 Hfree Hnotm.
+        destruct (ident_eq_dec x2 input) as [Hx2in|Hx2nin].
+        rewrite Hx2in in *.
+        { (* need to show that input is not in eqs and thus that
+             PM.find input env'' = PM.find input env... *)
+          apply Is_well_sch_free_variable_in_mems with input _ _ _ in Hwsch.
+          apply not_Is_defined_in_not_Is_variable_in in Hwsch.
+          apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ Heval0) in Hwsch.
+          rewrite Hwsch.
+          apply Hin2.
+          constructor. constructor. apply Hfree.
+          apply PS.add_spec; intuition. }
+        { (* Apply inductive hypothesis for variables in the expression. *)
+          apply Is_well_sch_free_variable with x2 _ _ _ in Hwsch.
+          apply (IHeqs1 _ Hwsch).
+          constructor. constructor. exact Hfree.
+          intro Hinx2.
+          apply PS.add_spec in Hinx2; intuition. }
+        intros x2 c3 Hfree Hnotm.
+        destruct (ident_eq_dec x2 input) as [Hx2in|Hx2nin].
+        rewrite Hx2in in *.
+        { (* the input is not a memory. *) contradiction. }
+        { (* Apply inductive hypothesis for memories in the expression. *)
+          apply Is_well_sch_free_variable_in_mems with x2 _ _ _ in Hwsch.
+          apply not_Is_defined_in_not_Is_memory_in in Hwsch.
+          apply H13 in Hwsch.
+          rewrite Hwsch.
+          apply Humem.
+          apply Hmems.
+          apply Hnotm.
+          constructor. constructor. exact Hfree.
+          apply PS.add_spec. intuition. }
+        { (* sem_clock H c0 n false *)
+          apply (clock_correct H n mems mems_v0 menv'' env'' c0) in H0.
+          apply (sem_clock_det _ _ _ _ _ H0) in H12.
+          discriminate.
+          (* copied and pasted from above... *)
+          intros x2 c3 Hfree Hnotm.
+          destruct (ident_eq_dec x2 input) as [Hx2in|Hx2nin].
+          (* take care of input *)
+          rewrite Hx2in in *.
+          apply Is_well_sch_free_variable_in_mems with input _ _ _ in Hwsch.
+          apply not_Is_defined_in_not_Is_variable_in in Hwsch.
+          apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ Heval0) in Hwsch.
+          rewrite Hwsch.
+          apply Hin2.
+          constructor. constructor 2. apply Hfree.
+          apply PS.add_spec; intuition.
+          (* variables in env *)
+          apply Is_well_sch_free_variable with x2 _ _ _ in Hwsch.
+          apply (IHeqs1 _ Hwsch).
+          constructor. constructor 2. exact Hfree.
+          intro Hinx2.
+          apply PS.add_spec in Hinx2; intuition.
+          (* variables in menv *)
+          intros x2 c3 Hfree Hnotm.
+          destruct (ident_eq_dec x2 input) as [Hx2in|Hx2nin].
+          rewrite Hx2in in *.
+          { (* the input is not a memory. *) contradiction. }
+          { (* Apply inductive hypothesis for memories in the expression. *)
+            apply Is_well_sch_free_variable_in_mems with x2 _ _ _ in Hwsch.
+            pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ Heval0).
+            apply not_Is_defined_in_not_Is_memory_in in Hwsch.
+            apply H13 in Hwsch.
+            rewrite Hwsch.
+            apply Humem.
+            apply Hmems.
+            apply Hnotm.
+            constructor. constructor 2. exact Hfree.
+            apply PS.add_spec. intuition. }
+        }
+        { (* ~Is_present_in ... *)
+          destruct Heval1 as [H0 H1].
+          destruct H1 as [H1 H2].
+          rewrite <- H1, <- H2 in *.
+
+          apply sem_equations_cons with (1:=Hsem).
+          clear Hsem; intros ? Hsem.
+          inversion Hsem.
+          specialize H5 with n.
+          destruct H5; destruct H5.
+          inversion H7.
+
+          Focus 2. (* remove annoying case of c1 absent *)
+          destruct (Is_variable_in_dec x eqs) as [Hvi|Hvni].
+          apply IHeqs1. apply Hvi.
+          split. intro Hsvar.
+          rewrite <- H12 in H5.
+          pose proof (sem_var_det _ _ _ _ _ H5 Hsvar) as Hbad.
+          discriminate Hbad.
+          intro Hfx.
+          assert (PM.find x env' = None) as Hfx'.
+          apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ Heval0) in Hvni.
+          rewrite Hvni.
+          apply Henv.
+          constructor. constructor.
+          rewrite Hfx in Hfx'.
+          discriminate.
+
+          apply (clock_correct H n mems mems_v0 menv' env' c0) in H13.
+          contradiction.
+
+          (* copied and pasted from above... *)
+          intros x2 c3 Hfree Hnotm.
+          destruct (ident_eq_dec x2 input) as [Hx2in|Hx2nin].
+          (* take care of input *)
+          rewrite Hx2in in *.
+          apply Is_well_sch_free_variable_in_mems with input _ _ _ in Hwsch.
+          apply not_Is_defined_in_not_Is_variable_in in Hwsch.
+          apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ Heval0) in Hwsch.
+          rewrite Hwsch.
+          apply Hin2.
+          constructor. constructor 2. apply Hfree.
+          apply PS.add_spec; intuition.
+          (* variables in env *)
+          apply Is_well_sch_free_variable with x2 _ _ _ in Hwsch.
+          apply (IHeqs1 _ Hwsch).
+          constructor. constructor 2. exact Hfree.
+          intro Hinx2.
+          apply PS.add_spec in Hinx2; intuition.
+          (* variables in menv *)
+          intros x2 c3 Hfree Hnotm.
+          destruct (ident_eq_dec x2 input) as [Hx2in|Hx2nin].
+          rewrite Hx2in in *.
+          { (* the input is not a memory. *) contradiction. }
+          { (* Apply inductive hypothesis for memories in the expression. *)
+            apply Is_well_sch_free_variable_in_mems with x2 _ _ _ in Hwsch.
+            pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ Heval0).
+            apply not_Is_defined_in_not_Is_memory_in in Hwsch.
+            apply H14 in Hwsch.
+            rewrite Hwsch.
+            apply Humem.
+            apply Hmems.
+            apply Hnotm.
+            constructor. constructor 2. exact Hfree.
+            apply PS.add_spec. intuition. }
+          }
+        admit. (* TODO: Inductive step for EqApp. *)
+      * destruct H0 as [H0 H1].
+        apply IHeqs1 with (c:=c) in H1; rewrite H1.
+        apply not_Is_variable_in_eq with (2:=Heval1) in H0.
+        rewrite H0; intuition.
+    + intros x H0 c.
+      apply Is_memory_in_cons in H0; destruct H0.
+      * destruct eq; inversion H0.
+        rewrite <- H3 in *.
+        admit. (* Inductive step for EqFby *)
+      * destruct H0.
+        rewrite (IHeqs2 _ H1).
+        eapply not_Is_memory_in_eq with (2:=Heval1) in H0.
+        rewrite H0; apply iff_refl.
+Qed.
 
 
-    (* meaning of imperative code; linked by translation function *)
-               let s := runCompiler (translate_eqns eqs) in
-               s.(st_mem)
-                   s.(st_instrs)
-
-             run M R s.(st_instrs) n (R', M')
-
-    (* missing: assumptions on input:  n.(n_input).(v_name) *)
-
-(* Working: *)
-Inductive run :
-  memoryEnv -> valueEnv -> stmt -> nat -> valueEnv * memoryEnv -> Prop :=
-               
-
-
-
-
-
-(* TODO: Do we really need these definitions? We should be able to extract
-         the relevant information from the definitions above via the
-         translation functions. *)
-Fixpoint freevar_exp (fvs: PS.t) (e: exp) : PS.t :=
-  match e with
-  | Var x => PS.add x fvs
-  | Const c => fvs
-  end.
-    
-Fixpoint freevar_stmt (fvs: PS.t) (s: stmt) : PS.t :=
-   match s with
-   | Assign i e => freevar_exp fvs e
-   | AssignSt i e => freevar_exp fvs e
-   | Ifte i s1 s2 => freevar_stmt (freevar_stmt (PS.add i fvs) s1) s2
-   | Step_ap i f e => freevar_exp fvs e
-   | Comp s1 s2 => freevar_stmt (freevar_stmt fvs s1) s2
-   | Skip => fvs
-   end.
 
 
 
