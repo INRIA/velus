@@ -418,10 +418,6 @@ Proof.
       left; apply IHeqs; apply H.
 Qed.
 
-Lemma Is_memory_in_cons:
-  forall eq eqs x, Is_memory_in x eqs -> Is_memory_in x (eq :: eqs).
-Proof. unfold Is_memory_in; auto using List.Exists_cons. Qed.
-
 Lemma Is_memory_in_dec:
   forall x eqs, {Is_memory_in x eqs}+{~Is_memory_in x eqs}.
 Proof.
@@ -614,6 +610,186 @@ Proof.
   rewrite PS.mem_spec.
   symmetry.
   apply Is_defined_in_defined.
+Qed.
+
+Lemma Is_memory_in_defined_in:
+  forall x eqs,
+    Is_memory_in x eqs ->
+    Is_defined_in x eqs.
+Proof.
+  induction eqs as [|eq].
+  inversion 1.
+  inversion_clear 1 as [? ? H0|? ? H0]; apply List.Exists_cons.
+  - left; destruct eq; inversion_clear H0; constructor.
+  - right; apply IHeqs; apply H0.
+Qed.
+
+Lemma Is_memory_in_cons:
+  forall x eq eqs,
+    Is_memory_in x (eq :: eqs) ->
+    Is_memory_in_eq x eq
+    \/ (~Is_memory_in_eq x eq /\ Is_memory_in x eqs).
+Proof.
+  intros x eq eqs Hdef.
+  apply List.Exists_cons in Hdef.
+  destruct (Is_memory_in_eq_dec x eq); intuition.
+Qed.
+
+Lemma Is_defined_in_cons:
+  forall x eq eqs,
+    Is_defined_in x (eq :: eqs) ->
+    Is_defined_in_eq x eq
+    \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
+Proof.
+  intros x eq eqs Hdef.
+  apply List.Exists_cons in Hdef.
+  destruct (Is_defined_in_eq_dec x eq); intuition.
+Qed.
+
+Lemma Is_variable_in_cons:
+  forall x eq eqs,
+    Is_variable_in x (eq :: eqs) ->
+    Is_variable_in_eq x eq
+    \/ (~Is_variable_in_eq x eq /\ Is_variable_in x eqs).
+Proof.
+  intros x eq eqs Hdef.
+  apply List.Exists_cons in Hdef.
+  destruct (Is_variable_in_eq_dec x eq); intuition.
+Qed.
+
+Lemma not_Is_defined_in_cons:
+  forall x eq eqs,
+    ~Is_defined_in x (eq :: eqs)
+    <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in x eqs.
+Proof.
+  intros x eq eqs. split.
+  intro H0; unfold Is_defined_in in H0; auto.
+  destruct 1 as [H0 H1]; intro H; apply Is_defined_in_cons in H; intuition.
+Qed.
+
+Lemma not_Is_variable_in_cons:
+  forall x eq eqs,
+    ~Is_variable_in x (eq :: eqs)
+    <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in x eqs.
+Proof.
+  intros x eq eqs. split.
+  intro H0; unfold Is_variable_in in H0; auto.
+  destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
+Qed.
+
+Lemma not_Is_memory_in_cons:
+  forall x eq eqs,
+    ~Is_memory_in x (eq :: eqs)
+    <-> ~Is_memory_in_eq x eq /\ ~Is_memory_in x eqs.
+Proof.
+  intros x eq eqs. split.
+  intro H0; unfold Is_memory_in in H0; auto.
+  destruct 1 as [H0 H1]; intro H; apply Is_memory_in_cons in H; intuition.
+Qed.
+
+Lemma not_Is_defined_in_not_Is_variable_in:
+  forall x eqs, ~Is_defined_in x eqs -> ~Is_variable_in x eqs.
+Proof.
+  Hint Constructors Is_defined_in_eq.
+  induction eqs as [|eq].
+  - intro H; contradict H; inversion H.
+  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
+    apply IHeqs in H1; apply not_Is_variable_in_cons.
+    split; [ destruct eq;  inversion 1; subst; intuition
+           | apply H1].
+Qed.
+
+Lemma not_Is_defined_in_not_Is_memory_in:
+  forall x eqs, ~Is_defined_in x eqs -> ~Is_memory_in x eqs.
+Proof.
+  Hint Constructors Is_defined_in_eq.
+  induction eqs as [|eq].
+  - intro H; contradict H; inversion H.
+  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
+    apply IHeqs in H1; apply not_Is_memory_in_cons.
+    split; [ destruct eq;  inversion 1; subst; intuition
+           | apply H1].
+Qed.
+
+Lemma Is_defined_in_not_mem_not_var:
+  forall x eqs,
+    ~Is_memory_in x eqs
+    -> ~Is_variable_in x eqs
+    -> ~Is_defined_in x eqs.
+Proof.
+  intros x eqs Hnmem Hnvar Hndef.
+  induction eqs as [|eq].
+  inversion Hndef.
+  apply not_Is_memory_in_cons in Hnmem.
+  apply not_Is_variable_in_cons in Hnvar.
+  destruct Hnmem as [Hnmem1 Hnmem2].
+  destruct Hnvar as [Hnvar1 Hnvar2].
+  apply Is_defined_in_cons in Hndef.
+  destruct Hndef as [Hndef|Hndef].
+  destruct eq; (inversion Hndef; subst);
+  solve [ apply Hnvar1; repeat constructor
+        | apply Hnmem1; repeat constructor ].
+  now apply IHeqs.
+Qed.
+
+Lemma not_Is_memory_in_eq_EqFby:
+  forall x i v0 lae,
+    ~ Is_memory_in_eq x (EqFby i v0 lae) -> x <> i.
+Proof.
+  intros x i v0 lae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_memory_in_eq i (EqFby i v0 lae)) by constructor.
+  contradiction.
+Qed.
+
+Lemma not_Is_defined_in_eq_EqDef:
+  forall x i cae,
+    ~ Is_defined_in_eq x (EqDef i cae) -> x <> i.
+Proof.
+  intros x i cae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_defined_in_eq i (EqDef i cae)) by constructor.
+  contradiction.
+Qed.
+
+Lemma not_Is_defined_in_eq_EqApp:
+  forall x i f lae,
+    ~ Is_defined_in_eq x (EqApp i f lae) -> x <> i.
+Proof.
+  intros x i f lae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_defined_in_eq i (EqApp i f lae)) by constructor.
+  contradiction.
+Qed.
+
+Lemma not_Is_defined_in_eq_EqFby:
+  forall x i v0 lae,
+    ~ Is_defined_in_eq x (EqFby i v0 lae) -> x <> i.
+Proof.
+  intros x i v0 lae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_defined_in_eq i (EqFby i v0 lae)) by constructor.
+  contradiction.
+Qed.
+
+Lemma not_Is_variable_in_eq_EqDef:
+  forall x i cae,
+    ~ Is_variable_in_eq x (EqDef i cae) -> x <> i.
+Proof.
+  intros x i cae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_variable_in_eq i (EqDef i cae)) by constructor.
+  contradiction.
+Qed.
+
+Lemma not_Is_variable_in_eq_EqApp:
+  forall x i f lae,
+    ~ Is_variable_in_eq x (EqApp i f lae) -> x <> i.
+Proof.
+  intros x i f lae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_variable_in_eq i (EqApp i f lae)) by constructor.
+  contradiction.
 Qed.
 
 (** The map containing global definitions. *)

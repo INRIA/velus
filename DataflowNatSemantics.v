@@ -118,3 +118,85 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
 Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
   List.Forall (sem_equation G H) eqs.
 
+
+
+
+Lemma sem_equations_tl:
+  forall G H eq eqs,
+    sem_equations G H (eq :: eqs) -> sem_equations G H eqs.
+Proof. inversion 1; auto. Qed.
+
+Lemma sem_equations_cons:
+  forall P G H eq eqs,
+    sem_equations G H (eq :: eqs)
+    -> (sem_equations G H eqs -> sem_equation G H eq -> P)
+    -> P.
+Proof.
+  intros P G H eq eqs Hsem H0.
+  apply Forall_cons2 in Hsem; destruct Hsem; auto.
+Qed.
+
+Lemma sem_var_det:
+  forall H x n v1 v2,
+    sem_var H x n v1
+    -> sem_var H x n v2
+    -> v1 = v2.
+Proof.
+  intros H x n v1 v2 H1 H2.
+  inversion_clear H1 as [xs1 Hf1];
+    inversion_clear H2 as [xs2 Hf2];
+    rewrite Hf1 in Hf2; injection Hf2;
+    intro Heq; rewrite <- Heq in *;
+    rewrite <- H0, <- H1; reflexivity.
+Qed.
+
+Lemma sem_clock_det:
+  forall H ck n v1 v2,
+    sem_clock H ck n v1
+    -> sem_clock H ck n v2
+    -> v1 = v2.
+Proof.
+  induction ck; repeat inversion_clear 1; intuition;
+  match goal with
+  | H1:sem_clock _ _ _ _, H2:sem_clock _ _ _ _ |- _
+    => apply (IHck _ _ _ H1) in H2; discriminate
+  | H1:sem_var _ _ _ _, H2: sem_var _ _ _ _ |- _
+    => apply (sem_var_det _ _ _ _ _ H1) in H2; now injection H2
+  end.
+Qed.
+
+Lemma sem_lexp_det:
+  forall v1 v2 H n e,
+    sem_lexp H e n v1
+    -> sem_lexp H e n v2
+    -> v1 = v2.
+Proof.
+  intros v1 v2 H n.
+  induction e using lexp_mult
+  with (P:=fun e=> sem_laexp H e n v1 -> sem_laexp H e n v2 -> v1 = v2);
+    do 2 inversion_clear 1;
+    match goal with
+    | H1:sem_clock _ _ _ true, H2:sem_clock _ _ _ false |- _ =>
+      pose proof (sem_clock_det _ _ _ _ _ H1 H2); discriminate
+    | H1:sem_var _ _ _ _, H2:sem_var _ _ _ _ |- _ =>
+      solve [ apply sem_var_det with (1:=H1) (2:=H2)
+            | pose proof (sem_var_det _ _ _ _ _ H1 H2) as Hcc;
+              injection Hcc; contradiction ]
+    | _ => auto
+    end.
+Qed.
+
+Lemma sem_laexp_det:
+  forall v1 v2 H n e,
+    sem_laexp H e n v1
+    -> sem_laexp H e n v2
+    -> v1 = v2.
+Proof.
+  intros v1 v2 H n e.
+  do 2 inversion_clear 1;
+  match goal with
+  | H1:sem_lexp _ _ _ _, H2:sem_lexp _ _ _ _ |- _ =>
+    pose proof (sem_lexp_det _ _ _ _ _ H1 H2) as Heq
+  end; auto.
+Qed.
+

@@ -19,3 +19,9 @@ Qed.
 Inductive const : Set :=
 | Cint : BinInt.Z -> const
 | Cbool : bool -> const.
+
+Lemma Forall_cons2:
+  forall A P (x: A) l,
+    List.Forall P (x :: l) <-> P x /\ List.Forall P l.
+Proof. intros; split; inversion_clear 1; auto. Qed.
+
