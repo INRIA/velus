@@ -111,9 +111,8 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
       sem_equation G H (EqApp x f arg)
 | SEqFby:
     forall x xs v0 lae,
-      (forall n, sem_laexp H lae n (xs n)) ->  (* TODO: Is this reasonable? *)
-      (forall n, exists xs v, sem_var H x n v
-                           /\ fbyR v0 xs n v) ->
+      (forall n v, xs n = v <-> sem_laexp H lae n v) ->
+      (forall n v, sem_var H x n v <-> fbyR v0 xs n v) ->
       sem_equation G H (EqFby x v0 lae).
 
 Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
