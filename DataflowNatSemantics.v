@@ -36,9 +36,9 @@ Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
 Inductive sem_laexp (H: history): laexp -> nat -> value -> Prop:=
 | SLtick:
     forall ck ce n c,
-      sem_lexp H ce n c ->
+      sem_lexp H ce n (present c) ->
       sem_clock H ck n true ->
-      sem_laexp H (LAexp ck ce) n c
+      sem_laexp H (LAexp ck ce) n (present c)
 | SLabs:
     forall ck ce n,
       sem_lexp H ce n absent ->
@@ -127,13 +127,13 @@ Lemma sem_equations_tl:
 Proof. inversion 1; auto. Qed.
 
 Lemma sem_equations_cons:
-  forall P G H eq eqs,
+  forall G H eq eqs,
     sem_equations G H (eq :: eqs)
-    -> (sem_equations G H eqs -> sem_equation G H eq -> P)
-    -> P.
+    <-> sem_equation G H eq /\ sem_equations G H eqs.
 Proof.
-  intros P G H eq eqs Hsem H0.
-  apply Forall_cons2 in Hsem; destruct Hsem; auto.
+  split; intro Hs.
+  apply Forall_cons2 in Hs; auto.
+  apply Forall_cons2; auto.
 Qed.
 
 Lemma sem_var_det:
@@ -166,14 +166,16 @@ Proof.
 Qed.
 
 Lemma sem_lexp_det:
-  forall v1 v2 H n e,
+  forall H n e v1 v2,
     sem_lexp H e n v1
     -> sem_lexp H e n v2
     -> v1 = v2.
 Proof.
-  intros v1 v2 H n.
+  intros H n.
   induction e using lexp_mult
-  with (P:=fun e=> sem_laexp H e n v1 -> sem_laexp H e n v2 -> v1 = v2);
+  with (P:=fun e=> forall v1 v2, sem_laexp H e n v1
+                                 -> sem_laexp H e n v2
+                                 -> v1 = v2);
     do 2 inversion_clear 1;
     match goal with
     | H1:sem_clock _ _ _ true, H2:sem_clock _ _ _ false |- _ =>
