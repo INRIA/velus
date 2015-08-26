@@ -1,6 +1,8 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 
+Import List.ListNotations.
+Open Scope list_scope.
 
 (** * Imperative language *)
 
@@ -165,15 +167,13 @@ Lemma stmt_eval_fold_left_shift:
                 (menv'', env'')
       /\
       stmt_eval menv'' env'' iacc (menv', env').
-Proof. (* TODO: rewrite this proof  *)
+Proof.
+  Hint Constructors stmt_eval.
   induction xs.
-  - simpl. split.
-    + intro H.
-      exists menv. exists env.
-      split. constructor. apply H.
-    + intro H. destruct H. destruct H.
-      destruct H as [H0 H1].
-      inversion_clear H0. apply H1.
+  - split; [ now eauto | ].
+    intro H; do 2 destruct H.
+    destruct H as [H0 H1].
+    inversion_clear H0; apply H1.
   - intros.
     split.
     + intro H0.
@@ -183,34 +183,18 @@ Proof. (* TODO: rewrite this proof  *)
       destruct H0 as [H0 H1].
       inversion_clear H1.
       exists menv1. exists env1.
-      split.
-      * simpl.
-        apply IHxs.
-        exists menv''. exists env''.
-        split.
-        apply H0.
-        eapply Icomp. apply H. apply Iskip.
-      * apply H2.
-    + intro H0.
-      simpl.
-      destruct H0 as [menv'' H0].
-      destruct H0 as [env'' H0].
-      destruct H0 as [H0 H1].
-      simpl in H0.
-      apply IHxs in H0.
-      destruct H0 as [menv1 H0].
-      destruct H0 as [env1 H0].
-      destruct H0 as [H2 H3].
-      inversion_clear H3.
-      inversion H0.
-      apply IHxs.
-      exists menv1. exists env1.
-      split.
-      apply H2.
-      eapply Icomp.
-      apply H.
-      rewrite H3, H5.
-      apply H1.
+      split; try apply IHxs; eauto.
+    + intros;
+      repeat progress
+             match goal with
+             | H:exists _, _ |- _ => destruct H
+                  | H:_ /\ _ |- _ => destruct H
+             | H:stmt_eval _ _ (Comp _ Skip) _ |- _ => inversion_clear H
+             | H:stmt_eval _ _ Skip _ |- _ => inversion H; subst
+             | H:stmt_eval _ _ (List.fold_left _ _ _) _ |- _ => apply IHxs in H
+             | _ => eauto
+             end.
+      apply IHxs; eauto.
 Qed.
 
 Lemma exp_eval_det:
