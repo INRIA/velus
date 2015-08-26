@@ -37,42 +37,6 @@ Proof.
   right; intro; destruct H; discriminate H.
 Qed.
 
-
-(*
-Lemma translate_caexp_menv_unchanged:
-  forall memories cae x menv env menv' env',
-    stmt_eval menv env (translate_caexp memories x cae) (menv', env') ->
-    menv = menv'.
-Proof.
-  intros memories cae.
-  apply (caexp_mult
-           (fun c : caexp =>
-              forall (x : ident) (menv : memoryEnv) (env : valueEnv)
-                     (menv' : memoryEnv) (env' : valueEnv),
-                stmt_eval menv env (translate_caexp memories x c) (menv', env') ->
-                menv = menv')
-           (fun c : cexp =>
-              forall (x : ident) (menv : memoryEnv) (env : valueEnv)
-                     (menv' : memoryEnv) (env' : valueEnv),
-                stmt_eval menv env (translate_cexp memories x c) (menv', env') ->
-                menv = menv')).
-  - intros.
-    apply (H _ _ _ _ _ H0).
-  - intros.
-    change (stmt_eval menv env
-                      (Ifte (tovar memories i)
-                              (translate_caexp memories x c)
-                              (translate_caexp memories x c0))
-                      (menv', env')) in H1.
-    inversion H1.
-    apply (H _ _ _ _ _ H8).
-    apply (H0 _ _ _ _ _ H8).
-  - intros.
-    inversion H.
-    reflexivity.
-Qed.
-*)
-
 (** ** Predicates *)
 
 (**

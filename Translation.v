@@ -120,7 +120,7 @@ Section TestTranslate.
   Example node1 : node :=
     mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
 
-  Eval cbv in (translate_node node1).
+  (* Eval cbv in (translate_node node1). *)
 
   Example prog1 : stmt :=
     Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7)))
@@ -136,7 +136,5 @@ Section TestTranslate.
 
   Example reset1 : stmt :=
     translate_eqns_init eqns1.
-
-  Eval cbv in reset1.
 
 End TestTranslate.
