@@ -160,6 +160,23 @@ Proof.
   destruct (Is_defined_in_eq_dec x eq); intuition.
 Qed.
 
+Lemma Is_wsch_Is_memory_in_mems:
+  forall mems x eqs,
+    Is_well_sch mems eqs ->
+    Is_memory_in x eqs ->
+    PS.In x mems.
+Proof.
+  induction eqs as [|eq]; [inversion 1|].
+  intros Hwsch Himi.
+  apply Is_memory_in_cons in Himi.
+  destruct Himi as [Himi|Himi].
+  - destruct eq; inversion_clear Himi; auto.
+    inversion_clear Hwsch; auto.
+  - apply Is_well_sch_cons in Hwsch.
+    destruct Himi as [? Himi].
+    auto.
+Qed.
+
 (* TODO: Write a function to decide
             {Is_well_sch mems eqs}+{~Is_well_sch mems eqs}
          and test it on the example programs in DataflowSyntax.v
@@ -1084,6 +1101,33 @@ Local Ltac resolve_env_assumption :=
              | H:forall c:const, sem_var _ _ _ _ <-> PM.find ?x ?env = _
                                  |- PM.find ?x ?env = _ => now (apply H)
 
+             | Hv: forall x' : ident,
+                 Is_variable_in x' ?eqs ->
+                                forall c' : const,
+                                  sem_var ?H x' ?n (present c')
+                                  <-> PM.find x' ?env = Some c',
+               Hs: sem_var ?H ?x ?n (present ?c)
+               |-  PM.find ?x ?env = Some ?c => apply Hv; [now auto|apply Hs]
+
+             | Hin: PS.In ?x ?mems,
+               Hm: forall x,
+                   PS.In x ?mems ->
+                         forall c : const,
+                           sem_var ?H' x ?n (present c)
+                           <-> find_mem x ?menv = Some c
+               |- find_mem ?x ?menv = Some ?c => apply Hm with (1:=Hin)
+
+             | Hs: sem_equations ?G ?H ?eqs,
+               Hh: sem_held_equations ?H ?H' ?eqs,
+               Hv: sem_var ?H ?x ?n ?v,
+               Hd: forall x' : ident, PS.In x' ?mems -> Is_memory_in x' ?eqs,
+               Hm: PS.In ?x ?mems
+               |- sem_var ?H' ?x ?n ?v =>
+                    apply Hd in Hm;
+                    apply Is_memory_in_defined_in in Hm;
+                    now apply sem_held_equations_corres
+                          with (1:=Hs) (2:=Hh) (3:=Hm) (4:=Hv)
+
              | H:x=input |- _ => now (subst; contradiction)
              end
   end.
@@ -1103,23 +1147,112 @@ Local Ltac resolve_env_assumption :=
       some value, but also that it is the correct value.
  *)
 
+Import List.ListNotations.
+Open Scope list_scope.
+
+Lemma List_shift_first:
+  forall (A:Set) ll (x : A) lr,
+    ll ++ (x :: lr) = (ll ++ [x]) ++ lr.
+Proof.
+  induction ll as [|? ? IH]; [auto|intros].
+  rewrite <- List.app_comm_cons.
+  rewrite IH.
+  now do 2 rewrite List.app_comm_cons.
+Qed.
+
+Lemma List_shift_away:
+  forall (A:Set) alleqs (eq : A) eqs,
+    (exists oeqs, alleqs = oeqs ++ (eq :: eqs))
+    -> exists oeqs', alleqs = oeqs' ++ eqs.
+Proof.
+  intros A alleqs eq eqs Hall.
+  destruct Hall as [oeqs Hall].
+  exists (oeqs ++ [eq]).
+  rewrite Hall.
+  now rewrite List_shift_first.
+Qed.
+
+Lemma Forall_app:
+  forall A (P: A -> Prop) ll rr,
+    List.Forall P (ll ++ rr) <-> (List.Forall P ll /\ List.Forall P rr).
+Proof.
+  intros A P ll rr.
+  induction ll as [|x ll IH]; [intuition|].
+  rewrite Forall_cons2.
+  rewrite and_assoc.
+  rewrite <-IH.
+  rewrite <-List.app_comm_cons.
+  now rewrite Forall_cons2.
+Qed.
+
+Lemma sem_equations_app2:
+  forall G H oeqs eqs,
+    sem_equations G H (oeqs ++ eqs)
+    -> sem_equations G H eqs.
+Proof.
+  intros G H oeqs eqs H0.
+  apply Forall_app in H0; intuition.
+Qed.
+
+Lemma sem_held_equations_app2:
+  forall H H' oeqs eqs,
+    sem_held_equations H H' (oeqs ++ eqs)
+    -> sem_held_equations H H' eqs.
+Proof.
+  intros H H' oeqs eqs H0.
+  apply Forall_app in H0; intuition.
+Qed.
+
+Lemma sem_held_equations_cons:
+  forall H H' eq eqs,
+    sem_held_equations H H' (eq :: eqs)
+    <-> sem_held_equation H H' eq /\ sem_held_equations H H' eqs.
+Proof.
+  split; intro Hs.
+  apply Forall_cons2 in Hs; auto.
+  apply Forall_cons2; auto.
+Qed.
+
+Lemma find_mem_gss:
+  forall y c m, find_mem y (add_mem y c m) = Some c.
+Proof.
+  intros. apply PM.gss.
+Qed.
+
+Lemma find_mem_gso:
+  forall x y c m, x <> y -> find_mem x (add_mem y c m) = find_mem x m.
+Proof.
+  intros. apply PM.gso. assumption.
+Qed.
+
+Lemma Is_memory_in_EqFby:
+  forall y v0 lae eqs,
+    Is_memory_in y (EqFby y v0 lae :: eqs).
+Proof.
+  intros. repeat constructor.
+Qed.
+
 Lemma is_step_correct:
   forall (G: global)
          (H: history)
          (H': history)
          (input: ident)
          (mems: PS.t)
-         (eqs: list equation)
-         (n: nat)
-         (menv: memoryEnv)
-         (menv': memoryEnv)
-         (env: valueEnv)
-         (env': valueEnv),
+         (alleqs: list equation),
+
+    sem_equations G H alleqs
+    -> sem_held_equations H H' alleqs
+    -> (forall x:ident, PS.In x mems -> Is_memory_in x alleqs)
+
+    -> forall (eqs: list equation)
+              (n: nat)
+              (menv: memoryEnv)
+              (menv': memoryEnv)
+              (env: valueEnv)
+              (env': valueEnv),
 
     Is_well_sch (PS.add input mems) eqs
-
-    -> sem_equations G H eqs
-    -> sem_held_equations H H' eqs
+    -> (exists oeqs, alleqs = oeqs ++ eqs)
     -> stmt_eval menv env (translate_eqns mems eqs) (menv', env')
 
     (* NB: PM.find x env' = Some c -> sem_var H x n (present c)
@@ -1136,71 +1269,83 @@ Lemma is_step_correct:
     -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
 
     (* - inputs (assumed) *)
-    -> ~PS.In input mems
+    -> ~Is_memory_in input eqs
     -> (forall c, sem_var H input n (present c) <-> PM.find input env = Some c)
 
     (* - unwritten memories (assumed) *)
-    -> (forall x, PS.In x mems ->
-                  forall c, sem_var H x n (present c)
-                            -> find_mem x menv = Some c)
+    -> (forall x:ident,
+           PS.In x mems ->
+           forall c, sem_var H' x n (present c) <-> find_mem x menv = Some c)
 
     (* - locals (shown) *)
-    -> (forall x, Is_variable_in x eqs ->
-                  forall c, sem_var H x n (present c)
-                            <-> PM.find x env' = Some c)
+    -> (forall x:ident,
+           Is_variable_in x eqs ->
+           forall c, sem_var H x n (present c) <-> PM.find x env' = Some c)
 
     (* - written memories (shown) *)
-    /\ (forall x, Is_memory_in x eqs ->
-                  forall c, sem_var H' x (S n) (present c)
-                            <-> find_mem x menv' = Some c).
+       /\ (forall x:ident,
+              Is_memory_in x eqs ->
+              forall c, sem_var H' x (S n) (present c)
+                        <-> find_mem x menv' = Some c).
 Proof.
+  intros until alleqs.
+  intros Hsems Hheld Himi.
+
   induction eqs as [|eq].
   split; intros; match goal with
                  | H:Is_variable_in _ nil |- _ => inversion H
                  | H:Is_memory_in _ nil |- _ => inversion H
                  end.
-  intros n menv menv'' env env'' Hwsch Hsem Hheld Heval Henv Hin1 Hin2 Humem.
+  intros n menv menv'' env env'' Hwsch Hall Hevals Henv Hin1 Hin2 Humem.
 
   (* split stmt_eval into two parts *)
-  apply stmt_eval_translate_eqns_cons in Heval;
-    destruct Heval as [menv' Heval];
-    destruct Heval as [env' Heval];
-    destruct Heval as [Heval0 Heval1].
+  apply stmt_eval_translate_eqns_cons in Hevals;
+    destruct Hevals as [menv' Hevals];
+    destruct Hevals as [env' Hevals];
+    destruct Hevals as [Hevals Heval].
 
   assert (forall x, Is_variable_in x eqs -> PM.find x env = None) as Henv'
       by (intros; apply Henv; constructor 2; auto).
 
+  apply not_Is_memory_in_cons in Hin1.
+  destruct Hin1 as [Hin1 Hin1s].
+
   specialize (IHeqs _ _ _ _ _
                     (Is_well_sch_cons _ _ _ Hwsch)
-                    (sem_equations_tl _ _ _ _ Hsem)
-                    (sem_held_equations_tl _ _ _ _ Hheld)
-                    Heval0 Henv' Hin1 Hin2 Humem).
+                    (List_shift_away _ _ _ _ Hall)
+                    Hevals Henv' Hin1s Hin2 Humem).
   destruct IHeqs as [IHeqs1 IHeqs2].
   clear Henv'.
+
+  destruct Hall as [oeqs Hall].
+  assert (Hsems' := Hsems); rewrite Hall in Hsems'.
+  apply sem_equations_app2 in Hsems'.
+  apply sem_equations_cons in Hsems'.
+  destruct Hsems' as [Hsem Hsems'].
+
   split.
   - intros x Hvi c.
     apply Is_variable_in_cons in Hvi; destruct Hvi as [Hvieq|Hivieqs].
-    + apply sem_equations_cons with (1:=Hsem); clear Hsem; intros Hsems Hsem.
-      destruct eq as [y cae|y f lae|]; inversion Hvieq; subst; clear Hvieq.
+    + destruct eq as [y cae|y f lae|]; inversion Hvieq; subst; clear Hvieq.
       * (* Inductive step for EqDef *)
         destruct cae as [ck ce].
-        simpl in Heval1.
+        simpl in Heval.
         inversion_clear Hsem as [? ? Hsem'| |];
           specialize Hsem' with n;
           destruct Hsem' as [v Hsem];
           destruct Hsem as [Hsv Hcae].
-        pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ Heval0)
+        pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ Hevals)
           as Hminv.
-        apply stmt_eval_Control in Heval1;
-          destruct Heval1 as [Heval1|Heval1];
-          destruct Heval1 as [Hpi Heval1].
+        apply stmt_eval_Control in Heval;
+          destruct Heval as [Heval|Heval];
+          destruct Heval as [Hpi Heval].
         { (* Is_present_in ck *)
           inversion Hcae as [? ? ? c' Hcexp Hclk|? ? ? Hcexp Hclk];
           subst; clear Hcae.
           { (* sem_clock H ck n true *)
-            apply (cexp_correct _ _ _ _ _ _ _ _ _ _ Hcexp) in Heval1.
-            2: resolve_env_assumption; apply IHeqs1; auto.
-            rewrite Heval1; rewrite PM.gss; split.
+            apply (cexp_correct _ _ _ _ _ _ _ _ _ _ Hcexp) in Heval.
+            2: resolve_env_assumption.
+            rewrite Heval; rewrite PM.gss; split.
             intro Hsv';
               assert (present c' = present c) as Heq
                 by apply sem_var_det with (1:=Hsv) (2:=Hsv').
@@ -1208,15 +1353,16 @@ Proof.
             injection 1 as Heq; rewrite Heq in Hsv; assumption. }
           { (* sem_clock H ck n false *)
             apply clock_correct_false with _ _ mems menv' env' _ in Hclk.
-            2: resolve_env_assumption; apply IHeqs1; auto.
+            2: resolve_env_assumption.
             contradiction. }
         }
         { (* ~Is_present_in ck *)
-          destruct Heval1 as [HR1 HR2]; rewrite HR2 in *; clear HR1 HR2.
-          inversion Hcae as [|ck' ce' n' Hcexp Hclk [HR1 HR2] HR3 HR4].
+          destruct Heval as [HR1 HR2]; rewrite HR2 in *; clear HR1 HR2.
+          inversion Hcae as [ ck' ce' n' c' Hcexp Hclk
+                            | ck' ce' n' Hcexp Hclk [HR1 HR2] HR3 HR4].
           { (* sem_clock H ck n true *)
-            apply (clock_correct_true H n mems menv' env' ck) in H5.
-            2: resolve_env_assumption; apply IHeqs1; auto.
+            apply (clock_correct_true H n mems menv' env' ck) in Hclk.
+            2: resolve_env_assumption.
             contradiction. }
           { (* sem_clock H ck n false *)
             split.
@@ -1227,7 +1373,7 @@ Proof.
             { intro Hfx.
               destruct (Is_variable_in_dec y eqs) as [Hvi|Hvni].
               apply IHeqs1; [apply Hvi | apply Hfx].
-              apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ Heval0) in Hvni.
+              apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ Hevals) in Hvni.
               rewrite Hvni in Hfx.
               rewrite Henv in Hfx.
               discriminate.
@@ -1237,21 +1383,205 @@ Proof.
       * (* TODO: Inductive step for EqApp. *) admit.
     + destruct Hivieqs as [H0 H1].
       apply IHeqs1 with (c:=c) in H1; rewrite H1.
-      apply not_Is_variable_in_eq with (2:=Heval1) in H0.
+      apply not_Is_variable_in_eq with (2:=Heval) in H0.
       rewrite H0; intuition.
-  - intros x H0 c.
-    apply Is_memory_in_cons in H0; destruct H0.
-    + destruct eq; inversion H0.
-      rewrite <- H3 in *.
-      admit. (* Inductive step for EqFby *)
-    + destruct H0.
-      rewrite (IHeqs2 _ H1).
-      eapply not_Is_memory_in_eq with (2:=Heval1) in H0.
-      rewrite H0; apply iff_refl.
+  - (* Inductive step for EqFby: y = v0 fby lae *)
+    intros x Hmi c.
+    apply Is_memory_in_cons in Hmi; destruct Hmi as [Hmieq|Himieqs].
+    2:now (destruct Himieqs as [Himieq Himieqs];
+           rewrite IHeqs2;
+           [ rewrite not_Is_memory_in_eq with (1:=Himieq) (2:=Heval) | auto ]).
+    destruct eq as [| |y v0 lae]; inversion Hmieq; subst; clear Hmieq.
+    destruct lae as [ck le].
+    simpl in Heval.
+    pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ Hevals)
+      as Hminv.
+
+    assert (Hheld' := Hheld).
+    apply sem_held_equations_app2 in Hheld'.
+    apply sem_held_equations_cons in Hheld'.
+    destruct Hheld' as [Hheld' Hhelds'].
+    inversion_clear Hheld' as [| |? ? ? ls Hlae Hsv].
+    specialize Hlae with n.
+
+    apply stmt_eval_Control in Heval;
+      destruct Heval as [Heval|Heval];
+      destruct Heval as [Hpi Heval].
+    { (* Is_present_in ck *)
+      inversion Heval as [|? ? ec ? Hexp Hmenv''| | | | |]; subst.
+      rewrite find_mem_gss.
+      inversion Hlae as [? ? ? ? Hlexp Hclk H1 H2 Hlsn|? ? ? Hlexp Hclk]; subst.
+      { (* sem_clock H ck n true *)
+        rewrite Hsv; clear Hsv.
+        assert (exp_eval menv' env'' (translate_lexp mems le) c0) as Hexp'
+          by (apply (lexp_correct _ _ _ _ _ _ _ Hlexp); resolve_env_assumption).
+        apply (exp_eval_det _ _ _ _ _ Hexp) in Hexp'.
+        rewrite Hexp' in *; clear Hexp'.
+        symmetry in Hlsn.
+        apply holdR_present with v0 _ _ _ in Hlsn.
+        split.
+        - intro Hlsn'.
+          apply hold_rel in Hlsn.
+          apply hold_rel in Hlsn'.
+          subst; reflexivity.
+        - injection 1.
+          intro HR; rewrite HR in Hlsn; auto. }
+      { (* sem_clock H ck n false *)
+        apply clock_correct_false with _ _ mems menv' env'' _ in Hclk.
+        2: resolve_env_assumption; apply IHeqs1; auto.
+        contradiction. } }
+    { (* ~Is_present_in ck *)
+      destruct Heval as [HR1 HR2]; rewrite HR1 in *; clear HR1 HR2.
+      inversion Hlae as [? ? ? ? Hlexp Hclk H1 H2 Hlsn
+                        | ? ? ? Hlexp Hclk H0 H2 Hlsn]; subst.
+      { (* sem_clock H ck n true *)
+        apply (clock_correct_true H n mems menv' env' ck) in Hclk.
+        2: resolve_env_assumption.
+        contradiction. }
+      { (* sem_clock H ck n false *)
+        Hint Constructors Is_memory_in_eq.
+        Hint Immediate Is_memory_in_EqFby.
+        destruct Is_memory_in_dec with y eqs as [Hxin|Hxin];
+        [ now apply IHeqs2 with (1:=Hxin) | ].
+        apply Hminv in Hxin.
+        rewrite Hxin; clear Hxin.
+        assert (PS.In y mems) as Hymems.
+        { apply Is_wsch_Is_memory_in_mems with _ y _ in Hwsch; [|now auto].
+          apply PS.add_spec in Hwsch.
+          destruct Hwsch as [Hwsch|Hwsch]; [|now auto].
+          rewrite Hwsch in Hin1.
+          exfalso; auto. }
+        rewrite <- Humem with (1:=Hymems).
+        split.
+        - intro HH.
+          apply Hsv in HH.
+          inversion_clear HH as [|? ? Hlsn' HholdR|? ? Hlsn'];
+            [ apply Hsv in HholdR; exact HholdR
+            | rewrite Hlsn' in Hlsn; discriminate ].
+        - intro HH.
+          symmetry in Hlsn.
+          apply holdR_absent with v0 _ c _ in Hlsn;
+            [ apply Hsv in Hlsn; exact Hlsn
+            | apply Hsv; exact HH ].
+      }
+    }
+Qed.
+
+Lemma stmt_eval_translate_eqn_init_shift:
+  forall eqs iacc menv env menv' env',
+    stmt_eval menv env
+              (List.fold_left translate_eqn_init eqs iacc)
+              (menv', env')
+    <->
+    exists menv'' env'',
+      stmt_eval menv env
+                (List.fold_left translate_eqn_init eqs Skip)
+                (menv'', env'')
+      /\
+      stmt_eval menv'' env'' iacc (menv', env').
+Proof.
+  Hint Constructors stmt_eval.
+  induction eqs as [|eq eqs IH].
+  - split; [ now eauto | ].
+    intro H; do 2 destruct H.
+    destruct H as [H0 H1].
+    inversion_clear H0; apply H1.
+  - intros.
+    split.
+    + intro H0.
+      apply IH in H0.
+      destruct H0 as [menv'' [env'' [H0 H1]]].
+      destruct eq; [now eauto|now eauto|].
+      inversion_clear H1.
+      exists menv1; exists env1.
+      split; try (simpl; apply IH); eauto.
+    + intros.
+      destruct eq;
+        [now (apply IH; auto)|now (apply IH; auto)|].
+      apply IH.
+      simpl in H.
+      destruct H as [menv'' [env'' [H0 H1]]].
+      apply IH in H0.
+      destruct H0 as [menv0 [env0 [H2 H3]]].
+      exists menv0; exists env0.
+      split; [now auto|].
+      inversion_clear H3.
+      inversion H0; subst.
+      econstructor; eauto.
+Qed.
+
+Lemma is_step_initialized:
+  forall (G: global)
+         (H: history)
+         (H': history)
+         (mems: PS.t)
+         (eqs: list equation)
+         (menv: memoryEnv)
+         (menv': memoryEnv)
+         (env: valueEnv)
+         (env': valueEnv),
+    sem_equations G H eqs
+    -> sem_held_equations H H' eqs
+    -> stmt_eval menv env (translate_eqns_init eqs) (menv', env')
+    -> (forall x:ident,
+           Is_memory_in x eqs ->
+           forall c, sem_var H' x 0 (present c) <-> find_mem x menv' = Some c).
+Proof. (* TODO: Tidy up this proof *)
+  induction eqs as [|eq]; [ inversion 4 | ].
+  intros menv menv' env env' Hsem Hheld Heval x Himi c.
+  apply sem_equations_cons in Hsem;
+    destruct Hsem as [Hsem Hsems].
+  apply sem_held_equations_cons in Hheld;
+    destruct Hheld as [Hheld Hhelds].
+  destruct eq;
+    (apply Is_memory_in_cons in Himi;
+     destruct Himi as [Himi|Himi];
+     [inversion Himi|destruct Himi as [Hnimi Himi]];
+     try apply IHeqs with (1:=Hsems) (2:=Hhelds) (3:=Heval) (4:=Himi)).
+  - subst.
+    unfold translate_eqns_init in Heval.
+    simpl in Heval.
+    apply stmt_eval_translate_eqn_init_shift in Heval.
+    destruct Heval as [menv'' [env'' [Hevals Heval]]].
+    inversion Heval; subst.
+    repeat progress
+           match goal with
+           | H:stmt_eval _ _ Skip _ |- _ => inversion H; subst; clear H
+           | H:stmt_eval _ _ (AssignSt _ _) _ |- _ => inversion H; subst; clear H
+           end.
+    rewrite find_mem_gss.
+    inversion Hheld; subst.
+    split.
+    intro HH.
+    apply H5 in HH.
+    inversion HH; subst.
+    inversion_clear H4.
+    reflexivity.
+
+    intro HH.
+    injection HH.
+    intro.
+    apply H5.
+    inversion H4. subst.
+    constructor.
+  - unfold translate_eqns_init in Heval.
+    simpl in Heval.
+    apply stmt_eval_translate_eqn_init_shift in Heval.
+    destruct Heval as [menv'' [env'' [Hevals Heval]]].
+    change (stmt_eval menv env (translate_eqns_init eqs) (menv'', env'')) in Hevals.
+    apply IHeqs with (1:=Hsems) (2:=Hhelds) (3:=Hevals) (c:=c) in Himi.
+    rewrite Himi.
+    inversion_clear Heval.
+    repeat progress
+           match goal with
+           | H:stmt_eval _ _ Skip _ |- _ => inversion H; subst; clear H
+           | H:stmt_eval _ _ (AssignSt _ _) _ |- _ => inversion H; subst; clear H
+           end.
+    assert (x<>i) as Hxni by (contradict Hnimi; subst; constructor).
+    rewrite find_mem_gso with (1:=Hxni).
+    intuition.
 Qed.
 
 (* TODO: lemma to 'close the loop' on is_step_correct.
          Induction on n (the number of the instant). *)
-
-
 

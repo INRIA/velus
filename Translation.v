@@ -93,6 +93,15 @@ Definition translate_node (n: node): class_def :=
                         s.(st_mem)
                         s.(st_instrs)).
 
+Definition translate_eqn_init (s: stmt) (eqn: equation): stmt :=
+  match eqn with
+  | EqFby x v0 lae => Comp (AssignSt x (Const v0)) s
+  | _ => s
+  end.
+
+Definition translate_eqns_init (eqns: list equation): stmt :=
+  List.fold_left translate_eqn_init eqns Skip.
+
 (* Define and translate a simple node. *)
 Section TestTranslate.
 
@@ -124,5 +133,10 @@ Section TestTranslate.
 
   Remark prog1_good : (translate_node node1).(c_step).(body) = prog1.
   Proof eq_refl.
+
+  Example reset1 : stmt :=
+    translate_eqns_init eqns1.
+
+  Eval cbv in reset1.
 
 End TestTranslate.
