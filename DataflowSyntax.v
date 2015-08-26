@@ -538,6 +538,14 @@ Inductive Is_defined_in_eq : ident -> equation -> Prop :=
 Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_defined_in_eq x) eqs.
 
+Inductive no_dup_defs : list equation -> Prop :=
+| NoDupDefs_nil : no_dup_defs nil
+| NoDupDefs_cons : forall eq eqs,
+                     (forall x, Is_defined_in_eq x eq
+                                -> ~Is_defined_in x eqs)
+                     -> no_dup_defs eqs
+                     -> no_dup_defs (eq::eqs).
+
 Lemma Is_defined_in_eq_dec:
   forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
 Proof.

@@ -9,6 +9,12 @@ Inductive value :=
 Definition stream := nat -> value.
 Definition cstream := nat -> bool.
 
+Lemma present_injection:
+  forall x y, x = y <-> present x = present y.
+Proof.
+  split; intro H; [rewrite H|injection H]; auto.
+Qed.
+
 (** Synchronous functions *)
 
 (* With auxiliary hold function. *)
@@ -118,5 +124,31 @@ Proof.
   split.
   intro H; rewrite <- H; apply fby_rel1.
   apply fby_rel2.
+Qed.
+
+Lemma holdR_ext:
+  forall xs ys,
+    (forall n, xs n = ys n)
+    -> forall v0 n c,
+      holdR v0 xs n c
+      <-> holdR v0 ys n c.
+Proof.
+  intros xs ys Heq.
+  induction n.
+  - split; inversion 1; constructor.
+  - intro c.
+    split;
+    (inversion 1 as [|? ? Hv Hhold|? ? Hv];
+     (rewrite Heq in Hv || rewrite <- Heq in Hv);
+     [ apply IHn in Hhold; now constructor
+     | apply holdR_present with (1:=Hv) ]).
+Qed.
+
+Lemma fbyR_holdR:
+  forall v0 xs n c,
+    fbyR v0 xs n (present c)
+    -> holdR v0 xs n c.
+Proof.
+  inversion 1; intuition.
 Qed.
 

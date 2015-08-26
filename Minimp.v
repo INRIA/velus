@@ -260,4 +260,16 @@ Proof.
     intuition.
 Qed.
 
+Lemma find_mem_gss:
+  forall y c m, find_mem y (add_mem y c m) = Some c.
+Proof.
+  intros. apply PM.gss.
+Qed.
+
+Lemma find_mem_gso:
+  forall x y c m, x <> y -> find_mem x (add_mem y c m) = find_mem x m.
+Proof.
+  intros. apply PM.gso. assumption.
+Qed.
+
 
