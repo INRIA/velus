@@ -114,22 +114,21 @@ Section TestTranslate.
       EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
       EqDef 4 (CAexp Cbase (Emerge 1 (CAexp (Con Cbase 1 true) (Eexp (Evar 2)))
                                    (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))));
-      EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))));
-      EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true))))
+      EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))))
+(*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
     ].
 
   Example node1 : node :=
     mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
 
-  Eval cbv in (translate_node node1).
+  (* Eval cbv in (translate_node node1). *)
 
   Example prog1 : stmt :=
-    Comp (Assign 1 (Const (Cbool true)))
-   (Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
+    Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
    (Comp (Ifte (Var 1) (Assign 4 (Var 2))
                        (Assign 4 (State 3)))
    (Comp (Ifte (Var 1) Skip (AssignSt 3 (Var 2)))
-                       Skip))).
+                       Skip)).
 
   Remark prog1_good : (translate_node node1).(c_step).(body) = prog1.
   Proof eq_refl.

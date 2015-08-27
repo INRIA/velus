@@ -309,10 +309,10 @@ Section Well_sch.
 
 End Well_sch.
 
-Example eqn1_well_sch: Is_well_sch (memories eqns1) eqns1.
+Example eqn1_well_sch: Is_well_sch (PS.add 1 (memories eqns1)) eqns1.
 Proof.
-  assert (well_sch (memories eqns1) eqns1 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns1) eqns1) as HS.
+  assert (well_sch (PS.add 1 (memories eqns1)) eqns1 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (PS.add 1 (memories eqns1)) eqns1) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
@@ -330,7 +330,7 @@ Lemma Is_well_sch_free_variable:
 Proof.
   intros x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
+    inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
     inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
     apply Hp in Hc;
     intuition.
@@ -345,7 +345,7 @@ Lemma Is_well_sch_free_variable_in_mems:
 Proof.
   intros x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
+    inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
     inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
     apply Hp in Hc;
     destruct Hc as [Hc0 Hc1];
@@ -371,7 +371,7 @@ Lemma Is_wsch_Is_memory_in_mems:
     Is_memory_in x eqs ->
     PS.In x mems.
 Proof.
-  induction eqs as [|eq]; [inversion 1|].
+  induction eqs as [|eq]; [inversion 2|].
   intros Hwsch Himi.
   apply Is_memory_in_cons in Himi.
   destruct Himi as [Himi|Himi].
@@ -381,11 +381,6 @@ Proof.
     destruct Himi as [? Himi].
     auto.
 Qed.
-
-(* TODO: Write a function to decide
-            {Is_well_sch mems eqs}+{~Is_well_sch mems eqs}
-         and test it on the example programs in DataflowSyntax.v
-*)
 
 Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: valueEnv)
   : clock -> Prop :=
