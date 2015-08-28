@@ -160,6 +160,16 @@ Section Well_sch.
     assumption.
   Qed.
 
+  Lemma check_var_compat:
+    forall memories variables,
+      SetoidList.compat_bool PS.E.eq (check_var memories variables).
+  Proof.
+    intros memories variables x y Heq.
+    unfold PS.E.eq in Heq.
+    rewrite Heq.
+    reflexivity.
+  Qed.
+
   Lemma well_sch_pre_spec:
     forall eqs good memories variables,
       (good, memories, variables)
@@ -212,7 +222,7 @@ Section Well_sch.
          [ constructor; auto; intros y Hy;
            apply free_in_caexp_spec' in Hy || apply free_in_laexp_spec' in Hy;
            rewrite PS.for_all_spec in Hcv;
-           [ | admit]; (* TODO: Where to start with this?! *)
+           [ | apply check_var_compat];
            apply Hcv in Hy;
            apply check_var_spec in Hy | ];
          intros;
@@ -252,40 +262,52 @@ Section Well_sch.
       + destruct good'; [clear IHf| inversion 1; apply IHf; auto ].
         pose proof (IHt (eq_refl true)) as IH; clear IHt.
         destruct IH as [Hwsch [Himi Hivi]].
-        destruct eq; simpl in HH.
-        * injection HH.
-          intros HRv HRm Hcv;
-            rewrite HRv in *; rewrite HRm in *; clear HRv HRm.
-          clear HH.
-          symmetry in Hcv.
-          apply not_for_all_spec in Hcv; [|admit].
-          intro Hwsch'.
-          apply Hcv.
-          inversion_clear Hwsch' as [|? ? ? Hwsch0 HH| | ].
-          intros x Hx.
-          apply free_in_caexp_spec in Hx.
-          destruct Hx as [Hx|Hx]; [ | apply not_In_empty in Hx; contradiction ].
-          apply HH in Hx.
-          destruct Hx as [Hx0 Hx1].
-          apply check_var_spec.
-          split.
-          intro Hxm.
-          apply Hx0 in Hxm.
-          split.
-          apply not_Is_defined_in_not_Is_memory_in in Hxm.
-          intro Hnm.
-          apply Himi in Hnm.
-          contradiction.
-          apply not_Is_defined_in_not_Is_variable_in in Hxm.
-          intro Hnm.
-          apply Hivi in Hnm.
-          contradiction.
-          intro Hxm.
-          apply Hx1 in Hxm.
-          apply Hivi in Hxm.
-          assumption.
-        * admit (* TODO: as above! *).
-        * admit (* TODO: as above! *).
+        destruct eq; simpl in HH;
+        (injection HH;
+         intros HRv HRm Hcv;
+         rewrite HRv in *; rewrite HRm in *;
+         clear HRv HRm;
+         clear HH;
+         symmetry in Hcv;
+         match goal with
+         | Hcv:PS.mem _ _ && _ = false |- _ =>
+             apply Bool.andb_false_iff in Hcv;
+             destruct Hcv as [Hcv|Hcv];
+             [ inversion 1;
+               apply mem_spec_false in Hcv;
+               contradiction | ]
+         | _ => idtac
+         end;
+         apply not_for_all_spec in Hcv; [|apply check_var_compat];
+         intro Hwsch';
+         apply Hcv;
+         inversion_clear Hwsch' as [|? ? ? Hwsch0 HH
+                                    |? ? ? ? Hwsch0 HH
+                                    |? ? ? ? Hwsch0 Hi HH];
+         intros x Hx;
+         apply free_in_caexp_spec in Hx || apply free_in_laexp_spec in Hx;
+         destruct Hx as [Hx|Hx]; [ | apply not_In_empty in Hx; contradiction ];
+         intros;
+         repeat progress
+                match goal with
+                | |- _ /\ _ => split; intros
+                | H: _ /\ _ |- _ => destruct H
+                | H: Is_free_in_caexp _ _ |- _ => apply HH in H
+                | H: Is_free_in_laexp _ _ |- _ => apply HH in H
+                | |- check_var memories' variables' x = true
+                                               => apply check_var_spec
+                | H1:~PS.In ?x ?mems -> Is_variable_in ?x ?eqs,
+                  H2:~PS.In ?x ?mems |- PS.In ?x variables'
+                    => apply H1 in H2; apply Hivi in H2; assumption
+                | H1:PS.In ?x ?mems -> ~Is_defined_in ?x ?eqs,
+                  H2:PS.In ?x ?mems |- _ => apply H1 in H2
+                | H:~Is_defined_in ?x ?eqs |- ~PS.In ?x variables'
+                    => apply not_Is_defined_in_not_Is_variable_in in H;
+                       intro HN; apply Hivi in HN; contradiction
+                | H:~Is_defined_in ?x ?eqs |- ~PS.In ?x memories'
+                    => apply not_Is_defined_in_not_Is_memory_in in H;
+                       intro HN; apply Himi in HN ; contradiction
+                end).
   Qed.
 
   Lemma well_sch_spec:
