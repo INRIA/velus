@@ -606,7 +606,7 @@ intro l. induction l as [| [| e] l]; intro l'; simpl.
     - inversion H.
     - destruct H as [_ H]. inversion H.
 Qed.
-
+(*
 Lemma split_last_Some : forall l l1 l2, split_last l = (Some l1, l2) <-> 
   l = l1 ++ l2 /\ (exists v, last l1 abs = here v) /\ l2 = alls abs l2.
 Proof.
@@ -672,3 +672,4 @@ destruct eqn.
 + 
 + 
 Qed.
+*)
