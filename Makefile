@@ -67,6 +67,7 @@ COQCHK?="$(COQBIN)coqchk"
 
 VFILES:=TranslationNatSemantics.v\
   Translation.v\
+  HoldEquivalence.v\
   DataflowListSemantics.v\
   DataflowNatSemantics.v\
   DataflowSyntax.v\

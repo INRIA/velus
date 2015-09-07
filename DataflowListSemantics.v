@@ -56,8 +56,8 @@ Definition history := list venv.
 
 Definition instant_sem_var env x c := PositiveMap.find x env = Some (here c).
 
-Definition sem_var (H : history) (x : ident) (cl : list value) : Prop :=
-  List.map (PositiveMap.find x) H = List.map (@Some _) cl.
+Definition sem_var (H : history) (x : ident) (vl : list value) : Prop :=
+  List.map (PositiveMap.find x) H = List.map (@Some _) vl.
 
 (** **  Semantics for one instant  **)
 
@@ -228,7 +228,7 @@ Fixpoint fby (v : const) (s : list value) : list value :=
 (* Original "(exists ...) -> ..." tranformed into "forall (... -> ...)" *)
 Inductive sem_equation (G : global) : history -> equation -> Prop :=
   | SEqDef : forall H x cae v,
-      sem_lexp H (Evar x) v ->
+      sem_lexp H (Evar x) v -> (* or [sem_var H x v] *)
       sem_caexp H cae v ->
       sem_equation G H (EqDef x cae)
   | SEqApp : forall H x f arg input output eqs H' vi vo,
@@ -257,6 +257,9 @@ Definition fby_rev v s := fst (fby_aux v s).
 Lemma fby_rev_nil : forall v, fby_rev v nil = nil.
 Proof. reflexivity. Qed.
 
+Lemma fby_rev_cons_here : forall v v' s, fby_rev v (here v' :: s) = here (snd (fby_aux v s)) :: fby_rev v s.
+Proof. intros v v' s. unfold fby_rev. simpl. now destruct (fby_aux v s). Qed.
+
 Lemma fby_aux_abs : forall v0 s, fby_aux v0 (abs :: s) = (abs :: fst (fby_aux v0 s), snd (fby_aux v0 s)).
 Proof.
 induction s as [| [| v] s]; simpl in *.
@@ -269,7 +272,7 @@ Corollary fby_rev_cons_abs : forall v0 s, fby_rev v0 (abs :: s) = abs :: fby_rev
 Proof. unfold fby_rev. intros. now rewrite fby_aux_abs. Qed.
 
 Lemma fby_rev_next : forall d v0 v s n,
-  List.nth (S n) (fby_rev v0 (v :: s)) (here d) = List.nth n (fby_rev v0 s) (here d).
+  List.nth (S n) (fby_rev v0 (v :: s)) d = List.nth n (fby_rev v0 s) d.
 Proof. unfold fby_rev. intros d c [| c'] s n; simpl; destruct (fby_aux c s); reflexivity. Qed.
 
 Lemma fby_rev_abs : forall d v s n, List.nth n s (here d) = abs -> List.nth n (fby_rev v s) (here d) = abs.
@@ -366,8 +369,8 @@ Inductive sem_equation_rev (G : global) : history -> equation -> Prop :=
       sem_lexp H' (Evar output.(v_name)) vo -> (* in the local context, output evaluates to vo *)
       List.Forall (sem_equation_rev G H') eqs -> (* in the local context, the equations have correct semantics *)
       sem_equation_rev G H (EqApp x f arg)
-  | SEqFby_rev : forall H x v y cl,
-      sem_var H y.(v_name) cl ->
+  | SEqFby_rev : forall H x v (y : var_dec) cl,
+      sem_var H y cl ->
       sem_lexp H (Evar x) (fby_rev v cl) ->
       sem_equation_rev G H (EqFby x v y).
 
@@ -427,7 +430,7 @@ Proof. intros. setoid_rewrite sem_caexp_equiv. apply for_all2_rev. Qed.
 Lemma sem_cexp_rev : forall H ce v, sem_cexp (rev H) ce (rev v) <-> sem_cexp H ce v.
 Proof. intros. setoid_rewrite sem_cexp_equiv. apply for_all2_rev. Qed.
 
-Print sem_equation_rev.
+(** Now, the equivalence on equations **)
 
 Theorem sem_equation_rev_1 : forall G H eq, sem_equation G H eq -> sem_equation_rev G (rev H) eq.
 Proof.

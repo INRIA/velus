@@ -7,7 +7,7 @@ Inductive clock : Set :=
 | Cbase : clock                           (** base clock *)
 | Con : clock -> ident -> bool -> clock.  (** subclock *)
 
-Record var_dec : Set := mk_var { v_name : ident;
+Record var_dec : Set := mk_var { v_name :> ident;
                                  v_clock : clock }.
 
 (** **  Syntax  **)
