@@ -101,12 +101,12 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
       sem_equation G H (EqDef x cae)
 | SEqApp:
     forall x f arg input output eqs,
-      PositiveMap.find f G = Some (mk_node f input output eqs) ->
+      PM.find f G = Some (mk_node f input output eqs) ->
       (exists H' vi vo,
          forall n, sem_laexp H arg n vi
                 /\ sem_var H x n vo
-                /\ sem_lexp H' (Evar input.(v_name)) n vi
-                /\ sem_lexp H' (Evar output.(v_name)) n vo
+		/\ sem_var H' input.(v_name) n vi
+		/\ sem_var H' output.(v_name) n vo
                 /\ List.Forall (sem_equation G H') eqs) ->
       sem_equation G H (EqApp x f arg)
 | SEqFby:
