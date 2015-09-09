@@ -4,7 +4,10 @@ Require Import Rustre.DataflowSyntax.
 Require Import SynchronousNat.
 
 Definition history := PM.t stream.
-Definition global := PM.t node.
+Definition global := list node.
+
+Definition find_node (f : ident) :=
+  List.find (fun n=> ident_eqb n.(n_name) f).
 
 Inductive sem_var (H: history)(x: ident)(n: nat)(v: value): Prop :=
 | Sv:
@@ -101,7 +104,7 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
       sem_equation G H (EqDef x cae)
 | SEqApp:
     forall x f arg input output eqs,
-      PM.find f G = Some (mk_node f input output eqs) ->
+      find_node f G = Some (mk_node f input output eqs) ->
       (exists H' vi vo,
          forall n, sem_laexp H arg n vi
                 /\ sem_var H x n vo
@@ -111,14 +114,23 @@ Inductive sem_equation (G: global) (H: history) : equation -> Prop :=
       sem_equation G H (EqApp x f arg)
 | SEqFby:
     forall x xs v0 lae,
-      (forall n v, xs n = v <-> sem_laexp H lae n v) ->
+      (forall n, sem_laexp H lae n (xs n)) ->
       (forall n v, sem_var H x n v <-> fbyR v0 xs n v) ->
       sem_equation G H (EqFby x v0 lae).
 
 Definition sem_equations (G: global) (H: history) (eqs: list equation) : Prop :=
   List.Forall (sem_equation G H) eqs.
 
+Definition sem_node (G: global) (f: ident) (xs: stream) (ys: stream) : Prop :=
+  forall i o eqs,
+    find_node f G = Some (mk_node f i o eqs) ->
+    exists (H: history),
+      (forall n, sem_var H i.(v_name) n (xs n))
+      /\ (forall n, sem_var H o.(v_name) n (ys n))
+      /\ sem_equations G H eqs.
 
+Definition sem_nodes (G: global) : Prop :=
+  List.Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
 
 
 Lemma sem_equations_tl:
@@ -148,6 +160,26 @@ Proof.
     rewrite Hf1 in Hf2; injection Hf2;
     intro Heq; rewrite <- Heq in *;
     rewrite <- H0, <- H1; reflexivity.
+Qed.
+
+Lemma sem_var_repr:
+  forall H x xs,
+    (forall n, sem_var H x n (xs n))
+    <->
+    (forall n v, sem_var H x n v <-> xs n = v).
+Proof.
+  intros H x xs.
+  split; intro H0.
+  - intros n v.
+    specialize H0 with n.
+    split;
+      intro H1;
+      [ apply (sem_var_det _ _ _ _ _ H0 H1)
+      | rewrite <- H1; exact H0 ].
+  - intro n.
+    specialize H0 with n (xs n).
+    apply H0.
+    reflexivity.
 Qed.
 
 Lemma sem_var_gso:
@@ -215,6 +247,25 @@ Proof.
   end; auto.
 Qed.
 
+Lemma sem_laexp_repr:
+  forall H x xs,
+    (forall n, sem_laexp H x n (xs n))
+    <->
+    (forall n v, sem_laexp H x n v <-> xs n = v).
+Proof.
+  intros H x xs.
+  split; intro H0.
+  - intros n v.
+    specialize H0 with n.
+    split;
+      intro H1;
+      [ apply (sem_laexp_det _ _ _ _ _ H0 H1)
+      | rewrite <- H1; exact H0 ].
+  - intro n.
+    specialize H0 with n (xs n).
+    apply H0.
+    reflexivity.
+Qed.
 
 
 Inductive sem_held_equation (H: history) (H': history) : equation -> Prop :=
@@ -266,6 +317,7 @@ Proof.
   apply HH; try apply Hsv.
 
   inversion_clear Hseq as [| |? xs ? ? Hxs Hfby].
+  rewrite sem_laexp_repr in Hxs.
   assert (forall n, xs n = ys n) as Hxsys by
         (intro n0;
          specialize Hys with n0;
@@ -511,6 +563,7 @@ Proof.
     apply fbyR_holdR.
     exact Hvar.
     intro n0.
+    rewrite sem_laexp_repr in H0.
     specialize H0 with n0 (xs n0).
     assert (sem_laexp H l n0 (xs n0)) as Hsl by (apply H0; reflexivity).
     apply str_laexp_spec in Hsl.
@@ -523,7 +576,7 @@ Proof.
     split.
     inversion_clear Hsem.
     apply SHEqFby with xs.
-    intro n; apply H0 with (v:=xs n); reflexivity.
+    apply H0.
     intros n c0.
     split.
     inversion_clear 1.
@@ -537,11 +590,9 @@ Proof.
     rewrite <-H5.
     apply hold_injection.
     intro n0.
-    specialize H0 with n0 (xs n0).
-    assert (xs n0 = xs n0) as Hlae by reflexivity.
-    apply H0 in Hlae.
-    apply str_laexp_spec in Hlae.
-    rewrite Hlae.
+    specialize H0 with n0.
+    apply str_laexp_spec in H0.
+    rewrite H0.
     reflexivity.
     intro Hhold.
     apply hold_rel in Hhold.
@@ -554,10 +605,9 @@ Proof.
     rewrite hold_injection with _ xs _ _.
     apply Hhold.
     intro n0.
-    specialize H0 with n0 (xs n0).
-    assert (sem_laexp H l n0 (xs n0)) as Hsl by (apply H0; reflexivity).
-    apply str_laexp_spec in Hsl.
-    exact Hsl.
+    specialize H0 with n0.
+    apply str_laexp_spec in H0.
+    exact H0.
 
     apply not_in_add_to_sem_held_equations.
     inversion_clear Hndups as [|? ? Hndups'].

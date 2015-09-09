@@ -9,6 +9,7 @@ Module PM := Coq.FSets.FMapPositive.PositiveMap.
 
 Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
+Definition ident_eqb := Pos.eqb.
 
 Lemma In_dec:
   forall x S, {PS.In x S}+{~PS.In x S}.
