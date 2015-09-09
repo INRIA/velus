@@ -404,7 +404,7 @@ Proof.
     auto.
 Qed.
 
-Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: valueEnv)
+Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
   : clock -> Prop :=
 | IsCbase: Is_present_in mems menv env Cbase
 | IsCon:
@@ -952,8 +952,8 @@ Lemma is_step_correct:
               (n: nat)
               (menv: memoryEnv)
               (menv': memoryEnv)
-              (env: valueEnv)
-              (env': valueEnv),
+              (env: constEnv)
+              (env': constEnv),
 
     Is_well_sch (PS.add input mems) eqs
     -> (exists oeqs, alleqs = oeqs ++ eqs)
@@ -1222,8 +1222,8 @@ Lemma is_step_initialized:
          (eqs: list equation)
          (menv: memoryEnv)
          (menv': memoryEnv)
-         (env: valueEnv)
-         (env': valueEnv),
+         (env: constEnv)
+         (env': constEnv),
     sem_equations G H eqs
     -> sem_held_equations H H' eqs
     -> stmt_eval menv env (translate_eqns_init eqs) (menv', env')
@@ -1305,8 +1305,8 @@ Lemma is_steps_correct:
               (n: nat)
               (menv: memoryEnv)
               (menv': memoryEnv)
-              (env: valueEnv)
-              (env': valueEnv),
+              (env: constEnv)
+              (env': constEnv),
 
     Is_well_sch (PS.add input mems) eqs
     -> stmt_eval menv env (translate_eqns mems eqs) (menv', env')

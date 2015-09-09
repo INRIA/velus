@@ -77,11 +77,11 @@ Definition find_object (id: ident) (menv: memoryEnv) : option step_fun :=
   PM.find id (menv.(m_instances)).
 
 
-Definition valueEnv : Set := PM.t const.
+Definition constEnv : Set := PM.t const.
 
-Definition empty: valueEnv := PM.empty const.
+Definition empty: constEnv := PM.empty const.
 
-Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
+Inductive exp_eval (menv: memoryEnv)(env: constEnv):
   exp -> const -> Prop :=
 | evar:
     forall x v,
@@ -95,8 +95,8 @@ Inductive exp_eval (menv: memoryEnv)(env: valueEnv):
     forall c ,
       exp_eval menv env (Const(c)) c.
 
-Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
-  stmt -> memoryEnv * valueEnv -> Prop :=
+Inductive stmt_eval (menv: memoryEnv)(env: constEnv) :
+  stmt -> memoryEnv * constEnv -> Prop :=
 | Iassign:
     forall x e v env',
       exp_eval menv env e v ->
@@ -132,7 +132,7 @@ Inductive stmt_eval (menv: memoryEnv)(env: valueEnv) :
 | Iskip:
     stmt_eval menv env Skip (menv, env)
 
-with application (menv: memoryEnv)(env: valueEnv) :
+with application (menv: memoryEnv)(env: constEnv) :
        step_fun -> const -> const * memoryEnv -> Prop :=
 | Aapp:
     forall s_fun arg_v v res_env res_memory,
@@ -142,7 +142,7 @@ with application (menv: memoryEnv)(env: valueEnv) :
       application menv env s_fun arg_v (v, res_memory).
 
 Inductive run :
-  memoryEnv -> valueEnv -> stmt -> nat -> memoryEnv * valueEnv -> Prop :=
+  memoryEnv -> constEnv -> stmt -> nat -> memoryEnv * constEnv -> Prop :=
 | Run_empty:
     forall menvInit envInit stmt,
       run menvInit envInit stmt 0 (menvInit, envInit)
