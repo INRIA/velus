@@ -4,33 +4,39 @@ Require Import Rustre.Common.
 Require Import Rustre.Minimp.
 Require Import Rustre.DataflowSyntax.
 
+Import List.ListNotations.
+Open Scope positive.
+Open Scope list.
 
 (** * Translation *)
 
-Record state : Set := mk_state {
-  st_mem : list ident;        (* m *)
-  st_objs : list obj_dec;     (* j *)
-  st_instrs : stmt            (* L *)
-}.
+(*
+   Note: it is necessary to distinguish different instantiations of
+         the same node (i.e., different objects of the same class).
 
-Fixpoint new_objs_eq (symap: (ident * PM.t obj_dec)%type) (eq: equation)
-  : (ident * PM.t obj_dec)%type :=
+         This is done in Auger's thesis in the language LSNI, where
+         node applications are assigned unique identifiers. His context
+         is richer, in particular, because the result of a node application
+         may be assigned to a pattern-tuple containing multiple identifiers.
+
+         Here, we take advantage of the fact that the result of a node
+         application is assigned to a single variable. We use the name of
+         that variable to identify the instance.
+ *)
+
+Definition gather_eq (acc: list ident * list obj_dec) (eq: equation) :=
   match eq with
-  | EqApp x f _ =>
-    match symap with
-    | (o, map) => (Pos.succ o, PM.add x (mk_obj_dec o f) map)
-    end
-  | _ => symap
+  | EqDef _ _ => acc
+  | EqApp x f _ => (fst acc, mk_obj_dec x f :: snd acc)
+  | EqFby x v0 _ => (x::fst acc, snd acc)
   end.
 
-Definition new_objs (eqns: list equation) : PM.t obj_dec :=
-  snd (List.fold_left new_objs_eq eqns (1%positive, PM.empty obj_dec)).
+Definition gather_eqs (eqs: list equation) : (list ident * list obj_dec) :=
+  List.fold_left gather_eq eqs ([], []).
 
 Section Translate.
 
   Variable memories : PS.t.
-  (* create this using new_objs ? *)
-  (* Variable objects : PM.t obj_dec. *)
 
   Definition tovar (x: ident) : exp :=
     if PS.mem x memories then State x else Var x.
@@ -68,9 +74,7 @@ Section Translate.
     | EqDef x (CAexp ck ce) =>
       Control ck (translate_cexp x ce)
     | EqApp x f (LAexp ck le) =>
-      (* TODO: should the 2nd x reference an object declaration?
-               i.e., objects x*)
-      Control ck (Step_ap x x (translate_lexp le))
+      Control ck (Step_ap x f x (translate_lexp le))
     | EqFby x v (LAexp ck le) =>
       Control ck (AssignSt x (translate_lexp le))
     end.
@@ -82,32 +86,73 @@ Section Translate.
 
 End Translate.
 
-Definition translate_node (n: node): class_def :=
-  let mems := memories n.(n_eqs) in
-  let s :=
-      mk_state (PS.elements mems) List.nil (translate_eqns mems n.(n_eqs)) in
-  mk_class n.(n_name)
-           s.(st_objs)
-           (mk_step_fun n.(n_input).(v_name)
-                        n.(n_output).(v_name)
-                        s.(st_mem)
-                        s.(st_instrs)).
+Definition ps_from_list (l: list ident) : PS.t :=
+  List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
-Definition translate_eqn_init (s: stmt) (eqn: equation): stmt :=
+Lemma ps_from_list_pre_spec:
+  forall x l S, (List.In x l \/ PS.In x S)
+                <->
+                PS.In x (List.fold_left (fun s i=>PS.add i s) l S).
+Proof.
+  (* TODO: How to use auto to do this whole proof? *)
+  induction l as [|l ls IH].
+  split; intro HH;
+    [ destruct HH as [HH|HH]; [ apply List.in_nil in HH; contradiction | auto]
+    | auto ].
+  split; intro HH.
+  - apply IH.
+    destruct HH as [HH|HH].
+    apply List.in_inv in HH.
+    destruct HH as [HH|HH].
+    rewrite HH.
+    right; apply PS.add_spec.
+    intuition.
+    intuition.
+    right; apply PS.add_spec; intuition.
+  - apply IH in HH.
+    destruct HH as [HH|HH].
+    left; apply List.in_cons; exact HH.
+    apply PS.add_spec in HH.
+    destruct HH as [HH|HH].
+    rewrite HH; intuition.
+    intuition.
+Qed.
+
+Lemma ps_from_list_spec:
+  forall x l, List.In x l <-> PS.In x (ps_from_list l).
+Proof.
+  unfold ps_from_list.
+  intros.
+  rewrite <- ps_from_list_pre_spec with (S:=PS.empty).
+  intuition.
+  match goal with
+  | H:PS.In _ PS.empty |- _ => apply not_In_empty in H; contradiction
+  end.
+Qed.
+
+Definition translate_reset_eqn (s: stmt) (eqn: equation): stmt :=
   match eqn with
-  | EqFby x v0 lae => Comp (AssignSt x (Const v0)) s
-  | _ => s
+  | EqDef _ _ => s
+  | EqFby x v0 _ => Comp (AssignSt x (Const v0)) s
+  | EqApp x f _ => Comp (Reset_ap f x) s
   end.
 
-Definition translate_eqns_init (eqns: list equation): stmt :=
-  List.fold_left translate_eqn_init eqns Skip.
+Definition translate_reset_eqns (eqns: list equation): stmt :=
+  List.fold_left translate_reset_eqn eqns Skip.
+
+Definition translate_node (n: node): class :=
+  let names := gather_eqs n.(n_eqs) in
+  let mems := ps_from_list (fst names) in
+  mk_class n.(n_name)
+           n.(n_input).(v_name)
+           n.(n_output).(v_name)
+           (fst names)
+           (snd names)
+           (translate_eqns mems n.(n_eqs))
+           (translate_reset_eqns n.(n_eqs)).
 
 (* Define and translate a simple node. *)
 Section TestTranslate.
-
-  Import List.ListNotations.
-  Open Scope positive.
-  Open Scope list.
 
   Example eqns1 : list equation :=
     [
@@ -130,13 +175,44 @@ Section TestTranslate.
    (Comp (Ifte (Var 1) Skip (AssignSt 3 (Var 2)))
                        Skip)).
 
-  Remark prog1_good : (translate_node node1).(c_step).(body) = prog1.
+  Remark prog1_good : (translate_node node1).(c_step) = prog1.
   Proof eq_refl.
 
   Example reset1 : stmt :=
-    translate_eqns_init eqns1.
+    translate_reset_eqns eqns1.
+
+  Example eqns2 : list equation :=
+    [
+      EqFby 3 (Cint 0) (LAexp Cbase (Evar 2));
+      EqApp 4 1 (LAexp Cbase (Evar 3));
+      EqApp 2 1 (LAexp Cbase (Evar 1))
+    ].
+
+  Example node2 : node :=
+    mk_node 2 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns2.
+
+  Eval cbv in (translate_node node2).
+
+  Example class2 : class :=
+    {|
+      c_name := 2;
+      c_input := 1;
+      c_output := 4;
+      c_mems := [3];
+      c_objs := [{| obj_inst := 2; obj_class := 1 |};
+                  {| obj_inst := 4; obj_class := 1 |}];
+      c_step := Comp (Step_ap 2 1 2 (Var 1))
+               (Comp (Step_ap 4 1 4 (State 3))
+               (Comp (AssignSt 3 (Var 2))
+               Skip));
+      c_reset := Comp (Reset_ap 1 2)
+                (Comp (Reset_ap 1 4)
+                (Comp (AssignSt 3 (Const (Cint 0)))
+                 Skip))
+    |}.
+
+  Remark prog2_good : translate_node node2 = class2.
+  Proof eq_refl.
 
 End TestTranslate.
-
-
 

@@ -4,6 +4,7 @@ Common.v
 Minimp.v
 DataflowSyntax.v
 DataflowNatSemantics.v
+DataflowNatMSemantics.v
 DataflowListSemantics.v
 Translation.v
 TranslationNatSemantics.v

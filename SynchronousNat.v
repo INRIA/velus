@@ -152,3 +152,26 @@ Proof.
   inversion 1; intuition.
 Qed.
 
+Lemma hold_injection:
+  forall xs ys c n,
+    (forall n, xs n = ys n)
+    -> hold c xs n = hold c ys n.
+Proof.
+  intros xs ys c n Heq.
+  induction n.
+  auto.
+  case_eq (xs n).
+  intro Habs.
+  assert (ys n = absent) as Habs' by (rewrite Heq in Habs; intuition).
+  unfold hold.
+  rewrite Habs. rewrite Habs'.
+  fold hold.
+  apply IHn.
+
+  intros v Habs.
+  assert (ys n = present v) as Habs' by (rewrite Heq in Habs; intuition).
+  unfold hold.
+  rewrite Habs. rewrite Habs'.
+  reflexivity.
+Qed.
+

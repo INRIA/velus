@@ -429,6 +429,13 @@ Proof.
   apply Is_memory_in_memories.
 Qed.
 
+Lemma Is_memory_in_EqFby:
+  forall y v0 lae eqs,
+    Is_memory_in y (EqFby y v0 lae :: eqs).
+Proof.
+  intros. repeat constructor.
+Qed.
+
 Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
   | EqDef x _   => PS.add x vars

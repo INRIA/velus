@@ -4,8 +4,10 @@ Require Import Rustre.DataflowSyntax.
 (* ** Definitions on imperative statements *)
 
 Require Import Rustre.Minimp.
+Require Import PArith.
 Require Import Rustre.Translation.
 Require Import Rustre.DataflowNatSemantics.
+Require Import Rustre.DataflowNatMSemantics.
 Require Import Rustre.SynchronousNat.
 
 (* TODO:
@@ -339,6 +341,14 @@ Proof.
   assumption.
 Qed.
 
+Example eqn2_well_sch: Is_well_sch (PS.add 1 (memories eqns2)) eqns2.
+Proof.
+  assert (well_sch (PS.add 1 (memories eqns2)) eqns2 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (PS.add 1 (memories eqns2)) eqns2) as HS.
+  rewrite HW in HS.
+  assumption.
+Qed.
+
 Lemma Is_well_sch_cons:
   forall m eq eqs, Is_well_sch m (eq :: eqs) -> Is_well_sch m eqs.
 Proof. inversion 1; auto. Qed.
@@ -466,12 +476,12 @@ Proof.
 Qed.
 
 Lemma stmt_eval_translate_eqns_cons:
-  forall mems menv env menv' env' eq eqs,
-    stmt_eval menv env (translate_eqns mems (eq :: eqs)) (menv', env')
+  forall prog mems menv env menv' env' eq eqs,
+    stmt_eval prog menv env (translate_eqns mems (eq :: eqs)) (menv', env')
     <->
     (exists menv'' env'',
-        stmt_eval menv env (translate_eqns mems eqs) (menv'', env'')
-        /\ stmt_eval menv'' env'' (translate_eqn mems eq) (menv', env')).
+        stmt_eval prog menv env (translate_eqns mems eqs) (menv'', env'')
+        /\ stmt_eval prog menv'' env'' (translate_eqn mems eq) (menv', env')).
 Proof. (* TODO: redo proof *)
   split.
   - intro H.
@@ -485,9 +495,8 @@ Proof. (* TODO: redo proof *)
     split. apply H1.
     inversion_clear H2.
     inversion H0.
-    rewrite <- H2.
-    rewrite <- H4.
-    apply H.
+    subst.
+    exact H.
   - intro H.
     destruct H as [menv'' H].
     destruct H as [env'' H].
@@ -503,22 +512,23 @@ Qed.
 
 
 Lemma stmt_eval_Control:
-  forall menv env mems c s menv' env',
-    stmt_eval menv env (Control mems c s) (menv', env')
-    -> (Is_present_in mems menv env c /\  stmt_eval menv env s (menv', env'))
+  forall prog menv env mems c s menv' env',
+    stmt_eval prog menv env (Control mems c s) (menv', env')
+    -> (Is_present_in mems menv env c
+        /\  stmt_eval prog menv env s (menv', env'))
        \/ (~Is_present_in mems menv env c /\ menv' = menv /\ env' = env).
 Proof.
   Hint Constructors Is_present_in.
-  intros menv env mems c s menv' env' Hs.
+  intros prog menv env mems c s menv' env' Hs.
   induction c.
   - intuition.
   - destruct (Is_present_in_dec mems menv env (Con c i b)) as [Hp|Hnp];
     [ left | right ];
     destruct b; inversion_clear Hs;
     try match goal with
-        | H:stmt_eval _ _ (Control _ _ _) _ |- _ => apply IHc in H;
+        | H:stmt_eval _ _ _ (Control _ _ _) _ |- _ => apply IHc in H;
             destruct H; destruct H
-        | H:stmt_eval _ _ Skip _ |- _ => inversion H
+        | H:stmt_eval _ _ _ Skip _ |- _ => inversion H
         end;
     try match goal with
         | Hn: ~Is_present_in _ _ _ _, H: Is_present_in _ _ _ _ |- _ =>
@@ -538,89 +548,102 @@ Proof.
 Qed.
 
 Lemma stmt_eval_translate_cexp_menv_inv:
-  forall menv env mems x menv' env' ce,
-    stmt_eval menv env (translate_cexp mems x ce) (menv', env')
+  forall prog menv env mems x menv' env' ce,
+    stmt_eval prog menv env (translate_cexp mems x ce) (menv', env')
     -> menv' = menv.
 Proof.
-  intros menv env mems x menv' env'.
+  intros prog menv env mems x menv' env'.
   induction ce using cexp_mult
   with (P := (fun cae : caexp =>
-                stmt_eval menv env (translate_caexp mems x cae) (menv', env') ->
-                menv' = menv));
+           stmt_eval prog menv env (translate_caexp mems x cae) (menv', env') ->
+           menv' = menv));
   (apply IHce || inversion_clear 1); auto.
 Qed.
 
 Lemma stmt_eval_translate_cexp_env_add:
-  forall menv env mems x menv' env' ce,
-    stmt_eval menv env (translate_cexp mems x ce) (menv', env')
+  forall prog menv env mems x menv' env' ce,
+    stmt_eval prog menv env (translate_cexp mems x ce) (menv', env')
     -> exists c, env' = PM.add x c env.
 Proof.
-  intros menv env mems x menv' env'.
+  intros prog menv env mems x menv' env'.
   induction ce using cexp_mult
   with (P := (fun cae : caexp =>
-                stmt_eval menv env (translate_caexp mems x cae) (menv', env') ->
-                exists c, env' = PM.add x c env));
+          stmt_eval prog menv env (translate_caexp mems x cae) (menv', env') ->
+          exists c, env' = PM.add x c env));
     (apply IHce || inversion_clear 1); auto.
   exists v; rewrite <- H1; intuition.
 Qed.
 
 Lemma not_Is_memory_in_eq:
-  forall x eq menv env mems menv' env',
+  forall prog x eq menv env mems menv' env',
     ~Is_memory_in_eq x eq
-    -> stmt_eval menv env (translate_eqn mems eq) (menv', env')
+    -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
     -> find_mem x menv' = find_mem x menv.
-Proof.
-  intros x eq menv env mems menv' env' Hneq Heval.
+Proof. (* TODO: Tidy proof *)
+  intros prog x eq menv env mems menv' env' Hneq Heval.
   destruct eq as [y cae|y f lae|y v0 lae].
-  destruct cae.
-  simpl in Heval.
-  apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
-  destruct Heval as [Heval1 Heval2].
-  apply stmt_eval_translate_cexp_menv_inv in Heval2.
-  rewrite Heval2. intuition.
-  destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
-  admit. (* TODO: node application *)
-
-  apply not_Is_memory_in_eq_EqFby in Hneq.
-  unfold translate_eqn in Heval.
-  destruct lae.
-  apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
-  destruct Heval as [Hipi Heval].
-  inversion_clear Heval.
-  rewrite <- H0.
-  unfold find_mem, add_mem.
-  simpl; rewrite PM.gso; [intuition | apply Hneq].
-  destruct Heval as [Hmenv Henv]; rewrite Hmenv; intuition.
+  - destruct cae.
+    simpl in Heval.
+    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    destruct Heval as [Heval1 Heval2].
+    apply stmt_eval_translate_cexp_menv_inv in Heval2.
+    rewrite Heval2. intuition.
+    destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
+  - destruct lae.
+    simpl in Heval.
+    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    destruct Heval as [Hipi Heval].
+    inversion_clear Heval.
+    rewrite <- H2.
+    reflexivity.
+    destruct Heval as [Hmenv Henv]; rewrite Hmenv; intuition.
+  - apply not_Is_memory_in_eq_EqFby in Hneq.
+    unfold translate_eqn in Heval.
+    destruct lae.
+    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    destruct Heval as [Hipi Heval].
+    inversion_clear Heval.
+    rewrite <- H0.
+    unfold find_mem, add_mem.
+    simpl; rewrite PM.gso; [intuition | apply Hneq].
+    destruct Heval as [Hmenv Henv]; rewrite Hmenv; intuition.
 Qed.
 
 Lemma not_Is_variable_in_eq:
-  forall x eq menv env mems menv' env',
+  forall prog x eq menv env mems menv' env',
     ~Is_variable_in_eq x eq
-    -> stmt_eval menv env (translate_eqn mems eq) (menv', env')
+    -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
     -> PM.find x env' = PM.find x env.
 Proof.
-  intros x eq menv env mems menv' env' Hnd Heval.
+  intros prog x eq menv env mems menv' env' Hnd Heval.
   destruct eq as [y e|y f e|y v0 e];
   try apply not_Is_variable_in_eq_EqDef in Hnd.
-  (unfold translate_eqn in Heval;
-   destruct e;
-   apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
-   destruct Heval as [Hipi Heval]; [
-     apply stmt_eval_translate_cexp_env_add in Heval;
-     destruct Heval; rewrite H;
-     rewrite PM.gso; [intuition | apply Hnd]
-   | destruct Heval as [Hmenv Henv]; rewrite Henv; intuition]).
-  admit. (* TODO: node application *)
-  simpl in Heval; destruct e.
-  apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
-  destruct Heval as [Heval1 Heval2].
-  inversion Heval2; intuition.
-  destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
+  - (unfold translate_eqn in Heval;
+     destruct e;
+     apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+     destruct Heval as [Hipi Heval]; [
+       apply stmt_eval_translate_cexp_env_add in Heval;
+       destruct Heval; rewrite H;
+       rewrite PM.gso; [intuition | apply Hnd]
+     | destruct Heval as [Hmenv Henv]; rewrite Henv; intuition]).
+  - simpl in Heval; destruct e.
+    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    destruct Heval as [Heval1 Heval2].
+    inversion_clear Heval2.
+    rewrite <- H3.
+    rewrite PM.gso; [reflexivity|].
+    intro Hxy; apply Hnd; rewrite Hxy; constructor.
+    destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
+  - simpl in Heval; destruct e.
+    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    destruct Heval as [Heval1 Heval2].
+    inversion Heval2; intuition.
+    destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
 Qed.
 
 Lemma stmt_eval_translate_eqns_menv_inv:
-  forall menv env mems eqs menv' env',
-    stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+  forall prog menv env mems eqs menv' env',
+    stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
     -> (forall x, ~Is_memory_in x eqs ->
                   find_mem x menv' = find_mem x menv).
 Proof.
@@ -640,8 +663,8 @@ Proof.
 Qed.
 
 Lemma stmt_eval_translate_eqns_env_inv:
-  forall menv env mems eqs menv' env',
-    stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+  forall prog menv env mems eqs menv' env',
+    stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
     -> (forall x, ~Is_variable_in x eqs ->
                   PM.find x env' = PM.find x env).
 Proof.
@@ -781,16 +804,16 @@ Qed.
 
 (* TODO: Tidy this proof *)
 Lemma cexp_correct:
-  forall H memories menv env menv' env' n c x e,
+  forall H memories prog menv env menv' env' n c x e,
     sem_cexp H e n (present c)
     -> (forall x c, Is_free_in_cexp x e
                     -> sem_var H x n (present c)
                     -> (~PS.In x memories -> PM.find x env = Some c)
                        /\ (PS.In x memories -> find_mem x menv = Some c))
-    -> stmt_eval menv env (translate_cexp memories x e) (menv', env')
+    -> stmt_eval prog menv env (translate_cexp memories x e) (menv', env')
     -> env' = PM.add x c env.
 Proof.
-  intros H memories menv env menv' env' n c x.
+  intros H memories prog menv env menv' env' n c x.
   induction e as [ck e IH|b et IHt ef IHf|e] using cexp_mult
   with (P:=fun e =>
              sem_caexp H e n (present c)
@@ -799,7 +822,8 @@ Proof.
                     -> sem_var H x n (present c)
                     -> (~PS.In x memories -> PM.find x env = Some c)
                        /\ (PS.In x memories -> find_mem x menv = Some c))
-             -> stmt_eval menv env (translate_caexp memories x e) (menv', env')
+             -> stmt_eval prog menv env (translate_caexp memories x e)
+                          (menv', env')
              -> env' = PM.add x c env).
   - (* CAexp *) inversion 1; auto.
   - (* Emerge *)
@@ -834,23 +858,26 @@ Proof.
 Qed.
 
 Lemma caexp_correct:
-  forall H memories menv env menv' env' n c x e,
+  forall H memories prog menv env menv' env' n c x e,
     sem_caexp H e n (present c)
     -> (forall x c, Is_free_in_caexp x e
                     -> sem_var H x n (present c)
                     -> (~PS.In x memories -> PM.find x env = Some c)
                        /\ (PS.In x memories -> find_mem x menv = Some c))
-    -> stmt_eval menv env (translate_caexp memories x e) (menv', env')
+    -> stmt_eval prog menv env (translate_caexp memories x e) (menv', env')
     -> env' = PM.add x c env.
 Proof.
-  intros H memories menv env menv' env' n c x e Hsem Henv Hstmt.
+  intros H memories prog menv env menv' env' n c x e Hsem Henv Hstmt.
   destruct e as [ck ce].
   inversion_clear Hsem as [? ? ? ? Hlexp ?|].
-  change (stmt_eval menv env (translate_cexp memories x ce) (menv', env'))
+  change (stmt_eval prog menv env (translate_cexp memories x ce) (menv', env'))
     in Hstmt.
   apply cexp_correct with (1:=Hlexp) (3:=Hstmt); auto.
 Qed.
 
+(* TODO: Tim: working from here... *)
+
+(*
 Local Ltac resolve_env_assumption :=
   intro x; intros; split; intros;
   match goal with
@@ -880,8 +907,8 @@ Local Ltac resolve_env_assumption :=
                    apply Hm in Hws; rewrite Hws | | apply PS.add_spec ]; auto
 
              | H0:~Is_variable_in _ _,
-               H1: stmt_eval _ _ _ _ |- _ =>
-                 apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ H1) in H0;
+               H1: stmt_eval _ _ _ _ _ |- _ =>
+                 apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ _ H1) in H0;
                  rewrite H0
 
              | H:forall c:const, sem_var _ _ _ _ <-> PM.find ?x ?env = _
@@ -917,7 +944,7 @@ Local Ltac resolve_env_assumption :=
              | H:x=input |- _ => now (subst; contradiction)
              end
   end.
-
+*)
 
 (* Notes:
    1. The assumption sem_equations must be shown for a set of equations.

@@ -70,6 +70,7 @@ VFILES:=SynchronousNat.v\
   TranslationNatSemantics.v\
   Translation.v\
   DataflowListSemantics.v\
+  DataflowNatMSemantics.v\
   DataflowNatSemantics.v\
   DataflowSyntax.v\
   Minimp.v\
