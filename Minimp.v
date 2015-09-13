@@ -22,6 +22,7 @@ Inductive stmt : Set :=
   | Reset_ap : ident -> ident -> stmt
            (* Reset_ap class object *)
   | Comp : stmt -> stmt -> stmt
+  | Repeat : nat -> stmt -> stmt
   | Skip.
 
 Record obj_dec : Set := mk_obj_dec {
@@ -145,6 +146,14 @@ Inductive stmt_eval :
       exp_eval menv env b (Cbool false) ->
       stmt_eval prog menv env ifFalse (menv', env') ->
       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env')
+| IrepeatO:
+    forall prog a menv env,
+      stmt_eval prog menv env (Repeat 0 a) (menv, env)
+| IrepeatS:
+    forall prog n a menv0 env0 menv1 env1 menv2 env2,
+      stmt_eval prog menv0 env0 a (menv1, env1) ->
+      stmt_eval prog menv1 env1 (Repeat n a) (menv2, env2) ->
+      stmt_eval prog menv0 env0 (Repeat (S n) a) (menv2, env2)
 | Iskip:
     forall prog menv env,
       stmt_eval prog menv env Skip (menv, env)
@@ -167,19 +176,6 @@ with stmt_reset_eval : program -> ident -> memoryEnv -> Prop :=
 Scheme stmt_eval_mult := Induction for stmt_eval Sort Prop
 with stmt_step_eval_mult := Induction for stmt_step_eval Sort Prop
 with stmt_reset_eval_mult := Induction for stmt_reset_eval Sort Prop.
-
-Inductive run :
-  program -> memoryEnv -> constEnv -> stmt -> nat ->
-  memoryEnv * constEnv -> Prop :=
-| Run_empty:
-    forall prog menvInit envInit stmt,
-      run prog menvInit envInit stmt 0 (menvInit, envInit)
-| Run_cons:
-    forall prog menvInit menvInter menvFinal
-           envInit envInter envFinal stmt n,
-      stmt_eval prog menvInit envInit stmt (menvInter, envInter) ->
-      run prog menvInter envInter stmt n (menvFinal, envFinal) ->
-      run prog menvInit envInit stmt (S n) (menvFinal, envFinal).
 
 Lemma stmt_eval_fold_left_shift:
   forall A prog f (xs:list A) iacc menv env menv' env',
