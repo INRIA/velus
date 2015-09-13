@@ -1,6 +1,5 @@
 Require Import Rustre.Common.
 
-
 (** * Dataflow language *)
 
 Inductive clock : Set :=
@@ -53,10 +52,6 @@ Definition global := list node.
 
 (* TODO: free variables should include those in clock expressions.
          use auto for the proofs. *)
-
-Require Coq.MSets.MSets.
-
-Module PS := Coq.MSets.MSetPositive.PositiveSet.
 
 Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
   match ck with
