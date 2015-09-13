@@ -4,9 +4,8 @@ Require Import Rustre.DataflowSyntax.
 Require Import SynchronousNat.
 
 Definition history := PM.t stream.
-Definition global := list node.
 
-Definition find_node (f : ident) :=
+Definition find_node (f : ident) : global -> option node :=
   List.find (fun n=> ident_eqb n.(n_name) f).
 
 Inductive sem_var (H: history)(x: ident)(n: nat)(v: value): Prop :=

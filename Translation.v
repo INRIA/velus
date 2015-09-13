@@ -151,6 +151,9 @@ Definition translate_node (n: node): class :=
            (translate_eqns mems n.(n_eqs))
            (translate_reset_eqns n.(n_eqs)).
 
+Definition translate (G: global) : program :=
+  List.map translate_node G.
+
 (* Define and translate a simple node. *)
 Section TestTranslate.
 
@@ -191,7 +194,7 @@ Section TestTranslate.
   Example node2 : node :=
     mk_node 2 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns2.
 
-  Eval cbv in (translate_node node2).
+  (* Eval cbv in (translate_node node2). *)
 
   Example class2 : class :=
     {|

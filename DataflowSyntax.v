@@ -47,6 +47,8 @@ Record node : Type := mk_node {
   n_output : var_dec;
   n_eqs : list equation }.
 
+Definition global := list node.
+
 (** ** Predicates *)
 
 (* TODO: free variables should include those in clock expressions.
@@ -807,7 +809,10 @@ Proof.
   contradiction.
 Qed.
 
-(** The map containing global definitions. *)
-Require Coq.FSets.FMapPositive.
-Definition global := FSets.FMapPositive.PositiveMap.t node.
+Inductive Is_node_in_eq : ident -> equation -> Prop :=
+| INI: forall x f e, Is_node_in_eq f (EqApp x f e).
+
+Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
+  List.Exists (Is_node_in_eq f) eqs.
+
 
