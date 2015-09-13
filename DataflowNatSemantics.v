@@ -245,5 +245,24 @@ Proof.
     reflexivity.
 Qed.
 
-
+Lemma find_node_Exists:
+  forall f G, find_node f G <> None <-> List.Exists (fun n=> f = n.(n_name)) G.
+Proof.
+  induction G as [|node G IH].
+  - split; intro Hfn.
+    exfalso; apply Hfn; reflexivity.
+    apply List.Exists_nil in Hfn; contradiction.
+  - destruct (ident_eq_dec node.(n_name) f) as [He|Hne]; simpl.
+    + assert (He' := He); apply BinPos.Pos.eqb_eq in He'.
+      unfold ident_eqb; rewrite He'.
+      split; intro HH; [clear HH|discriminate 1].
+      constructor.
+      symmetry; exact He.
+    + assert (Hne' := Hne); apply BinPos.Pos.eqb_neq in Hne'.
+      unfold ident_eqb; rewrite Hne'.
+      split; intro HH; [ apply IH in HH; constructor 2; exact HH |].
+      apply List.Exists_cons in HH.
+      destruct HH as [HH|HH]; [symmetry in HH; contradiction|].
+      apply IH; exact HH.
+Qed.
 

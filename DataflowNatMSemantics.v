@@ -82,6 +82,15 @@ with sem_node_mult := Induction for sem_node Sort Prop.
 Definition msem_nodes (G: global) : Prop :=
   List.Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
 
+Lemma msem_node_cons:
+  forall node G f xs M ys,
+    Ordered_nodes (node::G)
+    -> msem_node (node :: G) f xs M ys
+    -> node.(n_name) <> f
+    -> msem_node G f xs M ys.
+Proof.
+Admitted.   (* TODO: Show this! *)
+
 (* TODO:
     show that:
        sem_node G f xs ys

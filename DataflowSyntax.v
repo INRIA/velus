@@ -815,4 +815,12 @@ Inductive Is_node_in_eq : ident -> equation -> Prop :=
 Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_node_in_eq f) eqs.
 
+Inductive Ordered_nodes : global -> Prop :=
+| ONnil: Ordered_nodes nil
+| ONcons:
+    forall nd nds,
+      Ordered_nodes nds
+      -> (forall f, Is_node_in f nd.(n_eqs) ->
+                    List.Exists (fun n=> f = n.(n_name)) nds)
+      -> Ordered_nodes (nd::nds).
 
