@@ -5,6 +5,9 @@ Require Import PArith.
 (** * Common definitions *)
 
 Module PS := Coq.MSets.MSetPositive.PositiveSet.
+Module PSP := MSetProperties.WPropertiesOn Pos PS.
+Module PSF := MSetFacts.Facts PS.
+
 Module PM := Coq.FSets.FMapPositive.PositiveMap.
 
 Definition ident := positive.
