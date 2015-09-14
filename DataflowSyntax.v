@@ -819,3 +819,9 @@ Inductive Ordered_nodes : global -> Prop :=
                     List.Exists (fun n=> f = n.(n_name)) nds)
       -> Ordered_nodes (nd::nds).
 
+Inductive Is_instance_in_eq : ident -> equation -> Prop :=
+| III: forall x f e, Is_instance_in_eq x (EqApp x f e).
+
+Definition Is_instance_in (x: ident) (eqs: list equation) : Prop :=
+  List.Exists (Is_instance_in_eq x) eqs.
+
