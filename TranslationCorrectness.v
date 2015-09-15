@@ -1,3 +1,4 @@
+
 Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
 
@@ -9,6 +10,9 @@ Require Import Rustre.Translation.
 Require Import Rustre.DataflowNatSemantics.
 Require Import Rustre.DataflowNatMSemantics.
 Require Import Rustre.SynchronousNat.
+
+Import List.ListNotations.
+Open Scope list_scope.
 
 (* TODO:
    - Assume we are given a list of dataflow equations eqs satisfying
@@ -412,6 +416,52 @@ Proof.
   - apply Is_well_sch_cons in Hwsch.
     destruct Himi as [? Himi].
     auto.
+Qed.
+
+Inductive Welldef_global : list node -> Prop :=
+| WGnil:
+    Welldef_global []
+| WGcons:
+    forall nd nds,
+      Welldef_global nds ->
+      let eqs := nd.(n_eqs) in
+      let ni := nd.(n_input).(v_name) in
+      let no := nd.(n_output).(v_name) in
+      Is_well_sch (PS.add ni (memories eqs)) eqs
+      -> ~Is_memory_in ni eqs
+      -> Is_variable_in no eqs
+      -> ~Is_node_in nd.(n_name) eqs
+      -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
+      -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
+      -> Welldef_global (nd::nds).
+
+Lemma Welldef_global_cons:
+  forall node G,
+    Welldef_global (node::G) -> Welldef_global G.
+Proof.
+  inversion 1; assumption.
+Qed.
+
+(* TODO: Write a function 'welldef_global' to decide this. *)
+
+Lemma Welldef_global_Ordered_nodes:
+  forall G, Welldef_global G -> Ordered_nodes G.
+Proof.
+  induction G as [|node G IH]; [constructor|].
+  intro Hwdef.
+  constructor.
+  - apply IH; apply Welldef_global_cons with (1:=Hwdef).
+  - intros f Hini.
+    inversion Hwdef.
+    split; [ intro; subst | ];
+    repeat match goal with
+           | eqs:=n_eqs node |- _ => unfold eqs in *; clear eqs
+           | H1:~Is_node_in _ _, H2:Is_node_in _ _ |- False => contradiction
+           | H1: Is_node_in _ _,
+             H2: context[Is_node_in _ _ -> find_node _ _ <> None] |- _ =>
+             apply H2 in H1; apply find_node_Exists in H1; exact H1
+           end.
+  - inversion Hwdef; assumption.
 Qed.
 
 Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
@@ -960,8 +1010,348 @@ Local Ltac resolve_env_assumption :=
       some value, but also that it is the correct value.
  *)
 
-Import List.ListNotations.
-Open Scope list_scope.
+Inductive Memory_Corres (G: global) (n: nat) :
+       ident -> memory -> memoryEnv -> Prop :=
+| MemC:
+    forall f M menv i o eqs,
+      find_node f G = Some(mk_node f i o eqs)
+      -> Memory_Corres_eqs G n M menv eqs
+      -> Memory_Corres G n f M menv
+
+with Memory_Corres_eqs (G: global) (n: nat) :
+       memory -> memoryEnv -> list equation -> Prop :=
+| MemC_nil: forall m menv,
+    Memory_Corres_eqs G n m menv []
+| MemC_EqDef:
+    forall M menv x cae eqs,
+      Memory_Corres_eqs G n M menv eqs
+      -> Memory_Corres_eqs G n M menv (EqDef x cae::eqs)
+| MemC_EqApp:
+    forall M menv x f lae eqs,
+      (forall Mo omenv, mfind_inst x M = Some Mo
+                        -> find_obj x menv = Some omenv
+                        -> Memory_Corres G n f Mo omenv)
+      -> Memory_Corres_eqs G n M menv eqs
+      -> Memory_Corres_eqs G n M menv (EqApp x f lae::eqs)
+| MemC_EqFby:
+    forall M menv x v0 lae eqs,
+      (forall ms, mfind_mem x M = Some ms
+                  <-> find_mem x menv = Some (ms n))
+      -> Memory_Corres_eqs G n M menv eqs
+      -> Memory_Corres_eqs G n M menv (EqFby x v0 lae::eqs).
+
+Scheme Memory_Corres_mult := Induction for Memory_Corres Sort Prop
+with Memory_Corres_eqs_mult := Induction for Memory_Corres_eqs Sort Prop.
+
+Lemma not_Is_node_in_cons:
+  forall n eq eqs,
+    ~ Is_node_in n (eq::eqs) <-> ~Is_node_in_eq n eq /\ ~Is_node_in n eqs.
+Proof.
+  intros n eq eqs.
+  split; intro HH.
+  - split; intro; apply HH; unfold Is_node_in; intuition.
+  - destruct HH; inversion_clear 1; intuition.
+Qed.
+
+Lemma find_node_tl:
+  forall f node G,
+    node.(n_name) <> f
+    -> find_node f (node::G) = find_node f G.
+Proof.
+  intros f node G Hnf.
+  unfold find_node.
+  unfold List.find at 1.
+  apply Pos.eqb_neq in Hnf.
+  unfold ident_eqb.
+  rewrite Hnf.
+  reflexivity.
+Qed.
+
+Lemma find_node_split:
+  forall f G node,
+    find_node f G = Some node
+    -> exists bG aG,
+      G = bG ++ node :: aG.
+Proof.
+  induction G as [|nd G IH]; [unfold find_node, List.find; discriminate|].
+  intro nd'.
+  intro Hfind.
+  unfold find_node in Hfind; simpl in Hfind.
+  destruct (ident_eqb (n_name nd) f) eqn:Heq.
+  - injection Hfind; intro He; rewrite <-He in *; clear Hfind He.
+    exists []; exists G; reflexivity.
+  - apply IH in Hfind.
+    destruct Hfind as [bG [aG Hfind]].
+    exists (nd::bG); exists aG; rewrite Hfind; reflexivity.
+Qed.
+
+Lemma Ordered_nodes_append:
+  forall G G',
+    Ordered_nodes (G ++ G')
+    -> Ordered_nodes G'.
+Proof.
+  induction G as [|nd G IH]; [intuition|].
+  intros G' HnGG.
+  apply IH; inversion_clear HnGG; assumption.
+Qed.
+
+Lemma Ordered_nodes_cons_find_node_None:
+  forall node G,
+    Ordered_nodes (node::G)
+    -> find_node node.(n_name) G = None.
+Proof.
+  intros node G Hord.
+  inversion_clear Hord as [|? ? Hord' H0 Hfa]; clear H0.
+  induction G as [|eq G IH]; [trivial|].
+  simpl.
+  destruct (ident_eqb eq.(n_name) node.(n_name)) eqn:Heq;
+    apply Forall_cons2 in Hfa;
+    destruct Hfa as [Hneq H0].
+  - apply Peqb_true_eq in Heq.
+    rewrite Heq in Hneq.
+    exfalso; apply Hneq; reflexivity.
+  - apply IH; inversion_clear Hord'; assumption.
+Qed.
+
+Lemma find_node_later_names_not_eq:
+  forall f nd G nd',
+    Ordered_nodes (nd::G)
+    -> find_node f (G) = Some nd'
+    -> f <> nd.(n_name).
+Proof.
+  intros f nd G nd' Hord Hfind.
+  pose proof (Ordered_nodes_cons_find_node_None _ _ Hord) as Hnone.
+  intro Heq.
+  rewrite Heq, Hnone in Hfind.
+  discriminate.
+Qed.
+
+Lemma find_node_later_not_Is_node_in:
+  forall f nd G nd',
+    Ordered_nodes (nd::G)
+    -> find_node f (G) = Some nd'
+    -> ~Is_node_in nd.(n_name) nd'.(n_eqs).
+Proof.
+  intros f nd G nd' Hord Hfind Hini.
+  apply find_node_split in Hfind.
+  destruct Hfind as [bG [aG HG]].
+  rewrite HG in Hord.
+  inversion_clear Hord as [|? ? Hord' H0 Hnin]; clear H0.
+  apply Ordered_nodes_append in Hord'.
+  inversion_clear Hord' as [| ? ? Hord Heqs Hnin'].
+  apply Heqs in Hini.
+  destruct Hini as [H0 HH]; clear H0.
+  rewrite Forall_app in Hnin.
+  destruct Hnin as [H0 Hnin]; clear H0.
+  inversion_clear Hnin as [|? ? H0 HH']; clear H0.
+  apply List.Exists_exists in HH.
+  destruct HH as [node [HaG Heq]].
+  rewrite List.Forall_forall in HH'.
+  apply HH' in HaG.
+  contradiction.
+Qed.
+
+Lemma Memory_Corres_eqs_tl:
+  forall node G eqs n M menv,
+    Ordered_nodes (node::G)
+    -> ~Is_node_in node.(n_name) eqs
+    -> (Memory_Corres_eqs (node::G) n M menv eqs
+        <-> Memory_Corres_eqs G n M menv eqs).
+Proof.
+  intros node G eqs n M menv Hord Hini.
+  split; intro Hmc; revert M menv eqs Hmc Hini.
+  - induction 1 as [? ? ? ? ? ? Hfind| | | |? ? ? ? ? ? Hmfind]
+      using Memory_Corres_eqs_mult
+      with (P0:=fun M menv eqs IH=>
+                  ~Is_node_in node.(n_name) eqs
+                  -> Memory_Corres_eqs G n M menv eqs)
+           (P:=fun f M menv IH=>
+                 node.(n_name) <> f ->
+                 Memory_Corres G n f M menv); intro HH.
+    + rewrite find_node_tl with (1:=HH) in Hfind.
+      econstructor; [exact Hfind|].
+      apply IHHmc.
+      apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hfind).
+    + constructor.
+    + constructor; apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
+    + constructor.
+      * intros Mo omenv Hmfind Hfindo.
+        apply H; try assumption.
+        intro Hneq; rewrite <-Hneq in HH.
+        apply HH; repeat constructor.
+      * apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
+    + constructor; [trivial|].
+      apply IHHmc. apply not_Is_node_in_cons in HH. intuition.
+  - induction 1 as [? ? ? ? ? ? Hfind| | | |? ? ? ? ? ? Hmfind]
+      using Memory_Corres_eqs_mult
+      with (P0:=fun M menv eqs IH=>
+                  ~Is_node_in node.(n_name) eqs
+                  -> Memory_Corres_eqs (node::G) n M menv eqs)
+           (P:=fun f M menv IH=>
+                 node.(n_name) <> f ->
+                 Memory_Corres (node::G) n f M menv); intro HH.
+    + econstructor; [rewrite find_node_tl with (1:=HH); exact Hfind|].
+      apply IHHmc.
+      apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hfind).
+    + constructor.
+    + constructor; apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
+    + constructor.
+      * intros Mo omenv Hmfind Hfindo.
+        apply H; try assumption.
+        intro Hneq; rewrite <-Hneq in HH.
+        apply HH; repeat constructor.
+      * apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
+    + constructor; [trivial|].
+      apply IHHmc. apply not_Is_node_in_cons in HH. intuition.
+Qed.
+
+Lemma Memory_Corres_tl:
+  forall f node G n M menv,
+    node.(n_name) <> f
+    -> Ordered_nodes (node :: G)
+    -> (Memory_Corres (node :: G) n f M menv <-> Memory_Corres G n f M menv).
+Proof.
+  intros f node G n M menv Hnf Hord.
+  split;
+    inversion_clear 1;
+    econstructor;
+    repeat progress
+         match goal with
+         | Hf: find_node ?f (_ :: ?G) = Some _ |- _ =>
+           rewrite find_node_tl with (1:=Hnf) in Hf
+         | |- find_node ?f (_ :: ?G) = Some _ =>
+           rewrite find_node_tl with (1:=Hnf)
+         | Hf: find_node ?f ?G = Some _ |- find_node ?f ?G = Some _ => exact Hf
+         | H:Memory_Corres_eqs _ _ _ _ _ |- Memory_Corres_eqs _ _ _ _ _ =>
+           apply Memory_Corres_eqs_tl with (1:=Hord) (3:=H)
+         | Hf: find_node ?f ?G = Some _ |- ~Is_node_in _ _ =>
+           apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hf)
+         end.
+Qed.
+
+Lemma Is_node_correct:
+  forall (G: global)
+         (f: ident)
+         (fnode: node)
+         (xs: stream)
+         (M: memory)
+         (ys: stream)
+
+         (prog: program)
+         (prog': program)
+         (fclass: class)
+         (n: nat)
+         (menv: memoryEnv)
+         (env: constEnv)
+         (menv': memoryEnv)
+         (env': constEnv),
+
+    Welldef_global G
+    -> find_node f G = Some (fnode)
+    -> msem_node G f xs M ys
+
+    -> prog = translate G
+    -> find_class f prog = Some(fclass, prog')
+    -> (forall c, xs n = present c <-> PM.find (fclass.(c_input)) env = Some c)
+    -> (forall x, Is_variable_in x (fnode.(n_eqs)) -> PM.find x env = None)
+    -> stmt_eval prog' menv env (fclass.(c_step)) (menv', env')
+
+    -> Memory_Corres G n f M menv
+
+    -> (forall c, ys n =present c <-> PM.find (fclass.(c_output)) env' = Some c)
+       /\ Memory_Corres G (S n) f M menv'.
+Proof.
+  induction G as [|node G IH]; [discriminate|].
+  intros f fnode xs M ys prog prog' fclass n menv env menv' env'.
+  intros Hwd Hfnd Hmsem Hprog Hfcls Hin1 Hother Hstmt Hmc.
+  assert (Ordered_nodes (node::G)) as Hord
+    by apply Welldef_global_Ordered_nodes with (1:=Hwd).
+
+  simpl in Hfnd.
+  destruct (ident_eqb (n_name node) f) eqn:Hfeq.
+
+  Focus 2.
+  { assert (node.(n_name) <> f) as Hfneq
+        by apply Pos.eqb_neq with (1:=Hfeq).
+    rewrite Memory_Corres_tl with (1:=Hfneq) (2:=Hord) in Hmc |- *.
+    apply IH with (f:=f) (fnode:=fnode) (xs:=xs)
+                         (prog:=translate G) (prog':=prog')
+                         (menv:=menv) (env:=env)
+                         (menv':=menv') (env':=env').
+    apply (Welldef_global_cons _ _ Hwd).
+    apply Hfnd.
+    apply Pos.eqb_neq in Hfeq.
+    apply Welldef_global_Ordered_nodes in Hwd.
+    apply msem_node_cons with (1:=Hwd) (2:=Hmsem) (3:=Hfeq).
+    reflexivity.
+    rewrite Hprog in Hfcls; simpl in Hfcls; rewrite Hfeq in Hfcls; exact Hfcls.
+    exact Hin1.
+    exact Hother.
+    exact Hstmt.
+    exact Hmc. }
+  Unfocus.
+
+  rewrite Hprog in Hfcls; clear Hprog.
+  simpl in Hfcls; rewrite Hfeq in Hfcls.
+  symmetry in Hfcls; injection Hfcls.
+  intros He1 He2; rewrite He1, He2 in *; clear He1 He2 Hfcls.
+
+  injection Hfnd; intro He; rewrite He in *; clear He Hfnd.
+
+  destruct fnode.
+  simpl in *.
+
+  inversion_clear Hmsem as [? ? ? ? i o eqs Hfind Hsem].
+  simpl in *.
+  rewrite Hfeq in Hfind.
+  injection Hfind.
+  intros; subst.
+  clear Hfeq Hfind.
+  destruct Hsem as [H [Hi [Ho Hsem]]].
+  specialize Hi with n.
+  specialize Ho with n.
+
+  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2 Hout Hnode].
+  rename Hwd' into Hwd.
+  simpl in *.
+  unfold neqs, ni, no in *; clear neqs ni no.
+  rewrite ps_from_list_gather_eqs_memories in Hstmt.
+
+  assert (forall alleqs, (exists oeqs, alleqs = oeqs ++ eqs) ->
+    (forall x, Is_variable_in x eqs ->
+     forall c, sem_var H x n (present c) <-> PM.find x env' = Some c)
+    /\
+    Memory_Corres_eqs G (S n) M menv' eqs) as His_step_correct.
+  {
+    intros alleqs Hall.
+    admit. (* TODO: Replay the Is_step_correct induction *)
+  }
+
+  clear IH.
+  specialize His_step_correct with ([] ++ eqs).
+  destruct His_step_correct as [Hvar' Hmc']; [now eauto|].
+  split.
+  - intro c.
+    apply Hvar' with (c:=c) in Hout.
+    rewrite <- Hout.
+    split; intro HH;
+      [ rewrite HH in Ho; exact Ho
+      | now apply sem_var_det with (1:=Ho) (2:=HH) ].
+  - econstructor.
+    + simpl; rewrite Pos.eqb_refl; reflexivity.
+    + apply Memory_Corres_eqs_tl with (1:=Hord) (2:=Hnode) (3:=Hmc').
+Qed.
+
+(* TODO next:
+   - show that fclass.(c_reset) satisfies: Memory_Corres M 0 menv
+   - replace msem_node G f xs M ys with just sem_node G f xs ys
+     using a lemma from DataflowNatMSemantics.
+   - Show that running the step function for any n gives correct
+     results (provided we stock and repass the memory), and
+     eliminate the Memory_Corress hypothesis and result.
+*)
+
+
 
 Lemma is_step_correct:
   forall (G: global)
