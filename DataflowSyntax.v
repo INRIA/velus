@@ -816,7 +816,9 @@ Inductive Ordered_nodes : global -> Prop :=
     forall nd nds,
       Ordered_nodes nds
       -> (forall f, Is_node_in f nd.(n_eqs) ->
-                    List.Exists (fun n=> f = n.(n_name)) nds)
+                    f <> nd.(n_name)
+                    /\ List.Exists (fun n=> f = n.(n_name)) nds)
+      -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
       -> Ordered_nodes (nd::nds).
 
 Inductive Is_instance_in_eq : ident -> equation -> Prop :=
