@@ -406,8 +406,78 @@ Qed.
 
 (** **  The equivalence of [fby] with and without [hold]  **)
 
-(** The specification of [fby_rev] *)
-Lemma fby_aux_snd_spec : forall v0 v vl, snd (fby_aux v0 vl) = v <->
+(** ***  Definition of [fby] on [hold h]  **)
+
+(** With held environments, we insert the base value right from the start even if there are abs values *)
+
+Fixpoint held_fby_aux v0 s :=
+  match s with
+    | nil => (nil, v0)
+    | abs :: s0 => let '(s', v') := held_fby_aux v0 s0 in (here v' :: s', v')
+    | here v :: s0 => let '(s', v') := held_fby_aux v0 s0 in (here v' :: s', v)
+  end.
+Definition held_fby_rev v0 s := fst (held_fby_aux v0 s).
+
+Lemma held_fby_rev_nil : forall v, held_fby_rev v nil = nil.
+Proof. reflexivity. Qed.
+
+Lemma held_fby_rev_cons_here : forall v v' s,
+  held_fby_rev v (here v' :: s) = here (snd (held_fby_aux v s)) :: held_fby_rev v s.
+Proof. intros v v' s. unfold held_fby_rev. simpl. now destruct (held_fby_aux v s). Qed.
+
+Lemma held_fby_aux_abs : forall v0 s,
+  held_fby_aux v0 (abs :: s) = (here (snd (held_fby_aux v0 s)) :: fst (held_fby_aux v0 s), snd (held_fby_aux v0 s)).
+Proof.
+induction s as [| [| v] s]; simpl in *.
++ reflexivity.
++ rewrite IHs; reflexivity.
++ destruct (held_fby_aux v0 s); simpl. reflexivity.
+Qed.
+
+Corollary held_fby_rev_cons_abs : forall v0 s,
+  held_fby_rev v0 (abs :: s) = here (snd (held_fby_aux v0 s)) :: held_fby_rev v0 s.
+Proof. unfold held_fby_rev. intros. now rewrite held_fby_aux_abs. Qed.
+
+Lemma held_fby_rev_next : forall d v0 v s n,
+  List.nth (S n) (held_fby_rev v0 (v :: s)) d = List.nth n (held_fby_rev v0 s) d.
+Proof. unfold held_fby_rev. intros d c [| c'] s n; simpl; destruct (held_fby_aux c s); reflexivity. Qed.
+
+Lemma held_fby_rev_never_abs : forall d v s n, List.nth n (held_fby_rev v s) (here d) <> abs.
+Proof.
+intros d v s. induction s as [| v' s]; intros n Hn.
+* destruct n; simpl in Hn; discriminate.
+* destruct n; simpl in Hn.
+  + destruct v'; simpl in Hn.
+    - now rewrite held_fby_rev_cons_abs in Hn.
+    - now rewrite held_fby_rev_cons_here in Hn.
+  + rewrite held_fby_rev_next in Hn. now apply (IHs n Hn).
+Qed.
+
+Lemma held_fby_aux_app : forall s1 s2 v s1' s2' v' v'',
+  held_fby_aux v s2 = (s2', v') ->
+  held_fby_aux v' s1 = (s1', v'') ->
+  held_fby_aux v (s1 ++ s2) = (s1' ++ s2', v'').
+Proof.
+intros s1. induction s1 as [| [| c] s1]; intros s2 v s1' s2' v' v'' Hs2 Hs1.
++ inversion Hs1. subst. simpl. assumption.
++ simpl app. rewrite held_fby_aux_abs in Hs1 |- *. destruct s1' as [| ? s1']; inversion Hs1.
+  simpl. apply (IHs1 _ _ s1' _ _ v'') in Hs2.
+  - rewrite Hs2. f_equal; subst; auto.
+  - subst. apply surjective_pairing.
++ simpl in *. destruct (held_fby_aux v' s1) eqn:Hs1'.
+  rewrite (IHs1 _ _ _ _ _ _ Hs2 Hs1'). inversion_clear Hs1. simpl. reflexivity.
+Qed.
+
+Corollary held_fby_rev_last_abs : forall v s, held_fby_rev v (s ++ abs :: nil) = held_fby_rev v s ++ here v :: nil.
+Proof.
+intros. unfold held_fby_rev.
+erewrite held_fby_aux_app; simpl; try reflexivity; [].
+apply surjective_pairing.
+Qed.
+
+
+(** The specification of [held_fby_rev] *)
+Lemma held_fby_aux_snd_spec : forall v0 v vl, snd (held_fby_aux v0 vl) = v <->
   (exists n, nth n vl abs = here v /\ forall m, m < n -> nth m vl abs = abs)
   \/ v = v0 /\ forall n, nth n vl abs = abs.
 Proof.
@@ -417,22 +487,22 @@ intros v0 v vl. revert v0. induction vl as [| v1 vl]; intros v0.
   + destruct H as [[? [? _]] | [? _]]; discriminate || auto.
 * split; intro H.
   + destruct v1 as [| v1]; simpl in H.
-    - { destruct (fby_aux v0 vl) eqn:Hfby. simpl in H. subst.
+    - { destruct (held_fby_aux v0 vl) eqn:Hfby. simpl in H. subst.
         specialize (IHvl v0). rewrite Hfby in IHvl.
         assert (Hrec : v = v) by reflexivity. rewrite IHvl in Hrec. clear IHvl.
         destruct Hrec as [[n [Hn Hother]] | [Hn Hother]].
         + left. exists (S n). simpl. split; trivial.
           intros [| m] Hlt; trivial. apply Hother. omega.
         + right. split; trivial. intros [| n]; trivial. apply Hother. }
-    - destruct (fby_aux v0 vl) eqn:Hfby. simpl in H. subst v.
+    - destruct (held_fby_aux v0 vl) eqn:Hfby. simpl in H. subst v.
       specialize (IHvl v1). left. exists 0. split; trivial. intros. omega.
   + destruct v1 as [| v1]; simpl.
-    - { destruct (fby_aux v0 vl) eqn:Hfby. change (snd (l, c) = v). rewrite <- Hfby.
+    - { destruct (held_fby_aux v0 vl) eqn:Hfby. change (snd (l, c) = v). rewrite <- Hfby.
         rewrite IHvl. clear IHvl. destruct H as [[[| n] [Hn Hother]] | [Hn Hother]].
         + discriminate.
         + left. exists n. simpl. split; trivial. intros m Hlt. apply (Hother (S m)). omega.
         + right. split; trivial. intro n. apply (Hother (S n)). }
-    - { destruct (fby_aux v0 vl) eqn:Hfby. simpl.
+    - { destruct (held_fby_aux v0 vl) eqn:Hfby. simpl.
         destruct H as [[n [Hn Hother]] | [Hn Hother]].
         + assert (n = 0).
           { destruct n; trivial. exfalso. cut (here v1 = abs). discriminate.
@@ -442,24 +512,21 @@ intros v0 v vl. revert v0. induction vl as [| v1 vl]; intros v0.
           now rewrite <- (Hother 0). }
 Qed.
 
-Theorem fby_rev_spec : forall n v0 v vl, nth n (fby_rev v0 vl) abs = here v
-  <-> nth n vl abs <> abs
-   /\ ((exists n', nth (S (n + n')) vl abs = here v /\ forall m, m < n' -> nth (S (n + m)) vl abs = abs)
-       \/ v = v0 /\ forall n', nth (S (n + n')) vl abs = abs).
+Theorem held_fby_rev_spec : forall n v0 v vl, n < length vl -> 
+  (nth n (held_fby_rev v0 vl) abs = here v
+   <-> (exists n', nth (S (n + n')) vl abs = here v /\ forall m, m < n' -> nth (S (n + m)) vl abs = abs)
+        \/ v = v0 /\ forall n', nth (S (n + n')) vl abs = abs).
 Proof.
-intro n. induction n; intros v0 v vl.
-* simpl plus. unfold fby_rev. destruct vl as [| [| v1] vl]; simpl.
-  + intuition discriminate.
-  + destruct (fby_aux v0 vl); simpl. intuition discriminate.
-  + destruct (fby_aux v0 vl) eqn:Hfby; simpl.
+intro n. induction n; intros v0 v vl Hn.
+* simpl plus. unfold held_fby_rev. destruct vl as [| v1 vl]; simpl.
+  + simpl in Hn. exfalso. omega.
+  + destruct (held_fby_aux v0 vl) eqn:Hfby; simpl.
     assert (Hequiv : here c = here v <-> c = v). { split; intro Heq; subst; trivial. now injection Heq. }
-    rewrite Hequiv. change c with (snd (l, c)). rewrite <- Hfby.
-    rewrite fby_aux_snd_spec. intuition discriminate.
+    destruct v1; rewrite Hequiv; change c with (snd (l, c)); rewrite <- Hfby;
+    rewrite held_fby_aux_snd_spec; intuition discriminate.
 * destruct vl; simpl.
-  + split; intro Habs.
-    - discriminate.
-    - destruct Habs as [Habs _]. now elim Habs.
-  + rewrite fby_rev_next. apply IHn.
+  + simpl in Hn. exfalso. omega.
+  + rewrite held_fby_rev_next. apply IHn. simpl in Hn. omega.
 Qed.
 
 Lemma sem_var_length : forall h x vl, sem_var h x vl -> length vl = length h.
@@ -482,54 +549,17 @@ revert h x vl Hsem Hlen. induction n; intros h x vl Hsem Hlen Hn.
   - simpl in *. apply IHn; try omega. apply (sem_var_cons Hsem).
 Qed.
 
-(* General equivalence except for the first instant. *)
-Theorem fby_equivalence : forall h x vl1 vl2, history_valid h ->
-  sem_var h x vl1 -> sem_var (hold h) x vl2 ->
-  forall n v0 v, S n < length h -> ~(forall m, nth (S n + m) vl1 abs = abs) ->
-                 nth n (fby_rev v0 vl1) abs = here v -> nth (S n) vl2 abs = here v.
-Proof.
-intros h x vl1 vl2 Hvalid Husual Hhold n v0 v Hn Hnext Hv.
-assert (Hlen : length vl1 = length vl2).
-{ rewrite (sem_var_length Husual), (sem_var_length Hhold), hold_length. reflexivity. }
-cut (Some (nth (S n) vl2 abs) = Some (here v)); try now intro H; injection H.
-assert (S n < length (hold h)) by now rewrite hold_length.
-rewrite <- (sem_var_nth Hhold); trivial.
-rewrite hold_spec; trivial.
-simpl plus. rewrite fby_rev_spec in Hv.
-destruct Hv as [Hnow [[n' [Hmax Hlt]] | [Heq Hall]]]; try contradiction.
-assert (S (n + n') < length h).
-{ rewrite <- (sem_var_length Husual). apply (@nth_not_default_lt_length _ abs). now rewrite Hmax. }
-exists n'. repeat split.
-+ assumption.
-+ rewrite (sem_var_nth Husual).
-  - now rewrite Hmax.
-  - assumption.
-+ intros. rewrite (sem_var_nth Husual); try omega. now rewrite Hlt.
-Qed.
-
-(* The theorem for the first non [abs] instant. *)
-Theorem fby_non_equiv_first : forall h x vl1 vl2, history_valid h ->
-  sem_var h x vl1 -> sem_var (hold h) x vl2 ->
-  forall n v0 v, S n < length h -> (forall m, nth (S n + m) vl1 abs = abs) ->
-                 nth n (fby_rev v0 vl1) abs = here v -> nth (S n) vl2 abs = abs.
-Proof.
-intros h x vl1 vl2 Hvalid Husual Hhold n v0 v Hn Hlast Hv.
-cut (Some (nth (S n) vl2 abs) = Some abs). now intro H; injection H.
-rewrite <- (sem_var_nth Hhold).
-- rewrite hold_abs_spec; trivial.
-  intros m Hlt. rewrite (sem_var_nth Husual); trivial. f_equal. apply Hlast.
-- now rewrite hold_length.
-Qed.
-
+(* General equivalence. *)
 (** The more interesting result? *)
 Theorem fby_hold_equiv : forall h x vl, history_valid h -> sem_var (hold h) x vl ->
   forall n v0 v, S n < length h -> ~(forall m, nth (S n + m) vl abs = abs) ->
-                 nth n (fby_rev v0 vl) abs = here v -> nth (S n) vl abs = here v.
+                 nth n (held_fby_rev v0 vl) abs = here v -> nth (S n) vl abs = here v.
 Proof.
 intros h x vl Hvalid Hh n v0 v Hn Hlast Hv.
-cut (Some (nth (S n) vl abs) = Some (here v)). now intro H; injection H.
-rewrite fby_rev_spec in Hv.
-destruct Hv as [Hnow [[m [Hmax Hlt]] | [? ?]]]; try contradiction.
+cut (Some (nth (S n) vl abs) = Some (here v)); try now (intro H; injection H); [].
+assert (Hlen : n < length vl). { rewrite (sem_var_length Hh), hold_length. omega. }
+rewrite held_fby_rev_spec in Hv; trivial.
+destruct Hv as [[m [Hmax Hlt]] | [? ?]]; try contradiction; [].
 rewrite <- (sem_var_nth Hh).
 * rewrite <- hold_idempotent; trivial.
   rewrite <- hold_history_valid in Hvalid. rewrite <- hold_length in Hn.
@@ -557,84 +587,50 @@ rewrite <- (sem_var_nth Hh).
 * now rewrite hold_length.
 Qed.
 
+(*
+Theorem fby_equivalence : forall h x vl1 vl2, history_valid h ->
+  sem_var h x vl1 -> sem_var (hold h) x vl2 ->
+  forall n v0 v, S n < length h -> nth n (fby_rev v0 vl1) abs = here v -> nth (S n) vl2 abs = here v.
+Proof.
+intros h x vl1 vl2 Hvalid Husual Hhold n v0 v Hn Hv.
+assert (Hlen : length vl1 = length vl2).
+{ rewrite (sem_var_length Husual), (sem_var_length Hhold), hold_length. reflexivity. }
+cut (Some (nth (S n) vl2 abs) = Some (here v)); try now intro H; injection H.
+assert (S n < length (hold h)) by now rewrite hold_length.
+rewrite <- (sem_var_nth Hhold); trivial.
+rewrite hold_spec; trivial. exists 0. rewrite <- plus_n_O.
+simpl plus. rewrite fby_rev_spec in Hv.
+* split; trivial.
+destruct Hv as [[n' [Hmax Hlt]] | [Heq Hall]].
+  + assert (S (n + n') < length h).
+    { rewrite <- (sem_var_length Husual). apply (@nth_not_default_lt_length _ abs). now rewrite Hmax. }
+    exists n'. repeat split.
+    - assumption.
+    - rewrite (sem_var_nth Husual); now rewrite ?Hmax.
+    - intros. rewrite (sem_var_nth Husual); try omega. now rewrite Hlt.
+  + 
+* 
+Qed.
+
+(* The theorem for the first non [abs] instant. *)
+Theorem fby_non_equiv_first : forall h x vl1 vl2, history_valid h ->
+  sem_var h x vl1 -> sem_var (hold h) x vl2 ->
+  forall n v0 v, S n < length h -> (forall m, nth (S n + m) vl1 abs = abs) ->
+                 nth n (fby_rev v0 vl1) abs = here v -> nth (S n) vl2 abs = abs.
+Proof.
+intros h x vl1 vl2 Hvalid Husual Hhold n v0 v Hn Hlast Hv.
+cut (Some (nth (S n) vl2 abs) = Some abs). now intro H; injection H.
+rewrite <- (sem_var_nth Hhold).
+- rewrite hold_abs_spec; trivial.
+  intros m Hlt. rewrite (sem_var_nth Husual); trivial. f_equal. apply Hlast.
+- now rewrite hold_length.
+Qed.
+
 
 (** Defining a new semantics for held histories would only require to
     delete the first element and shift all elements by one after the first non [abs],
-    inseting the inital constant in its place.
+    inserting the inital constant in its place.
     Of course, if there are no such first element, we should return a list full of [abs]. *)
-
-(** Splits a list after its last non [abs] element.
-    The first component (if not None) is the list up to this last element, 
-    the second list contains the trailing [abs].
-    Provided we have a non [abs] element, then we can write
-    first res ++ second res = original list. *)
-
-Fixpoint split_last l : option (list value) * list value :=
-  match l with
-    | nil => (None, nil)
-    | abs :: l => match split_last l with
-                    | (None, l2) => (None, abs :: l2)
-                    | (Some l1, l2) => (Some (abs :: l1), l2)
-                  end
-    | here v :: l => match split_last l with
-                       | (None, l2) => (Some (here v :: nil), l2)
-                       | (Some l1, l2) => (Some (here v :: l1), l2)
-                     end
-  end.
-
-Lemma split_last_None : forall l l', split_last l = (None, l') <-> l = l' /\ l = alls abs l.
-Proof.
-intro l. induction l as [| [| e] l]; intro l'; simpl.
-* split; intro H.
-  + simpl in H. inversion_clear H. intuition.
-  + now destruct H; subst.
-* destruct (split_last l) as [[l1 |] l2].
-  + split; intro H.
-    - inversion H.
-    - destruct H as [? H']. subst. injection H'. intro H.
-      apply (conj (eq_refl l)) in H. rewrite <- IHl in H. discriminate.
-  + split; intro H.
-    - inversion_clear H. specialize (IHl l2). apply proj1 in IHl. specialize (IHl (reflexivity _)).
-      destruct IHl as [? IHl]. subst l2. now split; f_equal.
-    - f_equal. destruct H as [H1 H2]. subst. f_equal. injection H2. intro H.
-      apply (conj (eq_refl l)) in H. rewrite <- IHl in H. now inversion H.
-* destruct (split_last l) as [[l1 |] l2].
-  + split; intro H.
-    - inversion H.
-    - destruct H as [? H']. subst. inversion H'.
-  + split; intro H.
-    - inversion H.
-    - destruct H as [_ H]. inversion H.
-Qed.
-(*
-Lemma split_last_Some : forall l l1 l2, split_last l = (Some l1, l2) <-> 
-  l = l1 ++ l2 /\ (exists v, last l1 abs = here v) /\ l2 = alls abs l2.
-Proof.
-intro l. induction l as [| [| e] l]; intros l1 l2.
-* simpl. split; intro H.
-  + discriminate.
-  + destruct H as [H1 [H2 H3]]. destruct l1, l2; discriminate.
-* split; intro H; simpl in *.
-  + destruct (split_last l) as [[l1' |] l2'].
-    - destruct (proj1 (IHl l1' l2') (reflexivity _)) as [v [H1 H2]].
-      inv H. exists v. now split.
-    - inversion H.
-  + destruct H as [v [H1 H2]]. destruct l1 as [| ? l1]; try discriminate.
-    assert (Heq : split_last l = (Some l1, l2)). { rewrite IHl. exists v. inversion H1. now split. }
-    rewrite Heq. now inversion H1.
-* split; intro H; simpl in *.
-  + destruct (split_last l) as [[l1' |] l2'] eqn:Hsplit.
-    - inv H. destruct (proj1 (IHl l1' l2)) as [v [H1 H2]]; trivial.
-      exists v. split; trivial. now subst l.
-    - inv H. exists e. rewrite split_last_None in Hsplit. destruct Hsplit. subst l2. now split.
-  + destruct H as [v [H1 H2]]. destruct l1 as [| e1 l1].
-    - inversion_clear H1.
-      assert (Heq : split_last l2 = (None, l2)). { rewrite split_last_None. now split. }
-      now rewrite Heq.
-    - specialize (IHl l1 l2). inversion H1. subst l e1.
-      assert (Heq : split_last (l1 ++ here v :: l2) = (Some l1, l2)). { rewrite IHl. exists v. now split. }
-      now rewrite Heq.
-Qed.
 
 (** The simpler definition of [fby] with [hold]. *)
 Definition hold_fby_rev v vl := 

@@ -264,7 +264,7 @@ Lemma fby_aux_abs : forall v0 s, fby_aux v0 (abs :: s) = (abs :: fst (fby_aux v0
 Proof.
 induction s as [| [| v] s]; simpl in *.
 + reflexivity.
-+ destruct (fby_aux v0 s); rewrite IHs; reflexivity.
++ rewrite IHs; reflexivity.
 + destruct (fby_aux v0 s); simpl. reflexivity.
 Qed.
 
@@ -288,14 +288,12 @@ Lemma fby_aux_app : forall s1 s2 v s1' s2' v' v'' , fby_aux v s2 = (s2', v') -> 
   fby_aux v (s1 ++ s2) = (s1' ++ s2', v'').
 Proof.
 intros s1. induction s1 as [| [| c] s1]; intros s2 v s1' s2' v' v'' Hs2 Hs1.
-* inversion Hs1. subst. simpl. assumption.
-* simpl app. rewrite fby_aux_abs in Hs1 |- *. destruct s1' as [| ? s1']; inversion Hs1.
++ inversion Hs1. subst. simpl. assumption.
++ simpl app. rewrite fby_aux_abs in Hs1 |- *. destruct s1' as [| ? s1']; inversion Hs1.
   simpl. apply (IHs1 _ _ s1' _ _ v'') in Hs2.
-  + rewrite Hs2. f_equal.
-    - now rewrite H1.
-    - simpl. auto.
-  + subst. apply surjective_pairing.
-* simpl in *. destruct (fby_aux v' s1) eqn:Hs1'.
+  - rewrite Hs2. f_equal; subst; auto.
+  - subst. apply surjective_pairing.
++ simpl in *. destruct (fby_aux v' s1) eqn:Hs1'.
   rewrite (IHs1 _ _ _ _ _ _ Hs2 Hs1'). inversion_clear Hs1. simpl. reflexivity.
 Qed.
 
