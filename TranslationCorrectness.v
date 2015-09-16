@@ -819,186 +819,84 @@ Proof.
          end.
 Qed.
 
-Lemma Is_node_correct:
-  forall (G: global)
-         (f: ident)
-         (fnode: node)
-         (xs: stream)
-         (M: memory)
-         (ys: stream)
-
-         (prog: program)
-         (prog': program)
-         (fclass: class)
-         (n: nat)
-         (menv: memoryEnv)
-         (env: constEnv)
-         (menv': memoryEnv)
-         (env': constEnv),
-
-    Welldef_global G
-    -> find_node f G = Some (fnode)
-    -> msem_node G f xs M ys
-
-    -> prog = translate G
-    -> find_class f prog = Some(fclass, prog')
-    -> (forall c, xs n = present c <-> PM.find (fclass.(c_input)) env = Some c)
-    -> (forall x, Is_variable_in x (fnode.(n_eqs)) -> PM.find x env = None)
-    -> stmt_eval prog' menv env (fclass.(c_step)) (menv', env')
-
-    -> Memory_Corres G n f M menv
-
-    -> (forall c, ys n =present c <-> PM.find (fclass.(c_output)) env' = Some c)
-       /\ Memory_Corres G (S n) f M menv'.
-Proof.
-  induction G as [|node G IH]; [discriminate|].
-  intros f fnode xs M ys prog prog' fclass n menv env menv' env'.
-  intros Hwd Hfnd Hmsem Hprog Hfcls Hin1 Hother Hstmt Hmc.
-  assert (Ordered_nodes (node::G)) as Hord
-    by apply Welldef_global_Ordered_nodes with (1:=Hwd).
-
-  simpl in Hfnd.
-  destruct (ident_eqb (n_name node) f) eqn:Hfeq.
-
-  Focus 2.
-  { assert (node.(n_name) <> f) as Hfneq
-        by apply Pos.eqb_neq with (1:=Hfeq).
-    rewrite Memory_Corres_tl with (1:=Hfneq) (2:=Hord) in Hmc |- *.
-    apply IH with (f:=f) (fnode:=fnode) (xs:=xs)
-                         (prog:=translate G) (prog':=prog')
-                         (menv:=menv) (env:=env)
-                         (menv':=menv') (env':=env').
-    apply (Welldef_global_cons _ _ Hwd).
-    apply Hfnd.
-    apply Pos.eqb_neq in Hfeq.
-    apply Welldef_global_Ordered_nodes in Hwd.
-    apply msem_node_cons with (1:=Hwd) (2:=Hmsem) (3:=Hfeq).
-    reflexivity.
-    rewrite Hprog in Hfcls; simpl in Hfcls; rewrite Hfeq in Hfcls; exact Hfcls.
-    exact Hin1.
-    exact Hother.
-    exact Hstmt.
-    exact Hmc. }
-  Unfocus.
-
-  rewrite Hprog in Hfcls; clear Hprog.
-  simpl in Hfcls; rewrite Hfeq in Hfcls.
-  symmetry in Hfcls; injection Hfcls.
-  intros He1 He2; rewrite He1, He2 in *; clear He1 He2 Hfcls.
-
-  injection Hfnd; intro He; rewrite He in *; clear He Hfnd.
-
-  destruct fnode.
-  simpl in *.
-
-  inversion_clear Hmsem as [? ? ? ? i o eqs Hfind Hsem].
-  simpl in *.
-  rewrite Hfeq in Hfind.
-  injection Hfind.
-  intros; subst.
-  clear Hfeq Hfind.
-  destruct Hsem as [H [Hi [Ho Hsem]]].
-  specialize Hi with n.
-  specialize Ho with n.
-
-  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2 Hout Hnode].
-  rename Hwd' into Hwd.
-  simpl in *.
-  unfold neqs, ni, no in *; clear neqs ni no.
-  rewrite ps_from_list_gather_eqs_memories in Hstmt.
-
-  assert (forall alleqs, (exists oeqs, alleqs = oeqs ++ eqs) ->
-    (forall x, Is_variable_in x eqs ->
-     forall c, sem_var H x n (present c) <-> PM.find x env' = Some c)
-    /\
-    Memory_Corres_eqs G (S n) M menv' eqs) as His_step_correct.
-  {
-    intros alleqs Hall.
-    admit. (* TODO: Replay the Is_step_correct induction *)
-  }
-
-  clear IH.
-  specialize His_step_correct with ([] ++ eqs).
-  destruct His_step_correct as [Hvar' Hmc']; [now eauto|].
-  split.
-  - intro c.
-    apply Hvar' with (c:=c) in Hout.
-    rewrite <- Hout.
-    split; intro HH;
-      [ rewrite HH in Ho; exact Ho
-      | now apply sem_var_det with (1:=Ho) (2:=HH) ].
-  - econstructor.
-    + simpl; rewrite Pos.eqb_refl; reflexivity.
-    + apply Memory_Corres_eqs_tl with (1:=Hord) (2:=Hnode) (3:=Hmc').
-Qed.
-
-(* TODO next:
-   - show that fclass.(c_reset) satisfies: Memory_Corres M 0 menv
-   - replace msem_node G f xs M ys with just sem_node G f xs ys
-     using a lemma from DataflowNatMSemantics.
-   - Show that running the step function for any n gives correct
-     results (provided we stock and repass the memory), and
-     eliminate the Memory_Corress hypothesis and result.
-*)
-
-
-
 Lemma is_step_correct:
   forall (G: global)
          (H: history)
-         (H': history)
-         (input: ident)
+         (M: memory)
          (mems: PS.t)
-         (alleqs: list equation),
+         (alleqs : list equation),
 
-    sem_equations G H alleqs
-    -> sem_held_equations H H' alleqs
-    -> (forall x:ident, PS.In x mems -> Is_memory_in x alleqs)
+    List.Forall (msem_equation G H M) alleqs
+    -> (forall x:ident, PS.In x mems -> Is_memory_in x alleqs) (* ?? *)
 
-    -> forall (eqs: list equation)
+    -> forall (prog: program)
+              (x: ident)
+              (xs: stream)
+              (y: ident)
+              (ys: stream)
+              (eqs: list equation)
               (n: nat)
               (menv: memoryEnv)
               (menv': memoryEnv)
               (env: constEnv)
               (env': constEnv),
+        (exists oeqs, alleqs = oeqs ++ eqs)
 
-    Is_well_sch (PS.add input mems) eqs
-    -> (exists oeqs, alleqs = oeqs ++ eqs)
-    -> stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+        (* - input (assumed) *)
+        -> sem_var H x n (xs n)
+        -> (forall c, xs n = present c <-> PM.find x env = Some c)
+          (* NB: PM.find x env' = Some c -> sem_var H x n (present c)
+                 does not hold if PM.find x env = Some arbitrary_c, since
+                 x will not be written to when its clock is absent.
 
-    (* NB: PM.find x env' = Some c -> sem_var H x n (present c)
-           does not hold if PM.find x env = Some arbitrary_c, since
-           x will not be written to when its clock is absent.
+                 It may just be better to show the direction:
+                 sem_var H x n (present c) -> PM.find x env' = Some c
 
-           It may just be better to show the direction:
-           sem_var H x n (present c) -> PM.find x env' = Some c
+                 which is enough if the outputs are only sampled when
+                 they are present (normally the case).
 
-           which is enough if the outputs are only sampled when
-           they are present (normally the case).
+                 More discussion/context is needed. *)
+        -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
+        -> ~ Is_memory_in x eqs
 
-           More discussion/context is needed. *)
-    -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
+        (* - output (semantics assumed) *)
+        -> sem_var H y n (ys n)
+        -> Is_variable_in y eqs
 
-    (* - inputs (assumed) *)
-    -> ~Is_memory_in input eqs
-    -> (forall c, sem_var H input n (present c) <-> PM.find input env = Some c)
+        (* - execution of translated equations *)
+        -> Is_well_sch (PS.add x mems) eqs
+        -> (stmt_eval prog menv env (translate_eqns mems eqs) (menv', env'))
 
-    (* - unwritten memories (assumed) *)
-    -> (forall x:ident,
-           PS.In x mems ->
-           forall c, sem_var H' x n (present c) <-> find_mem x menv = Some c)
+        (* - instantiated nodes (assumed) *)
+        -> (forall (f : ident) (fnode : DataflowSyntax.node)
+                   (xs : stream) (M : memory) (ys : stream)
+                   (prog' : program) (fclass : class) (menv : memoryEnv)
+                   (env : constEnv) (menv' : memoryEnv) (env' : constEnv),
+               find_node f G = Some fnode
+               -> msem_node G f xs M ys
+               -> find_class f prog = Some (fclass, prog')
+               -> (forall c, xs n = present c
+                             <-> PM.find (c_input fclass) env = Some c)
+               -> (forall x, Is_variable_in x (n_eqs fnode)
+                             -> PM.find x env = None)
+               -> stmt_eval prog' menv env (c_step fclass) (menv', env')
+               -> Memory_Corres G n f M menv
+               -> (forall c, ys n = present c
+                             <-> PM.find (c_output fclass) env' = Some c)
+                  /\ Memory_Corres G (S n) f M menv')
 
-    (* - locals (shown) *)
-    -> (forall x:ident,
-           Is_variable_in x eqs ->
-           forall c, sem_var H x n (present c) <-> PM.find x env' = Some c)
+        (* - unwritten memories (assumed) *)
+        -> Memory_Corres_eqs G n M menv eqs
 
-    (* - written memories (shown) *)
-       /\ (forall x:ident,
-              Is_memory_in x eqs ->
-              forall c, sem_var H' x (S n) (present c)
-                        <-> find_mem x menv' = Some c).
+        (* - locals (shown) *)
+        -> (forall x : ident,
+               Is_variable_in x eqs ->
+               forall c : const, sem_var H x n (present c)
+                                 <-> PM.find x env' = Some c)
+        (* - written memories (shown) *)
+           /\ Memory_Corres_eqs G (S n) M menv' eqs.
 Proof.
+(*
   intros until alleqs.
   intros Hsems Hheld Himi.
 
@@ -1176,7 +1074,250 @@ Proof.
             | apply Hsv; exact HH ].
       }
     }
+*)
+Admitted. (* TODO! *)
+
+(*
+Lemma is_step_correct:
+  forall (G: global)
+         (H: history)
+         (H': history)
+         (input: ident)
+         (mems: PS.t)
+         (alleqs: list equation),
+
+    sem_equations G H alleqs
+    -> sem_held_equations H H' alleqs
+    -> (forall x:ident, PS.In x mems -> Is_memory_in x alleqs)
+
+    -> forall (eqs: list equation)
+              (n: nat)
+              (menv: memoryEnv)
+              (menv': memoryEnv)
+              (env: constEnv)
+              (env': constEnv),
+
+    Is_well_sch (PS.add input mems) eqs
+    -> (exists oeqs, alleqs = oeqs ++ eqs)
+    -> stmt_eval menv env (translate_eqns mems eqs) (menv', env')
+
+    -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
+
+    (* - inputs (assumed) *)
+    -> ~Is_memory_in input eqs
+    -> (forall c, sem_var H input n (present c) <-> PM.find input env = Some c)
+
+    (* - unwritten memories (assumed) *)
+    -> (forall x:ident,
+           PS.In x mems ->
+           forall c, sem_var H' x n (present c) <-> find_mem x menv = Some c)
+
+    (* - locals (shown) *)
+    -> (forall x:ident,
+           Is_variable_in x eqs ->
+           forall c, sem_var H x n (present c) <-> PM.find x env' = Some c)
+
+    (* - written memories (shown) *)
+       /\ (forall x:ident,
+              Is_memory_in x eqs ->
+              forall c, sem_var H' x (S n) (present c)
+                        <-> find_mem x menv' = Some c).
+Proof.
 Qed.
+*)
+
+(* TODO: Tidy this up... *)
+Lemma Forall_msem_equation_global_tl:
+  forall nd G H M eqs,
+    Ordered_nodes (nd::G)
+    -> (forall f, Is_node_in f eqs -> find_node f G <> None)
+    -> ~ Is_node_in nd.(n_name) eqs
+    -> List.Forall (msem_equation (nd::G) H M) eqs
+    -> List.Forall (msem_equation G H M) eqs.
+Proof.
+  intros nd G H M eqs Hord.
+  induction eqs as [|eq eqs IH]; [trivial|].
+  intros Hfind Hnini Hmsem.
+  apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
+  apply IH in Hseqs.
+  Focus 2.
+  { intros f Hini.
+    apply List.Exists_cons_tl with (x:=eq) in Hini.
+    now apply Hfind with (1:=Hini). }
+  Unfocus.
+  Focus 2.
+  { apply not_Is_node_in_cons in Hnini.
+    destruct Hnini; assumption. }
+  Unfocus.
+
+  apply List.Forall_cons with (2:=Hseqs).
+  inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst.
+  - constructor; auto.
+  - econstructor; [exact Hmfind|].
+    intros ls xs Hlae Hx.
+    apply not_Is_node_in_cons in Hnini.
+    destruct Hnini.
+    assert (nd.(n_name) <> f).
+    intro HH.
+    apply H0.
+    rewrite HH.
+    constructor.
+    pose proof (Hmsem _ _ Hlae Hx).
+    apply msem_node_cons with (1:=Hord) (2:=H3) (3:=H2).
+  - econstructor.
+    eassumption.
+    reflexivity.
+    eassumption.
+    assumption.
+Qed.
+
+Lemma Is_node_correct:
+  forall (G: global)
+         (f: ident)
+         (fnode: node)
+         (xs: stream)
+         (M: memory)
+         (ys: stream)
+
+         (prog: program)
+         (prog': program)
+         (fclass: class)
+         (n: nat)
+         (menv: memoryEnv)
+         (env: constEnv)
+         (menv': memoryEnv)
+         (env': constEnv),
+
+    Welldef_global G
+
+    -> find_node f G = Some fnode
+    -> msem_node G f xs M ys
+
+    -> prog = translate G
+    -> find_class f prog = Some(fclass, prog')
+    -> (forall c, xs n = present c <-> PM.find (fclass.(c_input)) env = Some c)
+    -> (forall x, Is_variable_in x (fnode.(n_eqs)) -> PM.find x env = None)
+    -> stmt_eval prog' menv env (fclass.(c_step)) (menv', env')
+
+    -> Memory_Corres G n f M menv
+
+    -> (forall c, ys n =present c <-> PM.find (fclass.(c_output)) env' = Some c)
+       /\ Memory_Corres G (S n) f M menv'.
+Proof.
+  induction G as [|node G IH]; [discriminate|].
+  intros f fnode xs M ys prog prog' fclass n menv env menv' env'.
+  intros Hwd Hfnd Hmsem Hprog Hfcls Hin1 Hother Hstmt Hmc.
+  assert (Ordered_nodes (node::G)) as Hord
+    by apply Welldef_global_Ordered_nodes with (1:=Hwd).
+
+  simpl in Hfnd.
+  destruct (ident_eqb (n_name node) f) eqn:Hfeq.
+
+  Focus 2.
+  { assert (node.(n_name) <> f) as Hfneq
+        by apply Pos.eqb_neq with (1:=Hfeq).
+    rewrite Memory_Corres_tl with (1:=Hfneq) (2:=Hord) in Hmc |- *.
+    apply IH with (f:=f) (fnode:=fnode) (xs:=xs)
+                         (prog:=translate G) (prog':=prog')
+                         (menv:=menv) (env:=env)
+                         (menv':=menv') (env':=env').
+    apply (Welldef_global_cons _ _ Hwd).
+    apply Hfnd.
+    apply Pos.eqb_neq in Hfeq.
+    apply Welldef_global_Ordered_nodes in Hwd.
+    apply msem_node_cons with (1:=Hwd) (2:=Hmsem) (3:=Hfeq).
+    reflexivity.
+    rewrite Hprog in Hfcls; simpl in Hfcls; rewrite Hfeq in Hfcls; exact Hfcls.
+    exact Hin1.
+    exact Hother.
+    exact Hstmt.
+    exact Hmc. }
+  Unfocus.
+
+  rewrite Hprog in Hfcls; clear Hprog.
+  simpl in Hfcls; rewrite Hfeq in Hfcls.
+  symmetry in Hfcls; injection Hfcls.
+  intros He1 He2; rewrite He1, He2 in *; clear He1 He2 Hfcls.
+
+  injection Hfnd; intro He; rewrite He in *; clear He Hfnd.
+
+  destruct fnode.
+  simpl in *.
+
+  inversion_clear Hmsem as [? ? ? ? i o eqs Hfind Hsem].
+  simpl in *.
+  rewrite Hfeq in Hfind.
+  injection Hfind.
+  intros; subst.
+  clear Hfind.
+  destruct Hsem as [H [Hi [Ho Hsem]]].
+  specialize Hi with n.
+  specialize Ho with n.
+
+  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2 Hout Hnode Hnd Hfind].
+  rename Hwd' into Hwd.
+  simpl in *.
+  unfold neqs, ni, no in *; clear neqs ni no.
+  rewrite ps_from_list_gather_eqs_memories in Hstmt.
+
+  assert ((forall x, Is_variable_in x eqs ->
+                     forall c, sem_var H x n (present c)
+                               <-> PM.find x env' = Some c)
+          /\ Memory_Corres_eqs G (S n) M menv' eqs) as His_step_correct.
+  {
+    eapply is_step_correct with (mems:=memories eqs).
+    (* TODO: Tidy this up... *)
+    - apply Forall_msem_equation_global_tl
+      with (1:=Hord) (2:=Hnd) (3:=Hnode) (4:=Hsem).
+    - intros; apply Is_memory_in_memories; assumption.
+    - exists []; trivial.
+    - exact Hi.
+    - exact Hin1.
+    - exact Hother.
+    - exact Hin2.
+    - exact Ho.
+    - exact Hout.
+    - exact Hwsch.
+    - exact Hstmt.
+    - apply (fun f fnode xs M ys prog' fclass menv env menv' env' Hfind Hmsem
+             => IH f fnode xs M ys (translate G) prog' fclass
+                   n menv env menv' env'
+                   Hwd Hfind Hmsem (eq_refl (translate G))).
+    - (* TODO: Tidy up this mess... *)
+      inversion_clear Hmc.
+      simpl in H0.
+      rewrite Hfeq in H0.
+      injection H0; intros Heq0 Heq1 Heq2;
+      rewrite <-Heq0, <-Heq1, <-Heq2 in *;
+      clear Heq0 Heq1 Heq2 H0.
+      apply Memory_Corres_eqs_tl with (1:=Hord) (2:=Hnode) (3:=H1).
+  }
+
+  clear IH.
+  destruct His_step_correct as [Hvar' Hmc'].
+  split.
+  - intro c.
+    apply Hvar' with (c:=c) in Hout.
+    rewrite <- Hout.
+    split; intro HH;
+      [ rewrite HH in Ho; exact Ho
+      | now apply sem_var_det with (1:=Ho) (2:=HH) ].
+  - econstructor.
+    + simpl; rewrite Pos.eqb_refl; reflexivity.
+    + apply Memory_Corres_eqs_tl with (1:=Hord) (2:=Hnode) (3:=Hmc').
+Qed.
+
+(* TODO next:
+   - show that fclass.(c_reset) satisfies: Memory_Corres M 0 menv
+   - replace msem_node G f xs M ys with just sem_node G f xs ys
+     using a lemma from DataflowNatMSemantics.
+   - Show that running the step function for any n gives correct
+     results (provided we stock and repass the memory), and
+     eliminate the Memory_Corress hypothesis and result.
+*)
+
+
+
 
 Lemma stmt_eval_translate_eqn_init_shift:
   forall eqs iacc menv env menv' env',

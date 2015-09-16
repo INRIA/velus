@@ -132,6 +132,27 @@ Qed.
       (provided the initial memory is created by reset)
  *)
 
+
+
+Lemma find_node_msem_node:
+  forall G f,
+    msem_nodes G
+    -> find_node f G <> None
+    -> (exists xs M ys, msem_node G f xs M ys).
+Proof.
+  intros G f Hnds Hfind.
+  apply find_node_Exists in Hfind.
+  apply List.Exists_exists in Hfind.
+  destruct Hfind as [nd [Hin Hf]].
+  unfold msem_nodes in Hnds.
+  rewrite List.Forall_forall in Hnds.
+  apply Hnds in Hin.
+  destruct Hin as [xs [M [ys Hmsem]]].
+  exists xs; exists M; exists ys.
+  rewrite Hf in *.
+  exact Hmsem.
+Qed.
+
 (* TODO: Replace with the new development in DataflowNatMSemantics:
 
 Inductive sem_held_equation (H: history) (H': history) : equation -> Prop :=
