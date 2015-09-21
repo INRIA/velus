@@ -132,8 +132,6 @@ Qed.
       (provided the initial memory is created by reset)
  *)
 
-
-
 Lemma find_node_msem_node:
   forall G f,
     msem_nodes G
@@ -493,14 +491,6 @@ Proof.
   assumption.
 Qed.
 
-Lemma sem_equations_app2:
-  forall G H oeqs eqs,
-    sem_equations G H (oeqs ++ eqs)
-    -> sem_equations G H eqs.
-Proof.
-  intros G H oeqs eqs H0.
-  apply Forall_app in H0; intuition.
-Qed.
 
 Lemma sem_held_equations_app2:
   forall H H' oeqs eqs,
