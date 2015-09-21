@@ -944,6 +944,9 @@ Local Ltac resolve_env_assumption :=
     destruct (ident_eq_dec x input);
       repeat progress
              match goal with
+             | H: exists _, _ |- _ => destruct H
+             | H: _ /\ _ |- _ => destruct H
+
              | H:   ~PS.In x _,
                Hin: x=input,
                Hws: Is_well_sch _ (_ :: _) |- _ =>
@@ -951,6 +954,9 @@ Local Ltac resolve_env_assumption :=
                  apply Is_well_sch_free_variable_in_mems with input _ _ _ in Hws;
                  [ apply not_Is_defined_in_not_Is_variable_in in Hws
                  | auto | apply PS.add_spec; auto ]
+
+             | H1: x = input, H2: PS.In x ?mems |- _ =>
+               rewrite H1 in H2; contradiction
 
              | H:   ~PS.In x _,
                Hin: x<>input,
@@ -982,15 +988,14 @@ Local Ltac resolve_env_assumption :=
                |-  PM.find ?x ?env = Some ?c => apply Hv; [now auto|apply Hs]
 
              | Hin: PS.In ?x ?mems,
-               Hm: forall x, PS.In x ?mems -> Is_memory_in x (_ ++ _)
+               Hm: forall x, PS.In x ?mems -> Is_memory_in x _
                |- find_mem ?x ?menv = Some _ => apply Hm in Hin
 
              | H1: Is_memory_in ?x ?eqs,
                H2: sem_var ?H ?x ?n (present ?c),
                H3: List.Forall (msem_equation ?G ?H ?M) ?eqs
                |- find_mem ?x ?menv = Some _ =>
-               apply Is_memory_in_msem_var with (1:=H1) (2:=H2) in H3;
-                 destruct H3 as [?ms [? ?]]
+               apply Is_memory_in_msem_var with (1:=H1) (2:=H2) in H3
 
              | H1: ?ms ?n = ?c |- find_mem ?x ?menv = Some ?c => rewrite <- H1
 
@@ -999,6 +1004,16 @@ Local Ltac resolve_env_assumption :=
                H3: mfind_mem ?x ?M = ?xs
                |- find_mem ?x ?menv = Some (?ms ?n) =>
                apply Is_memory_in_Memory_Corres_eqs with (1:=H1) (2:=H2) (3:=H3)
+
+             | H1: Is_memory_in ?x ?eqs,
+               H2: Memory_Corres_eqs ?G ?n ?M ?menv ?eqs,
+               H3: mfind_mem ?x ?M = Some _ |- _ =>
+               apply Is_memory_in_Memory_Corres_eqs with (1:=H1) (2:=H2) in H3
+
+             | H1: ?xs ?n = ?c,
+               H2: find_mem ?x ?menv = Some (?xs ?n)
+               |- find_mem ?x ?menv = Some ?c =>
+               rewrite H1 in H2; exact H2
              end
   end.
 
@@ -1235,7 +1250,7 @@ Proof.
         subst; clear Hcae.
         { (* sem_clock H ck n true *)
           apply (cexp_correct _ _ _ _ _ _ _ _ _ _ _ Hcexp) in Heval.
-          2: resolve_env_assumption.
+          2:now resolve_env_assumption.
           rewrite Heval; rewrite PM.gss; split.
           intro Hsv';
             assert (present c' = present c) as Heq
@@ -1244,7 +1259,7 @@ Proof.
           injection 1 as Heq; rewrite Heq in Hsv; assumption. }
         { (* sem_clock H ck n false *)
           apply clock_correct_false with _ _ mems menv' env' _ in Hclk.
-          2: resolve_env_assumption.
+          2:now resolve_env_assumption.
           contradiction. }
       }
       { (* ~Is_present_in ck *)
@@ -1253,7 +1268,7 @@ Proof.
                           | ck' ce' n' Hcexp Hclk [HR1 HR2] HR3 HR4].
         { (* sem_clock H ck n true *)
           apply (clock_correct_true H n mems menv' env' ck) in Hclk.
-          2: resolve_env_assumption.
+          2:now resolve_env_assumption.
           contradiction. }
         { (* sem_clock H ck n false *)
           split.
@@ -1276,7 +1291,7 @@ Proof.
       apply IHeqs0 with (c:=c) in H1; rewrite H1.
       apply not_Is_variable_in_eq with (2:=Heval) in H0.
       rewrite H0; intuition.
-  - (* TODO: Inductive step for EqApp. *) admit.
+  - (* TODO: Inductive step for EqApp: y = f lae. *) admit.
   - (* Inductive step for EqFby: y = v0 fby lae *)
     clear Hnode.
     Hint Constructors Is_memory_in_eq.
@@ -1316,20 +1331,7 @@ Proof.
           rewrite Henv'' in Heval.
           apply lexp_correct with (menv:=menv') (env:=env') (memories:=mems)
             in Hlexp.
-          Focus 2.
-          { resolve_env_assumption.
-            (* TODO: integrate the logic below into resolve_env_assumption *)
-            rewrite e in H2.
-            contradiction.
-            apply Hmeq in H2.
-            SearchAbout Is_memory_in msem_equation.
-            pose proof (Is_memory_in_msem_var _ _ _ _ _ _ _ H2 H1 Hsems).
-            destruct H3. destruct H3.
-            apply Is_memory_in_Memory_Corres_eqs with (1:=H2) (ms:=x0) in Hmc.
-            rewrite H4 in Hmc.
-            exact Hmc.
-            exact H3. }
-          Unfocus.
+          2:now resolve_env_assumption.
           apply (exp_eval_det _ _ _ _ _ Heval) in Hlexp.
           rewrite Hlexp in *; clear Hlexp.
           constructor.
@@ -1349,17 +1351,6 @@ Proof.
           contradiction.
           rewrite Henv'' in *.
           resolve_env_assumption.
-          (* TODO: integrate the logic below into resolve_env_assumption *)
-          rewrite e in H2.
-          contradiction.
-          apply Hmeq in H2.
-          SearchAbout Is_memory_in msem_equation.
-          pose proof (Is_memory_in_msem_var _ _ _ _ _ _ _ H2 H1 Hsems).
-          destruct H3. destruct H3.
-          apply Is_memory_in_Memory_Corres_eqs with (1:=H2) (ms:=x0) in Hmc.
-          rewrite H4 in Hmc.
-          exact Hmc.
-          exact H3.
         }
       }
       { (* ~Is_present_in ck *)
@@ -1369,7 +1360,7 @@ Proof.
         { (* sem_clock H ck n true *)
           rewrite Hall in *.
           apply (clock_correct_true H n mems menv' env' ck) in Hclk.
-          2: resolve_env_assumption.
+          2:now resolve_env_assumption.
           contradiction. }
         { (* sem_clock H ck n false *)
           Hint Constructors Is_memory_in_eq.
