@@ -292,3 +292,23 @@ Proof.
   intros. apply PM.gso. assumption.
 Qed.
 
+Lemma find_obj_gss:
+  forall y c m, find_obj y (add_obj y c m) = Some c.
+Proof.
+  intros. apply PM.gss.
+Qed.
+
+Lemma find_obj_gso:
+  forall x y c m, x <> y -> find_obj x (add_obj y c m) = find_obj x m.
+Proof.
+  intros. apply PM.gso. assumption.
+Qed.
+
+Lemma find_mem_add_obj:
+  forall x y omenv menv,
+    find_mem x (add_obj y omenv menv) = find_mem x menv.
+Proof.
+  unfold find_mem, add_obj.
+  reflexivity.
+Qed.
+

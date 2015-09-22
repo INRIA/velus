@@ -834,6 +834,35 @@ Inductive Is_instance_in_eq : ident -> equation -> Prop :=
 Definition Is_instance_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_instance_in_eq x) eqs.
 
+Lemma Is_instance_in_eq_dec:
+  forall x eq, {Is_instance_in_eq x eq}+{~Is_instance_in_eq x eq}.
+Proof.
+  destruct eq as [y cae|y f lae|y v0 lae];
+  (destruct (ident_eq_dec x y) as [xeqy|xneqy];
+     [ rewrite xeqy; left; constructor | right; inversion 1; auto])
+   || (right; inversion_clear 1).
+Qed.
+
+Lemma Is_instance_in_cons:
+  forall x eq eqs,
+    Is_instance_in x (eq :: eqs) ->
+    Is_instance_in_eq x eq
+    \/ (~Is_instance_in_eq x eq /\ Is_instance_in x eqs).
+Proof.
+  intros x eq eqs Hdef.
+  apply List.Exists_cons in Hdef.
+  destruct (Is_instance_in_eq_dec x eq); intuition.
+Qed.
+
+Lemma not_Is_instance_in_cons:
+  forall x eq eqs,
+    ~Is_instance_in x (eq :: eqs)
+    <-> ~Is_instance_in_eq x eq /\ ~Is_instance_in x eqs.
+Proof.
+  intros x eq eqs. split.
+  intro H0; unfold Is_instance_in in H0; auto.
+  destruct 1 as [H0 H1]; intro H; apply Is_instance_in_cons in H; intuition.
+Qed.
 
 Lemma not_Is_node_in_cons:
   forall n eq eqs,
