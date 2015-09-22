@@ -60,7 +60,8 @@ Inductive Is_well_sch (mems: PS.t) : list equation -> Prop :=
       Is_well_sch mems eqs ->
       (forall i, Is_free_in_laexp i e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+                    /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+      (~Is_instance_in x eqs) ->
       Is_well_sch mems (EqApp x f e :: eqs)
 | WSchEqFby:
     forall x v e eqs,
@@ -123,26 +124,31 @@ Section Well_sch.
       + auto.
   Qed.
 
-  Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t) : bool*PS.t*PS.t :=
+  Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t*PS.t)
+                  : bool*PS.t*PS.t*PS.t :=
     match acc with
-      | (true, memories, variables) =>
+      | (true, memories, instances, variables) =>
         match eq with
           | EqDef x e =>
             (PS.for_all (check_var memories variables) (free_in_caexp e PS.empty),
-               memories, PS.add x variables)
+               memories, instances, PS.add x variables)
           | EqApp x f e =>
-            (PS.for_all (check_var memories variables) (free_in_laexp e PS.empty),
-               memories, PS.add x variables)
+            (andb
+               (PS.for_all (check_var memories variables)
+                           (free_in_laexp e PS.empty))
+               (negb (PS.mem x instances)),
+               memories, PS.add x instances, PS.add x variables)
           | EqFby x v e =>
             (PS.mem x mems && PS.for_all (check_var memories variables)
-                                        (free_in_laexp e PS.empty),
-             PS.add x memories, variables)
+                                         (free_in_laexp e PS.empty),
+             PS.add x memories, instances, variables)
         end
-      | (false, _, _) => (false, PS.empty, PS.empty)
+      | (false, _, _, _) => (false, PS.empty, PS.empty, PS.empty)
     end.
 
   Definition well_sch (eqs: list equation) : bool :=
-    fst (fst (List.fold_right check_eq (true, PS.empty, PS.empty) eqs)).
+    fst (fst (fst (List.fold_right check_eq
+                                   (true, PS.empty, PS.empty, PS.empty) eqs))).
 
   Lemma not_for_all_spec:
     forall (s : PS.t) (f : BinNums.positive -> bool),
@@ -174,12 +180,13 @@ Section Well_sch.
   Qed.
 
   Lemma well_sch_pre_spec:
-    forall eqs good memories variables,
-      (good, memories, variables)
-          = List.fold_right check_eq (true, PS.empty, PS.empty) eqs
+    forall eqs good memories instances variables,
+      (good, memories, instances, variables)
+          = List.fold_right check_eq (true, PS.empty, PS.empty, PS.empty) eqs
       ->
       (good = true -> (Is_well_sch mems eqs
                        /\ (forall x, PS.In x memories <-> Is_memory_in x eqs)
+                       /\ (forall x, PS.In x instances <-> Is_instance_in x eqs)
                        /\ (forall x, PS.In x variables <-> Is_variable_in x eqs)))
       /\ (good = false -> ~Is_well_sch mems eqs).
   Proof.
@@ -191,15 +198,19 @@ Section Well_sch.
                  | H: PS.In _ PS.empty |- _ => apply PS.empty_spec in H;
                                                contradiction
                  | H: Is_memory_in _ nil |- _ => now inversion H
+                 | H: Is_instance_in _ nil |- _ => now inversion H
                  | H: Is_variable_in _ nil |- _ => now inversion H
+                 | H1: good=true, H2: good=false |- _ =>
+                   rewrite H1 in H2; discriminate
                end.
-    - intros good memories variables HH.
+    - intros good memories instances variables HH.
       simpl in HH.
-      destruct (List.fold_right check_eq (true, PS.empty, PS.empty) eqs)
-        as [[good' memories'] variables'].
-      specialize IHeqs with good' memories' variables'.
-      pose proof (IHeqs (eq_refl (good', memories', variables'))) as IH;
-        clear IHeqs.
+      destruct (List.fold_right check_eq
+                                (true, PS.empty, PS.empty, PS.empty) eqs)
+        as [[[good' memories'] instances'] variables'].
+      specialize IHeqs with good' memories' instances' variables'.
+      pose proof (IHeqs (eq_refl (good', memories', instances', variables')))
+        as IH; clear IHeqs.
       destruct IH as [IHt IHf].
       split; intro Hg; rewrite Hg in *; clear Hg.
       + destruct eq; (* the horror... *)
@@ -210,25 +221,32 @@ Section Well_sch.
                  discriminate);
          rewrite IH in HH;
          apply IHt in IH; clear IHt IHf;
-         destruct IH as [Hwsch [Himi Hivi]];
+         destruct IH as [Hwsch [Himi [Hiii Hivi]]];
          injection HH;
-         intros HRv HRm Hcv;
-         rewrite HRv in *; rewrite HRm in *; clear HRv HRm;
+         intros HRv HRi HRm Hcv;
+         rewrite HRv, HRi, HRm in *; clear HRv HRi HRm;
          symmetry in Hcv;
          try match goal with
                | H: PS.mem _ _ && _ = true |- _ =>
                  apply Bool.andb_true_iff in H;
                  destruct H as [H1 Hcv];
                  rewrite PS.mem_spec in H1
+               | H: _ && _ = true |- _ =>
+                 apply Bool.andb_true_iff in H;
+                 destruct H as [Hcv Hnin];
+                 rewrite Bool.negb_true_iff,
+                         <-PSF.not_mem_iff in Hnin
              end;
-         split;
-         [ constructor; auto; intros y Hy;
-           apply free_in_caexp_spec' in Hy || apply free_in_laexp_spec' in Hy;
-           rewrite PS.for_all_spec in Hcv;
-           [ | apply check_var_compat];
-           apply Hcv in Hy;
-           apply check_var_spec in Hy | ];
-         intros;
+          split;
+          constructor; auto;
+          (rewrite PS.for_all_spec in Hcv;
+           [ |now apply check_var_compat]);
+          try (intros y Hy;
+               apply free_in_caexp_spec' in Hy
+                 || apply free_in_laexp_spec' in Hy;
+               apply Hcv in Hy;
+               apply check_var_spec in Hy);
+          intros;
          repeat progress match goal with
           | |- ~Is_defined_in _ _ => apply Is_defined_in_not_mem_not_var
           | H:_ \/ _ |- _ => destruct H; subst
@@ -260,15 +278,39 @@ Section Well_sch.
             H2:Is_variable_in ?x eqs |- _ => apply Hivi in H2; contradiction
           | H1:~PS.In ?x memories',
             H2:Is_memory_in ?x eqs |- _ => apply Himi in H2; contradiction
+          | |- Is_instance_in _ (EqDef _ _ :: _) => constructor 2
+          | H:PS.In ?x instances' |- _ => apply Hiii in H
+          | H:Is_instance_in _ (EqDef _ _ :: _) |- _ => inversion_clear H
+          | H:Is_instance_in_eq _ (EqDef _ _) |- _ => inversion H
+          | H1:~PS.In ?x memories',
+            H2:Is_memory_in ?x eqs |- _ => apply Himi in H2; contradiction
+          | |- Is_instance_in _ (EqFby _ _ _ :: _) => constructor 2
+          | H:Is_instance_in _ (EqFby _ _ _ :: _) |- _ => inversion_clear H
+          | H:Is_instance_in_eq _ (EqFby _ _ _) |- _ => inversion H
+          | H:List.Exists (Is_instance_in_eq ?x) _
+            |- PS.In ?x instances' => apply Hiii in H
+          | H:Is_instance_in ?x _ |- PS.In ?x instances' =>
+            apply Hiii in H; exact H
           | _ => intuition
-         end).
+        end).
+         rewrite <-Hiii in H.
+         intuition.
+         constructor.
+         constructor.
+         constructor 2.
+         apply H.
+         inversion_clear H.
+         inversion_clear H0.
+         intuition.
+         apply Hiii in H0.
+         intuition.
       + destruct good'; [clear IHf| inversion 1; apply IHf; auto ].
         pose proof (IHt (eq_refl true)) as IH; clear IHt.
-        destruct IH as [Hwsch [Himi Hivi]].
+        destruct IH as [Hwsch [Himi [Hiii Hivi]]].
         destruct eq; simpl in HH;
         (injection HH;
-         intros HRv HRm Hcv;
-         rewrite HRv in *; rewrite HRm in *;
+         intros HRv HRi HRm Hcv;
+         rewrite HRv, HRi, HRm in *;
          clear HRv HRm;
          clear HH;
          symmetry in Hcv;
@@ -278,10 +320,23 @@ Section Well_sch.
              destruct Hcv as [Hcv|Hcv];
              [ inversion 1;
                apply mem_spec_false in Hcv;
-               contradiction | ]
+               contradiction
+             | rewrite not_for_all_spec in Hcv;
+               [ |now apply check_var_compat] ]
+         | H:_ && negb _ = false |- _ =>
+           apply Bool.andb_false_iff in Hcv;
+             destruct Hcv as [Hcv|Hcv];
+             [rewrite not_for_all_spec in Hcv;
+               [ |now apply check_var_compat]
+             | rewrite Bool.negb_false_iff in Hcv;
+               rewrite PS.mem_spec in Hcv;
+               apply Hiii in Hcv;
+               inversion 1;
+               contradiction ]
+         | H:PS.for_all _ _ = false |- _ =>
+           apply not_for_all_spec in Hcv; [|apply check_var_compat]
          | _ => idtac
          end;
-         apply not_for_all_spec in Hcv; [|apply check_var_compat];
          intro Hwsch';
          apply Hcv;
          inversion_clear Hwsch' as [|? ? ? Hwsch0 HH
@@ -322,10 +377,11 @@ Section Well_sch.
     intro eqns.
     pose proof (well_sch_pre_spec eqns).
     unfold well_sch.
-    destruct (List.fold_right check_eq (true, PS.empty, PS.empty) eqns)
-      as [[good memories] variables].
+    destruct (List.fold_right check_eq
+                              (true, PS.empty, PS.empty, PS.empty) eqns)
+      as [[[good memories] instances] variables].
     simpl.
-    specialize H with good memories variables.
+    specialize H with good memories instances variables.
     pose proof (H (eq_refl _)) as H'; clear H.
     destruct H' as [Ht Hf].
     destruct good;
