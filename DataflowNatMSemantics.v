@@ -38,12 +38,11 @@ Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
                     /\ sem_caexp H cae n v) ->
       msem_equation G H M (EqDef x cae)
 | SEqApp:
-    forall H M x f M' arg,
-      mfind_inst f M = Some M' ->
-      (forall ls xs,
-          (forall n, sem_laexp H arg n (ls n)) ->
-          (forall n, sem_var H x n (xs n)) ->
-          msem_node G f ls M' xs) ->
+    forall H M x f M' arg ls xs,
+      mfind_inst x M = Some M' ->
+      (forall n, sem_laexp H arg n (ls n)) ->
+      (forall n, sem_var H x n (xs n)) ->
+      msem_node G f ls M' xs ->
       msem_equation G H M (EqApp x f arg)
 | SEqFby:
     forall H M ms x ls v0 lae,
