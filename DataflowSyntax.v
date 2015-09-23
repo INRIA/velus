@@ -35,7 +35,7 @@ Inductive equation : Type :=
   | EqApp : ident -> ident -> laexp -> equation
   | EqFby : ident -> const -> var_dec -> equation.
   (* EqFby only on variables to allow for a simpler translation
-     as a name would already exist for the translation without the time shift. *)
+     as a name would already exist for the translation before the time shift. *)
 
 Record node : Type := mk_node {
   n_name : ident;
@@ -49,3 +49,11 @@ Require Coq.FSets.FMapPositive.
 Definition global := FSets.FMapPositive.PositiveMap.t node.
 
 
+Definition lexp_ind2 := fun (P : lexp -> Prop)
+  f_const f_var f_when =>
+fix F (l : lexp) : P l :=
+  match l as l0 return (P l0) with
+  | Econst c => f_const c
+  | Evar i => f_var i
+  | Ewhen (LAexp ck le) i b => f_when ck le i b (F le)
+  end.

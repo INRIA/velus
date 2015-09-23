@@ -50,11 +50,14 @@ Inductive value :=
   | here (v : const).
 Coercion here : const >-> value.
 
+Lemma value_dec : forall v1 v2 : value, {v1 = v2} + {v1 <> v2}.
+Proof. repeat decide equality. Qed.
+
 Definition venv := PositiveMap.t value.
 Definition history := list venv.
 
 
-Definition instant_sem_var env x c := PositiveMap.find x env = Some (here c).
+Definition instant_sem_var env x (v : value) := PositiveMap.find x env = Some v.
 
 Definition sem_var (H : history) (x : ident) (vl : list value) : Prop :=
   List.map (PositiveMap.find x) H = List.map (@Some _) vl.
@@ -81,10 +84,10 @@ Inductive instant_sem_clock (env : venv) : clock -> bool -> Prop :=
 (** ***  Expression semantics  **)
 
 Inductive instant_sem_laexp (env : venv) : laexp -> value -> Prop :=
-  | Stick : forall ck ce c,
-      instant_sem_lexp env ce c ->
+  | Stick : forall ck ce v,
+      instant_sem_lexp env ce v ->
       instant_sem_clock env ck true ->
-      instant_sem_laexp env (LAexp ck ce) c
+      instant_sem_laexp env (LAexp ck ce) v
   | Sabs : forall ck ce,
       instant_sem_lexp env ce abs ->
       instant_sem_clock env ck false ->
@@ -92,15 +95,15 @@ Inductive instant_sem_laexp (env : venv) : laexp -> value -> Prop :=
 
 with instant_sem_lexp (env : venv) : lexp -> value -> Prop :=
   | Sconst : forall c, instant_sem_lexp env (Econst c) c
-  | Svar : forall x c,
-      instant_sem_var env x c ->
-      instant_sem_lexp env (Evar x) c
-  | Swhen_eq : forall s x b c,
-      instant_sem_var env x  (Cbool b) ->
-      instant_sem_laexp env s c ->
-      instant_sem_lexp env (Ewhen s x b) c
+  | Svar : forall (x : ident) v,
+      instant_sem_var env x v ->
+      instant_sem_lexp env (Evar x) v
+  | Swhen_eq : forall s x b v,
+      instant_sem_var env x (Cbool b) ->
+      instant_sem_laexp env s v ->
+      instant_sem_lexp env (Ewhen s x b) v
   | Swhen_abs : forall s x b b',
-      instant_sem_var env x (Cbool b') -> b <> b' ->
+      instant_sem_var env x b' -> b' <> here (Cbool b) ->
       instant_sem_lexp env (Ewhen s x b) abs.
 
 Inductive instant_sem_caexp (env : venv) : caexp -> value -> Prop :=

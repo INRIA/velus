@@ -15,6 +15,9 @@ Ltac inv H := inversion H; subst; clear H.
 Lemma Some_inj : forall A (x y : A), Some x = Some y -> x = y.
 Proof. intros * H. now injection H. Qed.
 
+Lemma if_simpl : forall {A} (b : bool) (v : A), (if b then v else v) = v.
+Proof. now intros A [|] v. Qed.
+
 Lemma nth_nil : forall {A} (d : A) n, nth n nil d = d.
 Proof. intros A d [| n]; reflexivity. Qed.
 
@@ -34,6 +37,23 @@ intros A d n l Heq. destruct (Compare_dec.le_lt_dec (length l) n).
 - elim Heq. now apply nth_overflow.
 - assumption.
 Qed.
+
+Lemma nth_extensionality : forall {A} l1 l2, length l1 = length l2 ->
+ ((forall (d : A) n, n < length l1 -> nth n l1 d = nth n l2 d) <-> l1 = l2).
+Proof.
+intros A l1. induction l1 as [| e1 l1]; intros l2 Hlen.
+* destruct l2 as [| ]; try discriminate. intuition omega.
+* destruct l2 as [| e2 l2]; try discriminate.
+  split; intro Heq.
+  + f_equal.
+    - apply (Heq e1 0). simpl. omega.
+    - simpl in Hlen. rewrite <- IHl1; try omega.
+      intros d n Hn. apply (Heq d (S n)). simpl. omega.
+  + rewrite Heq. auto.
+Qed.
+
+Lemma ex_not_not_all : forall {A} P, ~(exists x : A, P x) -> forall x, ~ P x.
+Proof. firstorder. Qed.
 
 Lemma Forall_compat {A} : Proper ((eq ==> iff) ==> eq ==> iff) (@Forall A).
 Proof.
@@ -55,20 +75,43 @@ intros x env. split; intro Habs.
 + destruct (PositiveMap.find x env) eqn:Hin; trivial. elim Habs. exists v. now apply PositiveMap.find_2.
 Qed.
 
-Lemma for_all2_nth : forall A (d : A) l1 l2 P, for_all2 P l1 l2 ->
-  forall n, n < length l1 -> P (nth n l1 d) (nth n l2 d).
+Lemma for_all2_nth : forall A B (a : A) (b : B) l1 l2 P, length l1 = length l2 ->
+  (for_all2 P l1 l2 <-> forall n, n < length l1 -> P (nth n l1 a) (nth n l2 b)).
 Proof.
-intros A d l1 l2 P Hall n Hn.
-revert l1 l2 Hall Hn. induction n; intros l1 l2 Hall Hn.
-- assert (Hlen : length l1 = length l2) by apply (for_all2_length _ _ _ Hall).
-  destruct l1 as [| e1 l1]; simpl in Hn; try omega; [].
-  destruct l2 as [| e2 l2]; simpl in Hlen; try omega; [].
-  simpl. now inversion Hall.
-- assert (Hlen : length l1 = length l2) by apply (for_all2_length _ _ _ Hall).
-  destruct l1 as [| e1 l1]; simpl in Hn; try omega; [].
-  destruct l2 as [| e2 l2]; simpl in Hlen; try omega; [].
-  simpl. apply IHn; try omega. now inversion Hall.
+intros A B a b l1 l2 P Hlen. split.
+* intros Hall n Hn.
+  revert l1 l2 Hall Hn Hlen. induction n; intros l1 l2 Hall Hn Hlen.
+  + destruct l1 as [| e1 l1]; simpl in Hn; try omega; [].
+    destruct l2 as [| e2 l2]; simpl in Hlen; try omega; [].
+    simpl. now inversion Hall.
+  + destruct l1 as [| e1 l1]; simpl in Hn; try omega; [].
+    destruct l2 as [| e2 l2]; simpl in Hlen; try omega; [].
+    simpl. apply IHn; try omega. now inversion Hall.
+* revert l2  Hlen. induction l1 as [| e1 l1]; intros l2 Hlen Hall;
+  (destruct l2 as [| e2 l2]; simpl in Hlen; try omega; []).
+  + constructor.
+  + constructor.
+    - apply (Hall 0). simpl. omega.
+    - apply IHl1; try omega.
+      intros. apply (Hall (S n)). simpl. omega.
 Qed.
+
+Lemma alls_length_compat : forall {A B} (l1 l2 : list A) (v : B), length l1 = length l2 -> alls v l1 = alls v l2.
+Proof.
+intros A B l1. induction l1 as [| e1 l1]; intros l2 v Hlen.
+- now destruct l2.
+- destruct l2 as [| e2 l2]; try discriminate.
+  simpl in *. f_equal. apply IHl1. omega.
+Qed.
+
+
+Fixpoint map3 {A B C D} (f : A -> B -> C -> D) l1 l2 l3 :=
+  match l1, l2, l3 with
+    | nil, _, _ => nil
+    | _, nil, _ => nil
+    | _, _, nil => nil
+    | e1 :: l1 , e2 :: l2 , e3 :: l3 => f e1 e2 e3 :: map3 f l1 l2 l3
+  end.
 
 (** Some general properties of [sem_var]. *)
 Lemma sem_var_length : forall h x vl, sem_var h x vl -> length vl = length h.
@@ -658,7 +701,14 @@ rewrite fby_rev_spec in Hv.
 rewrite held_fby_rev_spec.
 * destruct Hv as [Hnow [[m [Hmax Hlt]] | [? Hall]]].
   + left. exists 0. split.
-    - rewrite <- plus_n_O. admit. (* TODO *)
+    - rewrite <- plus_n_O.
+      assert (S (n + m) < length h).
+      { rewrite <- (sem_var_length Husual). apply nth_not_default_lt_length with abs. rewrite Hmax. discriminate. }
+      apply Some_inj. rewrite <- (sem_var_nth Hhold); try (rewrite hold_length; omega); [].
+      rewrite hold_spec; omega || trivial; [].
+      exists m.
+      repeat split; trivial; intros; rewrite (sem_var_nth Husual); omega || f_equal; trivial.
+      now apply Hlt.
     - intros. omega.
   + right. split; trivial. intros m. apply Some_inj.
     destruct (Compare_dec.le_lt_dec (length (hold h)) (S (n + m))).
@@ -670,6 +720,192 @@ rewrite held_fby_rev_spec.
 * now rewrite (sem_var_length Hhold), hold_length.
 Qed.
 
+(** ***  A [hold] operator on lists  **)
+
+Fixpoint list_hold_aux v0 l :=
+  match l with
+    | nil => (nil, v0)
+    | abs :: l => let '(l', v') := list_hold_aux v0 l in (v' :: l', v')
+    | here v :: l => let '(l', v') := list_hold_aux v0 l in (here v :: l', here v)
+  end.
+Definition list_hold l := fst (list_hold_aux abs l).
+
+Lemma list_hold_nil : list_hold nil = nil.
+Proof. reflexivity. Qed.
+
+Lemma list_hold_cons_abs : forall s, list_hold (abs :: s) = snd (list_hold_aux abs s) :: list_hold s.
+Proof. intro s. unfold list_hold. simpl. now destruct (list_hold_aux abs s). Qed.
+
+Lemma list_hold_cons_here : forall v s, list_hold (here v :: s) = here v :: list_hold s.
+Proof. intros v s. unfold list_hold. simpl. now destruct (list_hold_aux abs s). Qed.
+
+Lemma list_hold_next : forall d v s n,
+  List.nth (S n) (list_hold (v :: s)) d = List.nth n (list_hold s) d.
+Proof. unfold list_hold. intros d [| c'] s n; simpl; destruct (list_hold_aux abs s); reflexivity. Qed.
+
+Lemma list_hold_aux_app : forall s1 s2 v s1' s2' v' v'',
+  list_hold_aux v s2 = (s2', v') ->
+  list_hold_aux v' s1 = (s1', v'') ->
+  list_hold_aux v (s1 ++ s2) = (s1' ++ s2', v'').
+Proof.
+intros s1. induction s1 as [| [| c] s1]; intros s2 v s1' s2' v' v'' Hs2 Hs1.
+- inversion Hs1. subst. simpl. assumption.
+- simpl app. simpl in *. destruct (list_hold_aux v' s1) as [s1'' v1'] eqn:Hs1'.
+  rewrite (IHs1 _ _ _ _ _ _ Hs2 Hs1'). inv Hs1. reflexivity.
+- simpl in *. destruct (list_hold_aux v' s1) eqn:Hs1'.
+  rewrite (IHs1 _ _ _ _ _ _ Hs2 Hs1'). inversion_clear Hs1. reflexivity.
+Qed.
+
+Corollary list_hold_last_abs : forall s, list_hold (s ++ abs :: nil) = list_hold s ++ abs :: nil.
+Proof.
+intros. unfold list_hold.
+erewrite list_hold_aux_app; simpl; try reflexivity; [].
+apply surjective_pairing.
+Qed.
+
+Lemma list_hold_length : forall l, length (list_hold l) = length l.
+Proof. induction 0 as [| [| ?] ?]; simpl; rewrite ?list_hold_cons_abs, ?list_hold_cons_here; simpl; auto. Qed.
+
+(** Specification of [list_hold] *)
+Lemma list_hold_aux_snd_spec : forall v0 v vl, snd (list_hold_aux v0 vl) = here v <->
+  (exists n, nth n vl abs = here v /\ forall m, m < n -> nth m vl abs = abs)
+  \/ here v = v0 /\ forall n, nth n vl abs = abs.
+Proof.
+intros v0 v vl. revert v0. induction vl as [| v1 vl]; intros v0.
+* setoid_rewrite nth_nil. simpl. split; intro H.
+  + subst. auto.
+  + destruct H as [[? [? _]] | [? _]]; discriminate || auto.
+* split; intro H.
+  + destruct v1 as [| v1]; simpl in H.
+    - { destruct (list_hold_aux v0 vl) eqn:Haux. simpl in H. subst.
+        specialize (IHvl v0). rewrite Haux in IHvl.
+        assert (Hrec : here v = v) by reflexivity. rewrite IHvl in Hrec. clear IHvl.
+        destruct Hrec as [[n [Hn Hother]] | [Hn Hother]].
+        + left. exists (S n). simpl. split; trivial.
+          intros [| m] Hlt; trivial. apply Hother. omega.
+        + right. split; trivial. intros [| n]; trivial. apply Hother. }
+    - destruct (list_hold_aux v0 vl) eqn:Haux. simpl in H. inv H.
+      specialize (IHvl v). left. exists 0. split; trivial. intros. omega.
+  + destruct v1 as [| v1]; simpl.
+    - { destruct (list_hold_aux v0 vl) eqn:Hfby. change (snd (l, v1) = v). rewrite <- Hfby.
+        rewrite IHvl. clear IHvl. destruct H as [[[| n] [Hn Hother]] | [Hn Hother]].
+        + discriminate.
+        + left. exists n. simpl. split; trivial. intros m Hlt. apply (Hother (S m)). omega.
+        + right. split; trivial. intro n. apply (Hother (S n)). }
+    - { destruct (list_hold_aux v0 vl) eqn:Hfby. simpl.
+        destruct H as [[n [Hn Hother]] | [Hn Hother]].
+        + assert (n = 0).
+          { destruct n; trivial. exfalso. cut (here v1 = abs). discriminate.
+            rewrite <- (Hother 0); trivial. omega. }
+          subst. simpl in Hn. now inv Hn.
+        + exfalso. cut (here v1 = abs). discriminate.
+          now rewrite <- (Hother 0). }
+Qed.
+
+Corollary list_hold_aux_snd_abs_spec : forall v0 vl, snd (list_hold_aux v0 vl) = abs <->
+  v0 = abs /\ forall n, nth n vl abs = abs.
+Proof.
+intros v0 vl. induction vl as [| [| c] vl].
++ setoid_rewrite nth_nil. simpl. intuition.
++ simpl. destruct (list_hold_aux v0 vl); simpl in *. rewrite IHvl. intuition.
+  - destruct n; auto.
+  - apply (H3 (S n)).
++ simpl. destruct (list_hold_aux v0 vl); simpl in *.
+  split; intro H; try discriminate.
+  destruct H as [_ Habs]. apply (Habs 0).
+Qed.
+
+
+Theorem list_hold_spec : forall n v vl, n < length vl -> 
+  (nth n (list_hold vl) abs = here v
+   <-> exists n', nth (n + n') vl abs = here v /\ forall m, m < n' -> nth (n + m) vl abs = abs).
+Proof.
+intro n. induction n; intros v vl Hn.
+* simpl plus. unfold list_hold. destruct vl as [| v1 vl]; simpl.
+  + simpl in Hn. exfalso. omega.
+  + destruct (list_hold_aux abs vl) as [l' v'] eqn:Haux; simpl.
+    assert (Hequiv : forall c,  here c = here v <-> c = v). { split; intro Heq; subst; trivial. now injection Heq. }
+    destruct v1; simpl.
+    - { simpl. change v' with (snd (l', v')). rewrite <- Haux. rewrite list_hold_aux_snd_spec.
+        split; intro H.
+        + destruct H as [[n [Hlmax Hlt]] | [? _]]; try discriminate.
+          exists (S n). split; trivial.
+          intros m Hm. destruct m; trivial. apply Hlt. omega.
+        + left. destruct H as [[| n] [Hlmax Hlt]]; try discriminate.
+          exists n. split; trivial. intros m Hm. apply (Hlt (S m)). omega. }
+    - { simpl. rewrite Hequiv.
+        split; intro H.
+        + subst. exists 0. split; trivial. intros. omega.
+        + destruct H as [n [Hmax Hlt]].
+          assert (n = 0).
+          { destruct n; trivial. assert (Habs : 0 < S n) by omega. apply Hlt in Habs. discriminate. }
+          subst. now inv Hmax. }
+* destruct vl; simpl.
+  + simpl in Hn. exfalso. omega.
+  + rewrite list_hold_next. apply IHn. simpl in Hn. omega.
+Qed.
+
+Theorem list_hold_abs_spec : forall n vl,
+  nth n (list_hold vl) abs = abs <-> forall m, n <= m -> nth m vl abs = abs.
+Proof.
+intro n. induction n; intro vl.
+* destruct vl as [| [| c] vl].
+  + rewrite list_hold_nil. setoid_rewrite nth_nil. intuition.
+  + rewrite list_hold_cons_abs. simpl. rewrite list_hold_aux_snd_abs_spec. intuition.
+    - destruct m; auto.
+    - apply (H (S n)). omega.
+  + rewrite list_hold_cons_here. simpl. split; intro H; try discriminate. now apply (H 0).
+* destruct vl as [| [| c] vl].
+  + rewrite list_hold_nil. setoid_rewrite nth_nil. intuition.
+  + rewrite list_hold_cons_abs. simpl. rewrite IHn. intuition.
+    - destruct m; auto with arith.
+    - apply (H (S m)). omega.
+  + rewrite list_hold_cons_here. simpl. rewrite IHn. intuition.
+    - destruct m; auto with arith. omega.
+    - apply (H (S m)). omega.
+Qed.
+
+(** RMK: [held_fby_rev] is not the composition of [fby_rev] and [list_hold] because of the first instants
+         where the list may contain [abs] elements. *)
+
+Lemma sem_var_hold : forall h x vl, history_valid h -> sem_var h x vl -> sem_var (hold h) x (list_hold vl).
+Proof.
+intros h x vl Hvalid Hsem. unfold sem_var. apply nth_extensionality.
+* do 2 rewrite map_length. rewrite list_hold_length, hold_length. symmetry. eapply sem_var_length. eassumption.
+* intros d n Hn. setoid_rewrite (@nth_indep _ _ n d (Some abs)) at 2.
+  + rewrite (@nth_indep _ _ n d (PositiveMap.find x (PositiveMap.empty value))); trivial.
+    rewrite map_length, hold_length in Hn.
+    do 2 rewrite map_nth.
+    destruct (nth n (list_hold vl) abs) as [| c] eqn:Heq.
+    - rewrite hold_abs_spec; trivial. rewrite list_hold_abs_spec in Heq.
+      intros m Hm. rewrite (sem_var_nth Hsem); trivial. rewrite Heq; trivial. omega.
+    - rewrite list_hold_spec in Heq; try now rewrite (sem_var_length Hsem).
+      destruct Heq as [m [Hmax Hlt]]. rewrite hold_spec; trivial.
+      assert ( n + m < length h).
+      { rewrite <- (sem_var_length Hsem). apply (@nth_not_default_lt_length _ abs). now rewrite Hmax. }
+      { exists m. repeat split; trivial.
+        - rewrite (sem_var_nth Hsem); trivial. now rewrite Hmax.
+        - intros m' Hm'. rewrite (sem_var_nth Hsem); trivial. rewrite Hlt; trivial. omega. }
+  + rewrite map_length, list_hold_length, (sem_var_length Hsem).
+    now rewrite map_length, hold_length in Hn.
+Qed.
+(*
+Lemma sem_var_hold_uniq : forall h x vl1 vl2,
+  sem_var h x vl1 -> sem_var (hold h) x vl2 -> vl2 = list_hold vl1.
+Proof.
+intros h x. unfold list_hold. induction h as [| env h]; intros vl1 vl2 Husual Hhold.
+* destruct vl1; inv Husual. destruct vl2; inv Hhold. reflexivity.
+* destruct vl1 as [| e1 vl1]; try now inv Husual. destruct vl2 as [| e2 vl2]; try now inv Hhold.
+  simpl. destruct (list_hold_aux abs vl1) as [l' v'] eqn:Heq, e1 as [| e1].
+  + simpl. f_equal.
+    - admit. (* TODO
+      inv Husual. inv Hhold. rewrite (@hold_env_out env _ x v' H0) in H2; try now apply Some_inj. *)
+    - rewrite (IHh vl1 vl2); solve [ now rewrite Heq | eapply sem_var_cons; eassumption].
+  + simpl. f_equal.
+    - apply Some_inj. inv Hhold. apply hold_env_in. now inv Husual.
+    - rewrite (IHh vl1 vl2); solve [ now rewrite Heq | eapply sem_var_cons; eassumption].
+Qed.
+*)
 (** ***  The equivalence theorem  **)
 
 (** General equivalence on held histories (except for first [abs] instants). *)
@@ -724,6 +960,8 @@ eapply fby_hold_equiv; try eassumption.
 eapply fby_rev_hold_held_fby_rev; try eassumption. omega.
 Qed.
 
+(** **  Definition of a held semantics  **)
+
 Inductive held_sem_equation_rev (G : global) : history -> equation -> Prop :=
   | HSEqDef_rev : forall H x cae v,
       sem_lexp H (Evar x) v -> sem_caexp H cae v -> held_sem_equation_rev G H (EqDef x cae)
@@ -740,33 +978,154 @@ Inductive held_sem_equation_rev (G : global) : history -> equation -> Prop :=
       sem_lexp H (Evar x) (held_fby_rev v cl) ->
       held_sem_equation_rev G H (EqFby x v y).
 
-(*
-Lemma hold_sem_laexp : forall h lae vl1 vl2,
-  sem_laexp h lae vl1 -> sem_laexp (hold h) lae vl2 ->
-  forall n v, n < length h -> nth n vl1 abs = here v -> nth n vl2 abs = here v.
-Proof.
-intros h [ck le] vl1 vl2 Husual Hhold n v Hn.
-induction le.
-+ rewrite sem_laexp_equiv in Husual. hnf in Husual.
- Print for_all2.
-Print Implicit for_all2_nth.
-  Check (for_all2_nth abs vl1 vl2). in Husual.
-SearchAbout for_all2.
-Locate for_all2.
- Print sem_laexp'. inv Husual. simpl in Hn. omega.
-+ 
-+ 
-* induction Hsem; simpl; constructor.
-  + 
-  + 
 
-Theorem hold_equivalence : forall G h eqn,
-  sem_equation_rev G h eqn <-> held_sem_equation_rev G (hold h) eqn.
+(** *** Equivalence with the usual list semantics  **)
+
+(** Equivalence on lesser semantics. *)
+Lemma sem_lexp_var : forall h x vl, sem_lexp h (Evar x) vl <-> sem_var h x vl.
 Proof.
-intros G h eqn. destruct eqn.
+intros h x. induction h as [| env h]; intro vl.
+* split; intro Hsem; destruct vl; inv Hsem; constructor. 
+* split; intro Hsem.
+  + inv Hsem; try reflexivity.
+    unfold sem_var. simpl. f_equal.
+    - now inv H2.
+    - now rewrite IHh in H5.
+  + assert (Hlen := sem_var_length Hsem).
+    destruct vl as [| v vl]; simpl in Hlen; try discriminate.
+    constructor.
+    - apply Svar. now inversion Hsem.
+    - rewrite IHh. eapply sem_var_cons; eassumption.
+Qed.
+
+Lemma sem_lexp_const : forall h c vl, sem_lexp h (Econst c) vl <-> vl = alls (here c) h.
+Proof.
+intros h c. induction h as [| env h]; intro vl.
 * split; intro H.
-  - inversion_clear H. econstructor 1.
-+ 
-+ 
+  + inv H. reflexivity.
+  + simpl in H. subst. constructor.
+* split; intro H.
+  + inv H. simpl. f_equal.
+    - inv H3. reflexivity.
+    - now rewrite <- IHh.
+  + destruct vl as [| [| v] vl]; try discriminate. inv H. constructor.
+    - constructor.
+    - rewrite IHh. reflexivity.
+Qed.
+
+(*
+Lemma sem_lexp_when : forall h ck le x b vl, sem_lexp h (Ewhen (LAexp ck le) x b) vl <->
+  exists ckl vl' bl, sem_clock h ck ckl /\ sem_lexp h le vl' /\ sem_var h x bl /\
+    vl = map3 (fun ck v b' => match ck, b' with
+                                | true, here (Cbool b') => if Bool.bool_dec b b' then v else abs
+                                | _, _ => abs 
+                              end)
+              ckl vl' bl.
+Proof.
+intro h. induction h as [| env h]; intros ck le x b vl.
+* split.
+  + intro H. inv H. exists nil, nil, nil. repeat split; constructor.
+  + intros  [ckl [vl' [bl [Hck [Hle [Hx Hmap]]]]]]. inv Hle. inv Hck.
+    assert (bl = nil). { destruct bl; trivial. inv Hx. }
+    subst. simpl. constructor.
+* split.
+  + intro H. inv H. rewrite IHh in H6. clear IHh.
+    destruct H6 as [ckl [vl' [bl [Hck [Hle [Hx Hmap]]]]]]. subst.
+    inv H3.
+    - unfold instant_sem_var in H4.
+      { inv H5.
+        + exists (true :: ckl), (c :: vl'), ((here (Cbool b)) :: bl). repeat split.
+          - now constructor.
+          - now constructor.
+          - unfold sem_var in *. simpl. now f_equal.
+          - simpl. destruct (Bool.bool_dec b b) as [Hb | Hb]; now elim Hb.
+        + exists (false :: ckl), (abs :: vl'), ((here (Cbool b)) :: bl). repeat split.
+          - now constructor.
+          - now constructor.
+          - unfold sem_var in *. simpl. now f_equal. }
+    - { (* We should first get the values of [ck] and [le] in [env]. *)
+        eexists (_ :: ckl), (_ :: vl'), (b' :: bl). repeat split.
+        + constructor; trivial. exfalso. admit. (* TODO: find the correct value of [ck] depending on the case *)
+        + constructor; trivial. exfalso. admit. (* TODO: find the correct value of [le] depending on the case *)
+        + unfold sem_var in *. simpl. now f_equal.
+        + simpl. f_equal.
+          destruct b' as [| [| b']]; trivial; try (now rewrite if_simpl); [].
+          destruct (Bool.bool_dec b b'); subst; trivial; now rewrite if_simpl || elim H5. }
+  + intros [ckl [vl' [bl [Hck [Hle [Hx Hmap]]]]]]. inv Hle. inv Hck.
+    unfold sem_var in Hx. destruct bl as [| b' bl]; try discriminate.
+    simpl. constructor.
+    - { destruct b' as [| [n | b']]; try rewrite if_simpl.
+        * apply Swhen_abs with abs.
+          + unfold instant_sem_var. now inv Hx.
+          + discriminate.
+        * apply Swhen_abs with (here (Cint n)).
+          + unfold instant_sem_var. now inv Hx.
+          + discriminate.
+        * destruct (Bool.bool_dec b b') as [Hb | Hb].
+          + subst. apply Swhen_eq.
+            - unfold instant_sem_var. now inv Hx. 
+            - Print instant_sem_laexp.
+; repeat constructor; trivial.
+            - unfold instant_sem_var. now inv Hx.
+            - unfold instant_sem_var. now inv Hx.
+            - admit.
+            - admit.
+          + apply Swhen_abs with b'.
+            - unfold instant_sem_var. now inv Hx.
+            - intro Habs. inv Habs. now elim Hb. }
+    - rewrite IHh. do 2 eexists; repeat split; eauto. unfold sem_var. now inv Hx.
+Qed.
+*)
+
+Lemma instant_sem_lexp_when_inv : forall env ck le x b v,
+  instant_sem_lexp env (Ewhen (LAexp ck le) x b) v -> exists v', instant_sem_lexp env le v'.
+Proof.
+intros env ck le x b v Hsem. inv Hsem. inv H4.
+- now exists v.
+- now exists abs.
+- admit. (* FIXME: we do not have the value of [le] with Swhen_abs *)
+Qed.
+
+Lemma sem_lexp_when_inv : forall h ck le x b vl,
+  sem_lexp h (Ewhen (LAexp ck le) x b) vl -> exists vl', sem_lexp h le vl'.
+Proof.
+intro h. induction h as [| env h]; intros ck le x b vl Hsem.
+- exists nil. constructor.
+- destruct vl as [| v vl]; try now inv Hsem. inversion_clear Hsem.
+  apply IHh in H1. destruct H1 as [vl' Hsem'].
+  apply instant_sem_lexp_when_inv in H0. destruct H0 as [v' Hsem].
+  exists (v' :: vl'). now constructor.
+Qed.
+
+Lemma hold_sem_lexp : forall h le vl, history_valid h -> sem_lexp h le vl -> sem_lexp (hold h) le (list_hold vl).
+Proof.
+intros h le. induction le using lexp_ind2; intros vl Hvalid Hsem.
+* rewrite sem_lexp_const in *. subst.
+  induction h; simpl. reflexivity.
+  rewrite list_hold_cons_here, IHh; trivial. eapply history_valid_cons; eassumption.
+* rewrite sem_lexp_var in *. now apply sem_var_hold.
+* admit.
+Qed.
+(*
+Lemma hold_sem_cexp : forall h ce vl, history_valid h -> sem_cexp h ce vl -> sem_cexp (hold h) ce (list_hold vl).
+Proof.
+intros h ce. induction ce. using cexp_ind2; intros vl Hvalid Hsem.
+* rewrite sem_lexp_const in *. subst.
+  induction h; simpl. reflexivity.
+  rewrite list_hold_cons_here, IHh; trivial. eapply history_valid_cons; eassumption.
+* rewrite sem_lexp_var in *. now apply sem_var_hold.
+* admit.
+Qed.
+
+Theorem hold_equivalence : forall G h eqn, history_valid h -> 
+  (sem_equation_rev G h eqn <-> held_sem_equation_rev G (hold h) eqn).
+Proof.
+intros G h eqn Hvalid. destruct eqn.
+* split; intro H.
+  + inversion_clear H. rename v into vl. constructor 1 with (list_hold vl).
+    - rewrite sem_lexp_var in *. now apply sem_var_hold.
+    - 
+* 
+* 
 Qed.
 *)
