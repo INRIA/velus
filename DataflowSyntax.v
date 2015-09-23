@@ -811,6 +811,25 @@ Proof.
   contradiction.
 Qed.
 
+Lemma Is_defined_in_Is_variable_memory_in:
+  forall x eqs, Is_defined_in x eqs
+                -> Is_variable_in x eqs \/ Is_memory_in x eqs.
+Proof.
+  induction eqs as [|eq eqs IH]; [now inversion 1|].
+  intro Hdef.
+  apply Is_defined_in_cons in Hdef.
+  destruct Hdef as [Hdef|Hdef];
+    [destruct eq;
+      inversion_clear Hdef;
+      [left|left|right];
+      repeat constructor|].
+  destruct Hdef as [Hdef0 Hdef1].
+  apply IH in Hdef1.
+  destruct Hdef1 as [Hdef|Hdef].
+  left; constructor 2; apply Hdef.
+  right; constructor 2; apply Hdef.
+Qed.
+
 Inductive Is_node_in_eq : ident -> equation -> Prop :=
 | INI: forall x f e, Is_node_in_eq f (EqApp x f e).
 

@@ -465,7 +465,7 @@ Inductive Welldef_global : list node -> Prop :=
       let ni := nd.(n_input).(v_name) in
       let no := nd.(n_output).(v_name) in
       Is_well_sch (PS.add ni (memories eqs)) eqs
-      -> ~Is_memory_in ni eqs
+      -> ~Is_defined_in ni eqs
       -> Is_variable_in no eqs
       -> ~Is_node_in nd.(n_name) eqs
       -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
@@ -499,5 +499,32 @@ Proof.
              apply H2 in H1; apply find_node_Exists in H1; exact H1
            end.
   - inversion Hwdef; assumption.
+Qed.
+
+Lemma Welldef_global_app:
+  forall G G', Welldef_global (G ++ G') -> Welldef_global G'.
+Proof.
+  intros G G' Hwdef.
+  induction G as [|g G IH]; [now apply Hwdef|].
+  rewrite <- List.app_comm_cons in Hwdef.
+  apply Welldef_global_cons in Hwdef.
+  apply IH.
+  apply Hwdef.
+Qed.
+
+Lemma Welldef_global_input_not_Is_defined_in:
+  forall f G fnode,
+    Welldef_global G
+    -> find_node f G = Some fnode
+    -> ~Is_defined_in fnode.(n_input).(v_name) fnode.(n_eqs).
+Proof.
+  induction G as [|node G IH]; [inversion_clear 2|].
+  intros fnode HWdef Hfnode.
+  apply find_node_split in Hfnode.
+  destruct Hfnode as [bG [aG HnG]].
+  rewrite HnG in HWdef; clear HnG.
+  apply Welldef_global_app in HWdef.
+  inversion_clear HWdef.
+  assumption.
 Qed.
 
