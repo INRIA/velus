@@ -2109,12 +2109,8 @@ Lemma is_translate_correct:
     -> (forall n, xs n = present ci)
     -> stmt_eval (translate G) mempty empty
                  (Comp (Reset_ap f obj)
-                       (Repeat n (Step_ap r f obj (Const ci)))) (menv, env)
-    -> (forall co,
-           match n with
-           | O => True
-           | S n' => ys n' = present co <-> PM.find r env = Some co
-           end).
+                       (Repeat (S n) (Step_ap r f obj (Const ci)))) (menv, env)
+    -> (forall co, ys n = present co <-> PM.find r env = Some co).
 Proof.
   intros until env.
   intros Hwdef Hsem Hxs Heval.
@@ -2132,26 +2128,69 @@ Proof.
   inversion_clear Hsem' as [? ? ? ? ? ? ? Hfindn Hsem''].
   destruct Hsem'' as [H [Hi [Ho [Hclk Hsem']]]].
 
-  assert ((match n with
-           | O => True
-           | S n => (forall co, ys n = present co <-> PM.find r env = Some co)
-           end)
+  assert ((forall co, ys n = present co <-> PM.find r env = Some co)
           /\ (match find_obj obj menv with
               | None => False
-              | Some omenv => Memory_Corres G n f M omenv
+              | Some omenv => Memory_Corres G (S n) f M omenv
               end)) as Hinv.
+  (* TODO: Ugly, dumb proof. How to streamline / beautify all these
+           inversions and rewrites. *)
   { revert menv env Hevals.
     induction n as [|? IH].
     - intros menv env Hevals.
-      inversion Hevals as [| | | | | | |? ? ? ? HR0 HR1 HR2 HR3 [HR4 HR5]| |].
-      rewrite <-HR4,<-HR5 in *.
-      rewrite <-Hmenv0, find_obj_gss.
-      intuition.
+      inversion Hevals as [| | | | | | | |? ? ? ? ? ? ? ? ? Heval0 Heval1
+                                            HR1 HR2 HR3 [HR4 HR5] [HR6 HR7]|].
+      clear HR1 HR2 HR3 HR4 HR5 HR6 HR7 Hevals menv1 env1 menv3 env3 a.
+      inversion Heval0 as [| | | | | | |? ? ? ? HR1 HR2 HR3 HR4 [HR5 HR6]| |].
+      rewrite <-HR5,<-HR6 in *.
+      clear HR1 HR2 HR3 HR4 HR5 HR6 Heval0 menv1 env1 menv2 env2 prog0 a n.
+      inversion_clear Heval1
+        as [| |? ? ? ? ? ? ? ? ? ?
+                 omenv omenv' rc Hfindo Hexp Hstep Hmenv Henv| | | | | | | ].
+      rewrite <-Hmenv,<-Henv in *; clear Hmenv Henv.
+      rewrite find_obj_gss.
+      inversion Hexp as [| |? HR1 HR2].
+      rewrite <-HR2 in *; clear HR1 HR2 c.
+      rewrite PM.gss.
+      inversion_clear Hstep as [? ? ? ? ? ? ? ? ? Hfindc Heval Hfindov].
+      rewrite Hfindr in Hfindc.
+      injection Hfindc; intros HR1 HR2;
+        rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfindc.
+      rewrite <-Hfindov.
+
+      eapply is_node_correct
+      with (1:=Hwdef) (2:=Hfindn) (3:=Hsem) (4:=eq_refl (translate G))
+                      (5:=Hfindr) (8:=Heval).
+      + rewrite PM.gss.
+        specialize Hxs with 0%nat.
+        split; intro HH; [rewrite Hxs in HH|];
+        injection HH; intro He; rewrite He in *;
+        intuition.
+      + pose proof (find_node_translate_find_class _ _ _ Hfindn) as Htrans.
+        destruct Htrans as [prog'' Htrans].
+        rewrite Hfindr in Htrans.
+        injection Htrans; intros HR1 HR2; rewrite HR1,<-HR2 in *.
+
+        apply Welldef_global_input_not_Is_defined_in with (1:=Hwdef) in Hfindn.
+        simpl in *.
+        intros x Hxivi.
+        rewrite PM.gso; [rewrite PM.gempty; reflexivity|].
+        intro Hxcls.
+        apply Is_variable_in_Is_defined_in in Hxivi.
+        rewrite Hxcls in Hxivi.
+        rewrite HR2 in Hxivi.
+        unfold translate_node in Hxivi.
+        simpl in Hxivi.
+        contradiction.
+      + rewrite <-Hmenv0 in Hfindo.
+        rewrite find_obj_gss in Hfindo.
+        injection Hfindo; intro He; rewrite He in *; clear He.
+        exact Hmc0.
     - intros menv env Hevals.
       inversion Hevals
         as [| | | | | | | |? ? ? ? ? ? ? ? ? Hevals' Heval
-                             HR0 HR1 HR2 HR3 [HR4 HR5]|].
-      clear HR0 HR1 HR2 HR3 HR4 HR5.
+                             HR0 HR1 HR2 [HR3 HR4] [HR5 HR6]|].
+      clear HR0 HR1 HR2 HR3 HR4 HR5 HR6.
       apply IH in Hevals'; clear IH.
       destruct Hevals' as [Hout Hmc]; clear Hout.
       inversion_clear Heval
@@ -2173,7 +2212,7 @@ Proof.
       with (1:=Hwdef) (2:=Hfindn) (3:=Hsem) (4:=eq_refl (translate G))
            (5:=Hfindr) (8:=Heval) (9:=Hmc).
       + rewrite PM.gss.
-        specialize Hxs with n.
+        specialize Hxs with (S n).
         split; intro HH; [rewrite Hxs in HH|];
         injection HH; intro He; rewrite He in *;
         intuition.
