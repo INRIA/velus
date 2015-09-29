@@ -830,6 +830,16 @@ Proof.
   right; constructor 2; apply Hdef.
 Qed.
 
+Lemma Is_variable_in_Is_defined_in:
+  forall x eqs,
+    Is_variable_in x eqs
+    -> Is_defined_in x eqs.
+Proof.
+  induction eqs as [|eq eqs IH]; [now inversion 1|].
+  inversion_clear 1 as [Hin ? Hivi|]; [|constructor 2; intuition].
+  destruct eq; inversion_clear Hivi; repeat constructor.
+Qed.
+
 Inductive Is_node_in_eq : ident -> equation -> Prop :=
 | INI: forall x f e, Is_node_in_eq f (EqApp x f e).
 

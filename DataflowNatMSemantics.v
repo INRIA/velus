@@ -28,7 +28,7 @@ Inductive memory : Set := mk_memory {
 }.
 
 Definition mfind_mem x menv := PM.find x menv.(mm_values).
-Definition mfind_inst f menv := PM.find f menv.(mm_instances).
+Definition mfind_inst x menv := PM.find x menv.(mm_instances).
 
 Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
 | SEqDef:
@@ -64,8 +64,26 @@ with msem_node (G: global) : ident -> stream -> memory -> stream -> Prop :=
       (exists (H: history),
         (forall n, sem_var H i.(v_name) n (xs n))
         /\ (forall n, sem_var H o.(v_name) n (ys n))
+        /\ (forall n y, xs n = absent ->
+                        Is_defined_in y eqs ->
+                        sem_var H y n absent)
         /\ List.Forall (msem_equation G H M) eqs) ->
-        msem_node G f xs M ys.
+      msem_node G f xs M ys.
+
+(* The clock constraint in msem_node,
+     (forall n y, xs n = absent -> Is_defined_in y eqs -> sem_var H y n absent)
+
+   is only necessary for the correctness proof of imperative code generation.
+   A translated node is only executed when the clock of its input expression
+   is true. For this 'optimization' to be correct, whenever the input is
+   absent, the output must be absent and the internal memories must not change.
+   These facts are consequences of the clock constraint above (see the
+   absent_invariant lemma below).
+
+   Such an 'assumption' introduces an obligation on clock checking. A node
+   will not have an m-semantics if it violates the constraint.
+ *)
+
 
 (* TODO: Warning: Ignoring recursive call
          We must write these induction principles manually. *)
@@ -77,6 +95,23 @@ with msem_node_mult := Induction for msem_node Sort Prop.
 Scheme sem_equation_mult := Induction for sem_equation Sort Prop
 with sem_node_mult := Induction for sem_node Sort Prop.
 *)
+
+Inductive Mem_unchanged (n: nat) : memory -> Prop :=
+| MUn:
+    forall menv,
+      (forall x xs, mfind_mem x menv = Some xs
+                    -> xs (S n) = xs n) ->
+      (forall x omenv,
+          mfind_inst x menv = Some omenv
+          -> Mem_unchanged n omenv) ->
+      Mem_unchanged n menv.
+
+Lemma absent_invariant:
+  forall G f xs M ys n,
+    msem_node G f xs M ys
+    -> xs n = absent
+    -> Mem_unchanged n M.
+Admitted.
 
 Definition msem_nodes (G: global) : Prop :=
   List.Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
@@ -102,7 +137,6 @@ Admitted.   (* TODO: Show this! *)
     then it is trivial that:
        sem_nodes G <-> msem_nodes G
  *)
-
 
 Lemma sem_msem_node:
   forall G f xs ys,

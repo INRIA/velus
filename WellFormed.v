@@ -528,3 +528,19 @@ Proof.
   assumption.
 Qed.
 
+Lemma Welldef_global_output_Is_variable_in:
+  forall f G fnode,
+    Welldef_global G
+    -> find_node f G = Some fnode
+    -> Is_variable_in fnode.(n_output).(v_name) fnode.(n_eqs).
+Proof.
+  induction G as [|node G IH]; [inversion_clear 2|].
+  intros fnode HWdef Hfnode.
+  apply find_node_split in Hfnode.
+  destruct Hfnode as [bG [aG HnG]].
+  rewrite HnG in HWdef; clear HnG.
+  apply Welldef_global_app in HWdef.
+  inversion_clear HWdef.
+  assumption.
+Qed.
+

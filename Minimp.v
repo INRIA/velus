@@ -151,8 +151,8 @@ Inductive stmt_eval :
       stmt_eval prog menv env (Repeat 0 a) (menv, env)
 | IrepeatS:
     forall prog n a menv0 env0 menv1 env1 menv2 env2,
-      stmt_eval prog menv0 env0 a (menv1, env1) ->
-      stmt_eval prog menv1 env1 (Repeat n a) (menv2, env2) ->
+      stmt_eval prog menv0 env0 (Repeat n a) (menv1, env1) ->
+      stmt_eval prog menv1 env1 a (menv2, env2) ->
       stmt_eval prog menv0 env0 (Repeat (S n) a) (menv2, env2)
 | Iskip:
     forall prog menv env,
