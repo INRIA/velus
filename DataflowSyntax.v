@@ -49,11 +49,18 @@ Require Coq.FSets.FMapPositive.
 Definition global := FSets.FMapPositive.PositiveMap.t node.
 
 
-Definition lexp_ind2 := fun (P : lexp -> Prop)
-  f_const f_var f_when =>
-fix F (l : lexp) : P l :=
-  match l as l0 return (P l0) with
-  | Econst c => f_const c
-  | Evar i => f_var i
-  | Ewhen (LAexp ck le) i b => f_when ck le i b (F le)
-  end.
+Definition lexp_ind2 := fun (P : lexp -> Prop) f_const f_var f_when =>
+  fix F (l : lexp) : P l :=
+    match l as l0 return (P l0) with
+      | Econst c => f_const c
+      | Evar i => f_var i
+      | Ewhen (LAexp ck le) i b => f_when ck le i b (F le)
+    end.
+
+Definition cexp_ind2 := fun (P : cexp -> Prop) f_merge f_exp =>
+  fix F c : P c :=
+    match c as c0 return (P c0) with
+      | Emerge x (CAexp ck1 ce1) (CAexp ck2 ce2) => f_merge x ck1 ce1 ck2 ce2 (F ce1) (F ce2)
+      | Eexp le => f_exp le
+    end.
+

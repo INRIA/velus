@@ -1097,6 +1097,73 @@ intro h. induction h as [| env h]; intros ck le x b vl Hsem.
   exists (v' :: vl'). now constructor.
 Qed.
 
+Lemma instant_sem_clock_hold : forall env env' ck b, instant_sem_clock env ck b ->
+  instant_sem_clock (hold_env env env') ck b.
+Proof.
+intros env env' ck b Hsem. induction Hsem; try now constructor.
+- constructor; trivial. now apply hold_env_in.
+- apply on_abs2 with c'; trivial. now apply hold_env_in.
+Qed.
+
+Lemma instant_sem_lexp_here_hold : forall env env' le c, instant_sem_lexp env le (here c) ->
+  instant_sem_lexp (hold_env env env') le (here c).
+Proof.
+intros env env' le c.
+generalize (eq_refl (here c)). generalize (here c) at -2. intros v' Heq Hsem.
+induction le using lexp_ind2; subst.
+* inv Hsem. now constructor.
+* inv Hsem. constructor. unfold instant_sem_var in *. now apply hold_env_in.
+* inv Hsem. constructor; trivial.
+  + now apply hold_env_in.
+  + inv H4. constructor.
+    - now apply IHle.
+    - now apply instant_sem_clock_hold.
+Qed.
+
+Corollary instant_sem_laexp_here_hold : forall env env' cae c, instant_sem_laexp env cae (here c) ->
+  instant_sem_laexp (hold_env env env') cae (here c).
+Proof.
+intros env env' ce c.
+generalize (eq_refl (here c)). generalize (here c) at -2. intros v' Heq Hsem.
+induction Hsem.
++ constructor.
+  - subst. now apply instant_sem_lexp_here_hold.
+  - now apply instant_sem_clock_hold.
++ inv Heq.
+Qed.
+
+Lemma instant_sem_cexp_here_hold : forall env env' ce c, instant_sem_cexp env ce (here c) ->
+  instant_sem_cexp (hold_env env env') ce (here c).
+Proof.
+intros env env' ce c.
+generalize (eq_refl (here c)). generalize (here c) at -2. intros v' Heq Hsem.
+induction ce using cexp_ind2; subst.
+* inv Hsem.
+  + constructor.
+    - unfold instant_sem_var in *. now apply hold_env_in.
+    - inv H4. constructor.
+        now apply IHce1.
+        now apply instant_sem_clock_hold.
+  + constructor 2.
+    - unfold instant_sem_var in *. now apply hold_env_in.
+    - inv H4. constructor.
+        now apply IHce2.
+        now apply instant_sem_clock_hold.
+* inv Hsem. constructor. now apply instant_sem_lexp_here_hold.
+Qed.
+
+Corollary instant_sem_caexp_here_hold : forall env env' cae c, instant_sem_caexp env cae (here c) ->
+  instant_sem_caexp (hold_env env env') cae (here c).
+Proof.
+intros env env' ce c.
+generalize (eq_refl (here c)). generalize (here c) at -2. intros v' Heq Hsem.
+induction Hsem.
++ constructor.
+  - subst. now apply instant_sem_cexp_here_hold.
+  - now apply instant_sem_clock_hold.
++ inv Heq.
+Qed.
+
 Lemma hold_sem_lexp : forall h le vl, history_valid h -> sem_lexp h le vl -> sem_lexp (hold h) le (list_hold vl).
 Proof.
 intros h le. induction le using lexp_ind2; intros vl Hvalid Hsem.
@@ -1104,28 +1171,113 @@ intros h le. induction le using lexp_ind2; intros vl Hvalid Hsem.
   induction h; simpl. reflexivity.
   rewrite list_hold_cons_here, IHh; trivial. eapply history_valid_cons; eassumption.
 * rewrite sem_lexp_var in *. now apply sem_var_hold.
-* admit.
+* assert (Hle := sem_lexp_when_inv Hsem).
+  destruct Hle as [vl' Hvl'].
+  apply (IHle _ Hvalid) in Hvl'.
+  clear IHle. revert vl vl' Hsem Hvl'.
+  induction h as [| env h]; intros vl vl' Hsem Hvl'.
+  + destruct vl; constructor || inv Hsem.
+  + destruct vl as [| v vl]; try now inv Hsem.
+    destruct vl' as [| v' vl']; try now inv Hvl'.
+    inv Hsem. apply IHh with vl vl' in H6.
+    - { clear IHh. inv H4; [destruct v as [| v] |].
+        * rewrite list_hold_cons_abs. simpl. constructor; trivial.
+          apply Swhen_eq.
+          + unfold instant_sem_var in *. now apply hold_env_in.
+          + inv H5.
+            - constructor.
+                admit. (* TODO *)
+                now apply instant_sem_clock_hold.
+            - admit. (* TODO *)
+        * rewrite list_hold_cons_here. simpl. constructor; trivial.
+          apply Swhen_eq.
+          + unfold instant_sem_var in *. now apply hold_env_in.
+          + inv H5. constructor.
+            - now apply instant_sem_lexp_here_hold.
+            - now apply instant_sem_clock_hold.
+        * rewrite list_hold_cons_abs. simpl. constructor; trivial.
+          admit. (* TODO *) }
+    - eapply history_valid_cons; eassumption.
+    - destruct v'; rewrite ?list_hold_cons_abs, ?list_hold_cons_here in Hvl'; now inv Hvl'.
+Admitted.
+
+Corollary hold_sem_laexp : forall h lae vl, history_valid h ->
+  sem_laexp h lae vl -> sem_laexp (hold h) lae (list_hold vl).
+Proof.
+intros h lae vl Hvalid Hsem. induction Hsem.
+* constructor.
+* destruct c as [| v].
+  + rewrite list_hold_cons_abs. simpl. constructor.
+    - admit. (* TODO *)
+    - apply IHHsem. eapply history_valid_cons; eassumption.
+  + rewrite list_hold_cons_here. simpl. constructor.
+    - now apply instant_sem_laexp_here_hold.
+    - apply IHHsem. eapply history_valid_cons; eassumption.
 Qed.
-(*
+
 Lemma hold_sem_cexp : forall h ce vl, history_valid h -> sem_cexp h ce vl -> sem_cexp (hold h) ce (list_hold vl).
 Proof.
-intros h ce. induction ce. using cexp_ind2; intros vl Hvalid Hsem.
-* rewrite sem_lexp_const in *. subst.
-  induction h; simpl. reflexivity.
-  rewrite list_hold_cons_here, IHh; trivial. eapply history_valid_cons; eassumption.
-* rewrite sem_lexp_var in *. now apply sem_var_hold.
-* admit.
+intros h ce. induction ce using cexp_ind2.
+* induction h as [| env h]; intros vl Hvalid Hsem.
+  + assert (vl = nil). { destruct vl; trivial. inv Hsem. }
+    subst. simpl. rewrite list_hold_nil. constructor.
+  + destruct vl as [| v vl]; try now inv Hsem.
+    inv Hsem.
+    admit. (* TODO *)
+* induction h as [| env h]; intros vl Halid Hsem.
+  + assert (vl = nil). { destruct vl; trivial. inv Hsem. }
+    subst. simpl. rewrite list_hold_nil. constructor.
+  + destruct vl as [| [| v] vl]; try now inv Hsem.
+    - { rewrite list_hold_cons_abs. simpl. constructor.
+        + admit. (* TODO *)
+        + apply IHh.
+          - eapply history_valid_cons; eassumption.
+          - now inv Hsem. }
+    - { rewrite list_hold_cons_here. simpl. constructor.
+        + inv Hsem. now apply instant_sem_cexp_here_hold.
+        + apply IHh.
+          - eapply history_valid_cons; eassumption.
+          - now inv Hsem. }
+Qed.
+
+Corollary hold_sem_caexp : forall h cae vl, history_valid h ->
+  sem_caexp h cae vl -> sem_caexp (hold h) cae (list_hold vl).
+Proof.
+intros h cae vl Hvalid Hsem. induction Hsem.
+* constructor.
+* destruct c as [| v].
+  + rewrite list_hold_cons_abs. simpl. constructor.
+    - admit. (* TODO *)
+    - apply IHHsem. eapply history_valid_cons; eassumption.
+  + rewrite list_hold_cons_here. simpl. constructor.
+    - now apply instant_sem_caexp_here_hold.
+    - apply IHHsem. eapply history_valid_cons; eassumption.
 Qed.
 
 Theorem hold_equivalence : forall G h eqn, history_valid h -> 
   (sem_equation_rev G h eqn <-> held_sem_equation_rev G (hold h) eqn).
 Proof.
-intros G h eqn Hvalid. destruct eqn.
-* split; intro H.
-  + inversion_clear H. rename v into vl. constructor 1 with (list_hold vl).
-    - rewrite sem_lexp_var in *. now apply sem_var_hold.
-    - 
-* 
-* 
-Qed.
-*)
+intros G h eqn Hvalid.
+split; intro H.
+* induction H.
+  + apply HSEqDef_rev with (list_hold v).
+    - now apply hold_sem_lexp.
+    - now apply hold_sem_caexp.
+  + assert (history_valid H'). { admit. } (* we lack the property that H' is well-formed *)
+    apply HSEqApp_rev with input output eqs (hold H') (list_hold vi) (list_hold vo).
+    - assumption.
+    - now apply hold_sem_laexp.
+    - now apply hold_sem_lexp.
+    - now apply hold_sem_lexp.
+    - now apply hold_sem_lexp.
+    - admit. (* induction hypothesis not strong_enough *)
+  + apply HSEqFby_rev with (list_hold cl).
+    - now apply sem_var_hold.
+    - (* The property is wrong here as [held_bfy_rev cl] is nore defined than [list_hold cl]. *)
+Abort.
+
+(** The conclusion at this point is that presenting a list semantics
+    as a mapping of a instantaneous one for all construvction except [fby] is a bad idea.
+    It seems nive at first but as we can see in this file,
+    it requires to perform spurious induction on [h] everywhere, thus defeating the intuition of proofs.
+    We should try to define the semantics directly on lists. *)
