@@ -1022,3 +1022,18 @@ Proof.
   contradiction.
 Qed.
 
+Lemma find_node_name:
+  forall f G fnode,
+    find_node f G = Some fnode -> fnode.(n_name) = f.
+Proof.
+  induction G as [|node G IH]; [now inversion 1|].
+  destruct node as [name input output eqs].
+  destruct (ident_eqb name f) eqn:Hfn;
+    assert (Hfn':=Hfn);
+    [apply Pos.eqb_eq in Hfn'; rewrite Hfn' in *|apply Pos.eqb_neq in Hfn'];
+    simpl; rewrite Hfn.
+  - injection 1; intro Heq; rewrite <-Heq; reflexivity.
+  - intros fnode Hfnode.
+    apply IH with (1:=Hfnode).
+Qed.
+

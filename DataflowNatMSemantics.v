@@ -545,3 +545,51 @@ Proof.
 Qed.
 *)
 
+(* TODO: Tidy this up... *)
+Lemma Forall_msem_equation_global_tl:
+  forall nd G H M eqs,
+    Ordered_nodes (nd::G)
+    -> (forall f, Is_node_in f eqs -> find_node f G <> None)
+    -> ~ Is_node_in nd.(n_name) eqs
+    -> List.Forall (msem_equation (nd::G) H M) eqs
+    -> List.Forall (msem_equation G H M) eqs.
+Proof.
+  intros nd G H M eqs Hord.
+  induction eqs as [|eq eqs IH]; [trivial|].
+  intros Hfind Hnini Hmsem.
+  apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
+  apply IH in Hseqs.
+  Focus 2.
+  { intros f Hini.
+    apply List.Exists_cons_tl with (x:=eq) in Hini.
+    now apply Hfind with (1:=Hini). }
+  Unfocus.
+  Focus 2.
+  { apply not_Is_node_in_cons in Hnini.
+    destruct Hnini; assumption. }
+  Unfocus.
+
+  apply List.Forall_cons with (2:=Hseqs).
+  inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst.
+  - constructor; auto.
+  - apply not_Is_node_in_cons in Hnini.
+    destruct Hnini.
+    assert (nd.(n_name) <> f).
+    intro HH.
+    apply H0.
+    rewrite HH.
+    constructor.
+    inversion_clear Hseq.
+    econstructor.
+    eexact H8.
+    eexact H9.
+    eexact H10.
+    apply msem_node_cons with (1:=Hord); assumption.
+  - econstructor.
+    eassumption.
+    reflexivity.
+    eassumption.
+    assumption.
+Qed.
+
+
