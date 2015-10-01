@@ -1254,7 +1254,37 @@ intros h cae vl Hvalid Hsem. induction Hsem.
     - apply IHHsem. eapply history_valid_cons; eassumption.
 Qed.
 
-Theorem hold_equivalence : forall G h eqn, history_valid h -> 
+Definition eqn_ind (P : equation -> Prop)
+  := fun f_def f_app f_fby =>
+  fix F eqn : P eqn :=
+    match eqn with
+      | EqDef x cae => f_def x cae
+      | EqApp x y lae => f_app x y lae
+      | EqFby x c y => f_fby x c y
+    end.
+(*
+Definition sem_equation_rev_ind2 (G : global) (P : history -> equation -> Prop) :=
+  fun (f_def : forall h x cae vl, sem_lexp h (Evar x) vl -> sem_caexp h cae vl -> P h (EqDef x cae))
+      (f_app : forall h x f arg input output eqs h' vi vo, 
+               PositiveMap.find f G = Some {| n_name := f; n_input := input; n_output := output; n_eqs := eqs |} ->
+               sem_laexp h arg vi ->
+               sem_lexp h (Evar x) vo ->
+               sem_lexp h' (Evar input) vi ->
+               sem_lexp h' (Evar output) vo ->
+               Forall (sem_equation_rev G h') eqs ->
+               Forall (P h') eqs ->  P h (EqApp x f arg))
+      (f_fby : forall h x v y vl, sem_var h y.(v_name) vl -> sem_lexp h (Evar x) (fby_rev v vl) -> P h (EqFby x v y))
+  =>
+  fix F (h : history) (eqn : equation) (s : sem_equation_rev G h eqn) :=
+    match s in (sem_equation_rev _ h0 e0) return (P h0 e0) with
+      | SEqDef_rev h x cae vl Hlexp Hcaexp => f_def h x cae vl Hlexp Hcaexp
+      | SEqApp_rev h x f arg input output eqs h' vi vo Hf Harg Hx Hvi Hvo Heqs =>
+          f_app h x f arg input output eqs h' vi vo Hf Harg Hx Hvi Hvo Heqs _
+      | SEqFby_rev h x v y vl Hvar Hlexp => f_fby h x v y vl Hvar Hlexp
+    end.
+*)
+
+Theorem hold_equivalence : forall G h eqn, history_valid h ->
   (sem_equation_rev G h eqn <-> held_sem_equation_rev G (hold h) eqn).
 Proof.
 intros G h eqn Hvalid.
