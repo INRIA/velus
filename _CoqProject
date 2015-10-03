@@ -10,3 +10,4 @@ Translation.v
 TranslationNatSemantics.v
 TranslationCorrectness.v
 SynchronousNat.v
+Wellformed.v

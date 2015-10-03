@@ -65,7 +65,8 @@ COQCHK?="$(COQBIN)coqchk"
 #                    #
 ######################
 
-VFILES:=SynchronousNat.v\
+VFILES:=Wellformed.v\
+  SynchronousNat.v\
   TranslationCorrectness.v\
   TranslationNatSemantics.v\
   Translation.v\
