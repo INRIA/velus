@@ -14,6 +14,12 @@ Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 
+Lemma ident_eqb_neq:
+  forall x y, ident_eqb x y = false <-> x <> y.
+Proof.
+  unfold ident_eqb; apply Pos.eqb_neq.
+Qed.
+
 Lemma In_dec:
   forall x S, {PS.In x S}+{~PS.In x S}.
 Proof.

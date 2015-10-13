@@ -1,4 +1,8 @@
 
+Require Import List.
+Import List.ListNotations.
+Open Scope list_scope.
+
 Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
 Require Import Rustre.DataflowNatSemantics.
@@ -12,8 +16,6 @@ Require Import Rustre.Minimp.
 Require Import PArith.
 Require Import Rustre.Translation.
 
-Import List.ListNotations.
-Open Scope list_scope.
 
 (* TODO:
    - Assume we are given a list of dataflow equations eqs satisfying
@@ -578,9 +580,6 @@ Qed.
       some value, but also that it is the correct value.
  *)
 
-(* TODO: Struggle to give a prettier definition of Memory_Corres and
-         an associated induction principle. Tim: 0, Coq: 1.
-
 Inductive Memory_Corres (G: global) (n: nat) :
        ident -> memory -> memoryEnv -> Prop :=
 | MemC:
@@ -606,13 +605,7 @@ with Memory_Corres_eq (G: global) (n: nat) :
                   -> find_mem x menv = Some (ms n))
       -> Memory_Corres_eq G n M menv (EqFby x v0 lae).
 
-Scheme Memory_Corres_mult := Induction for Memory_Corres Sort Prop
-with Memory_Corres_eq_mult := Induction for Memory_Corres_eq Sort Prop.
-
-Check Memory_Corres_mult.
-Check Memory_Corres_eq_mult.
-
-Section Memory_Corres_ind'.
+Section Memory_Corres_mult.
   Variables (G: global) (n: nat).
 
   Variable P : forall f M menv, Memory_Corres G n f M menv -> Prop.
@@ -641,176 +634,136 @@ Section Memory_Corres_ind'.
     forall f M menv i o eqs
            (Hfind : find_node f G = Some (mk_node f i o eqs))
            (Heqs : List.Forall (Memory_Corres_eq G n M menv) eqs),
-      List.Forall (fun eq=> exists Hmc, Peq M menv eq (Hmc eq)) eqs
+      List.Forall (fun eq=> exists Hmc, Peq M menv eq Hmc) eqs
       -> P f M menv (MemC G n f M menv i o eqs Hfind Heqs).
 
-  Definition mc_adapter M menv eqs
-    (mc_eq_ind': forall (eq : equation)
-                        (He : Memory_Corres_eq G n M menv eq), Peq M menv eq He)
-    (H: List.Forall (Memory_Corres_eq G n M menv) eqs)
-    : List.Forall (fun eq=> exists Hmc, Peq M menv eq (Hmc eq)) eqs.
-  Proof.
-    induction eqs as [|eq eqs IH]; [constructor|].
-    inversion_clear H as [|? ? H0 H1].
-    constructor.
-    exists (fun _=> H0).
-    apply (mc_eq_ind' eq H0).
-    apply IH.
-    exact H1.
-  Defined.
-  Print mc_adapter.
-
-  Check (fun (M : memory) (menv : memoryEnv) (eqs : list equation)
-             (mc_eq_ind' : forall (eq : equation)
-                                  (Hmceq : Memory_Corres_eq G n M menv eq),
-                 Peq M menv eq Hmceq)
-             (H : List.Forall (Memory_Corres_eq G n M menv) eqs) =>
-   let P := (fun eq => exists Hmc, Peq M menv eq (Hmc eq)) in
-   let Q := (fun eqs => List.Forall (Memory_Corres_eq G n M menv) eqs
-                        -> List.Forall P eqs) in
-   list_ind Q
-     (fun _ => List.Forall_nil P)
-     (fun (eq : equation) (eqs0 : list equation)
-          (IH : Q eqs0)
-          (H0 : List.Forall (Memory_Corres_eq G n M menv) (eq :: eqs0)) =>
-        (fun H1 : forall (A : Type) (P : A -> Prop) (x : A) (l : list A),
-             List.Forall P (x :: l) -> P x /\ List.Forall P l =>
-           (fun H2 : Memory_Corres_eq G n M menv eq
-                     /\ List.Forall (Memory_Corres_eq G n M menv) eqs0 =>
-              match H2 with
-              | conj H3 H4 =>
-                List.Forall_cons eq
-                  (ex_intro
-                     (fun Hmc => Peq M menv eq (Hmc eq)) (fun _ => H3)
-                     (mc_eq_ind' eq H3)) (IH H4)
-              end) (H1 equation (Memory_Corres_eq G n M menv) eq eqs0 H0))
-          (fun (A : Type) (P : A -> Prop) (x : A) (l : list A) =>
-             match Forall_cons2 A P x l with
-             | conj x0 _ => x0
-             end)) eqs H).
-
-  Fixpoint Memory_Corres_ind' f M menv
-           (Hmc : Memory_Corres G n f M menv) {struct Hmc}
-         : P f M menv Hmc :=
-    match Hmc as H in (Memory_Corres _ _ m1 m2 m3) return (P m1 m2 m3 H) with
-    | MemC f M menv x y eqs Hf Heqs =>
-        MemC_case f M menv x y eqs Hf Heqs
-          (mc_adapter M menv eqs (Memory_Corres_eq_ind' M menv) Heqs)
+  Fixpoint Memory_Corres_mult (f    : ident)
+                              (M    : memory)
+                              (menv : memoryEnv)
+                              (Hmc  : Memory_Corres G n f M menv)
+                              {struct Hmc} : P f M menv Hmc :=
+    match Hmc in (Memory_Corres _ _ f M menv) return (P f M menv Hmc) with
+    | MemC f M menv i o eqs Hfind Heqs =>
+        MemC_case f M menv i o eqs Hfind Heqs
+          (* Turn: Forall (Memory_Corres_eq G n M menv) eqs
+             into: Forall (fun eq=> exists Hmc, Peq M menv eq (Hmc eq)) eqs *)
+          ((fix map (eqs : list equation)
+                    (Heqs: Forall (Memory_Corres_eq G n M menv) eqs) :=
+              match Heqs in Forall _ fs
+                    return (Forall (fun eq=> exists Heq, Peq M menv eq Heq) fs)
+              with
+              | Forall_nil => Forall_nil _
+              | Forall_cons eq eqs Heq Heqs' =>
+                  Forall_cons eq
+                    (@ex_intro _ _ Heq (Memory_Corres_eq_mult M menv eq Heq))
+                    (map eqs Heqs')
+              end) eqs Heqs)
     end
 
-  with Memory_Corres_eq_ind' M menv eq
-         (Hmceq : Memory_Corres_eq G n M menv eq) {struct Hmceq}
-       : Peq M menv eq Hmceq :=
-    match Hmceq as m1 in (Memory_Corres_eq _ _ m2 m3 e0)
-                return (Peq m2 m3 e0 m1)
+  with Memory_Corres_eq_mult (M     : memory)
+                             (menv  : memoryEnv)
+                             (eq    : equation)
+                             (Hmceq : Memory_Corres_eq G n M menv eq)
+                             {struct Hmceq} : Peq M menv eq Hmceq :=
+    match Hmceq in (Memory_Corres_eq _ _ M menv eq) return (Peq M menv eq Hmceq)
     with
     | MemC_EqDef M menv x cae => EqDef_case M menv x cae
     | MemC_EqApp M menv x f lae Hmc =>
-      EqApp_case M menv x f lae Hmc
-           (fun Mo omenv (Hmfind : mfind_inst x M = Some Mo)
-                         (Hfindo : find_obj x menv = Some omenv) =>
-              Memory_Corres_ind' f Mo omenv (Hmc Mo omenv Hmfind Hfindo))
-    | MemC_EqFby M menv x v0 lae i => EqFby_case M menv x v0 lae i
+        EqApp_case M menv x f lae Hmc
+                   (fun (Mo     : memory)
+                        (omenv  : memoryEnv)
+                        (Hmfind : mfind_inst x M = Some Mo)
+                        (Hfindo : find_obj x menv = Some omenv) =>
+                      Memory_Corres_mult f Mo omenv (Hmc Mo omenv Hmfind Hfindo))
+    | MemC_EqFby M menv x v0 lae Hfind => EqFby_case M menv x v0 lae Hfind
     end.
 
-End Memory_Corres_ind'.
+End Memory_Corres_mult.
 
-*)
-
-Inductive Memory_Corres (G: global) (n: nat) :
-                        ident -> memory -> memoryEnv -> Prop :=
-| MemC:
-    forall f M menv i o eqs,
-      find_node f G = Some(mk_node f i o eqs)
-      -> Memory_Corres_eqs G n M menv eqs
-      -> Memory_Corres G n f M menv
-
-with Memory_Corres_eqs (G: global) (n: nat) :
-       memory -> memoryEnv -> list equation -> Prop :=
-| MemC_nil: forall m menv,
-    Memory_Corres_eqs G n m menv []
-| MemC_EqDef:
-    forall M menv x cae eqs,
-      Memory_Corres_eqs G n M menv eqs
-      -> Memory_Corres_eqs G n M menv (EqDef x cae::eqs)
-| MemC_EqApp:
-    forall M menv x f lae eqs,
-      (forall Mo omenv, mfind_inst x M = Some Mo
-                        -> find_obj x menv = Some omenv
-                        -> Memory_Corres G n f Mo omenv)
-      -> Memory_Corres_eqs G n M menv eqs
-      -> Memory_Corres_eqs G n M menv (EqApp x f lae::eqs)
-| MemC_EqFby:
-    forall M menv x v0 lae eqs,
-      (forall ms, mfind_mem x M = Some ms
-                  -> find_mem x menv = Some (ms n))
-      -> Memory_Corres_eqs G n M menv eqs
-      -> Memory_Corres_eqs G n M menv (EqFby x v0 lae::eqs).
-
-Scheme Memory_Corres_mult := Induction for Memory_Corres Sort Prop
-with Memory_Corres_eqs_mult := Induction for Memory_Corres_eqs Sort Prop.
+Lemma Memory_Corres_eq_node_tl:
+  forall node G eq n M menv,
+    Ordered_nodes (node::G)
+    -> ~Is_node_in_eq node.(n_name) eq
+    -> (Memory_Corres_eq (node::G) n M menv eq
+        <-> Memory_Corres_eq G n M menv eq).
+Proof.
+  intros node G eqs n M menv Hord Hini.
+  split; intro Hmc; revert M menv eqs Hmc Hini.
+  - induction 1 as [|? ? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn ? IH]
+      using Memory_Corres_eq_mult
+      with (P:=fun f M menv IH=>
+                 node.(n_name) <> f ->
+                 Memory_Corres G n f M menv);
+      intro HH; try constructor.
+    + intros Mo omenv Hmfind Hfindo.
+      apply Hfind; try assumption.
+      intro Hneq; rewrite <-Hneq in HH.
+      apply HH; repeat constructor.
+    + trivial.
+    + simpl in Hfindn.
+      apply ident_eqb_neq in HH.
+      rewrite HH in Hfindn.
+      econstructor; [exact Hfindn|].
+      apply find_node_later_not_Is_node_in with (2:=Hfindn) in Hord.
+      simpl in Hord; clear Hfindn.
+      induction eqs as [|eq eqs IHeqs]; [now constructor|].
+      apply Forall_cons2 in IH; destruct IH as [IH IHs].
+      apply not_Is_node_in_cons in Hord.
+      destruct Hord as [Hnini Hninis].
+      apply Forall_cons2 in Heqs; destruct Heqs as [Heq Heqs].
+      destruct IH as [IH0 IH]; clear IH0.
+      apply Forall_cons;
+        [ now apply IH with (1:=Hnini)
+        | now apply IHeqs with (1:=Hninis) (2:=Heqs) (3:=IHs) ].
+  - induction 1 as [|? ? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn ? IH]
+      using Memory_Corres_eq_mult
+      with (P:=fun f M menv IH=>
+                 node.(n_name) <> f ->
+                 Memory_Corres (node::G) n f M menv);
+      intro HH; try constructor.
+    + intros Mo omenv Hmfind Hfindo.
+      apply Hfind; trivial.
+      intro Hnnf; apply HH; rewrite Hnnf; now constructor.
+    + apply Hfind.
+    + apply find_node_later_not_Is_node_in with (2:=Hfindn) in Hord.
+      rewrite <-find_node_tl with (1:=HH) in Hfindn.
+      econstructor; [exact Hfindn|].
+      simpl in Hord; clear Hfindn Heqs.
+      induction eqs as [|eq eqs IHeqs]; [now constructor|].
+      apply not_Is_node_in_cons in Hord.
+      destruct Hord as [Hnini Hninis].
+      apply Forall_cons2 in IH; destruct IH as [IH IHs].
+      destruct IH as [IH0 IH]; clear IH0.
+      apply Forall_cons;
+        [now apply IH with (1:=Hnini)
+        | apply IHeqs with (1:=Hninis) (2:=IHs)].
+Qed.
 
 Lemma Memory_Corres_eqs_node_tl:
   forall node G eqs n M menv,
     Ordered_nodes (node::G)
     -> ~Is_node_in node.(n_name) eqs
-    -> (Memory_Corres_eqs (node::G) n M menv eqs
-        <-> Memory_Corres_eqs G n M menv eqs).
+    -> (Forall (Memory_Corres_eq (node::G) n M menv) eqs
+        <-> Forall (Memory_Corres_eq G n M menv) eqs).
 Proof.
-  intros node G eqs n M menv Hord Hini.
-  split; intro Hmc; revert M menv eqs Hmc Hini.
-  - induction 1 as [? ? ? ? ? ? Hfind| | | |? ? ? ? ? ? Hmfind]
-      using Memory_Corres_eqs_mult
-      with (P0:=fun M menv eqs IH=>
-                  ~Is_node_in node.(n_name) eqs
-                  -> Memory_Corres_eqs G n M menv eqs)
-           (P:=fun f M menv IH=>
-                 node.(n_name) <> f ->
-                 Memory_Corres G n f M menv); intro HH.
-    + rewrite find_node_tl with (1:=HH) in Hfind.
-      econstructor; [exact Hfind|].
-      apply IHHmc.
-      apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hfind).
-    + constructor.
-    + constructor; apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
-    + constructor.
-      * intros Mo omenv Hmfind Hfindo.
-        apply H; try assumption.
-        intro Hneq; rewrite <-Hneq in HH.
-        apply HH; repeat constructor.
-      * apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
-    + constructor; [trivial|].
-      apply IHHmc. apply not_Is_node_in_cons in HH. intuition.
-  - induction 1 as [? ? ? ? ? ? Hfind| | | |? ? ? ? ? ? Hmfind]
-      using Memory_Corres_eqs_mult
-      with (P0:=fun M menv eqs IH=>
-                  ~Is_node_in node.(n_name) eqs
-                  -> Memory_Corres_eqs (node::G) n M menv eqs)
-           (P:=fun f M menv IH=>
-                 node.(n_name) <> f ->
-                 Memory_Corres (node::G) n f M menv); intro HH.
-    + econstructor; [rewrite find_node_tl with (1:=HH); exact Hfind|].
-      apply IHHmc.
-      apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hfind).
-    + constructor.
-    + constructor; apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
-    + constructor.
-      * intros Mo omenv Hmfind Hfindo.
-        apply H; try assumption.
-        intro Hneq; rewrite <-Hneq in HH.
-        apply HH; repeat constructor.
-      * apply IHHmc; apply not_Is_node_in_cons in HH; intuition.
-    + constructor; [trivial|].
-      apply IHHmc. apply not_Is_node_in_cons in HH. intuition.
+  induction eqs as [|eq eqs IH]; [now intuition|].
+  intros n M menv Hord Hnini.
+  apply not_Is_node_in_cons in Hnini.
+  destruct Hnini as [Hnini Hninis].
+  split;
+    intro HH; apply Forall_cons2 in HH; destruct HH as [HH HHs];
+    apply Forall_cons;
+    (apply Memory_Corres_eq_node_tl with (1:=Hord) (2:=Hnini) (3:=HH)
+     || apply IH with (1:=Hord) (2:=Hninis) (3:=HHs)).
 Qed.
 
 Lemma Memory_Corres_node_tl:
   forall f node G n M menv,
-    node.(n_name) <> f
-    -> Ordered_nodes (node :: G)
+    Ordered_nodes (node :: G)
+    -> node.(n_name) <> f
     -> (Memory_Corres (node :: G) n f M menv <-> Memory_Corres G n f M menv).
 Proof.
-  intros f node G n M menv Hnf Hord.
+  intros f node G n M menv Hord Hnf.
   split;
     inversion_clear 1;
     econstructor;
@@ -821,36 +774,186 @@ Proof.
          | |- find_node ?f (_ :: ?G) = Some _ =>
            rewrite find_node_tl with (1:=Hnf)
          | Hf: find_node ?f ?G = Some _ |- find_node ?f ?G = Some _ => exact Hf
-         | H:Memory_Corres_eqs _ _ _ _ _ |- Memory_Corres_eqs _ _ _ _ _ =>
+         | H:Forall (Memory_Corres_eq _ _ _ _) _
+           |- Forall (Memory_Corres_eq _ _ _ _) _ =>
            apply Memory_Corres_eqs_node_tl with (1:=Hord) (3:=H)
          | Hf: find_node ?f ?G = Some _ |- ~Is_node_in _ _ =>
            apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hf)
          end.
 Qed.
 
-Lemma Memory_Corres_eqs_tl:
-  forall G n M menv eq eqs,
-    Memory_Corres_eqs G n M menv (eq::eqs)
-    -> Memory_Corres_eqs G n M menv eqs.
-Proof.
-  intros G n M menv eq eqs Hmc.
-  inversion Hmc; assumption.
-Qed.
-
 Lemma Is_memory_in_Memory_Corres_eqs:
   forall G n M menv x eqs,
     Is_memory_in x eqs
-    -> Memory_Corres_eqs G n M menv eqs
+    -> Forall (Memory_Corres_eq G n M menv) eqs
     -> (forall ms, mfind_mem x M = Some ms
                    -> find_mem x menv = Some (ms n)).
 Proof.
   induction eqs as [|eq eqs IH]; [now inversion 1|].
   intros Himi Hmc ms.
   apply Is_memory_in_cons in Himi.
-  destruct Himi as [Himeqs|[Himeq Himeqs]].
-  - destruct eq; inversion_clear Himeqs; inversion_clear Hmc; auto.
-  - apply Memory_Corres_eqs_tl in Hmc.
-    apply IH with (1:=Himeqs) (2:=Hmc).
+  inversion_clear Hmc as [|? ? Hmceq Hmceqs].
+  destruct Himi as [Himeqs|[Himeq Himeqs]];
+    [|now apply IH with (1:=Himeqs) (2:=Hmceqs)].
+  destruct eq; inversion_clear Himeqs.
+  inversion_clear Hmceq; auto.
+Qed.
+
+Lemma Memory_Corres_eqs_add_mem:
+  forall G M menv n y ms eqs,
+    mfind_mem y M = Some ms
+    -> Forall (Memory_Corres_eq G n M menv) eqs
+    -> Forall (Memory_Corres_eq G n M (add_mem y (ms n) menv)) eqs.
+Proof.
+  induction eqs as [|eq eqs IH]; [now auto|].
+  intros Hmfind Hmc.
+  apply Forall_cons2 in Hmc.
+  destruct Hmc as [Hmc0 Hmc1].
+  apply Forall_cons; [|apply IH with (1:=Hmfind) (2:=Hmc1)].
+  destruct eq; repeat constructor.
+  - intros Mo omenv Hifind Hfindo.
+    inversion_clear Hmc0 as [|? ? ? ? ? Hmc|].
+    now apply Hmc with (1:=Hifind) (2:=Hfindo).
+  - intros ms' Hmfind'.
+    destruct (ident_eq_dec i y) as [He|Hne].
+    + rewrite He in *.
+      rewrite Hmfind in Hmfind'.
+      injection Hmfind'; intro H; rewrite <- H; clear H.
+      rewrite find_mem_gss; reflexivity.
+    + rewrite find_mem_gso with (1:=Hne).
+      inversion_clear Hmc0 as [| |? ? ? ? ? Hmc].
+      now apply Hmc with (1:=Hmfind').
+Qed.
+
+(* Unfortunately, a similar lemma to Memory_Corres_eqs_add_mem but for add_obj
+   does not seem to hold without extra conditions:
+
+     Lemma Memory_Corres_eqs_add_obj:
+       forall G n M menv y Mo g omenv eqs,
+         mfind_inst y M = Some Mo
+         -> Memory_Corres G n g Mo omenv
+         -> Memory_Corres_eqs G n M menv eqs
+         -> Memory_Corres_eqs G n M (add_obj y omenv menv) eqs.
+
+   Consider the equations:
+      [ x = f y; x = g y; ... ]
+   It is possible for this system to have an m-semantics if both f and g have
+   the same input/output behaviour, but also possible for the memory structures
+   of f and g to differ from one another. In this case, we end up having as
+   hypothesis
+        Memory_Corres G n g Mo omenv
+   and the goal
+        Memory_Corres G n f Mo omenv *)
+
+Lemma Memory_Corres_eqs_add_obj:
+  forall G n M menv eqs y omenv,
+    Forall (Memory_Corres_eq G n M menv) eqs
+    -> ~Is_instance_in y eqs
+    -> Forall (Memory_Corres_eq G n M (add_obj y omenv menv)) eqs.
+Proof.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  intros y omenv Hmce Hniii.
+  apply Forall_cons2 in Hmce.
+  destruct Hmce as [Hmce0 Hmce1].
+  apply not_Is_instance_in_cons in Hniii.
+  destruct Hniii as [Hniii0 Hniii1].
+  apply Forall_cons; [|now apply IH with (1:=Hmce1) (2:=Hniii1)].
+  destruct eq; constructor; try constructor.
+  - intros Mo omenv' Hmfind Hfindo.
+    destruct (ident_eq_dec i y) as [Hiy|Hniy].
+    + rewrite Hiy in Hniii0; exfalso; apply Hniii0; constructor.
+    + rewrite find_obj_gso in Hfindo; [|exact Hniy].
+      inversion_clear Hmce0 as [|? ? ? ? ? HH|].
+      apply HH with (1:=Hmfind) (2:=Hfindo).
+  - intros ms Hmfind.
+    inversion_clear Hmce0 as [| |? ? ? ? ? HH].
+    rewrite find_mem_add_obj.
+    apply HH with (1:=Hmfind).
+Qed.
+
+(* TODO: Abstract out this pattern of induction over G using find_node. *)
+Lemma Memory_Corres_unchanged:
+  forall G f fnode n M menv,
+    Welldef_global G
+    -> find_node f G = Some fnode
+    -> Memory_Corres G n f M menv
+    -> Mem_unchanged n M
+    -> Memory_Corres G (S n) f M menv.
+Proof.
+  induction G as [|node G IHnode]; [now inversion_clear 2|].
+  intros f fnode n M menv Hwdef Hfindn Hmc Hmu.
+  pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
+  destruct node as [name input output eqs].
+  destruct (ident_eq_dec f name) as [Hfeq|Hfneq].
+  - rewrite Hfeq in *.
+    destruct fnode as [name' input' output' eqs'].
+    assert (Hfindn':=Hfindn).
+    simpl in Hfindn';
+      unfold ident_eqb in Hfindn';
+      rewrite Pos.eqb_refl in Hfindn'.
+    injection Hfindn';
+      intros HR1 HR2 HR3 HR4;
+      rewrite <-HR1,<-HR2,<-HR3,<-HR4 in *;
+      clear HR1 HR2 HR3 HR4 Hfindn'.
+    econstructor; [now apply Hfindn|].
+
+    inversion Hwdef as [|? ? Hwdef' neqs ni no
+                           Hwsch Hindi Hoivi Hnini Hfnone Hnname [HR1 HR2]].
+    unfold neqs,ni,no in *; clear neqs ni no HR1 HR2.
+    simpl in *.
+    clear Hfindn.
+    apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini).
+    inversion_clear Hmc as [? ? ? ? ? ? Hfindn Hmceqs].
+    simpl in Hfindn;
+      unfold ident_eqb in Hfindn;
+      rewrite Pos.eqb_refl in Hfindn.
+    injection Hfindn;
+      intros HR1 HR2 HR3;
+      rewrite <-HR1,<-HR2,<-HR3 in *;
+      clear HR1 HR2 HR3 Hfindn.
+    apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini) in Hmceqs.
+
+    clear Hwdef Hwsch Hindi Hoivi Hnini Hord.
+    induction eqs as [|eq eqs IH]; [now constructor|].
+    apply Forall_cons2 in Hmceqs.
+    destruct Hmceqs as [Hmceq Hmceqs].
+
+    destruct eq as [x e|x g e|x v0 e];
+    (apply IH in Hmceqs;
+       [|intros g' Hgini; apply Hfnone; constructor 2; exact Hgini]);
+    repeat constructor; try exact Hmceqs.
+    + intros Mo omenv Hmfind Hfindo.
+      inversion_clear Hmu as [? Hmfindm Hmfindi].
+      assert (Hmu':=Hmfind).
+      apply Hmfindi in Hmu'.
+      inversion_clear Hmceq as [|? ? ? ? ? Homc|].
+      pose proof (Homc _ _ Hmfind Hfindo) as Homc'.
+      assert (find_node g G <> None) as Hfindg
+          by (apply Hfnone; repeat constructor).
+      assert (exists node, find_node g G = Some node) as Hnode.
+      destruct (find_node g G) as [node|];
+        [|exfalso; apply Hfindg; reflexivity].
+      exists node; reflexivity.
+      destruct Hnode as [node Hnode].
+      now apply IHnode with (1:=Hwdef') (2:=Hnode) (3:=Homc') (4:=Hmu').
+    + intros ms Hmfind.
+      inversion_clear Hmu as [? Hmfindm Hmfindi].
+      assert (Hms:=Hmfind).
+      apply Hmfindm in Hms.
+      inversion_clear Hmceq as [| |? ? ? ? ? Hfindm].
+      apply Hfindm in Hmfind.
+      rewrite Hmfind.
+      rewrite Hms.
+      reflexivity.
+  - apply Welldef_global_cons in Hwdef.
+    apply not_eq_sym in Hfneq.
+    apply Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq).
+    assert (Hfneq':=Hfneq).
+    apply ident_eqb_neq in Hfneq'.
+    simpl in Hfindn.
+    rewrite Hfneq' in Hfindn.
+    apply Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc.
+    now apply IHnode with (1:=Hwdef) (2:=Hfindn) (3:=Hmc) (4:=Hmu).
 Qed.
 
 Lemma Is_memory_in_msem_var:
@@ -941,13 +1044,13 @@ Local Ltac resolve_env_assumption :=
              | H1: ?ms ?n = ?c |- find_mem ?x ?menv = Some ?c => rewrite <- H1
 
              | H1: Is_memory_in ?x ?eqs,
-               H2: Memory_Corres_eqs ?G ?n ?M ?menv ?eqs,
+               H2: Forall (Memory_Corres_eq ?G ?n ?M ?menv) ?eqs,
                H3: mfind_mem ?x ?M = ?xs
                |- find_mem ?x ?menv = Some (?ms ?n) =>
                apply Is_memory_in_Memory_Corres_eqs with (1:=H1) (2:=H2) (3:=H3)
 
              | H1: Is_memory_in ?x ?eqs,
-               H2: Memory_Corres_eqs ?G ?n ?M ?menv ?eqs,
+               H2: Forall (Memory_Corres_eq ?G ?n ?M ?menv) ?eqs,
                H3: mfind_mem ?x ?M = Some _ |- _ =>
                apply Is_memory_in_Memory_Corres_eqs with (1:=H1) (2:=H2) in H3
 
@@ -992,88 +1095,6 @@ Proof.
     end.
 Qed.
 
-(* TODO: These lemmas would not be necessary with a proper definition of
-         Memory_Corres (using List.Forall)... *)
-Lemma Memory_Corres_eqs_cons:
-  forall G n M menv eq eqs,
-    Memory_Corres_eqs G n M menv (eq::eqs)
-    <-> Memory_Corres_eqs G n M menv [eq]
-        /\ Memory_Corres_eqs G n M menv eqs.
-Proof.
-  Hint Constructors Memory_Corres_eqs.
-  split; [inversion 1|destruct 1 as [H0 ?]; inversion H0]; intuition.
-Qed.
-
-Lemma Memory_Corres_eqs_app:
-  forall G n M menv leqs reqs,
-    Memory_Corres_eqs G n M menv (leqs ++ reqs)
-    <-> Memory_Corres_eqs G n M menv leqs
-        /\ Memory_Corres_eqs G n M menv reqs.
-Proof.
-  Hint Constructors Memory_Corres_eqs.
-  induction leqs as [|eq leqs IH]; [now intuition|].
-  intro reqs.
-  split; intro HH.
-  - rewrite <- List.app_comm_cons in HH.
-    apply Memory_Corres_eqs_cons in HH.
-    destruct HH as [H0 H1].
-    apply IH in H1; destruct H1.
-    split; [apply Memory_Corres_eqs_cons|]; intuition.
-  - rewrite <- List.app_comm_cons.
-    apply Memory_Corres_eqs_cons.
-    destruct HH as [H0 H1].
-    apply Memory_Corres_eqs_cons in H0.
-    rewrite IH.
-    intuition.
-Qed.
-
-Lemma Memory_Corres_eqs_add_mem:
-  forall G M menv n y ms eqs,
-    mfind_mem y M = Some ms
-    -> Memory_Corres_eqs G n M menv eqs
-    -> Memory_Corres_eqs G n M (add_mem y (ms n) menv) eqs.
-Proof.
-  induction eqs as [|eq eqs IH]; [now auto|].
-  intros Hmfind Hmc.
-  apply Memory_Corres_eqs_cons in Hmc.
-  destruct Hmc as [Hmc0 Hmc1].
-  apply Memory_Corres_eqs_cons.
-  split; [|now apply IH with (1:=Hmfind) (2:=Hmc1)].
-  destruct eq; repeat constructor.
-  - intros Mo omenv Hifind Hfindo.
-    inversion_clear Hmc0 as [| |? ? ? ? ? ? Hmc H0|]; clear H0.
-    now apply Hmc with (1:=Hifind) (2:=Hfindo).
-  - intros ms' Hmfind'.
-    destruct (ident_eq_dec i y) as [He|Hne].
-    + rewrite He in *.
-      rewrite Hmfind in Hmfind'.
-      injection Hmfind'; intro H; rewrite <- H; clear H.
-      rewrite find_mem_gss; reflexivity.
-    + rewrite find_mem_gso with (1:=Hne).
-      inversion_clear Hmc0 as [| | |? ? ? ? ? ? Hmc H0]; clear H0.
-      now apply Hmc with (1:=Hmfind').
-Qed.
-
-(* Unfortunately, a similar lemma to Memory_Corres_eqs_add_mem but for add_obj
-   does not seem to hold without extra conditions:
-
-     Lemma Memory_Corres_eqs_add_obj:
-       forall G n M menv y Mo g omenv eqs,
-         mfind_inst y M = Some Mo
-         -> Memory_Corres G n g Mo omenv
-         -> Memory_Corres_eqs G n M menv eqs
-         -> Memory_Corres_eqs G n M (add_obj y omenv menv) eqs.
-
-   Consider the equations:
-      [ x = f y; x = g y; ... ]
-   It is possible for this system to have an m-semantics if both f and g have
-   the same input/output behaviour, but also possible for the memory structures
-   of f and g to differ from one another. In this case, we end up having as
-   hypothesis
-        Memory_Corres G n g Mo omenv
-   and the goal
-        Memory_Corres G n f Mo omenv *)
-
 Lemma find_node_translate_find_class:
   forall f G node,
     find_node f G = Some node
@@ -1090,120 +1111,6 @@ Proof.
     destruct Hfind as [prog'].
     exists prog'.
     assumption.
-Qed.
-
-Lemma Memory_Corres_eqs_add_obj:
-  forall G n M menv eqs y omenv,
-    Memory_Corres_eqs G n M menv eqs
-    -> ~Is_instance_in y eqs
-    -> Memory_Corres_eqs G n M (add_obj y omenv menv) eqs.
-Proof.
-  induction eqs as [|eq eqs IH]; [now constructor|].
-  intros y omenv Hmce Hniii.
-  apply Memory_Corres_eqs_cons in Hmce.
-  destruct Hmce as [Hmce0 Hmce1].
-  apply not_Is_instance_in_cons in Hniii.
-  destruct Hniii as [Hniii0 Hniii1].
-  apply Memory_Corres_eqs_cons.
-  split; [|now apply IH with (1:=Hmce1) (2:=Hniii1)].
-  destruct eq; constructor; try constructor.
-  - intros Mo omenv' Hmfind Hfindo.
-    destruct (ident_eq_dec i y) as [Hiy|Hniy].
-    + rewrite Hiy in Hniii0; exfalso; apply Hniii0; constructor.
-    + rewrite find_obj_gso in Hfindo; [|exact Hniy].
-      inversion_clear Hmce0 as [| |? ? ? ? ? ? HH|].
-      apply HH with (1:=Hmfind) (2:=Hfindo).
-  - intros ms Hmfind.
-    inversion_clear Hmce0 as [| | |? ? ? ? ? ? HH].
-    rewrite find_mem_add_obj.
-    apply HH with (1:=Hmfind).
-Qed.
-
-(* TODO: Abstract out this pattern of induction over G using find_node. *)
-(* TODO: Introduce some lemmas to simplify reasoning around ident_eq_dec. *)
-Lemma Memory_Corres_unchanged:
-  forall G f fnode n M menv,
-    Welldef_global G
-    -> find_node f G = Some fnode
-    -> Memory_Corres G n f M menv
-    -> Mem_unchanged n M
-    -> Memory_Corres G (S n) f M menv.
-Proof.
-  induction G as [|node G IHnode]; [now inversion_clear 2|].
-  intros f fnode n M menv Hwdef Hfindn Hmc Hmu.
-  pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
-  destruct node as [name input output eqs].
-  destruct (ident_eq_dec f name) as [Hfeq|Hfneq].
-  - rewrite Hfeq in *.
-    destruct fnode as [name' input' output' eqs'].
-    assert (Hfindn':=Hfindn).
-    simpl in Hfindn';
-      unfold ident_eqb in Hfindn';
-      rewrite Pos.eqb_refl in Hfindn'.
-    injection Hfindn';
-      intros HR1 HR2 HR3 HR4;
-      rewrite <-HR1,<-HR2,<-HR3,<-HR4 in *;
-      clear HR1 HR2 HR3 HR4 Hfindn'.
-    econstructor; [now apply Hfindn|].
-
-    inversion Hwdef as [|? ? Hwdef' neqs ni no
-                           Hwsch Hindi Hoivi Hnini Hfnone Hnname [HR1 HR2]].
-    unfold neqs,ni,no in *; clear neqs ni no HR1 HR2.
-    simpl in *.
-    clear Hfindn.
-    apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini).
-    inversion_clear Hmc as [? ? ? ? ? ? Hfindn Hmceqs].
-    simpl in Hfindn;
-      unfold ident_eqb in Hfindn;
-      rewrite Pos.eqb_refl in Hfindn.
-    injection Hfindn;
-      intros HR1 HR2 HR3;
-      rewrite <-HR1,<-HR2,<-HR3 in *;
-      clear HR1 HR2 HR3 Hfindn.
-    apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini) in Hmceqs.
-
-    clear Hwdef Hwsch Hindi Hoivi Hnini Hord.
-    induction eqs as [|eq eqs IH]; [now constructor|].
-    apply Memory_Corres_eqs_cons in Hmceqs.
-    destruct Hmceqs as [Hmceq Hmceqs].
-
-    destruct eq as [x e|x g e|x v0 e];
-    (apply IH in Hmceqs;
-       [|intros g' Hgini; apply Hfnone; constructor 2; exact Hgini]);
-    constructor; try exact Hmceqs.
-    + intros Mo omenv Hmfind Hfindo.
-      inversion_clear Hmu as [? Hmfindm Hmfindi].
-      assert (Hmu':=Hmfind).
-      apply Hmfindi in Hmu'.
-      inversion_clear Hmceq as [| |? ? ? ? ? ? Homc H0|].
-      pose proof (Homc _ _ Hmfind Hfindo) as Homc'.
-      assert (find_node g G <> None) as Hfindg
-          by (apply Hfnone; repeat constructor).
-      assert (exists node, find_node g G = Some node) as Hnode.
-      destruct (find_node g G) as [node|];
-        [|exfalso; apply Hfindg; reflexivity].
-      exists node; reflexivity.
-      destruct Hnode as [node Hnode].
-      now apply IHnode with (1:=Hwdef') (2:=Hnode) (3:=Homc') (4:=Hmu').
-    + intros ms Hmfind.
-      inversion_clear Hmu as [? Hmfindm Hmfindi].
-      assert (Hms:=Hmfind).
-      apply Hmfindm in Hms.
-      inversion_clear Hmceq as [| | |? ? ? ? ? ? Hfindm H0].
-      apply Hfindm in Hmfind.
-      rewrite Hmfind.
-      rewrite Hms.
-      reflexivity.
-  - apply Welldef_global_cons in Hwdef.
-    apply not_eq_sym in Hfneq.
-    apply Memory_Corres_node_tl with (1:=Hfneq) (2:=Hord).
-    apply Pos.eqb_neq in Hfneq.
-    simpl in Hfindn.
-    unfold ident_eqb in Hfindn.
-    rewrite Hfneq in Hfindn.
-    apply Pos.eqb_neq in Hfneq.
-    apply Memory_Corres_node_tl with (1:=Hfneq) (2:=Hord) in Hmc.
-    now apply IHnode with (1:=Hwdef) (2:=Hfindn) (3:=Hmc) (4:=Hmu).
 Qed.
 
 Lemma is_step_correct:
@@ -1270,14 +1177,14 @@ Lemma is_step_correct:
                   /\ Memory_Corres G (S n) f M menv')
 
         (* - unwritten memories (assumed) *)
-        -> Memory_Corres_eqs G n M menv alleqs
+        -> List.Forall (Memory_Corres_eq G n M menv) alleqs
 
         (* - locals (shown) *)
         -> (forall x, Is_variable_in x eqs
                     -> forall c : const, sem_var H x n (present c)
                                          <-> PM.find x env' = Some c)
            (* - written memories (shown) *)
-           /\ Memory_Corres_eqs G (S n) M menv' eqs.
+           /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs.
 Proof.
   intros until alleqs.
   intros Hsems Himi.
@@ -1298,7 +1205,7 @@ Proof.
   assert ((forall x, Is_variable_in x eqs
                      -> forall c, sem_var H x n (present c)
                                   <-> PM.find x env' = Some c)
-          /\ Memory_Corres_eqs G (S n) M menv' eqs) as IHeqs'.
+          /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs) as IHeqs'.
   { eapply IHeqs.
     - apply List_shift_away with (1:=Hall).
     - exact Hwdef.
@@ -1326,7 +1233,7 @@ Proof.
 
   destruct eq as [y cae|y f lae|y v0 lae].
   - (* Inductive step for EqDef *)
-    split; [|constructor; apply stmt_eval_EqDef_mem_inv in Heval;
+    split; [|repeat constructor; apply stmt_eval_EqDef_mem_inv in Heval;
              rewrite Heval; exact IHeqs1].
     intros x Hvi c.
     apply Is_variable_in_cons in Hvi; destruct Hvi as [Hvieq|Hivieqs].
@@ -1454,11 +1361,11 @@ Proof.
             contradiction.
           - exact Heval'.
           - rewrite Hall in Hmc.
-            apply Memory_Corres_eqs_app in Hmc.
+            apply Forall_app in Hmc.
             destruct Hmc as [H0 Hmc]; clear H0.
-            apply Memory_Corres_eqs_cons in Hmc.
+            apply Forall_cons2 in Hmc.
             destruct Hmc as [Hmc H0]; clear H0.
-            inversion_clear Hmc as [| |? ? ? ? ? ? Hmc' H0|].
+            inversion_clear Hmc as [|? ? ? ? ? Hmc' H0|].
             apply Hmc' with (1:=Hfindi).
             rewrite <- Hfindo; symmetry.
             inversion_clear Hwsch as [| |? ? ? ? ? ? Hnii|].
@@ -1490,8 +1397,9 @@ Proof.
         {
           assert (~Is_instance_in y eqs) as Hniii
               by (inversion_clear Hwsch; assumption).
-          constructor.
+          apply Forall_cons.
           2:now apply Memory_Corres_eqs_add_obj with (1:=IHeqs1) (2:=Hniii).
+          constructor.
           intros Mo' omenv'' Hmfind Hfindo'.
           rewrite find_obj_gss in Hfindo'.
           injection Hfindo'; intro He; rewrite <-He in *; clear He Hfindo'.
@@ -1553,17 +1461,20 @@ Proof.
         {
           assert (~Is_instance_in y eqs) as Hniii
               by (inversion_clear Hwsch; assumption).
-          constructor.
+          apply Forall_cons.
           2:now apply IHeqs1.
+          constructor.
           intros Mo' omenv' Hfindi' Hfindo.
           rewrite Hfindi in Hfindi'.
           injection Hfindi'; intro He; rewrite <-He in *; clear He.
           rewrite (stmt_eval_translate_eqns_minst_inv
                      _ _ _ _ _ _ _ Hevals _ Hniii) in Hfindo.
           rewrite Hall in Hmc.
-          apply Memory_Corres_eqs_app in Hmc.
+          apply Forall_app in Hmc.
           destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
-          inversion_clear Hmc as [| |? ? ? ? ? ? Hmc0 H0|]; clear H0.
+          apply Forall_cons2 in Hmc.
+          destruct Hmc as [Hmceq Hmceqs].
+          inversion_clear Hmceq as [|? ? ? ? ? Hmc0|].
           apply Hmc0 with (2:=Hfindo) in Hfindi; clear Hmc0.
           apply absent_invariant with (2:=Hlsn) in Hmsem.
           now apply Memory_Corres_unchanged
@@ -1611,8 +1522,8 @@ Proof.
           2:now resolve_env_assumption.
           apply (exp_eval_det _ _ _ _ _ Heval) in Hlexp.
           rewrite Hlexp in *; clear Hlexp.
-          constructor.
-          - intros ms' Hmfind'.
+          apply Forall_cons.
+          - constructor. intros ms' Hmfind'.
             rewrite Hmfind in Hmfind'.
             injection Hmfind'; intros He; rewrite <- He in *;
               clear He Hmfind' ms'.
@@ -1644,27 +1555,27 @@ Proof.
           Hint Immediate Is_memory_in_EqFby.
           rewrite <-Hlsn in Hmsn.
           destruct Hmsn as [Hmsinv Hsv].
-          apply Memory_Corres_eqs_cons.
-          split; [|assumption].
-          constructor; [|now constructor].
+          apply Forall_cons; [|assumption].
+          constructor.
+          intro ms'.
+          intro Hmfind'.
+          rewrite Hmfind' in Hmfind.
+          injection Hmfind.
+          intro Heq; rewrite Heq in *; clear Heq.
           destruct (Is_memory_in_dec y eqs) as [Hxin|Hxin].
           - (* If we already updated x, we're good. *)
-            intro ms'.
             now apply Is_memory_in_Memory_Corres_eqs with (1:=Hxin) (2:=IHeqs1).
           - (* Otherwise our memory is untouched and we don't touch it either *)
             rewrite Hall in Hmc.
-            apply Memory_Corres_eqs_app in Hmc.
+            apply Forall_app in Hmc.
             destruct Hmc as [H0 Hmc]; clear H0.
-            apply Memory_Corres_eqs_cons in Hmc.
+            apply Forall_cons2 in Hmc.
             destruct Hmc as [Hmc H0]; clear H0.
-            inversion_clear Hmc as [| | |? ? ? ? ? ? Hfindc H0]; clear H0.
-            rewrite Hmfind.
-            injection 1; intro Hmse; rewrite <-Hmse; clear Hmse.
-            apply Hfindc in Hmfind.
+            inversion_clear Hmc as [| |? ? ? ? ? Hfindc].
             rewrite (Hminv _ Hxin).
-            rewrite Hmfind.
             rewrite Hmsinv.
-            reflexivity.
+            apply Hfindc.
+            apply Hmfind'.
         }
       }
 Qed.
@@ -1714,7 +1625,7 @@ Proof.
   Focus 2.
   { assert (node.(n_name) <> f) as Hfneq
         by apply Pos.eqb_neq with (1:=Hfeq).
-    rewrite Memory_Corres_node_tl with (1:=Hfneq) (2:=Hord) in Hmc |- *.
+    rewrite Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc |- *.
     apply IH with (f:=f) (fnode:=fnode) (xs:=xs)
                          (prog:=translate G) (prog':=prog')
                          (menv:=menv) (env:=env)
@@ -1761,7 +1672,7 @@ Proof.
   assert ((forall x, Is_variable_in x eqs ->
                      forall c, sem_var H x n (present c)
                                <-> PM.find x env' = Some c)
-          /\ Memory_Corres_eqs G (S n) M menv' eqs) as His_step_correct.
+          /\ Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
   {
     eapply is_step_correct with (mems:=memories eqs) (env:=env) (menv:=menv)
                                 (input:=i.(v_name)) (prog:=translate G).
@@ -1971,7 +1882,7 @@ Proof.
     clear IHeqs Hnin' Hmsems Hevals.
 
     destruct eq as [x e|x g e|x v0 e]; simpl in Heval.
-    + constructor. inversion Heval.
+    + repeat constructor. inversion Heval.
       match goal with H:menv' = menv'' |- _ => rewrite <-H; apply Hmc end.
     + inversion_clear Hwsch as [| |? ? ? ? Hwsch' Hdeps Hnii|].
       clear Hwsch' Hdeps.
@@ -1988,7 +1899,7 @@ Proof.
       inversion_clear Heval0 as [| | |? ? ? ? ? ? ? Hreset Hadd| | | | | |].
       inversion_clear Hreset as [? ? ? ? ? ? Hfindc Hreset'].
 
-      constructor.
+      repeat constructor.
       * intros Mo' omenv'' Hmfind Hfindo.
         rewrite Hmfind in Hmfind';
           injection Hmfind'; intro He;
@@ -2014,7 +1925,7 @@ Proof.
       rewrite <-HR2 in *; clear HR1 HR2.
       rewrite <-Hms0.
 
-      constructor;
+      repeat constructor;
         [| now apply Memory_Corres_eqs_add_mem with (1:=Hfindm) (2:=Hmc)].
       intros ms' Hfindm'.
       rewrite Hfindm in Hfindm';
@@ -2022,7 +1933,7 @@ Proof.
       rewrite find_mem_gss.
       rewrite Hms0.
       reflexivity.
-  - apply Memory_Corres_node_tl with (1:=Heqb) (2:=Hord).
+  - apply Memory_Corres_node_tl with (1:=Hord) (2:=Heqb).
     eapply IH.
     + inversion_clear Hwdef; assumption.
     + now apply msem_node_cons with (1:=Hord) (2:=Hmsem0) (3:=Heqb).

@@ -125,46 +125,6 @@ Lemma msem_node_cons:
 Proof.
 Admitted.   (* TODO: Show this! *)
 
-(* TODO:
-    show that:
-       sem_node G f xs ys
-       <->
-       (exists ms, msem_node G f xs ms ys)
-
-    this requires constructing an ms: what can we reuse from the
-    sem_held_equations development?
-
-    then it is trivial that:
-       sem_nodes G <-> msem_nodes G
- *)
-
-Lemma sem_msem_node:
-  forall G f xs ys,
-    sem_node G f xs ys <-> (exists ms, msem_node G f xs ms ys).
-Proof.
-  intros G f xs ys.
-  split; [ intro Hsem | intro Hmsem ].
-  - admit.
-  - admit.
-Qed.
-
-(* TODO:
-    - rework is_step_correct.
-    - base it on msem_node G f xs ms ys
-    - induction on G, with well-defined predicate
-    - memories correspond to values of ms (and recursively for called nodes)
-    - local history corresponds to env
-    - inputs and outputs link correctly with xs and ys
-
-    - show that reset gives the first memory
- *)
-
-(* TODO:
-    - prove correctness in terms of sem_node G f xs ys,
-      hiding the internal memory details.
-      (provided the initial memory is created by reset)
- *)
-
 Lemma find_node_msem_node:
   forall G f,
     msem_nodes G
@@ -182,6 +142,53 @@ Proof.
   exists xs; exists M; exists ys.
   rewrite Hf in *.
   exact Hmsem.
+Qed.
+
+(* TODO: Tidy this up... *)
+Lemma Forall_msem_equation_global_tl:
+  forall nd G H M eqs,
+    Ordered_nodes (nd::G)
+    -> (forall f, Is_node_in f eqs -> find_node f G <> None)
+    -> ~ Is_node_in nd.(n_name) eqs
+    -> List.Forall (msem_equation (nd::G) H M) eqs
+    -> List.Forall (msem_equation G H M) eqs.
+Proof.
+  intros nd G H M eqs Hord.
+  induction eqs as [|eq eqs IH]; [trivial|].
+  intros Hfind Hnini Hmsem.
+  apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
+  apply IH in Hseqs.
+  Focus 2.
+  { intros f Hini.
+    apply List.Exists_cons_tl with (x:=eq) in Hini.
+    now apply Hfind with (1:=Hini). }
+  Unfocus.
+  Focus 2.
+  { apply not_Is_node_in_cons in Hnini.
+    destruct Hnini; assumption. }
+  Unfocus.
+
+  apply List.Forall_cons with (2:=Hseqs).
+  inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst.
+  - constructor; auto.
+  - apply not_Is_node_in_cons in Hnini.
+    destruct Hnini.
+    assert (nd.(n_name) <> f).
+    intro HH.
+    apply H0.
+    rewrite HH.
+    constructor.
+    inversion_clear Hseq.
+    econstructor.
+    eexact H8.
+    eexact H9.
+    eexact H10.
+    apply msem_node_cons with (1:=Hord); assumption.
+  - econstructor.
+    eassumption.
+    reflexivity.
+    eassumption.
+    assumption.
 Qed.
 
 (* TODO: Replace with the new development in DataflowNatMSemantics:
@@ -205,49 +212,9 @@ Definition sem_held_equations
            (H: history) (H': history) (eqs: list equation) : Prop :=
   List.Forall (sem_held_equation H H') eqs.
 
-Lemma sem_held_equations_tl:
-  forall H H' eq eqs,
-    sem_held_equations H H' (eq::eqs) -> sem_held_equations H H' eqs.
-Proof.
-  intros H H' eq eqs Hsem.
-  apply Forall_cons2 in Hsem.
-  intuition.
-Qed.
+ *)
 
-Lemma sem_held_equations_corres:
-  forall G H H' eqs,
-    sem_equations G H eqs
-    -> sem_held_equations H H' eqs
-    -> (forall x n c,
-           Is_defined_in x eqs
-           -> sem_var H x n (present c)
-           -> sem_var H' x n (present c)).
-Proof.
-  induction eqs as [|eq]; [inversion 3|].
-  intros Hs Hsh x n c Hdef Hsv.
-  apply Forall_cons2 in Hs; destruct Hs as [Hseq Hseqs];
-  apply Forall_cons2 in Hsh; destruct Hsh as [Hsheq Hsheqs];
-  apply Is_defined_in_cons in Hdef; destruct Hdef as [Hdef|Hdef];
-  [ | destruct Hdef as [Hndef Hdef];
-      apply (IHeqs Hseqs Hsheqs _ _ _ Hdef Hsv) ].
-  destruct eq as [| |y v0 lae]; inversion Hdef; subst;
-  inversion_clear Hsheq as [? ? HH|? ? ? HH|? ? ? ys Hys HH];
-  apply HH; try apply Hsv.
-
-  inversion_clear Hseq as [| |? xs ? ? Hxs Hfby].
-  rewrite sem_laexp_repr in Hxs.
-  assert (forall n, xs n = ys n) as Hxsys by
-        (intro n0;
-         specialize Hys with n0;
-         specialize Hxs with n0 (xs n0);
-         apply sem_laexp_det with H n0 lae;
-         (apply Hxs; reflexivity) || apply Hys).
-  apply Hfby in Hsv.
-  rewrite <- (holdR_ext _ _ Hxsys).
-  apply fbyR_holdR with (1:=Hsv).
-Qed.
-
-Section StreamGenerators.
+Section StreamExecution.
 
   Variable H: history.
   Variable arbitrary : stream.
@@ -357,7 +324,60 @@ Section StreamGenerators.
            end.
   Qed.
 
-End StreamGenerators.
+End StreamExecution.
+
+(* TODO:
+    show that:
+       sem_node G f xs ys
+       <->
+       (exists ms, msem_node G f xs ms ys)
+
+    this requires constructing an ms: what can we reuse from the
+    sem_held_equations development?
+
+    then it is trivial that:
+       sem_nodes G <-> msem_nodes G
+ *)
+
+Lemma sem_msem_node:
+  forall G f xs ys,
+    sem_node G f xs ys -> (exists ms, msem_node G f xs ms ys).
+Admitted.
+(*
+Proof.
+  intros G f xs ys Hsem.
+  induction G as [|node G IH];
+    [ inversion Hsem as [? ? ? ? ? ? Hfind]; now inversion Hfind |].
+  inversion_clear Hsem as [? ? ? ? ? ? Hfind HH].
+  destruct HH as [H [Hxs [Hys Heqs]]].
+  eexists.
+  econstructor.
+  eapply Hfind.
+  exists H.
+  split; [exact Hxs|].
+  split; [exact Hys|].
+  split; [admit|]. (* TODO: need to incorporate assumption on clocks *)
+  SearchAbout msem_equation.
+  induction eqs.
+
+
+  eexists.
+  econstructor.
+  SearchAbout find_node.
+  admit.
+Qed.
+*)
+
+(*
+Lemma Forall_msem_equation_global_tl:
+  forall nd G H M eqs,
+    Ordered_nodes (nd::G)
+    -> (forall f, Is_node_in f eqs -> find_node f G <> None)
+    -> ~ Is_node_in nd.(n_name) eqs
+    -> List.Forall (msem_equation (nd::G) H M) eqs
+    -> List.Forall (msem_equation G H M) eqs.
+*)
+
 
 Definition hold_history (H: history) : history -> list equation -> history :=
   List.fold_right
@@ -376,6 +396,7 @@ Definition hold_history (H: history) : history -> list equation -> history :=
    should anyway be true: there are no duplicate definitions in eqs.
 
    Note, however, that this requires a stronger definition of Is_well_sch. *)
+(*
 Lemma not_in_add_to_sem_held_equations:
   forall x xs eqs H H',
     ~Is_defined_in x eqs
@@ -523,73 +544,5 @@ Proof.
   now (eexists; apply Hsems).
   assumption.
 Qed.
-
-
-Lemma sem_held_equations_app2:
-  forall H H' oeqs eqs,
-    sem_held_equations H H' (oeqs ++ eqs)
-    -> sem_held_equations H H' eqs.
-Proof.
-  intros H H' oeqs eqs H0.
-  apply Forall_app in H0; intuition.
-Qed.
-
-Lemma sem_held_equations_cons:
-  forall H H' eq eqs,
-    sem_held_equations H H' (eq :: eqs)
-    <-> sem_held_equation H H' eq /\ sem_held_equations H H' eqs.
-Proof.
-  split; intro Hs.
-  apply Forall_cons2 in Hs; auto.
-  apply Forall_cons2; auto.
-Qed.
-*)
-
-(* TODO: Tidy this up... *)
-Lemma Forall_msem_equation_global_tl:
-  forall nd G H M eqs,
-    Ordered_nodes (nd::G)
-    -> (forall f, Is_node_in f eqs -> find_node f G <> None)
-    -> ~ Is_node_in nd.(n_name) eqs
-    -> List.Forall (msem_equation (nd::G) H M) eqs
-    -> List.Forall (msem_equation G H M) eqs.
-Proof.
-  intros nd G H M eqs Hord.
-  induction eqs as [|eq eqs IH]; [trivial|].
-  intros Hfind Hnini Hmsem.
-  apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
-  apply IH in Hseqs.
-  Focus 2.
-  { intros f Hini.
-    apply List.Exists_cons_tl with (x:=eq) in Hini.
-    now apply Hfind with (1:=Hini). }
-  Unfocus.
-  Focus 2.
-  { apply not_Is_node_in_cons in Hnini.
-    destruct Hnini; assumption. }
-  Unfocus.
-
-  apply List.Forall_cons with (2:=Hseqs).
-  inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst.
-  - constructor; auto.
-  - apply not_Is_node_in_cons in Hnini.
-    destruct Hnini.
-    assert (nd.(n_name) <> f).
-    intro HH.
-    apply H0.
-    rewrite HH.
-    constructor.
-    inversion_clear Hseq.
-    econstructor.
-    eexact H8.
-    eexact H9.
-    eexact H10.
-    apply msem_node_cons with (1:=Hord); assumption.
-  - econstructor.
-    eassumption.
-    reflexivity.
-    eassumption.
-    assumption.
-Qed.
-
+ *)
 

@@ -60,6 +60,7 @@ with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
     forall s x b b' n,
       sem_var H x n (present (Cbool b')) ->
       ~ (b = b') ->
+      (* Note: says nothing about 's'. *)
       sem_lexp H (Ewhen s x b) n absent.
 
 
@@ -241,4 +242,96 @@ Proof.
     apply H0.
     reflexivity.
 Qed.
+
+Lemma find_node_other:
+  forall f node G node',
+    node.(n_name) <> f
+    -> find_node f (node::G) = Some node'
+    -> find_node f G = Some node'.
+Proof.
+  intros f node G node' Hnf Hfind.
+  apply BinPos.Pos.eqb_neq in Hnf.
+  simpl in Hfind.
+  unfold ident_eqb in Hfind.
+  rewrite Hnf in Hfind.
+  exact Hfind.
+Qed.
+
+
+
+(* TODO: prove this equation together with the next one using a mutual
+         recursion scheme.
+         First we need to get this scheme !
+
+         Afterward, apply the same technique for msem_node_cons... *)
+
+Lemma sem_node_cons:
+  forall node G f xs ys,
+    Ordered_nodes (node::G)
+    -> sem_node (node::G) f xs ys
+    -> node.(n_name) <> f
+    -> sem_node G f xs ys.
+Proof.
+  intros node G f xs ys Hord Hsem Hnf.
+  inversion_clear Hsem as [? ? ? ? ? ? Hfind Hsems].
+  apply find_node_other with (1:=Hnf) in Hfind.
+  pose proof (find_node_later_not_Is_node_in _ _ _ _ Hord Hfind) as Hnini;
+    simpl in Hnini.
+  econstructor; [exact Hfind|].
+  destruct Hsems as [H [Hxs [Hys Heqs]]].
+  exists H.
+  split; [exact Hxs|].
+  split; [exact Hys|].
+  clear Hfind.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  apply Forall_cons2 in Heqs.
+  destruct Heqs as [Heq Heqs].
+  apply not_Is_node_in_cons in Hnini.
+  destruct Hnini as [Hneq Hnini].
+  constructor; [clear IH|now apply IH with (1:=Heqs) (2:=Hnini)].
+  destruct eq; inversion_clear Heq.
+  - constructor; trivial.
+  - constructor.
+    SearchAbout Ordered_nodes.
+
+    intros ls' xs' Hlae Hvar.
+    pose proof (H1 _ _ Hlae Hvar).
+(*
+    Ordered_nodes (node::G)
+    -> sem_node (node::G) f xs ys
+    -> node.(n_name) <> f
+    -> sem_node G f xs ys
+*)
+    admit.
+  - econstructor; eassumption; assumption.
+Qed.
+
+Lemma Forall_sem_equation_global_tl:
+  forall nd G H eqs,
+    Ordered_nodes (nd::G)
+    -> ~ Is_node_in nd.(n_name) eqs
+    -> List.Forall (sem_equation (nd::G) H) eqs
+    -> List.Forall (sem_equation G H) eqs.
+Proof.
+  intros nd G H eqs Hord.
+  induction eqs as [|eq eqs IH]; [trivial|].
+  intros Hnini Hsem.
+  apply Forall_cons2 in Hsem; destruct Hsem as [Hseq Hseqs].
+  apply IH in Hseqs.
+  2:(apply not_Is_node_in_cons in Hnini;
+     destruct Hnini; assumption).
+  apply List.Forall_cons with (2:=Hseqs).
+  inversion Hseq as [|H' ? ? ? Hsem HR1 HR2|]; subst.
+  - constructor; auto.
+  - apply not_Is_node_in_cons in Hnini.
+    destruct Hnini as [Hninieq Hnini].
+    assert (nd.(n_name) <> f) as Hnf
+      by (intro HH; apply Hninieq; rewrite HH; constructor).
+    econstructor.
+    intros ls xs Hlae Hvar.
+    pose proof (Hsem _ _ Hlae Hvar) as Hnode.
+    now apply sem_node_cons with (1:=Hord) (2:=Hnode) (3:=Hnf).
+  - econstructor; eassumption; assumption.
+Qed.
+
 
