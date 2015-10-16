@@ -1,3 +1,8 @@
+
+Require Import List.
+Import List.ListNotations.
+Open Scope list_scope.
+
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
@@ -119,7 +124,114 @@ with sem_node (G: global) : ident -> stream -> stream -> Prop :=
         (forall n, sem_var H i.(v_name) n (xs n))
         /\ (forall n, sem_var H o.(v_name) n (ys n))
         /\ List.Forall (sem_equation G H) eqs) ->
-        sem_node G f xs ys.
+      sem_node G f xs ys.
+
+Section sem_node_mult.
+  Variable G: global.
+
+  Variable P : forall (H: history) (eq: equation), sem_equation G H eq -> Prop.
+  Variable Pn : forall (f: ident) (xs ys: stream), sem_node G f xs ys -> Prop.
+
+  Hypothesis EqDef_case :
+    forall (H    : history)
+	   (x    : ident)
+	   (cae  : caexp)
+	   (Hvar : forall n, exists v,
+                     sem_var H x n v /\ sem_caexp H cae n v),
+      P H (EqDef x cae) (SEqDef G H x cae Hvar).
+
+  Hypothesis EqApp_case :
+    forall (H   : history)
+	   (y   : ident)
+	   (f   : ident)
+	   (lae : laexp)
+	   (Hnode : forall ls ys : stream,
+                        (forall n, sem_laexp H lae n (ls n))
+	              -> (forall n, sem_var H y n (ys n))
+	              -> sem_node G f ls ys),
+      (forall (ls ys : stream)
+              (Hls : forall n, sem_laexp H lae n (ls n))
+              (Hys : forall n, sem_var H y n (ys n)),
+          Pn f ls ys (Hnode ls ys Hls Hys)) ->
+      P H (EqApp y f lae) (SEqApp G H y f lae Hnode).
+
+  Hypothesis EqFby_case :
+    forall (H   : history)
+	   (y   : ident)
+	   (ls  : stream)
+	   (v0  : const)
+	   (lae : laexp)
+	   (Hls : forall n, sem_laexp H lae n (ls n))
+	   (Hys : forall n v, sem_var H y n v <-> fbyR v0 ls n v),
+      P H (EqFby y v0 lae) (SEqFby G H y ls v0 lae Hls Hys).
+
+  Hypothesis SNode_case :
+    forall (f   : ident)
+	   (xs  : stream)
+	   (ys  : stream)
+	   (i   : var_dec)
+	   (o   : var_dec)
+	   (eqs : list equation)
+	   (Hf  : find_node f G = Some (mk_node f i o eqs))
+           (Heqs : exists H : history,
+                        (forall n, sem_var H (v_name i) n (xs n))
+	             /\ (forall n, sem_var H (v_name o) n (ys n))
+	             /\ Forall (sem_equation G H) eqs),
+      (exists H : history,
+          (forall n, sem_var H (v_name i) n (xs n))
+          /\ (forall n, sem_var H (v_name o) n (ys n))
+          /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs)
+      -> Pn f xs ys (SNode G f xs ys i o eqs Hf Heqs).
+
+  Fixpoint sem_equation_mult (H  : history)
+			     (eq : equation)
+			     (Heq : sem_equation G H eq) {struct Heq}
+                                                                : P H eq Heq :=
+    match Heq in (sem_equation _ H eq) return (P H eq Heq) with
+    | SEqDef H y cae Hvar => EqDef_case H y cae Hvar
+    | SEqApp H y f lae Hnode =>
+      EqApp_case H y f lae Hnode
+                 (fun (ls ys : nat -> value)
+                      (Hls : forall n, sem_laexp H lae n (ls n))
+                      (Hys : forall n, sem_var H y n (ys n)) =>
+                    sem_node_mult f ls ys (Hnode ls ys Hls Hys))
+    | SEqFby H y ls v0 lae Hls Hys => EqFby_case H y ls v0 lae Hls Hys
+    end
+
+  with sem_node_mult (f  : ident)
+		     (ls : stream)
+		     (ys : stream)
+		     (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
+    match Hn in (sem_node _ f ls ys) return (Pn f ls ys Hn) with
+    | SNode f ls ys i o eqs Hf Hnode =>
+        SNode_case f ls ys i o eqs Hf Hnode
+          (* Turn: exists H : history,
+                        (forall n, sem_var H (v_name i) n (xs n))
+	             /\ (forall n, sem_var H (v_name o) n (ys n))
+	             /\ Forall (sem_equation G H) eqs
+             into: exists H : history,
+                        (forall n, sem_var H (v_name i) n (xs n))
+                     /\ (forall n, sem_var H (v_name o) n (ys n))
+                     /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs *)
+           (match Hnode with
+            | ex_intro H (conj Hxs (conj Hys Heqs)) =>
+                ex_intro _ H (conj Hxs (conj Hys
+                  (((fix map (eqs : list equation)
+                             (Heqs: Forall (sem_equation G H) eqs) :=
+                       match Heqs in Forall _ fs
+                             return (Forall (fun eq=> exists Hsem,
+                                                        P H eq Hsem) fs)
+                       with
+                       | Forall_nil => Forall_nil _
+                       | Forall_cons eq eqs Heq Heqs' =>
+                         Forall_cons eq (@ex_intro _ _ Heq
+                                           (sem_equation_mult H eq Heq))
+                                     (map eqs Heqs')
+                       end) eqs Heqs))))
+            end)
+    end.
+
+End sem_node_mult.
 
 Definition sem_nodes (G: global) : Prop :=
   List.Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
