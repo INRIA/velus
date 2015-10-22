@@ -104,11 +104,10 @@ Inductive sem_equation (G: global) : history -> equation -> Prop :=
               /\ sem_caexp H cae n v) ->
       sem_equation G H (EqDef x cae)
 | SEqApp:
-    forall H x f arg,
-      (forall ls xs,
-          (forall n, sem_laexp H arg n (ls n)) ->
-          (forall n, sem_var H x n (xs n)) ->
-          sem_node G f ls xs) ->
+    forall H x f arg ls xs,
+      (forall n, sem_laexp H arg n (ls n)) ->
+      (forall n, sem_var H x n (xs n)) ->
+      sem_node G f ls xs ->
       sem_equation G H (EqApp x f arg)
 | SEqFby:
     forall H x ls v0 lae,
@@ -141,19 +140,17 @@ Section sem_node_mult.
       P H (EqDef x cae) (SEqDef G H x cae Hvar).
 
   Hypothesis EqApp_case :
-    forall (H   : history)
-	   (y   : ident)
-	   (f   : ident)
-	   (lae : laexp)
-	   (Hnode : forall ls ys : stream,
-                        (forall n, sem_laexp H lae n (ls n))
-	              -> (forall n, sem_var H y n (ys n))
-	              -> sem_node G f ls ys),
-      (forall (ls ys : stream)
-              (Hls : forall n, sem_laexp H lae n (ls n))
-              (Hys : forall n, sem_var H y n (ys n)),
-          Pn f ls ys (Hnode ls ys Hls Hys)) ->
-      P H (EqApp y f lae) (SEqApp G H y f lae Hnode).
+    forall (H     : history)
+	   (y     : ident)
+	   (f     : ident)
+	   (lae   : laexp)
+           (ls    : stream)
+           (ys    : stream)
+	   (Hlae  : forall n, sem_laexp H lae n (ls n))
+           (Hvar  : forall n, sem_var H y n (ys n))
+	   (Hnode : sem_node G f ls ys),
+      Pn f ls ys Hnode ->
+      P H (EqApp y f lae) (SEqApp G H y f lae ls ys Hlae Hvar Hnode).
 
   Hypothesis EqFby_case :
     forall (H   : history)
@@ -189,12 +186,9 @@ Section sem_node_mult.
                                                                 : P H eq Heq :=
     match Heq in (sem_equation _ H eq) return (P H eq Heq) with
     | SEqDef H y cae Hvar => EqDef_case H y cae Hvar
-    | SEqApp H y f lae Hnode =>
-      EqApp_case H y f lae Hnode
-                 (fun (ls ys : nat -> value)
-                      (Hls : forall n, sem_laexp H lae n (ls n))
-                      (Hys : forall n, sem_var H y n (ys n)) =>
-                    sem_node_mult f ls ys (Hnode ls ys Hls Hys))
+    | SEqApp H y f lae ls ys Hlae Hvar Hnode =>
+      EqApp_case H y f lae ls ys Hlae Hvar Hnode
+                 (sem_node_mult f ls ys Hnode)
     | SEqFby H y ls v0 lae Hls Hys => EqFby_case H y ls v0 lae Hls Hys
     end
 
@@ -369,14 +363,6 @@ Proof.
   exact Hfind.
 Qed.
 
-
-
-(* TODO: prove this equation together with the next one using a mutual
-         recursion scheme.
-         First we need to get this scheme !
-
-         Afterward, apply the same technique for msem_node_cons... *)
-
 Lemma sem_node_cons:
   forall node G f xs ys,
     Ordered_nodes (node::G)
@@ -385,37 +371,30 @@ Lemma sem_node_cons:
     -> sem_node G f xs ys.
 Proof.
   intros node G f xs ys Hord Hsem Hnf.
-  inversion_clear Hsem as [? ? ? ? ? ? Hfind Hsems].
-  apply find_node_other with (1:=Hnf) in Hfind.
-  pose proof (find_node_later_not_Is_node_in _ _ _ _ Hord Hfind) as Hnini;
-    simpl in Hnini.
-  econstructor; [exact Hfind|].
-  destruct Hsems as [H [Hxs [Hys Heqs]]].
-  exists H.
-  split; [exact Hxs|].
-  split; [exact Hys|].
-  clear Hfind.
-  induction eqs as [|eq eqs IH]; [now constructor|].
-  apply Forall_cons2 in Heqs.
-  destruct Heqs as [Heq Heqs].
-  apply not_Is_node_in_cons in Hnini.
-  destruct Hnini as [Hneq Hnini].
-  constructor; [clear IH|now apply IH with (1:=Heqs) (2:=Hnini)].
-  destruct eq; inversion_clear Heq.
-  - constructor; trivial.
-  - constructor.
-    SearchAbout Ordered_nodes.
-
-    intros ls' xs' Hlae Hvar.
-    pose proof (H1 _ _ Hlae Hvar).
-(*
-    Ordered_nodes (node::G)
-    -> sem_node (node::G) f xs ys
-    -> node.(n_name) <> f
-    -> sem_node G f xs ys
-*)
-    admit.
-  - econstructor; eassumption; assumption.
+  revert Hnf.
+  induction Hsem as [|H y f lae ls ys Hlae Hvar Hnode IH| |
+                      f xs ys i o eqs Hf Heqs IH]
+  using sem_node_mult
+  with (P := fun H eq Hsem => ~Is_node_in_eq node.(n_name) eq
+                              -> sem_equation G H eq).
+  - constructor; intuition.
+  - intro Hnin.
+    apply SEqApp with (1:=Hlae) (2:=Hvar).
+    apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
+  - intro; apply SEqFby with (1:=Hls) (2:=Hys).
+  - intro.
+    rewrite find_node_tl with (1:=Hnf) in Hf.
+    apply SNode with (1:=Hf).
+    clear Heqs.
+    destruct IH as [H [Hxs [Hys Heqs]]].
+    exists H.
+    intuition.
+    apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
+    apply Is_node_in_Forall in Hord.
+    apply Forall_Forall with (1:=Hord) in Heqs.
+    apply Forall_impl with (2:=Heqs).
+    destruct 1 as [Hnini [Hsem HH]].
+    intuition.
 Qed.
 
 Lemma Forall_sem_equation_global_tl:
@@ -433,15 +412,13 @@ Proof.
   2:(apply not_Is_node_in_cons in Hnini;
      destruct Hnini; assumption).
   apply List.Forall_cons with (2:=Hseqs).
-  inversion Hseq as [|H' ? ? ? Hsem HR1 HR2|]; subst.
+  inversion Hseq as [|? ? ? ? ? ? Hsem Hvar Hnode|]; subst.
   - constructor; auto.
   - apply not_Is_node_in_cons in Hnini.
     destruct Hnini as [Hninieq Hnini].
     assert (nd.(n_name) <> f) as Hnf
       by (intro HH; apply Hninieq; rewrite HH; constructor).
-    econstructor.
-    intros ls xs Hlae Hvar.
-    pose proof (Hsem _ _ Hlae Hvar) as Hnode.
+    econstructor. exact Hsem. exact Hvar.
     now apply sem_node_cons with (1:=Hord) (2:=Hnode) (3:=Hnf).
   - econstructor; eassumption; assumption.
 Qed.

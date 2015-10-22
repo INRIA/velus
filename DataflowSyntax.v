@@ -903,6 +903,22 @@ Proof.
   - destruct HH; inversion_clear 1; intuition.
 Qed.
 
+Lemma Is_node_in_Forall:
+  forall n eqs,
+    ~Is_node_in n eqs <-> List.Forall (fun eq=>~Is_node_in_eq n eq) eqs.
+Proof.
+  induction eqs as [|eq eqs IH];
+    [split; [now constructor|now inversion 2]|].
+  split; intro HH.
+  - apply not_Is_node_in_cons in HH.
+    destruct HH as [Heq Heqs].
+    constructor; [exact Heq|apply IH with (1:=Heqs)].
+  - apply not_Is_node_in_cons.
+    inversion_clear HH as [|? ? Heq Heqs].
+    apply IH in Heqs.
+    intuition.
+Qed.
+
 Lemma Ordered_nodes_append:
   forall G G',
     Ordered_nodes (G ++ G')
@@ -1036,4 +1052,5 @@ Proof.
   - intros fnode Hfnode.
     apply IH with (1:=Hfnode).
 Qed.
+
 

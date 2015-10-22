@@ -67,6 +67,7 @@ Proof.
   contradiction.
 Qed.
 
+Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
@@ -94,7 +95,7 @@ Qed.
 
 Lemma Forall_app:
   forall A (P: A -> Prop) ll rr,
-    List.Forall P (ll ++ rr) <-> (List.Forall P ll /\ List.Forall P rr).
+    Forall P (ll ++ rr) <-> (Forall P ll /\ Forall P rr).
 Proof.
   intros A P ll rr.
   induction ll as [|x ll IH]; [intuition|].
@@ -103,6 +104,17 @@ Proof.
   rewrite <-IH.
   rewrite <-List.app_comm_cons.
   now rewrite Forall_cons2.
+Qed.
+
+Lemma Forall_Forall:
+  forall A P Q (xs : list A),
+    Forall P xs -> Forall Q xs -> Forall (fun x=>P x /\ Q x) xs.
+Proof.
+  induction xs as [|x xs IH]; [now constructor|].
+  intros HPs HQs.
+  inversion_clear HPs as [|? ? HP HPs'].
+  inversion_clear HQs as [|? ? HQ HQs'].
+  intuition.
 Qed.
 
 
