@@ -226,20 +226,6 @@ End msem_node_mult.
    will not have an m-semantics if it violates the constraint.
  *)
 
-(* TODO: conduct a proper induction principle for msem_node... *)
-
-
-(* TODO: Warning: Ignoring recursive call
-         We must write these induction principles manually. *)
-(*
-Scheme msem_equation_mult := Induction for msem_equation Sort Prop
-with msem_node_mult := Induction for msem_node Sort Prop.
-
-(* TODO: move to DataflowNatSemantics.v *)
-Scheme sem_equation_mult := Induction for sem_equation Sort Prop
-with sem_node_mult := Induction for sem_node Sort Prop.
-*)
-
 Inductive Mem_unchanged (n: nat) : memory -> Prop :=
 | MUn:
     forall menv,
@@ -250,11 +236,49 @@ Inductive Mem_unchanged (n: nat) : memory -> Prop :=
           -> Mem_unchanged n omenv) ->
       Mem_unchanged n menv.
 
+(*
+Inductive Memory_unchanged (G: global) (n: nat) : ident -> memory -> Prop :=
+| MemC:
+    forall f M i o eqs,
+      find_node f G = Some(mk_node f i o eqs)
+      -> List.Forall (Memory_Unchanged_eq G n M) eqs
+      -> Memory_unchanged G n f M menv
+
+with Memory_Corres_eq (G: global) (n: nat) :
+       memory -> memoryEnv -> equation -> Prop :=
+| MemC_EqDef:
+    forall M menv x cae,
+      Memory_Corres_eq G n M menv (EqDef x cae)
+| MemC_EqApp:
+    forall M menv x f lae,
+      (forall Mo omenv, mfind_inst x M = Some Mo
+                        -> find_obj x menv = Some omenv
+                        -> Memory_Corres G n f Mo omenv)
+      -> Memory_Corres_eq G n M menv (EqApp x f lae)
+| MemC_EqFby:
+    forall M menv x v0 lae,
+      (forall ms, mfind_mem x M = Some ms
+                  -> find_mem x menv = Some (ms n))
+      -> Memory_Corres_eq G n M menv (EqFby x v0 lae).
+*)
+
+
 Lemma absent_invariant:
   forall G f xs M ys n,
     msem_node G f xs M ys
     -> xs n = absent
     -> Mem_unchanged n M.
+Proof.
+  (*
+  inversion_clear 1.
+
+
+  intros G f xs M ys n Hmsem.
+  induction Hmsem
+  using msem_node_mult
+  with (P := fun H M eq Heq => True).
+  Show 4.
+*)
 Admitted.
 
 Definition msem_nodes (G: global) : Prop :=
@@ -267,7 +291,34 @@ Lemma msem_node_cons:
     -> node.(n_name) <> f
     -> msem_node G f xs M ys.
 Proof.
-Admitted.   (* TODO: Show this! *)
+  intros node G f xs M ys Hord Hsem Hnf.
+  revert Hnf.
+  induction Hsem as [|H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH| |
+                      f xs M ys i o eqs Hf Heqs IH]
+  using msem_node_mult
+  with (P := fun H M eq Hsem => ~Is_node_in_eq node.(n_name) eq
+                                -> msem_equation G H M eq).
+  - constructor; intuition.
+  - intro Hnin.
+    eapply SEqApp with (1:=Hmfind) (2:=Hls) (3:=Hys).
+    apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
+  - intro; eapply SEqFby with (1:=Hmfind) (2:=Hms0) (3:=Hls) (4:=Hy).
+  - intro.
+    rewrite find_node_tl with (1:=Hnf) in Hf.
+    apply SNode with (1:=Hf).
+    clear Heqs.
+    destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+    exists H.
+    split; [exact Hxs|].
+    split; [exact Hys|].
+    split; [exact Habs|].
+    apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
+    apply Is_node_in_Forall in Hord.
+    apply Forall_Forall with (1:=Hord) in Heqs.
+    apply Forall_impl with (2:=Heqs).
+    destruct 1 as [Hnini [Hsem HH]].
+    intuition.
+Qed.
 
 Lemma find_node_msem_node:
   forall G f,
