@@ -1,4 +1,3 @@
-
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -898,7 +897,7 @@ Proof.
     econstructor; [now apply Hfindn|].
 
     inversion Hwdef as [|? ? Hwdef' neqs ni no
-                           Hwsch Hindi Hoivi Hnini Hfnone Hnname [HR1 HR2]].
+                         Hwsch Hindi Hoivi Hnini Hndups Hfnone Hnname [HR1 HR2]].
     unfold neqs,ni,no in *; clear neqs ni no HR1 HR2.
     simpl in *.
     clear Hfindn.
@@ -913,7 +912,7 @@ Proof.
       clear HR1 HR2 HR3 Hfindn.
     apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini) in Hmceqs.
 
-    clear Hwdef Hwsch Hindi Hoivi Hnini Hord.
+    clear Hwdef Hwsch Hindi Hoivi Hnini Hord Hndups.
     induction eqs as [|eq eqs IH]; [now constructor|].
     apply Forall_cons2 in Hmceqs.
     destruct Hmceqs as [Hmceq Hmceqs].
@@ -1663,7 +1662,8 @@ Proof.
   specialize Hi with n.
   specialize Ho with n.
 
-  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2 Hout Hnode Hnd Hfind].
+  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2
+                           Hout Hnode Hndups Hnd Hfind].
   rename Hwd' into Hwd.
   simpl in *.
   unfold neqs, ni, no in *; clear neqs ni no.
@@ -1877,7 +1877,8 @@ Proof.
       assert (Is_node_in g (eq::eqs)) as Hgini'.
       constructor 2; exact Hgini.
       now apply Hnin with (1:=Hgini'). }
-    pose proof (IHeqs Hmsems Hnin' (Is_well_sch_cons _ _ _ Hwsch) _ _ Hevals)
+    pose proof (IHeqs Hmsems Hnin' Hnneq
+                      (Is_well_sch_cons _ _ _ Hwsch) _ _ Hevals)
       as Hmc.
     clear IHeqs Hnin' Hmsems Hevals.
 
@@ -1963,7 +1964,7 @@ Lemma is_translate_correct:
 Proof.
   intros until env.
   intros Hwdef Hsem Hxs Heval.
-  apply sem_msem_node in Hsem.
+  apply sem_msem_node with (1:=Hwdef) in Hsem.
   destruct Hsem as [M Hsem].
   inversion_clear Heval
     as [| | | |? ? ? ? ? env0 menv0 ? ? Hevalr Hevals| | | | |].

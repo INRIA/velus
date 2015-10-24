@@ -468,6 +468,7 @@ Inductive Welldef_global : list node -> Prop :=
       -> ~Is_defined_in ni eqs
       -> Is_variable_in no eqs
       -> ~Is_node_in nd.(n_name) eqs
+      -> no_dup_defs eqs (* see DataflowNatMSemantics: sem_msem_eq *)
       -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
       -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
       -> Welldef_global (nd::nds).

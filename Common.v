@@ -20,6 +20,18 @@ Proof.
   unfold ident_eqb; apply Pos.eqb_neq.
 Qed.
 
+Lemma ident_eqb_eq:
+  forall x y, ident_eqb x y = true <-> x = y.
+Proof.
+  unfold ident_eqb; apply Pos.eqb_eq.
+Qed.
+
+Lemma ident_eqb_refl:
+  forall f, ident_eqb f f = true.
+Proof.
+  unfold ident_eqb; apply Pos.eqb_refl.
+Qed.
+
 Lemma In_dec:
   forall x S, {PS.In x S}+{~PS.In x S}.
 Proof.
@@ -106,6 +118,18 @@ Proof.
   now rewrite Forall_cons2.
 Qed.
 
+Lemma Exists_app:
+  forall A (P: A -> Prop) ll rr,
+    Exists P rr
+    -> Exists P (ll ++ rr).
+Proof.
+  intros A P ll rr Hex.
+  induction ll as [|x ll IH]; [intuition|].
+  rewrite <-List.app_comm_cons.
+  constructor 2.
+  exact IH.
+Qed.
+
 Lemma Forall_Forall:
   forall A P Q (xs : list A),
     Forall P xs -> Forall Q xs -> Forall (fun x=>P x /\ Q x) xs.
@@ -116,5 +140,18 @@ Proof.
   inversion_clear HQs as [|? ? HQ HQs'].
   intuition.
 Qed.
+
+Lemma Forall_Exists:
+  forall A (P Q: A -> Prop) xs,
+    Forall P xs
+    -> Exists Q xs
+    -> Exists (fun x=>P x /\ Q x) xs.
+Proof.
+  induction xs as [|x xs IH]; [now inversion 2|].
+  intros Ha He.
+  inversion_clear Ha.
+  inversion_clear He; auto.
+Qed.
+
 
 

@@ -122,7 +122,7 @@ with sem_node (G: global) : ident -> stream -> stream -> Prop :=
       (exists (H: history),
         (forall n, sem_var H i.(v_name) n (xs n))
         /\ (forall n, sem_var H o.(v_name) n (ys n))
-        /\ List.Forall (sem_equation G H) eqs) ->
+        /\ Forall (sem_equation G H) eqs) ->
       sem_node G f xs ys.
 
 Section sem_node_mult.
@@ -228,7 +228,7 @@ Section sem_node_mult.
 End sem_node_mult.
 
 Definition sem_nodes (G: global) : Prop :=
-  List.Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
+  Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
 
 Lemma sem_var_det:
   forall H x n v1 v2,
@@ -352,15 +352,15 @@ Qed.
 Lemma find_node_other:
   forall f node G node',
     node.(n_name) <> f
-    -> find_node f (node::G) = Some node'
-    -> find_node f G = Some node'.
+    -> (find_node f (node::G) = Some node'
+        <-> find_node f G = Some node').
 Proof.
-  intros f node G node' Hnf Hfind.
+  intros f node G node' Hnf.
   apply BinPos.Pos.eqb_neq in Hnf.
-  simpl in Hfind.
-  unfold ident_eqb in Hfind.
-  rewrite Hnf in Hfind.
-  exact Hfind.
+  simpl.
+  unfold ident_eqb.
+  rewrite Hnf.
+  reflexivity.
 Qed.
 
 Lemma sem_node_cons:
@@ -397,12 +397,102 @@ Proof.
     intuition.
 Qed.
 
+Lemma find_node_find_again:
+  forall G f i o eqs g,
+    Ordered_nodes G
+    -> find_node f G =
+       Some {| n_name := f; n_input := i; n_output := o; n_eqs := eqs |}
+    -> Is_node_in g eqs
+    -> Exists (fun nd=> g = nd.(n_name)) G.
+Proof.
+  intros G f i o eqs g Hord Hfind Hini.
+  apply find_node_split in Hfind.
+  destruct Hfind as [bG [aG Hfind]].
+  rewrite Hfind in *.
+  clear Hfind.
+  apply Ordered_nodes_append in Hord.
+  apply Exists_app.
+  constructor 2.
+  inversion_clear Hord as [|? ? ? HH H0]; clear H0.
+  apply HH in Hini; clear HH.
+  intuition.
+Qed.
+
+Lemma sem_node_cons2:
+  forall nd G f xs ys,
+    Ordered_nodes G
+    -> sem_node G f xs ys
+    -> Forall (fun nd' : node => n_name nd <> n_name nd') G
+    -> sem_node (nd::G) f xs ys.
+Proof.
+  Hint Constructors sem_equation.
+  intros nd G f xs ys Hord Hsem Hnin.
+  assert (Hnin':=Hnin).
+  revert Hnin'.
+  induction Hsem as [|H y f lae ls ys Hlae Hvar Hnode IH| |
+                      f xs ys i o eqs Hfind Heqs IH]
+  using sem_node_mult
+  with (P := fun H eq Hsem => ~Is_node_in_eq nd.(n_name) eq
+                              -> sem_equation (nd::G) H eq);
+    try eauto; intro HH.
+  clear HH.
+  assert (nd.(n_name) <> f) as Hnf.
+  { intro Hnf.
+    rewrite Hnf in *.
+    apply find_node_split in Hfind.
+    destruct Hfind as [bG [aG Hge]].
+    rewrite Hge in Hnin.
+    apply Forall_app in Hnin.
+    destruct Hnin as [H0 Hfg]; clear H0.
+    inversion_clear Hfg.
+    match goal with H:f<>_ |- False => apply H end.
+    reflexivity. }
+  apply find_node_other with (2:=Hfind) in Hnf.
+  econstructor; [exact Hnf|clear Hnf].
+  clear Heqs.
+  destruct IH as [H [Hxs [Hys Heqs]]].
+  exists H.
+  intuition; clear Hxs Hys.
+  assert (forall g, Is_node_in g eqs
+                    -> Exists (fun nd=> g = nd.(n_name)) G)
+    as Hniex
+    by (intros g Hini;
+        apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
+        exact Hini).
+  assert (Forall
+            (fun eq=> forall g,
+                 Is_node_in_eq g eq
+                 -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
+  {
+    clear Hfind Heqs.
+    induction eqs as [|eq eqs IH]; [now constructor|].
+    constructor.
+    - intros g Hini.
+      apply Hniex.
+      constructor 1; apply Hini.
+    - apply IH.
+      intros g Hini; apply Hniex.
+      constructor 2; apply Hini.
+  }
+  apply Forall_Forall with (1:=HH) in Heqs.
+  apply Forall_impl with (2:=Heqs).
+  intros eq IH.
+  destruct IH as [Hsem [IH0 IH1]].
+  apply IH1.
+  intro Hini.
+  apply Hsem in Hini.
+  apply Forall_Exists with (1:=Hnin) in Hini.
+  apply Exists_exists in Hini.
+  destruct Hini as [nd' [Hin [Hneq Heq]]].
+  intuition.
+Qed.
+
 Lemma Forall_sem_equation_global_tl:
   forall nd G H eqs,
     Ordered_nodes (nd::G)
     -> ~ Is_node_in nd.(n_name) eqs
-    -> List.Forall (sem_equation (nd::G) H) eqs
-    -> List.Forall (sem_equation G H) eqs.
+    -> Forall (sem_equation (nd::G) H) eqs
+    -> Forall (sem_equation G H) eqs.
 Proof.
   intros nd G H eqs Hord.
   induction eqs as [|eq eqs IH]; [trivial|].
@@ -411,7 +501,7 @@ Proof.
   apply IH in Hseqs.
   2:(apply not_Is_node_in_cons in Hnini;
      destruct Hnini; assumption).
-  apply List.Forall_cons with (2:=Hseqs).
+  apply Forall_cons with (2:=Hseqs).
   inversion Hseq as [|? ? ? ? ? ? Hsem Hvar Hnode|]; subst.
   - constructor; auto.
   - apply not_Is_node_in_cons in Hnini.

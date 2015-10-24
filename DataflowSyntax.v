@@ -1016,7 +1016,7 @@ Qed.
 Lemma find_node_later_not_Is_node_in:
   forall f nd G nd',
     Ordered_nodes (nd::G)
-    -> find_node f (G) = Some nd'
+    -> find_node f G = Some nd'
     -> ~Is_node_in nd.(n_name) nd'.(n_eqs).
 Proof.
   intros f nd G nd' Hord Hfind Hini.
@@ -1036,6 +1036,24 @@ Proof.
   rewrite List.Forall_forall in HH'.
   apply HH' in HaG.
   contradiction.
+Qed.
+
+Lemma find_node_not_Is_node_in:
+  forall f nd G,
+    Ordered_nodes G
+    -> find_node f G = Some nd
+    -> ~Is_node_in nd.(n_name) nd.(n_eqs).
+Proof.
+  intros f nd G Hord Hfind.
+  apply find_node_split in Hfind.
+  destruct Hfind as [bG [aG HG]].
+  rewrite HG in Hord.
+  apply Ordered_nodes_append in Hord.
+  inversion_clear Hord as [|? ? Hord' Heqs Hnin].
+  intro Hini.
+  apply Heqs in Hini.
+  destruct Hini as [HH H0]; clear H0.
+  apply HH; reflexivity.
 Qed.
 
 Lemma find_node_name:

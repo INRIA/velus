@@ -7,6 +7,7 @@ Require Import Rustre.Common.
 Require Import Rustre.DataflowSyntax.
 Require Import SynchronousNat.
 Require Import DataflowNatSemantics.
+Require Import WellFormed.
 
 (*
    NB: The history H is not really necessary here. We could just as well
@@ -31,8 +32,58 @@ Inductive memory : Set := mk_memory {
   mm_instances : PM.t memory
 }.
 
+Definition empty_memory : memory :=
+  {| mm_values := PM.empty (nat -> const);
+     mm_instances := PM.empty memory |}.
+
 Definition mfind_mem x menv := PM.find x menv.(mm_values).
 Definition mfind_inst x menv := PM.find x menv.(mm_instances).
+
+Definition madd_mem (id: ident) (v: nat -> const) (M: memory) : memory :=
+  mk_memory (PM.add id v M.(mm_values))
+            M.(mm_instances).
+
+Definition madd_obj (id: ident) (M': memory) (M: memory) : memory :=
+  mk_memory M.(mm_values)
+            (PM.add id M' M.(mm_instances)).
+
+Lemma mfind_mem_gss:
+  forall x v M,
+    mfind_mem x (madd_mem x v M) = Some v.
+Proof.
+  intros x v M.
+  unfold mfind_mem, madd_mem.
+  now apply PM.gss.
+Qed.
+
+Lemma mfind_mem_gso:
+  forall x y v M,
+    x <> y
+    -> mfind_mem x (madd_mem y v M) = mfind_mem x M.
+Proof.
+  intros x y v M.
+  unfold mfind_mem, madd_mem.
+  now apply PM.gso.
+Qed.
+
+Lemma mfind_inst_gss:
+  forall x v M,
+    mfind_inst x (madd_obj x v M) = Some v.
+Proof.
+  intros x v M.
+  unfold mfind_inst, madd_obj.
+  now apply PM.gss.
+Qed.
+
+Lemma mfind_inst_gso:
+  forall x y v M,
+    x <> y
+    -> mfind_inst x (madd_obj y v M) = mfind_inst x M.
+Proof.
+  intros x y v M.
+  unfold mfind_inst, madd_obj.
+  now apply PM.gso.
+Qed.
 
 Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
 | SEqDef:
@@ -71,7 +122,7 @@ with msem_node (G: global) : ident -> stream -> memory -> stream -> Prop :=
         /\ (forall n y, xs n = absent ->
                         Is_defined_in y eqs ->
                         sem_var H y n absent)
-        /\ List.Forall (msem_equation G H M) eqs) ->
+        /\ Forall (msem_equation G H M) eqs) ->
       msem_node G f xs M ys.
 
 Section msem_node_mult.
@@ -241,7 +292,7 @@ Inductive Memory_unchanged (G: global) (n: nat) : ident -> memory -> Prop :=
 | MemC:
     forall f M i o eqs,
       find_node f G = Some(mk_node f i o eqs)
-      -> List.Forall (Memory_Unchanged_eq G n M) eqs
+      -> Forall (Memory_Unchanged_eq G n M) eqs
       -> Memory_unchanged G n f M menv
 
 with Memory_Corres_eq (G: global) (n: nat) :
@@ -282,7 +333,14 @@ Proof.
 Admitted.
 
 Definition msem_nodes (G: global) : Prop :=
-  List.Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
+  Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
+
+(* Instead of repeating all these cons lemmas (i.e., copying and pasting them),
+   and dealing with similar obligations multiple times in translation_correct,
+   maybe it would be better to bake Ordered_nodes into msem_node and to make
+   it like Miniimp, i.e.,
+      find_node f G = Some (nd, G') and msem_node G' nd xs ys ?
+   TODO: try this when the other elements are stabilised. *)
 
 Lemma msem_node_cons:
   forall node G f xs M ys,
@@ -320,6 +378,102 @@ Proof.
     intuition.
 Qed.
 
+Lemma msem_node_cons2:
+  forall nd G f xs M ys,
+    Ordered_nodes G
+    -> msem_node G f xs M ys
+    -> Forall (fun nd' : node => n_name nd <> n_name nd') G
+    -> msem_node (nd::G) f xs M ys.
+Proof.
+  Hint Constructors msem_equation.
+  intros nd G f xs M ys Hord Hsem Hnin.
+  assert (Hnin':=Hnin).
+  revert Hnin'.
+  induction Hsem as [|H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH| |
+                      f xs M ys i o eqs Hfind Heqs IH]
+  using msem_node_mult
+  with (P := fun H M eq Hsem => ~Is_node_in_eq nd.(n_name) eq
+                                -> msem_equation (nd::G) H M eq);
+    try eauto; intro HH.
+  clear HH.
+  assert (nd.(n_name) <> f) as Hnf.
+  { intro Hnf.
+    rewrite Hnf in *.
+    apply find_node_split in Hfind.
+    destruct Hfind as [bG [aG Hge]].
+    rewrite Hge in Hnin.
+    apply Forall_app in Hnin.
+    destruct Hnin as [H0 Hfg]; clear H0.
+    inversion_clear Hfg.
+    match goal with H:f<>_ |- False => apply H end.
+    reflexivity. }
+  apply find_node_other with (2:=Hfind) in Hnf.
+  econstructor; [exact Hnf|clear Hnf].
+  clear Heqs.
+  destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+  exists H.
+  intuition; clear Hxs Hys.
+  assert (forall g, Is_node_in g eqs
+                    -> Exists (fun nd=> g = nd.(n_name)) G)
+    as Hniex
+    by (intros g Hini;
+        apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
+        exact Hini).
+  assert (Forall
+            (fun eq=> forall g,
+                 Is_node_in_eq g eq
+                 -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
+  {
+    clear Hfind Heqs Habs.
+    induction eqs as [|eq eqs IH]; [now constructor|].
+    constructor.
+    - intros g Hini.
+      apply Hniex.
+      constructor 1; apply Hini.
+    - apply IH.
+      intros g Hini; apply Hniex.
+      constructor 2; apply Hini.
+  }
+  apply Forall_Forall with (1:=HH) in Heqs.
+  apply Forall_impl with (2:=Heqs).
+  intros eq IH.
+  destruct IH as [Hsem [IH0 IH1]].
+  apply IH1.
+  intro Hini.
+  apply Hsem in Hini.
+  apply Forall_Exists with (1:=Hnin) in Hini.
+  apply Exists_exists in Hini.
+  destruct Hini as [nd' [Hin [Hneq Heq]]].
+  intuition.
+Qed.
+
+Lemma msem_equation_cons2:
+  forall G H M eqs nd,
+    Ordered_nodes (nd::G)
+    -> Forall (msem_equation G H M) eqs
+    -> ~Is_node_in nd.(n_name) eqs
+    -> Forall (msem_equation (nd::G) H M) eqs.
+Proof.
+  Hint Constructors msem_equation.
+  intros G H M eqs nd Hord Hsem Hnini.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  apply Forall_cons2 in Hsem.
+  destruct Hsem as [Heq Heqs].
+  apply not_Is_node_in_cons in Hnini.
+  destruct Hnini as [Hnini Hninis].
+  apply IH with (2:=Hninis) in Heqs.
+  constructor; [|now apply Heqs].
+  destruct Heq as [|? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
+  econstructor.
+  - exact Hmfind.
+  - exact Hls.
+  - exact Hxs.
+  - SearchAbout msem_node (_::_).
+    inversion_clear Hord as [|? ? Hord' Hnn Hnns].
+    apply msem_node_cons2 with (1:=Hord') (3:=Hnns).
+    apply Hmsem.
+Qed.
+
 Lemma find_node_msem_node:
   forall G f,
     msem_nodes G
@@ -331,7 +485,7 @@ Proof.
   apply List.Exists_exists in Hfind.
   destruct Hfind as [nd [Hin Hf]].
   unfold msem_nodes in Hnds.
-  rewrite List.Forall_forall in Hnds.
+  rewrite Forall_forall in Hnds.
   apply Hnds in Hin.
   destruct Hin as [xs [M [ys Hmsem]]].
   exists xs; exists M; exists ys.
@@ -345,8 +499,8 @@ Lemma Forall_msem_equation_global_tl:
     Ordered_nodes (nd::G)
     -> (forall f, Is_node_in f eqs -> find_node f G <> None)
     -> ~ Is_node_in nd.(n_name) eqs
-    -> List.Forall (msem_equation (nd::G) H M) eqs
-    -> List.Forall (msem_equation G H M) eqs.
+    -> Forall (msem_equation (nd::G) H M) eqs
+    -> Forall (msem_equation G H M) eqs.
 Proof.
   intros nd G H M eqs Hord.
   induction eqs as [|eq eqs IH]; [trivial|].
@@ -363,7 +517,7 @@ Proof.
     destruct Hnini; assumption. }
   Unfocus.
 
-  apply List.Forall_cons with (2:=Hseqs).
+  apply Forall_cons with (2:=Hseqs).
   inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst.
   - constructor; auto.
   - apply not_Is_node_in_cons in Hnini.
@@ -405,339 +559,202 @@ Inductive sem_held_equation (H: history) (H': history) : equation -> Prop :=
 
 Definition sem_held_equations
            (H: history) (H': history) (eqs: list equation) : Prop :=
-  List.Forall (sem_held_equation H H') eqs.
+  Forall (sem_held_equation H H') eqs.
 
  *)
 
-Section StreamExecution.
+Lemma msem_equation_madd_mem:
+  forall G H M x ms eqs,
+    ~Is_defined_in x eqs
+    -> Forall (msem_equation G H M) eqs
+    -> Forall (msem_equation G H (madd_mem x ms M)) eqs.
+Proof.
+  Hint Constructors msem_equation.
+  intros G H M x ms eqs Hnd Hsem.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  apply not_Is_defined_in_cons in Hnd.
+  destruct Hnd as [Hnd Hnds].
+  apply Forall_cons2 in Hsem.
+  destruct Hsem as [Hsem Hsems].
+  constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
+  destruct Hsem as [| |? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar]; try now eauto.
+  apply not_Is_defined_in_eq_EqFby in Hnd.
+  econstructor.
+  - apply not_eq_sym in Hnd.
+    erewrite mfind_mem_gso with (1:=Hnd).
+    exact Hmfind.
+  - exact Hms0.
+  - exact Hlae.
+  - exact Hvar.
+Qed.
 
-  Variable H: history.
-  Variable arbitrary : stream.
+Lemma msem_equation_madd_obj:
+  forall G H M M' x eqs,
+    ~Is_defined_in x eqs
+    -> Forall (msem_equation G H M) eqs
+    -> Forall (msem_equation G H (madd_obj x M' M)) eqs.
+Proof.
+  Hint Constructors msem_equation.
+  intros G H M M' x eqs Hnd Hsem.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  apply not_Is_defined_in_cons in Hnd.
+  destruct Hnd as [Hnd Hnds].
+  apply Forall_cons2 in Hsem.
+  destruct Hsem as [Hsem Hsems].
+  constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
+  destruct Hsem as [|? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
+  apply not_Is_defined_in_eq_EqApp in Hnd.
+  econstructor.
+  - apply not_eq_sym in Hnd.
+    erewrite mfind_inst_gso with (1:=Hnd).
+    exact Hmfind.
+  - exact Hls.
+  - exact Hxs.
+  - exact Hmsem.
+Qed.
 
-  Definition const_eqb (c1: const) (c2: const) : bool :=
-    match (c1, c2) with
-    | (Cint z1, Cint z2) => BinInt.Z.eqb z1 z2
-    | (Cbool b1, Cbool b2) => Bool.eqb b1 b2
-    | _ => false
-    end.
+(*
+   - The no_dup_defs hypothesis is essential for the EqApp case.
 
-  Definition value_eqb (v1: value) (v2: value) : bool :=
-    match (v1, v2) with
-    | (present c1, present c2) => const_eqb c1 c2
-    | (absent, absent) => true
-    | _ => false
-    end.
+     If the set of equations contains two EqApp's to the same variable:
+        eq::eqs = [ EqApp x f lae; ...; EqApp x g lae' ]
 
-  Fixpoint str_clock (ck: clock) (n: nat) : bool :=
-    match ck with
-    | Cbase => true
-    | Con ck' x c => match PM.find x H with
-                     | None => false
-                     | Some xs => andb (str_clock ck' n)
-                                       (value_eqb (xs n) (present (Cbool c)))
-                     end
-    end.
+     Then it is possible to have a coherent H, namely if
+        f(lae) = g(lae')
 
-  Fixpoint str_lexp (e: lexp) (n: nat) : value :=
-    match e with
-    | Econst c => present c
-    | Evar x => match PM.find x H with
-                | Some xs => xs n
-                | None => absent
-                end
-    | Ewhen e' x c => match PM.find x H with
-                      | Some xs => match xs n with
-                                   | present (Cbool b) =>
-                                     if Bool.eqb b c
-                                     then str_laexp e' n
-                                     else absent
-                                   | _ => absent
-                                   end
-                      | None => absent
-                      end
-    end
-  with str_laexp (e: laexp) (n: nat) : value :=
-    match e with
-    | LAexp ck e => if str_clock ck n then str_lexp e n else absent
-    end.
+     But nothing forces the 'memory streams' (internal memories) of
+     f(lae) and g(lae') to be the same. This is problematic since they are
+     both 'stored' at M x...
 
-  Lemma str_clock_spec:
-    forall ck n c,
-      sem_clock H ck n c
-      -> str_clock ck n = c.
-  Proof.
-    induction ck.
-    inversion 1; intuition.
-    intros n c.
-    inversion_clear 1;
-      repeat progress (simpl;
-         match goal with
-         | H:sem_var _ _ _ _ |- _ => inversion_clear H
-         | H: PM.find _ _ = _ |- _ => rewrite H
-         | H: _ = present (Cbool ?b) |- _ => (rewrite H; destruct b)
-         | H: sem_clock _ _ _ _ |- _ => (apply IHck in H; rewrite H)
-         | H: b <> _ |- _ => (apply Bool.not_true_is_false in H
-                              || apply Bool.not_false_is_true in H;
-                              rewrite H)
-         | _ => (cbv; reflexivity)
-         end).
-    destruct (PM.find i H); cbv; reflexivity.
-  Qed.
+   - The no_dup_defs hypothesis is not essential for the EqFby case.
 
-  Lemma str_lexp_spec:
-    forall e n v,
-      sem_lexp H e n v
-      -> str_lexp e n = v.
-  Proof.
-    induction e using lexp_mult
-    with (P:=fun e => forall n v, sem_laexp H e n v -> str_laexp e n = v);
-    inversion 1;
-    repeat progress (simpl;
-           match goal with
-           | H:sem_lexp _ _ _ _ |- _ => (apply IHe in H; rewrite H)
-           | H:sem_laexp _ _ _ _ |- _ => (apply IHe in H; rewrite H)
-           | H:sem_clock _ _ _ _ |- _ => (apply str_clock_spec in H; rewrite H)
-           | H:sem_var _ _ _ _ |- _ => (inversion_clear H as [xs Hfind Hxsn];
-                                        rewrite Hfind; rewrite Hxsn)
-           | |- (if Bool.eqb ?b1 ?b2 then _ else _) = _ =>
-             try destruct b1; try destruct b2; simpl; intuition
-           | _ => intuition
-           end).
-  Qed.
+     If the set of equations contains two EqFby's to for the same variable:
+        eq::eqs = [ EqFby x v0 lae; ...; EqFby x v0' lae'; ... ]
 
-  Lemma str_laexp_spec:
-    forall e n v,
-      sem_laexp H e n v
-      -> str_laexp e n = v.
-  Proof.
-    inversion_clear 1; simpl;
-    repeat progress
-           match goal with
-           | H:sem_clock _ _ _ _ |- _ => (apply str_clock_spec in H; rewrite H)
-           | H:sem_lexp _ _ _ _ |- _ => (apply str_lexp_spec in H; rewrite H)
-           | _ => intuition
-           end.
-  Qed.
+     then the 'memory streams' associated with each, ms and ms', must be
+     identical since if (Forall (sem_equation G H) (eq::eqs)) exists then
+     then the H forces the coherence between 'both' x's, and necessarily also
+     between v0 and v0', and lae and lae'.
 
-End StreamExecution.
+     That said, proving this result is harder than just assuming something
+     that should be true anyway: that there are no duplicate definitions in
+     eqs.
 
-(* TODO:
-    show that:
-       sem_node G f xs ys
-       <->
-       (exists ms, msem_node G f xs ms ys)
+   Note that the no_dup_defs hypothesis requires a stronger definition of
+   either Is_well_sch or Welldef_global.
+*)
+Lemma sem_msem_eq:
+  forall G H eqs M eq,
+    (forall f xs ys, sem_node G f xs ys
+                     -> exists M : memory, msem_node G f xs M ys)
+    -> sem_equation G H eq
+    -> no_dup_defs (eq::eqs)
+    -> Forall (msem_equation G H M) eqs
+    -> exists M', Forall (msem_equation G H M') (eq::eqs).
+Proof.
+  intros G H eqs M eq IH Heq Hndups Heqs.
+  inversion Heq as [? ? ? Hsem
+                   |? ? ? ? ? ? Hls Hxs Hsem
+                   |? ? ? ? ? Hlae Hvar];
+    match goal with H:_=eq |- _ => rewrite <-H in * end.
+  - exists M.
+    repeat constructor; [exact Hsem|exact Heqs].
+  - apply IH in Hsem.
+    destruct Hsem as [M' Hmsem].
+    exists (madd_obj x M' M).
+    constructor.
+    econstructor.
+    + now apply mfind_inst_gss.
+    + exact Hls.
+    + exact Hxs.
+    + exact Hmsem.
+    + apply msem_equation_madd_obj.
+      inversion_clear Hndups as [|? ? Hnd]; apply Hnd; constructor.
+      apply Heqs.
+  - exists (madd_mem x (hold v0 ls) M).
+    constructor.
+    econstructor.
+    + now apply mfind_mem_gss.
+    + reflexivity.
+    + exact Hlae.
+    + intros n.
+      destruct (ls n) eqn:Hls.
+      * split; [simpl; rewrite Hls; reflexivity|].
+        apply Hvar; constructor; apply Hls.
+      * split; [simpl; rewrite Hls; reflexivity|].
+        apply Hvar; constructor; [|now apply hold_rel1].
+        intro Hls'; rewrite Hls' in Hls; discriminate Hls.
+    + apply msem_equation_madd_mem.
+      inversion_clear Hndups as [|? ? Hnd]; apply Hnd; constructor.
+      apply Heqs.
+Qed.
 
-    this requires constructing an ms: what can we reuse from the
-    sem_held_equations development?
-
-    then it is trivial that:
-       sem_nodes G <-> msem_nodes G
- *)
+Lemma sem_msem_eqs:
+  forall G H eqs,
+    (forall f xs ys, sem_node G f xs ys
+                     -> exists M : memory, msem_node G f xs M ys)
+    -> no_dup_defs eqs
+    -> Forall (sem_equation G H) eqs
+    -> exists M', Forall (msem_equation G H M') eqs.
+Proof.
+  intros G H eqs IH Hndups Heqs.
+  induction eqs as [|eq eqs IHeqs]; [exists empty_memory; now constructor|].
+  apply Forall_cons2 in Heqs.
+  destruct Heqs as [Heq Heqs].
+  assert (Hndups':=Hndups).
+  inversion_clear Hndups' as [|? ? Hnd Hnds].
+  apply IHeqs with (1:=Hnds) in Heqs.
+  destruct Heqs as [M Heqs].
+  now apply sem_msem_eq with (1:=IH) (2:=Heq) (3:=Hndups) (4:=Heqs).
+Qed.
 
 Lemma sem_msem_node:
   forall G f xs ys,
-    sem_node G f xs ys -> (exists ms, msem_node G f xs ms ys).
-Admitted.
-(*
+    Welldef_global G
+    -> sem_node G f xs ys
+    -> (exists M, msem_node G f xs M ys).
 Proof.
-  intros G f xs ys Hsem.
-  induction G as [|node G IH];
-    [ inversion Hsem as [? ? ? ? ? ? Hfind]; now inversion Hfind |].
-  inversion_clear Hsem as [? ? ? ? ? ? Hfind HH].
+  induction G as [|node].
+  inversion 2;
+    match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+  intros f xs ys Hwdef Hsem.
+  assert (Hsem' := Hsem).
+  inversion_clear Hsem' as [? ? ? ? ? ? Hfind HH].
   destruct HH as [H [Hxs [Hys Heqs]]].
-  eexists.
-  econstructor.
-  eapply Hfind.
-  exists H.
-  split; [exact Hxs|].
-  split; [exact Hys|].
-  split; [admit|]. (* TODO: need to incorporate assumption on clocks *)
-  SearchAbout msem_equation.
-  induction eqs.
-
-
-  eexists.
-  econstructor.
-  SearchAbout find_node.
-  admit.
-Qed.
-*)
-
-(*
-Lemma Forall_msem_equation_global_tl:
-  forall nd G H M eqs,
-    Ordered_nodes (nd::G)
-    -> (forall f, Is_node_in f eqs -> find_node f G <> None)
-    -> ~ Is_node_in nd.(n_name) eqs
-    -> List.Forall (msem_equation (nd::G) H M) eqs
-    -> List.Forall (msem_equation G H M) eqs.
-*)
-
-
-Definition hold_history (H: history) : history -> list equation -> history :=
-  List.fold_right
-    (fun eq H' =>
-       match eq with
-       | EqFby x v0 e => PM.add x (fun n=>present (hold v0 (str_laexp H e) n)) H'
-       | EqApp x _ _ => H'
-       | EqDef x _ => H'
-       end).
-
-(* An alternative lemma would be:
-   sem_held_equations H H' (filter_dup_defs eqs) -> sem_held_equations H H' eqs
-   which should hold since the H in sem_equations/sem_held_equations requires
-   that multiple definitions of the same variable be coherent. But proving
-   this stronger result is much harder than just assuming something that
-   should anyway be true: there are no duplicate definitions in eqs.
-
-   Note, however, that this requires a stronger definition of Is_well_sch. *)
-(*
-Lemma not_in_add_to_sem_held_equations:
-  forall x xs eqs H H',
-    ~Is_defined_in x eqs
-    -> sem_held_equations H H' eqs
-    -> sem_held_equations H (PM.add x xs H') eqs.
-Proof.
-  induction eqs as [|eq].
-  intuition (apply List.Forall_nil).
-  intros H H' Hndef Hsem.
-  apply not_Is_defined_in_cons in Hndef; destruct Hndef as [Hndef0 Hndef1].
-  unfold sem_held_equations in Hsem.
-  apply Forall_cons2 in Hsem; destruct Hsem as [Hsem0 Hsem1].
-  apply (IHeqs _ _ Hndef1) in Hsem1.
-  destruct eq; [ apply not_Is_defined_in_eq_EqDef in Hndef0
-               | apply not_Is_defined_in_eq_EqApp in Hndef0
-               | apply not_Is_defined_in_eq_EqFby in Hndef0 ];
-  apply List.Forall_cons; try apply Hsem1;
-  inversion_clear Hsem0 as [? ? Hsv|? ? ? Hsv|? ? ? ys Hlae Hsv];
-  try constructor;
-  intros;
-  try (apply sem_var_gso with (1:=Hndef0); apply Hsv; assumption).
-  apply SHEqFby with (1:=Hlae).
-  intros; rewrite <- Hsv; split; intro HH.
-  apply sem_var_gso with (1:=Hndef0) in HH; assumption.
-  apply sem_var_gso with (1:=Hndef0); assumption.
-Qed.
-
-
-(*
-   eqs = [ EqDef x y; EqFby y (Cint 0) (Econst (Cint 1)) ]
-   eqs' = eqFby x (Cint 0) (Econst (Cint 1)) :: eqs
-
-   Both eqs and eqs' have a coherent semantics (sem_equations G H _),
-   but their respective hold semantics differ (for eqs', x is always present).
-*)
-Lemma sem_held_equations_existence:
-  forall G H eqs,
-    sem_equations G H eqs
-    -> no_dup_defs eqs
-    -> sem_held_equations H (hold_history H H eqs) eqs
-       /\ (forall y n c,
-              sem_var H y n (present c)
-              -> sem_var (hold_history H H eqs) y n (present c)).
-Proof.
-  intros G H eqs Hsem Hndups.
-  induction eqs as [|eq].
-  - intuition constructor.
-  - apply Forall_cons2 in Hsem; destruct Hsem as [Hsem Hsems].
-    apply IHeqs in Hsems; [clear IHeqs
-                          | inversion_clear Hndups; assumption ].
-    destruct Hsems as [Hsems Hvars].
-    destruct eq.
-
-    split; [apply Forall_cons2|intuition];
-    split; [constructor; apply Hvars|intuition].
-
-    split; [apply Forall_cons2|intuition];
-    split; [constructor; apply Hvars|intuition].
-
+  pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
+  pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
+  pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
+  simpl in Hnini.
+  simpl in Hfind.
+  destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+  - assert (Hord':=Hord).
+    inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
+    injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
+    apply Forall_sem_equation_global_tl with (1:=Hord') (2:=Hnini) in Heqs.
+    assert (forall f xs ys,
+               sem_node G f xs ys
+               -> exists M, msem_node G f xs M ys) as IHG'
+        by auto.
+    inversion_clear Hwdef as [|? ? Hw0 neqs ? ? Hw1 Hw2 Hw3 Hw4 Hndups Hw5 Hw6].
+    simpl in neqs; unfold neqs in *.
+    pose proof (sem_msem_eqs G H eqs IHG' Hndups Heqs) as HH.
+    destruct HH as [M Hmsem].
+    exists M.
+    econstructor;
+      [simpl; rewrite ident_eqb_refl; reflexivity|].
+    exists H.
+    split; [exact Hxs|].
+    split; [exact Hys|].
     split.
-
-    (* show: sem_var -> sem_var *)
-    Focus 2.
-    intros y n c0 Hvar.
-    pose proof (Hvars _ _ _ Hvar) as Hvar'.
-    destruct (ident_eq_dec i y) as [Hiy|Hniy]; [rewrite Hiy|].
-    2:(inversion_clear Hvar'; apply Sv with xs; simpl; try rewrite PM.gso; auto).
-    simpl.
-    eapply Sv.
-    rewrite PM.gss.
-    rewrite <-Some_injection.
-    reflexivity.
-    simpl.
-    apply present_injection.
-    inversion_clear Hsem.
-    rewrite Hiy in *.
-    apply H1 in Hvar.
-    rewrite hold_injection with _ xs _ _.
-    apply hold_rel.
-    apply fbyR_holdR.
-    exact Hvar.
-    intro n0.
-    rewrite sem_laexp_repr in H0.
-    specialize H0 with n0 (xs n0).
-    assert (sem_laexp H l n0 (xs n0)) as Hsl by (apply H0; reflexivity).
-    apply str_laexp_spec in Hsl.
-    exact Hsl.
-
-    (* show sem_held_equations *)
-
-    simpl.
-    apply Forall_cons2.
-    split.
-    inversion_clear Hsem.
-    apply SHEqFby with xs.
-    apply H0.
-    intros n c0.
-    split.
-    inversion_clear 1.
-    rewrite PM.gss in H3.
-    injection H3.
-    intro.
-    rewrite <-H2 in H4.
-    injection H4.
-    intro.
-    apply hold_rel.
-    rewrite <-H5.
-    apply hold_injection.
-    intro n0.
-    specialize H0 with n0.
-    apply str_laexp_spec in H0.
-    rewrite H0.
-    reflexivity.
-    intro Hhold.
-    apply hold_rel in Hhold.
-    eapply Sv.
-    rewrite PM.gss.
-    rewrite <-Some_injection.
-    reflexivity.
-    simpl.
-    apply present_injection.
-    rewrite hold_injection with _ xs _ _.
-    apply Hhold.
-    intro n0.
-    specialize H0 with n0.
-    apply str_laexp_spec in H0.
-    exact H0.
-
-    apply not_in_add_to_sem_held_equations.
-    inversion_clear Hndups as [|? ? Hndups'].
-    apply Hndups'.
-    constructor.
-    apply Hsems.
+    admit. (* obligation on clocks *)
+    apply msem_equation_cons2 with (1:=Hord') (2:=Hmsem) (3:=Hnini).
+  - apply ident_eqb_neq in Hnf.
+    apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
+    inversion_clear Hord as [|? ? Hord' H0 Hnig].
+    apply IHG with (1:=HwdefG) in Hsem.
+    destruct Hsem as [M Hsem].
+    exists M.
+    apply msem_node_cons2 with (1:=Hord') (3:=Hnig).
+    exact Hsem.
 Qed.
-
-Lemma sem_held_equations_exist:
-  forall G H eqs,
-    sem_equations G H eqs
-    -> no_dup_defs eqs
-    -> exists H', sem_held_equations H H' eqs.
-Proof.
-  intros H H' eqs Hsems Hndups.
-  apply sem_held_equations_existence in Hsems.
-  destruct Hsems as [Hsems].
-  now (eexists; apply Hsems).
-  assumption.
-Qed.
- *)
 
