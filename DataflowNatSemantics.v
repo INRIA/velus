@@ -349,6 +349,49 @@ Proof.
     reflexivity.
 Qed.
 
+Lemma sem_cexp_det:
+  forall H n e v1 v2,
+    sem_cexp H e n v1
+    -> sem_cexp H e n v2
+    -> v1 = v2.
+Proof.
+  intros H n.
+  induction e using cexp_mult
+  with (P:=fun e=> forall v1 v2, sem_caexp H e n v1
+                                 -> sem_caexp H e n v2
+                                 -> v1 = v2);
+    do 2 inversion_clear 1;
+    match goal with
+    | H1:sem_clock _ _ _ true, H2:sem_clock _ _ _ false |- _ =>
+      pose proof (sem_clock_det _ _ _ _ _ H1 H2); discriminate
+    | H1:sem_var _ _ _ _, H2:sem_var _ _ _ _ |- _ =>
+      solve [ apply sem_var_det with (1:=H1) (2:=H2)
+            | pose proof (sem_var_det _ _ _ _ _ H1 H2) as Hcc;
+              injection Hcc; contradiction ]
+    | H1:sem_var _ _ _ (present (Cbool true)),
+      H2:sem_var _ _ _ (present (Cbool false)) |- _ =>
+      solve [apply sem_var_det with (1:=H1) in H2; discriminate]
+    | H1: sem_lexp ?H ?x ?n ?v1,
+      H2: sem_lexp ?H ?x ?n ?v2 |- ?v1 = ?v2 =>
+      now apply sem_lexp_det with (1:=H1) (2:=H2)
+    | _ => auto
+    end.
+Qed.
+
+Lemma sem_caexp_det:
+  forall v1 v2 H n e,
+    sem_caexp H e n v1
+    -> sem_caexp H e n v2
+    -> v1 = v2.
+Proof.
+  intros v1 v2 H n e.
+  do 2 inversion_clear 1;
+  match goal with
+  | H1:sem_cexp _ _ _ _, H2:sem_cexp _ _ _ _ |- _ =>
+    pose proof (sem_cexp_det _ _ _ _ _ H1 H2) as Heq
+  end; auto.
+Qed.
+
 Lemma find_node_other:
   forall f node G node',
     node.(n_name) <> f

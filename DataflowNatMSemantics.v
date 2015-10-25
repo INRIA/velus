@@ -85,6 +85,20 @@ Proof.
   now apply PM.gso.
 Qed.
 
+Inductive rhs_absent (H: history) (n: nat) : equation -> Prop :=
+| AEqDef:
+    forall x cae,
+      sem_caexp H cae n absent ->
+      rhs_absent H n (EqDef x cae)
+| AEqApp:
+    forall x f lae,
+      sem_laexp H lae n absent ->
+      rhs_absent H n (EqApp x f lae)
+| AEqFby:
+    forall x v0 lae,
+      sem_laexp H lae n absent ->
+      rhs_absent H n (EqFby x v0 lae).
+
 Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
 | SEqDef:
     forall H M x cae,
@@ -119,9 +133,8 @@ with msem_node (G: global) : ident -> stream -> memory -> stream -> Prop :=
       (exists (H: history),
         (forall n, sem_var H i.(v_name) n (xs n))
         /\ (forall n, sem_var H o.(v_name) n (ys n))
-        /\ (forall n y, xs n = absent ->
-                        Is_defined_in y eqs ->
-                        sem_var H y n absent)
+        /\ (forall n, xs n = absent ->
+                      Forall (rhs_absent H n) eqs)
         /\ Forall (msem_equation G H M) eqs) ->
       msem_node G f xs M ys.
 
@@ -189,18 +202,14 @@ Section msem_node_mult.
            (Hnode : exists H : history,
                  (forall n, sem_var H (v_name i) n (xs n))
               /\ (forall n, sem_var H (v_name o) n (ys n))
-              /\ (forall n y,
-                     xs n = absent
-                     -> Is_defined_in y eqs
-                     -> sem_var H y n absent)
+              /\ (forall n, xs n = absent ->
+                            Forall (rhs_absent H n) eqs)
               /\ Forall (msem_equation G H M) eqs),
       (exists H : history,
              (forall n, sem_var H (v_name i) n (xs n))
           /\ (forall n, sem_var H (v_name o) n (ys n))
-          /\ (forall n y,
-                 xs n = absent
-                 -> Is_defined_in y eqs
-                 -> sem_var H y n absent)
+          /\ (forall n, xs n = absent ->
+                        Forall (rhs_absent H n) eqs)
           /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs)
       -> Pn f xs M ys (SNode G f xs M ys i o eqs Hfind Hnode).
 
@@ -216,16 +225,14 @@ Section msem_node_mult.
         (* Turn: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
                    /\ (forall n, sem_var H (v_name o) n (ys n))
-                   /\ (forall n y, xs n = absent
-                                   -> Is_defined_in y eqs
-                                   -> sem_var H y n absent)
+                   /\ (forall n, xs n = absent
+                                 -> Forall (rhs_absent H n) eqs)
                    /\ Forall (msem_equation G H M) eqs
            Into: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
                    /\ (forall n, sem_var H (v_name o) n (ys n))
-                   /\ (forall n y, xs n = absent
-                                   -> Is_defined_in y eqs
-                                   -> sem_var H y n absent)
+                   /\ (forall n, xs n = absent
+                                 -> Forall (rhs_absent H n) eqs)
                    /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs *)
            (match Hnode with
             | ex_intro H (conj Hxs (conj Hys (conj Hclk Heqs))) =>
@@ -262,23 +269,162 @@ Section msem_node_mult.
 
 End msem_node_mult.
 
+Definition msem_nodes (G: global) : Prop :=
+  Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
 
-(* The clock constraint in msem_node,
-     (forall n y, xs n = absent -> Is_defined_in y eqs -> sem_var H y n absent)
+(* The original idea was to 'bake' the following assumption into msem_node:
 
+       (forall n y, xs n = absent
+                    -> Is_defined_in y eqs
+                    -> sem_var H y n absent)
+
+   That is, when the node input is absent then so are all of the
+   variables defined within the node. This is enough to show
+   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
+   the counter-example:
+
+       node f (x) = y where
+         y = 1 when false
+         s = 0 fby x
+
+       node g (x) = y where
+         y = f (3 when Cbase)
+
+   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
+   internal value y satisfies the assumption (it is always absent), but the
+   instantiation of f is still called at a faster rate.
+
+   The current (proposed) solution is to insist that all of the rhs' be
+   absent when the input is. This should be enough to ensure the two
+   key properties:
+   1. for (x = f e), e absent implies x absent (important for translation
+                     correctness),
+   2. for (x = f e) and (x = v0 fby e), e absent implies that the memories
+                     'stutter'.
+   This constraint _should_ follow readily from the clock calculus. Note that
+   we prefer a semantic condition here even if it will be shown via a static
+   analysis witnessed by clocks in expressions.
+
+   This extra condition
    is only necessary for the correctness proof of imperative code generation.
    A translated node is only executed when the clock of its input expression
    is true. For this 'optimization' to be correct, whenever the input is
    absent, the output must be absent and the internal memories must not change.
    These facts are consequences of the clock constraint above (see the
    absent_invariant lemma below).
-
-   Such an 'assumption' introduces an obligation on clock checking. A node
-   will not have an m-semantics if it violates the constraint.
  *)
 
-Definition msem_nodes (G: global) : Prop :=
-  Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
+Lemma rhs_absent_lhs_node:
+  forall G f xs M ys n,
+       Welldef_global G
+    -> msem_node G f xs M ys
+    -> xs n = absent
+    -> ys n = absent.
+Proof.
+  intros G f xs M ys n Hwdef Hsem.
+  induction Hsem as [|H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH|
+                     |f xs M ys i o eqs Hf Heqs IH]
+  using msem_node_mult
+  with (P := fun H M eq Hsem =>
+               forall x, rhs_absent H n eq
+                         -> msem_equation G H M eq
+                         -> Is_defined_in_eq x eq
+                         -> sem_var H x n absent).
+  - intros y Habs Hmsem Hidi.
+    inversion_clear Hidi.
+    inversion_clear Habs as [? ? Hcae| |].
+    specialize Hvar with n.
+    destruct Hvar as [v [Hvar Hcae']].
+    apply sem_caexp_det with (1:=Hcae) in Hcae'.
+    rewrite <-Hcae' in *; clear Hcae'.
+    exact Hvar.
+  - intros x Habs Hseq Hidi.
+    inversion_clear Hidi.
+    inversion_clear Habs as [|? ? ? Hlae|].
+    specialize Hls with n.
+    specialize Hys with n.
+    apply sem_laexp_det with (1:=Hlae) in Hls.
+    symmetry in Hls.
+    apply IH in Hls.
+    rewrite Hls in *.
+    exact Hys.
+  - intros x Habs Hsem Hidi.
+    inversion_clear Hidi.
+    inversion_clear Habs as [| |? ? ? Hlae].
+    specialize Hls with n.
+    apply sem_laexp_det with (1:=Hlae) in Hls.
+    specialize Hy with n.
+    rewrite <-Hls in Hy.
+    destruct Hy as [Hy0 Hy1].
+    exact Hy1.
+  - apply Welldef_global_output_Is_variable_in with (2:=Hf) in Hwdef.
+    simpl in Hwdef.
+    apply Is_variable_in_Is_defined_in in Hwdef.
+    intro Habsx.
+    clear Heqs.
+    destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+    specialize Hxs with n.
+    specialize Hys with n.
+    apply Habs in Habsx.
+    clear Hf Habs.
+    induction eqs as [|eq eqs IHeqs]; [now inversion Hwdef|].
+    apply Is_defined_in_cons in Hwdef.
+    apply Forall_cons2 in Heqs.
+    destruct Heqs as [Heqs0 Heqs1].
+    apply Forall_cons2 in Habsx.
+    destruct Habsx as [Habsx0 Habsx1].
+    destruct Hwdef as [Hin|[Hnin0 Hnin1]];
+      [clear IHeqs Heqs1|now apply IHeqs with (1:=Hnin1) (2:=Heqs1) (3:=Habsx1)].
+    destruct Heqs0 as [Hmsem Heqs].
+    apply Heqs with (1:=Habsx0) (2:=Hmsem) in Hin.
+    apply sem_var_det with (1:=Hin) in Hys.
+    rewrite Hys.
+    reflexivity.
+Qed.
+
+Lemma rhs_absent_lhs:
+  forall G H M n x neqs,
+    Welldef_global G
+    -> Forall (rhs_absent H n) neqs
+    -> Forall (msem_equation G H M) neqs
+    -> Is_defined_in x neqs
+    -> sem_var H x n absent.
+Proof.
+  intros G H M n x neqs Hwdef.
+  induction neqs as [|eq eqs IH]; [now inversion 2|].
+  intros Hrhs Hsem Hidi.
+  apply Is_defined_in_cons in Hidi.
+  apply Forall_cons2 in Hsem.
+  destruct Hsem as [Hsem0 Hsem1].
+  apply Forall_cons2 in Hrhs.
+  destruct Hrhs as [Hrhs0 Hrhs1].
+  destruct Hidi as [Hidi|Hidi].
+  - destruct eq;
+    inversion_clear Hrhs0 as [? ? Habs|? ? ? Habs|? ? ? Habs];
+    inversion_clear Hsem0 as [? ? ? ? Hvar
+                             |? ? ? ? ? ? ? ? Hmfind Hlae Hvar Hsem
+                             |? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar];
+    inversion_clear Hidi.
+    + specialize Hvar with n.
+      destruct Hvar as [v [Hvar Hcae]].
+      apply sem_caexp_det with (1:=Habs) in Hcae.
+      rewrite <-Hcae in Hvar.
+      exact Hvar.
+    + specialize Hlae with n.
+      apply sem_laexp_det with (1:=Hlae) in Habs.
+      apply rhs_absent_lhs_node with (1:=Hwdef) (2:=Hsem) in Habs.
+      specialize Hvar with n.
+      rewrite Habs in Hvar.
+      exact Hvar.
+    + specialize Hlae with n.
+      apply sem_laexp_det with (1:=Habs) in Hlae.
+      specialize Hvar with n.
+      rewrite <-Hlae in Hvar.
+      destruct Hvar as [Hms Hvar].
+      exact Hvar.
+  - destruct Hidi as [Hnidi Hidi].
+    now apply IH with (1:=Hrhs1) (2:=Hsem1) (3:=Hidi).
+Qed.
 
 (* Instead of repeating all these cons lemmas (i.e., copying and pasting them),
    and dealing with similar obligations multiple times in translation_correct,

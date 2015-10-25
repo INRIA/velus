@@ -878,33 +878,6 @@ Lemma Memory_Corres_unchanged:
     -> Memory_Corres G n f M menv
     -> Memory_Corres G (S n) f M menv.
 Admitted. (* Memory_Corres_unchanged: require subclocked predicate. *)
-(* The original idea was to 'bake' the following assumption into msem_node:
-
-       (forall n y, xs n = absent
-                    -> Is_defined_in y eqs
-                    -> sem_var H y n absent)
-
-   That is, when the node input is absent then so are all of the
-   variables defined within the node. This is enough to show
-   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
-   the counter-example:
-
-       node f (x) = y where
-         y = 1 when false
-         s = 0 fby x
-
-       node g (x) = y where
-         y = f (3 when Cbase)
-
-   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
-   internal value y satisfies the assumption (it is always absent), but the
-   instantiation of f is still called at a faster rate.
-
-   Suggest now: a separate 'subclocked' predicate which ensures that the
-   arguments of EqApp and EqFby are absent whenever the node input is.
-   This fact should be provided by the clock calculus.
-
-*)
 
 (*
 Proof.
@@ -1540,11 +1513,13 @@ Proof.
                           _ _ _ Hwdef Hfindn) as Hivio.
             apply Is_variable_in_Is_defined_in in Hivio.
             simpl in Hivio.
-            apply Hfclk with (2:=Hivio) in Hlsn.
+            apply Hfclk in Hlsn.
+            Check rhs_absent_lhs.
+            apply rhs_absent_lhs with (1:=Hwdef) (2:=Hlsn) (3:=Hsneqs) in Hivio.
             pose proof (sem_var_det _ _ _ _ _ Hsy HH) as Hysn.
             specialize Hys with n.
             rewrite Hysn in Hys.
-            pose proof (sem_var_det _ _ _ _ _ Hys Hlsn) as Hbad.
+            pose proof (sem_var_det _ _ _ _ _ Hys Hivio) as Hbad.
             discriminate Hbad.
           - assert (PM.find y env = None) as Hyenv
                 by (apply Henv; constructor; constructor).
