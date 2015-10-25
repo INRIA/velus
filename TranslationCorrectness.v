@@ -870,15 +870,116 @@ Proof.
     apply HH with (1:=Hmfind).
 Qed.
 
-(* TODO: Abstract out this pattern of induction over G using find_node. *)
 Lemma Memory_Corres_unchanged:
-  forall G f fnode n M menv,
+  forall G f n ls M ys menv,
     Welldef_global G
-    -> find_node f G = Some fnode
+    -> msem_node G f ls M ys
+    -> ls n = absent
     -> Memory_Corres G n f M menv
-    -> Mem_unchanged n M
     -> Memory_Corres G (S n) f M menv.
+Admitted. (* Memory_Corres_unchanged: require subclocked predicate. *)
+(* The original idea was to 'bake' the following assumption into msem_node:
+
+       (forall n y, xs n = absent
+                    -> Is_defined_in y eqs
+                    -> sem_var H y n absent)
+
+   That is, when the node input is absent then so are all of the
+   variables defined within the node. This is enough to show
+   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
+   the counter-example:
+
+       node f (x) = y where
+         y = 1 when false
+         s = 0 fby x
+
+       node g (x) = y where
+         y = f (3 when Cbase)
+
+   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
+   internal value y satisfies the assumption (it is always absent), but the
+   instantiation of f is still called at a faster rate.
+
+   Suggest now: a separate 'subclocked' predicate which ensures that the
+   arguments of EqApp and EqFby are absent whenever the node input is.
+   This fact should be provided by the clock calculus.
+
+*)
+
+(*
 Proof.
+  intros G f n ls M ys menv Hwdef Hmsem Habs.
+  revert menv.
+  induction Hmsem as [|H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH
+                      |H M ms y ls v0 lae Hmfind Hms0 Hls Hy
+                      |f xs M ys i o eqs Hf Heqs IH]
+  using msem_node_mult
+  with (P := fun H M eq Hsem =>
+               forall menv,
+                 (forall x, Is_defined_in_eq x eq
+                            -> sem_var H x n absent)
+                 -> Memory_Corres_eq G n M menv eq
+                 -> Memory_Corres_eq G (S n) M menv eq).
+  - constructor.
+  - intros Hdefabs Hmceq.
+    constructor.
+    intros Mo omenv Hmfind' Hfindo.
+    rewrite Hmfind in Hmfind'.
+    injection Hmfind'; intro Heq; rewrite <-Heq; clear Heq Hmfind'.
+    inversion_clear Hmceq as [|? ? ? ? ? Hmc'|].
+    apply Hmc' with (1:=Hmfind) in Hfindo; clear Hmc'.
+    assert (sem_var H y n absent) as Hyabs
+        by (apply Hdefabs; constructor); clear Hdefabs.
+    specialize Hys with n.
+    apply sem_var_det with (1:=Hys) in Hyabs.
+    admit.
+  - rename Habs into menv.
+    intros Hdefabs Hmceq.
+    constructor.
+    intros ms0 Hmfind0.
+    rewrite Hmfind in Hmfind0.
+    injection Hmfind0; intro Heq; rewrite <-Heq; clear Heq Hmfind0 ms0.
+    inversion_clear Hmceq as [| |? ? ? ? ? Hmenv].
+    apply Hmenv in Hmfind.
+    rewrite Hmfind.
+    assert (sem_var H y n absent) as Hyabs
+        by (apply Hdefabs; constructor).
+    specialize Hy with n.
+    destruct (ls n).
+    + destruct Hy as [Hmseq H0].
+      rewrite Hmseq.
+      reflexivity.
+    + destruct Hy as [H0 Hyp].
+      apply sem_var_det with (1:=Hyabs) in Hyp.
+      discriminate.
+  - intros menv Hmc.
+    inversion_clear Hmc as [? ? ? i' o' eqs' Hf' Hmceqs].
+    rewrite Hf in Hf'.
+    injection Hf';
+      intros HR1 HR2 HR3;
+      rewrite <-HR1, <-HR2, <-HR3 in *;
+      clear i' o' eqs' Hf' HR1 HR2 HR3.
+    clear Heqs.
+    destruct IH as [H [Hxs [Hys [Habs' HH]]]].
+    apply Forall_Forall with (1:=Hmceqs) in HH.
+    econstructor; [exact Hf|].
+    apply Forall_impl with (2:=HH); clear HH.
+    intros eq HH.
+    destruct HH as [Hmceq [Hmsem HH]].
+    apply HH with (2:=Hmceq).
+
+
+
+    intros x Hxdi.
+    apply Habs' with (1:=Habs).
+    econstructor.
+
+
+
+  Print Memory_Corres.
+  Check Memory_Corres_mult.
+  induction 2
+  using msem_node_mult.
   induction G as [|node G IHnode]; [now inversion_clear 2|].
   intros f fnode n M menv Hwdef Hfindn Hmc Hmu.
   pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
@@ -954,6 +1055,7 @@ Proof.
     apply Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc.
     now apply IHnode with (1:=Hwdef) (2:=Hfindn) (3:=Hmc) (4:=Hmu).
 Qed.
+*)
 
 Lemma Is_memory_in_msem_var:
   forall G H M n x eqs c,
@@ -1475,9 +1577,8 @@ Proof.
           destruct Hmc as [Hmceq Hmceqs].
           inversion_clear Hmceq as [|? ? ? ? ? Hmc0|].
           apply Hmc0 with (2:=Hfindo) in Hfindi; clear Hmc0.
-          apply absent_invariant with (2:=Hlsn) in Hmsem.
           now apply Memory_Corres_unchanged
-            with (1:=Hwdef) (2:=Hfindn) (3:=Hfindi) (4:=Hmsem).
+          with (1:=Hwdef) (2:=Hmsem) (3:=Hlsn) (4:=Hfindi).
         }
       }
   - (* Inductive step for EqFby: y = v0 fby lae *)

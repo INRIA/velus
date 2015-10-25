@@ -277,61 +277,6 @@ End msem_node_mult.
    will not have an m-semantics if it violates the constraint.
  *)
 
-Inductive Mem_unchanged (n: nat) : memory -> Prop :=
-| MUn:
-    forall menv,
-      (forall x xs, mfind_mem x menv = Some xs
-                    -> xs (S n) = xs n) ->
-      (forall x omenv,
-          mfind_inst x menv = Some omenv
-          -> Mem_unchanged n omenv) ->
-      Mem_unchanged n menv.
-
-(*
-Inductive Memory_unchanged (G: global) (n: nat) : ident -> memory -> Prop :=
-| MemC:
-    forall f M i o eqs,
-      find_node f G = Some(mk_node f i o eqs)
-      -> Forall (Memory_Unchanged_eq G n M) eqs
-      -> Memory_unchanged G n f M menv
-
-with Memory_Corres_eq (G: global) (n: nat) :
-       memory -> memoryEnv -> equation -> Prop :=
-| MemC_EqDef:
-    forall M menv x cae,
-      Memory_Corres_eq G n M menv (EqDef x cae)
-| MemC_EqApp:
-    forall M menv x f lae,
-      (forall Mo omenv, mfind_inst x M = Some Mo
-                        -> find_obj x menv = Some omenv
-                        -> Memory_Corres G n f Mo omenv)
-      -> Memory_Corres_eq G n M menv (EqApp x f lae)
-| MemC_EqFby:
-    forall M menv x v0 lae,
-      (forall ms, mfind_mem x M = Some ms
-                  -> find_mem x menv = Some (ms n))
-      -> Memory_Corres_eq G n M menv (EqFby x v0 lae).
-*)
-
-
-Lemma absent_invariant:
-  forall G f xs M ys n,
-    msem_node G f xs M ys
-    -> xs n = absent
-    -> Mem_unchanged n M.
-Proof.
-  (*
-  inversion_clear 1.
-
-
-  intros G f xs M ys n Hmsem.
-  induction Hmsem
-  using msem_node_mult
-  with (P := fun H M eq Heq => True).
-  Show 4.
-*)
-Admitted.
-
 Definition msem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
 
