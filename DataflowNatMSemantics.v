@@ -565,20 +565,20 @@ Definition sem_held_equations
 
 Lemma msem_equation_madd_mem:
   forall G H M x ms eqs,
-    ~Is_defined_in x eqs
+    ~Is_memory_in x eqs
     -> Forall (msem_equation G H M) eqs
     -> Forall (msem_equation G H (madd_mem x ms M)) eqs.
 Proof.
   Hint Constructors msem_equation.
   intros G H M x ms eqs Hnd Hsem.
   induction eqs as [|eq eqs IH]; [now constructor|].
-  apply not_Is_defined_in_cons in Hnd.
+  apply not_Is_memory_in_cons in Hnd.
   destruct Hnd as [Hnd Hnds].
   apply Forall_cons2 in Hsem.
   destruct Hsem as [Hsem Hsems].
   constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
   destruct Hsem as [| |? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar]; try now eauto.
-  apply not_Is_defined_in_eq_EqFby in Hnd.
+  apply not_Is_memory_in_eq_EqFby in Hnd.
   econstructor.
   - apply not_eq_sym in Hnd.
     erewrite mfind_mem_gso with (1:=Hnd).
@@ -590,20 +590,20 @@ Qed.
 
 Lemma msem_equation_madd_obj:
   forall G H M M' x eqs,
-    ~Is_defined_in x eqs
+    ~Is_instance_in x eqs
     -> Forall (msem_equation G H M) eqs
     -> Forall (msem_equation G H (madd_obj x M' M)) eqs.
 Proof.
   Hint Constructors msem_equation.
   intros G H M M' x eqs Hnd Hsem.
   induction eqs as [|eq eqs IH]; [now constructor|].
-  apply not_Is_defined_in_cons in Hnd.
+  apply not_Is_instance_in_cons in Hnd.
   destruct Hnd as [Hnd Hnds].
   apply Forall_cons2 in Hsem.
   destruct Hsem as [Hsem Hsems].
   constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
   destruct Hsem as [|? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
-  apply not_Is_defined_in_eq_EqApp in Hnd.
+  apply not_Is_instance_in_eq_EqApp in Hnd.
   econstructor.
   - apply not_eq_sym in Hnd.
     erewrite mfind_inst_gso with (1:=Hnd).
@@ -644,21 +644,21 @@ Qed.
    either Is_well_sch or Welldef_global.
 *)
 Lemma sem_msem_eq:
-  forall G H eqs M eq,
+  forall G H eqs M eq mems,
     (forall f xs ys, sem_node G f xs ys
                      -> exists M : memory, msem_node G f xs M ys)
     -> sem_equation G H eq
-    -> no_dup_defs (eq::eqs)
+    -> Is_well_sch mems (eq::eqs)
     -> Forall (msem_equation G H M) eqs
     -> exists M', Forall (msem_equation G H M') (eq::eqs).
 Proof.
-  intros G H eqs M eq IH Heq Hndups Heqs.
+  intros G H eqs M eq mems IH Heq Hwsch Hmeqs.
   inversion Heq as [? ? ? Hsem
                    |? ? ? ? ? ? Hls Hxs Hsem
                    |? ? ? ? ? Hlae Hvar];
     match goal with H:_=eq |- _ => rewrite <-H in * end.
   - exists M.
-    repeat constructor; [exact Hsem|exact Heqs].
+    repeat constructor; [exact Hsem|exact Hmeqs].
   - apply IH in Hsem.
     destruct Hsem as [M' Hmsem].
     exists (madd_obj x M' M).
@@ -668,9 +668,10 @@ Proof.
     + exact Hls.
     + exact Hxs.
     + exact Hmsem.
-    + apply msem_equation_madd_obj.
-      inversion_clear Hndups as [|? ? Hnd]; apply Hnd; constructor.
-      apply Heqs.
+    + inversion_clear Hwsch as [| |? ? ? ? ? ? Hnii|].
+      apply msem_equation_madd_obj.
+      apply Hnii.
+      now apply Hmeqs.
   - exists (madd_mem x (hold v0 ls) M).
     constructor.
     econstructor.
@@ -684,28 +685,27 @@ Proof.
       * split; [simpl; rewrite Hls; reflexivity|].
         apply Hvar; constructor; [|now apply hold_rel1].
         intro Hls'; rewrite Hls' in Hls; discriminate Hls.
-    + apply msem_equation_madd_mem.
-      inversion_clear Hndups as [|? ? Hnd]; apply Hnd; constructor.
-      apply Heqs.
+    + inversion_clear Hwsch as [| | |? ? ? ? ? ? ? Hnmi].
+      apply msem_equation_madd_mem.
+      apply Hnmi.
+      now apply Hmeqs.
 Qed.
 
 Lemma sem_msem_eqs:
-  forall G H eqs,
+  forall G H eqs mems,
     (forall f xs ys, sem_node G f xs ys
                      -> exists M : memory, msem_node G f xs M ys)
-    -> no_dup_defs eqs
+    -> Is_well_sch mems eqs
     -> Forall (sem_equation G H) eqs
     -> exists M', Forall (msem_equation G H M') eqs.
 Proof.
-  intros G H eqs IH Hndups Heqs.
+  intros G H eqs mems IH Hwsch Heqs.
   induction eqs as [|eq eqs IHeqs]; [exists empty_memory; now constructor|].
   apply Forall_cons2 in Heqs.
   destruct Heqs as [Heq Heqs].
-  assert (Hndups':=Hndups).
-  inversion_clear Hndups' as [|? ? Hnd Hnds].
-  apply IHeqs with (1:=Hnds) in Heqs.
+  apply IHeqs with (1:=Is_well_sch_cons _ _ _ Hwsch) in Heqs.
   destruct Heqs as [M Heqs].
-  now apply sem_msem_eq with (1:=IH) (2:=Heq) (3:=Hndups) (4:=Heqs).
+  now apply sem_msem_eq with (1:=IH) (2:=Heq) (3:=Hwsch) (4:=Heqs).
 Qed.
 
 Lemma sem_msem_node:
@@ -735,9 +735,9 @@ Proof.
                sem_node G f xs ys
                -> exists M, msem_node G f xs M ys) as IHG'
         by auto.
-    inversion_clear Hwdef as [|? ? Hw0 neqs ? ? Hw1 Hw2 Hw3 Hw4 Hndups Hw5 Hw6].
+    inversion_clear Hwdef as [|? ? Hw0 neqs ? ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
     simpl in neqs; unfold neqs in *.
-    pose proof (sem_msem_eqs G H eqs IHG' Hndups Heqs) as HH.
+    pose proof (sem_msem_eqs G H eqs _ IHG' Hwsch Heqs) as HH.
     destruct HH as [M Hmsem].
     exists M.
     econstructor;

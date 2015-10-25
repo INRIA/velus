@@ -893,6 +893,28 @@ Proof.
   destruct 1 as [H0 H1]; intro H; apply Is_instance_in_cons in H; intuition.
 Qed.
 
+Lemma not_Is_instance_in_eq_EqApp:
+  forall x i f lae,
+    ~ Is_instance_in_eq x (EqApp i f lae) -> x <> i.
+Proof.
+  intros x i f lae H0 xeqi.
+  rewrite xeqi in H0.
+  assert (Is_instance_in_eq i (EqApp i f lae)) by constructor.
+  contradiction.
+Qed.
+
+Lemma not_Is_defined_in_not_Is_instance_in:
+  forall x eqs, ~Is_defined_in x eqs -> ~Is_instance_in x eqs.
+Proof.
+  Hint Constructors Is_defined_in_eq.
+  induction eqs as [|eq].
+  - intro H; contradict H; inversion H.
+  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
+    apply IHeqs in H1; apply not_Is_instance_in_cons.
+    split; [ destruct eq;  inversion 1; subst; intuition
+           | apply H1].
+Qed.
+
 Lemma not_Is_node_in_cons:
   forall n eq eqs,
     ~ Is_node_in n (eq::eqs) <-> ~Is_node_in_eq n eq /\ ~Is_node_in n eqs.

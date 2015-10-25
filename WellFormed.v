@@ -70,6 +70,7 @@ Inductive Is_well_sch (mems: PS.t) : list equation -> Prop :=
       (forall i, Is_free_in_laexp i e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
                  /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+      (~Is_memory_in x eqs) ->
       Is_well_sch mems (EqFby x v e :: eqs).
 
 Section Well_sch.
@@ -139,8 +140,10 @@ Section Well_sch.
                (negb (PS.mem x instances)),
                memories, PS.add x instances, PS.add x variables)
           | EqFby x v e =>
-            (PS.mem x mems && PS.for_all (check_var memories variables)
-                                         (free_in_laexp e PS.empty),
+            (andb
+               (PS.mem x mems && PS.for_all (check_var memories variables)
+                                            (free_in_laexp e PS.empty))
+               (negb (PS.mem x memories)),
              PS.add x memories, instances, variables)
         end
       | (false, _, _, _) => (false, PS.empty, PS.empty, PS.empty)
@@ -226,7 +229,7 @@ Section Well_sch.
          intros HRv HRi HRm Hcv;
          rewrite HRv, HRi, HRm in *; clear HRv HRi HRm;
          symmetry in Hcv;
-         try match goal with
+         try repeat progress match goal with
                | H: PS.mem _ _ && _ = true |- _ =>
                  apply Bool.andb_true_iff in H;
                  destruct H as [H1 Hcv];
@@ -293,17 +296,17 @@ Section Well_sch.
             apply Hiii in H; exact H
           | _ => intuition
         end).
-         rewrite <-Hiii in H.
-         intuition.
-         constructor.
-         constructor.
-         constructor 2.
-         apply H.
-         inversion_clear H.
-         inversion_clear H0.
-         intuition.
-         apply Hiii in H0.
-         intuition.
+        rewrite <-Hiii in H.
+        intuition.
+        constructor.
+        constructor.
+        constructor 2.
+        apply H.
+        inversion_clear H.
+        inversion_clear H0.
+        intuition.
+        apply Hiii in H0.
+        intuition.
       + destruct good'; [clear IHf| inversion 1; apply IHf; auto ].
         pose proof (IHt (eq_refl true)) as IH; clear IHt.
         destruct IH as [Hwsch [Himi [Hiii Hivi]]].
@@ -314,7 +317,7 @@ Section Well_sch.
          clear HRv HRm;
          clear HH;
          symmetry in Hcv;
-         match goal with
+         repeat progress match goal with
          | Hcv:PS.mem _ _ && _ = false |- _ =>
              apply Bool.andb_false_iff in Hcv;
              destruct Hcv as [Hcv|Hcv];
@@ -333,6 +336,14 @@ Section Well_sch.
                apply Hiii in Hcv;
                inversion 1;
                contradiction ]
+         | Hcv:PS.mem _ _ && _ && _ = false |- _ =>
+           apply Bool.andb_false_iff in Hcv;
+             destruct Hcv as [Hcv|Hcv];
+             [|rewrite Bool.negb_false_iff in Hcv;
+                rewrite PS.mem_spec in Hcv;
+                apply Himi in Hcv;
+                inversion 1;
+                contradiction]
          | H:PS.for_all _ _ = false |- _ =>
            apply not_for_all_spec in Hcv; [|apply check_var_compat]
          | _ => idtac
@@ -468,7 +479,6 @@ Inductive Welldef_global : list node -> Prop :=
       -> ~Is_defined_in ni eqs
       -> Is_variable_in no eqs
       -> ~Is_node_in nd.(n_name) eqs
-      -> no_dup_defs eqs (* see DataflowNatMSemantics: sem_msem_eq *)
       -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
       -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
       -> Welldef_global (nd::nds).
