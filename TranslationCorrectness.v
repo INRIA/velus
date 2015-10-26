@@ -877,9 +877,6 @@ Lemma Memory_Corres_unchanged:
     -> ls n = absent
     -> Memory_Corres G n f M menv
     -> Memory_Corres G (S n) f M menv.
-Admitted. (* Memory_Corres_unchanged: require subclocked predicate. *)
-
-(*
 Proof.
   intros G f n ls M ys menv Hwdef Hmsem Habs.
   revert menv.
@@ -889,23 +886,20 @@ Proof.
   using msem_node_mult
   with (P := fun H M eq Hsem =>
                forall menv,
-                 (forall x, Is_defined_in_eq x eq
-                            -> sem_var H x n absent)
+                 rhs_absent H n eq
                  -> Memory_Corres_eq G n M menv eq
                  -> Memory_Corres_eq G (S n) M menv eq).
   - constructor.
-  - intros Hdefabs Hmceq.
+  - intros Hrhsa Hmceq.
     constructor.
     intros Mo omenv Hmfind' Hfindo.
     rewrite Hmfind in Hmfind'.
     injection Hmfind'; intro Heq; rewrite <-Heq; clear Heq Hmfind'.
     inversion_clear Hmceq as [|? ? ? ? ? Hmc'|].
     apply Hmc' with (1:=Hmfind) in Hfindo; clear Hmc'.
-    assert (sem_var H y n absent) as Hyabs
-        by (apply Hdefabs; constructor); clear Hdefabs.
-    specialize Hys with n.
-    apply sem_var_det with (1:=Hys) in Hyabs.
-    admit.
+    inversion_clear Hrhsa as [|? ? ? Hlaea|].
+    apply sem_laexp_det with (1:=(Hls n)) in Hlaea.
+    now apply IH with (1:=Hlaea) (2:=Hfindo).
   - rename Habs into menv.
     intros Hdefabs Hmceq.
     constructor.
@@ -915,16 +909,13 @@ Proof.
     inversion_clear Hmceq as [| |? ? ? ? ? Hmenv].
     apply Hmenv in Hmfind.
     rewrite Hmfind.
-    assert (sem_var H y n absent) as Hyabs
-        by (apply Hdefabs; constructor).
+    inversion_clear Hdefabs as [| |? ? ? Hlaea].
+    apply sem_laexp_det with (1:=(Hls n)) in Hlaea.
     specialize Hy with n.
-    destruct (ls n).
-    + destruct Hy as [Hmseq H0].
-      rewrite Hmseq.
-      reflexivity.
-    + destruct Hy as [H0 Hyp].
-      apply sem_var_det with (1:=Hyabs) in Hyp.
-      discriminate.
+    rewrite Hlaea in Hy.
+    destruct Hy as [Hmseq H0].
+    rewrite Hmseq.
+    reflexivity.
   - intros menv Hmc.
     inversion_clear Hmc as [? ? ? i' o' eqs' Hf' Hmceqs].
     rewrite Hf in Hf'.
@@ -934,101 +925,16 @@ Proof.
       clear i' o' eqs' Hf' HR1 HR2 HR3.
     clear Heqs.
     destruct IH as [H [Hxs [Hys [Habs' HH]]]].
+    apply Habs' in Habs.
+    apply Forall_Forall with (1:=Habs) in HH.
     apply Forall_Forall with (1:=Hmceqs) in HH.
+    clear Habs Hmceqs.
     econstructor; [exact Hf|].
     apply Forall_impl with (2:=HH); clear HH.
     intros eq HH.
-    destruct HH as [Hmceq [Hmsem HH]].
-    apply HH with (2:=Hmceq).
-
-
-
-    intros x Hxdi.
-    apply Habs' with (1:=Habs).
-    econstructor.
-
-
-
-  Print Memory_Corres.
-  Check Memory_Corres_mult.
-  induction 2
-  using msem_node_mult.
-  induction G as [|node G IHnode]; [now inversion_clear 2|].
-  intros f fnode n M menv Hwdef Hfindn Hmc Hmu.
-  pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
-  destruct node as [name input output eqs].
-  destruct (ident_eq_dec f name) as [Hfeq|Hfneq].
-  - rewrite Hfeq in *.
-    destruct fnode as [name' input' output' eqs'].
-    assert (Hfindn':=Hfindn).
-    simpl in Hfindn';
-      unfold ident_eqb in Hfindn';
-      rewrite Pos.eqb_refl in Hfindn'.
-    injection Hfindn';
-      intros HR1 HR2 HR3 HR4;
-      rewrite <-HR1,<-HR2,<-HR3,<-HR4 in *;
-      clear HR1 HR2 HR3 HR4 Hfindn'.
-    econstructor; [now apply Hfindn|].
-
-    inversion Hwdef as [|? ? Hwdef' neqs ni no
-                         Hwsch Hindi Hoivi Hnini Hfnone Hnname [HR1 HR2]].
-    unfold neqs,ni,no in *; clear neqs ni no HR1 HR2.
-    simpl in *.
-    clear Hfindn.
-    apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini).
-    inversion_clear Hmc as [? ? ? ? ? ? Hfindn Hmceqs].
-    simpl in Hfindn;
-      unfold ident_eqb in Hfindn;
-      rewrite Pos.eqb_refl in Hfindn.
-    injection Hfindn;
-      intros HR1 HR2 HR3;
-      rewrite <-HR1,<-HR2,<-HR3 in *;
-      clear HR1 HR2 HR3 Hfindn.
-    apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnini) in Hmceqs.
-
-    clear Hwdef Hwsch Hindi Hoivi Hnini Hord.
-    induction eqs as [|eq eqs IH]; [now constructor|].
-    apply Forall_cons2 in Hmceqs.
-    destruct Hmceqs as [Hmceq Hmceqs].
-
-    destruct eq as [x e|x g e|x v0 e];
-    (apply IH in Hmceqs;
-       [|intros g' Hgini; apply Hfnone; constructor 2; exact Hgini]);
-    repeat constructor; try exact Hmceqs.
-    + intros Mo omenv Hmfind Hfindo.
-      inversion_clear Hmu as [? Hmfindm Hmfindi].
-      assert (Hmu':=Hmfind).
-      apply Hmfindi in Hmu'.
-      inversion_clear Hmceq as [|? ? ? ? ? Homc|].
-      pose proof (Homc _ _ Hmfind Hfindo) as Homc'.
-      assert (find_node g G <> None) as Hfindg
-          by (apply Hfnone; repeat constructor).
-      assert (exists node, find_node g G = Some node) as Hnode.
-      destruct (find_node g G) as [node|];
-        [|exfalso; apply Hfindg; reflexivity].
-      exists node; reflexivity.
-      destruct Hnode as [node Hnode].
-      now apply IHnode with (1:=Hwdef') (2:=Hnode) (3:=Homc') (4:=Hmu').
-    + intros ms Hmfind.
-      inversion_clear Hmu as [? Hmfindm Hmfindi].
-      assert (Hms:=Hmfind).
-      apply Hmfindm in Hms.
-      inversion_clear Hmceq as [| |? ? ? ? ? Hfindm].
-      apply Hfindm in Hmfind.
-      rewrite Hmfind.
-      rewrite Hms.
-      reflexivity.
-  - apply Welldef_global_cons in Hwdef.
-    apply not_eq_sym in Hfneq.
-    apply Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq).
-    assert (Hfneq':=Hfneq).
-    apply ident_eqb_neq in Hfneq'.
-    simpl in Hfindn.
-    rewrite Hfneq' in Hfindn.
-    apply Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc.
-    now apply IHnode with (1:=Hwdef) (2:=Hfindn) (3:=Hmc) (4:=Hmu).
+    destruct HH as [Hmceq [Habseq [Hmsem HH]]].
+    now apply HH with (1:=Habseq) (2:=Hmceq).
 Qed.
-*)
 
 Lemma Is_memory_in_msem_var:
   forall G H M n x eqs c,
