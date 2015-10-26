@@ -85,20 +85,6 @@ Proof.
   now apply PM.gso.
 Qed.
 
-Inductive rhs_absent (H: history) (n: nat) : equation -> Prop :=
-| AEqDef:
-    forall x cae,
-      sem_caexp H cae n absent ->
-      rhs_absent H n (EqDef x cae)
-| AEqApp:
-    forall x f lae,
-      sem_laexp H lae n absent ->
-      rhs_absent H n (EqApp x f lae)
-| AEqFby:
-    forall x v0 lae,
-      sem_laexp H lae n absent ->
-      rhs_absent H n (EqFby x v0 lae).
-
 Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
 | SEqDef:
     forall H M x cae,
@@ -271,48 +257,6 @@ End msem_node_mult.
 
 Definition msem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
-
-(* The original idea was to 'bake' the following assumption into msem_node:
-
-       (forall n y, xs n = absent
-                    -> Is_defined_in y eqs
-                    -> sem_var H y n absent)
-
-   That is, when the node input is absent then so are all of the
-   variables defined within the node. This is enough to show
-   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
-   the counter-example:
-
-       node f (x) = y where
-         y = 1 when false
-         s = 0 fby x
-
-       node g (x) = y where
-         y = f (3 when Cbase)
-
-   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
-   internal value y satisfies the assumption (it is always absent), but the
-   instantiation of f is still called at a faster rate.
-
-   The current (proposed) solution is to insist that all of the rhs' be
-   absent when the input is. This should be enough to ensure the two
-   key properties:
-   1. for (x = f e), e absent implies x absent (important for translation
-                     correctness),
-   2. for (x = f e) and (x = v0 fby e), e absent implies that the memories
-                     'stutter'.
-   This constraint _should_ follow readily from the clock calculus. Note that
-   we prefer a semantic condition here even if it will be shown via a static
-   analysis witnessed by clocks in expressions.
-
-   This extra condition
-   is only necessary for the correctness proof of imperative code generation.
-   A translated node is only executed when the clock of its input expression
-   is true. For this 'optimization' to be correct, whenever the input is
-   absent, the output must be absent and the internal memories must not change.
-   These facts are consequences of the clock constraint above (see the
-   absent_invariant lemma below).
- *)
 
 Lemma rhs_absent_lhs_node:
   forall G f xs M ys n,
@@ -811,7 +755,7 @@ Proof.
   intros f xs ys Hwdef Hsem.
   assert (Hsem' := Hsem).
   inversion_clear Hsem' as [? ? ? ? ? ? Hfind HH].
-  destruct HH as [H [Hxs [Hys Heqs]]].
+  destruct HH as [H [Hxs [Hys [Habs Heqs]]]].
   pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
   pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
   pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
@@ -836,8 +780,7 @@ Proof.
     exists H.
     split; [exact Hxs|].
     split; [exact Hys|].
-    split.
-    admit. (* obligation on clocks *)
+    split; [exact Habs|].
     apply msem_equation_cons2 with (1:=Hord') (2:=Hmsem) (3:=Hnini).
   - apply ident_eqb_neq in Hnf.
     apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.

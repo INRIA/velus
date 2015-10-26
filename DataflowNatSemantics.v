@@ -96,6 +96,20 @@ with sem_cexp (H: history): cexp -> nat -> value -> Prop :=
       sem_lexp H e n v ->
       sem_cexp H (Eexp e) n v.
 
+Inductive rhs_absent (H: history) (n: nat) : equation -> Prop :=
+| AEqDef:
+    forall x cae,
+      sem_caexp H cae n absent ->
+      rhs_absent H n (EqDef x cae)
+| AEqApp:
+    forall x f lae,
+      sem_laexp H lae n absent ->
+      rhs_absent H n (EqApp x f lae)
+| AEqFby:
+    forall x v0 lae,
+      sem_laexp H lae n absent ->
+      rhs_absent H n (EqFby x v0 lae).
+
 Inductive sem_equation (G: global) : history -> equation -> Prop :=
 | SEqDef:
     forall H x cae,
@@ -122,6 +136,8 @@ with sem_node (G: global) : ident -> stream -> stream -> Prop :=
       (exists (H: history),
         (forall n, sem_var H i.(v_name) n (xs n))
         /\ (forall n, sem_var H o.(v_name) n (ys n))
+        /\ (forall n, xs n = absent ->
+                      Forall (rhs_absent H n) eqs)
         /\ Forall (sem_equation G H) eqs) ->
       sem_node G f xs ys.
 
@@ -173,10 +189,14 @@ Section sem_node_mult.
            (Heqs : exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
 	             /\ (forall n, sem_var H (v_name o) n (ys n))
+                     /\ (forall n, xs n = absent
+                                   -> Forall (rhs_absent H n) eqs)
 	             /\ Forall (sem_equation G H) eqs),
       (exists H : history,
           (forall n, sem_var H (v_name i) n (xs n))
           /\ (forall n, sem_var H (v_name o) n (ys n))
+          /\ (forall n, xs n = absent
+                        -> Forall (rhs_absent H n) eqs)
           /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs)
       -> Pn f xs ys (SNode G f xs ys i o eqs Hf Heqs).
 
@@ -202,14 +222,18 @@ Section sem_node_mult.
           (* Turn: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
 	             /\ (forall n, sem_var H (v_name o) n (ys n))
+                     /\ (forall n, xs n = absent
+                                   -> Forall (rhs_absent H n) eqs)
 	             /\ Forall (sem_equation G H) eqs
              into: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
                      /\ (forall n, sem_var H (v_name o) n (ys n))
+                     /\ (forall n, xs n = absent
+                                   -> Forall (rhs_absent H n) eqs)
                      /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs *)
            (match Hnode with
-            | ex_intro H (conj Hxs (conj Hys Heqs)) =>
-                ex_intro _ H (conj Hxs (conj Hys
+            | ex_intro H (conj Hxs (conj Hys (conj Habs Heqs))) =>
+                ex_intro _ H (conj Hxs (conj Hys (conj Habs
                   (((fix map (eqs : list equation)
                              (Heqs: Forall (sem_equation G H) eqs) :=
                        match Heqs in Forall _ fs
@@ -221,11 +245,53 @@ Section sem_node_mult.
                          Forall_cons eq (@ex_intro _ _ Heq
                                            (sem_equation_mult H eq Heq))
                                      (map eqs Heqs')
-                       end) eqs Heqs))))
+                       end) eqs Heqs)))))
             end)
     end.
 
 End sem_node_mult.
+
+(* The original idea was to 'bake' the following assumption into sem_node:
+
+       (forall n y, xs n = absent
+                    -> Is_defined_in y eqs
+                    -> sem_var H y n absent)
+
+   That is, when the node input is absent then so are all of the
+   variables defined within the node. This is enough to show
+   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
+   the counter-example:
+
+       node f (x) = y where
+         y = 1 when false
+         s = 0 fby x
+
+       node g (x) = y where
+         y = f (3 when Cbase)
+
+   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
+   internal value y satisfies the assumption (it is always absent), but the
+   instantiation of f is still called at a faster rate.
+
+   The current (proposed) solution is to insist that all of the rhs' be
+   absent when the input is. This should be enough to ensure the two
+   key properties:
+   1. for (x = f e), e absent implies x absent (important for translation
+                     correctness),
+   2. for (x = f e) and (x = v0 fby e), e absent implies that the memories
+                     'stutter'.
+   This constraint _should_ follow readily from the clock calculus. Note that
+   we prefer a semantic condition here even if it will be shown via a static
+   analysis witnessed by clocks in expressions.
+
+   This extra condition
+   is only necessary for the correctness proof of imperative code generation.
+   A translated node is only executed when the clock of its input expression
+   is true. For this 'optimization' to be correct, whenever the input is
+   absent, the output must be absent and the internal memories must not change.
+   These facts are consequences of the clock constraint above (see the
+   absent_invariant lemma below).
+ *)
 
 Definition sem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
@@ -429,7 +495,7 @@ Proof.
     rewrite find_node_tl with (1:=Hnf) in Hf.
     apply SNode with (1:=Hf).
     clear Heqs.
-    destruct IH as [H [Hxs [Hys Heqs]]].
+    destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
     exists H.
     intuition.
     apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
@@ -493,9 +559,9 @@ Proof.
   apply find_node_other with (2:=Hfind) in Hnf.
   econstructor; [exact Hnf|clear Hnf].
   clear Heqs.
-  destruct IH as [H [Hxs [Hys Heqs]]].
+  destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
   exists H.
-  intuition; clear Hxs Hys.
+  intuition; clear Hxs Hys Habs.
   assert (forall g, Is_node_in g eqs
                     -> Exists (fun nd=> g = nd.(n_name)) G)
     as Hniex
