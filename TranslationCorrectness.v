@@ -1420,7 +1420,6 @@ Proof.
             apply Is_variable_in_Is_defined_in in Hivio.
             simpl in Hivio.
             apply Hfclk in Hlsn.
-            Check rhs_absent_lhs.
             apply rhs_absent_lhs with (1:=Hwdef) (2:=Hlsn) (3:=Hsneqs) in Hivio.
             pose proof (sem_var_det _ _ _ _ _ Hsy HH) as Hysn.
             specialize Hys with n.
