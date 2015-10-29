@@ -924,7 +924,7 @@ Proof.
       rewrite <-HR1, <-HR2, <-HR3 in *;
       clear i' o' eqs' Hf' HR1 HR2 HR3.
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs' HH]]]].
+    destruct IH as [H [Hxs [Hys [Habs' [Hout HH]]]]].
     apply Habs' in Habs.
     apply Forall_Forall with (1:=Habs) in HH.
     apply Forall_Forall with (1:=Hmceqs) in HH.
@@ -1281,7 +1281,7 @@ Proof.
     inversion_clear Hsem as [|? ? ? ? Mo ? ls ys Hfindi Hlae Hsy Hmsem|].
     assert (Hmsem' := Hmsem).
     inversion_clear Hmsem' as [? ? ? ? i o neqs Hfindn HnH].
-    destruct HnH as [fH [Hls [Hys [Hfclk Hsneqs]]]].
+    destruct HnH as [fH [Hls [Hys [Hfclk [Hsout Hsneqs]]]]].
 
     pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ _ Hevals)
       as Hminv.
@@ -1639,7 +1639,7 @@ Proof.
   injection Hfind.
   intros; subst.
   clear Hfind.
-  destruct Hsem as [H [Hi [Ho [Hclk Hsem]]]].
+  destruct Hsem as [H [Hi [Ho [Hclk [Hsout Hsem]]]]].
   specialize Hi with n.
   specialize Ho with n.
 
@@ -1820,7 +1820,7 @@ Proof.
     econstructor; [exact Hfind'|clear Hfind'].
     injection Hfindc;
       intros HR1 HR2; rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfindc.
-    destruct Hmsem' as [H [Hxs [Hys [Hclk Hmsem]]]].
+    destruct Hmsem' as [H [Hxs [Hys [Hclk [Hsout Hmsem]]]]].
     simpl in Heval.
     assert (HordF:=Hord).
     inversion_clear Hord as [|? ? Hord' Hnin Hnneq].

@@ -136,8 +136,11 @@ with sem_node (G: global) : ident -> stream -> stream -> Prop :=
       (exists (H: history),
         (forall n, sem_var H i.(v_name) n (xs n))
         /\ (forall n, sem_var H o.(v_name) n (ys n))
+        (* no clocks faster than input *)
         /\ (forall n, xs n = absent ->
                       Forall (rhs_absent H n) eqs)
+        (* output clock matches input clock *)
+        /\ (forall n, xs n = absent <-> ys n = absent)
         /\ Forall (sem_equation G H) eqs) ->
       sem_node G f xs ys.
 
@@ -191,12 +194,14 @@ Section sem_node_mult.
 	             /\ (forall n, sem_var H (v_name o) n (ys n))
                      /\ (forall n, xs n = absent
                                    -> Forall (rhs_absent H n) eqs)
+                     /\ (forall n, xs n = absent <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs),
       (exists H : history,
           (forall n, sem_var H (v_name i) n (xs n))
           /\ (forall n, sem_var H (v_name o) n (ys n))
           /\ (forall n, xs n = absent
                         -> Forall (rhs_absent H n) eqs)
+          /\ (forall n, xs n = absent <-> ys n = absent)
           /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs)
       -> Pn f xs ys (SNode G f xs ys i o eqs Hf Heqs).
 
@@ -224,16 +229,18 @@ Section sem_node_mult.
 	             /\ (forall n, sem_var H (v_name o) n (ys n))
                      /\ (forall n, xs n = absent
                                    -> Forall (rhs_absent H n) eqs)
+                     /\ (forall n, xs n = absent <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs
              into: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
                      /\ (forall n, sem_var H (v_name o) n (ys n))
                      /\ (forall n, xs n = absent
                                    -> Forall (rhs_absent H n) eqs)
+                     /\ (forall n, xs n = absent <-> ys n = absent)
                      /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs *)
            (match Hnode with
-            | ex_intro H (conj Hxs (conj Hys (conj Habs Heqs))) =>
-                ex_intro _ H (conj Hxs (conj Hys (conj Habs
+            | ex_intro H (conj Hxs (conj Hys (conj Habs (conj Hout Heqs)))) =>
+                ex_intro _ H (conj Hxs (conj Hys (conj Habs (conj Hout
                   (((fix map (eqs : list equation)
                              (Heqs: Forall (sem_equation G H) eqs) :=
                        match Heqs in Forall _ fs
@@ -245,7 +252,7 @@ Section sem_node_mult.
                          Forall_cons eq (@ex_intro _ _ Heq
                                            (sem_equation_mult H eq Heq))
                                      (map eqs Heqs')
-                       end) eqs Heqs)))))
+                       end) eqs Heqs))))))
             end)
     end.
 
@@ -495,7 +502,7 @@ Proof.
     rewrite find_node_tl with (1:=Hnf) in Hf.
     apply SNode with (1:=Hf).
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+    destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
     exists H.
     intuition.
     apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
@@ -559,7 +566,7 @@ Proof.
   apply find_node_other with (2:=Hfind) in Hnf.
   econstructor; [exact Hnf|clear Hnf].
   clear Heqs.
-  destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+  destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
   exists H.
   intuition; clear Hxs Hys Habs.
   assert (forall g, Is_node_in g eqs
@@ -621,5 +628,4 @@ Proof.
     now apply sem_node_cons with (1:=Hord) (2:=Hnode) (3:=Hnf).
   - econstructor; eassumption; assumption.
 Qed.
-
 

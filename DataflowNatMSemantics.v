@@ -121,6 +121,7 @@ with msem_node (G: global) : ident -> stream -> memory -> stream -> Prop :=
         /\ (forall n, sem_var H o.(v_name) n (ys n))
         /\ (forall n, xs n = absent ->
                       Forall (rhs_absent H n) eqs)
+        /\ (forall n, xs n = absent <-> ys n = absent)
         /\ Forall (msem_equation G H M) eqs) ->
       msem_node G f xs M ys.
 
@@ -190,12 +191,14 @@ Section msem_node_mult.
               /\ (forall n, sem_var H (v_name o) n (ys n))
               /\ (forall n, xs n = absent ->
                             Forall (rhs_absent H n) eqs)
+              /\ (forall n, xs n = absent <-> ys n = absent)
               /\ Forall (msem_equation G H M) eqs),
       (exists H : history,
              (forall n, sem_var H (v_name i) n (xs n))
           /\ (forall n, sem_var H (v_name o) n (ys n))
           /\ (forall n, xs n = absent ->
                         Forall (rhs_absent H n) eqs)
+          /\ (forall n, xs n = absent <-> ys n = absent)
           /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs)
       -> Pn f xs M ys (SNode G f xs M ys i o eqs Hfind Hnode).
 
@@ -213,16 +216,18 @@ Section msem_node_mult.
                    /\ (forall n, sem_var H (v_name o) n (ys n))
                    /\ (forall n, xs n = absent
                                  -> Forall (rhs_absent H n) eqs)
+                   /\ (forall n, xs n = absent <-> ys n = absent)
                    /\ Forall (msem_equation G H M) eqs
            Into: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
                    /\ (forall n, sem_var H (v_name o) n (ys n))
                    /\ (forall n, xs n = absent
                                  -> Forall (rhs_absent H n) eqs)
+                   /\ (forall n, xs n = absent <-> ys n = absent)
                    /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs *)
            (match Hnode with
-            | ex_intro H (conj Hxs (conj Hys (conj Hclk Heqs))) =>
-                ex_intro _ H (conj Hxs (conj Hys (conj Hclk
+            | ex_intro H (conj Hxs (conj Hys (conj Hclk (conj Hout Heqs)))) =>
+                ex_intro _ H (conj Hxs (conj Hys (conj Hclk (conj Hout
                   (((fix map (eqs : list equation)
                              (Heqs: Forall (msem_equation G H M) eqs) :=
                        match Heqs in Forall _ fs
@@ -234,7 +239,7 @@ Section msem_node_mult.
                          Forall_cons eq (@ex_intro _ _ Heq
                                            (msem_equation_mult H M eq Heq))
                                      (map eqs Heqs')
-                       end) eqs Heqs)))))
+                       end) eqs Heqs))))))
             end)
     end
 
@@ -306,7 +311,7 @@ Proof.
     apply Is_variable_in_Is_defined_in in Hwdef.
     intro Habsx.
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+    destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
     specialize Hxs with n.
     specialize Hys with n.
     apply Habs in Habsx.
@@ -400,11 +405,12 @@ Proof.
     rewrite find_node_tl with (1:=Hnf) in Hf.
     apply SNode with (1:=Hf).
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+    destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
     exists H.
     split; [exact Hxs|].
     split; [exact Hys|].
     split; [exact Habs|].
+    split; [exact Hout|].
     apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
     apply Is_node_in_Forall in Hord.
     apply Forall_Forall with (1:=Hord) in Heqs.
@@ -445,7 +451,7 @@ Proof.
   apply find_node_other with (2:=Hfind) in Hnf.
   econstructor; [exact Hnf|clear Hnf].
   clear Heqs.
-  destruct IH as [H [Hxs [Hys [Habs Heqs]]]].
+  destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
   exists H.
   intuition; clear Hxs Hys.
   assert (forall g, Is_node_in g eqs
@@ -755,7 +761,7 @@ Proof.
   intros f xs ys Hwdef Hsem.
   assert (Hsem' := Hsem).
   inversion_clear Hsem' as [? ? ? ? ? ? Hfind HH].
-  destruct HH as [H [Hxs [Hys [Habs Heqs]]]].
+  destruct HH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
   pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
   pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
   pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
@@ -781,6 +787,7 @@ Proof.
     split; [exact Hxs|].
     split; [exact Hys|].
     split; [exact Habs|].
+    split; [exact Hout|].
     apply msem_equation_cons2 with (1:=Hord') (2:=Hmsem) (3:=Hnini).
   - apply ident_eqb_neq in Hnf.
     apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
