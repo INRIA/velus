@@ -44,8 +44,8 @@ Section Translate.
   Fixpoint Control (ck: clock)(s: stmt): stmt :=
     match ck with
     | Cbase => s
-    | Con ck x true => Ifte (tovar x) (Control ck s) Skip
-    | Con ck x false => Ifte (tovar x) Skip (Control ck s)
+    | Con ck x true  => Control ck (Ifte (tovar x) s Skip)
+    | Con ck x false => Control ck (Ifte (tovar x) Skip s)
     end.
 
   Fixpoint translate_lexp (e: lexp): exp :=
@@ -334,9 +334,10 @@ Instance Control_Proper :
 Proof.
   intros M M' HMeq ck ck' Hckeq e e' Heq; rewrite <-Hckeq, <-Heq;
   clear ck' e' Hckeq Heq.
-  induction ck as [ |ck' IH s sv].
+  revert e; induction ck as [ |ck' IH s sv].
   - reflexivity.
-  - destruct sv; simpl; rewrite IH, HMeq; reflexivity.
+  - intro e.
+    destruct sv; simpl; rewrite IH, HMeq; reflexivity.
 Qed.
 
 Instance translate_eqn_Proper :

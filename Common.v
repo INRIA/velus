@@ -153,5 +153,12 @@ Proof.
   inversion_clear He; auto.
 Qed.
 
-
+Lemma not_None_is_Some:
+  forall A (x : option A), x <> None <-> (exists v, x = Some v).
+Proof.
+  destruct x; intuition.
+  exists a; reflexivity.
+  discriminate.
+  match goal with H:exists _, _ |- _ => destruct H end; discriminate.
+Qed.
 

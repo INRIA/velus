@@ -52,15 +52,6 @@ Proof.
   assumption.
 Qed.
 
-Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
-  : clock -> Prop :=
-| IsCbase: Is_present_in mems menv env Cbase
-| IsCon:
-    forall ck c v,
-      Is_present_in mems menv env ck
-      -> exp_eval menv env (tovar mems c) (Cbool v)
-      -> Is_present_in mems menv env (Con ck c v).
-
 Lemma exp_eval_tovar_Cbool_dec:
   forall menv env mems c v,
     {exp_eval menv env (tovar mems c) (Cbool v)}
@@ -85,6 +76,15 @@ Proof.
     + no_match.
 Qed.
 
+Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
+  : clock -> Prop :=
+| IsCbase: Is_present_in mems menv env Cbase
+| IsCon:
+    forall ck c v,
+      Is_present_in mems menv env ck
+      -> exp_eval menv env (tovar mems c) (Cbool v)
+      -> Is_present_in mems menv env (Con ck c v).
+
 Lemma Is_present_in_dec:
   forall mems menv env ck,
     {Is_present_in mems menv env ck}+{~Is_present_in mems menv env ck}.
@@ -96,6 +96,35 @@ Proof.
     + destruct (exp_eval_tovar_Cbool_dec menv env mems i b); destruct b;
       (left; constructor; assumption) || right; inversion_clear 1; auto.
     + right; inversion_clear 1; auto.
+Qed.
+
+Inductive Is_absent_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
+  : clock -> Prop :=
+| IsAbs1:
+    forall ck c v,
+      Is_absent_in mems menv env ck
+      -> Is_absent_in mems menv env (Con ck c v)
+| IsAbs2:
+    forall ck c v1 v2,
+         Is_present_in mems menv env ck
+      -> exp_eval menv env (tovar mems c) (Cbool v1)
+      -> v2 <> v1
+      -> Is_absent_in mems menv env (Con ck c v2).
+
+Lemma Is_absent_in_disj:
+  forall mems menv env ck c v,
+    Is_absent_in mems menv env (Con ck c v)
+    -> (Is_absent_in mems menv env ck
+        \/ (forall v', exp_eval menv env (tovar mems c) (Cbool v')
+                       -> v' <> v)).
+Proof.
+  intros mems menv env ck c v.
+  inversion_clear 1 as [|? ? ? ? Hp Hexp Hneq]; intuition.
+  right; intros v' Hexp'.
+  intro HR; rewrite <-HR in *; clear HR.
+  apply Hneq.
+  pose proof (exp_eval_det _ _ _ _ _ Hexp Hexp') as Heq.
+  injection Heq; intuition.
 Qed.
 
 Lemma exp_eval_tovar:
@@ -144,40 +173,84 @@ Proof. (* TODO: redo proof *)
     apply Iskip.
 Qed.
 
-Lemma stmt_eval_Control:
+Lemma stmt_eval_Control_fwd:
   forall prog menv env mems c s menv' env',
     stmt_eval prog menv env (Control mems c s) (menv', env')
     -> (Is_present_in mems menv env c
-        /\  stmt_eval prog menv env s (menv', env'))
-       \/ (~Is_present_in mems menv env c /\ menv' = menv /\ env' = env).
+        /\ stmt_eval prog menv env s (menv', env'))
+       \/ (Is_absent_in mems menv env c
+           /\ menv' = menv /\ env' = env).
 Proof.
-  Hint Constructors Is_present_in.
+  Hint Constructors Is_present_in Is_absent_in.
   intros prog menv env mems c s menv' env' Hs.
-  induction c.
-  - intuition.
-  - destruct (Is_present_in_dec mems menv env (Con c i b)) as [Hp|Hnp];
-    [ left | right ];
-    destruct b; inversion_clear Hs;
-    try match goal with
-        | H:stmt_eval _ _ _ (Control _ _ _) _ |- _ => apply IHc in H;
-            destruct H; destruct H
-        | H:stmt_eval _ _ _ Skip _ |- _ => inversion H
-        end;
-    try match goal with
-        | Hn: ~Is_present_in _ _ _ _, H: Is_present_in _ _ _ _ |- _ =>
-          inversion_clear H; contradiction
-        end;
-    try (inversion_clear Hp;
-         match goal with
-         | H0: exp_eval _ _ _ (Cbool false),
-           H1: exp_eval _ _ _ (Cbool true) |- _ =>
-           discriminate (exp_eval_det _ _ _ _ _ H0 H1)
-         end);
-    try match goal with
-        | Hm: menv = _, He: env = _ |- _ => rewrite Hm, He in *
-        end;
-    auto;
-    contradict Hnp; auto.
+  revert s Hs.
+  induction c; [now intuition|].
+  intros s Hs.
+  simpl in Hs.
+  destruct b;
+    specialize (IHc _ Hs); clear Hs;
+    destruct IHc as [[Hp Hs]|[Hp [Hmenv Henv]]];
+    try inversion_clear Hs;
+  (left; now intuition)
+   || (right;
+        repeat progress
+               match goal with
+               | H: stmt_eval _ _ _ Skip _ |- _ => inversion H; subst; clear H
+               | Hp: Is_present_in _ _ _ _,
+                     He: exp_eval _ _ _ _ |- Is_absent_in _ _ _ _
+                 => apply IsAbs2 with (1:=Hp) (2:=He)
+               | _ => intuition
+               end).
+Qed.
+
+Lemma stmt_eval_Control:
+  forall prog mems menv env ck stmt,
+    (Is_absent_in mems menv env ck
+     -> stmt_eval prog menv env (Control mems ck stmt) (menv, env))
+    /\
+    (forall menv' env',
+       Is_present_in mems menv env ck
+       -> stmt_eval prog menv env stmt (menv', env')
+       -> stmt_eval prog menv env (Control mems ck stmt) (menv', env')).
+Proof.
+  intros prog mems menv env ck.
+  induction ck; intro s; split.
+  - now inversion 1.
+  - intros menv' env' Hp Hs; exact Hs.
+  - inversion_clear 1 as [? ? ? Hp|? ? ? ? Hp Hexp Hneq];
+    destruct b;
+    try (now apply IHck with (1:=Hp));
+    apply not_eq_sym in Hneq;
+      (apply Bool.not_true_is_false in Hneq
+       || apply Bool.not_false_is_true in Hneq);
+      subst;
+      apply IHck with (1:=Hp);
+      (apply Iifte_false with (1:=Hexp)
+       || apply Iifte_true with (1:=Hexp));
+      constructor.
+  - inversion_clear 1 as [|? ? ? Hp Hexp];
+    intro Hs;
+    destruct b;
+    apply IHck with (1:=Hp);
+    [ now apply Iifte_true with (1:=Hexp) (2:=Hs)
+    | now apply Iifte_false with (1:=Hexp) (2:=Hs) ].
+Qed.
+
+Lemma stmt_eval_Control_absent:
+  forall prog mems menv env ck stmt,
+    Is_absent_in mems menv env ck
+    -> stmt_eval prog menv env (Control mems ck stmt) (menv, env).
+Proof.
+  apply stmt_eval_Control.
+Qed.
+
+Lemma stmt_eval_Control_present:
+  forall prog mems menv env ck stmt menv' env',
+    Is_present_in mems menv env ck
+    -> stmt_eval prog menv env stmt (menv', env')
+    -> stmt_eval prog menv env (Control mems ck stmt) (menv', env').
+Proof.
+  apply stmt_eval_Control.
 Qed.
 
 Lemma stmt_eval_translate_cexp_menv_inv:
@@ -217,14 +290,14 @@ Proof. (* TODO: Tidy proof *)
   destruct eq as [y cae|y f lae|y v0 lae].
   - destruct cae.
     simpl in Heval.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     apply stmt_eval_translate_cexp_menv_inv in Heval2.
     rewrite Heval2. intuition.
     destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
   - destruct lae.
     simpl in Heval.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     inversion_clear Heval.
     rewrite <- H2.
@@ -233,7 +306,7 @@ Proof. (* TODO: Tidy proof *)
   - apply not_Is_memory_in_eq_EqFby in Hneq.
     unfold translate_eqn in Heval.
     destruct lae.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     inversion_clear Heval.
     rewrite <- H0.
@@ -252,14 +325,14 @@ Proof. (* TODO: Tidy proof *)
   destruct eq as [y cae|y f lae|y v0 lae].
   - destruct cae.
     simpl in Heval.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     apply stmt_eval_translate_cexp_menv_inv in Heval2.
     rewrite Heval2. intuition.
     destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
   - destruct lae.
     simpl in Heval.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     + inversion_clear Heval.
       rewrite <- H2.
@@ -269,7 +342,7 @@ Proof. (* TODO: Tidy proof *)
     + destruct Heval as [HR1 HR2]; rewrite HR1; reflexivity.
   - unfold translate_eqn in Heval.
     destruct lae.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     inversion_clear Heval.
     rewrite <- H0.
@@ -289,14 +362,14 @@ Proof.
   try apply not_Is_variable_in_eq_EqDef in Hnd.
   - (unfold translate_eqn in Heval;
      destruct e;
-     apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+     apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
      destruct Heval as [Hipi Heval]; [
        apply stmt_eval_translate_cexp_env_add in Heval;
        destruct Heval; rewrite H;
        rewrite PM.gso; [intuition | apply Hnd]
      | destruct Heval as [Hmenv Henv]; rewrite Henv; intuition]).
   - simpl in Heval; destruct e.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     inversion_clear Heval2.
     rewrite <- H3.
@@ -304,7 +377,7 @@ Proof.
     intro Hxy; apply Hnd; rewrite Hxy; constructor.
     destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
   - simpl in Heval; destruct e.
-    apply stmt_eval_Control in Heval; destruct Heval as [Heval|Heval];
+    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     inversion Heval2; intuition.
     destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
@@ -381,13 +454,6 @@ Local Ltac split_env_assumption :=
     |- _ => apply Henv in Hsem; [destruct Hsem |solve [auto]]; clear Henv
   end.
 
-(* Note that the converse:
-       Is_present_in memories menv env ck -> sem_clock H ck n true
-   cannot be shown, since the present/absent status of memories is lost
-   in menv/env. In other words, all elements of menv are always present,
-   so Is_present_in may be true when the corresponding clock is not
-   true under H (since it's elements may not be present on the "dataflow
-   side"). *)
 Lemma clock_correct_true:
   forall H n memories menv env ck,
     (forall x c, Is_free_in_clock x ck
@@ -413,6 +479,23 @@ Proof.
     intuition.
 Qed.
 
+Lemma get_exp_eval_tovar:
+  forall x mems menv env v,
+    (~ PS.In x mems -> PM.find x env = Some v)
+    -> (PS.In x mems -> find_mem x menv = Some v)
+    -> exp_eval menv env (tovar mems x) v.
+Proof.
+  intros x mems menv env v Hvar Hmem.
+  unfold tovar.
+  destruct (In_dec x mems) as [Hin|Hnin].
+  - specialize (Hmem Hin).
+    apply PS.mem_spec in Hin; rewrite Hin.
+    constructor; exact Hmem.
+  - specialize (Hvar Hnin).
+    apply mem_spec_false in Hnin; rewrite Hnin.
+    constructor; exact Hvar.
+Qed.
+
 Lemma clock_correct_false:
   forall H n memories menv env ck,
     (forall x c, Is_free_in_clock x ck
@@ -420,32 +503,28 @@ Lemma clock_correct_false:
                  -> (~PS.In x memories -> PM.find x env = Some c)
                     /\ (PS.In x memories -> find_mem x menv = Some c))
     -> sem_clock H ck n false
-    -> ~Is_present_in memories menv env ck.
+    -> Is_absent_in memories menv env ck.
 Proof.
-  Hint Constructors Is_present_in.
-  Hint Constructors sem_clock.
-  Hint Constructors Is_free_in_clock.
+  Hint Constructors Is_absent_in sem_clock Is_free_in_clock exp_eval.
   intros H n memories menv env.
-  induction ck as [|? ? x]; [inversion 2|].
+  induction ck as [|? ? x]; [ now inversion 2 | ].
   intro Henv.
-  inversion_clear 1 as [| |? ? ? ? Hclk'|? ? ? ? ? Hclk' Hvar].
-  apply IHck in Hclk'; auto.
-  inversion_clear 1; contradiction.
-  inversion_clear 1 as [|? ? ? Hipi Heval].
+  inversion_clear 1.
+  constructor; apply IHck; now auto.
+  apply clock_correct_true
+  with (memories:=memories) (menv:=menv) (env:=env) in H1;
+    [|now auto].
+  apply IsAbs2 with (1:=H1) (3:=H3).
   split_env_assumption.
-  repeat progress
-         match goal with
-         | H:_ \/ _ |- _ => destruct H
-         | H:_ /\ _ |- _ => destruct H
-         | H:exp_eval _ _ (tovar _ _ ) _ |- _ => apply exp_eval_tovar in H
-         | H:exp_eval _ _ (State _) _ |- _ => inversion_clear H
-         | H:exp_eval _ _ (Var _) _ |- _ => inversion_clear H
-         | H: find_mem _ _ = Some _ |- _ => rewrite H in *
-         | H: PM.find _ _ = Some _ |- _ => rewrite H in *
-         | Hin: PS.In _ _, Hmenv: PS.In _ _ -> _ |- _ => apply Hmenv in Hin
-         | Hin: ~PS.In _ _, Henv: ~PS.In _ _ -> _ |- _ => apply Henv in Hin
-         | H: Some _ = Some _ |- _ => solve [ injection H; auto ]
-         end.
+  destruct In_dec with x memories as [Hin|Hin];
+    match goal with
+    | H:~PS.In _ _ -> _, Hin:~PS.In _ _ |- _ => specialize (H Hin)
+    | H:PS.In _ _ -> _, Hin:PS.In _ _ |- _ => specialize (H Hin)
+    end;
+    apply PS.mem_spec in Hin || apply mem_spec_false in Hin;
+    unfold tovar;
+    rewrite Hin;
+    intuition.
 Qed.
 
 Lemma lexp_correct:
@@ -492,18 +571,17 @@ Proof.
   apply (lexp_correct _ _ _ _ _ _ _ Hlexp); auto.
 Qed.
 
-(* TODO: Tidy this proof *)
 Lemma cexp_correct:
-  forall H memories prog menv env menv' env' n c x e,
+  forall H memories prog menv env n c x e,
     sem_cexp H e n (present c)
     -> (forall x c, Is_free_in_cexp x e
                     -> sem_var H x n (present c)
                     -> (~PS.In x memories -> PM.find x env = Some c)
                        /\ (PS.In x memories -> find_mem x menv = Some c))
-    -> stmt_eval prog menv env (translate_cexp memories x e) (menv', env')
-    -> env' = PM.add x c env.
+    -> stmt_eval prog menv env (translate_cexp memories x e)
+                                                        (menv, PM.add x c env).
 Proof.
-  intros H memories prog menv env menv' env' n c x.
+  intros H memories prog menv env n c x.
   induction e as [ck e IH|b et IHt ef IHf|e] using cexp_mult
   with (P:=fun e =>
              sem_caexp H e n (present c)
@@ -513,56 +591,42 @@ Proof.
                     -> (~PS.In x memories -> PM.find x env = Some c)
                        /\ (PS.In x memories -> find_mem x menv = Some c))
              -> stmt_eval prog menv env (translate_caexp memories x e)
-                          (menv', env')
-             -> env' = PM.add x c env).
+                          (menv, PM.add x c env)).
   - (* CAexp *) inversion 1; auto.
   - (* Emerge *)
-    inversion_clear 1; inversion_clear 2;
-    solve [
-        apply IHt; auto
-      | apply IHf; auto
-      | split_env_assumption;
-        repeat progress
-               match goal with
-               | H:_ \/ _ |- _ => destruct H
-               | H:_ /\ _ |- _ => destruct H
-               | H:exp_eval _ _ (tovar _ _ ) _ |- _ => apply exp_eval_tovar in H
-               | H:exp_eval _ _ (State _) _ |- _ => inversion_clear H
-               | H:exp_eval _ _ (Var _) _ |- _ => inversion_clear H
-               | H: find_mem _ _ = Some _ |- _ => rewrite H in *
-               | H: PM.find _ _ = Some _ |- _ => rewrite H in *
-               | Hin: PS.In _ _, Hmenv: PS.In _ _ -> _ |- _ => apply Hmenv in Hin
-               | Hin: ~PS.In _ _, Henv: ~PS.In _ _ -> _ |- _ => apply Henv in Hin
-               | H: Some _ = Some _ |- _ => repeat injection H;
-                                            discriminate || auto
-               end
-      ].
+    inversion_clear 1; intro Henv.
+    + apply Iifte_true.
+      split_env_assumption.
+      apply get_exp_eval_tovar; now auto.
+      apply IHt; now auto.
+    + apply Iifte_false.
+      split_env_assumption.
+      apply get_exp_eval_tovar; now auto.
+      apply IHf; now auto.
   - (* Eexp *)
-    inversion 1; inversion 2; subst;
-    repeat progress match goal with
-    | H:sem_lexp _ _ _ _ |- _ => eapply lexp_correct in H; [|now auto]
-    | H1:exp_eval _ _ _ _, H2:exp_eval _ _ _ _ |- _ =>
-                                 eapply (exp_eval_det _ _ _ _ _ H1) in H2; subst
-    | _ => reflexivity
-    end.
+    inversion_clear 1; intro Henv.
+    unfold translate_cexp.
+    econstructor.
+    eapply lexp_correct; [eassumption|now auto].
+    reflexivity.
 Qed.
 
 Lemma caexp_correct:
-  forall H memories prog menv env menv' env' n c x e,
+  forall H memories prog menv env n c x e,
     sem_caexp H e n (present c)
     -> (forall x c, Is_free_in_caexp x e
                     -> sem_var H x n (present c)
                     -> (~PS.In x memories -> PM.find x env = Some c)
                        /\ (PS.In x memories -> find_mem x menv = Some c))
-    -> stmt_eval prog menv env (translate_caexp memories x e) (menv', env')
-    -> env' = PM.add x c env.
+    -> stmt_eval prog menv env (translate_caexp memories x e)
+                                                  (menv, PM.add x c env).
 Proof.
-  intros H memories prog menv env menv' env' n c x e Hsem Henv Hstmt.
+  intros H memories prog menv env n c x e Hsem Henv.
   destruct e as [ck ce].
   inversion_clear Hsem as [? ? ? ? Hlexp ?|].
-  change (stmt_eval prog menv env (translate_cexp memories x ce) (menv', env'))
-    in Hstmt.
-  apply cexp_correct with (1:=Hlexp) (3:=Hstmt); auto.
+  change (stmt_eval prog menv env (translate_cexp memories x ce)
+                     (menv, PM.add x c env)).
+  apply cexp_correct with (1:=Hlexp); now auto.
 Qed.
 
 (* Notes:
@@ -594,9 +658,10 @@ with Memory_Corres_eq (G: global) (n: nat) :
       Memory_Corres_eq G n M menv (EqDef x cae)
 | MemC_EqApp:
     forall M menv x f lae,
-      (forall Mo omenv, mfind_inst x M = Some Mo
-                        -> find_obj x menv = Some omenv
-                        -> Memory_Corres G n f Mo omenv)
+      (forall Mo, mfind_inst x M = Some Mo
+                  -> (exists omenv,
+                         find_obj x menv = Some omenv
+                         /\ Memory_Corres G n f Mo omenv))
       -> Memory_Corres_eq G n M menv (EqApp x f lae)
 | MemC_EqFby:
     forall M menv x v0 lae,
@@ -607,55 +672,46 @@ with Memory_Corres_eq (G: global) (n: nat) :
 Section Memory_Corres_mult.
   Variables (G: global) (n: nat).
 
-  Variable P : forall f M menv, Memory_Corres G n f M menv -> Prop.
-  Variable Peq : forall M menv eq, Memory_Corres_eq G n M menv eq -> Prop.
+  Variable P : ident -> memory -> memoryEnv -> Prop.
+  Variable Peq : memory -> memoryEnv -> equation -> Prop.
 
   Hypothesis EqDef_case: forall M menv x cae,
-      Peq M menv (EqDef x cae) (MemC_EqDef G n M menv x cae).
+      Peq M menv (EqDef x cae).
 
-  Hypothesis EqApp_case: forall M menv x f lae
-                                (Hmc : forall Mo omenv,
-                                    mfind_inst x M = Some Mo
-                                    -> find_obj x menv = Some omenv
-                                    -> Memory_Corres G n f Mo omenv),
-      (forall Mo omenv (Hmfind : mfind_inst x M = Some Mo)
-                       (Hfindo : find_obj x menv = Some omenv),
-          P f Mo omenv (Hmc Mo omenv Hmfind Hfindo))
-      -> Peq M menv (EqApp x f lae) (MemC_EqApp G n M menv x f lae Hmc).
+  Hypothesis EqApp_case: forall M menv x f lae,
+      (forall Mo (Hmfind: mfind_inst x M = Some Mo),
+          (exists omenv, find_obj x menv = Some omenv /\ P f Mo omenv))
+      -> Peq M menv (EqApp x f lae).
 
-  Hypothesis EqFby_case: forall M menv x v0 lae
-                                (Hfind : forall ms,
-                                    mfind_mem x M = Some ms
-                                    -> find_mem x menv = Some (ms n)),
-        Peq M menv (EqFby x v0 lae) (MemC_EqFby G n M menv x v0 lae Hfind).
+  Hypothesis EqFby_case: forall M menv x v0 lae,
+      (forall ms, mfind_mem x M = Some ms
+                  -> find_mem x menv = Some (ms n))
+      -> Peq M menv (EqFby x v0 lae).
 
   Hypothesis MemC_case:
     forall f M menv i o eqs
-           (Hfind : find_node f G = Some (mk_node f i o eqs))
-           (Heqs : List.Forall (Memory_Corres_eq G n M menv) eqs),
-      List.Forall (fun eq=> exists Hmc, Peq M menv eq Hmc) eqs
-      -> P f M menv (MemC G n f M menv i o eqs Hfind Heqs).
+           (Hfind : find_node f G = Some (mk_node f i o eqs)),
+      Forall (Peq M menv) eqs
+      -> P f M menv.
 
   Fixpoint Memory_Corres_mult (f    : ident)
                               (M    : memory)
                               (menv : memoryEnv)
                               (Hmc  : Memory_Corres G n f M menv)
-                              {struct Hmc} : P f M menv Hmc :=
-    match Hmc in (Memory_Corres _ _ f M menv) return (P f M menv Hmc) with
+                              {struct Hmc} : P f M menv :=
+    match Hmc in (Memory_Corres _ _ f M menv) return (P f M menv) with
     | MemC f M menv i o eqs Hfind Heqs =>
-        MemC_case f M menv i o eqs Hfind Heqs
+        MemC_case f M menv i o eqs Hfind
           (* Turn: Forall (Memory_Corres_eq G n M menv) eqs
-             into: Forall (fun eq=> exists Hmc, Peq M menv eq (Hmc eq)) eqs *)
+             into: Forall (Peq M menv) eqs *)
           ((fix map (eqs : list equation)
                     (Heqs: Forall (Memory_Corres_eq G n M menv) eqs) :=
-              match Heqs in Forall _ fs
-                    return (Forall (fun eq=> exists Heq, Peq M menv eq Heq) fs)
+              match Heqs in Forall _ fs return (Forall (Peq M menv) fs)
               with
               | Forall_nil => Forall_nil _
               | Forall_cons eq eqs Heq Heqs' =>
-                  Forall_cons eq
-                    (@ex_intro _ _ Heq (Memory_Corres_eq_mult M menv eq Heq))
-                    (map eqs Heqs')
+                Forall_cons eq (Memory_Corres_eq_mult M menv eq Heq)
+                            (map eqs Heqs')
               end) eqs Heqs)
     end
 
@@ -663,19 +719,23 @@ Section Memory_Corres_mult.
                              (menv  : memoryEnv)
                              (eq    : equation)
                              (Hmceq : Memory_Corres_eq G n M menv eq)
-                             {struct Hmceq} : Peq M menv eq Hmceq :=
-    match Hmceq in (Memory_Corres_eq _ _ M menv eq) return (Peq M menv eq Hmceq)
+                             {struct Hmceq} : Peq M menv eq.
+  refine(
+    match Hmceq in (Memory_Corres_eq _ _ M menv eq) return (Peq M menv eq)
     with
     | MemC_EqDef M menv x cae => EqDef_case M menv x cae
     | MemC_EqApp M menv x f lae Hmc =>
-        EqApp_case M menv x f lae Hmc
+        EqApp_case M menv x f lae
                    (fun (Mo     : memory)
-                        (omenv  : memoryEnv)
-                        (Hmfind : mfind_inst x M = Some Mo)
-                        (Hfindo : find_obj x menv = Some omenv) =>
-                      Memory_Corres_mult f Mo omenv (Hmc Mo omenv Hmfind Hfindo))
+                        (Hmfind : mfind_inst x M = Some Mo) => _)
     | MemC_EqFby M menv x v0 lae Hfind => EqFby_case M menv x v0 lae Hfind
-    end.
+    end).
+  specialize (Hmc Mo Hmfind).
+  destruct Hmc as [omenv [Hfindo Hmc]].
+  exists omenv.
+  apply Memory_Corres_mult in Hmc.
+  split; [exact Hfindo|exact Hmc].
+  Defined.
 
 End Memory_Corres_mult.
 
@@ -688,14 +748,18 @@ Lemma Memory_Corres_eq_node_tl:
 Proof.
   intros node G eqs n M menv Hord Hini.
   split; intro Hmc; revert M menv eqs Hmc Hini.
-  - induction 1 as [|? ? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn ? IH]
+  - induction 1 as [|? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn IH]
       using Memory_Corres_eq_mult
-      with (P:=fun f M menv IH=>
+      with (P:=fun f M menv=>
                  node.(n_name) <> f ->
                  Memory_Corres G n f M menv);
-      intro HH; try constructor.
-    + intros Mo omenv Hmfind Hfindo.
-      apply Hfind; try assumption.
+    intro HH; try constructor.
+    + intros Mo Hmfind.
+      specialize (Hfind _ Hmfind).
+      destruct Hfind as [omenv [Hfindo IH]].
+      exists omenv.
+      split; [exact Hfindo|].
+      apply IH.
       intro Hneq; rewrite <-Hneq in HH.
       apply HH; repeat constructor.
     + trivial.
@@ -705,37 +769,32 @@ Proof.
       econstructor; [exact Hfindn|].
       apply find_node_later_not_Is_node_in with (2:=Hfindn) in Hord.
       simpl in Hord; clear Hfindn.
-      induction eqs as [|eq eqs IHeqs]; [now constructor|].
-      apply Forall_cons2 in IH; destruct IH as [IH IHs].
-      apply not_Is_node_in_cons in Hord.
-      destruct Hord as [Hnini Hninis].
-      apply Forall_cons2 in Heqs; destruct Heqs as [Heq Heqs].
-      destruct IH as [IH0 IH]; clear IH0.
-      apply Forall_cons;
-        [ now apply IH with (1:=Hnini)
-        | now apply IHeqs with (1:=Hninis) (2:=Heqs) (3:=IHs) ].
-  - induction 1 as [|? ? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn ? IH]
+      apply Is_node_in_Forall in Hord.
+      apply Forall_Forall with (1:=Hord) in IH.
+      apply Forall_impl with (2:=IH).
+      intuition.
+  - induction 1 as [|? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn IH]
       using Memory_Corres_eq_mult
-      with (P:=fun f M menv IH=>
+      with (P:=fun f M menv=>
                  node.(n_name) <> f ->
                  Memory_Corres (node::G) n f M menv);
       intro HH; try constructor.
-    + intros Mo omenv Hmfind Hfindo.
-      apply Hfind; trivial.
-      intro Hnnf; apply HH; rewrite Hnnf; now constructor.
-    + apply Hfind.
+    + intros Mo Hmfind.
+      specialize (Hfind _ Hmfind).
+      destruct Hfind as [omenv [Hfindo IH]].
+      exists omenv.
+      split; [exact Hfindo|].
+      apply IH.
+      intro Hneq; rewrite <-Hneq in HH.
+      apply HH; repeat constructor.
+    + intuition.
     + apply find_node_later_not_Is_node_in with (2:=Hfindn) in Hord.
       rewrite <-find_node_tl with (1:=HH) in Hfindn.
       econstructor; [exact Hfindn|].
-      simpl in Hord; clear Hfindn Heqs.
-      induction eqs as [|eq eqs IHeqs]; [now constructor|].
-      apply not_Is_node_in_cons in Hord.
-      destruct Hord as [Hnini Hninis].
-      apply Forall_cons2 in IH; destruct IH as [IH IHs].
-      destruct IH as [IH0 IH]; clear IH0.
-      apply Forall_cons;
-        [now apply IH with (1:=Hnini)
-        | apply IHeqs with (1:=Hninis) (2:=IHs)].
+      apply Is_node_in_Forall in Hord.
+      apply Forall_Forall with (1:=Hord) in IH.
+      apply Forall_impl with (2:=IH).
+      intuition.
 Qed.
 
 Lemma Memory_Corres_eqs_node_tl:
@@ -810,9 +869,12 @@ Proof.
   destruct Hmc as [Hmc0 Hmc1].
   apply Forall_cons; [|apply IH with (1:=Hmfind) (2:=Hmc1)].
   destruct eq; repeat constructor.
-  - intros Mo omenv Hifind Hfindo.
+  - intros Mo Hifind.
     inversion_clear Hmc0 as [|? ? ? ? ? Hmc|].
-    now apply Hmc with (1:=Hifind) (2:=Hfindo).
+    specialize (Hmc _ Hifind).
+    destruct Hmc as [omenv HH].
+    exists omenv.
+    exact HH.
   - intros ms' Hmfind'.
     destruct (ident_eq_dec i y) as [He|Hne].
     + rewrite He in *.
@@ -858,12 +920,16 @@ Proof.
   destruct Hniii as [Hniii0 Hniii1].
   apply Forall_cons; [|now apply IH with (1:=Hmce1) (2:=Hniii1)].
   destruct eq; constructor; try constructor.
-  - intros Mo omenv' Hmfind Hfindo.
+  - intros Mo Hmfind.
     destruct (ident_eq_dec i y) as [Hiy|Hniy].
     + rewrite Hiy in Hniii0; exfalso; apply Hniii0; constructor.
-    + rewrite find_obj_gso in Hfindo; [|exact Hniy].
-      inversion_clear Hmce0 as [|? ? ? ? ? HH|].
-      apply HH with (1:=Hmfind) (2:=Hfindo).
+    + inversion_clear Hmce0 as [|? ? ? ? ? Hfindo|].
+      specialize (Hfindo _ Hmfind).
+      destruct Hfindo as [omenv' [Hfindo Hmc]].
+      exists omenv'.
+      split; [|exact Hmc].
+      rewrite find_obj_gso; [|exact Hniy].
+      exact Hfindo.
   - intros ms Hmfind.
     inversion_clear Hmce0 as [| |? ? ? ? ? HH].
     rewrite find_mem_add_obj.
@@ -892,14 +958,17 @@ Proof.
   - constructor.
   - intros Hrhsa Hmceq.
     constructor.
-    intros Mo omenv Hmfind' Hfindo.
+    intros Mo Hmfind'.
     rewrite Hmfind in Hmfind'.
     injection Hmfind'; intro Heq; rewrite <-Heq; clear Heq Hmfind'.
     inversion_clear Hmceq as [|? ? ? ? ? Hmc'|].
-    apply Hmc' with (1:=Hmfind) in Hfindo; clear Hmc'.
+    specialize (Hmc' _ Hmfind).
+    destruct Hmc' as [omenv [Hfindo Hmc]].
+    exists omenv.
+    split; [exact Hfindo|].
+    apply IH with (2:=Hmc).
     inversion_clear Hrhsa as [|? ? ? Hlaea|].
-    apply sem_laexp_det with (1:=(Hls n)) in Hlaea.
-    now apply IH with (1:=Hlaea) (2:=Hfindo).
+    now apply sem_laexp_det with (1:=(Hls n)) (2:=Hlaea).
   - rename Habs into menv.
     intros Hdefabs Hmceq.
     constructor.
@@ -961,6 +1030,24 @@ Proof.
   - apply IH; assumption.
 Qed.
 
+Lemma find_node_translate_find_class:
+  forall f G node,
+    find_node f G = Some node
+    -> (exists prog',
+           find_class f (translate G) = Some (translate_node node, prog')).
+Proof.
+  induction G as [|nd G IH]; [now inversion 1|].
+  intros node Hfind.
+  simpl; simpl in Hfind.
+  destruct (ident_eqb nd.(n_name) f) eqn:Heq.
+  - injection Hfind; intro He; rewrite He in *; clear He Hfind.
+    exists (translate G); reflexivity.
+  - apply IH in Hfind.
+    destruct Hfind as [prog'].
+    exists prog'.
+    assumption.
+Qed.
+
 Local Ltac resolve_env_assumption :=
   intro x; intros; split; intros;
   match goal with
@@ -988,13 +1075,6 @@ Local Ltac resolve_env_assumption :=
                  apply Is_well_sch_free_variable with x _ _ _ in Hws;
                  [ | auto | intro HH; apply PS.add_spec in HH; intuition ]
 
-             | H:   PS.In x _,
-               Hws: Is_well_sch _ (_ :: _),
-               Hm:  forall x : ident, ~Is_memory_in _ _ -> _ |- _ =>
-                 apply Is_well_sch_free_variable_in_mems with x _ _ _ in Hws;
-                 [ apply not_Is_defined_in_not_Is_memory_in in Hws;
-                   apply Hm in Hws; rewrite Hws | | apply PS.add_spec ]; auto
-
              | H0:~Is_variable_in _ _,
                H1: stmt_eval _ _ _ _ _ |- _ =>
                  apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ _ H1) in H0;
@@ -1013,7 +1093,8 @@ Local Ltac resolve_env_assumption :=
 
              | Hin: PS.In ?x ?mems,
                Hm: forall x, PS.In x ?mems -> Is_memory_in x _
-               |- find_mem ?x ?menv = Some _ => apply Hm in Hin
+               |- find_mem ?x ?menv = Some _ =>
+               specialize (Hm _ Hin)
 
              | H1: Is_memory_in ?x ?eqs,
                H2: sem_var ?H ?x ?n (present ?c),
@@ -1023,74 +1104,50 @@ Local Ltac resolve_env_assumption :=
 
              | H1: ?ms ?n = ?c |- find_mem ?x ?menv = Some ?c => rewrite <- H1
 
-             | H1: Is_memory_in ?x ?eqs,
-               H2: Forall (Memory_Corres_eq ?G ?n ?M ?menv) ?eqs,
-               H3: mfind_mem ?x ?M = ?xs
-               |- find_mem ?x ?menv = Some (?ms ?n) =>
-               apply Is_memory_in_Memory_Corres_eqs with (1:=H1) (2:=H2) (3:=H3)
-
-             | H1: Is_memory_in ?x ?eqs,
-               H2: Forall (Memory_Corres_eq ?G ?n ?M ?menv) ?eqs,
-               H3: mfind_mem ?x ?M = Some _ |- _ =>
-               apply Is_memory_in_Memory_Corres_eqs with (1:=H1) (2:=H2) in H3
+             | Hin: PS.In ?x ?mems,
+               Hwsch: Is_well_sch _ (_ :: _)
+               |- find_mem ?x _ = Some _ =>
+               inversion_clear Hwsch;
+                 match goal with
+                 | HH: forall i, ?isfreein i ?e -> ?Pvar /\ ?Pmem,
+                   Hf: ?isfreein ?x ?e |- _  => apply HH in Hf; destruct Hf
+                 end
 
              | H1: ?xs ?n = ?c,
                H2: find_mem ?x ?menv = Some (?xs ?n)
                |- find_mem ?x ?menv = Some ?c =>
                rewrite H1 in H2; exact H2
+
+             | Hin: PS.In ?x ?mems,
+               HH: PS.In ?x (PS.add _ ?mems) -> _ |- find_mem _ _ = Some _ =>
+               eapply or_intror in Hin;
+                 apply PS.add_spec in Hin;
+                 specialize (HH Hin)
+
+             | Hnd: ~Is_defined_in ?x ?eqs,
+               Hstmt: stmt_eval _ _ _ (translate_eqns ?mems ?eqs) (?menv', _)
+               |- find_mem ?x ?menv' = _ =>
+               apply not_Is_defined_in_not_Is_memory_in in Hnd;
+                 apply stmt_eval_translate_eqns_menv_inv with (2:=Hnd) in Hstmt;
+                 rewrite Hstmt
+
+             | Himi: Is_memory_in ?x ?all,
+               Hmc: Forall (Memory_Corres_eq _ ?n _ ?menv) ?all,
+               Hmfind: mfind_mem ?x _ = Some ?vs
+               |- find_mem ?x ?menv = Some (?vs ?n) =>
+               now apply Is_memory_in_Memory_Corres_eqs
+               with (1:=Himi) (2:=Hmc) (3:=Hmfind)
              end
   end.
 
-Lemma stmt_eval_EqDef_mem_inv:
-  forall prog menv env mems x e menv' env',
-    stmt_eval prog menv env (translate_eqn mems (EqDef x e)) (menv', env')
-    -> menv' = menv.
+Lemma not_absent_present:
+  forall x, x <> absent <-> exists c, x = present c.
 Proof.
-  intros until env'. intro Hstmt.
-  destruct e as [ck].
-  induction ck as [|? IH ? b];
-    [now apply stmt_eval_translate_cexp_menv_inv with (1:=Hstmt)|].
-  destruct b;
-    inversion_clear Hstmt;
-    match goal with
-    | H: stmt_eval prog menv env _ (menv', env') |- _ =>
-      (apply IH in H; assumption) || (inversion_clear H0; reflexivity)
-    end.
-Qed.
-
-Lemma stmt_eval_EqFby_env_inv:
-  forall prog menv env mems x v0 e menv' env',
-    stmt_eval prog menv env (translate_eqn mems (EqFby x v0 e)) (menv', env')
-    -> env' = env.
-Proof.
-  intros until env'. intro Hstmt.
-  destruct e as [ck].
-  induction ck as [|? IH ? b];
-    [inversion_clear Hstmt; reflexivity|].
-  destruct b;
-    inversion_clear Hstmt;
-    match goal with
-    | H: stmt_eval prog menv env _ (menv', env') |- _ =>
-      (apply IH in H; assumption) || (inversion_clear H0; reflexivity)
-    end.
-Qed.
-
-Lemma find_node_translate_find_class:
-  forall f G node,
-    find_node f G = Some node
-    -> (exists prog',
-           find_class f (translate G) = Some (translate_node node, prog')).
-Proof.
-  induction G as [|nd G IH]; [now inversion 1|].
-  intros node Hfind.
-  simpl; simpl in Hfind.
-  destruct (ident_eqb nd.(n_name) f) eqn:Heq.
-  - injection Hfind; intro He; rewrite He in *; clear He Hfind.
-    exists (translate G); reflexivity.
-  - apply IH in Hfind.
-    destruct Hfind as [prog'].
-    exists prog'.
-    assumption.
+  intros x.
+  split; intro HH.
+  destruct x; [intuition|eauto].
+  destruct HH as [c HH]; rewrite HH.
+  intro; discriminate.
 Qed.
 
 Lemma is_step_correct:
@@ -1108,9 +1165,7 @@ Lemma is_step_correct:
               (eqs: list equation)
               (n: nat)
               (menv: memoryEnv)
-              (menv': memoryEnv)
-              (env: constEnv)
-              (env': constEnv),
+              (env: constEnv),
         (exists oeqs, alleqs = oeqs ++ eqs)
         -> Welldef_global G
         -> prog = translate G
@@ -1136,56 +1191,53 @@ Lemma is_step_correct:
         (* - execution of translated equations *)
         -> Is_well_sch (PS.add input mems) eqs
         -> (forall x:ident, PS.In x mems -> Is_memory_in x alleqs)
-        -> (stmt_eval prog menv env (translate_eqns mems eqs) (menv', env'))
 
         (* - instantiated nodes (assumed) *)
-        -> (forall (f : ident) (fnode : DataflowSyntax.node)
-                   (xs : stream) (M : memory) (ys : stream)
-                   (prog' : program) (fclass : class) (menv : memoryEnv)
-                   (env : constEnv) (menv' : memoryEnv) (env' : constEnv),
+        -> (forall f fnode xs M ys prog' fclass menv env,
                find_node f G = Some fnode
                -> msem_node G f xs M ys
-               -> find_class f prog = Some (fclass, prog')
-               -> (forall c, xs n = present c
-                             <-> PM.find fclass.(c_input) env = Some c)
-               -> (forall x, Is_variable_in x fnode.(n_eqs)
-                             -> PM.find x env = None)
-               -> stmt_eval prog' menv env fclass.(c_step) (menv', env')
                -> Memory_Corres G n f M menv
-               -> (forall c, ys n = present c
-                             <-> PM.find fclass.(c_output) env' = Some c)
-                  /\ Memory_Corres G (S n) f M menv')
+               -> find_class f prog = Some (fclass, prog')
+               -> env = match xs n with
+                        | absent => empty
+                        | present c => PM.add (c_input fclass) c empty
+                        end
+               -> exists menv' env',
+                   stmt_eval prog' menv env (c_step fclass) (menv', env')
+                   /\ (forall c, ys n = present c
+                                 <-> PM.find (c_output fclass) env' = Some c)
+                   /\ Memory_Corres G (S n) f M menv')
 
         (* - unwritten memories (assumed) *)
         -> List.Forall (Memory_Corres_eq G n M menv) alleqs
 
         (* - locals (shown) *)
-        -> (forall x, Is_variable_in x eqs
-                    -> forall c : const, sem_var H x n (present c)
-                                         <-> PM.find x env' = Some c)
-           (* - written memories (shown) *)
-           /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs.
+        -> (exists menv' env',
+               stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+               /\ (forall x, Is_variable_in x eqs
+                             -> forall c : const, sem_var H x n (present c)
+                                                  <-> PM.find x env' = Some c)
+               (* - written memories (shown) *)
+               /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs).
 Proof.
   intros until alleqs.
   intros Hsems Himi.
 
-  induction eqs as [|eq].
-  split; intros; [ match goal with
-                   | H:Is_variable_in _ nil |- _ => inversion H
-                   end | now constructor ].
-  intros n menv menv'' env env'' Hall Hwdef Hprog Hin Henv Hin1 Hin2 Hwsch
-         Hmeq Hevals Hnode Hmc.
+  (* Induction on equations: translate_eqns [] = Skip *)
+  induction eqs as [|eq];
+    [ intros; exists menv, env;
+      split; [unfold translate_eqns; constructor|];
+      split; intros; [ match goal with
+                       | H:Is_variable_in _ nil |- _ => inversion H
+                       end | now constructor ]| ].
+  intros n menv env Hall Hwdef Hprog Hin Henv Hin1 Hin2 Hwsch Hmeq Hnode Hmc.
 
-  (* split stmt_eval into two parts *)
-  apply stmt_eval_translate_eqns_cons in Hevals;
-    destruct Hevals as [menv' Hevals];
-    destruct Hevals as [env' Hevals];
-    destruct Hevals as [Hevals Heval].
-
-  assert ((forall x, Is_variable_in x eqs
-                     -> forall c, sem_var H x n (present c)
-                                  <-> PM.find x env' = Some c)
-          /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs) as IHeqs'.
+  assert (exists menv' env',
+             stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+             /\ (forall x, Is_variable_in x eqs
+                           -> forall c, sem_var H x n (present c)
+                                        <-> PM.find x env' = Some c)
+             /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs) as IHeqs'.
   { eapply IHeqs.
     - apply List_shift_away with (1:=Hall).
     - exact Hwdef.
@@ -1196,12 +1248,11 @@ Proof.
     - apply not_Is_defined_in_cons with (1:=Hin2).
     - apply Is_well_sch_cons with (1:=Hwsch).
     - exact Hmeq.
-    - exact Hevals.
     - exact Hnode.
     - exact Hmc. }
 
   clear IHeqs.
-  destruct IHeqs' as [IHeqs0 IHeqs1].
+  destruct IHeqs' as [menv' [env' [Hstmt [IHeqs0 IHeqs1]]]].
 
   destruct Hall as [oeqs Hall].
   assert (Hsems' := Hsems); rewrite Hall in Hsems'.
@@ -1211,355 +1262,291 @@ Proof.
   apply Forall_cons2 in Hsems'.
   destruct Hsems' as [Hsem Hsems'].
 
-  destruct eq as [y cae|y f lae|y v0 lae].
-  - (* Inductive step for EqDef *)
-    split; [|repeat constructor; apply stmt_eval_EqDef_mem_inv in Heval;
-             rewrite Heval; exact IHeqs1].
-    intros x Hvi c.
-    apply Is_variable_in_cons in Hvi; destruct Hvi as [Hvieq|Hivieqs].
-    + inversion Hvieq; subst; clear Hvieq.
-      destruct cae as [ck ce].
-      simpl in Heval.
-      inversion_clear Hsem as [? ? ? ? Hsem'| |];
-        specialize Hsem' with n;
-        destruct Hsem' as [v Hsem];
-        destruct Hsem as [Hsv Hcae].
-      pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ _ Hevals)
-        as Hminv.
-      apply stmt_eval_Control in Heval;
-        destruct Heval as [Heval|Heval];
-        destruct Heval as [Hpi Heval].
-      { (* Is_present_in ck *)
-        inversion Hcae as [? ? ? c' Hcexp Hclk|? ? ? Hcexp Hclk];
-        subst; clear Hcae.
-        { (* sem_clock H ck n true *)
-          apply (cexp_correct _ _ _ _ _ _ _ _ _ _ _ Hcexp) in Heval.
-          2:now resolve_env_assumption.
-          rewrite Heval; rewrite PM.gss; split.
-          intro Hsv';
-            assert (present c' = present c) as Heq
-              by apply sem_var_det with (1:=Hsv) (2:=Hsv').
-          injection Heq as Heq'; subst; reflexivity.
-          injection 1 as Heq; rewrite Heq in Hsv; assumption. }
-        { (* sem_clock H ck n false *)
-          apply clock_correct_false with _ _ mems menv' env' _ in Hclk.
-          2:now resolve_env_assumption.
-          contradiction. }
-      }
-      { (* ~Is_present_in ck *)
-        destruct Heval as [HR1 HR2]; rewrite HR2 in *; clear HR1 HR2.
-        inversion Hcae as [ ck' ce' n' c' Hcexp Hclk
-                          | ck' ce' n' Hcexp Hclk [HR1 HR2] HR3 HR4].
-        { (* sem_clock H ck n true *)
-          apply (clock_correct_true H n mems menv' env' ck) in Hclk.
-          2:now resolve_env_assumption.
-          contradiction. }
-        { (* sem_clock H ck n false *)
-          split.
-          { intro Hsv'.
-            pose proof (sem_var_det _ _ _ _ _ Hsv Hsv') as Hbad.
-            rewrite <- HR4 in Hbad.
-            discriminate Hbad. }
-          { intro Hfx.
-            destruct (Is_variable_in_dec y eqs) as [Hvi|Hvni].
-            apply IHeqs0; [apply Hvi | apply Hfx].
-            apply (stmt_eval_translate_eqns_env_inv _ _ _ _ _ _ _ Hevals)
-              in Hvni.
-            rewrite Hvni in Hfx.
-            rewrite Henv in Hfx.
-            discriminate.
-            repeat constructor. }
-        }
-      }
-    + destruct Hivieqs as [H0 H1].
-      apply IHeqs0 with (c:=c) in H1; rewrite H1.
-      apply not_Is_variable_in_eq with (2:=Heval) in H0.
-      rewrite H0; intuition.
-  - (* TODO: Inductive step for EqApp: y = f lae. *)
-    destruct lae as [ck le].
-    simpl in Heval.
-    inversion_clear Hsem as [|? ? ? ? Mo ? ls ys Hfindi Hlae Hsy Hmsem|].
-    assert (Hmsem' := Hmsem).
-    inversion_clear Hmsem' as [? ? ? ? i o neqs Hfindn HnH].
-    destruct HnH as [fH [Hls [Hys [Hfclk [Hsout Hsneqs]]]]].
-
-    pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ _ Hevals)
-      as Hminv.
-    apply stmt_eval_Control in Heval;
-      destruct Heval as [Heval|Heval];
-      destruct Heval as [Hpi Heval].
-    + (* Is_present_in ck *)
-      inversion_clear Heval.
-      match goal with
-      | H0: find_obj y menv' = Some omenv,
-        H1: exp_eval menv' env' (translate_lexp mems le) v,
-        H2 : stmt_step_eval prog omenv f v omenv' rv,
-        H3 : add_obj y omenv' menv' = menv'',
-        H4 : PM.add y rv env' = env'' |- _ =>
-          rename H0 into Hfindo;
-          rename H1 into Hexp;
-          rename H2 into Heval;
-          rename H3 into Hmenv'';
-          rewrite <-H4 in *; clear H4
-      end.
-      specialize Hlae with n.
-      inversion Hlae as [? ? ? ? Hlexp Hclk H1 H2 Hlsn
-                        | ? ? ? Hlexp Hclk H0 H2 Hlsn]; clear H0 H1 H2.
-      * (* sem_clock H ck n true *)
-        apply lexp_correct with (memories:=mems) (menv:=menv') (env:=env')
-          in Hlexp.
-        2:resolve_env_assumption.
-        inversion_clear Heval as [? ? ? ? prog' ? ? cls oenv' Hfindc Heval' Hout].
-        assert (Hfindn':=Hfindn).
-        apply find_node_translate_find_class in Hfindn'.
-        destruct Hfindn' as [prog'' Hfindc'].
-        rewrite Hprog in Hfindc.
-        rewrite Hfindc' in Hfindc.
-        injection Hfindc;
-          intros He1 He2; rewrite He1 in *; rewrite <-He2 in Hout;
-          clear He1 Hfindc; simpl in *.
-        apply (exp_eval_det _ _ _ _ _ Hexp) in Hlexp.
-
-        assert((forall c, ys n = present c
-                          <-> PM.find cls.(c_output) oenv' = Some c)
-               /\ Memory_Corres G (S n) f Mo omenv') as Hinv.
-        { eapply Hnode with (env:=PM.add (c_input cls) v empty).
-          - exact Hfindn.
-          - exact Hmsem.
-          - rewrite <-He2, Hprog. exact Hfindc'.
-          - rewrite <-He2; simpl.
-            rewrite PM.gss, <- Hlsn, Hlexp.
-            intro c0; split; injection 1; intro He; rewrite He; intuition.
-          - intros x Hivi.
-            rewrite <- He2, PM.gso.
-            apply PM.gempty.
-            intro Hxni; simpl in Hxni.
-            apply Welldef_global_input_not_Is_defined_in
-              with (1:=Hwdef) in Hfindn.
-            apply not_Is_defined_in_not_Is_variable_in in Hfindn.
-            rewrite Hxni in Hivi.
-            contradiction.
-          - exact Heval'.
-          - rewrite Hall in Hmc.
-            apply Forall_app in Hmc.
-            destruct Hmc as [H0 Hmc]; clear H0.
-            apply Forall_cons2 in Hmc.
-            destruct Hmc as [Hmc H0]; clear H0.
-            inversion_clear Hmc as [|? ? ? ? ? Hmc' H0|].
-            apply Hmc' with (1:=Hfindi).
-            rewrite <- Hfindo; symmetry.
-            inversion_clear Hwsch as [| |? ? ? ? ? ? Hnii|].
-            apply stmt_eval_translate_eqns_minst_inv with (1:=Hevals) (2:=Hnii).
-        }
-        rewrite <-He2 in Hinv; simpl in Hinv.
-        destruct Hinv as [Hinv0 Hinv1].
-        rewrite <-Hmenv'' in *.
-        split.
-        { intros x' Hivi c0.
-          inversion_clear Hivi as [? ? Hivi'|? ? Hivi'].
-          - inversion Hivi' as [|x f' e HR1 [HR2 HR3 HR4]];
-              rewrite <-HR1, HR2 in *; clear HR1 HR2 HR3 HR4.
-            rewrite PM.gss, <-Hout, <-Hinv0.
-            specialize Hsy with n.
+  inversion Hsem as [H0 M0 y cae Hvar HR1 HR2 HR3
+                    |H0 M0 y f Mo lae ls xs Hmfind Hlae Hvar Hmsem HR1 HR2 HR3
+                    |H0 M0 ms y ls v0 lae Hmfind Hms0 Hlae Hvar HR1 HR2 HR3];
+    (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0);
+    specialize Hvar with n.
+  - (* Case EqDef: y = cae *)
+    exists menv'. (* the memory does not change *)
+    destruct Hvar as [v [Hsv Hcae]].
+    assert (forall x c,
+               Is_free_in_caexp x cae
+               -> sem_var H x n (present c)
+               -> (~ PS.In x mems -> PM.find x env' = Some c)
+                  /\ (PS.In x mems -> find_mem x menv' = Some c))
+      as Hcae' by resolve_env_assumption.
+    destruct v.
+    + (* y = absent *)
+      exists env'.
+      inversion Hcae as [|? ? n0 Hcexp Hclk HR1 HR2];
+        rewrite <-HR1 in *; clear HR1 HR2 n0.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_absent.
+        apply clock_correct_false with (2:=Hclk); now auto.
+      * intros x Hivi c.
+        destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
+          [now apply IHeqs0 with (1:=Hvin)|].
+        apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
+        rewrite Hstmt.
+        inversion_clear Hivi as [? ? Hivi'|];
+          [|unfold Is_variable_in in Hvin; contradiction].
+        inversion_clear Hivi'.
+        split; intro Hsv'.
+        apply sem_var_det with (1:=Hsv) in Hsv'; discriminate.
+        assert (PM.find y env = None).
+        apply Henv; now repeat constructor.
+        rewrite Hsv' in *; discriminate.
+      * repeat constructor; assumption.
+    + (* y = present *)
+      exists (PM.add y v env').
+      inversion Hcae as [? ? n0 v0 Hcexp Hclk HR1 HR2 HR3|];
+        rewrite <-HR1 in *; clear HR1 HR2 HR3 n0 v0.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_present.
+        apply clock_correct_true with (2:=Hclk); now auto.
+        apply cexp_correct with (1:=Hcexp); now auto.
+      * intros x Hivi c.
+        inversion_clear Hivi as [? ? Hivi'|]; [inversion_clear Hivi'|].
+        { rewrite PM.gss; split; intro HH.
+          - apply sem_var_det with (1:=Hsv) in HH.
+            injection HH; intro Heq; rewrite Heq; reflexivity.
+          - injection HH; intro Heq; rewrite <-Heq; exact Hsv. }
+        { destruct (ident_eq_dec x y) as [Hxy|Hnxy].
+          - rewrite Hxy in *; clear Hxy.
+            rewrite PM.gss.
             split.
-            + intro Hsy'; apply sem_var_det with (1:=Hsy) (2:=Hsy').
-            + intro Hsy'; rewrite Hsy' in Hsy; exact Hsy.
-          - destruct (ident_eq_dec x' y) as [Hxy|Hnxy].
-            + rewrite Hxy in *; clear Hxy.
-              rewrite PM.gss, <-Hout, <-Hinv0.
-              specialize Hsy with n.
-              split.
-              * intro Hsy'; apply sem_var_det with (1:=Hsy) (2:=Hsy').
-              * intro Hsy'; rewrite Hsy' in Hsy; exact Hsy.
-            + rewrite (PM.gso _ _ Hnxy).
-              now apply IHeqs0 with (1:=Hivi').
-        }
-        {
-          assert (~Is_instance_in y eqs) as Hniii
-              by (inversion_clear Hwsch; assumption).
-          apply Forall_cons.
-          2:now apply Memory_Corres_eqs_add_obj with (1:=IHeqs1) (2:=Hniii).
-          constructor.
-          intros Mo' omenv'' Hmfind Hfindo'.
-          rewrite find_obj_gss in Hfindo'.
-          injection Hfindo'; intro He; rewrite <-He in *; clear He Hfindo'.
-          rewrite Hfindi in Hmfind.
-          injection Hmfind; intro He; rewrite <-He in *; clear He Hmfind.
-          exact Hinv1.
-        }
-      * (* sem_clock H ck n false *)
-        apply clock_correct_false with _ _ mems menv' env' _ in Hclk.
-        2:now resolve_env_assumption.
-        contradiction.
-    + (* ~Is_present_in ck *)
+            * intro Hsv'; apply sem_var_det with (1:=Hsv) in Hsv'.
+              injection Hsv'; intro Heq; rewrite Heq; reflexivity.
+            * intro Hsv'.
+              injection Hsv'; intro Heq; rewrite Heq in Hsv; exact Hsv.
+          - rewrite (PM.gso _ _ Hnxy).
+            apply IHeqs0; assumption. }
+      * repeat constructor; assumption.
+  - (* Case EqApp: y = f lae *)
+    specialize Hlae with n.
+    (* used variables are defined *)
+    assert (forall x c,
+               Is_free_in_laexp x lae
+               -> sem_var H x n (present c)
+               -> (~ PS.In x mems -> PM.find x env' = Some c)
+                  /\ (PS.In x mems -> find_mem x menv' = Some c))
+      as Hlae' by resolve_env_assumption.
+    (* memory correspondence before execution *)
+    rewrite Hall in Hmc.
+    apply Forall_app in Hmc.
+    destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
+    apply Forall_cons2 in Hmc.
+    destruct Hmc as [Hmceq Hmceqs].
+    inversion_clear Hmceq as [|? ? ? ? ? Hmc0|].
+    specialize (Hmc0 _ Hmfind).
+    destruct Hmc0 as [omenv [Hfindo Hmc0]].
+    (* dataflow semantics *)
+    assert (Hmsem':=Hmsem).
+    inversion_clear Hmsem' as [? ? ? ? i o neqs Hfind Hnsem].
+    destruct Hnsem as [Hn [Hlsn [Hxsn [Habs [Hout Hnsem]]]]].
+    specialize Hlsn with n;
+      specialize Hxsn with n;
+      specialize Habs with n;
+      specialize Hout with n.
+    (* no other instance *)
+    assert (~Is_instance_in y eqs) as Hniii
+        by (inversion_clear Hwsch; assumption).
+    destruct (ls n) eqn:Hls.
+    + (* y = absent *)
+      exists menv', env'.
+      specialize (Habs (eq_refl absent)).
+      assert (xs n = absent) as Hout'
+          by (apply Hout; reflexivity); clear Hout.
+      inversion Hlae as [|? ? n0 Hlexp Hclk HR1 HR2];
+        rewrite <-HR1 in *; clear HR1 HR2 n0.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_absent.
+        apply clock_correct_false with (2:=Hclk); now auto.
+      * intros x Hivi c.
+        destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
+          [now apply IHeqs0 with (1:=Hvin)|].
+        apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
+        rewrite Hstmt.
+        inversion_clear Hivi as [? ? Hivi'|];
+          [|unfold Is_variable_in in Hvin; contradiction].
+        inversion Hivi' as [|x' f' e HR1 [HR2 HR3 HR4]];
+          rewrite HR2 in *; clear HR1 HR2 HR3 HR4 x' f' e Hivi'.
+        split; intro Hsv'.
+        { inversion_clear Hsv' as [xs' Hfind' Hxs'].
+          inversion_clear Hvar as [xs'' Hfind'' Hxs''].
+          rewrite Hfind' in Hfind''.
+          injection Hfind''; intro HR1; rewrite <-HR1 in *; clear HR1 Hfind''.
+          rewrite Hxs'' in *.
+          rewrite Hout' in Hxs'; discriminate. }
+        { assert (PM.find y env = None) as Hnone
+              by (apply Henv; repeat constructor).
+          rewrite Hnone in Hsv'.
+          discriminate. }
+      * apply Forall_cons; [|now apply IHeqs1].
+        constructor.
+        intros Mo' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro He; rewrite <-He in *; clear He Hmfind'.
+        exists omenv.
+        rewrite stmt_eval_translate_eqns_minst_inv with (1:=Hstmt) (2:=Hniii).
+        split; [exact Hfindo|].
+        now apply Memory_Corres_unchanged
+        with (1:=Hwdef) (2:=Hmsem) (3:=Hls) (4:=Hmc0).
+    + (* y = present *)
+      pose proof (find_node_translate_find_class _ _ _ Hfind) as Hfindc.
+      destruct Hfindc as [prog' Hfindc].
+      assert (
+          let fclass := translate_node (mk_node f i o neqs) in
+          exists omenv' oenv',
+            stmt_eval prog' omenv (PM.add i.(v_name) v empty)
+                      (c_step fclass) (omenv', oenv')
+            /\ (forall c,
+                   xs n = present c
+                   <-> PM.find (c_output fclass) oenv' = Some c)
+            /\ Memory_Corres G (S n) f Mo omenv') as Hnode'.
+      { eapply Hnode with (1:=Hfind) (2:=Hmsem) (3:=Hmc0).
+        - rewrite Hprog; exact Hfindc.
+        - rewrite Hls; reflexivity. }
       clear Hnode.
-      destruct Heval as [HR1 HR2]; rewrite HR1, HR2 in *; clear HR1 HR2.
-      specialize Hlae with n.
-      inversion Hlae as [? ? ? ? Hlexp Hclk H1 H2 Hlsn
-                        | ? ? ? Hlexp Hclk H0 H2 Hlsn];
-        clear H0 H1 H2;
-        symmetry in Hlsn.
-      { (* sem_clock H ck n true *)
-        apply (clock_correct_true H n mems menv' env' ck) in Hclk.
-        2:now resolve_env_assumption.
-        contradiction. }
-      { (* sem_clock H ck n false *)
-        split.
-        { intros x Hivi.
-          inversion_clear Hivi as [? ? Hivi'|? ? Hivi'];
-            [|now apply IHeqs0 with (1:=Hivi')].
-          inversion_clear Hivi'.
-          intro c.
-          specialize Hsy with n.
-          specialize Hls with n.
-          rewrite Hlsn in Hlae.
-          split; intro HH.
-          - (* Exploit the 'clocking assumption' built into msem_node. *)
-            pose proof (Welldef_global_output_Is_variable_in
-                          _ _ _ Hwdef Hfindn) as Hivio.
-            apply Is_variable_in_Is_defined_in in Hivio.
-            simpl in Hivio.
-            apply Hfclk in Hlsn.
-            apply rhs_absent_lhs with (1:=Hwdef) (2:=Hlsn) (3:=Hsneqs) in Hivio.
-            pose proof (sem_var_det _ _ _ _ _ Hsy HH) as Hysn.
-            specialize Hys with n.
-            rewrite Hysn in Hys.
-            pose proof (sem_var_det _ _ _ _ _ Hys Hivio) as Hbad.
-            discriminate Hbad.
-          - assert (PM.find y env = None) as Hyenv
-                by (apply Henv; constructor; constructor).
-            destruct (Is_variable_in_dec y eqs) as [Hyeqs|Hnyeqs].
-            + apply IHeqs0 with (c:=c) in Hyeqs.
-              apply Hyeqs in HH.
-              exact HH.
-            + pose proof (stmt_eval_translate_eqns_env_inv
-                            _ _ _ _ _ _ _ Hevals) as Hinv.
-              apply Hinv in Hnyeqs.
-              rewrite <-Hnyeqs in Hyenv.
-              rewrite Hyenv in HH.
-              discriminate HH.
-        }
-        {
-          assert (~Is_instance_in y eqs) as Hniii
-              by (inversion_clear Hwsch; assumption).
-          apply Forall_cons.
-          2:now apply IHeqs1.
-          constructor.
-          intros Mo' omenv' Hfindi' Hfindo.
-          rewrite Hfindi in Hfindi'.
-          injection Hfindi'; intro He; rewrite <-He in *; clear He.
-          rewrite (stmt_eval_translate_eqns_minst_inv
-                     _ _ _ _ _ _ _ Hevals _ Hniii) in Hfindo.
-          rewrite Hall in Hmc.
-          apply Forall_app in Hmc.
-          destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
-          apply Forall_cons2 in Hmc.
-          destruct Hmc as [Hmceq Hmceqs].
-          inversion_clear Hmceq as [|? ? ? ? ? Hmc0|].
-          apply Hmc0 with (2:=Hfindo) in Hfindi; clear Hmc0.
-          now apply Memory_Corres_unchanged
-          with (1:=Hwdef) (2:=Hmsem) (3:=Hlsn) (4:=Hfindi).
-        }
-      }
-  - (* Inductive step for EqFby: y = v0 fby lae *)
-    clear Hnode.
-    Hint Constructors Is_memory_in_eq.
-    Hint Immediate Is_memory_in_EqFby.
-    pose proof (stmt_eval_EqFby_env_inv _ _ _ _ _ _ _ _ _ Heval) as Henv''.
-    split.
-    + (* EqFby does not update env... *)
-      inversion_clear 1 as [? ? Hivieq|? ? Hivi];
-      [now inversion Hivieq|].
-      rewrite Henv''.
-      now apply IHeqs0 with (1:=Hivi).
-    + (* ...but it does update menv *)
-      pose proof (stmt_eval_translate_eqns_menv_inv _ _ _ _ _ _ _ Hevals)
-        as Hminv.
-      destruct lae as [ck l].
-
-      inversion_clear Hsem as [| |? ? ms ? ls ? ? Hmfind Hms0 Hlae Hmsn].
-      specialize Hmsn with n.
-      specialize Hlae with n.
-
-      simpl in Heval;
-        apply stmt_eval_Control in Heval;
-        destruct Heval as [Heval|Heval];
-        destruct Heval as [Hpi Heval].
-      { (* Is_present_in ck *)
-        inversion_clear Heval.
-        match goal with
-        | H1: exp_eval _ _ _ _, H2: add_mem _ _ _ = _ |- _ =>
-          rename H1 into Heval; rewrite <-H2 in *; clear H2
-        end.
-        inversion Hlae as [? ? ? ? Hlexp Hclk H1 H2 Hlsn
-                          | ? ? ? Hlexp Hclk H0 H2 Hlsn]; clear H0 H1 H2.
-        { (* sem_clock H ck n true *)
-          rewrite <- Hlsn in Hmsn.
-          destruct Hmsn as [Hmsn Hvsn]; clear Hlsn.
-          rewrite Henv'' in Heval.
-          apply lexp_correct with (menv:=menv') (env:=env') (memories:=mems)
-            in Hlexp.
-          2:now resolve_env_assumption.
-          apply (exp_eval_det _ _ _ _ _ Heval) in Hlexp.
-          rewrite Hlexp in *; clear Hlexp.
-          apply Forall_cons.
-          - constructor. intros ms' Hmfind'.
-            rewrite Hmfind in Hmfind'.
-            injection Hmfind'; intros He; rewrite <- He in *;
-              clear He Hmfind' ms'.
-            rewrite Hmsn.
-            rewrite find_mem_gss.
-            reflexivity.
-          - rewrite <- Hmsn.
-            now apply Memory_Corres_eqs_add_mem with (1:=Hmfind) (2:=IHeqs1).
-        }
-        { (* sem_clock H ck n false *)
-          apply clock_correct_false with _ _ mems menv' env'' _ in Hclk.
-          rewrite Henv'' in Hclk.
-          contradiction.
-          rewrite Henv'' in *.
-          resolve_env_assumption.
-        }
-      }
-      { (* ~Is_present_in ck *)
-        destruct Heval as [HR1 HR2]; rewrite HR1 in *; clear HR1 HR2.
-        inversion Hlae as [? ? ? ? Hlexp Hclk H1 H2 Hlsn
-                          | ? ? ? Hlexp Hclk H0 H2 Hlsn]; clear H0 H1 H2.
-        { (* sem_clock H ck n true *)
-          rewrite Hall in *.
-          apply (clock_correct_true H n mems menv' env' ck) in Hclk.
-          2:now resolve_env_assumption.
-          contradiction. }
-        { (* sem_clock H ck n false *)
-          Hint Constructors Is_memory_in_eq.
-          Hint Immediate Is_memory_in_EqFby.
-          rewrite <-Hlsn in Hmsn.
-          destruct Hmsn as [Hmsinv Hsv].
-          apply Forall_cons; [|assumption].
-          constructor.
-          intro ms'.
-          intro Hmfind'.
-          rewrite Hmfind' in Hmfind.
-          injection Hmfind.
-          intro Heq; rewrite Heq in *; clear Heq.
-          destruct (Is_memory_in_dec y eqs) as [Hxin|Hxin].
-          - (* If we already updated x, we're good. *)
-            now apply Is_memory_in_Memory_Corres_eqs with (1:=Hxin) (2:=IHeqs1).
-          - (* Otherwise our memory is untouched and we don't touch it either *)
-            rewrite Hall in Hmc.
-            apply Forall_app in Hmc.
-            destruct Hmc as [H0 Hmc]; clear H0.
-            apply Forall_cons2 in Hmc.
-            destruct Hmc as [Hmc H0]; clear H0.
-            inversion_clear Hmc as [| |? ? ? ? ? Hfindc].
-            rewrite (Hminv _ Hxin).
-            rewrite Hmsinv.
-            apply Hfindc.
-            apply Hmfind'.
-        }
-      }
+      simpl in *.
+      destruct Hnode' as [omenv' [oenv' [Hnstmt [Hnout Hnmc]]]].
+      assert (xs n <> absent) as Hxsp
+          by (intro HH; apply Hout in HH; discriminate).
+      apply not_absent_present in Hxsp.
+      destruct Hxsp as [c Hxsc].
+      exists (add_obj y omenv' menv'), (PM.add y c env').
+      inversion Hlae as [? ? n' v' Hlexp Hclk HR1 HR2 HR3|];
+        rewrite <-HR1 in *; clear HR1 HR2 HR3 n' v'.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_present.
+        apply clock_correct_true with (2:=Hclk); now auto.
+        apply lexp_correct
+        with (memories:=mems) (menv:=menv') (env:=env') in Hlexp;
+          [|now auto].
+        rewrite Hprog in *.
+        rewrite <-stmt_eval_translate_eqns_minst_inv
+        with (1:=Hstmt) (2:=Hniii) in Hfindo.
+        eapply Istep with (1:=Hfindo) (2:=Hlexp);
+          [|reflexivity|reflexivity].
+        eapply Iestep with (1:=Hfindc) (2:=Hnstmt).
+        now apply Hnout with (1:=Hxsc).
+      * intros x Hivi c'.
+        inversion_clear Hivi as [? ? Hivi'|]; [inversion_clear Hivi'|].
+        { rewrite PM.gss; split; intro HH.
+          - apply sem_var_det with (1:=Hvar) in HH.
+            rewrite Hxsc in HH.
+            injection HH; intro Heq; rewrite Heq; reflexivity.
+          - injection HH; intro Heq; rewrite <-Heq.
+            rewrite <-Hxsc; exact Hvar. }
+        { destruct (ident_eq_dec x y) as [Hxy|Hnxy].
+          - rewrite Hxy in *; clear Hxy.
+            rewrite PM.gss.
+            split.
+            * intro Hvar'; apply sem_var_det with (1:=Hvar) in Hvar'.
+              rewrite Hxsc in Hvar'.
+              injection Hvar'; intro Heq; rewrite Heq; reflexivity.
+            * intro Hsv'.
+              injection Hsv'; intro Heq; rewrite <-Heq in *.
+              rewrite Hxsc in Hvar; exact Hvar.
+          - rewrite (PM.gso _ _ Hnxy).
+            apply IHeqs0; assumption. }
+      * apply Forall_cons.
+        2:now apply Memory_Corres_eqs_add_obj with (1:=IHeqs1) (2:=Hniii).
+        constructor.
+        intros Mo' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
+        exists omenv'.
+        split; [rewrite find_obj_gss; reflexivity|exact Hnmc].
+  - (* Case EqFby: y = v0 fby lae *)
+    specialize Hlae with n.
+    assert (forall x c,
+               Is_free_in_laexp x lae
+               -> sem_var H x n (present c)
+               -> (~ PS.In x mems -> PM.find x env' = Some c)
+                  /\ (PS.In x mems -> find_mem x menv' = Some c))
+      as Hlae' by resolve_env_assumption.
+    destruct (ls n) eqn:Hls;
+      destruct Hvar as [Hms Hvar].
+    + (* y = absent *)
+      exists menv', env'.
+      inversion Hlae as [|? ? n0 Hlexp Hclk HR1 HR2];
+        rewrite <-HR1 in *; clear HR1 HR2 n0.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_absent.
+        apply clock_correct_false with (2:=Hclk); now auto.
+      * intros x Hivi c.
+        destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
+          [now apply IHeqs0 with (1:=Hvin)|].
+        apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
+        rewrite Hstmt.
+        inversion_clear Hivi as [? ? Hivi'|];
+          [|unfold Is_variable_in in Hvin; contradiction].
+        inversion_clear Hivi'.
+      * constructor.
+        2:assumption.
+        constructor.
+        intros ms0' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
+        destruct (Is_memory_in_dec y eqs) as [Hxin|Hxin];
+          [(* If we already updated x, we're good. *)
+           now apply Is_memory_in_Memory_Corres_eqs with (1:=Hxin) (2:=IHeqs1)|].
+        (* Otherwise our memory is untouched and we don't touch it either *)
+        rewrite Hall in Hmc.
+        apply Forall_app in Hmc.
+        destruct Hmc as [H0 Hmc]; clear H0.
+        apply Forall_cons2 in Hmc.
+        destruct Hmc as [Hmc H0]; clear H0.
+        inversion_clear Hmc as [| |? ? ? ? ? Hfindc].
+        rewrite Hms.
+        apply stmt_eval_translate_eqns_menv_inv with (2:=Hxin) in Hstmt.
+        rewrite Hstmt.
+        apply Hfindc with (1:=Hmfind).
+    + (* y = present *)
+      exists (add_mem y v menv'), env'.
+      inversion Hlae as [? ? n' v' Hlexp Hclk HR1 HR2 HR3|];
+        rewrite <-HR1 in *; clear HR1 HR2 HR3 n' v'.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_present.
+        apply clock_correct_true with (2:=Hclk); now auto.
+        econstructor.
+        apply lexp_correct with (1:=Hlexp); now auto.
+        reflexivity.
+      * intros x Hivi c.
+        inversion_clear Hivi as [? ? Hivi'|]; [now inversion_clear Hivi'|].
+        apply IHeqs0.
+        assumption.
+      * rewrite <-Hms.
+        apply Forall_cons.
+        2:now apply Memory_Corres_eqs_add_mem with (1:=Hmfind) (2:=IHeqs1).
+        constructor.
+        intros ms' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Hmfind' Heq.
+        now apply find_mem_gss.
 Qed.
 
+(* TODO: rework using (a simplified version of) msem_node_mult *)
 Lemma is_node_correct:
   forall (G: global)
          (f: ident)
@@ -1568,91 +1555,79 @@ Lemma is_node_correct:
          (M: memory)
          (ys: stream)
 
-         (prog: program)
          (prog': program)
          (fclass: class)
          (n: nat)
          (menv: memoryEnv)
-         (env: constEnv)
-         (menv': memoryEnv)
-         (env': constEnv),
+         (env: constEnv),
 
     Welldef_global G
-
     -> find_node f G = Some fnode
     -> msem_node G f xs M ys
-
-    -> prog = translate G
-    -> find_class f prog = Some(fclass, prog')
-    -> (forall c, xs n = present c <-> PM.find fclass.(c_input) env = Some c)
-    -> (forall x, Is_variable_in x fnode.(n_eqs) -> PM.find x env = None)
-    -> stmt_eval prog' menv env fclass.(c_step) (menv', env')
-
     -> Memory_Corres G n f M menv
 
-    -> (forall c, ys n =present c <-> PM.find (fclass.(c_output)) env' = Some c)
-       /\ Memory_Corres G (S n) f M menv'.
-Proof.
-  induction G as [|node G IH]; [discriminate|].
-  intros f fnode xs M ys prog prog' fclass n menv env menv' env'.
-  intros Hwd Hfnd Hmsem Hprog Hfcls Hin1 Hother Hstmt Hmc.
-  assert (Ordered_nodes (node::G)) as Hord
-    by apply Welldef_global_Ordered_nodes with (1:=Hwd).
+    -> find_class f (translate G) = Some(fclass, prog')
+    -> env = (match xs n with
+	      | present c => PM.add fclass.(c_input) c empty
+	      | absent => empty
+             end)
 
-  simpl in Hfnd.
+    -> (exists menv' env',
+           stmt_eval prog' menv env fclass.(c_step) (menv', env')
+           /\ (forall c, ys n =present c
+                         <-> PM.find (fclass.(c_output)) env' = Some c)
+           /\ Memory_Corres G (S n) f M menv').
+Proof.
+  (* TODO: Develop a version of msem_node_mult that works for eqs? *)
+  induction G as [|node G IH]; [now inversion 4|].
+  intros f fnode xs M ys prog' fclass n menv env.
+  intros Hwd Hfind Hmsem Hmc Hfcls Henv.
+  assert (Ordered_nodes (node::G)) as Hord
+      by apply Welldef_global_Ordered_nodes with (1:=Hwd).
+
+  simpl in Hfind,Hfcls.
   destruct (ident_eqb (n_name node) f) eqn:Hfeq.
 
   Focus 2.
-  { assert (node.(n_name) <> f) as Hfneq
+  { apply Welldef_global_cons in Hwd.
+    assert (node.(n_name) <> f) as Hfneq
         by apply Pos.eqb_neq with (1:=Hfeq).
-    rewrite Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc |- *.
-    apply IH with (f:=f) (fnode:=fnode) (xs:=xs)
-                         (prog:=translate G) (prog':=prog')
-                         (menv:=menv) (env:=env)
-                         (menv':=menv') (env':=env').
-    apply (Welldef_global_cons _ _ Hwd).
-    apply Hfnd.
-    apply Pos.eqb_neq in Hfeq.
-    apply Welldef_global_Ordered_nodes in Hwd.
-    apply msem_node_cons with (1:=Hwd) (2:=Hmsem) (3:=Hfeq).
-    reflexivity.
-    rewrite Hprog in Hfcls; simpl in Hfcls; rewrite Hfeq in Hfcls; exact Hfcls.
-    exact Hin1.
-    exact Hother.
-    exact Hstmt.
-    exact Hmc. }
+    rewrite Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc.
+    apply msem_node_cons with (1:=Hord) (3:=Hfneq) in Hmsem.
+    apply IH with (1:=Hwd) (2:=Hfind) (3:=Hmsem) (4:=Hmc) (6:=Henv) (ys:=ys)
+      in Hfcls.
+    destruct Hfcls as [menv' [env' [Hstmt [Hout Hmc']]]].
+    exists menv',env'.
+    rewrite Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq).
+    intuition. }
   Unfocus.
 
-  rewrite Hprog in Hfcls; clear Hprog.
-  simpl in Hfcls; rewrite Hfeq in Hfcls.
-  symmetry in Hfcls; injection Hfcls.
-  intros He1 He2; rewrite He1, He2 in *; clear He1 He2 Hfcls.
-
-  injection Hfnd; intro He; rewrite He in *; clear He Hfnd.
-
-  destruct fnode.
-  simpl in *.
+  injection Hfcls; intros HR1 HR2; rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfcls.
+  injection Hfind; intro HR1; rewrite HR1 in *; clear HR1 Hfind.
 
   inversion_clear Hmsem as [? ? ? ? i o eqs Hfind Hsem].
+  simpl in Hfind.
+  rewrite Hfeq in Hfind; clear Hfeq.
+  injection Hfind; intro HR1; rewrite HR1 in *; clear HR1 Hfind.
   simpl in *.
-  rewrite Hfeq in Hfind.
-  injection Hfind.
-  intros; subst.
-  clear Hfind.
+
   destruct Hsem as [H [Hi [Ho [Hclk [Hsout Hsem]]]]].
   specialize Hi with n.
   specialize Ho with n.
 
-  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2 Hout Hnode Hnd Hfind].
+  inversion_clear Hwd as [|? ? Hwd' neqs ni no Hwsch Hin2 Hout Hnode Hnd Hfind'].
   rename Hwd' into Hwd.
   simpl in *.
   unfold neqs, ni, no in *; clear neqs ni no.
-  rewrite ps_from_list_gather_eqs_memories in Hstmt.
 
-  assert ((forall x, Is_variable_in x eqs ->
+  assert (
+      exists menv' env',
+        stmt_eval (translate G) menv env
+                  (translate_eqns (memories eqs) eqs) (menv', env')
+        /\ (forall x, Is_variable_in x eqs ->
                      forall c, sem_var H x n (present c)
                                <-> PM.find x env' = Some c)
-          /\ Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
+        /\ Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
   {
     eapply is_step_correct with (mems:=memories eqs) (env:=env) (menv:=menv)
                                 (input:=i.(v_name)) (prog:=translate G).
@@ -1664,33 +1639,40 @@ Proof.
     - exact Hwd.
     - reflexivity.
     - intro c.
-      rewrite <- Hin1.
-      split; intro HH; [now apply (sem_var_det _ _ _ _ _ Hi HH)
-                       |rewrite <- HH; now apply Hi].
-    - exact Hother.
+      rewrite Henv.
+      split; intro HH.
+      apply (sem_var_det _ _ _ _ _ Hi) in HH; rewrite HH; apply PM.gss.
+      destruct (xs n) as [|v Hxs];
+        [ rewrite PM.gempty in HH; discriminate |].
+      rewrite PM.gss in HH; injection HH; intro HR1;
+      rewrite HR1 in *; exact Hi.
+    - rewrite Henv.
+      intros x Hivi.
+      destruct (xs n); [rewrite PM.gempty;reflexivity|].
+      rewrite PM.gso; [rewrite PM.gempty;reflexivity|].
+      apply Is_variable_in_Is_defined_in in Hivi.
+      intro Hx; rewrite Hx in *.
+      contradiction.
     - rewrite Is_memory_in_memories.
       apply not_Is_defined_in_not_Is_memory_in in Hin2.
       exact Hin2.
     - exact Hin2.
     - exact Hwsch.
     - intro; apply Is_memory_in_memories.
-    - exact Hstmt.
-    - apply (fun f fnode xs M ys prog' fclass menv env menv' env' Hfind Hmsem
-             => IH f fnode xs M ys (translate G) prog' fclass
-                   n menv env menv' env'
-                   Hwd Hfind Hmsem (eq_refl (translate G))).
-    - (* TODO: Tidy up this mess... *)
-      inversion_clear Hmc.
-      simpl in H0.
-      rewrite Hfeq in H0.
-      injection H0; intros Heq0 Heq1 Heq2;
+    - apply (fun f fnode xs M ys prog' fclass menv env Hfind Hmsem
+             => IH f fnode xs M ys prog' fclass n menv env Hwd Hfind Hmsem).
+    - inversion_clear Hmc as [? ? ? ? ? ? Hf Hmeqs].
+      simpl in Hf.
+      rewrite ident_eqb_refl in Hf.
+      injection Hf; intros Heq0 Heq1 Heq2;
       rewrite <-Heq0, <-Heq1, <-Heq2 in *;
-      clear Heq0 Heq1 Heq2 H0.
-      apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnode) (3:=H1).
+      clear Heq0 Heq1 Heq2 Hf.
+      apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnode) (3:=Hmeqs).
   }
-
   clear IH.
-  destruct His_step_correct as [Hvar' Hmc'].
+  destruct His_step_correct as [menv' [env' [Hstmt [Hvar' Hmc']]]].
+  exists menv',env'.
+  split; [rewrite ps_from_list_gather_eqs_memories; exact Hstmt|].
   split.
   - intro c.
     apply Hvar' with (c:=c) in Hout.
@@ -1746,30 +1728,40 @@ Proof.
 Qed.
 
 Lemma stmt_eval_translate_reset_eqns_cons:
-  forall prog menv env menv' env' (eq:equation) eqs,
-    stmt_eval prog menv env (translate_reset_eqns (eq :: eqs)) (menv', env')
-    <->
+  forall prog menv env (eq:equation) eqs P,
     (exists menv'' env'',
-        stmt_eval prog menv env (translate_reset_eqns eqs) (menv'', env'')
-        /\ stmt_eval prog menv'' env'' (translate_reset_eqn Skip eq) (menv', env')).
-Proof. (* TODO: redo proof *)
+        stmt_eval prog menv env
+                  (translate_reset_eqns (eq :: eqs)) (menv'', env'')
+        /\ P menv'' env'')
+    <->
+    (exists menv' env' menv'' env'',
+        stmt_eval prog menv env (translate_reset_eqns eqs) (menv', env')
+        /\ stmt_eval prog menv' env'
+                     (translate_reset_eqn Skip eq) (menv'', env'')
+        /\ P menv'' env'').
+Proof.
   split.
   - intro H.
+    destruct H as [menv'' [env'' H]].
     unfold translate_reset_eqns in H.
     simpl in H.
+    destruct H as [H HP].
     apply stmt_eval_translate_reset_eqn_shift in H.
-    destruct H as [menv'' [env'' [H1 H2]]].
-    exists menv'', env''.
-    split; [now apply H1|now apply H2].
+    destruct H as [menv' [env' [H1 H2]]].
+    exists menv', env', menv'', env''.
+    now intuition.
   - intro H.
-    destruct H as [menv'' [env'' [H1 H2]]].
+    destruct H as [menv' [env' [menv'' [env'' [H1 [H2 HP]]]]]].
     unfold translate_reset_eqns.
     simpl.
-    apply stmt_eval_translate_reset_eqn_shift.
     exists menv'', env''.
-    split; [now apply H1 | apply H2 ].
+    intuition.
+    apply stmt_eval_translate_reset_eqn_shift.
+    exists menv', env'.
+    intuition.
 Qed.
 
+(* TODO: rework using (a simplified version of) msem_node_mult *)
 (* This lemma is stated with Welldef_global rather than simply Ordered_nodes
    since the former gives Is_well_sch for each set of node equations within
    the global environment. In turn, Is_well_sch guarantees that any EqApp
@@ -1787,138 +1779,126 @@ Lemma is_node_reset_correct:
          (xs: stream)
          (M: memory)
          (ys: stream)
+         (fnode: node)
 
          (prog': program)
          (fclass: class)
          (menv: memoryEnv)
-         (env: constEnv)
-         (menv': memoryEnv)
-         (env': constEnv),
+         (env: constEnv),
 
        Welldef_global G
     -> msem_node G f xs M ys
+    -> find_node f G = Some fnode
 
     -> find_class f (translate G) = Some(fclass, prog')
-    -> stmt_eval prog' menv env fclass.(c_reset) (menv', env')
-
-    -> Memory_Corres G 0 f M menv'.
+    -> (exists menv' env',
+           stmt_eval prog' menv env fclass.(c_reset) (menv', env')
+           /\ Memory_Corres G 0 f M menv').
 Proof.
   induction G as [|node G IH]; [now inversion 1|].
-  intros until env'.
-  intros Hwdef Hmsem Hfindc Heval.
+  intros until env.
+  intros Hwdef Hmsem Hfindn Hfindc.
+
+  assert (Hfindn':=Hfindn).
   pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
-  assert (Hmsem0:=Hmsem).
-  inversion_clear Hmsem as [? ? ? ? i' o' eqs' Hfind Hmsem'].
-  assert (Hfind':=Hfind).
-  simpl in Hfind,Hfindc.
+  pose proof (find_node_not_Is_node_in _ _ _ Hord Hfindn) as Hnni.
+  pose proof (find_node_translate_find_class _ _ _ Hfindn) as HH.
+  destruct HH as [prog'' Hfindc'].
+  rewrite Hfindc in Hfindc'.
+  injection Hfindc';
+    intros HR1 HR2; rewrite <-HR1,HR2 in *; clear HR1 HR2 Hfindc' prog''.
+  simpl in Hfindc, Hfindn'.
   destruct (ident_eqb (n_name node) f) eqn:Heqb;
     [ apply Pos.eqb_eq in Heqb | apply Pos.eqb_neq in Heqb ].
-  - clear Hmsem0.
-    destruct node as [name i o eqs].
-    injection Hfind; intro He; rewrite <-He in *; clear He Hfind.
-    intros HR1 HR2 HR3; rewrite <-HR1,<-HR2,HR3 in *; clear HR1 HR2 HR3.
-    econstructor; [exact Hfind'|clear Hfind'].
-    injection Hfindc;
-      intros HR1 HR2; rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfindc.
-    destruct Hmsem' as [H [Hxs [Hys [Hclk [Hsout Hmsem]]]]].
-    simpl in Heval.
-    assert (HordF:=Hord).
-    inversion_clear Hord as [|? ? Hord' Hnin Hnneq].
-    apply Memory_Corres_eqs_node_tl with (1:=HordF);
-      [intro Hini; apply Hnin in Hini; intuition|].
+  - injection Hfindn'; intro HR1; rewrite <-HR1 in *; clear HR1 Hfindn'.
+    injection Hfindc; intros HR1; rewrite <-HR1 in *; clear HR1 Hfindc.
+    destruct node as [f' i o eqs].
+    simpl in Heqb.
+    rewrite Heqb in *; clear Heqb.
+    cut (exists menv' env',
+            stmt_eval (translate G) menv env (translate_reset_eqns eqs)
+                      (menv', env')
+            /\ Forall (Memory_Corres_eq G 0 M menv') eqs).
+    { destruct 1 as [menv' [env' [Hstmt Hmc]]].
+      exists menv', env'.
+      split; [exact Hstmt|].
+      econstructor; [exact Hfindn|].
+      apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnni).
+      exact Hmc. }
     simpl in *.
-
-    apply Forall_msem_equation_global_tl with (1:=HordF) in Hmsem;
-      [| intros g HH; apply find_node_Exists; apply Hnin in HH; now intuition
-       | intro HH; apply Hnin in HH; intuition ].
-    clear HordF Hclk.
-
-    inversion_clear Hwdef as [|? ? Hwdef' neqs ni no Hwsch HO1 HO2 HO3 HO4 HO5].
-    simpl in neqs, ni.
-    unfold neqs, ni in *.
-    clear HO1 HO2 HO3 HO4 HO5 neqs ni no.
-    revert Hwsch.
-    generalize (PS.add (v_name i) (memories eqs)) as mems.
-    intros mems Hwsch.
-
-    revert menv' env' Heval.
-    induction eqs as [|eq eqs IHeqs]; [now constructor|].
-
-    intros menv'' env'' Heval.
-    unfold translate_reset_eqns in Heval.
-    apply stmt_eval_translate_reset_eqns_cons in Heval.
-    destruct Heval as [menv' [env' [Hevals Heval]]].
-
-    apply Forall_cons2 in Hmsem.
-    destruct Hmsem as [Hmsem Hmsems].
-    assert (forall g, Is_node_in g eqs
-              -> g <> f /\ List.Exists (fun n => g = n_name n) G) as Hnin'.
-    { intros g Hgini.
-      assert (Is_node_in g (eq::eqs)) as Hgini'.
-      constructor 2; exact Hgini.
-      now apply Hnin with (1:=Hgini'). }
-    pose proof (IHeqs Hmsems Hnin' (Is_well_sch_cons _ _ _ Hwsch) _ _ Hevals)
-      as Hmc.
-    clear IHeqs Hnin' Hmsems Hevals.
-
-    destruct eq as [x e|x g e|x v0 e]; simpl in Heval.
-    + repeat constructor. inversion Heval.
-      match goal with H:menv' = menv'' |- _ => rewrite <-H; apply Hmc end.
-    + inversion_clear Hwsch as [| |? ? ? ? Hwsch' Hdeps Hnii|].
-      clear Hwsch' Hdeps.
-
-      inversion_clear Hmsem as [|? ? ? ? Mo ? ? ? Hmfind' Hls Hxs0 Hmsem'|].
-      inversion_clear Heval
-        as [| | | |? ? ? ? ? env0 menv0 ? ? Heval0 Heval1| | | | |].
-      inversion Heval1 as [| | | | | | | | |? ? ? HR1 HR2 HR3 HR4 [HR5 HR6]].
-      rewrite HR5,HR6 in *; clear HR1 HR2 HR3 HR4 HR5 HR6 Heval1.
-
-      assert(Hmsem'':=Hmsem').
-      inversion_clear Hmsem'' as [? ? ? ? ? ? ? Hfindn Hmsem].
-      destruct Hmsem as [H' [Hls' [Hxs0' Hmsem]]].
-      inversion_clear Heval0 as [| | |? ? ? ? ? ? ? Hreset Hadd| | | | | |].
-      inversion_clear Hreset as [? ? ? ? ? ? Hfindc Hreset'].
-
+    inversion_clear Hmsem as [? ? ? ? i' o' eqs' Hfind HH].
+    simpl in Hfind; rewrite ident_eqb_refl in Hfind.
+    injection Hfind; intros HR1 HR2 HR3; rewrite <-HR1,<-HR2,<-HR3 in *;
+    clear HR1 HR2 HR3 Hfind f' i' o' eqs'.
+    destruct HH as [H [Hxs [Hys [Habs [Hout Hmsem]]]]].
+    apply Forall_msem_equation_global_tl with (1:=Hord) (3:=Hnni) in Hmsem.
+    2:(intros f' Hini'; apply find_node_Exists; inversion_clear Hord;
+       apply H1 in Hini'; now intuition).
+    clear Hxs Hys Habs Hout Hfindn Hord.
+    assert (exists mems, Is_well_sch mems eqs) as Hwsch
+        by (inversion_clear Hwdef; exists (PS.add ni (memories eqs0)); intuition).
+    destruct Hwsch as [mems Hwsch].
+    apply Welldef_global_cons in Hwdef.
+    induction eqs as [|eq eqs IHeqs]; [exists menv, env; now intuition|].
+    apply not_Is_node_in_cons in Hnni.
+    destruct Hnni as [Hnni Hnnis].
+    apply Forall_cons2 in Hmsem; destruct Hmsem as [Hmsem Hmsems].
+    specialize (IHeqs Hnnis Hmsems (Is_well_sch_cons _ _ _ Hwsch)); clear Hnnis.
+    destruct IHeqs as [menv' [env' [Hstmt Hmc]]].
+    rewrite stmt_eval_translate_reset_eqns_cons.
+    exists menv', env'.
+    destruct eq as [|y g lae|y v0 lae].
+    + (* EqDef *)
+      exists menv', env'.
+      split; [exact Hstmt|].
       repeat constructor.
-      * intros Mo' omenv'' Hmfind Hfindo.
-        rewrite Hmfind in Hmfind';
-          injection Hmfind'; intro He;
-          rewrite <-He in *; clear He Hmfind'.
-        eapply IH with (1:=Hwdef') (2:=Hmsem') (3:=Hfindc).
-        rewrite <-Hadd in Hfindo.
-        rewrite find_obj_gss in Hfindo.
-        injection Hfindo; intro He; rewrite He in *; clear He Hfindo.
-        apply Hreset'.
-      * rewrite <-Hadd.
-        now apply Memory_Corres_eqs_add_obj with (1:=Hmc) (2:=Hnii).
-    + inversion Heval
-        as [| | | |? ? ? ? ? ? ? ? ? Heval0 Heval1| | | | |].
-      inversion Heval1
-        as [| | | | | | | | |? ? ? HR1 HR2 HR3 HR4 [HR5 HR6]].
-      rewrite HR5,HR6 in *; clear HR1 HR2 HR3 HR4 HR5 HR6.
-      inversion_clear Heval0
-        as [| ? ? ? ? ? ? ? Heval' Haddm| | | | | | | |].
-      rewrite <-Haddm.
-      inversion_clear Hmsem
-        as [| |? ? ? ? ? ? ? Hfindm Hms0 HH0 HH1]; clear HH0 HH1.
-      inversion Heval' as [| |c HR1 HR2].
-      rewrite <-HR2 in *; clear HR1 HR2.
-      rewrite <-Hms0.
-
-      repeat constructor;
-        [| now apply Memory_Corres_eqs_add_mem with (1:=Hfindm) (2:=Hmc)].
-      intros ms' Hfindm'.
-      rewrite Hfindm in Hfindm';
-        injection Hfindm'; intro He; rewrite <-He in *; clear He Hfindm'.
-      rewrite find_mem_gss.
-      rewrite Hms0.
-      reflexivity.
-  - apply Memory_Corres_node_tl with (1:=Hord) (2:=Heqb).
-    eapply IH.
-    + inversion_clear Hwdef; assumption.
-    + now apply msem_node_cons with (1:=Hord) (2:=Hmsem0) (3:=Heqb).
-    + exact Hfindc.
-    + exact Heval.
+      exact Hmc.
+    + (* EqApp *)
+      inversion_clear Hmsem as [|? ? ? ? Mo ? xs' ys' Hmfind Hxs' Hys' Hmsem'|].
+      assert (Hmsem'':=Hmsem').
+      inversion_clear Hmsem'' as [? ? ? ? ? ? ? Hfindn HH].
+      pose proof (find_node_translate_find_class _ _ _ Hfindn) as Hfindc.
+      destruct Hfindc as [prog'' Hfindc].
+      specialize (IH _ _ _ _ _ _ _ mempty empty Hwdef Hmsem' Hfindn Hfindc).
+      destruct IH as [omenv [oenv [Hstmtn Hmcn]]].
+      exists (add_obj y omenv menv'), env'.
+      split; [exact Hstmt|].
+      split.
+      * econstructor; [|now econstructor].
+        econstructor; [|reflexivity].
+        econstructor; [exact Hfindc|].
+        exact Hstmtn.
+      * inversion_clear Hwsch.
+        repeat constructor;
+          [|apply Memory_Corres_eqs_add_obj with (1:=Hmc); assumption].
+        intros M' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro HR; rewrite <-HR; clear HR Hmfind' M'.
+        exists omenv.
+        split; [now apply find_obj_gss|now intuition].
+    + (* EqFby *)
+      exists (add_mem y v0 menv'), env'.
+      split; [exact Hstmt|].
+      split.
+      * econstructor; [|now econstructor].
+        econstructor; [|reflexivity].
+        now constructor.
+      * inversion_clear Hmsem as [| |? ? ? ? ? ? ? Hmfind Hms Hlae Hls].
+        rewrite <-Hms in *.
+        repeat constructor;
+          [| now apply Memory_Corres_eqs_add_mem with (1:=Hmfind) (2:=Hmc)].
+        intros ms' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro HR; rewrite HR in *; clear HR Hmfind'.
+        rewrite find_mem_gss.
+        reflexivity.
+  - apply Welldef_global_cons in Hwdef.
+    apply msem_node_cons with (1:=Hord) (3:=Heqb) in Hmsem.
+    specialize (IH _ _ _ _ _ _ _ menv env Hwdef Hmsem Hfindn' Hfindc).
+    destruct IH as [menv' [env' [Hstmt Hmc]]].
+    exists menv', env'.
+    split; [exact Hstmt|].
+    now apply Memory_Corres_node_tl with (1:=Hord) (2:=Heqb) (3:=Hmc).
 Qed.
 
 Lemma is_translate_correct:
@@ -1929,10 +1909,134 @@ Lemma is_translate_correct:
          (ci: const)
          (r: ident)
          (obj: ident)
+         (n: nat),
+    Welldef_global G
+    -> sem_node G f xs ys
+    -> (forall n, xs n = present ci)
+    -> (exists menv env,
+           stmt_eval (translate G) mempty empty
+             (Comp (Reset_ap f obj)
+                   (Repeat (S n) (Step_ap r f obj (Const ci)))) (menv, env)
+           /\ (forall co, ys n = present co <-> PM.find r env = Some co)).
+Proof.
+  (* TODO: Ugly, dumb proof. How to streamline / beautify all these
+           inversions and rewrites. *)
+  intros until n.
+  intros Hwdef Hsem Hxs.
+  apply sem_msem_node with (1:=Hwdef) in Hsem.
+  destruct Hsem as [M Hmsem].
+  assert(Hmsem':=Hmsem).
+  inversion_clear Hmsem' as [? ? ? ? ? ? ? Hfindn Hmsem''].
+  destruct Hmsem'' as [H [Hi [Ho [Hclk [Habs Hmsem']]]]].
+  pose proof (find_node_translate_find_class _ _ _ Hfindn) as Hfindc.
+  destruct Hfindc as [prog' Hfindc].
+  pose proof (is_node_reset_correct _ _ _ _ _ _ _ _
+                                    mempty empty Hwdef Hmsem Hfindn Hfindc) as Hreset.
+  destruct Hreset as [menv' [env' [Hstmtr Hmc0]]].
+  simpl in Hstmtr.
+  cut (exists menv env,
+          stmt_eval (translate G) mempty empty
+                    (Comp (Reset_ap f obj) (Repeat (S n)
+                                               (Step_ap r f obj (Const ci))))
+                    (menv, env)
+          /\ (forall co, ys n = present co <-> PM.find r env = Some co)
+          /\ (exists omenv, find_obj obj menv = Some omenv
+                            /\ Memory_Corres G (S n) f M omenv)).
+  destruct 1 as [menv [env [Hstmt [Hout Hmc]]]]; exists menv, env; now intuition.
+  induction n.
+  - specialize Hxs with 0%nat.
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i.(v_name) ci empty)
+                                Hwdef Hfindn Hmsem Hmc0 Hfindc) as Hstmt.
+    rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
+    destruct Hstmt as [menv'' [env'' [Hstmt [Hout Hmc]]]].
+    assert (ys 0%nat <> absent) as Hyna
+        by (intro HH; apply Habs in HH; rewrite Hxs in HH; discriminate).
+    apply not_absent_present in Hyna.
+    destruct Hyna as [yc Hyna].
+    exists (add_obj obj menv'' (add_obj obj menv' mempty)).
+    exists (PM.add r yc empty).
+    split; [|split].
+    + (* TODO: automate! *)
+      econstructor.
+      econstructor; [|reflexivity].
+      econstructor; [exact Hfindc|exact Hstmtr].
+      econstructor.
+      econstructor.
+      econstructor.
+      apply find_obj_gss.
+      econstructor.
+      econstructor.
+      exact Hfindc.
+      apply Hstmt.
+      apply Hout.
+      apply Hyna.
+      reflexivity.
+      reflexivity.
+    + (* TODO: automate *)
+      intuition.
+      rewrite H0 in Hyna.
+      injection Hyna; intro; subst.
+      apply PM.gss.
+      rewrite PM.gss in H0.
+      injection H0; intro; subst.
+      exact Hyna.
+    + exists menv''.
+      intuition.
+      apply find_obj_gss.
+  - destruct IHn as [menv'' [env'' [Hstmts [H0 Hmc]]]]; clear H0.
+    destruct Hmc as [omenv [Hfindo Hmc]].
+    inversion_clear Hstmts.
+    specialize Hxs with (S n).
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i.(v_name) ci empty)
+                                Hwdef Hfindn Hmsem Hmc Hfindc) as Hstmt.
+    rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
+    destruct Hstmt as [menv''' [env''' [Hstmt [Hout Hmc']]]].
+    assert (ys (S n) <> absent) as Hyna
+        by (intro HH; apply Habs in HH; rewrite Hxs in HH; discriminate).
+    apply not_absent_present in Hyna.
+    destruct Hyna as [yc Hyna].
+    exists (add_obj obj menv''' menv'').
+    exists (PM.add r yc env'').
+    split; [|split].
+    + (* TODO: automate! *)
+      econstructor.
+      exact H0.
+      econstructor.
+      exact H1.
+      econstructor.
+      exact Hfindo.
+      econstructor.
+      econstructor.
+      exact Hfindc.
+      apply Hstmt.
+      apply Hout.
+      apply Hyna.
+      reflexivity.
+      reflexivity.
+    + (* TODO: automate! *)
+      intuition.
+      rewrite H2 in Hyna.
+      injection Hyna; intro; subst.
+      apply PM.gss.
+      rewrite PM.gss in H2.
+      injection H2; intro; subst.
+      exact Hyna.
+    + exists menv'''.
+      intuition.
+      apply find_obj_gss.
+Qed.
+
+Lemma is_translate_even_more_correct:
+  forall (G: global)
+         (f: ident)
+         (xs: stream)
+         (ys: stream)
+         (ci: const)
+         (r: ident)
+         (obj: ident)
          (n: nat)
          (menv: memoryEnv)
          (env: constEnv),
-
     Welldef_global G
     -> sem_node G f xs ys
     -> (forall n, xs n = present ci)
@@ -1941,131 +2045,11 @@ Lemma is_translate_correct:
                        (Repeat (S n) (Step_ap r f obj (Const ci)))) (menv, env)
     -> (forall co, ys n = present co <-> PM.find r env = Some co).
 Proof.
-  intros until env.
-  intros Hwdef Hsem Hxs Heval.
-  apply sem_msem_node with (1:=Hwdef) in Hsem.
-  destruct Hsem as [M Hsem].
-  inversion_clear Heval
-    as [| | | |? ? ? ? ? env0 menv0 ? ? Hevalr Hevals| | | | |].
-  inversion_clear Hevalr as [| | |? ? ? ? ? omenv0 ? Hreset Hmenv0| | | | | | ].
-  inversion_clear Hreset as [? ? ? ? ? ? Hfindr Hevalr].
-  assert (Memory_Corres G 0 f M omenv0) as Hmc0
-    by apply is_node_reset_correct
-       with (1:=Hwdef) (2:=Hsem) (3:=Hfindr) (4:=Hevalr).
-
-  assert(Hsem':=Hsem).
-  inversion_clear Hsem' as [? ? ? ? ? ? ? Hfindn Hsem''].
-  destruct Hsem'' as [H [Hi [Ho [Hclk Hsem']]]].
-
-  assert ((forall co, ys n = present co <-> PM.find r env = Some co)
-          /\ (match find_obj obj menv with
-              | None => False
-              | Some omenv => Memory_Corres G (S n) f M omenv
-              end)) as Hinv.
-  (* TODO: Ugly, dumb proof. How to streamline / beautify all these
-           inversions and rewrites. *)
-  { revert menv env Hevals.
-    induction n as [|? IH].
-    - intros menv env Hevals.
-      inversion Hevals as [| | | | | | | |? ? ? ? ? ? ? ? ? Heval0 Heval1
-                                            HR1 HR2 HR3 [HR4 HR5] [HR6 HR7]|].
-      clear HR1 HR2 HR3 HR4 HR5 HR6 HR7 Hevals menv1 env1 menv3 env3 a.
-      inversion Heval0 as [| | | | | | |? ? ? ? HR1 HR2 HR3 HR4 [HR5 HR6]| |].
-      rewrite <-HR5,<-HR6 in *.
-      clear HR1 HR2 HR3 HR4 HR5 HR6 Heval0 menv1 env1 menv2 env2 prog0 a n.
-      inversion_clear Heval1
-        as [| |? ? ? ? ? ? ? ? ? ?
-                 omenv omenv' rc Hfindo Hexp Hstep Hmenv Henv| | | | | | | ].
-      rewrite <-Hmenv,<-Henv in *; clear Hmenv Henv.
-      rewrite find_obj_gss.
-      inversion Hexp as [| |? HR1 HR2].
-      rewrite <-HR2 in *; clear HR1 HR2 c.
-      rewrite PM.gss.
-      inversion_clear Hstep as [? ? ? ? ? ? ? ? ? Hfindc Heval Hfindov].
-      rewrite Hfindr in Hfindc.
-      injection Hfindc; intros HR1 HR2;
-        rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfindc.
-      rewrite <-Hfindov.
-
-      eapply is_node_correct
-      with (1:=Hwdef) (2:=Hfindn) (3:=Hsem) (4:=eq_refl (translate G))
-                      (5:=Hfindr) (8:=Heval).
-      + rewrite PM.gss.
-        specialize Hxs with 0%nat.
-        split; intro HH; [rewrite Hxs in HH|];
-        injection HH; intro He; rewrite He in *;
-        intuition.
-      + pose proof (find_node_translate_find_class _ _ _ Hfindn) as Htrans.
-        destruct Htrans as [prog'' Htrans].
-        rewrite Hfindr in Htrans.
-        injection Htrans; intros HR1 HR2; rewrite HR1,<-HR2 in *.
-
-        apply Welldef_global_input_not_Is_defined_in with (1:=Hwdef) in Hfindn.
-        simpl in *.
-        intros x Hxivi.
-        rewrite PM.gso; [rewrite PM.gempty; reflexivity|].
-        intro Hxcls.
-        apply Is_variable_in_Is_defined_in in Hxivi.
-        rewrite Hxcls in Hxivi.
-        rewrite HR2 in Hxivi.
-        unfold translate_node in Hxivi.
-        simpl in Hxivi.
-        contradiction.
-      + rewrite <-Hmenv0 in Hfindo.
-        rewrite find_obj_gss in Hfindo.
-        injection Hfindo; intro He; rewrite He in *; clear He.
-        exact Hmc0.
-    - intros menv env Hevals.
-      inversion Hevals
-        as [| | | | | | | |? ? ? ? ? ? ? ? ? Hevals' Heval
-                             HR0 HR1 HR2 [HR3 HR4] [HR5 HR6]|].
-      clear HR0 HR1 HR2 HR3 HR4 HR5 HR6.
-      apply IH in Hevals'; clear IH.
-      destruct Hevals' as [Hout Hmc]; clear Hout.
-      inversion_clear Heval
-        as [| |? ? ? ? ? ? ? ? ? ?
-                 omenv omenv' rc Hfindo Hexp Hstep Hmenv Henv| | | | | | | ].
-      rewrite <-Hmenv,<-Henv in *.
-      rewrite Hfindo in Hmc.
-      rewrite find_obj_gss.
-      inversion Hexp as [| |? HR1 HR2].
-      rewrite <-HR2 in *; clear HR1 HR2 c.
-      rewrite PM.gss.
-      inversion_clear Hstep as [? ? ? ? ? ? ? ? ? Hfindc Heval Hfindov].
-      rewrite Hfindr in Hfindc.
-      injection Hfindc; intros HR1 HR2;
-        rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfindc.
-      rewrite <-Hfindov.
-
-      eapply is_node_correct
-      with (1:=Hwdef) (2:=Hfindn) (3:=Hsem) (4:=eq_refl (translate G))
-           (5:=Hfindr) (8:=Heval) (9:=Hmc).
-      + rewrite PM.gss.
-        specialize Hxs with (S n).
-        split; intro HH; [rewrite Hxs in HH|];
-        injection HH; intro He; rewrite He in *;
-        intuition.
-      + pose proof (find_node_translate_find_class _ _ _ Hfindn) as Htrans.
-        destruct Htrans as [prog'' Htrans].
-        rewrite Hfindr in Htrans.
-        injection Htrans; intros HR1 HR2; rewrite HR1,<-HR2 in *.
-
-        apply Welldef_global_input_not_Is_defined_in with (1:=Hwdef) in Hfindn.
-        simpl in *.
-        intros x Hxivi.
-        rewrite PM.gso; [rewrite PM.gempty; reflexivity|].
-        intro Hxcls.
-        apply Is_variable_in_Is_defined_in in Hxivi.
-        rewrite Hxcls in Hxivi.
-        rewrite HR2 in Hxivi.
-        unfold translate_node in Hxivi.
-        simpl in Hxivi.
-        contradiction.
-  }
-
-  intro co.
-  destruct n; [now auto|].
-  destruct Hinv as [Hinv0 Hinv1].
-  now apply Hinv0.
+  intros G f xs ys ci r obj n menv env Hwdef Hsem Hin Hstmt.
+  pose proof (is_translate_correct G f xs ys ci r obj n Hwdef Hsem Hin) as Hc.
+  destruct Hc as [menv2 [env2 [Hstmt2 Hout]]].
+  apply stmt_eval_det with (1:=Hstmt) in Hstmt2.
+  injection Hstmt2; intros; subst.
+  now apply Hout.
 Qed.
 
