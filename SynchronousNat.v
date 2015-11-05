@@ -15,6 +15,16 @@ Proof.
   split; intro H; [rewrite H|injection H]; auto.
 Qed.
 
+Lemma not_absent_present:
+  forall x, x <> absent <-> exists c, x = present c.
+Proof.
+  intros x.
+  split; intro HH.
+  destruct x; [intuition|eauto].
+  destruct HH as [c HH]; rewrite HH.
+  intro; discriminate.
+Qed.
+
 (** Synchronous functions *)
 
 (* With auxiliary hold function. *)

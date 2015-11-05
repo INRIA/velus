@@ -606,45 +606,42 @@ Definition sem_held_equations
 
 Lemma msem_equation_madd_mem:
   forall G H M x ms eqs,
-    ~Is_memory_in x eqs
+    ~Is_defined_in x eqs
     -> Forall (msem_equation G H M) eqs
     -> Forall (msem_equation G H (madd_mem x ms M)) eqs.
 Proof.
   Hint Constructors msem_equation.
   intros G H M x ms eqs Hnd Hsem.
   induction eqs as [|eq eqs IH]; [now constructor|].
-  apply not_Is_memory_in_cons in Hnd.
+  apply not_Is_defined_in_cons in Hnd.
   destruct Hnd as [Hnd Hnds].
   apply Forall_cons2 in Hsem.
   destruct Hsem as [Hsem Hsems].
   constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
   destruct Hsem as [| |? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar]; try now eauto.
-  apply not_Is_memory_in_eq_EqFby in Hnd.
-  econstructor.
-  - apply not_eq_sym in Hnd.
-    erewrite mfind_mem_gso with (1:=Hnd).
-    exact Hmfind.
-  - exact Hms0.
-  - exact Hlae.
-  - exact Hvar.
+  apply not_Is_defined_in_eq_EqFby in Hnd.
+  apply SEqFby with (2:=Hms0) (3:=Hlae) (4:=Hvar).
+  apply not_eq_sym in Hnd.
+  rewrite mfind_mem_gso with (1:=Hnd).
+  exact Hmfind.
 Qed.
 
 Lemma msem_equation_madd_obj:
   forall G H M M' x eqs,
-    ~Is_instance_in x eqs
+    ~Is_defined_in x eqs
     -> Forall (msem_equation G H M) eqs
     -> Forall (msem_equation G H (madd_obj x M' M)) eqs.
 Proof.
   Hint Constructors msem_equation.
   intros G H M M' x eqs Hnd Hsem.
   induction eqs as [|eq eqs IH]; [now constructor|].
-  apply not_Is_instance_in_cons in Hnd.
+  apply not_Is_defined_in_cons in Hnd.
   destruct Hnd as [Hnd Hnds].
   apply Forall_cons2 in Hsem.
   destruct Hsem as [Hsem Hsems].
   constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
   destruct Hsem as [|? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
-  apply not_Is_instance_in_eq_EqApp in Hnd.
+  apply not_Is_defined_in_eq_EqApp in Hnd.
   econstructor.
   - apply not_eq_sym in Hnd.
     erewrite mfind_inst_gso with (1:=Hnd).

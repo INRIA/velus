@@ -354,21 +354,6 @@ Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
 Definition memories (eqs: list equation) : PS.t :=
   List.fold_left memory_eq eqs PS.empty.
 
-Inductive Is_memory_in_eq : ident -> equation -> Prop :=
-| MemEqFby: forall x v e, Is_memory_in_eq x (EqFby x v e).
-
-Definition Is_memory_in (x: ident) (eqs: list equation) : Prop :=
-  List.Exists (Is_memory_in_eq x) eqs.
-
-Lemma Is_memory_in_eq_dec:
-  forall x eq, {Is_memory_in_eq x eq}+{~Is_memory_in_eq x eq}.
-Proof.
-  destruct eq as [y cae|y f lae|y v0 lae];
-  (destruct (ident_eq_dec x y) as [xeqy|xneqy];
-     [ rewrite xeqy; left; constructor | right; inversion 1; auto])
-   || (right; inversion_clear 1).
-Qed.
-
 Lemma In_fold_left_memory_eq:
   forall x eqs m,
     PS.In x (List.fold_left memory_eq eqs m)
@@ -398,138 +383,6 @@ Proof.
       * apply IHeqs; right; destruct eq; auto.
         apply PS.add_spec; auto.
 Qed.
-
-Lemma Is_memory_in_memories:
-  forall x eqs,
-    PS.In x (memories eqs) <-> Is_memory_in x eqs.
-Proof.
-  unfold memories, Is_memory_in.
-  induction eqs as [ eq | eq ].
-  - rewrite List.Exists_nil; split; intro H;
-    try apply not_In_empty in H; contradiction.
-  - simpl.
-    rewrite In_fold_left_memory_eq.
-    split.
-    + rewrite List.Exists_cons.
-      destruct 1. intuition.
-      destruct eq; try (apply not_In_empty in H; intuition).
-      simpl in H; apply PS.add_spec in H; destruct H.
-      rewrite H; left; constructor.
-      apply not_In_empty in H; contradiction.
-    + intro H; apply List.Exists_cons in H; destruct H.
-      destruct eq; try inversion H.
-      right; apply PS.add_spec; intuition.
-      left; apply IHeqs; apply H.
-Qed.
-
-Lemma Is_memory_in_dec:
-  forall x eqs, {Is_memory_in x eqs}+{~Is_memory_in x eqs}.
-Proof.
-  intros x eqs.
-  apply Bool.reflect_dec with (b := PS.mem x (memories eqs)).
-  apply Bool.iff_reflect.
-  rewrite PS.mem_spec.
-  symmetry.
-  apply Is_memory_in_memories.
-Qed.
-
-Lemma Is_memory_in_EqFby:
-  forall y v0 lae eqs,
-    Is_memory_in y (EqFby y v0 lae :: eqs).
-Proof.
-  intros. repeat constructor.
-Qed.
-
-Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
-  match eq with
-  | EqDef x _   => PS.add x vars
-  | EqApp x _ _ => PS.add x vars
-  | EqFby _ _ _ => vars
-  end.
-
-Definition variables (eqs: list equation) : PS.t :=
-  List.fold_left variable_eq eqs PS.empty.
-
-Inductive Is_variable_in_eq : ident -> equation -> Prop :=
-| VarEqDef: forall x e,   Is_variable_in_eq x (EqDef x e)
-| VarEqApp: forall x f e, Is_variable_in_eq x (EqApp x f e).
-
-Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
-  List.Exists (Is_variable_in_eq x) eqs.
-
-Lemma Is_variable_in_eq_dec:
-  forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
-Proof.
-  intros x eq.
-  destruct eq as [y cae|y f lae|y v0 lae];
-    match goal with
-    | |- context Is_variable_in_eq [EqFby _ _ _] => right; inversion 1
-    | _ => (destruct (ident_eq_dec x y) as [xeqy|xneqy];
-            [ rewrite xeqy; left; constructor
-            | right; inversion 1; auto])
-    end.
-Qed.
-
-Lemma In_fold_left_variable_eq:
-  forall x eqs m,
-    PS.In x (List.fold_left variable_eq eqs m)
-    <-> PS.In x (List.fold_left variable_eq eqs PS.empty) \/ PS.In x m.
-Proof. (* TODO: There must be a way to get auto to do all of this? *)
-  induction eqs as [|eq].
-  - split; auto.
-    destruct 1 as [H|].
-    apply not_In_empty in H; contradiction.
-    auto.
-  - split; [ intro H; simpl; rewrite IHeqs
-           | destruct 1 as [H|H]; apply IHeqs];
-    solve [
-        simpl in H; apply IHeqs in H; destruct H;
-        [ intuition
-        | destruct eq; try (apply PS.add_spec in H; destruct H);
-          match goal with
-          | H:x=_ |- _ => rewrite H; simpl; rewrite PS.add_spec; intuition
-          | _ => apply not_In_empty in H; contradiction
-          | _ => intuition
-          end ]
-      | right; destruct eq; try apply PS.add_spec; intuition
-      ].
-Qed.
-
-Lemma Is_variable_in_variables:
-  forall x eqs,
-    PS.In x (variables eqs)
-    <-> Is_variable_in x eqs.
-Proof.
-  unfold variables, Is_variable_in.
-  induction eqs as [ eq | eq ].
-  - rewrite List.Exists_nil; split; intro H;
-    try apply not_In_empty in H; contradiction.
-  - simpl.
-    rewrite In_fold_left_variable_eq.
-    split.
-    + rewrite List.Exists_cons.
-      destruct 1. intuition.
-      destruct eq; try (apply not_In_empty in H; intuition);
-      (simpl in H; apply PS.add_spec in H; destruct H;
-       [ rewrite H; left; constructor
-       | apply not_In_empty in H; contradiction ]).
-    + intro H; apply List.Exists_cons in H; destruct H.
-      destruct eq; try inversion H;
-      (right; apply PS.add_spec; intuition).
-      left; apply IHeqs; apply H.
-Qed.
-
-Lemma Is_variable_in_dec:
-  forall x eqs, {Is_variable_in x eqs}+{~Is_variable_in x eqs}.
-Proof.
-  intros x eqs.
-  apply Bool.reflect_dec with (b := PS.mem x (variables eqs)).
-  apply Bool.iff_reflect.
-  rewrite PS.mem_spec.
-  symmetry.
-  apply Is_variable_in_variables.
-Qed.
-
 
 Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
@@ -631,27 +484,33 @@ Proof.
   apply Is_defined_in_defined.
 Qed.
 
-Lemma Is_memory_in_defined_in:
-  forall x eqs,
-    Is_memory_in x eqs ->
-    Is_defined_in x eqs.
+Lemma In_memory_eq_In_defined_eq:
+  forall x eq S,
+    PS.In x (memory_eq S eq)
+    -> PS.In x (defined_eq S eq).
 Proof.
-  induction eqs as [|eq].
-  inversion 1.
-  inversion_clear 1 as [? ? H0|? ? H0]; apply List.Exists_cons.
-  - left; destruct eq; inversion_clear H0; constructor.
-  - right; apply IHeqs; apply H0.
+  intros x eq S HH.
+  destruct eq; try (apply PS.add_spec; now intuition).
+  apply PS.add_spec in HH.
+  destruct HH as [HH|HH].
+  - rewrite HH; apply PS.add_spec; left; reflexivity.
+  - apply PS.add_spec; right; exact HH.
 Qed.
 
-Lemma Is_memory_in_cons:
-  forall x eq eqs,
-    Is_memory_in x (eq :: eqs) ->
-    Is_memory_in_eq x eq
-    \/ (~Is_memory_in_eq x eq /\ Is_memory_in x eqs).
+Lemma In_fold_left_memory_eq_defined_eq:
+  forall x eqs S,
+    PS.In x (List.fold_left memory_eq eqs S)
+    -> PS.In x (List.fold_left defined_eq eqs S).
 Proof.
-  intros x eq eqs Hdef.
-  apply List.Exists_cons in Hdef.
-  destruct (Is_memory_in_eq_dec x eq); intuition.
+  intros x eqs.
+  induction eqs as [|eq eqs IH]; [now intuition|].
+  intros S HH.
+  apply IH in HH; clear IH.
+  apply In_fold_left_defined_eq in HH.
+  simpl. apply In_fold_left_defined_eq.
+  destruct HH as [HH|HH].
+  - left; exact HH.
+  - right; now apply In_memory_eq_In_defined_eq with (1:=HH).
 Qed.
 
 Lemma Is_defined_in_cons:
@@ -665,17 +524,6 @@ Proof.
   destruct (Is_defined_in_eq_dec x eq); intuition.
 Qed.
 
-Lemma Is_variable_in_cons:
-  forall x eq eqs,
-    Is_variable_in x (eq :: eqs) ->
-    Is_variable_in_eq x eq
-    \/ (~Is_variable_in_eq x eq /\ Is_variable_in x eqs).
-Proof.
-  intros x eq eqs Hdef.
-  apply List.Exists_cons in Hdef.
-  destruct (Is_variable_in_eq_dec x eq); intuition.
-Qed.
-
 Lemma not_Is_defined_in_cons:
   forall x eq eqs,
     ~Is_defined_in x (eq :: eqs)
@@ -684,81 +532,6 @@ Proof.
   intros x eq eqs. split.
   intro H0; unfold Is_defined_in in H0; auto.
   destruct 1 as [H0 H1]; intro H; apply Is_defined_in_cons in H; intuition.
-Qed.
-
-Lemma not_Is_variable_in_cons:
-  forall x eq eqs,
-    ~Is_variable_in x (eq :: eqs)
-    <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in x eqs.
-Proof.
-  intros x eq eqs. split.
-  intro H0; unfold Is_variable_in in H0; auto.
-  destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
-Qed.
-
-Lemma not_Is_memory_in_cons:
-  forall x eq eqs,
-    ~Is_memory_in x (eq :: eqs)
-    <-> ~Is_memory_in_eq x eq /\ ~Is_memory_in x eqs.
-Proof.
-  intros x eq eqs. split.
-  intro H0; unfold Is_memory_in in H0; auto.
-  destruct 1 as [H0 H1]; intro H; apply Is_memory_in_cons in H; intuition.
-Qed.
-
-Lemma not_Is_defined_in_not_Is_variable_in:
-  forall x eqs, ~Is_defined_in x eqs -> ~Is_variable_in x eqs.
-Proof.
-  Hint Constructors Is_defined_in_eq.
-  induction eqs as [|eq].
-  - intro H; contradict H; inversion H.
-  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
-    apply IHeqs in H1; apply not_Is_variable_in_cons.
-    split; [ destruct eq;  inversion 1; subst; intuition
-           | apply H1].
-Qed.
-
-Lemma not_Is_defined_in_not_Is_memory_in:
-  forall x eqs, ~Is_defined_in x eqs -> ~Is_memory_in x eqs.
-Proof.
-  Hint Constructors Is_defined_in_eq.
-  induction eqs as [|eq].
-  - intro H; contradict H; inversion H.
-  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
-    apply IHeqs in H1; apply not_Is_memory_in_cons.
-    split; [ destruct eq;  inversion 1; subst; intuition
-           | apply H1].
-Qed.
-
-Lemma Is_defined_in_not_mem_not_var:
-  forall x eqs,
-    ~Is_memory_in x eqs
-    -> ~Is_variable_in x eqs
-    -> ~Is_defined_in x eqs.
-Proof.
-  intros x eqs Hnmem Hnvar Hndef.
-  induction eqs as [|eq].
-  inversion Hndef.
-  apply not_Is_memory_in_cons in Hnmem.
-  apply not_Is_variable_in_cons in Hnvar.
-  destruct Hnmem as [Hnmem1 Hnmem2].
-  destruct Hnvar as [Hnvar1 Hnvar2].
-  apply Is_defined_in_cons in Hndef.
-  destruct Hndef as [Hndef|Hndef].
-  destruct eq; (inversion Hndef; subst);
-  solve [ apply Hnvar1; repeat constructor
-        | apply Hnmem1; repeat constructor ].
-  now apply IHeqs.
-Qed.
-
-Lemma not_Is_memory_in_eq_EqFby:
-  forall x i v0 lae,
-    ~ Is_memory_in_eq x (EqFby i v0 lae) -> x <> i.
-Proof.
-  intros x i v0 lae H0 xeqi.
-  rewrite xeqi in H0.
-  assert (Is_memory_in_eq i (EqFby i v0 lae)) by constructor.
-  contradiction.
 Qed.
 
 Lemma not_Is_defined_in_eq_EqDef:
@@ -791,43 +564,35 @@ Proof.
   contradiction.
 Qed.
 
-Lemma not_Is_variable_in_eq_EqDef:
-  forall x i cae,
-    ~ Is_variable_in_eq x (EqDef i cae) -> x <> i.
-Proof.
-  intros x i cae H0 xeqi.
-  rewrite xeqi in H0.
-  assert (Is_variable_in_eq i (EqDef i cae)) by constructor.
-  contradiction.
-Qed.
 
-Lemma not_Is_variable_in_eq_EqApp:
-  forall x i f lae,
-    ~ Is_variable_in_eq x (EqApp i f lae) -> x <> i.
-Proof.
-  intros x i f lae H0 xeqi.
-  rewrite xeqi in H0.
-  assert (Is_variable_in_eq i (EqApp i f lae)) by constructor.
-  contradiction.
-Qed.
+Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
+  match eq with
+  | EqDef x _   => PS.add x vars
+  | EqApp x _ _ => PS.add x vars
+  | EqFby _ _ _ => vars
+  end.
 
-Lemma Is_defined_in_Is_variable_memory_in:
-  forall x eqs, Is_defined_in x eqs
-                -> Is_variable_in x eqs \/ Is_memory_in x eqs.
+Definition variables (eqs: list equation) : PS.t :=
+  List.fold_left variable_eq eqs PS.empty.
+
+Inductive Is_variable_in_eq : ident -> equation -> Prop :=
+| VarEqDef: forall x e,   Is_variable_in_eq x (EqDef x e)
+| VarEqApp: forall x f e, Is_variable_in_eq x (EqApp x f e).
+
+Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
+  List.Exists (Is_variable_in_eq x) eqs.
+
+Lemma Is_variable_in_eq_dec:
+  forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
 Proof.
-  induction eqs as [|eq eqs IH]; [now inversion 1|].
-  intro Hdef.
-  apply Is_defined_in_cons in Hdef.
-  destruct Hdef as [Hdef|Hdef];
-    [destruct eq;
-      inversion_clear Hdef;
-      [left|left|right];
-      repeat constructor|].
-  destruct Hdef as [Hdef0 Hdef1].
-  apply IH in Hdef1.
-  destruct Hdef1 as [Hdef|Hdef].
-  left; constructor 2; apply Hdef.
-  right; constructor 2; apply Hdef.
+  intros x eq.
+  destruct eq as [y cae|y f lae|y v0 lae];
+    match goal with
+    | |- context Is_variable_in_eq [EqFby _ _ _] => right; inversion 1
+    | _ => (destruct (ident_eq_dec x y) as [xeqy|xneqy];
+            [ rewrite xeqy; left; constructor
+            | right; inversion 1; auto])
+    end.
 Qed.
 
 Lemma Is_variable_in_Is_defined_in:
@@ -838,6 +603,224 @@ Proof.
   induction eqs as [|eq eqs IH]; [now inversion 1|].
   inversion_clear 1 as [Hin ? Hivi|]; [|constructor 2; intuition].
   destruct eq; inversion_clear Hivi; repeat constructor.
+Qed.
+
+Lemma Is_variable_in_cons:
+  forall x eq eqs,
+    Is_variable_in x (eq :: eqs) ->
+    Is_variable_in_eq x eq
+    \/ (~Is_variable_in_eq x eq /\ Is_variable_in x eqs).
+Proof.
+  intros x eq eqs Hdef.
+  apply List.Exists_cons in Hdef.
+  destruct (Is_variable_in_eq_dec x eq); intuition.
+Qed.
+
+Lemma not_Is_variable_in_cons:
+  forall x eq eqs,
+    ~Is_variable_in x (eq :: eqs)
+    <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in x eqs.
+Proof.
+  intros x eq eqs. split.
+  intro H0; unfold Is_variable_in in H0; auto.
+  destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
+Qed.
+
+Lemma In_fold_left_variable_eq:
+  forall x eqs m,
+    PS.In x (List.fold_left variable_eq eqs m)
+    <-> PS.In x (List.fold_left variable_eq eqs PS.empty) \/ PS.In x m.
+Proof. (* TODO: There must be a way to get auto to do all of this? *)
+  induction eqs as [|eq].
+  - split; auto.
+    destruct 1 as [H|].
+    apply not_In_empty in H; contradiction.
+    auto.
+  - split; [ intro H; simpl; rewrite IHeqs
+           | destruct 1 as [H|H]; apply IHeqs];
+    solve [
+        simpl in H; apply IHeqs in H; destruct H;
+        [ intuition
+        | destruct eq; try (apply PS.add_spec in H; destruct H);
+          match goal with
+          | H:x=_ |- _ => rewrite H; simpl; rewrite PS.add_spec; intuition
+          | _ => apply not_In_empty in H; contradiction
+          | _ => intuition
+          end ]
+      | right; destruct eq; try apply PS.add_spec; intuition
+      ].
+Qed.
+
+Lemma Is_variable_in_variables:
+  forall x eqs,
+    PS.In x (variables eqs)
+    <-> Is_variable_in x eqs.
+Proof.
+  unfold variables, Is_variable_in.
+  induction eqs as [ eq | eq ].
+  - rewrite List.Exists_nil; split; intro H;
+    try apply not_In_empty in H; contradiction.
+  - simpl.
+    rewrite In_fold_left_variable_eq.
+    split.
+    + rewrite List.Exists_cons.
+      destruct 1. intuition.
+      destruct eq; try (apply not_In_empty in H; intuition);
+      (simpl in H; apply PS.add_spec in H; destruct H;
+       [ rewrite H; left; constructor
+       | apply not_In_empty in H; contradiction ]).
+    + intro H; apply List.Exists_cons in H; destruct H.
+      destruct eq; try inversion H;
+      (right; apply PS.add_spec; intuition).
+      left; apply IHeqs; apply H.
+Qed.
+
+Lemma Is_variable_in_dec:
+  forall x eqs, {Is_variable_in x eqs}+{~Is_variable_in x eqs}.
+Proof.
+  intros x eqs.
+  apply Bool.reflect_dec with (b := PS.mem x (variables eqs)).
+  apply Bool.iff_reflect.
+  rewrite PS.mem_spec.
+  symmetry.
+  apply Is_variable_in_variables.
+Qed.
+
+Lemma not_Is_defined_in_eq_not_Is_variable_in_eq:
+  forall x eq, ~Is_defined_in_eq x eq -> ~Is_variable_in_eq x eq.
+Proof.
+  Hint Constructors Is_defined_in_eq.
+  intros x eq Hnidi.
+  destruct eq; inversion 1; subst; intuition.
+Qed.
+
+Lemma not_Is_defined_in_not_Is_variable_in:
+  forall x eqs, ~Is_defined_in x eqs -> ~Is_variable_in x eqs.
+Proof.
+  Hint Constructors Is_defined_in_eq.
+  induction eqs as [|eq].
+  - intro H; contradict H; inversion H.
+  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
+    apply IHeqs in H1; apply not_Is_variable_in_cons.
+    split; [ now apply not_Is_defined_in_eq_not_Is_variable_in_eq
+           | now apply H1].
+Qed.
+
+Lemma Is_defined_in_memories:
+  forall x eqs,
+    PS.In x (memories eqs) -> Is_defined_in x eqs.
+Proof.
+  unfold memories, Is_defined_in.
+  induction eqs as [ eq | eq ].
+  - simpl; intro; not_In_empty.
+  - intro HH; simpl in HH.
+    apply In_fold_left_memory_eq in HH.
+    rewrite List.Exists_cons.
+    destruct HH as [HH|HH].
+    + right; now apply IHeqs with (1:=HH).
+    + left. apply In_memory_eq_In_defined_eq in HH.
+      destruct eq; apply PS.add_spec in HH; destruct HH as [HH|HH];
+      (rewrite HH; now constructor) || not_In_empty.
+Qed.
+
+Inductive NoDup_defs : list equation -> Prop :=
+| NDDNil: NoDup_defs nil
+| NDDEqDef:
+    forall x e eqs,
+      NoDup_defs eqs ->
+      ~Is_defined_in x eqs ->
+      NoDup_defs (EqDef x e :: eqs)
+| NDDEqApp:
+    forall x f e eqs,
+      NoDup_defs eqs ->
+      ~Is_defined_in x eqs ->
+      NoDup_defs (EqApp x f e :: eqs)
+| NDDEqFby:
+    forall x v e eqs,
+      NoDup_defs eqs ->
+      ~Is_defined_in x eqs ->
+      NoDup_defs (EqFby x v e :: eqs).
+
+Lemma NoDup_defs_cons:
+  forall eq eqs,
+    NoDup_defs (eq :: eqs) -> NoDup_defs eqs.
+Proof.
+  intros eq eqs Hndd.
+  destruct eq; inversion_clear Hndd; assumption.
+Qed.
+
+Lemma not_Is_variable_in_memories:
+  forall x eqs,
+    PS.In x (memories eqs)
+    -> NoDup_defs eqs
+    -> ~Is_variable_in x eqs.
+Proof.
+  (* TODO: Too complicated! Find a simpler proof. *)
+  intros x eqs Hinm Hndd.
+  pose proof (Is_defined_in_memories _ _ Hinm) as Hdin.
+  unfold memories, Is_variable_in in *.
+  induction eqs as [eq|eq eqs IH].
+  - simpl in *; intro; not_In_empty.
+  - apply Is_defined_in_cons in Hdin.
+    inversion Hndd
+      as [|y e ? Hndds Hndi|y f e ? Hndds Hndi|y v0 e ? Hndds Hndi];
+      subst; clear Hndd.
+    + destruct Hdin as [Hdin|[Hndin Hdins]].
+      simpl in Hinm.
+      intro He; apply List.Exists_cons in He; destruct He as [He|He].
+      apply Is_defined_in_memories in Hinm.
+      inversion He; subst; clear He.
+      contradiction.
+
+      inversion Hdin; subst; clear Hdin.
+      apply Is_variable_in_Is_defined_in in He.
+      contradiction.
+
+      simpl in Hinm.
+      apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
+      intro He; apply List.Exists_cons in He; destruct He as [He|He].
+      inversion He; subst; clear He.
+      apply Hndin; now constructor.
+      contradiction.
+    + destruct Hdin as [Hdin|[Hndin Hdins]].
+      simpl in Hinm.
+      intro He; apply List.Exists_cons in He; destruct He as [He|He].
+      apply Is_defined_in_memories in Hinm.
+      inversion He; subst; clear He.
+      contradiction.
+
+      inversion Hdin; subst; clear Hdin.
+      apply Is_variable_in_Is_defined_in in He.
+      contradiction.
+
+      simpl in Hinm.
+      apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
+      intro He; apply List.Exists_cons in He; destruct He as [He|He].
+      inversion He; subst; clear He.
+      apply Hndin; now constructor.
+      contradiction.
+    + destruct Hdin as [Hdin|[Hndin Hdins]].
+      simpl in Hinm.
+      intro He; apply List.Exists_cons in He; destruct He as [He|He].
+      inversion He; subst; clear He.
+      inversion Hdin; subst; clear Hdin.
+
+      apply Is_variable_in_Is_defined_in in He.
+      contradiction.
+
+      simpl in Hinm.
+      apply In_fold_left_memory_eq in Hinm.
+      destruct Hinm as [Hinm|Hinm].
+      apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
+      intro He; apply List.Exists_cons in He; destruct He as [He|He].
+
+      inversion He; subst; clear He.
+      contradiction.
+
+      apply PS.add_spec in Hinm.
+      destruct Hinm as [Hinm|Hinm]; [|now not_In_empty].
+      rewrite Hinm in *.
+      exfalso; apply Hndin; now constructor.
 Qed.
 
 Inductive Is_node_in_eq : ident -> equation -> Prop :=
@@ -856,64 +839,6 @@ Inductive Ordered_nodes : global -> Prop :=
                     /\ List.Exists (fun n=> f = n.(n_name)) nds)
       -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
       -> Ordered_nodes (nd::nds).
-
-Inductive Is_instance_in_eq : ident -> equation -> Prop :=
-| III: forall x f e, Is_instance_in_eq x (EqApp x f e).
-
-Definition Is_instance_in (x: ident) (eqs: list equation) : Prop :=
-  List.Exists (Is_instance_in_eq x) eqs.
-
-Lemma Is_instance_in_eq_dec:
-  forall x eq, {Is_instance_in_eq x eq}+{~Is_instance_in_eq x eq}.
-Proof.
-  destruct eq as [y cae|y f lae|y v0 lae];
-  (destruct (ident_eq_dec x y) as [xeqy|xneqy];
-     [ rewrite xeqy; left; constructor | right; inversion 1; auto])
-   || (right; inversion_clear 1).
-Qed.
-
-Lemma Is_instance_in_cons:
-  forall x eq eqs,
-    Is_instance_in x (eq :: eqs) ->
-    Is_instance_in_eq x eq
-    \/ (~Is_instance_in_eq x eq /\ Is_instance_in x eqs).
-Proof.
-  intros x eq eqs Hdef.
-  apply List.Exists_cons in Hdef.
-  destruct (Is_instance_in_eq_dec x eq); intuition.
-Qed.
-
-Lemma not_Is_instance_in_cons:
-  forall x eq eqs,
-    ~Is_instance_in x (eq :: eqs)
-    <-> ~Is_instance_in_eq x eq /\ ~Is_instance_in x eqs.
-Proof.
-  intros x eq eqs. split.
-  intro H0; unfold Is_instance_in in H0; auto.
-  destruct 1 as [H0 H1]; intro H; apply Is_instance_in_cons in H; intuition.
-Qed.
-
-Lemma not_Is_instance_in_eq_EqApp:
-  forall x i f lae,
-    ~ Is_instance_in_eq x (EqApp i f lae) -> x <> i.
-Proof.
-  intros x i f lae H0 xeqi.
-  rewrite xeqi in H0.
-  assert (Is_instance_in_eq i (EqApp i f lae)) by constructor.
-  contradiction.
-Qed.
-
-Lemma not_Is_defined_in_not_Is_instance_in:
-  forall x eqs, ~Is_defined_in x eqs -> ~Is_instance_in x eqs.
-Proof.
-  Hint Constructors Is_defined_in_eq.
-  induction eqs as [|eq].
-  - intro H; contradict H; inversion H.
-  - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
-    apply IHeqs in H1; apply not_Is_instance_in_cons.
-    split; [ destruct eq;  inversion 1; subst; intuition
-           | apply H1].
-Qed.
 
 Lemma not_Is_node_in_cons:
   forall n eq eqs,
@@ -1092,5 +1017,4 @@ Proof.
   - intros fnode Hfnode.
     apply IH with (1:=Hfnode).
 Qed.
-
 
