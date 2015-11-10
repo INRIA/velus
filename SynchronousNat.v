@@ -6,8 +6,11 @@ Inductive value :=
   | present (v : const).
 (* Coercion present : const >-> value. *)
 
-Definition stream := nat -> value.
-Definition cstream := nat -> bool.
+Definition stream A := nat -> A.
+Definition vstream := stream value.
+Definition cstream := stream bool.
+
+(* Definition const {A} (a: A): stream A := fun _ => a.  *)
 
 Lemma present_injection:
   forall x y, x = y <-> present x = present y.
@@ -29,7 +32,8 @@ Qed.
 
 (* With auxiliary hold function. *)
 
-Inductive holdR (v0: const) (xs: stream) : nat -> const -> Prop :=
+
+Inductive holdR (v0: const) (xs: stream value) : nat -> const -> Prop :=
 | holdR0:
     holdR v0 xs 0 v0
 | holdR_absent:
@@ -39,21 +43,22 @@ Inductive holdR (v0: const) (xs: stream) : nat -> const -> Prop :=
       holdR v0 xs (S n) v
 | holdR_present:
     forall n c,
-      xs n = present c ->
+      xs n = (present c) ->
       holdR v0 xs (S n) c.
 
-Inductive fbyR (v0: const) (xs: stream) : nat -> value -> Prop :=
+Inductive fbyR (v0: const) (xs: stream value) : nat -> value -> Prop :=
 | fbyR_absent:
     forall n,
       xs n = absent ->
       fbyR v0 xs n absent
 | fbyR_present:
-    forall c n,
-      xs n <> absent ->
+    forall c n v,
+      xs n = v ->
+      v <> absent ->
       holdR v0 xs n c ->
       fbyR v0 xs n (present c).
 
-Fixpoint hold (v0: const) (xs: stream) (n: nat) : const :=
+Fixpoint hold (v0: const) (xs: stream value) (n: nat) : const :=
   match n with
   | 0 => v0
   | S m => match xs m with
@@ -62,7 +67,7 @@ Fixpoint hold (v0: const) (xs: stream) (n: nat) : const :=
            end
   end.
 
-Definition fby (v0: const) (xs: stream) (n: nat) : value :=
+Definition fby (v0: const) (xs: stream value) (n: nat) : value :=
   match xs n with
   | absent => absent
   | _ => present (hold v0 xs n)
@@ -105,25 +110,24 @@ Proof.
   case_eq (xs n).
   - auto using fbyR_absent.
   - intros v xsn.
-    apply fbyR_present.
-    + rewrite xsn; discriminate.
-    + apply hold_rel; reflexivity.
+    eapply fbyR_present; try eassumption || discriminate.
+    apply hold_rel; reflexivity.
 Qed.
 
 Lemma fby_rel2: forall v0 xs n v, fbyR v0 xs n v -> fby v0 xs n = v.
 Proof.
   induction n.
-  - inversion_clear 1 as [ ? H0 | ? ? ? HR].
+  - inversion_clear 1 as [ ? H0 | ? ? ? ? ? HR].
     + unfold fby; rewrite H0; reflexivity.
     + unfold fby; case_eq (xs 0).
-      contradiction.
+      subst; contradiction.
       intros v2 xsn.
       apply hold_rel2 in HR; inversion HR.
       trivial.
-  - inversion_clear 1 as [ ? H0 | ? ? ? HR].
+  - inversion_clear 1 as [ ? H0 | ? ? ? ? ? HR].
     + unfold fby; rewrite H0; reflexivity.
     + unfold fby; case_eq (xs (S n)).
-      contradiction.
+      subst; contradiction.
       intros v2 xsn.
       apply hold_rel2 in HR; inversion HR.
       trivial.
@@ -184,4 +188,3 @@ Proof.
   rewrite Habs. rewrite Habs'.
   reflexivity.
 Qed.
-
