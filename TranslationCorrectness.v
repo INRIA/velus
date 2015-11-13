@@ -959,7 +959,7 @@ Proof.
   intros G f n ls M ys menv Hwdef Hmsem Habs.
   revert menv.
   induction Hmsem as [|H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH
-                      |H M ms y ls v0 lae Hmfind Hms0 Hls Hy
+                      |H M ms y ls yS v0 lae Hmfind Hms0 Hls HyS Hy
                       |f xs M ys i o eqs Hf Heqs IH]
   using msem_node_mult
   with (P := fun H M eq Hsem =>
@@ -1054,14 +1054,16 @@ Proof.
   destruct Hmsem as [Hmeq Hmeqs].
   - destruct eq; inversion Hidi; subst;
     try (exfalso; apply Hnvi0; now constructor).
-    inversion_clear Hmeq as [| |? ? ? ? ls ? Ha Hmfind Hms0 Hsemls Hmls].
+    inversion_clear Hmeq as [| |? ? ? ? ls ? ? ? Hmfind Hms0 Hsemls HxS Hmls].
     exists ms.
     split; [apply Hmfind|].
-    specialize Hmls with n.
+    specialize Hmls with n; specialize (HxS n); simpl in HxS.
     destruct (ls n);
       destruct Hmls as [Hms Hsv'].
+    rewrite Hsv' in HxS.
     + assert (present c = absent) by sem_det; discriminate.
     + cut (present (ms n) = present c); [injection 1; auto|].
+      rewrite Hsv' in HxS.
       sem_det.
   - apply IH; assumption.
 Qed.
@@ -1275,7 +1277,7 @@ Proof.
 
   inversion Hsem as [H0 M0 x xs cae Hvar Hcae HR1 HR2 HR3
                     |H0 M0 y f Mo lae ls xs Hmfind Hlae Hvar Hmsem HR1 HR2 HR3
-                    |H0 M0 ms y ls v0 lae Hmfind Hms0 Hlae Hvar HR1 HR2 HR3];
+                    |H0 M0 ms y ls yS v0 lae Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
     (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0);
     specialize (Hvar n).
   - (* Case EqDef: y = cae *)
@@ -1909,7 +1911,7 @@ Proof.
       * econstructor; [|now econstructor].
         econstructor; [|reflexivity].
         now constructor.
-      * inversion_clear Hmsem as [| |? ? ? ? ? ? ? Hmfind Hms Hlae Hls].
+      * inversion_clear Hmsem as [| |? ? ? ? ? ? ? ? Hmfind Hms Hlae Hls].
         rewrite <-Hms in *.
         repeat constructor;
           [| now apply Memory_Corres_eqs_add_mem with (1:=Hmfind) (2:=Hmc)].

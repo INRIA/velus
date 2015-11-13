@@ -111,15 +111,18 @@ Inductive rhs_absent_instant (H: env): equation -> Prop :=
 
 Definition restr (H: history)(n: nat): env :=
   PM.map (fun xs => xs n) H.
+Hint Unfold restr.
 
 Definition lift {A} (sem: env -> A -> Prop)(H: history)(xs: stream A): Prop :=
   forall n, sem (restr H n) (xs n).
+Hint Unfold lift.
 
 Definition sem_clock (H: history)(ck: clock)(xs: stream bool): Prop :=
   lift (fun env b => sem_clock_instant env ck b) H xs.
 
 Definition sem_var (H: history)(x: ident)(xs: stream value): Prop :=
   lift (fun env v => sem_var_instant env x v) H xs.
+Hint Unfold sem_var.
 
 Definition sem_laexp (H: history)(e: laexp)(xs: stream value): Prop :=
   lift (fun env v => sem_laexp_instant env e v) H xs.
@@ -147,9 +150,10 @@ Inductive sem_equation (G: global) : history -> equation -> Prop :=
       sem_node G f ls xs ->
       sem_equation G H (EqApp x f arg)
 | SEqFby:
-    forall H x (ls: stream value) v0 lae,
+    forall H x (ls xS: stream value) v0 lae,
       sem_laexp H lae ls ->
-      (forall n v, sem_var_instant (restr H n) x v <-> fbyR v0 ls n v) ->
+      sem_var H x xS ->
+      xS = fby v0 ls ->
       sem_equation G H (EqFby x v0 lae)
 
 with sem_node (G: global) : ident -> stream value -> stream value -> Prop :=
@@ -199,11 +203,13 @@ Section sem_node_mult.
     forall (H   : history)
 	   (y   : ident)
 	   (ls  : stream value)
+	   (yS  : stream value)
 	   (v0  : const)
 	   (lae : laexp)
 	   (Hls : sem_laexp H lae ls)
-	   (Hys : forall n v, sem_var_instant (restr H n) y v <-> fbyR v0 ls n v),
-      P H (EqFby y v0 lae) (SEqFby G H y ls v0 lae Hls Hys).
+	   (Hys : sem_var H y yS)
+           (Hfby: yS = fby v0 ls),
+      P H (EqFby y v0 lae) (SEqFby G H y ls yS v0 lae Hls Hys Hfby).
 
   Hypothesis SNode_case :
     forall (f   : ident)
@@ -238,7 +244,7 @@ Section sem_node_mult.
     | SEqApp H y f lae ls ys Hlae Hvar Hnode =>
       EqApp_case H y f lae ls ys Hlae Hvar Hnode
                  (sem_node_mult f ls ys Hnode)
-    | SEqFby H y ls v0 lae Hls Hys => EqFby_case H y ls v0 lae Hls Hys
+    | SEqFby H y ls yS v0 lae Hls Hys Hfby => EqFby_case H y ls yS v0 lae Hls Hys Hfby
     end
 
   with sem_node_mult (f  : ident)
@@ -541,7 +547,7 @@ Proof.
   - intro Hnin.
     apply SEqApp with (1:=Hlae) (2:=Hvar).
     apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
-  - intro; apply SEqFby with (1:=Hls) (2:=Hys).
+  - intro; eapply SEqFby; eassumption.
   - intro.
     rewrite find_node_tl with (1:=Hnf) in Hf.
     apply SNode with (1:=Hf).
@@ -671,5 +677,5 @@ Proof.
       by (intro HH; apply Hninieq; rewrite HH; constructor).
     econstructor. exact Hsem. exact Hvar.
     now apply sem_node_cons with (1:=Hord) (2:=Hnode) (3:=Hnf).
-  - econstructor; eassumption; assumption.
+  - econstructor; eauto.
 Qed.

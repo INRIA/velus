@@ -99,15 +99,16 @@ Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
       msem_node G f ls M' xs ->
       msem_equation G H M (EqApp x f arg)
 | SEqFby:
-    forall H M ms x ls v0 lae,
+    forall H M ms x ls xS v0 lae,
       mfind_mem x M = Some ms ->
       ms 0 = v0 ->
       sem_laexp H lae ls ->
+      sem_var H x xS ->
       (forall n, match ls n with
                  | absent    => ms (S n) = ms n              (* held *)
-                                /\ sem_var_instant (restr H n) x absent
+                                /\ xS n = absent
                  | present v => ms (S n) = v
-                                /\ sem_var_instant (restr H n) x (present (ms n))
+                                /\ xS n = present (ms n)
                  end) ->
       msem_equation G H M (EqFby x v0 lae)
 
@@ -166,18 +167,20 @@ Section msem_node_mult.
            (ms : nat -> const)
            (y : ident)
            (ls : stream value)
+           (yS : stream value)
            (v0 : const)
            (lae : laexp)
            (Hmfind : mfind_mem y M = Some ms)
            (Hms0 : ms 0 = v0)
            (Hls : sem_laexp H lae ls)
+           (HyS : sem_var H y yS)
            (Hy : forall n,
                match ls n with
-               | absent => ms (S n) = ms n /\ sem_var_instant (restr H n) y absent
+               | absent => ms (S n) = ms n /\ yS n = absent
                | present v =>
-                 ms (S n) = v /\ sem_var_instant (restr H n) y (present (ms n))
+                 ms (S n) = v /\ yS n = (present (ms n))
                end),
-      P H M (EqFby y v0 lae) (SEqFby G H M ms y ls v0 lae Hmfind Hms0 Hls Hy).
+      P H M (EqFby y v0 lae) (SEqFby G H M ms y ls yS v0 lae Hmfind Hms0 Hls HyS Hy).
 
   Hypothesis SNode_case:
     forall (f : ident)
@@ -256,8 +259,8 @@ Section msem_node_mult.
          | SEqApp H M y f M' lae ls ys Hmfind Hls Hys Hmsem =>
              EqApp_case H M y f M' lae ls ys Hmfind Hls Hys Hmsem
                         (msem_node_mult f ls M' ys Hmsem)
-         | SEqFby H M ms x ls v0 lae Hmfind Hms0 Hls Hy =>
-  	     EqFby_case H M ms x ls v0 lae Hmfind Hms0 Hls Hy
+         | SEqFby H M ms x ls yS v0 lae Hmfind Hms0 Hls hyS Hy =>
+  	     EqFby_case H M ms x ls yS v0 lae Hmfind Hms0 Hls hyS Hy
          end.
 
 End msem_node_mult.
@@ -328,6 +331,7 @@ Proof.
     specialize Hy with n.
     rewrite Hls_abs in *.
     destruct Hy as [Hy0 Hy1].
+    specialize (HyS n); simpl in HyS. rewrite Hy1 in HyS. 
     auto.
   - apply Welldef_global_output_Is_variable_in with (2:=Hf) in Hwdef.
     simpl in Hwdef.
@@ -375,7 +379,7 @@ Proof.
     inversion_clear Hrhs0 as [? ? Habs|? ? ? Habs|? ? ? Habs];
     inversion_clear Hsem0 as [? ? ? ? ? Hvar Hcae
                              |? ? ? ? ? ? ? ? Hmfind Hlae Hvar Hsem
-                             |? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar];
+                             |? ? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar];
     inversion_clear Hidi.
     + specialize (Hcae n); specialize (Hvar n); simpl in *.
       assert (Hxs_abs: xs n = absent) by sem_det.
@@ -386,8 +390,10 @@ Proof.
       congruence.
     + specialize (Hlae n); specialize (Hvar n); simpl in *.
       assert (Hls_abs: ls n = absent) by sem_det.
-      rewrite Hls_abs in Hvar; simpl in Hvar. 
-      firstorder.
+      specialize H1 with n.
+      rewrite Hls_abs in H1; simpl in Hvar.
+      destruct H1. rewrite H1 in Hvar.
+      auto.
   - destruct Hidi as [Hnidi Hidi].
     now apply IH with (1:=Hrhs1) (2:=Hsem1) (3:=Hidi).
 Qed.
@@ -417,7 +423,7 @@ Proof.
   - intro Hnin.
     eapply SEqApp with (1:=Hmfind) (2:=Hls) (3:=Hys).
     apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
-  - intro; eapply SEqFby with (1:=Hmfind) (2:=Hms0) (3:=Hls) (4:=Hy).
+  - intro; eapply SEqFby; eassumption.
   - intro.
     rewrite find_node_tl with (1:=Hnf) in Hf.
     apply SNode with (1:=Hf).
@@ -592,11 +598,7 @@ Proof.
     eexact H9.
     eexact H10.
     apply msem_node_cons with (1:=Hord); assumption.
-  - econstructor.
-    eassumption.
-    reflexivity.
-    eassumption.
-    assumption.
+  - econstructor; eassumption || reflexivity.
 Qed.
 
 
@@ -637,9 +639,9 @@ Proof.
   apply Forall_cons2 in Hsem.
   destruct Hsem as [Hsem Hsems].
   constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-  destruct Hsem as [| |? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar]; try now eauto.
+  destruct Hsem as [| |? ? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar]; try now eauto.
   apply not_Is_defined_in_eq_EqFby in Hnd.
-  apply SEqFby with (2:=Hms0) (3:=Hlae) (4:=Hvar).
+  eapply SEqFby; try eassumption.
   apply not_eq_sym in Hnd.
   rewrite mfind_mem_gso with (1:=Hnd).
   exact Hmfind.
@@ -712,7 +714,7 @@ Proof.
   intros G H eqs M eq mems IH Heq Hwsch Hmeqs.
   inversion Heq as [? ? ? ? Hsem
                    |? ? ? ? ? ? Hls Hxs Hsem
-                   |? ? ? ? ? Hlae Hvar];
+                   |? ? ? ? ? ? Hlae Hvar];
     match goal with H:_=eq |- _ => rewrite <-H in * end.
   - exists M.
     constructor ((econstructor; eassumption) || assumption).
@@ -736,12 +738,14 @@ Proof.
     + reflexivity.
     + exact Hlae.
     + intros n.
+      specialize (Hvar n); simpl in Hvar.
+      eassumption.
+    + intro n.
       destruct (ls n) eqn:Hls.
       * split; [simpl; rewrite Hls; reflexivity|].
-        apply Hvar; constructor; apply Hls.
+        rewrite H1. unfold fby. rewrite Hls; auto.
       * split; [simpl; rewrite Hls; reflexivity|].
-        apply Hvar; econstructor; [eauto | | now apply hold_rel1].
-        discriminate.
+        rewrite H1. unfold fby. rewrite Hls; auto.
     + inversion_clear Hwsch as [| | |? ? ? ? ? ? ? Hnmi].
       apply msem_equation_madd_mem.
       apply Hnmi.
