@@ -1,5 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
+Require Import Rustre.Heap.
 
 Import List.ListNotations.
 Open Scope list_scope.
@@ -54,25 +55,7 @@ Definition find_class (n: ident) : program -> option (class * list class) :=
 
 (** ** Semantics *)
 
-Inductive memoryEnv : Set :=
-  mk_memory
-    { m_values  : PM.t const;
-      m_objects : PM.t memoryEnv }.
-
-Definition add_mem (id: ident) (v: const) (menv: memoryEnv) : memoryEnv :=
-  mk_memory (PM.add id v menv.(m_values))
-            (menv.(m_objects)).
-
-Definition find_mem (id: ident) (menv: memoryEnv) : option const :=
-  PM.find id (menv.(m_values)).
-
-Definition add_obj (id: ident) (omenv: memoryEnv) (menv: memoryEnv)
-  : memoryEnv := mk_memory menv.(m_values)
-                           (PM.add id omenv menv.(m_objects)).
-
-Definition find_obj (id: ident) (menv: memoryEnv) : option memoryEnv :=
-  PM.find id (menv.(m_objects)).
-
+Definition memoryEnv: Type := memory const.
 Definition constEnv : Set := PM.t const.
 
 Definition empty: constEnv := PM.empty const.
@@ -86,7 +69,7 @@ Inductive exp_eval (menv: memoryEnv)(env: constEnv):
       exp_eval menv env (Var(x)) v
 | estate:
     forall x v,
-      find_mem x menv = Some(v) ->
+      mfind_mem x menv = Some(v) ->
       exp_eval menv env (State(x)) v
 | econst:
     forall c ,
@@ -116,20 +99,20 @@ Inductive stmt_eval :
 | Iassignst:
     forall prog menv env x e v menv',
       exp_eval menv env e v ->
-      add_mem x v menv = menv' ->
+      madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
 | Istep:
     forall prog menv env e v clsid o y menv' env' omenv omenv' rv,
-      find_obj o menv = Some(omenv) ->
+      mfind_inst o menv = Some(omenv) ->
       exp_eval menv env e v ->
       stmt_step_eval prog omenv clsid v omenv' rv ->
-      add_obj o omenv' menv = menv' ->
+      madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
       stmt_eval prog menv env (Step_ap y clsid o e) (menv', env')
 | Ireset:
     forall prog menv env o clsid omenv' menv',
       stmt_reset_eval prog clsid omenv' ->
-      add_obj o omenv' menv = menv' ->
+      madd_obj o omenv' menv = menv' ->
       stmt_eval prog menv env (Reset_ap clsid o) (menv', env)
 | Icomp:
     forall prog menv env a1 a2 env1 menv1 env2 menv2,
@@ -247,11 +230,11 @@ Proof.
     | H1: PM.add ?x ?v ?env = ?env1,
       H2: PM.add ?x ?v ?env = ?env2 |- _ =>
       rewrite H1 in H2; rewrite H2 in *; clear H1 H2
-    | H1: add_mem ?x ?v ?menv = ?menv1,
-      H2: add_mem ?x ?v ?menv = ?menv2 |- _ =>
+    | H1: madd_mem ?x ?v ?menv = ?menv1,
+      H2: madd_mem ?x ?v ?menv = ?menv2 |- _ =>
       rewrite H1 in H2; rewrite H2 in *; clear H1 H2
-    | H1: find_obj ?o ?menv = Some ?omenv1,
-      H2: find_obj ?o ?menv = Some ?omenv2 |- _ =>
+    | H1: mfind_inst ?o ?menv = Some ?omenv1,
+      H2: mfind_inst ?o ?menv = Some ?omenv2 |- _ =>
       rewrite H1 in H2; injection H2; intro Heq; rewrite Heq in *;
       clear H1 H2 Heq
     | H1: find_class ?clsid ?prog = _,
@@ -273,42 +256,10 @@ Proof.
       IH: context[stmt_eval ?prog ?menv ?env ?stmt _ -> (_, _) = _] |- _ =>
       apply IH in Hs; injection Hs; intros Heq1 Heq2;
       try rewrite Heq1 in *; try rewrite Heq2 in *; clear Heq1 Heq2 Hs
-    | H1: add_obj ?o ?omenv ?menv = ?menv1,
-      H2: add_obj ?o ?omenv ?menv = ?menv2 |- _ =>
+    | H1: madd_obj ?o ?omenv ?menv = ?menv1,
+      H2: madd_obj ?o ?omenv ?menv = ?menv2 |- _ =>
       rewrite H1 in H2; rewrite H2 in *; clear H1 H2
     | _ => intuition
     end.
-Qed.
-
-Lemma find_mem_gss:
-  forall y c m, find_mem y (add_mem y c m) = Some c.
-Proof.
-  intros. apply PM.gss.
-Qed.
-
-Lemma find_mem_gso:
-  forall x y c m, x <> y -> find_mem x (add_mem y c m) = find_mem x m.
-Proof.
-  intros. apply PM.gso. assumption.
-Qed.
-
-Lemma find_obj_gss:
-  forall y c m, find_obj y (add_obj y c m) = Some c.
-Proof.
-  intros. apply PM.gss.
-Qed.
-
-Lemma find_obj_gso:
-  forall x y c m, x <> y -> find_obj x (add_obj y c m) = find_obj x m.
-Proof.
-  intros. apply PM.gso. assumption.
-Qed.
-
-Lemma find_mem_add_obj:
-  forall x y omenv menv,
-    find_mem x (add_obj y omenv menv) = find_mem x menv.
-Proof.
-  unfold find_mem, add_obj.
-  reflexivity.
 Qed.
 

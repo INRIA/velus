@@ -4,10 +4,13 @@ Open Scope list_scope.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
+Require Import Rustre.Heap.
 Require Import Rustre.DataflowSyntax.
 Require Import SynchronousNat.
 Require Import DataflowNatSemantics.
 Require Import WellFormed.
+
+Set Implicit Arguments.
 
 (*
    NB: The history H is not really necessary here. We could just as well
@@ -27,63 +30,7 @@ Require Import WellFormed.
        with sem_node: too much work for too little gain.
  *)
 
-Inductive memory : Set := mk_memory {
-  mm_values : PM.t (nat -> const);
-  mm_instances : PM.t memory
-}.
-
-Definition empty_memory : memory :=
-  {| mm_values := PM.empty (nat -> const);
-     mm_instances := PM.empty memory |}.
-
-Definition mfind_mem x menv := PM.find x menv.(mm_values).
-Definition mfind_inst x menv := PM.find x menv.(mm_instances).
-
-Definition madd_mem (id: ident) (v: nat -> const) (M: memory) : memory :=
-  mk_memory (PM.add id v M.(mm_values))
-            M.(mm_instances).
-
-Definition madd_obj (id: ident) (M': memory) (M: memory) : memory :=
-  mk_memory M.(mm_values)
-            (PM.add id M' M.(mm_instances)).
-
-Lemma mfind_mem_gss:
-  forall x v M,
-    mfind_mem x (madd_mem x v M) = Some v.
-Proof.
-  intros x v M.
-  unfold mfind_mem, madd_mem.
-  now apply PM.gss.
-Qed.
-
-Lemma mfind_mem_gso:
-  forall x y v M,
-    x <> y
-    -> mfind_mem x (madd_mem y v M) = mfind_mem x M.
-Proof.
-  intros x y v M.
-  unfold mfind_mem, madd_mem.
-  now apply PM.gso.
-Qed.
-
-Lemma mfind_inst_gss:
-  forall x v M,
-    mfind_inst x (madd_obj x v M) = Some v.
-Proof.
-  intros x v M.
-  unfold mfind_inst, madd_obj.
-  now apply PM.gss.
-Qed.
-
-Lemma mfind_inst_gso:
-  forall x y v M,
-    x <> y
-    -> mfind_inst x (madd_obj y v M) = mfind_inst x M.
-Proof.
-  intros x y v M.
-  unfold mfind_inst, madd_obj.
-  now apply PM.gso.
-Qed.
+Definition memory := memory (stream const).
 
 Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
 | SEqDef:
@@ -142,7 +89,7 @@ Section msem_node_mult.
            (cae  : caexp)
            (Hvar : sem_var H x xs)
            (Hexp : sem_caexp H cae xs),
-      P H M (EqDef x cae) (SEqDef G H M x xs cae Hvar Hexp).
+      P (SEqDef G M Hvar Hexp).
 
   Hypothesis EqApp_case:
     forall (H      : history)
@@ -157,14 +104,13 @@ Section msem_node_mult.
            (Hls    : sem_laexp H lae ls)
            (Hys    : sem_var H y ys)
            (Hmsem  : msem_node G f ls M' ys),
-      Pn f ls M' ys Hmsem
-      -> P H M (EqApp y f lae)
-               (SEqApp G H M y f M' lae ls ys Hmfind Hls Hys Hmsem).
+      Pn Hmsem
+      -> P (SEqApp M Hmfind Hls Hys Hmsem).
 
   Hypothesis EqFby_case:
     forall (H : history)
            (M : memory)
-           (ms : nat -> const)
+           (ms : stream const)
            (y : ident)
            (ls : stream value)
            (yS : stream value)
@@ -180,7 +126,7 @@ Section msem_node_mult.
                | present v =>
                  ms (S n) = v /\ yS n = (present (ms n))
                end),
-      P H M (EqFby y v0 lae) (SEqFby G H M ms y ls yS v0 lae Hmfind Hms0 Hls HyS Hy).
+      P (SEqFby G M Hmfind Hms0 Hls HyS Hy).
 
   Hypothesis SNode_case:
     forall (f : ident)
@@ -204,18 +150,18 @@ Section msem_node_mult.
           /\ (forall n, xs n = absent ->
                         Forall (rhs_absent_instant (restr H n)) eqs)
           /\ (forall n, xs n = absent <-> ys n = absent)
-          /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs)
-      -> Pn f xs M ys (SNode G f xs M ys i o eqs Hfind Hnode).
+          /\ Forall (fun eq=>exists Hsem, P (eq := eq)(M := M)(H := H) Hsem) eqs)
+      -> Pn  (SNode Hfind Hnode).
 
   Fixpoint msem_node_mult (f : ident)
                           (xs : stream value)
                           (M : memory)
                           (ys : stream value)
                           (Hn : msem_node G f xs M ys) {struct Hn}
-                                                          : Pn f xs M ys Hn :=
-    match Hn in (msem_node _ f xs M ys) return (Pn f xs M ys Hn) with
+                                                          : Pn Hn :=
+    match Hn in (msem_node _ f xs M ys) return (Pn Hn) with
     | SNode f xs M ys i o eqs Hf Hnode =>
-        SNode_case f xs M ys i o eqs Hf Hnode
+        SNode_case Hf Hnode
         (* Turn: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
                    /\ (forall n, sem_var H (v_name o) n (ys n))
@@ -237,12 +183,12 @@ Section msem_node_mult.
                              (Heqs: Forall (msem_equation G H M) eqs) :=
                        match Heqs in Forall _ fs
                              return (Forall (fun eq=> exists Hsem,
-                                                        P H M eq Hsem) fs)
+                                                        P Hsem) fs)
                        with
                        | Forall_nil => Forall_nil _
                        | Forall_cons eq eqs Heq Heqs' =>
                          Forall_cons eq (@ex_intro _ _ Heq
-                                           (msem_equation_mult H M eq Heq))
+                                           (msem_equation_mult Heq))
                                      (map eqs Heqs')
                        end) eqs Heqs))))))
             end)
@@ -252,15 +198,14 @@ Section msem_node_mult.
                           (M : memory)
                           (eq : equation)
                           (Heq : msem_equation G H M eq) {struct Heq}
-                                                            : P H M eq Heq :=
-         match Heq in (msem_equation _ H M eq) return (P H M eq Heq)
+                                                            : P Heq :=
+         match Heq in (msem_equation _ H M eq) return (P Heq)
          with
-         | SEqDef H M y xs cae Hvar Hexp => EqDef_case H M y xs cae Hvar Hexp
+         | SEqDef H M y xs cae Hvar Hexp => EqDef_case M Hvar Hexp
          | SEqApp H M y f M' lae ls ys Hmfind Hls Hys Hmsem =>
-             EqApp_case H M y f M' lae ls ys Hmfind Hls Hys Hmsem
-                        (msem_node_mult f ls M' ys Hmsem)
+             EqApp_case M Hmfind Hls Hys                         (msem_node_mult Hmsem)
          | SEqFby H M ms x ls yS v0 lae Hmfind Hms0 Hls hyS Hy =>
-  	     EqFby_case H M ms x ls yS v0 lae Hmfind Hms0 Hls hyS Hy
+  	     EqFby_case M Hmfind Hms0 Hls hyS Hy
          end.
 
 End msem_node_mult.
@@ -762,7 +707,7 @@ Lemma sem_msem_eqs:
     -> exists M', Forall (msem_equation G H M') eqs.
 Proof.
   intros G H eqs mems IH Hwsch Heqs.
-  induction eqs as [|eq eqs IHeqs]; [exists empty_memory; now constructor|].
+  induction eqs as [|eq eqs IHeqs]; [exists (empty_memory _); now constructor|].
   apply Forall_cons2 in Heqs.
   destruct Heqs as [Heq Heqs].
   apply IHeqs with (1:=Is_well_sch_cons _ _ _ Hwsch) in Heqs.
@@ -799,7 +744,7 @@ Proof.
         by auto.
     inversion_clear Hwdef as [|? ? Hw0 neqs ? ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
     simpl in neqs; unfold neqs in *.
-    pose proof (sem_msem_eqs G H eqs _ IHG' Hwsch Heqs) as HH.
+    pose proof (sem_msem_eqs IHG' Hwsch Heqs) as HH.
     destruct HH as [M Hmsem].
     exists M.
     econstructor;

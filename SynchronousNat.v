@@ -6,9 +6,9 @@ Inductive value :=
   | present (v : const).
 (* Coercion present : const >-> value. *)
 
-Definition stream A := nat -> A.
-Definition vstream := stream value.
-Definition cstream := stream bool.
+Notation stream A := (nat -> A).
+Notation vstream := (stream value).
+Notation cstream := (stream bool).
 
 Lemma present_injection:
   forall x y, x = y <-> present x = present y.
