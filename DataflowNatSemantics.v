@@ -37,18 +37,7 @@ Inductive sem_clock (H: history): clock -> nat -> bool -> Prop :=
       ~ (c = c') ->
       sem_clock H (Con ck x c) n false.
 
-Inductive sem_laexp (H: history): laexp -> nat -> value -> Prop:=
-| SLtick:
-    forall ck ce n c,
-      sem_lexp H ce n (present c) ->
-      sem_clock H ck n true ->
-      sem_laexp H (LAexp ck ce) n (present c)
-| SLabs:
-    forall ck ce n,
-      sem_lexp H ce n absent ->
-      sem_clock H ck n false ->
-      sem_laexp H (LAexp ck ce) n absent
-with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
+Inductive sem_lexp (H: history): lexp -> nat -> value -> Prop :=
 | Sconst:
     forall c n,
       sem_lexp H (Econst c) n (present c)
@@ -59,7 +48,7 @@ with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
 | Swhen_eq:
     forall s x b n v,
       sem_var H x n (present (Cbool b)) ->
-      sem_laexp H s n v ->
+      sem_lexp H s n v ->
       sem_lexp H (Ewhen s x b) n v
 | Swhen_abs:
     forall s x b b' n,
@@ -68,6 +57,33 @@ with sem_lexp (H: history): lexp -> nat -> value -> Prop :=
       (* Note: says nothing about 's'. *)
       sem_lexp H (Ewhen s x b) n absent.
 
+Inductive sem_laexp (H: history): laexp -> nat -> value -> Prop:=
+| SLtick:
+    forall ck ce n c,
+      sem_lexp H ce n (present c) ->
+      sem_clock H ck n true ->
+      sem_laexp H (LAexp ck ce) n (present c)
+| SLabs:
+    forall ck ce n,
+      sem_lexp H ce n absent ->
+      sem_clock H ck n false ->
+      sem_laexp H (LAexp ck ce) n absent.
+
+Inductive sem_cexp (H: history): cexp -> nat -> value -> Prop :=
+| Smerge_true:
+    forall x t f n v,
+      sem_var H x n (present (Cbool true)) ->
+      sem_cexp H t n v ->
+      sem_cexp H (Emerge x t f) n v
+| Smerge_false:
+    forall x t f n v,
+      sem_var H x n (present (Cbool false)) ->
+      sem_cexp H f n v ->
+      sem_cexp H (Emerge x t f) n v
+| Sexp:
+    forall e n v,
+      sem_lexp H e n v ->
+      sem_cexp H (Eexp e) n v.
 
 Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
 | SCtick:
@@ -79,22 +95,7 @@ Inductive sem_caexp (H: history): caexp -> nat -> value -> Prop :=
     forall ck ce n,
       sem_cexp H ce n absent ->
       sem_clock H ck n false ->
-      sem_caexp H (CAexp ck ce) n absent
-with sem_cexp (H: history): cexp -> nat -> value -> Prop :=
-| Smerge_true:
-    forall x t f n v,
-      sem_var H x n (present (Cbool true)) ->
-      sem_caexp H t n v ->
-      sem_cexp H (Emerge x t f) n v
-| Smerge_false:
-    forall x t f n v,
-      sem_var H x n (present (Cbool false)) ->
-      sem_caexp H f n v ->
-      sem_cexp H (Emerge x t f) n v
-| Sexp:
-    forall e n v,
-      sem_lexp H e n v ->
-      sem_cexp H (Eexp e) n v.
+      sem_caexp H (CAexp ck ce) n absent.
 
 Inductive rhs_absent (H: history) (n: nat) : equation -> Prop :=
 | AEqDef:
@@ -372,10 +373,7 @@ Lemma sem_lexp_det:
     -> v1 = v2.
 Proof.
   intros H n.
-  induction e using lexp_mult
-  with (P:=fun e=> forall v1 v2, sem_laexp H e n v1
-                                 -> sem_laexp H e n v2
-                                 -> v1 = v2);
+  induction e;
     do 2 inversion_clear 1;
     match goal with
     | H1:sem_clock _ _ _ true, H2:sem_clock _ _ _ false |- _ =>
@@ -429,10 +427,7 @@ Lemma sem_cexp_det:
     -> v1 = v2.
 Proof.
   intros H n.
-  induction e using cexp_mult
-  with (P:=fun e=> forall v1 v2, sem_caexp H e n v1
-                                 -> sem_caexp H e n v2
-                                 -> v1 = v2);
+  induction e;
     do 2 inversion_clear 1;
     match goal with
     | H1:sem_clock _ _ _ true, H2:sem_clock _ _ _ false |- _ =>

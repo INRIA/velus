@@ -259,10 +259,7 @@ Lemma stmt_eval_translate_cexp_menv_inv:
     -> menv' = menv.
 Proof.
   intros prog menv env mems x menv' env'.
-  induction ce using cexp_mult
-  with (P := (fun cae : caexp =>
-           stmt_eval prog menv env (translate_caexp mems x cae) (menv', env') ->
-           menv' = menv));
+  induction ce;
   (apply IHce || inversion_clear 1); auto.
 Qed.
 
@@ -272,10 +269,7 @@ Lemma stmt_eval_translate_cexp_env_add:
     -> exists c, env' = PM.add x c env.
 Proof.
   intros prog menv env mems x menv' env'.
-  induction ce using cexp_mult
-  with (P := (fun cae : caexp =>
-          stmt_eval prog menv env (translate_caexp mems x cae) (menv', env') ->
-          exists c, env' = PM.add x c env));
+  induction ce;
     (apply IHce || inversion_clear 1); auto.
   exists v; rewrite <- H1; intuition.
 Qed.
@@ -542,21 +536,11 @@ Lemma lexp_correct:
 Proof.
   Hint Constructors exp_eval.
   intros H memories menv env n c.
-  induction e as [c0 e IH|c0|y|e IH y yb] using lexp_mult
-  with (P:=fun e =>
-          sem_laexp H e n (present c)
-          -> (forall x c, Is_free_in_laexp x e
-                          -> sem_var H x n (present c)
-                          -> (~PS.In x memories -> PM.find x env = Some c)
-                             /\ (PS.In x memories -> find_mem x menv = Some c))
-          -> exp_eval menv env (translate_laexp memories e) c);
-    inversion 1; intros;
-    try apply IH; try apply econst; auto.
-  split_env_assumption;
-    unfold translate_lexp;
-    destruct (PS.mem y memories) eqn:Hm;
-    rewrite PS.mem_spec in Hm || rewrite mem_spec_false in Hm;
-    auto.
+  induction e; inversion 1; simpl; intros; auto.
+  destruct (PS.mem i memories) eqn:Hm;
+  rewrite PS.mem_spec in Hm 
+    || rewrite mem_spec_false in Hm;
+  constructor; apply H5; auto.
 Qed.
 
 Lemma laexp_correct:
@@ -586,17 +570,7 @@ Lemma cexp_correct:
                                                         (menv, PM.add x c env).
 Proof.
   intros H memories prog menv env n c x.
-  induction e as [ck e IH|b et IHt ef IHf|e] using cexp_mult
-  with (P:=fun e =>
-             sem_caexp H e n (present c)
-             -> (forall x c,
-                    Is_free_in_caexp x e
-                    -> sem_var H x n (present c)
-                    -> (~PS.In x memories -> PM.find x env = Some c)
-                       /\ (PS.In x memories -> find_mem x menv = Some c))
-             -> stmt_eval prog menv env (translate_caexp memories x e)
-                          (menv, PM.add x c env)).
-  - (* CAexp *) inversion 1; auto.
+  induction e as [b et IHt ef IHf|e]. 
   - (* Emerge *)
     inversion_clear 1; intro Henv.
     + apply Iifte_true.
@@ -614,6 +588,7 @@ Proof.
     eapply lexp_correct; [eassumption|now auto].
     reflexivity.
 Qed.
+
 
 Lemma caexp_correct:
   forall H memories prog menv env n c x e,
