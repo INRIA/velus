@@ -146,8 +146,8 @@ Definition translate_node (n: node): class :=
   let names := gather_eqs n.(n_eqs) in
   let mems := ps_from_list (fst names) in
   mk_class n.(n_name)
-           n.(n_input).(v_name)
-           n.(n_output).(v_name)
+           n.(n_input)
+           n.(n_output)
            (fst names)
            (snd names)
            (translate_eqns mems n.(n_eqs))
@@ -169,7 +169,7 @@ Section TestTranslate.
     ].
 
   Example node1 : node :=
-    mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
+    mk_node 1 1 4 eqns1.
 
   (* Eval cbv in (translate_node node1). *)
 
@@ -194,7 +194,7 @@ Section TestTranslate.
     ].
 
   Example node2 : node :=
-    mk_node 2 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns2.
+    mk_node 2 1 4 eqns2.
 
   (* Eval cbv in (translate_node node2). *)
 

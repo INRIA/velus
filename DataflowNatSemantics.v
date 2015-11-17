@@ -135,8 +135,8 @@ with sem_node (G: global) : ident -> stream -> stream -> Prop :=
     forall f xs ys i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
       (exists (H: history),
-        (forall n, sem_var H i.(v_name) n (xs n))
-        /\ (forall n, sem_var H o.(v_name) n (ys n))
+        (forall n, sem_var H i n (xs n))
+        /\ (forall n, sem_var H o n (ys n))
         (* no clocks faster than input *)
         /\ (forall n, xs n = absent ->
                       Forall (rhs_absent H n) eqs)
@@ -186,20 +186,20 @@ Section sem_node_mult.
     forall (f   : ident)
 	   (xs  : stream)
 	   (ys  : stream)
-	   (i   : var_dec)
-	   (o   : var_dec)
+	   (i   : ident)
+	   (o   : ident)
 	   (eqs : list equation)
 	   (Hf  : find_node f G = Some (mk_node f i o eqs))
            (Heqs : exists H : history,
-                        (forall n, sem_var H (v_name i) n (xs n))
-	             /\ (forall n, sem_var H (v_name o) n (ys n))
+                        (forall n, sem_var H i n (xs n))
+	             /\ (forall n, sem_var H o n (ys n))
                      /\ (forall n, xs n = absent
                                    -> Forall (rhs_absent H n) eqs)
                      /\ (forall n, xs n = absent <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs),
       (exists H : history,
-          (forall n, sem_var H (v_name i) n (xs n))
-          /\ (forall n, sem_var H (v_name o) n (ys n))
+          (forall n, sem_var H i n (xs n))
+          /\ (forall n, sem_var H o n (ys n))
           /\ (forall n, xs n = absent
                         -> Forall (rhs_absent H n) eqs)
           /\ (forall n, xs n = absent <-> ys n = absent)

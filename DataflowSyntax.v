@@ -6,12 +6,12 @@ Open Scope list_scope.
 
 (** * Dataflow language *)
 
+Record var_dec : Set := mk_var { v_name : ident }.
+
+
 Inductive clock : Set :=
 | Cbase : clock                          (* base clock *)
 | Con : clock -> ident -> bool -> clock. (* subclock *)
-
-Record var_dec : Set := mk_var { v_name : ident;
-                                 v_clock : clock }.
 
 (** ** Syntax *)
 
@@ -43,8 +43,8 @@ Inductive equation : Type :=
 
 Record node : Type := mk_node {
   n_name : ident;
-  n_input : var_dec;
-  n_output : var_dec;
+  n_input : ident;
+  n_output : ident;
   n_eqs : list equation }.
 
 Definition global := list node.
