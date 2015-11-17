@@ -1421,7 +1421,7 @@ Proof.
       assert (
           let fclass := translate_node (mk_node f i o neqs) in
           exists omenv' oenv',
-            stmt_eval prog' omenv (PM.add i.(v_name) v empty)
+            stmt_eval prog' omenv (PM.add i v empty)
                       (c_step fclass) (omenv', oenv')
             /\ (forall c,
                    xs n = present c
@@ -1641,7 +1641,7 @@ Proof.
         /\ Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
   {
     eapply is_step_correct with (mems:=memories eqs) (env:=env) (menv:=menv)
-                                (input:=i.(v_name)) (prog:=translate G).
+                                (input:=i) (prog:=translate G).
     (* TODO: Tidy this up... *)
     - apply Forall_msem_equation_global_tl
       with (1:=Hord) (2:=Hnd) (3:=Hnode) (4:=Hsem).
@@ -1961,7 +1961,7 @@ Proof.
   destruct 1 as [menv [env [Hstmt [Hout Hmc]]]]; exists menv, env; now intuition.
   induction n.
   - specialize Hxs with 0%nat.
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i.(v_name) ci empty)
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci empty)
                                 Hwdef Hfindn Hmsem Hmc0 Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv'' [env'' [Hstmt [Hout Hmc]]]].
@@ -2003,7 +2003,7 @@ Proof.
     destruct Hmc as [omenv [Hfindo Hmc]].
     inversion_clear Hstmts.
     specialize Hxs with (S n).
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i.(v_name) ci empty)
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci empty)
                                 Hwdef Hfindn Hmsem Hmc Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv''' [env''' [Hstmt [Hout Hmc']]]].

@@ -117,8 +117,8 @@ with msem_node (G: global) : ident -> stream -> memory -> stream -> Prop :=
     forall f xs M ys i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
       (exists (H: history),
-        (forall n, sem_var H i.(v_name) n (xs n))
-        /\ (forall n, sem_var H o.(v_name) n (ys n))
+        (forall n, sem_var H i n (xs n))
+        /\ (forall n, sem_var H o n (ys n))
         /\ (forall n, xs n = absent ->
                       Forall (rhs_absent H n) eqs)
         /\ (forall n, xs n = absent <-> ys n = absent)
@@ -182,20 +182,20 @@ Section msem_node_mult.
            (xs : stream)
            (M : memory)
            (ys : stream)
-           (i  : var_dec)
-           (o : var_dec)
+           (i  : ident)
+           (o : ident)
            (eqs : list equation)
            (Hfind : find_node f G = Some (mk_node f i o eqs))
            (Hnode : exists H : history,
-                 (forall n, sem_var H (v_name i) n (xs n))
-              /\ (forall n, sem_var H (v_name o) n (ys n))
+                 (forall n, sem_var H i n (xs n))
+              /\ (forall n, sem_var H o n (ys n))
               /\ (forall n, xs n = absent ->
                             Forall (rhs_absent H n) eqs)
               /\ (forall n, xs n = absent <-> ys n = absent)
               /\ Forall (msem_equation G H M) eqs),
       (exists H : history,
-             (forall n, sem_var H (v_name i) n (xs n))
-          /\ (forall n, sem_var H (v_name o) n (ys n))
+             (forall n, sem_var H i n (xs n))
+          /\ (forall n, sem_var H o n (ys n))
           /\ (forall n, xs n = absent ->
                         Forall (rhs_absent H n) eqs)
           /\ (forall n, xs n = absent <-> ys n = absent)
