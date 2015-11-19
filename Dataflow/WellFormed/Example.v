@@ -7,6 +7,7 @@ Open Scope list.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Example.
+Require Import Rustre.Dataflow.IsMemory.
 Require Import Rustre.Dataflow.WellFormed.
 Require Import Rustre.Dataflow.WellFormed.Decide.
 

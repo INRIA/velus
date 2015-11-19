@@ -8,106 +8,118 @@ Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.Stream.
 
+(** 
+
+An history maps variables to streams of values (the variables'
+histories). Taking a snapshot of the history at a given time yields an
+environment.
+
+ *)
+
 Definition env := PM.t value.
 Definition history := PM.t (stream value).
+(*
+Implicit Type R: env.
+Implicit Type H: env.
+*)
 
-Inductive sem_var_instant (H: env)(x: ident)(xs: value): Prop :=
+Inductive sem_var_instant (R: env)(x: ident)(xs: value): Prop :=
 | Sv:
-      PM.find x H = Some xs ->
-      sem_var_instant H x xs.
+      PM.find x R = Some xs ->
+      sem_var_instant R x xs.
 
-Inductive sem_clock_instant (H: env): clock -> bool -> Prop :=
+Inductive sem_clock_instant (R: env): clock -> bool -> Prop :=
 | Sbase: 
-      sem_clock_instant H Cbase true
+      sem_clock_instant R Cbase true
 | Son_tick:
     forall ck x c,
-      sem_clock_instant H ck true ->
-      sem_var_instant H x (present (Cbool c)) ->
-      sem_clock_instant H (Con ck x c) true
+      sem_clock_instant R ck true ->
+      sem_var_instant R x (present (Cbool c)) ->
+      sem_clock_instant R (Con ck x c) true
 | Son_abs1:
     forall ck x c,
-      sem_clock_instant H ck false ->
-      sem_clock_instant H (Con ck x c) false
+      sem_clock_instant R ck false ->
+      sem_clock_instant R (Con ck x c) false
 | Son_abs2:
     forall ck x c c',
-      sem_clock_instant H ck true ->
-      sem_var_instant H x (present (Cbool c')) ->
+      sem_clock_instant R ck true ->
+      sem_var_instant R x (present (Cbool c')) ->
       ~ (c = c') ->
-      sem_clock_instant H (Con ck x c)  false.
+      sem_clock_instant R (Con ck x c)  false.
 
-Inductive sem_lexp_instant (H: env): lexp -> value -> Prop:=
+Inductive sem_lexp_instant (R: env): lexp -> value -> Prop:=
 | Sconst:
     forall c,
-      sem_lexp_instant H (Econst c) (present c)
+      sem_lexp_instant R (Econst c) (present c)
 | Svar:
     forall x v,
-      sem_var_instant H x v ->
-      sem_lexp_instant H (Evar x) v
+      sem_var_instant R x v ->
+      sem_lexp_instant R (Evar x) v
 | Swhen_eq:
     forall s x b v,
-      sem_var_instant H x (present (Cbool b)) ->
-      sem_lexp_instant H s v ->
-      sem_lexp_instant H (Ewhen s x b) v
+      sem_var_instant R x (present (Cbool b)) ->
+      sem_lexp_instant R s v ->
+      sem_lexp_instant R (Ewhen s x b) v
 | Swhen_abs:
     forall s x b b',
-      sem_var_instant H x (present (Cbool b')) ->
+      sem_var_instant R x (present (Cbool b')) ->
       ~ (b = b') ->
       (* Note: says nothing about 's'. *)
-      sem_lexp_instant H (Ewhen s x b) absent.
+      sem_lexp_instant R (Ewhen s x b) absent.
 
-Inductive sem_laexp_instant (H: env): laexp -> value -> Prop:=
+Inductive sem_laexp_instant (R: env): laexp -> value -> Prop:=
 | SLtick:
     forall ck ce c,
-      sem_lexp_instant H ce (present c) ->
-      sem_clock_instant H ck true ->
-      sem_laexp_instant H (LAexp ck ce) (present c)
+      sem_lexp_instant R ce (present c) ->
+      sem_clock_instant R ck true ->
+      sem_laexp_instant R (LAexp ck ce) (present c)
 | SLabs:
     forall ck ce,
-      sem_lexp_instant H ce absent ->
-      sem_clock_instant H ck false ->
-      sem_laexp_instant H (LAexp ck ce) absent.
+      sem_lexp_instant R ce absent ->
+      sem_clock_instant R ck false ->
+      sem_laexp_instant R (LAexp ck ce) absent.
 
-Inductive sem_cexp_instant (H: env): cexp -> value -> Prop :=
+Inductive sem_cexp_instant (R: env): cexp -> value -> Prop :=
 | Smerge_true:
     forall x t f v,
-      sem_var_instant H x (present (Cbool true)) ->
-      sem_cexp_instant H t v ->
-      sem_cexp_instant H (Emerge x t f) v
+      sem_var_instant R x (present (Cbool true)) ->
+      sem_cexp_instant R t v ->
+      sem_cexp_instant R (Emerge x t f) v
 | Smerge_false:
     forall x t f v,
-      sem_var_instant H x (present (Cbool false)) ->
-      sem_cexp_instant H f v ->
-      sem_cexp_instant H (Emerge x t f) v
+      sem_var_instant R x (present (Cbool false)) ->
+      sem_cexp_instant R f v ->
+      sem_cexp_instant R (Emerge x t f) v
 | Sexp:
     forall e v,
-      sem_lexp_instant H e v ->
-      sem_cexp_instant H (Eexp e) v.
+      sem_lexp_instant R e v ->
+      sem_cexp_instant R (Eexp e) v.
 
-Inductive sem_caexp_instant (H: env): caexp -> value -> Prop :=
+Inductive sem_caexp_instant (R: env): caexp -> value -> Prop :=
 | SCtick:
     forall ck ce c,
-      sem_cexp_instant H ce (present c) ->
-      sem_clock_instant H ck true ->
-      sem_caexp_instant H (CAexp ck ce) (present c)
+      sem_cexp_instant R ce (present c) ->
+      sem_clock_instant R ck true ->
+      sem_caexp_instant R (CAexp ck ce) (present c)
 | SCabs:
     forall ck ce,
-      sem_cexp_instant H ce absent ->
-      sem_clock_instant H ck false ->
-      sem_caexp_instant H (CAexp ck ce) absent.
+      sem_cexp_instant R ce absent ->
+      sem_clock_instant R ck false ->
+      sem_caexp_instant R (CAexp ck ce) absent.
 
-Inductive rhs_absent_instant (H: env): equation -> Prop :=
+Inductive rhs_absent_instant (R: env): equation -> Prop :=
 | AEqDef:
     forall x cae,
-      sem_caexp_instant H cae absent ->
-      rhs_absent_instant H (EqDef x cae)
+      sem_caexp_instant R cae absent ->
+      rhs_absent_instant R (EqDef x cae)
 | AEqApp:
     forall x f lae,
-      sem_laexp_instant H lae absent ->
-      rhs_absent_instant H (EqApp x f lae)
+      sem_laexp_instant R lae absent ->
+      rhs_absent_instant R (EqApp x f lae)
 | AEqFby:
     forall x v0 lae,
-      sem_laexp_instant H lae absent ->
-      rhs_absent_instant H (EqFby x v0 lae).
+      sem_laexp_instant R lae absent ->
+      rhs_absent_instant R (EqFby x v0 lae).
 
 
 Definition restr (H: history)(n: nat): env :=
