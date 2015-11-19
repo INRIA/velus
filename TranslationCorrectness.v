@@ -5,6 +5,7 @@ Open Scope list_scope.
 Require Import Rustre.Common.
 Require Import Rustre.Heap.
 Require Import Rustre.Dataflow.
+(* TODO: this should go *)
 Require Import Rustre.Dataflow.IsVariable.Decide.
 
 (* ** Definitions on imperative statements *)
