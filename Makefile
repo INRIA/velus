@@ -79,6 +79,7 @@ VFILES:=Heap.v\
   Dataflow/WellFormed.v\
   Dataflow/MemSemantics.v\
   Dataflow/Semantics.v\
+  Dataflow/IsVariable.v\
   Dataflow/IsFree/Decide.v\
   Dataflow/IsFree.v\
   Dataflow/Example.v\

@@ -2,6 +2,7 @@ Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsFree.
 Require Import Rustre.Dataflow.IsFree.Decide.
+Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.WellFormed.
 
 (** 
