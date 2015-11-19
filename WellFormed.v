@@ -410,8 +410,8 @@ Inductive Welldef_global : list node -> Prop :=
     forall nd nds,
       Welldef_global nds ->
       let eqs := nd.(n_eqs) in
-      let ni := nd.(n_input).(v_name) in
-      let no := nd.(n_output).(v_name) in
+      let ni := nd.(n_input) in
+      let no := nd.(n_output) in
       Is_well_sch (PS.add ni (memories eqs)) eqs
       -> ~Is_defined_in ni eqs
       -> Is_variable_in no eqs
@@ -464,7 +464,7 @@ Lemma Welldef_global_input_not_Is_defined_in:
   forall f G fnode,
     Welldef_global G
     -> find_node f G = Some fnode
-    -> ~Is_defined_in fnode.(n_input).(v_name) fnode.(n_eqs).
+    -> ~Is_defined_in fnode.(n_input) fnode.(n_eqs).
 Proof.
   induction G as [|node G IH]; [inversion_clear 2|].
   intros fnode HWdef Hfnode.
@@ -480,7 +480,7 @@ Lemma Welldef_global_output_Is_variable_in:
   forall f G fnode,
     Welldef_global G
     -> find_node f G = Some fnode
-    -> Is_variable_in fnode.(n_output).(v_name) fnode.(n_eqs).
+    -> Is_variable_in fnode.(n_output) fnode.(n_eqs).
 Proof.
   induction G as [|node G IH]; [inversion_clear 2|].
   intros fnode HWdef Hfnode.

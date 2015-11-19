@@ -34,18 +34,7 @@ Inductive sem_clock_instant (H: env): clock -> bool -> Prop :=
       ~ (c = c') ->
       sem_clock_instant H (Con ck x c)  false.
 
-Inductive sem_laexp_instant (H: env): laexp -> value -> Prop:=
-| SLtick:
-    forall ck ce c,
-      sem_lexp_instant H ce (present c) ->
-      sem_clock_instant H ck true ->
-      sem_laexp_instant H (LAexp ck ce) (present c)
-| SLabs:
-    forall ck ce,
-      sem_lexp_instant H ce absent ->
-      sem_clock_instant H ck false ->
-      sem_laexp_instant H (LAexp ck ce) absent
-with sem_lexp_instant (H: env): lexp -> value -> Prop :=
+Inductive sem_lexp_instant (H: env): lexp -> value -> Prop:=
 | Sconst:
     forall c,
       sem_lexp_instant H (Econst c) (present c)
@@ -56,7 +45,7 @@ with sem_lexp_instant (H: env): lexp -> value -> Prop :=
 | Swhen_eq:
     forall s x b v,
       sem_var_instant H x (present (Cbool b)) ->
-      sem_laexp_instant H s v ->
+      sem_lexp_instant H s v ->
       sem_lexp_instant H (Ewhen s x b) v
 | Swhen_abs:
     forall s x b b',
@@ -65,6 +54,33 @@ with sem_lexp_instant (H: env): lexp -> value -> Prop :=
       (* Note: says nothing about 's'. *)
       sem_lexp_instant H (Ewhen s x b) absent.
 
+Inductive sem_laexp_instant (H: env): laexp -> value -> Prop:=
+| SLtick:
+    forall ck ce c,
+      sem_lexp_instant H ce (present c) ->
+      sem_clock_instant H ck true ->
+      sem_laexp_instant H (LAexp ck ce) (present c)
+| SLabs:
+    forall ck ce,
+      sem_lexp_instant H ce absent ->
+      sem_clock_instant H ck false ->
+      sem_laexp_instant H (LAexp ck ce) absent.
+
+Inductive sem_cexp_instant (H: env): cexp -> value -> Prop :=
+| Smerge_true:
+    forall x t f v,
+      sem_var_instant H x (present (Cbool true)) ->
+      sem_cexp_instant H t v ->
+      sem_cexp_instant H (Emerge x t f) v
+| Smerge_false:
+    forall x t f v,
+      sem_var_instant H x (present (Cbool false)) ->
+      sem_cexp_instant H f v ->
+      sem_cexp_instant H (Emerge x t f) v
+| Sexp:
+    forall e v,
+      sem_lexp_instant H e v ->
+      sem_cexp_instant H (Eexp e) v.
 
 Inductive sem_caexp_instant (H: env): caexp -> value -> Prop :=
 | SCtick:
@@ -76,23 +92,7 @@ Inductive sem_caexp_instant (H: env): caexp -> value -> Prop :=
     forall ck ce,
       sem_cexp_instant H ce absent ->
       sem_clock_instant H ck false ->
-      sem_caexp_instant H (CAexp ck ce) absent
-with sem_cexp_instant (H: env): cexp -> value -> Prop :=
-| Smerge_true:
-    forall x t f v,
-      sem_var_instant H x (present (Cbool true)) ->
-      sem_caexp_instant H t v ->
-      sem_cexp_instant H (Emerge x t f) v
-| Smerge_false:
-    forall x t f v,
-      sem_var_instant H x (present (Cbool false)) ->
-      sem_caexp_instant H f v ->
-      sem_cexp_instant H (Emerge x t f) v
-| Sexp:
-    forall e v,
-      sem_lexp_instant H e v ->
-      sem_cexp_instant H (Eexp e) v.
-
+      sem_caexp_instant H (CAexp ck ce) absent.
 
 Inductive rhs_absent_instant (H: env): equation -> Prop :=
 | AEqDef:
@@ -161,8 +161,8 @@ with sem_node (G: global) : ident -> stream value -> stream value -> Prop :=
     forall f (xs ys: stream value) i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
       (exists (H: history),
-         sem_var H i.(v_name) xs
-        /\ sem_var H o.(v_name) ys
+           sem_var H i xs
+        /\ sem_var H o ys
         (* no clocks faster than input *)
         /\ (forall n, xs n = absent ->
                       Forall (rhs_absent_instant (restr H n)) eqs)
@@ -215,20 +215,20 @@ Section sem_node_mult.
     forall (f   : ident)
 	   (xs  : stream value)
 	   (ys  : stream value)
-	   (i   : var_dec)
-	   (o   : var_dec)
+	   (i   : ident)
+	   (o   : ident)
 	   (eqs : list equation)
 	   (Hf  : find_node f G = Some (mk_node f i o eqs))
            (Heqs : exists H : history,
-                        sem_var H (v_name i) xs
-	             /\ sem_var H (v_name o) ys
+                        sem_var H i xs
+	             /\ sem_var H o ys
                      /\ (forall n, xs n = absent
                                    -> Forall (rhs_absent_instant (restr H n)) eqs)
                      /\ (forall n, xs n = absent <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs),
       (exists H : history,
-             sem_var H (v_name i) xs
-          /\ sem_var H (v_name o) ys
+             sem_var H i xs
+          /\ sem_var H o ys
           /\ (forall n, xs n = absent
                         -> Forall (rhs_absent_instant (restr H n)) eqs)
           /\ (forall n, xs n = absent <-> ys n = absent)
@@ -373,10 +373,7 @@ Lemma sem_lexp_instant_det:
     -> v1 = v2.
 Proof.
   intros e R.
-  induction e using lexp_mult
-  with (P:=fun e => forall v1 v2, sem_laexp_instant R e v1
-                                 -> sem_laexp_instant R e v2
-                                 -> v1 = v2);
+  induction e;
     do 2 inversion_clear 1;
     match goal with
     | H1:sem_var_instant ?R ?e (present (Cbool ?b1)), 
@@ -414,21 +411,14 @@ Lemma sem_cexp_instant_det:
     -> v1 = v2.
 Proof.
   intros e R.
-  induction e using cexp_mult
-  with (P:=fun e=> forall v1 v2, sem_caexp_instant R e v1
-                                 -> sem_caexp_instant R e v2
-                                 -> v1 = v2);
-  inversion_clear 1; inversion_clear 1;
+  induction e;
+  do 2 inversion_clear 1; 
     try match goal with
       | H1: sem_cexp_instant ?R ?e ?l,
-        H2: sem_cexp_instant ?R ?e ?r |- ?l = ?r =>
-        eapply IHe; eassumption
-      | H1: sem_caexp_instant ?R ?c ?l,
-        H2: sem_caexp_instant ?R ?c ?r |- ?l = ?r =>
-        eapply IHe; eassumption
-      | H1: sem_caexp_instant ?R ?c ?l,
-        H2: sem_caexp_instant ?R ?c ?r |- ?l = ?r =>
-        eapply IHe0; eassumption
+        H2: sem_cexp_instant ?R ?e ?r
+        |- ?l = ?r =>
+        (eapply IHe1; eassumption) 
+     || (eapply IHe2; eassumption)
       | H1: sem_var_instant ?R ?i (present (Cbool true)),
         H2: sem_var_instant ?R ?i (present (Cbool false)) |- _ =>
         exfalso; 

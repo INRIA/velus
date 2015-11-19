@@ -6,36 +6,33 @@ Open Scope list_scope.
 
 (** * Dataflow language *)
 
+Record var_dec : Set := mk_var { v_name : ident }.
+
+
 Inductive clock : Set :=
 | Cbase : clock                          (* base clock *)
 | Con : clock -> ident -> bool -> clock. (* subclock *)
 
-Record var_dec : Set := mk_var { v_name : ident;
-                                 v_clock : clock }.
-
 (** ** Syntax *)
 
 (* TODO: laexp: would be nicer if it were a record *)
-Inductive laexp : Type :=
-  | LAexp : clock -> lexp -> laexp
-with lexp : Type :=
+Inductive lexp : Type :=
   | Econst : const -> lexp
   | Evar : ident -> lexp
-  | Ewhen : laexp -> ident -> bool -> lexp.
+  | Ewhen : lexp -> ident -> bool -> lexp.
 (* External operators are missing *)
 
-Scheme laexp_mult := Induction for laexp Sort Prop
-with lexp_mult := Induction for lexp Sort Prop.
+Inductive laexp : Type :=
+  | LAexp : clock -> lexp -> laexp.
+
 
 (* TODO: caexp: would be nicer if it were a record *)
-Inductive caexp : Type :=
-  | CAexp : clock -> cexp -> caexp
-with cexp : Type :=
-  | Emerge : ident -> caexp -> caexp -> cexp (* currently only binary merge *)
+Inductive cexp : Type :=
+  | Emerge : ident -> cexp -> cexp -> cexp (* currently only binary merge *)
   | Eexp : lexp -> cexp.
 
-Scheme caexp_mult := Induction for caexp Sort Prop
-with cexp_mult := Induction for cexp Sort Prop.
+Inductive caexp : Type :=
+  | CAexp : clock -> cexp -> caexp.
 
 (** ** Equations *)
 
@@ -46,8 +43,8 @@ Inductive equation : Type :=
 
 Record node : Type := mk_node {
   n_name : ident;
-  n_input : var_dec;
-  n_output : var_dec;
+  n_input : ident;
+  n_output : ident;
   n_eqs : list equation }.
 
 Definition global := list node.
@@ -79,21 +76,23 @@ Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
   match e with
   | Econst c => fvs
   | Evar x => PS.add x fvs
-  | Ewhen ae x xc => free_in_laexp ae (PS.add x fvs)
-  end
-with free_in_laexp (lae : laexp) (fvs : PS.t) : PS.t :=
+  | Ewhen e x xc => free_in_lexp e (PS.add x fvs)
+  end.
+
+Definition free_in_laexp (lae : laexp) (fvs : PS.t) : PS.t :=
   match lae with
   | LAexp ck e => free_in_lexp e (free_in_clock ck fvs)
   end.
 
 Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
 | FreeEvar: forall x, Is_free_in_lexp x (Evar x)
-| FreeEwhen1: forall ae c cv x,
-    Is_free_in_laexp x ae ->
-    Is_free_in_lexp x (Ewhen ae c cv)
-| FreeEwhen2: forall ae c cv,
-    Is_free_in_lexp c (Ewhen ae c cv)
-with Is_free_in_laexp : ident -> laexp -> Prop :=
+| FreeEwhen1: forall e c cv x,
+    Is_free_in_lexp x e ->
+    Is_free_in_lexp x (Ewhen e c cv)
+| FreeEwhen2: forall e c cv,
+    Is_free_in_lexp c (Ewhen e c cv).
+
+Inductive Is_free_in_laexp : ident -> laexp -> Prop :=
 | freeLAexp1: forall ck e x,
     Is_free_in_lexp x e ->
     Is_free_in_laexp x (LAexp ck e)
@@ -101,14 +100,15 @@ with Is_free_in_laexp : ident -> laexp -> Prop :=
     Is_free_in_clock x ck ->
     Is_free_in_laexp x (LAexp ck e).
 
-Fixpoint free_in_caexp (cae: caexp) (fvs: PS.t) : PS.t :=
+Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
+  match ce with
+  | Emerge i t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
+  | Eexp e => free_in_lexp e fvs
+  end.
+
+Definition free_in_caexp (cae: caexp) (fvs: PS.t) : PS.t :=
   match cae with
   | CAexp ck ce => free_in_cexp ce (free_in_clock ck fvs)
-  end
-with free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
-  match ce with
-  | Emerge i t f => free_in_caexp f (free_in_caexp t (PS.add i fvs))
-  | Eexp e => free_in_lexp e fvs
   end.
 
 (* Definition free_in_caexp cae := free_in_caexp' cae PS.empty. *)
@@ -117,15 +117,16 @@ Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
 | FreeEmerge_cond: forall i t f,
     Is_free_in_cexp i (Emerge i t f)
 | FreeEmerge_true: forall i t f x,
-    Is_free_in_caexp x t ->
+    Is_free_in_cexp x t ->
     Is_free_in_cexp x (Emerge i t f)
 | FreeEmerge_false: forall i t f x,
-    Is_free_in_caexp x f ->
+    Is_free_in_cexp x f ->
     Is_free_in_cexp x (Emerge i t f)
 | FreeEexp: forall e x,
     Is_free_in_lexp x e ->
-    Is_free_in_cexp x (Eexp e)
-with Is_free_in_caexp : ident -> caexp -> Prop :=
+    Is_free_in_cexp x (Eexp e).
+
+Inductive Is_free_in_caexp : ident -> caexp -> Prop :=
 | FreeCAexp1: forall ck ce x,
     Is_free_in_cexp x ce ->
     Is_free_in_caexp x (CAexp ck ce)
@@ -191,12 +192,8 @@ Lemma free_in_lexp_spec:
   forall x e m, PS.In x (free_in_lexp e m)
                 <-> Is_free_in_lexp x e \/ PS.In x m.
 Proof.
-  Hint Constructors Is_free_in_lexp Is_free_in_laexp.
-  intro x; induction e using lexp_mult
-  with (P:= fun e : laexp =>
-               forall m,
-                 PS.In x (free_in_laexp e m)
-                 <-> (Is_free_in_laexp x e \/ PS.In x m));
+  Hint Constructors Is_free_in_lexp.
+  intro x; induction e;
   intro m; (split;
   [
     intro H0; try apply IHe in H0
@@ -246,42 +243,63 @@ Proof.
   intuition not_In_empty.
 Qed.
 
+Ltac destruct_Is_free :=
+  repeat match goal with
+    | H: _ \/ _ |- _ => 
+      destruct H
+
+    | H: Is_free_in_cexp _ (Emerge _ _ _) |- _ => 
+      inversion H; subst; clear H
+
+    | H: Is_free_in_cexp _ (Eexp _) |- _ => 
+      inversion H; subst; clear H
+
+    | IHe: context[PS.In _ (free_in_cexp ?e _)],
+      H:PS.In _ (free_in_cexp ?e _) |- _ => 
+      apply IHe in H
+
+    | H: PS.In _ (free_in_lexp _ _) |- _ => 
+      apply free_in_lexp_spec in H
+
+    | H: PS.In _ (PS.add _ _) |- _ => 
+      apply PS.add_spec in H
+  end.
+
 Lemma free_in_cexp_spec:
   forall x e m, PS.In x (free_in_cexp e m)
                 <-> Is_free_in_cexp x e \/ PS.In x m.
 Proof.
-  Hint Constructors Is_free_in_cexp Is_free_in_caexp.
+  Hint Constructors Is_free_in_cexp.
   intro x;
-    induction e as [c e IHe|i t IHet f IHef|]
-                using cexp_mult
-                with (P:= fun e : caexp =>
-                            forall m,
-                              PS.In x (free_in_caexp e m)
-                              <-> (Is_free_in_caexp x e \/ PS.In x m));
-    intro m; (split; [intro H0; simpl in H0 | intro H0; simpl]);
-    repeat progress (
-             match goal with
-             | H:_\/_ |- _ => destruct H as [H|H]
-             | H:PS.In _ (free_in_cexp _ _) |- _ => apply IHe in H
-             | H:PS.In _ (free_in_caexp _ _) |- _ => apply IHet in H
-                                                     || apply IHef in H
-             | H:PS.In _ (PS.add _ _) |- _ => apply PS.add_spec in H
-             | H:PS.In _ (free_in_lexp _ _) |- _ => apply free_in_lexp_spec in H
-             | H:Is_free_in_caexp _ _ |- _ => inversion_clear H
-             | |- PS.In _ (free_in_cexp _ _) => apply IHe
-             | |- PS.In _ (free_in_caexp _ _) => apply IHet
-                                                       || apply IHef
-             | |- PS.In _ (free_in_lexp _ _) => apply free_in_lexp_spec
-             | _ => apply free_in_clock_spec in H0
-             | _ => intuition
-             end);
-    try (inversion H0; subst);
-    solve [
-        right; apply free_in_clock_spec; intuition
-      | subst; intuition
-      | inversion H0; subst; intuition
-      | right; apply IHet; right; apply PS.add_spec; intuition
-      | right; apply IHet; intuition ] || idtac.
+    induction e;
+    intro m; simpl; split; intro H0;
+    destruct_Is_free;
+    subst; auto;
+
+  repeat match goal with
+    (* Solve [PS.In x (free_in_cexp e2 (free_in_cexp e1 (PS.add i m)))] *)
+    | |- PS.In ?i (PS.add ?i _) => 
+      apply PS.add_spec; intuition
+    | IHe: context[PS.In _ (free_in_cexp ?e _)],
+      H: Is_free_in_cexp ?x ?e 
+      |- PS.In ?x (free_in_cexp ?e _) => 
+      apply IHe; auto
+    | _: PS.In ?x ?m
+      |- PS.In ?x (PS.add ?i ?m) => 
+      apply PS.add_spec; auto
+    | IHe: context[PS.In _ (free_in_cexp ?e _)]
+      |- PS.In _ (free_in_cexp ?e _)  => 
+      (* Keep peeling *)
+      apply IHe; right
+
+    (* Solve [PS.In x (free_in_lexp l m)] *)
+    | H: Is_free_in_lexp _ _ 
+      |- PS.In _ (free_in_lexp _ _) => 
+      apply free_in_lexp_spec; auto
+    | H: PS.In ?x ?m 
+      |- PS.In ?x (free_in_lexp _ ?m) => 
+      apply free_in_lexp_spec; auto
+         end.
 Qed.
 
 Lemma free_in_cexp_spec':

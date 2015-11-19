@@ -260,10 +260,7 @@ Lemma stmt_eval_translate_cexp_menv_inv:
     -> menv' = menv.
 Proof.
   intros prog menv env mems x menv' env'.
-  induction ce using cexp_mult
-  with (P := (fun cae : caexp =>
-           stmt_eval prog menv env (translate_caexp mems x cae) (menv', env') ->
-           menv' = menv));
+  induction ce;
   (apply IHce || inversion_clear 1); auto.
 Qed.
 
@@ -273,10 +270,7 @@ Lemma stmt_eval_translate_cexp_env_add:
     -> exists c, env' = PM.add x c env.
 Proof.
   intros prog menv env mems x menv' env'.
-  induction ce using cexp_mult
-  with (P := (fun cae : caexp =>
-          stmt_eval prog menv env (translate_caexp mems x cae) (menv', env') ->
-          exists c, env' = PM.add x c env));
+  induction ce;
     (apply IHce || inversion_clear 1); auto.
   exists v; rewrite <- H1; intuition.
 Qed.
@@ -543,14 +537,7 @@ Lemma lexp_correct:
 Proof.
   Hint Constructors exp_eval.
   intros R memories menv env c.
-  induction e as [c0 e IH|c0|y|e IH y yb] using lexp_mult
-  with (P:=fun e =>
-          sem_laexp_instant R e (present c)
-          -> (forall x c, Is_free_in_laexp x e
-                          -> sem_var_instant R x (present c)
-                          -> (~PS.In x memories -> PM.find x env = Some c)
-                             /\ (PS.In x memories -> mfind_mem x menv = Some c))
-          -> exp_eval menv env (translate_laexp memories e) c);
+  induction e as [c0|y|e IH y yb];
     inversion 1; intros;
     try apply IH; try apply econst; auto.
   split_env_assumption;
@@ -590,17 +577,7 @@ Lemma cexp_correct:
                                                         (menv, PM.add x c env).
 Proof.
   intros R memories prog menv env c x.
-  induction e as [ck e IH|b et IHt ef IHf|e] using cexp_mult
-  with (P:=fun e =>
-             sem_caexp_instant R e (present c)
-             -> (forall x c,
-                    Is_free_in_caexp x e
-                    -> sem_var_instant R x (present c)
-                    -> (~PS.In x memories -> PM.find x env = Some c)
-                       /\ (PS.In x memories -> mfind_mem x menv = Some c))
-             -> stmt_eval prog menv env (translate_caexp memories x e)
-                          (menv, PM.add x c env)).
-  - (* CAexp *) inversion 1; auto.
+  induction e as [b et IHt ef IHf|e].
   - (* Emerge *)
     inversion_clear 1; intro Henv.
     + apply Iifte_true.
@@ -618,6 +595,7 @@ Proof.
     eapply lexp_correct; [eassumption|now auto].
     reflexivity.
 Qed.
+
 
 Lemma caexp_correct:
   forall R memories prog menv env c x e,
@@ -1433,7 +1411,7 @@ Proof.
       assert (
           let fclass := translate_node (mk_node f i o neqs) in
           exists omenv' oenv',
-            stmt_eval prog' omenv (PM.add i.(v_name) v empty)
+            stmt_eval prog' omenv (PM.add i v empty)
                       (c_step fclass) (omenv', oenv')
             /\ (forall c,
                    xs n = present c
@@ -1652,7 +1630,7 @@ Proof.
         /\ Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
   {
     eapply is_step_correct with (mems:=memories eqs) (env:=env) (menv:=menv)
-                                (input:=i.(v_name)) (prog:=translate G).
+                                (input:=i) (prog:=translate G).
     (* TODO: Tidy this up... *)
     - apply Forall_msem_equation_global_tl
       with (1:=Hord) (2:=Hnd) (3:=Hnode) (4:=Hsem).
@@ -1974,7 +1952,7 @@ Proof.
   destruct 1 as [menv [env [Hstmt [Hout Hmc]]]]; exists menv, env; now intuition.
   induction n.
   - specialize Hxs with 0%nat.
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i.(v_name) ci empty)
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci empty)
                                 Hwdef Hfindn Hmsem Hmc0 Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv'' [env'' [Hstmt [Hout Hmc]]]].
@@ -2016,7 +1994,7 @@ Proof.
     destruct Hmc as [omenv [Hfindo Hmc]].
     inversion_clear Hstmts.
     specialize Hxs with (S n).
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i.(v_name) ci empty)
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci empty)
                                 Hwdef Hfindn Hmsem Hmc Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv''' [env''' [Hstmt [Hout Hmc']]]].

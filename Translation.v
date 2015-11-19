@@ -52,22 +52,24 @@ Section Translate.
     match e with
     | Econst c => Const c
     | Evar x => if PS.mem x memories then State x else Var x
-    | Ewhen ae c x => translate_laexp ae
-    end
-  with translate_laexp (lae: laexp): exp :=
-         match lae with
-         | LAexp ck e => translate_lexp e
-         end.
+    | Ewhen e c x => translate_lexp e
+    end.
+  
+  Definition translate_laexp (lae: laexp): exp :=
+    match lae with
+      | LAexp ck e => translate_lexp e
+    end.
 
   Fixpoint translate_cexp (x: ident)(e : cexp) {struct e}: stmt :=
     match e with
-    | Emerge y t f => Ifte (tovar y) (translate_caexp x t) (translate_caexp x f)
+    | Emerge y t f => Ifte (tovar y) (translate_cexp x t) (translate_cexp x f)
     | Eexp l => Assign x (translate_lexp l)
-    end
-  with translate_caexp (x: ident)(ae : caexp): stmt :=
-         match ae with
-         | CAexp ck e => translate_cexp x e
-         end.
+    end.
+
+  Definition translate_caexp (x: ident)(ae : caexp): stmt :=
+    match ae with
+      | CAexp ck e => translate_cexp x e
+    end.
 
   Definition translate_eqn (eqn: equation): stmt :=
     match eqn with
@@ -144,8 +146,8 @@ Definition translate_node (n: node): class :=
   let names := gather_eqs n.(n_eqs) in
   let mems := ps_from_list (fst names) in
   mk_class n.(n_name)
-           n.(n_input).(v_name)
-           n.(n_output).(v_name)
+           n.(n_input)
+           n.(n_output)
            (fst names)
            (snd names)
            (translate_eqns mems n.(n_eqs))
@@ -160,14 +162,14 @@ Section TestTranslate.
   Example eqns1 : list equation :=
     [
       EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
-      EqDef 4 (CAexp Cbase (Emerge 1 (CAexp (Con Cbase 1 true) (Eexp (Evar 2)))
-                                   (CAexp (Con Cbase 1 false) (Eexp (Evar 3)))));
+      EqDef 4 (CAexp Cbase (Emerge 1 (Eexp (Evar 2))
+                                     (Eexp (Evar 3))));
       EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))))
 (*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
     ].
 
   Example node1 : node :=
-    mk_node 1 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns1.
+    mk_node 1 1 4 eqns1.
 
   (* Eval cbv in (translate_node node1). *)
 
@@ -192,7 +194,7 @@ Section TestTranslate.
     ].
 
   Example node2 : node :=
-    mk_node 2 (mk_var 1 Cbase) (mk_var 4 Cbase) eqns2.
+    mk_node 2 1 4 eqns2.
 
   (* Eval cbv in (translate_node node2). *)
 
@@ -287,14 +289,8 @@ Instance translate_lexp_Proper :
 Proof.
   intros M M' HMeq e e' Heq; rewrite <- Heq; clear Heq e'.
   revert M M' HMeq.
-  induction e as [c e IH| | |e IH s sv] using lexp_mult
-  with (P := (fun e => forall M M', PS.eq M M'
-                       -> translate_laexp M e = translate_laexp M' e));
-    intros M M' HMeq.
-  - unfold translate_laexp; now apply IH with (1:=HMeq).
-  - reflexivity.
-  - unfold translate_lexp; rewrite HMeq; reflexivity.
-  - unfold translate_lexp; now apply IH with (1:=HMeq).
+  induction e; intros M M' HMeq; simpl; auto.
+  rewrite HMeq; auto.
 Qed.
 
 Instance translate_cexp_Proper :
@@ -303,20 +299,11 @@ Proof.
   intros M M' HMeq y y' Hyeq c c' Hceq; rewrite <- Hyeq, <- Hceq;
   clear y' c' Hyeq Hceq.
   revert M M' HMeq.
-  induction c as [ck c IH|s [ck c] IH ce IH'|l IH] using cexp_mult
-  with (P := (fun c => forall M M', PS.eq M M'
-                       -> translate_caexp M y c = translate_caexp M' y c)).
-  - intros M M' HMeq; unfold translate_caexp; apply IH with (1:=HMeq).
-  - intros M M' HMeq.
-    change (Ifte (tovar M s) (translate_caexp M y (CAexp ck c))
-                             (translate_caexp M y ce)
-            = Ifte (tovar M' s) (translate_caexp M' y (CAexp ck c))
-                                (translate_caexp M' y ce)).
-    rewrite <- IH with (1:=HMeq);
-      rewrite <- IH' with (1:=HMeq);
-      rewrite <- HMeq;
-      reflexivity.
-  - intros M M' HMeq; unfold translate_cexp; rewrite HMeq; reflexivity.
+  induction c; intros; simpl.
+  - erewrite IHc1; try eassumption.
+    erewrite IHc2; try eassumption. 
+    rewrite HMeq; auto.
+  - rewrite HMeq; auto.
 Qed.
 
 Instance translate_caexp_Proper :
