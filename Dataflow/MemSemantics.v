@@ -13,8 +13,15 @@ Require Import Rustre.Dataflow.Semantics.
 Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.WellFormed.
 
-
 Set Implicit Arguments.
+
+(**
+
+  We provide a "non-standard" dataflow semantics where the state
+  introduced by an [fby] is kept in a separate [heap] of streams.
+
+ *)
+
 
 (*
    NB: The history H is not really necessary here. We could just as well
@@ -36,7 +43,9 @@ Set Implicit Arguments.
 
 Definition memory := memory (stream const).
 
-Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
+Implicit Type M : memory.
+
+Inductive msem_equation G: history -> memory -> equation -> Prop :=
 | SEqDef:
     forall H M x xs cae,
       sem_var H x xs ->
@@ -63,11 +72,11 @@ Inductive msem_equation (G: global) : history -> memory -> equation -> Prop :=
                  end) ->
       msem_equation G H M (EqFby x v0 lae)
 
-with msem_node (G: global) : ident -> stream value -> memory -> stream value -> Prop :=
+with msem_node G: ident -> stream value -> memory -> stream value -> Prop :=
 | SNode:
     forall f xs M ys i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
-      (exists (H: history),
+      (exists H,
          sem_var H i xs
         /\ sem_var H o ys
         /\ (forall n, xs n = absent ->
@@ -216,8 +225,6 @@ End msem_node_mult.
 
 Definition msem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
-
-Check sem_caexp_instant.
 
 Ltac sem_det :=
   match goal with
