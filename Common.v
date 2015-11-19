@@ -14,6 +14,8 @@ Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 
+Implicit Type i j: ident.
+
 Lemma ident_eqb_neq:
   forall x y, ident_eqb x y = false <-> x <> y.
 Proof.
