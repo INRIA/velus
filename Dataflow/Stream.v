@@ -3,11 +3,15 @@ Require Import Rustre.Common.
 Inductive value :=
   | absent
   | present (v : const).
-(* Coercion present : const >-> value. *)
+
+Implicit Type v : value.
 
 Notation stream A := (nat -> A).
 Notation vstream := (stream value).
 Notation cstream := (stream bool).
+
+Implicit Type vs : vstream.
+Implicit Type cs : cstream.
 
 Lemma present_injection:
   forall x y, x = y <-> present x = present y.
