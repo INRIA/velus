@@ -14,6 +14,7 @@ Require Import Rustre.Dataflow.IsDefined.Decide.
 Require Import PArith.
 Require Import Rustre.Minimp.
 Require Import Rustre.Translation.
+Require Import Rustre.Translation.Proper.
 
 
 (* TODO:

@@ -67,6 +67,7 @@ COQCHK?=$(COQBIN)coqchk
 
 VFILES:=Heap.v\
   TranslationCorrectness.v\
+  Translation/Proper.v\
   Translation/Example.v\
   Translation.v\
   Minimp.v\

@@ -24,5 +24,6 @@ Minimp/Semantics.v
 Minimp.v
 Translation.v
 Translation/Example.v
+Translation/Proper.v
 TranslationCorrectness.v
 Heap.v
