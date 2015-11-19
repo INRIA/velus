@@ -6,16 +6,14 @@ Open Scope list_scope.
 
 (** * Dataflow language *)
 
-Record var_dec : Set := mk_var { v_name : ident }.
-
-
 Inductive clock : Set :=
 | Cbase : clock                          (* base clock *)
 | Con : clock -> ident -> bool -> clock. (* subclock *)
 
+Implicit Type ck : clock.
+
 (** ** Syntax *)
 
-(* TODO: laexp: would be nicer if it were a record *)
 Inductive lexp : Type :=
   | Econst : const -> lexp
   | Evar : ident -> lexp
@@ -25,14 +23,18 @@ Inductive lexp : Type :=
 Inductive laexp : Type :=
   | LAexp : clock -> lexp -> laexp.
 
+Implicit Type le: lexp.
+Implicit Type lae: laexp.
 
-(* TODO: caexp: would be nicer if it were a record *)
 Inductive cexp : Type :=
-  | Emerge : ident -> cexp -> cexp -> cexp (* currently only binary merge *)
+  | Emerge : ident -> cexp -> cexp -> cexp 
   | Eexp : lexp -> cexp.
 
 Inductive caexp : Type :=
   | CAexp : clock -> cexp -> caexp.
+
+Implicit Type ce: cexp.
+Implicit Type cae: caexp.
 
 (** ** Equations *)
 
@@ -41,13 +43,23 @@ Inductive equation : Type :=
   | EqApp : ident -> ident -> laexp -> equation
   | EqFby : ident -> const -> laexp -> equation.
 
+Implicit Type eqn: equation.
+
+(** ** Node *)
+
 Record node : Type := mk_node {
   n_name : ident;
   n_input : ident;
   n_output : ident;
   n_eqs : list equation }.
 
-Definition global := list node.
+Implicit Type node: node.
+
+(** ** Program *)
+
+Definition program := list node.
+
+
 
 Definition find_node (f : ident) : global -> option node :=
   List.find (fun n=> ident_eqb n.(n_name) f).
