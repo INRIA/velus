@@ -1,13 +1,15 @@
 -R . Rustre
 -install none
 Common.v
-Minimp.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v
 Dataflow.v
+Minimp/Syntax.v
+Minimp/Semantics.v
+Minimp.v
 Translation.v
 TranslationCorrectness.v
 Heap.v

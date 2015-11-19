@@ -68,13 +68,15 @@ COQCHK?=$(COQBIN)coqchk
 VFILES:=Heap.v\
   TranslationCorrectness.v\
   Translation.v\
+  Minimp.v\
+  Minimp/Semantics.v\
+  Minimp/Syntax.v\
   Dataflow.v\
   Dataflow/WellFormed.v\
   Dataflow/MemSemantics.v\
   Dataflow/Semantics.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
-  Minimp.v\
   Common.v
 
 -include $(addsuffix .d,$(VFILES))

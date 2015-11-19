@@ -1,7 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
-Require Import Rustre.Minimp.
+Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Dataflow.Syntax.
 
 Import List.ListNotations.

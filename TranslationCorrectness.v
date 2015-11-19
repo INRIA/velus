@@ -8,8 +8,8 @@ Require Import Rustre.Dataflow.
 
 (* ** Definitions on imperative statements *)
 
-Require Import Rustre.Minimp.
 Require Import PArith.
+Require Import Rustre.Minimp.
 Require Import Rustre.Translation.
 
 
