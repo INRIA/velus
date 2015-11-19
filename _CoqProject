@@ -3,11 +3,14 @@
 Common.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
+Dataflow/Example.v
 Dataflow/IsFree.v
 Dataflow/IsFree/Decide.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v
+Dataflow/WellFormed/Decide.v
+Dataflow/WellFormed/Example.v
 Dataflow.v
 Minimp/Syntax.v
 Minimp/Semantics.v

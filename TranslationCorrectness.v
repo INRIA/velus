@@ -33,22 +33,6 @@ Require Import Rustre.Translation.
      where a clock is active.
  *)
 
-Example eqn1_well_sch: Is_well_sch (PS.add 1 (memories eqns1)) eqns1.
-Proof.
-  assert (well_sch (PS.add 1 (memories eqns1)) eqns1 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (PS.add 1 (memories eqns1)) eqns1) as HS.
-  rewrite HW in HS.
-  assumption.
-Qed.
-
-Example eqn2_well_sch: Is_well_sch (PS.add 1 (memories eqns2)) eqns2.
-Proof.
-  assert (well_sch (PS.add 1 (memories eqns2)) eqns2 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (PS.add 1 (memories eqns2)) eqns2) as HS.
-  rewrite HW in HS.
-  assumption.
-Qed.
-
 Lemma exp_eval_tovar_Cbool_dec:
   forall menv env mems c v,
     {exp_eval menv env (tovar mems c) (Cbool v)}

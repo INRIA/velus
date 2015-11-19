@@ -72,11 +72,14 @@ VFILES:=Heap.v\
   Minimp/Semantics.v\
   Minimp/Syntax.v\
   Dataflow.v\
+  Dataflow/WellFormed/Example.v\
+  Dataflow/WellFormed/Decide.v\
   Dataflow/WellFormed.v\
   Dataflow/MemSemantics.v\
   Dataflow/Semantics.v\
   Dataflow/IsFree/Decide.v\
   Dataflow/IsFree.v\
+  Dataflow/Example.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
   Common.v
