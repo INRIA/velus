@@ -11,6 +11,8 @@ Open Scope list.
 
 (** * Translation *)
 
+(** ** Identification of node instances *)
+
 (*
    Note: it is necessary to distinguish different instantiations of
          the same node (i.e., different objects of the same class).
@@ -34,6 +36,8 @@ Definition gather_eq (acc: list ident * list obj_dec) (eq: equation) :=
 
 Definition gather_eqs (eqs: list equation) : (list ident * list obj_dec) :=
   List.fold_left gather_eq eqs ([], []).
+
+(** ** Translation *)
 
 Section Translate.
 
@@ -89,8 +93,36 @@ Section Translate.
 
 End Translate.
 
+Definition translate_reset_eqn (s: stmt) (eqn: equation): stmt :=
+  match eqn with
+  | EqDef _ _ => s
+  | EqFby x v0 _ => Comp (AssignSt x (Const v0)) s
+  | EqApp x f _ => Comp (Reset_ap f x) s
+  end.
+
 Definition ps_from_list (l: list ident) : PS.t :=
   List.fold_left (fun s i=>PS.add i s) l PS.empty.
+
+Definition translate_reset_eqns (eqns: list equation): stmt :=
+  List.fold_left translate_reset_eqn eqns Skip.
+
+Definition translate_node (n: node): class :=
+  let names := gather_eqs n.(n_eqs) in
+  let mems := ps_from_list (fst names) in
+  mk_class n.(n_name)
+           n.(n_input)
+           n.(n_output)
+           (fst names)
+           (snd names)
+           (translate_eqns mems n.(n_eqs))
+           (translate_reset_eqns n.(n_eqs)).
+
+Definition translate (G: global) : program :=
+  List.map translate_node G.
+
+
+(** ** Misc. lemmas *)
+
 
 Lemma ps_from_list_pre_spec:
   forall x l S, (List.In x l \/ PS.In x S)
