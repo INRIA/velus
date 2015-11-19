@@ -4,6 +4,17 @@ Require Import Rustre.Common.
 
 Set Implicit Arguments.
 
+(** 
+
+  Both Minimp and the Lustre rely on a rather structured notion of
+  heap, as found in object-oriented languages. Every node
+  instance/class instance forms a node whose leafs are nodes/instances
+  it is calling upon. This is captured by the [memory] tree-like
+  datastructure.
+
+ *)
+
+
 Inductive memory (A: Type): Type := mk_memory {
   mm_values : PM.t A;
   mm_instances : PM.t (memory A)
@@ -12,9 +23,9 @@ Inductive memory (A: Type): Type := mk_memory {
 Section Operations.
 
   Variable A B: Type.
-  Implicit Type menv: memory A.
+  Implicit Type menv : memory A.
 
-  Definition map (f: A -> B)(m: memory A): memory B. Admitted.
+(* Definition map (f: A -> B)(m: memory A): memory B. Admitted. *)
 
   Definition empty_memory : memory A :=
     {| mm_values := PM.empty _;
