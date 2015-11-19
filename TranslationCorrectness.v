@@ -60,14 +60,14 @@ Proof.
     + no_match.
 Qed.
 
-Inductive Is_present_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
+Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
-| IsCbase: Is_present_in mems menv env Cbase
+| IsCbase: Is_present_in mems heap stack Cbase
 | IsCon:
     forall ck c v,
-      Is_present_in mems menv env ck
-      -> exp_eval menv env (tovar mems c) (Cbool v)
-      -> Is_present_in mems menv env (Con ck c v).
+      Is_present_in mems heap stack ck
+      -> exp_eval heap stack (tovar mems c) (Cbool v)
+      -> Is_present_in mems heap stack (Con ck c v).
 
 Lemma Is_present_in_dec:
   forall mems menv env ck,
@@ -82,18 +82,17 @@ Proof.
     + right; inversion_clear 1; auto.
 Qed.
 
-Inductive Is_absent_in (mems: PS.t) (menv: memoryEnv) (env: constEnv)
-  : clock -> Prop :=
+Inductive Is_absent_in (mems: PS.t) heap stack: clock -> Prop :=
 | IsAbs1:
     forall ck c v,
-      Is_absent_in mems menv env ck
-      -> Is_absent_in mems menv env (Con ck c v)
+      Is_absent_in mems heap stack ck
+      -> Is_absent_in mems heap stack (Con ck c v)
 | IsAbs2:
     forall ck c v1 v2,
-         Is_present_in mems menv env ck
-      -> exp_eval menv env (tovar mems c) (Cbool v1)
+         Is_present_in mems heap stack ck
+      -> exp_eval heap stack (tovar mems c) (Cbool v1)
       -> v2 <> v1
-      -> Is_absent_in mems menv env (Con ck c v2).
+      -> Is_absent_in mems heap stack (Con ck c v2).
 
 Lemma Is_absent_in_disj:
   forall mems menv env ck c v,
@@ -613,7 +612,7 @@ Qed.
  *)
 
 Inductive Memory_Corres (G: global) (n: nat) :
-       ident -> memory -> memoryEnv -> Prop :=
+       ident -> memory -> heap -> Prop :=
 | MemC:
     forall f M menv i o eqs,
       find_node f G = Some(mk_node f i o eqs)
@@ -621,7 +620,7 @@ Inductive Memory_Corres (G: global) (n: nat) :
       -> Memory_Corres G n f M menv
 
 with Memory_Corres_eq (G: global) (n: nat) :
-       memory -> memoryEnv -> equation -> Prop :=
+       memory -> heap -> equation -> Prop :=
 | MemC_EqDef:
     forall M menv x cae,
       Memory_Corres_eq G n M menv (EqDef x cae)
@@ -641,8 +640,8 @@ with Memory_Corres_eq (G: global) (n: nat) :
 Section Memory_Corres_mult.
   Variables (G: global) (n: nat).
 
-  Variable P : ident -> memory -> memoryEnv -> Prop.
-  Variable Peq : memory -> memoryEnv -> equation -> Prop.
+  Variable P : ident -> memory -> heap -> Prop.
+  Variable Peq : memory -> heap -> equation -> Prop.
 
   Hypothesis EqDef_case: forall M menv x cae,
       Peq M menv (EqDef x cae).
@@ -665,7 +664,7 @@ Section Memory_Corres_mult.
 
   Fixpoint Memory_Corres_mult (f    : ident)
                               (M    : memory)
-                              (menv : memoryEnv)
+                              (menv : heap)
                               (Hmc  : Memory_Corres G n f M menv)
                               {struct Hmc} : P f M menv :=
     match Hmc in (Memory_Corres _ _ f M menv) return (P f M menv) with
@@ -685,7 +684,7 @@ Section Memory_Corres_mult.
     end
 
   with Memory_Corres_eq_mult (M     : memory)
-                             (menv  : memoryEnv)
+                             (menv  : heap)
                              (eq    : equation)
                              (Hmceq : Memory_Corres_eq G n M menv eq)
                              {struct Hmceq} : Peq M menv eq.
@@ -1137,8 +1136,8 @@ Lemma is_step_correct:
               (input: ident)
               (eqs: list equation)
               (n: nat)
-              (menv: memoryEnv)
-              (env: constEnv),
+              (menv: heap)
+              (env: stack),
         (exists oeqs, alleqs = oeqs ++ eqs)
         -> (forall x, PS.In x mems
                       -> (Is_defined_in x alleqs
@@ -1174,8 +1173,8 @@ Lemma is_step_correct:
                -> Memory_Corres G n f M menv
                -> find_class f prog = Some (fclass, prog')
                -> env = match xs n with
-                        | absent => empty
-                        | present c => PM.add (c_input fclass) c empty
+                        | absent => sempty
+                        | present c => PM.add (c_input fclass) c sempty
                         end
                -> exists menv' env',
                    stmt_eval prog' menv env (c_step fclass) (menv', env')
@@ -1396,7 +1395,7 @@ Proof.
       assert (
           let fclass := translate_node (mk_node f i o neqs) in
           exists omenv' oenv',
-            stmt_eval prog' omenv (PM.add i v empty)
+            stmt_eval prog' omenv (PM.add i v sempty)
                       (c_step fclass) (omenv', oenv')
             /\ (forall c,
                    xs n = present c
@@ -1547,8 +1546,8 @@ Lemma is_node_correct:
          (prog': program)
          (fclass: class)
          (n: nat)
-         (menv: memoryEnv)
-         (env: constEnv),
+         (menv: heap)
+         (env: stack),
 
     Welldef_global G
     -> find_node f G = Some fnode
@@ -1557,8 +1556,8 @@ Lemma is_node_correct:
 
     -> find_class f (translate G) = Some(fclass, prog')
     -> env = (match xs n with
-	      | present c => PM.add fclass.(c_input) c empty
-	      | absent => empty
+	      | present c => PM.add fclass.(c_input) c sempty
+	      | absent => sempty
              end)
 
     -> (exists menv' env',
@@ -1777,8 +1776,8 @@ Lemma is_node_reset_correct:
 
          (prog': program)
          (fclass: class)
-         (menv: memoryEnv)
-         (env: constEnv),
+         (menv: heap)
+         (env: stack),
 
        Welldef_global G
     -> msem_node G f xs M ys
@@ -1786,7 +1785,7 @@ Lemma is_node_reset_correct:
 
     -> find_class f (translate G) = Some(fclass, prog')
     -> (exists menv' env',
-           stmt_eval prog' mempty env fclass.(c_reset) (menv', env')
+           stmt_eval prog' hempty env fclass.(c_reset) (menv', env')
            /\ Memory_Corres G 0 f M menv').
 Proof.
   induction G as [|node G IH]; [now inversion 1|].
@@ -1810,7 +1809,7 @@ Proof.
     simpl in Heqb.
     rewrite Heqb in *; clear Heqb.
     cut (exists menv' env',
-            stmt_eval (translate G) mempty env (translate_reset_eqns eqs)
+            stmt_eval (translate G) hempty env (translate_reset_eqns eqs)
                       (menv', env')
             /\ Forall (Memory_Corres_eq G 0 M menv') eqs).
     { destruct 1 as [menv' [env' [Hstmt Hmc]]].
@@ -1833,7 +1832,7 @@ Proof.
         by (inversion_clear Hwdef; exists (PS.add ni (memories eqs0)); intuition).
     destruct Hwsch as [mems Hwsch].
     apply Welldef_global_cons in Hwdef.
-    induction eqs as [|eq eqs IHeqs]; [exists mempty, env; now intuition|].
+    induction eqs as [|eq eqs IHeqs]; [exists hempty, env; now intuition|].
     apply not_Is_node_in_cons in Hnni.
     destruct Hnni as [Hnni Hnnis].
     apply Forall_cons2 in Hmsem; destruct Hmsem as [Hmsem Hmsems].
@@ -1855,7 +1854,7 @@ Proof.
       inversion_clear Hmsem'' as [? ? ? ? ? ? ? Hfindn HH].
       pose proof (find_node_translate_find_class _ _ _ Hfindn) as Hfindc.
       destruct Hfindc as [prog'' Hfindc].
-      specialize (IH _ _ _ _ _ _ _ mempty empty Hwdef Hmsem' Hfindn Hfindc).
+      specialize (IH _ _ _ _ _ _ _ hempty sempty Hwdef Hmsem' Hfindn Hfindc).
       destruct IH as [omenv [oenv [Hstmtn Hmcn]]].
       exists (madd_obj y omenv menv'), env'.
       split; [exact Hstmt|].
@@ -1910,7 +1909,7 @@ Lemma is_translate_correct:
     -> sem_node G f xs ys
     -> (forall n, xs n = present ci)
     -> (exists menv env,
-           stmt_eval (translate G) mempty empty
+           stmt_eval (translate G) hempty sempty
              (Comp (Reset_ap f obj)
                    (Repeat (S n) (Step_ap r f obj (Const ci)))) (menv, env)
            /\ (forall co, ys n = present co <-> PM.find r env = Some co)).
@@ -1927,11 +1926,11 @@ Proof.
   pose proof (find_node_translate_find_class _ _ _ Hfindn) as Hfindc.
   destruct Hfindc as [prog' Hfindc].
   pose proof (is_node_reset_correct _ _ _ _ _ _ _ _
-                                    mempty empty Hwdef Hmsem Hfindn Hfindc) as Hreset.
+                                    hempty sempty Hwdef Hmsem Hfindn Hfindc) as Hreset.
   destruct Hreset as [menv' [env' [Hstmtr Hmc0]]].
   simpl in Hstmtr.
   cut (exists menv env,
-          stmt_eval (translate G) mempty empty
+          stmt_eval (translate G) hempty sempty
                     (Comp (Reset_ap f obj) (Repeat (S n)
                                                (Step_ap r f obj (Const ci))))
                     (menv, env)
@@ -1941,7 +1940,7 @@ Proof.
   destruct 1 as [menv [env [Hstmt [Hout Hmc]]]]; exists menv, env; now intuition.
   induction n.
   - specialize Hxs with 0%nat.
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci empty)
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci sempty)
                                 Hwdef Hfindn Hmsem Hmc0 Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv'' [env'' [Hstmt [Hout Hmc]]]].
@@ -1949,8 +1948,8 @@ Proof.
         by (intro HH; apply Habs in HH; rewrite Hxs in HH; discriminate).
     apply not_absent_present in Hyna.
     destruct Hyna as [yc Hyna].
-    exists (madd_obj obj menv'' (madd_obj obj menv' mempty)).
-    exists (PM.add r yc empty).
+    exists (madd_obj obj menv'' (madd_obj obj menv' hempty)).
+    exists (PM.add r yc sempty).
     split; [|split].
     + (* TODO: automate! *)
       econstructor.
@@ -1983,7 +1982,7 @@ Proof.
     destruct Hmc as [omenv [Hfindo Hmc]].
     inversion_clear Hstmts.
     specialize Hxs with (S n).
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci empty)
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci sempty)
                                 Hwdef Hfindn Hmsem Hmc Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv''' [env''' [Hstmt [Hout Hmc']]]].
@@ -2031,12 +2030,12 @@ Lemma is_translate_even_more_correct:
          (r: ident)
          (obj: ident)
          (n: nat)
-         (menv: memoryEnv)
-         (env: constEnv),
+         (menv: heap)
+         (env: stack),
     Welldef_global G
     -> sem_node G f xs ys
     -> (forall n, xs n = present ci)
-    -> stmt_eval (translate G) mempty empty
+    -> stmt_eval (translate G) hempty sempty
                  (Comp (Reset_ap f obj)
                        (Repeat (S n) (Step_ap r f obj (Const ci)))) (menv, env)
     -> (forall co, ys n = present co <-> PM.find r env = Some co).

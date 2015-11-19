@@ -4,30 +4,41 @@ Require Import Rustre.Common.
 Require Import Rustre.Heap.
 Require Import Rustre.Minimp.Syntax.
 
+(** 
+
+  The semantics of Minimp relies on a tree-structure [heap], based on
+  [Rustre.Heap], to store persistent objects and a [stack] to keep
+  track of local variables during method calls.
+
+ *)
+
 (** ** Semantics *)
 
-Definition memoryEnv: Type := memory const.
-Definition constEnv : Set := PM.t const.
+Definition heap: Type := memory const.
+Definition stack : Set := PM.t const.
 
-Definition empty: constEnv := PM.empty const.
-Definition mempty: memoryEnv := mk_memory empty (PM.empty memoryEnv).
+Implicit Type heap: heap.
+Implicit Type stack: stack.
 
-Inductive exp_eval (menv: memoryEnv)(env: constEnv):
+Definition sempty: stack := PM.empty const.
+Definition hempty: heap := empty_memory _.
+
+Inductive exp_eval heap stack:
   exp -> const -> Prop :=
 | evar:
     forall x v,
-      PM.find x env = Some(v) ->
-      exp_eval menv env (Var(x)) v
+      PM.find x stack = Some(v) ->
+      exp_eval heap stack (Var(x)) v
 | estate:
     forall x v,
-      mfind_mem x menv = Some(v) ->
-      exp_eval menv env (State(x)) v
+      mfind_mem x heap = Some(v) ->
+      exp_eval heap stack (State(x)) v
 | econst:
     forall c ,
-      exp_eval menv env (Const(c)) c.
+      exp_eval heap stack (Const(c)) c.
 
 Inductive stmt_eval :
-  program -> memoryEnv -> constEnv -> stmt -> memoryEnv * constEnv -> Prop :=
+  program -> heap -> stack -> stmt -> heap * stack -> Prop :=
 | Iassign:
     forall prog menv env x e v env',
       exp_eval menv env e v ->
@@ -78,26 +89,26 @@ Inductive stmt_eval :
     forall prog menv env,
       stmt_eval prog menv env Skip (menv, env)
 with stmt_step_eval :
-       program -> memoryEnv -> ident -> const -> memoryEnv -> const -> Prop :=
+       program -> heap -> ident -> const -> heap -> const -> Prop :=
 | Iestep:
     forall prog menv clsid iv prog' menv' ov cls env',
       find_class clsid prog = Some(cls, prog') ->
-      stmt_eval prog' menv (PM.add cls.(c_input) iv empty) cls.(c_step)
+      stmt_eval prog' menv (PM.add cls.(c_input) iv sempty) cls.(c_step)
                 (menv', env') ->
       PM.find cls.(c_output) env' = Some(ov) ->
       stmt_step_eval prog menv clsid iv menv' ov
-with stmt_reset_eval : program -> ident -> memoryEnv -> Prop :=
+with stmt_reset_eval : program -> ident -> heap -> Prop :=
 | Iereset:
     forall prog clsid cls prog' menv' env',
       find_class clsid prog = Some(cls, prog') ->
-      stmt_eval prog' mempty empty cls.(c_reset) (menv', env') ->
+      stmt_eval prog' hempty sempty cls.(c_reset) (menv', env') ->
       stmt_reset_eval prog clsid menv'.
 
 Scheme stmt_eval_mult := Induction for stmt_eval Sort Prop
 with stmt_step_eval_mult := Induction for stmt_step_eval Sort Prop
 with stmt_reset_eval_mult := Induction for stmt_reset_eval Sort Prop.
 
-
+(** ** Determinism of semantics *)
 
 Lemma exp_eval_det:
   forall menv env e v1 v2,
