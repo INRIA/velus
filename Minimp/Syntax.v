@@ -4,6 +4,13 @@ Require Import Rustre.Common.
 Import List.ListNotations.
 Open Scope list_scope.
 
+(** 
+
+  Minimp is a minimal object-oriented programming language exposing
+  two methods: [step] and [reset].
+
+ *)
+
 (** * Imperative language *)
 
 (** ** Syntax *)
@@ -12,6 +19,8 @@ Inductive exp : Set :=
 | Var : ident -> exp
 | State : ident -> exp
 | Const : const -> exp.
+
+Implicit Type e: exp.
 
 Inductive stmt : Set :=
   | Assign : ident -> exp -> stmt
@@ -25,11 +34,15 @@ Inductive stmt : Set :=
   | Repeat : nat -> stmt -> stmt
   | Skip.
 
+Implicit Type s: stmt.
+
+
 Record obj_dec : Set := mk_obj_dec {
   obj_inst  : ident;
   obj_class : ident
 }.
 
+(* TODO: lots of fields are not strictly necessary *)
 Record class : Set := mk_class {
   c_name   : ident;
 
@@ -43,10 +56,14 @@ Record class : Set := mk_class {
   c_reset  : stmt
 }.
 
+Implicit Type c: class.
+
 Definition program : Type := list class.
 
+Implicit Type p: program.
+
 Definition find_class (n: ident) : program -> option (class * list class) :=
-  fix find (p: program) :=
+  fix find p :=
     match p with
     | [] => None
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
