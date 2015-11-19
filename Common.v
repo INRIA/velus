@@ -1,6 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Coq.MSets.MSets.
-Require Import PArith.
+Require Export PArith.
 
 (** * Common definitions *)
 
