@@ -8,6 +8,16 @@ Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.Stream.
 
+(**
+
+  We provide a "standard" dataflow semantics relating an environment
+  of streams to a stream of outputs.
+
+ *)
+
+
+(** ** Environment and history *)
+
 (** 
 
 An history maps variables to streams of values (the variables'
@@ -18,17 +28,18 @@ environment.
 
 Definition env := PM.t value.
 Definition history := PM.t (stream value).
-(*
+
 Implicit Type R: env.
-Implicit Type H: env.
-*)
+Implicit Type H: history.
 
-Inductive sem_var_instant (R: env)(x: ident)(xs: value): Prop :=
+(** ** Instantaneous semantics *)
+
+Inductive sem_var_instant R (x: ident) v: Prop :=
 | Sv:
-      PM.find x R = Some xs ->
-      sem_var_instant R x xs.
+      PM.find x R = Some v ->
+      sem_var_instant R x v.
 
-Inductive sem_clock_instant (R: env): clock -> bool -> Prop :=
+Inductive sem_clock_instant R: clock -> bool -> Prop :=
 | Sbase: 
       sem_clock_instant R Cbase true
 | Son_tick:
@@ -47,7 +58,7 @@ Inductive sem_clock_instant (R: env): clock -> bool -> Prop :=
       ~ (c = c') ->
       sem_clock_instant R (Con ck x c)  false.
 
-Inductive sem_lexp_instant (R: env): lexp -> value -> Prop:=
+Inductive sem_lexp_instant R: lexp -> value -> Prop:=
 | Sconst:
     forall c,
       sem_lexp_instant R (Econst c) (present c)
@@ -67,7 +78,7 @@ Inductive sem_lexp_instant (R: env): lexp -> value -> Prop:=
       (* Note: says nothing about 's'. *)
       sem_lexp_instant R (Ewhen s x b) absent.
 
-Inductive sem_laexp_instant (R: env): laexp -> value -> Prop:=
+Inductive sem_laexp_instant R: laexp -> value -> Prop:=
 | SLtick:
     forall ck ce c,
       sem_lexp_instant R ce (present c) ->
@@ -79,7 +90,7 @@ Inductive sem_laexp_instant (R: env): laexp -> value -> Prop:=
       sem_clock_instant R ck false ->
       sem_laexp_instant R (LAexp ck ce) absent.
 
-Inductive sem_cexp_instant (R: env): cexp -> value -> Prop :=
+Inductive sem_cexp_instant R: cexp -> value -> Prop :=
 | Smerge_true:
     forall x t f v,
       sem_var_instant R x (present (Cbool true)) ->
@@ -95,7 +106,7 @@ Inductive sem_cexp_instant (R: env): cexp -> value -> Prop :=
       sem_lexp_instant R e v ->
       sem_cexp_instant R (Eexp e) v.
 
-Inductive sem_caexp_instant (R: env): caexp -> value -> Prop :=
+Inductive sem_caexp_instant R: caexp -> value -> Prop :=
 | SCtick:
     forall ck ce c,
       sem_cexp_instant R ce (present c) ->
@@ -107,7 +118,7 @@ Inductive sem_caexp_instant (R: env): caexp -> value -> Prop :=
       sem_clock_instant R ck false ->
       sem_caexp_instant R (CAexp ck ce) absent.
 
-Inductive rhs_absent_instant (R: env): equation -> Prop :=
+Inductive rhs_absent_instant R: equation -> Prop :=
 | AEqDef:
     forall x cae,
       sem_caexp_instant R cae absent ->
@@ -121,59 +132,61 @@ Inductive rhs_absent_instant (R: env): equation -> Prop :=
       sem_laexp_instant R lae absent ->
       rhs_absent_instant R (EqFby x v0 lae).
 
+(** ** Liftings of instantaneous semantics *)
 
-Definition restr (H: history)(n: nat): env :=
+Definition restr H (n: nat): env :=
   PM.map (fun xs => xs n) H.
 Hint Unfold restr.
 
-Definition lift {A} (sem: env -> A -> Prop)(H: history)(xs: stream A): Prop :=
+Definition lift {A} (sem: env -> A -> Prop) H (xs: stream A): Prop :=
   forall n, sem (restr H n) (xs n).
 Hint Unfold lift.
 
-Definition sem_clock (H: history)(ck: clock)(xs: stream bool): Prop :=
+Definition sem_clock H (ck: clock)(xs: stream bool): Prop :=
   lift (fun env b => sem_clock_instant env ck b) H xs.
 
-Definition sem_var (H: history)(x: ident)(xs: stream value): Prop :=
+Definition sem_var H (x: ident)(xs: stream value): Prop :=
   lift (fun env v => sem_var_instant env x v) H xs.
 Hint Unfold sem_var.
 
-Definition sem_laexp (H: history)(e: laexp)(xs: stream value): Prop :=
+Definition sem_laexp H (e: laexp)(xs: stream value): Prop :=
   lift (fun env v => sem_laexp_instant env e v) H xs.
 
-Definition sem_lexp (H: history)(e: lexp)(xs: stream value): Prop :=
+Definition sem_lexp H (e: lexp)(xs: stream value): Prop :=
   lift (fun env v => sem_lexp_instant env e v) H xs.
 
-Definition sem_caexp (H: history)(c: caexp)(xs: stream value): Prop :=
+Definition sem_caexp H (c: caexp)(xs: stream value): Prop :=
   lift (fun env v => sem_caexp_instant env c v) H xs.
 
-Definition sem_cexp (H: history)(c: cexp)(xs: stream value): Prop :=
+Definition sem_cexp H (c: cexp)(xs: stream value): Prop :=
   lift (fun env v => sem_cexp_instant env c v) H xs.
 
+(** ** Time-dependent semantics *)
 
-Inductive sem_equation (G: global) : history -> equation -> Prop :=
+Inductive sem_equation G: history -> equation -> Prop :=
 | SEqDef:
     forall H x xs cae,
       sem_var H x xs ->
       sem_caexp H cae xs ->
       sem_equation G H (EqDef x cae)
 | SEqApp:
-    forall H x f arg (ls xs: stream value),
+    forall H x f arg ls xs,
       sem_laexp H arg ls ->
       sem_var H x xs ->
       sem_node G f ls xs ->
       sem_equation G H (EqApp x f arg)
 | SEqFby:
-    forall H x (ls xS: stream value) v0 lae,
+    forall H x ls xs v0 lae,
       sem_laexp H lae ls ->
-      sem_var H x xS ->
-      xS = fby v0 ls ->
+      sem_var H x xs ->
+      xs = fby v0 ls ->
       sem_equation G H (EqFby x v0 lae)
 
-with sem_node (G: global) : ident -> stream value -> stream value -> Prop :=
+with sem_node G: ident -> stream value -> stream value -> Prop :=
 | SNode:
     forall f (xs ys: stream value) i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
-      (exists (H: history),
+      (exists H,
            sem_var H i xs
         /\ sem_var H o ys
         (* no clocks faster than input *)
@@ -184,10 +197,61 @@ with sem_node (G: global) : ident -> stream value -> stream value -> Prop :=
         /\ Forall (sem_equation G H) eqs) ->
       sem_node G f xs ys.
 
+Definition sem_nodes (G: global) : Prop :=
+  Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
+
+
+(* The original idea was to 'bake' the following assumption into sem_node:
+
+       (forall n y, xs n = absent
+                    -> Is_defined_in y eqs
+                    -> sem_var H y n absent)
+
+   That is, when the node input is absent then so are all of the
+   variables defined within the node. This is enough to show
+   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
+   the counter-example:
+
+       node f (x) = y where
+         y = 1 when false
+         s = 0 fby x
+
+       node g (x) = y where
+         y = f (3 when Cbase)
+
+   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
+   internal value y satisfies the assumption (it is always absent), but the
+   instantiation of f is still called at a faster rate.
+
+   The current (proposed) solution is to insist that all of the rhs' be
+   absent when the input is. This should be enough to ensure the two
+   key properties:
+   1. for (x = f e), e absent implies x absent (important for translation
+                     correctness),
+   2. for (x = f e) and (x = v0 fby e), e absent implies that the memories
+                     'stutter'.
+   This constraint _should_ follow readily from the clock calculus. Note that
+   we prefer a semantic condition here even if it will be shown via a static
+   analysis witnessed by clocks in expressions.
+
+   This extra condition
+   is only necessary for the correctness proof of imperative code generation.
+   A translated node is only executed when the clock of its input expression
+   is true. For this 'optimization' to be correct, whenever the input is
+   absent, the output must be absent and the internal memories must not change.
+   These facts are consequences of the clock constraint above (see the
+   absent_invariant lemma below).
+ *)
+
+
+
+
+(** ** Induction principle for [sem_node] and [sem_equation] *)
+
 Section sem_node_mult.
   Variable G: global.
 
-  Variable P : forall (H: history) (eq: equation), sem_equation G H eq -> Prop.
+  Variable P : forall H (eq: equation), sem_equation G H eq -> Prop.
   Variable Pn : forall (f: ident) (xs ys: stream value), sem_node G f xs ys -> Prop.
 
   Hypothesis EqDef_case :
@@ -232,14 +296,14 @@ Section sem_node_mult.
 	   (o   : ident)
 	   (eqs : list equation)
 	   (Hf  : find_node f G = Some (mk_node f i o eqs))
-           (Heqs : exists H : history,
+           (Heqs : exists H,
                         sem_var H i xs
 	             /\ sem_var H o ys
                      /\ (forall n, xs n = absent
                                    -> Forall (rhs_absent_instant (restr H n)) eqs)
                      /\ (forall n, xs n = absent <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs),
-      (exists H : history,
+      (exists H,
              sem_var H i xs
           /\ sem_var H o ys
           /\ (forall n, xs n = absent
@@ -301,50 +365,7 @@ Section sem_node_mult.
 
 End sem_node_mult.
 
-(* The original idea was to 'bake' the following assumption into sem_node:
-
-       (forall n y, xs n = absent
-                    -> Is_defined_in y eqs
-                    -> sem_var H y n absent)
-
-   That is, when the node input is absent then so are all of the
-   variables defined within the node. This is enough to show
-   Memory_Corres_unchanged for EqFby, but not for EqApp. Consider
-   the counter-example:
-
-       node f (x) = y where
-         y = 1 when false
-         s = 0 fby x
-
-       node g (x) = y where
-         y = f (3 when Cbase)
-
-   Now can instantiate g on a slower value (1 :: Con Cbase x true), and the
-   internal value y satisfies the assumption (it is always absent), but the
-   instantiation of f is still called at a faster rate.
-
-   The current (proposed) solution is to insist that all of the rhs' be
-   absent when the input is. This should be enough to ensure the two
-   key properties:
-   1. for (x = f e), e absent implies x absent (important for translation
-                     correctness),
-   2. for (x = f e) and (x = v0 fby e), e absent implies that the memories
-                     'stutter'.
-   This constraint _should_ follow readily from the clock calculus. Note that
-   we prefer a semantic condition here even if it will be shown via a static
-   analysis witnessed by clocks in expressions.
-
-   This extra condition
-   is only necessary for the correctness proof of imperative code generation.
-   A translated node is only executed when the clock of its input expression
-   is true. For this 'optimization' to be correct, whenever the input is
-   absent, the output must be absent and the internal memories must not change.
-   These facts are consequences of the clock constraint above (see the
-   absent_invariant lemma below).
- *)
-
-Definition sem_nodes (G: global) : Prop :=
-  Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
+(** ** Determinism of semantics *)
 
 Lemma sem_var_instant_det:
   forall x R v1 v2,
@@ -517,6 +538,8 @@ Lemma sem_caexp_det:
 Proof.
   apply_lift sem_caexp_instant_det c.
 Qed.
+
+(** ** Global management *)
 
 Lemma find_node_other:
   forall f node G node',
