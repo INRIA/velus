@@ -89,4 +89,3 @@ Proof.
   symmetry.
   apply Is_variable_in_variables.
 Qed.
-

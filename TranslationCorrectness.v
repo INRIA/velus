@@ -5,8 +5,9 @@ Open Scope list_scope.
 Require Import Rustre.Common.
 Require Import Rustre.Heap.
 Require Import Rustre.Dataflow.
-(* TODO: this should go *)
+(* TODO: these should go *)
 Require Import Rustre.Dataflow.IsVariable.Decide.
+Require Import Rustre.Dataflow.IsDefined.Decide.
 
 (* ** Definitions on imperative statements *)
 
@@ -1262,7 +1263,7 @@ Proof.
         apply stmt_eval_Control_absent.
         apply clock_correct_false with (2:=Hclk); now auto.
       * intros x0 Hivi c.
-        (* TODO: do we really need this [destruct]?
+        (* TODO: do we really need this [destruct]? It seems that we *know* that it cannot be a variable (proof by [contradiction]/[discriminate]).
                  If not, remove dependency on [Dataflow.IsVariable.Decide] *)
         destruct (Is_variable_in_dec x0 eqs) as [Hvin|Hvin];
           [now apply IHeqs0 with (1:=Hvin)|].
@@ -1491,8 +1492,12 @@ Proof.
         intros ms0' Hmfind'.
         rewrite Hmfind in Hmfind'.
         injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
+        (* TODO: do we really need this? We seem to *know* that it
+        cannot be equal ([exfalso] branch).
+
+                 If unnecessary, remove the import on Dataflow.IsDefined.Decide *)
         destruct (Is_defined_in_dec y eqs) as [Hxin|Hxin];
-          [inversion_clear Hwsch; now intuition|].
+          [ exfalso; inversion_clear Hwsch; now intuition|].
         rewrite Hall in Hmc.
         apply Forall_app in Hmc.
         destruct Hmc as [H0 Hmc]; clear H0.

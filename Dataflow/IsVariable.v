@@ -90,20 +90,3 @@ Proof.
     split; [ now apply not_Is_defined_in_eq_not_Is_variable_in_eq
            | now apply H1].
 Qed.
-
-Lemma Is_defined_in_memories:
-  forall x eqs,
-    PS.In x (memories eqs) -> Is_defined_in x eqs.
-Proof.
-  unfold memories, Is_defined_in.
-  induction eqs as [ eq | eq ].
-  - simpl; intro; not_In_empty.
-  - intro HH; simpl in HH.
-    apply In_fold_left_memory_eq in HH.
-    rewrite List.Exists_cons.
-    destruct HH as [HH|HH].
-    + right; now apply IHeqs with (1:=HH).
-    + left. apply In_memory_eq_In_defined_eq in HH.
-      destruct eq; apply PS.add_spec in HH; destruct HH as [HH|HH];
-      (rewrite HH; now constructor) || not_In_empty.
-Qed.
