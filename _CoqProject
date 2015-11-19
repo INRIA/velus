@@ -12,6 +12,7 @@ Dataflow/WellFormed.v
 Dataflow/WellFormed/Decide.v
 Dataflow/WellFormed/Example.v
 Dataflow/Ordered.v
+Dataflow/NoDup.v
 Dataflow.v
 Minimp/Syntax.v
 Minimp/Semantics.v
