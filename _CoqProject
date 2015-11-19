@@ -4,6 +4,7 @@ Common.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
 Dataflow/IsFree.v
+Dataflow/IsFree/Decide.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v
