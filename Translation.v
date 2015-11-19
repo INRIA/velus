@@ -2,7 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
 Require Import Rustre.Minimp.
-Require Import Rustre.DataflowSyntax.
+Require Import Rustre.Dataflow.Syntax.
 
 Import List.ListNotations.
 Open Scope positive.

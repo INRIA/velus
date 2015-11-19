@@ -4,8 +4,8 @@ Open Scope list_scope.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
-Require Import Rustre.DataflowSyntax.
-Require Import SynchronousNat.
+Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.Dataflow.Stream.
 
 Definition env := PM.t value.
 Definition history := PM.t (stream value).

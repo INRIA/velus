@@ -57,7 +57,7 @@ Implicit Type node: node.
 
 (** ** Program *)
 
-Definition program := list node.
+Definition global := list node.
 
 
 

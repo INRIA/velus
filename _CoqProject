@@ -2,13 +2,12 @@
 -install none
 Common.v
 Minimp.v
-DataflowSyntax.v
-DataflowNatSemantics.v
-DataflowNatMSemantics.v
-DataflowListSemantics.v
+Dataflow/Stream.v
+Dataflow/Syntax.v
+Dataflow/Semantics.v
+Dataflow/MemSemantics.v
+Dataflow/WellFormed.v
+Dataflow.v
 Translation.v
-TranslationNatSemantics.v
 TranslationCorrectness.v
-SynchronousNat.v
-WellFormed.v
 Heap.v

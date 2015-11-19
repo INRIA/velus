@@ -4,11 +4,7 @@ Open Scope list_scope.
 
 Require Import Rustre.Common.
 Require Import Rustre.Heap.
-Require Import Rustre.DataflowSyntax.
-Require Import Rustre.DataflowNatSemantics.
-Require Import Rustre.DataflowNatMSemantics.
-Require Import Rustre.SynchronousNat.
-Require Import Rustre.WellFormed.
+Require Import Rustre.Dataflow.
 
 (* ** Definitions on imperative statements *)
 

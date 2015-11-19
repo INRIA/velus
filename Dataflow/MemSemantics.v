@@ -5,10 +5,11 @@ Open Scope list_scope.
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.Heap.
-Require Import Rustre.DataflowSyntax.
-Require Import SynchronousNat.
-Require Import DataflowNatSemantics.
-Require Import WellFormed.
+Require Import Rustre.Dataflow.Stream.
+Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.Dataflow.Semantics.
+Require Import Rustre.Dataflow.WellFormed.
+
 
 Set Implicit Arguments.
 

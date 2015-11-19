@@ -1,5 +1,4 @@
 Require Import Rustre.Common.
-Require Import Rustre.DataflowSyntax.
 
 Inductive value :=
   | absent
