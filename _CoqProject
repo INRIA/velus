@@ -7,6 +7,7 @@ Dataflow/Example.v
 Dataflow/IsFree.v
 Dataflow/IsFree/Decide.v
 Dataflow/IsVariable.v
+Dataflow/IsVariable/Decide.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v

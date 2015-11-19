@@ -5,6 +5,7 @@ Open Scope list_scope.
 Require Import Rustre.Common.
 Require Import Rustre.Heap.
 Require Import Rustre.Dataflow.
+Require Import Rustre.Dataflow.IsVariable.Decide.
 
 (* ** Definitions on imperative statements *)
 
@@ -1260,6 +1261,8 @@ Proof.
         apply stmt_eval_Control_absent.
         apply clock_correct_false with (2:=Hclk); now auto.
       * intros x0 Hivi c.
+        (* TODO: do we really need this [destruct]?
+                 If not, remove dependency on [Dataflow.IsVariable.Decide] *)
         destruct (Is_variable_in_dec x0 eqs) as [Hvin|Hvin];
           [now apply IHeqs0 with (1:=Hvin)|].
         apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
