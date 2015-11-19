@@ -4,3 +4,4 @@ Require Export Dataflow.IsFree.
 Require Export Dataflow.Semantics.
 Require Export Dataflow.MemSemantics.
 Require Export Dataflow.WellFormed.
+Require Export Dataflow.Ordered.

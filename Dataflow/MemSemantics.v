@@ -8,6 +8,7 @@ Require Import Rustre.Heap.
 Require Import Rustre.Dataflow.Stream.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Semantics.
+Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.WellFormed.
 
 
