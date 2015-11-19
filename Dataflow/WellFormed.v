@@ -1,6 +1,7 @@
 
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.Dataflow.IsFree.
 
 (* ** Definitions on imperative statements *)
 
