@@ -40,6 +40,7 @@ Require Import Rustre.Translation.MemoryCorres.
      where a clock is active.
  *)
 
+(** ** Technical lemmas *)
 
 Lemma exp_eval_tovar:
   forall x v menv env memories,
@@ -439,6 +440,8 @@ Proof.
     intuition.
 Qed.
 
+(** ** Validity of [translate_lexp] *)
+
 Lemma lexp_correct:
   forall R memories menv env c e,
     sem_lexp_instant R e (present c)
@@ -460,6 +463,8 @@ Proof.
     auto.
 Qed.
 
+(** ** Validity of [translate_laexp] *)
+
 Lemma laexp_correct:
   forall R memories menv env c e,
     sem_laexp_instant R e (present c)
@@ -478,6 +483,8 @@ Proof.
   + constructor (assumption). 
   + assumption.
 Qed.
+
+(** ** Validity of [translate_cexp] *)
 
 Lemma cexp_correct:
   forall R memories prog menv env c x e,
@@ -509,6 +516,7 @@ Proof.
     reflexivity.
 Qed.
 
+(** ** Validity of [translate_caexp] *)
 
 Lemma caexp_correct:
   forall R memories prog menv env c x e,
@@ -542,6 +550,7 @@ Qed.
       some value, but also that it is the correct value.
  *)
 
+(** ** More technical lemma! *)
 
 Lemma find_node_translate_find_class:
   forall f G node,
@@ -685,6 +694,8 @@ Local Ltac resolve_env_assumption :=
                with (1:=Hidi) (2:=Hnvi) (3:=Hmc) (4:=Hmfind)
              end
   end.
+
+(** ** Validity of [translate_eqns] *)
 
 Lemma is_step_correct:
   forall (G: global)
@@ -1241,6 +1252,8 @@ Proof.
     + apply Memory_Corres_eqs_node_tl with (1:=Hord) (2:=Hnode) (3:=Hmc').
 Qed.
 
+(** ** Validity of the [reset] code *)
+
 Lemma stmt_eval_translate_reset_eqn_shift:
   forall prog eqs iacc menv env menv' env',
     stmt_eval prog menv env
@@ -1458,6 +1471,8 @@ Proof.
     split; [exact Hstmt|].
     now apply Memory_Corres_node_tl with (1:=Hord) (2:=Heqb) (3:=Hmc).
 Qed.
+
+(** ** Validity of the whole translation *)
 
 Lemma is_translate_correct:
   forall (G: global)
