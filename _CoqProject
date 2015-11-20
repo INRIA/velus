@@ -26,5 +26,6 @@ Translation.v
 Translation/Example.v
 Translation/Proper.v
 Translation/IsPresent.v
+Translation/MemoryCorres.v
 TranslationCorrectness.v
 Heap.v
