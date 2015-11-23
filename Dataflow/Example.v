@@ -7,12 +7,15 @@ Open Scope list.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 
+(* TODO: not properly clocked... *)
 Example eqns1 : list equation :=
   [
     EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
     EqDef 4 (CAexp Cbase (Emerge 1 (Eexp (Evar 2))
                                    (Eexp (Evar 3))));
-    EqDef 2 (CAexp (Con Cbase 1 true) (Eexp (Econst (Cint 7))))
+    EqDef 2 (CAexp (Con Cbase 1 true)
+                   (Eexp (Ewhen (Econst (Cint 7)) 1 true))
+            )
 (*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
   ].
 

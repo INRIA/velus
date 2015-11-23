@@ -73,7 +73,7 @@ Inductive Is_well_sch (mems: PS.t) : list equation -> Prop :=
 | WSchEqFby:
     forall x v e eqs,
       Is_well_sch mems eqs ->
-      PS.In x mems ->
+      PS.In x mems -> (* TODO: delete ? *)
       (forall i, Is_free_in_laexp i e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
                  /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
