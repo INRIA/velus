@@ -659,15 +659,15 @@ Qed.
    either Is_well_sch or Welldef_global.
 *)
 Lemma sem_msem_eq:
-  forall G H eqs M eq mems,
+  forall G H eqs M eq mems argIn,
     (forall f xs ys, sem_node G f xs ys
                      -> exists M : memory, msem_node G f xs M ys)
     -> sem_equation G H eq
-    -> Is_well_sch mems (eq::eqs)
+    -> Is_well_sch mems argIn (eq::eqs)
     -> Forall (msem_equation G H M) eqs
     -> exists M', Forall (msem_equation G H M') (eq::eqs).
 Proof.
-  intros G H eqs M eq mems IH Heq Hwsch Hmeqs.
+  intros G H eqs M eq mems argIn IH Heq Hwsch Hmeqs.
   inversion Heq as [? ? ? ? Hsem
                    |? ? ? ? ? ? Hls Hxs Hsem
                    |? ? ? ? ? ? Hlae Hvar];
@@ -710,18 +710,18 @@ Qed.
 
 
 Lemma sem_msem_eqs:
-  forall G H eqs mems,
+  forall G H eqs mems argIn,
     (forall f xs ys, sem_node G f xs ys
                      -> exists M : memory, msem_node G f xs M ys)
-    -> Is_well_sch mems eqs
+    -> Is_well_sch mems argIn eqs
     -> Forall (sem_equation G H) eqs
     -> exists M', Forall (msem_equation G H M') eqs.
 Proof.
-  intros G H eqs mems IH Hwsch Heqs.
+  intros G H eqs mems argIn IH Hwsch Heqs.
   induction eqs as [|eq eqs IHeqs]; [exists (empty_memory _); now constructor|].
   apply Forall_cons2 in Heqs.
   destruct Heqs as [Heq Heqs].
-  apply IHeqs with (1:=Is_well_sch_cons _ _ _ Hwsch) in Heqs.
+  apply IHeqs with (1:=Is_well_sch_cons _ _ _ _ Hwsch) in Heqs.
   destruct Heqs as [M Heqs].
   now apply sem_msem_eq with (1:=IH) (2:=Heq) (3:=Hwsch) (4:=Heqs).
 Qed.

@@ -81,8 +81,8 @@ Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
     | (false, _, _) => (false, PS.empty, PS.empty)
   end.
 
-Definition well_sch (eqs: list equation) : bool :=
-  fst (fst (List.fold_right check_eq (true, PS.empty, PS.empty) eqs)).
+Definition well_sch (argIn: ident)(eqs: list equation) : bool :=
+  fst (fst (List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqs)).
 
 Lemma not_for_all_spec:
   forall (s : PS.t) (f : BinNums.positive -> bool),
@@ -113,16 +113,17 @@ Proof.
 Qed.
 
 Lemma well_sch_pre_spec:
-  forall eqs good defined variables,
+  forall argIn eqs good defined variables,
     (good, defined, variables)
-        = List.fold_right check_eq (true, PS.empty, PS.empty) eqs
+        = List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqs
     ->
     (good = true
-     -> (Is_well_sch mems eqs
+     -> (Is_well_sch mems argIn eqs
          /\ (forall x, PS.In x defined <-> Is_defined_in x eqs)
          /\ (forall x, PS.In x variables <-> Is_variable_in x eqs)))
-    /\ (good = false -> ~Is_well_sch mems eqs).
-Proof.
+    /\ (good = false -> ~Is_well_sch mems argIn eqs).
+Admitted.
+(*
   induction eqs as [|eq].
   - simpl; injection 1; intros HRv HRm; subst.
     intuition;
@@ -265,17 +266,18 @@ Proof.
                    => intro HN; apply Hidi in HN; contradiction
                  end).
 Qed.
+*)
 
 Lemma well_sch_spec:
-  forall eqns,
-    if well_sch eqns
-    then Is_well_sch mems eqns
-    else ~Is_well_sch mems eqns.
+  forall argIn eqns,
+    if well_sch argIn eqns
+    then Is_well_sch mems argIn eqns
+    else ~Is_well_sch mems argIn eqns.
 Proof.
-  intro eqns.
-  pose proof (well_sch_pre_spec eqns).
+  intros argIn eqns.
+  pose proof (well_sch_pre_spec argIn eqns).
   unfold well_sch.
-  destruct (List.fold_right check_eq (true, PS.empty, PS.empty) eqns)
+  destruct (List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqns)
     as [[good defined] variables].
   simpl.
   specialize H with good defined variables.

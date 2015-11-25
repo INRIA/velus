@@ -52,39 +52,42 @@ Open Scope list_scope.
 
    To require that such input variables are not redefined in eqs.
 *)
-Inductive Is_well_sch (mems: PS.t) : list equation -> Prop :=
-| WSchNil: Is_well_sch mems nil
+Inductive Is_well_sch (mems: PS.t)(argIn: ident) : list equation -> Prop :=
+| WSchNil: Is_well_sch mems argIn nil
 | WSchEqDef:
     forall x e eqs,
-      Is_well_sch mems eqs ->
+      Is_well_sch mems argIn eqs ->
       (forall i, Is_free_in_caexp i e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+                 /\ (~PS.In i mems -> Is_variable_in i eqs
+                                   \/ i = argIn)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch mems (EqDef x e :: eqs)
+      Is_well_sch mems argIn (EqDef x e :: eqs)
 | WSchEqApp:
     forall x f e eqs,
-      Is_well_sch mems eqs ->
+      Is_well_sch mems argIn eqs ->
       (forall i, Is_free_in_laexp i e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
-                    /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+                    /\ (~PS.In i mems -> Is_variable_in i eqs
+                                      \/ i = argIn)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch mems (EqApp x f e :: eqs)
+      Is_well_sch mems argIn (EqApp x f e :: eqs)
 | WSchEqFby:
     forall x v e eqs,
-      Is_well_sch mems eqs ->
+      Is_well_sch mems argIn eqs ->
       PS.In x mems -> (* TODO: delete ? *)
       (forall i, Is_free_in_laexp i e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in i eqs)) ->
+                 /\ (~PS.In i mems -> Is_variable_in i eqs
+                                   \/ i = argIn)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch mems (EqFby x v e :: eqs).
+      Is_well_sch mems argIn (EqFby x v e :: eqs).
 
 Hint Constructors Is_well_sch.
 
 Lemma Is_well_sch_NoDup_defs:
-  forall mems eqs,
-    Is_well_sch mems eqs
+  forall mems argIn eqs,
+    Is_well_sch mems argIn eqs
     -> NoDup_defs eqs.
 Proof.
   induction eqs as [|eq eqs IH]; [now constructor|].
@@ -92,17 +95,17 @@ Proof.
 Qed.
 
 Lemma Is_well_sch_cons:
-  forall m eq eqs, Is_well_sch m (eq :: eqs) -> Is_well_sch m eqs.
+  forall m argIn eq eqs, Is_well_sch m argIn (eq :: eqs) -> Is_well_sch m argIn eqs.
 Proof. inversion 1; auto. Qed.
 
 Lemma Is_well_sch_free_variable:
-  forall x eq eqs mems,
-    Is_well_sch mems (eq :: eqs)
+  forall argIn x eq eqs mems,
+    Is_well_sch mems argIn (eq :: eqs)
     -> Is_free_in_equation x eq
     -> ~ PS.In x mems
-    -> Is_variable_in x eqs.
+    -> Is_variable_in x eqs \/ x = argIn.
 Proof.
-  intros x eq eqs mems Hwsch Hfree Hnim.
+  intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
     inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
     inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
@@ -111,13 +114,13 @@ Proof.
 Qed.
 
 Lemma Is_well_sch_free_variable_in_mems:
-  forall y eq eqs mems,
-    Is_well_sch mems (eq :: eqs)
+  forall argIn y eq eqs mems,
+    Is_well_sch mems argIn (eq :: eqs)
     -> Is_free_in_equation y eq
     -> PS.In y mems
     -> ~Is_defined_in y eqs.
 Proof.
-  intros x eq eqs mems Hwsch Hfree Hnim.
+  intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
     inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
     inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
@@ -128,13 +131,13 @@ Proof.
 Qed.
 
 Lemma Is_wsch_is_defined_in:
-  forall x eq eqs mems,
-    Is_well_sch mems (eq :: eqs) ->
+  forall x eq eqs mems argIn,
+    Is_well_sch mems argIn (eq :: eqs) ->
     Is_defined_in x (eq :: eqs) ->
     Is_defined_in_eq x eq
     \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
 Proof.
-  intros x eq eqs mems Hwsch Hdef.
+  intros x eq eqs mems argIn Hwsch Hdef.
   apply List.Exists_cons in Hdef.
   destruct (Is_defined_in_eq_dec x eq); intuition.
 Qed.
@@ -148,7 +151,7 @@ Inductive Welldef_global : list node -> Prop :=
       let eqs := nd.(n_eqs) in
       let ni := nd.(n_input) in
       let no := nd.(n_output) in
-      Is_well_sch (PS.add ni (memories eqs)) eqs
+      Is_well_sch (memories eqs) ni eqs
       -> ~Is_defined_in ni eqs
       -> Is_variable_in no eqs
       -> ~Is_node_in nd.(n_name) eqs

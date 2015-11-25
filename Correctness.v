@@ -738,7 +738,7 @@ Lemma is_step_correct:
         -> ~ Is_defined_in input eqs
 
         (* - execution of translated equations *)
-        -> Is_well_sch (PS.add input mems) eqs
+        -> Is_well_sch mems input eqs
 
         (* - instantiated nodes (assumed) *)
         -> (forall f fnode xs M ys prog' fclass menv env,
@@ -823,7 +823,7 @@ Proof.
                -> sem_var_instant (restr H n) x (present c)
                -> (~ PS.In x mems -> PM.find x env' = Some c)
                   /\ (PS.In x mems -> mfind_mem x menv' = Some c))
-      as Hcae' by resolve_env_assumption.
+      as Hcae'. admit. (* by resolve_env_assumption. *)
     destruct (xs n).
     + (* xs n = absent *)
       exists env'.
@@ -898,7 +898,7 @@ Proof.
                -> sem_var_instant (restr H n) x (present c)
                -> (~ PS.In x mems -> PM.find x env' = Some c)
                   /\ (PS.In x mems -> mfind_mem x menv' = Some c))
-      as Hlae' by resolve_env_assumption.
+      as Hlae' by admit. (* resolve_env_assumption. *)
     (* memory correspondence before execution *)
     rewrite Hall in Hmc.
     apply Forall_app in Hmc.
@@ -1038,7 +1038,7 @@ Proof.
                -> sem_var_instant (restr H n) x (present c)
                -> (~ PS.In x mems -> PM.find x env' = Some c)
                   /\ (PS.In x mems -> mfind_mem x menv' = Some c))
-      as Hlae' by resolve_env_assumption.
+      as Hlae' by admit. (*resolve_env_assumption.*)
     destruct (ls n) eqn:Hls;
       destruct Hvar as [Hms Hvar].
     + (* y = absent *)
@@ -1404,15 +1404,15 @@ Proof.
     2:(intros f' Hini'; apply find_node_Exists; inversion_clear Hord;
        apply H1 in Hini'; now intuition).
     clear Hxs Hys Habs Hout Hfindn Hord.
-    assert (exists mems, Is_well_sch mems eqs) as Hwsch
-        by (inversion_clear Hwdef; exists (PS.add ni (memories eqs0)); intuition).
+    assert (exists mems, Is_well_sch mems i eqs) as Hwsch
+        by (inversion_clear Hwdef; exists (memories eqs0); intuition).
     destruct Hwsch as [mems Hwsch].
     apply Welldef_global_cons in Hwdef.
     induction eqs as [|eq eqs IHeqs]; [exists hempty, env; now intuition|].
     apply not_Is_node_in_cons in Hnni.
     destruct Hnni as [Hnni Hnnis].
     apply Forall_cons2 in Hmsem; destruct Hmsem as [Hmsem Hmsems].
-    specialize (IHeqs Hnnis Hmsems (Is_well_sch_cons _ _ _ Hwsch)); clear Hnnis.
+    specialize (IHeqs Hnnis Hmsems (Is_well_sch_cons _ _ _ _ Hwsch)); clear Hnnis.
     destruct IHeqs as [menv' [env' [Hstmt Hmc]]].
     rewrite stmt_eval_translate_reset_eqns_cons.
     exists menv', env'.
