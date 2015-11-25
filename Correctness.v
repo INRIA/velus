@@ -601,99 +601,6 @@ Proof.
   - apply IH; assumption.
 Qed.
 
-Local Ltac resolve_env_assumption :=
-  let x := fresh in
-  intro x; intros; split; intros;
-  match goal with
-  | Hws: Is_well_sch (PS.add ?input _) _ |- _ =>
-    destruct (ident_eq_dec x input);
-      repeat progress
-             match goal with
-             | H: exists _, _ |- _ => destruct H
-             | H: _ /\ _ |- _ => destruct H
-
-             | H:   ~PS.In x _,
-               Hin: x=input,
-               Hws: Is_well_sch _ (_ :: _) |- _ =>
-                 subst;
-                 apply Is_well_sch_free_variable_in_mems with input _ _ _ in Hws;
-                 [| auto | apply PS.add_spec; auto ]
-
-             | H1: x = input, H2: PS.In x ?mems |- _ =>
-               rewrite H1 in H2; contradiction
-
-             | H:   ~PS.In x _,
-               Hin: x<>input,
-               Hws: Is_well_sch _ (_ :: _) |- _ =>
-                 apply Is_well_sch_free_variable with x _ _ _ in Hws;
-                 [ | auto | intro HH; apply PS.add_spec in HH; intuition ]
-
-             | H0:~Is_defined_in _ _,
-               H1: stmt_eval _ _ _ _ _ |- _ =>
-                 apply not_Is_defined_in_not_Is_variable_in in H0;
-                 apply stmt_eval_translate_eqns_env_inv with (1:=H1) in H0;
-                 rewrite H0
-
-             | H:forall c:const, sem_var_instant _ _ _ <-> PM.find ?x ?env = _
-                                 |- PM.find ?x ?env = _ => now (apply H)
-
-             | Hv: forall x' : ident,
-                 Is_variable_in x' ?eqs ->
-                                forall c' : const,
-                                  sem_var_instant ?R x' (present c')
-                                  <-> PM.find x' ?env = Some c',
-               Hs: sem_var_instant ?R ?x (present ?c)
-               |-  PM.find ?x ?env = Some ?c => apply Hv; assumption
-
-             | Hin: PS.In ?x ?mems,
-               Hm: forall x, PS.In x ?mems -> _ /\ _
-               |- mfind_mem ?x ?menv = Some _ =>
-               specialize (Hm _ Hin)
-
-             | H1: Is_defined_in ?x ?eqs,
-               H2: ~Is_variable_in ?x ?eqs,
-               H3: sem_var_instant ?R ?x (present ?c),
-               H4: List.Forall (msem_equation ?G ?H ?M) ?eqs
-               |- mfind_mem ?x ?menv = Some _ =>
-               apply Is_memory_in_msem_var with (1:=H1) (2:=H2) (3:=H3) in H4
-
-             | H1: ?ms ?n = ?c |- mfind_mem ?x ?menv = Some ?c => rewrite <- H1
-
-             | Hin: PS.In ?x ?mems,
-               Hwsch: Is_well_sch _ (_ :: _)
-               |- mfind_mem ?x _ = Some _ =>
-               inversion_clear Hwsch;
-                 match goal with
-                 | HH: forall i, ?isfreein i ?e -> ?Pvar /\ ?Pmem,
-                   Hf: ?isfreein ?x ?e |- _  => apply HH in Hf; destruct Hf
-                 end
-
-             | H1: ?xs ?n = ?c,
-               H2: mfind_mem ?x ?menv = Some (?xs ?n)
-               |- mfind_mem ?x ?menv = Some ?c =>
-               rewrite H1 in H2; exact H2
-
-             | Hin: PS.In ?x ?mems,
-               HH: PS.In ?x (PS.add _ ?mems) -> _ |- mfind_mem _ _ = Some _ =>
-               eapply or_intror in Hin;
-                 apply PS.add_spec in Hin;
-                 specialize (HH Hin)
-
-             | Hnd: ~Is_defined_in ?x ?eqs,
-               Hstmt: stmt_eval _ _ _ (translate_eqns ?mems ?eqs) (?menv', _)
-               |- mfind_mem ?x ?menv' = _ =>
-               apply stmt_eval_translate_eqns_menv_inv with (2:=Hnd) in Hstmt;
-                 rewrite Hstmt
-
-             | Hidi: Is_defined_in ?x ?all,
-               Hnvi: ~Is_variable_in ?x ?all,
-               Hmc: Forall (Memory_Corres_eq _ ?n _ ?menv) ?all,
-               Hmfind: mfind_mem ?x _ = Some ?vs
-               |- mfind_mem ?x ?menv = Some (?vs ?n) =>
-               now apply Is_memory_in_Memory_Corres_eqs
-               with (1:=Hidi) (2:=Hnvi) (3:=Hmc) (4:=Hmfind)
-             end
-  end.
 
 (** ** Validity of [translate_eqns] *)
 
@@ -810,7 +717,7 @@ Proof.
   apply Forall_cons2 in Hsems'.
   destruct Hsems' as [Hsem Hsems'].
 
-  inversion Hsem as [H0 M0 x xs cae Hvar Hcae HR1 HR2 HR3
+  inversion Hsem as [H0 M0 i xs cae Hvar Hcae HR1 HR2 HR3
                     |H0 M0 y f Mo lae ls xs Hmfind Hlae Hvar Hmsem HR1 HR2 HR3
                     |H0 M0 ms y ls yS v0 lae Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
     (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0);
@@ -818,12 +725,37 @@ Proof.
   - (* Case EqDef: y = cae *)
     exists menv'. (* the memory does not change *)
     specialize (Hcae n); simpl in *.
-    assert (forall x c,
+    assert (forall x c, 
                Is_free_in_caexp x cae
-               -> sem_var_instant (restr H n) x (present c)
-               -> (~ PS.In x mems -> PM.find x env' = Some c)
-                  /\ (PS.In x mems -> mfind_mem x menv' = Some c))
-      as Hcae'. admit. (* by resolve_env_assumption. *)
+            -> sem_var_instant (restr H n) x (present c)
+            -> (~ PS.In x mems -> PM.find x env' = Some c)
+               /\ (PS.In x mems -> mfind_mem x menv' = Some c))
+      as Hcae'. {
+      intros. 
+      split; intro Hmems.
+
+      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input)
+          by (eapply Is_well_sch_free_variable;
+              eassumption || constructor (assumption)). 
+
+        destruct Hdecide_x; try subst x.
+        + apply IHeqs0; assumption.
+        + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
+          apply Hin; assumption.
+          apply not_Is_defined_in_not_Is_variable_in.
+          apply not_Is_defined_in_cons in Hin2; destruct Hin2; assumption.
+          
+      - assert (~ Is_defined_in x eqs) 
+          by (eapply Is_well_sch_free_variable_in_mems; 
+              eassumption || constructor (assumption)).
+        specialize (Hinmems _ Hmems); destruct Hinmems.
+        erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
+        eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
+        assert (Is_defined_in x alleqs) by intuition.
+        assert (~ Is_variable_in x alleqs) by intuition.
+        erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
+    }
+
     destruct (xs n).
     + (* xs n = absent *)
       exists env'.
@@ -834,7 +766,7 @@ Proof.
         exists menv', env'.
         split; [exact Hstmt|].
         apply stmt_eval_Control_absent.
-        apply clock_correct_false with (2:=Hclk); now auto.
+        eapply clock_correct_false; eauto. 
       * intros x0 Hivi c.
         (* TODO: do we really need this [destruct]? It seems that we *know* that it cannot be a variable (proof by [contradiction]/[discriminate]).
                  If not, remove dependency on [Dataflow.IsVariable.Decide] *)
@@ -847,7 +779,7 @@ Proof.
         inversion_clear Hivi'.
         split; intro Hsv'.
         assert (present c = absent) by sem_det. discriminate.
-        assert (PM.find x env = None).
+        assert (PM.find i env = None).
         apply Henv; now repeat constructor.
         rewrite Hsv' in *; discriminate.
       * rewrite Hall in Hmc.
@@ -856,7 +788,7 @@ Proof.
         inversion_clear Hmc.
         repeat constructor; assumption.
     + (* xs n = present *)
-      exists (PM.add x v env').
+      exists (PM.add i v env').
       inversion Hcae as [? ? ? Hcexp Hclk HR1 HR2|];
         rewrite <-HR1 in *; clear HR1 HR2 c.
       split; [|split].
@@ -874,7 +806,7 @@ Proof.
                sem_det).
             congruence.
           - injection HH; intro Heq. subst. assumption. }
-        { destruct (ident_eq_dec x0 x) as [Hxy|Hnxy].
+        { destruct (ident_eq_dec x0 i) as [Hxy|Hnxy].
           - rewrite Hxy in *; clear Hxy.
             rewrite PM.gss.
             split; intro Hsv'.
@@ -898,7 +830,32 @@ Proof.
                -> sem_var_instant (restr H n) x (present c)
                -> (~ PS.In x mems -> PM.find x env' = Some c)
                   /\ (PS.In x mems -> mfind_mem x menv' = Some c))
-      as Hlae' by admit. (* resolve_env_assumption. *)
+      as Hlae'. {
+      intros.
+      split; intro Hmems.
+
+      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input) 
+          by (eapply Is_well_sch_free_variable;
+              eassumption || constructor (assumption)). 
+
+        destruct Hdecide_x; try subst x.
+        + apply IHeqs0; assumption.
+        + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
+          apply Hin; assumption.
+          apply not_Is_defined_in_not_Is_variable_in.
+          apply not_Is_defined_in_cons in Hin2; destruct Hin2; assumption.
+          
+      - assert (~ Is_defined_in x eqs) 
+          by (eapply Is_well_sch_free_variable_in_mems; 
+              eassumption || constructor (assumption)).
+        specialize (Hinmems _ Hmems); destruct Hinmems.
+        erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
+        eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
+        assert (Is_defined_in x alleqs) by intuition.
+        assert (~ Is_variable_in x alleqs) by intuition.
+        erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
+    }
+
     (* memory correspondence before execution *)
     rewrite Hall in Hmc.
     apply Forall_app in Hmc.
@@ -1038,7 +995,32 @@ Proof.
                -> sem_var_instant (restr H n) x (present c)
                -> (~ PS.In x mems -> PM.find x env' = Some c)
                   /\ (PS.In x mems -> mfind_mem x menv' = Some c))
-      as Hlae' by admit. (*resolve_env_assumption.*)
+      as Hlae'. {
+      intros.
+      split; intro Hmems.
+
+      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input) 
+          by (eapply Is_well_sch_free_variable;
+              eassumption || constructor (assumption)). 
+
+        destruct Hdecide_x; try subst x.
+        + apply IHeqs0; assumption.
+        + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
+          apply Hin; assumption.
+          apply not_Is_defined_in_not_Is_variable_in.
+          apply not_Is_defined_in_cons in Hin2; destruct Hin2; assumption.
+          
+      - assert (~ Is_defined_in x eqs) 
+          by (eapply Is_well_sch_free_variable_in_mems; 
+              eassumption || constructor (assumption)).
+        specialize (Hinmems _ Hmems); destruct Hinmems.
+        erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
+        eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
+        assert (Is_defined_in x alleqs) by intuition.
+        assert (~ Is_variable_in x alleqs) by intuition.
+        erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
+    }
+
     destruct (ls n) eqn:Hls;
       destruct Hvar as [Hms Hvar].
     + (* y = absent *)
