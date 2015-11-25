@@ -2,6 +2,7 @@
 -install none
 Common.v
 Example.v
+JoinIfte.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
 Dataflow/IsFree.v
@@ -11,6 +12,7 @@ Dataflow/IsVariable/Decide.v
 Dataflow/IsDefined.v
 Dataflow/IsDefined/Decide.v
 Dataflow/Memories.v
+Dataflow/Clocking.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v

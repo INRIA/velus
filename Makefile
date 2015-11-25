@@ -81,6 +81,7 @@ VFILES:=Heap.v\
   Dataflow/WellFormed.v\
   Dataflow/MemSemantics.v\
   Dataflow/Semantics.v\
+  Dataflow/Clocking.v\
   Dataflow/Memories.v\
   Dataflow/IsDefined/Decide.v\
   Dataflow/IsDefined.v\
@@ -90,6 +91,7 @@ VFILES:=Heap.v\
   Dataflow/IsFree.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
+  JoinIfte.v\
   Example.v\
   Common.v
 

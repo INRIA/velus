@@ -372,14 +372,14 @@ Qed.
 *)
 Lemma translate_eqns_Ifte_free_write:
   forall input mems eqs,
-    Is_well_sch (PS.add input mems) eqs
+    Is_well_sch mems input eqs
     -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
     -> ~ Is_defined_in input eqs
     -> Ifte_free_write (translate_eqns mems eqs).
 Proof.
   intros input mems eqs Hwsch Hnvi Hnin.
   induction eqs as [|eq eqs IH]; [cbv; now constructor|].
-  specialize (IH (Is_well_sch_cons _ _ _ Hwsch)).
+  specialize (IH (Is_well_sch_cons _ _ _ _ Hwsch)).
   unfold translate_eqns.
   simpl; apply Ifte_free_write_fold_left_shift.
   split.
@@ -401,11 +401,11 @@ Proof.
         destruct Hfree as [Hm Hnm].
         assert (x <> input) as Hninp
             by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor).
-        assert (~PS.In x (PS.add input mems)) as Hnxm'
-            by (rewrite PS.add_spec; now intuition).
+        assert (~PS.In x mems) as Hnxm' by intuition.
         intro Hxi; rewrite Hxi in *; clear Hxi.
         specialize (Hnm Hnxm').
         apply Hndef.
+        destruct Hnm as [Hnm|Hnm]; [|now intuition].
         apply Is_variable_in_Is_defined_in with (1:=Hnm). }
       destruct e as [ck ce].
       apply Ifte_free_write_Control_caexp.
@@ -423,11 +423,11 @@ Proof.
         destruct Hfree as [Hm Hnm].
         assert (x <> input) as Hninp
             by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor).
-        assert (~PS.In x (PS.add input mems)) as Hnxm'
-            by (rewrite PS.add_spec; now intuition).
+        assert (~PS.In x mems) as Hnxm' by intuition.
         intro Hxi; rewrite Hxi in *; clear Hxi.
         specialize (Hnm Hnxm').
         apply Hndef.
+        destruct Hnm as [Hnm|Hnm]; [|now intuition].
         apply Is_variable_in_Is_defined_in with (1:=Hnm). }
       destruct e as [ck ce].
       apply Ifte_free_write_Control_laexp
@@ -436,6 +436,6 @@ Proof.
       intros i Hfree Hcw.
       apply Hfni in Hfree.
       inversion Hcw; subst; apply Hfree; reflexivity.
-    + admit. (* fby *)
+    + admit. (* TODO: treat fby *)
 Qed.
 

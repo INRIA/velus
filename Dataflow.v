@@ -9,3 +9,4 @@ Require Export Dataflow.MemSemantics.
 Require Export Dataflow.WellFormed.
 Require Export Dataflow.Ordered.
 Require Export Dataflow.NoDup.
+Require Export Dataflow.Clocking.
