@@ -8,9 +8,10 @@ Require Import Rustre.Dataflow.Syntax.
 
 (** 
 
-For a program to be meaningful, it must satisfy the [Ordered_nodes]
-predicate, which states that a node may only call nodes that were
-defined earlier.
+The compilation of a whole program is only correct if that program satisfies
+the [Ordered_nodes] predicate, which states that a node may only call nodes
+that were defined earlier. The order is unimportant in a Dataflow program,
+but it is important in an imperative program.
 
  *)
 
