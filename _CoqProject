@@ -1,9 +1,9 @@
 -R . Rustre
 -install none
 Common.v
+Example.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
-Dataflow/Example.v
 Dataflow/IsFree.v
 Dataflow/IsFree/Decide.v
 Dataflow/IsVariable.v
@@ -15,7 +15,6 @@ Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v
 Dataflow/WellFormed/Decide.v
-Dataflow/WellFormed/Example.v
 Dataflow/Ordered.v
 Dataflow/NoDup.v
 Dataflow.v
@@ -23,7 +22,6 @@ Minimp/Syntax.v
 Minimp/Semantics.v
 Minimp.v
 Translation.v
-Translation/Example.v
 Correctness/Proper.v
 Correctness/IsPresent.v
 Correctness/MemoryCorres.v
