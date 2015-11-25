@@ -15,7 +15,7 @@ Require Import Rustre.Dataflow.Syntax.
  *)
 
 (* TODO: give an inductive specification instead? *)
-
+(* TB: Why? We need something executable. *)
 
 
 Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
