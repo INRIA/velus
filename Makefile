@@ -67,9 +67,9 @@ COQCHK?="$(COQBIN)coqchk"
 
 VFILES:=Heap.v\
   Correctness.v\
-  Translation/MemoryCorres.v\
-  Translation/IsPresent.v\
-  Translation/Proper.v\
+  Correctness/MemoryCorres.v\
+  Correctness/IsPresent.v\
+  Correctness/Proper.v\
   Translation/Example.v\
   Translation.v\
   Minimp.v\

@@ -15,9 +15,9 @@ Require Import Rustre.Dataflow.IsDefined.Decide.
 
 Require Import Rustre.Minimp.
 Require Import Rustre.Translation.
-Require Import Rustre.Translation.Proper.
-Require Import Rustre.Translation.IsPresent.
-Require Import Rustre.Translation.MemoryCorres.
+Require Import Rustre.Correctness.Proper.
+Require Import Rustre.Correctness.IsPresent.
+Require Import Rustre.Correctness.MemoryCorres.
 
 
 (* TODO:
