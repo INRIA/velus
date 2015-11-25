@@ -6,7 +6,7 @@ Open Scope list_scope.
 
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
-Require Import Rustre.Dataflow.IsMemory.
+Require Import Rustre.Dataflow.Memories.
 
 (**
 

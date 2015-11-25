@@ -10,7 +10,7 @@ Dataflow/IsVariable.v
 Dataflow/IsVariable/Decide.v
 Dataflow/IsDefined.v
 Dataflow/IsDefined/Decide.v
-Dataflow/IsMemory.v
+Dataflow/Memories.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v
