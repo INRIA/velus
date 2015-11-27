@@ -329,57 +329,55 @@ Proof.
 Qed.
 
 Lemma Ifte_free_write_Control_laexp:
-  forall mems ck f le,
-    (forall i, Is_free_in_laexp i (LAexp ck le) -> ~Can_write_in i (f le))
-    -> Ifte_free_write (f le)
-    -> Ifte_free_write (Control mems ck (f le)).
+  forall mems ck s,
+    (forall i, Is_free_in_clock i ck -> ~Can_write_in i s)
+    -> Ifte_free_write s
+    -> Ifte_free_write (Control mems ck s).
 Proof.
   induction ck as [|ck IH i b]; [now intuition|].
-  intros f le Hxni Hfce.
+  intros s Hxni Hfce.
   simpl.
-  destruct b.
-  - apply IH with (f:=fun le=>Ifte (tovar mems i) (f le) Skip).
-    + intros j Hfree Hcw.
-      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-      inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
-        [assumption|inversion Hskip].
-    + repeat constructor; [assumption| |now inversion 1].
-      apply Hxni.
-      match goal with
-      | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
+  destruct b; apply IH.
+  - intros j Hfree Hcw.
+    apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+    inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
+      [assumption|inversion Hskip].
+  - repeat constructor; [assumption| |now inversion 1].
+    apply Hxni.
+    match goal with
+    | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
+    end.
+    unfold tovar in Hfree.
+    destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+  - intros j Hfree Hcw.
+    apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+    inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
+      [inversion Hskip|assumption].
+  - repeat constructor; [assumption|now inversion 1|].
+    apply Hxni.
+    match goal with
+    | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
       end.
-      unfold tovar in Hfree.
-      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-  - apply IH with (f:=fun le=>Ifte (tovar mems i) Skip (f le)).
-    + intros j Hfree Hcw.
-      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-      inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
-        [inversion Hskip|assumption].
-    + repeat constructor; [assumption|now inversion 1|].
-      apply Hxni.
-      match goal with
-      | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-      end.
-      unfold tovar in Hfree.
-      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+    unfold tovar in Hfree.
+    destruct (PS.mem i mems); inversion Hfree; subst; now auto.
 Qed.
 
-(* TODO: The inclusion of input here is ugly. Try to remove with Pierre.
-         Problem: mems has two roles:
-                  1. In Is_well_sch: dependencies that do not occur 'at right',
-                                     i.e., that are not already executed.
-                  2. In translate_eqns: determines how variables are translated.
-*)
+Require Import Rustre.Dataflow.Clocking.
+Require Import Rustre.Dataflow.Clocking.Properties.
+
 Lemma translate_eqns_Ifte_free_write:
-  forall input mems eqs,
-    Is_well_sch mems input eqs
+  forall C mems input eqs,
+    Well_clocked_env C
+    -> Forall (Well_clocked_eq C) eqs
+    -> Is_well_sch mems input eqs
     -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
     -> ~ Is_defined_in input eqs
     -> Ifte_free_write (translate_eqns mems eqs).
 Proof.
-  intros input mems eqs Hwsch Hnvi Hnin.
-  induction eqs as [|eq eqs IH]; [cbv; now constructor|].
-  specialize (IH (Is_well_sch_cons _ _ _ _ Hwsch)).
+  intros C mems input eqs Hwk Hwks Hwsch Hnvi Hnin.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
+  specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
   unfold translate_eqns.
   simpl; apply Ifte_free_write_fold_left_shift.
   split.
@@ -390,7 +388,7 @@ Proof.
     + apply not_Is_defined_in_cons in Hnin.
       now intuition.
   - clear IH.
-    constructor; [|now constructor].
+    repeat constructor.
     destruct eq as [x e|x f e|x v0 e]; simpl.
     + assert (~PS.In x mems) as Hnxm
           by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
@@ -414,28 +412,47 @@ Proof.
       apply Hfni with (1:=Hfree).
       apply (Ifte_free_write_translate_cexp).
       intros i Hfree; apply Hfni; intuition.
-    + assert (~PS.In x mems) as Hnxm
-          by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-      inversion_clear Hwsch as [| |? ? ? ? Hwsch' HH Hndef|].
-      assert (forall i, Is_free_in_laexp i e -> x <> i) as Hfni.
-      { intros i Hfree.
-        apply HH in Hfree.
-        destruct Hfree as [Hm Hnm].
-        assert (x <> input) as Hninp
-            by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor).
-        assert (~PS.In x mems) as Hnxm' by intuition.
-        intro Hxi; rewrite Hxi in *; clear Hxi.
-        specialize (Hnm Hnxm').
-        apply Hndef.
-        destruct Hnm as [Hnm|Hnm]; [|now intuition].
-        apply Is_variable_in_Is_defined_in with (1:=Hnm). }
-      destruct e as [ck ce].
-      apply Ifte_free_write_Control_laexp
-      with (f:=fun le=>Step_ap x f x (translate_lexp mems le));
-        [|now constructor].
-      intros i Hfree Hcw.
-      apply Hfni in Hfree.
-      inversion Hcw; subst; apply Hfree; reflexivity.
-    + admit. (* TODO: treat fby *)
+    + destruct e as [ck e].
+      assert (~Is_free_in_clock x ck) as Hnfree
+          by (apply Well_clocked_EqApp_not_Is_free_in_clock
+              with (1:=Hwk) (2:=Hwkeq));
+      apply Ifte_free_write_Control_laexp;
+      [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
+    + destruct e as [ck e];
+      assert (~Is_free_in_clock x ck) as Hnfree
+          by (apply Well_clocked_EqFby_not_Is_free_in_clock
+              with (1:=Hwk) (2:=Hwkeq));
+      apply Ifte_free_write_Control_laexp;
+      [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
 Qed.
+
+(*
+   The property "Ifte_free_write (translate_eqns mems eqs)" is obtained above
+   using scheduling assumptions for EqDef, since they are needed to treat
+   the translation of merge expressions, and clocking assumptions for EqApp and
+   EqFby. While the EqApp case can also be obtained from the scheduling
+   assumptions alone, the EqFby case cannot. Consider the equations:
+      y = (true when x) :: Con Cbase x true
+      x = true fby y    :: Con Cbase x true
+
+   These equations and their clocks are incorrect, since "Con Cbase x"
+   requires that the clock of x be "Cbase", whereas the second equation
+   requires that it be "Con Cbase x true". Still, we could try compiling
+   them program:
+      if x { y = true };
+      if x { mem(x) = y }
+
+   This program is well scheduled, but it does not satisfy the invariant
+   Ifte_free_write. We could imagine a weaker invariant that allows the
+   right-most write under an expression to change free variables in the
+   expression, which suffices to justify the optimisation, but the
+   preservation of this invariant under the optimisation likely becomes much
+   trickier to prove. And, in any case, such programs are fundamentally
+   incorrect.
+
+   What about trying to reject such programs using sem_node rather than
+   introducing clocking assumptions? The problem is that certain circular
+   programs (like the one above) still have a semantics (since x and y
+   are effectively always present).
+*)
 
