@@ -13,6 +13,8 @@ Dataflow/IsDefined.v
 Dataflow/IsDefined/Decide.v
 Dataflow/Memories.v
 Dataflow/Clocking.v
+Dataflow/Clocking/Parents.v
+Dataflow/Clocking/Properties.v
 Dataflow/Semantics.v
 Dataflow/MemSemantics.v
 Dataflow/WellFormed.v
