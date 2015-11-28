@@ -59,16 +59,16 @@ Inductive msem_equation G: history -> memory -> equation -> Prop :=
       msem_node G f ls M' xs ->
       msem_equation G H M (EqApp x f arg)
 | SEqFby:
-    forall H M ms x ls xS v0 lae,
+    forall H M ms x ls xs v0 lae,
       mfind_mem x M = Some ms ->
       ms 0 = v0 ->
       sem_laexp H lae ls ->
-      sem_var H x xS ->
+      sem_var H x xs ->
       (forall n, match ls n with
                  | absent    => ms (S n) = ms n              (* held *)
-                                /\ xS n = absent
+                                /\ xs n = absent
                  | present v => ms (S n) = v
-                                /\ xS n = present (ms n)
+                                /\ xs n = present (ms n)
                  end) ->
       msem_equation G H M (EqFby x v0 lae)
 
