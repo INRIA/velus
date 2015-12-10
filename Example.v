@@ -11,9 +11,6 @@ Require Import Rustre.Dataflow.Memories.
 Require Import Rustre.Dataflow.WellFormed.
 Require Import Rustre.Dataflow.WellFormed.Decide.
 
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Translation.
-
 (* TODO: not properly clocked... *)
 Example eqns1 : list equation :=
   [
@@ -58,9 +55,9 @@ Proof.
   assumption.
 Qed.
 
-
-
 (** Translation *)
+Require Import Rustre.Minimp.Syntax.
+Require Import Rustre.Translation.
 
 (* Eval cbv in (translate_node node1). *)
 
@@ -76,7 +73,6 @@ Proof eq_refl.
 
 Example reset1 : stmt :=
   translate_reset_eqns eqns1.
-
 
 (* Eval cbv in (translate_node node2). *)
 
@@ -100,4 +96,20 @@ Example class2 : class :=
 
 Remark prog2_good : translate_node node2 = class2.
 Proof eq_refl.
+
+(** Optimization *)
+
+Require Import Rustre.FuseIfte.
+
+Example prog1' : stmt :=
+  Ifte (Var 1)
+       (Comp (Assign 2 (Const (Cint 7)))
+             (Assign 4 (Var 2)))
+       (Comp (Assign 4 (State 3))
+             (AssignSt 3 (Var 2))).
+
+Remark prog1'_is_fused: (ifte_fuse prog1 = prog1').
+Proof eq_refl.
+
+(* TODO: Show correctness of prog1' *)
 

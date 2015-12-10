@@ -44,6 +44,40 @@ Inductive const : Set :=
 | Cint : BinInt.Z -> const
 | Cbool : bool -> const.
 
+Definition const_eqb (c1: const) (c2: const) : bool :=
+  match c1, c2 with
+  | Cint z1, Cint z2 => BinInt.Z.eqb z1 z2
+  | Cbool b1, Cbool b2 => Bool.eqb b1 b2
+  | _, _ => false
+  end.
+
+Lemma const_eqb_eq:
+  forall (c1 c2: const),
+    const_eqb c1 c2 = true <-> c1 = c2.
+Proof.
+  split.
+  - destruct c1, c2; simpl; intro H; try discriminate.
+    + apply BinInt.Z.eqb_eq in H; rewrite H; reflexivity.
+    + apply Bool.eqb_prop in H; rewrite H; reflexivity.
+  - destruct c1, c2; simpl; intro H0; try discriminate H0.
+    + injection H0.
+      intro H1; rewrite H1.
+      destruct z, z0; simpl;
+      (reflexivity || discriminate || (apply Pos.eqb_eq; reflexivity)).
+    + injection H0.
+      intro H1; rewrite H1.
+      destruct b, b0; simpl; try reflexivity.
+Qed.
+
+Lemma const_eq_dec: forall (c1 c2: const), {c1=c2}+{c1<>c2}.
+Proof.
+  intros c1 c2.
+  destruct (const_eqb c1 c2) eqn:Heq; [left|right].
+  apply const_eqb_eq; assumption.
+  intro H; apply const_eqb_eq in H.
+  rewrite Heq in H; discriminate.
+Qed.
+
 Lemma Forall_cons2:
   forall A P (x: A) l,
     List.Forall P (x :: l) <-> P x /\ List.Forall P l.

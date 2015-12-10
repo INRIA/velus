@@ -72,6 +72,7 @@ VFILES:=Heap.v\
   Correctness/Proper.v\
   Translation.v\
   Minimp.v\
+  Minimp/Equiv.v\
   Minimp/Semantics.v\
   Minimp/Syntax.v\
   Dataflow.v\
@@ -93,7 +94,7 @@ VFILES:=Heap.v\
   Dataflow/IsFree.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
-  JoinIfte.v\
+  FuseIfte.v\
   Example.v\
   Common.v
 

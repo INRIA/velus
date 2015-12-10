@@ -4,7 +4,7 @@ Require Import Rustre.Common.
 Import List.ListNotations.
 Open Scope list_scope.
 
-(** 
+(**
 
   Minimp is a minimal object-oriented programming language exposing
   two methods: [step] and [reset].
@@ -68,4 +68,47 @@ Definition find_class (n: ident) : program -> option (class * list class) :=
     | [] => None
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
     end.
+
+Definition exp_eqb (e1: exp) (e2: exp) : bool :=
+  match e1, e2 with
+  | Var x1, Var x2 => ident_eqb x1 x2
+  | State s1, State s2 => ident_eqb s1 s2
+  | Const c1, Const c2 => const_eqb c1 c2
+  | _, _ => false
+  end.
+
+Lemma exp_eqb_eq:
+  forall e1 e2,
+    exp_eqb e1 e2 = true <-> e1 = e2.
+Proof.
+  split.
+  - destruct e1, e2; simpl; intro H0;
+    (try discriminate || (apply ident_eqb_eq in H0
+                          || apply const_eqb_eq in H0;
+                          rewrite H0; reflexivity)).
+  - destruct e1, e2; simpl; intro H0;
+    discriminate
+    || (injection H0; intro H1; rewrite H1;
+        apply ident_eqb_eq || apply const_eqb_eq; reflexivity).
+Qed.
+
+Lemma exp_eqb_neq:
+  forall e1 e2,
+    exp_eqb e1 e2 = false <-> e1 <> e2.
+Proof.
+  split; intro HH.
+  - intro Heq; apply exp_eqb_eq in Heq; rewrite Heq in HH; discriminate.
+  - apply Bool.not_true_iff_false.
+    intro Htrue; apply exp_eqb_eq in Htrue; intuition.
+Qed.
+
+Lemma exp_eq_dec: forall (e1: exp) (e2: exp), {e1 = e2}+{e1 <> e2}.
+Proof.
+  intros e1 e2.
+  destruct (exp_eqb e1 e2) eqn:Heq; [left|right].
+  apply exp_eqb_eq; assumption.
+  intro H; apply exp_eqb_eq in H.
+  rewrite Heq in H; discriminate.
+Qed.
+
 
