@@ -480,7 +480,7 @@ Proof.
   change (exp_eval menv env (translate_lexp memories ce) c).
   eapply lexp_correct; try eassumption.
   intros; apply Henv.
-  + constructor (assumption). 
+  + constructor (assumption).
   + assumption.
 Qed.
 
@@ -725,18 +725,18 @@ Proof.
   - (* Case EqDef: y = cae *)
     exists menv'. (* the memory does not change *)
     specialize (Hcae n); simpl in *.
-    assert (forall x c, 
+    assert (forall x c,
                Is_free_in_caexp x cae
             -> sem_var_instant (restr H n) x (present c)
             -> (~ PS.In x mems -> PM.find x env' = Some c)
                /\ (PS.In x mems -> mfind_mem x menv' = Some c))
       as Hcae'. {
-      intros. 
+      intros.
       split; intro Hmems.
 
       - assert (Hdecide_x: Is_variable_in x eqs \/ x = input)
           by (eapply Is_well_sch_free_variable;
-              eassumption || constructor (assumption)). 
+              eassumption || constructor (assumption)).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
@@ -744,9 +744,9 @@ Proof.
           apply Hin; assumption.
           apply not_Is_defined_in_not_Is_variable_in.
           apply not_Is_defined_in_cons in Hin2; destruct Hin2; assumption.
-          
-      - assert (~ Is_defined_in x eqs) 
-          by (eapply Is_well_sch_free_variable_in_mems; 
+
+      - assert (~ Is_defined_in x eqs)
+          by (eapply Is_well_sch_free_variable_in_mems;
               eassumption || constructor (assumption)).
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
@@ -766,7 +766,7 @@ Proof.
         exists menv', env'.
         split; [exact Hstmt|].
         apply stmt_eval_Control_absent.
-        eapply clock_correct_false; eauto. 
+        eapply clock_correct_false; eauto.
       * intros x0 Hivi c.
         (* TODO: do we really need this [destruct]? It seems that we *know* that it cannot be a variable (proof by [contradiction]/[discriminate]).
                  If not, remove dependency on [Dataflow.IsVariable.Decide] *)
@@ -810,12 +810,12 @@ Proof.
           - rewrite Hxy in *; clear Hxy.
             rewrite PM.gss.
             split; intro Hsv'.
-            * assert (v = c) 
+            * assert (v = c)
                 by (cut (present v = present c); [injection 1; auto|]; sem_det).
               congruence.
             * injection Hsv'; congruence.
           - erewrite PM.gso; try eassumption.
-            apply IHeqs0; assumption.  
+            apply IHeqs0; assumption.
         }
       * rewrite Hall in Hmc.
         apply Forall_app in Hmc; destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
@@ -834,9 +834,9 @@ Proof.
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input) 
+      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input)
           by (eapply Is_well_sch_free_variable;
-              eassumption || constructor (assumption)). 
+              eassumption || constructor (assumption)).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
@@ -844,9 +844,9 @@ Proof.
           apply Hin; assumption.
           apply not_Is_defined_in_not_Is_variable_in.
           apply not_Is_defined_in_cons in Hin2; destruct Hin2; assumption.
-          
-      - assert (~ Is_defined_in x eqs) 
-          by (eapply Is_well_sch_free_variable_in_mems; 
+
+      - assert (~ Is_defined_in x eqs)
+          by (eapply Is_well_sch_free_variable_in_mems;
               eassumption || constructor (assumption)).
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
@@ -872,7 +872,7 @@ Proof.
     specialize (Hlsn n);
       specialize (Hxsn n);
       specialize (Habs n);
-      specialize (Hout n); 
+      specialize (Hout n);
       simpl in *.
     (* no other instance *)
     assert (~Is_defined_in y eqs) as Hniii
@@ -999,9 +999,9 @@ Proof.
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input) 
+      - assert (Hdecide_x: Is_variable_in x eqs \/ x = input)
           by (eapply Is_well_sch_free_variable;
-              eassumption || constructor (assumption)). 
+              eassumption || constructor (assumption)).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
@@ -1009,9 +1009,9 @@ Proof.
           apply Hin; assumption.
           apply not_Is_defined_in_not_Is_variable_in.
           apply not_Is_defined_in_cons in Hin2; destruct Hin2; assumption.
-          
-      - assert (~ Is_defined_in x eqs) 
-          by (eapply Is_well_sch_free_variable_in_mems; 
+
+      - assert (~ Is_defined_in x eqs)
+          by (eapply Is_well_sch_free_variable_in_mems;
               eassumption || constructor (assumption)).
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
@@ -1227,7 +1227,7 @@ Proof.
     apply Hvar' with (c:=c) in Hout.
     rewrite <- Hout.
     split; intro HH;
-      [ rewrite HH in Ho; exact Ho 
+      [ rewrite HH in Ho; exact Ho
       | sem_det ].
   - econstructor.
     + simpl; rewrite Pos.eqb_refl; reflexivity.
@@ -1607,4 +1607,182 @@ Proof.
   injection Hstmt2; intros; subst.
   now apply Hout.
 Qed.
+
+(** Correctness of optimized code *)
+
+Require Import Minimp.FuseIfte.
+
+Lemma not_Can_write_in_translate_cexp:
+  forall x mems ce i,
+    x <> i -> ~ Can_write_in i (translate_cexp mems x ce).
+Proof.
+  induction ce.
+  - intros j Hxni Hcw.
+    specialize (IHce1 _ Hxni).
+    specialize (IHce2 _ Hxni).
+    inversion_clear Hcw; intuition.
+  - intros j Hxni Hcw.
+    inversion Hcw; intuition.
+Qed.
+
+Lemma Is_free_in_tovar:
+  forall mems i j,
+    Is_free_in_exp j (tovar mems i) <-> i = j.
+Proof.
+  unfold tovar.
+  intros mems i j.
+  destruct (PS.mem i mems); split; intro HH;
+  (inversion_clear HH; reflexivity || subst; now constructor).
+Qed.
+
+Lemma Ifte_free_write_translate_cexp:
+  forall mems x ce,
+    (forall i, Is_free_in_cexp i ce -> x <> i)
+    -> Ifte_free_write (translate_cexp mems x ce).
+Proof.
+  intros mems x ce Hfree.
+  induction ce.
+  - simpl; constructor;
+    [apply IHce1; now auto|apply IHce2; now auto|].
+    intros j Hfree'; split;
+    (apply not_Can_write_in_translate_cexp;
+      apply Is_free_in_tovar in Hfree';
+      subst; apply Hfree; constructor).
+  - now constructor.
+Qed.
+
+Lemma Ifte_free_write_Control_caexp:
+  forall mems ck f ce,
+    (forall i, Is_free_in_caexp i (CAexp ck ce) -> ~Can_write_in i (f ce))
+    -> Ifte_free_write (f ce)
+    -> Ifte_free_write (Control mems ck (f ce)).
+Proof.
+  induction ck as [|ck IH i b]; [now intuition|].
+  intros f ce Hxni Hfce.
+  simpl.
+  destruct b.
+  - apply IH with (f:=fun ce=>Ifte (tovar mems i) (f ce) Skip).
+    + intros j Hfree Hcw.
+      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+      inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
+        [assumption|inversion Hskip].
+    + repeat constructor; [assumption| |now inversion 1].
+      apply Hxni.
+      match goal with
+      | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
+      end.
+      unfold tovar in Hfree.
+      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+  - apply IH with (f:=fun ce=>Ifte (tovar mems i) Skip (f ce)).
+    + intros j Hfree Hcw.
+      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+      inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
+        [inversion Hskip|assumption].
+    + repeat constructor; [assumption|now inversion 1|].
+      apply Hxni.
+      match goal with
+      | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
+      end.
+      unfold tovar in Hfree.
+      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+Qed.
+
+Lemma Ifte_free_write_Control_laexp:
+  forall mems ck s,
+    (forall i, Is_free_in_clock i ck -> ~Can_write_in i s)
+    -> Ifte_free_write s
+    -> Ifte_free_write (Control mems ck s).
+Proof.
+  induction ck as [|ck IH i b]; [now intuition|].
+  intros s Hxni Hfce.
+  simpl.
+  destruct b; apply IH.
+  - intros j Hfree Hcw.
+    apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+    inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
+      [assumption|inversion Hskip].
+  - repeat constructor; [assumption| |now inversion 1].
+    apply Hxni.
+    match goal with
+    | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
+    end.
+    unfold tovar in Hfree.
+    destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+  - intros j Hfree Hcw.
+    apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+    inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
+      [inversion Hskip|assumption].
+  - repeat constructor; [assumption|now inversion 1|].
+    apply Hxni.
+    match goal with
+    | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
+      end.
+    unfold tovar in Hfree.
+    destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+Qed.
+
+Require Import Rustre.Dataflow.Clocking.
+Require Import Rustre.Dataflow.Clocking.Properties.
+
+Lemma translate_eqns_Ifte_free_write:
+  forall C mems input eqs,
+    Well_clocked_env C
+    -> Forall (Well_clocked_eq C) eqs
+    -> Is_well_sch mems input eqs
+    -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
+    -> ~ Is_defined_in input eqs
+    -> Ifte_free_write (translate_eqns mems eqs).
+Proof.
+  intros C mems input eqs Hwk Hwks Hwsch Hnvi Hnin.
+  induction eqs as [|eq eqs IH]; [now constructor|].
+  inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
+  specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
+  unfold translate_eqns.
+  simpl; apply Ifte_free_write_fold_left_shift.
+  split.
+  - apply IH.
+    + intros x Hin; apply Hnvi in Hin.
+      apply not_Is_variable_in_cons in Hin.
+      now intuition.
+    + apply not_Is_defined_in_cons in Hnin.
+      now intuition.
+  - clear IH.
+    repeat constructor.
+    destruct eq as [x e|x f e|x v0 e]; simpl.
+    + assert (~PS.In x mems) as Hnxm
+          by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
+      inversion_clear Hwsch as [|? ? ? Hwsch' HH Hndef| |].
+      assert (forall i, Is_free_in_caexp i e -> x <> i) as Hfni.
+      { intros i Hfree.
+        apply HH in Hfree.
+        destruct Hfree as [Hm Hnm].
+        assert (x <> input) as Hninp
+            by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor).
+        assert (~PS.In x mems) as Hnxm' by intuition.
+        intro Hxi; rewrite Hxi in *; clear Hxi.
+        specialize (Hnm Hnxm').
+        apply Hndef.
+        destruct Hnm as [Hnm|Hnm]; [|now intuition].
+        apply Is_variable_in_Is_defined_in with (1:=Hnm). }
+      destruct e as [ck ce].
+      apply Ifte_free_write_Control_caexp.
+      intros i Hfree.
+      apply (not_Can_write_in_translate_cexp).
+      apply Hfni with (1:=Hfree).
+      apply (Ifte_free_write_translate_cexp).
+      intros i Hfree; apply Hfni; intuition.
+    + destruct e as [ck e].
+      assert (~Is_free_in_clock x ck) as Hnfree
+          by (apply Well_clocked_EqApp_not_Is_free_in_clock
+              with (1:=Hwk) (2:=Hwkeq));
+      apply Ifte_free_write_Control_laexp;
+      [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
+    + destruct e as [ck e];
+      assert (~Is_free_in_clock x ck) as Hnfree
+          by (apply Well_clocked_EqFby_not_Is_free_in_clock
+              with (1:=Hwk) (2:=Hwkeq));
+      apply Ifte_free_write_Control_laexp;
+      [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
+Qed.
+
 

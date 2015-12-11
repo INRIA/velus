@@ -2,7 +2,6 @@
 -install none
 Common.v
 Example.v
-FuseIfte.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
 Dataflow/IsFree.v
@@ -25,6 +24,7 @@ Dataflow.v
 Minimp/Syntax.v
 Minimp/Semantics.v
 Minimp/Equiv.v
+Minimp/FuseIfte.v
 Minimp.v
 Translation.v
 Correctness/Proper.v

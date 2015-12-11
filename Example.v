@@ -99,7 +99,7 @@ Proof eq_refl.
 
 (** Optimization *)
 
-Require Import Rustre.FuseIfte.
+Require Import Rustre.Minimp.FuseIfte.
 
 Example prog1' : stmt :=
   Ifte (Var 1)
