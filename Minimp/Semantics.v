@@ -108,6 +108,15 @@ Scheme stmt_eval_mult := Induction for stmt_eval Sort Prop
 with stmt_step_eval_mult := Induction for stmt_step_eval Sort Prop
 with stmt_reset_eval_mult := Induction for stmt_reset_eval Sort Prop.
 
+(*
+Definition class_eval prog f menv input output menv' :=
+  forall fclass prog' env env',
+    find_class f prog = Some (fclass, prog') ->
+    env = PM.add (c_input fclass) input sempty ->
+    stmt_eval prog' menv env (c_step fclass) (menv', env')
+    /\ PM.find (c_output fclass) env' = Some output.
+*)
+
 (** ** Determinism of semantics *)
 
 Lemma exp_eval_det:

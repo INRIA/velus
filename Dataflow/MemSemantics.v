@@ -85,6 +85,7 @@ with msem_node G: ident -> stream value -> memory -> stream value -> Prop :=
         /\ Forall (msem_equation G H M) eqs) ->
       msem_node G f xs M ys.
 
+Definition msem_equations G H M eqs := List.Forall (msem_equation G H M) eqs.
 
 Section msem_node_mult.
   Variable G: global.

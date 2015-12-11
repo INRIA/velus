@@ -24,7 +24,29 @@ Inductive Is_variable_in_eq : ident -> equation -> Prop :=
 Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_variable_in_eq x) eqs.
 
+Lemma not_Is_variable_in_EqDef: 
+  forall x y e,
+    ~ Is_variable_in_eq x (EqDef y e) -> x <> y.
+Proof.
+  Hint Constructors Is_variable_in_eq. 
+  intros ** Hxy. subst x. auto.
+Qed.
 
+Lemma not_Is_variable_in_EqApp: 
+  forall x y f e,
+    ~ Is_variable_in_eq x (EqApp y f e) -> x <> y.
+Proof.
+  Hint Constructors Is_variable_in_eq. 
+  intros ** Hxy. subst x. auto.
+Qed.
+
+Ltac not_Is_variable x y :=
+  match goal with
+    | H: ~ Is_variable_in_eq x (EqDef y _) |- _ => 
+      apply not_Is_variable_in_EqDef in H
+    | H: ~ Is_variable_in_eq x (EqApp y _ _) |- _ => 
+      apply not_Is_variable_in_EqApp in H
+  end.
 
 
 Lemma Is_variable_in_eq_dec:
