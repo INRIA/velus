@@ -619,7 +619,8 @@ Variables (G: global)
           (alleqs : list equation)
           (Hsems: msem_equations G H M alleqs)
           (prog: program)
-          (input: ident).
+          (input: ident)
+          (Hinput: ~PS.In input mems).
 
 
 Lemma is_step_correct:
@@ -647,7 +648,6 @@ Lemma is_step_correct:
 
                  More discussion/context is needed. *)
         -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
-        -> ~PS.In input mems
         -> ~ Is_defined_in input eqs
 
         (* - execution of translated equations *)
@@ -675,7 +675,7 @@ Proof.
       split; intros; [ match goal with
                        | H:Is_variable_in _ nil |- _ => inversion H
                        end | now constructor ]| ].
-  intros n menv env Hall Hinmems Hin Henv Hin1 Hin2 Hwsch Hnode Hmc.
+  intros n menv env Hall Hinmems Hin Henv Hin2 Hwsch Hnode Hmc.
 
   assert (exists menv' env',
              stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
@@ -687,8 +687,7 @@ Proof.
     - apply List_shift_away with (1:=Hall).
     - exact Hinmems.
     - exact Hin.
-    - intros; apply Henv; constructor 2; auto.
-    - exact Hin1.
+    - intros; apply Henv; constructor(assumption).
     - apply not_Is_defined_in_cons with (1:=Hin2).
     - apply Is_well_sch_cons with (1:=Hwsch).
     - exact Hnode.
@@ -1143,9 +1142,6 @@ Proof.
           rewrite PM.gso; [rewrite PM.gempty;reflexivity|].
           apply Is_variable_in_Is_defined_in in Hivi.
           intro Hx; rewrite Hx in *.
-          contradiction.
-        - intro HinArg.
-          apply Is_defined_in_memories in HinArg.
           contradiction.
         - eapply IH; assumption.
         - inversion_clear Hmc as [? ? ? ? ? ? Hf Hmeqs].
