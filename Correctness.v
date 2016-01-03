@@ -619,13 +619,13 @@ Variables (G: global)
           (alleqs : list equation)
           (Hsems: msem_equations G H M alleqs)
           (prog: program)
+          (Hnode: equiv_prog G prog)
           (input: ident)
           (Hinput: ~PS.In input mems)
-          (Hnode: equiv_prog G prog).
+          (n: nat).
 
 Lemma is_step_correct:
   forall (eqs: list equation)
-         (n: nat)
          (menv: heap)
          (env: stack),
         (exists oeqs, alleqs = oeqs ++ eqs)
@@ -672,7 +672,7 @@ Proof.
       split; intros; [ match goal with
                        | H:Is_variable_in _ nil |- _ => inversion H
                        end | now constructor ]| ].
-  intros n menv env Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
+  intros menv env Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
 
   assert (exists menv' env',
              stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
