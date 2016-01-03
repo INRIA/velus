@@ -709,7 +709,8 @@ Proof.
     exists menv'. (* the memory does not change *)
     specialize (Hcae n); simpl in *.
     assert (equiv_env (fun x => Is_free_in_caexp x cae) (restr H n) mems env' menv')
-      as Hcae'. {
+      as Hcae'. 
+    {
       intros. 
       split; intro Hmems.
 
@@ -735,11 +736,49 @@ Proof.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
-    destruct (xs n).
+    destruct cae as [ck e].
+    inversion Hcae; subst ck0 e;
+    match goal with
+      | H: present _ = xs n |- _ => rewrite <- H in *
+      | H: absent = xs n |- _ => rewrite <- H in *
+    end.
+    + (* xs n = present *)
+      rename c into v.
+      exists (PM.add i v env').
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_present.
+        eapply clock_correct_true; now eauto.
+        eapply cexp_correct; now eauto.
+      * intros x0 Hivi c.
+        inversion_clear Hivi as [? ? Hivi'|]; [inversion_clear Hivi'|].
+        { rewrite PM.gss; split; intro HH.
+          - assert (c = v) by
+                (cut (present c = present v); [injection 1; auto|];
+                 sem_det).
+            congruence.
+          - injection HH; intro Heq. subst. assumption. }
+        { destruct (ident_eq_dec x0 i) as [Hxy|Hnxy].
+          - rewrite Hxy in *; clear Hxy.
+            rewrite PM.gss.
+            split; intro Hsv'.
+            * assert (v = c) 
+                by (cut (present v = present c); [injection 1; auto|]; sem_det).
+              congruence.
+            * injection Hsv'; congruence.
+          - erewrite PM.gso; try eassumption.
+            apply IHeqs0; assumption.  
+        }
+      * rewrite Hall in Hmc.
+        apply Forall_app in Hmc; destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
+        apply Forall_cons2 in Hmc; destruct Hmc as [Hmc Hmc0]; clear Hmc0.
+        inversion_clear Hmc.
+        repeat constructor; assumption.
+
     + (* xs n = absent *)
       exists env'.
-      inversion Hcae as [|? ? Hcexp Hclk HR1 HR2];
-        rewrite <-HR1 in *; clear HR1 HR2 .
       split; [|split].
       * apply stmt_eval_translate_eqns_cons.
         exists menv', env'.
@@ -766,41 +805,7 @@ Proof.
         apply Forall_cons2 in Hmc; destruct Hmc as [Hmc Hmc0]; clear Hmc0.
         inversion_clear Hmc.
         repeat constructor; assumption.
-    + (* xs n = present *)
-      exists (PM.add i v env').
-      inversion Hcae as [? ? ? Hcexp Hclk HR1 HR2|];
-        rewrite <-HR1 in *; clear HR1 HR2 c.
-      split; [|split].
-      * apply stmt_eval_translate_eqns_cons.
-        exists menv', env'.
-        split; [exact Hstmt|].
-        apply stmt_eval_Control_present.
-        apply clock_correct_true with (2:=Hclk); now auto.
-        apply cexp_correct with (1:=Hcexp); now auto.
-      * intros x0 Hivi c.
-        inversion_clear Hivi as [? ? Hivi'|]; [inversion_clear Hivi'|].
-        { rewrite PM.gss; split; intro HH.
-          - assert (c = v) by
-              (cut (present c = present v); [injection 1; auto|];
-               sem_det).
-            congruence.
-          - injection HH; intro Heq. subst. assumption. }
-        { destruct (ident_eq_dec x0 i) as [Hxy|Hnxy].
-          - rewrite Hxy in *; clear Hxy.
-            rewrite PM.gss.
-            split; intro Hsv'.
-            * assert (v = c) 
-                by (cut (present v = present c); [injection 1; auto|]; sem_det).
-              congruence.
-            * injection Hsv'; congruence.
-          - erewrite PM.gso; try eassumption.
-            apply IHeqs0; assumption.  
-        }
-      * rewrite Hall in Hmc.
-        apply Forall_app in Hmc; destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
-        apply Forall_cons2 in Hmc; destruct Hmc as [Hmc Hmc0]; clear Hmc0.
-        inversion_clear Hmc.
-        repeat constructor; assumption.
+
   - (* Case EqApp: y = f lae *)
     specialize (Hlae n).
     (* used variables are defined *)
@@ -852,50 +857,15 @@ Proof.
     (* no other instance *)
     assert (~Is_defined_in y eqs) as Hniii
         by (inversion_clear Hwsch; assumption).
-    destruct (ls n) eqn:Hls.
-    + (* y = absent *)
-      exists menv', env'.
-      specialize (Habs (eq_refl absent)).
-      assert (xs n = absent) as Hout'
-          by (apply Hout; reflexivity); clear Hout.
-      inversion Hlae as [|? ? Hlexp Hclk HR1 HR2];
-        rewrite <-HR1 in *; clear HR1 HR2.
-      split; [|split].
-      * apply stmt_eval_translate_eqns_cons.
-        exists menv', env'.
-        split; [exact Hstmt|].
-        apply stmt_eval_Control_absent.
-        apply clock_correct_false with (2:=Hclk); now auto.
-      * intros x Hivi c.
-        destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
-          [now apply IHeqs0 with (1:=Hvin)|].
-        apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
-        rewrite Hstmt.
-        inversion_clear Hivi as [? ? Hivi'|];
-          [|unfold Is_variable_in in Hvin; contradiction].
-        inversion Hivi' as [|x' f' e HR1 [HR2 HR3 HR4]];
-          rewrite HR2 in *; clear HR1 HR2 HR3 HR4 x' f' e Hivi'.
-        split; intro Hsv'.
-        { inversion_clear Hsv' as [Hfind'].
-          inversion_clear Hvar as [Hfind''].
-          rewrite Hfind' in Hfind''.
-          injection Hfind''; intro HR1; rewrite <-HR1 in *; clear HR1 Hfind''.
-          discriminate. }
-        { assert (PM.find y env = None) as Hnone
-              by (apply Henv; repeat constructor).
-          rewrite Hnone in Hsv'.
-          discriminate. }
-      * apply Forall_cons; [|now apply IHeqs1].
-        constructor.
-        intros Mo' Hmfind'.
-        rewrite Hmfind in Hmfind'.
-        injection Hmfind'; intro He; rewrite <-He in *; clear He Hmfind'.
-        exists omenv.
-        rewrite stmt_eval_translate_eqns_minst_inv with (1:=Hstmt) (2:=Hniii).
-        split; [exact Hfindo|].
-        now apply Memory_Corres_unchanged
-        with (2:=Hmsem) (3:=Hls) (4:=Hmc0).
+
+    destruct lae as [ce ck];
+      inversion Hlae; subst ce0 ck0;
+      match goal with
+        | H: present _ = ls n |- _ => rewrite <- H in *
+        | H: absent = ls n |- _ => rewrite <- H in *
+      end.
     + (* y = present *)
+      rename c into v.
       assert (xs n <> absent) as Hxsp
           by (intro HH; apply Hout in HH; discriminate).
       apply not_absent_present in Hxsp.
@@ -907,7 +877,7 @@ Proof.
       assert (exists menv' : heap,
                 stmt_step_eval prog omenv  f inValue menv' outValue
              /\ Memory_Corres G (S n) f Mo menv') as Hclass
-             by (eapply Hnode; try eassumption).
+             by (eapply Hnode; eauto).
       destruct Hclass as [omenv' [Hnstmt Hnmc]].
 
       simpl in *.
@@ -950,10 +920,52 @@ Proof.
         injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
         exists omenv'.
         split; [rewrite mfind_inst_gss; reflexivity|exact Hnmc].
+
+    + (* y = absent *)
+      exists menv', env'.
+      specialize (Habs (eq_refl absent)).
+      assert (xs n = absent) as Hout'
+          by (apply Hout; reflexivity); clear Hout.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_absent.
+        eapply clock_correct_false; now eauto.
+      * intros x Hivi c.
+        destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
+          [now apply IHeqs0 with (1:=Hvin)|].
+        apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
+        rewrite Hstmt.
+        inversion_clear Hivi as [? ? Hivi'|];
+          [|unfold Is_variable_in in Hvin; contradiction].
+        inversion Hivi' as [|x' f' e HR1 [HR2 HR3 HR4]];
+          rewrite HR2 in *; clear HR1 HR2 HR3 HR4 x' f' e Hivi'.
+        split; intro Hsv'.
+        { inversion_clear Hsv' as [Hfind'].
+          inversion_clear Hvar as [Hfind''].
+          rewrite Hfind' in Hfind''.
+          injection Hfind''; intro HR1; rewrite <-HR1 in *; clear HR1 Hfind''.
+          discriminate. }
+        { assert (PM.find y env = None) as Hnone
+              by (apply Henv; repeat constructor).
+          rewrite Hnone in Hsv'.
+          discriminate. }
+      * apply Forall_cons; [|now apply IHeqs1].
+        constructor.
+        intros Mo' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro He; rewrite <-He in *; clear He Hmfind'.
+        exists omenv.
+        rewrite stmt_eval_translate_eqns_minst_inv with (1:=Hstmt) (2:=Hniii).
+        split; [exact Hfindo|].
+        eapply Memory_Corres_unchanged; eauto.
+
   - (* Case EqFby: y = v0 fby lae *)
     specialize (Hlae n).
     assert (equiv_env (fun x => Is_free_in_laexp x lae) (restr H n) mems env' menv')
-      as Hlae'. {
+      as Hlae'. 
+    {
       intros.
       split; intro Hmems.
 
@@ -979,18 +991,45 @@ Proof.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
-    destruct (ls n) eqn:Hls;
+    destruct lae as [ck le];
+      inversion Hlae; subst ck0 le;
+      match goal with
+        | H: present _ = ls n |- _ => rewrite <- H in *
+        | H: absent = ls n |- _ => rewrite <- H in *
+      end;
       destruct Hvar as [Hms Hvar].
+    + (* y = present *)
+      rename c into v.
+      exists (madd_mem y v menv'), env'.
+      split; [|split].
+      * apply stmt_eval_translate_eqns_cons.
+        exists menv', env'.
+        split; [exact Hstmt|].
+        apply stmt_eval_Control_present.
+        eapply clock_correct_true; now eauto.
+        econstructor.
+        eapply lexp_correct; now eauto.
+        reflexivity.
+      * intros x Hivi c.
+        inversion_clear Hivi as [? ? Hivi'|]; [now inversion_clear Hivi'|].
+        apply IHeqs0.
+        assumption.
+      * rewrite <-Hms.
+        apply Forall_cons.
+        2:now apply Memory_Corres_eqs_add_mem with (1:=Hmfind) (2:=IHeqs1).
+        constructor.
+        intros ms' Hmfind'.
+        rewrite Hmfind in Hmfind'.
+        injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Hmfind' Heq.
+        now apply mfind_mem_gss.
     + (* y = absent *)
       exists menv', env'.
-      inversion Hlae as [|? ? Hlexp Hclk HR1 HR2];
-        rewrite <-HR1 in *; clear HR1 HR2.
       split; [|split].
       * apply stmt_eval_translate_eqns_cons.
         exists menv', env'.
         split; [exact Hstmt|].
         apply stmt_eval_Control_absent.
-        apply clock_correct_false with (2:=Hclk); now auto.
+        eapply clock_correct_false; now eauto.
       * intros x Hivi c.
         destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
           [now apply IHeqs0 with (1:=Hvin)|].
@@ -1018,34 +1057,10 @@ Proof.
         destruct Hmc as [Hmc H0]; clear H0.
         inversion_clear Hmc as [| |? ? ? ? ? Hfindc].
         rewrite Hms.
-        apply stmt_eval_translate_eqns_menv_inv with (2:=Hxin) in Hstmt.
+        eapply stmt_eval_translate_eqns_menv_inv in Hstmt;
+          try eassumption.
         rewrite Hstmt.
-        apply Hfindc with (1:=Hmfind).
-    + (* y = present *)
-      exists (madd_mem y v menv'), env'.
-      inversion Hlae as [? ? v' Hlexp Hclk HR1 HR2|];
-        rewrite <-HR1 in *; clear HR1 HR2 v'.
-      split; [|split].
-      * apply stmt_eval_translate_eqns_cons.
-        exists menv', env'.
-        split; [exact Hstmt|].
-        apply stmt_eval_Control_present.
-        apply clock_correct_true with (2:=Hclk); now auto.
-        econstructor.
-        apply lexp_correct with (1:=Hlexp); now auto.
-        reflexivity.
-      * intros x Hivi c.
-        inversion_clear Hivi as [? ? Hivi'|]; [now inversion_clear Hivi'|].
-        apply IHeqs0.
-        assumption.
-      * rewrite <-Hms.
-        apply Forall_cons.
-        2:now apply Memory_Corres_eqs_add_mem with (1:=Hmfind) (2:=IHeqs1).
-        constructor.
-        intros ms' Hmfind'.
-        rewrite Hmfind in Hmfind'.
-        injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Hmfind' Heq.
-        now apply mfind_mem_gss.
+        eapply Hfindc; auto.
 Qed.
 
 End IsStepCorrect.
@@ -1192,6 +1207,8 @@ Proof.
         eassumption.
       * rewrite Memory_Corres_node_tl; try assumption.
 Qed.
+
+End IsNodeCorrect.
 
 (** ** Validity of the [reset] code *)
 
@@ -1540,4 +1557,3 @@ Proof.
   econstructor; try eassumption.
   econstructor; try eauto.
 Qed.
-
