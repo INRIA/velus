@@ -622,12 +622,12 @@ Variables (G: global)
           (Hnode: equiv_prog G prog)
           (input: ident)
           (Hinput: ~PS.In input mems)
-          (n: nat).
+          (n: nat)
+          (menv: heap)
+          (env: stack).
 
 Lemma is_step_correct:
-  forall (eqs: list equation)
-         (menv: heap)
-         (env: stack),
+  forall (eqs: list equation),
         (exists oeqs, alleqs = oeqs ++ eqs)
         -> (forall x, PS.In x mems
                       -> (Is_defined_in x alleqs
@@ -672,7 +672,7 @@ Proof.
       split; intros; [ match goal with
                        | H:Is_variable_in _ nil |- _ => inversion H
                        end | now constructor ]| ].
-  intros menv env Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
+  intros Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
 
   assert (exists menv' env',
              stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
