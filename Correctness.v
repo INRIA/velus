@@ -620,8 +620,8 @@ Variables (G: global)
           (Hsems: msem_equations G H M alleqs)
           (prog: program)
           (input: ident)
-          (Hinput: ~PS.In input mems).
-
+          (Hinput: ~PS.In input mems)
+          (Hnode: equiv_prog G prog).
 
 Lemma is_step_correct:
   forall (eqs: list equation)
@@ -653,9 +653,6 @@ Lemma is_step_correct:
         (* - execution of translated equations *)
         -> Is_well_sch mems input eqs
 
-        (* - instantiated nodes (assumed) *)
-        -> equiv_prog G prog
-
         (* - unwritten memories (assumed) *)
         -> List.Forall (Memory_Corres_eq G n M menv) alleqs
 
@@ -675,7 +672,7 @@ Proof.
       split; intros; [ match goal with
                        | H:Is_variable_in _ nil |- _ => inversion H
                        end | now constructor ]| ].
-  intros n menv env Hall Hinmems Hin Henv Hin2 Hwsch Hnode Hmc.
+  intros n menv env Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
 
   assert (exists menv' env',
              stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
@@ -690,7 +687,6 @@ Proof.
     - intros; apply Henv; constructor(assumption).
     - apply not_Is_defined_in_cons with (1:=Hin2).
     - apply Is_well_sch_cons with (1:=Hwsch).
-    - exact Hnode.
     - exact Hmc. }
 
   clear IHeqs.
@@ -1119,6 +1115,7 @@ Proof.
                 Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
       {
         eapply is_step_correct; try eassumption.
+        - eapply IH; assumption.
         - exists []; auto.
         - intros y Hinm.
           assert (NoDup_defs eqs) as Hndds
@@ -1143,7 +1140,7 @@ Proof.
           apply Is_variable_in_Is_defined_in in Hivi.
           intro Hx; rewrite Hx in *.
           contradiction.
-        - eapply IH; assumption.
+
         - inversion_clear Hmc as [? ? ? ? ? ? Hf Hmeqs].
 
           simpl in Hf.
