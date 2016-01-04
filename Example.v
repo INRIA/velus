@@ -27,33 +27,33 @@ Example eqns1 : list equation :=
   ].
 
 Example node1 : node :=
-  mk_node 1 1 4 eqns1.
+  mk_node 1 [1] 4 eqns1.
 
 
 Example eqns2 : list equation :=
   [
     EqFby 3 (Cint 0) (LAexp Cbase (Evar 2));
-    EqApp 4 1 (LAexp Cbase (Evar 3));
-    EqApp 2 1 (LAexp Cbase (Evar 1))
+    EqApp 4 1 (LAexps Cbase [Evar 3]);
+    EqApp 2 1 (LAexps Cbase [Evar 1])
   ].
 
 Example node2 : node :=
-  mk_node 2 1 4 eqns2.
+  mk_node 2 [1] 4 eqns2.
 
 (** Scheduling *)
 
-Example eqn1_well_sch: Is_well_sch (memories eqns1) 1 eqns1.
+Example eqn1_well_sch: Is_well_sch (memories eqns1) [1] eqns1.
 Proof.
-  assert (well_sch (memories eqns1) 1 eqns1 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns1) 1 eqns1) as HS.
+  assert (well_sch (memories eqns1) [1] eqns1 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (memories eqns1) [1] eqns1) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
 
-Example eqn2_well_sch: Is_well_sch (memories eqns2) 1 eqns2.
+Example eqn2_well_sch: Is_well_sch (memories eqns2) [1] eqns2.
 Proof.
-  assert (well_sch (memories eqns2) 1 eqns2 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns2) 1 eqns2) as HS.
+  assert (well_sch (memories eqns2) [1] eqns2 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (memories eqns2) [1] eqns2) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
@@ -83,13 +83,13 @@ Example reset1 : stmt :=
 Example class2 : class :=
   {|
     c_name := 2;
-    c_input := 1;
+    c_input := [1];
     c_output := 4;
     c_mems := [3];
     c_objs := [{| obj_inst := 2; obj_class := 1 |};
                 {| obj_inst := 4; obj_class := 1 |}];
-    c_step := Comp (Step_ap 2 1 2 (Var 1))
-                   (Comp (Step_ap 4 1 4 (State 3))
+    c_step := Comp (Step_ap 2 1 2 [Var 1])
+                   (Comp (Step_ap 4 1 4 [State 3])
                          (Comp (AssignSt 3 (Var 2))
                                Skip));
     c_reset := Comp (Reset_ap 1 2)

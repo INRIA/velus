@@ -111,7 +111,7 @@ Proof.
       => apply IHs2 with (2:=Hexp) (3:=Hstmt); now cannot_write
     end.
   - inversion Hstmt; subst; clear Hstmt.
-    induction e; inversion Hexp; subst; intuition;
+    induction e'; inversion Hexp; subst; intuition;
     constructor; (rewrite PM.gso; [assumption|intro HH; subst; now eauto]).
   - inversion Hstmt; subst; clear Hstmt.
     induction e'; inversion_clear Hexp; intuition.
@@ -366,15 +366,15 @@ Require Import Rustre.Dataflow.Clocking.
 Require Import Rustre.Dataflow.Clocking.Properties.
 
 Lemma translate_eqns_Ifte_free_write:
-  forall C mems input eqs,
+  forall C mems inputs eqs,
     Well_clocked_env C
     -> Forall (Well_clocked_eq C) eqs
-    -> Is_well_sch mems input eqs
+    -> Is_well_sch mems inputs eqs
     -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
-    -> ~ Is_defined_in input eqs
+    -> (forall input, List.In input inputs -> ~ Is_defined_in input eqs)
     -> Ifte_free_write (translate_eqns mems eqs).
 Proof.
-  intros C mems input eqs Hwk Hwks Hwsch Hnvi Hnin.
+  intros C mems inputs eqs Hwk Hwks Hwsch Hnvi Hnin.
   induction eqs as [|eq eqs IH]; [now constructor|].
   inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
   specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
@@ -385,8 +385,9 @@ Proof.
     + intros x Hin; apply Hnvi in Hin.
       apply not_Is_variable_in_cons in Hin.
       now intuition.
-    + apply not_Is_defined_in_cons in Hnin.
-      now intuition.
+    + admit.
+      (* apply not_Is_defined_in_cons in Hnin.
+      now intuition. *)
   - clear IH.
     repeat constructor.
     destruct eq as [x e|x f e|x v0 e]; simpl.
@@ -397,8 +398,8 @@ Proof.
       { intros i Hfree.
         apply HH in Hfree.
         destruct Hfree as [Hm Hnm].
-        assert (x <> input) as Hninp
-            by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor).
+        assert (~ List.In x inputs) as Hninp by admit.
+(*            by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor). *)
         assert (~PS.In x mems) as Hnxm' by intuition.
         intro Hxi; rewrite Hxi in *; clear Hxi.
         specialize (Hnm Hnxm').

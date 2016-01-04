@@ -69,7 +69,7 @@ Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
            PS.add x defined, PS.add x variables)
         | EqApp x f e =>
           ((PS.for_all (check_var defined variables)
-                       (free_in_laexp e PS.empty))
+                       (free_in_laexps e PS.empty))
              && (negb (PS.mem x defined)),
            PS.add x defined, PS.add x variables)
         | EqFby x v e =>
@@ -81,8 +81,8 @@ Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
     | (false, _, _) => (false, PS.empty, PS.empty)
   end.
 
-Definition well_sch (argIn: ident)(eqs: list equation) : bool :=
-  fst (fst (List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqs)).
+Definition well_sch (argIns: list ident)(eqs: list equation) : bool :=
+  fst (fst (List.fold_right check_eq (true, PS.empty, List.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs)).
 
 Lemma not_for_all_spec:
   forall (s : PS.t) (f : BinNums.positive -> bool),
@@ -113,15 +113,15 @@ Proof.
 Qed.
 
 Lemma well_sch_pre_spec:
-  forall argIn eqs good defined variables,
+  forall argIns eqs good defined variables,
     (good, defined, variables)
-        = List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqs
+        = List.fold_right check_eq (true, PS.empty, List.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs
     ->
     (good = true
-     -> (Is_well_sch mems argIn eqs
+     -> (Is_well_sch mems argIns eqs
          /\ (forall x, PS.In x defined <-> Is_defined_in x eqs)
-         /\ (forall x, PS.In x variables <-> Is_variable_in x eqs \/ argIn = x)))
-    /\ (good = false -> ~Is_well_sch mems argIn eqs).
+         /\ (forall x, PS.In x variables <-> Is_variable_in x eqs \/ List.In x argIns)))
+    /\ (good = false -> ~Is_well_sch mems argIns eqs).
 Admitted.
 (*
   induction eqs as [|eq].
@@ -269,15 +269,15 @@ Qed.
 *)
 
 Lemma well_sch_spec:
-  forall argIn eqns,
-    if well_sch argIn eqns
-    then Is_well_sch mems argIn eqns
-    else ~Is_well_sch mems argIn eqns.
+  forall argIns eqns,
+    if well_sch argIns eqns
+    then Is_well_sch mems argIns eqns
+    else ~Is_well_sch mems argIns eqns.
 Proof.
   intros argIn eqns.
   pose proof (well_sch_pre_spec argIn eqns).
   unfold well_sch.
-  destruct (List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqns)
+  destruct (List.fold_right check_eq (true, PS.empty, List.fold_left (fun a b => PS.add b a) argIn PS.empty) eqns)
     as [[good defined] variables].
   simpl.
   specialize H with good defined variables.

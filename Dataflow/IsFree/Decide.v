@@ -34,6 +34,12 @@ Definition free_in_laexp (lae : laexp) (fvs : PS.t) : PS.t :=
   | LAexp ck e => free_in_lexp e (free_in_clock ck fvs)
   end.
 
+Definition free_in_laexps (laes : laexps) (fvs : PS.t) : PS.t :=
+  match laes with
+  | LAexps ck es => 
+    List.fold_left (fun fvs e => free_in_lexp e fvs) es (free_in_clock ck fvs)
+  end.
+
 Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
   match ce with
   | Emerge i t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
@@ -50,7 +56,7 @@ Definition free_in_caexp (cae: caexp) (fvs: PS.t) : PS.t :=
 Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
   match eq with
   | EqDef _ cae => free_in_caexp cae fvs
-  | EqApp _ f lae => free_in_laexp lae fvs
+  | EqApp _ f laes => free_in_laexps laes fvs
   | EqFby _ v lae => free_in_laexp lae fvs
   end.
 
@@ -225,6 +231,8 @@ Qed.
 Lemma free_in_equation_spec:
   forall x eq m, PS.In x (free_in_equation eq m)
                  <-> (Is_free_in_equation x eq \/ PS.In x m).
+Admitted.
+(*
 Proof.
   destruct eq; split; intro H;
   repeat progress (match goal with
@@ -238,6 +246,7 @@ Proof.
                    | _ => intuition
                    end).
 Qed.
+*)
 
 Lemma free_in_equation_spec':
   forall x eq, PS.In x (free_in_equation eq PS.empty)

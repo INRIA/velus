@@ -60,6 +60,7 @@ Section Translate.
     | Ewhen e c x => translate_lexp e
     end.
   
+(* TODO: remove (useless *)
   Definition translate_laexp (lae: laexp): exp :=
     match lae with
       | LAexp ck e => translate_lexp e
@@ -80,8 +81,8 @@ Section Translate.
     match eqn with
     | EqDef x (CAexp ck ce) =>
       Control ck (translate_cexp x ce)
-    | EqApp x f (LAexp ck le) =>
-      Control ck (Step_ap x f x (translate_lexp le))
+    | EqApp x f (LAexps ck les) =>
+      Control ck (Step_ap x f x (List.map translate_lexp les))
     | EqFby x v (LAexp ck le) =>
       Control ck (AssignSt x (translate_lexp le))
     end.

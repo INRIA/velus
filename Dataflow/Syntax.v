@@ -23,8 +23,12 @@ Inductive lexp : Type :=
 Inductive laexp : Type :=
   | LAexp : clock -> lexp -> laexp.
 
+Inductive laexps : Type :=
+  | LAexps : clock -> list lexp -> laexps.
+
 Implicit Type le: lexp.
-Implicit Type lae: laexp.
+Implicit Type lae: laexps.
+Implicit Type laes: laexps.
 
 Inductive cexp : Type :=
   | Emerge : ident -> cexp -> cexp -> cexp 
@@ -40,7 +44,7 @@ Implicit Type cae: caexp.
 
 Inductive equation : Type :=
   | EqDef : ident -> caexp -> equation
-  | EqApp : ident -> ident -> laexp -> equation
+  | EqApp : ident -> ident -> laexps -> equation
   | EqFby : ident -> const -> laexp -> equation.
 
 Implicit Type eqn: equation.
@@ -49,7 +53,7 @@ Implicit Type eqn: equation.
 
 Record node : Type := mk_node {
   n_name : ident;
-  n_input : ident;
+  n_input : list ident;
   n_output : ident;
   n_eqs : list equation }.
 

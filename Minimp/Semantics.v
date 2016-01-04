@@ -1,4 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
+Require Import List.
 
 Require Import Rustre.Common.
 Require Import Rustre.Heap.
@@ -37,6 +38,14 @@ Inductive exp_eval heap stack:
     forall c ,
       exp_eval heap stack (Const(c)) c.
 
+Lemma exps_eval_const:
+  forall h s cs,
+    Forall2 (exp_eval h s) (map Const cs) cs.
+Proof.
+  Hint Constructors exp_eval.
+  intros h s cs. induction cs; constructor; eauto.
+Qed.
+
 Inductive stmt_eval :
   program -> heap -> stack -> stmt -> heap * stack -> Prop :=
 | Iassign:
@@ -50,13 +59,13 @@ Inductive stmt_eval :
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
 | Istep:
-    forall prog menv env e v clsid o y menv' env' omenv omenv' rv,
+    forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
       mfind_inst o menv = Some(omenv) ->
-      exp_eval menv env e v ->
-      stmt_step_eval prog omenv clsid v omenv' rv ->
+      List.Forall2 (exp_eval menv env) es vs ->
+      stmt_step_eval prog omenv clsid vs omenv' rv ->
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
-      stmt_eval prog menv env (Step_ap y clsid o e) (menv', env')
+      stmt_eval prog menv env (Step_ap y clsid o es) (menv', env')
 | Ireset:
     forall prog menv env o clsid omenv' menv',
       stmt_reset_eval prog clsid omenv' ->
@@ -89,14 +98,15 @@ Inductive stmt_eval :
     forall prog menv env,
       stmt_eval prog menv env Skip (menv, env)
 with stmt_step_eval :
-       program -> heap -> ident -> const -> heap -> const -> Prop :=
+       program -> heap -> ident -> list const -> heap -> const -> Prop :=
 | Iestep:
-    forall prog menv clsid iv prog' menv' ov cls env',
+    forall prog menv env clsid ivs prog' menv' ov cls env',
       find_class clsid prog = Some(cls, prog') ->
-      stmt_eval prog' menv (PM.add cls.(c_input) iv sempty) cls.(c_step)
+      env = adds cls.(c_input) ivs sempty ->
+      stmt_eval prog' menv env cls.(c_step)
                 (menv', env') ->
       PM.find cls.(c_output) env' = Some(ov) ->
-      stmt_step_eval prog menv clsid iv menv' ov
+      stmt_step_eval prog menv clsid ivs menv' ov
 with stmt_reset_eval : program -> ident -> heap -> Prop :=
 | Iereset:
     forall prog clsid cls prog' menv' env',
@@ -175,6 +185,20 @@ Proof.
       apply IHxs; eauto.
 Qed.
 
+Lemma exp_evals_det:
+  forall menv env es vs1 vs2,
+    List.Forall2 (exp_eval menv env) es vs1 ->
+    List.Forall2 (exp_eval menv env) es vs2 ->
+    vs1 = vs2.
+Proof.
+  intros menv env es vs1 vs2 H1; generalize dependent vs2.
+  induction H1 as [|e1 c1 es1 cs1]; intros vs2 H2;
+  inversion_clear H2 as [|e2 c2 es2 cs2]; auto.
+  assert (c1 = c2) by eauto using exp_eval_det.
+  assert (cs1 = cs2) by eauto using IHForall2.
+  congruence.
+Qed.
+
 Lemma stmt_eval_det:
   forall prog s menv env renv1 renv2,
     stmt_eval prog menv env s renv1
@@ -193,12 +217,17 @@ Proof.
               forall menv', stmt_reset_eval prog i menv' -> menv = menv');
     inversion_clear 1;
     repeat progress match goal with
+    | H: ?env = adds _ _ _ |- _ => subst env
     | Ht: exp_eval ?menv ?env ?e (Cbool true),
       Hf: exp_eval ?menv ?env ?e (Cbool false) |- _ =>
       pose proof (exp_eval_det _ _ _ _ _ Ht Hf) as Hneq; discriminate
     | H1:exp_eval ?menv ?env ?e ?v1,
       H2:exp_eval ?menv ?env ?e ?v2 |- _ =>
       pose proof (exp_eval_det _ _ _ _ _ H1 H2) as Heq;
+        rewrite Heq in *; clear Heq H1 H2
+    | H1: List.Forall2 (exp_eval ?menv ?env) ?es ?vs1,
+      H2: List.Forall2 (exp_eval ?menv ?env) ?es ?vs2 |- _ =>
+      pose proof (exp_evals_det _ _ _ _ _ H1 H2) as Heq;
         rewrite Heq in *; clear Heq H1 H2
     | H1: PM.add ?x ?v ?env = ?env1,
       H2: PM.add ?x ?v ?env = ?env2 |- _ =>

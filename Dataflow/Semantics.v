@@ -39,6 +39,9 @@ Inductive sem_var_instant R (x: ident) v: Prop :=
       PM.find x R = Some v ->
       sem_var_instant R x v.
 
+Definition sem_vars_instant R (xs: list ident)(vs: list value): Prop :=
+  List.Forall2 (sem_var_instant R) xs vs.
+
 Inductive sem_clock_instant R: clock -> bool -> Prop :=
 | Sbase: 
       sem_clock_instant R Cbase true
@@ -90,6 +93,20 @@ Inductive sem_laexp_instant R: laexp -> value -> Prop:=
       sem_clock_instant R ck false ->
       sem_laexp_instant R (LAexp ck ce) absent.
 
+Inductive sem_laexps_instant R: laexps -> list value -> Prop:=
+| SLticks:
+    forall ck ces cs vs,
+      vs = List.map present cs ->
+      List.Forall2 (fun ce v => sem_lexp_instant R ce v) ces vs ->
+      sem_clock_instant R ck true ->
+      sem_laexps_instant R (LAexps ck ces) vs
+| SLabss:
+    forall ck ces vs,
+      vs = List.map (fun _ => absent) ces ->
+      List.Forall2 (fun ce v => sem_lexp_instant R ce v) ces vs ->
+      sem_clock_instant R ck false ->
+      sem_laexps_instant R (LAexps ck ces) vs.
+
 Inductive sem_cexp_instant R: cexp -> value -> Prop :=
 | Smerge_true:
     forall x t f v,
@@ -124,9 +141,10 @@ Inductive rhs_absent_instant R: equation -> Prop :=
       sem_caexp_instant R cae absent ->
       rhs_absent_instant R (EqDef x cae)
 | AEqApp:
-    forall x f lae,
-      sem_laexp_instant R lae absent ->
-      rhs_absent_instant R (EqApp x f lae)
+    forall x f laes vs,
+      sem_laexps_instant R laes vs ->
+      List.Forall (fun c => c = absent) vs ->
+      rhs_absent_instant R (EqApp x f laes)
 | AEqFby:
     forall x v0 lae,
       sem_laexp_instant R lae absent ->
@@ -147,10 +165,15 @@ Definition sem_clock H (ck: clock)(xs: stream bool): Prop :=
 
 Definition sem_var H (x: ident)(xs: stream value): Prop :=
   lift (fun env v => sem_var_instant env x v) H xs.
-Hint Unfold sem_var.
+
+Definition sem_vars H (x: list ident)(xs: stream (list value)): Prop :=
+  lift (fun env v => sem_vars_instant env x v) H xs.
 
 Definition sem_laexp H (e: laexp)(xs: stream value): Prop :=
   lift (fun env v => sem_laexp_instant env e v) H xs.
+
+Definition sem_laexps H (e: laexps)(xs: stream (list value)): Prop :=
+  lift (fun env v => sem_laexps_instant env e v) H xs.
 
 Definition sem_lexp H (e: lexp)(xs: stream value): Prop :=
   lift (fun env v => sem_lexp_instant env e v) H xs.
@@ -163,6 +186,18 @@ Definition sem_cexp H (c: cexp)(xs: stream value): Prop :=
 
 (** ** Time-dependent semantics *)
 
+Definition absent_list (xss: stream (list value))(n: nat): Prop :=
+  List.Forall (fun xs => xs = absent) (xss n).
+
+Definition present_list (xss: stream (list value))(n: nat)(vs: list const): Prop :=
+  xss n = List.map present vs.
+
+(* XXX: THIS LEMMA IS FALSE (take the empty list) *)
+Lemma not_absent_present_list:
+  forall xss n vs,
+    present_list xss n vs <-> ~ absent_list xss n.
+Admitted.
+
 Inductive sem_equation G: history -> equation -> Prop :=
 | SEqDef:
     forall H x xs cae,
@@ -171,7 +206,7 @@ Inductive sem_equation G: history -> equation -> Prop :=
       sem_equation G H (EqDef x cae)
 | SEqApp:
     forall H x f arg ls xs,
-      sem_laexp H arg ls ->
+      sem_laexps H arg ls ->
       sem_var H x xs ->
       sem_node G f ls xs ->
       sem_equation G H (EqApp x f arg)
@@ -182,20 +217,22 @@ Inductive sem_equation G: history -> equation -> Prop :=
       xs = fby v0 ls ->
       sem_equation G H (EqFby x v0 lae)
 
-with sem_node G: ident -> stream value -> stream value -> Prop :=
+with sem_node G: ident -> stream (list value) -> stream value -> Prop :=
 | SNode:
-    forall f (xs ys: stream value) i o eqs,
+    forall f xss ys i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
       (exists H,
-           sem_var H i xs
+           sem_vars H i xss
         /\ sem_var H o ys
+        (* XXX: This should be in Welldef_glob: *)
         (* no clocks faster than input *)
-        /\ (forall n, xs n = absent ->
+        /\ (forall n, absent_list xss n ->
                       Forall (rhs_absent_instant (restr H n)) eqs)
-        (* output clock matches input clock *)
-        /\ (forall n, xs n = absent <-> ys n = absent)
+        (* output clock matches input clock *) 
+        /\ (forall n, absent_list xss n <-> ys n = absent)
+        (* XXX: END *)
         /\ Forall (sem_equation G H) eqs) ->
-      sem_node G f xs ys.
+      sem_node G f xss ys.
 
 Definition sem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
@@ -252,7 +289,7 @@ Section sem_node_mult.
   Variable G: global.
 
   Variable P : forall H (eq: equation), sem_equation G H eq -> Prop.
-  Variable Pn : forall (f: ident) (xs ys: stream value), sem_node G f xs ys -> Prop.
+  Variable Pn : forall (f: ident) xss ys, sem_node G f xss ys -> Prop.
 
   Hypothesis EqDef_case :
     forall (H    : history)
@@ -267,14 +304,14 @@ Section sem_node_mult.
     forall (H     : history)
 	   (y     : ident)
 	   (f     : ident)
-	   (lae   : laexp)
-           (ls    : stream value)
+	   (laes   : laexps)
+           (ls    : stream (list value))
            (ys    : stream value)
-	   (Hlae  : sem_laexp H lae ls)
+	   (Hlaes  : sem_laexps H laes ls)
            (Hvar  : sem_var H y ys)
 	   (Hnode : sem_node G f ls ys),
       Pn f ls ys Hnode ->
-      P H (EqApp y f lae) (SEqApp G H y f lae ls ys Hlae Hvar Hnode).
+      P H (EqApp y f laes) (SEqApp G H y f laes ls ys Hlaes Hvar Hnode).
 
   Hypothesis EqFby_case :
     forall (H   : history)
@@ -290,27 +327,27 @@ Section sem_node_mult.
 
   Hypothesis SNode_case :
     forall (f   : ident)
-	   (xs  : stream value)
+	   (xss  : stream (list value))
 	   (ys  : stream value)
-	   (i   : ident)
+	   (i   : list ident)
 	   (o   : ident)
 	   (eqs : list equation)
 	   (Hf  : find_node f G = Some (mk_node f i o eqs))
            (Heqs : exists H,
-                        sem_var H i xs
+                        sem_vars H i xss
 	             /\ sem_var H o ys
-                     /\ (forall n, xs n = absent
+                     /\ (forall n, absent_list xss n 
                                    -> Forall (rhs_absent_instant (restr H n)) eqs)
-                     /\ (forall n, xs n = absent <-> ys n = absent)
+                     /\ (forall n, absent_list xss n <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs),
       (exists H,
-             sem_var H i xs
+             sem_vars H i xss
           /\ sem_var H o ys
-          /\ (forall n, xs n = absent
+          /\ (forall n, absent_list xss n
                         -> Forall (rhs_absent_instant (restr H n)) eqs)
-          /\ (forall n, xs n = absent <-> ys n = absent)
+          /\ (forall n, absent_list xss n <-> ys n = absent)
           /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs)
-      -> Pn f xs ys (SNode G f xs ys i o eqs Hf Heqs).
+      -> Pn f xss ys (SNode G f xss ys i o eqs Hf Heqs).
 
   Fixpoint sem_equation_mult (H  : history)
 			     (eq : equation)
@@ -325,7 +362,7 @@ Section sem_node_mult.
     end
 
   with sem_node_mult (f  : ident)
-		     (ls : stream value)
+		     (ls : stream (list value))
 		     (ys : stream value)
 		     (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
     match Hn in (sem_node _ f ls ys) return (Pn f ls ys Hn) with
@@ -437,6 +474,34 @@ Proof.
   end; auto.
 Qed.
 
+Lemma sem_lexps_instant_det:
+  forall R ces cs1 cs2,
+    Forall2 (fun ce v => sem_lexp_instant R ce v) ces cs1 ->
+    Forall2 (fun ce v => sem_lexp_instant R ce v) ces cs2 ->
+    cs1 = cs2.
+Proof.
+  intros R. 
+  induction ces; intros cs1 cs2 H1 H2;
+    inversion_clear H1 as [|? v1 ? css1]; 
+    inversion_clear H2  as [|? v2 ? css2]; try auto.
+  assert (v1 = v2)
+    by (eapply sem_lexp_instant_det; eauto).
+  assert (css1 = css2) by (eapply IHces; eassumption).
+  congruence.
+Qed.
+
+Lemma sem_laexps_instant_det:
+  forall e R v1 v2,
+    sem_laexps_instant R e v1
+    -> sem_laexps_instant R e v2
+    -> v1 = v2.
+Proof.
+  intros e R v1 v2.
+  inversion_clear 1 as [? ? cs1 |];
+  inversion_clear 1 as [? ? cs2 |];
+  eapply sem_lexps_instant_det; eauto.
+Qed.
+
 
 Lemma sem_cexp_instant_det:
   forall e R v1 v2,
@@ -525,6 +590,13 @@ Proof.
   apply_lift sem_laexp_instant_det e.
 Qed.
 
+Lemma sem_laexps_det:
+  forall H e xs1 xs2,  
+    sem_laexps H e xs1 -> sem_laexps H e xs2 -> xs1 = xs2.
+Proof.
+  apply_lift sem_laexps_instant_det e.
+Qed.
+
 Lemma sem_cexp_det:
   forall H c xs1 xs2,  
     sem_cexp H c xs1 -> sem_cexp H c xs2 -> xs1 = xs2.
@@ -538,6 +610,35 @@ Lemma sem_caexp_det:
 Proof.
   apply_lift sem_caexp_instant_det c.
 Qed.
+
+Ltac sem_det :=
+  match goal with
+    | H1: sem_caexp_instant ?H ?C ?X,
+      H2: sem_caexp_instant ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_caexp_instant_det; eexact H1 || eexact H2
+    | H1: sem_caexp ?H ?C ?X,
+      H2: sem_caexp ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_caexp_det; eexact H1 || eexact H2
+    | H1: sem_laexp_instant ?H ?C ?X,
+      H2: sem_laexp_instant ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_laexp_instant_det; eexact H1 || eexact H2
+    | H1: sem_laexp ?H ?C ?X,
+      H2: sem_laexp ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_laexp_det; eexact H1 || eexact H2
+    | H1: sem_laexps_instant ?H ?C ?X,
+      H2: sem_laexps_instant ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_laexps_instant_det; eexact H1 || eexact H2
+    | H1: sem_laexps ?H ?C ?X,
+      H2: sem_laexps ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_laexps_det; eexact H1 || eexact H2
+    | H1: sem_var_instant ?H ?C ?X,
+      H2: sem_var_instant ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_var_instant_det; eexact H1 || eexact H2
+    | H1: sem_var ?H ?C ?X,
+      H2: sem_var ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_var_det; eexact H1 || eexact H2
+  end.
+
 
 (** ** Global management *)
 
@@ -580,11 +681,13 @@ Proof.
     clear Heqs.
     destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
     exists H.
-    intuition.
-    apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
-    apply Is_node_in_Forall in Hord.
-    apply Forall_Forall with (1:=Hord) in Heqs.
-    apply Forall_impl with (2:=Heqs).
+    repeat (split; eauto).
+    set (cnode := {| n_name := f; n_input := i; n_output := o; n_eqs := eqs |}).
+    assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs cnode)) 
+      by (eapply Is_node_in_Forall; try eassumption;
+          eapply find_node_later_not_Is_node_in; try eassumption).
+    eapply Forall_Forall in Heqs; try eauto.
+    eapply Forall_impl with (2:=Heqs).
     destruct 1 as [Hnini [Hsem HH]].
     intuition.
 Qed.

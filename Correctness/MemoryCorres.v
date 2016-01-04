@@ -317,7 +317,7 @@ Lemma Memory_Corres_unchanged:
   forall G f n ls M ys menv,
     Welldef_global G
     -> msem_node G f ls M ys
-    -> ls n = absent
+    -> absent_list ls n
     -> Memory_Corres G n f M menv
     -> Memory_Corres G (S n) f M menv.
 Proof.
@@ -344,9 +344,10 @@ Proof.
     exists omenv.
     split; [exact Hfindo|].
     apply IH with (2:=Hmc).
-    inversion_clear Hrhsa as [|? ? ? Hlaea|].
+    inversion_clear Hrhsa as [|? ? ? ? Hlaea|].
     specialize (Hls n); simpl in Hls.
-    now sem_det.
+    assert (ls n = vs) by sem_det.
+    unfold absent_list; congruence.
   - rename Habs into menv.
     intros Hdefabs Hmceq.
     constructor.

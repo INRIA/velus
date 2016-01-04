@@ -65,7 +65,7 @@ Qed.
 Corollary Well_clocked_EqApp_not_Is_free_in_clock:
   forall C x f le ck,
     Well_clocked_env C
-    -> Well_clocked_eq C (EqApp x f (LAexp ck le))
+    -> Well_clocked_eq C (EqApp x f (LAexps ck le))
     -> ~Is_free_in_clock x ck.
 Proof.
   intros C x f le ck Hwc Hwce.

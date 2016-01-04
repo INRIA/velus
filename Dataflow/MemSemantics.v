@@ -54,7 +54,7 @@ Inductive msem_equation G: history -> memory -> equation -> Prop :=
 | SEqApp:
     forall H M x f M' arg ls xs,
       mfind_inst x M = Some M' ->
-      sem_laexp H arg ls ->
+      sem_laexps H arg ls ->
       sem_var H x xs ->
       msem_node G f ls M' xs ->
       msem_equation G H M (EqApp x f arg)
@@ -72,26 +72,26 @@ Inductive msem_equation G: history -> memory -> equation -> Prop :=
                  end) ->
       msem_equation G H M (EqFby x v0 lae)
 
-with msem_node G: ident -> stream value -> memory -> stream value -> Prop :=
+with msem_node G: ident -> stream (list value) -> memory -> stream value -> Prop :=
 | SNode:
-    forall f xs M ys i o eqs,
+    forall f xss M ys i o eqs,
       find_node f G = Some (mk_node f i o eqs) ->
       (exists H,
-         sem_var H i xs
+         sem_vars H i xss
         /\ sem_var H o ys
-        /\ (forall n, xs n = absent ->
+        /\ (forall n, absent_list xss n ->
                       Forall (rhs_absent_instant (restr H n)) eqs)
-        /\ (forall n, xs n = absent <-> ys n = absent)
+        /\ (forall n, absent_list xss n <-> ys n = absent)
         /\ Forall (msem_equation G H M) eqs) ->
-      msem_node G f xs M ys.
+      msem_node G f xss M ys.
 
 Definition msem_equations G H M eqs := List.Forall (msem_equation G H M) eqs.
 
 Section msem_node_mult.
   Variable G: global.
 
-  Variable Pn: forall (f : ident) (xs : stream value) (M : memory) (ys : stream value),
-                 msem_node G f xs M ys -> Prop.
+  Variable Pn: forall (f : ident) xss (M : memory) (ys : stream value),
+                 msem_node G f xss M ys -> Prop.
   Variable P: forall (H : history) (M : memory) (eq : equation),
                  msem_equation G H M eq -> Prop.
 
@@ -111,11 +111,11 @@ Section msem_node_mult.
            (y      : ident)
            (f      : ident)
            (M'     : memory)
-           (lae    : laexp)
-           (ls     : stream value)
+           (laes    : laexps)
+           (ls     : stream (list value))
            (ys     : stream value)
            (Hmfind : mfind_inst y M = Some M')
-           (Hls    : sem_laexp H lae ls)
+           (Hls    : sem_laexps H laes ls)
            (Hys    : sem_var H y ys)
            (Hmsem  : msem_node G f ls M' ys),
       Pn Hmsem
@@ -144,34 +144,34 @@ Section msem_node_mult.
 
   Hypothesis SNode_case:
     forall (f : ident)
-           (xs : stream value)
+           (xss : stream (list value))
            (M : memory)
            (ys : stream value)
-           (i  : ident)
+           (i  : list ident)
            (o : ident)
            (eqs : list equation)
            (Hfind : find_node f G = Some (mk_node f i o eqs))
            (Hnode : exists H : history,
-                 sem_var H i xs
+                 sem_vars H i xss
               /\ sem_var H o ys
-              /\ (forall n, xs n = absent ->
+              /\ (forall n, absent_list xss n ->
                             Forall (rhs_absent_instant (restr H n)) eqs)
-              /\ (forall n, xs n = absent <-> ys n = absent)
+              /\ (forall n, absent_list xss n <-> ys n = absent)
               /\ Forall (msem_equation G H M) eqs),
       (exists H : history,
-             sem_var H i xs
+             sem_vars H i xss
           /\ sem_var H o ys
-          /\ (forall n, xs n = absent ->
+          /\ (forall n, absent_list xss n ->
                         Forall (rhs_absent_instant (restr H n)) eqs)
-          /\ (forall n, xs n = absent <-> ys n = absent)
+          /\ (forall n, absent_list xss n <-> ys n = absent)
           /\ Forall (fun eq=>exists Hsem, P (eq := eq)(M := M)(H := H) Hsem) eqs)
       -> Pn  (SNode Hfind Hnode).
 
   Fixpoint msem_node_mult (f : ident)
-                          (xs : stream value)
+                          (xss : stream (list value))
                           (M : memory)
                           (ys : stream value)
-                          (Hn : msem_node G f xs M ys) {struct Hn}
+                          (Hn : msem_node G f xss M ys) {struct Hn}
                                                           : Pn Hn :=
     match Hn in (msem_node _ f xs M ys) return (Pn Hn) with
     | SNode f xs M ys i o eqs Hf Hnode =>
@@ -227,33 +227,11 @@ End msem_node_mult.
 Definition msem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
 
-Ltac sem_det :=
-  match goal with
-    | H1: sem_caexp_instant ?H ?C ?X,
-      H2: sem_caexp_instant ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_caexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_caexp ?H ?C ?X,
-      H2: sem_caexp ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_caexp_det; eexact H1 || eexact H2
-    | H1: sem_laexp_instant ?H ?C ?X,
-      H2: sem_laexp_instant ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_laexp ?H ?C ?X,
-      H2: sem_laexp ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexp_det; eexact H1 || eexact H2
-    | H1: sem_var_instant ?H ?C ?X,
-      H2: sem_var_instant ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_var_instant_det; eexact H1 || eexact H2
-    | H1: sem_var ?H ?C ?X,
-      H2: sem_var ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_var_det; eexact H1 || eexact H2
-  end.
-
 Lemma rhs_absent_lhs_node:
-  forall G f xs M ys n,
+  forall G f xss M ys n,
        Welldef_global G
-    -> msem_node G f xs M ys
-    -> xs n = absent
+    -> msem_node G f xss M ys
+    -> absent_list xss n
     -> ys n = absent.
 Proof.
   intros G f xs M ys n Hwdef Hsem.
@@ -274,12 +252,12 @@ Proof.
     assumption.
   - intros x Habs Hseq Hidi.
     inversion_clear Hidi.
-    inversion_clear Habs as [|? ? ? Hlae|].
-    specialize (Hls n). specialize (Hys n). simpl in *.
-    assert (Hlae_abs: ls n = absent) by sem_det.
+    inversion_clear Habs as [|? ? ? ? Hlae Hvs|].
+    specialize (Hls n); specialize (Hys n); simpl in *.
+    assert (Hlae_abs: ls n = vs) by sem_det.
     rewrite Hlae_abs in *.
-    assert (Hys_abs: ys n = absent) by auto.
-    congruence.
+    assert (absent_list ls n) by (unfold absent_list; congruence).
+    rewrite IH in *; eauto.
   - intros x Habs Hsem Hidi.
     inversion_clear Hidi.
     inversion_clear Habs as [| |? ? ? Hlae].
@@ -333,7 +311,7 @@ Proof.
   destruct Hrhs as [Hrhs0 Hrhs1].
   destruct Hidi as [Hidi|Hidi].
   - destruct eq;
-    inversion_clear Hrhs0 as [? ? Habs|? ? ? Habs|? ? ? Habs];
+    inversion_clear Hrhs0 as [? ? Habs|? ? ? ? Habs|? ? ? ? Habs];
     inversion_clear Hsem0 as [? ? ? ? ? Hvar Hcae
                              |? ? ? ? ? ? ? ? Hmfind Hlae Hvar Hsem
                              |? ? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar];
@@ -342,14 +320,15 @@ Proof.
       assert (Hxs_abs: xs n = absent) by sem_det.
       congruence.
     + specialize (Hlae n); specialize (Hvar n); simpl in *.
-      assert (Hv_abs: ls n = absent) by sem_det.
-      assert (Hxs_abs: xs n = absent) by (eapply rhs_absent_lhs_node; eassumption).
+      assert (Hv_abs: ls n = vs) by sem_det.
+      assert (absent_list ls n) by (unfold absent_list; congruence).
+      assert (Hxs_abs: xs n = absent) by (eapply rhs_absent_lhs_node; eauto).
       congruence.
     + specialize (Hlae n); specialize (Hvar n); simpl in *.
       assert (Hls_abs: ls n = absent) by sem_det.
-      specialize H1 with n.
-      rewrite Hls_abs in H1; simpl in Hvar.
-      destruct H1. rewrite H1 in Hvar.
+      specialize H2 with n.
+      rewrite Hls_abs in H2; simpl in Hvar.
+      destruct H2. rewrite H2 in Hvar.
       auto.
   - destruct Hidi as [Hnidi Hidi].
     now apply IH with (1:=Hrhs1) (2:=Hsem1) (3:=Hidi).
@@ -684,10 +663,8 @@ Proof.
     + exact Hls.
     + exact Hxs.
     + exact Hmsem.
-    + inversion_clear Hwsch as [| |? ? ? ? ? ? Hnii|].
-      apply msem_equation_madd_obj.
-      apply Hnii.
-      now apply Hmeqs.
+    + inversion_clear Hwsch as [| |? ? ? ? ? ? ? Hnii|].
+      eauto using msem_equation_madd_obj. 
   - exists (madd_mem x (hold v0 ls) M).
     constructor.
     econstructor.
@@ -754,7 +731,7 @@ Proof.
                sem_node G f xs ys
                -> exists M, msem_node G f xs M ys) as IHG'
         by auto.
-    inversion_clear Hwdef as [|? ? Hw0 neqs ? ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
+    inversion_clear Hwdef as [|? ? Hw0 neqs ? ? ? ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
     simpl in neqs; unfold neqs in *.
     pose proof (sem_msem_eqs IHG' Hwsch Heqs) as HH.
     destruct HH as [M Hmsem].

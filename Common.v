@@ -16,6 +16,7 @@ Definition ident_eqb := Pos.eqb.
 
 Implicit Type i j: ident.
 
+
 Lemma ident_eqb_neq:
   forall x y, ident_eqb x y = false <-> x <> y.
 Proof.
@@ -33,6 +34,63 @@ Lemma ident_eqb_refl:
 Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
+
+Definition adds {A} (is: list ident)(vs: list A)(S: PM.t A) :=
+  List.fold_right (fun (iiv: ident * A) env => 
+                    let (i , iv) := iiv in
+                    PM.add i iv env) S (List.combine is vs).
+
+Inductive Assoc {A} : list ident -> list A -> ident -> A -> Prop :=
+| AssocHere: 
+    forall i v is vs,
+      Assoc (i :: is) (v :: vs) i v
+| AssocThere:
+    forall i v i' v' is vs,
+      Assoc is vs i' v' ->
+      i <> i' ->
+      Assoc (i :: is) (v :: vs) i' v'.
+
+
+
+Lemma gsss: 
+  forall (A: Type)(is: list ident)(vs: list A) i c,
+    Assoc is vs i c <-> PM.find i (adds is vs (PM.empty _)) = Some c.
+Proof.
+  Hint Constructors Assoc.
+  split.
+  - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl. 
+    * rewrite PM.gss; auto.
+    * rewrite PM.gso; auto.
+  - generalize dependent vs;
+    induction is as [|i1 is1]; 
+    intro vs; destruct vs as [|v1 vs1]; 
+    unfold adds; simpl; eauto; 
+    intro Hfind; try (rewrite PM.gempty in Hfind; discriminate).
+    destruct (ident_eqb i i1) eqn:Heqi.
+    * apply ident_eqb_eq in Heqi. subst. 
+      rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
+      econstructor.
+    * apply ident_eqb_neq in Heqi.
+      rewrite PM.gso in Hfind; auto.
+Qed.
+
+Lemma gsos: 
+  forall (A: Type)(is: list ident)(vs: list A)(m: PM.t A) i,
+    ~ List.In i is ->
+    PM.find i (adds is vs m) = PM.find i m.
+Proof.
+  intros ** Hnin; generalize dependent vs.
+  induction is as [|i0 is0]; destruct vs as [|v0 vs0]; 
+  unfold adds; simpl; auto.
+  destruct (ident_eqb i i0) eqn:Heqi.
+  - exfalso.
+    apply ident_eqb_eq in Heqi. subst.
+    apply Hnin; simpl; auto.
+  - apply ident_eqb_neq in Heqi.
+    rewrite PM.gso; eauto.
+    apply IHis0. intro Hin. apply Hnin. simpl. auto.
+Qed.
+
 
 Lemma In_dec:
   forall x S, {PS.In x S}+{~PS.In x S}.
@@ -174,3 +232,5 @@ Qed.
 
 Ltac not_In_empty :=
   match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.
+
+

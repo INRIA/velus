@@ -47,4 +47,3 @@ Definition fby (v0: const) (xs: stream value) (n: nat) : value :=
   | absent => absent
   | _ => present (hold v0 xs n)
   end.
-
