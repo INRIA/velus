@@ -18,7 +18,7 @@ Require Import Rustre.Dataflow.Stream.
 
 (** ** Environment and history *)
 
-(** 
+(**
 
 An history maps variables to streams of values (the variables'
 histories). Taking a snapshot of the history at a given time yields an
@@ -40,7 +40,7 @@ Inductive sem_var_instant R (x: ident) v: Prop :=
       sem_var_instant R x v.
 
 Inductive sem_clock_instant R: clock -> bool -> Prop :=
-| Sbase: 
+| Sbase:
       sem_clock_instant R Cbase true
 | Son_tick:
     forall ck x c,
@@ -386,14 +386,14 @@ Lemma sem_clock_instant_det:
     -> v1 = v2.
 Proof.
   induction ck; repeat inversion_clear 1; intuition;
-  try match goal with 
+  try match goal with
         | H1: sem_clock_instant ?R ?ck ?l,
           H2: sem_clock_instant ?R ?ck ?r |- ?l = ?r =>
           eapply IHck; eassumption
         | H1: sem_var_instant ?R ?i (present (Cbool ?l)),
           H2: sem_var_instant ?R ?i (present (Cbool ?r)),
           H3: ?l = ?r -> False |- _ = _ =>
-          exfalso; apply H3; 
+          exfalso; apply H3;
           cut (present (Cbool l) = present (Cbool r)); [injection 1; auto|];
           eapply sem_var_instant_det; eassumption
       end.
@@ -410,13 +410,13 @@ Proof.
   induction e;
     do 2 inversion_clear 1;
     match goal with
-    | H1:sem_var_instant ?R ?e (present (Cbool ?b1)), 
+    | H1:sem_var_instant ?R ?e (present (Cbool ?b1)),
       H2:sem_var_instant ?R ?e (present (Cbool ?b2)),
       H3: ?b1 <> ?b2 |- _ =>
       exfalso; apply H3;
       cut (present (Cbool b1) = present (Cbool b2)); [injection 1; auto|];
       eapply sem_var_instant_det; eassumption
-    | H1:sem_var_instant ?R ?e ?v1, 
+    | H1:sem_var_instant ?R ?e ?v1,
       H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 =>
       eapply sem_var_instant_det; eassumption
     | _ => auto
@@ -446,17 +446,17 @@ Lemma sem_cexp_instant_det:
 Proof.
   intros e R.
   induction e;
-  do 2 inversion_clear 1; 
+  do 2 inversion_clear 1;
     try match goal with
       | H1: sem_cexp_instant ?R ?e ?l,
         H2: sem_cexp_instant ?R ?e ?r
         |- ?l = ?r =>
-        (eapply IHe1; eassumption) 
+        (eapply IHe1; eassumption)
      || (eapply IHe2; eassumption)
       | H1: sem_var_instant ?R ?i (present (Cbool true)),
         H2: sem_var_instant ?R ?i (present (Cbool false)) |- _ =>
-        exfalso; 
-          assert (present (Cbool true) = present (Cbool false)) 
+        exfalso;
+          assert (present (Cbool true) = present (Cbool false))
           by (eapply sem_var_instant_det; eassumption);
           discriminate
       | H1: sem_lexp_instant ?R ?l ?v1,
@@ -477,7 +477,7 @@ Proof.
   | H1: sem_cexp_instant _ _ _,
     H2: sem_cexp_instant _ _ _ |- _ =>
     eapply sem_cexp_instant_det; eassumption
-  end. 
+  end.
 Qed.
 
 
@@ -512,28 +512,28 @@ Proof.
 Qed.
 
 Lemma sem_lexp_det:
-  forall H e xs1 xs2,  
+  forall H e xs1 xs2,
     sem_lexp H e xs1 -> sem_lexp H e xs2 -> xs1 = xs2.
 Proof.
   apply_lift sem_lexp_instant_det e.
 Qed.
 
 Lemma sem_laexp_det:
-  forall H e xs1 xs2,  
+  forall H e xs1 xs2,
     sem_laexp H e xs1 -> sem_laexp H e xs2 -> xs1 = xs2.
 Proof.
   apply_lift sem_laexp_instant_det e.
 Qed.
 
 Lemma sem_cexp_det:
-  forall H c xs1 xs2,  
+  forall H c xs1 xs2,
     sem_cexp H c xs1 -> sem_cexp H c xs2 -> xs1 = xs2.
 Proof.
   apply_lift sem_cexp_instant_det c.
 Qed.
 
 Lemma sem_caexp_det:
-  forall H c xs1 xs2,  
+  forall H c xs1 xs2,
     sem_caexp H c xs1 -> sem_caexp H c xs2 -> xs1 = xs2.
 Proof.
   apply_lift sem_caexp_instant_det c.
