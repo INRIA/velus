@@ -1,0 +1,15 @@
+* Remove clock rate constraints from the semantics
+
+This ought to be deduced from a Clocking / Is_well_clocked predicate
+defined over the syntax.
+
+* Remove [laexp] and [caexp] from the syntax
+
+* Add primitives to the language
+
+Objective: write and compile a counter and an integrator, following
+the Lustre87 paper.
+
+* Remove call to decision procedures in correctness proof
+
+* Factorize Is_well_sch 3 cases into a single one
