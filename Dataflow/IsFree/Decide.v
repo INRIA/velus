@@ -137,6 +137,38 @@ Proof.
   intuition not_In_empty.
 Qed.
 
+Lemma fold_left_free_in_lexp_cons_equiv : forall x l m,
+  PS.In x (List.fold_left (fun fvs e => free_in_lexp e fvs) l m) <-> 
+  List.Exists (Is_free_in_lexp x) l \/ PS.In x m.
+Proof.
+intros x l. induction l; intro m; simpl.
++ split; intro H; auto; [].
+  destruct H as [H | H]; auto; [].
+  inversion H.
++ rewrite IHl. rewrite free_in_lexp_spec.
+  split; intros [H | H]; auto.
+  - destruct H as [H | H]; auto.
+  - inversion_clear H; auto.
+Qed.
+
+Lemma free_in_laexps_spec:
+  forall x e m, PS.In x (free_in_laexps e m)
+                <-> Is_free_in_laexps x e \/ PS.In x m.
+Proof.
+intros x [c l] m. unfold free_in_laexps.
+rewrite fold_left_free_in_lexp_cons_equiv.
+rewrite free_in_clock_spec.
+split; intros [H | H]; auto; inversion H; auto.
+Qed.
+
+Lemma free_in_laexps_spec':
+  forall x l, PS.In x (free_in_laexps l PS.empty)
+              <-> Is_free_in_laexps x l.
+Proof.
+  intros; pose proof (free_in_laexps_spec x l PS.empty);
+  intuition not_In_empty.
+Qed.
+
 Ltac destruct_Is_free :=
   repeat match goal with
     | H: _ \/ _ |- _ => 
@@ -231,22 +263,21 @@ Qed.
 Lemma free_in_equation_spec:
   forall x eq m, PS.In x (free_in_equation eq m)
                  <-> (Is_free_in_equation x eq \/ PS.In x m).
-Admitted.
-(*
 Proof.
   destruct eq; split; intro H;
-  repeat progress (match goal with
+  repeat (match goal with
                    | H:Is_free_in_equation _ _ |- _ => inversion_clear H
                    | H:PS.In _ (free_in_equation _ _) |- _ =>
                                                       apply free_in_caexp_spec in H
                                                    || apply free_in_laexp_spec in H
+                                                   || apply free_in_laexps_spec in H
                    | |- PS.In _ (free_in_equation _ _) =>
                                                       apply free_in_caexp_spec
                                                    || apply free_in_laexp_spec
+                                                   || apply free_in_laexps_spec
                    | _ => intuition
                    end).
 Qed.
-*)
 
 Lemma free_in_equation_spec':
   forall x eq, PS.In x (free_in_equation eq PS.empty)
