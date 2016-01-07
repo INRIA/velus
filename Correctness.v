@@ -1456,6 +1456,7 @@ Qed.
 
 (** ** Validity of the whole translation *)
 
+(* =translate_correct= *)
 Lemma is_translate_correct:
   forall (G: global)
          (f: ident)
@@ -1473,6 +1474,7 @@ Lemma is_translate_correct:
              (Comp (Reset_ap f obj)
                    (Repeat (S n) (Step_ap r f obj (Const ci)))) (menv, env)
            /\ (forall co, ys n = present co <-> PM.find r env = Some co)).
+(* =end= *)
 Proof.
   (* TODO: Ugly, dumb proof. How to streamline / beautify all these
            inversions and rewrites. *)
