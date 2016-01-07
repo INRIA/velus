@@ -13,3 +13,7 @@ the Lustre87 paper.
 * Remove call to decision procedures in correctness proof
 
 * Factorize Is_well_sch 3 cases into a single one
+
+* Merge multi-input into master
+
+* Experiment: use a subset type for the invariant "non-empty list of args"
