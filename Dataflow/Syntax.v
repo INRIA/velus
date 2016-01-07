@@ -17,8 +17,8 @@ Implicit Type ck : clock.
 Inductive lexp : Type :=
   | Econst : const -> lexp
   | Evar : ident -> lexp
-  | Ewhen : lexp -> ident -> bool -> lexp.
-(* External operators are missing *)
+  | Ewhen : lexp -> ident -> bool -> lexp
+  | Eop : operator -> list lexp -> lexp.
 
 Inductive laexp : Type :=
   | LAexp : clock -> lexp -> laexp.

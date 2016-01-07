@@ -58,6 +58,7 @@ Section Translate.
     | Econst c => Const c
     | Evar x => if PS.mem x memories then State x else Var x
     | Ewhen e c x => translate_lexp e
+    | Eop op es => Op op (List.map translate_lexp es)
     end.
   
   Definition translate_laexp (lae: laexp): exp :=

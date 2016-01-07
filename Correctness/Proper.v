@@ -79,8 +79,10 @@ Instance translate_lexp_Proper :
 Proof.
   intros M M' HMeq e e' Heq; rewrite <- Heq; clear Heq e'.
   revert M M' HMeq.
+  (* TODO: needs a stronger induciton principle *)
   induction e; intros M M' HMeq; simpl; auto.
   rewrite HMeq; auto.
+  admit.
 Qed.
 
 Instance translate_cexp_Proper :

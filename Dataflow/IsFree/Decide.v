@@ -27,6 +27,7 @@ Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
   | Econst c => fvs
   | Evar x => PS.add x fvs
   | Ewhen e x xc => free_in_lexp e (PS.add x fvs)
+  | Eop op eq => free_in_lexp e (PS.add x fvs)
   end.
 
 Definition free_in_laexp (lae : laexp) (fvs : PS.t) : PS.t :=

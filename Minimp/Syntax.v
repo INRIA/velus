@@ -1,6 +1,7 @@
 Require Import Rustre.Common.
 
 
+Open Scope bool_scope.
 Import List.ListNotations.
 Open Scope list_scope.
 
@@ -18,7 +19,8 @@ Open Scope list_scope.
 Inductive exp : Set :=
 | Var : ident -> exp
 | State : ident -> exp
-| Const : const -> exp.
+| Const : const -> exp
+| Op : operator -> list exp -> exp.
 
 Implicit Type e: exp.
 
@@ -69,11 +71,14 @@ Definition find_class (n: ident) : program -> option (class * list class) :=
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
     end.
 
+(*
+(* We need a custom induction recursion principle. *)
 Definition exp_eqb (e1: exp) (e2: exp) : bool :=
   match e1, e2 with
   | Var x1, Var x2 => ident_eqb x1 x2
   | State s1, State s2 => ident_eqb s1 s2
   | Const c1, Const c2 => const_eqb c1 c2
+  | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && exps_eqb es1 es2
   | _, _ => false
   end.
 
@@ -86,8 +91,7 @@ Proof.
     (try discriminate || (apply ident_eqb_eq in H0
                           || apply const_eqb_eq in H0;
                           rewrite H0; reflexivity)).
-  - destruct e1, e2; simpl; intro H0;
-    discriminate
+  - destruct e1, e2; simpl; intro Heq; try discriminate.
     || (injection H0; intro H1; rewrite H1;
         apply ident_eqb_eq || apply const_eqb_eq; reflexivity).
 Qed.
@@ -110,5 +114,4 @@ Proof.
   intro H; apply exp_eqb_eq in H.
   rewrite Heq in H; discriminate.
 Qed.
-
-
+*)

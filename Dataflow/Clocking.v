@@ -34,7 +34,11 @@ Inductive clk_lexp C: lexp -> clock -> Prop :=
     forall e x b ck,
       clk_lexp C e ck ->
       clk_var C x ck ->
-      clk_lexp C (Ewhen e x b) (Con ck x b).
+      clk_lexp C (Ewhen e x b) (Con ck x b)
+| Cop:
+    forall op les ck,
+      Forall (fun e => clk_lexp C e ck) les ->
+      clk_lexp C (Eop op les) ck.
 
 Inductive clk_cexp C: cexp -> clock -> Prop :=
 | Cmerge:
@@ -121,13 +125,14 @@ Lemma clk_clock_lexp:
     -> clk_lexp C le ck
     -> clk_clock C ck.
 Proof.
-  induction le as [| |le IH].
+  induction le as [| |le IH | ].
   - inversion_clear 2; now constructor.
-  - intros ck Hwc; inversion_clear 1 as [|? ? Hcv|].
+  - intros ck Hwc; inversion_clear 1 as [|? ? Hcv| |].
     apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
   - intros ck Hwc.
-    inversion_clear 1 as [| |? ? ? ck' Hle Hcv].
+    inversion_clear 1 as [| |? ? ? ck' Hle Hcv |].
     constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
+  - admit. (* TODO: with a new induction principle for lexp *)
 Qed.
 
 Lemma clk_clock_cexp:

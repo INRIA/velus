@@ -1,6 +1,8 @@
 Require Import Coq.FSets.FMapPositive.
+Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
+
 
 (** * Common definitions *)
 
@@ -15,6 +17,45 @@ Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 
 Implicit Type i j: ident.
+
+(* The basic types supported by Rustre *)
+Inductive base_type := Tint | Tbool.
+Inductive const : Set :=
+| Cint : BinInt.Z -> const
+| Cbool : bool -> const.
+
+Definition nelist A := {l : list A | l <> nil}.
+
+Inductive arity :=
+  | Tout (t_out : base_type)
+  | Tcons (t_in : base_type) (arr : arity).
+
+(* Our own version of RelationClasses.arrows interpreting the arity *)
+Definition base_interp t :=
+  match t with
+    | Tint => BinInt.Z
+    | Tbool => bool
+  end.
+
+Fixpoint arrows (l : arity) : Set :=
+  match l with
+    | Tout t => base_interp t
+    | Tcons A ar => base_interp A -> arrows ar
+  end.
+
+(* The set of external operators. idea: operator = sigT arrows but we want decidable equality *)
+Parameter operator : Set.
+Parameter get_arity : operator -> arity.
+Parameter get_interp : forall op : operator, arrows (get_arity op).
+Axiom op_dec : forall op1 op2 : operator, {op1 = op2} + {op1 <> op2}.
+
+(*
+Example plus : operator.
+exists (Tcons Tint (Tcons Tint (Tout Tint))).
+exact BinInt.Z.add.
+Defined.*)
+
+(** * Common (and preliminary) results **)
 
 Lemma ident_eqb_neq:
   forall x y, ident_eqb x y = false <-> x <> y.
@@ -39,10 +80,6 @@ Lemma In_dec:
 Proof.
   intros i m; unfold PS.In; case (PS.mem i m); auto.
 Qed.
-
-Inductive const : Set :=
-| Cint : BinInt.Z -> const
-| Cbool : bool -> const.
 
 Definition const_eqb (c1: const) (c2: const) : bool :=
   match c1, c2 with
@@ -115,7 +152,6 @@ Proof.
   contradiction.
 Qed.
 
-Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
@@ -199,7 +235,9 @@ Proof.
 Qed.
 
 
-(* TODO: Why isn't this lemma already in the module PS? *)
+(* TODO: Why isn't this lemma already in the module PS?
+   -> Actually it is ! *)
+Check PS.empty_spec.
 Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
 Proof.
   unfold PS.In; unfold PS.empty;
@@ -208,3 +246,24 @@ Qed.
 
 Ltac not_In_empty :=
   match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.
+
+(* A constant list of the same size *)
+Definition alls {A B} c (l : list A) : list B := map (fun _ => c) l.
+
+
+Definition op_eqb op1 op2 := if op_dec op1 op2 then true else false.
+
+Lemma op_eqb_true_iff : forall op1 op2, op_eqb op1 op2 = true <-> op1 = op2.
+Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
+
+Lemma op_eqb_false_iff : forall op1 op2, op_eqb op1 op2 = false <-> op1 <> op2.
+Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
+
+Open Scope bool_scope.
+
+Fixpoint forall2b {A B} (f : A -> B -> bool) l1 l2 :=
+  match l1, l2 with
+    | nil, nil => true
+    | e1 :: l1, e2 :: l2 => f e1 e2 && forall2b f l1 l2
+    | _, _ => false
+  end.

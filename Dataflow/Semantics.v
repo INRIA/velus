@@ -8,6 +8,93 @@ Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.Stream.
 
+
+(** ** Results about arities *)
+
+(* length function *)
+Fixpoint nb_args (ar : arity) :=
+  match ar with
+    | Tout _ => 0
+    | Tcons t ar => S (nb_args ar)
+  end.
+
+(* list of argument types *)
+Fixpoint arg_interp (ar : arity) :=
+  match ar with
+    | Tout _ => nil
+    | Tcons t ar => cons (base_interp t) (arg_interp ar)
+  end.
+
+(* result type *)
+Fixpoint res_interp (ar : arity) :=
+  match ar with
+    | Tout t => base_interp t
+    | Tcons _ ar => res_interp ar
+  end.
+
+(* base_type of result to const *)
+Definition base_to_const t :=
+  match t as t' return base_interp t' -> const with
+    | Tint => fun v => Cint v
+    | Tbool => fun b => Cbool b
+  end.
+
+(** Two possible versions: 
+    1) arguments must be correct
+    2) arguments are checked to have the proper type *)
+
+(* Version 1 *)
+(* List of valid arguments *)
+Inductive valid_args : arity -> Set :=
+  | noArg : forall t_out, valid_args (Tout t_out)
+  | moreArg : forall {t_in ar} (c : base_interp t_in) (l : valid_args ar), valid_args (Tcons t_in ar).
+
+(* TODO: make a better definition *)
+Fixpoint apply_arity_1 {ar : arity} (f : arrows ar) (args : valid_args ar) : res_interp ar.
+destruct ar; simpl in *.
+- exact f.
+- inversion_clear args.
+  exact (apply_arity_1 ar (f c) l).
+Defined.
+
+(* Version 2 *)
+(* Predicate accepting list of valid arguments *)
+Inductive Valid_args : arity -> list const -> Prop :=
+  | NoArg : forall t, Valid_args (Tout t) nil
+  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (cons (Cint n) l)
+  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (cons (Cbool b) l).
+
+Lemma Valid_args_length : forall ar l, Valid_args ar l -> length l = nb_args ar.
+Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
+
+Fixpoint apply_arity (ar : arity) : arrows ar -> list const -> value :=
+  match ar with
+    | Tout t => fun (f : arrows (Tout t)) (l : list const) =>
+        match l with
+          | nil => present (base_to_const t f)
+          | cons _ _ => absent (* error case: too many arguments *)
+        end
+    | Tcons Tint ar => fun (f : Z -> arrows ar) (l : list const) =>
+        match l with
+          | nil => absent (* error case: too few arguments *)
+          | cons (Cbool _) l => absent (* error case: wrong argument type *)
+          | cons (Cint n) l => apply_arity ar (f n) l
+        end
+    | Tcons Tbool ar => fun (f : bool -> arrows ar) (l : list const) =>
+        match l with
+          | nil => absent (* error case: too few arguments *)
+          | cons (Cint _) l => absent (* error case: wrong argument type *)
+          | cons (Cbool b) l => apply_arity ar (f b) l
+        end
+  end.
+
+Definition apply_op (op : operator) (l : list const) : value :=
+  apply_arity (get_arity op) (get_interp op) l.
+
+
+(* TODO: put R as a section variable *)
+
+
 (**
 
   We provide a "standard" dataflow semantics relating an environment
@@ -76,7 +163,15 @@ Inductive sem_lexp_instant R: lexp -> value -> Prop:=
       sem_var_instant R x (present (Cbool b')) ->
       ~ (b = b') ->
       (* Note: says nothing about 's'. *)
-      sem_lexp_instant R (Ewhen s x b) absent.
+      sem_lexp_instant R (Ewhen s x b) absent
+| Sop_eq: forall les op cs,
+    Forall2 (sem_lexp_instant R) les (map present cs) ->
+    Valid_args (get_arity op) cs ->
+    sem_lexp_instant R (Eop op les) (apply_op op cs)
+| Sop_abs: forall les op cs,
+    Forall2 (sem_lexp_instant R) les (alls absent cs) ->
+    Valid_args (get_arity op) cs ->
+    sem_lexp_instant R (Eop op les) (apply_op op cs).
 
 Inductive sem_laexp_instant R: laexp -> value -> Prop:=
 | SLtick:
@@ -408,7 +503,7 @@ Lemma sem_lexp_instant_det:
 Proof.
   intros e R.
   induction e;
-    do 2 inversion_clear 1;
+    try now do 2 inversion_clear 1;
     match goal with
     | H1:sem_var_instant ?R ?e (present (Cbool ?b1)),
       H2:sem_var_instant ?R ?e (present (Cbool ?b2)),
@@ -421,6 +516,7 @@ Proof.
       eapply sem_var_instant_det; eassumption
     | _ => auto
     end.
+admit. (* TODO: modify the induction principle for lexp so that the reasoning can go through *)
 Qed.
 
 Lemma sem_laexp_instant_det:
