@@ -488,8 +488,7 @@ Proof.
   - exact Hmfind.
   - exact Hls.
   - exact Hxs.
-  - SearchAbout msem_node (_::_).
-    inversion_clear Hord as [|? ? Hord' Hnn Hnns].
+  - inversion_clear Hord as [|? ? Hord' Hnn Hnns].
     apply msem_node_cons2 with (1:=Hord') (3:=Hnns).
     apply Hmsem.
 Qed.
