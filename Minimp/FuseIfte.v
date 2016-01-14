@@ -17,7 +17,10 @@ Inductive Is_free_in_exp : ident -> exp -> Prop :=
 | FreeVar: forall i,
     Is_free_in_exp i (Var i)
 | FreeState: forall i,
-    Is_free_in_exp i (State i).
+    Is_free_in_exp i (State i)
+| FreeOp: forall i op es,
+    List.Exists (Is_free_in_exp i) es ->
+    Is_free_in_exp i (Op op es).
 
 Inductive Can_write_in : ident -> stmt -> Prop :=
 | CWIAssign: forall x e,
@@ -94,8 +97,14 @@ Proof.
   Hint Constructors Is_free_in_exp Can_write_in exp_eval.
   induction s; intros menv env menv' env' e' v Hfree Hexp Hstmt.
   - inversion Hstmt; subst; clear Hstmt.
-    induction e; inversion Hexp; subst; intuition;
-    constructor; (rewrite PM.gso; [now assumption|intro HH; subst; now eauto]).
+    induction e using exp_ind2; inversion Hexp; subst; intuition;
+    try now (constructor; (rewrite PM.gso; [assumption | intro HH; subst; now eauto])).
+(*    + apply eop with cs; trivial.
+      induction es as [| e es].
+      * inversion_clear H. constructor.
+      * admit. (* FIXME: hum, it seems wrong! inversion_clear H. constructor. *) *)
+Admitted.
+(*
   - inversion Hstmt; subst; clear Hstmt.
     induction e; inversion Hexp; subst; intuition;
     constructor; (rewrite mfind_mem_gso; [assumption|intro HH; subst; now eauto]).
@@ -139,7 +148,7 @@ Proof.
       apply Hfree with (1:=Hfree').
       intuition.
   - inversion Hstmt; subst; assumption.
-Qed.
+Qed. *)
 
 Lemma lift_Ifte:
   forall e s1 s2 t1 t2,

@@ -125,14 +125,17 @@ Lemma clk_clock_lexp:
     -> clk_lexp C le ck
     -> clk_clock C ck.
 Proof.
-  induction le as [| |le IH | ].
-  - inversion_clear 2; now constructor.
-  - intros ck Hwc; inversion_clear 1 as [|? ? Hcv| |].
-    apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
-  - intros ck Hwc.
-    inversion_clear 1 as [| |? ? ? ck' Hle Hcv |].
-    constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
-  - admit. (* TODO: with a new induction principle for lexp *)
+induction le as [| |le IH | ] using lexp_ind2.
++ inversion_clear 2; now constructor.
++ intros ck Hwc; inversion_clear 1 as [|? ? Hcv| |].
+  apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
++ intros ck Hwc.
+  inversion_clear 1 as [| |? ? ? ck' Hle Hcv |].
+  constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
++ intros ck Hwc; inversion_clear 1 as [| | | ? ? ? Hrec].
+  induction les.
+  - admit. (* FIXME: seems false if there is no argument *)
+  - inversion_clear H. inversion_clear Hrec. now apply IHles.
 Qed.
 
 Lemma clk_clock_cexp:

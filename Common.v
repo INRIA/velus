@@ -247,6 +247,14 @@ Qed.
 Ltac not_In_empty :=
   match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.
 
+Lemma map_eq_cons : forall {A B} (f : A -> B) l y l',
+  map f l = y :: l' -> exists x l'', l = x :: l'' /\ f x = y.
+Proof.
+intros A B f l y l' Hmap. destruct l; simpl in Hmap.
+- discriminate.
+- inversion_clear Hmap. eauto.
+Qed.
+
 (* A constant list of the same size *)
 Definition alls {A B} c (l : list A) : list B := map (fun _ => c) l.
 
@@ -267,3 +275,107 @@ Fixpoint forall2b {A B} (f : A -> B -> bool) l1 l2 :=
     | e1 :: l1, e2 :: l2 => f e1 e2 && forall2b f l1 l2
     | _, _ => false
   end.
+
+Lemma Forall2_forall2 : forall {A B : Type} P l1 l2,
+  Forall2 P l1 l2 <-> length l1 = length l2 /\
+                      forall (a : A) (b : B) n x1 x2, n < length l1 -> nth n l1 a = x1 -> nth n l2 b = x2 -> P x1 x2.
+Proof.
+intros A B P l1. induction l1; intro l2.
+* split; intro H.
+  + inversion_clear H. split; simpl; auto. intros. omega.
+  + destruct H as [H _]. destruct l2; try discriminate. constructor.
+* split; intro H.
+  + inversion_clear H. rewrite IHl1 in H1. destruct H1. split; simpl; auto.
+    intros. destruct n; subst; trivial. eapply H1; eauto. omega.
+  + destruct H as [Hlen H].
+    destruct l2; simpl in Hlen; try discriminate. constructor.
+    apply (H a b 0); trivial; simpl; try omega.
+    rewrite IHl1. split; try omega.
+    intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
+Qed.
+
+Corollary Forall2_length : forall {A B} (P : A -> B -> Prop) l1 l2,
+  Forall2 P l1 l2 -> length l1 = length l2.
+Proof. intros * Hall. rewrite Forall2_forall2 in Hall. now destruct Hall. Qed.
+
+(** ** Results about arities *)
+
+(* length function *)
+Fixpoint nb_args (ar : arity) :=
+  match ar with
+    | Tout _ => 0
+    | Tcons t ar => S (nb_args ar)
+  end.
+
+(* list of argument types *)
+Fixpoint arg_interp (ar : arity) :=
+  match ar with
+    | Tout _ => nil
+    | Tcons t ar => cons (base_interp t) (arg_interp ar)
+  end.
+
+(* result type *)
+Fixpoint res_interp (ar : arity) :=
+  match ar with
+    | Tout t => base_interp t
+    | Tcons _ ar => res_interp ar
+  end.
+
+(* base_type of result to const *)
+Definition base_to_const t :=
+  match t as t' return base_interp t' -> const with
+    | Tint => fun v => Cint v
+    | Tbool => fun b => Cbool b
+  end.
+
+(** Two possible versions: 
+    1) arguments must be correct
+    2) arguments are checked to have the proper type *)
+
+(* Version 1 *)
+(* List of valid arguments *)
+Inductive valid_args : arity -> Set :=
+  | noArg : forall t_out, valid_args (Tout t_out)
+  | moreArg : forall {t_in ar} (c : base_interp t_in) (l : valid_args ar), valid_args (Tcons t_in ar).
+
+(* TODO: make a better definition *)
+Fixpoint apply_arity_1 {ar : arity} (f : arrows ar) (args : valid_args ar) : res_interp ar.
+destruct ar; simpl in *.
+- exact f.
+- inversion_clear args.
+  exact (apply_arity_1 ar (f c) l).
+Defined.
+
+(* Version 2 *)
+(* Predicate accepting list of valid arguments *)
+Inductive Valid_args : arity -> list const -> Prop :=
+  | NoArg : forall t, Valid_args (Tout t) nil
+  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (cons (Cint n) l)
+  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (cons (Cbool b) l).
+
+Lemma Valid_args_length : forall ar l, Valid_args ar l -> length l = nb_args ar.
+Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
+
+Fixpoint apply_arity (ar : arity) : arrows ar -> list const -> option const :=
+  match ar with
+    | Tout t => fun (f : arrows (Tout t)) (l : list const) =>
+        match l with
+          | nil => Some (base_to_const t f)
+          | cons _ _ => None (* error case: too many arguments *)
+        end
+    | Tcons Tint ar => fun (f : Z -> arrows ar) (l : list const) =>
+        match l with
+          | nil => None (* error case: too few arguments *)
+          | cons (Cbool _) l => None (* error case: wrong argument type *)
+          | cons (Cint n) l => apply_arity ar (f n) l
+        end
+    | Tcons Tbool ar => fun (f : bool -> arrows ar) (l : list const) =>
+        match l with
+          | nil => None (* error case: too few arguments *)
+          | cons (Cint _) l => None (* error case: wrong argument type *)
+          | cons (Cbool b) l => apply_arity ar (f b) l
+        end
+  end.
+
+Definition apply_op (op : operator) (l : list const) : option const :=
+  apply_arity (get_arity op) (get_interp op) l.

@@ -451,16 +451,31 @@ Lemma lexp_correct:
                        /\ (PS.In x memories -> mfind_mem x menv = Some c))
     -> exp_eval menv env (translate_lexp memories e) c.
 Proof.
-  Hint Constructors exp_eval.
-  intros R memories menv env c.
-  induction e as [c0|y|e IH y yb];
-    inversion 1; intros;
-    try apply IH; try apply econst; auto.
-  split_env_assumption;
+Hint Constructors exp_eval.
+intros R memories menv env c e. revert c.
+induction e as [c0|y|e IH y yb| op les IHle] using lexp_ind2; intro c;
+  inversion 1; intros; try apply IH; try apply econst; auto.
+* split_env_assumption;
     unfold translate_lexp;
     destruct (PS.mem y memories) eqn:Hm;
     rewrite PS.mem_spec in Hm || rewrite mem_spec_false in Hm;
     auto.
+* subst. simpl. apply eop with cs.
+  + clear H2 H4 H.
+    assert (Hlen : length les = length cs).
+    { rewrite <- (map_length present). eapply Forall2_length; eassumption. }
+    revert cs Hlen H3. induction les; intros cs Hlen Hrec.
+    - destruct cs; constructor || simpl in Hlen; discriminate.
+    - destruct cs as [| c1 cs]; simpl in Hlen; try discriminate.
+      { simpl. constructor.
+        + inversion_clear IHle.
+          apply H.
+          - now inversion_clear Hrec.
+          - intros. apply H5; trivial. constructor. now left.
+        + inversion_clear Hrec. apply IHles; omega || trivial.
+          - now inversion IHle.
+          - intros. apply H5; trivial. constructor. right. now inversion H1. }
+  + destruct (apply_op op cs); now inversion H2.
 Qed.
 
 (** ** Validity of [translate_laexp] *)
@@ -693,18 +708,11 @@ Proof.
                            -> forall c, sem_var_instant (restr H n) x (present c)
                                         <-> PM.find x env' = Some c)
              /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs) as IHeqs'.
-  { eapply IHeqs.
-    - apply List_shift_away with (1:=Hall).
-    - exact Hinmems.
-    - exact Hwdef.
-    - exact Hprog.
-    - exact Hin.
+  { eapply IHeqs; trivial.
+    - eapply List_shift_away; eassumption.
     - intros; apply Henv; constructor 2; auto.
-    - exact Hin1.
-    - apply not_Is_defined_in_cons with (1:=Hin2).
-    - apply Is_well_sch_cons with (1:=Hwsch).
-    - exact Hnode.
-    - exact Hmc. }
+    - eapply not_Is_defined_in_cons; eassumption.
+    - eapply Is_well_sch_cons; eassumption. }
 
   clear IHeqs.
   destruct IHeqs' as [menv' [env' [Hstmt [IHeqs0 IHeqs1]]]].
@@ -768,7 +776,8 @@ Proof.
         apply stmt_eval_Control_absent.
         eapply clock_correct_false; eauto.
       * intros x0 Hivi c.
-        (* TODO: do we really need this [destruct]? It seems that we *know* that it cannot be a variable (proof by [contradiction]/[discriminate]).
+        (* TODO: do we really need this [destruct]?
+                 It seems that we *know* that it cannot be a variable (proof by [contradiction]/[discriminate]).
                  If not, remove dependency on [Dataflow.IsVariable.Decide] *)
         destruct (Is_variable_in_dec x0 eqs) as [Hvin|Hvin];
           [now apply IHeqs0 with (1:=Hvin)|].

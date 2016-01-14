@@ -9,88 +9,11 @@ Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.Stream.
 
 
-(** ** Results about arities *)
-
-(* length function *)
-Fixpoint nb_args (ar : arity) :=
-  match ar with
-    | Tout _ => 0
-    | Tcons t ar => S (nb_args ar)
+Definition option_const_to_value co :=
+  match co with
+    | None => absent
+    | Some v => present v
   end.
-
-(* list of argument types *)
-Fixpoint arg_interp (ar : arity) :=
-  match ar with
-    | Tout _ => nil
-    | Tcons t ar => cons (base_interp t) (arg_interp ar)
-  end.
-
-(* result type *)
-Fixpoint res_interp (ar : arity) :=
-  match ar with
-    | Tout t => base_interp t
-    | Tcons _ ar => res_interp ar
-  end.
-
-(* base_type of result to const *)
-Definition base_to_const t :=
-  match t as t' return base_interp t' -> const with
-    | Tint => fun v => Cint v
-    | Tbool => fun b => Cbool b
-  end.
-
-(** Two possible versions: 
-    1) arguments must be correct
-    2) arguments are checked to have the proper type *)
-
-(* Version 1 *)
-(* List of valid arguments *)
-Inductive valid_args : arity -> Set :=
-  | noArg : forall t_out, valid_args (Tout t_out)
-  | moreArg : forall {t_in ar} (c : base_interp t_in) (l : valid_args ar), valid_args (Tcons t_in ar).
-
-(* TODO: make a better definition *)
-Fixpoint apply_arity_1 {ar : arity} (f : arrows ar) (args : valid_args ar) : res_interp ar.
-destruct ar; simpl in *.
-- exact f.
-- inversion_clear args.
-  exact (apply_arity_1 ar (f c) l).
-Defined.
-
-(* Version 2 *)
-(* Predicate accepting list of valid arguments *)
-Inductive Valid_args : arity -> list const -> Prop :=
-  | NoArg : forall t, Valid_args (Tout t) nil
-  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (cons (Cint n) l)
-  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (cons (Cbool b) l).
-
-Lemma Valid_args_length : forall ar l, Valid_args ar l -> length l = nb_args ar.
-Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
-
-Fixpoint apply_arity (ar : arity) : arrows ar -> list const -> value :=
-  match ar with
-    | Tout t => fun (f : arrows (Tout t)) (l : list const) =>
-        match l with
-          | nil => present (base_to_const t f)
-          | cons _ _ => absent (* error case: too many arguments *)
-        end
-    | Tcons Tint ar => fun (f : Z -> arrows ar) (l : list const) =>
-        match l with
-          | nil => absent (* error case: too few arguments *)
-          | cons (Cbool _) l => absent (* error case: wrong argument type *)
-          | cons (Cint n) l => apply_arity ar (f n) l
-        end
-    | Tcons Tbool ar => fun (f : bool -> arrows ar) (l : list const) =>
-        match l with
-          | nil => absent (* error case: too few arguments *)
-          | cons (Cint _) l => absent (* error case: wrong argument type *)
-          | cons (Cbool b) l => apply_arity ar (f b) l
-        end
-  end.
-
-Definition apply_op (op : operator) (l : list const) : value :=
-  apply_arity (get_arity op) (get_interp op) l.
-
 
 (* TODO: put R as a section variable *)
 
@@ -167,11 +90,10 @@ Inductive sem_lexp_instant R: lexp -> value -> Prop:=
 | Sop_eq: forall les op cs,
     Forall2 (sem_lexp_instant R) les (map present cs) ->
     Valid_args (get_arity op) cs ->
-    sem_lexp_instant R (Eop op les) (apply_op op cs)
-| Sop_abs: forall les op cs,
-    Forall2 (sem_lexp_instant R) les (alls absent cs) ->
-    Valid_args (get_arity op) cs ->
-    sem_lexp_instant R (Eop op les) (apply_op op cs).
+    sem_lexp_instant R (Eop op les) (option_const_to_value (apply_op op cs))
+| Sop_abs: forall les op,
+    Forall2 (sem_lexp_instant R) les (alls absent les) ->
+    sem_lexp_instant R (Eop op les) absent.
 
 Inductive sem_laexp_instant R: laexp -> value -> Prop:=
 | SLtick:
@@ -502,7 +424,7 @@ Lemma sem_lexp_instant_det:
     -> v1 = v2.
 Proof.
   intros e R.
-  induction e;
+  induction e using lexp_ind2;
     try now do 2 inversion_clear 1;
     match goal with
     | H1:sem_var_instant ?R ?e (present (Cbool ?b1)),
@@ -516,7 +438,31 @@ Proof.
       eapply sem_var_instant_det; eassumption
     | _ => auto
     end.
-admit. (* TODO: modify the induction principle for lexp so that the reasoning can go through *)
+intros v1 v2 Hsem1 Hsem2.
+inversion_clear Hsem1; inversion_clear Hsem2.
+* do 2 f_equal. clear H1 H3. revert cs cs0 H0 H2.
+  induction les as [| le les]; intros cs1 cs2 Hrec1 Hrec2.
+  + inversion Hrec1. inversion Hrec2. symmetry in H0, H1.
+    apply map_eq_nil in H0. apply map_eq_nil in H1. now subst.
+  + inversion Hrec1; subst. inversion Hrec2; subst.
+    symmetry in H2, H5.
+    apply map_eq_cons in H2. destruct H2 as [x1 [cs1' [Hcs1 Hx1]]].
+    apply map_eq_cons in H5. destruct H5 as [x2 [cs2' [Hcs2 Hx2]]]. subst.
+    assert (Hx : x1 = x2).
+    { inversion_clear H. rewrite present_injection. now apply H0. }
+    inversion_clear H. inversion_clear Hrec1; inversion_clear Hrec2.
+    f_equal; trivial. now apply (IHles H1).
+* exfalso. destruct les as [| le les].
+  + admit. (* FIXME: seems false if there is no argument *)
+  + inversion H0; subst. inversion H2; subst.
+    inversion_clear H. specialize (H3 _ _ H6 H9).
+    symmetry in H5. apply map_eq_cons in H5. decompose [ex and] H5. subst. discriminate.
+* exfalso. destruct les as [| le les].
+  + admit. (* FIXME: seems false if there is no argument *)
+  + inversion H0; subst. inversion H1; subst.
+    inversion_clear H. specialize (H3 _ _ H6 H7).
+    symmetry in H5. apply map_eq_cons in H5. decompose [ex and] H5. subst. discriminate.
+* reflexivity.
 Qed.
 
 Lemma sem_laexp_instant_det:

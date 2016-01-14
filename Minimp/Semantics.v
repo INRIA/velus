@@ -35,7 +35,12 @@ Inductive exp_eval heap stack:
       exp_eval heap stack (State(x)) v
 | econst:
     forall c ,
-      exp_eval heap stack (Const(c)) c.
+      exp_eval heap stack (Const(c)) c
+| eop:
+    forall op es cs c,
+      List.Forall2 (exp_eval heap stack) es cs ->
+      apply_op op cs = Some c ->
+      exp_eval heap stack (Op op es) c.
 
 Inductive stmt_eval :
   program -> heap -> stack -> stmt -> heap * stack -> Prop :=
@@ -116,12 +121,19 @@ Lemma exp_eval_det:
     exp_eval menv env e v2 ->
     v1 = v2.
 Proof.
-  induction e;
+  induction e using exp_ind2;
     intros v1 v2 H1 H2;
-    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1];
-    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2];
-    rewrite Hv1 in Hv2;
-    ( injection Hv2; trivial ) || apply Hv2.
+    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1| xa opa esa IHa Hv1];
+    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2| xb opb esb IHb Hv2];
+    try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2).
+  subst.
+  assert (esa = esb).
+  { clear H1 H2 H5 H9. revert esa esb Hv1 Hv2. induction es; intros esa esb Hv1 Hv2.
+    * inversion_clear Hv1. inversion_clear Hv2. reflexivity.
+    * inversion_clear Hv1. inversion_clear Hv2. inversion_clear H. f_equal.
+      + now apply H4.
+      + now apply IHes. }
+  subst. rewrite H5 in *. now inversion H9.
 Qed.
 
 Lemma stmt_eval_fold_left_shift:

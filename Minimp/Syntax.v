@@ -22,6 +22,23 @@ Inductive exp : Set :=
 | Const : const -> exp
 | Op : operator -> list exp -> exp.
 
+Definition exp_ind2 : forall P : exp -> Prop,
+  (forall i, P (Var i)) ->
+  (forall i, P (State i)) ->
+  (forall c, P (Const c)) ->
+  (forall op es, List.Forall P es -> P (Op op es)) ->
+  forall e, P e.
+Proof.
+intros P Hvar Hstate Hcons Hop. fix 1.
+intros e. destruct e as [i | i | c | op es].
++ apply Hvar.
++ apply Hstate.
++ apply Hcons.
++ apply Hop. induction es as [| e es].
+  - trivial.
+  - now constructor.
+Defined.
+
 Implicit Type e: exp.
 
 Inductive stmt : Set :=
@@ -71,29 +88,45 @@ Definition find_class (n: ident) : program -> option (class * list class) :=
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
     end.
 
-(*
-(* We need a custom induction recursion principle. *)
-Definition exp_eqb (e1: exp) (e2: exp) : bool :=
-  match e1, e2 with
+
+(* We need a custom recursion principle. *)
+Definition exp_eqb : exp -> exp -> bool.
+Proof.
+fix 1.
+intros e1 e2.
+refine (match e1, e2 with
   | Var x1, Var x2 => ident_eqb x1 x2
   | State s1, State s2 => ident_eqb s1 s2
   | Const c1, Const c2 => const_eqb c1 c2
-  | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && exps_eqb es1 es2
+  | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && _
   | _, _ => false
-  end.
+  end).
+Guarded.
+clear e1 e2. revert es2. induction es1 as [| e1 es1]; intros [| e2 es2].
+- exact true.
+- exact false.
+- exact false.
+- exact (exp_eqb e1 e2 && IHes1 es2).
+Defined.
 
 Lemma exp_eqb_eq:
   forall e1 e2,
     exp_eqb e1 e2 = true <-> e1 = e2.
 Proof.
-  split.
-  - destruct e1, e2; simpl; intro H0;
-    (try discriminate || (apply ident_eqb_eq in H0
-                          || apply const_eqb_eq in H0;
-                          rewrite H0; reflexivity)).
-  - destruct e1, e2; simpl; intro Heq; try discriminate.
-    || (injection H0; intro H1; rewrite H1;
-        apply ident_eqb_eq || apply const_eqb_eq; reflexivity).
+induction e1 using exp_ind2; intros e2; destruct e2; simpl; try now split; intro; discriminate.
++ rewrite ident_eqb_eq. now split; intro Heq; inversion Heq.
++ rewrite ident_eqb_eq. now split; intro Heq; inversion Heq.
++ rewrite const_eqb_eq. now split; intro Heq; inversion Heq.
++ rewrite Bool.andb_true_iff, op_eqb_true_iff.
+  split; intro Heq. 
+  - destruct Heq as [? Heq]; subst; split || f_equal; trivial; [].
+    revert l Heq. induction es as [| e1 es1]; intros [| e2 es2] Heq; simpl in Heq; trivial; try discriminate.
+    rewrite Bool.andb_true_iff in Heq. inversion_clear H.
+    specialize (IHes1 H1 es2). rewrite H0 in Heq.
+    destruct Heq as [? Heq]; subst; f_equal.
+    apply IHes1. simpl. apply Heq.
+  - inversion Heq. subst. split; trivial. clear Heq. induction l; simpl; trivial.
+    inversion_clear H. rewrite Bool.andb_true_iff, H0. split; trivial. now apply IHl.
 Qed.
 
 Lemma exp_eqb_neq:
@@ -114,4 +147,3 @@ Proof.
   intro H; apply exp_eqb_eq in H.
   rewrite Heq in H; discriminate.
 Qed.
-*)
