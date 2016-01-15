@@ -27,7 +27,7 @@ Definition exp_ind2 : forall P : exp -> Prop,
   (forall i, P (Var i)) ->
   (forall i, P (State i)) ->
   (forall c, P (Const c)) ->
-  (forall op es, Nelist.Forall P es -> P (Op op es)) ->
+  (forall op es (IHes : Nelist.Forall P es), P (Op op es)) ->
   forall e, P e.
 Proof.
 intros P Hvar Hstate Hcons Hop. fix 1.
@@ -119,14 +119,14 @@ induction e1 using exp_ind2; intros e2; destruct e2; simpl; try now split; intro
   split; intro Heq. 
   - destruct Heq as [? Heq]; subst; split || f_equal; trivial; [].
     revert n Heq. induction es as [| e1 es1]; intros [| e2 es2] Heq; simpl in Heq; try discriminate; [|].
-    * inversion_clear H. rewrite H0 in Heq. now subst.
-    * rewrite Bool.andb_true_iff in Heq. inversion_clear H.
-      specialize (IHes1 H1 es2). rewrite H0 in Heq.
+    * inversion_clear IHes. rewrite H in Heq. now subst.
+    * rewrite Bool.andb_true_iff in Heq. inversion_clear IHes.
+      specialize (IHes1 H0 es2). rewrite H in Heq.
       destruct Heq as [? Heq]; subst; f_equal.
       apply IHes1. simpl. apply Heq.
   - inversion Heq. subst. split; trivial. clear Heq. induction n; simpl; [|].
-    * inversion_clear H. now rewrite H0.
-    * inversion_clear H. rewrite Bool.andb_true_iff, H0. split; trivial. now apply IHn.
+    * inversion_clear IHes. now rewrite H.
+    * inversion_clear IHes. rewrite Bool.andb_true_iff, H. split; trivial. now apply IHn.
 Qed.
 
 Lemma exp_eqb_neq:

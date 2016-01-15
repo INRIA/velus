@@ -128,12 +128,12 @@ Proof.
     try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2).
   subst.
   assert (esa = esb).
-  { clear H1 H2 H5 H9. revert esa esb Hv1 Hv2. induction es; intros esa esb Hv1 Hv2.
-    * inversion_clear Hv1. inversion_clear Hv2. f_equal. inversion_clear H. now apply H2.
-    * inversion_clear Hv1. inversion_clear Hv2. inversion_clear H. f_equal.
-      + now apply H4.
-      + now apply IHes. }
-  subst. rewrite H5 in *. now inversion H9.
+  { clear H1 H2 H4 H8. revert esa esb Hv1 Hv2. induction es; intros esa esb Hv1 Hv2.
+    * inversion_clear Hv1. inversion_clear Hv2. f_equal. inversion_clear IHes. now apply H1.
+    * inversion_clear Hv1. inversion_clear Hv2. inversion_clear IHes. f_equal.
+      + now apply H3.
+      + now apply IHes0. }
+  subst. rewrite H4 in *. now inversion H8.
 Qed.
 
 Lemma stmt_eval_fold_left_shift:

@@ -13,6 +13,10 @@ Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.WellFormed.
 Require Import Heap.
 
+
+Ltac inv H := inversion H; subst; clear H.
+
+
 Inductive Is_free_in_exp : ident -> exp -> Prop :=
 | FreeVar: forall i,
     Is_free_in_exp i (Var i)
@@ -87,6 +91,82 @@ Ltac cannot_write :=
            | _ => now intuition
            end.
 
+(* Lionel: My own tactic because I don't want to break Tim's. *)
+Lemma not_free_aux : forall i op es,
+  ~Is_free_in_exp i (Op op es) -> Nelist.Forall (fun e => ~Is_free_in_exp i e) es.
+Proof.
+intros i op es Hfree. induction es.
++ constructor. intro Habs. apply Hfree. now do 2 constructor.
++ constructor. 
+  - intro Habs. apply Hfree. now do 2 constructor.
+  - apply IHes. intro Habs. inversion_clear Habs.
+    apply Hfree. constructor. now constructor 3.
+Qed.
+
+Ltac not_free :=
+  lazymatch goal with
+    | H : ~Is_free_in_exp ?x (Var ?i) |- _ => let HH := fresh in
+        assert (HH : i <> x) by (intro; subst; apply H; constructor);
+        clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (State ?i) |- _ => let HH := fresh in
+        assert (HH : i <> x) by (intro; subst; apply H; constructor);
+        clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (Op ?op ?es) |- _ => apply not_free_aux in H
+  end.
+
+(** If we add irrelevent values to [env], evaluation does not change. *)
+Lemma exp_eval_extend_env : forall mem env x v' e v,
+  ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval mem (PM.add x v' env) e v.
+Proof.
+intros mem env x v' e.
+induction e using exp_ind2; intros v Hfree Heval.
++ inv Heval. constructor. not_free. now rewrite PM.gso.
++ inv Heval. now constructor.
++ inv Heval. constructor.
++ inv Heval. constructor 4 with cs; trivial.
+  not_free.
+  assert (Hrec : Nelist.Forall (fun e => forall v,
+          exp_eval mem env e v -> exp_eval mem (PM.add x v' env) e v) es).
+  { rewrite Nelist.Forall_forall in IHes, Hfree |- *. intros. apply IHes; trivial. now apply Hfree. }
+  clear IHes Hfree H3. revert cs H1.
+  induction es; intros cs Hes; inv Hrec; inv Hes; constructor; auto.
+Qed.
+
+(** If we add irrelevent values to [mem], evaluation does not change. *)
+Lemma exp_eval_extend_mem : forall mem env x v' e v,
+  ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval (madd_mem x v' mem) env e v.
+Proof.
+intros mem env x v' e.
+induction e using exp_ind2; intros v Hfree Heval.
++ inversion_clear Heval. now constructor.
++ inversion_clear Heval. constructor. not_free. now rewrite mfind_mem_gso.
++ inversion_clear Heval. constructor.
++ inversion_clear Heval. constructor 4 with cs; trivial.
+  not_free.
+  assert (Hrec : Nelist.Forall (fun e => forall v,
+          exp_eval mem env e v -> exp_eval (madd_mem x v' mem) env e v) es).
+  { rewrite Nelist.Forall_forall in IHes, Hfree |- *. intros. apply IHes; trivial. now apply Hfree. }
+  clear IHes Hfree H0. revert cs H.
+  induction es; intros cs Hes; inv Hrec; inv Hes; constructor; auto.
+Qed.
+
+(** If we add objcets to [mem], evaluation does not change. *)
+Lemma exp_eval_extend_mem_by_obj : forall mem env f obj e v,
+  exp_eval mem env e v -> exp_eval (madd_obj f obj mem) env e v.
+Proof.
+intros mem env f v' e.
+induction e using exp_ind2; intros v Heval.
++ inversion_clear Heval. now constructor.
++ inversion_clear Heval. constructor. now rewrite mfind_mem_add_inst.
++ inversion_clear Heval. constructor.
++ inversion_clear Heval. constructor 4 with cs; trivial.
+  assert (Hrec : Nelist.Forall (fun e => forall v,
+          exp_eval mem env e v -> exp_eval (madd_obj f v' mem) env e v) es).
+  { rewrite Nelist.Forall_forall in IHes |- *. intros. now apply IHes. }
+  clear IHes H0. revert cs H.
+  induction es; intros cs Hes; inv Hrec; inv Hes; constructor; auto.
+Qed.
+
 Lemma cannot_write_exp_eval:
   forall prog s menv env menv' env' e v,
     (forall x, Is_free_in_exp x e -> ~ Can_write_in x s)
@@ -96,33 +176,19 @@ Lemma cannot_write_exp_eval:
 Proof.
   Hint Constructors Is_free_in_exp Can_write_in exp_eval.
   induction s; intros menv env menv' env' e' v Hfree Hexp Hstmt.
-  - inversion Hstmt; subst; clear Hstmt.
-    induction e using exp_ind2; inversion Hexp; subst; intuition;
-    try now (constructor; (rewrite PM.gso; [assumption | intro HH; subst; now eauto])).
-(*    + apply eop with cs; trivial.
-      induction es as [| e es].
-      * inversion_clear H. constructor.
-      * admit. (* FIXME: hum, it seems wrong! inversion_clear H. constructor. *) *)
-Admitted.
-(*
-  - inversion Hstmt; subst; clear Hstmt.
-    induction e; inversion Hexp; subst; intuition;
-    constructor; (rewrite mfind_mem_gso; [assumption|intro HH; subst; now eauto]).
-  - inversion Hstmt; subst; clear Hstmt.
-    match goal with
-    | Hstmt: stmt_eval prog menv env s1 _ |- _
-      => apply IHs1 with (2:=Hexp) (3:=Hstmt); now cannot_write
-    end.
-    match goal with
-    | Hstmt: stmt_eval prog menv env s2 _ |- _
-      => apply IHs2 with (2:=Hexp) (3:=Hstmt); now cannot_write
-    end.
-  - inversion Hstmt; subst; clear Hstmt.
-    induction e; inversion Hexp; subst; intuition;
-    constructor; (rewrite PM.gso; [assumption|intro HH; subst; now eauto]).
-  - inversion Hstmt; subst; clear Hstmt.
-    induction e'; inversion_clear Hexp; intuition.
-  - inversion Hstmt; subst; clear Hstmt.
+  - inv Hstmt.
+    apply exp_eval_extend_env; trivial.
+    intro Habs. apply (Hfree i); auto.
+  - inv Hstmt.
+    apply exp_eval_extend_mem; trivial.
+    intro Habs. apply (Hfree i); auto.
+  - inv Hstmt; solve [eapply IHs1; eassumption || cannot_write | eapply IHs2; eassumption || cannot_write].
+  - inv Hstmt.
+    apply exp_eval_extend_env, exp_eval_extend_mem_by_obj; trivial.
+    intro Habs. apply (Hfree i); auto.
+  - inv Hstmt.
+    now apply exp_eval_extend_mem_by_obj.
+  - inv Hstmt.
     match goal with
     | Hs1: stmt_eval _ _ _ s1 _,
       Hs2: stmt_eval _ _ _ s2 _ |- _
@@ -147,8 +213,8 @@ Admitted.
       inversion_clear Hcw.
       apply Hfree with (1:=Hfree').
       intuition.
-  - inversion Hstmt; subst; assumption.
-Qed. *)
+  - now inv Hstmt.
+Qed.
 
 Lemma lift_Ifte:
   forall e s1 s2 t1 t2,
