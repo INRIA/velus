@@ -81,10 +81,15 @@ Inductive sem_lexp_instant R: lexp -> value -> Prop:=
       sem_var_instant R x (present (Cbool b)) ->
       sem_lexp_instant R s v ->
       sem_lexp_instant R (Ewhen s x b) v
-| Swhen_abs:
+| Swhen_abs1:
     forall s x b b',
       sem_var_instant R x (present (Cbool b')) ->
       ~ (b = b') ->
+      (* Note: says nothing about 's'. *)
+      sem_lexp_instant R (Ewhen s x b) absent
+| Swhen_abs2:
+    forall s x b,
+      sem_var_instant R x absent ->
       (* Note: says nothing about 's'. *)
       sem_lexp_instant R (Ewhen s x b) absent
 | Sop_eq: forall les op cs,
@@ -436,6 +441,10 @@ Proof.
     | H1:sem_var_instant ?R ?e ?v1,
       H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 =>
       eapply sem_var_instant_det; eassumption
+    | H1:sem_var_instant ?R ?e (present _),
+      H2:sem_var_instant ?R ?e absent |- _ =>
+      apply (sem_var_instant_det _ _ _ _ H1) in H2;
+      discriminate
     | _ => auto
     end.
 intros v1 v2 Hsem1 Hsem2.
