@@ -4,6 +4,7 @@ Require Import Rustre.Common.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Memories.
+Require Import Nelist.
 
 Import List.ListNotations.
 Open Scope positive.
@@ -53,12 +54,22 @@ Section Translate.
     | Con ck x false => Control ck (Ifte (tovar x) Skip s)
     end.
 
-  Fixpoint translate_lexp (e: lexp): exp :=
+(* Strange bug? The following using Nelist.map is not accepted:
+  Fixpoint translate_lexp (e : lexp) {struct e} : exp :=
     match e with
     | Econst c => Const c
     | Evar x => if PS.mem x memories then State x else Var x
     | Ewhen e c x => translate_lexp e
-    | Eop op es => Op op (List.map translate_lexp es)
+    | Eop op es => Op op (Nelist.map translate_lexp es)
+    end.*)
+
+  Fixpoint translate_lexp (e : lexp) {struct e} : exp :=
+    match e with
+    | Econst c => Const c
+    | Evar x => if PS.mem x memories then State x else Var x
+    | Ewhen e c x => translate_lexp e
+    | Eop op es => Op op (nelist_rec _ (fun e => nebase (translate_lexp e))
+                                      (fun e _ rec => necons (translate_lexp e) rec) es)
     end.
   
   Definition translate_laexp (lae: laexp): exp :=

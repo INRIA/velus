@@ -38,7 +38,7 @@ Inductive exp_eval heap stack:
       exp_eval heap stack (Const(c)) c
 | eop:
     forall op es cs c,
-      List.Forall2 (exp_eval heap stack) es cs ->
+      Nelist.Forall2 (exp_eval heap stack) es cs ->
       apply_op op cs = Some c ->
       exp_eval heap stack (Op op es) c.
 
@@ -129,7 +129,7 @@ Proof.
   subst.
   assert (esa = esb).
   { clear H1 H2 H5 H9. revert esa esb Hv1 Hv2. induction es; intros esa esb Hv1 Hv2.
-    * inversion_clear Hv1. inversion_clear Hv2. reflexivity.
+    * inversion_clear Hv1. inversion_clear Hv2. f_equal. inversion_clear H. now apply H2.
     * inversion_clear Hv1. inversion_clear Hv2. inversion_clear H. f_equal.
       + now apply H4.
       + now apply IHes. }

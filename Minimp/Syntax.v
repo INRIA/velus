@@ -1,3 +1,4 @@
+Require Import Rustre.Nelist.
 Require Import Rustre.Common.
 
 
@@ -20,13 +21,13 @@ Inductive exp : Set :=
 | Var : ident -> exp
 | State : ident -> exp
 | Const : const -> exp
-| Op : operator -> list exp -> exp.
+| Op : operator -> nelist exp -> exp.
 
 Definition exp_ind2 : forall P : exp -> Prop,
   (forall i, P (Var i)) ->
   (forall i, P (State i)) ->
   (forall c, P (Const c)) ->
-  (forall op es, List.Forall P es -> P (Op op es)) ->
+  (forall op es, Nelist.Forall P es -> P (Op op es)) ->
   forall e, P e.
 Proof.
 intros P Hvar Hstate Hcons Hop. fix 1.
@@ -34,9 +35,7 @@ intros e. destruct e as [i | i | c | op es].
 + apply Hvar.
 + apply Hstate.
 + apply Hcons.
-+ apply Hop. induction es as [| e es].
-  - trivial.
-  - now constructor.
++ apply Hop. now induction es as [e | e es]; constructor.
 Defined.
 
 Implicit Type e: exp.
@@ -101,9 +100,8 @@ refine (match e1, e2 with
   | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && _
   | _, _ => false
   end).
-Guarded.
-clear e1 e2. revert es2. induction es1 as [| e1 es1]; intros [| e2 es2].
-- exact true.
+clear e1 e2. revert es2. induction es1 as [e1 | e1 es1]; intros [e2 | e2 es2].
+- exact (exp_eqb e1 e2).
 - exact false.
 - exact false.
 - exact (exp_eqb e1 e2 && IHes1 es2).
@@ -120,13 +118,15 @@ induction e1 using exp_ind2; intros e2; destruct e2; simpl; try now split; intro
 + rewrite Bool.andb_true_iff, op_eqb_true_iff.
   split; intro Heq. 
   - destruct Heq as [? Heq]; subst; split || f_equal; trivial; [].
-    revert l Heq. induction es as [| e1 es1]; intros [| e2 es2] Heq; simpl in Heq; trivial; try discriminate.
-    rewrite Bool.andb_true_iff in Heq. inversion_clear H.
-    specialize (IHes1 H1 es2). rewrite H0 in Heq.
-    destruct Heq as [? Heq]; subst; f_equal.
-    apply IHes1. simpl. apply Heq.
-  - inversion Heq. subst. split; trivial. clear Heq. induction l; simpl; trivial.
-    inversion_clear H. rewrite Bool.andb_true_iff, H0. split; trivial. now apply IHl.
+    revert n Heq. induction es as [| e1 es1]; intros [| e2 es2] Heq; simpl in Heq; try discriminate; [|].
+    * inversion_clear H. rewrite H0 in Heq. now subst.
+    * rewrite Bool.andb_true_iff in Heq. inversion_clear H.
+      specialize (IHes1 H1 es2). rewrite H0 in Heq.
+      destruct Heq as [? Heq]; subst; f_equal.
+      apply IHes1. simpl. apply Heq.
+  - inversion Heq. subst. split; trivial. clear Heq. induction n; simpl; [|].
+    * inversion_clear H. now rewrite H0.
+    * inversion_clear H. rewrite Bool.andb_true_iff, H0. split; trivial. now apply IHn.
 Qed.
 
 Lemma exp_eqb_neq:

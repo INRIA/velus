@@ -2,6 +2,7 @@
 -install none
 Common.v
 Example.v
+Nelist.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
 Dataflow/IsFree.v

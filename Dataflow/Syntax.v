@@ -1,5 +1,6 @@
 Require Import Rustre.Common.
 Require Import PArith.
+Require Import Rustre.Nelist.
 
 Import List.ListNotations.
 Open Scope list_scope.
@@ -18,7 +19,7 @@ Inductive lexp : Set :=
   | Econst : const -> lexp
   | Evar : ident -> lexp
   | Ewhen : lexp -> ident -> bool -> lexp
-  | Eop : operator -> list lexp -> lexp.
+  | Eop : operator -> nelist lexp -> lexp.
 
 Inductive laexp : Set :=
   | LAexp : clock -> lexp -> laexp.
@@ -71,7 +72,7 @@ Definition lexp_ind2 : forall P : lexp -> Prop,
   (forall c, P (Econst c)) ->
   (forall i, P (Evar i)) ->
   (forall le, P le -> forall i b, P (Ewhen le i b)) ->
-  (forall op les, List.Forall P les -> P (Eop op les)) ->
+  (forall op les, Nelist.Forall P les -> P (Eop op les)) ->
   forall le, P le.
 Proof.
 intros P Hconst Hvar Hwhen Hop. fix 1.
@@ -81,6 +82,7 @@ destruct le as [c | i | le | op les].
 + apply Hvar.
 + apply Hwhen. apply lexp_ind2.
 + apply Hop. induction les; constructor.
+  - apply lexp_ind2.
   - apply lexp_ind2.
   - apply IHles.
 Defined.

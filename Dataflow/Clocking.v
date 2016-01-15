@@ -2,6 +2,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
+Require Import Nelist.
 Require Import List.
 
 Definition clockenv := PM.t clock.
@@ -37,7 +38,7 @@ Inductive clk_lexp C: lexp -> clock -> Prop :=
       clk_lexp C (Ewhen e x b) (Con ck x b)
 | Cop:
     forall op les ck,
-      Forall (fun e => clk_lexp C e ck) les ->
+      Nelist.Forall (fun e => clk_lexp C e ck) les ->
       clk_lexp C (Eop op les) ck.
 
 Inductive clk_cexp C: cexp -> clock -> Prop :=
@@ -134,7 +135,7 @@ induction le as [| |le IH | ] using lexp_ind2.
   constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
 + intros ck Hwc; inversion_clear 1 as [| | | ? ? ? Hrec].
   induction les.
-  - admit. (* FIXME: seems false if there is no argument *)
+  - inversion_clear H. apply H0; trivial. now inversion_clear Hrec.
   - inversion_clear H. inversion_clear Hrec. now apply IHles.
 Qed.
 

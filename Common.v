@@ -1,4 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
+Require Import Nelist.
 Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
@@ -23,8 +24,6 @@ Inductive base_type := Tint | Tbool.
 Inductive const : Set :=
 | Cint : BinInt.Z -> const
 | Cbool : bool -> const.
-
-Definition nelist A := {l : list A | l <> nil}.
 
 Inductive arity :=
   | Tout (t_out : base_type)
@@ -256,7 +255,7 @@ intros A B f l y l' Hmap. destruct l; simpl in Hmap.
 Qed.
 
 (* A constant list of the same size *)
-Definition alls {A B} c (l : list A) : list B := map (fun _ => c) l.
+Definition alls {A B} c (l : nelist A) : nelist B := Nelist.map (fun _ => c) l.
 
 
 Definition op_eqb op1 op2 := if op_dec op1 op2 then true else false.
@@ -348,34 +347,26 @@ Defined.
 
 (* Version 2 *)
 (* Predicate accepting list of valid arguments *)
-Inductive Valid_args : arity -> list const -> Prop :=
-  | NoArg : forall t, Valid_args (Tout t) nil
-  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (cons (Cint n) l)
-  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (cons (Cbool b) l).
+Inductive Valid_args : arity -> nelist const -> Prop :=
+  | OneInt : forall t_out n, Valid_args (Tcons Tint (Tout t_out)) (nebase (Cint n))
+  | OneBool : forall t_out b, Valid_args (Tcons Tbool (Tout t_out)) (nebase (Cbool b))
+  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (necons (Cint n) l)
+  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (necons (Cbool b) l).
 
-Lemma Valid_args_length : forall ar l, Valid_args ar l -> length l = nb_args ar.
+Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar.
 Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
 
-Fixpoint apply_arity (ar : arity) : arrows ar -> list const -> option const :=
-  match ar with
-    | Tout t => fun (f : arrows (Tout t)) (l : list const) =>
-        match l with
-          | nil => Some (base_to_const t f)
-          | cons _ _ => None (* error case: too many arguments *)
-        end
-    | Tcons Tint ar => fun (f : Z -> arrows ar) (l : list const) =>
-        match l with
-          | nil => None (* error case: too few arguments *)
-          | cons (Cbool _) l => None (* error case: wrong argument type *)
-          | cons (Cint n) l => apply_arity ar (f n) l
-        end
-    | Tcons Tbool ar => fun (f : bool -> arrows ar) (l : list const) =>
-        match l with
-          | nil => None (* error case: too few arguments *)
-          | cons (Cint _) l => None (* error case: wrong argument type *)
-          | cons (Cbool b) l => apply_arity ar (f b) l
-        end
+Fixpoint apply_arity (ar : arity) (l : nelist const) : arrows ar -> option const :=
+  match ar as ar', l return arrows ar' -> option const with
+    | Tout _, _ => fun _ => None
+    | Tcons Tint (Tout Tint), nebase (Cint n) => fun f => Some (Cint (f n))
+    | Tcons Tint (Tout Tbool), nebase (Cint n) => fun f => Some (Cbool (f n))
+    | Tcons Tbool (Tout Tint), nebase (Cbool b) => fun f => Some (Cint (f b))
+    | Tcons Tbool (Tout Tbool), nebase (Cbool b) => fun f => Some (Cbool (f b))
+    | Tcons Tint ar, necons (Cint n) l => fun f => apply_arity ar l (f n)
+    | Tcons Tbool ar, necons (Cbool b) l => fun f => apply_arity ar l (f b)
+    | _, _ => fun _ => None (* Wrong type or number of arguments *)
   end.
 
-Definition apply_op (op : operator) (l : list const) : option const :=
-  apply_arity (get_arity op) (get_interp op) l.
+Definition apply_op (op : operator) (l : nelist const) : option const :=
+  apply_arity (get_arity op) l (get_interp op).

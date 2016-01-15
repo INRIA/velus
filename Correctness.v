@@ -462,19 +462,24 @@ induction e as [c0|y|e IH y yb| op les IHle] using lexp_ind2; intro c;
     auto.
 * subst. simpl. apply eop with cs.
   + clear H2 H4 H.
-    assert (Hlen : length les = length cs).
-    { rewrite <- (map_length present). eapply Forall2_length; eassumption. }
+    assert (Hlen : Nelist.length les = Nelist.length cs).
+    { rewrite <- (Nelist.map_length present). eapply Nelist.Forall2_length; eassumption. }
     revert cs Hlen H3. induction les; intros cs Hlen Hrec.
-    - destruct cs; constructor || simpl in Hlen; discriminate.
-    - destruct cs as [| c1 cs]; simpl in Hlen; try discriminate.
-      { simpl. constructor.
-        + inversion_clear IHle.
-          apply H.
-          - now inversion_clear Hrec.
-          - intros. apply H5; trivial. constructor. now left.
-        + inversion_clear Hrec. apply IHles; omega || trivial.
-          - now inversion IHle.
-          - intros. apply H5; trivial. constructor. right. now inversion H1. }
+    - { destruct cs as [c1 | c1 cs].
+        + constructor. inversion_clear Hrec. inversion_clear IHle. apply H0; trivial.
+          intros. apply H5; trivial. now do 2 constructor.
+        + destruct cs; simpl in Hlen; discriminate. }
+    - { destruct cs as [c1 | c1 cs].
+        * inversion Hrec.
+        * simpl. constructor.
+          + inversion_clear IHle.
+            apply H.
+            - now inversion_clear Hrec.
+            - intros. apply H5; trivial. now do 2 constructor.
+          + inversion_clear Hrec. apply IHles; omega || trivial.
+            - now inversion IHle.
+            - intros. apply H5; trivial. constructor. constructor 3. now inversion H1.
+            - simpl in Hlen. omega. }
   + destruct (apply_op op cs); now inversion H2.
 Qed.
 

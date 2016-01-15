@@ -28,7 +28,7 @@ Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
 | FreeEwhen2: forall e c cv,
     Is_free_in_lexp c (Ewhen e c cv)
 | FreeEop : forall c op es,
-    List.Exists (Is_free_in_lexp c) es -> Is_free_in_lexp c (Eop op es).
+    Nelist.Exists (Is_free_in_lexp c) es -> Is_free_in_lexp c (Eop op es).
 
 Inductive Is_free_in_laexp : ident -> laexp -> Prop :=
 | freeLAexp1: forall ck e x,

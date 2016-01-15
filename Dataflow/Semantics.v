@@ -88,11 +88,11 @@ Inductive sem_lexp_instant R: lexp -> value -> Prop:=
       (* Note: says nothing about 's'. *)
       sem_lexp_instant R (Ewhen s x b) absent
 | Sop_eq: forall les op cs,
-    Forall2 (sem_lexp_instant R) les (map present cs) ->
+    Nelist.Forall2 (sem_lexp_instant R) les (Nelist.map present cs) ->
     Valid_args (get_arity op) cs ->
     sem_lexp_instant R (Eop op les) (option_const_to_value (apply_op op cs))
 | Sop_abs: forall les op,
-    Forall2 (sem_lexp_instant R) les (alls absent les) ->
+    Nelist.Forall2 (sem_lexp_instant R) les (alls absent les) ->
     sem_lexp_instant R (Eop op les) absent.
 
 Inductive sem_laexp_instant R: laexp -> value -> Prop:=
@@ -442,26 +442,32 @@ intros v1 v2 Hsem1 Hsem2.
 inversion_clear Hsem1; inversion_clear Hsem2.
 * do 2 f_equal. clear H1 H3. revert cs cs0 H0 H2.
   induction les as [| le les]; intros cs1 cs2 Hrec1 Hrec2.
-  + inversion Hrec1. inversion Hrec2. symmetry in H0, H1.
-    apply map_eq_nil in H0. apply map_eq_nil in H1. now subst.
+  + inversion Hrec1. inversion Hrec2. subst. symmetry in H1, H4.
+    apply Nelist.map_eq_nebase in H1. destruct H1 as [? [? ?]].
+    apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst.
+    f_equal. rewrite present_injection. inversion_clear H. now apply H0.
   + inversion Hrec1; subst. inversion Hrec2; subst.
     symmetry in H2, H5.
-    apply map_eq_cons in H2. destruct H2 as [x1 [cs1' [Hcs1 Hx1]]].
-    apply map_eq_cons in H5. destruct H5 as [x2 [cs2' [Hcs2 Hx2]]]. subst.
+    apply Nelist.map_eq_necons in H2. destruct H2 as [x1 [cs1' [Hcs1 [Hx1 Hmap1]]]].
+    apply Nelist.map_eq_necons in H5. destruct H5 as [x2 [cs2' [Hcs2 [Hx2 Hmap2]]]]. subst.
     assert (Hx : x1 = x2).
     { inversion_clear H. rewrite present_injection. now apply H0. }
     inversion_clear H. inversion_clear Hrec1; inversion_clear Hrec2.
     f_equal; trivial. now apply (IHles H1).
-* exfalso. destruct les as [| le les].
-  + admit. (* FIXME: seems false if there is no argument *)
+* exfalso. destruct les as [le | le les].
+  + inversion H0. inversion H2. subst. symmetry in H4.
+    apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. simpl in *.
+    inversion_clear H. specialize (H3 _ _ H8 H5). discriminate.
   + inversion H0; subst. inversion H2; subst.
     inversion_clear H. specialize (H3 _ _ H6 H9).
-    symmetry in H5. apply map_eq_cons in H5. decompose [ex and] H5. subst. discriminate.
+    symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate.
 * exfalso. destruct les as [| le les].
-  + admit. (* FIXME: seems false if there is no argument *)
+  + inversion H0. inversion H1. subst. symmetry in H7.
+    apply Nelist.map_eq_nebase in H7. destruct H7 as [? [? ?]]. subst. simpl in *.
+    inversion_clear H. specialize (H3 _ _ H8 H5). discriminate.
   + inversion H0; subst. inversion H1; subst.
     inversion_clear H. specialize (H3 _ _ H6 H7).
-    symmetry in H5. apply map_eq_cons in H5. decompose [ex and] H5. subst. discriminate.
+    symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate.
 * reflexivity.
 Qed.
 

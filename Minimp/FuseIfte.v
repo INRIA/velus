@@ -19,7 +19,7 @@ Inductive Is_free_in_exp : ident -> exp -> Prop :=
 | FreeState: forall i,
     Is_free_in_exp i (State i)
 | FreeOp: forall i op es,
-    List.Exists (Is_free_in_exp i) es ->
+    Nelist.Exists (Is_free_in_exp i) es ->
     Is_free_in_exp i (Op op es).
 
 Inductive Can_write_in : ident -> stmt -> Prop :=
