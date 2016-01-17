@@ -120,31 +120,31 @@ Lemma well_sch_pre_spec:
     (good = true
      -> (Is_well_sch mems argIn eqs
          /\ (forall x, PS.In x defined <-> Is_defined_in x eqs)
-         /\ (forall x, PS.In x variables <-> Is_variable_in x eqs \/ argIn = x)))
+         /\ (forall x, PS.In x variables <-> Is_variable_in x eqs \/ x = argIn)))
     /\ (good = false -> ~Is_well_sch mems argIn eqs).
-Admitted.
-(*
+Proof.
   induction eqs as [|eq].
   - simpl; injection 1; intros HRv HRm; subst.
     intuition;
       repeat match goal with
+               | H: PS.In _ (PS.add _ _) |- _ => rewrite PS.add_spec in H; destruct H
                | H: PS.In _ PS.empty |- _ => apply PS.empty_spec in H;
                                              contradiction
                | H: Is_defined_in _ nil |- _ => now inversion H
                | H: Is_variable_in _ nil |- _ => now inversion H
-               | H1:good=true, H2:good=false |- _ =>
-                    rewrite H1 in H2; discriminate
+               | H1:good=true, H2:good=false |- _ => rewrite H1 in H2; discriminate
+               | |- _ => tauto
              end.
   - intros good defined variables HH.
     simpl in HH.
-    destruct (List.fold_right check_eq (true, PS.empty, PS.empty) eqs)
-      as [[good' defined'] variables'].
+    destruct (List.fold_right check_eq (true, PS.empty, PS.add argIn PS.empty) eqs)
+      as [[good' defined'] variables'] eqn:Heq.
     specialize IHeqs with good' defined' variables'.
     pose proof (IHeqs (eq_refl (good', defined', variables'))) as IH;
       clear IHeqs.
     destruct IH as [IHt IHf].
     split; intro Hg; rewrite Hg in *; clear Hg.
-    + destruct eq; (* the horror... *)
+    + destruct eq; (* the horror... *) (* XXX: . was ; *)
       (simpl in HH;
        assert (good' = true) as IH
            by (apply Bool.not_false_iff_true;
@@ -182,23 +182,23 @@ Admitted.
           | |- ~Is_defined_in ?x _ => intro
           | H1:~PS.In ?x defined',
             H2:Is_defined_in ?x eqs |- _ => apply Hidi in H2; contradiction
-          | |- Is_variable_in ?x eqs => apply Hivi
+          | |- Is_variable_in ?x eqs => auto; apply Hivi
           | _ => now intuition
                           end |];
+      (now rewrite <- Hivi; auto) ||
       split; intro x; split; intro HH;
          (apply PS.add_spec in HH;
-           destruct HH as [HH|HH];
-           [rewrite HH; now repeat constructor
-           |apply Hidi in HH || apply Hivi in HH; constructor 2; exact HH])
-         || (apply Is_defined_in_cons in HH || apply Is_variable_in_cons in HH;
-              apply PS.add_spec;
-              destruct HH as [HH|HH]; inversion_clear HH;
-              [left; reflexivity|right; apply Hidi || apply Hivi; assumption])
-         || (apply Hivi in HH; constructor 2; apply HH)
-         || (apply Is_variable_in_cons in HH;
-             destruct HH as [HH|HH];
-             [now inversion HH
-             |destruct HH as [HH0 HH1]; now apply Hivi with (1:=HH1)])).
+           destruct HH as [HH|HH]; try (now subst; repeat constructor); [];
+           solve [ now apply Hidi in HH; constructor 2
+                 | apply Hivi in HH; destruct HH as [HH | HH]; tauto || constructor; constructor 2;
+                   []; inversion_clear HH; (now constructor) || (now constructor 2) ])
+         || (rewrite PS.add_spec, ?Hivi, ?Hidi;
+              apply Is_defined_in_cons in HH
+              || (destruct HH as [HH | HH]; try tauto; []; apply Is_variable_in_cons in HH);
+              destruct HH as [HH|HH]; inversion_clear HH; tauto)
+         || (apply Hivi in HH; try (destruct HH as [HH | HH]; tauto || left); constructor 2; apply HH)
+         || (rewrite Hivi; try (destruct HH as [HH | HH]; try tauto; []);
+             apply Is_variable_in_cons in HH; destruct HH as [HH|HH]; inversion HH; tauto)).
     + destruct good'; [clear IHf| inversion 1; apply IHf; auto ].
       pose proof (IHt (eq_refl true)) as IH; clear IHt.
       destruct IH as [Hwsch [Hidi Hivi]].
@@ -264,9 +264,9 @@ Admitted.
                       H2:PS.In ?x ?mems |- _ => apply H1 in H2
                  | H:~Is_defined_in ?x ?eqs |- ~PS.In ?x defined'
                    => intro HN; apply Hidi in HN; contradiction
-                 end).
+                 end);
+          rewrite Hivi; auto.
 Qed.
-*)
 
 Lemma well_sch_spec:
   forall argIn eqns,
@@ -286,6 +286,5 @@ Proof.
   destruct good;
   intuition.
 Qed.
-
 
 End Decide.
