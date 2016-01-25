@@ -15,10 +15,12 @@ Set Implicit Arguments.
  *)
 
 
-Inductive memory (A: Type): Type := mk_memory {
-  mm_values : PM.t A;
-  mm_instances : PM.t (memory A)
+(* =memory= *)
+Inductive memory (V: Type): Type := mk_memory {
+  mm_values : PM.t V;
+  mm_instances : PM.t (memory V)
 }.
+(* =end= *)
 
 Section Operations.
 
