@@ -123,6 +123,10 @@ Inductive sem_cexp_instant R: cexp -> value -> Prop :=
       sem_var_instant R x (present (Cbool false)) ->
       sem_cexp_instant R f v ->
       sem_cexp_instant R (Emerge x t f) v
+| Smerge_abs:
+    forall x t f,
+      sem_var_instant R x absent ->
+      sem_cexp_instant R (Emerge x t f) absent
 | Sexp:
     forall e v,
       sem_lexp_instant R e v ->
@@ -519,6 +523,10 @@ Proof.
       | H1: sem_lexp_instant ?R ?l ?v1,
         H2: sem_lexp_instant ?R ?l ?v2 |- ?v1 = ?v2 =>
         eapply sem_lexp_instant_det; eassumption
+      | H1: sem_var_instant ?R ?i (present _),
+        H2: sem_var_instant ?R ?i absent |- _ =>
+        apply sem_var_instant_det with (1:=H1) in H2; discriminate
+      | |- absent = absent => reflexivity
     end.
 Qed.
 
