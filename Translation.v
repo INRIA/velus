@@ -123,13 +123,13 @@ Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
   end.
 (* =end= *)
 
-Definition ps_from_list (l: list ident) : PS.t :=
-  List.fold_left (fun s i=>PS.add i s) l PS.empty.
-
 (* =translate_reset_eqns= *)
 Definition translate_reset_eqns (eqns: list equation): stmt :=
   List.fold_left translate_reset_eqn eqns Skip.
 (* =end= *)
+
+Definition ps_from_list (l: list ident) : PS.t :=
+  List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
 (* =translate_node= *)
 Definition translate_node (n: node): class :=
