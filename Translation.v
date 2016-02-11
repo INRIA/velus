@@ -42,82 +42,96 @@ Definition gather_eqs (eqs: list equation) : (list ident * list obj_dec) :=
 
 Section Translate.
 
-  Variable memories : PS.t.
+Variable memories : PS.t.
 
-  Definition tovar (x: ident) : exp :=
-    if PS.mem x memories then State x else Var x.
+(* =tovar= *)
+Definition tovar (x: ident) : exp :=
+  if PS.mem x memories then State x else Var x.
+(* =end= *)
 
-  Fixpoint Control (ck: clock)(s: stmt): stmt :=
-    match ck with
-    | Cbase => s
-    | Con ck x true  => Control ck (Ifte (tovar x) s Skip)
-    | Con ck x false => Control ck (Ifte (tovar x) Skip s)
-    end.
+(* =control= *)
+Fixpoint Control (ck: clock) (s: stmt) : stmt :=
+  match ck with
+  | Cbase => s
+  | Con ck x true  => Control ck (Ifte (tovar x) s Skip)
+  | Con ck x false => Control ck (Ifte (tovar x) Skip s)
+  end.
+(* =end= *)
 
 (* Strange bug? The following using Nelist.map is not accepted:
-  Fixpoint translate_lexp (e : lexp) {struct e} : exp :=
-    match e with
-    | Econst c => Const c
-    | Evar x => if PS.mem x memories then State x else Var x
-    | Ewhen e c x => translate_lexp e
-    | Eop op es => Op op (Nelist.map translate_lexp es)
-    end.*)
+Fixpoint translate_lexp (e : lexp) {struct e} : exp :=
+  match e with
+  | Econst c => Const c
+  | Evar x => if PS.mem x memories then State x else Var x
+  | Ewhen e c x => translate_lexp e
+  | Eop op es => Op op (Nelist.map translate_lexp es)
+  end.*)
 
-  Fixpoint translate_lexp (e : lexp) {struct e} : exp :=
-    match e with
-    | Econst c => Const c
-    | Evar x => if PS.mem x memories then State x else Var x
-    | Ewhen e c x => translate_lexp e
-    | Eop op es => Op op (nelist_rec _ (fun e => nebase (translate_lexp e))
-                                      (fun e _ rec => necons (translate_lexp e) rec) es)
-    end.
-  
-  Definition translate_laexp (lae: laexp): exp :=
-    match lae with
-      | LAexp ck e => translate_lexp e
-    end.
+(* =translate_lexp= *)
+Fixpoint translate_lexp (e : lexp) : exp :=
+  match e with
+  | Econst c => Const c
+  | Evar x => if PS.mem x memories then State x else Var x
+  | Ewhen e c x => translate_lexp e
+  | Eop op es => Op op (nelist_rec _ (fun e => nebase (translate_lexp e))
+                                    (fun e _ rec => necons (translate_lexp e) rec) es)
+  end.
+(* =end= *)
 
-  Fixpoint translate_cexp (x: ident)(e : cexp) {struct e}: stmt :=
-    match e with
-    | Emerge y t f => Ifte (tovar y) (translate_cexp x t) (translate_cexp x f)
-    | Eexp l => Assign x (translate_lexp l)
-    end.
+Definition translate_laexp (lae: laexp) : exp :=
+  match lae with
+    | LAexp ck e => translate_lexp e
+  end.
 
-  Definition translate_caexp (x: ident)(ae : caexp): stmt :=
-    match ae with
-      | CAexp ck e => translate_cexp x e
-    end.
+(* =translate_cexp= *)
+Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
+  match e with
+  | Emerge y t f => Ifte (tovar y) (translate_cexp x t) (translate_cexp x f)
+  | Eexp l =>        Assign x (translate_lexp l)
+  end.
+(* =end= *)
 
-  Definition translate_eqn (eqn: equation): stmt :=
-    match eqn with
-    | EqDef x (CAexp ck ce) =>
-      Control ck (translate_cexp x ce)
-    | EqApp x f (LAexp ck le) =>
-      Control ck (Step_ap x f x (translate_lexp le))
-    | EqFby x v (LAexp ck le) =>
-      Control ck (AssignSt x (translate_lexp le))
-    end.
+Definition translate_caexp (x: ident) (ae: caexp) : stmt :=
+  match ae with
+    | CAexp ck e => translate_cexp x e
+  end.
 
-  (* NB: eqns ordered in reverse order of execution for coherence
-         with Is_well_sch. *)
-  Definition translate_eqns (eqns: list equation): stmt :=
-    List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
+(* =translate_eqn= *)
+Definition translate_eqn (eqn: equation) : stmt :=
+  match eqn with
+  | EqDef x (CAexp ck ce)   => Control ck (translate_cexp x ce)
+  | EqApp x f (LAexp ck le) => Control ck (Step_ap x f x (translate_lexp le))
+  | EqFby x v (LAexp ck le) => Control ck (AssignSt x (translate_lexp le))
+  end.
+(* =end= *)
+
+(* NB: eqns ordered in reverse order of execution for coherence
+       with Is_well_sch. *)
+(* =translate_eqns= *)
+Definition translate_eqns (eqns: list equation) : stmt :=
+  List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
+(* =end= *)
 
 End Translate.
 
-Definition translate_reset_eqn (s: stmt) (eqn: equation): stmt :=
+(* =translate_reset_eqn= *)
+Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
   match eqn with
-  | EqDef _ _ => s
+  | EqDef _ _ =>     s
   | EqFby x v0 _ => Comp (AssignSt x (Const v0)) s
-  | EqApp x f _ => Comp (Reset_ap f x) s
+  | EqApp x f _ =>   Comp (Reset_ap f x) s
   end.
+(* =end= *)
 
 Definition ps_from_list (l: list ident) : PS.t :=
   List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
+(* =translate_reset_eqns= *)
 Definition translate_reset_eqns (eqns: list equation): stmt :=
   List.fold_left translate_reset_eqn eqns Skip.
+(* =end= *)
 
+(* =translate_node= *)
 Definition translate_node (n: node): class :=
   let names := gather_eqs n.(n_eqs) in
   let mems := ps_from_list (fst names) in
@@ -128,9 +142,12 @@ Definition translate_node (n: node): class :=
            (snd names)
            (translate_eqns mems n.(n_eqs))
            (translate_reset_eqns n.(n_eqs)).
+(* =end= *)
 
+(* =translate= *)
 Definition translate (G: global) : program :=
   List.map translate_node G.
+(* =end= *)
 
 
 (** ** Misc. lemmas *)
