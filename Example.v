@@ -113,3 +113,126 @@ Proof eq_refl.
 
 (* TODO: Show correctness of prog1' *)
 
+(** Examples from paper *)
+
+Section CodegenPaper.
+
+  Require Import Nelist.
+
+
+  (* Too complicated! *)
+  Parameter Plus : operator.
+  Axiom Plus_arity : get_arity Plus = Tcons Tint (Tcons Tint (Tout Tint)).
+
+  Definition Plus_to_arrows (f: Z -> Z -> Z) : arrows (get_arity Plus).
+    rewrite Plus_arity. exact f.
+  Defined.
+
+  Axiom Plus_interp : get_interp Plus = Plus_to_arrows BinInt.Z.add.
+
+  Definition op_plus (x: lexp) (y: lexp) : lexp :=
+    Eop Plus (necons x (nebase y)).
+
+  Parameter Ifte_int : operator.
+  Axiom Ifte_int_arity : get_arity Ifte_int
+                         = Tcons Tbool (Tcons Tint (Tcons Tint (Tout Tint))).
+
+  Definition Ifte_int_to_arrows
+             (f: bool -> Z -> Z -> Z) : arrows (get_arity Ifte_int).
+    rewrite Ifte_int_arity. exact f.
+  Defined.
+
+  Definition ifte {T: Set} (x: bool) (t: T) (f: T) : T := if x then t else f.
+  Axiom Ifte_interp : get_interp Ifte_int = Ifte_int_to_arrows ifte.
+
+  Definition op_ifte (x: lexp) (t: lexp) (f: lexp) : lexp :=
+    Eop Ifte_int (necons x (necons t (nebase f))).
+
+
+
+
+  (* Node names *)
+  Definition n_counter     : ident := 1.
+  Definition n_altcounters : ident := n_counter + 1.
+
+(*
+  node counter (initial, increment: int; restart: bool) returns (n: int)
+  var c: int;
+  let
+    n = if restart then initial else c + increment;
+    c = 0 fby n;
+  tel
+
+ *)
+
+  (* counter: variable names *)
+  Definition initial   : ident := 1.
+  Definition increment : ident := 2.
+  Definition restart   : ident := 3.
+  Definition n         : ident := 4.
+  Definition c         : ident := 5.
+
+  Example counter_eqns : list equation :=
+    [
+      EqFby c (Cint 0) (LAexp Cbase (Evar n));
+      EqDef n (CAexp Cbase (Eexp (op_ifte (Evar restart)
+                                          (Evar initial)
+                                          (op_plus (Evar c) (Econst (Cint 1))))))
+    ].
+
+  (* TODO: show that these equations Is_well_sch and Well_clocked;
+           need multiple inputs *)
+
+  (* TODO: multiple inputs: initial, increment, restart *)
+  Example counter : node :=
+    mk_node n_counter initial n counter_eqns.
+
+  Eval cbv in translate_node counter.
+  Eval cbv in ifte_fuse (c_step (translate_node counter)).
+  Eval cbv in ifte_fuse (c_reset (translate_node counter)).
+
+
+(*
+  node altcounters (b: bool) returns (y: int)
+  var n1, n2: int;
+  let
+    n1 = counter(0, 1, false);
+    n2 = counter(0 whenot b, −1 whenot b, false whenot b);
+    y = merge b (n1 when b) n2;
+  tel
+*)
+
+  (* altcounters: variable names *)
+  Definition b  : ident := 1.
+  Definition n1 : ident := 2.
+  Definition n2 : ident := 3.
+  Definition y  : ident := 4.
+
+  Example altcounters_eqns : list equation :=
+    [
+      EqDef y (CAexp Cbase
+                     (Emerge b
+                             (Eexp (Ewhen (Evar n1) b true))
+                             (Eexp (Evar n2))));
+      (* Add other inputs:
+           Ewhen (Econst (Cint (-1))) b false
+           Ewhen (Econst (Cbool false)) b false *)
+      EqApp n2 n_counter (LAexp (Con Cbase b false)
+                                (Ewhen (Econst (Cint 0)) b false));
+      (* Add other inputs:
+           Econst 1
+           Econst false *)
+      EqApp n1 n_counter (LAexp Cbase (Econst (Cint 0)))
+    ].
+
+  (* TODO: show that these equations Is_well_sch and Well_clocked;
+           need multiple inputs *)
+
+  Example altcounters : node :=
+    mk_node n_altcounters b y altcounters_eqns.
+
+  Eval cbv in translate_node altcounters.
+  Eval cbv in ifte_fuse (c_step (translate_node altcounters)).
+
+
+End CodegenPaper.
