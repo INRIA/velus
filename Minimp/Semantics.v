@@ -42,27 +42,31 @@ Inductive exp_eval heap stack:
       apply_op op cs = Some c ->
       exp_eval heap stack (Op op es) c.
 
+(* =stmt_eval= *)
 Inductive stmt_eval :
-  program -> heap -> stack -> stmt -> heap * stack -> Prop :=
-| Iassign:
-    forall prog menv env x e v env',
+    program -> heap -> stack -> stmt -> heap * stack -> Prop :=
+| Iassign: forall prog menv env x e v env',
       exp_eval menv env e v ->
       PM.add x v env = env' ->
       stmt_eval prog menv env (Assign x e) (menv, env')
-| Iassignst:
+| (*...*)
+(* =end= *)
+  Iassignst:
     forall prog menv env x e v menv',
       exp_eval menv env e v ->
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
-| Istep:
-    forall prog menv env e v clsid o y menv' env' omenv omenv' rv,
+(* =stmt_eval:step= *)
+| Istep: forall prog menv env e v clsid o y menv' env' omenv omenv' rv,
       mfind_inst o menv = Some(omenv) ->
       exp_eval menv env e v ->
       stmt_step_eval prog omenv clsid v omenv' rv ->
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
       stmt_eval prog menv env (Step_ap y clsid o e) (menv', env')
-| Ireset:
+| (*...*)
+(* =end= *)
+  Ireset:
     forall prog menv env o clsid omenv' menv',
       stmt_reset_eval prog clsid omenv' ->
       madd_obj o omenv' menv = menv' ->
@@ -93,6 +97,7 @@ Inductive stmt_eval :
 | Iskip:
     forall prog menv env,
       stmt_eval prog menv env Skip (menv, env)
+(* =stmt_step_eval= *)
 with stmt_step_eval :
        program -> heap -> ident -> const -> heap -> const -> Prop :=
 | Iestep:
@@ -102,6 +107,7 @@ with stmt_step_eval :
                 (menv', env') ->
       PM.find cls.(c_output) env' = Some(ov) ->
       stmt_step_eval prog menv clsid iv menv' ov
+(* =end= *)
 with stmt_reset_eval : program -> ident -> heap -> Prop :=
 | Iereset:
     forall prog clsid cls prog' menv' env',

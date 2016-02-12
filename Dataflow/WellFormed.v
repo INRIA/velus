@@ -46,15 +46,6 @@ Variable memories : PS.t.
 (**
    The list of equations should be in reverse order: the first
    equation to execute should be the last in the list.
-
-   The set 'mems' should include any input variables. The relevant
-   clause is written:
-          (PS.In i mems -> ~Is_defined_in i eqs)
-
-   rather than:
-          (PS.In i mems -> ~Is_memory_in i eqs)
-
-   To require that such input variables are not redefined in eqs.
 *)
 (* =Is_well_sch= *)
 Inductive Is_well_sch (arg: ident) : list equation -> Prop :=
@@ -80,7 +71,7 @@ Inductive Is_well_sch (arg: ident) : list equation -> Prop :=
 | WSchEqFby:
     forall x v e eqs,
       Is_well_sch arg eqs ->
-      PS.In x memories -> (* TODO: delete ? *)
+      PS.In x memories -> (* TODO: delete *)
       (forall i, Is_free_in_laexp i e ->
                     (PS.In i memories -> ~Is_defined_in i eqs)
                  /\ (~PS.In i memories -> Is_variable_in i eqs
