@@ -3,6 +3,7 @@ Require Import Nelist.
 Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
+Require Import Omega.
 
 
 (** * Common definitions *)
@@ -43,16 +44,21 @@ Fixpoint arrows (l : arity) : Set :=
   end.
 
 (* The set of external operators. idea: operator = sigT arrows but we want decidable equality *)
-Parameter operator : Set.
-Parameter get_arity : operator -> arity.
-Parameter get_interp : forall op : operator, arrows (get_arity op).
+Definition operator := sigT arrows.
+Definition get_arity : operator -> arity := @projT1 _ _.
+Definition get_interp : forall op : operator, arrows (get_arity op) := @projT2 _ _.
+
+Lemma arity_dec : forall ar1 ar2 : arity, {ar1 = ar2} + {ar1 <> ar2}.
+Proof. do 2 decide equality. Qed.
+
+(* Must be postulated because we do not have decidable equality on function types.
+   Can be avoided, if we add an id field with a decidable equality. *)
 Axiom op_dec : forall op1 op2 : operator, {op1 = op2} + {op1 <> op2}.
 
-(*
 Example plus : operator.
 exists (Tcons Tint (Tcons Tint (Tout Tint))).
 exact BinInt.Z.add.
-Defined.*)
+Defined.
 
 (** * Common (and preliminary) results **)
 
@@ -233,15 +239,7 @@ Proof.
   match goal with H:exists _, _ |- _ => destruct H end; discriminate.
 Qed.
 
-
-(* TODO: Why isn't this lemma already in the module PS?
-   -> Actually it is ! *)
-Check PS.empty_spec.
-Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
-Proof.
-  unfold PS.In; unfold PS.empty;
-  intros; rewrite PS.mem_Leaf; apply Bool.diff_false_true.
-Qed.
+Definition not_In_empty: forall x : ident, ~(PS.In x PS.empty) := PS.empty_spec.
 
 Ltac not_In_empty :=
   match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.
