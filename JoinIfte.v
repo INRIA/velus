@@ -385,9 +385,8 @@ Proof.
     + intros x Hin; apply Hnvi in Hin.
       apply not_Is_variable_in_cons in Hin.
       now intuition.
-    + admit.
-      (* apply not_Is_defined_in_cons in Hnin.
-      now intuition. *)
+    + intros input Hin Hdefined. setoid_rewrite not_Is_defined_in_cons in Hnin.
+      apply Hnin in Hin. destruct Hin. contradiction.
   - clear IH.
     repeat constructor.
     destruct eq as [x e|x f e|x v0 e]; simpl.
@@ -398,8 +397,8 @@ Proof.
       { intros i Hfree.
         apply HH in Hfree.
         destruct Hfree as [Hm Hnm].
-        assert (~ List.In x inputs) as Hninp by admit.
-(*            by (intro Hin; rewrite Hin in *; apply Hnin; repeat constructor). *)
+        assert (~ List.In x inputs) as Hninp
+            by (intro Hin; apply (Hnin _ Hin); repeat constructor).
         assert (~PS.In x mems) as Hnxm' by intuition.
         intro Hxi; rewrite Hxi in *; clear Hxi.
         specialize (Hnm Hnxm').
