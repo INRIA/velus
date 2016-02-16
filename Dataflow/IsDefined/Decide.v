@@ -21,9 +21,9 @@ Remark: This development is not formally part of the correctness proof.
 
 Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
-  | EqDef x _   => PS.add x defs
-  | EqApp x _ _ => PS.add x defs
-  | EqFby x _ _ => PS.add x defs
+  | EqDef x _ _   => PS.add x defs
+  | EqApp x _ _ _ => PS.add x defs
+  | EqFby x _ _ _ => PS.add x defs
   end.
 
 Definition defined (eqs: list equation) : PS.t :=

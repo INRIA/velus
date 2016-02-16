@@ -1,6 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Coq.MSets.MSets.
 Require Export PArith.
+Require Import Rustre.Nelist.
 
 (** * Common definitions *)
 
@@ -35,60 +36,71 @@ Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
 
-Definition adds {A} (is: list ident)(vs: list A)(S: PM.t A) :=
-  List.fold_right (fun (iiv: ident * A) env => 
+Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
+  Nelist.fold_right (fun (iiv: ident * A) env => 
                     let (i , iv) := iiv in
-                    PM.add i iv env) S (List.combine is vs).
+                    PM.add i iv env) S (Nelist.combine is vs).
 
-Inductive Assoc {A} : list ident -> list A -> ident -> A -> Prop :=
+Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
+| AssocBase: 
+    forall i v,
+      Assoc (nebase i) (nebase v) i v
 | AssocHere: 
     forall i v is vs,
-      Assoc (i :: is) (v :: vs) i v
+      Assoc (necons i is) (necons v vs) i v
 | AssocThere:
     forall i v i' v' is vs,
       Assoc is vs i' v' ->
       i <> i' ->
-      Assoc (i :: is) (v :: vs) i' v'.
-
+      Assoc (necons i is) (necons v vs) i' v'.
 
 
 Lemma gsss: 
-  forall (A: Type)(is: list ident)(vs: list A) i c,
-    Assoc is vs i c <-> PM.find i (adds is vs (PM.empty _)) = Some c.
+  forall {A: Type} is (vs : nelist A) i c, length is = length vs ->
+    (Assoc is vs i c <-> PM.find i (adds is vs (PM.empty _)) = Some c).
 Proof.
   Hint Constructors Assoc.
+  intros A is vs i c Hlen.
   split.
-  - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl. 
+  - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl.
     * rewrite PM.gss; auto.
+    * rewrite (@PM.gss A i); auto.
     * rewrite PM.gso; auto.
-  - generalize dependent vs;
-    induction is as [|i1 is1]; 
-    intro vs; destruct vs as [|v1 vs1]; 
-    unfold adds; simpl; eauto; 
-    intro Hfind; try (rewrite PM.gempty in Hfind; discriminate).
-    destruct (ident_eqb i i1) eqn:Heqi.
-    * apply ident_eqb_eq in Heqi. subst. 
-      rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
-      econstructor.
-    * apply ident_eqb_neq in Heqi.
-      rewrite PM.gso in Hfind; auto.
+  - revert vs Hlen; induction is as [i1 |i1 is]; intros [v1 | v1 vs] Hlen;
+    try now destruct is || destruct vs; simpl in Hlen; discriminate.
+    + unfold adds. simpl. intro Hfind.
+      destruct (ident_eqb i i1) eqn:Heqi.
+      * apply ident_eqb_eq in Heqi. subst. 
+        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
+        econstructor.
+      * apply ident_eqb_neq in Heqi.
+        rewrite PM.gso, PM.gempty in Hfind; trivial. discriminate.
+    + unfold adds. simpl. intro Hfind.
+      destruct (ident_eqb i i1) eqn:Heqi.
+      * apply ident_eqb_eq in Heqi. subst. 
+        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
+        econstructor.
+      * apply ident_eqb_neq in Heqi.
+        rewrite PM.gso in Hfind; auto.
 Qed.
 
 Lemma gsos: 
-  forall (A: Type)(is: list ident)(vs: list A)(m: PM.t A) i,
-    ~ List.In i is ->
+  forall (A: Type) is vs (m : PM.t A) i, length is = length vs ->
+    ~ Nelist.In i is ->
     PM.find i (adds is vs m) = PM.find i m.
 Proof.
-  intros ** Hnin; generalize dependent vs.
-  induction is as [|i0 is0]; destruct vs as [|v0 vs0]; 
-  unfold adds; simpl; auto.
-  destruct (ident_eqb i i0) eqn:Heqi.
-  - exfalso.
-    apply ident_eqb_eq in Heqi. subst.
-    apply Hnin; simpl; auto.
-  - apply ident_eqb_neq in Heqi.
-    rewrite PM.gso; eauto.
-    apply IHis0. intro Hin. apply Hnin. simpl. auto.
+  intros A is vs m i Hlen Hnin. revert vs Hlen.
+  induction is as [i1 |i1 is]; intros [v1 |v1 vs] Hlen; 
+  try now destruct is || destruct vs; simpl in Hlen; discriminate.
+  - unfold adds; simpl; auto. now rewrite PM.gso.
+  - simpl in Hlen. unfold adds; simpl; auto.
+    destruct (ident_eqb i i1) eqn:Heqi.
+    + exfalso.
+      apply ident_eqb_eq in Heqi. subst.
+      apply Hnin; simpl; auto.
+    + apply ident_eqb_neq in Heqi.
+      rewrite PM.gso; eauto.
+      apply IHis; try omega; []. intro Hin. apply Hnin. simpl. auto.
 Qed.
 
 
@@ -233,4 +245,4 @@ Qed.
 Ltac not_In_empty :=
   match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.
 
-
+Ltac inv H := inversion H; subst; clear H.

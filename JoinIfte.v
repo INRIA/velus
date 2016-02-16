@@ -1,4 +1,3 @@
-
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
@@ -14,6 +13,11 @@ Require Import Rustre.Dataflow.WellFormed.
 Require Import Rustre.Translation.
 Require Import Rustre.Correctness.
 Require Import Heap.
+
+
+(** The global idea is to merge if statement iteratively by proving that merge yields equivalent statements.
+    But this is only true under some condition (see [Ifte_free_write]), so that we restrict 
+    our equivalence relation to program satisfying this condition. *)
 
 Inductive Is_free_in_exp : ident -> exp -> Prop :=
 | FreeVar: forall i,
@@ -86,6 +90,8 @@ Ltac cannot_write :=
            | _ => now intuition
            end.
 
+(* If a statement does not modify the free variables of an expression,
+   then that expression can be evaluated before or after the statement. *)
 Lemma cannot_write_exp_eval:
   forall prog s menv env menv' env' e v,
     (forall x, Is_free_in_exp x e -> ~ Can_write_in x s)
@@ -143,6 +149,7 @@ Proof.
   - inversion Hstmt; subst; assumption.
 Qed.
 
+(** Under a condition, merging if statement yields equivalent programs. *)
 Lemma lift_Ifte:
   forall prog e s1 s2 t1 t2 menv env menv' env',
     (forall x, Is_free_in_exp x e
@@ -184,6 +191,9 @@ Proof.
       apply Iifte_false with (1:=Hs2) (2:=Ht2).
 Qed.
 
+(* [Ifte_free_write] expresses that any variable read in the guard condition of an [Ifte]
+   is not written by its branches.
+   This is necessary to be able to merge two consecutive [Ifte] on the same guard. *)
 Inductive Ifte_free_write : stmt -> Prop :=
 | IFWAssign: forall x e,
     Ifte_free_write (Assign x e)
@@ -253,6 +263,8 @@ Proof.
     end.
 Qed.
 
+(* Now we prove that the [translate] function builds programs which satisfy
+   the [Is_free_write] condition, so that mrege rewriting is permitted. *)
 Lemma not_Can_write_in_translate_cexp:
   forall x mems ce i,
     x <> i -> ~ Can_write_in i (translate_cexp mems x ce).
@@ -292,11 +304,10 @@ Proof.
   - now constructor.
 Qed.
 
-Lemma Ifte_free_write_Control_caexp:
+Lemma Ifte_free_write_Control_cexp:
   forall mems ck f ce,
-    (forall i, Is_free_in_caexp i (CAexp ck ce) -> ~Can_write_in i (f ce))
-    -> Ifte_free_write (f ce)
-    -> Ifte_free_write (Control mems ck (f ce)).
+    (forall i, Is_free_in_clock i ck \/ Is_free_in_cexp i ce -> ~Can_write_in i (f ce)) ->
+    Ifte_free_write (f ce) -> Ifte_free_write (Control mems ck (f ce)).
 Proof.
   induction ck as [|ck IH i b]; [now intuition|].
   intros f ce Hxni Hfce.
@@ -304,31 +315,31 @@ Proof.
   destruct b.
   - apply IH with (f:=fun ce=>Ifte (tovar mems i) (f ce) Skip).
     + intros j Hfree Hcw.
-      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+      apply (Hxni j); [inversion_clear Hfree; now auto|].
       inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
         [assumption|inversion Hskip].
     + repeat constructor; [assumption| |now inversion 1].
-      apply Hxni.
+      apply Hxni. left.
       match goal with
       | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
       end.
       unfold tovar in Hfree.
-      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+      destruct (PS.mem i mems); inversion Hfree; subst; auto.
   - apply IH with (f:=fun ce=>Ifte (tovar mems i) Skip (f ce)).
     + intros j Hfree Hcw.
-      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
+      apply (Hxni j); [inversion_clear Hfree; now auto|].
       inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
         [inversion Hskip|assumption].
     + repeat constructor; [assumption|now inversion 1|].
-      apply Hxni.
+      apply Hxni. left.
       match goal with
       | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
       end.
       unfold tovar in Hfree.
-      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
+      destruct (PS.mem i mems); inversion Hfree; subst; auto.
 Qed.
 
-Lemma Ifte_free_write_Control_laexp:
+Lemma Ifte_free_write_Control_lexp:
   forall mems ck s,
     (forall i, Is_free_in_clock i ck -> ~Can_write_in i s)
     -> Ifte_free_write s
@@ -389,40 +400,37 @@ Proof.
       apply Hnin in Hin. destruct Hin. contradiction.
   - clear IH.
     repeat constructor.
-    destruct eq as [x e|x f e|x v0 e]; simpl.
+    destruct eq as [x ck ce | x ck f es | x ck v0 e]; simpl.
     + assert (~PS.In x mems) as Hnxm
           by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-      inversion_clear Hwsch as [|? ? ? Hwsch' HH Hndef| |].
-      assert (forall i, Is_free_in_caexp i e -> x <> i) as Hfni.
+      inversion_clear Hwsch as [|? ? ? ? Hwsch' HH Hndef| |].
+      assert (forall i, Is_free_in_caexp i ck ce -> x <> i) as Hfni.
       { intros i Hfree.
         apply HH in Hfree.
         destruct Hfree as [Hm Hnm].
-        assert (~ List.In x inputs) as Hninp
-            by (intro Hin; apply (Hnin _ Hin); repeat constructor).
+        assert (Hninp : ~List.In x inputs)
+          by (intro Hin; apply (Hnin _ Hin); repeat constructor).
         assert (~PS.In x mems) as Hnxm' by intuition.
         intro Hxi; rewrite Hxi in *; clear Hxi.
         specialize (Hnm Hnxm').
         apply Hndef.
         destruct Hnm as [Hnm|Hnm]; [|now intuition].
         apply Is_variable_in_Is_defined_in with (1:=Hnm). }
-      destruct e as [ck ce].
-      apply Ifte_free_write_Control_caexp.
-      intros i Hfree.
-      apply (not_Can_write_in_translate_cexp).
-      apply Hfni with (1:=Hfree).
-      apply (Ifte_free_write_translate_cexp).
-      intros i Hfree; apply Hfni; intuition.
-    + destruct e as [ck e].
-      assert (~Is_free_in_clock x ck) as Hnfree
+      apply Ifte_free_write_Control_cexp.
+      * intros i Hfree.
+        apply (not_Can_write_in_translate_cexp).
+        eapply Hfni; destruct Hfree; constructor(eassumption).
+      * apply (Ifte_free_write_translate_cexp).
+        intros i Hfree; apply Hfni; intuition.
+    + assert (~Is_free_in_clock x ck) as Hnfree
           by (apply Well_clocked_EqApp_not_Is_free_in_clock
               with (1:=Hwk) (2:=Hwkeq));
-      apply Ifte_free_write_Control_laexp;
+      apply Ifte_free_write_Control_lexp;
       [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
-    + destruct e as [ck e];
-      assert (~Is_free_in_clock x ck) as Hnfree
+    + assert (~Is_free_in_clock x ck) as Hnfree
           by (apply Well_clocked_EqFby_not_Is_free_in_clock
               with (1:=Hwk) (2:=Hwkeq));
-      apply Ifte_free_write_Control_laexp;
+      apply Ifte_free_write_Control_lexp;
       [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
 Qed.
 

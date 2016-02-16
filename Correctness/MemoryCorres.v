@@ -26,20 +26,20 @@ Inductive Memory_Corres (G: global) (n: nat) :
 with Memory_Corres_eq (G: global) (n: nat) :
        memory -> heap -> equation -> Prop :=
 | MemC_EqDef:
-    forall M menv x cae,
-      Memory_Corres_eq G n M menv (EqDef x cae)
+    forall M menv x ck ce,
+      Memory_Corres_eq G n M menv (EqDef x ck ce)
 | MemC_EqApp:
-    forall M menv x f lae,
+    forall M menv x ck f le,
       (forall Mo, mfind_inst x M = Some Mo
                   -> (exists omenv,
                          mfind_inst x menv = Some omenv
                          /\ Memory_Corres G n f Mo omenv))
-      -> Memory_Corres_eq G n M menv (EqApp x f lae)
+      -> Memory_Corres_eq G n M menv (EqApp x ck f le)
 | MemC_EqFby:
-    forall M menv x v0 lae,
+    forall M menv x ck v0 le,
       (forall ms, mfind_mem x M = Some ms
                   -> mfind_mem x menv = Some (ms n))
-      -> Memory_Corres_eq G n M menv (EqFby x v0 lae).
+      -> Memory_Corres_eq G n M menv (EqFby x ck v0 le).
 
 Section Memory_Corres_mult.
   Variables (G: global) (n: nat).
@@ -47,18 +47,18 @@ Section Memory_Corres_mult.
   Variable P : ident -> memory -> heap -> Prop.
   Variable Peq : memory -> heap -> equation -> Prop.
 
-  Hypothesis EqDef_case: forall M menv x cae,
-      Peq M menv (EqDef x cae).
+  Hypothesis EqDef_case: forall M menv x ck ce,
+      Peq M menv (EqDef x ck ce).
 
-  Hypothesis EqApp_case: forall M menv x f lae,
+  Hypothesis EqApp_case: forall M menv x ck f le,
       (forall Mo (Hmfind: mfind_inst x M = Some Mo),
           (exists omenv, mfind_inst x menv = Some omenv /\ P f Mo omenv))
-      -> Peq M menv (EqApp x f lae).
+      -> Peq M menv (EqApp x ck f le).
 
-  Hypothesis EqFby_case: forall M menv x v0 lae,
+  Hypothesis EqFby_case: forall M menv x ck v0 le,
       (forall ms, mfind_mem x M = Some ms
                   -> mfind_mem x menv = Some (ms n))
-      -> Peq M menv (EqFby x v0 lae).
+      -> Peq M menv (EqFby x ck v0 le).
 
   Hypothesis MemC_case:
     forall f M menv i o eqs
@@ -95,12 +95,12 @@ Section Memory_Corres_mult.
   refine(
     match Hmceq in (Memory_Corres_eq _ _ M menv eq) return (Peq M menv eq)
     with
-    | MemC_EqDef M menv x cae => EqDef_case M menv x cae
-    | MemC_EqApp M menv x f lae Hmc =>
-        EqApp_case M menv x f lae
+    | MemC_EqDef M menv x ck ce => EqDef_case M menv x ck ce
+    | MemC_EqApp M menv x ck f le Hmc =>
+        EqApp_case M menv x ck f le
                    (fun (Mo     : memory)
                         (Hmfind : mfind_inst x M = Some Mo) => _)
-    | MemC_EqFby M menv x v0 lae Hfind => EqFby_case M menv x v0 lae Hfind
+    | MemC_EqFby M menv x ck v0 lae Hfind => EqFby_case M menv x ck v0 lae Hfind
     end).
   specialize (Hmc Mo Hmfind).
   destruct Hmc as [omenv [Hfindo Hmc]].
@@ -120,7 +120,7 @@ Lemma Memory_Corres_eq_node_tl:
 Proof.
   intros node G eqs n M menv Hord Hini.
   split; intro Hmc; revert M menv eqs Hmc Hini.
-  - induction 1 as [|? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn IH]
+  - induction 1 as [| ? ? ? ? ? ? Hfind | | ? ? ? ? ? ? Hfindn IH]
       using Memory_Corres_eq_mult
       with (P:=fun f M menv=>
                  node.(n_name) <> f ->
@@ -145,7 +145,7 @@ Proof.
       apply Forall_Forall with (1:=Hord) in IH.
       apply Forall_impl with (2:=IH).
       intuition.
-  - induction 1 as [|? ? ? ? ? Hfind| |? ? ? ? ? ? Hfindn IH]
+  - induction 1 as [| ? ? ? ? ? ? Hfind | | ? ? ? ? ? ? Hfindn IH]
       using Memory_Corres_eq_mult
       with (P:=fun f M menv=>
                  node.(n_name) <> f ->
@@ -247,7 +247,7 @@ Proof.
   apply Forall_cons; [|apply IH with (1:=Hmfind) (2:=Hmc1)].
   destruct eq; repeat constructor.
   - intros Mo Hifind.
-    inversion_clear Hmc0 as [|? ? ? ? ? Hmc|].
+    inversion_clear Hmc0 as [|? ? ? ? ? ? Hmc|].
     specialize (Hmc _ Hifind).
     destruct Hmc as [omenv HH].
     exists omenv.
@@ -259,7 +259,7 @@ Proof.
       injection Hmfind'; intro H; rewrite <- H; clear H.
       rewrite mfind_mem_gss; reflexivity.
     + rewrite mfind_mem_gso with (1:=Hne).
-      inversion_clear Hmc0 as [| |? ? ? ? ? Hmc].
+      inversion_clear Hmc0 as [| |? ? ? ? ? ? Hmc].
       now apply Hmc with (1:=Hmfind').
 Qed.
 
@@ -300,7 +300,7 @@ Proof.
   - intros Mo Hmfind.
     destruct (ident_eq_dec i y) as [Hiy|Hniy].
     + rewrite Hiy in Hniii0; exfalso; apply Hniii0; constructor.
-    + inversion_clear Hmce0 as [|? ? ? ? ? Hfindo|].
+    + inversion_clear Hmce0 as [|? ? ? ? ? ? Hfindo|].
       specialize (Hfindo _ Hmfind).
       destruct Hfindo as [omenv' [Hfindo Hmc]].
       exists omenv'.
@@ -308,7 +308,7 @@ Proof.
       rewrite mfind_inst_gso; [|exact Hniy].
       exact Hfindo.
   - intros ms Hmfind.
-    inversion_clear Hmce0 as [| |? ? ? ? ? HH].
+    inversion_clear Hmce0 as [| |? ? ? ? ? ? HH].
     rewrite mfind_mem_add_inst.
     apply HH with (1:=Hmfind).
 Qed.
@@ -323,9 +323,9 @@ Lemma Memory_Corres_unchanged:
 Proof.
   intros G f n ls M ys menv Hwdef Hmsem Habs.
   revert menv.
-  induction Hmsem as [|H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH
-                      |H M ms y ls yS v0 lae Hmfind Hms0 Hls HyS Hy
-                      |f xs M ys i o eqs Hf Heqs IH]
+  induction Hmsem as [| H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
+                      | H M ms y ck ls yS v0 lae Hmfind Hms0 Hls HyS Hy
+                      | f xs M ys i o eqs Hf Heqs IH]
   using msem_node_mult
   with (P := fun H M eq Hsem =>
                forall menv,
@@ -338,23 +338,25 @@ Proof.
     intros Mo Hmfind'.
     rewrite Hmfind in Hmfind'.
     injection Hmfind'; intro Heq; rewrite <-Heq; clear Heq Hmfind'.
-    inversion_clear Hmceq as [|? ? ? ? ? Hmc'|].
+    inversion_clear Hmceq as [|? ? ? ? ? ? Hmc'|].
     specialize (Hmc' _ Hmfind).
     destruct Hmc' as [omenv [Hfindo Hmc]].
     exists omenv.
     split; [exact Hfindo|].
     apply IH with (2:=Hmc).
-    inversion_clear Hrhsa as [|? ? ? ? Hlaea|].
-    specialize (Hls n); simpl in Hls.
-    assert (ls n = vs) by sem_det.
-    unfold absent_list; congruence.
+    inversion_clear Hrhsa as [| ? ? ? ? ? Hlaea Hvs |].
+
+    assert (ls n = vs)
+      by (specialize (Hls n); simpl in Hls; sem_det).
+    
+    unfold absent_list. subst vs; eauto.
   - rename Habs into menv.
     intros Hdefabs Hmceq.
     constructor.
     intros ms0 Hmfind0.
     rewrite Hmfind in Hmfind0.
     injection Hmfind0; intro Heq; rewrite <-Heq; clear Heq Hmfind0 ms0.
-    inversion_clear Hmceq as [| |? ? ? ? ? Hmenv].
+    inversion_clear Hmceq as [| |? ? ? ? ? ? Hmenv].
     apply Hmenv in Hmfind.
     rewrite Hmfind.
     inversion_clear Hdefabs as [| |? ? ? Hlaea].
@@ -362,9 +364,7 @@ Proof.
     specialize Hy with n.
     assert (Hls_abs: ls n = absent) by sem_det.
     rewrite Hls_abs in Hy.
-    destruct Hy as [Hmseq H0].
-    rewrite Hmseq.
-    reflexivity.
+    now f_equal.
   - intros menv Hmc.
     inversion_clear Hmc as [? ? ? i' o' eqs' Hf' Hmceqs].
     rewrite Hf in Hf'.

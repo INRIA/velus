@@ -1,5 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
+Require Import Rustre.Nelist.
 Require Import Rustre.Common.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Dataflow.Syntax.
@@ -29,9 +30,9 @@ Open Scope list.
 
 Definition gather_eq (acc: list ident * list obj_dec) (eq: equation) :=
   match eq with
-  | EqDef _ _ => acc
-  | EqApp x f _ => (fst acc, mk_obj_dec x f :: snd acc)
-  | EqFby x v0 _ => (x::fst acc, snd acc)
+  | EqDef _ _ _ => acc
+  | EqApp x _ f _ => (fst acc, mk_obj_dec x f :: snd acc)
+  | EqFby x _ v0 _ => (x::fst acc, snd acc)
   end.
 
 Definition gather_eqs (eqs: list equation) : (list ident * list obj_dec) :=
@@ -60,31 +61,17 @@ Section Translate.
     | Ewhen e c x => translate_lexp e
     end.
   
-(* TODO: remove (useless *)
-  Definition translate_laexp (lae: laexp): exp :=
-    match lae with
-      | LAexp ck e => translate_lexp e
-    end.
-
   Fixpoint translate_cexp (x: ident)(e : cexp) {struct e}: stmt :=
     match e with
     | Emerge y t f => Ifte (tovar y) (translate_cexp x t) (translate_cexp x f)
     | Eexp l => Assign x (translate_lexp l)
     end.
 
-  Definition translate_caexp (x: ident)(ae : caexp): stmt :=
-    match ae with
-      | CAexp ck e => translate_cexp x e
-    end.
-
   Definition translate_eqn (eqn: equation): stmt :=
     match eqn with
-    | EqDef x (CAexp ck ce) =>
-      Control ck (translate_cexp x ce)
-    | EqApp x f (LAexps ck les) =>
-      Control ck (Step_ap x f x (List.map translate_lexp les))
-    | EqFby x v (LAexp ck le) =>
-      Control ck (AssignSt x (translate_lexp le))
+    | EqDef x ck ce => Control ck (translate_cexp x ce)
+    | EqApp x ck f les => Control ck (Step_ap x f x (Nelist.map translate_lexp les))
+    | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
     end.
 
   (* NB: eqns ordered in reverse order of execution for coherence
@@ -96,9 +83,9 @@ End Translate.
 
 Definition translate_reset_eqn (s: stmt) (eqn: equation): stmt :=
   match eqn with
-  | EqDef _ _ => s
-  | EqFby x v0 _ => Comp (AssignSt x (Const v0)) s
-  | EqApp x f _ => Comp (Reset_ap f x) s
+  | EqDef _ _ _ => s
+  | EqFby x _ v0 _ => Comp (AssignSt x (Const v0)) s
+  | EqApp x _ f _ => Comp (Reset_ap f x) s
   end.
 
 Definition ps_from_list (l: list ident) : PS.t :=

@@ -20,7 +20,7 @@ Require Import Rustre.Dataflow.Syntax.
 
 Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
-  | EqFby x _ _ => PS.add x mems
+  | EqFby x _ _ _ => PS.add x mems
   | _ => mems
   end.
 

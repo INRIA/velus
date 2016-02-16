@@ -28,20 +28,20 @@ this generically amounts to:
 Inductive NoDup_defs : list equation -> Prop :=
 | NDDNil: NoDup_defs nil
 | NDDEqDef:
-    forall x e eqs,
+    forall x ck e eqs,
       NoDup_defs eqs ->
       ~Is_defined_in x eqs ->
-      NoDup_defs (EqDef x e :: eqs)
+      NoDup_defs (EqDef x ck e :: eqs)
 | NDDEqApp:
-    forall x f e eqs,
+    forall x ck f e eqs,
       NoDup_defs eqs ->
       ~Is_defined_in x eqs ->
-      NoDup_defs (EqApp x f e :: eqs)
+      NoDup_defs (EqApp x ck f e :: eqs)
 | NDDEqFby:
-    forall x v e eqs,
+    forall x ck v e eqs,
       NoDup_defs eqs ->
       ~Is_defined_in x eqs ->
-      NoDup_defs (EqFby x v e :: eqs).
+      NoDup_defs (EqFby x ck v e :: eqs).
 
 
 
@@ -68,7 +68,7 @@ Proof.
   - simpl in *; intro; not_In_empty.
   - apply Is_defined_in_cons in Hdin.
     inversion Hndd
-      as [|y e ? Hndds Hndi|y f e ? Hndds Hndi|y v0 e ? Hndds Hndi];
+      as [|y ck e ? Hndds Hndi|y ck f e ? Hndds Hndi|y ck v0 e ? Hndds Hndi];
       subst; clear Hndd.
     + destruct Hdin as [Hdin|[Hndin Hdins]].
       simpl in Hinm.

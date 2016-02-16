@@ -1,8 +1,11 @@
 Require Import Rustre.Common.
 Require Import PArith.
+Require Import Rustre.Nelist.
+
 
 Import List.ListNotations.
 Open Scope list_scope.
+
 
 (** * Dataflow language *)
 
@@ -20,32 +23,22 @@ Inductive lexp : Type :=
   | Ewhen : lexp -> ident -> bool -> lexp.
 (* External operators are missing *)
 
-Inductive laexp : Type :=
-  | LAexp : clock -> lexp -> laexp.
-
-Inductive laexps : Type :=
-  | LAexps : clock -> list lexp -> laexps.
-
-Implicit Type le: lexp.
-Implicit Type lae: laexps.
-Implicit Type laes: laexps.
+Definition lexps := nelist lexp.
 
 Inductive cexp : Type :=
   | Emerge : ident -> cexp -> cexp -> cexp 
   | Eexp : lexp -> cexp.
 
-Inductive caexp : Type :=
-  | CAexp : clock -> cexp -> caexp.
-
+Implicit Type le: lexp.
+Implicit Type les: lexps.
 Implicit Type ce: cexp.
-Implicit Type cae: caexp.
 
 (** ** Equations *)
 
 Inductive equation : Type :=
-  | EqDef : ident -> caexp -> equation
-  | EqApp : ident -> ident -> laexps -> equation
-  | EqFby : ident -> const -> laexp -> equation.
+  | EqDef : ident -> clock -> cexp -> equation
+  | EqApp : ident -> clock -> ident -> lexps -> equation
+  | EqFby : ident -> clock -> const -> lexp -> equation.
 
 Implicit Type eqn: equation.
 
@@ -53,7 +46,7 @@ Implicit Type eqn: equation.
 
 Record node : Type := mk_node {
   n_name : ident;
-  n_input : list ident;
+  n_input : nelist ident;
   n_output : ident;
   n_eqs : list equation }.
 
@@ -65,8 +58,5 @@ Definition global := list node.
 
 Implicit Type G: global.
 
-
 Definition find_node (f : ident) : global -> option node :=
   List.find (fun n=> ident_eqb n.(n_name) f).
-
-

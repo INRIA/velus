@@ -96,16 +96,6 @@ Proof.
   - rewrite HMeq; auto.
 Qed.
 
-Instance translate_caexp_Proper :
-  Proper (PS.eq ==> eq ==> eq ==> eq) translate_caexp.
-Proof.
-  intros M M' HMeq y y' Hyeq c c' Hceq; rewrite <- Hyeq, <- Hceq;
-  clear y' c' Hyeq Hceq.
-  destruct c as [ck c].
-  change (translate_cexp M y c = translate_cexp M' y c).
-  rewrite HMeq; reflexivity.
-Qed.
-
 Instance Control_Proper :
   Proper (PS.eq ==> eq ==> eq ==> eq) Control.
 Proof.
@@ -119,13 +109,14 @@ Qed.
 
 Instance translate_exps_Proper :
   Proper (PS.eq ==> eq ==> eq) 
-    (fun M l => List.map (translate_lexp M) l).
+    (fun M l => Nelist.map (translate_lexp M) l).
 Proof.
   intros M M' HMeq l.
-  induction l; intros l' Hleq; destruct l'; try discriminate; eauto.
-  injection Hleq; intros.
-  simpl. erewrite IHl; eauto.
-  rewrite HMeq. congruence.
+  induction l; intros l' Hleq; destruct l'; try discriminate.
+  - inversion_clear Hleq. simpl. now rewrite HMeq.
+  - injection Hleq; intros.
+    simpl. erewrite IHl; eauto.
+    rewrite HMeq. congruence.
 Qed.
 
 Instance translate_eqn_Proper :
@@ -133,7 +124,7 @@ Instance translate_eqn_Proper :
 Proof.
   intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
   (* XXX: what is the Proper way to avoid the [rewrite translate_exps_Proper]? *)
-  destruct eq as [y e|y f e|y v0 e];
+  destruct eq as [y ck e|y ck f e|y ck v0 e];
     (destruct e; simpl; try (rewrite translate_exps_Proper; eauto); rewrite HMeq; reflexivity).
 Qed.
 

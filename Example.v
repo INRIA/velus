@@ -1,4 +1,5 @@
 Require Import PArith.
+Require Import Rustre.Nelist.
 Require Import List.
 Import List.ListNotations.
 Open Scope positive.
@@ -17,28 +18,26 @@ Require Import Rustre.Translation.
 (* TODO: not properly clocked... *)
 Example eqns1 : list equation :=
   [
-    EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
-    EqDef 4 (CAexp Cbase (Emerge 1 (Eexp (Evar 2))
-                                   (Eexp (Evar 3))));
-    EqDef 2 (CAexp (Con Cbase 1 true)
-                   (Eexp (Ewhen (Econst (Cint 7)) 1 true))
-            )
+    EqFby 3 (Con Cbase 1 false) (Cint 0) (Evar 2);
+    EqDef 4 Cbase (Emerge 1 (Eexp (Evar 2)) (Eexp (Evar 3)));
+    EqDef 2 (Con Cbase 1 true) (Eexp (Ewhen (Econst (Cint 7)) 1 true))
+            
 (*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
   ].
 
 Example node1 : node :=
-  mk_node 1 [1] 4 eqns1.
+  mk_node 1 (nebase 1) 4 eqns1.
 
 
 Example eqns2 : list equation :=
   [
-    EqFby 3 (Cint 0) (LAexp Cbase (Evar 2));
-    EqApp 4 1 (LAexps Cbase [Evar 3]);
-    EqApp 2 1 (LAexps Cbase [Evar 1])
+    EqFby 3 Cbase (Cint 0) (Evar 2);
+    EqApp 4 Cbase 1 (nebase (Evar 3));
+    EqApp 2 Cbase 1 (nebase (Evar 1))
   ].
 
 Example node2 : node :=
-  mk_node 2 [1] 4 eqns2.
+  mk_node 2 (nebase 1) 4 eqns2.
 
 (** Scheduling *)
 
@@ -83,13 +82,13 @@ Example reset1 : stmt :=
 Example class2 : class :=
   {|
     c_name := 2;
-    c_input := [1];
+    c_input := nebase 1;
     c_output := 4;
     c_mems := [3];
     c_objs := [{| obj_inst := 2; obj_class := 1 |};
                 {| obj_inst := 4; obj_class := 1 |}];
-    c_step := Comp (Step_ap 2 1 2 [Var 1])
-                   (Comp (Step_ap 4 1 4 [State 3])
+    c_step := Comp (Step_ap 2 1 2 (nebase (Var 1)))
+                   (Comp (Step_ap 4 1 4 (nebase (State 3)))
                          (Comp (AssignSt 3 (Var 2))
                                Skip));
     c_reset := Comp (Reset_ap 1 2)

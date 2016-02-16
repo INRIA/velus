@@ -54,7 +54,7 @@ Qed.
 Corollary Well_clocked_EqDef_not_Is_free_in_clock:
   forall C x ce ck,
     Well_clocked_env C
-    -> Well_clocked_eq C (EqDef x (CAexp ck ce))
+    -> Well_clocked_eq C (EqDef x ck ce)
     -> ~Is_free_in_clock x ck.
 Proof.
   intros C x ce ck Hwc Hwce.
@@ -65,7 +65,7 @@ Qed.
 Corollary Well_clocked_EqApp_not_Is_free_in_clock:
   forall C x f le ck,
     Well_clocked_env C
-    -> Well_clocked_eq C (EqApp x f (LAexps ck le))
+    -> Well_clocked_eq C (EqApp x ck f le)
     -> ~Is_free_in_clock x ck.
 Proof.
   intros C x f le ck Hwc Hwce.
@@ -76,7 +76,7 @@ Qed.
 Corollary Well_clocked_EqFby_not_Is_free_in_clock:
   forall C x v0 le ck,
     Well_clocked_env C
-    -> Well_clocked_eq C (EqFby x v0 (LAexp ck le))
+    -> Well_clocked_eq C (EqFby x ck v0 le)
     -> ~Is_free_in_clock x ck.
 Proof.
   intros C x v0 le ck Hwc Hwce.

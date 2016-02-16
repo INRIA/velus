@@ -18,7 +18,7 @@ but it is important in an imperative program.
 
 
 Inductive Is_node_in_eq : ident -> equation -> Prop :=
-| INI: forall x f e, Is_node_in_eq f (EqApp x f e).
+| INI: forall x ck f e, Is_node_in_eq f (EqApp x ck f e).
 
 Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_node_in_eq f) eqs.

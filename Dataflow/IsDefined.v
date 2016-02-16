@@ -16,9 +16,9 @@ Require Import Rustre.Dataflow.Memories.
  *)
 
 Inductive Is_defined_in_eq : ident -> equation -> Prop :=
-| DefEqDef: forall x e,   Is_defined_in_eq x (EqDef x e)
-| DefEqApp: forall x f e, Is_defined_in_eq x (EqApp x f e)
-| DefEqFby: forall x v e, Is_defined_in_eq x (EqFby x v e).
+| DefEqDef: forall x ck e,   Is_defined_in_eq x (EqDef x ck e)
+| DefEqApp: forall x ck f e, Is_defined_in_eq x (EqApp x ck f e)
+| DefEqFby: forall x ck v e, Is_defined_in_eq x (EqFby x ck v e).
 
 Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_defined_in_eq x) eqs.
@@ -57,32 +57,32 @@ Proof.
 Qed.
 
 Lemma not_Is_defined_in_eq_EqDef:
-  forall x i cae,
-    ~ Is_defined_in_eq x (EqDef i cae) -> x <> i.
+  forall x i ck ce,
+    ~ Is_defined_in_eq x (EqDef i ck ce) -> x <> i.
 Proof.
-  intros x i cae H0 xeqi.
+  intros x i ck ce H0 xeqi.
   rewrite xeqi in H0.
-  assert (Is_defined_in_eq i (EqDef i cae)) by constructor.
+  assert (Is_defined_in_eq i (EqDef i ck ce)) by constructor.
   contradiction.
 Qed.
 
 Lemma not_Is_defined_in_eq_EqApp:
-  forall x i f lae,
-    ~ Is_defined_in_eq x (EqApp i f lae) -> x <> i.
+  forall x i ck f le,
+    ~ Is_defined_in_eq x (EqApp i ck f le) -> x <> i.
 Proof.
-  intros x i f lae H0 xeqi.
+  intros x i ck f le H0 xeqi.
   rewrite xeqi in H0.
-  assert (Is_defined_in_eq i (EqApp i f lae)) by constructor.
+  assert (Is_defined_in_eq i (EqApp i ck f le)) by constructor.
   contradiction.
 Qed.
 
 Lemma not_Is_defined_in_eq_EqFby:
-  forall x i v0 lae,
-    ~ Is_defined_in_eq x (EqFby i v0 lae) -> x <> i.
+  forall x i ck v0 le,
+    ~ Is_defined_in_eq x (EqFby i ck v0 le) -> x <> i.
 Proof.
-  intros x i v0 lae H0 xeqi.
+  intros x i ck v0 le H0 xeqi.
   rewrite xeqi in H0.
-  assert (Is_defined_in_eq i (EqFby i v0 lae)) by constructor.
+  assert (Is_defined_in_eq i (EqFby i ck v0 le)) by constructor.
   contradiction.
 Qed.
 

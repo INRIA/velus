@@ -54,37 +54,37 @@ Open Scope list_scope.
    To require that such input variables are not redefined in eqs.
 *)
 
+(* FIXME: argIn should be a [nelist ident] *)
 Inductive Is_well_sch (mems: PS.t)(argIn: list ident) : list equation -> Prop :=
 | WSchNil: Is_well_sch mems argIn nil
 | WSchEqDef:
-    forall x e eqs,
+    forall x ck e eqs,
       Is_well_sch mems argIn eqs ->
-      (forall i, Is_free_in_caexp i e ->
+      (forall i, Is_free_in_caexp i ck e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
                  /\ (~PS.In i mems -> Is_variable_in i eqs
                                    \/ List.In i argIn)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch mems argIn (EqDef x e :: eqs)
+      Is_well_sch mems argIn (EqDef x ck e :: eqs)
 | WSchEqApp:
-    forall x f l ck es eqs,
+    forall x ck f les eqs,
       Is_well_sch mems argIn eqs ->
-      (forall i, Is_free_in_laexps i l ->
+      (forall i, Is_free_in_laexps i ck les ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
                     /\ (~PS.In i mems -> Is_variable_in i eqs
                                       \/ List.In i argIn)) ->
       (~Is_defined_in x eqs) ->
-      l = LAexps ck es -> es <> [] ->
-      Is_well_sch mems argIn (EqApp x f l :: eqs)
+      Is_well_sch mems argIn (EqApp x ck f les :: eqs)
 | WSchEqFby:
-    forall x v e eqs,
+    forall x ck v e eqs,
       Is_well_sch mems argIn eqs ->
       PS.In x mems -> (* TODO: delete ? *)
-      (forall i, Is_free_in_laexp i e ->
+      (forall i, Is_free_in_laexp i ck e ->
                     (PS.In i mems -> ~Is_defined_in i eqs)
                  /\ (~PS.In i mems -> Is_variable_in i eqs
                                    \/ List.In i argIn)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch mems argIn (EqFby x v e :: eqs).
+      Is_well_sch mems argIn (EqFby x ck v e :: eqs).
 
 Hint Constructors Is_well_sch.
 
@@ -110,9 +110,9 @@ Lemma Is_well_sch_free_variable:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion Hwsch as [|? ? ? ? Hp| ? ? ? ? ? ? ? Hp|? ? ? ? ? ? Hp];
-    inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
-    apply Hp in Hc;
+    inversion Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? ? Hp];
+    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; subst;
+    eapply Hp in Hc;
     intuition.
 Qed.
 
@@ -125,9 +125,9 @@ Lemma Is_well_sch_free_variable_in_mems:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? ? ? Hp|? ? ? ? ? ? Hp];
-    inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
-    apply Hp in Hc;
+    inversion_clear Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? ? Hp];
+    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
+    eapply Hp in Hc;
     destruct Hc as [Hc0 Hc1];
     apply Hc0 in Hnim;
     apply Hnim.
@@ -154,10 +154,9 @@ Inductive Welldef_global : list node -> Prop :=
       let eqs := nd.(n_eqs) in
       let ni := nd.(n_input) in
       let no := nd.(n_output) in
-      ni <> []
-      -> NoDup ni
-      -> Is_well_sch (memories eqs) ni eqs
-      -> ~ List.Exists (fun ni => Is_defined_in ni eqs) ni
+        NoDup (Nelist.nelist2list ni)
+      -> Is_well_sch (memories eqs) (Nelist.nelist2list ni) eqs
+      -> ~ List.Exists (fun ni => Is_defined_in ni eqs) (Nelist.nelist2list ni)
       -> Is_variable_in no eqs
       -> ~Is_node_in nd.(n_name) eqs
       -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
@@ -208,7 +207,7 @@ Lemma Welldef_global_input_not_Is_defined_in:
   forall f G fnode,
     Welldef_global G
     -> find_node f G = Some fnode
-    -> ~ List.Exists (fun ni => Is_defined_in ni fnode.(n_eqs)) fnode.(n_input).
+    -> ~ Nelist.Exists (fun ni => Is_defined_in ni fnode.(n_eqs)) fnode.(n_input).
 Proof.
   induction G as [|node G IH]; [inversion_clear 2|].
   intros fnode HWdef Hfnode.
@@ -217,7 +216,7 @@ Proof.
   rewrite HnG in HWdef; clear HnG.
   apply Welldef_global_app in HWdef.
   inversion_clear HWdef.
-  assumption.
+  now rewrite <- Nelist.nelist2list_Exists.
 Qed.
 
 Lemma Welldef_global_output_Is_variable_in:

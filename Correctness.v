@@ -1,3 +1,4 @@
+Require Import Rustre.Nelist.
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -196,16 +197,13 @@ Lemma not_Is_defined_in_eq_stmt_eval_menv_inv:
     -> mfind_mem x menv' = mfind_mem x menv.
 Proof. (* TODO: Tidy proof *)
   intros prog x eq menv env mems menv' env' Hneq Heval.
-  destruct eq as [y cae|y f lae|y v0 lae].
-  - destruct cae.
-    simpl in Heval.
-    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
+  destruct eq as [y ck ce | y ck f les | y ck v0 lae]; simpl in Heval.
+  - apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     apply stmt_eval_translate_cexp_menv_inv in Heval2.
     rewrite Heval2. intuition.
     destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
-  - destruct lae.
-    simpl in Heval.
+  - simpl in Heval.
     apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     inversion_clear Heval.
@@ -214,7 +212,6 @@ Proof. (* TODO: Tidy proof *)
     destruct Heval as [Hmenv Henv]; rewrite Hmenv; intuition.
   - apply not_Is_defined_in_eq_EqFby in Hneq.
     unfold translate_eqn in Heval.
-    destruct lae.
     apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     inversion_clear Heval.
@@ -231,16 +228,14 @@ Lemma not_Is_defined_in_eq_stmt_eval_mobj_inv:
     -> mfind_inst x menv' = mfind_inst x menv.
 Proof. (* TODO: Tidy proof *)
   intros prog x eq menv env mems menv' env' Hneq Heval.
-  destruct eq as [y cae|y f lae|y v0 lae].
-  - destruct cae.
-    simpl in Heval.
+  destruct eq as [y ck ce | y ck f les | y ck v0 lae].
+  - simpl in Heval.
     apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     apply stmt_eval_translate_cexp_menv_inv in Heval2.
     rewrite Heval2. intuition.
     destruct Heval2 as [Hmenv]; rewrite Hmenv; intuition.
-  - destruct lae.
-    simpl in Heval.
+  - simpl in Heval.
     apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     + inversion_clear Heval.
@@ -250,7 +245,6 @@ Proof. (* TODO: Tidy proof *)
       * rewrite mfind_inst_gso; [reflexivity|assumption].
     + destruct Heval as [HR1 HR2]; rewrite HR1; reflexivity.
   - unfold translate_eqn in Heval.
-    destruct lae.
     apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Hipi Heval].
     inversion_clear Heval.
@@ -267,25 +261,22 @@ Lemma not_Is_variable_in_eq_stmt_eval_env_inv:
     -> PM.find x env' = PM.find x env.
 Proof.
   intros prog x eq menv env mems menv' env' Hnd Heval.
-  destruct eq as [y e|y f e|y v0 e].
+  destruct eq as [y ck ce | y ck f les | y ck v0 ce]; simpl in Heval.
   - unfold translate_eqn in Heval.
-    destruct e.
     apply stmt_eval_Control_fwd in Heval;
       destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
       [|rewrite Henv; reflexivity].
     apply stmt_eval_translate_cexp_env_add in Heval.
     destruct Heval; rewrite H; rewrite PM.gso;
     [reflexivity|intro HR; rewrite HR in *; apply Hnd; constructor].
-  - simpl in Heval; destruct e.
-    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
+  - apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     inversion_clear Heval2.
     rewrite <- H3.
     rewrite PM.gso; [reflexivity|].
     intro Hxy; apply Hnd; rewrite Hxy; constructor.
     destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
-  - simpl in Heval; destruct e.
-    apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
+  - apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
     destruct Heval as [Heval1 Heval2].
     inversion Heval2; intuition.
     destruct Heval2 as [Hmenv Henv]; rewrite Henv; intuition.
@@ -485,34 +476,21 @@ Qed.
 
 Lemma lexps_correct:
   forall R memories menv env cs es,
-    let vs := List.map present cs in
-    Forall2 (fun e v => sem_lexp_instant R e v) es vs
-    -> equiv_env (fun x => List.Exists (Is_free_in_lexp x) es) R memories env menv 
-    -> Forall2 (exp_eval menv env) (map (translate_lexp memories) es) cs.
+    let vs := Nelist.map present cs in
+    Nelist.Forall2 (fun e v => sem_lexp_instant R e v) es vs
+    -> equiv_env (fun x => Nelist.Exists (Is_free_in_lexp x) es) R memories env menv 
+    -> Nelist.Forall2 (exp_eval menv env) (Nelist.map (translate_lexp memories) es) cs.
 Proof.
   Hint Constructors Forall2.
   intros ? ? ? ? cs.
-  induction cs; 
-    intros es Hvs Hsem Hequiv; destruct es; subst Hvs;
-    inversion_clear Hsem; constructor; eauto using lexp_correct.
+  induction cs; intros es Hvs Hsem Hequiv; subst Hvs.
+  + inv Hsem. constructor. eapply lexp_correct; eauto.
+    repeat intro. apply Hequiv; trivial. now constructor.
+  + inv Hsem. simpl. constructor.
+    - eapply lexp_correct; eauto.
+      repeat intro. apply Hequiv; trivial. now constructor.
+    - apply IHcs; trivial. repeat intro. apply Hequiv; trivial. now constructor 3.
 Qed.
-
-(** ** Validity of [translate_laexp] *)
-
-(* TODO: remove (useless) *)
-Lemma laexp_correct:
-  forall R memories menv env c e,
-    sem_laexp_instant R e (present c)
-    -> equiv_env (fun x => Is_free_in_laexp x e) R memories env menv
-    -> exp_eval menv env (translate_laexp memories e) c.
-Proof.
-  intros H memories menv env c e Hsem Henv.
-  destruct e as [ck ce].
-  inversion Hsem as [? ? ? Hlexp|].
-  change (exp_eval menv env (translate_lexp memories ce) c).
-  eapply lexp_correct; [eassumption | weaken_equiv_env]. 
-Qed.
-
 
 (** ** Validity of [translate_cexp] *)
 
@@ -541,24 +519,6 @@ Proof.
     econstructor.
     eapply lexp_correct; [eassumption|now auto].
     reflexivity.
-Qed.
-
-(** ** Validity of [translate_caexp] *)
-
-(* TODO: remove (useless) *)
-Lemma caexp_correct:
-  forall R memories prog menv env c x e,
-    sem_caexp_instant R e (present c)
-    -> equiv_env (fun x => Is_free_in_caexp x e) R memories env menv
-    -> stmt_eval prog menv env (translate_caexp memories x e)
-                                                  (menv, PM.add x c env).
-Proof.
-  intros H memories prog menv env c x e Hsem Henv.
-  destruct e as [ck ce].
-  inversion_clear Hsem as [? ? ? Hlexp ?|].
-  change (stmt_eval prog menv env (translate_cexp memories x ce)
-                     (menv, PM.add x c env)).
-  apply cexp_correct with (1:=Hlexp); now auto.
 Qed.
 
 (* Notes:
@@ -609,7 +569,7 @@ Proof.
   destruct Hmsem as [Hmeq Hmeqs].
   - destruct eq; inversion Hidi; subst;
     try (exfalso; apply Hnvi0; now constructor).
-    inversion_clear Hmeq as [| |? ? ? ? ls ? ? ? Hmfind Hms0 Hsemls HxS Hmls].
+    inversion_clear Hmeq as [| |? ? ? ? ? ls ? ? ? Hmfind Hms0 Hsemls HxS Hmls].
     exists ms.
     split; [apply Hmfind|].
     specialize Hmls with n; specialize (HxS n); simpl in HxS.
@@ -626,6 +586,15 @@ Qed.
 
 (** ** Validity of [translate_eqns] *)
 
+Lemma forall_absent:
+  forall les,
+    Nelist.Forall (fun xs0 : value => xs0 = absent)
+                  (Nelist.map (fun _ : lexp => absent) les).
+Proof.
+  induction les; simpl; constructor; eauto.
+Qed.
+
+
 Section IsStepCorrect.
 
 Variables (G: global)
@@ -637,8 +606,8 @@ Variables (G: global)
           (Hsems: msem_equations G H M alleqs)
           (prog: program)
           (Hnode: equiv_prog G prog)
-          (inputs: list ident)
-          (Hinput: forall input, List.In input inputs -> ~ PS.In input mems)
+          (inputs: nelist ident)
+          (Hinput: forall input, Nelist.In input inputs -> ~ PS.In input mems)
           (n: nat)
           (menv: heap)
           (env: stack).
@@ -651,7 +620,7 @@ Lemma is_step_correct:
                           /\ ~Is_variable_in x alleqs))
         
         (* - input (assumed) *)
-        -> (forall c input, List.In input inputs ->
+        -> (forall c input, Nelist.In input inputs ->
                             (sem_var_instant (restr H n) input (present c)
                              <-> PM.find input env = Some c))
           (* NB: PM.find x env' = Some c -> sem_var H x n (present c)
@@ -666,10 +635,10 @@ Lemma is_step_correct:
 
                  More discussion/context is needed. *)
         -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
-        -> (forall input, List.In input inputs -> ~ Is_defined_in input eqs)
+        -> (forall input, Nelist.In input inputs -> ~ Is_defined_in input eqs)
 
         (* - execution of translated equations *)
-        -> Is_well_sch mems inputs eqs
+        -> Is_well_sch mems (nelist2list inputs) eqs
 
         (* - unwritten memories (assumed) *)
         -> List.Forall (Memory_Corres_eq G n M menv) alleqs
@@ -718,35 +687,35 @@ Proof.
   apply Forall_cons2 in Hsems'.
   destruct Hsems' as [Hsem Hsems'].
 
-  inversion Hsem as [H0 M0 i xs cae Hvar Hcae HR1 HR2 HR3
-                    |H0 M0 y f Mo laes ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
-                    |H0 M0 ms y ls yS v0 lae Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
+  inversion Hsem as [H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
+                    |H0 M0 y ck f Mo les ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
+                    |H0 M0 ms y ck ls yS v0 le Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
     (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0);
     specialize (Hvar n).
   - (* Case EqDef: y = cae *)
     exists menv'. (* the memory does not change *)
-    specialize (Hcae n); simpl in *.
-    assert (equiv_env (fun x => Is_free_in_caexp x cae) (restr H n) mems env' menv')
-      as Hcae'. 
+    specialize (Hce n); simpl in *.
+    assert (equiv_env (fun x => Is_free_in_caexp x ck ce) (restr H n) mems env' menv')
+      as Hce'. 
     {
+      Hint Constructors Is_free_in_equation.
       intros. 
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x inputs)
-          by (eapply Is_well_sch_free_variable;
-              eassumption || constructor (assumption)). 
+      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x (nelist2list inputs))
+          by (eapply Is_well_sch_free_variable; eauto).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
-        + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
-          apply Hin; assumption.
+        + rewrite nelist2list_In in H2.
+          erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
+          now apply Hin.
           apply not_Is_defined_in_not_Is_variable_in.
           intro Hnot_def. eapply Hin2; try eauto.
           constructor(assumption).
           
       - assert (~ Is_defined_in x eqs) 
-          by (eapply Is_well_sch_free_variable_in_mems; 
-              eassumption || constructor (assumption)).
+          by (eapply Is_well_sch_free_variable_in_mems; eauto).
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
         eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
@@ -755,8 +724,7 @@ Proof.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
-    destruct cae as [ck e].
-    inversion Hcae; subst ck0 e;
+    inversion Hce; subst ck0 ce0;
     match goal with
       | H: present _ = xs n |- _ => rewrite <- H in *
       | H: absent = xs n |- _ => rewrite <- H in *
@@ -826,23 +794,25 @@ Proof.
         repeat constructor; assumption.
 
   - (* Case EqApp: y = f lae *)
-    specialize (Hlaes n).
+
+    (* specialize (Hlaes n). *)
     (* used variables are defined *)
-    assert (equiv_env (fun x => Is_free_in_laexps x laes) (restr H n) mems env' menv')
+    assert (equiv_env (fun x => Is_free_in_laexps x ck les) (restr H n) mems env' menv')
       as Hlae'. {
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x inputs) 
+      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x (nelist2list inputs))
           by (eapply Is_well_sch_free_variable;
               eassumption || constructor (assumption)). 
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
         + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
-          apply Hin; assumption.
+          apply Hin; [ rewrite <- nelist2list_In; now auto | now eauto ].
           apply not_Is_defined_in_not_Is_variable_in.
-          intro Hnot_def. eapply Hin2; eauto. constructor(assumption).
+          intro Hnot_def. eapply Hin2; eauto. 
+          rewrite <- nelist2list_In; eauto. econstructor(eassumption).
           
       - assert (~ Is_defined_in x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; 
@@ -861,64 +831,37 @@ Proof.
     destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
     apply Forall_cons2 in Hmc.
     destruct Hmc as [Hmceq Hmceqs].
-    inversion_clear Hmceq as [|? ? ? ? ? Hmc0|].
+    inversion_clear Hmceq as [|? ? ? ? ? ? Hmc0|].
     specialize (Hmc0 _ Hmfind).
     destruct Hmc0 as [omenv [Hfindo Hmc0]].
     (* dataflow semantics *)
     assert (Hmsem':=Hmsem).
     inversion_clear Hmsem' as [? ? ? ? i o neqs Hfind Hnsem].
     destruct Hnsem as [Hn [Hlsn [Hxsn [Habs [Hout Hnsem]]]]].
-    specialize (Hlsn n);
-      specialize (Hxsn n);
-      specialize (Habs n);
-      specialize (Hout n); 
-      simpl in *.
+
     (* no other instance *)
     assert (~Is_defined_in y eqs) as Hniii
         by (inversion_clear Hwsch; assumption).
 
-    destruct laes as [ck ces];
-      inversion Hlaes; subst ces0 ck0.
-(*
-      match goal with
-        | H: present _ = ls n |- _ => rewrite <- H in *
-        | H: absent = ls n |- _ => rewrite <- H in *
-      end.
-*)
+    specialize (Hlaes n);
+      specialize (Hxsn n);
+      specialize (Habs n);
+      specialize (Hout n); 
+      simpl in *.
+
+    inversion_clear Hlaes.    
     + (* y = present *)
-      subst vs.
-      rename cs into vs.
+      rename cs into inValues.
 
-      assert (vs <> []).
+      assert (xs n <> absent) as Hxsp. 
       {
-        intro. rewrite H0 in H2. simpl in H2. rewrite H2 in H3. 
-        inversion H3. inversion Hwsch. congruence. 
+        (* XXX: simplify *)
+        intro HH. apply Hout in HH. unfold absent_list in HH. rewrite H0 in HH.
+        destruct inValues; simpl in HH; inversion HH; discriminate.
       }
-
-      assert (~ absent_list ls n).
-      {
-        unfold absent_list. 
-        match goal with 
-          | H: ls n = _ |- _ => rewrite H
-        end.
-        destruct vs; eauto; simpl.
-        inversion_clear 1. discriminate.
-      }
-
-      assert (present_list ls n vs).
-      {
-        unfold present_list.
-        rewrite H2.
-        elim vs; constructor; eauto. 
-      }
-
-      assert (xs n <> absent) as Hxsp
-          by (intro HH; apply Hout in HH; contradiction).
       apply not_absent_present in Hxsp.
-      destruct Hxsp as [c Hxsc].
+      destruct Hxsp as [outValue Hxsc].
       rewrite Hxsc in *.
-
-      rename vs into inValues. rename c into outValue.
       
       assert (exists menv' : heap,
                 stmt_step_eval prog omenv  f inValues menv' outValue
@@ -934,12 +877,18 @@ Proof.
         split; [exact Hstmt|].
         apply stmt_eval_Control_present.
         eapply clock_correct_true; now eauto.
-        assert (Forall2 (exp_eval menv' env') (map (translate_lexp mems) ces) inValues).
+
+        assert (equiv_env (fun x : ident => Nelist.Exists (Is_free_in_lexp x) les)
+                          (restr H n) mems env' menv')
+          by weaken_equiv_env.
+
+        assert (Nelist.Forall2 (exp_eval menv' env')
+               (Nelist.map (translate_lexp mems) les) inValues).
         {
           eapply lexps_correct; eauto.
           match goal with
-            | H: _ = map present inValues |- _ => rewrite <- H
-            | H: map present inValues = _ |- _ => rewrite <- H
+            | H: _ = Nelist.map present inValues |- _ => rewrite <- H
+            | H: Nelist.map present inValues = _ |- _ => rewrite H
           end. eauto.
         }
         erewrite <-stmt_eval_translate_eqns_minst_inv in Hfindo; eauto.
@@ -971,15 +920,11 @@ Proof.
     + (* y = absent *)
       exists menv', env'.
 
-      assert (absent_list ls n).
-      {
-        unfold absent_list. rewrite H2.
-        elim ces; constructor; eauto.
-      }
+      assert (absent_list ls n)
+        by (unfold absent_list; rewrite H0; apply forall_absent).
 
-      (* specialize (Habs (eq_refl absent)). *)
       assert (xs n = absent) as Hout'
-          by (apply Hout; auto; clear Hout).
+          by (apply Hout; auto).
 
       split; [|split].
       * apply stmt_eval_translate_eqns_cons.
@@ -994,8 +939,8 @@ Proof.
         rewrite Hstmt.
         inversion_clear Hivi as [? ? Hivi'|];
           [|unfold Is_variable_in in Hvin; contradiction].
-        inversion Hivi' as [|x' f' e HR1 [HR2 HR3 HR4]];
-          rewrite HR2 in *; clear HR1 HR2 HR3 HR4 x' f' e Hivi'.
+        inversion Hivi' as [|x' ck' f' e HR1 [HR2 HR3 HR4]];
+        subst x' ck' f' x e.
         split; intro Hsv'.
         { inversion_clear Hsv' as [Hfind'].
           inversion_clear Hvar as [Hfind''].
@@ -1018,22 +963,23 @@ Proof.
 
   - (* Case EqFby: y = v0 fby lae *)
     specialize (Hlae n).
-    assert (equiv_env (fun x => Is_free_in_laexp x lae) (restr H n) mems env' menv')
+    assert (equiv_env (fun x => Is_free_in_laexp x ck le) (restr H n) mems env' menv')
       as Hlae'. 
     {
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x inputs) 
+      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x (nelist2list inputs)) 
           by (eapply Is_well_sch_free_variable;
               eassumption || constructor (assumption)). 
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
         + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
-          apply Hin; assumption.
+          apply Hin; [ rewrite <- nelist2list_In; now auto | now eauto ].
           apply not_Is_defined_in_not_Is_variable_in.
-          intro. eapply Hin2; eauto; constructor(assumption).
+          intro. eapply Hin2; eauto.
+          rewrite <- nelist2list_In; eauto. econstructor(eassumption).
           
       - assert (~ Is_defined_in x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; 
@@ -1046,8 +992,7 @@ Proof.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
-    destruct lae as [ck le];
-      inversion Hlae; subst ck0 le;
+    inversion Hlae; subst ck0 ce;
       match goal with
         | H: present _ = ls n |- _ => rewrite <- H in *
         | H: absent = ls n |- _ => rewrite <- H in *
@@ -1107,10 +1052,10 @@ Proof.
           [ exfalso; inversion_clear Hwsch; now intuition|].
         rewrite Hall in Hmc.
         apply Forall_app in Hmc.
-        destruct Hmc as [H0 Hmc]; clear H0.
+        destruct Hmc as [HZ Hmc]; clear HZ.
         apply Forall_cons2 in Hmc.
-        destruct Hmc as [Hmc H0]; clear H0.
-        inversion_clear Hmc as [| |? ? ? ? ? Hfindc].
+        destruct Hmc as [Hmc HZ]; clear HZ.
+        inversion_clear Hmc as [| |? ? ? ? ? ? Hfindc].
         rewrite Hms.
         eapply stmt_eval_translate_eqns_menv_inv in Hstmt;
           try eassumption.
@@ -1136,43 +1081,30 @@ Qed.
 
 Lemma assoc_inputs:
   forall R inArgs inputs c arg, 
-    In arg inArgs -> NoDup inArgs ->
+    Nelist.In arg inArgs -> Nelist.NoDup inArgs ->
     sem_var_instant R arg (present c) ->
-    Forall2 (sem_var_instant R) inArgs (List.map present inputs) ->
+    Nelist.Forall2 (sem_var_instant R) inArgs (Nelist.map present inputs) ->
     Assoc inArgs inputs arg c.
 Proof.
-  intros ** Hin Hnodup Hsem_var Hsem_vars; 
-  generalize dependent inputs.
-  induction inArgs as [|inArg inArgs']; 
-    intro inputs; destruct inputs as [|input inputs']; 
-    simpl; intro; subst;
-    try (exfalso;
-         match goal with
-          | H: In _ [] |- _ => inversion H
-          | H: Forall2 _ _ [] |- _ => inversion H
-          | H: Forall2 _ [] _ |- _ => inversion H
-        end).
-  destruct Hin.
-  - subst. inversion_clear Hsem_vars.
-    assert (input = c)
-      by (cut (present input = present c); 
-          [ injection 1; congruence
-          | sem_det]); subst.
+intros * Hin Hnodup Hsem_var. revert inputs.
+induction inArgs as [|inArg inArgs']; intros inputs Hall; inv Hall.
++ symmetry in H0. rewrite Nelist.map_eq_nebase in H0. destruct H0 as [? [? ?]]. subst.
+  inv Hin.
+  assert (x = c) by (cut (present x = present c); [ injection 1; congruence | sem_det]); subst.
+  constructor.
++ symmetry in H1. rewrite Nelist.map_eq_necons in H1. decompose [ex and] H1. clear H1. subst.
+  inv Hnodup. inv Hin.
+  - assert (x = c) by (cut (present x = present c); [ injection 1; congruence | sem_det]); subst.
     constructor.
-  - constructor.
-    apply IHinArgs'; auto.
-    inversion_clear Hnodup. auto.
-    inversion_clear Hsem_vars. auto.
-    intro.
-    inversion_clear Hnodup. 
-    apply H1. subst. auto.
+  - constructor; auto.
+    intro. subst. contradiction.
 Qed.
 
 
 Lemma sem_var_assoc:
   forall R inArg inputs c input,
     Assoc inArg inputs input c ->
-    Forall2 (sem_var_instant R) inArg (List.map present inputs) ->
+    Nelist.Forall2 (sem_var_instant R) inArg (Nelist.map present inputs) ->
     sem_var_instant R input (present c).
 Proof.
   intros ** Hassoc Hsem_vars.
@@ -1205,7 +1137,7 @@ Proof.
       set (prog := translate (node :: G)).
 
       inversion_clear Hwd as [|? ? Hwd' eqs inArg outArg 
-                               Hne HnodupIn Hwsch Hndef_in Hdef_out Hnnode Hfind Hnodup].
+                               HnodupIn Hwsch Hndef_in Hdef_out Hne Hfind Hnodup].
       clear Hwd'.
       inversion_clear Hmsem as [? ? ? ? ? ? ? Heqs
                                 [H [Hin [Hout [Hrabs [Habs Hall]]]]]].
@@ -1229,8 +1161,14 @@ Proof.
                      PM.find x env' = Some c) /\
                 Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
       {
-        eapply is_step_correct; try eassumption.
-        - eapply IH; assumption.
+        assert (Hlen : Nelist.length inArg = Nelist.length inputs).
+        {
+          transitivity (Nelist.length (xs n)). 
+          * eapply Nelist.Forall2_length; eauto. 
+          * rewrite Hxs, Nelist.map_length. auto.
+        }
+        eauto.
+        eapply is_step_correct with eqs inArg; eauto.
         - exists []; auto.
         - intros y Hinm.
           assert (NoDup_defs eqs) as Hndds
@@ -1238,35 +1176,28 @@ Proof.
           split; [now apply Is_defined_in_memories
                  |now apply not_Is_variable_in_memories].
         - intros c input Hinput.
-          specialize (Hin n); simpl in Hin.
+          specialize (Hin n).
           split; intro HH.
           + subst env.
-            unfold sem_vars_instant in Hin.
             apply gsss; eauto.
-            eapply assoc_inputs; eauto.
-            rewrite <- Hxs. auto.
-            (*
-            assert (Hxs_pres: List.In c inputs)
-              by (cut (xs n = present c);
-                  [ intro Hxsc; rewrite Hxsc in Hxs; injection Hxs; auto
-                  | sem_det]).
-            rewrite Hxs_pres in *.
-            subst env; apply PM.gss. *)
-          + subst env. 
-            apply gsss in HH.
+            rewrite nelist2list_NoDup in HnodupIn. eapply assoc_inputs; eauto; [].
+            match goal with | H : context[inputs] |- _ => move H at bottom end.
+            unfold present_list in Hxs. rewrite <- Hxs. auto.
+          + subst env.
+            apply gsss in HH; trivial.
             eapply sem_var_assoc; eauto.
-            rewrite <- Hxs. eauto.           
-            (* rewrite PM.gss in HH. injection HH; intro HR1.
-            rewrite Hxs in Hin; rewrite HR1 in *. 
-            assumption. *)
+            match goal with | H : context[inputs] |- _ => move H at bottom end.
+            unfold present_list in Hxs. 
+            rewrite <- Hxs. auto.
         - intros x Hivi.
           subst env.
           rewrite gsos, PM.gempty; auto.
-          intro Hx.
+          rewrite <- Nelist.nelist2list_In. intro.
           apply Is_variable_in_Is_defined_in in Hivi.
-          apply Hndef_in, Exists_exists; eauto.
+          apply Hndef_in, Exists_exists; eauto. 
 
-        - intros input Hinput Hisdef. 
+        - intros input Hinput Hisdef.
+          rewrite <- Nelist.nelist2list_In in Hinput.
           apply Hndef_in. apply Exists_exists.
           eauto.
 
@@ -1457,7 +1388,7 @@ Lemma is_reset_correct:
 Proof.
   intros eqs Hmsem Hwsch Hreset.
   induction eqs as [|eq eqs IH]; [eauto|].
-  destruct eq as [i e|i f e|i v e];
+  destruct eq as [i ck e | i ck f e | i ck v e];
   inversion_clear Hmsem as [| ? ? Hsem Hmsem' ];
   inversion_clear Hwsch;
   edestruct IH as [menv' [env' [Hstmt Hmc]]]; try eassumption.
@@ -1467,7 +1398,7 @@ Proof.
     eauto.
   - (* EqApp *)
     unfold translate_reset_eqns; simpl.
-    inversion_clear Hsem as [|? ? ? ? Mo ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
+    inversion_clear Hsem as [|? ? ? ? ? Mo ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
     assert (exists omenv, stmt_reset_eval (translate G) f omenv 
                        /\ Memory_Corres G 0 f Mo omenv) as [omenv [Hstmt_reset Hmcf]]
       by (eapply Hreset; try eassumption).
@@ -1494,7 +1425,7 @@ Proof.
       exists menv', env'.
       Hint Constructors stmt_eval.
       eauto.
-    + inversion_clear Hsem as [| | ? ? ? ? ? ? ? ? Hmfind Hms Hlae Hls]. 
+    + inversion_clear Hsem as [| | ? ? ? ? ? ? ? ? ? Hmfind Hms Hlae Hls].
       rewrite <- Hms.
       constructor; [|apply Memory_Corres_eqs_add_mem; assumption].
       constructor. intros ms' Hmfind'.
@@ -1528,7 +1459,7 @@ Proof.
       inversion_clear Hmsem as [? ? ? ? inArg outArg eqs Hfind 
                                 [H [Hin [Hout [Hrhs [Habs Hmsem']]]]]].
       rename Hmsem' into Hmsem.
-
+      
       specialize (Hin 0)%nat; specialize (Hout 0)%nat;
         simpl in Hin, Hout.
 
@@ -1541,7 +1472,7 @@ Proof.
         eapply Forall_msem_equation_global_tl; try eassumption.
       }
 
-      assert (Is_well_sch (memories eqs) inArg eqs)
+      assert (Is_well_sch (memories eqs) (nelist2list inArg) eqs)
         by (inversion Hwdef; subst ni eqs0;
             rewrite Hfind in *; simpl in *; assumption).
 
@@ -1588,21 +1519,21 @@ Qed.
 (** ** Validity of the whole translation *)
 
 Lemma is_translate_correct:
-  forall (G: global)
-         (f: ident)
-         (xss: stream (list value))
-         (ys: stream value)
-         (cis: list const)
-         (r: ident)
-         (obj: ident)
-         (n: nat),
+  forall (G   : global)
+         (f   : ident)
+         (xss : stream (nelist value))
+         (ys  : stream value)
+         (cis : nelist const)
+         (r   : ident)
+         (obj : ident)
+         (n   : nat),
     Welldef_global G
     -> sem_node G f xss ys
     -> (forall n, present_list xss n cis)
     -> (exists menv env,
            stmt_eval (translate G) hempty sempty
              (Comp (Reset_ap f obj)
-                   (Repeat (S n) (Step_ap r f obj (List.map Const cis)))) (menv, env)
+                   (Repeat (S n) (Step_ap r f obj (Nelist.map Const cis)))) (menv, env)
            /\ (forall co, ys n = present co <-> PM.find r env = Some co)).
 Proof.
   intros until n.
@@ -1622,7 +1553,7 @@ Proof.
   assert (forall n, 
           exists menvN omenvN envN,
             stmt_eval (translate G) (madd_obj obj menv0 hempty) sempty
-                      (Repeat (S n) (Step_ap r f obj (List.map Const cis)))
+                      (Repeat (S n) (Step_ap r f obj (Nelist.map Const cis)))
                       (menvN, envN)
             /\ mfind_inst obj menvN = Some omenvN
             /\ Memory_Corres G (S n) f M omenvN
@@ -1645,7 +1576,7 @@ Proof.
       do 3 eexists.
       split; [|split; [| split]]; try eauto.
       + econstructor; [econstructor|].
-        econstructor; try eauto.        
+        econstructor; try eauto.
         apply mfind_inst_gss.
         apply exps_eval_const.
       + apply mfind_inst_gss.
@@ -1662,7 +1593,7 @@ Proof.
             /\  Memory_Corres G (S (S n0)) f M omenv'') as [omenvSn [HstmtSn HmemSn]]
         by (specialize Hxs with (S n0); eapply is_node_correct; try eassumption).
 
-      assert (Forall2 (exp_eval menv' env') (map Const cis) cis) 
+      assert (Nelist.Forall2 (exp_eval menv' env') (Nelist.map Const cis) cis) 
         by apply exps_eval_const.
 
       do 3 eexists. 

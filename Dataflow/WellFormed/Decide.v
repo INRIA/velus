@@ -62,19 +62,19 @@ Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
   match acc with
     | (true, defined, variables) =>
       match eq with
-        | EqDef x e =>
+        | EqDef x ck e =>
           ((PS.for_all (check_var defined variables)
-                       (free_in_caexp e PS.empty))
+                       (free_in_caexp ck e PS.empty))
              && (negb (PS.mem x defined)),
            PS.add x defined, PS.add x variables)
-        | EqApp x f e =>
+        | EqApp x ck f les =>
           ((PS.for_all (check_var defined variables)
-                       (free_in_laexps e PS.empty))
+                       (free_in_laexps ck les PS.empty))
              && (negb (PS.mem x defined)),
            PS.add x defined, PS.add x variables)
-        | EqFby x v e =>
+        | EqFby x ck v e =>
           ((PS.mem x mems && PS.for_all (check_var defined variables)
-                   (free_in_laexp e PS.empty))
+                   (free_in_laexp ck e PS.empty))
              && (negb (PS.mem x defined)),
            PS.add x defined, variables)
       end
@@ -122,7 +122,7 @@ Lemma well_sch_pre_spec:
          /\ (forall x, PS.In x defined <-> Is_defined_in x eqs)
          /\ (forall x, PS.In x variables <-> Is_variable_in x eqs \/ List.In x argIns)))
     /\ (good = false -> ~Is_well_sch mems argIns eqs).
-Admitted.
+Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used, I think *)
 (*
   induction eqs as [|eq].
   - simpl; injection 1; intros HRv HRm; subst.

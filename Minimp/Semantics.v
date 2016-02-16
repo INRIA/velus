@@ -1,4 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
+Require Import Rustre.Nelist.
 Require Import List.
 
 Require Import Rustre.Common.
@@ -40,7 +41,7 @@ Inductive exp_eval heap stack:
 
 Lemma exps_eval_const:
   forall h s cs,
-    Forall2 (exp_eval h s) (map Const cs) cs.
+    Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
 Proof.
   Hint Constructors exp_eval.
   intros h s cs. induction cs; constructor; eauto.
@@ -61,7 +62,7 @@ Inductive stmt_eval :
 | Istep:
     forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
       mfind_inst o menv = Some(omenv) ->
-      List.Forall2 (exp_eval menv env) es vs ->
+      Nelist.Forall2 (exp_eval menv env) es vs ->
       stmt_step_eval prog omenv clsid vs omenv' rv ->
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
@@ -98,7 +99,7 @@ Inductive stmt_eval :
     forall prog menv env,
       stmt_eval prog menv env Skip (menv, env)
 with stmt_step_eval :
-       program -> heap -> ident -> list const -> heap -> const -> Prop :=
+       program -> heap -> ident -> nelist const -> heap -> const -> Prop :=
 | Iestep:
     forall prog menv env clsid ivs prog' menv' ov cls env',
       find_class clsid prog = Some(cls, prog') ->
@@ -187,16 +188,17 @@ Qed.
 
 Lemma exp_evals_det:
   forall menv env es vs1 vs2,
-    List.Forall2 (exp_eval menv env) es vs1 ->
-    List.Forall2 (exp_eval menv env) es vs2 ->
+    Nelist.Forall2 (exp_eval menv env) es vs1 ->
+    Nelist.Forall2 (exp_eval menv env) es vs2 ->
     vs1 = vs2.
 Proof.
   intros menv env es vs1 vs2 H1; generalize dependent vs2.
   induction H1 as [|e1 c1 es1 cs1]; intros vs2 H2;
-  inversion_clear H2 as [|e2 c2 es2 cs2]; auto.
-  assert (c1 = c2) by eauto using exp_eval_det.
-  assert (cs1 = cs2) by eauto using IHForall2.
-  congruence.
+  inversion_clear H2 as [|e2 c2 es2 cs2].
+  - f_equal. eauto using exp_eval_det.
+  - assert (c1 = c2) by eauto using exp_eval_det.
+    assert (cs1 = cs2) by eauto using IHForall2.
+    congruence.
 Qed.
 
 Lemma stmt_eval_det:
@@ -225,8 +227,8 @@ Proof.
       H2:exp_eval ?menv ?env ?e ?v2 |- _ =>
       pose proof (exp_eval_det _ _ _ _ _ H1 H2) as Heq;
         rewrite Heq in *; clear Heq H1 H2
-    | H1: List.Forall2 (exp_eval ?menv ?env) ?es ?vs1,
-      H2: List.Forall2 (exp_eval ?menv ?env) ?es ?vs2 |- _ =>
+    | H1: Nelist.Forall2 (exp_eval ?menv ?env) ?es ?vs1,
+      H2: Nelist.Forall2 (exp_eval ?menv ?env) ?es ?vs2 |- _ =>
       pose proof (exp_evals_det _ _ _ _ _ H1 H2) as Heq;
         rewrite Heq in *; clear Heq H1 H2
     | H1: PM.add ?x ?v ?env = ?env1,

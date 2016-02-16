@@ -2,6 +2,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.Nelist.
 Require Import List.
 
 Definition clockenv := PM.t clock.
@@ -13,8 +14,8 @@ Inductive clk_var C (x: ident) ck: Prop :=
     PM.find x C = Some ck ->
     clk_var C x ck.
 
-Definition clk_vars C (xs: list ident) ck: Prop :=
-  List.Forall (fun x => clk_var C x ck) xs.
+Definition clk_vars C (xs: nelist ident) ck: Prop :=
+  Nelist.Forall (fun x => clk_var C x ck) xs.
 
 Inductive clk_clock C: clock -> Prop :=
 | CCbase:
@@ -39,8 +40,8 @@ Inductive clk_lexp C: lexp -> clock -> Prop :=
       clk_var C x ck ->
       clk_lexp C (Ewhen e x b) (Con ck x b).
 
-Definition clk_lexps C (les: list lexp)(ck: clock): Prop :=
-  List.Forall (fun le => clk_lexp C le ck) les.
+Definition clk_lexps C (les: nelist lexp)(ck: clock): Prop :=
+  Nelist.Forall (fun le => clk_lexp C le ck) les.
 
 Inductive clk_cexp C: cexp -> clock -> Prop :=
 | Cmerge:
@@ -59,17 +60,17 @@ Inductive Well_clocked_eq C: equation -> Prop :=
     forall x ck ce,
       clk_var C x ck ->
       clk_cexp C ce ck ->
-      Well_clocked_eq C (EqDef x (CAexp ck ce))
+      Well_clocked_eq C (EqDef x ck ce)
 | CEqApp:
     forall x ck f les,
       clk_var C x ck ->
       clk_lexps C les ck ->
-      Well_clocked_eq C (EqApp x f (LAexps ck les))
+      Well_clocked_eq C (EqApp x ck f les)
 | CEqFby:
     forall x ck v0 le,
       clk_var C x ck ->
       clk_lexp C le ck ->
-      Well_clocked_eq C (EqFby x v0 (LAexp ck le)).
+      Well_clocked_eq C (EqFby x ck v0 le).
 
 Inductive Well_clocked_node C: node -> Prop :=
 | SNode:
@@ -87,11 +88,11 @@ Definition Well_clocked G : Prop :=
 
 Inductive Has_clock_eq: clock -> equation -> Prop :=
 | HcEqDef: forall x ck ce,
-    Has_clock_eq ck (EqDef x (CAexp ck ce))
+    Has_clock_eq ck (EqDef x ck ce)
 | HcEqApp: forall x f ck les,
-    Has_clock_eq ck (EqApp x f (LAexps ck les))
+    Has_clock_eq ck (EqApp x ck f les)
 | HcEqFby: forall x v0 ck le,
-    Has_clock_eq ck (EqFby x v0 (LAexp ck le)).
+    Has_clock_eq ck (EqFby x ck v0 le).
 
 (** ** Basic properties of clocking *)
 
