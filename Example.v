@@ -119,31 +119,12 @@ Section CodegenPaper.
   Require Import Nelist.
 
 
-  (* Too complicated! *)
-  Parameter Plus : operator.
-  Axiom Plus_arity : get_arity Plus = Tcons Tint (Tcons Tint (Tout Tint)).
+  Definition Plus : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.add.
+  Definition op_plus (x: lexp) (y: lexp) : lexp := Eop Plus (necons x (nebase y)).
 
-  Definition Plus_to_arrows (f: Z -> Z -> Z) : arrows (get_arity Plus).
-    rewrite Plus_arity. exact f.
-  Defined.
-
-  Axiom Plus_interp : get_interp Plus = Plus_to_arrows BinInt.Z.add.
-
-  Definition op_plus (x: lexp) (y: lexp) : lexp :=
-    Eop Plus (necons x (nebase y)).
-
-  Parameter Ifte_int : operator.
-  Axiom Ifte_int_arity : get_arity Ifte_int
-                         = Tcons Tbool (Tcons Tint (Tcons Tint (Tout Tint))).
-
-  Definition Ifte_int_to_arrows
-             (f: bool -> Z -> Z -> Z) : arrows (get_arity Ifte_int).
-    rewrite Ifte_int_arity. exact f.
-  Defined.
-
-  Definition ifte {T: Set} (x: bool) (t: T) (f: T) : T := if x then t else f.
-  Axiom Ifte_interp : get_interp Ifte_int = Ifte_int_to_arrows ifte.
-
+  Definition Ifte_int : operator :=
+    existT arrows (Tcons Tbool (Tcons Tint (Tcons Tint (Tout Tint))))
+             (fun (x : bool) t f => if x then t else f).
   Definition op_ifte (x: lexp) (t: lexp) (f: lexp) : lexp :=
     Eop Ifte_int (necons x (necons t (nebase f))).
 
@@ -182,9 +163,28 @@ Section CodegenPaper.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  (* TODO: multiple inputs: initial, increment, restart *)
+  Lemma Is_well_sch_counter_eqns : Is_well_sch (PS.singleton c) [initial; increment; restart] counter_eqns.
+  Proof.
+  unfold counter_eqns. constructor. constructor. constructor.
+  - intros i Hi. split.
+    + intros _ Habs. inversion Habs.
+    + intros Hic. right. inv Hi; inv H. inv H2. inv H1; inv H0; intuition.
+      * inv H1. intuition.
+      * inv H1. inv H0. inv H2.
+        { inv H0. elim Hic. PSdec.fsetdec. }
+        { inv H0. inv H1. }
+  - intro Habs. inv Habs.
+  - intros i Hi. split.
+    + intros Hic Habs. inv Habs.
+      * inv H0. inv Hic.
+      * inv H0.
+    + intro Hic. inv Hi; inv H. left. do 2 constructor.
+  - intro Habs. inv Habs; inv H0.
+  Qed.
+
+  (* TODO: multiple inputs: initial, increment, restart -> LR: done? *)
   Example counter : node :=
-    mk_node n_counter (nebase initial) n counter_eqns.
+    mk_node n_counter (necons initial (necons increment (nebase restart))) n counter_eqns.
 
   Eval cbv in translate_node counter.
   Eval cbv in ifte_fuse (c_step (translate_node counter)).
@@ -213,19 +213,41 @@ Section CodegenPaper.
               (Emerge b
                       (Eexp (Ewhen (Evar n1) b true))
                       (Eexp (Evar n2)));
-      (* Add other inputs:
-           Ewhen (Econst (Cint (-1))) b false
-           Ewhen (Econst (Cbool false)) b false *)
       EqApp n2 (Con Cbase b false) n_counter 
-               (nebase (Ewhen (Econst (Cint 0)) b false));
-      (* Add other inputs:
-           Econst 1
-           Econst false *)
-      EqApp n1 Cbase n_counter (nebase (Econst (Cint 0)))
+               (necons (Ewhen (Econst (Cint 0)) b false)
+               (necons (Ewhen (Econst (Cint (-1))) b false)
+               (nebase (Ewhen (Econst (Cbool false)) b false))));
+      EqApp n1 Cbase n_counter (necons (Econst (Cint 1))
+                               (necons (Econst (Cbool false))
+                               (nebase (Econst (Cint 0)))))
     ].
 
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
+
+  Lemma Is_Well_sch_altcounters_eqns : Is_well_sch PS.empty [b] altcounters_eqns.
+  Proof.
+  constructor. constructor. constructor. constructor.
+  - intros i Hi. split.
+    + intros _ Habs. inv Habs.
+    + intros _. right. inv Hi; inv H; inv H1; inv H0; inv H1.
+  - intro Habs. inv Habs.
+  - intros i Hi. split.
+    + intros Habs _. PSdec.fsetdec.
+    + intros _. inv Hi; inv H; intuition.
+      * inv H1; intuition. inv H2.
+      * inv H1; inv H0; try inv H1; try inv H2; intuition.
+      * inv H2.
+  - intro Habs. inv Habs; inv H0.
+  - intros i Hi. split.
+    + intros Habs _. PSdec.fsetdec.
+    + intros _. inv Hi; inv H.
+      * intuition.
+      * inv H2; inv H1; intuition. left.
+        constructor 2. inv H2. do 2 constructor.
+      * inv H2. inv H1. repeat constructor.
+  - intro Habs. inv Habs; inv H0; inv H1.
+  Qed.
 
   Example altcounters : node :=
     mk_node n_altcounters (nebase b) y altcounters_eqns.
