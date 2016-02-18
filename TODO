@@ -1,0 +1,2 @@
+* Remove call to decision procedures in [Correctness.v]
+* Factorize Is_well_sch 3 cases into a single one
