@@ -853,14 +853,13 @@ Proof.
     + (* y = present *)
       rename cs into inValues.
 
-      assert (xs n <> absent) as Hxsp. 
+      assert (exists c : const, xs n = present c) as [outValue Hxsc].
       {
-        (* XXX: simplify *)
-        intro HH. apply Hout in HH. unfold absent_list in HH. rewrite H0 in HH.
-        destruct inValues; simpl in HH; inversion HH; discriminate.
-      }
-      apply not_absent_present in Hxsp.
-      destruct Hxsp as [outValue Hxsc].
+        apply not_absent_present.        
+        intro HH.
+        apply Hout in HH.
+        eapply not_absent_present_list; eauto.
+      } 
       rewrite Hxsc in *.
       
       assert (exists menv' : heap,
@@ -1563,10 +1562,13 @@ Proof.
     induction 0.
     - specialize Hxs with 0%nat.
 
-      assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0]
-          by (apply not_absent_present;
-              rewrite <- Habs;
-              eapply not_absent_present_list; eauto).
+      (* XXX: factorize together with similar assert below *)
+      assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0].
+      {
+        apply not_absent_present;
+        rewrite <- Habs;
+        eapply not_absent_present_list; eauto.
+      }
 
       assert (exists menv,
               stmt_step_eval (translate G) menv0 f cis menv co0
@@ -1584,6 +1586,7 @@ Proof.
 
     - destruct IHn0 as [menv' [omenv' [env' [Hstmt [Hfind [Hmc _]]]]]].
 
+      (* XXX: factorize together with similar assert above *)
       assert (exists coSn, ys (S n0) = present coSn) as [coSn Hys]
           by (apply not_absent_present; rewrite <- Habs;
               eapply not_absent_present_list; eauto).

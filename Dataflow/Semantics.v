@@ -214,11 +214,15 @@ Definition absent_list (xss: stream (nelist value))(n: nat): Prop :=
 Definition present_list (xss: stream (nelist value))(n: nat)(vs: nelist const): Prop :=
   xss n = Nelist.map present vs.
 
-(* XXX: THIS LEMMA IS FALSE (we lack the clock info) *)
 Lemma not_absent_present_list:
-  forall xss n,
-    (exists vs, present_list xss n vs) <-> ~ absent_list xss n.
-Admitted. (* XXX: This must be merged inside the semantics *)
+  forall xss n vs,
+    present_list xss n vs -> ~ absent_list xss n.
+Proof.
+  intros * Hpres Habs.
+  unfold present_list in Hpres.
+  unfold absent_list in Habs.
+  rewrite Hpres in *. destruct vs; inversion_clear Habs; discriminate.
+Qed.
 
 (* FIXME: should we introduce the semantics of clocks somewhere? *)
 Inductive sem_equation G: history -> equation -> Prop :=
