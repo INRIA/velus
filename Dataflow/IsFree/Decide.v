@@ -256,11 +256,11 @@ Qed.
 
 Lemma free_in_equation_spec:
   forall x eq m, PS.In x (free_in_equation eq m)
-                 <-> (Is_free_in_equation x eq \/ PS.In x m).
+                 <-> (Is_free_in_eq x eq \/ PS.In x m).
 Proof.
   destruct eq; split; intro H;
   repeat (match goal with
-                   | H:Is_free_in_equation _ _ |- _ => inversion_clear H
+                   | H:Is_free_in_eq _ _ |- _ => inversion_clear H
                    | H:PS.In _ (free_in_equation _ _) |- _ =>
                                                       apply free_in_caexp_spec in H
                                                    || apply free_in_laexp_spec in H
@@ -275,7 +275,7 @@ Qed.
 
 Lemma free_in_equation_spec':
   forall x eq, PS.In x (free_in_equation eq PS.empty)
-               <-> Is_free_in_equation x eq.
+               <-> Is_free_in_eq x eq.
 Proof.
   intros; rewrite (free_in_equation_spec x eq PS.empty).
   intuition not_In_empty.

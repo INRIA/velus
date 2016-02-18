@@ -30,17 +30,17 @@ Inductive NoDup_defs : list equation -> Prop :=
 | NDDEqDef:
     forall x ck e eqs,
       NoDup_defs eqs ->
-      ~Is_defined_in x eqs ->
+      ~Is_defined_in_eqs x eqs ->
       NoDup_defs (EqDef x ck e :: eqs)
 | NDDEqApp:
     forall x ck f e eqs,
       NoDup_defs eqs ->
-      ~Is_defined_in x eqs ->
+      ~Is_defined_in_eqs x eqs ->
       NoDup_defs (EqApp x ck f e :: eqs)
 | NDDEqFby:
     forall x ck v e eqs,
       NoDup_defs eqs ->
-      ~Is_defined_in x eqs ->
+      ~Is_defined_in_eqs x eqs ->
       NoDup_defs (EqFby x ck v e :: eqs).
 
 
@@ -58,12 +58,12 @@ Lemma not_Is_variable_in_memories:
   forall x eqs,
     PS.In x (memories eqs)
     -> NoDup_defs eqs
-    -> ~Is_variable_in x eqs.
+    -> ~Is_variable_in_eqs x eqs.
 Proof.
   (* TODO: Too complicated! Find a simpler proof. *)
   intros x eqs Hinm Hndd.
   pose proof (Is_defined_in_memories _ _ Hinm) as Hdin.
-  unfold memories, Is_variable_in in *.
+  unfold memories, Is_variable_in_eqs in *.
   induction eqs as [eq|eq eqs IH].
   - simpl in *; intro; not_In_empty.
   - apply Is_defined_in_cons in Hdin.
@@ -78,7 +78,7 @@ Proof.
       contradiction.
 
       inversion Hdin; subst; clear Hdin.
-      apply Is_variable_in_Is_defined_in in He.
+      apply Is_variable_in_eqs_Is_defined_in_eqs in He.
       contradiction.
 
       simpl in Hinm.
@@ -95,7 +95,7 @@ Proof.
       contradiction.
 
       inversion Hdin; subst; clear Hdin.
-      apply Is_variable_in_Is_defined_in in He.
+      apply Is_variable_in_eqs_Is_defined_in_eqs in He.
       contradiction.
 
       simpl in Hinm.
@@ -110,7 +110,7 @@ Proof.
       inversion He; subst; clear He.
       inversion Hdin; subst; clear Hdin.
 
-      apply Is_variable_in_Is_defined_in in He.
+      apply Is_variable_in_eqs_Is_defined_in_eqs in He.
       contradiction.
 
       simpl in Hinm.

@@ -214,8 +214,8 @@ Qed.
 
 Lemma Is_memory_in_Memory_Corres_eqs:
   forall G n M menv x eqs,
-    Is_defined_in x eqs
-    -> ~Is_variable_in x eqs
+    Is_defined_in_eqs x eqs
+    -> ~Is_variable_in_eqs x eqs
     -> Forall (Memory_Corres_eq G n M menv) eqs
     -> (forall ms, mfind_mem x M = Some ms
                    -> mfind_mem x menv = Some (ms n)).
@@ -286,7 +286,7 @@ Qed.
 Lemma Memory_Corres_eqs_add_obj:
   forall G n M menv eqs y omenv,
     Forall (Memory_Corres_eq G n M menv) eqs
-    -> ~Is_defined_in y eqs
+    -> ~Is_defined_in_eqs y eqs
     -> Forall (Memory_Corres_eq G n M (madd_obj y omenv menv)) eqs.
 Proof.
   induction eqs as [|eq eqs IH]; [now constructor|].

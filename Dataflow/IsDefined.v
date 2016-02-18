@@ -20,7 +20,7 @@ Inductive Is_defined_in_eq : ident -> equation -> Prop :=
 | DefEqApp: forall x ck f e, Is_defined_in_eq x (EqApp x ck f e)
 | DefEqFby: forall x ck v e, Is_defined_in_eq x (EqFby x ck v e).
 
-Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
+Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_defined_in_eq x) eqs.
 
 Lemma Is_defined_in_eq_dec:
@@ -37,9 +37,9 @@ Qed.
 
 Lemma Is_defined_in_cons:
   forall x eq eqs,
-    Is_defined_in x (eq :: eqs) ->
+    Is_defined_in_eqs x (eq :: eqs) ->
     Is_defined_in_eq x eq
-    \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
+    \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
 Proof.
   intros x eq eqs Hdef.
   apply List.Exists_cons in Hdef.
@@ -48,11 +48,11 @@ Qed.
 
 Lemma not_Is_defined_in_cons:
   forall x eq eqs,
-    ~Is_defined_in x (eq :: eqs)
-    <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in x eqs.
+    ~Is_defined_in_eqs x (eq :: eqs)
+    <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in_eqs x eqs.
 Proof.
   intros x eq eqs. split.
-  intro H0; unfold Is_defined_in in H0; auto.
+  intro H0; unfold Is_defined_in_eqs in H0; auto.
   destruct 1 as [H0 H1]; intro H; apply Is_defined_in_cons in H; intuition.
 Qed.
 
@@ -110,9 +110,9 @@ Qed.
 
 Lemma Is_defined_in_memories:
   forall x eqs,
-    PS.In x (memories eqs) -> Is_defined_in x eqs.
+    PS.In x (memories eqs) -> Is_defined_in_eqs x eqs.
 Proof.
-  unfold memories, Is_defined_in.
+  unfold memories, Is_defined_in_eqs.
   induction eqs as [ eq | eq ].
   - simpl; intro; not_In_empty.
   - intro HH; simpl in HH.

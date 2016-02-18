@@ -61,29 +61,29 @@ Inductive Is_well_sch (mems: PS.t)(argIn: list ident) : list equation -> Prop :=
     forall x ck e eqs,
       Is_well_sch mems argIn eqs ->
       (forall i, Is_free_in_caexp i ck e ->
-                    (PS.In i mems -> ~Is_defined_in i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in i eqs
+                    (PS.In i mems -> ~Is_defined_in_eqs i eqs)
+                 /\ (~PS.In i mems -> Is_variable_in_eqs i eqs
                                    \/ List.In i argIn)) ->
-      (~Is_defined_in x eqs) ->
+      (~Is_defined_in_eqs x eqs) ->
       Is_well_sch mems argIn (EqDef x ck e :: eqs)
 | WSchEqApp:
     forall x ck f les eqs,
       Is_well_sch mems argIn eqs ->
       (forall i, Is_free_in_laexps i ck les ->
-                    (PS.In i mems -> ~Is_defined_in i eqs)
-                    /\ (~PS.In i mems -> Is_variable_in i eqs
+                    (PS.In i mems -> ~Is_defined_in_eqs i eqs)
+                    /\ (~PS.In i mems -> Is_variable_in_eqs i eqs
                                       \/ List.In i argIn)) ->
-      (~Is_defined_in x eqs) ->
+      (~Is_defined_in_eqs x eqs) ->
       Is_well_sch mems argIn (EqApp x ck f les :: eqs)
 | WSchEqFby:
     forall x ck v e eqs,
       Is_well_sch mems argIn eqs ->
       PS.In x mems -> (* TODO: delete ? *)
       (forall i, Is_free_in_laexp i ck e ->
-                    (PS.In i mems -> ~Is_defined_in i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in i eqs
+                    (PS.In i mems -> ~Is_defined_in_eqs i eqs)
+                 /\ (~PS.In i mems -> Is_variable_in_eqs i eqs
                                    \/ List.In i argIn)) ->
-      (~Is_defined_in x eqs) ->
+      (~Is_defined_in_eqs x eqs) ->
       Is_well_sch mems argIn (EqFby x ck v e :: eqs).
 
 Hint Constructors Is_well_sch.
@@ -104,9 +104,9 @@ Proof. inversion 1; auto. Qed.
 Lemma Is_well_sch_free_variable:
   forall argIn x eq eqs mems,
     Is_well_sch mems argIn (eq :: eqs)
-    -> Is_free_in_equation x eq
+    -> Is_free_in_eq x eq
     -> ~ PS.In x mems
-    -> Is_variable_in x eqs \/ List.In x argIn.
+    -> Is_variable_in_eqs x eqs \/ List.In x argIn.
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
@@ -119,9 +119,9 @@ Qed.
 Lemma Is_well_sch_free_variable_in_mems:
   forall argIn y eq eqs mems,
     Is_well_sch mems argIn (eq :: eqs)
-    -> Is_free_in_equation y eq
+    -> Is_free_in_eq y eq
     -> PS.In y mems
-    -> ~Is_defined_in y eqs.
+    -> ~Is_defined_in_eqs y eqs.
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
@@ -136,9 +136,9 @@ Qed.
 Lemma Is_wsch_is_defined_in:
   forall x eq eqs mems argIn,
     Is_well_sch mems argIn (eq :: eqs) ->
-    Is_defined_in x (eq :: eqs) ->
+    Is_defined_in_eqs x (eq :: eqs) ->
     Is_defined_in_eq x eq
-    \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
+    \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
 Proof.
   intros x eq eqs mems argIn Hwsch Hdef.
   apply List.Exists_cons in Hdef.
@@ -156,8 +156,8 @@ Inductive Welldef_global : list node -> Prop :=
       let no := nd.(n_output) in
         NoDup (Nelist.nelist2list ni)
       -> Is_well_sch (memories eqs) (Nelist.nelist2list ni) eqs
-      -> ~ List.Exists (fun ni => Is_defined_in ni eqs) (Nelist.nelist2list ni)
-      -> Is_variable_in no eqs
+      -> ~ List.Exists (fun ni => Is_defined_in_eqs ni eqs) (Nelist.nelist2list ni)
+      -> Is_variable_in_eqs no eqs
       -> ~Is_node_in nd.(n_name) eqs
       -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
       -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
@@ -207,7 +207,7 @@ Lemma Welldef_global_input_not_Is_defined_in:
   forall f G fnode,
     Welldef_global G
     -> find_node f G = Some fnode
-    -> ~ Nelist.Exists (fun ni => Is_defined_in ni fnode.(n_eqs)) fnode.(n_input).
+    -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs)) fnode.(n_input).
 Proof.
   induction G as [|node G IH]; [inversion_clear 2|].
   intros fnode HWdef Hfnode.
@@ -223,7 +223,7 @@ Lemma Welldef_global_output_Is_variable_in:
   forall f G fnode,
     Welldef_global G
     -> find_node f G = Some fnode
-    -> Is_variable_in fnode.(n_output) fnode.(n_eqs).
+    -> Is_variable_in_eqs fnode.(n_output) fnode.(n_eqs).
 Proof.
   induction G as [|node G IH]; [inversion_clear 2|].
   intros fnode HWdef Hfnode.

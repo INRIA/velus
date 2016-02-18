@@ -65,9 +65,9 @@ Qed.
 Lemma Is_defined_in_defined:
   forall x eqs,
     PS.In x (defined eqs)
-    <-> Is_defined_in x eqs.
+    <-> Is_defined_in_eqs x eqs.
 Proof.
-  unfold defined, Is_defined_in.
+  unfold defined, Is_defined_in_eqs.
   induction eqs as [ | eq ].
   - rewrite List.Exists_nil; split; intro H;
     try apply not_In_empty in H; contradiction.
@@ -86,7 +86,7 @@ Proof.
 Qed.
 
 Lemma Is_defined_in_dec:
-  forall x eqs, {Is_defined_in x eqs}+{~Is_defined_in x eqs}.
+  forall x eqs, {Is_defined_in_eqs x eqs}+{~Is_defined_in_eqs x eqs}.
 Proof.
   intros x eqs.
   apply Bool.reflect_dec with (b := PS.mem x (defined eqs)).
