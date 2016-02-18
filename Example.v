@@ -7,20 +7,58 @@ Open Scope list.
 
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.Minimp.Syntax.
+Require Import Rustre.Translation.
 
 Require Import Rustre.Dataflow.Memories.
 Require Import Rustre.Dataflow.WellFormed.
 Require Import Rustre.Dataflow.WellFormed.Decide.
 
+(* Common notations *)
+Class Assignment T U V := {assign : ident -> T -> U -> V}.
+Notation "x '::=' y" := (assign x _ y) (at level 47, no associativity).
+Class OpCall T U := {opcall : operator -> T -> U}.
+Notation "f '<' nel '>'" := (opcall f nel) (at level 46, format "f '<' nel '>'").
+Notation "x , y" := (necons x y) (at level 30, right associativity).
+Notation "x '§'" := (nebase x) (at level 30).
+
+(* Dataflow notations *)
+Coercion Cint : BinInt.Z >-> const.
+Coercion Cbool : bool >-> const.
+Coercion Evar : ident >-> lexp.
+Coercion Eexp : lexp >-> cexp.
+Coercion Econst : const >-> lexp.
+
+Notation "x 'on' ck" := (Con x ck) (at level 44).
+Notation "x 'when' C ( ck )" := (Ewhen x ck C) (at level 45, left associativity, format "x  'when'  C ( ck )").
+Notation "x '::=' v 'fby' y" := (EqFby x _ v y) (at level 47).
+Notation "x '::=' f '(|' nel '|)'" := (EqApp x _ f nel) (at level 47, format "x  '::='  f '(|' nel '|)'").
+Instance EqDef_Assign : Assignment clock cexp equation := {assign := EqDef}.
+Instance Eop_OpCall : OpCall lexps lexp := {opcall := Eop}.
+
+(* Imperative notations *)
+Coercion Var : ident >-> exp.
+Coercion State : ident >-> exp.
+Coercion Const : const >-> exp.
+
+Instance Assign_Assign : Assignment unit exp stmt := {assign := fun x (_ : unit) => Assign x}.
+Instance AssignSt_Assign : Assignment unit exp stmt := {assign := fun x (_ : unit) => AssignSt x}.
+Instance Op_OpCall : OpCall (nelist exp) exp := {opcall := Op}.
+Notation "stmt1 ;; stmt2" := (Comp stmt1 stmt2) (at level 48, right associativity).
+Notation "'If' b 'Then' t 'Else' f" := (Ifte b t f) (at level 47, t at level 47, f at level 47).
+Notation "x '::=' class '.' obj '(|' args '|)'" := (Step_ap x class obj args) (at level 47).
+Notation "'reset' class '.' obj" := (Reset_ap class obj) (at level 47).
+
 (* TODO: not properly clocked... *)
 Example eqns1 : list equation :=
   [
     EqFby 3 (Con Cbase 1 false) (Cint 0) (Evar 2);
-    EqDef 4 Cbase (Emerge 1 (Eexp (Evar 2)) (Eexp (Evar 3)));
-    EqDef 2 (Con Cbase 1 true) (Eexp (Ewhen (Econst (Cint 7)) 1 true))
+    assign 4 Cbase (Emerge 1 (Eexp (Evar 2)) (Eexp (Evar 3)));
+    assign 2 (Con Cbase 1 true) (Eexp (Ewhen (Econst (Cint 7)) 1 true))
             
 (*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
   ].
+Print eqns1.
 
 Example node1 : node :=
   mk_node 1 (nebase 1) 4 eqns1.
@@ -32,6 +70,7 @@ Example eqns2 : list equation :=
     EqApp 4 Cbase 1 (nebase (Evar 3));
     EqApp 2 Cbase 1 (nebase (Evar 1))
   ].
+Print eqns2.
 
 Example node2 : node :=
   mk_node 2 (nebase 1) 4 eqns2.
@@ -55,8 +94,6 @@ Proof.
 Qed.
 
 (** Translation *)
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Translation.
 
 (* Eval cbv in (translate_node node1). *)
 
@@ -66,6 +103,10 @@ Example prog1 : stmt :=
                    (Assign 4 (State 3)))
              (Comp (Ifte (Var 1) Skip (AssignSt 3 (Var 2)))
                    Skip)).
+Print prog1.
+(* If 1 Then Assign 2 7%Z Else Skip;;
+   If 1 Then Assign 4 2 Else Assign 4 3;;
+   If 1 Then Skip Else AssignSt 3 2;; Skip *)
 
 Remark prog1_good : (translate_node node1).(c_step) = prog1.
 Proof eq_refl.
@@ -92,6 +133,7 @@ Example class2 : class :=
                           (Comp (AssignSt 3 (Const (Cint 0)))
                                 Skip))
   |}.
+Print class2.
 
 Remark prog2_good : translate_node node2 = class2.
 Proof eq_refl.
@@ -106,6 +148,8 @@ Example prog1' : stmt :=
              (Assign 4 (Var 2)))
        (Comp (Assign 4 (State 3))
              (AssignSt 3 (Var 2))).
+Print prog1'.
+(* If 1 Then (Assign 2 7%Z;; Assign 4 2) Else (Assign 4 3;; AssignSt 3 2) *)
 
 Remark prog1'_is_fused: (ifte_fuse prog1 = prog1').
 Proof eq_refl.
@@ -159,11 +203,11 @@ Section CodegenPaper.
                                    (Evar initial)
                                    (op_plus (Evar c) (Econst (Cint 1)))))
     ].
-
+  Print counter_eqns.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma Is_well_sch_counter_eqns : Is_well_sch (PS.singleton c) [initial; increment; restart] counter_eqns.
+  Lemma counter_eqns_well_sch : Is_well_sch (PS.singleton c) [initial; increment; restart] counter_eqns.
   Proof.
   unfold counter_eqns. constructor. constructor. constructor.
   - intros i Hi. split.
@@ -221,11 +265,12 @@ Section CodegenPaper.
                                (necons (Econst (Cbool false))
                                (nebase (Econst (Cint 0)))))
     ].
+  Print altcounters_eqns.
 
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma Is_Well_sch_altcounters_eqns : Is_well_sch PS.empty [b] altcounters_eqns.
+  Lemma altcounters_eqns_Well_sch : Is_well_sch PS.empty [b] altcounters_eqns.
   Proof.
   constructor. constructor. constructor. constructor.
   - intros i Hi. split.
@@ -254,6 +299,5 @@ Section CodegenPaper.
 
   Eval cbv in translate_node altcounters.
   Eval cbv in ifte_fuse (c_step (translate_node altcounters)).
-
 
 End CodegenPaper.

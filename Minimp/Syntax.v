@@ -67,7 +67,7 @@ Record class : Set := mk_class {
   c_input  : nelist ident;
   c_output : ident;
 
-  c_mems   : list ident;       (* TODO: should track type of each *)
+  c_mems   : list ident;       (* TODO: should track type of each -> LR: use arity/arrows? *)
   c_objs   : list obj_dec;
 
   c_step   : stmt;
