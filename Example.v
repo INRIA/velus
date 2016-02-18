@@ -1,4 +1,5 @@
 Require Import PArith.
+Require Import Rustre.Nelist.
 Require Import List.
 Import List.ListNotations.
 Open Scope positive.
@@ -14,43 +15,41 @@ Require Import Rustre.Dataflow.WellFormed.Decide.
 (* TODO: not properly clocked... *)
 Example eqns1 : list equation :=
   [
-    EqFby 3 (Cint 0) (LAexp (Con Cbase 1 false) (Evar 2));
-    EqDef 4 (CAexp Cbase (Emerge 1 (Eexp (Evar 2))
-                                   (Eexp (Evar 3))));
-    EqDef 2 (CAexp (Con Cbase 1 true)
-                   (Eexp (Ewhen (Econst (Cint 7)) 1 true))
-            )
+    EqFby 3 (Con Cbase 1 false) (Cint 0) (Evar 2);
+    EqDef 4 Cbase (Emerge 1 (Eexp (Evar 2)) (Eexp (Evar 3)));
+    EqDef 2 (Con Cbase 1 true) (Eexp (Ewhen (Econst (Cint 7)) 1 true))
+            
 (*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
   ].
 
 Example node1 : node :=
-  mk_node 1 1 4 eqns1.
+  mk_node 1 (nebase 1) 4 eqns1.
 
 
 Example eqns2 : list equation :=
   [
-    EqFby 3 (Cint 0) (LAexp Cbase (Evar 2));
-    EqApp 4 1 (LAexp Cbase (Evar 3));
-    EqApp 2 1 (LAexp Cbase (Evar 1))
+    EqFby 3 Cbase (Cint 0) (Evar 2);
+    EqApp 4 Cbase 1 (nebase (Evar 3));
+    EqApp 2 Cbase 1 (nebase (Evar 1))
   ].
 
 Example node2 : node :=
-  mk_node 2 1 4 eqns2.
+  mk_node 2 (nebase 1) 4 eqns2.
 
 (** Scheduling *)
 
-Example eqn1_well_sch: Is_well_sch (memories eqns1) 1 eqns1.
+Example eqn1_well_sch: Is_well_sch (memories eqns1) [1] eqns1.
 Proof.
-  assert (well_sch (memories eqns1) 1 eqns1 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns1) 1 eqns1) as HS.
+  assert (well_sch (memories eqns1) [1] eqns1 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (memories eqns1) [1] eqns1) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
 
-Example eqn2_well_sch: Is_well_sch (memories eqns2) 1 eqns2.
+Example eqn2_well_sch: Is_well_sch (memories eqns2) [1] eqns2.
 Proof.
-  assert (well_sch (memories eqns2) 1 eqns2 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns2) 1 eqns2) as HS.
+  assert (well_sch (memories eqns2) [1] eqns2 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (memories eqns2) [1] eqns2) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
@@ -79,13 +78,13 @@ Example reset1 : stmt :=
 Example class2 : class :=
   {|
     c_name := 2;
-    c_input := 1;
+    c_input := nebase 1;
     c_output := 4;
     c_mems := [3];
     c_objs := [{| obj_inst := 2; obj_class := 1 |};
                 {| obj_inst := 4; obj_class := 1 |}];
-    c_step := Comp (Step_ap 2 1 2 (Var 1))
-                   (Comp (Step_ap 4 1 4 (State 3))
+    c_step := Comp (Step_ap 2 1 2 (nebase (Var 1)))
+                   (Comp (Step_ap 4 1 4 (nebase (State 3)))
                          (Comp (AssignSt 3 (Var 2))
                                Skip));
     c_reset := Comp (Reset_ap 1 2)
@@ -174,10 +173,10 @@ Section CodegenPaper.
 
   Example counter_eqns : list equation :=
     [
-      EqFby c (Cint 0) (LAexp Cbase (Evar n));
-      EqDef n (CAexp Cbase (Eexp (op_ifte (Evar restart)
-                                          (Evar initial)
-                                          (op_plus (Evar c) (Econst (Cint 1))))))
+      EqFby c Cbase (Cint 0) (Evar n);
+      EqDef n Cbase (Eexp (op_ifte (Evar restart)
+                                   (Evar initial)
+                                   (op_plus (Evar c) (Econst (Cint 1)))))
     ].
 
   (* TODO: show that these equations Is_well_sch and Well_clocked;
@@ -185,7 +184,7 @@ Section CodegenPaper.
 
   (* TODO: multiple inputs: initial, increment, restart *)
   Example counter : node :=
-    mk_node n_counter initial n counter_eqns.
+    mk_node n_counter (nebase initial) n counter_eqns.
 
   Eval cbv in translate_node counter.
   Eval cbv in ifte_fuse (c_step (translate_node counter)).
@@ -210,26 +209,26 @@ Section CodegenPaper.
 
   Example altcounters_eqns : list equation :=
     [
-      EqDef y (CAexp Cbase
-                     (Emerge b
-                             (Eexp (Ewhen (Evar n1) b true))
-                             (Eexp (Evar n2))));
+      EqDef y Cbase
+              (Emerge b
+                      (Eexp (Ewhen (Evar n1) b true))
+                      (Eexp (Evar n2)));
       (* Add other inputs:
            Ewhen (Econst (Cint (-1))) b false
            Ewhen (Econst (Cbool false)) b false *)
-      EqApp n2 n_counter (LAexp (Con Cbase b false)
-                                (Ewhen (Econst (Cint 0)) b false));
+      EqApp n2 (Con Cbase b false) n_counter 
+               (nebase (Ewhen (Econst (Cint 0)) b false));
       (* Add other inputs:
            Econst 1
            Econst false *)
-      EqApp n1 n_counter (LAexp Cbase (Econst (Cint 0)))
+      EqApp n1 Cbase n_counter (nebase (Econst (Cint 0)))
     ].
 
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
   Example altcounters : node :=
-    mk_node n_altcounters b y altcounters_eqns.
+    mk_node n_altcounters (nebase b) y altcounters_eqns.
 
   Eval cbv in translate_node altcounters.
   Eval cbv in ifte_fuse (c_step (translate_node altcounters)).

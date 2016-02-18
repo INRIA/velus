@@ -44,7 +44,7 @@ Inductive stmt : Set :=
   | Assign : ident -> exp -> stmt
   | AssignSt : ident -> exp -> stmt
   | Ifte : exp -> stmt -> stmt -> stmt
-  | Step_ap : ident -> ident -> ident -> exp -> stmt
+  | Step_ap : ident -> ident -> ident -> nelist exp -> stmt
            (* y = Step_ap class object arg *)
   | Reset_ap : ident -> ident -> stmt
            (* Reset_ap class object *)
@@ -64,7 +64,7 @@ Record obj_dec : Set := mk_obj_dec {
 Record class : Set := mk_class {
   c_name   : ident;
 
-  c_input  : ident;
+  c_input  : nelist ident;
   c_output : ident;
 
   c_mems   : list ident;       (* TODO: should track type of each *)

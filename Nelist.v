@@ -7,7 +7,9 @@ Set Implicit Arguments.
 Require List. (* To check their equivalent versions *)
 
 
-Inductive nelist (A : Set) : Set :=
+Ltac inv H := inversion H; subst; clear H.
+
+Inductive nelist (A : Type) : Type :=
   | nebase (e : A)
   | necons (e : A) (l : nelist A).
 
@@ -16,6 +18,9 @@ Fixpoint length {A} (l : nelist A) :=
     | nebase _ => 1
     | necons _ l' => S (length l')
   end.
+
+Lemma diff_length_nebase_necons : forall {A B} (a : A) (b : B) l, length (nebase a) <> length (necons b l).
+Proof. intros A B a b [? | ? ?]; simpl; discriminate. Qed.
 
 Fixpoint nelist2list {A} (l : nelist A) : list A :=
   match l with
@@ -27,7 +32,7 @@ Lemma nelist_2list_non_empty : forall A (l : nelist A), nelist2list l <> nil.
 Proof. intros A [e | e l]; simpl; discriminate. Qed.
 
 (*
-Fixpoint list2nelist {A : Set} (l : list A) (Hl : l <> nil) {struct l} : nelist A.
+Fixpoint list2nelist {A : Type} (l : list A) (Hl : l <> nil) {struct l} : nelist A.
 destruct l as [| e l'].
 + now elim Hl.
 + apply (@list_rec A (fun _ => nelist A) (nebase e)).
@@ -46,15 +51,18 @@ destruct l as [| e l'].
 Proof. discriminate. Defined.
 *)
 
-Fixpoint In {A : Set} (x : A) (l : nelist A) :=
+Fixpoint In {A : Type} (x : A) (l : nelist A) :=
   match l with
     | nebase e => x = e
     | necons e l' => x = e \/ In x l'
   end.
 
+Lemma nelist2list_In : forall {A} (x : A) l, List.In x (nelist2list l) <-> In x l.
+Proof. intros A x l. induction l; simpl; try rewrite IHl; intuition. Qed.
+
 (** **  The [map] function  **)
 
-Fixpoint map {A B : Set} (f : A -> B) l :=
+Fixpoint map {A B : Type} (f : A -> B) l :=
   match l with
     | nebase e => nebase (f e)
     | necons e l' => necons (f e) (map f l')
@@ -62,7 +70,7 @@ Fixpoint map {A B : Set} (f : A -> B) l :=
 
 Definition injective {A B} (f : A -> B) := forall x y, f x = f y -> x = y.
 
-Lemma map_In : forall {A B : Set} (f : A -> B), injective f ->
+Lemma map_In : forall {A B : Type} (f : A -> B), injective f ->
   forall l x, In (f x) (map f l) <-> In x l.
 Proof.
 intros A B f Hf l x. induction l as [e | e l]; simpl.
@@ -70,14 +78,14 @@ intros A B f Hf l x. induction l as [e | e l]; simpl.
 + rewrite IHl. firstorder. subst. tauto.
 Qed.
 
-Lemma map_eq_nebase : forall {A B : Set} (f : A -> B) l y, map f l = nebase y <-> exists x, l = nebase x /\ f x = y.
+Lemma map_eq_nebase : forall {A B : Type} (f : A -> B) l y, map f l = nebase y <-> exists x, l = nebase x /\ f x = y.
 Proof.
 intros A B f l y. destruct l; simpl; split; intro H; decompose [ex and] H || inversion_clear H; subst; eauto.
 - inversion H1. now subst.
 - discriminate.
 Qed.
 
-Lemma map_eq_necons : forall {A B : Set} (f : A -> B) l y l',
+Lemma map_eq_necons : forall {A B : Type} (f : A -> B) l y l',
   map f l = necons y l' <-> exists x l'', l = necons x l'' /\ f x = y /\ map f l'' = l'.
 Proof.
 intros A B f l y l'. destruct l; simpl; split; intro H; decompose [ex and] H || inversion_clear H; subst; eauto.
@@ -85,25 +93,46 @@ intros A B f l y l'. destruct l; simpl; split; intro H; decompose [ex and] H || 
 - inversion H0. now subst.
 Qed.
 
-Lemma map_length : forall  {A B : Set} (f : A -> B) l, length (map f l) = length l.
+Lemma map_length : forall  {A B : Type} (f : A -> B) l, length (map f l) = length l.
 Proof. intros A B f l. induction l; simpl; auto. Qed.
 
-(** **  The [fold_left] function  **)
+Lemma nelist2list_map : forall {A B : Type} (f : A -> B) l,
+  nelist2list (map f l) = List.map f (nelist2list l).
+Proof. intros A B f l. induction l; simpl; try rewrite IHl; reflexivity. Qed.
 
-Definition fold_left {A B : Set} (f : A -> B -> A) :=
+(** **  The [fold_left] and [fold_right] functions  **)
+
+Definition fold_left {A B : Type} (f : A -> B -> A) :=
 fix fold_left (l : nelist B) (a0 : A) {struct l} : A :=
   match l with
   | nebase e => f a0 e
   | necons b t => fold_left t (f a0 b)
   end.
 
+Definition fold_right {A B : Type} (f : B -> A -> A) (a0 : A) :=
+  fix fold_right (l : nelist B) : A :=
+  match l with
+  | nebase b => f b a0
+  | necons b t => f b (fold_right t)
+  end.
+
+(** **  The [combine] function  **)
+
+Fixpoint combine {A B : Type} (l : nelist A) (l' : nelist B) {struct l} : nelist (A * B) :=
+  match l, l' with
+    | nebase a, nebase b => nebase (a, b)
+    | nebase a, necons b lb => nebase (a, b)
+    | necons a la, nebase b => nebase (a, b)
+    | necons a la, necons b lb => necons (a, b) (combine la lb)
+  end.
+   
 (** **  The [Forall] and [Exists] predicates  **)
 
-Inductive Forall {A : Set} (P : A -> Prop) : nelist A -> Prop :=
+Inductive Forall {A : Type} (P : A -> Prop) : nelist A -> Prop :=
   | Forall_nil : forall x : A, P x -> Forall P (nebase x)
   | Forall_cons : forall (x : A) (l : nelist A), P x -> Forall P l -> Forall P (necons x l).
 
-Lemma Forall_forall : forall {A : Set} P l, Forall P l <-> forall x : A, In x l -> P x.
+Lemma Forall_forall : forall {A : Type} P l, Forall P l <-> forall x : A, In x l -> P x.
 Proof.
 intros A P l. induction l; simpl.
 + split; intro Hin.
@@ -116,13 +145,54 @@ intros A P l. induction l; simpl.
     * rewrite IHl. intros. apply Hin. auto.
 Qed.
 
-Inductive Forall2 {A B : Set} (R : A -> B -> Prop) : nelist A -> nelist B -> Prop :=
+Lemma nelist2list_Forall : forall {A} P (l : nelist A), List.Forall P (nelist2list l) <-> Forall P l.
+Proof. intros A P l. rewrite Forall_forall, List.Forall_forall. now setoid_rewrite nelist2list_In. Qed.
+
+Lemma Forall_map : forall {A B} (f : A -> B) P l, Forall P (map f l) <-> Forall (fun x => P (f x)) l.
+Proof. intros A B f P l. induction l; split; intro Hl; inv Hl; constructor; try rewrite IHl in *; auto. Qed.
+
+
+Inductive Forall2 {A B : Type} (R : A -> B -> Prop) : nelist A -> nelist B -> Prop :=
   | Forall2_nil : forall x y, R x y -> Forall2 R (nebase x) (nebase y)
   | Forall2_cons : forall x y l l', R x y -> Forall2 R l l' -> Forall2 R (necons x l) (necons y l').
 
-Lemma Forall2_length: forall {A B : Set} (R : A -> B -> Prop) l1 l2,
+Lemma Forall2_length: forall {A B : Type} (R : A -> B -> Prop) l1 l2,
   Forall2 R l1 l2 -> length l1 = length l2.
 Proof. intros A B R l1. induction l1; intros [|] Hall; inversion_clear Hall; simpl; auto. Qed.
+
+Lemma Forall2_det : forall {A B : Type} (R : A -> B -> Prop),
+  (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
+  forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
+Proof.
+intros A B R HR xs. induction xs as [x | x xs]; intros ys1 ys2 Hall1 Hall2.
+- inv Hall1. inv Hall2. f_equal. eauto.
+- inv Hall1. inv Hall2. f_equal; eauto.
+Qed.
+
+Lemma Forall2_map_l : forall {A B C} (f : A -> B) (R : B -> C -> Prop) l1 l2,
+  Forall2 R (map f l1) l2 <-> Forall2 (fun x y => R (f x) y) l1 l2.
+Proof.
+intros A B C f R l1. induction l1; intro l2; split; intro Hl; inv Hl; simpl;
+now constructor; trivial; now apply IHl1.
+Qed.
+
+Lemma Forall2_map_r : forall {A B C} (f : A -> C) (R : B -> C -> Prop) l1 l2,
+  Forall2 R l1 (map f l2) <-> Forall2 (fun x y => R x (f y)) l1 l2.
+Proof.
+intros A B C f R l1 l2. revert l1. induction l2; intro l1; split; intro Hl; inv Hl; simpl;
+now constructor; trivial; now apply IHl2.
+Qed.
+
+Corollary Forall2_map_lr : forall {A B C D} (f : A -> C) (g : B -> D) (R : C -> D -> Prop) l1 l2,
+  Forall2 R (map f l1) (map g l2) <-> Forall2 (fun x y => R (f x) (g y)) l1 l2.
+Proof. intros. now rewrite Forall2_map_l, Forall2_map_r. Qed.
+
+Lemma Forall2_eq : forall {A} l1 l2, Forall2 (@eq A) l1 l2 <-> l1 = l2.
+Proof.
+intros A l1 l2. split; intro Heq; subst.
+- revert l2 Heq. induction l1; intros l2 Heq; inv Heq; trivial; f_equal; auto.
+- induction l2; constructor; auto.
+Qed.
 
 (*
 Lemma Forall2_forall2 : forall {A B : Type} P l1 l2,
@@ -147,12 +217,12 @@ Corollary Forall2_length : forall {A B} (P : A -> B -> Prop) l1 l2,
   Forall2 P l1 l2 -> length l1 = length l2.
 Proof. intros * Hall. rewrite Forall2_forall2 in Hall. now destruct Hall. Qed.
 *)
-Inductive Exists {A : Set} (P : A -> Prop) : nelist A -> Prop :=
+Inductive Exists {A : Type} (P : A -> Prop) : nelist A -> Prop :=
   | Exists_base : forall x, P x -> Exists P (nebase x)
   | Exists_cons_hd : forall x l, P x -> Exists P (necons x l)
   | Exists_cons_tl : forall x l, Exists P l -> Exists P (necons x l).
 
-Lemma Exists_exists : forall {A : Set} P l, Exists P l <-> exists x : A, In x l /\ P x.
+Lemma Exists_exists : forall {A : Type} P l, Exists P l <-> exists x : A, In x l /\ P x.
 Proof.
 intros A P l. induction l; simpl.
 * split; intro Hin.
@@ -167,3 +237,19 @@ intros A P l. induction l; simpl.
     - constructor 3. rewrite IHl. exists x. tauto.
 Qed.
 
+Lemma nelist2list_Exists : forall {A} P (l : nelist A), List.Exists P (nelist2list l) <-> Exists P l.
+Proof. intros A P l. rewrite Exists_exists, List.Exists_exists. now setoid_rewrite nelist2list_In. Qed.
+
+(** **  The [NoDup] predicate  **)
+
+Inductive NoDup {A : Type} : nelist A -> Prop :=
+    NoDup_base : forall x, NoDup (nebase x)
+  | NoDup_cons : forall x l, ~In x l -> NoDup l -> NoDup (necons x l).
+
+Lemma nelist2list_NoDup : forall {A} (l : nelist A), List.NoDup (nelist2list l) <-> NoDup l.
+Proof.
+intros A l. induction l; simpl.
+- split; intro Hnodup; inv Hnodup; repeat constructor; intuition.
+- split; intro Hnodup; inv Hnodup; repeat constructor;
+  now rewrite ?IHl in *; try (rewrite <- nelist2list_In || rewrite nelist2list_In).
+Qed.

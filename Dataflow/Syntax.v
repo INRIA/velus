@@ -5,6 +5,7 @@ Require Import Rustre.Nelist.
 Import List.ListNotations.
 Open Scope list_scope.
 
+
 (** * Dataflow language *)
 
 Inductive clock : Set :=
@@ -21,28 +22,22 @@ Inductive lexp : Set :=
   | Ewhen : lexp -> ident -> bool -> lexp
   | Eop : operator -> nelist lexp -> lexp.
 
-Inductive laexp : Set :=
-  | LAexp : clock -> lexp -> laexp.
-
-Implicit Type le: lexp.
-Implicit Type lae: laexp.
+Definition lexps := nelist lexp.
 
 Inductive cexp : Set :=
   | Emerge : ident -> cexp -> cexp -> cexp 
   | Eexp : lexp -> cexp.
 
-Inductive caexp : Set :=
-  | CAexp : clock -> cexp -> caexp.
-
+Implicit Type le: lexp.
+Implicit Type les: lexps.
 Implicit Type ce: cexp.
-Implicit Type cae: caexp.
 
 (** ** Equations *)
 
-Inductive equation : Set :=
-  | EqDef : ident -> caexp -> equation
-  | EqApp : ident -> ident -> laexp -> equation
-  | EqFby : ident -> const -> laexp -> equation.
+Inductive equation : Type :=
+  | EqDef : ident -> clock -> cexp -> equation
+  | EqApp : ident -> clock -> ident -> lexps -> equation
+  | EqFby : ident -> clock -> const -> lexp -> equation.
 
 Implicit Type eqn: equation.
 
@@ -50,7 +45,7 @@ Implicit Type eqn: equation.
 
 Record node : Set := mk_node {
   n_name : ident;
-  n_input : ident;
+  n_input : nelist ident;
   n_output : ident;
   n_eqs : list equation }.
 
@@ -61,7 +56,6 @@ Implicit Type N: node.
 Definition global := list node.
 
 Implicit Type G: global.
-
 
 Definition find_node (f : ident) : global -> option node :=
   List.find (fun n=> ident_eqb n.(n_name) f).

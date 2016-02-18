@@ -21,9 +21,9 @@ not clear (to me) whether it is necessary.
 
 Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
-  | EqDef x _   => PS.add x vars
-  | EqApp x _ _ => PS.add x vars
-  | EqFby _ _ _ => vars
+  | EqDef x _ _   => PS.add x vars
+  | EqApp x _ _ _ => PS.add x vars
+  | EqFby _ _ _ _ => vars
   end.
 
 Definition variables (eqs: list equation) : PS.t :=

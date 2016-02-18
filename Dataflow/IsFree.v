@@ -30,13 +30,21 @@ Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
 | FreeEop : forall c op es,
     Nelist.Exists (Is_free_in_lexp c) es -> Is_free_in_lexp c (Eop op es).
 
-Inductive Is_free_in_laexp : ident -> laexp -> Prop :=
+Inductive Is_free_in_laexp : ident -> clock -> lexp -> Prop :=
 | freeLAexp1: forall ck e x,
-    Is_free_in_lexp x e ->
-    Is_free_in_laexp x (LAexp ck e)
+    Is_free_in_lexp x e  ->
+    Is_free_in_laexp x ck e
 | freeLAexp2: forall ck e x,
     Is_free_in_clock x ck ->
-    Is_free_in_laexp x (LAexp ck e).
+    Is_free_in_laexp x ck e.
+
+Inductive Is_free_in_laexps : ident -> clock -> lexps -> Prop :=
+| freeLAexps1: forall ck les x,
+    Nelist.Exists (Is_free_in_lexp x) les ->
+    Is_free_in_laexps x ck les
+| freeLAexps2: forall ck les x,
+    Is_free_in_clock x ck ->
+    Is_free_in_laexps x ck les.
 
 Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
 | FreeEmerge_cond: forall i t f,
@@ -51,28 +59,28 @@ Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
     Is_free_in_lexp x e ->
     Is_free_in_cexp x (Eexp e).
 
-Inductive Is_free_in_caexp : ident -> caexp -> Prop :=
+Inductive Is_free_in_caexp : ident -> clock -> cexp -> Prop :=
 | FreeCAexp1: forall ck ce x,
     Is_free_in_cexp x ce ->
-    Is_free_in_caexp x (CAexp ck ce)
+    Is_free_in_caexp x ck ce
 | FreeCAexp2: forall ck ce x,
     Is_free_in_clock x ck ->
-    Is_free_in_caexp x (CAexp ck ce).
+    Is_free_in_caexp x ck ce.
 
 Inductive Is_free_in_equation : ident -> equation -> Prop :=
 | FreeEqDef:
-    forall x cae i,
-      Is_free_in_caexp i cae ->
-      Is_free_in_equation i (EqDef x cae)
+    forall x ck ce i,
+      Is_free_in_caexp i ck ce ->
+      Is_free_in_equation i (EqDef x ck ce)
 | FreeEqApp:
-    forall x f lae i,
-      Is_free_in_laexp i lae ->
-      Is_free_in_equation i (EqApp x f lae)
+    forall x f ck les i,
+      Is_free_in_laexps i ck les ->
+      Is_free_in_equation i (EqApp x ck f les)
 | FreeEqFby:
-    forall x v lae i,
-      Is_free_in_laexp i lae ->
-      Is_free_in_equation i (EqFby x v lae).
+    forall x v ck le i,
+      Is_free_in_laexp i ck le ->
+      Is_free_in_equation i (EqFby x ck v le).
 
 Hint Constructors Is_free_in_clock Is_free_in_lexp
-     Is_free_in_laexp Is_free_in_cexp Is_free_in_caexp
-     Is_free_in_equation.
+     Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp 
+     Is_free_in_caexp Is_free_in_equation.

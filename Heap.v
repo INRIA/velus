@@ -27,7 +27,7 @@ Section Operations.
   Variable A B: Type.
   Implicit Type menv : memory A.
 
-(* Definition map (f: A -> B)(m: memory A): memory B. Admitted. *)
+(* Definition map (f: A -> B)(m: memory A): memory B. *)
 
   Definition empty_memory : memory A :=
     {| mm_values := PM.empty _;

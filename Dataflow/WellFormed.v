@@ -14,6 +14,7 @@ Require Import Rustre.Dataflow.NoDup.
 (* Require Import Rustre.DataflowNatSemantics. *)
 (* Require Import Rustre.SynchronousNat. *)
 
+Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
@@ -42,42 +43,43 @@ Open Scope list_scope.
 Section IsWellSch.
 
 Variable memories : PS.t.
+Variable arg: list ident.
 
 (**
    The list of equations should be in reverse order: the first
    equation to execute should be the last in the list.
 *)
 (* =Is_well_sch= *)
-Inductive Is_well_sch (arg: ident) : list equation -> Prop :=
-| WSchNil: Is_well_sch arg nil
-| WSchEqDef: forall x e eqs,
-    Is_well_sch arg eqs ->
-    (forall i, Is_free_in_caexp i e ->
+Inductive Is_well_sch : list equation -> Prop :=
+| WSchNil: Is_well_sch nil
+| WSchEqDef: forall x ck e eqs,
+    Is_well_sch eqs ->
+    (forall i, Is_free_in_caexp i ck e ->
                   (PS.In i memories -> ~Is_defined_in i eqs)
-               /\ (~PS.In i memories -> Is_variable_in i eqs \/ i = arg)) ->
+               /\ (~PS.In i memories -> Is_variable_in i eqs \/ List.In i arg)) ->
     (~Is_defined_in x eqs) ->
-    Is_well_sch arg (EqDef x e :: eqs)
+    Is_well_sch (EqDef x ck e :: eqs)
 | (*...*)
 (* =end= *)
   WSchEqApp:
-    forall x f e eqs,
-      Is_well_sch arg eqs ->
-      (forall i, Is_free_in_laexp i e ->
+    forall x ck f e eqs,
+      Is_well_sch eqs ->
+      (forall i, Is_free_in_laexps i ck e ->
                     (PS.In i memories -> ~Is_defined_in i eqs)
                     /\ (~PS.In i memories -> Is_variable_in i eqs
-                                      \/ i = arg)) ->
+                                      \/ List.In i arg)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch arg (EqApp x f e :: eqs)
+      Is_well_sch (EqApp x ck f e :: eqs)
 | WSchEqFby:
-    forall x v e eqs,
-      Is_well_sch arg eqs ->
+    forall x ck v e eqs,
+      Is_well_sch eqs ->
       PS.In x memories -> (* TODO: delete *)
-      (forall i, Is_free_in_laexp i e ->
+      (forall i, Is_free_in_laexp i ck e ->
                     (PS.In i memories -> ~Is_defined_in i eqs)
                  /\ (~PS.In i memories -> Is_variable_in i eqs
-                                   \/ i = arg)) ->
+                                   \/ List.In i arg)) ->
       (~Is_defined_in x eqs) ->
-      Is_well_sch arg (EqFby x v e :: eqs).
+      Is_well_sch (EqFby x ck v e :: eqs).
 
 End IsWellSch.
 
@@ -101,13 +103,13 @@ Lemma Is_well_sch_free_variable:
     Is_well_sch mems argIn (eq :: eqs)
     -> Is_free_in_equation x eq
     -> ~ PS.In x mems
-    -> Is_variable_in x eqs \/ x = argIn.
+    -> Is_variable_in x eqs \/ List.In x argIn.
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
-    inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
-    apply Hp in Hc;
+    inversion Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? ? Hp];
+    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; subst;
+    eapply Hp in Hc;
     intuition.
 Qed.
 
@@ -120,9 +122,9 @@ Lemma Is_well_sch_free_variable_in_mems:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [|? ? ? ? Hp|? ? ? ? ? Hp|? ? ? ? ? ? Hp];
-    inversion_clear Hfree as [? ? ? Hc|? ? ? ? Hc|? ? ? ? Hc];
-    apply Hp in Hc;
+    inversion_clear Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? ? Hp];
+    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
+    eapply Hp in Hc;
     destruct Hc as [Hc0 Hc1];
     apply Hc0 in Hnim;
     apply Hnim.
@@ -149,8 +151,9 @@ Inductive Welldef_global : list node -> Prop :=
       let eqs := nd.(n_eqs) in
       let ni := nd.(n_input) in
       let no := nd.(n_output) in
-      Is_well_sch (memories eqs) ni eqs
-      -> ~Is_defined_in ni eqs
+        NoDup (Nelist.nelist2list ni)
+      -> Is_well_sch (memories eqs) (Nelist.nelist2list ni) eqs
+      -> ~ List.Exists (fun ni => Is_defined_in ni eqs) (Nelist.nelist2list ni)
       -> Is_variable_in no eqs
       -> ~Is_node_in nd.(n_name) eqs
       -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
@@ -201,7 +204,7 @@ Lemma Welldef_global_input_not_Is_defined_in:
   forall f G fnode,
     Welldef_global G
     -> find_node f G = Some fnode
-    -> ~Is_defined_in fnode.(n_input) fnode.(n_eqs).
+    -> ~ Nelist.Exists (fun ni => Is_defined_in ni fnode.(n_eqs)) fnode.(n_input).
 Proof.
   induction G as [|node G IH]; [inversion_clear 2|].
   intros fnode HWdef Hfnode.
@@ -210,7 +213,7 @@ Proof.
   rewrite HnG in HWdef; clear HnG.
   apply Welldef_global_app in HWdef.
   inversion_clear HWdef.
-  assumption.
+  now rewrite <- Nelist.nelist2list_Exists.
 Qed.
 
 Lemma Welldef_global_output_Is_variable_in:

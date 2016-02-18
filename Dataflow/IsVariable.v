@@ -18,13 +18,35 @@ Require Import Rustre.Dataflow.IsDefined.
 
 
 Inductive Is_variable_in_eq : ident -> equation -> Prop :=
-| VarEqDef: forall x e,   Is_variable_in_eq x (EqDef x e)
-| VarEqApp: forall x f e, Is_variable_in_eq x (EqApp x f e).
+| VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
+| VarEqApp: forall x ck f e, Is_variable_in_eq x (EqApp x ck f e).
 
 Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_variable_in_eq x) eqs.
 
+Lemma not_Is_variable_in_EqDef: 
+  forall x ck y e,
+    ~ Is_variable_in_eq x (EqDef y ck e) -> x <> y.
+Proof.
+  Hint Constructors Is_variable_in_eq. 
+  intros ** Hxy. subst x. auto.
+Qed.
 
+Lemma not_Is_variable_in_EqApp: 
+  forall x y ck f e,
+    ~ Is_variable_in_eq x (EqApp y ck f e) -> x <> y.
+Proof.
+  Hint Constructors Is_variable_in_eq. 
+  intros ** Hxy. subst x. auto.
+Qed.
+
+Ltac not_Is_variable x y :=
+  match goal with
+    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ => 
+      apply not_Is_variable_in_EqDef in H
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _) |- _ => 
+      apply not_Is_variable_in_EqApp in H
+  end.
 
 
 Lemma Is_variable_in_eq_dec:
@@ -33,7 +55,7 @@ Proof.
   intros x eq.
   destruct eq as [y cae|y f lae|y v0 lae];
     match goal with
-    | |- context Is_variable_in_eq [EqFby _ _ _] => right; inversion 1
+    | |- context Is_variable_in_eq [EqFby _ _ _ _] => right; inversion 1
     | _ => (destruct (ident_eq_dec x y) as [xeqy|xneqy];
             [ rewrite xeqy; left; constructor
             | right; inversion 1; auto])

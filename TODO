@@ -1,19 +1,14 @@
-* Remove clock rate constraints from the semantics
-
-This ought to be deduced from a Clocking / Is_well_clocked predicate
-defined over the syntax.
-
-* Remove [laexp] and [caexp] from the syntax
-
-* Add primitives to the language
-
-Objective: write and compile a counter and an integrator, following
-the Lustre87 paper.
-
-* Remove call to decision procedures in correctness proof
-
+* Coq notations for embedded imperative/dataflow languages
+* Remove call to decision procedures in [Correctness.v]
 * Factorize Is_well_sch 3 cases into a single one
+* Uniform naming for Dataflow/Is* predicates
 
-* Merge multi-input into master
+Is_variable_in_eq
+Is_variable_in
 
-* Experiment: use a subset type for the invariant "non-empty list of args"
+Is_defined_in_eq
+Is_defined_in
+
+Is_free_in_equation
+
+* Grep for "XXX:"  and "TODO:"
