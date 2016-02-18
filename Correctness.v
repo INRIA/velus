@@ -624,6 +624,14 @@ Qed.
 
 (** ** Validity of [translate_eqns] *)
 
+(* TODO: Can we replace
+    (forall x, PS.In x mems ->
+		(Is_defined_in x alleqs /\ ~Is_variable_in x alleqs)) ->
+  and
+    ~PS.In input mems ->
+
+  with a simply definition of mems in terms of alleqs and one or two
+  auxilliary lemmas? *)
 Lemma is_step_correct:
   forall (G: global)
          (H: history)
