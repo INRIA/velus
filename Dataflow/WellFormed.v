@@ -40,51 +40,49 @@ Open Scope list_scope.
 
 (** ** Predicates *)
 
+Section IsWellSch.
+
+Variable memories : PS.t.
+(* FIXME: [arg] should be a [nelist ident] *)
+Variable arg: list ident.
+
 (**
    The list of equations should be in reverse order: the first
    equation to execute should be the last in the list.
-
-   The set 'mems' should include any input variables. The relevant
-   clause is written:
-          (PS.In i mems -> ~Is_defined_in i eqs)
-
-   rather than:
-          (PS.In i mems -> ~Is_memory_in i eqs)
-
-   To require that such input variables are not redefined in eqs.
 *)
-
-(* FIXME: argIn should be a [nelist ident] *)
-Inductive Is_well_sch (mems: PS.t)(argIn: list ident) : list equation -> Prop :=
-| WSchNil: Is_well_sch mems argIn nil
-| WSchEqDef:
-    forall x ck e eqs,
-      Is_well_sch mems argIn eqs ->
-      (forall i, Is_free_in_caexp i ck e ->
-                    (PS.In i mems -> ~Is_defined_in_eqs i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in_eqs i eqs
-                                   \/ List.In i argIn)) ->
+(* =Is_well_sch= *)
+Inductive Is_well_sch : list equation -> Prop :=
+| WSchNil: Is_well_sch nil
+| WSchEqDef: forall x ck e eqs,
+    Is_well_sch eqs ->
+    (forall i, Is_free_in_caexp i ck e ->
+                  (PS.In i memories -> ~Is_defined_in_eqs i eqs)
+               /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ List.In i arg)) ->
+    (~Is_defined_in_eqs x eqs) ->
+    Is_well_sch (EqDef x ck e :: eqs)
+| (*...*)
+(* =end= *)
+  WSchEqApp:
+    forall x ck f e eqs,
+      Is_well_sch eqs ->
+      (forall i, Is_free_in_laexps i ck e ->
+                    (PS.In i memories -> ~Is_defined_in_eqs i eqs)
+                    /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
+                                      \/ List.In i arg)) ->
       (~Is_defined_in_eqs x eqs) ->
-      Is_well_sch mems argIn (EqDef x ck e :: eqs)
-| WSchEqApp:
-    forall x ck f les eqs,
-      Is_well_sch mems argIn eqs ->
-      (forall i, Is_free_in_laexps i ck les ->
-                    (PS.In i mems -> ~Is_defined_in_eqs i eqs)
-                    /\ (~PS.In i mems -> Is_variable_in_eqs i eqs
-                                      \/ List.In i argIn)) ->
-      (~Is_defined_in_eqs x eqs) ->
-      Is_well_sch mems argIn (EqApp x ck f les :: eqs)
+      Is_well_sch (EqApp x ck f e :: eqs)
 | WSchEqFby:
     forall x ck v e eqs,
-      Is_well_sch mems argIn eqs ->
-      PS.In x mems -> (* TODO: delete ? *)
+      Is_well_sch eqs ->
+      PS.In x memories -> (* TODO: delete *)
       (forall i, Is_free_in_laexp i ck e ->
-                    (PS.In i mems -> ~Is_defined_in_eqs i eqs)
-                 /\ (~PS.In i mems -> Is_variable_in_eqs i eqs
-                                   \/ List.In i argIn)) ->
+                    (PS.In i memories -> ~Is_defined_in_eqs i eqs)
+                 /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
+                                   \/ List.In i arg)) ->
       (~Is_defined_in_eqs x eqs) ->
-      Is_well_sch mems argIn (EqFby x ck v e :: eqs).
+      Is_well_sch (EqFby x ck v e :: eqs).
+
+End IsWellSch.
 
 Hint Constructors Is_well_sch.
 

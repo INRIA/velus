@@ -19,13 +19,16 @@ Inductive Is_free_in_clock : ident -> clock -> Prop :=
       Is_free_in_clock x ck'
       -> Is_free_in_clock x (Con ck' y xc).
 
+(* Warning: induction scheme is not strong enough. *)
 Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
 | FreeEvar: forall x, Is_free_in_lexp x (Evar x)
 | FreeEwhen1: forall e c cv x,
     Is_free_in_lexp x e ->
     Is_free_in_lexp x (Ewhen e c cv)
 | FreeEwhen2: forall e c cv,
-    Is_free_in_lexp c (Ewhen e c cv).
+    Is_free_in_lexp c (Ewhen e c cv)
+| FreeEop : forall c op es,
+    Nelist.Exists (Is_free_in_lexp c) es -> Is_free_in_lexp c (Eop op es).
 
 Inductive Is_free_in_laexp : ident -> clock -> lexp -> Prop :=
 | freeLAexp1: forall ck e x,

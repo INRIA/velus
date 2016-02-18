@@ -27,6 +27,7 @@ Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
   | Econst c => fvs
   | Evar x => PS.add x fvs
   | Ewhen e x xc => free_in_lexp e (PS.add x fvs)
+  | Eop op eqs => Nelist.fold_left (fun fvs e => free_in_lexp e fvs) eqs fvs
   end.
 
 Definition free_in_laexp (ck: clock)(le : lexp) (fvs : PS.t) : PS.t :=
@@ -81,21 +82,33 @@ Lemma free_in_lexp_spec:
   forall x e m, PS.In x (free_in_lexp e m)
                 <-> Is_free_in_lexp x e \/ PS.In x m.
 Proof.
-  intro x; induction e;
-  intro m; (split;
+  intro x; induction e using lexp_ind2;
+  try now intro m; (split;
   [
     intro H0; try apply IHe in H0
   | intro H0; try apply IHe
   ]);
   try destruct H0 as [H0|H0];
   try apply free_in_clock_spec in H0;
-  try inversion H0;
+  try inversion H0; subst;
   try apply PS.add_spec;
   solve [
       intuition
     | right; apply free_in_clock_spec; intuition
     | apply PS.add_spec in H1; destruct H1; subst; intuition
     | right; apply PS.add_spec; intuition ].
+induction les as [le | le les]; intro m.
++ simpl. inversion_clear H. rewrite H0. split; intros [Hin | ?]; auto; left.
+  - now do 2 constructor.
+  - inversion_clear Hin. inversion_clear H. assumption.
++ inversion_clear H.
+  specialize (IHles H1 (free_in_lexp le m)). rewrite H0 in IHles.
+  rewrite IHles. split; intro Hin.
+  - destruct Hin as [Hin | [Hin | Hin]]; tauto || left; constructor; try now constructor 2. 
+    constructor 3. now inversion_clear Hin.
+  - destruct Hin as [Hin | ?]; try tauto; [].
+    Local Hint Constructors Is_free_in_lexp.
+    inversion_clear Hin. inversion_clear H; auto. 
 Qed.
 
 Lemma free_in_lexp_spec':

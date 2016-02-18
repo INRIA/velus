@@ -28,18 +28,18 @@ with Memory_Corres_eq (G: global) (n: nat) :
 | MemC_EqDef:
     forall M menv x ck ce,
       Memory_Corres_eq G n M menv (EqDef x ck ce)
-| MemC_EqApp:
-    forall M menv x ck f le,
-      (forall Mo, mfind_inst x M = Some Mo
-                  -> (exists omenv,
-                         mfind_inst x menv = Some omenv
-                         /\ Memory_Corres G n f Mo omenv))
-      -> Memory_Corres_eq G n M menv (EqApp x ck f le)
-| MemC_EqFby:
-    forall M menv x ck v0 le,
-      (forall ms, mfind_mem x M = Some ms
-                  -> mfind_mem x menv = Some (ms n))
-      -> Memory_Corres_eq G n M menv (EqFby x ck v0 le).
+| MemC_EqApp: forall M menv x ck f le,
+(* =Memory_Corres_eq:eqapp= *)
+(forall Mo, mfind_inst x M = Some Mo ->
+  (exists omenv, mfind_inst x menv = Some omenv /\ Memory_Corres G n f Mo omenv))
+-> Memory_Corres_eq G n M menv (EqApp x ck f le)(*,*)
+(* =end= *)
+| MemC_EqFby: forall M menv x ck v0 le,
+(* =Memory_Corres_eq:eqfby= *)
+(forall ms, mfind_mem x M = Some ms -> mfind_mem x menv = Some (ms n))
+-> Memory_Corres_eq G n M menv (EqFby x ck v0 le)(*.*)
+(* =end= *)
+.
 
 Section Memory_Corres_mult.
   Variables (G: global) (n: nat).

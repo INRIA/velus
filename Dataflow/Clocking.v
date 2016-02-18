@@ -2,7 +2,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
-Require Import Rustre.Nelist.
+Require Import Nelist.
 Require Import List.
 
 Definition clockenv := PM.t clock.
@@ -38,7 +38,11 @@ Inductive clk_lexp C: lexp -> clock -> Prop :=
     forall e x b ck,
       clk_lexp C e ck ->
       clk_var C x ck ->
-      clk_lexp C (Ewhen e x b) (Con ck x b).
+      clk_lexp C (Ewhen e x b) (Con ck x b)
+| Cop:
+    forall op les ck,
+      Nelist.Forall (fun e => clk_lexp C e ck) les ->
+      clk_lexp C (Eop op les) ck.
 
 Definition clk_lexps C (les: nelist lexp)(ck: clock): Prop :=
   Nelist.Forall (fun le => clk_lexp C le ck) les.
@@ -128,13 +132,17 @@ Lemma clk_clock_lexp:
     -> clk_lexp C le ck
     -> clk_clock C ck.
 Proof.
-  induction le as [| |le IH].
-  - inversion_clear 2; now constructor.
-  - intros ck Hwc; inversion_clear 1 as [|? ? Hcv|].
-    apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
-  - intros ck Hwc.
-    inversion_clear 1 as [| |? ? ? ck' Hle Hcv].
-    constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
+induction le as [| |le IH | ] using lexp_ind2.
++ inversion_clear 2; now constructor.
++ intros ck Hwc; inversion_clear 1 as [|? ? Hcv| |].
+  apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
++ intros ck Hwc.
+  inversion_clear 1 as [| |? ? ? ck' Hle Hcv |].
+  constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
++ intros ck Hwc; inversion_clear 1 as [| | | ? ? ? Hrec].
+  induction les.
+  - inversion_clear H. apply H0; trivial. now inversion_clear Hrec.
+  - inversion_clear H. inversion_clear Hrec. now apply IHles.
 Qed.
 
 Lemma clk_clock_cexp:

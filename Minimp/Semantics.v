@@ -37,7 +37,14 @@ Inductive exp_eval heap stack:
       exp_eval heap stack (State(x)) v
 | econst:
     forall c ,
-      exp_eval heap stack (Const(c)) c.
+      exp_eval heap stack (Const(c)) c
+| eop:
+    forall op es cs c,
+      Nelist.Forall2 (exp_eval heap stack) es cs ->
+      apply_op op cs = Some c ->
+      exp_eval heap stack (Op op es) c.
+
+(* =stmt_eval= *)
 
 Lemma exps_eval_const:
   forall h s cs,
@@ -48,26 +55,29 @@ Proof.
 Qed.
 
 Inductive stmt_eval :
-  program -> heap -> stack -> stmt -> heap * stack -> Prop :=
-| Iassign:
-    forall prog menv env x e v env',
+    program -> heap -> stack -> stmt -> heap * stack -> Prop :=
+| Iassign: forall prog menv env x e v env',
       exp_eval menv env e v ->
       PM.add x v env = env' ->
       stmt_eval prog menv env (Assign x e) (menv, env')
-| Iassignst:
+| (*...*)
+(* =end= *)
+  Iassignst:
     forall prog menv env x e v menv',
       exp_eval menv env e v ->
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
-| Istep:
-    forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
+(* =stmt_eval:step= *)
+| Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
       mfind_inst o menv = Some(omenv) ->
       Nelist.Forall2 (exp_eval menv env) es vs ->
       stmt_step_eval prog omenv clsid vs omenv' rv ->
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
       stmt_eval prog menv env (Step_ap y clsid o es) (menv', env')
-| Ireset:
+| (*...*)
+(* =end= *)
+  Ireset:
     forall prog menv env o clsid omenv' menv',
       stmt_reset_eval prog clsid omenv' ->
       madd_obj o omenv' menv = menv' ->
@@ -98,6 +108,7 @@ Inductive stmt_eval :
 | Iskip:
     forall prog menv env,
       stmt_eval prog menv env Skip (menv, env)
+(* =stmt_step_eval= *)
 with stmt_step_eval :
        program -> heap -> ident -> nelist const -> heap -> const -> Prop :=
 | Iestep:
@@ -108,6 +119,8 @@ with stmt_step_eval :
                 (menv', env') ->
       PM.find cls.(c_output) env' = Some(ov) ->
       stmt_step_eval prog menv clsid ivs menv' ov
+(* =end= *)
+
 with stmt_reset_eval : program -> ident -> heap -> Prop :=
 | Iereset:
     forall prog clsid cls prog' menv' env',
@@ -136,12 +149,19 @@ Lemma exp_eval_det:
     exp_eval menv env e v2 ->
     v1 = v2.
 Proof.
-  induction e;
+  induction e using exp_ind2;
     intros v1 v2 H1 H2;
-    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1];
-    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2];
-    rewrite Hv1 in Hv2;
-    ( injection Hv2; trivial ) || apply Hv2.
+    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1| xa opa esa IHa Hv1];
+    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2| xb opb esb IHb Hv2];
+    try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2).
+  subst.
+  assert (esa = esb).
+  { clear H1 H2 H4 H8. revert esa esb Hv1 Hv2. induction es; intros esa esb Hv1 Hv2.
+    * inversion_clear Hv1. inversion_clear Hv2. f_equal. inversion_clear IHes. now apply H1.
+    * inversion_clear Hv1. inversion_clear Hv2. inversion_clear IHes. f_equal.
+      + now apply H3.
+      + now apply IHes0. }
+  subst. rewrite H4 in *. now inversion H8.
 Qed.
 
 Lemma stmt_eval_fold_left_shift:

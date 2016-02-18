@@ -59,19 +59,18 @@ Inductive msem_equation G: history -> memory -> equation -> Prop :=
       sem_var H x xs ->
       msem_node G f ls M' xs ->
       msem_equation G H M (EqApp x ck f arg)
-| SEqFby:
-    forall H M ms x ck ls xs v0 le,
-      mfind_mem x M = Some ms ->
-      ms 0 = v0 ->
-      sem_laexp H ck le ls ->
-      sem_var H x xs ->
-      (forall n, match ls n with
-                 | absent    => ms (S n) = ms n              (* held *)
-                                /\ xs n = absent
-                 | present v => ms (S n) = v
-                                /\ xs n = present (ms n)
-                 end) ->
-      msem_equation G H M (EqFby x ck v0 le)
+(* =msem_equation:fby= *)
+| SEqFby: forall H M ms x ck ls xs v0 le,
+    mfind_mem x M = Some ms ->
+    ms 0 = v0 ->
+    sem_laexp H ck le ls ->
+    sem_var H x xs ->
+    (forall n, match ls n with
+          | absent    => ms (S n) = ms n /\ xs n = absent
+          | present v => ms (S n) = v    /\ xs n = present (ms n)
+          end) ->
+    msem_equation G H M (EqFby x ck v0 le)
+(* =end= *)
 
 with msem_node G: ident -> stream (nelist value) -> memory -> stream value -> Prop :=
 | SNode:

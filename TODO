@@ -1,3 +1,4 @@
+* Coq notations for embedded imperative/dataflow languages
 * Remove call to decision procedures in [Correctness.v]
 * Factorize Is_well_sch 3 cases into a single one
 * Uniform naming for Dataflow/Is* predicates

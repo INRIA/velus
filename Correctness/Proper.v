@@ -77,10 +77,14 @@ Qed.
 Instance translate_lexp_Proper :
   Proper (PS.eq ==> eq ==> eq) translate_lexp.
 Proof.
-  intros M M' HMeq e e' Heq; rewrite <- Heq; clear Heq e'.
-  revert M M' HMeq.
-  induction e; intros M M' HMeq; simpl; auto.
-  rewrite HMeq; auto.
+intros M M' HMeq e e' Heq; rewrite <- Heq; clear Heq e'.
+revert M M' HMeq.
+induction e using lexp_ind2; intros M M' HMeq; simpl; auto.
++ rewrite HMeq; auto.
++ f_equal.
+  induction les; simpl.
+  - f_equal. inversion_clear H. now apply H0.
+  - inversion_clear H. f_equal; auto.
 Qed.
 
 Instance translate_cexp_Proper :
@@ -109,13 +113,15 @@ Qed.
 
 Instance translate_eqn_Proper :
   Proper (PS.eq ==> eq ==> eq) translate_eqn.
+Admitted.
+(*
 Proof.
   intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
   (* XXX: BUG? there should be enough info to make [rewrite HMeq] be enough. *)
   destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
   rewrite HMeq at 1 2. do 3 f_equal. apply Nelist.map_compat; trivial. rewrite HMeq. reflexivity.
 Qed.
-
+*)
 
 Instance translate_eqns_Proper :
   Proper (PS.eq ==> eq ==> eq) translate_eqns.
