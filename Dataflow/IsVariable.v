@@ -21,7 +21,7 @@ Inductive Is_variable_in_eq : ident -> equation -> Prop :=
 | VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
 | VarEqApp: forall x ck f e, Is_variable_in_eq x (EqApp x ck f e).
 
-Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
+Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_variable_in_eq x) eqs.
 
 Lemma not_Is_variable_in_EqDef: 
@@ -62,10 +62,10 @@ Proof.
     end.
 Qed.
 
-Lemma Is_variable_in_Is_defined_in:
+Lemma Is_variable_in_eqs_Is_defined_in_eqs:
   forall x eqs,
-    Is_variable_in x eqs
-    -> Is_defined_in x eqs.
+    Is_variable_in_eqs x eqs
+    -> Is_defined_in_eqs x eqs.
 Proof.
   induction eqs as [|eq eqs IH]; [now inversion 1|].
   inversion_clear 1 as [Hin ? Hivi|]; [|constructor 2; intuition].
@@ -74,9 +74,9 @@ Qed.
 
 Lemma Is_variable_in_cons:
   forall x eq eqs,
-    Is_variable_in x (eq :: eqs) ->
+    Is_variable_in_eqs x (eq :: eqs) ->
     Is_variable_in_eq x eq
-    \/ (~Is_variable_in_eq x eq /\ Is_variable_in x eqs).
+    \/ (~Is_variable_in_eq x eq /\ Is_variable_in_eqs x eqs).
 Proof.
   intros x eq eqs Hdef.
   apply List.Exists_cons in Hdef.
@@ -85,11 +85,11 @@ Qed.
 
 Lemma not_Is_variable_in_cons:
   forall x eq eqs,
-    ~Is_variable_in x (eq :: eqs)
-    <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in x eqs.
+    ~Is_variable_in_eqs x (eq :: eqs)
+    <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in_eqs x eqs.
 Proof.
   intros x eq eqs. split.
-  intro H0; unfold Is_variable_in in H0; auto.
+  intro H0; unfold Is_variable_in_eqs in H0; auto.
   destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
 Qed.
 
@@ -102,7 +102,7 @@ Proof.
 Qed.
 
 Lemma not_Is_defined_in_not_Is_variable_in:
-  forall x eqs, ~Is_defined_in x eqs -> ~Is_variable_in x eqs.
+  forall x eqs, ~Is_defined_in_eqs x eqs -> ~Is_variable_in_eqs x eqs.
 Proof.
   Hint Constructors Is_defined_in_eq.
   induction eqs as [|eq].

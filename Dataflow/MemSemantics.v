@@ -574,7 +574,7 @@ Definition sem_held_equations
 
 Lemma msem_equation_madd_mem:
   forall G H M x ms eqs,
-    ~Is_defined_in x eqs
+    ~Is_defined_in_eqs x eqs
     -> Forall (msem_equation G H M) eqs
     -> Forall (msem_equation G H (madd_mem x ms M)) eqs.
 Proof.
@@ -596,7 +596,7 @@ Qed.
 
 Lemma msem_equation_madd_obj:
   forall G H M M' x eqs,
-    ~Is_defined_in x eqs
+    ~Is_defined_in_eqs x eqs
     -> Forall (msem_equation G H M) eqs
     -> Forall (msem_equation G H (madd_obj x M' M)) eqs.
 Proof.

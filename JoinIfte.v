@@ -381,8 +381,8 @@ Lemma translate_eqns_Ifte_free_write:
     Well_clocked_env C
     -> Forall (Well_clocked_eq C) eqs
     -> Is_well_sch mems inputs eqs
-    -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
-    -> (forall input, List.In input inputs -> ~ Is_defined_in input eqs)
+    -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
+    -> (forall input, List.In input inputs -> ~ Is_defined_in_eqs input eqs)
     -> Ifte_free_write (translate_eqns mems eqs).
 Proof.
   intros C mems inputs eqs Hwk Hwks Hwsch Hnvi Hnin.
@@ -415,7 +415,7 @@ Proof.
         specialize (Hnm Hnxm').
         apply Hndef.
         destruct Hnm as [Hnm|Hnm]; [|now intuition].
-        apply Is_variable_in_Is_defined_in with (1:=Hnm). }
+        apply Is_variable_in_eqs_Is_defined_in_eqs with (1:=Hnm). }
       apply Ifte_free_write_Control_cexp.
       * intros i Hfree.
         apply (not_Can_write_in_translate_cexp).

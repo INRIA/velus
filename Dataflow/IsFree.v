@@ -67,20 +67,20 @@ Inductive Is_free_in_caexp : ident -> clock -> cexp -> Prop :=
     Is_free_in_clock x ck ->
     Is_free_in_caexp x ck ce.
 
-Inductive Is_free_in_equation : ident -> equation -> Prop :=
+Inductive Is_free_in_eq : ident -> equation -> Prop :=
 | FreeEqDef:
     forall x ck ce i,
       Is_free_in_caexp i ck ce ->
-      Is_free_in_equation i (EqDef x ck ce)
+      Is_free_in_eq i (EqDef x ck ce)
 | FreeEqApp:
     forall x f ck les i,
       Is_free_in_laexps i ck les ->
-      Is_free_in_equation i (EqApp x ck f les)
+      Is_free_in_eq i (EqApp x ck f les)
 | FreeEqFby:
     forall x v ck le i,
       Is_free_in_laexp i ck le ->
-      Is_free_in_equation i (EqFby x ck v le).
+      Is_free_in_eq i (EqFby x ck v le).
 
 Hint Constructors Is_free_in_clock Is_free_in_lexp
      Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp 
-     Is_free_in_caexp Is_free_in_equation.
+     Is_free_in_caexp Is_free_in_eq.

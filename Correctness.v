@@ -296,7 +296,7 @@ Qed.
 Lemma stmt_eval_translate_eqns_menv_inv:
   forall prog menv env mems eqs menv' env',
     stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
-    -> (forall x, ~Is_defined_in x eqs ->
+    -> (forall x, ~Is_defined_in_eqs x eqs ->
                   mfind_mem x menv' = mfind_mem x menv).
 Proof.
   induction eqs as [ |eq].
@@ -315,7 +315,7 @@ Qed.
 Lemma stmt_eval_translate_eqns_minst_inv:
   forall prog menv env mems eqs menv' env',
     stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
-    -> (forall x, ~Is_defined_in x eqs ->
+    -> (forall x, ~Is_defined_in_eqs x eqs ->
                   mfind_inst x menv' = mfind_inst x menv).
 Proof.
   induction eqs as [ |eq].
@@ -334,7 +334,7 @@ Qed.
 Lemma stmt_eval_translate_eqns_env_inv:
   forall prog menv env mems eqs menv' env',
     stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
-    -> (forall x, ~Is_variable_in x eqs ->
+    -> (forall x, ~Is_variable_in_eqs x eqs ->
                   PM.find x env' = PM.find x env).
 Proof.
   induction eqs as [ |eq].
@@ -574,8 +574,8 @@ Definition equiv_prog G prog :=
 
 Lemma Is_memory_in_msem_var:
   forall G H M n x eqs c,
-    Is_defined_in x eqs
-    -> ~Is_variable_in x eqs
+    Is_defined_in_eqs x eqs
+    -> ~Is_variable_in_eqs x eqs
     -> sem_var_instant (restr H n) x (present c)
     -> List.Forall (msem_equation G H M) eqs
     -> (exists ms, mfind_mem x M = Some ms /\ ms n = c).
@@ -636,8 +636,8 @@ Lemma is_step_correct:
   forall (eqs: list equation),
         (exists oeqs, alleqs = oeqs ++ eqs)
         -> (forall x, PS.In x mems
-                      -> (Is_defined_in x alleqs
-                          /\ ~Is_variable_in x alleqs))
+                      -> (Is_defined_in_eqs x alleqs
+                          /\ ~Is_variable_in_eqs x alleqs))
         
         (* - input (assumed) *)
         -> (forall c input, Nelist.In input inputs ->
@@ -654,8 +654,8 @@ Lemma is_step_correct:
                  they are present (normally the case).
 
                  More discussion/context is needed. *)
-        -> (forall x, Is_variable_in x eqs -> PM.find x env = None)
-        -> (forall input, Nelist.In input inputs -> ~ Is_defined_in input eqs)
+        -> (forall x, Is_variable_in_eqs x eqs -> PM.find x env = None)
+        -> (forall input, Nelist.In input inputs -> ~ Is_defined_in_eqs input eqs)
 
         (* - execution of translated equations *)
         -> Is_well_sch mems (nelist2list inputs) eqs
@@ -666,7 +666,7 @@ Lemma is_step_correct:
         (* - locals (shown) *)
         -> (exists menv' env',
                stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
-               /\ (forall x, Is_variable_in x eqs
+               /\ (forall x, Is_variable_in_eqs x eqs
                              -> forall c : const, sem_var_instant (restr H n) x (present c)
                                                   <-> PM.find x env' = Some c)
                (* - written memories (shown) *)
@@ -677,13 +677,13 @@ Proof.
     [ intros; exists menv, env;
       split; [unfold translate_eqns; constructor|];
       split; intros; [ match goal with
-                       | H:Is_variable_in _ nil |- _ => inversion H
+                       | H:Is_variable_in_eqs _ nil |- _ => inversion H
                        end | now constructor ]| ].
   intros Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
 
   assert (exists menv' env',
              stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
-             /\ (forall x, Is_variable_in x eqs
+             /\ (forall x, Is_variable_in_eqs x eqs
                            -> forall c, sem_var_instant (restr H n) x (present c)
                                         <-> PM.find x env' = Some c)
              /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs) as IHeqs'.
@@ -717,11 +717,11 @@ Proof.
     assert (equiv_env (fun x => Is_free_in_caexp x ck ce) (restr H n) mems env' menv')
       as Hce'. 
     {
-      Hint Constructors Is_free_in_equation.
+      Hint Constructors Is_free_in_eq.
       intros. 
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x (nelist2list inputs))
+      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ List.In x (nelist2list inputs))
           by (eapply Is_well_sch_free_variable; eauto).
 
         destruct Hdecide_x; try subst x.
@@ -733,14 +733,14 @@ Proof.
           intro Hnot_def. eapply Hin2; try eauto.
           constructor(assumption).
           
-      - assert (~ Is_defined_in x eqs) 
+      - assert (~ Is_defined_in_eqs x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; eauto).
 
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
         eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
-        assert (Is_defined_in x alleqs) by intuition.
-        assert (~ Is_variable_in x alleqs) by intuition.
+        assert (Is_defined_in_eqs x alleqs) by intuition.
+        assert (~ Is_variable_in_eqs x alleqs) by intuition.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
@@ -802,7 +802,7 @@ Proof.
         apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
         rewrite Hstmt.
         inversion_clear Hivi as [? ? Hivi'|];
-          [|unfold Is_variable_in in Hvin; contradiction].
+          [|unfold Is_variable_in_eqs in Hvin; contradiction].
         inversion_clear Hivi'.
         split; intro Hsv'.
         assert (present c = absent) by sem_det. discriminate.
@@ -824,7 +824,7 @@ Proof.
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x (nelist2list inputs))
+      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ List.In x (nelist2list inputs))
           by (eapply Is_well_sch_free_variable;
               eassumption || constructor (assumption)).
 
@@ -836,14 +836,14 @@ Proof.
           intro Hnot_def. eapply Hin2; eauto. 
           rewrite <- nelist2list_In; eauto. econstructor(eassumption).
           
-      - assert (~ Is_defined_in x eqs) 
+      - assert (~ Is_defined_in_eqs x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; 
               eassumption || constructor (assumption)).
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
         eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
-        assert (Is_defined_in x alleqs) by intuition.
-        assert (~ Is_variable_in x alleqs) by intuition.
+        assert (Is_defined_in_eqs x alleqs) by intuition.
+        assert (~ Is_variable_in_eqs x alleqs) by intuition.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
@@ -862,7 +862,7 @@ Proof.
     destruct Hnsem as [Hn [Hlsn [Hxsn [Habs [Hout Hnsem]]]]].
 
     (* no other instance *)
-    assert (~Is_defined_in y eqs) as Hniii
+    assert (~Is_defined_in_eqs y eqs) as Hniii
         by (inversion_clear Hwsch; assumption).
 
     specialize (Hlaes n);
@@ -959,7 +959,7 @@ Proof.
         apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
         rewrite Hstmt.
         inversion_clear Hivi as [? ? Hivi'|];
-          [|unfold Is_variable_in in Hvin; contradiction].
+          [|unfold Is_variable_in_eqs in Hvin; contradiction].
         inversion Hivi' as [|x' ck' f' e HR1 [HR2 HR3 HR4]];
         subst x' ck' f' x e.
         split; intro Hsv'.
@@ -990,7 +990,7 @@ Proof.
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in x eqs \/ List.In x (nelist2list inputs)) 
+      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ List.In x (nelist2list inputs)) 
           by (eapply Is_well_sch_free_variable;
               eassumption || constructor (assumption)).
 
@@ -1002,14 +1002,14 @@ Proof.
           intro. eapply Hin2; eauto.
           rewrite <- nelist2list_In; eauto. econstructor(eassumption).
           
-      - assert (~ Is_defined_in x eqs) 
+      - assert (~ Is_defined_in_eqs x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; 
               eassumption || constructor (assumption)).
         specialize (Hinmems _ Hmems); destruct Hinmems.
         erewrite stmt_eval_translate_eqns_menv_inv; try eassumption.
         eapply Is_memory_in_msem_var in H1; try eassumption. do 2 destruct H1; subst c.
-        assert (Is_defined_in x alleqs) by intuition.
-        assert (~ Is_variable_in x alleqs) by intuition.
+        assert (Is_defined_in_eqs x alleqs) by intuition.
+        assert (~ Is_variable_in_eqs x alleqs) by intuition.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
 
@@ -1057,7 +1057,7 @@ Proof.
         apply stmt_eval_translate_eqns_env_inv with (2:=Hvin) in Hstmt.
         rewrite Hstmt.
         inversion_clear Hivi as [? ? Hivi'|];
-          [|unfold Is_variable_in in Hvin; contradiction].
+          [|unfold Is_variable_in_eqs in Hvin; contradiction].
         inversion_clear Hivi'.
       * constructor.
         2:assumption.
@@ -1176,7 +1176,7 @@ Proof.
       assert (exists (menv' : heap) (env' : stack),
                 stmt_eval (translate G) menv env (translate_eqns (memories eqs) eqs) (menv', env') /\
                 (forall x : ident,
-                   Is_variable_in x eqs ->
+                   Is_variable_in_eqs x eqs ->
                    forall c : const,
                      sem_var_instant (restr H n) x (present c) <->
                      PM.find x env' = Some c) /\
@@ -1214,7 +1214,7 @@ Proof.
           subst env.
           rewrite gsos, PM.gempty; auto.
           rewrite <- Nelist.nelist2list_In. intro.
-          apply Is_variable_in_Is_defined_in in Hivi.
+          apply Is_variable_in_eqs_Is_defined_in_eqs in Hivi.
           apply Hndef_in, Exists_exists; eauto. 
 
         - intros input Hinput Hisdef.
@@ -1757,8 +1757,8 @@ Lemma translate_eqns_Ifte_free_write:
     Well_clocked_env C
     -> Forall (Well_clocked_eq C) eqs
     -> Is_well_sch mems (nelist2list inputs) eqs
-    -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
-    -> (forall input, Nelist.In input inputs -> ~ Is_defined_in input eqs)
+    -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
+    -> (forall input, Nelist.In input inputs -> ~ Is_defined_in_eqs input eqs)
     -> Ifte_free_write (translate_eqns mems eqs).
 Proof.
   intros C mems inputs eqs Hwk Hwks Hwsch Hnvi Hnin.
@@ -1797,7 +1797,7 @@ Proof.
         specialize (Hnm Hnxm').
         apply Hndef.
         destruct Hnm as [Hnm|Hnm]; [|now intuition].
-        apply Is_variable_in_Is_defined_in with (1:=Hnm). }
+        apply Is_variable_in_eqs_Is_defined_in_eqs with (1:=Hnm). }
       apply Ifte_free_write_Control_caexp.
       intros i Hfree.
       apply (not_Can_write_in_translate_cexp).
