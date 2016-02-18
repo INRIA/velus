@@ -234,13 +234,7 @@ Proof.
   match goal with H:exists _, _ |- _ => destruct H end; discriminate.
 Qed.
 
-
-(* TODO: Why isn't this lemma already in the module PS? *)
-Lemma not_In_empty: forall x : ident, ~(PS.In x PS.empty).
-Proof.
-  unfold PS.In; unfold PS.empty;
-  intros; rewrite PS.mem_Leaf; apply Bool.diff_false_true.
-Qed.
+Definition not_In_empty: forall x : ident, ~(PS.In x PS.empty) := PS.empty_spec.
 
 Ltac not_In_empty :=
   match goal with H:PS.In _ PS.empty |- _ => now apply not_In_empty in H end.

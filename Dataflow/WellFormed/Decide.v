@@ -122,7 +122,7 @@ Lemma well_sch_pre_spec:
          /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
          /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ List.In x argIns)))
     /\ (good = false -> ~Is_well_sch mems argIns eqs).
-Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used, I think *)
+Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used *)
 (*
   induction eqs as [|eq].
   - simpl; injection 1; intros HRv HRm; subst.

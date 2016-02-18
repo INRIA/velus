@@ -1,4 +1,5 @@
 Require Import Setoid.
+Require Import Morphisms.
 
 (** Non-empty lists *)
 
@@ -67,6 +68,9 @@ Fixpoint map {A B : Type} (f : A -> B) l :=
     | nebase e => nebase (f e)
     | necons e l' => necons (f e) (map f l')
   end.
+
+Lemma map_compat {A B : Type} : Proper ((eq ==> eq) ==> eq ==> eq) (@map A B).
+Proof. intros f g Hfg l l' Hl. subst l'. induction l; simpl; f_equal; auto. Qed.
 
 Definition injective {A B} (f : A -> B) := forall x y, f x = f y -> x = y.
 

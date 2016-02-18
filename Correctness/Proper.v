@@ -107,25 +107,13 @@ Proof.
     destruct sv; simpl; rewrite IH, HMeq; reflexivity.
 Qed.
 
-Instance translate_exps_Proper :
-  Proper (PS.eq ==> eq ==> eq) 
-    (fun M l => Nelist.map (translate_lexp M) l).
-Proof.
-  intros M M' HMeq l.
-  induction l; intros l' Hleq; destruct l'; try discriminate.
-  - inversion_clear Hleq. simpl. now rewrite HMeq.
-  - injection Hleq; intros.
-    simpl. erewrite IHl; eauto.
-    rewrite HMeq. congruence.
-Qed.
-
 Instance translate_eqn_Proper :
   Proper (PS.eq ==> eq ==> eq) translate_eqn.
 Proof.
   intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
-  (* XXX: what is the Proper way to avoid the [rewrite translate_exps_Proper]? *)
-  destruct eq as [y ck e|y ck f e|y ck v0 e];
-    (destruct e; simpl; try (rewrite translate_exps_Proper; eauto); rewrite HMeq; reflexivity).
+  (* XXX: BUG? there should be enough info to make [rewrite HMeq] be enough. *)
+  destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
+  rewrite HMeq at 1 2. do 3 f_equal. apply Nelist.map_compat; trivial. rewrite HMeq. reflexivity.
 Qed.
 
 
