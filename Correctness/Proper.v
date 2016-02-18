@@ -113,15 +113,14 @@ Qed.
 
 Instance translate_eqn_Proper :
   Proper (PS.eq ==> eq ==> eq) translate_eqn.
-Admitted.
-(*
 Proof.
   intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
   (* XXX: BUG? there should be enough info to make [rewrite HMeq] be enough. *)
   destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
-  rewrite HMeq at 1 2. do 3 f_equal. apply Nelist.map_compat; trivial. rewrite HMeq. reflexivity.
+  - rewrite HMeq at 1 2. do 3 f_equal. apply Nelist.map_compat; trivial. rewrite HMeq. reflexivity.
+  - setoid_rewrite HMeq at 1. do 3 f_equal.
+    induction n; simpl; rewrite HMeq; now try rewrite IHn.
 Qed.
-*)
 
 Instance translate_eqns_Proper :
   Proper (PS.eq ==> eq ==> eq) translate_eqns.
