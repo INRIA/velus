@@ -59,15 +59,6 @@ Fixpoint Control (ck: clock) (s: stmt) : stmt :=
   end.
 (* =end= *)
 
-(* Strange bug? The following using Nelist.map is not accepted:
-Fixpoint translate_lexp (e : lexp) {struct e} : exp :=
-  match e with
-  | Econst c => Const c
-  | Evar x => if PS.mem x memories then State x else Var x
-  | Ewhen e c x => translate_lexp e
-  | Eop op es => Op op (Nelist.map translate_lexp es)
-  end.*)
-
 (* =translate_lexp= *)
 Fixpoint translate_lexp (e : lexp) : exp :=
   match e with
@@ -78,6 +69,10 @@ Fixpoint translate_lexp (e : lexp) : exp :=
                                     (fun e _ rec => necons (translate_lexp e) rec) es)
   end.
 (* =end= *)
+(* The Opp case should be written as
+       [Op op (Nelist.map translate_lexp es)]
+   but this is not structural enough for Coq. *)
+
 
 (* =translate_cexp= *)
 Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
@@ -149,28 +144,12 @@ Lemma ps_from_list_pre_spec:
                 <->
                 PS.In x (List.fold_left (fun s i=>PS.add i s) l S).
 Proof.
-  (* TODO: How to use auto to do this whole proof? *)
   induction l as [|l ls IH].
-  split; intro HH;
-    [ destruct HH as [HH|HH]; [ apply List.in_nil in HH; contradiction | auto]
-    | auto ].
-  split; intro HH.
-  - apply IH.
-    destruct HH as [HH|HH].
-    apply List.in_inv in HH.
-    destruct HH as [HH|HH].
-    rewrite HH.
-    right; apply PS.add_spec.
-    intuition.
-    intuition.
-    right; apply PS.add_spec; intuition.
-  - apply IH in HH.
-    destruct HH as [HH|HH].
-    left; apply List.in_cons; exact HH.
-    apply PS.add_spec in HH.
-    destruct HH as [HH|HH].
-    rewrite HH; intuition.
-    intuition.
+  - firstorder.
+  - split; intro HH.
+    + firstorder.
+    + apply IH in HH.
+      destruct HH as [HH|HH]; try apply PS.add_spec in HH; firstorder.
 Qed.
 
 Lemma ps_from_list_spec:
@@ -179,10 +158,8 @@ Proof.
   unfold ps_from_list.
   intros.
   rewrite <- ps_from_list_pre_spec with (S:=PS.empty).
-  intuition.
-  match goal with
-  | H:PS.In _ PS.empty |- _ => apply not_In_empty in H; contradiction
-  end.
+  split; try intros [H | H]; try tauto.
+  apply not_In_empty in H; contradiction.
 Qed.
 
 

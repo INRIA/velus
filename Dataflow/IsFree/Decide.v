@@ -61,13 +61,13 @@ Lemma free_in_clock_spec:
                  <-> Is_free_in_clock x ck \/ PS.In x m.
 Proof.
   induction ck.
-  split; intuition;
-  (match goal with H:Is_free_in_clock _ Cbase |- _ => inversion H end).
-  split; intro H0.
-  apply IHck in H0; destruct H0 as [H0|H0]; try apply PS.add_spec in H0;
-  intuition; subst; intuition.
-  apply IHck; destruct H0 as [H0|H0]; inversion H0;
-  solve [right; apply PS.add_spec; intuition | intuition].
+  - split; intuition;
+    (match goal with H:Is_free_in_clock _ Cbase |- _ => inversion H end).
+  - split; intro H0.
+    + apply IHck in H0; destruct H0 as [H0|H0]; try apply PS.add_spec in H0;
+      intuition; subst; intuition.
+    + apply IHck; destruct H0 as [H0|H0]; inversion H0;
+      solve [right; apply PS.add_spec; intuition | intuition].
 Qed.
 
 Corollary free_in_clock_spec':

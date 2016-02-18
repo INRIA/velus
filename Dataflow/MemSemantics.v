@@ -515,37 +515,26 @@ Lemma Forall_msem_equation_global_tl:
     -> Forall (msem_equation G H M) eqs.
 Proof.
   intros nd G H M eqs Hord.
-  induction eqs as [|eq eqs IH]; [trivial|].
+  induction eqs as [|eq eqs IH]; trivial; [].
   intros Hfind Hnini Hmsem.
   apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
   apply IH in Hseqs.
-  Focus 2.
-  { intros f Hini.
-    apply List.Exists_cons_tl with (x:=eq) in Hini.
-    now apply Hfind with (1:=Hini). }
-  Unfocus.
-  Focus 2.
-  { apply not_Is_node_in_cons in Hnini.
-    destruct Hnini; assumption. }
-  Unfocus.
-
-  apply Forall_cons with (2:=Hseqs).
-  inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst.
-  - econstructor; eauto.
-  - apply not_Is_node_in_cons in Hnini.
+  - apply Forall_cons; trivial.
+    inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst; eauto; [].
+    apply not_Is_node_in_cons in Hnini.
     destruct Hnini.
     assert (nd.(n_name) <> f).
-    intro HH.
-    apply H0.
-    rewrite HH.
-    constructor.
+    { intro HH.
+      apply H0.
+      rewrite HH.
+      constructor. }
     inversion_clear Hseq.
-    econstructor.
-    eexact H8.
-    eexact H9.
-    eexact H10.
-    apply msem_node_cons with (1:=Hord); assumption.
-  - econstructor; eassumption || reflexivity.
+    eauto using msem_node_cons.
+  - intros f Hini.
+    apply (List.Exists_cons_tl eq) in Hini.
+    now apply (Hfind _ Hini).
+  - apply not_Is_node_in_cons in Hnini.
+    now destruct Hnini.
 Qed.
 
 
@@ -691,7 +680,7 @@ Proof.
         rewrite H1. unfold fby. rewrite Hls; auto.
       * split; [simpl; rewrite Hls; reflexivity|].
         rewrite H1. unfold fby. rewrite Hls; auto.
-    + inversion_clear Hwsch as [| | |? ? ? ? ? ? ? ? Hnmi].
+    + inversion_clear Hwsch as [| | |? ? ? ? ? ? ? Hnmi].
       apply msem_equation_madd_mem.
       apply Hnmi.
       now apply Hmeqs.

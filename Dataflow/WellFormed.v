@@ -74,7 +74,7 @@ Inductive Is_well_sch : list equation -> Prop :=
 | WSchEqFby:
     forall x ck v e eqs,
       Is_well_sch eqs ->
-      PS.In x memories -> (* TODO: delete *)
+(*      PS.In x memories -> (* TODO: delete -> done !*) *)
       (forall i, Is_free_in_laexp i ck e ->
                     (PS.In i memories -> ~Is_defined_in_eqs i eqs)
                  /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
@@ -108,8 +108,8 @@ Lemma Is_well_sch_free_variable:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? ? Hp];
-    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; subst;
+    inversion Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? (*?*) Hp];
+    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; subst; intuition;
     eapply Hp in Hc;
     intuition.
 Qed.
@@ -123,7 +123,7 @@ Lemma Is_well_sch_free_variable_in_mems:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? ? Hp];
+    inversion_clear Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? Hp];
     inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
     eapply Hp in Hc;
     destruct Hc as [Hc0 Hc1];

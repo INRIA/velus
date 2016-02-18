@@ -10,6 +10,7 @@ Require Import Omega.
 Module PS := Coq.MSets.MSetPositive.PositiveSet.
 Module PSP := MSetProperties.WPropertiesOn Pos PS.
 Module PSF := MSetFacts.Facts PS.
+Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
 
 Module PM := Coq.FSets.FMapPositive.PositiveMap.
 

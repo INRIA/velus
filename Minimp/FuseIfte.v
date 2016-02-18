@@ -541,7 +541,7 @@ Add Relation stmt (ifte_eval_eq)
     transitivity proved by ifte_eval_eq_trans
   as ifte_eval_equiv.
 
-Lemma subrelation_stmt_ifte_eval_eq:
+Instance subrelation_stmt_ifte_eval_eq:
   subrelation ifte_eval_eq stmt_eval_eq.
 Proof.
   intros s1 s2 Heq x menv env menv' env'.
