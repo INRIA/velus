@@ -668,9 +668,8 @@ Lemma is_step_correct:
         -> Is_well_sch mems input eqs
 
         (* - instantiated nodes (assumed) *)
-        -> (forall f fnode xs M ys prog' fclass menv env,
-               find_node f G = Some fnode
-               -> msem_node G f xs M ys
+        -> (forall f xs M ys prog' fclass menv env,
+                  msem_node G f xs M ys
                -> Memory_Corres G n f M menv
                -> find_class f prog = Some (fclass, prog')
                -> env = match xs n with
@@ -946,7 +945,7 @@ Proof.
                    xs n = present c
                    <-> PM.find (c_output fclass) oenv' = Some c)
             /\ Memory_Corres G (S n) f Mo omenv') as Hnode'.
-      { eapply Hnode with (1:=Hfind) (2:=Hmsem) (3:=Hmc0).
+      { eapply Hnode with (1:=Hmsem) (2:=Hmc0).
         - rewrite Hprog; exact Hfindc.
         - rewrite Hls; reflexivity. }
       clear Hnode.
@@ -1108,7 +1107,6 @@ Qed.
 Lemma is_node_correct:
   forall (G: global)
          (f: ident)
-         (fnode: node)
          (xs: stream value)
          (M: memory)
          (ys: stream value)
@@ -1119,31 +1117,31 @@ Lemma is_node_correct:
          (menv: heap)
          (env: stack),
 
-    Welldef_global G
-    -> find_node f G = Some fnode
-    -> msem_node G f xs M ys
-    -> Memory_Corres G n f M menv
+(* =is_node_correct= *)
+Welldef_global G ->
+msem_node G f xs M ys ->
+Memory_Corres G n f M menv ->
 
-    -> find_class f (translate G) = Some(fclass, prog')
-    -> env = (match xs n with
-	      | present c => PM.add fclass.(c_input) c sempty
-	      | absent => sempty
-             end)
+find_class f (translate G) = Some(fclass, prog') ->
+env = (match xs n with
+       | present c => PM.add fclass.(c_input) c sempty
+       | absent => sempty
+       end) ->
 
-    -> (exists menv' env',
-           stmt_eval prog' menv env fclass.(c_step) (menv', env')
-           /\ (forall c, ys n =present c
-                         <-> PM.find (fclass.(c_output)) env' = Some c)
-           /\ Memory_Corres G (S n) f M menv').
+(exists menv' env',
+     stmt_eval prog' menv env fclass.(c_step) (menv', env')
+   /\ (forall c, ys n =present c <-> PM.find (fclass.(c_output)) env' = Some c)
+   /\ Memory_Corres G (S n) f M menv').
+(* =end= *)
 Proof.
   (* TODO: Develop a version of msem_node_mult that works for eqs? *)
   induction G as [|node G IH]; [now inversion 4|].
-  intros f fnode xs M ys prog' fclass n menv env.
-  intros Hwd Hfind Hmsem Hmc Hfcls Henv.
+  intros f xs M ys prog' fclass n menv env.
+  intros Hwd Hmsem Hmc Hfcls Henv.
   assert (Ordered_nodes (node::G)) as Hord
       by apply Welldef_global_Ordered_nodes with (1:=Hwd).
 
-  simpl in Hfind,Hfcls.
+  simpl in Hfcls.
   destruct (ident_eqb (n_name node) f) eqn:Hfeq.
 
   Focus 2.
@@ -1152,7 +1150,7 @@ Proof.
         by apply Pos.eqb_neq with (1:=Hfeq).
     rewrite Memory_Corres_node_tl with (1:=Hord) (2:=Hfneq) in Hmc.
     apply msem_node_cons with (1:=Hord) (3:=Hfneq) in Hmsem.
-    apply IH with (1:=Hwd) (2:=Hfind) (3:=Hmsem) (4:=Hmc) (6:=Henv) (ys:=ys)
+    apply IH with (1:=Hwd) (2:=Hmsem) (3:=Hmc) (5:=Henv) (ys:=ys)
       in Hfcls.
     destruct Hfcls as [menv' [env' [Hstmt [Hout Hmc']]]].
     exists menv',env'.
@@ -1161,7 +1159,7 @@ Proof.
   Unfocus.
 
   injection Hfcls; intros HR1 HR2; rewrite <-HR1,<-HR2 in *; clear HR1 HR2 Hfcls.
-  injection Hfind; intro HR1; rewrite HR1 in *; clear HR1 Hfind.
+  (* injection Hfind; intro HR1; rewrite HR1 in *; clear HR1 Hfind. *)
 
   inversion_clear Hmsem as [? ? ? ? i o eqs Hfind Hsem].
   simpl in Hfind.
@@ -1222,8 +1220,8 @@ Proof.
       contradiction.
     - exact Hin2.
     - exact Hwsch.
-    - apply (fun f fnode xs M ys prog' fclass menv env Hfind Hmsem
-             => IH f fnode xs M ys prog' fclass n menv env Hwd Hfind Hmsem).
+    - apply (fun f xs M ys prog' fclass menv env Hmsem
+             => IH f xs M ys prog' fclass n menv env Hwd Hmsem).
     - inversion_clear Hmc as [? ? ? ? ? ? Hf Hmeqs].
       simpl in Hf.
       rewrite ident_eqb_refl in Hf.
@@ -1516,8 +1514,8 @@ Proof.
   destruct 1 as [menv [env [Hstmt [Hout Hmc]]]]; exists menv, env; now intuition.
   induction n.
   - specialize Hxs with 0%nat.
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci sempty)
-                                Hwdef Hfindn Hmsem Hmc0 Hfindc) as Hstmt.
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ (PM.add i ci sempty)
+                                Hwdef Hmsem Hmc0 Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv'' [env'' [Hstmt [Hout Hmc]]]].
     assert (ys 0%nat <> absent) as Hyna
@@ -1558,8 +1556,8 @@ Proof.
     destruct Hmc as [omenv [Hfindo Hmc]].
     inversion_clear Hstmts.
     specialize Hxs with (S n).
-    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ _ (PM.add i ci sempty)
-                                Hwdef Hfindn Hmsem Hmc Hfindc) as Hstmt.
+    pose proof (is_node_correct _ _ _ _ _ _ _ _ _ (PM.add i ci sempty)
+                                Hwdef Hmsem Hmc Hfindc) as Hstmt.
     rewrite Hxs in Hstmt; specialize (Hstmt (eq_refl _)); simpl in Hstmt.
     destruct Hstmt as [menv''' [env''' [Hstmt [Hout Hmc']]]].
     assert (ys (S n) <> absent) as Hyna
