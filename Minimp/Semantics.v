@@ -44,8 +44,6 @@ Inductive exp_eval heap stack:
       apply_op op cs = Some c ->
       exp_eval heap stack (Op op es) c.
 
-(* =stmt_eval= *)
-
 Lemma exps_eval_const:
   forall h s cs,
     Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
@@ -54,6 +52,7 @@ Proof.
   intros h s cs. induction cs; constructor; eauto.
 Qed.
 
+(* =stmt_eval= *)
 Inductive stmt_eval :
     program -> heap -> stack -> stmt -> heap * stack -> Prop :=
 | Iassign: forall prog menv env x e v env',
