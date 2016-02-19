@@ -664,7 +664,7 @@ Lemma is_step_correct:
         -> (forall input, Nelist.In input inputs -> ~ Is_defined_in_eqs input eqs)
 
         (* - execution of translated equations *)
-        -> Is_well_sch mems (nelist2list inputs) eqs
+        -> Is_well_sch mems inputs eqs
 
         (* - unwritten memories (assumed) *)
         -> List.Forall (Memory_Corres_eq G n M menv) alleqs
@@ -728,13 +728,12 @@ Proof.
       intros. 
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ List.In x (nelist2list inputs))
+      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ Nelist.In x inputs)
           by (eapply Is_well_sch_free_variable; eauto).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
-        + rewrite nelist2list_In in H2.
-          erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
+        + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
           now apply Hin.
           apply not_Is_defined_in_not_Is_variable_in.
           intro Hnot_def. eapply Hin2; try eauto.
@@ -831,17 +830,17 @@ Proof.
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ List.In x (nelist2list inputs))
+      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ Nelist.In x inputs)
           by (eapply Is_well_sch_free_variable;
               eassumption || constructor (assumption)).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
         + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
-          apply Hin; [ rewrite <- nelist2list_In; now auto | now eauto ].
+          apply Hin; now eauto.
           apply not_Is_defined_in_not_Is_variable_in.
-          intro Hnot_def. eapply Hin2; eauto. 
-          rewrite <- nelist2list_In; eauto. econstructor(eassumption).
+          intro Hnot_def. eapply Hin2; eauto.
+          econstructor(eassumption).
           
       - assert (~ Is_defined_in_eqs x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; 
@@ -997,17 +996,16 @@ Proof.
       intros.
       split; intro Hmems.
 
-      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ List.In x (nelist2list inputs)) 
+      - assert (Hdecide_x: Is_variable_in_eqs x eqs \/ Nelist.In x inputs) 
           by (eapply Is_well_sch_free_variable;
               eassumption || constructor (assumption)).
 
         destruct Hdecide_x; try subst x.
         + apply IHeqs0; assumption.
         + erewrite stmt_eval_translate_eqns_env_inv; try eassumption.
-          apply Hin; [ rewrite <- nelist2list_In; now auto | now eauto ].
+          apply Hin; now eauto.
           apply not_Is_defined_in_not_Is_variable_in.
-          intro. eapply Hin2; eauto.
-          rewrite <- nelist2list_In; eauto. econstructor(eassumption).
+          intro. eapply Hin2; eauto. econstructor(eassumption).
           
       - assert (~ Is_defined_in_eqs x eqs) 
           by (eapply Is_well_sch_free_variable_in_mems; 
@@ -1403,7 +1401,7 @@ Variables (G: global)
           (H: history)
           (M: memory)
           (mems: PS.t)
-          (inputs: list ident).
+          (inputs: Nelist.nelist ident).
 
 
 Lemma is_reset_correct:
@@ -1502,7 +1500,7 @@ Proof.
         eapply Forall_msem_equation_global_tl; try eassumption.
       }
 
-      assert (Is_well_sch (memories eqs) (nelist2list inArg) eqs)
+      assert (Is_well_sch (memories eqs) inArg eqs)
         by (inversion Hwdef; subst ni eqs0;
             rewrite Hfind in *; simpl in *; assumption).
 
@@ -1765,7 +1763,7 @@ Lemma translate_eqns_Ifte_free_write:
   forall C mems inputs eqs,
     Well_clocked_env C
     -> Forall (Well_clocked_eq C) eqs
-    -> Is_well_sch mems (nelist2list inputs) eqs
+    -> Is_well_sch mems inputs eqs
     -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
     -> (forall input, Nelist.In input inputs -> ~ Is_defined_in_eqs input eqs)
     -> Ifte_free_write (translate_eqns mems eqs).
@@ -1794,11 +1792,9 @@ Proof.
       { intros i Hfree.
         apply HH in Hfree.
         destruct Hfree as [Hm Hnm].
-        assert (~ List.In x (nelist2list inputs)) as Hninp.
+        assert (~ Nelist.In x inputs) as Hninp.
         {
-          intro Hin. eapply Hnin. 
-          - apply nelist2list_In; eauto.
-          - constructor(auto). 
+          intro Hin. eapply Hnin; eauto. constructor(auto). 
         }
 
         assert (~PS.In x mems) as Hnxm' by intuition.

@@ -81,8 +81,8 @@ Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
     | (false, _, _) => (false, PS.empty, PS.empty)
   end.
 
-Definition well_sch (argIns: list ident)(eqs: list equation) : bool :=
-  fst (fst (List.fold_right check_eq (true, PS.empty, List.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs)).
+Definition well_sch (argIns: Nelist.nelist ident)(eqs: list equation) : bool :=
+  fst (fst (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs)).
 
 Lemma not_for_all_spec:
   forall (s : PS.t) (f : BinNums.positive -> bool),
@@ -115,12 +115,12 @@ Qed.
 Lemma well_sch_pre_spec:
   forall argIns eqs good defined variables,
     (good, defined, variables)
-        = List.fold_right check_eq (true, PS.empty, List.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs
+        = List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs
     ->
     (good = true
      -> (Is_well_sch mems argIns eqs
          /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
-         /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ List.In x argIns)))
+         /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ Nelist.In x argIns)))
     /\ (good = false -> ~Is_well_sch mems argIns eqs).
 Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used *)
 (*
@@ -269,7 +269,7 @@ Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not use
           rewrite Hivi; auto.
 Qed.
 *)
-
+Locate well_sch.
 Lemma well_sch_spec:
   forall argIns eqns,
     if well_sch argIns eqns
@@ -279,7 +279,7 @@ Proof.
   intros argIn eqns.
   pose proof (well_sch_pre_spec argIn eqns).
   unfold well_sch.
-  destruct (List.fold_right check_eq (true, PS.empty, List.fold_left (fun a b => PS.add b a) argIn PS.empty) eqns)
+  destruct (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIn PS.empty) eqns)
     as [[good defined] variables].
   simpl.
   specialize H with good defined variables.
