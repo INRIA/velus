@@ -629,6 +629,15 @@ Variables (G: global)
           (menv: heap)
           (env: stack).
 
+(* TODO: Can we replace
+    (forall x, PS.In x mems ->
+		(Is_defined_in x alleqs /\ ~Is_variable_in x alleqs)) ->
+  and
+    ~PS.In input mems ->
+
+  with a simply definition of mems in terms of alleqs and one or two
+  auxilliary lemmas? *)
+
 Lemma is_step_correct:
   forall (eqs: list equation),
         (exists oeqs, alleqs = oeqs ++ eqs)
@@ -1132,8 +1141,10 @@ Qed.
 
 Lemma is_node_correct:
   forall (G: global), 
+(* =is_node_correct= *)
     Welldef_global G ->
     equiv_prog G (translate G).
+(* =end= *)
 Proof.
   (* TODO: Develop a version of msem_node_mult that works for eqs? *)
   induction G as [|node G IH].
