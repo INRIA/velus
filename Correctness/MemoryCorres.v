@@ -323,13 +323,13 @@ Lemma Memory_Corres_unchanged:
 Proof.
   intros G f n ls M ys menv Hwdef Hmsem Habs.
   revert menv.
-  induction Hmsem as [| H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
-                      | H M ms y ck ls yS v0 lae Hmfind Hms0 Hls HyS Hy
-                      | f xs M ys i o eqs Hf Heqs IH]
+  induction Hmsem as [| bk H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
+                      | bk H M ms y ck ls yS v0 lae Hmfind Hms0 Hls HyS Hy
+                      | bk f xs M ys i o eqs Hbk Hf Heqs IH]
   using msem_node_mult
-  with (P := fun H M eq Hsem =>
+  with (P := fun bk H M eq Hsem =>
                forall menv,
-                 rhs_absent_instant (restr H n) eq
+                 rhs_absent_instant (bk n) (restr H n) eq
                  -> Memory_Corres_eq G n M menv eq
                  -> Memory_Corres_eq G (S n) M menv eq).
   - inversion_clear 2; constructor; assumption.

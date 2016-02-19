@@ -5,6 +5,8 @@ Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Minimp.Semantics.
 Require Import Rustre.Translation.
 
+
+(* Assumption: the base clock is [true] *)
 Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
 | IsCbase: Is_present_in mems heap stack Cbase
@@ -74,8 +76,8 @@ Lemma Is_absent_in_disj:
         \/ (forall v', exp_eval menv env (tovar mems c) (Cbool v')
                        -> v' <> v)).
 Proof.
-  intros mems menv env ck c v.
-  inversion_clear 1 as [|? ? ? ? Hp Hexp Hneq]; intuition.
+  intros until c.
+  inversion_clear 1 as [ | ? ? ? ? Hp Hexp Hneq]; intuition.
   right; intros v' Hexp'.
   intro HR; rewrite <-HR in *; clear HR.
   apply Hneq.
