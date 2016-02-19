@@ -1562,7 +1562,7 @@ Lemma is_translate_correct:
          (n   : nat),
     Welldef_global G
     -> sem_node G f xss ys
-    -> (forall n, present_list xss n cis)
+    -> (forall m, present_list xss m cis)
     -> (exists menv env,
            stmt_eval (translate G) hempty sempty
              (Comp (Reset_ap f obj)
