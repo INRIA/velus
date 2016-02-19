@@ -12,3 +12,4 @@ Is_defined_in
 Is_free_in_equation
 
 * Grep for "XXX:"  and "TODO:"
+* Switch the argin list in Is_well_sch to an nelist
