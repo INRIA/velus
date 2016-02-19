@@ -77,18 +77,18 @@ Example node2 : node :=
 
 (** Scheduling *)
 
-Example eqn1_well_sch: Is_well_sch (memories eqns1) [1] eqns1.
+Example eqn1_well_sch: Is_well_sch (memories eqns1) (1§) eqns1.
 Proof.
-  assert (well_sch (memories eqns1) [1] eqns1 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns1) [1] eqns1) as HS.
+  assert (well_sch (memories eqns1) (1§) eqns1 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (memories eqns1) (1§) eqns1) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
 
-Example eqn2_well_sch: Is_well_sch (memories eqns2) [1] eqns2.
+Example eqn2_well_sch: Is_well_sch (memories eqns2) (1§) eqns2.
 Proof.
-  assert (well_sch (memories eqns2) [1] eqns2 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns2) [1] eqns2) as HS.
+  assert (well_sch (memories eqns2) (1§) eqns2 = true) as HW by apply eq_refl.
+  pose proof (well_sch_spec (memories eqns2) (1§) eqns2) as HS.
   rewrite HW in HS.
   assumption.
 Qed.
@@ -207,13 +207,14 @@ Section CodegenPaper.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma counter_eqns_well_sch : Is_well_sch (PS.singleton c) [initial; increment; restart] counter_eqns.
+  Lemma counter_eqns_well_sch : Is_well_sch (PS.singleton c) (initial, increment, restart§) counter_eqns.
   Proof.
   unfold counter_eqns. constructor. constructor. constructor.
   - intros i Hi. split.
     + intros _ Habs. inversion Habs.
-    + intros Hic. right. inv Hi; inv H. inv H2. inv H1; inv H0; intuition.
-      * inv H1. intuition.
+    + intros Hic. right. inv Hi; inv H. inv H2. inv H1; inv H0.
+      * do 2 constructor 2. constructor.
+      * inv H1. now constructor.
       * inv H1. inv H0. inv H2.
         { inv H0. elim Hic. PSdec.fsetdec. }
         { inv H0. inv H1. }
@@ -270,7 +271,7 @@ Section CodegenPaper.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma altcounters_eqns_Well_sch : Is_well_sch PS.empty [b] altcounters_eqns.
+  Lemma altcounters_eqns_Well_sch : Is_well_sch PS.empty (b§) altcounters_eqns.
   Proof.
   constructor. constructor. constructor. constructor.
   - intros i Hi. split.
@@ -280,16 +281,17 @@ Section CodegenPaper.
   - intros i Hi. split.
     + intros Habs _. PSdec.fsetdec.
     + intros _. inv Hi; inv H; intuition.
-      * inv H1; intuition. inv H2.
-      * inv H1; inv H0; try inv H1; try inv H2; intuition.
+      * inv H1; inv H2 || right; constructor.
+      * inv H1; inv H0; try inv H1; try inv H2; right; constructor.
+      * right; constructor.
       * inv H2.
   - intro Habs. inv Habs; inv H0.
   - intros i Hi. split.
     + intros Habs _. PSdec.fsetdec.
     + intros _. inv Hi; inv H.
-      * intuition.
-      * inv H2; inv H1; intuition. left.
-        constructor 2. inv H2. do 2 constructor.
+      * right; constructor.
+      * inv H2; inv H1; try (now right; constructor); [].
+        left. constructor 2. inv H2. do 2 constructor.
       * inv H2. inv H1. repeat constructor.
   - intro Habs. inv Habs; inv H0; inv H1.
   Qed.

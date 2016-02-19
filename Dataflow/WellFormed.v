@@ -44,7 +44,7 @@ Section IsWellSch.
 
 Variable memories : PS.t.
 (* FIXME: [arg] should be a [nelist ident] *)
-Variable arg: list ident.
+Variable arg: Nelist.nelist ident.
 
 (**
    The list of equations should be in reverse order: the first
@@ -57,7 +57,7 @@ Inductive Is_well_sch : list equation -> Prop :=
     Is_well_sch eqs ->
     (forall i, Is_free_in_caexp i ck e ->
                   (PS.In i memories -> ~Is_defined_in_eqs i eqs)
-               /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ List.In i arg)) ->
+               /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ Nelist.In i arg)) ->
     (~Is_defined_in_eqs x eqs) ->
     Is_well_sch (EqDef x ck e :: eqs)
 | (*...*)
@@ -68,7 +68,7 @@ Inductive Is_well_sch : list equation -> Prop :=
       (forall i, Is_free_in_laexps i ck e ->
                     (PS.In i memories -> ~Is_defined_in_eqs i eqs)
                     /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
-                                      \/ List.In i arg)) ->
+                                      \/ Nelist.In i arg)) ->
       (~Is_defined_in_eqs x eqs) ->
       Is_well_sch (EqApp x ck f e :: eqs)
 | WSchEqFby:
@@ -78,7 +78,7 @@ Inductive Is_well_sch : list equation -> Prop :=
       (forall i, Is_free_in_laexp i ck e ->
                     (PS.In i memories -> ~Is_defined_in_eqs i eqs)
                  /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
-                                   \/ List.In i arg)) ->
+                                   \/ Nelist.In i arg)) ->
       (~Is_defined_in_eqs x eqs) ->
       Is_well_sch (EqFby x ck v e :: eqs).
 
@@ -104,7 +104,7 @@ Lemma Is_well_sch_free_variable:
     Is_well_sch mems argIn (eq :: eqs)
     -> Is_free_in_eq x eq
     -> ~ PS.In x mems
-    -> Is_variable_in_eqs x eqs \/ List.In x argIn.
+    -> Is_variable_in_eqs x eqs \/ Nelist.In x argIn.
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
@@ -153,7 +153,7 @@ Inductive Welldef_global : list node -> Prop :=
       let ni := nd.(n_input) in
       let no := nd.(n_output) in
         NoDup (Nelist.nelist2list ni)
-      -> Is_well_sch (memories eqs) (Nelist.nelist2list ni) eqs
+      -> Is_well_sch (memories eqs) ni eqs
       -> ~ List.Exists (fun ni => Is_defined_in_eqs ni eqs) (Nelist.nelist2list ni)
       -> Is_variable_in_eqs no eqs
       -> ~Is_node_in nd.(n_name) eqs
