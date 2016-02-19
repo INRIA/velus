@@ -425,14 +425,14 @@ Proof.
 Qed.
 
 Lemma clock_correct_false:
-  forall base R memories menv env ck,
+  forall R memories menv env ck,
     equiv_env (fun x => Is_free_in_clock x ck) R memories env menv
-    -> sem_clock_instant base R ck false
+    -> sem_clock_instant true R ck false
     -> Is_absent_in memories menv env ck.
 Proof.
   Hint Constructors Is_absent_in sem_clock_instant Is_free_in_clock exp_eval.
   intros until env.
-  induction ck as [|? ? x]. inversion 2. admit. (*[ now inversion 2 | ].*)
+  induction ck as [|? ? x]; [ now inversion 2 | ].
   intro Henv.
   inversion_clear 1.
   constructor; apply IHck; now auto.
@@ -626,6 +626,7 @@ Variables (G: global)
           (inputs: nelist ident)
           (Hinput: forall input, Nelist.In input inputs -> ~ PS.In input mems)
           (n: nat)
+          (Hbase: bk n = true)
           (menv: heap)
           (env: stack).
 
@@ -711,9 +712,9 @@ Proof.
   apply Forall_cons2 in Hsems'.
   destruct Hsems' as [Hsem Hsems'].
 
-  inversion Hsem as [bk0 H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
-                    |bk0 H0 M0 y ck f Mo les ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
-                    |bk0 H0 M0 ms y ck ls yS v0 le Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
+  inversion Hsem as [ bk0 H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
+                    | bk0 H0 M0 y ck f Mo les ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
+                    | bk0 H0 M0 ms y ck ls yS v0 le Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
     subst bk0 H0 M0 eq;
 (*    (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0); *)
     specialize (Hvar n).
@@ -750,8 +751,7 @@ Proof.
         assert (~ Is_variable_in_eqs x alleqs) by intuition.
         erewrite Is_memory_in_Memory_Corres_eqs; try eauto.
     }
-
-
+    
     inversion Hce; subst ck0 ce0;
     match goal with
       | H: present _ = xs n |- _ => rewrite <- H in *
@@ -799,8 +799,9 @@ Proof.
       * apply stmt_eval_translate_eqns_cons.
         exists menv', env'.
         split; [exact Hstmt|].
-        apply stmt_eval_Control_absent.
-        eapply clock_correct_false; eauto. 
+        rewrite Hbase in *.
+        apply stmt_eval_Control_absent; auto.
+        eapply clock_correct_false; eauto.
       * intros x0 Hivi c.
         (* TODO: do we really need this [destruct]? It seems that we *know* that it cannot be a variable (proof by [contradiction]/[discriminate]).
                  If not, remove dependency on [Dataflow.IsVariable.Decide] *)
@@ -958,8 +959,9 @@ Proof.
       * apply stmt_eval_translate_eqns_cons.
         exists menv', env'.
         split; [exact Hstmt|].
+        rewrite Hbase in *.
         apply stmt_eval_Control_absent.
-        eapply clock_correct_false; now eauto.
+        eapply clock_correct_false; eauto.
       * intros x Hivi c.
         destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
           [now apply IHeqs0 with (1:=Hvin)|].
@@ -1056,8 +1058,9 @@ Proof.
       * apply stmt_eval_translate_eqns_cons.
         exists menv', env'.
         split; [exact Hstmt|].
+        rewrite Hbase in *;
         apply stmt_eval_Control_absent.
-        eapply clock_correct_false; now eauto.
+        eapply clock_correct_false; eauto.
       * intros x Hivi c.
         destruct (Is_variable_in_dec x eqs) as [Hvin|Hvin];
           [now apply IHeqs0 with (1:=Hvin)|].
@@ -1199,6 +1202,7 @@ Proof.
         }
         eauto.
         eapply is_step_correct; eauto.
+        - apply Hck; eauto.
         - exists []; auto.
         - intros y Hinm.
           assert (NoDup_defs eqs) as Hndds

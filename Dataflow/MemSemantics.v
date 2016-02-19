@@ -447,18 +447,15 @@ Proof.
                  Is_node_in_eq g eq
                  -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
   {
-    clear Hfind Heqs Habs.
+    clear Hfind Heqs Habs Hnf.
     induction eqs as [|eq eqs IH]; [now constructor|].
     constructor.
     - intros g Hini.
       apply Hniex.
       constructor 1; apply Hini.
-    - admit.
-      (*
-      apply IH.
+    - apply IH.
       intros g Hini; apply Hniex.
       constructor 2; apply Hini.
-       *)
   }
   apply Forall_Forall with (1:=HH) in Heqs.
   apply Forall_impl with (2:=Heqs).
