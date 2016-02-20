@@ -49,7 +49,6 @@ Inductive stmt : Set :=
   | Reset_ap : ident -> ident -> stmt
            (* Reset_ap class object *)
   | Comp : stmt -> stmt -> stmt
-  | Repeat : nat -> stmt -> stmt
   | Skip.
 
 Implicit Type s: stmt.

@@ -44,10 +44,7 @@ Inductive Can_write_in : ident -> stmt -> Prop :=
     Can_write_in x (Comp s1 s2)
 | CWIComp2: forall x s1 s2,
     Can_write_in x s2 ->
-    Can_write_in x (Comp s1 s2)
-| CWIRepeat: forall x n s,
-    Can_write_in x s ->
-    Can_write_in x (Repeat n s).
+    Can_write_in x (Comp s1 s2).
 
 Lemma cannot_write_in_Ifte:
   forall x e s1 s2,
@@ -67,15 +64,6 @@ Lemma cannot_write_in_Comp:
 Proof.
   Hint Constructors Can_write_in.
   intros; split; intro; try (intro HH; inversion_clear HH); intuition.
-Qed.
-
-Lemma cannot_write_in_Repeat:
-  forall x s n,
-    ~Can_write_in x s <-> ~Can_write_in x (Repeat n s).
-Proof.
-  Hint Constructors Can_write_in.
-  intros; split; [|intuition].
-  intros Hs HH; inversion_clear HH; intuition.
 Qed.
 
 Ltac cannot_write :=
@@ -196,23 +184,6 @@ Proof.
          [apply IHs2 with (2:=Hs1) (3:=Hs2)|];
          now cannot_write
     end.
-  - revert menv env menv' env' Hfree Hexp Hstmt.
-    induction n; intros menv env menv' env' Hfree Hexp Hstmt.
-    + inversion Hstmt; subst; assumption.
-    + inversion_clear Hstmt.
-      match goal with
-      | Hsr: stmt_eval _ _ _ (Repeat n s) _ |- _
-        => apply IHn with (2:=Hexp) in Hsr;
-          [clear Hexp; rename Hsr into Hexp|]
-      end.
-      match goal with
-      | Hs: stmt_eval _ _ _ s _ |- _
-        => apply IHs with (2:=Hexp) (3:=Hs); now cannot_write
-      end.
-      intros x Hfree' Hcw.
-      inversion_clear Hcw.
-      apply Hfree with (1:=Hfree').
-      intuition.
   - now inv Hstmt.
 Qed.
 
@@ -225,11 +196,11 @@ Lemma lift_Ifte:
 Proof.
   intros prog e s1 s2 t1 t2 menv env menv' env' Hfw.
   split; intro Hstmt.
-  - inversion_clear Hstmt as [| | | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | | | |].
+  - inversion_clear Hstmt as [| | | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | | ].
     inversion_clear Hs as [| | | | |? ? ? ? ? ? ? ? Hexp Hs1
-                                   |? ? ? ? ? ? ? ? Hexp Hs2| | | ];
+                                   |? ? ? ? ? ? ? ? Hexp Hs2| ];
     inversion_clear Ht as [| | | | |? ? ? ? ? ? ? ? Hexp' Ht1
-                                   |? ? ? ? ? ? ? ? Hexp' Ht2| | | ].
+                                   |? ? ? ? ? ? ? ? Hexp' Ht2| ].
     + constructor; [now apply Hexp|].
       econstructor; [now apply Hs1|now apply Ht1].
     + apply cannot_write_exp_eval with (2:=Hexp) in Hs1; [|now cannot_write].
@@ -239,15 +210,15 @@ Proof.
     + constructor 7; [now apply Hexp|].
       econstructor; [now apply Hs2|now apply Ht2].
   - inversion_clear Hstmt as [| | | | |? ? ? ? ? ? ? ? Hexp Hs|
-                              ? ? ? ? ? ? ? ? Hexp Hs| | |].
+                              ? ? ? ? ? ? ? ? Hexp Hs|].
     + inversion_clear Hs
-        as [| | | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | | | |].
+        as [| | | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | | ].
       apply Icomp with (menv1:=menv'') (env1:=env'').
       apply Iifte_true with (1:=Hexp) (2:=Hs1).
       apply cannot_write_exp_eval with (2:=Hexp) in Hs1; [|now cannot_write].
       apply Iifte_true with (1:=Hs1) (2:=Ht1).
     + inversion_clear Hs
-        as [| | | |? ? ? ? ? env'' menv'' ? ? Hs2 Ht2| | | | |].
+        as [| | | |? ? ? ? ? env'' menv'' ? ? Hs2 Ht2| | | ].
       apply Icomp with (menv1:=menv'') (env1:=env'').
       apply Iifte_false with (1:=Hexp) (2:=Hs2).
       apply cannot_write_exp_eval with (2:=Hexp) in Hs2; [|now cannot_write].
@@ -270,9 +241,6 @@ Inductive Ifte_free_write : stmt -> Prop :=
     Ifte_free_write s1 ->
     Ifte_free_write s2 ->
     Ifte_free_write (Comp s1 s2)
-| IFWRepeat: forall n s,
-    Ifte_free_write s ->
-    Ifte_free_write (Repeat n s)
 | IFWSkip:
     Ifte_free_write Skip.
 
@@ -285,9 +253,9 @@ Proof.
   Hint Constructors Ifte_free_write.
   intros e s1 s2 t1 t2.
   split; intro Hifw.
-  - inversion_clear Hifw as [| | | |? ? Hs Ht| |].
+  - inversion_clear Hifw as [| | | |? ? Hs Ht|].
     constructor; inversion_clear Hs; inversion_clear Ht; now cannot_write.
-  - inversion_clear Hifw as [| |? ? ? Hfree1 Hfree2 Hcw| | | |].
+  - inversion_clear Hifw as [| |? ? ? Hfree1 Hfree2 Hcw| | | ].
     inversion_clear Hfree1; inversion_clear Hfree2.
     repeat constructor; cannot_write.
 Qed.

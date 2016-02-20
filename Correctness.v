@@ -1550,101 +1550,6 @@ Qed.
 
 (** ** Validity of the whole translation *)
 
-Lemma is_translate_correct0:
-  forall (G   : global)
-         (f   : ident)
-         (xss : stream (nelist value))
-         (ys  : stream value)
-         (cis : nelist const)
-         (r   : ident)
-         (obj : ident)
-         (n   : nat),
-    Welldef_global G
-    -> sem_node G f xss ys
-    -> (forall m, present_list xss m cis)
-    -> (exists menv env,
-           stmt_eval (translate G) hempty sempty
-             (Comp (Reset_ap f obj)
-                   (Repeat (S n) (Step_ap r f obj (Nelist.map Const cis)))) (menv, env)
-           /\ (forall co, ys n = present co <-> PM.find r env = Some co)).
-Proof.
-  intros until n.
-  intros Hwdef Hsem Hxs.
-  apply sem_msem_node with (1:=Hwdef) in Hsem.
-  destruct Hsem as [M Hmsem].
-  assert(Hmsem':=Hmsem).
-  inversion_clear Hmsem' as [? ? ? ? ? ? ? ? Hbk Hfindn Hmsem''].
-  destruct Hmsem'' as [H [Hi [Ho [Hclk [Habs Hmsem']]]]].
-
-  assert (exists menv0,
-            stmt_reset_eval (translate G) f menv0
-         /\ Memory_Corres G 0 f M menv0) as [menv0 [Hstmtr Hmc0]]
-      by (eapply is_node_reset_correct; try eassumption).
-
-  (* TODO: extract as a standalone lemma *)
-  assert (forall n, 
-          exists menvN omenvN envN,
-            stmt_eval (translate G) (madd_obj obj menv0 hempty) sempty
-                      (Repeat (S n) (Step_ap r f obj (Nelist.map Const cis)))
-                      (menvN, envN)
-            /\ mfind_inst obj menvN = Some omenvN
-            /\ Memory_Corres G (S n) f M omenvN
-            /\ (forall co, ys n = present co <-> PM.find r envN = Some co)).
-  {
-    induction 0.
-    - specialize Hxs with 0%nat.
-
-      (* XXX: factorize together with similar assert below *)
-      assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0].
-      {
-        apply not_absent_present;
-        rewrite <- Habs;
-        eapply not_absent_present_list; eauto.
-      }
-
-      assert (exists menv,
-              stmt_step_eval (translate G) menv0 f cis menv co0
-              /\  Memory_Corres G 1 f M menv) as [menv1 [Hstmt1 Hmem1]]
-        by (eapply is_node_correct; try eassumption).
-
-      do 3 eexists.
-      split; [|split; [| split]]; try eauto.
-      + econstructor; [econstructor|].
-        econstructor; try eauto.
-        apply mfind_inst_gss.
-        apply exps_eval_const.
-      + apply mfind_inst_gss.
-      + rewrite Hco0, PM.gss. intuition; congruence.
-
-    - destruct IHn0 as [menv' [omenv' [env' [Hstmt [Hfind [Hmc _]]]]]].
-
-      (* XXX: factorize together with similar assert above *)
-      assert (exists coSn, ys (S n0) = present coSn) as [coSn Hys]
-          by (apply not_absent_present; rewrite <- Habs;
-              eapply not_absent_present_list; eauto).
-
-      assert (exists omenv'',
-                stmt_step_eval (translate G) omenv' f cis omenv'' coSn
-            /\  Memory_Corres G (S (S n0)) f M omenv'') as [omenvSn [HstmtSn HmemSn]]
-        by (specialize Hxs with (S n0); eapply is_node_correct; try eassumption).
-
-      assert (Nelist.Forall2 (exp_eval menv' env') (Nelist.map Const cis) cis) 
-        by apply exps_eval_const.
-
-      do 3 eexists. 
-      split; [|split; [| split]]; eauto.
-      + apply mfind_inst_gss.
-      + rewrite Hys, PM.gss. intuition; congruence.
-  }
-
-  edestruct H0 as [menv [omenv [env [Hstmt [Hfind [Hmc Hpres]]]]]].
-
-  exists menv, env.
-  split; try eassumption.
-  econstructor; try eassumption.
-  econstructor; try eauto.
-Qed.
-
 Section EventLoop.
 
 Variables (G     : global)
@@ -1836,7 +1741,7 @@ Proof.
   - apply IH with (f:=fun ce=>Ifte (tovar mems i) (f ce) Skip).
     + intros j Hfree Hcw.
       apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-      inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
+      inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
         [assumption|inversion Hskip].
     + repeat constructor; [assumption| |now inversion 1].
       apply Hxni.
@@ -1848,7 +1753,7 @@ Proof.
   - apply IH with (f:=fun ce=>Ifte (tovar mems i) Skip (f ce)).
     + intros j Hfree Hcw.
       apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-      inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
+      inversion_clear Hcw as [| |? ? ? ? Hskip| | | |];
         [inversion Hskip|assumption].
     + repeat constructor; [assumption|now inversion 1|].
       apply Hxni.
@@ -1871,7 +1776,7 @@ Proof.
   destruct b; apply IH.
   - intros j Hfree Hcw.
     apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-    inversion_clear Hcw as [| | |? ? ? ? Hskip| | | |];
+    inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
       [assumption|inversion Hskip].
   - repeat constructor; [assumption| |now inversion 1].
     apply Hxni.
@@ -1882,7 +1787,7 @@ Proof.
     destruct (PS.mem i mems); inversion Hfree; subst; now auto.
   - intros j Hfree Hcw.
     apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-    inversion_clear Hcw as [| |? ? ? ? Hskip| | | | |];
+    inversion_clear Hcw as [| |? ? ? ? Hskip| | | | ];
       [inversion Hskip|assumption].
   - repeat constructor; [assumption|now inversion 1|].
     apply Hxni.
