@@ -1550,8 +1550,7 @@ Qed.
 
 (** ** Validity of the whole translation *)
 
-(* =translate_correct= *)
-Lemma is_translate_correct:
+Lemma is_translate_correct0:
   forall (G   : global)
          (f   : ident)
          (xss : stream (nelist value))
@@ -1568,7 +1567,6 @@ Lemma is_translate_correct:
              (Comp (Reset_ap f obj)
                    (Repeat (S n) (Step_ap r f obj (Nelist.map Const cis)))) (menv, env)
            /\ (forall co, ys n = present co <-> PM.find r env = Some co)).
-(* =end= *)
 Proof.
   intros until n.
   intros Hwdef Hsem Hxs.
@@ -1646,6 +1644,141 @@ Proof.
   econstructor; try eassumption.
   econstructor; try eauto.
 Qed.
+
+Section EventLoop.
+
+Variables (G     : global)
+          (main  : ident)
+          (css   : stream (nelist const))
+          (ys    : stream value)
+          (r     : ident)
+          (obj   : ident)
+          (Hwdef : Welldef_global G).
+
+Let xss := fun n => Nelist.map present (css n).
+
+Variable (Hsem: sem_node G main xss ys).
+
+Fixpoint step (n: nat) P r main obj css menv env: Prop :=
+  match n with
+    | 0%nat => stmt_eval P hempty sempty (Reset_ap main obj) (menv, env)
+    | S n =>
+      let vs := Nelist.map Const (css n) in
+      exists menvN envN,
+      step n P r main obj css menvN envN /\
+      stmt_eval P menvN envN (Step_ap r main obj vs) (menv, env)
+  end.
+
+Lemma is_event_loop_correctG:
+  forall M,
+    let P := translate G in
+    msem_node G main xss M ys ->
+    forall n,
+    exists menv env omenv,
+      step (S n) P r main obj css menv env 
+   /\ mfind_inst obj menv = Some omenv
+   /\ Memory_Corres G (S n) main M omenv
+   /\ (forall co, ys n = present co <-> PM.find r env = Some co).
+Proof.
+  intros * Hmsem n.
+  assert (exists menv0,
+            stmt_reset_eval (translate G) main menv0
+         /\ Memory_Corres G 0 main M menv0) as [menv0 [Hstmtr Hmc0]]
+      by (eapply is_node_reset_correct; try eassumption).
+
+  set (ci0 := css 0).
+
+  assert (Hpres: present_list xss 0 ci0)
+    by (subst xss; unfold present_list; eauto).
+
+  assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0].
+  {
+    inversion_clear Hmsem as
+        [ ? ? ? ? ? ? ? ? Hbk Hfind 
+            [H [Hsem_in [Hsem_out [Habs_rhs [Habs Hsem_eqns]]]]]].
+    apply not_absent_present;
+      rewrite <- Habs;
+      eapply not_absent_present_list; eauto.
+  }
+
+  induction n.
+  - (* Case: n ~ 0 *)
+    assert (exists menv,
+              stmt_step_eval (translate G) menv0 main ci0 menv co0
+              /\  Memory_Corres G 1 main M menv) as [menv1 [Hstmt1 Hmem1]]
+        by (eapply is_node_correct; eauto).
+
+    do 3 eexists.
+    split; [|split; [| split]]; try eauto.
+    + do 2 eexists; split; simpl step; eauto.
+      econstructor; eauto.
+      * apply mfind_inst_gss.
+      * apply exps_eval_const.
+    + apply mfind_inst_gss.
+    + rewrite Hco0, PM.gss. intuition congruence.
+
+  - (* Case: n ~ S n *)
+
+    destruct IHn as [menvN [envN [omenvN [HstepN [HmfindN [HmcN HeqN]]]]]].
+    
+    set (ciSn := css (S n)).
+
+    assert (HpresN: present_list xss (S n) ciSn)
+      by (subst xss; unfold present_list; eauto).
+
+    assert (exists coSn, ys (S n) = present coSn) as [coSn Hys].
+    {
+      inversion_clear Hmsem as
+        [ ? ? ? ? ? ? ? ? Hbk Hfind 
+            [H [Hsem_in [Hsem_out [Habs_rhs [Habs Hsem_eqns]]]]]].
+      apply not_absent_present; rewrite <- Habs;
+      eapply not_absent_present_list; eauto.
+    }
+    
+    assert (exists omenvSn,
+              stmt_step_eval (translate G) omenvN main ciSn omenvSn coSn
+          /\  Memory_Corres G (S (S n)) main M omenvSn) as [omenvSn [HstmtSn HmemSn]]
+      by (eapply is_node_correct; eauto).
+
+    (* XXX: this explicit [exists] is necessary: Coq picks a wrong instance otherwise. *)
+    exists (madd_obj obj omenvSn menvN).
+    do 2 eexists.
+
+    split; [|split; [| split]]; eauto.
+    + do 2 eexists; split; simpl step; try eauto.
+      econstructor; eauto.
+      apply exps_eval_const.
+    + apply mfind_inst_gss.   
+    + rewrite Hys, PM.gss. intuition congruence.
+Qed.
+
+(* =translate_correct= *)
+Lemma is_event_loop_correct:
+    let P := translate G in
+    sem_node G main xss ys ->
+    forall n,
+    exists menv env,
+      step (S n) P r main obj css menv env 
+   /\ (forall co, ys n = present co <-> PM.find r env = Some co).
+(* =end= *)
+Proof.
+  intros until n.
+
+  assert (exists M, msem_node G main xss M ys) as [M Hmsem]
+    by (eapply sem_msem_node; eauto).
+
+  assert (exists menv env omenv,
+            step (S n) P r main obj css menv env 
+         /\ mfind_inst obj menv = Some omenv
+         /\ Memory_Corres G (S n) main M omenv
+         /\ (forall co, ys n = present co <-> PM.find r env = Some co))
+    as [menv [env [omenv [Hstep [_ [_ Hys]]]]]]
+      by (eapply is_event_loop_correctG; eauto).
+
+  do 2 eexists; eauto.
+Qed.
+
+End EventLoop.
 
 (** Correctness of optimized code *)
 
