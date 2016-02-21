@@ -322,18 +322,18 @@ Lemma Memory_Corres_unchanged:
     -> Memory_Corres G (S n) f M menv.
 Proof.
   intros G f n ls M ys menv Hwdef Hmsem Habs.
-  revert menv.
+  revert menv. 
   induction Hmsem as [| bk H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
                       | bk H M ms y ck ls yS v0 lae Hmfind Hms0 Hls HyS Hy
                       | bk f xs M ys i o eqs Hbk Hf Heqs IH]
   using msem_node_mult
   with (P := fun bk H M eq Hsem =>
                forall menv,
-                 rhs_absent_instant (bk n) (restr H n) eq
+                 rhs_absent_instant (bk n) (restr H n) eq 
                  -> Memory_Corres_eq G n M menv eq
                  -> Memory_Corres_eq G (S n) M menv eq).
   - inversion_clear 2; constructor; assumption.
-  - intros Hrhsa Hmceq.
+  - intros Hrhsa Hmceq. 
     constructor.
     intros Mo Hmfind'.
     rewrite Hmfind in Hmfind'.
@@ -344,12 +344,15 @@ Proof.
     exists omenv.
     split; [exact Hfindo|].
     apply IH with (2:=Hmc).
-    inversion_clear Hrhsa as [| ? ? ? ? ? Hlaea Hvs |].
+    inversion_clear Hrhsa as [| ? ? ? ? ? Hlaea Hvs |]. 
 
     assert (ls n = vs)
       by (specialize (Hls n); simpl in Hls; sem_det).
-    
-    unfold absent_list. subst vs; eauto.
+    unfold absent_list. subst vs.
+    clear Hlaea.
+    induction (ls n); inversion_clear Hvs; subst e; auto.
+    rewrite IHn0 at 1; eauto.
+
   - rename Habs into menv.
     intros Hdefabs Hmceq.
     constructor.
@@ -373,7 +376,20 @@ Proof.
       rewrite <-HR1, <-HR2, <-HR3 in *;
       clear i' o' eqs' Hf' HR1 HR2 HR3.
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs' [Hout HH]]]]].
+    destruct IH as [H [Hxs [Hys [Hout HH]]]].
+
+    assert (Forall (msem_equation G bk H M) eqs).
+    {
+      rewrite Forall_forall in HH.
+      rewrite Forall_forall; intros.
+      specialize (HH x H0).
+      destruct HH. eauto.
+    }
+    
+    assert (Habs': absent_list xs n ->
+                   List.Forall (rhs_absent_instant (bk n) (restr H n)) eqs)
+      by (eapply subrate_property_eqns; eauto).
+
     apply Habs' in Habs.
     apply Forall_Forall with (1:=Habs) in HH.
     apply Forall_Forall with (1:=Hmceqs) in HH.
@@ -382,5 +398,5 @@ Proof.
     apply Forall_impl with (2:=HH); clear HH.
     intros eq HH.
     destruct HH as [Hmceq [Habseq [Hmsem HH]]].
-    now apply HH with (1:=Habseq) (2:=Hmceq).
+    eapply HH; eauto.
 Qed.

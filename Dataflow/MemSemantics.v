@@ -80,13 +80,67 @@ with msem_node G: ident -> stream (nelist value) -> memory -> stream value -> Pr
       (exists H,
          sem_vars bk H i xss
         /\ sem_var bk H o ys
-        /\ (forall n, absent_list xss n ->
-                      Forall (rhs_absent_instant (bk n) (restr H n)) eqs)
         /\ (forall n, absent_list xss n <-> ys n = absent)
         /\ Forall (msem_equation G bk H M) eqs) ->
       msem_node G f xss M ys.
 
 Definition msem_equations G bk H M eqs := List.Forall (msem_equation G bk H M) eqs.
+
+Lemma subrate_property_eqn:
+  forall G H M bk xss eqn n,
+    clock_of xss bk ->
+    msem_equation G bk H M eqn ->
+    absent_list xss n ->
+    rhs_absent_instant (bk n) (restr H n) eqn.
+Proof.
+  intros * Hck Hsem Habs.
+  assert (Hbk: bk n = false). 
+  {
+    destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto.
+    apply Bool.not_false_is_true in Hbk.
+    eapply Hck in Hbk.
+    destruct Hbk as [vs Hpres].
+    unfold present_list in Hpres; rewrite Habs in Hpres.
+    destruct (xss n); destruct vs; simpl in Hpres; discriminate Hpres.
+  }
+  rewrite Hbk in *.
+  destruct eqn;
+    try repeat
+      match goal with
+        | |- rhs_absent_instant false _ (EqDef _ _ _) => 
+          constructor
+        | |- rhs_absent_instant false _ (EqFby _ _ _ _) => 
+          constructor
+        | |- rhs_absent_instant false _ (EqApp _ _ _ ?ls) =>
+          apply AEqApp with (vs := Nelist.map (fun _ => absent) ls)
+        | |- sem_caexp_instant false _ ?ck ?ce absent =>
+          apply SCabs
+        | |- sem_clock_instant false _ ?ck false =>
+          apply subrate_clock
+        | |- sem_laexp_instant false _ ?ck ?le absent =>
+          apply SLabs
+        | |- sem_laexps_instant false _ ?ck ?les _ =>
+          apply SLabss; eauto
+      end.
+  clear Hsem Habs.
+  apply Forall_map. induction l; try apply IHl; constructor; auto. 
+Qed.
+
+Lemma subrate_property_eqns:
+  forall G H M bk xss eqns n,
+    clock_of xss bk ->
+    msem_equations G bk H M eqns ->
+    absent_list xss n ->
+    List.Forall (rhs_absent_instant (bk n) (restr H n)) eqns.
+Proof.
+  intros * Hck Hsem Habs.
+  induction eqns as [|eqn eqns]; auto.
+  inversion_clear Hsem.
+  constructor.
+  eapply subrate_property_eqn; eauto.
+  eapply IHeqns; eauto.
+Qed.
+
 
 Section msem_node_mult.
   Variable G: global.
@@ -163,15 +217,11 @@ Section msem_node_mult.
            (Hnode : exists H : history,
                  sem_vars bk H i xss
               /\ sem_var bk H o ys
-              /\ (forall n, absent_list xss n ->
-                            Forall (rhs_absent_instant (bk n) (restr H n)) eqs)
               /\ (forall n, absent_list xss n <-> ys n = absent)
               /\ Forall (msem_equation G bk H M) eqs),
       (exists H : history,
              sem_vars bk H i xss
           /\ sem_var bk H o ys
-          /\ (forall n, absent_list xss n ->
-                        Forall (rhs_absent_instant (bk n) (restr H n)) eqs)
           /\ (forall n, absent_list xss n <-> ys n = absent)
           /\ Forall (fun eq=>exists Hsem, P (bk := bk) (eq := eq)(M := M)(H := H) Hsem) eqs)
       -> Pn  (SNode Hbk Hfind Hnode).
@@ -200,8 +250,8 @@ Section msem_node_mult.
                    /\ (forall n, xs n = absent <-> ys n = absent)
                    /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs *)
            (match Hnode with
-            | ex_intro H (conj Hxs (conj Hys (conj Hclk (conj Hout Heqs)))) =>
-                ex_intro _ H (conj Hxs (conj Hys (conj Hclk (conj Hout
+            | ex_intro H (conj Hxs (conj Hys (conj Hout Heqs))) =>
+                ex_intro _ H (conj Hxs (conj Hys (conj Hout
                   (((fix map (eqs : list equation)
                              (Heqs: Forall (msem_equation G bk H M) eqs) :=
                        match Heqs in Forall _ fs
@@ -213,7 +263,7 @@ Section msem_node_mult.
                          Forall_cons eq (@ex_intro _ _ Heq
                                            (msem_equation_mult Heq))
                                      (map eqs Heqs')
-                       end) eqs Heqs))))))
+                       end) eqs Heqs)))))
             end)
     end
 
@@ -385,11 +435,10 @@ Proof.
     rewrite find_node_tl with (1:=Hnf) in Hf.
     eapply SNode; eauto.
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
+    destruct IH as [H [Hxs [Hys [Hout Heqs]]]].
     exists H.
     split; [exact Hxs|].
     split; [exact Hys|].
-    split; [exact Habs|].
     split; [exact Hout|].
     apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
     apply Is_node_in_Forall in Hord.
@@ -433,7 +482,7 @@ Proof.
   apply find_node_other with (2:=Hfind) in Hnf.
   econstructor; eauto.
   clear Heqs.
-  destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
+  destruct IH as [H [Hxs [Hys [Hout Heqs]]]].
   exists H.
   intuition; clear Hxs Hys.
   assert (forall g, Is_node_in g eqs
@@ -447,7 +496,7 @@ Proof.
                  Is_node_in_eq g eq
                  -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
   {
-    clear Hfind Heqs Habs Hnf.
+    clear Hfind Heqs Hnf.
     induction eqs as [|eq eqs IH]; [now constructor|].
     constructor.
     - intros g Hini.
@@ -721,7 +770,7 @@ Proof.
   intros f xs ys Hwdef Hsem.
   assert (Hsem' := Hsem).
   inversion_clear Hsem' as [? ? ? ? ? ? ? Hbk Hfind HH].
-  destruct HH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
+  destruct HH as [H [Hxs [Hys [Hout Heqs]]]].
   pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
   pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
   pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
@@ -736,19 +785,19 @@ Proof.
                sem_node G f xs ys
                -> exists M, msem_node G f xs M ys) as IHG'
         by auto.
-    inversion_clear Hwdef as [|? ? ? Hw0 neqs ? ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
+    inversion_clear Hwdef as [|? ? ? ? Hw0 neqs ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
     simpl in neqs; unfold neqs in *.
     pose proof (sem_msem_eqs IHG' Hwsch Heqs) as HH.
     destruct HH as [M Hmsem].
     exists M.
-    econstructor; eauto;
-      [simpl; rewrite ident_eqb_refl; reflexivity|].
-    exists H.
-    split; [exact Hxs|].
-    split; [exact Hys|].
-    split; [exact Habs|].
-    split; [exact Hout|].
-    apply msem_equation_cons2 with (1:=Hord') (2:=Hmsem) (3:=Hnini).
+    econstructor. 
+    + eauto.
+    + simpl; rewrite ident_eqb_refl. reflexivity.
+    + exists H.
+      split; [exact Hxs|].
+      split; [exact Hys|].
+      split; [exact Hout|].
+      eapply msem_equation_cons2; eauto.
   - apply ident_eqb_neq in Hnf.
     apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
     inversion_clear Hord as [|? ? Hord' H0 Hnig].

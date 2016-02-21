@@ -72,6 +72,14 @@ Fixpoint map {A B : Type} (f : A -> B) l :=
 Lemma map_compat {A B : Type} : Proper ((eq ==> eq) ==> eq ==> eq) (@map A B).
 Proof. intros f g Hfg l l' Hl. subst l'. induction l; simpl; f_equal; auto. Qed.
 
+Lemma map_compose:
+  forall A B C (f: A -> B)(g: B -> C) xs,
+    map g (map f xs) = map (fun x => g (f x)) xs.
+Proof.
+  intros until xs.
+  induction xs as [|x xs IH]; simpl; congruence.
+Qed.
+
 Definition injective {A B} (f : A -> B) := forall x y, f x = f y -> x = y.
 
 Lemma map_In : forall {A B : Type} (f : A -> B), injective f ->

@@ -868,7 +868,7 @@ Proof.
     (* dataflow semantics *)
     assert (Hmsem':=Hmsem).
     inversion_clear Hmsem' as [? ? ? ? ? i o neqs Hck Hfind Hnsem].
-    destruct Hnsem as [Hn [Hlsn [Hxsn [Habs [Hout Hnsem]]]]].
+    destruct Hnsem as [Hn [Hlsn [Hxsn [Hout Hnsem]]]].
 
     (* no other instance *)
     assert (~Is_defined_in_eqs y eqs) as Hniii
@@ -876,7 +876,6 @@ Proof.
 
     specialize (Hlaes n);
       specialize (Hxsn n);
-      specialize (Habs n);
       specialize (Hout n);
       simpl in *.
 
@@ -951,8 +950,12 @@ Proof.
     + (* y = absent *)
       exists menv', env'.
 
+      assert (Habs: absent_list ls n ->
+                      List.Forall (rhs_absent_instant (bk0 n) (restr Hn n)) neqs)
+        by (eapply subrate_property_eqns; eauto).
+
       assert (absent_list ls n)
-        by (unfold absent_list; rewrite H0; apply forall_absent).
+        by (unfold absent_list; rewrite H0, Nelist.map_compose; auto).
 
       assert (xs n = absent) as Hout'
           by (apply Hout; auto).
@@ -1175,7 +1178,7 @@ Proof.
                                HnodupIn Hwsch Hndef_in Hdef_out Hne Hfind Hnodup].
       clear Hwd'.
       inversion_clear Hmsem as [? ? ? ? ? ? ? ? Hck Heqs
-                                [H [Hin [Hout [Hrabs [Habs Hall]]]]]].
+                                [H [Hin [Hout [Hrabs Hall]]]]].
       subst eqs inArg outArg nodeName.
       simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
       injection Heqs. intro Hnode. rewrite Hnode in *. clear Heqs. simpl in *.
@@ -1493,7 +1496,7 @@ Proof.
         by (apply Pos.eqb_eq; assumption).
 
       inversion_clear Hmsem as [? ? ? ? ? inArg outArg eqs Hbk Hfind
-                                [H [Hin [Hout [Hrhs [Habs Hmsem']]]]]].
+                                [H [Hin [Hout [Hrhs Hmsem']]]]].
       rename Hmsem' into Hmsem.
 
       specialize (Hin 0)%nat; specialize (Hout 0)%nat;
@@ -1605,7 +1608,7 @@ Proof.
   {
     inversion_clear Hmsem as
         [ ? ? ? ? ? ? ? ? Hbk Hfind
-            [H [Hsem_in [Hsem_out [Habs_rhs [Habs Hsem_eqns]]]]]].
+            [H [Hsem_in [Hsem_out [Habs Hsem_eqns]]]]].
     apply not_absent_present;
       rewrite <- Habs;
       eapply not_absent_present_list; eauto.
@@ -1640,7 +1643,7 @@ Proof.
     {
       inversion_clear Hmsem as
         [ ? ? ? ? ? ? ? ? Hbk Hfind
-            [H [Hsem_in [Hsem_out [Habs_rhs [Habs Hsem_eqns]]]]]].
+            [H [Hsem_in [Hsem_out [Habs Hsem_eqns]]]]].
       apply not_absent_present; rewrite <- Habs;
       eapply not_absent_present_list; eauto.
     }
