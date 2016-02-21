@@ -1662,14 +1662,12 @@ Proof.
     + rewrite Hys, PM.gss. intuition congruence.
 Qed.
 
-(* =translate_correct= *)
 Lemma is_event_loop_correct:
-    let P := translate G in
-    sem_node G main xss ys ->
-    forall n,
-    exists menv env,
-      step (S n) P r main obj css menv env
-   /\ (forall co, ys n = present co <-> PM.find r env = Some co).
+(* =translate_correct= *)
+sem_node G main xss ys ->
+forall n, exists menv env,
+    step (S n) (translate G) r main obj css menv env
+    /\ (forall co, ys n = present co <-> PM.find r env = Some co).
 (* =end= *)
 Proof.
   intros until n.
@@ -1678,7 +1676,7 @@ Proof.
     by (eapply sem_msem_node; eauto).
 
   assert (exists menv env omenv,
-            step (S n) P r main obj css menv env
+            step (S n) (translate G) r main obj css menv env
          /\ mfind_inst obj menv = Some omenv
          /\ Memory_Corres G (S n) main M omenv
          /\ (forall co, ys n = present co <-> PM.find r env = Some co))
