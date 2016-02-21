@@ -57,7 +57,7 @@ Example eqns1 : list equation :=
     EqFby 3 (Con Cbase 1 false) (Cint 0) (Evar 2);
     assign 4 Cbase (Emerge 1 (Eexp (Evar 2)) (Eexp (Evar 3)));
     assign 2 (Con Cbase 1 true) (Eexp (Ewhen (Econst (Cint 7)) 1 true))
-            
+
 (*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
   ].
 Print eqns1.
@@ -180,7 +180,7 @@ Section CodegenPaper.
 
   (* Node names *)
   Definition n_counter     : ident := 1.
-  Definition n_altcounters : ident := n_counter + 1.
+  Definition n_avgvelocity : ident := n_counter + 1.
 
 (*
   node counter (initial, increment: int; restart: bool) returns (n: int)
@@ -236,73 +236,101 @@ Section CodegenPaper.
 
   Eval cbv in translate_node counter.
   Eval cbv in ifte_fuse (c_step (translate_node counter)).
+  Eval cbv in ifte_fuse (c_step (translate_node counter)).
   Eval cbv in ifte_fuse (c_reset (translate_node counter)).
 
 
+  Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
+  Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
+  Notation "x ':/' y" := (op_div x y) (at level 49).
+
 (*
-  node altcounters (b: bool) returns (y: int)
-  var n1, n2: int;
+  node avgvelocity (delta: int; sec: bool) returns (v: int)
+    var r, t, h: int;
   let
-    n1 = counter(0, 1, false);
-    n2 = counter(0 whenot b, −1 whenot b, false whenot b);
-    y = merge b (n1 when b) n2;
+    r = counter(0, delta, false);
+    t = counter(0 when sec, 1 when sec, false when sec);
+    v = merge sec ((r when sec) / t) (h whenot sec);
+    h = 0 fby v;
   tel
 *)
 
-  (* altcounters: variable names *)
-  Definition b  : ident := 1.
-  Definition n1 : ident := 2.
-  Definition n2 : ident := 3.
-  Definition y  : ident := 4.
+  (* avgvelocity: variable names *)
+  Definition delta  : ident := 1.
+  Definition sec    : ident := 2.
+  Definition r      : ident := 3.
+  Definition t      : ident := 4.
+  Definition v      : ident := 5.
+  Definition h      : ident := 6.
 
-  Example altcounters_eqns : list equation :=
+  Example avgvelocity_eqns : list equation :=
     [
-      EqDef y Cbase
-              (Emerge b
-                      (Eexp (Ewhen (Evar n1) b true))
-                      (Eexp (Evar n2)));
-      EqApp n2 (Con Cbase b false) n_counter 
-               (necons (Ewhen (Econst (Cint 0)) b false)
-               (necons (Ewhen (Econst (Cint (-1))) b false)
-               (nebase (Ewhen (Econst (Cbool false)) b false))));
-      EqApp n1 Cbase n_counter (necons (Econst (Cint 1))
-                               (necons (Econst (Cbool false))
-                               (nebase (Econst (Cint 0)))))
+      EqFby h Cbase (Cint 0) (Evar v);
+      EqDef v Cbase
+              (Emerge sec
+                      (Eexp (op_div (Ewhen (Evar r) sec true) (Evar t)))
+                      (Eexp (Ewhen (Evar h) sec false)));
+      EqApp t (Con Cbase sec true) n_counter
+                  (necons (Ewhen (Econst (Cint 0)) sec true)
+                  (necons (Ewhen (Econst (Cint 1)) sec true)
+                  (nebase (Ewhen (Econst (Cbool false)) sec true))));
+      EqApp r Cbase n_counter (necons (Econst (Cint 0))
+                              (necons (Evar delta)
+                              (nebase (Econst (Cbool false)))))
     ].
-  Print altcounters_eqns.
+  Print avgvelocity_eqns.
 
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma altcounters_eqns_Well_sch : Is_well_sch PS.empty (b§) altcounters_eqns.
+  Lemma avgvelocity_eqns_Well_sch :
+    Is_well_sch (PS.singleton h) (delta, sec§) avgvelocity_eqns.
   Proof.
-  constructor. constructor. constructor. constructor.
+    constructor. constructor. constructor. constructor. constructor.
   - intros i Hi. split.
     + intros _ Habs. inv Habs.
-    + intros _. right. inv Hi; inv H; inv H1; inv H0; inv H1.
+    + intros _. right. inv Hi; inv H; inv H1.
+      inv H0; constructor; reflexivity.
+      inv H0; inv H1.
   - intro Habs. inv Habs.
-  - intros i Hi. split.
-    + intros Habs _. PSdec.fsetdec.
+  - intros i Hi.
+    assert (i = sec).
+    { inv Hi; inv H. inv H1; inv H2 || reflexivity.
+      inv H1; inv H0. inv H2. reflexivity. inv H1. inv H2. reflexivity.
+      reflexivity. inv H2. }
+    rewrite H in *; clear H. split.
+    + intros Habs _. inv Habs.
     + intros _. inv Hi; inv H; intuition.
-      * inv H1; inv H2 || right; constructor.
-      * inv H1; inv H0; try inv H1; try inv H2; right; constructor.
-      * right; constructor.
+      * inv H1. inv H2 || right. right; constructor 2; constructor.
+      * inv H1; inv H0. inv H2. right; constructor 2; constructor.
+        inv H1; inv H2 || right; constructor 2; constructor.
+      * right; constructor 2; constructor.
       * inv H2.
   - intro Habs. inv Habs; inv H0.
   - intros i Hi. split.
-    + intros Habs _. PSdec.fsetdec.
-    + intros _. inv Hi; inv H.
-      * right; constructor.
-      * inv H2; inv H1; try (now right; constructor); [].
-        left. constructor 2. inv H2. do 2 constructor.
-      * inv H2. inv H1. repeat constructor.
+    + intros Habs.
+      apply PSP.FM.singleton_1 in Habs; rewrite <-Habs in *; clear Habs.
+      intro H. inv H. inv H1. inv Hi. inv H1. repeat inv H2. inv H2. inv H.
+    + intros Hh. inv Hi; inv H.
+      * right; constructor 2; constructor.
+      * inv H2; inv H1; inv H2.
+        inv H0. inv H2; left; constructor 2; repeat constructor.
+        right; constructor 2; constructor.
+        inv H0; inv H1; left; repeat constructor.
+      * inv H2; inv H1.
+        inv H2. exfalso; apply Hh; constructor.
+        right. constructor 2. constructor.
   - intro Habs. inv Habs; inv H0; inv H1.
+  - intros i Hi. split.
+    inv Hi; inv H. intro H; inv H.
+    inv Hi; inv H. intro H. left; repeat constructor.
+  - intros Habs. inv Habs; inv H0; inv H1. inv H0. inv H0.
   Qed.
 
-  Example altcounters : node :=
-    mk_node n_altcounters (nebase b) y altcounters_eqns.
+  Example avgvelocity : node :=
+    mk_node n_avgvelocity (delta, sec§) v avgvelocity_eqns.
 
-  Eval cbv in translate_node altcounters.
-  Eval cbv in ifte_fuse (c_step (translate_node altcounters)).
+  Eval cbv in translate_node avgvelocity.
+  Eval cbv in ifte_fuse (c_step (translate_node avgvelocity)).
 
 End CodegenPaper.
