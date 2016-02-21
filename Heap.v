@@ -18,8 +18,7 @@ Set Implicit Arguments.
 (* =memory= *)
 Inductive memory (V: Type): Type := mk_memory {
   mm_values : PM.t V;
-  mm_instances : PM.t (memory V)
-}.
+  mm_instances : PM.t (memory V)}.
 (* =end= *)
 
 Section Operations.
