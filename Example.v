@@ -30,7 +30,9 @@ Coercion Eexp : lexp >-> cexp.
 Coercion Econst : const >-> lexp.
 
 Notation "x 'on' ck" := (Con x ck) (at level 44).
-Notation "x 'when' C ( ck )" := (Ewhen x ck C) (at level 45, left associativity, format "x  'when'  C ( ck )").
+(*Notation "x 'when' C ( ck )" := (Ewhen x ck C) (at level 45, left associativity, format "x  'when'  C ( ck )").*)
+Notation "x 'when' ck" := (Ewhen x ck true) (at level 45, left associativity).
+Notation "x 'whenot' ck" := (Ewhen x ck false) (at level 45, left associativity).
 Notation "x '::=' v 'fby' y" := (EqFby x _ v y) (at level 47).
 Notation "x '::=' f '(|' nel '|)'" := (EqApp x _ f nel) (at level 47, format "x  '::='  f '(|' nel '|)'").
 Instance EqDef_Assign : Assignment clock cexp equation := {assign := EqDef}.
@@ -46,8 +48,8 @@ Instance AssignSt_Assign : Assignment unit exp stmt := {assign := fun x (_ : uni
 Instance Op_OpCall : OpCall (nelist exp) exp := {opcall := Op}.
 Notation "stmt1 ;; stmt2" := (Comp stmt1 stmt2) (at level 48, right associativity).
 Notation "'If' b 'Then' t 'Else' f" := (Ifte b t f) (at level 47, t at level 47, f at level 47).
-Notation "x '::=' class '.' obj '(|' args '|)'" := (Step_ap x class obj args) (at level 47).
-Notation "'reset' class '.' obj" := (Reset_ap class obj) (at level 47).
+Notation "x '::=' class '(' obj ').step(' args ')'" := (Step_ap x class obj args) (at level 47).
+Notation " class '(' obj ').reset()'" := (Reset_ap class obj) (at level 47).
 
 (* TODO: not properly clocked... *)
 Example eqns1 : list equation :=
@@ -165,6 +167,7 @@ Section CodegenPaper.
 
   Definition Plus : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.add.
   Definition op_plus (x: lexp) (y: lexp) : lexp := Eop Plus (necons x (nebase y)).
+  Notation "x ':+' y" := (op_plus x y) (at level 47).
 
   Definition Ifte_int : operator :=
     existT arrows (Tcons Tbool (Tcons Tint (Tcons Tint (Tout Tint))))

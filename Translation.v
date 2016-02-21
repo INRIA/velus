@@ -5,11 +5,12 @@ Require Import Rustre.Common.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Memories.
-Require Import Nelist.
 
 Import List.ListNotations.
 Open Scope positive.
 Open Scope list.
+Require Import Nelist.
+
 
 (** * Translation *)
 
@@ -86,7 +87,7 @@ Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
 Definition translate_eqn (eqn: equation) : stmt :=
   match eqn with
   | EqDef x ck ce   => Control ck (translate_cexp x ce)
-  | EqApp x ck f les => Control ck (Step_ap x f x (Nelist.map translate_lexp les))
+  | EqApp x ck f les => Control ck (Step_ap x f x (map translate_lexp les))
   | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
   end.
 (* =end= *)
