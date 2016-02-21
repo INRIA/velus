@@ -78,7 +78,7 @@ Inductive sem_lexp_instant R: lexp -> value -> Prop:=
 | Sconst:
     forall c v,
       v = (if base then present c else absent) ->
-      sem_lexp_instant R (Econst c) (present c)
+      sem_lexp_instant R (Econst c) v
 | Svar:
     forall x v,
       sem_var_instant R x v ->
@@ -528,7 +528,7 @@ Lemma sem_lexp_instant_det:
 Proof.
   intros R e.
   induction e using lexp_ind2;
-    try now do 2 inversion_clear 1;
+    try now (do 2 inversion_clear 1);
     match goal with
     | H1:sem_var_instant ?R ?e (present (Cbool ?b1)),
       H2:sem_var_instant ?R ?e (present (Cbool ?b2)),
@@ -545,7 +545,8 @@ Proof.
       discriminate
     | _ => auto
     end.
-intros v1 v2 Hsem1 Hsem2.
+- do 2 inversion_clear 1; destruct base; congruence.
+- intros v1 v2 Hsem1 Hsem2.
 inversion_clear Hsem1; inversion_clear Hsem2.
 * do 2 f_equal. clear H1 H3. revert cs cs0 H0 H2.
   induction les as [| le les]; intros cs1 cs2 Hrec1 Hrec2.

@@ -453,15 +453,16 @@ Qed.
 (** ** Validity of [translate_lexp] *)
 
 Lemma lexp_correct:
-  forall base R memories menv env c e,
-    sem_lexp_instant base R e (present c)
+  forall R memories menv env c e,
+    sem_lexp_instant true R e (present c)
     -> equiv_env (fun x => Is_free_in_lexp x e) R memories env menv 
     -> exp_eval menv env (translate_lexp memories e) c.
 Proof.
 Hint Constructors exp_eval.
 intros until e. revert c.
+(* XXX: This is extremely shaky *)
 induction e as [c0|y|e IH y yb| op les IHle] using lexp_ind2; intro c;
-  inversion 1; intros; try apply IH; try apply econst; auto.
+  inversion 1; try (subst; injection H1); intros; subst; try apply IH; try apply econst; auto.
 * split_env_assumption;
     unfold translate_lexp;
     destruct (PS.mem y memories) eqn:Hm;
@@ -491,9 +492,9 @@ induction e as [c0|y|e IH y yb| op les IHle] using lexp_ind2; intro c;
 Qed.
 
 Lemma lexps_correct:
-  forall base R memories menv env cs es,
+  forall R memories menv env cs es,
     let vs := Nelist.map present cs in
-    Nelist.Forall2 (fun e v => sem_lexp_instant base R e v) es vs
+    Nelist.Forall2 (fun e v => sem_lexp_instant true R e v) es vs
     -> equiv_env (fun x => Nelist.Exists (Is_free_in_lexp x) es) R memories env menv 
     -> Nelist.Forall2 (exp_eval menv env) (Nelist.map (translate_lexp memories) es) cs.
 Proof.
@@ -511,8 +512,8 @@ Qed.
 (** ** Validity of [translate_cexp] *)
 
 Lemma cexp_correct:
-  forall base R memories prog menv env c x e,
-    sem_cexp_instant base R e (present c)
+  forall R memories prog menv env c x e,
+    sem_cexp_instant true R e (present c)
     -> equiv_env (fun x => Is_free_in_cexp x e) R memories env menv
     -> stmt_eval prog menv env (translate_cexp memories x e)
                                                         (menv, PM.add x c env).
@@ -766,6 +767,7 @@ Proof.
         split; [exact Hstmt|].
         apply stmt_eval_Control_present.
         eapply clock_correct_true; now eauto.
+        rewrite Hbase in *.
         eapply cexp_correct; now eauto.
       * intros x0 Hivi c.
         inversion_clear Hivi as [? ? Hivi'|]; [inversion_clear Hivi'|].
@@ -913,6 +915,7 @@ Proof.
         assert (Nelist.Forall2 (exp_eval menv' env')
                (Nelist.map (translate_lexp mems) les) inValues).
         {
+          rewrite Hbase in *.
           eapply lexps_correct; eauto.
           match goal with
             | H: _ = Nelist.map present inValues |- _ => rewrite <- H
@@ -1036,6 +1039,7 @@ Proof.
         apply stmt_eval_Control_present.
         eapply clock_correct_true; now eauto.
         econstructor.
+        rewrite Hbase in *.
         eapply lexp_correct; now eauto.
         reflexivity.
       * intros x Hivi c.
