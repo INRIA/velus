@@ -52,15 +52,16 @@ Variable arg: Nelist.nelist ident.
 (* =Is_well_sch= *)
 Inductive Is_well_sch : list equation -> Prop :=
 | WSchNil: Is_well_sch nil
-| WSchEqDef: forall x ck e eqs,
+| WSchEq: forall x eq eqs,
     Is_well_sch eqs ->
-    (forall i, Is_free_in_caexp i ck e ->
+    (forall i, Is_free_in_eq i eq ->
                   (PS.In i memories -> ~Is_defined_in_eqs i eqs)
                /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ Nelist.In i arg)) ->
     (~Is_defined_in_eqs x eqs) ->
-    Is_well_sch (EqDef x ck e :: eqs)
-| (*...*)
+    Is_well_sch (eq :: eqs).
 (* =end= *)
+
+(*
   WSchEqApp:
     forall x ck f e eqs,
       Is_well_sch eqs ->
@@ -80,7 +81,7 @@ Inductive Is_well_sch : list equation -> Prop :=
                                    \/ Nelist.In i arg)) ->
       (~Is_defined_in_eqs x eqs) ->
       Is_well_sch (EqFby x ck v e :: eqs).
-
+*)
 End IsWellSch.
 
 Hint Constructors Is_well_sch.

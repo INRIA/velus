@@ -16,7 +16,7 @@ Require Import Rustre.Minimp.Syntax.
 
 (** ** Semantics *)
 
-Definition heap: Type := memory const.
+Definition memory: Type := memory const.
 Definition stack : Set := PM.t const.
 
 Implicit Type heap: heap.
