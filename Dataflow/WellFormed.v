@@ -43,7 +43,6 @@ Open Scope list_scope.
 Section IsWellSch.
 
 Variable memories : PS.t.
-(* FIXME: [arg] should be a [nelist ident] *)
 Variable arg: Nelist.nelist ident.
 
 (**
