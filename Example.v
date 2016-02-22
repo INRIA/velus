@@ -213,15 +213,22 @@ Section CodegenPaper.
     Is_well_sch (PS.singleton c) (initial, increment, restart§) counter_eqns.
   Proof.
   unfold counter_eqns. constructor. constructor. constructor.
-  - intros i Hi. split.
-    + intros _ Habs. inversion Habs.
-    + intros Hic. right. inv Hi; inv H. inv H2. inv H1; inv H0.
-      * do 2 constructor 2. constructor.
-      * inv H1. now constructor.
-      * inv H1. inv H0. inv H2.
-        { inv H0. elim Hic. PSdec.fsetdec. }
-        { inv H0. inv H1. }
-  - intro Habs. inv Habs.
+  - intros i Hi. split;
+    repeat match goal with
+             | H: IsFree.Is_free_in_eq _ _ |- _ => inv H; intros
+             | H: IsFree.Is_free_in_caexp _ _ _ |- _ => inv H; intros
+             | H: IsFree.Is_free_in_cexp _ _ |- _ => inv H; intros
+             | H: IsFree.Is_free_in_lexp _ _ |- _ => inv H; intros
+             | H: Exists _ _ |- _ => inv H; intros
+             | H: PS.In _ (PS.singleton _) |- _ =>
+               apply PSP.Dec.F.singleton_1 in H; subst; clear H
+             | |- _ \/ In _ _ => right; simpl; auto 
+             | H: ~ PS.In ?c (PS.singleton ?c) |- _ =>
+               exfalso; apply H; PSdec.fsetdec
+             | H: IsFree.Is_free_in_clock i Cbase |- _ =>
+               inversion H
+           end; try inversion 1. 
+  - intros ** Habs Hdef. inv Habs. inv Hdef.
   - intros i Hi. split.
     + intros Hic Habs. inv Habs.
       * inv H0. inv Hic.

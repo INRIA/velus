@@ -872,7 +872,7 @@ Proof.
 
     (* no other instance *)
     assert (~Is_defined_in_eqs y eqs) as Hniii
-        by (inversion_clear Hwsch; assumption).
+        by (inversion_clear Hwsch; eauto).
 
     specialize (Hlaes n);
       specialize (Hxsn n);
@@ -1074,29 +1074,39 @@ Proof.
         inversion_clear Hivi as [? ? Hivi'|];
           [|unfold Is_variable_in_eqs in Hvin; contradiction].
         inversion_clear Hivi'.
-      * constructor.
-        2:assumption.
-        constructor.
-        intros ms0' Hmfind'.
-        rewrite Hmfind in Hmfind'.
-        injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
-        (* TODO: do we really need this? We seem to *know* that it
-        cannot be equal ([exfalso] branch).
+      * {
+          constructor.
+          2:assumption.
+          constructor.
+          intros ms0' Hmfind'.
+          rewrite Hmfind in Hmfind'.
+          injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
+          (* TODO: do we really need this? We seem to *know* that it
+        cannot be equal ([exfalso] branch). If unnecessary, remove the
+        import on Dataflow.IsDefined.Decide *)
 
-                 If unnecessary, remove the import on Dataflow.IsDefined.Decide *)
-        destruct (Is_defined_in_dec y eqs) as [Hxin|Hxin];
-          [ exfalso; inversion_clear Hwsch; now intuition|].
-        rewrite Hall in Hmc.
-        apply Forall_app in Hmc.
-        destruct Hmc as [HZ Hmc]; clear HZ.
-        apply Forall_cons2 in Hmc.
-        destruct Hmc as [Hmc HZ]; clear HZ.
-        inversion_clear Hmc as [| |? ? ? ? ? ? Hfindc].
-        rewrite Hms.
-        eapply stmt_eval_translate_eqns_menv_inv in Hstmt;
-          try eassumption.
-        rewrite Hstmt.
-        eapply Hfindc; auto.
+          destruct (Is_defined_in_dec y eqs) as [Hxin|Hxin].        
+          - Hint Constructors Is_defined_in_eq.
+            exfalso.
+            inversion_clear Hwsch;
+              match goal with 
+                | H: context[~ Is_defined_in_eqs _ _] |- _ =>
+                  eapply H
+              end; eauto.
+            
+          - eauto.
+            rewrite Hall in Hmc.
+            apply Forall_app in Hmc.
+            destruct Hmc as [HZ Hmc]; clear HZ.
+            apply Forall_cons2 in Hmc.
+            destruct Hmc as [Hmc HZ]; clear HZ.
+            inversion_clear Hmc as [| |? ? ? ? ? ? Hfindc].
+            rewrite Hms.
+            eapply stmt_eval_translate_eqns_menv_inv in Hstmt;
+              try eassumption.
+            rewrite Hstmt.
+            eapply Hfindc; auto.
+        }
 Qed.
 
 End IsStepCorrect.
@@ -1450,7 +1460,7 @@ Proof.
       econstructor; [|constructor].
       econstructor; auto.
       assumption.
-    + repeat constructor; [| apply Memory_Corres_eqs_add_obj; assumption].
+    + repeat constructor; [| apply Memory_Corres_eqs_add_obj; eauto].
       intros M' Hmfind'.
       rewrite Hmfind in Hmfind'; injection Hmfind'; intro Heq; subst M'.
       exists omenv.
@@ -1835,22 +1845,20 @@ Proof.
     destruct eq as [x ck e|x ck f e|x ck v0 e]; simpl.
     + assert (~PS.In x mems) as Hnxm
           by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-      inversion_clear Hwsch as [|? ? ? ? Hwsch' HH Hndef| |].
+      inversion_clear Hwsch as [|? ? Hwsch' HH Hndef].
       assert (forall i, Is_free_in_caexp i ck e -> x <> i) as Hfni.
       { intros i Hfree.
-        apply HH in Hfree.
-        destruct Hfree as [Hm Hnm].
-        assert (~ Nelist.In x inputs) as Hninp.
-        {
-          intro Hin. eapply Hnin; eauto. constructor(auto).
-        }
+        assert (Hfree': Is_free_in_eq i (EqDef x ck e)) by auto.
+        eapply HH in Hfree'.
+        destruct Hfree' as [Hm Hnm].
+        assert (~ Nelist.In x inputs) as Hninp
+            by (intro Hin; eapply Hnin; eauto; constructor(auto)).
 
         assert (~PS.In x mems) as Hnxm' by intuition.
         intro Hxi; rewrite Hxi in *; clear Hxi.
         specialize (Hnm Hnxm').
-        apply Hndef.
-        destruct Hnm as [Hnm|Hnm]; [|now intuition].
-        apply Is_variable_in_eqs_Is_defined_in_eqs with (1:=Hnm). }
+        eapply Hndef; intuition.
+        eapply Is_variable_in_eqs_Is_defined_in_eqs. auto. }
       apply Ifte_free_write_Control_caexp.
       intros i Hfree.
       apply (not_Can_write_in_translate_cexp).

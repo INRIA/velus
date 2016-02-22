@@ -716,7 +716,7 @@ Proof.
     + exact Hls.
     + exact Hxs.
     + exact Hmsem.
-    + inversion_clear Hwsch as [| |? ? ? ? ? ? ? Hnii|].
+    + inversion_clear Hwsch.
       eauto using msem_equation_madd_obj. 
   - exists (madd_mem x (hold v0 ls) M).
     constructor.
@@ -733,10 +733,8 @@ Proof.
         rewrite H1. unfold fby. rewrite Hls; auto.
       * split; [simpl; rewrite Hls; reflexivity|].
         rewrite H1. unfold fby. rewrite Hls; auto.
-    + inversion_clear Hwsch as [| | |? ? ? ? ? ? ? Hnmi].
-      apply msem_equation_madd_mem.
-      apply Hnmi.
-      now apply Hmeqs.
+    + inversion_clear Hwsch.
+      apply msem_equation_madd_mem; eauto.
 Qed.
 
 (* XXX: for this lemma, and the ones before/after it, factorize 'G',

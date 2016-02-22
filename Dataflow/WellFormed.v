@@ -52,12 +52,12 @@ Variable arg: Nelist.nelist ident.
 (* =Is_well_sch= *)
 Inductive Is_well_sch : list equation -> Prop :=
 | WSchNil: Is_well_sch nil
-| WSchEq: forall x eq eqs,
+| WSchEq: forall eq eqs,
     Is_well_sch eqs ->
     (forall i, Is_free_in_eq i eq ->
                   (PS.In i memories -> ~Is_defined_in_eqs i eqs)
                /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ Nelist.In i arg)) ->
-    (~Is_defined_in_eqs x eqs) ->
+    (forall i, Is_defined_in_eq i eq -> ~Is_defined_in_eqs i eqs) ->
     Is_well_sch (eq :: eqs).
 (* =end= *)
 
@@ -92,7 +92,7 @@ Lemma Is_well_sch_NoDup_defs:
     -> NoDup_defs eqs.
 Proof.
   induction eqs as [|eq eqs IH]; [now constructor|].
-  inversion_clear 1; constructor; try apply IH; assumption.
+  inversion_clear 1; destruct eq; constructor; try apply IH; auto.
 Qed.
 
 Lemma Is_well_sch_cons:
@@ -108,10 +108,13 @@ Lemma Is_well_sch_free_variable:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? (*?*) Hp];
-    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; subst; intuition;
-    eapply Hp in Hc;
-    intuition.
+    inversion_clear Hwsch;
+    inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; 
+    subst; intuition;
+    match goal with
+      | H: context[ Is_variable_in_eqs _ _ \/ Nelist.In _ _] |- _ =>
+        eapply H; eauto
+    end.
 Qed.
 
 Lemma Is_well_sch_free_variable_in_mems:
@@ -123,12 +126,13 @@ Lemma Is_well_sch_free_variable_in_mems:
 Proof.
   intros argIn x eq eqs mems Hwsch Hfree Hnim.
   destruct eq;
-    inversion_clear Hwsch as [|? ? ? ? ? Hp | ? ? ? ? ? ? Hp | ? ? ? ? ? ? Hp];
+    inversion_clear Hwsch;
     inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
-    eapply Hp in Hc;
-    destruct Hc as [Hc0 Hc1];
-    apply Hc0 in Hnim;
-    apply Hnim.
+    match goal with
+      | H: context[ Nelist.In _ _ ] |- _ =>
+        eapply H
+    end;
+    auto.
 Qed.
 
 Lemma Is_wsch_is_defined_in:
