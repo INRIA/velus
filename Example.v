@@ -168,15 +168,14 @@ Section CodegenPaper.
   Definition Plus : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.add.
   Definition op_plus (x: lexp) (y: lexp) : lexp := Eop Plus (necons x (nebase y)).
   Notation "x ':+' y" := (op_plus x y) (at level 47).
+  Opaque Plus.
 
   Definition Ifte_int : operator :=
     existT arrows (Tcons Tbool (Tcons Tint (Tcons Tint (Tout Tint))))
              (fun (x : bool) t f => if x then t else f).
   Definition op_ifte (x: lexp) (t: lexp) (f: lexp) : lexp :=
     Eop Ifte_int (necons x (necons t (nebase f))).
-
-
-
+  Opaque Ifte_int.
 
   (* Node names *)
   Definition n_counter     : ident := 1.
@@ -210,7 +209,8 @@ Section CodegenPaper.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma counter_eqns_well_sch : Is_well_sch (PS.singleton c) (initial, increment, restart§) counter_eqns.
+  Lemma counter_eqns_well_sch :
+    Is_well_sch (PS.singleton c) (initial, increment, restart§) counter_eqns.
   Proof.
   unfold counter_eqns. constructor. constructor. constructor.
   - intros i Hi. split.
@@ -236,13 +236,12 @@ Section CodegenPaper.
 
   Eval cbv in translate_node counter.
   Eval cbv in ifte_fuse (c_step (translate_node counter)).
-  Eval cbv in ifte_fuse (c_step (translate_node counter)).
   Eval cbv in ifte_fuse (c_reset (translate_node counter)).
-
 
   Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
   Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
   Notation "x ':/' y" := (op_div x y) (at level 49).
+  Opaque Div.
 
 (*
   node avgvelocity (delta: int; sec: bool) returns (v: int)
