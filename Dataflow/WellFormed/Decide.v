@@ -269,7 +269,6 @@ Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not use
           rewrite Hivi; auto.
 Qed.
 *)
-Locate well_sch.
 Lemma well_sch_spec:
   forall argIns eqns,
     if well_sch argIns eqns
