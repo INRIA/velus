@@ -19,7 +19,7 @@ Class Assignment T U V := {assign : ident -> T -> U -> V}.
 Notation "x '::=' y" := (assign x _ y) (at level 47, no associativity).
 Class OpCall T U := {opcall : operator -> T -> U}.
 Notation "f '<' nel '>'" := (opcall f nel) (at level 46, format "f '<' nel '>'").
-Notation "x , y" := (necons x y) (at level 30, right associativity).
+Notation "x :,: y" := (necons x y) (at level 30, right associativity).
 Notation "x '§'" := (nebase x) (at level 30).
 
 (* Dataflow notations *)
@@ -94,6 +94,7 @@ Proof.
   rewrite HW in HS.
   assumption.
 Qed.
+
 
 (** Translation *)
 
@@ -209,32 +210,82 @@ Section CodegenPaper.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
 
-  Lemma counter_eqns_well_sch :
-    Is_well_sch (PS.singleton c) (initial, increment, restart§) counter_eqns.
-  Proof.
-  unfold counter_eqns. constructor. constructor. constructor.
-  - intros i Hi. split;
-    repeat match goal with
-             | H: IsFree.Is_free_in_eq _ _ |- _ => inv H; intros
-             | H: IsFree.Is_free_in_caexp _ _ _ |- _ => inv H; intros
-             | H: IsFree.Is_free_in_cexp _ _ |- _ => inv H; intros
-             | H: IsFree.Is_free_in_lexp _ _ |- _ => inv H; intros
-             | H: Exists _ _ |- _ => inv H; intros
+
+  Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
+  Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
+  Notation "x ':/' y" := (op_div x y) (at level 49).
+  Opaque Div.
+
+  (* XXX: prove by reflection, god damnit *)
+  Ltac invert :=
+    (* Invertible rules, yeah! *)
+    repeat progress 
+           match goal with
              | H: PS.In _ (PS.singleton _) |- _ =>
-               apply PSP.Dec.F.singleton_1 in H; subst; clear H
-             | |- _ \/ In _ _ => right; simpl; auto 
+               apply PSP.Dec.F.singleton_1 in H
              | H: ~ PS.In ?c (PS.singleton ?c) |- _ =>
-               exfalso; apply H; PSdec.fsetdec
-             | H: IsFree.Is_free_in_clock i Cbase |- _ =>
-               inversion H
-           end; try inversion 1. 
-  - intros ** Habs Hdef. inv Habs. inv Hdef.
-  - intros i Hi. split.
-    + intros Hic Habs. inv Habs.
-      * inv H0. inv Hic.
-      * inv H0.
-    + intro Hic. inv Hi; inv H. left. do 2 constructor.
-  - intro Habs. inv Habs; inv H0.
+               now (exfalso; apply H; PSdec.fsetdec)
+             | H: IsFree.Is_free_in_lexp _ (Econst _) |- _ => 
+               now (exfalso; inv H)
+
+
+             | |- Is_well_sch _ _ _ => constructor
+             | |- ~ _ => intro
+             | |- _ /\ _  => split
+             | |- _ -> _ => intros
+             | H: context[ op_ifte _ _ _ ] |- _ => unfold op_ifte in H
+             | H: context[ op_plus _ _ ] |- _ => unfold op_plus in H
+             | H: context[ op_div _ _ ] |- _ => unfold op_div in H
+             | [ i : ident , H : ?i = _ |- _ ] => subst i
+             | i: ident , H: _ = ?i |- _ => subst i
+
+             | H: IsFree.Is_free_in_eq _ (EqDef _ _ _) |- _ => inv H
+             | H: IsFree.Is_free_in_eq _ (EqFby _ _ _ _) |- _ => inv H
+             | H: IsFree.Is_free_in_eq _ (EqApp _ _ _ _) |- _ => inv H
+
+             | H: IsFree.Is_free_in_caexp _ _ _ |- _ => inversion H; clear H
+
+             | H: IsFree.Is_free_in_cexp _ (Emerge _ _ _) |- _ => inversion H; clear H
+             | H: IsFree.Is_free_in_cexp _ (Eexp _) |- _ => inv H
+
+             | H: IsFree.Is_free_in_lexp _ (Ewhen _ _ _) |- _ => inversion H; clear H
+             | H: IsFree.Is_free_in_lexp _ (Eop _ _) |- _ => inv H
+             | H: IsFree.Is_free_in_lexp ?x (Evar ?y) |- _ => 
+               assert (x = y) by (inv H; eauto); clear H
+
+             | H: IsFree.Is_free_in_clock _ Cbase |- _ => now (exfalso; inv H)
+             | H: IsFree.Is_free_in_clock _ (Con _ _ _) |- _ => inversion H; clear H
+             | H: IsFree.Is_free_in_laexp _ _ _ |- _ => inversion H; clear H
+             | H: IsFree.Is_free_in_laexps _ _ (nebase _) |- _ => inv H
+             | H: IsFree.Is_free_in_laexps _ _ (necons _ _) |- _ => inv H
+
+             | H: IsDefined.Is_defined_in_eqs _ [] |- _ => inv H
+             | H: IsDefined.Is_defined_in_eqs _ (_ :: _) |- _ => inv H
+
+             | H: IsDefined.Is_defined_in_eq _ (EqDef _ _ _) |- _ => inv H 
+             | H: IsDefined.Is_defined_in_eq _ (EqFby _ _ _ _) |- _ => inv H 
+             | H: IsDefined.Is_defined_in_eq _ (EqApp _ _ _ _) |- _ => inv H 
+
+             | H: List.Exists _ [] |- _ => inv H
+             | H: List.Exists _ (_ :: _) |- _ => inv H
+
+             | H: Exists _ (nebase _) |- _ => inv H
+             | H: Exists _ (necons _ _) |- _ => inv H
+           end. 
+
+  Ltac commit :=  
+    try solve [ right; 
+                simpl; auto 
+              | left; constructor 2; repeat constructor
+              | left; repeat constructor
+              | auto ].
+
+  Ltac is_well_sch := invert; commit.
+
+  Lemma counter_eqns_well_sch :
+    Is_well_sch (PS.singleton c) (initial :,: increment :,: restart§) counter_eqns.
+  Proof.
+    is_well_sch.
   Qed.
 
   (* TODO: multiple inputs: initial, increment, restart -> LR: done? *)
@@ -245,10 +296,6 @@ Section CodegenPaper.
   Eval cbv in ifte_fuse (c_step (translate_node counter)).
   Eval cbv in ifte_fuse (c_reset (translate_node counter)).
 
-  Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
-  Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
-  Notation "x ':/' y" := (op_div x y) (at level 49).
-  Opaque Div.
 
 (*
   node avgvelocity (delta: int; sec: bool) returns (v: int)
@@ -290,51 +337,13 @@ Section CodegenPaper.
            need multiple inputs *)
 
   Lemma avgvelocity_eqns_Well_sch :
-    Is_well_sch (PS.singleton h) (delta, sec§) avgvelocity_eqns.
+    Is_well_sch (PS.singleton h) (delta :,: sec§) avgvelocity_eqns.
   Proof.
-    constructor. constructor. constructor. constructor. constructor.
-  - intros i Hi. split.
-    + intros _ Habs. inv Habs.
-    + intros _. right. inv Hi; inv H; inv H1.
-      inv H0; constructor; reflexivity.
-      inv H0; inv H1.
-  - intro Habs. inv Habs.
-  - intros i Hi.
-    assert (i = sec).
-    { inv Hi; inv H. inv H1; inv H2 || reflexivity.
-      inv H1; inv H0. inv H2. reflexivity. inv H1. inv H2. reflexivity.
-      reflexivity. inv H2. }
-    rewrite H in *; clear H. split.
-    + intros Habs _. inv Habs.
-    + intros _. inv Hi; inv H; intuition.
-      * inv H1. inv H2 || right. right; constructor 2; constructor.
-      * inv H1; inv H0. inv H2. right; constructor 2; constructor.
-        inv H1; inv H2 || right; constructor 2; constructor.
-      * right; constructor 2; constructor.
-      * inv H2.
-  - intro Habs. inv Habs; inv H0.
-  - intros i Hi. split.
-    + intros Habs.
-      apply PSP.FM.singleton_1 in Habs; rewrite <-Habs in *; clear Habs.
-      intro H. inv H. inv H1. inv Hi. inv H1. repeat inv H2. inv H2. inv H.
-    + intros Hh. inv Hi; inv H.
-      * right; constructor 2; constructor.
-      * inv H2; inv H1; inv H2.
-        inv H0. inv H2; left; constructor 2; repeat constructor.
-        right; constructor 2; constructor.
-        inv H0; inv H1; left; repeat constructor.
-      * inv H2; inv H1.
-        inv H2. exfalso; apply Hh; constructor.
-        right. constructor 2. constructor.
-  - intro Habs. inv Habs; inv H0; inv H1.
-  - intros i Hi. split.
-    inv Hi; inv H. intro H; inv H.
-    inv Hi; inv H. intro H. left; repeat constructor.
-  - intros Habs. inv Habs; inv H0; inv H1. inv H0. inv H0.
+    is_well_sch.
   Qed.
 
   Example avgvelocity : node :=
-    mk_node n_avgvelocity (delta, sec§) v avgvelocity_eqns.
+    mk_node n_avgvelocity (delta :,: sec§) v avgvelocity_eqns.
 
   Eval cbv in translate_node avgvelocity.
   Eval cbv in ifte_fuse (c_step (translate_node avgvelocity)).
