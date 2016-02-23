@@ -61,27 +61,6 @@ Inductive Is_well_sch : list equation -> Prop :=
     Is_well_sch (eq :: eqs).
 (* =end= *)
 
-(*
-  WSchEqApp:
-    forall x ck f e eqs,
-      Is_well_sch eqs ->
-      (forall i, Is_free_in_laexps i ck e ->
-                    (PS.In i memories -> ~Is_defined_in_eqs i eqs)
-                    /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
-                                      \/ Nelist.In i arg)) ->
-      (~Is_defined_in_eqs x eqs) ->
-      Is_well_sch (EqApp x ck f e :: eqs)
-| WSchEqFby:
-    forall x ck v e eqs,
-      Is_well_sch eqs ->
-(*      PS.In x memories -> (* TODO: delete -> done !*) *)
-      (forall i, Is_free_in_laexp i ck e ->
-                    (PS.In i memories -> ~Is_defined_in_eqs i eqs)
-                 /\ (~PS.In i memories -> Is_variable_in_eqs i eqs
-                                   \/ Nelist.In i arg)) ->
-      (~Is_defined_in_eqs x eqs) ->
-      Is_well_sch (EqFby x ck v e :: eqs).
-*)
 End IsWellSch.
 
 Hint Constructors Is_well_sch.
