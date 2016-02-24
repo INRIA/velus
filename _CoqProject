@@ -32,4 +32,4 @@ Correctness/Proper.v
 Correctness/IsPresent.v
 Correctness/MemoryCorres.v
 Correctness.v
-Heap.v
+Memory.v

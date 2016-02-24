@@ -21,19 +21,19 @@ Definition option_const_to_value co :=
 
 (**
 
-  We provide a "standard" dataflow semantics relating an Rironment
+  We provide a "standard" dataflow semantics relating an environment
   of streams to a stream of outputs.
 
  *)
 
 
-(** ** Rironment and history *)
+(** ** Environment and history *)
 
 (**
 
 An history maps variables to streams of values (the variables'
 histories). Taking a snapshot of the history at a given time yields an
-Rironment.
+environment.
 
  *)
 
