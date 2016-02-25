@@ -4,16 +4,19 @@ Require Import Rustre.Common.
 
 Set Implicit Arguments.
 
+(** * Memory *)
+
 (** 
 
   Both Minimp and the Lustre rely on a rather structured notion of
-  heap, as found in object-oriented languages. Every node
+  (static) memory, as found in object-oriented languages. Every node
   instance/class instance forms a node whose leafs are nodes/instances
   it is calling upon. This is captured by the [memory] tree-like
   datastructure.
 
  *)
 
+(** ** Datatype *)
 
 (* =memory= *)
 Inductive memory (V: Type): Type := mk_memory {
@@ -21,12 +24,12 @@ Inductive memory (V: Type): Type := mk_memory {
   mm_instances : PM.t (memory V) }.
 (* =end= *)
 
+(** ** Operations *) 
+
 Section Operations.
 
   Variable A B: Type.
   Implicit Type menv : memory A.
-
-(* Definition map (f: A -> B)(m: memory A): memory B. *)
 
   Definition empty_memory : memory A :=
     {| mm_values := PM.empty _;
@@ -43,50 +46,52 @@ Section Operations.
     mk_memory M.(mm_values)
                   (PM.add id M' M.(mm_instances)).
   
+End Operations.
+
+(** ** Properties *)
+
+Section Properties.
+  
+  Variable A B: Type.
+  Variables (x y: ident)
+            (v: A)
+            (menv omenv: memory A).
+
   Lemma mfind_mem_gss:
-    forall x v M,
-      mfind_mem x (madd_mem x v M) = Some v.
+      mfind_mem x (madd_mem x v menv) = Some v.
   Proof.
-    intros x v M.
     unfold mfind_mem, madd_mem.
     now apply PM.gss.
   Qed.
 
   Lemma mfind_mem_gso:
-    forall x y v M,
       x <> y
-      -> mfind_mem x (madd_mem y v M) = mfind_mem x M.
+      -> mfind_mem x (madd_mem y v menv) = mfind_mem x menv.
   Proof.
-    intros x y v M.
     unfold mfind_mem, madd_mem.
     now apply PM.gso.
   Qed.
 
   Lemma mfind_inst_gss:
-    forall x v M,
-      mfind_inst x (madd_obj x v M) = Some v.
+      mfind_inst x (madd_obj x omenv menv) = Some omenv.
   Proof.
-    intros x v M.
     unfold mfind_inst, madd_obj.
     now apply PM.gss.
   Qed.
 
   Lemma mfind_inst_gso:
-    forall x y v M,
       x <> y
-      -> mfind_inst x (madd_obj y v M) = mfind_inst x M.
+      -> mfind_inst x (madd_obj y omenv menv) = mfind_inst x menv.
   Proof.
-    intros x y v M.
     unfold mfind_inst, madd_obj.
     now apply PM.gso.
   Qed.
 
   Lemma mfind_mem_add_inst:
-    forall x y omenv menv,
       mfind_mem x (madd_obj y omenv menv) = mfind_mem x menv.
   Proof.
     unfold mfind_mem, madd_obj.
     reflexivity.
   Qed.
-  
-End Operations.
+
+End Properties.
