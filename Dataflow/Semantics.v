@@ -29,6 +29,8 @@ environment.
 
  *)
 
+(* XXX: naming the environment type *and* its inhabitant [R] is
+        probably not a good idea *)
 Definition R := PM.t value.
 Definition history := PM.t (stream value).
 
