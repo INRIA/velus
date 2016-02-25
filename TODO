@@ -4,4 +4,23 @@ Using modules to deal with namespace conflicts when importing both
 CoreDF and Minimp
 
 * Remove call to decision procedures in [Correctness.v]
+* Define a [Sampling] type-class
+
+We can sample streams and histories. We would like to do so using a
+single, common notation.
+
+* Remove [sem_var_instant]
+
+It's not really a semantic rule.
+
+* Remove the [rhs_absent_instant] predicate
+
+It is just used re-stating the fact that, if the base clock is
+[false], the equations do not produce any ouput. At the moment, the
+proof uses it as an indirection to use that result.
+
+* Type of CoreDF programs
+
+Do we stick with [Global]? What did we use in the paper?
+
 * Grep for "XXX:"  and "TODO:"
