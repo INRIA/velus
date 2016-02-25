@@ -17,6 +17,12 @@ Inductive value :=
   | present (c : const).
 Implicit Type v : value.
 
+Definition option2value co :=
+  match co with
+    | None => absent
+    | Some v => present v
+  end.
+
 (** A stream is represented by its characteristic function: *)
 
 Notation stream A := (nat -> A).

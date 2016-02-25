@@ -65,6 +65,8 @@ Implicit Type G: global.
 Definition find_node (f : ident) : global -> option node :=
   List.find (fun n=> ident_eqb n.(n_name) f).
 
+(** ** Properties *)
+
 (** Stronger induction scheme for lexp *)
 Definition lexp_ind2 : forall P : lexp -> Prop,
   (forall c, P (Econst c)) ->

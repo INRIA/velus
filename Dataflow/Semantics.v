@@ -9,15 +9,7 @@ Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.Stream.
 
-
-Definition option_const_to_value co :=
-  match co with
-    | None => absent
-    | Some v => present v
-  end.
-
-(* TODO: put R as a section variable *)
-
+(** * The CoreDF semantics *)
 
 (**
 
@@ -48,156 +40,139 @@ Implicit Type H: history.
 Section InstantSemantics.
 
 Variable base : bool.
+Variable R: R.
 
-Inductive sem_var_instant R (x: ident) v: Prop :=
+Inductive sem_var_instant (x: ident) v: Prop :=
 | Sv:
       PM.find x R = Some v ->
-      sem_var_instant R x v.
+      sem_var_instant x v.
 
-
-Inductive sem_clock_instant R: clock -> bool -> Prop :=
+Inductive sem_clock_instant: clock -> bool -> Prop :=
 | Sbase:
-      sem_clock_instant R Cbase base
+      sem_clock_instant Cbase base
 | Son_tick:
     forall ck x c,
-      sem_clock_instant R ck true ->
-      sem_var_instant R x (present (Cbool c)) ->
-      sem_clock_instant R (Con ck x c) true
+      sem_clock_instant ck true ->
+      sem_var_instant x (present (Cbool c)) ->
+      sem_clock_instant (Con ck x c) true
 | Son_abs1:
     forall ck x c,
-      sem_clock_instant R ck false ->
-      sem_clock_instant R (Con ck x c) false
+      sem_clock_instant ck false ->
+      sem_clock_instant (Con ck x c) false
 | Son_abs2:
     forall ck x c c',
-      sem_clock_instant R ck true ->
-      sem_var_instant R x (present (Cbool c')) ->
+      sem_clock_instant ck true ->
+      sem_var_instant x (present (Cbool c')) ->
       ~ (c = c') ->
-      sem_clock_instant R (Con ck x c)  false.
+      sem_clock_instant (Con ck x c)  false.
 
-Inductive sem_lexp_instant R: lexp -> value -> Prop:=
+Inductive sem_lexp_instant: lexp -> value -> Prop:=
 | Sconst:
     forall c v,
       v = (if base then present c else absent) ->
-      sem_lexp_instant R (Econst c) v
+      sem_lexp_instant (Econst c) v
 | Svar:
     forall x v,
-      sem_var_instant R x v ->
-      sem_lexp_instant R (Evar x) v
+      sem_var_instant x v ->
+      sem_lexp_instant (Evar x) v
 | Swhen_eq:
     forall s x b v,
-      sem_var_instant R x (present (Cbool b)) ->
-      sem_lexp_instant R s v ->
-      sem_lexp_instant R (Ewhen s x b) v
+      sem_var_instant x (present (Cbool b)) ->
+      sem_lexp_instant s v ->
+      sem_lexp_instant (Ewhen s x b) v
 | Swhen_abs1:
     forall s x b b',
-      sem_var_instant R x (present (Cbool b')) ->
+      sem_var_instant x (present (Cbool b')) ->
       ~ (b = b') ->
       (* Note: says nothing about 's'. *)
-      sem_lexp_instant R (Ewhen s x b) absent
+      sem_lexp_instant (Ewhen s x b) absent
 | Swhen_abs2:
     forall s x b,
-      sem_var_instant R x absent ->
+      sem_var_instant x absent ->
       (* Note: says nothing about 's'. *)
-      sem_lexp_instant R (Ewhen s x b) absent
+      sem_lexp_instant (Ewhen s x b) absent
 | Sop_eq: forall les op cs,
-    Nelist.Forall2 (sem_lexp_instant R) les (Nelist.map present cs) ->
+    Nelist.Forall2 sem_lexp_instant les (Nelist.map present cs) ->
     Valid_args (get_arity op) cs ->
-    sem_lexp_instant R (Eop op les) (option_const_to_value (apply_op op cs))
+    sem_lexp_instant (Eop op les) (option2value (apply_op op cs))
 | Sop_abs: forall les op,
-    Nelist.Forall2 (sem_lexp_instant R) les (alls absent les) ->
-    sem_lexp_instant R (Eop op les) absent.
+    Nelist.Forall2 sem_lexp_instant les (alls absent les) ->
+    sem_lexp_instant (Eop op les) absent.
 
-Definition sem_lexps_instant R (les: nelist lexp)(vs: nelist value) :=
-  Nelist.Forall2 (sem_lexp_instant R) les vs.
+Definition sem_lexps_instant (les: nelist lexp)(vs: nelist value) :=
+  Nelist.Forall2 sem_lexp_instant les vs.
 
-Inductive sem_laexp_instant R: clock -> lexp -> value -> Prop:=
+Inductive sem_laexp_instant: clock -> lexp -> value -> Prop:=
 | SLtick:
     forall ck ce c,
-      sem_lexp_instant R ce (present c) ->
-      sem_clock_instant R ck true ->
-      sem_laexp_instant R ck ce (present c)
+      sem_lexp_instant ce (present c) ->
+      sem_clock_instant ck true ->
+      sem_laexp_instant ck ce (present c)
 | SLabs:
     forall ck ce,
-      sem_clock_instant R ck false ->
-      sem_laexp_instant R ck ce absent.
+      sem_clock_instant ck false ->
+      sem_laexp_instant ck ce absent.
 
-Inductive sem_laexps_instant R: clock -> lexps -> nelist value -> Prop:=
+Inductive sem_laexps_instant: clock -> lexps -> nelist value -> Prop:=
 | SLticks:
     forall ck ces cs vs,
       vs = Nelist.map present cs ->
-      sem_lexps_instant R ces vs ->
-      sem_clock_instant R ck true ->
-      sem_laexps_instant R ck ces vs
+      sem_lexps_instant ces vs ->
+      sem_clock_instant ck true ->
+      sem_laexps_instant ck ces vs
 | SLabss:
     forall ck ces vs,
       vs = Nelist.map (fun _ => absent) ces ->
-      sem_clock_instant R ck false ->
-      sem_laexps_instant R ck ces vs.
+      sem_clock_instant ck false ->
+      sem_laexps_instant ck ces vs.
 
-(*
-Definition sem_laexps_instant R (ck: clock)(e: lexps)(xs: nelist value): Prop :=
-  Nelist.Forall2 
-    (fun e xs => sem_laexp_instant R ck e xs)
-    e xs.
-*)
-
-Inductive sem_cexp_instant R: cexp -> value -> Prop :=
+Inductive sem_cexp_instant: cexp -> value -> Prop :=
 | Smerge_true:
     forall x t f v,
-      sem_var_instant R x (present (Cbool true)) ->
-      sem_cexp_instant R t v ->
-      sem_cexp_instant R (Emerge x t f) v
+      sem_var_instant x (present (Cbool true)) ->
+      sem_cexp_instant t v ->
+      sem_cexp_instant (Emerge x t f) v
 | Smerge_false:
     forall x t f v,
-      sem_var_instant R x (present (Cbool false)) ->
-      sem_cexp_instant R f v ->
-      sem_cexp_instant R (Emerge x t f) v
+      sem_var_instant x (present (Cbool false)) ->
+      sem_cexp_instant f v ->
+      sem_cexp_instant (Emerge x t f) v
 | Smerge_abs:
     forall x t f,
-      sem_var_instant R x absent ->
-      sem_cexp_instant R (Emerge x t f) absent
+      sem_var_instant x absent ->
+      sem_cexp_instant (Emerge x t f) absent
 | Sexp:
     forall e v,
-      sem_lexp_instant R e v ->
-      sem_cexp_instant R (Eexp e) v.
+      sem_lexp_instant e v ->
+      sem_cexp_instant (Eexp e) v.
 
-Inductive sem_caexp_instant R: clock -> cexp -> value -> Prop :=
+Inductive sem_caexp_instant: clock -> cexp -> value -> Prop :=
 | SCtick:
     forall ck ce c,
-      sem_cexp_instant R ce (present c) ->
-      sem_clock_instant R ck true ->
-      sem_caexp_instant R ck ce (present c)
+      sem_cexp_instant ce (present c) ->
+      sem_clock_instant ck true ->
+      sem_caexp_instant ck ce (present c)
 | SCabs:
     forall ck ce,
-      sem_clock_instant R ck false ->
-      sem_caexp_instant R ck ce absent.
+      sem_clock_instant ck false ->
+      sem_caexp_instant ck ce absent.
 
-Inductive rhs_absent_instant R: equation -> Prop :=
+Inductive rhs_absent_instant: equation -> Prop :=
 | AEqDef:
     forall x ck cae,
-      sem_caexp_instant R ck cae absent ->
-      rhs_absent_instant R (EqDef x ck cae)
+      sem_caexp_instant ck cae absent ->
+      rhs_absent_instant (EqDef x ck cae)
 | AEqApp:
     forall x f ck laes vs,
-      sem_laexps_instant R ck laes vs ->
+      sem_laexps_instant ck laes vs ->
       Nelist.Forall (fun c => c = absent) vs ->
-      rhs_absent_instant R (EqApp x ck f laes)
+      rhs_absent_instant (EqApp x ck f laes)
 | AEqFby:
     forall x ck v0 lae,
-      sem_laexp_instant R ck lae absent ->
-      rhs_absent_instant R (EqFby x ck v0 lae).
+      sem_laexp_instant ck lae absent ->
+      rhs_absent_instant (EqFby x ck v0 lae).
 
 End InstantSemantics.
-
-Lemma subrate_clock:
-  forall R ck,
-    sem_clock_instant false R ck false.
-Proof.
-  Hint Constructors sem_clock_instant.
-  intros R ck.
-  induction ck; eauto.
-Qed.
-
 
 (** ** Liftings of instantaneous semantics *)
 
@@ -215,13 +190,6 @@ Hint Unfold lift1.
 Definition lift {A B} (sem: bool -> R -> A -> B -> Prop) H x (ys: stream B): Prop :=
   forall n, sem (bk n) (restr H n) x (ys n).
 Hint Unfold lift.
-
-(*
-Lemma Forall2_lift_restr : forall {A B} sem H (args : nelist A) (xss : nelist (stream B)),
-  Nelist.Forall2 (fun x => lift sem H x) args xss ->
-  forall n, Nelist.Forall2 (sem (restr H n)) args (Nelist.map (fun f => f n) xss).
-Proof. intros * Hall n. induction Hall; simpl; constructor; auto. Qed.
-*)
 
 Definition sem_clock H (ck: clock)(xs: stream bool): Prop :=
   lift sem_clock_instant H ck xs.
@@ -260,21 +228,10 @@ Definition absent_list (xss: stream (nelist value))(n: nat): Prop :=
 Definition present_list (xss: stream (nelist value))(n: nat)(vs: nelist const): Prop :=
   xss n = Nelist.map present vs.
 
-Lemma not_absent_present_list:
-  forall xss n vs,
-    present_list xss n vs -> ~ absent_list xss n.
-Proof.
-  intros * Hpres Habs.
-  unfold present_list in Hpres.
-  unfold absent_list in Habs.
-  rewrite Hpres in *. destruct vs; inversion_clear Habs; discriminate.
-Qed.
-
 Definition clock_of (xss: stream (nelist value))(bs: stream bool): Prop :=
   forall n, 
     (exists vs, present_list xss n vs) <-> bs n = true.
 
-(* FIXME: should we introduce the semantics of clocks somewhere? *)
 Inductive sem_equation G : stream bool -> history -> equation -> Prop :=
 | SEqDef:
     forall bk H x xs ck ce,
@@ -314,7 +271,9 @@ Definition sem_nodes (G: global) : Prop :=
   List.Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
 
 
-(* The original idea was to 'bake' the following assumption into sem_node:
+(* XXX: I don't think that this comment is still relevant. Remove or rephrase? 
+
+  The original idea was to 'bake' the following assumption into sem_node:
 
        (forall n y, xs n = absent
                     -> Is_defined_in y eqs
@@ -355,9 +314,6 @@ Definition sem_nodes (G: global) : Prop :=
    These facts are consequences of the clock constraint above (see the
    absent_invariant lemma below).
  *)
-
-
-
 
 (** ** Induction principle for [sem_node] and [sem_equation] *)
 
@@ -452,15 +408,11 @@ Section sem_node_mult.
           (* Turn: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
 	             /\ (forall n, sem_var H (v_name o) n (ys n))
-                     /\ (forall n, xs n = absent
-                                   -> Forall (rhs_absent H n) eqs)
                      /\ (forall n, xs n = absent <-> ys n = absent)
 	             /\ Forall (sem_equation G H) eqs
              into: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
                      /\ (forall n, sem_var H (v_name o) n (ys n))
-                     /\ (forall n, xs n = absent
-                                   -> Forall (rhs_absent H n) eqs)
                      /\ (forall n, xs n = absent <-> ys n = absent)
                      /\ Forall (fun eq=>exists Hsem, P H eq Hsem) eqs *)
            (match Hnode with
@@ -483,7 +435,16 @@ Section sem_node_mult.
 
 End sem_node_mult.
 
-(** ** Determinism of semantics *)
+
+(** ** Determinism of the semantics *)
+
+(** *** Instantaneous semantics *)
+
+Section InstantDeterminism.
+
+Variable base: bool.
+
+(* XXX: Move [R] into a [Section] [Variable] *)
 
 Lemma sem_var_instant_det:
   forall x R v1 v2,
@@ -496,10 +457,6 @@ Proof.
     inversion_clear H2 as [Hf2];
     congruence.
 Qed.
-
-Section InstantDeterminism.
-
-Variable base: bool.
 
 Lemma sem_clock_instant_det:
   forall ck R v1 v2,
@@ -677,6 +634,8 @@ Qed.
 
 End InstantDeterminism.
 
+(** *** Lifted semantics *)
+
 Section LiftDeterminism.
 
 Variable bk : stream bool.
@@ -726,7 +685,6 @@ Proof.
   apply_lift sem_lexps_instant_det.
 Qed.
 
-
 Lemma sem_laexp_det:
   forall H ck e xs1 xs2,  
     sem_laexp bk H ck e xs1 -> sem_laexp bk H ck e xs2 -> xs1 = xs2.
@@ -754,7 +712,6 @@ Lemma sem_caexp_det:
 Proof.
   apply_lift sem_caexp_instant_det.
 Qed.
-
 
 (* XXX: every semantics definition, including [sem_var] which doesn't
 need it, takes a base clock value or base clock stream, except
@@ -803,11 +760,7 @@ Ltac sem_det :=
       eapply sem_var_det; eexact H1 || eexact H2
   end.
 
-(** ** Global management *)
-
-(* Section GlobalManagement. *)
-
-(* Variable bk: stream bool. *)
+(** ** Properties of the [global] environment *)
 
 Lemma find_node_other:
   forall f node G node',
@@ -978,4 +931,31 @@ Proof.
     econstructor; eauto.
     eapply sem_node_cons; eauto.
   - econstructor; eauto.
+Qed.
+
+(** ** Clocking property *)
+
+Lemma subrate_clock:
+  forall R ck,
+    sem_clock_instant false R ck false.
+Proof.
+  Hint Constructors sem_clock_instant.
+  intros R ck.
+  induction ck; eauto.
+Qed.
+
+(* XXX: Similarly, instead of [rhs_absent_instant] and friends, we
+should prove that all the semantic rules taken at [base = false] yield
+an absent value *)
+
+(** ** Presence and absence in non-empty lists *)
+
+Lemma not_absent_present_list:
+  forall xss n vs,
+    present_list xss n vs -> ~ absent_list xss n.
+Proof.
+  intros * Hpres Habs.
+  unfold present_list in Hpres.
+  unfold absent_list in Habs.
+  rewrite Hpres in *. destruct vs; inversion_clear Habs; discriminate.
 Qed.
