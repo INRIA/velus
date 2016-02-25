@@ -1,14 +1,7 @@
-* Coq notations for embedded imperative/dataflow languages
+* Refactor [lexp] to [exp]
+
+Using modules to deal with namespace conflicts when importing both
+CoreDF and Minimp
+
 * Remove call to decision procedures in [Correctness.v]
-* Factorize Is_well_sch 3 cases into a single one
-* Uniform naming for Dataflow/Is* predicates
-
-Is_variable_in_eq
-Is_variable_in
-
-Is_defined_in_eq
-Is_defined_in
-
-Is_free_in_equation
-
 * Grep for "XXX:"  and "TODO:"
