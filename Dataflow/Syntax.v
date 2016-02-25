@@ -6,7 +6,9 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 
-(** * Dataflow language *)
+(** * The CoreDF dataflow language *)
+
+(** ** Clocks *)
 
 Inductive clock : Set :=
 | Cbase : clock                          (* base clock *)
@@ -14,7 +16,7 @@ Inductive clock : Set :=
 
 Implicit Type ck : clock.
 
-(** ** Syntax *)
+(** ** Expressions *)
 
 Inductive lexp : Set :=
   | Econst : const -> lexp
@@ -24,12 +26,15 @@ Inductive lexp : Set :=
 
 Definition lexps := nelist lexp.
 
+Implicit Type le: lexp.
+Implicit Type les: lexps.
+
+(** ** Control expressions *)
+
 Inductive cexp : Set :=
   | Emerge : ident -> cexp -> cexp -> cexp 
   | Eexp : lexp -> cexp.
 
-Implicit Type le: lexp.
-Implicit Type les: lexps.
 Implicit Type ce: cexp.
 
 (** ** Equations *)
@@ -59,7 +64,6 @@ Implicit Type G: global.
 
 Definition find_node (f : ident) : global -> option node :=
   List.find (fun n=> ident_eqb n.(n_name) f).
-
 
 (** Stronger induction scheme for lexp *)
 Definition lexp_ind2 : forall P : lexp -> Prop,
