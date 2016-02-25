@@ -49,6 +49,8 @@ Inductive const : Set :=
 | Cint : BinInt.Z -> const
 | Cbool : bool -> const.
 
+Implicit Type c: const.
+
 Definition const_eqb (c1: const) (c2: const) : bool :=
   match c1, c2 with
   | Cint z1, Cint z2 => BinInt.Z.eqb z1 z2
@@ -175,11 +177,11 @@ Proof.
 Qed.
 
 Lemma gsss: 
-  forall {A: Type} is (vs : nelist A) i c, Nelist.length is = Nelist.length vs ->
-    (Assoc is vs i c <-> PM.find i (adds is vs (PM.empty _)) = Some c).
+  forall {A: Type} is (vs : nelist A) i a, Nelist.length is = Nelist.length vs ->
+    (Assoc is vs i a <-> PM.find i (adds is vs (PM.empty _)) = Some a).
 Proof.
   Hint Constructors Assoc.
-  intros A is vs i c Hlen.
+  intros * Hlen.
   split.
   - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl.
     * rewrite PM.gss; auto.
