@@ -7,6 +7,10 @@ Require Import Omega.
 
 (** * Common definitions *)
 
+(** ** Finite sets and finite maps *)
+
+(** These modules are used to manipulate identifiers. *)
+
 Module PS := Coq.MSets.MSetPositive.PositiveSet.
 Module PSP := MSetProperties.WPropertiesOn Pos PS.
 Module PSF := MSetFacts.Facts PS.
@@ -20,11 +24,42 @@ Definition ident_eqb := Pos.eqb.
 
 Implicit Type i j: ident.
 
-(* The basic types supported by Rustre *)
+Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
+  Nelist.fold_right (fun (iiv: ident * A) env => 
+                    let (i , iv) := iiv in
+                    PM.add i iv env) S (Nelist.combine is vs).
+
+Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
+| AssocBase: 
+    forall i v,
+      Assoc (nebase i) (nebase v) i v
+| AssocHere: 
+    forall i v is vs,
+      Assoc (necons i is) (necons v vs) i v
+| AssocThere:
+    forall i v i' v' is vs,
+      Assoc is vs i' v' ->
+      i <> i' ->
+      Assoc (necons i is) (necons v vs) i' v'.
+
+(** ** Basic types supported by CoreDF: *)
+
 Inductive base_type := Tint | Tbool.
 Inductive const : Set :=
 | Cint : BinInt.Z -> const
 | Cbool : bool -> const.
+
+Definition const_eqb (c1: const) (c2: const) : bool :=
+  match c1, c2 with
+  | Cint z1, Cint z2 => BinInt.Z.eqb z1 z2
+  | Cbool b1, Cbool b2 => Bool.eqb b1 b2
+  | _, _ => false
+  end.
+
+(** ** Universe for typed signatures *)
+
+(** These definitions are used to specify and import external
+operators *)
 
 Inductive arity :=
   | Tout (t_out : base_type)
@@ -48,19 +83,78 @@ Definition operator := sigT arrows.
 Definition get_arity : operator -> arity := @projT1 _ _.
 Definition get_interp : forall op : operator, arrows (get_arity op) := @projT2 _ _.
 
-Lemma arity_dec : forall ar1 ar2 : arity, {ar1 = ar2} + {ar1 <> ar2}.
-Proof. do 2 decide equality. Qed.
+(* length function *)
+Fixpoint nb_args (ar : arity) :=
+  match ar with
+    | Tout _ => 0
+    | Tcons t ar => S (nb_args ar)
+  end.
 
-(* Must be postulated because we do not have decidable equality on function types.
-   Can be avoided, if we add an id field with a decidable equality. *)
-Axiom op_dec : forall op1 op2 : operator, {op1 = op2} + {op1 <> op2}.
+(* list of argument types *)
+Fixpoint arg_interp (ar : arity) :=
+  match ar with
+    | Tout _ => nil
+    | Tcons t ar => cons (base_interp t) (arg_interp ar)
+  end.
 
-Example plus : operator.
-exists (Tcons Tint (Tcons Tint (Tout Tint))).
-exact BinInt.Z.add.
+(* result type *)
+Fixpoint res_interp (ar : arity) :=
+  match ar with
+    | Tout t => base_interp t
+    | Tcons _ ar => res_interp ar
+  end.
+
+(* base_type of result to const *)
+Definition base_to_const t :=
+  match t as t' return base_interp t' -> const with
+    | Tint => fun v => Cint v
+    | Tbool => fun b => Cbool b
+  end.
+
+(** Two possible versions: 
+    1) arguments must be correct
+    2) arguments are checked to have the proper type *)
+
+(* Version 1 *)
+(* List of valid arguments *)
+Inductive valid_args : arity -> Set :=
+  | noArg : forall t_out, valid_args (Tout t_out)
+  | moreArg : forall {t_in ar} (c : base_interp t_in) (l : valid_args ar), valid_args (Tcons t_in ar).
+
+(* TODO: make a better definition *)
+Fixpoint apply_arity_1 {ar : arity} (f : arrows ar) (args : valid_args ar) : res_interp ar.
+destruct ar; simpl in *.
+- exact f.
+- inversion_clear args.
+  exact (apply_arity_1 ar (f c) l).
 Defined.
 
-(** * Common (and preliminary) results **)
+(* Version 2 *)
+(* Predicate accepting list of valid arguments *)
+Inductive Valid_args : arity -> nelist const -> Prop :=
+  | OneInt : forall t_out n, Valid_args (Tcons Tint (Tout t_out)) (nebase (Cint n))
+  | OneBool : forall t_out b, Valid_args (Tcons Tbool (Tout t_out)) (nebase (Cbool b))
+  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (necons (Cint n) l)
+  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (necons (Cbool b) l).
+
+Fixpoint apply_arity (ar : arity) (l : nelist const) : arrows ar -> option const :=
+  match ar as ar', l return arrows ar' -> option const with
+    | Tout _, _ => fun _ => None
+    | Tcons Tint (Tout Tint), nebase (Cint n) => fun f => Some (Cint (f n))
+    | Tcons Tint (Tout Tbool), nebase (Cint n) => fun f => Some (Cbool (f n))
+    | Tcons Tbool (Tout Tint), nebase (Cbool b) => fun f => Some (Cint (f b))
+    | Tcons Tbool (Tout Tbool), nebase (Cbool b) => fun f => Some (Cbool (f b))
+    | Tcons Tint ar, necons (Cint n) l => fun f => apply_arity ar l (f n)
+    | Tcons Tbool ar, necons (Cbool b) l => fun f => apply_arity ar l (f b)
+    | _, _ => fun _ => None (* Wrong type or number of arguments *)
+  end.
+
+Definition apply_op (op : operator) (l : nelist const) : option const :=
+  apply_arity (get_arity op) l (get_interp op).
+
+(** ** Properties *)
+
+(** *** About identifiers **)
 
 Lemma ident_eqb_neq:
   forall x y, ident_eqb x y = false <-> x <> y.
@@ -79,25 +173,6 @@ Lemma ident_eqb_refl:
 Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
-
-Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
-  Nelist.fold_right (fun (iiv: ident * A) env => 
-                    let (i , iv) := iiv in
-                    PM.add i iv env) S (Nelist.combine is vs).
-
-Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
-| AssocBase: 
-    forall i v,
-      Assoc (nebase i) (nebase v) i v
-| AssocHere: 
-    forall i v is vs,
-      Assoc (necons i is) (necons v vs) i v
-| AssocThere:
-    forall i v i' v' is vs,
-      Assoc is vs i' v' ->
-      i <> i' ->
-      Assoc (necons i is) (necons v vs) i' v'.
-
 
 Lemma gsss: 
   forall {A: Type} is (vs : nelist A) i c, Nelist.length is = Nelist.length vs ->
@@ -154,12 +229,7 @@ Proof.
   intros i m; unfold PS.In; case (PS.mem i m); auto.
 Qed.
 
-Definition const_eqb (c1: const) (c2: const) : bool :=
-  match c1, c2 with
-  | Cint z1, Cint z2 => BinInt.Z.eqb z1 z2
-  | Cbool b1, Cbool b2 => Bool.eqb b1 b2
-  | _, _ => false
-  end.
+(** *** About basic types *)
 
 Lemma const_eqb_eq:
   forall (c1 c2: const),
@@ -187,6 +257,34 @@ Proof.
   intro H; apply const_eqb_eq in H.
   rewrite Heq in H; discriminate.
 Qed.
+
+
+(** *** About operators *)
+
+Lemma arity_dec : forall ar1 ar2 : arity, {ar1 = ar2} + {ar1 <> ar2}.
+Proof. do 2 decide equality. Qed.
+
+(* Must be postulated because we do not have decidable equality on function types.
+   Can be avoided, if we add an id field with a decidable equality. *)
+Axiom op_dec : forall op1 op2 : operator, {op1 = op2} + {op1 <> op2}.
+
+Example plus : operator.
+exists (Tcons Tint (Tcons Tint (Tout Tint))).
+exact BinInt.Z.add.
+Defined.
+
+Definition op_eqb op1 op2 := if op_dec op1 op2 then true else false.
+
+Lemma op_eqb_true_iff : forall op1 op2, op_eqb op1 op2 = true <-> op1 = op2.
+Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
+
+Lemma op_eqb_false_iff : forall op1 op2, op_eqb op1 op2 = false <-> op1 <> op2.
+Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
+
+Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar.
+Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
+
+(** *** About Coq stdlib *)
 
 Lemma Forall_cons2:
   forall A P (x: A) l,
@@ -320,18 +418,6 @@ intros A B f l y l' Hmap. destruct l; simpl in Hmap.
 - inversion_clear Hmap. eauto.
 Qed.
 
-(* A constant list of the same size *)
-Definition alls {A B} c (l : nelist A) : nelist B := Nelist.map (fun _ => c) l.
-
-
-Definition op_eqb op1 op2 := if op_dec op1 op2 then true else false.
-
-Lemma op_eqb_true_iff : forall op1 op2, op_eqb op1 op2 = true <-> op1 = op2.
-Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
-
-Lemma op_eqb_false_iff : forall op1 op2, op_eqb op1 op2 = false <-> op1 <> op2.
-Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
-
 Open Scope bool_scope.
 
 Fixpoint forall2b {A B} (f : A -> B -> bool) l1 l2 :=
@@ -362,77 +448,3 @@ Qed.
 Corollary Forall2_length : forall {A B} (P : A -> B -> Prop) l1 l2,
   Forall2 P l1 l2 -> length l1 = length l2.
 Proof. intros * Hall. rewrite Forall2_forall2 in Hall. now destruct Hall. Qed.
-
-(** ** Results about arities *)
-
-(* length function *)
-Fixpoint nb_args (ar : arity) :=
-  match ar with
-    | Tout _ => 0
-    | Tcons t ar => S (nb_args ar)
-  end.
-
-(* list of argument types *)
-Fixpoint arg_interp (ar : arity) :=
-  match ar with
-    | Tout _ => nil
-    | Tcons t ar => cons (base_interp t) (arg_interp ar)
-  end.
-
-(* result type *)
-Fixpoint res_interp (ar : arity) :=
-  match ar with
-    | Tout t => base_interp t
-    | Tcons _ ar => res_interp ar
-  end.
-
-(* base_type of result to const *)
-Definition base_to_const t :=
-  match t as t' return base_interp t' -> const with
-    | Tint => fun v => Cint v
-    | Tbool => fun b => Cbool b
-  end.
-
-(** Two possible versions: 
-    1) arguments must be correct
-    2) arguments are checked to have the proper type *)
-
-(* Version 1 *)
-(* List of valid arguments *)
-Inductive valid_args : arity -> Set :=
-  | noArg : forall t_out, valid_args (Tout t_out)
-  | moreArg : forall {t_in ar} (c : base_interp t_in) (l : valid_args ar), valid_args (Tcons t_in ar).
-
-(* TODO: make a better definition *)
-Fixpoint apply_arity_1 {ar : arity} (f : arrows ar) (args : valid_args ar) : res_interp ar.
-destruct ar; simpl in *.
-- exact f.
-- inversion_clear args.
-  exact (apply_arity_1 ar (f c) l).
-Defined.
-
-(* Version 2 *)
-(* Predicate accepting list of valid arguments *)
-Inductive Valid_args : arity -> nelist const -> Prop :=
-  | OneInt : forall t_out n, Valid_args (Tcons Tint (Tout t_out)) (nebase (Cint n))
-  | OneBool : forall t_out b, Valid_args (Tcons Tbool (Tout t_out)) (nebase (Cbool b))
-  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (necons (Cint n) l)
-  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (necons (Cbool b) l).
-
-Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar.
-Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
-
-Fixpoint apply_arity (ar : arity) (l : nelist const) : arrows ar -> option const :=
-  match ar as ar', l return arrows ar' -> option const with
-    | Tout _, _ => fun _ => None
-    | Tcons Tint (Tout Tint), nebase (Cint n) => fun f => Some (Cint (f n))
-    | Tcons Tint (Tout Tbool), nebase (Cint n) => fun f => Some (Cbool (f n))
-    | Tcons Tbool (Tout Tint), nebase (Cbool b) => fun f => Some (Cint (f b))
-    | Tcons Tbool (Tout Tbool), nebase (Cbool b) => fun f => Some (Cbool (f b))
-    | Tcons Tint ar, necons (Cint n) l => fun f => apply_arity ar l (f n)
-    | Tcons Tbool ar, necons (Cbool b) l => fun f => apply_arity ar l (f b)
-    | _, _ => fun _ => None (* Wrong type or number of arguments *)
-  end.
-
-Definition apply_op (op : operator) (l : nelist const) : option const :=
-  apply_arity (get_arity op) l (get_interp op).

@@ -81,6 +81,9 @@ Fixpoint combine {A B : Type} (l : nelist A) (l' : nelist B) {struct l} : nelist
     | necons a la, necons b lb => necons (a, b) (combine la lb)
   end.
 
+(* A constant list of the same size *)
+Definition alls {A B} c (l : nelist A) : nelist B := map (fun _ => c) l.
+
 (** ** Predicates **)
 
 Fixpoint In {A : Type} (x : A) (l : nelist A): Prop :=
