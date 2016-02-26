@@ -319,6 +319,10 @@ Definition sem_nodes (G: global) : Prop :=
 
 (** ** Induction principle for [sem_node] and [sem_equation] *)
 
+(** The automagically-generated induction principle is not strong
+enough: it does not support the internal fixpoint introduced by
+[List.Forall] *)
+
 Section sem_node_mult.
   Variable G: global.
 

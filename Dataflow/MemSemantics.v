@@ -16,15 +16,20 @@ Require Import Rustre.Dataflow.WellFormed.
 
 Set Implicit Arguments.
 
+(** * The CoreDF+Memory semantics *)
+
 (**
 
   We provide a "non-standard" dataflow semantics where the state
-  introduced by an [fby] is kept in a separate [heap] of streams.
+  introduced by an [fby] is kept in a separate [memory] of
+  streams. The only difference is therefore in the treatment of the
+  [fby].
 
  *)
 
 
-(*
+(* XXX: Is this comment still relevant?
+
    NB: The history H is not really necessary here. We could just as well
        replay all the semantic definitions using a valueEnv N ('N' for now),
        since all the historical information is in ms. This approach would
@@ -86,61 +91,11 @@ with msem_node G: ident -> stream (nelist value) -> memory -> stream value -> Pr
 
 Definition msem_equations G bk H M eqs := List.Forall (msem_equation G bk H M) eqs.
 
-Lemma subrate_property_eqn:
-  forall G H M bk xss eqn n,
-    clock_of xss bk ->
-    msem_equation G bk H M eqn ->
-    absent_list xss n ->
-    rhs_absent_instant (bk n) (restr H n) eqn.
-Proof.
-  intros * Hck Hsem Habs.
-  assert (Hbk: bk n = false). 
-  {
-    destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto.
-    apply Bool.not_false_is_true in Hbk.
-    eapply Hck in Hbk.
-    destruct Hbk as [vs Hpres].
-    unfold present_list in Hpres; rewrite Habs in Hpres.
-    destruct (xss n); destruct vs; simpl in Hpres; discriminate Hpres.
-  }
-  rewrite Hbk in *.
-  destruct eqn;
-    try repeat
-      match goal with
-        | |- rhs_absent_instant false _ (EqDef _ _ _) => 
-          constructor
-        | |- rhs_absent_instant false _ (EqFby _ _ _ _) => 
-          constructor
-        | |- rhs_absent_instant false _ (EqApp _ _ _ ?ls) =>
-          apply AEqApp with (vs := Nelist.map (fun _ => absent) ls)
-        | |- sem_caexp_instant false _ ?ck ?ce absent =>
-          apply SCabs
-        | |- sem_clock_instant false _ ?ck false =>
-          apply subrate_clock
-        | |- sem_laexp_instant false _ ?ck ?le absent =>
-          apply SLabs
-        | |- sem_laexps_instant false _ ?ck ?les _ =>
-          apply SLabss; eauto
-      end.
-  clear Hsem Habs.
-  apply Forall_map. induction l; try apply IHl; constructor; auto. 
-Qed.
+(** ** Induction principle for [msem_equation] and [msem_node] *)
 
-Lemma subrate_property_eqns:
-  forall G H M bk xss eqns n,
-    clock_of xss bk ->
-    msem_equations G bk H M eqns ->
-    absent_list xss n ->
-    List.Forall (rhs_absent_instant (bk n) (restr H n)) eqns.
-Proof.
-  intros * Hck Hsem Habs.
-  induction eqns as [|eqn eqns]; auto.
-  inversion_clear Hsem.
-  constructor.
-  eapply subrate_property_eqn; eauto.
-  eapply IHeqns; eauto.
-Qed.
-
+(** The automagically-generated induction principle is not strong
+enough: it does not support the internal fixpoint introduced by
+[List.Forall] *)
 
 Section msem_node_mult.
   Variable G: global.
@@ -287,121 +242,67 @@ End msem_node_mult.
 Definition msem_nodes (G: global) : Prop :=
   Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
 
-(* Lionel: As these two lemmas are not used, I simply commented them out.
-Lemma rhs_absent_lhs_node:
-  forall G f xss M ys n,
-       Welldef_global G
-    -> msem_node G f xss M ys
-    -> absent_list xss n
-    -> ys n = absent.
+
+(** ** Properties *)
+
+(** *** Equation non-activation *)
+
+Lemma subrate_property_eqn:
+  forall G H M bk xss eqn n,
+    clock_of xss bk ->
+    msem_equation G bk H M eqn ->
+    absent_list xss n ->
+    rhs_absent_instant (bk n) (restr H n) eqn.
 Proof.
-  intros G f xs M ys n Hwdef Hsem.
-  induction Hsem as [| H M y ck f M' le ls ys Hmfind Hls Hys Hmsem IH |
-                     | f xs M ys i o eqs Hf Heqs IH]
-  using msem_node_mult
-  with (P := fun H M eq Hsem =>
-               forall x, rhs_absent_instant (restr H n) eq
-                         -> msem_equation G H M eq
-                         -> Is_defined_in_eq x eq
-                         -> sem_var_instant (restr H n) x absent).
-  - intros y Habs Hmsem Hidi.
-    inversion_clear Hidi.
-    inversion_clear Habs as [? ? Hcae| |].
-    specialize (Hvar n); specialize (Hexp n); simpl in *.
-    assert (Habs: xs n = absent) by sem_det.
-    rewrite Habs in *.
-    assumption.
-  - intros x Habs Hseq Hidi.
-    inversion_clear Hidi.
-    inversion_clear Habs as [|? ? ? ? ? Hle Hvs|].
-    assert (Nelist.map (fun f => f n) ls = vs).
-    { assert (Hlen : Nelist.length ls = Nelist.length vs).
-      { transitivity (Nelist.length le); [symmetry |]; eapply Nelist.Forall2_length; eassumption. }
-      induction vs as [v | v vs]; destruct ls as [l1 | l1 ls]; simpl.
-      + 
-      
-    Print absent_list. 
-    specialize (Hls n); specialize (Hys n); simpl in *.
-    assert (Hle_abs: ls n = vs) by sem_det.
-    rewrite Hle_abs in *.
-    assert (absent_list ls n) by (unfold absent_list; congruence).
-    rewrite IH in *; eauto.
-  - intros x Habs Hsem Hidi.
-    inversion_clear Hidi.
-    inversion_clear Habs as [| |? ? ? Hlae].
-    specialize (Hls n); simpl in *.
-    assert (Hls_abs: ls n = absent) by sem_det.
-    specialize Hy with n.
-    rewrite Hls_abs in *.
-    destruct Hy as [Hy0 Hy1].
-    specialize (HyS n); simpl in HyS. rewrite Hy1 in HyS. 
-    auto.
-  - apply Welldef_global_output_Is_variable_in with (2:=Hf) in Hwdef.
-    simpl in Hwdef.
-    apply Is_variable_in_Is_defined_in in Hwdef.
-    intro Habsx.
-    clear Heqs.
-    destruct IH as [H [Hxs [Hys [Habs [Hout Heqs]]]]].
-    specialize (Hxs n).
-    specialize (Hys n).
-    apply Habs in Habsx.
-    clear Hf Habs.
-    induction eqs as [|eq eqs IHeqs]; [now inversion Hwdef|].
-    apply Is_defined_in_cons in Hwdef.
-    apply Forall_cons2 in Heqs.
-    destruct Heqs as [Heqs0 Heqs1].
-    apply Forall_cons2 in Habsx.
-    destruct Habsx as [Habsx0 Habsx1].
-    destruct Hwdef as [Hin|[Hnin0 Hnin1]];
-      [clear IHeqs Heqs1|now apply IHeqs with (1:=Hnin1) (2:=Heqs1) (3:=Habsx1)].
-    destruct Heqs0 as [Hmsem Heqs].
-    apply Heqs with (1:=Habsx0) (2:=Hmsem) in Hin.
-    simpl in *.
-    sem_det.
+  intros * Hck Hsem Habs.
+  assert (Hbk: bk n = false). 
+  {
+    destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto.
+    apply Bool.not_false_is_true in Hbk.
+    eapply Hck in Hbk.
+    destruct Hbk as [vs Hpres].
+    unfold present_list in Hpres; rewrite Habs in Hpres.
+    destruct (xss n); destruct vs; simpl in Hpres; discriminate Hpres.
+  }
+  rewrite Hbk in *.
+  destruct eqn;
+    try repeat
+      match goal with
+        | |- rhs_absent_instant false _ (EqDef _ _ _) => 
+          constructor
+        | |- rhs_absent_instant false _ (EqFby _ _ _ _) => 
+          constructor
+        | |- rhs_absent_instant false _ (EqApp _ _ _ ?ls) =>
+          apply AEqApp with (vs := Nelist.map (fun _ => absent) ls)
+        | |- sem_caexp_instant false _ ?ck ?ce absent =>
+          apply SCabs
+        | |- sem_clock_instant false _ ?ck false =>
+          apply subrate_clock
+        | |- sem_laexp_instant false _ ?ck ?le absent =>
+          apply SLabs
+        | |- sem_laexps_instant false _ ?ck ?les _ =>
+          apply SLabss; eauto
+      end.
+  clear Hsem Habs.
+  apply Forall_map. induction l; try apply IHl; constructor; auto. 
 Qed.
 
-
-Lemma rhs_absent_lhs:
-  forall G H M n x neqs,
-    Welldef_global G
-    -> Forall (rhs_absent_instant (restr H n)) neqs
-    -> Forall (msem_equation G H M) neqs
-    -> Is_defined_in x neqs
-    -> sem_var_instant (restr H n) x absent.
+Lemma subrate_property_eqns:
+  forall G H M bk xss eqns n,
+    clock_of xss bk ->
+    msem_equations G bk H M eqns ->
+    absent_list xss n ->
+    List.Forall (rhs_absent_instant (bk n) (restr H n)) eqns.
 Proof.
-  intros G H M n x neqs Hwdef.
-  induction neqs as [|eq eqs IH]; [now inversion 2|].
-  intros Hrhs Hsem Hidi.
-  apply Is_defined_in_cons in Hidi.
-  apply Forall_cons2 in Hsem.
-  destruct Hsem as [Hsem0 Hsem1].
-  apply Forall_cons2 in Hrhs.
-  destruct Hrhs as [Hrhs0 Hrhs1].
-  destruct Hidi as [Hidi|Hidi].
-  - destruct eq;
-    inversion_clear Hrhs0 as [? ? Habs|? ? ? ? Habs|? ? ? ? Habs];
-    inversion_clear Hsem0 as [? ? ? ? ? Hvar Hcae
-                             |? ? ? ? ? ? ? ? Hmfind Hlae Hvar Hsem
-                             |? ? ? ? ? ? ? ? Hmfind Hms0 Hlae Hvar];
-    inversion_clear Hidi.
-    + specialize (Hcae n); specialize (Hvar n); simpl in *.
-      assert (Hxs_abs: xs n = absent) by sem_det.
-      congruence.
-    + specialize (Hlae n); specialize (Hvar n); simpl in *.
-      assert (Hv_abs: ls n = vs) by sem_det.
-      assert (absent_list ls n) by (unfold absent_list; congruence).
-      assert (Hxs_abs: xs n = absent) by (eapply rhs_absent_lhs_node; eauto).
-      congruence.
-    + specialize (Hlae n); specialize (Hvar n); simpl in *.
-      assert (Hls_abs: ls n = absent) by sem_det.
-      specialize H2 with n.
-      rewrite Hls_abs in H2; simpl in Hvar.
-      destruct H2. rewrite H2 in Hvar.
-      auto.
-  - destruct Hidi as [Hnidi Hidi].
-    now apply IH with (1:=Hrhs1) (2:=Hsem1) (3:=Hidi).
+  intros * Hck Hsem Habs.
+  induction eqns as [|eqn eqns]; auto.
+  inversion_clear Hsem.
+  constructor.
+  eapply subrate_property_eqn; eauto.
+  eapply IHeqns; eauto.
 Qed.
-*)
+
+(** *** Environment cons-ing lemmas *)
 
 (* Instead of repeating all these cons lemmas (i.e., copying and pasting them),
    and dealing with similar obligations multiple times in translation_correct,
@@ -594,29 +495,7 @@ Proof.
     now destruct Hnini.
 Qed.
 
-
-(* TODO: Replace with the new development in DataflowNatMSemantics:
-
-Inductive sem_held_equation (H: history) (H': history) : equation -> Prop :=
-| SHEqDef:
-    forall x cae,
-      (forall n c, sem_var H x n (present c) -> sem_var H' x n (present c))
-      -> sem_held_equation H H' (EqDef x cae)
-| SHEqApp:
-    forall x f lae,
-      (forall n c, sem_var H x n (present c) -> sem_var H' x n (present c))
-      -> sem_held_equation H H' (EqApp x f lae)
-| SHEqFby:
-    forall x v0 lae ys,
-      (forall n, sem_laexp H lae n (ys n))
-      -> (forall n c, sem_var H' x n (present c) <-> holdR v0 ys n c)
-      -> sem_held_equation H H' (EqFby x v0 lae).
-
-Definition sem_held_equations
-           (H: history) (H': history) (eqs: list equation) : Prop :=
-  Forall (sem_held_equation H H') eqs.
-
- *)
+(** *** Memory management *)
 
 Lemma msem_equation_madd_mem:
   forall G bk H M x ms eqs,
@@ -661,7 +540,8 @@ Proof.
   erewrite mfind_inst_gso; eauto.
 Qed.
 
-(*
+(* XXX: I believe that this comment is outdated ([no_dup_defs] is long gone)
+
    - The no_dup_defs hypothesis is essential for the EqApp case.
 
      If the set of equations contains two EqApp's to the same variable:
@@ -691,6 +571,16 @@ Qed.
    Note that the no_dup_defs hypothesis requires a stronger definition of
    either Is_well_sch or Welldef_global.
 *)
+
+(** ** Fundamental theorem *)
+
+(** 
+
+We show that the standard semantics implies the existence of a
+dataflow memory for which the non-standard semantics holds true.
+
+ *)
+
 Lemma sem_msem_eq:
   forall G bk H eqs M eq mems argIn,
     (forall f xs ys, sem_node G f xs ys
@@ -756,7 +646,7 @@ Proof.
   now apply sem_msem_eq with (1:=IH) (2:=Heq) (3:=Hwsch) (4:=Heqs).
 Qed.
 
-Lemma sem_msem_node:
+Theorem sem_msem_node:
   forall G f xs ys,
     Welldef_global G
     -> sem_node G f xs ys
