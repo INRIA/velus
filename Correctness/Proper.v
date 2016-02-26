@@ -7,6 +7,8 @@ Require Import Rustre.Translation.
 Require Import Setoid.
 
 
+(** * Setoid morphisms for translation *)
+
 (**
  Annoying morphism lemmas... 
 *)
