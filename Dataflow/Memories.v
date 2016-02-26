@@ -6,17 +6,18 @@ Open Scope list_scope.
 
 Require Import Rustre.Dataflow.Syntax.
 
+(** * Collecting memory cells *)
+
 (** 
 
   The [memories] function collects the set of variables that will turn
   into heap variables after compilation, ie. variables denoting an
   [fby] equation.
 
+  We (ought to) have the following equivalence:
+    [forall x, PS.In x (memories eqs) <-> ~ Is_Variable x eqs]
+
  *)
-
-(* TODO: give an inductive specification instead? *)
-(* TB: Why? We need something executable. *)
-
 
 Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
   match eq with
@@ -26,6 +27,9 @@ Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
 
 Definition memories (eqs: list equation) : PS.t :=
   List.fold_left memory_eq eqs PS.empty.
+
+
+(** ** Properties *)
 
 Lemma In_fold_left_memory_eq:
   forall x eqs m,
