@@ -8,6 +8,8 @@ Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Memories.
 
+(** * Defined variables *)
+
 (**
 
   The [Is_defined_in] predicate identifies the variables defined by a
@@ -33,7 +35,7 @@ Proof.
      | right; inversion 1; auto]).
 Qed.
 
-
+(** ** Properties *)
 
 Lemma Is_defined_in_cons:
   forall x eq eqs,

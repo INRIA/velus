@@ -9,6 +9,8 @@ Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsDefined.
 Require Import Rustre.Dataflow.Memories.
 
+(** * Defined variables : decision procedure *)
+
 (** 
 
 Decision procedure for the [Is_defined_in] predicate. We show that it
@@ -30,7 +32,7 @@ Definition defined (eqs: list equation) : PS.t :=
   List.fold_left defined_eq eqs PS.empty.
 
 
-
+(** ** Properties *)
 
 Lemma In_fold_left_defined_eq:
   forall x eqs m,
