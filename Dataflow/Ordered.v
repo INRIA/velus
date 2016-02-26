@@ -6,15 +6,17 @@ Open Scope list_scope.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 
+(** * Ordering of nodes *)
+
 (** 
 
 The compilation of a whole program is only correct if that program satisfies
 the [Ordered_nodes] predicate, which states that a node may only call nodes
-that were defined earlier. The order is unimportant in a Dataflow program,
-but it is important in an imperative program.
+that were defined earlier.
 
- *)
+Remark: [Ordered_nodes] is implied by [Welldef_global].
 
+*)
 
 
 Inductive Is_node_in_eq : ident -> equation -> Prop :=
@@ -22,6 +24,20 @@ Inductive Is_node_in_eq : ident -> equation -> Prop :=
 
 Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_node_in_eq f) eqs.
+
+Inductive Ordered_nodes : global -> Prop :=
+| ONnil: Ordered_nodes nil
+| ONcons:
+    forall nd nds,
+      Ordered_nodes nds
+      -> (forall f, Is_node_in f nd.(n_eqs) ->
+                    f <> nd.(n_name)
+                    /\ List.Exists (fun n=> f = n.(n_name)) nds)
+      -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
+      -> Ordered_nodes (nd::nds).
+
+
+(** ** Properties of [Is_node_in] *)
 
 Section Is_node_Properties.
 
@@ -122,17 +138,7 @@ Section Is_node_Properties.
 
 End Is_node_Properties.
 
-
-Inductive Ordered_nodes : global -> Prop :=
-| ONnil: Ordered_nodes nil
-| ONcons:
-    forall nd nds,
-      Ordered_nodes nds
-      -> (forall f, Is_node_in f nd.(n_eqs) ->
-                    f <> nd.(n_name)
-                    /\ List.Exists (fun n=> f = n.(n_name)) nds)
-      -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
-      -> Ordered_nodes (nd::nds).
+(** ** Properties of [Ordered_nodes] *)
 
 Section Ordered_nodes_Properties.
 
