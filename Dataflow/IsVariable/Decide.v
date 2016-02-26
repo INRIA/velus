@@ -8,6 +8,8 @@ Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsVariable.
 
+(** * Stack variables: decision procedure *)
+
 (** 
 
 Decision procedure for the [IsVariable] predicate. We show that it is
@@ -29,6 +31,7 @@ Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
 Definition variables (eqs: list equation) : PS.t :=
   List.fold_left variable_eq eqs PS.empty.
 
+(** ** Properties *)
 
 Lemma In_fold_left_variable_eq:
   forall x eqs m,

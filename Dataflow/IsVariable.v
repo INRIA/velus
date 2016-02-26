@@ -8,6 +8,9 @@ Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsDefined.
 
+
+(** * Stack variables *)
+
 (**
 
   The [Is_variable] predicate identifies those variables that will
@@ -23,6 +26,8 @@ Inductive Is_variable_in_eq : ident -> equation -> Prop :=
 
 Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
   List.Exists (Is_variable_in_eq x) eqs.
+
+(** ** Properties *)
 
 Lemma not_Is_variable_in_EqDef: 
   forall x ck y e,
