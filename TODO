@@ -26,7 +26,7 @@ Do we stick with [Global]? What did we use in the paper?
 * Grep for "XXX:"  and "TODO:"
 * Use type classes for predicates
 
-Example: Is_free_*
+Example: Is_free_*, Is_Defined_*, Is_Variable_*, clk_
 
 * Prove the characterizing equivalence of [memories]
 

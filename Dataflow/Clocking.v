@@ -1,13 +1,22 @@
-
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Nelist.
 Require Import List.
 
+(** * Well clocked programs *)
+
+(** 
+
+This family of predicates states that a program is well-clocked
+wrt. its clock annotations.
+
+ *)
+
 Definition clockenv := PM.t clock.
 
 Implicit Type C: clockenv.
+
 
 Inductive clk_var C (x: ident) ck: Prop :=
 | Cv:
