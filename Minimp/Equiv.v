@@ -5,11 +5,19 @@ Require Import Rustre.Common.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Minimp.Semantics.
 
-(** stmt_eval_eq *)
-
 Require Import Relations.
 Require Import Morphisms.
 Require Import Setoid.
+
+(** * Equivalence of Minimp programs *)
+
+(**
+
+To prove the soundness of the if-then-else fusing optimization, we
+define (and prove some properties about) equivalence of Minimp
+programs.
+
+*)
 
 Definition stmt_eval_eq s1 s2: Prop :=
   forall prog menv env menv' env',
