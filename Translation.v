@@ -16,19 +16,22 @@ Require Import Nelist.
 
 (** ** Identification of node instances *)
 
-(*
-   Note: it is necessary to distinguish different instantiations of
-         the same node (i.e., different objects of the same class).
+(** 
 
-         This is done in Auger's thesis in the language LSNI, where
-         node applications are assigned unique identifiers. His context
-         is richer, in particular, because the result of a node application
-         may be assigned to a pattern-tuple containing multiple identifiers.
+Each node application in CoreDF turns into a method call in the
+imperative setting. This means that, upon initializing a node, one
+must declare a new instance for each its application.
 
-         Here, we take advantage of the fact that the result of a node
-         application is assigned to a single variable. We use the name of
-         that variable to identify the instance.
- *)
+Remark: it is necessary to distinguish different instantiations of the
+same node (i.e., different objects of the same class). This is done in
+Auger's thesis in the language LSNI, where node applications are
+assigned unique identifiers. His context is richer, in particular,
+because the result of a node application may be assigned to a
+pattern-tuple containing multiple identifiers.
+
+Here, we take advantage of the fact that the result of a node
+application is assigned to a single variable. We use the name of that
+variable to identify the instance.  *)
 
 Definition gather_eq (acc: list ident * list obj_dec) (eq: equation) :=
   match eq with
@@ -70,8 +73,13 @@ Fixpoint translate_lexp (e : lexp) : exp :=
                                     (fun e _ rec => necons (translate_lexp e) rec) es)
   end.
 (* =end= *)
-(* The Opp case should be written as
+
+(** The Opp case should be written as
+
+<<
        [Op op (Nelist.map translate_lexp es)]
+>>
+
    but this is not structural enough for Coq. *)
 
 
@@ -92,8 +100,9 @@ Definition translate_eqn (eqn: equation) : stmt :=
   end.
 (* =end= *)
 
-(* NB: eqns ordered in reverse order of execution for coherence
-       with Is_well_sch. *)
+(** Remark: eqns ordered in reverse order of execution for coherence with
+       [Is_well_sch]. *)
+
 (* =translate_eqns= *)
 Definition translate_eqns (eqns: list equation) : stmt :=
   List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
@@ -137,7 +146,7 @@ Definition translate (G: global) : program :=
 (* =end= *)
 
 
-(** ** Misc. lemmas *)
+(** ** Properties *)
 
 
 Lemma ps_from_list_pre_spec:
