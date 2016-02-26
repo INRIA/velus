@@ -6,20 +6,20 @@ Require Import Rustre.Common.
 Require Import Rustre.Memory.
 Require Import Rustre.Minimp.Syntax.
 
+(** * Minimp semantics *)
+
 (** 
 
-  The semantics of Minimp relies on a tree-structure [heap], based on
-  [Rustre.Memory], to store persistent objects and a [stack] to keep
+  The semantics of Minimp relies on a tree-structure [memory], based
+  on [Rustre.Memory], to store object instances and a [stack] to keep
   track of local variables during method calls.
 
  *)
 
-(** ** Semantics *)
-
 Definition heap: Type := memory const.
 Definition stack : Set := PM.t const.
 
-Implicit Type heap: heap.
+Implicit Type mmem: heap.
 Implicit Type stack: stack.
 
 Definition sempty: stack := PM.empty const.
