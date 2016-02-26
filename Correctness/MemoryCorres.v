@@ -7,11 +7,13 @@ Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Minimp.Semantics.
 Require Import Rustre.Translation.
 
+(** * Correspondence between dataflow and imperative memories *)
+
 (**
 
-  [Memory_Corres] relates a dataflow [memory] with an object [heap] at
-  an instant [n]. Morally, we are saying that taking a snapshot of the
-  memory at time [n] gives [heap].
+  [Memory_Corres] relates a dataflow [D.memory] with an object [heap]
+  at an instant [n]. Morally, we are saying that taking a snapshot of
+  the memory at time [n] gives [heap].
 
  *)
 
@@ -40,6 +42,8 @@ with Memory_Corres_eq (G: global) (n: nat) :
 -> Memory_Corres_eq G n M menv (EqFby x ck v0 le)(*.*)
 (* =end= *)
 .
+
+(** ** Induction principle for [Memory_Corres] and [Memory_Corres_eq] *)
 
 Section Memory_Corres_mult.
   Variables (G: global) (n: nat).
@@ -110,6 +114,8 @@ Section Memory_Corres_mult.
   Defined.
 
 End Memory_Corres_mult.
+
+(** ** Global environment management *)
 
 Lemma Memory_Corres_eq_node_tl:
   forall node G eq n M menv,
@@ -211,6 +217,8 @@ Proof.
            apply find_node_later_not_Is_node_in with (1:=Hord) (2:=Hf)
          end.
 Qed.
+
+(** ** Memory management *)
 
 Lemma Is_memory_in_Memory_Corres_eqs:
   forall G n M menv x eqs,
