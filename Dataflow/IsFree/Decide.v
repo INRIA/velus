@@ -3,6 +3,8 @@ Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsFree.
 
+(** * Free variables: decision procedure *)
+
 (** 
 
 Decision procedure for the [IsFree] predicate. We show that it is

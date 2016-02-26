@@ -1,7 +1,9 @@
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 
-(** 
+(** * Free variables *)
+
+(**
 
 The predicate [Is_free x t : Prop] states that the variable [x] is
 used in the term [t]. If [t] is an equation, this collects the
