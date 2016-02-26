@@ -6,6 +6,8 @@ Open Scope bool_scope.
 Import List.ListNotations.
 Open Scope list_scope.
 
+(** * Minimp syntax *)
+
 (**
 
   Minimp is a minimal object-oriented programming language exposing
@@ -13,30 +15,11 @@ Open Scope list_scope.
 
  *)
 
-(** * Imperative language *)
-
-(** ** Syntax *)
-
 Inductive exp : Set :=
 | Var : ident -> exp
 | State : ident -> exp
 | Const : const -> exp
 | Op : operator -> nelist exp -> exp.
-
-Definition exp_ind2 : forall P : exp -> Prop,
-  (forall i, P (Var i)) ->
-  (forall i, P (State i)) ->
-  (forall c, P (Const c)) ->
-  (forall op es (IHes : Nelist.Forall P es), P (Op op es)) ->
-  forall e, P e.
-Proof.
-intros P Hvar Hstate Hcons Hop. fix 1.
-intros e. destruct e as [i | i | c | op es].
-+ apply Hvar.
-+ apply Hstate.
-+ apply Hcons.
-+ apply Hop. now induction es as [e | e es]; constructor.
-Defined.
 
 Implicit Type e: exp.
 
@@ -73,7 +56,7 @@ Record class : Set := mk_class {
   c_reset  : stmt
 }.
 
-Implicit Type c: class.
+Implicit Type cl: class.
 
 Definition program : Type := list class.
 
@@ -86,8 +69,26 @@ Definition find_class (n: ident) : program -> option (class * list class) :=
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
     end.
 
+(** ** Induction principle for [exp] *)
 
-(* We need a custom recursion principle. *)
+Definition exp_ind2 : forall P : exp -> Prop,
+  (forall i, P (Var i)) ->
+  (forall i, P (State i)) ->
+  (forall c, P (Const c)) ->
+  (forall op es (IHes : Nelist.Forall P es), P (Op op es)) ->
+  forall e, P e.
+Proof.
+intros P Hvar Hstate Hcons Hop. fix 1.
+intros e. destruct e as [i | i | c | op es].
++ apply Hvar.
++ apply Hstate.
++ apply Hcons.
++ apply Hop. now induction es as [e | e es]; constructor.
+Defined.
+
+(** ** Decidable equality *)
+
+(* XXX: use [exp_ind2] *)
 Definition exp_eqb : exp -> exp -> bool.
 Proof.
 fix 1.
