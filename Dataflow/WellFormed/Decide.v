@@ -6,6 +6,8 @@ Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.IsDefined.
 Require Import Rustre.Dataflow.WellFormed.
 
+(** * Well formed CoreDF programs: decision procedure *)
+
 (** 
 
 Decision procedure for the [Is_well_sch] predicate. We show that it is
