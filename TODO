@@ -24,3 +24,52 @@ proof uses it as an indirection to use that result.
 Do we stick with [Global]? What did we use in the paper?
 
 * Grep for "XXX:"  and "TODO:"
+* Use type classes for predicates
+
+Example: Is_free_*
+
+* Prove the characterizing equivalence of [memories]
+
+Cf. [Dataflow/Memories.v]
+
+* Do we really need [Ordered_nodes] and [NoDup]?
+
+These are directly implied by [Welldef_global] and are used only in
+situations where we have the stronger [Welldef_global] property.
+
+* Defined Welldef_global as a zipper over a list of equations
+
+So that we don't need to split the equations [alleqs = eqs ++ oeqs] in
+the correctness proof.
+
+* Extract a [Welldef_node] from [Welldef_global] 
+
+Currently, [Welldef_global] contains constraints about a single node
+as well as constraints about this node in the larger context. Extract
+this in another predicate, [Welldef_global] including the new one.
+
+* Repair the decision procedure for [WellFormed]
+
+Use it in the Example
+
+* Rename [Clocking]
+
+For the sake of uniformity, it should be called [WellClocked], along
+the lines of [WellFormed]
+
+* Follow consistent naming
+
+Follow the 'Implicit Type' declarations
+
+* [Is_present_in] and [Is_absent_in] might not be necessary
+
+Cf. branch 'dumb' for a construction that does not require a dedicated
+inductive predicate.
+
+* Rename type [heap] to [memory] in Minimp.Semantics
+
+And use a qualified import to disambiguate.
+
+* [equiv_env] is misleading
+
+It is not an [equivalence], rather a [faithful] map.
