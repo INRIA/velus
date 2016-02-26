@@ -9,10 +9,14 @@ Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.IsDefined.
 Require Import Rustre.Dataflow.Memories.
 
+(** * No duplication of variables *)
+
 (**
 
   The [NoDup_def] predicate states that variables are only defined
   once. This is asking for some sort of SSA.
+
+  Remark: [Ordered_nodes] is implied by [Welldef_global].
 
 *)
 
@@ -44,7 +48,7 @@ Inductive NoDup_defs : list equation -> Prop :=
       NoDup_defs (EqFby x ck v e :: eqs).
 
 
-
+(** ** Properties *)
 
 Lemma NoDup_defs_cons:
   forall eq eqs,
