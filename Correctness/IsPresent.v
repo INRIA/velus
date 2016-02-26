@@ -6,7 +6,17 @@ Require Import Rustre.Minimp.Semantics.
 Require Import Rustre.Translation.
 
 
-(* Assumption: the base clock is [true] *)
+(** * Tying clock semantics and imperative semantics *)
+
+(** 
+
+The translation of equations is always guarded by a [Control ck]. When
+[ck] is false, the equation is not executed. It is therefore crucial
+to tie the result of [Control ck] with the dataflow semantics of
+[ck]. This is achieved by the following inductive relation.
+
+Assumption: the base clock is [true] *)
+
 Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
 | IsCbase: Is_present_in mems heap stack Cbase
@@ -28,6 +38,8 @@ Inductive Is_absent_in (mems: PS.t) heap stack: clock -> Prop :=
       -> v2 <> v1
       -> Is_absent_in mems heap stack (Con ck c v2).
 
+
+(** ** Properties *)
 
 Lemma exp_eval_tovar_Cbool_dec:
   forall menv env mems c v,
