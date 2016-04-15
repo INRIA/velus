@@ -53,11 +53,12 @@ destruct l as [| e l'].
 Proof. discriminate. Defined.
 *)
 
-Fixpoint map {A B : Type} (f : A -> B) l :=
-  match l with
+Definition map {A B : Type} (f : A -> B) :=
+  fix map l :=
+    match l with
     | nebase e => nebase (f e)
-    | necons e l' => necons (f e) (map f l')
-  end.
+    | necons e l' => necons (f e) (map l')
+    end.
 
 Definition fold_left {A B : Type} (f : A -> B -> A) :=
 fix fold_left (l : nelist B) (a0 : A) {struct l} : A :=

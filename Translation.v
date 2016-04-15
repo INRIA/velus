@@ -69,19 +69,9 @@ Fixpoint translate_lexp (e : lexp) : exp :=
   | Econst c => Const c
   | Evar x => if PS.mem x memories then State x else Var x
   | Ewhen e c x => translate_lexp e
-  | Eop op es => Op op (nelist_rec _ (fun e => nebase (translate_lexp e))
-                                    (fun e _ rec => necons (translate_lexp e) rec) es)
+  | Eop op es => Op op (Nelist.map translate_lexp es)
   end.
 (* =end= *)
-
-(** The Opp case should be written as
-
-<<
-       [Op op (Nelist.map translate_lexp es)]
->>
-
-   but this is not structural enough for Coq. *)
-
 
 (* =translate_cexp= *)
 Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
