@@ -16,23 +16,21 @@ Open Scope list_scope.
  *)
 
 Inductive exp : Set :=
-| Var : ident -> exp
-| State : ident -> exp
-| Const : const -> exp
-| Op : operator -> nelist exp -> exp.
+| Var : ident -> exp                 (* variable  *)
+| State : ident -> exp               (* state variable  *)
+| Const : const -> exp               (* constant *)
+| Op : operator -> nelist exp -> exp. (* n-ary operator *)
 
 Implicit Type e: exp.
 
 Inductive stmt : Set :=
-  | Assign : ident -> exp -> stmt
-  | AssignSt : ident -> exp -> stmt
-  | Ifte : exp -> stmt -> stmt -> stmt
-  | Step_ap : ident -> ident -> ident -> nelist exp -> stmt
-           (* y = Step_ap class object arg *)
-  | Reset_ap : ident -> ident -> stmt
-           (* Reset_ap class object *)
-  | Comp : stmt -> stmt -> stmt
-  | Skip.
+| Assign : ident -> exp -> stmt                                     (* x = e *)
+| AssignSt : ident -> exp -> stmt                                   (* self.x = e *)
+| Ifte : exp -> stmt -> stmt -> stmt                                 (* if e then s1 else s2 *)
+| Step_ap : ident -> ident -> ident -> nelist exp -> stmt (* y = (C x).step(es) *)
+| Reset_ap : ident -> ident -> stmt                                 (* (C x).reset() *)
+| Comp : stmt -> stmt -> stmt                                       (* s1; s2 *)
+| Skip.
 
 Implicit Type s: stmt.
 
