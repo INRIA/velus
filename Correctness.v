@@ -6,7 +6,7 @@ Open Scope list_scope.
 Require Import Rustre.Common.
 Open Scope positive.
 
-Require Import Rustre.Memory.
+Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
 (* TODO: these should go *)
 Require Import Rustre.Dataflow.IsVariable.Decide.

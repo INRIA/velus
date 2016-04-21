@@ -11,7 +11,7 @@ Require Import Rustre.Dataflow.IsFree.
 Require Import Rustre.Dataflow.IsDefined.
 Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.WellFormed.
-Require Import Rustre.Memory.
+Require Import Rustre.RMemory.
 
 
 Ltac inv H := inversion H; subst; clear H.

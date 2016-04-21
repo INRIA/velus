@@ -3,7 +3,7 @@ Require Import Rustre.Nelist.
 Require Import List.
 
 Require Import Rustre.Common.
-Require Import Rustre.Memory.
+Require Import Rustre.RMemory.
 Require Import Rustre.Minimp.Syntax.
 
 (** * Minimp semantics *)
@@ -11,7 +11,7 @@ Require Import Rustre.Minimp.Syntax.
 (** 
 
   The semantics of Minimp relies on a tree-structure [memory], based
-  on [Rustre.Memory], to store object instances and a [stack] to keep
+  on [Rustre.RMemory], to store object instances and a [stack] to keep
   track of local variables during method calls.
 
  *)

@@ -91,7 +91,7 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 #                    #
 ######################
 
-VFILES:=Memory.v\
+VFILES:=RMemory.v\
   Correctness.v\
   Correctness/MemoryCorres.v\
   Correctness/IsPresent.v\
