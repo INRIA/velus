@@ -5,7 +5,7 @@ Open Scope list_scope.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
-Require Import Rustre.Memory.
+Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.Stream.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsVariable.

@@ -4,6 +4,7 @@ Require Import Rustre.MinimpToClight.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping.
+Require ZArith.BinIntDef.
 
 Cd "extraction/extract".
 
@@ -57,9 +58,9 @@ Extract Constant SelectOp.symbol_is_external =>
 
 Extract Constant pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
-Extract Inlined Constant fail_op => "failwith ""op""".
 
 Separate Extraction
+         ZArith.BinIntDef
          MinimpToClight
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
