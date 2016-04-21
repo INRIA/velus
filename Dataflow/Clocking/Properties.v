@@ -5,7 +5,17 @@ Require Import Dataflow.Clocking.Parents.
 
 Require Import Dataflow.IsFree.
 Require Import Dataflow.IsDefined.
+Require Import Dataflow.Memories.
 
+Module Type PROPERTIES
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import IsF : ISFREE Op Syn)
+       (Import Clo : CLOCKING Op Syn)
+       (Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem)
+       (Import Par : PARENTS Op Syn Clo).
+  
 Lemma Is_free_in_clock_self_or_parent:
   forall x ck,
     Is_free_in_clock x ck
@@ -84,3 +94,4 @@ Proof.
     now constructor.
 Qed.
 
+End PROPERTIES.

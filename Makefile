@@ -122,7 +122,6 @@ VFILES:=Memory.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
   Nelist.v\
-  Example.v\
   Common.v\
   MinimpToClight.v
 

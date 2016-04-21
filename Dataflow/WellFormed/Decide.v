@@ -6,6 +6,10 @@ Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.IsDefined.
 Require Import Rustre.Dataflow.WellFormed.
 
+Require Import Rustre.Dataflow.Ordered.
+Require Import Rustre.Dataflow.Memories.
+Require Import Rustre.Dataflow.NoDup.
+
 (** * Well formed CoreDF programs: decision procedure *)
 
 (** 
@@ -17,53 +21,64 @@ Remark: This development is not formally part of the correctness proof.
 
  *)
 
+Module Type DECIDE
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (IsF : ISFREE Op Syn)
+       (Import IsFDec : IsFree.Decide.DECIDE Op Syn IsF)
+       (Import Ord : ORDERED Op Syn)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem)
+       (Import IsV : ISVARIABLE Op Syn Mem IsD)
+       (Import NoD : NODUP Op Syn Mem IsD IsV)
+       (Import Wef : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD).
+  
+  Section Decide.
 
-Section Decide.
+    Variable mems : PS.t.
 
-Variable mems : PS.t.
+    (* TODO: rewrite using a strong specification?  *)
 
-(* TODO: rewrite using a strong specification?  *)
+    Open Scope bool_scope.
 
-Open Scope bool_scope.
+    Definition check_var (defined: PS.t) (variables: PS.t) (x: ident) : bool :=
+      if PS.mem x mems
+      then negb (PS.mem x defined)
+      else PS.mem x variables.
 
-Definition check_var (defined: PS.t) (variables: PS.t) (x: ident) : bool :=
-  if PS.mem x mems
-  then negb (PS.mem x defined)
-  else PS.mem x variables.
+    Lemma check_var_spec:
+      forall defined variables x,
+        check_var defined variables x = true
+        <->
+        (PS.In x mems -> ~PS.In x defined)
+        /\ (~PS.In x mems -> PS.In x variables).
+    Proof.
+      (*  TODO: how to automate all of this? *)
+      intros defined variables x.
+      unfold check_var.
+      split.
+      - intro Hif.
+        split; intro Hin.
+        + apply PS.mem_spec in Hin.
+          rewrite Hin, Bool.negb_true_iff in Hif.
+          apply mem_spec_false in Hif. exact Hif.
+        + apply mem_spec_false in Hin.
+          rewrite Hin, PS.mem_spec in Hif. exact Hif.
+      - destruct 1 as [Hin Hnin].
+        destruct In_dec with x mems as [H|H].
+        + assert (PS.mem x mems = true) as H' by auto.
+          rewrite H', Bool.negb_true_iff, mem_spec_false.
+          now apply Hin with (1:=H).
+        + assert (PS.mem x mems = false) as H' by now apply mem_spec_false.
+          rewrite H', PS.mem_spec.
+          now apply Hnin with (1:=H).
+    Qed.
 
-Lemma check_var_spec:
-  forall defined variables x,
-    check_var defined variables x = true
-    <->
-    (PS.In x mems -> ~PS.In x defined)
-    /\ (~PS.In x mems -> PS.In x variables).
-Proof.
-(*  TODO: how to automate all of this? *)
-  intros defined variables x.
-  unfold check_var.
-  split.
-  - intro Hif.
-    split; intro Hin.
-    + apply PS.mem_spec in Hin.
-      rewrite Hin, Bool.negb_true_iff in Hif.
-      apply mem_spec_false in Hif. exact Hif.
-    + apply mem_spec_false in Hin.
-      rewrite Hin, PS.mem_spec in Hif. exact Hif.
-  - destruct 1 as [Hin Hnin].
-    destruct In_dec with x mems as [H|H].
-    + assert (PS.mem x mems = true) as H' by auto.
-      rewrite H', Bool.negb_true_iff, mem_spec_false.
-      now apply Hin with (1:=H).
-    + assert (PS.mem x mems = false) as H' by now apply mem_spec_false.
-      rewrite H', PS.mem_spec.
-      now apply Hnin with (1:=H).
-Qed.
-
-Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
-                : bool*PS.t*PS.t :=
-  match acc with
-    | (true, defined, variables) =>
-      match eq with
+    Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
+      : bool*PS.t*PS.t :=
+      match acc with
+      | (true, defined, variables) =>
+        match eq with
         | EqDef x ck e =>
           ((PS.for_all (check_var defined variables)
                        (free_in_caexp ck e PS.empty))
@@ -79,53 +94,53 @@ Definition check_eq (eq: equation) (acc: bool*PS.t*PS.t)
                    (free_in_laexp ck e PS.empty))
              && (negb (PS.mem x defined)),
            PS.add x defined, variables)
-      end
-    | (false, _, _) => (false, PS.empty, PS.empty)
-  end.
+        end
+      | (false, _, _) => (false, PS.empty, PS.empty)
+      end.
 
-Definition well_sch (argIns: Nelist.nelist ident)(eqs: list equation) : bool :=
-  fst (fst (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs)).
+    Definition well_sch (argIns: Nelist.nelist ident)(eqs: list equation) : bool :=
+      fst (fst (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs)).
 
-Lemma not_for_all_spec:
-  forall (s : PS.t) (f : BinNums.positive -> bool),
-    SetoidList.compat_bool PS.E.eq f ->
-    (PS.for_all f s = false <-> ~(PS.For_all (fun x : PS.elt => f x = true) s)).
-Proof.
-  intros s f HSL.
-  split.
-  - intros Hfa HFa.
-    apply (PS.for_all_spec _ HSL) in HFa.
-    rewrite Hfa in HFa.
-    discriminate.
-  - intro HFa.
-    apply Bool.not_true_iff_false.
-    intro Hfa; apply HFa.
-    apply (PS.for_all_spec _ HSL).
-    assumption.
-Qed.
+    Lemma not_for_all_spec:
+      forall (s : PS.t) (f : BinNums.positive -> bool),
+        SetoidList.compat_bool PS.E.eq f ->
+        (PS.for_all f s = false <-> ~(PS.For_all (fun x : PS.elt => f x = true) s)).
+    Proof.
+      intros s f HSL.
+      split.
+      - intros Hfa HFa.
+        apply (PS.for_all_spec _ HSL) in HFa.
+        rewrite Hfa in HFa.
+        discriminate.
+      - intro HFa.
+        apply Bool.not_true_iff_false.
+        intro Hfa; apply HFa.
+        apply (PS.for_all_spec _ HSL).
+        assumption.
+    Qed.
 
-Lemma check_var_compat:
-  forall defined variables,
-    SetoidList.compat_bool PS.E.eq (check_var defined variables).
-Proof.
-  intros defined variables x y Heq.
-  unfold PS.E.eq in Heq.
-  rewrite Heq.
-  reflexivity.
-Qed.
+    Lemma check_var_compat:
+      forall defined variables,
+        SetoidList.compat_bool PS.E.eq (check_var defined variables).
+    Proof.
+      intros defined variables x y Heq.
+      unfold PS.E.eq in Heq.
+      rewrite Heq.
+      reflexivity.
+    Qed.
 
-Lemma well_sch_pre_spec:
-  forall argIns eqs good defined variables,
-    (good, defined, variables)
+    Lemma well_sch_pre_spec:
+      forall argIns eqs good defined variables,
+        (good, defined, variables)
         = List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs
-    ->
-    (good = true
-     -> (Is_well_sch mems argIns eqs
-         /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
-         /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ Nelist.In x argIns)))
-    /\ (good = false -> ~Is_well_sch mems argIns eqs).
-Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used *)
-(*
+        ->
+        (good = true
+         -> (Is_well_sch mems argIns eqs
+            /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
+            /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ Nelist.In x argIns)))
+        /\ (good = false -> ~Is_well_sch mems argIns eqs).
+    Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used *)
+    (*
   induction eqs as [|eq].
   - simpl; injection 1; intros HRv HRm; subst.
     intuition;
@@ -270,24 +285,26 @@ Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not use
                  end);
           rewrite Hivi; auto.
 Qed.
-*)
-Lemma well_sch_spec:
-  forall argIns eqns,
-    if well_sch argIns eqns
-    then Is_well_sch mems argIns eqns
-    else ~Is_well_sch mems argIns eqns.
-Proof.
-  intros argIn eqns.
-  pose proof (well_sch_pre_spec argIn eqns).
-  unfold well_sch.
-  destruct (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIn PS.empty) eqns)
-    as [[good defined] variables].
-  simpl.
-  specialize H with good defined variables.
-  pose proof (H (eq_refl _)) as H'; clear H.
-  destruct H' as [Ht Hf].
-  destruct good;
-  intuition.
-Qed.
+     *)
+    Lemma well_sch_spec:
+      forall argIns eqns,
+        if well_sch argIns eqns
+        then Is_well_sch mems argIns eqns
+        else ~Is_well_sch mems argIns eqns.
+    Proof.
+      intros argIn eqns.
+      pose proof (well_sch_pre_spec argIn eqns).
+      unfold well_sch.
+      destruct (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIn PS.empty) eqns)
+        as [[good defined] variables].
+      simpl.
+      specialize H with good defined variables.
+      pose proof (H (eq_refl _)) as H'; clear H.
+      destruct H' as [Ht Hf].
+      destruct good;
+        intuition.
+    Qed.
 
-End Decide.
+  End Decide.
+
+End DECIDE.

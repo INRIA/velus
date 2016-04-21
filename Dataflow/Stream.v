@@ -8,70 +8,74 @@ domain [nat]. To reason about this object, we shall use functional
 extensionality [ Logic.FunctionalExtensionality]. This axiom is
 believed to be consistent with Coq. *)
 
-(** ** Datatypes *)
+Module Type STREAM (Op : OPERATORS).
 
-(** A synchronous [value] is either an absence or a present constant *)
+  (** ** Datatypes *)
 
-Inductive value :=
+  (** A synchronous [value] is either an absence or a present constant *)
+
+  Inductive value :=
   | absent
-  | present (c : const).
-Implicit Type v : value.
+  | present (c : Op.val).
+  Implicit Type v : value.
 
-Definition option2value co :=
-  match co with
+  Definition option2value co :=
+    match co with
     | None => absent
     | Some v => present v
-  end.
+    end.
 
-(** A stream is represented by its characteristic function: *)
+  (** A stream is represented by its characteristic function: *)
 
-Notation stream A := (nat -> A).
+  Notation stream A := (nat -> A).
 
-(** A synchronous stream thus maps time to synchronous values: *)
+  (** A synchronous stream thus maps time to synchronous values: *)
 
-Notation vstream := (stream value).
-Implicit Type vs : vstream.
+  Notation vstream := (stream value).
+  Implicit Type vs : vstream.
 
-(** A clock is a stream that returns [true] if the clocked stream
+  (** A clock is a stream that returns [true] if the clocked stream
 contains a value ([present c]) at the corresponding instant, [false]
 if the clocked stream is [absent] at the corresponding instant. *)
 
-Notation cstream := (stream bool).
-Implicit Type cs : cstream.
+  Notation cstream := (stream bool).
+  Implicit Type cs : cstream.
 
-(** ** Synchronous functions *)
+  (** ** Synchronous functions *)
 
-(* With auxiliary hold function. *)
+  (* With auxiliary hold function. *)
 
-Fixpoint hold (v0: const) (xs: stream value) (n: nat) : const :=
-  match n with
-  | 0 => v0
-  | S m => match xs m with
-           | absent => hold v0 xs m
-           | present hv => hv
-           end
-  end.
+  Fixpoint hold (v0: Op.val) (xs: stream value) (n: nat) : Op.val :=
+    match n with
+    | 0 => v0
+    | S m => match xs m with
+            | absent => hold v0 xs m
+            | present hv => hv
+            end
+    end.
 
-Definition fby (v0: const) (xs: stream value) (n: nat) : value :=
-  match xs n with
-  | absent => absent
-  | _ => present (hold v0 xs n)
-  end.
+  Definition fby (v0: Op.val) (xs: stream value) (n: nat) : value :=
+    match xs n with
+    | absent => absent
+    | _ => present (hold v0 xs n)
+    end.
 
-(** ** Properties *)
+  (** ** Properties *)
 
-Lemma present_injection:
-  forall x y, x = y <-> present x = present y.
-Proof.
-  split; intro H; [rewrite H|injection H]; auto.
-Qed.
+  Lemma present_injection:
+    forall x y, x = y <-> present x = present y.
+  Proof.
+    split; intro H; [rewrite H|injection H]; auto.
+  Qed.
 
-Lemma not_absent_present:
-  forall x, x <> absent <-> exists c, x = present c.
-Proof.
-  intros x.
-  split; intro HH.
-  destruct x; [intuition|eauto].
-  destruct HH as [c HH]; rewrite HH.
-  intro; discriminate.
-Qed.
+  Lemma not_absent_present:
+    forall x, x <> absent <-> exists c, x = present c.
+  Proof.
+    intros x.
+    split; intro HH.
+    destruct x; [intuition|eauto].
+    destruct HH as [c HH]; rewrite HH.
+    intro; discriminate.
+  Qed.
+
+End STREAM.

@@ -286,6 +286,34 @@ Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discr
 Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar.
 Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
 
+Module Type OPERATORS.
+  Parameter val : Type.
+  Parameter typ : Type.
+
+  Parameter unary_op : Type.
+  Parameter binary_op : Type.
+
+  Parameter sem_unary : unary_op -> val -> (* typ -> *) option val.
+  Parameter sem_binary : binary_op -> val -> (* typ -> *) val -> (* typ -> *) option val.
+
+  Parameter of_bool : bool -> val.
+  Parameter to_bool : val -> bool.
+  Axiom bool_inv : forall b, to_bool (of_bool b) = b.
+
+  (* Axiom unop_dec : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}. *)
+  (* Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}. *)
+  Parameter val_eqb : val -> val -> bool.
+  Parameter unop_eqb : unary_op -> unary_op -> bool.
+  Parameter binop_eqb : binary_op -> binary_op -> bool.
+
+  Axiom val_eqb_true_iff : forall v1 v2, val_eqb v1 v2 = true <-> v1 = v2.
+  Axiom val_eqb_false_iff : forall v1 v2, val_eqb v1 v2 = false <-> v1 <> v2.
+  Axiom unop_eqb_true_iff : forall op1 op2, unop_eqb op1 op2 = true <-> op1 = op2.
+  Axiom unop_eqb_false_iff : forall op1 op2, unop_eqb op1 op2 = false <-> op1 <> op2.
+  Axiom binop_eqb_true_iff : forall op1 op2, binop_eqb op1 op2 = true <-> op1 = op2.
+  Axiom binop_eqb_false_iff : forall op1 op2, binop_eqb op1 op2 = false <-> op1 <> op2.
+End OPERATORS.
+
 (** *** About Coq stdlib *)
 
 Lemma Forall_cons2:
@@ -329,7 +357,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Lemma List_shift_first:
-  forall (A:Set) ll (x : A) lr,
+  forall (A:Type) ll (x : A) lr,
     ll ++ (x :: lr) = (ll ++ [x]) ++ lr.
 Proof.
   induction ll as [|? ? IH]; [auto|intros].
@@ -339,7 +367,7 @@ Proof.
 Qed.
 
 Lemma List_shift_away:
-  forall (A:Set) alleqs (eq : A) eqs,
+  forall (A:Type) alleqs (eq : A) eqs,
     (exists oeqs, alleqs = oeqs ++ (eq :: eqs))
     -> exists oeqs', alleqs = oeqs' ++ eqs.
 Proof.

@@ -14,6 +14,7 @@ Require Import Rustre.Dataflow.Memories.
 Require Import Rustre.Dataflow.WellFormed.
 Require Import Rustre.Dataflow.WellFormed.Decide.
 
+
 (* Common notations *)
 Class Assignment T U V := {assign : ident -> T -> U -> V}.
 Notation "x '::=' y" := (assign x _ y) (at level 47, no associativity).
