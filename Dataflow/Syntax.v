@@ -91,6 +91,3 @@ Module Type SYNTAX (Op : OPERATORS).
   (* Defined. *)
 
 End SYNTAX.
-
-Declare Module Op : OPERATORS.
-Module Type SYNTAX' := SYNTAX Op.
