@@ -1,0 +1,20 @@
+# Object files, in general
+*.vo
+*.glob
+*.o
+*.a
+*.cmi
+*.cmo
+*.cmx
+*.cma
+*.cmxa
+*.cmti
+*.cmt
+*.merlin
+# Emacs saves
+*~
+
+*.v.d
+_build
+*.native
+CompCert
