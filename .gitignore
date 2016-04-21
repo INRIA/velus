@@ -11,10 +11,10 @@
 *.cmti
 *.cmt
 *.merlin
+
 # Emacs saves
 *~
 
 *.v.d
 _build
 *.native
-CompCert
