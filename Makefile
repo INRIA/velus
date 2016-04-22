@@ -46,7 +46,7 @@ $(call includecmdwithout@,$(COQBIN)coqtop -config)
 ##########################
 
 COQLIBS?=-R . Rustre\
--R CompCert/cparser compcert.cparser\
+  -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
   -R CompCert/flocq compcert.flocq\
   -R CompCert/driver compcert.driver\
@@ -57,7 +57,7 @@ COQLIBS?=-R . Rustre\
   -R CompCert/lib compcert.lib\
 
 COQDOCLIBS?=-R . Rustre\
--R CompCert/cparser compcert.cparser\
+  -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
   -R CompCert/flocq compcert.flocq\
   -R CompCert/driver compcert.driver\
@@ -123,6 +123,7 @@ VFILES:=RMemory.v\
   Dataflow/Stream.v\
   Nelist.v\
   Common.v\
+  Interface.v\
   MinimpToClight.v
 
 -include $(addsuffix .d,$(VFILES))
@@ -182,14 +183,17 @@ beautify: $(VFILES:=.beautified)
 
 .PHONY: all opt byte archclean clean install userinstall depend html validate extraction test
 
-extraction: extraction/Extraction.v
-	rm -f extraction/extract/*.*
-	$(COQEXEC) extraction/Extraction.v
+extraction: extraction/STAMP
+
+extraction/STAMP: $(VOFILES) extraction/Extraction.v 
+	@rm -f extraction/extract/*.*
+	@$(COQEXEC) extraction/Extraction.v
+	@touch extraction/STAMP
 
 test:
-	ln -sf CompCert extraction/CompCert
-	cd extraction; ocamlbuild -use-ocamlfind -no-hygiene -j 0 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  print_test.native
-	cp CompCert/compcert.ini extraction/_build/compcert.ini
+	@ln -sf CompCert extraction/CompCert
+	@cd extraction; ocamlbuild -use-ocamlfind -no-hygiene -j 0 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  print_test.native
+	@cp CompCert/compcert.ini extraction/_build/compcert.ini
 
 ####################
 #                  #
@@ -220,9 +224,9 @@ printenv:
 	@echo 'COQLIBINSTALL =	$(COQLIBINSTALL)'
 	@echo 'COQDOCINSTALL =	$(COQDOCINSTALL)'
 
-Makefile: _CoqProject
-	mv -f $@ $@.bak
-	"$(COQBIN)coq_makefile" -f $< -o $@
+# Makefile: _CoqProject
+# 	mv -f $@ $@.bak
+# 	"$(COQBIN)coq_makefile" -f $< -o $@
 
 
 ###################
@@ -232,7 +236,8 @@ Makefile: _CoqProject
 ###################
 
 %.vo %.glob: %.v
-	$(COQC) $(COQDEBUG) $(COQFLAGS) $*
+	@echo "COQC $*.v"
+	@$(COQC) $(COQDEBUG) $(COQFLAGS) $*
 
 %.vi: %.v
 	$(COQC) -i $(COQDEBUG) $(COQFLAGS) $*
