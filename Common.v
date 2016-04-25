@@ -299,7 +299,8 @@ Module Type OPERATORS.
   Parameter of_bool : bool -> val.
   Parameter to_bool : val -> bool.
   Axiom bool_inv : forall b, to_bool (of_bool b) = b.
-
+  Axiom bool_inj : forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2.
+  
   (* Axiom unop_dec : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}. *)
   (* Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}. *)
   Parameter val_eqb : val -> val -> bool.

@@ -503,71 +503,78 @@ enough: it does not support the internal fixpoint introduced by
                 H2: sem_var_instant ?R ?i (present (Op.of_bool ?r)),
                     H3: ?l = ?r -> False |- _ = _ =>
             exfalso; apply H3;
-            cut (present (Op.of_bool l) = present (Op.of_bool r)); [injection 1; auto|];
+            cut (present (Op.of_bool l) = present (Op.of_bool r)); [injection 1; apply Op.bool_inj|];
             eapply sem_var_instant_det; eassumption
           end.
-      (* PROBLEME : INJECTION *)
-    Admitted.
-
+    Qed.
+    
     Lemma sem_lexp_instant_det:
       forall R e v1 v2,
         sem_lexp_instant base R e v1
         -> sem_lexp_instant base R e v2
         -> v1 = v2.
-    Admitted.
-    (* Proof. *)
-    (*   intros R e. *)
-    (*   induction e (* using lexp_ind2 *); *)
-    (*     try now (do 2 inversion_clear 1); *)
-    (*     match goal with *)
-    (*     | H1:sem_var_instant ?R ?e (present (Cbool ?b1)), *)
-    (*       H2:sem_var_instant ?R ?e (present (Cbool ?b2)), *)
-    (*       H3: ?b1 <> ?b2 |- _ => *)
-    (*       exfalso; apply H3; *)
-    (*       cut (present (Cbool b1) = present (Cbool b2)); [injection 1; auto|]; *)
-    (*       eapply sem_var_instant_det; eassumption *)
-    (*     | H1:sem_var_instant ?R ?e ?v1, *)
-    (*       H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 => *)
-    (*       eapply sem_var_instant_det; eassumption *)
-    (*     | H1:sem_var_instant ?R ?e (present _), *)
-    (*       H2:sem_var_instant ?R ?e absent |- _ => *)
-    (*       apply (sem_var_instant_det _ _ _ _ H1) in H2; *)
-    (*       discriminate *)
-    (*     | _ => auto *)
-    (*     end. *)
-    (* - do 2 inversion_clear 1; destruct base; congruence. *)
-    (* - intros v1 v2 Hsem1 Hsem2. *)
-    (* inversion_clear Hsem1; inversion_clear Hsem2. *)
-    (* * do 2 f_equal. clear H1 H3. revert cs cs0 H0 H2. *)
-    (*   induction les as [| le les]; intros cs1 cs2 Hrec1 Hrec2. *)
-    (*   + inversion Hrec1. inversion Hrec2. subst. symmetry in H1, H4. *)
-    (*     apply Nelist.map_eq_nebase in H1. destruct H1 as [? [? ?]]. *)
-    (*     apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. *)
-    (*     f_equal. rewrite present_injection. inversion_clear H. now apply H0. *)
-    (*   + inversion Hrec1; subst. inversion Hrec2; subst. *)
-    (*     symmetry in H2, H5. *)
-    (*     apply Nelist.map_eq_necons in H2. destruct H2 as [x1 [cs1' [Hcs1 [Hx1 Hmap1]]]]. *)
-    (*     apply Nelist.map_eq_necons in H5. destruct H5 as [x2 [cs2' [Hcs2 [Hx2 Hmap2]]]]. subst. *)
-    (*     assert (Hx : x1 = x2). *)
-    (*     { inversion_clear H. rewrite present_injection. now apply H0. } *)
-    (*     inversion_clear H. inversion_clear Hrec1; inversion_clear Hrec2. *)
-    (*     f_equal; trivial. now apply (IHles H1). *)
-    (* * exfalso. destruct les as [le | le les]. *)
-    (*   + inversion H0. inversion H2. subst. symmetry in H4. *)
-    (*     apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. simpl in *. *)
-    (*     inversion_clear H. specialize (H3 _ _ H8 H5). discriminate. *)
-    (*   + inversion H0; subst. inversion H2; subst. *)
-    (*     inversion_clear H. specialize (H3 _ _ H6 H9). *)
-    (*     symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
-    (* * exfalso. destruct les as [| le les]. *)
-    (*   + inversion H0. inversion H1. subst. symmetry in H7. *)
-    (*     apply Nelist.map_eq_nebase in H7. destruct H7 as [? [? ?]]. subst. simpl in *. *)
-    (*     inversion_clear H. specialize (H3 _ _ H8 H5). discriminate. *)
-    (*   + inversion H0; subst. inversion H1; subst. *)
-    (*     inversion_clear H. specialize (H3 _ _ H6 H7). *)
-    (*     symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
-    (* * reflexivity. *)
-    (* Qed. *)
+    Proof.
+      intros R e.
+      induction e (* using lexp_ind2 *);
+        try now (do 2 inversion_clear 1);
+        match goal with
+        | H1:sem_var_instant ?R ?e (present (Op.of_bool ?b1)),
+          H2:sem_var_instant ?R ?e (present (Op.of_bool ?b2)),
+          H3: ?b1 <> ?b2 |- _ =>
+          exfalso; apply H3;
+          cut (present (Op.of_bool b1) = present (Op.of_bool b2)); [injection 1; apply Op.bool_inj|];
+          eapply sem_var_instant_det; eassumption
+        | H1:sem_var_instant ?R ?e ?v1,
+          H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 =>
+          eapply sem_var_instant_det; eassumption
+        | H1:sem_var_instant ?R ?e (present _),
+          H2:sem_var_instant ?R ?e absent |- _ =>
+          apply (sem_var_instant_det _ _ _ _ H1) in H2;
+          discriminate
+        | _ => auto
+        end.
+    - do 2 inversion_clear 1; destruct base; congruence.
+    - intros v1 v2 Hsem1 Hsem2.
+      inversion_clear Hsem1; inversion_clear Hsem2; specialize (IHe _ _ H H0). 
+      + now inversion IHe.
+        (* clear H1 H3. revert cs cs0 H0 H2. *)
+      (*   induction les as [| le les]; intros cs1 cs2 Hrec1 Hrec2. *)
+      (* + inversion Hrec1. inversion Hrec2. subst. symmetry in H1, H4. *)
+      (*   apply Nelist.map_eq_nebase in H1. destruct H1 as [? [? ?]]. *)
+      (*   apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. *)
+      (*   f_equal. rewrite present_injection. inversion_clear H. now apply H0. *)
+      (* + inversion Hrec1; subst. inversion Hrec2; subst. *)
+      (*   symmetry in H2, H5. *)
+      (*   apply Nelist.map_eq_necons in H2. destruct H2 as [x1 [cs1' [Hcs1 [Hx1 Hmap1]]]]. *)
+      (*   apply Nelist.map_eq_necons in H5. destruct H5 as [x2 [cs2' [Hcs2 [Hx2 Hmap2]]]]. subst. *)
+      (*   assert (Hx : x1 = x2). *)
+      (*   { inversion_clear H. rewrite present_injection. now apply H0. } *)
+      (*   inversion_clear H. inversion_clear Hrec1; inversion_clear Hrec2. *)
+      (*   f_equal; trivial. now apply (IHles H1). *)
+      + discriminate.
+      (*   exfalso. destruct les as [le | le les]. *)
+      (* + inversion H0. inversion H2. subst. symmetry in H4. *)
+      (*   apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. simpl in *. *)
+      (*   inversion_clear H. specialize (H3 _ _ H8 H5). discriminate. *)
+      (* + inversion H0; subst. inversion H2; subst. *)
+      (*   inversion_clear H. specialize (H3 _ _ H6 H9). *)
+      (*   symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
+      + discriminate.
+      (*   exfalso. destruct les as [| le les]. *)
+      (* + inversion H0. inversion H1. subst. symmetry in H7. *)
+      (*   apply Nelist.map_eq_nebase in H7. destruct H7 as [? [? ?]]. subst. simpl in *. *)
+      (*   inversion_clear H. specialize (H3 _ _ H8 H5). discriminate. *)
+      (* + inversion H0; subst. inversion H1; subst. *)
+      (*   inversion_clear H. specialize (H3 _ _ H6 H7). *)
+      (*   symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
+      + reflexivity.
+    - intros v1 v2 Hsem1 Hsem2.
+      inversion_clear Hsem1; inversion_clear Hsem2; specialize (IHe1 _ _ H H1); specialize (IHe2 _ _ H0 H2). 
+      + now inversion IHe1; inversion IHe2.
+      + discriminate.
+      + discriminate.
+      + reflexivity.
+    Qed.
 
     Lemma sem_laexp_instant_det:
       forall R ck e v1 v2,
@@ -631,9 +638,9 @@ enough: it does not support the internal fixpoint introduced by
             | H1: sem_var_instant ?R ?i (present (Op.of_bool true)),
                   H2: sem_var_instant ?R ?i (present (Op.of_bool false)) |- _ =>
               exfalso;
-                assert (present (Op.of_bool true) = present (Op.of_bool false))
+                assert (present (Op.of_bool true) = present (Op.of_bool false)) as H
                 by (eapply sem_var_instant_det; eassumption);
-                discriminate
+                inversion H as [H']; apply Op.bool_inj in H'; discriminate
             | H1: sem_lexp_instant ?bk ?R ?l ?v1,
                   H2: sem_lexp_instant ?bk ?R ?l ?v2 |- ?v1 = ?v2 =>
               eapply sem_lexp_instant_det; eassumption
@@ -642,8 +649,8 @@ enough: it does not support the internal fixpoint introduced by
               apply sem_var_instant_det with (1:=H1) in H2; discriminate
             | |- absent = absent => reflexivity
             end.
-    Admitted.
-
+    Qed.
+    
     Lemma sem_caexp_instant_det:
       forall R ck e v1 v2,
         sem_caexp_instant base R ck e v1

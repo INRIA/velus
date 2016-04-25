@@ -106,7 +106,26 @@ Module Type DECIDE
       | right; apply free_in_clock_spec; intuition
       | apply PS.add_spec in H1; destruct H1; subst; intuition
       | right; apply PS.add_spec; intuition ].
-    split; intros Hin. admit. admit.
+    split; intros Hin.
+    - destruct (IHe2 (free_in_lexp e1 m)) as [H2 H2'].
+      destruct (H2 Hin) as [H2'' | H2''].
+      + left; constructor.
+        now right.
+      + destruct (IHe1 m) as [H1 H1'].
+        destruct (H1 H2'') as [H1'' | H1''].
+        * left; constructor.
+          now left.
+        * now right.
+    - destruct Hin as [Hin | Hin]; simpl.
+      + apply IHe2.
+        inversion_clear Hin.
+        destruct H as [H | H].
+        * right; apply IHe1.
+          now left.
+        * now left. 
+      + apply IHe2.
+        right. apply IHe1.
+        now right.      
     (* - left. constructor. left. simpl in Hin. apply IHe1. *)
     (* induction les as [le | le les]; intro m. *)
     (* + simpl. inversion_clear H. rewrite H0. split; intros [Hin | ?]; auto; left. *)

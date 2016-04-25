@@ -61,13 +61,15 @@ Module Type ISPRESENT
     unfold tovar.
     destruct (PS.mem c mems).
     - case_eq (mfind_mem c menv).
-      + (* intro c0; destruct c0. *)
+      + left; apply estate.
+          (* intro c0; destruct c0. *)
         (* * no_match. *)
       (* * destruct b; destruct v; (left; apply estate; assumption) || no_match. *)
         admit.
       + no_match.
     - case_eq (PM.find c env).
-      + (* intro c0; destruct c0. *)
+      + left; apply evar.
+        (* intro c0; destruct c0. *)
         (* * no_match. *)
       (* * destruct b; destruct v; (left; apply evar; assumption) || no_match. *)
         admit.
@@ -103,8 +105,7 @@ Module Type ISPRESENT
     intro HR; rewrite <-HR in *; clear HR.
     apply Hneq.
     pose proof (exp_eval_det _ _ _ _ _ Hexp Hexp') as Heq.
-    (* injection Heq; intuition. *)
-    admit.
+    now apply Op.bool_inj.
   Qed.
 
 End ISPRESENT.

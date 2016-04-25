@@ -1,4 +1,4 @@
-Require Import compcert.lib.Integers.
+Require Import lib.Integers.
 Require Import Rustre.Common.
 
 (* Interface avec CompCert *)
@@ -77,6 +77,12 @@ Module Op <: OPERATORS.
   Theorem bool_inv : forall b : bool, to_bool (of_bool b) = b. 
   Proof. now destruct b. Qed.
 
+  Theorem bool_inj : forall b1 b2 : bool, of_bool b1 = of_bool b2 -> b1 = b2.
+  Proof.
+    unfold of_bool.
+    intros b1 b2; destruct b1, b2; inversion 1; auto.
+  Qed.
+    
   Lemma val_dec : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
   Proof. decide equality; apply Int.eq_dec. Qed.
   Definition val_eqb (v1 v2 : val) : bool :=
