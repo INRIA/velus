@@ -19,7 +19,6 @@ Require Import Rustre.Minimp.Syntax.
 Module Type SEMANTICS
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op).
-
   Definition heap: Type := memory Op.val.
   Definition stack : Type := PM.t Op.val.
 
@@ -41,12 +40,7 @@ Module Type SEMANTICS
   | econst:
       forall c ,
         exp_eval heap stack (Const c) c
-  (* | eop: *)
-  (*     forall op es cs c, *)
-  (*       Nelist.Forall2 (exp_eval heap stack) es cs -> *)
-  (*       apply_op op cs = Some c -> *)
-  (*       exp_eval heap stack (Op op es) c *)
-  | eunop :
+   | eunop :
       forall op e c v,
         exp_eval heap stack e c ->
         Op.sem_unary op c = Some v ->
@@ -61,7 +55,7 @@ Module Type SEMANTICS
   Axiom exps_eval_const:
     forall h s cs,
       Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
-  
+
   (* =stmt_eval= *)
   Inductive stmt_eval :
     program -> heap -> stack -> stmt -> heap * stack -> Prop :=
@@ -96,17 +90,7 @@ Module Type SEMANTICS
         stmt_eval prog menv env a1 (menv1, env1) ->
         stmt_eval prog menv1 env1 a2 (menv2, env2) ->
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
-  (* | Iifte_true: *)
-  (*     forall prog menv env b ifTrue ifFalse env' menv', *)
-  (*       exp_eval menv env b (Cbool true) -> *)
-  (*       stmt_eval prog menv env ifTrue (menv', env') -> *)
-  (*       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env') *)
-  (* | Iifte_false: *)
-  (*     forall prog menv env b ifTrue ifFalse env' menv', *)
-  (*       exp_eval menv env b (Cbool false) -> *)
-  (*       stmt_eval prog menv env ifFalse (menv', env') -> *)
-  (*       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env') *)
-  | Iifte:
+   | Iifte:
       forall prog menv env cond v ifTrue ifFalse env' menv',
         exp_eval menv env cond v ->
         stmt_eval prog menv env (if (Op.to_bool v) then ifTrue else ifFalse) (menv', env') -> 
@@ -138,23 +122,17 @@ Module Type SEMANTICS
                            with stmt_step_eval_mult := Induction for stmt_step_eval Sort Prop
                                                        with stmt_reset_eval_mult := Induction for stmt_reset_eval Sort Prop.
 
-  (*
-Definition class_eval prog f menv input output menv' :=
-  forall fclass prog' env env',
-    find_class f prog = Some (fclass, prog') ->
-    env = PM.add (c_input fclass) input sempty ->
-    stmt_eval prog' menv env (c_step fclass) (menv', env')
-    /\ PM.find (c_output fclass) env' = Some output.
-   *)
-
   (** ** Determinism of semantics *)
 
   Axiom exp_eval_det:
     forall menv env e v1 v2,
       exp_eval menv env e v1 ->
       exp_eval menv env e v2 ->
-      v1 = v2.  
+      v1 = v2.
 
+  (* OBLIGATOIRE SINON ERREUR DANS UNE PREUVE DE Correctness.v *)
+  Hint Constructors stmt_eval.
+  
   Axiom stmt_eval_fold_left_shift:
     forall A prog f (xs:list A) iacc menv env menv' env',
       stmt_eval prog menv env
@@ -204,11 +182,6 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
   | econst:
       forall c ,
         exp_eval heap stack (Const c) c
-  (* | eop: *)
-  (*     forall op es cs c, *)
-  (*       Nelist.Forall2 (exp_eval heap stack) es cs -> *)
-  (*       apply_op op cs = Some c -> *)
-  (*       exp_eval heap stack (Op op es) c *)
   | eunop :
       forall op e c v,
         exp_eval heap stack e c ->
@@ -263,17 +236,7 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
         stmt_eval prog menv env a1 (menv1, env1) ->
         stmt_eval prog menv1 env1 a2 (menv2, env2) ->
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
-  (* | Iifte_true: *)
-  (*     forall prog menv env b ifTrue ifFalse env' menv', *)
-  (*       exp_eval menv env b (Cbool true) -> *)
-  (*       stmt_eval prog menv env ifTrue (menv', env') -> *)
-  (*       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env') *)
-  (* | Iifte_false: *)
-  (*     forall prog menv env b ifTrue ifFalse env' menv', *)
-  (*       exp_eval menv env b (Cbool false) -> *)
-  (*       stmt_eval prog menv env ifFalse (menv', env') -> *)
-  (*       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env') *)
-  | Iifte:
+   | Iifte:
       forall prog menv env cond v ifTrue ifFalse env' menv',
         exp_eval menv env cond v ->
         stmt_eval prog menv env (if (Op.to_bool v) then ifTrue else ifFalse) (menv', env') -> 
@@ -304,15 +267,6 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
   Scheme stmt_eval_mult := Induction for stmt_eval Sort Prop
                            with stmt_step_eval_mult := Induction for stmt_step_eval Sort Prop
                                                        with stmt_reset_eval_mult := Induction for stmt_reset_eval Sort Prop.
-
-  (*
-Definition class_eval prog f menv input output menv' :=
-  forall fclass prog' env env',
-    find_class f prog = Some (fclass, prog') ->
-    env = PM.add (c_input fclass) input sempty ->
-    stmt_eval prog' menv env (c_step fclass) (menv', env')
-    /\ PM.find (c_output fclass) env' = Some output.
-   *)
 
   (** ** Determinism of semantics *)
 

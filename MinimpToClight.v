@@ -29,7 +29,7 @@ Definition example :=
     c_mems := [pos_of_str "t"];
     c_objs := [];
     c_step := Comp (Assign (pos_of_str "o")
-                           (Binop Plus
+                           (Binop Add
                                   (Syn.State (pos_of_str "t"))
                                   (Var (pos_of_str "i"))))
                    (AssignSt (pos_of_str "t") (Var (pos_of_str "o")));
@@ -83,9 +83,9 @@ Definition translate_unop (op: Op.unary_op) (e: cl_expr): cl_expr :=
 
 Definition translate_binop (op: Op.binary_op) (e1 e2: cl_expr): cl_expr :=
   match op with
-  | Plus => Clight.Ebinop Cop.Oadd e1 e2 cl_int
-  | Minus => Clight.Ebinop Cop.Osub e1 e2 cl_int
-  | Mult => Clight.Ebinop Cop.Omul e1 e2 cl_int
+  | Add => Clight.Ebinop Cop.Oadd e1 e2 cl_int
+  | Sub => Clight.Ebinop Cop.Osub e1 e2 cl_int
+  | Mul => Clight.Ebinop Cop.Omul e1 e2 cl_int
   end.
 
 (** Straightforward expression translation *)
