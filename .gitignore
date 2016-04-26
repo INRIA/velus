@@ -20,4 +20,5 @@ _build
 *.native
 STAMP
 extraction/extract/*
+extraction/CompCert
 *.bak

@@ -58,7 +58,170 @@ Module Type SEMANTICS
         Op.sem_binary op c1 c2 = Some v ->
         exp_eval heap stack (Binop op e1 e2) v.
 
-  Lemma exps_eval_const:
+  Axiom exps_eval_const:
+    forall h s cs,
+      Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
+  
+  (* =stmt_eval= *)
+  Inductive stmt_eval :
+    program -> heap -> stack -> stmt -> heap * stack -> Prop :=
+  | Iassign: forall prog menv env x e v env',
+      exp_eval menv env e v ->
+      PM.add x v env = env' ->
+      stmt_eval prog menv env (Assign x e) (menv, env')
+  | (*...*)
+  (* =end= *)
+  Iassignst:
+    forall prog menv env x e v menv',
+      exp_eval menv env e v ->
+      madd_mem x v menv = menv' ->
+      stmt_eval prog menv env (AssignSt x e) (menv', env)
+  (* =stmt_eval:step= *)
+  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
+      mfind_inst o menv = Some(omenv) ->
+      Nelist.Forall2 (exp_eval menv env) es vs ->
+      stmt_step_eval prog omenv clsid vs omenv' rv ->
+      madd_obj o omenv' menv = menv' ->
+      PM.add y rv env  = env' ->
+      stmt_eval prog menv env (Step_ap y clsid o es) (menv', env')
+  | (*...*)
+  (* =end= *)
+  Ireset:
+    forall prog menv env o clsid omenv' menv',
+      stmt_reset_eval prog clsid omenv' ->
+      madd_obj o omenv' menv = menv' ->
+      stmt_eval prog menv env (Reset_ap clsid o) (menv', env)
+  | Icomp:
+      forall prog menv env a1 a2 env1 menv1 env2 menv2,
+        stmt_eval prog menv env a1 (menv1, env1) ->
+        stmt_eval prog menv1 env1 a2 (menv2, env2) ->
+        stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
+  (* | Iifte_true: *)
+  (*     forall prog menv env b ifTrue ifFalse env' menv', *)
+  (*       exp_eval menv env b (Cbool true) -> *)
+  (*       stmt_eval prog menv env ifTrue (menv', env') -> *)
+  (*       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env') *)
+  (* | Iifte_false: *)
+  (*     forall prog menv env b ifTrue ifFalse env' menv', *)
+  (*       exp_eval menv env b (Cbool false) -> *)
+  (*       stmt_eval prog menv env ifFalse (menv', env') -> *)
+  (*       stmt_eval prog menv env (Ifte b ifTrue ifFalse) (menv', env') *)
+  | Iifte:
+      forall prog menv env cond v ifTrue ifFalse env' menv',
+        exp_eval menv env cond v ->
+        stmt_eval prog menv env (if (Op.to_bool v) then ifTrue else ifFalse) (menv', env') -> 
+        stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
+  | Iskip:
+      forall prog menv env,
+        stmt_eval prog menv env Skip (menv, env)
+  (* =stmt_step_eval= *)
+  with stmt_step_eval :
+         program -> heap -> ident -> nelist Op.val -> heap -> Op.val -> Prop :=
+       | Iestep:
+           forall prog menv env clsid ivs prog' menv' ov cls env',
+             find_class clsid prog = Some(cls, prog') ->
+             env = adds cls.(c_input) ivs sempty ->
+             stmt_eval prog' menv env cls.(c_step)
+                                            (menv', env') ->
+             PM.find cls.(c_output) env' = Some(ov) ->
+             stmt_step_eval prog menv clsid ivs menv' ov
+  (* =end= *)
+
+  with stmt_reset_eval : program -> ident -> heap -> Prop :=
+       | Iereset:
+           forall prog clsid cls prog' menv' env',
+             find_class clsid prog = Some(cls, prog') ->
+             stmt_eval prog' hempty sempty cls.(c_reset) (menv', env') ->
+             stmt_reset_eval prog clsid menv'.
+
+  Scheme stmt_eval_mult := Induction for stmt_eval Sort Prop
+                           with stmt_step_eval_mult := Induction for stmt_step_eval Sort Prop
+                                                       with stmt_reset_eval_mult := Induction for stmt_reset_eval Sort Prop.
+
+  (*
+Definition class_eval prog f menv input output menv' :=
+  forall fclass prog' env env',
+    find_class f prog = Some (fclass, prog') ->
+    env = PM.add (c_input fclass) input sempty ->
+    stmt_eval prog' menv env (c_step fclass) (menv', env')
+    /\ PM.find (c_output fclass) env' = Some output.
+   *)
+
+  (** ** Determinism of semantics *)
+
+  Axiom exp_eval_det:
+    forall menv env e v1 v2,
+      exp_eval menv env e v1 ->
+      exp_eval menv env e v2 ->
+      v1 = v2.  
+
+  Axiom stmt_eval_fold_left_shift:
+    forall A prog f (xs:list A) iacc menv env menv' env',
+      stmt_eval prog menv env
+                (List.fold_left (fun i x => Comp (f x) i) xs iacc)
+                (menv', env')
+      <->
+      exists menv'' env'',
+        stmt_eval prog menv env
+                  (List.fold_left (fun i x => Comp (f x) i) xs Skip)
+                  (menv'', env'')
+        /\
+        stmt_eval prog menv'' env'' iacc (menv', env').
+
+  Axiom exp_evals_det:
+    forall menv env es vs1 vs2,
+      Nelist.Forall2 (exp_eval menv env) es vs1 ->
+      Nelist.Forall2 (exp_eval menv env) es vs2 ->
+      vs1 = vs2.
+
+  Axiom stmt_eval_det:
+    forall prog s menv env renv1 renv2,
+      stmt_eval prog menv env s renv1
+      -> stmt_eval prog menv env s renv2
+      -> renv1 = renv2.
+
+End SEMANTICS.
+
+Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
+  Definition heap: Type := memory Op.val.
+  Definition stack : Type := PM.t Op.val.
+
+  Implicit Type mmem: heap.
+  Implicit Type stack: stack.
+
+  Definition sempty: stack := PM.empty Op.val.
+  Definition hempty: heap := empty_memory _.
+
+  Inductive exp_eval heap stack: exp -> Op.val -> Prop :=
+  | evar:
+      forall x v,
+        PM.find x stack = Some v ->
+        exp_eval heap stack (Var x) v
+  | estate:
+      forall x v,
+        mfind_mem x heap = Some v ->
+        exp_eval heap stack (State x) v
+  | econst:
+      forall c ,
+        exp_eval heap stack (Const c) c
+  (* | eop: *)
+  (*     forall op es cs c, *)
+  (*       Nelist.Forall2 (exp_eval heap stack) es cs -> *)
+  (*       apply_op op cs = Some c -> *)
+  (*       exp_eval heap stack (Op op es) c *)
+  | eunop :
+      forall op e c v,
+        exp_eval heap stack e c ->
+        Op.sem_unary op c = Some v ->
+        exp_eval heap stack (Unop op e) v
+  | ebinop :
+      forall op e1 e2 c1 c2 v,
+        exp_eval heap stack e1 c1 ->
+        exp_eval heap stack e2 c2 ->
+        Op.sem_binary op c1 c2 = Some v ->
+        exp_eval heap stack (Binop op e1 e2) v.
+
+  Theorem exps_eval_const:
     forall h s cs,
       Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
   Proof.
@@ -153,7 +316,7 @@ Definition class_eval prog f menv input output menv' :=
 
   (** ** Determinism of semantics *)
 
-  Lemma exp_eval_det:
+  Theorem exp_eval_det:
     forall menv env e v1 v2,
       exp_eval menv env e v1 ->
       exp_eval menv env e v2 ->
@@ -172,7 +335,7 @@ Definition class_eval prog f menv input output menv' :=
       now rewrite Hv1 in Hv2; injection Hv2.
   Qed.
 
-  Lemma stmt_eval_fold_left_shift:
+  Theorem stmt_eval_fold_left_shift:
     forall A prog f (xs:list A) iacc menv env menv' env',
       stmt_eval prog menv env
                 (List.fold_left (fun i x => Comp (f x) i) xs iacc)
@@ -214,7 +377,7 @@ Definition class_eval prog f menv input output menv' :=
         apply IHxs; eauto.
   Qed.
 
-  Lemma exp_evals_det:
+  Theorem exp_evals_det:
     forall menv env es vs1 vs2,
       Nelist.Forall2 (exp_eval menv env) es vs1 ->
       Nelist.Forall2 (exp_eval menv env) es vs2 ->
@@ -229,7 +392,7 @@ Definition class_eval prog f menv input output menv' :=
       congruence.
   Qed.
 
-  Lemma stmt_eval_det:
+  Theorem stmt_eval_det:
     forall prog s menv env renv1 renv2,
       stmt_eval prog menv env s renv1
       -> stmt_eval prog menv env s renv2
@@ -294,5 +457,6 @@ Definition class_eval prog f menv input output menv' :=
                       | _ => intuition
                       end.
   Qed.
-
-End SEMANTICS.
+  
+End SemanticsFun'.
+Module SemanticsFun <: SEMANTICS := SemanticsFun'.
