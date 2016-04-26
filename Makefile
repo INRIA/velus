@@ -46,6 +46,7 @@ $(call includecmdwithout@,$(COQBIN)coqtop -config)
 ##########################
 
 COQLIBS?=-R . Rustre\
+  -exclude-dir CompCert\
   -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
   -R CompCert/flocq compcert.flocq\
@@ -57,6 +58,7 @@ COQLIBS?=-R . Rustre\
   -R CompCert/lib compcert.lib\
 
 COQDOCLIBS?=-R . Rustre\
+  -exclude-dir CompCert\
   -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
   -R CompCert/flocq compcert.flocq\
@@ -181,7 +183,9 @@ beautify: $(VFILES:=.beautified)
 	@echo 'Do not do "make clean" until you are sure that everything went well!'
 	@echo 'If there were a problem, execute "for file in $$(find . -name \*.v.old -print); do mv $${file} $${file%.old}; done" in your shell/'
 
-.PHONY: all opt byte archclean clean install userinstall depend html validate extraction test
+.PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr
+
+test: all extraction extr
 
 extraction: extraction/STAMP
 
@@ -190,8 +194,9 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
-test:
-	@ln -sf CompCert extraction/CompCert
+extr:
+	@cd CompCert; find -name "*.cm*" -delete
+	@cd extraction; ln -sf ../CompCert CompCert
 	@cd extraction; ocamlbuild -use-ocamlfind -no-hygiene -j 0 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  print_test.native
 	@cp CompCert/compcert.ini extraction/_build/compcert.ini
 
@@ -211,6 +216,10 @@ clean:
 	rm -f $(VOFILES) $(VIFILES) $(GFILES) $(VFILES:.v=.v.d) $(VFILES:=.beautified) $(VFILES:=.old)
 	rm -f all.ps all-gal.ps all.pdf all-gal.pdf all.glob $(VFILES:.v=.glob) $(VFILES:.v=.tex) $(VFILES:.v=.g.tex) all-mli.tex
 	- rm -rf html mlihtml
+	rm -rf extraction/_build
+	rm -f extraction/extract/*
+	rm -f extraction/STAMP
+	rm -f extraction/CompCert
 
 archclean:
 	rm -f *.cmx *.o
@@ -258,7 +267,8 @@ printenv:
 	$(COQDOC) $(COQDOCFLAGS)  -html -g $< -o $@
 
 %.v.d: %.v
-	$(COQDEP) -slash $(COQLIBS) "$<" > "$@" || ( RV=$$?; rm -f "$@"; exit $${RV} )
+	@echo "COQDEP $*.v"
+	@$(COQDEP) -slash -exclude-dir extraction/CompCert $(COQLIBS) "$<" > "$@" || ( RV=$$?; rm -f "$@"; exit $${RV} )
 
 %.v.beautified:
 	$(COQC) $(COQDEBUG) $(COQFLAGS) -beautify $*
