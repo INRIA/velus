@@ -306,7 +306,8 @@ Definition split_3 {A B C: Type} (l: list (A * B * C))
 
 Definition vardef (volatile: bool) (x: cl_bind): cl_ident * cl_globdef :=
   let (x, ty) := x in
-  (x, @AST.Gvar Clight.fundef cl_type (AST.mkglobvar ty [] false volatile)).
+  let ty' := Ctypes.merge_attributes ty (Ctypes.mk_attr volatile None) in
+  (x, @AST.Gvar Clight.fundef cl_type (AST.mkglobvar ty' [AST.Init_space Z0] false volatile)).
 
 (** translation function: the main instance is declared as 'extern' and it's 
 step function's return variable as 'volatile' *)
