@@ -43,4 +43,4 @@ let _ =
     let p = add_builtins p in
     match Compiler.transf_clight_program p with
     | Error errmsg -> print_error stderr errmsg
-    | OK p -> print_endline "Compilation OK"
+    | OK p -> (* print_endline "Compilation OK" *) ()

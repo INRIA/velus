@@ -183,9 +183,12 @@ beautify: $(VFILES:=.beautified)
 	@echo 'Do not do "make clean" until you are sure that everything went well!'
 	@echo 'If there were a problem, execute "for file in $$(find . -name \*.v.old -print); do mv $${file} $${file%.old}; done" in your shell/'
 
-.PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr
+.PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr compcert
 
-test: all extraction extr
+compcert:
+	@cd CompCert; make -j 8 all
+
+test: all compcert extraction extr
 
 extraction: extraction/STAMP
 
@@ -196,8 +199,8 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 
 extr:
 	@cd CompCert; find -name "*.cm*" -delete
-	@cd extraction; ln -sf ../CompCert CompCert
-	@cd extraction; ocamlbuild -use-ocamlfind -no-hygiene -j 0 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  print_test.native
+	@cd extraction; ln -sf ../CompCert
+	@cd extraction; ocamlbuild -use-ocamlfind -no-hygiene -j 8 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  print_test.native
 	@cp CompCert/compcert.ini extraction/_build/compcert.ini
 
 ####################
