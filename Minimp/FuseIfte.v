@@ -85,7 +85,7 @@ Lemma not_free_aux : forall i op es,
 Proof.
 intros i op es Hfree. induction es.
 + constructor. intro Habs. apply Hfree. now do 2 constructor.
-+ constructor. 
++ constructor.
   - intro Habs. apply Hfree. now do 2 constructor.
   - apply IHes. intro Habs. inversion_clear Habs.
     apply Hfree. constructor. now constructor 3.
@@ -446,6 +446,13 @@ Definition ifte_fuse s : stmt :=
   | Comp s1 s2 => ifte_zip s1 s2
   | _ => s
   end.
+(* TODO: simplify the above definition to:
+Definition ifte_fuse s : stmt :=
+  match s with
+  | Comp s1 s2 => ifte_fuse' s1 s2
+  | _ => s
+  end.
+*)
 
 Lemma ifte_fuse'_free_write:
   forall s2 s1,
