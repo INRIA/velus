@@ -434,11 +434,23 @@ Proof.
   reflexivity.
 Qed.
 
+(*
+NB: almost got rid of ifte_zip, but this function decreases on the first
+    argument, whereas the remaining instance of ifte_zip requires a decrease
+    on the second argument...
 Fixpoint ifte_fuse' s1 s2 : stmt :=
   match s1, s2 with
-  | s1, Comp s2 s3 => ifte_fuse' (ifte_zip s1 s2) s3
-  | s1, s2 => ifte_zip s1 s2
+  | Ifte e1 t1 f1, Ifte e2 t2 f2 =>
+      if exp_eqb e1 e2
+      then Ifte e1 (ifte_fuse' t1 t2) (ifte_fuse' f1 f2)
+      else Comp s1 s2
+  | s1, Comp s2 s3 => ifte_fuse' (ifte_fuse' s1 s2) s3
+  | Skip, s => s
+  | s,    Skip => s
+  | Comp s1' s2', Ifte _ _ _ => Comp s1' (ifte_zip s2' s2)
+  | s1,   s2 => Comp s1 s2
   end.
+*)
 
 Definition ifte_fuse s : stmt :=
   match s with
