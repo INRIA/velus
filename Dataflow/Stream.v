@@ -8,7 +8,7 @@ domain [nat]. To reason about this object, we shall use functional
 extensionality [ Logic.FunctionalExtensionality]. This axiom is
 believed to be consistent with Coq. *)
 
-Module Type STREAM (Op : OPERATORS).
+Module Type STREAM (Import Op : OPERATORS).
 
   (** ** Datatypes *)
 
@@ -16,7 +16,7 @@ Module Type STREAM (Op : OPERATORS).
 
   Inductive value :=
   | absent
-  | present (c : Op.val).
+  | present (c : val).
   Implicit Type v : value.
 
   Definition option2value co :=
@@ -45,7 +45,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   (* With auxiliary hold function. *)
 
-  Fixpoint hold (v0: Op.val) (xs: stream value) (n: nat) : Op.val :=
+  Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
     match n with
     | 0 => v0
     | S m => match xs m with
@@ -54,7 +54,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
             end
     end.
 
-  Definition fby (v0: Op.val) (xs: stream value) (n: nat) : value :=
+  Definition fby (v0: val) (xs: stream value) (n: nat) : value :=
     match xs n with
     | absent => absent
     | _ => present (hold v0 xs n)

@@ -511,12 +511,12 @@ for all [Is_free_exp x e]. *)
             - simpl. apply eunop with c'.
               + apply IHle; auto.
               + rewrite typ_correct. 
-                destruct (Op.sem_unary op c' (SynDF.typeof le)); [now inversion H4 | discriminate].
+                destruct (sem_unary op c' (SynDF.typeof le)); [now inversion H4 | discriminate].
             - simpl. apply ebinop with (c1 := c1) (c2 := c2).
               + apply IHle1; auto.
               + apply IHle2; auto.
               + rewrite 2 typ_correct.
-                destruct (Op.sem_binary op c1 (SynDF.typeof le1) c2 (SynDF.typeof le2));
+                destruct (sem_binary op c1 (SynDF.typeof le1) c2 (SynDF.typeof le2));
                   [now inversion H5 | discriminate].
                 (* - subst. simpl. apply eop with cs. *)
             (* + clear H2 H4 H. *)
@@ -715,7 +715,7 @@ for all [Is_free_exp x e]. *)
                 -> (exists menv' env',
                       stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
                       /\ (forall x, Is_variable_in_eqs x eqs
-                              -> forall c : Op.val, sem_var_instant (restr H n) x (present c)
+                              -> forall c : val, sem_var_instant (restr H n) x (present c)
                                              <-> PM.find x env' = Some c)
                       (* - written memories (shown) *)
                       /\ List.Forall (Memory_Corres_eq G (S n) M menv') eqs).
@@ -922,7 +922,7 @@ for all [Is_free_exp x e]. *)
                 + (* y = present *)
                   rename cs into inValues.
 
-                  assert (exists c : Op.val, xs n = present c) as [outValue Hxsc].
+                  assert (exists c : val, xs n = present c) as [outValue Hxsc].
                   {
                     apply not_absent_present.
                     intro HH.
@@ -1244,7 +1244,7 @@ for all [Is_free_exp x e]. *)
                              stmt_eval (translate G) menv env (translate_eqns (memories eqs) eqs) (menv', env') /\
                              (forall x : ident,
                                  Is_variable_in_eqs x eqs ->
-                                 forall c : Op.val,
+                                 forall c : val,
                                    sem_var_instant (restr H n) x (present c) <->
                                    PM.find x env' = Some c) /\
                              Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
@@ -1599,7 +1599,7 @@ for all [Is_free_exp x e]. *)
 
             Variables (G     : global)
                       (main  : ident)
-                      (css   : stream (nelist Op.val))
+                      (css   : stream (nelist val))
                       (ys    : stream value)
                       (r     : ident)
                       (obj   : ident)

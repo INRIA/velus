@@ -51,7 +51,7 @@ Set Implicit Arguments.
  *)
 
 Module Type MEMSEMANTICS
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Op Syn)
@@ -63,7 +63,7 @@ Module Type MEMSEMANTICS
        (Import NoD : NODUP Op Syn Mem IsD IsV)
        (Import WeF : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD).
   
-  Definition memory := memory (stream Op.val).
+  Definition memory := memory (stream val).
 
   Implicit Type M : memory.
 
@@ -155,12 +155,12 @@ enough: it does not support the internal fixpoint introduced by
       forall (bk : stream bool)
              (H      : history)
              (M      : memory)
-             (ms     : stream Op.val)
+             (ms     : stream val)
              (y      : ident)
              (ck     : clock)
              (ls     : stream value)
              (yS     : stream value)
-             (v0     : Op.val)
+             (v0     : val)
              (le     : lexp)
              (Hmfind : mfind_mem y M = Some ms)
              (Hms0 : ms 0 = v0)

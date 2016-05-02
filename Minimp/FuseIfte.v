@@ -17,7 +17,7 @@ Require Import Rustre.RMemory.
 Ltac inv H := inversion H; subst; clear H.
 
 Module Type FUSEIFTE
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
        (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
@@ -241,12 +241,12 @@ Module Type FUSEIFTE
       destruct v.
       + apply cannot_write_exp_eval with (s := s1) (prog := prog) (menv' := menv'') (env' := env'') in Hse;
         auto; try cannot_write.
-        apply exp_eval_det with (v1 := Op.Vbool v1) in Hse; auto.
+        apply exp_eval_det with (v1 := Vbool v1) in Hse; auto.
         inversion Hse; subst.
         econstructor; [apply Hss | apply Hts].
       + apply cannot_write_exp_eval with (s := s2) (prog := prog) (menv' := menv'') (env' := env'') in Hse;
         auto; try cannot_write.
-        apply exp_eval_det with (v1 := Op.Vbool v1) in Hse; auto.
+        apply exp_eval_det with (v1 := Vbool v1) in Hse; auto.
         inversion Hse; subst.
         econstructor; [apply Hss | apply Hts].
     - inversion_clear Hstmt as [| | | | |? ? ? ? v ? ? ? ? Hexp Hs|].
@@ -254,12 +254,12 @@ Module Type FUSEIFTE
       + inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ].
         apply Icomp with (menv1:=menv'') (env1:=env'').
         * apply Iifte with true; auto.
-        * apply cannot_write_exp_eval with (e := e) (v := Op.Vbool true) in Hs1; auto; try cannot_write.
+        * apply cannot_write_exp_eval with (e := e) (v := Vbool true) in Hs1; auto; try cannot_write.
           apply Iifte with true; auto.
       + inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs2 Ht2| | ].
         apply Icomp with (menv1:=menv'') (env1:=env'').
         * apply Iifte with false; auto.
-        * apply cannot_write_exp_eval with (e := e) (v := Op.Vbool false) in Hs2; auto; try cannot_write.
+        * apply cannot_write_exp_eval with (e := e) (v := Vbool false) in Hs2; auto; try cannot_write.
           apply Iifte with false; auto.
   Qed.
 
