@@ -91,9 +91,9 @@ Module Type SEMANTICS
         stmt_eval prog menv1 env1 a2 (menv2, env2) ->
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
    | Iifte:
-      forall prog menv env cond v ifTrue ifFalse env' menv',
-        exp_eval menv env cond v ->
-        stmt_eval prog menv env (if (Op.to_bool v) then ifTrue else ifFalse) (menv', env') -> 
+      forall prog menv env cond b ifTrue ifFalse env' menv',
+        exp_eval menv env cond (Op.Vbool b) ->
+        stmt_eval prog menv env (if b then ifTrue else ifFalse) (menv', env') -> 
         stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
   | Iskip:
       forall prog menv env,
@@ -237,9 +237,9 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
         stmt_eval prog menv1 env1 a2 (menv2, env2) ->
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
    | Iifte:
-      forall prog menv env cond v ifTrue ifFalse env' menv',
-        exp_eval menv env cond v ->
-        stmt_eval prog menv env (if (Op.to_bool v) then ifTrue else ifFalse) (menv', env') -> 
+      forall prog menv env cond b ifTrue ifFalse env' menv',
+        exp_eval menv env cond (Op.Vbool b) ->
+        stmt_eval prog menv env (if b then ifTrue else ifFalse) (menv', env') -> 
         stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
   | Iskip:
       forall prog menv env,
@@ -363,10 +363,11 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
            (P1:=fun prog i menv srev=>
                   forall menv', stmt_reset_eval prog i menv' -> menv = menv');
       inversion_clear 1;
-      repeat progress match goal with
+    repeat progress match goal with
+                      | b: bool |- _ => destruct b
                       | H: ?env = adds _ _ _ |- _ => subst env
-                      | Ht: exp_eval ?menv ?env ?e (Cbool true),
-                            Hf: exp_eval ?menv ?env ?e (Cbool false) |- _ =>
+                      | Ht: exp_eval ?menv ?env ?e (Op.Vbool true),
+                            Hf: exp_eval ?menv ?env ?e (Op.Vbool false) |- _ =>
                         pose proof (exp_eval_det _ _ _ _ _ Ht Hf) as Hneq; discriminate
                       | H1:exp_eval ?menv ?env ?e ?v1,
                            H2:exp_eval ?menv ?env ?e ?v2 |- _ =>

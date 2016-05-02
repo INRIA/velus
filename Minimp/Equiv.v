@@ -112,7 +112,7 @@ Module Type EQUIV
   Proof.
     intros e e' Heeq s s' Hseq t t' Hteq prog menv env menv' env'.
     rewrite <-Heeq.
-    split; inversion_clear 1; destruct (Op.to_bool v) eqn: E; apply Iifte with v; auto; rewrite E;
+    split; inversion_clear 1; apply Iifte with b; auto; destruct b;
     [now rewrite <-Hseq | now rewrite <-Hteq | now rewrite Hseq | now rewrite Hteq].
   Qed.
 

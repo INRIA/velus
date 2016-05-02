@@ -287,19 +287,27 @@ Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_a
 Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
 
 Module Type OPERATORS.
-  Parameter val : Type.
+  Parameter val' : Type.
   Parameter typ : Type.
+
+  Inductive val: Type :=
+  | Vbool: bool -> val
+  | Val: val' -> val.
+  
+  (* Parameter true_val: val. *)
+  (* Parameter false_val: val. *)
+  (* Axiom distinct_TF: true_val <> false_val. *)
 
   Parameter unary_op : Type.
   Parameter binary_op : Type.
 
-  Parameter sem_unary : unary_op -> val -> (* typ -> *) option val.
-  Parameter sem_binary : binary_op -> val -> (* typ -> *) val -> (* typ -> *) option val.
-
-  Parameter of_bool : bool -> val.
-  Parameter to_bool : val -> bool.
-  Axiom bool_inv : forall b, to_bool (of_bool b) = b.
-  Axiom bool_inj : forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2.
+  Parameter sem_unary : unary_op -> val -> typ -> option val.
+  Parameter sem_binary : binary_op -> val -> typ -> val -> typ -> option val.
+  
+  (* Parameter of_bool : bool -> val. *)
+  (* Parameter to_bool : val -> bool. *)
+  (* Axiom bool_inv : forall b, to_bool (of_bool b) = b. *)
+  (* Axiom bool_inj : forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
   
   (* Axiom unop_dec : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}. *)
   (* Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}. *)
@@ -313,6 +321,19 @@ Module Type OPERATORS.
   Axiom unop_eqb_false_iff : forall op1 op2, unop_eqb op1 op2 = false <-> op1 <> op2.
   Axiom binop_eqb_true_iff : forall op1 op2, binop_eqb op1 op2 = true <-> op1 = op2.
   Axiom binop_eqb_false_iff : forall op1 op2, binop_eqb op1 op2 = false <-> op1 <> op2.
+
+  (* Definition of_bool (b : bool) := if b then true_val else false_val. *)
+  (* Lemma bool_inj: forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
+  (* Proof. *)
+  (*   destruct b1, b2; simpl; auto; *)
+  (*   intro; exfalso; now apply distinct_TF. *)
+  (* Qed. *)
+  (* Lemma bool_inv : forall b, val_eqb (Vbool b) (Vbool true) = b. *)
+  (* Proof. *)
+  (*   destruct b; simpl; [rewrite val_eqb_true_iff | rewrite val_eqb_false_iff]; *)
+  (*   auto; intro H; discriminate. *)
+  (* Qed. *)
+  
 End OPERATORS.
 
 (** *** About Coq stdlib *)

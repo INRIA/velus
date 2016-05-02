@@ -55,13 +55,20 @@ environment.
         PM.find x R = Some v ->
         sem_var_instant x v.
 
+    (* Definition of_bool (b: bool) := if b then Op.true_val else Op.false_val. *)
+    (* Lemma bool_inj: forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
+    (* Proof. *)
+    (*   destruct b1, b2; unfold of_bool; auto; *)
+    (*   intro; exfalso; now apply Op.distinct_TF. *)
+    (* Qed. *)
+
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
         sem_clock_instant Cbase base
     | Son_tick:
         forall ck x c,
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Op.of_bool c)) ->
+          sem_var_instant x (present (Op.Vbool c)) ->
           sem_clock_instant (Con ck x c) true
     | Son_abs1:
         forall ck x c,
@@ -70,7 +77,7 @@ environment.
     | Son_abs2:
         forall ck x c c',
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Op.of_bool c')) ->
+          sem_var_instant x (present (Op.Vbool c')) ->
           ~ (c = c') ->
           sem_clock_instant (Con ck x c)  false.
 
@@ -85,12 +92,12 @@ environment.
           sem_lexp_instant (Evar x) v
     | Swhen_eq:
         forall s x b v,
-          sem_var_instant x (present (Op.of_bool b)) ->
+          sem_var_instant x (present (Op.Vbool b)) ->
           sem_lexp_instant s v ->
           sem_lexp_instant (Ewhen s x b) v
     | Swhen_abs1:
         forall s x b b',
-          sem_var_instant x (present (Op.of_bool b')) ->
+          sem_var_instant x (present (Op.Vbool b')) ->
           ~ (b = b') ->
           (* Note: says nothing about 's'. *)
           sem_lexp_instant (Ewhen s x b) absent
@@ -155,12 +162,12 @@ environment.
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
         forall x t f v,
-          sem_var_instant x (present (Op.of_bool true)) ->
+          sem_var_instant x (present (Op.Vbool true)) ->
           sem_cexp_instant t v ->
           sem_cexp_instant (Emerge x t f) v
     | Smerge_false:
         forall x t f v,
-          sem_var_instant x (present (Op.of_bool false)) ->
+          sem_var_instant x (present (Op.Vbool false)) ->
           sem_cexp_instant f v ->
           sem_cexp_instant (Emerge x t f) v
     | Smerge_abs:
@@ -499,11 +506,11 @@ enough: it does not support the internal fixpoint introduced by
           | H1: sem_clock_instant ?bk ?R ?ck ?l,
                 H2: sem_clock_instant ?bk ?R ?ck ?r |- ?l = ?r =>
             eapply IHck; eassumption
-          | H1: sem_var_instant ?R ?i (present (Op.of_bool ?l)),
-                H2: sem_var_instant ?R ?i (present (Op.of_bool ?r)),
+          | H1: sem_var_instant ?R ?i (present (Op.Vbool ?l)),
+                H2: sem_var_instant ?R ?i (present (Op.Vbool ?r)),
                     H3: ?l = ?r -> False |- _ = _ =>
             exfalso; apply H3;
-            cut (present (Op.of_bool l) = present (Op.of_bool r)); [injection 1; apply Op.bool_inj|];
+            cut (present (Op.Vbool l) = present (Op.Vbool r)); [now injection 1|];
             eapply sem_var_instant_det; eassumption
           end.
     Qed.
@@ -518,11 +525,11 @@ enough: it does not support the internal fixpoint introduced by
       induction e (* using lexp_ind2 *);
         try now (do 2 inversion_clear 1);
         match goal with
-        | H1:sem_var_instant ?R ?e (present (Op.of_bool ?b1)),
-          H2:sem_var_instant ?R ?e (present (Op.of_bool ?b2)),
+        | H1:sem_var_instant ?R ?e (present (Op.Vbool ?b1)),
+          H2:sem_var_instant ?R ?e (present (Op.Vbool ?b2)),
           H3: ?b1 <> ?b2 |- _ =>
           exfalso; apply H3;
-          cut (present (Op.of_bool b1) = present (Op.of_bool b2)); [injection 1; apply Op.bool_inj|];
+          cut (present (Op.Vbool b1) = present (Op.Vbool b2)); [now injection 1|];
           eapply sem_var_instant_det; eassumption
         | H1:sem_var_instant ?R ?e ?v1,
           H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 =>
@@ -635,12 +642,11 @@ enough: it does not support the internal fixpoint introduced by
               |- ?l = ?r =>
               (eapply IHe1; eassumption)
               || (eapply IHe2; eassumption)
-            | H1: sem_var_instant ?R ?i (present (Op.of_bool true)),
-                  H2: sem_var_instant ?R ?i (present (Op.of_bool false)) |- _ =>
-              exfalso;
-                assert (present (Op.of_bool true) = present (Op.of_bool false)) as H
-                by (eapply sem_var_instant_det; eassumption);
-                inversion H as [H']; apply Op.bool_inj in H'; discriminate
+            | H1: sem_var_instant ?R ?i (present (Op.Vbool true)),
+                  H2: sem_var_instant ?R ?i (present (Op.Vbool false)) |- _ =>
+              let H := fresh in
+              assert (present (Op.Vbool true) = present (Op.Vbool false)) as H
+                  by (eapply sem_var_instant_det; eassumption); discriminate 
             | H1: sem_lexp_instant ?bk ?R ?l ?v1,
                   H2: sem_lexp_instant ?bk ?R ?l ?v2 |- ?v1 = ?v2 =>
               eapply sem_lexp_instant_det; eassumption

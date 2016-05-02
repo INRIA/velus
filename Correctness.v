@@ -118,6 +118,7 @@ Module Type CORRECTNESS
               specialize (IHc _ Hs); clear Hs;
               destruct IHc as [[Hp Hs]|[Hp [Hmenv Henv]]];
               try inversion_clear Hs;
+              try destruct b;
               (left; now intuition)
               || (right;
                   repeat progress
@@ -128,8 +129,8 @@ Module Type CORRECTNESS
                            => apply IsAbs2 with (1:=Hp) (2:=He)
                          | _ => intuition
                          end).
-          Admitted.
-
+          Qed.
+          
           Lemma stmt_eval_Control:
             forall prog mems menv env ck stmt,
               (Is_absent_in mems menv env ck
@@ -152,14 +153,13 @@ Module Type CORRECTNESS
                                                || apply Bool.not_false_is_true in Hneq);
               subst;
               apply IHck with (1:=Hp);
-              (apply Iifte_false with (1:=Hexp)
-                                      || apply Iifte with (1:=Hexp));
-              rewrite Op.bool_inv; constructor.
+              apply Iifte with (1:=Hexp);
+              constructor.
             - inversion_clear 1 as [|? ? ? Hp Hexp];
               intro Hs;
               destruct b;
               apply IHck; auto;
-              eapply Iifte; eauto; rewrite Op.bool_inv; auto.
+              eapply Iifte; eauto. 
           Qed.
 
           (** If the clock is absent, then the controlled statement evaluates as
@@ -194,7 +194,7 @@ Module Type CORRECTNESS
           Proof.
             intros prog menv env mems x menv' env'.
             induction ce;
-              (apply IHce || inversion_clear 1; destruct (Op.to_bool v)); auto.
+            (apply IHce || inversion_clear 1; try destruct b); auto.
           Qed.
 
           Lemma stmt_eval_translate_cexp_env_add:
@@ -204,7 +204,7 @@ Module Type CORRECTNESS
           Proof.
             intros prog menv env mems x menv' env'.
             induction ce;
-              (apply IHce || inversion_clear 1; destruct (Op.to_bool v)); auto;
+              (apply IHce || inversion_clear 1; try destruct b); auto;
               exists v; rewrite <- H1; intuition.
           Qed.
 
@@ -559,14 +559,14 @@ for all [Is_free_exp x e]. *)
             induction e as [b et IHt ef IHf|e].
             - (* Emerge *)
               inversion_clear 1; intro Henv.
-              + apply Iifte with (Op.of_bool true).
+              + apply Iifte with true.
                 * split_env_assumption.
                   apply get_exp_eval_tovar; now auto.
-                * rewrite Op.bool_inv; apply IHt; now auto.
-              + apply Iifte with (Op.of_bool false).
+                * apply IHt; now auto.
+              + apply Iifte with false.
                 * split_env_assumption.
                   apply get_exp_eval_tovar; now auto.
-                * rewrite Op.bool_inv; apply IHf; now auto.
+                * apply IHf; now auto.
             - (* Eexp *)
               inversion_clear 1; intro Henv.
               unfold translate_cexp.

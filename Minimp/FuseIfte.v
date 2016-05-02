@@ -208,7 +208,7 @@ Module Type FUSEIFTE
     - inv Hstmt.
       apply exp_eval_extend_mem; trivial.
       intro Habs. apply (Hfree i); auto.
-    - inv Hstmt; destruct (Op.to_bool v0); solve [eapply IHs1; eassumption || cannot_write | eapply IHs2; eassumption || cannot_write].
+    - inv Hstmt; destruct b; solve [eapply IHs1; eassumption || cannot_write | eapply IHs2; eassumption || cannot_write].
     - inv Hstmt.
       apply exp_eval_extend_env, exp_eval_extend_mem_by_obj; trivial.
       intro Habs. apply (Hfree i); auto.
@@ -238,33 +238,29 @@ Module Type FUSEIFTE
       inversion_clear Hs as [| | | | |? ? ? ? v ? ? ? ? Hse Hss| ];
         inversion_clear Ht as [| | | | |? ? ? ? v1 ? ? ? ? Hte Hts| ].
       apply Iifte with v; auto.
-      destruct (Op.to_bool v) eqn: E.
+      destruct v.
       + apply cannot_write_exp_eval with (s := s1) (prog := prog) (menv' := menv'') (env' := env'') in Hse;
         auto; try cannot_write.
-        apply exp_eval_det with (v1 := v1) in Hse; auto.
-        rewrite Hse in Hts; rewrite E in Hts.
+        apply exp_eval_det with (v1 := Op.Vbool v1) in Hse; auto.
+        inversion Hse; subst.
         econstructor; [apply Hss | apply Hts].
       + apply cannot_write_exp_eval with (s := s2) (prog := prog) (menv' := menv'') (env' := env'') in Hse;
         auto; try cannot_write.
-        apply exp_eval_det with (v1 := v1) in Hse; auto.
-        rewrite Hse in Hts; rewrite E in Hts.
+        apply exp_eval_det with (v1 := Op.Vbool v1) in Hse; auto.
+        inversion Hse; subst.
         econstructor; [apply Hss | apply Hts].
     - inversion_clear Hstmt as [| | | | |? ? ? ? v ? ? ? ? Hexp Hs|].
-      destruct (Op.to_bool v) eqn: E.      
+      destruct v.      
       + inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ].
         apply Icomp with (menv1:=menv'') (env1:=env'').
-        * apply Iifte with v; auto.
-          now rewrite E.
-        * apply cannot_write_exp_eval with (e := e) (v := v) in Hs1; auto; try cannot_write.
-          apply Iifte with v; auto.
-          now rewrite E.
+        * apply Iifte with true; auto.
+        * apply cannot_write_exp_eval with (e := e) (v := Op.Vbool true) in Hs1; auto; try cannot_write.
+          apply Iifte with true; auto.
       + inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs2 Ht2| | ].
         apply Icomp with (menv1:=menv'') (env1:=env'').
-        * apply Iifte with v; auto.
-          now rewrite E.
-        * apply cannot_write_exp_eval with (e := e) (v := v) in Hs2; auto; try cannot_write.
-          apply Iifte with v; auto.
-          now rewrite E.
+        * apply Iifte with false; auto.
+        * apply cannot_write_exp_eval with (e := e) (v := Op.Vbool false) in Hs2; auto; try cannot_write.
+          apply Iifte with false; auto.
   Qed.
 
   Inductive Ifte_free_write : stmt -> Prop :=

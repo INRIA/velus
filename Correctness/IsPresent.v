@@ -23,14 +23,14 @@ Module Type ISPRESENT
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
        (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
        (Import Trans : TRANSLATION Op SynDF SynMP).
-  
+    
   Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
   | IsCbase: Is_present_in mems heap stack Cbase
   | IsCon:
       forall ck c v,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems c) (Op.of_bool v)
+        -> exp_eval heap stack (tovar mems c) (Op.Vbool v)
         -> Is_present_in mems heap stack (Con ck c v).
 
   Inductive Is_absent_in (mems: PS.t) heap stack: clock -> Prop :=
@@ -41,7 +41,7 @@ Module Type ISPRESENT
   | IsAbs2:
       forall ck c v1 v2,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems c) (Op.of_bool v1)
+        -> exp_eval heap stack (tovar mems c) (Op.Vbool v1)
         -> v2 <> v1
         -> Is_absent_in mems heap stack (Con ck c v2).
 
@@ -50,33 +50,28 @@ Module Type ISPRESENT
 
   Lemma exp_eval_tovar_Cbool_dec:
     forall menv env mems c v,
-      {exp_eval menv env (tovar mems c) (Op.of_bool v)}
-      + {~exp_eval menv env (tovar mems c) (Op.of_bool v)}.
+      {exp_eval menv env (tovar mems c) (Op.Vbool v)}
+      + {~exp_eval menv env (tovar mems c) (Op.Vbool v)}.
   Proof.
     Ltac no_match := right; inversion_clear 1; try unfold mfind_mem in *;
                      match goal with
-                     | H: PM.find _ _ = _ |- _ => rewrite H in *; discriminate
+                     | H: PM.find _ _ = _,
+                          H': PM.find _ _ = _ |- _ => rewrite H in H'; discriminate
                      end.
     intros menv env mems c v.
     unfold tovar.
     destruct (PS.mem c mems).
     - case_eq (mfind_mem c menv).
-      + left; apply estate.
-          (* intro c0; destruct c0. *)
-        (* * no_match. *)
-      (* * destruct b; destruct v; (left; apply estate; assumption) || no_match. *)
-        admit.
+      + intro c0; destruct c0.
+        * destruct b; destruct v; (left; apply estate; assumption) || no_match.
+        * no_match.
       + no_match.
     - case_eq (PM.find c env).
-      + left; apply evar.
-        (* intro c0; destruct c0. *)
-        (* * no_match. *)
-      (* * destruct b; destruct v; (left; apply evar; assumption) || no_match. *)
-        admit.
+      + intro c0; destruct c0.
+        * destruct b; destruct v; (left; apply evar; assumption) || no_match.
+        * no_match.
       + no_match.
   Qed.
-
-
 
   Lemma Is_present_in_dec:
     forall mems menv env ck,
@@ -96,7 +91,7 @@ Module Type ISPRESENT
     forall mems menv env ck c v,
       Is_absent_in mems menv env (Con ck c v)
       -> (Is_absent_in mems menv env ck
-         \/ (forall v', exp_eval menv env (tovar mems c) (Op.of_bool v')
+         \/ (forall v', exp_eval menv env (tovar mems c) (Op.Vbool v')
                   -> v' <> v)).
   Proof.
     intros until c.
@@ -105,7 +100,7 @@ Module Type ISPRESENT
     intro HR; rewrite <-HR in *; clear HR.
     apply Hneq.
     pose proof (exp_eval_det _ _ _ _ _ Hexp Hexp') as Heq.
-    now apply Op.bool_inj.
+    now inversion Heq. 
   Qed.
 
 End ISPRESENT.

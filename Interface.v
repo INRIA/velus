@@ -8,9 +8,9 @@ Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Minimp.Semantics.
 
 (* Interface avec CompCert *)
-Inductive val' : Type :=
-| Vundef : val'
-| Vint : Int.int -> val'.
+Inductive val'' : Type :=
+| Vundef : val''
+| Vint : Int.int -> val''.
 
 Inductive unary_op' : Type :=
 | Opposite : unary_op'
@@ -26,77 +26,97 @@ Definition one := Int.one.
 Definition Vzero := Vint Int.zero.
 
 Module Op <: OPERATORS.
-  Definition val := val'.
+  Definition val' := val''.
+              
+  Inductive val: Type :=
+  | Vbool: bool -> val
+  | Val: val' -> val.
+
   Definition typ := nat.
   
   Definition unary_op := unary_op'.
   Definition binary_op := binary_op'.
 
-  Definition sem_opposite (v : val) : option val :=
+  Definition of_bool (b: bool) := Vint (if b then one else zero).
+
+  Definition sem_val_unary (sem: val' -> option val) (v: val) :=
     match v with
-    | Vundef => None
-    | Vint n => Some (Vint (Int.neg n))
+    | Vbool b => sem (of_bool b)   
+    | Val v => sem v
     end.
 
-  Definition sem_negation (v : val) : option val :=
-    match v with
-    | Vundef => None
-    | Vint n => Some (Vint (if (Int.eq n zero) then one else zero))
+  Definition sem_val_binary (sem: val' -> val' -> option val) (v1 v2: val) :=
+    match v1, v2 with
+    | Vbool b1, Vbool b2 => sem (of_bool b1) (of_bool b2)
+    | Val v1, Vbool b2 => sem v1 (of_bool b2)
+    | Vbool b1, Val v2 => sem (of_bool b1) v2
+    | Val v1, Val v2 => sem v1 v2
     end.
   
-  Definition sem_unary (op : unary_op) (v : val) : option val :=
-    match op with
-    | Opposite => sem_opposite v
-    | Negation => sem_negation v
-    end.
-
-  Definition sem_plus (v1 v2 : val) : option val :=
-    match v1, v2 with
-    | Vint n1, Vint n2 => Some (Vint (Int.add n1 n2))
-    | _, _ => None
-    end.
-
-  Definition sem_minus (v1 v2 : val) : option val :=
-    match v1, v2 with
-    | Vint n1, Vint n2 => Some (Vint (Int.sub n1 n2))
-    | _, _ => None
-    end.
-
-  Definition sem_mult (v1 v2 : val) : option val :=
-    match v1, v2 with
-    | Vint n1, Vint n2 => Some (Vint (Int.mul n1 n2))
-    | _, _ => None
-    end.
+  Definition sem_opposite: val -> option val :=
+    let sem v :=
+        match v with
+        | Vundef => None
+        | Vint n => Some (Val (Vint (Int.neg n)))
+        end
+    in sem_val_unary sem.
   
-  Definition sem_binary (op : binary_op) (v1 v2 : val) : option val :=
+  Definition sem_negation: val -> option val :=
+    let sem v :=
+        match v with
+        | Vundef => None
+        | Vint n => Some (Val (Vint (if (Int.eq n zero) then one else zero)))
+        end
+    in sem_val_unary sem.
+    
+  Definition sem_unary (op : unary_op): val -> option val :=
     match op with
-    | Add => sem_plus v1 v2
-    | Sub => sem_minus v1 v2
-    | Mul => sem_mult v1 v2
+    | Opposite => sem_opposite 
+    | Negation => sem_negation 
     end.
 
-  Definition of_bool (b : bool) : val := Vint (if b then Int.one else Int.zero).
-  Definition to_bool (v : val) : bool :=
-    match v with
-    | Vundef => false
-    | Vint n => negb (Int.eq n Int.zero)
+  Definition sem_plus: val -> val -> option val :=
+    let sem v1 v2 :=
+        match v1, v2 with
+        | Vint n1, Vint n2 => Some (Val (Vint (Int.add n1 n2)))
+        | _, _ => None
+        end
+    in sem_val_binary sem.
+
+  Definition sem_minus: val -> val -> option val :=
+    let sem v1 v2 :=
+        match v1, v2 with
+        | Vint n1, Vint n2 => Some (Val (Vint (Int.sub n1 n2)))
+        | _, _ => None
+        end
+    in sem_val_binary sem.
+
+  Definition sem_mult: val -> val -> option val :=
+    let sem v1 v2 :=
+        match v1, v2 with
+        | Vint n1, Vint n2 => Some (Val (Vint (Int.mul n1 n2)))
+        | _, _ => None
+        end
+    in sem_val_binary sem.
+  
+  Definition sem_binary (op : binary_op): val -> val -> option val :=
+    match op with
+    | Add => sem_plus
+    | Sub => sem_minus
+    | Mul => sem_mult
     end.
-
-  Theorem bool_inv : forall b : bool, to_bool (of_bool b) = b. 
-  Proof. now destruct b. Qed.
-
-  Theorem bool_inj : forall b1 b2 : bool, of_bool b1 = of_bool b2 -> b1 = b2.
-  Proof.
-    unfold of_bool.
-    intros b1 b2; destruct b1, b2; inversion 1; auto.
-  Qed.
     
   Lemma val_dec : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
-  Proof. decide equality; apply Int.eq_dec. Qed.
+  Proof. decide equality; [apply Bool.bool_dec | decide equality; apply Int.eq_dec]. Qed.
   Definition val_eqb (v1 v2 : val) : bool :=
     match v1, v2 with
-    | Vundef, Vundef => true
-    | Vint n1, Vint n2 => Int.eq n1 n2
+    | Vbool b1, Vbool b2 => Bool.eqb b1 b2
+    | Val v1, Val v2 =>
+      match v1, v2 with
+      | Vundef, Vundef => true
+      | Vint n1, Vint n2 => Int.eq n1 n2
+      | _, _ => false
+      end
     | _, _ => false
     end.
 
@@ -110,18 +130,20 @@ Module Op <: OPERATORS.
   
   Theorem val_eqb_true_iff : forall v1 v2, val_eqb v1 v2 = true <-> v1 = v2.
   Proof.
-    intros v1 v2; unfold val_eqb; destruct v1 as [|n1], v2 as [|n2]; try intuition discriminate.
+    intros v1 v2; unfold val_eqb; destruct v1 as [b1|v1], v2 as [b2|v2];
+    try destruct b1, b2; try destruct v1 as [|n1], v2 as [|n2]; try intuition discriminate.
     split; intro H.
-    - pose proof (Int.eq_spec n1 n2) as Heq; rewrite H in Heq; now f_equal.
+    - pose proof (Int.eq_spec n1 n2) as Heq; rewrite H in Heq; now do 2 f_equal.
     - inversion H; apply Int.eq_true.
   Qed.
 
   Theorem val_eqb_false_iff : forall v1 v2, val_eqb v1 v2 = false <-> v1 <> v2.
   Proof.
-    intros v1 v2; unfold val_eqb; destruct v1 as [|n1], v2 as [|n2]; try intuition discriminate.
+    intros v1 v2; unfold val_eqb; destruct v1 as [b1|v1], v2 as [b2|v2];
+    try destruct b1, b2; try destruct v1 as [|n1], v2 as [|n2]; try intuition discriminate.
     split; intros H.
     - intro Hf; pose proof (Int.eq_spec n1 n2) as Hneq; rewrite H in Hneq; inversion Hf as [Heq]; contradiction. 
-    - apply Int.eq_false; intro Heq; apply H; now f_equal.
+    - apply Int.eq_false; intro Heq; apply H; now do 2 f_equal.
   Qed.
 
   Theorem unop_eqb_true_iff : forall op1 op2, unop_eqb op1 op2 = true <-> op1 = op2.
