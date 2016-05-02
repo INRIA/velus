@@ -24,19 +24,19 @@ Module Type FUSEIFTE
        (Import Equ : EQUIV Op SynMP SemMP).
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
-  | FreeVar: forall i,
-      Is_free_in_exp i (Var i)
-  | FreeState: forall i,
-      Is_free_in_exp i (State i)
+  | FreeVar: forall i ty,
+      Is_free_in_exp i (Var i ty)
+  | FreeState: forall i ty,
+      Is_free_in_exp i (State i ty)
   (* | FreeOp: forall i op es, *)
   (*     Nelist.Exists (Is_free_in_exp i) es -> *)
   (*     Is_free_in_exp i (Op op es) *)
-  | FreeUnop: forall i op e,
+  | FreeUnop: forall i op e ty,
       Is_free_in_exp i e ->
-      Is_free_in_exp i (Unop op e)
-  |FreeBinop: forall i op e1 e2,
+      Is_free_in_exp i (Unop op e ty)
+  |FreeBinop: forall i op e1 e2 ty,
       Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
-      Is_free_in_exp i (Binop op e1 e2).
+      Is_free_in_exp i (Binop op e1 e2 ty).
 
   Inductive Can_write_in : ident -> stmt -> Prop :=
   | CWIAssign: forall x e,
@@ -103,29 +103,29 @@ Module Type FUSEIFTE
   (*     apply Hfree. constructor. now constructor 3. *)
   (* Qed. *)
 
-  Lemma not_free_aux1 : forall i op e,
-      ~Is_free_in_exp i (Unop op e) -> ~Is_free_in_exp i e.
+  Lemma not_free_aux1 : forall i op e ty,
+      ~Is_free_in_exp i (Unop op e ty) -> ~Is_free_in_exp i e.
   Proof.
-    intros i op e Hfree H; apply Hfree. now constructor. 
+    intros i op e ty Hfree H; apply Hfree. now constructor. 
   Qed.
   
-  Lemma not_free_aux2 : forall i op e1 e2,
-      ~Is_free_in_exp i (Binop op e1 e2) -> ~Is_free_in_exp i e1 /\ ~Is_free_in_exp i e2.
+  Lemma not_free_aux2 : forall i op e1 e2 ty,
+      ~Is_free_in_exp i (Binop op e1 e2 ty) -> ~Is_free_in_exp i e1 /\ ~Is_free_in_exp i e2.
   Proof.
-    intros i op e1 e2 Hfree; split; intro H; apply Hfree; constructor; [now left | now right].
+    intros i op e1 e2 ty Hfree; split; intro H; apply Hfree; constructor; [now left | now right].
   Qed.
 
   Ltac not_free :=
     lazymatch goal with
-    | H : ~Is_free_in_exp ?x (Var ?i) |- _ => let HH := fresh in
-                                            assert (HH : i <> x) by (intro; subst; apply H; constructor);
-                                              clear H; rename HH into H
-    | H : ~Is_free_in_exp ?x (State ?i) |- _ => let HH := fresh in
-                                              assert (HH : i <> x) by (intro; subst; apply H; constructor);
-                                                clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (Var ?i ?ty) |- _ => let HH := fresh in
+                                                assert (HH : i <> x) by (intro; subst; apply H; constructor);
+                                                  clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (State ?i ?ty) |- _ => let HH := fresh in
+                                                  assert (HH : i <> x) by (intro; subst; apply H; constructor);
+                                                    clear H; rename HH into H
     (* | H : ~Is_free_in_exp ?x (Op ?op ?es) |- _ => apply not_free_aux in H *)
-    | H : ~Is_free_in_exp ?x (Unop ?op ?e) |- _ => apply not_free_aux1 in H
-    | H : ~Is_free_in_exp ?x (Binop ?op ?e1 ?e2) |- _ => destruct (not_free_aux2 x op e1 e2 H)
+    | H : ~Is_free_in_exp ?x (Unop ?op ?e ?ty) |- _ => apply not_free_aux1 in H
+    | H : ~Is_free_in_exp ?x (Binop ?op ?e1 ?e2 ?ty) |- _ => destruct (not_free_aux2 x op e1 e2 ty H)
     end.
 
   (** If we add irrelevent values to [env], evaluation does not change. *)

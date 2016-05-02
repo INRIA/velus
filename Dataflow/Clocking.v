@@ -34,48 +34,48 @@ Module Type CLOCKING
   | CCbase:
       clk_clock C Cbase
   | CCon:
-      forall ck x b,
+      forall ck x b ty,
         clk_clock C ck ->
         clk_var C x ck ->
-        clk_clock C (Con ck x b).
+        clk_clock C (Con ck x ty b).
 
   Inductive clk_lexp C: lexp -> clock -> Prop :=
   | Cconst:
-      forall c,
-        clk_lexp C (Econst c) Cbase
+      forall c ty,
+        clk_lexp C (Econst c ty) Cbase
   | Cvar:
-      forall x ck,
+      forall x ck ty,
         clk_var C x ck ->
-        clk_lexp C (Evar x) ck
+        clk_lexp C (Evar x ty) ck
   | Cwhen:
-      forall e x b ck,
+      forall e x b ck ty,
         clk_lexp C e ck ->
         clk_var C x ck ->
-        clk_lexp C (Ewhen e x b) (Con ck x b)
+        clk_lexp C (Ewhen e x b) (Con ck x ty b)
   (* | Cop: *)
   (*     forall op les ck, *)
   (*       Nelist.Forall (fun e => clk_lexp C e ck) les -> *)
   (*       clk_lexp C (Eop op les) ck *)
   | Cunop:
-      forall op e ck,
+      forall op e ck ty,
         clk_lexp C e ck ->
-        clk_lexp C (Eunop op e) ck
+        clk_lexp C (Eunop op e ty) ck
   | Cbinop:
-      forall op e1 e2 ck,
+      forall op e1 e2 ck ty,
         clk_lexp C e1 ck ->
         clk_lexp C e2 ck ->
-        clk_lexp C (Ebinop op e1 e2) ck.
+        clk_lexp C (Ebinop op e1 e2 ty) ck.
 
   Definition clk_lexps C (les: nelist lexp)(ck: clock): Prop :=
     Nelist.Forall (fun le => clk_lexp C le ck) les.
 
   Inductive clk_cexp C: cexp -> clock -> Prop :=
   | Cmerge:
-      forall x t f ck,
+      forall x t f ck ty,
         clk_var C x ck ->
-        clk_cexp C t (Con ck x true) ->
-        clk_cexp C f (Con ck x false) ->
-        clk_cexp C (Emerge x t f) ck
+        clk_cexp C t (Con ck x ty true) ->
+        clk_cexp C f (Con ck x ty false) ->
+        clk_cexp C (Emerge x ty t f) ck
   | Cexp:
       forall e ck,
         clk_lexp C e ck ->
@@ -156,10 +156,10 @@ Module Type CLOCKING
   Proof.
     induction le as [| |le IH | | ] (* using lexp_ind2 *).
     - inversion_clear 2; now constructor.
-    - intros ck Hwc; inversion_clear 1 as [|? ? Hcv| | |].
+    - intros ck Hwc; inversion_clear 1 as [|? ? ? Hcv| | |].
       apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
     - intros ck Hwc.
-      inversion_clear 1 as [| |? ? ? ck' Hle Hcv | |].
+      inversion_clear 1 as [| |? ? ? ? ck' Hle Hcv | |].
       constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
     - intros ck Hwc; inversion_clear 1; auto.
     - intros ck Hwc; inversion_clear 1; auto.    
@@ -171,9 +171,9 @@ Module Type CLOCKING
       -> clk_cexp C ce ck
       -> clk_clock C ck.
   Proof.
-    induction ce as [i ce1 IH1 ce2 IH2|].
+    induction ce as [i ty ce1 IH1 ce2 IH2|].
     - intros ck Hwc.
-      inversion_clear 1 as [? ? ? ? Hcv Hct Hcf|].
+      inversion_clear 1 as [? ? ? ? ? Hcv Hct Hcf|].
       apply IH1 with (1:=Hwc) in Hct.
       inversion_clear Hct; assumption.
     - intros ck Hwc; inversion_clear 1 as [|? ? Hck].
@@ -181,21 +181,21 @@ Module Type CLOCKING
   Qed.
 
   Lemma clock_no_loops:
-    forall ck x b,
-      Con ck x b <> ck.
+    forall ck x ty b,
+      Con ck x ty b <> ck.
   Proof.
     induction ck as [|? IH]; [discriminate 1|].
     injection 1; intros ? ? Heq.
-    apply IH with (1:=Heq).
+    apply IH.  
   Qed.
 
   Lemma clk_clock_sub:
-    forall C ck x b,
+    forall C ck x ty b,
       Well_clocked_env C
-      -> clk_clock C (Con ck x b)
+      -> clk_clock C (Con ck x ty b)
       -> clk_var C x ck.
   Proof.
-    intros C ck x b Hwc Hclock.
+    intros C ck x ty b Hwc Hclock.
     inversion_clear Hclock as [|? ? ? Hclock' Hcv'].
     assumption.
   Qed.

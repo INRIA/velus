@@ -20,7 +20,7 @@ Require Import Rustre.Dataflow.Stream.
 
 
 Module Type SEMANTICS
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Op Syn).
@@ -66,38 +66,38 @@ environment.
     | Sbase:
         sem_clock_instant Cbase base
     | Son_tick:
-        forall ck x c,
+        forall ck x c ty,
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Op.Vbool c)) ->
-          sem_clock_instant (Con ck x c) true
+          sem_var_instant x (present (Vbool c)) ->
+          sem_clock_instant (Con ck x ty c) true
     | Son_abs1:
-        forall ck x c,
+        forall ck x c ty,
           sem_clock_instant ck false ->
-          sem_clock_instant (Con ck x c) false
+          sem_clock_instant (Con ck x ty c) false
     | Son_abs2:
-        forall ck x c c',
+        forall ck x c c' ty,
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Op.Vbool c')) ->
+          sem_var_instant x (present (Vbool c')) ->
           ~ (c = c') ->
-          sem_clock_instant (Con ck x c)  false.
+          sem_clock_instant (Con ck x ty c)  false.
 
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:
-        forall c v,
+        forall c v ty,
           v = (if base then present c else absent) ->
-          sem_lexp_instant (Econst c) v
+          sem_lexp_instant (Econst c ty) v
     | Svar:
-        forall x v,
+        forall x v ty,
           sem_var_instant x v ->
-          sem_lexp_instant (Evar x) v
+          sem_lexp_instant (Evar x ty) v
     | Swhen_eq:
         forall s x b v,
-          sem_var_instant x (present (Op.Vbool b)) ->
+          sem_var_instant x (present (Vbool b)) ->
           sem_lexp_instant s v ->
           sem_lexp_instant (Ewhen s x b) v
     | Swhen_abs1:
         forall s x b b',
-          sem_var_instant x (present (Op.Vbool b')) ->
+          sem_var_instant x (present (Vbool b')) ->
           ~ (b = b') ->
           (* Note: says nothing about 's'. *)
           sem_lexp_instant (Ewhen s x b) absent
@@ -114,23 +114,24 @@ environment.
     (*     Nelist.Forall2 sem_lexp_instant les (alls absent les) -> *)
     (*     sem_lexp_instant (Eop op les) absent *)
     | Sunop_eq:
-        forall le op c,
+        forall le op c ty,
           sem_lexp_instant le (present c) ->
-          sem_lexp_instant (Eunop op le) (option2value (Op.sem_unary op c))
+          sem_lexp_instant (Eunop op le ty) (option2value (sem_unary op c (typeof le)))
     | Sunop_abs:
-        forall le op,
+        forall le op ty,
           sem_lexp_instant le absent ->
-          sem_lexp_instant (Eunop op le) absent
+          sem_lexp_instant (Eunop op le ty) absent
     | Sbinop_eq:
-        forall le1 le2 op c1 c2,
+        forall le1 le2 op c1 c2 ty,
           sem_lexp_instant le1 (present c1) ->
           sem_lexp_instant le2 (present c2) ->
-          sem_lexp_instant (Ebinop op le1 le2) (option2value (Op.sem_binary op c1 c2))
+          sem_lexp_instant (Ebinop op le1 le2 ty)
+                           (option2value (sem_binary op c1 (typeof le1) c2 (typeof le2)))
     | Sbinop_abs:
-        forall le1 le2 op,
+        forall le1 le2 op ty,
           sem_lexp_instant le1 absent ->
           sem_lexp_instant le2 absent ->
-          sem_lexp_instant (Ebinop op le1 le2) absent.
+          sem_lexp_instant (Ebinop op le1 le2 ty) absent.
 
     Definition sem_lexps_instant (les: nelist lexp)(vs: nelist value) :=
       Nelist.Forall2 sem_lexp_instant les vs.
@@ -161,19 +162,19 @@ environment.
 
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
-        forall x t f v,
-          sem_var_instant x (present (Op.Vbool true)) ->
+        forall x t f v ty,
+          sem_var_instant x (present (Vbool true)) ->
           sem_cexp_instant t v ->
-          sem_cexp_instant (Emerge x t f) v
+          sem_cexp_instant (Emerge x ty t f) v
     | Smerge_false:
-        forall x t f v,
-          sem_var_instant x (present (Op.Vbool false)) ->
+        forall x t f v ty,
+          sem_var_instant x (present (Vbool false)) ->
           sem_cexp_instant f v ->
-          sem_cexp_instant (Emerge x t f) v
+          sem_cexp_instant (Emerge x ty t f) v
     | Smerge_abs:
-        forall x t f,
+        forall x t f ty,
           sem_var_instant x absent ->
-          sem_cexp_instant (Emerge x t f) absent
+          sem_cexp_instant (Emerge x ty t f) absent
     | Sexp:
         forall e v,
           sem_lexp_instant e v ->
@@ -258,7 +259,7 @@ environment.
   Definition absent_list (xss: stream (nelist value))(n: nat): Prop :=
     xss n = Nelist.map (fun _ => absent) (xss n).
 
-  Definition present_list (xss: stream (nelist value))(n: nat)(vs: nelist Op.val): Prop :=
+  Definition present_list (xss: stream (nelist value))(n: nat)(vs: nelist val): Prop :=
     xss n = Nelist.map present vs.
 
   Definition clock_of (xss: stream (nelist value))(bs: stream bool): Prop :=
@@ -392,7 +393,7 @@ enough: it does not support the internal fixpoint introduced by
 	    (y   : ident)
 	    (ls  : stream value)
 	    (yS  : stream value)
-	    (v0  : Op.val)
+	    (v0  : val)
         (ck  : clock)
 	    (lae : lexp)
 	    (Hls : sem_laexp bk H ck lae ls)
@@ -506,11 +507,11 @@ enough: it does not support the internal fixpoint introduced by
           | H1: sem_clock_instant ?bk ?R ?ck ?l,
                 H2: sem_clock_instant ?bk ?R ?ck ?r |- ?l = ?r =>
             eapply IHck; eassumption
-          | H1: sem_var_instant ?R ?i (present (Op.Vbool ?l)),
-                H2: sem_var_instant ?R ?i (present (Op.Vbool ?r)),
+          | H1: sem_var_instant ?R ?i (present (Vbool ?l)),
+                H2: sem_var_instant ?R ?i (present (Vbool ?r)),
                     H3: ?l = ?r -> False |- _ = _ =>
             exfalso; apply H3;
-            cut (present (Op.Vbool l) = present (Op.Vbool r)); [now injection 1|];
+            cut (present (Vbool l) = present (Vbool r)); [now injection 1|];
             eapply sem_var_instant_det; eassumption
           end.
     Qed.
@@ -525,11 +526,11 @@ enough: it does not support the internal fixpoint introduced by
       induction e (* using lexp_ind2 *);
         try now (do 2 inversion_clear 1);
         match goal with
-        | H1:sem_var_instant ?R ?e (present (Op.Vbool ?b1)),
-          H2:sem_var_instant ?R ?e (present (Op.Vbool ?b2)),
+        | H1:sem_var_instant ?R ?e (present (Vbool ?b1)),
+          H2:sem_var_instant ?R ?e (present (Vbool ?b2)),
           H3: ?b1 <> ?b2 |- _ =>
           exfalso; apply H3;
-          cut (present (Op.Vbool b1) = present (Op.Vbool b2)); [now injection 1|];
+          cut (present (Vbool b1) = present (Vbool b2)); [now injection 1|];
           eapply sem_var_instant_det; eassumption
         | H1:sem_var_instant ?R ?e ?v1,
           H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 =>
@@ -642,10 +643,10 @@ enough: it does not support the internal fixpoint introduced by
               |- ?l = ?r =>
               (eapply IHe1; eassumption)
               || (eapply IHe2; eassumption)
-            | H1: sem_var_instant ?R ?i (present (Op.Vbool true)),
-                  H2: sem_var_instant ?R ?i (present (Op.Vbool false)) |- _ =>
+            | H1: sem_var_instant ?R ?i (present (Vbool true)),
+                  H2: sem_var_instant ?R ?i (present (Vbool false)) |- _ =>
               let H := fresh in
-              assert (present (Op.Vbool true) = present (Op.Vbool false)) as H
+              assert (present (Vbool true) = present (Vbool false)) as H
                   by (eapply sem_var_instant_det; eassumption); discriminate 
             | H1: sem_lexp_instant ?bk ?R ?l ?v1,
                   H2: sem_lexp_instant ?bk ?R ?l ?v2 |- ?v1 = ?v2 =>

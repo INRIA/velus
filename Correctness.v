@@ -22,7 +22,7 @@ Require Import Rustre.Dataflow.Clocking.Parents.
 Require Import Rustre.Dataflow.Clocking.Properties.
 
 Module Type CORRECTNESS
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
        (Import Str : STREAM Op)
@@ -53,10 +53,10 @@ Module Type CORRECTNESS
        (** ** Technical lemmas *)
 
        Lemma exp_eval_tovar:
-  forall x v menv env mems,
-    exp_eval menv env (tovar mems x) v
-    <-> (exp_eval menv env (State x) v /\ PS.In x mems)
-      \/ (exp_eval menv env (Var x) v /\ ~PS.In x mems).
+  forall x ty v menv env mems,
+    exp_eval menv env (tovar mems (x, ty)) v
+    <-> (exp_eval menv env (State x ty) v /\ PS.In x mems)
+      \/ (exp_eval menv env (Var x ty) v /\ ~PS.In x mems).
           Proof.
             split; intro Heval;
             destruct In_dec with x mems as [Hxm|Hxm];
@@ -145,7 +145,7 @@ Module Type CORRECTNESS
             induction ck; intro s; split.
             - inversion 1.
             - intros menv' env' Hp Hs; exact Hs.
-            - inversion_clear 1 as [ ? ? ? Hp|? ? ? ? Hp Hexp Hneq];
+            - inversion_clear 1 as [ ? ? ? ? Hp|? ? ? ? ? Hp Hexp Hneq];
               destruct b;
               try (now apply IHck with (1:=Hp));
               apply not_eq_sym in Hneq;
@@ -155,7 +155,7 @@ Module Type CORRECTNESS
               apply IHck with (1:=Hp);
               apply Iifte with (1:=Hexp);
               constructor.
-            - inversion_clear 1 as [|? ? ? Hp Hexp];
+            - inversion_clear 1 as [|? ? ? ? Hp Hexp];
               intro Hs;
               destruct b;
               apply IHck; auto;
@@ -416,12 +416,12 @@ for all [Is_free_exp x e]. *)
           (** *** Correctness of clock's translation *)
 
           Lemma get_exp_eval_tovar:
-            forall x mems menv env v,
+            forall x ty mems menv env v,
               (~ PS.In x mems -> PM.find x env = Some v)
               -> (PS.In x mems -> mfind_mem x menv = Some v)
-              -> exp_eval menv env (tovar mems x) v.
+              -> exp_eval menv env (tovar mems (x, ty)) v.
           Proof.
-            intros x mems menv env v Hvar Hmem.
+            intros x ty mems menv env v Hvar Hmem.
             unfold tovar.
             destruct (In_dec x mems) as [Hin|Hnin].
             - specialize (Hmem Hin).
@@ -482,6 +482,14 @@ for all [Is_free_exp x e]. *)
 
           (** *** Correctness of [translate_lexp] *)
 
+          Theorem typ_correct:
+            forall mems e,
+              typeof (translate_lexp mems e) = SynDF.typeof e.
+          Proof.
+            induction e as [|y ty| | |]; simpl; auto.
+            destruct (PS.mem y mems); simpl; auto.
+          Qed.
+          
           Theorem lexp_correct:
             forall R mems menv env c e,
               sem_lexp_instant true R e (present c)
@@ -491,20 +499,25 @@ for all [Is_free_exp x e]. *)
             Hint Constructors exp_eval.
             intros until e. revert c.
             (* XXX: This is extremely shaky *)
-            induction e as [c0|y|e IH y yb|op le IHle|op le1 IHle1 le2 IHle2] (* using lexp_ind2 *); intro c;
-            inversion 1; try (subst; injection H1); intros; subst; try apply IH; try apply econst; auto.
+            induction e as [c0 ty|y ty|e IH y yb ty|op le IHle ty|op le1 IHle1 le2 IHle2 ty];
+              intro c; inversion 1 as [c' v ty' H'|x v ty' H'|s x b v ty' H' H''| | |le' op' c' ty' H'| |le1' le2' op' c1 c2 ty' H' H''|];
+            try (subst; injection H'); intros; subst; try apply IH; try apply econst; auto.
             - split_env_assumption;
               unfold translate_lexp;
               destruct (PS.mem y mems) eqn:Hm;
-              rewrite PS.mem_spec in Hm || rewrite mem_spec_false in Hm;
-              auto.
-            - simpl. apply eunop with c0.
+              simpl; rewrite Hm.
+              + auto.  
+              + rewrite mem_spec_false in Hm; auto.
+            - simpl. apply eunop with c'.
               + apply IHle; auto.
-              + destruct (Op.sem_unary op c0); [now inversion H3 | discriminate].
+              + rewrite typ_correct. 
+                destruct (Op.sem_unary op c' (SynDF.typeof le)); [now inversion H4 | discriminate].
             - simpl. apply ebinop with (c1 := c1) (c2 := c2).
               + apply IHle1; auto.
               + apply IHle2; auto.
-              + destruct (Op.sem_binary op c1 c2); [now inversion H4 | discriminate].
+              + rewrite 2 typ_correct.
+                destruct (Op.sem_binary op c1 (SynDF.typeof le1) c2 (SynDF.typeof le2));
+                  [now inversion H5 | discriminate].
                 (* - subst. simpl. apply eop with cs. *)
             (* + clear H2 H4 H. *)
             (*   assert (Hlen : Nelist.length les = Nelist.length cs). *)
@@ -556,7 +569,7 @@ for all [Is_free_exp x e]. *)
                           (menv, PM.add x c env).
           Proof.
             intros until x.
-            induction e as [b et IHt ef IHf|e].
+            induction e as [b ty et IHt ef IHf|e].
             - (* Emerge *)
               inversion_clear 1; intro Henv.
               + apply Iifte with true.
@@ -1601,7 +1614,7 @@ for all [Is_free_exp x e]. *)
             Fixpoint step (n: nat) P r main obj css menv env: Prop :=
               match n with
               | 0 => stmt_eval P hempty sempty (Reset_ap main obj) (menv, env)
-              | S n => let vs := Nelist.map Const (css n) in
+              | S n => let vs := Nelist.map (fun c => Const c (typ_of_val c)) (css n) in
                       exists menvN envN, step n P r main obj css menvN envN
                                     /\ stmt_eval P menvN envN (Step_ap r main obj vs) (menv, env)
               end.
@@ -1734,11 +1747,11 @@ for all [Is_free_exp x e]. *)
           Qed.
 
           Lemma Is_free_in_tovar:
-            forall mems i j,
-              Is_free_in_exp j (tovar mems i) <-> i = j.
+            forall mems i j ty,
+              Is_free_in_exp j (tovar mems (i, ty)) <-> i = j.
           Proof.
             unfold tovar.
-            intros mems i j.
+            intros mems i j ty.
             destruct (PS.mem i mems); split; intro HH;
             (inversion_clear HH; reflexivity || subst; now constructor).
           Qed.
@@ -1765,11 +1778,11 @@ for all [Is_free_exp x e]. *)
               -> Ifte_free_write (f ce)
               -> Ifte_free_write (Control mems ck (f ce)).
           Proof.
-            induction ck as [|ck IH i b]; [now intuition|].
+            induction ck as [|ck IH i ty b]; [now intuition|].
             intros f ce Hxni Hfce.
             simpl.
             destruct b.
-            - apply IH with (f:=fun ce=>Ifte (tovar mems i) (f ce) Skip).
+            - apply IH with (f:=fun ce=>Ifte (tovar mems (i, ty)) (f ce) Skip).
               + intros j Hfree Hcw.
                 apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
                 inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
@@ -1781,7 +1794,7 @@ for all [Is_free_exp x e]. *)
                 end.
                 unfold tovar in Hfree.
                 destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-            - apply IH with (f:=fun ce=>Ifte (tovar mems i) Skip (f ce)).
+            - apply IH with (f:=fun ce=>Ifte (tovar mems (i, ty)) Skip (f ce)).
               + intros j Hfree Hcw.
                 apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
                 inversion_clear Hcw as [| |? ? ? ? Hskip| | | |];
@@ -1801,7 +1814,7 @@ for all [Is_free_exp x e]. *)
               -> Ifte_free_write s
               -> Ifte_free_write (Control mems ck s).
           Proof.
-            induction ck as [|ck IH i b]; [now intuition|].
+            induction ck as [|ck IH i ty b]; [now intuition|].
             intros s Hxni Hfce.
             simpl.
             destruct b; apply IH.
@@ -1811,10 +1824,7 @@ for all [Is_free_exp x e]. *)
                 [assumption|inversion Hskip].
             - repeat constructor; [assumption| |now inversion 1].
               apply Hxni.
-              match goal with
-              | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-              end.
-              unfold tovar in Hfree.
+              rename H into Hfree.
               destruct (PS.mem i mems); inversion Hfree; subst; now auto.
             - intros j Hfree Hcw.
               apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
@@ -1822,10 +1832,7 @@ for all [Is_free_exp x e]. *)
                 [inversion Hskip|assumption].
             - repeat constructor; [assumption|now inversion 1|].
               apply Hxni.
-              match goal with
-              | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-              end.
-              unfold tovar in Hfree.
+              rename H into Hfree.
               destruct (PS.mem i mems); inversion Hfree; subst; now auto.
           Qed.
 

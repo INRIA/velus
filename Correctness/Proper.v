@@ -77,7 +77,7 @@ Module Type PROPER
     Proper (PS.eq ==> eq ==> eq) tovar.
   Proof.
     intros M M' HMeq x x' Hxeq; rewrite <- Hxeq; clear Hxeq x'.
-    unfold tovar.
+    unfold tovar; destruct x as [x ty].
     destruct (PS.mem x M) eqn:Hmem;
       rewrite <- HMeq, Hmem; reflexivity.
   Qed.
@@ -111,7 +111,7 @@ Module Type PROPER
   Proof.
     intros M M' HMeq ck ck' Hckeq e e' Heq; rewrite <-Hckeq, <-Heq;
     clear ck' e' Hckeq Heq.
-    revert e; induction ck as [ |ck' IH s sv].
+    revert e; induction ck as [ |ck' IH s ty sv].
     - reflexivity.
     - intro e.
       destruct sv; simpl; rewrite IH, HMeq; reflexivity.

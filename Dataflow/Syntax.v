@@ -8,24 +8,33 @@ Open Scope list_scope.
 
 (** * The CoreDF dataflow language *)
 
-Module Type SYNTAX (Op : OPERATORS).
+Module Type SYNTAX (Import Op : OPERATORS).
   (** ** Clocks *)
 
-  Inductive clock : Set :=
+  Inductive clock : Type :=
   | Cbase : clock                          (* base clock *)
-  | Con : clock -> ident -> bool -> clock. (* subclock *)
+  | Con : clock -> ident -> typ -> bool -> clock. (* subclock *)
 
   Implicit Type ck : clock.
 
   (** ** Expressions *)
 
   Inductive lexp : Type :=
-  | Econst : Op.val -> lexp
-  | Evar : ident -> lexp
+  | Econst : val -> typ -> lexp
+  | Evar : ident -> typ -> lexp
   | Ewhen : lexp -> ident -> bool -> lexp
-  | Eunop : Op.unary_op -> lexp -> lexp
-  | Ebinop : Op.binary_op -> lexp -> lexp -> lexp.
+  | Eunop : unary_op -> lexp -> typ -> lexp
+  | Ebinop : binary_op -> lexp -> lexp -> typ -> lexp.
 
+  Fixpoint typeof (le: lexp): typ :=
+    match le with
+    | Econst _ ty
+    | Evar _ ty
+    | Eunop _ _ ty
+    | Ebinop _ _ _ ty => ty
+    | Ewhen e _ _ => typeof e
+    end.
+  
   Definition lexps := nelist lexp.
 
   Implicit Type le: lexp.
@@ -34,7 +43,7 @@ Module Type SYNTAX (Op : OPERATORS).
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
-  | Emerge : ident -> cexp -> cexp -> cexp 
+  | Emerge : ident -> typ -> cexp -> cexp -> cexp 
   | Eexp : lexp -> cexp.
 
   Implicit Type ce: cexp.
@@ -44,7 +53,7 @@ Module Type SYNTAX (Op : OPERATORS).
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
   | EqApp : ident -> clock -> ident -> lexps -> equation
-  | EqFby : ident -> clock -> Op.val -> lexp -> equation.
+  | EqFby : ident -> clock -> val -> lexp -> equation.
 
   Implicit Type eqn: equation.
 

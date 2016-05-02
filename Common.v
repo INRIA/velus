@@ -298,6 +298,8 @@ Module Type OPERATORS.
   (* Parameter false_val: val. *)
   (* Axiom distinct_TF: true_val <> false_val. *)
 
+  Parameter typ_of_val: val -> typ.
+  
   Parameter unary_op : Type.
   Parameter binary_op : Type.
 
@@ -312,11 +314,14 @@ Module Type OPERATORS.
   (* Axiom unop_dec : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}. *)
   (* Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}. *)
   Parameter val_eqb : val -> val -> bool.
+  Parameter typ_eqb : typ -> typ -> bool.
   Parameter unop_eqb : unary_op -> unary_op -> bool.
   Parameter binop_eqb : binary_op -> binary_op -> bool.
 
   Axiom val_eqb_true_iff : forall v1 v2, val_eqb v1 v2 = true <-> v1 = v2.
   Axiom val_eqb_false_iff : forall v1 v2, val_eqb v1 v2 = false <-> v1 <> v2.
+  Axiom typ_eqb_true_iff : forall t1 t2, typ_eqb t1 t2 = true <-> t1 = t2.
+  Axiom typ_eqb_false_iff : forall t1 t2, typ_eqb t1 t2 = false <-> t1 <> t2.
   Axiom unop_eqb_true_iff : forall op1 op2, unop_eqb op1 op2 = true <-> op1 = op2.
   Axiom unop_eqb_false_iff : forall op1 op2, unop_eqb op1 op2 = false <-> op1 <> op2.
   Axiom binop_eqb_true_iff : forall op1 op2, binop_eqb op1 op2 = true <-> op1 = op2.

@@ -25,18 +25,18 @@ Module Type DECIDE
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
     match ck with
     | Cbase => fvs
-    | Con ck' x xc => free_in_clock ck' (PS.add x fvs)
+    | Con ck' x _ _ => free_in_clock ck' (PS.add x fvs)
     end.
 
 
   Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
     match e with
-    | Econst c => fvs
-    | Evar x => PS.add x fvs
-    | Ewhen e x xc => free_in_lexp e (PS.add x fvs)
-                                  (* | Eop op eqs => Nelist.fold_left (fun fvs e => free_in_lexp e fvs) eqs fvs *)
-    | Eunop op e => free_in_lexp e fvs
-    | Ebinop op e1 e2 => free_in_lexp e2 (free_in_lexp e1 fvs)
+    | Econst _ _ => fvs
+    | Evar x _ => PS.add x fvs
+    | Ewhen e x _ => free_in_lexp e (PS.add x fvs)
+    (* | Eop op eqs => Nelist.fold_left (fun fvs e => free_in_lexp e fvs) eqs fvs *)
+    | Eunop _ e _ => free_in_lexp e fvs
+    | Ebinop _ e1 e2 _ => free_in_lexp e2 (free_in_lexp e1 fvs)
     end.
 
   Definition free_in_laexp (ck: clock)(le : lexp) (fvs : PS.t) : PS.t :=
@@ -47,7 +47,7 @@ Module Type DECIDE
 
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with
-    | Emerge i t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
+    | Emerge i _ t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
     | Eexp e => free_in_lexp e fvs
     end.
 
@@ -211,7 +211,7 @@ Module Type DECIDE
            | H: _ \/ _ |- _ => 
              destruct H
 
-           | H: Is_free_in_cexp _ (Emerge _ _ _) |- _ => 
+           | H: Is_free_in_cexp _ (Emerge _ _ _ _) |- _ => 
              inversion H; subst; clear H
 
            | H: Is_free_in_cexp _ (Eexp _) |- _ => 
@@ -237,7 +237,6 @@ Module Type DECIDE
     intro m; simpl; split; intro H0;
     destruct_Is_free;
     subst; auto;
-
     repeat match goal with
            (* Solve [PS.In x (free_in_cexp e2 (free_in_cexp e1 (PS.add i m)))] *)
            | |- PS.In ?i (PS.add ?i _) => 

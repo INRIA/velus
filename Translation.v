@@ -34,7 +34,7 @@ application is assigned to a single variable. We use the name of that
 variable to identify the instance.  *)
 
 Module Type TRANSLATION
-       (Op: OPERATORS)
+       (Import Op: OPERATORS)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op).
 
@@ -55,35 +55,36 @@ Module Type TRANSLATION
     Variable memories : PS.t.
 
     (* =tovar= *)
-    Definition tovar (x: ident) : exp :=
-      if PS.mem x memories then State x else Var x.
+    Definition tovar (xt: ident * typ) : exp :=
+      let (x, ty) := xt in
+      if PS.mem x memories then State x ty else Var x ty.
     (* =end= *)
 
     (* =control= *)
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
       | Cbase => s
-      | Con ck x true  => Control ck (Ifte (tovar x) s Skip)
-      | Con ck x false => Control ck (Ifte (tovar x) Skip s)
+      | Con ck x ty true  => Control ck (Ifte (tovar (x, ty)) s Skip)
+      | Con ck x ty false => Control ck (Ifte (tovar (x, ty)) Skip s)
       end.
     (* =end= *)
 
     (* =translate_lexp= *)
     Fixpoint translate_lexp (e : lexp) : exp :=
       match e with
-      | Econst c => Const c
-      | Evar x => if PS.mem x memories then State x else Var x
+      | Econst c ty => Const c ty
+      | Evar x ty => tovar (x, ty)
       | Ewhen e c x => translate_lexp e
                                      (* | Eop op es => Op op (Nelist.map translate_lexp es) *)
-      | Eunop op e => Unop op (translate_lexp e)
-      | Ebinop op e1 e2 => Binop op (translate_lexp e1) (translate_lexp e2)
+      | Eunop op e ty => Unop op (translate_lexp e) ty
+      | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
       end.
     (* =end= *)
 
     (* =translate_cexp= *)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
-      | Emerge y t f => Ifte (tovar y) (translate_cexp x t) (translate_cexp x f)
+      | Emerge y ty t f => Ifte (tovar (y, ty)) (translate_cexp x t) (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
     (* =end= *)
@@ -111,7 +112,7 @@ Module Type TRANSLATION
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
     | EqDef _ _ _ => s
-    | EqFby x _ v0 _ => Comp (AssignSt x (Const v0)) s
+    | EqFby x _ v0 _ => Comp (AssignSt x (Const v0 (typ_of_val v0))) s
     | EqApp x _ f _ => Comp (Reset_ap f x) s
     end.
   (* =end= *)

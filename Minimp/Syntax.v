@@ -14,14 +14,23 @@ Open Scope list_scope.
   two methods: [step] and [reset].
 
  *)
-Module Type SYNTAX (Op : OPERATORS).
+Module Type SYNTAX (Import Op : OPERATORS).
   
   Inductive exp : Type :=
-  | Var : ident -> exp                       (* variable  *)
-  | State : ident -> exp                     (* state variable  *)
-  | Const : Op.val -> exp                    (* constant *)
-  | Unop : Op.unary_op -> exp -> exp          (* unary operator *)
-  | Binop : Op.binary_op -> exp -> exp -> exp. (* binary operator *)
+  | Var : ident -> typ -> exp                    (* variable  *)
+  | State : ident -> typ -> exp                  (* state variable  *)
+  | Const : val -> typ -> exp                    (* constant *)
+  | Unop : unary_op -> exp -> typ -> exp          (* unary operator *)
+  | Binop : binary_op -> exp -> exp -> typ -> exp. (* binary operator *)
+
+  Definition typeof (e: exp): typ :=
+    match e with
+    | Var _ ty
+    | State _ ty
+    | Const _ ty
+    | Unop _ _ ty
+    | Binop _ _ _ ty => ty
+    end.
   
    Inductive stmt : Type :=
   | Assign : ident -> exp -> stmt                         (* x = e *)
@@ -78,13 +87,22 @@ Module Type SYNTAX (Op : OPERATORS).
   
 End SYNTAX.
 
-Module SyntaxFun' (Op : OPERATORS).
-Inductive exp : Type :=
-  | Var : ident -> exp                       (* variable  *)
-  | State : ident -> exp                     (* state variable  *)
-  | Const : Op.val -> exp                    (* constant *)
-  | Unop : Op.unary_op -> exp -> exp          (* unary operator *)
-  | Binop : Op.binary_op -> exp -> exp -> exp. (* binary operator *)
+Module SyntaxFun' (Import Op : OPERATORS).
+  Inductive exp : Type :=
+  | Var : ident -> typ -> exp                    (* variable  *)
+  | State : ident -> typ -> exp                  (* state variable  *)
+  | Const : val -> typ -> exp                    (* constant *)
+  | Unop : unary_op -> exp -> typ -> exp          (* unary operator *)
+  | Binop : binary_op -> exp -> exp -> typ -> exp. (* binary operator *)
+
+  Definition typeof (e: exp): typ :=
+    match e with
+    | Var _ ty
+    | State _ ty
+    | Const _ ty
+    | Unop _ _ ty
+    | Binop _ _ _ ty => ty
+    end.
   
   Implicit Type e: exp.
 
@@ -161,12 +179,12 @@ Inductive exp : Type :=
     fix 1.
     intros e1 e2.
     refine (match e1, e2 with
-            | Var x1, Var x2 => ident_eqb x1 x2
-            | State s1, State s2 => ident_eqb s1 s2
-            | Const c1, Const c2 => Op.val_eqb c1 c2
+            | Var x1 ty1, Var x2 ty2 => ident_eqb x1 x2 && typ_eqb ty1 ty2
+            | State s1 ty1, State s2 ty2 => ident_eqb s1 s2 && typ_eqb ty1 ty2
+            | Const c1 ty1, Const c2 ty2 => val_eqb c1 c2 && typ_eqb ty1 ty2
             (* | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && _ *)
-            | Unop op1 e1', Unop op2 e2' => Op.unop_eqb op1 op2 && _
-            | Binop op1 e11 e12, Binop op2 e21 e22 => Op.binop_eqb op1 op2 && _ 
+            | Unop op1 e1' ty1, Unop op2 e2' ty2 => unop_eqb op1 op2  && typ_eqb ty1 ty2 && _
+            | Binop op1 e11 e12 ty1, Binop op2 e21 e22 ty2 => binop_eqb op1 op2  && typ_eqb ty1 ty2 && _ 
             | _, _ => false
             end).
     - exact (exp_eqb e1' e2').
@@ -183,10 +201,13 @@ Inductive exp : Type :=
       exp_eqb e1 e2 = true <-> e1 = e2.
   Proof.
     induction e1 (* using exp_ind2 *); intros e2; destruct e2; simpl; try now split; intro; discriminate.
-    - rewrite ident_eqb_eq. now split; intro Heq; inversion Heq.
-    - rewrite ident_eqb_eq. now split; intro Heq; inversion Heq.
-    - rewrite Op.val_eqb_true_iff. now split; intro Heq; inversion Heq.
-    - rewrite Bool.andb_true_iff, Op.unop_eqb_true_iff.
+    - rewrite Bool.andb_true_iff, ident_eqb_eq, typ_eqb_true_iff.
+      split; intro Heq; [now f_equal | now inversion Heq].
+    - rewrite Bool.andb_true_iff, ident_eqb_eq, typ_eqb_true_iff.
+      split; intro Heq; [now f_equal | now inversion Heq].
+    - rewrite Bool.andb_true_iff, typ_eqb_true_iff, val_eqb_true_iff.
+      split; intro Heq; [now f_equal | now inversion Heq].
+    - rewrite 2 Bool.andb_true_iff, typ_eqb_true_iff, unop_eqb_true_iff.
       split; intro Heq. 
       + f_equal; try apply IHe1; apply Heq.
       (* auto. destruct Heq as [? Heq]; subst; split || f_equal; trivial; []. *)
@@ -199,10 +220,11 @@ Inductive exp : Type :=
       + now inversion Heq; subst; rewrite IHe1. (* trivial. split; trivial. clear Heq. induction n; simpl; [|]. *)
     (* * inversion_clear IHes. now rewrite H. *)
     (* * inversion_clear IHes. rewrite Bool.andb_true_iff, H. split; trivial. now apply IHn. *)
-    - rewrite 2 Bool.andb_true_iff, Op.binop_eqb_true_iff.
+    - rewrite 3 Bool.andb_true_iff, typ_eqb_true_iff, binop_eqb_true_iff.
+      rewrite IHe1_1, IHe1_2.
       split; intro Heq.
-      + f_equal. apply Heq. apply IHe1_1, Heq. apply IHe1_2, Heq.
-      + now inversion Heq; subst; rewrite IHe1_1, IHe1_2.
+      + f_equal; apply Heq. 
+      + now inversion Heq. 
   Qed.
 
   Lemma exp_eqb_neq:

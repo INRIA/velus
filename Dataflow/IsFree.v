@@ -18,25 +18,25 @@ Module Type ISFREE
 
   Inductive Is_free_in_clock : ident -> clock -> Prop :=
   | FreeCon1:
-      forall x ck' xc,
-        Is_free_in_clock x (Con ck' x xc)
+      forall x ck' xc ty,
+        Is_free_in_clock x (Con ck' x ty xc)
   | FreeCon2:
-      forall x y ck' xc,
+      forall x y ck' xc ty,
         Is_free_in_clock x ck'
-        -> Is_free_in_clock x (Con ck' y xc).
+        -> Is_free_in_clock x (Con ck' y ty xc).
 
   (* Warning: induction scheme is not strong enough. *)
   Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
-  | FreeEvar: forall x, Is_free_in_lexp x (Evar x)
+  | FreeEvar: forall x ty, Is_free_in_lexp x (Evar x ty)
   | FreeEwhen1: forall e c cv x,
       Is_free_in_lexp x e ->
-      Is_free_in_lexp x (Ewhen e c cv)
+      Is_free_in_lexp x (Ewhen e c cv) 
   | FreeEwhen2: forall e c cv,
       Is_free_in_lexp c (Ewhen e c cv)
-  | FreeEunop : forall c op e,
-      Is_free_in_lexp c e -> Is_free_in_lexp c (Eunop op e)
-  | FreeEbinop : forall c op e1 e2,
-      Is_free_in_lexp c e1 \/ Is_free_in_lexp c e2 -> Is_free_in_lexp c (Ebinop op e1 e2).
+  | FreeEunop : forall c op e ty,
+      Is_free_in_lexp c e -> Is_free_in_lexp c (Eunop op e ty)
+  | FreeEbinop : forall c op e1 e2 ty,
+      Is_free_in_lexp c e1 \/ Is_free_in_lexp c e2 -> Is_free_in_lexp c (Ebinop op e1 e2 ty).
 
   Inductive Is_free_in_laexp : ident -> clock -> lexp -> Prop :=
   | freeLAexp1: forall ck e x,
@@ -55,14 +55,14 @@ Module Type ISFREE
       Is_free_in_laexps x ck les.
 
   Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
-  | FreeEmerge_cond: forall i t f,
-      Is_free_in_cexp i (Emerge i t f)
-  | FreeEmerge_true: forall i t f x,
+  | FreeEmerge_cond: forall i t f ty,
+      Is_free_in_cexp i (Emerge i ty t f)
+  | FreeEmerge_true: forall i t f x ty,
       Is_free_in_cexp x t ->
-      Is_free_in_cexp x (Emerge i t f)
-  | FreeEmerge_false: forall i t f x,
+      Is_free_in_cexp x (Emerge i ty t f)
+  | FreeEmerge_false: forall i t f x ty,
       Is_free_in_cexp x f ->
-      Is_free_in_cexp x (Emerge i t f)
+      Is_free_in_cexp x (Emerge i ty t f)
   | FreeEexp: forall e x,
       Is_free_in_lexp x e ->
       Is_free_in_cexp x (Eexp e).

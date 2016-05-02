@@ -17,44 +17,44 @@ Require Import Rustre.Minimp.Syntax.
  *)
 
 Module Type SEMANTICS
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op).
-  Definition heap: Type := memory Op.val.
-  Definition stack : Type := PM.t Op.val.
+  Definition heap: Type := memory val.
+  Definition stack : Type := PM.t val.
 
   Implicit Type mmem: heap.
   Implicit Type stack: stack.
 
-  Definition sempty: stack := PM.empty Op.val.
+  Definition sempty: stack := PM.empty val.
   Definition hempty: heap := empty_memory _.
 
-  Inductive exp_eval heap stack: exp -> Op.val -> Prop :=
+  Inductive exp_eval heap stack: exp -> val -> Prop :=
   | evar:
-      forall x v,
+      forall x v ty,
         PM.find x stack = Some v ->
-        exp_eval heap stack (Var x) v
+        exp_eval heap stack (Var x ty) v
   | estate:
-      forall x v,
+      forall x v ty,
         mfind_mem x heap = Some v ->
-        exp_eval heap stack (State x) v
+        exp_eval heap stack (State x ty) v
   | econst:
-      forall c ,
-        exp_eval heap stack (Const c) c
+      forall c ty,
+        exp_eval heap stack (Const c ty) c
    | eunop :
-      forall op e c v,
+      forall op e c v ty,
         exp_eval heap stack e c ->
-        Op.sem_unary op c = Some v ->
-        exp_eval heap stack (Unop op e) v
+        sem_unary op c (typeof e) = Some v ->
+        exp_eval heap stack (Unop op e ty) v
   | ebinop :
-      forall op e1 e2 c1 c2 v,
+      forall op e1 e2 c1 c2 v ty,
         exp_eval heap stack e1 c1 ->
         exp_eval heap stack e2 c2 ->
-        Op.sem_binary op c1 c2 = Some v ->
-        exp_eval heap stack (Binop op e1 e2) v.
+        sem_binary op c1 (typeof e1) c2 (typeof e2) = Some v ->
+        exp_eval heap stack (Binop op e1 e2 ty) v.
 
   Axiom exps_eval_const:
     forall h s cs,
-      Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
+      Nelist.Forall2 (exp_eval h s) (Nelist.map (fun c => Const c (typ_of_val c)) cs) cs.
 
   (* =stmt_eval= *)
   Inductive stmt_eval :
@@ -92,7 +92,7 @@ Module Type SEMANTICS
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
    | Iifte:
       forall prog menv env cond b ifTrue ifFalse env' menv',
-        exp_eval menv env cond (Op.Vbool b) ->
+        exp_eval menv env cond (Vbool b) ->
         stmt_eval prog menv env (if b then ifTrue else ifFalse) (menv', env') -> 
         stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
   | Iskip:
@@ -100,7 +100,7 @@ Module Type SEMANTICS
         stmt_eval prog menv env Skip (menv, env)
   (* =stmt_step_eval= *)
   with stmt_step_eval :
-         program -> heap -> ident -> nelist Op.val -> heap -> Op.val -> Prop :=
+         program -> heap -> ident -> nelist val -> heap -> val -> Prop :=
        | Iestep:
            forall prog menv env clsid ivs prog' menv' ov cls env',
              find_class clsid prog = Some(cls, prog') ->
@@ -160,43 +160,43 @@ Module Type SEMANTICS
 
 End SEMANTICS.
 
-Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
-  Definition heap: Type := memory Op.val.
-  Definition stack : Type := PM.t Op.val.
+Module SemanticsFun' (Import Op: OPERATORS) (Import Syn: SYNTAX Op).
+  Definition heap: Type := memory val.
+  Definition stack : Type := PM.t val.
 
   Implicit Type mmem: heap.
   Implicit Type stack: stack.
 
-  Definition sempty: stack := PM.empty Op.val.
+  Definition sempty: stack := PM.empty val.
   Definition hempty: heap := empty_memory _.
 
-  Inductive exp_eval heap stack: exp -> Op.val -> Prop :=
+  Inductive exp_eval heap stack: exp -> val -> Prop :=
   | evar:
-      forall x v,
+      forall x v ty,
         PM.find x stack = Some v ->
-        exp_eval heap stack (Var x) v
+        exp_eval heap stack (Var x ty) v
   | estate:
-      forall x v,
+      forall x v ty,
         mfind_mem x heap = Some v ->
-        exp_eval heap stack (State x) v
+        exp_eval heap stack (State x ty) v
   | econst:
-      forall c ,
-        exp_eval heap stack (Const c) c
-  | eunop :
-      forall op e c v,
+      forall c ty,
+        exp_eval heap stack (Const c ty) c
+   | eunop :
+      forall op e c v ty,
         exp_eval heap stack e c ->
-        Op.sem_unary op c = Some v ->
-        exp_eval heap stack (Unop op e) v
+        sem_unary op c (typeof e) = Some v ->
+        exp_eval heap stack (Unop op e ty) v
   | ebinop :
-      forall op e1 e2 c1 c2 v,
+      forall op e1 e2 c1 c2 v ty,
         exp_eval heap stack e1 c1 ->
         exp_eval heap stack e2 c2 ->
-        Op.sem_binary op c1 c2 = Some v ->
-        exp_eval heap stack (Binop op e1 e2) v.
+        sem_binary op c1 (typeof e1) c2 (typeof e2) = Some v ->
+        exp_eval heap stack (Binop op e1 e2 ty) v.
 
   Theorem exps_eval_const:
     forall h s cs,
-      Nelist.Forall2 (exp_eval h s) (Nelist.map Const cs) cs.
+      Nelist.Forall2 (exp_eval h s) (Nelist.map (fun c => Const c (typ_of_val c)) cs) cs.
   Proof.
     Hint Constructors exp_eval.
     intros h s cs. induction cs; constructor; eauto.
@@ -238,7 +238,7 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
    | Iifte:
       forall prog menv env cond b ifTrue ifFalse env' menv',
-        exp_eval menv env cond (Op.Vbool b) ->
+        exp_eval menv env cond (Vbool b) ->
         stmt_eval prog menv env (if b then ifTrue else ifFalse) (menv', env') -> 
         stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
   | Iskip:
@@ -246,7 +246,7 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
         stmt_eval prog menv env Skip (menv, env)
   (* =stmt_step_eval= *)
   with stmt_step_eval :
-         program -> heap -> ident -> nelist Op.val -> heap -> Op.val -> Prop :=
+         program -> heap -> ident -> nelist val -> heap -> val -> Prop :=
        | Iestep:
            forall prog menv env clsid ivs prog' menv' ov cls env',
              find_class clsid prog = Some(cls, prog') ->
@@ -278,10 +278,10 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
   Proof.
     induction e (* using exp_ind2 *);
     intros v1 v2 H1 H2;
-    inversion H1 as [xa va Hv1|xa va Hv1|xa va Hv1
-                     |opa ea ca va IHa Hv1|opa e1a e2a c1a c2a va IH1a IH2a Hv1];
-    inversion H2 as [xb vb Hv2|xb vb Hv2|xb vb Hv2
-                     |opb eb cb vb IHb Hv2|opb e1b e2b c1b c2b vb IH1b IH2b Hv2];
+    inversion H1 as [xa va tya Hv1|xa va tya Hv1|xa va tya Hv1
+                     |opa ea ca va tya IHa Hv1|opa e1a e2a c1a c2a va tya IH1a IH2a Hv1];
+    inversion H2 as [xb vb tyb Hv2|xb vb tyb Hv2|xb vb tyb Hv2
+                     |opb eb cb vb tyb IHb Hv2|opb e1b e2b c1b c2b vb tyb IH1b IH2b Hv2];
     try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2); subst.
     - pose proof (IHe ca cb IHa IHb); subst.
       now rewrite Hv1 in Hv2; injection Hv2.
@@ -366,8 +366,8 @@ Module SemanticsFun' (Op: OPERATORS) (Import Syn: SYNTAX Op).
     repeat progress match goal with
                       | b: bool |- _ => destruct b
                       | H: ?env = adds _ _ _ |- _ => subst env
-                      | Ht: exp_eval ?menv ?env ?e (Op.Vbool true),
-                            Hf: exp_eval ?menv ?env ?e (Op.Vbool false) |- _ =>
+                      | Ht: exp_eval ?menv ?env ?e (Vbool true),
+                            Hf: exp_eval ?menv ?env ?e (Vbool false) |- _ =>
                         pose proof (exp_eval_det _ _ _ _ _ Ht Hf) as Hneq; discriminate
                       | H1:exp_eval ?menv ?env ?e ?v1,
                            H2:exp_eval ?menv ?env ?e ?v2 |- _ =>
