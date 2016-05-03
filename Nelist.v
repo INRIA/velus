@@ -110,6 +110,9 @@ Inductive NoDup {A : Type} : nelist A -> Prop :=
     NoDup_base : forall x, NoDup (nebase x)
   | NoDup_cons : forall x l, ~In x l -> NoDup l -> NoDup (necons x l).
 
+Definition nefst {A B: Type} (l: nelist (A * B)): nelist A :=
+  map (@fst A B) l.
+
 (** ** Properties *)
 
 Ltac inv H := inversion H; subst; clear H.

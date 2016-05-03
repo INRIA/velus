@@ -52,10 +52,10 @@ Module Type SYNTAX (Import Op : OPERATORS).
     mk_class {
         c_name   : ident;
 
-        c_input  : nelist ident;
-        c_output : ident;
+        c_input  : nelist (ident * typ);
+        c_output : ident * typ;
 
-        c_mems   : list ident;       (* TODO: should track type of each *)
+        c_mems   : list (ident * typ);       (* TODO: should track type of each *)
         c_objs   : list obj_dec;
 
         c_step   : stmt;
@@ -129,10 +129,10 @@ Module SyntaxFun' (Import Op : OPERATORS).
     mk_class {
         c_name   : ident;
 
-        c_input  : nelist ident;
-        c_output : ident;
+        c_input  : nelist (ident * typ);
+        c_output : ident * typ;
 
-        c_mems   : list ident;       (* TODO: should track type of each *)
+        c_mems   : list (ident * typ);       (* TODO: should track type of each *)
         c_objs   : list obj_dec;
 
         c_step   : stmt;

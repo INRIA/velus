@@ -38,14 +38,14 @@ Module Type TRANSLATION
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op).
 
-  Definition gather_eq (acc: list ident * list obj_dec) (eq: equation) :=
+  Definition gather_eq (acc: list (ident * typ) * list obj_dec) (eq: equation) :=
     match eq with
     | EqDef _ _ _ => acc
     | EqApp x _ f _ => (fst acc, mk_obj_dec x f :: snd acc)
-    | EqFby x _ v0 _ => (x::fst acc, snd acc)
+    | EqFby x _ _ le => ((x, SynDF.typeof le)::fst acc, snd acc)
     end.
 
-  Definition gather_eqs (eqs: list equation) : (list ident * list obj_dec) :=
+  Definition gather_eqs (eqs: list equation) : (list (ident * typ) * list obj_dec) :=
     List.fold_left gather_eq eqs ([], []).
 
   (** ** Translation *)
@@ -128,14 +128,15 @@ Module Type TRANSLATION
   (* =translate_node= *)
   Definition translate_node (n: node): class :=
     let names := gather_eqs n.(n_eqs) in
-    let mems := ps_from_list (fst names) in
+    (* let (t_mems, _) := List.split (fst names) in *)
+    let mems := ps_from_list (List.map (@fst ident typ) (fst names)) in
     mk_class n.(n_name)
-                 n.(n_input)
-                     n.(n_output)
-                         (fst names)
-                         (snd names)
-                         (translate_eqns mems n.(n_eqs))
-                         (translate_reset_eqns n.(n_eqs)).
+             n.(n_input)
+             n.(n_output)
+             (fst names)
+             (snd names)
+             (translate_eqns mems n.(n_eqs))
+             (translate_reset_eqns n.(n_eqs)).
   (* =end= *)
 
   (* =translate= *)

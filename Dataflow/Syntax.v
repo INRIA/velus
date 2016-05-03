@@ -62,8 +62,8 @@ Module Type SYNTAX (Import Op : OPERATORS).
   Record node : Type :=
     mk_node {
         n_name : ident;
-        n_input : nelist ident;
-        n_output : ident;
+        n_input : nelist (ident * typ);
+        n_output : (ident * typ);
         n_eqs : list equation }.
 
   Implicit Type N: node.

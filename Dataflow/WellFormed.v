@@ -14,7 +14,7 @@ Open Scope list_scope.
 (** * Well formed CoreDF programs *)
 
 Module Type WELLFORMED
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import IsF : ISFREE Op Syn)
        (Import Ord : ORDERED Op Syn)
@@ -76,8 +76,8 @@ A CoreDF program is well defined if
       forall nd nds,
         Welldef_global nds ->
         let eqs := nd.(n_eqs) in
-        let ni := nd.(n_input) in
-        let no := nd.(n_output) in
+        let ni := Nelist.nefst nd.(n_input) in
+        let no := fst nd.(n_output) in
         NoDup (Nelist.nelist2list ni)
         -> Is_well_sch (memories eqs) ni eqs
         -> ~ List.Exists (fun ni => Is_defined_in_eqs ni eqs) (Nelist.nelist2list ni)
@@ -199,7 +199,8 @@ A CoreDF program is well defined if
     forall f G fnode,
       Welldef_global G
       -> find_node f G = Some fnode
-      -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs)) fnode.(n_input).
+      -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs))
+          (Nelist.nefst fnode.(n_input)).
   Proof.
     induction G as [|node G IH]; [inversion_clear 2|].
     intros fnode HWdef Hfnode.
@@ -215,7 +216,7 @@ A CoreDF program is well defined if
     forall f G fnode,
       Welldef_global G
       -> find_node f G = Some fnode
-      -> Is_variable_in_eqs fnode.(n_output) fnode.(n_eqs).
+      -> Is_variable_in_eqs (fst fnode.(n_output)) fnode.(n_eqs).
   Proof.
     induction G as [|node G IH]; [inversion_clear 2|].
     intros fnode HWdef Hfnode.

@@ -104,10 +104,10 @@ Module Type SEMANTICS
        | Iestep:
            forall prog menv env clsid ivs prog' menv' ov cls env',
              find_class clsid prog = Some(cls, prog') ->
-             env = adds cls.(c_input) ivs sempty ->
+             env = adds (Nelist.nefst cls.(c_input)) ivs sempty ->
              stmt_eval prog' menv env cls.(c_step)
                                             (menv', env') ->
-             PM.find cls.(c_output) env' = Some(ov) ->
+             PM.find (fst cls.(c_output)) env' = Some(ov) ->
              stmt_step_eval prog menv clsid ivs menv' ov
   (* =end= *)
 
@@ -250,10 +250,10 @@ Module SemanticsFun' (Import Op: OPERATORS) (Import Syn: SYNTAX Op).
        | Iestep:
            forall prog menv env clsid ivs prog' menv' ov cls env',
              find_class clsid prog = Some(cls, prog') ->
-             env = adds cls.(c_input) ivs sempty ->
+             env = adds (Nelist.nefst cls.(c_input)) ivs sempty ->
              stmt_eval prog' menv env cls.(c_step)
                                             (menv', env') ->
-             PM.find cls.(c_output) env' = Some(ov) ->
+             PM.find (fst cls.(c_output)) env' = Some(ov) ->
              stmt_step_eval prog menv clsid ivs menv' ov
   (* =end= *)
 

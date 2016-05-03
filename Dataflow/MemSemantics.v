@@ -99,8 +99,8 @@ Module Type MEMSEMANTICS
              clock_of xss bk ->
              find_node f G = Some (mk_node f i o eqs) ->
              (exists H,
-                 sem_vars bk H i xss
-                 /\ sem_var bk H o ys
+                 sem_vars bk H (Nelist.nefst i) xss
+                 /\ sem_var bk H (fst o) ys
                  /\ (forall n, absent_list xss n <-> ys n = absent)
                  /\ Forall (msem_equation G bk H M) eqs) ->
              msem_node G f xss M ys.
@@ -180,19 +180,19 @@ enough: it does not support the internal fixpoint introduced by
              (xss : stream (nelist value))
              (M : memory)
              (ys : stream value)
-             (i  : nelist ident)
-             (o : ident)
+             (i  : nelist (ident * typ))
+             (o : ident * typ)
              (eqs : list equation)
              (Hbk : clock_of xss bk)
              (Hfind : find_node f G = Some (mk_node f i o eqs))
              (Hnode : exists H : history,
-                 sem_vars bk H i xss
-                 /\ sem_var bk H o ys
+                 sem_vars bk H (Nelist.nefst i) xss
+                 /\ sem_var bk H (fst o) ys
                  /\ (forall n, absent_list xss n <-> ys n = absent)
                  /\ Forall (msem_equation G bk H M) eqs),
         (exists H : history,
-            sem_vars bk H i xss
-            /\ sem_var bk H o ys
+            sem_vars bk H (Nelist.nefst i) xss
+            /\ sem_var bk H (fst o) ys
             /\ (forall n, absent_list xss n <-> ys n = absent)
             /\ Forall (fun eq=>exists Hsem, P (bk := bk) (eq := eq)(M := M)(H := H) Hsem) eqs)
         -> Pn  (SNode Hbk Hfind Hnode).

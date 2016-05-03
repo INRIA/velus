@@ -15,7 +15,7 @@ Require Import Setoid.
 
 
 Module Type PROPER
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
        (Import Trans : TRANSLATION Op SynDF SynMP)
@@ -58,14 +58,14 @@ Module Type PROPER
   Qed.
 
   Lemma ps_from_list_gather_eqs_memories:
-    forall eqs, PS.eq (ps_from_list (fst (gather_eqs eqs)))
+    forall eqs, PS.eq (ps_from_list (List.map (@fst ident typ) (fst (gather_eqs eqs))))
                  (memories eqs).
   Proof.
     induction eqs as [|eq eqs IH]; [reflexivity|].
     unfold memories, gather_eqs.
     assert (forall eqs F S,
-               PS.eq (ps_from_list (fst (List.fold_left gather_eq eqs (F, S))))
-                     (List.fold_left memory_eq eqs (ps_from_list F))) as HH.
+               PS.eq (ps_from_list (List.map (@fst ident typ) (fst (List.fold_left gather_eq eqs (F, S)))))
+                     (List.fold_left memory_eq eqs (ps_from_list (List.map (@fst ident typ) F)))) as HH.
     { clear eq eqs IH; induction eqs as [|eq eqs IH]; [reflexivity|].
       intros F S.
       destruct eq; [now apply IH|now apply IH|].

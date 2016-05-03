@@ -24,16 +24,17 @@ Axiom pos_to_str: ident -> string.
 Definition example :=
   {|
     c_name := pos_of_str "count";
-    c_input := nebase (pos_of_str "i");
-    c_output := pos_of_str "o";
-    c_mems := [pos_of_str "t"];
+    c_input := nebase (pos_of_str "i", Tint);
+    c_output := (pos_of_str "o", Tint);
+    c_mems := [(pos_of_str "t", Tint)];
     c_objs := [];
     c_step := Comp (Assign (pos_of_str "o")
                            (Binop Add
-                                  (Syn.State (pos_of_str "t"))
-                                  (Var (pos_of_str "i"))))
-                   (AssignSt (pos_of_str "t") (Var (pos_of_str "o")));
-    c_reset := AssignSt (pos_of_str "t") (Const Vzero)
+                                  (State (pos_of_str "t") Tint)
+                                  (Var (pos_of_str "i") Tint)
+                                  Tint))
+                   (AssignSt (pos_of_str "t") (Var (pos_of_str "o") Tint));
+    c_reset := AssignSt (pos_of_str "t") (Const Vzero Tint)
   |}.
 
 Definition cl_type := Ctypes.type.
@@ -42,6 +43,8 @@ Definition cl_expr := Clight.expr.
 Definition cl_stmt := Clight.statement.
 Definition cl_bool := Ctypes.type_bool.
 Definition cl_int := Ctypes.type_int32s.
+Definition cl_void := Ctypes.Tvoid.
+Definition cl_float := Ctypes.Tfloat Ctypes.F32 Ctypes.noattr.
 Definition cl_ident := AST.ident.
 Definition cl_bind := prod cl_ident cl_type.
 Definition cl_globdef := AST.globdef Clight.fundef Ctypes.type.
@@ -70,43 +73,52 @@ Definition cl_zero: cl_expr := Clight.Econst_int zero cl_int.
 
 Definition translate_ident (id: ident): cl_ident := id.
 
-Definition translate_const (c: Op.val): cl_expr :=
-  Clight.Econst_int (Integers.Int.repr Z0) cl_int.
+Definition translate_const (c: val): cl_type -> cl_expr :=
+  match c with
+  | Vbool b => Clight.Econst_int (if b then one else zero)
+  | Val v =>
+    match v with
+    (* | Vundef => *)
+    | Vint n => Clight.Econst_int n
+    | Vfloat f => Clight.Econst_single f
+    end
+  end.
 
-Definition translate_type (ty: base_type): cl_type :=
+Definition translate_type (ty: typ): cl_type :=
   match ty with
-  | Tint => cl_int
   | Tbool => cl_bool
+  | Tvoid => cl_void
+  | Tint => cl_int
+  | Tfloat => cl_float
   end.
 
-Definition translate_unop (op: Op.unary_op) (e: cl_expr): cl_expr :=
+Definition translate_unop (op: unary_op): cl_expr -> cl_type -> cl_expr :=
   match op with
-  | Opposite => Clight.Eunop Cop.Oneg e cl_int
-  | Negation => Clight.Eunop Cop.Onotbool e cl_int
+  | Opposite => Clight.Eunop Cop.Oneg
+  | Negation => Clight.Eunop Cop.Onotbool
   end.
 
-Definition translate_binop (op: Op.binary_op) (e1 e2: cl_expr): cl_expr :=
+Definition translate_binop (op: binary_op): cl_expr -> cl_expr -> cl_type -> cl_expr :=
   match op with
-  | Add => Clight.Ebinop Cop.Oadd e1 e2 cl_int
-  | Sub => Clight.Ebinop Cop.Osub e1 e2 cl_int
-  | Mul => Clight.Ebinop Cop.Omul e1 e2 cl_int
+  | Add => Clight.Ebinop Cop.Oadd
+  | Sub => Clight.Ebinop Cop.Osub
+  | Mul => Clight.Ebinop Cop.Omul
   end.
 
 (** Straightforward expression translation *)
 Fixpoint translate_exp (cls: cl_ident) (e: exp): cl_expr :=
-  let ty := Common.Tint in
   match e with
-  | Var x (* ty *) => Clight.Evar (translate_ident x) (translate_type ty)  
-  | State x (* ty *) =>
+  | Var x ty => Clight.Evar (translate_ident x) (translate_type ty)  
+  | State x ty =>
     let ty_deref_self := type_of_inst cls in
     let ty_self := pointer_of ty_deref_self in
     Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self)
                   (translate_ident x) (translate_type ty) 
-  | Const c (* ty *) => translate_const c
-  | Unop op e (* ty *) =>
-    translate_unop op (translate_exp cls e)
-  | Binop op e1 e2 (* ty *) =>
-    translate_binop op (translate_exp cls e1) (translate_exp cls e2)
+  | Const c ty => translate_const c (translate_type ty)
+  | Unop op e ty =>
+    translate_unop op (translate_exp cls e) (translate_type ty)
+  | Binop op e1 e2 ty =>
+    translate_binop op (translate_exp cls e1) (translate_exp cls e2) (translate_type ty)
   end.
 
 Fixpoint list_type_to_typelist (tys: list cl_type): cl_typelist :=
@@ -130,12 +142,11 @@ Definition funcall
 Definition assign (bind: cl_ident) (ty: cl_type) (e: cl_expr): cl_stmt :=
   Clight.Sassign (Clight.Evar bind ty) e.
 
-Definition st_assign (cls x: cl_ident) (e: cl_expr): cl_stmt :=
+Definition st_assign (cls x: cl_ident) (ty: cl_type) (e: cl_expr): cl_stmt :=
   let ty_deref_self := type_of_inst cls in
   let ty_self := pointer_of ty_deref_self in
   Clight.Sassign
-    (Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self) x
-                   (Clight.typeof e)) e.
+    (Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self) x ty) e.
                  
 Definition binded_funcall (bind temp f: cl_ident) (ty: cl_type) (args: list cl_expr)
   : cl_stmt :=
@@ -147,7 +158,7 @@ Definition binded_funcall (bind temp f: cl_ident) (ty: cl_type) (args: list cl_e
 Definition reset_call (cls obj: cl_ident): cl_stmt :=
   let ty_reset :=
       Ctypes.Tfunction (Ctypes.Tcons (type_of_inst_p cls) Ctypes.Tnil)
-                       Ctypes.Tvoid AST.cc_default
+                       cl_void AST.cc_default
   in
   funcall None (reset_id cls) ty_reset [pointer_of_cls obj cls].
 
@@ -167,16 +178,17 @@ Fixpoint translate_stmt (temp: option cl_bind) (cls: cl_ident) (s: stmt)
   : (option cl_bind * cl_stmt) :=
   match s with
   | Assign x e =>
-    let ty := (* Syn.typeof e *) Common.Tint in
+    let ty := typeof e in
     (temp, assign x (translate_type ty) (translate_exp cls e))
   | AssignSt x e =>
-    (temp, st_assign cls x (translate_exp cls e))
+    let ty := typeof e in
+    (temp, st_assign cls x (translate_type ty) (translate_exp cls e))
   | Ifte e s1 s2 =>
     let (temp1, s1') := translate_stmt temp cls s1 in
     let (temp2, s2') := translate_stmt temp1 cls s2 in
     (temp2, Clight.Sifthenelse (translate_exp cls e) s1' s2')
   | Step_ap y cls x es (* ty *) =>
-    let ty := Common.Tint in
+    let ty := Tint in
     let args := nelist2list (Nelist.map (translate_exp cls) es) in
     let out_ty := translate_type ty in
     let temp' := match temp with Some t => t | None => (y, out_ty) end in
@@ -233,7 +245,7 @@ Definition make_reset
   : cl_globdef :=
   let seq_res := seq_of_statements (body :: (List.map reset_obj objs)) in
   let body := return_none seq_res in
-  fundef [self] None Ctypes.Tvoid temps body.
+  fundef [self] None cl_void temps body.
 
 Definition translate_obj_dec (obj: obj_dec): cl_bind :=
   match obj with
@@ -243,8 +255,8 @@ Definition translate_obj_dec (obj: obj_dec): cl_bind :=
     (inst, type_of_inst cls)
   end.
 
-Definition translate_param (p: ident): cl_bind :=
-  let (id, ty) := (p, Common.Tint) in
+Definition translate_param (p: ident * typ): cl_bind :=
+  let (id, ty) := p in
   (translate_ident id, translate_type ty).
 
 (** build the structure *)
@@ -290,7 +302,7 @@ Definition make_main
   let (out, out_ty) := out in
   let args := List.map make_arg ins in
   let step := step_call out out node f args out_ty in
-  let loop := Clight.Swhile cl_true step in
+  let loop := Clight.Sloop step Clight.Sskip in
   let body := return_zero (Clight.Ssequence (reset_call node f) loop) in
   fundef [] None cl_int [(out, out_ty)] body.
 

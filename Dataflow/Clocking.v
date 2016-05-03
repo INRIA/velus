@@ -14,7 +14,7 @@ wrt. its clock annotations.
  *)
 
 Module Type CLOCKING
-       (Op : OPERATORS)
+       (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op).
 
   Definition clockenv := PM.t clock.
@@ -102,8 +102,8 @@ Module Type CLOCKING
   | SNode:
       forall f i o eqs,
         Forall (Well_clocked_eq C) eqs ->
-        clk_vars C i Cbase ->
-        clk_var C o Cbase ->
+        clk_vars C (Nelist.nefst i) Cbase ->
+        clk_var C (fst o) Cbase ->
         Well_clocked_node C (mk_node f i o eqs).
 
   Definition Well_clocked_env C : Prop :=

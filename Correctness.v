@@ -53,12 +53,12 @@ Module Type CORRECTNESS
        (** ** Technical lemmas *)
 
        Lemma exp_eval_tovar:
-  forall x ty v menv env mems,
-    exp_eval menv env (tovar mems (x, ty)) v
-    <-> (exp_eval menv env (State x ty) v /\ PS.In x mems)
-      \/ (exp_eval menv env (Var x ty) v /\ ~PS.In x mems).
-          Proof.
-            split; intro Heval;
+         forall x ty v menv env mems,
+           exp_eval menv env (tovar mems (x, ty)) v
+           <-> (exp_eval menv env (State x ty) v /\ PS.In x mems)
+             \/ (exp_eval menv env (Var x ty) v /\ ~PS.In x mems).
+       Proof.
+         split; intro Heval;
             destruct In_dec with x mems as [Hxm|Hxm];
             pose proof Hxm as Hxmt;
             apply PS.mem_spec in Hxmt || apply mem_spec_false in Hxmt;
@@ -1235,7 +1235,8 @@ for all [Is_free_exp x e]. *)
 
                   rename i into inArg; rename o into outArg; rename eqs0 into eqs.
 
-                  set (env := adds inArg inputs sempty).
+                  set (inArg_fst := Nelist.nefst inArg).
+                  set (env := adds inArg_fst inputs sempty).
 
                   assert (msem_equations G bk H M eqs)
                     by (eapply Forall_msem_equation_global_tl; try eassumption).
@@ -1249,11 +1250,11 @@ for all [Is_free_exp x e]. *)
                                    PM.find x env' = Some c) /\
                              Forall (Memory_Corres_eq G (S n) M menv') eqs) as His_step_correct.
                   {
-                    assert (Hlen : Nelist.length inArg = Nelist.length inputs).
+                    assert (Hlen : Nelist.length inArg_fst = Nelist.length inputs).
                     {
                       transitivity (Nelist.length (xs n)).
                       * eapply Nelist.Forall2_length; eauto.
-                      * rewrite Hxs, Nelist.map_length. auto.
+                      * rewrite Hxs, Nelist.map_length; auto.
                     }
                     eauto.
                     eapply is_step_correct; eauto.
@@ -1312,7 +1313,7 @@ for all [Is_free_exp x e]. *)
                           by (rewrite Hnode; auto).
                         assert (eqs = n_eqs node)
                           by (rewrite Hnode; auto).
-                        subst inArg; subst eqs.
+                        subst inArg_fst inArg eqs.
                         rewrite ps_from_list_gather_eqs_memories. eapply Hstmt.
                       - assert (outArg = n_output node)
                           by (rewrite Hnode; auto).
@@ -1337,7 +1338,7 @@ for all [Is_free_exp x e]. *)
                   inversion_clear Hstmt'.
                   exists menv'; split.
                   * econstructor; try eassumption.
-                    simpl; subst nodeName; rewrite Hfeq.
+                    simpl; subst nodeName. rewrite Hfeq.
                     eassumption.
                   * rewrite Memory_Corres_node_tl; try assumption.
             Qed.
@@ -1549,7 +1550,8 @@ for all [Is_free_exp x e]. *)
                   eapply Forall_msem_equation_global_tl; try eassumption.
                 }
 
-                assert (Is_well_sch (memories eqs) inArg eqs)
+                set (inArg_fst := Nelist.nefst inArg).
+                assert (Is_well_sch (memories eqs) inArg_fst eqs)
                   by (inversion Hwdef; subst ni eqs0;
                       rewrite Hfind in *; simpl in *; assumption).
 
