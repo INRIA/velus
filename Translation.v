@@ -128,7 +128,6 @@ Module Type TRANSLATION
   (* =translate_node= *)
   Definition translate_node (n: node): class :=
     let names := gather_eqs n.(n_eqs) in
-    (* let (t_mems, _) := List.split (fst names) in *)
     let mems := ps_from_list (List.map (@fst ident typ) (fst names)) in
     mk_class n.(n_name)
              n.(n_input)

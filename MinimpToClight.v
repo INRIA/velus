@@ -21,20 +21,19 @@ Import List.ListNotations.
 Axiom pos_of_str: string -> ident.
 Axiom pos_to_str: ident -> string.
 
+Definition i := pos_of_str "i".
+Definition o := pos_of_str "o".
+Definition t := pos_of_str "t".
 Definition example :=
   {|
     c_name := pos_of_str "count";
-    c_input := nebase (pos_of_str "i", Tint);
-    c_output := (pos_of_str "o", Tint);
-    c_mems := [(pos_of_str "t", Tint)];
+    c_input := nebase (i, Tfloat);
+    c_output := (o, Tfloat);
+    c_mems := [(t, Tfloat)];
     c_objs := [];
-    c_step := Comp (Assign (pos_of_str "o")
-                           (Binop Add
-                                  (State (pos_of_str "t") Tint)
-                                  (Var (pos_of_str "i") Tint)
-                                  Tint))
-                   (AssignSt (pos_of_str "t") (Var (pos_of_str "o") Tint));
-    c_reset := AssignSt (pos_of_str "t") (Const Vzero Tint)
+    c_step := Comp (Assign o (Binop Add (State t Tint) (Var i Tfloat) Tfloat))
+                   (AssignSt t (Var o Tfloat));
+    c_reset := AssignSt t (Const Vzero Tint)
   |}.
 
 Definition cl_type := Ctypes.type.
@@ -57,6 +56,8 @@ Definition step_id (id: cl_ident): ident :=
 Definition reset_id (id: cl_ident): ident :=
   pos_of_str ("reset_" ++ (pos_to_str id)).
 Definition self_id: ident := pos_of_str "self".
+Definition wait_id: ident := pos_of_str "wait".
+Definition delay_id: ident := pos_of_str "delay".
 
 (** struct types  *)
 Definition type_of_inst (o: cl_ident): cl_type :=
@@ -134,9 +135,10 @@ Definition pointer_of_cls (x cls: cl_ident): cl_expr :=
 (** function call and assignment *)
 (* Q: Can we really use same ident for temporary and classic variables ? *)
 Definition funcall
-           (bind: option cl_ident) (f: cl_ident) (sig: cl_type)
-           (args: list cl_expr)
+           (bind: option cl_ident) (f: cl_ident) (ty: cl_type) (args: list cl_expr)
   : cl_stmt :=
+  let tys := List.map Clight.typeof args in
+  let sig := Ctypes.Tfunction (list_type_to_typelist tys) ty AST.cc_default in
   Clight.Scall bind (Clight.Evar f sig) args.
 
 Definition assign (bind: cl_ident) (ty: cl_type) (e: cl_expr): cl_stmt :=
@@ -150,17 +152,11 @@ Definition st_assign (cls x: cl_ident) (ty: cl_type) (e: cl_expr): cl_stmt :=
                  
 Definition binded_funcall (bind temp f: cl_ident) (ty: cl_type) (args: list cl_expr)
   : cl_stmt :=
-  let tys := List.map Clight.typeof args in
-  let sig := Ctypes.Tfunction (list_type_to_typelist tys) ty AST.cc_default in
-  Clight.Ssequence (funcall (Some temp) f sig args)
+   Clight.Ssequence (funcall (Some temp) f ty args)
                    (assign bind ty (Clight.Etempvar temp ty)).
 
 Definition reset_call (cls obj: cl_ident): cl_stmt :=
-  let ty_reset :=
-      Ctypes.Tfunction (Ctypes.Tcons (type_of_inst_p cls) Ctypes.Tnil)
-                       cl_void AST.cc_default
-  in
-  funcall None (reset_id cls) ty_reset [pointer_of_cls obj cls].
+  funcall None (reset_id cls) cl_void [pointer_of_cls obj cls].
 
 Definition step_call
            (bind temp cls: cl_ident) (obj: cl_ident) (args: list cl_expr)
@@ -301,8 +297,9 @@ Definition make_main
   : cl_globdef :=
   let (out, out_ty) := out in
   let args := List.map make_arg ins in
+  let wait := (* funcall None wait_id cl_void [make_arg (delay_id, cl_int)] *) Clight.Sskip in
   let step := step_call out out node f args out_ty in
-  let loop := Clight.Sloop step Clight.Sskip in
+  let loop := Clight.Sloop (Clight.Ssequence wait step) Clight.Sskip in
   let body := return_zero (Clight.Ssequence (reset_call node f) loop) in
   fundef [] None cl_int [(out, out_ty)] body.
 
@@ -316,10 +313,19 @@ Definition split_3 {A B C: Type} (l: list (A * B * C))
                      end
                   ) ([], [], []) l.
 
-Definition vardef (volatile: bool) (x: cl_bind): cl_ident * cl_globdef :=
+Definition vardef (init: bool) (volatile: bool) (x: cl_bind): cl_ident * cl_globdef :=
   let (x, ty) := x in
   let ty' := Ctypes.merge_attributes ty (Ctypes.mk_attr volatile None) in
-  (x, @AST.Gvar Clight.fundef cl_type (AST.mkglobvar ty' [AST.Init_space Z0] false volatile)).
+  (x, @AST.Gvar Clight.fundef cl_type
+                (AST.mkglobvar ty' (if init then [AST.Init_space Z0] else []) false volatile)).
+
+Definition make_wait: cl_ident * cl_globdef :=
+  let sig := AST.mksignature [AST.Tint] None AST.cc_default in
+  (wait_id,
+   @AST.Gfun Clight.fundef cl_type
+             (Clight.External (AST.EF_external (pos_to_str wait_id) sig)
+                              (Ctypes.Tcons cl_int Ctypes.Tnil)
+                              cl_void AST.cc_default)).
 
 (** translation function: the main instance is declared as 'extern' and it's 
 step function's return variable as 'volatile' *)
@@ -334,14 +340,15 @@ Definition translate (p: program) (main_node: ident)
     let out' := glob_bind out in
     let main := make_main main_node f ins out' in
     let cs := List.map translate_class p in
-    let f_gvar := vardef false (f, type_of_inst main_node) in
-    let o_gvar := vardef true out' in
+    let f_gvar := vardef true false (f, type_of_inst main_node) in
+    let o_gvar := vardef true true out' in
     let ins' := List.map glob_bind ins in
-    let ins_gvar := List.map (vardef true) ins' in
+    let ins_gvar := List.map (vardef true true) ins' in
     match split_3 cs with
       (structs, steps, resets) =>
-      let gdefs := f_gvar :: o_gvar :: ins_gvar ++
-                               resets ++ steps ++ [(main_id, main)]
+      let gdefs := make_wait :: vardef false false (glob_id delay_id, cl_int)
+                             :: f_gvar :: o_gvar :: ins_gvar ++
+                             resets ++ steps ++ [(main_id, main)]
       in
       Clight.make_program structs gdefs [] main_id                    
     end
