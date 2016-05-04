@@ -3,7 +3,7 @@ Open Scope positive.
 
 Require Import Rustre.Dataflow.
 Require Import Rustre.Minimp.
-Require Import Rustre.Translation.
+Require Import Rustre.DF2MP.Translation.
 Require Import Setoid.
 
 

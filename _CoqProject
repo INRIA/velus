@@ -11,6 +11,7 @@
 -R CompCert/cparser compcert.cparser
 
 -install none
+RMemory.v
 Common.v
 Example.v
 Nelist.v
@@ -38,11 +39,10 @@ Minimp/Semantics.v
 Minimp/Equiv.v
 Minimp/FuseIfte.v
 Minimp.v
-Translation.v
-Correctness/Proper.v
-Correctness/IsPresent.v
-Correctness/MemoryCorres.v
-Correctness.v
-Memory.v
-MinimpToClight.v
+DF2MP/Translation.v
+DF2MP/Correctness/Proper.v
+DF2MP/Correctness/IsPresent.v
+DF2MP/Correctness/MemoryCorres.v
+DF2MP/Correctness.v
+MP2CL/Translation.v
 Interface.v

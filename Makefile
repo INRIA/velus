@@ -94,11 +94,11 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 ######################
 
 VFILES:=RMemory.v\
-  Correctness.v\
-  Correctness/MemoryCorres.v\
-  Correctness/IsPresent.v\
-  Correctness/Proper.v\
-  Translation.v\
+  DF2MP/Correctness.v\
+  DF2MP/Correctness/MemoryCorres.v\
+  DF2MP/Correctness/IsPresent.v\
+  DF2MP/Correctness/Proper.v\
+  DF2MP/Translation.v\
   Minimp.v\
   Minimp/FuseIfte.v\
   Minimp/Equiv.v\
@@ -126,7 +126,7 @@ VFILES:=RMemory.v\
   Nelist.v\
   Common.v\
   Interface.v\
-  MinimpToClight.v
+  MP2CL/Translation.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))

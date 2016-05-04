@@ -3,7 +3,7 @@ Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Minimp.Semantics.
-Require Import Rustre.Translation.
+Require Import Rustre.DF2MP.Translation.
 
 
 (** * Tying clock semantics and imperative semantics *)

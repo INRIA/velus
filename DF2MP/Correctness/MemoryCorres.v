@@ -3,29 +3,14 @@ Require Import List.
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Minimp.Semantics.
-Require Import Rustre.Translation.
+Require Import Rustre.Minimp.
 
 (** * Correspondence between dataflow and imperative memories *)
 
 Module Type MEMORYCORRES
-       (Op : OPERATORS)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Op SynDF)
-       (Mem : MEMORIES Op SynDF)
-       (IsF : ISFREE Op SynDF)
-       (Import IsD : ISDEFINED Op SynDF Mem)
-       (Import SemDF : Rustre.Dataflow.Semantics.SEMANTICS Op SynDF Str Ord)
-       (Import IsV : ISVARIABLE Op SynDF Mem IsD)
-       (NoD : NODUP Op SynDF Mem IsD IsV)
-       (Import WeF : WELLFORMED Op SynDF IsF Ord Mem IsD IsV NoD)
-  
-       (Import MemSem : MEMSEMANTICS Op SynDF Str Ord Mem IsF IsD SemDF IsV NoD WeF).
+       (Op: OPERATORS)
+       (Import DF: DATAFLOW Op)
+       (Import MP: MINIMP Op).
 (**
 
   [Memory_Corres] relates a dataflow [D.memory] with an object [heap]

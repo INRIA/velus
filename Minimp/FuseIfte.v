@@ -1,27 +1,16 @@
-
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Minimp.Semantics.
-Require Import Rustre.Minimp.Equiv.
+Require Import Rustre.Minimp.
 Require Import Rustre.Dataflow.Syntax.
-Require Import Rustre.Dataflow.Memories.
-Require Import Rustre.Dataflow.IsFree.
-Require Import Rustre.Dataflow.IsDefined.
-Require Import Rustre.Dataflow.IsVariable.
-Require Import Rustre.Dataflow.WellFormed.
 Require Import Rustre.RMemory.
-
 
 Ltac inv H := inversion H; subst; clear H.
 
 Module Type FUSEIFTE
-       (Import Op : OPERATORS)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Equ : EQUIV Op SynMP SemMP).
+       (Import Op: OPERATORS)
+       (Import Syn: Rustre.Dataflow.Syntax.SYNTAX Op)
+       (Import MP: MINIMP Op).
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
   | FreeVar: forall i ty,

@@ -5,8 +5,8 @@ Require Import Rustre.Interface.
 
 Module Import Syn := SyntaxFun Op.
 
-Require Import Rustre.Minimp.Semantics.
-Module Import Sem := SemanticsFun Op Syn.
+(* Require Import Rustre.Minimp.Semantics. *)
+(* Module Import Sem := SemanticsFun Op Syn. *)
 
 Require common.AST.
 Require common.Errors.
@@ -368,61 +368,61 @@ Definition compile (p: Syn.program) (main_node: cl_ident)
 
 
 
-Require Import common.Events.
-Require Import common.Globalenvs.
-Require Import common.Memory.
-Require Import lib.Integers.
-Require Import common.Smallstep.
+(* Require Import common.Events. *)
+(* Require Import common.Globalenvs. *)
+(* Require Import common.Memory. *)
+(* Require Import lib.Integers. *)
+(* Require Import common.Smallstep. *)
 
-Record fundeft := Fundeft {name: ident; body: stmt}.
-Definition vart := cl_ident.
+(* Record fundeft := Fundeft {name: ident; body: stmt}. *)
+(* Definition vart := cl_ident. *)
 
-Definition genv := Genv.t fundeft vart.
-Inductive state := State (H: heap) (S: stack) (s: stmt).
+(* Definition genv := Genv.t fundeft vart. *)
+(* Inductive state := State (H: heap) (S: stack) (s: stmt). *)
 
-Definition make_gvar (init volatile: bool) (name: cl_ident) :=
-  (name,
-   @AST.Gvar fundeft _ (AST.mkglobvar name (if init then [AST.Init_space Z0] else []) false volatile)).
+(* Definition make_gvar (init volatile: bool) (name: cl_ident) := *)
+(*   (name, *)
+(*    @AST.Gvar fundeft _ (AST.mkglobvar name (if init then [AST.Init_space Z0] else []) false volatile)). *)
 
-Definition make_gfun (name: cl_ident) (body: stmt) :=
-  (name,
-   @AST.Gfun _ vart (Fundeft name body)).
+(* Definition make_gfun (name: cl_ident) (body: stmt) := *)
+(*   (name, *)
+(*    @AST.Gfun _ vart (Fundeft name body)). *)
 
-Definition convert_class (defs: list (cl_ident * AST.globdef fundeft vart)) (c: class)
-  : list (cl_ident * AST.globdef fundeft vart) :=
-  match c with
-    mk_class c_name c_input c_output c_mems c_objs c_step c_reset =>
-    let name := translate_ident c_name in
-    let cls := make_gvar false false name in
-    let step := make_gfun (step_id name) c_step in
-    let reset := make_gfun (reset_id name) c_reset in
-    cls :: step :: reset :: defs
-  end.
+(* Definition convert_class (defs: list (cl_ident * AST.globdef fundeft vart)) (c: class) *)
+(*   : list (cl_ident * AST.globdef fundeft vart) := *)
+(*   match c with *)
+(*     mk_class c_name c_input c_output c_mems c_objs c_step c_reset => *)
+(*     let name := translate_ident c_name in *)
+(*     let cls := make_gvar false false name in *)
+(*     let step := make_gfun (step_id name) c_step in *)
+(*     let reset := make_gfun (reset_id name) c_reset in *)
+(*     cls :: step :: reset :: defs *)
+(*   end. *)
 
-Definition convert_prog (p: program): AST.program fundeft vart :=
-  let defs := List.fold_left convert_class p nil in
-  AST.mkprogram defs [] main_id. 
+(* Definition convert_prog (p: program): AST.program fundeft vart := *)
+(*   let defs := List.fold_left convert_class p nil in *)
+(*   AST.mkprogram defs [] main_id.  *)
   
-Inductive step: genv -> state -> trace -> state -> Prop :=
-  DoStep: forall prog ge H S s H' S' t,
-    stmt_eval prog H S s (H', S') ->
-    step ge (State H S s) t (State H' S' Skip).
+(* Inductive step: genv -> state -> trace -> state -> Prop := *)
+(*   DoStep: forall prog ge H S s H' S' t, *)
+(*     stmt_eval prog H S s (H', S') -> *)
+(*     step ge (State H S s) t (State H' S' Skip). *)
 
-Parameter convert_mem: mem -> heap * stack.
-Inductive initial_state (ge: genv) (p: program): state -> Prop :=
-  IniState: forall b f m0 H0 S0,
-    let p' := convert_prog p in
-    Genv.init_mem p' = Some m0 ->
-    Genv.find_symbol ge p'.(AST.prog_main) = Some b ->
-    Genv.find_funct_ptr ge b = Some f ->
-    convert_mem m0 = (H0, S0) ->
-    initial_state ge p (State H0 S0 f.(body)).
+(* Parameter convert_mem: mem -> heap * stack. *)
+(* Inductive initial_state (ge: genv) (p: program): state -> Prop := *)
+(*   IniState: forall b f m0 H0 S0, *)
+(*     let p' := convert_prog p in *)
+(*     Genv.init_mem p' = Some m0 -> *)
+(*     Genv.find_symbol ge p'.(AST.prog_main) = Some b -> *)
+(*     Genv.find_funct_ptr ge b = Some f -> *)
+(*     convert_mem m0 = (H0, S0) -> *)
+(*     initial_state ge p (State H0 S0 f.(body)). *)
 
-Inductive final_state (s: state) (n: int): Prop := False.
+(* Inductive final_state (s: state) (n: int): Prop := False. *)
 
-Definition globalenv (p: program) :=
-  Genv.globalenv (convert_prog p).
+(* Definition globalenv (p: program) := *)
+(*   Genv.globalenv (convert_prog p). *)
 
-Definition semantics (p: program) :=
-  let ge := globalenv p in
-  Semantics_gen step (initial_state ge p) final_state ge ge.
+(* Definition semantics (p: program) := *)
+(*   let ge := globalenv p in *)
+(*   Semantics_gen step (initial_state ge p) final_state ge ge. *)

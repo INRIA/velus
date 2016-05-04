@@ -18,7 +18,7 @@ let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in
   let id = intern_string name in
   let id' = coqstring_of_camlstring name in
-  let targs = List.map (convertTyp env) ins |> MinimpToClight.list_type_to_typelist in
+  let targs = List.map (convertTyp env) ins |> Translation.list_type_to_typelist in
   let tres = convertTyp env out in
   let sg = Ctypes.signature_of_type targs tres AST.cc_default in
   let ef =
@@ -36,7 +36,7 @@ let add_builtins p =
   
 let _ =
   Sections.initialize();
-  match MinimpToClight.(translate [example] (intern_string "count")) with
+  match Translation.(translate [example] (intern_string "count")) with
   | Error errmsg -> print_error stderr errmsg
   | OK p ->
     PrintClight.print_program Format.std_formatter p;

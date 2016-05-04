@@ -1,6 +1,6 @@
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
-Require Import Rustre.MinimpToClight.
+Require Import Rustre.MP2CL.Translation.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping.
@@ -61,7 +61,7 @@ Extract Constant pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqst
 
 Separate Extraction
          ZArith.BinIntDef
-         MinimpToClight
+         MP2CL.Translation
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg

@@ -8,47 +8,25 @@ Open Scope positive.
 
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
-(* TODO: these should go *)
-Require Import Rustre.Dataflow.IsVariable.Decide.
-Require Import Rustre.Dataflow.IsDefined.Decide.
-
 Require Import Rustre.Minimp.
-Require Import Rustre.Translation.
-Require Import Rustre.Correctness.Proper.
-Require Import Rustre.Correctness.IsPresent.
-Require Import Rustre.Correctness.MemoryCorres.
+Require Import Rustre.DF2MP.Translation.
+Require Import Rustre.DF2MP.Correctness.Proper.
+Require Import Rustre.DF2MP.Correctness.IsPresent.
+Require Import Rustre.DF2MP.Correctness.MemoryCorres.
 Require Import Rustre.Minimp.FuseIfte.
-Require Import Rustre.Dataflow.Clocking.Parents.
-Require Import Rustre.Dataflow.Clocking.Properties.
 
 Module Type CORRECTNESS
-       (Import Op : OPERATORS)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Op SynDF)
-       (Import IsF : ISFREE Op SynDF)
-       (Import SemDF : Rustre.Dataflow.Semantics.SEMANTICS Op SynDF Str Ord)
-       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Mem : MEMORIES Op SynDF)
-       (Import IsD : ISDEFINED Op SynDF Mem)
-       (Import Trans : TRANSLATION Op SynDF SynMP)
-       (Import IsV : ISVARIABLE Op SynDF Mem IsD)
-       (Import IsP : ISPRESENT Op SynDF SynMP SemMP Trans)
-       (Import NoD : NODUP Op SynDF Mem IsD IsV)
-       (Import WeF : WELLFORMED Op SynDF IsF Ord Mem IsD IsV NoD)
-       (Import MemSem : MEMSEMANTICS Op SynDF Str Ord Mem IsF IsD SemDF IsV NoD WeF)
-       (Import MemCor : MEMORYCORRES Op SynDF SynMP SemMP Str Ord Mem IsF IsD SemDF IsV NoD WeF MemSem)
-       
-       (Import IsVDec : IsVariable.Decide.DECIDE Op SynDF Mem IsD IsV)
-       (Import IsDDec : IsDefined.Decide.DECIDE Op SynDF Mem IsD)
+       (Import Op: OPERATORS)
+       (Import DF: DATAFLOW Op)
+       (Import MP: MINIMP Op)
 
-       (Import Proper : PROPER Op SynDF SynMP Trans Mem)
-       (Equ : EQUIV Op SynMP SemMP)
-       (Import Fus : FUSEIFTE Op SynDF SynMP SemMP Equ)
-       (Import Clo : CLOCKING Op SynDF)
-       (Par : PARENTS Op SynDF Clo)
-       (Import Pro : PROPERTIES Op SynDF IsF Clo Mem IsD Par).
+       (Import Trans: TRANSLATION Op DF.Syn MP.Syn)
+       
+       (Import IsP: ISPRESENT Op DF.Syn MP.Syn MP.Sem Trans)
+       (Import MemCor: MEMORYCORRES Op DF MP)
+       (Import Mem: MEMORIES Op DF.Syn)
+       (Import Pro: PROPER Op DF.Syn MP.Syn Trans Mem)
+       (Import Fus: FUSEIFTE Op DF.Syn MP).
   
   (** ** Technical lemmas *)
 
@@ -484,7 +462,7 @@ for all [Is_free_exp x e]. *)
 
   Theorem typ_correct:
     forall mems e,
-      typeof (translate_lexp mems e) = SynDF.typeof e.
+      typeof (translate_lexp mems e) = DF.Syn.typeof e.
   Proof.
     induction e as [|y ty| | |]; simpl; auto.
     destruct (PS.mem y mems); simpl; auto.
@@ -511,12 +489,12 @@ for all [Is_free_exp x e]. *)
     - simpl. apply eunop with c'.
       + apply IHle; auto.
       + rewrite typ_correct. 
-        destruct (sem_unary op c' (SynDF.typeof le)); [now inversion H4 | discriminate].
+        destruct (sem_unary op c' (DF.Syn.typeof le)); [now inversion H4 | discriminate].
     - simpl. apply ebinop with (c1 := c1) (c2 := c2).
       + apply IHle1; auto.
       + apply IHle2; auto.
       + rewrite 2 typ_correct.
-        destruct (sem_binary op c1 (SynDF.typeof le1) c2 (SynDF.typeof le2));
+        destruct (sem_binary op c1 (DF.Syn.typeof le1) c2 (DF.Syn.typeof le2));
           [now inversion H5 | discriminate].
         (* - subst. simpl. apply eop with cs. *)
         (* + clear H2 H4 H. *)
@@ -1732,8 +1710,6 @@ for all [Is_free_exp x e]. *)
   End EventLoop.
 
   (** ** Correctness of optimized code *)
-
-  Require Import Minimp.FuseIfte.
 
   Lemma not_Can_write_in_translate_cexp:
     forall x mems ce i,
