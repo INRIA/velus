@@ -1,12 +1,6 @@
 Require Import lib.Integers.
 Require Import lib.Floats.
 Require Import Rustre.Common.
-Require Import common.Smallstep.
-Require Import common.Events.
-Require Import common.Globalenvs.
-Require Import common.Memory.
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Minimp.Semantics.
 
 (* Interface avec CompCert *)
 Inductive val'': Type :=
@@ -311,44 +305,3 @@ Module Export Op <: OPERATORS.
   Proof. intros op1 op2; unfold binop_eqb; destruct (binop_dec op1 op2); intuition. Qed.
 
 End Op.
-
-Module Import Syn := SyntaxFun Op.
-Module Import Sem := SemanticsFun Op Syn.
-
-Record fundeft := Fundeft {name: ident; body: stmt}.
-Parameter vart: Type.
-Parameter pub: program -> list ident.
-Parameter def: program -> list (ident * AST.globdef fundeft vart).
-
-Definition genv := Genv.t fundeft vart.
-Inductive state :=
-| State (H: heap) (S: stack) (s: stmt)
-| StopState.
-Parameter convert_prog: program -> AST.program fundeft vart.
-
-Inductive step: genv -> state -> trace -> state -> Prop :=
-| DoStep: forall prog ge H S s H' S' t,
-    stmt_eval prog H S s (H', S') ->
-    step ge (State H S s) t (State H' S' Skip)
-| Stop: forall ge H S t,
-    step ge (State H S Skip) t StopState.
-
-Parameter convert_mem: mem -> heap * stack.
-Inductive initial_state (ge: genv) (p: program): state -> Prop :=
-  IniState: forall b f m0 H0 S0,
-    let p' := convert_prog p in
-    Genv.init_mem p' = Some m0 ->
-    Genv.find_symbol ge p'.(AST.prog_main) = Some b ->
-    Genv.find_funct_ptr ge b = Some f ->
-    convert_mem m0 = (H0, S0) ->
-    initial_state ge p (State H0 S0 f.(body)).
-
-Inductive final_state: state -> int -> Prop :=
-  FinalState: final_state StopState zero.
-
-Definition globalenv (p: program) :=
-  Genv.globalenv (convert_prog p).
-
-Definition semantics (p: program) :=
-  let ge := globalenv p in
-  Semantics_gen step (initial_state ge p) final_state ge ge.

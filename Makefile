@@ -56,9 +56,9 @@ COQLIBS?=-R . Rustre\
   -R CompCert/ia32 compcert.ia32\
   -R CompCert/common compcert.common\
   -R CompCert/lib compcert.lib\
+  -exclude-dir extraction/CompCert\
 
 COQDOCLIBS?=-R . Rustre\
-  -exclude-dir CompCert\
   -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
   -R CompCert/flocq compcert.flocq\
