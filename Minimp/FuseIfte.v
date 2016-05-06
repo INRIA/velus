@@ -329,7 +329,7 @@ Fixpoint ifte_zip s1 s2 : stmt :=
       else Comp s1 s2
   | Skip, s => s
   | s,    Skip => s
-  | Comp s1' s2', Ifte _ _ _ => Comp s1' (ifte_zip s2' s2)
+  | Comp s1' s2', _ => Comp s1' (ifte_zip s2' s2)
   | s1,   s2 => Comp s1 s2
   end.
 
@@ -459,17 +459,9 @@ Fixpoint ifte_fuse' s1 s2 : stmt :=
 
 Definition ifte_fuse s : stmt :=
   match s with
-  | Comp s1 (Comp s2 s3) => ifte_fuse' (ifte_zip s1 s2) s3
-  | Comp s1 s2 => ifte_zip s1 s2
-  | _ => s
-  end.
-(* TODO: simplify the above definition to:
-Definition ifte_fuse s : stmt :=
-  match s with
   | Comp s1 s2 => ifte_fuse' s1 s2
   | _ => s
   end.
-*)
 
 Lemma ifte_fuse'_free_write:
   forall s2 s1,
@@ -637,23 +629,16 @@ Proof.
   intros s Hfree prog menv env menv' env'.
   destruct s; simpl; try reflexivity.
   inversion_clear Hfree.
-  match goal with
-  | |- _ <-> stmt_eval _ _ _ (Comp ?s1 ?s2) _ =>
-    destruct s2; try (rewrite ifte_zip_Comp;
-                        [reflexivity|assumption|assumption])
-  end.
-  match goal with H: Ifte_free_write (Comp _ _) |- _ => inversion_clear H end.
+  destruct s2;
   match goal with
   | H: Ifte_free_write ?s2 |- context [ifte_fuse' _ ?s2]
     => pose proof (ifte_eval_eq_refl _ H)
-  end.
-  rewrite ifte_zip_Comp; [|assumption|assumption].
-  rewrite Comp_assoc.
-  rewrite ifte_fuse'_Comp; [reflexivity| |assumption].
-  constructor; assumption.
+  end;
+  rewrite ifte_fuse'_Comp; auto; reflexivity.
 Qed.
 
 (*
+Open Scope positive_scope.
 Eval cbv in (ifte_fuse (Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
                              (Comp (Ifte (Var 1) (Assign 4 (Var 2))
                                          (Assign 4 (State 3)))
@@ -667,5 +652,4 @@ Eval cbv in (ifte_fuse (Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
                                                            (AssignSt 3 (Var 4))
                                                            Skip)) Skip))))).
 *)
-
 
