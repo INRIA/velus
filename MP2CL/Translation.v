@@ -13,7 +13,7 @@ Require common.Errors.
 Require cfrontend.Ctypes.
 Require cfrontend.Clight.
 Require cfrontend.Cop.
-Require driver.Compiler.
+(* Require driver.Compiler. *)
 
 Require Import String.
 
@@ -334,9 +334,9 @@ Definition make_wait: cl_ident * cl_globdef :=
 step function's return variable as 'volatile' *)
 Definition translate (p: program) (main_node: ident)
   : Errors.res Clight.program :=
-  let main_node := translate_ident main_node in
   match find_class main_node p with
   | Some (cls, _) =>
+    let main_node := translate_ident main_node in
     let f := glob_id main_node in
     let ins := nelist2list (Nelist.map translate_param cls.(c_input)) in
     let out := translate_param cls.(c_output) in
@@ -358,12 +358,12 @@ Definition translate (p: program) (main_node: ident)
   | None => Errors.Error (Errors.msg "undefined node")
   end. 
 
-Definition compile (p: Syn.program) (main_node: cl_ident)
-  : Errors.res Asm.program :=
-  match translate p main_node with
-  | Errors.OK p => Compiler.transf_clight_program p
-  | Errors.Error res => Errors.Error res
-  end.
+(* Definition compile (p: program) (main_node: cl_ident) *)
+(*   : Errors.res Asm.program := *)
+(*   match translate p main_node with *)
+(*   | Errors.OK p => Compiler.transf_clight_program p *)
+(*   | Errors.Error res => Errors.Error res *)
+(*   end. *)
 
 
 

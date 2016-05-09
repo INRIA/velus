@@ -126,7 +126,8 @@ VFILES:=RMemory.v\
   Nelist.v\
   Common.v\
   Interface.v\
-  MP2CL/Translation.v
+  MP2CL/Translation.v\
+  DF2CL.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
@@ -199,9 +200,8 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 
 extr:
 	@cd CompCert; find -name "*.cm*" -delete
-	@cd extraction; ln -sf ../CompCert
-	@cd extraction; ocamlbuild -use-ocamlfind -no-hygiene -j 8 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  print_test.native
-	@cp CompCert/compcert.ini extraction/_build/compcert.ini
+	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20  rustre.native
+	@cp CompCert/compcert.ini _build/compcert.ini
 
 ####################
 #                  #
@@ -219,10 +219,9 @@ clean:
 	rm -f $(VOFILES) $(VIFILES) $(GFILES) $(VFILES:.v=.v.d) $(VFILES:=.beautified) $(VFILES:=.old)
 	rm -f all.ps all-gal.ps all.pdf all-gal.pdf all.glob $(VFILES:.v=.glob) $(VFILES:.v=.tex) $(VFILES:.v=.g.tex) all-mli.tex
 	- rm -rf html mlihtml
-	rm -rf extraction/_build
 	rm -f extraction/extract/*
 	rm -f extraction/STAMP
-	rm -f extraction/CompCert
+	ocamlbuild -clean
 
 archclean:
 	rm -f *.cmx *.o
