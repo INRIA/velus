@@ -178,8 +178,7 @@ Fixpoint translate_stmt (vars: PM.t cl_type) (temp: option cl_bind) (owner: cl_i
     let '(vars1, temp1, s1') := translate_stmt vars temp owner s1 in
     let '(vars2, temp2, s2') := translate_stmt vars1 temp1 owner s2 in
     (vars2, temp2, Clight.Sifthenelse (translate_exp owner e) s1' s2')
-  | Step_ap y cls x es (* ty *) =>
-    let ty := Tint in
+  | Step_ap y ty cls x es =>
     let y := translate_ident y in
     let cls := translate_ident cls in
     let x := translate_ident x in

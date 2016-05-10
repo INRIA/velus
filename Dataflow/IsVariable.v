@@ -27,8 +27,8 @@ Module Type ISVARIABLE
        (Import IsD : ISDEFINED Op Syn Mem).
 
   Inductive Is_variable_in_eq : ident -> equation -> Prop :=
-  | VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
-  | VarEqApp: forall x ck f e, Is_variable_in_eq x (EqApp x ck f e).
+  | VarEqDef: forall x ck e,      Is_variable_in_eq x (EqDef x ck e)
+  | VarEqApp: forall x ck f e ty, Is_variable_in_eq x (EqApp x ck f e ty).
 
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
@@ -44,8 +44,8 @@ Module Type ISVARIABLE
   Qed.
 
   Lemma not_Is_variable_in_EqApp: 
-    forall x y ck f e,
-      ~ Is_variable_in_eq x (EqApp y ck f e) -> x <> y.
+    forall x y ck f e ty,
+      ~ Is_variable_in_eq x (EqApp y ck f e ty) -> x <> y.
   Proof.
     Hint Constructors Is_variable_in_eq. 
     intros ** Hxy. subst x. auto.
@@ -55,7 +55,7 @@ Module Type ISVARIABLE
     match goal with
     | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ => 
       apply not_Is_variable_in_EqDef in H
-    | H: ~ Is_variable_in_eq x (EqApp y _ _ _) |- _ => 
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ => 
       apply not_Is_variable_in_EqApp in H
     end.
 

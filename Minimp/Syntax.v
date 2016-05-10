@@ -33,12 +33,12 @@ Module Type SYNTAX (Import Op : OPERATORS).
     end.
   
    Inductive stmt : Type :=
-  | Assign : ident -> exp -> stmt                         (* x = e *)
-  | AssignSt : ident -> exp -> stmt                       (* self.x = e *)
-  | Ifte : exp -> stmt -> stmt -> stmt                     (* if e then s1 else s2 *)
-  | Step_ap : ident -> ident -> ident -> nelist exp -> stmt (* y = (C x).step(es) *)
-  | Reset_ap : ident -> ident -> stmt                     (* (C x).reset() *)
-  | Comp : stmt -> stmt -> stmt                           (* s1; s2 *)
+  | Assign : ident -> exp -> stmt                               (* x = e *)
+  | AssignSt : ident -> exp -> stmt                             (* self.x = e *)
+  | Ifte : exp -> stmt -> stmt -> stmt                           (* if e then s1 else s2 *)
+  | Step_ap : ident -> typ -> ident -> ident -> nelist exp -> stmt (* y:ty = (C x).step(es) *)
+  | Reset_ap : ident -> ident -> stmt                           (* (C x).reset() *)
+  | Comp : stmt -> stmt -> stmt                                 (* s1; s2 *)
   | Skip.
 
    Record obj_dec : Type :=
@@ -107,12 +107,12 @@ Module SyntaxFun' (Import Op : OPERATORS).
   Implicit Type e: exp.
 
   Inductive stmt : Type :=
-  | Assign : ident -> exp -> stmt                         (* x = e *)
-  | AssignSt : ident -> exp -> stmt                       (* self.x = e *)
-  | Ifte : exp -> stmt -> stmt -> stmt                     (* if e then s1 else s2 *)
-  | Step_ap : ident -> ident -> ident -> nelist exp -> stmt (* y = (C x).step(es) *)
-  | Reset_ap : ident -> ident -> stmt                     (* (C x).reset() *)
-  | Comp : stmt -> stmt -> stmt                           (* s1; s2 *)
+  | Assign : ident -> exp -> stmt                               (* x = e *)
+  | AssignSt : ident -> exp -> stmt                             (* self.x = e *)
+  | Ifte : exp -> stmt -> stmt -> stmt                           (* if e then s1 else s2 *)
+  | Step_ap : ident -> typ -> ident -> ident -> nelist exp -> stmt (* y = (C x).step(es) *)
+  | Reset_ap : ident -> ident -> stmt                           (* (C x).reset() *)
+  | Comp : stmt -> stmt -> stmt                                 (* s1; s2 *)
   | Skip.
 
   Implicit Type s: stmt.

@@ -84,7 +84,7 @@ Module Type DECIDE
                        (free_in_caexp ck e PS.empty))
              && (negb (PS.mem x defined)),
            PS.add x defined, PS.add x variables)
-        | EqApp x ck f les =>
+        | EqApp x ck f les _ =>
           ((PS.for_all (check_var defined variables)
                        (free_in_laexps ck les PS.empty))
              && (negb (PS.mem x defined)),

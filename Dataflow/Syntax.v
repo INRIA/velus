@@ -53,7 +53,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : ident -> clock -> ident -> lexps -> equation
+  | EqApp : ident -> clock -> ident -> lexps -> typ -> equation
   | EqFby : ident -> clock -> val -> lexp -> equation.
 
   Implicit Type eqn: equation.
@@ -147,7 +147,7 @@ Module SyntaxFun' (Import Op : OPERATORS).
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : ident -> clock -> ident -> lexps -> equation
+  | EqApp : ident -> clock -> ident -> lexps -> typ -> equation
   | EqFby : ident -> clock -> val -> lexp -> equation.
 
   Implicit Type eqn: equation.

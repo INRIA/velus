@@ -94,10 +94,10 @@ Module Type CLOCKING
         clk_cexp C ce ck ->
         Well_clocked_eq C (EqDef x ck ce)
   | CEqApp:
-      forall x ck f les,
+      forall x ck f les ty,
         clk_var C x ck ->
         clk_lexps C les ck ->
-        Well_clocked_eq C (EqApp x ck f les)
+        Well_clocked_eq C (EqApp x ck f les ty)
   | CEqFby:
       forall x ck v0 le,
         clk_var C x ck ->
@@ -121,8 +121,8 @@ Module Type CLOCKING
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
       Has_clock_eq ck (EqDef x ck ce)
-  | HcEqApp: forall x f ck les,
-      Has_clock_eq ck (EqApp x ck f les)
+  | HcEqApp: forall x f ck les ty,
+      Has_clock_eq ck (EqApp x ck f les ty)
   | HcEqFby: forall x v0 ck le,
       Has_clock_eq ck (EqFby x ck v0 le).
 

@@ -221,10 +221,10 @@ environment.
           sem_caexp_instant ck cae absent ->
           rhs_absent_instant (EqDef x ck cae)
     | AEqApp:
-        forall x f ck laes vs,
+        forall x f ck laes vs ty,
           sem_laexps_instant ck laes vs ->
           Nelist.Forall (fun c => c = absent) vs ->
-          rhs_absent_instant (EqApp x ck f laes)
+          rhs_absent_instant (EqApp x ck f laes ty)
     | AEqFby:
         forall x ck v0 lae,
           sem_laexp_instant ck lae absent ->
@@ -297,11 +297,11 @@ environment.
         sem_caexp bk H ck ce xs ->
         sem_equation G bk H (EqDef x ck ce)
   | SEqApp:
-      forall bk H x ck f arg ls xs,
+      forall bk H x ck f arg ls xs ty,
         sem_laexps bk H ck arg ls ->
         sem_var bk H x xs ->
         sem_node G f ls xs ->
-        sem_equation G bk H (EqApp x ck f arg)
+        sem_equation G bk H (EqApp x ck f arg ty)
   | SEqFby:
       forall bk H x ls xs v0 ck le,
         sem_laexp bk H ck le ls ->
@@ -405,11 +405,12 @@ enough: it does not support the internal fixpoint introduced by
 	    (les   : lexps)
         (ls    : stream (nelist value))
         (ys    : stream value)
-	    (Hlaes  : sem_laexps bk H ck les ls)
+        (ty    : typ)
+	    (Hlaes : sem_laexps bk H ck les ls)
         (Hvar  : sem_var bk H y ys)
 	    (Hnode : sem_node G f ls ys),
         Pn f ls ys Hnode ->
-        P bk H (EqApp y ck f les) (SEqApp G bk H y ck f les ls ys Hlaes Hvar Hnode).
+        P bk H (EqApp y ck f les ty) (SEqApp G bk H y ck f les ls ys ty Hlaes Hvar Hnode).
 
     Hypothesis EqFby_case :
       forall (bk: stream bool)
@@ -454,8 +455,8 @@ enough: it does not support the internal fixpoint introduced by
       : P bk H eq Heq :=
       match Heq in (sem_equation _ bk H eq) return (P bk H eq Heq) with
       | SEqDef bk H y xs ck ce Hvar Hexp => EqDef_case bk H y ck ce xs Hvar Hexp
-      | SEqApp bk H y ck f lae ls ys Hlae Hvar Hnode =>
-        EqApp_case bk H y ck f lae ls ys Hlae Hvar Hnode
+      | SEqApp bk H y ck f lae ls ys ty Hlae Hvar Hnode =>
+        EqApp_case bk H y ck f lae ls ys ty Hlae Hvar Hnode
                    (sem_node_mult f ls ys Hnode)
       | SEqFby bk H y ls yS ck v0 lae Hls Hys Hfby => EqFby_case bk H y ls yS ck v0 lae Hls Hys Hfby
       end
@@ -861,7 +862,7 @@ clock to [sem_var_instant] too. *)
     intros node G f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-                     | bk H y ck f lae ls ys Hlae Hvar Hnode IH
+                     | bk H y ck f lae ls ys ty Hlae Hvar Hnode IH
                      | 
                      | bk f xs ys i o eqs Hbk Hf Heqs IH]
                         using sem_node_mult

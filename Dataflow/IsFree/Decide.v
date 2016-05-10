@@ -60,7 +60,7 @@ Module Type DECIDE
   Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
     match eq with
     | EqDef _ ck cae => free_in_caexp ck cae fvs
-    | EqApp _ ck f laes => free_in_laexps ck laes fvs
+    | EqApp _ ck f laes _ => free_in_laexps ck laes fvs
     | EqFby _ ck v lae => free_in_laexp ck lae fvs
     end.
 

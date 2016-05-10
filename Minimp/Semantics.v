@@ -71,13 +71,13 @@ Module Type SEMANTICS
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
   (* =stmt_eval:step= *)
-  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
+  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv ty,
       mfind_inst o menv = Some(omenv) ->
       Nelist.Forall2 (exp_eval menv env) es vs ->
       stmt_step_eval prog omenv clsid vs omenv' rv ->
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
-      stmt_eval prog menv env (Step_ap y clsid o es) (menv', env')
+      stmt_eval prog menv env (Step_ap y ty clsid o es) (menv', env')
   | (*...*)
   (* =end= *)
   Ireset:
@@ -217,13 +217,13 @@ Module SemanticsFun' (Import Op: OPERATORS) (Import Syn: SYNTAX Op).
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
   (* =stmt_eval:step= *)
-  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv,
+  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv ty,
       mfind_inst o menv = Some(omenv) ->
       Nelist.Forall2 (exp_eval menv env) es vs ->
       stmt_step_eval prog omenv clsid vs omenv' rv ->
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
-      stmt_eval prog menv env (Step_ap y clsid o es) (menv', env')
+      stmt_eval prog menv env (Step_ap y ty clsid o es) (menv', env')
   | (*...*)
   (* =end= *)
   Ireset:

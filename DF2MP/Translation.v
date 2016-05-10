@@ -40,9 +40,9 @@ Module Type TRANSLATION
 
   Definition gather_eq (acc: list (ident * typ) * list obj_dec) (eq: equation) :=
     match eq with
-    | EqDef _ _ _ => acc
-    | EqApp x _ f _ => (fst acc, mk_obj_dec x f :: snd acc)
-    | EqFby x _ _ le => ((x, SynDF.typeof le)::fst acc, snd acc)
+    | EqDef _ _ _     => acc
+    | EqApp x _ f _ _ => (fst acc, mk_obj_dec x f :: snd acc)
+    | EqFby x _ _ le  => ((x, SynDF.typeof le)::fst acc, snd acc)
     end.
 
   Definition gather_eqs (eqs: list equation) : (list (ident * typ) * list obj_dec) :=
@@ -94,7 +94,7 @@ Module Type TRANSLATION
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp x ce)
-      | EqApp x ck f les => Control ck (Step_ap x f x (map translate_lexp les))
+      | EqApp x ck f les ty => Control ck (Step_ap x ty f x (map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
     (* =end= *)
@@ -113,8 +113,8 @@ Module Type TRANSLATION
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
     | EqDef _ _ _ => s
-    | EqFby x _ v0 _ => Comp (AssignSt x (Const v0 (typ_of_val v0))) s
-    | EqApp x _ f _ => Comp (Reset_ap f x) s
+    | EqFby x _ v0 _  => Comp (AssignSt x (Const v0 (typ_of_val v0))) s
+    | EqApp x _ f _ _ => Comp (Reset_ap f x) s
     end.
   (* =end= *)
 
@@ -164,9 +164,9 @@ Module TranslationFun' (Import Op: OPERATORS)
 
   Definition gather_eq (acc: list (ident * typ) * list obj_dec) (eq: equation) :=
     match eq with
-    | EqDef _ _ _ => acc
-    | EqApp x _ f _ => (fst acc, mk_obj_dec x f :: snd acc)
-    | EqFby x _ _ le => ((x, SynDF.typeof le)::fst acc, snd acc)
+    | EqDef _ _ _     => acc
+    | EqApp x _ f _ _ => (fst acc, mk_obj_dec x f :: snd acc)
+    | EqFby x _ _ le  => ((x, SynDF.typeof le)::fst acc, snd acc)
     end.
 
   Definition gather_eqs (eqs: list equation) : (list (ident * typ) * list obj_dec) :=
@@ -218,7 +218,7 @@ Module TranslationFun' (Import Op: OPERATORS)
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp x ce)
-      | EqApp x ck f les => Control ck (Step_ap x f x (map translate_lexp les))
+      | EqApp x ck f les ty => Control ck (Step_ap x ty f x (map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
     (* =end= *)
@@ -237,8 +237,8 @@ Module TranslationFun' (Import Op: OPERATORS)
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
     | EqDef _ _ _ => s
-    | EqFby x _ v0 _ => Comp (AssignSt x (Const v0 (typ_of_val v0))) s
-    | EqApp x _ f _ => Comp (Reset_ap f x) s
+    | EqFby x _ v0 _  => Comp (AssignSt x (Const v0 (typ_of_val v0))) s
+    | EqApp x _ f _ _ => Comp (Reset_ap f x) s
     end.
   (* =end= *)
 

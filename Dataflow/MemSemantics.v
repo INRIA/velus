@@ -74,12 +74,12 @@ Module Type MEMSEMANTICS
         sem_caexp bk H ck ce xs ->
         msem_equation G bk H M (EqDef x ck ce)
   | SEqApp:
-      forall bk H M x ck f M' arg ls xs,
+      forall bk H M x ck f M' arg ty ls xs,
         mfind_inst x M = Some M' ->
         sem_laexps bk H ck arg ls ->
         sem_var bk H x xs ->
         msem_node G f ls M' xs ->
-        msem_equation G bk H M (EqApp x ck f arg)
+        msem_equation G bk H M (EqApp x ck f arg ty)
   (* =msem_equation:fby= *)
   | SEqFby: forall bk H M ms x ck ls xs v0 le,
       mfind_mem x M = Some ms ->
@@ -144,12 +144,13 @@ enough: it does not support the internal fixpoint introduced by
              (les    : nelist lexp)
              (ls     : stream (nelist value))
              (ys     : stream value)
+             (ty     : typ)
              (Hmfind : mfind_inst y M = Some M')
              (Hls    : sem_laexps bk H ck les ls)
              (Hys    : sem_var bk H y ys)
              (Hmsem  : msem_node G f ls M' ys),
         Pn Hmsem
-        -> P (SEqApp M Hmfind Hls Hys Hmsem).
+        -> P (SEqApp M ty Hmfind Hls Hys Hmsem).
 
     Hypothesis EqFby_case:
       forall (bk : stream bool)
@@ -247,8 +248,8 @@ enough: it does not support the internal fixpoint introduced by
            match Heq in (msem_equation _ _ H M eq) return (P Heq)
            with
            | SEqDef bk H M y ck xs cae Hvar Hexp => EqDef_case M Hvar Hexp
-           | SEqApp bk H M y ck f M' lae ls ys Hmfind Hls Hys Hmsem =>
-             EqApp_case M Hmfind Hls Hys                         (msem_node_mult Hmsem)
+           | SEqApp bk H M y ck f M' lae ty ls ys Hmfind Hls Hys Hmsem =>
+             EqApp_case M ty Hmfind Hls Hys (msem_node_mult Hmsem)
            | SEqFby bk H M ms x ck ls yS v0 lae Hmfind Hms0 Hls hyS Hy =>
   	         EqFby_case M Hmfind Hms0 Hls hyS Hy
            end.
@@ -288,7 +289,7 @@ enough: it does not support the internal fixpoint introduced by
             constructor
           | |- rhs_absent_instant false _ (EqFby _ _ _ _) => 
             constructor
-          | |- rhs_absent_instant false _ (EqApp _ _ _ ?ls) =>
+          | |- rhs_absent_instant false _ (EqApp _ _ _ ?ls _) =>
             apply AEqApp with (vs := Nelist.map (fun _ => absent) ls)
           | |- sem_caexp_instant false _ ?ck ?ce absent =>
             apply SCabs
@@ -337,7 +338,7 @@ enough: it does not support the internal fixpoint introduced by
     intros node G f xs M ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-                     | bk H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
+                     | bk H M y ck f M' les ty ls ys Hmfind Hls Hys Hmsem IH
                      |
                      | bk f xs M ys i o eqs Hbk Hf Heqs IH ]
                         using msem_node_mult
@@ -452,7 +453,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hnini as [Hnini Hninis].
     apply IH with (2:=Hninis) in Heqs.
     constructor; [|now apply Heqs].
-    destruct Heq as [|? ? ? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
+    destruct Heq as [|? ? ? ? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
     econstructor; eauto.
     inversion_clear Hord as [|? ? Hord' Hnn Hnns].
     apply msem_node_cons2 with (1:=Hord') (3:=Hnns).
@@ -608,7 +609,7 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros G bk H eqs M eq mems argIn IH Heq Hwsch Hmeqs.
     inversion Heq as [? ? ? ? ? ? Hsem
-                        |? ? ? ? ? ? ? ? Hls Hxs Hsem
+                        |? ? ? ? ? ? ? ? ? Hls Hxs Hsem
                         |? ? ? ? ? ? ? ? Hle Hvar];
       match goal with H:_=eq |- _ => rewrite <-H in * end.
     - exists M.

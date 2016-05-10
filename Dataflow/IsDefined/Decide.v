@@ -28,9 +28,9 @@ Module Type DECIDE
   
   Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
-    | EqDef x _ _   => PS.add x defs
-    | EqApp x _ _ _ => PS.add x defs
-    | EqFby x _ _ _ => PS.add x defs
+    | EqDef x _ _     => PS.add x defs
+    | EqApp x _ _ _ _ => PS.add x defs
+    | EqFby x _ _ _   => PS.add x defs
     end.
 
   Definition defined (eqs: list equation) : PS.t :=

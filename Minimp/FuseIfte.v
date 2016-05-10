@@ -38,8 +38,8 @@ Module Type FUSEIFTE
   | CWIIfteFalse: forall x e s1 s2,
       Can_write_in x s2 ->
       Can_write_in x (Ifte e s1 s2)
-  | CWIStep_ap: forall x cls obj e,
-      Can_write_in x (Step_ap x cls obj e)
+  | CWIStep_ap: forall x ty cls obj e,
+      Can_write_in x (Step_ap x ty cls obj e)
   | CWIComp1: forall x s1 s2,
       Can_write_in x s1 ->
       Can_write_in x (Comp s1 s2)
@@ -262,8 +262,8 @@ Module Type FUSEIFTE
       Ifte_free_write s2 ->
       (forall x, Is_free_in_exp x e -> ~Can_write_in x s1 /\ ~Can_write_in x s2) ->
       Ifte_free_write (Ifte e s1 s2)
-  | IFWStep_ap: forall x cls obj e,
-      Ifte_free_write (Step_ap x cls obj e)
+  | IFWStep_ap: forall x ty cls obj e,
+      Ifte_free_write (Step_ap x ty cls obj e)
   | IFWComp: forall s1 s2,
       Ifte_free_write s1 ->
       Ifte_free_write s2 ->

@@ -23,7 +23,7 @@ Module Type ORDERED
        (Import Syn : SYNTAX Op).
 
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
-  | INI: forall x ck f e, Is_node_in_eq f (EqApp x ck f e).
+  | INI: forall x ck f e ty, Is_node_in_eq f (EqApp x ck f e ty).
 
   Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_node_in_eq f) eqs.

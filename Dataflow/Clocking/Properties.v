@@ -42,12 +42,12 @@ Theorem Well_clocked_eq_not_Is_free_in_clock:
 Proof.
   intros C eq x ck Hwc Hwce Hdef Hhasck Hfree.
   inversion Hwce as [x' ck' e Hcv Hexp Heq
-                    |x' ck' f e Hcv Hexp Heq
+                    |x' ck' f e ty Hcv Hexp Heq
                     |x' ck' v' e Hcv Hexp];
     subst; inversion Hdef; inversion Hhasck; clear Hdef Hhasck; subst;
     pose proof (Well_clocked_env_var _ _ _ Hwc Hcv) as Hclock;
     apply Is_free_in_clock_self_or_parent in Hfree;
-    destruct Hfree as [ck [ty [b [Hck|Hck]]]];
+    destruct Hfree as [ck [ty' [b [Hck|Hck]]]];
     (rewrite Hck in *;
       apply clk_clock_sub with (1:=Hwc) in Hclock;
       apply clk_var_det with (1:=Hcv) in Hclock;
@@ -73,12 +73,12 @@ Proof.
 Qed.
 
 Corollary Well_clocked_EqApp_not_Is_free_in_clock:
-  forall C x f le ck,
+  forall C x f le ck ty,
     Well_clocked_env C
-    -> Well_clocked_eq C (EqApp x ck f le)
+    -> Well_clocked_eq C (EqApp x ck f le ty)
     -> ~Is_free_in_clock x ck.
 Proof.
-  intros C x f le ck Hwc Hwce.
+  intros C x f le ck ty Hwc Hwce.
   apply Well_clocked_eq_not_Is_free_in_clock with (1:=Hwc) (2:=Hwce);
     now constructor.
 Qed.

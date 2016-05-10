@@ -740,7 +740,7 @@ for all [Is_free_exp x e]. *)
       destruct Hsems' as [Hsem Hsems'].
 
       inversion Hsem as [ bk0 H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
-                        | bk0 H0 M0 y ck f Mo les ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
+                        | bk0 H0 M0 y ck f Mo les ty ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
                         | bk0 H0 M0 ms y ck ls yS v0 le Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
         subst bk0 H0 M0 eq;
         (*    (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0); *)
@@ -887,7 +887,7 @@ for all [Is_free_exp x e]. *)
         destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
         apply Forall_cons2 in Hmc.
         destruct Hmc as [Hmceq Hmceqs].
-        inversion_clear Hmceq as [|? ? ? ? ? ? Hmc0|].
+        inversion_clear Hmceq as [|? ? ? ? ? ? ? Hmc0|].
         specialize (Hmc0 _ Hmfind).
         destruct Hmc0 as [omenv [Hfindo Hmc0]].
         (* dataflow semantics *)
@@ -999,8 +999,8 @@ for all [Is_free_exp x e]. *)
             rewrite Hstmt.
             inversion_clear Hivi as [? ? Hivi'|];
               [|unfold Is_variable_in_eqs in Hvin; contradiction].
-            inversion Hivi' as [|x' ck' f' e HR1 [HR2 HR3 HR4]];
-              subst x' ck' f' x e.
+            inversion Hivi' as [|x' ck' f' e ty' HR1 [HR2 HR3 HR4]];
+              subst x' ck' f' x e ty'.
             split; intro Hsv'.
             { inversion_clear Hsv' as [Hfind'].
               inversion_clear Hvar as [Hfind''].
@@ -1462,7 +1462,7 @@ for all [Is_free_exp x e]. *)
         eauto.
       - (* EqApp *)
         unfold translate_reset_eqns; simpl.
-        inversion_clear Hsem as [|? ? ? ? ? ? Mo ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
+        inversion_clear Hsem as [|? ? ? ? ? ? Mo ? ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
         assert (exists omenv, stmt_reset_eval (translate G) f omenv
                          /\ Memory_Corres G 0 f Mo omenv) as [omenv [Hstmt_reset Hmcf]]
             by (eapply Hreset; try eassumption).
@@ -1590,6 +1590,7 @@ for all [Is_free_exp x e]. *)
               (css   : stream (nelist val))
               (ys    : stream value)
               (r     : ident)
+              (ty    : typ)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
@@ -1604,7 +1605,7 @@ for all [Is_free_exp x e]. *)
       | 0 => stmt_eval P hempty sempty (Reset_ap main obj) (menv, env)
       | S n => let vs := Nelist.map (fun c => Const c (typ_of_val c)) (css n) in
               exists menvN envN, step n P r main obj css menvN envN
-                            /\ stmt_eval P menvN envN (Step_ap r main obj vs) (menv, env)
+                            /\ stmt_eval P menvN envN (Step_ap r ty main obj vs) (menv, env)
       end.
     (* =end= *)
 
