@@ -85,6 +85,7 @@ Module Type TRANSLATION
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
       | Emerge y ty t f => Ifte (tovar (y, ty)) (translate_cexp x t) (translate_cexp x f)
+      | Eite b t f => Ifte (translate_lexp b) (translate_cexp x t) (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
     (* =end= *)
@@ -208,6 +209,7 @@ Module TranslationFun' (Import Op: OPERATORS)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
       | Emerge y ty t f => Ifte (tovar (y, ty)) (translate_cexp x t) (translate_cexp x f)
+      | Eite b t f => Ifte (translate_lexp b) (translate_cexp x t) (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
     (* =end= *)

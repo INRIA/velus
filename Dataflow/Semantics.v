@@ -175,6 +175,30 @@ environment.
         forall x t f ty,
           sem_var_instant x absent ->
           sem_cexp_instant (Emerge x ty t f) absent
+    (* | Site_eq: *)
+    (*     forall b t f b' ct cf, *)
+    (*       sem_lexp_instant b (present (Vbool b')) -> *)
+    (*       sem_cexp_instant t (present ct) -> *)
+    (*       sem_cexp_instant f (present cf) -> *)
+    (*       sem_cexp_instant (Eite b t f) (if b' then present ct else present cf) *)
+    | Site_true:
+        forall b t f c v,
+          sem_lexp_instant b (present (Vbool true)) ->
+          sem_cexp_instant t (present c) ->
+          sem_cexp_instant f v ->
+          sem_cexp_instant (Eite b t f) (present c)
+    | Site_false:
+        forall b t f c v,
+          sem_lexp_instant b (present (Vbool false)) ->
+          sem_cexp_instant t v ->
+          sem_cexp_instant f (present c) ->
+          sem_cexp_instant (Eite b t f) (present c)
+    | Site_abs:
+        forall b t f,
+          sem_lexp_instant b absent ->
+          sem_cexp_instant t absent ->
+          sem_cexp_instant f absent ->
+          sem_cexp_instant (Eite b t f) absent
     | Sexp:
         forall e v,
           sem_lexp_instant e v ->
@@ -577,7 +601,8 @@ enough: it does not support the internal fixpoint introduced by
       (*   symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
       + reflexivity.
     - intros v1 v2 Hsem1 Hsem2.
-      inversion_clear Hsem1; inversion_clear Hsem2; specialize (IHe1 _ _ H H1); specialize (IHe2 _ _ H0 H2). 
+      inversion_clear Hsem1; inversion_clear Hsem2;
+      specialize (IHe1 _ _ H H1); specialize (IHe2 _ _ H0 H2). 
       + now inversion IHe1; inversion IHe2.
       + discriminate.
       + discriminate.
@@ -655,7 +680,11 @@ enough: it does not support the internal fixpoint introduced by
                   H2: sem_var_instant ?R ?i absent |- _ =>
               apply sem_var_instant_det with (1:=H1) in H2; discriminate
             | |- absent = absent => reflexivity
-            end.
+            end;
+      pose proof (sem_lexp_instant_det _ _ _ _ H0 H3) as H;
+      specialize (IHe1 _ _ H1 H4); specialize (IHe2 _ _ H2 H5).
+      - now inversion H; inversion IHe1; inversion IHe2.
+      - discriminate.
     Qed.
     
     Lemma sem_caexp_instant_det:

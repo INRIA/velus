@@ -547,7 +547,7 @@ for all [Is_free_exp x e]. *)
                   (menv, PM.add x c env).
   Proof.
     intros until x.
-    induction e as [b ty et IHt ef IHf|e].
+    induction e as [b ty et IHt ef IHf|b t IHt f IHf|e].
     - (* Emerge *)
       inversion_clear 1; intro Henv.
       + apply Iifte with true.
@@ -558,6 +558,14 @@ for all [Is_free_exp x e]. *)
         * split_env_assumption.
           apply get_exp_eval_tovar; now auto.
         * apply IHf; now auto.
+    - (* Eite *)
+      inversion_clear 1; intro Henv.
+      + apply Iifte with true.
+        * eapply lexp_correct; [eassumption|now auto].
+        * apply IHt; auto.
+      + apply Iifte with false.
+        * eapply lexp_correct; [eassumption|now auto].
+        * apply IHf; auto.
     - (* Eexp *)
       inversion_clear 1; intro Henv.
       unfold translate_cexp.
@@ -1715,13 +1723,14 @@ for all [Is_free_exp x e]. *)
     forall x mems ce i,
       x <> i -> ~ Can_write_in i (translate_cexp mems x ce).
   Proof.
-    induction ce.
-    - intros j Hxni Hcw.
-      specialize (IHce1 _ Hxni).
+    induction ce; intros j Hxni Hcw.
+    - specialize (IHce1 _ Hxni).
       specialize (IHce2 _ Hxni).
       inversion_clear Hcw; intuition.
-    - intros j Hxni Hcw.
-      inversion Hcw; intuition.
+    - specialize (IHce1 _ Hxni).
+      specialize (IHce2 _ Hxni).
+      inversion_clear Hcw; intuition.
+    - inversion Hcw; intuition.
   Qed.
 
   Lemma Is_free_in_tovar:
@@ -1734,6 +1743,19 @@ for all [Is_free_exp x e]. *)
     (inversion_clear HH; reflexivity || subst; now constructor).
   Qed.
 
+  Lemma Is_free_translate_lexp:
+    forall j mems l,
+      Is_free_in_exp j (translate_lexp mems l) -> Is_free_in_lexp j l.
+  Proof.
+    induction l; simpl; intro H.
+    - inversion H.
+    - now apply Is_free_in_tovar in H; subst.
+    - constructor; auto.
+    - constructor; inversion H; auto.
+    - constructor; inversion H; subst.
+      destruct H2; [left; auto | right; auto].
+  Qed.
+  
   Lemma Ifte_free_write_translate_cexp:
     forall mems x ce,
       (forall i, Is_free_in_cexp i ce -> x <> i)
@@ -1747,6 +1769,12 @@ for all [Is_free_exp x e]. *)
       (apply not_Can_write_in_translate_cexp;
         apply Is_free_in_tovar in Hfree';
         subst; apply Hfree; constructor).
+    - simpl; constructor;
+      [apply IHce1; now auto|apply IHce2; now auto|].
+      intros j Hfree'; split;
+      apply not_Can_write_in_translate_cexp;
+      apply Hfree;
+      now constructor; apply Is_free_translate_lexp with mems.
     - now constructor.
   Qed.
 

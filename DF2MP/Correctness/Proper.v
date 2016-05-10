@@ -103,6 +103,9 @@ Module Type PROPER
     - erewrite IHc1; try eassumption.
       erewrite IHc2; try eassumption. 
       rewrite HMeq; auto.
+    - erewrite IHc1; try eassumption.
+      erewrite IHc2; try eassumption. 
+      rewrite HMeq; auto.
     - rewrite HMeq; auto.
   Qed.
 

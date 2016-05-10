@@ -81,7 +81,7 @@ let compile filename =
       let p = add_builtins p in
       match Compiler.transf_clight_program p with
       | Error errmsg -> print_error stderr errmsg
-      | OK p -> print_endline "Compilation OK"
+      | OK p -> (* print_endline "Compilation OK" *)()
   with
     x ->
     close_in ic;
@@ -98,12 +98,3 @@ let process file =
 let _ =
   Sections.initialize();
   Arg.parse [] process "usage message"
-
-  (* match Translation.(translate [example] (intern_string "count")) with *)
-  (* | Error errmsg -> print_error stderr errmsg *)
-  (* | OK p -> *)
-  (*   PrintClight.print_program Format.std_formatter p; *)
-  (*   let p = add_builtins p in *)
-  (*   match Compiler.transf_clight_program p with *)
-  (*   | Error errmsg -> print_error stderr errmsg *)
-  (*   | OK p -> (\* print_endline "Compilation OK" *\) *)

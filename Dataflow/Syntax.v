@@ -44,6 +44,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
 
   Inductive cexp : Type :=
   | Emerge : ident -> typ -> cexp -> cexp -> cexp 
+  | Eite : lexp -> cexp -> cexp -> cexp
   | Eexp : lexp -> cexp.
 
   Implicit Type ce: cexp.
@@ -137,6 +138,7 @@ Module SyntaxFun' (Import Op : OPERATORS).
 
   Inductive cexp : Type :=
   | Emerge : ident -> typ -> cexp -> cexp -> cexp 
+  | Eite : lexp -> cexp -> cexp -> cexp
   | Eexp : lexp -> cexp.
 
   Implicit Type ce: cexp.

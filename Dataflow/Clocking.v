@@ -76,6 +76,12 @@ Module Type CLOCKING
         clk_cexp C t (Con ck x ty true) ->
         clk_cexp C f (Con ck x ty false) ->
         clk_cexp C (Emerge x ty t f) ck
+  | Cite:
+      forall b t f ck,
+        clk_lexp C b ck ->
+        clk_cexp C t ck ->
+        clk_cexp C f ck ->
+        clk_cexp C (Eite b t f) ck
   | Cexp:
       forall e ck,
         clk_lexp C e ck ->
@@ -154,7 +160,7 @@ Module Type CLOCKING
       -> clk_lexp C le ck
       -> clk_clock C ck.
   Proof.
-    induction le as [| |le IH | | ] (* using lexp_ind2 *).
+    induction le as [| |le IH | |] (* using lexp_ind2 *).
     - inversion_clear 2; now constructor.
     - intros ck Hwc; inversion_clear 1 as [|? ? ? Hcv| | |].
       apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
@@ -171,12 +177,14 @@ Module Type CLOCKING
       -> clk_cexp C ce ck
       -> clk_clock C ck.
   Proof.
-    induction ce as [i ty ce1 IH1 ce2 IH2|].
+    induction ce as [i ty ce1 IH1 ce2 IH2| |].
     - intros ck Hwc.
-      inversion_clear 1 as [? ? ? ? ? Hcv Hct Hcf|].
+      inversion_clear 1 as [? ? ? ? ? Hcv Hct Hcf| |].
       apply IH1 with (1:=Hwc) in Hct.
       inversion_clear Hct; assumption.
-    - intros ck Hwc; inversion_clear 1 as [|? ? Hck].
+    - intros ck Hwc; inversion_clear 1 as [|? ? ? ? Hl H1 H2|].
+      now apply IHce1.
+    - intros ck Hwc; inversion_clear 1 as [| |? ? Hck].
       apply clk_clock_lexp with (1:=Hwc) (2:=Hck).
   Qed.
 

@@ -63,6 +63,18 @@ Module Type ISFREE
   | FreeEmerge_false: forall i t f x ty,
       Is_free_in_cexp x f ->
       Is_free_in_cexp x (Emerge i ty t f)
+  (* | FreeEite: forall x b t f,  *)
+  (*     Is_free_in_lexp x b \/ Is_free_in_cexp x t \/ Is_free_in_cexp x f -> *)
+  (*     Is_free_in_cexp x (Eite b t f) *)
+  | FreeEite_cond: forall x b t f, 
+      Is_free_in_lexp x b ->
+      Is_free_in_cexp x (Eite b t f)
+  | FreeEite_true: forall x b t f, 
+      Is_free_in_cexp x t ->
+      Is_free_in_cexp x (Eite b t f)
+  | FreeEite_false: forall x b t f, 
+      Is_free_in_cexp x f ->
+      Is_free_in_cexp x (Eite b t f)
   | FreeEexp: forall e x,
       Is_free_in_lexp x e ->
       Is_free_in_cexp x (Eexp e).
