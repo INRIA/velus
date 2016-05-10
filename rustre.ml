@@ -73,6 +73,7 @@ let compile filename =
     (* Parsing of the file *)
     let lexbuf = Lexing.from_channel ic in
     let p = parse_implementation lexbuf in
+    let p = Elab.elab_global p in
 
     match DF2CL.compile p (intern_string (Filename.basename filename)) with
     | Error errmsg -> print_error stderr errmsg

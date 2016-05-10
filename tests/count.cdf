@@ -1,5 +1,5 @@
-node count (i:int) returns (o:int);
+node count (i:int) returns (o:int) vars t:int;
 let
-  t :: base = 0 fby (o:int);
-  o :: base = ((t:int) + (i:int) : int);
+  t :: base = 0 fby o;
+  o :: base = t + i;
 tel;
