@@ -74,7 +74,7 @@ let compile filename =
     let lexbuf = Lexing.from_channel ic in
     let p = parse_implementation lexbuf in
 
-    match DF2CL.compile p (intern_string "main_node") with
+    match DF2CL.compile p (intern_string (Filename.basename filename)) with
     | Error errmsg -> print_error stderr errmsg
     | OK p ->
       PrintClight.print_program Format.std_formatter p;

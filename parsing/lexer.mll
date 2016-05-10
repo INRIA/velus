@@ -21,6 +21,9 @@ List.iter (fun (str,tok) -> Hashtbl.add keyword_table str tok) [
  "merge", MERGE;
  "when", WHEN;
  "whennot", WHENNOT;
+ "if", IF;
+ "then", THEN;
+ "else", ELSE;
  "on", ON;
  "true", BOOL(true); 
  "false", BOOL(false);
@@ -51,6 +54,7 @@ rule token = parse
   | "+"             {ADD}
   | "-"             {SUB}
   | "*"             {MUL}
+  | "/"             {DIV}
   | "!"             {NOT}
   | int             { INT (int_of_string (Lexing.lexeme lexbuf)) }
   | float           { FLOAT (float_of_string (Lexing.lexeme lexbuf)) }

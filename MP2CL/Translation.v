@@ -2,6 +2,7 @@ Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Common.
 Require Import Rustre.Nelist.
 Require Import Rustre.Interface.
+Require Import Coq.FSets.FMapPositive.
 
 Module Import Syn := SyntaxFun Op.
 
@@ -23,21 +24,7 @@ Import List.ListNotations.
 
 Axiom pos_of_str: string -> ident.
 Axiom pos_to_str: ident -> string.
-
-Definition i := pos_of_str "i".
-Definition o := pos_of_str "o".
-Definition t := pos_of_str "t".
-Definition example :=
-  {|
-    c_name := pos_of_str "count";
-    c_input := nebase (i, Tfloat);
-    c_output := (o, Tfloat);
-    c_mems := [(t, Tfloat)];
-    c_objs := [];
-    c_step := Comp (Assign o (Binop Add (State t Tint) (Var i Tfloat) Tfloat))
-                   (AssignSt t (Var o Tfloat));
-    c_reset := AssignSt t (Const Vzero Tint)
-  |}.
+Axiom first_unused_ident: unit -> ident.
 
 Definition cl_type := Ctypes.type.
 Definition cl_typelist := Ctypes.typelist.
@@ -107,17 +94,20 @@ Definition translate_binop (op: binary_op): cl_expr -> cl_expr -> cl_type -> cl_
   | Add => Clight.Ebinop Cop.Oadd
   | Sub => Clight.Ebinop Cop.Osub
   | Mul => Clight.Ebinop Cop.Omul
+  | Div => Clight.Ebinop Cop.Odiv
   end.
 
+Definition deref_self_field (cls x: cl_ident) (ty: cl_type): cl_expr :=
+  let ty_deref_self := type_of_inst cls in
+  let ty_self := pointer_of ty_deref_self in
+  Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self) x ty.
+                
 (** Straightforward expression translation *)
 Fixpoint translate_exp (cls: cl_ident) (e: exp): cl_expr :=
   match e with
   | Var x ty => Clight.Evar (translate_ident x) (translate_type ty)  
   | State x ty =>
-    let ty_deref_self := type_of_inst cls in
-    let ty_self := pointer_of ty_deref_self in
-    Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self)
-                  (translate_ident x) (translate_type ty) 
+    deref_self_field cls (translate_ident x) (translate_type ty)
   | Const c ty => translate_const c (translate_type ty)
   | Unop op e ty =>
     translate_unop op (translate_exp cls e) (translate_type ty)
@@ -130,10 +120,6 @@ Fixpoint list_type_to_typelist (tys: list cl_type): cl_typelist :=
   | [] => Ctypes.Tnil
   | ty :: tys => Ctypes.Tcons ty (list_type_to_typelist tys)
   end.
-
-(** pointer expressions  *)
-Definition pointer_of_cls (x cls: cl_ident): cl_expr :=
-  Clight.Eaddrof (Clight.Evar x (type_of_inst cls)) (type_of_inst_p cls).
 
 (** function call and assignment *)
 (* Q: Can we really use same ident for temporary and classic variables ? *)
@@ -148,59 +134,69 @@ Definition assign (bind: cl_ident) (ty: cl_type) (e: cl_expr): cl_stmt :=
   Clight.Sassign (Clight.Evar bind ty) e.
 
 Definition st_assign (cls x: cl_ident) (ty: cl_type) (e: cl_expr): cl_stmt :=
-  let ty_deref_self := type_of_inst cls in
-  let ty_self := pointer_of ty_deref_self in
-  Clight.Sassign
-    (Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self) x ty) e.
+  Clight.Sassign (deref_self_field cls x ty) e.
                  
 Definition binded_funcall (bind temp f: cl_ident) (ty: cl_type) (args: list cl_expr)
   : cl_stmt :=
    Clight.Ssequence (funcall (Some temp) f ty args)
                    (assign bind ty (Clight.Etempvar temp ty)).
 
-Definition reset_call (cls obj: cl_ident): cl_stmt :=
-  funcall None (reset_id cls) cl_void [pointer_of_cls obj cls].
+Definition ptr_obj (owner: option cl_ident) (cls obj: cl_ident):=
+  Clight.Eaddrof
+    ((match owner with
+      | Some owner => deref_self_field owner
+      | None => Clight.Evar
+      end) obj (type_of_inst cls))
+    (type_of_inst_p cls).
+
+Definition reset_call (owner: option cl_ident) (cls obj: cl_ident): cl_stmt :=
+  funcall None (reset_id cls) cl_void [ptr_obj owner cls obj].
 
 Definition step_call
-           (bind temp cls: cl_ident) (obj: cl_ident) (args: list cl_expr)
+           (owner: option cl_ident) (bind temp cls: cl_ident) (obj: cl_ident) (args: list cl_expr)
            (out_ty: cl_type)
   : cl_stmt :=
-  let args := pointer_of_cls obj cls :: args in
+  let args := ptr_obj owner cls obj :: args in
   binded_funcall bind temp (step_id cls) out_ty args.
 
 (** 
 Statement conversion keeps track of the produced temporaries (function calls).
 NEW: use a unique temporary 
-[cls] represents the name of the current class.
+[owner] represents the name of the current class.
  *)
-Fixpoint translate_stmt (temp: option cl_bind) (cls: cl_ident) (s: stmt)
-  : (option cl_bind * cl_stmt) :=
+Fixpoint translate_stmt (vars: PM.t cl_type) (temp: option cl_bind) (owner: cl_ident) (s: stmt)
+  : (PM.t cl_type * option cl_bind * cl_stmt) :=
   match s with
   | Assign x e =>
-    let ty := typeof e in
-    (temp, assign x (translate_type ty) (translate_exp cls e))
+    let ty := translate_type (typeof e) in
+    let vars := PM.add x ty vars in 
+    (vars, temp, assign (translate_ident x) ty (translate_exp owner e))
   | AssignSt x e =>
     let ty := typeof e in
-    (temp, st_assign cls x (translate_type ty) (translate_exp cls e))
+    (vars, temp, st_assign owner (translate_ident x) (translate_type ty) (translate_exp owner e))
   | Ifte e s1 s2 =>
-    let (temp1, s1') := translate_stmt temp cls s1 in
-    let (temp2, s2') := translate_stmt temp1 cls s2 in
-    (temp2, Clight.Sifthenelse (translate_exp cls e) s1' s2')
+    let '(vars1, temp1, s1') := translate_stmt vars temp owner s1 in
+    let '(vars2, temp2, s2') := translate_stmt vars1 temp1 owner s2 in
+    (vars2, temp2, Clight.Sifthenelse (translate_exp owner e) s1' s2')
   | Step_ap y cls x es (* ty *) =>
     let ty := Tint in
+    let y := translate_ident y in
+    let cls := translate_ident cls in
+    let x := translate_ident x in
     let args := nelist2list (Nelist.map (translate_exp cls) es) in
     let out_ty := translate_type ty in
-    let temp' := match temp with Some t => t | None => (y, out_ty) end in
-    let s_step := step_call y (fst temp') cls x args out_ty in 
-    (Some temp', s_step)
+    let temp' := match temp with Some t => t | None => (first_unused_ident tt, out_ty) end in
+    let s_step := step_call (Some owner) y (fst temp') cls x args out_ty in 
+    let vars := PM.add y out_ty vars in 
+    (vars, Some temp', s_step)
   | Reset_ap cls x =>
-    (temp, reset_call cls x)
+    (vars, temp, reset_call (Some owner) cls x)
   | Comp s1 s2 =>
-    let (temp1, s1') := translate_stmt temp cls s1 in
-    let (temp2, s2') := translate_stmt temp1 cls s2 in
-    (temp2, Clight.Ssequence s1' s2')
+    let '(vars1, temp1, s1') := translate_stmt vars temp owner s1 in
+    let '(vars2, temp2, s2') := translate_stmt vars1 temp1 owner s2 in
+    (vars2, temp2, Clight.Ssequence s1' s2')
   | Skip =>
-    (temp, Clight.Sskip)
+    (vars, temp, Clight.Sskip)
   end.
 
 (** return statements  *)
@@ -213,20 +209,19 @@ Definition return_zero (s: cl_stmt): cl_stmt :=
   Clight.Ssequence s (Clight.Sreturn (Some cl_zero)).
 
 Definition fundef
-           (ins: list cl_bind) (out: option cl_bind) (ty: cl_type)
+           (ins: list cl_bind) (vars: list cl_bind) (ty: cl_type)
            (temps: list cl_bind) (body: cl_stmt)
   : cl_globdef :=
-  let out := match out with Some o => [o] | None => [] end in 
-  let f := Clight.mkfunction ty AST.cc_default ins out temps body in
+  let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
   @AST.Gfun Clight.fundef cl_type (Clight.Internal f).
 
 (** build the step function *)
 Definition make_step
            (self: cl_bind) (ins: list cl_bind) (out: cl_bind)
-           (temps: list cl_bind) (body: cl_stmt)
+           (vars: list cl_bind) (temps: list cl_bind) (body: cl_stmt)
   : cl_globdef :=
   let body := return_some body out in
-  fundef (self :: ins) (Some out) (snd out) temps body.
+  fundef (self :: ins) vars (snd out) temps body.
 
 Fixpoint seq_of_statements (sl: list cl_stmt): cl_stmt :=
   match sl with
@@ -234,17 +229,12 @@ Fixpoint seq_of_statements (sl: list cl_stmt): cl_stmt :=
   | s :: sl' => Clight.Ssequence s (seq_of_statements sl')
   end.
 
-Definition reset_obj (obj: obj_dec): cl_stmt :=
-  reset_call (obj_class obj) (obj_inst obj).
-
 (** build the reset function *)
 Definition make_reset
-           (self: cl_bind) (objs: list obj_dec) (temps: list cl_bind)
-           (body: cl_stmt)
+           (self: cl_bind) (vars: list cl_bind) (temps: list cl_bind) (body: cl_stmt)
   : cl_globdef :=
-  let seq_res := seq_of_statements (body :: (List.map reset_obj objs)) in
-  let body := return_none seq_res in
-  fundef [self] None cl_void temps body.
+  let body := return_none body in
+  fundef [self] vars cl_void temps body.
 
 Definition translate_obj_dec (obj: obj_dec): cl_bind :=
   match obj with
@@ -274,14 +264,14 @@ Definition translate_class (c: class)
     let out := translate_param c_output in
     let members := mems ++ objs in
     let name := translate_ident c_name in
-    let (temp_step, step) := translate_stmt None name c_step in
-    let (temp_reset, reset) := translate_stmt None name c_reset in
+    let '(vars_step, temp_step, step) := translate_stmt (PM.empty cl_type) None name c_step in
+    let '(vars_reset, temp_reset, reset) := translate_stmt (PM.empty cl_type) None name c_reset in
     let self := (self_id, type_of_inst_p name) in
     let temp_step' := match temp_step with Some t => [t] | None => [] end in
     let temp_reset' := match temp_reset with Some t => [t] | None => [] end in
     let cl_struct := make_struct name members in
-    let cl_step := (step_id name, make_step self ins out temp_step' step) in
-    let cl_reset := (reset_id name, make_reset self c_objs temp_reset' reset) in
+    let cl_step := (step_id name, make_step self ins out (PM.elements vars_step) temp_step' step) in
+    let cl_reset := (reset_id name, make_reset self (PM.elements vars_reset) temp_reset' reset) in
     (cl_struct, cl_step, cl_reset) 
   end.
 
@@ -301,10 +291,10 @@ Definition make_main
   let (out, out_ty) := out in
   let args := List.map make_arg ins in
   let wait := (* funcall None wait_id cl_void [make_arg (delay_id, cl_int)] *) Clight.Sskip in
-  let step := step_call out out node f args out_ty in
+  let step := step_call None out out node f args out_ty in
   let loop := Clight.Sloop (Clight.Ssequence wait step) Clight.Sskip in
-  let body := return_zero (Clight.Ssequence (reset_call node f) loop) in
-  fundef [] None cl_int [(out, out_ty)] body.
+  let body := return_zero (Clight.Ssequence (reset_call None node f) loop) in
+  fundef [] [] cl_int [(out, out_ty)] body.
 
 Definition split_3 {A B C: Type} (l: list (A * B * C))
  : list A * list B * list C :=
@@ -347,14 +337,12 @@ Definition translate (p: program) (main_node: ident)
     let o_gvar := vardef true true out' in
     let ins' := List.map glob_bind ins in
     let ins_gvar := List.map (vardef true true) ins' in
-    match split_3 cs with
-      (structs, steps, resets) =>
-      let gdefs := make_wait :: vardef false false (glob_id delay_id, cl_int)
-                             :: f_gvar :: o_gvar :: ins_gvar ++
-                             resets ++ steps ++ [(main_id, main)]
-      in
-      Clight.make_program structs gdefs [] main_id                    
-    end
+    let '(structs, steps, resets) := split_3 cs in
+    let gdefs := make_wait :: vardef false false (glob_id delay_id, cl_int)
+                           :: f_gvar :: o_gvar :: ins_gvar ++
+                           resets ++ steps ++ [(main_id, main)]
+    in
+    Clight.make_program structs gdefs [] main_id                    
   | None => Errors.Error (Errors.msg "undefined node")
   end. 
 

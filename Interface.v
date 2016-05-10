@@ -21,7 +21,8 @@ Inductive unary_op': Type :=
 Inductive binary_op': Type :=
 | Add
 | Sub
-| Mul.
+| Mul
+| Div.
 
 Definition zero := Int.zero.
 Definition one := Int.one.
@@ -206,12 +207,22 @@ Module Export Op <: OPERATORS.
     let sem_int n1 n2 := opt (Vint (Int.mul n1 n2)) in
     let sem_float f1 f2 := opt (Vfloat (Float32.mul f1 f2)) in
     sem_val_binary (sem_binarith sem_int sem_float).
+
+  Definition sem_div: val -> val -> typ -> typ -> option val :=
+    let sem_int n1 n2 :=
+        if Int.eq n2 Int.zero
+           || Int.eq n1 (Int.repr Int.min_signed) && Int.eq n2 Int.mone
+        then None else opt (Vint (Int.divs n1 n2))
+    in
+    let sem_float f1 f2 := opt (Vfloat (Float32.div f1 f2)) in
+    sem_val_binary (sem_binarith sem_int sem_float).
   
   Definition sem_binary (op: binary_op) (v1: val) (ty1: typ) (v2: val) (ty2: typ): option val :=
     (match op with
     | Add => sem_add
     | Sub => sem_sub
     | Mul => sem_mul
+    | Div => sem_div
     end) v1 v2 ty1 ty2.
     
   (* Lemma val_dec: forall v1 v2: val, {v1 = v2} + {v1 <> v2}. *)

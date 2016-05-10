@@ -61,6 +61,7 @@ Extract Constant SelectOp.symbol_is_external =>
 
 Extract Constant pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
+Extract Constant first_unused_ident => "Camlcoq.first_unused_ident".
 
 Separate Extraction
          ZArith.BinIntDef

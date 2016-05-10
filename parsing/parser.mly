@@ -63,9 +63,10 @@ let z_of_int i =
 %token <bool> BOOL
 %token NODE RETURNS
 %token FBY MERGE WHEN WHENNOT
+%token IF THEN ELSE	   
 %token EOF
 %token TBOOL TINT TFLOAT
-%token NOT ADD SUB MUL
+%token NOT ADD SUB MUL DIV
 	   
 %left MERGE
 %left WHEN
@@ -126,8 +127,9 @@ typ:
 (* ; *)
 
 clock:
-  | BASE           { Cbase }
-  | clock ON IDENT EQUAL BOOL { Con ($1, id $3, Interface.Tbool, $5) }
+  | BASE               { Cbase }
+  | clock ON IDENT     { Con ($1, id $3, Interface.Tbool, true) }
+  | clock ON NOT IDENT { Con ($1, id $4, Interface.Tbool, false) }
 ;
 
 
@@ -139,11 +141,13 @@ equs:
 ;
 
 cexp:
-  | MERGE param LPAREN cexp RPAREN LPAREN cexp RPAREN { Emerge (fst $2, snd $2, $4, $7) }
+  | MERGE LPAREN param RPAREN LPAREN cexp RPAREN LPAREN cexp RPAREN { Emerge (fst $3, snd $3, $6, $9) }
+  | IF lexp THEN cexp ELSE cexp                       { Eite ($2, $4, $6) }
   | lexp                                              { Eexp $1 }
 ;
 	
 lexp:
+  | LPAREN lexp RPAREN             { $2 }
   | LPAREN lexp_e COLON typ RPAREN { make_exp $2 $4 }
   | lexp WHEN IDENT                { Ewhen ($1, id $3, true) }
   | lexp WHENNOT IDENT             { Ewhen ($1, id $3, false) }
@@ -166,6 +170,7 @@ binop:
   | ADD {Add}
   | SUB {Sub}
   | MUL {Mul}
+  | DIV {Div}
   
 node_app:
   | LPAREN ne_lexps RPAREN { $2 }
@@ -178,6 +183,7 @@ ne_lexps:
 
 const:
   | INT { Op.Val (Vint (Int.repr (z_of_int $1))) }
+  | BOOL { Op.Vbool $1 }
 ;
 
 %%
