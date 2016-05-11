@@ -19,7 +19,7 @@ type lexps' = lexp' nelist
     
 type equation' =
   | EqDef' of ident * clock * cexp'
-  | EqApp' of ident * clock * ident * lexps' * Op.typ
+  | EqApp' of ident * clock * ident * lexps'
   | EqFby' of ident * clock * Op.coq_val * lexp'
 
 type node' = {
@@ -64,20 +64,29 @@ let rec elab_cexpr tenv ce =
   | Eite' (le, ce1, ce2) -> Eite (elab_lexpr tenv le, aux ce1, aux ce2)
   | Eexp' le -> Eexp (elab_lexpr tenv le)
   
-let elab_eq tenv = function
-  | EqDef' (x, ck, ce) -> EqDef (x, ck, elab_cexpr tenv ce)
-  | EqApp' (x, ck, f, les, ty) -> EqApp (x, ck, f, Nelist.map (elab_lexpr tenv) les, ty)
-  | EqFby' (x, ck, c, le) -> EqFby (x, ck, c, elab_lexpr tenv le)
+let elab_eq cenv tenv = function
+  | EqDef' (x, ck, ce) ->
+    EqDef (x, ck, elab_cexpr tenv ce)
+  | EqApp' (x, ck, f, les) ->
+    EqApp (x, ck, f, Nelist.map (elab_lexpr tenv) les, List.assoc f cenv)
+  | EqFby' (x, ck, c, le) ->
+    EqFby (x, ck, c, elab_lexpr tenv le)
 
 let get_tenv node =
   let ins = nelist2list node.n_input' in
   node.n_output' :: node.n_vars' @ ins
   
-let elab_node node =
+let elab_node cenv node =
   let tenv = get_tenv node in
   { n_name = node.n_name';
     n_input = node.n_input';
     n_output = node.n_output';
-    n_eqs = List.map (elab_eq tenv) node.n_eqs'}
-  
-let elab_global = List.map elab_node
+    n_eqs = List.map (elab_eq cenv tenv) node.n_eqs'}
+
+let get_cenv =
+  List.fold_left
+    (fun cenv {n_name'; n_output'} -> (n_name', snd n_output') :: cenv) [] 
+    
+let elab_global global =
+  let cenv = get_cenv global in
+  List.map (elab_node cenv) global

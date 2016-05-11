@@ -120,9 +120,9 @@ clock:
 
 equs:
   | { [] }
-  | IDENT COLONS clock EQUAL cexp SEMICOL equs                     { EqDef' (id $1, $3, $5) :: $7 }
-  | IDENT COLONS clock EQUAL IDENT node_app COLON typ SEMICOL equs { EqApp' (id $1, $3, id $5, $6, $8) :: $10 }
-  | IDENT COLONS clock EQUAL const FBY lexp SEMICOL equs           { EqFby' (id $1, $3, $5, $7) :: $9 }
+  | IDENT COLONS clock EQUAL cexp SEMICOL equs           { EqDef' (id $1, $3, $5) :: $7 }
+  | IDENT COLONS clock EQUAL IDENT node_app SEMICOL equs { EqApp' (id $1, $3, id $5, $6) :: $8 }
+  | IDENT COLONS clock EQUAL const FBY lexp SEMICOL equs { EqFby' (id $1, $3, $5, $7) :: $9 }
 ;
 
 cexp:

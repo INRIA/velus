@@ -10,6 +10,6 @@ vars h:int, t:int, r:int;
 let
   h :: base = 0 fby v;
   v :: base = merge sec ((r when sec) / t) (h whennot sec);
-  t :: base on sec = counter (0 when sec, 1 when sec, false when sec) : int;
-  r :: base = counter (0, delta, false) : int;
+  t :: base on sec = counter (0 when sec, 1 when sec, false when sec);
+  r :: base = counter (0, delta, false);
 tel;
