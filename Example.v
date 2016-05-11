@@ -179,38 +179,45 @@ Section CodegenPaper.
     Eop Ifte_int (necons x (necons t (nebase f))).
   Opaque Ifte_int.
 
-  (* Node names *)
-  Definition n_counter     : ident := 1.
-  Definition n_avgvelocity : ident := n_counter + 1.
+  Definition Disj : operator :=
+    existT arrows (Tcons Tbool (Tcons Tbool (Tout Tbool))) orb.
+  Definition op_disj (x: lexp) (y: lexp) : lexp := Eop Disj (necons x (nebase y)).
+  Notation "x ':||' y" := (op_disj x y) (at level 47).
+  Opaque Disj.
 
-(*
-  node counter (initial, increment: int; restart: bool) returns (n: int)
-  var c: int;
+  (* Node names *)
+  Definition n_count       : ident := 1.
+  Definition n_avgvelocity : ident := n_count + 1.
+
+  (*
+  node count (initial, inc: int; restart: bool) returns (n: int)
+    var c: int; f: bool;
   let
-    n = if restart then initial else c + increment;
+    n = if f or restart then initial else c + inc;
+    f = true fby false;
     c = 0 fby n;
   tel
-
- *)
+  *)
 
   (* counter: variable names *)
   Definition initial   : ident := 1.
-  Definition increment : ident := 2.
+  Definition inc       : ident := 2.
   Definition restart   : ident := 3.
   Definition n         : ident := 4.
-  Definition c         : ident := 5.
+  Definition f         : ident := 5.
+  Definition c         : ident := 6.
 
-  Example counter_eqns : list equation :=
+  Example count_eqns : list equation :=
     [
       EqFby c Cbase (Cint 0) (Evar n);
-      EqDef n Cbase (Eexp (op_ifte (Evar restart)
+      EqFby f Cbase (Cbool true) (Cbool false);
+      EqDef n Cbase (Eexp (op_ifte (op_disj (Evar f) (Evar restart))
                                    (Evar initial)
                                    (op_plus (Evar c) (Econst (Cint 1)))))
     ].
-  Print counter_eqns.
+  Print count_eqns.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
            need multiple inputs *)
-
 
   Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
   Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
@@ -220,13 +227,13 @@ Section CodegenPaper.
   (* XXX: prove by reflection, god damnit *)
   Ltac invert :=
     (* Invertible rules, yeah! *)
-    repeat progress 
+    repeat progress
            match goal with
              | H: PS.In _ (PS.singleton _) |- _ =>
                apply PSP.Dec.F.singleton_1 in H
              | H: ~ PS.In ?c (PS.singleton ?c) |- _ =>
                now (exfalso; apply H; PSdec.fsetdec)
-             | H: IsFree.Is_free_in_lexp _ (Econst _) |- _ => 
+             | H: IsFree.Is_free_in_lexp _ (Econst _) |- _ =>
                now (exfalso; inv H)
 
 
@@ -234,9 +241,14 @@ Section CodegenPaper.
              | |- ~ _ => intro
              | |- _ /\ _  => split
              | |- _ -> _ => intros
+
+             | |- PS.In ?x (PS.add ?x _) => apply PSF.add_1; reflexivity
+             | |- PS.In ?x (PS.add _ (PS.singleton ?x)) => apply PSF.add_2; reflexivity
+
              | H: context[ op_ifte _ _ _ ] |- _ => unfold op_ifte in H
              | H: context[ op_plus _ _ ] |- _ => unfold op_plus in H
              | H: context[ op_div _ _ ] |- _ => unfold op_div in H
+             | H: context[ op_disj _ _ ] |- _ => unfold op_disj in H
              | [ i : ident , H : ?i = _ |- _ ] => subst i
              | i: ident , H: _ = ?i |- _ => subst i
 
@@ -251,7 +263,7 @@ Section CodegenPaper.
 
              | H: IsFree.Is_free_in_lexp _ (Ewhen _ _ _) |- _ => inversion H; clear H
              | H: IsFree.Is_free_in_lexp _ (Eop _ _) |- _ => inv H
-             | H: IsFree.Is_free_in_lexp ?x (Evar ?y) |- _ => 
+             | H: IsFree.Is_free_in_lexp ?x (Evar ?y) |- _ =>
                assert (x = y) by (inv H; eauto); clear H
 
              | H: IsFree.Is_free_in_clock _ Cbase |- _ => now (exfalso; inv H)
@@ -263,47 +275,50 @@ Section CodegenPaper.
              | H: IsDefined.Is_defined_in_eqs _ [] |- _ => inv H
              | H: IsDefined.Is_defined_in_eqs _ (_ :: _) |- _ => inv H
 
-             | H: IsDefined.Is_defined_in_eq _ (EqDef _ _ _) |- _ => inv H 
-             | H: IsDefined.Is_defined_in_eq _ (EqFby _ _ _ _) |- _ => inv H 
-             | H: IsDefined.Is_defined_in_eq _ (EqApp _ _ _ _) |- _ => inv H 
+             | H: IsDefined.Is_defined_in_eq _ (EqDef _ _ _) |- _ => inv H
+             | H: IsDefined.Is_defined_in_eq _ (EqFby _ _ _ _) |- _ => inv H
+             | H: IsDefined.Is_defined_in_eq _ (EqApp _ _ _ _) |- _ => inv H
 
              | H: List.Exists _ [] |- _ => inv H
              | H: List.Exists _ (_ :: _) |- _ => inv H
 
              | H: Exists _ (nebase _) |- _ => inv H
              | H: Exists _ (necons _ _) |- _ => inv H
-           end. 
 
-  Ltac commit :=  
-    try solve [ right; 
-                simpl; auto 
+             | H: ~PS.In ?x (PS.add ?x _) |- _ => exfalso; apply H
+             | H: ~PS.In ?x (PS.add _ (PS.singleton ?x)) |- _ => exfalso; apply H
+             | H: PS.In _ (PS.add _ _) |- _ => inv H
+           end.
+
+  Ltac commit :=
+    try solve [ right;
+                simpl; auto
               | left; constructor 2; repeat constructor
               | left; repeat constructor
               | auto ].
 
   Ltac is_well_sch := invert; commit.
 
-  Lemma counter_eqns_well_sch :
-    Is_well_sch (PS.singleton c) (initial :,: increment :,: restart§) counter_eqns.
+  Lemma count_eqns_well_sch :
+    Is_well_sch (PS.add f (PS.singleton c))
+                (initial :,: inc :,: restart§) count_eqns.
   Proof.
     is_well_sch.
   Qed.
 
-  (* TODO: multiple inputs: initial, increment, restart -> LR: done? *)
-  Example counter : node :=
-    mk_node n_counter (necons initial (necons increment (nebase restart))) n counter_eqns.
+  Example count : node :=
+    mk_node n_count (necons initial (necons inc (nebase restart))) n count_eqns.
 
-  Eval cbv in translate_node counter.
-  Eval cbv in ifte_fuse (c_step (translate_node counter)).
-  Eval cbv in ifte_fuse (c_reset (translate_node counter)).
-
+  Eval cbv in translate_node count.
+  Eval cbv in ifte_fuse (c_step (translate_node count)).
+  Eval cbv in ifte_fuse (c_reset (translate_node count)).
 
 (*
   node avgvelocity (delta: int; sec: bool) returns (v: int)
     var r, t, h: int;
   let
-    r = counter(0, delta, false);
-    t = counter(0 when sec, 1 when sec, false when sec);
+    r = count(0, delta, false);
+    t = count(1 when sec, 1 when sec, false when sec);
     v = merge sec ((r when sec) / t) (h whenot sec);
     h = 0 fby v;
   tel
@@ -324,18 +339,15 @@ Section CodegenPaper.
               (Emerge sec
                       (Eexp (op_div (Ewhen (Evar r) sec true) (Evar t)))
                       (Eexp (Ewhen (Evar h) sec false)));
-      EqApp t (Con Cbase sec true) n_counter
-                  (necons (Ewhen (Econst (Cint 0)) sec true)
+      EqApp t (Con Cbase sec true) n_count
+                  (necons (Ewhen (Econst (Cint 1)) sec true)
                   (necons (Ewhen (Econst (Cint 1)) sec true)
                   (nebase (Ewhen (Econst (Cbool false)) sec true))));
-      EqApp r Cbase n_counter (necons (Econst (Cint 0))
-                              (necons (Evar delta)
-                              (nebase (Econst (Cbool false)))))
+      EqApp r Cbase n_count (necons (Econst (Cint 0))
+                            (necons (Evar delta)
+                            (nebase (Econst (Cbool false)))))
     ].
   Print avgvelocity_eqns.
-
-  (* TODO: show that these equations Is_well_sch and Well_clocked;
-           need multiple inputs *)
 
   Lemma avgvelocity_eqns_Well_sch :
     Is_well_sch (PS.singleton h) (delta :,: sec§) avgvelocity_eqns.
