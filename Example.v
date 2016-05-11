@@ -39,8 +39,6 @@ Instance EqDef_Assign : Assignment clock cexp equation := {assign := EqDef}.
 Instance Eop_OpCall : OpCall lexps lexp := {opcall := Eop}.
 
 (* Imperative notations *)
-Coercion Var : ident >-> exp.
-Coercion State : ident >-> exp.
 Coercion Const : const >-> exp.
 
 Instance Assign_Assign : Assignment unit exp stmt := {assign := fun x (_ : unit) => Assign x}.
@@ -189,17 +187,17 @@ Section CodegenPaper.
   Definition n_avgvelocity : ident := n_count + 1.
 
   (*
-  node count (initial, inc: int; restart: bool) returns (n: int)
+  node count (ini, inc: int; restart: bool) returns (n: int)
     var c: int; f: bool;
   let
-    n = if f or restart then initial else c + inc;
+    n = if f or restart then ini else c + inc;
     f = true fby false;
     c = 0 fby n;
   tel
   *)
 
   (* counter: variable names *)
-  Definition initial   : ident := 1.
+  Definition ini       : ident := 1.
   Definition inc       : ident := 2.
   Definition restart   : ident := 3.
   Definition n         : ident := 4.
@@ -211,8 +209,8 @@ Section CodegenPaper.
       EqFby c Cbase (Cint 0) (Evar n);
       EqFby f Cbase (Cbool true) (Cbool false);
       EqDef n Cbase (Eexp (op_ifte (op_disj (Evar f) (Evar restart))
-                                   (Evar initial)
-                                   (op_plus (Evar c) (Econst (Cint 1)))))
+                                   (Evar ini)
+                                   (op_plus (Evar c) (Evar inc))))
     ].
   Print count_eqns.
   (* TODO: show that these equations Is_well_sch and Well_clocked;
@@ -300,13 +298,13 @@ Section CodegenPaper.
 
   Lemma count_eqns_well_sch :
     Is_well_sch (PS.add f (PS.singleton c))
-                (initial :,: inc :,: restart§) count_eqns.
+                (ini :,: inc :,: restart§) count_eqns.
   Proof.
     is_well_sch.
   Qed.
 
   Example count : node :=
-    mk_node n_count (necons initial (necons inc (nebase restart))) n count_eqns.
+    mk_node n_count (necons ini (necons inc (nebase restart))) n count_eqns.
 
   Eval cbv in translate_node count.
   Eval cbv in ifte_fuse (c_step (translate_node count)).
