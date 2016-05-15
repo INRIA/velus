@@ -5,7 +5,7 @@ Require Import Rustre.Dataflow.IsFree.
 
 (** * Free variables: decision procedure *)
 
-(** 
+(**
 
 Decision procedure for the [IsFree] predicate. We show that it is
 equivalent to its specification.
@@ -13,6 +13,117 @@ equivalent to its specification.
 Remark: This development is not formally part of the correctness proof.
 
  *)
+
+Lemma Is_free_in_clock_disj:
+  forall y ck x c, Is_free_in_clock y (Con ck x c)
+                   <-> y = x \/ Is_free_in_clock y ck.
+Proof.
+  intros y ck x c; split; intro HH.
+  inversion_clear HH; [left; reflexivity|right; assumption].
+  destruct HH as [HH|HH].
+  rewrite HH; constructor.
+  constructor (assumption).
+Qed.
+
+Lemma Is_free_in_when_disj:
+  forall y e x c, Is_free_in_lexp y (Ewhen e x c)
+                  <-> y = x \/ Is_free_in_lexp y e.
+Proof.
+  intros y e x c; split; intro HH.
+  inversion_clear HH; auto.
+  destruct HH as [HH|HH].
+  rewrite HH; constructor (fail).
+  constructor (assumption).
+Qed.
+
+Fixpoint free_in_clock_dec (ck : clock) (T: PS.t)
+    : { S | forall x, PS.In x S <-> (Is_free_in_clock x ck \/ PS.In x T) }.
+  refine (
+      match ck with
+      | Cbase => exist _ T _
+      | Con ck' x c =>
+        match free_in_clock_dec ck' T with
+        | exist S' HF => exist _ (PS.add x S') _
+        end
+      end).
+  - intro x; split; intro HH.
+    right; exact HH.
+    destruct HH as [HH|HH]; [inversion HH|exact HH].
+  - intro y; split; intro HH.
+    + rewrite PS.add_spec in HH.
+      destruct HH as [HH|HH].
+      rewrite HH; left; constructor.
+      apply HF in HH.
+      destruct HH as [HH|HH]; [left|right].
+      constructor (assumption). assumption.
+    + rewrite Is_free_in_clock_disj in HH.
+      apply or_assoc in HH.
+      destruct HH as [HH|HH].
+      rewrite HH; apply PS.add_spec; left; reflexivity.
+      apply HF in HH; apply PS.add_spec; right; assumption.
+Defined.
+
+(*
+Lemma Is_free_in_lexp_op_nebase:
+  forall x op e,
+    Is_free_in_lexp x (Eop op (Nelist.nebase e))
+    <->
+    Is_free_in_lexp x e.
+Proof.
+  intros x op e; split; intro HH.
+  inversion_clear HH as [| | |H1 H2 H3 H4].
+  inversion_clear H4; assumption.
+  repeat constructor; assumption.
+Qed.
+
+Fixpoint free_in_lexp (e: lexp) (S: PS.t) {struct e}
+    : { T | forall x, PS.In x T <-> (Is_free_in_lexp x e \/ PS.In x S) }.
+  refine (
+      match e with
+      | Econst c => exist _ S _
+      | Evar x => exist _ (PS.add x S) _
+      | Ewhen e x xc =>
+        match free_in_lexp e S with
+        | exist S' HF => exist _ (PS.add x S') _
+        end
+      | Eop op es =>
+        Nelist.fold_left (fun fvs e' =>
+                       match fvs with
+                       (* TB: How to get this to work? *)
+                       | exist S' HF => free_in_lexp e' S'
+                       end) es _
+      end); try (intro y).
+  - split; intro HH; [auto|].
+    destruct HH as [HH|HH]; [inversion HH|assumption].
+  - split; intro HH.
+    + apply PS.add_spec in HH; destruct HH as [HH|HH]; [rewrite HH|]; auto.
+    + destruct HH as [HH|HH]; [inversion_clear HH|]; apply PS.add_spec; auto.
+  - split; intro HH.
+    + apply PS.add_spec in HH; destruct HH as [HH|HH]; [rewrite HH|]; auto.
+      apply HF in HH.
+      destruct HH as [HH|HH]; [left|auto].
+      constructor (assumption).
+    + rewrite Is_free_in_when_disj in HH.
+      apply or_assoc in HH.
+      destruct HH as [HH|HH].
+      rewrite HH; apply PS.add_spec; auto.
+      apply HF in HH; apply PS.add_spec; auto.
+  - Check (free_in_lexp e' S').
+*)
+
+
+Fixpoint free_in_lexp (e: lexp)
+    : { S | forall x, PS.In x S <-> Is_free_in_lexp x e }.
+  refine (
+      match e with
+      | Econst c => exist _ PS.empty _
+      | Evar x => exist _ (PS.singleton x) _
+      | Ewhen e x xc =>
+        match free_in_lexp e with
+        | exist S' HF => exist _ (PS.add x S') _
+        end
+      | Eop op eqs => _
+      end).
 
 
 (* TODO: use auto for the proofs. *)
@@ -106,11 +217,11 @@ induction les as [le | le les]; intro m.
 + inversion_clear H.
   specialize (IHles H1 (free_in_lexp le m)). rewrite H0 in IHles.
   rewrite IHles. split; intro Hin.
-  - destruct Hin as [Hin | [Hin | Hin]]; tauto || left; constructor; try now constructor 2. 
+  - destruct Hin as [Hin | [Hin | Hin]]; tauto || left; constructor; try now constructor 2.
     constructor 3. now inversion_clear Hin.
   - destruct Hin as [Hin | ?]; try tauto; [].
     Local Hint Constructors Is_free_in_lexp.
-    inversion_clear Hin. inversion_clear H; auto. 
+    inversion_clear Hin. inversion_clear H; auto.
 Qed.
 
 Lemma free_in_lexp_spec':
@@ -126,15 +237,15 @@ Lemma free_in_laexp_spec:
                 <-> Is_free_in_laexp x ck e \/ PS.In x m.
 Proof.
   destruct e; split; intros;
-  repeat 
+  repeat
     (match goal with
        | H:_ \/ _ |- _ => destruct H as [H|H]
        | H:PS.In _ (free_in_laexp _ _ _) |- _ => apply free_in_lexp_spec in H
        | H:PS.In _ (free_in_clock _ _) |- _ => apply free_in_clock_spec in H
        | |- PS.In _ (free_in_laexp _ _ _) => apply free_in_lexp_spec
-       | H:Is_free_in_laexp _ _ _ |- _ => inversion_clear H 
+       | H:Is_free_in_laexp _ _ _ |- _ => inversion_clear H
        | |- context[PS.In _ (free_in_clock _ _)] => rewrite free_in_clock_spec
-     end); 
+     end);
   intuition.
 Qed.
 
@@ -147,7 +258,7 @@ Proof.
 Qed.
 
 Lemma free_in_nelist_lexp_spec : forall x l m,
-  PS.In x (Nelist.fold_left (fun fvs e => free_in_lexp e fvs) l m) <-> 
+  PS.In x (Nelist.fold_left (fun fvs e => free_in_lexp e fvs) l m) <->
   Nelist.Exists (Is_free_in_lexp x) l \/ PS.In x m.
 Proof.
 Local Hint Constructors Nelist.Exists.
@@ -180,23 +291,23 @@ Qed.
 
 Ltac destruct_Is_free :=
   repeat match goal with
-    | H: _ \/ _ |- _ => 
+    | H: _ \/ _ |- _ =>
       destruct H
 
-    | H: Is_free_in_cexp _ (Emerge _ _ _) |- _ => 
+    | H: Is_free_in_cexp _ (Emerge _ _ _) |- _ =>
       inversion H; subst; clear H
 
-    | H: Is_free_in_cexp _ (Eexp _) |- _ => 
+    | H: Is_free_in_cexp _ (Eexp _) |- _ =>
       inversion H; subst; clear H
 
     | IHe: context[PS.In _ (free_in_cexp ?e _)],
-      H:PS.In _ (free_in_cexp ?e _) |- _ => 
+      H:PS.In _ (free_in_cexp ?e _) |- _ =>
       apply IHe in H
 
-    | H: PS.In _ (free_in_lexp _ _) |- _ => 
+    | H: PS.In _ (free_in_lexp _ _) |- _ =>
       apply free_in_lexp_spec in H
 
-    | H: PS.In _ (PS.add _ _) |- _ => 
+    | H: PS.In _ (PS.add _ _) |- _ =>
       apply PS.add_spec in H
   end.
 
@@ -212,26 +323,26 @@ Proof.
 
   repeat match goal with
     (* Solve [PS.In x (free_in_cexp e2 (free_in_cexp e1 (PS.add i m)))] *)
-    | |- PS.In ?i (PS.add ?i _) => 
+    | |- PS.In ?i (PS.add ?i _) =>
       apply PS.add_spec; intuition
     | IHe: context[PS.In _ (free_in_cexp ?e _)],
-      H: Is_free_in_cexp ?x ?e 
-      |- PS.In ?x (free_in_cexp ?e _) => 
+      H: Is_free_in_cexp ?x ?e
+      |- PS.In ?x (free_in_cexp ?e _) =>
       apply IHe; auto
     | _: PS.In ?x ?m
-      |- PS.In ?x (PS.add ?i ?m) => 
+      |- PS.In ?x (PS.add ?i ?m) =>
       apply PS.add_spec; auto
     | IHe: context[PS.In _ (free_in_cexp ?e _)]
-      |- PS.In _ (free_in_cexp ?e _)  => 
+      |- PS.In _ (free_in_cexp ?e _)  =>
       (* Keep peeling *)
       apply IHe; right
 
     (* Solve [PS.In x (free_in_lexp l m)] *)
-    | H: Is_free_in_lexp _ _ 
-      |- PS.In _ (free_in_lexp _ _) => 
+    | H: Is_free_in_lexp _ _
+      |- PS.In _ (free_in_lexp _ _) =>
       apply free_in_lexp_spec; auto
-    | H: PS.In ?x ?m 
-      |- PS.In ?x (free_in_lexp _ ?m) => 
+    | H: PS.In ?x ?m
+      |- PS.In ?x (free_in_lexp _ ?m) =>
       apply free_in_lexp_spec; auto
          end.
 Qed.
