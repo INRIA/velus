@@ -112,20 +112,6 @@ Fixpoint free_in_lexp (e: lexp) (S: PS.t) {struct e}
 *)
 
 
-Fixpoint free_in_lexp (e: lexp)
-    : { S | forall x, PS.In x S <-> Is_free_in_lexp x e }.
-  refine (
-      match e with
-      | Econst c => exist _ PS.empty _
-      | Evar x => exist _ (PS.singleton x) _
-      | Ewhen e x xc =>
-        match free_in_lexp e with
-        | exist S' HF => exist _ (PS.add x S') _
-        end
-      | Eop op eqs => _
-      end).
-
-
 (* TODO: use auto for the proofs. *)
 
 Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
