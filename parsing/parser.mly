@@ -38,13 +38,63 @@ let z_of_int i =
     BinNums.Zpos (positive_of_int i)
   else
     BinNums.Zneg (positive_of_int (-i))
+
+let elab_float_constant f =
+  let open Cabs in
+  let open C in
+  let ty = match f.suffix_FI with
+    | Some ("l"|"L") -> FLongDouble
+    | Some ("f"|"F") -> FFloat
+    | None -> FDouble
+    | _ -> assert false (* The lexer should not accept anything else. *)
+  in
+  let v = {
+    hex=f.isHex_FI;
+    intPart=begin match f.integer_FI with Some s -> s | None -> "0" end;
+    fracPart=begin match f.fraction_FI with Some s -> s | None -> "0" end;
+    exp=begin match f.exponent_FI with Some s -> s | None -> "0" end }
+  in
+  (v, ty)
+
+(** Floating point constants *)
+
+let convertFloat f kind =
+  let open C2C in
+  let open C in
+  let open Floats in
+  let mant = z_of_str f.C.hex (f.C.intPart ^ f.C.fracPart) 0 in
+  match mant with
+    | Z.Z0 ->
+      begin match kind with
+      | FFloat -> Float.to_single Float.zero
+      | FDouble | FLongDouble -> assert false
+      end
+    | Z.Zpos mant ->
+      let sgExp = match f.C.exp.[0] with '+' | '-' -> true | _ -> false in
+      let exp = z_of_str false f.C.exp (if sgExp then 1 else 0) in
+      let exp = if f.C.exp.[0] = '-' then Z.neg exp else exp in
+      let shift_exp =
+		(if f.C.hex then 4 else 1) * String.length f.C.fracPart in
+      let exp = Z.sub exp (Z.of_uint shift_exp) in
+      let base = P.of_int (if f.C.hex then 2 else 10) in
+      begin
+		match kind with
+		| FFloat ->
+		   let f = Float32.from_parsed base mant exp in
+           checkFloatOverflow f;
+           f
+		| FDouble | FLongDouble -> failwith "Double or LongDouble constant"
+	  end
+	| Z.Zneg _ -> assert false
+
+			   
 %}
 
 %token LPAREN RPAREN COLON COLONS SEMICOL 
 %token EQUAL COMMA LET TEL ON BASE
 %token <string> IDENT
 %token <int> INT
-%token <float> FLOAT
+%token <Cabs.floatInfo> FLOAT
 %token <bool> BOOL
 %token NODE VARS RETURNS
 %token FBY MERGE WHEN WHENNOT
@@ -135,6 +185,9 @@ binop:
 
 const:
   | i = INT  { Op.Val (Vint (Int.repr (z_of_int i))) }
-  | b = BOOL { Op.Vbool b }	
+  | b = BOOL { Op.Vbool b }
+  | f = FLOAT { let (v, fk) = elab_float_constant f in
+				let f = convertFloat v fk in
+				Op.Val (Vfloat f) }
 
 %%

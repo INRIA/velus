@@ -63,9 +63,19 @@ Extract Constant pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstr
 Extract Constant pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
 Extract Constant first_unused_ident => "Camlcoq.first_unused_ident".
 
+(* Cabs *)
+Extract Constant Cabs.cabsloc =>
+"{ lineno : int;
+   filename: string;
+   byteno: int;
+   ident : int;
+ }".
+Extract Constant Cabs.string => "String.t".
+Extract Constant Cabs.char_code => "int64".
+
 Separate Extraction
          ZArith.BinIntDef
-         Compiler.transf_clight_program (* Cabs *)
+         Compiler.transf_clight_program Cabs
          DF2CL
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
