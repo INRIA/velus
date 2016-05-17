@@ -67,6 +67,14 @@ Proof.
     end.
 Qed.
 
+Lemma Is_variable_in_eq_Is_defined_in_eq:
+  forall x eq,
+    Is_variable_in_eq x eq
+    -> Is_defined_in_eq x eq.
+Proof.
+  destruct eq; inversion_clear 1; constructor.
+Qed.
+
 Lemma Is_variable_in_eqs_Is_defined_in_eqs:
   forall x eqs,
     Is_variable_in_eqs x eqs
@@ -74,7 +82,8 @@ Lemma Is_variable_in_eqs_Is_defined_in_eqs:
 Proof.
   induction eqs as [|eq eqs IH]; [now inversion 1|].
   inversion_clear 1 as [Hin ? Hivi|]; [|constructor 2; intuition].
-  destruct eq; inversion_clear Hivi; repeat constructor.
+  apply Is_variable_in_eq_Is_defined_in_eq in Hivi.
+  constructor (assumption).
 Qed.
 
 Lemma Is_variable_in_cons:
