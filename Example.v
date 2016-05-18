@@ -141,7 +141,7 @@ Example prog1' : stmt :=
 Print prog1'.
 (* If 1 Then (Assign 2 7%Z;; Assign 4 2) Else (Assign 4 3;; AssignSt 3 2) *)
 
-Remark prog1'_is_fused: (ifte_fuse prog1 = prog1').
+Remark prog1'_is_fused: (fuse prog1 = prog1').
 Proof eq_refl.
 
 (* TODO: Show correctness of prog1' *)
@@ -219,8 +219,8 @@ Section CodegenPaper.
     mk_node n_count (necons ini (necons inc (nebase restart))) n count_eqns.
 
   Eval cbv in translate_node count.
-  Eval cbv in ifte_fuse (c_step (translate_node count)).
-  Eval cbv in ifte_fuse (c_reset (translate_node count)).
+  Eval cbv in fuse (c_step (translate_node count)).
+  Eval cbv in fuse (c_reset (translate_node count)).
 
 (*
   node avgvelocity (delta: int; sec: bool) returns (v: int)
@@ -266,6 +266,6 @@ Section CodegenPaper.
     mk_node n_avgvelocity (delta :,: sec§) v avgvelocity_eqns.
 
   Eval cbv in translate_node avgvelocity.
-  Eval cbv in ifte_fuse (c_step (translate_node avgvelocity)).
+  Eval cbv in fuse (c_step (translate_node avgvelocity)).
 
 End CodegenPaper.

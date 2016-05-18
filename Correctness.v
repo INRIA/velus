@@ -1703,10 +1703,10 @@ Proof.
   (inversion_clear HH; reflexivity || subst; now constructor).
 Qed.
 
-Lemma Ifte_free_write_translate_cexp:
+Lemma Is_fusible_translate_cexp:
   forall mems x ce,
     (forall i, Is_free_in_cexp i ce -> x <> i)
-    -> Ifte_free_write (translate_cexp mems x ce).
+    -> Is_fusible (translate_cexp mems x ce).
 Proof.
   intros mems x ce Hfree.
   induction ce.
@@ -1719,11 +1719,11 @@ Proof.
   - now constructor.
 Qed.
 
-Lemma Ifte_free_write_Control_caexp:
+Lemma Is_fusible_Control_caexp:
   forall mems ck f ce,
     (forall i, Is_free_in_caexp i ck ce -> ~Can_write_in i (f ce))
-    -> Ifte_free_write (f ce)
-    -> Ifte_free_write (Control mems ck (f ce)).
+    -> Is_fusible (f ce)
+    -> Is_fusible (Control mems ck (f ce)).
 Proof.
   induction ck as [|ck IH i b]; [now intuition|].
   intros f ce Hxni Hfce.
@@ -1755,11 +1755,11 @@ Proof.
       destruct (PS.mem i mems); inversion Hfree; subst; now auto.
 Qed.
 
-Lemma Ifte_free_write_Control_laexp:
+Lemma Is_fusible_Control_laexp:
   forall mems ck s,
     (forall i, Is_free_in_clock i ck -> ~Can_write_in i s)
-    -> Ifte_free_write s
-    -> Ifte_free_write (Control mems ck s).
+    -> Is_fusible s
+    -> Is_fusible (Control mems ck s).
 Proof.
   induction ck as [|ck IH i b]; [now intuition|].
   intros s Hxni Hfce.
@@ -1792,21 +1792,21 @@ Qed.
 Require Import Rustre.Dataflow.Clocking.
 Require Import Rustre.Dataflow.Clocking.Properties.
 
-Lemma translate_eqns_Ifte_free_write:
+Lemma translate_eqns_Is_fusible:
   forall C mems inputs eqs,
     Well_clocked_env C
     -> Forall (Well_clocked_eq C) eqs
     -> Is_well_sch mems inputs eqs
     -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
     -> (forall input, Nelist.In input inputs -> ~ Is_defined_in_eqs input eqs)
-    -> Ifte_free_write (translate_eqns mems eqs).
+    -> Is_fusible (translate_eqns mems eqs).
 Proof.
   intros C mems inputs eqs Hwk Hwks Hwsch Hnvi Hnin.
   induction eqs as [|eq eqs IH]; [now constructor|].
   inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
   specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
   unfold translate_eqns.
-  simpl; apply Ifte_free_write_fold_left_shift.
+  simpl; apply Is_fusible_fold_left_shift.
   split.
   - apply IH.
     + intros x Hin; apply Hnvi in Hin.
@@ -1834,20 +1834,20 @@ Proof.
         specialize (Hnm Hnxm').
         eapply Hndef; intuition.
         eapply Is_variable_in_eqs_Is_defined_in_eqs. auto. }
-      apply Ifte_free_write_Control_caexp.
+      apply Is_fusible_Control_caexp.
       intros i Hfree.
       apply (not_Can_write_in_translate_cexp).
       apply Hfni with (1:=Hfree).
-      apply (Ifte_free_write_translate_cexp).
+      apply (Is_fusible_translate_cexp).
       intros i Hfree; apply Hfni; intuition.
     + assert (~Is_free_in_clock x ck) as Hnfree
           by (apply Well_clocked_EqApp_not_Is_free_in_clock
               with (1:=Hwk) (2:=Hwkeq));
-      apply Ifte_free_write_Control_laexp;
+      apply Is_fusible_Control_laexp;
       [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
     + assert (~Is_free_in_clock x ck) as Hnfree
           by (apply Well_clocked_EqFby_not_Is_free_in_clock
               with (1:=Hwk) (2:=Hwkeq));
-      apply Ifte_free_write_Control_laexp;
+      apply Is_fusible_Control_laexp;
       [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
 Qed.
