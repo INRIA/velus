@@ -36,8 +36,11 @@ Notation "x 'when' ck" := (Ewhen x ck true) (at level 45, left associativity).
 Notation "x 'whenot' ck" := (Ewhen x ck false) (at level 45, left associativity).
 Notation "x '::=' v 'fby' y" := (EqFby x Cbase (v : const) (y : lexp)) 
                                   (at level 47, v at next level). 
-Notation "x '::=' f '(|' nel '|)'" := (EqApp x _ f nel) 
+Notation "x '::=' f '(|' nel '|)'" := (EqApp x Cbase f nel) 
                                         (at level 47, f, nel at next level, format "x  '::='  f '(|' nel '|)'").
+Notation "x '::=' f '(|' nel '|)' '@' ck" := (EqApp x ck f nel) 
+                                        (at level 47, f, nel at next level).
+
 Instance EqDef_CAssign : Assignment cexp equation := {assign := (fun i => EqDef i Cbase)}.
 Instance EqDef_EAssign : Assignment lexp equation := {assign := (fun i e => EqDef i Cbase (Eexp e))}.
 Instance Eop_OpCall : OpCall lexps lexp := {opcall := Eop}.
@@ -55,9 +58,14 @@ Notation "'state(|' x '|)::='  y" := (AssignSt x y) (at level 47).
 Instance Op_OpCall : OpCall (nelist exp) exp := {opcall := Op}.
 Notation "stmt1 ;; stmt2" := (Comp stmt1 stmt2) (at level 48, right associativity).
 Instance IFTE_imp : IFTE exp stmt := {ifte := Ifte}.
-Notation "x '::=' class '(' obj ').step(' args ')'" := (Step_ap x class obj args)
-                                                         (at level 47, class, obj, args at next level).
-Notation " class '(' obj ').reset()'" := (Reset_ap class obj) (at level 47).
+Instance IFTE_impVar : IFTE ident stmt := {ifte := fun i => Ifte (Var i) }.
+
+Notation "x '::=' class '(|' obj '|).step(' args ')'" := (Step_ap x class obj args)
+    (at level 47, class, obj, args at next level).
+Notation " class '(|' obj '|).reset()'" := (Reset_ap class obj)
+                                                 (at level 47, obj at next level).
+
+Print Grammar constr.
 
 (** Examples from paper *)
 
@@ -127,9 +135,14 @@ Section CodegenPaper.
   (* Print count_eqns. *)
 
   Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
-  Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
-  Notation "x ':/' y" := (op_div x y) (at level 49).
   Opaque Div.
+
+  Class NDiv U := {div : U -> U -> U}.
+  Notation "x ':/' y" := (div x y) (at level 47).
+
+  Instance NDiv_lexp : NDiv lexp := {div := fun x y => Eop Div (necons x (nebase y))}.
+  Instance NDiv_imp : NDiv exp := {div := fun x y => Op Div (necons x (nebase y))}.
+
 
   Lemma count_eqns_well_sch :
     Is_well_sch (PS.add f (PS.singleton c))
@@ -196,18 +209,15 @@ Section CodegenPaper.
 
   Example avgvelocity_eqns : list equation :=
     [
-      EqFby h Cbase (Cint 0) (Evar v);
-      EqDef v Cbase
-              (Emerge sec
-                      (Eexp (op_div (Ewhen (Evar r) sec true) (Evar t)))
-                      (Eexp (Ewhen (Evar h) sec false)));
-      EqApp t (Con Cbase sec true) n_count
-                  (necons (Ewhen (Econst (Cint 1)) sec true)
-                  (necons (Ewhen (Econst (Cint 1)) sec true)
-                  (nebase (Ewhen (Econst (Cbool false)) sec true))));
-      EqApp r Cbase n_count (necons (Econst (Cint 0))
-                            (necons (Evar delta)
-                            (nebase (Econst (Cbool false)))))
+      h ::= 0%Z fby v;
+      v ::= (Emerge sec
+                    (Ewhen r sec true :/ t)
+                    (Ewhen h sec false));
+      t ::= n_count (| (Ewhen 1%Z sec true) :,:
+                       (Ewhen 1%Z sec true) :,:
+                       (Ewhen false sec true) § |) 
+        @  (Con Cbase sec true);
+      r ::= n_count (| (0%Z : lexp) :,: (delta : lexp) :,: (false : lexp) § |)
     ].
   (* Print avgvelocity_eqns. *)
 
@@ -218,6 +228,8 @@ Section CodegenPaper.
   Example avgvelocity : node :=
     mk_node n_avgvelocity (delta :,: sec§) v avgvelocity_eqns.
 
+Print Grammar constr.
+
   Example avgvelocity_prog :=
     {|
       c_name := n_avgvelocity;
@@ -226,18 +238,22 @@ Section CodegenPaper.
       c_mems := [h];
       c_objs := [{| obj_inst := r; obj_class := n_count |};
                  {| obj_inst := t; obj_class := n_count |}];
-      c_step := Step_ap r n_count r ((Const 0%Z) :,: Var delta :,: (Const false) §);;
-                Ifte (Var sec)
-                     (Step_ap t n_count t ((Const 1%Z) :,: (Const 1%Z) :,: (Const false) §))
-                Skip;;
-                Ifte (Var sec)
-                     (Assign v (Op Div (Var r :,: Var t §)))
-                     (Assign v (State h));;
-                AssignSt h (Var v);;
+      c_step := (r ::= n_count (| r |).step((0%Z : exp) :,: 
+                                            (delta : exp) :,: 
+                                            (false : exp) §));;
+                If sec
+                Then (t ::= n_count (| t |).step((1%Z : exp) :,: 
+                                                 (1%Z : exp) :,: 
+                                                 (false : exp) §))
+                Else Skip;;
+                If sec
+                Then v ::=  ((r : exp) :/ (t : exp))
+                 Else v ::= (State h);;
+                state(| h |)::= v;;
                 Skip;
-      c_reset := Reset_ap n_count r;;
-                 Reset_ap n_count t;;
-                 AssignSt h 0%Z;;
+      c_reset := n_count (| r |).reset() ;;
+                 n_count (| t |).reset();;
+                 state(| h |)::= 0%Z;;
                  Skip
     |}.
 
@@ -246,18 +262,22 @@ Section CodegenPaper.
 
   Remark avgvelocity_prog_step_fuse:
     fuse (c_step avgvelocity_prog) =
-         Step_ap r n_count r ((Const 0%Z) :,: Var delta :,: (Const false) §);;
-         Ifte (Var sec)
-              (Step_ap t n_count t ((Const 1%Z) :,: (Const 1%Z) :,: (Const false) §);;
-               Assign v (Op Div (Var r :,: Var t §)))
-              (Assign v (State h));;
-         AssignSt h (Var v).
+         r ::= n_count (| r |).step((0%Z : exp) :,: 
+                                    (delta : exp) :,: 
+                                    (false : exp) §);;
+         If sec
+         Then (t ::= n_count (| t |).step((1%Z : exp) :,: 
+                                          (1%Z : exp) :,: 
+                                          (false : exp) §);;
+              v ::= ((r : exp) :/ (t : exp))) 
+         Else v ::= State h;;
+         state(| h |)::= v.
   Proof eq_refl.
 
   Remark avgvelocity_prog_reset_fuse:
-    fuse (c_reset avgvelocity_prog) = Reset_ap n_count r;;
-                                      Reset_ap n_count t;;
-                                      AssignSt h 0%Z.
+    fuse (c_reset avgvelocity_prog) = n_count (| r |).reset();;
+                                      n_count (| t |).reset();;
+                                      state(| h |)::= 0%Z.
   Proof eq_refl.
 
 End CodegenPaper.
