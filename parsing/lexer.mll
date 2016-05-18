@@ -49,10 +49,12 @@ let fractional_constant =
 let exponent_part =
     'e' ((sign? digit_sequence) as expo)
   | 'E' ((sign? digit_sequence) as expo)
-let decimal_floating_constant =
+let float =
     fractional_constant exponent_part? floating_suffix?
   | (digit_sequence as intpart) exponent_part floating_suffix?
-                        
+
+let ident = ['a'-'z']['A'-'Z''a'-'z''0'-'9''_']*
+            
 rule token = parse 
   | "--" [^ '\n']* ['\n']
                     {incr_linenum lexbuf; token lexbuf }
@@ -70,24 +72,19 @@ rule token = parse
   | "*"             {MUL}
   | "/"             {DIV}
   | "!"             {NOT}
-  | int             { INT (int_of_string (Lexing.lexeme lexbuf)) }
+  | int             {INT (int_of_string (Lexing.lexeme lexbuf))}
   (* | float           { FLOAT (float_of_string (Lexing.lexeme lexbuf)) } *)
-  | decimal_floating_constant     { FLOAT
-                                      {Cabs.isHex_FI = false;
-                                       Cabs.integer_FI = intpart;
-                                       Cabs.fraction_FI = frac;
-                                       Cabs.exponent_FI = expo;
-                                       Cabs.suffix_FI =
-                                         match suffix with
-                                         | None -> None
-                                         | Some c -> Some (String.make 1 c)} }
-  | (['a'-'z']['A'-'Z''a'-'z''0'-'9''_']* as id) 
-      { let s = Lexing.lexeme lexbuf in
-          try
-	    Hashtbl.find keyword_table s
-          with Not_found ->
-	    IDENT id }
-  
+  | float           {FLOAT
+                       {Cabs.isHex_FI = false;
+                        Cabs.integer_FI = intpart;
+                        Cabs.fraction_FI = frac;
+                        Cabs.exponent_FI = expo;
+                        Cabs.suffix_FI =
+                          match suffix with
+                          | None -> None
+                          | Some c -> Some (String.make 1 c)} }
+  | (ident as id)   {let s = Lexing.lexeme lexbuf in
+                     try Hashtbl.find keyword_table s
+                     with Not_found -> IDENT id}
   | eof             {EOF}
-  | ""              {raise (LexError (Lexing.lexeme_start lexbuf, 
-				  Lexing.lexeme_end lexbuf))}
+  | ""              {raise Lexing.(LexError (lexeme_start lexbuf, lexeme_end lexbuf))}

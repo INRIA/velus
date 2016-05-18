@@ -102,15 +102,8 @@ let convertFloat f kind =
 %token EOF
 %token TBOOL TINT TFLOAT
 %token NOT ADD SUB MUL DIV
-	   
-%left MERGE
-%left WHEN
-%left FBY
-%left ON
-%nonassoc BASE
 
-%start program
-%type <Elab.global> program
+%start <Elab.global> program
 
 %%
 
@@ -189,5 +182,3 @@ const:
   | f = FLOAT { let (v, fk) = elab_float_constant f in
 				let f = convertFloat v fk in
 				Op.Val (Vfloat f) }
-
-%%
