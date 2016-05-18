@@ -9,6 +9,7 @@ Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Translation.
+Require Import Rustre.Minimp.FuseIfte.
 
 Require Import Rustre.Dataflow.Memories.
 Require Import Rustre.Dataflow.WellFormed.
@@ -49,109 +50,11 @@ Notation "'If' b 'Then' t 'Else' f" := (Ifte b t f) (at level 47, t at level 47,
 Notation "x '::=' class '(' obj ').step(' args ')'" := (Step_ap x class obj args) (at level 47).
 Notation " class '(' obj ').reset()'" := (Reset_ap class obj) (at level 47).
 
-(* TODO: not properly clocked... *)
-Example eqns1 : list equation :=
-  [
-    EqFby 3 (Con Cbase 1 false) (Cint 0) (Evar 2);
-    assign 4 Cbase (Emerge 1 (Eexp (Evar 2)) (Eexp (Evar 3)));
-    assign 2 (Con Cbase 1 true) (Eexp (Ewhen (Econst (Cint 7)) 1 true))
-
-(*   ;EqDef 1 (CAexp Cbase (Eexp (Econst (Cbool true)))) *)
-  ].
-Print eqns1.
-
-Example node1 : node :=
-  mk_node 1 (nebase 1) 4 eqns1.
-
-
-Example eqns2 : list equation :=
-  [
-    EqFby 3 Cbase (Cint 0) (Evar 2);
-    EqApp 4 Cbase 1 (nebase (Evar 3));
-    EqApp 2 Cbase 1 (nebase (Evar 1))
-  ].
-Print eqns2.
-
-Example node2 : node :=
-  mk_node 2 (nebase 1) 4 eqns2.
-
-(** Scheduling *)
-
-Example eqn1_well_sch: Is_well_sch (memories eqns1) (1§) eqns1.
-Proof. apply Is_well_sch_by_refl; reflexivity. Qed.
-
-Example eqn2_well_sch: Is_well_sch (memories eqns2) (1§) eqns2.
-Proof. apply Is_well_sch_by_refl; reflexivity. Qed.
-
-(** Translation *)
-
-(* Eval cbv in (translate_node node1). *)
-
-Example prog1 : stmt :=
-  Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
-       (Comp (Ifte (Var 1) (Assign 4 (Var 2))
-                   (Assign 4 (State 3)))
-             (Comp (Ifte (Var 1) Skip (AssignSt 3 (Var 2)))
-                   Skip)).
-Print prog1.
-(* If 1 Then Assign 2 7%Z Else Skip;;
-   If 1 Then Assign 4 2 Else Assign 4 3;;
-   If 1 Then Skip Else AssignSt 3 2;; Skip *)
-
-Remark prog1_good : (translate_node node1).(c_step) = prog1.
-Proof eq_refl.
-
-Example reset1 : stmt :=
-  translate_reset_eqns eqns1.
-
-(* Eval cbv in (translate_node node2). *)
-
-Example class2 : class :=
-  {|
-    c_name := 2;
-    c_input := nebase 1;
-    c_output := 4;
-    c_mems := [3];
-    c_objs := [{| obj_inst := 2; obj_class := 1 |};
-                {| obj_inst := 4; obj_class := 1 |}];
-    c_step := Comp (Step_ap 2 1 2 (nebase (Var 1)))
-                   (Comp (Step_ap 4 1 4 (nebase (State 3)))
-                         (Comp (AssignSt 3 (Var 2))
-                               Skip));
-    c_reset := Comp (Reset_ap 1 2)
-                    (Comp (Reset_ap 1 4)
-                          (Comp (AssignSt 3 (Const (Cint 0)))
-                                Skip))
-  |}.
-Print class2.
-
-Remark prog2_good : translate_node node2 = class2.
-Proof eq_refl.
-
-(** Optimization *)
-
-Require Import Rustre.Minimp.FuseIfte.
-
-Example prog1' : stmt :=
-  Ifte (Var 1)
-       (Comp (Assign 2 (Const (Cint 7)))
-             (Assign 4 (Var 2)))
-       (Comp (Assign 4 (State 3))
-             (AssignSt 3 (Var 2))).
-Print prog1'.
-(* If 1 Then (Assign 2 7%Z;; Assign 4 2) Else (Assign 4 3;; AssignSt 3 2) *)
-
-Remark prog1'_is_fused: (fuse prog1 = prog1').
-Proof eq_refl.
-
-(* TODO: Show correctness of prog1' *)
-
 (** Examples from paper *)
 
 Section CodegenPaper.
 
   Require Import Nelist.
-
 
   Definition Plus : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.add.
   Definition op_plus (x: lexp) (y: lexp) : lexp := Eop Plus (necons x (nebase y)).
@@ -201,9 +104,7 @@ Section CodegenPaper.
                                    (Evar ini)
                                    (op_plus (Evar c) (Evar inc))))
     ].
-  Print count_eqns.
-  (* TODO: show that these equations Is_well_sch and Well_clocked;
-           need multiple inputs *)
+  (* Print count_eqns. *)
 
   Definition Div : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.div.
   Definition op_div (x: lexp) (y: lexp) : lexp := Eop Div (necons x (nebase y)).
@@ -218,9 +119,40 @@ Section CodegenPaper.
   Example count : node :=
     mk_node n_count (necons ini (necons inc (nebase restart))) n count_eqns.
 
-  Eval cbv in translate_node count.
-  Eval cbv in fuse (c_step (translate_node count)).
-  Eval cbv in fuse (c_reset (translate_node count)).
+  Example count_prog :=
+    {|
+      c_name := n_count;
+      c_input := ini :,: inc :,: restart §;
+      c_output := n;
+      c_mems := [f; c];
+      c_objs := [];
+      c_step := Assign n
+                  (Op Ifte_int
+                      (Op Disj (State f :,: Var restart §)
+                          :,: Var ini :,: Op Plus (State c :,: Var inc §) §));;
+                AssignSt f false;;
+                AssignSt c (Var n);;
+                Skip;
+      c_reset := AssignSt f true;;
+                 AssignSt c 0%Z;;
+                 Skip
+    |}.
+
+  Remark count_prog_good: translate_node count = count_prog.
+  Proof eq_refl.
+
+  Remark count_prog_step_fuse:
+    fuse (c_step count_prog) =
+         Assign n (Op Ifte_int
+                      (Op Disj (State f :,: Var restart §) :,: Var ini
+                          :,: Op Plus (State c :,: Var inc §) §));;
+         AssignSt f false;;
+         AssignSt c (Var n).
+  Proof eq_refl.
+
+  Remark count_prog_reset_fuse:
+    fuse (c_reset count_prog) = AssignSt f true;; AssignSt c 0%Z.
+  Proof eq_refl.
 
 (*
   node avgvelocity (delta: int; sec: bool) returns (v: int)
@@ -256,7 +188,7 @@ Section CodegenPaper.
                             (necons (Evar delta)
                             (nebase (Econst (Cbool false)))))
     ].
-  Print avgvelocity_eqns.
+  (* Print avgvelocity_eqns. *)
 
   Lemma avgvelocity_eqns_Well_sch :
     Is_well_sch (PS.singleton h) (delta :,: sec§) avgvelocity_eqns.
@@ -265,7 +197,47 @@ Section CodegenPaper.
   Example avgvelocity : node :=
     mk_node n_avgvelocity (delta :,: sec§) v avgvelocity_eqns.
 
-  Eval cbv in translate_node avgvelocity.
-  Eval cbv in fuse (c_step (translate_node avgvelocity)).
+  Example avgvelocity_prog :=
+    {|
+      c_name := n_avgvelocity;
+      c_input := delta :,: sec §;
+      c_output := v;
+      c_mems := [h];
+      c_objs := [{| obj_inst := r; obj_class := n_count |};
+                 {| obj_inst := t; obj_class := n_count |}];
+      c_step := Step_ap r n_count r ((Const 0%Z) :,: Var delta :,: (Const false) §);;
+                Ifte (Var sec)
+                     (Step_ap t n_count t ((Const 1%Z) :,: (Const 1%Z) :,: (Const false) §))
+                Skip;;
+                Ifte (Var sec)
+                     (Assign v (Op Div (Var r :,: Var t §)))
+                     (Assign v (State h));;
+                AssignSt h (Var v);;
+                Skip;
+      c_reset := Reset_ap n_count r;;
+                 Reset_ap n_count t;;
+                 AssignSt h 0%Z;;
+                 Skip
+    |}.
+
+  Remark avgvelocity_prog_good: translate_node avgvelocity = avgvelocity_prog.
+  Proof eq_refl.
+
+  Remark avgvelocity_prog_step_fuse:
+    fuse (c_step avgvelocity_prog) =
+         Step_ap r n_count r ((Const 0%Z) :,: Var delta :,: (Const false) §);;
+         Ifte (Var sec)
+              (Step_ap t n_count t ((Const 1%Z) :,: (Const 1%Z) :,: (Const false) §);;
+               Assign v (Op Div (Var r :,: Var t §)))
+              (Assign v (State h));;
+         AssignSt h (Var v).
+  Proof eq_refl.
+
+  Remark avgvelocity_prog_reset_fuse:
+    fuse (c_reset avgvelocity_prog) = Reset_ap n_count r;;
+                                      Reset_ap n_count t;;
+                                      AssignSt h 0%Z.
+  Proof eq_refl.
 
 End CodegenPaper.
+
