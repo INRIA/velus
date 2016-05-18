@@ -17,11 +17,11 @@ Require Import Rustre.Dataflow.WellFormed.Decide.
 
 
 (* Common notations *)
-Class Assignment T U V := {assign : ident -> T -> U -> V}.
-Notation "x '::=' y" := (assign x _ y) (at level 47, no associativity).
+Class Assignment U V := {assign : ident -> U -> V}.
+Notation "x '::=' y" := (assign x y) (at level 47, no associativity, only parsing).
 Class OpCall T U := {opcall : operator -> T -> U}.
-Notation "f '<' nel '>'" := (opcall f nel) (at level 46, format "f '<' nel '>'").
-Notation "x :,: y" := (necons x y) (at level 30, right associativity).
+Notation "f '<' nel '>'" := (opcall f nel) (at level 46, only parsing, format "f '<' nel '>'").
+Notation "x :,: y" := (necons x y) (at level 30, right associativity, only parsing).
 Notation "x '§'" := (nebase x) (at level 30).
 
 (* Dataflow notations *)
@@ -35,20 +35,29 @@ Notation "x 'on' ck" := (Con x ck) (at level 44).
 (*Notation "x 'when' C ( ck )" := (Ewhen x ck C) (at level 45, left associativity, format "x  'when'  C ( ck )").*)
 Notation "x 'when' ck" := (Ewhen x ck true) (at level 45, left associativity).
 Notation "x 'whenot' ck" := (Ewhen x ck false) (at level 45, left associativity).
-Notation "x '::=' v 'fby' y" := (EqFby x _ v y) (at level 47).
-Notation "x '::=' f '(|' nel '|)'" := (EqApp x _ f nel) (at level 47, format "x  '::='  f '(|' nel '|)'").
-Instance EqDef_Assign : Assignment clock cexp equation := {assign := EqDef}.
+Notation "x '::=' v 'fby' y" := (EqFby x Cbase (v : const) (y : lexp)) 
+                                  (at level 47, v at next level). 
+Notation "x '::=' f '(|' nel '|)'" := (EqApp x _ f nel) 
+                                        (at level 47, f, nel at next level, format "x  '::='  f '(|' nel '|)'").
+Instance EqDef_CAssign : Assignment cexp equation := {assign := (fun i => EqDef i Cbase)}.
+Instance EqDef_EAssign : Assignment lexp equation := {assign := (fun i e => EqDef i Cbase (Eexp e))}.
 Instance Eop_OpCall : OpCall lexps lexp := {opcall := Eop}.
 
 (* Imperative notations *)
 Coercion Const : const >-> exp.
+Coercion Var : ident >-> exp.
 
-Instance Assign_Assign : Assignment unit exp stmt := {assign := fun x (_ : unit) => Assign x}.
-Instance AssignSt_Assign : Assignment unit exp stmt := {assign := fun x (_ : unit) => AssignSt x}.
+Class IFTE U V := {ifte : U -> V -> V -> V}.
+Notation "'If' b 'Then' t 'Else' f" := (ifte b t f) (at level 47, t at level 47, f at level 47).
+
+Instance Assign_Assign : Assignment exp stmt := {assign := Assign}.
+(* Instance AssignSt_Assign : Assignment exp stmt := {assign := AssignSt}. *)
+Notation "'state(|' x '|)::='  y" := (AssignSt x y) (at level 47).
 Instance Op_OpCall : OpCall (nelist exp) exp := {opcall := Op}.
 Notation "stmt1 ;; stmt2" := (Comp stmt1 stmt2) (at level 48, right associativity).
-Notation "'If' b 'Then' t 'Else' f" := (Ifte b t f) (at level 47, t at level 47, f at level 47).
-Notation "x '::=' class '(' obj ').step(' args ')'" := (Step_ap x class obj args) (at level 47).
+Instance IFTE_imp : IFTE exp stmt := {ifte := Ifte}.
+Notation "x '::=' class '(' obj ').step(' args ')'" := (Step_ap x class obj args)
+                                                         (at level 47, class, obj, args at next level).
 Notation " class '(' obj ').reset()'" := (Reset_ap class obj) (at level 47).
 
 (** Examples from paper *)
@@ -58,9 +67,13 @@ Section CodegenPaper.
   Require Import Nelist.
 
   Definition Plus : operator := existT arrows (Tcons Tint (Tcons Tint (Tout Tint))) BinInt.Z.add.
-  Definition op_plus (x: lexp) (y: lexp) : lexp := Eop Plus (necons x (nebase y)).
-  Notation "x ':+' y" := (op_plus x y) (at level 47).
   Opaque Plus.
+
+  Class NPlus U := {plus : U -> U -> U}.
+  Notation "x ':+' y" := (plus x y) (at level 47).
+
+  Instance NPlus_lexp : NPlus lexp := {plus := fun x y => Eop Plus (necons x (nebase y))}.
+  Instance NPlus_exp : NPlus exp := {plus := fun x y => Op Plus (necons x (nebase y))}.
 
   Definition Ifte_int : operator :=
     existT arrows (Tcons Tbool (Tcons Tint (Tcons Tint (Tout Tint))))
@@ -69,11 +82,18 @@ Section CodegenPaper.
     Eop Ifte_int (necons x (necons t (nebase f))).
   Opaque Ifte_int.
 
+  Instance IFTE_lustre : IFTE lexp lexp := {ifte := op_ifte}.
+  Instance IFTE_impOp : IFTE exp exp := {ifte := fun x t f => Op Ifte_int (necons x (necons t (nebase f)))}.
+
   Definition Disj : operator :=
     existT arrows (Tcons Tbool (Tcons Tbool (Tout Tbool))) orb.
-  Definition op_disj (x: lexp) (y: lexp) : lexp := Eop Disj (necons x (nebase y)).
-  Notation "x ':||' y" := (op_disj x y) (at level 47).
   Opaque Disj.
+
+  Class NDisj U := {disj : U -> U -> U}.
+  Notation "x ':||' y" := (disj x y) (at level 47).
+
+  Instance NDisj_lexp : NDisj lexp := {disj := fun x y => Eop Disj (necons x (nebase y))}.
+  Instance NDisj_exp : NDisj exp := {disj := fun x y => Op Disj (necons x (nebase y))}.
 
   (* Node names *)
   Definition n_count       : ident := 1.
@@ -99,11 +119,11 @@ Section CodegenPaper.
 
   Example count_eqns : list equation :=
     [
-      EqFby c Cbase (Cint 0) (Evar n);
-      EqFby f Cbase (Cbool true) (Cbool false);
-      EqDef n Cbase (Eexp (op_ifte (op_disj (Evar f) (Evar restart))
-                                   (Evar ini)
-                                   (op_plus (Evar c) (Evar inc))))
+      c ::= 0%Z fby n ;
+      f ::= true fby false;
+      n ::= If ((f : lexp) :|| restart) 
+            Then (ini : lexp)
+            Else ((c : lexp) :+ inc)
     ].
   (* Print count_eqns. *)
 
@@ -127,32 +147,33 @@ Section CodegenPaper.
       c_output := n;
       c_mems := [f; c];
       c_objs := [];
-      c_step := Assign n
-                  (Op Ifte_int
-                      (Op Disj (State f :,: Var restart §)
-                          :,: Var ini :,: Op Plus (State c :,: Var inc §) §));;
-                AssignSt f false;;
-                AssignSt c (Var n);;
+      c_step := n ::=
+                  (If (State f) :|| restart
+                  Then (ini : exp)
+                  Else ((State c) :+ inc));;
+                state(| f |)::= false;;
+                state(| c |)::= n;;
                 Skip;
-      c_reset := AssignSt f true;;
-                 AssignSt c 0%Z;;
+      c_reset := state(| f |)::= true;;
+                 state(| c |)::= 0%Z;;
                  Skip
     |}.
+  
 
   Remark count_prog_good: translate_node count = count_prog.
   Proof eq_refl.
 
   Remark count_prog_step_fuse:
     fuse (c_step count_prog) =
-         Assign n (Op Ifte_int
-                      (Op Disj (State f :,: Var restart §) :,: Var ini
-                          :,: Op Plus (State c :,: Var inc §) §));;
-         AssignSt f false;;
-         AssignSt c (Var n).
+         n ::= (If (State f) :|| restart
+                Then (ini : exp)
+                Else ((State c) :+ inc));;
+         state(| f |)::= false;;
+         state(| c |)::= n.
   Proof eq_refl.
 
   Remark count_prog_reset_fuse:
-    fuse (c_reset count_prog) = AssignSt f true;; AssignSt c 0%Z.
+    fuse (c_reset count_prog) = state(| f |)::= true;; state(| c |)::= 0%Z.
   Proof eq_refl.
 
 (*
