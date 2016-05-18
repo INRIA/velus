@@ -78,21 +78,10 @@ Example node2 : node :=
 (** Scheduling *)
 
 Example eqn1_well_sch: Is_well_sch (memories eqns1) (1§) eqns1.
-Proof.
-  assert (well_sch (memories eqns1) (1§) eqns1 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns1) (1§) eqns1) as HS.
-  rewrite HW in HS.
-  assumption.
-Qed.
+Proof. apply Is_well_sch_by_refl; reflexivity. Qed.
 
 Example eqn2_well_sch: Is_well_sch (memories eqns2) (1§) eqns2.
-Proof.
-  assert (well_sch (memories eqns2) (1§) eqns2 = true) as HW by apply eq_refl.
-  pose proof (well_sch_spec (memories eqns2) (1§) eqns2) as HS.
-  rewrite HW in HS.
-  assumption.
-Qed.
-
+Proof. apply Is_well_sch_by_refl; reflexivity. Qed.
 
 (** Translation *)
 
@@ -221,87 +210,10 @@ Section CodegenPaper.
   Notation "x ':/' y" := (op_div x y) (at level 49).
   Opaque Div.
 
-  (* XXX: prove by reflection, god damnit *)
-  Ltac invert :=
-    (* Invertible rules, yeah! *)
-    repeat progress
-           match goal with
-             | H: PS.In _ (PS.singleton _) |- _ =>
-               apply PSP.Dec.F.singleton_1 in H
-             | H: ~ PS.In ?c (PS.singleton ?c) |- _ =>
-               now (exfalso; apply H; PSdec.fsetdec)
-             | H: IsFree.Is_free_in_lexp _ (Econst _) |- _ =>
-               now (exfalso; inv H)
-
-
-             | |- Is_well_sch _ _ _ => constructor
-             | |- ~ _ => intro
-             | |- _ /\ _  => split
-             | |- _ -> _ => intros
-
-             | |- PS.In ?x (PS.add ?x _) => apply PSF.add_1; reflexivity
-             | |- PS.In ?x (PS.add _ (PS.singleton ?x)) => apply PSF.add_2; reflexivity
-
-             | H: context[ op_ifte _ _ _ ] |- _ => unfold op_ifte in H
-             | H: context[ op_plus _ _ ] |- _ => unfold op_plus in H
-             | H: context[ op_div _ _ ] |- _ => unfold op_div in H
-             | H: context[ op_disj _ _ ] |- _ => unfold op_disj in H
-             | [ i : ident , H : ?i = _ |- _ ] => subst i
-             | i: ident , H: _ = ?i |- _ => subst i
-
-             | H: IsFree.Is_free_in_eq _ (EqDef _ _ _) |- _ => inv H
-             | H: IsFree.Is_free_in_eq _ (EqFby _ _ _ _) |- _ => inv H
-             | H: IsFree.Is_free_in_eq _ (EqApp _ _ _ _) |- _ => inv H
-
-             | H: IsFree.Is_free_in_caexp _ _ _ |- _ => inversion H; clear H
-
-             | H: IsFree.Is_free_in_cexp _ (Emerge _ _ _) |- _ => inversion H; clear H
-             | H: IsFree.Is_free_in_cexp _ (Eexp _) |- _ => inv H
-
-             | H: IsFree.Is_free_in_lexp _ (Ewhen _ _ _) |- _ => inversion H; clear H
-             | H: IsFree.Is_free_in_lexp _ (Eop _ _) |- _ => inv H
-             | H: IsFree.Is_free_in_lexp ?x (Evar ?y) |- _ =>
-               assert (x = y) by (inv H; eauto); clear H
-
-             | H: IsFree.Is_free_in_clock _ Cbase |- _ => now (exfalso; inv H)
-             | H: IsFree.Is_free_in_clock _ (Con _ _ _) |- _ => inversion H; clear H
-             | H: IsFree.Is_free_in_laexp _ _ _ |- _ => inversion H; clear H
-             | H: IsFree.Is_free_in_laexps _ _ (nebase _) |- _ => inv H
-             | H: IsFree.Is_free_in_laexps _ _ (necons _ _) |- _ => inv H
-
-             | H: IsDefined.Is_defined_in_eqs _ [] |- _ => inv H
-             | H: IsDefined.Is_defined_in_eqs _ (_ :: _) |- _ => inv H
-
-             | H: IsDefined.Is_defined_in_eq _ (EqDef _ _ _) |- _ => inv H
-             | H: IsDefined.Is_defined_in_eq _ (EqFby _ _ _ _) |- _ => inv H
-             | H: IsDefined.Is_defined_in_eq _ (EqApp _ _ _ _) |- _ => inv H
-
-             | H: List.Exists _ [] |- _ => inv H
-             | H: List.Exists _ (_ :: _) |- _ => inv H
-
-             | H: Exists _ (nebase _) |- _ => inv H
-             | H: Exists _ (necons _ _) |- _ => inv H
-
-             | H: ~PS.In ?x (PS.add ?x _) |- _ => exfalso; apply H
-             | H: ~PS.In ?x (PS.add _ (PS.singleton ?x)) |- _ => exfalso; apply H
-             | H: PS.In _ (PS.add _ _) |- _ => inv H
-           end.
-
-  Ltac commit :=
-    try solve [ right;
-                simpl; auto
-              | left; constructor 2; repeat constructor
-              | left; repeat constructor
-              | auto ].
-
-  Ltac is_well_sch := invert; commit.
-
   Lemma count_eqns_well_sch :
     Is_well_sch (PS.add f (PS.singleton c))
                 (ini :,: inc :,: restart§) count_eqns.
-  Proof.
-    is_well_sch.
-  Qed.
+  Proof. apply Is_well_sch_by_refl; reflexivity. Qed.
 
   Example count : node :=
     mk_node n_count (necons ini (necons inc (nebase restart))) n count_eqns.
@@ -348,9 +260,7 @@ Section CodegenPaper.
 
   Lemma avgvelocity_eqns_Well_sch :
     Is_well_sch (PS.singleton h) (delta :,: sec§) avgvelocity_eqns.
-  Proof.
-    is_well_sch.
-  Qed.
+  Proof. apply Is_well_sch_by_refl; reflexivity. Qed.
 
   Example avgvelocity : node :=
     mk_node n_avgvelocity (delta :,: sec§) v avgvelocity_eqns.

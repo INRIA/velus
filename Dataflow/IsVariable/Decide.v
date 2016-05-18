@@ -10,7 +10,7 @@ Require Import Rustre.Dataflow.IsVariable.
 
 (** * Stack variables: decision procedure *)
 
-(** 
+(**
 
 Decision procedure for the [IsVariable] predicate. We show that it is
 equivalent to its specification.
@@ -21,7 +21,7 @@ not clear (to me) whether it is necessary.
  *)
 
 
-Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
+Definition add_variable_eq (vars: PS.t) (eq: equation) : PS.t :=
   match eq with
   | EqDef x _ _   => PS.add x vars
   | EqApp x _ _ _ => PS.add x vars
@@ -29,14 +29,27 @@ Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
   end.
 
 Definition variables (eqs: list equation) : PS.t :=
-  List.fold_left variable_eq eqs PS.empty.
+  List.fold_left add_variable_eq eqs PS.empty.
+
+Lemma add_variable_eq_empty:
+  forall x eq variables,
+    PS.In x (add_variable_eq variables eq)
+    <-> PS.In x (add_variable_eq PS.empty eq) \/ PS.In x variables.
+Proof.
+  split; intro H.
+  destruct eq;
+  simpl in *; try (apply PS.add_spec in H; destruct H; [subst i|]); intuition.
+  destruct eq; simpl in *; destruct H;
+  try (apply PS.add_spec in H; destruct H); try apply PS.empty_spec in H;
+  intuition.
+Qed.
 
 (** ** Properties *)
 
-Lemma In_fold_left_variable_eq:
+Lemma In_fold_left_add_variable_eq:
   forall x eqs m,
-    PS.In x (List.fold_left variable_eq eqs m)
-    <-> PS.In x (List.fold_left variable_eq eqs PS.empty) \/ PS.In x m.
+    PS.In x (List.fold_left add_variable_eq eqs m)
+    <-> PS.In x (List.fold_left add_variable_eq eqs PS.empty) \/ PS.In x m.
 Proof. (* TODO: There must be a way to get auto to do all of this? *)
   induction eqs as [|eq].
   - split; auto.
@@ -68,7 +81,7 @@ Proof.
   - rewrite List.Exists_nil; split; intro H;
     try apply not_In_empty in H; contradiction.
   - simpl.
-    rewrite In_fold_left_variable_eq.
+    rewrite In_fold_left_add_variable_eq.
     split.
     + rewrite List.Exists_cons.
       destruct 1. intuition.

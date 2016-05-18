@@ -11,7 +11,7 @@ Require Import Rustre.Dataflow.Memories.
 
 (** * Defined variables : decision procedure *)
 
-(** 
+(**
 
 Decision procedure for the [Is_defined_in] predicate. We show that it
 is equivalent to its specification.
@@ -20,24 +20,32 @@ Remark: This development is not formally part of the correctness proof.
 
  *)
 
-
-Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
+Definition defined_eq (eq: equation) : ident :=
   match eq with
-  | EqDef x _ _   => PS.add x defs
-  | EqApp x _ _ _ => PS.add x defs
-  | EqFby x _ _ _ => PS.add x defs
+  | EqDef x _ _   => x
+  | EqApp x _ _ _ => x
+  | EqFby x _ _ _ => x
   end.
 
-Definition defined (eqs: list equation) : PS.t :=
-  List.fold_left defined_eq eqs PS.empty.
+Definition add_defined_eq (defs: PS.t) (eq: equation) : PS.t :=
+  PS.add (defined_eq eq) defs.
 
+Definition defined (eqs: list equation) : PS.t :=
+  List.fold_left add_defined_eq eqs PS.empty.
 
 (** ** Properties *)
 
-Lemma In_fold_left_defined_eq:
+Lemma defined_eq_Is_defined_in:
+  forall x eq, defined_eq eq = x <-> Is_defined_in_eq x eq.
+Proof.
+  destruct eq;
+  (split; intro H; [subst x; constructor|inversion_clear H; reflexivity]).
+Qed.
+
+Lemma In_fold_left_add_defined_eq:
   forall x eqs m,
-    PS.In x (List.fold_left defined_eq eqs m)
-    <-> PS.In x (List.fold_left defined_eq eqs PS.empty) \/ PS.In x m.
+    PS.In x (List.fold_left add_defined_eq eqs m)
+    <-> PS.In x (List.fold_left add_defined_eq eqs PS.empty) \/ PS.In x m.
 Proof.
   induction eqs as [|eq].
   - split; auto.
@@ -74,7 +82,7 @@ Proof.
   - rewrite List.Exists_nil; split; intro H;
     try apply not_In_empty in H; contradiction.
   - simpl.
-    rewrite In_fold_left_defined_eq.
+    rewrite In_fold_left_add_defined_eq.
     split.
     + rewrite List.Exists_cons.
       destruct 1. intuition.
@@ -85,6 +93,17 @@ Proof.
     + intro H; apply List.Exists_cons in H; destruct H.
       inversion H; destruct eq; (right; apply PS.add_spec; intuition).
       left; apply IHeqs; apply H.
+Qed.
+
+Lemma Is_defined_in_eq_dec:
+  forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
+Proof.
+  intros x eq.
+  apply Bool.reflect_dec with (b := ident_eqb (defined_eq eq) x).
+  apply Bool.iff_reflect.
+  rewrite ident_eqb_eq.
+  symmetry.
+  apply defined_eq_Is_defined_in.
 Qed.
 
 Lemma Is_defined_in_dec:
@@ -98,31 +117,3 @@ Proof.
   apply Is_defined_in_defined.
 Qed.
 
-Lemma In_memory_eq_In_defined_eq:
-  forall x eq S,
-    PS.In x (memory_eq S eq)
-    -> PS.In x (defined_eq S eq).
-Proof.
-  intros x eq S HH.
-  destruct eq; try (apply PS.add_spec; now intuition).
-  apply PS.add_spec in HH.
-  destruct HH as [HH|HH].
-  - rewrite HH; apply PS.add_spec; left; reflexivity.
-  - apply PS.add_spec; right; exact HH.
-Qed.
-
-Lemma In_fold_left_memory_eq_defined_eq:
-  forall x eqs S,
-    PS.In x (List.fold_left memory_eq eqs S)
-    -> PS.In x (List.fold_left defined_eq eqs S).
-Proof.
-  intros x eqs.
-  induction eqs as [|eq eqs IH]; [now intuition|].
-  intros S HH.
-  apply IH in HH; clear IH.
-  apply In_fold_left_defined_eq in HH.
-  simpl. apply In_fold_left_defined_eq.
-  destruct HH as [HH|HH].
-  - left; exact HH.
-  - right; now apply In_memory_eq_In_defined_eq with (1:=HH).
-Qed.

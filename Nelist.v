@@ -3,7 +3,7 @@ Require Import Morphisms.
 
 (** * Non-empty lists *)
 
-(** 
+(**
 
   This module re-implements the [List] library, specialized to the
   case where the list is necessarily non-empty.
@@ -38,13 +38,13 @@ Fixpoint list2nelist {A : Type} (l : list A) (Hl : l <> nil) {struct l} : nelist
 destruct l as [| e l'].
 + now elim Hl.
 + apply (@list_rec A (fun _ => nelist A) (nebase e)).
-  - apply 
-  - 
+  - apply
+  -
  destruct l'. exact (nebase e).
 + apply (necons e). apply (list2nelist _ (cons e' l')). Guarded.
   refine (match l as l' return l = l' -> nelist A with
     | nil => fun Heq => False_rect _ (Hl Heq)
-    | cons e l' => fun Heq => 
+    | cons e l' => fun Heq =>
         match l' as l'' return l' = l'' -> nelist A with
           | nil => fun _ => nebase e
           | cons e l' => fun _ => necons e (list2nelist _ l' _)
@@ -113,6 +113,22 @@ Inductive NoDup {A : Type} : nelist A -> Prop :=
 
 Ltac inv H := inversion H; subst; clear H.
 
+Lemma in_necons_spec:
+  forall T xs x (y: T),
+    In x (necons y xs) <-> y = x \/ In x xs.
+Proof.
+  induction xs; [firstorder|].
+  split; intro H.
+  - change (x = y \/ In x (necons e xs)) in H.
+    destruct H; [symmetry in H; now auto|].
+    apply IHxs in H.
+    destruct H; [subst e|]; simpl; now auto.
+  - destruct H.
+    subst y; simpl; now auto.
+    apply IHxs in H.
+    destruct H; [symmetry in H|]; simpl; now auto.
+Qed.
+
 (** *** About [length] *)
 
 Lemma diff_length_nebase_necons : forall {A B} (a : A) (b : B) l, length (nebase a) <> length (necons b l).
@@ -161,7 +177,7 @@ Lemma map_eq_necons : forall {A B : Type} (f : A -> B) l y l',
   map f l = necons y l' <-> exists x l'', l = necons x l'' /\ f x = y /\ map f l'' = l'.
 Proof.
 intros A B f l y l'. destruct l; simpl; split; intro H; decompose [ex and] H || inversion_clear H; subst; eauto.
-- discriminate. 
+- discriminate.
 - inversion H0. now subst.
 Qed.
 
@@ -171,7 +187,7 @@ Proof. intros A B f l. induction l; simpl; auto. Qed.
 Lemma nelist2list_map : forall {A B : Type} (f : A -> B) l,
   nelist2list (map f l) = List.map f (nelist2list l).
 Proof. intros A B f l. induction l; simpl; try rewrite IHl; reflexivity. Qed.
-   
+
 (** *** About [Forall] *)
 
 Lemma Forall_forall : forall {A : Type} P l, Forall P l <-> forall x : A, In x l -> P x.

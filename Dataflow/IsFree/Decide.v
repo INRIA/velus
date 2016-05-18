@@ -63,55 +63,6 @@ Fixpoint free_in_clock_dec (ck : clock) (T: PS.t)
       apply HF in HH; apply PS.add_spec; right; assumption.
 Defined.
 
-(*
-Lemma Is_free_in_lexp_op_nebase:
-  forall x op e,
-    Is_free_in_lexp x (Eop op (Nelist.nebase e))
-    <->
-    Is_free_in_lexp x e.
-Proof.
-  intros x op e; split; intro HH.
-  inversion_clear HH as [| | |H1 H2 H3 H4].
-  inversion_clear H4; assumption.
-  repeat constructor; assumption.
-Qed.
-
-Fixpoint free_in_lexp (e: lexp) (S: PS.t) {struct e}
-    : { T | forall x, PS.In x T <-> (Is_free_in_lexp x e \/ PS.In x S) }.
-  refine (
-      match e with
-      | Econst c => exist _ S _
-      | Evar x => exist _ (PS.add x S) _
-      | Ewhen e x xc =>
-        match free_in_lexp e S with
-        | exist S' HF => exist _ (PS.add x S') _
-        end
-      | Eop op es =>
-        Nelist.fold_left (fun fvs e' =>
-                       match fvs with
-                       (* TB: How to get this to work? *)
-                       | exist S' HF => free_in_lexp e' S'
-                       end) es _
-      end); try (intro y).
-  - split; intro HH; [auto|].
-    destruct HH as [HH|HH]; [inversion HH|assumption].
-  - split; intro HH.
-    + apply PS.add_spec in HH; destruct HH as [HH|HH]; [rewrite HH|]; auto.
-    + destruct HH as [HH|HH]; [inversion_clear HH|]; apply PS.add_spec; auto.
-  - split; intro HH.
-    + apply PS.add_spec in HH; destruct HH as [HH|HH]; [rewrite HH|]; auto.
-      apply HF in HH.
-      destruct HH as [HH|HH]; [left|auto].
-      constructor (assumption).
-    + rewrite Is_free_in_when_disj in HH.
-      apply or_assoc in HH.
-      destruct HH as [HH|HH].
-      rewrite HH; apply PS.add_spec; auto.
-      apply HF in HH; apply PS.add_spec; auto.
-  - Check (free_in_lexp e' S').
-*)
-
-
 (* TODO: use auto for the proofs. *)
 
 Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
@@ -119,7 +70,6 @@ Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
   | Cbase => fvs
   | Con ck' x xc => free_in_clock ck' (PS.add x fvs)
   end.
-
 
 Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
   match e with
@@ -141,10 +91,8 @@ Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
   | Eexp e => free_in_lexp e fvs
   end.
 
-
 Definition free_in_caexp (ck: clock)(ce: cexp) (fvs: PS.t) : PS.t :=
   free_in_cexp ce (free_in_clock ck fvs).
-
 
 Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
   match eq with
