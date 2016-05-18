@@ -65,7 +65,7 @@ Notation "x '::=' class '(|' obj '|).step(' args ')'" := (Step_ap x class obj ar
 Notation " class '(|' obj '|).reset()'" := (Reset_ap class obj)
                                                  (at level 47, obj at next level).
 
-Print Grammar constr.
+(* Print Grammar constr. *)
 
 (** Examples from paper *)
 
@@ -227,8 +227,6 @@ Section CodegenPaper.
 
   Example avgvelocity : node :=
     mk_node n_avgvelocity (delta :,: sec§) v avgvelocity_eqns.
-
-Print Grammar constr.
 
   Example avgvelocity_prog :=
     {|
