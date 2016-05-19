@@ -53,6 +53,45 @@ Module Type NODUP
         ~Is_defined_in_eqs x eqs ->
         NoDup_defs (EqFby x ck v e :: eqs).
 
+  (** ** Properties *)
+
+  Axiom NoDup_defs_cons:
+    forall eq eqs,
+      NoDup_defs (eq :: eqs) -> NoDup_defs eqs.
+  
+  Axiom not_Is_variable_in_memories:
+    forall x eqs,
+      PS.In x (memories eqs)
+      -> NoDup_defs eqs
+      -> ~Is_variable_in_eqs x eqs.
+
+End NODUP.
+
+Module NoDupFun'
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem)
+       (Import IsV : ISVARIABLE Op Syn Mem IsD).
+    
+  Inductive NoDup_defs : list equation -> Prop :=
+  | NDDNil: NoDup_defs nil
+  | NDDEqDef:
+      forall x ck e eqs,
+        NoDup_defs eqs ->
+        ~Is_defined_in_eqs x eqs ->
+        NoDup_defs (EqDef x ck e :: eqs)
+  | NDDEqApp:
+      forall x ck f e ty eqs,
+        NoDup_defs eqs ->
+        ~Is_defined_in_eqs x eqs ->
+        NoDup_defs (EqApp x ck f e ty :: eqs)
+  | NDDEqFby:
+      forall x ck v e eqs,
+        NoDup_defs eqs ->
+        ~Is_defined_in_eqs x eqs ->
+        NoDup_defs (EqFby x ck v e :: eqs).
+
 
   (** ** Properties *)
 
@@ -138,4 +177,5 @@ Module Type NODUP
         exfalso; apply Hndin; now constructor.
   Qed.
 
-End NODUP.
+End NoDupFun'.
+Module NoDupFun <: NODUP := NoDupFun'.

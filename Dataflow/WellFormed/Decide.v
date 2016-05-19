@@ -41,6 +41,69 @@ Module Type DECIDE
 
     Open Scope bool_scope.
 
+    Parameter check_var: PS.t -> PS.t -> PS.t -> ident -> bool.
+
+    Axiom check_var_spec:
+      forall defined variables x,
+        check_var mems defined variables x = true
+        <->
+        (PS.In x mems -> ~PS.In x defined)
+        /\ (~PS.In x mems -> PS.In x variables).
+    
+    Parameter check_eq: PS.t -> equation -> bool*PS.t*PS.t -> bool*PS.t*PS.t.
+
+    Parameter well_sch: PS.t -> Nelist.nelist ident -> list equation -> bool.
+
+    Axiom not_for_all_spec:
+      forall (s : PS.t) (f : BinNums.positive -> bool),
+        SetoidList.compat_bool PS.E.eq f ->
+        (PS.for_all f s = false <-> ~(PS.For_all (fun x : PS.elt => f x = true) s)).
+    
+    Axiom check_var_compat:
+      forall defined variables,
+        SetoidList.compat_bool PS.E.eq (check_var mems defined variables).
+    
+    Axiom well_sch_pre_spec:
+      forall argIns eqs good defined variables,
+        (good, defined, variables)
+        = List.fold_right (check_eq mems) (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs
+        ->
+        (good = true
+         -> (Is_well_sch mems argIns eqs
+            /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
+            /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ Nelist.In x argIns)))
+        /\ (good = false -> ~Is_well_sch mems argIns eqs).
+
+    Axiom well_sch_spec:
+      forall argIns eqns,
+        if well_sch mems argIns eqns
+        then Is_well_sch mems argIns eqns
+        else ~Is_well_sch mems argIns eqns.
+    
+  End Decide.
+
+End DECIDE.
+
+Module DecideFun'
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (IsF : ISFREE Op Syn)
+       (Import IsFDec : IsFree.Decide.DECIDE Op Syn IsF)
+       (Import Ord : ORDERED Op Syn)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem)
+       (Import IsV : ISVARIABLE Op Syn Mem IsD)
+       (Import NoD : NODUP Op Syn Mem IsD IsV)
+       (Import Wef : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD).
+  
+  Section Decide.
+
+    Variable mems : PS.t.
+
+    (* TODO: rewrite using a strong specification?  *)
+
+    Open Scope bool_scope.
+
     Definition check_var (defined: PS.t) (variables: PS.t) (x: ident) : bool :=
       if PS.mem x mems
       then negb (PS.mem x defined)
@@ -307,4 +370,5 @@ Qed.
 
   End Decide.
 
-End DECIDE.
+End DecideFun'.
+Module DecideFun <: DECIDE := DecideFun'.

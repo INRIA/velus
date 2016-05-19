@@ -30,6 +30,66 @@ Module Type ISVARIABLE
   | VarEqDef: forall x ck e,      Is_variable_in_eq x (EqDef x ck e)
   | VarEqApp: forall x ck f e ty, Is_variable_in_eq x (EqApp x ck f e ty).
 
+  (* definition is needed in signature *)
+  Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    List.Exists (Is_variable_in_eq x) eqs.
+
+  (** ** Properties *)
+
+  Axiom not_Is_variable_in_EqDef: 
+    forall x ck y e,
+      ~ Is_variable_in_eq x (EqDef y ck e) -> x <> y.
+  
+  Axiom not_Is_variable_in_EqApp: 
+    forall x y ck f e ty,
+      ~ Is_variable_in_eq x (EqApp y ck f e ty) -> x <> y.
+
+  (* tactic definition needed in signature *)
+  Ltac not_Is_variable x y :=
+    match goal with
+    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ => 
+      apply not_Is_variable_in_EqDef in H
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ => 
+      apply not_Is_variable_in_EqApp in H
+    end.
+  
+  Axiom Is_variable_in_eq_dec:
+    forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
+
+  Axiom Is_variable_in_eqs_Is_defined_in_eqs:
+    forall x eqs,
+      Is_variable_in_eqs x eqs
+      -> Is_defined_in_eqs x eqs.
+
+  Axiom Is_variable_in_cons:
+    forall x eq eqs,
+      Is_variable_in_eqs x (eq :: eqs) ->
+      Is_variable_in_eq x eq
+      \/ (~Is_variable_in_eq x eq /\ Is_variable_in_eqs x eqs).
+  
+  Axiom not_Is_variable_in_cons:
+    forall x eq eqs,
+      ~Is_variable_in_eqs x (eq :: eqs)
+      <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in_eqs x eqs.
+  
+  Axiom not_Is_defined_in_eq_not_Is_variable_in_eq:
+    forall x eq, ~Is_defined_in_eq x eq -> ~Is_variable_in_eq x eq.
+  
+  Axiom not_Is_defined_in_not_Is_variable_in:
+    forall x eqs, ~Is_defined_in_eqs x eqs -> ~Is_variable_in_eqs x eqs.
+
+End ISVARIABLE.
+
+Module IsVariableFun'
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem).
+
+  Inductive Is_variable_in_eq : ident -> equation -> Prop :=
+  | VarEqDef: forall x ck e,      Is_variable_in_eq x (EqDef x ck e)
+  | VarEqApp: forall x ck f e ty, Is_variable_in_eq x (EqApp x ck f e ty).
+
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
 
@@ -124,4 +184,5 @@ Module Type ISVARIABLE
              | now apply H1].
   Qed.
 
-End ISVARIABLE.
+End IsVariableFun'.
+Module IsVariableFun <: ISVARIABLE := IsVariableFun'.

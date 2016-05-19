@@ -22,6 +22,89 @@ Module Type DECIDE
        (Import Syn : SYNTAX Op)
        (Import IsF : ISFREE Op Syn).
 
+  Parameter free_in_clock: clock -> PS.t -> PS.t.
+
+  Parameter free_in_lexp: lexp -> PS.t -> PS.t.
+
+  Parameter free_in_laexp: clock -> lexp -> PS.t -> PS.t.
+
+  Parameter free_in_laexps: clock -> lexps -> PS.t -> PS.t.
+
+  Parameter free_in_cexp: cexp -> PS.t -> PS.t.
+
+  Parameter free_in_caexp: clock -> cexp -> PS.t -> PS.t.
+
+  Parameter free_in_equation: equation -> PS.t -> PS.t.
+
+  (** * Specification lemmas *)
+
+  Axiom free_in_clock_spec:
+    forall x ck m, PS.In x (free_in_clock ck m)
+              <-> Is_free_in_clock x ck \/ PS.In x m.
+
+  Axiom free_in_clock_spec':
+    forall x ck, PS.In x (free_in_clock ck PS.empty)
+            <-> Is_free_in_clock x ck.
+  
+  Axiom free_in_lexp_spec:
+    forall x e m, PS.In x (free_in_lexp e m)
+             <-> Is_free_in_lexp x e \/ PS.In x m.
+
+  Axiom free_in_lexp_spec':
+    forall x e, PS.In x (free_in_lexp e PS.empty)
+           <-> Is_free_in_lexp x e.
+ 
+  Axiom free_in_laexp_spec:
+    forall x ck e m, PS.In x (free_in_laexp ck e m)
+                <-> Is_free_in_laexp x ck e \/ PS.In x m.
+
+  Axiom free_in_laexp_spec':
+    forall x ck e, PS.In x (free_in_laexp ck e PS.empty)
+              <-> Is_free_in_laexp x ck e.
+  
+  Axiom free_in_nelist_lexp_spec : forall x l m,
+      PS.In x (Nelist.fold_left (fun fvs e => free_in_lexp e fvs) l m) <-> 
+      Nelist.Exists (Is_free_in_lexp x) l \/ PS.In x m.
+
+  Axiom free_in_laexps_spec:
+    forall x ck e m, PS.In x (free_in_laexps ck e m)
+                <-> Is_free_in_laexps x ck e \/ PS.In x m.
+
+  Axiom free_in_laexps_spec':
+    forall x ck l, PS.In x (free_in_laexps ck l PS.empty)
+              <-> Is_free_in_laexps x ck l.
+  
+  Axiom free_in_cexp_spec:
+    forall x e m, PS.In x (free_in_cexp e m)
+             <-> Is_free_in_cexp x e \/ PS.In x m.
+  
+  Axiom free_in_cexp_spec':
+    forall x e, PS.In x (free_in_cexp e PS.empty)
+           <-> Is_free_in_cexp x e.
+
+  Axiom free_in_caexp_spec:
+    forall x ck e m, PS.In x (free_in_caexp ck e m)
+                <-> Is_free_in_caexp x ck e \/ PS.In x m.
+
+  Axiom free_in_caexp_spec':
+    forall x ck e, PS.In x (free_in_caexp ck e PS.empty)
+              <-> Is_free_in_caexp x ck e.
+
+  Axiom free_in_equation_spec:
+    forall x eq m, PS.In x (free_in_equation eq m)
+              <-> (Is_free_in_eq x eq \/ PS.In x m).
+
+  Axiom free_in_equation_spec':
+    forall x eq, PS.In x (free_in_equation eq PS.empty)
+            <-> Is_free_in_eq x eq.
+
+End DECIDE.
+
+Module DecideFun'
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import IsF : ISFREE Op Syn).
+
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
     match ck with
     | Cbase => fvs
@@ -327,4 +410,5 @@ Module Type DECIDE
     intuition not_In_empty.
   Qed.
 
-End DECIDE.
+End DecideFun'.
+Module DecideFun <: DECIDE := DecideFun'.

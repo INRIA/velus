@@ -27,6 +27,64 @@ Module Type ISDEFINED
   | DefEqApp: forall x ck f e ty, Is_defined_in_eq x (EqApp x ck f e ty)
   | DefEqFby: forall x ck v e,    Is_defined_in_eq x (EqFby x ck v e).
 
+  (* definition is needed in signature *)
+  Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    List.Exists (Is_defined_in_eq x) eqs.
+
+  Axiom Is_defined_in_eq_dec:
+    forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
+
+  (** ** Properties *)
+
+  Axiom Is_defined_in_cons:
+    forall x eq eqs,
+      Is_defined_in_eqs x (eq :: eqs) ->
+      Is_defined_in_eq x eq
+      \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
+
+  Axiom not_Is_defined_in_cons:
+    forall x eq eqs,
+      ~Is_defined_in_eqs x (eq :: eqs)
+      <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in_eqs x eqs.
+
+  Axiom not_Is_defined_in_eq_EqDef:
+    forall x i ck ce,
+      ~ Is_defined_in_eq x (EqDef i ck ce) -> x <> i.
+
+  Axiom not_Is_defined_in_eq_EqApp:
+    forall x i ck f le ty,
+      ~ Is_defined_in_eq x (EqApp i ck f le ty) -> x <> i.
+
+  Axiom not_Is_defined_in_eq_EqFby:
+    forall x i ck v0 le,
+      ~ Is_defined_in_eq x (EqFby i ck v0 le) -> x <> i.
+
+  Axiom In_memory_eq_In_defined_eq_gen:
+    forall x eq S,
+      PS.In x (memory_eq S eq)
+      -> Is_defined_in_eq x eq \/ PS.In x S.
+
+  Axiom In_memory_eq_Is_defined_eq:
+    forall x eq,
+      PS.In x (memory_eq PS.empty eq)
+      -> Is_defined_in_eq x eq.
+
+  Axiom Is_defined_in_memories:
+    forall x eqs,
+      PS.In x (memories eqs) -> Is_defined_in_eqs x eqs.
+
+End ISDEFINED.
+
+Module IsDefinedFun'
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import Mem : MEMORIES Op Syn).
+
+  Inductive Is_defined_in_eq : ident -> equation -> Prop :=
+  | DefEqDef: forall x ck e,      Is_defined_in_eq x (EqDef x ck e)
+  | DefEqApp: forall x ck f e ty, Is_defined_in_eq x (EqApp x ck f e ty)
+  | DefEqFby: forall x ck v e,    Is_defined_in_eq x (EqFby x ck v e).
+
   Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_defined_in_eq x) eqs.
 
@@ -131,4 +189,6 @@ Module Type ISDEFINED
         apply In_memory_eq_Is_defined_eq in HH; auto.
   Qed.
 
-End ISDEFINED.
+End IsDefinedFun'.
+
+Module IsDefinedFun <: ISDEFINED := IsDefinedFun'.

@@ -25,6 +25,97 @@ Module Type ORDERED
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
   | INI: forall x ck f e ty, Is_node_in_eq f (EqApp x ck f e ty).
 
+  (* definition is needed in signature *)
+  Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
+    List.Exists (Is_node_in_eq f) eqs.
+
+  Inductive Ordered_nodes : global -> Prop :=
+  | ONnil: Ordered_nodes nil
+  | ONcons:
+      forall nd nds,
+        Ordered_nodes nds
+        -> (forall f, Is_node_in f nd.(n_eqs) ->
+                f <> nd.(n_name)
+                /\ List.Exists (fun n=> f = n.(n_name)) nds)
+        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
+        -> Ordered_nodes (nd::nds).
+
+
+  (** ** Properties of [Is_node_in] *)
+
+  Section Is_node_Properties.
+
+    Axiom not_Is_node_in_cons:
+      forall n eq eqs,
+        ~ Is_node_in n (eq::eqs) <-> ~Is_node_in_eq n eq /\ ~Is_node_in n eqs.
+
+    Axiom Is_node_in_Forall:
+      forall n eqs,
+        ~Is_node_in n eqs <-> List.Forall (fun eq=>~Is_node_in_eq n eq) eqs.
+
+    Axiom find_node_Exists:
+      forall f G, find_node f G <> None <-> List.Exists (fun n=> f = n.(n_name)) G.
+
+    Axiom find_node_tl:
+      forall f node G,
+        node.(n_name) <> f
+        -> find_node f (node::G) = find_node f G.
+
+    Axiom find_node_split:
+      forall f G node,
+        find_node f G = Some node
+        -> exists bG aG,
+          G = bG ++ node :: aG.
+
+    Axiom find_node_name:
+      forall f G fnode,
+        find_node f G = Some fnode -> fnode.(n_name) = f.
+
+  End Is_node_Properties.
+
+  (** ** Properties of [Ordered_nodes] *)
+
+  Section Ordered_nodes_Properties.
+
+    Axiom Ordered_nodes_append:
+      forall G G',
+        Ordered_nodes (G ++ G')
+        -> Ordered_nodes G'.
+
+    Axiom Ordered_nodes_cons_find_node_None:
+      forall node G,
+        Ordered_nodes (node::G)
+        -> find_node node.(n_name) G = None.
+
+    Axiom find_node_later_names_not_eq:
+      forall f nd G nd',
+        Ordered_nodes (nd::G)
+        -> find_node f (G) = Some nd'
+        -> f <> nd.(n_name).
+
+    Axiom find_node_later_not_Is_node_in:
+      forall f nd G nd',
+        Ordered_nodes (nd::G)
+        -> find_node f G = Some nd'
+        -> ~Is_node_in nd.(n_name) nd'.(n_eqs).
+
+    Axiom find_node_not_Is_node_in:
+      forall f nd G,
+        Ordered_nodes G
+        -> find_node f G = Some nd
+        -> ~Is_node_in nd.(n_name) nd.(n_eqs).
+
+  End Ordered_nodes_Properties.
+
+End ORDERED.
+
+Module OrderedFun'
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op).
+
+  Inductive Is_node_in_eq : ident -> equation -> Prop :=
+  | INI: forall x ck f e ty, Is_node_in_eq f (EqApp x ck f e ty).
+
   Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_node_in_eq f) eqs.
 
@@ -232,4 +323,5 @@ Module Type ORDERED
 
   End Ordered_nodes_Properties.
 
-End ORDERED.
+End OrderedFun'.
+Module OrderedFun <: ORDERED := OrderedFun'.

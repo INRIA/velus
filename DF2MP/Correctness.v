@@ -896,9 +896,10 @@ for all [Is_free_exp x e]. *)
         destruct Hnsem as [Hn [Hlsn [Hxsn [Hout Hnsem]]]].
 
         (* no other instance *)
-        assert (~Is_defined_in_eqs y eqs) as Hniii
-            by (inversion_clear Hwsch; eauto).
-
+        assert (~Is_defined_in_eqs y eqs) as Hniii.
+            (* by (inversion_clear Hwsch; eauto). *)
+        inversion_clear Hwsch; apply H2; constructor.
+        
         specialize (Hlaes n);
           specialize (Hxsn n);
           specialize (Hout n);
@@ -1481,6 +1482,7 @@ for all [Is_free_exp x e]. *)
           exists omenv.
           rewrite mfind_inst_gss.
           auto.
+          apply H2; constructor.
       - (* EqFby *)
         exists (madd_mem i v menv'), env'.
         split.
@@ -1880,13 +1882,15 @@ for all [Is_free_exp x e]. *)
           assert (Hfree': Is_free_in_eq i (EqDef x ck e)) by auto.
           eapply HH in Hfree'.
           destruct Hfree' as [Hm Hnm].
-          assert (~ Nelist.In x inputs) as Hninp
-              by (intro Hin; eapply Hnin; eauto; constructor(auto)).
-
+          assert (~ Nelist.In x inputs) as Hninp.
+              (* by (intro Hin; eapply Hnin; eauto; constructor(auto)). *)
+          intro Hin; eapply Hnin; eauto; do 2 constructor.
+          
           assert (~PS.In x mems) as Hnxm' by intuition.
           intro Hxi; rewrite Hxi in *; clear Hxi.
           specialize (Hnm Hnxm').
           eapply Hndef; intuition.
+          constructor.
           eapply Is_variable_in_eqs_Is_defined_in_eqs. auto. }
         apply Ifte_free_write_Control_caexp.
         intros i Hfree.

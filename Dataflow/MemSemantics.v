@@ -624,7 +624,9 @@ dataflow memory for which the non-standard semantics holds true.
       + exact Hxs.
       + exact Hmsem.
       + inversion_clear Hwsch.
-        eauto using msem_equation_madd_obj. 
+        apply msem_equation_madd_obj; auto.
+        apply H6; constructor.
+       (* eauto using msem_equation_madd_obj.  *)
     - exists (madd_mem x (hold v0 ls) M).
       constructor.
       econstructor.
@@ -642,6 +644,7 @@ dataflow memory for which the non-standard semantics holds true.
           rewrite H1. unfold fby. rewrite Hls; auto.
       + inversion_clear Hwsch.
         apply msem_equation_madd_mem; eauto.
+        apply H7; constructor.
   Qed.
 
   (* XXX: for this lemma, and the ones before/after it, factorize 'G',
