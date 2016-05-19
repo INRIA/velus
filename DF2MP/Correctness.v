@@ -26,7 +26,7 @@ Module Type CORRECTNESS
        (Import MemCor: MEMORYCORRES Op DF MP)
        (Import Mem: MEMORIES Op DF.Syn)
        (Import Pro: PROPER Op DF.Syn MP.Syn Trans Mem)
-       (Import Fus: FUSEIFTE Op DF.Syn MP).
+       (Import Fus: FUSEIFTE Op DF.Syn MP.Syn MP.Sem MP.Equ).
   
   (** ** Technical lemmas *)
 

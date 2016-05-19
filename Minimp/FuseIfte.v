@@ -9,8 +9,302 @@ Ltac inv H := inversion H; subst; clear H.
 
 Module Type FUSEIFTE
        (Import Op: OPERATORS)
+       (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
+       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
+       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP).
+
+  Inductive Is_free_in_exp : ident -> exp -> Prop :=
+  | FreeVar: forall i ty,
+      Is_free_in_exp i (Var i ty)
+  | FreeState: forall i ty,
+      Is_free_in_exp i (State i ty)
+  (* | FreeOp: forall i op es, *)
+  (*     Nelist.Exists (Is_free_in_exp i) es -> *)
+  (*     Is_free_in_exp i (Op op es) *)
+  | FreeUnop: forall i op e ty,
+      Is_free_in_exp i e ->
+      Is_free_in_exp i (Unop op e ty)
+  |FreeBinop: forall i op e1 e2 ty,
+      Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
+      Is_free_in_exp i (Binop op e1 e2 ty).
+
+  Inductive Can_write_in : ident -> stmt -> Prop :=
+  | CWIAssign: forall x e,
+      Can_write_in x (Assign x e)
+  | CWIAssignSt: forall x e,
+      Can_write_in x (AssignSt x e)
+  | CWIIfteTrue: forall x e s1 s2,
+      Can_write_in x s1 ->
+      Can_write_in x (Ifte e s1 s2)
+  | CWIIfteFalse: forall x e s1 s2,
+      Can_write_in x s2 ->
+      Can_write_in x (Ifte e s1 s2)
+  | CWIStep_ap: forall x ty cls obj e,
+      Can_write_in x (Step_ap x ty cls obj e)
+  | CWIComp1: forall x s1 s2,
+      Can_write_in x s1 ->
+      Can_write_in x (Comp s1 s2)
+  | CWIComp2: forall x s1 s2,
+      Can_write_in x s2 ->
+      Can_write_in x (Comp s1 s2).
+
+  Axiom cannot_write_in_Ifte:
+    forall x e s1 s2,
+      ~ Can_write_in x (Ifte e s1 s2)
+      <->
+      ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
+  
+  Axiom cannot_write_in_Comp:
+    forall x s1 s2,
+      ~ Can_write_in x (Comp s1 s2)
+      <->
+      ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
+ 
+  Axiom not_free_aux1 : forall i op e ty,
+      ~Is_free_in_exp i (Unop op e ty) -> ~Is_free_in_exp i e.
+  
+  Axiom not_free_aux2 : forall i op e1 e2 ty,
+      ~Is_free_in_exp i (Binop op e1 e2 ty) -> ~Is_free_in_exp i e1 /\ ~Is_free_in_exp i e2.
+  
+  (** If we add irrelevent values to [env], evaluation does not change. *)
+  Axiom exp_eval_extend_env : forall mem env x v' e v,
+      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval mem (PM.add x v' env) e v.
+  
+  (** If we add irrelevent values to [mem], evaluation does not change. *)
+  Axiom exp_eval_extend_mem : forall mem env x v' e v,
+      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval (madd_mem x v' mem) env e v.
+ 
+  (** If we add objcets to [mem], evaluation does not change. *)
+  Axiom exp_eval_extend_mem_by_obj : forall mem env f obj e v,
+      exp_eval mem env e v -> exp_eval (madd_obj f obj mem) env e v.
+ 
+  Axiom cannot_write_exp_eval:
+    forall prog s menv env menv' env' e v,
+      (forall x, Is_free_in_exp x e -> ~ Can_write_in x s)
+      -> exp_eval menv env e v
+      -> stmt_eval prog menv env s (menv', env')
+      -> exp_eval menv' env' e v.
+  
+  Axiom lift_Ifte:
+    forall e s1 s2 t1 t2,
+      (forall x, Is_free_in_exp x e
+            -> (~Can_write_in x s1 /\ ~Can_write_in x s2))
+      -> stmt_eval_eq (Comp (Ifte e s1 s2) (Ifte e t1 t2))
+                     (Ifte e (Comp s1 t1) (Comp s2 t2)).
+  
+  Inductive Ifte_free_write : stmt -> Prop :=
+  | IFWAssign: forall x e,
+      Ifte_free_write (Assign x e)
+  | IFWAssignSt: forall x e,
+      Ifte_free_write (AssignSt x e)
+  | IFWIfte: forall e s1 s2,
+      Ifte_free_write s1 ->
+      Ifte_free_write s2 ->
+      (forall x, Is_free_in_exp x e -> ~Can_write_in x s1 /\ ~Can_write_in x s2) ->
+      Ifte_free_write (Ifte e s1 s2)
+  | IFWStep_ap: forall x ty cls obj e,
+      Ifte_free_write (Step_ap x ty cls obj e)
+  | IFWComp: forall s1 s2,
+      Ifte_free_write s1 ->
+      Ifte_free_write s2 ->
+      Ifte_free_write (Comp s1 s2)
+  | IFWSkip:
+      Ifte_free_write Skip.
+
+  Axiom lift_Ifte_free_write:
+    forall e s1 s2 t1 t2,
+      Ifte_free_write (Comp (Ifte e s1 s2) (Ifte e t1 t2))
+      <->
+      Ifte_free_write (Ifte e (Comp s1 t1) (Comp s2 t2)).
+  
+  Require Import List.
+  Import List.ListNotations.
+  Open Scope list_scope.
+
+  Axiom Ifte_free_write_fold_left_shift:
+    forall A f (xs : list A) iacc,
+      Ifte_free_write (fold_left (fun i x => Comp (f x) i) xs iacc)
+      <->
+      (Ifte_free_write (fold_left (fun i x => Comp (f x) i) xs Skip)
+       /\ Ifte_free_write iacc).
+  
+  (*
+   The property "Ifte_free_write (translate_eqns mems eqs)" is obtained above
+   using scheduling assumptions for EqDef, since they are needed to treat
+   the translation of merge expressions, and clocking assumptions for EqApp and
+   EqFby. While the EqApp case can also be obtained from the scheduling
+   assumptions alone, the EqFby case cannot. Consider the equations:
+      y = (true when x) :: Con Cbase x true
+      x = true fby y    :: Con Cbase x true
+
+   These equations and their clocks are incorrect, since "Con Cbase x"
+   requires that the clock of x be "Cbase", whereas the second equation
+   requires that it be "Con Cbase x true". Still, we could try compiling
+   them program:
+      if x { y = true };
+      if x { mem(x) = y }
+
+   This program is well scheduled, but it does not satisfy the invariant
+   Ifte_free_write. We could imagine a weaker invariant that allows the
+   right-most write under an expression to change free variables in the
+   expression, which suffices to justify the optimisation, but the
+   preservation of this invariant under the optimisation likely becomes much
+   trickier to prove. And, in any case, such programs are fundamentally
+   incorrect.
+
+   What about trying to reject such programs using sem_node rather than
+   introducing clocking assumptions? The problem is that certain circular
+   programs (like the one above) still have a semantics (since x and y
+   are effectively always present).
+   *)
+
+  Parameter ifte_zip: stmt -> stmt -> stmt.
+  
+  Axiom Can_write_in_ifte_zip:
+    forall s1 s2 x,
+      (Can_write_in x s1 \/ Can_write_in x s2)
+      <-> Can_write_in x (ifte_zip s1 s2).
+
+  Axiom Cannot_write_in_ifte_zip:
+    forall s1 s2 x,
+      (~Can_write_in x s1 /\ ~Can_write_in x s2)
+      <-> ~Can_write_in x (ifte_zip s1 s2).
+  
+  Axiom ifte_zip_free_write:
+    forall s1 s2,
+      Ifte_free_write s1
+      -> Ifte_free_write s2
+      -> Ifte_free_write (ifte_zip s1 s2).
+  
+  Axiom ifte_zip_Comp':
+    forall s1 s2,
+      Ifte_free_write s1
+      -> (stmt_eval_eq (ifte_zip s1 s2) (Comp s1 s2)).
+ 
+  Parameter ifte_fuse': stmt -> stmt -> stmt.
+  
+  Parameter ifte_fuse: stmt -> stmt.
+
+  Axiom ifte_fuse'_free_write:
+    forall s2 s1,
+      Ifte_free_write s1
+      -> Ifte_free_write s2
+      -> Ifte_free_write (ifte_fuse' s1 s2).
+  
+  (** ifte_eval_eq *)
+
+  Require Import Relations.
+  Require Import Morphisms.
+  Require Import Setoid.
+
+   Definition ifte_eval_eq s1 s2: Prop :=
+    stmt_eval_eq s1 s2 /\ (Ifte_free_write s1 /\ Ifte_free_write s2).
+
+  (*
+Print relation.
+Check (ifte_eval_eq : relation stmt).
+   *)
+
+  Axiom ifte_eval_eq_refl:
+    forall s,
+      Ifte_free_write s
+      -> Proper ifte_eval_eq s.
+  
+  Axiom ifte_eval_eq_trans:
+    transitive stmt ifte_eval_eq.
+  
+  Axiom ifte_eval_eq_sym:
+    symmetric stmt ifte_eval_eq.
+  
+  Add Relation stmt (ifte_eval_eq)
+      symmetry proved by ifte_eval_eq_sym
+      transitivity proved by ifte_eval_eq_trans
+        as ifte_eval_equiv.
+
+  Instance subrelation_stmt_ifte_eval_eq:
+    subrelation ifte_eval_eq stmt_eval_eq.
+  Proof.
+    intros s1 s2 Heq x menv env menv' env'.
+    now apply Heq.
+  Qed.
+
+  Axiom ifte_zip_Comp:
+    forall s1 s2,
+      Ifte_free_write s1
+      -> Ifte_free_write s2
+      -> ifte_eval_eq (ifte_zip s1 s2) (Comp s1 s2).
+  
+  (* TODO: Why don't we get this automatically via the subrelation? *)
+  Instance ifte_eval_eq_Proper:
+    Proper (eq ==> eq ==> eq ==> ifte_eval_eq ==> eq ==> iff) stmt_eval.
+  Proof.
+    intros prog' prog HR1 menv' menv HR2 env' env HR3 s1 s2 Heq r' r HR4;
+    subst; destruct r as [menv' env'].
+    unfold ifte_eval_eq in Heq.
+    destruct Heq as [Heq ?].
+    rewrite Heq; reflexivity.
+  Qed.
+
+  Instance ifte_eval_eq_Comp_Proper:
+    Proper (ifte_eval_eq ==> ifte_eval_eq ==> ifte_eval_eq) Comp.
+  Proof.
+    Hint Constructors Ifte_free_write.
+    intros s s' Hseq t t' Hteq.
+    unfold ifte_eval_eq in *.
+    destruct Hseq as [Hseq [Hfrees Hfrees']].
+    destruct Hteq as [Hteq [Hfreet Hfreet']].
+    split; [|intuition].
+    rewrite Hseq, Hteq; reflexivity.
+  Qed.
+
+  Instance ifte_zip_ifte_eval_eq_Proper:
+    Proper (ifte_eval_eq ==> ifte_eval_eq ==> ifte_eval_eq) ifte_zip.
+  Proof.
+    intros s s' Hseq t t' Hteq.
+    unfold ifte_eval_eq in *.
+    destruct Hseq as [Hseq [Hfrees Hfrees']].
+    destruct Hteq as [Hteq [Hfreet Hfreet']].
+    split; [|split]; [|apply ifte_zip_free_write with (1:=Hfrees) (2:=Hfreet)
+                      |apply ifte_zip_free_write with (1:=Hfrees') (2:=Hfreet')].
+    rewrite ifte_zip_Comp' with (1:=Hfrees).
+    rewrite ifte_zip_Comp' with (1:=Hfrees').
+    rewrite Hseq, Hteq; reflexivity.
+  Qed.
+
+  Axiom ifte_fuse'_Comp:
+    forall s2 s1,
+      Ifte_free_write s1
+      -> Ifte_free_write s2
+      -> stmt_eval_eq (ifte_fuse' s1 s2) (Comp s1 s2).
+ 
+  Instance ifte_fuse'_ifte_eval_eq_Proper:
+    Proper (ifte_eval_eq ==> ifte_eval_eq ==> ifte_eval_eq) ifte_fuse'.
+  Proof.
+    intros s s' Hseq t t' Hteq.
+    unfold ifte_eval_eq in *.
+    destruct Hseq as [Hseq [Hfrees Hfrees']].
+    destruct Hteq as [Hteq [Hfreet Hfreet']].
+    split; [|split]; [|apply ifte_fuse'_free_write with (1:=Hfrees) (2:=Hfreet)
+                      |apply ifte_fuse'_free_write with (1:=Hfrees') (2:=Hfreet')].
+    repeat rewrite ifte_fuse'_Comp; try assumption.
+    rewrite Hseq, Hteq.
+    reflexivity.
+  Qed.
+
+  Axiom ifte_fuse_Comp:
+    forall s,
+      Ifte_free_write s
+      -> stmt_eval_eq (ifte_fuse s) s.
+  
+End FUSEIFTE.
+
+Module FuseIfteFun'
+       (Import Op: OPERATORS)
        (Import Syn: Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import MP: MINIMP Op).
+       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
+       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP).
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
   | FreeVar: forall i ty,
@@ -671,5 +965,5 @@ Eval cbv in (ifte_fuse (Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
                                                            Skip)) Skip))))).
  *)
 
-End FUSEIFTE.
-
+End FuseIfteFun'.
+Module FuseIfteFun <: FUSEIFTE := FuseIfteFun'.

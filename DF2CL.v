@@ -5,11 +5,13 @@ Require Import Rustre.Dataflow.WellFormed.Decide.
 Require Import Rustre.Interface.
 Require Import Rustre.DF2MP.Translation.
 Require Import Rustre.MP2CL.Translation.
+Require Import Rustre.Minimp.FuseIfte.
 
 Require Import common.Errors.
 
 Module Import SynDF := Dataflow.Syntax.SyntaxFun Op.
-Module Import DF2MPTrans := TranslationFun Op SynDF MP2CL.Translation.Syn.
+Module Import SynMP := MP2CL.Translation.Syn.
+Module Import DF2MPTrans := TranslationFun Op SynDF SynMP.
 
 Module Import IsF := IsFreeFun Op SynDF.
 Module Import IsFDec := Dataflow.IsFree.Decide.DecideFun Op SynDF IsF.
@@ -21,7 +23,13 @@ Module Import NoD := NoDupFun Op SynDF Mem IsD IsV.
 Module Import Wef := WellFormedFun Op SynDF IsF Ord Mem IsD IsV NoD.
 Module Import WefD := Dataflow.WellFormed.Decide.DecideFun Op SynDF IsF IsFDec Ord Mem IsD IsV NoD Wef.
 
+Module Import SemMP := Rustre.Minimp.Semantics.SemanticsFun Op SynMP.
+Module Import Equ := Rustre.Minimp.Equiv.EquivFun Op SynMP SemMP.
+Module Import FuseIFTE := FuseIfteFun Op SynDF MP2CL.Translation.Syn SemMP Equ.
+
 Require Import String.
+
+Open Scope error_monad_scope.
 
 Definition is_well_sch (res: Errors.res unit) (n: node) :=
   match res with
@@ -33,8 +41,12 @@ Definition is_well_sch (res: Errors.res unit) (n: node) :=
   | _ => res
   end.
 
-Open Scope error_monad_scope.
+Definition fuse (c: class): class :=
+  match c with
+    mk_class name ins out mems objs step reset =>
+    mk_class name ins out mems objs (ifte_fuse step) (ifte_fuse reset)
+  end.
 
 Definition compile (g: global) (main_node: ident) :=
   do _ <- (List.fold_left is_well_sch g (OK tt));
-  MP2CL.Translation.translate (DF2MPTrans.translate g) main_node.
+  MP2CL.Translation.translate (List.map fuse (DF2MPTrans.translate g)) main_node.
