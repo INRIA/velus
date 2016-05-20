@@ -187,9 +187,9 @@ beautify: $(VFILES:=.beautified)
 .PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr compcert
 
 compcert:
-	@cd CompCert; make -j 8 proof extraction; find -name "*.cm*" -delete
+	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof extraction
 
-test: all compcert extraction extr
+test: compcert all extraction extr
 
 extraction: extraction/STAMP
 
@@ -199,7 +199,7 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@touch extraction/STAMP
 
 extr:
-	@cd CompCert; find -name "*.cm*" -delete
+	@find CompCert -name '*.cm*' -delete
 	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I CompCert/cparser -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustre.native
 	@cp CompCert/compcert.ini _build/compcert.ini
 
