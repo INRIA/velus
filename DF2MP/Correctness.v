@@ -947,6 +947,7 @@ for all [Is_free_exp x e]. *)
               | H: Nelist.map present inValues = _ |- _ => rewrite H
               end. eauto.
             }
+            Hint Constructors stmt_eval.
             erewrite <-stmt_eval_translate_eqns_minst_inv in Hfindo; eauto.
           * {
               intros x Hivi c.
@@ -1903,11 +1904,13 @@ for all [Is_free_exp x e]. *)
                 with (1:=Hwk) (2:=Hwkeq));
         apply Ifte_free_write_Control_laexp;
         [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
+        constructor.
       + assert (~Is_free_in_clock x ck) as Hnfree
             by (apply Well_clocked_EqFby_not_Is_free_in_clock
                 with (1:=Hwk) (2:=Hwkeq));
         apply Ifte_free_write_Control_laexp;
         [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
+        constructor.
   Qed.
 
 End CORRECTNESS.

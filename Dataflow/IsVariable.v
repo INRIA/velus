@@ -36,26 +36,23 @@ Module Type ISVARIABLE
 
   (** ** Properties *)
 
-  Axiom not_Is_variable_in_EqDef: 
+  Axiom not_Is_variable_in_EqDef:
     forall x ck y e,
       ~ Is_variable_in_eq x (EqDef y ck e) -> x <> y.
   
-  Axiom not_Is_variable_in_EqApp: 
+  Axiom not_Is_variable_in_EqApp:
     forall x y ck f e ty,
       ~ Is_variable_in_eq x (EqApp y ck f e ty) -> x <> y.
 
   (* tactic definition needed in signature *)
   Ltac not_Is_variable x y :=
     match goal with
-    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ => 
+    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ =>
       apply not_Is_variable_in_EqDef in H
-    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ => 
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ =>
       apply not_Is_variable_in_EqApp in H
     end.
   
-  Axiom Is_variable_in_eq_dec:
-    forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
-
   Axiom Is_variable_in_eqs_Is_defined_in_eqs:
     forall x eqs,
       Is_variable_in_eqs x eqs
@@ -110,15 +107,6 @@ Module IsVariableFun'
     Hint Constructors Is_variable_in_eq. 
     intros ** Hxy. subst x. auto.
   Qed.
-
-  Ltac not_Is_variable x y :=
-    match goal with
-    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ => 
-      apply not_Is_variable_in_EqDef in H
-    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ => 
-      apply not_Is_variable_in_EqApp in H
-    end.
-
 
   Lemma Is_variable_in_eq_dec:
     forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.

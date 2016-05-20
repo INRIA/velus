@@ -15,8 +15,6 @@ Module Type SYNTAX (Import Op : OPERATORS).
   | Cbase : clock                          (* base clock *)
   | Con : clock -> ident -> typ -> bool -> clock. (* subclock *)
 
-  Implicit Type ck : clock.
-
   (** ** Expressions *)
 
   Inductive lexp : Type :=
@@ -67,14 +65,13 @@ Module Type SYNTAX (Import Op : OPERATORS).
         n_output : (ident * typ);
         n_eqs : list equation }.
 
-  Implicit Type N: node.
-
   (** ** Program *)
 
   Definition global := list node.
 
   Implicit Type G: global.
 
+  (* definition is needed in signature *)
   Definition find_node (f : ident) : global -> option node :=
     List.find (fun n=> ident_eqb n.(n_name) f).
 

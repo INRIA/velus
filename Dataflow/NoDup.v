@@ -55,10 +55,6 @@ Module Type NODUP
 
   (** ** Properties *)
 
-  Axiom NoDup_defs_cons:
-    forall eq eqs,
-      NoDup_defs (eq :: eqs) -> NoDup_defs eqs.
-  
   Axiom not_Is_variable_in_memories:
     forall x eqs,
       PS.In x (memories eqs)
@@ -95,13 +91,13 @@ Module NoDupFun'
 
   (** ** Properties *)
 
-  Lemma NoDup_defs_cons:
-    forall eq eqs,
-      NoDup_defs (eq :: eqs) -> NoDup_defs eqs.
-  Proof.
-    intros eq eqs Hndd.
-    destruct eq; inversion_clear Hndd; assumption.
-  Qed.
+  (* Lemma NoDup_defs_cons: *)
+  (*   forall eq eqs, *)
+  (*     NoDup_defs (eq :: eqs) -> NoDup_defs eqs. *)
+  (* Proof. *)
+  (*   intros eq eqs Hndd. *)
+  (*   destruct eq; inversion_clear Hndd; assumption. *)
+  (* Qed. *)
 
   Lemma not_Is_variable_in_memories:
     forall x eqs,

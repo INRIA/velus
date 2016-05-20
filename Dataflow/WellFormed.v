@@ -90,7 +90,7 @@ A CoreDF program is well defined if
 
   (** ** Properties of [Is_well_sch] *)
 
-  Hint Constructors Is_well_sch.
+  (* Hint Constructors Is_well_sch. *)
 
   Axiom Is_well_sch_NoDup_defs:
     forall mems argIn eqs,
@@ -113,14 +113,7 @@ A CoreDF program is well defined if
       -> Is_free_in_eq y eq
       -> PS.In y mems
       -> ~Is_defined_in_eqs y eqs.
-  
-  Axiom Is_wsch_is_defined_in:
-    forall x eq eqs mems argIn,
-      Is_well_sch mems argIn (eq :: eqs) ->
-      Is_defined_in_eqs x (eq :: eqs) ->
-      Is_defined_in_eq x eq
-      \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
-  
+    
   (** ** Properties of [Welldef_global] *)
 
   Axiom Welldef_global_cons:
@@ -131,22 +124,6 @@ A CoreDF program is well defined if
 
   Axiom Welldef_global_Ordered_nodes:
     forall G, Welldef_global G -> Ordered_nodes G.
- 
-  Axiom Welldef_global_app:
-    forall G G', Welldef_global (G ++ G') -> Welldef_global G'.
- 
-  Axiom Welldef_global_input_not_Is_defined_in:
-    forall f G fnode,
-      Welldef_global G
-      -> find_node f G = Some fnode
-      -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs))
-          (Nelist.nefst fnode.(n_input)).
-
-  Axiom Welldef_global_output_Is_variable_in:
-    forall f G fnode,
-      Welldef_global G
-      -> find_node f G = Some fnode
-      -> Is_variable_in_eqs (fst fnode.(n_output)) fnode.(n_eqs).
 
 End WELLFORMED.
 
@@ -278,17 +255,17 @@ A CoreDF program is well defined if
       auto.
   Qed.
 
-  Lemma Is_wsch_is_defined_in:
-    forall x eq eqs mems argIn,
-      Is_well_sch mems argIn (eq :: eqs) ->
-      Is_defined_in_eqs x (eq :: eqs) ->
-      Is_defined_in_eq x eq
-      \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
-  Proof.
-    intros x eq eqs mems argIn Hwsch Hdef.
-    apply List.Exists_cons in Hdef.
-    destruct (Is_defined_in_eq_dec x eq); intuition.
-  Qed.
+  (* Lemma Is_wsch_is_defined_in: *)
+  (*   forall x eq eqs mems argIn, *)
+  (*     Is_well_sch mems argIn (eq :: eqs) -> *)
+  (*     Is_defined_in_eqs x (eq :: eqs) -> *)
+  (*     Is_defined_in_eq x eq *)
+  (*     \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs). *)
+  (* Proof. *)
+  (*   intros x eq eqs mems argIn Hwsch Hdef. *)
+  (*   apply List.Exists_cons in Hdef. *)
+  (*   destruct (Is_defined_in_eq_dec x eq); intuition. *)
+  (* Qed. *)
 
   (** ** Properties of [Welldef_global] *)
 
@@ -321,49 +298,49 @@ A CoreDF program is well defined if
     - inversion Hwdef; assumption.
   Qed.
 
-  Lemma Welldef_global_app:
-    forall G G', Welldef_global (G ++ G') -> Welldef_global G'.
-  Proof.
-    intros G G' Hwdef.
-    induction G as [|g G IH]; [now apply Hwdef|].
-    rewrite <- List.app_comm_cons in Hwdef.
-    apply Welldef_global_cons in Hwdef.
-    apply IH.
-    apply Hwdef.
-  Qed.
+  (* Lemma Welldef_global_app: *)
+  (*   forall G G', Welldef_global (G ++ G') -> Welldef_global G'. *)
+  (* Proof. *)
+  (*   intros G G' Hwdef. *)
+  (*   induction G as [|g G IH]; [now apply Hwdef|]. *)
+  (*   rewrite <- List.app_comm_cons in Hwdef. *)
+  (*   apply Welldef_global_cons in Hwdef. *)
+  (*   apply IH. *)
+  (*   apply Hwdef. *)
+  (* Qed. *)
 
-  Lemma Welldef_global_input_not_Is_defined_in:
-    forall f G fnode,
-      Welldef_global G
-      -> find_node f G = Some fnode
-      -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs))
-          (Nelist.nefst fnode.(n_input)).
-  Proof.
-    induction G as [|node G IH]; [inversion_clear 2|].
-    intros fnode HWdef Hfnode.
-    apply find_node_split in Hfnode.
-    destruct Hfnode as [bG [aG HnG]].
-    rewrite HnG in HWdef; clear HnG.
-    apply Welldef_global_app in HWdef.
-    inversion_clear HWdef.
-    now rewrite <- Nelist.nelist2list_Exists.
-  Qed.
+  (* Lemma Welldef_global_input_not_Is_defined_in: *)
+  (*   forall f G fnode, *)
+  (*     Welldef_global G *)
+  (*     -> find_node f G = Some fnode *)
+  (*     -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs)) *)
+  (*         (Nelist.nefst fnode.(n_input)). *)
+  (* Proof. *)
+  (*   induction G as [|node G IH]; [inversion_clear 2|]. *)
+  (*   intros fnode HWdef Hfnode. *)
+  (*   apply find_node_split in Hfnode. *)
+  (*   destruct Hfnode as [bG [aG HnG]]. *)
+  (*   rewrite HnG in HWdef; clear HnG. *)
+  (*   apply Welldef_global_app in HWdef. *)
+  (*   inversion_clear HWdef. *)
+  (*   now rewrite <- Nelist.nelist2list_Exists. *)
+  (* Qed. *)
 
-  Lemma Welldef_global_output_Is_variable_in:
-    forall f G fnode,
-      Welldef_global G
-      -> find_node f G = Some fnode
-      -> Is_variable_in_eqs (fst fnode.(n_output)) fnode.(n_eqs).
-  Proof.
-    induction G as [|node G IH]; [inversion_clear 2|].
-    intros fnode HWdef Hfnode.
-    apply find_node_split in Hfnode.
-    destruct Hfnode as [bG [aG HnG]].
-    rewrite HnG in HWdef; clear HnG.
-    apply Welldef_global_app in HWdef.
-    inversion_clear HWdef.
-    assumption.
-  Qed.
+  (* Lemma Welldef_global_output_Is_variable_in: *)
+  (*   forall f G fnode, *)
+  (*     Welldef_global G *)
+  (*     -> find_node f G = Some fnode *)
+  (*     -> Is_variable_in_eqs (fst fnode.(n_output)) fnode.(n_eqs). *)
+  (* Proof. *)
+  (*   induction G as [|node G IH]; [inversion_clear 2|]. *)
+  (*   intros fnode HWdef Hfnode. *)
+  (*   apply find_node_split in Hfnode. *)
+  (*   destruct Hfnode as [bG [aG HnG]]. *)
+  (*   rewrite HnG in HWdef; clear HnG. *)
+  (*   apply Welldef_global_app in HWdef. *)
+  (*   inversion_clear HWdef. *)
+  (*   assumption. *)
+  (* Qed. *)
 
 End WellFormedFun'.
 Module WellFormedFun <: WELLFORMED := WellFormedFun'.

@@ -30,7 +30,7 @@ Module Type ISFREE
   | FreeEvar: forall x ty, Is_free_in_lexp x (Evar x ty)
   | FreeEwhen1: forall e c cv x,
       Is_free_in_lexp x e ->
-      Is_free_in_lexp x (Ewhen e c cv) 
+      Is_free_in_lexp x (Ewhen e c cv)
   | FreeEwhen2: forall e c cv,
       Is_free_in_lexp c (Ewhen e c cv)
   | FreeEunop : forall c op e ty,
@@ -66,13 +66,13 @@ Module Type ISFREE
   (* | FreeEite: forall x b t f,  *)
   (*     Is_free_in_lexp x b \/ Is_free_in_cexp x t \/ Is_free_in_cexp x f -> *)
   (*     Is_free_in_cexp x (Eite b t f) *)
-  | FreeEite_cond: forall x b t f, 
+  | FreeEite_cond: forall x b t f,
       Is_free_in_lexp x b ->
       Is_free_in_cexp x (Eite b t f)
-  | FreeEite_true: forall x b t f, 
+  | FreeEite_true: forall x b t f,
       Is_free_in_cexp x t ->
       Is_free_in_cexp x (Eite b t f)
-  | FreeEite_false: forall x b t f, 
+  | FreeEite_false: forall x b t f,
       Is_free_in_cexp x f ->
       Is_free_in_cexp x (Eite b t f)
   | FreeEexp: forall e x,
@@ -102,7 +102,7 @@ Module Type ISFREE
         Is_free_in_eq i (EqFby x ck v le).
 
   Hint Constructors Is_free_in_clock Is_free_in_lexp
-       Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp 
+       Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp
        Is_free_in_caexp Is_free_in_eq.
 
 End ISFREE.
@@ -195,10 +195,6 @@ Module IsFreeFun'
       forall x v ck le i,
         Is_free_in_laexp i ck le ->
         Is_free_in_eq i (EqFby x ck v le).
-
-  Hint Constructors Is_free_in_clock Is_free_in_lexp
-       Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp 
-       Is_free_in_caexp Is_free_in_eq.
 
 End IsFreeFun'.
 Module IsFreeFun <: ISFREE := IsFreeFun'.

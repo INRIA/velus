@@ -40,7 +40,6 @@ Module Type ORDERED
         -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Ordered_nodes (nd::nds).
 
-
   (** ** Properties of [Is_node_in] *)
 
   Section Is_node_Properties.
@@ -67,10 +66,6 @@ Module Type ORDERED
         -> exists bG aG,
           G = bG ++ node :: aG.
 
-    Axiom find_node_name:
-      forall f G fnode,
-        find_node f G = Some fnode -> fnode.(n_name) = f.
-
   End Is_node_Properties.
 
   (** ** Properties of [Ordered_nodes] *)
@@ -81,17 +76,6 @@ Module Type ORDERED
       forall G G',
         Ordered_nodes (G ++ G')
         -> Ordered_nodes G'.
-
-    Axiom Ordered_nodes_cons_find_node_None:
-      forall node G,
-        Ordered_nodes (node::G)
-        -> find_node node.(n_name) G = None.
-
-    Axiom find_node_later_names_not_eq:
-      forall f nd G nd',
-        Ordered_nodes (nd::G)
-        -> find_node f (G) = Some nd'
-        -> f <> nd.(n_name).
 
     Axiom find_node_later_not_Is_node_in:
       forall f nd G nd',
@@ -215,20 +199,20 @@ Module OrderedFun'
     Qed.
 
 
-    Lemma find_node_name:
-      forall f G fnode,
-        find_node f G = Some fnode -> fnode.(n_name) = f.
-    Proof.
-      induction G as [|node G IH]; [now inversion 1|].
-      destruct node as [name input output eqs].
-      destruct (ident_eqb name f) eqn:Hfn;
-        assert (Hfn':=Hfn);
-        [apply Pos.eqb_eq in Hfn'; rewrite Hfn' in *|apply Pos.eqb_neq in Hfn'];
-        simpl; rewrite Hfn.
-      - injection 1; intro Heq; rewrite <-Heq; reflexivity.
-      - intros fnode Hfnode.
-        apply IH with (1:=Hfnode).
-    Qed.
+    (* Lemma find_node_name: *)
+    (*   forall f G fnode, *)
+    (*     find_node f G = Some fnode -> fnode.(n_name) = f. *)
+    (* Proof. *)
+    (*   induction G as [|node G IH]; [now inversion 1|]. *)
+    (*   destruct node as [name input output eqs]. *)
+    (*   destruct (ident_eqb name f) eqn:Hfn; *)
+    (*     assert (Hfn':=Hfn); *)
+    (*     [apply Pos.eqb_eq in Hfn'; rewrite Hfn' in *|apply Pos.eqb_neq in Hfn']; *)
+    (*     simpl; rewrite Hfn. *)
+    (*   - injection 1; intro Heq; rewrite <-Heq; reflexivity. *)
+    (*   - intros fnode Hfnode. *)
+    (*     apply IH with (1:=Hfnode). *)
+    (* Qed. *)
 
   End Is_node_Properties.
 
@@ -247,36 +231,36 @@ Module OrderedFun'
     Qed.
 
 
-    Lemma Ordered_nodes_cons_find_node_None:
-      forall node G,
-        Ordered_nodes (node::G)
-        -> find_node node.(n_name) G = None.
-    Proof.
-      intros node G Hord.
-      inversion_clear Hord as [|? ? Hord' H0 Hfa]; clear H0.
-      induction G as [|eq G IH]; [trivial|].
-      simpl.
-      destruct (ident_eqb eq.(n_name) node.(n_name)) eqn:Heq;
-        apply Forall_cons2 in Hfa;
-        destruct Hfa as [Hneq H0].
-      - apply Peqb_true_eq in Heq.
-        rewrite Heq in Hneq.
-        exfalso; apply Hneq; reflexivity.
-      - apply IH; inversion_clear Hord'; assumption.
-    Qed.
+    (* Lemma Ordered_nodes_cons_find_node_None: *)
+    (*   forall node G, *)
+    (*     Ordered_nodes (node::G) *)
+    (*     -> find_node node.(n_name) G = None. *)
+    (* Proof. *)
+    (*   intros node G Hord. *)
+    (*   inversion_clear Hord as [|? ? Hord' H0 Hfa]; clear H0. *)
+    (*   induction G as [|eq G IH]; [trivial|]. *)
+    (*   simpl. *)
+    (*   destruct (ident_eqb eq.(n_name) node.(n_name)) eqn:Heq; *)
+    (*     apply Forall_cons2 in Hfa; *)
+    (*     destruct Hfa as [Hneq H0]. *)
+    (*   - apply Peqb_true_eq in Heq. *)
+    (*     rewrite Heq in Hneq. *)
+    (*     exfalso; apply Hneq; reflexivity. *)
+    (*   - apply IH; inversion_clear Hord'; assumption. *)
+    (* Qed. *)
 
-    Lemma find_node_later_names_not_eq:
-      forall f nd G nd',
-        Ordered_nodes (nd::G)
-        -> find_node f (G) = Some nd'
-        -> f <> nd.(n_name).
-    Proof.
-      intros f nd G nd' Hord Hfind.
-      pose proof (Ordered_nodes_cons_find_node_None _ _ Hord) as Hnone.
-      intro Heq.
-      rewrite Heq, Hnone in Hfind.
-      discriminate.
-    Qed.
+    (* Lemma find_node_later_names_not_eq: *)
+    (*   forall f nd G nd', *)
+    (*     Ordered_nodes (nd::G) *)
+    (*     -> find_node f (G) = Some nd' *)
+    (*     -> f <> nd.(n_name). *)
+    (* Proof. *)
+    (*   intros f nd G nd' Hord Hfind. *)
+    (*   pose proof (Ordered_nodes_cons_find_node_None _ _ Hord) as Hnone. *)
+    (*   intro Heq. *)
+    (*   rewrite Heq, Hnone in Hfind. *)
+    (*   discriminate. *)
+    (* Qed. *)
 
     Lemma find_node_later_not_Is_node_in:
       forall f nd G nd',

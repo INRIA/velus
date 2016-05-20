@@ -32,7 +32,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
     | Binop _ _ _ ty => ty
     end.
   
-   Inductive stmt : Type :=
+  Inductive stmt : Type :=
   | Assign : ident -> exp -> stmt                               (* x = e *)
   | AssignSt : ident -> exp -> stmt                             (* self.x = e *)
   | Ifte : exp -> stmt -> stmt -> stmt                           (* if e then s1 else s2 *)
@@ -41,7 +41,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
   | Comp : stmt -> stmt -> stmt                                 (* s1; s2 *)
   | Skip.
 
-   Record obj_dec : Type :=
+  Record obj_dec : Type :=
     mk_obj_dec {
         obj_inst  : ident;
         obj_class : ident
@@ -62,29 +62,23 @@ Module Type SYNTAX (Import Op : OPERATORS).
         c_reset  : stmt
       }.
 
-   Definition program : Type := list class.
-   
-   Definition find_class (n: ident) : program -> option (class * list class) :=
-    fix find p :=
-      match p with
-      | [] => None
-      | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
-      end.
+  Definition program : Type := list class.
 
+  (* definition is needed in signature *)
+  Definition find_class (n: ident) : program -> option (class * list class) :=
+    fix find p :=
+    match p with
+    | [] => None
+    | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
+    end.
+  
   (** ** Decidable equality *)
 
   Parameter exp_eqb : exp -> exp -> bool.
 
   Axiom exp_eqb_eq:
-    forall e1 e2,
-      exp_eqb e1 e2 = true <-> e1 = e2.
-
-  Axiom exp_eqb_neq:
-    forall e1 e2,
-      exp_eqb e1 e2 = false <-> e1 <> e2.
-
-  Axiom exp_eq_dec: forall (e1: exp) (e2: exp), {e1 = e2}+{e1 <> e2}.
-  
+    forall e1 e2, exp_eqb e1 e2 = true <-> e1 = e2.
+ 
 End SYNTAX.
 
 Module SyntaxFun' (Import Op : OPERATORS).
@@ -227,24 +221,24 @@ Module SyntaxFun' (Import Op : OPERATORS).
       + now inversion Heq. 
   Qed.
 
-  Lemma exp_eqb_neq:
-    forall e1 e2,
-      exp_eqb e1 e2 = false <-> e1 <> e2.
-  Proof.
-    split; intro HH.
-    - intro Heq; apply exp_eqb_eq in Heq; rewrite Heq in HH; discriminate.
-    - apply Bool.not_true_iff_false.
-      intro Htrue; apply exp_eqb_eq in Htrue; intuition.
-  Qed.
+  (* Lemma exp_eqb_neq: *)
+  (*   forall e1 e2, *)
+  (*     exp_eqb e1 e2 = false <-> e1 <> e2. *)
+  (* Proof. *)
+  (*   split; intro HH. *)
+  (*   - intro Heq; apply exp_eqb_eq in Heq; rewrite Heq in HH; discriminate. *)
+  (*   - apply Bool.not_true_iff_false. *)
+  (*     intro Htrue; apply exp_eqb_eq in Htrue; intuition. *)
+  (* Qed. *)
 
-  Lemma exp_eq_dec: forall (e1: exp) (e2: exp), {e1 = e2}+{e1 <> e2}.
-  Proof.
-    intros e1 e2.
-    destruct (exp_eqb e1 e2) eqn:Heq; [left|right].
-    apply exp_eqb_eq; assumption.
-    intro H; apply exp_eqb_eq in H.
-    rewrite Heq in H; discriminate.
-  Qed.
+  (* Lemma exp_eq_dec: forall (e1: exp) (e2: exp), {e1 = e2}+{e1 <> e2}. *)
+  (* Proof. *)
+  (*   intros e1 e2. *)
+  (*   destruct (exp_eqb e1 e2) eqn:Heq; [left|right]. *)
+  (*   apply exp_eqb_eq; assumption. *)
+  (*   intro H; apply exp_eqb_eq in H. *)
+  (*   rewrite Heq in H; discriminate. *)
+  (* Qed. *)
   
 End SyntaxFun'.
 Module SyntaxFun <: SYNTAX := SyntaxFun'.

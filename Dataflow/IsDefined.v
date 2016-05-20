@@ -59,16 +59,6 @@ Module Type ISDEFINED
     forall x i ck v0 le,
       ~ Is_defined_in_eq x (EqFby i ck v0 le) -> x <> i.
 
-  Axiom In_memory_eq_In_defined_eq_gen:
-    forall x eq S,
-      PS.In x (memory_eq S eq)
-      -> Is_defined_in_eq x eq \/ PS.In x S.
-
-  Axiom In_memory_eq_Is_defined_eq:
-    forall x eq,
-      PS.In x (memory_eq PS.empty eq)
-      -> Is_defined_in_eq x eq.
-
   Axiom Is_defined_in_memories:
     forall x eqs,
       PS.In x (memories eqs) -> Is_defined_in_eqs x eqs.

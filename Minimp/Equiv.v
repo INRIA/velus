@@ -43,23 +43,12 @@ Module Type EQUIV
       transitivity proved by stmt_eval_eq_trans
         as stmt_eval_equiv.
 
-  Instance stmt_eval_eq_Proper:
+  Declare Instance stmt_eval_eq_Proper:
     Proper (eq ==> eq ==> eq ==> stmt_eval_eq ==> eq ==> iff) stmt_eval.
-  Proof.
-    intros prog' prog HR1 menv' menv HR2 env' env HR3 s1 s2 Heq r' r HR4;
-    subst; destruct r as [menv' env'].
-    now apply Heq.
-  Qed.
-
-  Instance stmt_eval_eq_Comp_Proper:
+  
+  Declare Instance stmt_eval_eq_Comp_Proper:
     Proper (stmt_eval_eq ==> stmt_eval_eq ==> stmt_eval_eq) Comp.
-  Proof.
-    intros s s' Hseq t t' Hteq prog menv env menv' env'.
-    split; inversion_clear 1;
-    [rewrite Hseq, Hteq in *; econstructor; eassumption
-    |rewrite <-Hseq, <-Hteq in *; econstructor; eassumption].
-  Qed.
-
+  
   Axiom Comp_assoc:
     forall s1 s2 s3,
       stmt_eval_eq (Comp s1 (Comp s2 s3)) (Comp (Comp s1 s2) s3).
@@ -70,15 +59,9 @@ Module Type EQUIV
   Axiom stmt_eval_eq_Comp_Skip2:
     forall s, stmt_eval_eq (Comp s Skip) s.
   
-  Instance stmt_eval_eq_Ifte_Proper:
+  Declare Instance stmt_eval_eq_Ifte_Proper:
     Proper (eq ==> stmt_eval_eq ==> stmt_eval_eq ==> stmt_eval_eq) Ifte.
-  Proof.
-    intros e e' Heeq s s' Hseq t t' Hteq prog menv env menv' env'.
-    rewrite <-Heeq.
-    split; inversion_clear 1; apply Iifte with b; auto; destruct b;
-    [now rewrite <-Hseq | now rewrite <-Hteq | now rewrite Hseq | now rewrite Hteq].
-  Qed.
-
+  
 End EQUIV.
 
 Module EquivFun'

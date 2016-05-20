@@ -38,6 +38,7 @@ Module Type TRANSLATION
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op).
 
+  (* definition is needed in signature *)
   Definition gather_eq (acc: list (ident * typ) * list obj_dec) (eq: equation) :=
     match eq with
     | EqDef _ _ _     => acc
@@ -45,6 +46,7 @@ Module Type TRANSLATION
     | EqFby x _ _ le  => ((x, SynDF.typeof le)::fst acc, snd acc)
     end.
 
+  (* definition is needed in signature *)
   Definition gather_eqs (eqs: list equation) : (list (ident * typ) * list obj_dec) :=
     List.fold_left gather_eq eqs ([], []).
 
@@ -61,6 +63,7 @@ Module Type TRANSLATION
     (* =end= *)
 
     (* =control= *)
+    (* definition is needed in signature *)
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
       | Cbase => s
@@ -70,18 +73,20 @@ Module Type TRANSLATION
     (* =end= *)
 
     (* =translate_lexp= *)
+    (* definition is needed in signature *)
     Fixpoint translate_lexp (e : lexp) : exp :=
       match e with
       | Econst c ty => Const c ty
       | Evar x ty => tovar (x, ty)
       | Ewhen e c x => translate_lexp e
-                                     (* | Eop op es => Op op (Nelist.map translate_lexp es) *)
+      (* | Eop op es => Op op (Nelist.map translate_lexp es) *)
       | Eunop op e ty => Unop op (translate_lexp e) ty
       | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
       end.
     (* =end= *)
 
     (* =translate_cexp= *)
+    (* definition is needed in signature *)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
       | Emerge y ty t f => Ifte (tovar (y, ty)) (translate_cexp x t) (translate_cexp x f)
@@ -91,6 +96,7 @@ Module Type TRANSLATION
     (* =end= *)
 
     (* =translate_eqn= *)
+    (* definition is needed in signature *)
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp x ce)
@@ -99,10 +105,11 @@ Module Type TRANSLATION
       end.
     (* =end= *)
 
-    (** Remark: eqns ordered in reverse order of execution for coherence with
-       [Is_well_sch]. *)
+  (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
+  (*      [Is_well_sch]. *) *)
 
     (* =translate_eqns= *)
+    (* definition is needed in signature *)
     Definition translate_eqns (eqns: list equation) : stmt :=
       List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
     (* =end= *)
@@ -110,6 +117,7 @@ Module Type TRANSLATION
   End Translate.
 
   (* =translate_reset_eqn= *)
+  (* definition is needed in signature *)
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
     | EqDef _ _ _ => s
@@ -119,14 +127,17 @@ Module Type TRANSLATION
   (* =end= *)
 
   (* =translate_reset_eqns= *)
+  (* definition is needed in signature *)
   Definition translate_reset_eqns (eqns: list equation): stmt :=
     List.fold_left translate_reset_eqn eqns Skip.
   (* =end= *)
 
+  (* definition is needed in signature *)
   Definition ps_from_list (l: list ident) : PS.t :=
     List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
   (* =translate_node= *)
+  (* definition is needed in signature *)
   Definition translate_node (n: node): class :=
     let names := gather_eqs n.(n_eqs) in
     let mems := ps_from_list (List.map (@fst ident typ) (fst names)) in
@@ -140,21 +151,10 @@ Module Type TRANSLATION
   (* =end= *)
 
   (* =translate= *)
+  (* definition is needed in signature *)
   Definition translate (G: global) : program :=
     List.map translate_node G.
   (* =end= *)
-
-
-  (** ** Properties *)
-
-
-  Axiom ps_from_list_pre_spec:
-    forall x l S, (List.In x l \/ PS.In x S)
-             <->
-             PS.In x (List.fold_left (fun s i=>PS.add i s) l S).
-  
-  Axiom ps_from_list_spec:
-    forall x l, List.In x l <-> PS.In x (ps_from_list l).
 
 End TRANSLATION.
 
@@ -269,31 +269,30 @@ Module TranslationFun' (Import Op: OPERATORS)
   (* =end= *)
 
 
-  (** ** Properties *)
+  (* (** ** Properties *) *)
 
+  (* Lemma ps_from_list_pre_spec: *)
+  (*   forall x l S, (List.In x l \/ PS.In x S) *)
+  (*            <-> *)
+  (*            PS.In x (List.fold_left (fun s i=>PS.add i s) l S). *)
+  (* Proof. *)
+  (*   induction l as [|l ls IH]. *)
+  (*   - firstorder. *)
+  (*   - split; intro HH. *)
+  (*     + firstorder. *)
+  (*     + apply IH in HH. *)
+  (*       destruct HH as [HH|HH]; try apply PS.add_spec in HH; firstorder. *)
+  (* Qed. *)
 
-  Lemma ps_from_list_pre_spec:
-    forall x l S, (List.In x l \/ PS.In x S)
-             <->
-             PS.In x (List.fold_left (fun s i=>PS.add i s) l S).
-  Proof.
-    induction l as [|l ls IH].
-    - firstorder.
-    - split; intro HH.
-      + firstorder.
-      + apply IH in HH.
-        destruct HH as [HH|HH]; try apply PS.add_spec in HH; firstorder.
-  Qed.
-
-  Lemma ps_from_list_spec:
-    forall x l, List.In x l <-> PS.In x (ps_from_list l).
-  Proof.
-    unfold ps_from_list.
-    intros.
-    rewrite <- ps_from_list_pre_spec with (S:=PS.empty).
-    split; try intros [H | H]; try tauto.
-    apply not_In_empty in H; contradiction.
-  Qed.
+  (* Lemma ps_from_list_spec: *)
+  (*   forall x l, List.In x l <-> PS.In x (ps_from_list l). *)
+  (* Proof. *)
+  (*   unfold ps_from_list. *)
+  (*   intros. *)
+  (*   rewrite <- ps_from_list_pre_spec with (S:=PS.empty). *)
+  (*   split; try intros [H | H]; try tauto. *)
+  (*   apply not_In_empty in H; contradiction. *)
+  (* Qed. *)
 
   
 End TranslationFun'.
