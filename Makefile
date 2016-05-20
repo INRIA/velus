@@ -187,7 +187,7 @@ beautify: $(VFILES:=.beautified)
 .PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr compcert
 
 compcert:
-	@cd CompCert; make -j 8 all; find -name "*.cm*" -delete
+	@cd CompCert; make -j 8 proof extraction; find -name "*.cm*" -delete
 
 test: all compcert extraction extr
 
