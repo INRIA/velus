@@ -22,3 +22,5 @@ STAMP
 extraction/extract/*
 extraction/CompCert
 *.bak
+html
+*.c
