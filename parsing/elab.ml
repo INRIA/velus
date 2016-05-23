@@ -2,7 +2,8 @@ open Common
 open DF2CL.SynDF
 open Interface
 open Nelist
-    
+open Camlcoq
+
 type lexp' =
   | Econst' of Op.coq_val
   | Evar' of ident
@@ -30,7 +31,11 @@ type node' = {
   n_eqs' : equation' list }
 
 type global = node' list
-    
+
+let find x env =
+  try List.assoc x env
+  with Not_found -> failwith (extern_atom x ^ ": undefined id.")
+                                           
 let sup t1 t2 =
   match t1, t2 with
   | Tfloat, _ | _, Tfloat -> Tfloat
@@ -42,7 +47,7 @@ let rec infer tenv le =
   let aux = infer tenv in
   match le with
   | Econst' v -> Op.typ_of_val v
-  | Evar' x -> List.assoc x tenv
+  | Evar' x -> find x tenv
   | Ewhen' (e, _, _) -> aux e
   | Eunop' (_, e) -> aux e
   | Ebinop' (_, e1, e2) -> sup (aux e1) (aux e2)
@@ -60,16 +65,19 @@ let rec elab_lexpr tenv le =
 let rec elab_cexpr tenv ce =
   let aux = elab_cexpr tenv in
   match ce with
-  | Emerge' (x, ce1, ce2) -> Emerge (x, List.assoc x tenv, aux ce1, aux ce2)
+  | Emerge' (x, ce1, ce2) -> Emerge (x, find x tenv, aux ce1, aux ce2)
   | Eite' (le, ce1, ce2) -> Eite (elab_lexpr tenv le, aux ce1, aux ce2)
   | Eexp' le -> Eexp (elab_lexpr tenv le)
   
 let elab_eq cenv tenv = function
   | EqDef' (x, ck, ce) ->
+    ignore (find x tenv);
     EqDef (x, ck, elab_cexpr tenv ce)
   | EqApp' (x, ck, f, les) ->
-    EqApp (x, ck, f, Nelist.map (elab_lexpr tenv) les, List.assoc f cenv)
+    ignore (find x tenv);
+    EqApp (x, ck, f, Nelist.map (elab_lexpr tenv) les, find f cenv)
   | EqFby' (x, ck, c, le) ->
+    ignore (find x tenv);
     EqFby (x, ck, c, elab_lexpr tenv le)
 
 let get_tenv node =
