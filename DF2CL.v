@@ -43,8 +43,8 @@ Definition is_well_sch (res: Errors.res unit) (n: node) :=
 
 Definition fuse (c: class): class :=
   match c with
-    mk_class name ins out mems objs step reset =>
-    mk_class name ins out mems objs (ifte_fuse step) (ifte_fuse reset)
+    mk_class name ins out vars mems objs step reset =>
+    mk_class name ins out vars mems objs (ifte_fuse step) (ifte_fuse reset)
   end.
 
 Definition compile (g: global) (main_node: ident) :=

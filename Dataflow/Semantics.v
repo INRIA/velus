@@ -311,9 +311,9 @@ environment.
 
   with sem_node G: ident -> stream (nelist value) -> stream value -> Prop :=
        | SNode:
-           forall bk f xss ys i o eqs,
+           forall bk f xss ys i o v eqs,
              clock_of xss bk ->
-             find_node f G = Some (mk_node f i o eqs) ->
+             find_node f G = Some (mk_node f i o v eqs) ->
              (exists H,
                  sem_vars bk H (Nelist.nefst i) xss
                  /\ sem_var bk H (fst o) ys
@@ -433,9 +433,10 @@ enough: it does not support the internal fixpoint introduced by
 	    (ys  : stream value)
 	    (i   : nelist (ident * typ))
 	    (o   : ident * typ)
+	    (v   : list (ident * typ))
 	    (eqs : list equation)
         (Hck : clock_of xss bk)
-	    (Hf  : find_node f G = Some (mk_node f i o eqs))
+	    (Hf  : find_node f G = Some (mk_node f i o v eqs))
         (Heqs : exists H,
             sem_vars bk H (Nelist.nefst i) xss
 	        /\ sem_var bk H (fst o) ys
@@ -446,7 +447,7 @@ enough: it does not support the internal fixpoint introduced by
             /\ sem_var bk H (fst o) ys
             /\ (forall n, absent_list xss n <-> ys n = absent)
             /\ List.Forall (fun eq=> exists Hsem, P bk H eq Hsem) eqs)
-        -> Pn f xss ys (SNode G bk f xss ys i o eqs Hck Hf Heqs).
+        -> Pn f xss ys (SNode G bk f xss ys i o v eqs Hck Hf Heqs).
 
     Fixpoint sem_equation_mult (bk: stream bool)
              (H  : history)
@@ -466,8 +467,8 @@ enough: it does not support the internal fixpoint introduced by
 		               (ys : stream value)
 		               (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
            match Hn in (sem_node _ f ls ys) return (Pn f ls ys Hn) with
-           | SNode bk f ls ys i o eqs Hck Hf Hnode =>
-             SNode_case bk f ls ys i o eqs Hck Hf Hnode
+           | SNode bk f ls ys i o v eqs Hck Hf Hnode =>
+             SNode_case bk f ls ys i o v eqs Hck Hf Hnode
                         (* Turn: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
 	             /\ (forall n, sem_var H (v_name o) n (ys n))
@@ -864,7 +865,7 @@ clock to [sem_var_instant] too. *)
     induction Hsem as [
                      | bk H y ck f lae ls ys ty Hlae Hvar Hnode IH
                      | 
-                     | bk f xs ys i o eqs Hbk Hf Heqs IH]
+                     | bk f xs ys i o v eqs Hbk Hf Heqs IH]
                         using sem_node_mult
                       with (P := fun bk H eq Hsem => ~Is_node_in_eq node.(n_name) eq
                                                   -> sem_equation G bk H eq).
@@ -880,7 +881,7 @@ clock to [sem_var_instant] too. *)
       destruct IH as [H [Hxs [Hys [Hout Heqs]]]].
       exists H.
       repeat (split; eauto).
-      set (cnode := {| n_name := f; n_input := i; n_output := o; n_eqs := eqs |}).
+      set (cnode := {| n_name := f; n_input := i; n_output := o; n_vars := v; n_eqs := eqs |}).
       assert (List.Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs cnode)) 
         by (eapply Is_node_in_Forall; try eassumption;
             eapply find_node_later_not_Is_node_in; try eassumption).
@@ -891,14 +892,14 @@ clock to [sem_var_instant] too. *)
   Qed.
 
   Lemma find_node_find_again:
-    forall G f i o eqs g,
+    forall G f i o v eqs g,
       Ordered_nodes G
       -> find_node f G =
-        Some {| n_name := f; n_input := i; n_output := o; n_eqs := eqs |}
+        Some {| n_name := f; n_input := i; n_output := o; n_vars := v; n_eqs := eqs |}
       -> Is_node_in g eqs
       -> List.Exists (fun nd=> g = nd.(n_name)) G.
   Proof.
-    intros G f i o eqs g Hord Hfind Hini.
+    intros G f i o v eqs g Hord Hfind Hini.
     apply find_node_split in Hfind.
     destruct Hfind as [bG [aG Hfind]].
     rewrite Hfind in *.
@@ -925,7 +926,7 @@ clock to [sem_var_instant] too. *)
     induction Hsem as [
                      | bk H y f lae ls ys Hlae Hvar Hnode IH
                      |
-                     | bk f xs ys i o eqs Hbk Hfind Heqs IH]
+                     | bk f xs ys i o v eqs Hbk Hfind Heqs IH]
                         using sem_node_mult
                       with (P := fun bk H eq Hsem => ~Is_node_in_eq nd.(n_name) eq
                                                   -> sem_equation (nd::G) bk H eq);

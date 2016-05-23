@@ -81,6 +81,7 @@ let elab_node cenv node =
   { n_name = node.n_name';
     n_input = node.n_input';
     n_output = node.n_output';
+    n_vars = node.n_vars';
     n_eqs = List.map (elab_eq cenv tenv) node.n_eqs'}
 
 let get_cenv =

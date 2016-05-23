@@ -2,7 +2,6 @@ Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Common.
 Require Import Rustre.Nelist.
 Require Import Rustre.Interface.
-Require Import Coq.FSets.FMapPositive.
 
 Module Export Syn := SyntaxFun Op.
 
@@ -164,20 +163,19 @@ Statement conversion keeps track of the produced temporaries (function calls).
 NEW: use a unique temporary 
 [owner] represents the name of the current class.
  *)
-Fixpoint translate_stmt (vars: PM.t cl_type) (temp: option cl_bind) (owner: cl_ident) (s: stmt)
-  : (PM.t cl_type * option cl_bind * cl_stmt) :=
+Fixpoint translate_stmt (temp: option cl_bind) (owner: cl_ident) (s: stmt)
+  : (option cl_bind * cl_stmt) :=
   match s with
   | Assign x e =>
     let ty := translate_type (typeof e) in
-    let vars := PM.add x ty vars in 
-    (vars, temp, assign (translate_ident x) ty (translate_exp owner e))
+    (temp, assign (translate_ident x) ty (translate_exp owner e))
   | AssignSt x e =>
     let ty := typeof e in
-    (vars, temp, st_assign owner (translate_ident x) (translate_type ty) (translate_exp owner e))
+    (temp, st_assign owner (translate_ident x) (translate_type ty) (translate_exp owner e))
   | Ifte e s1 s2 =>
-    let '(vars1, temp1, s1') := translate_stmt vars temp owner s1 in
-    let '(vars2, temp2, s2') := translate_stmt vars1 temp1 owner s2 in
-    (vars2, temp2, Clight.Sifthenelse (translate_exp owner e) s1' s2')
+    let (temp1, s1') := translate_stmt temp owner s1 in
+    let (temp2, s2') := translate_stmt temp1 owner s2 in
+    (temp2, Clight.Sifthenelse (translate_exp owner e) s1' s2')
   | Step_ap y ty cls x es =>
     let y := translate_ident y in
     let cls := translate_ident cls in
@@ -186,16 +184,15 @@ Fixpoint translate_stmt (vars: PM.t cl_type) (temp: option cl_bind) (owner: cl_i
     let out_ty := translate_type ty in
     let temp' := match temp with Some t => t | None => (first_unused_ident tt, out_ty) end in
     let s_step := step_call (Some owner) y (fst temp') cls x args out_ty in 
-    let vars := PM.add y out_ty vars in 
-    (vars, Some temp', s_step)
+    (Some temp', s_step)
   | Reset_ap cls x =>
-    (vars, temp, reset_call (Some owner) cls x)
+    (temp, reset_call (Some owner) cls x)
   | Comp s1 s2 =>
-    let '(vars1, temp1, s1') := translate_stmt vars temp owner s1 in
-    let '(vars2, temp2, s2') := translate_stmt vars1 temp1 owner s2 in
-    (vars2, temp2, Clight.Ssequence s1' s2')
+    let (temp1, s1') := translate_stmt temp owner s1 in
+    let (temp2, s2') := translate_stmt temp1 owner s2 in
+    (temp2, Clight.Ssequence s1' s2')
   | Skip =>
-    (vars, temp, Clight.Sskip)
+    (temp, Clight.Sskip)
   end.
 
 (** return statements  *)
@@ -229,11 +226,10 @@ Fixpoint seq_of_statements (sl: list cl_stmt): cl_stmt :=
   end.
 
 (** build the reset function *)
-Definition make_reset
-           (self: cl_bind) (vars: list cl_bind) (temps: list cl_bind) (body: cl_stmt)
+Definition make_reset (self: cl_bind) (temps: list cl_bind) (body: cl_stmt)
   : cl_globdef :=
   let body := return_none body in
-  fundef [self] vars cl_void temps body.
+  fundef [self] [] cl_void temps body.
 
 Definition translate_obj_dec (obj: obj_dec): cl_bind :=
   match obj with
@@ -256,21 +252,22 @@ Definition make_struct (cls: cl_ident) (members: list cl_bind)
 Definition translate_class (c: class)
  : cl_structdef * (cl_ident * cl_globdef) * (cl_ident * cl_globdef) :=
   match c with
-    mk_class c_name c_input c_output c_mems c_objs c_step c_reset =>
+    mk_class c_name c_input c_output c_vars c_mems c_objs c_step c_reset =>
     let mems := List.map translate_param c_mems in
     let objs := List.map translate_obj_dec c_objs in
     let ins := nelist2list (Nelist.map translate_param c_input) in
     let out := translate_param c_output in
+    let vars := List.map translate_param c_vars in
     let members := mems ++ objs in
     let name := translate_ident c_name in
-    let '(vars_step, temp_step, step) := translate_stmt (PM.empty cl_type) None name c_step in
-    let '(vars_reset, temp_reset, reset) := translate_stmt (PM.empty cl_type) None name c_reset in
+    let (temp_step, step) := translate_stmt None name c_step in
+    let (temp_reset, reset) := translate_stmt None name c_reset in
     let self := (self_id, type_of_inst_p name) in
     let temp_step' := match temp_step with Some t => [t] | None => [] end in
     let temp_reset' := match temp_reset with Some t => [t] | None => [] end in
     let cl_struct := make_struct name members in
-    let cl_step := (step_id name, make_step self ins out (PM.elements vars_step) temp_step' step) in
-    let cl_reset := (reset_id name, make_reset self (PM.elements vars_reset) temp_reset' reset) in
+    let cl_step := (step_id name, make_step self ins out vars temp_step' step) in
+    let cl_reset := (reset_id name, make_reset self temp_reset' reset) in
     (cl_struct, cl_step, cl_reset) 
   end.
 

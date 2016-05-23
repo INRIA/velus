@@ -22,8 +22,8 @@ Module Type MEMORYCORRES
   Inductive Memory_Corres (G: global) (n: nat) :
     ident -> memory -> heap -> Prop :=
   | MemC:
-      forall f M menv i o eqs,
-        find_node f G = Some(mk_node f i o eqs)
+      forall f M menv i o v eqs,
+        find_node f G = Some(mk_node f i o v eqs)
         -> List.Forall (Memory_Corres_eq G n M menv) eqs
         -> Memory_Corres G n f M menv
 
@@ -67,8 +67,8 @@ Module Type MEMORYCORRES
         -> Peq M menv (EqFby x ck v0 le).
 
     Hypothesis MemC_case:
-      forall f M menv i o eqs
-        (Hfind : find_node f G = Some (mk_node f i o eqs)),
+      forall f M menv i o v eqs
+        (Hfind : find_node f G = Some (mk_node f i o v eqs)),
         Forall (Peq M menv) eqs
         -> P f M menv.
 
@@ -78,8 +78,8 @@ Module Type MEMORYCORRES
              (Hmc  : Memory_Corres G n f M menv)
              {struct Hmc} : P f M menv :=
       match Hmc in (Memory_Corres _ _ f M menv) return (P f M menv) with
-      | MemC f M menv i o eqs Hfind Heqs =>
-        MemC_case f M menv i o eqs Hfind
+      | MemC f M menv i o v eqs Hfind Heqs =>
+        MemC_case f M menv i o v eqs Hfind
                   (* Turn: Forall (Memory_Corres_eq G n M menv) eqs
              into: Forall (Peq M menv) eqs *)
                   ((fix map (eqs : list equation)
@@ -128,7 +128,7 @@ Module Type MEMORYCORRES
   Proof.
     intros node G eqs n M menv Hord Hini.
     split; intro Hmc; revert M menv eqs Hmc Hini.
-    - induction 1 as [| ? ? ? ? ? ? ? Hfind | | ? ? ? ? ? ? Hfindn IH]
+    - induction 1 as [| ? ? ? ? ? ? ? Hfind | | ? ? ? ? ? ? ? Hfindn IH]
                        using Memory_Corres_eq_mult
                      with (P:=fun f M menv=>
                                 node.(n_name) <> f ->
@@ -153,7 +153,7 @@ Module Type MEMORYCORRES
         apply Forall_Forall with (1:=Hord) in IH.
         apply Forall_impl with (2:=IH).
         intuition.
-    - induction 1 as [| ? ? ? ? ? ? ? Hfind | | ? ? ? ? ? ? Hfindn IH]
+    - induction 1 as [| ? ? ? ? ? ? ? Hfind | | ? ? ? ? ? ? ? Hfindn IH]
                        using Memory_Corres_eq_mult
                      with (P:=fun f M menv=>
                                 node.(n_name) <> f ->
@@ -335,7 +335,7 @@ Module Type MEMORYCORRES
     revert menv. 
     induction Hmsem as [| bk H M y ck f M' les ls ys ty Hmfind Hls Hys Hmsem IH
                         | bk H M ms y ck ls yS v0 lae Hmfind Hms0 Hls HyS Hy
-                        | bk f xs M ys i o eqs Hbk Hf Heqs IH]
+                        | bk f xs M ys i o v eqs Hbk Hf Heqs IH]
                          using msem_node_mult
                        with (P := fun bk H M eq Hsem =>
                                     forall menv,
@@ -379,12 +379,12 @@ Module Type MEMORYCORRES
       rewrite Hls_abs in Hy.
       now f_equal.
     - intros menv Hmc.
-      inversion_clear Hmc as [? ? ? i' o' eqs' Hf' Hmceqs].
+      inversion_clear Hmc as [? ? ? i' o' v' eqs' Hf' Hmceqs].
       rewrite Hf in Hf'.
       injection Hf';
-        intros HR1 HR2 HR3;
-        rewrite <-HR1, <-HR2, <-HR3 in *;
-        clear i' o' eqs' Hf' HR1 HR2 HR3.
+        intros HR1 HR2 HR3 HR4;
+        rewrite <-HR1, <-HR2, <-HR3, <-HR4 in *;
+        clear i' o' v' eqs' Hf' HR1 HR2 HR3 HR4.
       clear Heqs.
       destruct IH as [H [Hxs [Hys [Hout HH]]]].
 

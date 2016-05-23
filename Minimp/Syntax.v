@@ -54,6 +54,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
 
         c_input  : nelist (ident * typ);
         c_output : ident * typ;
+        c_vars   : list (ident * typ);
 
         c_mems   : list (ident * typ);       (* TODO: should track type of each *)
         c_objs   : list obj_dec;
@@ -125,6 +126,7 @@ Module SyntaxFun' (Import Op : OPERATORS).
 
         c_input  : nelist (ident * typ);
         c_output : ident * typ;
+        c_vars   : list (ident * typ);
 
         c_mems   : list (ident * typ);       (* TODO: should track type of each *)
         c_objs   : list obj_dec;

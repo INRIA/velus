@@ -63,6 +63,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
         n_name : ident;
         n_input : nelist (ident * typ);
         n_output : (ident * typ);
+        n_vars : list (ident * typ);
         n_eqs : list equation }.
 
   (** ** Program *)
@@ -156,6 +157,7 @@ Module SyntaxFun' (Import Op : OPERATORS).
         n_name : ident;
         n_input : nelist (ident * typ);
         n_output : (ident * typ);
+        n_vars : list (ident * typ);
         n_eqs : list equation }.
 
   Implicit Type N: node.

@@ -95,9 +95,9 @@ Module Type MEMSEMANTICS
 
   with msem_node G: ident -> stream (nelist value) -> memory -> stream value -> Prop :=
        | SNode:
-           forall bk f xss M ys i o eqs,
+           forall bk f xss M ys i o v eqs,
              clock_of xss bk ->
-             find_node f G = Some (mk_node f i o eqs) ->
+             find_node f G = Some (mk_node f i o v eqs) ->
              (exists H,
                  sem_vars bk H (Nelist.nefst i) xss
                  /\ sem_var bk H (fst o) ys
@@ -183,9 +183,10 @@ enough: it does not support the internal fixpoint introduced by
              (ys : stream value)
              (i  : nelist (ident * typ))
              (o : ident * typ)
+             (v  : list (ident * typ))
              (eqs : list equation)
              (Hbk : clock_of xss bk)
-             (Hfind : find_node f G = Some (mk_node f i o eqs))
+             (Hfind : find_node f G = Some (mk_node f i o v eqs))
              (Hnode : exists H : history,
                  sem_vars bk H (Nelist.nefst i) xss
                  /\ sem_var bk H (fst o) ys
@@ -205,7 +206,7 @@ enough: it does not support the internal fixpoint introduced by
              (Hn : msem_node G f xss M ys) {struct Hn}
       : Pn Hn :=
       match Hn in (msem_node _ f xs M ys) return (Pn Hn) with
-      | SNode bk f xs M ys i o eqs Hbk Hf Hnode =>
+      | SNode bk f xs M ys i o v eqs Hbk Hf Hnode =>
         SNode_case Hbk Hf Hnode
                    (* Turn: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
@@ -340,7 +341,7 @@ enough: it does not support the internal fixpoint introduced by
     induction Hsem as [
                      | bk H M y ck f M' les ty ls ys Hmfind Hls Hys Hmsem IH
                      |
-                     | bk f xs M ys i o eqs Hbk Hf Heqs IH ]
+                     | bk f xs M ys i o v eqs Hbk Hf Heqs IH ]
                         using msem_node_mult
                       with (P := fun bk H M eq Hsem => ~Is_node_in_eq node.(n_name) eq
                                                        -> msem_equation G bk H M eq).
@@ -380,7 +381,7 @@ enough: it does not support the internal fixpoint introduced by
     induction Hsem as [
                      | bk H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH
                      | 
-                     | bk f xs M ys i o eqs Hbk Hfind Heqs IH ]
+                     | bk f xs M ys i o v eqs Hbk Hfind Heqs IH ]
                         using msem_node_mult
                       with (P := fun bk H M eq Hsem => ~Is_node_in_eq nd.(n_name) eq
                                                        -> msem_equation (nd::G) bk H M eq);
@@ -677,7 +678,7 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros f xs ys Hwdef Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? ? ? Hbk Hfind HH].
+    inversion_clear Hsem' as [? ? ? ? ? ? ? ? Hbk Hfind HH].
     destruct HH as [H [Hxs [Hys [Hout Heqs]]]].
     pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
     pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
