@@ -63,7 +63,12 @@ Record class : Type :=
       c_objs   : list obj_dec
     }.
 
-Definition program : Type := prod (prod stmt (list (ident * typ))) (list class).
+Record program : Type :=
+  mk_prog {
+      p_body : stmt;
+      p_vars : list (ident * typ);
+      p_cls  : list class 
+    }.
 
 Definition find_class (n: ident) : list class -> option (class * list class) :=
     fix find p :=
@@ -110,8 +115,8 @@ Definition val_of_const c :=
 Inductive exp_eval (me: menv) (ve: venv): exp -> val * typ -> Prop :=
 | evar:
     forall x v ty,
-      PM.find x ve = Some v ->
-      exp_eval me ve (Var x ty) v
+      PM.MapsTo x (v, ty) ve ->
+      exp_eval me ve (Var x ty) (v, ty)
 | estate:
     forall x v ty,
       mfind_mem x me = Some v ->
@@ -149,7 +154,8 @@ Proof.
   induction e; intros v1 v2 H1 H2;
   inversion H1 as [xa va tya Hv1|xa va tya Hv1|ca tya Hv1];
   inversion H2 as [xb vb tyb Hv2|xb vb tyb Hv2|cb tyb Hv2];
-  try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2); subst.
+  try (unfold PM.MapsTo in *; rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2); subst.
+  now inversion 1.
   now inversion 1.
   reflexivity.
 Qed.
@@ -232,38 +238,57 @@ Definition make_main (body: Clight.statement) (vars: list (ident * typ))
 Definition glob_id (id: ident): ident :=
   pos_of_str ("_" ++ (pos_to_str id)).
 
-Print program.
-Definition translate (p: program) (main_node: ident)
+Program Definition translate (p: program) (main_node: ident)
   : Errors.res Clight.program :=
-  let '(body, vars, cls) := p in
-  let structs := List.map translate_class cls in
-  let main := make_main (translate_stmt main_node body) vars in
-  Clight.make_program structs [(main_id, main)] [] main_id.
+  let structs := List.map translate_class p.(p_cls) in
+  let main := make_main (translate_stmt main_node p.(p_body)) p.(p_vars) in
+  Errors.bind (Ctypes.build_composite_env structs)
+              (fun cenv => Errors.OK {| Clight.prog_defs := [(main_id, main)];
+                 Clight.prog_public := [];
+                 Clight.prog_main := main_id;
+                 Clight.prog_types := structs;
+                 Clight.prog_comp_env := cenv;
+                 Clight.prog_comp_env_eq :=  _ |}).
+Next Obligation.
+  
+
+  match Ctypes.build_composite_env structs with
+  | Errors.OK cenv =>
+    Errors.OK {| Clight.prog_defs := [(main_id, main)];
+                 Clight.prog_public := [];
+                 Clight.prog_main := main_id;
+                 Clight.prog_types := structs;
+                 Clight.prog_comp_env := cenv;
+                 Clight.prog_comp_env_eq :=  _ |}
+  | Errors.Error msg =>
+    Errors.Error msg
+  end.
+  (* Clight.make_program structs [(main_id, main)] [] main_id. *)
 
 (* SIMULATION *)
 
 Section PRESERVATION.
- 
+
+  Ltac inv := Coqlib.inv.
+  
   Variable main_node : ident.
 
   Variable prog: program.
   Variable tprog: Clight.program.
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
+  Hypothesis MAINNODE: exists c cls, find_class main_node prog.(p_cls) = Some (c, cls).
   
   (* Let ge := globalenv prog. *)
   Let tge := Clight.globalenv tprog.
-  Let vars := snd (fst prog).
+
+  Hypothesis VE_IN_VARS: forall x v t (ve: venv), PM.MapsTo x (v, t) ve -> In (x, t) prog.(p_vars).
   
   Definition main_fun :=
-    let '(body, vars, cls) := prog in
-    Clight.mkfunction Ctypes.type_int32s AST.cc_default [] vars [] (translate_stmt main_node body).
-
-  Inductive match_states: state -> Clight.state -> Prop :=
-    state_intro: forall me ve s k e le m,
-      match_states
-        (me, ve, s)
-        (Clight.State main_fun (translate_stmt main_node s) k e le m).
-
+    Clight.mkfunction Ctypes.type_int32s AST.cc_default []
+                      prog.(p_vars)
+                          []
+                          (translate_stmt main_node prog.(p_body)).
+  
   Lemma type_pres:
     forall e, Clight.typeof (translate_exp main_node e) = typeof e.
   Proof.
@@ -271,23 +296,26 @@ Section PRESERVATION.
     destruct c; simpl; reflexivity.
   Qed.
 
+  Lemma type_of_val:
+    forall me ve e v,
+      exp_eval me ve e (v, typeof e) ->
+      Values.Val.has_type v (Ctypes.typ_of_type (typeof e)).
+  Proof.
+    induction 1; simpl; admit.
+  Qed.
+  
   Lemma sem_cast_same:
-    forall v t chunk,
-      Ctypes.access_mode t = Ctypes.By_value chunk ->
+    forall v t t',
+      Ctypes.typ_of_type t = t' ->
+      Ctypes.access_mode t = Ctypes.By_value (AST.chunk_of_type t') ->
       v <> Values.Vundef ->
-      Values.Val.has_type v (Ctypes.typ_of_type t) ->
+      Values.Val.has_type v t' ->
       Cop.sem_cast v t t = Some v.
   Proof.
-    unfold Cop.sem_cast; intros v t c A U H.    
-    destruct t eqn: E; simpl in *; try discriminate.
-    - destruct i; destruct v; simpl in *; auto;
+    unfold Cop.sem_cast; intros ** U H.    
+    destruct t; simpl in *; subst; try discriminate.
+    - destruct i; destruct v; destruct s; simpl in *; auto;
       try contradiction; try now contradict U.
-      + admit.
-      + admit.
-      + admit.
-      + admit.
-      + admit.
-      + admit.
     - destruct v; simpl in *; auto;
       try contradiction; try now contradict U.
     - destruct f; destruct v; auto;
@@ -296,75 +324,166 @@ Section PRESERVATION.
       try contradiction; try now contradict U.
   Qed.
 
-  Definition ve_elts (ve: venv): list (ident * typ) :=
-    List.map (fun (b: ident * (val * typ)) =>
-                let (x, vt) := b in
-                let (v, t) := vt in
-                (x, t))
-             (PM.elements ve).
+  Lemma build_co_ok:
+    Ctypes.build_composite_env (map translate_class prog.(p_cls)) = Errors.OK (Clight.genv_cenv tge).
+  Proof.
+    unfold translate in TRANSL.
+    destruct (Ctypes.build_composite_env (map translate_class (p_cls prog))).
+  Qed.    
 
-  Remark ve_nil:
-    forall ve, PM.elements ve = [] <-> ve_elts ve = [].
-  Proof.  
-    unfold ve_elts; split; intro H.
-    - now rewrite H.
-    - now apply map_eq_nil in H.
+  Hypothesis BUILD_CO_OK:
+    Ctypes.build_composite_env (map translate_class prog.(p_cls)) = Errors.OK (Clight.genv_cenv tge).
+
+  Remark find_class_name:
+    forall id cls c cls',
+      find_class id cls = Some (c, cls') ->
+      c.(c_name) = id.
+  Proof.
+    intros ** Hfind.
+    induction cls; inversion Hfind as [H].
+    destruct (ident_eqb (c_name a) id) eqn: E.
+    - inversion H; subst. 
+      now apply ident_eqb_eq.
+    - now apply IHcls.
   Qed.
   
-  Inductive tr_env: venv -> Clight.env -> Prop := 
-    tr_env_intro: forall ve m e m',
-      Clight.alloc_variables tge Clight.empty_env m (ve_elts ve) e m' ->
-      tr_env ve e.
+  Lemma tr_main_node:
+    exists co,
+      Maps.PTree.get main_node (Clight.genv_cenv tge) = Some co
+      /\ (forall x t, In (x, t) (Ctypes.co_members co) ->
+              exists delta,
+                Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta).
+  Proof.
+    assert (tprog.(Clight.prog_types) = map translate_class prog.(p_cls)) as H.
+    - admit.
+    - destruct MAINNODE as [c [cls Hcls]].
+      assert (In (translate_class c) tprog.(Clight.prog_types)) as Hin.
+      + clear MAINNODE BUILD_CO_OK.
+        induction (Clight.prog_types tprog); induction (p_cls prog); simpl in *. 
+        * discriminate.
+        * apply nil_cons in H; contradiction.
+        * symmetry in H; apply nil_cons in H; contradiction.            
+        *{ destruct (ident_eqb (c_name a0) main_node).
+           - inversion Hcls; subst.
+             inversion H. now left.
+           - inversion H; subst.
+             right. apply IHl. admit. (* how to do the induction ??? *)
+         }
+        (* induction prog.(p_cls). *)
+        (* * simpl in *; discriminate. *)
+        (* *{ simpl in *. *)
+        (*    destruct (ident_eqb (c_name a) main_node). *)
+        (*    - inversion_clear Hcls; subst. *)
+        (*      apply in_eq. *)
+        (*    - specialize (IHl Hcls tprog). *)
+        (*      apply in_cons. *)
+        (*  } *)
+      + rewrite H in Hin.
+        unfold translate_class at 1 in Hin.
+        apply find_class_name in Hcls.
+        destruct c; simpl in Hcls; subst.
+        pose proof (Ctypes.build_composite_env_charact _ _ _ _ _ _ BUILD_CO_OK Hin) as [co Hco].
+        exists co; split.
+        * tauto.
+        * intros ** Hx.
+          admit.                (* how to get a witness ??? *)
+  Qed.
+
+  Inductive tr_vars: Clight.env -> Prop :=
+    tr_vars_intro: forall m e m',
+      Clight.alloc_variables tge Clight.empty_env m prog.(p_vars) e m' ->
+      tr_vars e.
+
+  Inductive tr_self: Clight.env -> Prop :=
+    tr_self_intro: forall m e m',
+      Clight.alloc_variables tge Clight.empty_env m [(self_id, pointer_of (type_of_inst main_node))] e m' ->
+      tr_self e.
+
+  Inductive match_states: state -> Clight.state -> Prop :=
+    state_intro: forall me ve s k e le m,
+      tr_vars e ->
+      tr_self e ->
+      match_states
+        (me, ve, s)
+        (Clight.State main_fun (translate_stmt main_node s) k e le m).
+
+  Remark allocated_is_in_env:
+    forall l x t m e e' m',
+      Clight.alloc_variables tge e m l e' m' ->
+      In (x, t) l ->
+      exists loc, Maps.PTree.get x e' = Some (loc, t).
+  Proof.
+    clear TRANSL MAINNODE VE_IN_VARS BUILD_CO_OK.
+    induction 1 as [|? ? ? ? ? ? loc ? ? Malloc Alloc]; intro Hin.
+    - exfalso; eapply in_nil; eauto.
+    - pose proof Hin as Hin'.
+      destruct Hin as [H|]; auto.
+      inv H. 
+      exists loc. admit.             (* How to do the induction ???? *)
+  Qed.
   
   Lemma tr_env_in:
-    forall i ve v t e,
-      PM.find i ve = Some (v, t) ->
-      tr_env ve e ->
+    forall i (ve: venv) v t e,
+      PM.MapsTo i (v, t) ve ->
+      tr_vars e ->
       exists loc, Maps.PTree.get i e = Some (loc, t).
   Proof.
-    intros i ve v t e Hfind TRe.
-    inversion TRe; subst.
-    inversion H; subst.
-    - apply PM.elements_correct in Hfind.
-      symmetry in H3; apply ve_nil in H3.
-      rewrite H3 in Hfind.
-      exfalso; eapply in_nil; eauto.
-    - admit.
+    intros ** Hfind TRe.
+    inv TRe.
+    specialize (VE_IN_VARS _ _ _ _ Hfind).
+    eapply allocated_is_in_env; eauto.
   Qed.
 
-  Lemma expr_eval:
-    forall me ve exp v e le m m',
-      Clight.alloc_variables tge Clight.empty_env m (tr_env ve) e m' ->
-      exp_eval me ve exp v ->
-      Clight.eval_expr tge e le m' (translate_exp main_node exp) (fst v).
+  Lemma tr_self_in:
+    forall e,
+      tr_self e ->
+      exists loc, Maps.PTree.get self_id e = Some (loc, pointer_of (type_of_inst main_node)).
   Proof.
-    intros me ve exp; induction exp; inversion_clear 2; subst; simpl.    
-    - assert (loc: Values.block). admit.
+    intros ** TRe.
+    inv TRe.
+    eapply allocated_is_in_env; eauto; simpl; auto.
+  Qed.
+
+  Notation "( x : t )" := (Clight.Evar x t) (at level 67).
+  Notation "(self --> x ) : t" := (deref_self_field main_node x t) (at level 67).
+  Notation "^self" := (Clight.Ederef (Clight.Evar self_id (pointer_of (type_of_inst main_node))) (type_of_inst main_node)) (at level 67).
+  
+  Lemma expr_eval:
+    forall me ve exp v t chunk e le m',
+      tr_vars e ->
+      tr_self e ->
+      exp_eval me ve exp (v, t) ->
+      Ctypes.access_mode t = Ctypes.By_value chunk ->
+      Clight.eval_expr tge e le m' (translate_exp main_node exp) v.
+  Proof.
+    intros me ve exp;
+    induction exp as [x ty|x ty|c ty];
+    intros ** Hvars Hself Heval Haccess;
+    inversion Heval as [? ? ? Hmto|? ? ? Hmem|]; subst; simpl in *.
+    - destruct (tr_env_in _ _ _ _ _ Hmto Hvars) as [loc Hget].  
       apply Clight.eval_Elvalue with (loc:=loc) (ofs:=Int.zero). 
-      + constructor. admit.
-      + simpl. admit.
+      + now constructor. 
+      + eapply Clight.deref_loc_value; eauto. simpl. admit. (* LOAD *)
     - assert (loc: Values.block). admit.
-      assert (ofs: Int.int). admit.
-      assert (delta: Z). admit.
-      assert (loc': Values.block). admit.
-      assert (co: Ctypes.composite). admit.
+      assert (ofs: Int.int). admit. (* where are they comin' from ??? *)
+      destruct tr_main_node as [co [Hco Hdelta]].
+      destruct (Hdelta x t) as [delta Hdelta']. admit.
       apply Clight.eval_Elvalue with (loc:=loc) (ofs:=Int.add ofs (Int.repr delta)). 
-      + apply Clight.eval_Efield_struct with (id:=main_node) (co:=co) (att:=Ctypes.noattr). 
+      + apply Clight.eval_Efield_struct with (id:=main_node) (co:=co) (att:=Ctypes.noattr); auto. 
         *{ apply Clight.eval_Elvalue with (loc:=loc) (ofs:=ofs). 
-           - constructor. apply Clight.eval_Elvalue with (loc:=loc') (ofs:=Int.zero).
-             + constructor. admit.
+           - constructor.
+             destruct (tr_self_in _ Hself) as [loc'].
+             apply Clight.eval_Elvalue with (loc:=loc') (ofs:=Int.zero).
+             + now constructor. 
              + apply Clight.deref_loc_value with (chunk:=AST.Mint32).
                * reflexivity. 
-               * simpl. admit.
+               * simpl. admit.  (* LOAD *)
            - now apply Clight.deref_loc_copy.
          }
-        * reflexivity.
-        * admit.
-        * admit.
-      + simpl. admit.
+      + eapply Clight.deref_loc_value; eauto. simpl. admit. (* LOAD *)
     - destruct c; constructor.
   Qed.
-  
+              
   Theorem simu:
     forall S1 S2,
       stmt_eval prog S1 S2 ->
@@ -374,51 +493,57 @@ Section PRESERVATION.
             Smallstep.plus Clight.step1 tge S1' t S2'
             /\ match_states S2 S2'.
   Proof.
-    induction 1; inversion_clear 1; simpl.
-    - assert (m': Memory.Mem.mem). admit.
-      assert (loc: Values.block). admit. 
-      exists (Clight.State main_fun Clight.Sskip k e0 le m'); exists Events.E0; split.
+    induction 1 as [? ? ? ? ? ? ? Heval Hve|? ? ? ? ? ? ? Heval Hmem];
+    inversion_clear 1 as [? ? ? ? env ? ? Hvars Hself]; simpl.
+    - assert (m': Memory.Mem.mem). admit. (* memory state after statement step *)
+      exists (Clight.State main_fun Clight.Sskip k env le m'); exists Events.E0; split.
       + apply Smallstep.plus_one.
         unfold Clight.step1.
-        assert (exists c, Ctypes.access_mode (typeof e) = Ctypes.By_value c) as [c C]. admit.
+        destruct v as [v t].
+        assert (Ctypes.access_mode t = Ctypes.By_value (AST.chunk_of_type (Ctypes.typ_of_type (typeof e)))). admit.
+        assert (t = typeof e) as Ht by now inversion Heval. 
+        subst.
         assert (v <> Values.Vundef) as V. admit.
+        assert (loc: Values.block). admit.
         apply Clight.step_assign with (loc:=loc) (ofs:=Int.zero) (v2:=v) (v:=v).
-        * constructor. admit.   (* x has to be present in the env before, cf local var *)
-        * apply expr_eval with (1:=H).
+        * constructor. admit.   (* x is allocated in the env before, cf local var *)
+        * eapply expr_eval; eauto. 
         * rewrite type_pres; simpl.
-          apply sem_cast_same with (1:=C) (2:=V).
-          admit. 
-        * simpl. apply Clight.assign_loc_value with (1:=C).
-          simpl. admit.
-      + constructor.
-    - assert (m': Memory.Mem.mem). admit.
+          eapply sem_cast_same; eauto.
+          eapply type_of_val; eauto. (* seems pretty wrong... *)
+        * eapply Clight.assign_loc_value; eauto. 
+          simpl. admit.         (* STORE *)
+      + now constructor.
+    - assert (m': Memory.Mem.mem). admit. (* memory state after statement step *)
       assert (loc: Values.block). admit.
       assert (ofs: Int.int). admit.
-      assert (loc': Values.block). admit.
-      assert (delta: Z). admit.
-      assert (co: Ctypes.composite). admit.
-      exists (Clight.State main_fun Clight.Sskip k e0 le m'); exists Events.E0; split.
+      exists (Clight.State main_fun Clight.Sskip k env le m'); exists Events.E0; split.
       + apply Smallstep.plus_one.
         unfold Clight.step1.
-        assert (exists c, Ctypes.access_mode (typeof e) = Ctypes.By_value c) as [c C]. admit.
+        destruct v as [v t].
+        assert (Ctypes.access_mode t = Ctypes.By_value (AST.chunk_of_type (Ctypes.typ_of_type (typeof e)))). admit.
+        assert (t = typeof e) as Ht by now inversion Heval. 
+        destruct tr_main_node as [co [Hco Hdelta]].
+        destruct (Hdelta x t) as [delta Hdelta']. admit.        
+        subst.
         assert (v <> Values.Vundef) as V. admit.
         apply Clight.step_assign with (loc:=loc) (ofs:=Int.add ofs (Int.repr delta)) (v2:=v) (v:=v).
-        *{ apply Clight.eval_Efield_struct with (id:=main_node) (co:=co) (att:=Ctypes.noattr). 
-           - apply Clight.eval_Elvalue with (loc:=loc) (ofs:=ofs). 
-             + constructor. apply Clight.eval_Elvalue with (loc:=loc') (ofs:=Int.zero).
-               * constructor. admit.
-               *{ apply Clight.deref_loc_value with (chunk:=AST.Mint32).
-                  - reflexivity. 
-                  - simpl. admit.
-                }
-             + now apply Clight.deref_loc_copy.
-           - reflexivity.
-           - admit.
-           - admit.
+        *{ apply Clight.eval_Efield_struct with (id:=main_node) (co:=co) (att:=Ctypes.noattr); auto. 
+          apply Clight.eval_Elvalue with (loc:=loc) (ofs:=ofs). 
+           - constructor.
+             destruct (tr_self_in _ Hself) as [loc'].
+             apply Clight.eval_Elvalue with (loc:=loc') (ofs:=Int.zero).
+             + now constructor. 
+             + apply Clight.deref_loc_value with (chunk:=AST.Mint32).
+               * reflexivity. 
+               * simpl. admit.  (* LOAD *)
+           - now apply Clight.deref_loc_copy.
          }
-        * apply expr_eval with (1:=H).
-        * rewrite type_pres; simpl. admit.
-        * simpl. apply Clight.assign_loc_value with (1:=C).
-          simpl. admit.
-      + constructor.
+        * eapply expr_eval; eauto. 
+        * rewrite type_pres; simpl.
+          eapply sem_cast_same; eauto.
+          eapply type_of_val; eauto. (* seems pretty wrong... *)
+        * eapply Clight.assign_loc_value; eauto. 
+          simpl. admit.         (* STORE *)
+      + now constructor.
   Qed.
