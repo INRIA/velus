@@ -14,8 +14,8 @@ Open Scope list_scope.
   two methods: [step] and [reset].
 
  *)
-Module Type SYNTAX (Import Op : OPERATORS).
-  
+Module Type PRE_SYNTAX (Import Op : OPERATORS).
+
   Inductive exp : Type :=
   | Var : ident -> typ -> exp                    (* variable  *)
   | State : ident -> typ -> exp                  (* state variable  *)
@@ -31,7 +31,7 @@ Module Type SYNTAX (Import Op : OPERATORS).
     | Unop _ _ ty
     | Binop _ _ _ ty => ty
     end.
-  
+
   Inductive stmt : Type :=
   | Assign : ident -> exp -> stmt                               (* x = e *)
   | AssignSt : ident -> exp -> stmt                             (* self.x = e *)
@@ -72,81 +72,29 @@ Module Type SYNTAX (Import Op : OPERATORS).
     | [] => None
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
     end.
-  
+
+End PRE_SYNTAX.
+
+Module Type SYNTAX (Import Op : OPERATORS).
+
+  Include PRE_SYNTAX Op.
+
   (** ** Decidable equality *)
 
   Parameter exp_eqb : exp -> exp -> bool.
 
   Axiom exp_eqb_eq:
     forall e1 e2, exp_eqb e1 e2 = true <-> e1 = e2.
- 
+
 End SYNTAX.
 
-Module SyntaxFun' (Import Op : OPERATORS).
-  Inductive exp : Type :=
-  | Var : ident -> typ -> exp                    (* variable  *)
-  | State : ident -> typ -> exp                  (* state variable  *)
-  | Const : val -> typ -> exp                    (* constant *)
-  | Unop : unary_op -> exp -> typ -> exp          (* unary operator *)
-  | Binop : binary_op -> exp -> exp -> typ -> exp. (* binary operator *)
+Module SyntaxFun (Import Op : OPERATORS) <: SYNTAX Op.
+  Include PRE_SYNTAX Op.
 
-  Definition typeof (e: exp): typ :=
-    match e with
-    | Var _ ty
-    | State _ ty
-    | Const _ ty
-    | Unop _ _ ty
-    | Binop _ _ _ ty => ty
-    end.
-  
   Implicit Type e: exp.
-
-  Inductive stmt : Type :=
-  | Assign : ident -> exp -> stmt                               (* x = e *)
-  | AssignSt : ident -> exp -> stmt                             (* self.x = e *)
-  | Ifte : exp -> stmt -> stmt -> stmt                           (* if e then s1 else s2 *)
-  | Step_ap : ident -> typ -> ident -> ident -> nelist exp -> stmt (* y = (C x).step(es) *)
-  | Reset_ap : ident -> ident -> stmt                           (* (C x).reset() *)
-  | Comp : stmt -> stmt -> stmt                                 (* s1; s2 *)
-  | Skip.
-
   Implicit Type s: stmt.
-
-
-  Record obj_dec : Type :=
-    mk_obj_dec {
-        obj_inst  : ident;
-        obj_class : ident
-      }.
-
-  (* TODO: lots of fields are not strictly necessary *)
-  Record class : Type :=
-    mk_class {
-        c_name   : ident;
-
-        c_input  : nelist (ident * typ);
-        c_output : ident * typ;
-        c_vars   : list (ident * typ);
-
-        c_mems   : list (ident * typ);       (* TODO: should track type of each *)
-        c_objs   : list obj_dec;
-
-        c_step   : stmt;
-        c_reset  : stmt
-      }.
-
   Implicit Type cl: class.
-
-  Definition program : Type := list class.
-
   Implicit Type p: program.
-
-  Definition find_class (n: ident) : program -> option (class * list class) :=
-    fix find p :=
-      match p with
-      | [] => None
-      | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
-      end.
 
   (** ** Induction principle for [exp] *)
 
@@ -180,7 +128,7 @@ Module SyntaxFun' (Import Op : OPERATORS).
             | Const c1 ty1, Const c2 ty2 => val_eqb c1 c2 && typ_eqb ty1 ty2
             (* | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && _ *)
             | Unop op1 e1' ty1, Unop op2 e2' ty2 => unop_eqb op1 op2  && typ_eqb ty1 ty2 && _
-            | Binop op1 e11 e12 ty1, Binop op2 e21 e22 ty2 => binop_eqb op1 op2  && typ_eqb ty1 ty2 && _ 
+            | Binop op1 e11 e12 ty1, Binop op2 e21 e22 ty2 => binop_eqb op1 op2  && typ_eqb ty1 ty2 && _
             | _, _ => false
             end).
     - exact (exp_eqb e1' e2').
@@ -204,7 +152,7 @@ Module SyntaxFun' (Import Op : OPERATORS).
     - rewrite Bool.andb_true_iff, typ_eqb_true_iff, val_eqb_true_iff.
       split; intro Heq; [now f_equal | now inversion Heq].
     - rewrite 2 Bool.andb_true_iff, typ_eqb_true_iff, unop_eqb_true_iff.
-      split; intro Heq. 
+      split; intro Heq.
       + f_equal; try apply IHe1; apply Heq.
       (* auto. destruct Heq as [? Heq]; subst; split || f_equal; trivial; []. *)
       (*   revert n Heq. induction es as [| e1 es1]; intros [| e2 es2] Heq; simpl in Heq; try discriminate; [|]. *)
@@ -219,8 +167,8 @@ Module SyntaxFun' (Import Op : OPERATORS).
     - rewrite 3 Bool.andb_true_iff, typ_eqb_true_iff, binop_eqb_true_iff.
       rewrite IHe1_1, IHe1_2.
       split; intro Heq.
-      + f_equal; apply Heq. 
-      + now inversion Heq. 
+      + f_equal; apply Heq.
+      + now inversion Heq.
   Qed.
 
   (* Lemma exp_eqb_neq: *)
@@ -241,6 +189,6 @@ Module SyntaxFun' (Import Op : OPERATORS).
   (*   intro H; apply exp_eqb_eq in H. *)
   (*   rewrite Heq in H; discriminate. *)
   (* Qed. *)
-  
-End SyntaxFun'.
-Module SyntaxFun <: SYNTAX := SyntaxFun'.
+
+End SyntaxFun.
+
