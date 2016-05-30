@@ -39,7 +39,7 @@ Module Type DECIDE
 
 End DECIDE.
 
-Module DecideFun'
+Module DecideFun
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (IsF : ISFREE Op Syn)
@@ -49,7 +49,8 @@ Module DecideFun'
        (Import IsD : ISDEFINED Op Syn Mem)
        (Import IsV : ISVARIABLE Op Syn Mem IsD)
        (Import NoD : NODUP Op Syn Mem IsD IsV)
-       (Import Wef : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD).
+       (Import Wef : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD)
+       <: DECIDE Op Syn IsF IsFDec Ord Mem IsD IsV NoD Wef.
   
   Section Decide.
 
@@ -329,5 +330,4 @@ Module DecideFun'
 
   End Decide.
 
-End DecideFun'.
-Module DecideFun <: DECIDE := DecideFun'.
+End DecideFun.

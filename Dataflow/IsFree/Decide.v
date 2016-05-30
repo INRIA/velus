@@ -28,10 +28,11 @@ Module Type DECIDE
 
 End DECIDE.
 
-Module DecideFun'
+Module DecideFun
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
-       (Import IsF : ISFREE Op Syn).
+       (Import IsF : ISFREE Op Syn)
+       <: DECIDE Op Syn IsF.
 
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
     match ck with
@@ -335,5 +336,4 @@ Module DecideFun'
   (*   intuition not_In_empty. *)
   (* Qed. *)
 
-End DecideFun'.
-Module DecideFun <: DECIDE := DecideFun'.
+End DecideFun.

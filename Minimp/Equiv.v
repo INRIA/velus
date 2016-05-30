@@ -17,7 +17,7 @@ define (and prove some properties about) equivalence of Minimp
 programs.
 
  *)
-Module Type EQUIV
+Module Type PRE_EQUIV
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Sem : SEMANTICS Op Syn).
@@ -27,6 +27,15 @@ Module Type EQUIV
       stmt_eval prog menv env s1 (menv', env')
       <->
       stmt_eval prog menv env s2 (menv', env').
+  
+End PRE_EQUIV.
+
+Module Type EQUIV
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import Sem : SEMANTICS Op Syn).
+  
+  Include PRE_EQUIV Op Syn Sem.
   
   Axiom stmt_eval_eq_refl:
     reflexive stmt stmt_eval_eq.
@@ -64,16 +73,13 @@ Module Type EQUIV
   
 End EQUIV.
 
-Module EquivFun'
+Module EquivFun
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
-       (Import Sem : SEMANTICS Op Syn).
+       (Import Sem : SEMANTICS Op Syn)
+       <: EQUIV Op Syn Sem.
   
-  Definition stmt_eval_eq s1 s2: Prop :=
-    forall prog menv env menv' env',
-      stmt_eval prog menv env s1 (menv', env')
-      <->
-      stmt_eval prog menv env s2 (menv', env').
+  Include PRE_EQUIV Op Syn Sem.
 
   Lemma stmt_eval_eq_refl:
     reflexive stmt stmt_eval_eq.
@@ -163,5 +169,4 @@ Module EquivFun'
     [now rewrite <-Hseq | now rewrite <-Hteq | now rewrite Hseq | now rewrite Hteq].
   Qed.
 
-End EquivFun'.
-Module EquivFun <: EQUIV := EquivFun'.
+End EquivFun.

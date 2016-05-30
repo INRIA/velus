@@ -16,13 +16,14 @@ Require Import Rustre.Minimp.Syntax.
 
  *)
 
-Module Type SEMANTICS
+Module Type PRE_SEMANTICS
        (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op).
+
   Definition heap: Type := memory val.
   Definition stack : Type := PM.t val.
 
-   Definition sempty: stack := PM.empty val.
+  Definition sempty: stack := PM.empty val.
   Definition hempty: heap := empty_memory _.
 
   Inductive exp_eval heap stack: exp -> val -> Prop :=
@@ -48,10 +49,6 @@ Module Type SEMANTICS
         exp_eval heap stack e2 c2 ->
         sem_binary op c1 (typeof e1) c2 (typeof e2) = Some v ->
         exp_eval heap stack (Binop op e1 e2 ty) v.
-
-  Axiom exps_eval_const:
-    forall h s cs,
-      Nelist.Forall2 (exp_eval h s) (Nelist.map (fun c => Const c (typ_of_val c)) cs) cs.
 
   (* =stmt_eval= *)
   Inductive stmt_eval :
@@ -115,6 +112,18 @@ Module Type SEMANTICS
              stmt_eval prog' hempty sempty cls.(c_reset) (menv', env') ->
              stmt_reset_eval prog clsid menv'.
 
+End PRE_SEMANTICS.
+
+Module Type SEMANTICS
+       (Import Op : OPERATORS)
+       (Import Syn : SYNTAX Op).
+
+  Include PRE_SEMANTICS Op Syn.
+
+  Axiom exps_eval_const:
+    forall h s cs,
+      Nelist.Forall2 (exp_eval h s) (Nelist.map (fun c => Const c (typ_of_val c)) cs) cs.
+
   (** ** Determinism of semantics *)
 
   Axiom exp_eval_det:
@@ -138,39 +147,9 @@ Module Type SEMANTICS
 
 End SEMANTICS.
 
-Module SemanticsFun' (Import Op: OPERATORS) (Import Syn: SYNTAX Op).
-  Definition heap: Type := memory val.
-  Definition stack : Type := PM.t val.
+Module SemanticsFun (Import Op: OPERATORS) (Import Syn: SYNTAX Op) <: SEMANTICS Op Syn.
 
-  Implicit Type mmem: heap.
-  Implicit Type stack: stack.
-
-  Definition sempty: stack := PM.empty val.
-  Definition hempty: heap := empty_memory _.
-
-  Inductive exp_eval heap stack: exp -> val -> Prop :=
-  | evar:
-      forall x v ty,
-        PM.find x stack = Some v ->
-        exp_eval heap stack (Var x ty) v
-  | estate:
-      forall x v ty,
-        mfind_mem x heap = Some v ->
-        exp_eval heap stack (State x ty) v
-  | econst:
-      forall c ty,
-        exp_eval heap stack (Const c ty) c
-   | eunop :
-      forall op e c v ty,
-        exp_eval heap stack e c ->
-        sem_unary op c (typeof e) = Some v ->
-        exp_eval heap stack (Unop op e ty) v
-  | ebinop :
-      forall op e1 e2 c1 c2 v ty,
-        exp_eval heap stack e1 c1 ->
-        exp_eval heap stack e2 c2 ->
-        sem_binary op c1 (typeof e1) c2 (typeof e2) = Some v ->
-        exp_eval heap stack (Binop op e1 e2 ty) v.
+  Include PRE_SEMANTICS Op Syn.
 
   Theorem exps_eval_const:
     forall h s cs,
@@ -179,75 +158,6 @@ Module SemanticsFun' (Import Op: OPERATORS) (Import Syn: SYNTAX Op).
     Hint Constructors exp_eval.
     intros h s cs. induction cs; constructor; eauto.
   Qed.
-
-  (* =stmt_eval= *)
-  Inductive stmt_eval :
-    program -> heap -> stack -> stmt -> heap * stack -> Prop :=
-  | Iassign: forall prog menv env x e v env',
-      exp_eval menv env e v ->
-      PM.add x v env = env' ->
-      stmt_eval prog menv env (Assign x e) (menv, env')
-  | (*...*)
-  (* =end= *)
-  Iassignst:
-    forall prog menv env x e v menv',
-      exp_eval menv env e v ->
-      madd_mem x v menv = menv' ->
-      stmt_eval prog menv env (AssignSt x e) (menv', env)
-  (* =stmt_eval:step= *)
-  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv ty,
-      mfind_inst o menv = Some(omenv) ->
-      Nelist.Forall2 (exp_eval menv env) es vs ->
-      stmt_step_eval prog omenv clsid vs omenv' rv ->
-      madd_obj o omenv' menv = menv' ->
-      PM.add y rv env  = env' ->
-      stmt_eval prog menv env (Step_ap y ty clsid o es) (menv', env')
-  | (*...*)
-  (* =end= *)
-  Ireset:
-    forall prog menv env o clsid omenv' menv',
-      stmt_reset_eval prog clsid omenv' ->
-      madd_obj o omenv' menv = menv' ->
-      stmt_eval prog menv env (Reset_ap clsid o) (menv', env)
-  | Icomp:
-      forall prog menv env a1 a2 env1 menv1 env2 menv2,
-        stmt_eval prog menv env a1 (menv1, env1) ->
-        stmt_eval prog menv1 env1 a2 (menv2, env2) ->
-        stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
-   | Iifte:
-      forall prog menv env cond b ifTrue ifFalse env' menv',
-        exp_eval menv env cond (Vbool b) ->
-        stmt_eval prog menv env (if b then ifTrue else ifFalse) (menv', env') -> 
-        stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
-  | Iskip:
-      forall prog menv env,
-        stmt_eval prog menv env Skip (menv, env)
-  (* =stmt_step_eval= *)
-  with stmt_step_eval :
-         program -> heap -> ident -> nelist val -> heap -> val -> Prop :=
-       | Iestep:
-           forall prog menv env clsid ivs prog' menv' ov cls env',
-             find_class clsid prog = Some(cls, prog') ->
-             env = adds (Nelist.nefst cls.(c_input)) ivs sempty ->
-             stmt_eval prog' menv env cls.(c_step)
-                                            (menv', env') ->
-             PM.find (fst cls.(c_output)) env' = Some(ov) ->
-             stmt_step_eval prog menv clsid ivs menv' ov
-  (* =end= *)
-
-  with stmt_reset_eval : program -> ident -> heap -> Prop :=
-       | Iereset:
-           forall prog clsid cls prog' menv' env',
-             find_class clsid prog = Some(cls, prog') ->
-             stmt_eval prog' hempty sempty cls.(c_reset) (menv', env') ->
-             stmt_reset_eval prog clsid menv'.
-
-  Scheme stmt_eval_mult :=
-    Induction for stmt_eval Sort Prop
-    with stmt_step_eval_mult :=
-      Induction for stmt_step_eval Sort Prop
-      with stmt_reset_eval_mult :=
-        Induction for stmt_reset_eval Sort Prop.
 
   (** ** Determinism of semantics *)
 
@@ -394,5 +304,4 @@ Module SemanticsFun' (Import Op: OPERATORS) (Import Syn: SYNTAX Op).
   (*                     end. *)
   (* Qed. *)
   
-End SemanticsFun'.
-Module SemanticsFun <: SEMANTICS := SemanticsFun'.
+End SemanticsFun.

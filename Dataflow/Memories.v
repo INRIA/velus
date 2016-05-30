@@ -19,7 +19,7 @@ Require Import Rustre.Dataflow.Syntax.
 
  *)
 
-Module Type MEMORIES
+Module Type PRE_MEMORIES
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op). 
 
@@ -32,7 +32,15 @@ Module Type MEMORIES
 
   Definition memories (eqs: list equation) : PS.t :=
     List.fold_left memory_eq eqs PS.empty.
+  
+End PRE_MEMORIES.
 
+Module Type MEMORIES
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op). 
+
+  Include PRE_MEMORIES Op Syn.
+  
   (** ** Properties *)
 
   Axiom In_fold_left_memory_eq:
@@ -42,20 +50,13 @@ Module Type MEMORIES
   
 End MEMORIES.
 
-Module MemoriesFun'
+Module MemoriesFun
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op). 
+       (Import Syn : SYNTAX Op)
+       <: MEMORIES Op Syn. 
 
-  Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
-    match eq with
-    | EqFby x _ _ _ => PS.add x mems
-    | _ => mems
-    end.
-
-  Definition memories (eqs: list equation) : PS.t :=
-    List.fold_left memory_eq eqs PS.empty.
-
-
+  Include PRE_MEMORIES Op Syn.
+ 
   (** ** Properties *)
 
   Lemma In_fold_left_memory_eq:
@@ -88,5 +89,4 @@ Module MemoriesFun'
           apply PS.add_spec; auto.
   Qed.
 
-End MemoriesFun'.
-Module MemoriesFun <: MEMORIES := MemoriesFun'.
+End MemoriesFun.

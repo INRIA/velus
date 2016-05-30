@@ -18,7 +18,7 @@ Remark: [Ordered_nodes] is implied by [Welldef_global].
 
  *)
 
-Module Type ORDERED
+Module Type PRE_ORDERED
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op).
 
@@ -39,6 +39,14 @@ Module Type ORDERED
                 /\ List.Exists (fun n=> f = n.(n_name)) nds)
         -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Ordered_nodes (nd::nds).
+
+End PRE_ORDERED.
+
+Module Type ORDERED
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op).
+
+  Include PRE_ORDERED Op Syn.
 
   (** ** Properties of [Is_node_in] *)
 
@@ -93,27 +101,12 @@ Module Type ORDERED
 
 End ORDERED.
 
-Module OrderedFun'
+Module OrderedFun
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
+       (Import Syn : SYNTAX Op)
+       <: ORDERED Op Syn.
 
-  Inductive Is_node_in_eq : ident -> equation -> Prop :=
-  | INI: forall x ck f e ty, Is_node_in_eq f (EqApp x ck f e ty).
-
-  Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
-    List.Exists (Is_node_in_eq f) eqs.
-
-  Inductive Ordered_nodes : global -> Prop :=
-  | ONnil: Ordered_nodes nil
-  | ONcons:
-      forall nd nds,
-        Ordered_nodes nds
-        -> (forall f, Is_node_in f nd.(n_eqs) ->
-                f <> nd.(n_name)
-                /\ List.Exists (fun n=> f = n.(n_name)) nds)
-        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
-        -> Ordered_nodes (nd::nds).
-
+  Include PRE_ORDERED Op Syn.
 
   (** ** Properties of [Is_node_in] *)
 
@@ -307,5 +300,4 @@ Module OrderedFun'
 
   End Ordered_nodes_Properties.
 
-End OrderedFun'.
-Module OrderedFun <: ORDERED := OrderedFun'.
+End OrderedFun.

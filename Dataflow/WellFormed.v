@@ -13,7 +13,7 @@ Open Scope list_scope.
 
 (** * Well formed CoreDF programs *)
 
-Module Type WELLFORMED
+Module Type PRE_WELLFORMED
        (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import IsF : ISFREE Op Syn)
@@ -87,6 +87,19 @@ A CoreDF program is well defined if
         -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Welldef_global (nd::nds).
 
+End PRE_WELLFORMED.
+
+Module Type WELLFORMED
+       (Import Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import IsF : ISFREE Op Syn)
+       (Import Ord : ORDERED Op Syn)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem)
+       (Import IsV : ISVARIABLE Op Syn Mem IsD)
+       (Import NoD : NODUP Op Syn Mem IsD IsV).
+
+  Include PRE_WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
 
   (** ** Properties of [Is_well_sch] *)
 
@@ -127,7 +140,7 @@ A CoreDF program is well defined if
 
 End WELLFORMED.
 
-Module WellFormedFun'
+Module WellFormedFun
        (Import Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import IsF : ISFREE Op Syn)
@@ -135,72 +148,10 @@ Module WellFormedFun'
        (Import Mem : MEMORIES Op Syn)
        (Import IsD : ISDEFINED Op Syn Mem)
        (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       (Import NoD : NODUP Op Syn Mem IsD IsV).
+       (Import NoD : NODUP Op Syn Mem IsD IsV)
+       <: WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
 
-  Section IsWellSch.
-
-    Variable memories : PS.t.
-    Variable arg: Nelist.nelist ident.
-
-    (**
-
-A list of equations is well scheduled if 
-  - the free stack variables ([~PS.In _ memories]) are defined before
-    (i.e. in [eqs]), or they belong to the input argument
-  - the free memory variables ([PS.In _ memories]) have not been
-    re-assigned before (i.e. in [eqs])
-  - the variable defined by an equation must be defined for the first
-    time
-
-Remark: we assume that the list of equations is in reverse order: the
-first equation to execute should be the last in the list.
-
-     *)
-    (* =Is_well_sch= *)
-    Inductive Is_well_sch : list equation -> Prop :=
-    | WSchNil: Is_well_sch nil
-    | WSchEq: forall eq eqs,
-        Is_well_sch eqs ->
-        (forall i, Is_free_in_eq i eq ->
-              (PS.In i memories -> ~Is_defined_in_eqs i eqs)
-              /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ Nelist.In i arg)) ->
-        (forall i, Is_defined_in_eq i eq -> ~Is_defined_in_eqs i eqs) ->
-        Is_well_sch (eq :: eqs).
-    (* =end= *)
-
-  End IsWellSch.
-
-  (**
-
-A CoreDF program is well defined if 
-  - Each node is well-defined, that is
-    - Each input arguments' name is distinct
-    - The equations are well scheduled
-    - The input variables are not redefined by the equations
-    - The output variable is indeed defined by the equations
-  - Every node call points to a previously-defined node
-  - Each of the nodes' name is distinct
-
-   *)
-
-  Inductive Welldef_global : list node -> Prop :=
-  | WGnil:
-      Welldef_global []
-  | WGcons:
-      forall nd nds,
-        Welldef_global nds ->
-        let eqs := nd.(n_eqs) in
-        let ni := Nelist.nefst nd.(n_input) in
-        let no := fst nd.(n_output) in
-        NoDup (Nelist.nelist2list ni)
-        -> Is_well_sch (memories eqs) ni eqs
-        -> ~ List.Exists (fun ni => Is_defined_in_eqs ni eqs) (Nelist.nelist2list ni)
-        -> Is_variable_in_eqs no eqs
-        -> ~Is_node_in nd.(n_name) eqs
-        -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
-        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
-        -> Welldef_global (nd::nds).
-
+  Include PRE_WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
 
   (** ** Properties of [Is_well_sch] *)
 
@@ -342,5 +293,4 @@ A CoreDF program is well defined if
   (*   assumption. *)
   (* Qed. *)
 
-End WellFormedFun'.
-Module WellFormedFun <: WELLFORMED := WellFormedFun'.
+End WellFormedFun.

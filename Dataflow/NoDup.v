@@ -28,7 +28,7 @@ this generically amounts to:
 >>
  *)
 
-Module Type NODUP
+Module Type PRE_NODUP
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Mem : MEMORIES Op Syn)
@@ -52,6 +52,17 @@ Module Type NODUP
         NoDup_defs eqs ->
         ~Is_defined_in_eqs x eqs ->
         NoDup_defs (EqFby x ck v e :: eqs).
+
+End PRE_NODUP.
+
+Module Type NODUP
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem)
+       (Import IsV : ISVARIABLE Op Syn Mem IsD).
+    
+  Include PRE_NODUP Op Syn Mem IsD IsV.
 
   (** ** Properties *)
 
@@ -63,31 +74,15 @@ Module Type NODUP
 
 End NODUP.
 
-Module NoDupFun'
+Module NoDupFun
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Mem : MEMORIES Op Syn)
        (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD).
+       (Import IsV : ISVARIABLE Op Syn Mem IsD)
+       <: NODUP Op Syn Mem IsD IsV.
     
-  Inductive NoDup_defs : list equation -> Prop :=
-  | NDDNil: NoDup_defs nil
-  | NDDEqDef:
-      forall x ck e eqs,
-        NoDup_defs eqs ->
-        ~Is_defined_in_eqs x eqs ->
-        NoDup_defs (EqDef x ck e :: eqs)
-  | NDDEqApp:
-      forall x ck f e ty eqs,
-        NoDup_defs eqs ->
-        ~Is_defined_in_eqs x eqs ->
-        NoDup_defs (EqApp x ck f e ty :: eqs)
-  | NDDEqFby:
-      forall x ck v e eqs,
-        NoDup_defs eqs ->
-        ~Is_defined_in_eqs x eqs ->
-        NoDup_defs (EqFby x ck v e :: eqs).
-
+  Include PRE_NODUP Op Syn Mem IsD IsV.
 
   (** ** Properties *)
 
@@ -173,5 +168,4 @@ Module NoDupFun'
         exfalso; apply Hndin; now constructor.
   Qed.
 
-End NoDupFun'.
-Module NoDupFun <: NODUP := NoDupFun'.
+End NoDupFun.

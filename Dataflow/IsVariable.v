@@ -20,7 +20,7 @@ Require Import Rustre.Dataflow.Memories.
 
  *)
 
-Module Type ISVARIABLE
+Module Type PRE_ISVARIABLE
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Mem : MEMORIES Op Syn)
@@ -33,6 +33,16 @@ Module Type ISVARIABLE
   (* definition is needed in signature *)
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
+  
+End PRE_ISVARIABLE.
+
+Module Type ISVARIABLE
+       (Op : OPERATORS)
+       (Import Syn : SYNTAX Op)
+       (Import Mem : MEMORIES Op Syn)
+       (Import IsD : ISDEFINED Op Syn Mem).
+
+  Include PRE_ISVARIABLE Op Syn Mem IsD.
 
   (** ** Properties *)
 
@@ -77,18 +87,14 @@ Module Type ISVARIABLE
 
 End ISVARIABLE.
 
-Module IsVariableFun'
+Module IsVariableFun
        (Op : OPERATORS)
        (Import Syn : SYNTAX Op)
        (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem).
+       (Import IsD : ISDEFINED Op Syn Mem)
+       <: ISVARIABLE Op Syn Mem IsD.
 
-  Inductive Is_variable_in_eq : ident -> equation -> Prop :=
-  | VarEqDef: forall x ck e,      Is_variable_in_eq x (EqDef x ck e)
-  | VarEqApp: forall x ck f e ty, Is_variable_in_eq x (EqApp x ck f e ty).
-
-  Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
-    List.Exists (Is_variable_in_eq x) eqs.
+  Include PRE_ISVARIABLE Op Syn Mem IsD.
 
   (** ** Properties *)
 
@@ -172,5 +178,4 @@ Module IsVariableFun'
              | now apply H1].
   Qed.
 
-End IsVariableFun'.
-Module IsVariableFun <: ISVARIABLE := IsVariableFun'.
+End IsVariableFun.

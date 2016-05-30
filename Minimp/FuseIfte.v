@@ -11,7 +11,7 @@ Open Scope list_scope.
 
 Ltac inv H := inversion H; subst; clear H.
 
-Module Type FUSEIFTE
+Module Type PRE_FUSEIFTE
        (Import Op: OPERATORS)
        (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
@@ -71,6 +71,17 @@ Module Type FUSEIFTE
       Ifte_free_write (Comp s1 s2)
   | IFWSkip:
       Ifte_free_write Skip.
+  
+End PRE_FUSEIFTE.
+
+Module Type FUSEIFTE
+       (Import Op: OPERATORS)
+       (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
+       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
+       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP).
+
+  Include PRE_FUSEIFTE Op SynDF SynMP SemMP Equ.
 
   Axiom Ifte_free_write_fold_left_shift:
     forall A f (xs : list A) iacc,
@@ -81,48 +92,16 @@ Module Type FUSEIFTE
   
 End FUSEIFTE.
 
-Module FuseIfteFun'
+Module FuseIfteFun
        (Import Op: OPERATORS)
-       (Import Syn: Rustre.Dataflow.Syntax.SYNTAX Op)
+       (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
        (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
        (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP).
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP)
+       <: FUSEIFTE Op SynDF SynMP SemMP Equ.
 
-  Inductive Is_free_in_exp : ident -> exp -> Prop :=
-  | FreeVar: forall i ty,
-      Is_free_in_exp i (Var i ty)
-  | FreeState: forall i ty,
-      Is_free_in_exp i (State i ty)
-  (* | FreeOp: forall i op es, *)
-  (*     Nelist.Exists (Is_free_in_exp i) es -> *)
-  (*     Is_free_in_exp i (Op op es) *)
-  | FreeUnop: forall i op e ty,
-      Is_free_in_exp i e ->
-      Is_free_in_exp i (Unop op e ty)
-  |FreeBinop: forall i op e1 e2 ty,
-      Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
-      Is_free_in_exp i (Binop op e1 e2 ty).
-
-  Inductive Can_write_in : ident -> stmt -> Prop :=
-  | CWIAssign: forall x e,
-      Can_write_in x (Assign x e)
-  | CWIAssignSt: forall x e,
-      Can_write_in x (AssignSt x e)
-  | CWIIfteTrue: forall x e s1 s2,
-      Can_write_in x s1 ->
-      Can_write_in x (Ifte e s1 s2)
-  | CWIIfteFalse: forall x e s1 s2,
-      Can_write_in x s2 ->
-      Can_write_in x (Ifte e s1 s2)
-  | CWIStep_ap: forall x ty cls obj e,
-      Can_write_in x (Step_ap x ty cls obj e)
-  | CWIComp1: forall x s1 s2,
-      Can_write_in x s1 ->
-      Can_write_in x (Comp s1 s2)
-  | CWIComp2: forall x s1 s2,
-      Can_write_in x s2 ->
-      Can_write_in x (Comp s1 s2).
-
+           Include PRE_FUSEIFTE Op SynDF SynMP SemMP Equ.
+           
   Lemma cannot_write_in_Ifte:
     forall x e s1 s2,
       ~ Can_write_in x (Ifte e s1 s2)
@@ -327,25 +306,6 @@ Module FuseIfteFun'
         * apply cannot_write_exp_eval with (e := e) (v := Vbool false) in Hs2; auto; try cannot_write.
           apply Iifte with false; auto.
   Qed.
-
-  Inductive Ifte_free_write : stmt -> Prop :=
-  | IFWAssign: forall x e,
-      Ifte_free_write (Assign x e)
-  | IFWAssignSt: forall x e,
-      Ifte_free_write (AssignSt x e)
-  | IFWIfte: forall e s1 s2,
-      Ifte_free_write s1 ->
-      Ifte_free_write s2 ->
-      (forall x, Is_free_in_exp x e -> ~Can_write_in x s1 /\ ~Can_write_in x s2) ->
-      Ifte_free_write (Ifte e s1 s2)
-  | IFWStep_ap: forall x ty cls obj e,
-      Ifte_free_write (Step_ap x ty cls obj e)
-  | IFWComp: forall s1 s2,
-      Ifte_free_write s1 ->
-      Ifte_free_write s2 ->
-      Ifte_free_write (Comp s1 s2)
-  | IFWSkip:
-      Ifte_free_write Skip.
 
   Lemma lift_Ifte_free_write:
     forall e s1 s2 t1 t2,
@@ -743,5 +703,4 @@ Eval cbv in (ifte_fuse (Comp (Ifte (Var 1) (Assign 2 (Const (Cint 7))) Skip)
                                                            Skip)) Skip))))).
  *)
 
-End FuseIfteFun'.
-Module FuseIfteFun <: FUSEIFTE := FuseIfteFun'.
+End FuseIfteFun.
