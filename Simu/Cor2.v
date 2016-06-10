@@ -4,7 +4,7 @@ Require Import lib.Integers.
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
 
-Require Import Syn Sem Tra.
+Require Import Syn Sem2 Tra.
 
 Require Import Program.Tactics.
 Require Import List.
@@ -258,12 +258,12 @@ Section PRESERVATION.
       valid_val v (typeof e) ->
       v = Values.Val.load_result (chunk_of_typ (typeof e)) v ->
       compat_stmt me ve env m (AssignSt x e)
-  | compat_comp: forall me1 ve1 me2 ve2 m1 m2 env s1 s2,
+  | compat_comp: forall me1 ve1 (* me2 ve2 *) m1 (* m2 *) env s1 s2,
       compat_stmt me1 ve1 env m1 s1 ->
-      stmt_eval (me1, ve1, s1) (me2, ve2, Skip) ->
-      compat_venv ve2 env m2 ->
-      compat_menv me2 env m2 ->
-      compat_stmt me2 ve2 env m2 s2 ->
+      (* stmt_eval (me1, ve1, s1) (me2, ve2, Skip) -> *)
+      (* compat_venv ve2 env m2 -> *)
+      (* compat_menv me2 env m2 -> *)
+      (* compat_stmt me2 ve2 env m2 s2 -> *)
       compat_stmt me1 ve1 env m1 (Comp s1 s2)
   | compat_skip: forall me ve m env,
       compat_stmt me ve env m Skip.
@@ -410,78 +410,35 @@ Section PRESERVATION.
              eapply Memory.Mem.load_store_other; eauto.
          }
   Qed.
-     
-  Inductive match_states: state -> Clight.state -> Prop :=
-    intro_state: forall me ve s k e le m,
+
+  Inductive compat_cont: menv -> venv -> Clight.env -> Memory.Mem.mem -> cont -> Clight.cont -> Prop :=
+  | compat_kstop: forall me ve e m,
+      compat_cont me ve e m Kstop Clight.Kstop
+  | compat_kseq: forall me ve e m s k k',
+      well_formed_stmt c_main s ->
+      compat_stmt me ve e m s ->
+      compat_cont me ve e m k k' ->
+      compat_cont me ve e m (Kseq s k) (Clight.Kseq (translate_stmt main_node s) k').
+  
+  Inductive match_states: state * stmt * cont -> Clight.state -> Prop :=
+    intro_state: forall me ve s k k' e le m,
       compat_venv ve e m ->
       compat_menv me e m ->
       well_formed_stmt c_main s ->
       compat_stmt me ve e m s ->
-      state_context (me, ve, s) k e le m ->
+      (* state_context (me, ve, s) k e le m -> *)
+      compat_cont me ve e m k k' ->
       nodup_env e ->
       nodup_vars ->
       nodup_mems ->
       match_states
-        (me, ve, s)
-        (Clight.State main_fun (translate_stmt main_node s) k e le m)
-
-  with state_context: state -> Clight.cont -> Clight.env -> Clight.temp_env -> Memory.Mem.mem -> Prop :=
-       | ctxt_assign: forall me ve x e k env le m,
-           state_context (me, ve, Assign x e) k env le m
-       | ctxt_stassign: forall me ve x e k env le m,
-           state_context (me, ve, AssignSt x e) k env le m
-       | ctxt_comp: forall me1 ve1 s1 me2 ve2 s2 me3 ve3 k e le m m' m'',
-           match_states
-             (me1, ve1, s1)
-             (Clight.State main_fun
-                           (translate_stmt main_node s1)
-                           (Clight.Kseq (translate_stmt main_node s2) k) e le m) ->
-           stmt_eval (me1, ve1, s1) (me2, ve2, Skip) ->
-           match_states
-             (me2, ve2, Skip)
-             (Clight.State main_fun
-                           (translate_stmt main_node Skip)
-                           (Clight.Kseq (translate_stmt main_node s2) k) e le m') ->
-           match_states
-             (me2, ve2, s2)
-             (Clight.State main_fun (translate_stmt main_node s2) k e le m') ->
-           stmt_eval (me2, ve2, s2) (me3, ve3, Skip) ->
-           match_states
-             (me3, ve3, Skip)
-             (Clight.State main_fun (translate_stmt main_node Skip) k e le m'') ->
-           state_context (me1, ve1, Comp s1 s2) k e le m
-       | ctxt_skip_comp: forall me ve s me' ve' k e le m m',
-          match_states
-             (me, ve, s)
-             (Clight.State main_fun (translate_stmt main_node s) k e le m) ->
-          stmt_eval (me, ve, s) (me', ve', Skip) ->
-          match_states
-             (me', ve', Skip)
-             (Clight.State main_fun (translate_stmt main_node Skip) k e le m') ->
-          state_context (me, ve, Comp Skip s) k e le m
-       | ctxt_skip: forall me ve k e le m,
-           state_context (me, ve, Skip) k e le m.
-
-  Lemma match_states_det:
-    forall st cst1 cst2,
-      match_states st cst1 ->
-      match_states st cst2 ->
-      cst1 = cst2.
-  Proof.
-    (* complètement faux !!! *)
-  Admitted.
-  
-  Ltac app_match_states_det :=
-    match goal with
-    | H1: match_states ?st ?cst1,
-          H2: match_states ?st ?cst2 |- _ =>
-      assert (cst1 = cst2) by (eapply match_states_det; eauto);
-        ((subst cst1; clear H1) || (subst cst2; clear H2))
-    end.
+        ((me, ve), s, k)
+        (Clight.State main_fun (translate_stmt main_node s) k' e le m).
   
   Hint Resolve expr_eval_simu Clight.assign_loc_value sem_cast_same.
-  Hint Constructors compat_stmt state_context.
-
+  Hint Constructors compat_stmt compat_cont match_states(* state_context *).
+  Hint Constructors well_formed_stmt.
+        
   Ltac discriminate' :=
     match goal with
     | H: ?x <> ?x |- _ => contradict H; reflexivity
@@ -489,7 +446,7 @@ Section PRESERVATION.
   
   Theorem simu:
     forall S1 S2,
-      stmt_eval S1 S2 ->
+      stmt_eval_cont S1 S2 ->
       forall S1',
         match_states S1 S1' ->
         exists S2' t,
@@ -497,22 +454,23 @@ Section PRESERVATION.
           /\ match_states S2 S2'.
   Proof.
     induction 1;
-    inversion_clear 1 as [? ? ? ? ? ? ? Hvenv Hmenv Hwf Hstmt Hctxt]; 
-    inv Hwf; inversion_clear Hstmt; inversion Hctxt;
-    (((subst s1 || subst s2); inv_stmt_eval) || destruct_conjs).
+    inversion_clear 1 as [? ? ? ? ? ? ? ? Hvenv Hmenv Hwf Hstmt (* Hctxt *) Hcont];
+    inv Hwf; inversion_clear Hstmt; (* inversion Hctxt; *)
+    (* (((subst s1 || subst s2); inv_stmt_eval) || destruct_conjs). *)
+    destruct_conjs.
     
     (* Assign x e : "x = e" *)
     - app_exp_eval_det.
       edestruct compat_assign_pres as [m']; eauto; destruct_conjs. 
-      exists (Clight.State main_fun Clight.Sskip k e0 le m'), Events.E0; split.
+      do 2 econstructor; split.
       + eapply Smallstep.plus_one, Clight.step_assign; eauto. 
         rewrite type_pres; auto. 
-      + constructor; (tauto || auto). 
+      + constructor; auto. admit.
         
     (* AssignSt x e : "self->x = e"*)
     - app_exp_eval_det.
       edestruct compat_stassign_pres as [m']; eauto; destruct_conjs. 
-      exists (Clight.State main_fun Clight.Sskip k e0 le m'), Events.E0; split.
+      do 2 econstructor; split.
       + eapply Smallstep.plus_one, Clight.step_assign; eauto.
         *{ eapply Clight.eval_Efield_struct
            with (id:=main_node) (att:=Ctypes.noattr); eauto.
@@ -523,42 +481,16 @@ Section PRESERVATION.
            - apply Clight.deref_loc_copy; auto.
          }
         * rewrite type_pres; auto. 
-      + constructor; (tauto || auto). 
+      + constructor; auto.  admit.
 
     (* Comp s1 s2 : "s1; s2" *)
-    - repeat app_stmt_eval_det.
-      edestruct IHstmt_eval1 as [S2' [t1 [Step1 ?]]]; eauto.
-      edestruct IHstmt_eval2 as [S3' [t2 [Step2 ?]]]; eauto.
-      repeat app_match_states_det.
-      exists (Clight.State main_fun (translate_stmt main_node Skip) k e le m''), Events.E0; split.
-      + eapply Smallstep.plus_left' with
-        (s2:=Clight.State main_fun (translate_stmt main_node s1)
-                          (Clight.Kseq (translate_stmt main_node s2) k) e le m)
-          (t1:=Events.E0) (t2:=Events.E0); auto.
-        * eapply Clight.step_seq.
-        *{ eapply Smallstep.plus_trans; eauto.
-           - eapply Smallstep.plus_left' with
-             (s2:=Clight.State main_fun (translate_stmt main_node s2) k e le m')
-               (t1:=Events.E0) (t2:=Events.E0); auto.
-             + apply Clight.step_skip_seq.
-             + assert (t2 = Events.E0). admit. subst t2; auto.
-           - assert (t1 = Events.E0). admit. subst t1; auto.
-         }
-      + inv H24; constructor; (tauto || auto). 
-
-    (* Comp Skip s : "skip; s" *)
-    - repeat app_stmt_eval_det.
-      edestruct IHstmt_eval as [S2' [t1 [Step1 Match2]]]; eauto.
-      app_match_states_det.
-      exists (Clight.State main_fun (translate_stmt main_node Skip) k e le m'), Events.E0; split; auto.
-      eapply Smallstep.plus_left' with
-      (s2:=Clight.State main_fun (translate_stmt main_node Skip)
-                        (Clight.Kseq (translate_stmt main_node s) k) e le m)
-        (t1:=Events.E0) (t2:=Events.E0); auto.
-      + eapply Clight.step_seq.
-      + eapply Smallstep.plus_left' with
-        (s2:=Clight.State main_fun (translate_stmt main_node s) k e le m)
-          (t1:=Events.E0) (t2:=Events.E0); auto.
-        * apply Clight.step_skip_seq.
-        * assert (t1 = Events.E0). admit. subst t1; auto.
+    - do 2 econstructor; split.
+      + eapply Smallstep.plus_one, Clight.step_seq.
+      + constructor; auto. admit.
+     
+    (* Skip : "skip" *)
+    - inv Hcont.
+      do 2 econstructor; split.
+      + eapply Smallstep.plus_one, Clight.step_skip_seq.
+      + constructor; auto. 
   Qed.
