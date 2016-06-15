@@ -1,38 +1,4 @@
-Require common.Values.
-
-Require Import Rustre.Common.
-Require Import Rustre.RMemory.
-
-Require Import Syn.
-
-Ltac inv H := inversion H; clear H; subst.
-
-(* SEMANTICS *)
-Definition val: Type := Values.val.
-
-Definition menv: Type := memory val.
-Definition venv: Type := PM.t val.
-
-Definition m_empty: menv := empty_memory _.
-Definition v_empty: venv := PM.empty val.
-
-Definition val_of_const c :=
-  match c with
-  | Cint i => Values.Vint i
-  | Cfloat f => Values.Vfloat f
-  | Csingle s => Values.Vsingle s
-  | Clong l => Values.Vlong l
-  end.
-
-Inductive exp_eval (me: menv) (ve: venv): exp -> val -> Prop :=
-| evar: forall x v ty,
-    PM.MapsTo x v ve ->
-    exp_eval me ve (Var x ty) v
-| estate: forall x v ty,
-    mfind_mem x me = Some v ->
-    exp_eval me ve (State x ty) v
-| econst: forall c ty,
-    exp_eval me ve (Const c ty) (val_of_const c).
+Require Import CommonSem.
 
 Definition state := (menv * venv * stmt)%type.
 

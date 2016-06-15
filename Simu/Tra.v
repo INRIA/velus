@@ -90,8 +90,8 @@ Definition translate (p: program) (main_node: ident)
   : Errors.res Clight.program :=
   let structs := List.map translate_class p in
   match find_class main_node p with
-    | Some (cls, _) =>
-      let main := make_main (translate_stmt main_node cls.(c_step)) cls.(c_vars) in
-      Clight.make_program structs [(main_id, main)] [] main_id
+  | Some (cls, _) =>
+    let main := make_main (translate_stmt main_node cls.(c_step)) cls.(c_vars) in
+    Clight.make_program structs [(main_id, main)] [] main_id
     | None => Errors.Error (Errors.msg "undefined node")
   end.
