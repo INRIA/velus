@@ -481,7 +481,13 @@ Section PRESERVATION.
       + rewrite <-Hload; symmetry; eapply Memory.Mem.load_store_other; eauto.
   Qed.
 
-  
+Remark ifte_translate:
+    forall (b: bool) s1 s2,
+      translate_stmt main_node (if b then s1 else s2) =
+      if b then (translate_stmt main_node s1) else (translate_stmt main_node s2).
+  Proof.
+    now destruct b.
+  Qed.  
           
 End PRESERVATION.
 
@@ -489,4 +495,4 @@ Hint Resolve expr_eval_simu Clight.assign_loc_value sem_cast_same.
 Hint Constructors compat_stmt well_formed_stmt.
 Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
 Hint Resolve valid_val_implies_access.
-  
+

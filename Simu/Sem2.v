@@ -21,9 +21,9 @@ Inductive stmt_eval: state -> stmt -> state -> Prop :=
     stmt_eval (me1, ve1) s1 (me2, ve2) ->
     stmt_eval (me2, ve2) s2 (me3, ve3) ->
     stmt_eval (me1, ve1) (Comp s1 s2) (me3, ve3)
-| Iskip_comp: forall me ve s me' ve',
-    stmt_eval (me, ve) s (me', ve') ->
-    stmt_eval (me, ve) (Comp Skip s) (me', ve')
+(* | Iskip_comp: forall me ve s me' ve', *)
+    (* stmt_eval (me, ve) s (me', ve') -> *)
+(* stmt_eval (me, ve) (Comp Skip s) (me', ve') *) 
 | Iskip: forall st,
     stmt_eval st Skip st.
 

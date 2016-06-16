@@ -40,40 +40,37 @@ Section SIMU.
   Hint Constructors compat_stmt well_formed_stmt.
   Hint Constructors match_states.
 
-  Definition big_step (st: c_state) s t (st': c_state) : Prop :=
-    let '(e, le, m) := st in
-    let '(e', le', m') := st' in
-    ClightBigstep.exec_stmt tge e le m s t le' m' ClightBigstep.Out_normal.   
+  Definition compat_stmt' S := compat_stmt main_node tprog (fst S) (snd S).
   
   Theorem simu:
-    forall me1 ve1 s S2,
+    forall S1 s S2,
       well_formed_stmt c_main s ->
-      stmt_eval (me1, ve1) s S2 ->
+      stmt_eval S1 s S2 ->
       forall e1 le1 m1,
-        match_states (me1, ve1) (e1, le1, m1) ->
-        compat_stmt main_node tprog me1 ve1 e1 m1 s ->
-        exists S2' t,
-          big_step (e1, le1, m1) (translate_stmt main_node s) t S2'
-          /\ match_states S2 S2'.
+        match_states S1 (e1, le1, m1) ->
+        compat_stmt' S1 e1 m1 s ->
+        exists le2 m2 t,
+          ClightBigstep.exec_stmt tge e1 le1 m1 (translate_stmt main_node s) t le2 m2 ClightBigstep.Out_normal
+          /\ match_states S2 (e1, le2, m2).
   Proof.
-    intros until S2; intro Hwf.
-    induction 1;
-    inversion_clear 1 as [? ? ? ? ? Hvenv Hmenv];
-    inv Hwf; inversion_clear 1.  
+    induction 2; inv H; intros ** MS Hcompat; remember MS;
+    inversion_clear MS as [? ? ? ? ? Hvenv Hmenv]; inversion_clear Hcompat. 
     
     (* Assign x e : "x = e" *)
-    - edestruct compat_assign_pres as [m']; eauto; destruct_conjs. admit.
-      exists (e1, le1, m'), Events.E0; split.
+    - app_exp_eval_det.
+      edestruct compat_assign_pres as [m']; eauto; destruct_conjs. 
+      (* exists (e1, le1, m'), Events.E0; split. *)
+      do 3 econstructor; split.
       + eapply ClightBigstep.exec_Sassign; eauto. 
         * eapply expr_eval_simu; eauto. 
-        * rewrite type_pres; auto. admit.
+        * rewrite type_pres; auto. 
       + constructor; auto. 
 
     (* AssignSt x e : "self->x = e"*)
     - app_exp_eval_det.
       edestruct compat_stassign_pres as [m']; eauto; destruct_conjs. 
-      do 2 econstructor; split.
-      + eapply Smallstep.plus_one, Clight.step_assign; eauto.
+      do 3 econstructor; split.
+      + eapply ClightBigstep.exec_Sassign; eauto.
         *{ eapply Clight.eval_Efield_struct
            with (id:=main_node) (att:=Ctypes.noattr); eauto.
            eapply Clight.eval_Elvalue; eauto. 
@@ -87,20 +84,22 @@ Section SIMU.
       + constructor; auto. 
 
     (* Ifte e s1 s2 : "if e then s1 else s2" *)
-    - do 2 econstructor; split.      
-      + eapply Smallstep.plus_one, Clight.step_ifthenelse.
-        * eapply expr_eval_simu; eauto.
-        * erewrite type_pres, bool_val_ptr; eauto. 
-      + destruct b; econstructor; auto.         
+    - edestruct IHstmt_eval as (le2 & m2 & t & ?);
+      destruct_conjs; eauto; [destruct b | destruct b |]; auto. 
+      do 3 econstructor; split; eauto.
+      eapply ClightBigstep.exec_Sifthenelse; eauto.
+      + eapply expr_eval_simu; eauto.
+      + erewrite type_pres, bool_val_ptr; eauto. 
+      + fold translate_stmt. rewrite <-ifte_translate; eauto.
 
     (* Comp s1 s2 : "s1; s2" *)
-    - do 2 econstructor; split.
-      + eapply Smallstep.plus_one, Clight.step_seq.
-      + constructor; auto. 
+    - edestruct IHstmt_eval1 as (le2 & m2 & t1 & ?); destruct_conjs; eauto.
+      edestruct IHstmt_eval2 as (le3 & m3 & t2 & ?); destruct_conjs; eauto.
+      admit.
+      do 3 econstructor; split; eauto.
+      eapply ClightBigstep.exec_Sseq_1; eauto.
      
     (* Skip : "skip" *)
-    - inv Hcont.
-      do 2 econstructor; split.
-      + eapply Smallstep.plus_one, Clight.step_skip_seq.
-      + constructor; auto. admit.
+    - do 3 econstructor; split; eauto.
+      eapply ClightBigstep.exec_Sskip.
   Qed.
