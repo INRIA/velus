@@ -253,9 +253,13 @@ Section PRESERVATION.
       valid_val v (typeof e) ->
       v = Values.Val.load_result (chunk_of_typ (typeof e)) v ->
       compat_stmt me ve env m (AssignSt x e)
-  | compat_comp: forall me1 ve1 m1 env s1 s2,
-      compat_stmt me1 ve1 env m1 s1 ->
-      compat_stmt me1 ve1 env m1 (Comp s1 s2)
+  | compat_ite: forall me ve env m e s1 s2,
+      compat_stmt me ve env m s1 ->
+      compat_stmt me ve env m s2 ->
+      compat_stmt me ve env m (Ifte e s1 s2)
+  | compat_comp: forall me ve m env s1 s2,
+      compat_stmt me ve env m s1 ->
+      compat_stmt me ve env m (Comp s1 s2)
    | compat_skip: forall me ve m env,
       compat_stmt me ve env m Skip.
   
@@ -341,8 +345,8 @@ Section PRESERVATION.
             /\ self_sep env m'.
   Proof.
     intros ** Hvenv Hmenv Hsep Hself_sep Hnodupenv Hnodupvars Hget Hwf Hcompat ?.
-    inversion_clear Hcompat as [? ? ? ? ? v' ? loc' ? Hget' ? ? Hloadres| | |]. 
-    inversion_clear Hwf as [? ? Hin| | |].
+    inversion_clear Hcompat as [? ? ? ? ? v' ? loc' ? Hget' ? ? Hloadres| | | |]. 
+    inversion_clear Hwf as [? ? Hin| | | |].
     rewrite Hget in Hget'; inversion Hget'; subst loc'.        
     app_exp_eval_det.
     edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto. 
@@ -416,8 +420,8 @@ Section PRESERVATION.
         /\ self_sep env m'.
   Proof.
     intros ** Hvenv Hmenv Hsep Hself_sep Hfields_sep Hnodupmems Hmembers Hoffset Hmain Hself Hloadptr Hwf Hcompat Heval.
-    inversion_clear Hcompat as [|? ? ? ? ? v' ? co' loc1' loc1 ofs' delta' Heval' Hoffset' Hmembers' Hmain' Hself' Hloadptr' ? ? Hloadres| |]. 
-    inversion_clear Hwf as [|? ? Hin| |].
+    inversion_clear Hcompat as [|? ? ? ? ? v' ? co' loc1' loc1 ofs' delta' Heval' Hoffset' Hmembers' Hmain' Hself' Hloadptr' ? ? Hloadres| | |]. 
+    inversion_clear Hwf as [|? ? Hin| | |].
     rewrite Hmain in Hmain'; inversion Hmain'; subst co'.
     rewrite Hself in Hself'; inversion Hself'; subst loc1'.
     rewrite Hoffset in Hoffset'; inversion Hoffset'; subst delta'.

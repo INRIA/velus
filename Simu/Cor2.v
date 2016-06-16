@@ -49,7 +49,21 @@ Section SIMU.
   Hint Resolve expr_eval_simu Clight.assign_loc_value sem_cast_same.
   Hint Constructors compat_stmt well_formed_stmt.
   Hint Constructors match_states compat_cont.
-          
+
+  Lemma bool_val_compat:
+  forall me ve m e v b l o,
+    exp_eval me ve e v ->
+    v <> Values.Vptr l o ->
+    valid_val v (typeof e) ->
+    bool_val v = Some b ->
+    Cop.bool_val v (typeof e) m = Some b.
+  Proof.
+    intros ** Heval Hptr (Haccess & Hnotundef & Htype) Hbool_val.
+    unfold Cop.bool_val.
+    unfold chunk_of_typ in Haccess.
+    admit.
+  Qed.
+
   Theorem simu:
     forall S1 S2,
       stmt_eval_cont S1 S2 ->
@@ -67,8 +81,9 @@ Section SIMU.
     - app_exp_eval_det.
       edestruct compat_assign_pres as [m']; eauto; destruct_conjs. 
       do 2 econstructor; split.
-      + eapply Smallstep.plus_one, Clight.step_assign; eauto. eapply expr_eval_simu; eauto. 
-        rewrite type_pres; auto. 
+      + eapply Smallstep.plus_one, Clight.step_assign; eauto.
+        * eapply expr_eval_simu; eauto. 
+        * rewrite type_pres; auto. 
       + constructor; auto. 
 
     (* AssignSt x e : "self->x = e"*)
@@ -87,6 +102,13 @@ Section SIMU.
         * eapply expr_eval_simu; eauto.
         * rewrite type_pres; auto. 
       + constructor; auto. 
+
+    (* Ifte e s1 s2 : "if e then s1 else s2" *)
+    - do 2 econstructor; split.      
+      + eapply Smallstep.plus_one, Clight.step_ifthenelse.
+        * eapply expr_eval_simu; eauto.
+        * erewrite type_pres, bool_val_ptr; eauto. 
+      + destruct b; econstructor; auto.         
 
     (* Comp s1 s2 : "s1; s2" *)
     - do 2 econstructor; split.

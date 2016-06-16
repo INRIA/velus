@@ -40,10 +40,11 @@ Definition typeof (e: exp): typ :=
   end.
 
 Inductive stmt : Type :=
-| Assign: ident -> exp -> stmt   (* x = e *)
-| AssignSt: ident -> exp -> stmt (* self.x = e *)
-| Comp: stmt -> stmt -> stmt     (* s1; s2 *)
-| Skip.
+| Assign: ident -> exp -> stmt       (* x = e *)
+| AssignSt: ident -> exp -> stmt     (* self.x = e *)
+| Ifte : exp -> stmt -> stmt -> stmt  (* if e then s1 else s2 *)
+| Comp: stmt -> stmt -> stmt         (* s1; s2 *)
+| Skip.                            (*  *)
 
 Record obj_dec : Type :=
   mk_obj_dec {
@@ -125,6 +126,11 @@ Section WellFormed.
       x <> self_id ->
       well_formed_exp e ->
       well_formed_stmt (AssignSt x e)
+  | wf_ite: forall e s1 s2,
+      well_formed_exp e ->
+      well_formed_stmt s1 ->
+      well_formed_stmt s2 ->
+      well_formed_stmt (Ifte e s1 s2)
   | wf_comp: forall s1 s2,
       well_formed_stmt s1 ->
       well_formed_stmt s2 ->

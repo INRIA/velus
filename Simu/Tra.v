@@ -50,6 +50,8 @@ Fixpoint translate_stmt (owner: ident) (s: stmt): Clight.statement :=
     Clight.Sassign (Clight.Evar x (typeof e)) (translate_exp owner e)
   | AssignSt x e =>
     Clight.Sassign (deref_self_field owner x (typeof e)) (translate_exp owner e)
+  | Ifte e s1 s2 =>
+    Clight.Sifthenelse (translate_exp owner e) (translate_stmt owner s1) (translate_stmt owner s2)
   | Comp s1 s2 =>
     Clight.Ssequence (translate_stmt owner s1) (translate_stmt owner s2)
   | Skip =>

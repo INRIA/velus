@@ -1,5 +1,6 @@
-Require common.Values.
-
+Require common.Values cfrontend.Cop.
+Require Import lib.Integers lib.Floats.
+        
 Require Export Rustre.Common.
 Require Export Rustre.RMemory.
 
@@ -23,6 +24,17 @@ Definition val_of_const c :=
   | Csingle s => Values.Vsingle s
   | Clong l => Values.Vlong l
   end.
+
+Lemma bool_val_ptr:
+  forall v t m m',
+    (forall ty attr, Ctypes.typeconv t <> Ctypes.Tpointer ty attr) ->
+    Cop.bool_val v t m = Cop.bool_val v t m'.
+Proof.
+  intros.
+  unfold Cop.bool_val.
+  destruct v, t; try destruct i0; try destruct f; simpl in *;
+  (auto || (edestruct H; eauto)). 
+Qed.
 
 Inductive exp_eval (me: menv) (ve: venv): exp -> val -> Prop :=
 | evar: forall x v ty,

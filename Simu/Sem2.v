@@ -1,3 +1,4 @@
+Require cfrontend.Cop.
 Require Import CommonSem.
 
 Definition state := (menv * venv)%type.
@@ -10,6 +11,12 @@ Inductive stmt_eval: state -> stmt -> state -> Prop :=
 | Iassignst: forall me ve x e v,
     exp_eval me ve e v ->
     stmt_eval (me, ve) (AssignSt x e) (madd_mem x v me, ve)
+| Iifte: forall me ve e m v b s1 s2 me' ve',
+    exp_eval me ve e v ->
+    (forall ty attr, Ctypes.typeconv (typeof e) <> Ctypes.Tpointer ty attr) ->
+    Cop.bool_val v (typeof e) m = Some b ->
+    stmt_eval (me, ve) (if b then s1 else s2) (me', ve') ->
+    stmt_eval (me, ve) (Ifte e s1 s2) (me', ve')    
 | Icomp: forall me1 ve1 s1 me2 ve2 s2 me3 ve3,
     stmt_eval (me1, ve1) s1 (me2, ve2) ->
     stmt_eval (me2, ve2) s2 (me3, ve3) ->
@@ -35,6 +42,11 @@ Inductive stmt_eval_cont: state * stmt * cont -> state * stmt * cont -> Prop :=
     exp_eval me ve e v ->
     madd_mem x v me = me' ->
     stmt_eval_cont ((me, ve), AssignSt x e, k) ((me', ve), Skip, k)
+| Iifte_cont: forall me ve m e v b s1 s2 k,
+    exp_eval me ve e v ->
+    (forall ty attr, Ctypes.typeconv (typeof e) <> Ctypes.Tpointer ty attr) ->
+    Cop.bool_val v (typeof e) m = Some b ->
+    stmt_eval_cont ((me, ve), Ifte e s1 s2, k) ((me, ve), if b then s1 else s2, k)    
 | Icomp_cont: forall st s1 s2 k,
     stmt_eval_cont (st, Comp s1 s2, k) (st, s1, Kseq s2 k)
 | Iskip_comp_cont: forall st s k,
@@ -52,10 +64,12 @@ Section SEQUENCES.
   | star_step: forall a b c,
       R a b -> star b c -> star a c.
 
+  Hint Constructors star.
+
   Lemma star_one:
     forall (a b: A), R a b -> star a b.
   Proof.
-    intros. econstructor; eauto. constructor.
+    intros. econstructor; eauto. 
   Qed.
 
   Lemma star_trans:
@@ -64,31 +78,26 @@ Section SEQUENCES.
     induction 1; intros. auto. econstructor; eauto.
   Qed.
 
+  Lemma one_star_trans:
+    forall (a b: A), R a b -> forall c, star b c -> star a c.
+  Proof.
+    intros. econstructor; eauto.
+  Qed.
+
 End SEQUENCES.
 
 Definition terminates (S: state) (s: stmt) (S': state) : Prop :=
   star stmt_eval_cont (S, s, Kstop) (S', Skip, Kstop).
 
-Hint Constructors stmt_eval_cont.
+Hint Resolve star_one star_trans one_star_trans. 
+Hint Constructors star stmt_eval_cont.
 
 Theorem to_cont:
   forall S s S',
     stmt_eval S s S' ->
     forall k, star stmt_eval_cont (S, s, k) (S', Skip, k).
 Proof.
-  induction 1; intro.
-  - apply star_one; eauto.
-  - apply star_one; eauto.
-  - eapply star_trans.
-    + apply star_one; eauto.
-    + eapply star_trans; eauto.
-      eapply star_trans; eauto.
-      apply star_one; eauto.
-  - eapply star_trans.
-    + apply star_one; eauto.
-    + eapply star_trans; eauto.
-      eapply star_one; eauto.
-  - apply star_refl.
+  induction 1; eauto.
 Qed.
 
 
@@ -120,6 +129,7 @@ Proof.
   intros until k'. intro STEP. dependent induction STEP; intros.
   - inv H0. inv H5. econstructor; eauto; auto.
   - inv H0. inv H5. econstructor; eauto; auto.
+  - inv H2. destruct S'. econstructor. econstructor; eauto. auto.
   - inv H. inv H5. econstructor; eauto. destruct S', S'1, S'0. econstructor; eauto.
   - inv H. econstructor; eauto. econstructor; eauto.
 Qed.

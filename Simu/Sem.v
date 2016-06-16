@@ -12,6 +12,12 @@ Inductive stmt_eval: state -> state -> Prop :=
     exp_eval me ve e v ->
     madd_mem x v me = me' ->
     stmt_eval (me, ve, AssignSt x e) (me', ve, Skip)
+| Iifte: forall me ve m e v b s1 s2 me' ve',
+    exp_eval me ve e v ->
+    (forall ty attr, Ctypes.typeconv (typeof e) <> Ctypes.Tpointer ty attr) ->
+    Cop.bool_val v (typeof e) m = Some b ->
+    stmt_eval (me, ve, if b then s1 else s2) (me', ve', Skip) ->
+    stmt_eval (me, ve, Ifte e s1 s2) (me', ve', Skip)
 | Icomp: forall me1 ve1 s1 me2 ve2 s2 me3 ve3,
     stmt_eval (me1, ve1, s1) (me2, ve2, Skip) ->
     stmt_eval (me2, ve2, s2) (me3, ve3, Skip) ->
@@ -55,10 +61,11 @@ Theorem stmt_eval_det:
     st1 = st2.
 Proof.
   intros.
-  revert st2 H0. induction H; intros st2 H2; inv H2;
+  revert st2 H0. induction H; intros st2 H2'; inv H2';
                  ((app_exp_eval_det; auto) || inv_stmt_eval || idtac).
-  - apply IHstmt_eval1 in H7. inv H7. apply IHstmt_eval2; auto.
-  - apply IHstmt_eval in H5; auto.
+  - pose proof (bool_val_ptr v _ m0 m H0) as Hptr. rewrite Hptr in H11. rewrite H1 in H11; inv H11. apply IHstmt_eval in H12; auto.
+  - apply IHstmt_eval1 in H6. inv H6. apply IHstmt_eval2; auto.
+  - apply IHstmt_eval in H4; auto.
   (* - apply IHstmt_eval in H5; auto. *)
 Qed.
 
