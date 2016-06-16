@@ -193,7 +193,8 @@ test: compcert all extraction extr
 
 extraction: extraction/STAMP
 
-extraction/STAMP: $(VOFILES) extraction/Extraction.v 
+extraction/STAMP: $(VOFILES) extraction/Extraction.v
+	@mkdir extraction/extract
 	@rm -f extraction/extract/*.*
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
