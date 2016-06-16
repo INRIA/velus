@@ -1,5 +1,6 @@
 Require Import CommonCor.
 Require Import Sem2.
+Require cfrontend.ClightBigstep.
 
 (* SIMULATION *)
 
@@ -18,23 +19,12 @@ Section SIMU.
   (* Hypothesis WF: well_formed prog. *)
   Hypothesis MAINNODE: find_class main_node prog = Some (c_main, cls_main).
 
-  Inductive compat_cont: (* menv -> venv -> Clight.env -> Memory.Mem.mem -> *) cont -> Clight.cont -> Prop :=
-  | compat_kstop: (* forall me ve e m, *)
-      compat_cont (* me ve e m*) Kstop Clight.Kstop
-  | compat_kseq: forall (* me ve e m *) s k k',
-      well_formed_stmt c_main s ->
-      (* compat_stmt me ve e m s -> *)
-      compat_cont k k' ->
-      compat_cont (* me ve e m *) (Kseq s k) (Clight.Kseq (translate_stmt main_node s) k').  
-
+  Definition c_state := (Clight.env * Clight.temp_env * Memory.Mem.mem)%type.
    
-  Inductive match_states: state * stmt * cont -> Clight.state -> Prop :=
-  | intro_state: forall me ve s k k' e le m,
+  Inductive match_states: state -> c_state -> Prop :=
+  | intro_state: forall me ve e le m,
       compat_venv c_main ve e m ->
       compat_menv main_node tprog c_main me e m ->
-      well_formed_stmt c_main s ->
-      compat_stmt main_node tprog me ve e m s ->
-      compat_cont k k' ->
       mem_sep main_node c_main e m ->
       self_sep main_node e m ->
       fields_sep tprog m ->
@@ -42,34 +32,41 @@ Section SIMU.
       nodup_vars c_main ->
       nodup_mems c_main ->
       match_states
-        ((me, ve), s, k)
-        (Clight.State (main_fun main_node c_main) (translate_stmt main_node s) k' e le m).
+        (me, ve)
+        (e, le, m).
 
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
   Hint Resolve expr_eval_simu Clight.assign_loc_value sem_cast_same.
   Hint Constructors compat_stmt well_formed_stmt.
-  Hint Constructors match_states compat_cont.
+  Hint Constructors match_states.
 
+  Definition big_step (st: c_state) s t (st': c_state) : Prop :=
+    let '(e, le, m) := st in
+    let '(e', le', m') := st' in
+    ClightBigstep.exec_stmt tge e le m s t le' m' ClightBigstep.Out_normal.   
+  
   Theorem simu:
-    forall S1 S2,
-      stmt_eval_cont S1 S2 ->
-      forall S1',
-        match_states S1 S1' ->
+    forall me1 ve1 s S2,
+      well_formed_stmt c_main s ->
+      stmt_eval (me1, ve1) s S2 ->
+      forall e1 le1 m1,
+        match_states (me1, ve1) (e1, le1, m1) ->
+        compat_stmt main_node tprog me1 ve1 e1 m1 s ->
         exists S2' t,
-          Smallstep.plus Clight.step1 tge S1' t S2'
+          big_step (e1, le1, m1) (translate_stmt main_node s) t S2'
           /\ match_states S2 S2'.
   Proof.
+    intros until S2; intro Hwf.
     induction 1;
-    inversion_clear 1 as [? ? ? ? ? ? ? ? Hvenv Hmenv Hwf Hstmt Hcont];
-    inv Hwf; inversion_clear Hstmt; destruct_conjs.
+    inversion_clear 1 as [? ? ? ? ? Hvenv Hmenv];
+    inv Hwf; inversion_clear 1.  
     
     (* Assign x e : "x = e" *)
-    - app_exp_eval_det.
-      edestruct compat_assign_pres as [m']; eauto; destruct_conjs. 
-      do 2 econstructor; split.
-      + eapply Smallstep.plus_one, Clight.step_assign; eauto.
+    - edestruct compat_assign_pres as [m']; eauto; destruct_conjs. admit.
+      exists (e1, le1, m'), Events.E0; split.
+      + eapply ClightBigstep.exec_Sassign; eauto. 
         * eapply expr_eval_simu; eauto. 
-        * rewrite type_pres; auto. 
+        * rewrite type_pres; auto. admit.
       + constructor; auto. 
 
     (* AssignSt x e : "self->x = e"*)
