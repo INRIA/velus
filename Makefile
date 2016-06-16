@@ -186,8 +186,11 @@ beautify: $(VFILES:=.beautified)
 
 .PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr compcert
 
-compcert:
+compcert: CompCert/Makefile.config
 	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof extraction
+
+CompCert/Makefile.config:
+	@cd CompCert; ./configure ia32-linux
 
 test: compcert all extraction extr
 
