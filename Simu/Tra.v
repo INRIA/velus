@@ -10,6 +10,11 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Axiom pos_of_str: string -> ident.
+Axiom pos_to_str: ident -> string.
+Definition self_id: ident := pos_of_str "self".
+Definition main_id: ident := pos_of_str "main".
+
 (* TRANSLATION *)
 Definition type_of_inst (o: ident): typ :=
   Ctypes.Tstruct o Ctypes.noattr.

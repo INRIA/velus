@@ -27,6 +27,37 @@ Inductive stmt_eval: state -> stmt -> state -> Prop :=
 | Iskip: forall st,
     stmt_eval st Skip st.
 
+Ltac app_bool_val :=
+  match goal with
+  | H: forall ty attr, Ctypes.typeconv ?t <> Ctypes.Tpointer ty attr,
+    H1: Cop.bool_val ?v ?t ?m = Some ?b,
+    H2: Cop.bool_val ?v ?t ?m' = Some ?b' |- _ =>
+let Heq := fresh in
+pose proof (bool_val_ptr v _ m m' H) as Heq; rewrite Heq in H1; rewrite H1 in H2; inv H2
+end.
+
+Theorem stmt_eval_det:
+  forall st s st1 st2,
+    stmt_eval st s st1 ->
+    stmt_eval st s st2 ->
+    st1 = st2.
+Proof.
+  intros until st2; intro Hev1; revert st2;
+  induction Hev1 as [| |? ? ? ? ? ? ? ? ? ? ? ? Hbool_val1| |]; intros st2 Hev2; inv Hev2;
+  try app_exp_eval_det; auto.
+  - apply IHHev1.
+    app_bool_val; auto.
+  - assert ((me2, ve2) = (me4, ve4)) as Heq by now apply IHHev1_1.
+    apply IHHev1_2; rewrite Heq; auto.
+Qed.
+
+Ltac app_stmt_eval_det :=
+  match goal with
+  | H1: stmt_eval ?st ?s ?st1,
+        H2: stmt_eval ?st ?s ?st2 |- _ =>
+    let H := fresh in
+    assert (st2 = st1) as H by (eapply stmt_eval_det; eauto); inv H; clear H2
+  end.
 
 Inductive cont :=
 | Kstop: cont

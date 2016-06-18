@@ -24,7 +24,7 @@ Section PRESERVATION.
   (* Let ge := globalenv prog. *)
   Let tge := Clight.globalenv tprog.
   
-  Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
+  Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.    
   (* Hypothesis WF: well_formed prog. *)
   Hypothesis MAINNODE: find_class main_node prog = Some (c_main, cls_main).
 
@@ -46,6 +46,18 @@ Section PRESERVATION.
     unfold translate in TRANSL.
     rewrite MAINNODE in TRANSL.
     unfold Clight.make_program in TRANSL.
+    revert TRANSL.
+    generalize (Clight.make_program_obligation_1
+                  (map translate_class prog)
+                  [(main_id,
+                    make_main
+                      (translate_stmt main_node
+                                      (c_step c_main))
+                      (c_vars c_main))] 
+                  [] main_id).
+    generalize (eq_refl (Ctypes.build_composite_env (map translate_class prog))).
+    intros H1 H2.
+    simpl in H2.
     admit.
   Qed.
   

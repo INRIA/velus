@@ -96,52 +96,6 @@ Proof.
   - now apply IHcls.
 Qed.
 
-Axiom pos_of_str: string -> ident.
-Axiom pos_to_str: ident -> string.
-Definition self_id: ident := pos_of_str "self".
-Definition main_id: ident := pos_of_str "main".
-
-Section WellFormed.
-  Variable c: class.
-
-  Inductive well_formed_exp: exp -> Prop :=
-  | wf_var: forall x ty,
-      In (x, ty) c.(c_vars) ->
-      x <> self_id ->
-      well_formed_exp (Var x ty)
-  | wf_state: forall x ty,
-      In (x, ty) c.(c_mems) ->
-      well_formed_exp (State x ty)
-  | wf_const: forall c ty,
-      well_formed_exp (Const c ty).
-
-  Inductive well_formed_stmt: stmt -> Prop :=
-  | wf_assign: forall x e,
-      In (x, typeof e) c.(c_vars) ->
-      x <> self_id ->
-      well_formed_exp e ->
-      well_formed_stmt (Assign x e)
-  | wf_assignst: forall x e,
-      In (x, typeof e) c.(c_mems) ->
-      x <> self_id ->
-      well_formed_exp e ->
-      well_formed_stmt (AssignSt x e)
-  | wf_ite: forall e s1 s2,
-      well_formed_exp e ->
-      well_formed_stmt s1 ->
-      well_formed_stmt s2 ->
-      well_formed_stmt (Ifte e s1 s2)
-  | wf_comp: forall s1 s2,
-      well_formed_stmt s1 ->
-      well_formed_stmt s2 ->
-      well_formed_stmt (Comp s1 s2)
-  | wf_skip: well_formed_stmt Skip.
-
-  Definition well_formed_cls: Prop := well_formed_stmt c.(c_step).
-End WellFormed.
-
-Definition well_formed: program -> Prop := Forall well_formed_cls. 
-
 (** ** Decidable equality *)
 
 Lemma exp_eq: forall (e1 e2: exp), {e1=e2} + {e1<>e2}.
