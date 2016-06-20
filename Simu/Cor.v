@@ -12,6 +12,9 @@ Require Export List.
 Export List.ListNotations.
 Open Scope list_scope.
 
+Require Import LibTactics.
+Ltac auto_star ::= try solve [eassumption | auto | jauto].
+
 (* SIMULATION *)
 
 Section PRESERVATION.
@@ -147,7 +150,7 @@ Section PRESERVATION.
 
   Remark valid_val_implies_access:
     forall v t, valid_val v t -> Ctypes.access_mode t = Ctypes.By_value (chunk_of_typ t).
-  Proof. intros ** H; apply H. Qed.
+  Proof. introv H; apply H. Qed.
     
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
   Hint Resolve valid_val_implies_access.
@@ -161,13 +164,13 @@ Section PRESERVATION.
       Clight.eval_expr tge e le m (translate_exp main_node exp) v.
   Proof.
     intros S exp;
-    induction exp as [x ty|x ty|c ty];
-    intros ** Hvenv Hmenv Hwf Heval;
-    inv Heval; inv Hwf; simpl.
+    induction exp as [| |c];
+    introv Hvenv Hmenv Hwf Heval;
+    inverts Heval; inverts Hwf; simpl.
 
     (* Var x ty : "x" *)
-    - edestruct Hvenv; destruct_conjs; eauto.
-      eapply Clight.eval_Elvalue, Clight.deref_loc_value; eauto.
+    - edestruct Hvenv; eauto.
+      eapply Clight.eval_Elvalue, Clight.deref_loc_value; iauto.
 
     (* State x ty : "self->x" *)
     - edestruct Hmenv; destruct_conjs; eauto.
@@ -177,8 +180,8 @@ Section PRESERVATION.
         eapply Clight.eval_Elvalue. 
         * apply Clight.eval_Ederef. 
           eapply Clight.eval_Elvalue, Clight.deref_loc_value; eauto.
-        * apply Clight.deref_loc_copy; auto.
-      + eapply Clight.deref_loc_value; eauto.
+        * apply* Clight.deref_loc_copy.
+      + apply* Clight.deref_loc_value.
 
     (* Const c ty : "c" *)
     - destruct c; constructor.
@@ -238,7 +241,7 @@ Section PRESERVATION.
       find_var x (update_var x S v) v' -> v' = v.
   Proof.
     unfold find_var, update_var; simpl.
-    intros; eapply find_add; eauto.
+    intros; apply* find_add.
   Qed.
 
   Remark find_update_field:
@@ -246,7 +249,7 @@ Section PRESERVATION.
       find_field x (update_field x S v) v' -> v' = v.
   Proof.
     unfold find_field, update_field, mfind_mem, madd_mem; simpl.
-    intros; eapply find_add; eauto.
+    intros; apply* find_add.
   Qed.
 
   Remark gso_var:
@@ -254,9 +257,9 @@ Section PRESERVATION.
       x <> x' -> find_var x (update_var x' S v) v' -> find_var x S v'.
   Proof.
     unfold find_var, update_var; simpl.
-    intros ** Neq H.
+    introv Neq H.
     rewrite <-H; symmetry.
-    apply PM.gso; auto.
+    apply* PM.gso.
   Qed.
 
   Remark gso_field:
@@ -264,9 +267,9 @@ Section PRESERVATION.
       x <> x' -> find_field x (update_field x' S v) v' -> find_field x S v'.
   Proof.
     unfold find_field, update_field; simpl.
-    intros ** Neq H.
+    introv Neq H.
     rewrite <-H; symmetry.
-    apply mfind_mem_gso; auto.
+    apply* mfind_mem_gso.
   Qed.
   
   Definition mem_sep (e: Clight.env) (m: Memory.Mem.mem) :=
@@ -300,15 +303,7 @@ Section PRESERVATION.
          (BinInt.Z.add (Int.unsigned (Int.add ofs (Int.repr delta)))
                        (Memdata.size_chunk (chunk_of_typ t)))
          (Int.unsigned (Int.add ofs (Int.repr delta')))).
-      
-  
-  Ltac clear_refl_trivial :=
-    match goal with
-    | H: ?x = ?x |- _ => clear H
-    end.
-  Ltac clear_refl_trivials := repeat clear_refl_trivial.
-  Ltac clean_context := clear_dups; clear_refl_trivials.
-  
+        
   Lemma compat_assign_pres:
     forall S env m loc x e v,
       compat_venv S env m ->
@@ -336,62 +331,61 @@ Section PRESERVATION.
   Proof.
     intros ** Hvenv Hmenv Hvars Hfields Hsep Hself_sep Hnodupenv Hnodupvars Hget Hin Hloadres ? ? ? ?.
     edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto. 
-    exists m'; repeat split; auto; clean_context.
+    exists m'; splits*. 
     - unfold compat_venv; intros x' v' t' Hfind Hin'.
-      destruct (AST.ident_eq x' x) as [|Hx].
+      destruct (AST.ident_eq x' x).
       + subst x'.
         apply find_update_var in Hfind; subst v'.
-        generalize (Hnodupvars _ _ _ Hin Hin'); intro; subst t'. 
-        exists loc; split; [|split]; auto.
-        rewrite Hloadres; eapply Memory.Mem.load_store_same; eauto.
+        specializes Hnodupvars Hin Hin'; subst t'. 
+        exists loc; splits*.
+        rewrite Hloadres; apply* Memory.Mem.load_store_same.
       + apply gso_var in Hfind; auto.
         edestruct Hvenv as [loc' [? [Hload]]]; eauto.
-        exists loc'; split; [|split]; auto. 
+        exists loc'; splits*.
         destruct (Values.eq_block loc' loc).
         * subst loc'.
           edestruct Hnodupenv; eauto. 
         * rewrite <-Hload. 
-          eapply Memory.Mem.load_store_other; eauto.
+          apply* Memory.Mem.load_store_other.
     - unfold compat_menv; intros x' v' t' Hmem Hin'.
       edestruct Hmenv
         as (co & loc'' & loc' & ofs & delta & ? & Hload & ? & ? & Hself' & Hloadptr & ?); eauto.
-      exists co, loc'', loc', ofs, delta.
-      split; [|split; [|split; [|repeat split]]]; auto.
+      exists co loc'' loc' ofs delta; splits*. 
       + destruct (Values.eq_block loc loc').
         * edestruct Hsep with (2:=Hget); eauto; contradiction.
         * rewrite <-Hload.
-          eapply Memory.Mem.load_store_other; eauto.
+          apply* Memory.Mem.load_store_other.
       + destruct (Values.eq_block loc'' loc).
         * subst loc''.
           edestruct Hnodupenv with (2:=Hget); eauto.
         * rewrite <-Hloadptr.
-          eapply Memory.Mem.load_store_other; eauto.
+          apply* Memory.Mem.load_store_other.
     - unfold compat_vars; intros x' t' Hin'.
       edestruct Hvars as (loc' & ? & ?); eauto.
-      exists loc'; split; auto.
-      eapply Memory.Mem.store_valid_access_1; eauto.
+      exists loc'; split*.
+      apply* Memory.Mem.store_valid_access_1.
     - unfold compat_fields; intros x' t' Hin'.
       edestruct Hfields as (co & loc1' & loc1 & ofs & delta & ? & ? & ? & ? & Hload & ?); eauto. 
-      exists co, loc1', loc1, ofs, delta; split; [|split; [|split; [|split; [|split]]]]; auto.
+      exists co loc1' loc1 ofs delta; splits*.
       + destruct (Values.eq_block loc1' loc).
         * subst loc1'.
           edestruct Hnodupenv with (2:=Hget); eauto.
-        * rewrite <-Hload; eapply Memory.Mem.load_store_other; eauto.
-      + eapply Memory.Mem.store_valid_access_1; eauto.
+        * rewrite <-Hload; apply* Memory.Mem.load_store_other.
+      + apply* Memory.Mem.store_valid_access_1.
     - unfold mem_sep; intros x' loc1 t' ofs loc1' loc1'' Hin1 Hget1 Hself Hload.
-      eapply Hsep; eauto.
+      apply* Hsep.
       instantiate (1:=ofs).
       destruct (Values.eq_block loc1'' loc).
       + subst loc1''.
         edestruct Hnodupenv with (2:=Hget); eauto.
-      + rewrite <-Hload; symmetry; eapply Memory.Mem.load_store_other; eauto.
+      + rewrite <-Hload; symmetry; apply* Memory.Mem.load_store_other.
     - unfold self_sep; intros loc1 ofs loc1' Hself Hload.
-      eapply Hself_sep; eauto.
+      apply* Hself_sep.
       instantiate (1:=ofs).
       destruct (Values.eq_block loc1' loc).
       + subst loc1'.
         edestruct Hnodupenv with (2:=Hget); eauto.
-      + rewrite <-Hload; symmetry; eapply Memory.Mem.load_store_other; eauto.
+      + rewrite <-Hload; symmetry; apply* Memory.Mem.load_store_other.
   Qed.
 
    Lemma compat_stassign_pres:
@@ -425,70 +419,68 @@ Section PRESERVATION.
   Proof.
     intros ** Hvenv Hmenv Hvars Hfields Hsep Hself_sep Hfields_sep Hnodupmems Hmembers Hoffset Hmain Hself Hloadptr Hin Hloadres ? ? ?.
     edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto. 
-    exists m'; repeat (split; auto); clean_context.
+    exists m'; splits*.
     - unfold compat_venv; intros x' v' t' Hmto Hin'.
       edestruct Hvenv as (loc'' & Hget & Hload' & ?); eauto.
-      exists loc''; split; [|split]; auto.
+      exists loc''; splits*.
       destruct (Values.eq_block loc'' loc).
       + edestruct Hsep with (1:=Hin'); eauto.
       + rewrite <-Hload'.
-        eapply Memory.Mem.load_store_other; eauto.
+        apply* Memory.Mem.load_store_other.
     - unfold compat_menv; intros x' v' t' Hmem Hin'.
       destruct (AST.ident_eq x' x).
       + subst x'.
         apply find_update_field in Hmem; subst v'.
-        generalize (Hnodupmems _ _ _ Hin Hin'); intro; subst t'. 
-        exists co, loc', loc, ofs, delta.
-        split; [|split; [|split; [|split; [|repeat split]]]]; auto.
-        * rewrite Hloadres; eapply Memory.Mem.load_store_same; eauto.
+        specializes Hnodupmems Hin Hin'; subst t'. 
+        exists co loc' loc ofs delta; splits*.
+        * rewrite Hloadres; apply* Memory.Mem.load_store_same.
         *{ destruct (Values.eq_block loc' loc).
            - edestruct Hself_sep; eauto.  
            - rewrite <-Hloadptr.
-             eapply Memory.Mem.load_store_other; eauto.
+             apply* Memory.Mem.load_store_other.
          }
       + apply gso_field in Hmem; auto.
         edestruct Hmenv
           as (co' & loc1' & loc1 & ofs' & delta' & ? & Hload' & ? & Hmain1 & Hself1 & Hloadptr1 & ?); eauto. 
-        rewrite Hmain in Hmain1; inversion Hmain1; subst co'.
-        rewrite Hself in Hself1; inversion Hself1; subst loc1'.
-        rewrite Hloadptr in Hloadptr1; inversion Hloadptr1; subst loc1 ofs'.
-        exists co, loc', loc, ofs, delta'.
-        split; [|split; [|split; [|split; [|repeat split]]]]; auto.
-        * rewrite <-Hload'. eapply Memory.Mem.load_store_other; eauto. 
+        rewrite Hmain1 in Hmain; inverts Hmain. 
+        rewrite Hself1 in Hself; inverts Hself. 
+        rewrite Hloadptr1 in Hloadptr; inverts Hloadptr.
+        exists co loc' loc ofs delta'; splits*.
+        * rewrite <-Hload'. apply* Memory.Mem.load_store_other. 
         *{ destruct (Values.eq_block loc' loc).
            - edestruct Hself_sep; eauto. 
-           - rewrite <-Hloadptr.
-             eapply Memory.Mem.load_store_other; eauto.
+           - rewrite <-Hloadptr1.
+             apply* Memory.Mem.load_store_other.
          }
     - unfold compat_vars; intros x' t' Hin'.
       edestruct Hvars as (loc1' & ? & ?); eauto.
       exists loc1'; split; auto.
-      eapply Memory.Mem.store_valid_access_1; eauto.
+      apply* Memory.Mem.store_valid_access_1.
     - unfold compat_fields; intros x' t' Hin'.
       edestruct Hfields as (co' & loc1' & loc1 & ofs' & delta' & ? & ? & ? & Hself' & Hload & ?); eauto. 
-      exists co', loc1', loc1, ofs', delta'; split; [|split; [|split; [|split; [|split]]]]; auto.
+      exists co' loc1' loc1 ofs' delta'; splits*.
       + destruct (Values.eq_block loc1' loc).
         * subst loc1'.
-          rewrite Hself in Hself'; inversion Hself'. subst loc'.
+          rewrite Hself in Hself'; inverts Hself'. 
           edestruct Hself_sep; eauto.
-        * rewrite <-Hload; eapply Memory.Mem.load_store_other; eauto.
-      + eapply Memory.Mem.store_valid_access_1; eauto.          
+        * rewrite <-Hload; apply* Memory.Mem.load_store_other.
+      + apply* Memory.Mem.store_valid_access_1.
     - unfold mem_sep; intros x' loc1 t' ofs' loc1' loc1'' Hin1 Hget1 Hself' Hload.
-      eapply Hsep; eauto.
+      apply* Hsep.
       instantiate (1:=ofs').
       destruct (Values.eq_block loc1'' loc).
       + subst loc1''.
-        rewrite Hself in Hself'; inversion Hself'. subst loc'.
+        rewrite Hself in Hself'; inverts Hself'.
         edestruct Hself_sep; eauto.  
-      + rewrite <-Hload; symmetry; eapply Memory.Mem.load_store_other; eauto.
+      + rewrite <-Hload; symmetry; apply* Memory.Mem.load_store_other.
     - unfold self_sep; intros loc1 ofs' loc1' Hself' Hload.
-      eapply Hself_sep; eauto.
+      apply* Hself_sep.
       instantiate (1:=ofs').
       destruct (Values.eq_block loc1' loc).
       + subst loc1'.
-        rewrite Hself in Hself'; inversion Hself'. subst loc'.
+        rewrite Hself in Hself'; inverts Hself'. 
         edestruct Hself_sep; eauto.  
-      + rewrite <-Hload; symmetry; eapply Memory.Mem.load_store_other; eauto.
+      + rewrite <-Hload; symmetry; apply* Memory.Mem.load_store_other.
   Qed.
 
 Remark ifte_translate:
@@ -538,51 +530,49 @@ Remark ifte_translate:
           ClightBigstep.exec_stmt tge e1 le1 m1 (translate_stmt main_node s) t le2 m2 ClightBigstep.Out_normal
           /\ match_states_bigbig S2 (e1, le2, m2).
   Proof.
-    induction 2; inversion_clear H; 
-    inversion_clear 1 as [? ? ? Hvenv Hmenv Hvars Hfields].
+    introv WF EV;
+    induction EV; introv MS; inverts WF; 
+    inverts MS as Hvenv Hmenv Hvars Hfields.
     
     (* Assign x e : "x = e" *)
     - app_exp_eval_det.
       edestruct Hvars; eauto.
-      edestruct compat_assign_pres as [m']; destruct_conjs; eauto.
-      do 3 econstructor; split.
-      + eapply ClightBigstep.exec_Sassign; eauto. 
-        rewrite type_pres; auto. 
-      + constructor; auto. 
-
+      edestruct compat_assign_pres; iauto.  
+      do 3 econstructor; split*.
+      apply* ClightBigstep.exec_Sassign. 
+      rewrite* type_pres. 
+      
     (* AssignSt x e : "self->x = e"*)
     - app_exp_eval_det.
       edestruct Hfields; eauto; destruct_conjs.
-      edestruct compat_stassign_pres as [m']; eauto; destruct_conjs. 
-      do 3 econstructor; split.
-      + eapply ClightBigstep.exec_Sassign; eauto.
-        *{ eapply Clight.eval_Efield_struct
-           with (id:=main_node) (att:=Ctypes.noattr); eauto.
-           eapply Clight.eval_Elvalue; eauto. 
-           - apply Clight.eval_Ederef. 
-             eapply Clight.eval_Elvalue; eauto.
-             apply Clight.deref_loc_value with (chunk:=AST.Mint32); eauto.
-           - apply Clight.deref_loc_copy; auto.
-         }
-        * rewrite type_pres; auto. 
-      + constructor; auto. 
-
+      edestruct compat_stassign_pres; iauto.
+      do 3 econstructor; split*.
+      apply* ClightBigstep.exec_Sassign.
+      + eapply Clight.eval_Efield_struct
+        with (id:=main_node) (att:=Ctypes.noattr); eauto.
+        apply* Clight.eval_Elvalue.  
+        * apply Clight.eval_Ederef. 
+          apply* Clight.eval_Elvalue.
+          apply Clight.deref_loc_value with (chunk:=AST.Mint32); eauto.
+        * apply* Clight.deref_loc_copy.
+      + rewrite* type_pres.
+        
     (* Ifte e s1 s2 : "if e then s1 else s2" *)
-    - edestruct IHstmt_eval as (le2 & m2 & t & ? & ?); eauto;
+    - edestruct IHEV; destruct_conjs; eauto;
       [destruct b|]; auto.
-      do 3 econstructor; split; eauto.
-      eapply ClightBigstep.exec_Sifthenelse; eauto.
+      do 3 econstructor; split*.
+      apply* ClightBigstep.exec_Sifthenelse.
       + erewrite type_pres, bool_val_ptr; eauto. 
-      + fold translate_stmt; rewrite <-ifte_translate; eauto.
+      + fold translate_stmt; rewrite* <-ifte_translate.
 
     (* Comp s1 s2 : "s1; s2" *)
     - app_stmt_eval_det.
-      edestruct IHstmt_eval1 as (le2 & m2 & t1 & ? & ?); eauto.
-      edestruct IHstmt_eval2 as (le3 & m3 & t2 & ? & ?); eauto.
-      do 3 econstructor; split; eauto.
-      eapply ClightBigstep.exec_Sseq_1; eauto.
+      edestruct IHEV1; destruct_conjs; eauto.
+      edestruct IHEV2; destruct_conjs; eauto.
+      do 3 econstructor; split*.
+      apply* ClightBigstep.exec_Sseq_1.
      
     (* Skip : "skip" *)
-    - do 3 econstructor; split; eauto.
+    - do 3 econstructor; split*.
       eapply ClightBigstep.exec_Sskip.
   Qed.
