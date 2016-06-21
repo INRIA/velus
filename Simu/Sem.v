@@ -1,12 +1,13 @@
 Require common.Values cfrontend.Cop.
 Require Import lib.Integers lib.Floats.
         
-Require Export Rustre.Common.
-Require Export Rustre.RMemory.
+Require Import Rustre.Common.
+Require Import Rustre.RMemory.
+Require Import Rustre.Nelist.
 
-Require Export Syn.
+Require Import Syn.
 
-Ltac inv H := inversion H; clear H; subst.
+Require Import LibTactics.
 
 (* SEMANTICS *)
 Definition val: Type := Values.val.
@@ -21,6 +22,11 @@ Definition state := (menv * venv)%type.
 
 Definition find_var (x: ident) (S: state) (v: val) := PM.find x (snd S) = Some v.
 Definition find_field (x: ident) (S: state) (v: val) := mfind_mem x (fst S) = Some v.
+Definition find_inst (o: ident) (S: state) (me: memory val) := mfind_inst o (fst S) = Some me.
+
+Definition update_var (x: ident) (S: state) (v: val) := (fst S, PM.add x v (snd S)).
+Definition update_field (x: ident) (S: state) (v: val) := (madd_mem x v (fst S), snd S).
+Definition update_inst (o: ident) (S: state) (me: memory val) := (madd_obj o me (fst S), snd S).
 
 Definition val_of_const c :=
   match c with
@@ -73,6 +79,17 @@ Proof.
   rewrite H1 in H2; inv H2; reflexivity.
 Qed.
 
+Remark find_inst_det:
+  forall x me1 me2 S,
+    find_inst x S me1 ->
+    find_inst x S me2 ->
+    me1 = me2.
+Proof.
+  unfold find_inst.
+  intros ** H1 H2.
+  rewrite H1 in H2; inv H2; reflexivity.
+Qed.
+
 Theorem exp_eval_det:
   forall S e v1 v2,
     exp_eval S e v1 ->
@@ -92,29 +109,43 @@ Ltac app_exp_eval_det :=
     assert (v1 = v2) by (eapply exp_eval_det; eauto); subst v2; clear H2 
   end.
 
-Definition update_var (x: ident) (S: state) (v: val) := (fst S, PM.add x v (snd S)).
-Definition update_field (x: ident) (S: state) (v: val) := (madd_mem x v (fst S), snd S).
-
 (* =stmt_eval= *)
-Inductive stmt_eval (S: state): stmt -> state -> Prop :=
-| Iassign: forall x e v,
+Inductive stmt_eval: program -> state -> stmt -> state -> Prop :=
+| Iassign: forall prog S x e v,
     exp_eval S e v ->
-    stmt_eval S (Assign x e) (update_var x S v)
-| Iassignst: forall x e v,
+    stmt_eval prog S (Assign x e) (update_var x S v)
+| Iassignst: forall prog S x e v,
     exp_eval S e v ->
-    stmt_eval S (AssignSt x e) (update_field x S v)
-| Iifte: forall e m v b s1 s2 S',
+    stmt_eval prog S (AssignSt x e) (update_field x S v)
+| Iifte: forall prog S e m v b s1 s2 S',
     exp_eval S e v ->
     (forall ty attr, Ctypes.typeconv (typeof e) <> Ctypes.Tpointer ty attr) ->
     Cop.bool_val v (typeof e) m = Some b ->
-    stmt_eval S (if b then s1 else s2) S' ->
-    stmt_eval S (Ifte e s1 s2) S'    
-| Icomp: forall s1 S2 s2 S3,
-    stmt_eval S s1 S2 ->
-    stmt_eval S2 s2 S3 ->
-    stmt_eval S (Comp s1 s2) S3
-| Iskip: 
-    stmt_eval S Skip S.
+    stmt_eval prog S (if b then s1 else s2) S' ->
+    stmt_eval prog S (Ifte e s1 s2) S'    
+| Icomp: forall prog S1 s1 S2 s2 S3,
+    stmt_eval prog S1 s1 S2 ->
+    stmt_eval prog S2 s2 S3 ->
+    stmt_eval prog S1 (Comp s1 s2) S3
+| Istep: forall prog S es vs clsid o y omenv omenv' rv ty,
+    find_inst o S omenv ->
+    Nelist.Forall2 (exp_eval S) es vs ->
+    stmt_step_eval prog omenv clsid vs omenv' rv ->
+    stmt_eval prog S (Step_ap y ty clsid o es) (update_var y (update_inst o S omenv') rv)
+| Iskip: forall prog S,
+    stmt_eval prog S Skip S
+
+with stmt_step_eval: program -> menv -> ident -> nelist val -> menv -> val -> Prop :=
+     | Iestep:
+         forall prog menv env clsid vs prog' S' rv cls,
+           find_class clsid prog = Some (cls, prog') ->
+           env = adds (Nelist.nefst cls.(c_input)) vs v_empty ->
+           stmt_eval prog' (menv, env) cls.(c_step) S' ->
+           find_var (fst cls.(c_output)) S' rv ->
+           stmt_step_eval prog menv clsid vs (fst S') rv.
+
+Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
+                         with stmt_step_eval_ind_2 := Minimality for stmt_step_eval Sort Prop.
 
 Ltac app_bool_val :=
   match goal with
@@ -125,10 +156,34 @@ let Heq := fresh in
 pose proof (bool_val_ptr v _ m m' H) as Heq; rewrite Heq in H1; rewrite H1 in H2; inv H2
 end.
 
+Lemma stmt_step_eval_det:
+  forall prog me clsid vs me1 rv1 me2 rv2,
+    stmt_step_eval prog me clsid vs me1 rv1 ->
+    stmt_step_eval prog me clsid vs me2 rv2 ->
+    me1 = me2 /\ rv1 = rv2.
+Proof.
+  introv Hstp1; revert me2 rv2.
+  induction Hstp1 using stmt_step_eval_ind_2 with
+  (P := fun p S s S' => forall S'', stmt_eval p S s S' -> stmt_eval p S s S'' -> S' = S'');
+  try (introv Hev1 Hev2; inverts Hev2); try app_exp_eval_det; auto.
+  - app_bool_val; auto.
+  - apply* IHHstp0.
+    asserts_rewrite* (S2 = S4).
+  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
+    assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
+    repeat fequals; apply* IHHstp1.
+  - introv Hstp2; inverts Hstp2.
+    substs.
+    rewrite H3 in H; inverts H.
+    assert (S' = S'0); auto; subst S'0.
+    split*.
+    apply* find_var_det.
+Qed.
+
 Theorem stmt_eval_det:
-  forall S s S1 S2,
-    stmt_eval S s S1 ->
-    stmt_eval S s S2 ->
+  forall prog S s S1 S2,
+    stmt_eval prog S s S1 ->
+    stmt_eval prog S s S2 ->
     S1 = S2.
 Proof.
   intros until S2; intro Hev1; revert S2;
@@ -136,16 +191,19 @@ Proof.
   try app_exp_eval_det; auto.
   - apply IHHev1.
     app_bool_val; auto.
-  - assert (S2 = S0) as Heq by now apply IHHev1_1.
-    apply IHHev1_2; rewrite Heq; auto.
+  - apply IHHev1_2.
+    asserts_rewrite* (S2 = S4).
+  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
+    assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
+    repeat fequals; apply* stmt_step_eval_det.
 Qed.
 
 Ltac app_stmt_eval_det :=
   match goal with
-  | H1: stmt_eval ?S ?s ?S1,
-        H2: stmt_eval ?S ?s ?S2 |- _ =>
+  | H1: stmt_eval ?prog ?S ?s ?S1,
+        H2: stmt_eval ?prog ?S ?s ?S2 |- _ =>
     let H := fresh in
-    assert (S2 = S1) as H by (eapply stmt_eval_det; eauto); inv H; clear H2
+    assert (S2 = S1) as H by (eapply stmt_eval_det; eauto); inverts H; clear H2
   end.
 
 (* Inductive cont := *)

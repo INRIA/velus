@@ -2,6 +2,7 @@ Require cfrontend.Clight.
 Require Import lib.Integers.
 
 Require Import Rustre.Common.
+Require Import Rustre.Nelist.
 
 Require Import Syn.
 
@@ -12,8 +13,12 @@ Open Scope list_scope.
 
 Axiom pos_of_str: string -> ident.
 Axiom pos_to_str: ident -> string.
+Axiom first_unused_ident: unit -> ident.
+
 Definition self_id: ident := pos_of_str "self".
 Definition main_id: ident := pos_of_str "main".
+Definition step_id (id: ident): ident :=
+  pos_of_str ("step_" ++ (pos_to_str id)).
 
 (* TRANSLATION *)
 Definition type_of_inst (o: ident): typ :=
@@ -45,23 +50,91 @@ Definition translate_exp (cls: ident) (e: exp): Clight.expr :=
   | Const c ty => translate_const c ty
   end.
 
+Fixpoint list_type_to_typelist (tys: list typ): Ctypes.typelist :=
+  match tys with
+  | [] => Ctypes.Tnil
+  | ty :: tys => Ctypes.Tcons ty (list_type_to_typelist tys)
+  end.
+
+Definition funcall
+           (bind: option ident) (f: ident) (ty: typ) (args: list Clight.expr)
+  : Clight.statement :=
+  let tys := List.map Clight.typeof args in
+  let sig := Ctypes.Tfunction (list_type_to_typelist tys) ty AST.cc_default in
+  Clight.Scall bind (Clight.Evar f sig) args.
+
+Definition assign (bind: ident) (ty: typ) (e: Clight.expr): Clight.statement :=
+  Clight.Sassign (Clight.Evar bind ty) e.
+
+Definition binded_funcall (bind temp f: ident) (ty: typ) (args: list Clight.expr)
+  : Clight.statement :=
+   Clight.Ssequence (funcall (Some temp) f ty args)
+                   (assign bind ty (Clight.Etempvar temp ty)).
+
+Definition ptr_obj (owner: option ident) (cls obj: ident): Clight.expr :=
+  Clight.Eaddrof
+    ((match owner with
+      | Some owner => deref_self_field owner
+      | None => Clight.Evar
+      end) obj (type_of_inst cls))
+    (type_of_inst_p cls).
+
+Definition step_call
+           (owner: option ident) (bind temp cls: ident) (obj: ident) (args: list Clight.expr)
+           (out_ty: typ)
+  : Clight.statement :=
+  let args := ptr_obj owner cls obj :: args in
+  binded_funcall bind temp (step_id cls) out_ty args.
 (** 
 Statement conversion keeps track of the produced temporaries (function calls).
 [owner] represents the name of the current class.
  *)
-Fixpoint translate_stmt (owner: ident) (s: stmt): Clight.statement :=
+Fixpoint translate_stmt (temp: option (ident * typ)) (owner: ident) (s: stmt)
+  : option (ident * typ) * Clight.statement :=
   match s with
   | Assign x e =>
-    Clight.Sassign (Clight.Evar x (typeof e)) (translate_exp owner e)
+    (temp, Clight.Sassign (Clight.Evar x (typeof e)) (translate_exp owner e))
   | AssignSt x e =>
-    Clight.Sassign (deref_self_field owner x (typeof e)) (translate_exp owner e)
+    (temp, Clight.Sassign (deref_self_field owner x (typeof e)) (translate_exp owner e))
   | Ifte e s1 s2 =>
-    Clight.Sifthenelse (translate_exp owner e) (translate_stmt owner s1) (translate_stmt owner s2)
+    let (temp1, s1') := translate_stmt temp owner s1 in
+    let (temp2, s2') := translate_stmt temp1 owner s2 in
+    (temp2, Clight.Sifthenelse (translate_exp owner e) s1' s2')
   | Comp s1 s2 =>
-    Clight.Ssequence (translate_stmt owner s1) (translate_stmt owner s2)
+    let (temp1, s1') := translate_stmt temp owner s1 in
+    let (temp2, s2') := translate_stmt temp1 owner s2 in
+    (temp2, Clight.Ssequence s1' s2')
+  | Step_ap y ty cls x es =>
+    let args := nelist2list (Nelist.map (translate_exp owner) es) in
+    let temp' := match temp with Some t => t | None => (first_unused_ident tt, ty) end in
+    let s_step := step_call (Some owner) y (fst temp') cls x args ty in 
+    (Some temp', s_step)
   | Skip =>
-    Clight.Sskip
+    (temp, Clight.Sskip)
   end.
+
+
+Definition return_some (s: Clight.statement) (out: ident * typ): Clight.statement :=
+  let (id, ty) := out in
+  Clight.Ssequence s (Clight.Sreturn (Some (Clight.Evar id ty))).
+Definition cl_zero: Clight.expr :=
+  Clight.Econst_int Int.zero Ctypes.type_int32s.
+Definition return_zero (s: Clight.statement): Clight.statement :=
+  Clight.Ssequence s (Clight.Sreturn (Some cl_zero)).
+
+Definition fundef
+           (ins: list (ident * typ)) (vars: list (ident * typ)) (ty: typ)
+           (temps: list (ident * typ)) (body: Clight.statement)
+  : AST.globdef Clight.fundef Ctypes.type :=
+  let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
+  @AST.Gfun Clight.fundef typ (Clight.Internal f).
+
+Definition make_step
+           (self: ident * typ) (ins: list (ident * typ)) (out: ident * typ)
+           (vars: list (ident * typ)) (temps: list (ident * typ)) (body: Clight.statement)
+  : AST.globdef Clight.fundef Ctypes.type :=
+  let body := return_some body out in
+  fundef (self :: ins) vars (snd out) temps body.
 
 Definition translate_obj_dec (obj: obj_dec): (ident * typ) :=
   match obj with
@@ -69,36 +142,63 @@ Definition translate_obj_dec (obj: obj_dec): (ident * typ) :=
     (inst, type_of_inst cls)
   end.
 
-Definition translate_class (c: class)
+Definition make_struct (cls: ident) (members: list (ident * typ))
   : Ctypes.composite_definition :=
+  Ctypes.Composite cls Ctypes.Struct members Ctypes.noattr.
+
+Definition translate_class (c: class)
+  : Ctypes.composite_definition * (ident * AST.globdef Clight.fundef Ctypes.type) :=
   match c with
-    mk_class name mems objs _ _ =>
-    let objs := List.map translate_obj_dec objs in
-    let members := mems ++ objs in
-    Ctypes.Composite name Ctypes.Struct members Ctypes.noattr
+    mk_class c_name c_input c_output c_vars c_mems c_objs c_step =>
+    let objs := List.map translate_obj_dec c_objs in
+    let members := c_mems ++ objs in
+    let (temp_step, step) := translate_stmt None c_name c_step in
+    let self := (self_id, type_of_inst_p c_name) in
+    let temp_step' := match temp_step with Some t => [t] | None => [] end in
+    let cl_struct := make_struct c_name members in
+    let cl_step := (step_id c_name, make_step self (nelist2list c_input) c_output c_vars temp_step' step) in
+    (cl_struct, cl_step)
   end.
-
-Definition cl_zero: Clight.expr :=
-  Clight.Econst_int Int.zero Ctypes.type_int32s.
-Definition return_zero (s: Clight.statement): Clight.statement :=
-  Clight.Ssequence s (Clight.Sreturn (Some cl_zero)).
-
-(** build the main function (entry point) *)
-Definition make_main (body: Clight.statement) (vars: list (ident * typ))
-  : AST.globdef Clight.fundef Ctypes.type :=
-  let body := return_zero body in
-  let main := Clight.mkfunction Ctypes.type_int32s AST.cc_default [] vars [] body in
-  @AST.Gfun Clight.fundef typ (Clight.Internal main).
 
 Definition glob_id (id: ident): ident :=
   pos_of_str ("_" ++ (pos_to_str id)).
+Definition glob_bind (bind: ident * typ): ident * typ :=
+  let (x, ty) := bind in
+  (glob_id x, ty).
+Definition make_arg (arg: ident * typ): Clight.expr :=
+  let (x, ty) := arg in
+  Clight.Evar (glob_id x) ty.
+
+Definition make_main (node: ident) (f: ident) (ins: list (ident * typ)) (out: ident * typ)
+  : AST.globdef Clight.fundef Ctypes.type :=
+  let (out, out_ty) := out in
+  let args := List.map make_arg ins in
+  let step := step_call None out out node f args out_ty in
+  let loop := Clight.Sloop ((* Clight.Ssequence wait *) step) Clight.Sskip in
+  let body := return_zero ((* Clight.Ssequence (reset_call None node f) *) loop) in
+  fundef [] [] Ctypes.type_int32s [(out, out_ty)] body.
+
+Definition vardef (init volatile: bool) (x: ident * typ): ident * AST.globdef Clight.fundef Ctypes.type :=
+  let (x, ty) := x in
+  let ty' := Ctypes.merge_attributes ty (Ctypes.mk_attr volatile None) in
+  (x, @AST.Gvar Clight.fundef _
+                (AST.mkglobvar ty' (if init then [AST.Init_space Z0] else []) false volatile)).
 
 Definition translate (p: program) (main_node: ident)
   : Errors.res Clight.program :=
-  let structs := List.map translate_class p in
   match find_class main_node p with
   | Some (cls, _) =>
-    let main := make_main (translate_stmt main_node cls.(c_step)) cls.(c_vars) in
-    Clight.make_program structs [(main_id, main)] [] main_id
-    | None => Errors.Error (Errors.msg "undefined node")
+    let f := glob_id main_node in
+    let ins := nelist2list cls.(c_input) in
+    let out' := glob_bind cls.(c_output) in
+    let main := make_main main_node f ins out' in
+    let cs := List.map translate_class p in
+    let f_gvar := vardef true false (f, type_of_inst main_node) in
+    let o_gvar := vardef true true out' in
+    let ins' := List.map glob_bind ins in
+    let ins_gvar := List.map (vardef true true) ins' in
+    let (structs, steps) := split cs in
+    let gdefs := f_gvar :: o_gvar :: ins_gvar ++ steps ++ [(main_id, main)] in
+    Clight.make_program structs gdefs [] main_id                    
+  | None => Errors.Error (Errors.msg "undefined node")
   end.

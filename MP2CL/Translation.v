@@ -180,7 +180,7 @@ Fixpoint translate_stmt (temp: option cl_bind) (owner: cl_ident) (s: stmt)
     let y := translate_ident y in
     let cls := translate_ident cls in
     let x := translate_ident x in
-    let args := nelist2list (Nelist.map (translate_exp cls) es) in
+    let args := nelist2list (Nelist.map (translate_exp owner ) es) in (* owner or cls ? *)
     let out_ty := translate_type ty in
     let temp' := match temp with Some t => t | None => (first_unused_ident tt, out_ty) end in
     let s_step := step_call (Some owner) y (fst temp') cls x args out_ty in 

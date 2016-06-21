@@ -2,7 +2,7 @@ Require Import lib.Integers.
 Require Import lib.Floats.
 Require cfrontend.Ctypes.
 
-Require Import Rustre.Common.
+Require Import Rustre.Common Rustre.Nelist.
 
 Require Import String.
 Require Import List.
@@ -40,25 +40,31 @@ Definition typeof (e: exp): typ :=
   end.
 
 Inductive stmt : Type :=
-| Assign: ident -> exp -> stmt       (* x = e *)
-| AssignSt: ident -> exp -> stmt     (* self.x = e *)
-| Ifte : exp -> stmt -> stmt -> stmt  (* if e then s1 else s2 *)
-| Comp: stmt -> stmt -> stmt         (* s1; s2 *)
-| Skip.                            (*  *)
+| Assign: ident -> exp -> stmt                               (* x = e *)
+| AssignSt: ident -> exp -> stmt                             (* self.x = e *)
+| Ifte: exp -> stmt -> stmt -> stmt                           (* if e then s1 else s2 *)
+| Comp: stmt -> stmt -> stmt                                 (* s1; s2 *)
+| Step_ap: ident -> typ -> ident -> ident -> nelist exp -> stmt (* y:ty = (C x).step(es) *)  
+| Skip.                                                    (*  *)
 
 Record obj_dec : Type :=
   mk_obj_dec {
-      obj_inst  : ident;
-      obj_class : ident
+      obj_inst : ident;
+      obj_class: ident
     }.
 
 Record class : Type :=
   mk_class {
-      c_name : ident;
-      c_mems : list (ident * typ);
-      c_objs : list obj_dec;
-      c_vars : list (ident * typ);  
-      c_step : stmt 
+      c_name  : ident;
+
+      c_input : nelist (ident * typ);
+      c_output: ident * typ;
+      c_vars  : list (ident * typ);
+        
+      c_mems  : list (ident * typ);
+      c_objs  : list obj_dec;
+
+      c_step  : stmt 
     }.
 
 Definition program : Type := list class.
