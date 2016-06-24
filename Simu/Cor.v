@@ -922,6 +922,7 @@ Section PRESERVATION.
 
       (* assignment: "y = $t" *)
       + edestruct Hvars; eauto.
+        (* not the right memory witness lemma here !!! *)
         edestruct compat_assign_pres with (x:=y) (c:=c); iauto.
         admit. skip.
         eapply ClightBigstep.exec_Sassign; iauto. 
