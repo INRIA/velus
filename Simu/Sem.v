@@ -90,6 +90,13 @@ Proof.
   rewrite H1 in H2; inv H2; reflexivity.
 Qed.
 
+Ltac app_find_inst_det :=
+  match goal with
+  | H1: find_inst ?x ?S ?me1,
+        H2: find_inst ?x ?S ?me2 |- _ =>
+    assert (me1 = me2) by (eapply find_inst_det; eauto); subst me2; clear H2 
+  end.
+
 Theorem exp_eval_det:
   forall S e v1 v2,
     exp_eval S e v1 ->
@@ -107,6 +114,23 @@ Ltac app_exp_eval_det :=
   | H1: exp_eval ?S ?e ?v1,
         H2: exp_eval ?S ?e ?v2 |- _ =>
     assert (v1 = v2) by (eapply exp_eval_det; eauto); subst v2; clear H2 
+  end.
+
+Theorem exps_eval_det:
+  forall S es vs1 vs2,
+    Nelist.Forall2 (exp_eval S) es vs1 ->
+    Nelist.Forall2 (exp_eval S) es vs2 ->
+    vs1 = vs2.
+Proof.
+  induction es, vs1, vs2; intros H1 H2; inverts H1; inverts H2; app_exp_eval_det; auto.  
+  f_equal; apply IHes; auto.
+Qed.
+
+Ltac app_exps_eval_det :=
+  match goal with
+  | H1: Nelist.Forall2 (exp_eval ?S) ?es ?vs1,
+        H2: Nelist.Forall2 (exp_eval ?S) ?es ?vs2 |- _ =>
+    assert (vs1 = vs2) by (eapply exps_eval_det; eauto); subst vs2; clear H2 
   end.
 
 (* =stmt_eval= *)
@@ -146,6 +170,7 @@ with stmt_step_eval: program -> menv -> ident -> nelist val -> menv -> val -> Pr
 
 Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
                          with stmt_step_eval_ind_2 := Minimality for stmt_step_eval Sort Prop.
+Combined Scheme stmt_eval_step_ind from stmt_eval_ind_2, stmt_step_eval_ind_2.
 
 Ltac app_bool_val :=
   match goal with
@@ -179,6 +204,14 @@ Proof.
     split*.
     apply* find_var_det.
 Qed.
+
+Ltac app_stmt_step_eval_det :=
+  match goal with
+  | H1: stmt_step_eval ?prog ?me ?clsid ?vs ?me1 ?rv1,
+        H2: stmt_step_eval ?prog ?me ?clsid ?vs ?me2 ?rv2 |- _ =>
+    let H := fresh in
+    assert (me1 = me2 /\ rv1 = rv2) as H by (eapply stmt_step_eval_det; eauto); inverts H; clear H2
+  end.
 
 Theorem stmt_eval_det:
   forall prog S s S1 S2,

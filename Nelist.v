@@ -122,6 +122,10 @@ Ltac inv H := inversion H; subst; clear H.
 Lemma diff_length_nebase_necons : forall {A B} (a : A) (b : B) l, length (nebase a) <> length (necons b l).
 Proof. intros A B a b [? | ? ?]; simpl; discriminate. Qed.
 
+Lemma nelist2list_length: forall {A} (l: nelist A),
+  length l = List.length (nelist2list l).
+Proof. induction l; simpl; auto. Qed.
+
 (** *** About [nelist2list] *)
 
 Lemma nelist2list_non_empty : forall A (l : nelist A), nelist2list l <> nil.
