@@ -139,6 +139,7 @@ Section PRESERVATION.
       find_inst o S me ->
       stmt_step_eval prog me clsid vs me' rv ->
       valid_val rv ty ->
+      rv = Values.Val.load_result (chunk_of_typ ty) rv ->
       well_formed_stmt c S (Step_ap y ty clsid o es)
   | wf_skip: 
       well_formed_stmt c S Skip.
@@ -446,7 +447,7 @@ Section PRESERVATION.
   Qed.
   
   Lemma compat_assign_pres:
-    forall c S e le m loc x t exp v,
+    forall c S e le m loc x t v,
       In c prog ->
       match_states_bigbig c S (e, le, m) ->
       Maps.PTree.get x e = Some (loc, t) ->
@@ -454,11 +455,10 @@ Section PRESERVATION.
       v = Values.Val.load_result (chunk_of_typ t) v ->
       valid_val v t ->
       x <> self_id ->
-      exp_eval S exp v ->
       exists m', Memory.Mem.store (chunk_of_typ t) m loc 0 v = Some m' 
             /\ match_states_bigbig c (update_var x S v) (e, le, m').
   Proof.
-    introv ? MS Hget Hin Hloadres ? ? ?.
+    introv ? MS Hget Hin Hloadres ? ?.
     inverts MS as Hvenv Hmenv Hvars Hself Hsep Hself_sep Hfields_sep Hnodupenv;
       introv Hnodupvars Hnodupmems.
     edestruct Hvars as (loc' & Hget' & ?); eauto.
@@ -546,7 +546,7 @@ Section PRESERVATION.
   Qed.
 
   Lemma compat_stassign_pres:
-    forall c S e le m x t exp v co loc_self loc_struct ofs delta,
+    forall c S e le m x t v co loc_self loc_struct ofs delta,
       In c prog ->
       match_states_bigbig c S (e, le, m) ->
       Ctypes.field_offset tge.(Clight.genv_cenv) x (Ctypes.co_members co) = Errors.OK delta ->
@@ -557,12 +557,11 @@ Section PRESERVATION.
       v = Values.Val.load_result (chunk_of_typ t) v ->
       valid_val v t ->
      Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable ->
-      exp_eval S exp v ->
       exists m',
         Memory.Mem.store (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) v = Some m'
         /\ match_states_bigbig c (update_field x S v) (e, le, m').
   Proof.
-    intros ** ? MS Hoffset Hget_co Hget_self Hload_self Hin Hloadres ? ? ?.
+    intros ** ? MS Hoffset Hget_co Hget_self Hload_self Hin Hloadres ? ? .
     inverts MS as Hvenv Hmenv Hvars Hself Hsep Hself_sep Hfields_sep Hnodupenv;
       introv Hnodupvars Hnodupmems.
     edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto. 
@@ -798,11 +797,15 @@ Section PRESERVATION.
     /\ (forall p me clsid vs me' rv,
           stmt_step_eval p me clsid vs me' rv ->
           p = prog ->
-          forall m f vargs, 
+          forall c c' prog' m f vargs ve e le,
+            In c prog ->
+            find_class clsid prog = Some (c', prog') ->
             match_step clsid f ->
             match_params vs vargs ->
+            match_states_bigbig c' (me, ve) (e, le, m) ->
             exists m' t,
               ClightBigstep.eval_funcall tge m (Clight.Internal f) vargs t m' rv
+              /\ match_states_bigbig c (me', ve) (e, le, m')
         ).
   Proof.
     clear TRANSL.
@@ -877,70 +880,65 @@ Section PRESERVATION.
 
       (* get the Clight corresponding field *)
       pose proof Hself as Hself'.
-      destruct Hself' as (? & ? & loc_struct & ofs & ? & ? & ? & Hmem & Hobj); auto; clear Hmem.
+      destruct Hself' as (? & ? & loc_struct & ofs & ? & ? & ? & Hmem & Hobj);
+        auto; clear Hmem.
       specializes Hobj Hin; destruct Hobj as (delta).
 
-      (* get the Clight function entry state *)
-      forwards Eq1: ne_Forall2_lengths Htypes.
-      forwards Eq2: ne_Forall2_lengths Hvalids.
-      rewrite Eq2 in Eq1; clear Eq2.
-      rewrite <-Eq1 in Hlengths; clear Eq1.
-      assert (length f.(Clight.fn_params) =
-              length (Values.Vptr loc_struct (Int.add ofs (Int.repr delta)) :: nelist2list vs))
-        by (rewrite Hlengths; simpl; f_equal; rewrite Nelist.nelist2list_length; auto).
-      forwards* (m' & e' & m'' & ? & ?): (compat_funcall_pres m1). 
-
-      (* inverts Step_eval. *)
-
       (* recursive funcall evaluation *)
-      edestruct H2 with
-      (f:=f) (vargs:=Values.Vptr loc_struct (Int.add ofs (Int.repr delta)) :: nelist2list vs);
+      edestruct H2 with (c:=c) (f:=f) (le:=le1)
+                               (vargs:=Values.Vptr loc_struct (Int.add ofs (Int.repr delta)) :: nelist2list vs);
         destruct_conjs; eauto.
       admit.
       admit.
+      skip.
+
+      (* memory state after assignment *)
+      edestruct Hvars; eauto.
+      edestruct compat_assign_pres with (c:=c); destruct_conjs; iauto.
            
-      do 3 econstructor; split~.
-      eapply ClightBigstep.exec_Sseq_1.
+      do 3 econstructor; split.
+      + eapply ClightBigstep.exec_Sseq_1.
 
-      (* funcall: "$t = clsid_step(&(self->o), v1, ..., vn)" *)
-      + eapply ClightBigstep.exec_Scall; eauto.
-        * simpl; eauto.
-        *{ eapply Clight.eval_Elvalue.
-           - apply* Clight.eval_Evar_global.
-           - apply* Clight.deref_loc_reference.
+        (* funcall: "$t = clsid_step(&(self->o), v1, ..., vn)" *)
+        *{ eapply ClightBigstep.exec_Scall; eauto.
+           - simpl; eauto.
+           - eapply Clight.eval_Elvalue.
+             + apply* Clight.eval_Evar_global.
+             + apply* Clight.deref_loc_reference.
+           - econstructor.
+             + eapply Clight.eval_Eaddrof.
+               apply* evall_self_field.
+             + eapply sem_cast_same.
+               unfold valid_val; splits~.
+               * discriminate.
+               * simpl; trivial.
+             + apply* exprs_eval_simu.
+           - eauto.
          }
-        *{ econstructor.
-           - eapply Clight.eval_Eaddrof.
-             apply* evall_self_field.
-           - eapply sem_cast_same.
-             unfold valid_val; splits~.
-             + discriminate.
-             + simpl; trivial.
-           - apply* exprs_eval_simu.
-         }
-        * eauto.
 
-      (* assignment: "y = $t" *)
-      + edestruct Hvars; eauto.
-        (* not the right memory witness lemma here !!! *)
-        edestruct compat_assign_pres with (x:=y) (c:=c); iauto.
-        admit. skip.
-        eapply ClightBigstep.exec_Sassign; iauto. 
-        * eapply Clight.eval_Etempvar; eauto.
+        (* assignment: "y = $t" *)
+        * eapply ClightBigstep.exec_Sassign; iauto. 
+          eapply Clight.eval_Etempvar; eauto.
           destruct temp; try destruct p; eapply Maps.PTree.gss. 
-        (* * eapply sem_cast_same. *)
-        (*   unfold valid_val; splits~. skip. *)
-        *{ econstructor.
-           - destruct* H10. 
-           - skip.
-         }
-      + constructor*.
-        admit.
+
+      + inverts H27. constructor*.
+        skip. skip.
 
     (* Skip : "skip" *)
     - do 3 econstructor; split*.
       eapply ClightBigstep.exec_Sskip.
 
     (* funcall *)
-    - admit.
+    - (* get the Clight function entry state *)
+      (* forwards Eq1: ne_Forall2_lengths Htypes. *)
+      (* forwards Eq2: ne_Forall2_lengths Hvalids. *)
+      (* rewrite Eq2 in Eq1; clear Eq2. *)
+      (* rewrite <-Eq1 in Hlengths; clear Eq1. *)
+      (* assert (length f.(Clight.fn_params) = *)
+      (*         length (Values.Vptr loc_struct (Int.add ofs (Int.repr delta)) :: nelist2list vs)) *)
+      (*   by (rewrite Hlengths; simpl; f_equal; rewrite Nelist.nelist2list_length; auto). *)
+      forwards* (m' & e' & m'' & ? & ?): (compat_funcall_pres m f vargs).
+      admit.
+      admit.
+      inverts H1.
   Qed.
