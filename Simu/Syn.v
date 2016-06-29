@@ -89,6 +89,25 @@ Proof.
   - apply in_cons; auto.
 Qed.
 
+Remark find_class_app:
+  forall id cls c cls',
+    find_class id cls = Some (c, cls') ->
+    exists cls'',
+      cls = cls'' ++ c :: cls'
+      /\ find_class id cls'' = None.
+Proof.
+  intros ** Hfind.
+  induction cls; inversion Hfind as [H].
+  destruct (ident_eqb (c_name a) id) eqn: E.
+  - inversion H; subst. 
+    exists nil; auto.
+  - specialize (IHcls H).
+    destruct IHcls as (cls'' & Hcls'' & Hnone).
+    rewrite Hcls''.
+    exists (a :: cls''); split; auto.
+    simpl; rewrite E; auto.
+Qed.
+
 Remark find_class_name:
   forall id cls c cls',
     find_class id cls = Some (c, cls') ->
