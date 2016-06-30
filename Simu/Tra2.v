@@ -121,7 +121,7 @@ Definition fundef
            (temps: list (ident * typ)) (body: Clight.statement)
   : AST.globdef Clight.fundef Ctypes.type :=
   let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
-  @AST.Gfun Clight.fundef typ (Clight.Internal f).
+  @AST.Gfun Clight.fundef typ (Ctypes.Internal f).
 
 Definition make_step
            (self: ident * typ) (ins: list (ident * typ)) (out: ident * typ)
@@ -177,6 +177,30 @@ Definition vardef (init volatile: bool) (x: ident * typ): ident * AST.globdef Cl
   (x, @AST.Gvar Clight.fundef _
                 (AST.mkglobvar ty' (if init then [AST.Init_space Z0] else []) false volatile)).
 
+Definition build_composite_env' (types: list Ctypes.composite_definition) :
+  { ce | Ctypes.build_composite_env types = Errors.OK ce } + Errors.errmsg.
+Proof.
+  destruct (Ctypes.build_composite_env types) as [ce|msg].
+  - left. exists ce; auto.
+  - right. exact msg.
+Defined.
+
+Definition make_program
+           (types: list Ctypes.composite_definition)
+           (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
+           (public: list ident)
+           (main: ident) : Errors.res Clight.program :=
+  match build_composite_env' types with
+  | inl (exist ce P) =>
+      Errors.OK {| Ctypes.prog_defs := defs;
+                   Ctypes.prog_public := public;
+                   Ctypes.prog_main := main;
+                   Ctypes.prog_types := types;
+                   Ctypes.prog_comp_env := ce;
+                   Ctypes.prog_comp_env_eq := P |}
+  | inr msg => Errors.Error msg
+  end.
+
 Definition translate (p: program) (main_node: ident)
   : Errors.res Clight.program :=
   match find_class main_node p with
@@ -192,6 +216,6 @@ Definition translate (p: program) (main_node: ident)
     let ins_gvar := List.map (vardef true true) ins' in
     let (structs, steps) := split cs in
     let gdefs := f_gvar :: o_gvar :: ins_gvar ++ steps ++ [(main_id, main)] in
-    Clight.make_program structs gdefs [] main_id                    
+    make_program structs gdefs [] main_id                    
   | None => Errors.Error (Errors.msg "undefined node")
   end.

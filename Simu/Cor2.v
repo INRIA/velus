@@ -1,5 +1,6 @@
-Require Import ClightBigstep2.
 Require cfrontend.Clight.
+Require Import cfrontend.ClightBigstep.
+
 Require Import lib.Integers.
 
 Require Import Rustre.Common.
@@ -62,9 +63,9 @@ Section PRESERVATION.
     /\ Values.Val.has_type v (Ctypes.typ_of_type t).
 
   Lemma sem_cast_same:
-    forall v t,
+    forall m v t,
       valid_val v t ->
-      Cop.sem_cast v t t = Some v.
+      Cop.sem_cast v t t m = Some v.
   Proof.
     unfold valid_val; intros; destruct_pairs.
     destruct t, v;
@@ -309,8 +310,8 @@ Section PRESERVATION.
       exists loc_f f,
         Globalenvs.Genv.find_symbol tge.(Clight.genv_genv) (step_id c.(c_name)) = Some loc_f
         /\ Maps.PTree.get (step_id c.(c_name)) e = None
-        /\ Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Clight.Internal f)
-        /\ Clight.type_of_fundef (Clight.Internal f) =
+        /\ Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Ctypes.Internal f)
+        /\ Clight.type_of_fundef (Ctypes.Internal f) =
           Ctypes.Tfunction (Ctypes.Tcons (type_of_inst_p c.(c_name))
                                          (list_type_to_typelist (map snd (nelist2list c.(c_input)))))
                            (snd c.(c_output)) AST.cc_default
@@ -487,7 +488,7 @@ Section PRESERVATION.
   Qed.
   
   Lemma compat_funcall_pres:
-    forall c S' S m o f me vargs vptr vs,
+    forall c m S' S o f me vargs vptr vs,
       Datatypes.length (Clight.fn_params f) = Datatypes.length vargs ->
       Clight.fn_params f = (self_id, type_of_inst_p c.(c_name)) :: nelist2list c.(c_input) ->
       match_states_bigbig c S S' ->
@@ -562,8 +563,8 @@ Section PRESERVATION.
             e1 le1 m1 
             (MS: match_states_bigbig c S1 (e1, le1, m1)),
           exists le2 m2 t,
-            exec_stmt_2 tge e1 le1 m1 (translate_stmt c.(c_name) s)
-                        t le2 m2 ClightBigstep.Out_normal
+            exec_stmt tge (Clight.function_entry2 tge) e1 le1 m1 (translate_stmt c.(c_name) s)
+                       t le2 m2 ClightBigstep.Out_normal
             /\ match_states_bigbig c S2 (e1, le2, m2))
     /\ (forall p me clsid vs me' rv,
           stmt_step_eval p me clsid vs me' rv ->
@@ -575,13 +576,13 @@ Section PRESERVATION.
             well_formed_stmt c' (me, adds (Nelist.map_fst c'.(c_input)) vs v_empty) c'.(c_step) ->
             match_states_bigbig c S (e, le, m) ->
             Globalenvs.Genv.find_symbol tge.(Clight.genv_genv) (step_id clsid) = Some loc_f ->
-            Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Clight.Internal f) ->
+            Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Ctypes.Internal f) ->
             find_inst o S me ->
             find_class clsid prog = Some (c', prog') ->
             List.length f.(Clight.fn_params) = 1 + Nelist.length vs ->
             Clight.eval_expr tge e le m (ptr_obj (Some c.(c_name)) clsid o) vptr ->
             exists m' t,
-              eval_funcall_2 tge m (Clight.Internal f) (vptr :: nelist2list vs) t m' rv
+              eval_funcall tge (Clight.function_entry2 tge) m (Ctypes.Internal f) (vptr :: nelist2list vs) t m' rv
               /\ match_states_bigbig c (update_inst o S me') (e, le, m')
         ).
   Proof.
@@ -678,7 +679,8 @@ Section PRESERVATION.
       rewrite Hfind' in Hfind''; inverts Hfind''.
       
       (* rewrite Hfind in Hfind'; inverts Hfind'. *)
-      destruct Hstep with (c:=cls) as (loc_f' & f' & Hget_loc_f' & ? & Hget_f' & ?); destruct_conjs; eauto.
+      destruct Hstep with (c:=cls) as (loc_f' & f' & Hget_loc_f' & ? & Hget_f' & ? & ? & ? & ? & Htr & ?);
+        destruct_conjs; eauto.
       forwards Eq: find_class_name Hfind.
       rewrite Eq in Hget_loc_f'; clear Eq.
       rewrite Hget_loc_f' in Hget_loc_f; inverts Hget_loc_f.
@@ -687,7 +689,7 @@ Section PRESERVATION.
       assert (length f.(Clight.fn_params) = length (vptr :: nelist2list vs))
         by (rewrite Hlengths; simpl; f_equal; rewrite Nelist.nelist2list_length; auto).
 
-      forwards* (m_fun & e_fun & le_fun & ? & ? & ?): (compat_funcall_pres cls).
+      forwards* (m_fun & e_fun & le_fun & ? & ? & ?): (compat_funcall_pres cls m).
       + skip.
       + forwards* Hsub: find_class_sub.
         subst env.
@@ -696,7 +698,8 @@ Section PRESERVATION.
         
         do 2 econstructor; split.
         apply* eval_funcall_internal.
-        * rewrite* H12.
+        * constructor*.
+        * rewrite* Htr.
         * admit.
         * skip.
         * skip.
