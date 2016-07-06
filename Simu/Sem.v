@@ -367,6 +367,16 @@ Proof.
     apply* find_var_det.
 Qed.
 
+Ltac app_stmt_step_eval_det' :=
+  match goal with
+  | H1: stmt_step_eval ?prog1 ?me ?clsid ?vs ?me1 ?rv1,
+        H2: stmt_step_eval ?prog2 ?me ?clsid ?vs ?me2 ?rv2, 
+            H3: sub_prog ?prog2 ?prog1,
+                H4: unique_classes ?prog1 |- _ =>
+    let H := fresh in
+    assert (me1 = me2 /\ rv1 = rv2) as H by (applys stmt_step_eval_det' H4 H1 H2 H3; eauto); inverts H; clear H2
+  end.
+
 Theorem stmt_eval_det':
   forall prog1 prog2 S s S1 S2,
     unique_classes prog1 ->

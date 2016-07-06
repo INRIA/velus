@@ -128,10 +128,12 @@ Proof. induction l; simpl; auto. Qed.
 
 (** *** About [nelist2list] *)
 
-Lemma nelist2list_non_empty : forall A (l : nelist A), nelist2list l <> nil.
+Lemma nelist2list_non_empty : forall {A} (l : nelist A), nelist2list l <> nil.
 Proof. intros A [e | e l]; simpl; discriminate. Qed.
 
-
+Lemma nelist2list_cons: forall {A} x (l : nelist A), nelist2list (necons x l) = cons x (nelist2list l).
+Proof. reflexivity. Qed.
+  
 Lemma nelist2list_In : forall {A} (x : A) l, List.In x (nelist2list l) <-> In x l.
 Proof. intros A x l. induction l; simpl; try rewrite IHl; intuition. Qed.
 

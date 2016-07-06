@@ -67,6 +67,9 @@ Record class : Type :=
       c_step  : stmt 
     }.
 
+Definition class_vars (c: class): list (ident * typ) :=
+  c.(c_output) :: nelist2list c.(c_input) ++ c.(c_vars).
+
 Definition program : Type := list class.
 
 Definition find_class (n: ident) : program -> option (class * list class) :=
