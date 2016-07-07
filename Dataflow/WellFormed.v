@@ -76,7 +76,7 @@ A CoreDF program is well defined if
       forall nd nds,
         Welldef_global nds ->
         let eqs := nd.(n_eqs) in
-        let ni := Nelist.nefst nd.(n_input) in
+        let ni := Nelist.map_fst nd.(n_input) in
         let no := fst nd.(n_output) in
         NoDup (Nelist.nelist2list ni)
         -> Is_well_sch (memories eqs) ni eqs
@@ -265,7 +265,7 @@ Module WellFormedFun
   (*     Welldef_global G *)
   (*     -> find_node f G = Some fnode *)
   (*     -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs)) *)
-  (*         (Nelist.nefst fnode.(n_input)). *)
+  (*         (Nelist.map_fst fnode.(n_input)). *)
   (* Proof. *)
   (*   induction G as [|node G IH]; [inversion_clear 2|]. *)
   (*   intros fnode HWdef Hfnode. *)

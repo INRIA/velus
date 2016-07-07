@@ -108,7 +108,7 @@ Module Type CLOCKING
   | SNode:
       forall f i o v eqs,
         Forall (Well_clocked_eq C) eqs ->
-        clk_vars C (Nelist.nefst i) Cbase ->
+        clk_vars C (Nelist.map_fst i) Cbase ->
         clk_var C (fst o) Cbase ->
         Well_clocked_node C (mk_node f i o v eqs).
 

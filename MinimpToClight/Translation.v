@@ -209,7 +209,7 @@ Definition fundef
            (temps: list cl_bind) (body: cl_stmt)
   : cl_globdef :=
   let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
-  @AST.Gfun Clight.fundef cl_type (Clight.Internal f).
+  @AST.Gfun Clight.fundef cl_type (Ctypes.Internal f).
 
 (** build the step function *)
 Definition make_step
@@ -312,7 +312,7 @@ Definition make_wait: cl_ident * cl_globdef :=
   let sig := AST.mksignature [AST.Tint] None AST.cc_default in
   (wait_id,
    @AST.Gfun _ cl_type
-             (Clight.External (AST.EF_external (pos_to_str wait_id) sig)
+             (Ctypes.External (AST.EF_external (pos_to_str wait_id) sig)
                               (Ctypes.Tcons cl_int Ctypes.Tnil)
                               cl_void AST.cc_default)).
 
@@ -338,7 +338,7 @@ Definition translate (p: program) (main_node: ident)
                            :: f_gvar :: o_gvar :: ins_gvar ++
                            resets ++ steps ++ [(main_id, main)]
     in
-    Clight.make_program structs gdefs [] main_id                    
+    Ctypes.make_program structs gdefs [] main_id                    
   | None => Errors.Error (Errors.msg "undefined node")
   end. 
 

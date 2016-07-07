@@ -2,7 +2,7 @@
 
 open Common
 open Location
-open DF2CL.SynDF
+open DataflowToClight.SynDF
 open Nelist
 open Interface
 open Integers

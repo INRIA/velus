@@ -315,7 +315,7 @@ environment.
              clock_of xss bk ->
              find_node f G = Some (mk_node f i o v eqs) ->
              (exists H,
-                 sem_vars bk H (Nelist.nefst i) xss
+                 sem_vars bk H (Nelist.map_fst i) xss
                  /\ sem_var bk H (fst o) ys
                  (* XXX: This should be in Welldef_glob: *)
                  (* output clock matches input clock *) 
@@ -438,12 +438,12 @@ enough: it does not support the internal fixpoint introduced by
         (Hck : clock_of xss bk)
 	    (Hf  : find_node f G = Some (mk_node f i o v eqs))
         (Heqs : exists H,
-            sem_vars bk H (Nelist.nefst i) xss
+            sem_vars bk H (Nelist.map_fst i) xss
 	        /\ sem_var bk H (fst o) ys
             /\ (forall n, absent_list xss n <-> ys n = absent)
 	        /\ List.Forall (sem_equation G bk H) eqs),
         (exists H,
-            sem_vars bk H (Nelist.nefst i) xss
+            sem_vars bk H (Nelist.map_fst i) xss
             /\ sem_var bk H (fst o) ys
             /\ (forall n, absent_list xss n <-> ys n = absent)
             /\ List.Forall (fun eq=> exists Hsem, P bk H eq Hsem) eqs)

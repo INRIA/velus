@@ -9,10 +9,10 @@ Open Scope positive.
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
 Require Import Rustre.Minimp.
-Require Import Rustre.DF2MP.Translation.
-Require Import Rustre.DF2MP.Correctness.Proper.
-Require Import Rustre.DF2MP.Correctness.IsPresent.
-Require Import Rustre.DF2MP.Correctness.MemoryCorres.
+Require Import Rustre.DataflowToMinimp.Translation.
+Require Import Rustre.DataflowToMinimp.Correctness.Proper.
+Require Import Rustre.DataflowToMinimp.Correctness.IsPresent.
+Require Import Rustre.DataflowToMinimp.Correctness.MemoryCorres.
 Require Import Rustre.Minimp.FuseIfte.
 
 Module Type CORRECTNESS
@@ -1223,7 +1223,7 @@ for all [Is_free_exp x e]. *)
 
           rename i into inArg; rename o into outArg; rename eqs0 into eqs.
 
-          set (inArg_fst := Nelist.nefst inArg).
+          set (inArg_fst := Nelist.map_fst inArg).
           set (env := adds inArg_fst inputs sempty).
 
           assert (msem_equations G bk H M eqs)
@@ -1539,7 +1539,7 @@ for all [Is_free_exp x e]. *)
           eapply Forall_msem_equation_global_tl; try eassumption.
         }
 
-        set (inArg_fst := Nelist.nefst inArg).
+        set (inArg_fst := Nelist.map_fst inArg).
         assert (Is_well_sch (memories eqs) inArg_fst eqs)
           by (inversion Hwdef; subst ni eqs0;
               rewrite Hfind in *; simpl in *; assumption).

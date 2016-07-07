@@ -4,7 +4,8 @@ open Printf
 open Clight
 open C2C
 open Builtins
-
+open Ctypes
+    
 open Location
 
 let print_c = ref false
@@ -25,7 +26,7 @@ let add_builtin p (name, (out, ins, b)) =
   let id' = coqstring_of_camlstring name in
   let targs = List.map (convertTyp env) ins |> Translation0.list_type_to_typelist in
   let tres = convertTyp env out in
-  let sg = Ctypes.signature_of_type targs tres AST.cc_default in
+  let sg = signature_of_type targs tres AST.cc_default in
   let ef =
     if name = "malloc" then AST.EF_malloc else
     if name = "free" then AST.EF_free else
@@ -73,7 +74,7 @@ let compile filename =
     let lexbuf = Lexing.from_channel ic in
     let p = parse_implementation lexbuf in
     let p = Elab.elab_global p in
-    match DF2CL.compile p (intern_string (Filename.basename filename)) with
+    match DataflowToClight.compile p (intern_string (Filename.basename filename)) with
     | Error errmsg -> print_error stderr errmsg
     | OK p ->
       if !print_c then

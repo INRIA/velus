@@ -94,11 +94,11 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 ######################
 
 VFILES:=RMemory.v\
-  DF2MP/Correctness.v\
-  DF2MP/Correctness/MemoryCorres.v\
-  DF2MP/Correctness/IsPresent.v\
-  DF2MP/Correctness/Proper.v\
-  DF2MP/Translation.v\
+  DataflowToMinimp/Correctness.v\
+  DataflowToMinimp/Correctness/MemoryCorres.v\
+  DataflowToMinimp/Correctness/IsPresent.v\
+  DataflowToMinimp/Correctness/Proper.v\
+  DataflowToMinimp/Translation.v\
   Minimp.v\
   Minimp/FuseIfte.v\
   Minimp/Equiv.v\
@@ -126,8 +126,8 @@ VFILES:=RMemory.v\
   Nelist.v\
   Common.v\
   Interface.v\
-  MP2CL/Translation.v\
-  DF2CL.v
+  MinimpToClight/Translation.v\
+  DataflowToClight.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
@@ -197,7 +197,7 @@ test: compcert all extraction extr
 extraction: extraction/STAMP
 
 extraction/STAMP: $(VOFILES) extraction/Extraction.v
-	@mkdir extraction/extract
+	@mkdir -p extraction/extract
 	@rm -f extraction/extract/*.*
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP

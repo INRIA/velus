@@ -1,7 +1,7 @@
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
-Require Import Rustre.DF2CL.
-Require Import Rustre.MP2CL.Translation.
+Require Import Rustre.DataflowToClight.
+Require Import Rustre.MinimpToClight.Translation.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping
@@ -76,8 +76,10 @@ Extract Constant Cabs.char_code => "int64".
 Separate Extraction
          ZArith.BinIntDef
          Compiler.transf_clight_program Cabs
-         DF2CL
+         DataflowToClight
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg
-         Conventions1.dummy_int_reg Conventions1.dummy_float_reg.
+         Conventions1.dummy_int_reg Conventions1.dummy_float_reg
+         Conventions1.int_callee_save_regs Conventions1.int_caller_save_regs
+         Conventions1.float_callee_save_regs Conventions1.float_caller_save_regs.

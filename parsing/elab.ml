@@ -1,5 +1,5 @@
 open Common
-open DF2CL.SynDF
+open DataflowToClight.SynDF
 open Interface
 open Nelist
 open Camlcoq
