@@ -40,12 +40,17 @@ Definition typeof (e: exp): typ :=
   end.
 
 Inductive stmt : Type :=
-| Assign: ident -> exp -> stmt                               (* x = e *)
-| AssignSt: ident -> exp -> stmt                             (* self.x = e *)
-| Ifte: exp -> stmt -> stmt -> stmt                           (* if e then s1 else s2 *)
-| Comp: stmt -> stmt -> stmt                                 (* s1; s2 *)
-| Step_ap: ident -> typ -> ident -> ident -> nelist exp -> stmt (* y:ty = (C x).step(es) *)  
-| Skip.                                                    (*  *)
+| Assign:                (* x = e *)
+    ident -> exp -> stmt  
+| AssignSt:              (* self.x = e *)
+    ident -> exp -> stmt
+| Ifte:                  (* if e then s1 else s2 *)
+    exp -> stmt -> stmt -> stmt
+| Comp:                  (* s1; s2 *)
+    stmt -> stmt -> stmt   
+| Step_ap:               (* (y1:t1,...,yn:tn) = (C x).step(es) *)  
+    nelist (ident * typ) -> ident -> ident -> nelist exp -> stmt 
+| Skip.                  (*  *)
 
 Record obj_dec : Type :=
   mk_obj_dec {
@@ -58,7 +63,7 @@ Record class : Type :=
       c_name  : ident;
 
       c_input : nelist (ident * typ);
-      c_output: ident * typ;
+      c_output: nelist (ident * typ);
       c_vars  : list (ident * typ);
         
       c_mems  : list (ident * typ);
@@ -68,7 +73,7 @@ Record class : Type :=
     }.
 
 Definition class_vars (c: class): list (ident * typ) :=
-  c.(c_output) :: nelist2list c.(c_input) ++ c.(c_vars).
+  nelist2list c.(c_output) ++ nelist2list c.(c_input) ++ c.(c_vars).
 
 Definition program : Type := list class.
 
