@@ -1,4 +1,4 @@
-Require cfrontend.ClightBigstep.
+Require Import cfrontend.ClightBigstep.
 Require cfrontend.Clight.
 Require Import lib.Integers.
 
@@ -31,23 +31,7 @@ Section PRESERVATION.
   Definition pointer_of_node node := pointer_of (type_of_inst node).
 
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
-  Hypothesis STEPS:
-    forall c (e: Clight.env),
-      In c prog ->
-      exists loc_f f,
-        Globalenvs.Genv.find_symbol tge.(Clight.genv_genv) (step_id c.(c_name)) = Some loc_f
-        /\ Maps.PTree.get (step_id c.(c_name)) e = None
-        /\ Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Clight.Internal f)
-        /\ Clight.type_of_fundef (Clight.Internal f) =
-          Ctypes.Tfunction (Ctypes.Tcons (type_of_inst_p c.(c_name))
-                                         (list_type_to_typelist (map snd (nelist2list c.(c_input)))))
-                                         (snd c.(c_output))
-                                         AST.cc_default
-        /\ Coqlib.list_norepet (Clight.var_names (Clight.fn_params f) ++ Clight.var_names (Clight.fn_vars f))
-        /\ Clight.fn_body f = snd (translate_stmt None c.(c_name) c.(c_step))
-        /\ length f.(Clight.fn_params) = 1 + Nelist.length c.(c_input)  
-        /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x)))
-                 (f.(Clight.fn_params) ++ f.(Clight.fn_vars)).
+  Hypothesis UNIQUE: unique_classes prog.
   
   (* Hypothesis WF: well_formed prog. *)
   (* Hypothesis MAINNODE: find_class main_node prog = Some (c_main, cls_main). *)
@@ -78,9 +62,9 @@ Section PRESERVATION.
     /\ Values.Val.has_type v (Ctypes.typ_of_type t).
 
   Lemma sem_cast_same:
-    forall v t,
+    forall m v t,
       valid_val v t ->
-      Cop.sem_cast v t t = Some v.
+      Cop.sem_cast v t t m = Some v.
   Proof.
     unfold valid_val; intros; destruct_pairs.
     destruct t, v;
@@ -90,7 +74,7 @@ Section PRESERVATION.
 
   Inductive well_formed_exp (c: class): exp -> Prop :=
   | wf_var: forall x ty,
-      In (x, ty) c.(c_vars) ->
+      In (x, ty) (class_vars c) ->
       x <> self_id ->
       well_formed_exp c (Var x ty)
   | wf_state: forall x ty,
@@ -101,7 +85,7 @@ Section PRESERVATION.
 
   Inductive well_formed_stmt (c: class) (S: state): stmt -> Prop :=
   | wf_assign: forall x e v,
-      In (x, typeof e) c.(c_vars) ->
+      In (x, typeof e) (class_vars c) ->
       x <> self_id ->
       well_formed_exp c e ->
       exp_eval S e v ->
@@ -126,33 +110,40 @@ Section PRESERVATION.
       stmt_eval prog S s1 S' ->
       well_formed_stmt c S' s2 ->
       well_formed_stmt c S (Comp s1 s2)
-  | wf_step: forall y ty c' prog' clsid o es vs me me' rv,
-      In (y, ty) c.(c_vars) ->
-      y <> self_id ->
+  | wf_step: forall ys c' prog' clsid o es vs me me' rvs,
+      (* In (y, ty) (class_vars c) -> *)
+      Nelist.length ys = Nelist.length rvs ->
+      Nelist.Forall (fun y => In y (class_vars c)) ys ->
+      (* y <> self_id -> *)
       In {| obj_inst := o; obj_class := clsid |} c.(c_objs) ->
       find_class clsid prog = Some (c', prog') ->
       Nelist.Forall (well_formed_exp c) es ->
       Nelist.Forall2 (exp_eval S) es vs ->
       Nelist.Forall2 (fun e v => valid_val v (typeof e)) es vs ->
       Nelist.Forall2 (fun e x => typeof e = snd x) es c'.(c_input) ->
-      ty = snd c'.(c_output) ->
-      find_inst o S me ->
-      stmt_step_eval prog me clsid vs me' rv ->
-      valid_val rv ty ->
-      rv = Values.Val.load_result (chunk_of_typ ty) rv ->
-      well_formed_stmt c S (Step_ap y ty clsid o es)
+      (* ty = snd c'.(c_output) -> *)
+      find_inst S o me ->
+      well_formed_stmt c' (me, adds (Nelist.map_fst c'.(c_input)) vs v_empty) c'.(c_step) ->
+      stmt_step_eval prog me clsid vs me' rvs ->
+      (* valid_val rv ty -> *)
+      (* ty <> Ctypes.Tvoid -> *)
+      well_formed_stmt c S (Step_ap ys clsid o es)
   | wf_skip: 
       well_formed_stmt c S Skip.
 
-  Definition compat_vars (c: class) (e: Clight.env) (m: Memory.Mem.mem): Prop :=
+  Definition compat_vars (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop :=
     forall x t,
       In c prog ->
-      In (x, t) c.(c_vars) ->
+      In (x, t) (class_vars c) ->
       exists loc,
         Maps.PTree.get x e = Some (loc, t)
-        /\ Memory.Mem.valid_access m (chunk_of_typ t) loc 0 Memtype.Writable.
+        /\ Memory.Mem.valid_access m (chunk_of_typ t) loc 0 Memtype.Writable
+        /\ forall v,
+            find_var S x v ->
+            Memory.Mem.load (chunk_of_typ t) m loc 0 = Some v
+            /\ valid_val v t.
 
-  Definition compat_self (c: class) (e: Clight.env) (m: Memory.Mem.mem): Prop :=
+  Definition compat_self (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop :=
     In c prog ->
     exists co loc_self loc_struct ofs,
       Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name))
@@ -163,12 +154,16 @@ Section PRESERVATION.
             exists delta,
               Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta
               /\ In (x, t) (Ctypes.co_members co)
-              /\ Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable)
-      /\ (forall o,
-            In o c.(c_objs) ->
-            exists delta,
-              Ctypes.field_offset (Clight.genv_cenv tge) o.(obj_inst) (Ctypes.co_members co) = Errors.OK delta).
-
+              /\ Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable
+              /\ forall v,
+                  find_field S x v ->
+                  Memory.Mem.load (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v
+                  /\ valid_val v t)
+      /\ forall o,
+          In o c.(c_objs) ->
+          exists delta,
+            Ctypes.field_offset (Clight.genv_cenv tge) o.(obj_inst) (Ctypes.co_members co) = Errors.OK delta.
+  
   (* Definition compat_fields (c: class) (e: Clight.env) (m: Memory.Mem.mem): Prop := *)
   (*   forall x t co loc_self loc_struct ofs, *)
   (*     In c prog -> *)
@@ -181,46 +176,52 @@ Section PRESERVATION.
   (*       /\ In (x, t) (Ctypes.co_members co) *)
   (*       /\ Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable. *)
   
-  Definition compat_venv (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem):  Prop :=
-    forall x v t loc,
-      In c prog ->
-      In (x, t) c.(c_vars) ->
-      Maps.PTree.get x e = Some (loc, t) ->
-      find_var x S v ->
-      Memory.Mem.load (chunk_of_typ t) m loc 0 = Some v
-      /\ valid_val v t.
+  (* Definition compat_venv (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem):  Prop := *)
+  (*   forall x v t loc, *)
+  (*     In c prog -> *)
+  (*     In (x, t) (class_vars c) -> *)
+  (*     Maps.PTree.get x e = Some (loc, t) -> *)
+  (*     find_var x S v -> *)
+  (*     Memory.Mem.load (chunk_of_typ t) m loc 0 = Some v *)
+  (*     /\ valid_val v t. *)
   
-  Definition compat_menv (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem):  Prop :=
-    forall x v t co loc_self loc_struct ofs delta,
-      In c prog -> 
-      In (x, t) c.(c_mems) ->
-      find_field x S v ->
-      Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) ->
-      Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) ->
-      Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co ->
-      Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta ->
-      Memory.Mem.load (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v
-      /\ valid_val v t.
+  (* Definition compat_menv (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem):  Prop := *)
+  (*   forall x v t co loc_self loc_struct ofs delta, *)
+  (*     In c prog ->  *)
+  (*     In (x, t) c.(c_mems) -> *)
+  (*     find_field x S v -> *)
+  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) -> *)
+  (*     Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) -> *)
+  (*     Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co -> *)
+  (*     Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta -> *)
+  (*     Memory.Mem.load (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v *)
+  (*     /\ valid_val v t. *)
   
   Remark valid_val_implies_access:
     forall v t, valid_val v t -> Ctypes.access_mode t = Ctypes.By_value (chunk_of_typ t).
   Proof. introv H; apply H. Qed.
-    
+
+  Remark valid_val_not_void:
+    forall v t, valid_val v t -> t <> Ctypes.Tvoid.
+  Proof.
+    introv H E; subst.
+    inverts H; discriminate.
+  Qed.
+  
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
   Hint Resolve valid_val_implies_access.
 
   Remark eval_var:
     forall c S e le m x t v,
-      compat_vars c e m ->
-      compat_venv c S e m ->
+      compat_vars c S e m ->
       In c prog ->
-      In (x, t) c.(c_vars) ->
-      find_var x S v ->
+      In (x, t) (class_vars c) ->
+      find_var S x v ->
       Clight.eval_expr tge e le m (Clight.Evar x t) v.
   Proof.
-    introv Hvars Hvenv ? ? ?.
-    edestruct Hvars; eauto.
-    edestruct Hvenv; iauto.
+    introv Hvars ? ? Find.
+    edestruct Hvars as (? & ? & ? & Hmem); eauto.
+    specializes Hmem Find.
     eapply Clight.eval_Elvalue, Clight.deref_loc_value; iauto. 
   Qed.
 
@@ -245,17 +246,16 @@ Section PRESERVATION.
   
   Remark eval_self_field:
     forall c S e le m x t v,
-      compat_self c e m ->
-      compat_menv c S e m ->
+      compat_self c S e m ->
       In c prog ->
       In (x, t) c.(c_mems) ->
-      find_field x S v ->
+      find_field S x v ->
       Clight.eval_expr tge e le m (deref_self_field c.(c_name) x t) v.
   Proof.
-    introv Hself Hmenv ? Hin ?.
+    introv Hself ? Hin Find.
     destruct* Hself as (? & ? & ? & ? & ? & ? & ? & Hmem & ?).  
-    specializes Hmem Hin; destruct_conjs.
-    edestruct Hmenv; eauto; destruct_conjs. 
+    forwards (? & ? & ? & ? & Hmem'): Hmem Hin.
+    specializes Hmem' Find.
     eapply Clight.eval_Elvalue.
     + apply* evall_self_field.
     + apply* Clight.deref_loc_value.      
@@ -263,17 +263,15 @@ Section PRESERVATION.
   
   Lemma expr_eval_simu:
     forall c S exp v e le m,
-      compat_vars c e m ->
-      compat_self c e m ->
-      compat_venv c S e m ->
-      compat_menv c S e m ->
+      compat_vars c S e m ->
+      compat_self c S e m ->
       In c prog ->
       well_formed_exp c exp ->
       exp_eval S exp v ->
       Clight.eval_expr tge e le m (translate_exp c.(c_name) exp) v.
   Proof.
     intros c S exp; induction exp as [| |cst];
-    introv ? ? ? ? ? Hwf Heval; inverts Heval; inverts Hwf.
+    introv ? ? ? Hwf Heval; inverts Heval; inverts Hwf.
 
     (* Var x ty : "x" *)
     - apply* eval_var.
@@ -287,10 +285,8 @@ Section PRESERVATION.
 
   Lemma exprs_eval_simu:
     forall c S es es' vs e le m,
-      compat_vars c e m ->
-      compat_self c e m ->
-      compat_venv c S e m ->
-      compat_menv c S e m ->
+      compat_vars c S e m ->
+      compat_self c S e m ->
       In c prog ->
       Nelist.Forall (well_formed_exp c) es ->
       Nelist.Forall2 (fun e v => valid_val v (typeof e)) es vs ->
@@ -299,11 +295,22 @@ Section PRESERVATION.
       Clight.eval_exprlist tge e le m es' (list_type_to_typelist (map Clight.typeof es')) (nelist2list vs).
   Proof.
     Hint Constructors Clight.eval_exprlist.
-    introv ? ? ? ? ? Hwf Hvalid Hev ?; subst es';
+    introv ? ? ? Hwf Hvalid Hev ?; subst es';
     induction Hev; inverts Hwf; inverts Hvalid; econstructor;
     (apply* expr_eval_simu || (rewrite type_pres; apply* sem_cast_same) || eauto).
   Qed.
 
+  Remark eval_exprlist_app:
+    forall e le m es es' vs vs',
+      Clight.eval_exprlist tge e le m es (list_type_to_typelist (map Clight.typeof es)) vs ->
+      Clight.eval_exprlist tge e le m es' (list_type_to_typelist (map Clight.typeof es')) vs' ->
+      Clight.eval_exprlist tge e le m (es ++ es') (list_type_to_typelist (map Clight.typeof (es ++ es'))) (vs ++ vs').
+  Proof.
+    induction es; introv Ev Ev'; inverts* Ev.
+    repeat rewrite <-app_comm_cons.
+    simpl; econstructor; eauto.
+  Qed.
+  
   Definition nodup_env (e: Clight.env) :=
     forall x x' loc t t',
       x' <> x ->
@@ -318,8 +325,8 @@ Section PRESERVATION.
 
   Definition nodup_vars (c: class) :=
     forall x t t',
-      In (x, t) c.(c_vars) ->
-      In (x, t') c.(c_vars) ->
+      In (x, t) (class_vars c) ->
+      In (x, t') (class_vars c) ->
       t' = t.
 
    Definition nodup_mems (c: class) :=
@@ -337,7 +344,7 @@ Section PRESERVATION.
 
   Remark find_update_var:
     forall x v v' S,
-      find_var x (update_var x S v) v' -> v' = v.
+      find_var (update_var S x v) x v' -> v' = v.
   Proof.
     unfold find_var, update_var; simpl.
     intros; apply* find_add.
@@ -345,7 +352,7 @@ Section PRESERVATION.
 
   Remark find_update_field:
     forall x v v' S,
-      find_field x (update_field x S v) v' -> v' = v.
+      find_field (update_field S x v) x v' -> v' = v.
   Proof.
     unfold find_field, update_field, mfind_mem, madd_mem; simpl.
     intros; apply* find_add.
@@ -353,7 +360,7 @@ Section PRESERVATION.
 
   Remark gso_var:
     forall x x' v v' S,
-      x <> x' -> find_var x (update_var x' S v) v' -> find_var x S v'.
+      x <> x' -> find_var (update_var S x' v) x v' -> find_var S x v'.
   Proof.
     unfold find_var, update_var; simpl.
     introv Neq H.
@@ -363,17 +370,27 @@ Section PRESERVATION.
 
   Remark gso_field:
     forall x x' v v' S,
-      x <> x' -> find_field x (update_field x' S v) v' -> find_field x S v'.
+      x <> x' -> find_field (update_field S x' v) x v' -> find_field S x v'.
   Proof.
     unfold find_field, update_field; simpl.
     introv Neq H.
     rewrite <-H; symmetry.
     apply* mfind_mem_gso.
   Qed.
-  
+
+  Remark find_field_update_var:
+    forall S x v x' v',
+      find_field (update_var S x v) x' v' -> find_field S x' v'.
+  Proof. unfold find_field, update_var; simpl; auto. Qed.
+
+  Remark find_var_update_field:
+    forall S x v x' v',
+      find_var (update_field S x v) x' v' -> find_var S x' v'.
+  Proof. unfold find_var, update_field; simpl; auto. Qed.
+
   Definition mem_sep (c: class) (e: Clight.env) (m: Memory.Mem.mem) :=
     forall x loc t loc_self loc_struct ofs,
-      In (x, t) c.(c_vars) -> 
+      In (x, t) (class_vars c) -> 
       Maps.PTree.get x e = Some (loc, t) ->
       Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) ->
       Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) ->
@@ -400,18 +417,54 @@ Section PRESERVATION.
                        (Memdata.size_chunk (chunk_of_typ t)))
          (Int.unsigned (Int.add ofs (Int.repr delta')))).
 
-  Definition c_state := (Clight.env * Clight.temp_env * Memory.Mem.mem)%type.
+  (* Hypothesis STEPS: *)
+  (*   forall c (e: Clight.env), *)
+  (*     In c prog -> *)
+  (*     exists loc_f f, *)
+  (*       Globalenvs.Genv.find_symbol tge.(Clight.genv_genv) (step_id c.(c_name)) = Some loc_f *)
+  (*       /\ Maps.PTree.get (step_id c.(c_name)) e = None *)
+  (*       /\ Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Ctypes.Internal f) *)
+  (*       /\ Clight.type_of_fundef (Ctypes.Internal f) = *)
+  (*         Ctypes.Tfunction (Ctypes.Tcons (type_of_inst_p c.(c_name)) *)
+  (*                                        (list_type_to_typelist (map snd (nelist2list c.(c_input) ++ nelist2list c.(c_output))))) *)
+  (*                                        Ctypes.Tvoid AST.cc_default *)
+  (*       /\ Coqlib.list_norepet (Clight.var_names (Clight.fn_params f) ++ Clight.var_names (Clight.fn_vars f)) *)
+  (*       /\ Clight.fn_body f = snd (translate_stmt c.(c_name) c.(c_step)) *)
+  (*       /\ length f.(Clight.fn_params) = 1 + Nelist.length c.(c_input)   *)
+  (*       /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x))) *)
+  (*                (f.(Clight.fn_params) ++ f.(Clight.fn_vars)). *)
+  
+  Definition match_step (e: Clight.env) :=
+    forall c,
+      In c prog ->
+      exists loc_f f,
+        Globalenvs.Genv.find_symbol tge.(Clight.genv_genv) (step_id c.(c_name)) = Some loc_f
+        /\ Maps.PTree.get (step_id c.(c_name)) e = None
+        /\ Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Ctypes.Internal f)
+        /\ Clight.type_of_fundef (Ctypes.Internal f) =
+          Ctypes.Tfunction (Ctypes.Tcons (type_of_inst_p c.(c_name))
+                                         (list_type_to_typelist
+                                            (map snd (nelist2list c.(c_input) ++ nelist2list c.(c_output)))))
+                           Ctypes.Tvoid AST.cc_default
+        (* /\ f.(Clight.fn_vars) = [] *)
+        /\ Coqlib.list_norepet (Clight.var_names (Clight.fn_params f) ++ Clight.var_names (Clight.fn_vars f))
+        /\ Clight.fn_body f = Clight.Ssequence (translate_stmt c.(c_name) c.(c_step)) (Clight.Sreturn None)
+        /\ f.(Clight.fn_params) =
+          (self_id, type_of_inst_p c.(c_name)) :: nelist2list c.(c_input) ++ nelist2list c.(c_output)
+        /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x)))
+                 (f.(Clight.fn_params) ++ f.(Clight.fn_vars)).
+  
+  Definition c_state := (Clight.env * Memory.Mem.mem)%type.
    
   Inductive match_states_bigbig (c: class) (S: state): c_state -> Prop :=
-    intro_state_bigbig: forall e le m,
+    intro_state_bigbig: forall e m,
       (* state correspondance *)
-      compat_venv c S e m ->     
-      compat_menv c S e m ->
-      
-      (* Clight state well defined *)
-      compat_vars c e m ->
-      compat_self c e m ->
+      compat_vars c S e m ->
+      compat_self c S e m ->
 
+      (* function *)
+      match_step e ->
+      
       (* Clight side separation *)
       mem_sep c e m ->
       self_sep c e m ->
@@ -421,7 +474,7 @@ Section PRESERVATION.
       (* Minimp side separation *)
       nodup_vars c ->
       nodup_mems c ->
-      match_states_bigbig c S (e, le, m).
+      match_states_bigbig c S (e, m).
 
   Hint Constructors match_states_bigbig.
   
@@ -447,62 +500,50 @@ Section PRESERVATION.
   Qed.
   
   Lemma compat_assign_pres:
-    forall c S e le m loc x t v,
+    forall c S e m loc x t v,
       In c prog ->
-      match_states_bigbig c S (e, le, m) ->
+      match_states_bigbig c S (e, m) ->
       Maps.PTree.get x e = Some (loc, t) ->
-      In (x, t) c.(c_vars) ->
+      In (x, t) (class_vars c) ->
       v = Values.Val.load_result (chunk_of_typ t) v ->
       valid_val v t ->
       x <> self_id ->
       exists m', Memory.Mem.store (chunk_of_typ t) m loc 0 v = Some m' 
-            /\ match_states_bigbig c (update_var x S v) (e, le, m').
+            /\ match_states_bigbig c (update_var S x v) (e, m').
   Proof.
     introv ? MS Hget Hin Hloadres ? ?.
-    inverts MS as Hvenv Hmenv Hvars Hself Hsep Hself_sep Hfields_sep Hnodupenv;
-      introv Hnodupvars Hnodupmems.
-    edestruct Hvars as (loc' & Hget' & ?); eauto.
+    inverts MS as Hvars Hself Hstep Hsep Hself_sep Hfields_sep Hnodupenv Hnodupvars; intro Hnodupmems.
+    edestruct Hvars as (loc' & Hget' & ? & ?); eauto.
     rewrite Hget' in Hget; inverts Hget; rename Hget' into Hget.
     edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto.
     destruct* Hself as (co & loc_self & loc_struct & ofs & Hget_self & Hload_self & Hget_co & Hmem & ?).
     exists m'; split*; constructor*.
 
-    - unfold compat_venv; intros x' v' t' loc' ? Hin' Hget' Hfind.
-      destruct (AST.ident_eq x' x).
-      + subst x'.
-        apply find_update_var in Hfind; subst v'.
-        specializes Hnodupvars Hin Hin'; subst t'. 
-        split*.
-        destruct (Values.eq_block loc' loc) as [|Neq].
-        * subst loc'.
-          rewrite Hloadres; apply* Memory.Mem.load_store_same.
-        * rewrite Hget in Hget'; inverts Hget'. now contradict Neq. 
-      + apply gso_var in Hfind; auto.
-        edestruct Hvenv as (Hload); eauto.
-        split*.
-        destruct (Values.eq_block loc' loc).
-        * subst loc'.
-          edestruct Hnodupenv; eauto. 
-        * rewrite <-Hload. 
-          apply* Memory.Mem.load_store_other.
-
-    - unfold compat_menv;
-      introv ? ? ? Hget_self' Hload_self' Hget_co' ?.
-      rewrite Hget_self' in Hget_self; inverts Hget_self.
-      rewrite Hget_co' in Hget_co; inverts Hget_co.
-      edestruct Hmenv as (Hload); eauto.
-      split*.
-      forwards* Eq: load_same; inverts Eq.
-      destruct (Values.eq_block loc loc_struct).
-      + edestruct Hsep; eauto.
-      + rewrite <-Hload.
-        apply* Memory.Mem.load_store_other.
-
-    - unfold compat_vars; intros.
-      edestruct Hvars as (loc'); eauto.
-      exists loc'; split*.
-      apply* Memory.Mem.store_valid_access_1.
-
+    - unfold compat_vars; intros x' t' ? Hin'.
+      edestruct Hvars as (loc' & Hget' & ? & Hm); eauto.
+      exists loc'; splits*.
+      + apply* Memory.Mem.store_valid_access_1.
+      + intros v' Hfind.
+        destruct (AST.ident_eq x' x).
+        *{ subst x'.
+           apply find_update_var in Hfind; subst v'.
+           specializes Hnodupvars Hin Hin'; subst t'. 
+           split*.
+           destruct (Values.eq_block loc' loc) as [|Neq].
+           - subst loc'.
+             rewrite Hloadres; apply* Memory.Mem.load_store_same.
+           - rewrite Hget in Hget'; inverts Hget'. now contradict Neq. 
+         }
+        *{ apply gso_var in Hfind; auto.
+           forwards (Hload & ?): Hm Hfind. 
+           split*.
+           destruct (Values.eq_block loc' loc).
+           - subst loc'.
+             edestruct Hnodupenv; eauto. 
+           - rewrite <-Hload. 
+             apply* Memory.Mem.load_store_other.
+         }        
+         
     - unfold compat_self; intro.
       exists co loc_self loc_struct ofs.
       splits*.
@@ -511,10 +552,19 @@ Section PRESERVATION.
           edestruct Hnodupenv; eauto.
         * rewrite <-Hload_self.
           apply* Memory.Mem.load_store_other.
-      + introv Hin'.
-        specializes Hmem Hin'; destruct Hmem as (delta).
+      + intros x' t' Hin'.
+        specializes Hmem Hin'; destruct Hmem as (delta & ? & ? & ? & Hm).
         exists delta; splits*.
-        apply* Memory.Mem.store_valid_access_1.
+         * apply* Memory.Mem.store_valid_access_1.
+         *{ intros v' Hfind.
+            apply find_field_update_var in Hfind.
+            forwards (Hload & ?): Hm Hfind.
+            splits*.
+            destruct (Values.eq_block loc loc_struct).
+            - edestruct Hsep; eauto.
+            - rewrite <-Hload.
+              apply* Memory.Mem.load_store_other.
+          }
 
     - unfold mem_sep; introv ? ? Hget_self' ?.
       rewrite Hget_self' in Hget_self; inverts Hget_self.
@@ -526,6 +576,80 @@ Section PRESERVATION.
       forwards* Eq: load_same; inverts Eq.
       apply* Hself_sep.
   Qed.
+
+  (* Lemma compat_assigns_pres: *)
+  (*   forall c S e m loc ys vs, *)
+  (*     In c prog -> *)
+  (*     match_states_bigbig c S (e, m) -> *)
+  (*     Nelist.Forall (fun y => In y (class_vars c)) ys -> *)
+  (*     exists m', Memory.Mem.store (chunk_of_typ t) m loc 0 v = Some m'  *)
+  (*           /\ match_states_bigbig c (update_var S x v) (e, m'). *)
+  (* Proof. *)
+  (*   introv ? MS Hget Hin Hloadres ? ?. *)
+  (*   inverts MS as Hvars Hself Hstep Hsep Hself_sep Hfields_sep Hnodupenv Hnodupvars; intro Hnodupmems. *)
+  (*   edestruct Hvars as (loc' & Hget' & ? & ?); eauto. *)
+  (*   rewrite Hget' in Hget; inverts Hget; rename Hget' into Hget. *)
+  (*   edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto. *)
+  (*   destruct* Hself as (co & loc_self & loc_struct & ofs & Hget_self & Hload_self & Hget_co & Hmem & ?). *)
+  (*   exists m'; split*; constructor*. *)
+
+  (*   - unfold compat_vars; intros x' t' ? Hin'. *)
+  (*     edestruct Hvars as (loc' & Hget' & ? & Hm); eauto. *)
+  (*     exists loc'; splits*. *)
+  (*     + apply* Memory.Mem.store_valid_access_1. *)
+  (*     + intros v' Hfind. *)
+  (*       destruct (AST.ident_eq x' x). *)
+  (*       *{ subst x'. *)
+  (*          apply find_update_var in Hfind; subst v'. *)
+  (*          specializes Hnodupvars Hin Hin'; subst t'.  *)
+  (*          split*. *)
+  (*          destruct (Values.eq_block loc' loc) as [|Neq]. *)
+  (*          - subst loc'. *)
+  (*            rewrite Hloadres; apply* Memory.Mem.load_store_same. *)
+  (*          - rewrite Hget in Hget'; inverts Hget'. now contradict Neq.  *)
+  (*        } *)
+  (*       *{ apply gso_var in Hfind; auto. *)
+  (*          forwards (Hload & ?): Hm Hfind.  *)
+  (*          split*. *)
+  (*          destruct (Values.eq_block loc' loc). *)
+  (*          - subst loc'. *)
+  (*            edestruct Hnodupenv; eauto.  *)
+  (*          - rewrite <-Hload.  *)
+  (*            apply* Memory.Mem.load_store_other. *)
+  (*        }         *)
+         
+  (*   - unfold compat_self; intro. *)
+  (*     exists co loc_self loc_struct ofs. *)
+  (*     splits*. *)
+  (*     + destruct (Values.eq_block loc_self loc). *)
+  (*       * subst loc. *)
+  (*         edestruct Hnodupenv; eauto. *)
+  (*       * rewrite <-Hload_self. *)
+  (*         apply* Memory.Mem.load_store_other. *)
+  (*     + intros x' t' Hin'. *)
+  (*       specializes Hmem Hin'; destruct Hmem as (delta & ? & ? & ? & Hm). *)
+  (*       exists delta; splits*. *)
+  (*        * apply* Memory.Mem.store_valid_access_1. *)
+  (*        *{ intros v' Hfind. *)
+  (*           apply find_field_update_var in Hfind. *)
+  (*           forwards (Hload & ?): Hm Hfind. *)
+  (*           splits*. *)
+  (*           destruct (Values.eq_block loc loc_struct). *)
+  (*           - edestruct Hsep; eauto. *)
+  (*           - rewrite <-Hload. *)
+  (*             apply* Memory.Mem.load_store_other. *)
+  (*         } *)
+
+  (*   - unfold mem_sep; introv ? ? Hget_self' ?. *)
+  (*     rewrite Hget_self' in Hget_self; inverts Hget_self. *)
+  (*     forwards* Eq: load_same; inverts Eq. *)
+  (*     apply* Hsep. *)
+
+  (*   - unfold self_sep; introv Hget_self' ?. *)
+  (*     rewrite Hget_self' in Hget_self; inverts Hget_self. *)
+  (*     forwards* Eq: load_same; inverts Eq. *)
+  (*     apply* Hself_sep. *)
+  (* Qed. *)
 
   Remark load_same':
     forall c env m m' chk loc' v ofs loc1 ofs1 loc2 ofs2,
@@ -546,9 +670,9 @@ Section PRESERVATION.
   Qed.
 
   Lemma compat_stassign_pres:
-    forall c S e le m x t v co loc_self loc_struct ofs delta,
+    forall c S e m x t v co loc_self loc_struct ofs delta,
       In c prog ->
-      match_states_bigbig c S (e, le, m) ->
+      match_states_bigbig c S (e, m) ->
       Ctypes.field_offset tge.(Clight.genv_cenv) x (Ctypes.co_members co) = Errors.OK delta ->
       Maps.PTree.get c.(c_name) (Clight.genv_cenv tge) = Some co ->
       Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) ->
@@ -559,42 +683,25 @@ Section PRESERVATION.
      Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable ->
       exists m',
         Memory.Mem.store (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) v = Some m'
-        /\ match_states_bigbig c (update_field x S v) (e, le, m').
+        /\ match_states_bigbig c (update_field S x v) (e, m').
   Proof.
     intros ** ? MS Hoffset Hget_co Hget_self Hload_self Hin Hloadres ? ? .
-    inverts MS as Hvenv Hmenv Hvars Hself Hsep Hself_sep Hfields_sep Hnodupenv;
-      introv Hnodupvars Hnodupmems.
+    inverts MS as Hvars Hself Hstep Hsep Hself_sep Hfields_sep Hnodupenv Hnodupvars; intro Hnodupmems.
     edestruct Memory.Mem.valid_access_store with (v:=v) as [m']; eauto. 
     exists m'; split*; constructor*.
 
-    - unfold compat_venv; intros ** loc ? ? ? ?. 
-      edestruct Hvenv as (Hload); eauto.  
-      split*.
-      destruct (Values.eq_block loc loc_struct).
-      + edestruct Hsep; eauto.
-      + rewrite <-Hload.
-        apply* Memory.Mem.load_store_other.
-
-    - unfold compat_menv. intros x' v' t' ? ? ? ? ? ? Hin' Hfind' Hget_self' Hload_self' Hget_co' Hoffset'.
-      rewrite Hget_self' in Hget_self; inverts Hget_self.
-      rewrite Hget_co' in Hget_co; inverts Hget_co.
-      forwards* Eq: load_same'; inverts Eq.
-      destruct (AST.ident_eq x' x).
-      + subst x'.
-        rewrite Hoffset' in Hoffset; inverts Hoffset.
-        apply find_update_field in Hfind'; subst v'.
-        specializes Hnodupmems Hin Hin'; subst t'. 
-        split*.
-        rewrite Hloadres; apply* Memory.Mem.load_store_same.
-      + apply gso_field in Hfind'; auto.
-        edestruct Hmenv as (Hload); eauto.
-        split*.
-        rewrite <-Hload; apply* Memory.Mem.load_store_other.
-
     - unfold compat_vars; intros.
-      edestruct Hvars as (loc'); eauto.
-      exists loc'; split*.
-      apply* Memory.Mem.store_valid_access_1.
+      edestruct Hvars as (loc & ? & ? & Hm); eauto.
+      exists loc; splits*.
+      + apply* Memory.Mem.store_valid_access_1.
+      + introv Hfind.
+        apply find_var_update_field in Hfind.
+        forwards (Hload & ?): Hm Hfind.
+        split*.
+        destruct (Values.eq_block loc loc_struct).
+        * edestruct Hsep; eauto.
+        * rewrite <-Hload.
+          apply* Memory.Mem.load_store_other.
 
     - unfold compat_self; intro.
       exists co loc_self loc_struct ofs.
@@ -607,10 +714,23 @@ Section PRESERVATION.
         * edestruct Hself_sep; eauto.
         * rewrite <-Hload_self'.
           apply* Memory.Mem.load_store_other.
-      + introv Hin'.
-        specializes Hmem Hin'; destruct Hmem as (delta').
+      + intros x' t' Hin'.
+        specializes Hmem Hin'; destruct Hmem as (delta' & Hoffset' & ? & ? & Hm).
         exists delta'; splits*.
-        apply* Memory.Mem.store_valid_access_1.    
+        * apply* Memory.Mem.store_valid_access_1.  
+        *{ intros v' Hfind'.
+           destruct (AST.ident_eq x' x).
+           - subst x'.
+             rewrite Hoffset' in Hoffset; inverts Hoffset.
+             apply find_update_field in Hfind'; subst v'.
+             specializes Hnodupmems Hin Hin'; subst t'. 
+             split*.
+             rewrite Hloadres; apply* Memory.Mem.load_store_same.
+           - apply gso_field in Hfind'; auto.
+             forwards (Hload & ?): Hm Hfind'.
+             split*.
+             rewrite <-Hload; apply* Memory.Mem.load_store_other.
+         }
         
     - unfold mem_sep; introv ? ? Hget_self' ?.
       rewrite Hget_self' in Hget_self; inverts Hget_self.
@@ -732,41 +852,25 @@ Section PRESERVATION.
   Qed.
   
   Remark type_pres':
-    forall c' c es,
+    forall c' c es ys,
       Nelist.Forall2 (fun e x => typeof e = snd x) es c'.(c_input) ->
-      map Clight.typeof (nelist2list (Nelist.map (translate_exp c.(c_name)) es)) =
-      map snd (nelist2list c'.(c_input)).
+      map Clight.typeof (nelist2list (Nelist.map (translate_exp c.(c_name)) es)
+                         ++ nelist2list (Nelist.map make_out_arg ys)) =
+      map snd (nelist2list c'.(c_input) ++ nelist2list c'.(c_output)).
   Proof.
-    intros c'.
-    induction (c_input c'); introv Heq;
-    inversion_clear Heq as [? ? Hty|? ? ? ? Hty Hforall2]; simpl.
-    - rewrite type_pres, Hty; auto.
-    - f_equal.
-      + rewrite type_pres, Hty; auto.
-      + specializes IHn Hforall2; eauto.
+    (* intros c'. *)
+    (* induction (c_input c'); introv Heq; *)
+    (* inversion_clear Heq as [? ? Hty|? ? ? ? Hty Hforall2]; simpl. *)
+    (* - rewrite type_pres, Hty; auto. *)
+    (* - f_equal. *)
+    (*   + rewrite type_pres, Hty; auto. *)
+    (*   + specializes IHn Hforall2; eauto. *)
+    admit.
   Qed.
-  
-  (* Remark ifte_translate: *)
-  (*   forall c temp (b: bool) s1 s2, *)
-  (*     translate_stmt temp c.(c_name) (if b then s1 else s2) = *)
-  (*     if b then (translate_stmt temp c.(c_name) s1) else (translate_stmt temp c.(c_name) s2). *)
-  (* Proof. *)
-  (*   now destruct b. *)
-  (* Qed.   *)
 
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
   Hint Resolve expr_eval_simu Clight.assign_loc_value sem_cast_same.
   Hint Constructors well_formed_stmt.
-
-
-  (* Definition empty_temp_env: Clight.temp_env := Maps.PTree.empty val. *)
-      
-  (* Inductive unique_temp: Clight.temp_env -> option (ident * typ) -> Prop := *)
-  (* | unique_empty: *)
-  (*     unique_temp empty_temp_env None *)
-  (* | unique_singleton: forall le x v ty, *)
-  (*     Maps.PTree.elements le = [(x, v)] ->  *)
-  (*     unique_temp le (Some (x, ty)). *)
 
   Remark ne_Forall2_lengths:
     forall A B (P: A -> B -> Prop) l1 l2,
@@ -776,9 +880,221 @@ Section PRESERVATION.
     simpl; f_equal; apply* IHl1.
   Qed.
 
-  Axiom match_step: ident -> Clight.function -> Prop.
-  Axiom match_params: nelist val -> list val -> Prop.
+  Lemma exprlist_make_out_arg:
+    forall c S e le m ys,
+      In c prog ->
+      compat_vars c S e m ->
+      Nelist.Forall (fun y => In y (class_vars c)) ys ->
+      exists vs, Clight.eval_exprlist tge e le m
+                                 (nelist2list (Nelist.map make_out_arg ys))
+                                 (list_type_to_typelist
+                                    (map Clight.typeof (nelist2list (Nelist.map make_out_arg ys))))
+                                 vs.
+  Proof.
+    introv ? Hvars Hins.
+    induction ys as [[x t]|[x t]]; inverts Hins as ? Hins;
+    edestruct Hvars; eauto.
+    - do 2 econstructor; eauto.
+      + apply Clight.eval_Eaddrof.
+        apply* Clight.eval_Evar_local.
+      + apply sem_cast_same.
+        simpl. splits*.
+        * discriminate.
+        * unfold pointer_of; simpl; trivial.
+    - forwards (? & ?): IHys Hins.
+      simpl.
+      do 2 econstructor; eauto.
+      + apply Clight.eval_Eaddrof.
+        apply* Clight.eval_Evar_local.
+      + apply sem_cast_same.
+        splits*.
+        * discriminate.
+        * unfold pointer_of; simpl; trivial.
+  Qed.
+  
+  Theorem simu_bigbig:
+    (forall p S1 s S2,
+        stmt_eval p S1 s S2 ->
+        sub_prog p prog ->
+        (* p = prog -> *)
+        forall c,
+          In c prog ->
+          forall e1 le1 m1
+            (WF: well_formed_stmt c S1 s) 
+            (MS: match_states_bigbig c S1 (e1, m1)),
+          exists le2 m2 t,
+            exec_stmt tge (Clight.function_entry1 tge) e1 le1 m1
+                      (translate_stmt c.(c_name) s) t le2 m2 ClightBigstep.Out_normal
+            /\ match_states_bigbig c S2 (e1, m2))
+    /\ (forall p me clsid vs me' rvs,
+          stmt_step_eval p me clsid vs me' rvs ->
+          sub_prog p prog ->
+          (* p = prog -> *)
+          forall c S o c' prog' m loc_f f loc_struct ofs e le outs,
+            (* In c prog -> *)
+            In c' prog ->
+            well_formed_stmt c' (me, adds (Nelist.map_fst c'.(c_input)) vs v_empty) c'.(c_step) ->
+            match_states_bigbig c S (e, m) ->
+            Globalenvs.Genv.find_symbol tge.(Clight.genv_genv) (step_id clsid) = Some loc_f ->
+            Globalenvs.Genv.find_funct_ptr tge.(Clight.genv_genv) loc_f = Some (Ctypes.Internal f) ->
+            find_inst S o me ->
+            find_class clsid prog = Some (c', prog') ->
+            List.length f.(Clight.fn_params) = 1 + Nelist.length vs + Nelist.length c'.(c_output) ->
+            Clight.eval_expr tge e le m (ptr_obj (Some c.(c_name)) clsid o) (Values.Vptr loc_struct ofs) ->
+            (* valid_val rv f.(Clight.fn_return) -> *)
+            (* Clight.fn_return f <> Ctypes.Tvoid -> *)
+            exists m' t,
+              eval_funcall tge (Clight.function_entry1 tge) m (Ctypes.Internal f)
+                           ((Values.Vptr loc_struct ofs) :: nelist2list vs ++ outs) t m' Values.Vundef
+              /\ match_states_bigbig c (update_inst S o me') (e, m')
+        ).
+  Proof.
+    clear TRANSL.
+    apply stmt_eval_step_ind;
+      [| |introv ? ? ? ? Hifte|introv ? HS1 ? HS2|introv ? Evs ? Hrec_eval|
+       |(introv Hfind ? ? Hrec_exec; intros ** MS Hget_loc_f Hget_f ? Hfind' Hlengths ?)];
+      intros;
+      try inverts WF as; [|introv Hin| | |introv Hlengths' Hins Hin Hfind Wfs ? Valids Types| |]; intros;
+      inverts MS as Hvars Hself Hstep.
 
+    (* Assign x e : "x = e" *)
+    - app_exp_eval_det.
+      edestruct Hvars; eauto.
+      edestruct compat_assign_pres; iauto.  
+      do 3 econstructor; split*.
+      apply* ClightBigstep.exec_Sassign. 
+      rewrite* type_pres.
+
+    (* AssignSt x e : "self->x = e"*)
+    - app_exp_eval_det.
+      pose proof Hself as Hself'.
+      destruct* Hself' as (? & ? & ? & ? & ? & ? & ? & Hmem & ?).
+      specializes Hmem Hin; destruct_conjs.    
+      edestruct compat_stassign_pres; iauto.      
+      do 3 econstructor; split*.
+      apply* ClightBigstep.exec_Sassign.
+      + apply* evall_self_field. 
+      + rewrite* type_pres.
+        
+    (* Ifte e s1 s2 : "if e then s1 else s2" *)
+    - edestruct Hifte with (le1:=le1); destruct_conjs; eauto; [destruct* b|]. 
+      do 3 econstructor; split*.
+      apply* exec_Sifthenelse. 
+      + erewrite type_pres, bool_val_ptr; eauto.
+      + destruct* b. 
+      
+    (* Comp s1 s2 : "s1; s2" *)
+    - app_stmt_eval_det'.
+      edestruct HS1; destruct_conjs; eauto.
+      edestruct HS2; destruct_conjs; eauto.
+      do 3 econstructor; split*.
+      apply* exec_Sseq_1.
+
+    (* Step_ap y ty clsid o [e1; ... ;en] : "y = clsid_step(&(self->o), e1, ..., en)" *)
+    - app_exps_eval_det.
+      app_find_inst_det.
+      app_stmt_step_eval_det'.
+      
+      (* get the Clight corresponding function *)
+      forwards* Hin': find_class_In Hfind.
+      pose proof Hstep as Hstep'.
+      edestruct Hstep' as (loc_f & f & ? & ? & ? & Htype_fun & ? & ? & Hlengths & ?); eauto.
+      rewrite <-type_pres' with (c:=c) (es:=es) (ys:=ys) in Htype_fun; auto.
+      forwards Eq: find_class_name Hfind.
+      rewrite Eq in *; clear Eq.
+      
+      (* get the Clight corresponding field *)
+      pose proof Hself as Hself'.
+      destruct* Hself' as (? & ? & ? & ? & ? & ? & ? & ? & Hobj).
+      specializes Hobj Hin; destruct Hobj. 
+
+      (* get outs values *)
+      edestruct exprlist_make_out_arg with (le:=le1) (c:=c) as (outs); eauto.
+      
+      (* recursive funcall evaluation *)
+      edestruct Hrec_eval with (c:=c) (e:=e1) (m:=m1) (le:=le1) (outs:=outs); destruct_conjs; eauto.
+      + rewrite <-ne_Forall2_lengths with (1:=Evs).
+        rewrite Hlengths; simpl; f_equal.
+        rewrite app_length; do 2 rewrite <-nelist2list_length.
+        f_equal; symmetry; apply* ne_Forall2_lengths.        
+      + apply Clight.eval_Eaddrof; apply* evall_self_field.
+      + do 3 econstructor; split*.
+        *{ apply* exec_Scall.
+           - simpl; eauto.
+           - eapply Clight.eval_Elvalue.
+             + apply* Clight.eval_Evar_global.
+             + apply* Clight.deref_loc_reference.
+           - econstructor.
+             + eapply Clight.eval_Eaddrof.
+               apply* evall_self_field.
+             + eapply sem_cast_same.
+               unfold valid_val; splits*.
+               * discriminate.
+               * simpl; trivial.
+             + apply* eval_exprlist_app.
+               apply* exprs_eval_simu.
+           - eauto.
+         }
+        *{ unfold update_vars.
+           induction ys as [[y t]|[y t]], rvs as [rv|rv]; simpl; inverts Hlengths'; try discriminate.
+           - unfold adds; simpl.
+             change (madd_obj o omenv' (fst S), PM.add y rv (snd S)) with (update_var (update_inst S o omenv') y rv).
+             edestruct compat_assign_pres with (c:=c) (x:=y); eauto. 
+
+          unfold adds.
+          induction (adds (map_fst ys) rvs (snd (update_inst S o omenv'))).
+          apply* compat_assign_pres. 
+
+    (* Skip : "skip" *)
+    - do 3 econstructor; split*.
+      eapply exec_Sskip.
+
+    (* funcall *)
+    - forwards* Hfind'': find_class_sub_same Hfind UNIQUE.
+      rewrite Hfind' in Hfind''; inverts Hfind''.
+      destruct Hstep with (c:=cls)
+        as (loc_f' & f' & Hget_loc_f' & Hget_f' & Htype_fun & Hvars_nil & ? & ? & Htr & ?);
+        destruct_conjs; eauto.
+      forwards Eq: find_class_name Hfind.
+      rewrite Eq in Hget_loc_f'; clear Eq.
+      rewrite Hget_loc_f' in Hget_loc_f; inverts Hget_loc_f.
+      rewrite Hget_f' in Hget_f; inverts Hget_f.
+
+      assert (length f.(Clight.fn_params) = length ((Values.Vptr loc_struct ofs) :: nelist2list vs))
+        by (rewrite Hlengths; simpl; f_equal; rewrite Nelist.nelist2list_length; auto).
+
+      forwards* (le_fun & ? & ?): (compat_funcall_pres cls m).
+      forwards* Hsub: find_class_sub.
+      subst env.
+      edestruct Hrec_exec with (le1:=le_fun) as (? & ? & ? & ? & MS); eauto.
+      destruct_conjs.
+        
+      do 2 econstructor; split.
+      apply* eval_funcall_internal.
+      + constructor*; rewrite Hvars_nil; simpl; constructor.
+      + rewrite* Htr.
+        apply* exec_Sseq_1.
+        apply* exec_Sreturn_some.
+        apply* Clight.eval_Etempvar.
+        inverts MS as Hvars'.
+        apply* Hvars'; rewrite <-surjective_pairing; eapply in_eq.
+      + simpl; split*.
+        inverts Htype_fun.
+        apply* sem_cast_same.
+      + simpl; eauto.       
+      + constructor*.
+        unfold compat_self.
+        intro Hin.
+        pose proof Hself as Hself'.
+        destruct* Hself' as (? & loc_struct' & ofs' & Hget_self' & Hget_co' & Hmem & Hobj).
+        do 3 econstructor; splits*.
+        intros x' t' Hin'. 
+        specializes Hmem Hin'; destruct Hmem.
+        econstructor; splits*.
+        * admit.
+        * admit.
+  Qed.
+  
   Theorem simu_bigbig:
     (forall p S1 s S2,
         stmt_eval p S1 s S2 ->
