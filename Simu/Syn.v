@@ -48,45 +48,181 @@ Inductive stmt : Type :=
     exp -> stmt -> stmt -> stmt
 | Comp:                  (* s1; s2 *)
     stmt -> stmt -> stmt   
-| Step_ap:               (* (y1:t1,...,yn:tn) = (C x).step(es) *)  
-    nelist (ident * typ) -> ident -> ident -> nelist exp -> stmt 
+| Call:               (* (y1:t1,...,yn:tn) = (C o).f(es) *)  
+    list (ident * typ) -> ident -> ident -> ident -> list exp -> stmt 
 | Skip.                  (*  *)
 
-Record obj_dec : Type :=
-  mk_obj_dec {
-      obj_inst : ident;
-      obj_class: ident
+Inductive VarsDeclared_exp (vars: list (ident * typ)): exp -> Prop :=
+| vd_var: forall x ty,
+    In (x, ty) vars ->
+    VarsDeclared_exp vars (Var x ty)
+| vd_state: forall x ty,
+    VarsDeclared_exp vars (State x ty)
+| vd_const: forall c ty,
+    VarsDeclared_exp vars (Const c ty).
+                     
+Inductive VarsDeclared (vars: list (ident * typ)): stmt -> Prop :=
+| vd_assign: forall x e,
+    In (x, typeof e) vars ->
+    VarsDeclared_exp vars e ->
+    VarsDeclared vars (Assign x e)
+| vd_assignst: forall x e,
+    VarsDeclared_exp vars e ->
+    VarsDeclared vars (AssignSt x e)
+| vd_ifte: forall e s1 s2,
+    VarsDeclared_exp vars e ->
+    VarsDeclared vars s1 ->
+    VarsDeclared vars s2 ->
+    VarsDeclared vars (Ifte e s1 s2)
+| vd_comp: forall s1 s2,
+    VarsDeclared vars s1 ->
+    VarsDeclared vars s2 ->
+    VarsDeclared vars (Comp s1 s2)
+| vd_call: forall f ys c o es,
+    incl ys vars ->
+    Forall (VarsDeclared_exp vars) es ->
+    VarsDeclared vars (Call ys c o f es)
+| vd_skip: 
+    VarsDeclared vars Skip.
+
+Inductive StateDeclared_exp (mems: list (ident * typ)): exp -> Prop :=
+| sd_var: forall x ty,
+    StateDeclared_exp mems (Var x ty)
+| sd_state: forall x ty,
+    In (x, ty) mems ->
+    StateDeclared_exp mems (State x ty)
+| sd_const: forall c ty,
+    StateDeclared_exp mems (Const c ty).
+                     
+Inductive StateDeclared (mems: list (ident * typ)): stmt -> Prop :=
+| sd_assign: forall x e,
+    StateDeclared_exp mems e ->
+    StateDeclared mems (Assign x e)
+| sd_assignst: forall x e,
+    In (x, typeof e) mems ->
+    StateDeclared_exp mems e ->
+    StateDeclared mems (AssignSt x e)
+| sd_ifte: forall e s1 s2,
+    StateDeclared_exp mems e ->
+    StateDeclared mems s1 ->
+    StateDeclared mems s2 ->
+    StateDeclared mems (Ifte e s1 s2)
+| sd_comp: forall s1 s2,
+    StateDeclared mems s1 ->
+    StateDeclared mems s2 ->
+    StateDeclared mems (Comp s1 s2)
+| sd_call: forall f ys c o es,
+    Forall (StateDeclared_exp mems) es ->
+    StateDeclared mems (Call ys c o f es)
+| sd_skip: 
+    StateDeclared mems Skip.
+                     
+Inductive InstanceDeclared (objs: list (ident * ident)): stmt -> Prop :=
+| id_assign: forall x e,
+    InstanceDeclared objs (Assign x e)
+| id_assignst: forall x e,
+    InstanceDeclared objs (AssignSt x e)
+| id_ifte: forall e s1 s2,
+    InstanceDeclared objs s1 ->
+    InstanceDeclared objs s2 ->
+    InstanceDeclared objs (Ifte e s1 s2)
+| id_comp: forall s1 s2,
+    InstanceDeclared objs s1 ->
+    InstanceDeclared objs s2 ->
+    InstanceDeclared objs (Comp s1 s2)
+| id_call: forall f ys c o es,
+    In (o, c) objs ->
+    InstanceDeclared objs (Call ys c o f es)
+| id_skip: 
+    InstanceDeclared objs Skip.
+
+ Record method : Type :=
+    mk_method {
+        m_name : ident;
+	    m_in   : list (ident * typ);
+	    m_vars : list (ident * typ);
+	    m_out  : list (ident * typ);
+	    m_body : stmt;
+                   
+	    m_nodup : NoDupMembers (m_in ++ m_vars ++ m_out);
+	    m_decl  : VarsDeclared (m_in ++ m_vars ++ m_out) m_body
     }.
+
+(* Record obj_dec : Type := *)
+(*   mk_obj_dec { *)
+(*       obj_inst : ident; *)
+(*       obj_class: ident *)
+(*     }. *)
 
 Record class : Type :=
-  mk_class {
-      c_name  : ident;
-
-      c_input : nelist (ident * typ);
-      c_output: nelist (ident * typ);
-      c_vars  : list (ident * typ);
+    mk_class {
+	    c_name    : ident;
+	    c_mems    : list (ident * typ);
+	    c_objs    : list (ident * ident);
+	    c_methods : list method;
         
-      c_mems  : list (ident * typ);
-      c_objs  : list obj_dec;
+	    c_nodupmems : NoDupMembers c_mems;
+        c_nodupobjs : NoDupMembers c_objs;
+                                   
+	    c_statedecl : Forall (fun m => StateDeclared c_mems m.(m_body)) c_methods;
+        c_instdecl  : Forall (fun m => InstanceDeclared c_objs m.(m_body)) c_methods
+      }.
 
-      c_step  : stmt 
+(* Record class : Type := *)
+(*   mk_class { *)
+(*       c_name  : ident; *)
+
+(*       c_input : nelist (ident * typ); *)
+(*       c_output: nelist (ident * typ); *)
+(*       c_vars  : list (ident * typ); *)
+        
+(*       c_mems  : list (ident * typ); *)
+(*       c_objs  : list obj_dec; *)
+
+(*       c_step  : stmt  *)
+(*     }. *)
+
+(* Definition class_vars (c: class): list (ident * typ) := *)
+(*   nelist2list c.(c_output) ++ nelist2list c.(c_input) ++ c.(c_vars). *)
+
+Definition ClassIn (clsnm: ident) (cls: list class) : Prop :=
+  Exists (fun cls => cls.(c_name) = clsnm) cls.
+
+Inductive WelldefClasses: list class -> Prop :=
+| wdc_nil:
+    WelldefClasses []
+| wdc_cons:
+    forall c cls',
+      WelldefClasses cls' ->
+      (forall o c', In (o, c') c.(c_objs) ->
+               ClassIn c' cls') ->
+      WelldefClasses (c :: cls').
+
+Record program : Type :=
+  mk_program {
+      p_classes : list class;
+      p_welldef : WelldefClasses p_classes
     }.
 
-Definition class_vars (c: class): list (ident * typ) :=
-  nelist2list c.(c_output) ++ nelist2list c.(c_input) ++ c.(c_vars).
+(* Definition program : Type := list class. *)
 
-Definition program : Type := list class.
-
-Definition find_class (n: ident) : program -> option (class * list class) :=
+Definition find_class' (n: ident): list class -> option (class * list class) :=
   fix find p :=
     match p with
     | [] => None
     | c :: p' => if ident_eqb c.(c_name) n then Some (c, p') else find p'
     end.
 
+Definition find_method (f: ident): list method -> option method :=
+  fix find ms :=
+    match ms with
+    | [] => None
+    | m :: ms' => if ident_eqb m.(m_name) f then Some m else find ms'
+    end.
+
 Remark find_class_In:
   forall id cls c cls',
-    find_class id cls = Some (c, cls') ->
+    find_class' id cls = Some (c, cls') ->
     In c cls.
 Proof.
   intros ** Hfind.
@@ -99,10 +235,10 @@ Qed.
 
 Remark find_class_app:
   forall id cls c cls',
-    find_class id cls = Some (c, cls') ->
+    find_class' id cls = Some (c, cls') ->
     exists cls'',
       cls = cls'' ++ c :: cls'
-      /\ find_class id cls'' = None.
+      /\ find_class' id cls'' = None.
 Proof.
   intros ** Hfind.
   induction cls; inversion Hfind as [H].
@@ -118,7 +254,7 @@ Qed.
 
 Remark find_class_name:
   forall id cls c cls',
-    find_class id cls = Some (c, cls') ->
+    find_class' id cls = Some (c, cls') ->
     c.(c_name) = id.
 Proof.
   intros ** Hfind.
@@ -128,6 +264,38 @@ Proof.
     now apply ident_eqb_eq.
   - now apply IHcls.
 Qed.
+
+Lemma WelldefClasses_cons:
+  forall c cls,
+    WelldefClasses (c :: cls) ->
+    WelldefClasses cls.
+Proof.
+  induction cls; inversion 1; auto.
+Qed.
+
+Lemma WelldefClasses_app:
+  forall cls cls',
+    WelldefClasses (cls ++ cls') ->
+    WelldefClasses cls'.
+Proof.
+  induction cls; inversion 1; auto.
+Qed.
+
+Program Definition find_class (n: ident) (p: program): option (class * program) :=
+  match find_class' n p.(p_classes) with
+  | Some (c, cls') => Some (c, {| p_classes := cls' |})
+  | None => None
+  end.
+Next Obligation.
+  rename Heq_anonymous into H.
+  symmetry in H; apply find_class_app in H.
+  destruct H as (cls'' & Eq & ?).
+  destruct p as (cls & WD).
+  simpl in Eq.
+  subst cls.
+  apply WelldefClasses_app in WD.
+  now apply WelldefClasses_cons in WD.  
+Defined.
 
 (** ** Decidable equality *)
 
