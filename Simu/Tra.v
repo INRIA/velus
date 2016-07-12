@@ -16,9 +16,12 @@ Axiom pos_to_str: ident -> string.
 Axiom first_unused_ident: unit -> ident.
 
 Definition self_id: ident := pos_of_str "self".
+Definition out_id: ident := pos_of_str "out".
 Definition main_id: ident := pos_of_str "main".
 Definition step_id (id: ident): ident :=
   pos_of_str ("step_" ++ (pos_to_str id)).
+Definition reset_id (id: ident): ident :=
+  pos_of_str ("reset_" ++ (pos_to_str id)).
 
 (* TRANSLATION *)
 Definition type_of_inst (o: ident): typ :=
@@ -28,10 +31,10 @@ Definition pointer_of (ty: typ): typ :=
 Definition type_of_inst_p (o: ident): typ :=
   pointer_of (type_of_inst o).
 
-Definition deref_self_field (cls x: ident) (ty: typ): Clight.expr :=
-  let ty_deref_self := type_of_inst cls in
-  let ty_self := pointer_of ty_deref_self in
-  Clight.Efield (Clight.Ederef (Clight.Evar self_id ty_self) ty_deref_self) x ty.
+Definition deref_field (id cls x: ident) (xty: typ): Clight.expr :=
+  let ty_deref := type_of_inst cls in
+  let ty_ptr := pointer_of ty_deref in
+  Clight.Efield (Clight.Ederef (Clight.Evar id ty_ptr) ty_deref) x xty.
 
 Definition translate_const (c: const): typ -> Clight.expr :=
   match c with
@@ -42,10 +45,14 @@ Definition translate_const (c: const): typ -> Clight.expr :=
   end.
 
 (** Straightforward expression translation *)
-Definition translate_exp (cls: ident) (e: exp): Clight.expr :=
+Definition translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
   match e with
-  | Var x ty => Clight.Evar x ty  
-  | State x ty => deref_self_field cls x ty
+  | Var x ty =>
+    if existsb (fun out => ident_eqb (fst out) x) m.(m_out) then
+      deref_field out_id (step_id c.(c_name)) x ty
+    else
+      Clight.Evar x ty  
+  | State x ty => deref_field self_id c.(c_name) x ty
   | Const c ty => translate_const c ty
   end.
 
@@ -60,8 +67,11 @@ Definition funcall (f: ident) (args: list Clight.expr) : Clight.statement :=
   let sig := Ctypes.Tfunction (list_type_to_typelist tys) Ctypes.Tvoid AST.cc_default in
   Clight.Scall None (Clight.Evar f sig) args.
 
-Definition assign (x: ident) (ty: typ) (e: Clight.expr): Clight.statement :=
-  Clight.Sassign (Clight.Evar x ty) e.
+Definition assign (x: ident) (ty: typ) (clsid: ident) (m: method): Clight.expr -> Clight.statement :=
+  if existsb (fun out => ident_eqb (fst out) x) m.(m_out) then
+      Clight.Sassign (deref_field out_id (step_id clsid) x ty)
+    else
+      Clight.Sset x.
 
 (* Definition binded_funcall (bind temp f: ident) (ty: typ) (args: list Clight.expr) *)
 (*   : Clight.statement := *)
@@ -71,42 +81,61 @@ Definition assign (x: ident) (ty: typ) (e: Clight.expr): Clight.statement :=
 Definition ptr_obj (owner: option ident) (cls obj: ident): Clight.expr :=
   Clight.Eaddrof
     ((match owner with
-      | Some owner => deref_self_field owner
+      | Some owner => deref_field self_id owner
       | None => Clight.Evar
       end) obj (type_of_inst cls))
-    (type_of_inst_p cls).
+    (type_of_inst_p cls).  
 
-Definition step_call (owner: option ident) (cls obj: ident) (args: list Clight.expr)
+Definition binded_funcall
+           (prog: program) (ys: list (ident * typ)) (owner cls f obj: ident) (args: list Clight.expr)
   : Clight.statement :=
-  let args := ptr_obj owner cls obj :: args in
-  funcall (step_id cls) args.
+  match find_class cls prog with
+  | Some (c, _) =>
+    match find_method f c.(c_methods) with
+    | Some m =>
+      let tyout := type_of_inst obj in
+      let out := Clight.Eaddrof (Clight.Evar obj tyout) (pointer_of tyout) in 
+      let args := ptr_obj (Some owner) cls obj :: args ++ [out] in
+      Clight.Ssequence
+        (funcall f args)
+        (fold_right
+           (fun y s =>
+              let '((y, ty), (y', _)) := y in
+              let assign_out := assign y ty owner m (Clight.Efield (Clight.Evar obj tyout) y' ty) in
+              Clight.Ssequence assign_out s
+           ) Clight.Sskip (combine ys m.(m_out)))
+    | None => Clight.Sskip
+    end
+  | None => Clight.Sskip
+  end.
+
+(* Definition reset_call (owner: option ident) (cls obj: ident): Clight.statement := *)
+(*   funcall (reset_id cls) [ptr_obj owner cls obj]. *)
 
 Definition make_in_arg (arg: ident * typ): Clight.expr :=
   let (x, ty) := arg in
   Clight.Evar x ty.
-Definition make_out_arg (arg: ident * typ): Clight.expr :=
-  let (x, ty) := arg in
-  Clight.Eaddrof (Clight.Evar x ty) (pointer_of ty).
+(* Definition make_out_arg (arg: ident * typ): Clight.expr := *)
+(*   let (x, ty) := arg in *)
+(*   Clight.Eaddrof (Clight.Evar x ty) (pointer_of ty). *)
 
 (** 
 Statement conversion keeps track of the produced temporaries (function calls).
-[owner] represents the name of the current class.
+[c] represents the current class.
  *)
-Fixpoint translate_stmt (owner: ident) (s: stmt): Clight.statement :=
+Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt): Clight.statement :=
   match s with
   | Assign x e =>
-    Clight.Sassign (Clight.Evar x (typeof e)) (translate_exp owner e)
+    assign x (typeof e) c.(c_name) m (translate_exp c m e) 
   | AssignSt x e =>
-    Clight.Sassign (deref_self_field owner x (typeof e)) (translate_exp owner e)
+    Clight.Sassign (deref_field self_id c.(c_name) x (typeof e)) (translate_exp c m e)
   | Ifte e s1 s2 =>
-    Clight.Sifthenelse (translate_exp owner e)
-                       (translate_stmt owner s1) (translate_stmt owner s2)
+    Clight.Sifthenelse (translate_exp c m e)
+                       (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Comp s1 s2 =>
-    Clight.Ssequence (translate_stmt owner s1) (translate_stmt owner s2)
-  | Step_ap ys cls x es =>
-    let args := nelist2list (Nelist.map (translate_exp owner) es) in
-    let outs := nelist2list (Nelist.map make_out_arg ys) in
-    step_call (Some owner) cls x (args ++ outs)  
+    Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
+  | Call ys cls f o es =>
+    binded_funcall prog ys c.(c_name) cls f o (map (translate_exp c m) es)  
   | Skip =>
     Clight.Sskip
   end.
@@ -122,33 +151,41 @@ Definition return_zero (s: Clight.statement): Clight.statement :=
   Clight.Ssequence s (Clight.Sreturn (Some cl_zero)).
 
 Definition fundef
-           (ins: list (ident * typ)) (vars: list (ident * typ)) (ty: typ) (body: Clight.statement)
+           (ins: list (ident * typ)) (vars temps: list (ident * typ)) (ty: typ) (body: Clight.statement)
   : AST.globdef Clight.fundef Ctypes.type :=
-  let f := Clight.mkfunction ty AST.cc_default ins vars [] body in
+  let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
   @AST.Gfun Clight.fundef typ (Ctypes.Internal f).
 
-Definition make_step
-           (self: ident * typ) (ins: list (ident * typ)) (outs: list (ident * typ))
-           (vars: list (ident * typ)) (body: Clight.statement)
+Definition make_fun
+           (self: ident * typ) (ins: list (ident * typ)) (out: ident * typ)
+           (vars temps: list (ident * typ)) (body: Clight.statement)
   : AST.globdef Clight.fundef Ctypes.type :=
   let body := return_none body in
-  fundef (self :: ins ++ outs) vars Ctypes.Tvoid body.
+  fundef (self :: ins ++ [out]) vars temps Ctypes.Tvoid body.
 
-Definition translate_obj_dec (obj: obj_dec): (ident * typ) :=
-  match obj with
-    mk_obj_dec inst cls =>
-    (inst, type_of_inst cls)
-  end.
+Definition translate_method (prog: program) (c: class) (m: method)
+  : ident * AST.globdef Clight.fundef Ctypes.type :=
+  let body := translate_stmt prog c m m.(m_body) in
+  let self := (self_id, type_of_inst_p c.(c_name)) in
+  let out := make_out_struct m.(m_out) in
+  make_fun self m.(m_in) out [] m.(m_vars) body.
+
+Definition translate_obj (obj: ident * ident): (ident * typ) :=
+  let (o, c) := obj in
+  (o, type_of_inst c).
 
 Definition make_struct (cls: ident) (members: list (ident * typ))
   : Ctypes.composite_definition :=
   Ctypes.Composite cls Ctypes.Struct members Ctypes.noattr.
 
+Definition make_members (c: class): Ctypes.members :=
+  c.(c_mems) ++ map translate_obj c.(c_objs).
+
 Definition translate_class (c: class)
   : Ctypes.composite_definition * (ident * AST.globdef Clight.fundef Ctypes.type) :=
+  let members := make_members c in
   match c with
     mk_class c_name c_input c_output c_vars c_mems c_objs c_step =>
-    let objs := List.map translate_obj_dec c_objs in
     let members := c_mems ++ objs in
     let step := translate_stmt c_name c_step in
     let self := (self_id, type_of_inst_p c_name) in

@@ -5,6 +5,8 @@ Require Coq.MSets.MSets.
 Require Export PArith.
 Require Import Omega.
 
+Open Scope list.
+
 (** * Common definitions *)
 
 (** ** Finite sets and finite maps *)
@@ -505,3 +507,214 @@ Qed.
 Corollary Forall2_length : forall {A B} (P : A -> B -> Prop) l1 l2,
   Forall2 P l1 l2 -> length l1 = length l2.
 Proof. intros * Hall. rewrite Forall2_forall2 in Hall. now destruct Hall. Qed.
+
+Lemma Forall2_det : forall {A B : Type} (R : A -> B -> Prop),
+  (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
+  forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
+Proof.
+intros A B R HR xs. induction xs as [x | x xs]; intros ys1 ys2 Hall1 Hall2.
+- inv Hall1. inv Hall2; reflexivity. 
+- inv Hall1. inv Hall2. f_equal; eauto.
+Qed.
+
+Section InMembers.
+  Context {A B: Type}.
+
+  Fixpoint InMembers (a:A) (l:list (A * B)) : Prop :=
+    match l with
+    | nil => False
+    | (a', _) :: m => a' = a \/ InMembers a m
+    end.
+
+  Inductive NoDupMembers: list (A * B) -> Prop :=
+  | NoDupMembers_nil:
+      NoDupMembers nil
+  | NoDupMembers_cons: forall a b l,
+      ~ InMembers a l ->
+      NoDupMembers l ->
+      NoDupMembers ((a, b)::l).
+
+  Theorem inmembers_eq:
+    forall a b l, InMembers a ((a, b) :: l).
+  Proof.
+    intros. constructor. reflexivity.
+  Qed.
+
+  Theorem inmembers_cons:
+    forall a a' l, InMembers a l -> InMembers a (a' :: l).
+  Proof.
+    intros. destruct a'. simpl. intuition.
+  Qed.
+
+  Theorem In_InMembers:
+    forall a b xs,
+      In (a, b) xs -> InMembers a xs.
+  Proof.
+    intros ** Hin.
+    induction xs as [|x xs IH]; inversion_clear Hin; subst.
+    - simpl. left. reflexivity.
+    - simpl. destruct x. right. intuition.
+  Qed.
+
+  Theorem nodupmembers_cons:
+    forall id ty xs,
+      NoDupMembers ((id, ty) :: xs) <->
+      ~InMembers id xs /\ NoDupMembers xs.
+  Proof.
+    split.
+    - inversion_clear 1. auto.
+    - destruct 1 as [Hnin Hndup].
+      constructor; auto.
+  Qed.
+
+  Theorem NotInMembers_NotIn:
+    forall a b xs, ~ InMembers a xs -> ~ In (a, b) xs.
+  Proof.
+    intros ** Hnim Hin.
+    apply In_InMembers in Hin.
+    intuition.
+  Qed.
+
+  Theorem NotInMembers_cons:
+    forall y x xs,
+      ~InMembers y (x::xs) -> ~InMembers y xs.
+  Proof.
+    induction xs as [|x' xs IH]; intro Hnin.
+    - inversion 1.
+    - intro HH. apply Hnin.
+      destruct x, x'.
+      right. inversion HH; auto.
+  Qed.
+
+  Lemma InMembers_app:
+    forall y ws xs,
+      InMembers y (ws ++ xs) <-> (InMembers y ws) \/ (InMembers y xs).
+  Proof.
+    induction ws as [|y' ws IH].
+    - intuition.
+      inversion H0.
+    - destruct y' as [y' yv]. simpl.
+      split; intro HH; destruct HH as [HH|HH].
+      + intuition.
+      + apply IH in HH. intuition.
+      + destruct HH as [HH|HH].
+        * intuition.
+        * right. apply IH. intuition.
+      + right. apply IH. intuition.
+  Qed.
+
+  Theorem NotInMembers_app:
+    forall y ws xs,
+      ~InMembers y (ws ++ xs) <-> (~InMembers y xs /\ ~InMembers y ws).
+  Proof.
+    destruct ws; repeat split.
+    - assumption.
+    - inversion 1.
+    - destruct 1. assumption.
+    - intro HH. apply H.
+      apply InMembers_app. auto.
+    - intro. apply H.
+      apply InMembers_app. auto.
+    - destruct 1 as [H1 H2].
+      intro H. apply InMembers_app in H. intuition.
+  Qed.
+
+  Theorem NotInMembers_app_comm:
+    forall y ws xs,
+      ~InMembers y (ws ++ xs) <-> ~InMembers y (xs ++ ws).
+  Proof.
+    split; intro HH; apply NotInMembers_app in HH;
+    apply NotInMembers_app; intuition.
+  Qed.
+
+  Theorem NoDupMembers_NoDup:
+    forall xs, NoDupMembers xs -> NoDup xs.
+  Proof.
+    induction xs as [|x xs IH]; [now constructor|].
+    intro Hndm.
+    inversion_clear Hndm.
+    constructor; [|now apply IH].
+    apply NotInMembers_NotIn. assumption.
+  Qed.
+
+  Lemma NoDupMembers_app_cons:
+    forall ws x y xs,
+      NoDupMembers (ws ++ (x, y) :: xs)
+      <-> ~InMembers x (ws ++ xs) /\ NoDupMembers (ws ++ xs).
+  Proof.
+    induction ws as [|w ws IH]; repeat split.
+    - apply nodupmembers_cons in H. intuition.
+    - apply nodupmembers_cons in H. intuition.
+    - destruct 1 as [HH1 HH2].
+      apply nodupmembers_cons. intuition.
+    - destruct w as [w ww].
+      simpl in H. apply nodupmembers_cons in H.
+      destruct H as [H1 H2].
+      apply IH in H2.
+      destruct H2 as [H2 H3].
+      intro HH. destruct HH as [HH|HH].
+      + subst. apply H1.
+        apply InMembers_app. right.
+        now constructor.
+      + apply H2. assumption.
+    - destruct w as [w ww].
+      simpl in *. apply nodupmembers_cons in H.
+      destruct H as [H1 H2].
+      apply IH in H2.
+      apply nodupmembers_cons.
+      destruct H2 as [H2 H3].
+      apply NotInMembers_app in H1.
+      destruct H1 as [H1 H4].
+      apply NotInMembers_cons in H1.
+      split; try apply NotInMembers_app; intuition.
+    - destruct 1 as [H1 H2].
+      destruct w as [w ww].
+      simpl in H2. apply nodupmembers_cons in H2.
+      destruct H2 as [H2 H3].
+      simpl. apply nodupmembers_cons.
+      split.
+      + intro HH. apply H2.
+        apply InMembers_app.
+        apply InMembers_app in HH.
+        destruct HH as [HH|HH]; [now auto|].
+        destruct HH as [HH|HH]; [|now auto].
+        exfalso; apply H1. subst.
+        now constructor.
+      + apply IH.
+        split; [|assumption].
+        intro HH. apply H1.
+        constructor 2. assumption.
+  Qed.
+
+  Lemma NoDupMembers_remove_1:
+    forall ws x xs,
+      NoDupMembers (ws ++ x :: xs) -> NoDupMembers (ws ++ xs).
+  Proof.
+    intros ** HH.
+    destruct x. apply NoDupMembers_app_cons in HH. intuition.
+  Qed.
+
+  Lemma NoDupMembers_app:
+    forall ws xs,
+      NoDupMembers (ws ++ xs) <-> NoDupMembers (xs ++ ws).
+  Proof.
+    induction ws as [|w ws IH]; split; intro HH.
+    - rewrite app_nil_r. assumption.
+    - rewrite app_nil_r in HH. assumption.
+    - destruct w as [w ww].
+      simpl in HH; apply nodupmembers_cons in HH.
+      destruct HH as [HH1 HH2].
+      apply NoDupMembers_app_cons.
+      apply NotInMembers_app_comm in HH1.
+      split; [assumption|].
+      apply IH. assumption.
+    - destruct w as [w ww].
+      apply NoDupMembers_app_cons in HH.
+      destruct HH as [HH1 HH2].
+      apply IH in HH2.
+      simpl; apply NoDupMembers_cons.
+      now apply NotInMembers_app_comm.
+      assumption.
+  Qed.
+
+End InMembers.

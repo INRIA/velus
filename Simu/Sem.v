@@ -3,7 +3,8 @@ Require Import lib.Integers lib.Floats.
         
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
-Require Import Rustre.Nelist.
+Require Rustre.Nelist.
+Require Import List.
 
 Require Import Syn.
 
@@ -22,8 +23,8 @@ Definition state := (menv * venv)%type.
 
 Definition find_var (S: state) (x: ident) (v: val) :=
   PM.find x (snd S) = Some v.
-Definition find_vars (S: state) (xs: nelist (ident * typ)) := 
-  Nelist.Forall2 (find_var S) (Nelist.map_fst xs). 
+Definition find_vars (S: state) (xs: list (ident * typ)) := 
+  Forall2 (find_var S) (fst (split xs)). 
 
 Definition find_field (S: state) (x: ident) (v: val) :=
   mfind_mem x (fst S) = Some v.
@@ -32,8 +33,11 @@ Definition find_inst (S: state) (o: ident) (me: memory val) :=
 
 Definition update_var (S: state) (x: ident) (v: val) :=
   (fst S, PM.add x v (snd S)).
-Definition update_vars (S: state) (xs: nelist (ident * typ)) (vs: nelist val) :=
-  (fst S, adds (Nelist.map_fst xs) vs (snd S)).
+Definition update_vars (S: state) (xs: list (ident * typ)) (vs: list val) :=
+  (fst S, fold_right (fun xtv env =>
+                        let '(x, t, v) := xtv in
+                        PM.add x v env) (snd S) (combine xs vs)).
+
 Definition update_field (S: state) (x: ident) (v: val) :=
   (madd_mem x v (fst S), snd S).
 Definition update_inst (S: state) (o: ident) (me: memory val) :=
@@ -76,7 +80,7 @@ Remark find_var_det:
 Proof.
   unfold find_var.
   intros ** H1 H2.
-  rewrite H1 in H2; inv H2; reflexivity.
+  rewrite H1 in H2; inverts H2; reflexivity.
 Qed.
 
 Ltac app_find_var_det :=
@@ -95,10 +99,8 @@ Proof.
   unfold find_vars.
   intros ** H1 H2.
   revert dependent vs2.
-  induction H1; inversion 1 as [? ? H2' E2|? ? ? ? H2' ? E2].
-  - app_find_var_det; reflexivity.
-  - app_find_var_det.
-    f_equal; auto.    
+  induction H1; inversion 1; auto.  
+  app_find_var_det; f_equal; auto. 
 Qed.
 
 Remark find_field_det:
@@ -109,7 +111,7 @@ Remark find_field_det:
 Proof.
   unfold find_field.
   intros ** H1 H2.
-  rewrite H1 in H2; inv H2; reflexivity.
+  rewrite H1 in H2; inverts H2; reflexivity.
 Qed.
 
 Remark find_inst_det:
@@ -120,7 +122,7 @@ Remark find_inst_det:
 Proof.
   unfold find_inst.
   intros ** H1 H2.
-  rewrite H1 in H2; inv H2; reflexivity.
+  rewrite H1 in H2; inverts H2; reflexivity.
 Qed.
 
 Ltac app_find_inst_det :=
@@ -184,26 +186,27 @@ Inductive stmt_eval: program -> state -> stmt -> state -> Prop :=
     stmt_eval prog S1 s1 S2 ->
     stmt_eval prog S2 s2 S3 ->
     stmt_eval prog S1 (Comp s1 s2) S3
-| Istep: forall prog S es vs clsid o omenv omenv' rvs ys,
+| Icall: forall prog S es vs clsid o f omenv omenv' rvs ys,
     find_inst S o omenv ->
-    Nelist.Forall2 (exp_eval S) es vs ->
-    stmt_step_eval prog omenv clsid vs omenv' rvs ->
-    stmt_eval prog S (Step_ap ys clsid o es)
+    Forall2 (exp_eval S) es vs ->
+    stmt_call_eval prog omenv clsid f vs omenv' rvs ->
+    length ys = length rvs ->
+    stmt_eval prog S (Call ys clsid o f es)
               (update_vars (update_inst S o omenv') ys rvs)
 | Iskip: forall prog S,
     stmt_eval prog S Skip S
 
-with stmt_step_eval: program -> menv -> ident -> nelist val -> menv -> nelist val -> Prop :=
-     | Iestep:
-         forall prog menv clsid vs prog' S' rvs cls,
-           find_class clsid prog = Some (cls, prog') ->
-           stmt_eval prog' (update_vars (menv, v_empty) cls.(c_input) vs) cls.(c_step) S' ->
-           find_vars S' cls.(c_output) rvs ->
-           stmt_step_eval prog menv clsid vs (fst S') rvs.
+with stmt_call_eval: program -> menv -> ident -> ident -> list val -> menv -> list val -> Prop :=
+     Iecall: forall prog prog' menv clsid f meth vs c S' rvs,
+         find_class clsid prog = Some (c, prog') ->
+         find_method f c.(c_methods) = Some meth ->
+         stmt_eval prog' (update_vars (menv, v_empty) meth.(m_in) vs) meth.(m_body) S' ->
+         find_vars S' meth.(m_out) rvs ->
+         stmt_call_eval prog menv clsid f vs (fst S') rvs.
 
 Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
-                         with stmt_step_eval_ind_2 := Minimality for stmt_step_eval Sort Prop.
-Combined Scheme stmt_eval_step_ind from stmt_eval_ind_2, stmt_step_eval_ind_2.
+                         with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
+Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
 
 Ltac app_bool_val :=
   match goal with
@@ -211,17 +214,17 @@ Ltac app_bool_val :=
     H1: Cop.bool_val ?v ?t ?m = Some ?b,
     H2: Cop.bool_val ?v ?t ?m' = Some ?b' |- _ =>
 let Heq := fresh in
-pose proof (bool_val_ptr v _ m m' H) as Heq; rewrite Heq in H1; rewrite H1 in H2; inv H2
+pose proof (bool_val_ptr v _ m m' H) as Heq; rewrite Heq in H1; rewrite H1 in H2; inverts H2
 end.
 
-Lemma stmt_step_eval_det:
-  forall prog me clsid vs me1 rvs1 me2 rvs2,
-    stmt_step_eval prog me clsid vs me1 rvs1 ->
-    stmt_step_eval prog me clsid vs me2 rvs2 ->
+Lemma stmt_call_eval_det:
+  forall prog me clsid f vs me1 rvs1 me2 rvs2,
+    stmt_call_eval prog me clsid f vs me1 rvs1 ->
+    stmt_call_eval prog me clsid f vs me2 rvs2 ->
     me1 = me2 /\ rvs1 = rvs2.
 Proof.
   introv Hstp1; revert me2 rvs2.
-  induction Hstp1 using stmt_step_eval_ind_2 with
+  induction Hstp1 using stmt_call_eval_ind_2 with
   (P := fun p S s S' => forall S'', stmt_eval p S s S' -> stmt_eval p S s S'' -> S' = S'');
   try (introv Hev1 Hev2; inverts Hev2); try app_exp_eval_det; auto.
   - app_bool_val; auto.
@@ -230,8 +233,9 @@ Proof.
   - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
     repeat fequals; apply* IHHstp1.
-  - introv Hstp2; inverts Hstp2 as Hfind.
-    rewrite Hfind in H; inverts H.
+  - introv Hstp2; inverts Hstp2 as Hfindcls Hfindmeth.
+    rewrite Hfindcls in H; inverts H.
+    rewrite Hfindmeth in H0; inverts H0.
     assert (S' = S'0); auto; subst S'0.
     split*.
     apply* find_vars_det.
@@ -239,10 +243,10 @@ Qed.
 
 Ltac app_stmt_step_eval_det :=
   match goal with
-  | H1: stmt_step_eval ?prog ?me ?clsid ?vs ?me1 ?rvs1,
-        H2: stmt_step_eval ?prog ?me ?clsid ?vs ?me2 ?rvs2 |- _ =>
+  | H1: stmt_call_eval ?prog ?me ?clsid ?f ?vs ?me1 ?rvs1,
+        H2: stmt_call_eval ?prog ?me ?clsid ?f ?vs ?me2 ?rvs2 |- _ =>
     let H := fresh in
-    assert (me1 = me2 /\ rvs1 = rvs2) as H by (eapply stmt_step_eval_det; eauto); inverts H; clear H2
+    assert (me1 = me2 /\ rvs1 = rvs2) as H by (eapply stmt_call_eval_det; eauto); inverts H; clear H2
   end.
 
 Theorem stmt_eval_det:
@@ -252,7 +256,7 @@ Theorem stmt_eval_det:
     S1 = S2.
 Proof.
   intros until S2; intro Hev1; revert S2;
-  induction Hev1; intros S2' Hev2; inv Hev2;
+  induction Hev1; intros S2' Hev2; inverts Hev2;
   try app_exp_eval_det; auto.
   - apply IHHev1.
     app_bool_val; auto.
@@ -260,7 +264,7 @@ Proof.
     asserts_rewrite* (S2 = S4).
   - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
-    repeat fequals; apply* stmt_step_eval_det.
+    repeat fequals; apply* stmt_call_eval_det.
 Qed.
 
 Ltac app_stmt_eval_det :=
@@ -271,173 +275,173 @@ Ltac app_stmt_eval_det :=
     assert (S2 = S1) as H by (eapply stmt_eval_det; eauto); inverts H; clear H2
   end.
 
-Inductive sub_prog: program -> program -> Prop :=
-  sub_prog_intro: forall p p',
-    sub_prog p (p' ++ p).
+(* Inductive sub_prog: program -> program -> Prop := *)
+(*   sub_prog_intro: forall p p', *)
+(*     sub_prog p (p' ++ p). *)
 
-Lemma find_class_sub:
-  forall prog clsid cls prog',
-    find_class clsid prog = Some (cls, prog') ->
-    sub_prog prog' prog.
-Proof.
-  introv Find.
-  forwards* (prog2' & ? & ?): find_class_app Find.
-  substs.
-  rewrite List_shift_first.
-  constructor.
-Qed.
+(* Lemma find_class_sub: *)
+(*   forall prog clsid cls prog', *)
+(*     find_class clsid prog = Some (cls, prog') -> *)
+(*     sub_prog prog' prog. *)
+(* Proof. *)
+(*   introv Find. *)
+(*   forwards* (prog2' & ? & ?): find_class_app Find. *)
+(*   substs. *)
+(*   rewrite List_shift_first. *)
+(*   constructor. *)
+(* Qed. *)
 
-Hint Constructors sub_prog.
+(* Hint Constructors sub_prog. *)
 
-Definition unique_classes (prog: program): Prop :=
-  forall c1 c2,
-    List.In c1 prog ->
-    List.In c2 prog ->
-    c1.(c_name) <> c2.(c_name).
+(* Definition unique_classes (prog: program): Prop := *)
+(*   forall c1 c2, *)
+(*     List.In c1 prog -> *)
+(*     List.In c2 prog -> *)
+(*     c1.(c_name) <> c2.(c_name). *)
 
-Remark unique_nil :
-  unique_classes nil.
-Proof.
-  unfold unique_classes; intros; contradiction.
-Qed.
+(* Remark unique_nil : *)
+(*   unique_classes nil. *)
+(* Proof. *)
+(*   unfold unique_classes; intros; contradiction. *)
+(* Qed. *)
 
-Remark unique_cons:
-  forall cls c,
-    unique_classes (c :: cls) -> unique_classes cls.
-Proof.
-  destruct cls.
-  - intros; apply unique_nil.
-  - intros c' H.
-    unfold unique_classes.
-    introv Hin1 Hin2.
-    unfold unique_classes in H.
-    apply List.in_cons with (a:=c') in Hin1.
-    apply List.in_cons with (a:=c') in Hin2.
-    specializes H Hin1 Hin2.
-Qed.
+(* Remark unique_cons: *)
+(*   forall cls c, *)
+(*     unique_classes (c :: cls) -> unique_classes cls. *)
+(* Proof. *)
+(*   destruct cls. *)
+(*   - intros; apply unique_nil. *)
+(*   - intros c' H. *)
+(*     unfold unique_classes. *)
+(*     introv Hin1 Hin2. *)
+(*     unfold unique_classes in H. *)
+(*     apply List.in_cons with (a:=c') in Hin1. *)
+(*     apply List.in_cons with (a:=c') in Hin2. *)
+(*     specializes H Hin1 Hin2. *)
+(* Qed. *)
 
-Remark unique_app:
-  forall cls cls',
-    unique_classes (cls ++ cls') -> unique_classes cls /\ unique_classes cls'.
-Proof.
-  induction cls.
-  - simpl; split; auto. apply unique_nil.
-  - intros cls' Unique.
-    split.
-    + unfold unique_classes.
-      introv Hin1 Hin2.
-      unfold unique_classes in Unique.
-      apply Unique; apply List.in_or_app; left; auto.
-    + rewrite <-List.app_comm_cons in Unique.  
-      apply unique_cons in Unique.
-      apply IHcls; auto.
-Qed.
+(* Remark unique_app: *)
+(*   forall cls cls', *)
+(*     unique_classes (cls ++ cls') -> unique_classes cls /\ unique_classes cls'. *)
+(* Proof. *)
+(*   induction cls. *)
+(*   - simpl; split; auto. apply unique_nil. *)
+(*   - intros cls' Unique. *)
+(*     split. *)
+(*     + unfold unique_classes. *)
+(*       introv Hin1 Hin2. *)
+(*       unfold unique_classes in Unique. *)
+(*       apply Unique; apply List.in_or_app; left; auto. *)
+(*     + rewrite <-List.app_comm_cons in Unique.   *)
+(*       apply unique_cons in Unique. *)
+(*       apply IHcls; auto. *)
+(* Qed. *)
 
-Remark find_class_sub_same:
-  forall prog1 prog2 clsid cls prog',
-    find_class clsid prog2 = Some (cls, prog') ->
-    unique_classes prog1 ->
-    sub_prog prog2 prog1 ->
-    find_class clsid prog1 = Some (cls, prog').
-Proof.
-  introv Hfind Unique Sub.
-  inverts Sub.
-  forwards* (prog2' & Hprog2 & Hnone): find_class_app Hfind.
-  induction p'; simpl; auto.
-  rewrite <-List.app_comm_cons in Unique.
-  assert (List.In a (a :: p' ++ prog2)) as Hin_a by apply List.in_eq.
-  assert (List.In cls (a :: p' ++ prog2)) as Hin_cls.
-  - forwards* Hin: find_class_In Hfind.
-    rewrite List.app_comm_cons.   
-    apply List.in_or_app; right; auto. 
-  - forwards Neq: Unique Hin_a Hin_cls.
-    apply ident_eqb_neq in Neq.
-    forwards* Eq: find_class_name Hfind.
-    rewrite Eq in Neq; rewrite Neq.
-    apply IHp'. eapply unique_cons; eauto.
-Qed.
+(* Remark find_class_sub_same: *)
+(*   forall prog1 prog2 clsid cls prog', *)
+(*     find_class clsid prog2 = Some (cls, prog') -> *)
+(*     unique_classes prog1 -> *)
+(*     sub_prog prog2 prog1 -> *)
+(*     find_class clsid prog1 = Some (cls, prog'). *)
+(* Proof. *)
+(*   introv Hfind Unique Sub. *)
+(*   inverts Sub. *)
+(*   forwards* (prog2' & Hprog2 & Hnone): find_class_app Hfind. *)
+(*   induction p'; simpl; auto. *)
+(*   rewrite <-List.app_comm_cons in Unique. *)
+(*   assert (List.In a (a :: p' ++ prog2)) as Hin_a by apply List.in_eq. *)
+(*   assert (List.In cls (a :: p' ++ prog2)) as Hin_cls. *)
+(*   - forwards* Hin: find_class_In Hfind. *)
+(*     rewrite List.app_comm_cons.    *)
+(*     apply List.in_or_app; right; auto.  *)
+(*   - forwards Neq: Unique Hin_a Hin_cls. *)
+(*     apply ident_eqb_neq in Neq. *)
+(*     forwards* Eq: find_class_name Hfind. *)
+(*     rewrite Eq in Neq; rewrite Neq. *)
+(*     apply IHp'. eapply unique_cons; eauto. *)
+(* Qed. *)
 
-Remark find_class_unique:
-  forall prog clsid cls prog',
-    unique_classes prog ->
-    find_class clsid prog = Some (cls, prog') ->
-    unique_classes prog'.
-Proof.
-  introv Unique Find.
-  forwards* (prog2' & Hprog2 & Hnone): find_class_app Find.
-  substs.
-  forwards (? & H): unique_app Unique.
-  eapply unique_cons; eauto.
-Qed.
+(* Remark find_class_unique: *)
+(*   forall prog clsid cls prog', *)
+(*     unique_classes prog -> *)
+(*     find_class clsid prog = Some (cls, prog') -> *)
+(*     unique_classes prog'. *)
+(* Proof. *)
+(*   introv Unique Find. *)
+(*   forwards* (prog2' & Hprog2 & Hnone): find_class_app Find. *)
+(*   substs. *)
+(*   forwards (? & H): unique_app Unique. *)
+(*   eapply unique_cons; eauto. *)
+(* Qed. *)
 
-Lemma stmt_step_eval_det':
-  forall prog1 prog2 me clsid vs me1 rvs1 me2 rvs2,
-    unique_classes prog1 ->
-    stmt_step_eval prog1 me clsid vs me1 rvs1 ->
-    stmt_step_eval prog2 me clsid vs me2 rvs2 ->
-    sub_prog prog2 prog1 ->
-    me1 = me2 /\ rvs1 = rvs2.
-Proof.
-  introv Unique Hstp1; revert me2 rvs2 prog2.
-  induction Hstp1 using stmt_step_eval_ind_2 with
-  (P := fun p S s S' => unique_classes p -> forall S'', stmt_eval p S s S' -> stmt_eval p S s S'' -> S' = S'');
-    [| | | | | |introv Hstp2 Hsub]; try (introv Hev1 Hev2; inverts Hev2); try app_exp_eval_det; auto. 
-  - app_bool_val; auto.
-  - apply* IHHstp0.
-    asserts_rewrite* (S2 = S4).
-  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
-    assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
-    repeat fequals; apply* IHHstp1;
-    rewrite* <-List.app_nil_l; simpl.
-  - inverts Hstp2.
-    substs.
-    forwards* H': find_class_sub_same.
-    rewrite H' in H; inverts H.
-    forwards Unique': find_class_unique Unique H'.
-    assert (S' = S'0); auto. subst S'0.
-    split*.
-    apply* find_vars_det.
-Qed.
+(* Lemma stmt_step_eval_det': *)
+(*   forall prog1 prog2 me clsid vs me1 rvs1 me2 rvs2, *)
+(*     unique_classes prog1 -> *)
+(*     stmt_step_eval prog1 me clsid vs me1 rvs1 -> *)
+(*     stmt_step_eval prog2 me clsid vs me2 rvs2 -> *)
+(*     sub_prog prog2 prog1 -> *)
+(*     me1 = me2 /\ rvs1 = rvs2. *)
+(* Proof. *)
+(*   introv Unique Hstp1; revert me2 rvs2 prog2. *)
+(*   induction Hstp1 using stmt_step_eval_ind_2 with *)
+(*   (P := fun p S s S' => unique_classes p -> forall S'', stmt_eval p S s S' -> stmt_eval p S s S'' -> S' = S''); *)
+(*     [| | | | | |introv Hstp2 Hsub]; try (introv Hev1 Hev2; inverts Hev2); try app_exp_eval_det; auto.  *)
+(*   - app_bool_val; auto. *)
+(*   - apply* IHHstp0. *)
+(*     asserts_rewrite* (S2 = S4). *)
+(*   - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0. *)
+(*     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0. *)
+(*     repeat fequals; apply* IHHstp1; *)
+(*     rewrite* <-List.app_nil_l; simpl. *)
+(*   - inverts Hstp2. *)
+(*     substs. *)
+(*     forwards* H': find_class_sub_same. *)
+(*     rewrite H' in H; inverts H. *)
+(*     forwards Unique': find_class_unique Unique H'. *)
+(*     assert (S' = S'0); auto. subst S'0. *)
+(*     split*. *)
+(*     apply* find_vars_det. *)
+(* Qed. *)
 
-Ltac app_stmt_step_eval_det' :=
-  match goal with
-  | H1: stmt_step_eval ?prog1 ?me ?clsid ?vs ?me1 ?rvs1,
-        H2: stmt_step_eval ?prog2 ?me ?clsid ?vs ?me2 ?rvs2, 
-            H3: sub_prog ?prog2 ?prog1,
-                H4: unique_classes ?prog1 |- _ =>
-    let H := fresh in
-    assert (me1 = me2 /\ rvs1 = rvs2) as H by (applys stmt_step_eval_det' H4 H1 H2 H3; eauto); inverts H; clear H2
-  end.
+(* Ltac app_stmt_step_eval_det' := *)
+(*   match goal with *)
+(*   | H1: stmt_step_eval ?prog1 ?me ?clsid ?vs ?me1 ?rvs1, *)
+(*         H2: stmt_step_eval ?prog2 ?me ?clsid ?vs ?me2 ?rvs2,  *)
+(*             H3: sub_prog ?prog2 ?prog1, *)
+(*                 H4: unique_classes ?prog1 |- _ => *)
+(*     let H := fresh in *)
+(*     assert (me1 = me2 /\ rvs1 = rvs2) as H by (applys stmt_step_eval_det' H4 H1 H2 H3; eauto); inverts H; clear H2 *)
+(*   end. *)
 
-Theorem stmt_eval_det':
-  forall prog1 prog2 S s S1 S2,
-    unique_classes prog1 ->
-    stmt_eval prog1 S s S1 ->
-    stmt_eval prog2 S s S2 ->
-    sub_prog prog2 prog1 ->
-    S1 = S2.
-Proof.
-  intros until S2; intros Unique Hev1; revert S2;
-  induction Hev1; intros S2' Hev2 Hsub; inv Hev2; inv Hsub;
-  try app_exp_eval_det; auto.
-  - apply* IHHev1.
-    app_bool_val; eauto.    
-  - apply* IHHev1_2.
-    asserts_rewrite* (S2 = S4).
-  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
-    assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
-    repeat fequals; apply* stmt_step_eval_det'.
-Qed.
+(* Theorem stmt_eval_det': *)
+(*   forall prog1 prog2 S s S1 S2, *)
+(*     unique_classes prog1 -> *)
+(*     stmt_eval prog1 S s S1 -> *)
+(*     stmt_eval prog2 S s S2 -> *)
+(*     sub_prog prog2 prog1 -> *)
+(*     S1 = S2. *)
+(* Proof. *)
+(*   intros until S2; intros Unique Hev1; revert S2; *)
+(*   induction Hev1; intros S2' Hev2 Hsub; inv Hev2; inv Hsub; *)
+(*   try app_exp_eval_det; auto. *)
+(*   - apply* IHHev1. *)
+(*     app_bool_val; eauto.     *)
+(*   - apply* IHHev1_2. *)
+(*     asserts_rewrite* (S2 = S4). *)
+(*   - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0. *)
+(*     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0. *)
+(*     repeat fequals; apply* stmt_step_eval_det'. *)
+(* Qed. *)
 
-Ltac app_stmt_eval_det' :=
-  match goal with
-  | H1: stmt_eval ?prog1 ?S ?s ?S1,
-        H2: stmt_eval ?prog2 ?S ?s ?S2,
-            H3: sub_prog ?prog2 ?prog1,
-                H4: unique_classes ?prog1 |- _ =>
-    let H := fresh in
-    assert (S1 = S2) as H by (applys stmt_eval_det' H4 H1 H2 H3; eauto); inverts H; clear H2
-  end.
+(* Ltac app_stmt_eval_det' := *)
+(*   match goal with *)
+(*   | H1: stmt_eval ?prog1 ?S ?s ?S1, *)
+(*         H2: stmt_eval ?prog2 ?S ?s ?S2, *)
+(*             H3: sub_prog ?prog2 ?prog1, *)
+(*                 H4: unique_classes ?prog1 |- _ => *)
+(*     let H := fresh in *)
+(*     assert (S1 = S2) as H by (applys stmt_eval_det' H4 H1 H2 H3; eauto); inverts H; clear H2 *)
+(*   end. *)
 
 (* Inductive cont := *)
 (* | Kstop: cont *)
