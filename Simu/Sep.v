@@ -6,14 +6,21 @@ Require Import lib.Maps.
 Require Import lib.Coqlib.
 
 Require Import Rustre.Common.
-Require Import Syn Sem.
+Require Import Rustre.RMemory.
+Require Import Syn Sem Tra.
 
 Require Import List.
 Require Import ZArith.BinInt.
 
+Require Import Program.Tactics.
+Require Import LibTactics.
+
 Open Scope list.
 Open Scope sep_scope.
 Open Scope Z.
+
+Notation "m -*> m'" := (massert_imp m m') (at level 70, no associativity) : sep_scope.
+Notation "m <-*-> m'" := (massert_eqv m m') (at level 70, no associativity) : sep_scope.
 
 Lemma storev_rule':
   forall chunk m m' b ofs v (spec1 spec: val -> Prop) P,
@@ -41,20 +48,21 @@ Qed.
 
 Lemma sepemp_right:
   forall P,
-    massert_eqv P (P ** sepemp).
+    P <-*-> (P ** sepemp).
 Proof.
   split; split; simpl; try (auto using sepemp_disjoint); intuition.
 Qed.
 
 Lemma sepemp_left:
   forall P,
-    massert_eqv P (sepemp ** P).
+    P <-*-> (sepemp ** P).
 Proof.
   intros. rewrite sep_comm. rewrite <-sepemp_right. reflexivity.
 Qed.
 
-Program Definition sepfalse: massert := {| m_pred := fun m => False;
-                                            m_footprint := fun b ofs => True |}.
+Program Definition sepfalse: massert :=
+  {| m_pred := fun m => False;
+     m_footprint := fun b ofs => True |}.
 Next Obligation.
   contradiction.
 Defined.
@@ -70,16 +78,14 @@ Section Sepall.
 
   Lemma sepall_cons:
     forall p x xs,
-      massert_eqv (sepall p (x::xs))
-                  (p x ** sepall p xs).
+      sepall p (x::xs) <-*-> p x ** sepall p xs.
   Proof.
     constructor; constructor; trivial.
   Qed.
 
   Lemma sepall_app:
     forall p xs ys,
-      massert_eqv (sepall p (xs ++ ys))
-                  (sepall p xs ** sepall p ys).
+      sepall p (xs ++ ys) <-*-> sepall p xs ** sepall p ys.
   Proof.
     induction xs.
     - intros. 
@@ -96,7 +102,7 @@ Section Sepall.
   Lemma sepall_breakout:
     forall ys ws x xs p,
       ys = ws ++ x :: xs ->
-      massert_eqv (sepall p ys) (p x ** sepall p (ws ++ xs)).
+      sepall p ys <-*-> p x ** sepall p (ws ++ xs).
   Proof.
     intros ** Hys.
     rewrite sepall_app.
@@ -113,13 +119,12 @@ Section Sepall.
       exists ws xs,
         ys = ws ++ x :: xs
         /\ (forall p,
-               massert_eqv (sepall p ys)
-                           (p x ** sepall p (ws ++ xs))).
+              sepall p ys <-*-> p x ** sepall p (ws ++ xs)).
   Proof.
     intros x ys Hin.
     apply in_split in Hin.
     destruct Hin as [ws [xs Hys]].
-    exists ws, xs.
+    exists ws xs.
     split; auto. 
     intro p. apply sepall_breakout with (1:=Hys).
   Qed.
@@ -143,7 +148,7 @@ Section Sepall.
     forall f f' xs,
       List.NoDup xs ->
       (forall x, In x xs -> f x = f' x) ->
-      massert_eqv (sepall f xs) (sepall f' xs).
+      sepall f xs <-*-> sepall f' xs.
   Proof.
     induction xs as [|x xs IH].
     reflexivity.
@@ -169,13 +174,13 @@ Section SplitRange.
   Lemma split_range_fields':
     forall b lo,
       NoDupMembers (co_members co) ->
-      massert_imp (range b lo (lo + sizeof_struct env 0 (co_members co)))
-                  (sepall (fun (fld: ident * type) =>
-                             let (id, ty) := fld in
-                             match field_offset env id (co_members co) with
-                             | OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
-                             | Error _ => sepfalse
-                             end) (co_members co)).
+      range b lo (lo + sizeof_struct env 0 (co_members co)) -*>
+            sepall (fun (fld: ident * type) =>
+                      let (id, ty) := fld in
+                      match field_offset env id (co_members co) with
+                      | OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
+                      | Error _ => sepfalse
+                      end) (co_members co).
   Proof.
     intros b lo Hndup.
     cut (forall cur,
@@ -236,13 +241,13 @@ Section SplitRange.
   Lemma split_range_fields:
     forall b lo,
       NoDupMembers (co_members co) ->
-      massert_imp (range b lo (lo + co_sizeof co))
-                  (sepall (fun (fld: ident * type) =>
+      range b lo (lo + co_sizeof co) -*>
+            sepall (fun (fld: ident * type) =>
                       let (id, ty) := fld in
                       match field_offset env id (co_members co) with
                       | OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
                       | Error _ => sepfalse
-                      end) (co_members co)).
+                      end) (co_members co).
   Proof.
     intros b lo Hndup.
     apply Henv in Hco.
@@ -265,59 +270,231 @@ Section SplitRange.
 
 End SplitRange.
 
+Definition chunk_of_type ty := AST.chunk_of_type (Ctypes.typ_of_type ty).
+Definition instance_match (i: ident) (S: state): state :=
+  (match mfind_inst i (fst S) with
+  | None => m_empty
+  | Some i => i
+  end, snd S).
+
 Section Staterep.
   Variable ge : composite_env.
 
-  Fixpoint staterep (p: program) (clsnm: ident) (me: menv)
-                    (b: block) (ofs: Z) : massert :=
+  Fixpoint staterep' (p: list class) (clsnm: ident) (S: state)
+                    (b: block) (ofs: Z): massert :=
     match p with
     | nil => sepfalse
-    | cls::p' =>
+    | cls :: p' =>
       if ident_eqb clsnm cls.(c_name)
       then
         sepall (fun (xty: ident * typ) =>
                   let (x, ty) := xty in
                   match field_offset ge x (make_members cls) with
                   | OK d =>
-	            Separation.contains (chunk_of_type ty) b (ofs + d)
-                                        (match_value x me.(mm_values))
+	                contains (chunk_of_type ty) b (ofs + d) (find_field S x)
                   | Error _ => sepfalse
                   end) cls.(c_mems)
         **
-        sepall (fun (o: obj_dec) =>
-                  let i := obj_inst o in
+        sepall (fun (o: ident * ident) =>
+                  let (i, c) := o in
                   match field_offset ge i (make_members cls) with
                   | OK d =>
-                    staterep p' o.(obj_class) (instance_match i me) b (ofs + d)
+                    staterep' p' c (instance_match i S) b (ofs + d)
                   | Error _ => sepfalse
                   end) cls.(c_objs)
-      else staterep p' clsnm me b ofs
+      else staterep' p' clsnm S b ofs
     end.
 
-  Lemma staterep_skip_cons:
+  Definition staterep (p: program) := staterep' p.(p_classes). 
+
+   Lemma staterep_skip_cons':
     forall cls prog clsnm me b ofs,
       clsnm <> cls.(c_name) ->
-      massert_eqv (staterep (cls::prog) clsnm me b ofs)
-                  (staterep prog clsnm me b ofs).
+      staterep' (cls :: prog) clsnm me b ofs <-*-> staterep' prog clsnm me b ofs.
   Proof.
     intros ** Hnm.
     apply ident_eqb_neq in Hnm.
-    simpl; rewrite Hnm.
-    reflexivity.
+    simpl; rewrite Hnm; reflexivity.
+  Qed.
+  
+  Lemma staterep_skip_cons:
+    forall cls prog prog' clsnm me b ofs,
+      clsnm <> cls.(c_name) ->
+      prog'.(p_classes) = cls :: prog.(p_classes) ->
+      staterep prog' clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
+  Proof.
+    intros ** Hnm Eq.
+    destruct prog'.
+    simpl in Eq; subst.
+    unfold staterep.
+    now apply staterep_skip_cons'.    
   Qed.
 
   Lemma staterep_skip_app:
-    forall clsnm prog oprog me b ofs,
+    forall clsnm prog oprog prog' me b ofs,
       ~ClassIn clsnm oprog ->
-      massert_eqv (staterep (oprog ++ prog) clsnm me b ofs)
-                  (staterep prog clsnm me b ofs).
+      prog'.(p_classes) = oprog ++ prog.(p_classes) ->
+      staterep prog' clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
-    intros ** Hnin.
+    intros ** Hnin Eq.
+    destruct prog'.
+    simpl in Eq; subst.
+    unfold staterep; simpl.
     induction oprog as [|cls oprog IH].
     - rewrite app_nil_l. reflexivity.
     - apply NotClassIn in Hnin. destruct Hnin.
       rewrite <-app_comm_cons.
-      rewrite staterep_skip_cons; auto.
+      rewrite staterep_skip_cons'; auto.
+      apply IH; auto.
+      apply WelldefClasses_cons' with cls.
+      now rewrite app_comm_cons.      
   Qed.
 
 End Staterep.
+
+Section BlockRep.
+  Variable ge : composite_env.
+
+  Definition blockrep (S: state) (flds: members) (b: block) : massert :=
+    sepall (fun xty : ident * type =>
+              let (x, ty) := xty in
+              match field_offset ge x flds, access_mode ty with
+              | OK d, By_value chunk =>
+                contains chunk b d (find_var S x)
+              | _, _ => sepfalse
+              end) flds.
+  
+End BlockRep.
+
+Lemma ident_eqb_sym:
+  forall x y, ident_eqb x y = ident_eqb y x.
+Proof Pos.eqb_sym.
+
+Lemma two_power_nat_le_divides:
+  forall m n,
+    two_power_nat m <= two_power_nat n ->
+    (two_power_nat m | two_power_nat n).
+Proof.
+  intros m n HH.
+  repeat rewrite two_power_nat_equiv in HH.
+  rewrite <-Z.pow_le_mono_r_iff in HH; intuition.
+  apply Z.le_exists_sub in HH.
+  destruct HH as [p [HH1 HH2]].
+  rewrite <-(nat_of_Z_eq p) in HH1; [|now apply Z.le_ge].
+  apply Zdivide_intro with (q:=two_power_nat (nat_of_Z p)).
+  repeat rewrite two_power_nat_equiv.
+  rewrite <-Z.pow_add_r; intuition.
+  rewrite HH1.
+  reflexivity.
+Qed.
+
+Lemma two_power_nat_max:
+  forall m n,
+    (two_power_nat m | Z.max (two_power_nat m) (two_power_nat n)).
+Proof.
+  intros m n.
+  rewrite Zmax_spec.
+  destruct (zlt (two_power_nat n) (two_power_nat m)).
+  apply Z.divide_refl.
+  apply two_power_nat_le_divides.
+  now apply Z.ge_le.
+Qed.
+
+Lemma co_members_alignof:
+  forall env co,
+    composite_consistent env co ->
+    attr_alignas (co_attr co) = None ->
+    Forall (fun (x: ident * type) =>
+              (alignof env (snd x) | co_alignof co))
+           (co_members co).
+Proof.
+  intros env co Henv Hattr.
+  rewrite co_consistent_alignof with (1:=Henv).
+  unfold align_attr.
+  rewrite Hattr; clear Hattr.
+  induction (co_members co) as [|m ms IH]; [now trivial|].
+  destruct (alignof_composite_two_p env ms) as [n Hms].
+  simpl. rewrite Hms in *; clear Hms.
+  destruct m as [x ty].
+  destruct (alignof_two_p env ty) as [m Hty].
+  rewrite Hty.
+  constructor.
+  - simpl. rewrite Hty. now apply two_power_nat_max.
+  - apply Forall_impl with (2:=IH).
+    destruct a as [x' ty']. simpl.
+    intro HH. apply Z.divide_trans with (1:=HH).
+    rewrite Z.max_comm. apply two_power_nat_max.
+Qed.
+
+Lemma align_noattr:
+  forall a, align_attr noattr a = a.
+Proof.
+  intros. unfold noattr. reflexivity.
+Qed.
+
+Lemma in_field_type:
+  forall xs x ty,
+    NoDupMembers xs ->
+    In (x, ty) xs ->
+    field_type x xs = OK ty.
+Proof.
+  intros xs x ty Hndup Hin.
+  induction xs as [|x' xs IH]; [now inversion Hin|].
+  destruct x' as [x' ty'].
+  apply nodupmembers_cons in Hndup.
+  destruct Hndup as [? Hndup].
+  inversion Hin as [Heq|Heq].
+  - injection Heq; intros; subst.
+    simpl. rewrite peq_true. reflexivity.
+  - simpl. rewrite peq_false.
+    + now apply IH with (1:=Hndup) (2:=Heq).
+    + intro; subst.
+      apply NotInMembers_NotIn in Heq; intuition.
+Qed.
+
+Definition valid_val (v: val) (t: typ): Prop :=
+    Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t)
+    /\ v <> Values.Vundef
+    /\ Values.Val.has_type v (Ctypes.typ_of_type t).
+
+Lemma sizeof_translate_chunk:
+  forall gcenv v t,
+    valid_val v t ->
+    sizeof gcenv t = Memdata.size_chunk (chunk_of_type t).
+Proof.
+  unfold valid_val; intros; destruct_pairs; 
+  destruct t, v;
+  (destruct i, s || destruct f || idtac);
+  (discriminates || contradiction || auto).
+Qed.
+
+Lemma align_chunk_divides_alignof_type:
+  forall gcenv v t,
+    valid_val v t ->
+    (Memdata.align_chunk (chunk_of_type t) | alignof gcenv t).
+Proof.
+  unfold valid_val; intros; destruct_pairs; 
+  destruct t, v;
+  (destruct i, s || destruct f || idtac);
+  (discriminates || contradiction || auto);
+  simpl; try rewrite align_noattr; simpl.
+Admitted.
+
+Remark valid_val_implies_access:
+    forall v t, valid_val v t -> access_mode t = By_value (chunk_of_type t).
+Proof. introv H; apply H. Qed.
+
+Lemma in_translate_param_chunked:
+  forall ge (flds: list (ident * typ)) x ty v,
+    valid_val v ty ->
+    In (x, ty) flds ->
+    exists chunk,
+      access_mode ty = By_value chunk
+      /\ (Memdata.align_chunk chunk | alignof ge ty).
+Proof.
+  intros ** Valid Hin.
+  exists (chunk_of_type ty).
+  split.
+  - now apply valid_val_implies_access with v.
+  - now apply align_chunk_divides_alignof_type with v.
+Qed.

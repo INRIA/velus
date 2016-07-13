@@ -718,3 +718,32 @@ Section InMembers.
   Qed.
 
 End InMembers.
+
+Set Implicit Arguments.
+Section Lists.
+
+  Variable A : Type.
+  
+  Fixpoint concat (l : list (list A)) : list A :=
+    match l with
+    | nil => nil
+    | cons x l => x ++ concat l
+    end.
+
+  Lemma concat_nil : concat nil = nil.
+  Proof eq_refl. 
+
+  Lemma concat_cons : forall x l, concat (cons x l) = x ++ concat l.
+  Proof. simpl; reflexivity. Qed.
+                               
+  Lemma concat_app : forall l1 l2, concat (l1 ++ l2) = concat l1 ++ concat l2.
+  Proof.
+    induction l1; auto.
+    intro.
+    rewrite <-app_comm_cons.
+    repeat rewrite concat_cons.
+    rewrite <-app_assoc.
+    f_equal; auto.
+  Qed.
+
+End Lists.

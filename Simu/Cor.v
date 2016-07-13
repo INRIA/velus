@@ -1,12 +1,13 @@
 Require Import cfrontend.ClightBigstep.
-Require cfrontend.Clight.
+Require Import cfrontend.Clight.
+Require Import cfrontend.Ctypes.
 Require Import lib.Integers.
 
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
 Require Import Rustre.Nelist.
 
-Require Import Syn Sem Tra.
+Require Import Syn Sem Tra Sep.
 
 Require Import Program.Tactics.
 Require Import List.
@@ -27,11 +28,10 @@ Section PRESERVATION.
   (* Let ge := globalenv prog. *)
   Let tge := Clight.globalenv tprog.
 
-  Definition chunk_of_typ ty := AST.chunk_of_type (Ctypes.typ_of_type ty).
   Definition pointer_of_node node := pointer_of (type_of_inst node).
 
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
-  Hypothesis UNIQUE: unique_classes prog.
+  (* Hypothesis UNIQUE: unique_classes prog. *)
   
   (* Hypothesis WF: well_formed prog. *)
   (* Hypothesis MAINNODE: find_class main_node prog = Some (c_main, cls_main). *)
@@ -50,16 +50,12 @@ Section PRESERVATION.
   (*                         (translate_stmt main_node c_main.(c_step)). *)
   
   Lemma type_pres:
-    forall c e, Clight.typeof (translate_exp c.(c_name) e) = typeof e.
+    forall c m e, Clight.typeof (translate_exp c m e) = typeof e.
   Proof.
-    induction e as [| |cst]; simpl; try reflexivity.
-    destruct cst; simpl; reflexivity.
+    induction e as [| |cst]; simpl; auto.
+    - case (existsb (fun out : positive * typ => ident_eqb (fst out) i) (m_out m)); auto.
+    - destruct cst; simpl; reflexivity.
   Qed.
-
-  Definition valid_val (v: val) (t: typ): Prop :=
-    Ctypes.access_mode t = Ctypes.By_value (chunk_of_typ t)
-    /\ v <> Values.Vundef
-    /\ Values.Val.has_type v (Ctypes.typ_of_type t).
 
   Lemma sem_cast_same:
     forall m v t,
@@ -72,134 +68,98 @@ Section PRESERVATION.
       (discriminates || contradiction || auto).
   Qed.
 
-  Inductive well_formed_exp (c: class): exp -> Prop :=
+  Inductive well_formed_exp (c: class) (m: method): exp -> Prop :=
   | wf_var: forall x ty,
-      In (x, ty) (class_vars c) ->
+      In (x, ty) (meth_vars m) ->
       x <> self_id ->
-      well_formed_exp c (Var x ty)
+      well_formed_exp c m (Var x ty)
   | wf_state: forall x ty,
       In (x, ty) c.(c_mems) ->
-      well_formed_exp c (State x ty)
+      well_formed_exp c m (State x ty)
   | wf_const: forall cst ty,
-      well_formed_exp c (Const cst ty).
+      well_formed_exp c m (Const cst ty).
 
-  Inductive well_formed_stmt (c: class) (S: state): stmt -> Prop :=
+  Inductive well_formed_stmt (c: class) (m: method) (S: state): stmt -> Prop :=
   | wf_assign: forall x e v,
-      In (x, typeof e) (class_vars c) ->
+      In (x, typeof e) (meth_vars m) ->
       x <> self_id ->
-      well_formed_exp c e ->
+      well_formed_exp c m e ->
       exp_eval S e v ->
       valid_val v (typeof e) ->
-      v = Values.Val.load_result (chunk_of_typ (typeof e)) v ->
-      well_formed_stmt c S (Assign x e)
+      v = Values.Val.load_result (chunk_of_type (typeof e)) v ->
+      well_formed_stmt c m S (Assign x e)
   | wf_assignst: forall x e v,
       In (x, typeof e) c.(c_mems) ->
       x <> self_id ->
-      well_formed_exp c e ->
+      well_formed_exp c m e ->
       exp_eval S e v ->
       valid_val v (typeof e) ->
-      v = Values.Val.load_result (chunk_of_typ (typeof e)) v ->
-      well_formed_stmt c S (AssignSt x e)
+      v = Values.Val.load_result (chunk_of_type (typeof e)) v ->
+      well_formed_stmt c m S (AssignSt x e)
   | wf_ite: forall e s1 s2,
-      well_formed_exp c e ->
-      well_formed_stmt c S s1 ->
-      well_formed_stmt c S s2 ->
-      well_formed_stmt c S (Ifte e s1 s2)
+      well_formed_exp c m e ->
+      well_formed_stmt c m S s1 ->
+      well_formed_stmt c m S s2 ->
+      well_formed_stmt c m S (Ifte e s1 s2)
   | wf_comp: forall S' s1 s2,
-      well_formed_stmt c S s1 ->
+      well_formed_stmt c m S s1 ->
       stmt_eval prog S s1 S' ->
-      well_formed_stmt c S' s2 ->
-      well_formed_stmt c S (Comp s1 s2)
-  | wf_step: forall ys c' prog' clsid o es vs me me' rvs,
+      well_formed_stmt c m S' s2 ->
+      well_formed_stmt c m S (Comp s1 s2)
+  | wf_call: forall ys clsid o f es,
       (* In (y, ty) (class_vars c) -> *)
-      Nelist.length ys = Nelist.length rvs ->
-      Nelist.Forall (fun y => In y (class_vars c)) ys ->
+      (* Nelist.length ys = Nelist.length rvs -> *)
+      (* Nelist.Forall (fun y => In y (class_vars c)) ys -> *)
       (* y <> self_id -> *)
-      In {| obj_inst := o; obj_class := clsid |} c.(c_objs) ->
-      find_class clsid prog = Some (c', prog') ->
-      Nelist.Forall (well_formed_exp c) es ->
-      Nelist.Forall2 (exp_eval S) es vs ->
-      Nelist.Forall2 (fun e v => valid_val v (typeof e)) es vs ->
-      Nelist.Forall2 (fun e x => typeof e = snd x) es c'.(c_input) ->
+      (* In {| obj_inst := o; obj_class := clsid |} c.(c_objs) -> *)
+      (* find_class clsid prog = Some (c', prog') -> *)
+      (* Nelist.Forall (well_formed_exp c) es -> *)
+      (* Nelist.Forall2 (exp_eval S) es vs -> *)
+      (* Nelist.Forall2 (fun e v => valid_val v (typeof e)) es vs -> *)
+      (* Nelist.Forall2 (fun e x => typeof e = snd x) es c'.(c_input) -> *)
       (* ty = snd c'.(c_output) -> *)
-      find_inst S o me ->
-      well_formed_stmt c' (me, adds (Nelist.map_fst c'.(c_input)) vs v_empty) c'.(c_step) ->
-      stmt_step_eval prog me clsid vs me' rvs ->
+      (* find_inst S o me -> *)
+      (* well_formed_stmt c' (me, adds (Nelist.map_fst c'.(c_input)) vs v_empty) m.(m_body) -> *)
+      (* stmt_call_eval prog me clsid vs me' rvs -> *)
       (* valid_val rv ty -> *)
       (* ty <> Ctypes.Tvoid -> *)
-      well_formed_stmt c S (Step_ap ys clsid o es)
+      well_formed_stmt c m S (Call ys clsid o f es)
   | wf_skip: 
-      well_formed_stmt c S Skip.
+      well_formed_stmt c m S Skip.
 
-  Definition compat_vars (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop :=
-    forall x t,
-      In c prog ->
-      In (x, t) (class_vars c) ->
-      exists loc,
-        Maps.PTree.get x e = Some (loc, t)
-        /\ Memory.Mem.valid_access m (chunk_of_typ t) loc 0 Memtype.Writable
-        /\ forall v,
-            find_var S x v ->
-            Memory.Mem.load (chunk_of_typ t) m loc 0 = Some v
-            /\ valid_val v t.
-
-  Definition compat_self (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop :=
-    In c prog ->
-    exists co loc_self loc_struct ofs,
-      Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name))
-      /\ Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs)
-      /\ Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co
-      /\ (forall x t,
-            In (x, t) c.(c_mems) ->
-            exists delta,
-              Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta
-              /\ In (x, t) (Ctypes.co_members co)
-              /\ Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable
-              /\ forall v,
-                  find_field S x v ->
-                  Memory.Mem.load (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v
-                  /\ valid_val v t)
-      /\ forall o,
-          In o c.(c_objs) ->
-          exists delta,
-            Ctypes.field_offset (Clight.genv_cenv tge) o.(obj_inst) (Ctypes.co_members co) = Errors.OK delta.
-  
-  (* Definition compat_fields (c: class) (e: Clight.env) (m: Memory.Mem.mem): Prop := *)
-  (*   forall x t co loc_self loc_struct ofs, *)
-  (*     In c prog -> *)
-  (*     In (x, t) c.(c_mems) -> *)
-  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) -> *)
-  (*     Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) -> *)
-  (*     Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co ->      *)
-  (*     exists delta, *)
-  (*       Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta *)
-  (*       /\ In (x, t) (Ctypes.co_members co) *)
-  (*       /\ Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable. *)
-  
-  (* Definition compat_venv (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem):  Prop := *)
-  (*   forall x v t loc, *)
+  (* Definition compat_vars (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop := *)
+  (*   forall x t, *)
   (*     In c prog -> *)
   (*     In (x, t) (class_vars c) -> *)
-  (*     Maps.PTree.get x e = Some (loc, t) -> *)
-  (*     find_var x S v -> *)
-  (*     Memory.Mem.load (chunk_of_typ t) m loc 0 = Some v *)
-  (*     /\ valid_val v t. *)
+  (*     exists loc, *)
+  (*       Maps.PTree.get x e = Some (loc, t) *)
+  (*       /\ Memory.Mem.valid_access m (chunk_of_type t) loc 0 Memtype.Writable *)
+  (*       /\ forall v, *)
+  (*           find_var S x v -> *)
+  (*           Memory.Mem.load (chunk_of_type t) m loc 0 = Some v *)
+  (*           /\ valid_val v t. *)
+
+  (* Definition compat_self (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop := *)
+  (*   In c prog -> *)
+  (*   exists co loc_self loc_struct ofs, *)
+  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) *)
+  (*     /\ Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) *)
+  (*     /\ Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co *)
+  (*     /\ (forall x t, *)
+  (*           In (x, t) c.(c_mems) -> *)
+  (*           exists delta, *)
+  (*             Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta *)
+  (*             /\ In (x, t) (Ctypes.co_members co) *)
+  (*             /\ Memory.Mem.valid_access m (chunk_of_type t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable *)
+  (*             /\ forall v, *)
+  (*                 find_field S x v -> *)
+  (*                 Memory.Mem.load (chunk_of_type t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v *)
+  (*                 /\ valid_val v t) *)
+  (*     /\ forall o, *)
+  (*         In o c.(c_objs) -> *)
+  (*         exists delta, *)
+  (*           Ctypes.field_offset (Clight.genv_cenv tge) o.(obj_inst) (Ctypes.co_members co) = Errors.OK delta. *)
   
-  (* Definition compat_menv (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem):  Prop := *)
-  (*   forall x v t co loc_self loc_struct ofs delta, *)
-  (*     In c prog ->  *)
-  (*     In (x, t) c.(c_mems) -> *)
-  (*     find_field x S v -> *)
-  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) -> *)
-  (*     Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) -> *)
-  (*     Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co -> *)
-  (*     Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta -> *)
-  (*     Memory.Mem.load (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v *)
-  (*     /\ valid_val v t. *)
-  
-  Remark valid_val_implies_access:
-    forall v t, valid_val v t -> Ctypes.access_mode t = Ctypes.By_value (chunk_of_typ t).
-  Proof. introv H; apply H. Qed.
 
   Remark valid_val_not_void:
     forall v t, valid_val v t -> t <> Ctypes.Tvoid.
@@ -211,77 +171,120 @@ Section PRESERVATION.
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
   Hint Resolve valid_val_implies_access.
 
-  Remark eval_var:
-    forall c S e le m x t v,
-      compat_vars c S e m ->
-      In c prog ->
-      In (x, t) (class_vars c) ->
-      find_var S x v ->
-      Clight.eval_expr tge e le m (Clight.Evar x t) v.
-  Proof.
-    introv Hvars ? ? Find.
-    edestruct Hvars as (? & ? & ? & Hmem); eauto.
-    specializes Hmem Find.
-    eapply Clight.eval_Elvalue, Clight.deref_loc_value; iauto. 
-  Qed.
+  (* Remark eval_var: *)
+  (*   forall (* c *) S e le m x t v, *)
+  (*     (* compat_vars c S e m -> *) *)
+  (*     (* In c prog -> *) *)
+  (*     (* In (x, t) (class_vars c) -> *) *)
+  (*     find_var S x v -> *)
+  (*     Clight.eval_expr tge e le m (Clight.Evar x t) v. *)
+  (* Proof. *)
+  (*   introv (* Hvars ? ? *) Find. *)
+  (*   (* edestruct Hvars as (? & ? & ? & Hmem); eauto. *) *)
+  (*   (* specializes Hmem Find. *) *)
+  (*   eapply Clight.eval_Elvalue, Clight.deref_loc_value. *)
+  (*   econstructor. *)
+    
+  (* Qed. *)
 
-  Remark evall_self_field:
-    forall c e le m x t co loc_self loc_struct ofs delta,
-      Maps.PTree.get self_id e = Some (loc_self, pointer_of_node (c_name c)) ->
-      Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) ->
-      Maps.PTree.get (c_name c) (Clight.genv_cenv tge) = Some co ->
-      Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta ->
-      Clight.eval_lvalue tge e le m (deref_self_field c.(c_name) x t) loc_struct (Int.add ofs (Int.repr delta)).
-  Proof.
-    intros.
-    eapply Clight.eval_Efield_struct
-    with (id:=c.(c_name)) (att:=Ctypes.noattr); eauto.
-    eapply Clight.eval_Elvalue. 
-    - apply Clight.eval_Ederef. 
-      apply* Clight.eval_Elvalue.
-      apply* Clight.deref_loc_value.
-      reflexivity.
-    - apply* Clight.deref_loc_copy.
-  Qed.
+  (* Remark evall_self_field: *)
+  (*   forall c e le m x t co loc_self loc_struct ofs delta, *)
+  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node (c_name c)) -> *)
+  (*     Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) -> *)
+  (*     Maps.PTree.get (c_name c) (Clight.genv_cenv tge) = Some co -> *)
+  (*     Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta -> *)
+  (*     Clight.eval_lvalue tge e le m (deref_self_field c.(c_name) x t) loc_struct (Int.add ofs (Int.repr delta)). *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   eapply Clight.eval_Efield_struct *)
+  (*   with (id:=c.(c_name)) (att:=Ctypes.noattr); eauto. *)
+  (*   eapply Clight.eval_Elvalue.  *)
+  (*   - apply Clight.eval_Ederef.  *)
+  (*     apply* Clight.eval_Elvalue. *)
+  (*     apply* Clight.deref_loc_value. *)
+  (*     reflexivity. *)
+  (*   - apply* Clight.deref_loc_copy. *)
+  (* Qed. *)
   
-  Remark eval_self_field:
-    forall c S e le m x t v,
-      compat_self c S e m ->
-      In c prog ->
-      In (x, t) c.(c_mems) ->
-      find_field S x v ->
-      Clight.eval_expr tge e le m (deref_self_field c.(c_name) x t) v.
-  Proof.
-    introv Hself ? Hin Find.
-    destruct* Hself as (? & ? & ? & ? & ? & ? & ? & Hmem & ?).  
-    forwards (? & ? & ? & ? & Hmem'): Hmem Hin.
-    specializes Hmem' Find.
-    eapply Clight.eval_Elvalue.
-    + apply* evall_self_field.
-    + apply* Clight.deref_loc_value.      
-  Qed.
+  (* Remark eval_self_field: *)
+  (*   forall c S e le m x t v, *)
+  (*     compat_self c S e m -> *)
+  (*     In c prog -> *)
+  (*     In (x, t) c.(c_mems) -> *)
+  (*     find_field S x v -> *)
+  (*     Clight.eval_expr tge e le m (deref_self_field c.(c_name) x t) v. *)
+  (* Proof. *)
+  (*   introv Hself ? Hin Find. *)
+  (*   destruct* Hself as (? & ? & ? & ? & ? & ? & ? & Hmem & ?).   *)
+  (*   forwards (? & ? & ? & ? & Hmem'): Hmem Hin. *)
+  (*   specializes Hmem' Find. *)
+  (*   eapply Clight.eval_Elvalue. *)
+  (*   + apply* evall_self_field. *)
+  (*   + apply* Clight.deref_loc_value.       *)
+  (* Qed. *)
   
   Lemma expr_eval_simu:
-    forall c S exp v e le m,
-      compat_vars c S e m ->
-      compat_self c S e m ->
-      In c prog ->
-      well_formed_exp c exp ->
+    forall c S exp v e le m meth,
+      (* compat_vars c S e m -> *)
+      (* compat_self c S e m -> *)
+      (* In c prog -> *)
+      (* well_formed_exp c exp -> *)
       exp_eval S exp v ->
-      Clight.eval_expr tge e le m (translate_exp c.(c_name) exp) v.
+      Clight.eval_expr tge e le m (translate_exp c meth exp) v.
   Proof.
-    intros c S exp; induction exp as [| |cst];
-    introv ? ? ? Hwf Heval; inverts Heval; inverts Hwf.
+    intros c S exp; induction exp as [x ty| |cst];
+    introv (* ? ? ? Hwf *) Heval; inverts Heval(* ; inverts Hwf *).
 
     (* Var x ty : "x" *)
-    - apply* eval_var.
+    - simpl.
+      case (existsb (fun out : positive * typ => ident_eqb (fst out) x) (m_out meth)).
+      + eapply eval_Elvalue.
+        *{ eapply eval_Efield_struct.
+           - eapply eval_Elvalue.
+             + apply eval_Ederef.
+               eapply eval_Elvalue.
+               * apply eval_Evar_local.
+                 skip.
+               *{ eapply deref_loc_value.
+                  - simpl; eauto.
+                  - skip.
+                }
+             + apply deref_loc_copy; auto.
+           - simpl; unfold type_of_inst; eauto.
+           - skip.
+           - skip.
+         }
+        *{ eapply deref_loc_value.
+           - simpl. skip.
+           - skip.
+         }
+      + apply eval_Etempvar.
+        admit.
       
     (* State x ty : "self->x" *)
-    - apply* eval_self_field.
-      
+    - simpl.
+      eapply eval_Elvalue.
+      + eapply eval_Efield_struct.
+        *{ eapply eval_Elvalue.
+           - apply eval_Ederef.
+             eapply eval_Elvalue.
+             + apply eval_Evar_local.
+               skip.
+             + eapply deref_loc_value.
+               * simpl; eauto.
+               * skip.
+           - apply deref_loc_copy; auto.
+         } 
+        * simpl; unfold type_of_inst; eauto.
+        * skip.
+        * skip.
+      + eapply deref_loc_value.
+        * simpl. skip.
+        * skip.
+        
     (* Const c ty : "c" *)
     - destruct cst; constructor.
-  Qed.
+  Admitted.
 
   Lemma exprs_eval_simu:
     forall c S es es' vs e le m,
@@ -409,12 +412,12 @@ Section PRESERVATION.
       Ctypes.field_offset (Clight.genv_cenv tge) x' (Ctypes.co_members co) = Errors.OK delta' ->
       (BinInt.Z.le
          (BinInt.Z.add (Int.unsigned (Int.add ofs (Int.repr delta')))
-                       (Memdata.size_chunk (chunk_of_typ t')))
+                       (Memdata.size_chunk (chunk_of_type t')))
          (Int.unsigned (Int.add ofs (Int.repr delta)))
        \/
        BinInt.Z.le
          (BinInt.Z.add (Int.unsigned (Int.add ofs (Int.repr delta)))
-                       (Memdata.size_chunk (chunk_of_typ t)))
+                       (Memdata.size_chunk (chunk_of_type t)))
          (Int.unsigned (Int.add ofs (Int.repr delta')))).
 
   (* Hypothesis STEPS: *)
@@ -431,7 +434,7 @@ Section PRESERVATION.
   (*       /\ Coqlib.list_norepet (Clight.var_names (Clight.fn_params f) ++ Clight.var_names (Clight.fn_vars f)) *)
   (*       /\ Clight.fn_body f = snd (translate_stmt c.(c_name) c.(c_step)) *)
   (*       /\ length f.(Clight.fn_params) = 1 + Nelist.length c.(c_input)   *)
-  (*       /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x))) *)
+  (*       /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) *)
   (*                (f.(Clight.fn_params) ++ f.(Clight.fn_vars)). *)
   
   Definition match_step (e: Clight.env) :=
@@ -451,7 +454,7 @@ Section PRESERVATION.
         /\ Clight.fn_body f = Clight.Ssequence (translate_stmt c.(c_name) c.(c_step)) (Clight.Sreturn None)
         /\ f.(Clight.fn_params) =
           (self_id, type_of_inst_p c.(c_name)) :: nelist2list c.(c_input) ++ nelist2list c.(c_output)
-        /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x)))
+        /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x)))
                  (f.(Clight.fn_params) ++ f.(Clight.fn_vars)).
   
   Definition c_state := (Clight.env * Memory.Mem.mem)%type.
@@ -505,10 +508,10 @@ Section PRESERVATION.
       match_states c S (e, m) ->
       Maps.PTree.get x e = Some (loc, t) ->
       In (x, t) (class_vars c) ->
-      v = Values.Val.load_result (chunk_of_typ t) v ->
+      v = Values.Val.load_result (chunk_of_type t) v ->
       valid_val v t ->
       x <> self_id ->
-      exists m', Memory.Mem.store (chunk_of_typ t) m loc 0 v = Some m' 
+      exists m', Memory.Mem.store (chunk_of_type t) m loc 0 v = Some m' 
             /\ match_states c (update_var S x v) (e, m').
   Proof.
     introv ? MS Hget Hin Hloadres ? ?.
@@ -582,7 +585,7 @@ Section PRESERVATION.
   (*     In c prog -> *)
   (*     match_states c S (e, m) -> *)
   (*     Nelist.Forall (fun y => In y (class_vars c)) ys -> *)
-  (*     exists m', Memory.Mem.store (chunk_of_typ t) m loc 0 v = Some m'  *)
+  (*     exists m', Memory.Mem.store (chunk_of_type t) m loc 0 v = Some m'  *)
   (*           /\ match_states c (update_var S x v) (e, m'). *)
   (* Proof. *)
   (*   introv ? MS Hget Hin Hloadres ? ?. *)
@@ -678,11 +681,11 @@ Section PRESERVATION.
       Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) ->
       Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) ->
       In (x, t) c.(c_mems) ->
-      v = Values.Val.load_result (chunk_of_typ t) v ->
+      v = Values.Val.load_result (chunk_of_type t) v ->
       valid_val v t ->
-     Memory.Mem.valid_access m (chunk_of_typ t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable ->
+     Memory.Mem.valid_access m (chunk_of_type t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable ->
       exists m',
-        Memory.Mem.store (chunk_of_typ t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) v = Some m'
+        Memory.Mem.store (chunk_of_type t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) v = Some m'
         /\ match_states c (update_field S x v) (e, m').
   Proof.
     intros ** ? MS Hoffset Hget_co Hget_self Hload_self Hin Hloadres ? ? .
@@ -759,8 +762,8 @@ Section PRESERVATION.
 
   Remark assign_loc_exists:
     forall v ty m loc,
-      Ctypes.access_mode ty = Ctypes.By_value (chunk_of_typ ty) ->
-      Memory.Mem.valid_access m (chunk_of_typ ty) loc 0 Memtype.Writable ->
+      Ctypes.access_mode ty = Ctypes.By_value (chunk_of_type ty) ->
+      Memory.Mem.valid_access m (chunk_of_type ty) loc 0 Memtype.Writable ->
       exists m',
         Clight.assign_loc tge.(Clight.genv_cenv) ty m loc Int.zero v m'.
   Proof.
@@ -774,8 +777,8 @@ Section PRESERVATION.
       length xs = length vs ->
       Forall (fun x => exists loc,
                   Maps.PTree.get (fst x) e = Some (loc, snd x)
-                  /\ Memory.Mem.valid_access m (chunk_of_typ (snd x)) loc 0 Memtype.Writable
-                  /\ Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x))) xs ->
+                  /\ Memory.Mem.valid_access m (chunk_of_type (snd x)) loc 0 Memtype.Writable
+                  /\ Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) xs ->
       exists m',
         Clight.bind_parameters tge e m xs vs m'.
   Proof.
@@ -800,11 +803,11 @@ Section PRESERVATION.
   Remark alloc_variables_implies:
     forall vars e m e' m', 
       Clight.alloc_variables tge e m vars e' m' ->
-      Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x))) vars ->
+      Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) vars ->
       Forall (fun x => exists loc,
                   Maps.PTree.get (fst x) e' = Some (loc, snd x)
-                  /\ Memory.Mem.valid_access m' (chunk_of_typ (snd x)) loc 0 Memtype.Writable
-                  /\ Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x))) vars.
+                  /\ Memory.Mem.valid_access m' (chunk_of_type (snd x)) loc 0 Memtype.Writable
+                  /\ Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) vars.
   Proof.
     induction vars.
     - constructor.
@@ -813,7 +816,7 @@ Section PRESERVATION.
       constructor.
       + exists b1; splits*.
         * admit.
-        *{ assert (Memory.Mem.valid_access m1 (chunk_of_typ (snd (id, ty))) b1 0 Memtype.Writable).
+        *{ assert (Memory.Mem.valid_access m1 (chunk_of_type (snd (id, ty))) b1 0 Memtype.Writable).
            - eapply Memory.Mem.valid_access_freeable_any.
              apply* Memory.Mem.valid_access_alloc_same.
              + omega.
@@ -837,7 +840,7 @@ Section PRESERVATION.
   Lemma compat_funcall_pres:
     forall m f vargs,
       Datatypes.length (Clight.fn_params f) = Datatypes.length vargs ->
-      Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_typ (snd x))) (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) ->
+      Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) ->
       exists m1 e_fun m2,
         Clight.alloc_variables tge Clight.empty_env m (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) e_fun m1 
         /\ Clight.bind_parameters tge e_fun m1 f.(Clight.fn_params) vargs m2.

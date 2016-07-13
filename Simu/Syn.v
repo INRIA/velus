@@ -148,6 +148,9 @@ Inductive InstanceDeclared (objs: list (ident * ident)): stmt -> Prop :=
 	    m_decl  : VarsDeclared (m_in ++ m_vars ++ m_out) m_body
     }.
 
+ Definition meth_vars (m: method): list (ident * typ) :=
+   m.(m_in) ++ m.(m_vars) ++ m.(m_out).
+
 (* Record obj_dec : Type := *)
 (*   mk_obj_dec { *)
 (*       obj_inst : ident; *)
@@ -187,6 +190,20 @@ Record class : Type :=
 
 Definition ClassIn (clsnm: ident) (cls: list class) : Prop :=
   Exists (fun cls => cls.(c_name) = clsnm) cls.
+
+Lemma NotClassIn:
+  forall clsnm cls prog,
+    ~ClassIn clsnm (cls::prog)
+    <-> (cls.(c_name) <> clsnm /\ ~ClassIn clsnm prog).
+Proof.
+  intros clsnm cls prog.
+  split; intro HH.
+  - split; intros Hn; apply HH; constructor (assumption).
+  - destruct HH as [HH1 HH2]; intros HH.
+    apply HH2. inversion HH.
+    + exfalso; apply HH1; assumption.
+    + assumption.
+Qed.
 
 Inductive WelldefClasses: list class -> Prop :=
 | wdc_nil:
@@ -265,7 +282,7 @@ Proof.
   - now apply IHcls.
 Qed.
 
-Lemma WelldefClasses_cons:
+Lemma WelldefClasses_cons':
   forall c cls,
     WelldefClasses (c :: cls) ->
     WelldefClasses cls.
@@ -273,12 +290,36 @@ Proof.
   induction cls; inversion 1; auto.
 Qed.
 
-Lemma WelldefClasses_app:
+Lemma WelldefClasses_app':
   forall cls cls',
     WelldefClasses (cls ++ cls') ->
     WelldefClasses cls'.
 Proof.
   induction cls; inversion 1; auto.
+Qed.
+
+Lemma WelldefClasses_cons:
+  forall p c cls,
+    p.(p_classes) = c :: cls ->
+    WelldefClasses cls.
+Proof.
+  intros p c cls H.
+  destruct p as (cls_p & WD).
+  simpl in H.
+  rewrite H in WD.
+  now apply WelldefClasses_cons' in WD.
+Qed.
+
+Lemma WelldefClasses_app:
+  forall p cls cls',
+    p.(p_classes) = cls ++ cls' ->
+    WelldefClasses cls'.
+Proof.
+  intros p cls cls' H.
+  destruct p as (cls_p & WD).
+  simpl in H.
+  rewrite H in WD.
+  now apply WelldefClasses_app' in WD.
 Qed.
 
 Program Definition find_class (n: ident) (p: program): option (class * program) :=
@@ -293,8 +334,8 @@ Next Obligation.
   destruct p as (cls & WD).
   simpl in Eq.
   subst cls.
-  apply WelldefClasses_app in WD.
-  now apply WelldefClasses_cons in WD.  
+  apply WelldefClasses_app' in WD.
+  now apply WelldefClasses_cons' in WD.  
 Defined.
 
 (** ** Decidable equality *)
