@@ -40,11 +40,17 @@ Definition cl_structdef := Ctypes.composite_definition.
 
 (** Common identifiers  *)
 Definition main_id: ident := pos_of_str "main".
+(* TB: Il faut être générique maintenant !
+       On hypothèse une fonction du type:
+          ident -> ident -> ident
+       pour composer des idents ? *)
 Definition step_id (id: cl_ident): ident :=
   pos_of_str ("step_" ++ (pos_to_str id)).
 Definition reset_id (id: cl_ident): ident :=
   pos_of_str ("reset_" ++ (pos_to_str id)).
 Definition self_id: ident := pos_of_str "self".
+
+(* TB: Pas la peine de faire la fonction de simulation tout de suite. *)
 Definition wait_id: ident := pos_of_str "wait".
 Definition delay_id: ident := pos_of_str "delay".
 
@@ -74,6 +80,10 @@ Definition translate_const (c: val): cl_type -> cl_expr :=
     end
   end.
 
+(* TB: Il faut que l'on trouve un moyen de mieux intégrer les types et les
+       opérations de Clight dans Minimp sans duplication. Que penses-tu
+       d'un prédicat sur les formes acceptables ? Ou plusieurs (types, unop,
+       binop, etc.) ? *)
 Definition translate_type (ty: typ): cl_type :=
   match ty with
   | Tbool => cl_bool
@@ -96,6 +106,7 @@ Definition translate_binop (op: binary_op): cl_expr -> cl_expr -> cl_type -> cl_
   | Div => Clight.Ebinop Cop.Odiv
   end.
 
+(* TB: et "out" ? *)
 Definition deref_self_field (cls x: cl_ident) (ty: cl_type): cl_expr :=
   let ty_deref_self := type_of_inst cls in
   let ty_self := pointer_of ty_deref_self in
@@ -148,9 +159,11 @@ Definition ptr_obj (owner: option cl_ident) (cls obj: cl_ident):=
       end) obj (type_of_inst cls))
     (type_of_inst_p cls).
 
+(* TPB: C'est générique maintenant. *)
 Definition reset_call (owner: option cl_ident) (cls obj: cl_ident): cl_stmt :=
   funcall None (reset_id cls) cl_void [ptr_obj owner cls obj].
 
+(* TPB: C'est générique maintenant. *)
 Definition step_call
            (owner: option cl_ident) (bind temp cls: cl_ident) (obj: cl_ident) (args: list cl_expr)
            (out_ty: cl_type)
@@ -177,15 +190,18 @@ Fixpoint translate_stmt (temp: option cl_bind) (owner: cl_ident) (s: stmt)
     let (temp2, s2') := translate_stmt temp1 owner s2 in
     (temp2, Clight.Sifthenelse (translate_exp owner e) s1' s2')
   | Step_ap y ty cls x es =>
+    (* TPB: C'est générique maintenant. *)
     let y := translate_ident y in
     let cls := translate_ident cls in
     let x := translate_ident x in
     let args := nelist2list (Nelist.map (translate_exp owner ) es) in (* owner or cls ? *)
     let out_ty := translate_type ty in
+    (* TPB: On n'en a plus besoin *)
     let temp' := match temp with Some t => t | None => (first_unused_ident tt, out_ty) end in
     let s_step := step_call (Some owner) y (fst temp') cls x args out_ty in 
     (Some temp', s_step)
   | Reset_ap cls x =>
+    (* TPB: C'est générique maintenant. *)
     (temp, reset_call (Some owner) cls x)
   | Comp s1 s2 =>
     let (temp1, s1') := translate_stmt temp owner s1 in
@@ -196,6 +212,7 @@ Fixpoint translate_stmt (temp: option cl_bind) (owner: cl_ident) (s: stmt)
   end.
 
 (** return statements  *)
+(* TPB: On n'en a plus besoin. *)
 Definition return_some (s: cl_stmt) (out: cl_bind): cl_stmt :=
   let (id, ty) := out in
   Clight.Ssequence s (Clight.Sreturn (Some (Clight.Evar id ty))).
@@ -260,7 +277,9 @@ Definition translate_class (c: class)
     let vars := List.map translate_param c_vars in
     let members := mems ++ objs in
     let name := translate_ident c_name in
+    (* TPB: C'est générique maintenant. *)
     let (temp_step, step) := translate_stmt None name c_step in
+    (* TPB: C'est générique maintenant. *)
     let (temp_reset, reset) := translate_stmt None name c_reset in
     let self := (self_id, type_of_inst_p name) in
     let temp_step' := match temp_step with Some t => [t] | None => [] end in
@@ -271,6 +290,8 @@ Definition translate_class (c: class)
     (cl_struct, cl_step, cl_reset) 
   end.
 
+(* TPB: Plutôt la fonction hypothésé ci-dessus du type
+          ident -> ident -> ident *)
 Definition glob_id (id: cl_ident): cl_ident :=
   pos_of_str ("_" ++ (pos_to_str id)).
 Definition glob_bind (bind: cl_bind): cl_bind :=
@@ -318,6 +339,7 @@ Definition make_wait: cl_ident * cl_globdef :=
 
 (** translation function: the main instance is declared as 'extern' and it's 
 step function's return variable as 'volatile' *)
+(* TPB: Est-ce possible de faire plus simple ? *)
 Definition translate (p: program) (main_node: ident)
   : Errors.res Clight.program :=
   match find_class main_node p with
