@@ -215,15 +215,11 @@ Inductive WelldefClasses: list class -> Prop :=
                ClassIn c' cls') ->
       WelldefClasses (c :: cls').
 
-Record program : Type :=
-  mk_program {
-      p_classes : list class;
-      p_welldef : WelldefClasses p_classes
-    }.
+Definition program : Type := list class.
 
 (* Definition program : Type := list class. *)
 
-Definition find_class' (n: ident): list class -> option (class * list class) :=
+Definition find_class (n: ident): program -> option (class * program) :=
   fix find p :=
     match p with
     | [] => None
@@ -237,10 +233,10 @@ Definition find_method (f: ident): list method -> option method :=
     | m :: ms' => if ident_eqb m.(m_name) f then Some m else find ms'
     end.
 
-Lemma ClassIn_find_class':
+Lemma ClassIn_find_class:
   forall clsnm prog,
     ClassIn clsnm prog ->
-    find_class' clsnm prog <> None.
+    find_class clsnm prog <> None.
 Proof.
   induction prog as [|cls prog' IH].
   now inversion 1.
@@ -255,7 +251,7 @@ Qed.
 
 Remark find_class_In:
   forall id cls c cls',
-    find_class' id cls = Some (c, cls') ->
+    find_class id cls = Some (c, cls') ->
     In c cls.
 Proof.
   intros ** Hfind.
@@ -268,10 +264,10 @@ Qed.
 
 Remark find_class_app:
   forall id cls c cls',
-    find_class' id cls = Some (c, cls') ->
+    find_class id cls = Some (c, cls') ->
     exists cls'',
       cls = cls'' ++ c :: cls'
-      /\ find_class' id cls'' = None.
+      /\ find_class id cls'' = None.
 Proof.
   intros ** Hfind.
   induction cls; inversion Hfind as [H].
@@ -287,7 +283,7 @@ Qed.
 
 Remark find_class_name:
   forall id cls c cls',
-    find_class' id cls = Some (c, cls') ->
+    find_class id cls = Some (c, cls') ->
     c.(c_name) = id.
 Proof.
   intros ** Hfind.
@@ -298,7 +294,7 @@ Proof.
   - now apply IHcls.
 Qed.
 
-Lemma WelldefClasses_cons':
+Lemma WelldefClasses_cons:
   forall c cls,
     WelldefClasses (c :: cls) ->
     WelldefClasses cls.
@@ -306,95 +302,12 @@ Proof.
   induction cls; inversion 1; auto.
 Qed.
 
-Lemma WelldefClasses_app':
+Lemma WelldefClasses_app:
   forall cls cls',
     WelldefClasses (cls ++ cls') ->
     WelldefClasses cls'.
 Proof.
   induction cls; inversion 1; auto.
-Qed.
-
-Lemma WelldefClasses_cons:
-  forall p c cls,
-    p.(p_classes) = c :: cls ->
-    WelldefClasses cls.
-Proof.
-  intros p c cls H.
-  destruct p as (cls_p & WD).
-  simpl in H.
-  rewrite H in WD.
-  now apply WelldefClasses_cons' in WD.
-Qed.
-
-Lemma WelldefClasses_app:
-  forall p cls cls',
-    p.(p_classes) = cls ++ cls' ->
-    WelldefClasses cls'.
-Proof.
-  intros p cls cls' H.
-  destruct p as (cls_p & WD).
-  simpl in H.
-  rewrite H in WD.
-  now apply WelldefClasses_app' in WD.
-Qed.
-
-Program Definition find_class (n: ident) (p: program): option (class * program) :=
-  match find_class' n p.(p_classes) with
-  | Some (c, cls') => Some (c, {| p_classes := cls' |})
-  | None => None
-  end.
-Next Obligation.
-  rename Heq_anonymous into H.
-  symmetry in H; apply find_class_app in H.
-  destruct H as (cls'' & Eq & ?).
-  destruct p as (cls & WD).
-  simpl in Eq.
-  subst cls.
-  apply WelldefClasses_app' in WD.
-  now apply WelldefClasses_cons' in WD.  
-Defined.
-
-Lemma ClassIn_find_class:
-  forall clsnm cls Hwdef,
-    ClassIn clsnm cls ->
-    find_class clsnm {| p_classes := cls; p_welldef := Hwdef |} <> None.
-Proof.
-  unfold find_class; simpl.
-  intros clsnm cls Hwdef Hfind.
-  apply ClassIn_find_class' in Hfind.
-  apply not_None_is_Some in Hfind.
-  destruct Hfind as ((c & cls') & Hfind).
-Admitted.
-
-Program Definition tail_prog (prog: program) :=
-  match prog.(p_classes) with
-  | [] => {| p_classes := [] |}
-  | _ :: cls' => {| p_classes := cls' |}
-  end.
-Next Obligation.
-  constructor.
-Defined.
-Next Obligation.
-  eapply WelldefClasses_cons; eauto.  
-Defined.
-
-Program Lemma find_class_cons_none:
-  forall n c cls prog (H: prog.(p_classes) = c :: cls),
-    n <> c.(c_name) ->
-    find_class n prog <> None ->
-    find_class n {| p_classes := cls; p_welldef := WelldefClasses_cons prog c cls H |} <> None.
-Proof.
-  intros n c cls prog H NEq Hfind.
-Admitted.
-
-Lemma find_class_nil:
-  forall prog n,
-    prog.(p_classes) = [] ->
-    find_class n prog = None.
-Proof.
-  intros.
-  unfold find_class.
-  destruct prog. simpl in *. subst. reflexivity. 
 Qed.
 
 (** ** Decidable equality *)

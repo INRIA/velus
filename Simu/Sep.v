@@ -319,8 +319,8 @@ Qed.
 Section Staterep.
   Variable ge : composite_env.
 
-  Fixpoint staterep' (p: list class) (clsnm: ident) (S: state)
-                    (b: block) (ofs: Z): massert :=
+  Fixpoint staterep
+           (p: program) (clsnm: ident) (S: state) (b: block) (ofs: Z): massert :=
     match p with
     | nil => sepfalse
     | cls :: p' =>
@@ -338,55 +338,33 @@ Section Staterep.
                   let (i, c) := o in
                   match field_offset ge i (make_members cls) with
                   | OK d =>
-                    staterep' p' c (instance_match S i) b (ofs + d)
+                    staterep p' c (instance_match S i) b (ofs + d)
                   | Error _ => sepfalse
                   end) cls.(c_objs)
-      else staterep' p' clsnm S b ofs
+      else staterep p' clsnm S b ofs
     end.
 
-  Definition staterep (p: program) := staterep' p.(p_classes). 
-
-   Lemma staterep_skip_cons':
+   Lemma staterep_skip_cons:
     forall cls prog clsnm me b ofs,
       clsnm <> cls.(c_name) ->
-      staterep' (cls :: prog) clsnm me b ofs <-*-> staterep' prog clsnm me b ofs.
+      staterep (cls :: prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
     intros ** Hnm.
     apply ident_eqb_neq in Hnm.
     simpl; rewrite Hnm; reflexivity.
   Qed.
-  
-  Lemma staterep_skip_cons:
-    forall cls prog prog' clsnm me b ofs,
-      clsnm <> cls.(c_name) ->
-      prog'.(p_classes) = cls :: prog.(p_classes) ->
-      staterep prog' clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
-  Proof.
-    intros ** Hnm Eq.
-    destruct prog'.
-    simpl in Eq; subst.
-    unfold staterep.
-    now apply staterep_skip_cons'.    
-  Qed.
 
   Lemma staterep_skip_app:
-    forall clsnm prog oprog prog' me b ofs,
+    forall clsnm prog oprog me b ofs,
       ~ClassIn clsnm oprog ->
-      prog'.(p_classes) = oprog ++ prog.(p_classes) ->
-      staterep prog' clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
+      staterep (oprog ++ prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
-    intros ** Hnin Eq.
-    destruct prog'.
-    simpl in Eq; subst.
-    unfold staterep; simpl.
+    intros ** Hnin.
     induction oprog as [|cls oprog IH].
     - rewrite app_nil_l. reflexivity.
     - apply NotClassIn in Hnin. destruct Hnin.
       rewrite <-app_comm_cons.
-      rewrite staterep_skip_cons'; auto.
-      apply IH; auto.
-      apply WelldefClasses_cons' with cls.
-      now rewrite app_comm_cons.      
+      rewrite staterep_skip_cons; auto.
   Qed.
 
 End Staterep.

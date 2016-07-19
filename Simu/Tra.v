@@ -261,7 +261,7 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
       let ins := map glob_bind m.(m_in) in
       let outs := map glob_bind m.(m_out) in
       let main := make_main prog main_node ins outs m in
-      let cs := List.map (translate_class prog) prog.(p_classes) in
+      let cs := List.map (translate_class prog) prog in
       let f_gvar := vardef true false (f, type_of_inst main_node) in
       let o_gvars := map (vardef true true) outs in
       let i_gvars := map (vardef true true) ins in
