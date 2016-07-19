@@ -237,6 +237,22 @@ Definition find_method (f: ident): list method -> option method :=
     | m :: ms' => if ident_eqb m.(m_name) f then Some m else find ms'
     end.
 
+Lemma ClassIn_find_class':
+  forall clsnm prog,
+    ClassIn clsnm prog ->
+    find_class' clsnm prog <> None.
+Proof.
+  induction prog as [|cls prog' IH].
+  now inversion 1.
+  intro Hcin.
+  simpl. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq.
+  - intro; discriminate.
+  - apply IH.
+    inversion Hcin; subst.
+    + rewrite ident_eqb_neq in Heq. intuition.
+    + assumption.
+Qed.
+
 Remark find_class_In:
   forall id cls c cls',
     find_class' id cls = Some (c, cls') ->
@@ -337,6 +353,49 @@ Next Obligation.
   apply WelldefClasses_app' in WD.
   now apply WelldefClasses_cons' in WD.  
 Defined.
+
+Lemma ClassIn_find_class:
+  forall clsnm cls Hwdef,
+    ClassIn clsnm cls ->
+    find_class clsnm {| p_classes := cls; p_welldef := Hwdef |} <> None.
+Proof.
+  unfold find_class; simpl.
+  intros clsnm cls Hwdef Hfind.
+  apply ClassIn_find_class' in Hfind.
+  apply not_None_is_Some in Hfind.
+  destruct Hfind as ((c & cls') & Hfind).
+Admitted.
+
+Program Definition tail_prog (prog: program) :=
+  match prog.(p_classes) with
+  | [] => {| p_classes := [] |}
+  | _ :: cls' => {| p_classes := cls' |}
+  end.
+Next Obligation.
+  constructor.
+Defined.
+Next Obligation.
+  eapply WelldefClasses_cons; eauto.  
+Defined.
+
+Program Lemma find_class_cons_none:
+  forall n c cls prog (H: prog.(p_classes) = c :: cls),
+    n <> c.(c_name) ->
+    find_class n prog <> None ->
+    find_class n {| p_classes := cls; p_welldef := WelldefClasses_cons prog c cls H |} <> None.
+Proof.
+  intros n c cls prog H NEq Hfind.
+Admitted.
+
+Lemma find_class_nil:
+  forall prog n,
+    prog.(p_classes) = [] ->
+    find_class n prog = None.
+Proof.
+  intros.
+  unfold find_class.
+  destruct prog. simpl in *. subst. reflexivity. 
+Qed.
 
 (** ** Decidable equality *)
 

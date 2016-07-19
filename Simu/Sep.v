@@ -271,11 +271,50 @@ Section SplitRange.
 End SplitRange.
 
 Definition chunk_of_type ty := AST.chunk_of_type (Ctypes.typ_of_type ty).
-Definition instance_match (i: ident) (S: state): state :=
+
+Definition match_value (e: PM.t val) (x: ident) (v': val) : Prop :=
+  match PM.find x e with
+  | None => True
+  | Some v => v = v'
+  end.
+
+Definition match_var (S: state) :=
+  match_value (snd S).
+
+Definition match_field (S: state) :=
+  match_value (fst S).(mm_values).
+
+Lemma match_value_empty:
+  forall x, match_value (PM.empty val) x = (fun _ => True).
+Proof.
+  intro. unfold match_value. 
+  rewrite PM.gempty; auto.
+Qed.
+
+Lemma match_value_add:
+  forall x x' v e,
+    x <> x' ->
+    match_value (PM.add x' v e) x = match_value e x.
+Proof.
+  intros ** Hneq.
+  unfold match_value. simpl.
+  rewrite PM.gso with (1:=Hneq).
+  reflexivity.
+Qed.
+
+Definition instance_match (S: state) (i: ident): state :=
   (match mfind_inst i (fst S) with
   | None => m_empty
   | Some i => i
   end, snd S).
+
+
+Lemma instance_match_empty:
+  forall x ve, instance_match (m_empty, ve) x = (m_empty, ve).
+Proof.
+  intros. unfold instance_match, mfind_inst; simpl.
+  rewrite PM.gempty. reflexivity.
+Qed.
 
 Section Staterep.
   Variable ge : composite_env.
@@ -291,7 +330,7 @@ Section Staterep.
                   let (x, ty) := xty in
                   match field_offset ge x (make_members cls) with
                   | OK d =>
-	                contains (chunk_of_type ty) b (ofs + d) (find_field S x)
+	                contains (chunk_of_type ty) b (ofs + d) (match_field S x)
                   | Error _ => sepfalse
                   end) cls.(c_mems)
         **
@@ -299,7 +338,7 @@ Section Staterep.
                   let (i, c) := o in
                   match field_offset ge i (make_members cls) with
                   | OK d =>
-                    staterep' p' c (instance_match i S) b (ofs + d)
+                    staterep' p' c (instance_match S i) b (ofs + d)
                   | Error _ => sepfalse
                   end) cls.(c_objs)
       else staterep' p' clsnm S b ofs
@@ -360,7 +399,7 @@ Section BlockRep.
               let (x, ty) := xty in
               match field_offset ge x flds, access_mode ty with
               | OK d, By_value chunk =>
-                contains chunk b d (find_var S x)
+                contains chunk b d (match_var S x)
               | _, _ => sepfalse
               end) flds.
   
@@ -458,43 +497,36 @@ Definition valid_val (v: val) (t: typ): Prop :=
     /\ Values.Val.has_type v (Ctypes.typ_of_type t).
 
 Lemma sizeof_translate_chunk:
-  forall gcenv v t,
-    valid_val v t ->
+  forall gcenv t,
+    Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t) ->
     sizeof gcenv t = Memdata.size_chunk (chunk_of_type t).
 Proof.
-  unfold valid_val; intros; destruct_pairs; 
-  destruct t, v;
+  destruct t;
   (destruct i, s || destruct f || idtac);
   (discriminates || contradiction || auto).
 Qed.
 
 Lemma align_chunk_divides_alignof_type:
-  forall gcenv v t,
-    valid_val v t ->
+  forall gcenv t,
+    Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t) ->
     (Memdata.align_chunk (chunk_of_type t) | alignof gcenv t).
 Proof.
-  unfold valid_val; intros; destruct_pairs; 
-  destruct t, v;
+  destruct t;
   (destruct i, s || destruct f || idtac);
   (discriminates || contradiction || auto);
   simpl; try rewrite align_noattr; simpl.
 Admitted.
 
-Remark valid_val_implies_access:
-    forall v t, valid_val v t -> access_mode t = By_value (chunk_of_type t).
-Proof. introv H; apply H. Qed.
-
 Lemma in_translate_param_chunked:
-  forall ge (flds: list (ident * typ)) x ty v,
-    valid_val v ty ->
+  forall ge (flds: list (ident * typ)) x ty,
+    Ctypes.access_mode ty = Ctypes.By_value (chunk_of_type ty) ->
     In (x, ty) flds ->
     exists chunk,
       access_mode ty = By_value chunk
       /\ (Memdata.align_chunk chunk | alignof ge ty).
 Proof.
-  intros ** Valid Hin.
+  intros ** ? Hin.
   exists (chunk_of_type ty).
-  split.
-  - now apply valid_val_implies_access with v.
-  - now apply align_chunk_divides_alignof_type with v.
+  split*.
+  now apply align_chunk_divides_alignof_type.  
 Qed.
