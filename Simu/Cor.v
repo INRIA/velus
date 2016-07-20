@@ -6,6 +6,8 @@ Require Import lib.Maps.
 Require Import lib.Coqlib.
 Require Import Errors.
 Require Import common.Separation.
+Require Import common.Values.
+Require Import common.Memory.
 
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
@@ -136,324 +138,6 @@ Section PRESERVATION.
       well_formed_stmt c m S (Call ys clsid o f es)
   | wf_skip: 
       well_formed_stmt c m S Skip.
-
-  Definition compat_vars (c: class) (S: state) (le: Clight.temp_env): Prop :=
-    forall meth x t v,
-      In c prog ->
-      In meth c.(c_methods) ->
-      In (x, t) (meth.(m_in) ++ meth.(m_vars)) ->
-      find_var S x v ->
-      le ! x = Some v /\ valid_val v t.
-
-  (* Definition compat_self (c: class) (S: state) (e: Clight.env) (m: Memory.Mem.mem): Prop := *)
-  (*   In c prog -> *)
-  (*   exists co loc_self loc_struct ofs, *)
-  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node c.(c_name)) *)
-  (*     /\ Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) *)
-  (*     /\ Maps.PTree.get c.(c_name) tge.(Clight.genv_cenv) = Some co *)
-  (*     /\ (forall x t, *)
-  (*           In (x, t) c.(c_mems) -> *)
-  (*           exists delta, *)
-  (*             Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta *)
-  (*             /\ In (x, t) (Ctypes.co_members co) *)
-  (*             /\ Memory.Mem.valid_access m (chunk_of_type t) loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) Memtype.Writable *)
-  (*             /\ forall v, *)
-  (*                 find_field S x v -> *)
-  (*                 Memory.Mem.load (chunk_of_type t) m loc_struct (Int.unsigned (Int.add ofs (Int.repr delta))) = Some v *)
-  (*                 /\ valid_val v t) *)
-  (*     /\ forall o, *)
-  (*         In o c.(c_objs) -> *)
-  (*         exists delta, *)
-  (*           Ctypes.field_offset (Clight.genv_cenv tge) o.(obj_inst) (Ctypes.co_members co) = Errors.OK delta. *)
-  
-  Lemma make_members_co:
-    forall clsnm cls prog',
-      find_class clsnm prog = Some (cls, prog') ->
-      (exists co, gcenv!clsnm = Some co
-             /\ co_su co = Struct
-             /\ co_members co = make_members cls
-             /\ attr_alignas (co_attr co) = None
-             /\ NoDupMembers (co_members co)).
-  Proof.
-    unfold translate in TRANSL.
-    apply not_None_is_Some in main_node_exists.
-    destruct main_node_exists as [[maincls prog'] Hfind_main].
-    rewrite Hfind_main in TRANSL.
-    destruct (map (translate_class prog) prog) as [|cls clss] eqn:Hmap.
-    - apply map_eq_nil in Hmap.
-      rewrite Hmap in Hfind_main; simpl in *; discriminate.
-    - 
-  Admitted.
-
-  Lemma field_translate_mem_type:
-    forall clsnm cls prog',
-      find_class clsnm prog = Some (cls, prog') ->
-      NoDupMembers (make_members cls) ->
-      forall x ty,
-        In (x, ty) cls.(c_mems) ->
-        field_type x (make_members cls) = OK ty.
-  Proof.
-    introv Hfind Hndup Hin.
-    apply in_field_type with (1:=Hndup).
-    unfold make_members. apply in_app_iff. now left.
-  Qed.
-
-  Lemma field_translate_obj_type:
-    forall clsnm cls prog',
-      find_class clsnm prog = Some (cls, prog') ->
-      NoDupMembers (make_members cls) ->
-      forall o c,
-        In (o, c) cls.(c_objs) ->
-        field_type o (make_members cls) = OK (type_of_inst c).
-  Proof.
-    introv Hfind Hndup Hin.
-    apply in_field_type with (1:=Hndup).
-    unfold make_members. apply in_app_iff. right.
-    apply in_map_iff. exists* (o, c). 
-  Qed.
-
-  (* TODO: Construct a global environment of structs for a given program. *)
-
-  Lemma gcenv_consistent:
-    composite_env_consistent gcenv.
-  Admitted.
-  
-  Lemma range_staterep:
-    forall ve b clsnm,
-      WelldefClasses prog ->
-      find_class clsnm prog <> None ->
-      range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
-            staterep gcenv prog clsnm (m_empty, ve) b 0.
-  Proof.
-    introv Hwdef Hfind.
-    cut (forall lo,
-           (alignof gcenv (type_of_inst clsnm) | lo) ->
-           massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
-                       (staterep gcenv prog clsnm (m_empty, ve) b lo)).
-    - intro HH; apply HH; apply Z.divide_0_r.
-    - clear main_node_exists TRANSL.
-
-      revert clsnm Hfind.
-      induction prog as [|cls prog' IH]; intros clsnm Hfind lo.
-      + apply not_None_is_Some in Hfind.
-        destruct Hfind. discriminate.
-      + intro Halign.
-        inversion Hwdef as [|? ? Hwdef']; subst.
-
-        assert (find_class clsnm prog = Some (cls, prog')) as Hprog.
-        admit.
-        (* TODO: need to link prog to (possibly reversed) translation *)
-
-        pose proof (make_members_co _ _ _ Hprog) as Hmco.
-        destruct Hmco as [co [Hg [Hsu [Hmem [Hattr Hndup]]]]].
-
-        pose proof (co_members_alignof _ _ (gcenv_consistent _ _ Hg) Hattr)
-          as Hcoal.
-        rewrite Hmem in Hcoal.
-        unfold make_members in Hcoal.
-        apply Forall_app in Hcoal.
-        destruct Hcoal as [Hcoal1 Hcoal2].
-        simpl in Halign.
-        rewrite Hg in Halign.
-        rewrite align_noattr in Halign.
-        assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
-
-        simpl.
-        destruct (ident_eqb clsnm cls.(c_name)) eqn:Hclsnm.
-        *{ rewrite Hg.
-           rewrite <-Hmem.
-           rewrite split_range_fields
-           with (1:=gcenv_consistent) (2:=Hg) (3:=Hsu) (4:=Hndup).
-           rewrite Hmem at 1.
-           unfold make_members.
-           rewrite sepall_app.
-           
-           apply sep_imp'.
-
-           - pose proof (field_translate_mem_type _ _ _ Hprog Hndup') as Htype.
-             clear Hcoal2.
-             
-             induction (c_mems cls); auto.
-             apply Forall_cons2 in Hcoal1.
-             destruct Hcoal1 as [Hcoal1 Hcoal2].
-
-             apply sep_imp'.
-             + destruct a.
-               destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
-               unfold match_field.
-               rewrite match_value_empty.
-               rewrite sizeof_translate_chunk.
-               *{ apply range_contains'.
-                  specialize (Htype i t).
-                  rewrite <-Hmem in Htype.
-                  apply field_offset_aligned with (ty:=t) in Hfo.
-                  - simpl in Hcoal1.
-                    apply Z.divide_add_r.
-                    + apply Zdivide_trans with (2:=Halign).
-                      apply Zdivide_trans with (2:=Hcoal1).
-                      apply align_chunk_divides_alignof_type.
-                      admit.
-                    + apply Zdivide_trans with (2:=Hfo).
-                      apply align_chunk_divides_alignof_type.
-                      admit.
-                  - apply Htype; constructor; reflexivity.
-                }
-               * admit.
-             + apply IHl. 
-               * apply Hcoal2. 
-               * intros; apply Htype; constructor (assumption).
-         
-           - pose proof (field_translate_obj_type _ _ _ Hprog Hndup') as Htype.
-             rewrite <-Hmem in Htype.
-           
-             induction (c_objs cls); auto.
-             simpl.
-             apply sep_imp'.
-             + clear IHl.
-               
-               destruct a as [o c].
-               assert (ClassIn c prog') as Hcin
-                   by (eapply H0; econstructor; eauto).
-               clear H0 Hcoal1.
-
-               apply Forall_cons2 in Hcoal2.
-               destruct Hcoal2 as [Hcoal2 Hcoal3].
-               
-               specialize (Htype o c (in_eq _ _)).
-               clear Hcoal3 l.
-
-               simpl. 
-               destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
-               rewrite instance_match_empty.
-               apply ClassIn_find_class in Hcin.
-               specialize (IH Hwdef' c Hcin (lo + z)%Z).
-
-               apply not_None_is_Some in Hcin.
-               destruct Hcin as ((c' & prog'') & Hcin).
-               assert (find_class c prog = Some (c', prog'')) as Hcin'.
-               admit. (* TODO: make_members_co should be more flexible. *)
-
-               assert (Hcin'' := Hcin').
-               apply make_members_co in Hcin'.
-               destruct Hcin' as [? [? [? [? [? ?]]]]].
-               rewrite H.
-
-               simpl in IH.
-               rewrite H in IH.
-               apply IH.
-
-               simpl in Hcoal2.
-               rewrite align_noattr in Hcoal2.
-               rewrite H in Hcoal2.
-               
-               rewrite align_noattr.
-               apply Z.divide_add_r.
-               * apply Zdivide_trans with (1:=Hcoal2).
-                 assumption.
-
-               * simpl in Htype.
-                 eapply field_offset_aligned in Hfo.
-                 2:apply Htype.
-                 apply Zdivide_trans with (2:=Hfo).
-                 simpl. rewrite H, align_noattr.
-                 apply Z.divide_refl.
-             + apply IHl.
-               * clear IHl. intros o c' Hin.
-                 apply H0 with (o:=o). constructor (assumption).
-               * simpl in Hcoal2. apply Forall_cons2 in Hcoal2.
-               destruct Hcoal2 as [Hcoal2 Hcoal3]. exact Hcoal3.
-               * intros o c Hin. apply Htype. constructor (assumption). 
-         }  
-
-        * rewrite Hg.
-          simpl in Hfind.
-          rewrite ident_eqb_sym in Hclsnm.
-          rewrite Hclsnm in Hfind.
-          specialize (IH Hwdef' clsnm Hfind lo).
-          simpl in IH.
-          rewrite Hg in IH.
-          apply IH.
-          rewrite align_noattr.
-          assumption.
-  Qed.
-
-  Lemma staterep_deref_mem:
-    forall cls prog' m S b ofs x ty d v,
-      access_mode ty = By_value (chunk_of_type ty) ->
-      m |= staterep gcenv (cls::prog') cls.(c_name) S b ofs ->
-      In (x, ty) cls.(c_mems) ->
-      find_field S x v ->
-      field_offset gcenv x (make_members cls) = OK d ->
-      Clight.deref_loc ty m b (Int.repr (ofs + d)) v.
-  Proof.
-    intros ** Hty Hm Hin Hv Hoff.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply sep_proj1 in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm. clear ws xs.
-    rewrite Hoff in Hm. clear Hoff.
-    apply loadv_rule in Hm.
-    destruct Hm as [v' [Hloadv Hmatch]].
-    unfold match_field, match_value in Hmatch.
-    unfold find_field, mfind_mem in Hv.
-    rewrite Hv in Hmatch. clear Hv.
-    rewrite <-Hmatch in Hloadv. clear Hmatch.
-    apply Clight.deref_loc_value with (2:=Hloadv); auto.
-  Qed.
-
-  Lemma staterep_assign_mem:
-    forall P cls prog' m m' S b ofs x ty d v,
-      access_mode ty = By_value (chunk_of_type ty) ->
-      NoDup cls.(c_objs) ->
-      NoDupMembers cls.(c_mems) ->
-      m |= staterep gcenv (cls::prog') cls.(c_name) S b ofs ** P ->
-      In (x, ty) cls.(c_mems) ->
-      field_offset gcenv x (make_members cls) = OK d ->
-      v = Values.Val.load_result (chunk_of_type ty) v ->
-      Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' ->
-      m' |= staterep gcenv (cls::prog') cls.(c_name) (update_field S x v) b ofs ** P.
-  Proof.
-    Opaque sepconj.
-    intros ** Hty Hcls Hmem Hm Hin Hoff Hlr Hal.
-    simpl in *. rewrite ident_eqb_refl in *.
-    rewrite sep_assoc. rewrite sep_assoc in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hsplit in Hmem.
-    rewrite Hin in Hm. rewrite sep_assoc in Hm.
-    rewrite Hin. rewrite sep_assoc.
-    rewrite Hoff in *.
-    rewrite sep_swap2.
-    rewrite sepall_switchp
-    with (f':=fun xty : ident * typ =>
-                let (x0, ty0) := xty in
-                match field_offset gcenv x0 (make_members cls) with
-                | OK d0 =>
-                  contains (chunk_of_type ty0) b (ofs + d0)
-                           (match_field S x0)
-                | Error _ => sepfalse
-                end).
-    - rewrite <-sep_swap2.
-      eapply storev_rule' with (1:=Hm).
-      + unfold match_field, match_value. simpl.
-        rewrite PM.gss. exact Hlr.
-      + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess].
-        * rewrite Hty in Haccess.
-          injection Haccess. intro; subst. assumption.
-        * rewrite Hty in Haccess. discriminate.
-    - apply NoDupMembers_remove_1 in Hmem.
-      apply NoDupMembers_NoDup with (1:=Hmem).
-    - intros x' Hin'; destruct x' as [x' ty'].
-      unfold match_field, update_field, madd_mem; simpl.
-      rewrite match_value_add; [reflexivity|].
-      apply NoDupMembers_app_cons in Hmem.
-      destruct Hmem as [Hmem].
-      apply In_InMembers in Hin'.
-      intro Heq. apply Hmem. rewrite Heq in Hin'.
-      assumption.
-  Qed.
   
   Remark valid_val_not_void:
     forall v t, valid_val v t -> t <> Ctypes.Tvoid.
@@ -461,211 +145,106 @@ Section PRESERVATION.
     introv H E; subst.
     inverts H; discriminate.
   Qed.
-  
+
+  Remark valid_val_access:
+    forall v t, valid_val v t -> access_mode t = By_value (chunk_of_type t).
+  Proof.
+    introv H.
+    apply H. 
+  Qed.
+
+  Hint Resolve valid_val_not_void valid_val_access.
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
-  (* Hint Resolve valid_val_implies_access. *)
 
-  (* Remark eval_var: *)
-  (*   forall (* c *) S e le m x t v, *)
-  (*     (* compat_vars c S e m -> *) *)
-  (*     (* In c prog -> *) *)
-  (*     (* In (x, t) (class_vars c) -> *) *)
-  (*     find_var S x v -> *)
-  (*     Clight.eval_expr tge e le m (Clight.Evar x t) v. *)
-  (* Proof. *)
-  (*   introv (* Hvars ? ? *) Find. *)
-  (*   (* edestruct Hvars as (? & ? & ? & Hmem); eauto. *) *)
-  (*   (* specializes Hmem Find. *) *)
-  (*   eapply Clight.eval_Elvalue, Clight.deref_loc_value. *)
-  (*   econstructor. *)
-    
-  (* Qed. *)
+  Definition c_state := (Clight.env * Clight.temp_env * Memory.Mem.mem)%type.
 
-  (* Remark evall_self_field: *)
-  (*   forall c e le m x t co loc_self loc_struct ofs delta, *)
-  (*     Maps.PTree.get self_id e = Some (loc_self, pointer_of_node (c_name c)) -> *)
-  (*     Memory.Mem.load AST.Mint32 m loc_self 0 = Some (Values.Vptr loc_struct ofs) -> *)
-  (*     Maps.PTree.get (c_name c) (Clight.genv_cenv tge) = Some co -> *)
-  (*     Ctypes.field_offset (Clight.genv_cenv tge) x (Ctypes.co_members co) = Errors.OK delta -> *)
-  (*     Clight.eval_lvalue tge e le m (deref_self_field c.(c_name) x t) loc_struct (Int.add ofs (Int.repr delta)). *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   eapply Clight.eval_Efield_struct *)
-  (*   with (id:=c.(c_name)) (att:=Ctypes.noattr); eauto. *)
-  (*   eapply Clight.eval_Elvalue.  *)
-  (*   - apply Clight.eval_Ederef.  *)
-  (*     apply* Clight.eval_Elvalue. *)
-  (*     apply* Clight.deref_loc_value. *)
-  (*     reflexivity. *)
-  (*   - apply* Clight.deref_loc_copy. *)
-  (* Qed. *)
-  
-  (* Remark eval_self_field: *)
-  (*   forall c S e le m x t v, *)
-  (*     compat_self c S e m -> *)
-  (*     In c prog -> *)
-  (*     In (x, t) c.(c_mems) -> *)
-  (*     find_field S x v -> *)
-  (*     Clight.eval_expr tge e le m (deref_self_field c.(c_name) x t) v. *)
-  (* Proof. *)
-  (*   introv Hself ? Hin Find. *)
-  (*   destruct* Hself as (? & ? & ? & ? & ? & ? & ? & Hmem & ?).   *)
-  (*   forwards (? & ? & ? & ? & Hmem'): Hmem Hin. *)
-  (*   specializes Hmem' Find. *)
-  (*   eapply Clight.eval_Elvalue. *)
-  (*   + apply* evall_self_field. *)
-  (*   + apply* Clight.deref_loc_value.       *)
-  (* Qed. *)
+  Inductive match_states (c: class) (f: method) (S: state): c_state -> Prop :=
+    intro_match_states: forall e le m sb sofs outb outco,
+      le ! self_id = Some (Vptr sb sofs) ->
+      le ! out_id = Some (Vptr outb Int.zero) ->
+      tge.(genv_cenv) ! (prefix f.(m_name) c.(c_name)) = Some outco ->
+      (forall x ty, In (x, ty) f.(m_out) -> In (x, ty) (co_members outco)) ->
 
-  Inductive exp_occurs: exp -> stmt -> Prop :=
-    | eo_assign: forall x e,
-        exp_occurs e (Assign x e)
-    | eo_assignst: forall x e,
-        exp_occurs e  (AssignSt x e)
-    | eo_ifte: forall e e' s1 s2,
-        e = e' \/ exp_occurs e s1 \/ exp_occurs e s2 ->
-        exp_occurs e (Ifte e' s1 s2)
-    | eo_comp: forall e s1 s2,
-        exp_occurs e s1 \/ exp_occurs e s2 ->
-        exp_occurs e (Comp s1 s2)
-    | eo_call: forall e f ys c o es,
-        In e es ->
-        exp_occurs e (Call ys c o f es).
-
-  Remark In_Forall:
-    forall {A} (x: A) xs P,
-      Forall P xs ->
-      In x xs ->
-      P x.
-  Proof.
-    introv Hforall Hin.
-    induction xs; inverts Hin; inverts Hforall; auto.    
-  Qed.
-
-  Remark not_In_app:
-    forall {A} (x: A) l1 l2,
-      ~ In x l2 ->
-      In x (l1 ++ l2) ->
-      In x l1.
-  Proof.
-    introv HnIn Hin.
-    induction l1.
-    - contradiction.
-    - rewrite <-app_comm_cons in Hin.
-      inverts Hin.
-      + apply in_eq.
-      + right; apply* IHl1.        
-  Qed.
-  
-  Lemma occurs_well_formed:
-    forall c m e,
-      In m c.(c_methods) ->
-      exp_occurs e m.(m_body) ->
-      well_formed_exp c m e.
-  Proof.
-    introv Hin Hocc.
-    pose proof (m_decl m) as Hdecl.
-    pose proof (c_statedecl c) as Hsdecl.
-    eapply In_Forall in Hsdecl; eauto.
-    induction m.(m_body); destruct e;
-    inverts Hocc; inverts Hdecl; inverts Hsdecl. 
-    - inverts H2; constructor*. admit.
-    - inverts H0; constructor*.
-    - constructor.
-    - inverts H0; constructor*. admit.
-    - inverts H3; constructor*.
-    - constructor.
-    - destruct H1 as [? | [? | ?]].
-      + subst.
-        inverts H3; constructor*. admit.
-      + apply* IHs1.
-      + apply* IHs2.
-    - destruct H1 as [? | [? | ?]].
-      + subst.
-        inverts H6; constructor*. 
-      + apply* IHs1.
-      + apply* IHs2.
-    - constructor.
-    - destruct H1.
-      + apply* IHs1.
-      + apply* IHs2.
-    - destruct H1.
-      + apply* IHs1.
-      + apply* IHs2.
-    - constructor.
-    - eapply In_Forall in H6; eauto.
-      inverts H6; constructor*. admit.
-    - eapply In_Forall in H0; eauto.
-      inverts H0; constructor*. 
-    - constructor.
-  Qed.
-      
+      m |= staterep tge prog c.(c_name) S sb (Int.unsigned sofs)
+        ** blockrep tge S (co_members outco) outb
+        ** sepall (fun ocg =>
+                     let '(o, cid, g) := ocg in
+                     match tge.(genv_cenv)!(prefix g cid), e!o with 
+                     | Some gco, Some (oblk, _) =>
+                       blockrep tge s_empty (co_members gco) oblk
+                     | _, _ => sepfalse
+                     end) (get_instance_methods f.(m_body))
+        ** pure (Forall (fun (xty: ident * typ) =>
+                           let (x, ty) := xty in
+                           x <> self_id /\ x <> out_id /\
+                           match le!x with
+                           | Some v => match_var S x v
+                           | None => False
+                           end) (f.(m_in) ++ f.(m_vars))) ->
+      match_states c f S (e, le, m).
+         
   Lemma expr_eval_simu:
-    forall c S exp v e le m meth,
-      compat_vars c S le ->
-      (* compat_self c S e m -> *)
-      In c prog ->
-      In meth c.(c_methods) ->
-      exp_occurs exp meth.(m_body) ->
-      (* well_formed_exp c exp -> *)
+    forall c S exp prog' clsnm  v e le m f,
+      find_class clsnm prog = Some (c, prog') ->
+      match_states c f S (e, le , m) ->
+      well_formed_exp c f exp ->
       exp_eval S exp v ->
-      Clight.eval_expr tge e le m (translate_exp c meth exp) v.
+      Clight.eval_expr tge e le m (translate_exp c f exp) v.
   Proof.
     intros c S exp; induction exp as [x ty| |cst];
-    introv Hvars ? Hin ? Heval; inverts Heval(* ; inverts Hwf *).
+    introv Find MS WF EV;
+    inverts EV; inverts MS as Hself Hout Houtco Hflds Hrep.
 
     (* Var x ty : "x" *)
-    - simpl.
-      destruct (existsb (fun out : positive * typ => ident_eqb (fst out) x) (m_out meth)) eqn: E.
-      + eapply eval_Elvalue.
-        *{ eapply eval_Efield_struct.
-           - eapply eval_Elvalue.
-             + apply eval_Ederef.
-               eapply eval_Elvalue.
-               * apply eval_Evar_local.
-                 skip.
-               *{ eapply deref_loc_value.
-                  - simpl; eauto.
-                  - skip.
-                }
-             + apply deref_loc_copy; auto.
+    - inverts WF as Hvars.
+      simpl.
+      destruct (existsb (fun out => ident_eqb (fst out) x) f.(m_out)) eqn: E.
+      + apply sep_pick2 in Hrep.
+        apply existsb_exists in E.
+        destruct E as ((x' & ty') & Hin & E).
+        rewrite ident_eqb_eq in E; simpl in E; subst. 
+        pose proof (m_nodup f) as Nodup.
+        assert (In (x, ty') (meth_vars f)) by
+            (now apply in_or_app; right; apply in_or_app; right).
+        app_NoDupMembers_det.
+        forwards* (? & Hoffset): blockrep_field_offset.
+        eapply eval_Elvalue.
+        *{ apply* eval_Efield_struct.
+           - apply* eval_Elvalue.
+             apply* deref_loc_copy.
            - simpl; unfold type_of_inst; eauto.
-           - skip.
-           - skip.
          }
-        *{ eapply deref_loc_value.
-           - simpl. skip.
-           - skip.
-         }
-      + apply eval_Etempvar.
-        edestruct Hvars; eauto.
-        eapply occurs_well_formed in Hin; eauto.
-        inverts Hin.
-        assert (~ In (x, ty) meth.(m_out)) as HnIn.
+        * rewrite Int.add_zero_l.
+          apply* blockrep_deref_mem. 
+      + apply sep_proj2, sep_proj2, sep_comm, sep_pure in Hrep.
+        destruct Hrep as (Hrep & H); clear H.
+        apply eval_Etempvar.
+        assert (~ In (x, ty) f.(m_out)) as HnIn.
         * apply not_true_iff_false in E.
           intro Hin; apply E.
           apply existsb_exists.
           exists (x, ty); split*.
           apply ident_eqb_refl. 
-        * eapply not_In_app in HnIn; eauto.
-          rewrite* <-app_assoc.
+        * unfold meth_vars in Hvars.
+          rewrite app_assoc in Hvars.
+          eapply not_In_app in HnIn; eauto.
+          eapply In_Forall in Hrep; eauto.
+          simpl in Hrep; destruct Hrep as (? & ? & ?).
+          destruct (le ! x); [now app_match_find_var_det | contradiction].
+
           
     (* State x ty : "self->x" *)
-    - simpl.
+    - inverts WF.
+      simpl.
+      forwards* (? & ? & ? & ? & ?): make_members_co.
+      apply find_class_name in Find; subst.
+      forwards* (? & Hoffset): staterep_field_offset. skip. skip.
       eapply eval_Elvalue.
-      + eapply eval_Efield_struct.
-        *{ eapply eval_Elvalue.
-           - apply eval_Ederef.
-             eapply eval_Elvalue.
-             + apply eval_Evar_local.
-               skip.
-             + eapply deref_loc_value.
-               * simpl; eauto.
-               * skip.
-           - apply deref_loc_copy; auto.
+      + apply* eval_Efield_struct.
+        *{ apply* eval_Elvalue.
+           apply* deref_loc_copy.
          } 
         * simpl; unfold type_of_inst; eauto.
-        * skip.
         * skip.
       + eapply deref_loc_value.
         * simpl. skip.

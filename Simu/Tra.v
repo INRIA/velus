@@ -36,7 +36,7 @@ Definition type_of_inst_p (o: ident): typ :=
 Definition deref_field (id cls x: ident) (xty: typ): Clight.expr :=
   let ty_deref := type_of_inst cls in
   let ty_ptr := pointer_of ty_deref in
-  Clight.Efield (Clight.Ederef (Clight.Evar id ty_ptr) ty_deref) x xty.
+  Clight.Efield (Clight.Ederef (Clight.Etempvar id ty_ptr) ty_deref) x xty.
 
 Definition translate_const (c: const): typ -> Clight.expr :=
   match c with
@@ -120,29 +120,20 @@ Definition binded_funcall
 Statement conversion keeps track of the produced temporaries (function calls).
 [c] represents the current class.
  *)
-Fixpoint translate_stmt
-         (out_structs: list (ident * ident * ident)) (prog: program) (c: class) (m: method) (s: stmt)
-  : list (ident * ident * ident) * Clight.statement :=
+Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
+  : Clight.statement :=
   match s with
   | Assign x e =>
-    (out_structs,
-     assign x (typeof e) c.(c_name) m (translate_exp c m e)) 
+    assign x (typeof e) c.(c_name) m (translate_exp c m e)
   | AssignSt x e =>
-    (out_structs,
-     Clight.Sassign (deref_field self_id c.(c_name) x (typeof e)) (translate_exp c m e))
+    Clight.Sassign (deref_field self_id c.(c_name) x (typeof e)) (translate_exp c m e)
   | Ifte e s1 s2 =>
-    let (os1, s1) := translate_stmt out_structs prog c m s1 in
-    let (os2, s2) := translate_stmt os1 prog c m s2 in
-    (os2, Clight.Sifthenelse (translate_exp c m e) s1 s2) 
+    Clight.Sifthenelse (translate_exp c m e) (translate_stmt prog c m s1) (translate_stmt prog c m s2) 
   | Comp s1 s2 =>
-    let (os1, s1) := translate_stmt out_structs prog c m s1 in
-    let (os2, s2) := translate_stmt os1 prog c m s2 in
-    (os2, Clight.Ssequence s1 s2)
+    Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Call ys cls f o es =>
-    ((o, cls, f) :: out_structs,
-     binded_funcall prog ys c.(c_name) cls f o (map (translate_exp c m) es))  
-  | Skip =>
-    (out_structs, Clight.Sskip)
+    binded_funcall prog ys c.(c_name) cls f o (map (translate_exp c m) es)  
+  | Skip => Clight.Sskip
   end.
 
 (* Definition return_some (s: Clight.statement) (out: ident * typ): Clight.statement := *)
@@ -176,7 +167,8 @@ Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident *
 
 Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
-  let (out_vars, body) := translate_stmt [] prog c m m.(m_body) in
+  let body := translate_stmt prog c m m.(m_body) in
+  let out_vars := get_instance_methods m.(m_body) in
   let self := (self_id, type_of_inst_p c.(c_name)) in
   let out := (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name))) in
   (prefix m.(m_name) c.(c_name),

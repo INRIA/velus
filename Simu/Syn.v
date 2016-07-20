@@ -52,6 +52,14 @@ Inductive stmt : Type :=
     list (ident * typ) -> ident -> ident -> ident -> list exp -> stmt 
 | Skip.                  (*  *)
 
+Fixpoint get_instance_methods (s: stmt): list (ident * ident * ident) :=
+  match s with
+  | Ifte _ s1 s2  
+  | Comp s1 s2 => get_instance_methods s2 ++ get_instance_methods s1
+  | Call _ cls f o _ => [(o, cls, f)] 
+  | _ => []
+  end.
+
 Inductive VarsDeclared_exp (vars: list (ident * typ)): exp -> Prop :=
 | vd_var: forall x ty,
     In (x, ty) vars ->

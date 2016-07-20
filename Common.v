@@ -717,7 +717,49 @@ Section InMembers.
       assumption.
   Qed.
 
+  Lemma NoDupMembers_app_r:
+    forall ws xs,
+      NoDupMembers (ws ++ xs) -> NoDupMembers xs.
+  Proof.
+    induction ws as [|w ws IH]; auto.
+    intros xs H.
+    apply IH.
+    rewrite <-app_comm_cons in H.
+    destruct w; rewrite nodupmembers_cons in H; tauto.
+  Qed.
+
+  Lemma NoDupMembers_det:
+    forall x t t' xs,
+      NoDupMembers xs ->
+      In (x, t) xs ->
+      In (x, t') xs ->
+      t = t'.
+  Proof.
+    induction xs; intros H Hin Hin'.
+    - contradict Hin.
+    - inversion Hin; inversion Hin'; subst.
+      + inversion H1; auto.
+      + inversion H; subst.
+        inversion Hin'.
+        * inversion H0; auto.
+        * exfalso. apply H3. eapply In_InMembers; eauto.
+      + inversion H; subst.
+        inversion Hin.
+        * inversion H1; auto.
+        * exfalso. apply H3. eapply In_InMembers; eauto.
+      + apply IHxs; auto.
+        destruct a; rewrite nodupmembers_cons in H; tauto. 
+  Qed.
+  
 End InMembers.
+
+Ltac app_NoDupMembers_det :=
+  match goal with
+  | H: NoDupMembers ?xs,
+       H1: In (?x, ?t1) ?xs,
+           H2: In (?x, ?t2) ?xs |- _ =>
+    assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
+  end.
 
 Set Implicit Arguments.
 Section Lists.
@@ -744,6 +786,57 @@ Section Lists.
     repeat rewrite concat_cons.
     rewrite <-app_assoc.
     f_equal; auto.
+  Qed.
+
+  Remark not_In_app:
+    forall (x: A) l1 l2,
+      ~ In x l2 ->
+      In x (l1 ++ l2) ->
+      In x l1.
+  Proof.
+    intros ** HnIn Hin.
+    induction l1.
+    - contradiction.
+    - rewrite <-app_comm_cons in Hin.
+      inversion Hin; subst.
+      + apply in_eq.
+      + right; now apply IHl1.
+  Qed.
+  
+  Remark In_Forall:
+    forall (x: A) xs P,
+      Forall P xs ->
+      In x xs ->
+      P x.
+  Proof.
+    intros ** Hforall Hin.
+    induction xs; inversion Hin; inversion Hforall; subst; auto.
+  Qed.
+
+  Remark map_cons':
+    forall (f: A -> A) l y ys,
+      map f l = y :: ys ->
+      exists x xs, y = f x /\ ys = map f xs.
+  Proof.
+    destruct l; simpl; intros ** H.
+    - contradict H. apply nil_cons.
+    - exists a, l. inversion H; auto.
+  Qed.
+
+  Remark map_app':
+    forall (f: A -> A) l1 l l2,
+      map f l = l1 ++ l2 ->
+      exists k1 k2, l1 = map f k1 /\ l2 = map f k2.
+  Proof.
+    induction l1; simpl; intros ** H.
+    - exists [], l; auto.
+    - apply map_cons' in H.
+      destruct H as (x & xs & Ha & Happ).
+      symmetry in Happ.
+      apply IHl1 in Happ.
+      destruct Happ as (k1 & k2 & Hl1 & Hl2).
+      exists (x :: k1), k2; simpl; split; auto.
+      f_equal; auto.
   Qed.
 
 End Lists.

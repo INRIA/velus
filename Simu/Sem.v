@@ -20,6 +20,7 @@ Definition m_empty: menv := empty_memory _.
 Definition v_empty: venv := PM.empty val.
 
 Definition state := (menv * venv)%type.
+Definition s_empty := (m_empty, v_empty).
 
 Definition find_var (S: state) (x: ident) (v: val) :=
   PM.find x (snd S) = Some v.
@@ -62,14 +63,24 @@ Proof.
   (auto || (edestruct H; eauto)). 
 Qed.
 
+Definition chunk_of_type ty := AST.chunk_of_type (Ctypes.typ_of_type ty).
+
+Definition valid_val (v: val) (t: typ): Prop :=
+    Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t)
+    /\ v <> Values.Vundef
+    /\ Values.Val.has_type v (Ctypes.typ_of_type t).
+
 Inductive exp_eval (S: state): exp -> val -> Prop :=
 | evar: forall x v ty,
     find_var S x v ->
+    valid_val v ty ->
     exp_eval S (Var x ty) v
 | estate: forall x v ty,
     find_field S x v ->
+    valid_val v ty ->
     exp_eval S (State x ty) v
 | econst: forall c ty,
+    valid_val (val_of_const c) ty ->
     exp_eval S (Const c ty) (val_of_const c).
 
 Remark find_var_det:
