@@ -68,7 +68,8 @@ Definition chunk_of_type ty := AST.chunk_of_type (Ctypes.typ_of_type ty).
 Definition valid_val (v: val) (t: typ): Prop :=
     Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t)
     /\ v <> Values.Vundef
-    /\ Values.Val.has_type v (Ctypes.typ_of_type t).
+    /\ Values.Val.has_type v (Ctypes.typ_of_type t)
+    /\ v = Values.Val.load_result (chunk_of_type t) v.
 
 Inductive exp_eval (S: state): exp -> val -> Prop :=
 | evar: forall x v ty,

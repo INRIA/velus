@@ -2,7 +2,7 @@ Require Import lib.Integers.
 Require Import lib.Floats.
 Require cfrontend.Ctypes.
 
-Require Import Rustre.Common Rustre.Nelist.
+Require Import Rustre.Common.
 
 Require Import String.
 Require Import List.
@@ -243,18 +243,22 @@ Definition find_method (f: ident): list method -> option method :=
 
 Lemma ClassIn_find_class:
   forall clsnm prog,
-    ClassIn clsnm prog ->
+    ClassIn clsnm prog <->
     find_class clsnm prog <> None.
 Proof.
-  induction prog as [|cls prog' IH].
-  now inversion 1.
-  intro Hcin.
-  simpl. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq.
-  - intro; discriminate.
-  - apply IH.
-    inversion Hcin; subst.
-    + rewrite ident_eqb_neq in Heq. intuition.
-    + assumption.
+  induction prog as [|cls prog' IH]; split.
+  - now inversion 1.
+  - simpl; intro H; now contradict H. 
+  - intro Hcin.
+    simpl. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq.
+    + intro; discriminate.
+    + apply IH.
+      inversion Hcin; subst.
+      * rewrite ident_eqb_neq in Heq. intuition.
+      * assumption.
+  - simpl. intro Hfind. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq.
+    + left; now rewrite ident_eqb_eq in Heq.
+    + right. unfold ClassIn in IH. now apply IH.
 Qed.
 
 Remark find_class_In:

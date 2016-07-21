@@ -4,6 +4,7 @@ Require Import common.Errors.
 Require Import cfrontend.Ctypes.
 Require Import lib.Maps.
 Require Import lib.Coqlib.
+Require Import lib.Integers.
 
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
@@ -26,7 +27,7 @@ Lemma storev_rule':
   forall chunk m m' b ofs v (spec1 spec: val -> Prop) P,
     m |= contains chunk b ofs spec1 ** P ->
     spec (Val.load_result chunk v) ->
-    Memory.Mem.storev chunk m (Vptr b (Integers.Int.repr ofs)) v = Some m' ->
+    Memory.Mem.storev chunk m (Vptr b (Int.repr ofs)) v = Some m' ->
     m' |= contains chunk b ofs spec ** P.
 Proof.
   intros ** Hm Hspec Hstore.
@@ -129,30 +130,30 @@ Section Sepall.
     intro p. apply sepall_breakout with (1:=Hys).
   Qed.
 
-  Lemma sepall_in_map:
-    forall x ys f,
-      In x (map f ys) ->
-      exists x' ws xs,
-        x = f x' 
-        /\ ys = ws ++ x' :: xs
-        /\ (forall p,
-              sepall p ys <-*-> p x ** sepall p (ws ++ xs)).
-  Proof.
-    intros x ys f Hin.
-    apply in_split in Hin.
-    destruct Hin as [ws [xs Hys]].
-    pose proof Hys as Hys'. 
-    apply map_app' in Hys'.
-    destruct Hys' as (ws' & xxs' & Hws & Hxxs).
-    symmetry in Hxxs.
-    apply map_cons' in Hxxs.
-    destruct Hxxs as (x' & xs' & Hx & Hxs).
-    subst.
-    exists x' ws' xs'.
-    splits*; auto. 
-    - admit.
-    - intro p. admit.
-  Qed.
+  (* Lemma sepall_in_map: *)
+  (*   forall x ys f, *)
+  (*     In x (map f ys) -> *)
+  (*     exists x' ws xs, *)
+  (*       x = f x'  *)
+  (*       /\ ys = ws ++ x' :: xs *)
+  (*       /\ (forall p, *)
+  (*             sepall p ys <-*-> p x ** sepall p (ws ++ xs)). *)
+  (* Proof. *)
+  (*   intros x ys f Hin. *)
+  (*   apply in_split in Hin. *)
+  (*   destruct Hin as [ws [xs Hys]]. *)
+  (*   pose proof Hys as Hys'.  *)
+  (*   apply map_app' in Hys'. *)
+  (*   destruct Hys' as (ws' & xxs' & Hws & Hxxs). *)
+  (*   symmetry in Hxxs. *)
+  (*   apply map_cons' in Hxxs. *)
+  (*   destruct Hxxs as (x' & xs' & Hx & Hxs). *)
+  (*   subst. *)
+  (*   exists x' ws' xs'. *)
+  (*   splits*; auto.  *)
+  (*   - admit. *)
+  (*   - intro p. admit. *)
+  (* Qed. *)
 
   Lemma sepall_sepfalse:
     forall m p xs,
@@ -765,7 +766,7 @@ Section StateRepProperties.
       In (x, ty) cls.(c_mems) ->
       find_field S x v ->
       field_offset gcenv x (make_members cls) = OK d ->
-      Clight.deref_loc ty m b (Integers.Int.repr (ofs + d)) v.
+      Clight.deref_loc ty m b (Int.repr (ofs + d)) v.
   Proof.
     intros ** Hty Hm Hin Hv Hoff.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
@@ -793,7 +794,7 @@ Section StateRepProperties.
       In (x, ty) cls.(c_mems) ->
       field_offset gcenv x (make_members cls) = OK d ->
       v = Values.Val.load_result (chunk_of_type ty) v ->
-      Clight.assign_loc gcenv ty m b (Integers.Int.repr (ofs + d)) v m' ->
+      Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' ->
       m' |= staterep gcenv (cls::prog') cls.(c_name) (update_field S x v) b ofs ** P.
   Proof.
     Opaque sepconj.
@@ -877,7 +878,7 @@ Section BlockRep.
       In (x, ty) (co_members co) ->
       find_var S x v ->
       field_offset ge x (co_members co) = OK d ->
-      Clight.deref_loc ty m b (Integers.Int.repr d) v.
+      Clight.deref_loc ty m b (Int.repr d) v.
   Proof.
     intros ** Hm Hin Hv Hoff.
     unfold blockrep in Hm.
@@ -904,7 +905,7 @@ Section BlockRep.
       field_offset ge x (co_members co) = OK d ->
       access_mode ty = By_value chunk ->
       v = Val.load_result chunk v ->
-      Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' ->
+      Clight.assign_loc ge ty m b (Int.repr d) v m' ->
       m' |= blockrep (update_var S x v) (co_members co) b ** P.
   Proof.
     Opaque sepconj.
