@@ -123,14 +123,14 @@ Section PRESERVATION.
       stmt_eval prog S s1 S' ->
       well_formed_stmt c m S' s2 ->
       well_formed_stmt c m S (Comp s1 s2)
-  | wf_call: forall ys clsid o f es,
+  | wf_call: forall ys clsid c' prog' o fid f es,
       (* In (y, ty) (class_vars c) -> *)
       (* Nelist.length ys = Nelist.length rvs -> *)
       (* Nelist.Forall (fun y => In y (class_vars c)) ys -> *)
       (* y <> self_id -> *)
       (* In {| obj_inst := o; obj_class := clsid |} c.(c_objs) -> *)
       (* find_class clsid prog = Some (c', prog') -> *)
-      (* Nelist.Forall (well_formed_exp c) es -> *)
+      Forall (well_formed_exp c m) es ->
       (* Nelist.Forall2 (exp_eval S) es vs -> *)
       (* Nelist.Forall2 (fun e v => valid_val v (typeof e)) es vs -> *)
       (* Nelist.Forall2 (fun e x => typeof e = snd x) es c'.(c_input) -> *)
@@ -140,7 +140,9 @@ Section PRESERVATION.
       (* stmt_call_eval prog me clsid vs me' rvs -> *)
       (* valid_val rv ty -> *)
       (* ty <> Ctypes.Tvoid -> *)
-      well_formed_stmt c m S (Call ys clsid o f es)
+      find_class clsid prog = Some (c', prog') ->
+      find_method fid (c_methods c') = Some f ->
+      well_formed_stmt c m S (Call ys clsid o fid es)
   | wf_skip: 
       well_formed_stmt c m S Skip.
   
@@ -453,12 +455,13 @@ Section PRESERVATION.
     remember prog.
     clear TRANSL main_node_exists.
     introv EV; induction EV; introv Find HfIn WF MS; subst;
-    inversion_clear WF as [|? ? Hin| | | |];
+    inversion_clear WF as [|? ? Hin| | |? ? ? ? ? ? ? ? ? Find' Findmeth|];
     pose proof MS as MS'; inverts MS' as Hself Hout Houtco Hrep.
 
     (* Assign x e : "x = e" *)
     - simpl; unfold assign.
       destruct (existsb (fun out => ident_eqb (fst out) x) f.(m_out)) eqn: E.
+
       (* out->x = e *)
       + (* get the 'out' variable left value evaluation *)
         edestruct evall_out_field as (? & ? & Hblockrep & Hin & Hoffset); eauto.
@@ -480,6 +483,7 @@ Section PRESERVATION.
              + rewrite* Int.add_zero_l.
          }
         * admit.
+
       (* x = e *)
       + exists (PTree.set x v le1) m1 E0; split.
         * apply* ClightBigstep.exec_Sset.
@@ -509,10 +513,10 @@ Section PRESERVATION.
              rewrite* Int.unsigned_repr.
              admit.
          }
-      + skip.
+      + admit.
       
     (* Ifte e s1 s2 : "if e then s1 else s2" *)
-    - edestruct IHEV; destruct_conjs; eauto; [destruct*b|]. 
+    - edestruct IHEV; destruct_conjs; eauto; [destruct* b|]. 
       do 3 econstructor; split*.
       apply* exec_Sifthenelse.
       + erewrite type_pres, bool_val_ptr; eauto.
@@ -526,7 +530,44 @@ Section PRESERVATION.
       apply* exec_Sseq_1.
       
     (* Step_ap y ty clsid o [e1; ... ;en] : "y = clsid_step(&(self->o), e1, ..., en)" *)
-    - (* app_exps_eval_det. *)
+    - do 3 econstructor; split.
+      + simpl.
+        unfold binded_funcall.
+        rewrite Find', Findmeth.
+        apply* exec_Sseq_1.
+        *{ eapply exec_Scall.
+           - simpl.
+             skip.
+           - simpl.
+             eapply eval_Elvalue.
+             + apply eval_Evar_global.
+               * admit.
+               * skip.
+             + apply* deref_loc_reference.               
+           - apply find_method_In in Findmeth.
+             econstructor.
+             + eapply Clight.eval_Eaddrof. 
+               skip.
+             + eapply sem_cast_same. 
+               unfold valid_val; splits*.
+               * discriminate. 
+               * simpl; trivial.
+             + econstructor.
+               * eapply Clight.eval_Eaddrof. 
+                 skip.
+               *{ eapply sem_cast_same. 
+                  unfold valid_val; splits*.
+                  - discriminate. 
+                  - simpl; trivial.
+                }
+               * applys* exprs_eval_simu Find.
+           - skip.
+           - skip.
+           - skip.
+         }
+        * skip.
+      + skip.
+      (* app_exps_eval_det. *)
       (* app_find_inst_det. *)
       (* app_stmt_step_eval_det'. *)
       

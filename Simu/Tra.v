@@ -92,7 +92,7 @@ Definition funcall_assign
 
 Definition binded_funcall
            (prog: program) (ys: list (ident * typ)) (owner: ident)
-           (cls f obj: ident) (args: list Clight.expr)
+           (cls obj f: ident) (args: list Clight.expr)
   : Clight.statement :=
   match find_class cls prog with
   | Some (c, _) =>
@@ -100,7 +100,7 @@ Definition binded_funcall
     | Some m =>
       let tyout := type_of_inst obj in
       let out := Clight.Eaddrof (Clight.Evar obj tyout) (pointer_of tyout) in 
-      let args := ptr_obj owner cls obj :: args ++ [out] in
+      let args := ptr_obj owner cls obj :: out :: args in
       Clight.Ssequence
         (funcall f args)
         (funcall_assign ys owner obj tyout m)
@@ -128,8 +128,8 @@ Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
     Clight.Sifthenelse (translate_exp c m e) (translate_stmt prog c m s1) (translate_stmt prog c m s2) 
   | Comp s1 s2 =>
     Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
-  | Call ys cls f o es =>
-    binded_funcall prog ys c.(c_name) cls f o (map (translate_exp c m) es)  
+  | Call ys cls o f es =>
+    binded_funcall prog ys c.(c_name) cls o f (map (translate_exp c m) es)  
   | Skip => Clight.Sskip
   end.
 
@@ -154,7 +154,7 @@ Definition make_fundef
            (vars temps: list (ident * typ)) (body: Clight.statement)
   : AST.globdef Clight.fundef Ctypes.type :=
   let body := return_none body in
-  fundef (self :: ins ++ [out]) vars temps Ctypes.Tvoid body.
+  fundef (self :: out :: ins) vars temps Ctypes.Tvoid body.
 
 Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident * typ) :=
   map (fun ocf =>

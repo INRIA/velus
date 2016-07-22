@@ -56,7 +56,7 @@ Fixpoint get_instance_methods (s: stmt): list (ident * ident * ident) :=
   match s with
   | Ifte _ s1 s2  
   | Comp s1 s2 => get_instance_methods s2 ++ get_instance_methods s1
-  | Call _ cls f o _ => [(o, cls, f)] 
+  | Call _ cls o f _ => [(o, cls, f)] 
   | _ => []
   end.
 
@@ -311,6 +311,19 @@ Proof.
   - inversion H; subst. 
     now apply ident_eqb_eq.
   - now apply IHcls.
+Qed.
+
+Remark find_method_In:
+  forall fid ms f,
+    find_method fid ms = Some f ->
+    In f ms.
+Proof.
+  intros ** Hfind.
+  induction ms; inversion Hfind as [H].
+  destruct (ident_eqb (m_name a) fid) eqn: E.
+  - inversion H; subst. 
+    apply in_eq. 
+  - apply in_cons; auto.
 Qed.
 
 Lemma WelldefClasses_cons:
