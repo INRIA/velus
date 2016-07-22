@@ -11,12 +11,9 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Axiom pos_of_str: string -> ident.
 Axiom pos_to_str: ident -> string.
 Axiom first_unused_ident: unit -> ident.
 
-Definition self_id: ident := pos_of_str "self".
-Definition out_id: ident := pos_of_str "out".
 Definition main_id: ident := pos_of_str "main".
 Definition prefix (pref id: ident): ident :=
   pos_of_str ((pos_to_str pref) ++ "_" ++ (pos_to_str id)).

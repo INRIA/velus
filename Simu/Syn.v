@@ -144,20 +144,27 @@ Inductive InstanceDeclared (objs: list (ident * ident)): stmt -> Prop :=
 | id_skip: 
     InstanceDeclared objs Skip.
 
- Record method : Type :=
-    mk_method {
-        m_name : ident;
-	    m_in   : list (ident * typ);
-	    m_vars : list (ident * typ);
-	    m_out  : list (ident * typ);
-	    m_body : stmt;
-                   
-	    m_nodup : NoDupMembers (m_in ++ m_vars ++ m_out);
-	    m_decl  : VarsDeclared (m_in ++ m_vars ++ m_out) m_body
+Axiom pos_of_str: string -> ident.
+Definition self_id: ident := pos_of_str "self".
+Definition out_id: ident := pos_of_str "out".
+
+Record method : Type :=
+  mk_method {
+      m_name : ident;
+	  m_in   : list (ident * typ);
+	  m_vars : list (ident * typ);
+	  m_out  : list (ident * typ);
+	  m_body : stmt;
+      
+	  m_nodup : NoDupMembers (m_in ++ m_vars ++ m_out);
+	  m_decl  : VarsDeclared (m_in ++ m_vars ++ m_out) m_body;
+
+      m_self_id : ~InMembers self_id (m_in ++ m_vars ++ m_out);
+      m_out_id  : ~InMembers out_id (m_in ++ m_vars ++ m_out)
     }.
 
- Definition meth_vars (m: method): list (ident * typ) :=
-   m.(m_in) ++ m.(m_vars) ++ m.(m_out).
+Definition meth_vars (m: method): list (ident * typ) :=
+  m.(m_in) ++ m.(m_vars) ++ m.(m_out).
 
 (* Record obj_dec : Type := *)
 (*   mk_obj_dec { *)
