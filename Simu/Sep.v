@@ -299,34 +299,34 @@ End SplitRange.
 Definition match_value (e: PM.t val) (x: ident) (v': val) : Prop :=
   match PM.find x e with
   | None => True
-  | Some v => v = v'
+  | Some v => v' = v
   end.
 
-Definition match_var (S: state) :=
-  match_value (snd S).
+(* Definition match_var (S: state) := *)
+(*   match_value (snd S). *)
 
 Remark match_find_var_det:
-  forall S x v1 v2,
-    match_var S x v1 ->
-    find_var S x v2 ->
+  forall me ve x v1 v2,
+    match_value ve x v1 ->
+    find_var (me, ve) x v2 ->
     v1 = v2.
 Proof.
-  unfold match_var, match_value, find_var.
-  introv Hm Hf.
-  destruct (PM.find x (snd S)).
+  unfold match_value, find_var; simpl.
+  intros ** Hm Hf.
+  destruct (PM.find x ve).
   - subst; inverts* Hf.
   - discriminate.
 Qed.
 
 Ltac app_match_find_var_det :=
   match goal with
-  | H1: find_var ?S ?x ?v1,
-        H2: match_var ?S ?x ?v2 |- _ =>
-    assert (v2 = v1) by (applys* match_find_var_det H2 H1); subst v1; clear H2 
+  | H1: find_var (?me, ?ve) ?x ?v1,
+        H2: match_value ?ve ?x ?v2 |- _ =>
+    assert (v2 = v1) by (applys* match_find_var_det H2 H1); subst v1; clear H2
   end.
 
-Definition match_field (S: state) :=
-  match_value (fst S).(mm_values).
+(* Definition match_field (me: menv) := *)
+(*   match_value me.(mm_values). *)
 
 Lemma match_value_empty:
   forall x, match_value (PM.empty val) x = (fun _ => True).
@@ -346,15 +346,14 @@ Proof.
   reflexivity.
 Qed.
 
-Definition instance_match (S: state) (i: ident): state :=
-  (match mfind_inst i (fst S) with
+Definition instance_match (me: menv) (i: ident): menv :=
+  match mfind_inst i me with
   | None => m_empty
   | Some i => i
-  end, snd S).
-
+  end.
 
 Lemma instance_match_empty:
-  forall x ve, instance_match (m_empty, ve) x = (m_empty, ve).
+  forall x, instance_match m_empty x = m_empty.
 Proof.
   intros. unfold instance_match, mfind_inst; simpl.
   rewrite PM.gempty. reflexivity.
@@ -364,7 +363,7 @@ Section Staterep.
   Variable ge : composite_env.
 
   Fixpoint staterep
-           (p: program) (clsnm: ident) (S: state) (b: block) (ofs: Z): massert :=
+           (p: program) (clsnm: ident) (me: menv) (b: block) (ofs: Z): massert :=
     match p with
     | nil => sepfalse
     | cls :: p' =>
@@ -374,7 +373,7 @@ Section Staterep.
                   let (x, ty) := xty in
                   match field_offset ge x (make_members cls) with
                   | OK d =>
-	                contains (chunk_of_type ty) b (ofs + d) (match_field S x)
+	                contains (chunk_of_type ty) b (ofs + d) (match_value me.(mm_values) x)
                   | Error _ => sepfalse
                   end) cls.(c_mems)
         **
@@ -382,16 +381,16 @@ Section Staterep.
                   let (i, c) := o in
                   match field_offset ge i (make_members cls) with
                   | OK d =>
-                    staterep p' c (instance_match S i) b (ofs + d)
+                    staterep p' c (instance_match me i) b (ofs + d)
                   | Error _ => sepfalse
                   end) cls.(c_objs)
-      else staterep p' clsnm S b ofs
+      else staterep p' clsnm me b ofs
     end.
-
-   Lemma staterep_skip_cons:
-    forall cls prog clsnm S b ofs,
+  
+  Lemma staterep_skip_cons:
+    forall cls prog clsnm me b ofs,
       clsnm <> cls.(c_name) ->
-      staterep (cls :: prog) clsnm S b ofs <-*-> staterep prog clsnm S b ofs.
+      staterep (cls :: prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
     intros ** Hnm.
     apply ident_eqb_neq in Hnm.
@@ -399,9 +398,9 @@ Section Staterep.
   Qed.
 
   Lemma staterep_skip_app:
-    forall clsnm prog oprog S b ofs,
+    forall clsnm prog oprog me b ofs,
       ~ClassIn clsnm oprog ->
-      staterep (oprog ++ prog) clsnm S b ofs <-*-> staterep prog clsnm S b ofs.
+      staterep (oprog ++ prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
     intros ** Hnin.
     induction oprog as [|cls oprog IH].
@@ -601,17 +600,17 @@ Section StateRepProperties.
   Admitted.
   
   Lemma range_staterep:
-    forall ve b clsnm,
+    forall b clsnm,
       WelldefClasses prog ->
       find_class clsnm prog <> None ->
       range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
-            staterep gcenv prog clsnm (m_empty, ve) b 0.
+            staterep gcenv prog clsnm m_empty b 0.
   Proof.
     introv Hwdef Hfind.
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
            massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
-                       (staterep gcenv prog clsnm (m_empty, ve) b lo)).
+                       (staterep gcenv prog clsnm m_empty b lo)).
     - intro HH; apply HH; apply Z.divide_0_r.
     - clear main_node_exists TRANSL.
 
@@ -662,7 +661,6 @@ Section StateRepProperties.
              apply sep_imp'.
              + destruct a.
                destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
-               unfold match_field.
                rewrite match_value_empty.
                rewrite sizeof_translate_chunk.
                *{ apply range_contains'.
@@ -760,11 +758,11 @@ Section StateRepProperties.
   Qed.
 
   Lemma staterep_deref_mem:
-    forall cls prog' m S b ofs x ty d v,
+    forall cls prog' m me ve b ofs x ty d v,
       access_mode ty = By_value (chunk_of_type ty) ->
-      m |= staterep gcenv (cls::prog') cls.(c_name) S b ofs ->
+      m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ->
       In (x, ty) cls.(c_mems) ->
-      find_field S x v ->
+      find_field (me, ve) x v ->
       field_offset gcenv x (make_members cls) = OK d ->
       Clight.deref_loc ty m b (Int.repr (ofs + d)) v.
   Proof.
@@ -778,24 +776,24 @@ Section StateRepProperties.
     rewrite Hoff in Hm. clear Hoff.
     apply loadv_rule in Hm.
     destruct Hm as [v' [Hloadv Hmatch]].
-    unfold match_field, match_value in Hmatch.
-    unfold find_field, mfind_mem in Hv.
+    unfold match_value in Hmatch.
+    unfold find_field, mfind_mem in Hv; simpl in Hv.
     rewrite Hv in Hmatch. clear Hv.
-    rewrite <-Hmatch in Hloadv. clear Hmatch.
+    rewrite Hmatch in Hloadv. clear Hmatch.
     apply Clight.deref_loc_value with (2:=Hloadv); auto.
   Qed.
 
   Lemma staterep_assign_mem:
-    forall P cls prog' m m' S b ofs x ty d v,
+    forall P cls prog' m m' me b ofs x ty d v,
       access_mode ty = By_value (chunk_of_type ty) ->
       NoDup cls.(c_objs) ->
       NoDupMembers cls.(c_mems) ->
-      m |= staterep gcenv (cls::prog') cls.(c_name) S b ofs ** P ->
+      m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P ->
       In (x, ty) cls.(c_mems) ->
       field_offset gcenv x (make_members cls) = OK d ->
       v = Values.Val.load_result (chunk_of_type ty) v ->
       Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' ->
-      m' |= staterep gcenv (cls::prog') cls.(c_name) (update_field S x v) b ofs ** P.
+      m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs ** P.
   Proof.
     Opaque sepconj.
     intros ** Hty Hcls Hmem Hm Hin Hoff Hlr Hal.
@@ -814,13 +812,13 @@ Section StateRepProperties.
                 match field_offset gcenv x0 (make_members cls) with
                 | OK d0 =>
                   contains (chunk_of_type ty0) b (ofs + d0)
-                           (match_field S x0)
+                           (match_value (mm_values me) x0)
                 | Error _ => sepfalse
                 end).
     - rewrite <-sep_swap2.
       eapply storev_rule' with (1:=Hm).
-      + unfold match_field, match_value. simpl.
-        rewrite PM.gss. exact Hlr.
+      + unfold match_value. simpl.
+        rewrite PM.gss. symmetry; exact Hlr.
       + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess].
         * rewrite Hty in Haccess.
           injection Haccess. intro; subst. assumption.
@@ -828,7 +826,7 @@ Section StateRepProperties.
     - apply NoDupMembers_remove_1 in Hmem.
       apply NoDupMembers_NoDup with (1:=Hmem).
     - intros x' Hin'; destruct x' as [x' ty'].
-      unfold match_field, update_field, madd_mem; simpl.
+      unfold update_field, madd_mem; simpl.
       rewrite match_value_add; [reflexivity|].
       apply NoDupMembers_app_cons in Hmem.
       destruct Hmem as [Hmem].
@@ -841,21 +839,30 @@ Section StateRepProperties.
     forall m S cls prog b ofs x ty,
       m |= staterep gcenv (cls :: prog) cls.(c_name) S b ofs ->
       In (x, ty) (make_members cls) ->
-      exists d, field_offset gcenv x (make_members cls) = OK d.
+      exists d, field_offset gcenv x (make_members cls) = OK d (* /\ 0 <= ofs <= Int.max_unsigned *).
   Proof.
     introv Hm Hin.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply in_app_or in Hin.
-    destruct Hin as [Hin | Hin];
-      apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].      
-    - apply sep_proj1 in Hm.
+    destruct Hin as [Hin | Hin].
+    - apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].      
+      apply sep_proj1 in Hm.
       rewrite Hin in Hm. clear Hsplit Hin.
       apply sep_proj1 in Hm. clear ws xs.
       destruct (field_offset gcenv x (make_members cls)).
       + exists* z.
       + contradict Hm.
-    - apply sep_proj2 in Hm.
-      admit.
+    - apply in_map_iff in Hin.
+      destruct Hin as (obj & Htr & Hin).
+      apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].      
+      apply sep_proj2 in Hm.
+      rewrite Hin in Hm. clear Hsplit Hin.
+      apply sep_proj1 in Hm. clear ws xs.
+      destruct obj.
+      simpl in Htr; inversion Htr; subst i.
+      destruct (field_offset gcenv x (make_members cls)).
+      + exists* z.
+      + contradict Hm.
   Qed.
   
 End StateRepProperties.
@@ -863,20 +870,20 @@ End StateRepProperties.
 Section BlockRep.
   Variable ge : composite_env.
 
-  Definition blockrep (S: state) (flds: members) (b: block) : massert :=
+  Definition blockrep (ve: venv) (flds: members) (b: block) : massert :=
     sepall (fun xty : ident * type =>
               let (x, ty) := xty in
               match field_offset ge x flds, access_mode ty with
               | OK d, By_value chunk =>
-                contains chunk b d (match_var S x)
+                contains chunk b d (match_value ve x)
               | _, _ => sepfalse
               end) flds.
 
   Lemma blockrep_deref_mem:
-    forall m S co b x ty d v,
-      m |= blockrep S (co_members co) b ->
+    forall m me ve co b x ty d v,
+      m |= blockrep ve (co_members co) b ->
       In (x, ty) (co_members co) ->
-      find_var S x v ->
+      find_var (me, ve) x v ->
       field_offset ge x (co_members co) = OK d ->
       Clight.deref_loc ty m b (Int.repr d) v.
   Proof.
@@ -890,23 +897,23 @@ Section BlockRep.
     destruct (access_mode ty) eqn:Haccess; try contradiction.
     apply loadv_rule in Hm.
     destruct Hm as [v' [Hloadv Hmatch]].
-    unfold match_var, match_value in Hmatch.
-    unfold find_var in Hv.
+    unfold match_value in Hmatch.
+    unfold find_var in Hv; simpl in Hv.
     rewrite Hv in Hmatch. clear Hv.
-    rewrite <-Hmatch in Hloadv. clear Hmatch.
+    rewrite Hmatch in Hloadv. clear Hmatch.
     apply Clight.deref_loc_value with (1:=Haccess) (2:=Hloadv).
   Qed.
 
   Lemma blockrep_assign_mem:
-    forall P co m m' S b d x v ty chunk,
+    forall P co m m' ve b d x v ty chunk,
       NoDupMembers (co_members co) ->
-      m |= blockrep S (co_members co) b ** P ->
+      m |= blockrep ve (co_members co) b ** P ->
       In (x, ty) (co_members co) ->
       field_offset ge x (co_members co) = OK d ->
       access_mode ty = By_value chunk ->
       v = Val.load_result chunk v ->
       Clight.assign_loc ge ty m b (Int.repr d) v m' ->
-      m' |= blockrep (update_var S x v) (co_members co) b ** P.
+      m' |= blockrep (PM.add x v ve) (co_members co) b ** P.
   Proof.
     Opaque sepconj.
     intros ** Hndup Hm Hin Hoff Haccess Hlr Hal.
@@ -924,19 +931,18 @@ Section BlockRep.
             let (x0, ty0) := xty in
             match field_offset ge x0 (co_members co), access_mode ty0 with
             | OK d0, By_value chunk =>
-              contains chunk b d0 (match_var S x0)
+              contains chunk b d0 (match_value ve x0)
             | _, _ => sepfalse
             end).
     - rewrite <-sep_swap2.
       eapply storev_rule' with (1:=Hm).
-      + unfold match_var, match_value, update_var. simpl. rewrite PM.gss. exact Hlr.
+      + unfold match_value. rewrite PM.gss. symmetry; exact Hlr.
       + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *.
         * injection Haccess'. intro HR; rewrite <-HR in *; assumption.
         * discriminate.
     - apply NoDupMembers_remove_1 in Hndup.
       apply NoDupMembers_NoDup with (1:=Hndup).
     - intros x' Hin'; destruct x' as [x' ty'].
-      unfold match_var, update_var. simpl.
       rewrite match_value_add; [reflexivity|].
       apply NoDupMembers_app_cons in Hndup.
       destruct Hndup as [Hndup].
@@ -946,8 +952,8 @@ Section BlockRep.
   Qed.
 
   Lemma blockrep_field_offset:
-    forall m S flds b x ty,
-      m |= blockrep S flds b ->
+    forall m ve flds b x ty,
+      m |= blockrep ve flds b ->
       In (x, ty) flds ->
       exists d, field_offset ge x flds = OK d.
   Proof.

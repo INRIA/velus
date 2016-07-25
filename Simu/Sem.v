@@ -3,7 +3,6 @@ Require Import lib.Integers lib.Floats.
         
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
-Require Rustre.Nelist.
 Require Import List.
 
 Require Import Syn.
@@ -20,7 +19,6 @@ Definition m_empty: menv := empty_memory _.
 Definition v_empty: venv := PM.empty val.
 
 Definition state := (menv * venv)%type.
-Definition s_empty := (m_empty, v_empty).
 
 Definition find_var (S: state) (x: ident) (v: val) :=
   PM.find x (snd S) = Some v.

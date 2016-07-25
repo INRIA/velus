@@ -146,21 +146,14 @@ Section PRESERVATION.
   | wf_skip: 
       well_formed_stmt c m S Skip.
   
-  Remark valid_val_not_void:
-    forall v t, valid_val v t -> t <> Ctypes.Tvoid.
-  Proof.
-    introv H E; subst.
-    inverts H; discriminate.
-  Qed.
-
-  Remark valid_val_access:
+   Remark valid_val_access:
     forall v t, valid_val v t -> access_mode t = By_value (chunk_of_type t).
   Proof.
     introv H.
-    apply H. 
+    apply H.
   Qed.
 
-  Hint Resolve valid_val_not_void valid_val_access.
+  Hint Resolve valid_val_access.
   Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt.
 
   Definition c_state := (Clight.env * Clight.temp_env * Memory.Mem.mem)%type.
@@ -168,19 +161,20 @@ Section PRESERVATION.
   Definition sep_invariant
              (c: class) (f: method) (S: state) (e: env) (le: temp_env) (m: Mem.mem)
              (sb: block) (sofs: Int.int) (outb: block) (outco: composite) :=
-    m |= staterep gcenv prog c.(c_name) S sb (Int.unsigned sofs)
-        ** blockrep gcenv S (co_members outco) outb
+    let (me, ve) := S in
+    m |= staterep gcenv prog c.(c_name) me sb (Int.unsigned sofs)
+        ** blockrep gcenv ve (co_members outco) outb
         ** sepall (fun ocg =>
                      let '(o, cid, g) := ocg in
                      match gcenv ! (prefix g cid), e!o with 
                      | Some gco, Some (oblk, _) =>
-                       blockrep gcenv s_empty (co_members gco) oblk
+                       blockrep gcenv v_empty (co_members gco) oblk
                      | _, _ => sepfalse
                      end) (get_instance_methods f.(m_body))
         ** pure (Forall (fun (xty: ident * typ) =>
                            let (x, ty) := xty in
                            match le!x with
-                           | Some v => match_var S x v
+                           | Some v => match_value ve x v
                            | None => False
                            end) (f.(m_in) ++ f.(m_vars))).
   
@@ -204,12 +198,13 @@ Section PRESERVATION.
       exists d,
         eval_lvalue tge e le m (deref_field out_id (prefix (m_name f) (c_name c)) x ty)
                     outb (Int.add Int.zero (Int.repr d))
-        /\ m |= blockrep gcenv S (co_members outco) outb
+        /\ m |= blockrep gcenv (snd S) (co_members outco) outb
         /\ In (x, ty) (co_members outco)
         /\ field_offset gcenv x (co_members outco) = Errors.OK d.
   Proof.
     introv ? ? ? Hrep Houtco ? E.
     (* pick the interesting conjunct *)
+    destruct S.
     apply sep_pick2 in Hrep.
 
     (* show that (x, ty) ∈ f.(m_out) *)
@@ -249,6 +244,7 @@ Section PRESERVATION.
       eval_expr tge e le m (deref_field out_id (prefix (m_name f) (c_name c)) x ty) v.
   Proof.
     intros.
+    destruct S.
     edestruct evall_out_field; eauto.
     apply* eval_Elvalue.
     rewrite Int.add_zero_l.
@@ -266,6 +262,7 @@ Section PRESERVATION.
       eval_expr tge e le m (Etempvar x ty) v.
   Proof.
     introv ? ? Hrep Hvars E ?.
+    destruct S.
     apply sep_proj2, sep_proj2, sep_comm, sep_pure in Hrep.
     destruct Hrep as (Hrep & H'); clear H'.
     apply eval_Etempvar.
@@ -280,7 +277,8 @@ Section PRESERVATION.
       eapply not_In_app in HnIn; eauto.
       eapply In_Forall in Hrep; eauto.
       simpl in Hrep.
-      destruct (le ! x); [now app_match_find_var_det | contradiction].
+      destruct (le ! x);    
+      [now app_match_find_var_det | contradiction].
   Qed.
 
   Lemma evall_self_field:
@@ -293,11 +291,12 @@ Section PRESERVATION.
       exists d,
         eval_lvalue tge e le m (deref_field self_id (c_name c) x ty)
                     sb (Int.add sofs (Int.repr d))
-        /\ m |= staterep gcenv (c :: prog') c.(c_name) S sb (Int.unsigned sofs)
+        /\ m |= staterep gcenv (c :: prog') c.(c_name) (fst S) sb (Int.unsigned sofs)
         /\ field_offset gcenv x (make_members c) = Errors.OK d
         /\ NoDupMembers (make_members c).
   Proof.
     introv Find ? ? Hrep ?.
+    destruct S.
     apply sep_proj1 in Hrep.
     forwards* (? & Hco & ? & Eq & ? & Nodup): make_members_co; instantiate (1:=tprog) in Hco.
     forwards ?: find_class_name Find; subst.
@@ -330,6 +329,7 @@ Section PRESERVATION.
       eval_expr tge e le m (deref_field self_id (c_name c) x ty) v.
   Proof.
     intros.
+    destruct S.
     edestruct evall_self_field as (? & ? & ? & Hoffset & Nodup); eauto.
     apply* eval_Elvalue.
     apply* staterep_deref_mem.
@@ -337,7 +337,6 @@ Section PRESERVATION.
     rewrite* Int.unsigned_repr.
     forwards* Ftype: field_translate_mem_type.
     eapply field_offset_in_range in Hoffset; eauto.
-    split*.
     admit.
   Qed.
   
@@ -383,10 +382,19 @@ Section PRESERVATION.
   Proof.
     introv H.
     apply exp_eval_valid in H.
-    apply* valid_val_access.
+    apply H.
   Qed.
 
-  Hint Resolve exp_eval_valid exp_eval_access.
+  Lemma exp_eval_lr:
+    forall S e v,
+      exp_eval S e v -> v = Val.load_result (chunk_of_type (typeof e)) v.
+  Proof.
+    introv H.
+    apply exp_eval_valid in H.
+    apply H.
+  Qed.
+
+  Hint Resolve exp_eval_valid exp_eval_access exp_eval_lr.
 
   Lemma exprs_eval_simu:
     forall c S es es' prog' clsnm vs e le m f,
@@ -419,23 +427,130 @@ Section PRESERVATION.
     simpl; econstructor; eauto.
   Qed.
 
-  (*   forall c S e m loc x t v, *)
-  (*     In c prog -> *)
-  (*     match_states c S (e, m) -> *)
-  (*     Maps.PTree.get x e = Some (loc, t) -> *)
-  (*     In (x, t) (class_vars c) -> *)
-  (*     v = Values.Val.load_result (chunk_of_type t) v -> *)
-  (*     valid_val v t -> *)
-  (*     x <> self_id -> *)
-  (*     exists m', Memory.Mem.store (chunk_of_type t) m loc 0 v = Some m'  *)
-  (*           /\ match_states c (update_var S x v) (e, m'). *)
-  (* Lemma match_states_assign_out: *)
-  (*     forall c f S e le m, *)
-  (*       match_states c f S (e, le, m) -> *)
-  (*       In (x, t) f.(m_out) -> *)
-  (*       exists m', Memory.Mem.store (chunk_of_type t) m loc 0 v = Some m' *)
-  (*             /\ match_states c (update_var S x v) (e, m'). *)
+  Lemma match_states_assign_out:
+    forall c clsnm prog' f S x ty e le m v d sb sofs outco outb,
+      find_class clsnm prog = Some (c, prog') ->
+      In f c.(c_methods) ->
+      le ! out_id = Some (Vptr outb Int.zero) ->
+      le ! self_id = Some (Vptr sb sofs) ->
+      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      sep_invariant c f S e le m sb sofs outb outco ->
+      In (x, ty) (meth_vars f) ->
+      In (x, ty) (co_members outco) ->
+      field_offset gcenv x (co_members outco) = Errors.OK d ->
+      access_mode ty = By_value (chunk_of_type ty) ->
+      v = Values.Val.load_result (chunk_of_type ty) v ->
+      existsb (fun out => ident_eqb (fst out) x) f.(m_out) = true ->
+      exists m', Memory.Mem.storev (chunk_of_type ty) m (Vptr outb (Int.repr d)) v = Some m'
+            /\ match_states c f (update_var S x v) (e, le, m').
+  Proof.
+    intros **  ? ? ? ? Houtco Hrep Hvars Hin Hoffset Haccess Hlr E.
+    destruct S.
+    unfold sep_invariant in Hrep.
+
+    (* determine outco *)
+    forwards* (outco' & Houtco' & Eq): global_out_struct;
+      [unfold translate_out; eauto |].
+    rewrite Houtco in Houtco'; symmetry in Houtco'; inverts Houtco'.
+
+    (* show that (x, ty) ∈ f.(m_out) *)
+    apply existsb_exists in E.
+    destruct E as ((x' & ty') & Hin' & E).
+    rewrite ident_eqb_eq in E; simpl in E; subst x'.
+    pose proof (m_nodup f) as Nodup.
+    assert (In (x, ty') (meth_vars f)) by
+        (now apply in_or_app; right; apply in_or_app; right).
+    app_NoDupMembers_det.
     
+    (* get the updated memory *)
+    apply sepall_in in Hin.
+    destruct Hin as [ws [ys [Hys Heq]]].
+    unfold blockrep at 1 in Hrep.
+    rewrite Heq in Hrep.
+    rewrite Hoffset, Haccess in Hrep.
+    rewrite sep_assoc, sep_swap in Hrep.
+    eapply Separation.storev_rule' with (v:=v) in Hrep; eauto.
+    destruct Hrep as (m' & ? & Hrep).
+    exists m'; split*.
+    unfold update_var; simpl.
+    econstructor; eauto.
+    unfold sep_invariant.
+    unfold blockrep at 1.
+    rewrite Heq.
+    rewrite Hoffset, Haccess.
+    rewrite sep_assoc, sep_swap.
+    do 3 rewrite <-sep_assoc; rewrite sep_comm;
+    rewrite sep_pure; do 2 rewrite sep_assoc.
+    do 3 rewrite <-sep_assoc in Hrep; rewrite sep_comm in Hrep;
+    rewrite sep_pure in Hrep; do 2 rewrite sep_assoc in Hrep.
+    destruct Hrep as (Hpure & Hrep); split.
+    - clear Hrep.
+      (* SearchAbout Forall inside List. *)
+
+      (* apply Forall_impl with (2:=Hpure). *)
+      
+      rewrite app_assoc in Nodup.
+      rewrite NoDupMembers_app in Nodup.
+      apply In_InMembers in Hin'.
+      eapply NoDupMembers_app_InMembers in Nodup; eauto.
+      induction* (m_in f ++ m_vars f).
+      inverts* Hpure; constructor; destruct a.
+      + destruct* le ! i.
+        rewrite* match_value_add.
+        intro.
+        apply Nodup.
+        subst i.
+        now left.
+      + apply* IHl.
+        intro.
+        apply Nodup.
+        now right.
+    - eapply sep_imp; eauto.
+      + unfold hasvalue.
+        unfold match_value; simpl.
+        rewrite PM.gss.
+        rewrite <-Hlr; auto.
+      + apply* sep_imp'.
+        apply* sep_imp'.
+        do 2 apply NoDupMembers_app_r in Nodup.
+        rewrite <-Eq, Hys in Nodup.
+        apply NoDupMembers_app_cons in Nodup.
+        destruct Nodup as (Notin & Nodup).
+        rewrite sepall_switchp with
+        (f' := fun xty : ident * type =>
+                 let (x0, ty0) := xty in
+                 match field_offset gcenv x0 (co_members outco) with
+                 | Errors.OK d0 =>
+                   match access_mode ty0 with
+                   | By_value chunk => contains chunk outb d0 (match_value (PM.add x v v0) x0)
+                   | By_reference => sepfalse
+                   | By_copy => sepfalse
+                   | By_nothing => sepfalse
+                   end
+                 | Errors.Error _ => sepfalse
+                 end); eauto.
+        * apply NoDupMembers_NoDup; iauto.
+        * intros (x' & t') Hin.
+          rewrite* match_value_add.
+          intro; subst x'.
+          apply Notin.
+          eapply In_InMembers; eauto.
+  Qed.
+  
+  Lemma match_states_assign_tempvar:
+    forall c f S x ty e le m v d sb sofs outco outb,
+      le ! out_id = Some (Vptr outb Int.zero) ->
+      le ! self_id = Some (Vptr sb sofs) ->
+      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      sep_invariant c f S e le m sb sofs outb outco ->
+      field_offset gcenv x (co_members outco) = Errors.OK d ->
+      access_mode ty = By_value (chunk_of_type ty) ->
+      v = Values.Val.load_result (chunk_of_type ty) v ->
+      match_states c f (update_var S x v) (e, PTree.set x v le, m).
+  Proof.
+  Admitted.
+  
+  
   (* Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt. *)
   Hint Resolve expr_eval_simu Clight.assign_loc_value exp_eval_valid sem_cast_same.
   
@@ -464,25 +579,18 @@ Section PRESERVATION.
 
       (* out->x = e *)
       + (* get the 'out' variable left value evaluation *)
-        edestruct evall_out_field as (? & ? & Hblockrep & Hin & Hoffset); eauto.
+        edestruct evall_out_field; eauto.
 
         (* get the updated memory *)
-        apply sepall_in in Hin.
-        destruct Hin as [ws [ys [Hys Heq]]].
-        apply Heq in Hblockrep.
-        rewrite Hoffset in Hblockrep.
-        erewrite exp_eval_access in Hblockrep; eauto.
-        eapply Separation.storev_rule' with (v:=v) in Hblockrep; eauto.
-        destruct Hblockrep as (m2 & ? & ?).
+        edestruct match_states_assign_out as (m2 & ?); jauto.
 
-        exists le1 m2 E0; split.
-        *{ apply* ClightBigstep.exec_Sassign.
-           - rewrite* type_pres; apply* sem_cast_same; apply* exp_eval_valid.
-           - apply* assign_loc_value.
-             + simpl; apply* exp_eval_access.
-             + rewrite* Int.add_zero_l.
+        exists le1 m2 E0; split*.
+        apply* ClightBigstep.exec_Sassign.
+        * rewrite* type_pres; apply* sem_cast_same; apply* exp_eval_valid.
+        *{ apply* assign_loc_value.
+           - simpl; apply* exp_eval_access.
+           - rewrite* Int.add_zero_l.
          }
-        * admit.
 
       (* x = e *)
       + exists (PTree.set x v le1) m1 E0; split.
@@ -612,7 +720,6 @@ Section PRESERVATION.
       (*      - eauto. *)
       (*    } *)
       (*   * admit.  *)
-      admit.
       
     (* Skip : "skip" *)
     - do 3 econstructor; split*.

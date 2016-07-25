@@ -728,6 +728,25 @@ Section InMembers.
     destruct w; rewrite nodupmembers_cons in H; tauto.
   Qed.
 
+  Lemma NoDupMembers_app_InMembers:
+    forall x xs ws,
+      NoDupMembers (xs ++ ws) ->
+      InMembers x xs ->
+      ~InMembers x ws.
+  Proof.
+    induction ws as [|w ws IH]; auto.
+    intros Nodup Hin H.
+    destruct w; simpl in H.
+    destruct H.
+    - apply NoDupMembers_app_cons in Nodup.
+      destruct Nodup as (Notin & ?).
+      apply NotInMembers_app in Notin.
+      subst.
+      destruct Notin as (? & Notin); now apply Notin. 
+    - apply NoDupMembers_remove_1 in Nodup.
+      apply IH; auto.
+  Qed.
+  
   Lemma NoDupMembers_det:
     forall x t t' xs,
       NoDupMembers xs ->
