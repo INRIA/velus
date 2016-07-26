@@ -769,6 +769,16 @@ Section InMembers.
       + apply IHxs; auto.
         destruct a; rewrite nodupmembers_cons in H; tauto. 
   Qed.
+
+  Lemma InMembers_neq:
+    forall x y xs,
+      InMembers x xs ->
+      ~ InMembers y xs ->
+      x <> y.
+  Proof.
+    intros ** Hx Hy; subst.
+    now apply Hx.
+  Qed.
   
 End InMembers.
 

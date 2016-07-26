@@ -166,6 +166,13 @@ Record method : Type :=
 Definition meth_vars (m: method): list (ident * typ) :=
   m.(m_in) ++ m.(m_vars) ++ m.(m_out).
 
+Lemma nodup_vars:
+  forall m,
+    NoDupMembers (meth_vars m).
+Proof.
+  intro; exact (m_nodup m). 
+Qed.
+
 (* Record obj_dec : Type := *)
 (*   mk_obj_dec { *)
 (*       obj_inst : ident; *)

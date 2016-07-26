@@ -839,30 +839,42 @@ Section StateRepProperties.
     forall m S cls prog b ofs x ty,
       m |= staterep gcenv (cls :: prog) cls.(c_name) S b ofs ->
       In (x, ty) (make_members cls) ->
-      exists d, field_offset gcenv x (make_members cls) = OK d (* /\ 0 <= ofs <= Int.max_unsigned *).
+      exists d, field_offset gcenv x (make_members cls) = OK d
+           /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
     introv Hm Hin.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply in_app_or in Hin.
-    destruct Hin as [Hin | Hin].
-    - apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].      
-      apply sep_proj1 in Hm.
-      rewrite Hin in Hm. clear Hsplit Hin.
-      apply sep_proj1 in Hm. clear ws xs.
-      destruct (field_offset gcenv x (make_members cls)).
-      + exists* z.
-      + contradict Hm.
-    - apply in_map_iff in Hin.
-      destruct Hin as (obj & Htr & Hin).
+    destruct Hin as [Hin | Hin].  
+    - apply sep_proj1 in Hm.
       apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].      
-      apply sep_proj2 in Hm.
       rewrite Hin in Hm. clear Hsplit Hin.
-      apply sep_proj1 in Hm. clear ws xs.
-      destruct obj.
-      simpl in Htr; inversion Htr; subst i.
+      apply sep_proj1 in Hm.
+      clear ws xs.
       destruct (field_offset gcenv x (make_members cls)).
-      + exists* z.
+      + exists z; split*.
+        apply* contains_no_overflow. 
       + contradict Hm.
+    - apply sep_proj2 in Hm.
+      induction (c_objs cls).
+      + contradiction.
+      + inverts Hin as Hin.
+        * simpl in Hm.
+          admit.
+        * simpl in Hm.
+          apply sep_proj2 in Hm.
+          apply* IHl.
+      (*     apply in_map_iff in Hin. *)
+      (*   destruct Hin as (obj & Htr & Hin). *)
+      (*   apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].       *)
+      (*   apply sep_proj2 in Hm. *)
+      (*   rewrite Hin in Hm. clear Hsplit Hin. *)
+      (*   apply sep_proj1 in Hm. clear ws xs. *)
+      (*   destruct obj. *)
+      (*   simpl in Htr; inversion Htr; subst i. *)
+      (*   destruct (field_offset gcenv x (make_members cls)). *)
+      (* + exists* z. *)
+      (* + contradict Hm. *)
   Qed.
   
 End StateRepProperties.
