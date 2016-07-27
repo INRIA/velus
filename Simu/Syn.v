@@ -173,12 +173,6 @@ Proof.
   intro; exact (m_nodup m). 
 Qed.
 
-(* Record obj_dec : Type := *)
-(*   mk_obj_dec { *)
-(*       obj_inst : ident; *)
-(*       obj_class: ident *)
-(*     }. *)
-
 Record class : Type :=
     mk_class {
 	    c_name    : ident;
@@ -192,23 +186,6 @@ Record class : Type :=
 	    c_statedecl : Forall (fun m => StateDeclared c_mems m.(m_body)) c_methods;
         c_instdecl  : Forall (fun m => InstanceDeclared c_objs m.(m_body)) c_methods
       }.
-
-(* Record class : Type := *)
-(*   mk_class { *)
-(*       c_name  : ident; *)
-
-(*       c_input : nelist (ident * typ); *)
-(*       c_output: nelist (ident * typ); *)
-(*       c_vars  : list (ident * typ); *)
-        
-(*       c_mems  : list (ident * typ); *)
-(*       c_objs  : list obj_dec; *)
-
-(*       c_step  : stmt  *)
-(*     }. *)
-
-(* Definition class_vars (c: class): list (ident * typ) := *)
-(*   nelist2list c.(c_output) ++ nelist2list c.(c_input) ++ c.(c_vars). *)
 
 Definition ClassIn (clsnm: ident) (cls: list class) : Prop :=
   Exists (fun cls => cls.(c_name) = clsnm) cls.
@@ -235,11 +212,10 @@ Inductive WelldefClasses: list class -> Prop :=
       WelldefClasses cls' ->
       (forall o c', In (o, c') c.(c_objs) ->
                ClassIn c' cls') ->
+      Forall (fun c' => c.(c_name) <> c'.(c_name)) cls' ->
       WelldefClasses (c :: cls').
 
 Definition program : Type := list class.
-
-(* Definition program : Type := list class. *)
 
 Definition find_class (n: ident): program -> option (class * program) :=
   fix find p :=
@@ -366,3 +342,77 @@ Proof.
   unfold exp_eqb.
   intros e1 e2; destruct (exp_eq e1 e2); intuition.
 Qed.
+
+Inductive sub_prog: program -> program -> Prop := 
+  sub_prog_intro: forall p p', 
+    sub_prog p (p' ++ p). 
+ 
+Lemma find_class_sub: 
+  forall prog clsid cls prog', 
+    find_class clsid prog = Some (cls, prog') -> 
+    sub_prog prog' prog. 
+Proof. 
+  intros ** Find. 
+  apply find_class_app in Find.
+  destruct Find as (? & ? & ?); subst. 
+  rewrite List_shift_first. 
+  constructor. 
+Qed. 
+ 
+Hint Constructors sub_prog. 
+ 
+(* Remark unique_app:  *)
+(*   forall cls cls',  *)
+(*     unique_classes (cls ++ cls') -> unique_classes cls /\ unique_classes cls'.  *)
+(* Proof.  *)
+(*   induction cls.  *)
+(*   - simpl; split; auto. apply unique_nil.  *)
+(*   - intros cls' Unique.  *)
+(*     split.  *)
+(*     + unfold unique_classes.  *)
+(*       introv Hin1 Hin2.  *)
+(*       unfold unique_classes in Unique.  *)
+(*       apply Unique; apply List.in_or_app; left; auto.  *)
+(*     + rewrite <-List.app_comm_cons in Unique.    *)
+(*       apply unique_cons in Unique.  *)
+(*       apply IHcls; auto.  *)
+(* Qed.  *)
+ 
+Remark find_class_sub_same: 
+  forall prog1 prog2 clsid cls prog', 
+    find_class clsid prog2 = Some (cls, prog') -> 
+    WelldefClasses prog1 -> 
+    sub_prog prog2 prog1 -> 
+    find_class clsid prog1 = Some (cls, prog'). 
+Proof. 
+  intros ** Hfind WD Sub. 
+  inversion Sub; clear Sub; subst.  
+  pose proof (find_class_app _ _ _ _ Hfind) as H.
+  destruct H as (prog2' & Hprog2 & Hnone).
+  induction p'; simpl; auto. 
+  rewrite <-List.app_comm_cons in WD. 
+  assert (List.In cls (p' ++ prog2)) as Hin_cls. 
+  - pose proof (find_class_In _ _ _ _ Hfind) as Hin.
+    apply List.in_or_app; right; auto.  
+  - inversion WD as [|? ? ? ? Hforall]; subst a.
+    apply find_class_name in Hfind; subst clsid.
+    apply In_Forall with (2:=Hin_cls) in Hforall.
+    apply ident_eqb_neq in Hforall. 
+    rewrite Hforall. 
+    apply IHp'. eapply WelldefClasses_cons; eauto. 
+Qed. 
+ 
+Remark find_class_welldef: 
+  forall prog clsid cls prog', 
+    WelldefClasses prog -> 
+    find_class clsid prog = Some (cls, prog') -> 
+    WelldefClasses prog'. 
+Proof. 
+  intros ** WD Find.
+  apply find_class_app in Find.
+  destruct Find as (prog2' & Hprog2 & Hnone).
+  subst.
+  apply WelldefClasses_app in WD.
+  eapply WelldefClasses_cons; eauto. 
+Qed. 
+ 

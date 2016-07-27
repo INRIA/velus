@@ -130,31 +130,6 @@ Section Sepall.
     intro p. apply sepall_breakout with (1:=Hys).
   Qed.
 
-  (* Lemma sepall_in_map: *)
-  (*   forall x ys f, *)
-  (*     In x (map f ys) -> *)
-  (*     exists x' ws xs, *)
-  (*       x = f x'  *)
-  (*       /\ ys = ws ++ x' :: xs *)
-  (*       /\ (forall p, *)
-  (*             sepall p ys <-*-> p x ** sepall p (ws ++ xs)). *)
-  (* Proof. *)
-  (*   intros x ys f Hin. *)
-  (*   apply in_split in Hin. *)
-  (*   destruct Hin as [ws [xs Hys]]. *)
-  (*   pose proof Hys as Hys'.  *)
-  (*   apply map_app' in Hys'. *)
-  (*   destruct Hys' as (ws' & xxs' & Hws & Hxxs). *)
-  (*   symmetry in Hxxs. *)
-  (*   apply map_cons' in Hxxs. *)
-  (*   destruct Hxxs as (x' & xs' & Hx & Hxs). *)
-  (*   subst. *)
-  (*   exists x' ws' xs'. *)
-  (*   splits*; auto.  *)
-  (*   - admit. *)
-  (*   - intro p. admit. *)
-  (* Qed. *)
-
   Lemma sepall_sepfalse:
     forall m p xs,
       m |= sepall p xs ->
@@ -693,8 +668,8 @@ Section StateRepProperties.
                
                destruct a as [o c].
                assert (ClassIn c prog') as Hcin
-                   by (eapply H0; econstructor; eauto).
-               clear H0 Hcoal1.
+                   by (eapply H1; econstructor; eauto).
+               clear H1 Hcoal1.
 
                apply Forall_cons2 in Hcoal2.
                destruct Hcoal2 as [Hcoal2 Hcoal3].
@@ -739,7 +714,7 @@ Section StateRepProperties.
                  apply Z.divide_refl.
              + apply IHl.
                * clear IHl. intros o c' Hin.
-                 apply H0 with (o:=o). constructor (assumption).
+                 apply H1 with (o:=o). constructor (assumption).
                * simpl in Hcoal2. apply Forall_cons2 in Hcoal2.
                destruct Hcoal2 as [Hcoal2 Hcoal3]. exact Hcoal3.
                * intros o c Hin. apply Htype. constructor (assumption).
@@ -836,45 +811,23 @@ Section StateRepProperties.
   Qed.
 
   Lemma staterep_field_offset:
-    forall m S cls prog b ofs x ty,
-      m |= staterep gcenv (cls :: prog) cls.(c_name) S b ofs ->
-      In (x, ty) (make_members cls) ->
+    forall m me cls prog b ofs x ty,
+      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ->
+      In (x, ty) (c_mems cls) ->
       exists d, field_offset gcenv x (make_members cls) = OK d
            /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
     introv Hm Hin.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply in_app_or in Hin.
-    destruct Hin as [Hin | Hin].  
-    - apply sep_proj1 in Hm.
-      apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].      
-      rewrite Hin in Hm. clear Hsplit Hin.
-      apply sep_proj1 in Hm.
-      clear ws xs.
-      destruct (field_offset gcenv x (make_members cls)).
-      + exists z; split*.
-        apply* contains_no_overflow. 
-      + contradict Hm.
-    - apply sep_proj2 in Hm.
-      induction (c_objs cls).
-      + contradiction.
-      + inverts Hin as Hin.
-        * simpl in Hm.
-          admit.
-        * simpl in Hm.
-          apply sep_proj2 in Hm.
-          apply* IHl.
-      (*     apply in_map_iff in Hin. *)
-      (*   destruct Hin as (obj & Htr & Hin). *)
-      (*   apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].       *)
-      (*   apply sep_proj2 in Hm. *)
-      (*   rewrite Hin in Hm. clear Hsplit Hin. *)
-      (*   apply sep_proj1 in Hm. clear ws xs. *)
-      (*   destruct obj. *)
-      (*   simpl in Htr; inversion Htr; subst i. *)
-      (*   destruct (field_offset gcenv x (make_members cls)). *)
-      (* + exists* z. *)
-      (* + contradict Hm. *)
+    apply sep_proj1 in Hm.
+    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
+    rewrite Hin in Hm. clear Hsplit Hin.
+    apply sep_proj1 in Hm.
+    clear ws xs.
+    destruct (field_offset gcenv x (make_members cls)).
+    + exists z; split*.
+      apply* contains_no_overflow.
+    + contradict Hm.
   Qed.
   
 End StateRepProperties.
