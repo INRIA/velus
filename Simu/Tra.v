@@ -72,38 +72,33 @@ Definition assign (x: ident) (ty: typ) (clsid: ident) (m: method): Clight.expr -
   else
     Clight.Sset x.
 
-(* Definition binded_funcall (bind temp f: ident) (ty: typ) (args: list Clight.expr) *)
-(*   : Clight.statement := *)
-(*    Clight.Ssequence (funcall (Some temp) f ty args) *)
-(*                     (assign bind ty (Clight.Etempvar temp ty)). *)
-
 Definition ptr_obj (owner: ident) (cls obj: ident): Clight.expr :=
   Clight.Eaddrof (deref_field self_id owner obj (type_of_inst cls)) (type_of_inst_p cls).  
 
 Definition funcall_assign
-           (ys: list (ident * typ)) (owner: ident) (obj: ident) (tyout: typ) (m: method)
+           (ys: list (ident * typ)) (owner: ident) (caller: method) (obj: ident) (tyout: typ) (callee: method)
            : Clight.statement :=
   fold_right
     (fun y s =>
        let '((y, ty), (y', _)) := y in
-       let assign_out := assign y ty owner m (Clight.Efield (Clight.Evar obj tyout) y' ty) in
+       let assign_out := assign y ty owner caller (Clight.Efield (Clight.Evar obj tyout) y' ty) in
        Clight.Ssequence assign_out s
-    ) Clight.Sskip (combine ys m.(m_out)).
+    ) Clight.Sskip (combine ys callee.(m_out)).
 
 Definition binded_funcall
-           (prog: program) (ys: list (ident * typ)) (owner: ident)
+           (prog: program) (ys: list (ident * typ)) (owner: ident) (caller: method)
            (cls obj f: ident) (args: list Clight.expr)
   : Clight.statement :=
   match find_class cls prog with
   | Some (c, _) =>
     match find_method f c.(c_methods) with
     | Some m =>
-      let tyout := type_of_inst obj in
+      let tyout := type_of_inst (prefix f cls) in
       let out := Clight.Eaddrof (Clight.Evar obj tyout) (pointer_of tyout) in 
       let args := ptr_obj owner cls obj :: out :: args in
       Clight.Ssequence
         (funcall f args)
-        (funcall_assign ys owner obj tyout m)
+        (funcall_assign ys owner caller obj tyout m)
     | None => Clight.Sskip
     end
   | None => Clight.Sskip
@@ -129,7 +124,7 @@ Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
   | Comp s1 s2 =>
     Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Call ys cls o f es =>
-    binded_funcall prog ys c.(c_name) cls o f (map (translate_exp c m) es)  
+    binded_funcall prog ys c.(c_name) m cls o f (map (translate_exp c m) es)  
   | Skip => Clight.Sskip
   end.
 

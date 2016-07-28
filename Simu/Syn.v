@@ -309,6 +309,19 @@ Proof.
   - apply in_cons; auto.
 Qed.
 
+Remark find_method_name:
+  forall fid fs f,
+    find_method fid fs = Some f ->
+    f.(m_name) = fid.
+Proof.
+  intros ** Hfind.
+  induction fs; inversion Hfind as [H].
+  destruct (ident_eqb (m_name a) fid) eqn: E.
+  - inversion H; subst. 
+    now apply ident_eqb_eq.
+  - now apply IHfs.
+Qed.
+
 Lemma WelldefClasses_cons:
   forall c cls,
     WelldefClasses (c :: cls) ->

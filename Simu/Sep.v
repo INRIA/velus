@@ -829,6 +829,24 @@ Section StateRepProperties.
       apply* contains_no_overflow.
     + contradict Hm.
   Qed.
+
+  Lemma staterep_inst_offset:
+    forall m me cls prog b ofs o c,
+      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ->
+      In (o, c) (c_objs cls) ->
+      exists d, field_offset gcenv o (make_members cls) = OK d.
+  Proof.
+    introv Hm Hin.
+    simpl in Hm. rewrite ident_eqb_refl in Hm.
+    apply sep_proj2 in Hm.
+    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
+    rewrite Hin in Hm. clear Hsplit Hin.
+    apply sep_proj1 in Hm.
+    clear ws xs.
+    destruct (field_offset gcenv o (make_members cls)).
+    + exists z; split*.
+    + contradict Hm.
+  Qed.
   
 End StateRepProperties.
 
