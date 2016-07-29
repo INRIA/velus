@@ -25,6 +25,16 @@ Definition find_var (S: state) (x: ident) (v: val) :=
 Definition find_vars (S: state) (xs: list (ident * typ)) := 
   Forall2 (find_var S) (fst (split xs)). 
 
+Lemma find_vars_cons:
+  forall S xs vs x ty v,
+    find_vars S ((x, ty) :: xs) (v :: vs) ->
+    find_var S x v /\ find_vars S xs vs.
+Proof.
+  unfold find_vars, find_var; simpl.
+  intros; destruct S. destruct (split xs); simpl in *.
+  inverts H; simpl in *; split; auto.
+Qed.
+
 Definition find_field (S: state) (x: ident) (v: val) :=
   mfind_mem x (fst S) = Some v.
 Definition find_inst (S: state) (o: ident) (me: memory val) :=

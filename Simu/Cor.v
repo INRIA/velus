@@ -977,8 +977,7 @@ Section PRESERVATION.
                     oblk (Int.add Int.zero (Int.repr d))
         /\ e ! o = Some (oblk, type_of_inst (prefix f clsid))
         /\ gcenv ! (prefix f clsid) = Some co
-        /\ field_offset tge x (co_members co) = Errors.OK d
-        /\ m |= blockrep gcenv v_empty (co_members co) oblk.
+        /\ field_offset tge x (co_members co) = Errors.OK d.
   Proof.
     introv ? ? ? ? ? Find Findmeth Hin.
     forwards* (oblk & co & Hinst' & ? & Hrep'): invariant_inst.
@@ -1005,7 +1004,7 @@ Section PRESERVATION.
   Qed.
   
   Lemma exec_funcall_assign:
-    forall callee caller ys e1 le1 m1 c prog' c' prog'' o f clsid S sb sofs outb outco rvs,  
+    forall callee caller ys e1 le1 m1 c prog' c' prog'' o f clsid S S' sb sofs outb outco rvs binst instco,  
       find_class c.(c_name) prog = Some (c, prog') ->
       In caller c.(c_methods) ->
       find_class clsid prog = Some (c', prog'') ->
@@ -1022,6 +1021,10 @@ Section PRESERVATION.
       gcenv ! (prefix caller.(m_name) c.(c_name)) = Some outco ->
       (0 <= Int.unsigned sofs)%Z ->
       Forall2 (fun v y => valid_val v (snd y)) rvs ys ->
+      find_vars S' callee.(m_out) rvs ->
+      e1 ! o = Some (binst, type_of_inst (prefix f clsid)) ->
+      gcenv ! (prefix f clsid) = Some instco ->
+      m1 |= blockrep tge (snd S') (co_members instco) binst ->
       exists le2 m2 T,
         exec_stmt tge (function_entry2 tge) e1 le1 m1
                   (funcall_assign ys c.(c_name) caller o (type_of_inst (prefix f clsid)) callee)
@@ -1030,9 +1033,10 @@ Section PRESERVATION.
   Proof.
     unfold funcall_assign.
     intros ** Findc ? Findc' Findmeth ? Length1 Length2 Incl Hforall
-           Types Hout Hself Hrep Houtco ? Valids.
-    revert S le1 m1 ys rvs Hout Hself Hrep Incl Hforall Types Length1 Length2 Valids.
-    induction (m_out callee); introv ? ? ?  Incl Hforall Types Length1 Length2 Valids;    
+           Types Hout Hself Hrep Houtco ? Valids Findvars Hinst Hinstco Hblockrep.
+    revert S le1 m1 ys rvs Hout Hself Hrep Incl Hforall Types Length1 Length2 Valids Findvars Hblockrep.
+    induction (m_out callee);
+      intros ** ? ? ?  Incl Hforall Types Length1 Length2 Valids Findvars Hblockrep;    
     destruct ys, rvs; simpl in *; try discriminate.
     - exists le1 m1 E0; split.
       + apply exec_Sskip.
@@ -1046,21 +1050,24 @@ Section PRESERVATION.
       destruct Incl.
       inverts Types as Eqty Types; simpl in Eqty.
       inverts Valids as Valid Valids; simpl in Valid.
+      apply find_vars_cons in Findvars.
+      destruct Findvars.
       forwards Eq: find_class_name Findc'.
       forwards Eq': find_method_name Findmeth.
 
       (* get the o.y' value evaluation *)
       assert (In (y', ty') callee.(m_out)) as Hin. admit.
-      forwards* (instco' & b & dy' & Ev_o_y' & Hinst & Hinstco & Hoffset_y' & Hblockrep):
+      forwards* (instco' & b & dy' & Ev_o_y' & Hinst' & Hinstco' & Hoffset_y'):
         (evall_inst_field y' ty') Findc.
+      rewrite Hinst' in Hinst; inverts Hinst.
+      rewrite Hinstco' in Hinstco; inverts Hinstco.
       subst ty'.
       assert (eval_expr tge e1 le1 m1 (Efield (Evar o (type_of_inst (prefix f clsid))) y' ty) v).
       + apply* eval_Elvalue.
         apply* blockrep_deref_mem.
-        * rewrite <-Eq, <-Eq' in Hinstco.
+        * rewrite <-Eq, <-Eq' in Hinstco'.
           erewrite output_match in Hin; eauto.
           eapply find_method_In; eauto.
-        * unfold find_var; simpl. admit.
         * rewrite Int.unsigned_zero; simpl.
           rewrite* Int.unsigned_repr.
           admit.
