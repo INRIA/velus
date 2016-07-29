@@ -997,6 +997,13 @@ Section PRESERVATION.
     + simpl; unfold type_of_inst; eauto.
   Qed.
 
+  Lemma incl_cons:
+    forall {A} (x: A) xs ys,
+      incl (x :: xs) ys -> In x ys /\ incl xs ys.
+  Proof.
+    unfold incl; intuition.
+  Qed.
+  
   Lemma exec_funcall_assign:
     forall callee caller ys e1 le1 m1 c prog' c' prog'' o f clsid S sb sofs outb outco rvs,  
       find_class c.(c_name) prog = Some (c, prog') ->
@@ -1006,7 +1013,7 @@ Section PRESERVATION.
       In (o, clsid, f) (get_instance_methods caller.(m_body)) ->
       length ys = length callee.(m_out) ->
       length rvs = length callee.(m_out) ->
-      Forall (fun y => In y (meth_vars caller)) ys ->
+      incl ys (meth_vars caller) ->
       Forall (fun y => access_mode (snd y) = By_value (chunk_of_type (snd y))) ys ->
       Forall2 (fun y y' => snd y = snd y') ys callee.(m_out) ->
       le1 ! out_id = Some (Vptr outb Int.zero) ->
@@ -1022,10 +1029,10 @@ Section PRESERVATION.
         /\ match_states c caller (update_vars S ys rvs) (e1, le2, m2).
   Proof.
     unfold funcall_assign.
-    intros ** Findc ? Findc' Findmeth ? Length1 Length2 Hforall1 Hforall2
+    intros ** Findc ? Findc' Findmeth ? Length1 Length2 Incl Hforall
            Types Hout Hself Hrep Houtco ? Valids.
-    revert S le1 m1 ys rvs Hout Hself Hrep Hforall1 Hforall2 Types Length1 Length2 Valids.
-    induction (m_out callee); introv ? ? ?  Hforall1 Hforall2 Types Length1 Length2 Valids;    
+    revert S le1 m1 ys rvs Hout Hself Hrep Incl Hforall Types Length1 Length2 Valids.
+    induction (m_out callee); introv ? ? ?  Incl Hforall Types Length1 Length2 Valids;    
     destruct ys, rvs; simpl in *; try discriminate.
     - exists le1 m1 E0; split.
       + apply exec_Sskip.
@@ -1034,8 +1041,9 @@ Section PRESERVATION.
     - destruct p as (y, ty); destruct a as (y', ty').
       inverts Length1.
       inverts Length2.
-      inverts Hforall1.
-      inverts Hforall2.
+      inverts Hforall.
+      apply incl_cons in Incl.
+      destruct Incl.
       inverts Types as Eqty Types; simpl in Eqty.
       inverts Valids as Valid Valids; simpl in Valid.
       forwards Eq: find_class_name Findc'.
