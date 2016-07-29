@@ -37,6 +37,34 @@ Definition update_vars (S: state) (xs: list (ident * typ)) (vs: list val) :=
                         let '(x, t, v) := xtv in
                         PM.add x v env) (snd S) (combine xs vs)).
 
+Theorem add_comm:
+    forall x x' (v v': val) m,
+      x <> x' ->
+      PM.add x v (PM.add x' v' m) = PM.add x' v' (PM.add x v m).
+  Proof.
+    induction x, x', m; simpl; intro Neq;
+    ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
+  Qed.
+  
+Lemma update_vars_cons:
+  forall S xs vs x ty v,
+    NoDupMembers ((x, ty) :: xs) ->
+    update_vars S ((x, ty) :: xs) (v :: vs) = update_vars (update_var S x v) xs vs.
+Proof.
+  introv Nodup.
+  destruct S.
+  unfold update_vars, update_var; simpl.
+  f_equal.
+  revert x v Nodup.
+  induction (combine xs vs) as [|xtv]; intros; auto.
+  simpl in *. 
+  rewrite <-IHl; auto.
+  destruct xtv  as ((x', t'), v'). 
+  rewrite add_comm; auto.
+  admit.
+Qed.
+
+    
 Definition update_field (S: state) (x: ident) (v: val) :=
   (madd_mem x v (fst S), snd S).
 Definition update_inst (S: state) (o: ident) (me: memory val) :=

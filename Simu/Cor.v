@@ -135,6 +135,7 @@ Section PRESERVATION.
       (* Nelist.Forall2 (exp_eval S) es vs -> *)
       (* Nelist.Forall2 (fun e v => valid_val v (typeof e)) es vs -> *)
       Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
+      Forall (fun y => In y (meth_vars m)) ys ->
       (* ty = snd c'.(c_output) -> *)
       (* find_inst S o me -> *)
       (* well_formed_stmt c' (me, adds (Nelist.map_fst c'.(c_input)) vs v_empty) m.(m_body) -> *)
@@ -924,33 +925,179 @@ Section PRESERVATION.
     - rewrite* Eq. 
   Qed.
 
-  Lemma evall_out_struct:
-    forall clsnm prog' c f f' S e le m o ty c' sb sofs outb outco,
-      find_class clsnm prog = Some (c, prog') ->
-      In f c.(c_methods) ->
-      le ! self_id = Some (Vptr sb sofs) ->
+  Lemma invariant_inst:
+    forall c f f' S e le m o c' sb sofs outb outco,
       sep_invariant c f S e le m sb sofs outb outco ->
       In (o, c', f') (get_instance_methods f.(m_body)) ->
-      ty = type_of_inst (prefix f' c') ->
-      exists b,
-        eval_lvalue tge e le m (Evar o ty) b Int.zero.
+      exists b co,
+        e ! o = Some (b, type_of_inst (prefix f' c'))
+        /\ gcenv ! (prefix f' c') = Some co
+        /\ m |= blockrep gcenv v_empty (co_members co) b.
   Proof.
-    introv Find ? ? Hrep Hin ?; subst.
+    introv Hrep Hin.
     destruct S.
-    forwards ?: find_class_name Find; subst.
     apply sep_pick3 in Hrep.
     apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hrep. clear Hsplit Hin.
     apply sep_proj1 in Hrep.
     clear ws xs.
-    destruct gcenv ! (prefix f' c'); [|contradict Hrep].
+    destruct gcenv ! (prefix f' c') eqn: Find; [|contradict Hrep].
     destruct e ! o eqn: E; [|contradict Hrep].
     destruct p as (oblk, t).
-    destruct (type_eq t (type_of_inst (prefix f' c'))); [|contradict Hrep].
+    destruct (type_eq t (type_of_inst (prefix f' c'))); [|contradict Hrep]; subst.
+    exists oblk c0; split*.
+  Qed.
+
+  Lemma evall_inst_struct: 
+    forall clsnm prog' c f f' S e le m o c' sb sofs outb outco, 
+      find_class clsnm prog = Some (c, prog') -> 
+      In f c.(c_methods) -> 
+      le ! self_id = Some (Vptr sb sofs) -> 
+      sep_invariant c f S e le m sb sofs outb outco -> 
+      In (o, c', f') (get_instance_methods f.(m_body)) -> 
+      exists b, 
+        eval_lvalue tge e le m (Evar o (type_of_inst (prefix f' c'))) b Int.zero. 
+  Proof. 
+    intros.
+    forwards* (b & ? & ?): invariant_inst.
+  Qed.
+  
+  Lemma evall_inst_field:
+     forall x ty clsnm prog' owner caller S e le m o clsid f c callee prog'' sb sofs outb outco,
+      find_class clsnm prog = Some (owner, prog') ->
+      In caller owner.(c_methods) ->
+      le ! self_id = Some (Vptr sb sofs) ->
+      sep_invariant owner caller S e le m sb sofs outb outco ->
+      In (o, clsid, f) (get_instance_methods caller.(m_body)) ->
+      find_class clsid prog = Some (c, prog'') ->
+      find_method f c.(c_methods) = Some callee ->
+      In (x, ty) callee.(m_out) ->
+      exists co oblk d,
+        eval_lvalue tge e le m (Efield (Evar o (type_of_inst (prefix f clsid))) x ty) 
+                    oblk (Int.add Int.zero (Int.repr d))
+        /\ e ! o = Some (oblk, type_of_inst (prefix f clsid))
+        /\ gcenv ! (prefix f clsid) = Some co
+        /\ field_offset tge x (co_members co) = Errors.OK d
+        /\ m |= blockrep gcenv v_empty (co_members co) oblk.
+  Proof.
+    introv ? ? ? ? ? Find Findmeth Hin.
+    forwards* (oblk & co & Hinst' & ? & Hrep'): invariant_inst.
+
+    forwards Eq: find_class_name Find.
+    forwards Eq': find_method_name Findmeth.
     subst.
-    exists oblk.
-    apply* eval_Evar_local.
-  Qed.  
+    apply find_method_In in Findmeth.
+    erewrite output_match in Hin; eauto.
+
+    forwards* (d & Hoffset): blockrep_field_offset.
+    exists co oblk d; splits*.
+    apply* eval_Efield_struct.
+    + apply* eval_Elvalue.
+      apply* deref_loc_copy.
+    + simpl; unfold type_of_inst; eauto.
+  Qed.
+
+  Lemma exec_funcall_assign:
+    forall callee caller ys e1 le1 m1 c prog' c' prog'' o f clsid S sb sofs outb outco rvs,  
+      find_class c.(c_name) prog = Some (c, prog') ->
+      In caller c.(c_methods) ->
+      find_class clsid prog = Some (c', prog'') ->
+      find_method f c'.(c_methods) = Some callee ->
+      In (o, clsid, f) (get_instance_methods caller.(m_body)) ->
+      length ys = length callee.(m_out) ->
+      length rvs = length callee.(m_out) ->
+      Forall (fun y => In y (meth_vars caller)) ys ->
+      Forall (fun y => access_mode (snd y) = By_value (chunk_of_type (snd y))) ys ->
+      Forall2 (fun y y' => snd y = snd y') ys callee.(m_out) ->
+      le1 ! out_id = Some (Vptr outb Int.zero) ->
+      le1 ! self_id = Some (Vptr sb sofs) ->
+      sep_invariant c caller S e1 le1 m1 sb sofs outb outco ->
+      gcenv ! (prefix caller.(m_name) c.(c_name)) = Some outco ->
+      (0 <= Int.unsigned sofs)%Z ->
+      Forall2 (fun v y => valid_val v (snd y)) rvs ys ->
+      exists le2 m2 T,
+        exec_stmt tge (function_entry2 tge) e1 le1 m1
+                  (funcall_assign ys c.(c_name) caller o (type_of_inst (prefix f clsid)) callee)
+                  T le2 m2 Out_normal
+        /\ match_states c caller (update_vars S ys rvs) (e1, le2, m2).
+  Proof.
+    unfold funcall_assign.
+    intros ** Findc ? Findc' Findmeth ? Length1 Length2 Hforall1 Hforall2
+           Types Hout Hself Hrep Houtco ? Valids.
+    revert S le1 m1 ys rvs Hout Hself Hrep Hforall1 Hforall2 Types Length1 Length2 Valids.
+    induction (m_out callee); introv ? ? ?  Hforall1 Hforall2 Types Length1 Length2 Valids;    
+    destruct ys, rvs; simpl in *; try discriminate.
+    - exists le1 m1 E0; split.
+      + apply exec_Sskip.
+      + destruct S; unfold update_vars; simpl.
+        econstructor; eauto.
+    - destruct p as (y, ty); destruct a as (y', ty').
+      inverts Length1.
+      inverts Length2.
+      inverts Hforall1.
+      inverts Hforall2.
+      inverts Types as Eqty Types; simpl in Eqty.
+      inverts Valids as Valid Valids; simpl in Valid.
+      forwards Eq: find_class_name Findc'.
+      forwards Eq': find_method_name Findmeth.
+
+      (* get the o.y' value evaluation *)
+      assert (In (y', ty') callee.(m_out)) as Hin. admit.
+      forwards* (instco' & b & dy' & Ev_o_y' & Hinst & Hinstco & Hoffset_y' & Hblockrep):
+        (evall_inst_field y' ty') Findc.
+      subst ty'.
+      assert (eval_expr tge e1 le1 m1 (Efield (Evar o (type_of_inst (prefix f clsid))) y' ty) v).
+      + apply* eval_Elvalue.
+        apply* blockrep_deref_mem.
+        * rewrite <-Eq, <-Eq' in Hinstco.
+          erewrite output_match in Hin; eauto.
+          eapply find_method_In; eauto.
+        * unfold find_var; simpl. admit.
+        * rewrite Int.unsigned_zero; simpl.
+          rewrite* Int.unsigned_repr.
+          admit.
+      + unfold assign.
+        destruct (existsb (fun out => ident_eqb (fst out) y) caller.(m_out)) eqn: E.
+
+      (* out->y = o.y' *)
+      *{ (* get the 'out' variable left value evaluation *)
+          forwards* (dy & Ev_out_y & Hoffset_y): evall_out_field Findc.
+   
+          (* get the updated memory *)
+          edestruct match_states_assign_out with (1:=Findc) as (m2 & Store & MS); eauto.
+          apply Valid. 
+          
+          inverts MS as Hself' Hout' Houtco' Hrep'.
+          rewrite Hself' in Hself; inverts Hself.
+          rewrite Hout' in Hout; inverts Hout.
+          rewrite Houtco' in Houtco; inverts Houtco.
+          edestruct IHl with (m1:=m2) as (le' & m' & T' & Exec & MS); eauto.
+          clear IHl.
+          
+          do 3 econstructor; split.
+          - eapply exec_Sseq_1 with (m1:=m2); eauto.
+            apply* ClightBigstep.exec_Sassign.
+            apply* assign_loc_value.
+            rewrite* Int.add_zero_l. 
+          - rewrite* update_vars_cons.
+            admit.
+        }
+        
+      (* y = o.y' *)
+      *{ edestruct IHl with (m1:=m1) (le1:=PTree.set y v le1) (S:=update_var S y v)
+           as (le' & m' & T' & Exec & MS); eauto.
+         rewrite* PTree.gso. admit.
+         rewrite* PTree.gso. admit.
+         skip.
+         clear IHl.
+              
+         do 3 econstructor; split.
+         - eapply exec_Sseq_1; eauto.
+           apply* ClightBigstep.exec_Sset.
+         - rewrite* update_vars_cons.
+           admit.
+       }
+  Admitted.
 
   Remark type_pres':
     forall f c caller es,
@@ -964,122 +1111,6 @@ Section PRESERVATION.
       rewrite* type_pres.
     - apply* IHl.
   Qed.
-
-  (* Lemma exec_assign: *)
-  (*   forall e1 le1 m1 clsnm prog' c S f x e v sb sofs outb outco, *)
-  (*     find_class clsnm prog = Some (c, prog') -> *)
-  (*     In f c.(c_methods) -> *)
-  (*     well_formed_exp c f e -> *)
-  (*     In (x, typeof e) (meth_vars f) -> *)
-  (*     le1 ! self_id = Some (Vptr sb sofs) -> *)
-  (*     (0 <= Int.unsigned sofs)%Z -> *)
-  (*     le1 ! out_id = Some (Vptr outb Int.zero) -> *)
-  (*     gcenv ! (prefix f.(m_name) c.(c_name)) = Some outco -> *)
-  (*     sep_invariant c f S e1 le1 m1 sb sofs outb outco -> *)
-  (*     exp_eval S e v -> *)
-  (*     exists le2 m2 T, *)
-  (*       exec_stmt tge (function_entry2 tge) e1 le1 m1 *)
-  (*                 (translate_stmt prog c f (Assign x e)) T le2 m2 Out_normal *)
-  (*       /\ match_states c f (update_var S x v) (e1, le2, m2). *)
-  (* Proof. *)
-  (*   introv ? ? ? Hvars; intros. *)
-  (*   simpl. *)
-  (*   simpl; unfold assign. *)
-  (*   destruct (existsb (fun out => ident_eqb (fst out) x) f.(m_out)) eqn: E. *)
-    
-  (*   (* out->x = e *) *)
-  (*   - (* get the 'out' variable left value evaluation *) *)
-  (*     edestruct evall_out_field; eauto. *)
-      
-  (*     (* get the updated memory *) *)
-  (*     edestruct match_states_assign_out as (m2 & ?); jauto. *)
-        
-  (*     exists le1 m2 E0; split*. *)
-  (*     apply* ClightBigstep.exec_Sassign. *)
-  (*     + rewrite* type_pres; apply* sem_cast_same; apply* exp_eval_valid. *)
-  (*     + apply* assign_loc_value. *)
-  (*       * simpl; apply* exp_eval_access. *)
-  (*       * rewrite* Int.add_zero_l. *)
-          
-  (*   (* x = e *) *)
-  (*   - exists (PTree.set x v le1) m1 E0; split. *)
-  (*     + apply* ClightBigstep.exec_Sset. *)
-  (*     + pose proof (m_out_id f); pose proof (m_self_id f). *)
-  (*       apply* match_states_assign_tempvar; *)
-  (*         apply In_InMembers in Hvars; eapply InMembers_neq; eauto. *)
-  (* Qed. *)
-  
-  Lemma exec_funcall_assign:
-    forall callee caller ys e1 le1 m1 c prog' c' prog'' o f clsid S sb sofs outb outco instco,  
-      find_class c.(c_name) prog = Some (c, prog') ->
-      In caller c.(c_methods) ->
-      find_class clsid prog = Some (c', prog'') ->
-      find_method f c'.(c_methods) = Some callee ->
-      gcenv ! (prefix f clsid) = Some instco ->
-      In (o, clsid, f) (get_instance_methods caller.(m_body)) ->
-      length ys = length callee.(m_out) ->
-      Forall (fun y => In y (meth_vars caller)) ys ->
-      le1 ! out_id = Some (Vptr outb Int.zero) ->
-      le1 ! self_id = Some (Vptr sb sofs) ->
-      sep_invariant c caller S e1 le1 m1 sb sofs outb outco ->
-      gcenv ! (prefix caller.(m_name) c.(c_name)) = Some outco ->
-      exists le2 m2 T,
-        exec_stmt tge (function_entry2 tge) e1 le1 m1
-                  (funcall_assign ys c.(c_name) caller o (type_of_inst (prefix f clsid)) callee)
-                  T le2 m2 Out_normal.
-  Proof.
-    unfold funcall_assign.
-    introv Findc ? ? ? Hinstco ? Length Hforall; intros.
-    revert le1 m1 H3 H4 H5 ys Hforall Length.
-    induction (m_out callee); introv Hforall Length;    
-    destruct ys; simpl in *; try discriminate.
-    - exists le1 m1 E0; apply exec_Sskip.
-    - destruct p as (y, ty); destruct a as (y', ty').
-      inverts Length.
-      inverts Hforall.
-      (* forwards Eq: find_class_name Findc. *)
-      (* forwards Eq': find_method_name Findmeth. *)
-      (* edestruct IHl as (? & ? & ? & ?); eauto. *)
-      (* clear IHl. *)
-      (* unfold assign. *)
-      (* destruct (existsb (fun out => ident_eqb (fst out) y) caller.(m_out)) eqn: E. *)
-
-      (* (* out->y = o.y' *) *)
-      (* + (* get the 'out' variable left value evaluation *) *)
-      (*   forwards* (? & ? & ?): evall_out_field Findc. *)
-
-      (*   (* get the o struct left value evaluation *) *)
-      (*   forwards* (? & ?): evall_out_struct Findc. *)
-
-      (*   do 3 econstructor. *)
-      (*   apply* exec_Sseq_1. *)
-      (*   apply* ClightBigstep.exec_Sassign. *)
-      (*   *{ apply* eval_Elvalue. *)
-      (*      - eapply eval_Efield_struct. *)
-      (*        + apply* eval_Elvalue. *)
-      (*          apply* deref_loc_copy. *)
-      (*        + unfold type_of_inst; simpl; eauto.   *)
-      (*        + eauto. *)
-      (*        + skip. *)
-      (*      - apply* deref_loc_value. *)
-      (*        + simpl. skip. *)
-      (*        + skip. *)
-      (*    } *)
-      (*   * simpl; apply* sem_cast_same. skip. *)
-      (*   *{ apply* assign_loc_value. *)
-      (*      - simpl. skip. *)
-      (*      - rewrite Int.add_zero_l. *)
-      (*        skip. *)
-      (*    } *)
-
-      (* (* x = e *) *)
-      (* + do 3 econstructor. *)
-      (*   apply* exec_Sseq_1. *)
-      (*   apply* ClightBigstep.exec_Sset. *)
-      (*   * pose proof (m_out_id f); pose proof (m_self_id f). *)
-      (*     apply* match_states_assign_tempvar;  *)
-      (*       apply In_InMembers in Hvars; eapply InMembers_neq; eauto. *)
-Admitted.
   
   Theorem correctness:
     (forall p S1 s S2,
@@ -1117,8 +1148,9 @@ Admitted.
       [| |introv ? ? ? ? Hifte|introv ? HS1 ? HS2|introv ? Evs ? Hrec_eval|
        |introv Find ? ? Hrec_exec];
       intros;
-      try inversion_clear WF as [? ? Hvars|? ? Hin| | |? ? ? ? ? ? ? ? ? ? ? ? ? Find' Findmeth|];
-      pose proof MS as MS'; inverts MS' as Hself Hout Houtco Hrep.
+      try inversion_clear WF as [? ? Hvars|? ? Hin| |
+                                 |? ? ? ? ? ? ? ? ? ? ? ? ? ? Find' Findmeth|];
+      (* pose proof MS as MS';  *)inverts MS as Hself Hout Houtco Hrep.
     
     (* Assign x e : "x = e" *)
     - simpl; unfold assign.
@@ -1187,38 +1219,42 @@ Admitted.
       edestruct eval_self_inst with (1:=Find); eauto.
       
       (* the *out parameter *)
-      edestruct evall_out_struct with (1:=Find) (o:=o) (c':=clsid) (f':=f); eauto.        
+      edestruct evall_inst_struct with (1:=Find) (o:=o) (c':=clsid) (f':=f); eauto.        
       
       (* recursive funcall evaluation *)
-      edestruct Hrec_eval with (c:=c) (e1:=e1) (m1:=m1) (le1:=le1) as (m2 & T & ? & ?); eauto.
-
-      (* output assignments *)
-      edestruct exec_funcall_assign with (ys:=ys) as (? & ? & ? & ?) ; eauto.
-      skip. admit. admit.
-      (* TODO write a lemma which gives the right state *)
-      do 3 econstructor; split.
-      + simpl.
-        unfold binded_funcall.
-        rewrite Find', Findmeth.
-        apply* exec_Sseq_1.
-        *{ eapply exec_Scall; eauto.
-           - reflexivity.
-           - simpl.
-             eapply eval_Elvalue.
-             + apply* eval_Evar_global.
-             + apply* deref_loc_reference.               
-           - apply find_method_In in Findmeth.
-             do 2 (econstructor; eauto).
-             applys* exprs_eval_simu Find.
-           - unfold Genv.find_funct.
-             destruct* (Int.eq_dec Int.zero Int.zero) as [|Neq].
-             exfalso; apply* Neq.
-           - simpl; rewrite Htypefun; repeat f_equal.
-             apply* type_pres'.
-         }
-        * 
-      + skip.
+      edestruct Hrec_eval with (c:=c) (e1:=e1) (m1:=m1) (le1:=le1) as (m2 & T & ? & MS'); eauto.
+      inverts MS' as Hself' Hout' Houtco' Hrep'.
+      rewrite Hself' in Hself; inverts Hself.
+      rewrite Hout' in Hout; inverts Hout.
+      rewrite Houtco' in Houtco; inverts Houtco.
       
+      (* output assignments *)
+      edestruct exec_funcall_assign with (ys:=ys) (m1:=m2) as (le3 & m3 & ? & ? & ?) ; eauto.
+      skip. skip. admit. admit. skip.
+      (* TODO write a lemma which gives the right state *)
+      exists le3 m3; econstructor; split*.
+      simpl.
+      unfold binded_funcall.
+      rewrite Find', Findmeth.
+      eapply exec_Sseq_1 with (m1:=m2); eauto.
+      assert (forall v, le1 = set_opttemp None v le1) as E by reflexivity.
+      erewrite E at 2.
+      + eapply exec_Scall; eauto.
+        * reflexivity.
+        *{ simpl.
+           eapply eval_Elvalue.
+           - apply* eval_Evar_global.
+           - apply* deref_loc_reference.               
+         }
+        * apply find_method_In in Findmeth.
+          do 2 (econstructor; eauto).
+          applys* exprs_eval_simu Find.
+        * unfold Genv.find_funct.
+          destruct* (Int.eq_dec Int.zero Int.zero) as [|Neq].
+          exfalso; apply* Neq.
+        * simpl; rewrite Htypefun; repeat f_equal.
+          apply* type_pres'.
+          
     (* Skip : "skip" *)
     - exists le1 m1 E0; split*.
       eapply exec_Sskip.
