@@ -42,20 +42,36 @@ Definition find_inst (S: state) (o: ident) (me: memory val) :=
 
 Definition update_var (S: state) (x: ident) (v: val) :=
   (fst S, PM.add x v (snd S)).
+
 Definition update_vars (S: state) (xs: list (ident * typ)) (vs: list val) :=
-  (fst S, fold_right (fun xtv env =>
-                        let '(x, t, v) := xtv in
-                        PM.add x v env) (snd S) (combine xs vs)).
+  (fst S, adds' xs vs (snd S)).
 
 Theorem add_comm:
     forall x x' (v v': val) m,
       x <> x' ->
       PM.add x v (PM.add x' v' m) = PM.add x' v' (PM.add x v m).
-  Proof.
-    induction x, x', m; simpl; intro Neq;
-    ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
-  Qed.
-  
+Proof.
+  induction x, x', m; simpl; intro Neq;
+  ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
+Qed.
+
+Lemma adds'_cons_cons:
+  forall xs x (t: typ) (v: val) vs S,
+    ~ InMembers x xs ->
+    adds' ((x, t) :: xs) (v :: vs) S = adds' xs vs (PM.add x v S).
+Proof.
+  unfold adds'.
+  induction xs as [|(x', t')]; intros ** NotIn; simpl; auto.
+  destruct vs as [|v']; simpl; auto.
+  rewrite <-IHxs with (t:=t).
+  - simpl.
+    rewrite add_comm; auto.
+    intro Eq.
+    apply NotIn; subst.
+    apply inmembers_eq.
+  - now apply NotInMembers_cons in NotIn.
+Qed.
+
 Lemma update_vars_cons:
   forall S xs vs x ty v,
     NoDupMembers ((x, ty) :: xs) ->
@@ -63,7 +79,7 @@ Lemma update_vars_cons:
 Proof.
   introv Nodup.
   destruct S.
-  unfold update_vars, update_var; simpl.
+  unfold update_vars, update_var, adds'; simpl.
   f_equal.
   revert x v Nodup.
   induction (combine xs vs) as [|xtv]; intros; auto.

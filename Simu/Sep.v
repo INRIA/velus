@@ -37,6 +37,12 @@ Proof.
   intro; subst. assumption.
 Qed.
 
+Lemma sep_pure':
+  forall P m, m |= pure P <-> P.
+Proof.
+  simpl; intros. intuition auto. 
+Qed.
+
 (* Introduce sepall *)
 
 Program Definition sepemp: massert :=  pure True.

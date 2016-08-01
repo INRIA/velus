@@ -31,6 +31,11 @@ Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
                     let (i , iv) := iiv in
                     PM.add i iv env) S (Nelist.combine is vs).
 
+Definition adds' {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
+  fold_right (fun (xbv: (ident * B) * A) env => 
+                    let '(x , b, v) := xbv in
+                    PM.add x v env) S (combine xs vs).
+
 Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
 | AssocBase: 
     forall i v,
@@ -556,6 +561,19 @@ Section InMembers.
     - simpl. destruct x. right. intuition.
   Qed.
 
+  Theorem InMembers_In:
+    forall a xs,
+      InMembers a xs -> exists b, In (a, b) xs.
+  Proof.
+    intros ** Hin.
+    induction xs as [|x xs IH]; simpl in Hin.
+    - contradiction. 
+    - simpl. destruct x. destruct Hin; subst.
+      + exists b; now left.
+      + destruct IH as (b'); auto.
+        exists b'; now right. 
+  Qed.
+
   Theorem nodupmembers_cons:
     forall id ty xs,
       NoDupMembers ((id, ty) :: xs) <->
@@ -790,10 +808,9 @@ Ltac app_NoDupMembers_det :=
     assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
   end.
 
-Set Implicit Arguments.
 Section Lists.
 
-  Variable A : Type.
+  Context {A : Type}.
   
   Fixpoint concat (l : list (list A)) : list A :=
     match l with
@@ -868,4 +885,22 @@ Section Lists.
       f_equal; auto.
   Qed.
 
+  Lemma incl_cons':
+    forall (x: A) xs ys,
+      incl (x :: xs) ys -> In x ys /\ incl xs ys.
+  Proof.
+    unfold incl; intuition.
+  Qed.
+
+  Lemma incl_nil:
+    forall (xs: list A),
+      incl xs [] -> xs = [].
+  Proof.
+    intros xs H.
+    induction xs; auto.
+    unfold incl in H.
+    specialize (H a (in_eq a xs)).
+    contradict H.
+  Qed.
+  
 End Lists.
