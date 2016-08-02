@@ -44,7 +44,7 @@ Definition update_var (S: state) (x: ident) (v: val) :=
   (fst S, PM.add x v (snd S)).
 
 Definition update_vars (S: state) (xs: list (ident * typ)) (vs: list val) :=
-  (fst S, adds' xs vs (snd S)).
+  (fst S, adds xs vs (snd S)).
 
 Theorem add_comm:
     forall x x' (v v': val) m,
@@ -55,12 +55,12 @@ Proof.
   ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
 Qed.
 
-Lemma adds'_cons_cons:
+Lemma adds_cons_cons:
   forall xs x (t: typ) (v: val) vs S,
     ~ InMembers x xs ->
-    adds' ((x, t) :: xs) (v :: vs) S = adds' xs vs (PM.add x v S).
+    adds ((x, t) :: xs) (v :: vs) S = adds xs vs (PM.add x v S).
 Proof.
-  unfold adds'.
+  unfold adds.
   induction xs as [|(x', t')]; intros ** NotIn; simpl; auto.
   destruct vs as [|v']; simpl; auto.
   rewrite <-IHxs with (t:=t).
@@ -72,23 +72,23 @@ Proof.
   - now apply NotInMembers_cons in NotIn.
 Qed.
 
-Lemma update_vars_cons:
-  forall S xs vs x ty v,
-    NoDupMembers ((x, ty) :: xs) ->
-    update_vars S ((x, ty) :: xs) (v :: vs) = update_vars (update_var S x v) xs vs.
-Proof.
-  introv Nodup.
-  destruct S.
-  unfold update_vars, update_var, adds'; simpl.
-  f_equal.
-  revert x v Nodup.
-  induction (combine xs vs) as [|xtv]; intros; auto.
-  simpl in *. 
-  rewrite <-IHl; auto.
-  destruct xtv  as ((x', t'), v'). 
-  rewrite add_comm; auto.
-  admit.
-Qed.
+(* Lemma update_vars_cons: *)
+(*   forall S xs vs x ty v, *)
+(*     NoDupMembers ((x, ty) :: xs) -> *)
+(*     update_vars S ((x, ty) :: xs) (v :: vs) = update_vars (update_var S x v) xs vs. *)
+(* Proof. *)
+(*   introv Nodup. *)
+(*   destruct S. *)
+(*   unfold update_vars, update_var, adds; simpl. *)
+(*   f_equal. *)
+(*   revert x v Nodup. *)
+(*   induction (combine xs vs) as [|xtv]; intros; auto. *)
+(*   simpl in *.  *)
+(*   rewrite <-IHl; auto. *)
+(*   destruct xtv  as ((x', t'), v').  *)
+(*   rewrite add_comm; auto. *)
+(*   admit. *)
+(* Qed. *)
 
     
 Definition update_field (S: state) (x: ident) (v: val) :=
@@ -217,18 +217,19 @@ Ltac app_exp_eval_det :=
 
 Theorem exps_eval_det:
   forall S es vs1 vs2,
-    Nelist.Forall2 (exp_eval S) es vs1 ->
-    Nelist.Forall2 (exp_eval S) es vs2 ->
+    Forall2 (exp_eval S) es vs1 ->
+    Forall2 (exp_eval S) es vs2 ->
     vs1 = vs2.
 Proof.
-  induction es, vs1, vs2; intros H1 H2; inverts H1; inverts H2; app_exp_eval_det; auto.  
+  induction es, vs1, vs2; intros H1 H2; inverts H1; inverts H2; auto.
+  app_exp_eval_det; auto.  
   f_equal; apply IHes; auto.
 Qed.
 
 Ltac app_exps_eval_det :=
   match goal with
-  | H1: Nelist.Forall2 (exp_eval ?S) ?es ?vs1,
-        H2: Nelist.Forall2 (exp_eval ?S) ?es ?vs2 |- _ =>
+  | H1: Forall2 (exp_eval ?S) ?es ?vs1,
+        H2: Forall2 (exp_eval ?S) ?es ?vs2 |- _ =>
     assert (vs1 = vs2) by (eapply exps_eval_det; eauto); subst vs2; clear H2 
   end.
 
@@ -254,7 +255,7 @@ Inductive stmt_eval: program -> state -> stmt -> state -> Prop :=
     find_inst S o omenv ->
     Forall2 (exp_eval S) es vs ->
     stmt_call_eval prog omenv clsid f vs omenv' rvs ->
-    length ys = length rvs ->
+    Forall2 (fun v y => valid_val v (snd y)) rvs ys ->
     stmt_eval prog S (Call ys clsid o f es)
               (update_vars (update_inst S o omenv') ys rvs)
 | Iskip: forall prog S,

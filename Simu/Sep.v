@@ -945,7 +945,8 @@ Section BlockRep.
     forall m ve flds b x ty P,
       m |= blockrep ve flds b ** P ->
       In (x, ty) flds ->
-      exists d, field_offset ge x flds = Errors.OK d.
+      exists d, field_offset ge x flds = Errors.OK d
+           /\ 0 <= d <= Int.max_unsigned.
   Proof.
     introv Hm Hin.
     unfold blockrep in Hm.
@@ -954,7 +955,12 @@ Section BlockRep.
     rewrite Hin in Hm. clear Hsplit Hin.
     do 2 apply sep_proj1 in Hm. clear ws xs.
     destruct (field_offset ge x flds).
-    - exists* z.
+    - exists* z; split*.
+      destruct (access_mode ty).
+      + apply* contains_no_overflow.
+      + contradict Hm.
+      + contradict Hm.
+      + contradict Hm.
     - contradict Hm.
   Qed.
   

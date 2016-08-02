@@ -1,5 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
-Require Import Nelist.
+(* Require Import Nelist. *)
 Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
@@ -26,28 +26,28 @@ Definition ident_eqb := Pos.eqb.
 
 Implicit Type i j: ident.
 
-Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
-  Nelist.fold_right (fun (iiv: ident * A) env => 
-                    let (i , iv) := iiv in
-                    PM.add i iv env) S (Nelist.combine is vs).
+(* Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) := *)
+(*   Nelist.fold_right (fun (iiv: ident * A) env =>  *)
+(*                     let (i , iv) := iiv in *)
+(*                     PM.add i iv env) S (Nelist.combine is vs). *)
 
-Definition adds' {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
+Definition adds {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
   fold_right (fun (xbv: (ident * B) * A) env => 
                     let '(x , b, v) := xbv in
                     PM.add x v env) S (combine xs vs).
 
-Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
-| AssocBase: 
-    forall i v,
-      Assoc (nebase i) (nebase v) i v
-| AssocHere: 
-    forall i v is vs,
-      Assoc (necons i is) (necons v vs) i v
-| AssocThere:
-    forall i v i' v' is vs,
-      Assoc is vs i' v' ->
-      i <> i' ->
-      Assoc (necons i is) (necons v vs) i' v'.
+(* Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop := *)
+(* | AssocBase:  *)
+(*     forall i v, *)
+(*       Assoc (nebase i) (nebase v) i v *)
+(* | AssocHere:  *)
+(*     forall i v is vs, *)
+(*       Assoc (necons i is) (necons v vs) i v *)
+(* | AssocThere: *)
+(*     forall i v i' v' is vs, *)
+(*       Assoc is vs i' v' -> *)
+(*       i <> i' -> *)
+(*       Assoc (necons i is) (necons v vs) i' v'. *)
 
 (** ** Basic types supported by CoreDF: *)
 
@@ -140,26 +140,26 @@ Defined.
 
 (* Version 2 *)
 (* Predicate accepting list of valid arguments *)
-Inductive Valid_args : arity -> nelist const -> Prop :=
-  | OneInt : forall t_out n, Valid_args (Tcons Tint (Tout t_out)) (nebase (Cint n))
-  | OneBool : forall t_out b, Valid_args (Tcons Tbool (Tout t_out)) (nebase (Cbool b))
-  | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (necons (Cint n) l)
-  | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (necons (Cbool b) l).
+(* Inductive Valid_args : arity -> nelist const -> Prop := *)
+(*   | OneInt : forall t_out n, Valid_args (Tcons Tint (Tout t_out)) (nebase (Cint n)) *)
+(*   | OneBool : forall t_out b, Valid_args (Tcons Tbool (Tout t_out)) (nebase (Cbool b)) *)
+(*   | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (necons (Cint n) l) *)
+(*   | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (necons (Cbool b) l). *)
 
-Fixpoint apply_arity (ar : arity) (l : nelist const) : arrows ar -> option const :=
-  match ar as ar', l return arrows ar' -> option const with
-    | Tout _, _ => fun _ => None
-    | Tcons Tint (Tout Tint), nebase (Cint n) => fun f => Some (Cint (f n))
-    | Tcons Tint (Tout Tbool), nebase (Cint n) => fun f => Some (Cbool (f n))
-    | Tcons Tbool (Tout Tint), nebase (Cbool b) => fun f => Some (Cint (f b))
-    | Tcons Tbool (Tout Tbool), nebase (Cbool b) => fun f => Some (Cbool (f b))
-    | Tcons Tint ar, necons (Cint n) l => fun f => apply_arity ar l (f n)
-    | Tcons Tbool ar, necons (Cbool b) l => fun f => apply_arity ar l (f b)
-    | _, _ => fun _ => None (* Wrong type or number of arguments *)
-  end.
+(* Fixpoint apply_arity (ar : arity) (l : nelist const) : arrows ar -> option const := *)
+(*   match ar as ar', l return arrows ar' -> option const with *)
+(*     | Tout _, _ => fun _ => None *)
+(*     | Tcons Tint (Tout Tint), nebase (Cint n) => fun f => Some (Cint (f n)) *)
+(*     | Tcons Tint (Tout Tbool), nebase (Cint n) => fun f => Some (Cbool (f n)) *)
+(*     | Tcons Tbool (Tout Tint), nebase (Cbool b) => fun f => Some (Cint (f b)) *)
+(*     | Tcons Tbool (Tout Tbool), nebase (Cbool b) => fun f => Some (Cbool (f b)) *)
+(*     | Tcons Tint ar, necons (Cint n) l => fun f => apply_arity ar l (f n) *)
+(*     | Tcons Tbool ar, necons (Cbool b) l => fun f => apply_arity ar l (f b) *)
+(*     | _, _ => fun _ => None (* Wrong type or number of arguments *) *)
+(*   end. *)
 
-Definition apply_op (op : operator) (l : nelist const) : option const :=
-  apply_arity (get_arity op) l (get_interp op).
+(* Definition apply_op (op : operator) (l : nelist const) : option const := *)
+(*   apply_arity (get_arity op) l (get_interp op). *)
 
 (** ** Properties *)
 
@@ -183,53 +183,53 @@ Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
 
-Lemma gsss: 
-  forall {A: Type} is (vs : nelist A) i a, Nelist.length is = Nelist.length vs ->
-    (Assoc is vs i a <-> PM.find i (adds is vs (PM.empty _)) = Some a).
-Proof.
-  Hint Constructors Assoc.
-  intros * Hlen.
-  split.
-  - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl.
-    * rewrite PM.gss; auto.
-    * rewrite (@PM.gss A i); auto.
-    * rewrite PM.gso; auto.
-  - revert vs Hlen; induction is as [i1 |i1 is]; intros [v1 | v1 vs] Hlen;
-    try now destruct is || destruct vs; simpl in Hlen; discriminate.
-    + unfold adds. simpl. intro Hfind.
-      destruct (ident_eqb i i1) eqn:Heqi.
-      * apply ident_eqb_eq in Heqi. subst. 
-        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
-        econstructor.
-      * apply ident_eqb_neq in Heqi.
-        rewrite PM.gso, PM.gempty in Hfind; trivial. discriminate.
-    + unfold adds. simpl. intro Hfind.
-      destruct (ident_eqb i i1) eqn:Heqi.
-      * apply ident_eqb_eq in Heqi. subst. 
-        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
-        econstructor.
-      * apply ident_eqb_neq in Heqi.
-        rewrite PM.gso in Hfind; auto.
-Qed.
+(* Lemma gsss:  *)
+(*   forall {A: Type} is (vs : nelist A) i a, Nelist.length is = Nelist.length vs -> *)
+(*     (Assoc is vs i a <-> PM.find i (adds is vs (PM.empty _)) = Some a). *)
+(* Proof. *)
+(*   Hint Constructors Assoc. *)
+(*   intros * Hlen. *)
+(*   split. *)
+(*   - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl. *)
+(*     * rewrite PM.gss; auto. *)
+(*     * rewrite (@PM.gss A i); auto. *)
+(*     * rewrite PM.gso; auto. *)
+(*   - revert vs Hlen; induction is as [i1 |i1 is]; intros [v1 | v1 vs] Hlen; *)
+(*     try now destruct is || destruct vs; simpl in Hlen; discriminate. *)
+(*     + unfold adds. simpl. intro Hfind. *)
+(*       destruct (ident_eqb i i1) eqn:Heqi. *)
+(*       * apply ident_eqb_eq in Heqi. subst.  *)
+(*         rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind. *)
+(*         econstructor. *)
+(*       * apply ident_eqb_neq in Heqi. *)
+(*         rewrite PM.gso, PM.gempty in Hfind; trivial. discriminate. *)
+(*     + unfold adds. simpl. intro Hfind. *)
+(*       destruct (ident_eqb i i1) eqn:Heqi. *)
+(*       * apply ident_eqb_eq in Heqi. subst.  *)
+(*         rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind. *)
+(*         econstructor. *)
+(*       * apply ident_eqb_neq in Heqi. *)
+(*         rewrite PM.gso in Hfind; auto. *)
+(* Qed. *)
 
-Lemma gsos: 
-  forall (A: Type) is vs (m : PM.t A) i, Nelist.length is = Nelist.length vs ->
-    ~ Nelist.In i is ->
-    PM.find i (adds is vs m) = PM.find i m.
-Proof.
-  intros A is vs m i Hlen Hnin. revert vs Hlen.
-  induction is as [i1 |i1 is]; intros [v1 |v1 vs] Hlen; 
-  try now destruct is || destruct vs; simpl in Hlen; discriminate.
-  - unfold adds; simpl; auto. now rewrite PM.gso.
-  - simpl in Hlen. unfold adds; simpl; auto.
-    destruct (ident_eqb i i1) eqn:Heqi.
-    + exfalso.
-      apply ident_eqb_eq in Heqi. subst.
-      apply Hnin; simpl; auto.
-    + apply ident_eqb_neq in Heqi.
-      rewrite PM.gso; eauto.
-      apply IHis; try omega; []. intro Hin. apply Hnin. simpl. auto.
-Qed.
+(* Lemma gsos:  *)
+(*   forall (A: Type) is vs (m : PM.t A) i, Nelist.length is = Nelist.length vs -> *)
+(*     ~ Nelist.In i is -> *)
+(*     PM.find i (adds is vs m) = PM.find i m. *)
+(* Proof. *)
+(*   intros A is vs m i Hlen Hnin. revert vs Hlen. *)
+(*   induction is as [i1 |i1 is]; intros [v1 |v1 vs] Hlen;  *)
+(*   try now destruct is || destruct vs; simpl in Hlen; discriminate. *)
+(*   - unfold adds; simpl; auto. now rewrite PM.gso. *)
+(*   - simpl in Hlen. unfold adds; simpl; auto. *)
+(*     destruct (ident_eqb i i1) eqn:Heqi. *)
+(*     + exfalso. *)
+(*       apply ident_eqb_eq in Heqi. subst. *)
+(*       apply Hnin; simpl; auto. *)
+(*     + apply ident_eqb_neq in Heqi. *)
+(*       rewrite PM.gso; eauto. *)
+(*       apply IHis; try omega; []. intro Hin. apply Hnin. simpl. auto. *)
+(* Qed. *)
 
 
 Lemma In_dec:
@@ -290,8 +290,8 @@ Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discr
 Lemma op_eqb_false_iff : forall op1 op2, op_eqb op1 op2 = false <-> op1 <> op2.
 Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
 
-Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar.
-Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed.
+(* Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar. *)
+(* Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed. *)
 
 Module Type OPERATORS.
   Parameter val' : Type.
@@ -509,17 +509,14 @@ intros A B P l1. induction l1; intro l2.
     intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
 Qed.
 
-Corollary Forall2_length : forall {A B} (P : A -> B -> Prop) l1 l2,
-  Forall2 P l1 l2 -> length l1 = length l2.
-Proof. intros * Hall. rewrite Forall2_forall2 in Hall. now destruct Hall. Qed.
 
 Lemma Forall2_det : forall {A B : Type} (R : A -> B -> Prop),
   (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
   forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
 Proof.
 intros A B R HR xs. induction xs as [x | x xs]; intros ys1 ys2 Hall1 Hall2.
-- inv Hall1. inv Hall2; reflexivity. 
-- inv Hall1. inv Hall2. f_equal; eauto.
+- inversion Hall1. inversion Hall2; reflexivity. 
+- inversion Hall1. inversion Hall2. f_equal; eauto.
 Qed.
 
 Section InMembers.
@@ -810,7 +807,7 @@ Ltac app_NoDupMembers_det :=
 
 Section Lists.
 
-  Context {A : Type}.
+  Context {A B : Type}.
   
   Fixpoint concat (l : list (list A)) : list A :=
     match l with
@@ -902,5 +899,20 @@ Section Lists.
     specialize (H a (in_eq a xs)).
     contradict H.
   Qed.
-  
+
+  Lemma app_last_app:
+    forall xs xs' (x: A),
+      (xs ++ [x]) ++ xs' = xs ++ x :: xs'.
+  Proof.
+    induction xs; simpl; auto.
+    intros; f_equal; apply IHxs.
+  Qed.
+
+  Lemma Forall2_length :
+    forall (P : A -> B -> Prop) l1 l2,
+      Forall2 P l1 l2 -> length l1 = length l2.
+  Proof.
+    induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.    
+  Qed.
+
 End Lists.
