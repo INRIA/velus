@@ -1,6 +1,6 @@
 Require Import common.Separation.
 Require Import common.Values.
-Require Import common.Errors.
+Require common.Errors.
 Require Import cfrontend.Ctypes.
 Require Import lib.Maps.
 Require Import lib.Coqlib.
@@ -185,8 +185,8 @@ Section SplitRange.
             sepall (fun (fld: ident * type) =>
                       let (id, ty) := fld in
                       match field_offset env id (co_members co) with
-                      | OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
-                      | Error _ => sepfalse
+                      | Errors.OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
+                      | Errors.Error _ => sepfalse
                       end) (co_members co).
   Proof.
     intros b lo Hndup.
@@ -197,8 +197,8 @@ Section SplitRange.
               (sepall (fun fld : ident * type =>
                          let (id0, ty) := fld in
                          match field_offset_rec env id0 (co_members co) cur with
-                         | OK ofs => range b (lo + ofs) (lo + ofs + sizeof env ty)
-                         | Error _ => sepfalse
+                         | Errors.OK ofs => range b (lo + ofs) (lo + ofs + sizeof env ty)
+                         | Errors.Error _ => sepfalse
                          end) (co_members co))).
     - intro HH.
       specialize HH with 0. rewrite Z.add_0_r in HH.
@@ -252,8 +252,8 @@ Section SplitRange.
             sepall (fun (fld: ident * type) =>
                       let (id, ty) := fld in
                       match field_offset env id (co_members co) with
-                      | OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
-                      | Error _ => sepfalse
+                      | Errors.OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
+                      | Errors.Error _ => sepfalse
                       end) (co_members co).
   Proof.
     intros b lo Hndup.
@@ -353,17 +353,17 @@ Section Staterep.
         sepall (fun (xty: ident * typ) =>
                   let (x, ty) := xty in
                   match field_offset ge x (make_members cls) with
-                  | OK d =>
+                  | Errors.OK d =>
 	                contains (chunk_of_type ty) b (ofs + d) (match_value me.(mm_values) x)
-                  | Error _ => sepfalse
+                  | Errors.Error _ => sepfalse
                   end) cls.(c_mems)
         **
         sepall (fun (o: ident * ident) =>
                   let (i, c) := o in
                   match field_offset ge i (make_members cls) with
-                  | OK d =>
+                  | Errors.OK d =>
                     staterep p' c (instance_match me i) b (ofs + d)
-                  | Error _ => sepfalse
+                  | Errors.Error _ => sepfalse
                   end) cls.(c_objs)
       else staterep p' clsnm me b ofs
     end.
@@ -463,7 +463,7 @@ Lemma in_field_type:
   forall xs x ty,
     NoDupMembers xs ->
     In (x, ty) xs ->
-    field_type x xs = OK ty.
+    field_type x xs = Errors.OK ty.
 Proof.
   intros xs x ty Hndup Hin.
   induction xs as [|x' xs IH]; [now inversion Hin|].
@@ -553,7 +553,7 @@ Section StateRepProperties.
       NoDupMembers (make_members cls) ->
       forall x ty,
         In (x, ty) cls.(c_mems) ->
-        field_type x (make_members cls) = OK ty.
+        field_type x (make_members cls) = Errors.OK ty.
   Proof.
     introv Hfind Hndup Hin.
     apply in_field_type with (1:=Hndup).
@@ -566,7 +566,7 @@ Section StateRepProperties.
       NoDupMembers (make_members cls) ->
       forall o c,
         In (o, c) cls.(c_objs) ->
-        field_type o (make_members cls) = OK (type_of_inst c).
+        field_type o (make_members cls) = Errors.OK (type_of_inst c).
   Proof.
     introv Hfind Hndup Hin.
     apply in_field_type with (1:=Hndup).
@@ -739,15 +739,16 @@ Section StateRepProperties.
   Qed.
 
   Lemma staterep_deref_mem:
-    forall cls prog' m me ve b ofs x ty d v,
+    forall cls prog' m me ve b ofs x ty d v P,
       access_mode ty = By_value (chunk_of_type ty) ->
-      m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ->
+      m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P ->
       In (x, ty) cls.(c_mems) ->
       find_field (me, ve) x v ->
-      field_offset gcenv x (make_members cls) = OK d ->
+      field_offset gcenv x (make_members cls) = Errors.OK d ->
       Clight.deref_loc ty m b (Int.repr (ofs + d)) v.
   Proof.
     intros ** Hty Hm Hin Hv Hoff.
+    apply sep_proj1 in Hm.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply sep_proj1 in Hm.
     apply sepall_in in Hin.
@@ -771,7 +772,7 @@ Section StateRepProperties.
       NoDupMembers cls.(c_mems) ->
       m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P ->
       In (x, ty) cls.(c_mems) ->
-      field_offset gcenv x (make_members cls) = OK d ->
+      field_offset gcenv x (make_members cls) = Errors.OK d ->
       v = Values.Val.load_result (chunk_of_type ty) v ->
       Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' ->
       m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs ** P.
@@ -791,10 +792,10 @@ Section StateRepProperties.
     with (f':=fun xty : ident * typ =>
                 let (x0, ty0) := xty in
                 match field_offset gcenv x0 (make_members cls) with
-                | OK d0 =>
+                | Errors.OK d0 =>
                   contains (chunk_of_type ty0) b (ofs + d0)
                            (match_value (mm_values me) x0)
-                | Error _ => sepfalse
+                | Errors.Error _ => sepfalse
                 end).
     - rewrite <-sep_swap2.
       eapply storev_rule' with (1:=Hm).
@@ -817,15 +818,15 @@ Section StateRepProperties.
   Qed.
 
   Lemma staterep_field_offset:
-    forall m me cls prog b ofs x ty,
-      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ->
+    forall m me cls prog b ofs x ty P,
+      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
       In (x, ty) (c_mems cls) ->
-      exists d, field_offset gcenv x (make_members cls) = OK d
+      exists d, field_offset gcenv x (make_members cls) = Errors.OK d
            /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
     introv Hm Hin.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply sep_proj1 in Hm.
+    do 2 apply sep_proj1 in Hm.
     apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
     apply sep_proj1 in Hm.
@@ -837,12 +838,13 @@ Section StateRepProperties.
   Qed.
 
   Lemma staterep_inst_offset:
-    forall m me cls prog b ofs o c,
-      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ->
+    forall m me cls prog b ofs o c P,
+      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
       In (o, c) (c_objs cls) ->
-      exists d, field_offset gcenv o (make_members cls) = OK d.
+      exists d, field_offset gcenv o (make_members cls) = Errors.OK d.
   Proof.
     introv Hm Hin.
+    apply sep_proj1 in Hm.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply sep_proj2 in Hm.
     apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
@@ -863,17 +865,17 @@ Section BlockRep.
     sepall (fun xty : ident * type =>
               let (x, ty) := xty in
               match field_offset ge x flds, access_mode ty with
-              | OK d, By_value chunk =>
+              | Errors.OK d, By_value chunk =>
                 contains chunk b d (match_value ve x)
               | _, _ => sepfalse
               end) flds.
 
   Lemma blockrep_deref_mem:
-    forall m me ve co b x ty d v,
-      m |= blockrep ve (co_members co) b ->
+    forall m ve co b x ty d v P,
+      m |= blockrep ve (co_members co) b ** P ->
       In (x, ty) (co_members co) ->
-      find_var (me, ve) x v ->
-      field_offset ge x (co_members co) = OK d ->
+      PM.find x ve = Some v ->
+      field_offset ge x (co_members co) = Errors.OK d ->
       Clight.deref_loc ty m b (Int.repr d) v.
   Proof.
     intros ** Hm Hin Hv Hoff.
@@ -881,13 +883,12 @@ Section BlockRep.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm. clear ws xs.
+    do 2 apply sep_proj1 in Hm. clear ws xs.
     rewrite Hoff in Hm. clear Hoff.
     destruct (access_mode ty) eqn:Haccess; try contradiction.
     apply loadv_rule in Hm.
     destruct Hm as [v' [Hloadv Hmatch]].
     unfold match_value in Hmatch.
-    unfold find_var in Hv; simpl in Hv.
     rewrite Hv in Hmatch. clear Hv.
     rewrite Hmatch in Hloadv. clear Hmatch.
     apply Clight.deref_loc_value with (1:=Haccess) (2:=Hloadv).
@@ -898,7 +899,7 @@ Section BlockRep.
       NoDupMembers (co_members co) ->
       m |= blockrep ve (co_members co) b ** P ->
       In (x, ty) (co_members co) ->
-      field_offset ge x (co_members co) = OK d ->
+      field_offset ge x (co_members co) = Errors.OK d ->
       access_mode ty = By_value chunk ->
       v = Val.load_result chunk v ->
       Clight.assign_loc ge ty m b (Int.repr d) v m' ->
@@ -919,7 +920,7 @@ Section BlockRep.
     with (f':=fun xty : ident * type =>
             let (x0, ty0) := xty in
             match field_offset ge x0 (co_members co), access_mode ty0 with
-            | OK d0, By_value chunk =>
+            | Errors.OK d0, By_value chunk =>
               contains chunk b d0 (match_value ve x0)
             | _, _ => sepfalse
             end).
@@ -941,17 +942,17 @@ Section BlockRep.
   Qed.
 
   Lemma blockrep_field_offset:
-    forall m ve flds b x ty,
-      m |= blockrep ve flds b ->
+    forall m ve flds b x ty P,
+      m |= blockrep ve flds b ** P ->
       In (x, ty) flds ->
-      exists d, field_offset ge x flds = OK d.
+      exists d, field_offset ge x flds = Errors.OK d.
   Proof.
     introv Hm Hin.
     unfold blockrep in Hm.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm. clear ws xs.
+    do 2 apply sep_proj1 in Hm. clear ws xs.
     destruct (field_offset ge x flds).
     - exists* z.
     - contradict Hm.
