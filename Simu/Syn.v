@@ -147,6 +147,7 @@ Inductive InstanceDeclared (objs: list (ident * ident)): stmt -> Prop :=
 Axiom pos_of_str: string -> ident.
 Definition self_id: ident := pos_of_str "self".
 Definition out_id: ident := pos_of_str "out".
+Axiom self_not_out: self_id <> out_id.
 
 Record method : Type :=
   mk_method {

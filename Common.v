@@ -915,4 +915,25 @@ Section Lists.
     induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.    
   Qed.
 
+  (* should be in standard lib... *)
+  Lemma not_in_cons (x a : A) (l : list A):
+    ~ In x (a :: l) <-> x <> a /\ ~ In x l.
+  Proof.
+    split.
+    - intro Notin.
+      split.
+      + intro Eq.
+        apply Notin.
+        rewrite Eq.
+        apply in_eq.
+      + intro In.
+        apply Notin.
+        apply in_cons; auto.
+    - intros [Neq Notin] In.
+      apply in_inv in In.
+      destruct In.
+      + apply Neq; auto.
+      + apply Notin; auto.
+  Qed.
+
 End Lists.

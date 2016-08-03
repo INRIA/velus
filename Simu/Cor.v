@@ -45,6 +45,9 @@ Section PRESERVATION.
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
   Hypothesis main_node_exists: find_class main_node prog <> None.
   Hypothesis WD: WelldefClasses prog.
+  Hypothesis Consistent: composite_env_consistent gcenv.
+  
+  Opaque sepconj.
   
   (* Hypothesis UNIQUE: unique_classes prog. *)
   
@@ -807,114 +810,6 @@ Section PRESERVATION.
         apply Notin.
         eapply In_InMembers; eauto.
   Qed.
-
-  (* Remark alloc_exists: *) 
-  (*   forall vars e m, *) 
-  (*     exists e' m', *) 
-  (*       Clight.alloc_variables tge e m vars e' m'. *) 
-  (* Proof. *) 
-  (*   induction vars as [|(x, ty)]. *) 
-  (*   - do 3 econstructor. *) 
-  (*   - intros. *) 
-  (*     destruct (Memory.Mem.alloc m 0 (Ctypes.sizeof (Clight.genv_cenv tge) ty)) eqn: Eq. *) 
-  (*     specialize (IHvars (Maps.PTree.set x (b, ty) e) m0). *) 
-  (*     destruct* IHvars as (? & ? & ?). *) 
-  (*     do 3 econstructor; eauto. *) 
-  (* Qed. *) 
- 
-  (* Remark assign_loc_exists: *) 
-  (*   forall v ty m loc, *) 
-  (*     Ctypes.access_mode ty = Ctypes.By_value (chunk_of_type ty) -> *) 
-  (*     Memory.Mem.valid_access m (chunk_of_type ty) loc 0 Memtype.Writable -> *) 
-  (*     exists m', *) 
-  (*       Clight.assign_loc tge.(Clight.genv_cenv) ty m loc Int.zero v m'. *) 
-  (* Proof. *) 
-  (*   introv ? Hvalid. *) 
-  (*   forwards (? & ?): Memory.Mem.valid_access_store Hvalid. *) 
-  (*   do 2 econstructor; eauto. *) 
-  (* Qed. *) 
-   
-  (* Remark bind_parameters_exists: *) 
-  (*   forall xs vs e m, *) 
-  (*     length xs = length vs -> *) 
-  (*     Forall (fun x => exists loc, *) 
-  (*                 Maps.PTree.get (fst x) e = Some (loc, snd x) *) 
-  (*                 /\ Memory.Mem.valid_access m (chunk_of_type (snd x)) loc 0 Memtype.Writable *) 
-  (*                 /\ Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) xs -> *) 
-  (*     exists m', *) 
-  (*       Clight.bind_parameters tge e m xs vs m'. *) 
-  (* Proof. *) 
-  (*   induction xs as [|(x, ty)]; destruct vs; introv Hlengths Hparams; try discriminate. *) 
-  (*   - do 2 econstructor. *) 
-  (*   - inverts Hparams as (? & ? & Hvalid & Haccess) Hparams.   *) 
-  (*     forwards (m' & Hassign): (assign_loc_exists v) Haccess Hvalid. *) 
-  (*     edestruct IHxs with (m:=m') (e:=e); eauto. *) 
-  (*     + inversion_clear Hassign as [|? ? ? ? Haccess']. *) 
-  (*       *{ clear IHxs Hlengths. induction xs. *) 
-  (*          - constructor. *) 
-  (*          - inverts Hparams as (loc & ?). *) 
-  (*            constructor. *) 
-  (*            + exists loc; splits*. *) 
-  (*              apply* Memory.Mem.store_valid_access_1. *) 
-  (*            + apply* IHxs. *) 
-  (*        } *) 
-  (*       * rewrite Haccess' in Haccess; discriminate. *) 
-  (*     + do 2 econstructor; eauto.  *) 
-  (* Qed. *) 
- 
-  (* Remark alloc_variables_implies: *) 
-  (*   forall vars e m e' m',  *) 
-  (*     Clight.alloc_variables tge e m vars e' m' -> *) 
-  (*     Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) vars -> *) 
-  (*     Forall (fun x => exists loc, *) 
-  (*                 Maps.PTree.get (fst x) e' = Some (loc, snd x) *) 
-  (*                 /\ Memory.Mem.valid_access m' (chunk_of_type (snd x)) loc 0 Memtype.Writable *) 
-  (*                 /\ Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) vars. *) 
-  (* Proof. *) 
-  (*   induction vars. *) 
-  (*   - constructor. *) 
-  (*   - introv Halloc Hforall. *) 
-  (*     inverts Halloc. *) 
-  (*     constructor. *) 
-  (*     + exists b1; splits*. *) 
-  (*       * admit. *) 
-  (*       *{ assert (Memory.Mem.valid_access m1 (chunk_of_type (snd (id, ty))) b1 0 Memtype.Writable). *) 
-  (*          - eapply Memory.Mem.valid_access_freeable_any. *) 
-  (*            apply* Memory.Mem.valid_access_alloc_same. *) 
-  (*            + omega. *) 
-  (*            + simpl. admit. *) 
-  (*            + eapply BinInt.Z.divide_0_r. *) 
-  (*          - admit. *) 
-  (*        } *) 
-  (*       * inverts* Hforall. *) 
-  (*     + apply* IHvars. *) 
-  (*       inverts* Hforall. *) 
-  (* Qed. *) 
- 
-  (* Remark forall_app: *) 
-  (*   forall A (P: A -> Prop) l1 l2, *) 
-  (*     Forall P (l1 ++ l2) -> Forall P l1 /\ Forall P l2. *) 
-  (* Proof. *) 
-  (*   introv HForall; split; rewrite Forall_forall in *; introv Hin; *) 
-  (*   apply HForall; apply in_or_app; [left | right]; auto. *) 
-  (* Qed. *) 
- 
-  (* Lemma compat_funcall_pres: *) 
-  (*   forall m f vargs, *) 
-  (*     Datatypes.length (Clight.fn_params f) = Datatypes.length vargs -> *) 
-  (*     Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) -> *) 
-  (*     exists m1 e_fun m2, *) 
-  (*       Clight.alloc_variables tge Clight.empty_env m (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) e_fun m1  *) 
-  (*       /\ Clight.bind_parameters tge e_fun m1 f.(Clight.fn_params) vargs m2. *) 
-  (* Proof. *) 
-  (*   introv Hlengths Haccesses. *) 
-  (*   forwards (e_fun & m1 & Halloc): *) 
-  (*     (alloc_exists (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) Clight.empty_env m). *) 
-  (*   exists m1 e_fun. *) 
-  (*   forwards* Hforall': alloc_variables_implies Halloc Haccesses. *) 
-  (*   forwards (Hforall & H'): forall_app Hforall'; clear Hforall' H'. *) 
-  (*   forwards* (m2 & ?): bind_parameters_exists Hlengths Hforall. *) 
-  (* Qed. *)
   
   (* Hint Constructors Clight.eval_lvalue Clight.eval_expr well_formed_stmt. *)
   Hint Resolve expr_eval_simu Clight.assign_loc_value exp_eval_valid sem_cast_same.
@@ -927,12 +822,14 @@ Section PRESERVATION.
         Genv.find_symbol tge mid = Some loc_f
         /\ e ! mid = None
         /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
-        /\ type_of_function f =
-          Tfunction
-            (Ctypes.Tcons (type_of_inst_p c.(c_name))
-                          (Ctypes.Tcons (type_of_inst_p (prefix m.(m_name) c.(c_name)))
-                                        (list_type_to_typelist (map snd m.(m_in)))))
-            Tvoid AST.cc_default
+          /\ f.(fn_params) = (self_id, type_of_inst_p c.(c_name))
+                              :: (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name)))
+                              :: m.(m_in)
+        /\ f.(fn_return) = Tvoid
+        /\ f.(fn_callconv) = AST.cc_default
+        /\ f.(fn_vars) = make_out_vars (get_instance_methods m.(m_body))
+        /\ list_norepet (var_names f.(fn_params))
+        /\ list_norepet (var_names f.(fn_vars))
   (* /\ type_of_fundef (Internal f) = *)
         (*   Tfunction (Ctypes.Tcons (type_of_inst_p c.(c_name)) *)
         (*                           (Ctypes.Tcons (type_of_inst_p (prefix m.(m_name) c.(c_name))) *)
@@ -953,14 +850,15 @@ Section PRESERVATION.
       m |= staterep gcenv prog c.(c_name) me sb (Int.unsigned sofs) ** P ->
       In (o, c') (c_objs c) ->
       exists d,
-        eval_expr tge e le m (ptr_obj c.(c_name) c' o) (Vptr sb (Int.add sofs (Int.repr d))).
+        eval_expr tge e le m (ptr_obj c.(c_name) c' o) (Vptr sb (Int.add sofs (Int.repr d)))
+        /\ field_offset gcenv o (make_members c) = Errors.OK d.
   Proof.
     introv Find ? ? Hrep Hin.
     forwards ?: find_class_name Find; subst.
     forwards* (? & Hco & ? & Eq & ? & ?): make_members_co; instantiate (1:=tprog) in Hco.
     rewrite* staterep_skip in Hrep.
     forwards* (d & Hoffset): staterep_inst_offset. 
-    exists d.
+    exists d; split*.
     apply eval_Eaddrof.
     apply* eval_Efield_struct.
     - apply* eval_Elvalue.
@@ -968,42 +866,6 @@ Section PRESERVATION.
     - simpl; unfold type_of_inst; eauto.
     - rewrite* Eq. 
   Qed.
-
-  (* Lemma invariant_inst: *)
-  (*   forall c f f' S e le m o c' sb sofs outb outco, *)
-  (*     sep_invariant c f S e le m sb sofs outb outco -> *)
-  (*     In (o, c', f') (get_instance_methods f.(m_body)) -> *)
-  (*     exists b co, *)
-  (*       e ! o = Some (b, type_of_inst (prefix f' c')) *)
-  (*       /\ gcenv ! (prefix f' c') = Some co *)
-  (*       /\ m |= blockrep gcenv v_empty (co_members co) b. *)
-  (* Proof. *)
-  (*   introv Hrep Hin. *)
-  (*   destruct S. *)
-  (*   apply sep_pick3 in Hrep. *)
-  (*   apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]]. *)
-  (*   unfold subrep in Hrep. *)
-  (*   rewrite Hin in Hrep. clear Hsplit Hin. *)
-  (*   apply sep_proj1 in Hrep. *)
-  (*   clear ws xs. *)
-  (*   destruct gcenv ! (prefix f' c') eqn: Find; [|contradict Hrep]. *)
-  (*   destruct e ! o eqn: E; [|contradict Hrep]. *)
-  (*   destruct p as (oblk, t). *)
-  (*   destruct (type_eq t (type_of_inst (prefix f' c'))); [|contradict Hrep]; subst. *)
-  (*   exists oblk c0; split*. *)
-  (* Qed. *)
-
-  (* Lemma evall_inst_struct:  *)
-  (*   forall clsnm prog' c f f' e le m o c' sb sofs b,  *)
-  (*     find_class clsnm prog = Some (c, prog') ->  *)
-  (*     In f c.(c_methods) ->  *)
-  (*     le ! self_id = Some (Vptr sb sofs) ->  *)
-  (*     e ! o = Some (b, type_of_inst (prefix f' c')) -> *)
-  (*     eval_lvalue tge e le m (Evar o (type_of_inst (prefix f' c'))) b Int.zero.  *)
-  (* Proof.  *)
-  (*   intros. *)
-  (*   econstructor; eauto. *)
-  (* Qed. *)
 
   Lemma subrep_extract:
     forall f f' e m o c' P,
@@ -1190,16 +1052,295 @@ Section PRESERVATION.
              + repeat rewrite* adds_cons_cons. 
          }
   Qed.
+
+  Remark bind_parameter_temps_exists:
+    forall xs vs le,
+      length xs = length vs ->
+      exists le',
+        bind_parameter_temps xs vs le = Some le'.
+  Proof.
+    induction xs as [|(x, ty)]; destruct vs; introv Hlengths; try discriminate.
+    - exists le; reflexivity.  
+    - simpl.
+      inverts Hlengths as Hlengths.
+      specializes IHxs Hlengths; eauto.
+  Qed.
+
+  Theorem set_comm:
+    forall {A} x x' (v v': A) m,
+      x <> x' ->
+      PTree.set x v (PTree.set x' v' m) = PTree.set x' v' (PTree.set x v m).
+  Proof.
+    induction x, x', m; simpl; intro Neq;
+    ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
+  Qed.
+  
+  Remark bind_parameters_temps_cons:
+    forall x t xs v vs le le',
+      list_norepet (var_names ((x, t) :: xs)) ->
+      bind_parameter_temps ((x, t) :: xs) (v :: vs) le = Some le' ->
+      PTree.get x le' = Some v.
+  Proof.
+    induction xs as [|[x' t']]; destruct vs;
+    introv Norep Bind; inverts Bind as Bind.
+    - apply PTree.gss.
+    - inverts Norep as Notin Norep.
+      apply not_in_cons in Notin.
+      apply* IHxs.
+      + constructor.
+        * apply Notin.
+        * inverts Norep as Notin' Norep.
+          apply Norep.
+      + simpl.
+        erewrite set_comm in Bind; iauto.
+  Qed.
+
+  Remark find_add:
+    forall x (v v': val) pm,
+      PM.find x (PM.add x v pm) = Some v' -> v' = v.
+  Proof.
+    induction x, pm; simpl; (eauto || now injection 1).
+  Qed.
+  
+  Remark bind_parameters_temps_implies:
+    forall xs x vs v s ts vself o to vout le le',
+      list_norepet (var_names xs) ->
+      PM.find x (adds xs vs v_empty) = Some v ->
+      bind_parameter_temps ((s, ts) :: (o, to) :: xs)
+                           (vself :: vout :: vs) le = Some le' ->
+      PTree.get x le' = Some v.
+  Proof.
+    unfold adds.
+    induction xs as [|(x', t')]; destruct vs;
+    introv Norep Find Bind; simpl in Find.
+    - rewrite PM.gempty in Find.
+      discriminate.
+    - rewrite PM.gempty in Find.
+      discriminate.
+    - rewrite PM.gempty in Find.
+      discriminate.
+    - destruct (AST.ident_eq x x').
+      + remember ((x', t')::xs) as xs' in Bind.
+        remember (v::vs) as vs' in Bind.
+        unfold bind_parameter_temps in Bind.
+        fold Clight.bind_parameter_temps in Bind.
+        rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'.
+        subst x'.
+        apply find_add in Find; inversion Find.
+        apply* bind_parameters_temps_cons.
+      + rewrite* PM.gso in Find.
+        remember ((o, to)::(x', t')::xs) as xs' in Bind.
+        remember (vout::v::vs) as vs' in Bind.
+        unfold bind_parameter_temps in Bind.
+        fold Clight.bind_parameter_temps in Bind.
+        rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'.
+        inverts Norep.
+        eapply IHxs; eauto.
+  Qed.
+
+  Remark bind_parameters_temps_comm:
+    forall xs vs s ts o to vself vout x t v le le',
+      x <> o ->
+      x <> s ->
+      bind_parameter_temps ((s, ts) :: (o, to) :: (x, t) :: xs) (vself :: vout :: v :: vs) le = Some le' ->
+      bind_parameter_temps ((x, t) :: (s, ts) :: (o, to) :: xs) (v :: vself :: vout :: vs) le = Some le'.
+  Proof.
+    destruct xs as [|(y, ty)], vs; intros ** Bind; inverts Bind; simpl.
+    - f_equal. rewrite (set_comm s x); auto.
+      apply set_comm; auto.
+    - do 2 f_equal. rewrite (set_comm s x); auto.
+      apply set_comm; auto.
+  Qed.
+  
+  Remark bind_parameters_temps_implies':
+    forall xs vs s ts vself o to vout le le',
+      s <> o ->
+      ~ InMembers s xs ->
+      ~ InMembers o xs ->
+      bind_parameter_temps ((s, ts) :: (o, to) :: xs)
+                           (vself :: vout :: vs) le = Some le' ->
+      PTree.get s le' = Some vself /\ PTree.get o le' = Some vout.
+  Proof.
+    induction xs as [|(x', t')]; destruct vs;
+    introv Neq Notin_s Notin_o Bind.
+    - inverts Bind.
+      split.
+      + rewrite PTree.gso, PTree.gss; auto.
+      + rewrite* PTree.gss.
+    - inverts Bind.
+    - inverts Bind.
+    - eapply bind_parameters_temps_comm in Bind.
+      + remember ((s, ts)::(o, to)::xs) as xs' in Bind.
+        remember (vself::vout::vs) as vs' in Bind.
+        unfold bind_parameter_temps in Bind.
+        fold Clight.bind_parameter_temps in Bind.
+        rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'.
+        eapply IHxs; eauto; eapply NotInMembers_cons; eauto.
+      + intro Eq.
+        apply Notin_o.
+        subst o. apply inmembers_eq.
+      + intro Eq.
+        apply Notin_s.
+        subst s. apply inmembers_eq.
+  Qed.
+
+  Remark alloc_implies:
+    forall vars x b t e m e' m', 
+      ~ InMembers x vars ->
+      alloc_variables tge (PTree.set x (b, t) e) m vars e' m' ->
+      e' ! x = Some (b, t).
+  Proof.
+    induction vars as [|(x', t')]; intros ** Notin H;
+    inverts H as ? Halloc.
+    - apply PTree.gss.
+    - rewrite <-set_comm in Halloc.
+      + apply* IHvars.
+        eapply NotInMembers_cons; eauto.
+      + intro; subst x; apply Notin; apply inmembers_eq.
+  Qed.
+  
+  Remark alloc_exists:
+    forall f vars e m P,
+      vars = get_instance_methods f.(m_body) ->
+      Forall (fun ocf => let '(o, cls, fid) := ocf in
+                      exists co, gcenv ! (prefix fid cls) = Some co
+                            /\ co_su co = Struct
+                            /\ NoDupMembers (co_members co)
+                            /\ forall x ty,
+                                In (x, ty) (co_members co) ->
+                                exists chunk : AST.memory_chunk,
+                                  access_mode ty = By_value chunk /\
+                                  (align_chunk chunk | alignof gcenv ty)) vars ->
+      NoDupMembers (make_out_vars vars) ->
+      m |= P ->
+      exists e' m',
+        alloc_variables tge e m (make_out_vars vars) e' m'
+        /\ m' |= subrep f e' ** P.
+  Proof.
+    intros ** Eq Hforall Nodup Hrep.
+    assert (exists vars', get_instance_methods f.(m_body) = vars' ++ vars) as Heq
+        by (exists (@nil (ident * ident * ident)); auto).
+    unfold subrep; rewrite <-Eq.
+    clear Eq.
+    revert e m P Hrep.
+    induction vars as [|((o, cls), fid)]; intros ** Hrep.
+    - exists e m; split*.
+      + constructor.
+      + simpl. 
+        rewrite* <-sepemp_left.
+    - inverts Hforall as (co & Hco & ? & ? & ?).
+      inverts Nodup.
+      destruct (Mem.alloc m 0 (Ctypes.sizeof gcenv (type_of_inst (prefix fid cls)))) as (m1 & b) eqn: Eq.
+      edestruct IHvars with (e:=PTree.set o (b, (type_of_inst (prefix fid cls))) e) (m:=m1)
+        as (e' & m' & ? & Hrep'); eauto.
+      + destruct Heq as [vars' Heq].
+        exists (vars' ++ [(o, cls, fid)]).
+        rewrite app_last_app; auto.
+      + apply* alloc_rule.
+        * omega.
+        * admit.
+      + exists e' m'; split*.
+        * econstructor; eauto.
+        *{ simpl in *. rewrite Hco in *.
+           erewrite alloc_implies; eauto.
+           destruct (type_eq (type_of_inst (prefix fid cls))
+             (type_of_inst (prefix fid cls))) as [|E].
+           - rewrite sep_assoc.
+             rewrite sep_swap in Hrep'.
+             apply* sep_imp.
+             apply* blockrep_empty.
+           - exfalso; apply* E.
+         }
+  Qed.
+
+  Remark inmembers_var_names:
+    forall xs x,
+      InMembers x xs <-> In x (var_names xs).
+  Proof.
+    induction xs as [|(x, t)]; split; simpl; intro H; auto.
+    - destruct H.
+      + now left.
+      + now right; apply IHxs.
+    - destruct H.
+      + now left.
+      + now right; apply IHxs. 
+  Qed.
+  
+  Remark nodupmembers_list_norepet (xs: list (ident * typ)) :
+    NoDupMembers xs <-> list_norepet (var_names xs).
+  Proof.
+    induction xs as [|(x, t)]; split; simpl; intro H; inverts H; try constructor; auto.
+    - now rewrite <-inmembers_var_names.
+    - now apply IHxs.
+    - now rewrite inmembers_var_names.
+    - now apply IHxs. 
+  Qed.
+  
+  Lemma compat_funcall_pres:
+    forall f sb sofs ob vs vargs c prog' o owner d me me' tself tout callee instco m P,
+      In (o, c.(c_name)) owner.(c_objs) ->
+      field_offset gcenv o (make_members owner) = Errors.OK d ->
+      (0 <= (Int.unsigned sofs) + d <= Int.max_unsigned)%Z ->
+      (0 <= d <= Int.max_unsigned)%Z ->
+      find_class owner.(c_name) prog = Some (owner, prog') ->
+      length (fn_params f) = length vargs ->
+      fn_params f = (self_id, tself) :: (out_id, tout) :: callee.(m_in) ->
+      fn_vars f = (make_out_vars (get_instance_methods callee.(m_body))) ->
+      list_norepet (var_names f.(fn_params)) ->
+      list_norepet (var_names f.(fn_vars)) ->
+      vargs = (Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr ob Int.zero) :: vs ->
+      mfind_inst o me = Some me' ->
+      gcenv ! (prefix (m_name callee) (c_name c)) = Some instco ->
+      m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs) ** P ->
+      exists e_fun le_fun m_fun,
+        bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le_fun
+        /\ alloc_variables tge empty_env m f.(fn_vars) e_fun m_fun
+        /\ match_states c callee (me', adds callee.(m_in) vs v_empty) (e_fun, le_fun, m_fun).
+  Proof.
+    intros ** Hin Offs ? ? Find Hlengths Hparams Hvars Norep_par Norep_vars ? Find_inst ? Hrep.
+    subst vargs; rewrite Hparams, Hvars in *.
+    forwards (le_fun & Bind): bind_parameter_temps_exists Hlengths.
+    forwards* (e_fun & m_fun & ? & Hm_fun): (alloc_exists callee).
+    - skip.
+    - now rewrite nodupmembers_list_norepet. 
+    - forwards* (? & ?): bind_parameters_temps_implies' self_not_out.
+      + intro.
+        apply (m_self_id callee).
+        rewrite InMembers_app; now left.
+      + intro.
+        apply (m_out_id callee).
+        rewrite InMembers_app; now left. 
+      + exists e_fun le_fun m_fun; splits*.
+        econstructor; eauto.
+        * simpl.
+          rewrite sep_swap in Hm_fun.
+          rewrite staterep_skip in Hm_fun; eauto.
+          simpl in Hm_fun.
+          rewrite ident_eqb_refl, sep_assoc in Hm_fun.
+          apply sep_proj2 in Hm_fun.
+          apply sepall_in in Hin.
+          destruct Hin as (ws & xs & Hin & Heq).
+          rewrite Heq, sep_assoc in Hm_fun.
+          rewrite Offs in Hm_fun.
+          apply sep_drop2 in Hm_fun.
+          unfold instance_match in Hm_fun.
+          rewrite Find_inst in Hm_fun.
+          unfold Int.add; repeat rewrite* Int.unsigned_repr. 
+          admit.
+        * unfold Int.add; repeat rewrite* Int.unsigned_repr. 
+  Qed.
   
   Remark type_pres':
     forall f c caller es,
       Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
-      map snd f.(m_in) = map Clight.typeof (map (translate_exp c caller) es).
+      type_of_params f.(m_in) =
+      list_type_to_typelist (map Clight.typeof (map (translate_exp c caller) es)).
   Proof.
     intro f.
-    induction (m_in f); introv Heq; inversion_clear Heq as [|? ? ? ? Ht]; simpl; auto.
+    induction (m_in f) as [|(x, t)]; introv Heq;
+    inversion_clear Heq as [|? ? ? ? Ht]; simpl; auto.
     f_equal.
-    - rewrite <-Ht.
+    - simpl in Ht; rewrite <-Ht.
       rewrite* type_pres.
     - apply* IHl.
   Qed.
@@ -1222,7 +1363,8 @@ Section PRESERVATION.
     (forall p me1 clsid fid vs me2 rvs,
         stmt_call_eval p me1 clsid fid vs me2 rvs ->
         sub_prog p prog ->
-        forall owner c caller callee prog' prog'' S e1 le1 m1 o f ptr_f sb o_ofs outb outco oty sofs binst instco,
+        forall owner c caller callee prog' prog'' S e1 le1 m1 o cf ptr_f sb
+          d outb outco oty sofs binst instco,
           find_class clsid prog = Some (c, prog') ->
           find_method fid c.(c_methods) = Some callee ->
           m1 |= staterep gcenv prog owner.(c_name) (fst S) sb (Int.unsigned sofs)
@@ -1232,14 +1374,18 @@ Section PRESERVATION.
           find_class owner.(c_name) prog = Some (owner, prog'') ->
           In caller owner.(c_methods) ->
           Globalenvs.Genv.find_symbol tge fid = Some ptr_f ->
-          Globalenvs.Genv.find_funct_ptr tge ptr_f = Some (Ctypes.Internal f) ->
+          Globalenvs.Genv.find_funct_ptr tge ptr_f = Some (Ctypes.Internal cf) ->
+          length cf.(fn_params) = 2 + length vs ->
           find_inst S o me1 ->
           oty = type_of_inst (prefix fid clsid) ->
           e1 ! o = Some (binst, oty) ->
-          eval_expr tge e1 le1 m1 (ptr_obj owner.(c_name) clsid o) (Vptr sb o_ofs) ->
+          In (o, clsid) owner.(c_objs) ->
+          field_offset gcenv o (make_members owner) = Errors.OK d ->
+          gcenv ! (prefix fid clsid) = Some instco ->
+          eval_expr tge e1 le1 m1 (ptr_obj owner.(c_name) clsid o) (Vptr sb (Int.add sofs (Int.repr d))) ->
           exists m2 T,
-            eval_funcall tge (function_entry2 tge) m1 (Internal f)
-                         ((Vptr sb o_ofs) :: (Vptr binst Int.zero) :: vs) T m2 Vundef
+            eval_funcall tge (function_entry2 tge) m1 (Internal cf)
+                         ((Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr binst Int.zero) :: vs) T m2 Vundef
             /\ m2 |= staterep gcenv prog owner.(c_name) (madd_obj o me2 (fst S)) sb (Int.unsigned sofs)
                    ** blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst
                    ** blockrep gcenv (snd S) outco.(co_members) outb
@@ -1249,7 +1395,7 @@ Section PRESERVATION.
     clear TRANSL main_node_exists.
     apply stmt_eval_call_ind;
       [| |introv ? ? ? ? Hifte|introv ? HS1 ? HS2|introv ? Evs ? Hrec_eval|
-       |introv Find Findmeth ? Hrec_exec ? ? Find' Findmeth' Hrep];
+       |introv Find Findmeth ? Hrec_exec ? ? Find' Findmeth' Hrep; introv ? ? Hgetptrf Hgetcf];
       intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
                                  |? ? ? ? ? ? ? ? ? ? ? ? Hin ? ? ? Find' Findmeth|];
@@ -1324,14 +1470,15 @@ Section PRESERVATION.
     (* Step_ap y ty clsid o [e1; ... ;en] : "y = clsid_step(&(self->o), e1, ..., en)" *)
     - (* get the Clight corresponding function *)
       forwards* Hin': find_class_In Find'.
-      edestruct methods_corres with (e:=e1) as (ptr_f & cf & ? & ? & ? & Htypefun); eauto.
+      edestruct methods_corres with (e:=e1)
+        as (ptr_f & cf & ? & ? & ? & Hparams & Hreturn & Hcc & ?); eauto.
 
       forwards Eq: find_class_name Find'.
       forwards Eq': find_method_name Findmeth.
       rewrite Eq, Eq' in *.
 
       (* the *self parameter *)
-      edestruct eval_self_inst with (1:=Find) (e:=e1); eauto.
+      edestruct eval_self_inst with (1:=Find) (e:=e1) as (? & ? & ?); eauto.
 
       (* the *out parameter *)
       rewrite sep_swap3 in Hrep.
@@ -1341,39 +1488,43 @@ Section PRESERVATION.
       rewrite sep_swap3 in Hrep.
       edestruct Hrec_eval with (owner:=c) (e1:=e1) (m1:=m1) (le1:=le1) (instco:=instco)
         as (m2 & T & ? & Hm2); eauto.
-      clear Hrec_eval.
-      
-      (* output assignments *)
-      (* rewrite sepemp_right in Hm2; do 4 rewrite sep_assoc in Hm2. *)
-      rewrite sep_comm in Hm2; do 3 rewrite sep_assoc in Hm2.
-      rewrite sep_swap34 in Hm2.
-      edestruct exec_funcall_assign with (ys:=ys) (m1:=m2) as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.
-      + transitivity (length ys); auto. eapply Forall2_length; eauto.
-      + apply sep_proj2 in Hm3; rewrite sep_swap, sep_comm in Hm3; do 2 rewrite sep_assoc in Hm3.
-        rewrite sep_swap, sep_swap3 in Hm3. 
-        exists le3 m3; econstructor; split*.
-        simpl.
-        unfold binded_funcall.
-        rewrite Find', Findmeth.
-        eapply exec_Sseq_1 with (m1:=m2); eauto.
-        assert (forall v, le1 = set_opttemp None v le1) as E by reflexivity.
-        erewrite E at 2.
-        eapply exec_Scall; eauto.
-        * reflexivity.
-        *{ simpl.
-           eapply eval_Elvalue.
-           - apply* eval_Evar_global.
-           - apply* deref_loc_reference.               
+      + symmetry; erewrite <-Forall2_length; eauto.
+        rewrite Hparams; simpl; repeat f_equal.
+        eapply Forall2_length; eauto.
+      + (* output assignments *)
+        clear Hrec_eval.      
+        rewrite sep_comm in Hm2; do 3 rewrite sep_assoc in Hm2;
+        rewrite sep_swap34 in Hm2.
+        edestruct exec_funcall_assign with (ys:=ys) (m1:=m2)
+          as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.
+        * transitivity (length ys); auto. eapply Forall2_length; eauto.
+        *{ apply sep_proj2 in Hm3; rewrite sep_swap, sep_comm in Hm3;
+           do 2 rewrite sep_assoc in Hm3.
+           rewrite sep_swap, sep_swap3 in Hm3. 
+           exists le3 m3; econstructor; split*.
+           simpl.
+           unfold binded_funcall.
+           rewrite Find', Findmeth.
+           eapply exec_Sseq_1 with (m1:=m2); eauto.
+           assert (forall v, le1 = set_opttemp None v le1) as E by reflexivity.
+           erewrite E at 2.
+           eapply exec_Scall; eauto.
+           - reflexivity.
+           - simpl.
+             eapply eval_Elvalue.
+             + apply* eval_Evar_global.
+             + apply* deref_loc_reference.               
+           - apply find_method_In in Findmeth.
+             do 2 (econstructor; eauto).
+             applys* exprs_eval_simu Find.
+           - unfold Genv.find_funct.
+             destruct* (Int.eq_dec Int.zero Int.zero) as [|Neq].
+             exfalso; apply* Neq.
+           - simpl. unfold type_of_function;
+               rewrite Hparams, Hreturn, Hcc; simpl; repeat f_equal.
+             apply* type_pres'.
          }
-        * apply find_method_In in Findmeth.
-          do 2 (econstructor; eauto).
-          applys* exprs_eval_simu Find.
-        * unfold Genv.find_funct.
-          destruct* (Int.eq_dec Int.zero Int.zero) as [|Neq].
-          exfalso; apply* Neq.
-        * simpl; rewrite Htypefun; repeat f_equal.
-          apply* type_pres'.
-          
+         
     (* Skip : "skip" *)
     - exists le1 m1 E0; split*.
       eapply exec_Sskip.
@@ -1382,44 +1533,100 @@ Section PRESERVATION.
     - forwards* Find'': find_class_sub_same Find.
       rewrite Find' in Find''; inverts Find''.
       rewrite Findmeth in Findmeth'; inverts Findmeth'.
-      
-      (* destruct Hstep with (c:=cls) *)
-      (*   as (loc_f' & f' & Hget_loc_f' & Hget_f' & Htype_fun & Hvars_nil & ? & ? & Htr & ?); *)
-      (*   destruct_conjs; eauto. *)
+
+      edestruct methods_corres with (e:=e1)
+        as (ptr_f' & cf' & Hgetptrf' & ? & Hgetcf' & ?); eauto.
+      rewrite Hgetptrf' in Hgetptrf; inverts Hgetptrf.
+      rewrite Hgetcf' in Hgetcf; inverts Hgetcf.
+
       forwards Eq: find_class_name Find.
-      subst.
-      (* rewrite Eq in Hget_loc_f'; clear Eq. *)
-      (* rewrite Hget_loc_f' in Hget_loc_f; inverts Hget_loc_f. *)
-      (* rewrite Hget_f' in Hget_f; inverts Hget_f. *)
+      forwards Eq': find_method_name Findmeth.
+      rewrite <-Eq, <-Eq' in *.
+      (* subst. *)
 
-      (* assert (length f.(Clight.fn_params) = length ((Values.Vptr loc_struct ofs) :: nelist2list vs)) *)
-      (*   by (rewrite Hlengths; simpl; f_equal; rewrite Nelist.nelist2list_length; auto). *)
-
-      (* forwards* (le_fun & ? & ?): (compat_funcall_pres cls m). *)
-      forwards* Hsub: find_class_sub.
-
-      (* subst env. *)
-      specialize (Hrec_exec Hsub owner).
-      edestruct Hrec_exec as (? & ? & ? & ? & MS); eauto.
-      + admit.
-      + econstructor; eauto.
-        skip.
-        skip.
-        skip.
-        skip.
-        skip.
-      + do 2 econstructor; split.
-        *{ apply* eval_funcall_internal.
-           - constructor*. skip. skip. skip. skip. skip. 
-           - (* rewrite* Htr. *)
-             (* apply* exec_Sseq_1. *)
-             (* apply* exec_Sreturn_some. *)
-             (* apply* Clight.eval_Etempvar. *)
-             (* inverts MS as Hvars'. *)
-             (* apply* Hvars'; rewrite <-surjective_pairing; eapply in_eq. *)
-             skip.
-           - skip.
+      forwards* (e_fun & le_fun & m_fun & Bind & Alloc & MS):
+        (compat_funcall_pres cf sb sofs binst vs); auto.
+      + skip.
+      + skip.
+      + forwards* Hsub: find_class_sub.
+        specialize (Hrec_exec Hsub owner).
+        edestruct Hrec_exec with (le1:=le_fun) (e1:=e_fun) (m1:=m_fun)
+          as (? & ? & ? & ? & MS'); eauto.
+        * admit.
+        * admit. 
+        *{ do 2 econstructor; split.
+           - apply* eval_funcall_internal.
+             + constructor*. skip. 
+             + (* rewrite* Htr. *)
+               (* apply* exec_Sseq_1. *)
+               (* apply* exec_Sreturn_some. *)
+               (* apply* Clight.eval_Etempvar. *)
+               (* inverts MS as Hvars'. *)
+               (* apply* Hvars'; rewrite <-surjective_pairing; eapply in_eq. *)
+               skip.
+             + skip.
+             + skip.
            - skip.
          }
-        * skip.
   Qed.
+
+  (* Remark norepet_params: *)
+  (*   forall f ts to, *)
+  (*      list_norepet (var_names ((self_id, ts) :: (out_id, to) :: f.(m_in))). *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   unfold var_names. apply list_map_norepet. *)
+  (*   - constructor. *)
+  (*     + apply not_in_cons; split. *)
+  (*       * intro Eq; inversion Eq as [self_out]. *)
+  (*         contradict self_out; apply self_not_out.   *)
+  (*       * pose proof (m_self_id f) as Notin. *)
+  (*         apply NotInMembers_NotIn. *)
+  (*         apply NotInMembers_app in Notin; tauto. *)
+  (*     + constructor. *)
+  (*       * pose proof (m_out_id f) as Notin. *)
+  (*         apply NotInMembers_NotIn. *)
+  (*         apply NotInMembers_app in Notin; tauto. *)
+  (*       *{ pose proof (m_nodup f) as Nodup. *)
+  (*          rewrite NoDupMembers_app in Nodup. *)
+  (*          apply NoDupMembers_app_r in Nodup. *)
+  (*          induction (m_in f); inverts Nodup; constructor. *)
+  (*          - apply NotInMembers_NotIn; auto. *)
+  (*          - apply* IHl. *)
+  (*        } *)
+  (*   - intros (x, tx) (y, ty) Hx Hy Hxy Eq; simpl in Eq. *)
+  (*     apply Hxy; f_equal; auto. *)
+  (*     apply in_inv in Hx. *)
+  (*     apply in_inv in Hy. *)
+  (*     destruct Hx as [Hx|Hx], Hy as [Hy|Hy]. *)
+  (*     + now inverts Hx; inverts Hy. *)
+  (*     + apply in_inv in Hy. *)
+  (*       destruct Hy as [Hy|Hy]. *)
+  (*       * inverts Hx; inverts Hy. *)
+  (*         exfalso; apply* self_not_out. *)
+  (*       * inverts Hx; subst y. *)
+  (*         exfalso; apply (m_self_id f). *)
+  (*         rewrite InMembers_app; left. now apply In_InMembers with ty.  *)
+  (*     + apply in_inv in Hx. *)
+  (*       destruct Hx as [Hx|Hx]. *)
+  (*       * inverts Hx; inverts Hy. *)
+  (*         exfalso; apply* self_not_out. *)
+  (*       * inverts Hy; subst x. *)
+  (*         exfalso; apply (m_self_id f). *)
+  (*         rewrite InMembers_app; left. now apply In_InMembers with tx.  *)
+  (*     + apply in_inv in Hx. *)
+  (*       apply in_inv in Hy. *)
+  (*       destruct Hx as [Hx|Hx], Hy as [Hy|Hy]. *)
+  (*       * now inverts Hx; inverts Hy. *)
+  (*       * inverts Hx; subst y. *)
+  (*         exfalso; apply (m_out_id f). *)
+  (*         rewrite InMembers_app; left. now apply In_InMembers with ty.  *)
+  (*       * inverts Hy; subst x. *)
+  (*         exfalso; apply (m_out_id f). *)
+  (*         rewrite InMembers_app; left. now apply In_InMembers with tx.  *)
+  (*       * pose proof (m_nodup f) as Nodup. *)
+  (*         rewrite NoDupMembers_app in Nodup. *)
+  (*         apply NoDupMembers_app_r in Nodup. *)
+  (*         subst x. *)
+  (*         eapply NoDupMembers_det; eauto. *)
+  (* Qed. *)

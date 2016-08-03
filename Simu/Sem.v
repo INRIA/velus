@@ -71,25 +71,6 @@ Proof.
     apply inmembers_eq.
   - now apply NotInMembers_cons in NotIn.
 Qed.
-
-(* Lemma update_vars_cons: *)
-(*   forall S xs vs x ty v, *)
-(*     NoDupMembers ((x, ty) :: xs) -> *)
-(*     update_vars S ((x, ty) :: xs) (v :: vs) = update_vars (update_var S x v) xs vs. *)
-(* Proof. *)
-(*   introv Nodup. *)
-(*   destruct S. *)
-(*   unfold update_vars, update_var, adds; simpl. *)
-(*   f_equal. *)
-(*   revert x v Nodup. *)
-(*   induction (combine xs vs) as [|xtv]; intros; auto. *)
-(*   simpl in *.  *)
-(*   rewrite <-IHl; auto. *)
-(*   destruct xtv  as ((x', t'), v').  *)
-(*   rewrite add_comm; auto. *)
-(*   admit. *)
-(* Qed. *)
-
     
 Definition update_field (S: state) (x: ident) (v: val) :=
   (madd_mem x v (fst S), snd S).
