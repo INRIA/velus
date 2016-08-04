@@ -275,25 +275,16 @@ Section PRESERVATION.
   Qed.
 
   Remark staterep_skip:
-    forall c clsnm prog' me m sb sofs P,
+    forall c clsnm prog' me sb sofs P,
       find_class clsnm prog = Some (c, prog') ->
-      (m |= staterep gcenv prog c.(c_name) me sb (Int.unsigned sofs) ** P <->
-      m |= staterep gcenv (c :: prog') c.(c_name) me sb (Int.unsigned sofs) ** P).
+      staterep gcenv prog c.(c_name) me sb (Int.unsigned sofs) ** P <-*->
+      staterep gcenv (c :: prog') c.(c_name) me sb (Int.unsigned sofs) ** P.
   Proof.
     introv Find.
     forwards ?: find_class_name Find; subst.
     forwards (? & Hprog & FindNone): find_class_app Find.
-    split; intro Hrep.
-    - rewrite Hprog in Hrep.
-      rewrite* staterep_skip_app in Hrep.
-      intro Hin.
-      apply ClassIn_find_class in Hin.
-      contradiction.
-    - rewrite Hprog.
-      rewrite* staterep_skip_app.
-      intro Hin.
-      apply ClassIn_find_class in Hin.
-      contradiction.
+    rewrite Hprog.
+    rewrite* staterep_skip_app.
   Qed.
   
   (* Remark invariant_staterep: *)
@@ -1053,19 +1044,29 @@ Section PRESERVATION.
          }
   Qed.
 
-  Remark bind_parameter_temps_exists:
-    forall xs vs le,
-      length xs = length vs ->
-      exists le',
-        bind_parameter_temps xs vs le = Some le'.
+  Remark inmembers_var_names:
+    forall xs x,
+      InMembers x xs <-> In x (var_names xs).
   Proof.
-    induction xs as [|(x, ty)]; destruct vs; introv Hlengths; try discriminate.
-    - exists le; reflexivity.  
-    - simpl.
-      inverts Hlengths as Hlengths.
-      specializes IHxs Hlengths; eauto.
+    induction xs as [|(x, t)]; split; simpl; intro H; auto.
+    - destruct H.
+      + now left.
+      + now right; apply IHxs.
+    - destruct H.
+      + now left.
+      + now right; apply IHxs. 
   Qed.
-
+  
+  Remark nodupmembers_list_norepet (xs: list (ident * typ)) :
+    NoDupMembers xs <-> list_norepet (var_names xs).
+  Proof.
+    induction xs as [|(x, t)]; split; simpl; intro H; inverts H; try constructor; auto.
+    - now rewrite <-inmembers_var_names.
+    - now apply IHxs.
+    - now rewrite inmembers_var_names.
+    - now apply IHxs. 
+  Qed.
+  
   Theorem set_comm:
     forall {A} x x' (v v': A) m,
       x <> x' ->
@@ -1077,79 +1078,83 @@ Section PRESERVATION.
   
   Remark bind_parameters_temps_cons:
     forall x t xs v vs le le',
-      list_norepet (var_names ((x, t) :: xs)) ->
       bind_parameter_temps ((x, t) :: xs) (v :: vs) le = Some le' ->
+      list_norepet (var_names ((x, t) :: xs)) ->
       PTree.get x le' = Some v.
   Proof.
     induction xs as [|[x' t']]; destruct vs;
-    introv Norep Bind; inverts Bind as Bind.
+    introv Bind Norep; inverts Bind as Bind.
     - apply PTree.gss.
     - inverts Norep as Notin Norep.
       apply not_in_cons in Notin.
       apply* IHxs.
+      + simpl.
+        erewrite set_comm in Bind; iauto.
       + constructor.
         * apply Notin.
         * inverts Norep as Notin' Norep.
           apply Norep.
-      + simpl.
-        erewrite set_comm in Bind; iauto.
   Qed.
 
-  Remark find_add:
-    forall x (v v': val) pm,
-      PM.find x (PM.add x v pm) = Some v' -> v' = v.
-  Proof.
-    induction x, pm; simpl; (eauto || now injection 1).
-  Qed.
+  (* Remark find_add: *)
+  (*   forall x (v v': val) pm, *)
+  (*     PM.find x (PM.add x v pm) = Some v' -> v' = v. *)
+  (* Proof. *)
+  (*   induction x, pm; simpl; (eauto || now injection 1). *)
+  (* Qed. *)
   
-  Remark bind_parameters_temps_implies:
-    forall xs x vs v s ts vself o to vout le le',
-      list_norepet (var_names xs) ->
-      PM.find x (adds xs vs v_empty) = Some v ->
-      bind_parameter_temps ((s, ts) :: (o, to) :: xs)
-                           (vself :: vout :: vs) le = Some le' ->
-      PTree.get x le' = Some v.
-  Proof.
-    unfold adds.
-    induction xs as [|(x', t')]; destruct vs;
-    introv Norep Find Bind; simpl in Find.
-    - rewrite PM.gempty in Find.
-      discriminate.
-    - rewrite PM.gempty in Find.
-      discriminate.
-    - rewrite PM.gempty in Find.
-      discriminate.
-    - destruct (AST.ident_eq x x').
-      + remember ((x', t')::xs) as xs' in Bind.
-        remember (v::vs) as vs' in Bind.
-        unfold bind_parameter_temps in Bind.
-        fold Clight.bind_parameter_temps in Bind.
-        rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'.
-        subst x'.
-        apply find_add in Find; inversion Find.
-        apply* bind_parameters_temps_cons.
-      + rewrite* PM.gso in Find.
-        remember ((o, to)::(x', t')::xs) as xs' in Bind.
-        remember (vout::v::vs) as vs' in Bind.
-        unfold bind_parameter_temps in Bind.
-        fold Clight.bind_parameter_temps in Bind.
-        rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'.
-        inverts Norep.
-        eapply IHxs; eauto.
-  Qed.
+  (* Remark bind_parameters_temps_implies: *)
+  (*   forall xs x vs v s ts vself o to vout le le', *)
+  (*     list_norepet (var_names xs) -> *)
+  (*     PM.find x (adds xs vs v_empty) = Some v -> *)
+  (*     bind_parameter_temps ((s, ts) :: (o, to) :: xs) *)
+  (*                          (vself :: vout :: vs) le = Some le' -> *)
+  (*     PTree.get x le' = Some v. *)
+  (* Proof. *)
+  (*   unfold adds. *)
+  (*   induction xs as [|(x', t')]; destruct vs; *)
+  (*   introv Norep Find Bind; simpl in Find. *)
+  (*   - rewrite PM.gempty in Find. *)
+  (*     discriminate. *)
+  (*   - rewrite PM.gempty in Find. *)
+  (*     discriminate. *)
+  (*   - rewrite PM.gempty in Find. *)
+  (*     discriminate. *)
+  (*   - destruct (AST.ident_eq x x'). *)
+  (*     + remember ((x', t')::xs) as xs' in Bind. *)
+  (*       remember (v::vs) as vs' in Bind. *)
+  (*       unfold bind_parameter_temps in Bind. *)
+  (*       fold Clight.bind_parameter_temps in Bind. *)
+  (*       rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'. *)
+  (*       subst x'. *)
+  (*       apply find_add in Find; inversion Find. *)
+  (*       apply* bind_parameters_temps_cons. *)
+  (*     + rewrite* PM.gso in Find. *)
+  (*       remember ((o, to)::(x', t')::xs) as xs' in Bind. *)
+  (*       remember (vout::v::vs) as vs' in Bind. *)
+  (*       unfold bind_parameter_temps in Bind. *)
+  (*       fold Clight.bind_parameter_temps in Bind. *)
+  (*       rewrite Heqxs', Heqvs' in Bind; clear Heqxs' Heqvs'. *)
+  (*       inverts Norep. *)
+  (*       eapply IHxs; eauto. *)
+  (* Qed. *)
 
   Remark bind_parameters_temps_comm:
     forall xs vs s ts o to vself vout x t v le le',
       x <> o ->
       x <> s ->
-      bind_parameter_temps ((s, ts) :: (o, to) :: (x, t) :: xs) (vself :: vout :: v :: vs) le = Some le' ->
-      bind_parameter_temps ((x, t) :: (s, ts) :: (o, to) :: xs) (v :: vself :: vout :: vs) le = Some le'.
+      (bind_parameter_temps ((s, ts) :: (o, to) :: (x, t) :: xs) (vself :: vout :: v :: vs) le = Some le' <->
+      bind_parameter_temps ((x, t) :: (s, ts) :: (o, to) :: xs) (v :: vself :: vout :: vs) le = Some le').
   Proof.
-    destruct xs as [|(y, ty)], vs; intros ** Bind; inverts Bind; simpl.
+    destruct xs as [|(y, ty)], vs; split; intros ** Bind; inverts Bind; simpl.
     - f_equal. rewrite (set_comm s x); auto.
       apply set_comm; auto.
+    - f_equal. rewrite (set_comm x o); auto.
+      f_equal. apply set_comm; auto.
     - do 2 f_equal. rewrite (set_comm s x); auto.
       apply set_comm; auto.
+    - do 2 f_equal. rewrite (set_comm x o); auto.
+      f_equal. apply set_comm; auto.
   Qed.
   
   Remark bind_parameters_temps_implies':
@@ -1169,7 +1174,7 @@ Section PRESERVATION.
       + rewrite* PTree.gss.
     - inverts Bind.
     - inverts Bind.
-    - eapply bind_parameters_temps_comm in Bind.
+    - rewrite bind_parameters_temps_comm in Bind.
       + remember ((s, ts)::(o, to)::xs) as xs' in Bind.
         remember (vself::vout::vs) as vs' in Bind.
         unfold bind_parameter_temps in Bind.
@@ -1184,6 +1189,98 @@ Section PRESERVATION.
         subst s. apply inmembers_eq.
   Qed.
 
+  Remark bind_parameters_temps_cons':
+    forall xs vs x ty v le le',
+      ~ InMembers x xs ->
+      bind_parameter_temps xs vs le = Some le' ->
+      bind_parameter_temps ((x, ty) :: xs) (v :: vs) le = Some (PTree.set x v le').
+  Proof.
+    induction xs as [|(x', t')], vs; simpl; intros ** Notin Bind; try discriminate.
+    - now inversion Bind.
+    - simpl in IHxs.
+      rewrite set_comm.
+      + apply* IHxs.
+      + intro; apply Notin; now left.
+  Qed.
+  
+  Remark bind_parameter_temps_exists:
+    forall xs s o ys vs ts to sptr optr,
+      s <> o ->
+      NoDupMembers xs ->
+      ~ InMembers s xs ->
+      ~ InMembers o xs ->
+      ~ InMembers s ys ->
+      ~ InMembers o ys ->
+      length xs = length vs ->
+      exists le',
+        bind_parameter_temps ((s, ts) :: (o, to) :: xs)
+                             (sptr :: optr :: vs)
+                             (create_undef_temps ys) = Some le'
+        /\ Forall (fun xty : ident * typ =>
+                    let (x, _) := xty in
+                    match le' ! x with
+                    | Some v => match_value (adds xs vs v_empty) x v
+                    | None => False
+                    end) (xs ++ ys).
+  Proof.
+    induction xs as [|(x, ty)]; destruct vs;
+    introv Hso Nodup Nos Noo Nos' Noo' Hlengths; try discriminate.
+    - simpl; econstructor; split*.
+      unfold match_value, adds; simpl.
+      induction ys as [|(y, t)]; simpl; auto.
+      assert (y <> s) by (intro; subst; apply Nos'; apply inmembers_eq).
+      assert (y <> o) by (intro; subst; apply Noo'; apply inmembers_eq).
+      constructor.
+      + rewrite PM.gempty.
+        do 2 rewrite* PTree.gso.
+        rewrite* PTree.gss.
+      + apply NotInMembers_cons in Nos'.
+        apply NotInMembers_cons in Noo'.
+        specializes IHys Nos' Noo'.
+        eapply Forall_impl_In; eauto.
+        intros (y', t') Hin Hmatch.
+        assert (y' <> s) by (intro; subst; apply Nos'; eapply In_InMembers; eauto).
+        assert (y' <> o) by (intro; subst; apply Noo'; eapply In_InMembers; eauto).
+        do 2 rewrite PTree.gso in *; auto.      
+        destruct (ident_eqb y' y) eqn: E.
+        * apply ident_eqb_eq in E; subst y'.
+          rewrite PTree.gss.
+          now rewrite PM.gempty.
+        * apply ident_eqb_neq in E.
+          rewrite* PTree.gso.
+    - inverts Hlengths as Hlengths.
+      inversion Nodup as [|? ? ? Notin Nodup']; subst.
+      edestruct IHxs with (s:=s) (ts:=ts) (o:=o) (to:=to) (sptr:=sptr) (optr:=optr)
+        as (le' & Bind & ?); eauto.
+      + eapply NotInMembers_cons; eauto.
+      + eapply NotInMembers_cons; eauto.
+      + assert (x <> s) by (intro; subst; apply Nos; apply inmembers_eq).
+        assert (x <> o) by (intro; subst; apply Noo; apply inmembers_eq).      
+        exists (PTree.set x v le'); split.
+        * rewrite* bind_parameters_temps_comm.
+          apply* bind_parameters_temps_cons'.
+          simpl; intros [|[|]]; auto.
+        *{ rewrite <-app_comm_cons.
+           constructor.
+           - rewrite PTree.gss.
+             unfold match_value, adds; simpl.
+             now rewrite PM.gss.
+           - eapply Forall_impl_In; eauto.
+             intros (x', t') Hin MV.
+             destruct (ident_eqb x' x) eqn: E.
+             + rewrite ident_eqb_eq in E; subst x'.
+               rewrite PTree.gss; unfold match_value, adds; simpl.
+               now rewrite PM.gss.
+             + rewrite ident_eqb_neq in E.
+               rewrite PTree.gso.
+               destruct le' ! x'; try contradiction.
+               unfold match_value, adds in MV.
+               unfold match_value, adds; simpl.
+               rewrite* PM.gso.
+               exact E.
+         }
+  Qed.
+  
   Remark alloc_implies:
     forall vars x b t e m e' m', 
       ~ InMembers x vars ->
@@ -1253,31 +1350,27 @@ Section PRESERVATION.
          }
   Qed.
 
-  Remark inmembers_var_names:
-    forall xs x,
-      InMembers x xs <-> In x (var_names xs).
-  Proof.
-    induction xs as [|(x, t)]; split; simpl; intro H; auto.
-    - destruct H.
-      + now left.
-      + now right; apply IHxs.
-    - destruct H.
-      + now left.
-      + now right; apply IHxs. 
-  Qed.
-  
-  Remark nodupmembers_list_norepet (xs: list (ident * typ)) :
-    NoDupMembers xs <-> list_norepet (var_names xs).
-  Proof.
-    induction xs as [|(x, t)]; split; simpl; intro H; inverts H; try constructor; auto.
-    - now rewrite <-inmembers_var_names.
-    - now apply IHxs.
-    - now rewrite inmembers_var_names.
-    - now apply IHxs. 
-  Qed.
+  (* Remark nodup_params: *)
+  (*   forall f ts to, *)
+  (*      NoDupMembers ((self_id, ts) :: (out_id, to) :: f.(m_in)). *)
+  (* Proof. *)
+  (*   intros. *)
+  (*   - constructor. *)
+  (*     + simpl; intros [?|Hin]. *)
+  (*       * apply* self_not_out. *)
+  (*       * pose proof (m_self_id f) as Notin. *)
+  (*         apply NotInMembers_app in Notin; tauto. *)
+  (*     + constructor. *)
+  (*       * pose proof (m_out_id f) as Notin. *)
+  (*         apply NotInMembers_app in Notin; tauto. *)
+  (*       * pose proof (m_nodup f) as Nodup. *)
+  (*         rewrite NoDupMembers_app in Nodup. *)
+  (*         now apply NoDupMembers_app_r in Nodup. *)
+  (* Qed. *)
   
   Lemma compat_funcall_pres:
     forall f sb sofs ob vs vargs c prog' o owner d me me' tself tout callee instco m P,
+      c.(c_name) <> owner.(c_name) ->
       In (o, c.(c_name)) owner.(c_objs) ->
       field_offset gcenv o (make_members owner) = Errors.OK d ->
       (0 <= (Int.unsigned sofs) + d <= Int.max_unsigned)%Z ->
@@ -1286,47 +1379,66 @@ Section PRESERVATION.
       length (fn_params f) = length vargs ->
       fn_params f = (self_id, tself) :: (out_id, tout) :: callee.(m_in) ->
       fn_vars f = (make_out_vars (get_instance_methods callee.(m_body))) ->
+      fn_temps f = m_vars callee ->
       list_norepet (var_names f.(fn_params)) ->
       list_norepet (var_names f.(fn_vars)) ->
       vargs = (Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr ob Int.zero) :: vs ->
       mfind_inst o me = Some me' ->
       gcenv ! (prefix (m_name callee) (c_name c)) = Some instco ->
-      m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs) ** P ->
+      m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
+          ** blockrep gcenv (adds (m_in callee) vs v_empty) (co_members instco) ob
+          ** P ->
       exists e_fun le_fun m_fun,
         bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le_fun
         /\ alloc_variables tge empty_env m f.(fn_vars) e_fun m_fun
         /\ match_states c callee (me', adds callee.(m_in) vs v_empty) (e_fun, le_fun, m_fun).
   Proof.
-    intros ** Hin Offs ? ? Find Hlengths Hparams Hvars Norep_par Norep_vars ? Find_inst ? Hrep.
-    subst vargs; rewrite Hparams, Hvars in *.
-    forwards (le_fun & Bind): bind_parameter_temps_exists Hlengths.
-    forwards* (e_fun & m_fun & ? & Hm_fun): (alloc_exists callee).
-    - skip.
-    - now rewrite nodupmembers_list_norepet. 
-    - forwards* (? & ?): bind_parameters_temps_implies' self_not_out.
-      + intro.
-        apply (m_self_id callee).
-        rewrite InMembers_app; now left.
-      + intro.
-        apply (m_out_id callee).
-        rewrite InMembers_app; now left. 
-      + exists e_fun le_fun m_fun; splits*.
+    intros ** ? Hin Offs ? ? Find Hlengths Hparams Hvars Htemps Norep_par Norep_vars ? Find_inst ? Hrep.
+    subst vargs; rewrite Hparams, Hvars, Htemps in *.
+    pose proof (m_self_id callee) as Notin_s.
+    pose proof (m_out_id callee) as Notin_o.
+    assert (~ InMembers self_id (m_in callee)) by (apply NotInMembers_app in Notin_s; tauto). 
+    assert (~ InMembers out_id (m_in callee)) by (apply NotInMembers_app in Notin_o; tauto).
+    assert (~ InMembers self_id (m_vars callee)) by
+        (rewrite NotInMembers_app_comm, <-app_assoc in Notin_s; apply NotInMembers_app in Notin_s; tauto).
+    assert (~ InMembers out_id (m_vars callee)) by
+        (rewrite NotInMembers_app_comm, <-app_assoc in Notin_o; apply NotInMembers_app in Notin_o; tauto).
+
+    forwards* (le_fun & Bind & Hinputs):
+      (bind_parameter_temps_exists (m_in callee) self_id out_id (m_vars callee)) self_not_out.
+    - pose proof (m_nodup callee) as Nodup.
+      rewrite NoDupMembers_app in Nodup.
+      now apply NoDupMembers_app_r in Nodup.
+    - simpl in Hlengths. inversion Hlengths; eauto.
+    - forwards* (e_fun & m_fun & ? & Hm_fun): (alloc_exists callee).
+      + skip.
+      + now rewrite nodupmembers_list_norepet. 
+      + forwards* (? & ?): (bind_parameters_temps_implies' (m_in callee)) self_not_out.
+        exists e_fun le_fun m_fun; splits*.
         econstructor; eauto.
         * simpl.
-          rewrite sep_swap in Hm_fun.
-          rewrite staterep_skip in Hm_fun; eauto.
-          simpl in Hm_fun.
-          rewrite ident_eqb_refl, sep_assoc in Hm_fun.
-          apply sep_proj2 in Hm_fun.
+          apply sep_comm; do 2 rewrite sep_assoc; rewrite sep_swap3.
+          apply sep_pure; split*.
+          eapply sep_imp; eauto.
+          rewrite sep_swap; apply sep_imp'; auto.
+          
+          (* extract the staterep *)
+          edestruct find_class_app as (pre_prog & Hprog & FindNone); eauto.
+          rewrite Hprog in WD.
+          eapply welldef_not_class_in in WD; eauto.
+          rewrite staterep_skip; eauto.
+          simpl.
+          rewrite ident_eqb_refl, sep_assoc.
+          rewrite sep_drop.
           apply sepall_in in Hin.
           destruct Hin as (ws & xs & Hin & Heq).
-          rewrite Heq, sep_assoc in Hm_fun.
-          rewrite Offs in Hm_fun.
-          apply sep_drop2 in Hm_fun.
-          unfold instance_match in Hm_fun.
-          rewrite Find_inst in Hm_fun.
+          rewrite Heq, sep_assoc, Offs.
+          rewrite sep_comm, sep_drop.  
+          unfold instance_match; rewrite Find_inst.
+          erewrite <-staterep_skip_cons; eauto.
+          erewrite <-staterep_skip_app; eauto.
+          rewrite <-Hprog.
           unfold Int.add; repeat rewrite* Int.unsigned_repr. 
-          admit.
         * unfold Int.add; repeat rewrite* Int.unsigned_repr. 
   Qed.
   
@@ -1570,63 +1682,3 @@ Section PRESERVATION.
          }
   Qed.
 
-  (* Remark norepet_params: *)
-  (*   forall f ts to, *)
-  (*      list_norepet (var_names ((self_id, ts) :: (out_id, to) :: f.(m_in))). *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   unfold var_names. apply list_map_norepet. *)
-  (*   - constructor. *)
-  (*     + apply not_in_cons; split. *)
-  (*       * intro Eq; inversion Eq as [self_out]. *)
-  (*         contradict self_out; apply self_not_out.   *)
-  (*       * pose proof (m_self_id f) as Notin. *)
-  (*         apply NotInMembers_NotIn. *)
-  (*         apply NotInMembers_app in Notin; tauto. *)
-  (*     + constructor. *)
-  (*       * pose proof (m_out_id f) as Notin. *)
-  (*         apply NotInMembers_NotIn. *)
-  (*         apply NotInMembers_app in Notin; tauto. *)
-  (*       *{ pose proof (m_nodup f) as Nodup. *)
-  (*          rewrite NoDupMembers_app in Nodup. *)
-  (*          apply NoDupMembers_app_r in Nodup. *)
-  (*          induction (m_in f); inverts Nodup; constructor. *)
-  (*          - apply NotInMembers_NotIn; auto. *)
-  (*          - apply* IHl. *)
-  (*        } *)
-  (*   - intros (x, tx) (y, ty) Hx Hy Hxy Eq; simpl in Eq. *)
-  (*     apply Hxy; f_equal; auto. *)
-  (*     apply in_inv in Hx. *)
-  (*     apply in_inv in Hy. *)
-  (*     destruct Hx as [Hx|Hx], Hy as [Hy|Hy]. *)
-  (*     + now inverts Hx; inverts Hy. *)
-  (*     + apply in_inv in Hy. *)
-  (*       destruct Hy as [Hy|Hy]. *)
-  (*       * inverts Hx; inverts Hy. *)
-  (*         exfalso; apply* self_not_out. *)
-  (*       * inverts Hx; subst y. *)
-  (*         exfalso; apply (m_self_id f). *)
-  (*         rewrite InMembers_app; left. now apply In_InMembers with ty.  *)
-  (*     + apply in_inv in Hx. *)
-  (*       destruct Hx as [Hx|Hx]. *)
-  (*       * inverts Hx; inverts Hy. *)
-  (*         exfalso; apply* self_not_out. *)
-  (*       * inverts Hy; subst x. *)
-  (*         exfalso; apply (m_self_id f). *)
-  (*         rewrite InMembers_app; left. now apply In_InMembers with tx.  *)
-  (*     + apply in_inv in Hx. *)
-  (*       apply in_inv in Hy. *)
-  (*       destruct Hx as [Hx|Hx], Hy as [Hy|Hy]. *)
-  (*       * now inverts Hx; inverts Hy. *)
-  (*       * inverts Hx; subst y. *)
-  (*         exfalso; apply (m_out_id f). *)
-  (*         rewrite InMembers_app; left. now apply In_InMembers with ty.  *)
-  (*       * inverts Hy; subst x. *)
-  (*         exfalso; apply (m_out_id f). *)
-  (*         rewrite InMembers_app; left. now apply In_InMembers with tx.  *)
-  (*       * pose proof (m_nodup f) as Nodup. *)
-  (*         rewrite NoDupMembers_app in Nodup. *)
-  (*         apply NoDupMembers_app_r in Nodup. *)
-  (*         subst x. *)
-  (*         eapply NoDupMembers_det; eauto. *)
-  (* Qed. *)

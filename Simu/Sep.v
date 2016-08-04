@@ -380,13 +380,13 @@ Section Staterep.
 
   Lemma staterep_skip_app:
     forall clsnm prog oprog me b ofs,
-      ~ClassIn clsnm oprog ->
+      find_class clsnm oprog = None ->
       staterep (oprog ++ prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
     intros ** Hnin.
     induction oprog as [|cls oprog IH].
     - rewrite app_nil_l. reflexivity.
-    - apply NotClassIn in Hnin. destruct Hnin.
+    - apply find_class_none in Hnin; destruct Hnin. 
       rewrite <-app_comm_cons.
       rewrite staterep_skip_cons; auto.
   Qed.
@@ -673,7 +673,7 @@ Section StateRepProperties.
              + clear IHl.
                
                destruct a as [o c].
-               assert (ClassIn c prog') as Hcin
+               assert (find_class c prog' <> None) as Hcin
                    by (eapply H1; econstructor; eauto).
                clear H1 Hcoal1.
 
@@ -686,7 +686,6 @@ Section StateRepProperties.
                simpl.
                destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
                rewrite instance_match_empty.
-               apply ClassIn_find_class in Hcin.
                specialize (IH Hwdef' c Hcin (lo + z)%Z).
 
                apply not_None_is_Some in Hcin.

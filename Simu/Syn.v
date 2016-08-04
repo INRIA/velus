@@ -188,33 +188,24 @@ Record class : Type :=
         c_instdecl  : Forall (fun m => InstanceDeclared c_objs m.(m_body)) c_methods
       }.
 
-Definition ClassIn (clsnm: ident) (cls: list class) : Prop :=
-  Exists (fun cls => cls.(c_name) = clsnm) cls.
+(* Definition ClassIn (clsnm: ident) (cls: list class) : Prop := *)
+(*   Exists (fun cls => cls.(c_name) = clsnm) cls. *)
 
-Lemma NotClassIn:
-  forall clsnm cls prog,
-    ~ClassIn clsnm (cls::prog)
-    <-> (cls.(c_name) <> clsnm /\ ~ClassIn clsnm prog).
-Proof.
-  intros clsnm cls prog.
-  split; intro HH.
-  - split; intros Hn; apply HH; constructor (assumption).
-  - destruct HH as [HH1 HH2]; intros HH.
-    apply HH2. inversion HH.
-    + exfalso; apply HH1; assumption.
-    + assumption.
-Qed.
+(* Lemma NotClassIn: *)
+(*   forall clsnm cls prog, *)
+(*     ~ClassIn clsnm (cls::prog) *)
+(*     <-> (cls.(c_name) <> clsnm /\ ~ClassIn clsnm prog). *)
+(* Proof. *)
+(*   intros clsnm cls prog. *)
+(*   split; intro HH. *)
+(*   - split; intros Hn; apply HH; constructor (assumption). *)
+(*   - destruct HH as [HH1 HH2]; intros HH. *)
+(*     apply HH2. inversion HH. *)
+(*     + exfalso; apply HH1; assumption. *)
+(*     + assumption. *)
+(* Qed. *)
 
-Inductive WelldefClasses: list class -> Prop :=
-| wdc_nil:
-    WelldefClasses []
-| wdc_cons:
-    forall c cls',
-      WelldefClasses cls' ->
-      (forall o c', In (o, c') c.(c_objs) ->
-               ClassIn c' cls') ->
-      Forall (fun c' => c.(c_name) <> c'.(c_name)) cls' ->
-      WelldefClasses (c :: cls').
+
 
 Definition program : Type := list class.
 
@@ -232,24 +223,48 @@ Definition find_method (f: ident): list method -> option method :=
     | m :: ms' => if ident_eqb m.(m_name) f then Some m else find ms'
     end.
 
-Lemma ClassIn_find_class:
-  forall clsnm prog,
-    ClassIn clsnm prog <->
-    find_class clsnm prog <> None.
+Inductive WelldefClasses: list class -> Prop :=
+| wdc_nil:
+    WelldefClasses []
+| wdc_cons:
+    forall c cls',
+      WelldefClasses cls' ->
+      (forall o c', In (o, c') c.(c_objs) ->
+               find_class c' cls' <> None) ->
+      Forall (fun c' => c.(c_name) <> c'.(c_name)) cls' ->
+      WelldefClasses (c :: cls').
+
+(* Lemma ClassIn_find_class: *)
+(*   forall clsnm prog, *)
+(*     ClassIn clsnm prog <-> *)
+(*     find_class clsnm prog <> None. *)
+(* Proof. *)
+(*   induction prog as [|cls prog' IH]; split. *)
+(*   - now inversion 1. *)
+(*   - simpl; intro H; now contradict H.  *)
+(*   - intro Hcin. *)
+(*     simpl. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq. *)
+(*     + intro; discriminate. *)
+(*     + apply IH. *)
+(*       inversion Hcin; subst. *)
+(*       * rewrite ident_eqb_neq in Heq. intuition. *)
+(*       * assumption. *)
+(*   - simpl. intro Hfind. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq. *)
+(*     + left; now rewrite ident_eqb_eq in Heq. *)
+(*     + right. unfold ClassIn in IH. now apply IH. *)
+(* Qed. *)
+
+Lemma find_class_none:
+  forall clsnm cls prog,
+    find_class clsnm (cls::prog) = None
+    <-> (cls.(c_name) <> clsnm /\ find_class clsnm prog = None).
 Proof.
-  induction prog as [|cls prog' IH]; split.
-  - now inversion 1.
-  - simpl; intro H; now contradict H. 
-  - intro Hcin.
-    simpl. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq.
-    + intro; discriminate.
-    + apply IH.
-      inversion Hcin; subst.
-      * rewrite ident_eqb_neq in Heq. intuition.
-      * assumption.
-  - simpl. intro Hfind. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq.
-    + left; now rewrite ident_eqb_eq in Heq.
-    + right. unfold ClassIn in IH. now apply IH.
+  intros clsnm cls prog.
+  simpl; destruct (ident_eqb (c_name cls) clsnm) eqn: E.
+  - split; intro HH; try discriminate.
+    destruct HH.
+    apply ident_eqb_eq in E; contradiction.
+  - apply ident_eqb_neq in E; split; intro HH; tauto.
 Qed.
 
 Remark find_class_In:
@@ -375,23 +390,6 @@ Qed.
  
 Hint Constructors sub_prog. 
  
-(* Remark unique_app:  *)
-(*   forall cls cls',  *)
-(*     unique_classes (cls ++ cls') -> unique_classes cls /\ unique_classes cls'.  *)
-(* Proof.  *)
-(*   induction cls.  *)
-(*   - simpl; split; auto. apply unique_nil.  *)
-(*   - intros cls' Unique.  *)
-(*     split.  *)
-(*     + unfold unique_classes.  *)
-(*       introv Hin1 Hin2.  *)
-(*       unfold unique_classes in Unique.  *)
-(*       apply Unique; apply List.in_or_app; left; auto.  *)
-(*     + rewrite <-List.app_comm_cons in Unique.    *)
-(*       apply unique_cons in Unique.  *)
-(*       apply IHcls; auto.  *)
-(* Qed.  *)
- 
 Remark find_class_sub_same: 
   forall prog1 prog2 clsid cls prog', 
     find_class clsid prog2 = Some (cls, prog') -> 
@@ -430,3 +428,35 @@ Proof.
   eapply WelldefClasses_cons; eauto. 
 Qed. 
  
+Remark welldef_not_class_in:
+  forall pre_prog post_prog o c c',
+    WelldefClasses (pre_prog ++ c :: post_prog) ->
+    In (o, c'.(c_name)) c.(c_objs) ->
+    find_class c'.(c_name) pre_prog = None.
+Proof.
+  induction pre_prog as [|k]; intros post_prog o c c' WD Hin; auto.
+  rewrite <-app_comm_cons in WD.
+  pose proof WD as WD'.
+  apply WelldefClasses_cons in WD'.
+  pose proof WD' as WD''.
+  apply WelldefClasses_app in WD'.
+  inversion_clear WD' as [|? ? Hwd Hclassin Hdiff]; subst.
+  clear Hwd Hdiff.
+  specialize (Hclassin _ _ Hin).
+  apply not_None_is_Some in Hclassin;
+    destruct Hclassin as ((k', prog') & Hclassin).
+  pose proof (find_class_name _ _ _ _ Hclassin) as Eq.
+  apply find_class_In in Hclassin.
+  inversion_clear WD as [|? ? Hwd Hobjs Hdiff]; subst.
+  clear Hwd Hobjs.
+  apply Forall_app in Hdiff; destruct Hdiff as [Hdiff' Hdiff].
+  clear Hdiff'.
+  inversion_clear Hdiff as [|? ? Hkc Hdiff'].
+  clear Hkc.
+  simpl.
+  destruct (ident_eqb (c_name k) (c_name c')) eqn: Heq.
+  - eapply In_Forall in Hdiff'; eauto.
+    apply ident_eqb_eq in Heq.
+    rewrite <-Eq in Heq; contradiction.
+  - eapply IHpre_prog; eauto.
+Qed.

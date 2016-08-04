@@ -936,4 +936,21 @@ Section Lists.
       + apply Notin; auto.
   Qed.
 
+  Lemma Forall_impl_In :
+    forall (P Q : A -> Prop) l,
+      (forall a, In a l -> P a -> Q a) ->
+      Forall P l -> Forall Q l.
+  Proof.
+    induction l; auto.
+    intros H HP.
+    inversion_clear HP.
+    constructor.
+    - apply H; auto.
+      apply in_eq.
+    - apply IHl; auto.
+      intros a' Ha' HP.
+      apply H; auto.
+      apply in_cons; auto.
+  Qed.
+  
 End Lists.
