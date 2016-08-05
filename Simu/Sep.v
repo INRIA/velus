@@ -167,6 +167,47 @@ Section Sepall.
     intros; apply Hin. constructor (assumption).
   Qed.
 
+  Lemma sep_eqv:
+    forall P P' Q Q',
+      massert_eqv P P' ->
+      massert_eqv Q Q' ->
+      massert_eqv (P ** Q) (P' ** Q').
+  Proof.
+    intros ** HP HQ.
+    rewrite HP. rewrite HQ.
+    reflexivity.
+  Qed.
+
+  Lemma sepall_weakenp:
+    forall P P' xs,
+      (forall x, In x xs -> massert_imp (P x) (P' x)) ->
+      massert_imp (sepall P xs) (sepall P' xs).
+  Proof.
+    intros P P' xs Hx.
+    induction xs.
+    reflexivity.
+    simpl. apply sep_imp'.
+    - apply Hx. apply in_eq.
+    - rewrite IHxs. reflexivity.
+      intros x Hin.
+      apply Hx. apply in_cons with (1:=Hin).
+  Qed.
+  
+  Lemma sepall_swapp:
+    forall P P' xs,
+      (forall x, In x xs -> P x <-*-> P' x) ->
+      sepall P xs <-*-> sepall P' xs.
+  Proof.
+    intros P P' xs Hx.
+    induction xs.
+    reflexivity.
+    simpl. apply sep_eqv.
+    - rewrite Hx. reflexivity. apply in_eq.
+    - rewrite IHxs. reflexivity.
+      intros x Hin.
+      apply Hx. apply in_cons with (1:=Hin).
+  Qed.
+  
 End Sepall.
 
 Section SplitRange.
@@ -343,6 +384,14 @@ Qed.
 Section Staterep.
   Variable ge : composite_env.
 
+  Definition staterep_mems (cls: class) (me: menv) (b: block) (ofs: Z) (xty: ident * typ) :=
+    let (x, ty) := xty in
+    match field_offset ge x (make_members cls) with
+    | Errors.OK d =>
+	  contains (chunk_of_type ty) b (ofs + d) (match_value me.(mm_values) x)
+    | Errors.Error _ => sepfalse
+    end.
+
   Fixpoint staterep
            (p: program) (clsnm: ident) (me: menv) (b: block) (ofs: Z): massert :=
     match p with
@@ -350,13 +399,7 @@ Section Staterep.
     | cls :: p' =>
       if ident_eqb clsnm cls.(c_name)
       then
-        sepall (fun (xty: ident * typ) =>
-                  let (x, ty) := xty in
-                  match field_offset ge x (make_members cls) with
-                  | Errors.OK d =>
-	                contains (chunk_of_type ty) b (ofs + d) (match_value me.(mm_values) x)
-                  | Errors.Error _ => sepfalse
-                  end) cls.(c_mems)
+        sepall (staterep_mems cls me b ofs) cls.(c_mems)
         **
         sepall (fun (o: ident * ident) =>
                   let (i, c) := o in
@@ -366,6 +409,14 @@ Section Staterep.
                   | Errors.Error _ => sepfalse
                   end) cls.(c_objs)
       else staterep p' clsnm me b ofs
+    end.
+
+  Definition staterep_objs (p': program) (cls: class) (me: menv) (b: block) (ofs: Z) (o: ident * ident) :=
+    let (i, c) := o in
+    match field_offset ge i (make_members cls) with
+    | Errors.OK d =>
+      staterep p' c (instance_match me i) b (ofs + d)
+    | Errors.Error _ => sepfalse
     end.
   
   Lemma staterep_skip_cons:
@@ -621,6 +672,7 @@ Section StateRepProperties.
         assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
 
         simpl.
+        unfold staterep_mems.
         destruct (ident_eqb clsnm cls.(c_name)) eqn:Hclsnm.
         *{ rewrite Hg.
            rewrite <-Hmem.
@@ -754,6 +806,7 @@ Section StateRepProperties.
     destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
     apply sep_proj1 in Hm. clear ws xs.
+    unfold staterep_mems in Hm.
     rewrite Hoff in Hm. clear Hoff.
     apply loadv_rule in Hm.
     destruct Hm as [v' [Hloadv Hmatch]].
@@ -832,6 +885,7 @@ Section StateRepProperties.
     rewrite Hin in Hm. clear Hsplit Hin.
     apply sep_proj1 in Hm.
     clear ws xs.
+    unfold staterep_mems in Hm.
     destruct (field_offset gcenv x (make_members cls)).
     + exists z; split*.
       apply* contains_no_overflow.
@@ -995,6 +1049,44 @@ Section BlockRep.
       apply Hin. constructor (assumption).
   Qed.
 
+  Lemma blockrep_any_empty:
+    forall flds ve b,
+      blockrep ve flds b -*> blockrep v_empty flds b.
+  Proof.
+    intros flds ve b.
+    apply sepall_weakenp.
+    intros f Hin.
+    destruct f as [x ty].
+    destruct (field_offset ge x flds); try reflexivity.
+    destruct (access_mode ty); try reflexivity.
+    apply contains_imp.
+    intros. now rewrite match_value_empty.
+  Qed.
+
+  Lemma blockrep_nodup:
+    forall xs vs flds ve ob,
+      NoDupMembers (xs ++ flds) ->
+      blockrep ve flds ob <-*-> blockrep (adds xs vs ve) flds ob.
+  Proof.
+    intros ** Nodup.
+    unfold blockrep.
+    apply sepall_swapp.
+    intros (x, t) Hin.
+    destruct (field_offset ge x flds); auto.
+    destruct (access_mode t); auto.
+    revert vs ve.
+    induction xs as [|(x', t')], vs; unfold adds in *; simpl; auto.
+    rewrite <-app_comm_cons, nodupmembers_cons in Nodup.
+    destruct Nodup as [Notin Nodup].
+    intro ve.
+    unfold match_value in *.
+    rewrite PM.gso.
+    + apply* IHxs.
+    + intro; subst; apply Notin.
+      rewrite InMembers_app; right.
+      eapply In_InMembers; eauto.
+  Qed.
+  
   Lemma blockrep_field_offset:
     forall m ve flds b x ty P,
       m |= blockrep ve flds b ** P ->

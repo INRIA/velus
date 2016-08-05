@@ -188,25 +188,6 @@ Record class : Type :=
         c_instdecl  : Forall (fun m => InstanceDeclared c_objs m.(m_body)) c_methods
       }.
 
-(* Definition ClassIn (clsnm: ident) (cls: list class) : Prop := *)
-(*   Exists (fun cls => cls.(c_name) = clsnm) cls. *)
-
-(* Lemma NotClassIn: *)
-(*   forall clsnm cls prog, *)
-(*     ~ClassIn clsnm (cls::prog) *)
-(*     <-> (cls.(c_name) <> clsnm /\ ~ClassIn clsnm prog). *)
-(* Proof. *)
-(*   intros clsnm cls prog. *)
-(*   split; intro HH. *)
-(*   - split; intros Hn; apply HH; constructor (assumption). *)
-(*   - destruct HH as [HH1 HH2]; intros HH. *)
-(*     apply HH2. inversion HH. *)
-(*     + exfalso; apply HH1; assumption. *)
-(*     + assumption. *)
-(* Qed. *)
-
-
-
 Definition program : Type := list class.
 
 Definition find_class (n: ident): program -> option (class * program) :=
@@ -233,26 +214,6 @@ Inductive WelldefClasses: list class -> Prop :=
                find_class c' cls' <> None) ->
       Forall (fun c' => c.(c_name) <> c'.(c_name)) cls' ->
       WelldefClasses (c :: cls').
-
-(* Lemma ClassIn_find_class: *)
-(*   forall clsnm prog, *)
-(*     ClassIn clsnm prog <-> *)
-(*     find_class clsnm prog <> None. *)
-(* Proof. *)
-(*   induction prog as [|cls prog' IH]; split. *)
-(*   - now inversion 1. *)
-(*   - simpl; intro H; now contradict H.  *)
-(*   - intro Hcin. *)
-(*     simpl. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq. *)
-(*     + intro; discriminate. *)
-(*     + apply IH. *)
-(*       inversion Hcin; subst. *)
-(*       * rewrite ident_eqb_neq in Heq. intuition. *)
-(*       * assumption. *)
-(*   - simpl. intro Hfind. destruct (ident_eqb (c_name cls) clsnm) eqn:Heq. *)
-(*     + left; now rewrite ident_eqb_eq in Heq. *)
-(*     + right. unfold ClassIn in IH. now apply IH. *)
-(* Qed. *)
 
 Lemma find_class_none:
   forall clsnm cls prog,
