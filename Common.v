@@ -1,5 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
-(* Require Import Nelist. *)
+Require Import Nelist.
 Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
@@ -26,28 +26,28 @@ Definition ident_eqb := Pos.eqb.
 
 Implicit Type i j: ident.
 
-(* Definition adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) := *)
-(*   Nelist.fold_right (fun (iiv: ident * A) env =>  *)
-(*                     let (i , iv) := iiv in *)
-(*                     PM.add i iv env) S (Nelist.combine is vs). *)
+Definition ne_adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
+  Nelist.fold_right (fun (iiv: ident * A) env =>
+                    let (i , iv) := iiv in
+                    PM.add i iv env) S (Nelist.combine is vs).
 
 Definition adds {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
   fold_right (fun (xbv: (ident * B) * A) env => 
                     let '(x , b, v) := xbv in
                     PM.add x v env) S (combine xs vs).
 
-(* Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop := *)
-(* | AssocBase:  *)
-(*     forall i v, *)
-(*       Assoc (nebase i) (nebase v) i v *)
-(* | AssocHere:  *)
-(*     forall i v is vs, *)
-(*       Assoc (necons i is) (necons v vs) i v *)
-(* | AssocThere: *)
-(*     forall i v i' v' is vs, *)
-(*       Assoc is vs i' v' -> *)
-(*       i <> i' -> *)
-(*       Assoc (necons i is) (necons v vs) i' v'. *)
+Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
+| AssocBase:
+    forall i v,
+      Assoc (nebase i) (nebase v) i v
+| AssocHere:
+    forall i v is vs,
+      Assoc (necons i is) (necons v vs) i v
+| AssocThere:
+    forall i v i' v' is vs,
+      Assoc is vs i' v' ->
+      i <> i' ->
+      Assoc (necons i is) (necons v vs) i' v'.
 
 (** ** Basic types supported by CoreDF: *)
 
@@ -183,53 +183,53 @@ Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
 
-(* Lemma gsss:  *)
-(*   forall {A: Type} is (vs : nelist A) i a, Nelist.length is = Nelist.length vs -> *)
-(*     (Assoc is vs i a <-> PM.find i (adds is vs (PM.empty _)) = Some a). *)
-(* Proof. *)
-(*   Hint Constructors Assoc. *)
-(*   intros * Hlen. *)
-(*   split. *)
-(*   - intros ** Hassoc; induction Hassoc; try contradiction; unfold adds; simpl. *)
-(*     * rewrite PM.gss; auto. *)
-(*     * rewrite (@PM.gss A i); auto. *)
-(*     * rewrite PM.gso; auto. *)
-(*   - revert vs Hlen; induction is as [i1 |i1 is]; intros [v1 | v1 vs] Hlen; *)
-(*     try now destruct is || destruct vs; simpl in Hlen; discriminate. *)
-(*     + unfold adds. simpl. intro Hfind. *)
-(*       destruct (ident_eqb i i1) eqn:Heqi. *)
-(*       * apply ident_eqb_eq in Heqi. subst.  *)
-(*         rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind. *)
-(*         econstructor. *)
-(*       * apply ident_eqb_neq in Heqi. *)
-(*         rewrite PM.gso, PM.gempty in Hfind; trivial. discriminate. *)
-(*     + unfold adds. simpl. intro Hfind. *)
-(*       destruct (ident_eqb i i1) eqn:Heqi. *)
-(*       * apply ident_eqb_eq in Heqi. subst.  *)
-(*         rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind. *)
-(*         econstructor. *)
-(*       * apply ident_eqb_neq in Heqi. *)
-(*         rewrite PM.gso in Hfind; auto. *)
-(* Qed. *)
+Lemma gsss:
+  forall {A: Type} is (vs : nelist A) i a, Nelist.length is = Nelist.length vs ->
+    (Assoc is vs i a <-> PM.find i (ne_adds is vs (PM.empty _)) = Some a).
+Proof.
+  Hint Constructors Assoc.
+  intros * Hlen.
+  split.
+  - intros ** Hassoc; induction Hassoc; try contradiction; unfold ne_adds; simpl.
+    * rewrite PM.gss; auto.
+    * rewrite (@PM.gss A i); auto.
+    * rewrite PM.gso; auto.
+  - revert vs Hlen; induction is as [i1 |i1 is]; intros [v1 | v1 vs] Hlen;
+    try now destruct is || destruct vs; simpl in Hlen; discriminate.
+    + unfold ne_adds. simpl. intro Hfind.
+      destruct (ident_eqb i i1) eqn:Heqi.
+      * apply ident_eqb_eq in Heqi. subst.
+        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
+        econstructor.
+      * apply ident_eqb_neq in Heqi.
+        rewrite PM.gso, PM.gempty in Hfind; trivial. discriminate.
+    + unfold ne_adds. simpl. intro Hfind.
+      destruct (ident_eqb i i1) eqn:Heqi.
+      * apply ident_eqb_eq in Heqi. subst.
+        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
+        econstructor.
+      * apply ident_eqb_neq in Heqi.
+        rewrite PM.gso in Hfind; auto.
+Qed.
 
-(* Lemma gsos:  *)
-(*   forall (A: Type) is vs (m : PM.t A) i, Nelist.length is = Nelist.length vs -> *)
-(*     ~ Nelist.In i is -> *)
-(*     PM.find i (adds is vs m) = PM.find i m. *)
-(* Proof. *)
-(*   intros A is vs m i Hlen Hnin. revert vs Hlen. *)
-(*   induction is as [i1 |i1 is]; intros [v1 |v1 vs] Hlen;  *)
-(*   try now destruct is || destruct vs; simpl in Hlen; discriminate. *)
-(*   - unfold adds; simpl; auto. now rewrite PM.gso. *)
-(*   - simpl in Hlen. unfold adds; simpl; auto. *)
-(*     destruct (ident_eqb i i1) eqn:Heqi. *)
-(*     + exfalso. *)
-(*       apply ident_eqb_eq in Heqi. subst. *)
-(*       apply Hnin; simpl; auto. *)
-(*     + apply ident_eqb_neq in Heqi. *)
-(*       rewrite PM.gso; eauto. *)
-(*       apply IHis; try omega; []. intro Hin. apply Hnin. simpl. auto. *)
-(* Qed. *)
+Lemma gsos:
+  forall (A: Type) is vs (m : PM.t A) i, Nelist.length is = Nelist.length vs ->
+    ~ Nelist.In i is ->
+    PM.find i (ne_adds is vs m) = PM.find i m.
+Proof.
+  intros A is vs m i Hlen Hnin. revert vs Hlen.
+  induction is as [i1 |i1 is]; intros [v1 |v1 vs] Hlen;
+  try now destruct is || destruct vs; simpl in Hlen; discriminate.
+  - unfold ne_adds; simpl; auto. now rewrite PM.gso.
+  - simpl in Hlen. unfold ne_adds; simpl; auto.
+    destruct (ident_eqb i i1) eqn:Heqi.
+    + exfalso.
+      apply ident_eqb_eq in Heqi. subst.
+      apply Hnin; simpl; auto.
+    + apply ident_eqb_neq in Heqi.
+      rewrite PM.gso; eauto.
+      apply IHis; try omega; []. intro Hin. apply Hnin. simpl. auto.
+Qed.
 
 
 Lemma In_dec:

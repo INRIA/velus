@@ -98,7 +98,7 @@ Module Type PRE_SEMANTICS
        | Iestep:
            forall prog menv env clsid ivs prog' menv' ov cls env',
              find_class clsid prog = Some(cls, prog') ->
-             env = adds (Nelist.map_fst cls.(c_input)) ivs sempty ->
+             env = ne_adds (Nelist.map_fst cls.(c_input)) ivs sempty ->
              stmt_eval prog' menv env cls.(c_step) (menv', env') ->
              PM.find (fst cls.(c_output)) env' = Some(ov) ->
              stmt_step_eval prog menv clsid ivs menv' ov

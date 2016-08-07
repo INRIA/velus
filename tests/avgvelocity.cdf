@@ -1,8 +1,8 @@
-node counter (initial:int, increment:int, restart:bool) returns (n:int)
+node counter (ini:int, inc:int, restart:bool) returns (n:int)
 vars c:int;
 let
   c :: base = 0 fby n;
-  n :: base = if restart then initial else (c + increment);
+  n :: base = if restart then ini else (c + inc);
 tel;
 
 node avgvelocity (delta:int, sec:bool) returns (v:int)

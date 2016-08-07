@@ -1224,7 +1224,7 @@ for all [Is_free_exp x e]. *)
           rename i into inArg; rename o into outArg; rename eqs0 into eqs.
 
           set (inArg_fst := Nelist.map_fst inArg).
-          set (env := adds inArg_fst inputs sempty).
+          set (env := ne_adds inArg_fst inputs sempty).
 
           assert (msem_equations G bk H M eqs)
             by (eapply Forall_msem_equation_global_tl; try eassumption).
