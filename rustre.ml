@@ -30,12 +30,14 @@ let add_builtin p (name, (out, ins, b)) =
   let ef =
     if name = "malloc" then AST.EF_malloc else
     if name = "free" then AST.EF_free else
+    if Str.string_match re_runtime name 0 then AST.EF_runtime(id', sg) else
     if Str.string_match re_builtin name 0
-    && List.mem_assoc name builtins_generic.functions
-    then AST.EF_builtin (id', sg)
-    else AST.EF_external (id', sg) in
+    && List.mem_assoc name builtins.functions
+    then AST.EF_builtin(id', sg)
+    else AST.EF_external(id', sg) in
   let decl = (id, AST.Gfun (External (ef, targs, tres, AST.cc_default))) in
   { p with prog_defs = decl :: p.prog_defs }
+
 
 let add_builtins p =
   List.fold_left add_builtin p builtins_generic.functions
