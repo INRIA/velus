@@ -234,7 +234,7 @@ Definition make_step
            (vars: list cl_bind) (temps: list cl_bind) (body: cl_stmt)
   : cl_globdef :=
   let body := return_some body out in
-  fundef (self :: ins) vars (snd out) temps body.
+  fundef (self :: ins) (out :: vars) (snd out) temps body.
 
 Fixpoint seq_of_statements (sl: list cl_stmt): cl_stmt :=
   match sl with
