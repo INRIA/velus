@@ -441,6 +441,19 @@ Section Staterep.
       rewrite <-app_comm_cons.
       rewrite staterep_skip_cons; auto.
   Qed.
+
+  Remark staterep_skip:
+    forall c clsnm prog prog' me b ofs,
+      find_class clsnm prog = Some (c, prog') ->
+      staterep prog c.(c_name) me b ofs <-*->
+      staterep (c :: prog') c.(c_name) me b ofs.
+  Proof.
+    introv Find.
+    forwards ?: find_class_name Find; subst.
+    forwards (? & Hprog & FindNone): find_class_app Find.
+    rewrite Hprog.
+    rewrite* staterep_skip_app.
+  Qed.
   
 End Staterep.
 
@@ -1086,7 +1099,41 @@ Section BlockRep.
       rewrite InMembers_app; right.
       eapply In_InMembers; eauto.
   Qed.
-  
+
+    Lemma blockrep_findvars:
+    forall S xs vs b,
+      find_vars S xs vs ->
+      blockrep (snd S) xs b -*> blockrep (adds xs vs v_empty) xs b.
+    Proof.
+      destruct S as (?, ve); unfold find_vars, find_var, adds; simpl.
+      intros ** Findvars.
+      unfold blockrep.
+      apply sepall_weakenp.
+      intros (x, t) Hin.
+      destruct (field_offset ge x xs); auto.
+      destruct (access_mode t); auto.
+      apply contains_imp.    
+      unfold match_value.
+      intros v Findx.
+      revert vs Findvars.
+      induction xs as [|(x', t')], vs; simpl; intro Findvars.
+      - rewrite* PM.gempty.
+      - rewrite* PM.gempty.
+      - rewrite* PM.gempty.
+      - inversion Findvars as [|y ? ys ? Find Findvars' Heq]; subst; clear Findvars.
+        destruct (split xs) as (g, d).
+        simpl in *; inverts Heq.
+        destruct (ident_eqb x x') eqn: E.
+        + apply ident_eqb_eq in E; subst x'.
+          rewrite Find in Findx.
+          rewrite PM.gss; auto.
+        + apply ident_eqb_neq in E.
+          destruct Hin as [Eq|?].
+          * inverts Eq; now contradict E.
+          * rewrite* PM.gso.
+            apply* IHxs.
+    Qed.
+
   Lemma blockrep_field_offset:
     forall m ve flds b x ty P,
       m |= blockrep ve flds b ** P ->
