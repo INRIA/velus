@@ -22,49 +22,6 @@ Open Scope Z.
 Notation "m -*> m'" := (massert_imp m m') (at level 70, no associativity) : sep_scope.
 Notation "m <-*-> m'" := (massert_eqv m m') (at level 70, no associativity) : sep_scope.
 
-(* TODO: Tim: move to CompCert *)
-Lemma storev_rule':
-  forall chunk m m' b ofs v (spec1 spec: val -> Prop) P,
-    m |= contains chunk b ofs spec1 ** P ->
-    spec (Val.load_result chunk v) ->
-    Memory.Mem.storev chunk m (Vptr b (Int.repr ofs)) v = Some m' ->
-    m' |= contains chunk b ofs spec ** P.
-Proof.
-  intros ** Hm Hspec Hstore.
-  apply storev_rule with (1:=Hm) in Hspec.
-  destruct Hspec as [m'' [Hmem Hspec]].
-  rewrite Hmem in Hstore. injection Hstore.
-  intro; subst. assumption.
-Qed.
-
-(* TODO: Tim: move to CompCert *)
-Lemma sep_pure':
-  forall P m, m |= pure P <-> P.
-Proof.
-  simpl; intros. intuition auto. 
-Qed.
-
-(* TODO: Tim: move to CompCert *)
-Require Import Morphisms.
-Instance footprint_massert_imp_Proper:
-  Proper (massert_imp --> eq ==> eq ==> Basics.impl) m_footprint.
-Proof.
-  destruct 1. repeat intro. subst. intuition.
-Qed.
-
-(* TODO: Tim: move to CompCert *)
-Instance footprint_massert_eqv_Proper:
-  Proper (massert_eqv ==> eq ==> eq ==> iff) m_footprint.
-Proof.
-  intros P Q HPQ b' b Hbeq ofs' ofs Hoeq.
-  subst.
-  destruct HPQ as [HPQ HQP].
-  split; intro HH.
-  now rewrite HQP.
-  now rewrite HPQ.
-Qed.
-
-
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
 Require Import compcert.common.Memory.
