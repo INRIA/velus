@@ -14,7 +14,7 @@ Require Import common.Globalenvs.
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
 
-Require Import Syn Sem Tra Sep.
+Require Import Syn Sem Tra Sep SepInv.
 
 Require Import Program.Tactics.
 Require Import List.
@@ -27,6 +27,16 @@ Open Scope Z.
 
 Require Import LibTactics.
 Ltac auto_star ::= try solve [eassumption | auto | jauto].
+
+(* To Tidy: *)
+
+Ltac app_match_find_var_det :=
+  match goal with
+  | H1: find_var (?me, ?ve) ?x ?v1,
+        H2: match_value ?ve ?x ?v2 |- _ =>
+    assert (v2 = v1) by (applys* match_find_var_det H2 H1); subst v1; clear H2
+  end.
+
 
 (* SIMULATION *)
 
@@ -143,9 +153,21 @@ Section PRESERVATION.
       else sepfalse
     | _, _ => sepfalse
     end.
+
+  Definition subrep_inst_free e ocg :=
+    let '(o, cid, g) := ocg in
+    match gcenv ! (prefix g cid), e ! o with 
+    | Some gco, Some (oblk, t) =>
+      if type_eq t (type_of_inst (prefix g cid)) then
+        blockrep gcenv v_empty (co_members gco) oblk
+        -* range oblk 0 (co_sizeof gco)
+      else sepfalse
+    | _, _ => sepfalse
+    end.
   
   Definition subrep (f: method) (e: env) :=
-    sepall (subrep_inst e) (get_instance_methods f.(m_body)).
+    sepall (subrep_inst e) (get_instance_methods f.(m_body))
+    ** sepall (subrep_inst_free e) (get_instance_methods f.(m_body)).
 
   Definition varsrep (f: method) (ve: venv) (le: temp_env) :=
     pure (Forall (fun (xty: ident * typ) =>

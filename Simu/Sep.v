@@ -8,7 +8,6 @@ Require Import lib.Integers.
 
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
-Require Import Syn Sem Tra.
 
 Require Import List.
 Require Import ZArith.BinInt.
@@ -23,6 +22,7 @@ Open Scope Z.
 Notation "m -*> m'" := (massert_imp m m') (at level 70, no associativity) : sep_scope.
 Notation "m <-*-> m'" := (massert_eqv m m') (at level 70, no associativity) : sep_scope.
 
+(* TODO: Tim: move to CompCert *)
 Lemma storev_rule':
   forall chunk m m' b ofs v (spec1 spec: val -> Prop) P,
     m |= contains chunk b ofs spec1 ** P ->
@@ -37,13 +37,403 @@ Proof.
   intro; subst. assumption.
 Qed.
 
+(* TODO: Tim: move to CompCert *)
 Lemma sep_pure':
   forall P m, m |= pure P <-> P.
 Proof.
   simpl; intros. intuition auto. 
 Qed.
 
-(* Introduce sepall *)
+(* TODO: Tim: move to CompCert *)
+Require Import Morphisms.
+Instance footprint_massert_imp_Proper:
+  Proper (massert_imp --> eq ==> eq ==> Basics.impl) m_footprint.
+Proof.
+  destruct 1. repeat intro. subst. intuition.
+Qed.
+
+(* TODO: Tim: move to CompCert *)
+Instance footprint_massert_eqv_Proper:
+  Proper (massert_eqv ==> eq ==> eq ==> iff) m_footprint.
+Proof.
+  intros P Q HPQ b' b Hbeq ofs' ofs Hoeq.
+  subst.
+  destruct HPQ as [HPQ HQP].
+  split; intro HH.
+  now rewrite HQP.
+  now rewrite HPQ.
+Qed.
+
+
+(* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
+
+Require Import compcert.common.Memory.
+
+Definition wand_footprint (P Q: massert) (b: block) (ofs: Z) : Prop :=
+  ~m_footprint P b ofs /\ m_footprint Q b ofs.
+
+Program Definition sepwand (P Q: massert) : massert := {|
+  m_pred := fun m =>
+              (forall m', Mem.unchanged_on (wand_footprint P Q) m m' ->
+                          m' |= P -> m' |= Q)
+              /\ (forall b ofs, wand_footprint P Q b ofs -> Mem.valid_block m b);
+  m_footprint := wand_footprint P Q
+|}.
+Next Obligation.
+  rename H into HPQ, H1 into Hval, H0 into Hun1.
+  repeat split.
+  - intros m'' Hun2 HP.
+    apply Mem.unchanged_on_trans with (1:=Hun1) in Hun2.
+    now apply HPQ with (1:=Hun2) (2:=HP).
+  - intros b ofs Hwfoot.
+    apply Mem.valid_block_unchanged_on with (1:=Hun1).
+    apply Hval with (1:=Hwfoot).
+Qed.
+
+Infix "-*" := sepwand (at level 65, right associativity) : sep_scope.
+
+(* TODO: configure auto to take care of decidable_footprint and
+         footprint_perm obligations. *)
+
+Definition decidable_footprint (P: massert) : Prop :=
+  forall b ofs, Decidable.decidable (m_footprint P b ofs).
+
+Instance decidable_footprint_Proper:
+  Proper (massert_eqv ==> iff) decidable_footprint.
+Proof.
+  intros P Q HPQ.
+  unfold decidable_footprint, Decidable.decidable.
+  split; intros.
+  now rewrite <-HPQ.
+  now rewrite HPQ.
+Qed.
+
+Lemma decidable_footprint_sepconj:
+  forall P Q,
+    decidable_footprint P ->
+    decidable_footprint Q ->
+    decidable_footprint (P ** Q).
+Proof.
+  intros P Q HP HQ b ofs.
+  specialize (HP b ofs).
+  specialize (HQ b ofs).
+  simpl; intuition.
+Qed.
+
+Lemma decidable_ident_eq:
+  forall (b b': AST.ident), Decidable.decidable (b = b').
+Proof.
+  intros b b'. unfold Decidable.decidable.
+  destruct (peq b' b); intuition.
+Qed.
+
+Lemma decidable_footprint_range:
+  forall b lo hi,
+    decidable_footprint (range b lo hi).
+Proof.
+  unfold decidable_footprint.
+  intros.
+  apply Decidable.dec_and.
+  apply decidable_ident_eq.
+  apply Decidable.dec_and.
+  apply Z.le_decidable.
+  apply Z.lt_decidable.
+Qed.
+
+Lemma decidable_footprint_contains:
+  forall chunk b ofs spec,
+    decidable_footprint (contains chunk b ofs spec).
+Proof.
+  unfold decidable_footprint.
+  intros.
+  apply Decidable.dec_and.
+  apply decidable_ident_eq.
+  apply Decidable.dec_and.
+  apply Z.le_decidable.
+  apply Z.lt_decidable.
+Qed.
+
+Lemma sep_unwand:
+  forall P Q,
+    decidable_footprint P ->
+    massert_imp (P ** (P -* Q)) Q.
+Proof.
+  intros P Q Hdec.
+  split.
+  - intros m HPPQ.
+    destruct HPPQ as (HP & HW & Hdj).
+    destruct HW as [Hu ?].
+    apply Hu.
+    apply Mem.unchanged_on_refl.
+    assumption.
+  - intros b ofs HfQ.
+    destruct (Hdec b ofs); [now left|right].
+    split; intuition.
+Qed.
+
+Lemma disjoint_sepwand:
+  forall P Q, disjoint_footprint P (P -* Q).
+Proof.
+  intros P Q b ofs HfP HfPQ.
+  destruct HfPQ as [HfnP HfQ].
+  intuition.
+Qed.
+
+Lemma merge_disjoint:
+  forall P Q R m,
+    disjoint_footprint P Q ->
+    m |= P ** R ->
+    m |= Q ** R ->
+    m |= P ** Q ** R.
+Proof.
+  intros P Q R m HdPQ HPR HQR.
+  rewrite <-sep_assoc.
+  repeat split.
+  - apply sep_proj1 with (1:=HPR).
+  - apply sep_proj1 with (1:=HQR).
+  - assumption.
+  - apply sep_proj2 with (1:=HPR).
+  - intros b ofs Hfw HfR.
+    destruct Hfw as [HfP|HfPQ].
+    + destruct HPR as [? [? HdPR]].
+      unfold disjoint_footprint in HdPR.
+      apply HdPR with (1:=HfP) (2:=HfR).
+    + destruct HQR as [? [? HdQR]].
+      unfold disjoint_footprint in HdQR.
+      apply HdQR with (1:=HfPQ) (2:=HfR).
+Qed.
+
+Lemma merge_sepwand:
+  forall P Q R m,
+    m |= P ** R ->
+    m |= (P -* Q) ** R ->
+    m |= P ** (P -* Q) ** R.
+Proof.
+  intros. apply merge_disjoint; try assumption.
+  now apply disjoint_sepwand.
+Qed.
+
+Instance wand_footprint_massert_Proper:
+  Proper (massert_eqv ==> massert_eqv ==> eq ==> eq ==> iff) wand_footprint.
+Proof.
+  intros P Q HPQ R S HRS b' b Hbeq ofs' ofs Hoeq.
+  subst.
+  unfold wand_footprint.
+  rewrite HPQ, HRS. reflexivity.
+Qed.
+
+Instance sepwand_massert_Proper:
+  Proper (massert_eqv ==> massert_eqv ==> massert_eqv) sepwand.
+Proof.
+  intros P Q HPQ R S HRS.
+  split; [split|split].
+  - intros m HPR.
+    destruct HPR as [HPR1 HPR2].
+    split.
+    + intros m' Hun HQ.
+      rewrite <-HRS.
+      rewrite <-HPQ in HQ.
+      apply HPR1 with (2:=HQ).
+      apply Mem.unchanged_on_implies with (1:=Hun).
+      intros b ofs HfW Hv.
+      now rewrite HPQ, HRS in HfW.
+    + intros b ofs.
+      rewrite <-HPQ, <-HRS.
+      apply HPR2.
+  - intros b ofs Hf.
+    simpl in Hf.
+    now rewrite <-HPQ, <-HRS in Hf.
+  - intros m HQS.
+    destruct HQS as [HQS1 HQS2].
+    split.
+    + intros m' Hun HP.
+      rewrite HPQ in HP.
+      rewrite HRS.
+      apply HQS1 with (2:=HP).
+      apply Mem.unchanged_on_implies with (1:=Hun).
+      intros b ofs HfW Hv.
+      now rewrite HPQ, HRS.
+    + intros b ofs.
+      rewrite HPQ, HRS.
+      apply HQS2.
+  - intros b ofs Hf.
+    simpl in Hf. rewrite HPQ, HRS in Hf.
+    assumption.
+Qed.
+
+Lemma hide_in_sepwand:
+  forall P Q R,
+    decidable_footprint Q ->
+    massert_eqv P (Q ** R) ->
+    massert_eqv P (Q ** (Q -* P)).
+Proof.
+  intros P Q R HQdec HPQR.
+  rewrite HPQR at 2.
+  split; [split|].
+  - intros m HP.
+    apply HPQR in HP.
+    split; [|split].
+    + apply sep_proj1 with (1:=HP).
+    + split.
+      * intros m' Hun HQ'.
+        destruct HP as (HQ & HR & Hdj).
+        repeat split; try assumption.
+        apply m_invar with (1:=HR).
+        apply Mem.unchanged_on_implies with (1:=Hun).
+        intros b ofs HfR Hv.
+        destruct (HQdec b ofs).
+        now (exfalso; apply Hdj with (2:=HfR)).
+        split; [assumption|now right].
+      * intros b ofs.
+        destruct 1 as [HnfQ [|HfR]]; [contradiction|].
+        apply sep_proj2 in HP.
+        apply m_valid with (1:=HP) (2:=HfR).
+    + apply disjoint_sepwand.
+  - intros b ofs Hf.
+    rewrite HPQR.
+    destruct Hf as [|Hf]; [now left|].
+    destruct Hf as [HfQ [|HfR]]; [now left|].
+    now right.
+  - rewrite sep_unwand with (1:=HQdec).
+    rewrite HPQR. reflexivity.
+Qed.
+
+Lemma sepwand_out:
+  forall P Q,
+    decidable_footprint P ->
+    massert_eqv (P ** Q) (P ** (P -* (P ** Q))).
+Proof.
+  split.
+  - now rewrite <-hide_in_sepwand.
+  - now rewrite sep_unwand.
+Qed.
+
+(* Reynold's "rules capturing the adjunctive relationship between separating
+   conjunction and separating implication". *)
+
+Lemma reynolds1:
+  forall P1 P2 P3,
+    massert_imp (P1 ** P2) P3 ->
+    (forall b ofs, m_footprint P1 b ofs -> wand_footprint P2 P3 b ofs) ->
+    massert_imp P1 (P2 -* P3).
+Proof.
+  intros P1 P2 P3 HH Hfi.
+  split.
+  - intros m HP1.
+    split.
+    + intros m' Hun HP2.
+      apply HH.
+      split; [|split].
+      * apply m_invar with (1:=HP1).
+        apply Mem.unchanged_on_implies with (1:=Hun).
+        intros; now apply Hfi.
+      * assumption.
+      * intros b ofs HfP1 HfP2.
+        apply Hfi in HfP1.
+        destruct HfP1. contradiction.
+    + intros b ofs.
+      destruct 1 as [HnfP2 HfP3].
+      destruct HH as [HHm HHf].
+      apply HHf in HfP3.
+      destruct HfP3 as [HfP1|]; [|contradiction].
+      apply m_valid with (1:=HP1) (2:=HfP1).
+  - intros b ofs.
+    destruct 1 as [HnfP2 HfP3].
+    destruct HH as [HHm HHf].
+    apply HHf in HfP3.
+    destruct HfP3; intuition.
+Qed.
+
+Lemma reynolds2:
+  forall P1 P2 P3,
+    decidable_footprint P2 ->
+    massert_imp P1 (P2 -* P3) ->
+    massert_imp (P1 ** P2) P3.
+Proof.
+  intros P1 P2 P3 HD2 HH.
+  rewrite HH. rewrite sep_comm.
+  rewrite sep_unwand with (1:=HD2).
+  reflexivity.
+Qed.
+
+Definition footprint_perm (P: massert) (b: block) (lo hi: Z) : Prop :=
+  (forall m, m |= P ->
+             (forall i k p, m_footprint P b i ->
+                            lo <= i < hi -> Mem.perm m b i k p)).
+
+Lemma footprint_perm_sepconj:
+  forall P Q b lo hi,
+    footprint_perm P b lo hi ->
+    footprint_perm Q b lo hi ->
+    footprint_perm (P ** Q) b lo hi.
+Proof.
+  intros P Q b lo hi HfpP HfpQ.
+  intros m HPQ i k p Hf Hi.
+  destruct HPQ as (HP & HQ & Hdj).
+  destruct Hf as [HfP|HfQ].
+  - now apply HfpP.
+  - now apply HfpQ.
+Qed.
+
+Lemma footprint_perm_range:
+  forall b lo hi b' lo' hi',
+    footprint_perm (range b lo hi) b' lo' hi'.
+Proof.
+  intros b lo hi b' lo' hi' m Hm i k p Hf Hi.
+  destruct Hf. subst.
+  destruct Hm as (Hlo & Hhi & Hp).
+  now apply Hp.
+Qed.
+
+Lemma footprint_perm_contains:
+  forall chunk b ofs spec b' lo hi,
+    footprint_perm (contains chunk b ofs spec) b' lo hi.
+Proof.
+  intros chunk b ofs spec b' lo hi m Hm i k p Hf Hi.
+  destruct Hf. subst.
+  destruct Hm as (Hlo & Hhi & Hv & Hl).
+  apply Mem.valid_access_freeable_any with (p:=p) in Hv.
+  destruct Hv as (Hperm & j & Hofs).
+  apply Mem.perm_cur.
+  now apply Hperm.
+Qed.
+
+Lemma range_imp_with_wand:
+  forall P b lo hi,
+    massert_imp (range b lo hi) P ->
+    decidable_footprint P ->
+    footprint_perm P b lo hi ->
+    massert_imp (range b lo hi) (P ** (P -* range b lo hi)).
+Proof.
+  intros P b lo hi HRP HPfdec HPperm.
+  split.
+  - intros m HR.
+    split; [|split].
+    + now apply HRP.
+    + split.
+      * intros m' Hun HP.
+        assert (HR':=HR).
+        destruct HR' as (Hlo & Hhi & Hperm).
+        repeat split; try assumption.
+        intros i k p Hi.
+        destruct (HPfdec b i) as [HfPi|HnfPi].
+        now apply HPperm with (1:=HP) (2:=HfPi) (3:=Hi).
+        apply Mem.perm_unchanged_on with (1:=Hun).
+        split; [assumption|simpl; now intuition].
+        now apply Hperm.
+      * intros b' ofs.
+        destruct 1 as [? HfR].
+        assert (b = b') by (simpl in HfR; intuition).
+        subst. apply (m_valid _ _ _ _ HR HfR).
+    + intros b' ofs HfP HfPR.
+      destruct HfPR. contradiction.
+  - intros b' ofs Hf.
+    destruct HRP as [HRP HfPR].
+    destruct Hf as [|Hf]; [now apply HfPR|].
+    now destruct Hf.
+Qed.
+
+(* * * * * * * * sepall * * * * * * * * * * * * * * *)
 
 Program Definition sepemp: massert :=  pure True.
 
@@ -67,12 +457,54 @@ Proof.
   intros. rewrite sep_comm. rewrite <-sepemp_right. reflexivity.
 Qed.
 
+Lemma decidable_footprint_sepemp:
+  decidable_footprint sepemp.
+Proof.
+  unfold decidable_footprint. simpl.
+  intros; apply Decidable.dec_False.
+Qed.
+
+Lemma footprint_perm_sepemp:
+  forall b lo hi, footprint_perm sepemp b lo hi.
+Proof.
+  intros lo hi m. inversion 2.
+Qed.
+
+Lemma empty_range:
+  forall b lo hi,
+    hi <= lo ->
+    0 <= lo ->
+    hi <= Integers.Int.modulus ->
+    massert_eqv sepemp (range b lo hi).
+Proof.
+  intros b lo hi Hgt.
+  split; [split|split].
+  - simpl. intuition.
+  - inversion 1. intuition.
+  - intros; exact I.
+  - inversion 1.
+Qed.
+
 Program Definition sepfalse: massert :=
   {| m_pred := fun m => False;
      m_footprint := fun b ofs => True |}.
 Next Obligation.
   contradiction.
 Defined.
+
+
+Lemma decidable_footprint_sepfalse:
+  decidable_footprint sepfalse.
+Proof.
+  unfold decidable_footprint. simpl.
+  intros; apply Decidable.dec_True.
+Qed.
+
+Lemma footprint_perm_sepfalse:
+  forall b lo hi, footprint_perm sepfalse b lo hi.
+Proof.
+  intros b lo hi m Hm. inversion Hm.
+Qed.
 
 Section Sepall.
   Context {A: Type}.
@@ -134,6 +566,19 @@ Section Sepall.
     exists ws xs.
     split; auto. 
     intro p. apply sepall_breakout with (1:=Hys).
+  Qed.
+
+  Lemma sepall_wandout:
+    forall p x xs,
+      decidable_footprint (p x) ->
+      In x xs ->
+      massert_eqv (sepall p xs) (p x ** (p x -* sepall p xs)).
+  Proof.
+    intros p x xs Hdec Hin.
+    apply in_split in Hin.
+    destruct Hin as (ws & ys & Hin).
+    rewrite sepall_breakout with (1:=Hin).
+    now apply sepwand_out.
   Qed.
 
   Lemma sepall_sepfalse:
@@ -207,8 +652,36 @@ Section Sepall.
       intros x Hin.
       apply Hx. apply in_cons with (1:=Hin).
   Qed.
+
+  Lemma decidable_footprint_sepall:
+    forall P xs,
+      (forall x, decidable_footprint (P x)) ->
+      decidable_footprint (sepall P xs).
+  Proof.
+    induction xs as [|x xs IH].
+    now (intros; apply decidable_footprint_sepemp).
+    intro HPx.
+    simpl. apply decidable_footprint_sepconj.
+    - apply HPx.
+    - apply IH with (1:=HPx).
+  Qed.
+
+  Lemma footprint_perm_sepall:
+    forall P xs b lo hi,
+      (forall x b lo hi, footprint_perm (P x) b lo hi) ->
+      footprint_perm (sepall P xs) b lo hi.
+  Proof.
+    induction xs as [|x xs IH].
+    now (intros; apply footprint_perm_sepemp).
+    intros b lo hi Hfp.
+    simpl. apply footprint_perm_sepconj.
+    - apply Hfp.
+    - apply IH with (1:=Hfp).
+  Qed.
   
 End Sepall.
+
+(* * * * * * * * Ranges * * * * * * * * * * * * * * *)
 
 Section SplitRange.
   Variable env: composite_env.
@@ -219,32 +692,59 @@ Section SplitRange.
   Hypothesis Hco: env!id = Some co.
   Hypothesis Hstruct: co_su co = Struct.
 
-  Lemma split_range_fields':
-    forall b lo,
-      NoDupMembers (co_members co) ->
-      range b lo (lo + sizeof_struct env 0 (co_members co)) -*>
-            sepall (fun (fld: ident * type) =>
-                      let (id, ty) := fld in
-                      match field_offset env id (co_members co) with
-                      | Errors.OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
-                      | Errors.Error _ => sepfalse
-                      end) (co_members co).
+  Definition field_range (flds: list (AST.ident * type)) (b: block) (lo: Z)
+             (fld: AST.ident * type) : massert :=
+    let (id, ty) := fld in
+    match field_offset env id flds with
+      | Errors.OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
+      | Errors.Error _ => sepfalse
+    end.
+
+  Lemma decidable_footprint_field_range:
+    forall lo b flds,
+      decidable_footprint (sepall (field_range flds b lo) flds).
   Proof.
-    intros b lo Hndup.
+    intros.
+    apply decidable_footprint_sepall.
+    intro fld. destruct fld as [x ty].
+    simpl. destruct (field_offset env x flds).
+    - apply decidable_footprint_range.
+    - apply decidable_footprint_sepfalse.
+  Qed.
+
+  Lemma footprint_perm_field_range:
+    forall flds b pos x b' lo hi,
+      footprint_perm (field_range flds b pos x) b' lo hi.
+  Proof.
+    intros flds b pos x b' lo hi.
+    destruct x as [x ty].
+    simpl. destruct (field_offset env x flds).
+    - apply footprint_perm_range.
+    - apply footprint_perm_sepfalse.
+  Qed.
+  
+  Lemma split_range_fields':
+    forall b lo flds,
+      NoDupMembers flds ->
+      massert_imp (range b lo (lo + sizeof_struct env 0 flds))
+                  (sepall (field_range flds b lo) flds).
+  Proof.
+    intros b lo flds Hndup.
     cut (forall cur,
             massert_imp
               (range b (lo + cur)
-                       (lo + sizeof_struct env cur (co_members co)))
-              (sepall (fun fld : ident * type =>
+                       (lo + sizeof_struct env cur flds))
+              (sepall (fun fld : AST.ident * type =>
                          let (id0, ty) := fld in
-                         match field_offset_rec env id0 (co_members co) cur with
-                         | Errors.OK ofs => range b (lo + ofs) (lo + ofs + sizeof env ty)
+                         match field_offset_rec env id0 flds cur with
+                         | Errors.OK ofs =>
+                             range b (lo + ofs) (lo + ofs + sizeof env ty)
                          | Errors.Error _ => sepfalse
-                         end) (co_members co))).
+                         end) flds)).
     - intro HH.
       specialize HH with 0. rewrite Z.add_0_r in HH.
       apply HH.
-    - induction (co_members co) as [|x xs IH]; [now constructor|].
+    - induction flds as [|x xs IH]; [now constructor|].
       destruct x as [id' ty'].
       apply nodupmembers_cons in Hndup.
       destruct Hndup as [Hnin Hndup].
@@ -281,880 +781,43 @@ Section SplitRange.
         eapply In_InMembers; eassumption.
   Qed.
 
-  (* A useful lemma for accessing a struct through its fields. It is an
-     implication rather than an equivalence since information about
-     inter-field padding is lost. It is thus not possible to recover the
-     range from the sepall, which may inhibit reasoning about By_copy
-     assignments of complete records. *)
   Lemma split_range_fields:
     forall b lo,
       NoDupMembers (co_members co) ->
-      range b lo (lo + co_sizeof co) -*>
-            sepall (fun (fld: ident * type) =>
-                      let (id, ty) := fld in
-                      match field_offset env id (co_members co) with
-                      | Errors.OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
-                      | Errors.Error _ => sepfalse
-                      end) (co_members co).
+      massert_eqv (range b lo (lo + co_sizeof co))
+                  (sepall (field_range (co_members co) b lo) (co_members co)
+                   ** (sepall (field_range (co_members co) b lo) (co_members co)
+                       -* range b lo (lo + co_sizeof co))).
   Proof.
     intros b lo Hndup.
-    apply Henv in Hco.
-    rewrite (co_consistent_sizeof _ _ Hco).
-    rewrite (co_consistent_alignof _ _ Hco).
-    rewrite Hstruct.
-    simpl.
-    rewrite range_split'
-    with (mid:=lo + sizeof_struct env 0 (co_members co)).
-    - rewrite sep_comm. rewrite sep_drop.
-      apply split_range_fields' with (1:=Hndup).
-    - split.
-      * rewrite <-Z.add_0_r at 1.
-        apply Z.add_le_mono_l.
-        apply sizeof_struct_incr.
-      * apply Z.add_le_mono_l.
-        apply align_le.
-        apply alignof_composite_pos.
+    cut (massert_imp (range b lo (lo + co_sizeof co))
+                     (sepall (field_range (co_members co) b lo) (co_members co))).
+    - intro Himp.
+      split.
+      + apply range_imp_with_wand with (1:=Himp).
+        apply decidable_footprint_field_range.
+        apply footprint_perm_sepall.
+        apply footprint_perm_field_range.
+      + apply sep_unwand.
+        apply decidable_footprint_field_range.
+    - apply Henv in Hco.
+      rewrite (co_consistent_sizeof _ _ Hco).
+      rewrite (co_consistent_alignof _ _ Hco).
+      rewrite Hstruct.
+      simpl.
+      rewrite range_split'
+      with (mid:=lo + sizeof_struct env 0 (co_members co)).
+      + rewrite split_range_fields' with (1:=Hndup).
+        now rewrite sep_comm, sep_drop.
+      + split.
+        * rewrite <-Z.add_0_r at 1.
+          apply Z.add_le_mono_l.
+          apply sizeof_struct_incr.
+        * apply Z.add_le_mono_l.
+          apply align_le.
+          apply alignof_composite_pos.
   Qed.
 
 End SplitRange.
 
-Definition match_value (e: PM.t val) (x: ident) (v': val) : Prop :=
-  match PM.find x e with
-  | None => True
-  | Some v => v' = v
-  end.
 
-(* Definition match_var (S: state) := *)
-(*   match_value (snd S). *)
-
-Remark match_find_var_det:
-  forall me ve x v1 v2,
-    match_value ve x v1 ->
-    find_var (me, ve) x v2 ->
-    v1 = v2.
-Proof.
-  unfold match_value, find_var; simpl.
-  intros ** Hm Hf.
-  destruct (PM.find x ve).
-  - subst; inverts* Hf.
-  - discriminate.
-Qed.
-
-Ltac app_match_find_var_det :=
-  match goal with
-  | H1: find_var (?me, ?ve) ?x ?v1,
-        H2: match_value ?ve ?x ?v2 |- _ =>
-    assert (v2 = v1) by (applys* match_find_var_det H2 H1); subst v1; clear H2
-  end.
-
-(* Definition match_field (me: menv) := *)
-(*   match_value me.(mm_values). *)
-
-Lemma match_value_empty:
-  forall x, match_value (PM.empty val) x = (fun _ => True).
-Proof.
-  intro. unfold match_value. 
-  rewrite PM.gempty; auto.
-Qed.
-
-Lemma match_value_add:
-  forall x x' v e,
-    x <> x' ->
-    match_value (PM.add x' v e) x = match_value e x.
-Proof.
-  intros ** Hneq.
-  unfold match_value. simpl.
-  rewrite PM.gso with (1:=Hneq).
-  reflexivity.
-Qed.
-
-Definition instance_match (me: menv) (i: ident): menv :=
-  match mfind_inst i me with
-  | None => m_empty
-  | Some i => i
-  end.
-
-Lemma instance_match_empty:
-  forall x, instance_match m_empty x = m_empty.
-Proof.
-  intros. unfold instance_match, mfind_inst; simpl.
-  rewrite PM.gempty. reflexivity.
-Qed.
-
-Section Staterep.
-  Variable ge : composite_env.
-
-  Definition staterep_mems (cls: class) (me: menv) (b: block) (ofs: Z) (xty: ident * typ) :=
-    let (x, ty) := xty in
-    match field_offset ge x (make_members cls) with
-    | Errors.OK d =>
-	  contains (chunk_of_type ty) b (ofs + d) (match_value me.(mm_values) x)
-    | Errors.Error _ => sepfalse
-    end.
-
-  Fixpoint staterep
-           (p: program) (clsnm: ident) (me: menv) (b: block) (ofs: Z): massert :=
-    match p with
-    | nil => sepfalse
-    | cls :: p' =>
-      if ident_eqb clsnm cls.(c_name)
-      then
-        sepall (staterep_mems cls me b ofs) cls.(c_mems)
-        **
-        sepall (fun (o: ident * ident) =>
-                  let (i, c) := o in
-                  match field_offset ge i (make_members cls) with
-                  | Errors.OK d =>
-                    staterep p' c (instance_match me i) b (ofs + d)
-                  | Errors.Error _ => sepfalse
-                  end) cls.(c_objs)
-      else staterep p' clsnm me b ofs
-    end.
-
-  Definition staterep_objs (p': program) (cls: class) (me: menv) (b: block) (ofs: Z) (o: ident * ident) :=
-    let (i, c) := o in
-    match field_offset ge i (make_members cls) with
-    | Errors.OK d =>
-      staterep p' c (instance_match me i) b (ofs + d)
-    | Errors.Error _ => sepfalse
-    end.
-  
-  Lemma staterep_skip_cons:
-    forall cls prog clsnm me b ofs,
-      clsnm <> cls.(c_name) ->
-      staterep (cls :: prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
-  Proof.
-    intros ** Hnm.
-    apply ident_eqb_neq in Hnm.
-    simpl; rewrite Hnm; reflexivity.
-  Qed.
-
-  Lemma staterep_skip_app:
-    forall clsnm prog oprog me b ofs,
-      find_class clsnm oprog = None ->
-      staterep (oprog ++ prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
-  Proof.
-    intros ** Hnin.
-    induction oprog as [|cls oprog IH].
-    - rewrite app_nil_l. reflexivity.
-    - apply find_class_none in Hnin; destruct Hnin. 
-      rewrite <-app_comm_cons.
-      rewrite staterep_skip_cons; auto.
-  Qed.
-
-  Remark staterep_skip:
-    forall c clsnm prog prog' me b ofs,
-      find_class clsnm prog = Some (c, prog') ->
-      staterep prog c.(c_name) me b ofs <-*->
-      staterep (c :: prog') c.(c_name) me b ofs.
-  Proof.
-    introv Find.
-    forwards ?: find_class_name Find; subst.
-    forwards (? & Hprog & FindNone): find_class_app Find.
-    rewrite Hprog.
-    rewrite* staterep_skip_app.
-  Qed.
-  
-End Staterep.
-
-Lemma ident_eqb_sym:
-  forall x y, ident_eqb x y = ident_eqb y x.
-Proof Pos.eqb_sym.
-
-Lemma two_power_nat_le_divides:
-  forall m n,
-    two_power_nat m <= two_power_nat n ->
-    (two_power_nat m | two_power_nat n).
-Proof.
-  intros m n HH.
-  repeat rewrite two_power_nat_equiv in HH.
-  rewrite <-Z.pow_le_mono_r_iff in HH; intuition.
-  apply Z.le_exists_sub in HH.
-  destruct HH as [p [HH1 HH2]].
-  rewrite <-(nat_of_Z_eq p) in HH1; [|now apply Z.le_ge].
-  apply Zdivide_intro with (q:=two_power_nat (nat_of_Z p)).
-  repeat rewrite two_power_nat_equiv.
-  rewrite <-Z.pow_add_r; intuition.
-  rewrite HH1.
-  reflexivity.
-Qed.
-
-Lemma two_power_nat_max:
-  forall m n,
-    (two_power_nat m | Z.max (two_power_nat m) (two_power_nat n)).
-Proof.
-  intros m n.
-  rewrite Zmax_spec.
-  destruct (zlt (two_power_nat n) (two_power_nat m)).
-  apply Z.divide_refl.
-  apply two_power_nat_le_divides.
-  now apply Z.ge_le.
-Qed.
-
-Lemma co_members_alignof:
-  forall env co,
-    composite_consistent env co ->
-    attr_alignas (co_attr co) = None ->
-    Forall (fun (x: ident * type) =>
-              (alignof env (snd x) | co_alignof co))
-           (co_members co).
-Proof.
-  intros env co Henv Hattr.
-  rewrite co_consistent_alignof with (1:=Henv).
-  unfold align_attr.
-  rewrite Hattr; clear Hattr.
-  induction (co_members co) as [|m ms IH]; [now trivial|].
-  destruct (alignof_composite_two_p env ms) as [n Hms].
-  simpl. rewrite Hms in *; clear Hms.
-  destruct m as [x ty].
-  destruct (alignof_two_p env ty) as [m Hty].
-  rewrite Hty.
-  constructor.
-  - simpl. rewrite Hty. now apply two_power_nat_max.
-  - apply Forall_impl with (2:=IH).
-    destruct a as [x' ty']. simpl.
-    intro HH. apply Z.divide_trans with (1:=HH).
-    rewrite Z.max_comm. apply two_power_nat_max.
-Qed.
-
-Lemma align_noattr:
-  forall a, align_attr noattr a = a.
-Proof.
-  intros. unfold noattr. reflexivity.
-Qed.
-
-Lemma in_field_type:
-  forall xs x ty,
-    NoDupMembers xs ->
-    In (x, ty) xs ->
-    field_type x xs = Errors.OK ty.
-Proof.
-  intros xs x ty Hndup Hin.
-  induction xs as [|x' xs IH]; [now inversion Hin|].
-  destruct x' as [x' ty'].
-  apply nodupmembers_cons in Hndup.
-  destruct Hndup as [? Hndup].
-  inversion Hin as [Heq|Heq].
-  - injection Heq; intros; subst.
-    simpl. rewrite peq_true. reflexivity.
-  - simpl. rewrite peq_false.
-    + now apply IH with (1:=Hndup) (2:=Heq).
-    + intro; subst.
-      apply NotInMembers_NotIn in Heq; intuition.
-Qed.
-
-Lemma sizeof_translate_chunk:
-  forall gcenv t,
-    Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t) ->
-    sizeof gcenv t = Memdata.size_chunk (chunk_of_type t).
-Proof.
-  destruct t;
-  (destruct i, s || destruct f || idtac);
-  (discriminates || contradiction || auto).
-Qed.
-
-Lemma align_chunk_divides_alignof_type:
-  forall gcenv t,
-    Ctypes.access_mode t = Ctypes.By_value (chunk_of_type t) ->
-    (Memdata.align_chunk (chunk_of_type t) | alignof gcenv t).
-Proof.
-  destruct t;
-  (destruct i, s || destruct f || idtac);
-  (discriminates || contradiction || auto);
-  simpl; try rewrite align_noattr; simpl.
-Admitted.
-
-Lemma in_translate_param_chunked:
-  forall ge (flds: list (ident * typ)) x ty,
-    Ctypes.access_mode ty = Ctypes.By_value (chunk_of_type ty) ->
-    In (x, ty) flds ->
-    exists chunk,
-      access_mode ty = By_value chunk
-      /\ (Memdata.align_chunk chunk | alignof ge ty).
-Proof.
-  intros ** ? Hin.
-  exists (chunk_of_type ty).
-  split*.
-  now apply align_chunk_divides_alignof_type.  
-Qed.
-
-Section StateRepProperties.
-
-  Variable main_node : ident.
-  Variable prog: program.
-  Variable tprog: Clight.program.
-   
-  Let tge := Clight.globalenv tprog.
-  Let gcenv := Clight.genv_cenv tge.
-  
-  Definition pointer_of_node node := pointer_of (type_of_inst node).
-
-  Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
-  Hypothesis main_node_exists: find_class main_node prog <> None.
- 
-  Lemma make_members_co:
-    forall clsnm cls prog',
-      find_class clsnm prog = Some (cls, prog') ->
-      (exists co, gcenv!clsnm = Some co
-             /\ co_su co = Struct
-             /\ co_members co = make_members cls
-             /\ attr_alignas (co_attr co) = None
-             /\ NoDupMembers (co_members co)).
-  Proof.
-    unfold translate in TRANSL.
-    apply not_None_is_Some in main_node_exists.
-    destruct main_node_exists as [[maincls prog'] Hfind_main].
-    rewrite Hfind_main in TRANSL.
-    destruct (map (translate_class prog) prog) as [|cls clss] eqn:Hmap.
-    - apply map_eq_nil in Hmap.
-      rewrite Hmap in Hfind_main; simpl in *; discriminate.
-    -
-  Admitted.
-
-  Lemma field_translate_mem_type:
-    forall clsnm cls prog',
-      find_class clsnm prog = Some (cls, prog') ->
-      NoDupMembers (make_members cls) ->
-      forall x ty,
-        In (x, ty) cls.(c_mems) ->
-        field_type x (make_members cls) = Errors.OK ty.
-  Proof.
-    introv Hfind Hndup Hin.
-    apply in_field_type with (1:=Hndup).
-    unfold make_members. apply in_app_iff. now left.
-  Qed.
-
-  Lemma field_translate_obj_type:
-    forall clsnm cls prog',
-      find_class clsnm prog = Some (cls, prog') ->
-      NoDupMembers (make_members cls) ->
-      forall o c,
-        In (o, c) cls.(c_objs) ->
-        field_type o (make_members cls) = Errors.OK (type_of_inst c).
-  Proof.
-    introv Hfind Hndup Hin.
-    apply in_field_type with (1:=Hndup).
-    unfold make_members. apply in_app_iff. right.
-    apply in_map_iff. exists* (o, c).
-  Qed.
-
-  (* TODO: Construct a global environment of structs for a given program. *)
-
-  Lemma gcenv_consistent:
-    composite_env_consistent gcenv.
-  Admitted.
-  
-  Lemma range_staterep:
-    forall b clsnm,
-      WelldefClasses prog ->
-      find_class clsnm prog <> None ->
-      range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
-            staterep gcenv prog clsnm m_empty b 0.
-  Proof.
-    introv Hwdef Hfind.
-    cut (forall lo,
-           (alignof gcenv (type_of_inst clsnm) | lo) ->
-           massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
-                       (staterep gcenv prog clsnm m_empty b lo)).
-    - intro HH; apply HH; apply Z.divide_0_r.
-    - clear main_node_exists TRANSL.
-
-      revert clsnm Hfind.
-      induction prog as [|cls prog' IH]; intros clsnm Hfind lo.
-      + apply not_None_is_Some in Hfind.
-        destruct Hfind. discriminate.
-      + intro Halign.
-        inversion Hwdef as [|? ? Hwdef']; subst.
-
-        assert (find_class clsnm prog = Some (cls, prog')) as Hprog.
-        admit.
-        (* TODO: need to link prog to (possibly reversed) translation *)
-
-        pose proof (make_members_co _ _ _ Hprog) as Hmco.
-        destruct Hmco as [co [Hg [Hsu [Hmem [Hattr Hndup]]]]].
-
-        pose proof (co_members_alignof _ _ (gcenv_consistent _ _ Hg) Hattr)
-          as Hcoal.
-        rewrite Hmem in Hcoal.
-        unfold make_members in Hcoal.
-        apply Forall_app in Hcoal.
-        destruct Hcoal as [Hcoal1 Hcoal2].
-        simpl in Halign.
-        rewrite Hg in Halign.
-        rewrite align_noattr in Halign.
-        assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
-
-        simpl.
-        unfold staterep_mems.
-        destruct (ident_eqb clsnm cls.(c_name)) eqn:Hclsnm.
-        *{ rewrite Hg.
-           rewrite <-Hmem.
-           rewrite split_range_fields
-           with (1:=gcenv_consistent) (2:=Hg) (3:=Hsu) (4:=Hndup).
-           rewrite Hmem at 1.
-           unfold make_members.
-           rewrite sepall_app.
-           
-           apply sep_imp'.
-
-           - pose proof (field_translate_mem_type _ _ _ Hprog Hndup') as Htype.
-             clear Hcoal2.
-             
-             induction (c_mems cls); auto.
-             apply Forall_cons2 in Hcoal1.
-             destruct Hcoal1 as [Hcoal1 Hcoal2].
-
-             apply sep_imp'.
-             + destruct a.
-               destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
-               rewrite match_value_empty.
-               rewrite sizeof_translate_chunk.
-               *{ apply range_contains'.
-                  specialize (Htype i t).
-                  rewrite <-Hmem in Htype.
-                  apply field_offset_aligned with (ty:=t) in Hfo.
-                  - simpl in Hcoal1.
-                    apply Z.divide_add_r.
-                    + apply Zdivide_trans with (2:=Halign).
-                      apply Zdivide_trans with (2:=Hcoal1).
-                      apply align_chunk_divides_alignof_type.
-                      admit.
-                    + apply Zdivide_trans with (2:=Hfo).
-                      apply align_chunk_divides_alignof_type.
-                      admit.
-                  - apply Htype; constructor; reflexivity.
-                }
-               * admit.
-             + apply IHl.
-               * apply Hcoal2.
-               * intros; apply Htype; constructor (assumption).
-         
-           - pose proof (field_translate_obj_type _ _ _ Hprog Hndup') as Htype.
-             rewrite <-Hmem in Htype.
-           
-             induction (c_objs cls); auto.
-             simpl.
-             apply sep_imp'.
-             + clear IHl.
-               
-               destruct a as [o c].
-               assert (find_class c prog' <> None) as Hcin
-                   by (eapply H1; econstructor; eauto).
-               clear H1 Hcoal1.
-
-               apply Forall_cons2 in Hcoal2.
-               destruct Hcoal2 as [Hcoal2 Hcoal3].
-               
-               specialize (Htype o c (in_eq _ _)).
-               clear Hcoal3 l.
-
-               simpl.
-               destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
-               rewrite instance_match_empty.
-               specialize (IH Hwdef' c Hcin (lo + z)%Z).
-
-               apply not_None_is_Some in Hcin.
-               destruct Hcin as ((c' & prog'') & Hcin).
-               assert (find_class c prog = Some (c', prog'')) as Hcin'.
-               admit. (* TODO: make_members_co should be more flexible. *)
-
-               assert (Hcin'' := Hcin').
-               apply make_members_co in Hcin'.
-               destruct Hcin' as [? [? [? [? [? ?]]]]].
-               rewrite H.
-
-               simpl in IH.
-               rewrite H in IH.
-               apply IH.
-
-               simpl in Hcoal2.
-               rewrite align_noattr in Hcoal2.
-               rewrite H in Hcoal2.
-               
-               rewrite align_noattr.
-               apply Z.divide_add_r.
-               * apply Zdivide_trans with (1:=Hcoal2).
-                 assumption.
-
-               * simpl in Htype.
-                 eapply field_offset_aligned in Hfo.
-                 2:apply Htype.
-                 apply Zdivide_trans with (2:=Hfo).
-                 simpl. rewrite H, align_noattr.
-                 apply Z.divide_refl.
-             + apply IHl.
-               * clear IHl. intros o c' Hin.
-                 apply H1 with (o:=o). constructor (assumption).
-               * simpl in Hcoal2. apply Forall_cons2 in Hcoal2.
-               destruct Hcoal2 as [Hcoal2 Hcoal3]. exact Hcoal3.
-               * intros o c Hin. apply Htype. constructor (assumption).
-         }
-
-        * rewrite Hg.
-          simpl in Hfind.
-          rewrite ident_eqb_sym in Hclsnm.
-          rewrite Hclsnm in Hfind.
-          specialize (IH Hwdef' clsnm Hfind lo).
-          simpl in IH.
-          rewrite Hg in IH.
-          apply IH.
-          rewrite align_noattr.
-          assumption.
-  Qed.
-
-  Lemma staterep_deref_mem:
-    forall cls prog' m me ve b ofs x ty d v P,
-      access_mode ty = By_value (chunk_of_type ty) ->
-      m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P ->
-      In (x, ty) cls.(c_mems) ->
-      find_field (me, ve) x v ->
-      field_offset gcenv x (make_members cls) = Errors.OK d ->
-      Clight.deref_loc ty m b (Int.repr (ofs + d)) v.
-  Proof.
-    intros ** Hty Hm Hin Hv Hoff.
-    apply sep_proj1 in Hm.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply sep_proj1 in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm. clear ws xs.
-    unfold staterep_mems in Hm.
-    rewrite Hoff in Hm. clear Hoff.
-    apply loadv_rule in Hm.
-    destruct Hm as [v' [Hloadv Hmatch]].
-    unfold match_value in Hmatch.
-    unfold find_field, mfind_mem in Hv; simpl in Hv.
-    rewrite Hv in Hmatch. clear Hv.
-    rewrite Hmatch in Hloadv. clear Hmatch.
-    apply Clight.deref_loc_value with (2:=Hloadv); auto.
-  Qed.
-
-  (* Lemma staterep_assign_mem: *)
-  (*   forall P cls prog' m m' me b ofs x ty d v, *)
-  (*     access_mode ty = By_value (chunk_of_type ty) -> *)
-  (*     NoDup cls.(c_objs) -> *)
-  (*     NoDupMembers cls.(c_mems) -> *)
-  (*     m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P -> *)
-  (*     In (x, ty) cls.(c_mems) -> *)
-  (*     field_offset gcenv x (make_members cls) = Errors.OK d -> *)
-  (*     v = Values.Val.load_result (chunk_of_type ty) v -> *)
-  (*     Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' -> *)
-  (*     m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs ** P. *)
-  (* Proof. *)
-    
-  (*   intros ** Hty Hcls Hmem Hm Hin Hoff Hlr Hal. *)
-  (*   simpl in *. rewrite ident_eqb_refl in *. *)
-  (*   rewrite sep_assoc. rewrite sep_assoc in Hm. *)
-  (*   apply sepall_in in Hin. *)
-  (*   destruct Hin as [ws [xs [Hsplit Hin]]]. *)
-  (*   rewrite Hsplit in Hmem. *)
-  (*   rewrite Hin in Hm. rewrite sep_assoc in Hm. *)
-  (*   rewrite Hin. rewrite sep_assoc. *)
-  (*   rewrite Hoff in *. *)
-  (*   rewrite sep_swap2. *)
-  (*   rewrite sepall_switchp *)
-  (*   with (f':=fun xty : ident * typ => *)
-  (*               let (x0, ty0) := xty in *)
-  (*               match field_offset gcenv x0 (make_members cls) with *)
-  (*               | Errors.OK d0 => *)
-  (*                 contains (chunk_of_type ty0) b (ofs + d0) *)
-  (*                          (match_value (mm_values me) x0) *)
-  (*               | Errors.Error _ => sepfalse *)
-  (*               end). *)
-  (*   - rewrite <-sep_swap2. *)
-  (*     eapply storev_rule' with (1:=Hm). *)
-  (*     + unfold match_value. simpl. *)
-  (*       rewrite PM.gss. symmetry; exact Hlr. *)
-  (*     + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess]. *)
-  (*       * rewrite Hty in Haccess. *)
-  (*         injection Haccess. intro; subst. assumption. *)
-  (*       * rewrite Hty in Haccess. discriminate. *)
-  (*   - apply NoDupMembers_remove_1 in Hmem. *)
-  (*     apply NoDupMembers_NoDup with (1:=Hmem). *)
-  (*   - intros x' Hin'; destruct x' as [x' ty']. *)
-  (*     unfold update_field, madd_mem; simpl. *)
-  (*     rewrite match_value_add; [reflexivity|]. *)
-  (*     apply NoDupMembers_app_cons in Hmem. *)
-  (*     destruct Hmem as [Hmem]. *)
-  (*     apply In_InMembers in Hin'. *)
-  (*     intro Heq. apply Hmem. rewrite Heq in Hin'. *)
-  (*     assumption. *)
-  (* Qed. *)
-
-  Opaque sepconj.
-  
-  Lemma staterep_field_offset:
-    forall m me cls prog b ofs x ty P,
-      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
-      In (x, ty) (c_mems cls) ->
-      exists d, field_offset gcenv x (make_members cls) = Errors.OK d
-           /\ 0 <= ofs + d <= Int.max_unsigned.
-  Proof.
-    introv Hm Hin.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
-    do 2 apply sep_proj1 in Hm.
-    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm.
-    clear ws xs.
-    unfold staterep_mems in Hm.
-    destruct (field_offset gcenv x (make_members cls)).
-    + exists z; split*.
-      apply* contains_no_overflow.
-    + contradict Hm.
-  Qed.
-
-  Lemma staterep_inst_offset:
-    forall m me cls prog b ofs o c P,
-      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
-      In (o, c) (c_objs cls) ->
-      exists d, field_offset gcenv o (make_members cls) = Errors.OK d.
-  Proof.
-    introv Hm Hin.
-    apply sep_proj1 in Hm.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply sep_proj2 in Hm.
-    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm.
-    clear ws xs.
-    destruct (field_offset gcenv o (make_members cls)).
-    + exists z; split*.
-    + contradict Hm.
-  Qed.
-  
-End StateRepProperties.
-
-Section BlockRep.
-  Variable ge : composite_env.
-  Hypothesis ge_consistent : composite_env_consistent ge.
-
-  Definition blockrep (ve: venv) (flds: members) (b: block) : massert :=
-    sepall (fun xty : ident * type =>
-              let (x, ty) := xty in
-              match field_offset ge x flds, access_mode ty with
-              | Errors.OK d, By_value chunk =>
-                contains chunk b d (match_value ve x)
-              | _, _ => sepfalse
-              end) flds.
-
-  Lemma blockrep_deref_mem:
-    forall m ve co b x ty d v P,
-      m |= blockrep ve (co_members co) b ** P ->
-      In (x, ty) (co_members co) ->
-      PM.find x ve = Some v ->
-      field_offset ge x (co_members co) = Errors.OK d ->
-      Clight.deref_loc ty m b (Int.repr d) v.
-  Proof.
-    intros ** Hm Hin Hv Hoff.
-    unfold blockrep in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    do 2 apply sep_proj1 in Hm. clear ws xs.
-    rewrite Hoff in Hm. clear Hoff.
-    destruct (access_mode ty) eqn:Haccess; try contradiction.
-    apply loadv_rule in Hm.
-    destruct Hm as [v' [Hloadv Hmatch]].
-    unfold match_value in Hmatch.
-    rewrite Hv in Hmatch. clear Hv.
-    rewrite Hmatch in Hloadv. clear Hmatch.
-    apply Clight.deref_loc_value with (1:=Haccess) (2:=Hloadv).
-  Qed.
-
-  (* Lemma blockrep_assign_mem: *)
-  (*   forall P co m m' ve b d x v ty chunk, *)
-  (*     NoDupMembers (co_members co) -> *)
-  (*     m |= blockrep ve (co_members co) b ** P -> *)
-  (*     In (x, ty) (co_members co) -> *)
-  (*     field_offset ge x (co_members co) = Errors.OK d -> *)
-  (*     access_mode ty = By_value chunk -> *)
-  (*     v = Val.load_result chunk v -> *)
-  (*     Clight.assign_loc ge ty m b (Int.repr d) v m' -> *)
-  (*     m' |= blockrep (PM.add x v ve) (co_members co) b ** P. *)
-  (* Proof. *)
-  (*   Opaque sepconj. *)
-  (*   intros ** Hndup Hm Hin Hoff Haccess Hlr Hal. *)
-  (*   apply sepall_in in Hin. *)
-  (*   destruct Hin as [ws [xs [Hsplit Hin]]]. *)
-  (*   unfold blockrep in *. *)
-  (*   rewrite Hin in Hm. rewrite sep_assoc in Hm. *)
-  (*   rewrite Hin. rewrite sep_assoc. *)
-  (*   rewrite Hoff in *. *)
-  (*   rewrite sep_swap2. *)
-  (*   rewrite Haccess in *. *)
-  (*   rewrite Hsplit in Hndup. *)
-  (*   rewrite sepall_switchp *)
-  (*   with (f':=fun xty : ident * type => *)
-  (*           let (x0, ty0) := xty in *)
-  (*           match field_offset ge x0 (co_members co), access_mode ty0 with *)
-  (*           | Errors.OK d0, By_value chunk => *)
-  (*             contains chunk b d0 (match_value ve x0) *)
-  (*           | _, _ => sepfalse *)
-  (*           end). *)
-  (*   - rewrite <-sep_swap2. *)
-  (*     eapply storev_rule' with (1:=Hm). *)
-  (*     + unfold match_value. rewrite PM.gss. symmetry; exact Hlr. *)
-  (*     + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *. *)
-  (*       * injection Haccess'. intro HR; rewrite <-HR in *; assumption. *)
-  (*       * discriminate. *)
-  (*   - apply NoDupMembers_remove_1 in Hndup. *)
-  (*     apply NoDupMembers_NoDup with (1:=Hndup). *)
-  (*   - intros x' Hin'; destruct x' as [x' ty']. *)
-  (*     rewrite match_value_add; [reflexivity|]. *)
-  (*     apply NoDupMembers_app_cons in Hndup. *)
-  (*     destruct Hndup as [Hndup]. *)
-  (*     apply In_InMembers in Hin'. *)
-  (*     intro Heq. apply Hndup. rewrite Heq in Hin'. *)
-  (*     assumption. *)
-  (* Qed. *)
-
-  Lemma sizeof_by_value:
-    forall ty chunk,
-      access_mode ty = By_value chunk ->
-      sizeof ge ty = Memdata.size_chunk chunk.
-  Proof.
-    destruct ty; try (intros; discriminate);
-      [destruct i, s, a|destruct s, a|destruct f, a|];
-      injection 1; intros; subst; reflexivity.
-  Qed.
-  
-  Lemma blockrep_empty:
-    forall nm co b,
-      ge ! nm = Some co ->
-      co_su co = Struct ->
-      NoDupMembers (co_members co) ->
-      (forall x ty, In (x, ty) (co_members co) ->
-                    exists chunk, access_mode ty = By_value chunk
-                              /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      range b 0 (co_sizeof co) -*> blockrep (PM.empty val) (co_members co) b.
-  Proof.
-    intros ** Hco Hstruct Hndups Hchunk.
-    change (massert_imp (range b 0 (0 + co_sizeof co))
-                        (blockrep (PM.empty val) (co_members co) b)).
-    erewrite split_range_fields
-    with (2:=Hco) (3:=Hstruct) (4:=Hndups); [|apply ge_consistent].
-    unfold blockrep.
-    assert (co_members co = co_members co) as Heq by reflexivity.
-    revert Heq; generalize (co_members co) at 2; intros flds Hflds.
-    rewrite Hflds at 1. rewrite Hflds at 1.
-    assert (forall x ty, In (x, ty) flds -> In (x, ty) (co_members co)) as Hin
-        by (rewrite <-Hflds; auto).
-    clear Hco Hstruct Hflds.
-    induction flds as [|x xs IH].
-    reflexivity.
-    rewrite sepall_cons.
-    apply sep_imp'.
-    - clear IH.
-      destruct x as [x ty].
-      specialize (Hin x ty (in_eq _ _)).
-      destruct (field_offset ge x (co_members co)) eqn:Hfo; auto.
-      rewrite match_value_empty.
-      destruct (Hchunk _ _ Hin) as [chunk [Hmode Halign]].
-      rewrite Hmode.
-      rewrite sizeof_by_value with (1:=Hmode).
-      simpl. apply range_contains'.
-      eapply field_offset_aligned in Hfo.
-      2:apply in_field_type with (1:=Hndups) (2:=Hin).
-      now apply Zdivide_trans with (2:=Hfo).
-    - apply IH; intros.
-      apply Hin. constructor (assumption).
-  Qed.
-
-  Lemma blockrep_any_empty:
-    forall flds ve b,
-      blockrep ve flds b -*> blockrep v_empty flds b.
-  Proof.
-    intros flds ve b.
-    apply sepall_weakenp.
-    intros f Hin.
-    destruct f as [x ty].
-    destruct (field_offset ge x flds); try reflexivity.
-    destruct (access_mode ty); try reflexivity.
-    apply contains_imp.
-    intros. now rewrite match_value_empty.
-  Qed.
-
-  Lemma blockrep_nodup:
-    forall xs vs flds ve ob,
-      NoDupMembers (xs ++ flds) ->
-      blockrep ve flds ob <-*-> blockrep (adds xs vs ve) flds ob.
-  Proof.
-    intros ** Nodup.
-    unfold blockrep.
-    apply sepall_swapp.
-    intros (x, t) Hin.
-    destruct (field_offset ge x flds); auto.
-    destruct (access_mode t); auto.
-    revert vs ve.
-    induction xs as [|(x', t')], vs; unfold adds in *; simpl; auto.
-    rewrite <-app_comm_cons, nodupmembers_cons in Nodup.
-    destruct Nodup as [Notin Nodup].
-    intro ve.
-    unfold match_value in *.
-    rewrite PM.gso.
-    + apply* IHxs.
-    + intro; subst; apply Notin.
-      rewrite InMembers_app; right.
-      eapply In_InMembers; eauto.
-  Qed.
-
-    Lemma blockrep_findvars:
-    forall S xs vs b,
-      find_vars S xs vs ->
-      blockrep (snd S) xs b -*> blockrep (adds xs vs v_empty) xs b.
-    Proof.
-      destruct S as (?, ve); unfold find_vars, find_var, adds; simpl.
-      intros ** Findvars.
-      unfold blockrep.
-      apply sepall_weakenp.
-      intros (x, t) Hin.
-      destruct (field_offset ge x xs); auto.
-      destruct (access_mode t); auto.
-      apply contains_imp.    
-      unfold match_value.
-      intros v Findx.
-      revert vs Findvars.
-      induction xs as [|(x', t')], vs; simpl; intro Findvars.
-      - rewrite* PM.gempty.
-      - rewrite* PM.gempty.
-      - rewrite* PM.gempty.
-      - inversion Findvars as [|y ? ys ? Find Findvars' Heq]; subst; clear Findvars.
-        destruct (split xs) as (g, d).
-        simpl in *; inverts Heq.
-        destruct (ident_eqb x x') eqn: E.
-        + apply ident_eqb_eq in E; subst x'.
-          rewrite Find in Findx.
-          rewrite PM.gss; auto.
-        + apply ident_eqb_neq in E.
-          destruct Hin as [Eq|?].
-          * inverts Eq; now contradict E.
-          * rewrite* PM.gso.
-            apply* IHxs.
-    Qed.
-
-  Lemma blockrep_field_offset:
-    forall m ve flds b x ty P,
-      m |= blockrep ve flds b ** P ->
-      In (x, ty) flds ->
-      exists d, field_offset ge x flds = Errors.OK d
-           /\ 0 <= d <= Int.max_unsigned.
-  Proof.
-    introv Hm Hin.
-    unfold blockrep in Hm.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    do 2 apply sep_proj1 in Hm. clear ws xs.
-    destruct (field_offset ge x flds).
-    - exists* z; split*.
-      destruct (access_mode ty).
-      + apply* contains_no_overflow.
-      + contradict Hm.
-      + contradict Hm.
-      + contradict Hm.
-    - contradict Hm.
-  Qed.
-  
-End BlockRep.

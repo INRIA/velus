@@ -235,7 +235,6 @@ Definition vardef (init volatile: bool) (x: ident * typ): ident * AST.globdef Cl
   (x, @AST.Gvar Clight.fundef _
                 (AST.mkglobvar ty' (if init then [AST.Init_space Z0] else []) false volatile)).
 
-Print List.
 Definition translate (prog: program) (main_node: ident): Errors.res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
