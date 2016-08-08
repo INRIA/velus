@@ -262,19 +262,6 @@ Section PRESERVATION.
       [unfold translate_out; eauto |].
     rewrite Houtco in Houtco'; inverts* Houtco'.
   Qed.
-
-  Remark staterep_skip:
-    forall c clsnm prog' me sb sofs,
-      find_class clsnm prog = Some (c, prog') ->
-      staterep gcenv prog c.(c_name) me sb (Int.unsigned sofs) <-*->
-      staterep gcenv (c :: prog') c.(c_name) me sb (Int.unsigned sofs).
-  Proof.
-    introv Find.
-    forwards ?: find_class_name Find; subst.
-    forwards (? & Hprog & FindNone): find_class_app Find.
-    rewrite Hprog.
-    rewrite* staterep_skip_app.
-  Qed.
     
   Lemma evall_out_field:
     forall clsnm prog' c f ve e le m x ty outb outco P,
@@ -1471,9 +1458,9 @@ Section PRESERVATION.
     clear TRANSL main_node_exists.
     apply stmt_eval_call_ind;
       [| |introv ? ? ? ? Hifte|introv ? HS1 ? HS2|introv ? Evs ? Hrec_eval|
-       |introv Find Findmeth ? Hrec_exec ? ? Find' Findmeth' Hrep;
-         introv ? ? Hgetptrf Hgetcf ? ? Hinstty Hbinst ? Hin;
-         introv ? Hinstco];
+       |introv Find Findmeth ? Hrec_exec Findvars ? Find' Findmeth' Hrep;
+         introv Findowner ? Hgetptrf Hgetcf ? Findinst Hinstty Hbinst ? Hin;
+         introv Offs Hinstco];
       intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
                                  |? ? ? ? ? ? ? ? ? ? ? ? Hin ? ? ? Find' Findmeth|];
@@ -1576,8 +1563,6 @@ Section PRESERVATION.
       + eapply find_method_In; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
-        (* rewrite sep_comm in Hm2; do 3 rewrite sep_assoc in Hm2; *)
-        (* rewrite sep_swap34, sep_swap in Hm2. *)
         rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
         edestruct exec_funcall_assign with (ys:=ys) (m1:=m2)
           as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.
@@ -1641,6 +1626,11 @@ Section PRESERVATION.
       forwards Eq': find_method_name Findmeth.
       rewrite <-Eq, <-Eq' in *.
 
+      edestruct find_class_app with (1:=Findowner)
+        as (pre_prog & Hprog & FindNone); eauto.
+      rewrite Hprog in WD.
+      assert (c_name c <> c_name owner) by (apply* welldef_not_same_name).
+
       (* extract the out structure *)
       rewrite sep_swap23, sep_swap in Hrep.
       eapply subrep_extract in Hrep; eauto.
@@ -1648,9 +1638,8 @@ Section PRESERVATION.
       rewrite Hinstco' in Hinstco; inverts Hinstco.
       rewrite Hbinst' in Hbinst; inverts Hbinst.
       rewrite sep_swap23, sep_swap in Hrep.
-      forwards* (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & ? & ? & ? & Hm_fun & ? & ?):
+      forwards* (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & ? & ? & Hobjs & Hm_fun & ? & ?):
         (compat_funcall_pres cf sb sofs binst vs); auto.
-      + admit.
       + admit.
       + admit.
       + forwards* Hsub: find_class_sub.
@@ -1658,11 +1647,10 @@ Section PRESERVATION.
         apply find_method_In in Findmeth.
         edestruct Hrec_exec with (le1:=le_fun) (e1:=e_fun) (m1:=m_fun)
           as (? & ? & ? & ? & MS'); eauto.
-        * econstructor; eauto.
-          simpl. apply sep_proj2, sep_drop2 in Hm_fun.
-          do 3 rewrite <-sep_assoc in Hm_fun.
-          apply sep_proj1 in Hm_fun.
-          do 2 rewrite* sep_assoc in Hm_fun.
+        * rewrite match_states_conj; splits*.
+          simpl.
+          rewrite sep_swap, sep_swap34, sep_swap45, sep_swap23, sep_swap34,
+          <-sep_assoc, sep_swap45, sep_swap34, sep_assoc in Hm_fun; eauto.
         *{ do 2 econstructor; exists ws xs; splits*.
            - apply* eval_funcall_internal.
              + constructor*. 
@@ -1671,7 +1659,56 @@ Section PRESERVATION.
                apply* exec_Sreturn_none.
              + rewrite Hret; reflexivity. 
              + skip.
-           - inverts MS'. skip.
+           - rewrite sep_swap5.
+             rewrite <-sep_assoc, sep_swap5, sep_assoc in MS'.
+             unfold varsrep in *; rewrite sep_pure in *.
+             rewrite <-sep_assoc, sep_swap3, sep_assoc in MS'.
+             rewrite match_states_conj in MS'; destruct MS' as (Hpure & Hrep' & ?);
+             split*; clear Hpure.
+             rewrite sep_swap34, sep_swap23, sep_swap.
+             rewrite sep_swap4 in Hrep'.
+             unfold varsrep in Hrep'; rewrite sep_pure in Hrep';
+             destruct Hrep' as [Hpure Hrep']; clear Hpure.
+             rewrite sep_swap in Hrep'; apply sep_proj2 in Hrep'. (* FREE *)
+             rewrite sep_swap, sep_swap34, sep_swap23, <-sep_assoc,
+             sep_swap45, sep_swap34, sep_swap23, <-sep_assoc, sep_swap23 in Hrep'.
+             eapply sep_imp; eauto.
+             + rewrite staterep_skip with (c:=owner); eauto. simpl.
+               rewrite ident_eqb_refl. rewrite sep_comm.
+               apply* sep_imp'.
+               rewrite sepall_breakout with (ys:=c_objs owner); eauto; simpl.
+               apply sep_imp'.
+               * rewrite Offs.
+                 unfold instance_match, mfind_inst, madd_obj; simpl.
+                 rewrite PM.gss.
+                 eapply welldef_not_class_in in WD; eauto.
+                 rewrite <-staterep_skip_cons with (prog:=prog'') (cls:=owner); eauto.
+                 rewrite <-staterep_skip_app with (prog:=owner :: prog''); eauto.
+                 rewrite <-Hprog.
+                 unfold Int.add.
+                 repeat rewrite* Int.unsigned_repr.
+                 admit.
+                 admit.
+                 admit.
+               *{ unfold staterep_objs.
+                  apply sepall_swapp.
+                  intros (i, k) Hini.
+                  destruct (field_offset gcenv i (make_members owner)); auto.
+                  unfold instance_match, mfind_inst, madd_obj; simpl.
+                  destruct (ident_eqb i o) eqn: E.
+                  - exfalso.
+                    apply ident_eqb_eq in E; subst i.
+                    pose proof (c_nodupobjs owner) as Nodup.
+                    rewrite Hobjs in Nodup.
+                    rewrite NoDupMembers_app_cons in Nodup.
+                    destruct Nodup as [Notin Nodup].
+                    apply Notin.
+                    eapply In_InMembers; eauto.
+                  - apply ident_eqb_neq in E. 
+                    rewrite* PM.gso.
+                }
+             + repeat apply* sep_imp'.
+               erewrite <-output_match; eauto.
+               apply* blockrep_findvars.
          }
-        * skip.
 Admitted.

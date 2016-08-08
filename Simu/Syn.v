@@ -421,3 +421,24 @@ Proof.
     rewrite <-Eq in Heq; contradiction.
   - eapply IHpre_prog; eauto.
 Qed.
+
+Remark welldef_not_same_name:
+  forall pre_prog post_prog o c c',
+    WelldefClasses (pre_prog ++ c :: post_prog) ->
+    In (o, c'.(c_name)) c.(c_objs) ->
+    c'.(c_name) <> c.(c_name).
+Proof.
+  induction pre_prog as [|k]; intros post_prog o c c' WD Hin.
+  - simpl in WD; inversion WD as [|? ? WD' Find Forall]; subst.
+    specialize (Find _ _ Hin).
+    apply not_None_is_Some in Find.
+    destruct Find as ((c'', prog') & Find).
+    pose proof Find as Findname.
+    apply find_class_name in Findname.
+    apply find_class_In in Find.
+    apply In_Forall with (x:=c'') in Forall; eauto.
+    rewrite <-Findname; auto.
+  - eapply IHpre_prog; eauto.
+    rewrite <-app_comm_cons in WD.
+    apply WelldefClasses_cons in WD; eauto.
+Qed.
