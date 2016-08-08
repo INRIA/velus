@@ -1261,7 +1261,7 @@ Section PRESERVATION.
     - exists e m; split*.
       + constructor.
       + simpl. 
-        rewrite* <-sepemp_left.
+        repeat rewrite* <-sepemp_left.
     - inverts Hforall as (co & Hco & ? & ? & ? & ?).
       inverts Nodup.
       destruct (Mem.alloc m 0 (Ctypes.sizeof gcenv (type_of_inst (prefix fid cls)))) as (m1 & b) eqn: Eq.
@@ -1279,10 +1279,9 @@ Section PRESERVATION.
            erewrite alloc_implies; eauto.
            destruct (type_eq (type_of_inst (prefix fid cls))
              (type_of_inst (prefix fid cls))) as [|E].
-           - rewrite sep_assoc.
-             rewrite sep_swap in Hrep'.
-             apply* sep_imp.
-             apply* blockrep_empty.
+           - rewrite blockrep_empty in Hrep'; eauto.
+             repeat rewrite sep_assoc in *.
+             rewrite sep_swap, sep_swap34, sep_swap23; auto.
            - exfalso; apply* E.
          }
   Qed.
@@ -1406,21 +1405,24 @@ Section PRESERVATION.
         /\ gcenv ! (prefix f' c') = Some co
         /\ get_instance_methods (m_body f) = ws ++ (o, c', f') :: xs
         /\ m |= blockrep gcenv v_empty (co_members co) b
+            ** (blockrep gcenv v_empty (co_members co) b -* range b 0 (co_sizeof co))
             ** sepall (subrep_inst e) (ws ++ xs)
+            ** sepall (subrep_inst_free e) (ws ++ xs)
             ** P.
   Proof.
     intros ** Hrep Hin.
-    unfold subrep, subrep_inst in *.
+    unfold subrep, subrep_inst, subrep_inst_free in *.
     apply sepall_in in Hin; destruct Hin as (ws & xs & Hin & Heq). 
-    rewrite Heq in Hrep.
+    repeat rewrite Heq in Hrep.
     pose proof Hrep as Hrep'.
-    do 2 apply sep_proj1 in Hrep.
+    do 3 apply sep_proj1 in Hrep.
     destruct gcenv ! (prefix f' c'); [|contradict Hrep].
     destruct e ! o; [|contradict Hrep].
     destruct p as (oblk, t).
     destruct (type_eq t (type_of_inst (prefix f' c'))); [|contradict Hrep].
     subst t.
-    rewrite sep_assoc in Hrep'.
+    repeat rewrite sep_assoc in Hrep'.
+    rewrite sep_swap23 in Hrep'.
     exists oblk c ws xs; auto.
   Qed.
   
@@ -1473,7 +1475,10 @@ Section PRESERVATION.
             /\ m2 |= staterep gcenv prog owner.(c_name) (madd_obj o me2 (fst S)) sb (Int.unsigned sofs)
                    ** blockrep gcenv (snd S) outco.(co_members) outb
                    ** blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst
+                   ** (blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst
+                       -* range binst 0 (co_sizeof instco))
                    ** sepall (subrep_inst e1) (ws ++ xs)
+                   ** sepall (subrep_inst_free e1) (ws ++ xs)
                    ** varsrep caller (snd S) le1
                    ** P).
   Proof.
@@ -1585,7 +1590,8 @@ Section PRESERVATION.
       + eapply find_method_In; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
-        rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
+        rewrite sep_swap3, <-sep_assoc, <-sep_assoc, sep_swap45, sep_swap34,
+        sep_assoc, sep_assoc, sep_swap45, sep_swap34 in Hm2.
         edestruct exec_funcall_assign with (ys:=ys) (m1:=m2)
           as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.
         * transitivity (length ys); auto. eapply Forall2_length; eauto.
@@ -1619,13 +1625,22 @@ Section PRESERVATION.
              apply sep_imp'; auto.
              unfold subrep.
              rewrite (sepall_breakout _ _ _ _ (subrep_inst e1) Heq).
-             rewrite sep_assoc.
+             rewrite (sepall_breakout _ _ _ _ (subrep_inst_free e1) Heq).
+             repeat rewrite sep_assoc.
              apply sep_imp'; auto.
-             unfold subrep_inst.
-             rewrite Hinstco, Hoblk.
-             destruct (type_eq (type_of_inst (prefix f clsid)) (type_of_inst (prefix f clsid))) as [|neq].
-             + apply* blockrep_any_empty.
-             + contradict neq; auto.
+             + unfold subrep_inst.
+               rewrite Hinstco, Hoblk.
+               destruct (type_eq (type_of_inst (prefix f clsid)) (type_of_inst (prefix f clsid))) as [|neq].
+               * apply* blockrep_any_empty.
+               * contradict neq; auto.
+             + rewrite sep_swap.
+               apply sep_imp'; auto.
+               apply sep_imp'; auto.
+               unfold subrep_inst_free.
+               rewrite Hinstco, Hoblk.
+               destruct (type_eq (type_of_inst (prefix f clsid)) (type_of_inst (prefix f clsid))) as [|neq].
+               * admit.
+               * contradict neq; auto.
          }
          
     (* Skip : "skip" *)
@@ -1659,7 +1674,7 @@ Section PRESERVATION.
       destruct Hrep as (binst' & instco' & ws & xs & Hbinst' & Hinstco' & ? & Hrep).
       rewrite Hinstco' in Hinstco; inverts Hinstco.
       rewrite Hbinst' in Hbinst; inverts Hbinst.
-      rewrite sep_swap23, sep_swap in Hrep.
+      rewrite sep_swap45, sep_swap34, sep_swap23, sep_swap in Hrep.
       forwards* (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & ? & ? & Hobjs & Hm_fun & ? & ?):
         (compat_funcall_pres cf sb sofs binst vs); auto.
       + admit.
@@ -1671,8 +1686,8 @@ Section PRESERVATION.
           as (? & ? & ? & ? & MS'); eauto.
         * rewrite match_states_conj; splits*.
           simpl.
-          rewrite sep_swap, sep_swap34, sep_swap45, sep_swap23, sep_swap34,
-          <-sep_assoc, sep_swap45, sep_swap34, sep_assoc in Hm_fun; eauto.
+          rewrite sep_swap, sep_swap34, sep_swap23, sep_swap45, sep_swap34,
+          <-sep_assoc, sep_swap45, sep_swap34, sep_assoc in Hm_fun; eauto.  
         *{ do 2 econstructor; exists ws xs; splits*.
            - apply* eval_funcall_internal.
              + constructor*. 
@@ -1680,7 +1695,7 @@ Section PRESERVATION.
                apply* exec_Sseq_1.
                apply* exec_Sreturn_none.
              + rewrite Hret; reflexivity. 
-             + skip.
+             + unfold Mem.free_list. skip.
            - rewrite sep_swap5.
              rewrite <-sep_assoc, sep_swap5, sep_assoc in MS'.
              unfold varsrep in *; rewrite sep_pure in *.

@@ -1,4 +1,3 @@
-
 Require Import common.Separation.
 Require Import common.Values.
 Require common.Errors.
@@ -931,44 +930,44 @@ Section BlockRep.
     - contradict Hm.
   Qed.
 
-  Lemma blockrep_assign_mem:
-    forall P co m m' ve b d x v ty chunk,
-      NoDupMembers (co_members co) ->
-      m |= blockrep ve (co_members co) b ** P ve ->
-      In (x, ty) (co_members co) ->
-      field_offset ge x (co_members co) = Errors.OK d ->
-      access_mode ty = By_value chunk ->
-      v = Val.load_result chunk v ->
-      Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' ->
-      massert_imp (P ve) (P (PM.add x v ve)) ->
-      m' |= blockrep (PM.add x v ve) (co_members co) b ** P (PM.add x v ve).
-  Proof.
-    Opaque sepconj.
-    intros ** Hndup Hm Hin Hoff Haccess Hlr Hal HP.
-    apply sepall_in in Hin.
-    destruct Hin as [ws [xs [Hsplit Hin]]].
-    unfold blockrep in *.
-    rewrite Hin in Hm. rewrite sep_assoc in Hm.
-    rewrite Hin. rewrite sep_assoc.
-    rewrite Hoff in *.
-    rewrite sep_swap2.
-    rewrite Haccess in *.
-    rewrite Hsplit in Hndup.
-    rewrite sepall_swapp.
-    - rewrite <-sep_swap2.
-      rewrite HP in Hm.
-      eapply storev_rule' with (1:=Hm).
-      + unfold match_value. rewrite PM.gss. symmetry. exact Hlr.
-      + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *.
-        * injection Haccess'. intro HR; rewrite <-HR in *; assumption.
-        * discriminate.
-    - intros x' Hin'; destruct x' as [x' ty'].
-      rewrite match_value_add; [reflexivity|].
-      apply NoDupMembers_app_cons in Hndup.
-      destruct Hndup as [Hndup].
-      apply In_InMembers in Hin'.
-      intro Heq. apply Hndup. rewrite Heq in Hin'.
-      assumption.
-  Qed.
+  (* Lemma blockrep_assign_mem: *)
+  (*   forall P co m m' ve b d x v ty chunk, *)
+  (*     NoDupMembers (co_members co) -> *)
+  (*     m |= blockrep ve (co_members co) b ** P ve -> *)
+  (*     In (x, ty) (co_members co) -> *)
+  (*     field_offset ge x (co_members co) = Errors.OK d -> *)
+  (*     access_mode ty = By_value chunk -> *)
+  (*     v = Val.load_result chunk v -> *)
+  (*     Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' -> *)
+  (*     massert_imp (P ve) (P (PM.add x v ve)) -> *)
+  (*     m' |= blockrep (PM.add x v ve) (co_members co) b ** P (PM.add x v ve). *)
+  (* Proof. *)
+  (*   Opaque sepconj. *)
+  (*   intros ** Hndup Hm Hin Hoff Haccess Hlr Hal HP. *)
+  (*   apply sepall_in in Hin. *)
+  (*   destruct Hin as [ws [xs [Hsplit Hin]]]. *)
+  (*   unfold blockrep in *. *)
+  (*   rewrite Hin in Hm. rewrite sep_assoc in Hm. *)
+  (*   rewrite Hin. rewrite sep_assoc. *)
+  (*   rewrite Hoff in *. *)
+  (*   rewrite sep_swap2. *)
+  (*   rewrite Haccess in *. *)
+  (*   rewrite Hsplit in Hndup. *)
+  (*   rewrite sepall_swapp. *)
+  (*   - rewrite <-sep_swap2. *)
+  (*     rewrite HP in Hm. *)
+  (*     eapply storev_rule' with (1:=Hm). *)
+  (*     + unfold match_value. rewrite PM.gss. symmetry. exact Hlr. *)
+  (*     + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *. *)
+  (*       * injection Haccess'. intro HR; rewrite <-HR in *; assumption. *)
+  (*       * discriminate. *)
+  (*   - intros x' Hin'; destruct x' as [x' ty']. *)
+  (*     rewrite match_value_add; [reflexivity|]. *)
+  (*     apply NoDupMembers_app_cons in Hndup. *)
+  (*     destruct Hndup as [Hndup]. *)
+  (*     apply In_InMembers in Hin'. *)
+  (*     intro Heq. apply Hndup. rewrite Heq in Hin'. *)
+  (*     assumption. *)
+  (* Qed. *)
 
 End BlockRep.

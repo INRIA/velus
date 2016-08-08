@@ -24,7 +24,8 @@ Notation "m <-*-> m'" := (massert_eqv m m') (at level 70, no associativity) : se
 
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
-Require Import compcert.common.Memory.
+Require Import common.Memory.
+Require Import Morphisms.
 
 Definition wand_footprint (P Q: massert) (b: block) (ofs: Z) : Prop :=
   ~m_footprint P b ofs /\ m_footprint Q b ofs.
