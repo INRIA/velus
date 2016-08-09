@@ -114,7 +114,7 @@ Qed.
 Lemma sep_unwand:
   forall P Q,
     decidable_footprint P ->
-    massert_imp (P ** (P -* Q)) Q.
+    (P ** (P -* Q)) -*> Q.
 Proof.
   intros P Q Hdec.
   split.
@@ -222,8 +222,8 @@ Qed.
 Lemma hide_in_sepwand:
   forall P Q R,
     decidable_footprint Q ->
-    massert_eqv P (Q ** R) ->
-    massert_eqv P (Q ** (Q -* P)).
+    P <-*-> (Q ** R) ->
+    P <-*-> (Q ** (Q -* P)).
 Proof.
   intros P Q R HQdec HPQR.
   rewrite HPQR at 2.
@@ -259,7 +259,7 @@ Qed.
 Lemma sepwand_out:
   forall P Q,
     decidable_footprint P ->
-    massert_eqv (P ** Q) (P ** (P -* (P ** Q))).
+    (P ** Q) <-*-> (P ** (P -* (P ** Q))).
 Proof.
   split.
   - now rewrite <-hide_in_sepwand.
@@ -271,9 +271,9 @@ Qed.
 
 Lemma reynolds1:
   forall P1 P2 P3,
-    massert_imp (P1 ** P2) P3 ->
+    (P1 ** P2) -*> P3 ->
     (forall b ofs, m_footprint P1 b ofs -> wand_footprint P2 P3 b ofs) ->
-    massert_imp P1 (P2 -* P3).
+    P1 -*> (P2 -* P3).
 Proof.
   intros P1 P2 P3 HH Hfi.
   split.
@@ -305,8 +305,8 @@ Qed.
 Lemma reynolds2:
   forall P1 P2 P3,
     decidable_footprint P2 ->
-    massert_imp P1 (P2 -* P3) ->
-    massert_imp (P1 ** P2) P3.
+    P1 -*> (P2 -* P3) ->
+    (P1 ** P2) -*> P3.
 Proof.
   intros P1 P2 P3 HD2 HH.
   rewrite HH. rewrite sep_comm.
@@ -358,10 +358,10 @@ Qed.
 
 Lemma range_imp_with_wand:
   forall P b lo hi,
-    massert_imp (range b lo hi) P ->
+    (range b lo hi) -*> P ->
     decidable_footprint P ->
     footprint_perm P b lo hi ->
-    massert_imp (range b lo hi) (P ** (P -* range b lo hi)).
+    (range b lo hi) -*> (P ** (P -* range b lo hi)).
 Proof.
   intros P b lo hi HRP HPfdec HPperm.
   split.
@@ -433,7 +433,7 @@ Lemma empty_range:
     hi <= lo ->
     0 <= lo ->
     hi <= Integers.Int.modulus ->
-    massert_eqv sepemp (range b lo hi).
+    sepemp <-*-> (range b lo hi).
 Proof.
   intros b lo hi Hgt.
   split; [split|split].
@@ -530,7 +530,7 @@ Section Sepall.
     forall p x xs,
       decidable_footprint (p x) ->
       In x xs ->
-      massert_eqv (sepall p xs) (p x ** (p x -* sepall p xs)).
+      (sepall p xs) <-*-> (p x ** (p x -* sepall p xs)).
   Proof.
     intros p x xs Hdec Hin.
     apply in_split in Hin.
@@ -572,9 +572,9 @@ Section Sepall.
 
   Lemma sep_eqv:
     forall P P' Q Q',
-      massert_eqv P P' ->
-      massert_eqv Q Q' ->
-      massert_eqv (P ** Q) (P' ** Q').
+      P <-*-> P' ->
+      Q <-*->  Q' ->
+      (P ** Q) <-*-> (P' ** Q').
   Proof.
     intros ** HP HQ.
     rewrite HP. rewrite HQ.
@@ -583,8 +583,8 @@ Section Sepall.
 
   Lemma sepall_weakenp:
     forall P P' xs,
-      (forall x, In x xs -> massert_imp (P x) (P' x)) ->
-      massert_imp (sepall P xs) (sepall P' xs).
+      (forall x, In x xs -> (P x) -*> (P' x)) ->
+      (sepall P xs) -*> (sepall P' xs).
   Proof.
     intros P P' xs Hx.
     induction xs.
@@ -635,6 +635,20 @@ Section Sepall.
     simpl. apply footprint_perm_sepconj.
     - apply Hfp.
     - apply IH with (1:=Hfp).
+  Qed.
+
+  Lemma sepall_unwand:
+  forall xs P Q,
+    (forall x, decidable_footprint (P x)) ->
+    (sepall P xs ** sepall (fun x => P x -* Q x) xs) -*> sepall Q xs.
+  Proof.
+    induction xs; simpl; intros ** Hdec.
+    - now rewrite sepemp_left.
+    - rewrite sep_assoc, sep_swap23, <-sep_assoc.
+      apply sep_imp'.
+      + apply sep_unwand.
+        apply Hdec.
+      + apply IHxs; auto.
   Qed.
   
 End Sepall.
