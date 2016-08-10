@@ -469,6 +469,15 @@ Proof.
   match goal with H:exists _, _ |- _ => destruct H end; discriminate.
 Qed.
 
+Lemma not_Some_is_None:
+  forall A (x : option A),  (forall v, x <> Some v) <-> x = None.
+Proof.
+  destruct x; intuition.
+  - exfalso; now apply (H a).
+  - discriminate.
+  - discriminate.
+Qed.
+
 Definition not_In_empty: forall x : ident, ~(PS.In x PS.empty) := PS.empty_spec.
 
 Ltac not_In_empty :=
@@ -592,13 +601,20 @@ Section InMembers.
 
   Theorem NotInMembers_cons:
     forall y x xs,
-      ~InMembers y (x::xs) -> ~InMembers y xs.
+      ~InMembers y (x::xs) -> ~InMembers y xs /\ y <> fst x.
   Proof.
     induction xs as [|x' xs IH]; intro Hnin.
-    - inversion 1.
-    - intro HH. apply Hnin.
-      destruct x, x'.
-      right. inversion HH; auto.
+    - split.
+      + inversion 1.
+      + intro Eq; apply Hnin.
+        destruct x; simpl in *; now left.
+    - split.
+      + intro HH. apply Hnin.
+        destruct x, x'.
+        right. inversion HH; auto.
+      + intro HH. apply Hnin.
+        destruct x, x'.
+        simpl in *; now left.
   Qed.
 
   Lemma InMembers_app:
@@ -794,7 +810,30 @@ Section InMembers.
     intros ** Hx Hy; subst.
     now apply Hx.
   Qed.
-  
+
+  Remark fst_InMembers:
+    forall x xs,
+      InMembers x xs <-> In x (map (@fst A B) xs).
+  Proof.
+    induction xs; simpl; intuition.
+  Qed.
+
+  Remark fst_NoDupMembers:
+    forall xs,
+      NoDupMembers xs <-> NoDup (map (@fst A B) xs).
+  Proof.
+    induction xs as [|(x,y)].
+    - split; constructor.
+    - simpl; split; inversion 1.
+      + inversion H as [|? ? ? Notin ? Heq]; subst.
+        constructor.
+        * now rewrite <-fst_InMembers.
+        * now apply IHxs.
+      + constructor.
+        * now rewrite fst_InMembers.
+        * now apply IHxs.
+  Qed.
+
 End InMembers.
 
 Ltac app_NoDupMembers_det :=
