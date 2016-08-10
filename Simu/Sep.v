@@ -50,9 +50,6 @@ Qed.
 
 Infix "-*" := sepwand (at level 65, right associativity) : sep_scope.
 
-(* TODO: configure auto to take care of decidable_footprint and
-         footprint_perm obligations. *)
-
 Definition decidable_footprint (P: massert) : Prop :=
   forall b ofs, Decidable.decidable (m_footprint P b ofs).
 
@@ -78,6 +75,8 @@ Proof.
   simpl; intuition.
 Qed.
 
+Hint Resolve decidable_footprint_sepconj.
+
 Lemma decidable_ident_eq:
   forall (b b': AST.ident), Decidable.decidable (b = b').
 Proof.
@@ -98,6 +97,8 @@ Proof.
   apply Z.lt_decidable.
 Qed.
 
+Hint Resolve decidable_footprint_range.
+
 Lemma decidable_footprint_contains:
   forall chunk b ofs spec,
     decidable_footprint (contains chunk b ofs spec).
@@ -110,6 +111,8 @@ Proof.
   apply Z.le_decidable.
   apply Z.lt_decidable.
 Qed.
+
+Hint Resolve decidable_footprint_contains.
 
 Lemma sep_unwand:
   forall P Q,
@@ -169,6 +172,17 @@ Lemma merge_sepwand:
 Proof.
   intros. apply merge_disjoint; try assumption.
   now apply disjoint_sepwand.
+Qed.
+
+Lemma sepwand_mp:
+  forall m P Q,
+    m |= P ->
+    m |= P -* Q ->
+    m |= Q.
+Proof.
+  intros m P Q HP HPQ.
+  apply HPQ; [|assumption].
+  apply Mem.unchanged_on_refl.
 Qed.
 
 Instance wand_footprint_massert_Proper:
@@ -356,14 +370,19 @@ Proof.
   now apply Hperm.
 Qed.
 
+Hint Resolve footprint_perm_sepconj
+             footprint_perm_range
+             footprint_perm_contains.
+             
 Lemma range_imp_with_wand:
   forall P b lo hi,
     (range b lo hi) -*> P ->
     decidable_footprint P ->
     footprint_perm P b lo hi ->
-    (range b lo hi) -*> (P ** (P -* range b lo hi)).
+    (range b lo hi) <-*-> (P ** (P -* range b lo hi)).
 Proof.
   intros P b lo hi HRP HPfdec HPperm.
+  split; [|now rewrite sep_unwand].
   split.
   - intros m HR.
     split; [|split].
@@ -391,6 +410,89 @@ Proof.
     now destruct Hf.
 Qed.
 
+Definition subseteq_footprint (P Q: massert) : Prop :=
+  (forall b ofs, m_footprint P b ofs -> m_footprint Q b ofs).
+
+Instance subseteq_footprint_footprint_Proper:
+  Proper (subseteq_footprint ==> eq ==> eq ==> Basics.impl) m_footprint.
+Proof.
+  intros P Q Hsub b b' Heqb ofs ofs' Heqofs HP.
+  subst. apply Hsub with (1:=HP).
+Qed.
+
+Lemma subseteq_footprint_refl:
+  forall P, subseteq_footprint P P.
+Proof.
+  now unfold subseteq_footprint.
+Qed.
+
+Lemma subseteq_footprint_trans:
+  forall P Q R, subseteq_footprint P Q ->
+                subseteq_footprint Q R ->
+                subseteq_footprint P R.
+Proof.
+  unfold subseteq_footprint. intuition.
+Qed.
+
+Lemma subseteq_footprint_sepconj:
+  forall P Q R S,
+    subseteq_footprint P Q ->
+    subseteq_footprint R S ->
+    subseteq_footprint (P ** R) (Q ** S).
+Proof.
+  intros P Q R S HPQ HRS.
+  intros b ofs.
+  destruct 1 as [HP|HR].
+  - left; now apply HPQ.
+  - right; now apply HRS.
+Qed.
+
+Lemma unify_distinct_wands:
+  forall P Q R S,
+    disjoint_footprint R S ->
+    subseteq_footprint P R ->
+    subseteq_footprint Q S ->
+    (P -* R) ** (Q -* S)
+    -*> (P ** Q) -* (R ** S).
+Proof.
+  intros P Q R S HdjRS HsPR HsQS.
+  split.
+  - intros m HH.
+    split.
+    + intros m' Hun.
+      destruct HH as (HPR & HQS & Hdj).
+      destruct 1 as (HP & HQ & HdjPQ).
+      repeat split.
+      * apply m_invar with (m':=m') in HPR.
+        now apply sepwand_mp with (1:=HP) in HPR.
+        apply Mem.unchanged_on_implies with (1:=Hun).
+        intros b ofs HfPR Hv.
+        destruct HfPR as (HnfP & HfR).
+        split.
+        destruct 1 as [HfP|HfQ]; [contradiction|].
+        apply HdjRS with (1:=HfR).
+        apply HsQS with (1:=HfQ).
+        now left.
+      * apply m_invar with (m':=m') in HQS.
+        now apply sepwand_mp with (1:=HQ) in HQS.
+        apply Mem.unchanged_on_implies with (1:=Hun).
+        intros b ofs HfQS Hv.
+        destruct HfQS as (HnfQ & HfS).
+        split.
+        destruct 1 as [HfP|HfQ]; [|contradiction].
+        apply HdjRS with (2:=HfS).
+        apply HsPR with (1:=HfP).
+        now right.
+      * assumption.
+    + intros b ofs Hfw.
+      apply (m_valid _ _ _ ofs HH).
+      destruct Hfw as [HnfPQ [HfR|HfS]]; [left|right]; split;
+        try (intro; apply HnfPQ; simpl); intuition.
+  - intros b ofs.
+    destruct 1 as [HnfPQ [HfR|HfS]]; [left|right]; split;
+      try (intro; apply HnfPQ; simpl); intuition. 
+Qed.
+
 (* * * * * * * * sepall * * * * * * * * * * * * * * *)
 
 Program Definition sepemp: massert :=  pure True.
@@ -415,6 +517,42 @@ Proof.
   intros. rewrite sep_comm. rewrite <-sepemp_right. reflexivity.
 Qed.
 
+Lemma wandwand_sepemp:
+  forall P, massert_eqv (P -* P) sepemp.
+Proof.
+  firstorder.
+Qed.
+
+Lemma wand_footprint_sepemp:
+  forall P b ofs,
+    wand_footprint sepemp P b ofs <-> m_footprint P b ofs.
+Proof.
+  firstorder.
+Qed.
+
+Lemma sepemp_wand:
+  forall P,
+    sepemp -* P <-*-> P.
+Proof.
+  split; split.
+  - inversion 1 as [Hun Hv].
+    apply Hun.
+    apply Mem.unchanged_on_refl.
+    now simpl.
+  - now split.
+  - intros m HP. split.
+    + intros m' Hun He.
+      apply m_invar with (1:=HP).
+      apply Mem.unchanged_on_implies with (1:=Hun).
+      intros; now apply wand_footprint_sepemp.
+    + intros b ofs Hw.
+      rewrite wand_footprint_sepemp in Hw.
+      apply m_valid with (1:=HP) (2:=Hw).
+  - intros b ofs Hf.
+    simpl in Hf.
+    now apply wand_footprint_sepemp in Hf.
+Qed.
+
 Lemma decidable_footprint_sepemp:
   decidable_footprint sepemp.
 Proof.
@@ -427,6 +565,8 @@ Lemma footprint_perm_sepemp:
 Proof.
   intros lo hi m. inversion 2.
 Qed.
+
+Hint Resolve decidable_footprint_sepemp footprint_perm_sepemp.
 
 Lemma empty_range:
   forall b lo hi,
@@ -450,7 +590,6 @@ Next Obligation.
   contradiction.
 Defined.
 
-
 Lemma decidable_footprint_sepfalse:
   decidable_footprint sepfalse.
 Proof.
@@ -464,6 +603,52 @@ Proof.
   intros b lo hi m Hm. inversion Hm.
 Qed.
 
+Hint Resolve decidable_footprint_sepfalse footprint_perm_sepfalse.
+
+Section MassertPredEqv.
+  Context {A: Type}.
+  
+  Definition massert_pred_eqv (P: A -> massert) (Q: A -> massert) : Prop :=
+    forall x, massert_eqv (P x) (Q x).
+
+  Lemma massert_pred_eqv_refl:
+    forall P, massert_pred_eqv P P.
+  Proof.
+    now unfold massert_pred_eqv.
+  Qed.
+
+  Lemma massert_pred_eqv_sym:
+    forall P Q, massert_pred_eqv P Q -> massert_pred_eqv Q P.
+  Proof.
+    unfold massert_pred_eqv. intros P Q HPQ x. now rewrite (HPQ x).
+  Qed.
+
+  Lemma massert_pred_eqv_trans:
+    forall P Q R,
+      massert_pred_eqv P Q ->
+      massert_pred_eqv Q R ->
+      massert_pred_eqv P R.
+  Proof.
+    unfold massert_pred_eqv. intros P Q R HPQ HQR x.
+    now rewrite (HPQ x), (HQR x).
+  Qed.
+
+  Add Relation (A -> massert) massert_pred_eqv
+      reflexivity proved by massert_pred_eqv_refl
+      symmetry proved by massert_pred_eqv_sym
+      transitivity proved by massert_pred_eqv_trans
+  as massert_pred_eqv_prel.
+
+  Lemma massert_pred_eqv_inst:
+    forall P Q x,
+      massert_pred_eqv P Q ->
+      massert_eqv (P x) (Q x).
+  Proof.
+    intros P Q x HPQ. apply HPQ.
+  Qed.
+  
+End MassertPredEqv.
+
 Section Sepall.
   Context {A: Type}.
 
@@ -472,6 +657,37 @@ Section Sepall.
     | nil => sepemp
     | x::xs => p x ** sepall p xs
     end.
+
+  Require Coq.Sorting.Permutation.
+  Instance sepall_massert_pred_eqv_permutation_eqv_Proper:
+    Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
+           sepall.
+  Proof.
+    intros p q Heq xs ys Hperm.
+    induction Hperm.
+    - reflexivity.
+    - simpl.
+      rewrite IHHperm, (massert_pred_eqv_inst _ _ _ Heq).
+      reflexivity.
+    - simpl.
+      repeat rewrite (massert_pred_eqv_inst _ _ _ Heq).
+      rewrite sep_swap.
+      repeat apply sep_imp'; try reflexivity.
+      induction l; [reflexivity|].
+      simpl.
+      rewrite (sep_comm (p a)).
+      rewrite <-(sep_assoc _ (sepall p l)).
+      rewrite <-(sep_assoc _ (q y ** sepall p l)).
+      rewrite IHl, (massert_pred_eqv_inst _ _ _ Heq).
+      repeat rewrite sep_assoc.
+      rewrite (sep_comm _ (q a)).
+      reflexivity.
+    - rewrite IHHperm1, <-IHHperm2.
+      clear Hperm1 Hperm2 IHHperm1 IHHperm2.
+      induction l'; [reflexivity|].
+      simpl. rewrite (massert_pred_eqv_inst _ _ _ Heq), IHl'.
+      reflexivity.
+  Qed.
 
   Lemma sepall_cons:
     forall p x xs,
@@ -554,6 +770,7 @@ Section Sepall.
     destruct Hall.
   Qed.
 
+  (* TODO: replace this lemma with sepall_swapp *)
   Lemma sepall_switchp:
     forall f f' xs,
       List.NoDup xs ->
@@ -637,6 +854,8 @@ Section Sepall.
     - apply IH with (1:=Hfp).
   Qed.
 
+  Hint Resolve decidable_footprint_sepall footprint_perm_sepall.
+
   Lemma sepall_unwand:
   forall xs P Q,
     (forall x, decidable_footprint (P x)) ->
@@ -649,6 +868,49 @@ Section Sepall.
       + apply sep_unwand.
         apply Hdec.
       + apply IHxs; auto.
+  Qed.
+  
+  Lemma subseteq_footprint_sepall:
+    forall p q xs,
+      (forall x, subseteq_footprint (p x) (q x)) ->
+      subseteq_footprint (sepall p xs) (sepall q xs).
+  Proof.
+    intros p q xs Hsub.
+    induction xs as [|x xs IH].
+    now apply subseteq_footprint_refl.
+    simpl. apply subseteq_footprint_sepconj.
+    now apply Hsub.
+    apply IH.
+  Qed.
+    
+  Lemma sepall_outwand_cons:
+    forall p q x xs,
+      (forall x, decidable_footprint (p x)) ->
+      (forall x, subseteq_footprint (p x) (q x)) ->
+      (p x ** (p x -* q x)) ** sepall p xs ** (sepall p xs -* sepall q xs)
+      -*> sepall p (x::xs) ** (sepall p (x::xs) -* sepall q (x::xs)).
+  Proof.
+    intros p q x xs Hdec Hsub.
+    rewrite sep_assoc.
+    split.
+    - intros m Hm.
+      rewrite sep_swap23 in Hm.
+      rewrite unify_distinct_wands in Hm.
+      + Opaque sepconj. simpl. Transparent sepconj. now rewrite sep_assoc.
+      + rewrite sep_swap23 in Hm.
+        rewrite <-sep_assoc in Hm.
+        rewrite sep_unwand in Hm; [|now auto].
+        rewrite sep_unwand in Hm; [|now auto].
+        apply Hm.
+      + apply Hsub.
+      + apply subseteq_footprint_sepall.
+        apply Hsub.
+    - intros b ofs Hf.
+      rewrite sep_unwand; [|now auto].
+      rewrite <-sep_assoc, sep_unwand; [|now auto].
+      destruct Hf as [Hfp|Hf].
+      + now rewrite (subseteq_footprint_sepall _ _ _ Hsub) in Hfp.
+      + now destruct Hf.
   Qed.
   
 End Sepall.
@@ -679,9 +941,7 @@ Section SplitRange.
     intros.
     apply decidable_footprint_sepall.
     intro fld. destruct fld as [x ty].
-    simpl. destruct (field_offset env x flds).
-    - apply decidable_footprint_range.
-    - apply decidable_footprint_sepfalse.
+    simpl. destruct (field_offset env x flds); auto.
   Qed.
 
   Lemma footprint_perm_field_range:
@@ -690,9 +950,7 @@ Section SplitRange.
   Proof.
     intros flds b pos x b' lo hi.
     destruct x as [x ty].
-    simpl. destruct (field_offset env x flds).
-    - apply footprint_perm_range.
-    - apply footprint_perm_sepfalse.
+    simpl. destruct (field_offset env x flds); auto.
   Qed.
   
   Lemma split_range_fields':

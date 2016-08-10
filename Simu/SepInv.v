@@ -149,37 +149,31 @@ Section Staterep.
     forall p clsnm me b ofs,
       decidable_footprint (staterep p clsnm me b ofs).
   Proof.
-    induction p as [|cls p' IH];
-      [intros; now apply decidable_footprint_sepfalse|].
+    induction p as [|cls p' IH]; [now auto|].
     intros; simpl.
     destruct (ident_eqb clsnm (c_name cls));
       [|now apply IH].
     apply decidable_footprint_sepconj;
       apply decidable_footprint_sepall;
       (intro x; destruct x as [x ty]; simpl;
-       destruct (field_offset ge x (make_members cls)));
-      try apply decidable_footprint_contains;
-      try apply decidable_footprint_sepfalse;
-      try apply IH.
+       destruct (field_offset ge x (make_members cls))); auto.
   Qed.
 
   Lemma footprint_perm_staterep:
     forall p clsnm me b ofs b' lo hi,
       footprint_perm (staterep p clsnm me b ofs) b' lo hi.
   Proof.
-    induction p as [|cls p' IH];
-    [intros; now apply footprint_perm_sepfalse|].
+    induction p as [|cls p' IH]; [now auto|].
     intros; simpl.
     destruct (ident_eqb clsnm (c_name cls));
       [|now apply IH].
     apply footprint_perm_sepconj;
       apply footprint_perm_sepall;
       (intro x; destruct x as [x ty]; simpl;
-       destruct (field_offset ge x (make_members cls)));
-      try apply footprint_perm_contains;
-      try apply footprint_perm_sepfalse;
-      try apply IH.
+       destruct (field_offset ge x (make_members cls))); auto.
   Qed.
+
+  Hint Resolve decidable_footprint_staterep footprint_perm_staterep.
 
 End Staterep.
 
@@ -558,59 +552,61 @@ Section StateRepProperties.
     apply Clight.deref_loc_value with (2:=Hloadv); auto.
   Qed.
 
-  (* Lemma staterep_assign_mem: *)
-  (*   forall P cls prog' m m' me b ofs x ty d v, *)
-  (*     access_mode ty = By_value (chunk_of_type ty) -> *)
-  (*     NoDup cls.(c_objs) -> *)
-  (*     NoDupMembers cls.(c_mems) -> *)
-  (*     m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P -> *)
-  (*     In (x, ty) cls.(c_mems) -> *)
-  (*     field_offset gcenv x (make_members cls) = Errors.OK d -> *)
-  (*     v = Values.Val.load_result (chunk_of_type ty) v -> *)
-  (*     Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' -> *)
-  (*     m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs ** P. *)
-  (* Proof. *)
-
-  (*   intros ** Hty Hcls Hmem Hm Hin Hoff Hlr Hal. *)
-  (*   simpl in *. rewrite ident_eqb_refl in *. *)
-  (*   rewrite sep_assoc. rewrite sep_assoc in Hm. *)
-  (*   apply sepall_in in Hin. *)
-  (*   destruct Hin as [ws [xs [Hsplit Hin]]]. *)
-  (*   rewrite Hsplit in Hmem. *)
-  (*   rewrite Hin in Hm. rewrite sep_assoc in Hm. *)
-  (*   rewrite Hin. rewrite sep_assoc. *)
-  (*   rewrite Hoff in *. *)
-  (*   rewrite sep_swap2. *)
-  (*   rewrite sepall_switchp *)
-  (*   with (f':=fun xty : ident * typ => *)
-  (*               let (x0, ty0) := xty in *)
-  (*               match field_offset gcenv x0 (make_members cls) with *)
-  (*               | Errors.OK d0 => *)
-  (*                 contains (chunk_of_type ty0) b (ofs + d0) *)
-  (*                          (match_value (mm_values me) x0) *)
-  (*               | Errors.Error _ => sepfalse *)
-  (*               end). *)
-  (*   - rewrite <-sep_swap2. *)
-  (*     eapply storev_rule' with (1:=Hm). *)
-  (*     + unfold match_value. simpl. *)
-  (*       rewrite PM.gss. symmetry; exact Hlr. *)
-  (*     + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess]. *)
-  (*       * rewrite Hty in Haccess. *)
-  (*         injection Haccess. intro; subst. assumption. *)
-  (*       * rewrite Hty in Haccess. discriminate. *)
-  (*   - apply NoDupMembers_remove_1 in Hmem. *)
-  (*     apply NoDupMembers_NoDup with (1:=Hmem). *)
-  (*   - intros x' Hin'; destruct x' as [x' ty']. *)
-  (*     unfold update_field, madd_mem; simpl. *)
-  (*     rewrite match_value_add; [reflexivity|]. *)
-  (*     apply NoDupMembers_app_cons in Hmem. *)
-  (*     destruct Hmem as [Hmem]. *)
-  (*     apply In_InMembers in Hin'. *)
-  (*     intro Heq. apply Hmem. rewrite Heq in Hin'. *)
-  (*     assumption. *)
-  (* Qed. *)
-
-  Opaque sepconj.
+  Lemma staterep_assign_mem:
+    forall P cls prog' m m' me b ofs x ty d v,
+      (P me -*> P (madd_mem x v me)) ->
+      access_mode ty = By_value (chunk_of_type ty) ->
+      NoDup cls.(c_objs) ->
+      NoDupMembers cls.(c_mems) ->
+      m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P me ->
+      In (x, ty) cls.(c_mems) ->
+      field_offset gcenv x (make_members cls) = Errors.OK d ->
+      v = Values.Val.load_result (chunk_of_type ty) v ->
+      Clight.assign_loc gcenv ty m b (Int.repr (ofs + d)) v m' ->
+      m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs
+               ** P (madd_mem x v me).
+  Proof.
+    intros ** HPimp Hty Hcls Hmem Hm Hin Hoff Hlr Hal.
+    rewrite <-HPimp; clear HPimp.
+    Opaque sepconj. simpl in *. Transparent sepconj.
+    rewrite ident_eqb_refl in *.
+    rewrite sep_assoc. rewrite sep_assoc in Hm.
+    apply sepall_in in Hin.
+    destruct Hin as [ws [xs [Hsplit Hin]]].
+    rewrite Hsplit in Hmem.
+    rewrite Hin in Hm. rewrite sep_assoc in Hm.
+    rewrite Hin. rewrite sep_assoc.
+    unfold staterep_mems in *.
+    rewrite Hoff in *.
+    rewrite sep_swap2.
+    rewrite sepall_switchp
+    with (f':=fun xty : ident * typ =>
+                let (x0, ty0) := xty in
+                match field_offset gcenv x0 (make_members cls) with
+                | Errors.OK d0 =>
+                  contains (chunk_of_type ty0) b (ofs + d0)
+                           (match_value (mm_values me) x0)
+                | Errors.Error _ => sepfalse
+                end) at 1.
+    - rewrite <-sep_swap2.
+      eapply storev_rule2 with (1:=Hm).
+      + unfold match_value. simpl.
+        rewrite PM.gss. symmetry; exact Hlr.
+      + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess].
+        * rewrite Hty in Haccess.
+          injection Haccess. intro; subst. assumption.
+        * rewrite Hty in Haccess. discriminate.
+    - apply NoDupMembers_remove_1 in Hmem.
+      apply NoDupMembers_NoDup with (1:=Hmem).
+    - intros x' Hin'; destruct x' as [x' ty'].
+      unfold update_field, madd_mem; simpl.
+      rewrite match_value_add; [reflexivity|].
+      apply NoDupMembers_app_cons in Hmem.
+      destruct Hmem as [Hmem].
+      apply In_InMembers in Hin'.
+      intro Heq. apply Hmem. rewrite Heq in Hin'.
+      assumption.
+  Qed.
 
   Lemma staterep_field_offset:
     forall m me cls prog b ofs x ty P,
@@ -620,7 +616,8 @@ Section StateRepProperties.
            /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
     introv Hm Hin.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
+    Opaque sepconj. simpl in Hm. Transparent sepconj.
+    rewrite ident_eqb_refl in Hm.
     do 2 apply sep_proj1 in Hm.
     apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
@@ -692,52 +689,45 @@ Section BlockRep.
     apply Clight.deref_loc_value with (1:=Haccess) (2:=Hloadv).
   Qed.
 
-  (* Lemma blockrep_assign_mem: *)
-  (*   forall P co m m' ve b d x v ty chunk, *)
-  (*     NoDupMembers (co_members co) -> *)
-  (*     m |= blockrep ve (co_members co) b ** P -> *)
-  (*     In (x, ty) (co_members co) -> *)
-  (*     field_offset ge x (co_members co) = Errors.OK d -> *)
-  (*     access_mode ty = By_value chunk -> *)
-  (*     v = Val.load_result chunk v -> *)
-  (*     Clight.assign_loc ge ty m b (Int.repr d) v m' -> *)
-  (*     m' |= blockrep (PM.add x v ve) (co_members co) b ** P. *)
-  (* Proof. *)
-  (*   Opaque sepconj. *)
-  (*   intros ** Hndup Hm Hin Hoff Haccess Hlr Hal. *)
-  (*   apply sepall_in in Hin. *)
-  (*   destruct Hin as [ws [xs [Hsplit Hin]]]. *)
-  (*   unfold blockrep in *. *)
-  (*   rewrite Hin in Hm. rewrite sep_assoc in Hm. *)
-  (*   rewrite Hin. rewrite sep_assoc. *)
-  (*   rewrite Hoff in *. *)
-  (*   rewrite sep_swap2. *)
-  (*   rewrite Haccess in *. *)
-  (*   rewrite Hsplit in Hndup. *)
-  (*   rewrite sepall_switchp *)
-  (*   with (f':=fun xty : ident * type => *)
-  (*           let (x0, ty0) := xty in *)
-  (*           match field_offset ge x0 (co_members co), access_mode ty0 with *)
-  (*           | Errors.OK d0, By_value chunk => *)
-  (*             contains chunk b d0 (match_value ve x0) *)
-  (*           | _, _ => sepfalse *)
-  (*           end). *)
-  (*   - rewrite <-sep_swap2. *)
-  (*     eapply storev_rule' with (1:=Hm). *)
-  (*     + unfold match_value. rewrite PM.gss. symmetry; exact Hlr. *)
-  (*     + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *. *)
-  (*       * injection Haccess'. intro HR; rewrite <-HR in *; assumption. *)
-  (*       * discriminate. *)
-  (*   - apply NoDupMembers_remove_1 in Hndup. *)
-  (*     apply NoDupMembers_NoDup with (1:=Hndup). *)
-  (*   - intros x' Hin'; destruct x' as [x' ty']. *)
-  (*     rewrite match_value_add; [reflexivity|]. *)
-  (*     apply NoDupMembers_app_cons in Hndup. *)
-  (*     destruct Hndup as [Hndup]. *)
-  (*     apply In_InMembers in Hin'. *)
-  (*     intro Heq. apply Hndup. rewrite Heq in Hin'. *)
-  (*     assumption. *)
-  (* Qed. *)
+  Lemma blockrep_assign_mem:
+    forall P co m m' ve b d x v ty chunk,
+      NoDupMembers (co_members co) ->
+      m |= blockrep ve (co_members co) b ** P ve ->
+      In (x, ty) (co_members co) ->
+      field_offset ge x (co_members co) = Errors.OK d ->
+      access_mode ty = By_value chunk ->
+      v = Val.load_result chunk v ->
+      Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' ->
+      massert_imp (P ve) (P (PM.add x v ve)) ->
+      m' |= blockrep (PM.add x v ve) (co_members co) b ** P (PM.add x v ve).
+  Proof.
+    Opaque sepconj.
+    intros ** Hndup Hm Hin Hoff Haccess Hlr Hal HP.
+    apply sepall_in in Hin.
+    destruct Hin as [ws [xs [Hsplit Hin]]].
+    unfold blockrep in *.
+    rewrite Hin in Hm. rewrite sep_assoc in Hm.
+    rewrite Hin. rewrite sep_assoc.
+    rewrite Hoff in *.
+    rewrite sep_swap2.
+    rewrite Haccess in *.
+    rewrite Hsplit in Hndup.
+    rewrite sepall_swapp.
+    - rewrite <-sep_swap2.
+      rewrite HP in Hm.
+      eapply storev_rule2 with (1:=Hm).
+      + unfold match_value. rewrite PM.gss. symmetry. exact Hlr.
+      + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *.
+        * injection Haccess'. intro HR; rewrite <-HR in *; assumption.
+        * discriminate.
+    - intros x' Hin'; destruct x' as [x' ty'].
+      rewrite match_value_add; [reflexivity|].
+      apply NoDupMembers_app_cons in Hndup.
+      destruct Hndup as [Hndup].
+      apply In_InMembers in Hin'.
+      intro Heq. apply Hndup. rewrite Heq in Hin'.
+      assumption.
+  Qed.
 
   Lemma sizeof_by_value:
     forall ty chunk,
@@ -929,45 +919,5 @@ Section BlockRep.
       + contradict Hm.
     - contradict Hm.
   Qed.
-
-  (* Lemma blockrep_assign_mem: *)
-  (*   forall P co m m' ve b d x v ty chunk, *)
-  (*     NoDupMembers (co_members co) -> *)
-  (*     m |= blockrep ve (co_members co) b ** P ve -> *)
-  (*     In (x, ty) (co_members co) -> *)
-  (*     field_offset ge x (co_members co) = Errors.OK d -> *)
-  (*     access_mode ty = By_value chunk -> *)
-  (*     v = Val.load_result chunk v -> *)
-  (*     Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' -> *)
-  (*     massert_imp (P ve) (P (PM.add x v ve)) -> *)
-  (*     m' |= blockrep (PM.add x v ve) (co_members co) b ** P (PM.add x v ve). *)
-  (* Proof. *)
-  (*   Opaque sepconj. *)
-  (*   intros ** Hndup Hm Hin Hoff Haccess Hlr Hal HP. *)
-  (*   apply sepall_in in Hin. *)
-  (*   destruct Hin as [ws [xs [Hsplit Hin]]]. *)
-  (*   unfold blockrep in *. *)
-  (*   rewrite Hin in Hm. rewrite sep_assoc in Hm. *)
-  (*   rewrite Hin. rewrite sep_assoc. *)
-  (*   rewrite Hoff in *. *)
-  (*   rewrite sep_swap2. *)
-  (*   rewrite Haccess in *. *)
-  (*   rewrite Hsplit in Hndup. *)
-  (*   rewrite sepall_swapp. *)
-  (*   - rewrite <-sep_swap2. *)
-  (*     rewrite HP in Hm. *)
-  (*     eapply storev_rule' with (1:=Hm). *)
-  (*     + unfold match_value. rewrite PM.gss. symmetry. exact Hlr. *)
-  (*     + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *. *)
-  (*       * injection Haccess'. intro HR; rewrite <-HR in *; assumption. *)
-  (*       * discriminate. *)
-  (*   - intros x' Hin'; destruct x' as [x' ty']. *)
-  (*     rewrite match_value_add; [reflexivity|]. *)
-  (*     apply NoDupMembers_app_cons in Hndup. *)
-  (*     destruct Hndup as [Hndup]. *)
-  (*     apply In_InMembers in Hin'. *)
-  (*     intro Heq. apply Hndup. rewrite Heq in Hin'. *)
-  (*     assumption. *)
-  (* Qed. *)
 
 End BlockRep.
