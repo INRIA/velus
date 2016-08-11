@@ -22,6 +22,18 @@ Open Scope Z.
 Notation "m -*> m'" := (massert_imp m m') (at level 70, no associativity) : sep_scope.
 Notation "m <-*-> m'" := (massert_eqv m m') (at level 70, no associativity) : sep_scope.
 
+(* TODO: export to CompCert *)
+Lemma sepconj_eqv:
+  forall P P' Q Q',
+    massert_eqv P P' ->
+    massert_eqv Q Q' ->
+    massert_eqv (P ** Q) (P' ** Q').
+Proof.
+  intros ** HP HQ.
+  rewrite HP. rewrite HQ.
+  reflexivity.
+Qed.
+
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
 Require Import common.Memory.
@@ -659,43 +671,23 @@ Section Sepall.
     end.
 
   Require Coq.Sorting.Permutation.
-  Instance sepall_massert_pred_eqv_permutation_eqv_Proper:
-    Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
-           sepall.
+
+  Lemma sepall_permutation:
+    forall p xs ys,
+      Permutation.Permutation xs ys ->
+      massert_eqv (sepall p xs) (sepall p ys).
   Proof.
-    intros p q Heq xs ys Hperm.
+    intros p xs ys Hperm.
     induction Hperm.
     - reflexivity.
+    - simpl. now rewrite IHHperm.
     - simpl.
-      rewrite IHHperm, (massert_pred_eqv_inst _ _ _ Heq).
-      reflexivity.
-    - simpl.
-      repeat rewrite (massert_pred_eqv_inst _ _ _ Heq).
-      rewrite sep_swap.
-      repeat apply sep_imp'; try reflexivity.
-      induction l; [reflexivity|].
-      simpl.
-      rewrite (sep_comm (p a)).
-      rewrite <-(sep_assoc _ (sepall p l)).
-      rewrite <-(sep_assoc _ (q y ** sepall p l)).
-      rewrite IHl, (massert_pred_eqv_inst _ _ _ Heq).
-      repeat rewrite sep_assoc.
-      rewrite (sep_comm _ (q a)).
-      reflexivity.
+      rewrite sep_swap; reflexivity.
     - rewrite IHHperm1, <-IHHperm2.
       clear Hperm1 Hperm2 IHHperm1 IHHperm2.
-      induction l'; [reflexivity|].
-      simpl. rewrite (massert_pred_eqv_inst _ _ _ Heq), IHl'.
-      reflexivity.
+      now induction l'.
   Qed.
-
-  Lemma sepall_cons:
-    forall p x xs,
-      sepall p (x::xs) <-*-> p x ** sepall p xs.
-  Proof.
-    constructor; constructor; trivial.
-  Qed.
-
+  
   Lemma sepall_app:
     forall p xs ys,
       sepall p (xs ++ ys) <-*-> sepall p xs ** sepall p ys.
@@ -710,6 +702,13 @@ Section Sepall.
       rewrite sep_assoc.
       rewrite IHxs.
       reflexivity.
+  Qed.
+
+  Lemma sepall_cons:
+    forall p x xs,
+      sepall p (x::xs) <-*-> p x ** sepall p xs.
+  Proof.
+    constructor; constructor; trivial.
   Qed.
 
   Lemma sepall_breakout:
@@ -787,17 +786,6 @@ Section Sepall.
     intros; apply Hin. constructor (assumption).
   Qed.
 
-  Lemma sep_eqv:
-    forall P P' Q Q',
-      P <-*-> P' ->
-      Q <-*->  Q' ->
-      (P ** Q) <-*-> (P' ** Q').
-  Proof.
-    intros ** HP HQ.
-    rewrite HP. rewrite HQ.
-    reflexivity.
-  Qed.
-
   Lemma sepall_weakenp:
     forall P P' xs,
       (forall x, In x xs -> (P x) -*> (P' x)) ->
@@ -821,7 +809,7 @@ Section Sepall.
     intros P P' xs Hx.
     induction xs.
     reflexivity.
-    simpl. apply sep_eqv.
+    simpl. apply sepconj_eqv.
     - rewrite Hx. reflexivity. apply in_eq.
     - rewrite IHxs. reflexivity.
       intros x Hin.
@@ -914,6 +902,41 @@ Section Sepall.
   Qed.
   
 End Sepall.
+
+Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
+  Proper (eq ==> @Permutation.Permutation A ==> massert_eqv)
+         sepall.
+Proof.
+  intros p q Heq xs ys Hperm.
+  rewrite sepall_permutation with (1:=Hperm).
+  induction Hperm.
+  - reflexivity.
+  - simpl. now rewrite IHHperm, Heq.
+  - simpl.
+    repeat rewrite Heq.
+    repeat apply sepconj_eqv; try reflexivity.
+  - now rewrite IHHperm2.
+Qed.
+
+(*
+Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
+  Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
+         sepall.
+Proof.
+  intros p q Heq xs ys Hperm.
+  rewrite sepall_permutation with (1:=Hperm).
+  induction Hperm.
+  - reflexivity.
+  - simpl. now rewrite IHHperm, (massert_pred_eqv_inst _ _ _ Heq).
+  - simpl.
+    repeat rewrite (massert_pred_eqv_inst _ _ _ Heq).
+    repeat apply sepconj_eqv; try reflexivity.
+    induction l; [reflexivity|].
+    simpl.
+    now rewrite IHl, (massert_pred_eqv_inst _ _ _ Heq).
+  - now rewrite IHHperm2.
+Qed.
+*)
 
 (* * * * * * * * Ranges * * * * * * * * * * * * * * *)
 
