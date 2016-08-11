@@ -766,6 +766,8 @@ Section BlockRep.
     apply decidable_footprint_contains.
   Qed.
 
+  Hint Resolve footprint_perm_blockrep footprint_decidable_blockrep.
+
   Lemma blockrep_empty':
     forall flds b,
       NoDupMembers flds ->
