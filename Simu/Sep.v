@@ -34,6 +34,24 @@ Proof.
   reflexivity.
 Qed.
 
+Lemma disjoint_footprint_sepconj:
+  forall P Q R,
+    disjoint_footprint R (P ** Q) <-> disjoint_footprint R P /\ disjoint_footprint R Q.
+Proof.
+  intros.
+  split; intro H.
+  - split; intros b ofs; specialize (H b ofs); intros HfR HfP; apply H; auto.
+    + now left.
+    + now right.
+  - destruct H as [HfP HfQ].
+    intros b ofs.
+    specialize (HfP b ofs).
+    specialize (HfQ b ofs).
+    intros HfR HPQ.
+    destruct HPQ.
+    + now apply HfP.
+    + now apply HfQ.
+Qed.
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
 Require Import common.Memory.
@@ -432,7 +450,7 @@ Proof.
     now destruct Hf.
 Qed.
 
-Definition subseteq_footprint (P Q: massert) : Prop :=
+Definition subseteq_footprint (P Q: massert) :=
   (forall b ofs, m_footprint P b ofs -> m_footprint Q b ofs).
 
 Instance subseteq_footprint_footprint_Proper:
@@ -455,6 +473,11 @@ Lemma subseteq_footprint_trans:
 Proof.
   unfold subseteq_footprint. intuition.
 Qed.
+
+Add Parametric Relation: massert subseteq_footprint
+    reflexivity proved by subseteq_footprint_refl
+    transitivity proved by subseteq_footprint_trans
+      as subseteq_footprint_rel.
 
 Instance subseteq_footprint_massert_imp_Proper:
   Proper (massert_imp ==> massert_imp --> Basics.impl) subseteq_footprint.

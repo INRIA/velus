@@ -170,15 +170,11 @@ Section PRESERVATION.
   Definition subrep_inst_env e x :=
     match e ! x with
     | Some (b, Tstruct id _) =>
-      (* match t with *)
-      (* | Tstruct id _ => *)
-        match gcenv ! id with
-        | Some co =>
-          blockrep gcenv v_empty (co_members co) b
-        | None => sepfalse
-        end
-      (* | _ => sepfalse *)
-      (* end *)
+      match gcenv ! id with
+      | Some co =>
+        blockrep gcenv v_empty (co_members co) b
+      | None => sepfalse
+      end
     | _ => sepfalse
     end.
     
@@ -253,35 +249,86 @@ Section PRESERVATION.
       rewrite app_last_app; auto.
   Qed.
 
+  Remark decidable_footprint_subrep_inst:
+    forall x, decidable_footprint (subrep_inst x).
+  Proof.
+    intros (x, (b, t)).
+    simpl; destruct t; auto. destruct gcenv ! i; auto.
+  Qed.
+
+  Remark footprint_perm_subrep_inst:
+    forall x b lo hi,
+      footprint_perm (subrep_inst x) b lo hi.
+  Proof.
+    intros (x, (b, t)) b' lo hi.
+    simpl; destruct t; auto. destruct gcenv ! i; auto.
+  Qed.
+  
+  Remark disjoint_footprint_range_inst:
+    forall l b lo hi,
+      ~ InMembers b (map snd l) ->
+      disjoint_footprint (range b lo hi) (sepall range_inst l).
+  Proof.
+    induction l as [|(x, (b', t'))]; simpl;
+    intros b lo hi Notin.
+    - apply sepemp_disjoint. 
+    - rewrite disjoint_footprint_sepconj; split.
+      + intros blk ofs Hfp Hfp'.
+        apply Notin.
+        left.
+        simpl in *. transitivity blk; iauto.
+      + apply IHl.
+        intro; apply Notin; now right.
+  Qed.
+  
+  Hint Resolve decidable_footprint_subrep_inst footprint_perm_subrep_inst.
+  
   Lemma range_wand_intro:
     forall e,
+      Forall (fun xbt => let '(x, (b, t)):= xbt in
+                      exists id co,
+                        t = Tstruct id noattr
+                        /\ gcenv ! id = Some co
+                        /\ co_su co = Struct
+                        /\ NoDupMembers (co_members co)
+                        /\ forall x' t',
+                            In (x', t') (co_members co) ->
+                            exists chunk : AST.memory_chunk,
+                              access_mode t' = By_value chunk /\
+                              (align_chunk chunk | alignof gcenv t')) (PTree.elements e) ->
+      NoDupMembers (map snd (PTree.elements e)) ->
       subrep_range e -*>
       sepall subrep_inst (PTree.elements e)
       ** (sepall subrep_inst (PTree.elements e) -* subrep_range e).
   Proof.
     unfold subrep_range.
-    intro.
-    induction (PTree.elements e) as [|(x, (b, t))].
-    - simpl; rewrite <-hide_in_sepwand; auto.
+    intros ** Forall Nodup.
+    induction (PTree.elements e) as [|(x, (b, t))]; simpl.
+    - rewrite <-hide_in_sepwand; auto.
       now rewrite <-sepemp_right.
-    - repeat rewrite sepall_cons.
+    - inverts Forall as (id & co & Ht & Hco & ? & ? & ?) Forall.
+      inverts Nodup as Notin Nodup.
+      rewrite Ht, Hco.
       rewrite sep_assoc.
-      rewrite IHl at 1.
-      rewrite <-unify_distinct_wands.
+      rewrite IHl at 1; auto.
+      rewrite <-unify_distinct_wands; auto.
       + repeat rewrite <-sep_assoc.
         apply sep_imp'; auto.
         rewrite sep_comm, sep_assoc, sep_swap.
         apply sep_imp'; auto.
         simpl range_inst.
         rewrite <-range_imp_with_wand; auto.
-        * simpl. admit.
-        * simpl; destruct t; auto. destruct gcenv ! i; auto.
-          admit.
-        * simpl; destruct t; auto. destruct gcenv ! i eqn: E; auto.
-          admit.
-      + simpl. admit.
-      + simpl. admit.
-      + admit.
+        simpl.
+        change ((prog_comp_env tprog) ! id) with (gcenv ! id).
+        rewrite Hco.
+        eapply blockrep_empty; eauto.
+      + now apply disjoint_footprint_range_inst. 
+      + simpl. change ((prog_comp_env tprog) ! id) with (gcenv ! id); rewrite Hco.
+        rewrite blockrep_empty; eauto.
+        reflexivity.
+      + apply subseteq_footprint_sepall.
+        intros (x', (b', t')); simpl.
+        
   Qed.
   
   Definition varsrep (f: method) (ve: venv) (le: temp_env) :=
