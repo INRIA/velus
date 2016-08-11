@@ -197,7 +197,17 @@ Proof.
   apply Mem.unchanged_on_refl.
 Qed.
 
-Instance wand_footprint_massert_Proper:
+Instance wand_footprint_massert_imp_Proper:
+  Proper (massert_imp ==> massert_imp --> eq ==> eq ==> Basics.impl)
+         wand_footprint.
+Proof.
+  intros P Q HPQ R S HRS b' b Hbeq ofs' ofs Hoeq.
+  subst.
+  unfold wand_footprint.
+  now rewrite HPQ, HRS.
+Qed.
+
+Instance wand_footprint_massert_eqv_Proper:
   Proper (massert_eqv ==> massert_eqv ==> eq ==> eq ==> iff) wand_footprint.
 Proof.
   intros P Q HPQ R S HRS b' b Hbeq ofs' ofs Hoeq.
@@ -645,12 +655,6 @@ Section MassertPredEqv.
     now rewrite (HPQ x), (HQR x).
   Qed.
 
-  Add Relation (A -> massert) massert_pred_eqv
-      reflexivity proved by massert_pred_eqv_refl
-      symmetry proved by massert_pred_eqv_sym
-      transitivity proved by massert_pred_eqv_trans
-  as massert_pred_eqv_prel.
-
   Lemma massert_pred_eqv_inst:
     forall P Q x,
       massert_pred_eqv P Q ->
@@ -660,6 +664,12 @@ Section MassertPredEqv.
   Qed.
   
 End MassertPredEqv.
+
+Add Parametric Relation (A: Type) : (A -> massert) massert_pred_eqv
+    reflexivity proved by massert_pred_eqv_refl
+    symmetry proved by massert_pred_eqv_sym
+    transitivity proved by massert_pred_eqv_trans
+as massert_pred_eqv_prel.
 
 Section Sepall.
   Context {A: Type}.
@@ -904,22 +914,6 @@ Section Sepall.
 End Sepall.
 
 Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
-  Proper (eq ==> @Permutation.Permutation A ==> massert_eqv)
-         sepall.
-Proof.
-  intros p q Heq xs ys Hperm.
-  rewrite sepall_permutation with (1:=Hperm).
-  induction Hperm.
-  - reflexivity.
-  - simpl. now rewrite IHHperm, Heq.
-  - simpl.
-    repeat rewrite Heq.
-    repeat apply sepconj_eqv; try reflexivity.
-  - now rewrite IHHperm2.
-Qed.
-
-(*
-Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
   Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
          sepall.
 Proof.
@@ -936,7 +930,6 @@ Proof.
     now rewrite IHl, (massert_pred_eqv_inst _ _ _ Heq).
   - now rewrite IHHperm2.
 Qed.
-*)
 
 (* * * * * * * * Ranges * * * * * * * * * * * * * * *)
 
