@@ -456,6 +456,26 @@ Proof.
   unfold subseteq_footprint. intuition.
 Qed.
 
+Instance subseteq_footprint_massert_imp_Proper:
+  Proper (massert_imp ==> massert_imp --> Basics.impl) subseteq_footprint.
+Proof.
+  intros P Q HPQ R S HSR HPsR b ofs HfQ.
+  apply HPQ in HfQ.
+  specialize (HPsR b ofs HfQ).
+  now apply HSR in HPsR.
+Qed.
+
+Instance subseteq_footprint_massert_eqv_Proper:
+  Proper (massert_eqv ==> massert_eqv ==> iff) subseteq_footprint.
+Proof.
+  intros P Q HPQ R S HSR.
+  destruct HPQ as [HPQ HQP].
+  destruct HSR as [HSR HRS].  
+  split; intro HH.
+  - rewrite HPQ in HH; now rewrite HRS.
+  - rewrite HQP in HH. now rewrite HSR.
+Qed.
+
 Lemma subseteq_footprint_sepconj:
   forall P Q R S,
     subseteq_footprint P Q ->
@@ -1030,38 +1050,26 @@ Section SplitRange.
   Lemma split_range_fields:
     forall b lo,
       NoDupMembers (co_members co) ->
-      massert_eqv (range b lo (lo + co_sizeof co))
-                  (sepall (field_range (co_members co) b lo) (co_members co)
-                   ** (sepall (field_range (co_members co) b lo) (co_members co)
-                       -* range b lo (lo + co_sizeof co))).
+      massert_imp (range b lo (lo + co_sizeof co))
+                  (sepall (field_range (co_members co) b lo) (co_members co)).
   Proof.
     intros b lo Hndup.
-    cut (massert_imp (range b lo (lo + co_sizeof co))
-                     (sepall (field_range (co_members co) b lo) (co_members co))).
-    - intro Himp.
-      split.
-      + apply range_imp_with_wand with (1:=Himp).
-        apply decidable_footprint_field_range.
-        apply footprint_perm_sepall.
-        apply footprint_perm_field_range.
-      + apply sep_unwand.
-        apply decidable_footprint_field_range.
-    - apply Henv in Hco.
-      rewrite (co_consistent_sizeof _ _ Hco).
-      rewrite (co_consistent_alignof _ _ Hco).
-      rewrite Hstruct.
-      simpl.
-      rewrite range_split'
-      with (mid:=lo + sizeof_struct env 0 (co_members co)).
-      + rewrite split_range_fields' with (1:=Hndup).
-        now rewrite sep_comm, sep_drop.
-      + split.
-        * rewrite <-Z.add_0_r at 1.
-          apply Z.add_le_mono_l.
-          apply sizeof_struct_incr.
-        * apply Z.add_le_mono_l.
-          apply align_le.
-          apply alignof_composite_pos.
+    apply Henv in Hco.
+    rewrite (co_consistent_sizeof _ _ Hco).
+    rewrite (co_consistent_alignof _ _ Hco).
+    rewrite Hstruct.
+    simpl.
+    rewrite range_split'
+    with (mid:=lo + sizeof_struct env 0 (co_members co)).
+    + rewrite split_range_fields' with (1:=Hndup).
+      now rewrite sep_comm, sep_drop.
+    + split.
+      * rewrite <-Z.add_0_r at 1.
+        apply Z.add_le_mono_l.
+        apply sizeof_struct_incr.
+      * apply Z.add_le_mono_l.
+        apply align_le.
+        apply alignof_composite_pos.
   Qed.
 
 End SplitRange.

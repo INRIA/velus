@@ -411,7 +411,6 @@ Section StateRepProperties.
            rewrite <-Hmem.
            rewrite split_range_fields
            with (1:=gcenv_consistent) (2:=Hg) (3:=Hsu) (4:=Hndup).
-           rewrite sep_comm, sep_drop at 1.
            unfold field_range. (* try to do without unfolding here *)
            rewrite Hmem at 1.
            unfold make_members.
@@ -811,16 +810,10 @@ Section BlockRep.
       (forall x ty, In (x, ty) (co_members co) ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      massert_eqv (range b 0 (co_sizeof co))
-                  (blockrep (PM.empty val) (co_members co) b
-                   ** (blockrep (PM.empty val) (co_members co) b
-                       -* range b 0 (co_sizeof co))).
+      massert_imp (range b 0 (co_sizeof co))
+                  (blockrep (PM.empty val) (co_members co) b).
   Proof.
     intros ** Hco Hstruct Hndups Hchunk.
-    change (massert_eqv (range b 0 (0 + co_sizeof co))
-                        (blockrep (PM.empty val) (co_members co) b
-                         ** (blockrep (PM.empty val) (co_members co) b
-                             -* range b 0 (co_sizeof co)))).
     rewrite split_range_fields
     with (1:=ge_consistent) (2:=Hco) (3:=Hstruct) (4:=Hndups).
     rewrite blockrep_empty' with (1:=Hndups) (2:=Hchunk).
