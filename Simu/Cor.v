@@ -20,7 +20,7 @@ Require Import Program.Tactics.
 Require Import List.
 Import List.ListNotations.
 Require Import Coq.ZArith.BinInt.
-Require Coq.Sorting.Permutation.
+Require Import Coq.Sorting.Permutation.
 
 Open Scope list_scope.
 Open Scope sep_scope.
@@ -145,37 +145,144 @@ Section PRESERVATION.
 
   Definition c_state := (Clight.env * Clight.temp_env)%type.
 
-  Definition subrep_inst e ocg :=
-    let '(o, cid, g) := ocg in
-    match gcenv ! (prefix g cid), e ! o with 
-    | Some gco, Some (oblk, t) =>
-      if type_eq t (type_of_inst (prefix g cid)) then
-        blockrep gcenv v_empty (co_members gco) oblk
-      else sepfalse
-    | _, _ => sepfalse
-    end.
-
-  (* Definition subrep_inst_free e ocg := *)
+  (* Definition subrep_inst e ocg := *)
   (*   let '(o, cid, g) := ocg in *)
   (*   match gcenv ! (prefix g cid), e ! o with  *)
   (*   | Some gco, Some (oblk, t) => *)
   (*     if type_eq t (type_of_inst (prefix g cid)) then *)
   (*       blockrep gcenv v_empty (co_members gco) oblk *)
-  (*       -* range oblk 0 (co_sizeof gco) *)
   (*     else sepfalse *)
   (*   | _, _ => sepfalse *)
   (*   end. *)
-  
-  Definition subrep (f: method) (e: env) :=
-    sepall (subrep_inst e) (get_instance_methods f.(m_body))
-    (* ** sepall (subrep_inst_free e) (get_instance_methods f.(m_body)) *).
 
-  Definition subrep_range_inst (xbt: ident * (block * typ)):=
+  Definition subrep_inst (xbt: ident * (block * typ)) :=
+    let '(x, (b, t)) := xbt in
+    match t with
+    | Tstruct id _ =>
+      match gcenv ! id with
+      | Some co =>
+        blockrep gcenv v_empty (co_members co) b
+      | None => sepfalse
+      end
+    | _ => sepfalse
+    end.
+
+  Definition subrep_inst_env e x :=
+    match e ! x with
+    | Some (b, Tstruct id _) =>
+      (* match t with *)
+      (* | Tstruct id _ => *)
+        match gcenv ! id with
+        | Some co =>
+          blockrep gcenv v_empty (co_members co) b
+        | None => sepfalse
+        end
+      (* | _ => sepfalse *)
+      (* end *)
+    | _ => sepfalse
+    end.
+    
+  (* Definition subrep (f: method) (e: env) := *)
+  (*   sepall (subrep_inst e) (get_instance_methods f.(m_body)). *)
+
+  Definition subrep (f: method) (e: env) :=
+    sepall (subrep_inst_env e)
+           (var_names (make_out_vars (get_instance_methods f.(m_body)))).
+  
+  Lemma subrep_eqv:
+    forall f e,
+      Permutation (var_names (make_out_vars (get_instance_methods f.(m_body))))
+                  (map fst (PTree.elements e)) ->
+      subrep f e <-*->
+      sepall subrep_inst (PTree.elements e).
+  Proof.
+    intros ** Permut.
+    unfold subrep.
+    rewrite Permut.
+    clear Permut.
+    remember (PTree.elements e) as elems.
+    assert (exists elems', PTree.elements e = elems' ++ elems) as Helems by
+          (exists (@nil (ident * (block * typ))); now simpl).
+    clear Heqelems.
+    induction elems as [|(x, (b, t))]; simpl; auto.
+    destruct Helems as (elems' & Helems).
+    apply sepconj_eqv.
+    - unfold subrep_inst_env.
+      assert (e ! x = Some (b, t)) as Hx
+          by (apply PTree.elements_complete; rewrite Helems;
+              apply in_app; right; apply in_eq).
+      rewrite Hx; auto.
+    - eapply IHelems; eauto.
+      exists (elems' ++ [(x, (b, t))]); rewrite app_last_app; auto.
+  Qed.
+  
+  Definition range_inst (xbt: ident * (block * typ)):=
     let '(x, (b, t)) := xbt in
     range b 0 (Ctypes.sizeof tge t).
-  
+
+  Definition range_inst_env e x :=
+    match e ! x with
+    | Some (b, t) => range b 0 (Ctypes.sizeof tge t)
+    | None => sepfalse
+    end.
+
   Definition subrep_range (e: env) :=
-    sepall subrep_range_inst (PTree.elements e).
+    sepall range_inst (PTree.elements e).
+  
+  Lemma subrep_range_eqv:
+    forall e,
+      subrep_range e <-*->
+      sepall (range_inst_env e) (map fst (PTree.elements e)).
+  Proof.
+    intro e.
+    unfold subrep_range.
+    remember (PTree.elements e) as elems.
+    assert (exists elems', PTree.elements e = elems' ++ elems) as Helems by
+          (exists (@nil (ident * (block * typ))); now simpl).
+    clear Heqelems.
+    induction elems as [|(x, (b, t))]; auto; simpl.
+    destruct Helems as [elems' Helems].
+    apply sepconj_eqv.
+    - unfold range_inst_env.
+      assert (In (x, (b, t)) (PTree.elements e)) as Hin
+          by (rewrite Helems; apply in_or_app; right; apply in_eq).
+      apply PTree.elements_complete in Hin.
+      rewrite Hin; auto.
+    - apply IHelems.
+      exists (elems' ++ [(x, (b, t))]).
+      rewrite app_last_app; auto.
+  Qed.
+
+  Lemma range_wand_intro:
+    forall e,
+      subrep_range e -*>
+      sepall subrep_inst (PTree.elements e)
+      ** (sepall subrep_inst (PTree.elements e) -* subrep_range e).
+  Proof.
+    unfold subrep_range.
+    intro.
+    induction (PTree.elements e) as [|(x, (b, t))].
+    - simpl; rewrite <-hide_in_sepwand; auto.
+      now rewrite <-sepemp_right.
+    - repeat rewrite sepall_cons.
+      rewrite sep_assoc.
+      rewrite IHl at 1.
+      rewrite <-unify_distinct_wands.
+      + repeat rewrite <-sep_assoc.
+        apply sep_imp'; auto.
+        rewrite sep_comm, sep_assoc, sep_swap.
+        apply sep_imp'; auto.
+        simpl range_inst.
+        rewrite <-range_imp_with_wand; auto.
+        * simpl. admit.
+        * simpl; destruct t; auto. destruct gcenv ! i; auto.
+          admit.
+        * simpl; destruct t; auto. destruct gcenv ! i eqn: E; auto.
+          admit.
+      + simpl. admit.
+      + simpl. admit.
+      + admit.
+  Qed.
   
   Definition varsrep (f: method) (ve: venv) (le: temp_env) :=
     pure (Forall (fun (xty: ident * typ) =>
@@ -1230,35 +1337,6 @@ Section PRESERVATION.
       + intro; subst x; apply Notin; apply inmembers_eq.
   Qed.
 
-  Definition env_range e x :=
-    match e ! x with
-    | Some (b, t) => range b 0 (Ctypes.sizeof tge t)
-    | None => sepfalse
-    end.
-  
-  Lemma sepall_fst:
-    forall e,
-      sepall (fun xbt => let '(x, (b, t)) := xbt in range b 0 (Ctypes.sizeof tge t)) (PTree.elements e)
-      <-*-> sepall (env_range e) (map fst (PTree.elements e)).
-  Proof.
-    intro e.
-    remember (PTree.elements e) as elems.
-    assert (exists elems', PTree.elements e = elems' ++ elems) as Helems by
-          (exists (@nil (ident * (block * typ))); now simpl).
-    clear Heqelems.
-    induction elems as [|(x, (b, t))]; auto; simpl.
-    destruct Helems as [elems' Helems].
-    apply sep_eqv.
-    - unfold env_range.
-      assert (In (x, (b, t)) (PTree.elements e)) as Hin
-          by (rewrite Helems; apply in_or_app; right; apply in_eq).
-      apply PTree.elements_complete in Hin.
-      rewrite Hin; auto.
-    - apply IHelems.
-      exists (elems' ++ [(x, (b, t))]).
-      rewrite app_last_app; auto.
-  Qed.
-
   Remark alloc_InMembers:
     forall vars e m e' m', 
       alloc_variables tge e m vars e' m' ->
@@ -1317,16 +1395,16 @@ Section PRESERVATION.
 
   Remark alloc_mem_vars:
     forall vars e m e' m' P,
+      m |= P ->
       NoDupMembers vars ->
       alloc_variables tge e m vars e' m' ->
-      m |= P ->
-      m' |= sepall (env_range e') (var_names vars) ** P.
+      m' |= sepall (range_inst_env e') (var_names vars) ** P.
   Proof.
-    induction vars as [|(y, t)]; intros ** Nodup Alloc Hrep;  
+    induction vars as [|(y, t)]; intros ** Hrep Nodup Alloc;  
     inverts Alloc as ? Alloc; simpl.
     - now rewrite <-sepemp_left.
     - inverts Nodup.
-      unfold env_range at 1.
+      unfold range_inst_env at 1.
       erewrite alloc_implies; eauto.
       rewrite sep_assoc, sep_swap.
       apply* IHvars.
@@ -1337,13 +1415,13 @@ Section PRESERVATION.
 
   Remark alloc_permutation:
     forall vars m e' m',
-      NoDupMembers vars ->
       alloc_variables tge empty_env m vars e' m' ->
-      Permutation.Permutation (var_names vars) (map fst (PTree.elements e')).
+      NoDupMembers vars ->
+      Permutation (var_names vars) (map fst (PTree.elements e')).
   Proof.
-    intros ** Nodup Alloc.
+    intros ** Alloc Nodup.
     pose proof (alloc_InMembers _ _ _ _ _ Alloc) as H.
-    apply Permutation.NoDup_Permutation.
+    apply NoDup_Permutation.
     - unfold var_names. now rewrite <-fst_NoDupMembers.
     - rewrite NoDup_norepet.
       apply PTree.elements_keys_norepet.
@@ -1353,9 +1431,25 @@ Section PRESERVATION.
       repeat rewrite fst_InMembers in H.
       intuition. 
   Qed.
-  
+
   Remark alloc_exists:
-    forall f vars e m P,
+    forall vars e m,
+      NoDupMembers vars ->
+      exists e' m',
+        alloc_variables tge e m vars e' m'.
+  Proof.
+    induction vars as [|(x, t)]; intros ** Nodup.
+    - exists e m; constructor.  
+    - inverts Nodup as Notin.
+      destruct (Mem.alloc m 0 (Ctypes.sizeof gcenv t)) as (m1 & b) eqn: Eq.
+      edestruct IHvars with (e:=PTree.set x (b, t) e) (m:=m1)
+        as (e' & m' & Halloc); eauto.
+      exists e' m'; econstructor; eauto.
+  Qed.
+
+  (* Lemma  *)
+  Lemma alloc_result:
+    forall f vars m P,
       vars = get_instance_methods f.(m_body) ->
       Forall (fun ocf => let '(o, cls, fid) := ocf in
                       exists co, gcenv ! (prefix fid cls) = Some co
@@ -1370,56 +1464,22 @@ Section PRESERVATION.
       NoDupMembers (make_out_vars vars) ->
       m |= P ->
       exists e' m',
-        alloc_variables tge e m (make_out_vars vars) e' m'
+        alloc_variables tge empty_env m (make_out_vars vars) e' m'
         /\ m' |= subrep f e'
              ** (subrep f e' -* subrep_range e')
              ** P.
   Proof.
-    intros ** Eq Hforall Nodup Hrep.
-    assert (exists vars', get_instance_methods f.(m_body) = vars' ++ vars) as Heq
-        by (exists (@nil (ident * ident * ident)); auto).
-    unfold subrep; rewrite <-Eq.
-    clear Eq.
-    revert e m P Hrep.
-    induction vars as [|((o, cls), fid)]; intros ** Hrep.
-    - exists e m; split*.
-      + constructor.
-      + simpl. 
-        repeat rewrite* <-sepemp_left.
-        admit.
-    - inverts Hforall as (co & Hco & ? & ? & ? & ?).
-      inverts Nodup as Notin.
-      destruct (Mem.alloc m 0 (Ctypes.sizeof gcenv (type_of_inst (prefix fid cls)))) as (m1 & b) eqn: Eq.
-      edestruct IHvars with (e:=PTree.set o (b, (type_of_inst (prefix fid cls))) e) (m:=m1)
-        as (e' & m' & Halloc & Hrep'); eauto.
-      + destruct Heq as [vars' Heq].
-        exists (vars' ++ [(o, cls, fid)]).
-        rewrite app_last_app; auto.
-      + apply* alloc_rule.
-        * omega.
-        * simpl; rewrite* Hco. 
-      + exists e' m'; split*.
-        * econstructor; eauto.
-        *{ simpl in *. rewrite Hco in *.
-           pose proof alloc_implies as Halloc_implies.
-           specialize (Halloc_implies _ _ _ _ _ _ _ _ Notin Halloc).
-           rewrite Halloc_implies.
-           destruct (type_eq (type_of_inst (prefix fid cls))
-             (type_of_inst (prefix fid cls))) as [|E].
-           - rewrite blockrep_empty in Hrep'; eauto.
-             repeat rewrite sep_assoc in *.
-             apply sep_swap.
-             eapply sep_imp; eauto.
-             rewrite sep_swap.
-             apply sep_imp'; auto.
-             rewrite <-sep_assoc.
-             apply sep_imp'; auto.
-             apply PTree.elements_correct in Halloc_implies.          
-             
-             admit.
-             (* rewrite sep_swap, sep_swap34, sep_swap23; auto. *)
-           - exfalso; apply* E.
-         }
+    intros ** Heq Hforall Nodup Hrep; subst.
+    pose proof (alloc_exists _ empty_env m Nodup) as Alloc.
+    destruct Alloc as (e' & m' & Alloc).
+    exists e' m'; split*.
+    eapply alloc_mem_vars in Hrep; eauto.
+    apply alloc_permutation in Alloc; auto.
+    rewrite Alloc in Hrep.
+    rewrite <-subrep_range_eqv in Hrep.
+    repeat rewrite subrep_eqv; auto.
+    rewrite range_wand_intro in Hrep.
+    now rewrite sep_assoc in Hrep.
   Qed.
 
   Lemma compat_funcall_pres:
@@ -1478,9 +1538,10 @@ Section PRESERVATION.
       rewrite NoDupMembers_app in Nodup.
       now apply NoDupMembers_app_r in Nodup.
     - simpl in Hlengths. inversion Hlengths; eauto.
-    - forwards* (e_fun & m_fun & ? & Hm_fun): (alloc_exists callee).
+    - forwards* (e_fun & m_fun & ? & Hm_fun): (alloc_result callee).
       + skip.
-      + now rewrite nodupmembers_list_norepet. 
+      + unfold var_names in Norep_vars.
+        now rewrite fst_NoDupMembers, NoDup_norepet. 
       + forwards* (? & ?): (bind_parameters_temps_implies' (m_in callee)) self_not_out.
         pose proof Hin as Hin'.
         apply sepall_in in Hin.
@@ -1535,19 +1596,27 @@ Section PRESERVATION.
     - apply* IHl.
   Qed.
 
-  (* Lemma free_exists': *)
-  (*   forall xs m P, *)
-  (*     m |= sepall (fun bse => let '(b, s, e) := bse in range b s e) xs ** P -> *)
-  (*     exists m', Mem.free_list m xs = Some m'. *)
-  (* Proof. *)
-  (*   induction xs as [|((b, s), e)]; simpl; intros ** Hrep. *)
-  (*   - exists m; auto. *)
-  (*   - rewrite sep_assoc in Hrep. *)
-  (*     apply free_rule in Hrep. *)
-  (*     destruct Hrep as (m1 & Hfree & Hm1). *)
-  (*     rewrite Hfree. *)
-  (*     eapply IHxs; eauto. *)
-  (* Qed. *)
+  Lemma free_exists:
+    forall e f m P,
+      m |= subrep f e
+        ** (subrep f e -* subrep_range e)
+        ** P ->
+      exists m', Mem.free_list m (blocks_of_env tge e) = Some m'.
+  Proof.
+    intros ** Hrep.
+    rewrite <-sep_assoc, sep_unwand in Hrep.
+    - revert m Hrep.
+      unfold subrep_range, blocks_of_env.
+      induction (PTree.elements e) as [|(x,(b,ty))];
+        simpl; intros m Hrep.
+      + exists m; auto.
+      + rewrite sep_assoc in Hrep.
+        apply free_rule in Hrep.
+        destruct Hrep as (m1 & Hfree & Hm1).
+        rewrite Hfree.
+        apply IHl; auto.
+    - admit.
+  Qed.
 
   Lemma subrep_extract:
     forall f f' e m o c' P,
@@ -1577,28 +1646,6 @@ Section PRESERVATION.
     repeat rewrite sep_assoc in Hrep'.
     rewrite sep_swap23 in Hrep'.
     exists oblk c ws xs; auto.
-  Qed.
-
-  Lemma free_exists:
-    forall e f m P,
-      m |= subrep f e
-        ** (subrep f e -* subrep_range e)
-        ** P ->
-      exists m', Mem.free_list m (blocks_of_env tge e) = Some m'.
-  Proof.
-    intros ** Hrep.
-    rewrite <-sep_assoc, sep_unwand in Hrep.
-    - revert m Hrep.
-      unfold subrep_range, blocks_of_env.
-      induction (PTree.elements e) as [|(x,(b,ty))];
-        simpl; intros m Hrep.
-      + exists m; auto.
-      + rewrite sep_assoc in Hrep.
-        apply free_rule in Hrep.
-        destruct Hrep as (m1 & Hfree & Hm1).
-        rewrite Hfree.
-        apply IHl; auto.
-    - admit.
   Qed.
   
   Theorem correctness:
