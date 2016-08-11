@@ -947,16 +947,19 @@ Section Sepall.
         apply Hm.
       + apply Hsub.
       + apply subseteq_footprint_sepall.
+        intros.
         apply Hsub.
     - intros b ofs Hf.
       rewrite sep_unwand; [|now auto].
       rewrite <-sep_assoc, sep_unwand; [|now auto].
       destruct Hf as [Hfp|Hf].
-      + now rewrite (subseteq_footprint_sepall _ _ _ Hsub) in Hfp.
+      + now rewrite subseteq_footprint_sepall with (q:=q) in Hfp.        
       + now destruct Hf.
   Qed.
   
 End Sepall.
+
+Hint Resolve decidable_footprint_sepall footprint_perm_sepall.
 
 Instance sepall_massert_pred_eqv_permutation_eqv_Proper A:
   Proper (massert_pred_eqv ==> @Permutation.Permutation A ==> massert_eqv)
@@ -1098,5 +1101,3 @@ Section SplitRange.
   Qed.
 
 End SplitRange.
-
-

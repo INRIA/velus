@@ -283,7 +283,7 @@ Section PRESERVATION.
   
   Hint Resolve decidable_footprint_subrep_inst footprint_perm_subrep_inst.
   
-  Lemma range_wand_intro:
+  Lemma range_wand_equiv:
     forall e,
       Forall (fun xbt => let '(x, (b, t)):= xbt in
                       exists id co,
@@ -297,12 +297,14 @@ Section PRESERVATION.
                               access_mode t' = By_value chunk /\
                               (align_chunk chunk | alignof gcenv t')) (PTree.elements e) ->
       NoDupMembers (map snd (PTree.elements e)) ->
-      subrep_range e -*>
+      subrep_range e <-*->
       sepall subrep_inst (PTree.elements e)
       ** (sepall subrep_inst (PTree.elements e) -* subrep_range e).
   Proof.
     unfold subrep_range.
     intros ** Forall Nodup.
+    split.
+    2: now rewrite* sep_unwand.
     induction (PTree.elements e) as [|(x, (b, t))]; simpl.
     - rewrite <-hide_in_sepwand; auto.
       now rewrite <-sepemp_right.
@@ -327,8 +329,15 @@ Section PRESERVATION.
         rewrite blockrep_empty; eauto.
         reflexivity.
       + apply subseteq_footprint_sepall.
-        intros (x', (b', t')); simpl.
-        
+        intros (x', (b', t')) Hin; simpl.
+        eapply In_Forall in Forall; eauto.
+        simpl in Forall.
+        destruct Forall as (id' & co' & Ht' & Hco' & ? & ? & ?).
+        rewrite Ht', Hco'. simpl.
+        change ((prog_comp_env tprog) ! id') with (gcenv ! id').
+        rewrite Hco'.        
+        rewrite blockrep_empty; eauto.
+        reflexivity.
   Qed.
   
   Definition varsrep (f: method) (ve: venv) (le: temp_env) :=
@@ -1525,8 +1534,10 @@ Section PRESERVATION.
     rewrite Alloc in Hrep.
     rewrite <-subrep_range_eqv in Hrep.
     repeat rewrite subrep_eqv; auto.
-    rewrite range_wand_intro in Hrep.
-    now rewrite sep_assoc in Hrep.
+    rewrite range_wand_equiv in Hrep.
+    - now rewrite sep_assoc in Hrep.
+    - admit.
+    - admit.
   Qed.
 
   Lemma compat_funcall_pres:
