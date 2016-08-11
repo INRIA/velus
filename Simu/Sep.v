@@ -913,15 +913,17 @@ Section Sepall.
   
   Lemma subseteq_footprint_sepall:
     forall p q xs,
-      (forall x, subseteq_footprint (p x) (q x)) ->
+      (forall x, In x xs -> subseteq_footprint (p x) (q x)) ->
       subseteq_footprint (sepall p xs) (sepall q xs).
   Proof.
     intros p q xs Hsub.
     induction xs as [|x xs IH].
     now apply subseteq_footprint_refl.
     simpl. apply subseteq_footprint_sepconj.
-    now apply Hsub.
+    now (apply Hsub; constructor).
     apply IH.
+    intros x' Hin.
+    apply Hsub. now apply in_cons.
   Qed.
     
   Lemma sepall_outwand_cons:
