@@ -991,5 +991,11 @@ Section Lists.
       apply H; auto.
       apply in_cons; auto.
   Qed.
+
+  Lemma NoDup_map_inv (f:A->B) l : NoDup (map f l) -> NoDup l.
+  Proof.
+    induction l; simpl; inversion_clear 1; subst; constructor; auto.
+    intro H. now apply (in_map f) in H.
+  Qed.
   
 End Lists.

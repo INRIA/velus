@@ -359,8 +359,8 @@ Section PRESERVATION.
     ** staterep gcenv prog c.(c_name) (fst S) sb (Int.unsigned sofs)
     ** blockrep gcenv (snd S) outco.(co_members) outb
     ** subrep f e
-    ** (subrep f e -* subrep_range e)
-    ** varsrep f (snd S) le.
+    ** varsrep f (snd S) le
+    ** (subrep f e -* subrep_range e).
 
   Lemma match_states_conj:
     forall c f S e le m sb sofs outb outco P,
@@ -368,8 +368,8 @@ Section PRESERVATION.
       m |= staterep gcenv prog c.(c_name) (fst S) sb (Int.unsigned sofs)
           ** blockrep gcenv (snd S) outco.(co_members) outb
           ** subrep f e
-          ** (subrep f e -* subrep_range e)
           ** varsrep f (snd S) le
+          ** (subrep f e -* subrep_range e)
           ** P
       /\ le ! self_id = Some (Vptr sb sofs)
       /\ le ! out_id = Some (Vptr outb Int.zero)
@@ -1449,6 +1449,109 @@ Section PRESERVATION.
          }
   Qed.
 
+    (* Definition get_type (xbt: ident * (block * typ)) := *)
+  (*   let '(x, (b, t)) := xbt in *)
+  (*   (x, t). *)
+
+  (* Remark In_get_type: *)
+  (*   forall elts x t, *)
+  (*     In (x, t) (map get_type elts) -> *)
+  (*     exists b, In (x, (b, t)) elts. *)
+  (* Proof. *)
+  (*   induction elts as [|(x', (b', t'))]; simpl; intros ** Hin. *)
+  (*   - contradiction. *)
+  (*   - destruct Hin as [Eq|Hin]. *)
+  (*     + inverts Eq. *)
+  (*       exists b'; now left. *)
+  (*     + apply IHelts in Hin. *)
+  (*       destruct Hin as [b Hin]. *)
+  (*       exists b; now right. *)
+  (* Qed. *)
+
+  (* Remark get_type_In: *)
+  (*   forall elts x b t, *)
+  (*     In (x, (b, t)) elts -> *)
+  (*     In (x, t) (map get_type elts). *)
+  (* Proof. *)
+  (*   induction elts as [|(x', (b', t'))]; simpl; intros ** Hin. *)
+  (*   - contradiction. *)
+  (*   - destruct Hin as [Eq|Hin]. *)
+  (*     + inverts Eq. *)
+  (*       now left. *)
+  (*     + apply IHelts in Hin. *)
+  (*       now right. *)
+  (* Qed. *)
+
+  (* Remark get_set_same: *)
+  (*   forall {A} x e v (v': A), *)
+  (*     (PTree.set x v e) ! x = Some v' -> v = v'. *)
+  (* Proof. *)
+  (*   induction x, e; simpl; (eauto || now inversion 1). *)
+  (* Qed. *)
+  
+  (* Remark alloc_In: *)
+  (*   forall vars e m e' m',  *)
+  (*     alloc_variables tge e m vars e' m' -> *)
+  (*     (forall x t, *)
+  (*         In (x, t) (map get_type (PTree.elements e')) <-> *)
+  (*         In (x, t) (map get_type (PTree.elements e)) \/ In (x, t) vars). *)
+  (* Proof. *)
+  (*   induction vars as [|(y, ty)]; intros ** Alloc x t;     *)
+  (*   inverts Alloc as ? Alloc. *)
+  (*   - split*. simpl. *)
+  (*     intros [?|?]; auto. *)
+  (*     contradiction. *)
+  (*   - specialize (IHvars _ _ _ _ Alloc x t). *)
+  (*     destruct IHvars as [In_Or Or_In]. *)
+  (*     split.     *)
+  (*     + intro Hin. *)
+  (*       apply In_Or in Hin. *)
+  (*       destruct Hin as [Hin|?]. *)
+  (*       *{ destruct (ident_eqb x y) eqn: E. *)
+  (*          - apply ident_eqb_eq in E. *)
+  (*            subst y. *)
+  (*            apply In_get_type in Hin. *)
+  (*            destruct Hin as [b Hin]. *)
+  (*            apply PTree.elements_complete in Hin. *)
+  (*            apply get_set_same in Hin. *)
+  (*            inverts Hin. *)
+  (*            right; apply in_eq. *)
+  (*          - apply ident_eqb_neq in E. *)
+  (*            apply In_get_type in Hin. *)
+  (*            destruct Hin as [b Hin]. *)
+  (*            apply PTree.elements_complete in Hin. *)
+  (*            rewrite* PTree.gso in Hin. *)
+  (*            apply PTree.elements_correct in Hin. *)
+  (*            left; eapply get_type_In; eauto. *)
+  (*        } *)
+  (*       * right; apply in_cons; auto. *)
+  (*     + intros [Hin|Hin]; apply Or_In. *)
+  (*       *{ left. *)
+  (*          destruct (ident_eqb x y) eqn: E. *)
+  (*          - apply ident_eqb_eq in E. *)
+  (*            subst y. *)
+  (*            apply get_type_In with (b:=b1). *)
+  (*            apply PTree.elements_correct.              *)
+  (*            rewrite* PTree.gss. *)
+  (*            admit. *)
+  (*          - apply ident_eqb_neq in E. *)
+  (*            apply In_get_type in Hin. *)
+  (*            destruct Hin as [b Hin]. *)
+  (*            apply get_type_In with (b:=b). *)
+  (*            apply PTree.elements_correct.              *)
+  (*            rewrite* PTree.gso. *)
+  (*            apply* PTree.elements_complete. *)
+  (*        } *)
+  (*       *{ inverts Hin as Eq. *)
+  (*          - inverts Eq. *)
+  (*            left. *)
+  (*            apply get_type_In with (b:=b1). *)
+  (*            apply PTree.elements_correct.              *)
+  (*            rewrite* PTree.gss. *)
+  (*          - now right.  *)
+  (*        } *)
+  (* Qed. *)
+  
   Remark alloc_mem_vars:
     forall vars e m e' m' P,
       m |= P ->
@@ -1659,15 +1762,18 @@ Section PRESERVATION.
       m |= subrep f e
         ** (subrep f e -* subrep_range e)
         ** P ->
-      exists m', Mem.free_list m (blocks_of_env tge e) = Some m'.
+      exists m',
+        Mem.free_list m (blocks_of_env tge e) = Some m'
+        /\ m' |= P.
   Proof.
     intros ** Hrep.
     rewrite <-sep_assoc, sep_unwand in Hrep.
-    - revert m Hrep.
+    - revert P m Hrep.
       unfold subrep_range, blocks_of_env.
       induction (PTree.elements e) as [|(x,(b,ty))];
-        simpl; intros m Hrep.
-      + exists m; auto.
+        simpl; intros P m Hrep.
+      + exists m; split*.
+        rewrite* sepemp_left.
       + rewrite sep_assoc in Hrep.
         apply free_rule in Hrep.
         destruct Hrep as (m1 & Hfree & Hm1).
@@ -1683,27 +1789,26 @@ Section PRESERVATION.
       exists b co ws xs,
         e ! o = Some (b, type_of_inst (prefix f' c'))
         /\ gcenv ! (prefix f' c') = Some co
-        /\ get_instance_methods (m_body f) = ws ++ (o, c', f') :: xs
+        /\ var_names (make_out_vars (get_instance_methods (m_body f))) = ws ++ o :: xs
         /\ m |= blockrep gcenv v_empty (co_members co) b
-            ** (blockrep gcenv v_empty (co_members co) b -* range b 0 (co_sizeof co))
-            ** sepall (subrep_inst e) (ws ++ xs)
-            ** sepall (subrep_inst_free e) (ws ++ xs)
+            ** sepall (subrep_inst_env e) (ws ++ xs)
             ** P.
   Proof.
     intros ** Hrep Hin.
-    unfold subrep, subrep_inst, subrep_inst_free in *.
+    unfold subrep, subrep_inst in *.
     apply sepall_in in Hin; destruct Hin as (ws & xs & Hin & Heq). 
-    repeat rewrite Heq in Hrep.
-    pose proof Hrep as Hrep'.
-    do 3 apply sep_proj1 in Hrep.
-    destruct gcenv ! (prefix f' c'); [|contradict Hrep].
-    destruct e ! o; [|contradict Hrep].
-    destruct p as (oblk, t).
-    destruct (type_eq t (type_of_inst (prefix f' c'))); [|contradict Hrep].
-    subst t.
-    repeat rewrite sep_assoc in Hrep'.
-    rewrite sep_swap23 in Hrep'.
-    exists oblk c ws xs; auto.
+    (* repeat rewrite Heq in Hrep. *)
+    (* pose proof Hrep as Hrep'. *)
+    (* do 3 apply sep_proj1 in Hrep. *)
+    (* destruct gcenv ! (prefix f' c'); [|contradict Hrep]. *)
+    (* destruct e ! o; [|contradict Hrep]. *)
+    (* destruct p as (oblk, t). *)
+    (* destruct (type_eq t (type_of_inst (prefix f' c'))); [|contradict Hrep]. *)
+    (* subst t. *)
+    (* repeat rewrite sep_assoc in Hrep'. *)
+    (* rewrite sep_swap23 in Hrep'. *)
+    (* exists oblk c ws xs; auto. *)
+    admit.
   Qed.
   
   Theorem correctness:
@@ -1751,14 +1856,14 @@ Section PRESERVATION.
           exists m2 T ws xs,
             eval_funcall tge (function_entry2 tge) m1 (Internal cf)
                          ((Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr binst Int.zero) :: vs) T m2 Vundef
-            /\ get_instance_methods (m_body caller) = ws ++ (o, clsid, fid) :: xs
+            /\ var_names (make_out_vars (get_instance_methods (m_body caller))) = ws ++ o(* (o, clsid, fid) *) :: xs
             /\ m2 |= staterep gcenv prog owner.(c_name) (madd_obj o me2 (fst S)) sb (Int.unsigned sofs)
                    ** blockrep gcenv (snd S) outco.(co_members) outb
                    ** blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst
-                   ** (blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst
-                       -* range binst 0 (co_sizeof instco))
-                   ** sepall (subrep_inst e1) (ws ++ xs)
-                   ** sepall (subrep_inst_free e1) (ws ++ xs)
+                   (* ** (blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst *)
+                   (*     -* range binst 0 (co_sizeof instco)) *)
+                   ** sepall (subrep_inst_env e1) (ws ++ xs)
+                   (* ** sepall (subrep_inst_free e1) (ws ++ xs) *)
                    ** varsrep caller (snd S) le1
                    ** P).
   Proof.
@@ -1870,8 +1975,7 @@ Section PRESERVATION.
       + eapply find_method_In; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
-        rewrite sep_swap3, <-sep_assoc, <-sep_assoc, sep_swap45, sep_swap34,
-        sep_assoc, sep_assoc, sep_swap45, sep_swap34 in Hm2.
+        rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
         edestruct exec_funcall_assign with (ys:=ys) (m1:=m2)
           as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.
         * transitivity (length ys); auto. eapply Forall2_length; eauto.
@@ -1903,24 +2007,16 @@ Section PRESERVATION.
              eapply sep_imp; eauto.
              apply sep_imp'; auto.
              apply sep_imp'; auto.
-             unfold subrep.
-             rewrite (sepall_breakout _ _ _ _ (subrep_inst e1) Heq).
-             rewrite (sepall_breakout _ _ _ _ (subrep_inst_free e1) Heq).
-             repeat rewrite sep_assoc.
+             rewrite <-sep_assoc.
              apply sep_imp'; auto.
-             + unfold subrep_inst.
-               rewrite Hinstco, Hoblk.
-               destruct (type_eq (type_of_inst (prefix f clsid)) (type_of_inst (prefix f clsid))) as [|neq].
-               * apply* blockrep_any_empty.
-               * contradict neq; auto.
-             + rewrite sep_swap.
-               apply sep_imp'; auto.
-               apply sep_imp'; auto.
-               unfold subrep_inst_free.
-               rewrite Hinstco, Hoblk.
-               destruct (type_eq (type_of_inst (prefix f clsid)) (type_of_inst (prefix f clsid))) as [|neq].
-               * admit.
-               * contradict neq; auto.
+             unfold subrep.
+             rewrite (sepall_breakout _ _ _ _ (subrep_inst_env e1) Heq).
+             apply sep_imp'; auto.
+             unfold subrep_inst_env.
+             rewrite Hoblk.
+             unfold type_of_inst.
+             rewrite Hinstco.
+             apply* blockrep_any_empty.
          }
          
     (* Skip : "skip" *)
@@ -1954,7 +2050,7 @@ Section PRESERVATION.
       destruct Hrep as (binst' & instco' & ws & xs & Hbinst' & Hinstco' & ? & Hrep).
       rewrite Hinstco' in Hinstco; inverts Hinstco.
       rewrite Hbinst' in Hbinst; inverts Hbinst.
-      rewrite sep_swap45, sep_swap34, sep_swap23, sep_swap in Hrep.
+      rewrite sep_swap23, sep_swap in Hrep.
       forwards* (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & ? & ? & Hobjs & Hm_fun & ? & ?):
         (compat_funcall_pres cf sb sofs binst vs); auto.
       + admit.
@@ -1967,65 +2063,67 @@ Section PRESERVATION.
         * rewrite match_states_conj; splits*.
           simpl.
           rewrite sep_swap, sep_swap34, sep_swap23, sep_swap45, sep_swap34,
-          <-sep_assoc, sep_swap45, sep_swap34, sep_assoc in Hm_fun; eauto.  
-        *{ do 2 econstructor; exists ws xs; splits*.
+          <-sep_assoc, <-sep_assoc, sep_swap45, sep_swap34, sep_swap23,
+          sep_swap45, sep_swap34, sep_assoc, sep_assoc in Hm_fun; eauto.  
+        *{ rewrite match_states_conj in MS'; destruct MS' as (Hm_fun' & ?).
+           rewrite sep_swap23, sep_swap5, sep_swap in Hm_fun'.
+           forwards* (m_fun'' & Hfree & Hm_fun''): free_exists.
+           exists m_fun''; econstructor; exists ws xs; splits*.
            - apply* eval_funcall_internal.
              + constructor*. 
              + rewrite* Htr.
                apply* exec_Sseq_1.
                apply* exec_Sreturn_none.
              + rewrite Hret; reflexivity. 
-             + unfold Mem.free_list. skip.
            - rewrite sep_swap5.
-             rewrite <-sep_assoc, sep_swap5, sep_assoc in MS'.
+             do 3 rewrite <-sep_assoc in Hm_fun''; rewrite sep_swap5 in Hm_fun'';
+             do 3 rewrite sep_assoc in Hm_fun''.          
              unfold varsrep in *; rewrite sep_pure in *.
-             rewrite <-sep_assoc, sep_swap3, sep_assoc in MS'.
-             rewrite match_states_conj in MS'; destruct MS' as (Hpure & Hrep' & ?);
-             split*; clear Hpure.
-             rewrite sep_swap34, sep_swap23, sep_swap.
-             rewrite sep_swap4 in Hrep'.
-             unfold varsrep in Hrep'; rewrite sep_pure in Hrep';
-             destruct Hrep' as [Hpure Hrep']; clear Hpure.
-             rewrite sep_swap in Hrep'; apply sep_proj2 in Hrep'. (* FREE *)
-             rewrite sep_swap, sep_swap34, sep_swap23, <-sep_assoc,
-             sep_swap45, sep_swap34, sep_swap23, <-sep_assoc, sep_swap23 in Hrep'.
+             destruct Hm_fun'' as (Hpure & Hm_fun''); split*.
+             rewrite sep_swap5, sep_pure in Hm_fun''.
+             destruct Hm_fun'' as (Hpure' & Hm_fun'').             
+             rewrite sep_swap23, sep_swap.
              eapply sep_imp; eauto.
-             + rewrite staterep_skip with (c:=owner); eauto. simpl.
-               rewrite ident_eqb_refl. rewrite sep_comm.
-               apply* sep_imp'.
-               rewrite sepall_breakout with (ys:=c_objs owner); eauto; simpl.
-               apply sep_imp'.
-               * rewrite Offs.
-                 unfold instance_match, mfind_inst, madd_obj; simpl.
-                 rewrite PM.gss.
-                 eapply welldef_not_class_in in WD; eauto.
-                 rewrite <-staterep_skip_cons with (prog:=prog'') (cls:=owner); eauto.
-                 rewrite <-staterep_skip_app with (prog:=owner :: prog''); eauto.
-                 rewrite <-Hprog.
-                 unfold Int.add.
-                 repeat rewrite* Int.unsigned_repr.
-                 admit.
-                 admit.
-                 admit.
-               *{ unfold staterep_objs.
-                  apply sepall_swapp.
-                  intros (i, k) Hini.
-                  destruct (field_offset gcenv i (make_members owner)); auto.
-                  unfold instance_match, mfind_inst, madd_obj; simpl.
-                  destruct (ident_eqb i o) eqn: E.
-                  - exfalso.
-                    apply ident_eqb_eq in E; subst i.
-                    pose proof (c_nodupobjs owner) as Nodup.
-                    rewrite Hobjs in Nodup.
-                    rewrite NoDupMembers_app_cons in Nodup.
-                    destruct Nodup as [Notin Nodup].
-                    apply Notin.
-                    eapply In_InMembers; eauto.
-                  - apply ident_eqb_neq in E. 
-                    rewrite* PM.gso.
-                }
-             + repeat apply* sep_imp'.
-               erewrite <-output_match; eauto.
+             apply sep_imp'; auto.
+             apply sep_imp'; auto.
+             + erewrite <-output_match; eauto.
                apply* blockrep_findvars.
+             + rewrite staterep_skip with (c:=owner); eauto. simpl.
+               rewrite ident_eqb_refl. rewrite sep_assoc, sep_swap3.
+               apply sep_imp'.
+               * admit.
+               *{ rewrite sepall_breakout with (ys:=c_objs owner); eauto; simpl.
+                  rewrite sep_assoc.
+                  apply sep_imp'.
+                  - rewrite Offs.
+                    unfold instance_match, mfind_inst, madd_obj; simpl.
+                    rewrite PM.gss.
+                    eapply welldef_not_class_in in WD; eauto.
+                    rewrite <-staterep_skip_cons with (prog:=prog'') (cls:=owner); eauto.
+                    rewrite <-staterep_skip_app with (prog:=owner :: prog''); eauto.
+                    rewrite <-Hprog.
+                    unfold Int.add.
+                    repeat rewrite* Int.unsigned_repr.
+                    admit.
+                    admit.
+                    admit.
+                  - apply sep_imp'; auto.
+                    unfold staterep_objs.
+                    apply sepall_swapp.
+                    intros (i, k) Hini.
+                    destruct (field_offset gcenv i (make_members owner)); auto.
+                    unfold instance_match, mfind_inst, madd_obj; simpl.
+                    destruct (ident_eqb i o) eqn: E.
+                    + exfalso.
+                      apply ident_eqb_eq in E; subst i.
+                      pose proof (c_nodupobjs owner) as Nodup.
+                      rewrite Hobjs in Nodup.
+                      rewrite NoDupMembers_app_cons in Nodup.
+                      destruct Nodup as [Notin Nodup].
+                      apply Notin.
+                      eapply In_InMembers; eauto.
+                    + apply ident_eqb_neq in E. 
+                      rewrite* PM.gso.
+                }
          }
 Admitted.
