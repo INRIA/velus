@@ -127,7 +127,13 @@ VFILES:=RMemory.v\
   Common.v\
   Interface.v\
   MinimpToClight/Translation.v\
-  DataflowToClight.v
+  DataflowToClight.v\
+  Simu/Syn.v\
+  Simu/Sem.v\
+  Simu/Tra.v\
+  Simu/Cor.v\
+  Simu/Sep.v\
+  Simu/SepInv.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
