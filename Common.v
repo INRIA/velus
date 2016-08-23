@@ -997,5 +997,12 @@ Section Lists.
     induction l; simpl; inversion_clear 1; subst; constructor; auto.
     intro H. now apply (in_map f) in H.
   Qed.
+
+  Lemma cons_is_app:
+    forall (x: A) xs,
+      x :: xs = [x] ++ xs.
+  Proof.
+    destruct xs; simpl; auto.
+  Qed.
   
 End Lists.

@@ -38,6 +38,14 @@ Ltac app_match_find_var_det :=
     assert (v2 = v1) by (applys* match_find_var_det H2 H1); subst v1; clear H2
   end.
 
+Lemma type_eq_refl:
+  forall {A} t (T F: A),
+    (if type_eq t t then T else F) = T.
+Proof.
+  intros.
+  destruct (type_eq t t) as [|Neq]; auto.
+  now contradict Neq.
+Qed.
 
 (* SIMULATION *)
 
@@ -167,28 +175,35 @@ Section PRESERVATION.
     | _ => sepfalse
     end.
 
-  Definition subrep_inst_env e x :=
+  Definition subrep_inst_env e (xt: ident * type) :=
+    let (x, t) := xt in
     match e ! x with
-    | Some (b, Tstruct id _) =>
-      match gcenv ! id with
-      | Some co =>
-        blockrep gcenv v_empty (co_members co) b
-      | None => sepfalse
-      end
+    | Some (b, Tstruct id _ as t') =>
+      if (type_eq t t') then
+        match gcenv ! id with
+        | Some co =>
+          blockrep gcenv v_empty (co_members co) b
+        | None => sepfalse
+        end
+      else sepfalse
     | _ => sepfalse
     end.
     
   (* Definition subrep (f: method) (e: env) := *)
   (*   sepall (subrep_inst e) (get_instance_methods f.(m_body)). *)
 
+  Definition drop_block (xbt: ident * (block * type)) :=
+    let '(x, (b, t)) := xbt in
+    (x, t).
+  
   Definition subrep (f: method) (e: env) :=
     sepall (subrep_inst_env e)
-           (var_names (make_out_vars (get_instance_methods f.(m_body)))).
-  
+           (make_out_vars (get_instance_methods f.(m_body))).
+
   Lemma subrep_eqv:
     forall f e,
-      Permutation (var_names (make_out_vars (get_instance_methods f.(m_body))))
-                  (map fst (PTree.elements e)) ->
+      Permutation (make_out_vars (get_instance_methods f.(m_body)))
+                  (map drop_block (PTree.elements e)) ->
       subrep f e <-*->
       sepall subrep_inst (PTree.elements e).
   Proof.
@@ -203,11 +218,12 @@ Section PRESERVATION.
     induction elems as [|(x, (b, t))]; simpl; auto.
     destruct Helems as (elems' & Helems).
     apply sepconj_eqv.
-    - unfold subrep_inst_env.
-      assert (e ! x = Some (b, t)) as Hx
+    - assert (e ! x = Some (b, t)) as Hx
           by (apply PTree.elements_complete; rewrite Helems;
               apply in_app; right; apply in_eq).
       rewrite Hx; auto.
+      destruct t; auto.
+      rewrite type_eq_refl; auto.
     - eapply IHelems; eauto.
       exists (elems' ++ [(x, (b, t))]); rewrite app_last_app; auto.
   Qed.
@@ -282,10 +298,6 @@ Section PRESERVATION.
   Qed.
   
   Hint Resolve decidable_footprint_subrep_inst footprint_perm_subrep_inst.
-
-  Definition drop_block (xbt: ident * (block * type)) :=
-    let '(x, (b, t)) := xbt in
-    (x, t).
 
   Lemma range_wand_equiv:
     forall e,
@@ -1009,9 +1021,7 @@ Section PRESERVATION.
         /\ list_norepet (var_names f.(fn_params))
         /\ list_norepet (var_names f.(fn_vars))
         /\ list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps))
-        /\ f.(fn_body) = return_none (translate_stmt prog c m m.(m_body))
-        (* /\ Forall (fun x => Ctypes.access_mode (snd x) = Ctypes.By_value (chunk_of_type (snd x))) *)
-        (*          (f.(Clight.fn_params) ++ f.(Clight.fn_vars)) *).
+        /\ f.(fn_body) = return_none (translate_stmt prog c m m.(m_body)).
   Admitted.
   
   Lemma eval_self_inst:
@@ -1628,22 +1638,107 @@ Section PRESERVATION.
       intuition. 
   Qed.
 
+  Remark get_leaf:
+    forall {A: Type} x, 
+      (@PTree.Leaf A) ! x = None.
+  Proof.
+     intros; now destruct x. 
+  Qed.
+  
+  Remark In_singleton:
+    forall {A} (y x: A),
+      In y [x] <-> y = x.
+  Proof.
+    split; intro H.
+    - simpl in H; destruct H; auto.
+      contradiction.
+    - subst x; apply in_eq.
+  Qed.
+  
+  Remark equiv_eq_singleton:
+    forall {A} (x: A) l,
+      NoDup l ->
+      ([x] = l <-> (forall y, In y l <-> In y [x])).
+  Proof.
+    intros ** Nodup.
+    split.
+    - intros; subst l; split; auto.
+    - destruct l; intro H.
+      + specialize (H x); destruct H as [? H'].
+        exfalso; apply H'; now left.
+      + inverts Nodup as Notin Nodup.
+        destruct l.
+        * specialize (H x); do 2 rewrite In_singleton in H.
+          f_equal; now apply H.
+        *{ pose proof H as H'.
+           specialize (H a); rewrite In_singleton in H.
+           specialize (H' a0); rewrite In_singleton in H'.
+           destruct H as [Ha].
+           destruct H' as [Ha0].
+           assert (a = a0).
+           - transitivity x.
+             + apply Ha, in_eq.
+             + symmetry; apply Ha0, in_cons, in_eq.
+           - exfalso; apply Notin.
+             subst; apply in_eq.
+         }
+  Qed.
+  
+  Remark elements_set_leaf:
+    forall {A} x (v: A),
+      PTree.elements (PTree.set x v PTree.Leaf) = [(x, v)].
+  Proof.
+    symmetry; rewrite equiv_eq_singleton.
+    - intros (y, a).
+      rewrite In_singleton.
+      split; intro H.
+      + apply PTree.elements_complete in H.
+        destruct (ident_eqb x y) eqn: E.
+        * apply ident_eqb_eq in E; subst y.
+          apply get_set_same in H.
+          now f_equal.
+        * apply ident_eqb_neq in E.
+          rewrite PTree.gso in H; auto.
+          rewrite get_leaf in H; discriminate.
+      + inverts H.
+        apply PTree.elements_correct, PTree.gss.
+    - apply NoDup_map_inv with (f:=fst).
+      apply NoDup_norepet.
+      apply PTree.elements_keys_norepet.
+  Qed.
+  
+  Lemma set_nodupmembers:
+    forall x (e: env) b1 t,
+      NoDupMembers (map snd (PTree.elements e)) ->
+      (forall b, InMembers b (map snd (PTree.elements e)) -> b <> b1) ->
+      NoDupMembers (map snd (PTree.elements (PTree.set x (b1, t) e))).
+  Proof.
+    induction e; simpl in *; intros ** Nodup Diff.
+    - rewrite elements_set_leaf; simpl.
+      constructor; auto.
+    - admit.
+  Qed.
+  
   Remark alloc_nodupmembers:
     forall vars e m e' m',
       alloc_variables tge e m vars e' m' ->
       NoDupMembers (map snd (PTree.elements e)) ->
-      (* (forall b, InMembers b (map snd (PTree.elements e)) -> Mem.valid_block m b) -> *)
+      (forall b, InMembers b (map snd (PTree.elements e)) -> Mem.valid_block m b) ->
       NoDupMembers (map snd (PTree.elements e')).
   Proof.
-    (* induction vars as [|(x, t)]; intros ** Alloc Nodup Valid; inverts Alloc as Alloc; auto. *)
-    (* apply IHvars with (e:=PTree.set x (b1, t) e) (m:=m1) (m':=m'); auto. *)
-    (* assert (In (x, (b1, t)) (PTree.elements (PTree.set x (b1, t) e))) as Hin *)
-    (*   by (apply PTree.elements_correct, PTree.gss). *)
-    (* apply in_map with (f:=snd) in Hin; simpl in Hin. *)
-    (* apply Mem.fresh_block_alloc in Alloc. *)
-    (* SearchAbout PTree.elements PTree.set. *)
-  Admitted.
-    
+    induction vars as [|(x, t)]; intros ** Alloc Nodup Valid; inverts Alloc as Alloc; auto.
+    apply IHvars with (e:=PTree.set x (b1, t) e) (m:=m1) (m':=m'); auto.
+    - apply set_nodupmembers; auto.
+      intros b Hinb. 
+      apply Valid in Hinb.
+      eapply Mem.valid_not_valid_diff; eauto.
+      eapply Mem.fresh_block_alloc; eauto.
+    - intros b Hinb.
+      destruct (eq_block b b1) as [Eq|Neq].
+      + subst b1. eapply Mem.valid_new_block; eauto.
+      + admit.
+  Qed.
+  
   Remark alloc_exists:
     forall vars e m,
       NoDupMembers vars ->
@@ -1729,7 +1824,10 @@ Section PRESERVATION.
     - now rewrite sep_assoc in Hrep.
     - eapply Permutation_Forall; eauto. 
     - eapply alloc_nodupmembers; eauto.
-      unfold PTree.elements; simpl; constructor. 
+      + unfold PTree.elements; simpl; constructor.
+      + intros ** Hin.
+        unfold PTree.elements in Hin; simpl in Hin.
+        contradiction.
   Qed.
 
   Lemma compat_funcall_pres:
@@ -1869,11 +1967,11 @@ Section PRESERVATION.
         rewrite Hfree.
         apply IHl; auto.
     - unfold subrep.
-      induction (var_names (make_out_vars (get_instance_methods (m_body f)))) as [|x]; simpl; auto.
+      induction (make_out_vars (get_instance_methods (m_body f))) as [|(x, t)]; simpl; auto.
       apply decidable_footprint_sepconj; auto.
-      unfold subrep_inst_env.
-      destruct (e ! x) as [(b, t)|]; auto.
-      destruct t; auto.
+      destruct (e ! x) as [(b, t')|]; auto.
+      destruct t'; auto.
+      destruct (type_eq t (Tstruct i a)); auto.
       destruct (gcenv ! i); auto.
   Qed.
 
@@ -1884,19 +1982,17 @@ Section PRESERVATION.
       exists b co ws xs,
         e ! o = Some (b, type_of_inst (prefix f' c'))
         /\ gcenv ! (prefix f' c') = Some co
-        /\ var_names (make_out_vars (get_instance_methods (m_body f))) = ws ++ o :: xs
+        /\ make_out_vars (get_instance_methods (m_body f)) = ws ++ (o, type_of_inst (prefix f' c')) :: xs
         /\ m |= blockrep gcenv v_empty (co_members co) b
             ** sepall (subrep_inst_env e) (ws ++ xs)
             ** P.
   Proof.
     intros ** Hrep Hin.
     unfold subrep, subrep_inst in *.
-    assert (In o (var_names (make_out_vars (get_instance_methods (m_body f))))) as Hin'.
+    assert (In (o, type_of_inst (prefix f' c')) (make_out_vars (get_instance_methods (m_body f)))) as Hin'.
     - apply in_map with
-      (f:=fun x => fst (let '(o0, cid, f0) := x in (o0, type_of_inst (prefix f0 cid)))) in Hin.
-      simpl in Hin.
-      unfold var_names, make_out_vars.
-      rewrite map_map; auto.
+      (f:=fun x => let '(o0, cid, f0) := x in (o0, type_of_inst (prefix f0 cid))) in Hin.
+      unfold make_out_vars; auto.
     - clear Hin.
       apply sepall_in in Hin'; destruct Hin' as (ws & xs & Hin & Heq). 
       repeat rewrite Heq in Hrep.
@@ -1906,10 +2002,13 @@ Section PRESERVATION.
       destruct e ! o; [|contradict Hrep].
       destruct p as (oblk, t).
       destruct t; try now contradict Hrep.
-      destruct gcenv ! i; [|contradict Hrep].
+      destruct (type_eq (type_of_inst (prefix f' c')) (Tstruct i a)) as [Eq|]; [|contradict Hrep].
+      unfold type_of_inst in Eq.
+      inverts Eq.
+      destruct gcenv ! (prefix f' c'); [|contradict Hrep].
       rewrite sep_assoc in Hrep'.
       exists oblk c ws xs; splits*.
-  Admitted.
+  Qed.
   
   Theorem correctness:
     (forall p S1 s S2,
@@ -1956,7 +2055,7 @@ Section PRESERVATION.
           exists m2 T ws xs,
             eval_funcall tge (function_entry2 tge) m1 (Internal cf)
                          ((Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr binst Int.zero) :: vs) T m2 Vundef
-            /\ var_names (make_out_vars (get_instance_methods (m_body caller))) = ws ++ o :: xs
+            /\ make_out_vars (get_instance_methods (m_body caller)) = ws ++ (o, type_of_inst (prefix fid clsid)) :: xs
             /\ m2 |= staterep gcenv prog owner.(c_name) (madd_obj o me2 (fst S)) sb (Int.unsigned sofs)
                    ** blockrep gcenv (snd S) outco.(co_members) outb
                    ** blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst
@@ -2113,6 +2212,7 @@ Section PRESERVATION.
              rewrite Hoblk.
              unfold type_of_inst.
              rewrite Hinstco.
+             rewrite type_eq_refl.
              apply* blockrep_any_empty.
          }
          
