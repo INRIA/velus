@@ -13,7 +13,6 @@ Require Import List.
 Require Import ZArith.BinInt.
 
 Require Import Program.Tactics.
-Require Import LibTactics.
 
 Require Import Sep Syn Sem Tra.
 
@@ -54,9 +53,17 @@ Proof.
   unfold match_value, find_var; simpl.
   intros ** Hm Hf.
   destruct (PM.find x ve).
-  - subst; inverts* Hf.
+  - subst; inv Hf; reflexivity.
   - discriminate.
 Qed.
+
+
+Ltac app_match_find_var_det :=
+  match goal with
+  | H1: find_var (?me, ?ve) ?x ?v1,
+        H2: match_value ?ve ?x ?v2 |- _ =>
+    assert (v2 = v1) by (apply (match_find_var_det _ _ _ _ _ H2 H1)); subst v1; clear H2
+  end.
 
 Definition instance_match (me: menv) (i: ident): menv :=
   match mfind_inst i me with
@@ -138,11 +145,11 @@ Section Staterep.
       staterep prog c.(c_name) me b ofs <-*->
       staterep (c :: prog') c.(c_name) me b ofs.
   Proof.
-    introv Find.
-    forwards ?: find_class_name Find; subst.
-    forwards (? & Hprog & FindNone): find_class_app Find.
+    intros ** Find.
+    pose proof (find_class_name _ _ _ _ Find); subst.
+    pose proof (find_class_app _ _ _ _ Find) as (? & Hprog & FindNone). 
     rewrite Hprog.
-    rewrite* staterep_skip_app.
+    rewrite staterep_skip_app; auto.
   Qed.
 
   Lemma decidable_footprint_staterep:
@@ -294,7 +301,7 @@ Lemma in_translate_param_chunked:
 Proof.
   intros ** ? Hin.
   exists (chunk_of_type ty).
-  split*.
+  split; auto.
   now apply align_chunk_divides_alignof_type.
 Qed.
 
@@ -339,7 +346,7 @@ Section StateRepProperties.
         In (x, ty) cls.(c_mems) ->
         field_type x (make_members cls) = Errors.OK ty.
   Proof.
-    introv Hfind Hndup Hin.
+    intros ** Hfind Hndup ? ? Hin.
     apply in_field_type with (1:=Hndup).
     unfold make_members. apply in_app_iff. now left.
   Qed.
@@ -352,10 +359,10 @@ Section StateRepProperties.
         In (o, c) cls.(c_objs) ->
         field_type o (make_members cls) = Errors.OK (type_of_inst c).
   Proof.
-    introv Hfind Hndup Hin.
+    intros ** Hfind Hndup ? ? Hin.
     apply in_field_type with (1:=Hndup).
     unfold make_members. apply in_app_iff. right.
-    apply in_map_iff. exists* (o, c).
+    apply in_map_iff. exists (o, c); auto.
   Qed.
 
   (* TODO: Construct a global environment of structs for a given program. *)
@@ -371,7 +378,7 @@ Section StateRepProperties.
       range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
             staterep gcenv prog clsnm m_empty b 0.
   Proof.
-    introv Hwdef Hfind.
+    intros ** Hwdef Hfind.
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
            massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
@@ -614,7 +621,7 @@ Section StateRepProperties.
       exists d, field_offset gcenv x (make_members cls) = Errors.OK d
            /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
-    introv Hm Hin.
+    intros ** Hm Hin.
     Opaque sepconj. simpl in Hm. Transparent sepconj.
     rewrite ident_eqb_refl in Hm.
     do 2 apply sep_proj1 in Hm.
@@ -624,8 +631,8 @@ Section StateRepProperties.
     clear ws xs.
     unfold staterep_mems in Hm.
     destruct (field_offset gcenv x (make_members cls)).
-    + exists z; split*.
-      apply* contains_no_overflow.
+    + exists z; split; auto.
+      eapply contains_no_overflow; eauto.
     + contradict Hm.
   Qed.
 
@@ -633,9 +640,10 @@ Section StateRepProperties.
     forall m me cls prog b ofs o c P,
       m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
       In (o, c) (c_objs cls) ->
-      exists d, field_offset gcenv o (make_members cls) = Errors.OK d.
+      exists d, field_offset gcenv o (make_members cls) = Errors.OK d
+           /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
-    introv Hm Hin.
+    intros ** Hm Hin.
     apply sep_proj1 in Hm.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply sep_proj2 in Hm.
@@ -644,7 +652,8 @@ Section StateRepProperties.
     apply sep_proj1 in Hm.
     clear ws xs.
     destruct (field_offset gcenv o (make_members cls)).
-    + exists z; split*.
+    + exists z; split; auto.
+      admit.
     + contradict Hm.
   Qed.
 
@@ -850,7 +859,7 @@ Section BlockRep.
     intro ve.
     unfold match_value in *.
     rewrite PM.gso.
-    + apply* IHxs.
+    + apply IHxs; auto.
     + intro; subst; apply Notin.
       rewrite InMembers_app; right.
       eapply In_InMembers; eauto.
@@ -872,22 +881,21 @@ Section BlockRep.
       unfold match_value.
       intros v Findx.
       revert vs Findvars.
-      induction xs as [|(x', t')], vs; simpl; intro Findvars.
-      - rewrite* PM.gempty.
-      - rewrite* PM.gempty.
-      - rewrite* PM.gempty.
-      - inversion Findvars as [|y ? ys ? Find Findvars' Heq]; subst; clear Findvars.
-        destruct (split xs) as (g, d).
-        simpl in *; inverts Heq.
-        destruct (ident_eqb x x') eqn: E.
-        + apply ident_eqb_eq in E; subst x'.
-          rewrite Find in Findx.
-          rewrite PM.gss; auto.
-        + apply ident_eqb_neq in E.
-          destruct Hin as [Eq|?].
-          * inverts Eq; now contradict E.
-          * rewrite* PM.gso.
-            apply* IHxs.
+      induction xs as [|(x', t')], vs; simpl; intro Findvars;
+      try (rewrite PM.gempty; auto).
+      inversion Findvars as [|y ? ys ? Find Findvars' Heq]; subst; clear Findvars.
+      destruct (split xs) as (g, d).
+      simpl in *; inv Heq.
+      destruct (ident_eqb x x') eqn: E.
+      - apply ident_eqb_eq in E; subst x'.
+        rewrite Find in Findx.
+        rewrite PM.gss; auto.
+      - apply ident_eqb_neq in E.
+        destruct Hin as [Eq|?].
+        + inv Eq; now contradict E.
+        + rewrite PM.gso.
+          apply IHxs; auto.
+          exact E.
     Qed.
 
   Lemma blockrep_field_offset:
@@ -897,20 +905,16 @@ Section BlockRep.
       exists d, field_offset ge x flds = Errors.OK d
            /\ 0 <= d <= Int.max_unsigned.
   Proof.
-    introv Hm Hin.
+    intros ** Hm Hin.
     unfold blockrep in Hm.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].
     rewrite Hin in Hm. clear Hsplit Hin.
     do 2 apply sep_proj1 in Hm. clear ws xs.
-    destruct (field_offset ge x flds).
-    - exists* z; split*.
-      destruct (access_mode ty).
-      + apply* contains_no_overflow.
-      + contradict Hm.
-      + contradict Hm.
-      + contradict Hm.
-    - contradict Hm.
+    destruct (field_offset ge x flds), (access_mode ty);
+      try now contradict Hm.
+    exists z; split; auto.
+    eapply contains_no_overflow; eauto.
   Qed.
 
 End BlockRep.

@@ -7,8 +7,6 @@ Require Import List.
 
 Require Import Syn.
 
-Require Import LibTactics.
-
 (* SEMANTICS *)
 Definition val: Type := Values.val.
 
@@ -32,7 +30,7 @@ Lemma find_vars_cons:
 Proof.
   unfold find_vars, find_var; simpl.
   intros; destruct S. destruct (split xs); simpl in *.
-  inverts H; simpl in *; split; auto.
+  inv H; simpl in *; split; auto.
 Qed.
 
 Definition find_field (S: state) (x: ident) (v: val) :=
@@ -52,7 +50,7 @@ Theorem add_comm:
       PM.add x v (PM.add x' v' m) = PM.add x' v' (PM.add x v m).
 Proof.
   induction x, x', m; simpl; intro Neq;
-  ((f_equal; apply IHx; intro Eq; apply Neq; now inversion Eq) || now contradict Neq).
+  ((f_equal; apply IHx; intro Eq; apply Neq; now inv Eq) || now contradict Neq).
 Qed.
 
 Lemma adds_cons_cons:
@@ -125,7 +123,7 @@ Remark find_var_det:
 Proof.
   unfold find_var.
   intros ** H1 H2.
-  rewrite H1 in H2; inverts H2; reflexivity.
+  rewrite H1 in H2; inv H2; reflexivity.
 Qed.
 
 Ltac app_find_var_det :=
@@ -156,7 +154,7 @@ Remark find_field_det:
 Proof.
   unfold find_field.
   intros ** H1 H2.
-  rewrite H1 in H2; inverts H2; reflexivity.
+  rewrite H1 in H2; inv H2; reflexivity.
 Qed.
 
 Remark find_inst_det:
@@ -167,7 +165,7 @@ Remark find_inst_det:
 Proof.
   unfold find_inst.
   intros ** H1 H2.
-  rewrite H1 in H2; inverts H2; reflexivity.
+  rewrite H1 in H2; inv H2; reflexivity.
 Qed.
 
 Ltac app_find_inst_det :=
@@ -202,7 +200,7 @@ Theorem exps_eval_det:
     Forall2 (exp_eval S) es vs2 ->
     vs1 = vs2.
 Proof.
-  induction es, vs1, vs2; intros H1 H2; inverts H1; inverts H2; auto.
+  induction es, vs1, vs2; intros H1 H2; inv H1; inv H2; auto.
   app_exp_eval_det; auto.  
   f_equal; apply IHes; auto.
 Qed.
@@ -260,7 +258,8 @@ Ltac app_bool_val :=
     H1: Cop.bool_val ?v ?t ?m = Some ?b,
     H2: Cop.bool_val ?v ?t ?m' = Some ?b' |- _ =>
 let Heq := fresh in
-pose proof (bool_val_ptr v _ m m' H) as Heq; rewrite Heq in H1; rewrite H1 in H2; inverts H2
+pose proof (bool_val_ptr v _ m m' H) as Heq; rewrite Heq in H1; rewrite H1 in H2;
+inv H2
 end.
 
 Lemma stmt_call_eval_det:
@@ -269,22 +268,24 @@ Lemma stmt_call_eval_det:
     stmt_call_eval prog me clsid f vs me2 rvs2 ->
     me1 = me2 /\ rvs1 = rvs2.
 Proof.
-  introv Hstp1; revert me2 rvs2.
+  intros ** Hstp1 Hstp2; revert me2 rvs2 Hstp2.
   induction Hstp1 using stmt_call_eval_ind_2 with
   (P := fun p S s S' => forall S'', stmt_eval p S s S' -> stmt_eval p S s S'' -> S' = S'');
-  try (introv Hev1 Hev2; inverts Hev2); try app_exp_eval_det; auto.
+  try (intros ** Hev1 Hev2; inv Hev2); try app_exp_eval_det; auto.
   - app_bool_val; auto.
-  - apply* IHHstp0.
-    asserts_rewrite* (S2 = S4).
-  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
+  - apply IHHstp0; auto.
+    assert (S2 = S4) as E by auto.
+    rewrite E; auto.
+  - assert (omenv = omenv0) by (eapply find_inst_det; eauto); subst omenv0.
     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
-    repeat fequals; apply* IHHstp1.
-  - introv Hstp2; inverts Hstp2 as Hfindcls Hfindmeth.
-    rewrite Hfindcls in H; inverts H.
-    rewrite Hfindmeth in H0; inverts H0.
+    edestruct IHHstp1; eauto.
+    repeat f_equal; eauto. 
+  - subst.
+    rewrite H3 in H; inv H.
+    rewrite H4 in H0; inv H0.
     assert (S' = S'0); auto; subst S'0.
-    split*.
-    apply* find_vars_det.
+    split; auto.
+    eapply find_vars_det; eauto.
 Qed.
 
 Ltac app_stmt_step_eval_det :=
@@ -292,7 +293,7 @@ Ltac app_stmt_step_eval_det :=
   | H1: stmt_call_eval ?prog ?me ?clsid ?f ?vs ?me1 ?rvs1,
         H2: stmt_call_eval ?prog ?me ?clsid ?f ?vs ?me2 ?rvs2 |- _ =>
     let H := fresh in
-    assert (me1 = me2 /\ rvs1 = rvs2) as H by (eapply stmt_call_eval_det; eauto); inverts H; clear H2
+    assert (me1 = me2 /\ rvs1 = rvs2) as H by (eapply stmt_call_eval_det; eauto); inv H; clear H2
   end.
 
 Theorem stmt_eval_det:
@@ -302,15 +303,15 @@ Theorem stmt_eval_det:
     S1 = S2.
 Proof.
   intros until S2; intro Hev1; revert S2;
-  induction Hev1; intros S2' Hev2; inverts Hev2;
+  induction Hev1; intros S2' Hev2; inv Hev2;
   try app_exp_eval_det; auto.
   - apply IHHev1.
     app_bool_val; auto.
   - apply IHHev1_2.
-    asserts_rewrite* (S2 = S4).
-  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0.
+    assert (S2 = S4) as E by auto; rewrite E; auto.    
+  - assert (omenv = omenv0) by (eapply find_inst_det; eauto); subst omenv0.
     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0.
-    repeat fequals; apply* stmt_call_eval_det.
+    repeat f_equal; eapply stmt_call_eval_det; eauto.
 Qed.
 
 Ltac app_stmt_eval_det :=
@@ -318,7 +319,7 @@ Ltac app_stmt_eval_det :=
   | H1: stmt_eval ?prog ?S ?s ?S1,
         H2: stmt_eval ?prog ?S ?s ?S2 |- _ =>
     let H := fresh in
-    assert (S2 = S1) as H by (eapply stmt_eval_det; eauto); inverts H; clear H2
+    assert (S2 = S1) as H by (eapply stmt_eval_det; eauto); inv H; clear H2
   end.
 
 Lemma stmt_step_eval_det': 
@@ -329,26 +330,25 @@ Lemma stmt_step_eval_det':
     sub_prog prog2 prog1 -> 
     me1 = me2 /\ rvs1 = rvs2. 
 Proof. 
-  introv WD Hstp1; revert me2 rvs2 prog2. 
+  intros ** WD Hstp1 Hstp2 Sub; revert me2 rvs2 prog2 Hstp2 Sub. 
   induction Hstp1 using stmt_call_eval_ind_2 with 
   (P := fun p S s S' => WelldefClasses p -> forall S'', stmt_eval p S s S' -> stmt_eval p S s S'' -> S' = S''); 
-    [| | | | | |introv Hstp2 Hsub]; try (introv Hev1 Hev2; inverts Hev2); try app_exp_eval_det; auto.  
+    [| | | | | |intros ** Hstp2 Hsub]; try (intros ** Hev1 Hev2; inv Hev2); try app_exp_eval_det; auto.  
   - app_bool_val; auto. 
-  - apply* IHHstp0. 
-    asserts_rewrite* (S2 = S4). 
-  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0. 
+  - apply IHHstp0; auto. 
+    assert (S2 = S4) as E by auto; rewrite E; auto.    
+  - assert (omenv = omenv0) by (eapply find_inst_det; eauto); subst omenv0. 
     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0. 
-    repeat fequals; apply* IHHstp1; 
-    rewrite* <-List.app_nil_l; simpl. 
-  - inverts Hstp2. 
-    forwards* H': find_class_sub_same. 
-    rewrite H' in H; inverts H. 
-    rewrite H0 in H4; inverts H4.
-    forwards WD': find_class_welldef WD H'. 
+    repeat f_equal; eapply IHHstp1; eauto. 
+  - inv Hstp2. 
+    pose proof (find_class_sub_same _ _ _ _ _ H3 WD Hsub) as H'.
+    rewrite H' in H; auto; inv H. 
+    rewrite H0 in H4; inv H4.
+    pose proof (find_class_welldef _ _ _ _ WD H') as WD'.
     assert (S' = S'0); auto.
     subst S'0. 
-    split*. 
-    apply* find_vars_det. 
+    split; auto. 
+    eapply find_vars_det; eauto.
 Qed. 
  
 Theorem stmt_eval_det': 
@@ -360,15 +360,15 @@ Theorem stmt_eval_det':
     S1 = S2. 
 Proof. 
   intros until S2; intros WD Hev1; revert S2; 
-  induction Hev1; intros S2' Hev2 Hsub; inverts Hev2; inverts Hsub; 
+  induction Hev1; intros S2' Hev2 Hsub; inv Hev2; inv Hsub; 
   try app_exp_eval_det; auto. 
-  - apply* IHHev1. 
+  - apply IHHev1; auto.
     app_bool_val; eauto.     
-  - apply* IHHev1_2. 
-    asserts_rewrite* (S2 = S4). 
-  - assert (omenv = omenv0) by apply* find_inst_det; subst omenv0. 
+  - apply IHHev1_2; auto.
+    assert (S2 = S4) as E by auto; rewrite E; auto.    
+  - assert (omenv = omenv0) by (eapply find_inst_det; eauto); subst omenv0. 
     assert (vs = vs0) by (eapply Forall2_det; eauto; eapply exp_eval_det); subst vs0. 
-    repeat fequals; apply* stmt_step_eval_det'. 
+    repeat f_equal; eapply stmt_step_eval_det'; eauto. 
 Qed. 
  
 Ltac app_stmt_eval_det' := 
@@ -378,5 +378,5 @@ Ltac app_stmt_eval_det' :=
             H3: sub_prog ?prog2 ?prog1, 
                 H4: WelldefClasses ?prog1 |- _ => 
     let H := fresh in 
-    assert (S1 = S2) as H by (applys stmt_eval_det' H4 H1 H2 H3; eauto); inverts H; clear H2 
+    assert (S1 = S2) as H by (apply (stmt_eval_det' _ _ _ _ _ _ H4 H1 H2 H3); eauto); inv H; clear H2 
   end.

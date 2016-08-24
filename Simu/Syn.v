@@ -336,7 +336,18 @@ Qed.
 Inductive sub_prog: program -> program -> Prop := 
   sub_prog_intro: forall p p', 
     sub_prog p (p' ++ p). 
- 
+
+Hint Constructors sub_prog. 
+
+Lemma sub_prog_refl:
+  forall prog, sub_prog prog prog.
+Proof.
+  intro; change prog with ([]++prog) at 2.
+  constructor.
+Qed.
+
+Hint Resolve sub_prog_refl.
+
 Lemma find_class_sub: 
   forall prog clsid cls prog', 
     find_class clsid prog = Some (cls, prog') -> 
@@ -348,9 +359,7 @@ Proof.
   rewrite List_shift_first. 
   constructor. 
 Qed. 
- 
-Hint Constructors sub_prog. 
- 
+  
 Remark find_class_sub_same: 
   forall prog1 prog2 clsid cls prog', 
     find_class clsid prog2 = Some (cls, prog') -> 

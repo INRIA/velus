@@ -13,7 +13,6 @@ Require Import List.
 Require Import ZArith.BinInt.
 
 Require Import Program.Tactics.
-Require Import LibTactics.
 
 Open Scope list.
 Open Scope sep_scope.
@@ -32,6 +31,26 @@ Proof.
   intros ** HP HQ.
   rewrite HP. rewrite HQ.
   reflexivity.
+Qed.
+
+Lemma pure_imp:
+  forall P Q,
+    (pure P -*> pure Q) <-> (P -> Q).
+Proof.
+  split; intro Imp.
+  - eapply Imp. 
+  - split; auto.
+  Grab Existential Variables.
+  exact Memory.Mem.empty.
+Qed.
+
+Lemma pure_eqv:
+  forall P Q,
+    (pure P <-*-> pure Q) <-> (P <-> Q).
+Proof.
+  split; intro Eqv; destruct Eqv.
+  - split; now rewrite <-pure_imp.  
+  - split; now rewrite pure_imp.
 Qed.
 
 Lemma disjoint_footprint_sepconj:
@@ -789,7 +808,7 @@ Section Sepall.
     intros x ys Hin.
     apply in_split in Hin.
     destruct Hin as [ws [xs Hys]].
-    exists ws xs.
+    exists ws, xs.
     split; auto. 
     intro p. apply sepall_breakout with (1:=Hys).
   Qed.
