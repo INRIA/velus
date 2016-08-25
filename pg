@@ -1,0 +1,66 @@
+#!/bin/sh
+# Start Proof General with the right -I options
+# Use the Makefile to rebuild dependencies if needed
+# Recompile the modified file after coqide editing
+
+update_path_vars()
+{
+    INCLUDES=$1
+    PREFIX=$2
+
+    AFTERAS=
+    RECMODE=rec
+    ISPATH=0
+    for arg in $INCLUDES; do
+      case "$arg" in
+	-as) ;;
+	-R)
+	  COQPROGARGS="$COQPROGARGS \"$arg\""
+	  RECMODE=
+	  ISPATH=1
+	  ;;
+	-I)
+	  COQPROGARGS="$COQPROGARGS \"$arg\""
+	  RECMODE=nonrec
+	  ISPATH=1
+	  ;;
+	*)
+	  if [ $ISPATH -eq 1 ]; then
+	    COQPROGARGS="$COQPROGARGS \"$PREFIX$arg\""
+	    COQLOADPATH="$COQLOADPATH ($RECMODE \"$PREFIX$arg\""
+	    ISPATH=0
+	  else
+	    COQPROGARGS="$COQPROGARGS $AFTERAS\"$arg\""
+	    COQLOADPATH="$COQLOADPATH \"$arg\")"
+	  fi
+	  ;;
+      esac
+
+      case "$arg" in
+	-as) AFTERAS='"-as" ';;
+	*) AFTERAS=;;
+      esac
+    done
+}
+
+PWD=$(pwd)
+COMPCERT_INCLUDES=$(make -C CompCert print-includes)
+
+COQPROGARGS=""
+COQLOADPATH=""
+
+update_path_vars "$COMPCERT_INCLUDES" "$PWD/CompCert/"
+
+COQPROGARGS="\"-R\" \"$PWD\" \"Rustre\" $COQPROGARGS"
+COQLOADPATH="(\"$PWD\" \"Rustre\") $COQLOADPATH"
+
+#echo "COQPROGARGS=$COQPROGARGS"
+#echo
+#echo "COQLOADPATH=$COQLOADPATH"
+
+emacs --eval "(setq coq-use-project-file nil)"		\
+      --eval "(setq coq-prog-args '($COQPROGARGS))"	\
+      --eval "(setq coq-load-path '($COQLOADPATH))"     \
+      --eval "(setq compile-before-require nil)"	\
+      "$@"
+
