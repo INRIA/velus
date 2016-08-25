@@ -1008,3 +1008,45 @@ Section Lists.
   Qed.
   
 End Lists.
+
+Ltac induction_list_tac e I l H :=
+  match type of e with
+    list ?A =>
+    let Eq := fresh in
+    let Eql := H in
+    remember e as l eqn:Eq;
+      assert (exists l', e = l' ++ l) as Eql by (exists (@nil A); simpl; auto);
+      clear Eq; move Eql at top; induction l as I;
+      [clear Eql|
+       match goal with
+         IH: (exists l', e = l' ++ ?l'') -> ?P,
+             EQ: (exists l', e = l' ++ ?x::?xs) |- _ =>
+         let l' := fresh l in
+         let E := fresh in
+         destruct EQ as [l' Eql];
+           rewrite <-app_last_app in Eql;
+           assert (exists l', e = l' ++ xs) as E by (exists (l' ++ [x]); auto);
+           specialize (IH E); clear E
+       end]
+  end.
+
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) "eq:" ident(H) :=
+  induction_list_tac E I l H.
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) :=
+  let H := fresh "H" l in
+  induction_list E as I with l eq:H.
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) :=
+  let l := fresh "l" in
+  induction_list E as I with l.
+Tactic Notation "induction_list" constr(E) :=
+  induction_list E as [|].
+Tactic Notation "induction_list" constr(E) "with" ident(l) "eq:" ident(H) :=
+  induction_list E as [|] with l eq:H.
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "eq:" ident(H) :=
+  let l := fresh "l" in
+  induction_list E as I with l eq:H.
+Tactic Notation "induction_list" constr(E) "with" ident(l) :=
+  induction_list E as [|] with l.
+Tactic Notation "induction_list" constr(E) "eq:" ident(H) :=
+  let l := fresh "l" in
+  induction_list E as [|] with l eq:H.

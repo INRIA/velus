@@ -182,21 +182,16 @@ Section PRESERVATION.
     unfold subrep.
     rewrite Permut.
     clear Permut.
-    remember (PTree.elements e) as elems.
-    assert (exists elems', PTree.elements e = elems' ++ elems) as Helems by
-          (exists (@nil (ident * (block * typ))); now simpl).
-    clear Heqelems.
-    induction elems as [|(x, (b, t))]; simpl; auto.
-    destruct Helems as (elems' & Helems).
+    induction_list (PTree.elements e) as [|(x, (b, t))] with elems;
+      simpl; auto.
     apply sepconj_eqv.
     - assert (e ! x = Some (b, t)) as Hx
           by (apply PTree.elements_complete; rewrite Helems;
-              apply in_app; right; apply in_eq).
+              apply in_app; left; apply in_app; right; apply in_eq).
       rewrite Hx; auto.
       destruct t; auto.
       now rewrite type_eq_refl.
     - eapply IHelems; eauto.
-      exists (elems' ++ [(x, (b, t))]); now rewrite app_last_app.
   Qed.
   
   Definition range_inst (xbt: ident * (block * typ)):=
@@ -219,21 +214,14 @@ Section PRESERVATION.
   Proof.
     intro e.
     unfold subrep_range.
-    remember (PTree.elements e) as elems.
-    assert (exists elems', PTree.elements e = elems' ++ elems) as Helems by
-          (exists (@nil (ident * (block * typ))); now simpl).
-    clear Heqelems.
-    induction elems as [|(x, (b, t))]; auto; simpl.
-    destruct Helems as [elems' Helems].
+    induction_list (PTree.elements e) as [|(x, (b, t))] with elems; auto; simpl.
     apply sepconj_eqv.
     - unfold range_inst_env.
       assert (In (x, (b, t)) (PTree.elements e)) as Hin
-          by (rewrite Helems; apply in_or_app; right; apply in_eq).
+          by (rewrite Helems; apply in_or_app; left; apply in_or_app; right; apply in_eq).
       apply PTree.elements_complete in Hin.
       now rewrite Hin.
     - apply IHelems.
-      exists (elems' ++ [(x, (b, t))]).
-      now rewrite app_last_app.
   Qed.
 
   Remark decidable_footprint_subrep_inst:
@@ -1047,11 +1035,11 @@ Section PRESERVATION.
     revert ve ve' le1 m1 ys rvs Hout Hself Hrep Incl Types Length1 Length2 Nodup Valids.
     pose proof (m_nodup callee) as Nodup'.
     do 2 apply NoDupMembers_app_r in Nodup'.
-    remember (m_out callee) as outs.
-    assert (exists outs', m_out callee = outs' ++ outs) as Eq_out
-        by (exists (@nil (ident * typ)); auto).
-    clear Heqouts.
-    induction outs as [|(y', ty') outs]; intros;
+    (* remember (m_out callee) as outs. *)
+    (* assert (exists outs', m_out callee = outs' ++ outs) as Eq_out *)
+    (*     by (exists (@nil (ident * typ)); auto). *)
+    (* clear Heqouts. *)
+    induction_list (m_out callee) as [|(y', ty')] with outs; intros;
     destruct ys, rvs; try discriminate.
     - exists le1, m1, E0; split; auto.
       apply exec_Sskip.
@@ -1071,11 +1059,10 @@ Section PRESERVATION.
       rewrite <-Eq, <-Eq' in Hinstco.
       pose proof (output_match _ _ _ _ _ Findc' Findmeth' Hinstco) as Eq_instco.
       pose proof (output_match _ _ _ _ _ Findc Hcaller Houtco) as Eq_outco. 
-      destruct Eq_out as (outs' & Eq_out).
-
+      
       (* get the o.y' value evaluation *)
       assert (In (y', ty') callee.(m_out)) as Hin
-          by (rewrite Eq_out; apply in_or_app; right; apply in_eq).
+          by (rewrite Houts; apply in_or_app; left; apply in_or_app; right; apply in_eq).
       rewrite Eq, Eq' in Hinstco.
       edestruct (evall_inst_field y' ty' e1 le1) as (dy' & Ev_o_y' & Hoffset_y' & ?); eauto.
       assert (eval_expr tge e1 le1 m1 (Efield (Evar o (type_of_inst (prefix f clsid))) y' ty') v).
@@ -1104,8 +1091,6 @@ Section PRESERVATION.
             
            edestruct IHouts with (m1:=m2) (ve:= PM.add y v ve) (ve':=PM.add y' v ve')
              as (le' & m' & T' & Exec & Hm' & ? & ?); eauto.
-           - exists (outs' ++ [(y', ty')]).
-             rewrite app_last_app; auto.
            - rewrite sep_swap3. 
              rewrite adds_cons_cons in Hm2; auto.
              
@@ -1121,8 +1106,6 @@ Section PRESERVATION.
         (* y = o.y' *)
         *{ edestruct IHouts with (m1:=m1) (le1:=PTree.set y v le1) (ve:= PM.add y v ve) (ve':=PM.add y' v ve')
              as (le' & m' & T' & Exec & Hm' & ? & ?); eauto.
-           - exists (outs' ++ [(y', ty')]).
-             rewrite app_last_app; auto.
            - rewrite PTree.gso; auto.
              pose proof (m_out_id caller) as Notout.
              apply In_InMembers in Hvars.
@@ -1385,20 +1368,18 @@ Section PRESERVATION.
           \/ In (x, t) vars).
   Proof.
     intro vars.
-    remember vars as vars'.
-    assert (exists vars'', vars = vars'' ++ vars') as Hvars
-      by (exists (@nil (ident * type)); simpl; auto).
-    clear Heqvars'.
-    induction vars' as [|(y, ty)]; intros ** Alloc Nodup x t;
+    (* remember vars as vars'. *)
+    (* assert (exists vars'', vars = vars'' ++ vars') as Hvars *)
+    (*   by (exists (@nil (ident * type)); simpl; auto). *)
+    (* clear Heqvars'. *)
+    induction_list vars as [|(y, ty)] with vars'; intros ** Alloc Nodup x t;
     inv Alloc; inv Nodup.
     - split; simpl.
       + intros. left; split; auto.
         intros; contradiction.
       + intros [[? ?]|?]; auto.
         contradiction.
-    - destruct Hvars as [vars'' Hvars].
-      edestruct IHvars' with (x:=x) (t:=t) as [In_Or Or_In]; eauto.
-      1: exists (vars'' ++ [(y, ty)]); rewrite app_last_app; auto.
+    - edestruct IHvars' with (x:=x) (t:=t) as [In_Or Or_In]; eauto.
       clear IHvars'.
       split.
       + intro Hin.
