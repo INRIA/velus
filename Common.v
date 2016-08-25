@@ -327,14 +327,10 @@ Module Type OPERATORS.
   Parameter unop_eqb : unary_op -> unary_op -> bool.
   Parameter binop_eqb : binary_op -> binary_op -> bool.
 
-  Axiom val_eqb_true_iff : forall v1 v2, val_eqb v1 v2 = true <-> v1 = v2.
-  Axiom val_eqb_false_iff : forall v1 v2, val_eqb v1 v2 = false <-> v1 <> v2.
-  Axiom typ_eqb_true_iff : forall t1 t2, typ_eqb t1 t2 = true <-> t1 = t2.
-  Axiom typ_eqb_false_iff : forall t1 t2, typ_eqb t1 t2 = false <-> t1 <> t2.
-  Axiom unop_eqb_true_iff : forall op1 op2, unop_eqb op1 op2 = true <-> op1 = op2.
-  Axiom unop_eqb_false_iff : forall op1 op2, unop_eqb op1 op2 = false <-> op1 <> op2.
-  Axiom binop_eqb_true_iff : forall op1 op2, binop_eqb op1 op2 = true <-> op1 = op2.
-  Axiom binop_eqb_false_iff : forall op1 op2, binop_eqb op1 op2 = false <-> op1 <> op2.
+  Axiom val_eqb_iff : forall v1 v2, val_eqb v1 v2 = true <-> v1 = v2.
+  Axiom typ_eqb_iff : forall t1 t2, typ_eqb t1 t2 = true <-> t1 = t2.
+  Axiom unop_eqb_iff : forall op1 op2, unop_eqb op1 op2 = true <-> op1 = op2.
+  Axiom binop_eqb_iff : forall op1 op2, binop_eqb op1 op2 = true <-> op1 = op2.
 
   (* Definition of_bool (b : bool) := if b then true_val else false_val. *)
   (* Lemma bool_inj: forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
@@ -349,6 +345,18 @@ Module Type OPERATORS.
   (* Qed. *)
   
 End OPERATORS.
+
+Lemma flip_eqb:
+  forall A f (t1: A) (t2: A),
+    (f t1 t2 = true <-> t1 = t2) ->
+    (f t1 t2 = false <-> t1 <> t2).
+Proof.
+  intros A f t1 t2 HH.
+  split; intro Hfeq.
+  - intro Heq. apply HH in Heq. rewrite Heq in *. discriminate.
+  - apply Bool.not_true_is_false. intro Heq.
+    apply HH in Heq. now apply Hfeq.
+Qed.
 
 (** *** About Coq stdlib *)
 

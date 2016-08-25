@@ -145,13 +145,13 @@ Module SyntaxFun (Import Op : OPERATORS) <: SYNTAX Op.
       exp_eqb e1 e2 = true <-> e1 = e2.
   Proof.
     induction e1 (* using exp_ind2 *); intros e2; destruct e2; simpl; try now split; intro; discriminate.
-    - rewrite Bool.andb_true_iff, ident_eqb_eq, typ_eqb_true_iff.
+    - rewrite Bool.andb_true_iff, ident_eqb_eq, typ_eqb_iff.
       split; intro Heq; [now f_equal | now inversion Heq].
-    - rewrite Bool.andb_true_iff, ident_eqb_eq, typ_eqb_true_iff.
+    - rewrite Bool.andb_true_iff, ident_eqb_eq, typ_eqb_iff.
       split; intro Heq; [now f_equal | now inversion Heq].
-    - rewrite Bool.andb_true_iff, typ_eqb_true_iff, val_eqb_true_iff.
+    - rewrite Bool.andb_true_iff, typ_eqb_iff, val_eqb_iff.
       split; intro Heq; [now f_equal | now inversion Heq].
-    - rewrite 2 Bool.andb_true_iff, typ_eqb_true_iff, unop_eqb_true_iff.
+    - rewrite 2 Bool.andb_true_iff, typ_eqb_iff, unop_eqb_iff.
       split; intro Heq.
       + f_equal; try apply IHe1; apply Heq.
       (* auto. destruct Heq as [? Heq]; subst; split || f_equal; trivial; []. *)
@@ -164,7 +164,7 @@ Module SyntaxFun (Import Op : OPERATORS) <: SYNTAX Op.
       + now inversion Heq; subst; rewrite IHe1. (* trivial. split; trivial. clear Heq. induction n; simpl; [|]. *)
     (* * inversion_clear IHes. now rewrite H. *)
     (* * inversion_clear IHes. rewrite Bool.andb_true_iff, H. split; trivial. now apply IHn. *)
-    - rewrite 3 Bool.andb_true_iff, typ_eqb_true_iff, binop_eqb_true_iff.
+    - rewrite 3 Bool.andb_true_iff, typ_eqb_iff, binop_eqb_iff.
       rewrite IHe1_1, IHe1_2.
       split; intro Heq.
       + f_equal; apply Heq.
