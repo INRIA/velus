@@ -836,6 +836,30 @@ Section InMembers.
         * now apply IHxs.
   Qed.
 
+  Remark InMembers_snd_In:
+    forall {C} y l,
+      InMembers y (map (@snd C (A * B)) l) ->
+      exists x z, In (x, (y, z)) l.
+  Proof.
+    induction l as [|(x', (y', z'))]; simpl; intros ** Hin.
+    - contradiction.
+    - destruct Hin as [|Hin].
+      + subst y'; exists x', z'; now left.
+      + apply IHl in Hin; destruct Hin as (x & z & Hin).
+        exists x, z; now right.
+  Qed.
+
+  Remark In_InMembers_snd:
+    forall {C} x y z l,
+      In (x, (y, z)) l ->
+      InMembers y (map (@snd C (A * B)) l).
+  Proof.
+    induction l as [|(x', (y', z'))]; simpl; intros ** Hin; auto.
+    destruct Hin as [Eq|Hin].
+    - inv Eq; now left.
+    - right; auto.
+  Qed.
+  
 End InMembers.
 
 Ltac app_NoDupMembers_det :=

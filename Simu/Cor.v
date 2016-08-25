@@ -67,9 +67,9 @@ Section PRESERVATION.
   Admitted.
 
    Lemma methods_corres:
-    forall c clsnm prog' mid m (e: Clight.env),
+    forall c clsnm prog' fid m (e: Clight.env),
       find_class clsnm prog = Some (c, prog') ->
-      find_method mid c.(c_methods) = Some m ->
+      find_method fid c.(c_methods) = Some m ->
       Forall (fun xt => sizeof tge (snd xt) <= Int.modulus /\
                       (exists (id : AST.ident) (co : composite),
                           snd xt = Tstruct id noattr /\
@@ -83,8 +83,8 @@ Section PRESERVATION.
                                 (align_chunk chunk | alignof gcenv t'))))
               (make_out_vars (get_instance_methods (m_body m)))
       /\ exists loc_f f,
-          Genv.find_symbol tge mid = Some loc_f
-          /\ e ! mid = None
+          Genv.find_symbol tge fid = Some loc_f
+          /\ e ! fid = None
           /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
           /\ f.(fn_params) = (self_id, type_of_inst_p c.(c_name))
                               :: (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name)))
@@ -1351,10 +1351,6 @@ Section PRESERVATION.
           \/ In (x, t) vars).
   Proof.
     intro vars.
-    (* remember vars as vars'. *)
-    (* assert (exists vars'', vars = vars'' ++ vars') as Hvars *)
-    (*   by (exists (@nil (ident * type)); simpl; auto). *)
-    (* clear Heqvars'. *)
     induction_list vars as [|(y, ty)] with vars'; intros ** Alloc Nodup x t;
     inv Alloc; inv Nodup.
     - split; simpl.
@@ -1542,11 +1538,26 @@ Section PRESERVATION.
       apply NoDup_norepet.
       apply PTree.elements_keys_norepet.
   Qed.
+
+  Remark elements_set:
+    forall {A} e x (v: A),
+      ~InMembers x (PTree.elements e) ->
+      Permutation (PTree.elements (PTree.set x v e)) ((x, v) :: PTree.elements e).
+  Proof.
+    intros ** Notin.
+    assert (In (x, v) (PTree.elements (PTree.set x v e))) as Hin
+        by apply PTree.elements_correct, PTree.gss.
+    apply in_split in Hin.
+    destruct Hin as (es & es' & Eq).
+    rewrite Eq.
+    apply Permutation_sym, Permutation_cons_app.
+    admit.
+  Qed.
   
   Lemma set_nodupmembers:
     forall x (e: env) b1 t,
       NoDupMembers (map snd (PTree.elements e)) ->
-      (forall b, InMembers b (map snd (PTree.elements e)) -> b <> b1) ->
+      ~ InMembers b1 (map snd (PTree.elements e)) -> 
       NoDupMembers (map snd (PTree.elements (PTree.set x (b1, t) e))).
   Proof.
     induction e; simpl in *; intros ** Nodup Diff.
@@ -1554,7 +1565,7 @@ Section PRESERVATION.
       constructor; auto.
     - admit.
   Qed.
-  
+
   Remark alloc_nodupmembers:
     forall vars e m e' m',
       alloc_variables tge e m vars e' m' ->
@@ -1566,16 +1577,29 @@ Section PRESERVATION.
     inv Alloc; auto.
     apply IHvars with (e:=PTree.set x (b1, t) e) (m:=m1) (m':=m'); auto.
     - apply set_nodupmembers; auto.
-      intros b Hinb. 
+      intros Hinb. 
       apply Valid in Hinb.
       eapply Mem.valid_not_valid_diff; eauto.
       eapply Mem.fresh_block_alloc; eauto.
-    - intros b Hinb.
+    - intros b Hinb.   
       destruct (eq_block b b1) as [Eq|Neq].
-      + subst b1. eapply Mem.valid_new_block; eauto.
-      + admit.
+      + subst b1; eapply Mem.valid_new_block; eauto.
+      + assert (InMembers b (map snd (PTree.elements e))) as Hin.
+        *{ apply InMembers_snd_In in Hinb; destruct Hinb as (x' & t' & Hin).
+           apply (In_InMembers_snd x' _ t'). 
+           apply PTree.elements_complete in Hin.
+           destruct (ident_eqb x x') eqn: E.
+           - apply ident_eqb_eq in E; subst x'.
+             apply get_set_same in Hin.
+             inv Hin. now contradict Neq.
+           - apply ident_eqb_neq in E.
+             rewrite PTree.gso in Hin; auto.
+             now apply PTree.elements_correct. 
+         }
+        * apply Valid in Hin.
+          eapply Mem.valid_block_alloc; eauto.
   Qed.
-  
+
   Remark alloc_exists:
     forall vars e m,
       NoDupMembers vars ->
