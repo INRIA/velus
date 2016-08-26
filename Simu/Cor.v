@@ -1470,88 +1470,150 @@ Section PRESERVATION.
       intuition. 
   Qed.
 
-  Remark get_leaf:
-    forall {A: Type} x, 
-      (@PTree.Leaf A) ! x = None.
-  Proof.
-     intros; now destruct x. 
-  Qed.
+  (* Remark get_leaf: *)
+  (*   forall {A: Type} x,  *)
+  (*     (@PTree.Leaf A) ! x = None. *)
+  (* Proof. *)
+  (*    intros; now destruct x.  *)
+  (* Qed. *)
   
-  Remark In_singleton:
-    forall {A} (y x: A),
-      In y [x] <-> y = x.
-  Proof.
-    split; intro H.
-    - simpl in H; destruct H; auto.
-      contradiction.
-    - subst x; apply in_eq.
-  Qed.
+  (* Remark In_singleton: *)
+  (*   forall {A} (y x: A), *)
+  (*     In y [x] <-> y = x. *)
+  (* Proof. *)
+  (*   split; intro H. *)
+  (*   - simpl in H; destruct H; auto. *)
+  (*     contradiction. *)
+  (*   - subst x; apply in_eq. *)
+  (* Qed. *)
   
-  Remark equiv_eq_singleton:
-    forall {A} (x: A) l,
-      NoDup l ->
-      ([x] = l <-> (forall y, In y l <-> In y [x])).
-  Proof.
-    intros ** Nodup.
-    split.
-    - intros; subst l; split; auto.
-    - destruct l; intro H.
-      + specialize (H x); destruct H as [? H'].
-        exfalso; apply H'; now left.
-      + inversion_clear Nodup as [|? ? Notin].
-        destruct l.
-        * specialize (H x); rewrite 2 In_singleton in H.
-          f_equal; now apply H.
-        *{ pose proof H as H'.
-           specialize (H a); rewrite In_singleton in H.
-           specialize (H' a0); rewrite In_singleton in H'.
-           destruct H as [Ha].
-           destruct H' as [Ha0].
-           assert (a = a0).
-           - transitivity x.
-             + apply Ha, in_eq.
-             + symmetry; apply Ha0, in_cons, in_eq.
-           - exfalso; apply Notin.
-             subst; apply in_eq.
-         }
-  Qed.
+  (* Remark equiv_eq_singleton: *)
+  (*   forall {A} (x: A) l, *)
+  (*     NoDup l -> *)
+  (*     ([x] = l <-> (forall y, In y l <-> In y [x])). *)
+  (* Proof. *)
+  (*   intros ** Nodup. *)
+  (*   split. *)
+  (*   - intros; subst l; split; auto. *)
+  (*   - destruct l; intro H. *)
+  (*     + specialize (H x); destruct H as [? H']. *)
+  (*       exfalso; apply H'; now left. *)
+  (*     + inversion_clear Nodup as [|? ? Notin]. *)
+  (*       destruct l. *)
+  (*       * specialize (H x); rewrite 2 In_singleton in H. *)
+  (*         f_equal; now apply H. *)
+  (*       *{ pose proof H as H'. *)
+  (*          specialize (H a); rewrite In_singleton in H. *)
+  (*          specialize (H' a0); rewrite In_singleton in H'. *)
+  (*          destruct H as [Ha]. *)
+  (*          destruct H' as [Ha0]. *)
+  (*          assert (a = a0). *)
+  (*          - transitivity x. *)
+  (*            + apply Ha, in_eq. *)
+  (*            + symmetry; apply Ha0, in_cons, in_eq. *)
+  (*          - exfalso; apply Notin. *)
+  (*            subst; apply in_eq. *)
+  (*        } *)
+  (* Qed. *)
   
-  Remark elements_set_leaf:
-    forall {A} x (v: A),
-      PTree.elements (PTree.set x v PTree.Leaf) = [(x, v)].
-  Proof.
-    symmetry; rewrite equiv_eq_singleton.
-    - intros (y, a).
-      rewrite In_singleton.
-      split; intro H.
-      + apply PTree.elements_complete in H.
-        destruct (ident_eqb x y) eqn: E.
-        * apply ident_eqb_eq in E; subst y.
-          apply get_set_same in H.
-          now f_equal.
-        * apply ident_eqb_neq in E.
-          rewrite PTree.gso in H; auto.
-          rewrite get_leaf in H; discriminate.
-      + inv H.
-        apply PTree.elements_correct, PTree.gss.
-    - apply NoDup_map_inv with (f:=fst).
-      apply NoDup_norepet.
-      apply PTree.elements_keys_norepet.
-  Qed.
+  (* Remark elements_set_leaf: *)
+  (*   forall {A} x (v: A), *)
+  (*     PTree.elements (PTree.set x v PTree.Leaf) = [(x, v)]. *)
+  (* Proof. *)
+  (*   symmetry; rewrite equiv_eq_singleton. *)
+  (*   - intros (y, a). *)
+  (*     rewrite In_singleton. *)
+  (*     split; intro H. *)
+  (*     + apply PTree.elements_complete in H. *)
+  (*       destruct (ident_eqb x y) eqn: E. *)
+  (*       * apply ident_eqb_eq in E; subst y. *)
+  (*         apply get_set_same in H. *)
+  (*         now f_equal. *)
+  (*       * apply ident_eqb_neq in E. *)
+  (*         rewrite PTree.gso in H; auto. *)
+  (*         rewrite get_leaf in H; discriminate. *)
+  (*     + inv H. *)
+  (*       apply PTree.elements_correct, PTree.gss. *)
+  (*   - apply NoDup_map_inv with (f:=fst). *)
+  (*     apply NoDup_norepet. *)
+  (*     apply PTree.elements_keys_norepet. *)
+  (* Qed. *)
 
-  Remark elements_set:
-    forall {A} e x (v: A),
-      ~InMembers x (PTree.elements e) ->
-      Permutation (PTree.elements (PTree.set x v e)) ((x, v) :: PTree.elements e).
+  (* Remark elements_set: *)
+  (*   forall {A} e x (v: A), *)
+  (*     ~InMembers x (PTree.elements e) -> *)
+  (*     Permutation (PTree.elements (PTree.set x v e)) ((x, v) :: PTree.elements e). *)
+  (* Proof. *)
+  (*   intros ** Notin. *)
+  (*   assert (In (x, v) (PTree.elements (PTree.set x v e))) as Hin *)
+  (*       by apply PTree.elements_correct, PTree.gss. *)
+  (*   apply in_split in Hin. *)
+  (*   destruct Hin as (es & es' & Eq). *)
+  (*   rewrite Eq. *)
+  (*   apply Permutation_sym, Permutation_cons_app. *)
+  (*   admit. *)
+  (* Qed. *)
+
+  (* Remark Permutation_NoDupMembers_snd: *)
+  (*   forall {A B C} (l l': list (A * (B * C))), *)
+  (*     Permutation l l' -> *)
+  (*     NoDupMembers (map snd l) -> *)
+  (*     NoDupMembers (map snd l'). *)
+  (* Proof. *)
+  (*   intros ** Perm Nodup. *)
+  (*   induction Perm; simpl in *; try constructor; auto. *)
+  (*   - destruct x as (a, (b, c)); simpl in *. *)
+  (*     inversion_clear Nodup as [|? ? ? Notin]. constructor; auto. *)
+  (*     intro Hin; apply Notin. *)
+  (*     apply InMembers_snd_In in Hin; destruct Hin as (a' & c' & Hin). *)
+  (*     apply (In_InMembers_snd a' b c'). *)
+  (*     apply Permutation_sym in Perm; now apply Permutation_in with (2:=Hin) in Perm. *)
+  (*   - destruct x as (a, (b, c)), y as (a', (b', c')); simpl in *. *)
+  (*     inversion_clear Nodup as [|? ? ? Notinb' Nodup']. *)
+  (*     apply NotInMembers_cons in Notinb'; simpl in Notinb'; destruct Notinb' as [Notinb' Diff]. *)
+  (*     inversion_clear Nodup' as [|? ? ? Notinb Nodup'']. *)
+  (*     constructor; auto. *)
+  (*     + inversion 1; contradiction. *)
+  (*     + constructor; auto. *)
+  (* Qed. *)
+  
+  Remark elements_set_snd:
+    forall {A B} e x (a: A) (b: B),
+      ~InMembers a (map snd (PTree.elements e)) ->
+      Permutation (map snd (PTree.elements (PTree.set x (a, b) e))) ((a, b) :: map snd (PTree.elements e)).
   Proof.
     intros ** Notin.
-    assert (In (x, v) (PTree.elements (PTree.set x v e))) as Hin
+    assert (In (x, (a, b)) (PTree.elements (PTree.set x (a, b) e))) as Hin
         by apply PTree.elements_correct, PTree.gss.
+    apply in_map with (f:=snd) in Hin; simpl in Hin.
     apply in_split in Hin.
     destruct Hin as (es & es' & Eq).
     rewrite Eq.
     apply Permutation_sym, Permutation_cons_app.
     admit.
+  Qed.
+
+  Remark Permutation_NoDupMembers:
+    forall {A B} (l l': list (A * B)),
+      Permutation l l' ->
+      NoDupMembers l ->
+      NoDupMembers l'.
+  Proof.
+    intros ** Perm Nodup.
+    induction Perm; simpl in *; try constructor; auto.
+    - destruct x as (a, b); simpl in *.
+      inversion_clear Nodup as [|? ? ? Notin]. constructor; auto.
+      intro Hin; apply Notin.
+      apply InMembers_In in Hin; destruct Hin as (b' & Hin).
+      apply (In_InMembers a b').
+      apply Permutation_sym in Perm; now apply Permutation_in with (2:=Hin) in Perm.
+    - destruct x as (a, b), y as (a', b'); simpl in *.
+      inversion_clear Nodup as [|? ? ? Notinb' Nodup'].
+      apply NotInMembers_cons in Notinb'; simpl in Notinb'; destruct Notinb' as [Notinb' Diff].
+      inversion_clear Nodup' as [|? ? ? Notinb Nodup''].
+      constructor; auto.
+      + inversion 1; contradiction.
+      + constructor; auto.
   Qed.
   
   Lemma set_nodupmembers:
@@ -1560,11 +1622,11 @@ Section PRESERVATION.
       ~ InMembers b1 (map snd (PTree.elements e)) -> 
       NoDupMembers (map snd (PTree.elements (PTree.set x (b1, t) e))).
   Proof.
-    induction e; simpl in *; intros ** Nodup Diff.
-    - rewrite elements_set_leaf; simpl.
-      constructor; auto.
-    - admit.
-  Qed.
+    intros ** Nodup Diff.
+    apply Permutation_NoDupMembers with ((b1, t) :: map snd (PTree.elements e)).
+    - now apply Permutation_sym, elements_set_snd.
+    - simpl; constructor; auto.
+  Qed.  
 
   Remark alloc_nodupmembers:
     forall vars e m e' m',
