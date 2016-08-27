@@ -52,13 +52,14 @@ Set Implicit Arguments.
 
 Module Type MEMSEMANTICS
        (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
        (Import Syn : SYNTAX Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Op Syn)
        (Import Mem : MEMORIES Op Syn)
        (Import IsF : ISFREE Op Syn)
        (Import IsD : ISDEFINED Op Syn Mem)
-       (Import Sem : SEMANTICS Op Syn Str Ord)
+       (Import Sem : SEMANTICS Op OpAux Syn Str Ord)
        (Import IsV : ISVARIABLE Op Syn Mem IsD)
        (Import NoD : NODUP Op Syn Mem IsD IsV)
        (Import WeF : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD).

@@ -19,8 +19,9 @@ programs.
  *)
 Module Type PRE_EQUIV
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Sem : SEMANTICS Op Syn).
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Op OpAux)
+       (Import Sem : SEMANTICS Op OpAux Syn).
   
   Definition stmt_eval_eq s1 s2: Prop :=
     forall prog menv env menv' env',
@@ -32,10 +33,11 @@ End PRE_EQUIV.
 
 Module Type EQUIV
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Sem : SEMANTICS Op Syn).
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Op OpAux)
+       (Import Sem : SEMANTICS Op OpAux Syn).
   
-  Include PRE_EQUIV Op Syn Sem.
+  Include PRE_EQUIV Op OpAux Syn Sem.
   
   Axiom stmt_eval_eq_refl:
     reflexive stmt stmt_eval_eq.
@@ -75,11 +77,12 @@ End EQUIV.
 
 Module EquivFun
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Sem : SEMANTICS Op Syn)
-       <: EQUIV Op Syn Sem.
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Op OpAux)
+       (Import Sem : SEMANTICS Op OpAux Syn)
+       <: EQUIV Op OpAux Syn Sem.
   
-  Include PRE_EQUIV Op Syn Sem.
+  Include PRE_EQUIV Op OpAux Syn Sem.
 
   Lemma stmt_eval_eq_refl:
     reflexive stmt stmt_eval_eq.
@@ -165,8 +168,26 @@ Module EquivFun
   Proof.
     intros e e' Heeq s s' Hseq t t' Hteq prog menv env menv' env'.
     rewrite <-Heeq.
-    split; inversion_clear 1; apply Iifte with b; auto; destruct b;
-    [now rewrite <-Hseq | now rewrite <-Hteq | now rewrite Hseq | now rewrite Hteq].
+    split; inversion_clear 1;
+      destruct b;
+      try match goal with
+          | H: exp_eval _ _ _ _ |- _ => apply Iifte with (1:=H)
+          | H: stmt_eval _ _ _ _ _ |- _ =>
+            (rewrite <-Hseq in H
+             || rewrite <-Hteq in H
+             || rewrite Hseq in H
+                                || rewrite Hteq in H)
+          end;
+      try match goal with
+          | H:val_to_bool ?v = Some true |- _ =>
+            apply val_to_bool_true' in H
+          | H:val_to_bool ?v = Some false |- _ =>
+            apply val_to_bool_false' in H
+          end; subst;
+        econstructor; try eassumption;
+          try apply val_to_bool_true;
+          try apply val_to_bool_false';
+          easy.
   Qed.
 
 End EquivFun.

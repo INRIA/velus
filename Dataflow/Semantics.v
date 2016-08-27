@@ -21,6 +21,7 @@ Require Import Rustre.Dataflow.Stream.
 
 Module Type SEMANTICS
        (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
        (Import Syn : SYNTAX Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Op Syn).
@@ -55,31 +56,25 @@ environment.
         PM.find x R = Some v ->
         sem_var_instant x v.
 
-    (* Definition of_bool (b: bool) := if b then Op.true_val else Op.false_val. *)
-    (* Lemma bool_inj: forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
-    (* Proof. *)
-    (*   destruct b1, b2; unfold of_bool; auto; *)
-    (*   intro; exfalso; now apply Op.distinct_TF. *)
-    (* Qed. *)
-
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
         sem_clock_instant Cbase base
-    | Son_tick:
-        forall ck x c ty,
+    | Son:
+        forall ck x c b ty,
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Vbool c)) ->
-          sem_clock_instant (Con ck x ty c) true
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
+          sem_clock_instant (Con ck x ty b) true
     | Son_abs1:
         forall ck x c ty,
           sem_clock_instant ck false ->
           sem_clock_instant (Con ck x ty c) false
     | Son_abs2:
-        forall ck x c c' ty,
+        forall ck x c b ty,
           sem_clock_instant ck true ->
-          sem_var_instant x (present (Vbool c')) ->
-          ~ (c = c') ->
-          sem_clock_instant (Con ck x ty c)  false.
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
+          sem_clock_instant (Con ck x ty (negb b)) false.
 
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:
@@ -91,17 +86,18 @@ environment.
           sem_var_instant x v ->
           sem_lexp_instant (Evar x ty) v
     | Swhen_eq:
-        forall s x b v,
-          sem_var_instant x (present (Vbool b)) ->
+        forall s x c b v,
+          sem_var_instant x (present c) ->
           sem_lexp_instant s v ->
+          val_to_bool c = Some b ->
           sem_lexp_instant (Ewhen s x b) v
     | Swhen_abs1:
-        forall s x b b',
-          sem_var_instant x (present (Vbool b')) ->
-          ~ (b = b') ->
+        forall s x c b,
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
           (* Note: says nothing about 's'. *)
-          sem_lexp_instant (Ewhen s x b) absent
-    | Swhen_abs2:
+          sem_lexp_instant (Ewhen s x (negb b)) absent
+    | Swhen_abs:
         forall s x b,
           sem_var_instant x absent ->
           (* Note: says nothing about 's'. *)
@@ -163,36 +159,25 @@ environment.
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
         forall x t f v ty,
-          sem_var_instant x (present (Vbool true)) ->
+          sem_var_instant x (present true_val) ->
           sem_cexp_instant t v ->
           sem_cexp_instant (Emerge x ty t f) v
     | Smerge_false:
         forall x t f v ty,
-          sem_var_instant x (present (Vbool false)) ->
+          sem_var_instant x (present false_val) ->
           sem_cexp_instant f v ->
           sem_cexp_instant (Emerge x ty t f) v
     | Smerge_abs:
         forall x t f ty,
           sem_var_instant x absent ->
           sem_cexp_instant (Emerge x ty t f) absent
-    (* | Site_eq: *)
-    (*     forall b t f b' ct cf, *)
-    (*       sem_lexp_instant b (present (Vbool b')) -> *)
-    (*       sem_cexp_instant t (present ct) -> *)
-    (*       sem_cexp_instant f (present cf) -> *)
-    (*       sem_cexp_instant (Eite b t f) (if b' then present ct else present cf) *)
-    | Site_true:
-        forall b t f c v,
-          sem_lexp_instant b (present (Vbool true)) ->
-          sem_cexp_instant t (present c) ->
-          sem_cexp_instant f v ->
-          sem_cexp_instant (Eite b t f) (present c)
-    | Site_false:
-        forall b t f c v,
-          sem_lexp_instant b (present (Vbool false)) ->
-          sem_cexp_instant t v ->
-          sem_cexp_instant f (present c) ->
-          sem_cexp_instant (Eite b t f) (present c)
+    | Site_eq:
+        forall x t f c b ct cf,
+          sem_lexp_instant x (present c) ->
+          sem_cexp_instant t (present ct) ->
+          sem_cexp_instant f (present cf) ->
+          val_to_bool c = Some b ->
+          sem_cexp_instant (Eite x t f) (if b then present ct else present cf)
     | Site_abs:
         forall b t f,
           sem_lexp_instant b absent ->
@@ -287,7 +272,7 @@ environment.
     xss n = Nelist.map present vs.
 
   Definition clock_of (xss: stream (nelist value))(bs: stream bool): Prop :=
-    forall n, 
+    forall n,
       (exists vs, present_list xss n vs) <-> bs n = true.
 
   Inductive sem_equation G : stream bool -> history -> equation -> Prop :=
@@ -318,7 +303,7 @@ environment.
                  sem_vars bk H (Nelist.map_fst i) xss
                  /\ sem_var bk H (fst o) ys
                  (* XXX: This should be in Welldef_glob: *)
-                 (* output clock matches input clock *) 
+                 (* output clock matches input clock *)
                  /\ (forall n, absent_list xss n <-> ys n = absent)
                  (* XXX: END *)
                  /\ List.Forall (sem_equation G bk H) eqs) ->
@@ -329,7 +314,7 @@ environment.
     List.Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
 
 
-  (* XXX: I don't think that this comment is still relevant. Remove or rephrase? 
+  (* XXX: I don't think that this comment is still relevant. Remove or rephrase?
 
   The original idea was to 'bake' the following assumption into sem_node:
 
@@ -388,60 +373,60 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqDef_case :
       forall (bk : stream bool)
         (H    : history)
-	    (x    : ident)
+            (x    : ident)
         (ck   : clock)
-	    (ce  : cexp)
+            (ce  : cexp)
         (xs   : stream value)
-	    (Hvar : sem_var bk H x xs)
+            (Hvar : sem_var bk H x xs)
         (Hexp : sem_caexp bk H ck ce xs),
         P bk H (EqDef x ck ce) (SEqDef G bk H x xs ck ce Hvar Hexp).
 
     Hypothesis EqApp_case :
       forall (bk: stream bool)
         (H     : history)
-	    (y     : ident)
+            (y     : ident)
         (ck    : clock)
-	    (f     : ident)
-	    (les   : lexps)
+            (f     : ident)
+            (les   : lexps)
         (ls    : stream (nelist value))
         (ys    : stream value)
         (ty    : typ)
-	    (Hlaes : sem_laexps bk H ck les ls)
+            (Hlaes : sem_laexps bk H ck les ls)
         (Hvar  : sem_var bk H y ys)
-	    (Hnode : sem_node G f ls ys),
+            (Hnode : sem_node G f ls ys),
         Pn f ls ys Hnode ->
         P bk H (EqApp y ck f les ty) (SEqApp G bk H y ck f les ls ys ty Hlaes Hvar Hnode).
 
     Hypothesis EqFby_case :
       forall (bk: stream bool)
         (H   : history)
-	    (y   : ident)
-	    (ls  : stream value)
-	    (yS  : stream value)
-	    (v0  : val)
+            (y   : ident)
+            (ls  : stream value)
+            (yS  : stream value)
+            (v0  : val)
         (ck  : clock)
-	    (lae : lexp)
-	    (Hls : sem_laexp bk H ck lae ls)
-	    (Hys : sem_var bk H y yS)
+            (lae : lexp)
+            (Hls : sem_laexp bk H ck lae ls)
+            (Hys : sem_var bk H y yS)
         (Hfby: yS = fby v0 ls),
         P bk H (EqFby y ck v0 lae) (SEqFby G bk H y ls yS v0 ck lae Hls Hys Hfby).
 
     Hypothesis SNode_case :
       forall (bk: stream bool)
         (f   : ident)
-	    (xss : stream (nelist value))
-	    (ys  : stream value)
-	    (i   : nelist (ident * typ))
-	    (o   : ident * typ)
-	    (v   : list (ident * typ))
-	    (eqs : list equation)
+            (xss : stream (nelist value))
+            (ys  : stream value)
+            (i   : nelist (ident * typ))
+            (o   : ident * typ)
+            (v   : list (ident * typ))
+            (eqs : list equation)
         (Hck : clock_of xss bk)
-	    (Hf  : find_node f G = Some (mk_node f i o v eqs))
+            (Hf  : find_node f G = Some (mk_node f i o v eqs))
         (Heqs : exists H,
             sem_vars bk H (Nelist.map_fst i) xss
-	        /\ sem_var bk H (fst o) ys
+                /\ sem_var bk H (fst o) ys
             /\ (forall n, absent_list xss n <-> ys n = absent)
-	        /\ List.Forall (sem_equation G bk H) eqs),
+                /\ List.Forall (sem_equation G bk H) eqs),
         (exists H,
             sem_vars bk H (Nelist.map_fst i) xss
             /\ sem_var bk H (fst o) ys
@@ -451,8 +436,8 @@ enough: it does not support the internal fixpoint introduced by
 
     Fixpoint sem_equation_mult (bk: stream bool)
              (H  : history)
-			 (eq : equation)
-			 (Heq : sem_equation G bk H eq) {struct Heq}
+                         (eq : equation)
+                         (Heq : sem_equation G bk H eq) {struct Heq}
       : P bk H eq Heq :=
       match Heq in (sem_equation _ bk H eq) return (P bk H eq Heq) with
       | SEqDef bk H y xs ck ce Hvar Hexp => EqDef_case bk H y ck ce xs Hvar Hexp
@@ -463,17 +448,17 @@ enough: it does not support the internal fixpoint introduced by
       end
 
     with sem_node_mult (f  : ident)
-		               (ls : stream (nelist value))
-		               (ys : stream value)
-		               (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
+                               (ls : stream (nelist value))
+                               (ys : stream value)
+                               (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
            match Hn in (sem_node _ f ls ys) return (Pn f ls ys Hn) with
            | SNode bk f ls ys i o v eqs Hck Hf Hnode =>
              SNode_case bk f ls ys i o v eqs Hck Hf Hnode
                         (* Turn: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
-	             /\ (forall n, sem_var H (v_name o) n (ys n))
+                     /\ (forall n, sem_var H (v_name o) n (ys n))
                      /\ (forall n, xs n = absent <-> ys n = absent)
-	             /\ Forall (sem_equation G H) eqs
+                     /\ Forall (sem_equation G H) eqs
              into: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
                      /\ (forall n, sem_var H (v_name o) n (ys n))
@@ -528,20 +513,20 @@ enough: it does not support the internal fixpoint introduced by
         -> sem_clock_instant base R ck v2
         -> v1 = v2.
     Proof.
-      induction ck; repeat inversion_clear 1; intuition;
-      try match goal with
+      induction ck; repeat inversion 1; subst; intuition;
+      try repeat progress match goal with
           | H1: sem_clock_instant ?bk ?R ?ck ?l,
-                H2: sem_clock_instant ?bk ?R ?ck ?r |- ?l = ?r =>
-            eapply IHck; eassumption
-          | H1: sem_var_instant ?R ?i (present (Vbool ?l)),
-                H2: sem_var_instant ?R ?i (present (Vbool ?r)),
-                    H3: ?l = ?r -> False |- _ = _ =>
-            exfalso; apply H3;
-            cut (present (Vbool l) = present (Vbool r)); [now injection 1|];
-            eapply sem_var_instant_det; eassumption
+                H2: sem_clock_instant ?bk ?R ?ck ?r |- _ =>
+            apply IHck with (1:=H1) in H2; discriminate
+          | H1: sem_var_instant ?R ?i (present ?l),
+                H2: sem_var_instant ?R ?i (present ?r) |- _ =>
+            apply sem_var_instant_det with (1:=H1) in H2;
+              injection H2; intro; subst
+          | H1: val_to_bool _ = Some ?b, H2: val_to_bool _ = _ |- _ =>
+            rewrite H1 in H2; destruct b; discriminate
           end.
     Qed.
-    
+
     Lemma sem_lexp_instant_det:
       forall R e v1 v2,
         sem_lexp_instant base R e v1
@@ -552,8 +537,8 @@ enough: it does not support the internal fixpoint introduced by
       induction e (* using lexp_ind2 *);
         try now (do 2 inversion_clear 1);
         match goal with
-        | H1:sem_var_instant ?R ?e (present (Vbool ?b1)),
-          H2:sem_var_instant ?R ?e (present (Vbool ?b2)),
+        | H1:sem_var_instant ?R ?e (present ?b1),
+          H2:sem_var_instant ?R ?e (present ?b2),
           H3: ?b1 <> ?b2 |- _ =>
           exfalso; apply H3;
           cut (present (Vbool b1) = present (Vbool b2)); [now injection 1|];
@@ -569,46 +554,30 @@ enough: it does not support the internal fixpoint introduced by
         end.
     - do 2 inversion_clear 1; destruct base; congruence.
     - intros v1 v2 Hsem1 Hsem2.
-      inversion_clear Hsem1; inversion_clear Hsem2; specialize (IHe _ _ H H0). 
-      + now inversion IHe.
-        (* clear H1 H3. revert cs cs0 H0 H2. *)
-      (*   induction les as [| le les]; intros cs1 cs2 Hrec1 Hrec2. *)
-      (* + inversion Hrec1. inversion Hrec2. subst. symmetry in H1, H4. *)
-      (*   apply Nelist.map_eq_nebase in H1. destruct H1 as [? [? ?]]. *)
-      (*   apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. *)
-      (*   f_equal. rewrite present_injection. inversion_clear H. now apply H0. *)
-      (* + inversion Hrec1; subst. inversion Hrec2; subst. *)
-      (*   symmetry in H2, H5. *)
-      (*   apply Nelist.map_eq_necons in H2. destruct H2 as [x1 [cs1' [Hcs1 [Hx1 Hmap1]]]]. *)
-      (*   apply Nelist.map_eq_necons in H5. destruct H5 as [x2 [cs2' [Hcs2 [Hx2 Hmap2]]]]. subst. *)
-      (*   assert (Hx : x1 = x2). *)
-      (*   { inversion_clear H. rewrite present_injection. now apply H0. } *)
-      (*   inversion_clear H. inversion_clear Hrec1; inversion_clear Hrec2. *)
-      (*   f_equal; trivial. now apply (IHles H1). *)
-      + discriminate.
-      (*   exfalso. destruct les as [le | le les]. *)
-      (* + inversion H0. inversion H2. subst. symmetry in H4. *)
-      (*   apply Nelist.map_eq_nebase in H4. destruct H4 as [? [? ?]]. subst. simpl in *. *)
-      (*   inversion_clear H. specialize (H3 _ _ H8 H5). discriminate. *)
-      (* + inversion H0; subst. inversion H2; subst. *)
-      (*   inversion_clear H. specialize (H3 _ _ H6 H9). *)
-      (*   symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
-      + discriminate.
-      (*   exfalso. destruct les as [| le les]. *)
-      (* + inversion H0. inversion H1. subst. symmetry in H7. *)
-      (*   apply Nelist.map_eq_nebase in H7. destruct H7 as [? [? ?]]. subst. simpl in *. *)
-      (*   inversion_clear H. specialize (H3 _ _ H8 H5). discriminate. *)
-      (* + inversion H0; subst. inversion H1; subst. *)
-      (*   inversion_clear H. specialize (H3 _ _ H6 H7). *)
-      (*   symmetry in H5. apply Nelist.map_eq_necons in H5. decompose [ex and] H5. subst. discriminate. *)
-      + reflexivity.
+      inversion Hsem1; inversion Hsem2; subst;
+      repeat progress match goal with
+      | H1:sem_lexp_instant ?b ?R ?e ?v1,
+           H2:sem_lexp_instant ?b ?R ?e ?v2 |- ?v1 = ?v2 =>
+        specialize (IHe _ _ H1 H2)
+      | H1:sem_var_instant ?R ?i ?v1,
+           H2:sem_var_instant ?R ?i ?v2 |- _ =>
+        apply sem_var_instant_det with (1:=H1) in H2
+      | Hp:present _ = present _ |- _ =>
+        injection Hp; intro; subst
+      | H1:val_to_bool _ = Some _,
+        H2:val_to_bool _ = Some (negb _) |- _ =>
+        rewrite H2 in H1; exfalso; injection H1;
+          now apply Bool.no_fixpoint_negb
+      end; try easy.
     - intros v1 v2 Hsem1 Hsem2.
       inversion_clear Hsem1; inversion_clear Hsem2;
-      specialize (IHe1 _ _ H H1); specialize (IHe2 _ _ H0 H2). 
-      + now inversion IHe1; inversion IHe2.
-      + discriminate.
-      + discriminate.
-      + reflexivity.
+        specialize (IHe _ _ H H0); try easy.
+      now inversion IHe.
+    - intros v1 v2 Hsem1 Hsem2.
+      inversion_clear Hsem1; inversion_clear Hsem2;
+        specialize (IHe1 _ _ H H1);
+        specialize (IHe2 _ _ H0 H2); try easy.
+      now (injection IHe1; injection IHe2; intros; subst).
     Qed.
 
     Lemma sem_laexp_instant_det:
@@ -647,7 +616,7 @@ enough: it does not support the internal fixpoint introduced by
       do 2 inversion_clear 1;
         match goal with
         | H1: sem_lexps_instant _ _ _ _, H2: sem_lexps_instant _ _ _ _ |- _ =>
-          eapply sem_lexps_instant_det; eauto 
+          eapply sem_lexps_instant_det; eauto
         | H1:sem_clock_instant _ _ _ ?T, H2:sem_clock_instant _ _ _ ?F |- _ =>
           let H := fresh in
           assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
@@ -664,31 +633,30 @@ enough: it does not support the internal fixpoint introduced by
       intros R e.
       induction e;
         do 2 inversion_clear 1;
-        try match goal with
+        try repeat progress match goal with
             | H1: sem_cexp_instant ?bk ?R ?e ?l,
-                  H2: sem_cexp_instant ?bk ?R ?e ?r
-              |- ?l = ?r =>
-              (eapply IHe1; eassumption)
-              || (eapply IHe2; eassumption)
-            | H1: sem_var_instant ?R ?i (present (Vbool true)),
-                  H2: sem_var_instant ?R ?i (present (Vbool false)) |- _ =>
-              let H := fresh in
-              assert (present (Vbool true) = present (Vbool false)) as H
-                  by (eapply sem_var_instant_det; eassumption); discriminate 
+                  H2: sem_cexp_instant ?bk ?R ?e ?r |- _ =>
+              apply IHe1 with (1:=H1) in H2
+              || apply IHe2 with (1:=H1) in H2;
+                injection H2; intro; subst
+            | H1: sem_var_instant ?R ?i (present true_val),
+                  H2: sem_var_instant ?R ?i (present false_val) |- _ =>
+              apply sem_var_instant_det with (1:=H1) in H2;
+                exfalso; injection H2; now apply true_not_false_val
             | H1: sem_lexp_instant ?bk ?R ?l ?v1,
-                  H2: sem_lexp_instant ?bk ?R ?l ?v2 |- ?v1 = ?v2 =>
-              eapply sem_lexp_instant_det; eassumption
+                  H2: sem_lexp_instant ?bk ?R ?l ?v2 |- _ =>
+              apply sem_lexp_instant_det with (1:=H1) in H2;
+                discriminate || injection H2; intro; subst
             | H1: sem_var_instant ?R ?i (present _),
                   H2: sem_var_instant ?R ?i absent |- _ =>
               apply sem_var_instant_det with (1:=H1) in H2; discriminate
-            | |- absent = absent => reflexivity
-            end;
-      pose proof (sem_lexp_instant_det _ _ _ _ H0 H3) as H;
-      specialize (IHe1 _ _ H1 H4); specialize (IHe2 _ _ H2 H5).
-      - now inversion H; inversion IHe1; inversion IHe2.
-      - discriminate.
+            | H1: val_to_bool _ = Some _,
+                  H2:val_to_bool _ = Some _ |- _ =>
+              rewrite H1 in H2; injection H2; intro; subst
+                            end; auto.
+      eapply sem_lexp_instant_det; eassumption.
     Qed.
-    
+
     Lemma sem_caexp_instant_det:
       forall R ck e v1 v2,
         sem_caexp_instant base R ck e v1
@@ -701,7 +669,7 @@ enough: it does not support the internal fixpoint introduced by
         | H1: sem_cexp_instant _ _ _ _,
               H2: sem_cexp_instant _ _ _ _ |- _ =>
           eapply sem_cexp_instant_det; eassumption
-        | H1:sem_clock_instant _ _ _ ?T, 
+        | H1:sem_clock_instant _ _ _ ?T,
              H2:sem_clock_instant _ _ _ ?F |- _ =>
           let H := fresh in
           assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
@@ -754,7 +722,7 @@ enough: it does not support the internal fixpoint introduced by
     Qed.
 
     Lemma sem_lexps_det:
-      forall H les cs1 cs2,    
+      forall H les cs1 cs2,
         sem_lexps bk H les cs1 ->
         sem_lexps bk H les cs2 ->
         cs1 = cs2.
@@ -763,14 +731,14 @@ enough: it does not support the internal fixpoint introduced by
     Qed.
 
     Lemma sem_laexp_det:
-      forall H ck e xs1 xs2,  
+      forall H ck e xs1 xs2,
         sem_laexp bk H ck e xs1 -> sem_laexp bk H ck e xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_laexp_instant_det.
     Qed.
 
     Lemma sem_laexps_det:
-      forall H ck e xs1 xs2,  
+      forall H ck e xs1 xs2,
         sem_laexps bk H ck e xs1 -> sem_laexps bk H ck e xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_laexps_instant_det.
@@ -784,7 +752,7 @@ enough: it does not support the internal fixpoint introduced by
     Qed.
 
     Lemma sem_caexp_det:
-      forall H ck c xs1 xs2,  
+      forall H ck c xs1 xs2,
         sem_caexp bk H ck c xs1 -> sem_caexp bk H ck c xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_caexp_instant_det.
@@ -864,7 +832,7 @@ clock to [sem_var_instant] too. *)
     revert Hnf.
     induction Hsem as [
                      | bk H y ck f lae ls ys ty Hlae Hvar Hnode IH
-                     | 
+                     |
                      | bk f xs ys i o v eqs Hbk Hf Heqs IH]
                         using sem_node_mult
                       with (P := fun bk H eq Hsem => ~Is_node_in_eq node.(n_name) eq
@@ -882,7 +850,7 @@ clock to [sem_var_instant] too. *)
       exists H.
       repeat (split; eauto).
       set (cnode := {| n_name := f; n_input := i; n_output := o; n_vars := v; n_eqs := eqs |}).
-      assert (List.Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs cnode)) 
+      assert (List.Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs cnode))
         by (eapply Is_node_in_Forall; try eassumption;
             eapply find_node_later_not_Is_node_in; try eassumption).
       eapply Forall_Forall in Heqs; try eauto.

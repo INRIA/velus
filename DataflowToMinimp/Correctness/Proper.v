@@ -16,9 +16,10 @@ Require Import Setoid.
 
 Module Type PROPER
        (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import Trans : TRANSLATION Op SynDF SynMP)
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux)
+       (Import Trans : TRANSLATION Op OpAux SynDF SynMP)
        (Import Mem : MEMORIES Op SynDF).
 
   Instance eq_equiv : Equivalence PS.eq.

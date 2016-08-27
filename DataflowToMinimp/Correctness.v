@@ -17,17 +17,18 @@ Require Import Rustre.Minimp.FuseIfte.
 
 Module Type CORRECTNESS
        (Import Op: OPERATORS)
-       (Import DF: DATAFLOW Op)
-       (Import MP: MINIMP Op)
+       (Import OpAux: OPERATORS_AUX Op)
+       (Import DF: DATAFLOW Op OpAux)
+       (Import MP: MINIMP Op OpAux)
 
-       (Import Trans: TRANSLATION Op DF.Syn MP.Syn)
+       (Import Trans: TRANSLATION Op OpAux DF.Syn MP.Syn)
        
-       (Import IsP: ISPRESENT Op DF.Syn MP.Syn MP.Sem Trans)
-       (Import MemCor: MEMORYCORRES Op DF MP)
+       (Import IsP: ISPRESENT Op OpAux DF.Syn MP.Syn MP.Sem Trans)
+       (Import MemCor: MEMORYCORRES Op OpAux DF MP)
        (Import Mem: MEMORIES Op DF.Syn)
-       (Import Pro: PROPER Op DF.Syn MP.Syn Trans Mem)
-       (Import Fus: FUSEIFTE Op DF.Syn MP.Syn MP.Sem MP.Equ).
-  
+       (Import Pro: PROPER Op OpAux DF.Syn MP.Syn Trans Mem)
+       (Import Fus: FUSEIFTE Op OpAux DF.Syn MP.Syn MP.Sem MP.Equ).
+
   (** ** Technical lemmas *)
 
   Lemma exp_eval_tovar:
@@ -93,20 +94,17 @@ Module Type CORRECTNESS
     intros s Hs.
     simpl in Hs.
     destruct b;
-      specialize (IHc _ Hs); clear Hs;
+    specialize (IHc _ Hs); clear Hs;
       destruct IHc as [[Hp Hs]|[Hp [Hmenv Henv]]];
-      try inversion_clear Hs;
-      try destruct b;
-      (left; now intuition)
-      || (right;
-          repeat progress
-                 match goal with
-                 | H: stmt_eval _ _ _ Skip _ |- _ => inversion H; subst; clear H
-                 | Hp: Is_present_in _ _ _ _,
-                       He: exp_eval _ _ _ _ |- Is_absent_in _ _ _ _
-                   => apply IsAbs2 with (1:=Hp) (2:=He)
-                 | _ => intuition
-                 end).
+      try inversion_clear Hs; subst; intuition.
+    - destruct b; [now eauto|].
+      right. match goal with H:stmt_eval _ _ _ _ _ |- _ => inv H end.
+      assert (true = negb false) as Htrue by reflexivity.
+      rewrite Htrue. eauto.
+    - destruct b; [|now eauto].
+      right. match goal with H:stmt_eval _ _ _ _ _ |- _ => inv H end.
+      assert (false = negb true) as Hfalse by reflexivity.
+      rewrite Hfalse. eauto.
   Qed.
   
   Lemma stmt_eval_Control:
@@ -119,25 +117,17 @@ Module Type CORRECTNESS
           -> stmt_eval prog menv env stmt (menv', env')
           -> stmt_eval prog menv env (Control mems ck stmt) (menv', env')).
   Proof.
+    Hint Constructors stmt_eval.
     intros prog mems menv env ck.
     induction ck; intro s; split.
     - inversion 1.
     - intros menv' env' Hp Hs; exact Hs.
-    - inversion_clear 1 as [ ? ? ? ? Hp|? ? ? ? ? Hp Hexp Hneq];
-      destruct b;
-      try (now apply IHck with (1:=Hp));
-      apply not_eq_sym in Hneq;
-      (apply Bool.not_true_is_false in Hneq
-                                       || apply Bool.not_false_is_true in Hneq);
-      subst;
-      apply IHck with (1:=Hp);
-      apply Iifte with (1:=Hexp);
-      constructor.
-    - inversion_clear 1 as [|? ? ? ? Hp Hexp];
-      intro Hs;
-      destruct b;
-      apply IHck; auto;
-      eapply Iifte; eauto. 
+    - inversion_clear 1 as [? ? ? ? Hp|? ? ? ? ? Hp Hexp];
+        destruct b; destruct (PS.mem i mems); try destruct b0;
+          apply IHck with (1:=Hp); eauto.
+    - inversion_clear 1 as [|? ? ? ? ? Hp Hexp]; intro Hs;
+        destruct b; destruct (PS.mem i mems); try destruct b0;
+          apply IHck with (1:=Hp); eauto.
   Qed.
 
   (** If the clock is absent, then the controlled statement evaluates as
@@ -423,13 +413,12 @@ for all [Is_free_exp x e]. *)
     intros until env.
     induction ck as [|? ? x]; [ intuition | ].
     intro Henv.
-    inversion_clear 1.
-    constructor. apply IHck; auto.
-    intros.
-    split_env_assumption.
-    apply exp_eval_tovar.
-    destruct In_dec with x mems;
-      intuition.
+    inversion 1; subst.
+    econstructor; try eassumption.
+    - apply IHck; [now weaken_equiv_env|assumption].
+    - split_env_assumption.
+      apply exp_eval_tovar.
+      destruct In_dec with x mems; intuition.
   Qed.
 
   Theorem clock_correct_false:
@@ -443,19 +432,22 @@ for all [Is_free_exp x e]. *)
     induction ck as [|? ? x]; [ now inversion 2 | ].
     intro Henv.
     inversion_clear 1.
-    constructor; apply IHck; now auto.
-    eapply clock_correct_true in H0; auto.
-    eapply IsAbs2; eauto.
-    split_env_assumption.
-    destruct In_dec with x mems as [Hin|Hin];
-      match goal with
-      | H:~PS.In _ _ -> _, Hin:~PS.In _ _ |- _ => specialize (H Hin)
-      | H:PS.In _ _ -> _, Hin:PS.In _ _ |- _ => specialize (H Hin)
-      end;
-      apply PS.mem_spec in Hin || apply mem_spec_false in Hin;
-      unfold tovar;
-      rewrite Hin;
-      intuition.
+    - constructor. apply IHck; auto.
+    - destruct b0; [apply val_to_bool_true' in H2
+                   |apply val_to_bool_false' in H2]; subst;
+        eapply IsAbs2;
+        try eapply clock_correct_true with (2:=H0);
+        try apply val_to_bool_true;
+        try apply val_to_bool_false;
+        auto;
+        split_env_assumption;
+        destruct In_dec with x mems as [Hin|Hin];
+        match goal with
+        | H:~PS.In _ _ -> _, Hin:~PS.In _ _ |- _ => specialize (H Hin)
+        | H:PS.In _ _ -> _, Hin:PS.In _ _ |- _ => specialize (H Hin)
+        end;
+        apply PS.mem_spec in Hin || apply mem_spec_false in Hin;
+        unfold tovar; rewrite Hin; intuition.
   Qed.
 
   (** *** Correctness of [translate_lexp] *)
@@ -547,25 +539,23 @@ for all [Is_free_exp x e]. *)
                   (menv, PM.add x c env).
   Proof.
     intros until x.
-    induction e as [b ty et IHt ef IHf|b t IHt f IHf|e].
+    induction e as [y ty et IHt ef IHf|y t IHt f IHf|e].
     - (* Emerge *)
       inversion_clear 1; intro Henv.
-      + apply Iifte with true.
-        * split_env_assumption.
-          apply get_exp_eval_tovar; now auto.
-        * apply IHt; now auto.
-      + apply Iifte with false.
-        * split_env_assumption.
-          apply get_exp_eval_tovar; now auto.
-        * apply IHf; now auto.
+      + apply IHt in H1; [|auto].
+        simpl.
+        eapply Iifte; [|now apply val_to_bool_true'|assumption].
+        split_env_assumption. apply get_exp_eval_tovar; auto.
+      + apply IHf in H1; [|auto].
+        eapply Iifte; [|now apply val_to_bool_false'|assumption].
+        split_env_assumption. apply get_exp_eval_tovar; auto.
     - (* Eite *)
-      inversion_clear 1; intro Henv.
-      + apply Iifte with true.
-        * eapply lexp_correct; [eassumption|now auto].
-        * apply IHt; auto.
-      + apply Iifte with false.
-        * eapply lexp_correct; [eassumption|now auto].
-        * apply IHf; auto.
+      intro HH; inv HH; intro Henv.
+      simpl; econstructor; [|eassumption|].
+      eapply lexp_correct; now eauto.
+      destruct b;
+        match goal with H:present _ = present _ |- _ => injection H end;
+        intro; subst; [apply IHt|apply IHf]; eauto.
     - (* Eexp *)
       inversion_clear 1; intro Henv.
       unfold translate_cexp.

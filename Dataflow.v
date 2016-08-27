@@ -17,18 +17,18 @@ Require Import Dataflow.IsDefined.Decide.
 Require Export Dataflow.Clocking.Parents.
 Require Export Dataflow.Clocking.Properties.
 
-Module Type DATAFLOW (Op: OPERATORS).
+Module Type DATAFLOW (Op: OPERATORS) (OpAux: OPERATORS_AUX Op).
   Declare Module Export Syn: SYNTAX Op.
   Declare Module Export Str: STREAM Op.
   Declare Module Export Ord: ORDERED Op Syn.
   Declare Module Export IsF: ISFREE Op Syn.
-  Declare Module Export Sem: SEMANTICS Op Syn Str Ord.
+  Declare Module Export Sem: SEMANTICS Op OpAux Syn Str Ord.
   Declare Module Export Mem: MEMORIES Op Syn.
   Declare Module Export IsD: ISDEFINED Op Syn Mem.
   Declare Module Export IsV: ISVARIABLE Op Syn Mem IsD.
   Declare Module Export NoD: NODUP Op Syn Mem IsD IsV.
   Declare Module Export WeF: WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
-  Declare Module Export MemSem: MEMSEMANTICS Op Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.     
+  Declare Module Export MemSem: MEMSEMANTICS Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.     
   Declare Module Export IsVDec: IsVariable.Decide.DECIDE Op Syn Mem IsD IsV.
   Declare Module Export IsDDec: IsDefined.Decide.DECIDE Op Syn Mem IsD.
   Declare Module Export Clo: CLOCKING Op Syn.

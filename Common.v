@@ -4,6 +4,7 @@ Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
 Require Import Omega.
+Require Import Coq.Classes.EquivDec.
 
 Open Scope list.
 
@@ -295,68 +296,119 @@ Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discr
 (* Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar. *)
 (* Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed. *)
 
+Generalizable Variables A.
+  
+Lemma equiv_decb_equiv:
+  forall `{EqDec A} (x y : A),
+    equiv_decb x y = true <-> equiv x y.
+Proof.
+  intros ** x y.
+  split; intro; unfold equiv_decb in *;
+    destruct (equiv_dec x y); intuition.
+Qed.
+
+Lemma equiv_decb_refl:
+  forall `{EqDec A} (x: A),
+    equiv_decb x x = true.
+Proof.
+  intros. now apply equiv_decb_equiv.
+Qed.
+
+Lemma not_equiv_decb_equiv:
+  forall `{EqDec A} (x y: A),
+    equiv_decb x y = false <-> ~(equiv x y).
+Proof.
+  split; intro Hne.
+  - unfold equiv_decb in Hne.
+    now destruct (equiv_dec x y).
+  - unfold equiv_decb.
+    destruct (equiv_dec x y); [|reflexivity].
+    exfalso; now apply Hne.
+Qed.
+
 Module Type OPERATORS.
-  Parameter val' : Type.
+  Parameter val : Type.
   Parameter typ : Type.
 
-  Inductive val: Type :=
-  | Vbool: bool -> val
-  | Val: val' -> val.
-  
-  (* Parameter true_val: val. *)
-  (* Parameter false_val: val. *)
-  (* Axiom distinct_TF: true_val <> false_val. *)
+  Parameter true_val  : val.
+  Parameter false_val : val.
+  Axiom true_not_false_val : true_val <> false_val.
 
+  (* TODO: This operation is impossible! Get rid of it. *)
   Parameter typ_of_val: val -> typ.
   
-  Parameter unary_op : Type.
+  Parameter unary_op  : Type.
   Parameter binary_op : Type.
 
-  Parameter sem_unary : unary_op -> val -> typ -> option val.
+  Parameter sem_unary  : unary_op -> val -> typ -> option val.
   Parameter sem_binary : binary_op -> val -> typ -> val -> typ -> option val.
-  
-  (* Parameter of_bool : bool -> val. *)
-  (* Parameter to_bool : val -> bool. *)
-  (* Axiom bool_inv : forall b, to_bool (of_bool b) = b. *)
-  (* Axiom bool_inj : forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
-  
-  (* Axiom unop_dec : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}. *)
-  (* Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}. *)
-  Parameter val_eqb : val -> val -> bool.
-  Parameter typ_eqb : typ -> typ -> bool.
-  Parameter unop_eqb : unary_op -> unary_op -> bool.
-  Parameter binop_eqb : binary_op -> binary_op -> bool.
 
-  Axiom val_eqb_iff : forall v1 v2, val_eqb v1 v2 = true <-> v1 = v2.
-  Axiom typ_eqb_iff : forall t1 t2, typ_eqb t1 t2 = true <-> t1 = t2.
-  Axiom unop_eqb_iff : forall op1 op2, unop_eqb op1 op2 = true <-> op1 = op2.
-  Axiom binop_eqb_iff : forall op1 op2, binop_eqb op1 op2 = true <-> op1 = op2.
+  Axiom val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
+  Axiom typ_dec   : forall t1 t2 : typ, {t1 = t2} + {t1 <> t2}.
+  Axiom unop_dec  : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}.
+  Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}.
 
-  (* Definition of_bool (b : bool) := if b then true_val else false_val. *)
-  (* Lemma bool_inj: forall b1 b2, of_bool b1 = of_bool b2 -> b1 = b2. *)
-  (* Proof. *)
-  (*   destruct b1, b2; simpl; auto; *)
-  (*   intro; exfalso; now apply distinct_TF. *)
-  (* Qed. *)
-  (* Lemma bool_inv : forall b, val_eqb (Vbool b) (Vbool true) = b. *)
-  (* Proof. *)
-  (*   destruct b; simpl; [rewrite val_eqb_true_iff | rewrite val_eqb_false_iff]; *)
-  (*   auto; intro H; discriminate. *)
-  (* Qed. *)
-  
 End OPERATORS.
 
-Lemma flip_eqb:
-  forall A f (t1: A) (t2: A),
-    (f t1 t2 = true <-> t1 = t2) ->
-    (f t1 t2 = false <-> t1 <> t2).
-Proof.
-  intros A f t1 t2 HH.
-  split; intro Hfeq.
-  - intro Heq. apply HH in Heq. rewrite Heq in *. discriminate.
-  - apply Bool.not_true_is_false. intro Heq.
-    apply HH in Heq. now apply Hfeq.
-Qed.
+Module Type OPERATORS_AUX (Import Ops : OPERATORS).
+  Require Export Coq.Classes.EquivDec.
+  Close Scope equiv_scope.
+
+  Instance: EqDec val eq := { equiv_dec := val_dec }.
+  Instance: EqDec typ eq := { equiv_dec := typ_dec }.
+  Instance: EqDec unary_op eq := { equiv_dec := unop_dec }.
+  Instance: EqDec binary_op eq := { equiv_dec := binop_dec }.
+  
+  Definition val_to_bool (v: val) : option bool :=
+    if equiv_decb v true_val then Some true
+    else if equiv_decb v false_val then Some false
+         else None.
+
+  Lemma val_to_bool_true:
+    val_to_bool true_val = Some true.
+  Proof.
+    unfold val_to_bool. now rewrite equiv_decb_refl.
+  Qed.
+  
+  Lemma val_to_bool_false:
+    val_to_bool false_val = Some false.
+  Proof.
+    unfold val_to_bool.
+    assert (equiv_decb false_val true_val = false) as Hne.
+    apply not_equiv_decb_equiv.
+    now intro HH; apply true_not_false_val; rewrite HH.
+    now rewrite Hne, equiv_decb_refl.
+  Qed.
+
+  Lemma val_to_bool_true':
+    forall v,
+      val_to_bool v = Some true <-> v = true_val.
+  Proof.
+    intro; split; intro HH.
+    2:now subst; apply val_to_bool_true.
+    destruct (equiv_dec v true_val); [assumption|].
+    apply not_equiv_decb_equiv in c.
+    unfold val_to_bool in HH; rewrite c in HH.
+    now destruct (equiv_decb v false_val).
+  Qed.
+
+  Lemma val_to_bool_false':
+    forall v,
+      val_to_bool v = Some false <-> v = false_val.
+  Proof.
+    intro; split; intro HH.
+    2:now subst; apply val_to_bool_false.
+    destruct (equiv_dec v false_val); [assumption|].
+    apply not_equiv_decb_equiv in c.
+    unfold val_to_bool in HH; rewrite c in HH.
+    now destruct (equiv_decb v true_val).
+  Qed.
+  
+End OPERATORS_AUX.
+
+Module OperatorsAux (Import Ops : OPERATORS) <: OPERATORS_AUX Ops.
+  Include OPERATORS_AUX Ops.
+End OperatorsAux.
 
 (** *** About Coq stdlib *)
 
@@ -633,7 +685,6 @@ Section InMembers.
   Proof.
     induction ws as [|y' ws IH].
     - intuition.
-      inversion H0.
     - destruct y' as [y' yv]. simpl.
       split; intro HH; destruct HH as [HH|HH].
       + intuition.

@@ -13,10 +13,11 @@ Ltac inv H := inversion H; subst; clear H.
 
 Module Type PRE_FUSEIFTE
        (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP).
+       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op OpAux)
+       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op OpAux SynMP)
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op OpAux SynMP SemMP).
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
   | FreeVar: forall i ty,
@@ -76,12 +77,13 @@ End PRE_FUSEIFTE.
 
 Module Type FUSEIFTE
        (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP).
+       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op OpAux)
+       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op OpAux SynMP)
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op OpAux SynMP SemMP).
 
-  Include PRE_FUSEIFTE Op SynDF SynMP SemMP Equ.
+  Include PRE_FUSEIFTE Op OpAux SynDF SynMP SemMP Equ.
 
   Axiom Ifte_free_write_fold_left_shift:
     forall A f (xs : list A) iacc,
@@ -94,13 +96,14 @@ End FUSEIFTE.
 
 Module FuseIfteFun
        (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op SynMP SemMP)
-       <: FUSEIFTE Op SynDF SynMP SemMP Equ.
+       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Op OpAux)
+       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Op OpAux SynMP)
+       (Import Equ: Rustre.Minimp.Equiv.EQUIV Op OpAux SynMP SemMP)
+       <: FUSEIFTE Op OpAux SynDF SynMP SemMP Equ.
 
-           Include PRE_FUSEIFTE Op SynDF SynMP SemMP Equ.
+  Include PRE_FUSEIFTE Op OpAux SynDF SynMP SemMP Equ.
            
   Lemma cannot_write_in_Ifte:
     forall x e s1 s2,
@@ -252,7 +255,8 @@ Module FuseIfteFun
     - inv Hstmt.
       apply exp_eval_extend_mem; trivial.
       intro Habs. apply (Hfree i); auto.
-    - inv Hstmt; destruct b; solve [eapply IHs1; eassumption || cannot_write | eapply IHs2; eassumption || cannot_write].
+    - inv Hstmt. destruct b; [eapply IHs1|eapply IHs2];
+                   try eassumption; try now cannot_write.
     - inv Hstmt.
       apply exp_eval_extend_env, exp_eval_extend_mem_by_obj; trivial.
       intro Habs. apply (Hfree i); auto.
@@ -274,37 +278,39 @@ Module FuseIfteFun
       (forall x, Is_free_in_exp x e
             -> (~Can_write_in x s1 /\ ~Can_write_in x s2))
       -> stmt_eval_eq (Comp (Ifte e s1 s2) (Ifte e t1 t2))
-                     (Ifte e (Comp s1 t1) (Comp s2 t2)).
+                      (Ifte e (Comp s1 t1) (Comp s2 t2)).
   Proof.
+    Hint Constructors stmt_eval.
     intros e s1 s2 t1 t2 Hfw prog menv env menv' env'.
     split; intro Hstmt.
     - inversion_clear Hstmt as [| | | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
-      inversion_clear Hs as [| | | | |? ? ? ? v ? ? ? ? Hse Hss| ];
-        inversion_clear Ht as [| | | | |? ? ? ? v1 ? ? ? ? Hte Hts| ].
-      apply Iifte with v; auto.
-      destruct v.
-      + apply cannot_write_exp_eval with (s := s1) (prog := prog) (menv' := menv'') (env' := env'') in Hse;
-        auto; try cannot_write.
-        apply exp_eval_det with (v1 := Vbool v1) in Hse; auto.
-        inversion Hse; subst.
-        econstructor; [apply Hss | apply Hts].
-      + apply cannot_write_exp_eval with (s := s2) (prog := prog) (menv' := menv'') (env' := env'') in Hse;
-        auto; try cannot_write.
-        apply exp_eval_det with (v1 := Vbool v1) in Hse; auto.
-        inversion Hse; subst.
-        econstructor; [apply Hss | apply Hts].
-    - inversion_clear Hstmt as [| | | | |? ? ? ? v ? ? ? ? Hexp Hs|].
-      destruct v.      
-      + inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ].
-        apply Icomp with (menv1:=menv'') (env1:=env'').
-        * apply Iifte with true; auto.
-        * apply cannot_write_exp_eval with (e := e) (v := Vbool true) in Hs1; auto; try cannot_write.
-          apply Iifte with true; auto.
-      + inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs2 Ht2| | ].
-        apply Icomp with (menv1:=menv'') (env1:=env'').
-        * apply Iifte with false; auto.
-        * apply cannot_write_exp_eval with (e := e) (v := Vbool false) in Hs2; auto; try cannot_write.
-          apply Iifte with false; auto.
+      inversion_clear Hs as   [| | | | |? ? ? ? ? bs ? ? ? ? Hx1 Hse Hss|];
+        inversion_clear Ht as [| | | | |? ? ? ? ? bt ? ? ? ? Hx3 Hte Hts|];
+        destruct bs; destruct bt; econstructor; try eassumption;
+          repeat progress match goal with
+          | H:val_to_bool _ = Some true |- _ => apply val_to_bool_true' in H
+          | H:val_to_bool _ = Some false |- _ => apply val_to_bool_false' in H
+          end; subst.
+      + econstructor (eassumption).
+      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
+        apply exp_eval_det with (1:=Hx3) in Hx1.
+        exfalso; now apply true_not_false_val.
+      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
+        apply exp_eval_det with (1:=Hx3) in Hx1.
+        exfalso; now apply true_not_false_val.
+      + econstructor (eassumption).
+    - inversion_clear Hstmt as [| | | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
+      destruct b; assert (Hv':=Hv);
+        [apply val_to_bool_true' in Hv'
+        |apply val_to_bool_false' in Hv']; subst;
+          inversion_clear Hs as [| | | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ];
+          apply Icomp with (menv1:=menv'') (env1:=env'').
+      + apply Iifte with (1:=Hx) (2:=Hv) (3:=Hs1).
+      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
+        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
+      + apply Iifte with (1:=Hx) (2:=Hv) (3:=Hs1).
+      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
+        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
   Qed.
 
   Lemma lift_Ifte_free_write:

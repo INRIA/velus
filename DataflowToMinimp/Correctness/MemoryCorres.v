@@ -9,8 +9,9 @@ Require Import Rustre.Minimp.
 
 Module Type MEMORYCORRES
        (Op: OPERATORS)
-       (Import DF: DATAFLOW Op)
-       (Import MP: MINIMP Op).
+       (OpAux: OPERATORS_AUX Op)
+       (Import DF: DATAFLOW Op OpAux)
+       (Import MP: MINIMP Op OpAux).
 (**
 
   [Memory_Corres] relates a dataflow [D.memory] with an object [heap]

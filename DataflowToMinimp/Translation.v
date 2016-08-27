@@ -35,8 +35,9 @@ variable to identify the instance.  *)
 
 Module Type PRE_TRANSLATION
        (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op).
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux).
 
   (* definition is needed in signature *)
   Definition gather_eq (acc: list (ident * typ) * list obj_dec) (eq: equation) :=
@@ -161,20 +162,22 @@ End PRE_TRANSLATION.
 
 Module Type TRANSLATION
        (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op).
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux).
 
-  Include PRE_TRANSLATION Op SynDF SynMP. 
+  Include PRE_TRANSLATION Op OpAux SynDF SynMP. 
 
 End TRANSLATION.
 
 Module TranslationFun
        (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
-       <: TRANSLATION Op SynDF SynMP.
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux)
+       <: TRANSLATION Op OpAux SynDF SynMP.
 
-  Include PRE_TRANSLATION Op SynDF SynMP. 
+  Include PRE_TRANSLATION Op OpAux SynDF SynMP. 
 
   (* (** ** Properties *) *)
 

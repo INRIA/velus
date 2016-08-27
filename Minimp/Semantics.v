@@ -18,7 +18,8 @@ Require Import Rustre.Minimp.Syntax.
 
 Module Type PRE_SEMANTICS
        (Import Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Op OpAux).
 
   Definition heap: Type := memory val.
   Definition stack : Type := PM.t val.
@@ -57,14 +58,11 @@ Module Type PRE_SEMANTICS
       exp_eval menv env e v ->
       PM.add x v env = env' ->
       stmt_eval prog menv env (Assign x e) (menv, env')
-  | (*...*)
-  (* =end= *)
-  Iassignst:
+  | Iassignst:
     forall prog menv env x e v menv',
       exp_eval menv env e v ->
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
-  (* =stmt_eval:step= *)
   | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv ty,
       mfind_inst o menv = Some(omenv) ->
       Nelist.Forall2 (exp_eval menv env) es vs ->
@@ -72,9 +70,7 @@ Module Type PRE_SEMANTICS
       madd_obj o omenv' menv = menv' ->
       PM.add y rv env  = env' ->
       stmt_eval prog menv env (Step_ap y ty clsid o es) (menv', env')
-  | (*...*)
-  (* =end= *)
-  Ireset:
+  | Ireset:
     forall prog menv env o clsid omenv' menv',
       stmt_reset_eval prog clsid omenv' ->
       madd_obj o omenv' menv = menv' ->
@@ -84,15 +80,16 @@ Module Type PRE_SEMANTICS
         stmt_eval prog menv env a1 (menv1, env1) ->
         stmt_eval prog menv1 env1 a2 (menv2, env2) ->
         stmt_eval prog menv env (Comp a1 a2) (menv2, env2)
-   | Iifte:
-      forall prog menv env cond b ifTrue ifFalse env' menv',
-        exp_eval menv env cond (Vbool b) ->
+  | Iifte:
+      forall prog menv env cond v b ifTrue ifFalse env' menv',
+        exp_eval menv env cond v ->
+        val_to_bool v = Some b ->
         stmt_eval prog menv env (if b then ifTrue else ifFalse) (menv', env') ->
         stmt_eval prog menv env (Ifte cond ifTrue ifFalse) (menv', env')
   | Iskip:
       forall prog menv env,
         stmt_eval prog menv env Skip (menv, env)
-  (* =stmt_step_eval= *)
+
   with stmt_step_eval :
          program -> heap -> ident -> nelist val -> heap -> val -> Prop :=
        | Iestep:
@@ -102,7 +99,6 @@ Module Type PRE_SEMANTICS
              stmt_eval prog' menv env cls.(c_step) (menv', env') ->
              PM.find (fst cls.(c_output)) env' = Some(ov) ->
              stmt_step_eval prog menv clsid ivs menv' ov
-  (* =end= *)
 
   with stmt_reset_eval : program -> ident -> heap -> Prop :=
        | Iereset:
@@ -115,9 +111,10 @@ End PRE_SEMANTICS.
 
 Module Type SEMANTICS
        (Import Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Op OpAux).
 
-  Include PRE_SEMANTICS Op Syn.
+  Include PRE_SEMANTICS Op OpAux Syn.
 
   Axiom exps_eval_const:
     forall h s cs,
@@ -146,9 +143,12 @@ Module Type SEMANTICS
 
 End SEMANTICS.
 
-Module SemanticsFun (Import Op: OPERATORS) (Import Syn: SYNTAX Op) <: SEMANTICS Op Syn.
+Module SemanticsFun
+       (Import Op: OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
+       (Import Syn: SYNTAX Op OpAux) <: SEMANTICS Op OpAux Syn.
 
-  Include PRE_SEMANTICS Op Syn.
+  Include PRE_SEMANTICS Op OpAux Syn.
 
   Theorem exps_eval_const:
     forall h s cs,

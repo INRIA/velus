@@ -19,19 +19,21 @@ Assumption: the base clock is [true] *)
 
 Module Type ISPRESENT
        (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op)
-       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op SynMP)
-       (Import Trans : TRANSLATION Op SynDF SynMP).
-    
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux)
+       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op OpAux SynMP)
+       (Import Trans : TRANSLATION Op OpAux SynDF SynMP).
+
   Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
   | IsCbase: Is_present_in mems heap stack Cbase
   | IsCon:
-      forall ck c ty v,
+      forall ck c v b ty,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems (c, ty)) (Vbool v)
-        -> Is_present_in mems heap stack (Con ck c ty v).
+        -> exp_eval heap stack (tovar mems (c, ty)) v
+        -> val_to_bool v = Some b
+        -> Is_present_in mems heap stack (Con ck c ty b).
 
   Inductive Is_absent_in (mems: PS.t) heap stack: clock -> Prop :=
   | IsAbs1:
@@ -39,40 +41,48 @@ Module Type ISPRESENT
         Is_absent_in mems heap stack ck
         -> Is_absent_in mems heap stack (Con ck c ty v)
   | IsAbs2:
-      forall ck c ty v1 v2,
+      forall ck c v b ty,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems (c, ty)) (Vbool v1)
-        -> v2 <> v1
-        -> Is_absent_in mems heap stack (Con ck c ty v2).
-
+        -> exp_eval heap stack (tovar mems (c, ty)) v
+        -> val_to_bool v = Some b
+        -> Is_absent_in mems heap stack (Con ck c ty (negb b)).
 
   (** ** Properties *)
 
-  Lemma exp_eval_tovar_Cbool_dec:
-    forall menv env mems c v,
-      {exp_eval menv env (tovar mems c) (Vbool v)}
-      + {~exp_eval menv env (tovar mems c) (Vbool v)}.
+  Lemma exp_eval_tovar_dec:
+    forall menv env mems c,
+      {exp_eval menv env (tovar mems c) true_val}
+      + {exp_eval menv env (tovar mems c) false_val}
+      + {~exp_eval menv env (tovar mems c) true_val
+         /\ ~exp_eval menv env (tovar mems c) false_val}.
   Proof.
-    Ltac no_match := right; inversion_clear 1; try unfold mfind_mem in *;
+    Ltac no_match := right; split; inversion 1; subst; unfold mfind_mem in *;
                      match goal with
                      | H: PM.find _ _ = _,
-                          H': PM.find _ _ = _ |- _ => rewrite H in H'; discriminate
+                       H': PM.find _ _ = _ |- _ => rewrite H in H';
+                                                   inversion H'
                      end.
-    intros menv env mems c v.
+    intros menv env mems c.
     unfold tovar; destruct c as [c ty].
     destruct (PS.mem c mems).
-    - case_eq (mfind_mem c menv).
-      + intro c0; destruct c0.
-        * destruct b; destruct v; (left; apply estate; assumption) || no_match.
-        * no_match.
-      + no_match.
-    - case_eq (PM.find c env).
-      + intro c0; destruct c0.
-        * destruct b; destruct v; (left; apply evar; assumption) || no_match.
-        * no_match.
-      + no_match.
+    - case_eq (mfind_mem c menv); [|now no_match].
+      intro v.
+      destruct (val_dec v true_val) as [Ht|Ht].
+      + rewrite Ht. left; left; now constructor.
+      + intro.
+        destruct (val_dec v false_val) as [Hf|Hf].
+        rewrite Hf in *.
+        left; right; now constructor.
+        now no_match; [apply Ht|apply Hf].
+    - case_eq (PM.find c env); [|now no_match].
+      intro v.
+      destruct (val_dec v true_val) as [Ht|Ht].
+      + rewrite Ht; left; left; now constructor.
+      + destruct (val_dec v false_val) as [Hf|Hf].
+        rewrite Hf; left; right; now constructor.
+        now no_match; [apply Ht|apply Hf].
   Qed.
-
+  
   Lemma Is_present_in_dec:
     forall mems menv env ck,
       {Is_present_in mems menv env ck}+{~Is_present_in mems menv env ck}.
@@ -81,26 +91,43 @@ Module Type ISPRESENT
     induction ck.
     - left; constructor.
     - destruct IHck.
-      + destruct (exp_eval_tovar_Cbool_dec menv env mems (i, t) b); destruct b;
-        (left; constructor; assumption) || right; inversion_clear 1; auto.
+      + destruct (exp_eval_tovar_dec menv env mems (i, t)) as [[HH|HH]|[HH1 HH2]].
+        * destruct b; [left|right].
+          econstructor (eauto); apply val_to_bool_true.
+          inversion 1; subst.
+          apply exp_eval_det with (1:=HH) in H5.
+          now subst; rewrite val_to_bool_true in *.
+        * destruct b; [right|left].
+          inversion 1; subst.
+          apply exp_eval_det with (1:=HH) in H5.
+          now subst; rewrite val_to_bool_false in *.
+          econstructor (eauto); apply val_to_bool_false.
+        * right. inversion_clear 1.
+          destruct b.
+          apply val_to_bool_true' in H2.
+          rewrite H2 in *. now apply HH1.
+          apply val_to_bool_false' in H2.
+          rewrite H2 in *. now apply HH2.
       + right; inversion_clear 1; auto.
   Qed.
-
 
   Lemma Is_absent_in_disj:
     forall mems menv env ck c ty v,
       Is_absent_in mems menv env (Con ck c ty v)
       -> (Is_absent_in mems menv env ck
-         \/ (forall v', exp_eval menv env (tovar mems (c, ty)) (Vbool v')
-                  -> v' <> v)).
+         \/ (forall v', exp_eval menv env (tovar mems (c, ty)) v'
+             -> (if v then v' <> true_val else v' <> false_val))).
   Proof.
     intros until c.
-    inversion_clear 1 as [ | ? ? ? ? ? Hp Hexp Hneq]; intuition.
-    right; intros v' Hexp'.
-    intro HR; rewrite <-HR in *; clear HR.
-    apply Hneq.
-    pose proof (exp_eval_det _ _ _ _ _ Hexp Hexp') as Heq.
-    now inversion Heq. 
+    inversion_clear 1 as [|? ? ? b ? Hneq Hexp Hvb]; intuition.
+    right; intros v' Hexp'; destruct b.
+    - apply val_to_bool_true' in Hvb; subst.
+      apply exp_eval_det with (1:=Hexp') in Hexp; subst.
+      apply true_not_false_val.
+    - apply val_to_bool_false' in Hvb; subst.
+      apply exp_eval_det with (1:=Hexp') in Hexp; subst.
+      simpl. intro H; symmetry in H.
+      now apply true_not_false_val.
   Qed.
 
 End ISPRESENT.
