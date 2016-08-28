@@ -19,10 +19,10 @@ Module Type PRE_SYNTAX
        (Import OpAux : OPERATORS_AUX Op).
 
   Inductive exp : Type :=
-  | Var : ident -> typ -> exp                    (* variable  *)
-  | State : ident -> typ -> exp                  (* state variable  *)
-  | Const : val -> typ -> exp                    (* constant *)
-  | Unop : unary_op -> exp -> typ -> exp          (* unary operator *)
+  | Var : ident -> typ -> exp                      (* variable  *)
+  | State : ident -> typ -> exp                    (* state variable  *)
+  | Const : val -> typ -> exp                      (* constant *)
+  | Unop : unary_op -> exp -> typ -> exp           (* unary operator *)
   | Binop : binary_op -> exp -> exp -> typ -> exp. (* binary operator *)
 
   Definition typeof (e: exp): typ :=
@@ -58,7 +58,7 @@ Module Type PRE_SYNTAX
         c_output : ident * typ;
         c_vars   : list (ident * typ);
 
-        c_mems   : list (ident * typ);       (* TODO: should track type of each *)
+        c_mems   : list (ident * typ);
         c_objs   : list obj_dec;
 
         c_step   : stmt;
@@ -132,7 +132,6 @@ Module SyntaxFun
             | Var x1 ty1, Var x2 ty2 => ident_eqb x1 x2 && equiv_decb ty1 ty2
             | State s1 ty1, State s2 ty2 => ident_eqb s1 s2 && equiv_decb ty1 ty2
             | Const c1 ty1, Const c2 ty2 => equiv_decb c1 c2 && equiv_decb ty1 ty2
-            (* | Op op1 es1, Op op2 es2 => op_eqb op1 op2 && _ *)
             | Unop op1 e1' ty1, Unop op2 e2' ty2 => equiv_decb op1 op2
                                                  && equiv_decb ty1 ty2 && _
             | Binop op1 e11 e12 ty1, Binop op2 e21 e22 ty2 => equiv_decb op1 op2
@@ -142,11 +141,6 @@ Module SyntaxFun
             end).
     - exact (exp_eqb e1' e2').
     - exact (exp_eqb e11 e21 && exp_eqb e12 e22).
-      (*   clear e1 e2. revert es2. induction es1 as [e1 | e1 es1]; intros [e2 | e2 es2]. *)
-      (* - exact (exp_eqb e1 e2). *)
-      (* - exact false. *)
-      (* - exact false. *)
-      (* - exact (exp_eqb e1 e2 && IHes1 es2). *)
   Defined.
 
   Lemma exp_eqb_eq:
@@ -163,41 +157,13 @@ Module SyntaxFun
     - rewrite 2 Bool.andb_true_iff, equiv_decb_equiv, equiv_decb_equiv.
       split; intro Heq.
       + f_equal; try apply IHe1; apply Heq.
-      (* auto. destruct Heq as [? Heq]; subst; split || f_equal; trivial; []. *)
-      (*   revert n Heq. induction es as [| e1 es1]; intros [| e2 es2] Heq; simpl in Heq; try discriminate; [|]. *)
-      (*   * inversion_clear IHes. rewrite H in Heq. now subst. *)
-      (*   * rewrite Bool.andb_true_iff in Heq. inversion_clear IHes. *)
-      (*     specialize (IHes1 H0 es2). rewrite H in Heq. *)
-      (*     destruct Heq as [? Heq]; subst; f_equal. *)
-      (*     apply IHes1. simpl. apply Heq. *)
-      + now inversion Heq; subst; rewrite IHe1. (* trivial. split; trivial. clear Heq. induction n; simpl; [|]. *)
-    (* * inversion_clear IHes. now rewrite H. *)
-    (* * inversion_clear IHes. rewrite Bool.andb_true_iff, H. split; trivial. now apply IHn. *)
+      + now inversion Heq; subst; rewrite IHe1.
     - rewrite 3 Bool.andb_true_iff, equiv_decb_equiv, equiv_decb_equiv.
       rewrite IHe1_1, IHe1_2.
       split; intro Heq.
       + f_equal; apply Heq.
       + now inversion Heq.
   Qed.
-
-  (* Lemma exp_eqb_neq: *)
-  (*   forall e1 e2, *)
-  (*     exp_eqb e1 e2 = false <-> e1 <> e2. *)
-  (* Proof. *)
-  (*   split; intro HH. *)
-  (*   - intro Heq; apply exp_eqb_eq in Heq; rewrite Heq in HH; discriminate. *)
-  (*   - apply Bool.not_true_iff_false. *)
-  (*     intro Htrue; apply exp_eqb_eq in Htrue; intuition. *)
-  (* Qed. *)
-
-  (* Lemma exp_eq_dec: forall (e1: exp) (e2: exp), {e1 = e2}+{e1 <> e2}. *)
-  (* Proof. *)
-  (*   intros e1 e2. *)
-  (*   destruct (exp_eqb e1 e2) eqn:Heq; [left|right]. *)
-  (*   apply exp_eqb_eq; assumption. *)
-  (*   intro H; apply exp_eqb_eq in H. *)
-  (*   rewrite Heq in H; discriminate. *)
-  (* Qed. *)
 
 End SyntaxFun.
 

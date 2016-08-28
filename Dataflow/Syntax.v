@@ -21,7 +21,7 @@ Module Type PRE_SYNTAX (Import Op : OPERATORS).
 
            What to do??? *)
   Inductive clock : Type :=
-  | Cbase : clock                          (* base clock *)
+  | Cbase : clock                                 (* base clock *)
   | Con : clock -> ident -> typ -> bool -> clock. (* subclock *)
 
   (** ** Expressions *)
@@ -88,31 +88,7 @@ Module Type PRE_SYNTAX (Import Op : OPERATORS).
 End PRE_SYNTAX.
 
 Module Type SYNTAX (Import Op : OPERATORS).
-  
   Include PRE_SYNTAX Op.
-
-  (** ** Properties *)
-
-  (** Stronger induction scheme for lexp *)
-  (* Definition lexp_ind2 : forall P : lexp -> Prop, *)
-  (*   (forall c, P (Econst c)) -> *)
-  (*   (forall i, P (Evar i)) -> *)
-  (*   (forall le, P le -> forall i b, P (Ewhen le i b)) -> *)
-  (*   (forall op les, Nelist.Forall P les -> P (Eop op les)) -> *)
-  (*   forall le, P le. *)
-  (* Proof. *)
-  (* intros P Hconst Hvar Hwhen Hop. fix 1. *)
-  (* intro le. *)
-  (* destruct le as [c | i | le | op les]. *)
-  (* + apply Hconst. *)
-  (* + apply Hvar. *)
-  (* + apply Hwhen. apply lexp_ind2. *)
-  (* + apply Hop. induction les; constructor. *)
-  (*   - apply lexp_ind2. *)
-  (*   - apply lexp_ind2. *)
-  (*   - apply IHles. *)
-  (* Defined. *)
-
 End SYNTAX.
 
 Module SyntaxFun (Import Op : OPERATORS) <: SYNTAX Op.

@@ -80,7 +80,6 @@ Module Type PRE_TRANSLATION
       | Econst c ty => Const c ty
       | Evar x ty => tovar (x, ty)
       | Ewhen e c x => translate_lexp e
-      (* | Eop op es => Op op (Nelist.map translate_lexp es) *)
       | Eunop op e ty => Unop op (translate_lexp e) ty
       | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
       end.
