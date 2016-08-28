@@ -57,6 +57,8 @@ Module Type PRE_TRANSLATION
 
     Variable memories : PS.t.
 
+    (* TODO: Would it be easier to lookup the type of a variable in a
+             typing environment? *)
     (* =tovar= *)
     Definition tovar (xt: ident * typ) : exp :=
       let (x, ty) := xt in
@@ -68,8 +70,8 @@ Module Type PRE_TRANSLATION
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
       | Cbase => s
-      | Con ck x ty true  => Control ck (Ifte (tovar (x, ty)) s Skip)
-      | Con ck x ty false => Control ck (Ifte (tovar (x, ty)) Skip s)
+      | Con ck x true  => Control ck (Ifte (tovar (x, bool_typ)) s Skip)
+      | Con ck x false => Control ck (Ifte (tovar (x, bool_typ)) Skip s)
       end.
     (* =end= *)
 

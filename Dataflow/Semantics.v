@@ -60,21 +60,21 @@ environment.
     | Sbase:
         sem_clock_instant Cbase base
     | Son:
-        forall ck x c b ty,
+        forall ck x c b,
           sem_clock_instant ck true ->
           sem_var_instant x (present c) ->
           val_to_bool c = Some b ->
-          sem_clock_instant (Con ck x ty b) true
+          sem_clock_instant (Con ck x b) true
     | Son_abs1:
-        forall ck x c ty,
+        forall ck x c,
           sem_clock_instant ck false ->
-          sem_clock_instant (Con ck x ty c) false
+          sem_clock_instant (Con ck x c) false
     | Son_abs2:
-        forall ck x c b ty,
+        forall ck x c b,
           sem_clock_instant ck true ->
           sem_var_instant x (present c) ->
           val_to_bool c = Some b ->
-          sem_clock_instant (Con ck x ty (negb b)) false.
+          sem_clock_instant (Con ck x (negb b)) false.
 
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:

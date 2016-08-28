@@ -122,10 +122,10 @@ Module Type CORRECTNESS
     induction ck; intro s; split.
     - inversion 1.
     - intros menv' env' Hp Hs; exact Hs.
-    - inversion_clear 1 as [? ? ? ? Hp|? ? ? ? ? Hp Hexp];
+    - inversion_clear 1 as [? ? ? Hp|? ? ? ? Hp Hexp];
         destruct b; destruct (PS.mem i mems); try destruct b0;
           apply IHck with (1:=Hp); eauto.
-    - inversion_clear 1 as [|? ? ? ? ? Hp Hexp]; intro Hs;
+    - inversion_clear 1 as [|? ? ? ? Hp Hexp]; intro Hs;
         destruct b; destruct (PS.mem i mems); try destruct b0;
           apply IHck with (1:=Hp); eauto.
   Qed.
@@ -488,27 +488,6 @@ for all [Is_free_exp x e]. *)
       + rewrite 2 typ_correct.
         destruct (sem_binary op c1 (DF.Syn.typeof le1) c2 (DF.Syn.typeof le2));
           [now inversion H5 | discriminate].
-        (* - subst. simpl. apply eop with cs. *)
-        (* + clear H2 H4 H. *)
-        (*   assert (Hlen : Nelist.length les = Nelist.length cs). *)
-        (*   { rewrite <- (Nelist.map_length present). eapply Nelist.Forall2_length; eassumption. } *)
-        (*   revert cs Hlen H3. induction les; intros cs Hlen Hrec. *)
-        (* - { destruct cs as [c1 | c1 cs]. *)
-        (*     + constructor. inversion_clear Hrec. inversion_clear IHle. apply H0; trivial. *)
-        (*       weaken_equiv_env. constructor(eauto). *)
-        (*     + destruct cs; simpl in Hlen; discriminate. } *)
-        (* - { destruct cs as [c1 | c1 cs]. *)
-        (*     * inversion Hrec. *)
-        (*     * simpl. constructor. *)
-        (*     + inversion_clear IHle. *)
-        (*       apply H. *)
-        (*     - now inversion_clear Hrec. *)
-        (*     - weaken_equiv_env. constructor(auto). *)
-        (*       + inversion_clear Hrec. apply IHles; omega || trivial. *)
-        (*     - now inversion IHle. *)
-        (*     - weaken_equiv_env. inversion H1. constructor(assumption). *)
-        (*     - simpl in Hlen. omega. } *)
-        (*   + destruct (apply_op op cs); now inversion H2. *)
   Qed.
 
   Theorem lexps_correct:
@@ -1778,11 +1757,11 @@ for all [Is_free_exp x e]. *)
       -> Ifte_free_write (f ce)
       -> Ifte_free_write (Control mems ck (f ce)).
   Proof.
-    induction ck as [|ck IH i ty b]; [now intuition|].
+    induction ck as [|ck IH i b]; [now intuition|].
     intros f ce Hxni Hfce.
     simpl.
     destruct b.
-    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, ty)) (f ce) Skip).
+    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_typ)) (f ce) Skip).
       + intros j Hfree Hcw.
         apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
         inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
@@ -1794,7 +1773,7 @@ for all [Is_free_exp x e]. *)
         end.
         unfold tovar in Hfree.
         destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, ty)) Skip (f ce)).
+    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_typ)) Skip (f ce)).
       + intros j Hfree Hcw.
         apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
         inversion_clear Hcw as [| |? ? ? ? Hskip| | | |];
@@ -1814,7 +1793,7 @@ for all [Is_free_exp x e]. *)
       -> Ifte_free_write s
       -> Ifte_free_write (Control mems ck s).
   Proof.
-    induction ck as [|ck IH i ty b]; [now intuition|].
+    induction ck as [|ck IH i b]; [now intuition|].
     intros s Hxni Hfce.
     simpl.
     destruct b; apply IH.

@@ -115,7 +115,7 @@ Module Type PROPER
   Proof.
     intros M M' HMeq ck ck' Hckeq e e' Heq; rewrite <-Hckeq, <-Heq;
     clear ck' e' Hckeq Heq.
-    revert e; induction ck as [ |ck' IH s ty sv].
+    revert e; induction ck as [ |ck' IH s sv].
     - reflexivity.
     - intro e.
       destruct sv; simpl; rewrite IH, HMeq; reflexivity.

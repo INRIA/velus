@@ -24,6 +24,8 @@ Module Export Op <: OPERATORS.
   Lemma true_not_false_val: true_val <> false_val.
   Proof. discriminate. Qed.
 
+  Definition bool_typ := Ctypes.type_bool.
+  
   (* Wrong. TODO: Fix this. *)
   Definition typ_of_val (v: val): typ :=
     match v with

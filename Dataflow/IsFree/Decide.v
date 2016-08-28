@@ -37,7 +37,7 @@ Module DecideFun
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
     match ck with
     | Cbase => fvs
-    | Con ck' x _ _ => free_in_clock ck' (PS.add x fvs)
+    | Con ck' x _ => free_in_clock ck' (PS.add x fvs)
     end.
 
   Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=

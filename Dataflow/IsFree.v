@@ -18,12 +18,12 @@ Module Type PRE_ISFREE
 
   Inductive Is_free_in_clock : ident -> clock -> Prop :=
   | FreeCon1:
-      forall x ck' xc ty,
-        Is_free_in_clock x (Con ck' x ty xc)
+      forall x ck' xc,
+        Is_free_in_clock x (Con ck' x xc)
   | FreeCon2:
-      forall x y ck' xc ty,
+      forall x y ck' xc,
         Is_free_in_clock x ck'
-        -> Is_free_in_clock x (Con ck' y ty xc).
+        -> Is_free_in_clock x (Con ck' y xc).
 
   (* Warning: induction scheme is not strong enough. *)
   Inductive Is_free_in_lexp : ident -> lexp -> Prop :=

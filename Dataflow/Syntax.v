@@ -11,18 +11,9 @@ Open Scope list_scope.
 Module Type PRE_SYNTAX (Import Op : OPERATORS).
   (** ** Clocks *)
 
-  (* TODO: Remove the typ argument from Con.
-           Difficulty: the Control function from translation currently
-                       uses this argument to generate Minimp expressions.
-           Two possible solutions:
-           1. Remove types from Minimp subexpressions (use a global
-             environment).
-           2. Pass a typing environment to Control.
-
-           What to do??? *)
   Inductive clock : Type :=
   | Cbase : clock                                 (* base clock *)
-  | Con : clock -> ident -> typ -> bool -> clock. (* subclock *)
+  | Con : clock -> ident -> bool -> clock. (* subclock *)
 
   (** ** Expressions *)
 

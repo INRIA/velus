@@ -34,10 +34,10 @@ Module Type CLOCKING
   | CCbase:
       clk_clock C Cbase
   | CCon:
-      forall ck x b ty,
+      forall ck x b,
         clk_clock C ck ->
         clk_var C x ck ->
-        clk_clock C (Con ck x ty b).
+        clk_clock C (Con ck x b).
 
   Inductive clk_lexp C: lexp -> clock -> Prop :=
   | Cconst:
@@ -48,14 +48,10 @@ Module Type CLOCKING
         clk_var C x ck ->
         clk_lexp C (Evar x ty) ck
   | Cwhen:
-      forall e x b ck ty,
+      forall e x b ck,
         clk_lexp C e ck ->
         clk_var C x ck ->
-        clk_lexp C (Ewhen e x b) (Con ck x ty b)
-  (* | Cop: *)
-  (*     forall op les ck, *)
-  (*       Nelist.Forall (fun e => clk_lexp C e ck) les -> *)
-  (*       clk_lexp C (Eop op les) ck *)
+        clk_lexp C (Ewhen e x b) (Con ck x b)
   | Cunop:
       forall op e ck ty,
         clk_lexp C e ck ->
@@ -73,8 +69,8 @@ Module Type CLOCKING
   | Cmerge:
       forall x t f ck ty,
         clk_var C x ck ->
-        clk_cexp C t (Con ck x ty true) ->
-        clk_cexp C f (Con ck x ty false) ->
+        clk_cexp C t (Con ck x true) ->
+        clk_cexp C f (Con ck x false) ->
         clk_cexp C (Emerge x ty t f) ck
   | Cite:
       forall b t f ck,
@@ -165,7 +161,7 @@ Module Type CLOCKING
     - intros ck Hwc; inversion_clear 1 as [|? ? ? Hcv| | |].
       apply Well_clocked_env_var with (1:=Hwc) (2:=Hcv).
     - intros ck Hwc.
-      inversion_clear 1 as [| |? ? ? ? ck' Hle Hcv | |].
+      inversion_clear 1 as [| |? ? ? ck' Hle Hcv | |].
       constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
     - intros ck Hwc; inversion_clear 1; auto.
     - intros ck Hwc; inversion_clear 1; auto.    
@@ -189,21 +185,21 @@ Module Type CLOCKING
   Qed.
 
   Lemma clock_no_loops:
-    forall ck x ty b,
-      Con ck x ty b <> ck.
+    forall ck x b,
+      Con ck x b <> ck.
   Proof.
     induction ck as [|? IH]; [discriminate 1|].
-    injection 1; intros ? ? Heq.
+    injection 1; intros ? Heq.
     apply IH.  
   Qed.
 
   Lemma clk_clock_sub:
-    forall C ck x ty b,
+    forall C ck x b,
       Well_clocked_env C
-      -> clk_clock C (Con ck x ty b)
+      -> clk_clock C (Con ck x b)
       -> clk_var C x ck.
   Proof.
-    intros C ck x ty b Hwc Hclock.
+    intros C ck x b Hwc Hclock.
     inversion_clear Hclock as [|? ? ? Hclock' Hcv'].
     assumption.
   Qed.

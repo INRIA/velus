@@ -29,23 +29,23 @@ Module Type ISPRESENT
   : clock -> Prop :=
   | IsCbase: Is_present_in mems heap stack Cbase
   | IsCon:
-      forall ck c v b ty,
+      forall ck c v b,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems (c, ty)) v
+        -> exp_eval heap stack (tovar mems (c, bool_typ)) v
         -> val_to_bool v = Some b
-        -> Is_present_in mems heap stack (Con ck c ty b).
+        -> Is_present_in mems heap stack (Con ck c b).
 
   Inductive Is_absent_in (mems: PS.t) heap stack: clock -> Prop :=
   | IsAbs1:
-      forall ck c ty v,
+      forall ck c v,
         Is_absent_in mems heap stack ck
-        -> Is_absent_in mems heap stack (Con ck c ty v)
+        -> Is_absent_in mems heap stack (Con ck c v)
   | IsAbs2:
-      forall ck c v b ty,
+      forall ck c v b,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems (c, ty)) v
+        -> exp_eval heap stack (tovar mems (c, bool_typ)) v
         -> val_to_bool v = Some b
-        -> Is_absent_in mems heap stack (Con ck c ty (negb b)).
+        -> Is_absent_in mems heap stack (Con ck c (negb b)).
 
   (** ** Properties *)
 
@@ -91,15 +91,15 @@ Module Type ISPRESENT
     induction ck.
     - left; constructor.
     - destruct IHck.
-      + destruct (exp_eval_tovar_dec menv env mems (i, t)) as [[HH|HH]|[HH1 HH2]].
+      + destruct (exp_eval_tovar_dec menv env mems (i, bool_typ)) as [[HH|HH]|[HH1 HH2]].
         * destruct b; [left|right].
           econstructor (eauto); apply val_to_bool_true.
           inversion 1; subst.
-          apply exp_eval_det with (1:=HH) in H5.
+          apply exp_eval_det with (1:=HH) in H4.
           now subst; rewrite val_to_bool_true in *.
         * destruct b; [right|left].
           inversion 1; subst.
-          apply exp_eval_det with (1:=HH) in H5.
+          apply exp_eval_det with (1:=HH) in H4.
           now subst; rewrite val_to_bool_false in *.
           econstructor (eauto); apply val_to_bool_false.
         * right. inversion_clear 1.
@@ -112,14 +112,14 @@ Module Type ISPRESENT
   Qed.
 
   Lemma Is_absent_in_disj:
-    forall mems menv env ck c ty v,
-      Is_absent_in mems menv env (Con ck c ty v)
+    forall mems menv env ck c v,
+      Is_absent_in mems menv env (Con ck c v)
       -> (Is_absent_in mems menv env ck
-         \/ (forall v', exp_eval menv env (tovar mems (c, ty)) v'
+         \/ (forall v', exp_eval menv env (tovar mems (c, bool_typ)) v'
              -> (if v then v' <> true_val else v' <> false_val))).
   Proof.
     intros until c.
-    inversion_clear 1 as [|? ? ? b ? Hneq Hexp Hvb]; intuition.
+    inversion_clear 1 as [|? ? ? b ? Hexp Hvb]; intuition.
     right; intros v' Hexp'; destruct b.
     - apply val_to_bool_true' in Hvb; subst.
       apply exp_eval_det with (1:=Hexp') in Hexp; subst.

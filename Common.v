@@ -334,6 +334,7 @@ Module Type OPERATORS.
   Parameter false_val : val.
   Axiom true_not_false_val : true_val <> false_val.
 
+  Parameter bool_typ : typ.
   (* TODO: This operation is impossible! Get rid of it. *)
   Parameter typ_of_val: val -> typ.
   

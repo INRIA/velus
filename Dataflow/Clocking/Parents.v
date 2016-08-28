@@ -8,39 +8,39 @@ Module Type PARENTS
        (Import Clo : CLOCKING Op Syn).
   
   Inductive clock_parent ck : clock -> Prop :=
-  | CP0: forall x ty b,
-      clock_parent ck (Con ck x ty b)
-  | CP1: forall ck' x ty b,
+  | CP0: forall x b,
+      clock_parent ck (Con ck x b)
+  | CP1: forall ck' x b,
       clock_parent ck ck'
-      -> clock_parent ck (Con ck' x ty b).
+      -> clock_parent ck (Con ck' x b).
 
   Lemma clock_parent_parent':
-    forall ck' ck i ty b,
-      clock_parent (Con ck i ty b) ck'
+    forall ck' ck i b,
+      clock_parent (Con ck i b) ck'
       -> clock_parent ck ck'.
   Proof.
     Hint Constructors clock_parent.
     induction ck' as [|? IH]; [now inversion 1|].
-    intros ck i' ty' b' Hcp.
-    inversion Hcp as [|? ? ? ? Hcp']; [now auto|].
+    intros ck i' b' Hcp.
+    inversion Hcp as [|? ? ? Hcp']; [now auto|].
     apply IH in Hcp'; auto.
   Qed.
 
   Lemma clock_parent_parent:
-    forall ck' ck i ty b,
-      clock_parent (Con ck i ty b) ck'
-      -> clock_parent ck (Con ck' i ty b).
+    forall ck' ck i b,
+      clock_parent (Con ck i b) ck'
+      -> clock_parent ck (Con ck' i b).
   Proof.
     Hint Constructors clock_parent.
     destruct ck'; [now inversion 1|].
-    intros ck i' ty' b' Hcp.
-    inversion Hcp as [|? ? ? ? Hcp']; [now auto|].
+    intros ck i' b' Hcp.
+    inversion Hcp as [|? ? ? Hcp']; [now auto|].
     apply clock_parent_parent' in Hcp'; auto.
   Qed.
 
   Lemma clock_parent_Cbase:
-    forall ck i ty b,
-      clock_parent Cbase (Con ck i ty b).
+    forall ck i b,
+      clock_parent Cbase (Con ck i b).
   Proof.
     induction ck as [|? IH]; [now constructor|].
     intros; constructor; apply IH.
@@ -51,7 +51,7 @@ Module Type PARENTS
       ~clock_parent ck ck.
   Proof.
     induction ck as [|? IH]; [now inversion 1|].
-    intro Hp; inversion Hp as [? ? ? HR|? ? ? ? Hp'].
+    intro Hp; inversion Hp as [? ? HR|? ? ? Hp'].
     - rewrite HR in Hp; contradiction.
     - apply clock_parent_parent' in Hp'; contradiction.
   Qed.
@@ -67,17 +67,17 @@ Module Type PARENTS
   Qed.
 
   Lemma clock_parent_Con:
-    forall ck ck' i ty b j ty' c,
-      clock_parent (Con ck i ty b) (Con ck' j ty' c)
+    forall ck ck' i b j c,
+      clock_parent (Con ck i b) (Con ck' j c)
       -> clock_parent ck ck'.
   Proof.
     destruct ck; induction ck' as [|? IH].
-    - inversion 1 as [|? ? ? ? Hp].
+    - inversion 1 as [|? ? ? Hp].
       apply clock_parent_parent' in Hp; inversion Hp.
     - intros; now apply clock_parent_Cbase.
-    - inversion 1 as [|? ? ? ? Hp]; inversion Hp.
-    - intros i' ty b' j ty' c.
-      inversion 1 as [? ? ? Hck'|? ? ? ? Hp];
+    - inversion 1 as [|? ? ? Hp]; inversion Hp.
+    - intros i' b' j  c.
+      inversion 1 as [? ? Hck'|? ? ? Hp];
         [rewrite Hck' in IH; now constructor|].
       apply IH in Hp; auto.
   Qed.
@@ -103,10 +103,10 @@ Module Type PARENTS
   Qed.
 
   Lemma Con_not_clock_parent:
-    forall ck x ty b,
-      ~clock_parent (Con ck x ty b) ck.
+    forall ck x b,
+      ~clock_parent (Con ck x b) ck.
   Proof.
-    intros ck x ty b Hp; apply clock_parent_strict with (1:=Hp); constructor.
+    intros ck x b Hp; apply clock_parent_strict with (1:=Hp); constructor.
   Qed.
 
   Lemma clk_clock_parent:
@@ -120,7 +120,7 @@ Module Type PARENTS
     induction ck' as [|ck' IH]; destruct ck as [|ck i' ty' b'];
     try now (inversion 3 || auto).
     intros Hwc Hp Hck.
-    inversion Hp as [j ty c [HR1 HR2 HR3]|ck'' j ty c Hp' [HR1 HR2 HR3]].
+    inversion Hp as [j c [HR1 HR2 HR3]|ck'' j c Hp' [HR1 HR2 HR3]].
     - rewrite <-HR1 in *; clear HR1 HR2 HR3.
       inversion_clear Hck as [|? ? ? ? Hck' Hcv].
       inversion_clear Hck'; auto.

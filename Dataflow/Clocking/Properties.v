@@ -19,16 +19,16 @@ Module Type PROPERTIES
 Lemma Is_free_in_clock_self_or_parent:
   forall x ck,
     Is_free_in_clock x ck
-    -> exists ck' ty b, ck = Con ck' x ty b \/ clock_parent (Con ck' x ty b) ck.
+    -> exists ck' b, ck = Con ck' x b \/ clock_parent (Con ck' x b) ck.
 Proof.
   Hint Constructors clock_parent.
   induction ck as [|? IH]; [now inversion 1|].
   intro Hfree.
-  inversion Hfree as [|? ? ? ? ? Hfree']; clear Hfree; subst.
-  - exists ck, t, b; now auto.
+  inversion Hfree as [|? ? ? ? Hfree']; clear Hfree; subst.
+  - exists ck, b; now auto.
   - specialize (IH Hfree'); clear Hfree'.
-    destruct IH as [ck' [ty' [b' Hcp]]].
-    exists ck', ty', b'; right.
+    destruct IH as [ck' [b' Hcp]].
+    exists ck', b'; right.
     destruct Hcp as [Hcp|Hcp]; [rewrite Hcp| inversion Hcp]; now auto.
 Qed.
 
@@ -47,7 +47,7 @@ Proof.
     subst; inversion Hdef; inversion Hhasck; clear Hdef Hhasck; subst;
     pose proof (Well_clocked_env_var _ _ _ Hwc Hcv) as Hclock;
     apply Is_free_in_clock_self_or_parent in Hfree;
-    destruct Hfree as [ck [ty' [b [Hck|Hck]]]];
+    destruct Hfree as [ck [b [Hck|Hck]]];
     (rewrite Hck in *;
       apply clk_clock_sub with (1:=Hwc) in Hclock;
       apply clk_var_det with (1:=Hcv) in Hclock;
