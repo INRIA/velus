@@ -79,7 +79,7 @@ Module Type PRE_TRANSLATION
     (* definition is needed in signature *)
     Fixpoint translate_lexp (e : lexp) : exp :=
       match e with
-      | Econst c ty => Const c ty
+      | Econst c => Const c
       | Evar x ty => tovar (x, ty)
       | Ewhen e c x => translate_lexp e
       | Eunop op e ty => Unop op (translate_lexp e) ty
@@ -123,7 +123,7 @@ Module Type PRE_TRANSLATION
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
     | EqDef _ _ _ => s
-    | EqFby x _ v0 _  => Comp (AssignSt x (Const v0 (typ_of_val v0))) s
+    | EqFby x _ c0 _  => Comp (AssignSt x (Const c0)) s
     | EqApp x _ f _ _ => Comp (Reset_ap f x) s
     end.
   (* =end= *)

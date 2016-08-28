@@ -82,16 +82,16 @@ Module Type MEMSEMANTICS
         msem_node G f ls M' xs ->
         msem_equation G bk H M (EqApp x ck f arg ty)
   (* =msem_equation:fby= *)
-  | SEqFby: forall bk H M ms x ck ls xs v0 le,
+  | SEqFby: forall bk H M ms x ck ls xs c0 le,
       mfind_mem x M = Some ms ->
-      ms 0 = v0 ->
+      ms 0 = (sem_const c0) ->
       sem_laexp bk H ck le ls ->
       sem_var bk H x xs ->
       (forall n, match ls n with
                  | absent    => ms (S n) = ms n /\ xs n = absent
                  | present v => ms (S n) = v    /\ xs n = present (ms n)
                  end) ->
-      msem_equation G bk H M (EqFby x ck v0 le)
+      msem_equation G bk H M (EqFby x ck c0 le)
   (* =end= *)
 
   with msem_node G: ident -> stream (nelist value) -> memory -> stream value -> Prop :=
@@ -162,10 +162,10 @@ enough: it does not support the internal fixpoint introduced by
              (ck     : clock)
              (ls     : stream value)
              (yS     : stream value)
-             (v0     : val)
+             (c0     : const)
              (le     : lexp)
              (Hmfind : mfind_mem y M = Some ms)
-             (Hms0 : ms 0 = v0)
+             (Hms0 : ms 0 = sem_const c0)
              (Hls : sem_laexp bk H ck le ls)
              (HyS : sem_var bk H y yS)
              (Hy : forall n,
@@ -226,18 +226,18 @@ enough: it does not support the internal fixpoint introduced by
                    (match Hnode with
                     | ex_intro H (conj Hxs (conj Hys (conj Hout Heqs))) =>
                       ex_intro _ H (conj Hxs (conj Hys (conj Hout
-                                                             (((fix map (eqs : list equation)
-                                                                    (Heqs: Forall (msem_equation G bk H M) eqs) :=
-                                                                  match Heqs in Forall _ fs
-                                                                        return (Forall (fun eq=> exists Hsem,
-                                                                                            P Hsem) fs)
-                                                                  with
-                                                                  | Forall_nil => Forall_nil _
-                                                                  | Forall_cons eq eqs Heq Heqs' =>
-                                                                    Forall_cons eq (@ex_intro _ _ Heq
-                                                                                              (msem_equation_mult Heq))
-                                                                                (map eqs Heqs')
-                                                                  end) eqs Heqs)))))
+                         (((fix map (eqs : list equation)
+                                (Heqs: Forall (msem_equation G bk H M) eqs) :=
+                              match Heqs in Forall _ fs
+                                    return (Forall (fun eq=> exists Hsem,
+                                                        P Hsem) fs)
+                              with
+                              | Forall_nil => Forall_nil _
+                              | Forall_cons eq eqs Heq Heqs' =>
+                                Forall_cons eq (@ex_intro _ _ Heq
+                                                          (msem_equation_mult Heq))
+                                            (map eqs Heqs')
+                              end) eqs Heqs)))))
                     end)
       end
 
@@ -629,7 +629,7 @@ dataflow memory for which the non-standard semantics holds true.
         apply msem_equation_madd_obj; auto.
         apply H6; constructor.
        (* eauto using msem_equation_madd_obj.  *)
-    - exists (madd_mem x (hold v0 ls) M).
+    - exists (madd_mem x (hold (sem_const c0) ls) M).
       constructor.
       econstructor.
       + now apply mfind_mem_gss.

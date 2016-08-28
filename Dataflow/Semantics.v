@@ -78,9 +78,9 @@ environment.
 
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:
-        forall c v ty,
-          v = (if base then present c else absent) ->
-          sem_lexp_instant (Econst c ty) v
+        forall c v,
+          v = (if base then present (sem_const c) else absent) ->
+          sem_lexp_instant (Econst c) v
     | Svar:
         forall x v ty,
           sem_var_instant x v ->
@@ -281,11 +281,11 @@ environment.
         sem_node G f ls xs ->
         sem_equation G bk H (EqApp x ck f arg ty)
   | SEqFby:
-      forall bk H x ls xs v0 ck le,
+      forall bk H x ls xs c0 ck le,
         sem_laexp bk H ck le ls ->
         sem_var bk H x xs ->
-        xs = fby v0 ls ->
-        sem_equation G bk H (EqFby x ck v0 le)
+        xs = fby (sem_const c0) ls ->
+        sem_equation G bk H (EqFby x ck c0 le)
 
   with sem_node G: ident -> stream (nelist value) -> stream value -> Prop :=
        | SNode:
@@ -347,34 +347,34 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqFby_case :
       forall (bk: stream bool)
-        (H   : history)
-            (y   : ident)
-            (ls  : stream value)
-            (yS  : stream value)
-            (v0  : val)
-        (ck  : clock)
-            (lae : lexp)
-            (Hls : sem_laexp bk H ck lae ls)
-            (Hys : sem_var bk H y yS)
-        (Hfby: yS = fby v0 ls),
-        P bk H (EqFby y ck v0 lae) (SEqFby G bk H y ls yS v0 ck lae Hls Hys Hfby).
+             (H   : history)
+             (y   : ident)
+             (ls  : stream value)
+             (yS  : stream value)
+             (c0  : const)
+             (ck  : clock)
+             (lae : lexp)
+             (Hls : sem_laexp bk H ck lae ls)
+             (Hys : sem_var bk H y yS)
+             (Hfby: yS = fby (sem_const c0) ls),
+        P bk H (EqFby y ck c0 lae) (SEqFby G bk H y ls yS c0 ck lae Hls Hys Hfby).
 
     Hypothesis SNode_case :
       forall (bk: stream bool)
-        (f   : ident)
-            (xss : stream (nelist value))
-            (ys  : stream value)
-            (i   : nelist (ident * typ))
-            (o   : ident * typ)
-            (v   : list (ident * typ))
-            (eqs : list equation)
-        (Hck : clock_of xss bk)
-            (Hf  : find_node f G = Some (mk_node f i o v eqs))
-        (Heqs : exists H,
+             (f   : ident)
+             (xss : stream (nelist value))
+             (ys  : stream value)
+             (i   : nelist (ident * typ))
+             (o   : ident * typ)
+             (v   : list (ident * typ))
+             (eqs : list equation)
+             (Hck : clock_of xss bk)
+             (Hf  : find_node f G = Some (mk_node f i o v eqs))
+             (Heqs : exists H,
             sem_vars bk H (Nelist.map_fst i) xss
-                /\ sem_var bk H (fst o) ys
+            /\ sem_var bk H (fst o) ys
             /\ (forall n, absent_list xss n <-> ys n = absent)
-                /\ List.Forall (sem_equation G bk H) eqs),
+            /\ List.Forall (sem_equation G bk H) eqs),
         (exists H,
             sem_vars bk H (Nelist.map_fst i) xss
             /\ sem_var bk H (fst o) ys
@@ -415,18 +415,19 @@ enough: it does not support the internal fixpoint introduced by
                         (match Hnode with
                          | ex_intro H (conj Hxs (conj Hys (conj Hout Heqs))) =>
                            ex_intro _ H (conj Hxs (conj Hys (conj Hout
-                                                                  (((fix map (eqs : list equation)
-                                                                         (Heqs: List.Forall (sem_equation G bk H) eqs) :=
-                                                                       match Heqs in List.Forall _ fs
-                                                                             return (List.Forall (fun eq=> exists Hsem,
-                                                                                                      P bk H eq Hsem) fs)
-                                                                       with
-                                                                       | List.Forall_nil => List.Forall_nil _
-                                                                       | List.Forall_cons eq eqs Heq Heqs' =>
-                                                                         List.Forall_cons eq (@ex_intro _ _ Heq
-                                                                                                        (sem_equation_mult bk H eq Heq))
-                                                                                          (map eqs Heqs')
-                                                                       end) eqs Heqs)))))
+                             (((fix map (eqs : list equation)
+                                (Heqs: List.Forall (sem_equation G bk H) eqs) :=
+                                  match Heqs in List.Forall _ fs
+                                        return (List.Forall
+                                                  (fun eq=> exists Hsem,
+                                                       P bk H eq Hsem) fs)
+                                  with
+                                  | List.Forall_nil => List.Forall_nil _
+                                  | List.Forall_cons eq eqs Heq Heqs' =>
+                                    List.Forall_cons eq (@ex_intro _ _ Heq
+                                                (sem_equation_mult bk H eq Heq))
+                                                     (map eqs Heqs')
+                                  end) eqs Heqs)))))
                          end)
            end.
 

@@ -52,118 +52,6 @@ Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
       i <> i' ->
       Assoc (necons i is) (necons v vs) i' v'.
 
-(** ** Basic types supported by CoreDF: *)
-
-Inductive base_type := Tint | Tbool.
-Inductive const : Set :=
-| Cint : BinInt.Z -> const
-| Cbool : bool -> const.
-
-Implicit Type c: const.
-
-Definition const_eqb (c1: const) (c2: const) : bool :=
-  match c1, c2 with
-  | Cint z1, Cint z2 => BinInt.Z.eqb z1 z2
-  | Cbool b1, Cbool b2 => Bool.eqb b1 b2
-  | _, _ => false
-  end.
-
-(** ** Universe for typed signatures *)
-
-(** These definitions are used to specify and import external
-operators *)
-
-Inductive arity :=
-  | Tout (t_out : base_type)
-  | Tcons (t_in : base_type) (arr : arity).
-
-(* Our own version of RelationClasses.arrows interpreting the arity *)
-Definition base_interp t :=
-  match t with
-    | Tint => BinInt.Z
-    | Tbool => bool
-  end.
-
-Fixpoint arrows (l : arity) : Set :=
-  match l with
-    | Tout t => base_interp t
-    | Tcons A ar => base_interp A -> arrows ar
-  end.
-
-(* The set of external operators. idea: operator = sigT arrows but we want decidable equality *)
-Definition operator := sigT arrows.
-Definition get_arity : operator -> arity := @projT1 _ _.
-Definition get_interp : forall op : operator, arrows (get_arity op) := @projT2 _ _.
-
-(* length function *)
-Fixpoint nb_args (ar : arity) :=
-  match ar with
-    | Tout _ => 0
-    | Tcons t ar => S (nb_args ar)
-  end.
-
-(* list of argument types *)
-Fixpoint arg_interp (ar : arity) :=
-  match ar with
-    | Tout _ => nil
-    | Tcons t ar => cons (base_interp t) (arg_interp ar)
-  end.
-
-(* result type *)
-Fixpoint res_interp (ar : arity) :=
-  match ar with
-    | Tout t => base_interp t
-    | Tcons _ ar => res_interp ar
-  end.
-
-(* base_type of result to const *)
-Definition base_to_const t :=
-  match t as t' return base_interp t' -> const with
-    | Tint => fun v => Cint v
-    | Tbool => fun b => Cbool b
-  end.
-
-(** Two possible versions: 
-    1) arguments must be correct
-    2) arguments are checked to have the proper type *)
-
-(* Version 1 *)
-(* List of valid arguments *)
-Inductive valid_args : arity -> Set :=
-  | noArg : forall t_out, valid_args (Tout t_out)
-  | moreArg : forall {t_in ar} (c : base_interp t_in) (l : valid_args ar), valid_args (Tcons t_in ar).
-
-(* TODO: make a better definition *)
-Fixpoint apply_arity_1 {ar : arity} (f : arrows ar) (args : valid_args ar) : res_interp ar.
-destruct ar; simpl in *.
-- exact f.
-- inversion_clear args.
-  exact (apply_arity_1 ar (f c) l).
-Defined.
-
-(* Version 2 *)
-(* Predicate accepting list of valid arguments *)
-(* Inductive Valid_args : arity -> nelist const -> Prop := *)
-(*   | OneInt : forall t_out n, Valid_args (Tcons Tint (Tout t_out)) (nebase (Cint n)) *)
-(*   | OneBool : forall t_out b, Valid_args (Tcons Tbool (Tout t_out)) (nebase (Cbool b)) *)
-(*   | MoreInt : forall ar (n : Z) l, Valid_args ar l -> Valid_args (Tcons Tint ar) (necons (Cint n) l) *)
-(*   | MoreBool : forall ar (b : bool) l, Valid_args ar l -> Valid_args (Tcons Tbool ar) (necons (Cbool b) l). *)
-
-(* Fixpoint apply_arity (ar : arity) (l : nelist const) : arrows ar -> option const := *)
-(*   match ar as ar', l return arrows ar' -> option const with *)
-(*     | Tout _, _ => fun _ => None *)
-(*     | Tcons Tint (Tout Tint), nebase (Cint n) => fun f => Some (Cint (f n)) *)
-(*     | Tcons Tint (Tout Tbool), nebase (Cint n) => fun f => Some (Cbool (f n)) *)
-(*     | Tcons Tbool (Tout Tint), nebase (Cbool b) => fun f => Some (Cint (f b)) *)
-(*     | Tcons Tbool (Tout Tbool), nebase (Cbool b) => fun f => Some (Cbool (f b)) *)
-(*     | Tcons Tint ar, necons (Cint n) l => fun f => apply_arity ar l (f n) *)
-(*     | Tcons Tbool ar, necons (Cbool b) l => fun f => apply_arity ar l (f b) *)
-(*     | _, _ => fun _ => None (* Wrong type or number of arguments *) *)
-(*   end. *)
-
-(* Definition apply_op (op : operator) (l : nelist const) : option const := *)
-(*   apply_arity (get_arity op) l (get_interp op). *)
-
 (** ** Properties *)
 
 (** *** About identifiers **)
@@ -241,60 +129,7 @@ Proof.
   intros i m; unfold PS.In; case (PS.mem i m); auto.
 Qed.
 
-(** *** About basic types *)
-
-Lemma const_eqb_eq:
-  forall (c1 c2: const),
-    const_eqb c1 c2 = true <-> c1 = c2.
-Proof.
-  split.
-  - destruct c1, c2; simpl; intro H; try discriminate.
-    + apply BinInt.Z.eqb_eq in H; rewrite H; reflexivity.
-    + apply Bool.eqb_prop in H; rewrite H; reflexivity.
-  - destruct c1, c2; simpl; intro H0; try discriminate H0.
-    + injection H0.
-      intro H1; rewrite H1.
-      destruct z, z0; simpl;
-      (reflexivity || discriminate || (apply Pos.eqb_eq; reflexivity)).
-    + injection H0.
-      intro H1; rewrite H1.
-      destruct b, b0; simpl; try reflexivity.
-Qed.
-
-Lemma const_eq_dec: forall (c1 c2: const), {c1=c2}+{c1<>c2}.
-Proof.
-  intros c1 c2.
-  destruct (const_eqb c1 c2) eqn:Heq; [left|right].
-  apply const_eqb_eq; assumption.
-  intro H; apply const_eqb_eq in H.
-  rewrite Heq in H; discriminate.
-Qed.
-
-
-(** *** About operators *)
-
-Lemma arity_dec : forall ar1 ar2 : arity, {ar1 = ar2} + {ar1 <> ar2}.
-Proof. do 2 decide equality. Qed.
-
-(* Must be postulated because we do not have decidable equality on function types.
-   Can be avoided, if we add an id field with a decidable equality. *)
-Axiom op_dec : forall op1 op2 : operator, {op1 = op2} + {op1 <> op2}.
-
-Example plus : operator.
-exists (Tcons Tint (Tcons Tint (Tout Tint))).
-exact BinInt.Z.add.
-Defined.
-
-Definition op_eqb op1 op2 := if op_dec op1 op2 then true else false.
-
-Lemma op_eqb_true_iff : forall op1 op2, op_eqb op1 op2 = true <-> op1 = op2.
-Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
-
-Lemma op_eqb_false_iff : forall op1 op2, op_eqb op1 op2 = false <-> op1 <> op2.
-Proof. intros op1 op2. unfold op_eqb. destruct (op_dec op1 op2); intuition discriminate. Qed.
-
-(* Lemma Valid_args_length : forall ar l, Valid_args ar l -> Nelist.length l = nb_args ar. *)
-(* Proof. intros ar l Hvalid. induction Hvalid; simpl; auto. Qed. *)
+(** *** Operator abstraction *)
 
 Generalizable Variables A.
   
@@ -329,14 +164,16 @@ Qed.
 Module Type OPERATORS.
   Parameter val : Type.
   Parameter typ : Type.
+  Parameter const : Type.
 
   Parameter true_val  : val.
   Parameter false_val : val.
   Axiom true_not_false_val : true_val <> false_val.
 
   Parameter bool_typ : typ.
-  (* TODO: This operation is impossible! Get rid of it. *)
-  Parameter typ_of_val: val -> typ.
+
+  Parameter typ_const : const -> typ.
+  Parameter sem_const : const -> val.
   
   Parameter unary_op  : Type.
   Parameter binary_op : Type.
@@ -346,6 +183,7 @@ Module Type OPERATORS.
 
   Axiom val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
   Axiom typ_dec   : forall t1 t2 : typ, {t1 = t2} + {t1 <> t2}.
+  Axiom const_dec : forall c1 c2 : const, {c1 = c2} + {c1 <> c2}.
   Axiom unop_dec  : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}.
   Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}.
 
@@ -357,6 +195,7 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
 
   Instance: EqDec val eq := { equiv_dec := val_dec }.
   Instance: EqDec typ eq := { equiv_dec := typ_dec }.
+  Instance: EqDec const eq := { equiv_dec := const_dec }.
   Instance: EqDec unary_op eq := { equiv_dec := unop_dec }.
   Instance: EqDec binary_op eq := { equiv_dec := binop_dec }.
   

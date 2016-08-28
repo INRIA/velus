@@ -37,8 +37,8 @@ Module Type PRE_SEMANTICS
         mfind_mem x heap = Some v ->
         exp_eval heap stack (State x ty) v
   | econst:
-      forall c ty,
-        exp_eval heap stack (Const c ty) c
+      forall c,
+        exp_eval heap stack (Const c) (sem_const c)
    | eunop :
       forall op e c v ty,
         exp_eval heap stack e c ->
@@ -118,7 +118,9 @@ Module Type SEMANTICS
 
   Axiom exps_eval_const:
     forall h s cs,
-      Nelist.Forall2 (exp_eval h s) (Nelist.map (fun c => Const c (typ_of_val c)) cs) cs.
+      Nelist.Forall2 (exp_eval h s)
+                     (Nelist.map Const cs)
+                     (Nelist.map sem_const cs).
 
   (** ** Determinism of semantics *)
 
@@ -152,7 +154,9 @@ Module SemanticsFun
 
   Theorem exps_eval_const:
     forall h s cs,
-      Nelist.Forall2 (exp_eval h s) (Nelist.map (fun c => Const c (typ_of_val c)) cs) cs.
+      Nelist.Forall2 (exp_eval h s)
+                     (Nelist.map Const cs)
+                     (Nelist.map sem_const cs).
   Proof.
     Hint Constructors exp_eval.
     intros h s cs. induction cs; constructor; eauto.
@@ -168,11 +172,14 @@ Module SemanticsFun
   Proof.
     induction e (* using exp_ind2 *);
     intros v1 v2 H1 H2;
-    inversion H1 as [xa va tya Hv1|xa va tya Hv1|xa va tya Hv1
-                     |opa ea ca va tya IHa Hv1|opa e1a e2a c1a c2a va tya IH1a IH2a Hv1];
-    inversion H2 as [xb vb tyb Hv2|xb vb tyb Hv2|xb vb tyb Hv2
-                     |opb eb cb vb tyb IHb Hv2|opb e1b e2b c1b c2b vb tyb IH1b IH2b Hv2];
+    inversion H1 as [xa va tya Hv1|xa va tya Hv1|xa va Hv1
+                     |opa ea ca va tya IHa Hv1
+                     |opa e1a e2a c1a c2a va tya IH1a IH2a Hv1];
+    inversion H2 as [xb vb tyb Hv2|xb vb tyb Hv2|xb vb Hv2
+                     |opb eb cb vb tyb IHb Hv2
+                     |opb e1b e2b c1b c2b vb tyb IH1b IH2b Hv2];
     try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2); subst.
+    - reflexivity.
     - pose proof (IHe ca cb IHa IHb); subst.
       now rewrite Hv1 in Hv2; injection Hv2.
     - pose proof (IHe1 c1a c1b IH1a IH1b); pose proof (IHe2 c2a c2b IH2a IH2b); subst.

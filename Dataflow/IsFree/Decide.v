@@ -42,7 +42,7 @@ Module DecideFun
 
   Fixpoint free_in_lexp (e: lexp) (fvs: PS.t) : PS.t :=
     match e with
-    | Econst _ _ => fvs
+    | Econst _ => fvs
     | Evar x _ => PS.add x fvs
     | Ewhen e x _ => free_in_lexp e (PS.add x fvs)
     (* | Eop op eqs => Nelist.fold_left (fun fvs e => free_in_lexp e fvs) eqs fvs *)

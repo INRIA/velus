@@ -19,17 +19,17 @@ Module Type PRE_SYNTAX
        (Import OpAux : OPERATORS_AUX Op).
 
   Inductive exp : Type :=
-  | Var : ident -> typ -> exp                      (* variable  *)
+  | Var   : ident -> typ -> exp                    (* variable  *)
   | State : ident -> typ -> exp                    (* state variable  *)
-  | Const : val -> typ -> exp                      (* constant *)
-  | Unop : unary_op -> exp -> typ -> exp           (* unary operator *)
+  | Const : const-> exp                            (* constant *)
+  | Unop  : unary_op -> exp -> typ -> exp          (* unary operator *)
   | Binop : binary_op -> exp -> exp -> typ -> exp. (* binary operator *)
 
   Definition typeof (e: exp): typ :=
     match e with
+    | Const c => typ_const c
     | Var _ ty
     | State _ ty
-    | Const _ ty
     | Unop _ _ ty
     | Binop _ _ _ ty => ty
     end.
@@ -131,7 +131,7 @@ Module SyntaxFun
     refine (match e1, e2 with
             | Var x1 ty1, Var x2 ty2 => ident_eqb x1 x2 && equiv_decb ty1 ty2
             | State s1 ty1, State s2 ty2 => ident_eqb s1 s2 && equiv_decb ty1 ty2
-            | Const c1 ty1, Const c2 ty2 => equiv_decb c1 c2 && equiv_decb ty1 ty2
+            | Const c1, Const c2 => equiv_decb c1 c2
             | Unop op1 e1' ty1, Unop op2 e2' ty2 => equiv_decb op1 op2
                                                  && equiv_decb ty1 ty2 && _
             | Binop op1 e11 e12 ty1, Binop op2 e21 e22 ty2 => equiv_decb op1 op2
@@ -152,7 +152,7 @@ Module SyntaxFun
       split; intro Heq; [now f_equal | now inversion Heq].
     - rewrite Bool.andb_true_iff, ident_eqb_eq, equiv_decb_equiv.
       split; intro Heq; [now f_equal | now inversion Heq].
-    - rewrite Bool.andb_true_iff, equiv_decb_equiv, equiv_decb_equiv.
+    - rewrite equiv_decb_equiv.
       split; intro Heq; [now f_equal | now inversion Heq].
     - rewrite 2 Bool.andb_true_iff, equiv_decb_equiv, equiv_decb_equiv.
       split; intro Heq.

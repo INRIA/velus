@@ -25,16 +25,31 @@ Module Export Op <: OPERATORS.
   Proof. discriminate. Qed.
 
   Definition bool_typ := Ctypes.type_bool.
-  
-  (* Wrong. TODO: Fix this. *)
-  Definition typ_of_val (v: val): typ :=
-    match v with
-    (* | Vundef => Tvoid *)
-    | Values.Vint _ => Ctypes.Tvoid
-    | Values.Vfloat _ => Ctypes.Tvoid
-    | _ => Ctypes.Tvoid
+
+  Inductive constant : Type :=
+  | Cint: Integers.int -> Ctypes.intsize -> Ctypes.signedness -> constant
+  | Clong: Integers.int64 -> Ctypes.signedness -> constant
+  | Cfloat: Floats.float -> constant
+  | Csingle: Floats.float32 -> constant.
+
+  Definition const := constant.
+
+  Definition typ_const (c: const) : typ :=
+    match c with
+    | Cint _ sz sg => Ctypes.Tint sz sg Ctypes.noattr
+    | Clong _ sg   => Ctypes.Tlong sg Ctypes.noattr
+    | Cfloat _     => Ctypes.Tfloat Ctypes.F64 Ctypes.noattr
+    | Csingle _    => Ctypes.Tfloat Ctypes.F32 Ctypes.noattr
     end.
-    
+
+  Definition sem_const (c: const) : val :=
+    match c with
+    | Cint i _ _ => Values.Vint i
+    | Clong i _  => Values.Vlong i
+    | Cfloat f   => Values.Vfloat f
+    | Csingle f  => Values.Vsingle f
+    end.
+
   Definition unary_op := Cop.unary_operation.
   Definition binary_op := Cop.binary_operation.
 
@@ -52,6 +67,17 @@ Module Export Op <: OPERATORS.
 
   Lemma typ_dec   : forall t1 t2 : typ, {t1 = t2} + {t1 <> t2}.
   Proof Ctypes.type_eq.
+  
+  Lemma const_dec : forall c1 c2 : const, {c1 = c2} + {c1 <> c2}.
+  Proof.
+    assert (forall (x y: Ctypes.intsize), {x=y} + {x<>y}) by decide equality.
+    assert (forall (x y: Ctypes.signedness), {x=y} + {x<>y}) by decide equality.
+    decide equality.
+    apply Int.eq_dec.
+    apply Int64.eq_dec.
+    apply Float.eq_dec.
+    apply Float32.eq_dec.
+  Qed.
       
   Lemma unop_dec  : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}.
   Proof.

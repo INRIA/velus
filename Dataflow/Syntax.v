@@ -18,7 +18,7 @@ Module Type PRE_SYNTAX (Import Op : OPERATORS).
   (** ** Expressions *)
 
   Inductive lexp : Type :=
-  | Econst : val -> typ -> lexp
+  | Econst : const -> lexp
   | Evar : ident -> typ -> lexp
   | Ewhen : lexp -> ident -> bool -> lexp
   | Eunop : unary_op -> lexp -> typ -> lexp
@@ -26,7 +26,7 @@ Module Type PRE_SYNTAX (Import Op : OPERATORS).
 
   Fixpoint typeof (le: lexp): typ :=
     match le with
-    | Econst _ ty
+    | Econst c => typ_const c
     | Evar _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
@@ -52,7 +52,7 @@ Module Type PRE_SYNTAX (Import Op : OPERATORS).
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
   | EqApp : ident -> clock -> ident -> lexps -> typ -> equation
-  | EqFby : ident -> clock -> val -> lexp -> equation.
+  | EqFby : ident -> clock -> const -> lexp -> equation.
 
   Implicit Type eqn: equation.
 

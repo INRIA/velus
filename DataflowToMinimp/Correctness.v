@@ -469,9 +469,10 @@ for all [Is_free_exp x e]. *)
     Hint Constructors exp_eval.
     intros until e. revert c.
     (* XXX: This is extremely shaky *)
-    induction e as [c0 ty|y ty|e IH y yb ty|op le IHle ty|op le1 IHle1 le2 IHle2 ty];
-      intro c; inversion 1 as [c' v ty' H'|x v ty' H'|s x b v ty' H' H''| | |le' op' c' ty' H'| |le1' le2' op' c1 c2 ty' H' H''|];
-      try (subst; injection H'); intros; subst; try apply IH; try apply econst; auto.
+    induction e as [c0|y ty|e IH y yb|op le IHle ty|op le1 IHle1 le2 IHle2 ty];
+      intro c; inversion 1 as [c' v Hp H'|x v ty' H'|s x b v ty' H' H''| | |le' op' c' ty' H'| |le1' le2' op' c1 c2 ty' H' H''|];
+        try (subst; injection H'); intros; subst; try apply IH; try apply econst; auto.
+    - simpl. injection Hp. intro; subst. constructor.
     - split_env_assumption;
       unfold translate_lexp;
       destruct (PS.mem y mems) eqn:Hm;
@@ -1454,7 +1455,7 @@ for all [Is_free_exp x e]. *)
           auto.
           apply H2; constructor.
       - (* EqFby *)
-        exists (madd_mem i v menv'), env'.
+        exists (madd_mem i (sem_const v) menv'), env'.
         split.
         + unfold translate_reset_eqns; simpl;
           rewrite stmt_eval_translate_reset_eqn_shift.
@@ -1559,25 +1560,32 @@ for all [Is_free_exp x e]. *)
 
     Variables (G     : global)
               (main  : ident)
-              (css   : stream (nelist val))
+              (css   : stream (nelist const))
               (ys    : stream value)
               (r     : ident)
               (ty    : typ)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
-    Let xss := fun n => Nelist.map present (css n).
+    Let xss := fun n => Nelist.map (fun c => present (sem_const c)) (css n).
 
     Variable (Hsem: sem_node G main xss ys).
 
+    (* TODO: Tim: It seems a little bit strange to interpret the system input
+                  as a stream of constant values that is 'passed' to a program
+                  by converting them into expressions at each instant.
+                  Maybe it would be better to put them in envN and execute
+                  a statement whose arguments are the corresponding variable
+                  names? *)
+    
     Open Scope nat_scope.
     (* =step= *)
     Fixpoint step (n: nat) P r main obj css menv env: Prop :=
       match n with
       | 0 => stmt_eval P hempty sempty (Reset_ap main obj) (menv, env)
-      | S n => let vs := Nelist.map (fun c => Const c (typ_of_val c)) (css n) in
+      | S n => let cs := Nelist.map Const (css n) in
               exists menvN envN, step n P r main obj css menvN envN
-                            /\ stmt_eval P menvN envN (Step_ap r ty main obj vs) (menv, env)
+                /\ stmt_eval P menvN envN (Step_ap r ty main obj cs) (menv, env)
       end.
     (* =end= *)
 
@@ -1600,8 +1608,8 @@ for all [Is_free_exp x e]. *)
 
       set (ci0 := css 0).
 
-      assert (Hpres: present_list xss 0 ci0)
-        by (subst xss; unfold present_list; eauto).
+      assert (Hpres: present_list xss 0 (Nelist.map sem_const ci0))
+        by (subst xss; unfold present_list; rewrite map_compose; eauto).
 
       assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0].
       {
@@ -1616,7 +1624,8 @@ for all [Is_free_exp x e]. *)
       induction n.
       - (* Case: n ~ 0 *)
         assert (exists menv,
-                   stmt_step_eval (translate G) menv0 main ci0 menv co0
+                   stmt_step_eval (translate G) menv0 main
+                                  (Nelist.map sem_const ci0) menv co0
                    /\  Memory_Corres G 1 main M menv) as [menv1 [Hstmt1 Hmem1]]
             by (eapply is_node_correct; eauto).
 
@@ -1635,8 +1644,8 @@ for all [Is_free_exp x e]. *)
 
         set (ciSn := css (S n)).
 
-        assert (HpresN: present_list xss (S n) ciSn)
-          by (subst xss; unfold present_list; eauto).
+        assert (HpresN: present_list xss (S n) (Nelist.map sem_const ciSn))
+          by (subst xss; unfold present_list; rewrite map_compose; eauto).
 
         assert (exists coSn, ys (S n) = present coSn) as [coSn Hys].
         {
@@ -1648,7 +1657,8 @@ for all [Is_free_exp x e]. *)
         }
 
         assert (exists omenvSn,
-                   stmt_step_eval (translate G) omenvN main ciSn omenvSn coSn
+                   stmt_step_eval (translate G) omenvN main
+                                  (Nelist.map sem_const ciSn) omenvSn coSn
                    /\  Memory_Corres G (S (S n)) main M omenvSn) as [omenvSn [HstmtSn HmemSn]]
             by (eapply is_node_correct; eauto).
 

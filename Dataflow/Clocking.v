@@ -41,8 +41,8 @@ Module Type CLOCKING
 
   Inductive clk_lexp C: lexp -> clock -> Prop :=
   | Cconst:
-      forall c ty,
-        clk_lexp C (Econst c ty) Cbase
+      forall c,
+        clk_lexp C (Econst c) Cbase
   | Cvar:
       forall x ck ty,
         clk_var C x ck ->
