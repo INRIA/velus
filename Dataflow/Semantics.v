@@ -103,19 +103,20 @@ environment.
           (* Note: says nothing about 's'. *)
           sem_lexp_instant (Ewhen s x b) absent
     | Sunop_eq:
-        forall le op c ty,
+        forall le op c c' ty,
           sem_lexp_instant le (present c) ->
-          sem_lexp_instant (Eunop op le ty) (option2value (sem_unary op c (typeof le)))
+          sem_unary op c (typeof le) = Some c' ->
+          sem_lexp_instant (Eunop op le ty) (present c')
     | Sunop_abs:
         forall le op ty,
           sem_lexp_instant le absent ->
           sem_lexp_instant (Eunop op le ty) absent
     | Sbinop_eq:
-        forall le1 le2 op c1 c2 ty,
+        forall le1 le2 op c1 c2 c' ty,
           sem_lexp_instant le1 (present c1) ->
           sem_lexp_instant le2 (present c2) ->
-          sem_lexp_instant (Ebinop op le1 le2 ty)
-                           (option2value (sem_binary op c1 (typeof le1) c2 (typeof le2)))
+          sem_binary op c1 (typeof le1) c2 (typeof le2) = Some c' ->
+          sem_lexp_instant (Ebinop op le1 le2 ty) (present c')
     | Sbinop_abs:
         forall le1 le2 op ty,
           sem_lexp_instant le1 absent ->
@@ -520,13 +521,21 @@ enough: it does not support the internal fixpoint introduced by
       end; try easy.
     - intros v1 v2 Hsem1 Hsem2.
       inversion_clear Hsem1; inversion_clear Hsem2;
-        specialize (IHe _ _ H H0); try easy.
-      now inversion IHe.
+      repeat progress match goal with
+      | H1:sem_lexp_instant _ _ _ _, H2:sem_lexp_instant _ _ _ _ |- _ =>
+        specialize (IHe _ _ H1 H2); try (injection IHe; intro; subst)
+      | H1:sem_unary _ _ _ = _, H2:sem_unary _ _ _ = _ |- _ =>
+        rewrite H1 in H2; injection H2; intro; subst
+      end; try easy.
     - intros v1 v2 Hsem1 Hsem2.
       inversion_clear Hsem1; inversion_clear Hsem2;
-        specialize (IHe1 _ _ H H1);
-        specialize (IHe2 _ _ H0 H2); try easy.
-      now (injection IHe1; injection IHe2; intros; subst).
+      repeat progress match goal with
+      | H1:sem_lexp_instant _ _ ?e _, H2:sem_lexp_instant _ _ ?e _ |- _ =>
+        (specialize (IHe1 _ _ H1 H2); try (injection IHe1; intro; subst))
+         || (specialize (IHe2 _ _ H1 H2); try (injection IHe2; intro; subst))
+      | H1:sem_binary _ _ _ _ _ = _, H2:sem_binary _ _ _ _ _ = _ |- _ =>
+        rewrite H1 in H2; injection H2; intro; subst
+      end; try easy.
     Qed.
 
     Lemma sem_laexp_instant_det:

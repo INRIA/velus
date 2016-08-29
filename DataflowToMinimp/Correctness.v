@@ -468,7 +468,7 @@ for all [Is_free_exp x e]. *)
   Proof.
     Hint Constructors exp_eval.
     intros until e. revert c.
-    (* XXX: This is extremely shaky *)
+    (* XXX: Tidy up this proof *)
     induction e as [c0|y ty|e IH y yb|op le IHle ty|op le1 IHle1 le2 IHle2 ty];
       intro c; inversion 1 as [c' v Hp H'|x v ty' H'|s x b v ty' H' H''| | |le' op' c' ty' H'| |le1' le2' op' c1 c2 ty' H' H''|];
         try (subst; injection H'); intros; subst; try apply IH; try apply econst; auto.
@@ -481,14 +481,11 @@ for all [Is_free_exp x e]. *)
       + rewrite mem_spec_false in Hm; auto.
     - simpl. apply eunop with c'.
       + apply IHle; auto.
-      + rewrite typ_correct. 
-        destruct (sem_unary op c' (DF.Syn.typeof le)); [now inversion H4 | discriminate].
+      + now rewrite typ_correct.
     - simpl. apply ebinop with (c1 := c1) (c2 := c2).
       + apply IHle1; auto.
       + apply IHle2; auto.
-      + rewrite 2 typ_correct.
-        destruct (sem_binary op c1 (DF.Syn.typeof le1) c2 (DF.Syn.typeof le2));
-          [now inversion H5 | discriminate].
+      + now rewrite 2 typ_correct.
   Qed.
 
   Theorem lexps_correct:
