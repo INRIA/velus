@@ -1,6 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
-Require Import Nelist.
 Require Import List.
+Import ListNotations.
 Require Coq.MSets.MSets.
 Require Export PArith.
 Require Import Omega.
@@ -25,32 +25,30 @@ Module PM := Coq.FSets.FMapPositive.PositiveMap.
 
 Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
-Definition ident_eqb := Pos.eqb.
+Definition ident_eqb := Pos.eqb. (* TODO: replace with equiv_decb *)
+
+Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
 
-Definition ne_adds {A} (is : nelist ident) (vs : nelist A) (S : PM.t A) :=
-  Nelist.fold_right (fun (iiv: ident * A) env =>
-                    let (i , iv) := iiv in
-                    PM.add i iv env) S (Nelist.combine is vs).
+Module Type IDS.
+  Parameter self : ident.
+  Parameter out  : ident.
 
-Definition adds {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
-  fold_right (fun (xbv: (ident * B) * A) env => 
-                    let '(x , b, v) := xbv in
-                    PM.add x v env) S (combine xs vs).
+  Parameter step  : ident.
+  Parameter reset : ident.
 
-Inductive Assoc {A} : nelist ident -> nelist A -> ident -> A -> Prop :=
-| AssocBase:
-    forall i v,
-      Assoc (nebase i) (nebase v) i v
-| AssocHere:
-    forall i v is vs,
-      Assoc (necons i is) (necons v vs) i v
-| AssocThere:
-    forall i v i' v' is vs,
-      Assoc is vs i' v' ->
-      i <> i' ->
-      Assoc (necons i is) (necons v vs) i' v'.
+  Definition reserved : list ident := [ self; out ].
+
+  Definition methods  : list ident := [ step; reset ].
+
+  Axiom reserved_nodup: NoDup reserved.
+  Axiom methods_nodup: NoDup methods.
+
+  Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
+    ~In (fst xty) reserved.
+
+End IDS.
 
 (** ** Properties *)
 
@@ -73,55 +71,6 @@ Lemma ident_eqb_refl:
 Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
-
-Lemma gsss:
-  forall {A: Type} is (vs : nelist A) i a, Nelist.length is = Nelist.length vs ->
-    (Assoc is vs i a <-> PM.find i (ne_adds is vs (PM.empty _)) = Some a).
-Proof.
-  Hint Constructors Assoc.
-  intros * Hlen.
-  split.
-  - intros ** Hassoc; induction Hassoc; try contradiction; unfold ne_adds; simpl.
-    * rewrite PM.gss; auto.
-    * rewrite (@PM.gss A i); auto.
-    * rewrite PM.gso; auto.
-  - revert vs Hlen; induction is as [i1 |i1 is]; intros [v1 | v1 vs] Hlen;
-    try now destruct is || destruct vs; simpl in Hlen; discriminate.
-    + unfold ne_adds. simpl. intro Hfind.
-      destruct (ident_eqb i i1) eqn:Heqi.
-      * apply ident_eqb_eq in Heqi. subst.
-        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
-        econstructor.
-      * apply ident_eqb_neq in Heqi.
-        rewrite PM.gso, PM.gempty in Hfind; trivial. discriminate.
-    + unfold ne_adds. simpl. intro Hfind.
-      destruct (ident_eqb i i1) eqn:Heqi.
-      * apply ident_eqb_eq in Heqi. subst.
-        rewrite PM.gss in Hfind; injection Hfind; intro; subst; clear Hfind.
-        econstructor.
-      * apply ident_eqb_neq in Heqi.
-        rewrite PM.gso in Hfind; auto.
-Qed.
-
-Lemma gsos:
-  forall (A: Type) is vs (m : PM.t A) i, Nelist.length is = Nelist.length vs ->
-    ~ Nelist.In i is ->
-    PM.find i (ne_adds is vs m) = PM.find i m.
-Proof.
-  intros A is vs m i Hlen Hnin. revert vs Hlen.
-  induction is as [i1 |i1 is]; intros [v1 |v1 vs] Hlen;
-  try now destruct is || destruct vs; simpl in Hlen; discriminate.
-  - unfold ne_adds; simpl; auto. now rewrite PM.gso.
-  - simpl in Hlen. unfold ne_adds; simpl; auto.
-    destruct (ident_eqb i i1) eqn:Heqi.
-    + exfalso.
-      apply ident_eqb_eq in Heqi. subst.
-      apply Hnin; simpl; auto.
-    + apply ident_eqb_neq in Heqi.
-      rewrite PM.gso; eauto.
-      apply IHis; try omega; []. intro Hin. apply Hnin. simpl. auto.
-Qed.
-
 
 Lemma In_dec:
   forall x S, {PS.In x S}+{~PS.In x S}.
@@ -380,6 +329,32 @@ Proof.
   - discriminate.
 Qed.
 
+Lemma combine_map_fst:
+  forall {A B C} (f: A -> B) xs (ys: list C),
+    combine (map f xs) ys = map (fun x=>(f (fst x), snd x)) (combine xs ys).
+Proof.
+  induction xs; try constructor.
+  destruct ys; try constructor.
+  simpl. now rewrite IHxs.
+Qed.
+
+Lemma combine_map_snd:
+  forall {A B C} (f: A -> B) (xs: list C) ys,
+    combine xs (map f ys) = map (fun x=>(fst x, f (snd x))) (combine xs ys).
+Proof.
+  induction xs; try constructor.
+  destruct ys; try constructor.
+  simpl. now rewrite IHxs.
+Qed.
+
+Lemma combine_map_both:
+  forall {A B C D} (f: A -> B) (g: C -> D) xs ys,
+    combine (map f xs) (map g ys)
+    = map (fun x => (f (fst x), g (snd x))) (combine xs ys).
+Proof.
+  intros. now rewrite combine_map_fst, combine_map_snd, map_map.
+Qed.
+
 Definition not_In_empty: forall x : ident, ~(PS.In x PS.empty) := PS.empty_spec.
 
 Ltac not_In_empty :=
@@ -428,6 +403,14 @@ Proof.
 intros A B R HR xs. induction xs as [x | x xs]; intros ys1 ys2 Hall1 Hall2.
 - inversion Hall1. inversion Hall2; reflexivity. 
 - inversion Hall1. inversion Hall2. f_equal; eauto.
+Qed.
+
+Lemma Forall2_combine:
+  forall {A B} P (xs: list A) (ys: list B),
+    Forall2 P xs ys -> Forall (fun x=>P (fst x) (snd x)) (combine xs ys).
+Proof.
+  intros A B P xs ys Hfa2.
+  induction Hfa2; now constructor.
 Qed.
 
 Section InMembers.
@@ -626,7 +609,7 @@ Section InMembers.
     destruct x. apply NoDupMembers_app_cons in HH. intuition.
   Qed.
 
-  Lemma NoDupMembers_app:
+   Lemma NoDupMembers_app_assoc:
     forall ws xs,
       NoDupMembers (ws ++ xs) <-> NoDupMembers (xs ++ ws).
   Proof.
@@ -658,6 +641,15 @@ Section InMembers.
     apply IH.
     rewrite <-app_comm_cons in H.
     destruct w; rewrite nodupmembers_cons in H; tauto.
+  Qed.
+
+  Lemma NoDupMembers_app_l:
+    forall ws xs,
+      NoDupMembers (ws ++ xs) -> NoDupMembers ws.
+  Proof.
+    intros ** Hndup.
+    apply NoDupMembers_app_assoc in Hndup.
+    apply NoDupMembers_app_r with (1:=Hndup).
   Qed.
 
   Lemma NoDupMembers_app_InMembers:
@@ -735,15 +727,87 @@ Section InMembers.
         * now apply IHxs.
   Qed.
 
+  Lemma InMembers_In_combine:
+    forall x (xs: list A) (ys: list B),
+      InMembers x (combine xs ys) ->
+      In x xs.
+  Proof.
+    induction xs as [|x' xs]; auto.
+    destruct ys; [contradiction|].
+    destruct 1 as [Heq|Hin].
+    now subst; constructor.
+    constructor (apply IHxs with (1:=Hin)).
+  Qed.
+
+  Lemma In_InMembers_combine:
+    forall x (xs: list A) (ys: list B),
+      length xs = length ys ->
+      (In x xs <-> InMembers x (combine xs ys)).
+  Proof.
+    intros x xs ys Hlen.
+    split; [|now apply InMembers_In_combine].
+    revert x xs ys Hlen.
+    induction xs as [|x' xs]; auto.
+    intros ys Hlen Hin.
+    destruct ys; [discriminate|].
+    inversion Hin; subst; [now left|right].
+    apply IHxs; auto.
+  Qed.
+
+  Lemma NoDup_NoDupMembers_combine:
+    forall (xs: list A) (ys: list B),
+    NoDup xs -> NoDupMembers (combine xs ys).
+  Proof.
+    induction xs as [|x xs]; [now intros; constructor|].
+    intros ys Hndup.
+    destruct ys; simpl; constructor.
+    - inversion_clear Hndup.
+      intro Hin. apply InMembers_In_combine in Hin.
+      contradiction.
+    - apply IHxs; auto. now inversion Hndup.
+  Qed.
+
 End InMembers.
 
 Ltac app_NoDupMembers_det :=
   match goal with
   | H: NoDupMembers ?xs,
-       H1: In (?x, ?t1) ?xs,
-           H2: In (?x, ?t2) ?xs |- _ =>
-    assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
-  end.
+         H1: In (?x, ?t1) ?xs,
+             H2: In (?x, ?t2) ?xs |- _ =>
+      assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
+    end.
+
+(** adds and its properties *)
+
+Definition adds {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
+  fold_right (fun (xbv: (ident * B) * A) env => 
+                    let '(x , b, v) := xbv in
+                    PM.add x v env) S (combine xs vs).
+
+Lemma find_gsso:
+  forall {A B} x x' (ty: A) xs (vs: list B) S,
+    x <> x' ->
+    PM.find x (adds ((x', ty) :: xs) vs S) = PM.find x (adds xs (tl vs) S).
+Proof.
+  intros ** Hneq.
+  unfold adds.
+  destruct vs. destruct xs; reflexivity.
+  simpl. rewrite PM.gso; auto.
+Qed.      
+
+Lemma NotInMembers_find_adds:
+  forall {A B} x (xs: list (ident * A)) (v: option B) vs S,
+    ~InMembers x xs ->
+    PM.find x S = v ->
+    PM.find x (adds xs vs S) = v.
+Proof.
+  induction xs as [|xty xs]; auto.
+  intros v vs S Hnin Hfind.
+  apply NotInMembers_cons in Hnin.
+  destruct Hnin as [Hnin Hneq].
+  destruct xty as [x' ty].
+  rewrite find_gsso; auto.
+Qed.
 
 Section Lists.
 
@@ -907,3 +971,4 @@ Section Lists.
   Qed.
   
 End Lists.
+

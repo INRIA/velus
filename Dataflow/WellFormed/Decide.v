@@ -10,6 +10,8 @@ Require Import Rustre.Dataflow.Ordered.
 Require Import Rustre.Dataflow.Memories.
 Require Import Rustre.Dataflow.NoDup.
 
+Require Import List.
+
 (** * Well formed CoreDF programs: decision procedure *)
 
 (** 
@@ -22,16 +24,17 @@ Remark: This development is not formally part of the correctness proof.
  *)
 
 Module Type DECIDE
+       (Ids: IDS)
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (IsF : ISFREE Op Syn)
-       (Import IsFDec : IsFree.Decide.DECIDE Op Syn IsF)
-       (Import Ord : ORDERED Op Syn)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       (Import NoD : NODUP Op Syn Mem IsD IsV)
-       (Import Wef : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD).
+       (Import Syn : SYNTAX Ids Op)
+       (IsF : ISFREE Ids Op Syn)
+       (Import IsFDec : IsFree.Decide.DECIDE Ids Op Syn IsF)
+       (Import Ord : ORDERED Ids Op Syn)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
+       (Import Wef : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD).
   
   Section Decide.
 
@@ -40,17 +43,18 @@ Module Type DECIDE
 End DECIDE.
 
 Module DecideFun
+       (Ids: IDS)
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (IsF : ISFREE Op Syn)
-       (Import IsFDec : IsFree.Decide.DECIDE Op Syn IsF)
-       (Import Ord : ORDERED Op Syn)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       (Import NoD : NODUP Op Syn Mem IsD IsV)
-       (Import Wef : WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD)
-       <: DECIDE Op Syn IsF IsFDec Ord Mem IsD IsV NoD Wef.
+       (Import Syn : SYNTAX Ids Op)
+       (IsF : ISFREE Ids Op Syn)
+       (Import IsFDec : IsFree.Decide.DECIDE Ids Op Syn IsF)
+       (Import Ord : ORDERED Ids Op Syn)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
+       (Import Wef : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD)
+       <: DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV NoD Wef.
   
   Section Decide.
 
@@ -84,7 +88,7 @@ Module DecideFun
         + apply mem_spec_false in Hin.
           rewrite Hin, PS.mem_spec in Hif. exact Hif.
       - destruct 1 as [Hin Hnin].
-        destruct In_dec with x mems as [H|H].
+        destruct Common.In_dec with x mems as [H|H].
         + assert (PS.mem x mems = true) as H' by auto.
           rewrite H', Bool.negb_true_iff, mem_spec_false.
           now apply Hin with (1:=H).
@@ -116,12 +120,12 @@ Module DecideFun
       | (false, _, _) => (false, PS.empty, PS.empty)
       end.
 
-    Definition well_sch (argIns: Nelist.nelist ident)(eqs: list equation) : bool :=
+    Definition well_sch (argIns: list ident)(eqs: list equation) : bool :=
       fst
         (fst
            (List.fold_right
               check_eq
-              (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty)
+              (true, PS.empty, fold_left (fun a b => PS.add b a) argIns PS.empty)
               eqs)).
 
     (* Lemma not_for_all_spec: *)
@@ -155,12 +159,12 @@ Module DecideFun
 (*     Lemma well_sch_pre_spec: *)
 (*       forall argIns eqs good defined variables, *)
 (*         (good, defined, variables) *)
-(*         = List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIns PS.empty) eqs *)
+(*         = List.fold_right check_eq (true, PS.empty, fold_left (fun a b => PS.add b a) argIns PS.empty) eqs *)
 (*         -> *)
 (*         (good = true *)
 (*          -> (Is_well_sch mems argIns eqs *)
 (*             /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs) *)
-(*             /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ Nelist.In x argIns))) *)
+(*             /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ In x argIns))) *)
 (*         /\ (good = false -> ~Is_well_sch mems argIns eqs). *)
 (*     Admitted. (* XXX: Stating that a decision procedure behaves as expected. Not used *) *)
 (*     (* *)
@@ -318,7 +322,7 @@ Module DecideFun
 (*       intros argIn eqns. *)
 (*       pose proof (well_sch_pre_spec argIn eqns). *)
 (*       unfold well_sch. *)
-(*       destruct (List.fold_right check_eq (true, PS.empty, Nelist.fold_left (fun a b => PS.add b a) argIn PS.empty) eqns) *)
+(*       destruct (List.fold_right check_eq (true, PS.empty, fold_left (fun a b => PS.add b a) argIn PS.empty) eqns) *)
 (*         as [[good defined] variables]. *)
 (*       simpl. *)
 (*       specialize H with good defined variables. *)

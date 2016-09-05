@@ -13,20 +13,21 @@ Open Scope list_scope.
 
 (** * Well formed CoreDF programs *)
 
-Module Type PRE_WELLFORMED
-       (Import Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import IsF : ISFREE Op Syn)
-       (Import Ord : ORDERED Op Syn)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       (Import NoD : NODUP Op Syn Mem IsD IsV).
+Module Type WELLFORMED
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import IsF : ISFREE Ids Op Syn)
+       (Import Ord : ORDERED Ids Op Syn)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       (Import NoD : NODUP Ids Op Syn Mem IsD IsV).
 
   Section IsWellSch.
 
     Variable memories : PS.t.
-    Variable arg: Nelist.nelist ident.
+    Variable arg: list ident.
 
     (**
 
@@ -49,7 +50,7 @@ first equation to execute should be the last in the list.
         Is_well_sch eqs ->
         (forall i, Is_free_in_eq i eq ->
               (PS.In i memories -> ~Is_defined_in_eqs i eqs)
-              /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ Nelist.In i arg)) ->
+              /\ (~PS.In i memories -> Is_variable_in_eqs i eqs \/ In i arg)) ->
         (forall i, Is_defined_in_eq i eq -> ~Is_defined_in_eqs i eqs) ->
         Is_well_sch (eq :: eqs).
     (* =end= *)
@@ -76,83 +77,17 @@ A CoreDF program is well defined if
       forall nd nds,
         Welldef_global nds ->
         let eqs := nd.(n_eqs) in
-        let ni := Nelist.map_fst nd.(n_input) in
-        let no := fst nd.(n_output) in
-        NoDup (Nelist.nelist2list ni)
+        let ni := map fst nd.(n_in) in
+        let no := fst nd.(n_out) in
+        NoDup ni
         -> Is_well_sch (memories eqs) ni eqs
-        -> ~ List.Exists (fun ni => Is_defined_in_eqs ni eqs) (Nelist.nelist2list ni)
+        -> ~Exists (fun ni => Is_defined_in_eqs ni eqs) ni
         -> Is_variable_in_eqs no eqs
         -> ~Is_node_in nd.(n_name) eqs
         -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
         -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Welldef_global (nd::nds).
-
-End PRE_WELLFORMED.
-
-Module Type WELLFORMED
-       (Import Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import IsF : ISFREE Op Syn)
-       (Import Ord : ORDERED Op Syn)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       (Import NoD : NODUP Op Syn Mem IsD IsV).
-
-  Include PRE_WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
-
-  (** ** Properties of [Is_well_sch] *)
-
-  (* Hint Constructors Is_well_sch. *)
-
-  Axiom Is_well_sch_NoDup_defs:
-    forall mems argIn eqs,
-      Is_well_sch mems argIn eqs
-      -> NoDup_defs eqs.
   
-  Axiom Is_well_sch_cons:
-    forall m argIn eq eqs, Is_well_sch m argIn (eq :: eqs) -> Is_well_sch m argIn eqs.
-  
-  Axiom Is_well_sch_free_variable:
-    forall argIn x eq eqs mems,
-      Is_well_sch mems argIn (eq :: eqs)
-      -> Is_free_in_eq x eq
-      -> ~ PS.In x mems
-      -> Is_variable_in_eqs x eqs \/ Nelist.In x argIn.
-  
-  Axiom Is_well_sch_free_variable_in_mems:
-    forall argIn y eq eqs mems,
-      Is_well_sch mems argIn (eq :: eqs)
-      -> Is_free_in_eq y eq
-      -> PS.In y mems
-      -> ~Is_defined_in_eqs y eqs.
-    
-  (** ** Properties of [Welldef_global] *)
-
-  Axiom Welldef_global_cons:
-    forall node G,
-      Welldef_global (node::G) -> Welldef_global G.
- 
-  (* TODO: Write a function 'welldef_global' to decide this. *)
-
-  Axiom Welldef_global_Ordered_nodes:
-    forall G, Welldef_global G -> Ordered_nodes G.
-
-End WELLFORMED.
-
-Module WellFormedFun
-       (Import Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import IsF : ISFREE Op Syn)
-       (Import Ord : ORDERED Op Syn)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       (Import NoD : NODUP Op Syn Mem IsD IsV)
-       <: WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
-
-  Include PRE_WELLFORMED Op Syn IsF Ord Mem IsD IsV NoD.
-
   (** ** Properties of [Is_well_sch] *)
 
   Hint Constructors Is_well_sch.
@@ -175,7 +110,7 @@ Module WellFormedFun
       Is_well_sch mems argIn (eq :: eqs)
       -> Is_free_in_eq x eq
       -> ~ PS.In x mems
-      -> Is_variable_in_eqs x eqs \/ Nelist.In x argIn.
+      -> Is_variable_in_eqs x eqs \/ In x argIn.
   Proof.
     intros argIn x eq eqs mems Hwsch Hfree Hnim.
     destruct eq;
@@ -183,7 +118,7 @@ Module WellFormedFun
       inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; 
       subst; intuition;
       match goal with
-      | H: context[ Is_variable_in_eqs _ _ \/ Nelist.In _ _] |- _ =>
+      | H: context[ Is_variable_in_eqs _ _ \/ In _ _] |- _ =>
         eapply H; eauto
       end.
   Qed.
@@ -200,8 +135,7 @@ Module WellFormedFun
       inversion_clear Hwsch;
       inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
       match goal with
-      | H: context[ Nelist.In _ _ ] |- _ =>
-        eapply H
+      | H: context[In _ _ ] |- _ => eapply H
       end;
       auto.
   Qed.
@@ -214,7 +148,7 @@ Module WellFormedFun
   (*     \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs). *)
   (* Proof. *)
   (*   intros x eq eqs mems argIn Hwsch Hdef. *)
-  (*   apply List.Exists_cons in Hdef. *)
+  (*   apply Exists_cons in Hdef. *)
   (*   destruct (Is_defined_in_eq_dec x eq); intuition. *)
   (* Qed. *)
 
@@ -264,8 +198,8 @@ Module WellFormedFun
   (*   forall f G fnode, *)
   (*     Welldef_global G *)
   (*     -> find_node f G = Some fnode *)
-  (*     -> ~ Nelist.Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs)) *)
-  (*         (Nelist.map_fst fnode.(n_input)). *)
+  (*     -> ~ Exists (fun ni => Is_defined_in_eqs ni fnode.(n_eqs)) *)
+  (*         (map fst fnode.(n_input)). *)
   (* Proof. *)
   (*   induction G as [|node G IH]; [inversion_clear 2|]. *)
   (*   intros fnode HWdef Hfnode. *)
@@ -274,7 +208,7 @@ Module WellFormedFun
   (*   rewrite HnG in HWdef; clear HnG. *)
   (*   apply Welldef_global_app in HWdef. *)
   (*   inversion_clear HWdef. *)
-  (*   now rewrite <- Nelist.nelist2list_Exists. *)
+  (*   easy. *)
   (* Qed. *)
 
   (* Lemma Welldef_global_output_Is_variable_in: *)
@@ -292,5 +226,21 @@ Module WellFormedFun
   (*   inversion_clear HWdef. *)
   (*   assumption. *)
   (* Qed. *)
+End WELLFORMED.
 
+Module WellFormedFun
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import IsF : ISFREE Ids Op Syn)
+       (Import Ord : ORDERED Ids Op Syn)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
+       <: WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD.
+
+  Include WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD.
+  
 End WellFormedFun.
+

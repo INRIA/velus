@@ -1,5 +1,4 @@
 Require Import Coq.FSets.FMapPositive.
-Require Import Rustre.Nelist.
 Require Import List.
 
 Require Import Rustre.Common.
@@ -16,14 +15,17 @@ Require Import Rustre.Minimp.Syntax.
 
  *)
 
-Module Type PRE_SEMANTICS
-       (Import Op : OPERATORS)
+Module Type SEMANTICS
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Op OpAux).
+       (Import Syn   : SYNTAX Ids Op OpAux).
 
-  Definition heap: Type := memory val.
+  (* TODO: rename types to env/menv and the instances to ve/me *)
+  Definition heap : Type := memory val.
   Definition stack : Type := PM.t val.
 
+  (* TODO: rename to vempty/mempty *)
   Definition sempty: stack := PM.empty val.
   Definition hempty: heap := empty_memory _.
 
@@ -39,7 +41,7 @@ Module Type PRE_SEMANTICS
   | econst:
       forall c,
         exp_eval heap stack (Const c) (sem_const c)
-   | eunop :
+  | eunop :
       forall op e c v ty,
         exp_eval heap stack e c ->
         sem_unary op c (typeof e) = Some v ->
@@ -63,18 +65,14 @@ Module Type PRE_SEMANTICS
       exp_eval menv env e v ->
       madd_mem x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
-  | Istep: forall prog menv env es vs clsid o y menv' env' omenv omenv' rv ty,
-      mfind_inst o menv = Some(omenv) ->
-      Nelist.Forall2 (exp_eval menv env) es vs ->
-      stmt_step_eval prog omenv clsid vs omenv' rv ->
+  | Icall: forall prog menv env es vs clsid o f ys menv' env' omenv omenv' rvs,
+      omenv = match mfind_inst o menv with None => hempty
+                                         | Some(om) => om end ->
+      Forall2 (exp_eval menv env) es vs ->
+      stmt_call_eval prog omenv clsid f vs omenv' rvs ->
       madd_obj o omenv' menv = menv' ->
-      PM.add y rv env  = env' ->
-      stmt_eval prog menv env (Step_ap y ty clsid o es) (menv', env')
-  | Ireset:
-    forall prog menv env o clsid omenv' menv',
-      stmt_reset_eval prog clsid omenv' ->
-      madd_obj o omenv' menv = menv' ->
-      stmt_eval prog menv env (Reset_ap clsid o) (menv', env)
+      adds ys rvs env = env' ->
+      stmt_eval prog menv env (Call ys clsid o f es) (menv', env')
   | Icomp:
       forall prog menv env a1 a2 env1 menv1 env2 menv2,
         stmt_eval prog menv env a1 (menv1, env1) ->
@@ -90,77 +88,16 @@ Module Type PRE_SEMANTICS
       forall prog menv env,
         stmt_eval prog menv env Skip (menv, env)
 
-  with stmt_step_eval :
-         program -> heap -> ident -> nelist val -> heap -> val -> Prop :=
-       | Iestep:
-           forall prog menv env clsid ivs prog' menv' ov cls env',
-             find_class clsid prog = Some(cls, prog') ->
-             env = ne_adds (Nelist.map_fst cls.(c_input)) ivs sempty ->
-             stmt_eval prog' menv env cls.(c_step) (menv', env') ->
-             PM.find (fst cls.(c_output)) env' = Some(ov) ->
-             stmt_step_eval prog menv clsid ivs menv' ov
-
-  with stmt_reset_eval : program -> ident -> heap -> Prop :=
-       | Iereset:
-           forall prog clsid cls prog' menv' env',
-             find_class clsid prog = Some(cls, prog') ->
-             stmt_eval prog' hempty sempty cls.(c_reset) (menv', env') ->
-             stmt_reset_eval prog clsid menv'.
-
-End PRE_SEMANTICS.
-
-Module Type SEMANTICS
-       (Import Op : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Op OpAux).
-
-  Include PRE_SEMANTICS Op OpAux Syn.
-
-  Axiom exps_eval_const:
-    forall h s cs,
-      Nelist.Forall2 (exp_eval h s)
-                     (Nelist.map Const cs)
-                     (Nelist.map sem_const cs).
-
-  (** ** Determinism of semantics *)
-
-  Axiom exp_eval_det:
-    forall menv env e v1 v2,
-      exp_eval menv env e v1 ->
-      exp_eval menv env e v2 ->
-      v1 = v2.
-
-  Axiom stmt_eval_fold_left_shift:
-    forall A prog f (xs:list A) iacc menv env menv' env',
-      stmt_eval prog menv env
-                (List.fold_left (fun i x => Comp (f x) i) xs iacc)
-                (menv', env')
-      <->
-      exists menv'' env'',
-        stmt_eval prog menv env
-                  (List.fold_left (fun i x => Comp (f x) i) xs Skip)
-                  (menv'', env'')
-        /\
-        stmt_eval prog menv'' env'' iacc (menv', env').
-
-End SEMANTICS.
-
-Module SemanticsFun
-       (Import Op: OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import Syn: SYNTAX Op OpAux) <: SEMANTICS Op OpAux Syn.
-
-  Include PRE_SEMANTICS Op OpAux Syn.
-
-  Theorem exps_eval_const:
-    forall h s cs,
-      Nelist.Forall2 (exp_eval h s)
-                     (Nelist.map Const cs)
-                     (Nelist.map sem_const cs).
-  Proof.
-    Hint Constructors exp_eval.
-    intros h s cs. induction cs; constructor; eauto.
-  Qed.
+  with stmt_call_eval :
+     program -> heap -> ident -> ident -> list val -> heap -> list val -> Prop :=
+  | Iecall:
+      forall prog menv clsid f fm vs prog' menv' env' cls rvs,
+        find_class clsid prog = Some(cls, prog') ->
+        find_method f cls.(c_methods) = Some fm ->
+        stmt_eval prog' menv (adds fm.(m_in) vs sempty)
+                  fm.(m_body) (menv', env') ->
+        Forall2 (fun xty v=>PM.find (fst xty) env' = Some(v)) fm.(m_out) rvs ->
+        stmt_call_eval prog menv clsid f vs menv' rvs.
 
   (** ** Determinism of semantics *)
 
@@ -227,87 +164,14 @@ Module SemanticsFun
                end.
         apply IHxs; eauto.
   Qed.
-
-  (* Theorem exp_evals_det: *)
-  (*   forall menv env es vs1 vs2, *)
-  (*     Nelist.Forall2 (exp_eval menv env) es vs1 -> *)
-  (*     Nelist.Forall2 (exp_eval menv env) es vs2 -> *)
-  (*     vs1 = vs2. *)
-  (* Proof. *)
-  (*   intros menv env es vs1 vs2 H1; generalize dependent vs2. *)
-  (*   induction H1 as [|e1 c1 es1 cs1]; intros vs2 H2; *)
-  (*   inversion_clear H2 as [|e2 c2 es2 cs2]. *)
-  (*   - f_equal. eauto using exp_eval_det. *)
-  (*   - assert (c1 = c2) by eauto using exp_eval_det. *)
-  (*     assert (cs1 = cs2) by eauto using IHForall2. *)
-  (*     congruence. *)
-  (* Qed. *)
-
-  (* Theorem stmt_eval_det: *)
-  (*   forall prog s menv env renv1 renv2, *)
-  (*     stmt_eval prog menv env s renv1 *)
-  (*     -> stmt_eval prog menv env s renv2 *)
-  (*     -> renv1 = renv2. *)
-  (* Proof. *)
-  (*   intros prog s menv env renv1 renv2 Hs1. *)
-  (*   revert renv2. *)
-  (*   induction Hs1 using stmt_eval_mult *)
-  (*   with (P:=fun prog menv env s renv1 sev=> *)
-  (*              forall renv2, stmt_eval prog menv env s renv2 -> renv1 = renv2) *)
-  (*          (P0:=fun prog menv clsid v menv' rv ssev=> *)
-  (*                 forall menv'' rv', stmt_step_eval prog menv clsid v menv'' rv' *)
-  (*                               -> menv' = menv'' /\ rv = rv') *)
-  (*          (P1:=fun prog i menv srev=> *)
-  (*                 forall menv', stmt_reset_eval prog i menv' -> menv = menv'); *)
-  (*     inversion_clear 1; *)
-  (*   repeat progress match goal with *)
-  (*                     | b: bool |- _ => destruct b *)
-  (*                     | H: ?env = adds _ _ _ |- _ => subst env *)
-  (*                     | Ht: exp_eval ?menv ?env ?e (Vbool true), *)
-  (*                           Hf: exp_eval ?menv ?env ?e (Vbool false) |- _ => *)
-  (*                       pose proof (exp_eval_det _ _ _ _ _ Ht Hf) as Hneq; discriminate *)
-  (*                     | H1:exp_eval ?menv ?env ?e ?v1, *)
-  (*                          H2:exp_eval ?menv ?env ?e ?v2 |- _ => *)
-  (*                       pose proof (exp_eval_det _ _ _ _ _ H1 H2) as Heq; *)
-  (*                         rewrite Heq in *; clear Heq H1 H2 *)
-  (*                     | H1: Nelist.Forall2 (exp_eval ?menv ?env) ?es ?vs1, *)
-  (*                           H2: Nelist.Forall2 (exp_eval ?menv ?env) ?es ?vs2 |- _ => *)
-  (*                       pose proof (exp_evals_det _ _ _ _ _ H1 H2) as Heq; *)
-  (*                         rewrite Heq in *; clear Heq H1 H2 *)
-  (*                     | H1: PM.add ?x ?v ?env = ?env1, *)
-  (*                           H2: PM.add ?x ?v ?env = ?env2 |- _ => *)
-  (*                       rewrite H1 in H2; rewrite H2 in *; clear H1 H2 *)
-  (*                     | H1: madd_mem ?x ?v ?menv = ?menv1, *)
-  (*                           H2: madd_mem ?x ?v ?menv = ?menv2 |- _ => *)
-  (*                       rewrite H1 in H2; rewrite H2 in *; clear H1 H2 *)
-  (*                     | H1: mfind_inst ?o ?menv = Some ?omenv1, *)
-  (*                           H2: mfind_inst ?o ?menv = Some ?omenv2 |- _ => *)
-  (*                       rewrite H1 in H2; injection H2; intro Heq; rewrite Heq in *; *)
-  (*                       clear H1 H2 Heq *)
-  (*                     | H1: find_class ?clsid ?prog = _, *)
-  (*                           H2: find_class ?clsid ?prog = _ |- _ => *)
-  (*                       rewrite H1 in H2; injection H2; *)
-  (*                       intros Heq1 Heq2; rewrite Heq1, Heq2 in *; clear H2 H2 Heq1 Heq2 *)
-  (*                     | H1: PM.find ?x ?env = ?rv1, *)
-  (*                           H2: PM.find ?x ?env = ?rv2 |- _ => *)
-  (*                       rewrite H1 in H2; injection H2; rewrite H2 in *; clear H1 H2 *)
-  (*                     | Hs: stmt_step_eval ?prog ?omenv ?clsid ?v _ _, *)
-  (*                           IH: context[stmt_step_eval ?prog ?omenv ?clsid ?v _ _ -> _ = _ /\ _ = _] *)
-  (*                       |- _ => *)
-  (*                       apply IH in Hs; destruct Hs as [Heq1 Heq2]; try rewrite Heq1 in *; *)
-  (*                       try rewrite Heq2 in *; clear Heq1 Heq2 *)
-  (*                     | Hs: stmt_reset_eval ?prog ?clsid _, *)
-  (*                           IH: context[stmt_reset_eval ?prog ?clsid _ -> _ = _] |- _ => *)
-  (*                       apply IH in Hs; try rewrite Hs in *; clear Hs *)
-  (*                     | Hs: stmt_eval ?prog ?menv ?env ?stmt _, *)
-  (*                           IH: context[stmt_eval ?prog ?menv ?env ?stmt _ -> (_, _) = _] |- _ => *)
-  (*                       apply IH in Hs; injection Hs; intros Heq1 Heq2; *)
-  (*                       try rewrite Heq1 in *; try rewrite Heq2 in *; clear Heq1 Heq2 Hs *)
-  (*                     | H1: madd_obj ?o ?omenv ?menv = ?menv1, *)
-  (*                           H2: madd_obj ?o ?omenv ?menv = ?menv2 |- _ => *)
-  (*                       rewrite H1 in H2; rewrite H2 in *; clear H1 H2 *)
-  (*                     | _ => intuition *)
-  (*                     end. *)
-  (* Qed. *)
   
+End SEMANTICS.
+
+Module SemanticsFun
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn   : SYNTAX Ids Op OpAux) <: SEMANTICS Ids Op OpAux Syn.
+  Include SEMANTICS Ids Op OpAux Syn.
 End SemanticsFun.
+        

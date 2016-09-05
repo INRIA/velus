@@ -35,7 +35,7 @@ Definition is_well_sch (res: Errors.res unit) (n: node) :=
   match res with
   | OK _ =>
     let eqs := n.(n_eqs) in
-    let ni := Nelist.map_fst n.(n_input) in
+    let ni := map fst n.(n_input) in
     if well_sch (memories eqs) ni eqs then OK tt
     else Error (Errors.msg ("node " ++ pos_to_str n.(n_name) ++ " is not well scheduled."))
   | _ => res

@@ -21,10 +21,11 @@ Remark: This development is not formally part of the correctness proof.
  *)
 
 Module Type DECIDE
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem).
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem).
   
   Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
@@ -133,3 +134,4 @@ Module Type DECIDE
   Qed.
 
 End DECIDE.
+

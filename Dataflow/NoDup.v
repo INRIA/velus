@@ -28,12 +28,13 @@ this generically amounts to:
 >>
  *)
 
-Module Type PRE_NODUP
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD).
+Module Type NODUP
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
     
   Inductive NoDup_defs : list equation -> Prop :=
   | NDDNil: NoDup_defs nil
@@ -52,37 +53,6 @@ Module Type PRE_NODUP
         NoDup_defs eqs ->
         ~Is_defined_in_eqs x eqs ->
         NoDup_defs (EqFby x ck v e :: eqs).
-
-End PRE_NODUP.
-
-Module Type NODUP
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD).
-    
-  Include PRE_NODUP Op Syn Mem IsD IsV.
-
-  (** ** Properties *)
-
-  Axiom not_Is_variable_in_memories:
-    forall x eqs,
-      PS.In x (memories eqs)
-      -> NoDup_defs eqs
-      -> ~Is_variable_in_eqs x eqs.
-
-End NODUP.
-
-Module NoDupFun
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD)
-       <: NODUP Op Syn Mem IsD IsV.
-    
-  Include PRE_NODUP Op Syn Mem IsD IsV.
 
   (** ** Properties *)
 
@@ -168,4 +138,18 @@ Module NoDupFun
         exfalso; apply Hndin; now constructor.
   Qed.
 
+End NODUP.
+
+Module NoDupFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       <: NODUP Ids Op Syn Mem IsD IsV.
+  
+  Include NODUP Ids Op Syn Mem IsD IsV.
+
 End NoDupFun.
+

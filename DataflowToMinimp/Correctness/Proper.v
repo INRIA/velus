@@ -6,7 +6,6 @@ Require Import Rustre.Minimp.
 Require Import Rustre.DataflowToMinimp.Translation.
 Require Import Setoid.
 
-
 (** * Setoid morphisms for translation *)
 
 (**
@@ -15,12 +14,13 @@ Require Import Setoid.
 
 
 Module Type PROPER
-       (Import Op : OPERATORS)
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux)
-       (Import Trans : TRANSLATION Op OpAux SynDF SynMP)
-       (Import Mem : MEMORIES Op SynDF).
+       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
+       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP)
+       (Import Mem : MEMORIES Ids Op SynDF).
 
   Instance eq_equiv : Equivalence PS.eq.
   Proof. firstorder. Qed.
@@ -59,14 +59,13 @@ Module Type PROPER
   Qed.
 
   Lemma ps_from_list_gather_eqs_memories:
-    forall eqs, PS.eq (ps_from_list (List.map (@fst ident typ) (fst (gather_eqs eqs))))
-                 (memories eqs).
+    forall eqs, PS.eq (ps_from_list (fst (gather_eqs eqs))) (memories eqs).
   Proof.
     induction eqs as [|eq eqs IH]; [reflexivity|].
     unfold memories, gather_eqs.
     assert (forall eqs F S,
-               PS.eq (ps_from_list (List.map (@fst ident typ) (fst (List.fold_left gather_eq eqs (F, S)))))
-                     (List.fold_left memory_eq eqs (ps_from_list (List.map (@fst ident typ) F)))) as HH.
+               PS.eq (ps_from_list (fst (List.fold_left gather_eq eqs (F, S))))
+                     (List.fold_left memory_eq eqs (ps_from_list F))) as HH.
     { clear eq eqs IH; induction eqs as [|eq eqs IH]; [reflexivity|].
       intros F S.
       destruct eq; [now apply IH|now apply IH|].
@@ -125,11 +124,9 @@ Module Type PROPER
     Proper (PS.eq ==> eq ==> eq) translate_eqn.
   Proof.
     intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
-    (* XXX: BUG? there should be enough info to make [rewrite HMeq] be enough. *)
     destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
-    - rewrite HMeq at 1 2. do 3 f_equal. apply Nelist.map_compat; trivial. rewrite HMeq. reflexivity.
-    (* - setoid_rewrite HMeq at 1. do 3 f_equal. *)
-    (*   induction n; simpl; rewrite HMeq; now try rewrite IHn. *)
+    - rewrite HMeq at 1 2. do 3 f_equal.
+      apply List.map_ext. intro. now rewrite HMeq.
   Qed.
 
   Instance translate_eqns_Proper :

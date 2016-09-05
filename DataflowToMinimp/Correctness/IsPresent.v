@@ -18,12 +18,13 @@ to tie the result of [Control ck] with the dataflow semantics of
 Assumption: the base clock is [true] *)
 
 Module Type ISPRESENT
-       (Import Op : OPERATORS)
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux)
-       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Op OpAux SynMP)
-       (Import Trans : TRANSLATION Op OpAux SynDF SynMP).
+       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP).
 
   Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=

@@ -23,11 +23,12 @@ not clear (to me) whether it is necessary.
  *)
 
 Module Type DECIDE
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       (Import IsV : ISVARIABLE Op Syn Mem IsD).
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
   
   Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with

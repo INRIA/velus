@@ -1,7 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
-Require Import Nelist.
 Require Import List.
 
 (** * Well clocked programs *)
@@ -14,8 +13,9 @@ wrt. its clock annotations.
  *)
 
 Module Type CLOCKING
-       (Import Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op).
 
   Definition clockenv := PM.t clock.
 
@@ -27,8 +27,8 @@ Module Type CLOCKING
       PM.find x C = Some ck ->
       clk_var C x ck.
 
-  Definition clk_vars C (xs: nelist ident) ck: Prop :=
-    Nelist.Forall (fun x => clk_var C x ck) xs.
+  Definition clk_vars C (xs: list ident) ck: Prop :=
+    Forall (fun x => clk_var C x ck) xs.
 
   Inductive clk_clock C: clock -> Prop :=
   | CCbase:
@@ -62,8 +62,8 @@ Module Type CLOCKING
         clk_lexp C e2 ck ->
         clk_lexp C (Ebinop op e1 e2 ty) ck.
 
-  Definition clk_lexps C (les: nelist lexp)(ck: clock): Prop :=
-    Nelist.Forall (fun le => clk_lexp C le ck) les.
+  Definition clk_lexps C (les: list lexp)(ck: clock): Prop :=
+    Forall (fun le => clk_lexp C le ck) les.
 
   Inductive clk_cexp C: cexp -> clock -> Prop :=
   | Cmerge:
@@ -102,11 +102,11 @@ Module Type CLOCKING
 
   Inductive Well_clocked_node C: node -> Prop :=
   | SNode:
-      forall f i o v eqs,
+      forall f i o v eqs ingt0 decl nodup good,
         Forall (Well_clocked_eq C) eqs ->
-        clk_vars C (Nelist.map_fst i) Cbase ->
+        clk_vars C (map fst i) Cbase ->
         clk_var C (fst o) Cbase ->
-        Well_clocked_node C (mk_node f i o v eqs).
+        Well_clocked_node C (mk_node f i o v eqs ingt0 decl nodup good).
 
   Definition Well_clocked_env C : Prop :=
     forall x ck, PM.find x C = Some ck -> clk_clock C ck.

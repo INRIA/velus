@@ -17,11 +17,12 @@ define (and prove some properties about) equivalence of Minimp
 programs.
 
  *)
-Module Type PRE_EQUIV
-       (Op : OPERATORS)
+Module Type EQUIV
+       (Ids          : IDS)
+       (Op           : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Op OpAux)
-       (Import Sem : SEMANTICS Op OpAux Syn).
+       (Import Syn   : SYNTAX Ids Op OpAux)
+       (Import Sem   : SEMANTICS Ids Op OpAux Syn).
   
   Definition stmt_eval_eq s1 s2: Prop :=
     forall prog menv env menv' env',
@@ -29,61 +30,6 @@ Module Type PRE_EQUIV
       <->
       stmt_eval prog menv env s2 (menv', env').
   
-End PRE_EQUIV.
-
-Module Type EQUIV
-       (Op : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Op OpAux)
-       (Import Sem : SEMANTICS Op OpAux Syn).
-  
-  Include PRE_EQUIV Op OpAux Syn Sem.
-  
-  Axiom stmt_eval_eq_refl:
-    reflexive stmt stmt_eval_eq.
-  
-  Axiom stmt_eval_eq_sym:
-    symmetric stmt stmt_eval_eq.
-  
-  Axiom stmt_eval_eq_trans:
-    transitive stmt stmt_eval_eq.
-  
-  Add Relation stmt (stmt_eval_eq)
-      reflexivity proved by stmt_eval_eq_refl
-      symmetry proved by stmt_eval_eq_sym
-      transitivity proved by stmt_eval_eq_trans
-        as stmt_eval_equiv.
-
-  Declare Instance stmt_eval_eq_Proper:
-    Proper (eq ==> eq ==> eq ==> stmt_eval_eq ==> eq ==> iff) stmt_eval.
-  
-  Declare Instance stmt_eval_eq_Comp_Proper:
-    Proper (stmt_eval_eq ==> stmt_eval_eq ==> stmt_eval_eq) Comp.
-  
-  Axiom Comp_assoc:
-    forall s1 s2 s3,
-      stmt_eval_eq (Comp s1 (Comp s2 s3)) (Comp (Comp s1 s2) s3).
- 
-  Axiom stmt_eval_eq_Comp_Skip1:
-    forall s, stmt_eval_eq (Comp Skip s) s.
-  
-  Axiom stmt_eval_eq_Comp_Skip2:
-    forall s, stmt_eval_eq (Comp s Skip) s.
-  
-  Declare Instance stmt_eval_eq_Ifte_Proper:
-    Proper (eq ==> stmt_eval_eq ==> stmt_eval_eq ==> stmt_eval_eq) Ifte.
-  
-End EQUIV.
-
-Module EquivFun
-       (Op : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Op OpAux)
-       (Import Sem : SEMANTICS Op OpAux Syn)
-       <: EQUIV Op OpAux Syn Sem.
-  
-  Include PRE_EQUIV Op OpAux Syn Sem.
-
   Lemma stmt_eval_eq_refl:
     reflexive stmt stmt_eval_eq.
   Proof. now apply iff_refl. Qed.
@@ -189,5 +135,16 @@ Module EquivFun
           try apply val_to_bool_false';
           easy.
   Qed.
+  
+End EQUIV.
 
+Module EquivFun
+       (Ids          : IDS)
+       (Op           : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn   : SYNTAX Ids Op OpAux)
+       (Import Sem   : SEMANTICS Ids Op OpAux Syn)
+       <: EQUIV Ids Op OpAux Syn Sem.
+  Include EQUIV Ids Op OpAux Syn Sem.
 End EquivFun.
+

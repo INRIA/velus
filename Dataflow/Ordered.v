@@ -18,9 +18,10 @@ Remark: [Ordered_nodes] is implied by [Welldef_global].
 
  *)
 
-Module Type PRE_ORDERED
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
+Module Type ORDERED
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op).
 
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
   | INI: forall x ck f e ty, Is_node_in_eq f (EqApp x ck f e ty).
@@ -39,74 +40,6 @@ Module Type PRE_ORDERED
                 /\ List.Exists (fun n=> f = n.(n_name)) nds)
         -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Ordered_nodes (nd::nds).
-
-End PRE_ORDERED.
-
-Module Type ORDERED
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
-
-  Include PRE_ORDERED Op Syn.
-
-  (** ** Properties of [Is_node_in] *)
-
-  Section Is_node_Properties.
-
-    Axiom not_Is_node_in_cons:
-      forall n eq eqs,
-        ~ Is_node_in n (eq::eqs) <-> ~Is_node_in_eq n eq /\ ~Is_node_in n eqs.
-
-    Axiom Is_node_in_Forall:
-      forall n eqs,
-        ~Is_node_in n eqs <-> List.Forall (fun eq=>~Is_node_in_eq n eq) eqs.
-
-    Axiom find_node_Exists:
-      forall f G, find_node f G <> None <-> List.Exists (fun n=> f = n.(n_name)) G.
-
-    Axiom find_node_tl:
-      forall f node G,
-        node.(n_name) <> f
-        -> find_node f (node::G) = find_node f G.
-
-    Axiom find_node_split:
-      forall f G node,
-        find_node f G = Some node
-        -> exists bG aG,
-          G = bG ++ node :: aG.
-
-  End Is_node_Properties.
-
-  (** ** Properties of [Ordered_nodes] *)
-
-  Section Ordered_nodes_Properties.
-
-    Axiom Ordered_nodes_append:
-      forall G G',
-        Ordered_nodes (G ++ G')
-        -> Ordered_nodes G'.
-
-    Axiom find_node_later_not_Is_node_in:
-      forall f nd G nd',
-        Ordered_nodes (nd::G)
-        -> find_node f G = Some nd'
-        -> ~Is_node_in nd.(n_name) nd'.(n_eqs).
-
-    Axiom find_node_not_Is_node_in:
-      forall f nd G,
-        Ordered_nodes G
-        -> find_node f G = Some nd
-        -> ~Is_node_in nd.(n_name) nd.(n_eqs).
-
-  End Ordered_nodes_Properties.
-
-End ORDERED.
-
-Module OrderedFun
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       <: ORDERED Op Syn.
-
-  Include PRE_ORDERED Op Syn.
 
   (** ** Properties of [Is_node_in] *)
 
@@ -300,4 +233,13 @@ Module OrderedFun
 
   End Ordered_nodes_Properties.
 
+End ORDERED.
+
+Module OrderedFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       <: ORDERED Ids Op Syn.
+  Include ORDERED Ids Op Syn.
 End OrderedFun.
+

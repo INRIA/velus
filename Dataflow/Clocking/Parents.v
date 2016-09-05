@@ -3,9 +3,10 @@ Require Import Dataflow.Syntax.
 Require Import Dataflow.Clocking.
 
 Module Type PARENTS
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Clo : CLOCKING Op Syn).
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Clo : CLOCKING Ids Op Syn).
   
   Inductive clock_parent ck : clock -> Prop :=
   | CP0: forall x b,
@@ -130,3 +131,4 @@ Module Type PARENTS
   Qed.
 
 End PARENTS.
+

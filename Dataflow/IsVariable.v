@@ -20,11 +20,12 @@ Require Import Rustre.Dataflow.Memories.
 
  *)
 
-Module Type PRE_ISVARIABLE
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem).
+Module Type ISVARIABLE
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem).
 
   Inductive Is_variable_in_eq : ident -> equation -> Prop :=
   | VarEqDef: forall x ck e,      Is_variable_in_eq x (EqDef x ck e)
@@ -34,68 +35,6 @@ Module Type PRE_ISVARIABLE
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
   
-End PRE_ISVARIABLE.
-
-Module Type ISVARIABLE
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem).
-
-  Include PRE_ISVARIABLE Op Syn Mem IsD.
-
-  (** ** Properties *)
-
-  Axiom not_Is_variable_in_EqDef:
-    forall x ck y e,
-      ~ Is_variable_in_eq x (EqDef y ck e) -> x <> y.
-  
-  Axiom not_Is_variable_in_EqApp:
-    forall x y ck f e ty,
-      ~ Is_variable_in_eq x (EqApp y ck f e ty) -> x <> y.
-
-  (* tactic definition needed in signature *)
-  Ltac not_Is_variable x y :=
-    match goal with
-    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ =>
-      apply not_Is_variable_in_EqDef in H
-    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ =>
-      apply not_Is_variable_in_EqApp in H
-    end.
-  
-  Axiom Is_variable_in_eqs_Is_defined_in_eqs:
-    forall x eqs,
-      Is_variable_in_eqs x eqs
-      -> Is_defined_in_eqs x eqs.
-
-  Axiom Is_variable_in_cons:
-    forall x eq eqs,
-      Is_variable_in_eqs x (eq :: eqs) ->
-      Is_variable_in_eq x eq
-      \/ (~Is_variable_in_eq x eq /\ Is_variable_in_eqs x eqs).
-  
-  Axiom not_Is_variable_in_cons:
-    forall x eq eqs,
-      ~Is_variable_in_eqs x (eq :: eqs)
-      <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in_eqs x eqs.
-  
-  Axiom not_Is_defined_in_eq_not_Is_variable_in_eq:
-    forall x eq, ~Is_defined_in_eq x eq -> ~Is_variable_in_eq x eq.
-  
-  Axiom not_Is_defined_in_not_Is_variable_in:
-    forall x eqs, ~Is_defined_in_eqs x eqs -> ~Is_variable_in_eqs x eqs.
-
-End ISVARIABLE.
-
-Module IsVariableFun
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       (Import IsD : ISDEFINED Op Syn Mem)
-       <: ISVARIABLE Op Syn Mem IsD.
-
-  Include PRE_ISVARIABLE Op Syn Mem IsD.
-
   (** ** Properties *)
 
   Lemma not_Is_variable_in_EqDef: 
@@ -113,7 +52,16 @@ Module IsVariableFun
     Hint Constructors Is_variable_in_eq. 
     intros ** Hxy. subst x. auto.
   Qed.
-
+  
+  (* tactic definition needed in signature *)
+  Ltac not_Is_variable x y :=
+    match goal with
+    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ =>
+      apply not_Is_variable_in_EqDef in H
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ =>
+      apply not_Is_variable_in_EqApp in H
+    end.
+  
   Lemma Is_variable_in_eq_dec:
     forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
   Proof.
@@ -177,5 +125,17 @@ Module IsVariableFun
       split; [ now apply not_Is_defined_in_eq_not_Is_variable_in_eq
              | now apply H1].
   Qed.
+
+End ISVARIABLE.
+
+Module IsVariableFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       <: ISVARIABLE Ids Op Syn Mem IsD.
+
+  Include ISVARIABLE Ids Op Syn Mem IsD.
 
 End IsVariableFun.

@@ -1,16 +1,15 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
-Require Import Rustre.Nelist.
 Require Import Rustre.Common.
 Require Import Rustre.Minimp.Syntax.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Memories.
 
+Require Import List.
+Require Import Coq.Lists.List.
 Import List.ListNotations.
 Open Scope positive.
 Open Scope list.
-Require Import Nelist.
-
 
 (** * Translation *)
 
@@ -33,22 +32,25 @@ Here, we take advantage of the fact that the result of a node
 application is assigned to a single variable. We use the name of that
 variable to identify the instance.  *)
 
-Module Type PRE_TRANSLATION
-       (Import Op: OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux).
+Module Type TRANSLATION
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux).
 
   (* definition is needed in signature *)
-  Definition gather_eq (acc: list (ident * typ) * list obj_dec) (eq: equation) :=
+  Definition gather_eq
+             (acc: list ident * list (ident * ident)) (eq: equation) :=
     match eq with
     | EqDef _ _ _     => acc
-    | EqApp x _ f _ _ => (fst acc, mk_obj_dec x f :: snd acc)
-    | EqFby x _ _ le  => ((x, SynDF.typeof le)::fst acc, snd acc)
+    | EqApp x _ f _ _ => (fst acc, (x, f) :: snd acc)
+    | EqFby x _ _ _ => (x::fst acc, snd acc)
     end.
 
   (* definition is needed in signature *)
-  Definition gather_eqs (eqs: list equation) : (list (ident * typ) * list obj_dec) :=
+  Definition gather_eqs
+             (eqs: list equation) : list ident * list (ident * ident) :=
     List.fold_left gather_eq eqs ([], []).
 
   (** ** Translation *)
@@ -57,8 +59,6 @@ Module Type PRE_TRANSLATION
 
     Variable memories : PS.t.
 
-    (* TODO: Would it be easier to lookup the type of a variable in a
-             typing environment? *)
     (* =tovar= *)
     Definition tovar (xt: ident * typ) : exp :=
       let (x, ty) := xt in
@@ -91,8 +91,12 @@ Module Type PRE_TRANSLATION
     (* definition is needed in signature *)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
-      | Emerge y ty t f => Ifte (tovar (y, ty)) (translate_cexp x t) (translate_cexp x f)
-      | Eite b t f => Ifte (translate_lexp b) (translate_cexp x t) (translate_cexp x f)
+      | Emerge y ty t f => Ifte (tovar (y, ty))
+                                (translate_cexp x t)
+                                (translate_cexp x f)
+      | Eite b t f => Ifte (translate_lexp b)
+                           (translate_cexp x t)
+                           (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
     (* =end= *)
@@ -102,7 +106,8 @@ Module Type PRE_TRANSLATION
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp x ce)
-      | EqApp x ck f les ty => Control ck (Step_ap x ty f x (map translate_lexp les))
+      | EqApp x ck f les ty =>
+          Control ck (Call [(x, ty)] f x step (List.map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
     (* =end= *)
@@ -124,7 +129,7 @@ Module Type PRE_TRANSLATION
     match eqn with
     | EqDef _ _ _ => s
     | EqFby x _ c0 _  => Comp (AssignSt x (Const c0)) s
-    | EqApp x _ f _ _ => Comp (Reset_ap f x) s
+    | EqApp x _ f _ _ => Comp (Call [] f x reset []) s
     end.
   (* =end= *)
 
@@ -138,48 +143,152 @@ Module Type PRE_TRANSLATION
   Definition ps_from_list (l: list ident) : PS.t :=
     List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
+  Hint Constructors NoDupMembers VarsDeclared.
+  
+  Program Definition reset_method (eqns: list equation): method :=
+    {| m_name := reset;
+       m_in   := [];
+       m_vars := [];
+       m_out  := [];
+       m_body := translate_reset_eqns eqns;
+       m_nodupvars := _;
+       m_varsdecl  := _;
+       m_good      := _
+    |}.
+  Next Obligation.
+    unfold translate_reset_eqns.
+    cut(forall s,
+           VarsDeclared [] s ->
+           VarsDeclared [] (List.fold_left translate_reset_eqn eqns s)); auto.
+    induction eqns as [|eq eqns]; auto.
+    destruct eq; auto;
+      simpl; intros; apply IHeqns.
+    (* TODO: get auto to solve this goal completely *)
+    - constructor; auto.
+      constructor; auto.
+      apply List.incl_refl.
+    - constructor; auto.
+      constructor; auto.
+      constructor; auto.
+  Qed.
+  
+(*
+  Lemma blah:
+    forall eqs,
+      MemsDeclared (fst_gather_eqs eqs) (reset_method eqs).(m_body).
+
+
+    (* TODO: MemsDeclared mems (reset_method eqns).(m_body) *)
+    (* TODO: InstanceDeclared objs (reset_method eqns).(m_body) *)
+
+    (* TODO: Then tackle the trickier step method *)
+ *)
+  
   (* =translate_node= *)
   (* definition is needed in signature *)
-  Definition translate_node (n: node): class :=
-    let names := gather_eqs n.(n_eqs) in
-    let mems := ps_from_list (List.map (@fst ident typ) (fst names)) in
-    mk_class n.(n_name)
-             n.(n_input)
-             n.(n_output)
-             n.(n_vars)
-             (fst names)
-             (snd names)
-             (translate_eqns mems n.(n_eqs))
-             (translate_reset_eqns n.(n_eqs)).
+  Program Definition translate_node (n: node) : class :=
+    let (memids, dobjs) := gather_eqs n.(n_eqs) in
+    let mems := ps_from_list memids in
+    let (dmems, dvars) := partition (fun x=>PS.mem (fst x) mems) n.(n_vars) in
+    {| c_name    := n.(n_name);
+       c_mems    := dmems;
+       c_objs    := dobjs;
+       c_methods := [ {| m_name := step;
+                         m_in   := n.(n_in);
+                         m_vars := dvars;
+                         m_out  := [n.(n_out)];
+                         m_body := translate_eqns mems n.(n_eqs);
+                         m_nodupvars := _;
+                         m_varsdecl  := _;
+                         m_good      := _
+                      |};
+                      reset_method n.(n_eqs) ];
+       c_nodupmems := _;
+       c_nodupobjs := _;
+       
+       c_memsdecl := _;
+       c_instdecl := _
+    |}.
   (* =end= *)
+  Next Obligation.
+  Admitted.
+  Next Obligation.
+  Admitted.
+  Next Obligation.
+  Admitted.
+  Next Obligation.
+  Admitted.
+  Next Obligation.
+  Admitted.
+  Next Obligation.
+  Admitted.
+  Next Obligation.
+  Admitted.
 
   (* =translate= *)
   (* definition is needed in signature *)
   Definition translate (G: global) : program :=
     List.map translate_node G.
   (* =end= *)
+    
+  Lemma translate_node_name:
+    forall n, (translate_node n).(c_name) = n.(n_name).
+  Proof.
+    destruct n.
+    unfold translate_node.
+    simpl.
+    (* TODO: There must be a better way! *)
+    destruct (gather_eqs n_eqs0).
+    destruct (partition (fun x => PS.mem (fst x) (ps_from_list l)) n_vars0).
+    reflexivity.
+  Qed.
+  
+  Lemma exists_step_method:
+    forall node,
+    exists stepm,
+      find_method step (translate_node node).(c_methods) = Some stepm.
+  Proof.
+    intro node.
+    unfold translate_node.
+    destruct (gather_eqs node.(n_eqs)).
+    destruct (partition (fun x => PS.mem (fst x) (ps_from_list l))
+                        node.(n_vars)).
+    simpl. rewrite ident_eqb_refl. eauto.
+  Qed.
 
-End PRE_TRANSLATION.
+  Lemma exists_reset_method:
+    forall node,
+      find_method reset (translate_node node).(c_methods)
+      = Some (reset_method node.(n_eqs)).
+  Proof.
+    intro node.
+    unfold translate_node.
+    destruct (gather_eqs node.(n_eqs)).
+    destruct (partition (fun x => PS.mem (fst x) (ps_from_list l))
+                        node.(n_vars)).
+    simpl.
+    assert (ident_eqb step reset = false) as Hsr.
+    apply ident_eqb_neq.
+    apply PositiveOrder.neq_sym. apply reset_not_step.
+    now rewrite Hsr, ident_eqb_refl.
+  Qed.
 
-Module Type TRANSLATION
-       (Import Op: OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux).
-
-  Include PRE_TRANSLATION Op OpAux SynDF SynMP. 
-
-End TRANSLATION.
-
-Module TranslationFun
-       (Import Op: OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Op OpAux)
-       <: TRANSLATION Op OpAux SynDF SynMP.
-
-  Include PRE_TRANSLATION Op OpAux SynDF SynMP. 
-
+  Lemma find_method_stepm:
+    forall node stepm,
+      find_method step (translate_node node).(c_methods) = Some stepm ->
+      stepm.(m_out) = [node.(n_out)].
+  Proof.
+    intros node stepm.
+    unfold translate_node.
+    destruct (gather_eqs node.(n_eqs)).
+    destruct (partition (fun x => PS.mem (fst x) (ps_from_list l))
+                        node.(n_vars)).
+    simpl. rewrite ident_eqb_refl.
+    injection 1.
+    intro HH; rewrite <-HH.
+    reflexivity.
+  Qed.
+  
   (* (** ** Properties *) *)
 
   (* Lemma ps_from_list_pre_spec: *)
@@ -204,6 +313,18 @@ Module TranslationFun
   (*   split; try intros [H | H]; try tauto. *)
   (*   apply not_In_empty in H; contradiction. *)
   (* Qed. *)
+  
+End TRANSLATION.
 
+Module TranslationFun
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
+       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
+       <: TRANSLATION Ids Op OpAux SynDF SynMP.
+
+  Include TRANSLATION Ids Op OpAux SynDF SynMP. 
   
 End TranslationFun.
+

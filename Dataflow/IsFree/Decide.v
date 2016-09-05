@@ -2,6 +2,7 @@ Require Import Rustre.Common.
 
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsFree.
+Require Import List.
 
 (** * Free variables: decision procedure *)
 
@@ -18,9 +19,10 @@ Remark: This development is not formally part of the correctness proof.
 (* TODO: use auto for the proofs. *)
 
 Module Type DECIDE
+       (Ids : IDS)
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import IsF : ISFREE Op Syn).
+       (Import Syn : SYNTAX Ids Op)
+       (Import IsF : ISFREE Ids Op Syn).
 
   Parameter free_in_laexp: clock -> lexp -> PS.t -> PS.t.
   Parameter free_in_laexps: clock -> lexps -> PS.t -> PS.t.
@@ -29,10 +31,11 @@ Module Type DECIDE
 End DECIDE.
 
 Module DecideFun
+       (Ids : IDS)
        (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import IsF : ISFREE Op Syn)
-       <: DECIDE Op Syn IsF.
+       (Import Syn : SYNTAX Ids Op)
+       (Import IsF : ISFREE Ids Op Syn)
+       <: DECIDE Ids Op Syn IsF.
 
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
     match ck with
@@ -45,7 +48,6 @@ Module DecideFun
     | Econst _ => fvs
     | Evar x _ => PS.add x fvs
     | Ewhen e x _ => free_in_lexp e (PS.add x fvs)
-    (* | Eop op eqs => Nelist.fold_left (fun fvs e => free_in_lexp e fvs) eqs fvs *)
     | Eunop _ e _ => free_in_lexp e fvs
     | Ebinop _ e1 e2 _ => free_in_lexp e2 (free_in_lexp e1 fvs)
     end.
@@ -54,7 +56,7 @@ Module DecideFun
     free_in_lexp le (free_in_clock ck fvs).
 
   Definition free_in_laexps (ck: clock)(les : lexps) (fvs : PS.t) : PS.t :=
-    Nelist.fold_left (fun fvs e => free_in_lexp e fvs) les (free_in_clock ck fvs).
+    fold_left (fun fvs e => free_in_lexp e fvs) les (free_in_clock ck fvs).
 
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with
@@ -185,10 +187,10 @@ Module DecideFun
   (* Qed. *)
 
   (* Lemma free_in_nelist_lexp_spec : forall x l m, *)
-  (*     PS.In x (Nelist.fold_left (fun fvs e => free_in_lexp e fvs) l m) <->  *)
-  (*     Nelist.Exists (Is_free_in_lexp x) l \/ PS.In x m. *)
+  (*     PS.In x (fold_left (fun fvs e => free_in_lexp e fvs) l m) <->  *)
+  (*     Exists (Is_free_in_lexp x) l \/ PS.In x m. *)
   (* Proof. *)
-  (*   Local Hint Constructors Nelist.Exists. *)
+  (*   Local Hint Constructors Exists. *)
   (*   intros x l. induction l; intro m; simpl. *)
   (*   + rewrite free_in_lexp_spec; split; intro H; intuition. *)
   (*     inversion_clear H0. intuition. *)

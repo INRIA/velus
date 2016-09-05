@@ -1,5 +1,6 @@
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
+Require Import List.
 
 (** * Free variables *)
 
@@ -12,9 +13,10 @@ variables in the right-hand side of the equation. In particular, if
 
  *)
 
-Module Type PRE_ISFREE
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
+Module Type ISFREE
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op).
 
   Inductive Is_free_in_clock : ident -> clock -> Prop :=
   | FreeCon1:
@@ -48,7 +50,7 @@ Module Type PRE_ISFREE
 
   Inductive Is_free_in_laexps : ident -> clock -> lexps -> Prop :=
   | freeLAexps1: forall ck les x,
-      Nelist.Exists (Is_free_in_lexp x) les ->
+      Exists (Is_free_in_lexp x) les ->
       Is_free_in_laexps x ck les
   | freeLAexps2: forall ck les x,
       Is_free_in_clock x ck ->
@@ -105,19 +107,15 @@ Module Type PRE_ISFREE
        Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp
        Is_free_in_caexp Is_free_in_eq.
 
-End PRE_ISFREE.
-
-Module Type ISFREE
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op).
-  Include PRE_ISFREE Op Syn.
 End ISFREE.
 
 Module IsFreeFun
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       <: ISFREE Op Syn.
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       <: ISFREE Ids Op Syn.
 
-  Include PRE_ISFREE Op Syn.
+  Include ISFREE Ids Op Syn.
 
 End IsFreeFun.
+

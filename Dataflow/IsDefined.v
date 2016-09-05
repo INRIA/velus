@@ -17,10 +17,11 @@ Require Import Rustre.Dataflow.Memories.
 
  *)
 
-Module Type PRE_ISDEFINED
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn).
+Module Type ISDEFINED
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn).
 
   Inductive Is_defined_in_eq : ident -> equation -> Prop :=
   | DefEqDef: forall x ck e,      Is_defined_in_eq x (EqDef x ck e)
@@ -31,57 +32,8 @@ Module Type PRE_ISDEFINED
   Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_defined_in_eq x) eqs.
 
-End PRE_ISDEFINED.
-
-Module Type ISDEFINED
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn).
-
-  Include PRE_ISDEFINED Op Syn Mem.
-  
-  Axiom Is_defined_in_eq_dec:
-    forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
-
   (** ** Properties *)
 
-  Axiom Is_defined_in_cons:
-    forall x eq eqs,
-      Is_defined_in_eqs x (eq :: eqs) ->
-      Is_defined_in_eq x eq
-      \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
-
-  Axiom not_Is_defined_in_cons:
-    forall x eq eqs,
-      ~Is_defined_in_eqs x (eq :: eqs)
-      <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in_eqs x eqs.
-
-  Axiom not_Is_defined_in_eq_EqDef:
-    forall x i ck ce,
-      ~ Is_defined_in_eq x (EqDef i ck ce) -> x <> i.
-
-  Axiom not_Is_defined_in_eq_EqApp:
-    forall x i ck f le ty,
-      ~ Is_defined_in_eq x (EqApp i ck f le ty) -> x <> i.
-
-  Axiom not_Is_defined_in_eq_EqFby:
-    forall x i ck v0 le,
-      ~ Is_defined_in_eq x (EqFby i ck v0 le) -> x <> i.
-
-  Axiom Is_defined_in_memories:
-    forall x eqs,
-      PS.In x (memories eqs) -> Is_defined_in_eqs x eqs.
-
-End ISDEFINED.
-
-Module IsDefinedFun
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Op)
-       (Import Mem : MEMORIES Op Syn)
-       <: ISDEFINED Op Syn Mem.
-
-  Include PRE_ISDEFINED Op Syn Mem.
- 
   Lemma Is_defined_in_eq_dec:
     forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
   Proof.
@@ -91,8 +43,6 @@ Module IsDefinedFun
         [ rewrite xeqy; left; constructor
         | right; inversion 1; auto]).
   Qed.
-
-  (** ** Properties *)
 
   Lemma Is_defined_in_cons:
     forall x eq eqs,
@@ -182,5 +132,17 @@ Module IsDefinedFun
       + left. 
         apply In_memory_eq_Is_defined_eq in HH; auto.
   Qed.
+  
+End ISDEFINED.
+
+Module IsDefinedFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       <: ISDEFINED Ids Op Syn Mem.
+
+  Include ISDEFINED Ids Op Syn Mem.
 
 End IsDefinedFun.
+
