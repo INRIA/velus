@@ -525,7 +525,7 @@ for all [Is_free_exp x e]. *)
         simpl.
         eapply Iifte; [|now apply val_to_bool_true'|assumption].
         split_env_assumption. apply get_exp_eval_tovar; auto.
-      + apply IHf in H1; [|auto].
+      + apply IHf in H2; [|auto].
         eapply Iifte; [|now apply val_to_bool_false'|assumption].
         split_env_assumption. apply get_exp_eval_tovar; auto.
     - (* Eite *)
