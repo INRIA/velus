@@ -148,7 +148,8 @@ Module Type SYNTAX
 	m_body : stmt;
         
 	m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
-	m_varsdecl  : VarsDeclared (m_in ++ m_vars ++ m_out) m_body;
+        (* TODO: ~VarsDeclared m_in m_body? *)
+	m_varsdecl  : VarsDeclared (m_vars ++ m_out) m_body;
         m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
       }.
   
@@ -158,10 +159,8 @@ Module Type SYNTAX
 	c_mems    : list (ident * typ);
 	c_objs    : list (ident * ident);   (* (instance, class) *)
 	c_methods : list method;
-        
-	c_nodupmems : NoDupMembers c_mems;
-        c_nodupobjs : NoDupMembers c_objs;
-        
+
+        c_nodups   : NoDup (map fst c_mems ++ map fst c_objs);
 	c_memsdecl : Forall (fun m=>MemsDeclared c_mems m.(m_body)) c_methods;
         c_instdecl : Forall (fun m=>InstanceDeclared c_objs m.(m_body)) c_methods
       }.

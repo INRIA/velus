@@ -25,7 +25,7 @@ Module Type MEMORIES
        (Import Syn : SYNTAX Ids Op).
 
   (* definitions are needed in signature *)
-  Fixpoint memory_eq (mems: PS.t) (eq: equation) {struct eq} : PS.t :=
+  Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
     | EqFby x _ _ _ => PS.add x mems
     | _ => mems

@@ -9,25 +9,23 @@ Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
 Require Import Rustre.Minimp.
 Require Import Rustre.DataflowToMinimp.Translation.
-Require Import Rustre.DataflowToMinimp.Correctness.Proper.
 Require Import Rustre.DataflowToMinimp.Correctness.IsPresent.
 Require Import Rustre.DataflowToMinimp.Correctness.MemoryCorres.
 Require Import Rustre.Minimp.FuseIfte.
 
 Module Type CORRECTNESS
-       (Import Ids: IDS)
-       (Import Op : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import DF: DATAFLOW Ids Op OpAux)
-       (Import MP: MINIMP Ids Op OpAux)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import DF    : DATAFLOW Ids Op OpAux)
+       (Import MP    : MINIMP Ids Op OpAux)
+       (Import Mem   : MEMORIES Ids Op DF.Syn)
 
-       (Import Trans: TRANSLATION Ids Op OpAux DF.Syn MP.Syn)
+       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn MP.Syn Mem)
        
-       (Import IsP: ISPRESENT Ids Op OpAux DF.Syn MP.Syn MP.Sem Trans)
+       (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn MP.Syn MP.Sem Mem Trans)
        (Import MemCor: MEMORYCORRES Ids Op OpAux DF MP)
-       (Import Mem: MEMORIES Ids Op DF.Syn)
-       (Import Pro: PROPER Ids Op OpAux DF.Syn MP.Syn Trans Mem)
-       (Import Fus: FUSEIFTE Ids Op OpAux DF.Syn MP.Syn MP.Sem MP.Equ).
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn MP.Syn MP.Sem MP.Equ).
 
   (** ** Technical lemmas *)
 
@@ -870,7 +868,7 @@ for all [Is_free_exp x e]. *)
         (* dataflow semantics *)
         assert (Hmsem':=Hmsem).
         inversion_clear Hmsem'
-          as [? ? ? ? ? i o v neqs ingt0 decl nodup good Hck Hfind Hnsem].
+          as [? ? ? ? ? i o v neqs ingt0 defd decl nodup good Hck Hfind Hnsem].
         destruct Hnsem as [Hn [Hlsn [Hxsn [Hout Hnsem]]]].
 
         (* no other instance *)
@@ -1232,7 +1230,7 @@ for all [Is_free_exp x e]. *)
           inversion_clear Hwd as [|? ? Hwd' eqs inArgs outArg
                              HnodupIn Hwsch Hndef_in Hdef_out Hne Hfind Hnodup].
           clear Hwd'.
-          inversion_clear Hmsem as [? ? ? ? ? ? ? ? ? ? ? ? ? Hck Heqs
+          inversion_clear Hmsem as [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hck Heqs
                                       [H [Hin [Hout [Hrabs Hall]]]]].
           subst eqs inArgs outArg nodeName.
           simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
@@ -1284,7 +1282,7 @@ for all [Is_free_exp x e]. *)
             - intros input Hinput Hisdef.
               apply Hndef_in; apply Exists_exists.
               exists input; auto.
-            - inversion_clear Hmc as [? ? ? ? ? ? ? ? ? ? ? Hf Hmeqs].
+            - inversion_clear Hmc as [? ? ? ? ? ? ? ? ? ? ? ? Hf Hmeqs].
 
               simpl in Hf.
               rewrite ident_eqb_refl in Hf.
@@ -1298,24 +1296,15 @@ for all [Is_free_exp x e]. *)
           split.
           * { destruct (exists_step_method node) as [stepm Hstepm].
               econstructor; eauto.
-              - simpl. rewrite translate_node_name.
-                rewrite Pos.eqb_refl. reflexivity.
+              - simpl. rewrite Pos.eqb_refl. reflexivity.
               - subst env.
-                unfold translate_node in Hstepm.
-                destruct (gather_eqs node.(n_eqs)) eqn:Hl.
-                destruct (partition (fun x => PS.mem (fst x) (ps_from_list l))
-                                    node.(n_vars)).
                 simpl in Hstepm.
                 rewrite ident_eqb_refl in Hstepm.
-                symmetry in Hl.
-                rewrite surjective_pairing in Hl.
-                inversion Hl as [[Hl1 Hl2]].
                 injection Hstepm.
                 clear Hstepm. intro Hstepm.
                 rewrite <-Hstepm, Hnode. clear Hstepm.
-                rewrite Hnode in Hl1.
                 simpl in *.
-                rewrite Hl1, ps_from_list_gather_eqs_memories.
+                rewrite ps_from_list_gather_eqs_memories.
                 eassumption.
               - assert (outArg = node.(n_out))
                   by (rewrite Hnode; auto).
@@ -1342,8 +1331,7 @@ for all [Is_free_exp x e]. *)
           inversion_clear Hstmt'.
           exists menv'; split.
           * econstructor; try eassumption.
-            simpl. rewrite translate_node_name.
-            subst nodeName. rewrite Hfeq.
+            simpl. subst nodeName. rewrite Hfeq.
             eassumption.
           * rewrite Memory_Corres_node_tl; try assumption.
     Qed.
@@ -1545,7 +1533,7 @@ for all [Is_free_exp x e]. *)
       + assert (nodeName = f) as Hfeq
             by (apply Pos.eqb_eq; assumption).
         inversion_clear Hmsem as [? ? ? ? ? inArgs outArg v eqs
-                                    ingt0 decl nodup good
+                                    ingt0 defd decl nodup good
                                     Hbk Hfind [H [Hin [Hout [Hrhs Hmsem']]]]].
         rename Hmsem' into Hmsem.
 
@@ -1583,7 +1571,7 @@ for all [Is_free_exp x e]. *)
         exists menv'.
         split.
         * { econstructor.
-            - simpl. rewrite translate_node_name, Heqb. reflexivity.
+            - simpl. rewrite Heqb. reflexivity.
             - apply exists_reset_method.
             - unfold adds. rewrite Hfind. simpl.
               unfold adds. simpl. eassumption.
@@ -1606,39 +1594,12 @@ for all [Is_free_exp x e]. *)
         exists menv'; split.
         * inversion_clear Hstmt.
           econstructor; try eassumption.
-          simpl. subst nodeName. rewrite translate_node_name, Heqb.
+          simpl. subst nodeName. rewrite Heqb.
           eassumption.
         * apply Memory_Corres_node_tl; eassumption.
   Qed.
 
   (** ** Correctness, from the point of view of the event loop *)
-
-  Lemma mfind_inst_empty:
-    forall o, mfind_inst o hempty = None.
-  Proof.
-    intro o. unfold mfind_inst.
-    apply PM.gempty.
-  Qed.
-
-  Lemma find_class_translate:
-    forall n G cls prog',
-      find_class n (translate G) = Some (cls, prog')
-      -> (exists node, find_node n G = Some node
-                       /\ cls = translate_node node).
-  Proof.
-    induction G as [|node G]; [now inversion 1|].
-    intros ** Hfind.
-    simpl in Hfind.
-    rewrite translate_node_name in Hfind.
-    destruct (equiv_dec node.(n_name) n) as [Heq|Hneq].
-    - rewrite Heq, ident_eqb_refl in Hfind.
-      injection Hfind; intros; subst.
-      exists node. split; auto.
-      simpl. now rewrite Heq, ident_eqb_refl.
-    - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
-      apply IHG in Hfind. destruct Hfind as (node' & Hfind & Hcls).
-      exists node'. simpl. rewrite Hneq. auto.
-  Qed.
 
   Section EventLoop.
 
@@ -1712,7 +1673,7 @@ for all [Is_free_exp x e]. *)
       assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0].
       {
         inversion_clear Hmsem as
-            [? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
+            [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
                 [H [Hsem_in [Hsem_out [Habs Hsem_eqns]]]]].
         apply not_absent_present;
           rewrite <- Habs;
@@ -1768,7 +1729,7 @@ for all [Is_free_exp x e]. *)
         assert (exists coSn, ys (S n) = present coSn) as [coSn Hys].
         {
           inversion_clear Hmsem as
-              [? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
+              [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
                   [H [Hsem_in [Hsem_out [Habs Hsem_eqns]]]]].
           apply not_absent_present; rewrite <- Habs;
             eapply not_absent_present_list; eauto.

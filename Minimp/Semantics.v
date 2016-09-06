@@ -164,6 +164,13 @@ Module Type SEMANTICS
                end.
         apply IHxs; eauto.
   Qed.
+
+  Lemma mfind_inst_empty:
+    forall o, mfind_inst o hempty = None.
+  Proof.
+    intro o. unfold mfind_inst.
+    apply PM.gempty.
+  Qed.
   
 End SEMANTICS.
 

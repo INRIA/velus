@@ -40,7 +40,6 @@ Minimp/Equiv.v
 Minimp/FuseIfte.v
 Minimp.v
 DataflowToMinimp/Translation.v
-DataflowToMinimp/Correctness/Proper.v
 DataflowToMinimp/Correctness/IsPresent.v
 DataflowToMinimp/Correctness/MemoryCorres.v
 DataflowToMinimp/Correctness.v

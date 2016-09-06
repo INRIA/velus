@@ -1,5 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import List.
+Require Import Coq.Sorting.Permutation.
+Require Import Morphisms.
 Import ListNotations.
 Require Coq.MSets.MSets.
 Require Export PArith.
@@ -311,6 +313,36 @@ Proof.
   inversion_clear He; auto.
 Qed.
 
+Lemma Permutation_Forall:
+  forall {A} (l l': list A) P,
+    Permutation l l' ->
+    Forall P l ->
+    Forall P l'.
+Proof.
+    induction 1; inversion 1; auto.
+    match goal with H:Forall _ (_ :: _) |- _ => inversion H end.
+    repeat constructor; auto.
+Qed.
+
+Instance Forall_Permutation_Proper (A:Type):
+  Proper (eq ==> Permutation (A:=A) ==> iff) Forall.
+Proof.
+  intros P Q HPQ xs ys Hperm.
+  subst P.
+  split; intro HH; [|symmetry in Hperm];
+    apply Permutation_Forall with (1:=Hperm) (2:=HH).
+Qed.
+
+  Lemma Forall_app_weaken:
+    forall {A} xs P (ys : list A),
+      Forall P (xs ++ ys) ->
+      Forall P ys.
+  Proof.
+    intros ** HH. apply Forall_app in HH. intuition.
+  Qed.
+  
+
+
 Lemma not_None_is_Some:
   forall A (x : option A), x <> None <-> (exists v, x = Some v).
 Proof.
@@ -518,6 +550,23 @@ Section InMembers.
       + right. apply IH. intuition.
   Qed.
 
+  Instance InMembers_Permutation_Proper:
+    Proper (eq ==> (@Permutation (A*B)) ==> iff) InMembers.
+  Proof.
+    intros x y Heq xs ys Hperm.
+    rewrite Heq. clear Heq x.
+    split; intro Hinm.
+    - apply InMembers_In in Hinm.
+      destruct Hinm as [b Hinm].
+      apply Permutation_in with (2:=Hinm) in Hperm.
+      apply In_InMembers with (1:=Hperm).
+    - apply InMembers_In in Hinm.
+      destruct Hinm as [b Hinm].
+      symmetry in Hperm.
+      apply Permutation_in with (2:=Hinm) in Hperm.
+      apply In_InMembers with (1:=Hperm).
+  Qed.
+  
   Theorem NotInMembers_app:
     forall y ws xs,
       ~InMembers y (ws ++ xs) <-> (~InMembers y xs /\ ~InMembers y ws).
@@ -694,6 +743,37 @@ Section InMembers.
         destruct a; rewrite nodupmembers_cons in H; tauto. 
   Qed.
 
+  Instance NoDupMembers_Permutation_Proper:
+    Proper (Permutation (A:=A * B) ==> iff) NoDupMembers.
+  Proof.
+    intros xs ys Hperm.
+    induction Hperm.
+    - now intuition.
+    - destruct x as [x y].
+      rewrite 2 nodupmembers_cons, IHHperm, Hperm.
+      reflexivity.
+    - split; intro HH.
+      + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
+        destruct x as [x y].
+        inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
+        econstructor.
+        * intro Hinm. apply Hinm'.
+          inversion_clear Hinm; subst; auto.
+          exfalso; apply Hninm. now constructor.
+        * constructor; auto. intro Hinm.
+          apply Hninm. constructor (assumption).
+      + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
+        destruct y as [x y].
+        inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
+        econstructor.
+        * intro Hinm. apply Hinm'.
+          inversion_clear Hinm; subst; auto.
+          exfalso; apply Hninm. now constructor.
+        * constructor; auto. intro Hinm.
+          apply Hninm. constructor (assumption).
+    - now rewrite IHHperm1.
+  Qed.
+  
   Lemma InMembers_neq:
     forall x y xs,
       InMembers x xs ->
@@ -835,6 +915,15 @@ Section Lists.
     f_equal; auto.
   Qed.
 
+  Instance In_Permutation_Proper (A:Type):
+    Proper (eq ==> Permutation (A:=A) ==> iff) (@In A).
+  Proof.
+    intros x y Hxy xs ys Hperm.
+    subst y.
+    split; intro HH; [|symmetry in Hperm];
+      now apply Permutation_in with (1:=Hperm) in HH.
+  Qed.
+  
   Remark not_In_app:
     forall (x: A) l1 l2,
       ~ In x l2 ->
@@ -963,12 +1052,103 @@ Section Lists.
     intro H. now apply (in_map f) in H.
   Qed.
 
+
+  Lemma NoDup_cons:
+    forall {A} (x:A) xs,
+      NoDup (x::xs) <-> ~In x xs /\ NoDup xs.
+  Proof.
+    split; intro HH.
+    - inversion_clear HH. intuition.
+    - destruct HH. constructor; auto.
+  Qed.
+  
+  Instance NoDup_Permutation_Proper (A:Type):
+    Proper (Permutation (A:=A) ==> iff) (@NoDup A).
+  Proof.
+    intros xs ys Hperm.
+    induction Hperm.
+    - now intuition.
+    - rewrite 2 NoDup_cons, IHHperm, Hperm.
+      reflexivity.
+    - split; inversion_clear 1 as [|? ? Hnin Hndup];
+        inversion_clear Hndup as [|? ? Hnin' Hndup'];
+        (constructor; [|constructor]); auto; intro Hnin3;
+          apply Hnin.
+      + inversion Hnin3; [|contradiction].
+        subst. now constructor.
+      + constructor (assumption).
+      + inversion Hnin3; [|contradiction].
+        subst. now constructor.
+      + constructor (assumption).
+    - now rewrite IHHperm1, IHHperm2.
+  Qed.
+
+  Lemma NoDup_app_weaken:
+    forall {A} (xs: list A) ys,
+      NoDup (xs ++ ys) ->
+      NoDup xs.
+  Proof.
+    Hint Constructors NoDup.
+    intros ** Hndup.
+    induction xs as [|x xs]; auto.
+    inversion_clear Hndup as [|? ? Hnin Hndup'].
+    apply IHxs in Hndup'.
+    constructor; auto.
+    intro Hin. apply Hnin.
+    apply in_or_app; now left.
+  Qed.
+  
   Lemma cons_is_app:
     forall (x: A) xs,
       x :: xs = [x] ++ xs.
   Proof.
     destruct xs; simpl; auto.
   Qed.
+
+  Lemma permutation_partition:
+    forall p (l: list A),
+      Permutation l (fst (partition p l) ++ snd (partition p l)).
+  Proof.
+    induction l as [|x l].
+    now constructor.
+    simpl.
+    destruct (p x).
+    - rewrite (surjective_pairing (partition _ _)).
+      now simpl; apply Permutation_cons.
+    - rewrite (surjective_pairing (partition _ _)).
+      now simpl; apply Permutation_cons_app.
+  Qed.
+
+  Lemma Permutation_app_assoc:
+    forall (ws: list A) xs ys,
+      Permutation ((ws ++ xs) ++ ys) (ws ++ xs ++ ys).
+  Proof.
+    intros.
+    induction ws.
+    reflexivity.
+    now apply Permutation_cons.
+  Qed.
+
+  Lemma partition_switch:
+    forall f g,
+      (forall x:A, f x = g x) ->
+      forall xs, partition f xs = partition g xs.
+  Proof.
+    intros ** Hfg xs.
+    induction xs as [|x xs]; auto. simpl.
+    specialize (Hfg x). symmetry in Hfg. rewrite Hfg, IHxs.
+    reflexivity.
+  Qed.
+
+  Lemma partition_filter:
+    forall P (xs: list A),
+      Permutation (fst (partition P xs)) (filter P xs).
+  Proof.
+    induction xs as [|x xs]; auto.
+    simpl; rewrite (surjective_pairing (partition P xs)).
+    destruct (P x); auto.
+    now apply Permutation_cons.
+  Qed.
   
 End Lists.
-
+  

@@ -24,7 +24,8 @@ Module Type ISPRESENT
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
        (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
        (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP).
+       (Import Mem   : MEMORIES Ids Op SynDF)
+       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem).
 
   Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
@@ -132,3 +133,4 @@ Module Type ISPRESENT
   Qed.
 
 End ISPRESENT.
+

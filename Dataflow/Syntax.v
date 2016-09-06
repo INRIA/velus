@@ -1,5 +1,6 @@
 Require Import Rustre.Common.
 Require Import PArith.
+Require Import Coq.Sorting.Permutation.
 
 Require Import List.
 Import List.ListNotations.
@@ -93,12 +94,15 @@ Module Type SYNTAX
 
   Inductive VarsDeclared (vars: list (ident * typ)): equation -> Prop :=
   | eqn_def: forall x ck e,
+      VarsDeclared_cexp vars e ->
       VarsDeclared_clock vars ck ->
       VarsDeclared vars (EqDef x ck e)
   | eqn_app: forall x ck f es ty,
+      Forall (VarsDeclared_lexp vars) es ->
       VarsDeclared_clock vars ck ->
       VarsDeclared vars (EqApp x ck f es ty)
   | eqn_fby: forall x ck c e,
+      VarsDeclared_lexp vars e ->
       VarsDeclared_clock vars ck ->
       VarsDeclared vars (EqFby x ck c e).
 
@@ -110,6 +114,13 @@ Module Type SYNTAX
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e
     end.
+
+  Definition var_defined (eq: equation) : ident :=
+    match eq with
+    | EqDef x _ _ => x
+    | EqApp x _ _ _ _ => x
+    | EqFby x _ _ _ => x
+    end.
   
   Record node : Type :=
     mk_node {
@@ -120,6 +131,8 @@ Module Type SYNTAX
         n_eqs  : list equation;
 
         n_ingt0 : 0 < length n_in;
+        n_defd  : Permutation (map var_defined n_eqs)
+                              (map fst (n_vars ++ [n_out]));
         n_decl  : Forall (VarsDeclared (n_in ++ n_vars ++ [n_out])) n_eqs;
         n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
         n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])

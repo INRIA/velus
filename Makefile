@@ -97,7 +97,6 @@ VFILES:=RMemory.v\
   DataflowToMinimp/Correctness.v\
   DataflowToMinimp/Correctness/MemoryCorres.v\
   DataflowToMinimp/Correctness/IsPresent.v\
-  DataflowToMinimp/Correctness/Proper.v\
   DataflowToMinimp/Translation.v\
   Minimp.v\
   Minimp/FuseIfte.v\
