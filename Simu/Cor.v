@@ -187,7 +187,7 @@ Section PRESERVATION.
                               exists chunk : AST.memory_chunk,
                                 access_mode t' = By_value chunk /\
                                 (align_chunk chunk | alignof gcenv t'))))
-              (make_out_vars (instance_methods (m_body m)))
+              (make_out_vars (instance_methods m))
       /\ exists loc_f f,
           Genv.find_symbol tge (prefix fid clsnm) = Some loc_f
           /\ e ! (prefix fid clsnm) = None
@@ -197,7 +197,7 @@ Section PRESERVATION.
                               :: m.(m_in)
           /\ f.(fn_return) = Tvoid
           /\ f.(fn_callconv) = AST.cc_default
-          /\ f.(fn_vars) = make_out_vars (instance_methods m.(m_body))
+          /\ f.(fn_vars) = make_out_vars (instance_methods m)
           /\ f.(fn_temps) = m.(m_vars) 
           /\ list_norepet (var_names f.(fn_params))
           /\ list_norepet (var_names f.(fn_vars))
@@ -245,7 +245,7 @@ Section PRESERVATION.
                     fn_params := (self_id, type_of_inst_p (c_name c))
                                    :: (out_id, type_of_inst_p (prefix (m_name m0) (c_name c)))
                                    :: m_in m0;
-                    fn_vars := make_out_vars (instance_methods (m_body m0));
+                    fn_vars := make_out_vars (instance_methods m0);
                     fn_temps := m_vars m0;
                     fn_body := return_none (translate_stmt prog c m0 (m_body m0)) |}) in Finddef.
         exists loc_f, f.
@@ -329,7 +329,7 @@ Section PRESERVATION.
       NoDupMembers ys ->
       length ys = length f.(m_out) ->
       In (o, clsid) c.(c_objs) ->
-      In (o, clsid, fid) (instance_methods m.(m_body)) ->
+      In (o, clsid, fid) (instance_methods m) ->
       Forall (well_formed_exp c m) es ->
       Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
       Forall2 (fun y y' => snd y = snd y') ys f.(m_out) ->
@@ -382,11 +382,11 @@ Section PRESERVATION.
   
   Definition subrep (f: method) (e: env) :=
     sepall (subrep_inst_env e)
-           (make_out_vars (instance_methods f.(m_body))).
+           (make_out_vars (instance_methods f)).
 
   Lemma subrep_eqv:
     forall f e,
-      Permutation (make_out_vars (instance_methods f.(m_body)))
+      Permutation (make_out_vars (instance_methods f))
                   (map drop_block (PTree.elements e)) ->
       subrep f e <-*-> sepall subrep_inst (PTree.elements e).
   Proof.
@@ -1139,7 +1139,7 @@ Section PRESERVATION.
       (* In caller c.(c_methods) -> *)
       find_class clsid prog = Some (c', prog'') ->
       find_method f c'.(c_methods) = Some callee ->
-      In (o, clsid, f) (instance_methods caller.(m_body)) ->
+      In (o, clsid, f) (instance_methods caller) ->
       length ys = length callee.(m_out) ->
       length rvs = length callee.(m_out) ->
       NoDupMembers ys ->
@@ -1153,11 +1153,11 @@ Section PRESERVATION.
            ** varsrep caller ve le1
            ** P ->                                       
       Forall2 (fun v y => valid_val v (snd y)) rvs ys ->
-      e1 ! o = Some (binst, type_of_inst (prefix f clsid)) ->
+      e1 ! (prefix o f) = Some (binst, type_of_inst (prefix f clsid)) ->
       gcenv ! (prefix f clsid) = Some instco ->
       exists le2 m2 T,
         exec_stmt tge (function_entry2 tge) e1 le1 m1
-                  (funcall_assign ys c.(c_name) caller o (type_of_inst (prefix f clsid)) callee)
+                  (funcall_assign ys c.(c_name) caller (prefix o f) (type_of_inst (prefix f clsid)) callee)
                   T le2 m2 Out_normal
         /\ m2 |= blockrep gcenv (adds callee.(m_out) rvs ve') instco.(co_members) binst
                ** blockrep gcenv (adds ys rvs ve) outco.(co_members) outb
@@ -1197,7 +1197,7 @@ Section PRESERVATION.
           by (rewrite Houts; apply in_or_app; left; apply in_or_app; right; apply in_eq).
       rewrite Eq, Eq' in Hinstco.
       edestruct (evall_inst_field y' ty' e1 le1) as (dy' & Ev_o_y' & Hoffset_y' & ?); eauto.
-      assert (eval_expr tge e1 le1 m1 (Efield (Evar o (type_of_inst (prefix f clsid))) y' ty') v).
+      assert (eval_expr tge e1 le1 m1 (Efield (Evar (prefix o f) (type_of_inst (prefix f clsid))) y' ty') v).
       { eapply eval_Elvalue; eauto.
         eapply blockrep_deref_mem; eauto.
         - rewrite <-Eq, <-Eq' in Hinstco.
@@ -2012,7 +2012,7 @@ Section PRESERVATION.
   (* Lemma  *)
   Lemma alloc_result:
     forall f m P,
-      let vars := instance_methods f.(m_body) in
+      let vars := instance_methods f in
       Forall (fun xt: positive * type =>
                 sizeof tge (snd xt) <= Int.modulus
                 /\ exists (id : AST.ident) (co : composite),
@@ -2073,7 +2073,7 @@ Section PRESERVATION.
       find_method callee_id c.(c_methods) = Some callee ->
       length (fn_params f) = length vargs ->
       fn_params f = (self_id, tself) :: (out_id, tout) :: callee.(m_in) ->
-      fn_vars f = (make_out_vars (instance_methods callee.(m_body))) ->
+      fn_vars f = make_out_vars (instance_methods callee) ->
       fn_temps f = m_vars callee ->
       list_norepet (var_names f.(fn_params)) ->
       list_norepet (var_names f.(fn_vars)) ->
@@ -2202,7 +2202,7 @@ Section PRESERVATION.
         rewrite Hfree.
         now apply IHl.
     - unfold subrep.
-      induction (make_out_vars (instance_methods (m_body f))) as [|(x, t)]; simpl; auto.
+      induction (make_out_vars (instance_methods f)) as [|(x, t)]; simpl; auto.
       apply decidable_footprint_sepconj; auto.
       destruct (e ! x) as [(b, t')|]; auto.
       destruct t'; auto.
@@ -2213,20 +2213,20 @@ Section PRESERVATION.
   Lemma subrep_extract:
     forall f f' e m o c' P,
       m |= subrep f e ** P ->
-      In (o, c', f') (instance_methods f.(m_body)) ->
+      In (o, c', f') (instance_methods f) ->
       exists b co ws xs,
-        e ! o = Some (b, type_of_inst (prefix f' c'))
+        e ! (prefix o f') = Some (b, type_of_inst (prefix f' c'))
         /\ gcenv ! (prefix f' c') = Some co
-        /\ make_out_vars (instance_methods (m_body f)) = ws ++ (o, type_of_inst (prefix f' c')) :: xs
+        /\ make_out_vars (instance_methods f) = ws ++ (prefix o f', type_of_inst (prefix f' c')) :: xs
         /\ m |= blockrep gcenv v_empty (co_members co) b
             ** sepall (subrep_inst_env e) (ws ++ xs)
             ** P.
   Proof.
     intros ** Hrep Hin.
     unfold subrep, subrep_inst in *.
-    assert (In (o, type_of_inst (prefix f' c')) (make_out_vars (instance_methods (m_body f)))) as Hin'.
+    assert (In (prefix o f', type_of_inst (prefix f' c')) (make_out_vars (instance_methods f))) as Hin'.
     { apply in_map with
-      (f:=fun x => let '(o0, cid, f0) := x in (o0, type_of_inst (prefix f0 cid))) in Hin.
+      (f:=fun x => let '(o0, cid, f0) := x in (prefix o0 f0, type_of_inst (prefix f0 cid))) in Hin.
       unfold make_out_vars; auto.
     }
     clear Hin.
@@ -2235,7 +2235,7 @@ Section PRESERVATION.
     pose proof Hrep as Hrep'.
     do 2 apply sep_proj1 in Hrep.
     unfold subrep_inst_env in *.
-    destruct e ! o; [|contradict Hrep].
+    destruct e ! (prefix o f'); [|contradict Hrep].
     destruct p as (oblk, t).
     destruct t; try now contradict Hrep.
     destruct (type_eq (type_of_inst (prefix f' c')) (Tstruct i a)) as [Eq|]; [|contradict Hrep].
@@ -2280,9 +2280,9 @@ Section PRESERVATION.
           length cf.(fn_params) = (2 + length vs)%nat ->
           find_inst S o me1 ->
           oty = type_of_inst (prefix fid clsid) ->
-          e1 ! o = Some (binst, oty) ->
+          e1 ! (prefix o fid) = Some (binst, oty) ->
           In (o, clsid) owner.(c_objs) ->
-          In (o, clsid, fid) (instance_methods caller.(m_body)) ->
+          In (o, clsid, fid) (instance_methods caller) ->
           field_offset gcenv o (make_members owner) = Errors.OK d ->
           0 <= Int.unsigned sofs + d <= Int.max_unsigned ->
           0 <= Int.unsigned sofs ->
@@ -2292,7 +2292,7 @@ Section PRESERVATION.
           exists m2 T ws xs,
             eval_funcall tge (function_entry2 tge) m1 (Internal cf)
                          ((Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr binst Int.zero) :: vs) T m2 Vundef
-            /\ make_out_vars (instance_methods (m_body caller)) = ws ++ (o, type_of_inst (prefix fid clsid)) :: xs
+            /\ make_out_vars (instance_methods caller) = ws ++ (prefix o fid, type_of_inst (prefix fid clsid)) :: xs
             /\ m2 |= staterep gcenv prog owner.(c_name) (madd_obj o me2 (fst S)) sb (Int.unsigned sofs)
                    ** blockrep gcenv (snd S) outco.(co_members) outb
                    ** blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst

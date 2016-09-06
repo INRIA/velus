@@ -93,19 +93,15 @@ Definition binded_funcall
     match find_method f c.(c_methods) with
     | Some m =>
       let tyout := type_of_inst (prefix f cls) in
-      let out := Clight.Eaddrof (Clight.Evar obj tyout) (pointer_of tyout) in 
+      let out := Clight.Eaddrof (Clight.Evar (prefix obj f) tyout) (pointer_of tyout) in 
       let args := ptr_obj owner cls obj :: out :: args in
       Clight.Ssequence
         (funcall (prefix f cls) args)
-        (funcall_assign ys owner caller obj tyout m)
+        (funcall_assign ys owner caller (prefix obj f) tyout m)
     | None => Clight.Sskip
     end
   | None => Clight.Sskip
   end.
-
-(* Definition reset_call (owner: option ident) (cls obj: ident): Clight.statement := *)
-(*   funcall (reset_id cls) [ptr_obj owner cls obj]. *)
-
 
 (** 
 Statement conversion keeps track of the produced temporaries (function calls).
@@ -153,13 +149,26 @@ Definition make_fundef
 Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident * typ) :=
   map (fun ocf =>
          let '(o, cid, f) := ocf in
-         (o, type_of_inst (prefix f cid))
+         (prefix o f, type_of_inst (prefix f cid))
       ) out_vars.
+
+Lemma dec_inst: forall x y : (ident * ident * ident), {x = y} + {x <> y}.
+Proof. repeat decide equality. Qed.
+
+Definition instance_methods (m: method): list (ident * ident * ident) :=
+  let fix rec s l :=
+      match s with
+      | Ifte _ s1 s2  
+      | Comp s1 s2 => rec s2 (rec s1 l)
+      | Call _ cls o f _ => if in_dec dec_inst (o, cls, f) l then l else (o, cls, f) :: l 
+      | _ => l
+    end
+    in rec m.(m_body) [].
 
 Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
   let body := translate_stmt prog c m m.(m_body) in
-  let out_vars := instance_methods m.(m_body) in
+  let out_vars := instance_methods m in
   let self := (self_id, type_of_inst_p c.(c_name)) in
   let out := (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name))) in
   (prefix m.(m_name) c.(c_name),
