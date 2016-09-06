@@ -78,6 +78,30 @@ Proof.
   rewrite PM.gempty. reflexivity.
 Qed.
 
+Remark field_offset_rec_in_range':
+  forall gcenv flds x ofs pos,
+    field_offset_rec gcenv x flds pos = Errors.OK ofs ->
+    pos <= ofs.
+Proof.
+  induction flds as [|[i t]]; simpl; intros.
+  - discriminate.
+  - destruct (AST.ident_eq x i); intros.
+    + inv H. apply align_le. apply alignof_pos.
+    + specialize (IHflds _ _ _ H). eapply Zle_trans; eauto.
+      apply Zle_trans with (align pos (alignof gcenv t)).
+      * apply align_le. apply alignof_pos.
+      * generalize (sizeof_pos gcenv t). omega.
+Qed.
+
+Remark field_offset_in_range':
+  forall gcenv flds x ofs,
+    field_offset gcenv x flds = Errors.OK ofs ->
+    0 <= ofs.
+Proof.
+  unfold field_offset; intros.
+  eapply field_offset_rec_in_range'; eauto.
+Qed.
+  
 Section Staterep.
   Variable ge : composite_env.
 
@@ -635,15 +659,17 @@ Section StateRepProperties.
       eapply contains_no_overflow; eauto.
     + contradict Hm.
   Qed.
-
+   
   Lemma staterep_inst_offset:
     forall m me cls prog b ofs o c P,
       m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
+      0 <= ofs ->
       In (o, c) (c_objs cls) ->
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d
            /\ 0 <= ofs + d <= Int.max_unsigned.
   Proof.
-    intros ** Hm Hin.
+    Opaque sepconj.
+    intros ** Hm ? Hin.
     apply sep_proj1 in Hm.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply sep_proj2 in Hm.
@@ -651,9 +677,31 @@ Section StateRepProperties.
     rewrite Hin in Hm. clear Hsplit Hin.
     apply sep_proj1 in Hm.
     clear ws xs.
-    destruct (field_offset gcenv o (make_members cls)).
+    destruct (field_offset gcenv o (make_members cls)) eqn: E.
     + exists z; split; auto.
-      admit.
+      apply field_offset_in_range' in E.
+      revert c me o z Hm E.
+      induction prog0 as [|c']; intros ** Hm E; simpl in Hm.
+      * contradiction.
+      *{ destruct (ident_eqb c (c_name c')).
+         - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm.
+           + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm.
+             * admit.
+             *{ apply sep_drop, sep_pick1 in Hm.
+                destruct (field_offset gcenv o' (make_members c')) eqn: E'.
+                - apply field_offset_in_range' in E'.
+                  rewrite <-Z.add_assoc in Hm.
+                  edestruct IHprog0; eauto; omega.
+                - contradict Hm.
+              }
+           + apply sep_proj1, sep_proj1 in Hm.
+             destruct (field_offset gcenv x (make_members c')) eqn: E'.
+             * apply contains_no_overflow in Hm.
+               apply field_offset_in_range' in E'.
+               destruct Hm; omega.
+             * contradict Hm.
+         - eapply IHprog0; eauto.
+        }
     + contradict Hm.
   Qed.
 

@@ -761,6 +761,15 @@ Section InMembers.
     destruct w; rewrite nodupmembers_cons in H; tauto.
   Qed.
 
+  Lemma NoDupMembers_app_l:
+    forall ws xs,
+      NoDupMembers (ws ++ xs) -> NoDupMembers ws.
+  Proof.
+    intros ** H.
+    apply NoDupMembers_app in H.
+    eapply NoDupMembers_app_r; eauto.
+  Qed.
+  
   Lemma NoDupMembers_app_InMembers:
     forall x xs ws,
       NoDupMembers (xs ++ ws) ->
@@ -921,6 +930,12 @@ Section Lists.
     induction xs; inversion Hin; inversion Hforall; subst; auto.
   Qed.
 
+  Lemma map_cons (x:A)(l:list A) (f: A -> B) : map f (x::l) = (f x) :: (map f l).
+  Proof.
+    reflexivity.
+  Qed.
+  
+                                                  
   Remark map_cons':
     forall (f: A -> A) l y ys,
       map f l = y :: ys ->

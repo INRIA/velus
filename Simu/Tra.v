@@ -12,7 +12,6 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Axiom pos_to_str: ident -> string.
-Axiom first_unused_ident: unit -> ident.
 
 Definition main_id: ident := pos_of_str "main".
 Definition prefix (pref id: ident): ident :=
@@ -160,7 +159,7 @@ Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident *
 Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
   let body := translate_stmt prog c m m.(m_body) in
-  let out_vars := get_instance_methods m.(m_body) in
+  let out_vars := instance_methods m.(m_body) in
   let self := (self_id, type_of_inst_p c.(c_name)) in
   let out := (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name))) in
   (prefix m.(m_name) c.(c_name),
@@ -235,6 +234,30 @@ Definition vardef (init volatile: bool) (x: ident * typ): ident * AST.globdef Cl
   (x, @AST.Gvar Clight.fundef _
                 (AST.mkglobvar ty' (if init then [AST.Init_space Z0] else []) false volatile)).
 
+Definition build_composite_env' (types: list Ctypes.composite_definition) :
+  { ce | Ctypes.build_composite_env types = Errors.OK ce } + Errors.errmsg.
+Proof.
+  destruct (Ctypes.build_composite_env types) as [ce|msg].
+  - left. exists ce; auto.
+  - right. exact msg.
+Defined.
+
+Definition make_program'
+           (types: list Ctypes.composite_definition)
+           (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
+           (public: list ident)
+           (main: ident) : Errors.res (Ctypes.program Clight.function) :=
+  match build_composite_env' types with
+  | inl (exist ce P) =>
+    Errors.OK {| Ctypes.prog_defs := defs;
+                 Ctypes.prog_public := public;
+                 Ctypes.prog_main := main;
+                 Ctypes.prog_types := types;
+                 Ctypes.prog_comp_env := ce;
+                 Ctypes.prog_comp_env_eq := P |}
+  | inr msg => Errors.Error msg
+  end.
+
 Definition translate (prog: program) (main_node: ident): Errors.res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
@@ -250,7 +273,7 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
       let i_gvars := map (vardef true true) ins in
       let (structs, funs) := split cs in
       let gdefs := f_gvar :: o_gvars ++ i_gvars ++ (concat funs) ++ [(main_id, main)] in
-      Ctypes.make_program (concat structs) gdefs [] main_id
+      make_program' (concat structs) gdefs [] main_id
     | None => Errors.Error (Errors.msg "unfound step function")
     end
   | None => Errors.Error (Errors.msg "undefined node")

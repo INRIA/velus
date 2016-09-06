@@ -52,10 +52,10 @@ Inductive stmt : Type :=
     list (ident * typ) -> ident -> ident -> ident -> list exp -> stmt 
 | Skip.                  (*  *)
 
-Fixpoint get_instance_methods (s: stmt): list (ident * ident * ident) :=
+Fixpoint instance_methods (s: stmt): list (ident * ident * ident) :=
   match s with
   | Ifte _ s1 s2  
-  | Comp s1 s2 => get_instance_methods s2 ++ get_instance_methods s1
+  | Comp s1 s2 => instance_methods s2 ++ instance_methods s1
   | Call _ cls o f _ => [(o, cls, f)] 
   | _ => []
   end.
