@@ -96,7 +96,7 @@ Definition binded_funcall
       let out := Clight.Eaddrof (Clight.Evar obj tyout) (pointer_of tyout) in 
       let args := ptr_obj owner cls obj :: out :: args in
       Clight.Ssequence
-        (funcall f args)
+        (funcall (prefix f cls) args)
         (funcall_assign ys owner caller obj tyout m)
     | None => Clight.Sskip
     end
