@@ -115,6 +115,24 @@ Module Type SYNTAX
     | Ewhen e _ _ => typeof e
     end.
 
+  Definition is_fby (eq: equation) : bool :=
+    match eq with
+    | EqFby _ _ _ _ => true
+    | _ => false
+    end.
+
+  Definition is_app (eq: equation) : bool :=
+    match eq with
+    | EqApp _ _ _ _ _ => true
+    | _ => false
+    end.
+
+  Definition is_def (eq: equation) : bool :=
+    match eq with
+    | EqDef _ _ _ => true
+    | _ => false
+    end.
+
   Definition var_defined (eq: equation) : ident :=
     match eq with
     | EqDef x _ _ => x
@@ -133,6 +151,7 @@ Module Type SYNTAX
         n_ingt0 : 0 < length n_in;
         n_defd  : Permutation (map var_defined n_eqs)
                               (map fst (n_vars ++ [n_out]));
+        n_vout  : ~In (fst n_out) (map var_defined (filter is_fby n_eqs));
         n_decl  : Forall (VarsDeclared (n_in ++ n_vars ++ [n_out])) n_eqs;
         n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
         n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])

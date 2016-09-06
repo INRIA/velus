@@ -743,7 +743,7 @@ Section InMembers.
         destruct a; rewrite nodupmembers_cons in H; tauto. 
   Qed.
 
-  Instance NoDupMembers_Permutation_Proper:
+  Global Instance NoDupMembers_Permutation_Proper:
     Proper (Permutation (A:=A * B) ==> iff) NoDupMembers.
   Proof.
     intros xs ys Hperm.
@@ -915,7 +915,7 @@ Section Lists.
     f_equal; auto.
   Qed.
 
-  Instance In_Permutation_Proper (A:Type):
+  Global Instance In_Permutation_Proper (A:Type):
     Proper (eq ==> Permutation (A:=A) ==> iff) (@In A).
   Proof.
     intros x y Hxy xs ys Hperm.
@@ -1062,7 +1062,7 @@ Section Lists.
     - destruct HH. constructor; auto.
   Qed.
   
-  Instance NoDup_Permutation_Proper (A:Type):
+  Global Instance NoDup_Permutation_Proper (A:Type):
     Proper (Permutation (A:=A) ==> iff) (@NoDup A).
   Proof.
     intros xs ys Hperm.

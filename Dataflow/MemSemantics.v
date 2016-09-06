@@ -99,10 +99,10 @@ Module Type MEMSEMANTICS
   with msem_node G :
             ident -> stream (list value) -> memory -> stream value -> Prop :=
        | SNode:
-           forall bk f xss M ys i o v eqs ingt0 defd decl nodup good,
+           forall bk f xss M ys i o v eqs ingt0 vout defd decl nodup good,
              clock_of xss bk ->
              find_node f G = Some (mk_node f i o v eqs
-                                           ingt0 defd decl nodup good) ->
+                                           ingt0 vout defd decl nodup good) ->
              (exists H,
                  sem_vars bk H (map fst i) xss
                  /\ sem_var bk H (fst o) ys
@@ -193,12 +193,14 @@ enough: it does not support the internal fixpoint introduced by
              (ingt0 : 0 < length i)
              (defd  : Permutation (map var_defined eqs)
                                   (map fst (v ++ [o])))
+             (vout  : ~In (fst o) (map var_defined (filter is_fby eqs)))
              (decl  : Forall (VarsDeclared (i ++ v ++ [o])) eqs)
              (nodup : NoDupMembers (i ++ v ++ [o]))
              (good  : Forall NotReserved (i ++ v ++ [o]))
              (Hbk   : clock_of xss bk)
              (Hfind : find_node f G =
-                        Some (mk_node f i o v eqs ingt0 defd decl nodup good))
+                      Some (mk_node f i o v eqs
+                                    ingt0 defd vout decl nodup good))
              (Hnode : exists H : history,
                  sem_vars bk H (map fst i) xss
                  /\ sem_var bk H (fst o) ys
@@ -219,7 +221,8 @@ enough: it does not support the internal fixpoint introduced by
              (Hn  : msem_node G f xss M ys) {struct Hn}
       : Pn Hn :=
       match Hn in (msem_node _ f xs M ys) return (Pn Hn) with
-      | SNode bk f xs M ys i o v eqs ingt0 defd decl nodup good Hbk Hf Hnode =>
+      | SNode bk f xs M ys i o v eqs
+              ingt0 defd vout decl nodup good Hbk Hf Hnode =>
         SNode_case Hbk Hf Hnode
                    (* Turn: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
@@ -360,7 +363,7 @@ enough: it does not support the internal fixpoint introduced by
     induction Hsem as [
         | bk H M y ck f M' les ty ls ys Hmfind Hls Hys Hmsem IH
         |
-        | bk f xs M ys i o v eqs ingt0 defd decl nodup good Hbk Hf Heqs IH ]
+        | bk f xs M ys i o v eqs ingt0 defd vout decl nodup good Hbk Hf Heqs IH ]
         using msem_node_mult
         with (P := fun bk H M eq Hsem => ~Is_node_in_eq node.(n_name) eq
                                          -> msem_equation G bk H M eq).
@@ -400,7 +403,8 @@ enough: it does not support the internal fixpoint introduced by
     induction Hsem as [
         | bk H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH
         | 
-        | bk f xs M ys i o v eqs ingt0 defd decl nodup good Hbk Hfind Heqs IH ]
+        | bk f xs M ys i o v eqs
+             ingt0 defd vout decl nodup good Hbk Hfind Heqs IH ]
         using msem_node_mult
         with (P := fun bk H M eq Hsem => ~Is_node_in_eq nd.(n_name) eq
                                          -> msem_equation (nd::G) bk H M eq);
@@ -434,7 +438,7 @@ enough: it does not support the internal fixpoint introduced by
                    Is_node_in_eq g eq
                    -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
     {
-      clear defd decl nodup good Hfind Heqs Hnf.
+      clear defd vout decl nodup good Hfind Heqs Hnf.
       induction eqs as [|eq eqs IH]; [now constructor|].
       constructor.
       - intros g Hini.
@@ -694,7 +698,7 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros f xs ys Hwdef Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind HH].
+    inversion_clear Hsem' as [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind HH].
     destruct HH as [H [Hxs [Hys [Hout Heqs]]]].
     pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
     pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.

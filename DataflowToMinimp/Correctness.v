@@ -868,7 +868,8 @@ for all [Is_free_exp x e]. *)
         (* dataflow semantics *)
         assert (Hmsem':=Hmsem).
         inversion_clear Hmsem'
-          as [? ? ? ? ? i o v neqs ingt0 defd decl nodup good Hck Hfind Hnsem].
+          as [? ? ? ? ? i o v neqs
+                ingt0 defd vout decl nodup good Hck Hfind Hnsem].
         destruct Hnsem as [Hn [Hlsn [Hxsn [Hout Hnsem]]]].
 
         (* no other instance *)
@@ -1230,7 +1231,7 @@ for all [Is_free_exp x e]. *)
           inversion_clear Hwd as [|? ? Hwd' eqs inArgs outArg
                              HnodupIn Hwsch Hndef_in Hdef_out Hne Hfind Hnodup].
           clear Hwd'.
-          inversion_clear Hmsem as [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hck Heqs
+          inversion_clear Hmsem as [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hck Heqs
                                       [H [Hin [Hout [Hrabs Hall]]]]].
           subst eqs inArgs outArg nodeName.
           simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
@@ -1282,8 +1283,7 @@ for all [Is_free_exp x e]. *)
             - intros input Hinput Hisdef.
               apply Hndef_in; apply Exists_exists.
               exists input; auto.
-            - inversion_clear Hmc as [? ? ? ? ? ? ? ? ? ? ? ? Hf Hmeqs].
-
+            - inversion_clear Hmc as [? ? ? ? ? ? ? ? ? ? ? ? ? Hf Hmeqs].
               simpl in Hf.
               rewrite ident_eqb_refl in Hf.
               injection Hf; intros Heq0 Heq1 Heq2 Heq3.
@@ -1533,7 +1533,7 @@ for all [Is_free_exp x e]. *)
       + assert (nodeName = f) as Hfeq
             by (apply Pos.eqb_eq; assumption).
         inversion_clear Hmsem as [? ? ? ? ? inArgs outArg v eqs
-                                    ingt0 defd decl nodup good
+                                    ingt0 defd vout decl nodup good
                                     Hbk Hfind [H [Hin [Hout [Hrhs Hmsem']]]]].
         rename Hmsem' into Hmsem.
 
@@ -1673,7 +1673,7 @@ for all [Is_free_exp x e]. *)
       assert (exists co0, ys 0 = present co0)%nat as [co0 Hco0].
       {
         inversion_clear Hmsem as
-            [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
+            [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
                 [H [Hsem_in [Hsem_out [Habs Hsem_eqns]]]]].
         apply not_absent_present;
           rewrite <- Habs;
@@ -1729,7 +1729,7 @@ for all [Is_free_exp x e]. *)
         assert (exists coSn, ys (S n) = present coSn) as [coSn Hys].
         {
           inversion_clear Hmsem as
-              [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
+              [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
                   [H [Hsem_in [Hsem_out [Habs Hsem_eqns]]]]].
           apply not_absent_present; rewrite <- Habs;
             eapply not_absent_present_list; eauto.
