@@ -54,7 +54,6 @@ Section PRESERVATION.
   Variable prog: program.
   Variable tprog: Clight.program.
    
-  (* Let ge := globalenv prog. *)
   Let tge := Clight.globalenv tprog.
   Let gcenv := Clight.genv_cenv tge.
   
@@ -93,51 +92,8 @@ Section PRESERVATION.
     apply build_composite_env_consistent in TRANSL; auto.
   Qed.
   Hint Resolve Consistent.
-  (* Hypothesis Consistent: composite_env_consistent gcenv. *)
   
   Opaque sepconj.
-
-  Remark split_map:
-    forall {A B C} (xs: list C) (l: list A) (l': list B) f f',
-      split (map (fun x => (f x, f' x)) xs) = (l, l') ->
-      l = map f xs /\ l' = map f' xs.
-  Proof.
-    induction xs; simpl; intros ** Split.
-    - inv Split; auto.
-    - destruct (split (map (fun x : C => (f x, f' x)) xs)) as (g, d) eqn: E.
-      inv Split.
-      edestruct IHxs as [G D]; eauto; rewrite <-G, <-D; auto.
-  Qed.
-
-  Remark in_concat_cons:
-    forall {A} l' (l: list A) x xs,
-      In x l ->
-      In (xs :: l) l' ->
-      In x (concat l').
-  Proof.
-    induction l' as [|y]; simpl; intros ** Hin Hin'.
-    - contradiction.
-    - destruct Hin' as [E|Hin'].
-      + subst y.
-        apply in_app; left; now apply in_cons.
-      + apply in_app; right.
-        eapply IHl'; eauto.
-  Qed.
-
-  Remark in_concat:
-    forall {A} l' (l: list A) x,
-      In x l ->
-      In l l' ->
-      In x (concat l').
-  Proof.
-    induction l' as [|y]; simpl; intros ** Hin Hin'.
-    - contradiction.
-    - destruct Hin' as [E|Hin'].
-      + subst y.
-        apply in_app; now left. 
-      + apply in_app; right.
-        eapply IHl'; eauto.
-  Qed.
   
   Theorem global_out_struct:
     forall clsnm c prog' fid f id su m a,
@@ -1472,13 +1428,6 @@ Section PRESERVATION.
         now right.
   Qed.
 
-  Remark get_set_same:
-    forall {A} x e v (v': A),
-      (PTree.set x v e) ! x = Some v' -> v = v'.
-  Proof.
-    induction x, e; simpl; (eauto || now inversion 1).
-  Qed.
-  
   Remark alloc_In:
     forall vars e m e' m',
       alloc_variables tge e m vars e' m' ->
@@ -1508,7 +1457,7 @@ Section PRESERVATION.
              apply In_drop_block in Hin.
              destruct Hin as [b Hin].
              apply PTree.elements_complete in Hin.
-             apply get_set_same in Hin.
+             rewrite PTree.gss in Hin.
              inv Hin.
              right; apply in_eq.
            - apply ident_eqb_neq in E.
@@ -1614,45 +1563,6 @@ Section PRESERVATION.
   Proof.
      intros; now destruct x.
   Qed.
-  
-  Remark In_singleton:
-    forall {A} (y x: A),
-      In y [x] <-> y = x.
-  Proof.
-    split; intro H.
-    - simpl in H; destruct H; auto.
-      contradiction.
-    - subst x; apply in_eq.
-  Qed.
-  
-  Remark equiv_eq_singleton:
-    forall {A} (x: A) l,
-      NoDup l ->
-      ([x] = l <-> (forall y, In y l <-> In y [x])).
-  Proof.
-    intros ** Nodup.
-    split.
-    - intros; subst l; split; auto.
-    - destruct l; intro H.
-      + specialize (H x); destruct H as [? H'].
-        exfalso; apply H'; now left.
-      + inversion_clear Nodup as [|? ? Notin].
-        destruct l.
-        * specialize (H x); rewrite 2 In_singleton in H.
-          f_equal; now apply H.
-        * pose proof H as H'.
-          specialize (H a); rewrite In_singleton in H.
-          specialize (H' a0); rewrite In_singleton in H'.
-          destruct H as [Ha].
-          destruct H' as [Ha0].
-          assert (a = a0).
-          { transitivity x.
-            - apply Ha, in_eq.
-            - symmetry; apply Ha0, in_cons, in_eq.
-          }
-          exfalso; apply Notin.
-          subst; apply in_eq.
-  Qed.
 
   Remark xelements_set_leaf:
     forall {A} x i (v: A),
@@ -1666,7 +1576,7 @@ Section PRESERVATION.
         rewrite PTree.prev_append_prev in Eq.
         destruct (ident_eqb x j) eqn: E.
         * apply ident_eqb_eq in E; subst.
-          apply get_set_same in H; subst.
+          rewrite PTree.gss in H; inv H. 
           reflexivity.
         * apply ident_eqb_neq in E.
           rewrite PTree.gso in H; auto.
@@ -1883,29 +1793,6 @@ Section PRESERVATION.
     - intros (a', b'); apply elements_set_snd_In; auto.
   Qed.
   
-  Remark Permutation_NoDupMembers:
-    forall {A B} (l l': list (A * B)),
-      Permutation l l' ->
-      NoDupMembers l ->
-      NoDupMembers l'.
-  Proof.
-    intros ** Perm Nodup.
-    induction Perm; simpl in *; try constructor; auto.
-    - destruct x as (a, b); simpl in *.
-      inversion_clear Nodup as [|? ? ? Notin]. constructor; auto.
-      intro Hin; apply Notin.
-      apply InMembers_In in Hin; destruct Hin as (b' & Hin).
-      apply (In_InMembers a b').
-      apply Permutation_sym in Perm; now apply Permutation_in with (2:=Hin) in Perm.
-    - destruct x as (a, b), y as (a', b'); simpl in *.
-      inversion_clear Nodup as [|? ? ? Notinb' Nodup'].
-      apply NotInMembers_cons in Notinb'; simpl in Notinb'; destruct Notinb' as [Notinb' Diff].
-      inversion_clear Nodup' as [|? ? ? Notinb Nodup''].
-      constructor; auto.
-      + inversion 1; contradiction.
-      + constructor; auto.
-  Qed.
-  
   Lemma set_nodupmembers:
     forall x (e: env) b1 t,
       NoDupMembers (map snd (PTree.elements e)) ->
@@ -1945,7 +1832,7 @@ Section PRESERVATION.
           apply PTree.elements_complete in Hin.
           destruct (ident_eqb x x') eqn: E.
           - apply ident_eqb_eq in E; subst x'.
-            apply get_set_same in Hin.
+            rewrite PTree.gss in Hin.
             inv Hin. now contradict Neq.
           - apply ident_eqb_neq in E.
             rewrite PTree.gso in Hin; auto.
@@ -1986,27 +1873,6 @@ Section PRESERVATION.
   Proof.
     induction elems as [|(x, (b, t))]; simpl; auto.
     now f_equal.
-  Qed.
-
-  Lemma Permutation_Forall:
-    forall {A} (l l': list A) P,
-      Permutation l l' ->
-      Forall P l ->
-      Forall P l'.
-  Proof.
-    induction 1; inversion 1; auto.
-    inversion H3.
-    repeat constructor; auto.
-  Qed.
-
-  Lemma Forall_Forall':
-    forall (A : Type) (P Q : A -> Prop) (xs : list A),
-      Forall P xs /\ Forall Q xs <-> Forall (fun x : A => P x /\ Q x) xs.
-  Proof.
-    split.
-    - intros [? ?]; now apply Forall_Forall.
-    - intro HForall.
-      induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.      
   Qed.
   
   (* Lemma  *)

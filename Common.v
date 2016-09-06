@@ -4,6 +4,7 @@ Require Import List.
 Require Coq.MSets.MSets.
 Require Export PArith.
 Require Import Omega.
+Require Import Coq.Sorting.Permutation.
 
 Open Scope list.
 
@@ -812,6 +813,29 @@ Section InMembers.
         destruct a; rewrite nodupmembers_cons in H; tauto. 
   Qed.
 
+  Remark Permutation_NoDupMembers:
+    forall (l l': list (A * B)),
+      Permutation l l' ->
+      NoDupMembers l ->
+      NoDupMembers l'.
+  Proof.
+    intros ** Perm Nodup.
+    induction Perm; simpl in *; try constructor; auto.
+    - destruct x as (a, b); simpl in *.
+      inversion_clear Nodup as [|? ? ? Notin]. constructor; auto.
+      intro Hin; apply Notin.
+      apply InMembers_In in Hin; destruct Hin as (b' & Hin).
+      apply (In_InMembers a b').
+      apply Permutation_sym in Perm; now apply Permutation_in with (2:=Hin) in Perm.
+    - destruct x as (a, b), y as (a', b'); simpl in *.
+      inversion_clear Nodup as [|? ? ? Notinb' Nodup'].
+      apply NotInMembers_cons in Notinb'; simpl in Notinb'; destruct Notinb' as [Notinb' Diff].
+      inversion_clear Nodup' as [|? ? ? Notinb Nodup''].
+      constructor; auto.
+      + inversion 1; contradiction.
+      + constructor; auto.
+  Qed.
+  
   Lemma InMembers_neq:
     forall x y xs,
       InMembers x xs ->
@@ -934,8 +958,7 @@ Section Lists.
   Proof.
     reflexivity.
   Qed.
-  
-                                                  
+                                                   
   Remark map_cons':
     forall (f: A -> A) l y ys,
       map f l = y :: ys ->
@@ -1045,7 +1068,114 @@ Section Lists.
   Proof.
     destruct xs; simpl; auto.
   Qed.
+
+  Lemma in_app:
+  forall (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
+  Proof.
+    intros. split; intro. apply in_app_or. auto. apply in_or_app. auto.
+  Qed.
   
+  Remark in_concat_cons:
+    forall l' (l: list A) x xs,
+      In x l ->
+      In (xs :: l) l' ->
+      In x (concat l').
+  Proof.
+    induction l' as [|y]; simpl; intros ** Hin Hin'.
+    - contradiction.
+    - destruct Hin' as [E|Hin'].
+      + subst y.
+        apply in_app; left; now apply in_cons.
+      + apply in_app; right.
+        eapply IHl'; eauto.
+  Qed.
+
+  Remark in_concat:
+    forall l' (l: list A) x,
+      In x l ->
+      In l l' ->
+      In x (concat l').
+  Proof.
+    induction l' as [|y]; simpl; intros ** Hin Hin'.
+    - contradiction.
+    - destruct Hin' as [E|Hin'].
+      + subst y.
+        apply in_app; now left.
+      + apply in_app; right.
+        eapply IHl'; eauto.
+  Qed.
+
+  Remark split_map:
+    forall {C} (xs: list C) (l: list A) (l': list B) f f',
+      split (map (fun x => (f x, f' x)) xs) = (l, l') ->
+      l = map f xs /\ l' = map f' xs.
+  Proof.
+    induction xs; simpl; intros ** Split.
+    - inv Split; auto.
+    - destruct (split (map (fun x : C => (f x, f' x)) xs)) as (g, d) eqn: E.
+      inv Split.
+      edestruct IHxs as [G D]; eauto; rewrite <-G, <-D; auto.
+  Qed.
+
+  Remark In_singleton:
+    forall (y x: A),
+      In y [x] <-> y = x.
+  Proof.
+    split; intro H.
+    - simpl in H; destruct H; auto.
+      contradiction.
+    - subst x; apply in_eq.
+  Qed.
+  
+  Remark equiv_eq_singleton:
+    forall (x: A) l,
+      NoDup l ->
+      ([x] = l <-> (forall y, In y l <-> In y [x])).
+  Proof.
+    intros ** Nodup.
+    split.
+    - intros; subst l; split; auto.
+    - destruct l; intro H.
+      + specialize (H x); destruct H as [? H'].
+        exfalso; apply H'; now left.
+      + inversion_clear Nodup as [|? ? Notin].
+        destruct l.
+        * specialize (H x); rewrite 2 In_singleton in H.
+          f_equal; now apply H.
+        * pose proof H as H'.
+          specialize (H a); rewrite In_singleton in H.
+          specialize (H' a0); rewrite In_singleton in H'.
+          destruct H as [Ha].
+          destruct H' as [Ha0].
+          assert (a = a0).
+          { transitivity x.
+            - apply Ha, in_eq.
+            - symmetry; apply Ha0, in_cons, in_eq.
+          }
+          exfalso; apply Notin.
+          subst; apply in_eq.
+  Qed.
+
+  Lemma Permutation_Forall:
+    forall {A} (l l': list A) P,
+      Permutation l l' ->
+      Forall P l ->
+      Forall P l'.
+  Proof.
+    induction 1; inversion 1; auto.
+    inversion H3.
+    repeat constructor; auto.
+  Qed.
+
+  Lemma Forall_Forall':
+    forall (A : Type) (P Q : A -> Prop) (xs : list A),
+      Forall P xs /\ Forall Q xs <-> Forall (fun x : A => P x /\ Q x) xs.
+  Proof.
+    split.
+    - intros [? ?]; now apply Forall_Forall.
+    - intro HForall.
+      induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.      
+  Qed.
 End Lists.
 
 Ltac induction_list_tac e I l H :=
