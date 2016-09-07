@@ -367,7 +367,26 @@ Module Type TRANSLATION
     - now rewrite IHHperm1, IHHperm2.
   Qed.
 
-  (* TODO: Tidy and simplify! *)
+  Lemma in_memories_var_defined:
+    forall x eqs,
+      PS.In x (memories eqs) ->
+      In x (map var_defined eqs).
+  Proof.
+    intros x eqs Hin.
+    induction eqs as [|eq eqs].
+    now apply PSF.empty_iff in Hin.
+    unfold memories in *. simpl in *.
+    apply In_fold_left_memory_eq in Hin.
+    destruct Hin as [Hin|Hin].
+    - specialize (IHeqs Hin). now right.
+    - destruct eq; simpl in Hin;
+        try (apply PSF.empty_iff in Hin; contradiction).
+      apply PS.add_spec in Hin.
+      destruct Hin as [Hin|Hin].
+      now subst; simpl; left.
+      now apply PSF.empty_iff in Hin.
+  Qed.
+      
   Lemma in_memories_is_fby:
     forall eqs eq,
       In eq eqs ->
@@ -377,152 +396,57 @@ Module Type TRANSLATION
     induction eqs as [|eq eqs].
     now intuition.
     intros eq' Hin Hndup.
-    destruct Hin. subst eq'.
-    destruct eq.
-
-    (* EqDef *)
-    simpl in *.
-    apply Common.NoDup_cons in Hndup.
+    simpl in Hndup. apply NoDup_cons' in Hndup.
     destruct Hndup as [Hnin Hndup].
     unfold memories.
-    simpl.
-    apply mem_spec_false.
-    intro HH.
-    apply Hnin.
-    {
-    clear IHeqs Hnin Hndup.
-
-      induction eqs.
-    simpl in HH.
-    apply PSF.empty_iff in HH.
-    contradiction.
-    simpl in HH.
-    apply In_fold_left_memory_eq in HH.
-    destruct HH.
-    specialize (IHeqs H).
-    constructor (assumption).
-    destruct a; simpl in H; try apply PSF.empty_iff in H; try contradiction.
-    apply PS.add_spec in H.
-    destruct H.
-    subst.
-    simpl; now left.
-    apply PSF.empty_iff in H. contradiction.
-    }
-
-    (* EqApp *)
-    simpl in *.
-    apply Common.NoDup_cons in Hndup.
-    destruct Hndup as [Hnin Hndup].
-    unfold memories.
-    simpl.
-    apply mem_spec_false.
-    intro HH.
-    apply Hnin.
-    {
-    clear IHeqs Hnin Hndup.
-
-      induction eqs.
-    simpl in HH.
-    apply PSF.empty_iff in HH.
-    contradiction.
-    simpl in HH.
-    apply In_fold_left_memory_eq in HH.
-    destruct HH.
-    specialize (IHeqs H).
-    constructor (assumption).
-    destruct a; simpl in H; try apply PSF.empty_iff in H; try contradiction.
-    apply PS.add_spec in H.
-    destruct H.
-    subst.
-    simpl; now left.
-    apply PSF.empty_iff in H. contradiction.
-    }
-
-    (* EqFby *)
-    simpl in *.
-    apply Common.NoDup_cons in Hndup.
-    destruct Hndup as [Hnin Hndup].
-    unfold memories.
-    simpl.
-    apply PS.mem_spec.
-    simpl.
-    apply In_fold_left_memory_eq.
-    right.
-    apply PS.add_spec.
-    now left.
-
-    specialize (IHeqs _ H).
-    simpl in Hndup.
-    apply Common.NoDup_cons in Hndup.
-    destruct Hndup as [Hnin Hndup].
-    specialize (IHeqs Hndup).
-    destruct eq; unfold memories; simpl; try apply IHeqs; auto.
-    simpl in Hnin.
-    destruct eq'; simpl; try apply mem_spec_false.
-
-    (* EqDef *)
-    intro HH.
-    apply In_fold_left_memory_eq in HH.
-    destruct HH.
-    unfold memories in IHeqs.
-    simpl in IHeqs.
-    apply mem_spec_false in IHeqs.
-    contradiction.
-    apply PS.add_spec in H0.
-    destruct H0.
-    subst.
-    apply Hnin.
-    { clear Hnin IHeqs.
-      induction eqs.
-      simpl in *. contradiction.
-      inversion_clear H; subst.
-      now left.
-      simpl in *; apply Common.NoDup_cons in Hndup.
-      destruct Hndup as [Hnin Hndup].
-      specialize (IHeqs Hndup H0).
-      right; assumption. }
-    apply not_In_empty in H0. contradiction.
-
-    (* EqApp *)
-    intro HH.
-    apply In_fold_left_memory_eq in HH.
-    destruct HH.
-    unfold memories in IHeqs.
-    simpl in IHeqs.
-    apply mem_spec_false in IHeqs.
-    contradiction.
-    apply PS.add_spec in H0.
-    destruct H0.
-    subst.
-    apply Hnin.
-    { clear Hnin IHeqs.
-      induction eqs.
-      simpl in *. contradiction.
-      inversion_clear H; subst.
-      now left.
-      simpl in *; apply Common.NoDup_cons in Hndup.
-      destruct Hndup as [Hnin Hndup].
-      specialize (IHeqs Hndup H0).
-      right; assumption. }
-    apply not_In_empty in H0. contradiction.
-
-    (* EqFby *)
-    simpl in IHeqs.
-    apply PS.mem_spec.
-    apply In_fold_left_memory_eq.
-    left.
-    now rewrite PS.mem_spec in IHeqs.
+    destruct Hin as [|Hin].
+    - subst eq'.
+      destruct eq; simpl in *;
+        try (apply mem_spec_false; intro HH; apply Hnin;
+             apply in_memories_var_defined with (1:=HH)).
+      apply PS.mem_spec.
+      apply In_fold_left_memory_eq.
+      right. apply PS.add_spec. now left.
+    - specialize (IHeqs _ Hin Hndup).
+      unfold memories in *.
+      destruct eq; simpl; try apply IHeqs; auto.
+      simpl in Hnin.
+      destruct eq'; simpl;
+        try (apply mem_spec_false; intro HH;
+             apply In_fold_left_memory_eq in HH;
+             destruct HH as [HH|HH];
+             apply mem_spec_false in IHeqs;
+             try contradiction;
+             try (apply PS.add_spec in HH; destruct HH as [HH|HH];
+                  subst)).
+      + apply Hnin.
+        clear Hnin IHeqs.
+        induction eqs.
+        simpl in *. contradiction.
+        inversion_clear Hin as [|Hin']; subst.
+        now left.
+        simpl in *; apply NoDup_cons' in Hndup.
+        destruct Hndup as [Hnin Hndup].
+        specialize (IHeqs Hndup Hin').
+        right; assumption.
+      + now apply not_In_empty in HH.
+      + apply Hnin.
+        clear Hnin IHeqs.
+        induction eqs.
+        simpl in *. contradiction.
+        inversion_clear Hin as [|Hin']; subst.
+        now left.
+        simpl in *; apply NoDup_cons' in Hndup.
+        destruct Hndup as [Hnin Hndup].
+        specialize (IHeqs Hndup Hin').
+        right; assumption.
+      + now apply not_In_empty in HH.
+      + simpl in IHeqs.
+        apply PS.mem_spec.
+        apply In_fold_left_memory_eq.
+        left. now rewrite PS.mem_spec in IHeqs.
   Qed.
 
-  (*
-        n_defd  : Permutation (map var_defined n_eqs)
-                              (map fst (n_vars ++ [n_out]));
-        n_vout  : ~PS.In (fst n_out) (memories n_eqs);
-        n_decl  : Forall (VarsDeclared (n_in ++ n_vars ++ [n_out])) n_eqs;
-        n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
-        n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])
-*) 
- 
   Lemma fst_partition_memories_var_defined:
     forall n,
       Permutation
@@ -577,29 +501,32 @@ Module Type TRANSLATION
       map fst (snd (gather_eqs n.(n_eqs)))
       = map var_defined (filter is_app n.(n_eqs)).
   Proof.
+    
   Admitted.
   
   Lemma VarsDeclared_translate_eqns:
-    forall n mems,
+    forall n,
       VarsDeclared
-        (snd (partition (fun x=> PS.mem (fst x) mems) n.(n_vars))
+        (snd (partition (fun x=> PS.mem (fst x) (memories n.(n_eqs))) n.(n_vars))
          ++ [n.(n_out)])
-        (translate_eqns mems n.(n_eqs)).
+        (translate_eqns (memories n.(n_eqs)) n.(n_eqs)).
   Proof.
   Admitted.
 
   Lemma MemsDeclared_translate_eqns:
-    forall n mems,
+    forall n,
       MemsDeclared
-        (fst (partition (fun x=> PS.mem (fst x) mems) n.(n_vars)))
-        (translate_eqns mems n.(n_eqs)).
+        (fst (partition (fun x=> PS.mem (fst x) (memories n.(n_eqs)))
+                        n.(n_vars)))
+        (translate_eqns (memories n.(n_eqs)) n.(n_eqs)).
   Proof.
   Admitted.
 
   Lemma MemsDeclared_translate_reset_eqns:
-    forall n mems,
+    forall n,
       MemsDeclared
-        (fst (partition (fun x=> PS.mem (fst x) mems) n.(n_vars)))
+        (fst (partition (fun x=> PS.mem (fst x) (memories n.(n_eqs)))
+                        n.(n_vars)))
         (translate_reset_eqns n.(n_eqs)).
   Proof.
   Admitted.
@@ -670,6 +597,10 @@ Module Type TRANSLATION
     symmetry; apply permutation_partition.
   Qed.
   Next Obligation.
+    simpl. rewrite ps_from_list_gather_eqs_memories.
+    rewrite partition_switch
+    with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
+    2:now intro; rewrite ps_from_list_gather_eqs_memories.
     now apply VarsDeclared_translate_eqns.
   Qed.
   Next Obligation.
@@ -723,8 +654,15 @@ Module Type TRANSLATION
   Qed.
   Next Obligation.
     repeat constructor.
-    now apply MemsDeclared_translate_eqns.
-    now apply MemsDeclared_translate_reset_eqns.
+    - simpl. rewrite partition_switch
+             with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
+      2:now intro; rewrite ps_from_list_gather_eqs_memories.
+      rewrite ps_from_list_gather_eqs_memories.
+      now apply MemsDeclared_translate_eqns.
+    - simpl. rewrite partition_switch
+             with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
+      2:now intro; rewrite ps_from_list_gather_eqs_memories.
+      now apply MemsDeclared_translate_reset_eqns.
   Qed.       
   Next Obligation.
     repeat constructor.

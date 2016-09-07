@@ -1052,8 +1052,7 @@ Section Lists.
     intro H. now apply (in_map f) in H.
   Qed.
 
-
-  Lemma NoDup_cons:
+  Lemma NoDup_cons':
     forall {A} (x:A) xs,
       NoDup (x::xs) <-> ~In x xs /\ NoDup xs.
   Proof.
@@ -1068,7 +1067,7 @@ Section Lists.
     intros xs ys Hperm.
     induction Hperm.
     - now intuition.
-    - rewrite 2 NoDup_cons, IHHperm, Hperm.
+    - rewrite 2 NoDup_cons', IHHperm, Hperm.
       reflexivity.
     - split; inversion_clear 1 as [|? ? Hnin Hndup];
         inversion_clear Hndup as [|? ? Hnin' Hndup'];
