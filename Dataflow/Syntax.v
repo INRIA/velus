@@ -115,23 +115,14 @@ Module Type SYNTAX
     | Ewhen e _ _ => typeof e
     end.
 
-  Definition is_fby (eq: equation) : bool :=
+  Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
-    | EqFby _ _ _ _ => true
-    | _ => false
+    | EqFby x _ _ _ => PS.add x mems
+    | _ => mems
     end.
 
-  Definition is_app (eq: equation) : bool :=
-    match eq with
-    | EqApp _ _ _ _ _ => true
-    | _ => false
-    end.
-
-  Definition is_def (eq: equation) : bool :=
-    match eq with
-    | EqDef _ _ _ => true
-    | _ => false
-    end.
+  Definition memories (eqs: list equation) : PS.t :=
+    List.fold_left memory_eq eqs PS.empty.
 
   Definition var_defined (eq: equation) : ident :=
     match eq with
@@ -139,7 +130,7 @@ Module Type SYNTAX
     | EqApp x _ _ _ _ => x
     | EqFby x _ _ _ => x
     end.
-  
+
   Record node : Type :=
     mk_node {
         n_name : ident;
@@ -151,7 +142,7 @@ Module Type SYNTAX
         n_ingt0 : 0 < length n_in;
         n_defd  : Permutation (map var_defined n_eqs)
                               (map fst (n_vars ++ [n_out]));
-        n_vout  : ~In (fst n_out) (map var_defined (filter is_fby n_eqs));
+        n_vout  : ~PS.In (fst n_out) (memories n_eqs);
         n_decl  : Forall (VarsDeclared (n_in ++ n_vars ++ [n_out])) n_eqs;
         n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
         n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])

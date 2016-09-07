@@ -382,7 +382,7 @@ enough: it does not support the internal fixpoint introduced by
              (ingt0 : 0 < length i)
              (defd  : Permutation (map var_defined eqs)
                                   (map fst (v ++ [o])))
-             (vout  : ~In (fst o) (map var_defined (filter is_fby eqs)))
+             (vout  : ~PS.In (fst o) (memories eqs))
              (decl  : Forall (VarsDeclared (i ++ v ++ [o])) eqs)
              (nodup : NoDupMembers (i ++ v ++ [o]))
              (good  : Forall NotReserved (i ++ v ++ [o]))

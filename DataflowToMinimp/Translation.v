@@ -299,7 +299,24 @@ Module Type TRANSLATION
       simpl; apply IH with (1:=Heq); rewrite HSeq, Heq; reflexivity. }
     rewrite HH with (S':=Skip); reflexivity.
   Qed.
-  
+
+  Definition is_fby (eq: equation) : bool :=
+    match eq with
+    | EqFby _ _ _ _ => true
+    | _ => false
+    end.
+
+  Definition is_app (eq: equation) : bool :=
+    match eq with
+    | EqApp _ _ _ _ _ => true
+    | _ => false
+    end.
+
+  Definition is_def (eq: equation) : bool :=
+    match eq with
+    | EqDef _ _ _ => true
+    | _ => false
+    end.
 
   Lemma is_filtered_eqs:
     forall eqs,
@@ -320,13 +337,240 @@ Module Type TRANSLATION
       now symmetry.
   Qed.
 
+  Lemma filter_app:
+    forall {A} (p:A->bool) xs ys,
+      filter p xs ++ filter p ys = filter p (xs ++ ys).
+  Proof.
+    induction xs as [|x xs]; intro ys; auto.
+    simpl; destruct (p x); simpl; rewrite IHxs; auto.
+  Qed.
+
+  Lemma filter_mem_fst:
+    forall p (xs: list (ident * typ)),
+      map fst (filter (fun (x:ident*typ)=>PS.mem (fst x) p) xs)
+      = filter (fun x=>PS.mem x p) (map fst xs).
+  Proof.
+    induction xs as [|x xs]; auto.
+    simpl.
+    destruct (PS.mem (fst x) p); simpl;
+      now rewrite IHxs.
+  Qed.
+
+  Instance Permutation_filter_Proper {A} (p:A->bool):
+    Proper (@Permutation A ==> @Permutation A) (filter p).
+  Proof.
+    Hint Constructors Permutation.
+    intros xs ys Hperm.
+    induction Hperm; simpl; auto.
+    - destruct (p x); auto.
+    - destruct (p x); destruct (p y); auto.
+    - now rewrite IHHperm1, IHHperm2.
+  Qed.
+
+  (* TODO: Tidy and simplify! *)
+  Lemma in_memories_is_fby:
+    forall eqs eq,
+      In eq eqs ->
+      NoDup (map var_defined eqs) ->
+      PS.mem (var_defined eq) (memories eqs) = is_fby eq.
+  Proof.
+    induction eqs as [|eq eqs].
+    now intuition.
+    intros eq' Hin Hndup.
+    destruct Hin. subst eq'.
+    destruct eq.
+
+    (* EqDef *)
+    simpl in *.
+    apply Common.NoDup_cons in Hndup.
+    destruct Hndup as [Hnin Hndup].
+    unfold memories.
+    simpl.
+    apply mem_spec_false.
+    intro HH.
+    apply Hnin.
+    {
+    clear IHeqs Hnin Hndup.
+
+      induction eqs.
+    simpl in HH.
+    apply PSF.empty_iff in HH.
+    contradiction.
+    simpl in HH.
+    apply In_fold_left_memory_eq in HH.
+    destruct HH.
+    specialize (IHeqs H).
+    constructor (assumption).
+    destruct a; simpl in H; try apply PSF.empty_iff in H; try contradiction.
+    apply PS.add_spec in H.
+    destruct H.
+    subst.
+    simpl; now left.
+    apply PSF.empty_iff in H. contradiction.
+    }
+
+    (* EqApp *)
+    simpl in *.
+    apply Common.NoDup_cons in Hndup.
+    destruct Hndup as [Hnin Hndup].
+    unfold memories.
+    simpl.
+    apply mem_spec_false.
+    intro HH.
+    apply Hnin.
+    {
+    clear IHeqs Hnin Hndup.
+
+      induction eqs.
+    simpl in HH.
+    apply PSF.empty_iff in HH.
+    contradiction.
+    simpl in HH.
+    apply In_fold_left_memory_eq in HH.
+    destruct HH.
+    specialize (IHeqs H).
+    constructor (assumption).
+    destruct a; simpl in H; try apply PSF.empty_iff in H; try contradiction.
+    apply PS.add_spec in H.
+    destruct H.
+    subst.
+    simpl; now left.
+    apply PSF.empty_iff in H. contradiction.
+    }
+
+    (* EqFby *)
+    simpl in *.
+    apply Common.NoDup_cons in Hndup.
+    destruct Hndup as [Hnin Hndup].
+    unfold memories.
+    simpl.
+    apply PS.mem_spec.
+    simpl.
+    apply In_fold_left_memory_eq.
+    right.
+    apply PS.add_spec.
+    now left.
+
+    specialize (IHeqs _ H).
+    simpl in Hndup.
+    apply Common.NoDup_cons in Hndup.
+    destruct Hndup as [Hnin Hndup].
+    specialize (IHeqs Hndup).
+    destruct eq; unfold memories; simpl; try apply IHeqs; auto.
+    simpl in Hnin.
+    destruct eq'; simpl; try apply mem_spec_false.
+
+    (* EqDef *)
+    intro HH.
+    apply In_fold_left_memory_eq in HH.
+    destruct HH.
+    unfold memories in IHeqs.
+    simpl in IHeqs.
+    apply mem_spec_false in IHeqs.
+    contradiction.
+    apply PS.add_spec in H0.
+    destruct H0.
+    subst.
+    apply Hnin.
+    { clear Hnin IHeqs.
+      induction eqs.
+      simpl in *. contradiction.
+      inversion_clear H; subst.
+      now left.
+      simpl in *; apply Common.NoDup_cons in Hndup.
+      destruct Hndup as [Hnin Hndup].
+      specialize (IHeqs Hndup H0).
+      right; assumption. }
+    apply not_In_empty in H0. contradiction.
+
+    (* EqApp *)
+    intro HH.
+    apply In_fold_left_memory_eq in HH.
+    destruct HH.
+    unfold memories in IHeqs.
+    simpl in IHeqs.
+    apply mem_spec_false in IHeqs.
+    contradiction.
+    apply PS.add_spec in H0.
+    destruct H0.
+    subst.
+    apply Hnin.
+    { clear Hnin IHeqs.
+      induction eqs.
+      simpl in *. contradiction.
+      inversion_clear H; subst.
+      now left.
+      simpl in *; apply Common.NoDup_cons in Hndup.
+      destruct Hndup as [Hnin Hndup].
+      specialize (IHeqs Hndup H0).
+      right; assumption. }
+    apply not_In_empty in H0. contradiction.
+
+    (* EqFby *)
+    simpl in IHeqs.
+    apply PS.mem_spec.
+    apply In_fold_left_memory_eq.
+    left.
+    now rewrite PS.mem_spec in IHeqs.
+  Qed.
+
+  (*
+        n_defd  : Permutation (map var_defined n_eqs)
+                              (map fst (n_vars ++ [n_out]));
+        n_vout  : ~PS.In (fst n_out) (memories n_eqs);
+        n_decl  : Forall (VarsDeclared (n_in ++ n_vars ++ [n_out])) n_eqs;
+        n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
+        n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])
+*) 
+ 
   Lemma fst_partition_memories_var_defined:
     forall n,
-      map fst (fst (partition
-                      (fun x=> PS.mem (fst x) (memories n.(n_eqs))) n.(n_vars)))
-      = map var_defined (filter is_fby n.(n_eqs)).
+      Permutation
+        (map fst (fst (partition
+                         (fun x=>PS.mem (fst x) (memories n.(n_eqs)))
+                         n.(n_vars))))
+        (map var_defined (filter is_fby n.(n_eqs))).
   Proof.
-  Admitted.
+    intro n.
+    match goal with |- Permutation (map fst (fst (partition ?p ?l))) _ =>
+      assert (Permutation (map fst (fst (partition p l)))
+                          (map fst (filter p n.(n_vars))))
+        as Hperm by (apply Permutation_map_aux; apply partition_filter)
+    end.
+    rewrite Hperm; clear Hperm.
+    match goal with |- context[filter ?p ?l] =>
+      rewrite <-(app_nil_r (filter p l))
+    end.
+    assert (filter (fun x=>PS.mem (fst x) (memories n.(n_eqs))) [n.(n_out)]
+            = []) as Hfout.
+    { simpl.
+      match goal with |- (if ?p then _ else _) = _ => destruct p eqn:Heq end;
+        auto.
+      rewrite PS.mem_spec in Heq.
+      contradiction (n.(n_vout)). }
+    rewrite <-Hfout; clear Hfout.
+    rewrite filter_app, filter_mem_fst, <-n_defd.
+    remember (memories n.(n_eqs)) as mems.
+    set (P:=fun eqs eq=> In eq eqs ->
+                         PS.mem (var_defined eq) mems = is_fby eq).
+    assert (forall eq, P n.(n_eqs) eq) as Peq.
+    { subst P mems.
+      intro. intro Hin. apply in_memories_is_fby; auto.
+      rewrite n_defd.
+      apply fst_NoDupMembers.
+      pose proof (n.(n_nodup)) as Hnodup.
+      now apply NoDupMembers_app_r in Hnodup.
+    }
+    clear Heqmems.
+    induction n.(n_eqs) as [|eq eqs]; auto.
+    assert (forall eq, P eqs eq) as Peq'
+        by (intros e Hin; apply Peq; constructor (assumption)).
+    specialize (IHeqs Peq'). clear Peq'.
+    destruct eq eqn:Heq; simpl;
+      specialize (Peq eq); red in Peq; subst eq;
+      simpl in Peq; (rewrite Peq; [|now intuition]);
+      rewrite IHeqs; auto.
+  Qed.
 
   Lemma fst_gather_eqs_var_defined:
     forall n,
@@ -374,9 +618,14 @@ Module Type TRANSLATION
   Proof.
   Admitted.
 
+
+  
+
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
+    (* TODO: fst (gather_eqs) should be a PS.t
+               (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
     let memids := fst gathered in
     let dobjs := snd gathered in
@@ -404,12 +653,6 @@ Module Type TRANSLATION
     |}.
   (* =end= *)
   Next Obligation.
-    repeat progress match goal with
-                    | H: (_ , _) = _ |- _ =>
-                      rewrite surjective_pairing in H;
-                        injection H; clear H
-                    end.
-    intros; subst.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
@@ -427,21 +670,9 @@ Module Type TRANSLATION
     symmetry; apply permutation_partition.
   Qed.
   Next Obligation.
-    repeat progress match goal with
-                    | H: (_ , _) = _ |- _ =>
-                      rewrite surjective_pairing in H;
-                        injection H; clear H
-                    end.
-    intros; subst.
     now apply VarsDeclared_translate_eqns.
   Qed.
   Next Obligation.
-    repeat progress match goal with
-                    | H: (_ , _) = _ |- _ =>
-                      rewrite surjective_pairing in H;
-                        injection H; clear H
-                    end.
-    intros; subst.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
@@ -459,20 +690,21 @@ Module Type TRANSLATION
     symmetry; apply permutation_partition.
   Qed.
   Next Obligation.
-    repeat progress match goal with
-                    | H: (_ , _) = _ |- _ =>
-                      rewrite surjective_pairing in H;
-                        injection H; clear H
-                    end.
-    intros; subst.
     rewrite partition_switch
     with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
     2:intro x; now rewrite ps_from_list_gather_eqs_memories.
-    rewrite fst_partition_memories_var_defined.
     rewrite fst_gather_eqs_var_defined.
+    (* Annoying, Coq should be able to rewrite these directly... *)
+    match goal with |- NoDup (?l1 ++ ?l2) =>
+      assert (Permutation (l1 ++ l2)
+                          (map var_defined (filter is_fby n.(n_eqs)) ++ l2))
+       as Hperm
+       by (apply Permutation_app; auto;
+            now rewrite fst_partition_memories_var_defined)
+    end.
+    rewrite Hperm; clear Hperm.
     eapply (NoDup_app_weaken _ (map var_defined (filter is_def n.(n_eqs)))).
     rewrite Permutation_app_comm.
-    (* Annoying, Coq should be able to rewrite these directly... *)
     match goal with |- NoDup (?l1 ++ ?l2 ++ ?l3) =>
       assert (Permutation (l1 ++ l2 ++ l3) (l1 ++ l3 ++ l2)) as Hperm
         by (rewrite Permutation_app'; auto; now rewrite Permutation_app_comm)
@@ -484,32 +716,18 @@ Module Type TRANSLATION
         by (apply Permutation_map_aux; apply is_filtered_eqs)
     end.
     rewrite Hperm. clear Hperm.
-    rewrite n_defd.
-    apply fst_NoDupMembers.
-    apply NoDupMembers_app_r with (ws:=n.(n_in)).
-    apply n_nodup.
+    pose proof (n_nodup n) as Hndm.
+    apply NoDupMembers_app_r in Hndm.
+    apply fst_NoDupMembers in Hndm.
+    now rewrite n_defd.
   Qed.
   Next Obligation.
-    repeat constructor;
-      simpl;
-      repeat progress match goal with
-                      | H: (_ , _) = _ |- _ =>
-                        rewrite surjective_pairing in H;
-                          injection H; clear H
-                      end;
-      intros; subst.
-      now apply MemsDeclared_translate_eqns.
-      now apply MemsDeclared_translate_reset_eqns.
+    repeat constructor.
+    now apply MemsDeclared_translate_eqns.
+    now apply MemsDeclared_translate_reset_eqns.
   Qed.       
   Next Obligation.
-    repeat constructor;
-      simpl;
-      repeat progress match goal with
-                      | H: (_ , _) = _ |- _ =>
-                        rewrite surjective_pairing in H;
-                          injection H; clear H
-                      end;
-      intros; subst.
+    repeat constructor.
     now apply InstanceDeclared_translate_eqns.
     now apply InstanceDeclared_translate_reset_eqns.
   Qed.
