@@ -497,12 +497,25 @@ Module Type TRANSLATION
   Qed.
 
   Lemma fst_gather_eqs_var_defined:
-    forall n,
-      map fst (snd (gather_eqs n.(n_eqs)))
-      = map var_defined (filter is_app n.(n_eqs)).
+    forall eqs,
+      Permutation (map fst (snd (gather_eqs eqs)))
+                  (map var_defined (filter is_app eqs)).
   Proof.
-    
-  Admitted.
+    induction eqs as [|eq eqs]; auto.
+    simpl. unfold gather_eqs in *.
+    assert (forall eqs F S,
+               Permutation
+                 (map fst (snd (fold_left gather_eq eqs (F, S))))
+                 (map fst S ++ map var_defined (filter is_app eqs))) as HH.
+    { clear eq eqs IHeqs.
+      induction eqs as [|eq eqs].
+      now intros; simpl; rewrite app_nil_r.
+      destruct eq; intros; try apply IHeqs.
+      simpl. rewrite IHeqs.
+      now apply Permutation_cons_app. }
+    simpl.
+    destruct eq; simpl; auto; now rewrite HH.
+  Qed.
   
   Lemma VarsDeclared_translate_eqns:
     forall n,
@@ -624,8 +637,14 @@ Module Type TRANSLATION
     rewrite partition_switch
     with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
     2:intro x; now rewrite ps_from_list_gather_eqs_memories.
-    rewrite fst_gather_eqs_var_defined.
     (* Annoying, Coq should be able to rewrite these directly... *)
+    match goal with |- NoDup (?l1 ++ ?l2) =>
+      assert (Permutation (l1 ++ l2)
+                          (l1 ++ map var_defined (filter is_app n.(n_eqs))))
+        as Hperm
+        by (apply Permutation_app; auto; apply fst_gather_eqs_var_defined)
+    end.
+    rewrite Hperm; clear Hperm.
     match goal with |- NoDup (?l1 ++ ?l2) =>
       assert (Permutation (l1 ++ l2)
                           (map var_defined (filter is_fby n.(n_eqs)) ++ l2))
