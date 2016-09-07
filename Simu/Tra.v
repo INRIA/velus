@@ -16,6 +16,9 @@ Axiom pos_to_str: ident -> string.
 Definition main_id: ident := pos_of_str "main".
 Definition prefix (pref id: ident): ident :=
   pos_of_str ((pos_to_str pref) ++ "_" ++ (pos_to_str id)).
+Axiom prefix_injective:
+  forall pref id pref' id',
+    prefix pref id = prefix pref' id' -> pref = pref' /\ id = id'.
 Definition step_id (id: ident): ident := 
   pos_of_str ("step_" ++ (pos_to_str id)).
 (* Definition reset_id (id: ident): ident := *)

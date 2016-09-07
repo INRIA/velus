@@ -45,7 +45,46 @@ Proof.
   - now inversion H.
   - apply IHl; now inversion H.
 Qed.
- 
+
+Lemma NoDup_instance_methods:
+  forall m, NoDup (instance_methods m).
+Proof.
+  intro.
+  unfold instance_methods.
+  induction (m_body m); simpl.
+  - constructor.
+  - constructor.
+  - admit.
+  - admit.
+  - constructor; auto; constructor.
+  - constructor.
+Qed.
+
+Lemma NoDupMembers_instance_methods:
+  forall m, NoDupMembers (make_out_vars (instance_methods m)).
+Proof.
+  intro.
+  unfold make_out_vars.
+  rewrite fst_NoDupMembers, NoDup_norepet.
+  apply list_map_norepet.
+  - apply list_map_norepet.
+    + rewrite <-NoDup_norepet.
+      apply NoDup_instance_methods.
+    + intros ((ox, cx), fx) ((oy, cy), fy) Hx Hy Diff; simpl.
+      intro E; apply Diff.
+      inversion E as [[E1 E2]].
+      apply prefix_injective in E1; apply prefix_injective in E2.
+      destruct E1, E2; now subst.
+  - intros (x, tx) (y, ty) Hx Hy Diff; simpl.
+    apply in_map_iff in Hx; destruct Hx as (((ox, cx), fx) & Ex & Hx).
+    apply in_map_iff in Hy; destruct Hy as (((oy, cy), fy) & Ey & Hy).
+    inv Ex; inv Ey.
+    intro E; apply Diff.
+    apply prefix_injective in E; destruct E; subst.
+    repeat f_equal.
+    admit.
+Qed.
+
 (* SIMULATION *)
 
 Section PRESERVATION.
@@ -186,7 +225,8 @@ Section PRESERVATION.
       inversion TRANSL as [Htprog]; clear TRANSL.
       unfold AST.prog_defmap; simpl.
       apply PTree_Properties.of_list_norepet.
-      - admit.
+      - (* rewrite <-NoDup_norepet, <-fst_NoDupMembers. *)
+        rewrite map_cons, 3 map_app; simpl. admit.
       - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
         unfold translate_method in Findmth; auto.
     }
@@ -229,7 +269,7 @@ Section PRESERVATION.
         * unfold var_names.
           rewrite <-NoDup_norepet, <-fst_NoDupMembers.
           subst f; simpl.
-          admit.
+          apply NoDupMembers_instance_methods.
         * subst f; simpl.
           admit.
   Qed.
