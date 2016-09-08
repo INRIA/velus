@@ -993,6 +993,64 @@ Section Lists.
     contradict H.
   Qed.
 
+  Lemma Permutation_incl1:
+    forall (ws: list A) xs ys,
+      Permutation xs ys ->
+      (incl xs ws <-> incl ys ws).
+  Proof.
+    intros ** Hperm.
+    induction Hperm.
+    - reflexivity.
+    - split; intro HH.
+      + apply incl_cons' in HH.
+        destruct HH as [Hin Hincl].
+        apply IHHperm in Hincl.
+        apply incl_cons; auto.
+      + apply incl_cons' in HH.
+        destruct HH as [Hin Hincl].
+        apply IHHperm in Hincl.
+        apply incl_cons; auto.
+    - split; intro HH.
+      + apply incl_cons' in HH.
+        destruct HH as (Hiny & HH).
+        apply incl_cons' in HH.
+        destruct HH as (Hinx & Hincl).
+        repeat (apply incl_cons; auto).
+      + apply incl_cons' in HH.
+        destruct HH as (Hinx & HH).
+        apply incl_cons' in HH.
+        destruct HH as (Hiny & Hincl).
+        repeat (apply incl_cons; auto).
+    - now rewrite IHHperm1, IHHperm2.
+  Qed.      
+
+  Global Instance Permutation_incl_Proper:
+    Proper (@Permutation A ==> @Permutation A ==> iff) (@incl A).
+  Proof.
+    intros xs ys Hperm xs' ys' Hperm'.
+    induction Hperm'; try rewrite (Permutation_incl1 _ _ _ Hperm).
+    - reflexivity.
+    - split; intro HH.
+      + intros y Hin.
+        apply HH in Hin.
+        inversion_clear Hin as [|Hin'].
+        now subst; constructor.
+        rewrite Hperm' in Hin'.
+        constructor (assumption).
+      + intros y Hin.
+        apply HH in Hin.
+        inversion_clear Hin as [|Hin'].
+        now subst; constructor.
+        rewrite <-Hperm' in Hin'.
+        constructor (assumption).
+    - split; intro HH.
+      + intros z Hin. apply HH in Hin. now rewrite perm_swap.
+      + intros z Hin. apply HH in Hin. now rewrite perm_swap.
+    - rewrite (Permutation_incl1 _ _ _ Hperm) in IHHperm'1.
+      rewrite (Permutation_incl1 _ _ _ Hperm) in IHHperm'2.
+      now rewrite IHHperm'1, IHHperm'2.
+  Qed.
+
   Lemma app_last_app:
     forall xs xs' (x: A),
       (xs ++ [x]) ++ xs' = xs ++ x :: xs'.
@@ -1149,5 +1207,25 @@ Section Lists.
     now apply Permutation_cons.
   Qed.
   
-End Lists.
+  Lemma filter_app:
+    forall (p:A->bool) xs ys,
+      filter p xs ++ filter p ys = filter p (xs ++ ys).
+  Proof.
+    induction xs as [|x xs]; intro ys; auto.
+    simpl; destruct (p x); simpl; rewrite IHxs; auto.
+  Qed.
+
+  Global Instance Permutation_filter_Proper (p:A->bool):
+    Proper (@Permutation A ==> @Permutation A) (filter p).
+  Proof.
+    Hint Constructors Permutation.
+    intros xs ys Hperm.
+    induction Hperm; simpl; auto.
+    - destruct (p x); auto.
+    - destruct (p x); destruct (p y); auto.
+    - now rewrite IHHperm1, IHHperm2.
+  Qed.
   
+End Lists.
+
+      

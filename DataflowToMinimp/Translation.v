@@ -337,14 +337,6 @@ Module Type TRANSLATION
       now symmetry.
   Qed.
 
-  Lemma filter_app:
-    forall {A} (p:A->bool) xs ys,
-      filter p xs ++ filter p ys = filter p (xs ++ ys).
-  Proof.
-    induction xs as [|x xs]; intro ys; auto.
-    simpl; destruct (p x); simpl; rewrite IHxs; auto.
-  Qed.
-
   Lemma filter_mem_fst:
     forall p (xs: list (ident * typ)),
       map fst (filter (fun (x:ident*typ)=>PS.mem (fst x) p) xs)
@@ -354,17 +346,6 @@ Module Type TRANSLATION
     simpl.
     destruct (PS.mem (fst x) p); simpl;
       now rewrite IHxs.
-  Qed.
-
-  Instance Permutation_filter_Proper {A} (p:A->bool):
-    Proper (@Permutation A ==> @Permutation A) (filter p).
-  Proof.
-    Hint Constructors Permutation.
-    intros xs ys Hperm.
-    induction Hperm; simpl; auto.
-    - destruct (p x); auto.
-    - destruct (p x); destruct (p y); auto.
-    - now rewrite IHHperm1, IHHperm2.
   Qed.
 
   Lemma in_memories_var_defined:
@@ -516,6 +497,45 @@ Module Type TRANSLATION
     simpl.
     destruct eq; simpl; auto; now rewrite HH.
   Qed.
+
+  Lemma snd_partition_memories_var_defined:
+    forall n,
+      Permutation
+        (map fst (snd (partition
+                         (fun x=>PS.mem (fst x) (memories n.(n_eqs)))
+                         n.(n_vars))))
+        (map var_defined (filter (fun x=>negb (is_fby x)) n.(n_eqs))).
+  Proof.
+  Admitted.
+
+  Instance Permutation_VarsDeclared_exp_Proper:
+    Proper (@Permutation (ident*typ) ==> eq ==> iff) VarsDeclared_exp.
+  Proof.
+    intros xs ys Hperm s1 s2 Heq; subst s2.
+    induction s1; (split; intro HH; inversion_clear HH; constructor);
+      (rewrite <-Hperm || rewrite Hperm || apply IHs1
+       || apply IHs1_1 || apply IHs1_2); auto.
+  Qed.
+
+  Instance Permutation_VarsDeclared_Proper:
+    Proper (@Permutation (ident*typ) ==> eq ==> iff) VarsDeclared.
+  Proof.
+    intros xs ys Hperm s1 s2 Heq.
+    subst s2.
+    induction s1; (split; intro HH; inversion_clear HH; constructor);
+      try (rewrite <-Hperm || rewrite Hperm
+           || apply IHs1_1 || apply IHs1_2); auto.
+    - apply Forall_forall.
+      intros x Hin.
+      rewrite <-Hperm.
+      match goal with H:Forall _ _ |- _ =>
+        rewrite Forall_forall in H; apply H with (1:=Hin) end.
+    - apply Forall_forall.
+      intros x Hin.
+      rewrite Hperm.
+      match goal with H:Forall _ _ |- _ =>
+        rewrite Forall_forall in H; apply H with (1:=Hin) end.
+  Qed.
   
   Lemma VarsDeclared_translate_eqns:
     forall n,
@@ -524,6 +544,8 @@ Module Type TRANSLATION
          ++ [n.(n_out)])
         (translate_eqns (memories n.(n_eqs)) n.(n_eqs)).
   Proof.
+    intro n.
+    (* rewrite snd_partition_memories_var_defined. *)
   Admitted.
 
   Lemma MemsDeclared_translate_eqns:
