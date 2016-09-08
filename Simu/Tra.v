@@ -150,23 +150,25 @@ Definition make_fundef
   fundef (self :: out :: ins) vars temps Ctypes.Tvoid body.
 
 Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident * typ) :=
-  map (fun ocf =>
-         let '(o, cid, f) := ocf in
+  map (fun ofc =>
+         let '(o, f, cid) := ofc in
          (prefix o f, type_of_inst (prefix f cid))
       ) out_vars.
 
-Lemma dec_inst: forall x y : (ident * ident * ident), {x = y} + {x <> y}.
+Lemma dec_pair: forall x y : (ident * ident), {x = y} + {x <> y}.
 Proof. repeat decide equality. Qed.
 
+Fixpoint rec_instance_methods (s: stmt) (l: list (ident * ident * ident))
+  : list (ident * ident * ident) :=
+  match s with
+  | Ifte _ s1 s2  
+  | Comp s1 s2 => rec_instance_methods s2 (rec_instance_methods s1 l)
+  | Call _ cls o f _ => if in_dec dec_pair (o, f) (map fst l) then l else (o, f, cls) :: l 
+  | _ => l
+  end.
+  
 Definition instance_methods (m: method): list (ident * ident * ident) :=
-  let fix rec s l :=
-      match s with
-      | Ifte _ s1 s2  
-      | Comp s1 s2 => rec s2 (rec s1 l)
-      | Call _ cls o f _ => if in_dec dec_inst (o, cls, f) l then l else (o, cls, f) :: l 
-      | _ => l
-    end
-    in rec m.(m_body) [].
+  rec_instance_methods m.(m_body) [].
 
 Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=

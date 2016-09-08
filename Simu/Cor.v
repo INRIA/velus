@@ -46,43 +46,61 @@ Proof.
   - apply IHl; now inversion H.
 Qed.
 
-Lemma NoDup_instance_methods:
-  forall m, NoDup (instance_methods m).
+Lemma NoDupMembers_disjoint:
+  forall l1 l2,
+    NoDupMembers (l1 ++ l2) -> list_disjoint (var_names l1) (var_names l2).
 Proof.
-  intro.
-  unfold instance_methods.
-  induction (m_body m); simpl.
-  - constructor.
-  - constructor.
-  - admit.
-  - admit.
-  - constructor; auto; constructor.
-  - constructor.
+  unfold list_disjoint, var_names.
+  intros l1 l2 H x y Hx Hy.
+  apply in_map_iff in Hx; destruct Hx as ((x', tx) & Ex & Hx);
+  apply in_map_iff in Hy; destruct Hy as ((y', ty) & Ey & Hy);
+  simpl in *; subst.
+  intro E; subst.
+  apply in_split in Hx; destruct Hx as (lx & lx' & Hx);
+  apply in_split in Hy; destruct Hy as (ly & ly' & Hy);
+  subst.
+  rewrite <-app_assoc in H.
+  apply NoDupMembers_app_r in H.
+  rewrite <-app_comm_cons, nodupmembers_cons in H.
+  destruct H as [Notin]; apply Notin.
+  apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
+Qed.
+
+Lemma NoDupMembers_rec_instance_methods:
+  forall s l,
+    NoDupMembers l ->
+    NoDupMembers (rec_instance_methods s l).
+Proof.
+  induction s; simpl; intros ** Nodup;
+  try repeat constructor; auto.
+  destruct (in_dec dec_pair (i0, i1) (map fst l1)); auto.
+  constructor; auto.
+  now rewrite fst_InMembers.
 Qed.
 
 Lemma NoDupMembers_instance_methods:
+  forall m, NoDupMembers (instance_methods m).
+Proof.
+  intro.
+  unfold instance_methods.
+  apply NoDupMembers_rec_instance_methods; constructor.
+Qed.
+
+Lemma NoDupMembers_make_out_vars:
   forall m, NoDupMembers (make_out_vars (instance_methods m)).
 Proof.
   intro.
   unfold make_out_vars.
-  rewrite fst_NoDupMembers, NoDup_norepet.
+  rewrite fst_NoDupMembers, map_map, NoDup_norepet.
   apply list_map_norepet.
-  - apply list_map_norepet.
-    + rewrite <-NoDup_norepet.
-      apply NoDup_instance_methods.
-    + intros ((ox, cx), fx) ((oy, cy), fy) Hx Hy Diff; simpl.
-      intro E; apply Diff.
-      inversion E as [[E1 E2]].
-      apply prefix_injective in E1; apply prefix_injective in E2.
-      destruct E1, E2; now subst.
-  - intros (x, tx) (y, ty) Hx Hy Diff; simpl.
-    apply in_map_iff in Hx; destruct Hx as (((ox, cx), fx) & Ex & Hx).
-    apply in_map_iff in Hy; destruct Hy as (((oy, cy), fy) & Ey & Hy).
-    inv Ex; inv Ey.
+  - rewrite <-NoDup_norepet.
+    apply NoDupMembers_NoDup, NoDupMembers_instance_methods.
+  - intros ((ox, fx), cx) ((oy, fy), cy) Hx Hy Diff; simpl.
     intro E; apply Diff.
     apply prefix_injective in E; destruct E; subst.
     repeat f_equal.
-    admit.
+    eapply NoDupMembers_det; eauto.
+    apply NoDupMembers_instance_methods.
 Qed.
 
 (* SIMULATION *)
@@ -168,7 +186,7 @@ Section PRESERVATION.
   Qed.
 
   Lemma methods_corres:
-    forall c clsnm prog' fid m (e: Clight.env),
+    forall c clsnm prog' fid m (* (e: Clight.env) *),
       find_class clsnm prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some m ->
       Forall (fun xt => sizeof tge (snd xt) <= Int.modulus /\
@@ -185,7 +203,7 @@ Section PRESERVATION.
               (make_out_vars (instance_methods m))
       /\ exists loc_f f,
           Genv.find_symbol tge (prefix fid clsnm) = Some loc_f
-          /\ e ! (prefix fid clsnm) = None
+          (* /\ e ! (prefix fid clsnm) = None *)
           /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
           /\ f.(fn_params) = (self_id, type_of_inst_p c.(c_name))
                               :: (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name)))
@@ -246,7 +264,6 @@ Section PRESERVATION.
                     fn_body := return_none (translate_stmt prog c m0 (m_body m0)) |}) in Finddef.
         exists loc_f, f.
         try repeat split; auto.
-        * admit.
         * change (Genv.find_funct_ptr tge loc_f) with (Genv.find_funct_ptr (Genv.globalenv tprog) loc_f).
           unfold Genv.find_funct_ptr.
           unfold Clight.fundef in Finddef.
@@ -269,9 +286,20 @@ Section PRESERVATION.
         * unfold var_names.
           rewrite <-NoDup_norepet, <-fst_NoDupMembers.
           subst f; simpl.
-          apply NoDupMembers_instance_methods.
-        * subst f; simpl.
-          admit.
+          apply NoDupMembers_make_out_vars.
+        *{ subst f; simpl.
+           repeat apply list_disjoint_cons_l.
+           - apply NoDupMembers_disjoint.
+             pose proof (m_nodup m0) as Nodup.
+             rewrite app_assoc in Nodup.
+             now apply NoDupMembers_app_l in Nodup.
+           - unfold var_names; rewrite <-fst_InMembers.
+             intro Hin; apply (m_out_id m0).
+             apply InMembers_app; right; apply InMembers_app; now left.
+           - unfold var_names; rewrite <-fst_InMembers.
+             intro Hin; apply (m_self_id m0).
+             apply InMembers_app; right; apply InMembers_app; now left.
+         }
   Qed.
      
   Lemma type_pres:
@@ -325,7 +353,7 @@ Section PRESERVATION.
       NoDupMembers ys ->
       length ys = length f.(m_out) ->
       In (o, clsid) c.(c_objs) ->
-      In (o, clsid, fid) (instance_methods m) ->
+      In (o, fid, clsid) (instance_methods m) ->
       Forall (well_formed_exp c m) es ->
       Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
       Forall2 (fun y y' => snd y = snd y') ys f.(m_out) ->
@@ -1135,7 +1163,7 @@ Section PRESERVATION.
       (* In caller c.(c_methods) -> *)
       find_class clsid prog = Some (c', prog'') ->
       find_method f c'.(c_methods) = Some callee ->
-      In (o, clsid, f) (instance_methods caller) ->
+      (* In (o, f, clsid) (instance_methods caller) -> *)
       length ys = length callee.(m_out) ->
       length rvs = length callee.(m_out) ->
       NoDupMembers ys ->
@@ -1163,7 +1191,7 @@ Section PRESERVATION.
         /\ le2 ! self_id = Some (Vptr sb sofs). 
   Proof.
     unfold funcall_assign.
-    intros ** Findc Hcaller Findc' Findmeth ? Length1 Length2 Nodup Incl 
+    intros ** Findc Hcaller Findc' Findmeth (* ? *) Length1 Length2 Nodup Incl 
            Types Hout Hself Houtco Hrep Valids Hinst Hinstco.
     revert ve ve' le1 m1 ys rvs Hout Hself Hrep Incl Types Length1 Length2 Nodup Valids.
     pose proof (m_nodup callee) as Nodup'.
@@ -1597,240 +1625,42 @@ Section PRESERVATION.
       intuition. 
   Qed.
 
-  Remark get_leaf:
-    forall {A: Type} x,
-      (@PTree.Leaf A) ! x = None.
-  Proof.
-     intros; now destruct x.
-  Qed.
-
-  Remark xelements_set_leaf:
-    forall {A} x i (v: A),
-      PTree.xelements (PTree.set x v PTree.Leaf) i [] = [(PTree.prev_append i x, v)].
-  Proof.
-    symmetry; rewrite equiv_eq_singleton.
-    - intros (y, a).
-      rewrite In_singleton.
-      split; intro H.
-      + apply PTree.in_xelements in H; destruct H as (j & Eq & H).
-        rewrite PTree.prev_append_prev in Eq.
-        destruct (ident_eqb x j) eqn: E.
-        * apply ident_eqb_eq in E; subst.
-          rewrite PTree.gss in H; inv H. 
-          reflexivity.
-        * apply ident_eqb_neq in E.
-          rewrite PTree.gso in H; auto.
-          rewrite get_leaf in H; discriminate.
-      + inv H.
-        rewrite <-PTree.prev_append_prev.
-        apply PTree.xelements_correct, PTree.gss.
-    - apply NoDup_map_inv with (f:=fst).
-      change (map fst (PTree.xelements (PTree.set x v PTree.Leaf) i []))
-      with (PTree.xkeys (PTree.set x v PTree.Leaf) i).
-      apply NoDup_norepet.
-      apply PTree.xelements_keys_norepet.
-  Qed.
-  
-  Remark elements_set_leaf:
-    forall {A} x (v: A),
-      PTree.elements (PTree.set x v PTree.Leaf) = [(x, v)].
-  Proof.
-    unfold PTree.elements.
-    intros; apply xelements_set_leaf.
-  Qed.
-
-  (* Remark elements_set: *)
-  (*   forall {A} e x (v: A), *)
-  (*     ~InMembers x (PTree.elements e) -> *)
-  (*     Permutation (PTree.elements (PTree.set x v e)) ((x, v) :: PTree.elements e). *)
-  (* Proof. *)
-  (*   intros ** Notin. *)
-  (*   assert (In (x, v) (PTree.elements (PTree.set x v e))) as Hin *)
-  (*       by apply PTree.elements_correct, PTree.gss. *)
-  (*   apply in_split in Hin. *)
-  (*   destruct Hin as (es & es' & Eq). *)
-  (*   rewrite Eq. *)
-  (*   apply Permutation_sym, Permutation_cons_app. *)
-  (*   admit. *)
-  (* Qed. *)
-
-  (* Remark Permutation_NoDupMembers_snd: *)
-  (*   forall {A B C} (l l': list (A * (B * C))), *)
-  (*     Permutation l l' -> *)
-  (*     NoDupMembers (map snd l) -> *)
-  (*     NoDupMembers (map snd l'). *)
-  (* Proof. *)
-  (*   intros ** Perm Nodup. *)
-  (*   induction Perm; simpl in *; try constructor; auto. *)
-  (*   - destruct x as (a, (b, c)); simpl in *. *)
-  (*     inversion_clear Nodup as [|? ? ? Notin]. constructor; auto. *)
-  (*     intro Hin; apply Notin. *)
-  (*     apply InMembers_snd_In in Hin; destruct Hin as (a' & c' & Hin). *)
-  (*     apply (In_InMembers_snd a' b c'). *)
-  (*     apply Permutation_sym in Perm; now apply Permutation_in with (2:=Hin) in Perm. *)
-  (*   - destruct x as (a, (b, c)), y as (a', (b', c')); simpl in *. *)
-  (*     inversion_clear Nodup as [|? ? ? Notinb' Nodup']. *)
-  (*     apply NotInMembers_cons in Notinb'; simpl in Notinb'; destruct Notinb' as [Notinb' Diff]. *)
-  (*     inversion_clear Nodup' as [|? ? ? Notinb Nodup'']. *)
-  (*     constructor; auto. *)
-  (*     + inversion 1; contradiction. *)
-  (*     + constructor; auto. *)
-  (* Qed. *)
-
-   Remark elements_set_snd_In:
-    forall {A B} e x (a: A) (b: B),
+  Lemma Permutation_set:
+    forall {A B} x (a:A) (b:B) e,
       ~InMembers x (PTree.elements e) ->
-      forall a' b',
-        In (a', b') (map snd (PTree.elements (PTree.set x (a, b) e))) <->
-        In (a', b') ((a, b) :: map snd (PTree.elements e)).
+      Permutation (PTree.elements (PTree.set x (a, b) e))
+                  ((x, (a, b)) :: PTree.elements e).
   Proof.
-    intros ** Notin a' b'.
-    split; intro Hin.
-    - apply list_in_map_inv in Hin; destruct Hin as ((x', (a'', b'')) & E & Hin);
-      simpl in E; inv E.
-      apply PTree.elements_complete in Hin.
-      destruct (ident_eqb x x') eqn: E.
-      + apply ident_eqb_eq in E; subst x'.
-        rewrite PTree.gss in Hin; inv Hin.
-        apply in_eq.
-      + apply ident_eqb_neq in E.
-        rewrite PTree.gso in Hin; auto.
-        apply PTree.elements_correct in Hin.
-        apply in_map with (f:=snd) in Hin; simpl in Hin.
-        apply in_cons; auto.
-    - simpl in Hin; destruct Hin as [E|Hin].
-      + inv E.
-        change (a', b') with (snd (x, (a', b'))).
-        apply in_map, PTree.elements_correct, PTree.gss.
-      + apply list_in_map_inv in Hin; destruct Hin as ((x', (a'', b'')) & E & Hin);
-        simpl in E; inv E.
-        change (a'', b'') with (snd (x', (a'', b''))).
-        apply in_map, PTree.elements_correct. 
-        destruct (ident_eqb x x') eqn: E.
-        * apply ident_eqb_eq in E; subst x'.
-          exfalso; apply Notin.
-          eapply In_InMembers; eauto.
-        * apply ident_eqb_neq in E.
-          rewrite PTree.gso; auto.
-          apply PTree.elements_complete; auto.
-  Qed.
-
-  Remark xelements_app:
-    forall {A} (e: PTree.t A) i k,
-      PTree.xelements e i k = PTree.xelements e i [] ++ k.
-  Proof.
-    intros; rewrite <-PTree.xelements_append; reflexivity.
-  Qed.
-  
-  Remark NoDupMembers_set_x:
-    forall {A B} e x (a: A) (b: B) i k,
-      NoDupMembers (map snd (PTree.xelements e i k)) ->
-      ~InMembers a (map snd (PTree.xelements e i k)) ->
-      NoDupMembers (map snd (PTree.xelements (PTree.set x (a, b) e) i k)).
-  Proof.
-    induction e; simpl; intros ** Nodup Notin.
-    - rewrite xelements_app.
-      rewrite xelements_set_leaf; simpl.
-      constructor; auto.
-    - destruct x; simpl in *. 
-      + destruct o as [(a', b')|]; simpl in *.
-        *{ rewrite xelements_app, map_app, map_cons;
-           rewrite xelements_app, map_app, map_cons in Nodup;           
-           rewrite xelements_app, map_app, map_cons in Notin; simpl in *.
-           apply NotInMembers_app in Notin; destruct Notin as [Notin].
-           rewrite NoDupMembers_app_cons; rewrite NoDupMembers_app_cons in Nodup.
-           destruct Nodup as [Notin' Nodup].
-           split.
-           - rewrite NotInMembers_app; rewrite NotInMembers_app in Notin'.
-             destruct Notin'; split; auto.
-             admit.
-           - assert (NoDupMembers (map snd (PTree.xelements (PTree.set x (a, b) e2) i~1 k))).
-             { apply IHe2.
-               - now apply NoDupMembers_app_r in Nodup.
-               - apply NotInMembers_cons in Notin; tauto.
-             }
-             admit.          
-         }
-        * rewrite xelements_app, map_app;
-          rewrite xelements_app, map_app in Nodup;
-          rewrite xelements_app, map_app in Notin; simpl in *.
-          apply NotInMembers_app in Notin.
-          assert (NoDupMembers (map snd (PTree.xelements (PTree.set x (a, b) e2) i~1 k))).
-          { apply IHe2.
-            - now apply NoDupMembers_app_r in Nodup.
-            - tauto.  
-          }
-          admit.         
-      + destruct o as [(a', b')|]; simpl in *.
-        *{ rewrite xelements_app, map_app, map_cons;
-           rewrite xelements_app, map_app, map_cons in Nodup;
-           rewrite xelements_app, map_app, map_cons in Notin; simpl in *.
-           rewrite NoDupMembers_app_cons; rewrite NoDupMembers_app_cons in Nodup.
-           destruct Nodup as [Notin' Nodup].
-           apply NotInMembers_app in Notin. split.
-           - rewrite NotInMembers_app; rewrite NotInMembers_app in Notin'.
-             destruct Notin'; split; auto.
-             admit.
-           - assert (NoDupMembers (map snd (PTree.xelements (PTree.set x (a, b) e1) i~0 []))).
-             { apply IHe1.
-               - now apply NoDupMembers_app_l in Nodup.
-               - tauto.
-             }
-             admit.                 
-         } 
-        * rewrite xelements_app, map_app;
-          rewrite xelements_app, map_app in Nodup;
-          rewrite xelements_app, map_app in Notin; simpl in *.
-          apply NotInMembers_app in Notin.
-          assert (NoDupMembers (map snd (PTree.xelements (PTree.set x (a, b) e1) i~0 []))).
-          { apply IHe1.
-            - now apply NoDupMembers_app_l in Nodup.
-            - tauto.  
-          }
-          admit.         
-      + destruct o as [(a', b')|]; simpl in *.
-        * rewrite xelements_app, map_app, map_cons;
-          rewrite xelements_app, map_app, map_cons in Nodup;    
-          rewrite xelements_app, map_app, map_cons in Notin; simpl in *.           
-          rewrite NoDupMembers_app_cons; rewrite NoDupMembers_app_cons in Nodup.
-          destruct Nodup; split; auto.
-          rewrite NotInMembers_app; rewrite NotInMembers_app in Notin.
-          destruct Notin as [Notin]; split; auto.
-          apply NotInMembers_cons in Notin; tauto.
-        * rewrite xelements_app, map_app, map_cons;
-          rewrite xelements_app, map_app in Nodup;    
-          rewrite xelements_app, map_app in Notin; simpl in *.
-          rewrite NoDupMembers_app_cons; split; auto.
-  Qed.
-  
-  Remark NoDupMembers_set:
-    forall {A B} e x (a: A) (b: B),
-      NoDupMembers (map snd (PTree.elements e)) ->
-      ~InMembers a (map snd (PTree.elements e)) ->
-      NoDupMembers (map snd (PTree.elements (PTree.set x (a, b) e))).
-  Proof.
-    unfold PTree.elements.
-    intros.
-    now apply NoDupMembers_set_x.
-  Qed.
-  
-  Remark elements_set_snd:
-    forall {A B} e x (a: A) (b: B),
-      NoDupMembers (map snd (PTree.elements e)) ->
-      ~InMembers x (PTree.elements e) ->
-      ~InMembers a (map snd (PTree.elements e)) ->
-      Permutation (map snd (PTree.elements (PTree.set x (a, b) e)))
-                  ((a, b) :: map snd (PTree.elements e)).
-  Proof.
-    intros ** Nodup Notinx Notina.
+    intros ** Hin.
     apply NoDup_Permutation.
-    - apply NoDupMembers_NoDup.
-      apply NoDupMembers_set; auto.
+    - apply NoDup_map_inv with (f:=fst).
+      apply NoDup_norepet.
+      apply PTree.elements_keys_norepet.
     - constructor.
-      + intro Hin; apply Notina.
-        eapply In_InMembers; eauto. 
-      + apply NoDupMembers_NoDup; auto.
-    - intros (a', b'); apply elements_set_snd_In; auto.
+      now apply NotInMembers_NotIn.
+      apply NoDup_map_inv with (f:=fst).
+      apply NoDup_norepet.
+      apply PTree.elements_keys_norepet.
+    - intro y. destruct y as [y y'].
+      split; intro HH.
+      + apply PTree.elements_complete in HH.
+        rewrite PTree.gsspec in HH.
+        destruct (peq y x).
+        * injection HH; intro; subst; now constructor.
+        * apply PTree.elements_correct in HH; now constructor 2.
+      + apply in_inv in HH.
+        destruct HH as [HH|HH].
+        * destruct y' as [y' y''].
+          injection HH; intros; subst.
+          apply PTree.elements_correct.
+          rewrite PTree.gsspec.
+          now rewrite peq_true.
+        * apply PTree.elements_correct.
+          rewrite PTree.gso.
+          now apply PTree.elements_complete.
+          intro Heq; rewrite Heq in *.
+          apply Hin.
+          apply In_InMembers with (1:=HH).
   Qed.
   
   Lemma set_nodupmembers:
@@ -1841,28 +1671,41 @@ Section PRESERVATION.
       NoDupMembers (map snd (PTree.elements (PTree.set x (b1, t) e))).
   Proof.
     intros ** Nodup Notin Diff.
-    apply Permutation_NoDupMembers with ((b1, t) :: map snd (PTree.elements e)).
-    - now apply Permutation_sym, elements_set_snd.
-    - simpl; constructor; auto.
+    assert (Permutation (map snd (PTree.elements (PTree.set x (b1, t) e)))
+                        ((b1, t) :: (map snd (PTree.elements e)))) as Perm.
+    { change (b1, t) with (snd (x, (b1, t))).
+      rewrite <-map_cons.
+      now apply Permutation_map, Permutation_set.     
+    }
+    rewrite Perm.
+    simpl; constructor; auto.
   Qed.  
 
   Remark alloc_nodupmembers:
     forall vars e m e' m',
       alloc_variables tge e m vars e' m' ->
+      NoDupMembers vars ->
       NoDupMembers (map snd (PTree.elements e)) ->
       Forall (fun xv => ~InMembers (fst xv) (PTree.elements e)) vars ->
       (forall b, InMembers b (map snd (PTree.elements e)) -> Mem.valid_block m b) ->
       NoDupMembers (map snd (PTree.elements e')).
   Proof.
-    induction vars as [|(x, t)]; intros ** Alloc Nodup Forall Valid;
-    inv Alloc; inv Forall; auto.
+    induction vars as [|(x, t)]; intros ** Alloc Nodupvars Nodup Forall Valid;
+    inversion Nodupvars as [|? ? ? Notin Nodupvars']; clear Nodupvars;
+    inversion Alloc as [|? ? ? ? ? ? ? ? ? Hmem Alloc']; clear Alloc;
+    inversion Forall as [|? ? Hnin Hforall]; clear Forall; subst; auto.
     apply IHvars with (e:=PTree.set x (b1, t) e) (m:=m1) (m':=m'); auto.
     - apply set_nodupmembers; auto.
       intros Hinb. 
       apply Valid in Hinb.
       eapply Mem.valid_not_valid_diff; eauto.
       eapply Mem.fresh_block_alloc; eauto.
-    - admit.
+    - clear IHvars Alloc'.
+      induction vars as [|(x', t')]; constructor;
+      inv Hforall; inv Nodupvars'; apply NotInMembers_cons in Notin; destruct Notin.
+      + rewrite Permutation_set; auto.
+        apply NotInMembers_cons; split; auto.
+      + apply IHvars; auto.
     - intros b Hinb.   
       destruct (eq_block b b1) as [Eq|Neq].
       + subst b1; eapply Mem.valid_new_block; eauto.
@@ -2028,7 +1871,7 @@ Section PRESERVATION.
       now apply NoDupMembers_app_r in Nodup.
     - simpl in Hlengths. inversion Hlengths; eauto.
     - edestruct (alloc_result callee) as (e_fun & m_fun & ? & Hm_fun); eauto.
-      + edestruct methods_corres with (e:=empty_env); eauto.
+      + edestruct methods_corres (* with (e:=empty_env) *); eauto.
       + unfold var_names in Norep_vars.
         now rewrite fst_NoDupMembers, NoDup_norepet. 
       + edestruct (bind_parameter_temps_implies' (m_in callee)) with (1:=self_not_out) as (? & ?); eauto.
@@ -2119,7 +1962,7 @@ Section PRESERVATION.
   Lemma subrep_extract:
     forall f f' e m o c' P,
       m |= subrep f e ** P ->
-      In (o, c', f') (instance_methods f) ->
+      In (o, f', c') (instance_methods f) ->
       exists b co ws xs,
         e ! (prefix o f') = Some (b, type_of_inst (prefix f' c'))
         /\ gcenv ! (prefix f' c') = Some co
@@ -2132,7 +1975,7 @@ Section PRESERVATION.
     unfold subrep, subrep_inst in *.
     assert (In (prefix o f', type_of_inst (prefix f' c')) (make_out_vars (instance_methods f))) as Hin'.
     { apply in_map with
-      (f:=fun x => let '(o0, cid, f0) := x in (prefix o0 f0, type_of_inst (prefix f0 cid))) in Hin.
+      (f:=fun x => let '(o0, f0, cid) := x in (prefix o0 f0, type_of_inst (prefix f0 cid))) in Hin.
       unfold make_out_vars; auto.
     }
     clear Hin.
@@ -2188,7 +2031,7 @@ Section PRESERVATION.
           oty = type_of_inst (prefix fid clsid) ->
           e1 ! (prefix o fid) = Some (binst, oty) ->
           In (o, clsid) owner.(c_objs) ->
-          In (o, clsid, fid) (instance_methods caller) ->
+          In (o, fid, clsid) (instance_methods caller) ->
           field_offset gcenv o (make_members owner) = Errors.OK d ->
           0 <= Int.unsigned sofs + d <= Int.max_unsigned ->
           0 <= Int.unsigned sofs ->
@@ -2287,8 +2130,8 @@ Section PRESERVATION.
       
     (* Call [y1; ...; yn] clsid o f [e1; ... ;em] : "clsid_f(&(self->o), &o, e1, ..., em); y1 = o.y1; ..." *)
     (* get the Clight corresponding function *)
-    - edestruct methods_corres with (e:=e1)
-        as (? & ptr_f & cf & ? & ? & ? & Hparams & Hreturn & Hcc & ?); eauto.
+    - edestruct methods_corres (* with (e:=e1) *)
+        as (? & ptr_f & cf & ? & ? & (* ? & *) Hparams & Hreturn & Hcc & ?); eauto.
 
       pose proof (find_class_name _ _ _ _ Find') as Eq.
       pose proof (find_method_name _ _ _ Findmeth) as Eq'.
@@ -2326,6 +2169,7 @@ Section PRESERVATION.
              + simpl.
                eapply eval_Elvalue.
                * apply eval_Evar_global; eauto.
+                 admit.
                * apply deref_loc_reference; auto.               
              + apply find_method_In in Findmeth.
                do 2 (econstructor; eauto).
@@ -2366,8 +2210,8 @@ Section PRESERVATION.
       rewrite Findmeth in Findmeth'; inv Findmeth'.
 
       (* get the clight function *)
-      edestruct methods_corres with (e:=e1)
-        as (? & ptr_f' & cf' & Hgetptrf' & ? & Hgetcf' & ? & Hret & ? & ? & ? & ? & ? & ? & Htr); eauto.
+      edestruct methods_corres (* with (e:=e1) *)
+        as (? & ptr_f' & cf' & Hgetptrf' (* & ? *) & Hgetcf' & ? & Hret & ? & ? & ? & ? & ? & ? & Htr); eauto.
       rewrite Hgetptrf' in Hgetptrf; inv Hgetptrf.
       rewrite Hgetcf' in Hgetcf; inv Hgetcf.
 
