@@ -573,6 +573,7 @@ Section PRESERVATION.
     pure (le ! self_id = Some (Vptr sb sofs))
     ** pure (le ! out_id = Some (Vptr outb Int.zero))
     ** pure (gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco)
+    ** pure (forall x b t, e ! x = Some (b, t) -> exists o f, x = prefix_out o f)
     ** pure (0 <= Int.unsigned sofs)
     ** staterep gcenv prog c.(c_name) (fst S) sb (Int.unsigned sofs)
     ** blockrep gcenv (snd S) outco.(co_members) outb
@@ -592,6 +593,7 @@ Section PRESERVATION.
       /\ le ! self_id = Some (Vptr sb sofs)
       /\ le ! out_id = Some (Vptr outb Int.zero)
       /\ gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco
+      /\ (forall x b t, e ! x = Some (b, t) -> exists o f, x = prefix_out o f)
       /\ 0 <= Int.unsigned sofs.
   Proof.
     unfold match_states; split; intros ** H.
@@ -1781,6 +1783,7 @@ Section PRESERVATION.
       m |= P ->
       exists e' m',
         alloc_variables tge empty_env m (make_out_vars vars) e' m'
+        /\ (forall x b t, e' ! x = Some (b, t) -> exists o f, x = prefix_out o f)
         /\ m' |= subrep f e'
              ** (subrep f e' -* subrep_range e')
              ** P.
@@ -1789,27 +1792,36 @@ Section PRESERVATION.
     rewrite <-Forall_Forall' in Hforall; destruct Hforall.
     pose proof (alloc_exists _ empty_env m Nodup) as Alloc.
     destruct Alloc as (e' & m' & Alloc).
-    exists e', m'; split; auto.
     eapply alloc_mem_vars in Hrep; eauto.
     pose proof Alloc as Perm.
     apply alloc_permutation in Perm; auto.
-    pose proof Perm as Perm_fst.
-    apply Permutation_fst in Perm_fst.
-    rewrite map_fst_drop_block in Perm_fst.
-    rewrite Perm_fst in Hrep.
-    rewrite <-subrep_range_eqv in Hrep.
-    repeat rewrite subrep_eqv; auto.
-    rewrite range_wand_equiv in Hrep.
-    - now rewrite sep_assoc in Hrep.
-    - eapply Permutation_Forall; eauto. 
-    - eapply alloc_nodupmembers; eauto.
-      + unfold PTree.elements; simpl; constructor.
-      + unfold PTree.elements; simpl.
-        clear H H0 Nodup Alloc Perm Perm_fst.
-        induction (make_out_vars vars); constructor; auto.
-      + intros ** Hin.
-        unfold PTree.elements in Hin; simpl in Hin.
-        contradiction.
+    exists e', m'; split; [auto|split].
+    - intros ** Hget.
+      apply PTree.elements_correct in Hget.
+      apply in_map with (f:=drop_block) in Hget.
+      apply Permutation_sym in Perm.
+      rewrite Perm in Hget.
+      unfold make_out_vars in Hget; simpl in Hget.
+      apply in_map_iff in Hget.
+      destruct Hget as (((o, f'), c) & Eq & Hget).
+      inv Eq. now exists o, f'.
+    - pose proof Perm as Perm_fst.
+      apply Permutation_fst in Perm_fst.
+      rewrite map_fst_drop_block in Perm_fst.
+      rewrite Perm_fst in Hrep.
+      rewrite <-subrep_range_eqv in Hrep.
+      repeat rewrite subrep_eqv; auto.
+      rewrite range_wand_equiv in Hrep.
+      + now rewrite sep_assoc in Hrep.
+      + eapply Permutation_Forall; eauto. 
+      + eapply alloc_nodupmembers; eauto.
+        * unfold PTree.elements; simpl; constructor.
+        * unfold PTree.elements; simpl.
+          clear H H0 Nodup Alloc Perm Perm_fst.
+          induction (make_out_vars vars); constructor; auto.
+        * intros ** Hin.
+          unfold PTree.elements in Hin; simpl in Hin.
+          contradiction.
   Qed.
 
   Lemma compat_funcall_pres:
@@ -1837,6 +1849,7 @@ Section PRESERVATION.
       exists e_fun le_fun m_fun ws xs,
         bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le_fun
         /\ alloc_variables tge empty_env m f.(fn_vars) e_fun m_fun
+        /\ (forall x b t, e_fun ! x = Some (b, t) -> exists o f, x = prefix_out o f)
         /\ le_fun ! self_id = Some (Vptr sb (Int.add sofs (Int.repr d)))
         /\ le_fun ! out_id = Some (Vptr ob Int.zero)
         /\ c_objs owner = ws ++ (o, c_name c) :: xs
@@ -1872,7 +1885,7 @@ Section PRESERVATION.
       rewrite NoDupMembers_app in Nodup.
       now apply NoDupMembers_app_r in Nodup.
     - simpl in Hlengths. inversion Hlengths; eauto.
-    - edestruct (alloc_result callee) as (e_fun & m_fun & ? & Hm_fun); eauto.
+    - edestruct (alloc_result callee) as (e_fun & m_fun & ? & ? & Hm_fun); eauto.
       + edestruct methods_corres (* with (e:=empty_env) *); eauto.
       + unfold var_names in Norep_vars.
         now rewrite fst_NoDupMembers, NoDup_norepet. 
@@ -1881,7 +1894,7 @@ Section PRESERVATION.
         apply sepall_in in Hin.
         destruct Hin as (ws & xs & Hin & Heq).             
         exists e_fun, le_fun, m_fun, ws, xs;
-          split; [|split; [|split; [|split; [|split; [|split]]]]]; auto.
+          split; [|split; [|split; [|split; [|split; [|split; [|split]]]]]]; auto.
         *{ rewrite <- 5 sep_assoc; rewrite sep_swap.
            apply sep_pure; split; auto.
            rewrite sep_assoc, sep_swap, sep_assoc, sep_swap23, sep_swap.
@@ -2060,7 +2073,7 @@ Section PRESERVATION.
                Hinstty Hbinst ? Hin Offs ? ? Hinstco ? ?]; intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
                                  |? ? ? ? ? ? callee ? ? ? ? ? Hin ? ? ? Find' Findmeth|];
-      try (rewrite match_states_conj in MS; destruct MS as (Hrep & Hself & Hout & Houtco & ?)).
+      try (rewrite match_states_conj in MS; destruct MS as (Hrep & Hself & Hout & Houtco & He & ?)).
     
     (* Assign x e : "x = e" *)
     - (* get the 'self' variable left value evaluation *)
@@ -2085,7 +2098,8 @@ Section PRESERVATION.
            - rewrite Int.add_zero_l; auto.
          }
         * rewrite match_states_conj. 
-          rewrite sep_swap34, sep_swap23, sep_swap, sep_swap23; auto.  
+          rewrite sep_swap34, sep_swap23, sep_swap, sep_swap23.
+          split; auto.
            
       (* x = e *)
       + exists (PTree.set x v le1), m1, E0; split.
@@ -2114,11 +2128,13 @@ Section PRESERVATION.
            - unfold Int.add.
              rewrite Int.unsigned_repr; auto.
          }
-      + rewrite match_states_conj; auto.
+      + rewrite match_states_conj.
+        split; auto.
 
     (* Ifte e s1 s2 : "if e then s1 else s2" *)
     - edestruct Hifte; destruct_conjs; eauto; [(destruct b; auto)| |]. 
-      + rewrite match_states_conj; eauto.
+      + rewrite match_states_conj.
+        split; eauto.
       + do 3 econstructor; split; eauto.
         eapply exec_Sifthenelse; eauto.
         * erewrite type_pres, bool_val_ptr; eauto.
@@ -2126,7 +2142,7 @@ Section PRESERVATION.
       
     (* Comp s1 s2 : "s1; s2" *)
     - edestruct HS1; destruct_conjs; eauto.
-      + rewrite match_states_conj; eauto.
+      + rewrite match_states_conj. split; eauto.
       + edestruct HS2; destruct_conjs; eauto.
         do 3 econstructor; split; eauto.
         eapply exec_Sseq_1; eauto.
@@ -2172,7 +2188,12 @@ Section PRESERVATION.
              + simpl.
                eapply eval_Elvalue.
                * apply eval_Evar_global; eauto.
-                 admit.
+                 rewrite <-not_Some_is_None.
+                 intros (b, t) Hget.
+                 apply He in Hget; destruct Hget as (o' & f' & Eqpref).
+                 unfold prefix_fun, prefix_out in Eqpref.
+                 apply prefix_injective in Eqpref; destruct Eqpref.
+                 apply fun_not_out; auto.
                * apply deref_loc_reference; auto.               
              + apply find_method_In in Findmeth.
                do 2 (econstructor; eauto).
@@ -2205,7 +2226,7 @@ Section PRESERVATION.
     (* Skip : "skip" *)
     - exists le1, m1, E0; split.
       + eapply exec_Sskip.
-      + rewrite match_states_conj; auto. 
+      + rewrite match_states_conj; split; auto. 
         
     (* funcall *)
     - pose proof (find_class_sub_same _ _ _ _ _ Find WD Sub) as Find''.
@@ -2235,7 +2256,7 @@ Section PRESERVATION.
       rewrite Hbinst' in Hbinst; inversion Hbinst; subst binst'; clear Hbinst.
       rewrite sep_swap23, sep_swap in Hrep.
       edestruct (compat_funcall_pres cf sb sofs binst vs)
-        as (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & ? & ? & Hobjs & Hm_fun & ? & ?);
+        as (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & He_fun & ? & ? & Hobjs & Hm_fun & ? & ?);
         eauto; simpl; auto.
       pose proof (find_class_sub _ _ _ _ Find') as Hsub.
       specialize (Hrec_exec Hsub c).
