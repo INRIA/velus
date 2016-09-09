@@ -97,7 +97,7 @@ Proof.
     apply NoDupMembers_NoDup, NoDupMembers_instance_methods.
   - intros ((ox, fx), cx) ((oy, fy), cy) Hx Hy Diff; simpl.
     intro E; apply Diff.
-    apply prefix_injective in E; destruct E; subst.
+    apply prefix_out_injective in E; destruct E; subst.
     repeat f_equal.
     eapply NoDupMembers_det; eauto.
     apply NoDupMembers_instance_methods.
@@ -202,11 +202,11 @@ Section PRESERVATION.
                                 (align_chunk chunk | alignof gcenv t'))))
               (make_out_vars (instance_methods m))
       /\ exists loc_f f,
-          Genv.find_symbol tge (prefix fid clsnm) = Some loc_f
+          Genv.find_symbol tge (prefix_fun clsnm fid) = Some loc_f
           (* /\ e ! (prefix fid clsnm) = None *)
           /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
           /\ f.(fn_params) = (self_id, type_of_inst_p c.(c_name))
-                              :: (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name)))
+                              :: (out_id, type_of_inst_p (prefix_fun c.(c_name) m.(m_name)))
                               :: m.(m_in)
           /\ f.(fn_return) = Tvoid
           /\ f.(fn_callconv) = AST.cc_default
@@ -225,7 +225,7 @@ Section PRESERVATION.
     pose proof (find_class_name _ _ _ _ Findcl) as Eq.
     pose proof (find_method_name _ _ _ Findmth) as Eq'.
     subst.
-    assert ((AST.prog_defmap tprog) ! (prefix m0.(m_name) c.(c_name)) =
+    assert ((AST.prog_defmap tprog) ! (prefix_fun c.(c_name) m0.(m_name)) =
             Some (snd (translate_method prog c m0))) as Hget. 
     { unfold translate_class in E.
       apply split_map in E.
@@ -257,7 +257,7 @@ Section PRESERVATION.
         set (f:= {| fn_return := Tvoid;
                     fn_callconv := AST.cc_default;
                     fn_params := (self_id, type_of_inst_p (c_name c))
-                                   :: (out_id, type_of_inst_p (prefix (m_name m0) (c_name c)))
+                                   :: (out_id, type_of_inst_p (prefix_fun (c_name c) (m_name m0)))
                                    :: m_in m0;
                     fn_vars := make_out_vars (instance_methods m0);
                     fn_temps := m_vars m0;
@@ -572,7 +572,7 @@ Section PRESERVATION.
     let (e, le) := CS in
     pure (le ! self_id = Some (Vptr sb sofs))
     ** pure (le ! out_id = Some (Vptr outb Int.zero))
-    ** pure (gcenv ! (prefix f.(m_name) c.(c_name)) = Some outco)
+    ** pure (gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco)
     ** pure (0 <= Int.unsigned sofs)
     ** staterep gcenv prog c.(c_name) (fst S) sb (Int.unsigned sofs)
     ** blockrep gcenv (snd S) outco.(co_members) outb
@@ -591,7 +591,7 @@ Section PRESERVATION.
           ** P
       /\ le ! self_id = Some (Vptr sb sofs)
       /\ le ! out_id = Some (Vptr outb Int.zero)
-      /\ gcenv ! (prefix f.(m_name) c.(c_name)) = Some outco
+      /\ gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco
       /\ 0 <= Int.unsigned sofs.
   Proof.
     unfold match_states; split; intros ** H.
@@ -653,7 +653,7 @@ Section PRESERVATION.
     forall clsnm prog' c fid f outco,
       find_class clsnm prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       f.(m_out) = outco.(co_members).
   Proof.
     intros ** ? ? Houtco.
@@ -668,11 +668,11 @@ Section PRESERVATION.
       m |= blockrep gcenv ve outco.(co_members) outb ** P ->
       find_method fid c.(c_methods) = Some f ->
       le ! out_id = Some (Vptr outb Int.zero) ->
-      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       In (x, ty) (meth_vars f) ->
       existsb (fun out => ident_eqb (fst out) x) f.(m_out) = true ->
       exists d,
-        eval_lvalue tge e le m (deref_field out_id (prefix (m_name f) (c_name c)) x ty)
+        eval_lvalue tge e le m (deref_field out_id (prefix_fun (c_name c) (m_name f)) x ty)
                     outb (Int.add Int.zero (Int.repr d))
         /\ field_offset gcenv x (co_members outco) = Errors.OK d.
   Proof.
@@ -699,11 +699,11 @@ Section PRESERVATION.
       find_method fid c.(c_methods) = Some f ->
       le ! out_id = Some (Vptr outb Int.zero) ->
       m |= blockrep gcenv (snd S) outco.(co_members) outb ** P ->
-      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       In (x, ty) (meth_vars f) ->
       existsb (fun out => ident_eqb (fst out) x) f.(m_out) = true ->
       find_var S x v ->
-      eval_expr tge e le m (deref_field out_id (prefix (m_name f) (c_name c)) x ty) v.
+      eval_expr tge e le m (deref_field out_id (prefix_fun (c_name c) (m_name f)) x ty) v.
   Proof.
     intros.
     edestruct evall_out_field with (e:=e) as (? & ? & ?); eauto.
@@ -805,7 +805,7 @@ Section PRESERVATION.
           ** P ->
       le ! self_id = Some (Vptr sb sofs) ->
       le ! out_id = Some (Vptr outb Int.zero) ->
-      gcenv ! (prefix f.(m_name) c.(c_name)) = Some outco ->
+      gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco ->
       0 <= Int.unsigned sofs ->
       well_formed_exp c f exp ->
       exp_eval S exp v ->
@@ -900,7 +900,7 @@ Section PRESERVATION.
           ** P ->
       le ! self_id = Some (Vptr sb sofs) ->
       le ! out_id = Some (Vptr outb Int.zero) ->
-      gcenv ! (prefix f.(m_name) c.(c_name)) = Some outco ->
+      gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco ->
       0 <= Int.unsigned sofs ->
       Forall (well_formed_exp c f) es ->
       Forall2 (exp_eval S) es vs ->
@@ -961,7 +961,7 @@ Section PRESERVATION.
     forall c clsnm prog' fid f le ve x ty m v d outco outb P,
       find_class clsnm prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       m |= varsrep f ve le ** blockrep gcenv ve outco.(co_members) outb ** P ->
       In (x, ty) (meth_vars f) ->
       field_offset gcenv x (co_members outco) = Errors.OK d ->
@@ -1014,7 +1014,7 @@ Section PRESERVATION.
     forall c clsnm prog' fid f ve x ty le m v P outco outb,
       find_class clsnm prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      gcenv ! (prefix (m_name f) (c_name c)) = Some outco ->
+      gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       m |= varsrep f ve le ** blockrep gcenv ve outco.(co_members) outb ** P ->
       In (x, ty) (meth_vars f) ->
       existsb (fun out => ident_eqb (fst out) x) f.(m_out) = false ->
@@ -1130,13 +1130,13 @@ Section PRESERVATION.
   Lemma evall_inst_field:
      forall x ty e le m o clsid f c callee prog'' oblk instco ve P,
       m |= blockrep gcenv ve instco.(co_members) oblk ** P ->
-      e ! o = Some (oblk, type_of_inst (prefix f clsid)) ->
-      gcenv ! (prefix f clsid) = Some instco ->
+      e ! o = Some (oblk, type_of_inst (prefix_fun clsid f)) ->
+      gcenv ! (prefix_fun clsid f) = Some instco ->
       find_class clsid prog = Some (c, prog'') ->
       find_method f c.(c_methods) = Some callee ->
       In (x, ty) callee.(m_out) ->
       exists d,
-        eval_lvalue tge e le m (Efield (Evar o (type_of_inst (prefix f clsid))) x ty) 
+        eval_lvalue tge e le m (Efield (Evar o (type_of_inst (prefix_fun clsid f))) x ty) 
                     oblk (Int.add Int.zero (Int.repr d))
         /\ field_offset tge x instco.(co_members) = Errors.OK d
         /\ 0 <= d <= Int.max_unsigned.
@@ -1171,17 +1171,18 @@ Section PRESERVATION.
       Forall2 (fun y y' => snd y = snd y') ys callee.(m_out) ->
       le1 ! out_id = Some (Vptr outb Int.zero) ->
       le1 ! self_id = Some (Vptr sb sofs) ->
-      gcenv ! (prefix (m_name caller) (c_name c)) = Some outco ->
+      gcenv ! (prefix_fun (c_name c) (m_name caller)) = Some outco ->
       m1 |= blockrep gcenv (adds callee.(m_out) rvs ve') instco.(co_members) binst
            ** blockrep gcenv ve outco.(co_members) outb
            ** varsrep caller ve le1
            ** P ->                                       
       Forall2 (fun v y => valid_val v (snd y)) rvs ys ->
-      e1 ! (prefix o f) = Some (binst, type_of_inst (prefix f clsid)) ->
-      gcenv ! (prefix f clsid) = Some instco ->
+      e1 ! (prefix_out o f) = Some (binst, type_of_inst (prefix_fun clsid f)) ->
+      gcenv ! (prefix_fun clsid f) = Some instco ->
       exists le2 m2 T,
         exec_stmt tge (function_entry2 tge) e1 le1 m1
-                  (funcall_assign ys c.(c_name) caller (prefix o f) (type_of_inst (prefix f clsid)) callee)
+                  (funcall_assign ys c.(c_name) caller (prefix_out o f)
+                                                (type_of_inst (prefix_fun clsid f)) callee)
                   T le2 m2 Out_normal
         /\ m2 |= blockrep gcenv (adds callee.(m_out) rvs ve') instco.(co_members) binst
                ** blockrep gcenv (adds ys rvs ve) outco.(co_members) outb
@@ -1221,7 +1222,8 @@ Section PRESERVATION.
           by (rewrite Houts; apply in_or_app; left; apply in_or_app; right; apply in_eq).
       rewrite Eq, Eq' in Hinstco.
       edestruct (evall_inst_field y' ty' e1 le1) as (dy' & Ev_o_y' & Hoffset_y' & ?); eauto.
-      assert (eval_expr tge e1 le1 m1 (Efield (Evar (prefix o f) (type_of_inst (prefix f clsid))) y' ty') v).
+      assert (eval_expr tge e1 le1 m1 (Efield (Evar (prefix_out o f)
+                                                    (type_of_inst (prefix_fun clsid f))) y' ty') v).
       { eapply eval_Elvalue; eauto.
         eapply blockrep_deref_mem; eauto.
         - rewrite <-Eq, <-Eq' in Hinstco.
@@ -1828,7 +1830,7 @@ Section PRESERVATION.
       list_norepet (var_names f.(fn_vars)) ->
       vargs = (Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr ob Int.zero) :: vs ->
       mfind_inst o me = Some me' ->
-      gcenv ! (prefix (m_name callee) (c_name c)) = Some instco ->
+      gcenv ! (prefix_fun (c_name c) (m_name callee)) = Some instco ->
       m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
           ** blockrep gcenv v_empty (co_members instco) ob
           ** P ->
@@ -1964,18 +1966,18 @@ Section PRESERVATION.
       m |= subrep f e ** P ->
       In (o, f', c') (instance_methods f) ->
       exists b co ws xs,
-        e ! (prefix o f') = Some (b, type_of_inst (prefix f' c'))
-        /\ gcenv ! (prefix f' c') = Some co
-        /\ make_out_vars (instance_methods f) = ws ++ (prefix o f', type_of_inst (prefix f' c')) :: xs
+        e ! (prefix_out o f') = Some (b, type_of_inst (prefix_fun c' f'))
+        /\ gcenv ! (prefix_fun c' f') = Some co
+        /\ make_out_vars (instance_methods f) = ws ++ (prefix_out o f', type_of_inst (prefix_fun c' f')) :: xs
         /\ m |= blockrep gcenv v_empty (co_members co) b
             ** sepall (subrep_inst_env e) (ws ++ xs)
             ** P.
   Proof.
     intros ** Hrep Hin.
     unfold subrep, subrep_inst in *.
-    assert (In (prefix o f', type_of_inst (prefix f' c')) (make_out_vars (instance_methods f))) as Hin'.
+    assert (In (prefix_out o f', type_of_inst (prefix_fun c' f')) (make_out_vars (instance_methods f))) as Hin'.
     { apply in_map with
-      (f:=fun x => let '(o0, f0, cid) := x in (prefix o0 f0, type_of_inst (prefix f0 cid))) in Hin.
+      (f:=fun x => let '(o0, f0, cid) := x in (prefix_out o0 f0, type_of_inst (prefix_fun cid f0))) in Hin.
       unfold make_out_vars; auto.
     }
     clear Hin.
@@ -1984,13 +1986,13 @@ Section PRESERVATION.
     pose proof Hrep as Hrep'.
     do 2 apply sep_proj1 in Hrep.
     unfold subrep_inst_env in *.
-    destruct e ! (prefix o f'); [|contradict Hrep].
+    destruct e ! (prefix_out o f'); [|contradict Hrep].
     destruct p as (oblk, t).
     destruct t; try now contradict Hrep.
-    destruct (type_eq (type_of_inst (prefix f' c')) (Tstruct i a)) as [Eq|]; [|contradict Hrep].
+    destruct (type_eq (type_of_inst (prefix_fun c' f')) (Tstruct i a)) as [Eq|]; [|contradict Hrep].
     unfold type_of_inst in Eq.
     inv Eq.
-    destruct gcenv ! (prefix f' c'); [|contradict Hrep].
+    destruct gcenv ! (prefix_fun c' f'); [|contradict Hrep].
     rewrite sep_assoc in Hrep'.
     exists oblk, c, ws, xs; split; auto.
   Qed.
@@ -2024,24 +2026,25 @@ Section PRESERVATION.
                ** P ->
           find_class owner.(c_name) prog = Some (owner, prog'') ->
           find_method caller.(m_name) owner.(c_methods) = Some caller ->
-          Globalenvs.Genv.find_symbol tge (prefix fid clsid) = Some ptr_f ->
+          Globalenvs.Genv.find_symbol tge (prefix_fun clsid fid) = Some ptr_f ->
           Globalenvs.Genv.find_funct_ptr tge ptr_f = Some (Ctypes.Internal cf) ->
           length cf.(fn_params) = (2 + length vs)%nat ->
           find_inst S o me1 ->
-          oty = type_of_inst (prefix fid clsid) ->
-          e1 ! (prefix o fid) = Some (binst, oty) ->
+          oty = type_of_inst (prefix_fun clsid fid) ->
+          e1 ! (prefix_out o fid) = Some (binst, oty) ->
           In (o, clsid) owner.(c_objs) ->
           In (o, fid, clsid) (instance_methods caller) ->
           field_offset gcenv o (make_members owner) = Errors.OK d ->
           0 <= Int.unsigned sofs + d <= Int.max_unsigned ->
           0 <= Int.unsigned sofs ->
-          gcenv ! (prefix fid clsid) = Some instco ->
+          gcenv ! (prefix_fun clsid fid) = Some instco ->
           well_formed_stmt c callee callee.(m_body) ->
           eval_expr tge e1 le1 m1 (ptr_obj owner.(c_name) clsid o) (Vptr sb (Int.add sofs (Int.repr d))) ->
           exists m2 T ws xs,
             eval_funcall tge (function_entry2 tge) m1 (Internal cf)
                          ((Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr binst Int.zero) :: vs) T m2 Vundef
-            /\ make_out_vars (instance_methods caller) = ws ++ (prefix o fid, type_of_inst (prefix fid clsid)) :: xs
+            /\ make_out_vars (instance_methods caller) =
+              ws ++ (prefix_out o fid, type_of_inst (prefix_fun clsid fid)) :: xs
             /\ m2 |= staterep gcenv prog owner.(c_name) (madd_obj o me2 (fst S)) sb (Int.unsigned sofs)
                    ** blockrep gcenv (snd S) outco.(co_members) outb
                    ** blockrep gcenv (adds callee.(m_out) rvs v_empty) instco.(co_members) binst

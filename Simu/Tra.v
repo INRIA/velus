@@ -14,11 +14,38 @@ Open Scope list_scope.
 Axiom pos_to_str: ident -> string.
 
 Definition main_id: ident := pos_of_str "main".
-Definition prefix (pref id: ident): ident :=
-  pos_of_str ((pos_to_str pref) ++ "_" ++ (pos_to_str id)).
+Axiom prefix: ident -> ident -> ident.
+Axiom fun_id: ident.
+(* Axiom out_id: ident. *)
+Axiom fun_not_out: fun_id <> out_id.
+
+Definition prefix_fun (c f: ident): ident :=
+  prefix fun_id (prefix c f).
+Definition prefix_out (o f: ident): ident :=
+  prefix out_id (prefix o f).
+
 Axiom prefix_injective:
   forall pref id pref' id',
     prefix pref id = prefix pref' id' -> pref = pref' /\ id = id'.
+Lemma prefix_fun_injective: 
+ forall c c' f f',
+   prefix_fun c f = prefix_fun c' f' -> c = c' /\ f = f'.
+Proof.
+  unfold prefix_fun.
+  intros ** Eq.
+  apply prefix_injective in Eq; destruct Eq as [E Eq]; clear E.
+  now apply prefix_injective.
+Qed.
+Lemma prefix_out_injective: 
+ forall c c' f f',
+   prefix_out c f = prefix_out c' f' -> c = c' /\ f = f'.
+Proof.
+  unfold prefix_out.
+  intros ** Eq.
+  apply prefix_injective in Eq; destruct Eq as [E Eq]; clear E.
+  now apply prefix_injective.
+Qed.
+
 Definition step_id (id: ident): ident := 
   pos_of_str ("step_" ++ (pos_to_str id)).
 (* Definition reset_id (id: ident): ident := *)
@@ -50,7 +77,7 @@ Definition translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
   match e with
   | Var x ty =>
     if existsb (fun out => ident_eqb (fst out) x) m.(m_out) then
-      deref_field out_id (prefix m.(m_name) c.(c_name)) x ty
+      deref_field out_id (prefix_fun c.(c_name) m.(m_name)) x ty
     else
       Clight.Etempvar x ty  
   | State x ty => deref_field self_id c.(c_name) x ty
@@ -70,7 +97,7 @@ Definition funcall (f: ident) (args: list Clight.expr) : Clight.statement :=
 
 Definition assign (x: ident) (ty: typ) (clsid: ident) (m: method): Clight.expr -> Clight.statement :=
   if existsb (fun out => ident_eqb (fst out) x) m.(m_out) then
-    Clight.Sassign (deref_field out_id (prefix m.(m_name) clsid) x ty)
+    Clight.Sassign (deref_field out_id (prefix_fun clsid m.(m_name)) x ty)
   else
     Clight.Sset x.
 
@@ -95,12 +122,12 @@ Definition binded_funcall
   | Some (c, _) =>
     match find_method f c.(c_methods) with
     | Some m =>
-      let tyout := type_of_inst (prefix f cls) in
-      let out := Clight.Eaddrof (Clight.Evar (prefix obj f) tyout) (pointer_of tyout) in 
+      let tyout := type_of_inst (prefix_fun cls f) in
+      let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in 
       let args := ptr_obj owner cls obj :: out :: args in
       Clight.Ssequence
-        (funcall (prefix f cls) args)
-        (funcall_assign ys owner caller (prefix obj f) tyout m)
+        (funcall (prefix_fun cls f) args)
+        (funcall_assign ys owner caller (prefix_out obj f) tyout m)
     | None => Clight.Sskip
     end
   | None => Clight.Sskip
@@ -152,7 +179,7 @@ Definition make_fundef
 Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident * typ) :=
   map (fun ofc =>
          let '(o, f, cid) := ofc in
-         (prefix o f, type_of_inst (prefix f cid))
+         (prefix_out o f, type_of_inst (prefix_fun cid f))
       ) out_vars.
 
 Lemma dec_pair: forall x y : (ident * ident), {x = y} + {x <> y}.
@@ -175,8 +202,8 @@ Definition translate_method (prog: program) (c: class) (m: method)
   let body := translate_stmt prog c m m.(m_body) in
   let out_vars := instance_methods m in
   let self := (self_id, type_of_inst_p c.(c_name)) in
-  let out := (out_id, type_of_inst_p (prefix m.(m_name) c.(c_name))) in
-  (prefix m.(m_name) c.(c_name),
+  let out := (out_id, type_of_inst_p (prefix_fun c.(c_name) m.(m_name))) in
+  (prefix_fun c.(c_name) m.(m_name),
    make_fundef self m.(m_in) out (make_out_vars out_vars) m.(m_vars) body).
 
 Definition make_methods (prog: program) (c: class)
@@ -194,7 +221,7 @@ Definition make_struct (c: class): Ctypes.composite_definition :=
   Ctypes.Composite c.(c_name) Ctypes.Struct (make_members c) Ctypes.noattr.
 
 Definition translate_out (c: class) (m: method): Ctypes.composite_definition :=
-  Ctypes.Composite (prefix m.(m_name) c.(c_name)) Ctypes.Struct m.(m_out) Ctypes.noattr.
+  Ctypes.Composite (prefix_fun c.(c_name) m.(m_name)) Ctypes.Struct m.(m_out) Ctypes.noattr.
 
 Definition make_out (c: class): list Ctypes.composite_definition :=
   map (translate_out c) c.(c_methods).
