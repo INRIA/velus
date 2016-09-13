@@ -62,13 +62,9 @@ first equation to execute should be the last in the list.
 
 A CoreDF program is well defined if 
   - Each node is well-defined, that is
-    - Each input arguments' name is distinct
     - The equations are well scheduled
-    - The input variables are not redefined by the equations
-    - The output variable is indeed defined by the equations
   - Every node call points to a previously-defined node
   - Each of the nodes' name is distinct
-
    *)
 
   Inductive Welldef_global : list node -> Prop :=
