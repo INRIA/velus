@@ -193,7 +193,7 @@ enough: it does not support the internal fixpoint introduced by
              (ingt0 : 0 < length i)
              (defd  : Permutation (map var_defined eqs)
                                   (map fst (v ++ [o])))
-             (vout  : ~PS.In (fst o) (memories eqs))
+             (vout  : ~In (fst o) (map var_defined (filter is_fby eqs)))
              (decl  : Forall (VarsDeclared (i ++ v ++ [o])) eqs)
              (nodup : NoDupMembers (i ++ v ++ [o]))
              (good  : Forall NotReserved (i ++ v ++ [o]))
@@ -714,7 +714,7 @@ dataflow memory for which the non-standard semantics holds true.
                  sem_node G f xs ys
                  -> exists M, msem_node G f xs M ys) as IHG'
           by auto.
-      inversion_clear Hwdef as [|? ? ? ? Hw0 neqs ? Hwsch Hw2 Hw3 Hw4 Hw5 Hw6].
+      inversion_clear Hwdef as [|? ? Hw0 neqs Hwsch Hw2 Hw3 Hw4].
       simpl in neqs; unfold neqs in *.
       pose proof (sem_msem_eqs IHG' Hwsch Heqs) as HH.
       destruct HH as [M Hmsem].

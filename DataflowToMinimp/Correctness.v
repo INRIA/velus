@@ -1228,31 +1228,33 @@ for all [Is_free_exp x e]. *)
 
           set (prog := translate (node :: G)).
 
-          inversion_clear Hwd as [|? ? Hwd' eqs inArgs outArg
-                             HnodupIn Hwsch Hndef_in Hdef_out Hne Hfind Hnodup].
+          inversion_clear Hwd as [|? ? Hwd' eqs Hwsch Hndef_in Hfind Hnodup].
           clear Hwd'.
           inversion_clear Hmsem as [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hck Heqs
                                       [H [Hin [Hout [Hrabs Hall]]]]].
-          subst eqs inArgs outArg nodeName.
+          subst eqs nodeName.
           simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
           injection Heqs. intro Hnode. rewrite Hnode in *. clear Heqs. simpl in *.
 
-          rename i into inArgs; rename o into outArg; rename eqs0 into eqs.
+          assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs))
+            as HR by (rewrite Hnode; intuition).
+          destruct HR as (HR1 & HR2 & HR3). subst i o eqs0.
 
-          set (env := adds inArgs inputs sempty).
+          set (env := adds node.(n_in) inputs sempty).
 
-          assert (msem_equations G bk H M eqs)
+          assert (msem_equations G bk H M node.(n_eqs))
             by (eapply Forall_msem_equation_global_tl; try eassumption).
 
           assert (exists (menv' : heap) (env' : stack),
                      stmt_eval (translate G) menv env
-                       (translate_eqns (memories eqs) eqs) (menv', env') /\
+                       (translate_eqns (memories node.(n_eqs)) node.(n_eqs))
+                       (menv', env') /\
                      (forall x : ident,
-                         Is_variable_in_eqs x eqs ->
+                         Is_variable_in_eqs x node.(n_eqs) ->
                          forall c : val,
                            sem_var_instant (restr H n) x (present c) <->
                            PM.find x env' = Some c) /\
-                     Forall (Memory_Corres_eq G (S n) M menv') eqs)
+                     Forall (Memory_Corres_eq G (S n) M menv') node.(n_eqs))
             as His_step_correct.
           {
             eauto.
@@ -1260,7 +1262,7 @@ for all [Is_free_exp x e]. *)
             - apply Hck; eauto.
             - exists []; auto.
             - intros y Hinm.
-              assert (NoDup_defs eqs) as Hndds
+              assert (NoDup_defs node.(n_eqs)) as Hndds
                   by (eapply Is_well_sch_NoDup_defs; eauto).
               split; [now apply Is_defined_in_memories
                      |now apply not_Is_variable_in_memories].
@@ -1271,18 +1273,18 @@ for all [Is_free_exp x e]. *)
                                                (2:=Hinput) (3:=Hin).
             - intros x Hivi.
               subst env.
-              destruct (in_dec ident_eq_dec x (map fst inArgs)) as [HinA|HninA].
+              destruct (in_dec ident_eq_dec x (map fst node.(n_in)))
+                as [HinA|HninA].
               + apply Is_variable_in_eqs_Is_defined_in_eqs in Hivi.
-                contradiction Hndef_in.
-                apply Exists_exists.
-                exists x; intuition.
-              + assert (~InMembers x inArgs) as Hninm
+                contradiction (not_Exists_Is_defined_in_eqs_n_in node).
+                apply Exists_exists. exists x; intuition.
+              + assert (~InMembers x node.(n_in)) as Hninm
                     by (intro; apply HninA; now apply fst_InMembers).
                 apply NotInMembers_find_adds with (1:=Hninm).
                 apply PM.gempty.
             - intros input Hinput Hisdef.
-              apply Hndef_in; apply Exists_exists.
-              exists input; auto.
+              contradiction (not_Exists_Is_defined_in_eqs_n_in node).
+              apply Exists_exists. exists input; intuition.
             - inversion_clear Hmc as [? ? ? ? ? ? ? ? ? ? ? ? ? Hf Hmeqs].
               simpl in Hf.
               rewrite ident_eqb_refl in Hf.
@@ -1291,7 +1293,7 @@ for all [Is_free_exp x e]. *)
               eapply Memory_Corres_eqs_node_tl; try eassumption.
           }
 
-          destruct His_step_correct as [menv' [env' [Hstmt [Hsemvar Hmem]]]].
+          destruct His_step_correct as (menv' & env' & Hstmt & Hsemvar & Hmem).
           exists menv'.
           split.
           * { destruct (exists_step_method node) as [stepm Hstepm].
@@ -1306,13 +1308,12 @@ for all [Is_free_exp x e]. *)
                 simpl in *.
                 rewrite ps_from_list_gather_eqs_memories.
                 eassumption.
-              - assert (outArg = node.(n_out))
-                  by (rewrite Hnode; auto).
-                subst outArg.
-                rewrite find_method_stepm with (1:=Hstepm).
+              - rewrite find_method_stepm with (1:=Hstepm).
                 specialize (Hout n); simpl in Hout; rewrite Hys in Hout.
                 constructor; auto.
-                apply Hsemvar; try assumption.
+                apply Hsemvar.
+                apply n_out_variable_in_eqs.
+                assumption.
             }
           * {
               econstructor.
@@ -1551,8 +1552,7 @@ for all [Is_free_exp x e]. *)
 
         set (inArgs_fst := map fst inArgs).
         assert (Is_well_sch (memories eqs) inArgs_fst eqs)
-          by (inversion Hwdef; subst ni eqs0;
-              rewrite Hfind in *; simpl in *; assumption).
+          by (inversion Hwdef; subst inArgs_fst eqs0; now rewrite Hfind in *).
 
         assert (Welldef_global G)
           by (inversion Hwdef; assumption).

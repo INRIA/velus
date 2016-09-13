@@ -126,6 +126,29 @@ Module Type ISVARIABLE
              | now apply H1].
   Qed.
 
+  Lemma Is_variable_in_var_defined:
+    forall x eqs,
+      Is_variable_in_eqs x eqs
+      <-> In x (map var_defined (filter (notb is_fby) eqs)).
+  Proof.
+    unfold notb.
+    induction eqs as [|eq eqs].
+    now apply Exists_nil.
+    split; intro HH.
+    - inversion_clear HH as [? ? Hdef|? ? Hdef].
+      + inversion_clear Hdef; simpl; auto.
+      + apply IHeqs in Hdef. simpl.
+        destruct eq; simpl; intuition.
+    - destruct eq; simpl in *.
+      + destruct HH as [HH|HH].
+        * subst; repeat constructor.
+        * apply IHeqs in HH. constructor (assumption).
+      + destruct HH as [HH|HH].
+        * subst; repeat constructor.
+        * apply IHeqs in HH. constructor (assumption).
+      + apply IHeqs in HH. constructor (assumption).
+  Qed.
+
 End ISVARIABLE.
 
 Module IsVariableFun

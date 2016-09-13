@@ -300,43 +300,6 @@ Module Type TRANSLATION
     rewrite HH with (S':=Skip); reflexivity.
   Qed.
 
-  Definition is_fby (eq: equation) : bool :=
-    match eq with
-    | EqFby _ _ _ _ => true
-    | _ => false
-    end.
-
-  Definition is_app (eq: equation) : bool :=
-    match eq with
-    | EqApp _ _ _ _ _ => true
-    | _ => false
-    end.
-
-  Definition is_def (eq: equation) : bool :=
-    match eq with
-    | EqDef _ _ _ => true
-    | _ => false
-    end.
-
-  Lemma is_filtered_eqs:
-    forall eqs,
-      Permutation
-        (filter is_def eqs ++ filter is_app eqs ++ filter is_fby eqs)
-        eqs.
-  Proof.
-    induction eqs as [|eq eqs]; auto.
-    destruct eq; simpl.
-    - now apply Permutation_cons.
-    - rewrite <-Permutation_cons_app.
-      apply Permutation_cons; reflexivity.
-      now symmetry.
-    - symmetry.
-      rewrite <-Permutation_app_assoc.
-      apply Permutation_cons_app.
-      rewrite Permutation_app_assoc.
-      now symmetry.
-  Qed.
-
   Lemma filter_mem_fst:
     forall p (xs: list (ident * typ)),
       map fst (filter (fun (x:ident*typ)=>PS.mem (fst x) p) xs)
@@ -428,6 +391,27 @@ Module Type TRANSLATION
         left. now rewrite PS.mem_spec in IHeqs.
   Qed.
 
+  Lemma in_memories_filter_is_fby:
+    forall x eqs,
+      PS.In x (memories eqs) <-> In x (map var_defined (filter is_fby eqs)).
+  Proof.
+    unfold memories.
+    induction eqs as [|eq eqs].
+    - split; intro HH; try apply not_In_empty in HH; intuition.
+    - destruct eq; simpl; (try now rewrite IHeqs).
+      split; intro HH.
+      + apply In_fold_left_memory_eq in HH.
+        destruct HH as [HH|HH].
+        * right; now apply IHeqs.
+        * apply PS.add_spec in HH.
+          destruct HH as [HH|HH]; subst; auto.
+          contradiction (not_In_empty x).
+      + apply In_fold_left_memory_eq.
+        destruct HH as [HH|HH].
+        * rewrite PS.add_spec; intuition.
+        * apply IHeqs in HH; now left.
+  Qed.        
+
   Lemma fst_partition_memories_var_defined:
     forall n,
       Permutation
@@ -451,8 +435,13 @@ Module Type TRANSLATION
     { simpl.
       match goal with |- (if ?p then _ else _) = _ => destruct p eqn:Heq end;
         auto.
-      rewrite PS.mem_spec in Heq.
-      contradiction (n.(n_vout)). }
+      contradiction (Bool.eq_true_false_abs _ Heq). clear Heq.
+      SearchAbout PS.mem false.
+      apply mem_spec_false.
+      intro Hin.
+      apply in_memories_filter_is_fby in Hin.
+      contradiction (n.(n_vout)).
+    }
     rewrite <-Hfout; clear Hfout.
     rewrite filter_app, filter_mem_fst, <-n_defd.
     remember (memories n.(n_eqs)) as mems.

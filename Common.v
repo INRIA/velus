@@ -203,6 +203,18 @@ End OperatorsAux.
 
 (** *** About Coq stdlib *)
 
+Definition notb {A} (f: A -> bool) (x: A) := negb (f x).
+
+Lemma filter_notb_app:
+  forall {A} (p: A -> bool) xs,
+    Permutation (filter p xs ++ filter (notb p) xs) xs.
+Proof.
+  induction xs as [|x xs]; auto.
+  unfold notb, negb in *. simpl. destruct (p x); simpl.
+  now rewrite IHxs.
+  rewrite <-Permutation_middle. now rewrite IHxs.
+Qed.
+
 Lemma Forall_cons2:
   forall A P (x: A) l,
     List.Forall P (x :: l) <-> P x /\ List.Forall P l.
@@ -313,6 +325,47 @@ Proof.
   inversion_clear He; auto.
 Qed.
 
+Lemma decidable_Exists:
+  forall {A} (P: A->Prop) xs,
+    (forall x, In x xs -> Decidable.decidable (P x)) ->
+    Decidable.decidable (Exists P xs).
+Proof.
+  intros ** Hdec.
+  induction xs as [|x xs].
+  - right. now intro HH; apply Exists_nil in HH.
+  - destruct (Hdec x) as [Hx|Hx].
+    + now constructor.
+    + destruct IHxs as [Hxs|Hxs];
+        try (now left; constructor).
+      intros y Hin.
+      apply Hdec. constructor (assumption).
+    + destruct IHxs as [Hxs|Hxs].
+      * intros y Hin.
+        apply Hdec. constructor (assumption).
+      * left. constructor (assumption).
+      * right. intro HH.
+        apply Exists_cons in HH.
+        intuition.
+Qed.
+
+Lemma decidable_Exists_not_Forall:
+  forall {A} (P: A -> Prop) xs,
+    (forall x, In x xs -> Decidable.decidable (P x)) ->
+    (Exists P xs <-> ~Forall (fun x=>~(P x)) xs).
+Proof.
+  induction xs as [|x xs]; intro Hdec.
+  - split; intro HH.
+    + now apply Exists_nil in HH.
+    + apply Exists_nil. now apply HH.
+  - split; intro HH.
+    + inversion_clear 1 as [|? ? HnP Hfa].
+      inversion_clear HH as [|? ? Hex]; auto.
+      apply IHxs in Hex; auto.
+      intros y Hin. apply Hdec. intuition.
+    + destruct (Hdec x) as [Hx|Hx]; auto. now intuition.
+      right. apply IHxs; intuition.
+Qed.
+  
 Lemma Permutation_Forall:
   forall {A} (l l': list A) P,
     Permutation l l' ->
@@ -333,15 +386,13 @@ Proof.
     apply Permutation_Forall with (1:=Hperm) (2:=HH).
 Qed.
 
-  Lemma Forall_app_weaken:
-    forall {A} xs P (ys : list A),
-      Forall P (xs ++ ys) ->
-      Forall P ys.
-  Proof.
-    intros ** HH. apply Forall_app in HH. intuition.
-  Qed.
-  
-
+Lemma Forall_app_weaken:
+  forall {A} xs P (ys : list A),
+    Forall P (xs ++ ys) ->
+    Forall P ys.
+Proof.
+  intros ** HH. apply Forall_app in HH. intuition.
+Qed.
 
 Lemma not_None_is_Some:
   forall A (x : option A), x <> None <-> (exists v, x = Some v).
@@ -443,6 +494,14 @@ Lemma Forall2_combine:
 Proof.
   intros A B P xs ys Hfa2.
   induction Hfa2; now constructor.
+Qed.
+
+Instance Permutation_map_Proper {A B}:
+  Proper ((@eq (A -> B)) ==> Permutation (A:=A) ==> (Permutation (A:=B)))
+         (@map A B).
+Proof.
+  intros f g Heq xs ys Hperm.
+  subst. now apply Permutation_map_aux.
 Qed.
 
 Section InMembers.

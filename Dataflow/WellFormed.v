@@ -10,6 +10,7 @@ Require Import Rustre.Dataflow.NoDup.
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
+Require Import Coq.Sorting.Permutation.
 
 (** * Well formed CoreDF programs *)
 
@@ -77,16 +78,53 @@ A CoreDF program is well defined if
       forall nd nds,
         Welldef_global nds ->
         let eqs := nd.(n_eqs) in
-        let ni := map fst nd.(n_in) in
-        let no := fst nd.(n_out) in
-        NoDup ni
-        -> Is_well_sch (memories eqs) ni eqs
-        -> ~Exists (fun ni => Is_defined_in_eqs ni eqs) ni
-        -> Is_variable_in_eqs no eqs
+        Is_well_sch (memories eqs) (map fst nd.(n_in)) eqs
         -> ~Is_node_in nd.(n_name) eqs
         -> (forall f, Is_node_in f eqs -> find_node f nds <> None)
-        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
+        -> Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Welldef_global (nd::nds).
+
+  Lemma n_out_variable_in_eqs:
+    forall n,
+      Is_variable_in_eqs (fst n.(n_out)) n.(n_eqs).
+  Proof.
+    intros.
+    apply Is_variable_in_var_defined.
+    eapply not_In_app with (1:=n.(n_vout)).
+    rewrite <-map_app.
+    rewrite Permutation_app_comm.
+    rewrite filter_notb_app.
+    rewrite n.(n_defd).
+    apply in_map. intuition.
+  Qed.
+  
+  Lemma not_Exists_Is_defined_in_eqs_n_in:
+    forall n,
+      ~Exists (fun ni=>Is_defined_in_eqs ni n.(n_eqs)) (map fst n.(n_in)).
+  Proof.
+    intros n HH.
+    assert (forall {B} eqs (xs:list (ident*B)),
+      Exists (fun ni=> Is_defined_in_eqs ni eqs) (map fst xs)
+      <-> Exists (fun x=> Is_defined_in_eqs (fst x) eqs) xs) as Hexfst.
+    { intros B eqs. induction xs as [|x xs].
+      - simpl. now rewrite 2 Exists_nil.
+      - simpl. split;
+                 inversion_clear 1;
+                 try (now constructor);
+                 try (constructor (now apply IHxs)). }
+    rewrite Hexfst in HH; clear Hexfst.
+    apply decidable_Exists_not_Forall in HH.
+    2:(intros; apply decidable_Is_defined_in_eqs).
+    apply HH. clear HH.
+    apply Forall_forall.
+    intros x Hin.
+    rewrite Is_defined_in_var_defined.
+    rewrite n.(n_defd).
+    destruct x as [x xty].
+    apply In_InMembers in Hin.
+    rewrite <-fst_InMembers. simpl.
+    apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup) Hin).
+  Qed.
   
   (** ** Properties of [Is_well_sch] *)
 

@@ -23,7 +23,16 @@ Module Type MEMORIES
        (Ids : IDS)
        (Op  : OPERATORS)
        (Import Syn : SYNTAX Ids Op).
-  
+
+  Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
+    match eq with
+    | EqFby x _ _ _ => PS.add x mems
+    | _ => mems
+    end.
+
+  Definition memories (eqs: list equation) : PS.t :=
+    List.fold_left memory_eq eqs PS.empty.
+
   (** ** Properties *)
 
   Lemma In_fold_left_memory_eq:

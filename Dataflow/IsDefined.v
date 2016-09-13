@@ -44,6 +44,15 @@ Module Type ISDEFINED
         | right; inversion 1; auto]).
   Qed.
 
+  Lemma decidable_Is_defined_in_eqs:
+    forall x eqs,
+      Decidable.decidable (Is_defined_in_eqs x eqs).
+  Proof.
+    intros. apply decidable_Exists.
+    intros eq Hin.
+    destruct (Is_defined_in_eq_dec x eq); [left|right]; auto.
+  Qed.
+
   Lemma Is_defined_in_cons:
     forall x eq eqs,
       Is_defined_in_eqs x (eq :: eqs) ->
@@ -131,6 +140,32 @@ Module Type ISDEFINED
       + right; now apply IHeqs with (1:=HH).
       + left. 
         apply In_memory_eq_Is_defined_eq in HH; auto.
+  Qed.
+
+  Lemma Is_defined_in_eqs_var_defined:
+    forall x eq,
+      Is_defined_in_eq x eq <-> var_defined eq = x.
+  Proof.
+    Hint Constructors Is_defined_in_eq.
+    intros x eq.
+    destruct eq; simpl;
+      split; intro HH; subst; try inversion_clear HH; auto.
+  Qed.
+
+  Lemma Is_defined_in_var_defined:
+    forall x eqs,
+      Is_defined_in_eqs x eqs
+      <-> In x (map var_defined eqs).
+  Proof.
+    induction eqs as [|eq eqs].
+    now apply Exists_nil.
+    split; intro HH.
+    - inversion_clear HH as [? ? Hdef|? ? Hdef]; simpl; [left|right].
+      + now apply Is_defined_in_eqs_var_defined in Hdef.
+      + now apply IHeqs.
+    - destruct HH as [Hdef|Hdef]; simpl; [left|right].
+      + now apply Is_defined_in_eqs_var_defined in Hdef.
+      + now apply IHeqs.
   Qed.
   
 End ISDEFINED.
