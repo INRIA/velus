@@ -341,9 +341,9 @@ Section StateRepProperties.
   Definition pointer_of_node node := pointer_of (type_of_inst node).
 
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
-  Hypothesis main_node_exists: find_class main_node prog <> None.
+  Hypothesis gcenv_consistent: composite_env_consistent gcenv.
 
-  Lemma make_members_co:
+  Hypothesis make_members_co:
     forall clsnm cls prog',
       find_class clsnm prog = Some (cls, prog') ->
       (exists co, gcenv!clsnm = Some co
@@ -351,19 +351,9 @@ Section StateRepProperties.
              /\ co_members co = make_members cls
              /\ attr_alignas (co_attr co) = None
              /\ NoDupMembers (co_members co)).
-  Proof.
-    unfold translate in TRANSL.
-    apply not_None_is_Some in main_node_exists.
-    destruct main_node_exists as [[maincls prog'] Hfind_main].
-    rewrite Hfind_main in TRANSL.
-    destruct (map (translate_class prog) prog) as [|cls clss] eqn:Hmap.
-    - apply map_eq_nil in Hmap.
-      rewrite Hmap in Hfind_main; simpl in *; discriminate.
-    -
-  Admitted.
 
   Lemma field_translate_mem_type:
-    forall clsnm cls prog',
+    forall prog clsnm cls prog',
       find_class clsnm prog = Some (cls, prog') ->
       NoDupMembers (make_members cls) ->
       forall x ty,
@@ -376,7 +366,7 @@ Section StateRepProperties.
   Qed.
 
   Lemma field_translate_obj_type:
-    forall clsnm cls prog',
+    forall prog clsnm cls prog',
       find_class clsnm prog = Some (cls, prog') ->
       NoDupMembers (make_members cls) ->
       forall o c,
@@ -390,11 +380,7 @@ Section StateRepProperties.
   Qed.
 
   (* TODO: Construct a global environment of structs for a given program. *)
-
-  Lemma gcenv_consistent:
-    composite_env_consistent gcenv.
-  Admitted.
-
+  
   Lemma range_staterep:
     forall b clsnm,
       WelldefClasses prog ->
@@ -408,17 +394,21 @@ Section StateRepProperties.
            massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
                        (staterep gcenv prog clsnm m_empty b lo)).
     - intro HH; apply HH; apply Z.divide_0_r.
-    - clear main_node_exists TRANSL.
+    - clear TRANSL.
 
       revert clsnm Hfind.
-      induction prog as [|cls prog' IH]; intros clsnm Hfind lo.
+      remember prog as prog1.
+      rewrite Heqprog1 in make_members_co.
+      clear Heqprog1.
+      induction prog1 as [|cls prog' IH]; intros clsnm Hfind lo.
       + apply not_None_is_Some in Hfind.
         destruct Hfind. discriminate.
       + intro Halign.
         inversion Hwdef as [|? ? Hwdef']; subst.
-
+        
         assert (find_class clsnm prog = Some (cls, prog')) as Hprog.
         admit.
+      
         (* TODO: need to link prog to (possibly reversed) translation *)
 
         pose proof (make_members_co _ _ _ Hprog) as Hmco.
@@ -449,7 +439,7 @@ Section StateRepProperties.
 
            apply sep_imp'.
 
-           - pose proof (field_translate_mem_type _ _ _ Hprog Hndup') as Htype.
+           - pose proof (field_translate_mem_type _ _ _ _ Hprog Hndup') as Htype.
              clear Hcoal2.
 
              induction (c_mems cls); auto.
@@ -481,7 +471,7 @@ Section StateRepProperties.
                * apply Hcoal2.
                * intros; apply Htype; constructor (assumption).
 
-           - pose proof (field_translate_obj_type _ _ _ Hprog Hndup') as Htype.
+           - pose proof (field_translate_obj_type _ _ _ _ Hprog Hndup') as Htype.
              rewrite <-Hmem in Htype.
 
              induction (c_objs cls); auto.

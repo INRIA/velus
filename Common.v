@@ -1394,6 +1394,60 @@ Section Lists.
     - intro HForall.
       induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.      
   Qed.
+
+  Lemma NoDup_app_cons:
+    forall ws (x: A) xs,
+      NoDup (ws ++ x :: xs)
+      <-> ~In x (ws ++ xs) /\ NoDup (ws ++ xs).
+  Proof.
+    induction ws; simpl; split; intros ** Nodup.
+    - inv Nodup; auto. 
+    - destruct Nodup; auto. 
+    - inversion Nodup as [|? ? Notin Nodup']; clear Nodup; subst.
+      split.
+      + intro H; destruct H.
+        * subst; apply Notin.
+          apply in_app; right; apply in_eq.
+        * apply NoDup_remove_2 in Nodup'.
+          contradiction.
+      + constructor.
+        * intro Hin; apply Notin.
+          apply in_app_or in Hin.
+          destruct Hin; apply in_app; auto.
+          right; now apply in_cons.
+        * now apply NoDup_remove_1 in Nodup'.
+    - destruct Nodup as [Notin Nodup].
+      inversion Nodup as [|? ? Notin' Nodup']; clear Nodup; subst.
+      constructor.
+      + intro Hin.
+        apply in_app_or in Hin.
+        destruct Hin; apply Notin', in_app; auto.
+        simpl in H; destruct H; auto.
+        subst; contradict Notin; now left.  
+      + rewrite IHws; split; auto.
+  Qed.
+  
+  Lemma NoDup_app:
+    forall (ws xs: list A),
+      NoDup (ws ++ xs) <-> NoDup (xs ++ ws).
+   Proof.
+     induction ws; simpl; split; intros ** Nodup.
+     - now rewrite app_nil_r.
+     - now rewrite app_nil_r in Nodup.
+     - inversion Nodup as [|? ? Notin' Nodup']; clear Nodup; subst.
+       rewrite NoDup_app_cons; split.
+       + intro Hin; apply in_app_or in Hin.
+         destruct Hin; apply Notin', in_app; auto.
+       + now rewrite <-IHws.
+     - constructor.
+       + apply NoDup_remove_2 in Nodup.
+         intro Hin; apply in_app_or in Hin.
+         destruct Hin; apply Nodup, in_app; auto.
+       + rewrite NoDup_app_cons in Nodup.
+         destruct Nodup.
+         now rewrite IHws.
+   Qed.
+   
 End Lists.
 
 Ltac induction_list_tac e I l H :=

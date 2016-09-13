@@ -103,6 +103,33 @@ Proof.
     apply NoDupMembers_instance_methods.
 Qed.
 
+Remark translate_obj_fst:
+  forall c, map fst (map translate_obj (c_objs c)) = map fst (c_objs c).
+Proof.
+  intro; rewrite map_map.
+  induction (c_objs c) as [|(o, k)]; simpl; auto.
+  now rewrite IHl.
+Qed.
+
+Lemma NoDupMembers_make_members:
+  forall c, NoDupMembers (make_members c).
+Proof.
+  intro; unfold make_members.
+  pose proof (c_nodup c) as Nodup.
+  rewrite fst_NoDupMembers.
+  rewrite map_app.
+  now rewrite translate_obj_fst.
+Qed.
+
+Lemma glob_bind_vardef_fst:
+  forall xs init volatile,
+    map fst (map (vardef init volatile) (map glob_bind xs)) =
+    map (fun xt => glob_id (fst xt)) xs.
+Proof.
+  induction xs as [|(x, t)]; simpl; intros; auto.
+  now rewrite IHxs.
+Qed.
+
 (* SIMULATION *)
 
 Section PRESERVATION.
@@ -151,23 +178,60 @@ Section PRESERVATION.
   Hint Resolve Consistent.
   
   Opaque sepconj.
+
+  Theorem make_members_co:
+    forall clsnm cls prog',
+      find_class clsnm prog = Some (cls, prog') ->
+      (exists co,
+          gcenv ! clsnm = Some co
+          /\ co_su co = Struct
+          /\ co_members co = make_members cls
+          /\ attr_alignas (co_attr co) = None
+          /\ NoDupMembers (co_members co)).
+  Proof.
+    unfold translate in TRANSL.
+    destruct (find_class main_node prog) as [(main, prog')|]; try discriminate.
+    destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
+    destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
+    intros ** Findcl.
+    pose proof (find_class_name _ _ _ _ Findcl); subst.
+    apply build_ok in TRANSL.
+    assert (In (Composite (c_name cls) Struct (make_members cls) noattr) (concat structs)).
+    { unfold translate_class in E.
+      apply split_map in E.
+      destruct E as [Structs].
+      unfold make_struct in Structs.
+      apply find_class_In in Findcl.
+      apply in_map with (f:=fun c => Composite (c_name c) Struct (make_members c) noattr :: make_out c)
+        in Findcl.
+      apply in_concat with (l:=Composite (c_name cls) Struct (make_members cls) noattr :: make_out cls); auto.
+      - apply in_eq.
+      - now rewrite Structs.
+    }
+    edestruct build_composite_env_charact as (co & ? & Hmembers & Hattr & ?); eauto.
+    exists co; repeat split; auto.
+    - rewrite Hattr; auto. 
+    - rewrite Hmembers. apply NoDupMembers_make_members. 
+  Qed.
   
   Theorem global_out_struct:
-    forall clsnm c prog' fid f id su m a,
+    forall clsnm c prog' fid f (* id su m a *),
       find_class clsnm prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      translate_out c f = Composite id su m a ->
+      (* translate_out c f = Composite id su m a -> *)
       exists co,
-        gcenv ! id = Some co
-        /\ co.(co_members) = f.(m_out).
+        gcenv ! (prefix_fun (c_name c) (m_name f)) = Some co
+        /\ co.(co_su) = Struct 
+        /\ co.(co_members) = f.(m_out)
+        /\ co.(co_attr) = noattr.
   Proof.
     unfold translate in TRANSL.
     destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
     destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
     destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
     apply build_ok in TRANSL.
-    intros ** Findcl Findmth Trans.
-    assert (In (Composite id su m0 a) (concat structs)).
+    intros ** Findcl Findmth.
+    assert (In (Composite (prefix_fun (c_name c) (m_name f)) Struct f.(m_out) noattr) (concat structs)).
     { unfold translate_class in E.
       apply split_map in E.
       destruct E as [Structs].
@@ -177,148 +241,11 @@ Section PRESERVATION.
         in Findcl.
       apply find_method_In in Findmth.
       apply in_map with (f:=translate_out c) in Findmth.
-      rewrite Trans in Findmth.
+      unfold translate_out at 1 in Findmth.
       eapply in_concat_cons; eauto.
       rewrite Structs; eauto.
     }
-    unfold translate_out in Trans; inversion Trans; subst id su m0 a.
     edestruct build_composite_env_charact as (co & ? & ? & ? & ?); eauto.
-  Qed.
-
-  Lemma methods_corres:
-    forall c clsnm prog' fid m (* (e: Clight.env) *),
-      find_class clsnm prog = Some (c, prog') ->
-      find_method fid c.(c_methods) = Some m ->
-      Forall (fun xt => sizeof tge (snd xt) <= Int.modulus /\
-                      (exists (id : AST.ident) (co : composite),
-                          snd xt = Tstruct id noattr /\
-                          gcenv ! id = Some co /\
-                          co_su co = Struct /\
-                          NoDupMembers (co_members co) /\
-                          (forall (x' : AST.ident) (t' : type),
-                              In (x', t') (co_members co) ->
-                              exists chunk : AST.memory_chunk,
-                                access_mode t' = By_value chunk /\
-                                (align_chunk chunk | alignof gcenv t'))))
-              (make_out_vars (instance_methods m))
-      /\ exists loc_f f,
-          Genv.find_symbol tge (prefix_fun clsnm fid) = Some loc_f
-          (* /\ e ! (prefix fid clsnm) = None *)
-          /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
-          /\ f.(fn_params) = (self_id, type_of_inst_p c.(c_name))
-                              :: (out_id, type_of_inst_p (prefix_fun c.(c_name) m.(m_name)))
-                              :: m.(m_in)
-          /\ f.(fn_return) = Tvoid
-          /\ f.(fn_callconv) = AST.cc_default
-          /\ f.(fn_vars) = make_out_vars (instance_methods m)
-          /\ f.(fn_temps) = m.(m_vars) 
-          /\ list_norepet (var_names f.(fn_params))
-          /\ list_norepet (var_names f.(fn_vars))
-          /\ list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps))
-          /\ f.(fn_body) = return_none (translate_stmt prog c m m.(m_body)).
-  Proof.
-    unfold translate in TRANSL.
-    destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
-    destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
-    destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
-    intros ** Findcl Findmth.
-    pose proof (find_class_name _ _ _ _ Findcl) as Eq.
-    pose proof (find_method_name _ _ _ Findmth) as Eq'.
-    subst.
-    assert ((AST.prog_defmap tprog) ! (prefix_fun c.(c_name) m0.(m_name)) =
-            Some (snd (translate_method prog c m0))) as Hget. 
-    { unfold translate_class in E.
-      apply split_map in E.
-      destruct E as [? Funs].
-      unfold make_methods in Funs.
-      apply find_class_In in Findcl.
-      apply in_map with (f:=fun c => map (translate_method prog c) (c_methods c))
-        in Findcl.
-      apply find_method_In in Findmth.
-      apply in_map with (f:=translate_method prog c) in Findmth.
-      eapply in_concat in Findmth; eauto.
-      rewrite <-Funs in Findmth.
-      unfold make_program' in TRANSL.
-      destruct (build_composite_env' (concat structs)) as [(ce, P)|]; try discriminate.
-      inversion TRANSL as [Htprog]; clear TRANSL.
-      unfold AST.prog_defmap; simpl.
-      apply PTree_Properties.of_list_norepet.
-      - (* rewrite <-NoDup_norepet, <-fst_NoDupMembers. *)
-        rewrite map_cons, 3 map_app; simpl. admit.
-      - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
-        unfold translate_method in Findmth; auto.
-    }
-    split.
-      + admit.
-      + apply Genv.find_def_symbol in Hget.
-        destruct Hget as (loc_f & Findsym & Finddef).
-        simpl in Finddef.
-        unfold make_fundef, fundef in Finddef.
-        set (f:= {| fn_return := Tvoid;
-                    fn_callconv := AST.cc_default;
-                    fn_params := (self_id, type_of_inst_p (c_name c))
-                                   :: (out_id, type_of_inst_p (prefix_fun (c_name c) (m_name m0)))
-                                   :: m_in m0;
-                    fn_vars := make_out_vars (instance_methods m0);
-                    fn_temps := m_vars m0;
-                    fn_body := return_none (translate_stmt prog c m0 (m_body m0)) |}) in Finddef.
-        exists loc_f, f.
-        try repeat split; auto.
-        * change (Genv.find_funct_ptr tge loc_f) with (Genv.find_funct_ptr (Genv.globalenv tprog) loc_f).
-          unfold Genv.find_funct_ptr.
-          unfold Clight.fundef in Finddef.
-          now rewrite Finddef.
-        *{ unfold var_names.
-           rewrite <-NoDup_norepet, <-fst_NoDupMembers.
-           subst f; simpl.
-           constructor.
-           - intro Hin; simpl in Hin; destruct Hin as [Eq|Hin].
-             + now apply self_not_out.
-             + apply (m_self_id m0).
-               apply InMembers_app; now left.
-           - constructor.
-             + intro Hin.
-               apply (m_out_id m0).
-               apply InMembers_app; now left.
-             + pose proof (m_nodup m0) as Nodup.
-               now apply NoDupMembers_app_l in Nodup.
-         }
-        * unfold var_names.
-          rewrite <-NoDup_norepet, <-fst_NoDupMembers.
-          subst f; simpl.
-          apply NoDupMembers_make_out_vars.
-        *{ subst f; simpl.
-           repeat apply list_disjoint_cons_l.
-           - apply NoDupMembers_disjoint.
-             pose proof (m_nodup m0) as Nodup.
-             rewrite app_assoc in Nodup.
-             now apply NoDupMembers_app_l in Nodup.
-           - unfold var_names; rewrite <-fst_InMembers.
-             intro Hin; apply (m_out_id m0).
-             apply InMembers_app; right; apply InMembers_app; now left.
-           - unfold var_names; rewrite <-fst_InMembers.
-             intro Hin; apply (m_self_id m0).
-             apply InMembers_app; right; apply InMembers_app; now left.
-         }
-  Qed.
-     
-  Lemma type_pres:
-    forall c m e, Clight.typeof (translate_exp c m e) = typeof e.
-  Proof.
-    induction e as [| |cst]; simpl; auto.
-    - now case (existsb (fun out : positive * typ => ident_eqb (fst out) i) (m_out m)).
-    - destruct cst; simpl; reflexivity.
-  Qed.
-
-  Lemma sem_cast_same:
-    forall m v t,
-      valid_val v t ->
-      Cop.sem_cast v t t m = Some v.
-  Proof.
-    unfold valid_val; intros; destruct_pairs.
-    destruct t, v;
-      (destruct i, s || destruct f || idtac);
-      (discriminates || contradiction || auto).
   Qed.
 
   Inductive well_formed_exp (c: class) (m: method): exp -> Prop :=
@@ -364,8 +291,230 @@ Section PRESERVATION.
       well_formed_stmt c m (Call ys clsid o fid es)
   | wf_skip: 
       well_formed_stmt c m Skip.
+
+  Theorem well_formed:
+    Forall (fun c => Forall (fun m => well_formed_stmt c m (m_body m)) (c_methods c)) prog.
+  Admitted.
   
-   Remark valid_val_access:
+  Remark In_rec_instance_methods:
+    forall s l o fid cid,
+      In (o, fid, cid) (rec_instance_methods s l) <->
+      In (o, fid, cid) (rec_instance_methods s []) \/ In (o, fid, cid) l.
+  Proof.
+    induction s; simpl; split; intros ** Hin; try now right.
+    - destruct Hin; auto; contradiction.
+    - destruct Hin; auto; contradiction.
+    - rewrite IHs2, IHs1 in Hin.
+      rewrite IHs2.
+      destruct Hin as [|[|]]; auto.
+    - rewrite IHs2 in Hin.
+      rewrite IHs2, IHs1.
+      destruct Hin as [[|]|]; auto.
+    - rewrite IHs2, IHs1 in Hin.
+      rewrite IHs2.
+      destruct Hin as [|[|]]; auto.
+    - rewrite IHs2 in Hin.
+      rewrite IHs2, IHs1.
+      destruct Hin as [[|]|]; auto.
+    - destruct (in_dec dec_pair (i0, i1) (map fst l1)).
+      + now right.
+      + destruct Hin as [E|Hin].
+        * inv E; left; now left.
+        * now right.
+    - destruct Hin as [[E|]|Hin]; try contradiction.
+      + inv E.
+        destruct (in_dec dec_pair (o, fid) (map fst l1)) as [E|].
+        * admit.
+        * apply in_eq.
+      + destruct (in_dec dec_pair (i0, i1) (map fst l1)); auto.
+        now apply in_cons.
+    - destruct Hin; auto; contradiction.
+  Qed.
+  
+  Lemma well_formed_instance_methods:
+    forall o fid cid caller ownerid owner cls callerid,
+      find_class ownerid prog = Some (owner, cls) ->
+      find_method callerid (c_methods owner) = Some caller ->
+      In (o, fid, cid) (instance_methods caller) ->
+      exists c prog' callee,
+        find_class cid prog = Some (c, prog')
+        /\ find_method fid (c_methods c) = Some callee.
+  Proof.
+    intros ** Findcl Findmth Hin.
+    pose proof (find_class_name _ _ _ _ Findcl) as Eq.
+    pose proof (find_method_name _ _ _ Findmth) as Eq'.
+    apply find_class_In in Findcl.
+    apply find_method_In in Findmth.
+    pose proof (well_formed) as WF.
+    do 2 eapply In_Forall in WF; eauto.
+    unfold instance_methods in Hin.
+    induction (m_body caller); simpl in *; try contradiction; inv WF.
+    - rewrite In_rec_instance_methods in Hin. destruct Hin.
+      + apply IHs2; auto.
+      + apply IHs1; auto. 
+    - rewrite In_rec_instance_methods in Hin. destruct Hin.
+      + apply IHs2; auto.
+      + apply IHs1; auto. 
+    - destruct Hin as [E|]; try contradiction; inv E.
+      exists c', prog', f; split; auto.
+  Qed.
+
+  Theorem methods_corres:
+    forall c clsnm prog' fid m (* (e: Clight.env) *),
+      find_class clsnm prog = Some (c, prog') ->
+      find_method fid c.(c_methods) = Some m ->
+      Forall (fun xt => sizeof tge (snd xt) <= Int.modulus /\
+                      (exists (id : AST.ident) (co : composite),
+                          snd xt = Tstruct id noattr /\
+                          gcenv ! id = Some co /\
+                          co_su co = Struct /\
+                          NoDupMembers (co_members co) /\
+                          (forall (x' : AST.ident) (t' : type),
+                              In (x', t') (co_members co) ->
+                              exists chunk : AST.memory_chunk,
+                                access_mode t' = By_value chunk /\
+                                (align_chunk chunk | alignof gcenv t'))))
+              (make_out_vars (instance_methods m))
+      /\ exists loc_f f,
+          Genv.find_symbol tge (prefix_fun clsnm fid) = Some loc_f
+          (* /\ e ! (prefix fid clsnm) = None *)
+          /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
+          /\ f.(fn_params) = (self_id, type_of_inst_p c.(c_name))
+                              :: (out_id, type_of_inst_p (prefix_fun c.(c_name) m.(m_name)))
+                              :: m.(m_in)
+          /\ f.(fn_return) = Tvoid
+          /\ f.(fn_callconv) = AST.cc_default
+          /\ f.(fn_vars) = make_out_vars (instance_methods m)
+          /\ f.(fn_temps) = m.(m_vars) 
+          /\ list_norepet (var_names f.(fn_params))
+          /\ list_norepet (var_names f.(fn_vars))
+          /\ list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps))
+          /\ f.(fn_body) = return_none (translate_stmt prog c m m.(m_body)).
+  Proof.
+    unfold translate in TRANSL.
+    destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
+    destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
+    destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
+    intros ** Findcl Findmth.
+    pose proof (find_class_name _ _ _ _ Findcl);
+      pose proof (find_method_name _ _ _ Findmth); subst.
+    assert ((AST.prog_defmap tprog) ! (prefix_fun c.(c_name) m0.(m_name)) =
+            Some (snd (translate_method prog c m0))) as Hget. 
+    { unfold translate_class in E.
+      apply split_map in E.
+      destruct E as [? Funs].
+      unfold make_methods in Funs.
+      apply find_class_In in Findcl.
+      apply in_map with (f:=fun c => map (translate_method prog c) (c_methods c))
+        in Findcl.
+      apply find_method_In in Findmth.
+      apply in_map with (f:=translate_method prog c) in Findmth.
+      eapply in_concat in Findmth; eauto.
+      rewrite <-Funs in Findmth.
+      unfold make_program' in TRANSL.
+      destruct (build_composite_env' (concat structs)) as [(ce, P)|]; try discriminate.
+      inversion TRANSL as [Htprog]; clear TRANSL.
+      unfold AST.prog_defmap; simpl.
+      apply PTree_Properties.of_list_norepet.
+      - (* rewrite <-NoDup_norepet, <-fst_NoDupMembers. *)
+        rewrite map_cons, 3 map_app; simpl.
+        repeat rewrite glob_bind_vardef_fst. admit.
+      - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
+        unfold translate_method in Findmth; auto.
+    }
+    split.
+    + induction_list (instance_methods m0) as [|((o, f), k)] with insts; simpl; auto.
+      constructor; auto.
+      clear IHinsts.
+      assert (In (o, f, k) (instance_methods m0)) as Hin
+          by (rewrite Hinsts; apply in_app; left; apply in_app; right; apply in_eq).
+      edestruct well_formed_instance_methods as (c' & prog'' & callee & Findc' & Findcallee); eauto.
+      pose proof (find_class_name _ _ _ _ Findc');
+        pose proof (find_method_name _ _ _ Findcallee); subst.
+      eapply global_out_struct in Findc' as (co & ? & ? & Hmembers & ?); try reflexivity; eauto.
+      split.
+      * admit.
+      *{ exists (prefix_fun (c_name c') (m_name callee)), co.
+         repeat split; auto.
+         - rewrite Hmembers.
+           pose proof (m_nodup callee) as Nodup.
+           do 2 apply NoDupMembers_app_r in Nodup; auto.
+         - rewrite Hmembers.
+           intros x t Hinxt.
+           admit.
+       }
+    + apply Genv.find_def_symbol in Hget.
+      destruct Hget as (loc_f & Findsym & Finddef).
+      simpl in Finddef.
+      unfold make_fundef, fundef in Finddef.
+      set (f:= {| fn_return := Tvoid;
+                  fn_callconv := AST.cc_default;
+                  fn_params := (self_id, type_of_inst_p (c_name c))
+                                 :: (out_id, type_of_inst_p (prefix_fun (c_name c) (m_name m0)))
+                                 :: m_in m0;
+                  fn_vars := make_out_vars (instance_methods m0);
+                  fn_temps := m_vars m0;
+                  fn_body := return_none (translate_stmt prog c m0 (m_body m0)) |}) in Finddef.
+      exists loc_f, f.
+      try repeat split; auto.
+      * change (Genv.find_funct_ptr tge loc_f) with (Genv.find_funct_ptr (Genv.globalenv tprog) loc_f).
+        unfold Genv.find_funct_ptr.
+        unfold Clight.fundef in Finddef.
+        now rewrite Finddef.
+      *{ unfold var_names.
+         rewrite <-NoDup_norepet, <-fst_NoDupMembers.
+         subst f; simpl.
+         constructor.
+         - intro Hin; simpl in Hin; destruct Hin as [Eq|Hin].
+           + now apply self_not_out.
+           + apply (m_self_id m0).
+             apply InMembers_app; now left.
+         - constructor.
+           + intro Hin.
+             apply (m_out_id m0).
+             apply InMembers_app; now left.
+           + pose proof (m_nodup m0) as Nodup.
+             now apply NoDupMembers_app_l in Nodup.
+       }
+      * unfold var_names.
+        rewrite <-NoDup_norepet, <-fst_NoDupMembers.
+        subst f; simpl.
+        apply NoDupMembers_make_out_vars.
+      *{ subst f; simpl.
+         repeat apply list_disjoint_cons_l.
+         - apply NoDupMembers_disjoint.
+           pose proof (m_nodup m0) as Nodup.
+           rewrite app_assoc in Nodup.
+           now apply NoDupMembers_app_l in Nodup.
+         - unfold var_names; rewrite <-fst_InMembers.
+           intro Hin; apply (m_out_id m0).
+           apply InMembers_app; right; apply InMembers_app; now left.
+         - unfold var_names; rewrite <-fst_InMembers.
+           intro Hin; apply (m_self_id m0).
+           apply InMembers_app; right; apply InMembers_app; now left.
+       }
+  Qed.
+  
+  Lemma type_pres:
+    forall c m e, Clight.typeof (translate_exp c m e) = typeof e.
+  Proof.
+    induction e as [| |cst]; simpl; auto.
+    - now case (existsb (fun out : positive * typ => ident_eqb (fst out) i) (m_out m)).
+    - destruct cst; simpl; reflexivity.
+  Qed.
+
+  Lemma sem_cast_same:
+    forall m v t,
+      valid_val v t ->
+      Cop.sem_cast v t t m = Some v.
+  Proof.
+    unfold valid_val; intros; destruct_pairs.
+    destruct t, v;
+      (destruct i, s || destruct f || idtac);
+      (discriminates || contradiction || auto).
+  Qed.
+  
+  Remark valid_val_access:
     forall v t, valid_val v t -> access_mode t = By_value (chunk_of_type t).
   Proof. intros ** H; apply H. Qed.
 
@@ -659,8 +808,7 @@ Section PRESERVATION.
       f.(m_out) = outco.(co_members).
   Proof.
     intros ** ? ? Houtco.
-    edestruct global_out_struct as (outco' & Houtco' & Eq); eauto;
-    [unfold translate_out; eauto |].
+    edestruct global_out_struct as (outco' & Houtco' & Eq); eauto.
     rewrite Houtco in Houtco'; now inv Houtco'.
   Qed.
     
@@ -761,7 +909,7 @@ Section PRESERVATION.
   Proof.
     intros ** Find ? ? ? Hrep Hin.
     pose proof (find_class_name _ _ _ _ Find); subst.
-    edestruct (make_members_co prog tprog) as (? & Hco & ? & Eq & ? & ?); eauto.  
+    edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto.  
     rewrite staterep_skip in Hrep; eauto.
     edestruct staterep_field_offset as (d & ? & ?); eauto.
     exists d; split; [|split]; auto.
@@ -1117,7 +1265,7 @@ Section PRESERVATION.
   Proof.
     intros ** Find ? ? Hrep Hin ?.
     pose proof (find_class_name _ _ _ _ Find); subst.
-    edestruct (make_members_co prog tprog) as (? & Hco & ? & Eq & ? & ?); eauto. 
+    edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto. 
     rewrite staterep_skip in Hrep; eauto.
     edestruct staterep_inst_offset as (d & ? & ?); eauto.
     exists d; split; [|split]; auto.

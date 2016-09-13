@@ -173,12 +173,29 @@ Record class : Type :=
 	    c_objs    : list (ident * ident);
 	    c_methods : list method;
         
-	    c_nodupmems : NoDupMembers c_mems;
-        c_nodupobjs : NoDupMembers c_objs;
+	    c_nodup : NoDup (map fst c_mems ++ map fst c_objs);
                                    
 	    c_statedecl : Forall (fun m => StateDeclared c_mems m.(m_body)) c_methods;
         c_instdecl  : Forall (fun m => InstanceDeclared c_objs m.(m_body)) c_methods
       }.
+
+Lemma c_nodupmems:
+  forall c, NoDupMembers (c_mems c).
+Proof.
+  intro.
+  pose proof (c_nodup c) as Nodup.
+  apply NoDup_app_weaken in Nodup.
+  now rewrite fst_NoDupMembers.
+Qed.
+
+Lemma c_nodupobjs:
+  forall c, NoDupMembers (c_objs c).
+Proof.
+  intro.
+  pose proof (c_nodup c) as Nodup.
+  apply NoDup_app, NoDup_app_weaken in Nodup.
+  now rewrite fst_NoDupMembers.
+Qed.
 
 Definition program : Type := list class.
 
