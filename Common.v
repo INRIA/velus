@@ -1245,6 +1245,24 @@ Section Lists.
     now apply Permutation_cons.
   Qed.
 
+  Global Instance Permutation_app_Proper2 (xs: list A):
+    Proper (Permutation (A:=A) ==> Permutation (A:=A))
+           (app (A:=A) xs).
+  Proof.
+    intros ys ws Hperm.
+    now apply Permutation_app_head.
+  Qed.
+  
+  Global Instance Permutation_app_Proper3:
+    Proper (Permutation (A:=A) ==> (@eq (list A)) ==> Permutation (A:=A))
+           (app (A:=A)).
+  Proof.
+    intros xs ys Hperm ws1 ws2 Heq.
+    rewrite Heq.
+    rewrite (Permutation_app_comm xs), (Permutation_app_comm ys).
+    now apply Permutation_app_head.
+  Qed.
+
   Lemma partition_switch:
     forall f g,
       (forall x:A, f x = g x) ->

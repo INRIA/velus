@@ -487,16 +487,6 @@ Module Type TRANSLATION
     destruct eq; simpl; auto; now rewrite HH.
   Qed.
 
-  Lemma snd_partition_memories_var_defined:
-    forall n,
-      Permutation
-        (map fst (snd (partition
-                         (fun x=>PS.mem (fst x) (memories n.(n_eqs)))
-                         n.(n_vars))))
-        (map var_defined (filter (fun x=>negb (is_fby x)) n.(n_eqs))).
-  Proof.
-  Admitted.
-
   Instance Permutation_VarsDeclared_exp_Proper:
     Proper (@Permutation (ident*typ) ==> eq ==> iff) VarsDeclared_exp.
   Proof.
@@ -525,7 +515,17 @@ Module Type TRANSLATION
       match goal with H:Forall _ _ |- _ =>
         rewrite Forall_forall in H; apply H with (1:=Hin) end.
   Qed.
-  
+
+  Lemma snd_partition_memories_var_defined:
+    forall n,
+      Permutation
+        (map fst (snd (partition
+                         (fun x=>PS.mem (fst x) (memories n.(n_eqs)))
+                         n.(n_vars))))
+        (map var_defined (filter (notb is_fby) n.(n_eqs))).
+  Proof.
+  Admitted.
+
   Lemma VarsDeclared_translate_eqns:
     forall n,
       VarsDeclared
@@ -569,9 +569,6 @@ Module Type TRANSLATION
   Proof.
   Admitted.
 
-
-  
-
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -608,17 +605,11 @@ Module Type TRANSLATION
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
       apply (NoDupMembers_app_r (fst (partition p l))) end.
-    match goal with |- NoDupMembers ?l =>
-      cut (Permutation l (n_in n ++ n_vars n ++ [n_out n]))
-    end.
-    intro Hperm; rewrite Hperm. now apply n_nodup.
-    assert (Permutation (n.(n_in) ++ n.(n_vars) ++ [n.(n_out)])
-                        (n.(n_vars) ++ [n.(n_out)] ++ n.(n_in))) as Hr
-        by (now rewrite Permutation_app_comm, Permutation_app_assoc).
-    rewrite Hr.
-    rewrite <- (Permutation_app_assoc _ _ ([n.(n_out)] ++ n.(n_in))).
-    apply Permutation_app; auto.
-    symmetry; apply permutation_partition.
+    rewrite <-(Permutation_app_assoc (fst _)).
+    rewrite <- (permutation_partition _ n.(n_vars)).
+    rewrite (Permutation_app_comm [n.(n_out)]), <-Permutation_app_assoc.
+    rewrite (Permutation_app_comm n.(n_vars)), Permutation_app_assoc.
+    apply n.(n_nodup).
   Qed.
   Next Obligation.
     simpl. rewrite ps_from_list_gather_eqs_memories.
@@ -632,51 +623,23 @@ Module Type TRANSLATION
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
       apply (Forall_app_weaken (fst (partition p l))) end.
-    match goal with |- Forall _ ?l =>
-      cut (Permutation l (n_in n ++ n_vars n ++ [n_out n]))
-    end.
-    intro Hperm; rewrite Hperm. now apply n_good.
-    assert (Permutation (n.(n_in) ++ n.(n_vars) ++ [n.(n_out)])
-                        (n.(n_vars) ++ [n.(n_out)] ++ n.(n_in))) as Hr
-        by (now rewrite Permutation_app_comm, Permutation_app_assoc).
-    rewrite Hr.
-    rewrite <- (Permutation_app_assoc _ _ ([n.(n_out)] ++ n.(n_in))).
-    apply Permutation_app; auto.
-    symmetry; apply permutation_partition.
+    rewrite <-(Permutation_app_assoc (fst _)).
+    rewrite <- (permutation_partition _ n.(n_vars)).
+    rewrite <-(Permutation_app_assoc n.(n_vars)).
+    rewrite Permutation_app_comm.
+    apply n.(n_good).
   Qed.
   Next Obligation.
     rewrite partition_switch
     with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
     2:intro x; now rewrite ps_from_list_gather_eqs_memories.
-    (* Annoying, Coq should be able to rewrite these directly... *)
-    match goal with |- NoDup (?l1 ++ ?l2) =>
-      assert (Permutation (l1 ++ l2)
-                          (l1 ++ map var_defined (filter is_app n.(n_eqs))))
-        as Hperm
-        by (apply Permutation_app; auto; apply fst_gather_eqs_var_defined)
-    end.
-    rewrite Hperm; clear Hperm.
-    match goal with |- NoDup (?l1 ++ ?l2) =>
-      assert (Permutation (l1 ++ l2)
-                          (map var_defined (filter is_fby n.(n_eqs)) ++ l2))
-       as Hperm
-       by (apply Permutation_app; auto;
-            now rewrite fst_partition_memories_var_defined)
-    end.
-    rewrite Hperm; clear Hperm.
+    rewrite fst_gather_eqs_var_defined.
+    rewrite fst_partition_memories_var_defined.
     eapply (NoDup_app_weaken _ (map var_defined (filter is_def n.(n_eqs)))).
     rewrite Permutation_app_comm.
-    match goal with |- NoDup (?l1 ++ ?l2 ++ ?l3) =>
-      assert (Permutation (l1 ++ l2 ++ l3) (l1 ++ l3 ++ l2)) as Hperm
-        by (rewrite Permutation_app'; auto; now rewrite Permutation_app_comm)
-    end.
-    rewrite Hperm. clear Hperm.
     rewrite <- 2 map_app.
-    match goal with |- NoDup (map ?f ?l) =>
-      assert (Permutation (map f l) (map f n.(n_eqs))) as Hperm
-        by (apply Permutation_map_aux; apply is_filtered_eqs)
-    end.
-    rewrite Hperm. clear Hperm.
+    rewrite (Permutation_app_comm (filter is_fby _)).
+    rewrite is_filtered_eqs.
     pose proof (n_nodup n) as Hndm.
     apply NoDupMembers_app_r in Hndm.
     apply fst_NoDupMembers in Hndm.
