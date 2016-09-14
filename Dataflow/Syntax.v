@@ -21,10 +21,10 @@ Module Type SYNTAX
 
   Inductive lexp : Type :=
   | Econst : const -> lexp
-  | Evar   : ident -> typ -> lexp
+  | Evar   : ident -> type -> lexp
   | Ewhen  : lexp -> ident -> bool -> lexp
-  | Eunop  : unary_op -> lexp -> typ -> lexp
-  | Ebinop : binary_op -> lexp -> lexp -> typ -> lexp.
+  | Eunop  : unary_op -> lexp -> type -> lexp
+  | Ebinop : binary_op -> lexp -> lexp -> type -> lexp.
 
   Definition lexps := list lexp.
 
@@ -34,7 +34,7 @@ Module Type SYNTAX
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
-  | Emerge : ident -> typ -> cexp -> cexp -> cexp 
+  | Emerge : ident -> type -> cexp -> cexp -> cexp 
   | Eite   : lexp -> cexp -> cexp -> cexp
   | Eexp   : lexp -> cexp.
 
@@ -45,29 +45,29 @@ Module Type SYNTAX
   (* TODO: Why aren't the two others typed? *)
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : ident -> clock -> ident -> lexps -> typ -> equation
+  | EqApp : ident -> clock -> ident -> lexps -> type -> equation
   | EqFby : ident -> clock -> const -> lexp -> equation.
 
   Implicit Type eqn: equation.
 
   (** ** Node *)
 
-  Inductive VarsDeclared_clock (vars: list (ident * typ)): clock -> Prop :=
+  Inductive VarsDeclared_clock (vars: list (ident * type)): clock -> Prop :=
   | vd_base:
       VarsDeclared_clock vars Cbase
   | vd_on: forall ck x b,
-      In (x, bool_typ) vars ->
+      In (x, bool_type) vars ->
       VarsDeclared_clock vars ck ->
       VarsDeclared_clock vars (Con ck x b).
   
-  Inductive VarsDeclared_lexp (vars: list (ident * typ)): lexp -> Prop :=
+  Inductive VarsDeclared_lexp (vars: list (ident * type)): lexp -> Prop :=
   | vd_const: forall c,
       VarsDeclared_lexp vars (Econst c)
   | vd_var: forall x ty,
       In (x, ty) vars ->
       VarsDeclared_lexp vars (Evar x ty)
   | vd_when: forall e x b,
-      In (x, bool_typ) vars ->
+      In (x, bool_type) vars ->
       VarsDeclared_lexp vars e ->
       VarsDeclared_lexp vars (Ewhen e x b)
   | vd_unop: forall op e ty,
@@ -78,7 +78,7 @@ Module Type SYNTAX
       VarsDeclared_lexp vars e2 ->
       VarsDeclared_lexp vars (Ebinop op e1 e2 ty).
 
-  Inductive VarsDeclared_cexp (vars: list (ident * typ)): cexp -> Prop :=
+  Inductive VarsDeclared_cexp (vars: list (ident * type)): cexp -> Prop :=
   | vd_merge: forall x ty e1 e2,
       VarsDeclared_cexp vars e1 ->
       VarsDeclared_cexp vars e2 ->
@@ -92,7 +92,7 @@ Module Type SYNTAX
       VarsDeclared_lexp vars e ->
       VarsDeclared_cexp vars (Eexp e).
 
-  Inductive VarsDeclared (vars: list (ident * typ)): equation -> Prop :=
+  Inductive VarsDeclared (vars: list (ident * type)): equation -> Prop :=
   | eqn_def: forall x ck e,
       VarsDeclared_cexp vars e ->
       VarsDeclared_clock vars ck ->
@@ -106,9 +106,9 @@ Module Type SYNTAX
       VarsDeclared_clock vars ck ->
       VarsDeclared vars (EqFby x ck c e).
 
-  Fixpoint typeof (le: lexp): typ :=
+  Fixpoint typeof (le: lexp): type :=
     match le with
-    | Econst c => typ_const c
+    | Econst c => type_const c
     | Evar _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
@@ -143,9 +143,9 @@ Module Type SYNTAX
   Record node : Type :=
     mk_node {
         n_name : ident;
-        n_in   : list (ident * typ);
-        n_out  : (ident * typ);
-        n_vars : list (ident * typ);
+        n_in   : list (ident * type);
+        n_out  : (ident * type);
+        n_vars : list (ident * type);
         n_eqs  : list equation;
 
         n_ingt0 : 0 < length n_in;

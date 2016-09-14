@@ -347,7 +347,7 @@ enough: it does not support the internal fixpoint introduced by
              (les   : lexps)
              (ls    : stream (list value))
              (ys    : stream value)
-             (ty    : typ)
+             (ty    : type)
              (Hlaes : sem_laexps bk H ck les ls)
              (Hvar  : sem_var bk H y ys)
              (Hnode : sem_node G f ls ys),
@@ -375,9 +375,9 @@ enough: it does not support the internal fixpoint introduced by
              (f     : ident)
              (xss   : stream (list value))
              (ys    : stream value)
-             (i     : list (ident * typ))
-             (o     : ident * typ)
-             (v     : list (ident * typ))
+             (i     : list (ident * type))
+             (o     : ident * type)
+             (v     : list (ident * type))
              (eqs   : list equation)
              (ingt0 : 0 < length i)
              (defd  : Permutation (map var_defined eqs)
@@ -1005,7 +1005,7 @@ an absent value *)
   Qed.
 
   Lemma sem_vars_gt0:
-    forall bk H (xs: list (ident * typ)) ls,
+    forall bk H (xs: list (ident * type)) ls,
       0 < length xs ->
       sem_vars bk H (map fst xs) ls ->
       forall n, 0 < length (ls n).

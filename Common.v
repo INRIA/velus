@@ -114,26 +114,29 @@ Qed.
 
 Module Type OPERATORS.
   Parameter val : Type.
-  Parameter typ : Type.
+  Parameter type : Type.
   Parameter const : Type.
 
   Parameter true_val  : val.
   Parameter false_val : val.
   Axiom true_not_false_val : true_val <> false_val.
 
-  Parameter bool_typ : typ.
+  Parameter bool_type : type.
 
-  Parameter typ_const : const -> typ.
-  Parameter sem_const : const -> val.
+  Parameter type_const : const -> type.
+  Parameter sem_const  : const -> val.
   
   Parameter unary_op  : Type.
   Parameter binary_op : Type.
 
-  Parameter sem_unary  : unary_op -> val -> typ -> option val.
-  Parameter sem_binary : binary_op -> val -> typ -> val -> typ -> option val.
+  Parameter sem_unary  : unary_op -> val -> type -> option val.
+  Parameter sem_binary : binary_op -> val -> type -> val -> type -> option val.
+
+  Parameter type_unary  : unary_op -> type -> option type.
+  Parameter type_binary : binary_op -> type -> type -> option type.
 
   Axiom val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
-  Axiom typ_dec   : forall t1 t2 : typ, {t1 = t2} + {t1 <> t2}.
+  Axiom type_dec  : forall t1 t2 : type, {t1 = t2} + {t1 <> t2}.
   Axiom const_dec : forall c1 c2 : const, {c1 = c2} + {c1 <> c2}.
   Axiom unop_dec  : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}.
   Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}.
@@ -145,7 +148,7 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Close Scope equiv_scope.
 
   Instance: EqDec val eq := { equiv_dec := val_dec }.
-  Instance: EqDec typ eq := { equiv_dec := typ_dec }.
+  Instance: EqDec type eq := { equiv_dec := type_dec }.
   Instance: EqDec const eq := { equiv_dec := const_dec }.
   Instance: EqDec unary_op eq := { equiv_dec := unop_dec }.
   Instance: EqDec binary_op eq := { equiv_dec := binop_dec }.

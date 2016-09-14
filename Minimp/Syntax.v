@@ -17,15 +17,15 @@ Module Type SYNTAX
        (Import OpAux : OPERATORS_AUX Op).
 
   Inductive exp : Type :=
-  | Var   : ident -> typ -> exp                    (* variable  *)
-  | State : ident -> typ -> exp                    (* state variable  *)
-  | Const : const-> exp                            (* constant *)
-  | Unop  : unary_op -> exp -> typ -> exp          (* unary operator *)
-  | Binop : binary_op -> exp -> exp -> typ -> exp. (* binary operator *)
+  | Var   : ident -> type -> exp                    (* variable  *)
+  | State : ident -> type -> exp                    (* state variable  *)
+  | Const : const-> exp                             (* constant *)
+  | Unop  : unary_op -> exp -> type -> exp          (* unary operator *)
+  | Binop : binary_op -> exp -> exp -> type -> exp. (* binary operator *)
 
-  Definition typeof (e: exp): typ :=
+  Definition typeof (e: exp): type :=
     match e with
-    | Const c => typ_const c
+    | Const c => type_const c
     | Var _ ty
     | State _ ty
     | Unop _ _ ty
@@ -37,11 +37,11 @@ Module Type SYNTAX
   | AssignSt : ident -> exp -> stmt                  (* self.x = e *)
   | Ifte : exp -> stmt -> stmt -> stmt               (* if e then s1 else s2 *)
   | Comp : stmt -> stmt -> stmt                      (* s1; s2 *)
-  | Call : list (ident * typ) -> ident -> ident -> ident -> list exp -> stmt
+  | Call : list (ident * type) -> ident -> ident -> ident -> list exp -> stmt
                 (* y1:t1, ..., yn:tn := class instance method (e1, ..., em) *)
   | Skip.
 
-  Inductive VarsDeclared_exp (vars: list (ident * typ)): exp -> Prop :=
+  Inductive VarsDeclared_exp (vars: list (ident * type)): exp -> Prop :=
   | vd_var: forall x ty,
       In (x, ty) vars ->
       VarsDeclared_exp vars (Var x ty)
@@ -57,7 +57,7 @@ Module Type SYNTAX
       VarsDeclared_exp vars e2 ->
       VarsDeclared_exp vars (Binop op e1 e2 ty).
                        
-  Inductive VarsDeclared (vars: list (ident * typ)): stmt -> Prop :=
+  Inductive VarsDeclared (vars: list (ident * type)): stmt -> Prop :=
   | vd_assign: forall x e,
       In (x, typeof e) vars ->
       VarsDeclared_exp vars e ->
@@ -81,7 +81,7 @@ Module Type SYNTAX
   | vd_skip: 
       VarsDeclared vars Skip.
 
-  Inductive MemsDeclared_exp (mems: list (ident * typ)): exp -> Prop :=
+  Inductive MemsDeclared_exp (mems: list (ident * type)): exp -> Prop :=
   | md_var: forall x ty,
       MemsDeclared_exp mems (Var x ty)
   | md_state: forall x ty,
@@ -97,7 +97,7 @@ Module Type SYNTAX
       MemsDeclared_exp mems e2 ->
       MemsDeclared_exp mems (Binop op e1 e2 ty).
 
-  Inductive MemsDeclared (mems: list (ident * typ)): stmt -> Prop :=
+  Inductive MemsDeclared (mems: list (ident * type)): stmt -> Prop :=
   | md_assign: forall x e,
       MemsDeclared_exp mems e ->
       MemsDeclared mems (Assign x e)
@@ -142,9 +142,9 @@ Module Type SYNTAX
   Record method : Type :=
     mk_method {
         m_name : ident;
-	m_in   : list (ident * typ);
-	m_vars : list (ident * typ);
-	m_out  : list (ident * typ);
+	m_in   : list (ident * type);
+	m_vars : list (ident * type);
+	m_out  : list (ident * type);
 	m_body : stmt;
         
 	m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
@@ -156,7 +156,7 @@ Module Type SYNTAX
   Record class : Type :=
     mk_class {
 	c_name    : ident;
-	c_mems    : list (ident * typ);
+	c_mems    : list (ident * type);
 	c_objs    : list (ident * ident);   (* (instance, class) *)
 	c_methods : list method;
 

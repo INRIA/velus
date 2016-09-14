@@ -64,7 +64,7 @@ Module Type TRANSLATION
     Variable memories : PS.t.
 
     (* =tovar= *)
-    Definition tovar (xt: ident * typ) : exp :=
+    Definition tovar (xt: ident * type) : exp :=
       let (x, ty) := xt in
       if PS.mem x memories then State x ty else Var x ty.
     (* =end= *)
@@ -74,8 +74,8 @@ Module Type TRANSLATION
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
       | Cbase => s
-      | Con ck x true  => Control ck (Ifte (tovar (x, bool_typ)) s Skip)
-      | Con ck x false => Control ck (Ifte (tovar (x, bool_typ)) Skip s)
+      | Con ck x true  => Control ck (Ifte (tovar (x, bool_type)) s Skip)
+      | Con ck x false => Control ck (Ifte (tovar (x, bool_type)) Skip s)
       end.
     (* =end= *)
 
@@ -301,8 +301,8 @@ Module Type TRANSLATION
   Qed.
 
   Lemma filter_mem_fst:
-    forall p (xs: list (ident * typ)),
-      map fst (filter (fun (x:ident*typ)=>PS.mem (fst x) p) xs)
+    forall p (xs: list (ident * type)),
+      map fst (filter (fun (x:ident*type)=>PS.mem (fst x) p) xs)
       = filter (fun x=>PS.mem x p) (map fst xs).
   Proof.
     induction xs as [|x xs]; auto.
@@ -436,7 +436,6 @@ Module Type TRANSLATION
       match goal with |- (if ?p then _ else _) = _ => destruct p eqn:Heq end;
         auto.
       contradiction (Bool.eq_true_false_abs _ Heq). clear Heq.
-      SearchAbout PS.mem false.
       apply mem_spec_false.
       intro Hin.
       apply in_memories_filter_is_fby in Hin.
@@ -488,7 +487,7 @@ Module Type TRANSLATION
   Qed.
 
   Instance Permutation_VarsDeclared_exp_Proper:
-    Proper (@Permutation (ident*typ) ==> eq ==> iff) VarsDeclared_exp.
+    Proper (@Permutation (ident*type) ==> eq ==> iff) VarsDeclared_exp.
   Proof.
     intros xs ys Hperm s1 s2 Heq; subst s2.
     induction s1; (split; intro HH; inversion_clear HH; constructor);
@@ -497,7 +496,7 @@ Module Type TRANSLATION
   Qed.
 
   Instance Permutation_VarsDeclared_Proper:
-    Proper (@Permutation (ident*typ) ==> eq ==> iff) VarsDeclared.
+    Proper (@Permutation (ident*type) ==> eq ==> iff) VarsDeclared.
   Proof.
     intros xs ys Hperm s1 s2 Heq.
     subst s2.

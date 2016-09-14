@@ -33,7 +33,7 @@ Module Type ISPRESENT
   | IsCon:
       forall ck c v b,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems (c, bool_typ)) v
+        -> exp_eval heap stack (tovar mems (c, bool_type)) v
         -> val_to_bool v = Some b
         -> Is_present_in mems heap stack (Con ck c b).
 
@@ -45,7 +45,7 @@ Module Type ISPRESENT
   | IsAbs2:
       forall ck c v b,
         Is_present_in mems heap stack ck
-        -> exp_eval heap stack (tovar mems (c, bool_typ)) v
+        -> exp_eval heap stack (tovar mems (c, bool_type)) v
         -> val_to_bool v = Some b
         -> Is_absent_in mems heap stack (Con ck c (negb b)).
 
@@ -93,7 +93,8 @@ Module Type ISPRESENT
     induction ck.
     - left; constructor.
     - destruct IHck.
-      + destruct (exp_eval_tovar_dec menv env mems (i, bool_typ)) as [[HH|HH]|[HH1 HH2]].
+      + destruct (exp_eval_tovar_dec menv env mems (i, bool_type))
+          as [[HH|HH]|[HH1 HH2]].
         * destruct b; [left|right].
           econstructor (eauto); apply val_to_bool_true.
           inversion 1; subst.
@@ -117,7 +118,7 @@ Module Type ISPRESENT
     forall mems menv env ck c v,
       Is_absent_in mems menv env (Con ck c v)
       -> (Is_absent_in mems menv env ck
-         \/ (forall v', exp_eval menv env (tovar mems (c, bool_typ)) v'
+         \/ (forall v', exp_eval menv env (tovar mems (c, bool_type)) v'
              -> (if v then v' <> true_val else v' <> false_val))).
   Proof.
     intros until c.

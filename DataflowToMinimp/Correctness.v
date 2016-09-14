@@ -1139,7 +1139,7 @@ for all [Is_free_exp x e]. *)
     Qed.
     
     Lemma adds_sem_var_find:
-      forall Hn i (iargs: list (ident * typ)) ivals c,
+      forall Hn i (iargs: list (ident * type)) ivals c,
         NoDupMembers iargs ->
         In i (map fst iargs) ->
         Forall2 (sem_var_instant Hn) (map fst iargs) (map present ivals) ->
@@ -1152,7 +1152,7 @@ for all [Is_free_exp x e]. *)
       apply Forall2_combine in Hsem.
       unfold adds.
       assert (PM.find i (fold_right
-                            (fun (xbv : ident * typ * val) (env : PM.t val) =>
+                            (fun (xbv : ident * type * val) (env : PM.t val) =>
                                let '(x, _, v) := xbv in PM.add x v env)
                             sempty (combine iargs ivals)) = Some c
               <-> PM.find i (fold_right (fun (xv : ident * value) env =>
@@ -1608,7 +1608,7 @@ for all [Is_free_exp x e]. *)
               (css   : stream (list const))
               (ys    : stream value)
               (r     : ident)
-              (ty    : typ)
+              (ty    : type)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
@@ -1870,7 +1870,7 @@ for all [Is_free_exp x e]. *)
     intros f ce Hxni Hfce.
     simpl.
     destruct b.
-    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_typ)) (f ce) Skip).
+    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_type)) (f ce) Skip).
       + intros j Hfree Hcw.
         apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
         inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
@@ -1882,7 +1882,7 @@ for all [Is_free_exp x e]. *)
         end.
         unfold tovar in Hfree.
         destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_typ)) Skip (f ce)).
+    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_type)) Skip (f ce)).
       + intros j Hfree Hcw.
         apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
         inversion_clear Hcw as [| |? ? ? ? Hskip| | | |];
