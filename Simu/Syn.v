@@ -79,6 +79,7 @@ Inductive VarsDeclared (vars: list (ident * typ)): stmt -> Prop :=
     VarsDeclared vars s2 ->
     VarsDeclared vars (Comp s1 s2)
 | vd_call: forall f ys c o es,
+    NoDupMembers ys ->
     incl ys vars ->
     Forall (VarsDeclared_exp vars) es ->
     VarsDeclared vars (Call ys c o f es)
@@ -155,7 +156,7 @@ Record method : Type :=
       m_self_id : ~InMembers self_id (m_in ++ m_vars ++ m_out);
       m_out_id  : ~InMembers out_id (m_in ++ m_vars ++ m_out)
     }.
-
+  
 Definition meth_vars (m: method): list (ident * typ) :=
   m.(m_in) ++ m.(m_vars) ++ m.(m_out).
 

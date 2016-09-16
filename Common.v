@@ -1491,3 +1491,7 @@ Tactic Notation "induction_list" constr(E) "with" ident(l) :=
 Tactic Notation "induction_list" constr(E) "eq:" ident(H) :=
   let l := fresh "l" in
   induction_list E as [|] with l eq:H.
+
+Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
+  let H := fresh "H" l in
+  induction_list_tac E I l H.
