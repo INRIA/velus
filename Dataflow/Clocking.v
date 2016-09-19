@@ -1,5 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import Rustre.Dataflow.Syntax.
 Require Import List.
 

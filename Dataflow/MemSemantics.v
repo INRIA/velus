@@ -5,6 +5,7 @@ Require Import Coq.Sorting.Permutation.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.Stream.
 Require Import Rustre.Dataflow.Syntax.

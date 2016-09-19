@@ -1,4 +1,5 @@
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
 Require Import Rustre.Minimp.Syntax.

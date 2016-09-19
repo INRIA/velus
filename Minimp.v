@@ -1,3 +1,4 @@
+Require Import Operators.
 Require Export Minimp.Syntax.
 Require Export Minimp.Semantics.
 Require Export Minimp.Equiv.

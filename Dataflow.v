@@ -1,3 +1,4 @@
+Require Import Operators.
 Require Export Dataflow.Stream.
 Require Export Dataflow.Syntax.
 Require Export Dataflow.IsFree.

@@ -1,4 +1,5 @@
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsFree.
 Require Import Rustre.Dataflow.IsFree.Decide.

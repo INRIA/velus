@@ -1,4 +1,5 @@
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import PArith.
 Require Import Coq.Sorting.Permutation.
 

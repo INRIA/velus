@@ -1,4 +1,5 @@
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import Dataflow.Syntax.
 Require Import Dataflow.Clocking.
 Require Import Dataflow.Clocking.Parents.

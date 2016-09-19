@@ -13,6 +13,7 @@
 -install none
 RMemory.v
 Common.v
+Operators.v
 Example.v
 Dataflow/Stream.v
 Dataflow/Syntax.v

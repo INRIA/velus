@@ -1,4 +1,5 @@
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 
 Open Scope bool_scope.
 Require Import List.

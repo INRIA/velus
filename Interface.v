@@ -1,6 +1,7 @@
 Require Import lib.Integers.
 Require Import lib.Floats.
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 
 Require compcert.common.Values.
 Require compcert.cfrontend.Cop.

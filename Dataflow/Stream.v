@@ -1,4 +1,5 @@
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 
 (** * Extensional model of synchronous streams *)
 

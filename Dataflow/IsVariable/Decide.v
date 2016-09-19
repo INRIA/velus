@@ -5,6 +5,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Require Import Rustre.Common.
+Require Import Rustre.Operators.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsVariable.
 Require Import Rustre.Dataflow.IsDefined.
