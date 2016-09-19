@@ -14,7 +14,6 @@
 RMemory.v
 Common.v
 Example.v
-Nelist.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
 Dataflow/IsFree.v
@@ -43,6 +42,4 @@ DataflowToMinimp/Translation.v
 DataflowToMinimp/Correctness/IsPresent.v
 DataflowToMinimp/Correctness/MemoryCorres.v
 DataflowToMinimp/Correctness.v
-MinimpToClight/Translation.v
 Interface.v
-DataflowToClight.v

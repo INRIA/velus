@@ -122,17 +122,8 @@ VFILES:=RMemory.v\
   Dataflow/IsFree.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
-  Nelist.v\
   Common.v\
-  Interface.v\
-  MinimpToClight/Translation.v\
-  DataflowToClight.v\
-  Simu/Syn.v\
-  Simu/Sem.v\
-  Simu/Tra.v\
-  Simu/Cor.v\
-  Simu/Sep.v\
-  Simu/SepInv.v
+  Interface.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
