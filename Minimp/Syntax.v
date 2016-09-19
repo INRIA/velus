@@ -41,104 +41,6 @@ Module Type SYNTAX
                 (* y1:t1, ..., yn:tn := class instance method (e1, ..., em) *)
   | Skip.
 
-  Inductive VarsDeclared_exp (vars: list (ident * type)): exp -> Prop :=
-  | vd_var: forall x ty,
-      In (x, ty) vars ->
-      VarsDeclared_exp vars (Var x ty)
-  | vd_state: forall x ty,
-      VarsDeclared_exp vars (State x ty)
-  | vd_const: forall c,
-      VarsDeclared_exp vars (Const c)
-  | vd_unop: forall op e ty,
-      VarsDeclared_exp vars e ->
-      VarsDeclared_exp vars (Unop op e ty)
-  | vd_binop: forall op e1 e2 ty,
-      VarsDeclared_exp vars e1 ->
-      VarsDeclared_exp vars e2 ->
-      VarsDeclared_exp vars (Binop op e1 e2 ty).
-                       
-  Inductive VarsDeclared (vars: list (ident * type)): stmt -> Prop :=
-  | vd_assign: forall x e,
-      In (x, typeof e) vars ->
-      VarsDeclared_exp vars e ->
-      VarsDeclared vars (Assign x e)
-  | vd_assignst: forall x e,
-      VarsDeclared_exp vars e ->
-      VarsDeclared vars (AssignSt x e)
-  | vd_ifte: forall e s1 s2,
-      VarsDeclared_exp vars e ->
-      VarsDeclared vars s1 ->
-      VarsDeclared vars s2 ->
-      VarsDeclared vars (Ifte e s1 s2)
-  | vd_comp: forall s1 s2,
-      VarsDeclared vars s1 ->
-      VarsDeclared vars s2 ->
-      VarsDeclared vars (Comp s1 s2)
-  | vd_call: forall f ys c o es,
-      List.incl ys vars ->
-      Forall (VarsDeclared_exp vars) es ->
-      VarsDeclared vars (Call ys c o f es)
-  | vd_skip: 
-      VarsDeclared vars Skip.
-
-  Inductive MemsDeclared_exp (mems: list (ident * type)): exp -> Prop :=
-  | md_var: forall x ty,
-      MemsDeclared_exp mems (Var x ty)
-  | md_state: forall x ty,
-      List.In (x, ty) mems ->
-      MemsDeclared_exp mems (State x ty)
-  | md_const: forall c,
-      MemsDeclared_exp mems (Const c)
-  | md_unop: forall op e ty,
-      MemsDeclared_exp mems e ->
-      MemsDeclared_exp mems (Unop op e ty)
-  | md_binop: forall op e1 e2 ty,
-      MemsDeclared_exp mems e1 ->
-      MemsDeclared_exp mems e2 ->
-      MemsDeclared_exp mems (Binop op e1 e2 ty).
-
-  Inductive MemsDeclared (mems: list (ident * type)): stmt -> Prop :=
-  | md_assign: forall x e,
-      MemsDeclared_exp mems e ->
-      MemsDeclared mems (Assign x e)
-  | md_assignst: forall x e,
-      List.In (x, typeof e) mems ->
-      MemsDeclared_exp mems e ->
-      MemsDeclared mems (AssignSt x e)
-  | md_ifte: forall e s1 s2,
-      MemsDeclared_exp mems e ->
-      MemsDeclared mems s1 ->
-      MemsDeclared mems s2 ->
-      MemsDeclared mems (Ifte e s1 s2)
-  | md_comp: forall s1 s2,
-      MemsDeclared mems s1 ->
-      MemsDeclared mems s2 ->
-      MemsDeclared mems (Comp s1 s2)
-  | md_call: forall f ys c o es,
-      Forall (MemsDeclared_exp mems) es ->
-      MemsDeclared mems (Call ys c o f es)
-  | md_skip: 
-      MemsDeclared mems Skip.
-                       
-  Inductive InstanceDeclared (objs: list (ident * ident)): stmt -> Prop :=
-  | id_assign: forall x e,
-      InstanceDeclared objs (Assign x e)
-  | id_assignst: forall x e,
-      InstanceDeclared objs (AssignSt x e)
-  | id_ifte: forall e s1 s2,
-      InstanceDeclared objs s1 ->
-      InstanceDeclared objs s2 ->
-      InstanceDeclared objs (Ifte e s1 s2)
-  | id_comp: forall s1 s2,
-      InstanceDeclared objs s1 ->
-      InstanceDeclared objs s2 ->
-      InstanceDeclared objs (Comp s1 s2)
-  | id_call: forall f ys c o es,
-      List.In (o, c) objs ->
-      InstanceDeclared objs (Call ys c o f es)
-  | id_skip: 
-      InstanceDeclared objs Skip.
-
   Record method : Type :=
     mk_method {
         m_name : ident;
@@ -148,8 +50,6 @@ Module Type SYNTAX
 	m_body : stmt;
         
 	m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
-        (* TODO: ~VarsDeclared m_in m_body? *)
-	m_varsdecl  : VarsDeclared (m_vars ++ m_out) m_body;
         m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
       }.
   
@@ -160,9 +60,7 @@ Module Type SYNTAX
 	c_objs    : list (ident * ident);   (* (instance, class) *)
 	c_methods : list method;
 
-        c_nodups   : NoDup (map fst c_mems ++ map fst c_objs);
-	c_memsdecl : Forall (fun m=>MemsDeclared c_mems m.(m_body)) c_methods;
-        c_instdecl : Forall (fun m=>InstanceDeclared c_objs m.(m_body)) c_methods
+        c_nodups   : NoDup (map fst c_mems ++ map fst c_objs)
       }.
 
   Definition program : Type := list class.

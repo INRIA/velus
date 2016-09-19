@@ -298,10 +298,10 @@ environment.
 
   with sem_node G: ident -> stream (list value) -> stream value -> Prop :=
        | SNode:
-           forall bk f xss ys i o v eqs ingt0 defd vout decl nodup good,
+           forall bk f xss ys i o v eqs ingt0 defd vout nodup good,
              clock_of xss bk ->
              find_node f G = Some (mk_node f i o v eqs
-                                           ingt0 defd vout decl nodup good) ->
+                                           ingt0 defd vout nodup good) ->
              (exists H,
                  sem_vars bk H (map fst i) xss
                  /\ sem_var bk H (fst o) ys
@@ -383,13 +383,12 @@ enough: it does not support the internal fixpoint introduced by
              (defd  : Permutation (map var_defined eqs)
                                   (map fst (v ++ [o])))
              (vout  : ~In (fst o) (map var_defined (filter is_fby eqs)))
-             (decl  : Forall (VarsDeclared (i ++ v ++ [o])) eqs)
              (nodup : NoDupMembers (i ++ v ++ [o]))
              (good  : Forall NotReserved (i ++ v ++ [o]))
              (Hck   : clock_of xss bk)
              (Hf    : find_node f G =
                       Some (mk_node f i o v eqs
-                                    ingt0 defd vout decl nodup good))
+                                    ingt0 defd vout nodup good))
              (Heqs  : exists H,
             sem_vars bk H (map fst i) xss
             /\ sem_var bk H (fst o) ys
@@ -402,7 +401,7 @@ enough: it does not support the internal fixpoint introduced by
             /\ Forall (fun eq=> exists Hsem, P bk H eq Hsem) eqs)
         -> Pn f xss ys
               (SNode G bk f xss ys i o v eqs ingt0
-                     defd vout decl nodup good Hck Hf Heqs).
+                     defd vout nodup good Hck Hf Heqs).
 
     Fixpoint sem_equation_mult (bk: stream bool)
              (H  : history)
@@ -424,9 +423,9 @@ enough: it does not support the internal fixpoint introduced by
                        (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
            match Hn in (sem_node _ f ls ys) return (Pn f ls ys Hn) with
            | SNode bk f ls ys i o v eqs
-                   ingt0 defd vout decl nodup good Hck Hf Hnode =>
+                   ingt0 defd vout nodup good Hck Hf Hnode =>
              SNode_case bk f ls ys i o v eqs
-                        ingt0 defd vout decl nodup good Hck Hf Hnode
+                        ingt0 defd vout nodup good Hck Hf Hnode
                         (* Turn: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
                      /\ (forall n, sem_var H (v_name o) n (ys n))
@@ -813,7 +812,7 @@ clock to [sem_var_instant] too. *)
     induction Hsem as [
          | bk H y ck f lae ls ys ty Hlae Hvar Hnode IH
          |
-         | bk f xs ys i o v eqs ingt0 defd vout decl nodup good Hbk Hf Heqs IH]
+         | bk f xs ys i o v eqs ingt0 defd vout nodup good Hbk Hf Heqs IH]
             using sem_node_mult
           with (P := fun bk H eq Hsem => ~Is_node_in_eq node.(n_name) eq
                                       -> sem_equation G bk H eq).
@@ -837,7 +836,6 @@ clock to [sem_var_instant] too. *)
                        n_ingt0 := ingt0;
                        n_defd  := defd;
                        n_vout  := vout;
-                       n_decl  := decl;
                        n_nodup := nodup;
                        n_good  := good
                     |}).
@@ -851,17 +849,17 @@ clock to [sem_var_instant] too. *)
   Qed.
 
   Lemma find_node_find_again:
-    forall G f i o v eqs ingt0 defd vout decl nodup good g,
+    forall G f i o v eqs ingt0 defd vout nodup good g,
       Ordered_nodes G
       -> find_node f G =
          Some {| n_name := f; n_in := i; n_out := o;
-                 n_vars := v; n_eqs := eqs; n_decl := decl;
+                 n_vars := v; n_eqs := eqs;
                  n_ingt0 := ingt0; n_defd := defd; n_vout := vout;
                  n_nodup := nodup; n_good := good |}
       -> Is_node_in g eqs
       -> Exists (fun nd=> g = nd.(n_name)) G.
   Proof.
-    intros G f i o v eqs ingt0 defd vout decl nodup good g Hord Hfind Hini.
+    intros G f i o v eqs ingt0 defd vout nodup good g Hord Hfind Hini.
     apply find_node_split in Hfind.
     destruct Hfind as [bG [aG Hfind]].
     rewrite Hfind in *.
@@ -888,7 +886,7 @@ clock to [sem_var_instant] too. *)
     induction Hsem as [
        | bk H y f lae ls ys Hlae Hvar Hnode IH
        |
-       | bk f xs ys i o v eqs ingt0 defd vout decl nodup good Hbk Hfind Heqs IH]
+       | bk f xs ys i o v eqs ingt0 defd vout nodup good Hbk Hfind Heqs IH]
           using sem_node_mult
         with (P := fun bk H eq Hsem =>
                      ~Is_node_in_eq nd.(n_name) eq
@@ -923,7 +921,7 @@ clock to [sem_var_instant] too. *)
                    Is_node_in_eq g eq
                    -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
     {
-      clear defd vout decl nodup good Hfind Heqs Hnf.
+      clear defd vout nodup good Hfind Heqs Hnf.
       induction eqs as [|eq eqs IH]; [now constructor|].
       constructor.
       - intros g Hini.

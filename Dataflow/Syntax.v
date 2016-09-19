@@ -52,60 +52,6 @@ Module Type SYNTAX
 
   (** ** Node *)
 
-  Inductive VarsDeclared_clock (vars: list (ident * type)): clock -> Prop :=
-  | vd_base:
-      VarsDeclared_clock vars Cbase
-  | vd_on: forall ck x b,
-      In (x, bool_type) vars ->
-      VarsDeclared_clock vars ck ->
-      VarsDeclared_clock vars (Con ck x b).
-  
-  Inductive VarsDeclared_lexp (vars: list (ident * type)): lexp -> Prop :=
-  | vd_const: forall c,
-      VarsDeclared_lexp vars (Econst c)
-  | vd_var: forall x ty,
-      In (x, ty) vars ->
-      VarsDeclared_lexp vars (Evar x ty)
-  | vd_when: forall e x b,
-      In (x, bool_type) vars ->
-      VarsDeclared_lexp vars e ->
-      VarsDeclared_lexp vars (Ewhen e x b)
-  | vd_unop: forall op e ty,
-      VarsDeclared_lexp vars e ->
-      VarsDeclared_lexp vars (Eunop op e ty)
-  | vd_binop: forall op e1 e2 ty,
-      VarsDeclared_lexp vars e1 ->
-      VarsDeclared_lexp vars e2 ->
-      VarsDeclared_lexp vars (Ebinop op e1 e2 ty).
-
-  Inductive VarsDeclared_cexp (vars: list (ident * type)): cexp -> Prop :=
-  | vd_merge: forall x ty e1 e2,
-      VarsDeclared_cexp vars e1 ->
-      VarsDeclared_cexp vars e2 ->
-      VarsDeclared_cexp vars (Emerge x ty e1 e2)
-  | vd_ite: forall e1 et ef,
-      VarsDeclared_lexp vars e1 ->
-      VarsDeclared_cexp vars et ->
-      VarsDeclared_cexp vars ef ->
-      VarsDeclared_cexp vars (Eite e1 et ef)
-  | vd_exp: forall e,
-      VarsDeclared_lexp vars e ->
-      VarsDeclared_cexp vars (Eexp e).
-
-  Inductive VarsDeclared (vars: list (ident * type)): equation -> Prop :=
-  | eqn_def: forall x ck e,
-      VarsDeclared_cexp vars e ->
-      VarsDeclared_clock vars ck ->
-      VarsDeclared vars (EqDef x ck e)
-  | eqn_app: forall x ck f es ty,
-      Forall (VarsDeclared_lexp vars) es ->
-      VarsDeclared_clock vars ck ->
-      VarsDeclared vars (EqApp x ck f es ty)
-  | eqn_fby: forall x ck c e,
-      VarsDeclared_lexp vars e ->
-      VarsDeclared_clock vars ck ->
-      VarsDeclared vars (EqFby x ck c e).
-
   Fixpoint typeof (le: lexp): type :=
     match le with
     | Econst c => type_const c
@@ -152,7 +98,6 @@ Module Type SYNTAX
         n_defd  : Permutation (map var_defined n_eqs)
                               (map fst (n_vars ++ [n_out]));
         n_vout  : ~In (fst n_out) (map var_defined (filter is_fby n_eqs));
-        n_decl  : Forall (VarsDeclared (n_in ++ n_vars ++ [n_out])) n_eqs;
         n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
         n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])
       }.

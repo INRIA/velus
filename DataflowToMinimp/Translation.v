@@ -147,7 +147,7 @@ Module Type TRANSLATION
   Definition ps_from_list (l: list ident) : PS.t :=
     List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
-  Hint Constructors NoDupMembers VarsDeclared.
+  Hint Constructors NoDupMembers.
   
   Program Definition reset_method (eqns: list equation): method :=
     {| m_name := reset;
@@ -156,25 +156,8 @@ Module Type TRANSLATION
        m_out  := [];
        m_body := translate_reset_eqns eqns;
        m_nodupvars := _;
-       m_varsdecl  := _;
        m_good      := _
     |}.
-  Next Obligation.
-    unfold translate_reset_eqns.
-    cut(forall s,
-           VarsDeclared [] s ->
-           VarsDeclared [] (List.fold_left translate_reset_eqn eqns s)); auto.
-    induction eqns as [|eq eqns]; auto.
-    destruct eq; auto;
-      simpl; intros; apply IHeqns.
-    (* TODO: get auto to solve this goal completely *)
-    - constructor; auto.
-      constructor; auto.
-      apply List.incl_refl.
-    - constructor; auto.
-      constructor; auto.
-      constructor; auto.
-  Qed.
 
   (** Properties of translation functions *)
 
@@ -486,88 +469,6 @@ Module Type TRANSLATION
     destruct eq; simpl; auto; now rewrite HH.
   Qed.
 
-  Instance Permutation_VarsDeclared_exp_Proper:
-    Proper (@Permutation (ident*type) ==> eq ==> iff) VarsDeclared_exp.
-  Proof.
-    intros xs ys Hperm s1 s2 Heq; subst s2.
-    induction s1; (split; intro HH; inversion_clear HH; constructor);
-      (rewrite <-Hperm || rewrite Hperm || apply IHs1
-       || apply IHs1_1 || apply IHs1_2); auto.
-  Qed.
-
-  Instance Permutation_VarsDeclared_Proper:
-    Proper (@Permutation (ident*type) ==> eq ==> iff) VarsDeclared.
-  Proof.
-    intros xs ys Hperm s1 s2 Heq.
-    subst s2.
-    induction s1; (split; intro HH; inversion_clear HH; constructor);
-      try (rewrite <-Hperm || rewrite Hperm
-           || apply IHs1_1 || apply IHs1_2); auto.
-    - apply Forall_forall.
-      intros x Hin.
-      rewrite <-Hperm.
-      match goal with H:Forall _ _ |- _ =>
-        rewrite Forall_forall in H; apply H with (1:=Hin) end.
-    - apply Forall_forall.
-      intros x Hin.
-      rewrite Hperm.
-      match goal with H:Forall _ _ |- _ =>
-        rewrite Forall_forall in H; apply H with (1:=Hin) end.
-  Qed.
-
-  Lemma snd_partition_memories_var_defined:
-    forall n,
-      Permutation
-        (map fst (snd (partition
-                         (fun x=>PS.mem (fst x) (memories n.(n_eqs)))
-                         n.(n_vars))))
-        (map var_defined (filter (notb is_fby) n.(n_eqs))).
-  Proof.
-  Admitted.
-
-  Lemma VarsDeclared_translate_eqns:
-    forall n,
-      VarsDeclared
-        (snd (partition (fun x=> PS.mem (fst x) (memories n.(n_eqs))) n.(n_vars))
-         ++ [n.(n_out)])
-        (translate_eqns (memories n.(n_eqs)) n.(n_eqs)).
-  Proof.
-    intro n.
-    (* rewrite snd_partition_memories_var_defined. *)
-  Admitted.
-
-  Lemma MemsDeclared_translate_eqns:
-    forall n,
-      MemsDeclared
-        (fst (partition (fun x=> PS.mem (fst x) (memories n.(n_eqs)))
-                        n.(n_vars)))
-        (translate_eqns (memories n.(n_eqs)) n.(n_eqs)).
-  Proof.
-  Admitted.
-
-  Lemma MemsDeclared_translate_reset_eqns:
-    forall n,
-      MemsDeclared
-        (fst (partition (fun x=> PS.mem (fst x) (memories n.(n_eqs)))
-                        n.(n_vars)))
-        (translate_reset_eqns n.(n_eqs)).
-  Proof.
-  Admitted.
-
-  Lemma InstanceDeclared_translate_eqns:
-    forall n,
-      InstanceDeclared (snd (gather_eqs n.(n_eqs)))
-        (translate_eqns (ps_from_list (fst (gather_eqs n.(n_eqs)))) n.(n_eqs)).
-  Proof.
-  Admitted.
-
-  Lemma InstanceDeclared_translate_reset_eqns:
-    forall n,
-      InstanceDeclared (snd (gather_eqs n.(n_eqs)))
-                       (translate_reset_eqns n.(n_eqs)).
-  Proof.
-  Admitted.
-
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -589,14 +490,10 @@ Module Type TRANSLATION
                          m_out  := [n.(n_out)];
                          m_body := translate_eqns mems n.(n_eqs);
                          m_nodupvars := _;
-                         m_varsdecl  := _;
                          m_good      := _
                       |};
                       reset_method n.(n_eqs) ];
-       c_nodups   := _;
-       
-       c_memsdecl := _;
-       c_instdecl := _
+       c_nodups   := _
     |}.
   (* =end= *)
   Next Obligation.
@@ -609,13 +506,6 @@ Module Type TRANSLATION
     rewrite (Permutation_app_comm [n.(n_out)]), <-Permutation_app_assoc.
     rewrite (Permutation_app_comm n.(n_vars)), Permutation_app_assoc.
     apply n.(n_nodup).
-  Qed.
-  Next Obligation.
-    simpl. rewrite ps_from_list_gather_eqs_memories.
-    rewrite partition_switch
-    with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
-    2:now intro; rewrite ps_from_list_gather_eqs_memories.
-    now apply VarsDeclared_translate_eqns.
   Qed.
   Next Obligation.
     rewrite (Permutation_app_comm n.(n_in)).
@@ -643,23 +533,6 @@ Module Type TRANSLATION
     apply NoDupMembers_app_r in Hndm.
     apply fst_NoDupMembers in Hndm.
     now rewrite n_defd.
-  Qed.
-  Next Obligation.
-    repeat constructor.
-    - simpl. rewrite partition_switch
-             with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
-      2:now intro; rewrite ps_from_list_gather_eqs_memories.
-      rewrite ps_from_list_gather_eqs_memories.
-      now apply MemsDeclared_translate_eqns.
-    - simpl. rewrite partition_switch
-             with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
-      2:now intro; rewrite ps_from_list_gather_eqs_memories.
-      now apply MemsDeclared_translate_reset_eqns.
-  Qed.       
-  Next Obligation.
-    repeat constructor.
-    now apply InstanceDeclared_translate_eqns.
-    now apply InstanceDeclared_translate_reset_eqns.
   Qed.
 
   (* =translate= *)
