@@ -19,23 +19,10 @@ Remark: This development is not formally part of the correctness proof.
 (* TODO: use auto for the proofs. *)
 
 Module Type DECIDE
-       (Ids : IDS)
-       (Op : OPERATORS)
+       (Ids        : IDS)
+       (Op         : OPERATORS)
        (Import Syn : SYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn).
-
-  Parameter free_in_laexp: clock -> lexp -> PS.t -> PS.t.
-  Parameter free_in_laexps: clock -> lexps -> PS.t -> PS.t.
-  Parameter free_in_caexp: clock -> cexp -> PS.t -> PS.t.
-
-End DECIDE.
-
-Module DecideFun
-       (Ids : IDS)
-       (Op : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
-       (Import IsF : ISFREE Ids Op Syn)
-       <: DECIDE Ids Op Syn IsF.
 
   Lemma Is_free_in_clock_disj:
     forall y ck x c, Is_free_in_clock y (Con ck x c)
@@ -346,5 +333,13 @@ Module DecideFun
     intuition not_In_empty.
   Qed.
 
-End DecideFun.
+End DECIDE.
+
+Module Decide
+       (Ids        : IDS)
+       (Op         : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import IsF : ISFREE Ids Op Syn) <: DECIDE Ids Op Syn IsF.
+  Include DECIDE Ids Op Syn IsF.
+End Decide.       
 

@@ -136,3 +136,15 @@ Module Type DECIDE
 
 End DECIDE.
 
+Module Decide
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       <: DECIDE Ids Op Syn Mem IsD.
+
+  Include DECIDE Ids Op Syn Mem IsD.
+
+End Decide.
+

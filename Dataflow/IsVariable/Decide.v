@@ -103,4 +103,30 @@ Module Type DECIDE
     apply Is_variable_in_variables.
   Qed.
 
+  Lemma variable_eq_empty:
+    forall x eq variables,
+      PS.In x (variable_eq variables eq)
+      <-> PS.In x (variable_eq PS.empty eq) \/ PS.In x variables.
+  Proof.
+    split; intro H.
+    destruct eq;
+      simpl in *; try (apply PS.add_spec in H; destruct H; [subst i|]);
+        intuition.
+    destruct eq; simpl in *; destruct H;
+      try (apply PS.add_spec in H; destruct H); try apply PS.empty_spec in H;
+        intuition.
+  Qed.
+  
 End DECIDE.
+
+Module Decide
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       <: DECIDE Ids Op Syn Mem IsD IsV.
+  Include DECIDE Ids Op Syn Mem IsD IsV.
+End Decide.
+
