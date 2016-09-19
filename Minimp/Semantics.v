@@ -45,13 +45,13 @@ Module Type SEMANTICS
   | eunop :
       forall op e c v ty,
         exp_eval heap stack e c ->
-        sem_unary op c (typeof e) = Some v ->
+        sem_unop op c (typeof e) = Some v ->
         exp_eval heap stack (Unop op e ty) v
   | ebinop :
       forall op e1 e2 c1 c2 v ty,
         exp_eval heap stack e1 c1 ->
         exp_eval heap stack e2 c2 ->
-        sem_binary op c1 (typeof e1) c2 (typeof e2) = Some v ->
+        sem_binop op c1 (typeof e1) c2 (typeof e2) = Some v ->
         exp_eval heap stack (Binop op e1 e2 ty) v.
 
   (* =stmt_eval= *)

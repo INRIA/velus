@@ -106,7 +106,7 @@ environment.
     | Sunop_eq:
         forall le op c c' ty,
           sem_lexp_instant le (present c) ->
-          sem_unary op c (typeof le) = Some c' ->
+          sem_unop op c (typeof le) = Some c' ->
           sem_lexp_instant (Eunop op le ty) (present c')
     | Sunop_abs:
         forall le op ty,
@@ -116,7 +116,7 @@ environment.
         forall le1 le2 op c1 c2 c' ty,
           sem_lexp_instant le1 (present c1) ->
           sem_lexp_instant le2 (present c2) ->
-          sem_binary op c1 (typeof le1) c2 (typeof le2) = Some c' ->
+          sem_binop op c1 (typeof le1) c2 (typeof le2) = Some c' ->
           sem_lexp_instant (Ebinop op le1 le2 ty) (present c')
     | Sbinop_abs:
         forall le1 le2 op ty,
@@ -534,8 +534,8 @@ enough: it does not support the internal fixpoint introduced by
       | H1:sem_var_instant ?R ?i ?v1,
            H2:sem_var_instant ?R ?i ?v2 |- _ =>
         apply sem_var_instant_det with (1:=H1) in H2
-      | H1:sem_unary _ _ _ = Some ?v1,
-           H2:sem_unary _ _ _ = Some ?v2 |- _ =>
+      | H1:sem_unop _ _ _ = Some ?v1,
+           H2:sem_unop _ _ _ = Some ?v2 |- _ =>
         rewrite H1 in H2; injection H2; intro; subst
       | Hp:present _ = present _ |- _ =>
         injection Hp; intro; subst
@@ -551,10 +551,10 @@ enough: it does not support the internal fixpoint introduced by
         apply IHe1 with (1:=H1) in H2
       | H1:sem_lexp_instant _ _ e2 _, H2:sem_lexp_instant _ _ e2 _ |- _ =>
         apply IHe2 with (1:=H1) in H2
-      | H1:sem_unary _ _ _ = _, H2:sem_unary _ _ _ = _ |- _ =>
+      | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
         rewrite H1 in H2; injection H2; intro; subst
-      | H1:sem_binary _ _ _ _ _ = Some ?v1,
-           H2:sem_binary _ _ _ _ _ = Some ?v2 |- _ =>
+      | H1:sem_binop _ _ _ _ _ = Some ?v1,
+           H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
         rewrite H1 in H2; injection H2; intro; subst
       | H:present _ = present _ |- _ => injection H; intro; subst
       end; subst; try easy.

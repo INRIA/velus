@@ -1,33 +1,46 @@
 Require Import Common.
 
 Module Type OPERATORS.
+
+  (* Types *)
+  
   Parameter val : Type.
   Parameter type : Type.
   Parameter const : Type.
 
+  (* Booleans *)
+  
   Parameter true_val  : val.
   Parameter false_val : val.
   Axiom true_not_false_val : true_val <> false_val.
 
   Parameter bool_type : type.
 
+  (* Constants *)
+  
   Parameter type_const : const -> type.
   Parameter sem_const  : const -> val.
+
+  (* Operations *)
   
-  Parameter unary_op  : Type.
-  Parameter binary_op : Type.
+  Parameter unop  : Type.
+  Parameter binop : Type.
 
-  Parameter sem_unary  : unary_op -> val -> type -> option val.
-  Parameter sem_binary : binary_op -> val -> type -> val -> type -> option val.
+  Parameter sem_unop  : unop -> val -> type -> option val.
+  Parameter sem_binop : binop -> val -> type -> val -> type -> option val.
 
-  Parameter type_unary  : unary_op -> type -> option type.
-  Parameter type_binary : binary_op -> type -> type -> option type.
+  (* Typing *)
+  
+  Parameter type_unop  : unop -> type -> option type.
+  Parameter type_binop : binop -> type -> type -> option type.
 
+  (* Decidability of elements *)
+  
   Axiom val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
   Axiom type_dec  : forall t1 t2 : type, {t1 = t2} + {t1 <> t2}.
   Axiom const_dec : forall c1 c2 : const, {c1 = c2} + {c1 <> c2}.
-  Axiom unop_dec  : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}.
-  Axiom binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}.
+  Axiom unop_dec  : forall op1 op2 : unop, {op1 = op2} + {op1 <> op2}.
+  Axiom binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
 
 End OPERATORS.
 
@@ -35,11 +48,11 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Require Export Coq.Classes.EquivDec.
   Close Scope equiv_scope.
 
-  Instance: EqDec val eq := { equiv_dec := val_dec }.
-  Instance: EqDec type eq := { equiv_dec := type_dec }.
+  Instance: EqDec val eq   := { equiv_dec := val_dec   }.
+  Instance: EqDec type eq  := { equiv_dec := type_dec  }.
   Instance: EqDec const eq := { equiv_dec := const_dec }.
-  Instance: EqDec unary_op eq := { equiv_dec := unop_dec }.
-  Instance: EqDec binary_op eq := { equiv_dec := binop_dec }.
+  Instance: EqDec unop eq  := { equiv_dec := unop_dec  }.
+  Instance: EqDec binop eq := { equiv_dec := binop_dec }.
   
   Definition val_to_bool (v: val) : option bool :=
     if equiv_decb v true_val then Some true

@@ -73,26 +73,25 @@ Module Export Op <: OPERATORS.
     | Csingle f  => Values.Vsingle f
     end.
 
-  Inductive unary_op' : Type :=
-  | UnaryOp: Cop.unary_operation -> unary_op'
-  | CastOp:  type -> unary_op'.
+  Inductive unop' : Type :=
+  | UnaryOp: Cop.unary_operation -> unop'
+  | CastOp:  type -> unop'.
 
-  Definition unary_op := unary_op'.
-  Definition binary_op := Cop.binary_operation.
+  Definition unop := unop'.
+  Definition binop := Cop.binary_operation.
 
-  Definition sem_unary (uop: unary_op) (v: val) (ty: type) : option val :=
+  Definition sem_unop (uop: unop) (v: val) (ty: type) : option val :=
     match uop with
     | UnaryOp op => Cop.sem_unary_operation op v (cltype ty) Memory.Mem.empty
     | CastOp ty' => Cop.sem_cast v (cltype ty) (cltype ty') Memory.Mem.empty
     end.
 
-  Definition sem_binary (op: binary_op)
-             (v1: val) (ty1: type)
-             (v2: val) (ty2: type) : option val :=
+  Definition sem_binop (op: binop) (v1: val) (ty1: type)
+                                   (v2: val) (ty2: type) : option val :=
     Cop.sem_binary_operation
       empty_composite_env op v1 (cltype ty1) v2 (cltype ty2) Memory.Mem.empty.
 
-  Definition type_unary (uop: unary_op) (ty: type) : option type :=
+  Definition type_unop (uop: unop) (ty: type) : option type :=
     match uop with
     | UnaryOp op => match Ctyping.type_unop op (cltype ty) with
                     | Errors.OK ty' => typecl ty'
@@ -104,7 +103,7 @@ Module Export Op <: OPERATORS.
                     end
     end.
 
-  Definition type_binary (op: binary_op) (ty1 ty2: type) : option type :=
+  Definition type_binop (op: binop) (ty1 ty2: type) : option type :=
     match Ctyping.type_binop op (cltype ty1) (cltype ty2) with
     | Errors.OK ty' => typecl ty'
     | Errors.Error _ => None
@@ -130,7 +129,7 @@ Module Export Op <: OPERATORS.
                       || apply Float32.eq_dec).
   Qed.
 
-  Lemma unop_dec  : forall op1 op2 : unary_op, {op1 = op2} + {op1 <> op2}.
+  Lemma unop_dec  : forall op1 op2 : unop, {op1 = op2} + {op1 <> op2}.
   Proof.
     assert (forall (x y: Cop.unary_operation), {x=y} + {x<>y})
       by decide equality.
@@ -138,7 +137,7 @@ Module Export Op <: OPERATORS.
     apply type_dec.
   Qed.
 
-  Lemma binop_dec : forall op1 op2 : binary_op, {op1 = op2} + {op1 <> op2}.
+  Lemma binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
   Proof.
     decide equality.
   Qed.

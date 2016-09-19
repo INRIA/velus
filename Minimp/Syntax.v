@@ -18,11 +18,11 @@ Module Type SYNTAX
        (Import OpAux : OPERATORS_AUX Op).
 
   Inductive exp : Type :=
-  | Var   : ident -> type -> exp                    (* variable  *)
-  | State : ident -> type -> exp                    (* state variable  *)
-  | Const : const-> exp                             (* constant *)
-  | Unop  : unary_op -> exp -> type -> exp          (* unary operator *)
-  | Binop : binary_op -> exp -> exp -> type -> exp. (* binary operator *)
+  | Var   : ident -> type -> exp                (* variable  *)
+  | State : ident -> type -> exp                (* state variable  *)
+  | Const : const-> exp                         (* constant *)
+  | Unop  : unop -> exp -> type -> exp          (* unary operator *)
+  | Binop : binop -> exp -> exp -> type -> exp. (* binary operator *)
 
   Definition typeof (e: exp): type :=
     match e with

@@ -24,8 +24,8 @@ Module Type SYNTAX
   | Econst : const -> lexp
   | Evar   : ident -> type -> lexp
   | Ewhen  : lexp -> ident -> bool -> lexp
-  | Eunop  : unary_op -> lexp -> type -> lexp
-  | Ebinop : binary_op -> lexp -> lexp -> type -> lexp.
+  | Eunop  : unop -> lexp -> type -> lexp
+  | Ebinop : binop -> lexp -> lexp -> type -> lexp.
 
   Definition lexps := list lexp.
 
