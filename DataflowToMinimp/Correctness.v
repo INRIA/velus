@@ -1928,7 +1928,7 @@ for all [Is_free_exp x e]. *)
   Require Import Rustre.Dataflow.Clocking.
   Require Import Rustre.Dataflow.Clocking.Properties.
 
-  Lemma translate_eqns_Ifte_free_write:
+  Lemma translate_eqns_IsFusible_free_write:
     forall C mems inputs eqs,
       Well_clocked_env C
       -> Forall (Well_clocked_eq C) eqs
