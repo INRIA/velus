@@ -45,23 +45,36 @@ Module Type SYNTAX
   Record method : Type :=
     mk_method {
         m_name : ident;
-	m_in   : list (ident * type);
-	m_vars : list (ident * type);
-	m_out  : list (ident * type);
-	m_body : stmt;
+	    m_in   : list (ident * type);
+	    m_vars : list (ident * type);
+	    m_out  : list (ident * type);
+	    m_body : stmt;
         
-	m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
+	    m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
         m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
       }.
+
+  Lemma m_notreserved:
+    forall x m,
+      In x reserved ->
+      ~InMembers x (m.(m_in) ++ m.(m_vars) ++ m.(m_out)).
+  Proof.
+    intros ** Hin Hinm.
+    pose proof m.(m_good) as Good.
+    induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
+      inv Hinm; inv Good.
+    - contradiction.
+    - now apply IHl.
+  Qed.
   
   Record class : Type :=
     mk_class {
-	c_name    : ident;
-	c_mems    : list (ident * type);
-	c_objs    : list (ident * ident);   (* (instance, class) *)
-	c_methods : list method;
+	    c_name    : ident;
+	    c_mems    : list (ident * type);
+	    c_objs    : list (ident * ident);   (* (instance, class) *)
+	    c_methods : list method;
 
-        c_nodups   : NoDup (map fst c_mems ++ map fst c_objs)
+        c_nodup   : NoDup (map fst c_mems ++ map fst c_objs)
       }.
 
   Definition program : Type := list class.
@@ -73,6 +86,32 @@ Module Type SYNTAX
                                  then Some m else find ms'
                    end.
 
+  Remark find_method_In:
+    forall fid ms f,
+      find_method fid ms = Some f ->
+      In f ms.
+  Proof.
+    intros ** Hfind.
+    induction ms; inversion Hfind as [H].
+    destruct (ident_eqb (m_name a) fid) eqn: E.
+    - inversion H; subst. 
+      apply in_eq. 
+    - apply in_cons; auto.
+  Qed.
+
+  Remark find_method_name:
+    forall fid fs f,
+      find_method fid fs = Some f ->
+      f.(m_name) = fid.
+  Proof.
+    intros ** Hfind.
+    induction fs; inversion Hfind as [H].
+    destruct (ident_eqb (m_name a) fid) eqn: E.
+    - inversion H; subst. 
+      now apply ident_eqb_eq.
+    - now apply IHfs.
+  Qed.
+
   Definition find_class (n: ident) : program -> option (class * list class) :=
     fix find p := match p with
                   | [] => None
@@ -80,6 +119,75 @@ Module Type SYNTAX
                                then Some (c, p') else find p'
                   end.
 
+  Lemma find_class_none:
+    forall clsnm cls prog,
+      find_class clsnm (cls::prog) = None
+      <-> (cls.(c_name) <> clsnm /\ find_class clsnm prog = None).
+  Proof.
+    intros clsnm cls prog.
+    simpl; destruct (ident_eqb (c_name cls) clsnm) eqn: E.
+    - split; intro HH; try discriminate.
+      destruct HH.
+      apply ident_eqb_eq in E; contradiction.
+    - apply ident_eqb_neq in E; split; intro HH; tauto.
+  Qed.
+
+  Remark find_class_app:
+    forall id cls c cls',
+      find_class id cls = Some (c, cls') ->
+      exists cls'',
+        cls = cls'' ++ c :: cls'
+        /\ find_class id cls'' = None.
+  Proof.
+    intros ** Hfind.
+    induction cls; inversion Hfind as [H].
+    destruct (ident_eqb (c_name a) id) eqn: E.
+    - inversion H; subst. 
+      exists nil; auto.
+    - specialize (IHcls H).
+      destruct IHcls as (cls'' & Hcls'' & Hnone).
+      rewrite Hcls''.
+      exists (a :: cls''); split; auto.
+      simpl; rewrite E; auto.
+  Qed.
+
+  Remark find_class_name:
+    forall id cls c cls',
+      find_class id cls = Some (c, cls') ->
+      c.(c_name) = id.
+  Proof.
+    intros ** Hfind.
+    induction cls; inversion Hfind as [H].
+    destruct (ident_eqb (c_name a) id) eqn: E.
+    - inversion H; subst. 
+      now apply ident_eqb_eq.
+    - now apply IHcls.
+  Qed.
+
+  Remark find_class_In:
+    forall id cls c cls',
+      find_class id cls = Some (c, cls') ->
+      In c cls.
+  Proof.
+    intros ** Hfind.
+    induction cls; inversion Hfind as [H].
+    destruct (ident_eqb (c_name a) id) eqn: E.
+    - inversion H; subst. 
+      apply in_eq. 
+    - apply in_cons; auto.
+  Qed.
+
+  Inductive WelldefClasses: list class -> Prop :=
+  | wdc_nil:
+      WelldefClasses []
+  | wdc_cons:
+      forall c cls',
+        WelldefClasses cls' ->
+        (forall o c', In (o, c') c.(c_objs) ->
+                 find_class c' cls' <> None) ->
+        Forall (fun c' => c.(c_name) <> c'.(c_name)) cls' ->
+        WelldefClasses (c :: cls').
+  
   Lemma exp_dec : forall e1 e2 : exp, {e1 = e2} + {e1 <> e2}.
   Proof.
     decide equality;

@@ -3,12 +3,12 @@ Require Import lib.Floats.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
 
-Require compcert.common.Values.
-Require compcert.cfrontend.Cop.
-Require compcert.cfrontend.Ctypes.
-Require compcert.cfrontend.Ctyping.
-Require compcert.common.Memory.
-Require compcert.lib.Maps.
+Require common.Values.
+Require cfrontend.Cop.
+Require cfrontend.Ctypes.
+Require cfrontend.Ctyping.
+Require common.Memory.
+Require lib.Maps.
 
 (* Interface avec CompCert *)
 

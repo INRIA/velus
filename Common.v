@@ -669,6 +669,29 @@ Section InMembers.
       assumption.
   Qed.
 
+  Lemma NoDupMembers_app:
+    forall ws xs,
+      NoDupMembers (ws ++ xs) <-> NoDupMembers (xs ++ ws).
+  Proof.
+    induction ws as [|w ws IH]; split; intro HH.
+    - rewrite app_nil_r. assumption.
+    - rewrite app_nil_r in HH. assumption.
+    - destruct w as [w ww].
+      simpl in HH; apply nodupmembers_cons in HH.
+      destruct HH as [HH1 HH2].
+      apply NoDupMembers_app_cons.
+      apply NotInMembers_app_comm in HH1.
+      split; [assumption|].
+      apply IH. assumption.
+    - destruct w as [w ww].
+      apply NoDupMembers_app_cons in HH.
+      destruct HH as [HH1 HH2].
+      apply IH in HH2.
+      simpl; apply NoDupMembers_cons.
+      now apply NotInMembers_app_comm.
+      assumption.
+  Qed.
+
   Lemma NoDupMembers_app_r:
     forall ws xs,
       NoDupMembers (ws ++ xs) -> NoDupMembers xs.
@@ -1413,7 +1436,7 @@ Section Lists.
    
 End Lists.
 
-(*
+
 Ltac induction_list_tac e I l H :=
   match type of e with
     list ?A =>
@@ -1435,29 +1458,28 @@ Ltac induction_list_tac e I l H :=
        end]
   end.
 
-Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) "eq:" ident(H) :=
-  induction_list_tac E I l H.
+(* Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) "eq:" ident(H) := *)
+(*   induction_list_tac E I l H. *)
 Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) :=
   let H := fresh "H" l in
-  induction_list E as I with l eq:H.
+  induction_list_tac E I l H.
 Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) :=
   let l := fresh "l" in
   induction_list E as I with l.
 Tactic Notation "induction_list" constr(E) :=
   induction_list E as [|].
-Tactic Notation "induction_list" constr(E) "with" ident(l) "eq:" ident(H) :=
-  induction_list E as [|] with l eq:H.
-Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "eq:" ident(H) :=
-  let l := fresh "l" in
-  induction_list E as I with l eq:H.
+(* Tactic Notation "induction_list" constr(E) "with" ident(l) "eq:" ident(H) := *)
+(*   induction_list E as [|] with l eq:H. *)
+(* Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "eq:" ident(H) := *)
+(*   let l := fresh "l" in *)
+(*   induction_list E as I with l eq:H. *)
 Tactic Notation "induction_list" constr(E) "with" ident(l) :=
   induction_list E as [|] with l.
-Tactic Notation "induction_list" constr(E) "eq:" ident(H) :=
-  let l := fresh "l" in
-  induction_list E as [|] with l eq:H.
+(* Tactic Notation "induction_list" constr(E) "eq:" ident(H) := *)
+(*   let l := fresh "l" in *)
+(*   induction_list E as [|] with l eq:H. *)
 
-Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
-  let H := fresh "H" l in
-  induction_list_tac E I l H.
-*)
+(* Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) := *)
+(*   let H := fresh "H" l in *)
+(*   induction_list_tac E I l H. *)
 
