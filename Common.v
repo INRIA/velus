@@ -487,14 +487,17 @@ Section InMembers.
   Qed.
 
   Theorem NotInMembers_cons:
-    forall y x xs,
-      ~InMembers y (x::xs) -> ~InMembers y xs /\ y <> fst x.
+    forall xs x y,
+      ~InMembers y (x::xs) <-> ~InMembers y xs /\ y <> fst x.
   Proof.
-    induction xs as [|x' xs IH]; intro Hnin.
+    induction xs as [|x' xs IH]; split; intro Hnin.
     - split.
       + inversion 1.
       + intro Eq; apply Hnin.
         destruct x; simpl in *; now left.
+    - destruct x; simpl. destruct Hnin as [? Diff].
+      intro Hin; apply Diff.
+      destruct Hin; try contradiction; auto.
     - split.
       + intro HH. apply Hnin.
         destruct x, x'.
@@ -502,6 +505,12 @@ Section InMembers.
       + intro HH. apply Hnin.
         destruct x, x'.
         simpl in *; now left.
+    - rewrite IH in Hnin; destruct Hnin as ((Hnin & Hx') & Hx).
+      destruct x, x'; simpl in *.
+      intro Hin; destruct Hin as [|[|]].
+      + now apply Hx.
+      + now apply Hx'.
+      + now apply Hnin.
   Qed.
 
   Lemma InMembers_app:
@@ -520,7 +529,7 @@ Section InMembers.
       + right. apply IH. intuition.
   Qed.
 
-  Instance InMembers_Permutation_Proper:
+  Global Instance InMembers_Permutation_Proper:
     Proper (eq ==> (@Permutation (A*B)) ==> iff) InMembers.
   Proof.
     intros x y Heq xs ys Hperm.
@@ -536,7 +545,16 @@ Section InMembers.
       apply Permutation_in with (2:=Hinm) in Hperm.
       apply In_InMembers with (1:=Hperm).
   Qed.
-  
+
+  (*
+  Global Instance InMembers_Permutation_Proper' x:
+    Proper ((@Permutation (A*B)) ==> iff) (InMembers x).
+  Proof.
+    intros xs ys Hperm.
+    now rewrite Hperm.
+  Qed.
+  *)
+    
   Theorem NotInMembers_app:
     forall y ws xs,
       ~InMembers y (ws ++ xs) <-> (~InMembers y xs /\ ~InMembers y ws).
@@ -743,7 +761,7 @@ Section InMembers.
           apply Hninm. constructor (assumption).
     - now rewrite IHHperm1.
   Qed.
-  
+
   Lemma InMembers_neq:
     forall x y xs,
       InMembers x xs ->
@@ -817,6 +835,30 @@ Section InMembers.
     - apply IHxs; auto. now inversion Hndup.
   Qed.
 
+  Remark InMembers_snd_In:
+    forall {C} y l,
+      InMembers y (map (@snd C (A * B)) l) ->
+      exists x z, In (x, (y, z)) l.
+  Proof.
+    induction l as [|(x', (y', z'))]; simpl; intros ** Hin.
+    - contradiction.
+    - destruct Hin as [|Hin].
+      + subst y'; exists x', z'; now left.
+      + apply IHl in Hin; destruct Hin as (x & z & Hin).
+        exists x, z; now right.
+  Qed.
+
+  Remark In_InMembers_snd:
+    forall {C} x y z l,
+      In (x, (y, z)) l ->
+      InMembers y (map (@snd C (A * B)) l).
+  Proof.
+    induction l as [|(x', (y', z'))]; simpl; intros ** Hin; auto.
+    destruct Hin as [Eq|Hin].
+    - inv Eq; now left.
+    - right; auto.
+  Qed.
+  
 End InMembers.
 
 Ltac app_NoDupMembers_det :=
@@ -919,6 +961,11 @@ Section Lists.
     induction xs; inversion Hin; inversion Hforall; subst; auto.
   Qed.
 
+  Lemma map_cons (x:A)(l:list A) (f: A -> B) : map f (x::l) = (f x) :: (map f l).
+  Proof.
+    reflexivity.
+  Qed.
+                                                   
   Remark map_cons':
     forall (f: A -> A) l y ys,
       map f l = y :: ys ->
@@ -1132,6 +1179,12 @@ Section Lists.
     destruct xs; simpl; auto.
   Qed.
 
+  Lemma in_app:
+  forall (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
+  Proof.
+    intros. split; intro. apply in_app_or. auto. apply in_or_app. auto.
+  Qed.
+
   Lemma permutation_partition:
     forall p (l: list A),
       Permutation l (fst (partition p l) ++ snd (partition p l)).
@@ -1214,6 +1267,195 @@ Section Lists.
     - now rewrite IHHperm1, IHHperm2.
   Qed.
   
+  Remark in_concat_cons:
+    forall l' (l: list A) x xs,
+      In x l ->
+      In (xs :: l) l' ->
+      In x (concat l').
+  Proof.
+    induction l' as [|y]; simpl; intros ** Hin Hin'.
+    - contradiction.
+    - destruct Hin' as [E|Hin'].
+      + subst y.
+        apply in_app; left; now apply in_cons.
+      + apply in_app; right.
+        eapply IHl'; eauto.
+  Qed.
+
+  Remark in_concat:
+    forall l' (l: list A) x,
+      In x l ->
+      In l l' ->
+      In x (concat l').
+  Proof.
+    induction l' as [|y]; simpl; intros ** Hin Hin'.
+    - contradiction.
+    - destruct Hin' as [E|Hin'].
+      + subst y.
+        apply in_app; now left.
+      + apply in_app; right.
+        eapply IHl'; eauto.
+  Qed.
+
+  Remark split_map:
+    forall {C} (xs: list C) (l: list A) (l': list B) f f',
+      split (map (fun x => (f x, f' x)) xs) = (l, l') ->
+      l = map f xs /\ l' = map f' xs.
+  Proof.
+    induction xs; simpl; intros ** Split.
+    - inv Split; auto.
+    - destruct (split (map (fun x : C => (f x, f' x)) xs)) as (g, d) eqn: E.
+      inv Split.
+      edestruct IHxs as [G D]; eauto; rewrite <-G, <-D; auto.
+  Qed.
+
+  Remark In_singleton:
+    forall (y x: A),
+      In y [x] <-> y = x.
+  Proof.
+    split; intro H.
+    - simpl in H; destruct H; auto.
+      contradiction.
+    - subst x; apply in_eq.
+  Qed.
+  
+  Remark equiv_eq_singleton:
+    forall (x: A) l,
+      NoDup l ->
+      ([x] = l <-> (forall y, In y l <-> In y [x])).
+  Proof.
+    intros ** Nodup.
+    split.
+    - intros; subst l; split; auto.
+    - destruct l; intro H.
+      + specialize (H x); destruct H as [? H'].
+        exfalso; apply H'; now left.
+      + inversion_clear Nodup as [|? ? Notin].
+        destruct l.
+        * specialize (H x); rewrite 2 In_singleton in H.
+          f_equal; now apply H.
+        * pose proof H as H'.
+          specialize (H a); rewrite In_singleton in H.
+          specialize (H' a0); rewrite In_singleton in H'.
+          destruct H as [Ha].
+          destruct H' as [Ha0].
+          assert (a = a0).
+          { transitivity x.
+            - apply Ha, in_eq.
+            - symmetry; apply Ha0, in_cons, in_eq.
+          }
+          exfalso; apply Notin.
+          subst; apply in_eq.
+  Qed.
+
+  Lemma Forall_Forall':
+    forall (A : Type) (P Q : A -> Prop) (xs : list A),
+      Forall P xs /\ Forall Q xs <-> Forall (fun x : A => P x /\ Q x) xs.
+  Proof.
+    split.
+    - intros [? ?]; now apply Forall_Forall.
+    - intro HForall.
+      induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.      
+  Qed.
+
+  Lemma NoDup_app_cons:
+    forall ws (x: A) xs,
+      NoDup (ws ++ x :: xs)
+      <-> ~In x (ws ++ xs) /\ NoDup (ws ++ xs).
+  Proof.
+    induction ws; simpl; split; intros ** Nodup.
+    - inv Nodup; auto. 
+    - destruct Nodup; auto. 
+    - inversion Nodup as [|? ? Notin Nodup']; clear Nodup; subst.
+      split.
+      + intro H; destruct H.
+        * subst; apply Notin.
+          apply in_app; right; apply in_eq.
+        * apply NoDup_remove_2 in Nodup'.
+          contradiction.
+      + constructor.
+        * intro Hin; apply Notin.
+          apply in_app_or in Hin.
+          destruct Hin; apply in_app; auto.
+          right; now apply in_cons.
+        * now apply NoDup_remove_1 in Nodup'.
+    - destruct Nodup as [Notin Nodup].
+      inversion Nodup as [|? ? Notin' Nodup']; clear Nodup; subst.
+      constructor.
+      + intro Hin.
+        apply in_app_or in Hin.
+        destruct Hin; apply Notin', in_app; auto.
+        simpl in H; destruct H; auto.
+        subst; contradict Notin; now left.  
+      + rewrite IHws; split; auto.
+  Qed.
+  
+  Lemma NoDup_app:
+    forall (ws xs: list A),
+      NoDup (ws ++ xs) <-> NoDup (xs ++ ws).
+   Proof.
+     induction ws; simpl; split; intros ** Nodup.
+     - now rewrite app_nil_r.
+     - now rewrite app_nil_r in Nodup.
+     - inversion Nodup as [|? ? Notin' Nodup']; clear Nodup; subst.
+       rewrite NoDup_app_cons; split.
+       + intro Hin; apply in_app_or in Hin.
+         destruct Hin; apply Notin', in_app; auto.
+       + now rewrite <-IHws.
+     - constructor.
+       + apply NoDup_remove_2 in Nodup.
+         intro Hin; apply in_app_or in Hin.
+         destruct Hin; apply Nodup, in_app; auto.
+       + rewrite NoDup_app_cons in Nodup.
+         destruct Nodup.
+         now rewrite IHws.
+   Qed.
+   
 End Lists.
 
-      
+Ltac induction_list_tac e I l H :=
+  match type of e with
+    list ?A =>
+    let Eq := fresh in
+    let Eql := H in
+    remember e as l eqn:Eq;
+      assert (exists l', e = l' ++ l) as Eql by (exists (@nil A); simpl; auto);
+      clear Eq; move Eql at top; induction l as I;
+      [clear Eql|
+       match goal with
+         IH: (exists l', e = l' ++ ?l'') -> ?P,
+             EQ: (exists l', e = l' ++ ?x::?xs) |- _ =>
+         let l' := fresh l in
+         let E := fresh in
+         destruct EQ as [l' Eql];
+           rewrite <-app_last_app in Eql;
+           assert (exists l', e = l' ++ xs) as E by (exists (l' ++ [x]); auto);
+           specialize (IH E); clear E
+       end]
+  end.
+
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) "eq:" ident(H) :=
+  induction_list_tac E I l H.
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "with" ident(l) :=
+  let H := fresh "H" l in
+  induction_list E as I with l eq:H.
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) :=
+  let l := fresh "l" in
+  induction_list E as I with l.
+Tactic Notation "induction_list" constr(E) :=
+  induction_list E as [|].
+Tactic Notation "induction_list" constr(E) "with" ident(l) "eq:" ident(H) :=
+  induction_list E as [|] with l eq:H.
+Tactic Notation "induction_list" constr(E) "as" simple_intropattern(I) "eq:" ident(H) :=
+  let l := fresh "l" in
+  induction_list E as I with l eq:H.
+Tactic Notation "induction_list" constr(E) "with" ident(l) :=
+  induction_list E as [|] with l.
+Tactic Notation "induction_list" constr(E) "eq:" ident(H) :=
+  let l := fresh "l" in
+  induction_list E as [|] with l eq:H.
+
+Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
+  let H := fresh "H" l in
+  induction_list_tac E I l H.
+
