@@ -123,11 +123,11 @@ VFILES:=RMemory.v\
   Dataflow/Syntax.v\
   Dataflow/Stream.v\
   Common.v\
-  Interface.v\
-  Simu/Tra.v\
-  Simu/Cor.v\
-  Simu/Sep.v\
-  Simu/SepInv.v
+  ObcToClight/Interface.v\
+  ObcToClight/Tra.v\
+  ObcToClight/Cor.v\
+  ObcToClight/Sep.v\
+  ObcToClight/SepInv.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))

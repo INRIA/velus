@@ -43,8 +43,8 @@ DataflowToObc/Translation.v
 DataflowToObc/Correctness/IsPresent.v
 DataflowToObc/Correctness/MemoryCorres.v
 DataflowToObc/Correctness.v
-Interface.v
-Simu/Tra.v
-Simu/Cor.v
-Simu/Sep.v
-Simu/SepInv.v
+ObcToClight/Interface.v
+ObcToClight/Tra.v
+ObcToClight/Cor.v
+ObcToClight/Sep.v
+ObcToClight/SepInv.v

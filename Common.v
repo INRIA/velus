@@ -1413,6 +1413,7 @@ Section Lists.
    
 End Lists.
 
+(*
 Ltac induction_list_tac e I l H :=
   match type of e with
     list ?A =>
@@ -1458,4 +1459,5 @@ Tactic Notation "induction_list" constr(E) "eq:" ident(H) :=
 Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
   let H := fresh "H" l in
   induction_list_tac E I l H.
+*)
 
