@@ -34,6 +34,27 @@ Module Type OPERATORS.
   Parameter type_unop  : unop -> type -> option type.
   Parameter type_binop : binop -> type -> type -> option type.
 
+  Parameter wt_val : val -> type -> Prop.
+
+  Axiom wt_val_true  : wt_val true_val bool_type.
+  Axiom wt_val_false : wt_val false_val bool_type.
+  Axiom wt_val_const : forall c, wt_val (sem_const c) (type_const c).
+
+  Axiom pres_sem_unop:
+    forall op ty1 ty v1 v,
+      type_unop op ty1 = Some ty ->
+      sem_unop op v1 ty1 = Some v ->
+      wt_val v1 ty1 ->
+      wt_val v ty.
+
+  Axiom pres_sem_binop:
+    forall op ty1 ty2 ty v1 v2 v,
+      type_binop op ty1 ty2 = Some ty ->
+      sem_binop op v1 ty1 v2 ty2 = Some v ->
+      wt_val v1 ty1 ->
+      wt_val v2 ty2 ->
+      wt_val v ty.
+
   (* Decidability of elements *)
   
   Axiom val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
