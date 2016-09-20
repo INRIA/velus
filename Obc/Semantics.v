@@ -4,13 +4,13 @@ Require Import List.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
 Require Import Rustre.RMemory.
-Require Import Rustre.Minimp.Syntax.
+Require Import Rustre.Obc.Syntax.
 
-(** * Minimp semantics *)
+(** * Obc semantics *)
 
 (** 
 
-  The semantics of Minimp relies on a tree-structure [memory], based
+  The semantics of Obc relies on a tree-structure [memory], based
   on [Rustre.RMemory], to store object instances and a [stack] to keep
   track of local variables during method calls.
 

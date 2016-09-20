@@ -94,15 +94,15 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 ######################
 
 VFILES:=RMemory.v\
-  DataflowToMinimp/Correctness.v\
-  DataflowToMinimp/Correctness/MemoryCorres.v\
-  DataflowToMinimp/Correctness/IsPresent.v\
-  DataflowToMinimp/Translation.v\
-  Minimp.v\
-  Minimp/FuseIfte.v\
-  Minimp/Equiv.v\
-  Minimp/Semantics.v\
-  Minimp/Syntax.v\
+  DataflowToObc/Correctness.v\
+  DataflowToObc/Correctness/MemoryCorres.v\
+  DataflowToObc/Correctness/IsPresent.v\
+  DataflowToObc/Translation.v\
+  Obc.v\
+  Obc/FuseIfte.v\
+  Obc/Equiv.v\
+  Obc/Semantics.v\
+  Obc/Syntax.v\
   Dataflow.v\
   Dataflow/NoDup.v\
   Dataflow/Ordered.v\

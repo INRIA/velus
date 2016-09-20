@@ -8,18 +8,18 @@ Open Scope positive.
 
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
-Require Import Rustre.Minimp.
-Require Import Rustre.DataflowToMinimp.Translation.
-Require Import Rustre.DataflowToMinimp.Correctness.IsPresent.
-Require Import Rustre.DataflowToMinimp.Correctness.MemoryCorres.
-Require Import Rustre.Minimp.FuseIfte.
+Require Import Rustre.Obc.
+Require Import Rustre.DataflowToObc.Translation.
+Require Import Rustre.DataflowToObc.Correctness.IsPresent.
+Require Import Rustre.DataflowToObc.Correctness.MemoryCorres.
+Require Import Rustre.Obc.FuseIfte.
 
 Module Type CORRECTNESS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import DF    : DATAFLOW Ids Op OpAux)
-       (Import MP    : MINIMP Ids Op OpAux)
+       (Import MP    : OBC Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op DF.Syn)
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn MP.Syn Mem)

@@ -7,9 +7,9 @@ Open Scope list.
 
 Require Import Rustre.Common.
 Require Import Rustre.Dataflow.Syntax.
-Require Import Rustre.Minimp.Syntax.
+Require Import Rustre.Obc.Syntax.
 Require Import Rustre.Translation.
-Require Import Rustre.Minimp.FuseIfte.
+Require Import Rustre.Obc.FuseIfte.
 
 Require Import Rustre.Dataflow.Memories.
 Require Import Rustre.Dataflow.WellFormed.

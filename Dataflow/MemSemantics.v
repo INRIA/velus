@@ -40,7 +40,7 @@ Set Implicit Arguments.
        have two advantages:
 
        1. Conceptually cleanliness: N corresponds more or less to the
-          temporary variables in the Minimp implementation (except that it
+          temporary variables in the Obc implementation (except that it
           would also contain values for variables defined by EqFby).
 
        2. No index needed to access values in when reasoning about

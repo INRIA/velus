@@ -2,7 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
-Require Import Rustre.Minimp.
+Require Import Rustre.Obc.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.RMemory.
 
@@ -17,9 +17,9 @@ Module Type FUSEIFTE
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Ids Op)
-       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Equ: Rustre.Minimp.Equiv.EQUIV Ids Op OpAux SynMP SemMP).
+       (Import SynMP: Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP: Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import Equ  : Rustre.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP).
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
   | FreeVar: forall i ty,
@@ -670,9 +670,9 @@ Module FuseIfteFun
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Ids Op)
-       (Import SynMP: Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP: Rustre.Minimp.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Equ: Rustre.Minimp.Equiv.EQUIV Ids Op OpAux SynMP SemMP)
+       (Import SynMP: Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP: Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import Equ  : Rustre.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP)
        <: FUSEIFTE Ids Op OpAux SynDF SynMP SemMP Equ.
 
   Include FUSEIFTE Ids Op OpAux SynDF SynMP SemMP Equ.

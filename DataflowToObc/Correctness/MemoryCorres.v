@@ -4,7 +4,7 @@ Require Import Rustre.Common.
 Require Import Rustre.Operators.
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
-Require Import Rustre.Minimp.
+Require Import Rustre.Obc.
 
 (** * Correspondence between dataflow and imperative memories *)
 
@@ -13,7 +13,7 @@ Module Type MEMORYCORRES
        (Op  : OPERATORS)
        (OpAux: OPERATORS_AUX Op)
        (Import DF: DATAFLOW Ids Op OpAux)
-       (Import MP: MINIMP Ids Op OpAux).
+       (Import MP: OBC Ids Op OpAux).
 (**
 
   [Memory_Corres] relates a dataflow [D.memory] with an object [heap]

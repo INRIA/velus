@@ -2,7 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
-Require Import Rustre.Minimp.Syntax.
+Require Import Rustre.Obc.Syntax.
 Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.Memories.
 
@@ -41,7 +41,7 @@ Module Type TRANSLATION
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
+       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op SynDF).
 
   (* definition is needed in signature *)
@@ -601,7 +601,7 @@ Module TranslationFun
        (Import Op  : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
+       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
        (Import Mem : MEMORIES Ids Op SynDF)
        <: TRANSLATION Ids Op OpAux SynDF SynMP Mem.
 

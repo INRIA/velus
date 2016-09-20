@@ -6,10 +6,10 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-(** * Minimp syntax *)
+(** * Obc syntax *)
 
 (**
-  Minimp is a minimal object-oriented programming language.
+  Obc is a minimal object-oriented programming language.
  *)
 
 Module Type SYNTAX

@@ -2,9 +2,9 @@ Require Import Rustre.Common.
 Require Import Rustre.Operators.
 Require Import Rustre.RMemory.
 Require Import Rustre.Dataflow.
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Minimp.Semantics.
-Require Import Rustre.DataflowToMinimp.Translation.
+Require Import Rustre.Obc.Syntax.
+Require Import Rustre.Obc.Semantics.
+Require Import Rustre.DataflowToObc.Translation.
 
 
 (** * Tying clock semantics and imperative semantics *)
@@ -23,8 +23,8 @@ Module Type ISPRESENT
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Minimp.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Rustre.Minimp.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP : Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
        (Import Mem   : MEMORIES Ids Op SynDF)
        (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem).
 

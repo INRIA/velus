@@ -2,19 +2,19 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
-Require Import Rustre.Minimp.Syntax.
-Require Import Rustre.Minimp.Semantics.
+Require Import Rustre.Obc.Syntax.
+Require Import Rustre.Obc.Semantics.
 
 Require Import Relations.
 Require Import Morphisms.
 Require Import Setoid.
 
-(** * Equivalence of Minimp programs *)
+(** * Equivalence of Obc programs *)
 
 (**
 
 To prove the soundness of the if-then-else fusing optimization, we
-define (and prove some properties about) equivalence of Minimp
+define (and prove some properties about) equivalence of Obc
 programs.
 
  *)

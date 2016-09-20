@@ -8,7 +8,7 @@ Set Implicit Arguments.
 
 (** 
 
-  Both Minimp and the Lustre rely on a rather structured notion of
+  Both Obc and the Lustre rely on a rather structured notion of
   (static) memory, as found in object-oriented languages. Every node
   instance/class instance forms a node whose leafs are nodes/instances
   it is calling upon. This is captured by the [memory] tree-like
