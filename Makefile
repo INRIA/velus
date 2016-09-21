@@ -122,6 +122,7 @@ VFILES:=RMemory.v\
   Dataflow/IsFree/Decide.v\
   Dataflow/IsFree.v\
   Dataflow/Syntax.v\
+  Dataflow/Typing.v\
   Dataflow/Stream.v\
   Common.v\
   ObcToClight/Interface.v\

@@ -17,6 +17,7 @@ Operators.v
 Example.v
 Dataflow/Stream.v
 Dataflow/Syntax.v
+Dataflow/Typing.v
 Dataflow/IsFree.v
 Dataflow/IsFree/Decide.v
 Dataflow/IsVariable.v
