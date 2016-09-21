@@ -494,7 +494,7 @@ Module Type TRANSLATION
                          m_good      := _
                       |};
                       reset_method n.(n_eqs) ];
-       c_nodups   := _
+       c_nodup   := _
     |}.
   (* =end= *)
   Next Obligation.

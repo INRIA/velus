@@ -77,6 +77,24 @@ Module Type SYNTAX
         c_nodup   : NoDup (map fst c_mems ++ map fst c_objs)
       }.
 
+  Lemma c_nodupmems:
+    forall c, NoDupMembers (c_mems c).
+  Proof.
+    intro.
+    pose proof (c_nodup c) as Nodup.
+    apply NoDup_app_weaken in Nodup.
+    now rewrite fst_NoDupMembers.
+  Qed.
+
+  Lemma c_nodupobjs:
+    forall c, NoDupMembers (c_objs c).
+  Proof.
+    intro.
+    pose proof (c_nodup c) as Nodup.
+    apply NoDup_app, NoDup_app_weaken in Nodup.
+    now rewrite fst_NoDupMembers.
+  Qed.
+
   Definition program : Type := list class.
   
   Definition find_method (f: ident): list method -> option method :=
@@ -187,6 +205,118 @@ Module Type SYNTAX
                  find_class c' cls' <> None) ->
         Forall (fun c' => c.(c_name) <> c'.(c_name)) cls' ->
         WelldefClasses (c :: cls').
+
+  Lemma WelldefClasses_cons:
+    forall c cls,
+      WelldefClasses (c :: cls) ->
+      WelldefClasses cls.
+  Proof.
+    induction cls; inversion 1; auto.
+  Qed.
+
+  Lemma WelldefClasses_app:
+    forall cls cls',
+      WelldefClasses (cls ++ cls') ->
+      WelldefClasses cls'.
+  Proof.
+    induction cls; inversion 1; auto.
+  Qed.
+
+  Remark welldef_not_class_in:
+    forall pre_prog post_prog o c c',
+      WelldefClasses (pre_prog ++ c :: post_prog) ->
+      In (o, c'.(c_name)) c.(c_objs) ->
+      find_class c'.(c_name) pre_prog = None.
+  Proof.
+    induction pre_prog as [|k]; intros post_prog o c c' WD Hin; auto.
+    rewrite <-app_comm_cons in WD.
+    pose proof WD as WD'.
+    apply WelldefClasses_cons in WD'.
+    pose proof WD' as WD''.
+    apply WelldefClasses_app in WD'.
+    inversion_clear WD' as [|? ? Hwd Hclassin Hdiff]; subst.
+    clear Hwd Hdiff.
+    specialize (Hclassin _ _ Hin).
+    apply not_None_is_Some in Hclassin;
+      destruct Hclassin as ((k', prog') & Hclassin).
+    pose proof (find_class_name _ _ _ _ Hclassin) as Eq.
+    apply find_class_In in Hclassin.
+    inversion_clear WD as [|? ? Hwd Hobjs Hdiff]; subst.
+    clear Hwd Hobjs.
+    apply Forall_app in Hdiff; destruct Hdiff as [Hdiff' Hdiff].
+    clear Hdiff'.
+    inversion_clear Hdiff as [|? ? Hkc Hdiff'].
+    clear Hkc.
+    simpl.
+    destruct (ident_eqb (c_name k) (c_name c')) eqn: Heq.
+    - eapply In_Forall in Hdiff'; eauto.
+      apply ident_eqb_eq in Heq.
+      rewrite <-Eq in Heq; contradiction.
+    - eapply IHpre_prog; eauto.
+  Qed.
+
+  Remark welldef_not_same_name:
+    forall pre_prog post_prog o c c',
+      WelldefClasses (pre_prog ++ c :: post_prog) ->
+      In (o, c'.(c_name)) c.(c_objs) ->
+      c'.(c_name) <> c.(c_name).
+  Proof.
+    induction pre_prog as [|k]; intros post_prog o c c' WD Hin.
+    - simpl in WD; inversion WD as [|? ? WD' Find Forall]; subst.
+      specialize (Find _ _ Hin).
+      apply not_None_is_Some in Find.
+      destruct Find as ((c'', prog') & Find).
+      pose proof Find as Findname.
+      apply find_class_name in Findname.
+      apply find_class_In in Find.
+      apply In_Forall with (x:=c'') in Forall; eauto.
+      rewrite <-Findname; auto.
+    - eapply IHpre_prog; eauto.
+      rewrite <-app_comm_cons in WD.
+      apply WelldefClasses_cons in WD; eauto.
+  Qed.
+
+  Inductive sub_prog: program -> program -> Prop := 
+    sub_prog_intro: forall p p', 
+      sub_prog p (p' ++ p). 
+
+  Remark find_class_sub_same: 
+    forall prog1 prog2 clsid cls prog', 
+      find_class clsid prog2 = Some (cls, prog') -> 
+      WelldefClasses prog1 -> 
+      sub_prog prog2 prog1 -> 
+      find_class clsid prog1 = Some (cls, prog'). 
+  Proof. 
+    intros ** Hfind WD Sub. 
+    inversion Sub; clear Sub; subst.  
+    pose proof (find_class_app _ _ _ _ Hfind) as H.
+    destruct H as (prog2' & Hprog2 & Hnone).
+    induction p'; simpl; auto. 
+    rewrite <-List.app_comm_cons in WD. 
+    assert (List.In cls (p' ++ prog2)) as Hin_cls. 
+    - pose proof (find_class_In _ _ _ _ Hfind) as Hin.
+      apply List.in_or_app; right; auto.  
+    - inversion WD as [|? ? ? ? Hforall]; subst a.
+      apply find_class_name in Hfind; subst clsid.
+      apply In_Forall with (2:=Hin_cls) in Hforall.
+      apply ident_eqb_neq in Hforall. 
+      rewrite Hforall. 
+      apply IHp'. eapply WelldefClasses_cons; eauto. 
+  Qed.
+
+  Lemma find_class_sub: 
+    forall prog clsid cls prog', 
+      find_class clsid prog = Some (cls, prog') -> 
+      sub_prog prog' prog. 
+  Proof. 
+    intros ** Find. 
+    apply find_class_app in Find.
+    destruct Find as (? & ? & ?); subst. 
+    rewrite List_shift_first. 
+    constructor. 
+  Qed. 
+
+  Hint Constructors sub_prog.
   
   Lemma exp_dec : forall e1 e2 : exp, {e1 = e2} + {e1 <> e2}.
   Proof.
@@ -205,7 +335,7 @@ Module Type SYNTAX
     intro Hrs. rewrite Hrs in *.
     intuition.
   Qed.
-  
+
 End SYNTAX.
 
 Module SyntaxFun

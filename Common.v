@@ -131,6 +131,15 @@ Lemma Forall_cons2:
     List.Forall P (x :: l) <-> P x /\ List.Forall P l.
 Proof. intros; split; inversion_clear 1; auto. Qed.
 
+Lemma add_comm:
+  forall {A} x x' (v v': A) m,
+    x <> x' ->
+    PM.add x v (PM.add x' v' m) = PM.add x' v' (PM.add x v m).
+Proof.
+  induction x, x', m; simpl; intro Neq;
+  ((f_equal; apply IHx; intro Eq; apply Neq; now inv Eq) || now contradict Neq).
+Qed.
+
 Lemma pm_in_dec: forall A i m, PM.In (A:=A) i m \/ ~PM.In (A:=A) i m.
 Proof.
   unfold PM.In, PM.MapsTo.
@@ -881,7 +890,6 @@ Section InMembers.
     - inv Eq; now left.
     - right; auto.
   Qed.
-  
 End InMembers.
 
 Ltac app_NoDupMembers_det :=
@@ -891,38 +899,6 @@ Ltac app_NoDupMembers_det :=
              H2: In (?x, ?t2) ?xs |- _ =>
       assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
     end.
-
-(** adds and its properties *)
-
-Definition adds {A B} (xs : list (ident * B)) (vs : list A) (S : PM.t A) :=
-  fold_right (fun (xbv: (ident * B) * A) env => 
-                    let '(x , b, v) := xbv in
-                    PM.add x v env) S (combine xs vs).
-
-Lemma find_gsso:
-  forall {A B} x x' (ty: A) xs (vs: list B) S,
-    x <> x' ->
-    PM.find x (adds ((x', ty) :: xs) vs S) = PM.find x (adds xs (tl vs) S).
-Proof.
-  intros ** Hneq.
-  unfold adds.
-  destruct vs. destruct xs; reflexivity.
-  simpl. rewrite PM.gso; auto.
-Qed.      
-
-Lemma NotInMembers_find_adds:
-  forall {A B} x (xs: list (ident * A)) (v: option B) vs S,
-    ~InMembers x xs ->
-    PM.find x S = v ->
-    PM.find x (adds xs vs S) = v.
-Proof.
-  induction xs as [|xty xs]; auto.
-  intros v vs S Hnin Hfind.
-  apply NotInMembers_cons in Hnin.
-  destruct Hnin as [Hnin Hneq].
-  destruct xty as [x' ty].
-  rewrite find_gsso; auto.
-Qed.
 
 Section Lists.
 
@@ -958,7 +934,7 @@ Section Lists.
     split; intro HH; [|symmetry in Hperm];
       now apply Permutation_in with (1:=Hperm) in HH.
   Qed.
-  
+
   Remark not_In_app:
     forall (x: A) l1 l2,
       ~ In x l2 ->
@@ -1435,6 +1411,54 @@ Section Lists.
    Qed.
    
 End Lists.
+
+(** adds and its properties *)
+
+Definition adds {A} xs (vs : list A) (e : PM.t A) :=
+  fold_right (fun (xv: ident * A) env => 
+                let (x , v) := xv in
+                PM.add x v env) e (combine xs vs).
+
+Lemma find_gsso:
+  forall {A} x x' xs (vs: list A) S,
+    x <> x' ->
+    PM.find x (adds (x' :: xs) vs S) = PM.find x (adds xs (tl vs) S).
+Proof.
+  intros ** Hneq.
+  unfold adds.
+  destruct vs. destruct xs; reflexivity.
+  simpl. rewrite PM.gso; auto.
+Qed.      
+
+Lemma NotInMembers_find_adds:
+  forall {A} x xs (v: option A) vs S,
+    ~In x xs ->
+    PM.find x S = v ->
+    PM.find x (adds xs vs S) = v.
+Proof.
+  induction xs as [|xty xs]; auto.
+  intros v vs S Hnin Hfind.
+  apply not_in_cons in Hnin.
+  destruct Hnin as [Hnin Hneq].
+  rewrite find_gsso; auto.
+Qed.
+
+Lemma adds_cons_cons:
+  forall {A} xs x (v: A) vs e,
+    ~ In x xs ->
+    adds (x :: xs) (v :: vs) e = adds xs vs (PM.add x v e).
+Proof.
+  unfold adds.
+  induction xs as [|x']; intros ** NotIn; simpl; auto.
+  destruct vs as [|v']; simpl; auto.
+  rewrite <-IHxs.
+  - simpl.
+    rewrite add_comm; auto.
+    intro Eq.
+    apply NotIn; subst.
+    apply in_eq.
+  - now apply not_in_cons in NotIn.
+Qed.
 
 
 Ltac induction_list_tac e I l H :=

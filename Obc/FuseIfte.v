@@ -196,17 +196,17 @@ Module Type FUSEIFTE
     - inv Hstmt.
       apply exp_eval_extend_mem_by_obj.
       unfold adds.
-      remember (combine l rvs) as lr eqn:Heq.
-      assert (forall x, In x lr -> In (fst x) l) as Hin
+      remember (combine (map fst l) rvs) as lr eqn:Heq.
+      assert (forall x, In x lr -> In (fst x) (map fst l)) as Hin
         by (destruct x; subst; apply in_combine_l).
-      clear Heq. induction lr as [|x lr]; [easy|].
-      destruct x as [[x ty]].
+      clear Heq. induction lr as [|x lr]; auto. 
+      destruct x as [x v'].
       apply exp_eval_extend_env.
       + intro HH; apply (Hfree x HH).
         constructor.
-        apply In_InMembers with (b:=ty).
-        change (In (fst ((x, ty), v0)) l).
-        apply Hin. now constructor.
+        apply fst_InMembers.
+        change (In (fst (x, v')) (map fst l)).
+        apply Hin. apply in_eq. 
       + apply IHlr. intros y Hin'. apply Hin.
         constructor (assumption).
     - now inv Hstmt.

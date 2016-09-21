@@ -72,7 +72,7 @@ Module Type SEMANTICS
       Forall2 (exp_eval menv env) es vs ->
       stmt_call_eval prog omenv clsid f vs omenv' rvs ->
       madd_obj o omenv' menv = menv' ->
-      adds ys rvs env = env' ->
+      adds (map fst ys) rvs env = env' ->
       stmt_eval prog menv env (Call ys clsid o f es) (menv', env')
   | Icomp:
       forall prog menv env a1 a2 env1 menv1 env2 menv2,
@@ -95,11 +95,16 @@ Module Type SEMANTICS
       forall prog menv clsid f fm vs prog' menv' env' cls rvs,
         find_class clsid prog = Some(cls, prog') ->
         find_method f cls.(c_methods) = Some fm ->
-        stmt_eval prog' menv (adds fm.(m_in) vs sempty)
+        stmt_eval prog' menv (adds (map fst fm.(m_in)) vs sempty)
                   fm.(m_body) (menv', env') ->
-        Forall2 (fun xty v=>PM.find (fst xty) env' = Some(v)) fm.(m_out) rvs ->
+        Forall2 (fun x v => PM.find x env' = Some v) (map fst fm.(m_out)) rvs ->
         stmt_call_eval prog menv clsid f vs menv' rvs.
 
+  Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
+                            with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
+  Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
+
+  
   (** ** Determinism of semantics *)
 
   Theorem exp_eval_det:

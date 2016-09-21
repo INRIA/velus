@@ -888,7 +888,7 @@ Section BlockRep.
   Lemma blockrep_nodup:
     forall xs vs flds ve ob,
       NoDupMembers (xs ++ flds) ->
-      blockrep ve flds ob <-*-> blockrep (adds xs vs ve) flds ob.
+      blockrep ve flds ob <-*-> blockrep (adds (map fst xs) vs ve) flds ob.
   Proof.
     intros ** Nodup.
     unfold blockrep.
@@ -911,8 +911,8 @@ Section BlockRep.
 
   Lemma blockrep_findvars:
     forall ve xs vs b,
-      Forall2 (fun xty v => PM.find (fst xty) ve = Some v) xs vs ->
-      blockrep ve xs b -*> blockrep (adds xs vs sempty) xs b.
+      Forall2 (fun x v => PM.find x ve = Some v) (map fst xs) vs ->
+      blockrep ve xs b -*> blockrep (adds (map fst xs) vs sempty) xs b.
     Proof.
       unfold  adds; simpl.
       intros ** Findvars.

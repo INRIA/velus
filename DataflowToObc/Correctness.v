@@ -1145,23 +1145,22 @@ for all [Is_free_exp x e]. *)
         In i (map fst iargs) ->
         Forall2 (sem_var_instant Hn) (map fst iargs) (map present ivals) ->
         (sem_var_instant Hn i (present c)
-        <-> PM.find i (adds iargs ivals sempty) = Some c).
+        <-> PM.find i (adds (map fst iargs) ivals sempty) = Some c).
     Proof.
       intros ** Hndup Hin Hsem.
       assert (length (map fst iargs) = length (map present ivals)) as Hlen
         by (apply Forall2_length with (1:=Hsem)).
       apply Forall2_combine in Hsem.
       unfold adds.
-      assert (PM.find i (fold_right
-                            (fun (xbv : ident * type * val) (env : PM.t val) =>
-                               let '(x, _, v) := xbv in PM.add x v env)
-                            sempty (combine iargs ivals)) = Some c
+      assert (PM.find i (fold_right (fun (xv : ident * val) (env : PM.t val) =>
+                                       let (x, v) := xv in PM.add x v env)
+                                    sempty (combine (map fst iargs) ivals)) = Some c
               <-> PM.find i (fold_right (fun (xv : ident * value) env =>
-                                           PM.add (fst xv) (snd xv) env)
-                    (PM.empty _) (combine (map fst iargs) (map present ivals)))
-                  = Some (present c)) as Hfeq.
+                                         PM.add (fst xv) (snd xv) env)
+                                      (PM.empty _) (combine (map fst iargs) (map present ivals)))
+                = Some (present c)) as Hfeq.
       - clear Hndup Hin Hsem.
-        rewrite combine_map_both.
+        rewrite combine_map_both, combine_map_fst.
         assert (forall x c, PM.find x sempty = Some c
                             <-> PM.find x (PM.empty value) = Some (present c))
           as Hrem by (intros; rewrite 2 PM.gempty; split; inversion 1).
@@ -1241,7 +1240,7 @@ for all [Is_free_exp x e]. *)
             as HR by (rewrite Hnode; intuition).
           destruct HR as (HR1 & HR2 & HR3). subst i o eqs0.
 
-          set (env := adds node.(n_in) inputs sempty).
+          set (env := adds (map fst node.(n_in)) inputs sempty).
 
           assert (msem_equations G bk H M node.(n_eqs))
             by (eapply Forall_msem_equation_global_tl; try eassumption).
@@ -1279,9 +1278,7 @@ for all [Is_free_exp x e]. *)
               + apply Is_variable_in_eqs_Is_defined_in_eqs in Hivi.
                 contradiction (not_Exists_Is_defined_in_eqs_n_in node).
                 apply Exists_exists. exists x; intuition.
-              + assert (~InMembers x node.(n_in)) as Hninm
-                    by (intro; apply HninA; now apply fst_InMembers).
-                apply NotInMembers_find_adds with (1:=Hninm).
+              + apply NotInMembers_find_adds with (1:=HninA).
                 apply PM.gempty.
             - intros input Hinput Hisdef.
               contradiction (not_Exists_Is_defined_in_eqs_n_in node).

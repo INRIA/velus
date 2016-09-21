@@ -13,6 +13,7 @@
 -install none
 RMemory.v
 Common.v
+Ident.v
 Operators.v
 Example.v
 Dataflow/Stream.v
@@ -44,7 +45,7 @@ DataflowToObc/Correctness/IsPresent.v
 DataflowToObc/Correctness/MemoryCorres.v
 DataflowToObc/Correctness.v
 ObcToClight/Interface.v
-ObcToClight/Tra.v
-ObcToClight/Cor.v
-ObcToClight/Sep.v
-ObcToClight/SepInv.v
+ObcToClight/Translation.v
+ObcToClight/Correctness.v
+ObcToClight/MoreSeparation.v
+ObcToClight/SepInvariant.v
