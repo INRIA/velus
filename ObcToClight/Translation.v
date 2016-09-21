@@ -5,7 +5,7 @@ Require Import Rustre.Common.
 Require Import Rustre.Obc.Syntax.
 Require Import Rustre.ObcToClight.Interface.
 Require Import Rustre.Ident.
-Require Import Operators.
+Require Import Rustre.Operators.
 
 Module Export OpAux := OperatorsAux Op.
 Module Export Syn := SyntaxFun Ids Op OpAux.
@@ -17,7 +17,7 @@ Open Scope list_scope.
 
 Definition main_id: ident := pos_of_str "main".
 Axiom prefix: ident -> ident -> ident.
-Axiom fun_id: ident.
+Definition fun_id: ident  := pos_of_str "fun".
 Axiom fun_not_out: fun_id <> out.
 
 Definition prefix_fun (c f: ident): ident :=

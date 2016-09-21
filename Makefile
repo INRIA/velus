@@ -128,7 +128,8 @@ VFILES:=RMemory.v\
   ObcToClight/Translation.v\
   ObcToClight/Correctness.v\
   ObcToClight/MoreSeparation.v\
-  ObcToClight/SepInvariant.v
+  ObcToClight/SepInvariant.v\
+  DataflowToClight.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
