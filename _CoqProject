@@ -35,6 +35,7 @@ Dataflow/Ordered.v
 Dataflow/NoDup.v
 Dataflow.v
 Obc/Syntax.v
+Obc/Typing.v
 Obc/Semantics.v
 Obc/Equiv.v
 Obc/FuseIfte.v

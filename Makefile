@@ -103,6 +103,7 @@ VFILES:=RMemory.v\
   Obc/Equiv.v\
   Obc/Semantics.v\
   Obc/Syntax.v\
+  Obc/Typing.v\
   Dataflow.v\
   Dataflow/NoDup.v\
   Dataflow/Ordered.v\
