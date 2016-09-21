@@ -57,10 +57,10 @@ Module Type OPERATORS.
 
   (* Decidability of elements *)
   
-  Axiom val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
-  Axiom type_dec  : forall t1 t2 : type, {t1 = t2} + {t1 <> t2}.
-  Axiom const_dec : forall c1 c2 : const, {c1 = c2} + {c1 <> c2}.
-  Axiom unop_dec  : forall op1 op2 : unop, {op1 = op2} + {op1 <> op2}.
+  Axiom val_dec   : forall v1  v2  : val,    {v1 = v2}  +  {v1 <> v2}.
+  Axiom type_dec  : forall t1  t2  : type,   {t1 = t2}  +  {t1 <> t2}.
+  Axiom const_dec : forall c1  c2  : const,  {c1 = c2}  +  {c1 <> c2}.
+  Axiom unop_dec  : forall op1 op2 : unop,  {op1 = op2} + {op1 <> op2}.
   Axiom binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
 
 End OPERATORS.
@@ -69,10 +69,10 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Require Export Coq.Classes.EquivDec.
   Close Scope equiv_scope.
 
-  Instance: EqDec val eq   := { equiv_dec := val_dec   }.
-  Instance: EqDec type eq  := { equiv_dec := type_dec  }.
+  Instance: EqDec val   eq := { equiv_dec := val_dec   }.
+  Instance: EqDec type  eq := { equiv_dec := type_dec  }.
   Instance: EqDec const eq := { equiv_dec := const_dec }.
-  Instance: EqDec unop eq  := { equiv_dec := unop_dec  }.
+  Instance: EqDec unop  eq := { equiv_dec := unop_dec  }.
   Instance: EqDec binop eq := { equiv_dec := binop_dec }.
   
   Definition val_to_bool (v: val) : option bool :=
