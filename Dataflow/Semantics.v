@@ -153,23 +153,23 @@ environment.
 
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
-        forall x t f v ty,
+        forall x t f v,
           sem_var_instant x (present true_val) ->
           sem_cexp_instant t v ->
           sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x ty t f) v
+          sem_cexp_instant (Emerge x t f) v
     | Smerge_false:
-        forall x t f v ty,
+        forall x t f v,
           sem_var_instant x (present false_val) ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f v ->
-          sem_cexp_instant (Emerge x ty t f) v
+          sem_cexp_instant (Emerge x t f) v
     | Smerge_abs:
-        forall x t f ty,
+        forall x t f,
           sem_var_instant x absent ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x ty t f) absent
+          sem_cexp_instant (Emerge x t f) absent
     | Site_eq:
         forall x t f c b ct cf,
           sem_lexp_instant x (present c) ->

@@ -536,7 +536,7 @@ Section PRESERVATION.
     forall c m e, Clight.typeof (translate_exp c m e) = cltype (typeof e).
   Proof.
     induction e as [| |cst| |]; simpl; auto.
-    - now case (existsb (fun out : positive * type => ident_eqb (fst out) i) (m_out m)).
+    - now case (mem_assoc_ident i (m_out m)). 
     - destruct cst; simpl; reflexivity.
     - destruct u; auto.
       admit.
@@ -905,7 +905,7 @@ Section PRESERVATION.
       m |= blockrep gcenv ve outco.(co_members) outb ** P ->
       gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       In (x, ty) (f.(m_in) ++ f.(m_vars) ++ f.(m_out)) ->
-      existsb (fun out => ident_eqb (fst out) x) f.(m_out) = true ->
+      mem_assoc_ident x (m_out f) = true ->
       PM.find x ve = Some v ->
       eval_expr tge e le m (deref_field out (prefix_fun (c_name c) (m_name f)) x (cltype ty)) v.
   Proof.
@@ -926,7 +926,7 @@ Section PRESERVATION.
       find_method fid c.(c_methods) = Some f ->
       m |= varsrep f ve le ** P ->
       In (x, ty) (f.(m_in) ++ f.(m_vars) ++ f.(m_out)) ->
-      existsb (fun out => ident_eqb (fst out) x) f.(m_out) = false ->
+      mem_assoc_ident x (m_out f) = false ->
       PM.find x ve = Some v ->
       eval_expr tge e le m (Etempvar x (cltype ty)) v.
   Proof.
@@ -1021,7 +1021,7 @@ Section PRESERVATION.
     inv EV; inv WF.
 
     (* Var x ty : "x" *)
-    - simpl; destruct (existsb (fun out => ident_eqb (fst out) x) f.(m_out)) eqn: E.
+    - simpl; destruct (mem_assoc_ident x f.(m_out)) eqn:E.
       + rewrite sep_swap in Hrep.
         eapply eval_out_field; eauto.
       + rewrite sep_swap4 in Hrep.
@@ -1172,14 +1172,14 @@ Section PRESERVATION.
       field_offset gcenv x (co_members outco) = Errors.OK d ->
       access_mode (cltype ty) = By_value (chunk_of_type ty) ->
       v = Values.Val.load_result (chunk_of_type ty) v ->
-      existsb (fun out => ident_eqb (fst out) x) f.(m_out) = true ->
+      mem_assoc_ident x (m_out f) = true ->
       exists m', Memory.Mem.storev (chunk_of_type ty) m (Vptr outb (Int.repr d)) v = Some m'
             /\ m' |= varsrep f (PM.add x v ve) le
                    ** blockrep gcenv (PM.add x v ve) outco.(co_members) outb ** P .
   Proof.
     intros ** Find Findmeth Hco Hrep Hvars Hoffset Haccess Hlr E.
 
-    eapply existsb_In in E; eauto.
+    unfold mem_assoc_ident in E; eapply existsb_In in E; eauto.
     pose proof (output_match _ _ _ _ _ _ Find Findmeth Hco) as Eq.
     pose proof E as Hin; apply in_map with (f:=translate_param) in Hin;
     rewrite Eq in Hin; eauto.
@@ -1224,7 +1224,7 @@ Section PRESERVATION.
       gcenv ! (prefix_fun (c_name c) (m_name f)) = Some outco ->
       m |= varsrep f ve le ** blockrep gcenv ve outco.(co_members) outb ** P ->
       In (x, ty) (f.(m_in) ++ f.(m_vars) ++ f.(m_out)) ->
-      existsb (fun out => ident_eqb (fst out) x) f.(m_out) = false ->
+      mem_assoc_ident x (m_out f) = false ->
       m |= varsrep f (PM.add x v ve) (PTree.set x v le)
           ** blockrep gcenv (PM.add x v ve) outco.(co_members) outb ** P.
   Proof.
@@ -1250,7 +1250,7 @@ Section PRESERVATION.
       rewrite sepall_swapp; eauto.
       intros (x', t') Hx'.
       rewrite match_value_add; auto.
-      eapply not_existsb_InMembers in E; eauto.
+      unfold mem_assoc_ident in E; eapply not_existsb_InMembers in E; eauto.
       apply In_InMembers in Hx'.
       intro Hxx'; subst x.
       apply E.
@@ -1445,7 +1445,7 @@ Section PRESERVATION.
       }    
       unfold assign.
       simpl fold_right.
-      destruct (existsb (fun out => ident_eqb (fst out) y) caller.(m_out)) eqn: E.
+      destruct (mem_assoc_ident y (m_out caller)) eqn: E.
       
       (* out->y = o.y' *)
       + (* get the 'out' variable left value evaluation *)
@@ -2319,7 +2319,7 @@ Section PRESERVATION.
     (* Assign x e : "x = e" *)
     - (* get the 'self' variable left value evaluation *)
       simpl translate_stmt; unfold assign.
-      destruct (existsb (fun out => ident_eqb (fst out) x) f.(m_out)) eqn: E.
+      destruct (mem_assoc_ident x (m_out f)) eqn: E.
 
       (* out->x = e *)
       + (* get the 'out' variable left value evaluation *)

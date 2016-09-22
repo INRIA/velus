@@ -82,7 +82,7 @@ Fixpoint translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
   match e with
   | Var x ty =>
     let ty := cltype ty in
-    if existsb (fun out => ident_eqb (fst out) x) m.(m_out) then
+    if mem_assoc_ident x m.(m_out) then
       deref_field out (prefix_fun c.(c_name) m.(m_name)) x ty
     else
       Clight.Etempvar x ty  
@@ -108,7 +108,7 @@ Definition funcall (f: ident) (args: list Clight.expr) : Clight.statement :=
   Clight.Scall None (Clight.Evar f sig) args.
 
 Definition assign (x: ident) (ty: Ctypes.type) (clsid: ident) (m: method): Clight.expr -> Clight.statement :=
-  if existsb (fun out => ident_eqb (fst out) x) m.(m_out) then
+  if mem_assoc_ident x m.(m_out) then
     Clight.Sassign (deref_field out (prefix_fun clsid m.(m_name)) x ty)
   else
     Clight.Sset x.

@@ -46,12 +46,12 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma stmt_eval_translate_eqns_cons:
-    forall prog mems menv env menv' env' eq eqs,
-      stmt_eval prog menv env (translate_eqns mems (eq :: eqs)) (menv', env')
+    forall prog mems vars menv env menv' env' eq eqs,
+      stmt_eval prog menv env (translate_eqns mems vars (eq :: eqs)) (menv', env')
       <->
       (exists menv'' env'',
-          stmt_eval prog menv env (translate_eqns mems eqs) (menv'', env'')
-          /\ stmt_eval prog menv'' env'' (translate_eqn mems eq) (menv', env')).
+          stmt_eval prog menv env (translate_eqns mems vars eqs) (menv'', env'')
+          /\ stmt_eval prog menv'' env'' (translate_eqn mems vars eq) (menv', env')).
   Proof. (* TODO: redo proof *)
     split.
     - intro H.
@@ -155,33 +155,33 @@ Module Type CORRECTNESS
   (** ** More technical lemmas *)
 
   Lemma stmt_eval_translate_cexp_menv_inv:
-    forall prog menv env mems x menv' env' ce,
-      stmt_eval prog menv env (translate_cexp mems x ce) (menv', env')
+    forall prog menv env mems vars x menv' env' ce,
+      stmt_eval prog menv env (translate_cexp mems vars x ce) (menv', env')
       -> menv' = menv.
   Proof.
-    intros prog menv env mems x menv' env'.
+    intros until env'.
     induction ce;
       (apply IHce || inversion_clear 1; try destruct b); auto.
   Qed.
 
   Lemma stmt_eval_translate_cexp_env_add:
-    forall prog menv env mems x menv' env' ce,
-      stmt_eval prog menv env (translate_cexp mems x ce) (menv', env')
+    forall prog menv env mems vars x menv' env' ce,
+      stmt_eval prog menv env (translate_cexp mems vars x ce) (menv', env')
       -> exists c, env' = PM.add x c env.
   Proof.
-    intros prog menv env mems x menv' env'.
+    intros until env'.
     induction ce;
       (apply IHce || inversion_clear 1; try destruct b); auto;
       exists v; rewrite <- H1; intuition.
   Qed.
 
   Lemma not_Is_defined_in_eq_stmt_eval_menv_inv:
-    forall prog x eq menv env mems menv' env',
+    forall prog x eq menv vars env mems menv' env',
       ~Is_defined_in_eq x eq
-      -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
+      -> stmt_eval prog menv env (translate_eqn mems vars eq) (menv', env')
       -> mfind_mem x menv' = mfind_mem x menv.
   Proof. (* TODO: Tidy proof *)
-    intros prog x eq menv env mems menv' env' Hneq Heval.
+    intros ** Hneq Heval.
     destruct eq as [y ck ce | y ck f les | y ck v0 lae]; simpl in Heval.
     - apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
       destruct Heval as [Heval1 Heval2].
@@ -207,12 +207,12 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma not_Is_defined_in_eq_stmt_eval_mobj_inv:
-    forall prog x eq menv env mems menv' env',
+    forall prog x eq menv env mems vars menv' env',
       ~Is_defined_in_eq x eq
-      -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
+      -> stmt_eval prog menv env (translate_eqn mems vars eq) (menv', env')
       -> mfind_inst x menv' = mfind_inst x menv.
   Proof. (* TODO: Tidy proof *)
-    intros prog x eq menv env mems menv' env' Hneq Heval.
+    intros ** Hneq Heval.
     destruct eq as [y ck ce | y ck f les | y ck v0 lae].
     - simpl in Heval.
       apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
@@ -240,12 +240,12 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma not_Is_variable_in_eq_stmt_eval_env_inv:
-    forall prog x eq menv env mems menv' env',
+    forall prog x eq menv env mems vars menv' env',
       ~Is_variable_in_eq x eq
-      -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
+      -> stmt_eval prog menv env (translate_eqn mems vars eq) (menv', env')
       -> PM.find x env' = PM.find x env.
   Proof.
-    intros prog x eq menv env mems menv' env' Hnd Heval.
+    intros ** Hnd Heval.
     destruct eq as [y ck ce | y ck f les | y ck v0 ce]; simpl in Heval.
     - apply stmt_eval_Control_fwd in Heval;
         destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
@@ -269,19 +269,19 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma not_Is_defined_in_eq_stmt_eval_env_inv:
-    forall prog x eq menv env mems menv' env',
+    forall prog x eq menv env mems vars menv' env',
       ~Is_defined_in_eq x eq
-      -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
+      -> stmt_eval prog menv env (translate_eqn mems vars eq) (menv', env')
       -> PM.find x env' = PM.find x env.
   Proof.
-    intros prog x eq menv env mems menv' env' Hidi Hstmt.
+    intros ** Hidi Hstmt.
     apply not_Is_defined_in_eq_not_Is_variable_in_eq in Hidi.
     now apply not_Is_variable_in_eq_stmt_eval_env_inv with (1:=Hidi) (2:=Hstmt).
   Qed.
 
   Lemma stmt_eval_translate_eqns_menv_inv:
-    forall prog menv env mems eqs menv' env',
-      stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+    forall prog menv env mems vars eqs menv' env',
+      stmt_eval prog menv env (translate_eqns mems vars eqs) (menv', env')
       -> (forall x, ~Is_defined_in_eqs x eqs ->
               mfind_mem x menv' = mfind_mem x menv).
   Proof.
@@ -299,8 +299,8 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma stmt_eval_translate_eqns_minst_inv:
-    forall prog menv env mems eqs menv' env',
-      stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+    forall prog menv env mems vars eqs menv' env',
+      stmt_eval prog menv env (translate_eqns mems vars eqs) (menv', env')
       -> (forall x, ~Is_defined_in_eqs x eqs ->
               mfind_inst x menv' = mfind_inst x menv).
   Proof.
@@ -318,8 +318,8 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma stmt_eval_translate_eqns_env_inv:
-    forall prog menv env mems eqs menv' env',
-      stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+    forall prog menv env mems vars eqs menv' env',
+      stmt_eval prog menv env (translate_eqns mems vars eqs) (menv', env')
       -> (forall x, ~Is_variable_in_eqs x eqs ->
               PM.find x env' = PM.find x env).
   Proof.
@@ -510,14 +510,14 @@ for all [Is_free_exp x e]. *)
   (** *** Correctness of [translate_cexp] *)
 
   Theorem cexp_correct:
-    forall R mems prog menv env c x e,
+    forall R mems vars prog menv env c x e,
       sem_cexp_instant true R e (present c)
       -> equiv_env (fun x => Is_free_in_cexp x e) R mems env menv
-      -> stmt_eval prog menv env (translate_cexp mems x e)
+      -> stmt_eval prog menv env (translate_cexp mems vars x e)
                   (menv, PM.add x c env).
   Proof.
     intros until x.
-    induction e as [y ty et IHt ef IHf|y t IHt f IHf|e].
+    induction e as [y et IHt ef IHf|y t IHt f IHf|e].
     - (* Emerge *)
       inversion_clear 1; intro Henv.
       + apply IHt in H1; [|auto].
@@ -547,7 +547,7 @@ for all [Is_free_exp x e]. *)
       TODO: lemma showing that a well-typed and well-clocked set of
             equations has a semantics.
 
-   2. The assumption stmt_eval (translate_eqns mems eqs) implies that an
+   2. The assumption stmt_eval (translate_eqns mems vars eqs) implies that an
       execution exists and thus that exp_eval's evar and estate find some
       value for each required variable.
       This is somehow backwards; it should be an obligation to show that
@@ -615,6 +615,7 @@ for all [Is_free_exp x e]. *)
               (H: history)
               (M: memory)
               (mems: PS.t)
+              (vars: list (ident * type))
               (alleqs : list equation)
               (Hsems: msem_equations G bk H M alleqs)
               (prog: program)
@@ -668,7 +669,7 @@ for all [Is_free_exp x e]. *)
 
         (* - locals (shown) *)
         -> (exists menv' env',
-              stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+              stmt_eval prog menv env (translate_eqns mems vars eqs) (menv', env')
               /\ (forall x, Is_variable_in_eqs x eqs
                   -> forall c : val, sem_var_instant (restr H n) x (present c)
                                <-> PM.find x env' = Some c)
@@ -685,7 +686,7 @@ for all [Is_free_exp x e]. *)
       intros Hall Hinmems Hin Henv Hin2 Hwsch Hmc.
 
       assert (exists menv' env',
-               stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
+               stmt_eval prog menv env (translate_eqns mems vars eqs) (menv', env')
                /\ (forall x, Is_variable_in_eqs x eqs
                        -> forall c, sem_var_instant (restr H n) x (present c)
                               <-> PM.find x env' = Some c)
@@ -1236,9 +1237,9 @@ for all [Is_free_exp x e]. *)
           simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
           injection Heqs. intro Hnode. rewrite Hnode in *. clear Heqs. simpl in *.
 
-          assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs))
+          assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs) /\ v = node.(n_vars))
             as HR by (rewrite Hnode; intuition).
-          destruct HR as (HR1 & HR2 & HR3). subst i o eqs0.
+          destruct HR as (HR1 & HR2 & HR3 & HR4). subst i o eqs0 v.
 
           set (env := adds (map fst node.(n_in)) inputs sempty).
 
@@ -1247,7 +1248,9 @@ for all [Is_free_exp x e]. *)
 
           assert (exists (menv' : heap) (env' : stack),
                      stmt_eval (translate G) menv env
-                       (translate_eqns (memories node.(n_eqs)) node.(n_eqs))
+                               (translate_eqns (memories node.(n_eqs))
+                                               (node.(n_out) :: node.(n_in) ++ node.(n_vars))
+                                               node.(n_eqs))
                        (menv', env') /\
                      (forall x : ident,
                          Is_variable_in_eqs x node.(n_eqs) ->
@@ -1800,8 +1803,8 @@ for all [Is_free_exp x e]. *)
   (** ** Correctness of optimized code *)
 
   Lemma not_Can_write_in_translate_cexp:
-    forall x mems ce i,
-      x <> i -> ~ Can_write_in i (translate_cexp mems x ce).
+    forall x mems vars ce i,
+      x <> i -> ~ Can_write_in i (translate_cexp mems vars x ce).
   Proof.
     induction ce; intros j Hxni Hcw.
     - specialize (IHce1 _ Hxni).
@@ -1837,11 +1840,11 @@ for all [Is_free_exp x e]. *)
   Qed.
   
   Lemma IsFusible_translate_cexp:
-    forall mems x ce,
+    forall mems vars x ce,
       (forall i, Is_free_in_cexp i ce -> x <> i)
-      -> IsFusible (translate_cexp mems x ce).
+      -> IsFusible (translate_cexp mems vars x ce).
   Proof.
-    intros mems x ce Hfree.
+    intros ** Hfree.
     induction ce.
     - simpl; constructor;
       [apply IHce1; now auto|apply IHce2; now auto|].
@@ -1926,15 +1929,15 @@ for all [Is_free_exp x e]. *)
   Require Import Rustre.Dataflow.Clocking.Properties.
 
   Lemma translate_eqns_IsFusible_free_write:
-    forall C mems inputs eqs,
+    forall C mems vars inputs eqs,
       Well_clocked_env C
       -> Forall (Well_clocked_eq C) eqs
       -> Is_well_sch mems inputs eqs
       -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
       -> (forall input, In input inputs -> ~ Is_defined_in_eqs input eqs)
-      -> IsFusible (translate_eqns mems eqs).
+      -> IsFusible (translate_eqns mems vars eqs).
   Proof.
-    intros C mems inputs eqs Hwk Hwks Hwsch Hnvi Hnin.
+    intros ** Hwk Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
     inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
     specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).

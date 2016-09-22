@@ -96,7 +96,7 @@ Module Type DECIDE
 
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with
-    | Emerge i _ t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
+    | Emerge i t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
     | Eite b t f => free_in_cexp f (free_in_cexp t (free_in_lexp b fvs))
     | Eexp e => free_in_lexp e fvs
     end.

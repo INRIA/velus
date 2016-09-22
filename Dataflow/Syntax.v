@@ -35,7 +35,7 @@ Module Type SYNTAX
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
-  | Emerge : ident -> type -> cexp -> cexp -> cexp 
+  | Emerge : ident -> cexp -> cexp -> cexp 
   | Eite   : lexp -> cexp -> cexp -> cexp
   | Eexp   : lexp -> cexp.
 

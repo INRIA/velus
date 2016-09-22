@@ -33,6 +33,15 @@ Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
 
+Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
+  existsb (fun y => ident_eqb (fst y) x).
+
+Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
+  match find (fun y => ident_eqb (fst y) x) xs with
+  | Some (_, a) => Some a
+  | None => None
+  end.
+       
 Module Type IDS.
   Parameter self : ident.
   Parameter out  : ident.
