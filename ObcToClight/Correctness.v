@@ -311,7 +311,6 @@ Section PRESERVATION.
       Forall2 (fun y xt => In (y, snd xt) (m.(m_in) ++ m.(m_vars) ++ m.(m_out))) ys f.(m_out) ->
       find_class clsid prog = Some (c', prog') ->
       find_method fid (c_methods c') = Some f ->
-      well_formed_stmt c' f f.(m_body) ->
       well_formed_stmt c m (Call ys clsid o fid es)
   | wf_skip: 
       well_formed_stmt c m Skip.
@@ -2397,6 +2396,13 @@ Section PRESERVATION.
         rewrite Hparams; simpl; repeat f_equal.
         rewrite list_length_map.
         eapply Forall2_length; eauto.
+      + edestruct find_class_app with (1:=Find')
+          as (pre_prog & Hprog & FindNone); eauto.
+        rewrite Hprog, Forall_app in well_formed.
+        destruct well_formed as [? well_formed'].
+        apply Forall_inv in well_formed'.
+        apply find_method_In in Findmeth.
+        eapply In_Forall in well_formed'; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
         rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
