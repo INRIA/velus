@@ -25,7 +25,7 @@ Module Type ORDERED
        (Import Syn : SYNTAX Ids Op).
 
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
-  | INI: forall x ck f e ty, Is_node_in_eq f (EqApp x ck f e ty).
+  | INI: forall x ck f e, Is_node_in_eq f (EqApp x ck f e).
 
   (* definition is needed in signature *)
   Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=

@@ -48,8 +48,8 @@ Module Type TRANSLATION
   Definition gather_eq
              (acc: list ident * list (ident * ident)) (eq: equation) :=
     match eq with
-    | EqDef _ _ _     => acc
-    | EqApp x _ f _ _ => (fst acc, (x, f) :: snd acc)
+    | EqDef _ _ _   => acc
+    | EqApp x _ f _ => (fst acc, (x, f) :: snd acc)
     | EqFby x _ _ _ => (x::fst acc, snd acc)
     end.
 
@@ -116,8 +116,8 @@ Module Type TRANSLATION
     Definition translate_eqn (vars: list (ident * type)) (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp vars x ce)
-      | EqApp x ck f les ty =>
-          Control ck (Call [(x, ty)] f x step (List.map translate_lexp les))
+      | EqApp x ck f les =>
+        Control ck (Call [x] f x step (List.map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
     (* =end= *)
@@ -137,9 +137,9 @@ Module Type TRANSLATION
   (* definition is needed in signature *)
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
-    | EqDef _ _ _ => s
-    | EqFby x _ c0 _  => Comp (AssignSt x (Const c0)) s
-    | EqApp x _ f _ _ => Comp (Call [] f x reset []) s
+    | EqDef _ _ _    => s
+    | EqFby x _ c0 _ => Comp (AssignSt x (Const c0)) s
+    | EqApp x _ f _  => Comp (Call [] f x reset []) s
     end.
   (* =end= *)
 

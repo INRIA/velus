@@ -711,7 +711,7 @@ for all [Is_free_exp x e]. *)
 
       inversion Hsem as
           [bk0 H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
-          |bk0 H0 M0 y ck f Mo les ty ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
+          |bk0 H0 M0 y ck f Mo les ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
           |bk0 H0 M0 ms y ck ls yS v0 le Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
         subst bk0 H0 M0 eq;
         (*    (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0); *)
@@ -864,7 +864,7 @@ for all [Is_free_exp x e]. *)
         destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
         apply Forall_cons2 in Hmc.
         destruct Hmc as [Hmceq Hmceqs].
-        inversion_clear Hmceq as [|? ? ? ? ? ? ? Hmc0|].
+        inversion_clear Hmceq as [|? ? ? ? ? ? Hmc0|].
         specialize (Hmc0 _ Hmfind).
         destruct Hmc0 as [omenv [Hfindo Hmc0]].
         (* dataflow semantics *)
@@ -983,8 +983,8 @@ for all [Is_free_exp x e]. *)
             rewrite Hstmt.
             inversion_clear Hivi as [? ? Hivi'|];
               [|unfold Is_variable_in_eqs in Hvin; contradiction].
-            inversion Hivi' as [|x' ck' f' e ty' HR1 [HR2 HR3 HR4]];
-              subst x' ck' f' x e ty'.
+            inversion Hivi' as [|x' ck' f' e HR1 [HR2 HR3 HR4]];
+              subst x' ck' f' x e.
             split; intro Hsv'.
             { inversion_clear Hsv' as [Hfind'].
               inversion_clear Hvar as [Hfind''].
@@ -1474,7 +1474,7 @@ for all [Is_free_exp x e]. *)
       - (* EqApp *)
         unfold translate_reset_eqns; simpl.
         inversion_clear Hsem
-          as [|? ? ? ? ? ? Mo ? ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
+          as [|? ? ? ? ? ? Mo ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
         set (omenv := match mfind_inst i menv' with
                       | Some m => m | None => hempty end).
         assert (exists omenv',
@@ -1609,7 +1609,6 @@ for all [Is_free_exp x e]. *)
               (css   : stream (list const))
               (ys    : stream value)
               (r     : ident)
-              (ty    : type)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
@@ -1631,7 +1630,7 @@ for all [Is_free_exp x e]. *)
       | 0 => stmt_eval P hempty sempty (Call [] main obj reset []) (menv, env)
       | S n => let cs := map Const (css n) in
                exists menvN envN, dostep n P r main obj css menvN envN
-               /\ stmt_eval P menvN envN (Call [(r, ty)] main obj step cs)
+               /\ stmt_eval P menvN envN (Call [r] main obj step cs)
                             (menv, env)
       end.
     (* =end= *)
@@ -1691,7 +1690,7 @@ for all [Is_free_exp x e]. *)
 
         assert (exists menv' env',
                    stmt_eval (translate G) menv0 env0
-                             (Call [(r, ty)] main obj step (map Const ci0))
+                             (Call [r] main obj step (map Const ci0))
                              (menv', env')
                    /\ (exists omenv, mfind_inst obj menv' = Some omenv
                                      /\ Memory_Corres G 1 main M omenv)
@@ -1742,7 +1741,7 @@ for all [Is_free_exp x e]. *)
 
         assert (exists menvN' envN',
                    stmt_eval (translate G) menvN envN
-                             (Call [(r, ty)] main obj step (map Const ciSn))
+                             (Call [r] main obj step (map Const ciSn))
                              (menvN', envN')
                    /\ (exists omenvsN, mfind_inst obj menvN' = Some omenvsN
                                     /\ Memory_Corres G (S (S n)) main M omenvsN)
@@ -1981,7 +1980,7 @@ for all [Is_free_exp x e]. *)
                 with (1:=Hwk) (2:=Hwkeq));
           apply IsFusible_Control_laexp; try intuition.
         match goal with H:Can_write_in _ _ |- _ => inversion_clear H end.
-        match goal with H:InMembers _ _ |- _ => inversion_clear H end.
+        match goal with H:In _ _ |- _ => inversion_clear H end.
         subst. now apply Hnfree.
         contradiction.
       + assert (~Is_free_in_clock x ck) as Hnfree
@@ -1992,4 +1991,3 @@ for all [Is_free_exp x e]. *)
   Qed.
 
 End CORRECTNESS.
-

@@ -68,11 +68,11 @@ Module Type SEMANTICS
       stmt_eval prog menv env (AssignSt x e) (menv', env)
   | Icall: forall prog menv env es vs clsid o f ys menv' env' omenv omenv' rvs,
       omenv = match mfind_inst o menv with None => hempty
-                                         | Some(om) => om end ->
+                                         | Some om => om end ->
       Forall2 (exp_eval menv env) es vs ->
       stmt_call_eval prog omenv clsid f vs omenv' rvs ->
       madd_obj o omenv' menv = menv' ->
-      adds (map fst ys) rvs env = env' ->
+      adds ys rvs env = env' ->
       stmt_eval prog menv env (Call ys clsid o f es) (menv', env')
   | Icomp:
       forall prog menv env a1 a2 env1 menv1 env2 menv2,
@@ -187,4 +187,3 @@ Module SemanticsFun
        (Import Syn   : SYNTAX Ids Op OpAux) <: SEMANTICS Ids Op OpAux Syn.
   Include SEMANTICS Ids Op OpAux Syn.
 End SemanticsFun.
-        

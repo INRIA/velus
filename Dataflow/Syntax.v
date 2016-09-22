@@ -46,7 +46,7 @@ Module Type SYNTAX
   (* TODO: Why aren't the two others typed? *)
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : ident -> clock -> ident -> lexps -> type -> equation
+  | EqApp : ident -> clock -> ident -> lexps -> equation
   | EqFby : ident -> clock -> const -> lexp -> equation.
 
   Implicit Type eqn: equation.
@@ -65,7 +65,7 @@ Module Type SYNTAX
   Definition var_defined (eq: equation) : ident :=
     match eq with
     | EqDef x _ _ => x
-    | EqApp x _ _ _ _ => x
+    | EqApp x _ _ _ => x
     | EqFby x _ _ _ => x
     end.
 
@@ -77,7 +77,7 @@ Module Type SYNTAX
 
   Definition is_app (eq: equation) : bool :=
     match eq with
-    | EqApp _ _ _ _ _ => true
+    | EqApp _ _ _ _ => true
     | _ => false
     end.
 

@@ -117,18 +117,19 @@ Definition ptr_obj (owner: ident) (cls obj: ident): Clight.expr :=
   Clight.Eaddrof (deref_field self owner obj (type_of_inst cls)) (type_of_inst_p cls).  
 
 Definition funcall_assign
-           (ys: list (ident * Ctypes.type)) (owner: ident) (caller: method)
+           (ys: list ident) (owner: ident) (caller: method)
            (obj: ident) (tyout: Ctypes.type) (callee: method)
            : Clight.statement :=
   fold_right
     (fun y s =>
-       let '((y, ty), (y', _)) := y in
+       let '(y, (y', ty)) := y in
+       let ty := cltype ty in 
        let assign_out := assign y ty owner caller (Clight.Efield (Clight.Evar obj tyout) y' ty) in
        Clight.Ssequence assign_out s
     ) Clight.Sskip (combine ys callee.(m_out)).
 
 Definition binded_funcall
-           (prog: program) (ys: list (ident * Ctypes.type)) (owner: ident)
+           (prog: program) (ys: list ident) (owner: ident)
            (caller: method) (cls obj f: ident) (args: list Clight.expr)
   : Clight.statement :=
   match find_class cls prog with
@@ -166,7 +167,7 @@ Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
   | Comp s1 s2 =>
     Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Call ys cls o f es =>
-    binded_funcall prog (map translate_param ys) c.(c_name) m cls o f (map (translate_exp c m) es)  
+    binded_funcall prog ys c.(c_name) m cls o f (map (translate_exp c m) es)  
   | Skip => Clight.Sskip
   end.
 

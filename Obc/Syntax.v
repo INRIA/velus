@@ -38,8 +38,8 @@ Module Type SYNTAX
   | AssignSt : ident -> exp -> stmt                  (* self.x = e *)
   | Ifte : exp -> stmt -> stmt -> stmt               (* if e then s1 else s2 *)
   | Comp : stmt -> stmt -> stmt                      (* s1; s2 *)
-  | Call : list (ident * type) -> ident -> ident -> ident -> list exp -> stmt
-                (* y1:t1, ..., yn:tn := class instance method (e1, ..., em) *)
+  | Call : list ident -> ident -> ident -> ident -> list exp -> stmt
+                (* y1, ..., yn := class instance method (e1, ..., em) *)
   | Skip.
 
   Record method : Type :=

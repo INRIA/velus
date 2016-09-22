@@ -45,7 +45,7 @@ Module Type FUSEIFTE
       Can_write_in x s2 ->
       Can_write_in x (Ifte e s1 s2)
   | CWICall_ap: forall x xs cls i f es,
-      InMembers x xs ->
+      In x xs ->
       Can_write_in x (Call xs cls i f es)
   | CWIComp1: forall x s1 s2,
       Can_write_in x s1 ->
@@ -196,17 +196,16 @@ Module Type FUSEIFTE
     - inv Hstmt.
       apply exp_eval_extend_mem_by_obj.
       unfold adds.
-      remember (combine (map fst l) rvs) as lr eqn:Heq.
-      assert (forall x, In x lr -> In (fst x) (map fst l)) as Hin
+      remember (combine l rvs) as lr eqn:Heq.
+      assert (forall x, In x lr -> In (fst x) l) as Hin
         by (destruct x; subst; apply in_combine_l).
       clear Heq. induction lr as [|x lr]; auto. 
       destruct x as [x v'].
       apply exp_eval_extend_env.
       + intro HH; apply (Hfree x HH).
         constructor.
-        apply fst_InMembers.
-        change (In (fst (x, v')) (map fst l)).
-        apply Hin. apply in_eq. 
+        change (In (fst (x, v')) l).
+        apply Hin, in_eq. 
       + apply IHlr. intros y Hin'. apply Hin.
         constructor (assumption).
     - now inv Hstmt.

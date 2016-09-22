@@ -96,9 +96,9 @@ Module Type ISFREE
         Is_free_in_caexp i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
-      forall x f ck les i ty,
+      forall x f ck les i,
         Is_free_in_laexps i ck les ->
-        Is_free_in_eq i (EqApp x ck f les ty)
+        Is_free_in_eq i (EqApp x ck f les)
   | FreeEqFby:
       forall x v ck le i,
         Is_free_in_laexp i ck le ->

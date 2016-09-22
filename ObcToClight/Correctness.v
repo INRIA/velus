@@ -303,13 +303,13 @@ Section PRESERVATION.
       well_formed_stmt c m s2 ->
       well_formed_stmt c m (Comp s1 s2)
   | wf_call: forall ys clsid c' prog' o fid f es,
-      NoDupMembers ys ->
+      NoDup ys ->
       In (o, clsid) c.(c_objs) ->
       In (o, fid, clsid) (instance_methods m) ->
       Forall (well_formed_exp c m) es ->
       Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
-      Forall2 (fun y y' => snd y = snd y') ys f.(m_out) ->
-      incl ys (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) ->
+      length ys = length f.(m_out) ->
+      incl (combine ys (map snd f.(m_out))) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) ->
       find_class clsid prog = Some (c', prog') ->
       find_method fid (c_methods c') = Some f ->
       well_formed_stmt c' f f.(m_body) ->
@@ -1371,9 +1371,9 @@ Section PRESERVATION.
       find_method caller_id c.(c_methods) = Some caller ->
       find_class clsid prog = Some (c', prog'') ->
       find_method f c'.(c_methods) = Some callee ->
-      NoDupMembers ys ->
-      incl ys (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out)) ->
-      Forall2 (fun y y' => snd y = snd y') ys callee.(m_out) ->
+      NoDup ys ->
+      length ys = length callee.(m_out) ->
+      incl (combine ys (map snd callee.(m_out))) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out)) ->
       le1 ! out = Some (Vptr outb Int.zero) ->
       le1 ! self = Some (Vptr sb sofs) ->
       gcenv ! (prefix_fun (c_name c) (m_name caller)) = Some outco ->
@@ -1381,41 +1381,35 @@ Section PRESERVATION.
            ** blockrep gcenv ve outco.(co_members) outb
            ** varsrep caller ve le1
            ** P ->                                       
-      Forall2 (fun v y => valid_val v (snd y)) rvs ys ->
+      Forall2 (fun v y => valid_val v (snd y)) rvs callee.(m_out) ->
       e1 ! (prefix_out o f) = Some (binst, type_of_inst (prefix_fun clsid f)) ->
       gcenv ! (prefix_fun clsid f) = Some instco ->
       exists le2 m2 T,
         exec_stmt tge (function_entry2 tge) e1 le1 m1
-                  (funcall_assign (map translate_param ys) c.(c_name) caller (prefix_out o f)
+                  (funcall_assign ys c.(c_name) caller (prefix_out o f)
                                   (type_of_inst (prefix_fun clsid f)) callee)
                   T le2 m2 Out_normal
         /\ m2 |= blockrep gcenv (adds (map fst callee.(m_out)) rvs ve') instco.(co_members) binst
-               ** blockrep gcenv (adds (map fst ys) rvs ve) outco.(co_members) outb
-               ** varsrep caller (adds (map fst ys) rvs ve) le2
+               ** blockrep gcenv (adds ys rvs ve) outco.(co_members) outb
+               ** varsrep caller (adds ys rvs ve) le2
                ** P
         /\ le2 ! out = Some (Vptr outb Int.zero) 
         /\ le2 ! self = Some (Vptr sb sofs). 
   Proof.
     unfold funcall_assign.
-    intros ** Findc Hcaller Findc' Findmeth Nodup Incl 
-           Types Hout Hself Houtco Hrep Valids Hinst Hinstco.
-    assert (length ys = length callee.(m_out)) as Length1
-        by (eapply Forall2_length; eauto).
+    intros ** Findc Hcaller Findc' Findmeth Nodup Length1 Incl
+           Hout Hself Houtco Hrep Valids Hinst Hinstco.
     assert (length rvs = length callee.(m_out)) as Length2
-        by (transitivity (length ys); auto; eapply Forall2_length; eauto).
-    revert ve ve' le1 m1 ys rvs Hout Hself Hrep Incl Types Length1 Length2 Nodup Valids.
+        by (eapply Forall2_length; eauto).
+    revert ve ve' le1 m1 ys rvs Hout Hself Hrep Incl Length1 Length2 Nodup Valids.
     pose proof (m_nodupvars callee) as Nodup'.
     do 2 apply NoDupMembers_app_r in Nodup'.
-    induction_list (m_out callee) as [|(y', ty')] with outs; intros;
-    destruct ys, rvs; try discriminate.
+    induction_list (m_out callee) as [|(y', ty)] with outs; intros;
+    destruct ys as [|y], rvs; try discriminate.
     - exists le1, m1, E0; split; auto.
       apply exec_Sskip.
-    - destruct p as (y, ty). 
-      inv Length1; inv Length2; inv Nodup; inv Nodup'.    
-      apply incl_cons' in Incl.
-      destruct Incl as [Hvars Incl].
-      inversion_clear Types as [|? ? ? ? Eqty Types'];
-        rename Types' into Types; simpl in Eqty; subst.
+    - inv Length1; inv Length2; inv Nodup; inv Nodup'.    
+      simpl in Incl; apply incl_cons' in Incl; destruct Incl as [Hvars Incl].
       inversion_clear Valids as [|? ? ? ? Valid Valids'];
         rename Valids' into Valids; simpl in Valid.
 
@@ -1427,12 +1421,13 @@ Section PRESERVATION.
       pose proof (output_match _ _ _ _ _ _ Findc Hcaller Houtco) as Eq_outco. 
       
       (* get the o.y' value evaluation *)
-      assert (In (y', ty') callee.(m_out)) as Hin
+      assert (In (y', ty) callee.(m_out)) as Hin
           by (rewrite Houts; apply in_or_app; left; apply in_or_app; right; apply in_eq).
       rewrite Eq, Eq' in Hinstco.
-      edestruct (evall_inst_field y' ty' e1 le1) as (dy' & Ev_o_y' & Hoffset_y' & ?); eauto.
-      assert (eval_expr tge e1 le1 m1 (Efield (Evar (prefix_out o f)
-                                                    (type_of_inst (prefix_fun clsid f))) y' (cltype ty')) v).
+      edestruct (evall_inst_field y' ty e1 le1) as (dy' & Ev_o_y' & Hoffset_y' & ?); eauto.
+      assert (eval_expr tge e1 le1 m1
+                        (Efield (Evar (prefix_out o f)
+                                      (type_of_inst (prefix_fun clsid f))) y' (cltype ty)) v).
       { eapply eval_Elvalue; eauto.
         eapply blockrep_deref_mem; eauto.
         - rewrite <-Eq, <-Eq' in Hinstco.
