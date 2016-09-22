@@ -308,8 +308,7 @@ Section PRESERVATION.
       In (o, fid, clsid) (instance_methods m) ->
       Forall (well_formed_exp c m) es ->
       Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
-      length ys = length f.(m_out) ->
-      incl (combine ys (map snd f.(m_out))) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) ->
+      Forall2 (fun y xt => In (y, snd xt) (m.(m_in) ++ m.(m_vars) ++ m.(m_out))) ys f.(m_out) ->
       find_class clsid prog = Some (c', prog') ->
       find_method fid (c_methods c') = Some f ->
       well_formed_stmt c' f f.(m_body) ->
@@ -1372,8 +1371,7 @@ Section PRESERVATION.
       find_class clsid prog = Some (c', prog'') ->
       find_method f c'.(c_methods) = Some callee ->
       NoDup ys ->
-      length ys = length callee.(m_out) ->
-      incl (combine ys (map snd callee.(m_out))) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out)) ->
+      Forall2 (fun y xt => In (y, snd xt) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out))) ys callee.(m_out) ->
       le1 ! out = Some (Vptr outb Int.zero) ->
       le1 ! self = Some (Vptr sb sofs) ->
       gcenv ! (prefix_fun (c_name c) (m_name caller)) = Some outco ->
@@ -1397,8 +1395,10 @@ Section PRESERVATION.
         /\ le2 ! self = Some (Vptr sb sofs). 
   Proof.
     unfold funcall_assign.
-    intros ** Findc Hcaller Findc' Findmeth Nodup Length1 Incl
+    intros ** Findc Hcaller Findc' Findmeth Nodup Incl
            Hout Hself Houtco Hrep Valids Hinst Hinstco.
+    assert (length ys = length callee.(m_out)) as Length1
+        by (eapply Forall2_length; eauto).
     assert (length rvs = length callee.(m_out)) as Length2
         by (eapply Forall2_length; eauto).
     revert ve ve' le1 m1 ys rvs Hout Hself Hrep Incl Length1 Length2 Nodup Valids.
@@ -1409,7 +1409,8 @@ Section PRESERVATION.
     - exists le1, m1, E0; split; auto.
       apply exec_Sskip.
     - inv Length1; inv Length2; inv Nodup; inv Nodup'.    
-      simpl in Incl; apply incl_cons' in Incl; destruct Incl as [Hvars Incl].
+      inversion_clear Incl as [|? ? ? ? Hvars Incl'];
+        rename Incl' into Incl; simpl in Hvars.
       inversion_clear Valids as [|? ? ? ? Valid Valids'];
         rename Valids' into Valids; simpl in Valid.
 
@@ -2307,7 +2308,7 @@ Section PRESERVATION.
       intros ** Find' Findmeth' Hrep Findowner ? Hgetptrf Hgetcf ? Findinst
              Hinstty Hbinst ? Hin Offs ? ? Hinstco ? ?]; intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
-                                 |? ? ? ? ? ? callee ? ? ? ? Hin ? ? ? Find' Findmeth|];
+                                 |? ? ? ? ? ? callee ? ? ? ? Hin ? ? Find' Findmeth|];
       try (rewrite match_states_conj in MS; destruct MS as (Hrep & Hself & Hout & Houtco & He & ?));
       subst.
     
