@@ -47,11 +47,6 @@ Proof.
   now apply prefix_injective.
 Qed.
 
-Definition step_id (id: ident): ident := 
-  pos_of_str ("step_" ++ (pos_to_str id)).
-(* Definition reset_id (id: ident): ident := *)
-(*   pos_of_str ("reset_" ++ (pos_to_str id)). *)
-
 (* TRANSLATION *)
 Definition type_of_inst (o: ident): Ctypes.type :=
   Ctypes.Tstruct o Ctypes.noattr.
@@ -171,8 +166,7 @@ Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
   | Comp s1 s2 =>
     Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Call ys cls o f es =>
-    let ys := map translate_param ys in
-    binded_funcall prog ys c.(c_name) m cls o f (map (translate_exp c m) es)  
+    binded_funcall prog (map translate_param ys) c.(c_name) m cls o f (map (translate_exp c m) es)  
   | Skip => Clight.Sskip
   end.
 
@@ -281,14 +275,14 @@ Definition make_main
            (prog: program) (node: ident) (ins: list (ident * Ctypes.type))
            (outs: list (ident * Ctypes.type)) (m: method)
   : AST.globdef Clight.fundef Ctypes.type :=
-  let out_struct := step_id node in
+  let out_struct := prefix_fun node step in
   let args_in := map make_in_arg ins in
-  let tyout := type_of_inst (step_id node) in
+  let tyout := type_of_inst (prefix_fun node step) in
   let out := Clight.Eaddrof (Clight.Evar out_struct tyout) (pointer_of tyout) in 
   let args := (Clight.Eaddrof (Clight.Evar (glob_id node) (type_of_inst node)) (type_of_inst_p node))
-                :: args_in ++ [out] in
+                :: out :: args_in in
   let step := Clight.Ssequence
-                (funcall (step_id node) args)
+                (funcall (prefix_fun node step) args)
                 (fold_right
                    (fun y s =>
                       let '((y, ty), (y', _)) := y in
@@ -298,7 +292,7 @@ Definition make_main
                    ) Clight.Sskip (combine outs m.(m_out))) in
   let loop := Clight.Sloop ((* Clight.Ssequence wait *) step) Clight.Sskip in
   let body := return_zero ((* Clight.Ssequence (reset_call None node f) *) loop) in
-  fundef [] [(out_struct, type_of_inst (step_id node))] [] Ctypes.type_int32s body.
+  fundef [] [(out_struct, tyout)] [] Ctypes.type_int32s body.
 
 Definition vardef (init volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
@@ -334,7 +328,7 @@ Definition make_program'
 Definition translate (prog: program) (main_node: ident): Errors.res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
-    match find_method (step_id main_node) c.(c_methods) with
+    match find_method step c.(c_methods) with
     | Some m =>
       let f := glob_id main_node in
       let ins := map glob_bind m.(m_in) in

@@ -193,7 +193,7 @@ Section PRESERVATION.
   Proof.
     unfold translate in TRANSL.
     destruct (find_class main_node prog) as [(c, cls)|]; try discriminate.
-    destruct (find_method (step_id main_node) (c_methods c)) as [m|]; try discriminate.
+    destruct (find_method step (c_methods c)) as [m|]; try discriminate.
     destruct (split (map (translate_class prog) prog)) as (structs, funs).
     apply build_ok in TRANSL.
     apply build_composite_env_consistent in TRANSL; auto.
@@ -214,7 +214,7 @@ Section PRESERVATION.
   Proof.
     unfold translate in TRANSL.
     destruct (find_class main_node prog) as [(main, prog')|]; try discriminate.
-    destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
+    destruct (find_method step (c_methods main)) as [m|]; try discriminate.
     destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
     intros ** Findcl.
     pose proof (find_class_name _ _ _ _ Findcl); subst.
@@ -249,7 +249,7 @@ Section PRESERVATION.
   Proof.
     unfold translate in TRANSL.
     destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
-    destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
+    destruct (find_method step (c_methods main)) as [m|]; try discriminate.
     destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
     apply build_ok in TRANSL.
     intros ** Findcl Findmth.
@@ -417,7 +417,7 @@ Section PRESERVATION.
   Proof.
     unfold translate in TRANSL.
     destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
-    destruct (find_method (step_id main_node) (c_methods main)) as [m|]; try discriminate.
+    destruct (find_method step (c_methods main)) as [m|]; try discriminate.
     destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
     intros ** Findcl Findmth.
     pose proof (find_class_name _ _ _ _ Findcl);

@@ -61,7 +61,7 @@ Extract Constant SelectOp.symbol_is_external =>
 
 Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
-Extract Constant Translation.prefix => "(fun p1 p2 -> Camlcoq.(p1 |> extern_atom) ^ ""$"" ^  Camlcoq.(p2 |> extern_atom) |> intern_string)".
+Extract Constant Translation.prefix => "(fun p1 p2 -> Camlcoq.(intern_string (extern_atom p1 ^ ""$"" ^  extern_atom p2)))".
 
 (* Extract Constant first_unused_ident => "Camlcoq.first_unused_ident". *)
 

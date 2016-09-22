@@ -7,6 +7,8 @@ open Interface
 open Integers
 open Camlcoq
 open Elab
+open Cop
+open Ctypes
 
 let id = intern_string
 let id' (s, a) = (id s, a)
@@ -124,17 +126,17 @@ node_dec:
   vars = loption(VARS; xs = separated_list(COMMA, param) {xs}); SEMICOL;
   LET; eqs = list(terminated(equ, SEMICOL)); TEL
   { { n_name' = id f;
-      n_input' = ins;
-      n_output' = out;
+      n_in' = ins;
+      n_out' = out;
       n_vars' = vars;
       n_eqs' = eqs } }
 
 param: p = separated_pair(IDENT, COLON, typ) { id' p }
 
 typ:
-  | TBOOL  { Tbool }
-  | TINT   { Tint }
-  | TFLOAT { Tfloat }
+  | TBOOL  { Op.bool_type }
+  | TINT   { Op.Tint (I32, Signed) }
+  | TFLOAT { Op.Tfloat F32 }
 
 equ:
   | x = pat; EQUAL; ce = cexp
@@ -148,8 +150,8 @@ pat: p = separated_pair(IDENT, COLONS, clock) { id' p }
 
 clock:
   | BASE                          { Cbase }
-  | c = clock; ON; x = IDENT      { Con (c, id x, Tbool, true) }
-  | c = clock; ON; NOT; x = IDENT { Con (c, id x, Tbool, false) }
+  | c = clock; ON; x = IDENT      { Con (c, id x, true) }
+  | c = clock; ON; NOT; x = IDENT { Con (c, id x, false) }
 
 cexp:
   | MERGE; x = IDENT; ce1 = cexp; ce2 = cexp      { Emerge' (id x, ce1, ce2) }
@@ -166,18 +168,18 @@ lexp:
   | le = lexp;  WHENNOT; x = IDENT     { Ewhen' (le, id x, false) }
 
 unop:
-  | SUB {Opposite}
-  | NOT {Negation}
+  | SUB {Op.UnaryOp Oneg}
+  | NOT {Op.UnaryOp Onotbool}
 
 binop:
-  | ADD {Add}
-  | SUB {Sub}
-  | MUL {Mul}
-  | DIV {Div}
+  | ADD {Oadd}
+  | SUB {Osub}
+  | MUL {Omul}
+  | DIV {Odiv}
 
 const:
-  | i = INT  { Op.Val (Vint (Int.repr (z_of_int i))) }
-  | b = BOOL { Op.Vbool b }
+  | i = INT  { Op.Cint (Int.repr (z_of_int i), I32, Signed) }
+  | b = BOOL { Op.Cint ((if b then Int.one else Int.zero), IBool, Signed) }
   | f = FLOAT { let (v, fk) = elab_float_constant f in
                 let f = convertFloat v fk in
-                Op.Val (Vfloat f) }
+                Op.Cfloat f }
