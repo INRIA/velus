@@ -9,8 +9,9 @@ open Ctypes
 open Location
 
 let print_c = ref false
-let write_c = ref false
-
+let write_cl = ref false
+let write_cm = ref false
+    
 let print_error oc msg =
   let print_one_error = function
     | Errors.MSG s -> output_string oc (camlstring_of_coqstring s)
@@ -81,17 +82,20 @@ let compile filename =
     | OK p ->
       if !print_c then
         PrintClight.print_program Format.std_formatter p;
-      if !write_c then
-        begin
-          let target_name = filename ^ ".light.c" in
-          let oc = open_out target_name in
-          PrintClight.print_program (Format.formatter_of_out_channel oc) p;
-          close_out oc
-        end;
+      (* if !write_cl then *)
+      (*   begin *)
+      (*     let target_name = filename ^ ".light.c" in *)
+      (*     let oc = open_out target_name in *)
+      (*     PrintClight.print_program (Format.formatter_of_out_channel oc) p; *)
+      (*     close_out oc *)
+      (*   end; *)
+      if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
+      if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
       let p = add_builtins p in
       match Compiler.transf_clight_program p with
       | Error errmsg -> print_error stderr errmsg
       | OK p -> print_endline "Compilation OK"
+
   with x -> close_in ic; raise x
 
 let process file =
@@ -104,7 +108,8 @@ let process file =
 
 let speclist = [
   "-p", Arg.Set print_c, " Print generated Clight on standard output";
-  "-dclight", Arg.Set write_c, " Save generated Clight in <source>.light.c"
+  "-dclight", Arg.Set write_cl, " Save generated Clight in <source>.light.c";
+  "-dcminor", Arg.Set write_cm, " Save generated Clight in <source>.minor.c"
 ]
 
 let usage_msg = "Usage: rustre [options] <source>"

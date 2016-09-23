@@ -8,7 +8,7 @@ Require ia32.Machregs ia32.Conventions1
         backend.Selection backend.RTLgen
         driver.Compiler cparser.Cabs.
 Require ZArith.BinIntDef.
-
+        
 Cd "extraction/extract".
 
 Extraction Blacklist Int String List.
@@ -45,6 +45,7 @@ Extract Constant Compiler.print_Cminor => "PrintCminor.print_if".
 Extract Constant Compiler.print_RTL => "PrintRTL.print_if".
 Extract Constant Compiler.print_LTL => "PrintLTL.print_if".
 Extract Constant Compiler.print_Mach => "PrintMach.print_if".
+Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
 
 (* Inlining *)
 Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".

@@ -39,7 +39,7 @@ let sup t1 t2 =
   match t1, t2 with
   | Op.Tfloat s, _ | _, Op.Tfloat s -> Op.Tfloat s
   | Op.Tlong s, _ | _, Op.Tlong s -> Op.Tlong s
-  | Op.Tint (i, s) , _ | _, Op.Tint (i, s) -> Op.Tint (i, s)
+  | Op.Tint (i, s) , _ -> Op.Tint (i, s)
     
 let rec infer tenv le =
   let aux = infer tenv in
@@ -63,17 +63,17 @@ let rec elab_lexpr tenv le =
 let rec elab_cexpr tenv ce =
   let aux = elab_cexpr tenv in
   match ce with
-  | Emerge' (x, ce1, ce2) -> Emerge (x, find x tenv, aux ce1, aux ce2)
+  | Emerge' (x, ce1, ce2) -> Emerge (x, aux ce1, aux ce2)
   | Eite' (le, ce1, ce2) -> Eite (elab_lexpr tenv le, aux ce1, aux ce2)
   | Eexp' le -> Eexp (elab_lexpr tenv le)
   
-let elab_eq cenv tenv = function
+let elab_eq tenv = function
   | EqDef' (x, ck, ce) ->
     ignore (find x tenv);
     EqDef (x, ck, elab_cexpr tenv ce)
   | EqApp' (x, ck, f, les) ->
     ignore (find x tenv);
-    EqApp (x, ck, f, List.map (elab_lexpr tenv) les, find f cenv)
+    EqApp (x, ck, f, List.map (elab_lexpr tenv) les)
   | EqFby' (x, ck, c, le) ->
     ignore (find x tenv);
     EqFby (x, ck, c, elab_lexpr tenv le)
@@ -87,7 +87,7 @@ let elab_node cenv node =
     n_in = node.n_in';
     n_out = node.n_out';
     n_vars = node.n_vars';
-    n_eqs = List.map (elab_eq cenv tenv) node.n_eqs'}
+    n_eqs = List.map (elab_eq tenv) node.n_eqs'}
 
 let get_cenv =
   List.fold_left
