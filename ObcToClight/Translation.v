@@ -276,24 +276,29 @@ Definition make_main
            (prog: program) (node: ident) (ins: list (ident * Ctypes.type))
            (outs: list (ident * Ctypes.type)) (m: method)
   : AST.globdef Clight.fundef Ctypes.type :=
-  let out_struct := prefix_fun node step in
-  let args_in := map make_in_arg ins in
-  let tyout := type_of_inst (prefix_fun node step) in
-  let out := Clight.Eaddrof (Clight.Evar out_struct tyout) (pointer_of tyout) in 
-  let args := (Clight.Eaddrof (Clight.Evar (glob_id node) (type_of_inst node)) (type_of_inst_p node))
-                :: out :: args_in in
+  let out_step_struct := prefix_fun node step in
+  let args_step_in := map make_in_arg ins in
+  let tyout_step := type_of_inst (prefix_fun node step) in
+  let out_step := Clight.Eaddrof (Clight.Evar out_step_struct tyout_step) (pointer_of tyout_step) in 
+  let self := Clight.Eaddrof (Clight.Evar (glob_id node) (type_of_inst node)) (type_of_inst_p node) in
+  let args_step := self :: out_step :: args_step_in in
+  let out_reset_struct := prefix_fun node reset in
+  let tyout_reset := type_of_inst (prefix_fun node reset) in
+  let out_reset := Clight.Eaddrof (Clight.Evar out_reset_struct tyout_reset) (pointer_of tyout_reset) in 
+  let reset := funcall (prefix_fun node reset) [self; out_reset] in
   let step := Clight.Ssequence
-                (funcall (prefix_fun node step) args)
+                (funcall (prefix_fun node step) args_step)
                 (fold_right
                    (fun y s =>
                       let '((y, ty), (y', _)) := y in
-                      let assign_out := Clight.Sassign (Clight.Evar y ty)
-                                                       (Clight.Efield (Clight.Evar out_struct tyout) y' ty) in
+                      let assign_out :=
+                          Clight.Sassign (Clight.Evar y ty)
+                                         (Clight.Efield (Clight.Evar out_step_struct tyout_step) y' ty) in
                       Clight.Ssequence assign_out s
                    ) Clight.Sskip (combine outs m.(m_out))) in
   let loop := Clight.Sloop ((* Clight.Ssequence wait *) step) Clight.Sskip in
-  let body := return_zero ((* Clight.Ssequence (reset_call None node f) *) loop) in
-  fundef [] [(out_struct, tyout)] [] Ctypes.type_int32s body.
+  let body := return_zero (Clight.Ssequence reset loop) in
+  fundef [] [(out_reset_struct, tyout_reset); (out_step_struct, tyout_step)] [] Ctypes.type_int32s body.
 
 Definition vardef (init volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
