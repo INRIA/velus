@@ -293,6 +293,33 @@ Module Export Op <: OPERATORS.
     + unfold Cop.sem_binarith in H; DestructCases;
         apply cases_of_bool; discriminate.
   Qed.
+
+  Ltac GoalMatchMatch :=
+    repeat match goal with
+           | |- match match ?x with _ => _ end with _ => _ end = _ =>
+             destruct x
+           end; auto.
+  
+  Lemma classify_add_cltypes:
+    forall ty1 ty2,
+      Cop.classify_add (cltype ty1) (cltype ty2) = Cop.add_default.
+  Proof.
+    unfold Cop.classify_add, cltype; destruct ty1, ty2; simpl; GoalMatchMatch.
+  Qed.
+
+  Lemma classify_sub_cltypes:
+    forall ty1 ty2,
+      Cop.classify_sub (cltype ty1) (cltype ty2) = Cop.sub_default.
+  Proof.
+    unfold Cop.classify_sub, cltype; destruct ty1, ty2; simpl; GoalMatchMatch.
+  Qed.
+
+  Lemma classify_cmp_cltypes:
+    forall ty1 ty2,
+      Cop.classify_cmp (cltype ty1) (cltype ty2) = Cop.cmp_default.
+  Proof.
+    unfold Cop.classify_cmp, cltype; destruct ty1, ty2; simpl; GoalMatchMatch.
+  Qed.
   
   Lemma pres_sem_binop:
     forall op ty1 ty2 ty v1 v2 v,
@@ -316,10 +343,12 @@ Module Export Op <: OPERATORS.
     { destruct 1 as (Hnun' & Hnptr'). eauto using typecl_wt_val_wt_val. }
     destruct op; simpl in Hsem.
     - (* add *)
-      unfold Cop.sem_add, Cop.classify_add, Cop.sem_binarith in Hsem.
+      unfold Cop.sem_add, Cop.sem_binarith in Hsem.
+      rewrite classify_add_cltypes in Hsem.
       DestructCases; split; try discriminate; ContradictNotVptr.
     - (* sub *)
-      unfold Cop.sem_sub, Cop.classify_sub, Cop.sem_binarith in Hsem.
+      unfold Cop.sem_sub, Cop.sem_binarith in Hsem.
+      rewrite classify_sub_cltypes in Hsem.
       DestructCases; split; try discriminate; ContradictNotVptr.
     - (* mul *)
       unfold Cop.sem_mul, Cop.sem_binarith in Hsem.
@@ -385,6 +414,53 @@ Module Export Op <: OPERATORS.
   Lemma binop_dec : forall op1 op2 : binop, {op1 = op2} + {op1 <> op2}.
   Proof.
     decide equality.
+  Qed.
+
+  Lemma sem_unary_operation_any_mem:
+    forall op v ty M1 M2,
+      (forall b ofs, v <> Values.Vptr b ofs) ->
+      Cop.sem_unary_operation op v ty M1
+      = Cop.sem_unary_operation op v ty M2.
+  Proof.
+    intros ** Hnptr.
+    destruct op, v; simpl;
+      unfold Cop.sem_notbool, Cop.sem_notint, Cop.sem_neg, Cop.sem_absfloat;
+      repeat match goal with
+             | |- (match ?x with _ => _ end) = _ => destruct x; auto
+             | _ => ContradictNotVptr
+             end.
+  Qed.
+
+  Lemma sem_cast_any_mem:
+    forall v ty1 ty2 M1 M2,
+      (forall b ofs, v <> Values.Vptr b ofs) ->
+      Cop.sem_cast v ty1 ty2 M1 = Cop.sem_cast v ty1 ty2 M2.
+  Proof.
+    intros ** Hnptr.
+    unfold Cop.sem_cast.
+    destruct (Cop.classify_cast ty1 ty2); auto.
+    destruct v; auto.
+    ContradictNotVptr.
+  Qed.
+
+  Lemma sem_binary_operation_any_cenv_mem:
+    forall op v1 ty1 v2 ty2 M1 M2 cenv1 cenv2,
+      (forall b ofs, v1 <> Values.Vptr b ofs) ->
+      (forall b ofs, v2 <> Values.Vptr b ofs) ->
+      Cop.sem_binary_operation cenv1 op v1 (cltype ty1) v2 (cltype ty2) M1
+      = Cop.sem_binary_operation cenv2 op v1 (cltype ty1) v2 (cltype ty2) M2.
+  Proof.
+    intros ** Hnptr1 Hnptr2.
+    destruct op; simpl;
+      unfold Cop.sem_add, Cop.sem_sub, Cop.sem_mul, Cop.sem_div, Cop.sem_mod,
+             Cop.sem_and, Cop.sem_or, Cop.sem_xor, Cop.sem_shl, Cop.sem_shr,
+             Cop.sem_cmp, Cop.sem_binarith;
+      try rewrite classify_add_cltypes;
+      try rewrite classify_sub_cltypes;
+      try rewrite classify_cmp_cltypes;
+      try rewrite (sem_cast_any_mem v1 (cltype ty1) _ M1 M2 Hnptr1);
+      try rewrite (sem_cast_any_mem v2 (cltype ty2) _ M1 M2 Hnptr2);
+      GoalMatchMatch.
   Qed.
     
 End Op.
