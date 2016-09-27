@@ -38,6 +38,19 @@ Module Export Op <: OPERATORS.
     | Ctypes.Tfloat sz  (Ctypes.mk_attr false None) => Some (Tfloat sz)
     | _ => None
     end.
+
+  Definition type_chunk (ty: type) : AST.memory_chunk :=
+    match ty with
+    | Tint Ctypes.I8 Ctypes.Signed    => AST.Mint8signed
+    | Tint Ctypes.I8 Ctypes.Unsigned  => AST.Mint8unsigned
+    | Tint Ctypes.I16 Ctypes.Signed   => AST.Mint16signed
+    | Tint Ctypes.I16 Ctypes.Unsigned => AST.Mint16unsigned
+    | Tint Ctypes.I32 _               => AST.Mint32
+    | Tint Ctypes.IBool _             => AST.Mint8unsigned
+    | Tlong _                         => AST.Mint64
+    | Tfloat Ctypes.F32               => AST.Mfloat32
+    | Tfloat Ctypes.F64               => AST.Mfloat64
+    end.
   
   Definition true_val := Values.Vtrue.
   Definition false_val := Values.Vfalse.
@@ -462,6 +475,35 @@ Module Export Op <: OPERATORS.
       try rewrite (sem_cast_any_mem v2 (cltype ty2) _ M1 M2 Hnptr2);
       GoalMatchMatch.
   Qed.
+
+  Lemma access_mode_cltype:
+    forall ty,
+      Ctypes.access_mode (cltype ty) = Ctypes.By_value (type_chunk ty).
+  Proof.
+    destruct ty as [sz sg|sz|f].
+    - destruct sz, sg; auto.
+    - destruct sz; auto.
+    - destruct f; auto.
+  Qed.
     
+  Lemma wt_val_load_result:
+    forall ty v,
+      wt_val v ty ->
+      Values.Val.load_result (type_chunk ty) v = v.
+  Proof.
+    intros ** Hwt.
+    destruct ty as [sz sg|sz|sz].
+    - destruct sz, sg; simpl;
+        inv Hwt; auto;
+        match goal with
+        | H:Ctyping.wt_int _ _ _ |- _ => rewrite <-H
+        end;
+        try rewrite Int.sign_ext_idem;
+        try rewrite Int.zero_ext_idem;
+        intuition.
+    - destruct sz; inv Hwt; auto.
+    - destruct sz; inv Hwt; auto.
+  Qed.
+  
 End Op.
 
