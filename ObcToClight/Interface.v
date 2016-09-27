@@ -135,18 +135,19 @@ Module Export Op <: OPERATORS.
 
   Definition wt_val : val -> type -> Prop := wt_val'.
 
+  Hint Unfold wt_val.
+  Hint Constructors wt_val'.
+  
   Lemma wt_val_true:
     wt_val true_val bool_type.
   Proof.
-    apply wt_val_int.
-    reflexivity.
+    apply wt_val_int. reflexivity.
   Qed.
 
   Lemma wt_val_false:
     wt_val false_val bool_type.
   Proof.
-    apply wt_val_int.
-    reflexivity.
+    apply wt_val_int. reflexivity.
   Qed.
 
   Lemma wt_val_const:
@@ -159,6 +160,12 @@ Module Export Op <: OPERATORS.
     - apply wt_val_single.
   Qed.
 
+  Ltac DestructCases :=
+    match goal with
+    | H: ?x <> ?x |- _ => now contradiction H
+    | _ => Ctyping.DestructCases
+    end.
+  
   Lemma typecl_wt_val_wt_val:
     forall cty ty v,
       typecl cty = Some ty ->
@@ -168,28 +175,13 @@ Module Export Op <: OPERATORS.
       wt_val v ty.
   Proof.
     intros ** Htcl Hcty Hnun Hnptr.
-    destruct cty; try discriminate;
-      (destruct a; destruct attr_volatile; destruct attr_alignas;
-       try discriminate; simpl in *; fold Ctypes.noattr in Hcty).
-    - injection Htcl; intro HR; rewrite HR in *; clear Htcl.
-      rewrite <-HR; clear HR.
-      destruct v; try now inversion Hcty.
-      + now contradiction Hnun.
-      + inversion_clear Hcty. now apply wt_val_int.
-      + exfalso; now eapply Hnptr.
-    - injection Htcl; intro HR; rewrite HR in *; clear Htcl.
-      rewrite <-HR; clear HR.
-      destruct v; try now inversion Hcty.
-      + now contradiction Hnun.
-      + now apply wt_val_long.
-    - injection Htcl; intro HR; rewrite HR in *; clear Htcl.
-      rewrite <-HR; clear HR.
-      destruct v; try now inversion Hcty.
-      + now contradiction Hnun.
-      + destruct f; try now inversion Hcty.
-        now apply wt_val_float.
-      + destruct f; try now inversion Hcty.
-        now apply wt_val_single.
+    destruct cty;
+      simpl in *;
+      destruct v;
+      DestructCases;
+      inversion Hcty;
+      auto.
+    exfalso; now eapply Hnptr.
   Qed.
 
   Lemma wt_val_not_vundef_nor_vptr:
@@ -208,11 +200,8 @@ Module Export Op <: OPERATORS.
       Ctyping.wt_val v (cltype ty).
   Proof.
     intros ** Hwt.
-    destruct ty; inversion_clear Hwt.
-    - now apply Ctyping.wt_val_int.
-    - now apply Ctyping.wt_val_long.
-    - now apply Ctyping.wt_val_float.
-    - now apply Ctyping.wt_val_single.
+    destruct ty; inversion_clear Hwt;
+    eauto using Ctyping.wt_val.
   Qed.
 
   Lemma pres_sem_unop:
@@ -224,98 +213,87 @@ Module Export Op <: OPERATORS.
   Proof.
     intros ** Htop Hsop Hv1.
     pose proof (wt_val_not_vundef_nor_vptr _ _ Hv1) as [Hnun Hnptr].
+    unfold type_unop, sem_unop in *.
     destruct op as [uop|].
     - (* UnaryOp *)
-      simpl in *.
+      apply wt_val_wt_val_cltype in Hv1.
       destruct (Ctyping.type_unop uop (cltype ty1)) as [cty|] eqn:Hok;
         [|discriminate].
-      pose proof (Ctyping.pres_sem_unop _ _ _ _ _ _ Hok Hsop
-                                        (wt_val_wt_val_cltype _ _ Hv1)) as Hcwt.
-      clear Hok.
+      apply Ctyping.pres_sem_unop with (2:=Hsop) (3:=Hv1) in Hok;
+        DestructCases.
       cut (v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs)).
-      destruct 1 as (Hnun' & Hnptr');
-        now apply typecl_wt_val_wt_val with (1:=Htop); eauto.
+      { destruct 1 as (Hnun' & Hnptr'). eauto using typecl_wt_val_wt_val. }
       destruct uop; simpl in *.
       + rewrite Cop.notbool_bool_val in Hsop.
-        destruct (Cop.bool_val v1 (cltype ty1) Memory.Mem.empty);
-          try discriminate.
-        injection Hsop; intro; subst v.
-        destruct b; simpl; split; discriminate.
+        DestructCases. destruct b; split; discriminate.
       + unfold Cop.sem_notint in Hsop.
-          destruct (Cop.classify_notint (cltype ty1));
-            destruct v1; try discriminate;
-            injection Hsop; intro; subst; split; discriminate.
+        destruct v1; DestructCases; split; discriminate.
       + unfold Cop.sem_neg in Hsop.
-        destruct (Cop.classify_neg (cltype ty1));
-          destruct v1; try discriminate;
-          injection Hsop; intro; subst; split; discriminate.
+        destruct v1; DestructCases; split; discriminate.
       + unfold Cop.sem_absfloat in Hsop.
-        destruct (Cop.classify_neg (cltype ty1));
-          destruct v1; try discriminate;
-            injection Hsop; intro; subst; split; discriminate.
+        destruct v1; DestructCases; split; discriminate.
     - (* CastOp *)
-      (* TODO: automate proof on the example of Ctyping.pres_sem_cast *)
-      simpl in Hsop. simpl in Htop.
       destruct (Ctyping.check_cast (cltype ty1) (cltype t));
-        [|discriminate].
-      destruct ty1 as [i1 s1|s1|f1];
-        destruct t as [i2 s2|s2|f2];
-        injection Htop; intro; subst; simpl in Hsop;
-          destruct v1 as [i|i|f|f|b|ofs]; inversion_clear Hv1.
-      + destruct i, i1, s1, i2, s2; inversion_clear Hsop;
-          try (apply wt_val_int; simpl;
-               try (rewrite Int.sign_ext_idem||rewrite Int.zero_ext_idem);
-               intuition);
-          match goal with |- context [if ?c then _ else _] => destruct c end;
-          auto.
-      + destruct i, i1, s1, s2; inversion_clear Hsop; apply wt_val_long.
-      + destruct i, i1, s1, f2; inversion_clear Hsop;
-          (apply wt_val_single || apply wt_val_float).
-      + destruct f, s1, i2, s2; inversion_clear Hsop;
-          try (apply wt_val_int; simpl;
-               try (rewrite Int.sign_ext_idem||rewrite Int.zero_ext_idem);
-               intuition);
-          match goal with |- context [if ?c then _ else _] => destruct c end;
-          auto.
-      + destruct f, s1; inversion_clear Hsop; apply wt_val_long.
-      + destruct f, s1, f2; inversion_clear Hsop;
-          (apply wt_val_single || apply wt_val_float).
-      + unfold Cop.sem_cast in Hsop.
-        destruct f1, i2, s2; simpl in Hsop; try discriminate;
-          (destruct (Float.to_int f) || destruct (Float.to_intu f));
-          try (destruct (Float.to_intu f));
-          try discriminate;
-          injection Hsop; intro; subst; apply wt_val_int; simpl;
-          try ((rewrite Int.sign_ext_idem||rewrite Int.zero_ext_idem);
-               now intuition);
-          try match goal with |- context [if ?c then _ else _] => destruct c end;
-          auto.
-      + unfold Cop.sem_cast in Hsop.
-        destruct f1, i2, s2; simpl in Hsop; try discriminate;
-          (destruct (Float32.to_int b) || destruct (Float32.to_intu b));
-          try (destruct (Float32.to_intu b));
-          try discriminate;
-          injection Hsop; intro; subst; apply wt_val_int; simpl;
-          try ((rewrite Int.sign_ext_idem||rewrite Int.zero_ext_idem);
-               now intuition);
-          try match goal with |- context [if ?c then _ else _] => destruct c end;
-          auto.
-      + apply Cop.cast_val_is_casted in Hsop;
-          inversion_clear Hsop.
-        apply wt_val_long.
-      + apply Cop.cast_val_is_casted in Hsop;
-          inversion_clear Hsop.
-        apply wt_val_long.
-      + apply Cop.cast_val_is_casted in Hsop;
-          inversion_clear Hsop.
-        now apply wt_val_float.
-        now apply wt_val_single.
-      + apply Cop.cast_val_is_casted in Hsop;
-          inversion_clear Hsop.
-        now apply wt_val_float.
-        now apply wt_val_single.
+        [injection Htop; intro; subst; clear Htop|discriminate].
+      apply wt_val_wt_val_cltype in Hv1.
+      pose proof (Ctyping.pres_sem_cast _ _ _ _ _ Hv1 Hsop).
+      eapply typecl_wt_val_wt_val with (2:=H).
+      destruct ty; now simpl.
+      + (* result cannot be Vundef *)
+        unfold Cop.sem_cast, Cop.classify_cast in Hsop.
+        destruct Hv1; DestructCases; try discriminate; auto.
+      + (* result cannot be Vptr *)
+        unfold Cop.sem_cast, Cop.classify_cast in Hsop.
+        intros b ofs.
+        specialize (Hnptr b ofs).
+        destruct Hv1; DestructCases; try discriminate; auto.
   Qed.
 
+  (* Solve goal with hypothesis of the form:
+       (forall b ofs, Values.Vptr b' ofs' <> Values.Vptr b ofs) *)
+  Ltac ContradictNotVptr :=
+      match goal with
+      | H: context [Values.Vptr ?b ?i <> Values.Vptr _ _] |- _ =>
+        now contradiction (H b i)
+      end.
+
+  Lemma cases_of_bool:
+    forall P b,
+      P Values.Vtrue ->
+      P Values.Vfalse ->
+      P (Values.Val.of_bool b).
+  Proof.
+    destruct b; auto.
+  Qed.
+  
+  Lemma option_map_of_bool_true_false:
+    forall e x,
+      Coqlib.option_map Values.Val.of_bool e = Some x ->
+      x = Values.Vtrue \/ x = Values.Vfalse.
+  Proof.
+    intros e x Hom.
+    destruct e as [b|]; [destruct b|].
+    - injection Hom; intro; subst; intuition.
+    - injection Hom; intro; subst; intuition.
+    - discriminate Hom.
+  Qed.
+
+  Lemma sem_cmp_not_vundef_nor_vptr:
+    forall cop v1 ty1 v2 ty2 m v,
+      Cop.sem_cmp cop v1 ty1 v2 ty2 m = Some v ->
+      v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs).
+  Proof.
+    intros ** H.
+    unfold Cop.sem_cmp in H;
+      DestructCases; split; try discriminate;
+        try (apply option_map_of_bool_true_false in H;
+             destruct H; subst; discriminate).
+    + unfold Cop.sem_binarith in H; DestructCases;
+        apply cases_of_bool; discriminate.
+    + unfold Cop.sem_binarith in H; DestructCases;
+        apply cases_of_bool; discriminate.
+  Qed.
+  
   Lemma pres_sem_binop:
     forall op ty1 ty2 ty v1 v2 v,
       type_binop op ty1 ty2 = Some ty ->
@@ -324,7 +302,57 @@ Module Export Op <: OPERATORS.
       wt_val v2 ty2 ->
       wt_val v ty.
   Proof.
-  Admitted.
+    unfold type_binop, sem_binop.
+    intros ** Hty Hsem Hwt1 Hwt2.
+    destruct (Ctyping.type_binop op (cltype ty1) (cltype ty2)) eqn:Hok;
+      [|discriminate].
+    pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt1) as (Hnun1 & Hnptr1).
+    pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt2) as (Hnun2 & Hnptr2).
+    apply wt_val_wt_val_cltype in Hwt1.
+    apply wt_val_wt_val_cltype in Hwt2.
+    pose proof (Ctyping.pres_sem_binop _ _ _ _ _ _ _ _ _ Hok Hsem Hwt1 Hwt2)
+      as Hwt.
+    cut (v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs)).
+    { destruct 1 as (Hnun' & Hnptr'). eauto using typecl_wt_val_wt_val. }
+    destruct op; simpl in Hsem.
+    - (* add *)
+      unfold Cop.sem_add, Cop.classify_add, Cop.sem_binarith in Hsem.
+      DestructCases; split; try discriminate; ContradictNotVptr.
+    - (* sub *)
+      unfold Cop.sem_sub, Cop.classify_sub, Cop.sem_binarith in Hsem.
+      DestructCases; split; try discriminate; ContradictNotVptr.
+    - (* mul *)
+      unfold Cop.sem_mul, Cop.sem_binarith in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* div *)
+      unfold Cop.sem_div, Cop.sem_binarith in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* mod *)
+      unfold Cop.sem_mod, Cop.sem_binarith in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* and *)
+      unfold Cop.sem_and, Cop.sem_binarith in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* or *)
+      unfold Cop.sem_or, Cop.sem_binarith in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* xor *)
+      unfold Cop.sem_xor, Cop.sem_binarith in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* shl *)
+      unfold Cop.sem_shl, Cop.sem_shift in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+    - (* shr *)
+      unfold Cop.sem_shr, Cop.sem_shift in Hsem.
+      DestructCases; split; discriminate; ContradictNotVptr.
+      (* comparisons *)
+    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+  Qed.
 
   Lemma val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
   Proof Values.Val.eq.
