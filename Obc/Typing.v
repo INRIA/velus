@@ -1,6 +1,8 @@
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
+Require Import Rustre.RMemory.
 Require Import Rustre.Obc.Syntax.
+Require Import Rustre.Obc.Semantics.
 
 Require Import List.
 Import List.ListNotations.
@@ -19,7 +21,8 @@ Module Type TYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux).
+       (Import Syn   : SYNTAX Ids Op OpAux)
+       (Import Sem   : SEMANTICS Ids Op OpAux Syn).
 
   Section WellTyped.
 
@@ -97,6 +100,74 @@ Module Type TYPING
       wt_program p ->
       wt_program (cls::p).
 
+  (** Properties *)
+    
+  Definition wt_valo (ve: stack) (xty: ident * type) :=
+    match PM.find (fst xty) ve with
+    | None => True
+    | Some v => wt_val v (snd xty)
+    end.
+
+  Definition wt_env (vars: list (ident * type)) (ve: stack) :=
+    Forall (wt_valo ve) vars.
+    
+  Inductive wt_mem : heap -> program -> class -> Prop :=
+  | WTmenv: forall me p cl,
+      wt_env cl.(c_mems) me.(mm_values) ->
+      Forall (wt_mem_inst me p) cl.(c_objs) ->
+      wt_mem me p cl
+  with wt_mem_inst : heap -> program -> (ident * ident) -> Prop :=
+  | WTminst: forall me p oclsid mo cls p',
+      PM.find (fst oclsid) me.(mm_instances) = Some mo ->
+      find_class (snd oclsid) p = Some(cls, p') ->
+      wt_mem mo p' cls ->
+      wt_mem_inst me p oclsid.
+         
+  Lemma venv_find_wt_val:
+    forall vars ve x ty v,
+      wt_env vars ve ->
+      In (x, ty) vars ->
+      PM.find x ve = Some v ->
+      wt_val v ty.
+  Proof.
+    intros ** WTe Hin Hfind.
+    apply In_Forall with (1:=WTe) in Hin.
+    unfold wt_valo in Hin.
+    simpl in Hin.
+    now rewrite Hfind in Hin.
+  Qed.
+  
+  Lemma pres_sem_exp:
+    forall mems vars me ve e v,
+      wt_env mems me.(mm_values) ->
+      wt_env vars ve ->
+      wt_exp mems vars e ->
+      exp_eval me ve e v ->
+      wt_val v (typeof e).
+  Proof.
+    intros until v. intros WTm WTv.
+    revert v.
+    induction e; intros v WTe Hexp.
+    - inv WTe. inv Hexp.
+      eapply venv_find_wt_val with (1:=WTv); eauto.
+    - inv WTe. inv Hexp.
+      unfold mfind_mem in *.
+      eapply venv_find_wt_val with (1:=WTm); eauto.
+    - inv Hexp. apply wt_val_const.
+    - inv WTe. inv Hexp.
+      match goal with
+      | WTe:wt_exp _ _ ?e, Hexp:exp_eval _ _ ?e ?v |- _ =>
+        specialize (IHe v WTe Hexp)
+      end.
+      eapply pres_sem_unop in IHe; now eauto.
+    - inv WTe. inv Hexp.
+      repeat match goal with
+             | IH: forall v, _, WTe:wt_exp _ _ ?e, Hexp:exp_eval _ _ ?e ?v |- _
+                 => specialize (IH v WTe Hexp)
+             end.
+      eapply pres_sem_binop with (3:=IHe1) in IHe2; eauto.
+  Qed.
+    
 End TYPING.
 
 Module Typing
