@@ -106,7 +106,18 @@ Proof.
   eapply field_offset_rec_in_range'; eauto.
 Qed.
 
-Definition chunk_of_type ty := AST.chunk_of_type (Ctypes.typ_of_type (cltype ty)).
+Definition chunk_of_type ty := 
+  match ty with
+  | Tint I8 Signed => AST.Mint8signed
+  | Tint I8 Unsigned => AST.Mint8unsigned
+  | Tint I16 Signed => AST.Mint16signed
+  | Tint I16 Unsigned => AST.Mint16unsigned
+  | Tint I32 _ => AST.Mint32
+  | Tint IBool _ => AST.Mint8unsigned
+  | Tlong _ => AST.Mint64
+  | Tfloat F32 => AST.Mfloat32
+  | Tfloat F64 => AST.Mfloat64
+  end.
 
 Section Staterep.
   Variable ge : composite_env.

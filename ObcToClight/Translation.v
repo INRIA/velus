@@ -62,7 +62,7 @@ Definition deref_field (id cls x: ident) (xty: Ctypes.type): Clight.expr :=
 
 Definition translate_const (c: const): Clight.expr :=
   (match c with
-  | Cint i _ _ => Clight.Econst_int i
+  | Cint i sz sg => Clight.Econst_int (Cop.cast_int_int sz sg i)
   | Clong l _ => Clight.Econst_long l
   | Cfloat f => Clight.Econst_float f
   | Csingle s => Clight.Econst_single s
@@ -71,7 +71,7 @@ Definition translate_const (c: const): Clight.expr :=
 Definition translate_unop (op: unop) (e: Clight.expr) (ty: Ctypes.type): Clight.expr :=
   match op with
   | UnaryOp cop => Clight.Eunop cop e ty
-  | CastOp ty => Clight.Ecast e (cltype ty)
+  | CastOp _ => Clight.Ecast e ty
   end.
 
 Definition translate_binop (op: binop): Clight.expr -> Clight.expr -> Ctypes.type -> Clight.expr :=
@@ -188,14 +188,6 @@ Definition fundef
   let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
   @AST.Gfun Clight.fundef Ctypes.type (Ctypes.Internal f).
 
-Definition make_fundef
-           (self: ident * Ctypes.type) (ins: list (ident * Ctypes.type))
-           (out: ident * Ctypes.type) (vars temps: list (ident * Ctypes.type))
-           (body: Clight.statement)
-  : AST.globdef Clight.fundef Ctypes.type :=
-  let body := return_none body in
-  fundef (self :: out :: ins) vars temps Ctypes.Tvoid body.
-
 Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident * Ctypes.type) :=
   map (fun ofc =>
          let '(o, f, cid) := ofc in
@@ -226,7 +218,7 @@ Definition translate_method (prog: program) (c: class) (m: method)
   let out := (out, type_of_inst_p (prefix_fun c.(c_name) m.(m_name))) in
   let vars := map translate_param m.(m_vars) in
   (prefix_fun c.(c_name) m.(m_name),
-   make_fundef self ins out (make_out_vars out_vars) vars body).
+   fundef (self :: out :: ins) (make_out_vars out_vars) vars Ctypes.Tvoid (return_none body)).
 
 Definition make_methods (prog: program) (c: class)
   : list (ident * AST.globdef Clight.fundef Ctypes.type) :=
