@@ -70,6 +70,7 @@ Module Type TYPING
         In (o, clsid) insts ->
         find_class clsid p = Some(cls, p') ->
         find_method f cls.(c_methods) = Some fm ->
+        NoDup ys ->
         Forall2 (fun y xt => In (fst y, snd xt) vars) ys fm.(m_out) ->
         Forall2 (fun e xt => typeof e = snd xt) es fm.(m_in) ->
         Forall wt_exp es ->
