@@ -27,14 +27,14 @@ Module Export Op <: OPERATORS.
   Definition cltype (ty: type) : Ctypes.type :=
     match ty with
     | Tint sz sg => Ctypes.Tint sz sg Ctypes.noattr
-    | Tlong sg   => Ctypes.Tlong sg Ctypes.noattr
+    | Tlong sg   => Ctypes.Tlong sg (Ctypes.mk_attr false (Some 3%N))
     | Tfloat sz  => Ctypes.Tfloat sz Ctypes.noattr
     end.
 
   Definition typecl (ty: Ctypes.type) : option type :=
     match ty with
     | Ctypes.Tint sz sg (Ctypes.mk_attr false None) => Some (Tint sz sg)
-    | Ctypes.Tlong sg   (Ctypes.mk_attr false None) => Some (Tlong sg)
+    | Ctypes.Tlong sg   (Ctypes.mk_attr false (Some 3%N)) => Some (Tlong sg)
     | Ctypes.Tfloat sz  (Ctypes.mk_attr false None) => Some (Tfloat sz)
     | _ => None
     end.
@@ -177,7 +177,9 @@ Module Export Op <: OPERATORS.
       + now contradiction Hnun.
       + inversion_clear Hcty. now apply wt_val_int.
       + exfalso; now eapply Hnptr.
-    - injection Htcl; intro HR; rewrite HR in *; clear Htcl.
+    - destruct n; try destruct p; try discriminate.
+      destruct p; try discriminate.
+      injection Htcl; intro HR; rewrite HR in *; clear Htcl.
       rewrite <-HR; clear HR.
       destruct v; try now inversion Hcty.
       + now contradiction Hnun.

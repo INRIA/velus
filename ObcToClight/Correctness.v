@@ -33,6 +33,15 @@ Open Scope Z.
 Hint Constructors Clight.eval_lvalue Clight.eval_expr.
 Hint Resolve  Clight.assign_loc_value.
 
+Lemma divide_refl:
+  forall n, (n | n).
+Proof.
+  intro.
+  exists 1.
+  omega.
+Qed.
+Hint Resolve divide_refl.
+
 Lemma type_eq_refl:
   forall {A} t (T F: A),
     (if type_eq t t then T else F) = T.
@@ -248,7 +257,14 @@ Section PRESERVATION.
       In (x, ty) c.(c_mems) ->
       well_formed_exp c m (State x ty)
   | wf_const: forall cst,
-      well_formed_exp c m (Const cst).
+      well_formed_exp c m (Const cst)
+  | wf_unop: forall op e ty,
+      well_formed_exp c m e ->
+      well_formed_exp c m (Unop op e ty)
+  | wf_binop: forall op e1 e2 ty,
+      well_formed_exp c m e1 ->
+      well_formed_exp c m e2 ->
+      well_formed_exp c m (Binop op e1 e2 ty).
 
   Inductive well_formed_stmt (c: class) (m: method): stmt -> Prop :=
   | wf_assign: forall x e,
@@ -283,24 +299,17 @@ Section PRESERVATION.
   Hypothesis well_formed:
     Forall (fun c => Forall (fun m => well_formed_stmt c m (m_body m)) (c_methods c)) prog.
 
-  Inductive occurs_in_strict: stmt -> stmt -> Prop :=
+  Inductive occurs_in: stmt -> stmt -> Prop :=
+  | occurs_refl: forall s,
+      occurs_in s s
   | occurs_ite: forall s e s1 s2,
       occurs_in s s1 \/ occurs_in s s2 ->
-      occurs_in_strict s (Ifte e s1 s2)
+      occurs_in s (Ifte e s1 s2)
   | occurs_comp: forall s s1 s2,
       occurs_in s s1 \/ occurs_in s s2 ->
-      occurs_in_strict s (Comp s1 s2)
-  with occurs_in: stmt -> stmt -> Prop :=
-       | occurs_in_intro: forall s1 s2,
-           s1 = s2 \/ occurs_in_strict s1 s2 ->
-           occurs_in s1 s2.
+      occurs_in s (Comp s1 s2).
 
-  Remark occurs_in_refl:
-    forall s, occurs_in s s.
-  Proof.
-    intro; constructor; now left.
-  Qed.
-  Hint Resolve occurs_in_refl.
+  Hint Resolve occurs_refl.
   
   Remark occurs_in_ite:
     forall e s1 s2 s,
@@ -308,11 +317,10 @@ Section PRESERVATION.
       occurs_in s1 s /\ occurs_in s2 s.
   Proof.
     intros ** Occurs.
-    induction s; inversion_clear Occurs as [? ? [Eq|Occurs']];
-    (discriminate || inversion_clear Occurs' as [? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]] || inv Eq);
-    split; constructor; right; constructor;
-    ((left; apply occurs_in_refl) || (right; apply occurs_in_refl)
-     || (left; now apply IHs1) || (right; now apply IHs2)).
+    induction s; inversion_clear Occurs as [|? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]];
+    split; constructor; ((left; now apply IHs1) || (right; now apply IHs2) || idtac). 
+    - left; auto.
+    - right; auto.
   Qed.
 
   Remark occurs_in_comp:
@@ -321,11 +329,10 @@ Section PRESERVATION.
       occurs_in s1 s /\ occurs_in s2 s.
   Proof.
     intros ** Occurs.
-    induction s; inversion_clear Occurs as [? ? [Eq|Occurs']];
-    (discriminate || inversion_clear Occurs' as [? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]] || inv Eq);
-    split; constructor; right; constructor;
-    ((left; apply occurs_in_refl) || (right; apply occurs_in_refl)
-     || (left; now apply IHs1) || (right; now apply IHs2)).
+    induction s; inversion_clear Occurs as [|? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]];
+    split; constructor; ((left; now apply IHs1) || (right; now apply IHs2) || idtac). 
+    - left; auto.
+    - right; auto.
   Qed.
   Hint Resolve occurs_in_ite occurs_in_comp.
   
@@ -336,10 +343,9 @@ Section PRESERVATION.
   Proof.
     intros ** Occurs.
     unfold instance_methods.
-    induction (m_body f); inversion_clear Occurs as [? ? [Eq|Occurs']]; simpl;
-    (discriminate || inversion_clear Occurs' as [? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]] || inv Eq);
-    try (apply In_rec_instance_methods; auto).
-    simpl; now left.
+    induction (m_body f); inversion_clear Occurs as [|? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]];
+    simpl; try (apply In_rec_instance_methods; auto).
+    now left.
   Qed.
   
   Section ClassProperties.
@@ -592,9 +598,11 @@ Section PRESERVATION.
     pose proof (find_class_name _ _ _ _ Findc);
       pose proof (find_method_name _ _ _ Findcallee); subst.
     clear Findmth.
-    edestruct global_out_struct as (co & ? & ? & Hmembers & ?); try reflexivity; eauto.
+    edestruct global_out_struct as (co & Hco & ? & Hmembers & ?); try reflexivity; eauto.
     split.
-    * admit.
+    * simpl; change (prog_comp_env tprog) with gcenv.
+      rewrite Hco.
+      unfold co_sizeof. admit.
     *{ exists (prefix_fun (c_name c) (m_name callee)), co.
        repeat split; auto.
        - rewrite Hmembers.
@@ -603,7 +611,13 @@ Section PRESERVATION.
          rewrite fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.
        - rewrite Hmembers.
          intros x t Hinxt.
-         admit.
+         unfold translate_param in Hinxt.
+         apply in_map_iff in Hinxt;
+           destruct Hinxt as ((x', t') & Eq & Hinxt); inv Eq.
+         destruct t'; simpl.
+         + destruct i, s; econstructor; split; eauto.
+         + econstructor; split; eauto.
+         + destruct f; econstructor; split; eauto.
      }
   Qed.
   
@@ -1124,7 +1138,7 @@ Section PRESERVATION.
     Qed.
     
     Lemma expr_eval_simu:
-      forall me ve exp v e le m sb sofs outb outco P,
+      forall me ve e le m sb sofs outb outco P ex v,
         m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
             ** blockrep gcenv ve outco.(co_members) outb
             ** subrep caller e
@@ -1134,12 +1148,12 @@ Section PRESERVATION.
         le ! out = Some (Vptr outb Int.zero) ->
         gcenv ! (prefix_fun owner.(c_name) caller.(m_name)) = Some outco ->
         0 <= Int.unsigned sofs ->
-        well_formed_exp owner caller exp ->
-        exp_eval me ve exp v ->
-        Clight.eval_expr tge e le m (translate_exp owner caller exp) v.
+        well_formed_exp owner caller ex ->
+        exp_eval me ve ex v ->
+        Clight.eval_expr tge e le m (translate_exp owner caller ex) v.
     Proof.
-      intros me ve exp; induction exp as [x ty| |cst| |];
       intros ** Hrep ? ? ? ? WF EV;
+      revert v EV; induction ex as [x| |cst|op|]; intros v EV;
       inv EV; inv WF.
 
       (* Var x ty : "x" *)
@@ -1154,6 +1168,18 @@ Section PRESERVATION.
         
       (* Const c ty : "c" *)
       - destruct cst; constructor.
+
+      (* Unop op e ty : "op e" *)
+      - destruct op; simpl in *; econstructor; eauto.
+        + rewrite type_pres.
+          admit.
+        + rewrite type_pres.
+          admit.                (* problème annotation Cast *)
+
+      (* Binop op e1 e2 : "e1 op e2" *)
+      - simpl in *. unfold translate_binop.
+        econstructor; eauto.
+        admit.
     Qed.
 
   (* Lemma exp_eval_valid: *)
