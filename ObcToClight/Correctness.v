@@ -33,14 +33,7 @@ Open Scope Z.
 Hint Constructors Clight.eval_lvalue Clight.eval_expr.
 Hint Resolve  Clight.assign_loc_value.
 
-Lemma divide_refl:
-  forall n, (n | n).
-Proof.
-  intro.
-  exists 1.
-  omega.
-Qed.
-Hint Resolve divide_refl.
+Hint Resolve Z.divide_refl.
 
 Lemma type_eq_refl:
   forall {A} t (T F: A),

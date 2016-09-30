@@ -39,18 +39,18 @@ Module Type SYNTAX
   | Ifte : exp -> stmt -> stmt -> stmt               (* if e then s1 else s2 *)
   | Comp : stmt -> stmt -> stmt                      (* s1; s2 *)
   | Call : list ident -> ident -> ident -> ident -> list exp -> stmt
-                (* y1, ..., yn := class instance method (e1, ..., em) *)
+  (* y1, ..., yn := class instance method (e1, ..., em) *)
   | Skip.
 
   Record method : Type :=
     mk_method {
         m_name : ident;
-	    m_in   : list (ident * type);
-	    m_vars : list (ident * type);
-	    m_out  : list (ident * type);
-	    m_body : stmt;
+        m_in   : list (ident * type);
+        m_vars : list (ident * type);
+        m_out  : list (ident * type);
+        m_body : stmt;
         
-	    m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
+        m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
         m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
       }.
 
@@ -69,10 +69,10 @@ Module Type SYNTAX
   
   Record class : Type :=
     mk_class {
-	    c_name    : ident;
-	    c_mems    : list (ident * type);
-	    c_objs    : list (ident * ident);   (* (instance, class) *)
-	    c_methods : list method;
+        c_name    : ident;
+        c_mems    : list (ident * type);
+        c_objs    : list (ident * ident);   (* (instance, class) *)
+        c_methods : list method;
 
         c_nodup   : NoDup (map fst c_mems ++ map fst c_objs)
       }.
@@ -101,7 +101,7 @@ Module Type SYNTAX
     fix find ms := match ms with
                    | [] => None
                    | m :: ms' => if ident_eqb m.(m_name) f
-                                 then Some m else find ms'
+                                then Some m else find ms'
                    end.
 
   Remark find_method_In:
@@ -134,7 +134,7 @@ Module Type SYNTAX
     fix find p := match p with
                   | [] => None
                   | c :: p' => if ident_eqb c.(c_name) n
-                               then Some (c, p') else find p'
+                              then Some (c, p') else find p'
                   end.
 
   Lemma find_class_none:
@@ -321,9 +321,9 @@ Module Type SYNTAX
   Lemma exp_dec : forall e1 e2 : exp, {e1 = e2} + {e1 <> e2}.
   Proof.
     decide equality;
-      try apply equiv_dec.
+    try apply equiv_dec.
   Qed.
-    
+  
   Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
   Lemma reset_not_step:
@@ -343,7 +343,7 @@ Module SyntaxFun
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op) <: SYNTAX Ids Op OpAux.
 
-  Include SYNTAX Ids Op OpAux.
+                                             Include SYNTAX Ids Op OpAux.
 
 End SyntaxFun.
 

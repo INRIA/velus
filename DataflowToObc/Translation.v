@@ -94,28 +94,23 @@ Module Type TRANSLATION
 
     (* =translate_cexp= *)
     (* definition is needed in signature *)
-    Fixpoint translate_cexp (vars: list (ident * type)) (x: ident) (e: cexp) : stmt :=
+    Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
-      | Emerge y t f =>
-        let ty := match assoc_ident y vars with
-                  | Some t => t
-                  | None => bool_type (* SHOULD BE AN ERROR *)
-                  end in
-        Ifte (tovar (y, ty))
-                 (translate_cexp vars x t)
-                 (translate_cexp vars x f)
+      | Emerge y t f => Ifte (tovar (y, bool_type))
+                            (translate_cexp x t)
+                            (translate_cexp x f)
       | Eite b t f => Ifte (translate_lexp b)
-                           (translate_cexp vars x t)
-                           (translate_cexp vars x f)
+                          (translate_cexp x t)
+                          (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
     (* =end= *)
 
     (* =translate_eqn= *)
     (* definition is needed in signature *)
-    Definition translate_eqn (vars: list (ident * type)) (eqn: equation) : stmt :=
+    Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
-      | EqDef x ck ce => Control ck (translate_cexp vars x ce)
+      | EqDef x ck ce => Control ck (translate_cexp x ce)
       | EqApp x ck f les =>
         Control ck (Call [x] f x step (List.map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
@@ -127,8 +122,8 @@ Module Type TRANSLATION
 
     (* =translate_eqns= *)
     (* definition is needed in signature *)
-    Definition translate_eqns (vars: list (ident * type)) (eqns: list equation) : stmt :=
-      List.fold_left (fun i eq => Comp (translate_eqn vars eq) i) eqns Skip.
+    Definition translate_eqns (eqns: list equation) : stmt :=
+      List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
     (* =end= *)
 
   End Translate.
@@ -237,10 +232,10 @@ Module Type TRANSLATION
   Qed.
 
   Instance translate_cexp_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq ==> eq) translate_cexp.
+    Proper (PS.eq ==> eq ==> eq ==> eq) translate_cexp.
   Proof.
-    intros M M' HMeq n n' Hneq y y' Hyeq c c' Hceq; rewrite <- Hyeq, <- Hceq, <- Hneq;
-    clear y' c' n' Hyeq Hceq Hneq.
+    intros M M' HMeq y y' Hyeq c c' Hceq; rewrite <- Hyeq, <- Hceq;
+    clear y' c' Hyeq Hceq.
     revert M M' HMeq.
     induction c; intros; simpl.
     - erewrite IHc1; try eassumption.
@@ -264,24 +259,24 @@ Module Type TRANSLATION
   Qed.
 
   Instance translate_eqn_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq) translate_eqn.
+    Proper (PS.eq ==> eq ==> eq) translate_eqn.
   Proof.
-    intros M M' HMeq n n' Hneq eq eq' Heq; rewrite <- Heq, <- Hneq; clear Heq Hneq eq' n'.
+    intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
     destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
     - rewrite HMeq at 1 2. do 3 f_equal.
       apply List.map_ext. intro. now rewrite HMeq.
   Qed.
 
   Instance translate_eqns_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq) translate_eqns.
+    Proper (PS.eq ==> eq ==> eq) translate_eqns.
   Proof.
-    intros M M' Heq n n' Hneq eqs eqs' Heqs.
-    rewrite <- Heqs, <- Hneq; clear eqs' n' Heqs Hneq.
+    intros M M' Heq eqs eqs' Heqs.
+    rewrite <- Heqs; clear eqs' Heqs.
     unfold translate_eqns.
     assert (forall S S',
                S = S' ->
-               List.fold_left (fun i eq => Comp (translate_eqn M n eq) i) eqs S
-               = List.fold_left (fun i eq => Comp (translate_eqn M' n eq) i) eqs S')
+               List.fold_left (fun i eq => Comp (translate_eqn M eq) i) eqs S
+               = List.fold_left (fun i eq => Comp (translate_eqn M' eq) i) eqs S')
       as HH.
     { revert M M' Heq.
       induction eqs as [|eq eqs IH]; intros M M' Heq S S' HSeq; [apply HSeq|].
@@ -494,7 +489,7 @@ Module Type TRANSLATION
                          m_in   := n.(n_in);
                          m_vars := dvars;
                          m_out  := [n.(n_out)];
-                         m_body := translate_eqns mems ((n.(n_out) :: n.(n_in) ++ n.(n_vars))) n.(n_eqs);
+                         m_body := translate_eqns mems n.(n_eqs);
                          m_nodupvars := _;
                          m_good      := _
                       |};
