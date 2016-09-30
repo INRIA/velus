@@ -97,6 +97,22 @@ Module Type SYNTAX
     intro Hrs. rewrite Hrs in *.
     intuition.
   Qed.
+
+  Lemma find_method_In:
+    forall f ms fm,
+      find_method f ms = Some fm ->
+      In fm ms.
+  Proof.
+    intros f ms fm Hfind.
+    induction ms as [|m ms].
+    now inversion Hfind.
+    simpl in Hfind.
+    destruct (ident_eq_dec m.(m_name) f) as [He|Hne].
+    - subst. rewrite ident_eqb_refl in Hfind.
+      injection Hfind; intro; subst; apply in_eq.
+    - rewrite (proj2 (ident_eqb_neq m.(m_name) f) Hne) in Hfind.
+      auto using in_cons.
+  Qed.
   
 End SYNTAX.
 

@@ -371,9 +371,15 @@ Fixpoint forall2b {A B} (f : A -> B -> bool) l1 l2 :=
     | _, _ => false
   end.
 
-Lemma Forall2_forall2 : forall {A B : Type} P l1 l2,
-  Forall2 P l1 l2 <-> length l1 = length l2 /\
-                      forall (a : A) (b : B) n x1 x2, n < length l1 -> nth n l1 a = x1 -> nth n l2 b = x2 -> P x1 x2.
+Lemma Forall2_forall2 :
+  forall {A B : Type} P l1 l2,
+    Forall2 P l1 l2
+    <-> length l1 = length l2
+        /\ forall (a : A) (b : B) n x1 x2,
+             n < length l1 ->
+             nth n l1 a = x1 ->
+             nth n l2 b = x2 ->
+             P x1 x2.
 Proof.
 intros A B P l1. induction l1; intro l2.
 * split; intro H.
@@ -389,6 +395,21 @@ intros A B P l1. induction l1; intro l2.
     intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
 Qed.
 
+Lemma Forall2_forall:
+  forall {A B} (P: A -> B -> Prop) xs ys,
+    (forall x y, In (x, y) (combine xs ys) -> P x y) ->
+    length xs = length ys ->
+    Forall2 P xs ys.
+Proof.
+  intros ** Hin Hlen.
+  apply Forall2_forall2.
+  split; auto.
+  intros x y n x' y' Hnl Hn1 Hn2.
+  apply Hin.
+  subst x' y'. rewrite <-combine_nth with (1:=Hlen).
+  apply nth_In.
+  now rewrite combine_length, <-Hlen, Min.min_idempotent.
+Qed.    
 
 Lemma Forall2_det : forall {A B : Type} (R : A -> B -> Prop),
   (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
@@ -405,6 +426,21 @@ Lemma Forall2_combine:
 Proof.
   intros A B P xs ys Hfa2.
   induction Hfa2; now constructor.
+Qed.
+
+Lemma In_ex_nth:
+  forall {A} (x: A) xs d,
+    In x xs ->
+    exists n, n < length xs /\ nth n xs d = x.
+Proof.
+  induction xs.
+  now inversion 1.
+  intros d Hin.
+  inversion_clear Hin as [Heq|Hin'].
+  - subst. exists 0. split; simpl; auto with arith.
+  - specialize (IHxs d Hin').
+    destruct IHxs as (n & Hlen & Hnth).
+    exists (S n); split; simpl; auto with arith.
 Qed.
 
 Instance Permutation_map_Proper {A B}:
@@ -885,7 +921,47 @@ Proof.
   unfold adds.
   destruct vs. destruct xs; reflexivity.
   simpl. rewrite PM.gso; auto.
-Qed.      
+Qed.
+
+Lemma find_gsss:
+  forall {A B} x v (ty: A) xs (vs: list B) S,
+    PM.find x (adds ((x, ty) :: xs) (v :: vs) S) = Some v.
+Proof.
+  intros. unfold adds. apply PM.gss.
+Qed.  
+
+Lemma find_gssn:
+  forall {A B} d1 (d2: B) n env xs vs x (ty: A),
+    n < length xs ->
+    length xs = length vs ->
+    NoDupMembers xs ->
+    nth n xs d1 = (x, ty) ->
+    PM.find x (adds xs vs env) = Some (nth n vs d2).
+Proof.
+  intros ** Hlen Hleq Hndup Hnth.
+  unfold adds.
+  remember (combine xs vs) as xvs eqn:Hxvs.
+  setoid_rewrite <-Hxvs.
+  assert (xs = fst (split xvs)) as Hxs
+      by (now subst xvs; rewrite combine_split with (1:=Hleq)).
+  assert (vs = snd (split xvs)) as Hvs
+      by (now subst xvs; rewrite combine_split with (1:=Hleq)).
+  subst xs vs.
+  clear Hleq. revert n Hlen Hnth.
+  induction xvs as [|xv xvs]; intros n Hlen Hnth.
+  now inversion Hlen.
+  simpl. destruct xv as [[x' ty'] v'].
+  simpl in *; destruct (split xvs); simpl in *.
+  inversion_clear Hndup as [|? ? ? Hnin Hndup'].
+  destruct n.
+  - injection Hnth; intros; subst. now rewrite PM.gss.
+  - injection Hxvs; intro; subst.
+    rewrite PM.gso.
+    + rewrite (IHxvs Hndup' eq_refl n); auto with arith.
+    + pose proof (nth_In l d1 (Lt.lt_S_n _ _ Hlen)) as Hin.
+      rewrite Hnth in Hin. apply In_InMembers in Hin.
+      eapply InMembers_neq; eauto.
+Qed.
 
 Lemma NotInMembers_find_adds:
   forall {A B} x (xs: list (ident * A)) (v: option B) vs S,
@@ -1112,15 +1188,28 @@ Section Lists.
     induction l; auto.
     intros H HP.
     inversion_clear HP.
-    constructor.
-    - apply H; auto.
-      apply in_eq.
-    - apply IHl; auto.
-      intros a' Ha' HP.
-      apply H; auto.
-      apply in_cons; auto.
+    auto using in_eq, in_cons.
   Qed.
 
+  Lemma Forall2_impl_In:
+    forall (P Q: A -> B -> Prop) (l1: list A) (l2: list B),
+      (forall (a: A) (b: B), In a l1 -> In b l2 -> P a b -> Q a b) ->
+      Forall2 P l1 l2 ->
+      Forall2 Q l1 l2.
+  Proof.
+    intros ** HPQ HfaP.
+    induction HfaP; auto.
+    apply Forall2_cons;
+      auto using in_eq, in_cons.
+  Qed.
+
+  Lemma Forall2_swap_args:
+    forall (P: A -> B -> Prop) (xs: list A) (ys: list B),
+      Forall2 P xs ys <-> Forall2 (fun y x => P x y) ys xs.
+  Proof.
+    split; intro HH; induction HH; auto.
+  Qed.
+  
   Lemma NoDup_map_inv (f:A->B) l : NoDup (map f l) -> NoDup l.
   Proof.
     induction l; simpl; inversion_clear 1; subst; constructor; auto.
@@ -1412,6 +1501,20 @@ Section Lists.
    Qed.
    
 End Lists.
+
+Lemma Forall_Forall2:
+  forall {A B} (P: A -> Prop) (Q: B -> Prop) xs ys,
+    Forall P xs ->
+    Forall Q ys ->
+    length xs = length ys ->
+    Forall2 (fun x y=> P x /\ Q y) xs ys.
+Proof.
+  intros ** HfP HfQ Hlen.
+  apply Forall2_forall with (2:=Hlen).
+  intros x y Hin.
+  split; eauto using (In_Forall _ _ _ HfP), (In_Forall _ _ _ HfQ),
+         in_combine_l, in_combine_r.
+Qed.
 
 (*
 Ltac induction_list_tac e I l H :=

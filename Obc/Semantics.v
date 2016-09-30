@@ -30,6 +30,8 @@ Module Type SEMANTICS
   Definition sempty: stack := PM.empty val.
   Definition hempty: heap := empty_memory _.
 
+  Hint Unfold sempty.
+
   Inductive exp_eval heap stack: exp -> val -> Prop :=
   | evar:
       forall x v ty,
@@ -99,6 +101,10 @@ Module Type SEMANTICS
                   fm.(m_body) (menv', env') ->
         Forall2 (fun xty v=>PM.find (fst xty) env' = Some(v)) fm.(m_out) rvs ->
         stmt_call_eval prog menv clsid f vs menv' rvs.
+
+  Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
+  with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
+  Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
 
   (** ** Determinism of semantics *)
 
