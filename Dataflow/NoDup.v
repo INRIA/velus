@@ -45,10 +45,10 @@ Module Type NODUP
         ~Is_defined_in_eqs x eqs ->
         NoDup_defs (EqDef x ck e :: eqs)
   | NDDEqApp:
-      forall x ck f e ty eqs,
+      forall x ck f e eqs,
         NoDup_defs eqs ->
         ~Is_defined_in_eqs x eqs ->
-        NoDup_defs (EqApp x ck f e ty :: eqs)
+        NoDup_defs (EqApp x ck f e :: eqs)
   | NDDEqFby:
       forall x ck v e eqs,
         NoDup_defs eqs ->
@@ -79,7 +79,7 @@ Module Type NODUP
     - simpl in *; intro; not_In_empty.
     - apply Is_defined_in_cons in Hdin.
       inversion Hndd
-        as [|y ck e ? Hndds Hndi|y ck f e ? ? Hndds Hndi|y ck v0 e ? Hndds Hndi];
+        as [|y ck e ? Hndds Hndi|y ck f e ? Hndds Hndi|y ck v0 e ? Hndds Hndi];
         subst; clear Hndd.
       + destruct Hdin as [Hdin|[Hndin Hdins]].
         simpl in Hinm.

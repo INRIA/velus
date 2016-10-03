@@ -159,7 +159,7 @@ Module Type CORRECTNESS
       stmt_eval prog menv env (translate_cexp mems x ce) (menv', env')
       -> menv' = menv.
   Proof.
-    intros prog menv env mems x menv' env'.
+    intros until env'.
     induction ce;
       (apply IHce || inversion_clear 1; try destruct b); auto.
   Qed.
@@ -169,7 +169,7 @@ Module Type CORRECTNESS
       stmt_eval prog menv env (translate_cexp mems x ce) (menv', env')
       -> exists c, env' = PM.add x c env.
   Proof.
-    intros prog menv env mems x menv' env'.
+    intros until env'.
     induction ce;
       (apply IHce || inversion_clear 1; try destruct b); auto;
       exists v; rewrite <- H1; intuition.
@@ -181,7 +181,7 @@ Module Type CORRECTNESS
       -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
       -> mfind_mem x menv' = mfind_mem x menv.
   Proof. (* TODO: Tidy proof *)
-    intros prog x eq menv env mems menv' env' Hneq Heval.
+    intros ** Hneq Heval.
     destruct eq as [y ck ce | y ck f les | y ck v0 lae]; simpl in Heval.
     - apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
       destruct Heval as [Heval1 Heval2].
@@ -212,7 +212,7 @@ Module Type CORRECTNESS
       -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
       -> mfind_inst x menv' = mfind_inst x menv.
   Proof. (* TODO: Tidy proof *)
-    intros prog x eq menv env mems menv' env' Hneq Heval.
+    intros ** Hneq Heval.
     destruct eq as [y ck ce | y ck f les | y ck v0 lae].
     - simpl in Heval.
       apply stmt_eval_Control_fwd in Heval; destruct Heval as [Heval|Heval];
@@ -245,7 +245,7 @@ Module Type CORRECTNESS
       -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
       -> PM.find x env' = PM.find x env.
   Proof.
-    intros prog x eq menv env mems menv' env' Hnd Heval.
+    intros ** Hnd Heval.
     destruct eq as [y ck ce | y ck f les | y ck v0 ce]; simpl in Heval.
     - apply stmt_eval_Control_fwd in Heval;
         destruct Heval as [[Hipi Heval]|[Habs [Hmenv Henv]]];
@@ -274,7 +274,7 @@ Module Type CORRECTNESS
       -> stmt_eval prog menv env (translate_eqn mems eq) (menv', env')
       -> PM.find x env' = PM.find x env.
   Proof.
-    intros prog x eq menv env mems menv' env' Hidi Hstmt.
+    intros ** Hidi Hstmt.
     apply not_Is_defined_in_eq_not_Is_variable_in_eq in Hidi.
     now apply not_Is_variable_in_eq_stmt_eval_env_inv with (1:=Hidi) (2:=Hstmt).
   Qed.
@@ -517,7 +517,7 @@ for all [Is_free_exp x e]. *)
                   (menv, PM.add x c env).
   Proof.
     intros until x.
-    induction e as [y ty et IHt ef IHf|y t IHt f IHf|e].
+    induction e as [y et IHt ef IHf|y t IHt f IHf|e].
     - (* Emerge *)
       inversion_clear 1; intro Henv.
       + apply IHt in H1; [|auto].
@@ -547,7 +547,7 @@ for all [Is_free_exp x e]. *)
       TODO: lemma showing that a well-typed and well-clocked set of
             equations has a semantics.
 
-   2. The assumption stmt_eval (translate_eqns mems eqs) implies that an
+   2. The assumption stmt_eval (translate_eqns mems vars eqs) implies that an
       execution exists and thus that exp_eval's evar and estate find some
       value for each required variable.
       This is somehow backwards; it should be an obligation to show that
@@ -710,7 +710,7 @@ for all [Is_free_exp x e]. *)
 
       inversion Hsem as
           [bk0 H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
-          |bk0 H0 M0 y ck f Mo les ty ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
+          |bk0 H0 M0 y ck f Mo les ls xs Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
           |bk0 H0 M0 ms y ck ls yS v0 le Hmfind Hms0 Hlae HyS Hvar HR1 HR2 HR3];
         subst bk0 H0 M0 eq;
         (*    (rewrite <-HR3 in *; clear HR1 HR2 HR3 H0 M0); *)
@@ -863,7 +863,7 @@ for all [Is_free_exp x e]. *)
         destruct Hmc as [Hmc0 Hmc]; clear Hmc0.
         apply Forall_cons2 in Hmc.
         destruct Hmc as [Hmceq Hmceqs].
-        inversion_clear Hmceq as [|? ? ? ? ? ? ? Hmc0|].
+        inversion_clear Hmceq as [|? ? ? ? ? ? Hmc0|].
         specialize (Hmc0 _ Hmfind).
         destruct Hmc0 as [omenv [Hfindo Hmc0]].
         (* dataflow semantics *)
@@ -982,8 +982,8 @@ for all [Is_free_exp x e]. *)
             rewrite Hstmt.
             inversion_clear Hivi as [? ? Hivi'|];
               [|unfold Is_variable_in_eqs in Hvin; contradiction].
-            inversion Hivi' as [|x' ck' f' e ty' HR1 [HR2 HR3 HR4]];
-              subst x' ck' f' x e ty'.
+            inversion Hivi' as [|x' ck' f' e HR1 [HR2 HR3 HR4]];
+              subst x' ck' f' x e.
             split; intro Hsv'.
             { inversion_clear Hsv' as [Hfind'].
               inversion_clear Hvar as [Hfind''].
@@ -1145,23 +1145,22 @@ for all [Is_free_exp x e]. *)
         In i (map fst iargs) ->
         Forall2 (sem_var_instant Hn) (map fst iargs) (map present ivals) ->
         (sem_var_instant Hn i (present c)
-        <-> PM.find i (adds iargs ivals sempty) = Some c).
+        <-> PM.find i (adds (map fst iargs) ivals sempty) = Some c).
     Proof.
       intros ** Hndup Hin Hsem.
       assert (length (map fst iargs) = length (map present ivals)) as Hlen
         by (apply Forall2_length with (1:=Hsem)).
       apply Forall2_combine in Hsem.
       unfold adds.
-      assert (PM.find i (fold_right
-                            (fun (xbv : ident * type * val) (env : PM.t val) =>
-                               let '(x, _, v) := xbv in PM.add x v env)
-                            sempty (combine iargs ivals)) = Some c
+      assert (PM.find i (fold_right (fun (xv : ident * val) (env : PM.t val) =>
+                                       let (x, v) := xv in PM.add x v env)
+                                    sempty (combine (map fst iargs) ivals)) = Some c
               <-> PM.find i (fold_right (fun (xv : ident * value) env =>
-                                           PM.add (fst xv) (snd xv) env)
-                    (PM.empty _) (combine (map fst iargs) (map present ivals)))
-                  = Some (present c)) as Hfeq.
+                                         PM.add (fst xv) (snd xv) env)
+                                      (PM.empty _) (combine (map fst iargs) (map present ivals)))
+                = Some (present c)) as Hfeq.
       - clear Hndup Hin Hsem.
-        rewrite combine_map_both.
+        rewrite combine_map_both, combine_map_fst.
         assert (forall x c, PM.find x sempty = Some c
                             <-> PM.find x (PM.empty value) = Some (present c))
           as Hrem by (intros; rewrite 2 PM.gempty; split; inversion 1).
@@ -1237,18 +1236,18 @@ for all [Is_free_exp x e]. *)
           simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
           injection Heqs. intro Hnode. rewrite Hnode in *. clear Heqs. simpl in *.
 
-          assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs))
+          assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs) /\ v = node.(n_vars))
             as HR by (rewrite Hnode; intuition).
-          destruct HR as (HR1 & HR2 & HR3). subst i o eqs0.
+          destruct HR as (HR1 & HR2 & HR3 & HR4). subst i o eqs0 v.
 
-          set (env := adds node.(n_in) inputs sempty).
+          set (env := adds (map fst node.(n_in)) inputs sempty).
 
           assert (msem_equations G bk H M node.(n_eqs))
             by (eapply Forall_msem_equation_global_tl; try eassumption).
 
           assert (exists (menv' : heap) (env' : stack),
                      stmt_eval (translate G) menv env
-                       (translate_eqns (memories node.(n_eqs)) node.(n_eqs))
+                               (translate_eqns (memories node.(n_eqs)) node.(n_eqs))
                        (menv', env') /\
                      (forall x : ident,
                          Is_variable_in_eqs x node.(n_eqs) ->
@@ -1279,9 +1278,7 @@ for all [Is_free_exp x e]. *)
               + apply Is_variable_in_eqs_Is_defined_in_eqs in Hivi.
                 contradiction (not_Exists_Is_defined_in_eqs_n_in node).
                 apply Exists_exists. exists x; intuition.
-              + assert (~InMembers x node.(n_in)) as Hninm
-                    by (intro; apply HninA; now apply fst_InMembers).
-                apply NotInMembers_find_adds with (1:=Hninm).
+              + apply NotInMembers_find_adds with (1:=HninA).
                 apply PM.gempty.
             - intros input Hinput Hisdef.
               contradiction (not_Exists_Is_defined_in_eqs_n_in node).
@@ -1474,7 +1471,7 @@ for all [Is_free_exp x e]. *)
       - (* EqApp *)
         unfold translate_reset_eqns; simpl.
         inversion_clear Hsem
-          as [|? ? ? ? ? ? Mo ? ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
+          as [|? ? ? ? ? ? Mo ? xs' ys' Hmfind Hxs' Hys' HsemNode|].
         set (omenv := match mfind_inst i menv' with
                       | Some m => m | None => hempty end).
         assert (exists omenv',
@@ -1609,7 +1606,6 @@ for all [Is_free_exp x e]. *)
               (css   : stream (list const))
               (ys    : stream value)
               (r     : ident)
-              (ty    : type)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
@@ -1631,7 +1627,7 @@ for all [Is_free_exp x e]. *)
       | 0 => stmt_eval P hempty sempty (Call [] main obj reset []) (menv, env)
       | S n => let cs := map Const (css n) in
                exists menvN envN, dostep n P r main obj css menvN envN
-               /\ stmt_eval P menvN envN (Call [(r, ty)] main obj step cs)
+               /\ stmt_eval P menvN envN (Call [r] main obj step cs)
                             (menv, env)
       end.
     (* =end= *)
@@ -1691,7 +1687,7 @@ for all [Is_free_exp x e]. *)
 
         assert (exists menv' env',
                    stmt_eval (translate G) menv0 env0
-                             (Call [(r, ty)] main obj step (map Const ci0))
+                             (Call [r] main obj step (map Const ci0))
                              (menv', env')
                    /\ (exists omenv, mfind_inst obj menv' = Some omenv
                                      /\ Memory_Corres G 1 main M omenv)
@@ -1742,7 +1738,7 @@ for all [Is_free_exp x e]. *)
 
         assert (exists menvN' envN',
                    stmt_eval (translate G) menvN envN
-                             (Call [(r, ty)] main obj step (map Const ciSn))
+                             (Call [r] main obj step (map Const ciSn))
                              (menvN', envN')
                    /\ (exists omenvsN, mfind_inst obj menvN' = Some omenvsN
                                     /\ Memory_Corres G (S (S n)) main M omenvsN)
@@ -1844,7 +1840,7 @@ for all [Is_free_exp x e]. *)
       (forall i, Is_free_in_cexp i ce -> x <> i)
       -> IsFusible (translate_cexp mems x ce).
   Proof.
-    intros mems x ce Hfree.
+    intros ** Hfree.
     induction ce.
     - simpl; constructor;
       [apply IHce1; now auto|apply IHce2; now auto|].
@@ -1937,7 +1933,7 @@ for all [Is_free_exp x e]. *)
       -> (forall input, In input inputs -> ~ Is_defined_in_eqs input eqs)
       -> IsFusible (translate_eqns mems eqs).
   Proof.
-    intros C mems inputs eqs Hwk Hwks Hwsch Hnvi Hnin.
+    intros ** Hwk Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
     inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
     specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
@@ -1981,7 +1977,7 @@ for all [Is_free_exp x e]. *)
                 with (1:=Hwk) (2:=Hwkeq));
           apply IsFusible_Control_laexp; try intuition.
         match goal with H:Can_write_in _ _ |- _ => inversion_clear H end.
-        match goal with H:InMembers _ _ |- _ => inversion_clear H end.
+        match goal with H:In _ _ |- _ => inversion_clear H end.
         subst. now apply Hnfree.
         contradiction.
       + assert (~Is_free_in_clock x ck) as Hnfree
@@ -1992,4 +1988,3 @@ for all [Is_free_exp x e]. *)
   Qed.
 
 End CORRECTNESS.
-

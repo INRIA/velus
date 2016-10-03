@@ -73,8 +73,8 @@ Module Type TYPING
         In (o, clsid) insts ->
         find_class clsid p = Some(cls, p') ->
         find_method f cls.(c_methods) = Some fm ->
-        NoDupMembers ys ->
-        Forall2 (fun y xt => In (fst y, snd xt) vars) ys fm.(m_out) ->
+        NoDup ys ->
+        Forall2 (fun y xt => In (y, snd xt) vars) ys fm.(m_out) ->
         Forall2 (fun e xt => typeof e = snd xt) es fm.(m_in) ->
         Forall wt_exp es ->
         wt_stmt (Call ys clsid o f es)
@@ -272,7 +272,7 @@ Module Type TYPING
         contradiction.
       + apply IHvars; auto.
   Qed.
-  
+
   Lemma pres_sem_stmt':
     (forall p me ve stmt e',
         stmt_eval p me ve stmt e' ->
@@ -312,7 +312,7 @@ Module Type TYPING
       constructor.
       + eapply wt_env_add; eauto.
         apply fst_NoDupMembers.
-        now apply NoDup_app_weaken with (1:=cls.(c_nodups)).
+        now apply NoDup_app_weaken with (1:=cls.(c_nodup)).
       + apply Forall_impl_In with (2:=WTmi).
         inversion 2; now eauto using wt_mem_inst.
     - (* call *)
@@ -367,7 +367,7 @@ Module Type TYPING
           { apply fst_NoDupMembers.
             eapply NoDup_app_weaken.
             rewrite Permutation.Permutation_app_comm.
-            apply cls.(c_nodups).
+            apply cls.(c_nodup).
           }
           match goal with H:In (o, clsid) cls.(c_objs) |- _ =>
           apply NoDupMembers_det with (1:=Hndup) (2:=H) in Hin end.
@@ -384,26 +384,24 @@ Module Type TYPING
         destruct x as (x, ty). intro Hin.
         unfold wt_valo; simpl.
         revert Hndups WTe Hin H8 H0 H7; clear; intros.
-        destruct (in_dec ident_eq_dec x (map fst ys)) as [Hx|Hx];
-          rewrite <-fst_InMembers in Hx.
+        destruct (in_dec ident_eq_dec x ys) as [Hx|Hx].
         * repeat match goal with
                    H:Forall2 _ _ _ |- _ => apply Forall2_forall2 in H end.
           match goal with H:length ys = _ /\ _ |- _ =>
                           destruct H as (Hlen_ys & Hys) end.
           match goal with H:length rvs = _ /\ _ |- _ =>
                           destruct H as (Hlen_rvs & Hrvs) end.
-          apply InMembers_In in Hx.
-          destruct Hx as (tx & Hx).
-          pose proof (x, ty) as def1.
+          pose proof x as def1.
+          pose proof (x, ty) as def2.
           apply In_ex_nth with (d:=def1) in Hx.
           destruct Hx as (n & Hlen & Hx).
-          specialize (Hys _ def1 _ _ _ Hlen Hx eq_refl); simpl in Hys.
+          specialize (Hys _ def2 _ _ _ Hlen Hx eq_refl); simpl in Hys.
           apply NoDupMembers_det with (1:=Hndups) (2:=Hin) in Hys; subst ty.
-          assert (def2 := true_val).
+          assert (def3 := true_val).
           assert (n < length rvs) as Hlen'
             by (now rewrite Hlen_ys, <-Hlen_rvs in Hlen).
-          specialize (Hrvs def2 def1 n _ _ Hlen' eq_refl eq_refl).
-          rewrite find_gssn with (d2:=def2) (1:=Hlen) (4:=Hx); auto.
+          specialize (Hrvs def3 def2 n _ _ Hlen' eq_refl eq_refl).
+          rewrite find_gssn with (d2:=def3) (1:=Hlen) (4:=Hx); auto.
           now setoid_rewrite Hlen_ys; rewrite Hlen_rvs.
         * rewrite NotInMembers_find_adds with (v:=PM.find x env) (1:=Hx); auto.
           now apply Forall_forall with (1:=WTe) in Hin.
@@ -454,13 +452,16 @@ Module Type TYPING
           intros Hin Hvalo; clear Hvalo.
           unfold wt_valo; simpl.
           rewrite NotInMembers_find_adds with (v:=None); eauto using PM.gempty.
-          apply NoDupMembers_app_InMembers with (xs:=fm.(m_vars) ++ fm.(m_out)).
-          now rewrite Permutation.Permutation_app_comm; apply fm.(m_nodupvars).
+          apply NoDup_app_In with (xs:=map fst fm.(m_vars) ++ map fst fm.(m_out)).
+          rewrite Permutation.Permutation_app_comm.
+          now rewrite <- 2 map_app, <-fst_NoDupMembers; apply fm.(m_nodupvars).
+          rewrite <- map_app, <-fst_InMembers.
           apply In_InMembers with (1:=Hin).
       + (* In a well-typed class, method bodies are well-typed. *)
         apply wt_class_find_method with (1:=WTc) (2:=Hfindm).
       + split; auto.
         (* Show that result values are well-typed. *)
+        apply Forall2_map_1 in Hrvs.
         apply Forall2_swap_args in Hrvs.
         eapply Forall2_impl_In with (2:=Hrvs).
         intros v x Hvin Hxin Hxv.

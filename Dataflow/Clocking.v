@@ -68,11 +68,11 @@ Module Type CLOCKING
 
   Inductive clk_cexp C: cexp -> clock -> Prop :=
   | Cmerge:
-      forall x t f ck ty,
+      forall x t f ck,
         clk_var C x ck ->
         clk_cexp C t (Con ck x true) ->
         clk_cexp C f (Con ck x false) ->
-        clk_cexp C (Emerge x ty t f) ck
+        clk_cexp C (Emerge x t f) ck
   | Cite:
       forall b t f ck,
         clk_lexp C b ck ->
@@ -91,10 +91,10 @@ Module Type CLOCKING
         clk_cexp C ce ck ->
         Well_clocked_eq C (EqDef x ck ce)
   | CEqApp:
-      forall x ck f les ty,
+      forall x ck f les,
         clk_var C x ck ->
         clk_lexps C les ck ->
-        Well_clocked_eq C (EqApp x ck f les ty)
+        Well_clocked_eq C (EqApp x ck f les)
   | CEqFby:
       forall x ck v0 le,
         clk_var C x ck ->
@@ -119,8 +119,8 @@ Module Type CLOCKING
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
       Has_clock_eq ck (EqDef x ck ce)
-  | HcEqApp: forall x f ck les ty,
-      Has_clock_eq ck (EqApp x ck f les ty)
+  | HcEqApp: forall x f ck les,
+      Has_clock_eq ck (EqApp x ck f les)
   | HcEqFby: forall x v0 ck le,
       Has_clock_eq ck (EqFby x ck v0 le).
 
@@ -175,9 +175,9 @@ Module Type CLOCKING
       -> clk_cexp C ce ck
       -> clk_clock C ck.
   Proof.
-    induction ce as [i ty ce1 IH1 ce2 IH2| |].
+    induction ce as [i ce1 IH1 ce2 IH2| |].
     - intros ck Hwc.
-      inversion_clear 1 as [? ? ? ? ? Hcv Hct Hcf| |].
+      inversion_clear 1 as [? ? ? ? Hcv Hct Hcf| |].
       apply IH1 with (1:=Hwc) in Hct.
       inversion_clear Hct; assumption.
     - intros ck Hwc; inversion_clear 1 as [|? ? ? ? Hl H1 H2|].
@@ -207,4 +207,3 @@ Module Type CLOCKING
   Qed.
 
 End CLOCKING.
-

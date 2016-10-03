@@ -57,18 +57,18 @@ Module Type TYPING
 
     Fixpoint typeofc (ce: cexp): type :=
       match ce with
-      | Emerge x ty t f => typeofc t
-      | Eite e t f      => typeofc t
-      | Eexp e          => typeof e
+      | Emerge x t f => typeofc t
+      | Eite e t f   => typeofc t
+      | Eexp e       => typeof e
       end.
 
     Inductive wt_cexp : cexp -> Prop :=
-    | wt_Emerge: forall x ty t f,
+    | wt_Emerge: forall x t f,
         In (x, bool_type) vars ->
         typeofc t = typeofc f ->
         wt_cexp t ->
         wt_cexp f ->
-        wt_cexp (Emerge x ty t f)
+        wt_cexp (Emerge x t f)
     | wt_Eite: forall e t f,
         wt_lexp e ->
         typeof e = bool_type ->
@@ -84,13 +84,13 @@ Module Type TYPING
         wt_clock ck ->
         wt_cexp e ->
         wt_equation (EqDef x ck e)
-    | wt_EqApp: forall n x ck f es ty,
+    | wt_EqApp: forall n x ck f es,
         find_node f G = Some n ->
         In (x, snd n.(n_out)) vars ->
         Forall2 (fun e xt => typeof e = snd xt) es n.(n_in) ->
         wt_clock ck ->
         Forall wt_lexp es ->
-        wt_equation (EqApp x ck f es ty)
+        wt_equation (EqApp x ck f es)
     | wt_EqFby: forall x ck c0 e,
         In (x, type_const c0) vars ->
         typeof e = type_const c0 ->

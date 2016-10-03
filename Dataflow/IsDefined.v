@@ -25,9 +25,9 @@ Module Type ISDEFINED
        (Import Mem : MEMORIES Ids Op Syn).
 
   Inductive Is_defined_in_eq : ident -> equation -> Prop :=
-  | DefEqDef: forall x ck e,      Is_defined_in_eq x (EqDef x ck e)
-  | DefEqApp: forall x ck f e ty, Is_defined_in_eq x (EqApp x ck f e ty)
-  | DefEqFby: forall x ck v e,    Is_defined_in_eq x (EqFby x ck v e).
+  | DefEqDef: forall x ck e,   Is_defined_in_eq x (EqDef x ck e)
+  | DefEqApp: forall x ck f e, Is_defined_in_eq x (EqApp x ck f e)
+  | DefEqFby: forall x ck v e, Is_defined_in_eq x (EqFby x ck v e).
 
   (* definition is needed in signature *)
   Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
@@ -86,12 +86,12 @@ Module Type ISDEFINED
   Qed.
 
   Lemma not_Is_defined_in_eq_EqApp:
-    forall x i ck f le ty,
-      ~ Is_defined_in_eq x (EqApp i ck f le ty) -> x <> i.
+    forall x i ck f le,
+      ~ Is_defined_in_eq x (EqApp i ck f le) -> x <> i.
   Proof.
-    intros x i ck f le ty H0 xeqi.
-    rewrite xeqi in H0.
-    assert (Is_defined_in_eq i (EqApp i ck f le ty)) by constructor.
+    intros ** H xeqi.
+    rewrite xeqi in H.
+    assert (Is_defined_in_eq i (EqApp i ck f le)) by constructor.
     contradiction.
   Qed.
 

@@ -96,7 +96,7 @@ Module Type DECIDE
 
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with
-    | Emerge i _ t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
+    | Emerge i t f => free_in_cexp f (free_in_cexp t (PS.add i fvs))
     | Eite b t f => free_in_cexp f (free_in_cexp t (free_in_lexp b fvs))
     | Eexp e => free_in_lexp e fvs
     end.
@@ -106,9 +106,9 @@ Module Type DECIDE
 
   Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
     match eq with
-    | EqDef _ ck cae => free_in_caexp ck cae fvs
-    | EqApp _ ck f laes _ => free_in_laexps ck laes fvs
-    | EqFby _ ck v lae => free_in_laexp ck lae fvs
+    | EqDef _ ck cae    => free_in_caexp ck cae fvs
+    | EqApp _ ck f laes => free_in_laexps ck laes fvs
+    | EqFby _ ck v lae  => free_in_laexp ck lae fvs
     end.
 
   (** * Specification lemmas *) 
@@ -341,5 +341,4 @@ Module Decide
        (Import Syn : SYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn) <: DECIDE Ids Op Syn IsF.
   Include DECIDE Ids Op Syn IsF.
-End Decide.       
-
+End Decide.

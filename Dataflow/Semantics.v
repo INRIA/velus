@@ -153,23 +153,23 @@ environment.
 
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
-        forall x t f v ty,
+        forall x t f v,
           sem_var_instant x (present true_val) ->
           sem_cexp_instant t v ->
           sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x ty t f) v
+          sem_cexp_instant (Emerge x t f) v
     | Smerge_false:
-        forall x t f v ty,
+        forall x t f v,
           sem_var_instant x (present false_val) ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f v ->
-          sem_cexp_instant (Emerge x ty t f) v
+          sem_cexp_instant (Emerge x t f) v
     | Smerge_abs:
-        forall x t f ty,
+        forall x t f,
           sem_var_instant x absent ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x ty t f) absent
+          sem_cexp_instant (Emerge x t f) absent
     | Site_eq:
         forall x t f c b ct cf,
           sem_lexp_instant x (present c) ->
@@ -205,10 +205,10 @@ environment.
           sem_caexp_instant ck cae absent ->
           rhs_absent_instant (EqDef x ck cae)
     | AEqApp:
-        forall x f ck laes vs ty,
+        forall x f ck laes vs,
           sem_laexps_instant ck laes vs ->
           Forall (fun c => c = absent) vs ->
-          rhs_absent_instant (EqApp x ck f laes ty)
+          rhs_absent_instant (EqApp x ck f laes)
     | AEqFby:
         forall x ck v0 lae,
           sem_laexp_instant ck lae absent ->
@@ -285,11 +285,11 @@ environment.
         sem_caexp bk H ck ce xs ->
         sem_equation G bk H (EqDef x ck ce)
   | SEqApp:
-      forall bk H x ck f arg ls xs ty,
+      forall bk H x ck f arg ls xs,
         sem_laexps bk H ck arg ls ->
         sem_var bk H x xs ->
         sem_node G f ls xs ->
-        sem_equation G bk H (EqApp x ck f arg ty)
+        sem_equation G bk H (EqApp x ck f arg)
   | SEqFby:
       forall bk H x ls xs c0 ck le,
         sem_laexp bk H ck le ls ->
@@ -348,13 +348,12 @@ enough: it does not support the internal fixpoint introduced by
              (les   : lexps)
              (ls    : stream (list value))
              (ys    : stream value)
-             (ty    : type)
              (Hlaes : sem_laexps bk H ck les ls)
              (Hvar  : sem_var bk H y ys)
              (Hnode : sem_node G f ls ys),
         Pn f ls ys Hnode ->
-        P bk H (EqApp y ck f les ty)
-          (SEqApp G bk H y ck f les ls ys ty Hlaes Hvar Hnode).
+        P bk H (EqApp y ck f les)
+          (SEqApp G bk H y ck f les ls ys Hlaes Hvar Hnode).
 
     Hypothesis EqFby_case :
       forall (bk: stream bool)
@@ -411,8 +410,8 @@ enough: it does not support the internal fixpoint introduced by
       : P bk H eq Heq :=
       match Heq in (sem_equation _ bk H eq) return (P bk H eq Heq) with
       | SEqDef bk H y xs ck ce Hvar Hexp => EqDef_case bk H y ck ce xs Hvar Hexp
-      | SEqApp bk H y ck f lae ls ys ty Hlae Hvar Hnode =>
-        EqApp_case bk H y ck f lae ls ys ty Hlae Hvar Hnode
+      | SEqApp bk H y ck f lae ls ys Hlae Hvar Hnode =>
+        EqApp_case bk H y ck f lae ls ys Hlae Hvar Hnode
                    (sem_node_mult f ls ys Hnode)
       | SEqFby bk H y ls yS ck v0 lae Hls Hys Hfby =>
           EqFby_case bk H y ls yS ck v0 lae Hls Hys Hfby
@@ -811,7 +810,7 @@ clock to [sem_var_instant] too. *)
     intros node G f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-         | bk H y ck f lae ls ys ty Hlae Hvar Hnode IH
+         | bk H y ck f lae ls ys Hlae Hvar Hnode IH
          |
          | bk f xs ys i o v eqs ingt0 defd vout nodup good Hbk Hf Heqs IH]
             using sem_node_mult

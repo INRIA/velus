@@ -3,12 +3,12 @@ Require Import lib.Floats.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
 
-Require compcert.common.Values.
-Require compcert.cfrontend.Cop.
-Require compcert.cfrontend.Ctypes.
-Require compcert.cfrontend.Ctyping.
-Require compcert.common.Memory.
-Require compcert.lib.Maps.
+Require common.Values.
+Require cfrontend.Cop.
+Require cfrontend.Ctypes.
+Require cfrontend.Ctyping.
+Require common.Memory.
+Require lib.Maps.
 
 (* Interface avec CompCert *)
 
@@ -27,14 +27,14 @@ Module Export Op <: OPERATORS.
   Definition cltype (ty: type) : Ctypes.type :=
     match ty with
     | Tint sz sg => Ctypes.Tint sz sg Ctypes.noattr
-    | Tlong sg   => Ctypes.Tlong sg Ctypes.noattr
+    | Tlong sg   => Ctypes.Tlong sg (Ctypes.mk_attr false (Some 3%N))
     | Tfloat sz  => Ctypes.Tfloat sz Ctypes.noattr
     end.
 
   Definition typecl (ty: Ctypes.type) : option type :=
     match ty with
     | Ctypes.Tint sz sg (Ctypes.mk_attr false None) => Some (Tint sz sg)
-    | Ctypes.Tlong sg   (Ctypes.mk_attr false None) => Some (Tlong sg)
+    | Ctypes.Tlong sg   (Ctypes.mk_attr false (Some 3%N)) => Some (Tlong sg)
     | Ctypes.Tfloat sz  (Ctypes.mk_attr false None) => Some (Tfloat sz)
     | _ => None
     end.

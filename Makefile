@@ -80,7 +80,7 @@ OPT?=
 COQDEP?="$(COQBIN)coqdep" -c
 COQFLAGS?=-q $(OPT) $(COQLIBS) $(OTHERFLAGS) $(COQ_XML)
 COQCHKFLAGS?=-silent -o
-COQDOCFLAGS?=-interpolate -utf8
+COQDOCFLAGS?=-interpolate -utf8 -g
 COQC?="$(COQBIN)coqc"
 GALLINA?="$(COQBIN)gallina"
 COQDOC?="$(COQBIN)coqdoc"
@@ -125,11 +125,13 @@ VFILES:=RMemory.v\
   Dataflow/Typing.v\
   Dataflow/Stream.v\
   Common.v\
+  Ident.v\
   ObcToClight/Interface.v\
-  ObcToClight/Tra.v\
-  ObcToClight/Cor.v\
-  ObcToClight/Sep.v\
-  ObcToClight/SepInv.v
+  ObcToClight/Translation.v\
+  ObcToClight/Correctness.v\
+  ObcToClight/MoreSeparation.v\
+  ObcToClight/SepInvariant.v\
+  DataflowToClight.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))

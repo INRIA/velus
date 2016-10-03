@@ -33,9 +33,9 @@ Module Type DECIDE
   
   Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
-    | EqDef x _ _     => PS.add x vars
-    | EqApp x _ _ _ _ => PS.add x vars
-    | EqFby _ _ _ _   => vars
+    | EqDef x _ _   => PS.add x vars
+    | EqApp x _ _ _ => PS.add x vars
+    | EqFby _ _ _ _ => vars
     end.
 
   Definition variables (eqs: list equation) : PS.t :=
@@ -129,4 +129,3 @@ Module Decide
        <: DECIDE Ids Op Syn Mem IsD IsV.
   Include DECIDE Ids Op Syn Mem IsD IsV.
 End Decide.
-

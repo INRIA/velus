@@ -58,14 +58,14 @@ Module Type ISFREE
       Is_free_in_laexps x ck les.
 
   Inductive Is_free_in_cexp : ident -> cexp -> Prop :=
-  | FreeEmerge_cond: forall i t f ty,
-      Is_free_in_cexp i (Emerge i ty t f)
-  | FreeEmerge_true: forall i t f x ty,
+  | FreeEmerge_cond: forall i t f,
+      Is_free_in_cexp i (Emerge i t f)
+  | FreeEmerge_true: forall i t f x,
       Is_free_in_cexp x t ->
-      Is_free_in_cexp x (Emerge i ty t f)
-  | FreeEmerge_false: forall i t f x ty,
+      Is_free_in_cexp x (Emerge i t f)
+  | FreeEmerge_false: forall i t f x,
       Is_free_in_cexp x f ->
-      Is_free_in_cexp x (Emerge i ty t f)
+      Is_free_in_cexp x (Emerge i t f)
   (* | FreeEite: forall x b t f,  *)
   (*     Is_free_in_lexp x b \/ Is_free_in_cexp x t \/ Is_free_in_cexp x f -> *)
   (*     Is_free_in_cexp x (Eite b t f) *)
@@ -96,9 +96,9 @@ Module Type ISFREE
         Is_free_in_caexp i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
-      forall x f ck les i ty,
+      forall x f ck les i,
         Is_free_in_laexps i ck les ->
-        Is_free_in_eq i (EqApp x ck f les ty)
+        Is_free_in_eq i (EqApp x ck f les)
   | FreeEqFby:
       forall x v ck le i,
         Is_free_in_laexp i ck le ->

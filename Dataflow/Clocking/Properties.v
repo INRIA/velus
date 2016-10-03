@@ -44,7 +44,7 @@ Theorem Well_clocked_eq_not_Is_free_in_clock:
 Proof.
   intros C eq x ck Hwc Hwce Hdef Hhasck Hfree.
   inversion Hwce as [x' ck' e Hcv Hexp Heq
-                    |x' ck' f e ty Hcv Hexp Heq
+                    |x' ck' f e Hcv Hexp Heq
                     |x' ck' v' e Hcv Hexp];
     subst; inversion Hdef; inversion Hhasck; clear Hdef Hhasck; subst;
     pose proof (Well_clocked_env_var _ _ _ Hwc Hcv) as Hclock;
@@ -75,12 +75,12 @@ Proof.
 Qed.
 
 Corollary Well_clocked_EqApp_not_Is_free_in_clock:
-  forall C x f le ck ty,
+  forall C x f le ck,
     Well_clocked_env C
-    -> Well_clocked_eq C (EqApp x ck f le ty)
+    -> Well_clocked_eq C (EqApp x ck f le)
     -> ~Is_free_in_clock x ck.
 Proof.
-  intros C x f le ck ty Hwc Hwce.
+  intros C x f le ck Hwc Hwce.
   apply Well_clocked_eq_not_Is_free_in_clock with (1:=Hwc) (2:=Hwce);
     now constructor.
 Qed.

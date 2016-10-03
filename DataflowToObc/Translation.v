@@ -48,8 +48,8 @@ Module Type TRANSLATION
   Definition gather_eq
              (acc: list ident * list (ident * ident)) (eq: equation) :=
     match eq with
-    | EqDef _ _ _     => acc
-    | EqApp x _ f _ _ => (fst acc, (x, f) :: snd acc)
+    | EqDef _ _ _   => acc
+    | EqApp x _ f _ => (fst acc, (x, f) :: snd acc)
     | EqFby x _ _ _ => (x::fst acc, snd acc)
     end.
 
@@ -96,12 +96,12 @@ Module Type TRANSLATION
     (* definition is needed in signature *)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
-      | Emerge y ty t f => Ifte (tovar (y, ty))
-                                (translate_cexp x t)
-                                (translate_cexp x f)
+      | Emerge y t f => Ifte (tovar (y, bool_type))
+                            (translate_cexp x t)
+                            (translate_cexp x f)
       | Eite b t f => Ifte (translate_lexp b)
-                           (translate_cexp x t)
-                           (translate_cexp x f)
+                          (translate_cexp x t)
+                          (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
     (* =end= *)
@@ -111,8 +111,8 @@ Module Type TRANSLATION
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp x ce)
-      | EqApp x ck f les ty =>
-          Control ck (Call [(x, ty)] f x step (List.map translate_lexp les))
+      | EqApp x ck f les =>
+        Control ck (Call [x] f x step (List.map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
     (* =end= *)
@@ -132,9 +132,9 @@ Module Type TRANSLATION
   (* definition is needed in signature *)
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
-    | EqDef _ _ _ => s
-    | EqFby x _ c0 _  => Comp (AssignSt x (Const c0)) s
-    | EqApp x _ f _ _ => Comp (Call [] f x reset []) s
+    | EqDef _ _ _    => s
+    | EqFby x _ c0 _ => Comp (AssignSt x (Const c0)) s
+    | EqApp x _ f _  => Comp (Call [] f x reset []) s
     end.
   (* =end= *)
 
@@ -271,7 +271,7 @@ Module Type TRANSLATION
     Proper (PS.eq ==> eq ==> eq) translate_eqns.
   Proof.
     intros M M' Heq eqs eqs' Heqs.
-    rewrite <- Heqs; clear Heqs.
+    rewrite <- Heqs; clear eqs' Heqs.
     unfold translate_eqns.
     assert (forall S S',
                S = S' ->
@@ -494,7 +494,7 @@ Module Type TRANSLATION
                          m_good      := _
                       |};
                       reset_method n.(n_eqs) ];
-       c_nodups   := _
+       c_nodup   := _
     |}.
   (* =end= *)
   Next Obligation.
@@ -608,4 +608,3 @@ Module TranslationFun
   Include TRANSLATION Ids Op OpAux SynDF SynMP Mem.
   
 End TranslationFun.
-

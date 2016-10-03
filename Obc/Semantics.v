@@ -70,7 +70,7 @@ Module Type SEMANTICS
       stmt_eval prog menv env (AssignSt x e) (menv', env)
   | Icall: forall prog menv env es vs clsid o f ys menv' env' omenv omenv' rvs,
       omenv = match mfind_inst o menv with None => hempty
-                                         | Some(om) => om end ->
+                                         | Some om => om end ->
       Forall2 (exp_eval menv env) es vs ->
       stmt_call_eval prog omenv clsid f vs omenv' rvs ->
       madd_obj o omenv' menv = menv' ->
@@ -97,14 +97,15 @@ Module Type SEMANTICS
       forall prog menv clsid f fm vs prog' menv' env' cls rvs,
         find_class clsid prog = Some(cls, prog') ->
         find_method f cls.(c_methods) = Some fm ->
-        stmt_eval prog' menv (adds fm.(m_in) vs sempty)
+        stmt_eval prog' menv (adds (map fst fm.(m_in)) vs sempty)
                   fm.(m_body) (menv', env') ->
-        Forall2 (fun xty v=>PM.find (fst xty) env' = Some(v)) fm.(m_out) rvs ->
+        Forall2 (fun x v => PM.find x env' = Some v) (map fst fm.(m_out)) rvs ->
         stmt_call_eval prog menv clsid f vs menv' rvs.
 
   Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
   with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
   Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
+
 
   (** ** Determinism of semantics *)
 
@@ -188,4 +189,4 @@ Module SemanticsFun
        (Import Syn   : SYNTAX Ids Op OpAux) <: SEMANTICS Ids Op OpAux Syn.
   Include SEMANTICS Ids Op OpAux Syn.
 End SemanticsFun.
-        
+

@@ -35,12 +35,12 @@ Module Type MEMORYCORRES
        | MemC_EqDef:
            forall M menv x ck ce,
              Memory_Corres_eq G n M menv (EqDef x ck ce)
-       | MemC_EqApp: forall M menv x ck f le ty,
+       | MemC_EqApp: forall M menv x ck f le,
            (* =Memory_Corres_eq:eqapp= *)
            (forall Mo, mfind_inst x M = Some Mo ->
                   (exists omenv, mfind_inst x menv = Some omenv
                                  /\ Memory_Corres G n f Mo omenv))
-           -> Memory_Corres_eq G n M menv (EqApp x ck f le ty)(*,*)
+           -> Memory_Corres_eq G n M menv (EqApp x ck f le)(*,*)
        (* =end= *)
        | MemC_EqFby: forall M menv x ck v0 le,
            (* =Memory_Corres_eq:eqfby= *)
@@ -61,10 +61,10 @@ Module Type MEMORYCORRES
     Hypothesis EqDef_case: forall M menv x ck ce,
         Peq M menv (EqDef x ck ce).
 
-    Hypothesis EqApp_case: forall M menv x ck f le ty,
+    Hypothesis EqApp_case: forall M menv x ck f le,
         (forall Mo (Hmfind: mfind_inst x M = Some Mo),
             (exists omenv, mfind_inst x menv = Some omenv /\ P f Mo omenv))
-        -> Peq M menv (EqApp x ck f le ty).
+        -> Peq M menv (EqApp x ck f le).
 
     Hypothesis EqFby_case: forall M menv x ck v0 le,
         (forall ms, mfind_mem x M = Some ms
@@ -108,8 +108,8 @@ Module Type MEMORYCORRES
         match Hmceq in (Memory_Corres_eq _ _ M menv eq) return (Peq M menv eq)
         with
         | MemC_EqDef M menv x ck ce => EqDef_case M menv x ck ce
-        | MemC_EqApp M menv x ck f le ty Hmc =>
-          EqApp_case M menv x ck f le ty
+        | MemC_EqApp M menv x ck f le Hmc =>
+          EqApp_case M menv x ck f le
                      (fun (Mo     : memory)
                         (Hmfind : mfind_inst x M = Some Mo) => _)
         | MemC_EqFby M menv x ck v0 lae Hfind =>
@@ -135,7 +135,7 @@ Module Type MEMORYCORRES
   Proof.
     intros node G eqs n M menv Hord Hini.
     split; intro Hmc; revert M menv eqs Hmc Hini.
-    - induction 1 as [| ? ? ? ? ? ? ? Hfind | |? ? ? ? ? ? ? ? ? ? ? ? Hfindn IH]
+    - induction 1 as [|? ? ? ? ? ? Hfind | |? ? ? ? ? ? ? ? ? ? ? ? Hfindn IH]
                        using Memory_Corres_eq_mult
                      with (P:=fun f M menv=>
                                 node.(n_name) <> f ->
@@ -160,7 +160,7 @@ Module Type MEMORYCORRES
         apply Forall_Forall with (1:=Hord) in IH.
         apply Forall_impl with (2:=IH).
         intuition.
-    - induction 1 as [| ? ? ? ? ? ? ? Hfind | |? ? ? ? ? ? ? ? ? ? ? ? Hfindn IH]
+    - induction 1 as [|? ? ? ? ? ? Hfind | |? ? ? ? ? ? ? ? ? ? ? ? Hfindn IH]
                        using Memory_Corres_eq_mult
                      with (P:=fun f M menv=>
                                 node.(n_name) <> f ->
@@ -265,7 +265,7 @@ Module Type MEMORYCORRES
     apply Forall_cons; [|apply IH with (1:=Hmfind) (2:=Hmc1)].
     destruct eq; repeat constructor.
     - intros Mo Hifind.
-      inversion_clear Hmc0 as [|? ? ? ? ? ? ? Hmc|].
+      inversion_clear Hmc0 as [|? ? ? ? ? ? Hmc|].
       specialize (Hmc _ Hifind).
       destruct Hmc as [omenv HH].
       exists omenv.
@@ -318,7 +318,7 @@ Module Type MEMORYCORRES
     - intros Mo Hmfind.
       destruct (ident_eq_dec i y) as [Hiy|Hniy].
       + rewrite Hiy in Hniii0; exfalso; apply Hniii0; constructor.
-      + inversion_clear Hmce0 as [|? ? ? ? ? ? ? Hfindo|].
+      + inversion_clear Hmce0 as [|? ? ? ? ? ? Hfindo|].
         specialize (Hfindo _ Hmfind).
         destruct Hfindo as [omenv' [Hfindo Hmc]].
         exists omenv'.
@@ -342,7 +342,7 @@ Module Type MEMORYCORRES
     intros G f n ls M ys menv Hwdef Hmsem Habs.
     revert menv. 
     induction Hmsem
-      as [| bk H M y ck f M' les ls ys ty Hmfind Hls Hys Hmsem IH
+      as [| bk H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
           | bk H M ms y ck ls yS v0 lae Hmfind Hms0 Hls HyS Hy
           | bk f xs M ys i o v eqs ingt0 defd vout nodup good Hbk Hf Heqs IH]
            using msem_node_mult
@@ -357,13 +357,13 @@ Module Type MEMORYCORRES
       intros Mo Hmfind'.
       rewrite Hmfind in Hmfind'.
       injection Hmfind'; intro Heq; rewrite <-Heq; clear Heq Hmfind'.
-      inversion_clear Hmceq as [|? ? ? ? ? ? ? Hmc'|].
+      inversion_clear Hmceq as [|? ? ? ? ? ? Hmc'|].
       specialize (Hmc' _ Hmfind).
       destruct Hmc' as [omenv [Hfindo Hmc]].
       exists omenv.
       split; [exact Hfindo|].
       apply IH with (2:=Hmc).
-      inversion_clear Hrhsa as [| ? ? ? ? ? ? Hlaea Hvs |]. 
+      inversion_clear Hrhsa as [|? ? ? ? ? Hlaea Hvs |]. 
 
       assert (ls n = vs)
         by (specialize (Hls n); simpl in Hls; sem_det).
@@ -432,4 +432,3 @@ Module Type MEMORYCORRES
   Qed.
 
 End MEMORYCORRES.
-
