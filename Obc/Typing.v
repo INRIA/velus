@@ -498,6 +498,110 @@ Module Type TYPING
     intros; eapply (proj2 pres_sem_stmt'); eauto.
   Qed.
   
+  Lemma wt_program_app:
+    forall cls cls',
+      wt_program (cls ++ cls') ->
+      wt_program cls'.
+  Proof.
+    induction cls; inversion 1; auto.
+  Qed.
+
+  Remark wt_program_not_class_in:
+    forall pre post o c c',
+      wt_program (pre ++ c :: post) ->
+      In (o, c'.(c_name)) c.(c_objs) ->
+      find_class c'.(c_name) pre = None.
+  Proof.
+    induction pre as [|k]; intros post o c c' WT Hin; auto.
+    simpl in WT. inv WT.
+    match goal with H:NoDup _ |- _ =>
+      rewrite map_cons in H; apply NoDup_cons' in H;
+        destruct H as (Hnin & Hndup) end.
+    rewrite map_app, in_app, map_cons in Hnin.
+    apply Decidable.not_or in Hnin.
+    rewrite not_in_cons in Hnin.
+    destruct Hnin as (Hnpre & Hneq & Hnpost).
+    apply ident_eqb_neq in Hneq.
+    simpl.
+    match goal with H:wt_program _ |- _ =>
+      specialize (IHpre _ _ _ _ H Hin); apply wt_program_app in H;
+        inversion_clear H as [|? ? WTc WTp Hnodup] end.
+    destruct (ident_eqb k.(c_name) c'.(c_name)) eqn: Heq; auto.
+    apply ident_eqb_eq in Heq; rewrite Heq in *; clear Heq.
+    inversion_clear WTc as [Ho Hm].
+    apply In_Forall with (1:=Ho) in Hin.
+    apply not_None_is_Some in Hin.
+    destruct Hin as ((cls, p') & Hin).
+    simpl in Hin.
+    rewrite <-(find_class_name _ _ _ _ Hin) in *.
+    apply find_class_In in Hin.
+    apply in_map with (f:=c_name) in Hin.
+    contradiction.
+  Qed.
+
+  Remark wt_program_not_same_name:
+    forall post o c c',
+      wt_program (c :: post) ->
+      In (o, c'.(c_name)) c.(c_objs) ->
+      c'.(c_name) <> c.(c_name).
+  Proof.
+    intros ** WTp Hin Hc'.
+    rewrite Hc' in Hin; clear c' Hc'.
+    inversion_clear WTp as [|? ? WTc WTp' Hnodup]; clear WTp'.
+    inversion_clear Hnodup as [|? ? Hnin Hnodup'].
+    apply Hnin.
+    inversion_clear WTc as [Ho Hm]; clear Hm.
+    apply In_Forall with (1:=Ho) in Hin.
+    apply not_None_is_Some in Hin.    
+    destruct Hin as ((cls, p') & Hin).
+    simpl in Hin. rewrite <-(find_class_name _ _ _ _ Hin) in *.
+    apply find_class_In in Hin.
+    now apply in_map.
+  Qed.
+
+  Inductive sub_prog: program -> program -> Prop := 
+    sub_prog_intro: forall p p', 
+      sub_prog p (p' ++ p). 
+
+  Remark find_class_sub_same: 
+    forall prog1 prog2 clsid cls prog', 
+      find_class clsid prog2 = Some (cls, prog') -> 
+      wt_program prog1 -> 
+      sub_prog prog2 prog1 -> 
+      find_class clsid prog1 = Some (cls, prog'). 
+  Proof. 
+    intros ** Hfind WD Sub.
+    inv Sub.
+    induction p' as [|cls' p']; simpl; auto.
+    inversion_clear WD as [|? ? WTc WTp Hnodup].
+    specialize (IHp' WTp).
+    destruct (ident_eq_dec cls'.(c_name) clsid) as [He|Hne].
+    - rewrite map_cons in Hnodup.
+      apply NoDup_cons' in Hnodup.
+      destruct Hnodup as (Hnin & Hnodup).
+      rewrite He in *; clear He.
+      contradiction Hnin.
+      rewrite <-(find_class_name _ _ _ _ IHp').
+      apply find_class_In in IHp'.
+      now apply in_map.
+    - apply ident_eqb_neq in Hne.
+      now rewrite Hne, IHp'.
+  Qed.
+
+  Lemma find_class_sub: 
+    forall prog clsid cls prog', 
+      find_class clsid prog = Some (cls, prog') -> 
+      sub_prog prog' prog. 
+  Proof. 
+    intros ** Find. 
+    apply find_class_app in Find.
+    destruct Find as (? & ? & ?); subst. 
+    rewrite List_shift_first. 
+    constructor. 
+  Qed. 
+
+  Hint Constructors sub_prog.  
+  
 End TYPING.
 
 Module Typing

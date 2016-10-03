@@ -16,12 +16,14 @@ Require Import Program.Tactics.
 
 Require Import Rustre.Obc.Syntax.
 Require Import Rustre.Obc.Semantics.
+Require Import Rustre.Obc.Typing.
 Require Import Rustre.ObcToClight.MoreSeparation.  
 Require Import Rustre.ObcToClight.Translation.
 Require Import Rustre.Ident.
 Require Import Rustre.ObcToClight.Interface.
 
 Module Export Sem := SemanticsFun Ids Op OpAux Syn.
+Module Export Typ := Typing Ids Op OpAux Syn Sem.
 
 Open Scope list.
 Open Scope sep_scope.
@@ -400,7 +402,7 @@ Section StateRepProperties.
   
   Lemma range_staterep:
     forall b clsnm,
-      WelldefClasses prog ->
+      wt_program prog ->
       find_class clsnm prog <> None ->
       range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
             staterep gcenv prog clsnm hempty b 0.
@@ -497,8 +499,8 @@ Section StateRepProperties.
              + clear IHl.
 
                destruct a as [o c].
-               assert (find_class c prog' <> None) as Hcin
-                   by (eapply H1; econstructor; eauto).
+               assert (find_class c prog' <> None) as Hcin.
+               admit. (* by (eapply H1; econstructor; eauto). *)
                clear H1 Hcoal1.
 
                apply Forall_cons2 in Hcoal2.
@@ -510,7 +512,8 @@ Section StateRepProperties.
                simpl.
                destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
                rewrite instance_match_empty.
-               specialize (IH Hwdef' c Hcin (lo + z)%Z).
+               inv Hwdef.
+               specialize (IH H3 c Hcin (lo + z)%Z).
 
                apply not_None_is_Some in Hcin.
                destruct Hcin as ((c' & prog'') & Hcin).
@@ -542,8 +545,10 @@ Section StateRepProperties.
                  simpl. rewrite H, align_noattr.
                  apply Z.divide_refl.
              + apply IHl.
+               (*
                * clear IHl. intros o c' Hin.
                  apply H1 with (o:=o). constructor (assumption).
+                *)
                * simpl in Hcoal2. apply Forall_cons2 in Hcoal2.
                destruct Hcoal2 as [Hcoal2 Hcoal3]. exact Hcoal3.
                * intros o c Hin. apply Htype. constructor (assumption).
@@ -553,7 +558,8 @@ Section StateRepProperties.
           simpl in Hfind.
           rewrite ident_eqb_sym in Hclsnm.
           rewrite Hclsnm in Hfind.
-          specialize (IH Hwdef' clsnm Hfind lo).
+          inv Hwdef.
+          specialize (IH H4 clsnm Hfind lo).
           simpl in IH.
           rewrite Hg in IH.
           apply IH.
@@ -975,3 +981,4 @@ Section BlockRep.
 End BlockRep.
 
 Hint Resolve footprint_perm_blockrep footprint_decidable_blockrep.
+

@@ -11,6 +11,7 @@ Require Export Dataflow.WellFormed.
 Require Export Dataflow.Ordered.
 Require Export Dataflow.NoDup.
 Require Export Dataflow.Clocking.
+Require Export Dataflow.Typing.
 
 Require Import Rustre.Common.
 Require Import Dataflow.IsVariable.Decide.
@@ -27,6 +28,7 @@ Module Type DATAFLOW
   Declare Module Export Ord: ORDERED Ids Op Syn.
   Declare Module Export IsF: ISFREE Ids Op Syn.
   Declare Module Export Sem: SEMANTICS Ids Op OpAux Syn Str Ord.
+  Declare Module Export Typ: TYPING Ids Op Syn.
   Declare Module Export Mem: MEMORIES Ids Op Syn.
   Declare Module Export IsD: ISDEFINED Ids Op Syn Mem.
   Declare Module Export IsV: ISVARIABLE Ids Op Syn Mem IsD.

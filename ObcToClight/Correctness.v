@@ -216,7 +216,7 @@ Section PRESERVATION.
   (*   - discriminate. *)
   (* Qed. *)
 
-  Hypothesis WD: WelldefClasses prog.
+  Hypothesis WT: wt_program prog.
 
   Lemma build_ok:
     forall types defs public main p,
@@ -2222,8 +2222,8 @@ Section PRESERVATION.
            apply sep_imp'; auto.
            - edestruct find_class_app with (1:=Findowner)
                as (pre_prog & Hprog & FindNone); eauto.
-             rewrite Hprog in WD.
-             eapply welldef_not_class_in in WD; eauto.
+             rewrite Hprog in WT.
+             eapply wt_program_not_class_in in WT; eauto.
              rewrite staterep_skip; eauto.
              simpl.
              rewrite ident_eqb_refl.
@@ -2569,7 +2569,7 @@ Section PRESERVATION.
       + rewrite match_states_conj; split; auto. 
         
     (* funcall *)
-    - pose proof (find_class_sub_same _ _ _ _ _ Find WD Sub) as Find''.
+    - pose proof (find_class_sub_same _ _ _ _ _ Find WT Sub) as Find''.
       rewrite Find' in Find''; inversion Find''; subst prog'0 cls; clear Find''.
       rewrite Findmeth in Findmeth'; inversion Findmeth'; subst fm; clear Findmeth'.
 
@@ -2585,8 +2585,10 @@ Section PRESERVATION.
 
       edestruct find_class_app with (1:=Findowner)
         as (pre_prog & Hprog & FindNone); eauto.
-      rewrite Hprog in WD.
-      assert (c_name c <> c_name owner) by (eapply welldef_not_same_name; eauto).
+      rewrite Hprog in WT.
+      assert (c_name c <> c_name owner)
+        by (eapply wt_program_not_same_name;
+            eauto using (wt_program_app _ _ WT)).
 
       (* extract the out structure *)
       rewrite sep_swap23, sep_swap in Hrep.
@@ -2643,7 +2645,7 @@ Section PRESERVATION.
              + rewrite Offs.
                unfold instance_match, mfind_inst, madd_obj; simpl.
                rewrite PM.gss.
-               eapply welldef_not_class_in in WD; eauto.
+               eapply wt_program_not_class_in in WT; eauto.
                rewrite <-staterep_skip_cons with (prog:=prog'') (cls:=owner); eauto.
                rewrite <-staterep_skip_app with (prog:=owner :: prog''); eauto.
                rewrite <-Hprog.
@@ -2669,5 +2671,7 @@ Section PRESERVATION.
                * apply ident_eqb_neq in E. 
                  rewrite PM.gso; auto.
          }
-  Qed.  
+  Qed.
+
 End PRESERVATION.
+
