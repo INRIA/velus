@@ -54,13 +54,16 @@ Module Type SYNTAX
         m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
       }.
 
+  Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
+  
   Lemma m_notreserved:
     forall x m,
       In x reserved ->
-      ~InMembers x (m.(m_in) ++ m.(m_vars) ++ m.(m_out)).
+      ~InMembers x (meth_vars m).
   Proof.
     intros ** Hin Hinm.
     pose proof m.(m_good) as Good.
+    unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
       inv Hinm; inv Good.
     - contradiction.

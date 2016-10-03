@@ -600,6 +600,17 @@ Module Type TYPING
     constructor. 
   Qed. 
 
+  Lemma wt_stmt_sub:
+    forall prog prog' insts mems vars s,
+      wt_stmt prog' insts mems vars s ->
+      wt_program prog ->
+      sub_prog prog' prog ->
+      wt_stmt prog insts mems vars s.
+  Proof.
+    induction 1; intros ** Sub; econstructor; eauto.
+    eapply find_class_sub_same; eauto.
+  Qed.
+  
   Hint Constructors sub_prog.  
   
 End TYPING.

@@ -242,55 +242,52 @@ Section PRESERVATION.
   
   Opaque sepconj.
 
-  Inductive well_formed_exp (c: class) (m: method): exp -> Prop :=
-  | wf_var: forall x ty,
-      In (x, ty) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) ->
-      well_formed_exp c m (Var x ty)
-  | wf_state: forall x ty,
-      In (x, ty) c.(c_mems) ->
-      well_formed_exp c m (State x ty)
-  | wf_const: forall cst,
-      well_formed_exp c m (Const cst)
-  | wf_unop: forall op e ty,
-      well_formed_exp c m e ->
-      well_formed_exp c m (Unop op e ty)
-  | wf_binop: forall op e1 e2 ty,
-      well_formed_exp c m e1 ->
-      well_formed_exp c m e2 ->
-      well_formed_exp c m (Binop op e1 e2 ty).
+  (* Inductive well_formed_exp (c: class) (m: method): exp -> Prop := *)
+  (* | wf_var: forall x ty, *)
+  (*     In (x, ty) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) -> *)
+  (*     well_formed_exp c m (Var x ty) *)
+  (* | wf_state: forall x ty, *)
+  (*     In (x, ty) c.(c_mems) -> *)
+  (*     well_formed_exp c m (State x ty) *)
+  (* | wf_const: forall cst, *)
+  (*     well_formed_exp c m (Const cst) *)
+  (* | wf_unop: forall op e ty, *)
+  (*     well_formed_exp c m e -> *)
+  (*     well_formed_exp c m (Unop op e ty) *)
+  (* | wf_binop: forall op e1 e2 ty, *)
+  (*     well_formed_exp c m e1 -> *)
+  (*     well_formed_exp c m e2 -> *)
+  (*     well_formed_exp c m (Binop op e1 e2 ty). *)
 
-  Inductive well_formed_stmt (c: class) (m: method): stmt -> Prop :=
-  | wf_assign: forall x e,
-      In (x, typeof e) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) ->
-      well_formed_exp c m e ->
-      well_formed_stmt c m (Assign x e)
-  | wf_assignst: forall x e,
-      In (x, typeof e) c.(c_mems) ->
-      well_formed_exp c m e ->
-      well_formed_stmt c m (AssignSt x e)
-  | wf_ite: forall e s1 s2,
-      well_formed_exp c m e ->
-      well_formed_stmt c m s1 ->
-      well_formed_stmt c m s2 ->
-      well_formed_stmt c m (Ifte e s1 s2)
-  | wf_comp: forall  s1 s2,
-      well_formed_stmt c m s1 ->
-      well_formed_stmt c m s2 ->
-      well_formed_stmt c m (Comp s1 s2)
-  | wf_call: forall ys clsid c' prog' o fid f es,
-      NoDup ys ->
-      In (o, clsid) c.(c_objs) ->
-      Forall (well_formed_exp c m) es ->
-      Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
-      Forall2 (fun y xt => In (y, snd xt) (m.(m_in) ++ m.(m_vars) ++ m.(m_out))) ys f.(m_out) ->
-      find_class clsid prog = Some (c', prog') ->
-      find_method fid (c_methods c') = Some f ->
-      well_formed_stmt c m (Call ys clsid o fid es)
-  | wf_skip: 
-      well_formed_stmt c m Skip.
-
-  Hypothesis well_formed:
-    Forall (fun c => Forall (fun m => well_formed_stmt c m (m_body m)) (c_methods c)) prog.
+  (* Inductive well_formed_stmt (c: class) (m: method): stmt -> Prop := *)
+  (* | wf_assign: forall x e, *)
+  (*     In (x, typeof e) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) -> *)
+  (*     well_formed_exp c m e -> *)
+  (*     well_formed_stmt c m (Assign x e) *)
+  (* | wf_assignst: forall x e, *)
+  (*     In (x, typeof e) c.(c_mems) -> *)
+  (*     well_formed_exp c m e -> *)
+  (*     well_formed_stmt c m (AssignSt x e) *)
+  (* | wf_ite: forall e s1 s2, *)
+  (*     well_formed_exp c m e -> *)
+  (*     well_formed_stmt c m s1 -> *)
+  (*     well_formed_stmt c m s2 -> *)
+  (*     well_formed_stmt c m (Ifte e s1 s2) *)
+  (* | wf_comp: forall  s1 s2, *)
+  (*     well_formed_stmt c m s1 -> *)
+  (*     well_formed_stmt c m s2 -> *)
+  (*     well_formed_stmt c m (Comp s1 s2) *)
+  (* | wf_call: forall ys clsid c' prog' o fid f es, *)
+  (*     NoDup ys -> *)
+  (*     In (o, clsid) c.(c_objs) -> *)
+  (*     Forall (well_formed_exp c m) es -> *)
+  (*     Forall2 (fun e x => typeof e = snd x) es f.(m_in) -> *)
+  (*     Forall2 (fun y xt => In (y, snd xt) (m.(m_in) ++ m.(m_vars) ++ m.(m_out))) ys f.(m_out) -> *)
+  (*     find_class clsid prog = Some (c', prog') -> *)
+  (*     find_method fid (c_methods c') = Some f -> *)
+  (*     well_formed_stmt c m (Call ys clsid o fid es) *)
+  (* | wf_skip:  *)
+  (*     well_formed_stmt c m Skip. *)
 
   Inductive occurs_in: stmt -> stmt -> Prop :=
   | occurs_refl: forall s,
@@ -434,12 +431,16 @@ Section PRESERVATION.
         intros ** Hin.
         pose proof (find_class_name _ _ _ _ Findcl) as Eq.
         pose proof (find_method_name _ _ _ Findmth) as Eq'.
-        apply find_class_In in Findcl.
-        apply find_method_In in Findmth.
-        pose proof well_formed as WF.
-        do 2 eapply In_Forall in WF; eauto.
+        (* apply find_class_In in Findcl. *)
+        (* apply find_method_In in Findmth. *)
+        edestruct wt_program_find_class as [WT']; eauto.
+        eapply wt_class_find_method in WT'; eauto.
+        (* eapply wt_program_find_class in WT; eauto. *)
+        (* pose proof well_formed as WF. *)
+        (* do 2 eapply In_Forall in WF; eauto. *)
         unfold instance_methods in Hin.
-        induction (m_body caller); simpl in *; try contradiction; inv WF.
+        unfold wt_method in WT'.
+        induction (m_body caller); simpl in *; try contradiction; inv WT'.
         - rewrite In_rec_instance_methods in Hin. destruct Hin.
           + apply IHs2; auto.
           + apply IHs1; auto. 
@@ -447,7 +448,9 @@ Section PRESERVATION.
           + apply IHs2; auto.
           + apply IHs1; auto. 
         - destruct Hin as [E|]; try contradiction; inv E.
-          exists c', prog'0, f; split; auto.
+          exists cls, p', fm; split; auto.
+          apply find_class_sub in Findcl.
+          eapply find_class_sub_same; eauto.
       Qed.
 
       Theorem methods_corres:
@@ -663,7 +666,7 @@ Section PRESERVATION.
   Qed.
   
   Hint Resolve valid_val_access valid_val_load sem_cast_same acces_cltype.
-  Hint Constructors well_formed_stmt.
+  Hint Constructors wt_stmt.
 
   Definition c_state := (Clight.env * Clight.temp_env)%type.
 
@@ -911,7 +914,7 @@ Section PRESERVATION.
   Remark existsb_In:
     forall f x ty,
       existsb (fun out => ident_eqb (fst out) x) f.(m_out) = true ->
-      In (x, ty) (f.(m_in) ++ f.(m_vars) ++ f.(m_out)) ->
+      In (x, ty) (meth_vars f) ->
       In (x, ty) f.(m_out).
   Proof.
     intros ** E ?.
@@ -919,7 +922,7 @@ Section PRESERVATION.
     destruct E as ((x' & ty') & Hin & E).
     rewrite ident_eqb_eq in E; simpl in E; subst.
     pose proof (m_nodupvars f) as Nodup.
-    assert (In (x, ty') (f.(m_in) ++ f.(m_vars) ++ f.(m_out)))
+    assert (In (x, ty') (meth_vars f))
       by (now apply in_or_app; right; apply in_or_app; right).
     now app_NoDupMembers_det.
   Qed.
@@ -940,7 +943,7 @@ Section PRESERVATION.
   Remark not_existsb_InMembers:
     forall f x ty,
       existsb (fun out => ident_eqb (fst out) x) f.(m_out) = false ->
-      In (x, ty) (f.(m_in) ++ f.(m_vars) ++ f.(m_out)) ->
+      In (x, ty) (meth_vars f) ->
       ~ InMembers x f.(m_out).
   Proof.
     intros ** E ? Hin.
@@ -950,7 +953,7 @@ Section PRESERVATION.
     exists (x, ty); split; simpl.
     - apply InMembers_In in Hin.
       destruct Hin as [ty' Hin].
-      assert (In (x, ty') (f.(m_in) ++ f.(m_vars) ++ f.(m_out)))
+      assert (In (x, ty') (meth_vars f))
         by (now apply in_or_app; right; apply in_or_app; right).
       pose proof (m_nodupvars f). 
       now app_NoDupMembers_det.
@@ -968,7 +971,7 @@ Section PRESERVATION.
       Hypothesis Hrep: m |= blockrep gcenv ve outco.(co_members) outb ** P.
       Hypothesis Get_out: le ! out = Some (Vptr outb Int.zero).
       Hypothesis Get_outco: gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco.
-      Hypothesis Hin: In (x, ty) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out)).
+      Hypothesis Hin: In (x, ty) (meth_vars caller).
       
       Lemma evall_out_field:
         forall e,      
@@ -1011,7 +1014,7 @@ Section PRESERVATION.
     Lemma eval_temp_var:
       forall ve e le m x ty v P,
         m |= varsrep caller ve le ** P ->
-        In (x, ty) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out)) ->
+        In (x, ty) (meth_vars caller) ->
         mem_assoc_ident x (m_out caller) = false ->
         PM.find x ve = Some v ->
         eval_expr tge e le m (Etempvar x (cltype ty)) v.
@@ -1026,6 +1029,7 @@ Section PRESERVATION.
         exists (x, ty); split; auto.
         apply ident_eqb_refl. 
       }
+      unfold meth_vars in Hvars.
       rewrite app_assoc in Hvars.
       eapply not_In_app in HnIn; eauto.
       apply in_map with (f:=translate_param) in HnIn.
@@ -1141,7 +1145,7 @@ Section PRESERVATION.
         le ! out = Some (Vptr outb Int.zero) ->
         gcenv ! (prefix_fun owner.(c_name) caller.(m_name)) = Some outco ->
         0 <= Int.unsigned sofs ->
-        well_formed_exp owner caller ex ->
+        wt_exp owner.(c_mems) (meth_vars caller) ex ->
         exp_eval me ve ex v ->
         Clight.eval_expr tge e le m (translate_exp owner caller ex) v.
     Proof.
@@ -1247,7 +1251,7 @@ Section PRESERVATION.
         le ! out = Some (Vptr outb Int.zero) ->
         gcenv ! (prefix_fun owner.(c_name) caller.(m_name)) = Some outco ->
         0 <= Int.unsigned sofs ->
-        Forall (well_formed_exp owner caller) es ->
+        Forall (wt_exp owner.(c_mems) (meth_vars caller)) es ->
         Forall2 (exp_eval me ve) es vs ->
         es' = map (translate_exp owner caller) es ->
         Clight.eval_exprlist tge e le m es'
@@ -1311,7 +1315,7 @@ Section PRESERVATION.
                 (le: temp_env) (x: ident) (ty: type).
       Hypothesis Hrep: m |= varsrep caller ve le ** blockrep gcenv ve outco.(co_members) outb ** P.
       Hypothesis Hco: gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco.
-      Hypothesis Hvars: In (x, ty) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out)).
+      Hypothesis Hvars: In (x, ty) (meth_vars caller).
 
       Lemma match_states_assign_out:
         forall v d,
@@ -1454,7 +1458,7 @@ Section PRESERVATION.
         find_class clsid prog = Some (c, prog') ->
         find_method f c.(c_methods) = Some callee ->
         NoDup ys ->
-        Forall2 (fun y xt => In (y, snd xt) (caller.(m_in) ++ caller.(m_vars) ++ caller.(m_out))) ys
+        Forall2 (fun y xt => In (y, snd xt) (meth_vars caller)) ys
                 callee.(m_out) ->
         le1 ! out = Some (Vptr outb Int.zero) ->
         le1 ! self = Some (Vptr sb sofs) ->
@@ -2168,24 +2172,26 @@ Section PRESERVATION.
     intros ** ? Hin Offs ? ? Findowner Findc Hcallee Hlengths
            Hparams Hvars Htemps Norep_par Norep_vars ? ? Hrep.
     subst vargs; rewrite Hparams, Hvars, Htemps in *.
-    assert (~ InMembers self (callee.(m_in) ++ callee.(m_vars) ++ callee.(m_out))) as Notin_s
+    assert (~ InMembers self (meth_vars callee)) as Notin_s
         by apply m_notreserved, in_eq.
-    assert (~ InMembers out (callee.(m_in) ++ callee.(m_vars) ++ callee.(m_out))) as Notin_o
+    assert (~ InMembers out (meth_vars callee)) as Notin_o
         by apply m_notreserved, in_cons, in_eq.
     assert (~ InMembers self (map translate_param (m_in callee))).
-    { apply NotInMembers_app in Notin_s.
+    { unfold meth_vars in Notin_s; apply NotInMembers_app in Notin_s.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto. 
     }
     assert (~ InMembers out (map translate_param (m_in callee))).
-    { apply NotInMembers_app in Notin_o.
+    { unfold meth_vars in Notin_o; apply NotInMembers_app in Notin_o.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
     }
     assert (~ InMembers self (map translate_param (m_vars callee))).
-    { rewrite NotInMembers_app_comm, <-app_assoc in Notin_s; apply NotInMembers_app in Notin_s.
+    { unfold meth_vars in Notin_s; rewrite NotInMembers_app_comm, <-app_assoc in Notin_s;
+      apply NotInMembers_app in Notin_s.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
     }    
     assert (~ InMembers out (map translate_param (m_vars callee))).
-    { rewrite NotInMembers_app_comm, <-app_assoc in Notin_o; apply NotInMembers_app in Notin_o.
+    { unfold meth_vars in Notin_o; rewrite NotInMembers_app_comm, <-app_assoc in Notin_o;
+      apply NotInMembers_app in Notin_o.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
     }
     assert (0 <= d <= Int.max_unsigned) by
@@ -2327,7 +2333,7 @@ Section PRESERVATION.
         sub_prog p prog ->
         forall c prog' f
           (Occurs: occurs_in s (m_body f))
-          (WF: well_formed_stmt c f s)
+          (WF: wt_stmt prog c.(c_objs) c.(c_mems) (meth_vars f) s)
           (Find: find_class c.(c_name) prog = Some (c, prog'))
           (Hf: find_method f.(m_name) c.(c_methods) = Some f),
         forall e1 le1 m1 sb sofs outb outco P
@@ -2363,7 +2369,7 @@ Section PRESERVATION.
           0 <= Int.unsigned sofs + d <= Int.max_unsigned ->
           0 <= Int.unsigned sofs ->
           gcenv ! (prefix_fun clsid fid) = Some instco ->
-          well_formed_stmt c callee callee.(m_body) ->
+          wt_stmt prog c.(c_objs) c.(c_mems) (meth_vars callee) callee.(m_body) ->
           eval_expr tge e1 le1 m1 (ptr_obj owner.(c_name) clsid o) (Vptr sb (Int.add sofs (Int.repr d))) ->
           exists m2 T ws xs,
             eval_funcall tge (function_entry2 tge) m1 (Internal cf)
@@ -2386,7 +2392,7 @@ Section PRESERVATION.
       intros ** Findowner ? Find' Findmeth' Hrep Hgetptrf Hgetcf ? Findinst
              Hbinst ? Hin Offs ? ? Hinstco ? ?]; intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
-                                 |? ? ? ? ? ? callee ? ? ? (* ? *) Hin ? ? Find' Findmeth|];
+                                 |? ? ? ? ? callee ? ? Hin Find' Findmeth|];
       try (rewrite match_states_conj in MS; destruct MS as (Hrep & Hself & Hout & Houtco & He & ?));
       subst.
     
@@ -2420,9 +2426,9 @@ Section PRESERVATION.
       (* x = e *)
       + exists (PTree.set x v le1), m1, E0; split.
         * eapply ClightBigstep.exec_Sset; eauto.          
-        *{ assert (~ InMembers self (f.(m_in) ++ f.(m_vars) ++ f.(m_out)))
+        *{ assert (~ InMembers self (meth_vars f))
              by apply m_notreserved, in_eq.
-           assert (~ InMembers out (f.(m_in) ++ f.(m_vars) ++ f.(m_out)))
+           assert (~ InMembers out (meth_vars f))
              by apply m_notreserved, in_cons, in_eq.
            rewrite match_states_conj; split; [|split; [|split]]; auto.
            - rewrite sep_swap4 in *.
@@ -2458,7 +2464,7 @@ Section PRESERVATION.
 
       pose proof (find_class_name _ _ _ _ Find') as Eq.
       pose proof (find_method_name _ _ _ Findmeth) as Eq'.
-      rewrite Eq, Eq' in *.
+      subst. (* rewrite Eq, Eq' in *. *)
 
       (* the *self parameter *)
       edestruct eval_self_inst with (1:=Find) (e:=e1) as (? & ? & ? & ?); eauto.
@@ -2476,13 +2482,10 @@ Section PRESERVATION.
         rewrite Hparams; simpl; repeat f_equal.
         rewrite list_length_map.
         eapply Forall2_length; eauto.
-      + edestruct find_class_app with (1:=Find')
-          as (pre_prog & Hprog & FindNone); eauto.
-        rewrite Hprog, Forall_app in well_formed.
-        destruct well_formed as [? well_formed'].
-        apply Forall_inv in well_formed'.
-        apply find_method_In in Findmeth.
-        eapply In_Forall in well_formed'; eauto.
+      + destruct wt_program_find_class with (2:=Find') as [WT']; auto.
+        eapply wt_class_find_method in WT'; eauto.
+        unfold wt_method in WT'.
+        eapply wt_stmt_sub, find_class_sub; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
         rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
