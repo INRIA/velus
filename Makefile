@@ -209,6 +209,7 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 extr:
 	@find CompCert -name '*.cm*' -delete
 	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I CompCert/cparser -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustre.native
+	@mv rustre.native rustre
 	@cp CompCert/compcert.ini _build/compcert.ini
 
 ####################
