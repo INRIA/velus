@@ -561,8 +561,28 @@ Module Type TYPING
 
   Inductive sub_prog: program -> program -> Prop := 
     sub_prog_intro: forall p p', 
-      sub_prog p (p' ++ p). 
+      sub_prog p (p' ++ p).
 
+  Lemma sub_prog_refl:
+    forall p, sub_prog p p.
+  Proof.
+    intro; rewrite <-app_nil_l; constructor.
+  Qed.
+    
+  Add Parametric Relation: program sub_prog
+      reflexivity proved by sub_prog_refl
+        as sub_prog_rel.
+
+  Lemma sub_prog_cons:
+    forall cls prog' prog,
+      sub_prog (cls :: prog') prog ->
+      sub_prog prog' prog.
+  Proof.
+    intros ** Hsub.
+    inv Hsub.
+    rewrite <-app_last_app. constructor.
+  Qed.
+  
   Remark find_class_sub_same: 
     forall prog1 prog2 clsid cls prog', 
       find_class clsid prog2 = Some (cls, prog') -> 
