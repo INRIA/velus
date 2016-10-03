@@ -108,19 +108,6 @@ Proof.
   eapply field_offset_rec_in_range'; eauto.
 Qed.
 
-Definition chunk_of_type ty := 
-  match ty with
-  | Tint I8 Signed => AST.Mint8signed
-  | Tint I8 Unsigned => AST.Mint8unsigned
-  | Tint I16 Signed => AST.Mint16signed
-  | Tint I16 Unsigned => AST.Mint16unsigned
-  | Tint I32 _ => AST.Mint32
-  | Tint IBool _ => AST.Mint8unsigned
-  | Tlong _ => AST.Mint64
-  | Tfloat F32 => AST.Mfloat32
-  | Tfloat F64 => AST.Mfloat64
-  end.
-
 Section Staterep.
   Variable ge : composite_env.
 
@@ -128,7 +115,7 @@ Section Staterep.
     let (x, ty) := xty in
     match field_offset ge x (make_members cls) with
     | Errors.OK d =>
-	  contains (chunk_of_type ty) b (ofs + d) (match_value me.(mm_values) x)
+	  contains (type_chunk ty) b (ofs + d) (match_value me.(mm_values) x)
     | Errors.Error _ => sepfalse
     end.
 
@@ -313,8 +300,8 @@ Qed.
 
 Lemma sizeof_translate_chunk:
   forall gcenv t,
-    Ctypes.access_mode (cltype t) = Ctypes.By_value (chunk_of_type t) ->
-    sizeof gcenv (cltype t) = Memdata.size_chunk (chunk_of_type t).
+    Ctypes.access_mode (cltype t) = Ctypes.By_value (type_chunk t) ->
+    sizeof gcenv (cltype t) = Memdata.size_chunk (type_chunk t).
 Proof.
   destruct t;
   (destruct i, s || destruct f || idtac);
@@ -323,8 +310,8 @@ Qed.
 
 Lemma align_chunk_divides_alignof_type:
   forall gcenv t,
-    Ctypes.access_mode (cltype t) = Ctypes.By_value (chunk_of_type t) ->
-    (Memdata.align_chunk (chunk_of_type t) | alignof gcenv (cltype t)).
+    Ctypes.access_mode (cltype t) = Ctypes.By_value (type_chunk t) ->
+    (Memdata.align_chunk (type_chunk t) | alignof gcenv (cltype t)).
 Proof.
   destruct t;
   (destruct i, s || destruct f || idtac);
@@ -334,14 +321,14 @@ Admitted.
 
 Lemma in_translate_param_chunked:
   forall ge (flds: list (ident * Ctypes.type)) x ty,
-    Ctypes.access_mode (cltype ty) = Ctypes.By_value (chunk_of_type ty) ->
+    Ctypes.access_mode (cltype ty) = Ctypes.By_value (type_chunk ty) ->
     In (x, cltype ty) flds ->
     exists chunk,
       access_mode (cltype ty) = By_value chunk
       /\ (Memdata.align_chunk chunk | alignof ge (cltype ty)).
 Proof.
   intros ** ? Hin.
-  exists (chunk_of_type ty).
+  exists (type_chunk ty).
   split; auto.
   now apply align_chunk_divides_alignof_type.
 Qed.
@@ -569,7 +556,7 @@ Section StateRepProperties.
 
   Lemma staterep_deref_mem:
     forall cls prog' m me b ofs x ty d v P,
-      access_mode (cltype ty) = By_value (chunk_of_type ty) ->
+      access_mode (cltype ty) = By_value (type_chunk ty) ->
       m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P ->
       In (x, ty) cls.(c_mems) ->
       mfind_mem x me = Some v ->
@@ -598,13 +585,13 @@ Section StateRepProperties.
   Lemma staterep_assign_mem:
     forall P cls prog' m m' me b ofs x ty d v,
       (P me -*> P (madd_mem x v me)) ->
-      access_mode (cltype ty) = By_value (chunk_of_type ty) ->
+      access_mode (cltype ty) = By_value (type_chunk ty) ->
       NoDup cls.(c_objs) ->
       NoDupMembers cls.(c_mems) ->
       m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P me ->
       In (x, ty) cls.(c_mems) ->
       field_offset gcenv x (make_members cls) = Errors.OK d ->
-      v = Values.Val.load_result (chunk_of_type ty) v ->
+      v = Values.Val.load_result (type_chunk ty) v ->
       Clight.assign_loc gcenv (cltype ty) m b (Int.repr (ofs + d)) v m' ->
       m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs
                ** P (madd_mem x v me).
@@ -627,7 +614,7 @@ Section StateRepProperties.
                 let (x0, ty0) := xty in
                 match field_offset gcenv x0 (make_members cls) with
                 | Errors.OK d0 =>
-                  contains (chunk_of_type ty0) b (ofs + d0)
+                  contains (type_chunk ty0) b (ofs + d0)
                            (match_value (mm_values me) x0)
                 | Errors.Error _ => sepfalse
                 end) at 1.

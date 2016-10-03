@@ -624,10 +624,10 @@ Section PRESERVATION.
   Qed.
 
   Definition valid_val (v: val) (t: type): Prop :=
-    Ctypes.access_mode (cltype t) = Ctypes.By_value (chunk_of_type t)
+    Ctypes.access_mode (cltype t) = Ctypes.By_value (type_chunk t)
     /\ v <> Values.Vundef
     /\ Values.Val.has_type v (Ctypes.typ_of_type (cltype t))
-    /\ v = Values.Val.load_result (chunk_of_type t) v.
+    /\ v = Values.Val.load_result (type_chunk t) v.
 
   Lemma sem_cast_same:
     forall m v t,
@@ -646,17 +646,17 @@ Section PRESERVATION.
   Remark valid_val_access:
     forall v t,
       valid_val v t ->
-      access_mode (cltype t) = By_value (chunk_of_type t).
+      access_mode (cltype t) = By_value (type_chunk t).
   Proof. intros ** H; apply H. Qed.
 
   Remark valid_val_load:
     forall v t,
       valid_val v t ->
-      v = Values.Val.load_result (chunk_of_type t) v.
+      v = Values.Val.load_result (type_chunk t) v.
   Proof. intros ** H; apply H. Qed.
 
   Lemma acces_cltype:
-    forall t, access_mode (cltype t) = By_value (chunk_of_type t).
+    forall t, access_mode (cltype t) = By_value (type_chunk t).
   Proof.
     destruct t;
     (destruct i, s || destruct f || idtac); reflexivity.
@@ -1069,7 +1069,7 @@ Section PRESERVATION.
       Lemma eval_self_field:
         forall e v,
           mfind_mem x me = Some v ->
-          access_mode (cltype ty) = By_value (chunk_of_type ty) ->
+          access_mode (cltype ty) = By_value (type_chunk ty) ->
           eval_expr tge e le m (deref_field self (c_name owner) x (cltype ty)) v.
       Proof.
         intros. 
@@ -1195,7 +1195,7 @@ Section PRESERVATION.
   (* Lemma exp_eval_access: *)
   (*   forall me ve e v, *)
   (*     exp_eval me ve e v -> *)
-  (*     access_mode (cltype (typeof e)) = By_value (chunk_of_type (typeof e)). *)
+  (*     access_mode (cltype (typeof e)) = By_value (type_chunk (typeof e)). *)
   (* Proof. *)
   (*   intros ** H. *)
   (*   apply exp_eval_valid in H. *)
@@ -1205,7 +1205,7 @@ Section PRESERVATION.
   (* Lemma exp_eval_access_s: *)
   (*  forall S es vs, *)
   (*    Forall2 (exp_eval S) es vs -> *)
-  (*    Forall (fun e => access_mode (typeof e) = By_value (chunk_of_type (typeof e))) es. *)
+  (*    Forall (fun e => access_mode (typeof e) = By_value (type_chunk (typeof e))) es. *)
   (* Proof. *)
   (*   induction es, vs; intros ** H; inv H; auto. *)
   (*   constructor. *)
@@ -1215,7 +1215,7 @@ Section PRESERVATION.
   
   (* Lemma exp_eval_lr: *)
   (*   forall S e v, *)
-  (*     exp_eval S e v -> v = Val.load_result (chunk_of_type (typeof e)) v. *)
+  (*     exp_eval S e v -> v = Val.load_result (type_chunk (typeof e)) v. *)
   (* Proof. *)
   (*   intros ** H. *)
   (*   apply exp_eval_valid in H. *)
@@ -1225,7 +1225,7 @@ Section PRESERVATION.
   (* Lemma exp_eval_lr_s: *)
   (*  forall S es vs, *)
   (*    Forall2 (exp_eval S) es vs -> *)
-  (*    Forall2 (fun e v => v = Val.load_result (chunk_of_type (typeof e)) v) es vs. *)
+  (*    Forall2 (fun e v => v = Val.load_result (type_chunk (typeof e)) v) es vs. *)
   (* Proof. *)
   (*   induction es, vs; intros ** H; inv H; auto. *)
   (*   constructor. *)
@@ -1316,10 +1316,10 @@ Section PRESERVATION.
       Lemma match_states_assign_out:
         forall v d,
           field_offset gcenv x (co_members outco) = Errors.OK d ->
-          access_mode (cltype ty) = By_value (chunk_of_type ty) ->
-          v = Values.Val.load_result (chunk_of_type ty) v ->
+          access_mode (cltype ty) = By_value (type_chunk ty) ->
+          v = Values.Val.load_result (type_chunk ty) v ->
           mem_assoc_ident x (m_out caller) = true ->
-          exists m', Memory.Mem.storev (chunk_of_type ty) m (Vptr outb (Int.repr d)) v = Some m'
+          exists m', Memory.Mem.storev (type_chunk ty) m (Vptr outb (Int.repr d)) v = Some m'
                 /\ m' |= varsrep caller (PM.add x v ve) le
                      ** blockrep gcenv (PM.add x v ve) outco.(co_members) outb ** P .
       Proof.
@@ -1406,9 +1406,9 @@ Section PRESERVATION.
         m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs) ** P ->
         In (x, ty) owner.(c_mems) ->
         field_offset gcenv x (make_members owner) = Errors.OK d ->
-        v = Values.Val.load_result (chunk_of_type ty) v ->
+        v = Values.Val.load_result (type_chunk ty) v ->
         exists m',
-          Memory.Mem.storev (chunk_of_type ty) m (Vptr sb (Int.repr (Int.unsigned sofs + d))) v = Some m'
+          Memory.Mem.storev (type_chunk ty) m (Vptr sb (Int.repr (Int.unsigned sofs + d))) v = Some m'
           /\ m' |= staterep gcenv prog owner.(c_name) (madd_mem x v me) sb (Int.unsigned sofs) ** P.
     Proof.
       intros ** Hrep Hmems Hoffset Hlr.
