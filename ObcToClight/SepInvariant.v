@@ -382,7 +382,11 @@ Section StateRepProperties.
     unfold make_members. apply in_app_iff. right.
     apply in_map_iff. exists (o, c); auto.
   Qed.
-    
+
+  Hint Resolve Zdivide_trans
+               align_chunk_divides_alignof_type
+               access_mode_cltype : clalign.
+
   Lemma range_staterep:
     forall b clsnm,
       wt_program prog ->
@@ -398,20 +402,22 @@ Section StateRepProperties.
                        (staterep gcenv prog clsnm hempty b lo)).
     now intro HH; apply HH; apply Z.divide_0_r.
 
-    clear TRANSL.
+    (* Setup an induction on prog. *)
     revert clsnm Hfind.
     remember prog as prog1.
     assert (WTp' := WTp).
     rewrite Heqprog1 in make_members_co, WTp.
     assert (sub_prog prog1 prog) as Hsub
         by now rewrite Heqprog1.
-    clear Heqprog1.
+    clear TRANSL Heqprog1.
     induction prog1 as [|cls prog' IH]; intros clsnm Hfind lo Halign.
     now apply not_None_is_Some in Hfind; destruct Hfind; discriminate.
-    inversion WTp' as [|? ? WTc WTp'' Hnodup]; subst.
+    inversion_clear WTp' as [|? ? WTc WTp'' Hnodup]; subst.
 
+    (* Staterep looks for the named class: found now or later? *)
     destruct (ident_eqb cls.(c_name) clsnm) eqn:Hclsnm.
-    -      
+
+    - (* Exploit make_members_co for the named class. *)
       apply not_None_is_Some in Hfind.
       destruct Hfind as ((cls', prog'') & Hfind).
       assert (find_class clsnm prog = Some (cls', prog'')) as Hprog
@@ -419,133 +425,75 @@ Section StateRepProperties.
       destruct (make_members_co _ _ _ Hprog)
         as (co & Hg & Hsu & Hmem & Hattr & Hndup).
 
-      simpl in Hfind.
-      rewrite Hclsnm in Hfind.
+      (* find_class succeeds for clsnm (deliberately after previous step). *)
+      simpl in Hfind. rewrite Hclsnm in Hfind.
       injection Hfind; intros He1 He2; rewrite <-He1, <-He2 in *.
       clear Hfind He1 He2.
-        
+
+      (* Develop some facts about member alignment. *)
       pose proof (co_members_alignof _ _ (gcenv_consistent _ _ Hg) Hattr)
         as Hcoal.
-      rewrite Hmem in Hcoal.
-      unfold make_members in Hcoal.
-      apply Forall_app in Hcoal.
-      destruct Hcoal as [Hcoal1 Hcoal2].
-      simpl in Halign.
-      rewrite Hg in Halign.
-      rewrite align_noattr in Halign.
+      rewrite Hmem in Hcoal. unfold make_members in Hcoal.
+      apply Forall_app in Hcoal. destruct Hcoal as [Hcoal1 Hcoal2].
+      simpl in Halign. rewrite Hg, align_noattr in Halign.
       assert (Hndup':=Hndup). rewrite Hmem in Hndup'.
-    
-      simpl.
-      unfold staterep_mems.
 
+      (* Massage the goal into two parallel parts: for locals and instances. *)
+      simpl. unfold staterep_mems.
       rewrite ident_eqb_sym in Hclsnm.
-      rewrite Hclsnm.
-      rewrite Hg.
-      rewrite <-Hmem.
+      rewrite Hclsnm, Hg, <-Hmem.
       rewrite split_range_fields
       with (1:=gcenv_consistent) (2:=Hg) (3:=Hsu) (4:=Hndup).
-      unfold field_range. (* try to do without unfolding here *)
-      rewrite Hmem at 1.
-      unfold make_members.
+      rewrite Hmem at 2. unfold make_members.
       rewrite sepall_app.
-      
       apply sep_imp'.
-      
-      + pose proof (field_translate_mem_type _ _ _ _ Hprog Hndup') as Htype.
+
+      + (* Divide up the memory sub-block for cls.(c_mems). *)
+        pose proof (field_translate_mem_type _ _ _ _ Hprog Hndup') as Htype.
         clear Hcoal2.
-        
-        induction (c_mems cls); auto.
+        induction cls.(c_mems) as [|m ms]; auto.
         apply Forall_cons2 in Hcoal1.
         destruct Hcoal1 as [Hcoal1 Hcoal2].
-        
-        apply sep_imp'.
-        * destruct a; simpl. 
-          destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
-          rewrite match_value_empty.
-          rewrite sizeof_translate_chunk.
-          { apply range_contains'.
-            specialize (Htype i t).
-            rewrite <-Hmem in Htype.
-            apply field_offset_aligned with (ty:=cltype t) in Hfo.
-            - simpl in Hcoal1.
-              apply Z.divide_add_r.
-              + apply Zdivide_trans with (2:=Halign).
-                apply Zdivide_trans with (2:=Hcoal1).
-                apply align_chunk_divides_alignof_type.
-                apply access_mode_cltype.
-              + apply Zdivide_trans with (2:=Hfo).
-                apply align_chunk_divides_alignof_type.
-                apply access_mode_cltype.
-            - apply Htype; constructor; reflexivity.
-          }
-          apply access_mode_cltype.
-        * apply IHl.
-          apply Hcoal2.
-          intros; apply Htype; constructor (assumption).
-          
-      + pose proof (field_translate_obj_type _ _ _ _ Hprog Hndup') as Htype.
+        apply sep_imp'; auto with datatypes.
+        destruct m; simpl. 
+        destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
+        rewrite match_value_empty, sizeof_translate_chunk; eauto with clalign.
+        apply range_contains'.
+        apply field_offset_aligned with (ty:=cltype t) in Hfo.
+        now apply Z.divide_add_r; eauto with clalign.
+        rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
+
+      + (* Divide up the memory sub-block for cls.(c_objs). *)
+        pose proof (field_translate_obj_type _ _ _ _ Hprog Hndup') as Htype.
         rewrite <-Hmem in Htype.
-
-        destruct WTc as [Ho Hm].
-        clear Hm.
-        
-        induction cls.(c_objs); auto.
-        simpl.
-        apply sep_imp'.
-        * clear IHl.
-            
-          destruct a as [o c].
-          apply In_Forall with (x:=(o, c)) in Ho.
-          clear Hcoal1.
-          
-          apply Forall_cons2 in Hcoal2.
-          2:apply in_eq.
-          destruct Hcoal2 as [Hcoal2 Hcoal3].
-          
-          specialize (Htype o c (in_eq _ _)).
-          clear Hcoal3 l.
-          
-          simpl.
-          destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
-          rewrite instance_match_empty.
-
-          inversion_clear WTp' as [|? ? ? WTp'''].
-          specialize (IH WTp''' (sub_prog_cons _ _ _ Hsub) c Ho (lo + z)%Z).
-          
-          apply not_None_is_Some in Ho.
-          destruct Ho as ((c' & prog''') & Ho).
-          assert (find_class c prog = Some (c', prog''')) as Hcin'
+        destruct WTc as [Ho Hm]; clear Hm.
+        induction cls.(c_objs) as [|o os]; auto.
+        simpl. apply sep_imp'.
+        2:now inv Ho; apply Forall_cons2 in Hcoal2; intuition.
+        apply In_Forall with (x:=o) in Ho; auto with datatypes.
+        destruct o as [o c].
+        apply Forall_cons2 in Hcoal2.
+        destruct Hcoal2 as [Hcoal2 Hcoal3].
+        specialize (Htype o c (in_eq _ _)).
+        clear IHos Hcoal1 Hcoal3 os.
+        simpl in *.
+        destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
+        rewrite instance_match_empty.
+        specialize (IH WTp'' (sub_prog_cons _ _ _ Hsub) c Ho (lo + z)%Z).
+        apply not_None_is_Some in Ho.
+        destruct Ho as ((c' & prog''') & Ho).
+        assert (find_class c prog = Some (c', prog''')) as Hcin'
             by apply find_class_sub_same with (1:=Ho) (2:=WTp)
                                               (3:=sub_prog_cons _ _ _ Hsub).
-          
-          assert (Hcin'' := Hcin').
-          apply make_members_co in Hcin'.
-          destruct Hcin' as [? [? [? [? [? ?]]]]].
-          rewrite H1.
-          
-          simpl in IH.
-          rewrite H1 in IH.
-          apply IH.
-          
-          simpl in Hcoal2.
-          rewrite align_noattr in Hcoal2.
-          rewrite H1 in Hcoal2.
-          
-          rewrite align_noattr.
-          apply Z.divide_add_r.
-          apply Zdivide_trans with (1:=Hcoal2). assumption.
-              
-          simpl in Htype.
-          eapply field_offset_aligned in Hfo.
-          2:apply Htype.
-          apply Zdivide_trans with (2:=Hfo).
-          simpl. rewrite H1, align_noattr.
-          apply Z.divide_refl.
-        * apply IHl.
-          now inv Ho.
-          { simpl in Hcoal2. apply Forall_cons2 in Hcoal2.
-            destruct Hcoal2 as [Hcoal2 Hcoal3]. exact Hcoal3. }
-          { intros o c Hin. apply Htype. constructor (assumption). }
+        destruct (make_members_co _ _ _ Hcin')
+          as (co' & Hg' & Hsu' & Hmem' & Hattr' & Hnodup').
+        rewrite Hg', align_noattr in *.
+        apply IH.
+        apply Z.divide_add_r; eauto with clalign.
+        eapply field_offset_aligned in Hfo; eauto.
+        apply Zdivide_trans with (2:=Hfo).
+        simpl. rewrite Hg', align_noattr.
+        apply Z.divide_refl.
     - simpl in Hfind.
       rewrite Hclsnm in Hfind.
       specialize (IH WTp'' (sub_prog_cons _ _ _ Hsub) clsnm Hfind lo Halign).
