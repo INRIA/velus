@@ -126,15 +126,37 @@ Module Export Op <: OPERATORS.
        forall ty, wt_val Vundef ty
 
      Allowing that, in particular, values read from uninitialized
-     memory are well-typed. Our typing invariants become slightly more
-     complicated -- they will require that variables be initialized before
-     they are read -- but also slightly stronger, since we need not treat
-     the Vundef case.
-  *)
+     memory are well-typed. Our typing invariant is slightly stronger,
+     since Vundef is not well-typed. We treat uninitialized memory
+     in Obc using None. The ObcToClight correctness proof works
+     because we assume that the source Obc program has a semantics,
+     which precludes reading None values. In other words, all
+     values that we read successfully in Obc are well-typed (and
+     never Vundef).
+
+     There is a special case in wt_val_int because in Clight a boolean
+     value is considered well-typed if Int.zero_ext 8 n = n.
+     We could have, for instance, wt_val' (Vint 7) type_bool.
+     But this is problematic in our development because we want
+     Cop.sem_cast to be idempotent (sem_cast_same), since it is
+     implicit in a Clight assignment, but not by an Obc assignment.
+     This property is not true in Clight (C99) since casting to
+     a bool gives 0 or 1. For example,
+       Cop.sem_cast (Vint 7) type_bool type_bool = Some (Vint 1)
+
+     Why not just change the definition of Ctyping.wt_int?
+     Unfortunately, this would make it impossible to prove
+     Ctyping.wt_load_result (access_mode ty = By_value chunk ->
+      wt_val (Val.load_result chunk v) ty). That is, for bools it
+     would not be enough to simply load the value from memory, we
+     would have to know that the memory also contained either 0 or 1.
+     The C99 type system is not strong enough for our purposes.
+   *)
   Inductive wt_val' : val -> type -> Prop :=
   | wt_val_int:
       forall n sz sg,
         Ctyping.wt_int n sz sg ->
+        (sz = Ctypes.IBool -> (n = Int.zero \/ n = Int.one)) ->
         wt_val' (Values.Vint n) (Tint sz sg)
   | wt_val_long:
       forall n sg,
@@ -154,20 +176,23 @@ Module Export Op <: OPERATORS.
   Lemma wt_val_true:
     wt_val true_val bool_type.
   Proof.
-    apply wt_val_int. reflexivity.
+    apply wt_val_int; intuition.
   Qed.
 
   Lemma wt_val_false:
     wt_val false_val bool_type.
   Proof.
-    apply wt_val_int. reflexivity.
+    apply wt_val_int; intuition.
   Qed.
 
   Lemma wt_val_const:
     forall c, wt_val (sem_const c) (type_const c).
   Proof.
     destruct c.
-    - apply wt_val_int. apply Ctyping.pres_cast_int_int.
+    - apply wt_val_int.
+      + apply Ctyping.pres_cast_int_int.
+      + intro; subst; simpl.
+        destruct (Int.eq i Int.zero); auto.
     - apply wt_val_long.
     - apply wt_val_float.
     - apply wt_val_single.
@@ -178,6 +203,112 @@ Module Export Op <: OPERATORS.
     | H: ?x <> ?x |- _ => now contradiction H
     | _ => Ctyping.DestructCases
     end.
+
+  Definition good_bool (v: Values.val) (ty: Ctypes.type) :=
+    match ty, v with
+    | Ctypes.Tint Ctypes.IBool sg a, Values.Vint v =>
+      (v = Int.zero \/ v = Int.one)
+    | _, _ => True
+    end.
+
+  Lemma wt_value_good_bool:
+    forall v ty,
+      wt_val v ty ->
+      good_bool v (cltype ty).
+  Proof.
+    intros ** WTv. unfold good_bool.
+    inv WTv; simpl; auto.
+    match goal with H:sz = Ctypes.IBool -> _ |- _ =>
+                    destruct sz; auto; destruct H; subst; auto
+    end.
+  Qed.
+
+  Lemma good_bool_vtrue:
+    forall ty,
+      good_bool Values.Vtrue ty.
+  Proof.
+    intros; destruct ty; simpl; try destruct i; auto.
+  Qed.
+
+  Lemma good_bool_vfalse:
+    forall ty,
+      good_bool Values.Vfalse ty.
+  Proof.
+    intros; destruct ty; simpl; try destruct i; auto.
+  Qed.
+
+  Lemma good_bool_vlong:
+    forall ty i,
+      good_bool (Values.Vlong i) ty.
+  Proof.
+    intros; destruct ty; simpl; try destruct i0; auto.
+  Qed.
+
+  Lemma good_bool_vfloat:
+    forall ty f,
+      good_bool (Values.Vfloat f) ty.
+  Proof.
+    intros; destruct ty; simpl; try destruct i; auto.
+  Qed.
+
+  Lemma good_bool_vsingle:
+    forall ty f,
+      good_bool (Values.Vsingle f) ty.
+  Proof.
+    intros; destruct ty; simpl; try destruct i; auto.
+  Qed.
+
+  Lemma good_bool_tint:
+    forall v sz sg a,
+      sz <> Ctypes.IBool ->
+      good_bool v (Ctypes.Tint sz sg a).
+  Proof.
+    intros; destruct v, sz; simpl; intuition.
+  Qed.
+
+  Lemma good_bool_tlong:
+    forall v sg a,
+      good_bool v (Ctypes.Tlong sg a).
+  Proof.
+    intros; destruct v; simpl; auto.
+  Qed.
+
+  Lemma good_bool_tfloat:
+    forall v sz a,
+      good_bool v (Ctypes.Tfloat sz a).
+  Proof.
+    intros; destruct v; simpl; auto.
+  Qed.
+
+  Local Hint Immediate good_bool_vtrue good_bool_vfalse good_bool_vlong
+        good_bool_vfloat good_bool_vsingle good_bool_tlong
+        good_bool_tfloat.
+  
+  Lemma good_bool_not_bool:
+    forall v ty,
+      (forall sg a, ty <> Ctypes.Tint Ctypes.IBool sg a) ->
+      good_bool v ty.
+  Proof.
+    intros v ty Hty.
+    destruct ty; simpl; eauto.
+    destruct i, v; auto.
+    now contradiction (Hty s a).
+  Qed.
+
+  Local Hint Resolve good_bool_not_bool.
+    
+  Opaque good_bool.
+  
+  Lemma good_bool_zero_or_one:
+    forall i sz sg a,
+      good_bool (Values.Vint i) (Ctypes.Tint sz sg a) ->
+      sz = Ctypes.IBool ->
+      i = Int.zero \/ i = Int.one.
+  Proof.
+    intros ** Hgb Hsz; subst; inversion_clear Hgb; auto.
+  Qed.
+
+  Local Hint Resolve good_bool_zero_or_one.
   
   Lemma typecl_wt_val_wt_val:
     forall cty ty v,
@@ -185,15 +316,16 @@ Module Export Op <: OPERATORS.
       Ctyping.wt_val v cty ->
       v <> Values.Vundef ->
       (forall b ofs, v <> Values.Vptr b ofs) ->
+      good_bool v cty ->
       wt_val v ty.
   Proof.
-    intros ** Htcl Hcty Hnun Hnptr.
+    intros ** Htcl Hcty Hnun Hnptr Hgb.
     destruct cty;
       simpl in *;
       destruct v;
       DestructCases;
       inversion Hcty;
-      auto.
+      eauto.
     exfalso; now eapply Hnptr.
   Qed.
 
@@ -232,19 +364,22 @@ Module Export Op <: OPERATORS.
       apply wt_val_wt_val_cltype in Hv1.
       destruct (Ctyping.type_unop uop (cltype ty1)) as [cty|] eqn:Hok;
         [|discriminate].
+      assert (Hok':=Hok).
       apply Ctyping.pres_sem_unop with (2:=Hsop) (3:=Hv1) in Hok;
         DestructCases.
-      cut (v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs)).
-      { destruct 1 as (Hnun' & Hnptr'). eauto using typecl_wt_val_wt_val. }
+      cut (v <> Values.Vundef
+           /\ (forall b ofs, v <> Values.Vptr b ofs)
+           /\ good_bool v cty).
+      { destruct 1 as (Hnun' & Hnptr' & Hgb). eauto using typecl_wt_val_wt_val. }
       destruct uop; simpl in *.
-      + rewrite Cop.notbool_bool_val in Hsop.
-        DestructCases. destruct b; split; discriminate.
+      + clear Hok'. rewrite Cop.notbool_bool_val in Hsop.
+        DestructCases. destruct b; repeat split; try discriminate; auto.
       + unfold Cop.sem_notint in Hsop.
-        destruct v1; DestructCases; split; discriminate.
+        destruct v1; DestructCases; repeat split; try discriminate; auto.
       + unfold Cop.sem_neg in Hsop.
-        destruct v1; DestructCases; split; discriminate.
+        destruct v1; DestructCases; repeat split; try discriminate; auto.
       + unfold Cop.sem_absfloat in Hsop.
-        destruct v1; DestructCases; split; discriminate.
+        destruct v1; DestructCases; repeat split; try discriminate; auto.
     - (* CastOp *)
       destruct (Ctyping.check_cast (cltype ty1) (cltype t));
         [injection Htop; intro; subst; clear Htop|discriminate].
@@ -260,6 +395,48 @@ Module Export Op <: OPERATORS.
         intros b ofs.
         specialize (Hnptr b ofs).
         destruct Hv1; DestructCases; try discriminate; auto.
+      + (* booleans must be zero or one *)
+        destruct ty; simpl; auto.
+        destruct i; try now (apply good_bool_tint; discriminate).
+        unfold Cop.sem_cast in Hsop.
+        simpl in Hsop.
+        DestructCases;
+          try match goal with |- context [if ?x then _ else _] => destruct x end;
+          simpl; auto.
+  Qed.
+
+  Ltac GoalMatchMatch :=
+    repeat match goal with
+           | |- match match ?x with _ => _ end with _ => _ end = _ =>
+             destruct x
+           end; auto.
+
+  Lemma sem_cast_same:
+    forall m v t,
+      wt_val v t ->
+      Cop.sem_cast v (cltype t) (cltype t) m = Some v.
+  Proof.
+    intros ** WTv.
+    apply Cop.cast_val_casted.
+    destruct (wt_val_not_vundef_nor_vptr _ _ WTv) as (Hnun & Hnptr).
+    pose proof (wt_value_good_bool _ _ WTv) as Hgb.
+    apply wt_val_wt_val_cltype in WTv.
+    destruct v.
+    - intuition.
+    - inv WTv; try match goal with H:_ = cltype t |- _ =>
+                                   destruct t; now inv H end.
+      constructor.
+      match goal with H:Ctypes.Tint ?sz ?sg _ = cltype t |- _ =>
+        rewrite <-H in Hgb; destruct sz, sg; simpl in *; auto
+      end; destruct (good_bool_zero_or_one _ _ _ _ Hgb);
+        try subst; auto.
+    - inv WTv. apply Cop.val_casted_long.
+      match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
+    - inv WTv. apply Cop.val_casted_float.
+      match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
+    - inv WTv. apply Cop.val_casted_single.
+      match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
+    - specialize (Hnptr b i); intuition.
   Qed.
 
   (* Solve goal with hypothesis of the form:
@@ -307,12 +484,6 @@ Module Export Op <: OPERATORS.
         apply cases_of_bool; discriminate.
   Qed.
 
-  Ltac GoalMatchMatch :=
-    repeat match goal with
-           | |- match match ?x with _ => _ end with _ => _ end = _ =>
-             destruct x
-           end; auto.
-  
   Lemma classify_add_cltypes:
     forall ty1 ty2,
       Cop.classify_add (cltype ty1) (cltype ty2) = Cop.add_default.
@@ -333,7 +504,36 @@ Module Export Op <: OPERATORS.
   Proof.
     unfold Cop.classify_cmp, cltype; destruct ty1, ty2; simpl; GoalMatchMatch.
   Qed.
-  
+
+  Lemma sem_cmp_true_or_false:
+    forall cop v1 ty1 v2 ty2 m v,
+      Cop.sem_cmp cop v1 ty1 v2 ty2 m = Some v ->
+      v = Values.Vtrue \/ v = Values.Vfalse.
+  Proof.
+    intros ** Hsem.
+    unfold Cop.sem_cmp, Cop.sem_binarith in Hsem.
+    DestructCases;
+      try repeat match goal with
+                 | H:Coqlib.option_map Values.Val.of_bool ?r = Some _ |- _ =>
+                   destruct r; simpl in H; try discriminate;
+                     injection H; clear H; intro; subst
+                 | |- context [Values.Val.of_bool ?b] => destruct b; auto
+                 end.
+  Qed.
+
+  (* Boolean binary operations (&&, ||) are elaborated into Sifthenelse's. *)
+  Lemma binop_never_bool:
+    forall op ty1 ty2 ty,
+      Ctyping.type_binop op ty1 ty2 = Errors.OK ty ->
+      forall sz a, ty <> Ctypes.Tint Ctypes.IBool sz a.
+  Proof.
+    intros op ty1 ty2 ty Htype sz a.
+    unfold Ctyping.type_binop, Ctyping.binarith_type,
+           Ctyping.comparison_type, Ctyping.binarith_int_type,
+           Ctyping.shift_op_type in Htype.
+    DestructCases; discriminate.
+  Qed.
+    
   Lemma pres_sem_binop:
     forall op ty1 ty2 ty v1 v2 v,
       type_binop op ty1 ty2 = Some ty ->
@@ -346,54 +546,63 @@ Module Export Op <: OPERATORS.
     intros ** Hty Hsem Hwt1 Hwt2.
     destruct (Ctyping.type_binop op (cltype ty1) (cltype ty2)) eqn:Hok;
       [|discriminate].
+    pose proof (binop_never_bool _ _ _ _ Hok) as Hnbool.
     pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt1) as (Hnun1 & Hnptr1).
     pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt2) as (Hnun2 & Hnptr2).
     apply wt_val_wt_val_cltype in Hwt1.
     apply wt_val_wt_val_cltype in Hwt2.
     pose proof (Ctyping.pres_sem_binop _ _ _ _ _ _ _ _ _ Hok Hsem Hwt1 Hwt2)
       as Hwt.
-    cut (v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs)).
-    { destruct 1 as (Hnun' & Hnptr'). eauto using typecl_wt_val_wt_val. }
+    cut (v <> Values.Vundef
+         /\ (forall b ofs, v <> Values.Vptr b ofs)
+         /\ good_bool v t).
+    { destruct 1 as (Hnun' & Hnptr' & Hgb). eauto using typecl_wt_val_wt_val. }
     destruct op; simpl in Hsem.
     - (* add *)
       unfold Cop.sem_add, Cop.sem_binarith in Hsem.
       rewrite classify_add_cltypes in Hsem.
-      DestructCases; split; try discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* sub *)
       unfold Cop.sem_sub, Cop.sem_binarith in Hsem.
       rewrite classify_sub_cltypes in Hsem.
-      DestructCases; split; try discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* mul *)
       unfold Cop.sem_mul, Cop.sem_binarith in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* div *)
       unfold Cop.sem_div, Cop.sem_binarith in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* mod *)
       unfold Cop.sem_mod, Cop.sem_binarith in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* and *)
       unfold Cop.sem_and, Cop.sem_binarith in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* or *)
       unfold Cop.sem_or, Cop.sem_binarith in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* xor *)
       unfold Cop.sem_xor, Cop.sem_binarith in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* shl *)
       unfold Cop.sem_shl, Cop.sem_shift in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
     - (* shr *)
       unfold Cop.sem_shr, Cop.sem_shift in Hsem.
-      DestructCases; split; discriminate; ContradictNotVptr.
+      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
       (* comparisons *)
-    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
-    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
-    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
-    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
-    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
-    - apply sem_cmp_not_vundef_nor_vptr in Hsem; intuition.
+    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
+        subst; repeat split; try discriminate; auto.
+    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
+        subst; repeat split; try discriminate; auto.
+    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
+        subst; repeat split; try discriminate; auto.
+    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
+        subst; repeat split; try discriminate; auto.
+    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
+        subst; repeat split; try discriminate; auto.
+    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
+        subst; repeat split; try discriminate; auto.
   Qed.
 
   Lemma val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
