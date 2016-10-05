@@ -62,6 +62,7 @@ Module Type TYPING
         wt_stmt (AssignSt x e)
     | wt_Ifte: forall e s1 s2,
         wt_exp e ->
+        typeof e = bool_type ->
         wt_stmt s1 ->
         wt_stmt s2 ->
         wt_stmt (Ifte e s1 s2)
