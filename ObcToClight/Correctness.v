@@ -568,26 +568,6 @@ Section PRESERVATION.
     - destruct cst; simpl; reflexivity.
     - destruct u; auto.
   Qed.
-
-  (* Definition valid_val (v: val) (t: type): Prop := *)
-  (*   Ctypes.access_mode (cltype t) = Ctypes.By_value (type_chunk t) *)
-  (*   /\ v <> Values.Vundef *)
-  (*   /\ (* Values.Val.has_type v (Ctypes.typ_of_type (cltype t)) *)True *)
-  (*   /\ v = Values.Val.load_result (type_chunk t) v. *)
-
-  (* Lemma sem_cast_same: *)
-  (*   forall m v t, *)
-  (*     valid_val v t -> *)
-  (*     Cop.sem_cast v (cltype t) (cltype t) m = Some v. *)
-  (* Proof. *)
-  (*   unfold valid_val; intros; destruct_pairs. *)
-  (*   destruct t, v; *)
-  (*     (destruct i, s || destruct f || idtac); *)
-  (*     (discriminates || contradiction || auto); *)
-  (*     unfold Cop.sem_cast; simpl in *; f_equal; auto. *)
-  (*   admit. *)
-  (*   admit. *)
-  (* Qed. *)
   
   Lemma acces_cltype:
     forall t, access_mode (cltype t) = By_value (type_chunk t).
@@ -1121,7 +1101,11 @@ Section PRESERVATION.
       - destruct op; simpl in *; econstructor; eauto.
         + rewrite type_pres.
           erewrite sem_unary_operation_any_mem; eauto.
+<<<<<<< HEAD
           eapply wt_val_not_vundef_nor_vptr; eauto. 
+=======
+          admit.
+>>>>>>> some modifs
         + rewrite type_pres.
           admit.                (* problème annotation Cast *)
 
@@ -1129,8 +1113,13 @@ Section PRESERVATION.
       - simpl in *. unfold translate_binop.
         econstructor; eauto.
         rewrite 2 type_pres.
+<<<<<<< HEAD
         erewrite sem_binary_operation_any_cenv_mem; eauto;
         eapply wt_val_not_vundef_nor_vptr; eauto.
+=======
+        erewrite sem_binary_operation_any_cenv_mem; eauto.
+        admit. admit.
+>>>>>>> some modifs
     Qed.
 
     Lemma exp_eval_valid_s:
@@ -2577,11 +2566,19 @@ Section PRESERVATION.
            destruct (val_to_bool v) eqn: E.
            - rewrite Hbool in E.
              destruct b.
+<<<<<<< HEAD
              + apply val_to_bool_true' in E; subst; simpl.
                rewrite Int.eq_false; auto.
                apply Int.one_not_zero.
              + apply val_to_bool_false' in E; subst; simpl.
                rewrite Int.eq_true; auto.
+=======
+             + apply val_to_bool_true' in E; subst.
+               unfold Cop.bool_val.
+               admit.
+             + apply val_to_bool_false' in E; subst.
+               admit.
+>>>>>>> some modifs
            - discriminate.
          }
         * destruct b; eauto.
