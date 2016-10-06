@@ -55,6 +55,10 @@ Module Type SYNTAX
       }.
 
   Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
+  Lemma NoDupMembers_meth_vars:
+    forall f, NoDupMembers (meth_vars f).
+  Proof. intro; apply (m_nodupvars f). Qed.
+  Hint Resolve NoDupMembers_meth_vars.
   
   Lemma m_notreserved:
     forall x m,
