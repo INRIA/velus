@@ -661,8 +661,8 @@ Section StateRepProperties.
   Qed.
    
   Lemma staterep_inst_offset:
-    forall m me cls prog b ofs o c P,
-      m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
+    forall m me cls p b ofs o c P,
+      m |= staterep gcenv (cls :: p) cls.(c_name) me b ofs ** P ->
       0 <= ofs ->
       In (o, c) (c_objs cls) ->
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d
@@ -678,31 +678,29 @@ Section StateRepProperties.
     apply sep_proj1 in Hm.
     clear ws xs.
     destruct (field_offset gcenv o (make_members cls)) eqn: E.
-    + exists z; split; auto.
-      apply field_offset_in_range' in E.
-      revert c me o z Hm E.
-      induction prog0 as [|c']; intros ** Hm E; simpl in Hm.
-      * contradiction.
-      *{ destruct (ident_eqb c (c_name c')).
-         - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm.
-           + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm.
-             * admit.
-             *{ apply sep_drop, sep_pick1 in Hm.
-                destruct (field_offset gcenv o' (make_members c')) eqn: E'.
-                - apply field_offset_in_range' in E'.
-                  rewrite <-Z.add_assoc in Hm.
-                  edestruct IHprog0; eauto; omega.
-                - contradict Hm.
-              }
-           + apply sep_proj1, sep_proj1 in Hm.
-             destruct (field_offset gcenv x (make_members c')) eqn: E'.
-             * apply contains_no_overflow in Hm.
-               apply field_offset_in_range' in E'.
-               destruct Hm; omega.
-             * contradict Hm.
-         - eapply IHprog0; eauto.
-        }
-    + contradict Hm.
+    2: contradict Hm.
+    exists z; split; auto.
+    apply field_offset_in_range' in E.
+    revert c me o z Hm E.
+    induction p as [|c']; intros ** Hm E; simpl in Hm.
+    1: contradiction.
+    destruct (ident_eqb c (c_name c')).
+    - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm.
+      + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm.
+        * admit.
+        * apply sep_drop, sep_pick1 in Hm.
+          destruct (field_offset gcenv o' (make_members c')) eqn: E'.
+          2: contradict Hm.
+          apply field_offset_in_range' in E'.
+          rewrite <-Z.add_assoc in Hm.
+          edestruct IHp; eauto; omega.
+      + apply sep_proj1, sep_proj1 in Hm.
+        destruct (field_offset gcenv x (make_members c')) eqn: E'.
+        2: contradict Hm.
+        apply contains_no_overflow in Hm.
+        apply field_offset_in_range' in E'.
+        destruct Hm; omega.
+    - eapply IHp; eauto.
   Qed.
 
 End StateRepProperties.

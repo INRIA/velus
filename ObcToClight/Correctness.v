@@ -206,16 +206,7 @@ Section PRESERVATION.
   Let tge := Clight.globalenv tprog.
   Let gcenv := Clight.genv_cenv tge.
   
-   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
-
-  (* Theorem main_node_exists: find_class main_node prog <> None. *)
-  (* Proof. *)
-  (*   unfold translate in TRANSL. *)
-  (*   destruct (find_class main_node prog) as [(c, cls)|]. *)
-  (*   - intro; discriminate. *)
-  (*   - discriminate. *)
-  (* Qed. *)
-
+  Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
   Hypothesis WT: wt_program prog.
 
   Lemma build_ok:
@@ -242,53 +233,6 @@ Section PRESERVATION.
   
   Opaque sepconj.
 
-  (* Inductive well_formed_exp (c: class) (m: method): exp -> Prop := *)
-  (* | wf_var: forall x ty, *)
-  (*     In (x, ty) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) -> *)
-  (*     well_formed_exp c m (Var x ty) *)
-  (* | wf_state: forall x ty, *)
-  (*     In (x, ty) c.(c_mems) -> *)
-  (*     well_formed_exp c m (State x ty) *)
-  (* | wf_const: forall cst, *)
-  (*     well_formed_exp c m (Const cst) *)
-  (* | wf_unop: forall op e ty, *)
-  (*     well_formed_exp c m e -> *)
-  (*     well_formed_exp c m (Unop op e ty) *)
-  (* | wf_binop: forall op e1 e2 ty, *)
-  (*     well_formed_exp c m e1 -> *)
-  (*     well_formed_exp c m e2 -> *)
-  (*     well_formed_exp c m (Binop op e1 e2 ty). *)
-
-  (* Inductive well_formed_stmt (c: class) (m: method): stmt -> Prop := *)
-  (* | wf_assign: forall x e, *)
-  (*     In (x, typeof e) (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) -> *)
-  (*     well_formed_exp c m e -> *)
-  (*     well_formed_stmt c m (Assign x e) *)
-  (* | wf_assignst: forall x e, *)
-  (*     In (x, typeof e) c.(c_mems) -> *)
-  (*     well_formed_exp c m e -> *)
-  (*     well_formed_stmt c m (AssignSt x e) *)
-  (* | wf_ite: forall e s1 s2, *)
-  (*     well_formed_exp c m e -> *)
-  (*     well_formed_stmt c m s1 -> *)
-  (*     well_formed_stmt c m s2 -> *)
-  (*     well_formed_stmt c m (Ifte e s1 s2) *)
-  (* | wf_comp: forall  s1 s2, *)
-  (*     well_formed_stmt c m s1 -> *)
-  (*     well_formed_stmt c m s2 -> *)
-  (*     well_formed_stmt c m (Comp s1 s2) *)
-  (* | wf_call: forall ys clsid c' prog' o fid f es, *)
-  (*     NoDup ys -> *)
-  (*     In (o, clsid) c.(c_objs) -> *)
-  (*     Forall (well_formed_exp c m) es -> *)
-  (*     Forall2 (fun e x => typeof e = snd x) es f.(m_in) -> *)
-  (*     Forall2 (fun y xt => In (y, snd xt) (m.(m_in) ++ m.(m_vars) ++ m.(m_out))) ys f.(m_out) -> *)
-  (*     find_class clsid prog = Some (c', prog') -> *)
-  (*     find_method fid (c_methods c') = Some f -> *)
-  (*     well_formed_stmt c m (Call ys clsid o fid es) *)
-  (* | wf_skip:  *)
-  (*     well_formed_stmt c m Skip. *)
-
   Inductive occurs_in: stmt -> stmt -> Prop :=
   | occurs_refl: forall s,
       occurs_in s s
@@ -298,7 +242,6 @@ Section PRESERVATION.
   | occurs_comp: forall s s1 s2,
       occurs_in s s1 \/ occurs_in s s2 ->
       occurs_in s (Comp s1 s2).
-
   Hint Resolve occurs_refl.
   
   Remark occurs_in_ite:
@@ -629,7 +572,7 @@ Section PRESERVATION.
   Definition valid_val (v: val) (t: type): Prop :=
     Ctypes.access_mode (cltype t) = Ctypes.By_value (type_chunk t)
     /\ v <> Values.Vundef
-    /\ Values.Val.has_type v (Ctypes.typ_of_type (cltype t))
+    /\ (* Values.Val.has_type v (Ctypes.typ_of_type (cltype t)) *)True
     /\ v = Values.Val.load_result (type_chunk t) v.
 
   Lemma sem_cast_same:
@@ -1169,6 +1112,7 @@ Section PRESERVATION.
       (* Unop op e ty : "op e" *)
       - destruct op; simpl in *; econstructor; eauto.
         + rewrite type_pres.
+          erewrite sem_unary_operation_any_mem; eauto.
           admit.
         + rewrite type_pres.
           admit.                (* problème annotation Cast *)
@@ -1176,7 +1120,9 @@ Section PRESERVATION.
       (* Binop op e1 e2 : "e1 op e2" *)
       - simpl in *. unfold translate_binop.
         econstructor; eauto.
-        admit.
+        rewrite 2 type_pres.
+        erewrite sem_binary_operation_any_cenv_mem; eauto.
+        admit. admit.
     Qed.
 
   (* Lemma exp_eval_valid: *)
@@ -2468,7 +2414,7 @@ Section PRESERVATION.
 
       (* the *self parameter *)
       edestruct eval_self_inst with (1:=Find) (e:=e1) as (? & ? & ? & ?); eauto.
-
+      
       (* the *out parameter *)
       rewrite sep_swap3 in Hrep.
       apply occurs_in_instance_methods in Occurs.
@@ -2559,6 +2505,7 @@ Section PRESERVATION.
            - rewrite Hbool in E.
              destruct b.
              + apply val_to_bool_true' in E; subst.
+               unfold Cop.bool_val.
                admit.
              + apply val_to_bool_false' in E; subst.
                admit.
