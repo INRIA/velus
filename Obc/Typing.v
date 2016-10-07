@@ -622,6 +622,51 @@ Module Type TYPING
   Qed. 
 
   Hint Constructors sub_prog.  
+
+  Lemma find_class_chained:
+    forall prog c1 c2 cls prog' cls' prog'',
+      wt_program prog ->
+      find_class c1 prog = Some (cls, prog') ->
+      find_class c2 prog' = Some (cls', prog'') ->
+      find_class c2 prog = Some (cls', prog'').
+  Proof.
+    induction prog as [|c prog IH]; [now inversion 2|].
+    intros ** WTp Hfc Hfc'.
+    simpl in Hfc.
+    inversion_clear WTp as [|? ? WTc WTp' Hnodup].
+    pose proof (find_class_In _ _ _ _ Hfc') as Hfcin.
+    pose proof (find_class_name _ _ _ _ Hfc') as Hc2.
+    destruct (ident_eq_dec c.(c_name) c1) as [He|Hne].
+    - rewrite He, ident_eqb_refl in Hfc.
+      injection Hfc; intros R1 R2; rewrite <-R1, <-R2 in *; clear Hfc R1 R2.
+      inversion_clear Hnodup as [|? ? Hnin Hnodup'].
+      assert (c.(c_name) <> cls'.(c_name)) as Hne.
+      + intro Hn. apply Hnin.
+        apply in_split in Hfcin.
+        destruct Hfcin as (ws & xs & Hfcin).
+        rewrite Hfcin, map_app, map_cons.
+        apply in_or_app; right. now constructor.
+      + simpl. apply ident_eqb_neq in Hne.
+        rewrite Hc2 in Hne. now rewrite Hne.
+    - apply ident_eqb_neq in Hne.
+      rewrite Hne in Hfc. clear Hne.
+      rewrite <- (IH _ _ _ _ _ _ WTp' Hfc Hfc').
+      inversion_clear Hnodup as [|? ? Hnin Hnodup'].
+      apply find_class_app in Hfc.
+      destruct Hfc as (cls'' & Hprog & Hfc).
+      rewrite Hprog in Hnin.
+      assert (c.(c_name) <> cls'.(c_name)) as Hne.
+      + intro Hn. apply Hnin.
+        apply in_split in Hfcin.
+        destruct Hfcin as (ws & xs & Hfcin).
+        rewrite Hfcin, map_app, map_cons, map_app, map_cons.
+        apply in_or_app; right.
+        constructor 2.
+        apply in_or_app; right.
+        now constructor.
+      + simpl. rewrite <-Hc2. apply ident_eqb_neq in Hne.
+        now rewrite Hne.
+  Qed.
   
 End TYPING.
 

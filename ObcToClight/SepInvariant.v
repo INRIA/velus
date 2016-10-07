@@ -426,17 +426,8 @@ Section StructInBounds.
     rewrite H2p.
     apply two_power_nat_pos.
   Qed.
-
+  
 End StructInBounds.
-
-(* TODO: move into Obc/Syntax.v *)
-Lemma find_class_chained:
-  forall prog c1 c2 cls prog' cls' prog'',
-    wt_program prog ->
-    find_class c1 prog = Some (cls, prog') ->
-    find_class c2 prog' = Some (cls', prog'') ->
-    find_class c2 prog = Some (cls', prog'').
-Admitted.
 
 Section StateRepProperties.
 
@@ -485,6 +476,27 @@ Section StateRepProperties.
       + simpl. rewrite peq_false with (1:=Hne). apply IH.
   Qed.
 
+  Lemma field_type_skip_app:
+    forall x ws xs,
+      ~InMembers x ws ->
+      field_type x (ws ++ xs) = field_type x xs.
+  Proof.
+    induction ws as [|w ws IH]; auto.
+    intros xs Hnin.
+    apply NotInMembers_cons in Hnin.
+    destruct Hnin as (Hnin & Hx).
+    destruct w. simpl.
+    rewrite peq_false; auto.
+  Qed.
+
+  Lemma InMembers_translate_param_idem:
+    forall o xs,
+      InMembers o (map translate_param xs) = InMembers o xs.
+  Proof.
+    induction xs as [|x xs IH]; auto.
+    destruct x. simpl. rewrite IH. reflexivity.
+  Qed.
+
   Lemma struct_in_struct_in_bounds':
     forall min max ofs clsid cls o c cls' prog' prog'',
       wt_program prog ->
@@ -508,11 +520,36 @@ Section StateRepProperties.
     pose proof (field_offset_type _ _ _ _ Hfo) as Hty.
     destruct Hty as (ty & Hty).
     eapply struct_in_struct_in_bounds with (a:=noattr); eauto.
-    rewrite Hmem.
-    unfold make_members.
-    admit.
+    clear make_members_co.
+    (* Show that the field_type is a Tstruct *)
+    pose proof cls.(c_nodup) as Hnodup.
+    rewrite Permutation.Permutation_app_comm in Hnodup.
+    assert (~InMembers o cls.(c_mems)) as Hnmem.
+    { apply In_InMembers in Hin.
+      apply NoDup_app_In with (x:=o) in Hnodup.
+      now rewrite fst_InMembers; auto.
+      now rewrite fst_InMembers in Hin. }
+    apply NoDup_app_weaken in Hnodup.
+    revert Hnodup Hty Hin. rewrite Hmem. unfold make_members.
+    rewrite field_type_skip_app.
+    2:now rewrite InMembers_translate_param_idem.
+    clear.
+    induction cls.(c_objs) as [|x xs IH]; [now inversion 1|].
+    destruct x as [o' c'].
+    destruct (ident_eq_dec o o') as [He|Hne].
+    - simpl. rewrite He, peq_true. intros Hnodup ? Hoc.
+      destruct Hoc as [Hoc|Hin].
+      + injection Hoc; intros R1; rewrite <-R1. reflexivity.
+      + inv Hnodup.
+        match goal with H:~In _ _ |- _ => contradiction H end.
+        apply fst_InMembers. now apply In_InMembers in Hin.
+    - simpl; rewrite peq_false; auto.
+      intros Hnodup Hft Hin.
+      destruct Hin; auto.
+      now injection H; intros R1 R2; rewrite <-R1,<-R2 in *; contradiction Hne.
+      inv Hnodup; auto.
   Qed.
-  
+
   Lemma field_translate_mem_type:
     forall prog clsnm cls prog',
       find_class clsnm prog = Some (cls, prog') ->
