@@ -1425,27 +1425,6 @@ Section Lists.
       + rewrite IHws; split; auto.
   Qed.
   
-  Lemma NoDup_app:
-    forall (ws xs: list A),
-      NoDup (ws ++ xs) <-> NoDup (xs ++ ws).
-   Proof.
-     induction ws; simpl; split; intros ** Nodup.
-     - now rewrite app_nil_r.
-     - now rewrite app_nil_r in Nodup.
-     - inversion Nodup as [|? ? Notin' Nodup']; clear Nodup; subst.
-       rewrite NoDup_app_cons; split.
-       + intro Hin; apply in_app_or in Hin.
-         destruct Hin; apply Notin', in_app; auto.
-       + now rewrite <-IHws.
-     - constructor.
-       + apply NoDup_remove_2 in Nodup.
-         intro Hin; apply in_app_or in Hin.
-         destruct Hin; apply Nodup, in_app; auto.
-       + rewrite NoDup_app_cons in Nodup.
-         destruct Nodup.
-         now rewrite IHws.
-   Qed.
-
   Lemma NoDup_app_In:
     forall (x: A) xs ws,
       NoDup (xs ++ ws) ->

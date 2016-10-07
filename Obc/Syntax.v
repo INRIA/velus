@@ -91,7 +91,8 @@ Module Type SYNTAX
   Proof.
     intro.
     pose proof (c_nodup c) as Nodup.
-    apply NoDup_app, NoDup_app_weaken in Nodup.
+    rewrite Permutation.Permutation_app_comm in Nodup.
+    apply NoDup_app_weaken in Nodup.
     now rewrite fst_NoDupMembers.
   Qed.
 
