@@ -374,13 +374,8 @@ Section PRESERVATION.
         intros ** Hin.
         pose proof (find_class_name _ _ _ _ Findcl) as Eq.
         pose proof (find_method_name _ _ _ Findmth) as Eq'.
-        (* apply find_class_In in Findcl. *)
-        (* apply find_method_In in Findmth. *)
         edestruct wt_program_find_class as [WT']; eauto.
         eapply wt_class_find_method in WT'; eauto.
-        (* eapply wt_program_find_class in WT; eauto. *)
-        (* pose proof well_formed as WF. *)
-        (* do 2 eapply In_Forall in WF; eauto. *)
         unfold instance_methods in Hin.
         unfold wt_method in WT'.
         induction (m_body caller); simpl in *; try contradiction; inv WT'.
@@ -1101,25 +1096,21 @@ Section PRESERVATION.
       - destruct op; simpl in *; econstructor; eauto.
         + rewrite type_pres.
           erewrite sem_unary_operation_any_mem; eauto.
-<<<<<<< HEAD
-          eapply wt_val_not_vundef_nor_vptr; eauto. 
-=======
-          admit.
->>>>>>> some modifs
+          eapply wt_val_not_vundef_nor_vptr; eauto.
         + rewrite type_pres.
-          admit.                (* problème annotation Cast *)
+          match goal with
+            H: match Ctyping.check_cast ?x ?y with _ => _ end = _ |- _ =>
+            destruct (Ctyping.check_cast x y); inv H
+          end.
+          erewrite sem_cast_any_mem; eauto.
+          eapply wt_val_not_vundef_nor_vptr; eauto. 
 
       (* Binop op e1 e2 : "e1 op e2" *)
       - simpl in *. unfold translate_binop.
         econstructor; eauto.
         rewrite 2 type_pres.
-<<<<<<< HEAD
         erewrite sem_binary_operation_any_cenv_mem; eauto;
         eapply wt_val_not_vundef_nor_vptr; eauto.
-=======
-        erewrite sem_binary_operation_any_cenv_mem; eauto.
-        admit. admit.
->>>>>>> some modifs
     Qed.
 
     Lemma exp_eval_valid_s:
@@ -1132,32 +1123,6 @@ Section PRESERVATION.
     Proof.
       induction es, vs; intros ** Wt Ev; inv Wt; inv Ev; eauto.
     Qed.
-
-  (* Lemma exp_eval_access: *)
-  (*   forall me ve e v vars mems, *)
-  (*     wt_env me.(mm_values) mems -> *)
-  (*     wt_env ve vars -> *)
-  (*     wt_exp mems vars e -> *)
-  (*     exp_eval me ve e v -> *)
-  (*     access_mode (cltype (typeof e)) = By_value (type_chunk (typeof e)). *)
-  (* Proof. *)
-  (*   eauto. *)
-  (*   intros ** H. *)
-  (*   eapply pres_sem_exp in H; eauto. *)
-  (*   apply exp_eval_valid in H. *)
-  (*   apply H. *)
-  (* Qed. *)
-
-  (* Lemma exp_eval_access_s: *)
-  (*  forall S es vs, *)
-  (*    Forall2 (exp_eval S) es vs -> *)
-  (*    Forall (fun e => access_mode (typeof e) = By_value (type_chunk (typeof e))) es. *)
-  (* Proof. *)
-  (*   induction es, vs; intros ** H; inv H; auto. *)
-  (*   constructor. *)
-  (*   - eapply exp_eval_access; eauto. *)
-  (*   - eapply IHes; eauto. *)
-  (* Qed. *)
     
     Lemma exp_eval_lr:
       forall c vars me ve e v,
@@ -1171,21 +1136,7 @@ Section PRESERVATION.
       apply wt_val_load_result; eauto.
     Qed.
 
-  (* Lemma exp_eval_lr_s: *)
-  (*  forall S es vs, *)
-  (*    Forall2 (exp_eval S) es vs -> *)
-  (*    Forall2 (fun e v => v = Val.load_result (type_chunk (typeof e)) v) es vs. *)
-  (* Proof. *)
-  (*   induction es, vs; intros ** H; inv H; auto. *)
-  (*   constructor. *)
-  (*   - eapply exp_eval_lr; eauto. *)
-  (*   - now apply IHes. *)
-  (* Qed. *)
-  
-   (* exp_eval_access *)
-       (* exp_eval_valid_s exp_eval_access_s exp_eval_lr *)
-
-  Lemma exprs_eval_simu:
+    Lemma exprs_eval_simu:
       forall me ve es es' vs e le m sb sofs outb outco P,
         m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
             ** blockrep gcenv ve outco.(co_members) outb
@@ -2311,6 +2262,70 @@ Section PRESERVATION.
     now rewrite <- E.
   Qed.
   Hint Resolve wt_params.
+
+  Lemma wt_val_valo:
+    forall xs vs e,
+      NoDupMembers xs ->
+      ((Forall (wt_valo (adds (map fst xs) vs e)) xs /\ length xs = length vs)
+      <-> Forall2 (fun v xt => wt_val v (snd xt)) vs xs).
+  Proof.
+    induction xs as [|(x, t)], vs as [|v]; intros ** Nodup; inv Nodup;
+    (split; [
+        intros [Forall Length]; inv Length; inversion_clear Forall as [|? ? Valo Forall']
+      | intro Forall2; inversion_clear Forall2 as [|? ? ? ? ? Forall2']]);
+    auto.
+    - constructor.
+      + unfold wt_valo in Valo; simpl in *.
+        now rewrite find_gsss in Valo.
+      + simpl in *.
+        rewrite <-IHxs; auto; split; auto.
+        rewrite adds_cons_cons in Forall'; eauto.
+        now rewrite <-fst_InMembers.
+    - split; simpl in *.
+      + constructor.
+        * unfold wt_valo; simpl.
+          now rewrite find_gsss.
+        * rewrite <-IHxs in Forall2'; auto; destruct Forall2'.
+          rewrite adds_cons_cons; eauto.
+          now rewrite <-fst_InMembers.
+      + erewrite Forall2_length with (l1:=vs); eauto. 
+  Qed.
+  
+  Lemma wt_env_params:
+    forall vs callee es, 
+      Forall2 (fun e v => wt_val v (typeof e)) es vs ->
+      Forall2 (fun (e : exp) (xt : ident * type) => typeof e = snd xt) es (m_in callee) ->
+      wt_env (adds (map fst (m_in callee)) vs sempty) (meth_vars callee).
+  Proof.
+    intros ** Wt Eq.
+    unfold wt_env.
+    apply Forall_app.
+    pose proof (m_nodupvars callee) as Nodup.
+    split.
+    - apply NoDupMembers_app_l in Nodup.
+      apply wt_val_valo with (vs:=vs) (e:=sempty) in Nodup.
+      destruct Nodup as [? Hvalo].
+      pose proof (wt_params _ _ _ Wt Eq) as Params.
+      apply Hvalo in Params; now destruct Params.
+    - apply Forall_forall.
+      intros (x, t) Hin.
+      assert (~ In x (map fst (m_in callee))).
+      { intro Hin'.
+        apply in_map_iff in Hin'; destruct Hin' as [(x', t') [? Hin']]; simpl in *; subst.
+        apply in_split in Hin; destruct Hin as (? & ? & Hin).
+        apply in_split in Hin'; destruct Hin' as (? & ? & Hin').
+        rewrite Hin, Hin' in Nodup.
+        rewrite <-app_assoc, <-app_comm_cons in Nodup.
+        apply NoDupMembers_app_r in Nodup.
+        inversion_clear Nodup as [|? ? ? Notin].
+        apply Notin.
+        apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
+      }
+      unfold wt_valo; simpl.
+      rewrite NotInMembers_find_adds with (v:=None); auto.
+      apply PM.gempty.
+  Qed.
+  Hint Resolve wt_env_params.
   
   Theorem correctness:
     (forall p me1 ve1 s S2,
@@ -2343,7 +2358,8 @@ Section PRESERVATION.
                ** subrep caller e1
                ** varsrep caller ve le1
                ** P ->
-          wt_mem me1 prog' c ->
+          wt_env (adds (map fst (m_in callee)) vs sempty) (meth_vars callee) ->
+          wt_mem me1 prog' c ->   (* prog' *)
           Forall2 (fun (v : val) (xt : ident * type) => wt_val v (snd xt)) 
      vs (m_in callee) ->
           Globalenvs.Genv.find_symbol tge (prefix_fun clsid fid) = Some ptr_f ->
@@ -2377,7 +2393,7 @@ Section PRESERVATION.
     [| |intros Evs ? Hrec_eval ? ? ? owner ? caller
      |intros HS1 ? HS2|intros Hbool ? Hifte|
      |rename H into Find; intros Findmeth ? Hrec_exec Findvars Sub;
-      intros ** Findowner ? Find' Findmeth' Hrep ? ? Hgetptrf Hgetcf ? Findinst
+      intros ** Findowner ? Find' Findmeth' Hrep ? ? ? Hgetptrf Hgetcf ? Findinst
              Hbinst ? Hin Offs ? ? Hinstco ? ?]; intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
                                  |? ? ? ? ? callee ? ? Hin Find' Findmeth|];
@@ -2469,12 +2485,20 @@ Section PRESERVATION.
       edestruct subrep_extract as (oblk & instco & ? & ? & Hoblk & Hinstco & ?); eauto.
       
       (* recursive funcall evaluation *)
+      assert (wt_mem  match mfind_inst o menv with
+                      | Some om => om
+                      | None => hempty
+                      end p' cls).
+      { inversion_clear WT_mem as [? ? ? ? Hinst].
+        eapply In_Forall in Hinst; eauto.
+        inversion_clear Hinst as [? ? ? Hinst'|? ? ? ? ? ? Hinst' Find''];
+          simpl in Hinst'; rewrite Hinst'.
+        - apply wt_hempty.
+        - simpl in Find''; rewrite Find'' in Find'; inv Find'; auto.   
+      }
       rewrite sep_swap3 in Hrep.
       edestruct Hrec_eval with (owner:=owner) (e1:=e1) (m1:=m1) (le1:=le1) (instco:=instco)
         as (m2 & T & xs & ws & ? & Heq & Hm2); eauto.
-      + destruct (mfind_inst o menv).
-        2: apply wt_hempty.
-        admit.
       + symmetry; erewrite <-Forall2_length; eauto.
         rewrite Hparams; simpl; repeat f_equal.
         rewrite list_length_map.
@@ -2485,14 +2509,10 @@ Section PRESERVATION.
         eapply wt_stmt_sub, find_class_sub; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
+        edestruct pres_sem_stmt_call; eauto.
         rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
         edestruct exec_funcall_assign with (1:=Find) (ys:=ys) (m1:=m2)
           as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.
-
-        edestruct pres_sem_stmt_call; eauto.
-        destruct (mfind_inst o menv).
-        2: apply wt_hempty.
-        admit.
 
         exists le3, m3; econstructor; split; auto.
         *{ simpl.
@@ -2566,19 +2586,11 @@ Section PRESERVATION.
            destruct (val_to_bool v) eqn: E.
            - rewrite Hbool in E.
              destruct b.
-<<<<<<< HEAD
              + apply val_to_bool_true' in E; subst; simpl.
                rewrite Int.eq_false; auto.
                apply Int.one_not_zero.
              + apply val_to_bool_false' in E; subst; simpl.
                rewrite Int.eq_true; auto.
-=======
-             + apply val_to_bool_true' in E; subst.
-               unfold Cop.bool_val.
-               admit.
-             + apply val_to_bool_false' in E; subst.
-               admit.
->>>>>>> some modifs
            - discriminate.
          }
         * destruct b; eauto.
@@ -2629,14 +2641,16 @@ Section PRESERVATION.
       specialize (Hrec_exec Hsub c).
       edestruct Hrec_exec with (le1:=le_fun) (e1:=e_fun) (m1:=m_fun)
         as (? & m_fun' & ? & ? & MS'); eauto.
-      + rewrite match_states_conj; split; eauto; [|repeat split; eauto].
+      + assert (wt_mem match mfind_inst o me with
+                       | Some om => om
+                       | None => hempty
+                       end prog c) as Wt_mem. admit.
+        inversion_clear Wt_mem.
+        rewrite match_states_conj; split; eauto; [|repeat split; eauto].
         simpl.
         rewrite sep_swap, sep_swap34, sep_swap23, sep_swap45, sep_swap34,
         <-sep_assoc, <-sep_assoc, sep_swap45, sep_swap34, sep_swap23,
         sep_swap45, sep_swap34, sep_assoc, sep_assoc in Hm_fun; eauto.
-        admit.
-        admit.
-        admit.
       + rewrite match_states_conj in MS'; destruct MS' as (Hm_fun' & ?).
         rewrite sep_swap23, sep_swap5, sep_swap in Hm_fun'.
         rewrite <-sep_assoc, sep_unwand in Hm_fun'; auto.
