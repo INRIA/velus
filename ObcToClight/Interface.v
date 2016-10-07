@@ -152,7 +152,6 @@ Module Export Op <: OPERATORS.
      would have to know that the memory also contained either 0 or 1.
      The C99 type system is not strong enough for our purposes.
    *)
-  SearchAbout (Ctypes.access_mode _ = Ctypes.By_value _).
   Inductive wt_val' : val -> type -> Prop :=
   | wt_val_int:
       forall n sz sg,
@@ -654,6 +653,20 @@ Module Export Op <: OPERATORS.
              end.
   Qed.
 
+  Lemma sem_cast_operation_any_mem:
+    forall v ty1 ty2 M1 M2,
+      (forall b ofs, v <> Values.Vptr b ofs) ->
+      Cop.sem_cast v ty1 ty2 M1
+      = Cop.sem_cast v ty1 ty2 M2.
+  Proof.
+    intros ** Hnptr.
+    destruct v; simpl; unfold Cop.sem_cast;
+      repeat match goal with
+             | |- (match ?x with _ => _ end) = _ => destruct x; auto
+             | _ => ContradictNotVptr
+             end.
+  Qed.
+  
   Lemma sem_cast_any_mem:
     forall v ty1 ty2 M1 M2,
       (forall b ofs, v <> Values.Vptr b ofs) ->
