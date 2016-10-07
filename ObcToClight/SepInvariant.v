@@ -333,6 +333,111 @@ Proof.
   now apply align_chunk_divides_alignof_type.
 Qed.
 
+
+(** The struct_in_bounds predicate.
+
+    TODO: add explanatory text. *)
+
+Section StructInBounds.
+  Variable env : composite_env.
+  Hypothesis env_consistent: composite_env_consistent env.
+
+  Definition struct_in_bounds (min max ofs: Z) (flds: Ctypes.members) :=
+    min <= ofs /\ ofs + sizeof_struct env 0 flds <= max.
+
+  Lemma struct_in_bounds_sizeof:
+    forall id co,
+      env!id = Some co ->
+      struct_in_bounds 0 (sizeof_struct env 0 (co_members co)) 0 (co_members co).
+  Proof.
+    intros. unfold struct_in_bounds. auto with zarith.
+  Qed.
+
+  Lemma struct_in_bounds_weaken:
+    forall min' max' min max ofs flds,
+      struct_in_bounds min max ofs flds ->
+      min' <= min ->
+      max <= max' ->
+      struct_in_bounds min' max' ofs flds.
+  Proof.
+    unfold struct_in_bounds. destruct 1; intros. auto with zarith.
+  Qed.
+
+  Lemma field_offset_type:
+    forall id flds d,
+      field_offset env id flds = Errors.OK d ->
+      exists ty, field_type id flds = Errors.OK ty.
+  Proof.
+    unfold field_offset.
+    intros until d.
+    cut (forall ofs, field_offset_rec env id flds ofs = Errors.OK d ->
+                     exists ty, field_type id flds = Errors.OK ty); eauto.
+    induction flds as [|(id', ty') flds IH]; intros ofs Hfo; [now inv Hfo|].
+    simpl.
+    destruct (ident_eq_dec id id') as [He|Hne].
+    - rewrite He, peq_true. now exists ty'.
+    - simpl in Hfo.
+      rewrite peq_false in *; auto.
+      destruct (IH _ Hfo) as (ty & Hft).
+      exists ty; assumption.
+  Qed.
+  
+  Lemma struct_in_bounds_field:
+    forall min max ofs flds id d,
+      struct_in_bounds min max ofs flds ->
+      field_offset env id flds = Errors.OK d ->
+      min <= ofs + d <= max.
+  Proof.
+    unfold struct_in_bounds.
+    intros ** (Hmin & Hmax) Hfo.
+    destruct (field_offset_type _ _ _ Hfo) as (ty & Hft).
+    destruct (field_offset_in_range _ _ _ _ _ Hfo Hft) as (H0d & Hsize).
+    split; auto with zarith.
+    apply Z.le_trans with (2:=Hmax).
+    apply Z.add_le_mono; auto with zarith.
+    apply Z.le_trans with (2:=Hsize).
+    rewrite Zplus_0_r_reverse at 1.
+    auto using (Z.ge_le _ _ (sizeof_pos env ty)) with zarith.
+  Qed.
+
+  Lemma struct_in_struct_in_bounds:
+    forall min max ofs flds id sid d co a,
+      struct_in_bounds min max ofs flds ->
+      field_offset env id flds = Errors.OK d ->
+      field_type id flds = Errors.OK (Tstruct sid a) ->
+      env!sid = Some co ->
+      co_su co = Struct ->
+      struct_in_bounds min max (ofs + d) (co_members co).
+  Proof.
+    unfold struct_in_bounds.
+    intros ** (Hmin & Hmax) Hfo Hft Henv Hsu.
+    apply field_offset_in_range with (1:=Hfo) in Hft.
+    destruct Hft as (Hd0 & Hsizeof).
+    split; auto with zarith.
+    apply Zplus_le_compat_l with (p:=ofs) in Hsizeof.
+    apply Z.le_trans with (1:=Hsizeof) in Hmax.
+    apply Z.le_trans with (2:=Hmax).
+    simpl; rewrite Henv, Z.add_assoc.
+    apply Z.add_le_mono_l.
+    specialize (env_consistent _ _ Henv).
+    rewrite (co_consistent_sizeof _ _ env_consistent), Hsu.
+    apply align_le.
+    destruct (co_alignof_two_p co) as (n & H2p).
+    rewrite H2p.
+    apply two_power_nat_pos.
+  Qed.
+
+End StructInBounds.
+
+(* TODO: move into Obc/Syntax.v *)
+Lemma find_class_chained:
+  forall prog c1 c2 cls prog' cls' prog'',
+    wt_program prog ->
+    find_class c1 prog = Some (cls, prog') ->
+    find_class c2 prog' = Some (cls', prog'') ->
+    find_class c2 prog = Some (cls', prog'').
+Admitted.
+
 Section StateRepProperties.
 
   Variable main_node : ident.
@@ -354,6 +459,60 @@ Section StateRepProperties.
              /\ attr_alignas (co_attr co) = None
              /\ NoDupMembers (co_members co)).
 
+  Lemma c_objs_field_offset:
+    forall o c cls,
+      In (o, c) cls.(c_objs) ->
+      exists d, field_offset gcenv o (make_members cls) = Errors.OK d.
+  Proof.
+    intros ** Hin.
+    unfold field_offset.
+    cut (forall ofs, exists d,
+         field_offset_rec gcenv o (make_members cls) ofs = Errors.OK d); auto.
+    unfold make_members.
+    apply in_split in Hin.
+    destruct Hin as (ws & xs & Hin).
+    rewrite Hin, map_app, map_cons.
+    rewrite app_assoc.
+    generalize (map translate_param cls.(c_mems) ++ map translate_obj ws).
+    generalize (map translate_obj xs).
+    clear Hin ws xs.
+    intros ws xs.
+    induction xs as [|x xs IH]; intros ofs.
+    - simpl. setoid_rewrite peq_true. now eexists.
+    - destruct x as (x, ty).
+      destruct (ident_eq_dec o x) as [He|Hne].
+      + simpl. rewrite He, peq_true. now eexists.
+      + simpl. rewrite peq_false with (1:=Hne). apply IH.
+  Qed.
+
+  Lemma struct_in_struct_in_bounds':
+    forall min max ofs clsid cls o c cls' prog' prog'',
+      wt_program prog ->
+      find_class clsid prog = Some (cls, prog') ->
+      struct_in_bounds gcenv min max ofs (make_members cls) ->
+      In (o, c) cls.(c_objs) ->
+      find_class c prog' = Some (cls', prog'') ->
+      exists d, field_offset gcenv o (make_members cls) = Errors.OK d
+                /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
+  Proof.
+    intros ** WTp Hfc Hsb Hin Hfc'.
+    destruct (c_objs_field_offset _ _ _ Hin) as (d & Hfo).
+    exists d; split; auto.
+    destruct (make_members_co _ _ _ Hfc)
+      as (cls_co & Hg & Hsu & Hmem & Hattr & Hndup).
+    rewrite <-Hmem in *.
+    eapply find_class_chained with (1:=WTp) (2:=Hfc) in Hfc'.
+    destruct (make_members_co _ _ _ Hfc')
+      as (cls'_co & Hg' & Hsu' & Hmem' & Hattr' & Hndup').
+    rewrite <-Hmem' in *.
+    pose proof (field_offset_type _ _ _ _ Hfo) as Hty.
+    destruct Hty as (ty & Hty).
+    eapply struct_in_struct_in_bounds with (a:=noattr); eauto.
+    rewrite Hmem.
+    unfold make_members.
+    admit.
+  Qed.
+  
   Lemma field_translate_mem_type:
     forall prog clsnm cls prog',
       find_class clsnm prog = Some (cls, prog') ->
@@ -609,48 +768,48 @@ Section StateRepProperties.
     + contradict Hm.
   Qed.
    
-  Lemma staterep_inst_offset:
-    forall m me cls p b ofs o c P,
-      m |= staterep gcenv (cls :: p) cls.(c_name) me b ofs ** P ->
-      0 <= ofs ->
-      In (o, c) (c_objs cls) ->
-      exists d, field_offset gcenv o (make_members cls) = Errors.OK d
-           /\ 0 <= ofs + d <= Int.max_unsigned.
-  Proof.
-    Opaque sepconj.
-    intros ** Hm ? Hin.
-    apply sep_proj1 in Hm.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply sep_proj2 in Hm.
-    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm.
-    clear ws xs.
-    destruct (field_offset gcenv o (make_members cls)) eqn: E.
-    2: contradict Hm.
-    exists z; split; auto.
-    apply field_offset_in_range' in E.
-    revert c me o z Hm E.
-    induction p as [|c']; intros ** Hm E; simpl in Hm.
-    1: contradiction.
-    destruct (ident_eqb c (c_name c')).
-    - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm.
-      + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm.
-        * admit.
-        * apply sep_drop, sep_pick1 in Hm.
-          destruct (field_offset gcenv o' (make_members c')) eqn: E'.
-          2: contradict Hm.
-          apply field_offset_in_range' in E'.
-          rewrite <-Z.add_assoc in Hm.
-          edestruct IHp; eauto; omega.
-      + apply sep_proj1, sep_proj1 in Hm.
-        destruct (field_offset gcenv x (make_members c')) eqn: E'.
-        2: contradict Hm.
-        apply contains_no_overflow in Hm.
-        apply field_offset_in_range' in E'.
-        destruct Hm; omega.
-    - eapply IHp; eauto.
-  Qed.
+  (* Lemma staterep_inst_offset: *)
+  (*   forall m me cls p b ofs o c P, *)
+  (*     m |= staterep gcenv (cls :: p) cls.(c_name) me b ofs ** P -> *)
+  (*     0 <= ofs -> *)
+  (*     In (o, c) (c_objs cls) -> *)
+  (*     exists d, field_offset gcenv o (make_members cls) = Errors.OK d *)
+  (*          /\ 0 <= ofs + d <= Int.max_unsigned. *)
+  (* Proof. *)
+  (*   Opaque sepconj. *)
+  (*   intros ** Hm ? Hin. *)
+  (*   apply sep_proj1 in Hm. *)
+  (*   simpl in Hm. rewrite ident_eqb_refl in Hm. *)
+  (*   apply sep_proj2 in Hm. *)
+  (*   apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]]. *)
+  (*   rewrite Hin in Hm. clear Hsplit Hin. *)
+  (*   apply sep_proj1 in Hm. *)
+  (*   clear ws xs. *)
+  (*   destruct (field_offset gcenv o (make_members cls)) eqn: E. *)
+  (*   2: contradict Hm. *)
+  (*   exists z; split; auto. *)
+  (*   apply field_offset_in_range' in E. *)
+  (*   revert c me o z Hm E. *)
+  (*   induction p as [|c']; intros ** Hm E; simpl in Hm. *)
+  (*   1: contradiction. *)
+  (*   destruct (ident_eqb c (c_name c')). *)
+  (*   - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm. *)
+  (*     + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm. *)
+  (*       * admit. *)
+  (*       * apply sep_drop, sep_pick1 in Hm. *)
+  (*         destruct (field_offset gcenv o' (make_members c')) eqn: E'. *)
+  (*         2: contradict Hm. *)
+  (*         apply field_offset_in_range' in E'. *)
+  (*         rewrite <-Z.add_assoc in Hm. *)
+  (*         edestruct IHp; eauto; omega. *)
+  (*     + apply sep_proj1, sep_proj1 in Hm. *)
+  (*       destruct (field_offset gcenv x (make_members c')) eqn: E'. *)
+  (*       2: contradict Hm. *)
+  (*       apply contains_no_overflow in Hm. *)
+  (*       apply field_offset_in_range' in E'. *)
+  (*       destruct Hm; omega. *)
+  (*   - eapply IHp; eauto. *)
+  (* Qed. *)
 
 End StateRepProperties.
 

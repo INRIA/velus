@@ -152,6 +152,7 @@ Module Export Op <: OPERATORS.
      would have to know that the memory also contained either 0 or 1.
      The C99 type system is not strong enough for our purposes.
    *)
+  SearchAbout (Ctypes.access_mode _ = Ctypes.By_value _).
   Inductive wt_val' : val -> type -> Prop :=
   | wt_val_int:
       forall n sz sg,
