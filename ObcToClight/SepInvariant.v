@@ -484,7 +484,7 @@ Section StateRepProperties.
       + simpl. rewrite He, peq_true. now eexists.
       + simpl. rewrite peq_false with (1:=Hne). apply IH.
   Qed.
-
+  
   Lemma struct_in_struct_in_bounds':
     forall min max ofs clsid cls o c cls' prog' prog'',
       wt_program prog ->
@@ -493,7 +493,7 @@ Section StateRepProperties.
       In (o, c) cls.(c_objs) ->
       find_class c prog' = Some (cls', prog'') ->
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d
-                /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
+           /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
   Proof.
     intros ** WTp Hfc Hsb Hin Hfc'.
     destruct (c_objs_field_offset _ _ _ Hin) as (d & Hfo).
@@ -768,48 +768,48 @@ Section StateRepProperties.
     + contradict Hm.
   Qed.
    
-  Lemma staterep_inst_offset:
-    forall m me cls p b ofs o c P,
-      m |= staterep gcenv (cls :: p) cls.(c_name) me b ofs ** P ->
-      0 <= ofs ->
-      In (o, c) (c_objs cls) ->
-      exists d, field_offset gcenv o (make_members cls) = Errors.OK d
-           /\ 0 <= ofs + d <= Int.max_unsigned.
-  Proof.
-    Opaque sepconj.
-    intros ** Hm ? Hin.
-    apply sep_proj1 in Hm.
-    simpl in Hm. rewrite ident_eqb_refl in Hm.
-    apply sep_proj2 in Hm.
-    apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]].
-    rewrite Hin in Hm. clear Hsplit Hin.
-    apply sep_proj1 in Hm.
-    clear ws xs.
-    destruct (field_offset gcenv o (make_members cls)) eqn: E.
-    2: contradict Hm.
-    exists z; split; auto.
-    apply field_offset_in_range' in E.
-    revert c me o z Hm E.
-    induction p as [|c']; intros ** Hm E; simpl in Hm.
-    1: contradiction.
-    destruct (ident_eqb c (c_name c')).
-    - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm.
-      + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm.
-        * admit.
-        * apply sep_drop, sep_pick1 in Hm.
-          destruct (field_offset gcenv o' (make_members c')) eqn: E'.
-          2: contradict Hm.
-          apply field_offset_in_range' in E'.
-          rewrite <-Z.add_assoc in Hm.
-          edestruct IHp; eauto; omega.
-      + apply sep_proj1, sep_proj1 in Hm.
-        destruct (field_offset gcenv x (make_members c')) eqn: E'.
-        2: contradict Hm.
-        apply contains_no_overflow in Hm.
-        apply field_offset_in_range' in E'.
-        destruct Hm; omega.
-    - eapply IHp; eauto.
-  Qed.
+  (* Lemma staterep_inst_offset: *)
+  (*   forall m me cls p b ofs o c P, *)
+  (*     m |= staterep gcenv (cls :: p) cls.(c_name) me b ofs ** P -> *)
+  (*     0 <= ofs -> *)
+  (*     In (o, c) (c_objs cls) -> *)
+  (*     exists d, field_offset gcenv o (make_members cls) = Errors.OK d *)
+  (*          /\ 0 <= ofs + d <= Int.max_unsigned. *)
+  (* Proof. *)
+  (*   Opaque sepconj. *)
+  (*   intros ** Hm ? Hin. *)
+  (*   apply sep_proj1 in Hm. *)
+  (*   simpl in Hm. rewrite ident_eqb_refl in Hm. *)
+  (*   apply sep_proj2 in Hm. *)
+  (*   apply sepall_in in Hin; destruct Hin as [ws [xs [Hsplit Hin]]]. *)
+  (*   rewrite Hin in Hm. clear Hsplit Hin. *)
+  (*   apply sep_proj1 in Hm. *)
+  (*   clear ws xs. *)
+  (*   destruct (field_offset gcenv o (make_members cls)) eqn: E. *)
+  (*   2: contradict Hm. *)
+  (*   exists z; split; auto. *)
+  (*   apply field_offset_in_range' in E. *)
+  (*   revert c me o z Hm E. *)
+  (*   induction p as [|c']; intros ** Hm E; simpl in Hm. *)
+  (*   1: contradiction. *)
+  (*   destruct (ident_eqb c (c_name c')). *)
+  (*   - destruct (c_mems c') as [|(x, ?)] eqn: Mems; simpl in Hm. *)
+  (*     + destruct (c_objs c') as [|(o', ?)] eqn: Objs; simpl in Hm. *)
+  (*       * admit. *)
+  (*       * apply sep_drop, sep_pick1 in Hm. *)
+  (*         destruct (field_offset gcenv o' (make_members c')) eqn: E'. *)
+  (*         2: contradict Hm. *)
+  (*         apply field_offset_in_range' in E'. *)
+  (*         rewrite <-Z.add_assoc in Hm. *)
+  (*         edestruct IHp; eauto; omega. *)
+  (*     + apply sep_proj1, sep_proj1 in Hm. *)
+  (*       destruct (field_offset gcenv x (make_members c')) eqn: E'. *)
+  (*       2: contradict Hm. *)
+  (*       apply contains_no_overflow in Hm. *)
+  (*       apply field_offset_in_range' in E'. *)
+  (*       destruct Hm; omega. *)
+  (*   - eapply IHp; eauto. *)
+  (* Qed. *)
 
 End StateRepProperties.
 

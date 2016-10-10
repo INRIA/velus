@@ -505,6 +505,8 @@ Section PRESERVATION.
       End MethodProperties.
   End ClassProperties.
 
+  Hint Resolve make_members_co.
+  
   Theorem instance_methods_caract:
     forall ownerid owner prog' callerid caller,
       find_class ownerid prog = Some (owner, prog') ->
@@ -1006,14 +1008,23 @@ Section PRESERVATION.
         pose proof (find_class_name _ _ _ _ Findcl); subst.
         edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto. 
         rewrite staterep_skip in Hrep; eauto.
-        edestruct staterep_inst_offset as (d & ? & ?); eauto.
-        exists d; split; [|split]; auto.
-        apply eval_Eaddrof.
-        eapply eval_Efield_struct; eauto.
-        - eapply eval_Elvalue; eauto.
-          now apply deref_loc_copy. 
-        - simpl; unfold type_of_inst; eauto.
-        - now rewrite Eq.
+        edestruct wt_program_find_class as [[Find]]; eauto.
+        eapply In_Forall in Find; eauto; simpl in Find.
+        apply not_None_is_Some in Find.
+        destruct Find as [(?, ?)]; eauto.          
+        edestruct struct_in_struct_in_bounds' as (d & ? & Struct); eauto.
+        - rewrite <- Eq.
+          eapply struct_in_bounds_sizeof; eauto.
+        - exists d; split; [|split]; auto.
+          + apply eval_Eaddrof.
+            eapply eval_Efield_struct; eauto.
+            * eapply eval_Elvalue; eauto.
+              now apply deref_loc_copy. 
+            * simpl; unfold type_of_inst; eauto.
+            * now rewrite Eq.
+          + destruct Struct.
+            split; try omega.
+            admit.            
       Qed.
     End SelfField.
 
