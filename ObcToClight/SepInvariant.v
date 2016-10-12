@@ -429,6 +429,15 @@ Section StructInBounds.
   
 End StructInBounds.
 
+(* TODO: move into Obc/Syntax.v *)
+Lemma find_class_chained:
+  forall prog c1 c2 cls prog' cls' prog'',
+    wt_program prog ->
+    find_class c1 prog = Some (cls, prog') ->
+    find_class c2 prog' = Some (cls', prog'') ->
+    find_class c2 prog = Some (cls', prog'').
+Admitted.
+
 Section StateRepProperties.
 
   Variable main_node : ident.
@@ -505,7 +514,7 @@ Section StateRepProperties.
       In (o, c) cls.(c_objs) ->
       find_class c prog' = Some (cls', prog'') ->
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d
-                /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
+           /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
   Proof.
     intros ** WTp Hfc Hsb Hin Hfc'.
     destruct (c_objs_field_offset _ _ _ Hin) as (d & Hfo).

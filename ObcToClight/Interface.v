@@ -712,7 +712,7 @@ Module Export Op <: OPERATORS.
   Lemma wt_val_load_result:
     forall ty v,
       wt_val v ty ->
-      Values.Val.load_result (type_chunk ty) v = v.
+      v = Values.Val.load_result (type_chunk ty) v.
   Proof.
     intros ** Hwt.
     destruct ty as [sz sg|sz|sz].
