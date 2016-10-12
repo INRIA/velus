@@ -31,6 +31,41 @@ Module Type TYPING
 
   (** Preservation of well-typing. *)
 
+  (** For the ifte fusion optimization *)
+
+  Lemma zip_wt:
+    forall p insts mems vars s1 s2,
+      wt_stmt p insts mems vars s1 ->
+      wt_stmt p insts mems vars s2 ->
+      wt_stmt p insts mems vars (zip s1 s2).
+  Proof.
+    induction s1, s2; simpl;
+      try match goal with |- context [if ?e1 ==b ?e2 then _ else _] =>
+            destruct (equiv_decb e1 e2) end;
+      auto with obctyping;
+      inversion_clear 1;
+      try inversion_clear 2;
+      auto with obctyping.
+    inversion_clear 1.
+    auto with obctyping.
+  Qed.
+
+  Lemma fuse_wt:
+    forall p insts mems vars s,
+      wt_stmt p insts mems vars s ->
+      wt_stmt p insts mems vars (fuse s).
+  Proof.
+    intros ** WTs.
+    destruct s; auto; simpl; inv WTs.
+    match goal with H1:wt_stmt _ _ _ _ s1, H2:wt_stmt _ _ _ _ s2 |- _ =>
+                    revert s2 s1 H1 H2 end.
+    induction s2; simpl; auto using zip_wt.
+    intros s2 WTs1 WTcomp.
+    inv WTcomp.
+    apply IHs2_2; auto.
+    apply zip_wt; auto.
+  Qed.
+
   Section Expressions.
 
     (* DF variables and their types: n_in ++ n_out ++ n_vars *)
@@ -360,6 +395,6 @@ Module Type TYPING
     simpl; rewrite map_c_name_translate.
     auto using NoDup_cons.
   Qed.
-  
+
 End TYPING.
 
