@@ -96,40 +96,76 @@ Proof.
   apply NoDupMembers_rec_instance_methods; constructor.
 Qed.
 
-Lemma In_rec_instance_methods:
-  forall s l o fid cid,
-    In (o, fid, cid) (rec_instance_methods s l) <->
-    In (o, fid, cid) (rec_instance_methods s []) \/ In (o, fid, cid) l.
+(* TODO: tidy proof *)
+Lemma In_rec_instance_methods_In_insts:
+  forall p insts mems vars s l o f c,
+    wt_stmt p insts mems vars s ->
+    (forall o f c, In (o, f, c) l -> In (o, c) insts) ->
+    In (o, f, c) (rec_instance_methods s l) ->
+    In (o, c) insts.
 Proof.
-  induction s; simpl; split; intros ** Hin;
-  try now right.
-  - destruct Hin; auto; contradiction.
-  - destruct Hin; auto; contradiction.
-  - rewrite IHs2, IHs1 in Hin.
-    rewrite IHs2.
-    destruct Hin as [|[|]]; auto.
-  - rewrite IHs2 in Hin.
-    rewrite IHs2, IHs1.
-    destruct Hin as [[|]|]; auto.
-  - rewrite IHs2, IHs1 in Hin.
-    rewrite IHs2.
-    destruct Hin as [|[|]]; auto.
-  - rewrite IHs2 in Hin.
-    rewrite IHs2, IHs1.
-    destruct Hin as [[|]|]; auto.
-  - destruct (in_dec dec_pair (i0, i1) (map fst l1)).
-    + now right.
-    + destruct Hin as [E|Hin].
-      * inv E; left; now left.
-      * now right.
-  - destruct Hin as [[E|]|Hin]; try contradiction.
-    + inv E.
-      destruct (in_dec dec_pair (o, fid) (map fst l1)) as [E|] eqn: H.
-      * admit.
-      * apply in_eq.
-    + destruct (in_dec dec_pair (i0, i1) (map fst l1)); auto.
-      now apply in_cons.
-  - destruct Hin; auto; contradiction.
+  induction s; simpl.
+
+  intros; eapply H0; eauto.
+  intros; eapply H0; eauto.
+  intros. inv H. eapply IHs2 in H1; eauto.
+  intros. inv H. eapply IHs2 in H1; eauto.
+  intros. destruct (in_dec dec_pair (i0, i1) (map fst l1)).
+  eapply H0. eapply H1. inv H. inv H1. injection H.
+  intros; subst. assumption.
+  eapply H0. eauto.
+
+  intros. eapply H0; eauto.
+Qed.
+
+(* TODO: tidy proof *)
+Lemma In_rec_instance_methods:
+  forall p insts mems vars s l v,
+    wt_stmt p insts mems vars s ->
+    NoDupMembers insts ->
+    (forall o f c, In (o, f, c) l -> In (o, c) insts) ->
+    (In v (rec_instance_methods s l) <->
+     In v (rec_instance_methods s []) \/ In v l).
+Proof.
+  induction s; intros ** WTs Hnodup Hlin; inv WTs; simpl;
+    split; intro HH; eauto using In_rec_instance_methods_In_insts;
+    try rewrite IHs2, IHs1 in HH;
+    try rewrite IHs2, IHs1;
+    try now intuition.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H4. 2:eapply Hin. intros. inversion H.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H4. 2:eapply Hin. intros. eapply Hlin. eapply H.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H4. 2:eapply Hin. intros. eapply Hlin. eapply H.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H4. 2:eapply Hin. intros. inversion H.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H1. 2:eapply Hin. intros. inversion H.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H1. 2:eapply Hin. intros. eapply Hlin. eapply H.
+  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
+    eapply H1. 2:eapply Hin. intros. eapply Hlin. eapply H.
+  - intros. eapply In_rec_instance_methods_In_insts.
+    eapply H1. 2:eapply H. intros. inv H0.
+  - match goal with H:context [if ?b then _ else _] |- _ => destruct b end.
+    + intuition.
+    + inv HH; intuition.
+  - match goal with |- context [if ?b then _ else _] => destruct b end.
+    + destruct HH as [HH|HH]; auto.
+      destruct HH; intuition.
+      subst v.
+      apply fst_InMembers in i2.
+      apply InMembers_In in i2.
+      destruct i2 as (i' & i2).
+      pose proof (Hlin _ _ _ i2).
+      apply NoDupMembers_det with (1:=Hnodup) (2:=H4) in H.
+      subst.
+      assumption.
+    + destruct HH.
+      destruct H; intuition.
+      rewrite <-H. constructor; auto.
+      constructor 2; auto.
 Qed.
  
 Lemma NoDupMembers_make_out_vars:
