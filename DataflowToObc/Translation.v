@@ -610,7 +610,12 @@ Module Type TRANSLATION
     apply fst_NoDupMembers in Hndm.
     now rewrite n_defd.
   Qed.
-
+  Next Obligation.
+    constructor; auto using NoDup.
+    inversion_clear 1; auto.
+    now apply reset_not_step.
+  Qed.
+  
   (* =translate= *)
   (* definition is needed in signature *)
   Definition translate (G: global) : program :=

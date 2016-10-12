@@ -81,7 +81,8 @@ Module Type SYNTAX
         c_objs    : list (ident * ident);   (* (instance, class) *)
         c_methods : list method;
 
-        c_nodup   : NoDup (map fst c_mems ++ map fst c_objs)
+        c_nodup   : NoDup (map fst c_mems ++ map fst c_objs);
+        c_nodupm  : NoDup (map m_name c_methods)
       }.
 
   Lemma c_nodupmems:

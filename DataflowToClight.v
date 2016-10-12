@@ -55,10 +55,28 @@ Definition fuse_method (m: method): method :=
     mk_method name ins vars out (fuse body) nodup good 
   end.
 
+Lemma map_m_name_fuse_methods:
+  forall methods,
+    List.map m_name (List.map fuse_method methods) = List.map m_name methods.
+Proof.
+  intro ms; induction ms as [|m ms]; auto.
+  simpl. rewrite IHms.
+  now destruct m.
+Qed.
+  
+Lemma NoDup_m_name_fuse_methods:
+  forall methods,
+    List.NoDup (List.map m_name methods) ->
+    List.NoDup (List.map m_name (List.map fuse_method methods)).
+Proof.
+  intros; now rewrite map_m_name_fuse_methods.
+Qed.
+
 Definition fuse_class (c: class): class :=
   match c with
-    mk_class name mems objs methods nodup =>
+    mk_class name mems objs methods nodup nodupm =>
     mk_class name mems objs (List.map fuse_method methods) nodup
+             (NoDup_m_name_fuse_methods _ nodupm)
   end.
 
 Definition compile (g: global) (main_node: ident) :=
