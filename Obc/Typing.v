@@ -4,6 +4,8 @@ Require Import Rustre.RMemory.
 Require Import Rustre.Obc.Syntax.
 Require Import Rustre.Obc.Semantics.
 
+Require Import Morphisms.
+
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -102,6 +104,51 @@ Module Type TYPING
       wt_program p ->
       NoDup (map c_name (cls::p)) ->
       wt_program (cls::p).
+
+  Hint Constructors wt_exp wt_stmt wt_program : obctyping.
+
+  Instance wt_exp_Proper:
+    Proper (@Permutation.Permutation (ident * type)
+                                     ==> @Permutation.Permutation (ident * type)
+                                     ==> @eq exp ==> iff) wt_exp.
+  Proof.
+    intros m2 m1 Hm v2 v1 Hv e' e He; subst.
+    induction e; split; inversion_clear 1; constructor;
+      try rewrite Hm in *;
+      try rewrite Hv in *;
+      repeat match goal with H:_ <-> _ |- _ => apply H; clear H end;
+      auto with obctyping.
+  Qed.
+  
+  Instance wt_stmt_Proper:
+    Proper (@eq program
+                ==> @Permutation.Permutation (ident * ident)
+                ==> @Permutation.Permutation (ident * type)
+                ==> @Permutation.Permutation (ident * type)
+                ==> @eq stmt ==> iff) wt_stmt.
+  Proof.
+    intros p' p Hp xs2 xs1 Hxs ys2 ys1 Hys zs2 zs1 Hzs s' s Hs.
+    subst.
+    induction s; split; intro HH; inv HH; try econstructor;
+      repeat match goal with
+             | H:Permutation.Permutation _ _ |- _ =>
+               (erewrite H || erewrite <-H); clear H
+             | H:_ <-> _ |- _ => (try apply H); clear H
+             end;
+      eauto with obctyping.
+    - match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
+                      apply Forall2_impl_In with (2:=H) end.
+      intros; now rewrite <-Hzs.
+    - match goal with H:Forall (wt_exp _ _) _ |- _ =>
+                      apply Forall_impl with (2:=H) end.
+      intros; now rewrite <-Hys, <-Hzs.
+    - match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
+                      apply Forall2_impl_In with (2:=H) end.
+      intros; now rewrite Hzs.
+    - match goal with H:Forall (wt_exp _ _) _ |- _ =>
+                      apply Forall_impl with (2:=H) end.
+      intros; now rewrite Hys, Hzs.
+  Qed.
   
   (** Properties *)
   

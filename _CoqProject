@@ -46,6 +46,7 @@ DataflowToObc/Translation.v
 DataflowToObc/Correctness/IsPresent.v
 DataflowToObc/Correctness/MemoryCorres.v
 DataflowToObc/Correctness.v
+DataflowToObc/Typing.v
 ObcToClight/Interface.v
 ObcToClight/Translation.v
 ObcToClight/Correctness.v

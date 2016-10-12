@@ -70,8 +70,10 @@ Module Type TYPING
         wt_cexp f ->
         wt_cexp (Emerge x t f)
     | wt_Eite: forall e t f,
-        wt_lexp e ->
         typeof e = bool_type ->
+        wt_lexp e ->
+        wt_cexp t ->
+        wt_cexp f ->
         typeofc t = typeofc f ->
         wt_cexp (Eite e t f)
     | wt_Eexp: forall e,
@@ -115,6 +117,22 @@ Module Type TYPING
       wt_node ns n ->
       Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
       wt_global (n::ns).
+
+  Lemma wt_global_NoDup:
+    forall g,
+      wt_global g ->
+      NoDup (map n_name g).
+  Proof.
+    induction g; eauto using NoDup.
+    intro WTg. simpl. constructor.
+    2:apply IHg; now inv WTg.
+    intro Hin.
+    inversion_clear WTg as [|? ? ? WTn Hn].
+    change (Forall (fun n' => (fun i=> a.(n_name) <> i) n'.(n_name)) g) in Hn.
+    apply Forall_map in Hn.
+    apply In_Forall with (1:=Hn) in Hin.
+    now contradiction Hin.
+  Qed.
 
 End TYPING.
 

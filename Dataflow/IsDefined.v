@@ -168,6 +168,16 @@ Module Type ISDEFINED
       + now apply Is_defined_in_eqs_var_defined in Hdef.
       + now apply IHeqs.
   Qed.
+
+  Lemma In_EqFby_Is_defined_in_eqs:
+    forall x ck c0 e eqs,
+      In (EqFby x ck c0 e) eqs ->
+      Is_defined_in_eqs x eqs.
+  Proof.
+    induction eqs; inversion_clear 1; subst.
+    now repeat constructor.
+    constructor 2; intuition.
+  Qed.
   
 End ISDEFINED.
 

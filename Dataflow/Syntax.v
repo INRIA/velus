@@ -134,6 +134,16 @@ Module Type SYNTAX
       now symmetry.
   Qed.
 
+  Lemma NoDup_var_defined_n_eqs:
+    forall n,
+      NoDup (map var_defined n.(n_eqs)).
+  Proof.
+    intro n.
+    rewrite n.(n_defd).
+    apply fst_NoDupMembers.
+    apply (NoDupMembers_app_r _ _ n.(n_nodup)).
+  Qed.
+
 End SYNTAX.
 
 Module SyntaxFun

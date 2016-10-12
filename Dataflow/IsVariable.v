@@ -159,6 +159,26 @@ Module Type ISVARIABLE
       + apply IHeqs in HH. constructor (assumption).
   Qed.
 
+  Lemma In_EqDef_Is_variable_in_eqs:
+    forall x ck e eqs,
+      In (EqDef x ck e) eqs ->
+      Is_variable_in_eqs x eqs.
+  Proof.
+    induction eqs; inversion_clear 1; subst.
+    now repeat constructor.
+    constructor 2; intuition.
+  Qed.
+
+  Lemma In_EqApp_Is_variable_in_eqs:
+    forall x ck f es eqs,
+      In (EqApp x ck f es) eqs ->
+      Is_variable_in_eqs x eqs.
+  Proof.
+    induction eqs; inversion_clear 1; subst.
+    now repeat constructor.
+    constructor 2; intuition.
+  Qed.
+  
 End ISVARIABLE.
 
 Module IsVariableFun

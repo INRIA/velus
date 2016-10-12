@@ -140,6 +140,15 @@ Lemma Forall_cons2:
     List.Forall P (x :: l) <-> P x /\ List.Forall P l.
 Proof. intros; split; inversion_clear 1; auto. Qed.
 
+Lemma all_In_Forall:
+  forall {A} (P: A -> Prop) (xs: list A),
+    (forall x, In x xs -> P x) ->
+    Forall P xs.
+Proof.
+  induction xs; auto.
+  constructor; auto with datatypes.
+Qed.
+
 Lemma add_comm:
   forall {A} x x' (v v': A) m,
     x <> x' ->
@@ -217,6 +226,14 @@ Proof.
   rewrite <-IH.
   rewrite <-List.app_comm_cons.
   now rewrite Forall_cons2.
+Qed.
+
+Lemma Forall_map:
+  forall {A B} (f: A -> B) P xs,
+    Forall P (map f xs) <-> Forall (fun x => P (f x)) xs.
+Proof.
+  intros A B f P xs.
+  induction xs; split; simpl; inversion 1; intuition.
 Qed.
 
 Lemma Exists_app:
@@ -307,12 +324,22 @@ Proof.
 Qed.
 
 Instance Forall_Permutation_Proper (A:Type):
-  Proper (eq ==> Permutation (A:=A) ==> iff) Forall.
+  Proper (pointwise_relation A iff ==> Permutation (A:=A) ==> iff) Forall.
 Proof.
   intros P Q HPQ xs ys Hperm.
-  subst P.
-  split; intro HH; [|symmetry in Hperm];
-    apply Permutation_Forall with (1:=Hperm) (2:=HH).
+  assert (forall ws, Forall P ws <-> Forall Q ws) as Hsame
+      by (induction ws as [|w ws]; split; inversion_clear 1;
+          auto; constructor; try (rewrite HPQ || rewrite <-HPQ); intuition).
+  induction Hperm.
+  - split; auto.
+  - split; inversion_clear 1.
+    + constructor; try rewrite <-HPQ; intuition.
+    + constructor; try rewrite HPQ; intuition.
+  - split; intro;
+      repeat match goal with H:Forall _ (_::_) |- _ => inversion_clear H end;
+      repeat constructor; try (rewrite HPQ || rewrite <-HPQ); auto;
+        now apply Hsame.
+  - now rewrite IHHperm1, <-IHHperm2, Hsame.
 Qed.
 
 Lemma Forall_app_weaken:
@@ -1272,9 +1299,19 @@ Section Lists.
     reflexivity.
   Qed.
 
-  Lemma partition_filter:
+  Lemma fst_partition_filter:
     forall P (xs: list A),
       Permutation (fst (partition P xs)) (filter P xs).
+  Proof.
+    induction xs as [|x xs]; auto.
+    simpl; rewrite (surjective_pairing (partition P xs)).
+    destruct (P x); auto.
+    now apply Permutation_cons.
+  Qed.
+
+  Lemma snd_partition_filter:
+    forall P (xs: list A),
+      Permutation (snd (partition P xs)) (filter (fun x => negb (P x)) xs).
   Proof.
     induction xs as [|x xs]; auto.
     simpl; rewrite (surjective_pairing (partition P xs)).
@@ -1299,6 +1336,24 @@ Section Lists.
     - destruct (p x); auto.
     - destruct (p x); destruct (p y); auto.
     - now rewrite IHHperm1, IHHperm2.
+  Qed.
+
+  Global Instance pointwise_filter_Proper {A}:
+    Proper (pointwise_relation A eq ==> @eq (list A) ==> @eq (list A))
+           (@filter A).
+  Proof.
+    intros f g Heq ys xs Hperm. subst.
+    induction xs as [|x xs]; auto.
+    simpl. now rewrite Heq, IHxs.
+  Qed.
+  
+  Global Instance pointwise_partition_Proper {A}:
+    Proper (pointwise_relation A eq ==> @eq (list A) ==> @eq (list A * list A))
+           (@partition A).
+  Proof.
+    intros f g Heq ys xs Hperm. subst.
+    induction xs as [|x xs]; auto.
+    simpl. now rewrite Heq, IHxs.
   Qed.
   
   Remark in_concat_cons:

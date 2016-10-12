@@ -19,14 +19,14 @@ Module Type CORRECTNESS
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import DF    : DATAFLOW Ids Op OpAux)
-       (Import MP    : OBC Ids Op OpAux)
+       (Import Obc   : OBC Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op DF.Syn)
 
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn MP.Syn Mem)
+       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
        
-       (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn MP.Syn MP.Sem Mem Trans)
-       (Import MemCor: MEMORYCORRES Ids Op OpAux DF MP)
-       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn MP.Syn MP.Sem MP.Equ).
+       (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
+       (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ).
 
   (** ** Technical lemmas *)
 
@@ -1306,7 +1306,7 @@ for all [Is_free_exp x e]. *)
                 simpl in *.
                 rewrite ps_from_list_gather_eqs_memories.
                 eassumption.
-              - rewrite find_method_stepm with (1:=Hstepm).
+              - rewrite find_method_stepm_out with (1:=Hstepm).
                 specialize (Hout n); simpl in Hout; rewrite Hys in Hout.
                 constructor; auto.
                 apply Hsemvar.

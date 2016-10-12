@@ -95,6 +95,7 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 
 VFILES:=RMemory.v\
   DataflowToObc/Correctness.v\
+  DataflowToObc/Typing.v\
   DataflowToObc/Correctness/MemoryCorres.v\
   DataflowToObc/Correctness/IsPresent.v\
   DataflowToObc/Translation.v\

@@ -396,6 +396,54 @@ Module Type TRANSLATION
         * apply IHeqs in HH; now left.
   Qed.        
 
+  Lemma fby_In_filter_memories:
+    forall eqs vars x (ty: type) ck c0 e,
+      In (EqFby x ck c0 e) eqs ->
+      In (x, ty) vars ->
+      In (x, ty) (filter (fun x=> PS.mem (fst x) (memories eqs)) vars).
+  Proof.
+    intros ** Heqs Hvars.
+    apply filter_In. split; auto.
+    apply PS.mem_spec.
+    assert (In (EqFby x ck c0 e) (filter is_fby eqs)) as Heqs'
+        by (apply filter_In; auto).
+    apply in_map with (f:=var_defined) in Heqs'.
+    now apply in_memories_filter_is_fby.
+  Qed.
+
+  Lemma not_in_memories_filter_notb_is_fby:
+    forall x eqs,
+      NoDup (map var_defined eqs) ->
+      In x (map var_defined (filter (notb is_fby) eqs)) ->
+      ~PS.In x (memories eqs).
+  Proof.
+    intros x eqs Hnodup HH.
+    rewrite in_memories_filter_is_fby.
+    induction eqs as [|eq eqs]; [intuition|].
+    destruct eq; simpl in *; inversion_clear Hnodup as [|? ? Hnin Hnodup'].
+    - destruct HH as [HH|HH]; [|now apply IHeqs].
+      subst. intro Hin.
+      rewrite in_map_iff in Hnin, Hin.
+      apply Hnin.
+      destruct Hin as (y & Hvar & Hin).
+      apply filter_In in Hin.
+      exists y; intuition.
+    - destruct HH as [HH|HH]; [|now apply IHeqs].
+      subst. intro Hin.
+      rewrite in_map_iff in Hnin, Hin.
+      apply Hnin.
+      destruct Hin as (y & Hvar & Hin).
+      apply filter_In in Hin.
+      exists y; intuition.
+    - specialize (IHeqs Hnodup' HH).
+      destruct 1 as [Heq|Hin]; [|contradiction].
+      subst. apply Hnin.
+      rewrite in_map_iff in *.
+      destruct HH as (y & Hv & Hin).
+      apply filter_In in Hin.
+      exists y; intuition.
+  Qed.      
+  
   Lemma fst_partition_memories_var_defined:
     forall n,
       Permutation
@@ -408,7 +456,7 @@ Module Type TRANSLATION
     match goal with |- Permutation (map fst (fst (partition ?p ?l))) _ =>
       assert (Permutation (map fst (fst (partition p l)))
                           (map fst (filter p n.(n_vars))))
-        as Hperm by (apply Permutation_map_aux; apply partition_filter)
+        as Hperm by (apply Permutation_map_aux; apply fst_partition_filter)
     end.
     rewrite Hperm; clear Hperm.
     match goal with |- context[filter ?p ?l] =>
@@ -470,6 +518,33 @@ Module Type TRANSLATION
     destruct eq; simpl; auto; now rewrite HH.
   Qed.
 
+  Lemma snd_gather_eqs_filter_is_app:
+    forall nothing eqs,
+      Permutation.Permutation (snd (gather_eqs eqs))
+                              (map (fun eq=>
+                                      match eq with
+                                      | EqApp x _ f _ => (x, f)
+                                      | _ => nothing
+                                      end) (List.filter is_app eqs)).
+  Proof.
+    intros.
+    match goal with |- context [map ?g _] => set(f:=g) end.
+    induction eqs as [|eq eqs]; auto.
+    simpl. unfold gather_eqs in *.
+    assert (forall eqs F S,
+               Permutation
+                 (snd (fold_left gather_eq eqs (F, S)))
+                 (S ++ map f (filter is_app eqs))) as HH.
+    { clear eq eqs IHeqs.
+      induction eqs as [|eq eqs].
+      now intros; simpl; rewrite app_nil_r.
+      destruct eq; intros; try apply IHeqs.
+      simpl. rewrite IHeqs.
+      now apply Permutation_cons_app. }
+    simpl.
+    destruct eq; simpl; auto; now rewrite HH.
+  Qed.
+  
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -542,6 +617,14 @@ Module Type TRANSLATION
     List.map translate_node G.
   (* =end= *)
 
+  Lemma map_c_name_translate:
+    forall g,
+      map c_name (translate g) = map n_name g.
+  Proof.
+    induction g as [|n g]; auto.
+    simpl; rewrite IHg. reflexivity.
+  Qed.
+  
   Lemma exists_step_method:
     forall node,
     exists stepm,
@@ -563,10 +646,22 @@ Module Type TRANSLATION
     simpl. now rewrite Hsr, ident_eqb_refl.
   Qed.
 
-  Lemma find_method_stepm:
+  Lemma find_method_stepm_out:
     forall node stepm,
       find_method step (translate_node node).(c_methods) = Some stepm ->
       stepm.(m_out) = [node.(n_out)].
+  Proof.
+    intros node stepm.
+    simpl. rewrite ident_eqb_refl.
+    injection 1.
+    intro HH; rewrite <-HH.
+    reflexivity.
+  Qed.
+
+  Lemma find_method_stepm_in:
+    forall node stepm,
+      find_method step (translate_node node).(c_methods) = Some stepm ->
+      stepm.(m_in) = node.(n_in).
   Proof.
     intros node stepm.
     simpl. rewrite ident_eqb_refl.
@@ -593,6 +688,25 @@ Module Type TRANSLATION
       apply IHG in Hfind. destruct Hfind as (node' & Hfind & Hcls).
       exists node'. simpl. rewrite Hneq. auto.
   Qed.
+
+  Lemma find_node_translate:
+    forall n g node,
+      find_node n g = Some node ->
+      exists cls prog', find_class n (translate g) = Some (cls, prog')
+                        /\ cls = translate_node node.
+  Proof.
+    induction g as [|node g]; [now inversion 1|].
+    intros ** Hfind.
+    simpl in Hfind.
+    destruct (equiv_dec node.(n_name) n) as [Heq|Hneq].
+    - rewrite Heq, ident_eqb_refl in Hfind.
+      injection Hfind; intros; subst node0.
+      exists (translate_node node), (translate g). split; auto.
+      simpl. now rewrite Heq, ident_eqb_refl.
+    - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
+      apply IHg in Hfind. destruct Hfind as (cls & prog' & Hfind & Hcls).
+      exists cls, prog'. split; auto. simpl. now rewrite Hneq.
+  Qed.
   
 End TRANSLATION.
 
@@ -608,3 +722,4 @@ Module TranslationFun
   Include TRANSLATION Ids Op OpAux SynDF SynMP Mem.
   
 End TranslationFun.
+
