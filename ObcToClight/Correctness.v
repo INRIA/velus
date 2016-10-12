@@ -1008,6 +1008,8 @@ Section PRESERVATION.
         pose proof (find_class_name _ _ _ _ Findcl); subst.
         edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto. 
         rewrite staterep_skip in Hrep; eauto.
+        pose proof (struct_in_bounds_sizeof _ _ _ Hco).
+        destruct H2.
         edestruct wt_program_find_class as [[Find]]; eauto.
         eapply In_Forall in Find; eauto; simpl in Find.
         apply not_None_is_Some in Find.
@@ -1024,6 +1026,7 @@ Section PRESERVATION.
             * now rewrite Eq.
           + destruct Struct.
             split; try omega.
+            
             admit.            
       Qed.
     End SelfField.
@@ -2261,83 +2264,6 @@ Section PRESERVATION.
   Qed.
   Hint Resolve stmt_eval_sub_prog.
   
-  Lemma wt_params:
-    forall vs xs es,
-      Forall2 (fun e v => wt_val v (typeof e)) es vs ->
-      Forall2 (fun e (xt: ident * type) => typeof e = snd xt) es xs ->
-      Forall2 (fun v xt => wt_val v (snd xt)) vs xs.
-  Proof.
-    induction vs, xs, es; intros ** Wt Eq; inv Wt;
-    inversion_clear Eq as [|? ? ? ? E]; auto.
-    constructor; eauto.
-    now rewrite <- E.
-  Qed.
-  Hint Resolve wt_params.
-
-  Lemma wt_val_valo:
-    forall xs vs e,
-      NoDupMembers xs ->
-      ((Forall (wt_valo (adds (map fst xs) vs e)) xs /\ length xs = length vs)
-      <-> Forall2 (fun v xt => wt_val v (snd xt)) vs xs).
-  Proof.
-    induction xs as [|(x, t)], vs as [|v]; intros ** Nodup; inv Nodup;
-    (split; [
-        intros [Forall Length]; inv Length; inversion_clear Forall as [|? ? Valo Forall']
-      | intro Forall2; inversion_clear Forall2 as [|? ? ? ? ? Forall2']]);
-    auto.
-    - constructor.
-      + unfold wt_valo in Valo; simpl in *.
-        now rewrite find_gsss in Valo.
-      + simpl in *.
-        rewrite <-IHxs; auto; split; auto.
-        rewrite adds_cons_cons in Forall'; eauto.
-        now rewrite <-fst_InMembers.
-    - split; simpl in *.
-      + constructor.
-        * unfold wt_valo; simpl.
-          now rewrite find_gsss.
-        * rewrite <-IHxs in Forall2'; auto; destruct Forall2'.
-          rewrite adds_cons_cons; eauto.
-          now rewrite <-fst_InMembers.
-      + erewrite Forall2_length with (l1:=vs); eauto. 
-  Qed.
-  
-  Lemma wt_env_params:
-    forall vs callee es, 
-      Forall2 (fun e v => wt_val v (typeof e)) es vs ->
-      Forall2 (fun (e : exp) (xt : ident * type) => typeof e = snd xt) es (m_in callee) ->
-      wt_env (adds (map fst (m_in callee)) vs sempty) (meth_vars callee).
-  Proof.
-    intros ** Wt Eq.
-    unfold wt_env.
-    apply Forall_app.
-    pose proof (m_nodupvars callee) as Nodup.
-    split.
-    - apply NoDupMembers_app_l in Nodup.
-      apply wt_val_valo with (vs:=vs) (e:=sempty) in Nodup.
-      destruct Nodup as [? Hvalo].
-      pose proof (wt_params _ _ _ Wt Eq) as Params.
-      apply Hvalo in Params; now destruct Params.
-    - apply Forall_forall.
-      intros (x, t) Hin.
-      assert (~ In x (map fst (m_in callee))).
-      { intro Hin'.
-        apply in_map_iff in Hin'; destruct Hin' as [(x', t') [? Hin']]; simpl in *; subst.
-        apply in_split in Hin; destruct Hin as (? & ? & Hin).
-        apply in_split in Hin'; destruct Hin' as (? & ? & Hin').
-        rewrite Hin, Hin' in Nodup.
-        rewrite <-app_assoc, <-app_comm_cons in Nodup.
-        apply NoDupMembers_app_r in Nodup.
-        inversion_clear Nodup as [|? ? ? Notin].
-        apply Notin.
-        apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
-      }
-      unfold wt_valo; simpl.
-      rewrite NotInMembers_find_adds with (v:=None); auto.
-      apply PM.gempty.
-  Qed.
-  Hint Resolve wt_env_params.
-  
   Theorem correctness:
     (forall p me1 ve1 s S2,
         stmt_eval p me1 ve1 s S2 ->
@@ -2404,7 +2330,7 @@ Section PRESERVATION.
     [| |intros Evs ? Hrec_eval ? ? ? owner ? caller
      |intros HS1 ? HS2|intros Hbool ? Hifte|
      |rename H into Find; intros Findmeth ? Hrec_exec Findvars Sub;
-      intros ** Findowner ? Find' Findmeth' Hrep ? ? ? Hgetptrf Hgetcf ? Findinst
+      intros ** Findowner ? Find' Findmeth' Hrep ? WTmem ? Hgetptrf Hgetcf ? Findinst
              Hbinst ? Hin Offs ? ? Hinstco ? ?]; intros;
       try inversion_clear WF as [? ? Hvars|? ? Hin| |
                                  |? ? ? ? ? callee ? ? Hin Find' Findmeth|];
@@ -2502,7 +2428,7 @@ Section PRESERVATION.
                       end p' cls).
       { inversion_clear WT_mem as [? ? ? ? Hinst].
         eapply In_Forall in Hinst; eauto.
-        inversion_clear Hinst as [? ? ? Hinst'|? ? ? ? ? ? Hinst' Find''];
+        inversion_clear Hinst as [? ? ? ? Hinst'|? ? ? ? ? ? ? Hinst' Find''];
           simpl in Hinst'; rewrite Hinst'.
         - apply wt_hempty.
         - simpl in Find''; rewrite Find'' in Find'; inv Find'; auto.   
@@ -2633,9 +2559,8 @@ Section PRESERVATION.
 
       edestruct find_class_app with (1:=Findowner)
         as (pre_prog & Hprog & FindNone); eauto.
-      rewrite Hprog in WT.
       assert (c_name c <> c_name owner)
-        by (eapply wt_program_not_same_name;
+        by (rewrite Hprog in WT; eapply wt_program_not_same_name;
             eauto using (wt_program_app _ _ WT)).
 
       (* extract the out structure *)
@@ -2652,11 +2577,8 @@ Section PRESERVATION.
       specialize (Hrec_exec Hsub c).
       edestruct Hrec_exec with (le1:=le_fun) (e1:=e_fun) (m1:=m_fun)
         as (? & m_fun' & ? & ? & MS'); eauto.
-      + assert (wt_mem match mfind_inst o me with
-                       | Some om => om
-                       | None => hempty
-                       end prog c) as Wt_mem. admit.
-        inversion_clear Wt_mem.
+      + eapply wt_mem_sub in WTmem; eauto. 
+        inversion_clear WTmem.
         rewrite match_states_conj; split; eauto; [|repeat split; eauto].
         simpl.
         rewrite sep_swap, sep_swap34, sep_swap23, sep_swap45, sep_swap34,
@@ -2698,7 +2620,7 @@ Section PRESERVATION.
              + rewrite Offs.
                unfold instance_match, mfind_inst, madd_obj; simpl.
                rewrite PM.gss.
-               eapply wt_program_not_class_in in WT; eauto.
+               rewrite Hprog in WT; eapply wt_program_not_class_in in WT; eauto.
                rewrite <-staterep_skip_cons with (prog:=prog'') (cls:=owner); eauto.
                rewrite <-staterep_skip_app with (prog:=owner :: prog''); eauto.
                rewrite <-Hprog.
