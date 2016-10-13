@@ -102,23 +102,58 @@ Module Export Op <: OPERATORS.
     Cop.sem_binary_operation
       empty_composite_env op v1 (cltype ty1) v2 (cltype ty2) Memory.Mem.empty.
 
+  Definition is_bool_type (ty: type) : bool :=
+    match ty with
+    | Tint Ctypes.IBool sg => true
+    | _ => false
+    end.
+
+  Definition is_bool_unop (op: Cop.unary_operation) : bool :=
+    match op with
+    | Cop.Onotbool => true
+    | _            => false
+    end.
+
   Definition type_unop (uop: unop) (ty: type) : option type :=
     match uop with
-    | UnaryOp op => match Ctyping.type_unop op (cltype ty) with
-                    | Errors.OK ty' => typecl ty'
-                    | Errors.Error _ => None
-                    end
+    | UnaryOp op => if is_bool_unop op && is_bool_type ty then Some bool_type
+                    else match Ctyping.type_unop op (cltype ty) with
+                         | Errors.OK ty' => typecl ty'
+                         | Errors.Error _ => None
+                         end
     | CastOp ty' => match Ctyping.check_cast (cltype ty) (cltype ty') with
                     | Errors.OK _ => Some ty'
                     | Errors.Error _ => None
                     end
     end.
 
-  Definition type_binop (op: binop) (ty1 ty2: type) : option type :=
-    match Ctyping.type_binop op (cltype ty1) (cltype ty2) with
-    | Errors.OK ty' => typecl ty'
-    | Errors.Error _ => None
+  Definition binop_always_returns_bool (op: binop) : bool :=
+    match op with
+    | Cop.Oeq  => true
+    | Cop.One  => true
+    | Cop.Olt  => true
+    | Cop.Ogt  => true
+    | Cop.Ole  => true
+    | Cop.Oge  => true
+    | _        => false
     end.
+  
+  Definition is_bool_binop (op: binop) : bool :=
+    match op with
+    | Cop.Oand => true
+    | Cop.Oor  => true
+    | Cop.Oxor => true
+    | _        => false
+    end.
+
+  Definition type_binop (op: binop) (ty1 ty2: type) : option type :=
+    if binop_always_returns_bool op
+       || (is_bool_binop op && (is_bool_type ty1 && is_bool_type ty2))
+    then Some bool_type
+    else match Ctyping.type_binop op (cltype ty1) (cltype ty2) with
+         | Errors.OK ty' => typecl ty'
+         | Errors.Error _ => None
+         end.
 
   (* Neither Vundef nor Vptr is well-typed.
 
@@ -309,7 +344,30 @@ Module Export Op <: OPERATORS.
   Qed.
 
   Local Hint Resolve good_bool_zero_or_one.
+
+  Lemma wt_val_Vfalse_bool_type:
+    wt_val (Values.Vfalse) bool_type.
+  Proof.
+    constructor; unfold Ctyping.wt_int; [now vm_compute|intuition].
+  Qed.
+
+  Lemma wt_val_Vtrue_bool_type:
+    wt_val (Values.Vtrue) bool_type.
+  Proof.
+    constructor; unfold Ctyping.wt_int; [now vm_compute|intuition].
+  Qed.
+
+  Local Hint Resolve wt_val_Vfalse_bool_type wt_val_Vtrue_bool_type.
   
+  Lemma wt_val_of_bool_bool_type:
+    forall v,
+      wt_val (Values.Val.of_bool v) bool_type.
+  Proof.
+    destruct v; simpl; auto.
+  Qed.
+
+  Local Hint Resolve wt_val_of_bool_bool_type.
+    
   Lemma typecl_wt_val_wt_val:
     forall cty ty v,
       typecl cty = Some ty ->
@@ -349,6 +407,16 @@ Module Export Op <: OPERATORS.
     eauto using Ctyping.wt_val.
   Qed.
 
+  Lemma is_bool_type_true:
+    forall ty,
+      is_bool_type ty = true ->
+      exists sg, ty = Tint Ctypes.IBool sg.
+  Proof.
+    destruct ty; try destruct i, s; simpl; intuition.
+    - exists Ctypes.Signed; auto.
+    - exists Ctypes.Unsigned; auto.
+  Qed.
+
   Lemma pres_sem_unop:
     forall op ty1 ty v1 v,
       type_unop op ty1 = Some ty ->
@@ -361,25 +429,34 @@ Module Export Op <: OPERATORS.
     unfold type_unop, sem_unop in *.
     destruct op as [uop|].
     - (* UnaryOp *)
-      apply wt_val_wt_val_cltype in Hv1.
-      destruct (Ctyping.type_unop uop (cltype ty1)) as [cty|] eqn:Hok;
-        [|discriminate].
-      assert (Hok':=Hok).
-      apply Ctyping.pres_sem_unop with (2:=Hsop) (3:=Hv1) in Hok;
-        DestructCases.
-      cut (v <> Values.Vundef
-           /\ (forall b ofs, v <> Values.Vptr b ofs)
-           /\ good_bool v cty).
-      { destruct 1 as (Hnun' & Hnptr' & Hgb). eauto using typecl_wt_val_wt_val. }
-      destruct uop; simpl in *.
-      + clear Hok'. rewrite Cop.notbool_bool_val in Hsop.
-        DestructCases. destruct b; repeat split; try discriminate; auto.
-      + unfold Cop.sem_notint in Hsop.
-        destruct v1; DestructCases; repeat split; try discriminate; auto.
-      + unfold Cop.sem_neg in Hsop.
-        destruct v1; DestructCases; repeat split; try discriminate; auto.
-      + unfold Cop.sem_absfloat in Hsop.
-        destruct v1; DestructCases; repeat split; try discriminate; auto.
+      destruct (is_bool_unop uop && is_bool_type ty1) eqn:Hb.
+      + apply andb_prop in Hb; destruct Hb as (Huop & Hbty).
+        destruct uop; try discriminate Huop.
+        apply is_bool_type_true in Hbty.
+        destruct Hbty as (sg & Hbty); subst.
+        inversion_clear Hv1 as [? ? ? WTn Hor| | |].
+        destruct (Hor eq_refl); subst; simpl in Hsop;
+        unfold Cop.sem_notbool, Cop.classify_bool in Hsop;
+        DestructCases; auto.
+      + apply wt_val_wt_val_cltype in Hv1.      
+        destruct (Ctyping.type_unop uop (cltype ty1)) as [cty|] eqn:Hok;
+          [|discriminate].
+        assert (Hok':=Hok).
+        apply Ctyping.pres_sem_unop with (2:=Hsop) (3:=Hv1) in Hok;
+          DestructCases.
+        cut (v <> Values.Vundef
+             /\ (forall b ofs, v <> Values.Vptr b ofs)
+             /\ good_bool v cty).
+        { destruct 1 as (Hnun' & Hnptr' & Hgb). eauto using typecl_wt_val_wt_val. }
+        destruct uop; simpl in *.
+        * clear Hok'. rewrite Cop.notbool_bool_val in Hsop.
+          DestructCases. destruct b; repeat split; try discriminate; auto.
+        * unfold Cop.sem_notint in Hsop.
+          destruct v1; DestructCases; repeat split; try discriminate; auto.
+        * unfold Cop.sem_neg in Hsop.
+          destruct v1; DestructCases; repeat split; try discriminate; auto.
+        * unfold Cop.sem_absfloat in Hsop.
+          destruct v1; DestructCases; repeat split; try discriminate; auto.
     - (* CastOp *)
       destruct (Ctyping.check_cast (cltype ty1) (cltype t));
         [injection Htop; intro; subst; clear Htop|discriminate].
@@ -544,65 +621,77 @@ Module Export Op <: OPERATORS.
   Proof.
     unfold type_binop, sem_binop.
     intros ** Hty Hsem Hwt1 Hwt2.
-    destruct (Ctyping.type_binop op (cltype ty1) (cltype ty2)) eqn:Hok;
-      [|discriminate].
-    pose proof (binop_never_bool _ _ _ _ Hok) as Hnbool.
-    pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt1) as (Hnun1 & Hnptr1).
-    pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt2) as (Hnun2 & Hnptr2).
-    apply wt_val_wt_val_cltype in Hwt1.
-    apply wt_val_wt_val_cltype in Hwt2.
-    pose proof (Ctyping.pres_sem_binop _ _ _ _ _ _ _ _ _ Hok Hsem Hwt1 Hwt2)
-      as Hwt.
-    cut (v <> Values.Vundef
-         /\ (forall b ofs, v <> Values.Vptr b ofs)
-         /\ good_bool v t).
-    { destruct 1 as (Hnun' & Hnptr' & Hgb). eauto using typecl_wt_val_wt_val. }
-    destruct op; simpl in Hsem.
-    - (* add *)
-      unfold Cop.sem_add, Cop.sem_binarith in Hsem.
-      rewrite classify_add_cltypes in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* sub *)
-      unfold Cop.sem_sub, Cop.sem_binarith in Hsem.
-      rewrite classify_sub_cltypes in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* mul *)
-      unfold Cop.sem_mul, Cop.sem_binarith in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* div *)
-      unfold Cop.sem_div, Cop.sem_binarith in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* mod *)
-      unfold Cop.sem_mod, Cop.sem_binarith in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* and *)
-      unfold Cop.sem_and, Cop.sem_binarith in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* or *)
-      unfold Cop.sem_or, Cop.sem_binarith in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* xor *)
-      unfold Cop.sem_xor, Cop.sem_binarith in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* shl *)
-      unfold Cop.sem_shl, Cop.sem_shift in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-    - (* shr *)
-      unfold Cop.sem_shr, Cop.sem_shift in Hsem.
-      DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
-      (* comparisons *)
-    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
-        subst; repeat split; try discriminate; auto.
-    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
-        subst; repeat split; try discriminate; auto.
-    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
-        subst; repeat split; try discriminate; auto.
-    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
-        subst; repeat split; try discriminate; auto.
-    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
-        subst; repeat split; try discriminate; auto.
-    - destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem);
-        subst; repeat split; try discriminate; auto.
+    destruct (binop_always_returns_bool op) eqn:Heq1; simpl in Hty;
+      [|destruct
+          (is_bool_binop op && (is_bool_type ty1 && is_bool_type ty2)) eqn:Heq2];
+      simpl in Hty.
+    - (* Binary comparisons always return a bool (zero or one). *)
+      injection Hty; intro; subst.
+      destruct op; try discriminate Heq1;
+        unfold Cop.sem_binary_operation in Hsem;
+        destruct (sem_cmp_true_or_false _ _ _ _ _ _ _ Hsem); subst; auto.
+    - (* Binary operators that are closed on bool. *)
+      injection Hty; intro; subst; clear Hty.
+      apply andb_prop in Heq2; destruct Heq2 as (Hbop & Heq2).
+      apply andb_prop in Heq2; destruct Heq2 as (Hbty1 & Hbty2).
+      destruct (is_bool_type_true _ Hbty1) as (sg1 & Hty1).
+      destruct (is_bool_type_true _ Hbty2) as (sg2 & Hty2).
+      subst; clear Hbty1 Hbty2 Heq1.
+      destruct op; try discriminate Hbop;
+        destruct v1, v2;
+        inv Hwt1; inv Hwt2;
+          repeat match goal with H:?x = ?x -> _ \/ _ |- _ =>
+                                 destruct (H eq_refl); clear H end;
+          subst;
+          vm_compute in Hsem;
+          injection Hsem; intro; subst v; auto.
+    - (* Everything else. *)
+      destruct (Ctyping.type_binop op (cltype ty1) (cltype ty2)) eqn:Hok;
+        [|discriminate].
+      pose proof (binop_never_bool _ _ _ _ Hok) as Hnbool.
+      pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt1) as (Hnun1 & Hnptr1).
+      pose proof (wt_val_not_vundef_nor_vptr _ _ Hwt2) as (Hnun2 & Hnptr2).
+      apply wt_val_wt_val_cltype in Hwt1.
+      apply wt_val_wt_val_cltype in Hwt2.
+      pose proof (Ctyping.pres_sem_binop _ _ _ _ _ _ _ _ _ Hok Hsem Hwt1 Hwt2)
+        as Hwt.
+      cut (v <> Values.Vundef
+           /\ (forall b ofs, v <> Values.Vptr b ofs)
+           /\ good_bool v t).
+      { destruct 1 as (Hnun' & Hnptr' & Hgb). eauto using typecl_wt_val_wt_val. }
+      destruct op; simpl in Hsem; try discriminate Heq1.
+      + (* add *)
+        unfold Cop.sem_add, Cop.sem_binarith in Hsem.
+        rewrite classify_add_cltypes in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* sub *)
+        unfold Cop.sem_sub, Cop.sem_binarith in Hsem.
+        rewrite classify_sub_cltypes in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* mul *)
+        unfold Cop.sem_mul, Cop.sem_binarith in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* div *)
+        unfold Cop.sem_div, Cop.sem_binarith in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* mod *)
+        unfold Cop.sem_mod, Cop.sem_binarith in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* and *)
+        unfold Cop.sem_and, Cop.sem_binarith in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* or *)
+        unfold Cop.sem_or, Cop.sem_binarith in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* xor *)
+        unfold Cop.sem_xor, Cop.sem_binarith in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* shl *)
+        unfold Cop.sem_shl, Cop.sem_shift in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
+      + (* shr *)
+        unfold Cop.sem_shr, Cop.sem_shift in Hsem.
+        DestructCases; repeat split; try discriminate; try ContradictNotVptr; auto.
   Qed.
 
   Lemma val_dec   : forall v1 v2 : val, {v1 = v2} + {v1 <> v2}.
