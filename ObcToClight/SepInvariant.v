@@ -429,15 +429,6 @@ Section StructInBounds.
   
 End StructInBounds.
 
-(* TODO: move into Obc/Syntax.v *)
-Lemma find_class_chained:
-  forall prog c1 c2 cls prog' cls' prog'',
-    wt_program prog ->
-    find_class c1 prog = Some (cls, prog') ->
-    find_class c2 prog' = Some (cls', prog'') ->
-    find_class c2 prog = Some (cls', prog'').
-Admitted.
-
 Section StateRepProperties.
 
   Variable main_node : ident.
