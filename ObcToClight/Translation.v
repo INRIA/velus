@@ -1,5 +1,7 @@
 Require cfrontend.Clight.
 Require Import lib.Integers.
+Require Import common.Errors.
+Require Import lib.Maps.
 
 Require Import Rustre.Common.
 Require Import Rustre.Obc.Syntax.
@@ -10,10 +12,13 @@ Require Import Rustre.Operators.
 Module Export OpAux := OperatorsAux Op.
 Module Export Syn := SyntaxFun Ids Op OpAux.
 
+Require Import ZArith.BinIntDef.
 Require Import String.
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
+Open Scope error_monad_scope.
+Open Scope Z.
 
 Definition main_id: ident := pos_of_str "main".
 Axiom prefix: ident -> ident -> ident.
@@ -224,7 +229,9 @@ Definition translate_method (prog: program) (c: class) (m: method)
 
 Definition make_methods (prog: program) (c: class)
   : list (ident * AST.globdef Clight.fundef Ctypes.type) :=
-  map (translate_method prog c) c.(c_methods).
+  let meths := map (translate_method prog c) c.(c_methods) in
+  
+  meths.
 
 Definition translate_obj (obj: ident * ident): (ident * Ctypes.type) :=
   let (o, c) := obj in
@@ -309,6 +316,23 @@ Proof.
   - right. exact msg.
 Defined.
 
+Definition check_size (env: Ctypes.composite_env) (id: AST.ident) :=
+  match env ! id with
+  | Some co =>
+    if Z.leb (Ctypes.co_sizeof co) Int.modulus
+    then Errors.OK tt else Errors.Error (Errors.msg "2big")
+  | None => Errors.Error (Errors.msg "unknown")
+  end.
+
+Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composite_definition)
+  : res unit :=
+  match types with
+  | nil => OK tt
+  | Ctypes.Composite id su m a :: types =>
+      do _ <- check_size env id;
+      check_size_env env types
+  end.
+
 Definition make_program'
            (types: list Ctypes.composite_definition)
            (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
@@ -316,6 +340,7 @@ Definition make_program'
            (main: ident) : Errors.res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
   | inl (exist ce P) =>
+    do _ <- check_size_env ce types;
     Errors.OK {| Ctypes.prog_defs := defs;
                  Ctypes.prog_public := public;
                  Ctypes.prog_main := main;
