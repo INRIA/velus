@@ -76,113 +76,170 @@ Proof.
   apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
 Qed.
 
-Lemma NoDupMembers_rec_instance_methods:
-  forall s l,
-    NoDupMembers l ->
-    NoDupMembers (rec_instance_methods s l).
+Lemma eq_key_equiv:
+  forall k x k' x',
+    M.eq_key (elt:=ident) (k, x) (k', x') <-> k = k'.
 Proof.
-  induction s; simpl; intros ** Nodup;
-  try repeat constructor; auto.
-  destruct (in_dec dec_pair (i0, i1) (map fst l1)); auto.
-  constructor; auto.
-  now rewrite fst_InMembers.
+  intros (x1, x2) x3 (x'1, x'2) x'3.
+  unfold M.eq_key, M.Raw.Proofs.PX.eqk; simpl; split; intro H.
+  - destruct H; subst; auto.
+  - inv H; split; auto.
 Qed.
 
-Lemma NoDupMembers_instance_methods:
-  forall m, NoDupMembers (instance_methods m).
+Lemma setoid_in_key:
+  forall l k x,
+    SetoidList.InA (M.eq_key (elt:=ident)) (k, x) l <-> InMembers k l.
 Proof.
-  intro.
-  unfold instance_methods.
-  apply NoDupMembers_rec_instance_methods; constructor.
+  induction l as [|(k', x')]; split; intros Hin; try inv Hin. 
+  - constructor.
+    now rewrite <-eq_key_equiv with (x:=x) (x':=x').
+  - destruct (IHl k x); apply inmembers_cons; auto.
+  - constructor.
+    now apply eq_key_equiv.
+  - destruct (IHl k x); apply SetoidList.InA_cons; right; auto.
 Qed.
 
-(* TODO: tidy proof *)
+Lemma eq_key_elt_equiv:
+  forall k x k' x',
+    M.eq_key_elt (elt:=ident) (k, x) (k', x') <-> (k, x) = (k', x').
+Proof.
+  intros (x1, x2) x3 (x'1, x'2) x'3.
+  unfold M.eq_key_elt, M.Raw.Proofs.PX.eqke; simpl; split; intro H.
+  - destruct H as [[]]; subst; auto.
+  - inv H; split; auto.
+Qed.
+
+Lemma setoid_in_key_elt:
+  forall l k x,
+    SetoidList.InA (M.eq_key_elt (elt:=ident)) (k, x) l <-> In (k, x) l.
+Proof.
+  induction l as [|(k', x')]; split; intros Hin; try inv Hin. 
+  - constructor.
+    symmetry; now rewrite <-eq_key_elt_equiv.
+  - destruct (IHl k x); apply in_cons; auto.
+  - constructor.
+    now apply eq_key_elt_equiv.
+  - destruct (IHl k x); apply SetoidList.InA_cons; right; auto.
+Qed.
+
+Lemma setoid_nodup:
+  forall l,
+    SetoidList.NoDupA (M.eq_key (elt:=ident)) l <-> NoDupMembers l.
+Proof.
+  induction l as [|(k, x)]; split; intro Nodup; inv Nodup; constructor.
+  - now rewrite <-setoid_in_key with (x:=x).
+  - now rewrite <-IHl.
+  - now rewrite setoid_in_key.
+  - now rewrite IHl.
+Qed.
+
+Lemma MapsTo_add_same:
+  forall m o f (c c': ident),
+    M.MapsTo (o, f) c (M.add (o, f) c' m) ->
+    c = c'.
+Proof.
+  intros ** Hin.
+  assert (M.E.eq (o, f) (o, f)) as E by reflexivity.
+  pose proof (@M.add_1 _ m (o, f) (o, f) c' E) as Hin'.
+  apply M.find_1 in Hin; apply M.find_1 in Hin'.
+  rewrite Hin in Hin'; inv Hin'; auto.
+Qed.
+
+Lemma MapsTo_add_empty:
+  forall o f o' f' c c',
+    M.MapsTo (o, f) c (M.add (o', f') c' (M.empty ident)) ->
+    o = o' /\ f = f' /\ c = c'.
+Proof.
+  intros ** Hin.
+  destruct (M.E.eq_dec (o', f') (o, f)) as [[E1 E2]|E1]; simpl in *.
+  - subst. repeat split; auto.
+    eapply MapsTo_add_same; eauto.
+  - apply M.add_3 in Hin; simpl; auto.
+    apply M.find_1 in Hin; discriminate.
+Qed.
+
 Lemma In_rec_instance_methods_In_insts:
-  forall p insts mems vars s l o f c,
+  forall s m o fid cid p insts mems vars,
     wt_stmt p insts mems vars s ->
-    (forall o f c, In (o, f, c) l -> In (o, c) insts) ->
-    In (o, f, c) (rec_instance_methods s l) ->
-    In (o, c) insts.
+    M.MapsTo (o, fid) cid (rec_instance_methods s m) ->
+    (forall o f c, M.MapsTo (o, f) c m -> In (o, c) insts) ->
+    In (o, cid) insts.
 Proof.
-  induction s; simpl.
-
-  intros; eapply H0; eauto.
-  intros; eapply H0; eauto.
-  intros. inv H. eapply IHs2 in H1; eauto.
-  intros. inv H. eapply IHs2 in H1; eauto.
-  intros. destruct (in_dec dec_pair (i0, i1) (map fst l1)).
-  eapply H0. eapply H1. inv H. inv H1. injection H.
-  intros; subst. assumption.
-  eapply H0. eauto.
-
-  intros. eapply H0; eauto.
+  induction s; intros ** Wt Hin H; inv Wt; simpl in *; eauto.
+  destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+  - subst.
+    apply MapsTo_add_same in Hin; subst; assumption.
+  - apply M.add_3 in Hin; eauto.
 Qed.
 
-(* TODO: tidy proof *)
+Lemma In_instance_methods_In_insts:
+  forall f o fid cid p insts mems,
+    wt_method p insts mems f ->
+    M.MapsTo (o, fid) cid (instance_methods f) ->
+    In (o, cid) insts.
+Proof.
+  unfold wt_method, instance_methods.
+  intros.
+  eapply In_rec_instance_methods_In_insts; eauto.
+  intros o' f' c' Hin.
+  apply M.find_1 in Hin; discriminate.
+Qed.
+
 Lemma In_rec_instance_methods:
-  forall p insts mems vars s l v,
+  forall s m o fid cid p insts mems vars,
     wt_stmt p insts mems vars s ->
     NoDupMembers insts ->
-    (forall o f c, In (o, f, c) l -> In (o, c) insts) ->
-    (In v (rec_instance_methods s l) <->
-     In v (rec_instance_methods s []) \/ In v l).
+    In (o, cid) insts ->
+    (M.MapsTo (o, fid) cid (rec_instance_methods s m) <->
+    M.MapsTo (o, fid) cid (rec_instance_methods s (@M.empty ident))
+    \/ M.MapsTo (o, fid) cid m).
 Proof.
-  induction s; intros ** WTs Hnodup Hlin; inv WTs; simpl;
-    split; intro HH; eauto using In_rec_instance_methods_In_insts;
-    try rewrite IHs2, IHs1 in HH;
-    try rewrite IHs2, IHs1;
-    try now intuition.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H4. 2:eapply Hin. intros. inversion H.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H4. 2:eapply Hin. intros. eapply Hlin. eapply H.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H4. 2:eapply Hin. intros. eapply Hlin. eapply H.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H4. 2:eapply Hin. intros. inversion H.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H1. 2:eapply Hin. intros. inversion H.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H1. 2:eapply Hin. intros. eapply Hlin. eapply H.
-  - intros ** Hin. eapply In_rec_instance_methods_In_insts.
-    eapply H1. 2:eapply Hin. intros. eapply Hlin. eapply H.
-  - intros. eapply In_rec_instance_methods_In_insts.
-    eapply H1. 2:eapply H. intros. inv H0.
-  - match goal with H:context [if ?b then _ else _] |- _ => destruct b end.
-    + intuition.
-    + inv HH; intuition.
-  - match goal with |- context [if ?b then _ else _] => destruct b end.
-    + destruct HH as [HH|HH]; auto.
-      destruct HH; intuition.
-      subst v.
-      apply fst_InMembers in i2.
-      apply InMembers_In in i2.
-      destruct i2 as (i' & i2).
-      pose proof (Hlin _ _ _ i2).
-      apply NoDupMembers_det with (1:=Hnodup) (2:=H4) in H.
-      subst.
-      assumption.
-    + destruct HH.
-      destruct H; intuition.
-      rewrite <-H. constructor; auto.
-      constructor 2; auto.
+  induction s; simpl; intros ** Wt Nodup Ho; split; intros ** Hin;
+  inv Wt; try now right.
+  - destruct Hin as [H|]; auto; apply M.find_1 in H; discriminate. 
+  - destruct Hin as [H|]; auto; apply M.find_1 in H; discriminate. 
+  - rewrite IHs2, IHs1 in Hin; eauto.
+    rewrite IHs2; eauto.
+    destruct Hin as [|[|]]; auto.
+  - erewrite IHs2 in Hin; eauto.
+    rewrite IHs2, IHs1; eauto.
+    destruct Hin as [[|]|]; auto.
+  - rewrite IHs2, IHs1 in Hin; eauto.
+    rewrite IHs2; eauto.
+    destruct Hin as [|[|]]; auto.
+  - rewrite IHs2 in Hin; eauto.
+    rewrite IHs2, IHs1; eauto.
+    destruct Hin as [[|]|]; auto.
+  - destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+    + subst.
+      apply MapsTo_add_same in Hin; subst.
+      left; apply M.add_1; auto.
+    + right; eapply M.add_3; eauto; simpl; auto.
+  - destruct Hin as [Hin|Hin]. 
+    + apply MapsTo_add_empty in Hin; destruct Hin as (? & ? & ?); subst.
+      apply M.add_1; auto.
+    + destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+      * subst.
+        app_NoDupMembers_det.
+        apply M.add_1; auto.
+      * apply M.add_2; auto. 
+  - destruct Hin; auto; apply M.find_1 in H; discriminate. 
 Qed.
- 
+
 Lemma NoDupMembers_make_out_vars:
   forall m, NoDupMembers (make_out_vars (instance_methods m)).
 Proof.
   intro.
   unfold make_out_vars.
-  rewrite fst_NoDupMembers, map_map, NoDup_norepet.
-  apply list_map_norepet.
-  - rewrite <-NoDup_norepet.
-    apply NoDupMembers_NoDup, NoDupMembers_instance_methods.
-  - intros ((ox, fx), cx) ((oy, fy), cy) Hx Hy Diff; simpl.
-    intro E; apply Diff.
-    apply prefix_out_injective in E; destruct E; subst.
-    repeat f_equal.
-    eapply NoDupMembers_det; eauto.
-    apply NoDupMembers_instance_methods.
+  assert (NoDupMembers (M.elements (elt:=ident) (instance_methods m))) as Nodup
+    by (rewrite <-setoid_nodup; apply M.elements_3w).
+  induction (M.elements (elt:=ident) (instance_methods m)) as [|((o, f), c)];
+    simpl; inversion_clear Nodup as [|? ? ? Notin Nodup']; constructor; auto.
+  intro Hin; apply Notin.
+  rewrite fst_InMembers, map_map, in_map_iff in Hin.
+  destruct Hin as (((o', f'), c') & Eq & Hin); simpl in *.
+  apply prefix_out_injective in Eq; destruct Eq; subst.
+  eapply In_InMembers; eauto.
 Qed.
 
 Remark translate_param_fst:
@@ -305,17 +362,43 @@ Section PRESERVATION.
     - right; auto.
   Qed.
   Hint Resolve occurs_in_ite occurs_in_comp.
+
+  Lemma occurs_in_wt:
+    forall s s' p insts mems vars,
+      wt_stmt p insts mems vars s ->
+      occurs_in s' s ->
+      wt_stmt p insts mems vars s'.
+  Proof.
+    induction s; intros ** Wt Occ;
+    inv Wt; inversion_clear Occ as [|? ? ? ? [?|?]|? ? ? [?|?]];
+    try econstructor; eauto.
+  Qed.
   
   Lemma occurs_in_instance_methods:
-    forall ys clsid o fid es f,
+    forall ys clsid o fid es f p insts mems,
+      wt_method p insts mems f ->
+      NoDupMembers insts ->
       occurs_in (Call ys clsid o fid es) (m_body f) ->
-      In (o, fid, clsid) (instance_methods f).
+      M.MapsTo (o, fid) clsid (instance_methods f).
   Proof.
-    intros ** Occurs.
-    unfold instance_methods.
-    induction (m_body f); inversion_clear Occurs as [|? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]];
-    simpl; try (apply In_rec_instance_methods; auto).
-    now left.
+    unfold instance_methods, wt_method.
+    intros ** Wt Nodup Occurs.
+    induction (m_body f);
+      inversion_clear Occurs as [|? ? ? ? [Hs1|Hs2]|? ? ? [Hs1|Hs2]];
+      inversion Wt; subst; simpl.
+    - rewrite In_rec_instance_methods; eauto.
+      eapply occurs_in_wt in Hs1; eauto.
+      inv Hs1; assumption.
+    - rewrite In_rec_instance_methods; eauto.
+      eapply occurs_in_wt in Hs2; eauto.
+      inv Hs2; assumption.
+    - rewrite In_rec_instance_methods; eauto.
+      eapply occurs_in_wt in Hs1; eauto.
+      inv Hs1; assumption.
+    - rewrite In_rec_instance_methods; eauto.
+      eapply occurs_in_wt in Hs2; eauto.
+      inv Hs2; assumption.
+    - apply M.add_1; auto.
   Qed.
   
   Section ClassProperties.
@@ -403,29 +486,35 @@ Section PRESERVATION.
 
       Lemma well_formed_instance_methods:
         forall o fid cid,
-          In (o, fid, cid) (instance_methods caller) ->
+          In (o, cid) owner.(c_objs) ->
+          M.MapsTo (o, fid) cid (instance_methods caller) ->
           exists c cls callee,
             find_class cid prog = Some (c, cls)
             /\ find_method fid (c_methods c) = Some callee.
       Proof.
-        intros ** Hin.
+        intros ** Ho Hin.
         pose proof (find_class_name _ _ _ _ Findcl) as Eq.
         pose proof (find_method_name _ _ _ Findmth) as Eq'.
         edestruct wt_program_find_class as [WT']; eauto.
         eapply wt_class_find_method in WT'; eauto.
         unfold instance_methods in Hin.
         unfold wt_method in WT'.
-        induction (m_body caller); simpl in *; try contradiction; inv WT'.
-        - rewrite In_rec_instance_methods in Hin. destruct Hin.
+        pose proof (c_nodupobjs owner).
+        induction (m_body caller); simpl in *;
+        try (apply M.find_1 in Hin; discriminate); inv WT'.
+        - rewrite In_rec_instance_methods in Hin; eauto. destruct Hin.
           + apply IHs2; auto.
           + apply IHs1; auto. 
-        - rewrite In_rec_instance_methods in Hin. destruct Hin.
+        - rewrite In_rec_instance_methods in Hin; eauto. destruct Hin.
           + apply IHs2; auto.
           + apply IHs1; auto. 
-        - destruct Hin as [E|]; try contradiction; inv E.
-          exists cls, p', fm; split; auto.
-          apply find_class_sub in Findcl.
-          eapply find_class_sub_same; eauto.
+        - destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+          + subst.
+            apply MapsTo_add_same in Hin; subst.
+            exists cls, p', fm; split; auto.
+            apply find_class_sub in Findcl.
+            eapply find_class_sub_same; eauto.
+          + apply M.add_3, M.find_1 in Hin; simpl; auto; discriminate.
       Qed.
 
       Theorem methods_corres:
@@ -562,12 +651,18 @@ Section PRESERVATION.
              (make_out_vars (instance_methods caller)).
   Proof.
     intros ** Findcl Findmth.
-    induction_list (instance_methods caller) as [|((o, f), k)] with insts; simpl; auto.
+    edestruct wt_program_find_class as [WT']; eauto.
+    eapply wt_class_find_method in WT'; eauto.
+    induction_list (make_out_vars (instance_methods caller)) as [|(inst, t)] with vars; simpl; auto.
     constructor; auto.
-    clear IHinsts.
-    assert (In (o, f, k) (instance_methods caller)) as Hin
-        by (rewrite Hinsts; apply in_app; left; apply in_app; right; apply in_eq).
+    assert (In (inst, t) (make_out_vars (instance_methods caller))) as Hin
+        by (rewrite Hvars; apply in_app; left; apply in_app; right; apply in_eq).
+    unfold make_out_vars in Hin; apply in_map_iff in Hin;
+    destruct Hin as (((o, fid), cid) & E & Hin); inversion E; subst inst t; clear E.
+    rewrite <-setoid_in_key_elt in Hin; apply M.elements_2 in Hin.
+    assert (In (o, cid) (c_objs owner)) by (eapply In_instance_methods_In_insts; eauto).
     edestruct well_formed_instance_methods as (c & cls & callee & Findc & Findcallee); eauto.
+    clear IHvars.
     pose proof (find_class_name _ _ _ _ Findc);
       pose proof (find_method_name _ _ _ Findcallee); subst.
     clear Findmth.
@@ -575,7 +670,7 @@ Section PRESERVATION.
     split.
     * simpl; change (prog_comp_env tprog) with gcenv.
       rewrite Hco.
-      unfold co_sizeof. admit.
+      admit.
     *{ exists (prefix_fun (c_name c) (m_name callee)), co.
        repeat split; auto.
        - rewrite Hmembers.
@@ -2243,7 +2338,7 @@ Section PRESERVATION.
   Lemma subrep_extract:
     forall f f' e m o c' P,
       m |= subrep f e ** P ->
-      In (o, f', c') (instance_methods f) ->
+      M.MapsTo (o, f') c' (instance_methods f) ->
       exists b co ws xs,
         e ! (prefix_out o f') = Some (b, type_of_inst (prefix_fun c' f'))
         /\ gcenv ! (prefix_fun c' f') = Some co
@@ -2255,7 +2350,8 @@ Section PRESERVATION.
     intros ** Hrep Hin.
     unfold subrep, subrep_inst in *.
     assert (In (prefix_out o f', type_of_inst (prefix_fun c' f')) (make_out_vars (instance_methods f))) as Hin'.
-    { apply in_map with
+    { apply M.elements_1, setoid_in_key_elt in Hin.
+      apply in_map with
       (f:=fun x => let '(o0, f0, cid) := x in (prefix_out o0 f0, type_of_inst (prefix_fun cid f0))) in Hin.
       unfold make_out_vars; auto.
     }
@@ -2343,7 +2439,7 @@ Section PRESERVATION.
           me1 = match mfind_inst o me with Some om => om | None => hempty end ->        
           e1 ! (prefix_out o fid) = Some (outb_callee, oty) ->
           In (o, clsid) owner.(c_objs) ->
-          In (o, fid, clsid) (instance_methods caller) ->
+          M.MapsTo (o, fid) clsid (instance_methods caller) ->
           field_offset gcenv o (make_members owner) = Errors.OK d ->
           0 <= Int.unsigned sofs + d <= Int.max_unsigned ->
           0 <= Int.unsigned sofs ->
@@ -2449,14 +2545,18 @@ Section PRESERVATION.
 
       pose proof (find_class_name _ _ _ _ Find') as Eq.
       pose proof (find_method_name _ _ _ Findmeth) as Eq'.
-      subst. (* rewrite Eq, Eq' in *. *)
+      subst. 
 
       (* the *self parameter *)
       edestruct eval_self_inst with (1:=Find) (e:=e1) as (? & ? & ? & ?); eauto.
       
       (* the *out parameter *)
       rewrite sep_swap3 in Hrep.
-      apply occurs_in_instance_methods in Occurs.
+      edestruct wt_program_find_class with (2:=Find) as [WT'']; eauto.
+      eapply wt_class_find_method in WT''; eauto.
+      pose proof (c_nodupobjs owner) as Nodup.
+      eapply occurs_in_instance_methods in Occurs; eauto.
+      (* clear WT' Nodup. *)
       edestruct subrep_extract as (oblk & outco_callee & ? & ? & Hoblk & Houtco_callee & ?); eauto.
       
       (* recursive funcall evaluation *)
@@ -2484,7 +2584,7 @@ Section PRESERVATION.
         eapply wt_stmt_sub, find_class_sub; eauto.
       + (* output assignments *)
         clear Hrec_eval.      
-        edestruct pres_sem_stmt_call; eauto.
+        edestruct pres_sem_stmt_call with (2:=Find'); eauto.
         rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
         edestruct exec_funcall_assign with (1:=Find) (ys:=ys) (m1:=m2)
           as (le3 & m3 & ? & ? & Hm3 & ? & ?) ; eauto.

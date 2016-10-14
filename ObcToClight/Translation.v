@@ -188,26 +188,28 @@ Definition fundef
   let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
   @AST.Gfun Clight.fundef Ctypes.type (Ctypes.Internal f).
 
-Definition make_out_vars (out_vars: list (ident * ident * ident)): list (ident * Ctypes.type) :=
+Require Import FMapAVL.
+Require Export Coq.Structures.OrderedTypeEx.
+
+Module IdentPair := PairOrderedType Positive_as_OT Positive_as_OT.
+Module M := FMapAVL.Make(IdentPair).
+
+Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
   map (fun ofc =>
          let '(o, f, cid) := ofc in
          (prefix_out o f, type_of_inst (prefix_fun cid f))
-      ) out_vars.
+      ) (M.elements out_vars).
 
-Lemma dec_pair: forall x y : (ident * ident), {x = y} + {x <> y}.
-Proof. repeat decide equality. Qed.
-
-Fixpoint rec_instance_methods (s: stmt) (l: list (ident * ident * ident))
-  : list (ident * ident * ident) :=
+Fixpoint rec_instance_methods (s: stmt) (m: M.t ident): M.t ident :=
   match s with
   | Ifte _ s1 s2  
-  | Comp s1 s2 => rec_instance_methods s2 (rec_instance_methods s1 l)
-  | Call _ cls o f _ => if in_dec dec_pair (o, f) (map fst l) then l else (o, f, cls) :: l 
-  | _ => l
+  | Comp s1 s2 => rec_instance_methods s2 (rec_instance_methods s1 m)
+  | Call _ cls o f _ => M.add (o, f) cls m 
+  | _ => m
   end.
   
-Definition instance_methods (m: method): list (ident * ident * ident) :=
-  rec_instance_methods m.(m_body) [].
+Definition instance_methods (m: method): M.t ident :=
+  rec_instance_methods m.(m_body) (@M.empty ident).
 
 Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
