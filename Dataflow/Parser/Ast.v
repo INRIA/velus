@@ -1,0 +1,85 @@
+(* *********************************************************************)
+(*                                                                     *)
+(*                    The Velus Lustre compiler                        *)
+(*                                                                     *)
+(*  Copyright Institut National de Recherche en Informatique et en     *)
+(*  Automatique.  All rights reserved.  This file is distributed       *)
+(*  under the terms of the GNU General Public License as published by  *)
+(*  the Free Software Foundation, either version 2 of the License, or  *)
+(*  (at your option) any later version.  This file is also distributed *)
+(*  under the terms of the INRIA Non-Commercial License Agreement.     *)
+(*                                                                     *)
+(* *********************************************************************)
+
+(* This module draws on the work of Jacques-Henri Jourdan for the CompCert
+   project (CompCert/cparser/Cabs.v). *)
+
+(* OCaml's string type. *)
+Parameter string : Type.
+(* OCaml's int64 type, used to represent individual characters in literals. *)
+Parameter char_code : Type.
+(* Context information. *)
+Parameter astloc : Type.
+
+Record floatInfo := {
+  isHex_FI:bool;
+  integer_FI:option string;
+  fraction_FI:option string;
+  exponent_FI:option string;
+  suffix_FI:option string
+}.
+
+Inductive type_name :=
+| Tint8
+| Tuint8
+| Tint16
+| Tuint16
+| Tint32
+| Tuint32
+| Tint64
+| Tuint64
+| Tfloat
+| Tdouble
+| Tbool : type_name.
+
+Inductive unary_operator :=
+| MINUS | PLUS | NOT | BNOT.
+
+Inductive binary_operator :=
+| ADD | SUB | MUL | DIV | MOD
+| BAND | BOR
+| LAND | LOR | XOR | LSL | LSR
+| EQ | NE | LT | GT | LE | GE.
+
+Inductive constant :=
+(* The string is the textual representation of the constant in
+   the source code. *)
+| CONST_INT   : string -> constant
+| CONST_FLOAT : floatInfo -> constant
+| CONST_CHAR  : bool -> list char_code -> constant.
+
+Inductive clock :=
+| BASE  : clock
+| ON    : clock -> bool -> string -> clock.
+
+Inductive expression :=
+| UNARY    : unary_operator -> expression -> expression
+| BINARY   : binary_operator -> expression -> expression -> expression
+| IFTE     : expression -> expression -> expression -> expression
+| CAST     : type_name -> expression -> expression
+| CALL     : string -> list expression -> expression
+| CONSTANT : constant -> expression
+| VARIABLE : string -> expression
+| FBY      : constant -> expression -> expression
+| WHEN     : expression -> bool -> string -> expression
+| MERGE    : string -> expression -> expression -> expression.
+
+Definition var_decls := list (string * type_name * clock).
+
+Definition equation : Type := (list string * expression * astloc)%type.
+
+Inductive declaration :=
+      (*  name      inputs       outputs      locals   *)
+| NODE : string -> var_decls -> var_decls -> var_decls
+         -> list equation -> declaration.
+
