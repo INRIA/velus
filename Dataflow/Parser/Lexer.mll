@@ -29,45 +29,44 @@ let tok t loc = Coq_existT (t, Obj.magic loc)
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
     [
-      ("else",     fun loc -> tok ELSE't     loc);
-      ("float",    fun loc -> tok FLOAT't    loc);
-      ("double",   fun loc -> tok DOUBLE't   loc);
-      ("real",     fun loc -> tok DOUBLE't   loc); (* LEGACY *)
+      ("and",      fun loc -> tok AND't      loc);
       ("bool",     fun loc -> tok BOOL't     loc);
+      ("double",   fun loc -> tok DOUBLE't   loc);
+      ("else",     fun loc -> tok ELSE't     loc);
+      ("fby",      fun loc -> tok FBY't      loc);
+      ("float",    fun loc -> tok FLOAT't    loc);
       ("if",       fun loc -> tok IF't       loc);
-      ("then",     fun loc -> tok THEN't     loc);
-      ("int8_t",   fun loc -> tok INT8_T't   loc);
-      ("uint8_t",  fun loc -> tok UINT8_T't  loc);
-      ("int16_t",  fun loc -> tok INT16_T't  loc);
-      ("uint16_t", fun loc -> tok UINT16_T't loc);
-      ("int32_t",  fun loc -> tok INT32_T't  loc);
       ("int",      fun loc -> tok INT32_T't  loc); (* LEGACY *)
-      ("uint32_t", fun loc -> tok UINT32_T't loc);
+      ("int16_t",  fun loc -> tok INT16_T't  loc);
+      ("int32_t",  fun loc -> tok INT32_T't  loc);
       ("int64_t",  fun loc -> tok INT64_T't  loc);
-      ("uint64_t", fun loc -> tok UINT64_T't loc);
-      ("returns",  fun loc -> tok RETURNS't  loc);
+      ("int8_t",   fun loc -> tok INT8_T't   loc);
+      ("land",     fun loc -> tok LAND't     loc);
+      ("let",      fun loc -> tok LET't      loc);
+      ("lnot",     fun loc -> tok LNOT't     loc);
+      ("lor",      fun loc -> tok LOR't      loc);
       ("lsl",      fun loc -> tok LSL't      loc);
       ("lsr",      fun loc -> tok LSR't      loc);
-      ("land",     fun loc -> tok LAND't     loc);
       ("lxor",     fun loc -> tok LXOR't     loc);
-      ("lor",      fun loc -> tok LOR't      loc);
-      ("lnot",     fun loc -> tok LNOT't     loc);
-      ("xor",      fun loc -> tok XOR't      loc);
-      ("not",      fun loc -> tok NOT't      loc);
-      ("and",      fun loc -> tok AND't      loc);
-      ("or",       fun loc -> tok OR't       loc);
-      ("mod",      fun loc -> tok MOD't      loc);
-      ("let",      fun loc -> tok LET't      loc);
-      ("tel",      fun loc -> tok TEL't      loc);
-      ("node",     fun loc -> tok NODE't     loc);
-      ("var",      fun loc -> tok VAR't      loc);
-      ("fby",      fun loc -> tok FBY't      loc);
-      ("when",     fun loc -> tok WHEN't     loc);
-      ("whenot",   fun loc -> tok WHENOT't   loc);
       ("merge",    fun loc -> tok MERGE't    loc);
+      ("mod",      fun loc -> tok MOD't      loc);
+      ("node",     fun loc -> tok NODE't     loc);
+      ("not",      fun loc -> tok NOT't      loc);
       ("on",       fun loc -> tok ON't       loc);
       ("onot",     fun loc -> tok ONOT't     loc);
-      ("",         fun loc -> tok RETURNS't  loc);
+      ("or",       fun loc -> tok OR't       loc);
+      ("real",     fun loc -> tok DOUBLE't   loc); (* LEGACY *)
+      ("returns",  fun loc -> tok RETURNS't  loc);
+      ("tel",      fun loc -> tok TEL't      loc);
+      ("then",     fun loc -> tok THEN't     loc);
+      ("uint16_t", fun loc -> tok UINT16_T't loc);
+      ("uint32_t", fun loc -> tok UINT32_T't loc);
+      ("uint64_t", fun loc -> tok UINT64_T't loc);
+      ("uint8_t",  fun loc -> tok UINT8_T't  loc);
+      ("var",      fun loc -> tok VAR't      loc);
+      ("when",     fun loc -> tok WHEN't     loc);
+      ("whenot",   fun loc -> tok WHENOT't   loc);
+      ("xor",      fun loc -> tok XOR't      loc);
     ]
 
 let init filename channel : Lexing.lexbuf =
