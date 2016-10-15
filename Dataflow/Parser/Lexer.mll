@@ -32,6 +32,7 @@ let () =
       ("else",     fun loc -> tok ELSE't     loc);
       ("float",    fun loc -> tok FLOAT't    loc);
       ("double",   fun loc -> tok DOUBLE't   loc);
+      ("real",     fun loc -> tok DOUBLE't   loc); (* LEGACY *)
       ("bool",     fun loc -> tok BOOL't     loc);
       ("if",       fun loc -> tok IF't       loc);
       ("then",     fun loc -> tok THEN't     loc);
@@ -40,6 +41,7 @@ let () =
       ("int16_t",  fun loc -> tok INT16_T't  loc);
       ("uint16_t", fun loc -> tok UINT16_T't loc);
       ("int32_t",  fun loc -> tok INT32_T't  loc);
+      ("int",      fun loc -> tok INT32_T't  loc); (* LEGACY *)
       ("uint32_t", fun loc -> tok UINT32_T't loc);
       ("int64_t",  fun loc -> tok INT64_T't  loc);
       ("uint64_t", fun loc -> tok UINT64_T't loc);
@@ -320,10 +322,10 @@ and singleline_comment = parse
 {
   open Streams
 
-  let tokens_stream filename : Parser.Aut.GramDefs.token coq_Stream =
-    let lexbuf = Lexer.init filename (open_in filename) in
+  let tokens_stream filename : token coq_Stream =
+    let lexbuf = init filename (open_in filename) in
     let rec loop () =
-      Cons (Lexer.initial lexbuf, Lazy.from_fun loop)
+      Cons (initial lexbuf, Lazy.from_fun loop)
     in
     Lazy.from_fun loop
 }
