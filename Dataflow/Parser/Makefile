@@ -8,7 +8,7 @@ COQC?=$(COQBIN)coqc
 COQ_LOAD_PATH=-R . Rustre.Dataflow.Parser \
   	      -R ../../CompCert/cparser/validator compcert.cparser.validator
 
-default:
+default: Parser.vo Lexer.cmo
 
 extraction/Parser.ml: extraction/extraction.v Parser.vo Ast.vo
 	$(COQC) $(COQ_LOAD_PATH) $(<:.v=)
