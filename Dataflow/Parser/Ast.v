@@ -63,16 +63,16 @@ Inductive clock :=
 | ON    : clock -> bool -> string -> clock.
 
 Inductive expression :=
-| UNARY    : unary_operator -> expression -> expression
-| BINARY   : binary_operator -> expression -> expression -> expression
-| IFTE     : expression -> expression -> expression -> expression
-| CAST     : type_name -> expression -> expression
-| CALL     : string -> list expression -> expression
-| CONSTANT : constant -> expression
-| VARIABLE : string -> expression
-| FBY      : constant -> expression -> expression
-| WHEN     : expression -> bool -> string -> expression
-| MERGE    : string -> expression -> expression -> expression.
+| UNARY    : unary_operator -> expression -> astloc -> expression
+| BINARY   : binary_operator -> expression -> expression -> astloc -> expression
+| IFTE     : expression -> expression -> expression -> astloc -> expression
+| CAST     : type_name -> expression -> astloc -> expression
+| CALL     : string -> list expression -> astloc -> expression
+| CONSTANT : constant -> astloc -> expression
+| VARIABLE : string -> astloc -> expression
+| FBY      : constant -> expression -> astloc -> expression
+| WHEN     : expression -> bool -> string -> astloc -> expression
+| MERGE    : string -> expression -> expression -> astloc -> expression.
 
 Definition var_decls := list (string * type_name * clock).
 
