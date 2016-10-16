@@ -22,6 +22,8 @@ Lexer.ml: Lexer.mll
 
 extraction/Parser.cmo: extraction/Parser.ml
 extraction/Parser.cmx: extraction/Parser.ml
+extraction/Parser.cma: extraction/Parser.cmo
+extraction/Parser.cmxa: extraction/Parser.cmx
 
 Lexer.cmo: extraction/Ast.cmo extraction/Parser.cmo Lexer.ml
 Lexer.cmo: IEXTRACTION:=-I extraction
