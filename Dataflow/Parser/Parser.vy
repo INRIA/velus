@@ -58,6 +58,7 @@ Require Import Coq.Program.Syntax.
 %type<list string> pattern
 %type<equation> equation
 %type<list equation> equations
+%type<unit> optsemicolon
 %type<declaration> declaration
 %type<list declaration> translation_unit
 
@@ -354,8 +355,14 @@ equations:
 | eqs=equations eq=equation
     { eq::eqs }
 
+optsemicolon:
+| /* empty */
+    { () }
+| SEMICOLON
+    { () }
+
 declaration:
-| loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN
+| loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=parameter_list RPAREN SEMICOLON
   locals=local_decl_list LET eqns=equations TEL
     { NODE (fst id) iparams oparams locals eqns }
