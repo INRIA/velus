@@ -328,7 +328,7 @@ Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composit
   : res unit :=
   match types with
   | nil => OK tt
-  | Ctypes.Composite id su m a :: types =>
+  | Ctypes.Composite id _ _ _ :: types =>
       do _ <- check_size env id;
       check_size_env env types
   end.

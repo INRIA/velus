@@ -302,18 +302,79 @@ Section PRESERVATION.
   
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
   Hypothesis WT: wt_program prog.
+  
+  Lemma build_check_size_env_ok:
+    forall types defs public main p,
+      make_program' types defs public main = Errors.OK p ->
+      build_composite_env types = Errors.OK p.(prog_comp_env)
+      /\ check_size_env p.(prog_comp_env) types = Errors.OK tt.
+  Proof.
+    unfold make_program'; intros.
+    destruct (build_composite_env' types) as [[gce ?]|?]; try discriminate.
+    destruct (check_size_env gce types) eqn: E; try discriminate.
+    destruct u; inv H; simpl; split; auto.
+  Qed.
 
   Lemma build_ok:
     forall types defs public main p,
       make_program' types defs public main = Errors.OK p ->
       build_composite_env types = Errors.OK p.(prog_comp_env).
   Proof.
-    unfold make_program'; intros.
-    destruct (build_composite_env' types) as [[ce EQ] | msg].
-    - inv H; auto.
-    - discriminate.
+    intros ** H.
+    apply (proj1 (build_check_size_env_ok _ _ _ _ _ H)).
   Qed.
 
+  Lemma check_size_env_ok:
+    forall types defs public main p,
+      make_program' types defs public main = Errors.OK p ->
+      check_size_env p.(prog_comp_env) types = Errors.OK tt.
+  Proof.
+    intros ** H.
+    apply (proj2 (build_check_size_env_ok _ _ _ _ _ H)).
+  Qed.
+
+  Lemma check_size_ok:
+    forall ce types,
+      check_size_env ce types = Errors.OK tt ->
+      Forall (fun t => match t with
+                      Ctypes.Composite id _ _ _ => check_size ce id = Errors.OK tt
+                    end) types.
+  Proof.
+    intros ** H.
+    induction types as [|(id, ?)]; auto.
+    simpl in H.
+    destruct (check_size ce id) eqn: E; try discriminate; destruct u; simpl in H.
+    constructor; auto.
+  Qed.
+  
+  (* Lemma foo: *)
+  (*   forall id co, *)
+  (*     gcenv ! id = Some co -> *)
+  (*     co.(co_sizeof) <= Int.modulus. *)
+  (* Proof. *)
+  (*   unfold translate in TRANSL. *)
+  (*   destruct (find_class main_node prog) as [(main, ?)|]; try discriminate. *)
+  (*   destruct (find_method step (c_methods main)) as [m|]; try discriminate. *)
+  (*   destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E. *)
+  (*   (* pose proof (find_class_name _ _ _ _ Findcl); subst. *) *)
+  (*   apply build_ok in TRANSL. *)
+  (*   assert (In (Composite (c_name owner) Struct (make_members owner) noattr) (concat structs)). *)
+  (*   { unfold translate_class in E. *)
+  (*     apply split_map in E. *)
+  (*     destruct E as [Structs]. *)
+  (*     unfold make_struct in Structs. *)
+  (*     apply find_class_In in Findcl. *)
+  (*     apply in_map with (f:=fun c => Composite (c_name c) Struct (make_members c) noattr :: make_out c) *)
+  (*       in Findcl. *)
+  (*     apply in_concat with (Composite (c_name owner) Struct (make_members owner) noattr :: make_out owner).  *)
+  (*     - apply in_eq. *)
+  (*     - now rewrite Structs. *)
+  (*   } *)
+  (*   edestruct build_composite_env_charact as (co & ? & Hmembers & Hattr & ?); eauto. *)
+  (*   exists co; repeat split; auto. *)
+  (*   - rewrite Hattr; auto.  *)
+  (*   - rewrite Hmembers. apply NoDupMembers_make_members.Admitted. *)
+  
   Theorem Consistent: composite_env_consistent gcenv.
   Proof.
     unfold translate in TRANSL.
@@ -446,13 +507,14 @@ Section PRESERVATION.
           gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some co
           /\ co.(co_su) = Struct 
           /\ co.(co_members) = map translate_param caller.(m_out)
-          /\ co.(co_attr) = noattr.
+          /\ co.(co_attr) = noattr
+          /\ co.(co_sizeof) <= Int.modulus.
       Proof.
         unfold translate in TRANSL.
         destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
         destruct (find_method step (c_methods main)) as [m|]; try discriminate.
         destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
-        apply build_ok in TRANSL.
+        apply build_check_size_env_ok in TRANSL; destruct TRANSL as [BUILD SIZE].
         assert (In (Composite
                       (prefix_fun (c_name owner) (m_name caller))
                       Struct
@@ -471,7 +533,12 @@ Section PRESERVATION.
           eapply in_concat_cons; eauto.
           rewrite Structs; eauto.
         }
-        edestruct build_composite_env_charact as (co & ? & ? & ? & ?); eauto.
+        edestruct build_composite_env_charact as (co & Hco & ? & ? & ?); eauto.
+        exists co; repeat (split; auto).
+        eapply check_size_ok, In_Forall in SIZE; eauto; simpl in SIZE.
+        unfold check_size in SIZE; rewrite Hco in SIZE.
+        destruct (co_sizeof co <=? Int.modulus) eqn: Le; try discriminate.
+        rewrite Zle_is_le_bool; auto.
       Qed.
 
       Remark output_match:
@@ -554,6 +621,7 @@ Section PRESERVATION.
           rewrite <-Funs in Findmth.
           unfold make_program' in TRANSL.
           destruct (build_composite_env' (concat structs)) as [(ce, P)|]; try discriminate.
+          destruct (check_size_env ce (concat structs)); try discriminate.
           inversion TRANSL as [Htprog]; clear TRANSL.
           unfold AST.prog_defmap; simpl.
           apply PTree_Properties.of_list_norepet.
@@ -666,11 +734,10 @@ Section PRESERVATION.
     pose proof (find_class_name _ _ _ _ Findc);
       pose proof (find_method_name _ _ _ Findcallee); subst.
     clear Findmth.
-    edestruct global_out_struct as (co & Hco & ? & Hmembers & ?); try reflexivity; eauto.
+    edestruct global_out_struct as (co & Hco & ? & Hmembers & ? & ?); try reflexivity; eauto.
     split.
     * simpl; change (prog_comp_env tprog) with gcenv.
-      rewrite Hco.
-      admit.
+      rewrite Hco; auto.
     *{ exists (prefix_fun (c_name c) (m_name callee)), co.
        repeat split; auto.
        - rewrite Hmembers.
