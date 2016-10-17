@@ -288,9 +288,6 @@ Proof.
   contradict Notin; apply in_eq.  
 Qed.
 
-  
-(* SIMULATION *)
-
 Section PRESERVATION.
 
   Variable main_node : ident.
@@ -346,35 +343,7 @@ Section PRESERVATION.
     destruct (check_size ce id) eqn: E; try discriminate; destruct u; simpl in H.
     constructor; auto.
   Qed.
-  
-  (* Lemma foo: *)
-  (*   forall id co, *)
-  (*     gcenv ! id = Some co -> *)
-  (*     co.(co_sizeof) <= Int.modulus. *)
-  (* Proof. *)
-  (*   unfold translate in TRANSL. *)
-  (*   destruct (find_class main_node prog) as [(main, ?)|]; try discriminate. *)
-  (*   destruct (find_method step (c_methods main)) as [m|]; try discriminate. *)
-  (*   destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E. *)
-  (*   (* pose proof (find_class_name _ _ _ _ Findcl); subst. *) *)
-  (*   apply build_ok in TRANSL. *)
-  (*   assert (In (Composite (c_name owner) Struct (make_members owner) noattr) (concat structs)). *)
-  (*   { unfold translate_class in E. *)
-  (*     apply split_map in E. *)
-  (*     destruct E as [Structs]. *)
-  (*     unfold make_struct in Structs. *)
-  (*     apply find_class_In in Findcl. *)
-  (*     apply in_map with (f:=fun c => Composite (c_name c) Struct (make_members c) noattr :: make_out c) *)
-  (*       in Findcl. *)
-  (*     apply in_concat with (Composite (c_name owner) Struct (make_members owner) noattr :: make_out owner).  *)
-  (*     - apply in_eq. *)
-  (*     - now rewrite Structs. *)
-  (*   } *)
-  (*   edestruct build_composite_env_charact as (co & ? & Hmembers & Hattr & ?); eauto. *)
-  (*   exists co; repeat split; auto. *)
-  (*   - rewrite Hattr; auto.  *)
-  (*   - rewrite Hmembers. apply NoDupMembers_make_members.Admitted. *)
-  
+ 
   Theorem Consistent: composite_env_consistent gcenv.
   Proof.
     unfold translate in TRANSL.
@@ -625,8 +594,7 @@ Section PRESERVATION.
           inversion TRANSL as [Htprog]; clear TRANSL.
           unfold AST.prog_defmap; simpl.
           apply PTree_Properties.of_list_norepet.
-          - (* rewrite <-NoDup_norepet, <-fst_NoDupMembers. *)
-            rewrite map_cons, 3 map_app; simpl.
+          - rewrite map_cons, 3 map_app; simpl.
             repeat rewrite glob_bind_vardef_fst. admit.
           - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
             unfold translate_method in Findmth; auto.
@@ -772,7 +740,7 @@ Section PRESERVATION.
     (destruct i, s || destruct f || idtac); reflexivity.
   Qed.
   
-  Hint Resolve (* sem_cast_same *) wt_val_load_result acces_cltype.
+  Hint Resolve wt_val_load_result acces_cltype.
   Hint Constructors wt_stmt.
 
   Definition c_state := (Clight.env * Clight.temp_env)%type.
@@ -2178,7 +2146,6 @@ Section PRESERVATION.
     now f_equal.
   Qed.
   
-  (* Lemma  *)
   Lemma alloc_result:
     forall f m P,
       let vars := instance_methods f in
@@ -2399,9 +2366,7 @@ Section PRESERVATION.
       rewrite Hfree.
       now apply IHl.
   Qed.
-
-  (* rewrite <-sep_assoc, sep_unwand in Hrep; auto. *)
-     
+  
   Lemma subrep_extract:
     forall f f' e m o c' P,
       m |= subrep f e ** P ->
@@ -2749,8 +2714,6 @@ Section PRESERVATION.
 
       edestruct pres_sem_stmt_call; eauto.
       destruct (mfind_inst o me); econstructor; eauto.
-
-      (* edestruct pres_sem_stmt with (stmt:=m_body callee); eauto. *)
 
       (* get the clight function *)
       edestruct methods_corres

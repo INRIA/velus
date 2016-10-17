@@ -12,7 +12,7 @@ Require Import Rustre.Operators.
 Module Export OpAux := OperatorsAux Op.
 Module Export Syn := SyntaxFun Ids Op OpAux.
 
-Require Import ZArith.BinIntDef.
+Require Import ZArith.BinInt.
 Require Import String.
 Require Import List.
 Import List.ListNotations.
@@ -176,9 +176,6 @@ Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
   | Skip => Clight.Sskip
   end.
 
-(* Definition return_some (s: Clight.statement) (out: ident * typ): Clight.statement := *)
-(*   let (id, ty) := out in *)
-(*   Clight.Ssequence s (Clight.Sreturn (Some (Clight.Evar id ty))). *)
 Definition return_none (s: Clight.statement): Clight.statement :=
   Clight.Ssequence s (Clight.Sreturn None).
 Definition cl_zero: Clight.expr :=
@@ -269,9 +266,6 @@ Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
 Definition make_in_arg (arg: ident * Ctypes.type): Clight.expr :=
   let (x, ty) := arg in
   Clight.Evar x ty.
-(* Definition make_out_arg (arg: ident * typ): Clight.expr := *)
-(*   let (x, ty) := arg in *)
-(*   Clight.Eaddrof (Clight.Evar x ty) (pointer_of ty). *)
 
 Definition make_main
            (prog: program) (node: ident) (ins: list (ident * Ctypes.type))
@@ -319,7 +313,7 @@ Defined.
 Definition check_size (env: Ctypes.composite_env) (id: AST.ident) :=
   match env ! id with
   | Some co =>
-    if Z.leb (Ctypes.co_sizeof co) Int.modulus
+    if (Ctypes.co_sizeof co) <=? Int.modulus
     then Errors.OK tt else Errors.Error (Errors.msg "2big")
   | None => Errors.Error (Errors.msg "unknown")
   end.
