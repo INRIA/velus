@@ -33,6 +33,7 @@ let () =
       ("bool",     fun loc -> tok BOOL't     loc);
       ("double",   fun loc -> tok DOUBLE't   loc);
       ("else",     fun loc -> tok ELSE't     loc);
+      ("false",    fun loc -> tok FALSE't    loc);
       ("fby",      fun loc -> tok FBY't      loc);
       ("float",    fun loc -> tok FLOAT't    loc);
       ("if",       fun loc -> tok IF't       loc);
@@ -59,6 +60,7 @@ let () =
       ("returns",  fun loc -> tok RETURNS't  loc);
       ("tel",      fun loc -> tok TEL't      loc);
       ("then",     fun loc -> tok THEN't     loc);
+      ("true",     fun loc -> tok TRUE't     loc);
       ("uint16_t", fun loc -> tok UINT16_T't loc);
       ("uint32_t", fun loc -> tok UINT32_T't loc);
       ("uint64_t", fun loc -> tok UINT64_T't loc);

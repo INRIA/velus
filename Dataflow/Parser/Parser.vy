@@ -24,6 +24,7 @@ Require Import Coq.Program.Syntax.
 
 %token<string * astloc> VAR_NAME
 %token<constant * astloc> CONSTANT
+%token<astloc> TRUE FALSE
 %token<astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON
 %token<astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
 %token<astloc> IF THEN ELSE
@@ -43,6 +44,7 @@ Require Import Coq.Program.Syntax.
     when_expression relational_expression equality_expression AND_expression
     exclusive_OR_expression inclusive_OR_expression logical_AND_expression
     logical_OR_expression expression
+%type<constant * astloc> bool_constant
 %type<list expression> argument_expression_list 
 %type<unary_operator * astloc> unary_operator
 %type<var_decls> var_decl
@@ -99,10 +101,18 @@ Require Import Coq.Program.Syntax.
    - Expressions may contain the fby and merge operators.
 *)
 
+bool_constant:
+| loc=TRUE
+    { (CONST_BOOL true, loc) }
+| loc=FALSE
+    { (CONST_BOOL false, loc) }
+
 primary_expression:
 | var=VAR_NAME
     { VARIABLE (fst var) (snd var) }
 | cst=CONSTANT
+    { CONSTANT (fst cst) (snd cst) }
+| cst=bool_constant
     { CONSTANT (fst cst) (snd cst) }
 | loc=LPAREN expr=expression RPAREN
     { expr }

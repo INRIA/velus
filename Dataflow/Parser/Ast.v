@@ -54,6 +54,7 @@ Inductive binary_operator :=
 Inductive constant :=
 (* The string is the textual representation of the constant in
    the source code. *)
+| CONST_BOOL  : bool -> constant
 | CONST_INT   : string -> constant
 | CONST_FLOAT : floatInfo -> constant
 | CONST_CHAR  : bool -> list char_code -> constant.
