@@ -1447,7 +1447,6 @@ Section Lists.
       induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.      
   Qed.
 
-  
   Lemma NoDup_app_cons:
     forall ws (x: A) xs,
       NoDup (ws ++ x :: xs)
@@ -1496,6 +1495,41 @@ Section Lists.
       apply IH; auto.
   Qed.
 
+  Lemma NoDup_app':
+    forall (xs ws: list A),
+      NoDup xs ->
+      NoDup ws ->
+      Forall (fun x => ~ In x ws) xs ->
+      NoDup (xs ++ ws).
+  Proof.
+    induction xs as [|x]; auto.
+    intros ** Nodupxs Nodupws Hin.
+    inv Hin; inv Nodupxs.
+    rewrite <-app_comm_cons.
+    constructor; auto.
+    intro H.
+    apply not_In_app in H; auto.
+  Qed.
+
+  Lemma Forall_not_In_app:
+    forall (zs xs ys: list A),
+      Forall (fun z => ~ In z xs) zs ->
+      Forall (fun z => ~ In z ys) zs ->
+      Forall (fun z => ~ In z (xs ++ ys)) zs.
+  Proof.
+    induction zs; auto; intros ** Hxs Hys; inv Hxs; inv Hys.
+    constructor; auto.
+    intro H; apply not_In_app in H; auto.
+  Qed.
+
+  Lemma Forall_not_In_singleton:
+    forall (x: A) ys,
+      ~ In x ys ->
+      Forall (fun y => ~ In y [x]) ys.
+  Proof.
+    induction ys; auto; simpl; intros; constructor; auto; intros [|]; auto. 
+  Qed.
+  
 End Lists.
 
 Lemma Forall2_map_1:

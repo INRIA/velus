@@ -594,8 +594,23 @@ Section PRESERVATION.
           inversion TRANSL as [Htprog]; clear TRANSL.
           unfold AST.prog_defmap; simpl.
           apply PTree_Properties.of_list_norepet.
-          - rewrite map_cons, 3 map_app; simpl.
-            repeat rewrite glob_bind_vardef_fst. admit.
+          - rewrite map_cons, 3 map_app, <-NoDup_norepet; simpl.
+            repeat rewrite glob_bind_vardef_fst.
+            constructor.
+            + admit.
+            + repeat apply NoDup_app'; repeat apply Forall_not_In_app;
+              repeat apply Forall_not_In_singleton.
+              * admit.
+              * admit.
+              * rewrite Funs.
+                admit.
+              * repeat constructor; auto.
+              * admit.
+              * admit.
+              * admit.
+              * admit.
+              * admit.
+              * admit.
           - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
             unfold translate_method in Findmth; auto.
         }

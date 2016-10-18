@@ -20,38 +20,6 @@ Open Scope list_scope.
 Open Scope error_monad_scope.
 Open Scope Z.
 
-Definition main_id: ident := pos_of_str "main".
-Axiom prefix: ident -> ident -> ident.
-Definition fun_id: ident  := pos_of_str "fun".
-Axiom fun_not_out: fun_id <> out.
-
-Definition prefix_fun (c f: ident): ident :=
-  prefix fun_id (prefix c f).
-Definition prefix_out (o f: ident): ident :=
-  prefix out (prefix o f).
-
-Axiom prefix_injective:
-  forall pref id pref' id',
-    prefix pref id = prefix pref' id' -> pref = pref' /\ id = id'.
-Lemma prefix_fun_injective: 
- forall c c' f f',
-   prefix_fun c f = prefix_fun c' f' -> c = c' /\ f = f'.
-Proof.
-  unfold prefix_fun.
-  intros ** Eq.
-  apply prefix_injective in Eq; destruct Eq as [E Eq]; clear E.
-  now apply prefix_injective.
-Qed.
-Lemma prefix_out_injective: 
- forall c c' f f',
-   prefix_out c f = prefix_out c' f' -> c = c' /\ f = f'.
-Proof.
-  unfold prefix_out.
-  intros ** Eq.
-  apply prefix_injective in Eq; destruct Eq as [E Eq]; clear E.
-  now apply prefix_injective.
-Qed.
-
 (* TRANSLATION *)
 Definition type_of_inst (o: ident): Ctypes.type :=
   Ctypes.Tstruct o Ctypes.noattr.
@@ -257,8 +225,6 @@ Definition translate_class (prog: program) (c: class)
   let out_structs := make_out c in   
   (class_struct :: out_structs, methods).
 
-Definition glob_id (id: ident): ident :=
-  pos_of_str ("_" ++ (pos_to_str id)).
 Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
   let (x, ty) := bind in
   (glob_id x, cltype ty).
