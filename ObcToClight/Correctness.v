@@ -278,6 +278,113 @@ Proof.
   now rewrite IHxs.
 Qed.
 
+Lemma NoDup_glob_id:
+  forall {A} (xs: list (ident * A)),
+    NoDupMembers xs ->
+    NoDup (map (fun xt => glob_id (fst xt)) xs).
+Proof.
+  induction xs as [|(x, t)]; simpl;
+  inversion_clear 1 as [|? ? ? Notin]; constructor; auto.
+  rewrite in_map_iff; intros ((x', t') & E & Hin); apply Notin.
+  simpl in E; apply glob_id_injective in E; subst x'.
+  eapply In_InMembers; eauto.
+Qed.
+
+Lemma NoDup_funs:
+  forall prog,
+    wt_program prog ->
+    NoDup (map fst (concat (map (fun c => map (translate_method prog c) (c_methods c)) prog))).
+Proof.
+  intros ** Wt.
+  remember prog as prog'.
+  rewrite Heqprog' at 1.
+  rewrite Heqprog' in Wt.
+  clear Heqprog'.
+  unfold program in *.
+  induction_list prog as [|c] with cls; simpl (* intro Wt *).
+  - constructor.
+  - inversion_clear Wt as [|? ? ? ? Nodup]; simpl in Nodup;
+    inversion_clear Nodup as [|? ? Notinc].
+    rewrite map_app, map_map.
+    apply NoDup_app'; auto.
+    + simpl.
+      pose proof (c_nodupm c) as Nodup.
+      induction (c_methods c) as [|m]; simpl;
+      inversion_clear Nodup as [|? ? Notin]; constructor; auto.
+      rewrite in_map_iff; intros (m' & E & Hin); apply Notin.
+      apply prefix_fun_injective in E; destruct E as [? E]; rewrite <-E.
+      rewrite in_map_iff; exists m'; auto.
+    + induction (c_methods c) as [|m]; simpl; auto.
+      constructor; auto.
+      rewrite in_map_iff; intros ((x, d) & E & Hin).
+      simpl in E; subst x.
+      apply in_concat' in Hin; destruct Hin as (l' & Hin & Hin').
+      rewrite in_map_iff in Hin; destruct Hin as (c' & E & Hin); subst l'.
+      rewrite in_map_iff in Hin'; destruct Hin' as (m' & E & Hin').
+      unfold translate_method in E; inversion E as [[Eq E']]; clear E E'.
+      apply prefix_fun_injective in Eq.
+      destruct Eq as [Eq].
+      apply Notinc.
+      rewrite <- Eq.
+      now apply in_map.
+Qed.
+
+Lemma prefixed_funs:
+  forall prog f,
+    In f (map fst (concat (map (fun c => map (translate_method prog c) (c_methods c)) prog))) ->
+    prefixed_fun f.
+Proof.
+  intros ** Hin.
+  remember prog as prog'.
+  rewrite Heqprog' in Hin at 1.
+  clear Heqprog'.
+  induction prog as [|c]; simpl in *.
+  - contradiction.
+  - rewrite in_map_iff in Hin; destruct Hin as ((f', d) & E & Hin); simpl in E; subst f'.
+    rewrite in_app_iff in Hin; destruct Hin as [Hin|Hin].
+    + rewrite in_map_iff in Hin; destruct Hin as (m & E & Hin).
+      unfold translate_method in E; inv E; eauto; constructor.
+    + apply in_map with (f:=fst) in Hin; auto.
+Qed.
+
+Lemma glob_not_in_prefixed:
+  forall (xs: list (ident * type)) ps,
+    Forall prefixed ps ->
+    Forall (fun z => ~ In z ps) (map (fun xt => glob_id (fst xt)) xs).
+Proof.
+  induction xs as [|(x, t)]; simpl; intros ** Pref; auto.
+  constructor; auto.
+  intro Hin.
+  eapply In_Forall in Pref; eauto.
+  contradict Pref; apply glob_id_not_prefixed.
+Qed.
+
+Lemma main_not_glob:
+  forall (xs: list (ident * type)),
+    ~ In main_id (map (fun xt => glob_id (fst xt)) xs).
+Proof.
+  induction xs as [|(x, t)]; simpl; auto.
+  intros [Hin|Hin].
+  - unfold glob_id, main_id in Hin.
+    apply pos_of_str_injective in Hin; inv Hin.
+  - contradiction.
+Qed.
+
+Lemma NoDupMembers_glob:
+  forall (ys xs: list (ident * type)),
+    NoDupMembers (xs ++ ys) ->
+    Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) xs))
+           (map (fun xt => glob_id (fst xt)) ys).
+Proof.
+  induction ys as [|(y, t)]; simpl; intros ** Nodup; auto.
+  rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup].
+  constructor; auto.
+  rewrite in_map_iff; intros ((x, t') & E & Hin).
+  simpl in E; apply glob_id_injective in E; subst y.
+  apply Notin.
+  apply InMembers_app; left; eapply In_InMembers; eauto.
+Qed.
+
 Lemma self_not_out: self <> out.
 Proof.
   intro Eq.
@@ -597,20 +704,45 @@ Section PRESERVATION.
           - rewrite map_cons, 3 map_app, <-NoDup_norepet; simpl.
             repeat rewrite glob_bind_vardef_fst.
             constructor.
-            + admit.
+            + repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
+              intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
+              try simpl in E.
+              * apply glob_id_injective in E; subst x.
+                admit.
+              * apply glob_id_injective in E; subst x.
+                admit.
+              * subst x.
+                apply in_map with (f:=fst) in Hin.
+                subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
+                contradict Hin; apply glob_id_not_prefixed. 
+              * unfold glob_id, main_id in Hin.
+                apply pos_of_str_injective in Hin.
+                inv Hin. 
             + repeat apply NoDup_app'; repeat apply Forall_not_In_app;
               repeat apply Forall_not_In_singleton.
-              * admit.
-              * admit.
+              * apply NoDup_glob_id, m_nodupout.
+              * apply NoDup_glob_id, m_nodupin.
               * rewrite Funs.
-                admit.
+                now apply NoDup_funs.
               * repeat constructor; auto.
-              * admit.
-              * admit.
-              * admit.
-              * admit.
-              * admit.
-              * admit.
+              * intro Hin; subst funs; apply prefixed_funs in Hin.
+                inversion Hin as [? ? E].
+                unfold prefix, main_id in E.
+                unfold prefix_fun, fun_id in E.
+                apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E.
+                inversion E.
+              * apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+                apply prefixed_fun_prefixed; subst funs.
+                now apply prefixed_funs in Hin.
+              * apply main_not_glob. 
+              * apply NoDupMembers_glob.
+                pose proof (m_nodupvars m) as Nodup.
+                rewrite NoDupMembers_app_assoc, <-app_assoc in Nodup.
+                now apply NoDupMembers_app_r, NoDupMembers_app_assoc in Nodup.
+              * apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+                apply prefixed_fun_prefixed; subst funs.
+                now apply prefixed_funs in Hin.
+              *  apply main_not_glob.
           - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
             unfold translate_method in Findmth; auto.
         }

@@ -1386,6 +1386,18 @@ Section Lists.
         eapply IHl'; eauto.
   Qed.
 
+  Remark in_concat':
+    forall (l': list (list A)) x,
+      In x (concat l') ->
+      exists l, In l l' /\ In x l.
+  Proof.
+    induction l' as [|y]; simpl; intros ** Hin.
+    - contradiction.
+    - apply in_app in Hin; destruct Hin as [Hin|Hin]; eauto.
+      destruct (IHl' x Hin) as (l & ? & ?).
+      exists l; split; auto.
+  Qed.
+  
   Remark split_map:
     forall {C} (xs: list C) (l: list A) (l': list B) f f',
       split (map (fun x => (f x, f' x)) xs) = (l, l') ->
@@ -1692,7 +1704,7 @@ Tactic Notation "induction_list" constr(E) "with" ident(l) :=
 (*   let l := fresh "l" in *)
 (*   induction_list E as [|] with l eq:H. *)
 
-(* Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) := *)
-(*   let H := fresh "H" l in *)
-(*   induction_list_tac E I l H. *)
+Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
+  let H := fresh "H" l in
+  induction_list_tac E I l H.
 

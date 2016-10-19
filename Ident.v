@@ -15,6 +15,9 @@ Axiom pos_of_str_injective:
     pos_of_str x = pos_of_str x' ->
     x = x'.
 
+Axiom pos_to_str_equiv:
+  forall x, pos_to_str (pos_of_str x) = x.
+         
 Module Export Ids <: IDS.
   Definition self := pos_of_str "self".
   Definition out := pos_of_str "out".             
@@ -100,5 +103,39 @@ Proof.
   now apply prefix_injective.
 Qed.
 
+Inductive prefixed: ident -> Prop :=
+  prefixed_intro: forall pref id, prefixed (prefix pref id).
+
+Inductive prefixed_fun: ident -> Prop :=
+  prefixed_fun_intro: forall c f, prefixed_fun (prefix_fun c f).
+
+Lemma prefixed_fun_prefixed:
+  forall x, prefixed_fun x -> prefixed x.
+Proof.
+  inversion 1; unfold prefix_fun; constructor.
+Qed.
+
 Definition glob_id (id: ident): ident :=
-  pos_of_str ("_" ++ (pos_to_str id)).
+  pos_of_str ("$" ++ (pos_to_str id)).
+
+Lemma glob_id_injective:
+  forall x x',
+    glob_id x = glob_id x' ->
+    x = x'.
+Proof.
+  unfold glob_id.
+  intros ** H.
+  apply pos_of_str_injective in H.
+  inv H.
+  now apply pos_to_str_injective.
+Qed.
+
+Lemma glob_id_not_prefixed:
+  forall x, ~ prefixed (glob_id x).
+Proof.
+  intros ** H.
+  inversion H as [? ? E].
+  unfold prefix, glob_id in E.
+  apply pos_of_str_injective in E.
+  admit.
+Qed.
