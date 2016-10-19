@@ -44,7 +44,7 @@ Parser.cmxa: $(PARSER_FILES:.cmo=.cmx)
 
 clean_extraction:
 	@rm -rf *.mli *.ml
-	@rm -rf *.cmi *.cmo *.cmx *.cma *.cmxa *.o
+	@rm -rf *.cmi *.cmo *.cmx *.cma *.cmxa *.o *.a
 	@rm -rf extraction.glob extraction.vo
 
 include ../Makefile
