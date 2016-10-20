@@ -33,9 +33,9 @@ Module Export Op <: OPERATORS.
 
   Definition typecl (ty: Ctypes.type) : option type :=
     match ty with
-    | Ctypes.Tint sz sg (Ctypes.mk_attr false None) => Some (Tint sz sg)
-    | Ctypes.Tlong sg   (Ctypes.mk_attr false (Some 3%N)) => Some (Tlong sg)
-    | Ctypes.Tfloat sz  (Ctypes.mk_attr false None) => Some (Tfloat sz)
+    | Ctypes.Tint sz sg attr => Some (Tint sz sg)
+    | Ctypes.Tlong sg attr => Some (Tlong sg)
+    | Ctypes.Tfloat sz attr => Some (Tfloat sz)
     | _ => None
     end.
 
