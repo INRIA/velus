@@ -31,17 +31,17 @@ let () =
     [
       ("and",      fun loc -> tok AND't      loc);
       ("bool",     fun loc -> tok BOOL't     loc);
-      ("double",   fun loc -> tok DOUBLE't   loc);
+      ("float64",  fun loc -> tok FLOAT64't  loc);
       ("else",     fun loc -> tok ELSE't     loc);
       ("false",    fun loc -> tok FALSE't    loc);
       ("fby",      fun loc -> tok FBY't      loc);
-      ("float",    fun loc -> tok FLOAT't    loc);
+      ("float32",  fun loc -> tok FLOAT32't  loc);
       ("if",       fun loc -> tok IF't       loc);
-      ("int",      fun loc -> tok INT32_T't  loc); (* LEGACY *)
-      ("int16_t",  fun loc -> tok INT16_T't  loc);
-      ("int32_t",  fun loc -> tok INT32_T't  loc);
-      ("int64_t",  fun loc -> tok INT64_T't  loc);
-      ("int8_t",   fun loc -> tok INT8_T't   loc);
+      ("int",      fun loc -> tok INT32't    loc); (* LEGACY *)
+      ("int16",    fun loc -> tok INT16't    loc);
+      ("int32",    fun loc -> tok INT32't    loc);
+      ("int64",    fun loc -> tok INT64't    loc);
+      ("int8",     fun loc -> tok INT8't     loc);
       ("land",     fun loc -> tok LAND't     loc);
       ("let",      fun loc -> tok LET't      loc);
       ("lnot",     fun loc -> tok LNOT't     loc);
@@ -56,15 +56,15 @@ let () =
       ("on",       fun loc -> tok ON't       loc);
       ("onot",     fun loc -> tok ONOT't     loc);
       ("or",       fun loc -> tok OR't       loc);
-      ("real",     fun loc -> tok DOUBLE't   loc); (* LEGACY *)
+      ("real",     fun loc -> tok FLOAT64't  loc); (* LEGACY *)
       ("returns",  fun loc -> tok RETURNS't  loc);
       ("tel",      fun loc -> tok TEL't      loc);
       ("then",     fun loc -> tok THEN't     loc);
       ("true",     fun loc -> tok TRUE't     loc);
-      ("uint16_t", fun loc -> tok UINT16_T't loc);
-      ("uint32_t", fun loc -> tok UINT32_T't loc);
-      ("uint64_t", fun loc -> tok UINT64_T't loc);
-      ("uint8_t",  fun loc -> tok UINT8_T't  loc);
+      ("uint16",   fun loc -> tok UINT16't   loc);
+      ("uint32",   fun loc -> tok UINT32't   loc);
+      ("uint64",   fun loc -> tok UINT64't   loc);
+      ("uint8",    fun loc -> tok UINT8't    loc);
       ("var",      fun loc -> tok VAR't      loc);
       ("when",     fun loc -> tok WHEN't     loc);
       ("whenot",   fun loc -> tok WHENOT't   loc);

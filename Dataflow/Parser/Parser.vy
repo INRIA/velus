@@ -1,5 +1,3 @@
-/* *********************************************************************/
-/*                                                                     */
 /*                    The Velus Lustre compiler                        */
 /*                                                                     */
 /*  Copyright Institut National de Recherche en Informatique et en     */
@@ -30,8 +28,8 @@ Require Import Coq.Program.Syntax.
 %token<astloc> IF THEN ELSE
 
 %token<astloc> LPAREN RPAREN COMMA SEMICOLON
-%token<astloc> BOOL INT8_T UINT8_T INT16_T UINT16_T INT32_T UINT32_T
-  INT64_T UINT64_T FLOAT DOUBLE
+%token<astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
+  INT64 UINT64 FLOAT32 FLOAT64
 
 %token<astloc> LET TEL NODE RETURNS VAR FBY
 %token<astloc> WHEN WHENOT MERGE ON ONOT DOT
@@ -70,7 +68,7 @@ Require Import Coq.Program.Syntax.
 (* Actual grammar *)
 
 (* Expressions: taken directly from CompCert/C99 with the exceptions:
-   - Casts are not written "(int8_t)e" but rather "(e : int8_t)" as in Scade.
+   - Casts are not written "(int8)e" but rather "(e : int8)" as in Scade.
      This differs from Lustre which has "int e" and "real e".
 
    - For operators, the Scade/Lustre syntax is used (the middle column below),
@@ -295,25 +293,25 @@ identifier_list:
     { fst id :: idl }
 
 type_name:
-| loc=INT8_T
+| loc=INT8
     { (Tint8, loc) }
-| loc=UINT8_T
+| loc=UINT8
     { (Tuint8, loc) }
-| loc=INT16_T
+| loc=INT16
     { (Tint16, loc) }
-| loc=UINT16_T
+| loc=UINT16
     { (Tuint16, loc) }
-| loc=INT32_T
+| loc=INT32
     { (Tint32, loc) }
-| loc=UINT32_T
+| loc=UINT32
     { (Tuint32, loc) }
-| loc=INT64_T
+| loc=INT64
     { (Tint64, loc) }
-| loc=UINT64_T
+| loc=UINT64
     { (Tuint64, loc) }
-| loc=FLOAT
+| loc=FLOAT32
     { (Tfloat, loc) }
-| loc=DOUBLE
+| loc=FLOAT64
     { (Tdouble, loc) }
 | loc=BOOL
     { (Tbool, loc) }
