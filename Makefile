@@ -125,6 +125,7 @@ VFILES:=RMemory.v\
   Dataflow/Syntax.v\
   Dataflow/Typing.v\
   Dataflow/Stream.v\
+  Dataflow/Parser/Ast.v\
   Common.v\
   Ident.v\
   ObcToClight/Interface.v\
@@ -132,6 +133,7 @@ VFILES:=RMemory.v\
   ObcToClight/Correctness.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
+  ObcToClight/DataflowElab.v\
   DataflowToClight.v
 
 -include $(addsuffix .d,$(VFILES))

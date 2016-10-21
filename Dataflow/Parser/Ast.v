@@ -21,6 +21,8 @@ Parameter char_code : Type.
 (* Context information. *)
 Parameter astloc : Type.
 
+Parameter string_of_astloc : astloc -> string.
+
 Record floatInfo := {
   isHex_FI:bool;
   integer_FI:option string;

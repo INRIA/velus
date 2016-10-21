@@ -118,6 +118,8 @@ Module Type TYPING
       Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
       wt_global (n::ns).
 
+  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : dftyping.
+
   Lemma wt_global_NoDup:
     forall g,
       wt_global g ->
