@@ -42,3 +42,12 @@ Module Type DATAFLOW
   Declare Module Export Pro: PROPERTIES Ids Op Syn IsF Clo Mem IsD Par.
 End DATAFLOW.
 
+Module DataflowFun
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       <: DATAFLOW Ids Op OpAux.
+
+  Include DATAFLOW Ids Op OpAux.
+
+End DataflowFun.

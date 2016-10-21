@@ -133,7 +133,8 @@ VFILES:=RMemory.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
   DataflowToClight.v\
-  Operators.v
+  Operators.v\
+  Instantiator.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))

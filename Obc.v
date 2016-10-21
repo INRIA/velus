@@ -13,3 +13,12 @@ Module Type OBC (Ids: IDS) (Op: OPERATORS) (OpAux: OPERATORS_AUX Op).
   Declare Module Export Typ: TYPING Ids Op OpAux Syn Sem.
 End OBC.
 
+Module ObcFun
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       <: OBC Ids Op OpAux.
+
+  Include OBC Ids Op OpAux.
+
+End ObcFun.

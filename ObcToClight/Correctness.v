@@ -26,6 +26,12 @@ Import List.ListNotations.
 Require Import Coq.ZArith.BinInt.
 Require Import Coq.Sorting.Permutation.
 
+Require Import Instantiator.
+Module Import Typ := Obc.Typ.
+Module Import Syn := Obc.Syn.
+Module Import Sem := Obc.Sem.
+Module Import OpAux := OpAux.
+
 Open Scope list_scope.
 Open Scope sep_scope.
 Open Scope Z.
@@ -2645,14 +2651,14 @@ Section PRESERVATION.
      |rename H into Find; intros Findmeth ? Hrec_exec Findvars Sub;
       intros ** Findowner ? Find' Findmeth' Hrep Hbounds ? WTmem ? Hgetptrf Hgetcf ? Findout
              Houtb_callee ? Hin Offs ? ? Houtco_callee ? ?]; intros;
-      try inversion_clear WF as [? ? Hvars|? ? Hin| |
+      try inversion WF as [? ? Hvars|? ? Hin| |
                                  |? ? ? ? ? callee ? ? Hin Find' Findmeth|];
       try (rewrite match_states_conj in MS;
             destruct MS as (Hrep & Hbounds & WT_env & WT_mem & Hself & Hout & Houtco & He & ?));
       subst.
     
     (* Assign x e : "x = e" *)
-    - edestruct pres_sem_stmt with (stmt:=Assign x e); eauto.        
+    - edestruct pres_sem_stmt with (5:=WF); eauto.        
 
       (* get the 'self' variable left value evaluation *)
       simpl translate_stmt; unfold assign.
@@ -2697,7 +2703,7 @@ Section PRESERVATION.
          }
          
     (* AssignSt x e : "self->x = e"*)
-    - edestruct pres_sem_stmt with (stmt:=AssignSt x e); eauto.
+    - edestruct pres_sem_stmt with (5:=WF); eauto. 
 
       edestruct evall_self_field with (e:=e1) as (? & ? & Hoffset & ?); eauto.
 
@@ -2717,7 +2723,7 @@ Section PRESERVATION.
 
     (* Call [y1; ...; yn] clsid o f [e1; ... ;em] : "clsid_f(&(self->o), &o, e1, ..., em); y1 = o.y1; ..." *)
     (* get the Clight corresponding function *)
-    - edestruct pres_sem_stmt with (stmt:=Call ys clsid o f es); eauto.
+    - edestruct pres_sem_stmt with (5:=WF); eauto. 
       
       edestruct methods_corres
         as (ptr_f & cf & ? & ? & Hparams & Hreturn & Hcc & ?); eauto.
@@ -2816,7 +2822,7 @@ Section PRESERVATION.
           apply blockrep_any_empty.
 
     (* Comp s1 s2 : "s1; s2" *)
-    - edestruct pres_sem_stmt with (stmt:=Comp a1 a2); eauto.
+    - edestruct pres_sem_stmt with (5:=WF); eauto. 
       
       apply occurs_in_comp in Occurs.
       edestruct HS1; destruct_conjs; eauto.
@@ -2826,7 +2832,7 @@ Section PRESERVATION.
         eapply exec_Sseq_1; eauto.
           
     (* Ifte e s1 s2 : "if e then s1 else s2" *)
-    - edestruct pres_sem_stmt with (stmt:=Ifte cond ifTrue ifFalse); eauto.
+    - edestruct pres_sem_stmt with (5:=WF); eauto. 
 
       apply occurs_in_ite in Occurs.
       edestruct Hifte; destruct_conjs; eauto; [(destruct b; auto)|(destruct b; auto)| |]. 
@@ -2978,6 +2984,38 @@ Section PRESERVATION.
                  rewrite PM.gso; auto.
          }
   Qed.
+  
+Open Scope nat_scope.
 
-End PRESERVATION.
+Variable m1: Memory.Mem.mem.
+
+Definition exec_call node f es m T m' :=
+  exec_stmt tge (function_entry2 tge) Clight.empty_env (@PTree.empty val)
+            m (funcall (prefix_fun node f) es) T (@PTree.empty val) m' Out_normal.
+            
+Fixpoint dostep (n: nat) owner c obj css T m : Prop :=
+  let self := ptr_obj owner c obj in
+  let out f :=
+      let t := type_of_inst (prefix_fun c f) in
+      Clight.Eaddrof (Clight.Evar (prefix_out obj f) t) (pointer_of t)
+  in
+  match n with
+  | 0 =>
+    exec_call c reset [self; out reset] m1 T m
+  | S n =>
+    let cs := map translate_const (css n) in
+    let args := self :: out step :: cs in
+    exists mN TN,
+    dostep n owner c obj css TN mN
+    /\ exec_call c step args mN TN m
+  end.
+
+
+Lemma is_correct:
+  forall n c obj css menv venv r,
+    Corr.dostep n prog r c obj css menv venv ->
+    exists owner T m,
+      dostep n owner c obj css T m.
+
+(* End PRESERVATION. *)
 

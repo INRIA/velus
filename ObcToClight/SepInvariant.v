@@ -14,16 +14,14 @@ Require Import ZArith.BinInt.
 
 Require Import Program.Tactics.
 
-Require Import Rustre.Obc.Syntax.
-Require Import Rustre.Obc.Semantics.
-Require Import Rustre.Obc.Typing.
-Require Import Rustre.ObcToClight.MoreSeparation.  
+Require Import Rustre.ObcToClight.MoreSeparation.
 Require Import Rustre.ObcToClight.Translation.
-Require Import Rustre.Ident.
 Require Import Rustre.ObcToClight.Interface.
 
-Module Export Sem := SemanticsFun Ids Op OpAux Syn.
-Module Export Typ := Typing Ids Op OpAux Syn Sem.
+Require Import Instantiator.
+Module Import Syn := Obc.Syn.
+Module Import Sem := Obc.Sem.
+Module Import Typ := Obc.Typ.
 
 Open Scope list.
 Open Scope sep_scope.

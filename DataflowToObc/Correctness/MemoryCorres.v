@@ -432,3 +432,14 @@ Module Type MEMORYCORRES
   Qed.
 
 End MEMORYCORRES.
+
+Module MemoryCorresFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (OpAux: OPERATORS_AUX Op)
+       (Import DF: DATAFLOW Ids Op OpAux)
+       (Import MP: OBC Ids Op OpAux)
+       <: MEMORYCORRES Ids Op OpAux DF MP.
+
+      Include MEMORYCORRES Ids Op OpAux DF MP.
+End MemoryCorresFun.     

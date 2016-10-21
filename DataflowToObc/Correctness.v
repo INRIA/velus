@@ -1988,3 +1988,23 @@ for all [Is_free_exp x e]. *)
   Qed.
 
 End CORRECTNESS.
+
+Module CorrectnessFun
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import DF    : DATAFLOW Ids Op OpAux)
+       (Import Obc   : OBC Ids Op OpAux)
+       (Import Mem   : MEMORIES Ids Op DF.Syn)
+
+       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
+       
+       (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
+       (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
+
+       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus.
+
+  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus.
+
+End CorrectnessFun.

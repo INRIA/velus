@@ -4,13 +4,11 @@ Require Import common.Errors.
 Require Import lib.Maps.
 
 Require Import Rustre.Common.
-Require Import Rustre.Obc.Syntax.
 Require Import Rustre.ObcToClight.Interface.
 Require Import Rustre.Ident.
-Require Import Rustre.Operators.
 
-Module Export OpAux := OperatorsAux Op.
-Module Export Syn := SyntaxFun Ids Op OpAux.
+Require Import Instantiator.
+Module Import Syn := Obc.Syn.
 
 Require Import ZArith.BinInt.
 Require Import String.
