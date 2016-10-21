@@ -14,55 +14,55 @@
    and Nicolas Halbwachs in the Lustre v6 reference manual (2016). */
 
 %{
-Require Import Rustre.Dataflow.Parser.Ast.
+Require Rustre.Dataflow.Parser.Ast.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
-Require Import Coq.Program.Syntax.
+Require Coq.Program.Syntax.
 %}
 
-%token<string * astloc> VAR_NAME
-%token<constant * astloc> CONSTANT
-%token<astloc> TRUE FALSE
-%token<astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON
-%token<astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
-%token<astloc> IF THEN ELSE
+%token<Ast.string * Ast.astloc> VAR_NAME
+%token<Ast.constant * Ast.astloc> CONSTANT
+%token<Ast.astloc> TRUE FALSE
+%token<Ast.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON
+%token<Ast.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
+%token<Ast.astloc> IF THEN ELSE
 
-%token<astloc> LPAREN RPAREN COMMA SEMICOLON
-%token<astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
+%token<Ast.astloc> LPAREN RPAREN COMMA SEMICOLON
+%token<Ast.astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
   INT64 UINT64 FLOAT32 FLOAT64
 
-%token<astloc> LET TEL NODE RETURNS VAR FBY
-%token<astloc> WHEN WHENOT MERGE ON ONOT DOT
+%token<Ast.astloc> LET TEL NODE RETURNS VAR FBY
+%token<Ast.astloc> WHEN WHENOT MERGE ON ONOT DOT
 
 %token EOF
 
-%type<expression> primary_expression postfix_expression
+%type<Ast.expression> primary_expression postfix_expression
     fby_expression unary_expression cast_expression
     multiplicative_expression additive_expression shift_expression
     when_expression relational_expression equality_expression AND_expression
     exclusive_OR_expression inclusive_OR_expression logical_AND_expression
     logical_OR_expression expression
-%type<constant * astloc> bool_constant
-%type<list expression> argument_expression_list 
-%type<unary_operator * astloc> unary_operator
-%type<var_decls> var_decl
-%type<var_decls> var_decl_list
-%type<var_decls> local_var_decl
-%type<list string (* Reverse order *)> identifier_list
-%type<type_name * astloc> type_name
-%type<clock> declared_clock
-%type<clock> clock
-%type<var_decls> local_decl
-%type<var_decls> local_decl_list
-%type<var_decls (* Reverse order *)> parameter_list
-%type<list string> pattern
-%type<equation> equation
-%type<list equation> equations
+%type<Ast.constant * Ast.astloc> bool_constant
+%type<list Ast.expression> argument_expression_list 
+%type<Ast.unary_operator * Ast.astloc> unary_operator
+%type<Ast.var_decls> var_decl
+%type<Ast.var_decls> var_decl_list
+%type<Ast.var_decls> local_var_decl
+%type<list Ast.string (* Reverse order *)> identifier_list
+%type<Ast.type_name * Ast.astloc> type_name
+%type<Ast.clock> declared_clock
+%type<Ast.clock> clock
+%type<Ast.var_decls> local_decl
+%type<Ast.var_decls> local_decl_list
+%type<Ast.var_decls (* Reverse order *)> parameter_list
+%type<list Ast.string> pattern
+%type<Ast.equation> equation
+%type<list Ast.equation> equations
 %type<unit> optsemicolon
-%type<declaration> declaration
-%type<list declaration> translation_unit
+%type<Ast.declaration> declaration
+%type<list Ast.declaration> translation_unit
 
-%start<list declaration> translation_unit_file
+%start<list Ast.declaration> translation_unit_file
 %%
 
 (* Actual grammar *)
@@ -101,17 +101,17 @@ Require Import Coq.Program.Syntax.
 
 bool_constant:
 | loc=TRUE
-    { (CONST_BOOL true, loc) }
+    { (Ast.CONST_BOOL true, loc) }
 | loc=FALSE
-    { (CONST_BOOL false, loc) }
+    { (Ast.CONST_BOOL false, loc) }
 
 primary_expression:
 | var=VAR_NAME
-    { VARIABLE (fst var) (snd var) }
+    { Ast.VARIABLE (fst var) (snd var) }
 | cst=CONSTANT
-    { CONSTANT (fst cst) (snd cst) }
+    { Ast.CONSTANT (fst cst) (snd cst) }
 | cst=bool_constant
-    { CONSTANT (fst cst) (snd cst) }
+    { Ast.CONSTANT (fst cst) (snd cst) }
 | loc=LPAREN expr=expression RPAREN
     { expr }
 
@@ -120,7 +120,7 @@ postfix_expression:
 | expr=primary_expression
     { expr }
 | fn=VAR_NAME LPAREN args=argument_expression_list RPAREN
-    { CALL (fst fn) (rev args) (snd fn) }
+    { Ast.CALL (fst fn) (rev args) (snd fn) }
 
 (* Semantic value is in reverse order. *)
 argument_expression_list:
@@ -134,137 +134,137 @@ fby_expression:
 | expr=postfix_expression
     { expr }
 | cst=CONSTANT loc=FBY expr=postfix_expression
-    { FBY (fst cst) expr loc }
+    { Ast.FBY (fst cst) expr loc }
 
 (* 6.5.3 *)
 unary_expression:
 | expr=fby_expression
     { expr }
 | op=unary_operator expr=cast_expression
-    { UNARY (fst op) expr (snd op) }
+    { Ast.UNARY (fst op) expr (snd op) }
 
 unary_operator:
 | loc=PLUS
-    { (PLUS, loc) }
+    { (Ast.PLUS, loc) }
 | loc=MINUS
-    { (MINUS, loc) }
+    { (Ast.MINUS, loc) }
 | loc=LNOT
-    { (BNOT, loc) }
+    { (Ast.BNOT, loc) }
 | loc=NOT
-    { (NOT, loc) }
+    { (Ast.NOT, loc) }
 
 (* 6.5.4 *)
 cast_expression:
 | expr=unary_expression
     { expr }
 | LPAREN expr=cast_expression loc=COLON typ=type_name RPAREN
-    { CAST (fst typ) expr loc }
+    { Ast.CAST (fst typ) expr loc }
 
 (* 6.5.5 *)
 multiplicative_expression:
 | expr=cast_expression
     { expr }
 | expr1=multiplicative_expression loc=STAR expr2=cast_expression
-    { BINARY MUL expr1 expr2 loc }
+    { Ast.BINARY Ast.MUL expr1 expr2 loc }
 | expr1=multiplicative_expression loc=SLASH expr2=cast_expression
-    { BINARY DIV expr1 expr2 loc }
+    { Ast.BINARY Ast.DIV expr1 expr2 loc }
 | expr1=multiplicative_expression loc=MOD expr2=cast_expression
-    { BINARY MOD expr1 expr2 loc }
+    { Ast.BINARY Ast.MOD expr1 expr2 loc }
 
 (* 6.5.6 *)
 additive_expression:
 | expr=multiplicative_expression
     { expr }
 | expr1=additive_expression loc=PLUS expr2=multiplicative_expression
-    { BINARY ADD expr1 expr2 loc }
+    { Ast.BINARY Ast.ADD expr1 expr2 loc }
 | expr1=additive_expression loc=MINUS expr2=multiplicative_expression
-    { BINARY SUB expr1 expr2 loc }
+    { Ast.BINARY Ast.SUB expr1 expr2 loc }
 
 (* 6.5.7 *)
 shift_expression:
 | expr=additive_expression
     { expr }
 | expr1=shift_expression loc=LSL expr2=additive_expression
-    { BINARY LSL expr1 expr2 loc }
+    { Ast.BINARY Ast.LSL expr1 expr2 loc }
 | expr1=shift_expression loc=LSR expr2=additive_expression
-    { BINARY LSR expr1 expr2 loc }
+    { Ast.BINARY Ast.LSR expr1 expr2 loc }
 
 (* Lustre when operators *)
 when_expression:
 | expr=shift_expression
     { expr }
 | expr=when_expression loc=WHEN id=VAR_NAME
-    { WHEN expr true (fst id) loc }
+    { Ast.WHEN expr true (fst id) loc }
 | expr=when_expression loc=WHENOT id=VAR_NAME
-    { WHEN expr false (fst id) loc }
+    { Ast.WHEN expr false (fst id) loc }
 
 (* 6.5.8 *)
 relational_expression:
 | expr=when_expression
     { expr }
 | expr1=relational_expression loc=LT expr2=when_expression
-    { BINARY LT expr1 expr2 loc }
+    { Ast.BINARY Ast.LT expr1 expr2 loc }
 | expr1=relational_expression loc=GT expr2=when_expression
-    { BINARY GT expr1 expr2 loc }
+    { Ast.BINARY Ast.GT expr1 expr2 loc }
 | expr1=relational_expression loc=LEQ expr2=when_expression
-    { BINARY LE expr1 expr2 loc }
+    { Ast.BINARY Ast.LE expr1 expr2 loc }
 | expr1=relational_expression loc=GEQ expr2=when_expression
-    { BINARY GE expr1 expr2 loc }
+    { Ast.BINARY Ast.GE expr1 expr2 loc }
 
 (* 6.5.9 *)
 equality_expression:
 | expr=relational_expression
     { expr }
 | expr1=equality_expression loc=EQ expr2=relational_expression
-    { BINARY EQ expr1 expr2 loc }
+    { Ast.BINARY Ast.EQ expr1 expr2 loc }
 | expr1=equality_expression loc=NEQ expr2=relational_expression
-    { BINARY NE expr1 expr2 loc }
+    { Ast.BINARY Ast.NE expr1 expr2 loc }
 
 (* 6.5.10 *)
 AND_expression:
 | expr=equality_expression
     { expr }
 | expr1=AND_expression loc=LAND expr2=equality_expression
-    { BINARY BAND expr1 expr2 loc }
+    { Ast.BINARY Ast.BAND expr1 expr2 loc }
 
 (* 6.5.11 *)
 exclusive_OR_expression:
 | expr=AND_expression
     { expr }
 | expr1=exclusive_OR_expression loc=LXOR expr2=AND_expression
-    { BINARY XOR expr1 expr2 loc }
+    { Ast.BINARY Ast.XOR expr1 expr2 loc }
 | expr1=exclusive_OR_expression loc=XOR expr2=AND_expression
-    { BINARY XOR expr1 expr2 loc }
+    { Ast.BINARY Ast.XOR expr1 expr2 loc }
 
 (* 6.5.12 *)
 inclusive_OR_expression:
 | expr=exclusive_OR_expression
     { expr }
 | expr1=inclusive_OR_expression loc=LOR expr2=exclusive_OR_expression
-    { BINARY BOR expr1 expr2 loc }
+    { Ast.BINARY Ast.BOR expr1 expr2 loc }
 
 (* 6.5.13 *)
 logical_AND_expression:
 | expr=inclusive_OR_expression
     { expr }
 | expr1=logical_AND_expression loc=AND expr2=inclusive_OR_expression
-    { BINARY LAND expr1 expr2 loc }
+    { Ast.BINARY Ast.LAND expr1 expr2 loc }
 
 (* 6.5.14 *)
 logical_OR_expression:
 | expr=logical_AND_expression
     { expr }
 | expr1=logical_OR_expression loc=OR expr2=logical_AND_expression
-    { BINARY LOR expr1 expr2 loc }
+    { Ast.BINARY Ast.LOR expr1 expr2 loc }
 
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
 expression:
 | expr=logical_OR_expression
     { expr }
 | loc=IF expr1=expression THEN expr2=expression ELSE expr3=expression
-    { IFTE expr1 expr2 expr3 loc }
+    { Ast.IFTE expr1 expr2 expr3 loc }
 | loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
-    { MERGE (fst id) expr1 expr2 loc }
+    { Ast.MERGE (fst id) expr1 expr2 loc }
 
 (* Declarations are much simpler than in C. We do not have arrays,
    structs/unions, or pointers. We do not have storage-class specifiers,
@@ -294,41 +294,41 @@ identifier_list:
 
 type_name:
 | loc=INT8
-    { (Tint8, loc) }
+    { (Ast.Tint8, loc) }
 | loc=UINT8
-    { (Tuint8, loc) }
+    { (Ast.Tuint8, loc) }
 | loc=INT16
-    { (Tint16, loc) }
+    { (Ast.Tint16, loc) }
 | loc=UINT16
-    { (Tuint16, loc) }
+    { (Ast.Tuint16, loc) }
 | loc=INT32
-    { (Tint32, loc) }
+    { (Ast.Tint32, loc) }
 | loc=UINT32
-    { (Tuint32, loc) }
+    { (Ast.Tuint32, loc) }
 | loc=INT64
-    { (Tint64, loc) }
+    { (Ast.Tint64, loc) }
 | loc=UINT64
-    { (Tuint64, loc) }
+    { (Ast.Tuint64, loc) }
 | loc=FLOAT32
-    { (Tfloat, loc) }
+    { (Ast.Tfloat, loc) }
 | loc=FLOAT64
-    { (Tdouble, loc) }
+    { (Ast.Tdouble, loc) }
 | loc=BOOL
-    { (Tbool, loc) }
+    { (Ast.Tbool, loc) }
 
 declared_clock:
 | /* empty */
-    { BASE }
+    { Ast.BASE }
 | WHEN clk=clock
     { clk }
 
 clock:
 | DOT
-    { BASE }
+    { Ast.BASE }
 | clk=clock ON id=VAR_NAME
-    { ON clk true (fst id) }
+    { Ast.ON clk true (fst id) }
 | clk=clock ONOT id=VAR_NAME
-    { ON clk false (fst id) }
+    { Ast.ON clk false (fst id) }
 
 local_decl:
 | vd=local_var_decl
@@ -373,7 +373,7 @@ declaration:
 | loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=parameter_list RPAREN SEMICOLON
   locals=local_decl_list LET eqns=equations TEL
-    { NODE (fst id) iparams oparams locals eqns }
+    { Ast.NODE (fst id) iparams oparams locals eqns }
 
 translation_unit:
 | def=declaration
