@@ -144,8 +144,6 @@ unary_expression:
     { Ast.UNARY (fst op) expr (snd op) }
 
 unary_operator:
-| loc=PLUS
-    { (Ast.PLUS, loc) }
 | loc=MINUS
     { (Ast.MINUS, loc) }
 | loc=LNOT
@@ -310,9 +308,9 @@ type_name:
 | loc=UINT64
     { (Ast.Tuint64, loc) }
 | loc=FLOAT32
-    { (Ast.Tfloat, loc) }
+    { (Ast.Tfloat32, loc) }
 | loc=FLOAT64
-    { (Ast.Tdouble, loc) }
+    { (Ast.Tfloat64, loc) }
 | loc=BOOL
     { (Ast.Tbool, loc) }
 

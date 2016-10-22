@@ -21,8 +21,6 @@ Parameter char_code : Type.
 (* Context information. *)
 Parameter astloc : Type.
 
-Parameter string_of_astloc : astloc -> string.
-
 Record floatInfo := {
   isHex_FI:bool;
   integer_FI:option string;
@@ -40,12 +38,12 @@ Inductive type_name :=
 | Tuint32
 | Tint64
 | Tuint64
-| Tfloat
-| Tdouble
+| Tfloat32
+| Tfloat64
 | Tbool : type_name.
 
 Inductive unary_operator :=
-| MINUS | PLUS | NOT | BNOT.
+| MINUS | NOT | BNOT.
 
 Inductive binary_operator :=
 | ADD | SUB | MUL | DIV | MOD
@@ -77,6 +75,21 @@ Inductive expression :=
 | WHEN     : expression -> bool -> string -> astloc -> expression
 | MERGE    : string -> expression -> expression -> astloc -> expression.
 
+(* TODO: Reorganize to add astloc as usual, with "decorating wrapper"? *)
+Definition expression_loc (e: expression) : astloc :=
+  match e with
+  | UNARY _ _ l => l
+  | BINARY _ _ _ l => l
+  | IFTE _ _ _ l => l
+  | CAST _ _ l => l
+  | CALL _ _ l => l
+  | CONSTANT _ l => l
+  | VARIABLE _ l => l
+  | FBY _ _ l => l
+  | WHEN _ _ _ l => l
+  | MERGE _ _ _ l => l
+  end.
+    
 Definition var_decls := list (string * type_name * clock).
 
 Definition equation : Type := (list string * expression * astloc)%type.

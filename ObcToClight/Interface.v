@@ -995,6 +995,24 @@ Module Export Op <: OPERATORS.
        try destruct f0; auto);
         (destruct Heq2 as [Heq2|[Heq2|Heq2]]; discriminate).
   Qed.
-  
+
+
+  Open Scope string_scope.
+
+  Definition string_of_type (ty: type) : String.string :=
+    match ty with
+    | Tint Ctypes.IBool sg            => "bool"
+    | Tint Ctypes.I8 Ctypes.Signed    => "int8"
+    | Tint Ctypes.I8 Ctypes.Unsigned  => "uint8"
+    | Tint Ctypes.I16 Ctypes.Signed   => "int16"
+    | Tint Ctypes.I16 Ctypes.Unsigned => "uint16"
+    | Tint Ctypes.I32 Ctypes.Signed   => "int32"
+    | Tint Ctypes.I32 Ctypes.Unsigned => "uint32"
+    | Tlong Ctypes.Signed             => "int64"
+    | Tlong Ctypes.Unsigned           => "uint64"
+    | Tfloat Ctypes.F32               => "float32"
+    | Tfloat Ctypes.F64               => "float64"
+    end.
+
 End Op.
 
