@@ -169,6 +169,28 @@ Module Type ELABORATION
       | _ => Error (err_loc (expression_loc ae) (msg "expression not normalized"))
       end.
 
+    Fixpoint elab_cexp (ae: Ast.expression) : res cexp :=
+      match ae with
+      | MERGE sx aet aef loc =>
+        let x := ident_of_string sx in
+        do ok <- assert_type loc x bool_type;
+        do et <- elab_cexp aet;
+        do ef <- elab_cexp aef;
+        if typeofc et ==b typeofc ef
+        then OK (Emerge x et ef)
+        else Error (err_loc loc (msg "badly typed merge"))
+      | IFTE ae aet aef loc =>
+        do e <- elab_lexp ae;
+        do et <- elab_cexp aet;
+        do ef <- elab_cexp aef;
+        if (typeof e ==b bool_type) && (typeofc et ==b typeofc ef)
+        then OK (Eite e et ef)
+        else Error (err_loc loc (msg "badly typed if/then/else"))
+      | _ =>
+        do e <- elab_lexp ae;
+        OK (Eexp e)
+      end.
+
   End ElabExpressions.
 
   Lemma find_type_In:
@@ -227,6 +249,54 @@ Module Type ELABORATION
       intro; subst.
       now rewrite type_binop'_correct in He.
     - now rewrite type_castop.
+  Qed.
+
+  Lemma wt_elab_cexp:
+    forall env ae e,
+      elab_cexp env ae = OK e ->
+      wt_cexp (PM.elements env) e.
+  Proof.
+    induction ae; intros e Helab.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - monadInv Helab.
+      specialize (IHae2 _ EQ1); clear EQ1.
+      specialize (IHae3 _ EQ0); clear EQ0.
+      destruct ((typeof x ==b bool_type) && (typeofc x0 ==b typeofc x1)) eqn:Hg;
+        try discriminate.
+      apply andb_prop in Hg; destruct Hg as (Hg1 & Hg2).
+      rewrite equiv_decb_equiv in Hg1, Hg2.
+      monadInv EQ3. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - monadInv Helab.
+      specialize (IHae1 _ EQ1); clear EQ1.
+      specialize (IHae2 _ EQ0); clear EQ0.
+      destruct ((typeofc x0 ==b typeofc x1)) eqn:Hg;
+        try discriminate.
+      rewrite equiv_decb_equiv in Hg.
+      monadInv EQ3. apply assert_type_In in EQ.
+      auto with dftyping.
   Qed.
 
 End ELABORATION.
