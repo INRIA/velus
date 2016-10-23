@@ -108,7 +108,7 @@ Module Export Op <: OPERATORS.
     | _ => false
     end.
 
-  Definition is_bool_unop (op: Cop.unary_operation) : bool :=
+  Definition unop_always_returns_bool (op: Cop.unary_operation) : bool :=
     match op with
     | Cop.Onotbool => true
     | _            => false
@@ -116,7 +116,7 @@ Module Export Op <: OPERATORS.
 
   Definition type_unop (uop: unop) (ty: type) : option type :=
     match uop with
-    | UnaryOp op => if is_bool_unop op then Some bool_type
+    | UnaryOp op => if unop_always_returns_bool op then Some bool_type
                     else match Ctyping.type_unop op (cltype ty) with
                          | Errors.OK ty' => typecl ty'
                          | Errors.Error _ => None
@@ -454,7 +454,7 @@ Module Export Op <: OPERATORS.
     unfold type_unop, sem_unop in *.
     destruct op as [uop|].
     - (* UnaryOp *)
-      destruct (is_bool_unop uop) eqn:Huop.
+      destruct (unop_always_returns_bool uop) eqn:Huop.
       + destruct uop; try discriminate Huop.
         injection Htop; intros; subst.
         simpl in Hsop.
