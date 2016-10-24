@@ -90,12 +90,17 @@ Definition expression_loc (e: expression) : astloc :=
   | MERGE _ _ _ l => l
   end.
     
-Definition var_decls := list (string * type_name * clock).
+Definition var_decls := list (string * type_name * clock * astloc).
 
 Definition equation : Type := (list string * expression * astloc)%type.
 
 Inductive declaration :=
       (*  name      inputs       outputs      locals   *)
 | NODE : string -> var_decls -> var_decls -> var_decls
-         -> list equation -> declaration.
+         -> list equation -> astloc -> declaration.
+
+Definition declaration_loc (d: declaration) : astloc :=
+  match d with
+  | NODE name inputs outputs locals eqs loc => loc
+  end.
 

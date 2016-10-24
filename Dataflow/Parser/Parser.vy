@@ -271,8 +271,8 @@ expression:
    stdint.h/Scade (e.g., "uint_16"). *)
 
 var_decl:
-| ids=identifier_list COLON ty=type_name clk=declared_clock
-    { map (fun id=> (id, fst ty, clk)) ids }
+| ids=identifier_list loc=COLON ty=type_name clk=declared_clock
+    { map (fun id=> (id, fst ty, clk, loc)) ids }
 
 var_decl_list:
 | vars=var_decl
@@ -371,7 +371,7 @@ declaration:
 | loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=parameter_list RPAREN SEMICOLON
   locals=local_decl_list LET eqns=equations TEL
-    { Ast.NODE (fst id) iparams oparams locals eqns }
+    { Ast.NODE (fst id) iparams oparams locals eqns loc }
 
 translation_unit:
 | def=declaration
