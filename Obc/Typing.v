@@ -90,7 +90,7 @@ Module Type TYPING
                        (insts : list (ident * ident))
                        (mems  : list (ident * type))
                        (m     : method) : Prop
-    := wt_stmt p insts mems (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) m.(m_body).
+    := wt_stmt p insts mems (meth_vars m) m.(m_body).
 
   Definition wt_class (p : program) (cls: class) : Prop
     := (Forall (fun ocls=> find_class (snd ocls) p <> None) cls.(c_objs))

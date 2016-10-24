@@ -2984,38 +2984,112 @@ Section PRESERVATION.
                  rewrite PM.gso; auto.
          }
   Qed.
+
+  Theorem stmt_correctness:
+    forall p me1 ve1 s S2,
+      stmt_eval p me1 ve1 s S2 ->
+      sub_prog p prog ->
+      forall c prog' f
+        (Occurs: occurs_in s (m_body f))
+        (WF: wt_stmt prog c.(c_objs) c.(c_mems) (meth_vars f) s)
+        (Find: find_class c.(c_name) prog = Some (c, prog'))
+        (Hf: find_method f.(m_name) c.(c_methods) = Some f),
+      forall e1 le1 m1 sb sofs outb outco P
+        (MS: m1 |= match_states c f (me1, ve1) (e1, le1) sb sofs outb outco ** P),
+      exists le2 m2 T,
+        exec_stmt tge (function_entry2 tge) e1 le1 m1
+                  (translate_stmt prog c f s) T le2 m2 Out_normal
+        /\ m2 |= match_states c f S2 (e1, le2) sb sofs outb outco ** P.
+  Proof.
+    intros.
+    eapply (proj1 correctness); eauto.
+  Qed.
   
-Open Scope nat_scope.
+  Open Scope nat_scope.
 
-Variable m1: Memory.Mem.mem.
+  Section Foo.
+    Let empty_le := @PTree.empty val.
+    Variables (m1: Memory.Mem.mem) (e1: env) (owner: class) (caller: method) (prog': program)
+              (sb outb: block) (sofs: int) (outco: composite) (P: massert).
+    Hypothesis Findcl: find_class (c_name owner) prog = Some (owner, prog').
+    Hypothesis Findstep: find_method step (c_methods owner) = Some caller.          
+    Hypothesis MS1: m1 |= match_states owner caller (hempty, sempty) (empty_env, empty_le) sb sofs outb outco ** P.
 
-Definition exec_call node f es m T m' :=
-  exec_stmt tge (function_entry2 tge) Clight.empty_env (@PTree.empty val)
-            m (funcall (prefix_fun node f) es) T (@PTree.empty val) m' Out_normal.
-            
-Fixpoint dostep (n: nat) owner c obj css T m : Prop :=
-  let self := ptr_obj owner c obj in
-  let out f :=
-      let t := type_of_inst (prefix_fun c f) in
-      Clight.Eaddrof (Clight.Evar (prefix_out obj f) t) (pointer_of t)
-  in
-  match n with
-  | 0 =>
-    exec_call c reset [self; out reset] m1 T m
-  | S n =>
-    let cs := map translate_const (css n) in
-    let args := self :: out step :: cs in
-    exists mN TN,
-    dostep n owner c obj css TN mN
-    /\ exec_call c step args mN TN m
-  end.
-
-
-Lemma is_correct:
-  forall n c obj css menv venv r,
-    Corr.dostep n prog r c obj css menv venv ->
-    exists owner T m,
-      dostep n owner c obj css T m.
-
+    Inductive dostep owner caller r c obj css : nat -> trace -> env -> temp_env -> Memory.Mem.mem -> Prop :=
+    | do_reset: forall T le m,
+        exec_stmt tge (function_entry2 tge) empty_env empty_le
+                  m1 (binded_funcall prog [] (c_name owner) caller c obj reset []) T le m Out_normal ->
+        dostep owner caller r c obj css 0 T empty_env le m
+    | do_step: forall n TN e mN leN T le m,
+        let cs := map translate_const (css n) in
+        dostep owner caller r c obj css n TN e leN mN ->
+        exec_stmt tge (function_entry2 tge) e leN
+                  mN (binded_funcall prog [r] (c_name owner) caller c obj step cs) T le m Out_normal ->
+        dostep owner caller r c obj css (S n) T e le m.
+    
+    (* Fixpoint dostep (n: nat) owner caller r c obj css T e m le : Prop := *)
+    (*   match n with *)
+    (*   | 0 => *)
+    (*     exec_stmt tge (function_entry2 tge) e1 (@PTree.empty val) *)
+    (*               m1 (binded_funcall prog [] (c_name owner) caller c obj reset []) T le m Out_normal *)
+    (*   | S n => *)
+    (*     let cs := map translate_const (css n) in *)
+    (*     exists mN leN TN, *)
+    (*       dostep n owner caller r c obj css TN e mN leN *)
+    (*       /\ exec_stmt tge (function_entry2 tge) e leN *)
+    (*                   mN (binded_funcall prog [r] (c_name owner) caller c obj step cs) T le m Out_normal *)
+    (*   end. *)
+    
+    Lemma translate_exp_const:
+      forall cs c f,
+        map (translate_exp c f) (map Const cs) = map translate_const cs.
+    Proof.
+      induction cs; intros; simpl; auto.
+      f_equal; auto.
+    Qed.
+    
+    Lemma is_correct:
+      forall n node obj css menv venv r,
+        Corr.dostep n prog r node obj css menv venv ->
+        exists T e le m,
+          dostep owner caller r node obj css n T e le m
+          /\ m |= match_states owner caller (menv, venv) (e, le) sb sofs outb outco ** P.
+    Proof.
+      induction n; intros ** Dostep.
+      - pose proof (find_method_name _ _ _ Findstep) as Eq'; rewrite <-Eq' in Findstep.
+        assert (occurs_in (Obc.Syn.Call [] node obj reset []) (m_body caller)). admit.
+        eapply stmt_correctness in Dostep; eauto.
+        + destruct Dostep as (le' & m' & T & Exec & MS').
+          exists T, empty_env, le', m'; split; auto.
+          constructor; simpl in Exec; auto.
+        + reflexivity.
+        + edestruct wt_program_find_class as [WT']; eauto.
+          eapply wt_class_find_method in WT'; eauto.
+          unfold wt_method in WT'.
+          eapply wt_stmt_sub with (prog:=prog) in WT'; eauto.
+          * eapply occurs_in_wt with (1:=WT'); eauto.
+          * eapply find_class_sub; eauto. 
+      - destruct Dostep as (menvN & envN & Dostep & Ev).
+        apply IHn in Dostep.
+        destruct Dostep as (TN & eN & leN & mN & Dostep & MS).
+        pose proof (find_method_name _ _ _ Findstep) as Eq'; rewrite <-Eq' in Findstep.
+        assert (occurs_in (Obc.Syn.Call [r] node obj step (map Obc.Syn.Const (css n)))
+                          (m_body caller)). admit.
+        eapply stmt_correctness in Ev; eauto.
+        + destruct Ev as (le' & m' & T & Exec & MS').
+          exists T, eN, le', m'; split; auto.
+          econstructor; eauto.
+          simpl in Exec; rewrite translate_exp_const in Exec; auto.
+        + reflexivity.
+        + edestruct wt_program_find_class as [WT']; eauto.
+          eapply wt_class_find_method in WT'; eauto.
+          unfold wt_method in WT'.
+          eapply wt_stmt_sub with (prog:=prog) in WT'; eauto.
+          * eapply occurs_in_wt with (1:=WT'); eauto.
+          * eapply find_class_sub; eauto.
+    Qed.
+    
+  End Foo.
+  
 (* End PRESERVATION. *)
 
