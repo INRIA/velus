@@ -3008,18 +3008,17 @@ Section PRESERVATION.
   Open Scope nat_scope.
 
   Section Foo.
-    Let empty_le := @PTree.empty val.
-    Variables (m1: Memory.Mem.mem) (e1: env) (owner: class) (caller: method) (prog': program)
+    Variables (m1: Memory.Mem.mem) (e1: env) (le1: temp_env) (owner: class) (caller: method) (prog': program)
               (sb outb: block) (sofs: int) (outco: composite) (P: massert).
     Hypothesis Findcl: find_class (c_name owner) prog = Some (owner, prog').
-    Hypothesis Findstep: find_method step (c_methods owner) = Some caller.          
-    Hypothesis MS1: m1 |= match_states owner caller (hempty, sempty) (empty_env, empty_le) sb sofs outb outco ** P.
+    Hypothesis Findmeth: find_method (m_name caller) (c_methods owner) = Some caller.          
+    Hypothesis MS1: m1 |= match_states owner caller (hempty, sempty) (e1, le1) sb sofs outb outco ** P.
 
     Inductive dostep owner caller r c obj css : nat -> trace -> env -> temp_env -> Memory.Mem.mem -> Prop :=
     | do_reset: forall T le m,
-        exec_stmt tge (function_entry2 tge) empty_env empty_le
+        exec_stmt tge (function_entry2 tge) e1 le1
                   m1 (binded_funcall prog [] (c_name owner) caller c obj reset []) T le m Out_normal ->
-        dostep owner caller r c obj css 0 T empty_env le m
+        dostep owner caller r c obj css 0 T e1 le m
     | do_step: forall n TN e mN leN T le m,
         let cs := map translate_const (css n) in
         dostep owner caller r c obj css n TN e leN mN ->
@@ -3056,11 +3055,10 @@ Section PRESERVATION.
           /\ m |= match_states owner caller (menv, venv) (e, le) sb sofs outb outco ** P.
     Proof.
       induction n; intros ** Dostep.
-      - pose proof (find_method_name _ _ _ Findstep) as Eq'; rewrite <-Eq' in Findstep.
-        assert (occurs_in (Obc.Syn.Call [] node obj reset []) (m_body caller)). admit.
+      - assert (occurs_in (Obc.Syn.Call [] node obj reset []) (m_body caller)). admit.
         eapply stmt_correctness in Dostep; eauto.
         + destruct Dostep as (le' & m' & T & Exec & MS').
-          exists T, empty_env, le', m'; split; auto.
+          exists T, e1, le', m'; split; auto.
           constructor; simpl in Exec; auto.
         + reflexivity.
         + edestruct wt_program_find_class as [WT']; eauto.
@@ -3072,7 +3070,6 @@ Section PRESERVATION.
       - destruct Dostep as (menvN & envN & Dostep & Ev).
         apply IHn in Dostep.
         destruct Dostep as (TN & eN & leN & mN & Dostep & MS).
-        pose proof (find_method_name _ _ _ Findstep) as Eq'; rewrite <-Eq' in Findstep.
         assert (occurs_in (Obc.Syn.Call [r] node obj step (map Obc.Syn.Const (css n)))
                           (m_body caller)). admit.
         eapply stmt_correctness in Ev; eauto.
