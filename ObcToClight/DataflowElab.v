@@ -473,8 +473,7 @@ Module Type ELABORATION
            elab_clock_decl tyenv (PM.add x ck acc) vds
       end.
 
-    Program Definition elab_declaration (nenv: PM.t (list type * list type))
-                                        (decl: Ast.declaration) : res node :=
+    Program Definition elab_declaration (decl: Ast.declaration) : res node :=
       match decl with
       | NODE name inputs outputs locals equations loc =>
         let '(xout, sout) := fold_left elab_var_decl outputs
@@ -542,6 +541,12 @@ Module Type ELABORATION
       admit.
     Qed.
 
+    Lemma wt_elab_declaration:
+      forall d node,
+        elab_declaration d = OK node ->
+        wt_node G node.
+    Admitted.
+
   End ElabDeclaration.
 
   Fixpoint elab_declarations' (nenvg: PM.t (list type * list type) * global)
@@ -562,7 +567,13 @@ Module Type ELABORATION
 
   Definition elab_declarations (decls: list Ast.declaration) : res global :=
     elab_declarations' (PM.empty (list type * list type), []) decls.
-           
+
+  Lemma wt_elab_declarations:
+    forall decls g,
+      elab_declarations decls = OK g ->
+      wt_global g.
+  Admitted.
+  
 End ELABORATION.
 
 
