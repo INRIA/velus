@@ -76,11 +76,11 @@ Module Type ELABORATION
       forall x ck, PM.find x cenv = Some ck -> wt_clock (PM.elements env) ck.
 
     Hypothesis wt_nenv :
-      forall f n tysin tysout,
+      forall f tysin tysout,
         PM.find f nenv = Some (tysin, tysout) ->
-        (find_node f G = Some n
-         /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
-         /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
+        (exists n, find_node f G = Some n
+                   /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
+                   /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
 
     Definition find_type (loc: astloc) (x: ident) : res type :=
       match PM.find x env with
@@ -356,6 +356,30 @@ Module Type ELABORATION
       - now rewrite type_castop.
     Qed.
 
+    Ltac NamedDestructCases :=
+      repeat progress
+             match goal with
+             | H:match ?e with _ => _ end = OK _ |- _ =>
+               let Heq := fresh "Heq" in
+               destruct e eqn:Heq; try discriminate
+             | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
+             end.
+    
+    Lemma wt_elab_lexps:
+      forall loc aes tys es,
+        elab_lexps loc aes tys = OK es ->
+        (Forall (wt_lexp (PM.elements env)) es
+         /\ Forall2 (fun e ty=>typeof e = ty) es tys).
+    Proof.
+      induction aes; simpl; intros ** Helab; DestructCases; auto.
+      monadInv Helab.
+      apply wt_elab_lexp in EQ.
+      specialize (IHaes _ _ EQ0); destruct IHaes.
+      unfold assert_lexp_type in EQ1.
+      NamedDestructCases. rewrite equiv_decb_equiv in Heq.
+      auto.
+    Qed.
+    
     Lemma wt_elab_cexp:
       forall ae e,
         elab_cexp ae = OK e ->
@@ -371,11 +395,10 @@ Module Type ELABORATION
       - monadInv Helab.
         specialize (IHae2 _ EQ1); clear EQ1.
         specialize (IHae3 _ EQ0); clear EQ0.
-        destruct ((typeof x ==b bool_type) && (typeofc x0 ==b typeofc x1)) eqn:Hg;
-          try discriminate.
-        apply andb_prop in Hg; destruct Hg as (Hg1 & Hg2).
+        NamedDestructCases.
+        apply andb_prop in Heq; destruct Heq as (Hg1 & Hg2).
         rewrite equiv_decb_equiv in Hg1, Hg2.
-        monadInv EQ3. eauto using wt_elab_lexp with dftyping.
+        eauto using wt_elab_lexp with dftyping.
       - apply bind_inversion in Helab.
         destruct Helab as (le & Helab & Hexp).
         monadInv Hexp. eauto using wt_elab_lexp with dftyping.
@@ -397,11 +420,9 @@ Module Type ELABORATION
       - monadInv Helab.
         specialize (IHae1 _ EQ1); clear EQ1.
         specialize (IHae2 _ EQ0); clear EQ0.
-        destruct ((typeofc x0 ==b typeofc x1)) eqn:Hg;
-          try discriminate.
-        rewrite equiv_decb_equiv in Hg.
-        monadInv EQ3. apply assert_type_In in EQ.
-        auto with dftyping.
+        NamedDestructCases.
+        rewrite equiv_decb_equiv in Heq.
+        eauto using assert_type_In with dftyping.
     Qed.
 
     Lemma wt_elab_equation:
@@ -413,17 +434,50 @@ Module Type ELABORATION
       destruct aeq as ((xs & ae) & loc).
       destruct ae; simpl in Helab;
         repeat progress
-               match goal with H:bind _ _ = _ |- _ => monadInv H end.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
-      - admit.
+               match goal with
+               | H:bind _ _ = _ |- _ => monadInv H
+               | H:elab_lexp _ = OK _ |- _ => apply wt_elab_lexp in H
+               | H:elab_lexps _ _ _ = OK _ |- _ => apply wt_elab_lexps in H
+               | H:find_clock _ _ = OK _ |- _ => apply wt_find_clock in H
+               | H:find_type _ _ = OK _ |- _ => apply find_type_In in H
+               | H:assert_type _ _ _ = OK _ |- _ => apply assert_type_In in H
+               | H:elab_cexp _ = OK _ |- _ => apply wt_elab_cexp in H
+               | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
+               | _ => NamedDestructCases
+               end; auto with dftyping.
+      - unfold find_type_unop in EQ3. NamedDestructCases.
+        rewrite type_unop'_correct in Heq.
+        auto with dftyping.
+      - unfold find_type_binop in EQ4. NamedDestructCases.
+        rewrite type_binop'_correct in Heq.
+        auto with dftyping.
+      - apply andb_prop in Heq.
+        destruct Heq as (Heq1 & Heq2).
+        rewrite equiv_decb_equiv in Heq1, Heq2.
+        auto with dftyping.
+      - auto using type_castop with dftyping.
+      - unfold find_node_interface in EQ0. NamedDestructCases.
+        destruct EQ2.
+        specialize (wt_nenv (ident_of_string s) _ _ Heq).
+        destruct wt_nenv as (n & Hfind & Hin & Hout); clear wt_nenv.
+        inv Hout.
+        econstructor; eauto.
+        rename x1 into intys.
+        rename x3 into ines.
+        clear Heq H6 EQ Hfind.
+        apply Forall2_map_1 with (f:=typeof) in H0.
+        apply Forall2_swap_args in H0.
+        apply Forall2_map_1 with (f:=snd) in Hin.
+        apply Forall2_swap_args in Hin.
+        apply Forall2_det with (2:=H0) in Hin.
+        2:now intros; subst.
+        cut (Forall2 eq (map typeof ines) (map snd n.(n_in))).
+        + intros Hfa. rewrite Forall2_map_1 in Hfa.
+          apply Forall2_swap_args in Hfa.
+          rewrite Forall2_map_1 in Hfa.
+          now apply Forall2_swap_args in Hfa.
+        + rewrite Hin. clear Hin.
+          induction (map snd n.(n_in)); auto.
     Qed.
     
   End ElabExpressions.
@@ -437,11 +491,11 @@ Module Type ELABORATION
     Variable nenv : PM.t (list type * list type).
 
     Hypothesis wt_nenv :
-      forall f n tysin tysout,
+      forall f tysin tysout,
         PM.find f nenv = Some (tysin, tysout) ->
-        (find_node f G = Some n
-         /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
-         /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
+        (exists n, find_node f G = Some n
+                   /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
+                   /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
 
     Fixpoint elab_var_decls (acc: list (ident * type) * (PS.t * PM.t type))
                (vds: list (string * type_name * Ast.clock * astloc))
