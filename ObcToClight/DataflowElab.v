@@ -443,22 +443,31 @@ Module Type ELABORATION
          /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
          /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
 
-    Definition elab_var_decl (acc: list (ident * type) * (PS.t * PM.t type))
-               (vd: string * type_name * Ast.clock * astloc)
-               : (list (ident * type) * (PS.t * PM.t type)) :=
-      let '(rs, (vars, tyenv)) := acc in
-      let '(sx, sty, sck, loc) := vd in
-      let x := ident_of_string sx in
-      let ty := elab_type loc sty in
-      ((x, ty)::rs, (PS.add x vars, PM.add x ty tyenv)).
+    Fixpoint elab_var_decls (acc: list (ident * type) * (PS.t * PM.t type))
+               (vds: list (string * type_name * Ast.clock * astloc))
+               : res (list (ident * type) * (PS.t * PM.t type)) :=
+      match vds with
+      | nil => OK acc
+      | vd::vds =>
+        let '(rs, (vars, tyenv)) := acc in
+        let '(sx, sty, sck, loc) := vd in
+        let x := ident_of_string sx in
+        let ty := elab_type loc sty in
+        if PS.mem x vars
+        then Error (err_loc loc (CTX x :: msg " is declared more than once"))
+        else elab_var_decls ((x, ty)::rs, (PS.add x vars, PM.add x ty tyenv)) vds
+      end.
 
-    Fixpoint check_defd (out: PS.t) (defd: PS.t) (eqs: list equation) : bool :=
+    Fixpoint check_defined (loc: astloc) (out: PS.t) (defd: PS.t)
+                           (eqs: list equation) : res unit :=
       match eqs with
-      | nil => PS.is_empty defd
+      | nil => if PS.is_empty defd then OK tt
+               else Error (err_loc loc (msg "some variables are not defined"))
       | eq::eqs => let x := var_defined eq in
                    if PS.mem x defd && (negb (is_fby eq && PS.mem x out))
-                   then check_defd out (PS.remove x defd) eqs
-                   else false
+                   then check_defined loc out (PS.remove x defd) eqs
+                   else Error (err_loc loc
+                                       (CTX x :: msg " is improperly defined"))
       end.
 
     Fixpoint elab_clock_decl (tyenv: PM.t type) (acc: PM.t clock)
@@ -473,53 +482,59 @@ Module Type ELABORATION
            elab_clock_decl tyenv (PM.add x ck acc) vds
       end.
 
+    Local Obligation Tactic :=
+      Tactics.program_simpl;
+      repeat progress
+             match goal with
+             | H:_ = bind _ _ |- _ => symmetry in H; monadInv H
+             | H:(if ?b then _ else _) = _ |- _ =>
+               let Hb := fresh "Hb" in
+               destruct b eqn:Hb; try discriminate
+             end.
+
     Program Definition elab_declaration (decl: Ast.declaration) : res node :=
       match decl with
       | NODE name inputs outputs locals equations loc =>
-        let '(xout, sout) := fold_left elab_var_decl outputs
-                                       ([], (PS.empty, PM.empty type)) in
-        let '(xlocal, svars) := fold_left elab_var_decl locals ([], sout) in
-        let '(xin, (allvars, tyenv)) := fold_left elab_var_decl inputs
-                                                  ([], svars) in
-        match elab_clock_decl tyenv (PM.empty clock)
-                              (inputs ++ outputs ++ locals) with
-        | OK ckenv =>
-          match mmap (elab_equation tyenv ckenv nenv) equations with
-          | OK eqs =>
-            match check_defd (fst sout) (fst (svars)) eqs with
-            | false => Error (err_loc loc (msg "a variable is not properly defined"))
-            | true =>
-              match existsb (fun x=>PS.mem x allvars) Ident.Ids.reserved with
-              | true => Error (err_loc loc (msg "illegal variable name"))
-              | false =>
-                match length xin ==b 0 with
-                | true => Error (err_loc loc (msg "not enough inputs"))
-                | false =>
-                  match xout with
-                  | o::nil => OK {| n_name  := ident_of_string name;
-                                    n_in    := xin;
-                                    n_out   := o;
-                                    n_vars  := xlocal;
-                                    n_eqs   := eqs;
-                                    n_ingt0 := _;
-                                    n_defd  := _;
-                                    n_vout  := _;
-                                    n_nodup := _;
-                                    n_good  := _ |}
-                  | _ => Error (err_loc loc (msg "need one output"))
-                  end
-                end
-              end
-            end
-          | Error e => Error e
-          end
+        match (do xout   <- elab_var_decls ([], (PS.empty, PM.empty type))
+                                                                       outputs;
+               do xlocal <- elab_var_decls ([], snd xout) locals;
+               do xin    <- elab_var_decls ([], snd xlocal) inputs;
+               OK (fst xout, fst xlocal, fst xin,
+                   fst (snd xout), fst (snd xlocal), snd xin)) with
         | Error e => Error e
+        | OK (xout, xlocal, xin, sout, svars, (allvars, tyenv)) =>
+          match (do env1  <- elab_clock_decl tyenv (PM.empty clock) inputs;
+                 do env2  <- elab_clock_decl tyenv env1 outputs;
+                 do ckenv <- elab_clock_decl tyenv env2 locals;
+                 do eqs <- mmap (elab_equation tyenv ckenv nenv) equations;
+                 do ok <- check_defined loc sout svars eqs;
+                 if existsb (fun x=>PS.mem x allvars) Ident.Ids.reserved
+                 then Error (err_loc loc (msg "illegal variable name"))
+                 else if length xin ==b 0
+                      then Error (err_loc loc (msg "not enough inputs"))
+                      else OK eqs) with
+          | Error e => Error e
+          | OK eqs =>
+            match xout with
+            | o::nil => OK {| n_name  := ident_of_string name;
+                              n_in    := xin;
+                              n_out   := o;
+                              n_vars  := xlocal;
+                              n_eqs   := eqs;
+                              n_ingt0 := _;
+                              n_defd  := _;
+                              n_vout  := _;
+                              n_nodup := _;
+                              n_good  := _ |}
+            | _ => Error (err_loc loc (msg "need one output"))
+            end
+          end
         end
       end.
     Next Obligation.
       (* 0 < length xin *)
-      match goal with H:false = (length xin ==b 0) |- _ => rename H into Hin end.
-      symmetry in Hin. apply not_equiv_decb_equiv in Hin.
+      match goal with H:(length _ ==b 0) = false |- _ => rename H into Hin end.
+      apply not_equiv_decb_equiv in Hin.
       now apply NPeano.Nat.neq_0_lt_0 in Hin.
     Qed.
     Next Obligation.
@@ -575,5 +590,4 @@ Module Type ELABORATION
   Admitted.
   
 End ELABORATION.
-
 
