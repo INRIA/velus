@@ -711,9 +711,49 @@ Section PRESERVATION.
           inversion TRANSL as [Htprog]; clear TRANSL.
           unfold AST.prog_defmap; simpl.
           apply PTree_Properties.of_list_norepet.
-          - rewrite map_cons, 3 map_app, <-NoDup_norepet; simpl.
+          - rewrite 3 map_cons, 3 map_app, <-NoDup_norepet; simpl.
             repeat rewrite glob_bind_vardef_fst.
-            constructor.
+            repeat constructor.
+            + repeat rewrite not_in_cons; repeat split.
+              * intro E; apply glob_id_injective in E.
+                admit.
+              * intro E; apply glob_id_injective in E.
+                admit.
+              *{ repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
+                 intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
+                 try simpl in E.
+                 - apply glob_id_injective in E; subst x.
+                   admit.
+                 - apply glob_id_injective in E; subst x.
+                   admit.
+                 - subst x.
+                   apply in_map with (f:=fst) in Hin.
+                   subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
+                   contradict Hin; apply glob_id_not_prefixed. 
+                 - unfold glob_id, main_id in Hin.
+                   apply pos_of_str_injective in Hin.
+                   inv Hin.
+               }
+            + repeat rewrite not_in_cons; repeat split.
+              * intro E; apply glob_id_injective, prefix_out_injective in E.
+                unfold step, reset in E; destruct E as [? E].
+                apply pos_of_str_injective in E.
+                discriminate.
+              *{ repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
+                 intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
+                 try simpl in E.
+                 - apply glob_id_injective in E; subst x.
+                   admit.
+                 - apply glob_id_injective in E; subst x.
+                   admit.
+                 - subst x.
+                   apply in_map with (f:=fst) in Hin.
+                   subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
+                   contradict Hin; apply glob_id_not_prefixed.
+                 - unfold glob_id, main_id in Hin.
+                   apply pos_of_str_injective in Hin.
+                   inv Hin.
+               }
             + repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
               intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
               try simpl in E.
@@ -724,10 +764,10 @@ Section PRESERVATION.
               * subst x.
                 apply in_map with (f:=fst) in Hin.
                 subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
-                contradict Hin; apply glob_id_not_prefixed. 
+                contradict Hin; apply glob_id_not_prefixed.
               * unfold glob_id, main_id in Hin.
                 apply pos_of_str_injective in Hin.
-                inv Hin. 
+                inv Hin.
             + repeat apply NoDup_app'; repeat apply Forall_not_In_app;
               repeat apply Forall_not_In_singleton.
               * apply NoDup_glob_id, m_nodupout.
@@ -752,8 +792,8 @@ Section PRESERVATION.
               * apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
                 apply prefixed_fun_prefixed; subst funs.
                 now apply prefixed_funs in Hin.
-              *  apply main_not_glob.
-          - apply in_cons, in_app; right; apply in_app; right; apply in_app; left.
+              * apply main_not_glob.
+          - apply in_cons, in_cons, in_cons, in_app; right; apply in_app; right; apply in_app; left.
             unfold translate_method in Findmth; auto.
         }
         apply Genv.find_def_symbol in Hget.
