@@ -43,6 +43,15 @@ Parameter string_of_astloc : astloc -> String.string.
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ": " :: m.  
 
+Local Ltac NamedDestructCases :=
+  repeat progress
+         match goal with
+         | H:match ?e with _ => _ end = OK _ |- _ =>
+           let Heq := fresh "Heq" in
+           destruct e eqn:Heq; try discriminate
+         | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
+         end.
+
 Module Type ELABORATION
        (Import Ids    : IDS)
        (Import OpAux  : OPERATORS_AUX Interface.Op)
@@ -356,15 +365,6 @@ Module Type ELABORATION
       - now rewrite type_castop.
     Qed.
 
-    Ltac NamedDestructCases :=
-      repeat progress
-             match goal with
-             | H:match ?e with _ => _ end = OK _ |- _ =>
-               let Heq := fresh "Heq" in
-               destruct e eqn:Heq; try discriminate
-             | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
-             end.
-    
     Lemma wt_elab_lexps:
       forall loc aes tys es,
         elab_lexps loc aes tys = OK es ->
@@ -462,16 +462,13 @@ Module Type ELABORATION
         destruct wt_nenv as (n & Hfind & Hin & Hout); clear wt_nenv.
         inv Hout.
         econstructor; eauto.
-        rename x1 into intys.
-        rename x3 into ines.
-        clear Heq H6 EQ Hfind.
         apply Forall2_map_1 with (f:=typeof) in H0.
         apply Forall2_swap_args in H0.
         apply Forall2_map_1 with (f:=snd) in Hin.
         apply Forall2_swap_args in Hin.
         apply Forall2_det with (2:=H0) in Hin.
         2:now intros; subst.
-        cut (Forall2 eq (map typeof ines) (map snd n.(n_in))).
+        cut (Forall2 eq (map typeof x3) (map snd n.(n_in))).
         + intros Hfa. rewrite Forall2_map_1 in Hfa.
           apply Forall2_swap_args in Hfa.
           rewrite Forall2_map_1 in Hfa.
@@ -512,6 +509,82 @@ Module Type ELABORATION
         else elab_var_decls ((x, ty)::rs, (PS.add x vars, PM.add x ty tyenv)) vds
       end.
 
+    Lemma elab_var_decls_spec:
+      forall ys xs defd tyenv xs' defd' tyenv',
+        elab_var_decls (xs, (defd, tyenv)) ys = OK (xs', (defd', tyenv')) ->
+        NoDupMembers xs ->
+        (forall x, ~PS.In x defd -> ~InMembers x xs) ->
+        NoDupMembers xs'
+        /\ PS.Subset defd defd'
+        /\ (forall x, InMembers x xs' <-> InMembers x xs
+                                         \/ (~PS.In x defd /\ PS.In x defd')).
+    Proof.
+      (* TODO: Tidy proof *)
+      induction ys as [|y ys IH]; intros ** Helab Hnodup Hnid.
+      - simpl in Helab. monadInv1 Helab. intuition.
+      - simpl in Helab.
+        destruct y as [[[sx sty] ?] loc].
+        NamedDestructCases.
+        apply mem_spec_false in Heq.
+        cut (forall x, ~ PS.In x (PS.add (ident_of_string sx) defd) ->
+                 ~ InMembers x ((ident_of_string sx, elab_type loc sty) :: xs)).
+        + intro HH.
+          specialize (Hnid _ Heq).
+          specialize (IH _ _ _ _ _ _ Helab
+                         (NoDupMembers_cons _ _ _ Hnid Hnodup) HH).
+          clear Helab HH.
+          destruct IH as (IH1 & IH2 & IH3).
+          split; auto.
+          split.
+          transitivity (PS.add (ident_of_string sx) defd); auto.
+          apply PSP.subset_add_2.
+          reflexivity.
+          split.
+          {
+            intros Hinm.
+            apply IH3 in Hinm.
+            destruct Hinm; auto.
+            destruct H.
+            * subst x.
+              right.
+              split; auto.
+              apply PSP.in_subset with (2:=IH2).
+              apply PS.add_spec.
+              now left.
+            * now left.
+            * destruct H.
+              rewrite PS.add_spec in H.
+              apply Decidable.not_or in H.
+              destruct H.
+              right; split; auto.
+          }
+          { destruct 1.
+            apply IH3.
+            left. constructor (assumption).
+            destruct H.
+            apply IH3.
+            destruct (ident_eq_dec x (ident_of_string sx)).
+            now left; subst x; constructor.
+            right.
+            split; auto.
+            rewrite PS.add_spec.
+            intro HH.
+            destruct HH.
+            apply n; auto.
+            apply H; auto. }
+        + intros x Hnin Hinm.
+          apply Hnin.
+          rewrite PS.add_spec.
+          rewrite PS.add_spec in Hnin.
+          apply Decidable.not_or in Hnin.
+          destruct Hnin.
+          specialize (Hnid _ H0).
+          contradiction Hnid.
+          inv Hinm.
+          exfalso; now apply H.
+          auto.
+    Qed.
+    
     Fixpoint check_defined (loc: astloc) (out: PS.t) (defd: PS.t)
                            (eqs: list equation) : res unit :=
       match eqs with
@@ -523,6 +596,56 @@ Module Type ELABORATION
                    else Error (err_loc loc
                                        (CTX x :: msg " is improperly defined"))
       end.
+
+    Lemma check_defined_spec:
+      forall eqs loc out defd,
+        check_defined loc out defd eqs = OK tt ->
+        (forall x, In x (map var_defined eqs) <-> PS.In x defd)
+        /\ NoDup (map var_defined eqs)
+        /\ (forall x, In x (map var_defined (filter is_fby eqs))
+                      -> ~PS.In x out).
+    Proof.
+      (* TODO: Tidy up proof. *)
+      induction eqs as [|eq eqs IH]; simpl; intros loc out defd Hchk.
+      - destruct (PS.is_empty defd) eqn:Hemp; try discriminate.
+        apply PS.is_empty_spec in Hemp.
+        repeat split.
+        + inversion 1.
+        + intro HH; rewrite (PSP.empty_is_empty_1 Hemp) in HH.
+          contradiction (not_In_empty x).
+        + apply NoDup_nil.
+        + inversion 1.
+      - NamedDestructCases.
+        apply andb_prop in Heq.
+        destruct Heq as (Heq1 & Heq2).
+        rewrite PS.mem_spec in Heq1.
+        rewrite Bool.negb_true_iff, Bool.andb_false_iff in Heq2.
+        rewrite mem_spec_false in Heq2.
+        specialize (IH _ _ _ Hchk); clear Hchk.
+        destruct IH as (IH1 & IH2 & IH3).
+        repeat split.
+        + intro HH.
+          destruct HH.
+          now subst x.
+          apply IH1 in H.
+          apply PSP.Dec.F.remove_iff in H.
+          intuition.
+        + intro HH.
+          destruct (var_defined eq ==b x) eqn:Heq.
+          now rewrite equiv_decb_equiv in Heq; left.
+          rewrite not_equiv_decb_equiv in Heq.
+          right. apply IH1.
+          apply PSP.Dec.F.remove_iff.
+          auto.
+        + constructor; auto.
+          rewrite IH1.
+          now apply PSP.Dec.F.remove_1.
+        + intros x Hvd.
+          destruct (is_fby eq); auto.
+          destruct Heq2; try discriminate.
+          destruct Hvd; auto.
+          rewrite <-H0; auto.
+    Qed.
 
     Fixpoint elab_clock_decl (tyenv: PM.t type) (acc: PM.t clock)
                (vds: list (string * type_name * Ast.clock * astloc))
@@ -536,6 +659,23 @@ Module Type ELABORATION
            elab_clock_decl tyenv (PM.add x ck acc) vds
       end.
 
+    (* TODO: move to Common *)
+    Lemma NoDupMembers_app:
+      forall {A B} (ws xs : list (A * B)),
+        NoDupMembers ws ->
+        NoDupMembers xs ->
+        (forall x, InMembers x ws -> ~InMembers x xs) ->
+        NoDupMembers (ws ++ xs).
+    Proof.
+      intros ** Hndws Hndxs Hnin.
+      induction ws as [|w ws IH]; auto.
+      destruct w as (wn & wv).
+      inv Hndws.
+      simpl; apply NoDupMembers_cons; auto using inmembers_cons.
+      apply NotInMembers_app.
+      split; auto using Hnin, inmembers_eq.
+    Qed.
+    
     Local Obligation Tactic :=
       Tactics.program_simpl;
       repeat progress
@@ -546,6 +686,8 @@ Module Type ELABORATION
                destruct b eqn:Hb; try discriminate
              end.
 
+    Local Hint Resolve NoDupMembers_nil NoDup_nil.
+    
     Program Definition elab_declaration (decl: Ast.declaration) : res node :=
       match decl with
       | NODE name inputs outputs locals equations loc =>
@@ -562,7 +704,7 @@ Module Type ELABORATION
                  do ckenv <- elab_clock_decl tyenv env2 locals;
                  do eqs <- mmap (elab_equation tyenv ckenv nenv) equations;
                  do ok <- check_defined loc sout svars eqs;
-                 if existsb (fun x=>PS.mem x allvars) Ident.Ids.reserved
+                 if existsb (fun x=>PS.mem x allvars) reserved
                  then Error (err_loc loc (msg "illegal variable name"))
                  else if length xin ==b 0
                       then Error (err_loc loc (msg "not enough inputs"))
@@ -593,21 +735,228 @@ Module Type ELABORATION
     Qed.
     Next Obligation.
       (* Permutation (map var_defined eqs) (map fst (xlocal ++ [(i, t)])) *)
-      admit.
+      rename x0 into xlocals.
+      rename x into o.
+      rename x4 into ckenv.
+      clear x2 x3 EQ2 EQ4 EQ3 Hb Hb0.
+      destruct o as [xouts tyouts].
+      destruct xlocals as [xlocals slocals].
+      destruct x1 as [xinputs sinputs].
+      simpl in *.
+      subst sinputs.
+      monadInv EQ8.
+      destruct x6.
+      destruct tyouts as (out_defd & out_tyenv).
+      destruct slocals as (local_defd & local_tyenv).
+      (* XXX *)
+      apply elab_var_decls_spec in EQ; auto.
+      destruct EQ as (Hout_nodup & Ho & Hout_defd); clear Ho.
+      apply elab_var_decls_spec in EQ1; auto.
+      destruct EQ1 as (Hlocals_nodup & Hlocals_o & Hlocals_defd).
+      apply elab_var_decls_spec in EQ0; auto.
+      destruct EQ0 as (Hinputs_nodup & Hinputs_l & Hdefd).
+      (* XXX *)
+      apply check_defined_spec in EQ6.
+      simpl in *.
+      destruct EQ6 as (Hvdefd & Hnodup & Hnout).
+
+      apply Permutation.NoDup_Permutation; auto.
+      apply fst_NoDupMembers.
+      apply NoDupMembers_app; auto.
+      intros x Hinm.
+      apply Hlocals_defd in Hinm.
+      destruct Hinm; auto.
+      destruct H.
+      assert (i = i \/ False) by intuition.
+      apply Hout_defd in H1.
+      destruct H1; auto.
+      destruct H1.
+      intro Hxi.
+      inv Hxi. now apply H.
+      inv H3.
+
+      intro x.
+      rewrite Hvdefd.
+      rewrite map_app, in_app.
+      rewrite <-fst_InMembers.
+      simpl.
+      split; intro HH.
+      - clear Hvdefd Hdefd Hnout.
+        destruct (Common.In_dec x out_defd).
+        + right; apply Hout_defd.
+          right; split; auto.
+          apply not_In_empty.
+        + left. apply Hlocals_defd.
+          right.
+          split; auto.
+      - destruct HH.
+        apply Hlocals_defd in H.
+        destruct H; try contradiction.
+        destruct H; auto.
+        destruct H; auto.
+        assert (i = x \/ False) by intuition.
+        apply Hout_defd in H0.
+        destruct H0; try contradiction.
+        destruct H0.
+        apply PSP.in_subset with (1:=H1) (2:=Hlocals_o).
+        contradiction.
     Qed.
     Next Obligation.
-      (* ~ In (fst (i, t)) (map var_defined (filter is_fby eqs)) *)
-      admit.
+      (* ~ In i (map var_defined (filter is_fby eqs)) *)
+      rename x0 into xlocals.
+      rename x into o.
+      rename x4 into ckenv.
+      clear x2 x3 EQ2 EQ4 EQ3 Hb Hb0.
+      destruct o as [xouts tyouts].
+      destruct xlocals as [xlocals slocals].
+      destruct x1 as [xinputs sinputs].
+      simpl in *.
+      subst sinputs.
+      monadInv EQ8.
+      destruct x6.
+      destruct tyouts as (out_defd & out_tyenv).
+      destruct slocals as (local_defd & local_tyenv).
+      (* XXX *)
+      apply elab_var_decls_spec in EQ; auto.
+      destruct EQ as (Hout_nodup & Ho & Hout_defd); clear Ho.
+      apply elab_var_decls_spec in EQ1; auto.
+      destruct EQ1 as (Hlocals_nodup & Hlocals_o & Hlocals_defd).
+      apply elab_var_decls_spec in EQ0; auto.
+      destruct EQ0 as (Hinputs_nodup & Hinputs_l & Hdefd).
+      (* XXX *)
+      apply check_defined_spec in EQ6.
+      simpl in *.
+      destruct EQ6 as (Hvdefd & Hnodup & Hnout).
+
+      intro HH.
+      apply (Hnout i); auto.
+      assert (i = i \/ False) by intuition.
+      apply Hout_defd in H.
+      destruct H; intuition.
     Qed.
     Next Obligation.
       (* NoDupMembers (xin ++ xlocal ++ [(i, t)]) *)
-      admit.
+      rename x0 into xlocals.
+      rename x into o.
+      rename x4 into ckenv.
+      clear x2 x3 EQ2 EQ4 EQ3 Hb Hb0.
+      destruct o as [xouts tyouts].
+      destruct xlocals as [xlocals slocals].
+      destruct x1 as [xinputs sinputs].
+      simpl in *.
+      subst sinputs.
+      monadInv EQ8.
+      destruct x6.
+      destruct tyouts as (out_defd & out_tyenv).
+      destruct slocals as (local_defd & local_tyenv).
+      (* XXX *)
+      apply elab_var_decls_spec in EQ; auto.
+      destruct EQ as (Hout_nodup & Ho & Hout_defd); clear Ho.
+      apply elab_var_decls_spec in EQ1; auto.
+      destruct EQ1 as (Hlocals_nodup & Hlocals_o & Hlocals_defd).
+      apply elab_var_decls_spec in EQ0; auto.
+      destruct EQ0 as (Hinputs_nodup & Hinputs_l & Hdefd).
+      (* XXX *)
+      apply check_defined_spec in EQ6.
+      simpl in *.
+      destruct EQ6 as (Hvdefd & Hnodup & Hnout).
+
+      apply NoDupMembers_app; auto.
+      apply NoDupMembers_app; auto.
+      - intros x Himx Hnimx.
+        apply Hlocals_defd in Himx.
+        destruct Himx; auto.
+        destruct H.
+        inversion_clear Hnimx. subst x.
+        assert (i = i \/ False) by intuition.
+        apply Hout_defd in H1.
+        destruct H1; try contradiction.
+        intuition.
+        inv H1.
+      - intros x Himx Hnimx.
+        apply Hdefd in Himx.
+        destruct Himx; try contradiction.
+        destruct H.
+        apply InMembers_app in Hnimx.
+        destruct Hnimx.
+        + apply Hlocals_defd in H1.
+          destruct H1; try contradiction.
+          destruct H1. contradiction.
+        + inversion_clear H1. subst x.
+          assert (i = i \/ False) by intuition.
+          apply Hout_defd in H1.
+          destruct H1; try contradiction.
+          destruct H1.
+          apply PSP.in_subset with (2:=Hlocals_o) in H2.
+          contradiction.
+          inv H2.
     Qed.
     Next Obligation.
       (* Forall NotReserved (xin ++ xlocal ++ [(i, t)]) *)
       match goal with H:context [PS.mem _ allvars] |- _ => rename H into Hr end.
-      symmetry in Hr.
-      admit.
+      rewrite 2 Bool.orb_false_iff in Hr.
+      destruct Hr as (Hr1 & Hr2 & Hr3).
+      rewrite mem_spec_false in Hr1, Hr2.
+
+      rename x0 into xlocals.
+      rename x into o.
+      rename x4 into ckenv.
+      clear x2 x3 EQ2 EQ4 EQ3  Hb0.
+      destruct o as [xouts tyouts].
+      destruct xlocals as [xlocals slocals].
+      destruct x1 as [xinputs sinputs].
+      simpl in *.
+      subst sinputs.
+      monadInv EQ8.
+      destruct x6.
+      destruct tyouts as (out_defd & out_tyenv).
+      destruct slocals as (local_defd & local_tyenv).
+      (* XXX *)
+      apply elab_var_decls_spec in EQ; auto.
+      destruct EQ as (Hout_nodup & Ho & Hout_defd); clear Ho.
+      apply elab_var_decls_spec in EQ1; auto.
+      destruct EQ1 as (Hlocals_nodup & Hlocals_o & Hlocals_defd).
+      apply elab_var_decls_spec in EQ0; auto.
+      destruct EQ0 as (Hinputs_nodup & Hinputs_l & Hdefd).
+      (* XXX *)
+      apply check_defined_spec in EQ6.
+      simpl in *.
+      destruct EQ6 as (Hvdefd & Hnodup & Hnout).
+      apply all_In_Forall.
+      intros x Hx.
+      apply in_app in Hx.
+      cut (PS.In (fst x) allvars).
+      - intro Hall.
+        intro Hres.
+        inv Hres.
+        + apply Hr1.
+          rewrite <-H in Hall.
+          assumption.
+        + apply Hr2.
+          inv H.
+          rewrite <-H0 in Hall.
+          assumption.
+          inv H0.
+      - destruct Hx.
+        + destruct x. apply In_InMembers in H.
+          apply Hdefd in H.
+          destruct H; try contradiction.
+          destruct H; auto.
+        + apply in_app in H.
+          destruct H.
+          * destruct x; apply In_InMembers in H.
+            apply Hlocals_defd in H.
+            destruct H; try contradiction.
+            destruct H.
+            apply PSP.in_subset with (1:=H0) (2:=Hinputs_l).
+          * inv H.
+            apply PSP.in_subset with (2:=Hinputs_l).
+            apply PSP.in_subset with (2:=Hlocals_o).
+            assert (i = i \/ False) by intuition.
+            apply Hout_defd in H.
+            destruct H; try contradiction.
+            destruct H; auto.
+            inv H0.
     Qed.
 
     Lemma wt_elab_declaration:
