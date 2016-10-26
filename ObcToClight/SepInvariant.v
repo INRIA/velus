@@ -19,9 +19,9 @@ Require Import Rustre.ObcToClight.Translation.
 Require Import Rustre.ObcToClight.Interface.
 
 Require Import Instantiator.
-Module Import Syn := Obc.Syn.
-Module Import Sem := Obc.Sem.
-Module Import Typ := Obc.Typ.
+Import Obc.Syn.
+Import Obc.Sem.
+Import Obc.Typ.
 
 Open Scope list.
 Open Scope sep_scope.

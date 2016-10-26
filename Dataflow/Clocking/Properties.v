@@ -97,3 +97,16 @@ Proof.
 Qed.
 
 End PROPERTIES.
+
+Module PropertiesFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import IsF : ISFREE Ids Op Syn)
+       (Import Clo : CLOCKING Ids Op Syn)
+       (Mem        : MEMORIES Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import Par : PARENTS Ids Op Syn Clo)
+       <: PROPERTIES Ids Op Syn IsF Clo Mem IsD Par.
+  Include PROPERTIES Ids Op Syn IsF Clo Mem IsD Par.
+End PropertiesFun.

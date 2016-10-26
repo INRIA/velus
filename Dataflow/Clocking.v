@@ -207,3 +207,11 @@ Module Type CLOCKING
   Qed.
 
 End CLOCKING.
+
+Module ClockingFun
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       <: CLOCKING Ids Op Syn.
+  Include CLOCKING Ids Op Syn.
+End ClockingFun.

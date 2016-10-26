@@ -27,10 +27,10 @@ Require Import Coq.ZArith.BinInt.
 Require Import Coq.Sorting.Permutation.
 
 Require Import Instantiator.
-Module Import Typ := Obc.Typ.
-Module Import Syn := Obc.Syn.
-Module Import Sem := Obc.Sem.
-Module Import OpAux := OpAux.
+Import Obc.Typ.
+Import Obc.Syn.
+Import Obc.Sem.
+Import OpAux.
 
 Open Scope list_scope.
 Open Scope sep_scope.
@@ -456,12 +456,13 @@ Section PRESERVATION.
     destruct (check_size ce id) eqn: E; try discriminate; destruct u; simpl in H.
     constructor; auto.
   Qed.
- 
+  
   Theorem Consistent: composite_env_consistent gcenv.
   Proof.
     unfold translate in TRANSL.
     destruct (find_class main_node prog) as [(c, cls)|]; try discriminate.
     destruct (find_method step (c_methods c)) as [m|]; try discriminate.
+    destruct (find_method reset (c_methods c)); try discriminate.
     destruct (split (map (translate_class prog) prog)) as (structs, funs).
     apply build_ok in TRANSL.
     apply build_composite_env_consistent in TRANSL; auto.
@@ -559,6 +560,7 @@ Section PRESERVATION.
       unfold translate in TRANSL.
       destruct (find_class main_node prog) as [(main, ?)|]; try discriminate.
       destruct (find_method step (c_methods main)) as [m|]; try discriminate.
+      destruct (find_method reset (c_methods main)); try discriminate.
       destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
       pose proof (find_class_name _ _ _ _ Findcl); subst.
       apply build_ok in TRANSL.
@@ -595,6 +597,7 @@ Section PRESERVATION.
         unfold translate in TRANSL.
         destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
         destruct (find_method step (c_methods main)) as [m|]; try discriminate.
+        destruct (find_method reset (c_methods main)); try discriminate.
         destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
         apply build_check_size_env_ok in TRANSL; destruct TRANSL as [BUILD SIZE].
         assert (In (Composite
@@ -685,6 +688,7 @@ Section PRESERVATION.
         unfold translate in TRANSL.
         destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
         destruct (find_method step (c_methods main)) as [m|]; try discriminate.
+        destruct (find_method reset (c_methods main)); try discriminate.
         destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
         pose proof (find_class_name _ _ _ _ Findcl);
           pose proof (find_method_name _ _ _ Findmth); subst.
@@ -3004,9 +3008,47 @@ Section PRESERVATION.
     intros.
     eapply (proj1 correctness); eauto.
   Qed.
+
+  Lemma find_main_node:
+    exists c_main prog_main m_reset m_step,
+      find_class main_node prog = Some (c_main, prog_main)
+      /\ find_method reset c_main.(c_methods) = Some m_reset
+      /\ find_method step c_main.(c_methods) = Some m_step.
+  Proof.
+    unfold translate in TRANSL.
+    destruct (find_class main_node prog) as [(c, cls)|]; try discriminate.
+    destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate.
+    destruct (find_method reset (c_methods c)) eqn: Ereset; try discriminate.
+    repeat econstructor; eauto.
+  Qed.
+
+  Section Init.
+    Variables (c_main: class) (prog_main: program) (m_reset m_step: method).
+    Hypothesis Find: find_class main_node prog = Some (c_main, prog_main).
+    Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
+    Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
+
+    Lemma match_states_main_step:
+      exists m e le sb sofs outb outco,
+        m |= match_states c_main m_step (hempty, sempty) (e, le) sb sofs outb outco.
+    Proof.
+      admit.
+    Qed.
+    
+  End Init.
   
   Open Scope nat_scope.
 
+  Definition call_reset owner caller c obj e le m T le' m' :=
+    exec_stmt tge (function_entry2 tge) e le m
+              (binded_funcall prog [] (c_name owner) caller c obj reset [])
+              T le' m' Out_normal.
+
+  Definition call_step owner caller c obj args r e le m T le' m' :=
+    exec_stmt tge (function_entry2 tge) e le m
+              (binded_funcall prog [r] (c_name owner) caller c obj step args)
+              T le' m' Out_normal.
+             
   Section Foo.
     Variables (m1: Memory.Mem.mem) (e1: env) (le1: temp_env) (owner: class) (caller: method) (prog': program)
               (sb outb: block) (sofs: int) (outco: composite) (P: massert).
@@ -3014,17 +3056,15 @@ Section PRESERVATION.
     Hypothesis Findmeth: find_method (m_name caller) (c_methods owner) = Some caller.          
     Hypothesis MS1: m1 |= match_states owner caller (hempty, sempty) (e1, le1) sb sofs outb outco ** P.
 
-    Inductive dostep owner caller r c obj css : nat -> trace -> env -> temp_env -> Memory.Mem.mem -> Prop :=
+    Inductive dostep r c obj css : nat -> trace -> env -> temp_env -> Memory.Mem.mem -> Prop :=
     | do_reset: forall T le m,
-        exec_stmt tge (function_entry2 tge) e1 le1
-                  m1 (binded_funcall prog [] (c_name owner) caller c obj reset []) T le m Out_normal ->
-        dostep owner caller r c obj css 0 T e1 le m
+        call_reset owner caller c obj e1 le1 m1 T le m ->
+        dostep r c obj css 0 T e1 le m
     | do_step: forall n TN e mN leN T le m,
         let cs := map translate_const (css n) in
-        dostep owner caller r c obj css n TN e leN mN ->
-        exec_stmt tge (function_entry2 tge) e leN
-                  mN (binded_funcall prog [r] (c_name owner) caller c obj step cs) T le m Out_normal ->
-        dostep owner caller r c obj css (S n) T e le m.
+        dostep r c obj css n TN e leN mN ->
+        call_step owner caller c obj cs r e leN mN T le m ->
+        dostep r c obj css (S n) T e le m.
     
     (* Fixpoint dostep (n: nat) owner caller r c obj css T e m le : Prop := *)
     (*   match n with *)
@@ -3051,11 +3091,11 @@ Section PRESERVATION.
       forall n node obj css menv venv r,
         Corr.dostep n prog r node obj css menv venv ->
         exists T e le m,
-          dostep owner caller r node obj css n T e le m
+          dostep r node obj css n T e le m
           /\ m |= match_states owner caller (menv, venv) (e, le) sb sofs outb outco ** P.
     Proof.
       induction n; intros ** Dostep.
-      - assert (occurs_in (Obc.Syn.Call [] node obj reset []) (m_body caller)). admit.
+      - assert (occurs_in (Call [] node obj reset []) (m_body caller)). admit.
         eapply stmt_correctness in Dostep; eauto.
         + destruct Dostep as (le' & m' & T & Exec & MS').
           exists T, e1, le', m'; split; auto.
@@ -3066,11 +3106,11 @@ Section PRESERVATION.
           unfold wt_method in WT'.
           eapply wt_stmt_sub with (prog:=prog) in WT'; eauto.
           * eapply occurs_in_wt with (1:=WT'); eauto.
-          * eapply find_class_sub; eauto. 
+          * eapply find_class_sub; eauto.
       - destruct Dostep as (menvN & envN & Dostep & Ev).
         apply IHn in Dostep.
         destruct Dostep as (TN & eN & leN & mN & Dostep & MS).
-        assert (occurs_in (Obc.Syn.Call [r] node obj step (map Obc.Syn.Const (css n)))
+        assert (occurs_in (Call [r] node obj step (map Const (css n)))
                           (m_body caller)). admit.
         eapply stmt_correctness in Ev; eauto.
         + destruct Ev as (le' & m' & T & Exec & MS').
@@ -3088,5 +3128,5 @@ Section PRESERVATION.
     
   End Foo.
   
-(* End PRESERVATION. *)
+End PRESERVATION.
 

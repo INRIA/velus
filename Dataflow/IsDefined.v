@@ -181,7 +181,7 @@ Module Type ISDEFINED
   
 End ISDEFINED.
 
-Module IsDefined
+Module IsDefinedFun
        (Ids : IDS)
        (Op  : OPERATORS)
        (Import Syn : SYNTAX Ids Op)
@@ -190,5 +190,5 @@ Module IsDefined
 
   Include ISDEFINED Ids Op Syn Mem.
 
-End IsDefined.
+End IsDefinedFun.
 

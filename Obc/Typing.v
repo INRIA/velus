@@ -789,7 +789,7 @@ Module Type TYPING
   
 End TYPING.
 
-Module Typing
+Module TypingFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
@@ -797,5 +797,5 @@ Module Typing
        (Import Sem   : SEMANTICS Ids Op OpAux Syn)
            <: TYPING Ids Op OpAux Syn Sem.
   Include TYPING Ids Op OpAux Syn Sem.
-End Typing.
+End TypingFun.
 

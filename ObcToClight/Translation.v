@@ -8,7 +8,7 @@ Require Import Rustre.ObcToClight.Interface.
 Require Import Rustre.Ident.
 
 Require Import Instantiator.
-Module Import Syn := Obc.Syn.
+Import Obc.Syn.
 
 Require Import ZArith.BinInt.
 Require Import String.
@@ -313,17 +313,21 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
   | Some (c, _) =>
     match find_method step c.(c_methods) with
     | Some m =>
-      let f := glob_id main_node in
-      let ins := map glob_bind m.(m_in) in
-      let outs := map glob_bind m.(m_out) in
-      let main := make_main prog main_node ins outs m in
-      let cs := map (translate_class prog) prog in
-      let f_gvar := vardef true false (f, type_of_inst main_node) in
-      let o_gvars := map (vardef true true) outs in
-      let i_gvars := map (vardef true true) ins in
-      let (structs, funs) := split cs in
-      let gdefs := f_gvar :: o_gvars ++ i_gvars ++ (concat funs) ++ [(main_id, main)] in
-      make_program' (concat structs) gdefs [] main_id
+      match find_method reset c.(c_methods) with
+      | Some _ =>
+        let f := glob_id main_node in
+        let ins := map glob_bind m.(m_in) in
+        let outs := map glob_bind m.(m_out) in
+        let main := make_main prog main_node ins outs m in
+        let cs := map (translate_class prog) prog in
+        let f_gvar := vardef true false (f, type_of_inst main_node) in
+        let o_gvars := map (vardef true true) outs in
+        let i_gvars := map (vardef true true) ins in
+        let (structs, funs) := split cs in
+        let gdefs := f_gvar :: o_gvars ++ i_gvars ++ (concat funs) ++ [(main_id, main)] in
+        make_program' (concat structs) gdefs [] main_id
+      | None => Errors.Error (Errors.msg "unfound reset function")
+      end
     | None => Errors.Error (Errors.msg "unfound step function")
     end
   | None => Errors.Error (Errors.msg "undefined node")

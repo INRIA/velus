@@ -1017,3 +1017,14 @@ an absent value *)
   Qed.
   
 End SEMANTICS.
+
+Module SemanticsFun
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Str : STREAM Op)
+       (Import Ord : ORDERED Ids Op Syn)
+       <: SEMANTICS Ids Op OpAux Syn Str Ord.
+  Include SEMANTICS Ids Op OpAux Syn Str Ord.
+End SemanticsFun.

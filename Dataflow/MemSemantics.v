@@ -737,3 +737,21 @@ dataflow memory for which the non-standard semantics holds true.
   Qed.
 
 End MEMSEMANTICS.
+
+Module MemSemanticsFun
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Str : STREAM Op)
+       (Import Ord : ORDERED Ids Op Syn)
+       (Import Mem : MEMORIES Ids Op Syn)
+       (Import IsF : ISFREE Ids Op Syn)
+       (Import IsD : ISDEFINED Ids Op Syn Mem)
+       (Import Sem : SEMANTICS Ids Op OpAux Syn Str Ord)
+       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
+       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
+       (Import WeF : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD)
+       <: MEMSEMANTICS Ids Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
+  Include MEMSEMANTICS Ids Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
+End MemSemanticsFun.

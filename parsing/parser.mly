@@ -2,7 +2,7 @@
 
 open Common
 open Location
-open DataflowToClight.SynDF
+open Instantiator.DF.Syn
 open Interface
 open Integers
 open Camlcoq

@@ -18,7 +18,8 @@ Module ObcFun
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        <: OBC Ids Op OpAux.
-
-  Include OBC Ids Op OpAux.
-
+  Module Export Syn := SyntaxFun Ids Op OpAux.
+  Module Export Sem := SemanticsFun Ids Op OpAux Syn.
+  Module Export Equ := EquivFun Ids Op OpAux Syn Sem.
+  Module Export Typ := TypingFun Ids Op OpAux Syn Sem.
 End ObcFun.
