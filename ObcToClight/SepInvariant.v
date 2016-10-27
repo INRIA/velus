@@ -926,8 +926,7 @@ Section BlockRep.
       (forall x ty, In (x, ty) flds ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      massert_eqv (sepall (field_range ge flds b 0) flds)
-                  (blockrep (PM.empty val) flds b).
+      sepall (field_range ge flds b 0) flds <-*-> blockrep sempty flds b.
   Proof.
     intros ** Hndups Hchunk.
     unfold blockrep.
@@ -963,8 +962,7 @@ Section BlockRep.
       (forall x ty, In (x, ty) (co_members co) ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      massert_imp (range b 0 (co_sizeof co))
-                  (blockrep (PM.empty val) (co_members co) b).
+      range b 0 (co_sizeof co) -*> blockrep sempty (co_members co) b.
   Proof.
     intros ** Hco Hstruct Hndups Hchunk.
     rewrite split_range_fields

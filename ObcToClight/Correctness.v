@@ -276,8 +276,8 @@ Qed.
 Hint Resolve NoDupMembers_make_members.
 
 Lemma glob_bind_vardef_fst:
-  forall xs init volatile,
-    map fst (map (vardef init volatile) (map glob_bind xs)) =
+  forall xs env volatile,
+    map fst (map (vardef env volatile) (map glob_bind xs)) =
     map (fun xt => glob_id (fst xt)) xs.
 Proof.
   induction xs as [|(x, t)]; simpl; intros; auto.
@@ -414,8 +414,8 @@ Section PRESERVATION.
   Hypothesis WT: wt_program prog.
   
   Lemma build_check_size_env_ok:
-    forall types defs public main p,
-      make_program' types defs public main = Errors.OK p ->
+    forall types gvars gvars_vol defs public main p,
+      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
       build_composite_env types = Errors.OK p.(prog_comp_env)
       /\ check_size_env p.(prog_comp_env) types = Errors.OK tt.
   Proof.
@@ -426,21 +426,21 @@ Section PRESERVATION.
   Qed.
 
   Lemma build_ok:
-    forall types defs public main p,
-      make_program' types defs public main = Errors.OK p ->
+    forall types gvars gvars_vol defs public main p,
+      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
       build_composite_env types = Errors.OK p.(prog_comp_env).
   Proof.
     intros ** H.
-    apply (proj1 (build_check_size_env_ok _ _ _ _ _ H)).
+    apply (proj1 (build_check_size_env_ok _ _ _ _ _ _ _ H)).
   Qed.
 
   Lemma check_size_env_ok:
-    forall types defs public main p,
-      make_program' types defs public main = Errors.OK p ->
+    forall types gvars gvars_vol defs public main p,
+      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
       check_size_env p.(prog_comp_env) types = Errors.OK tt.
   Proof.
     intros ** H.
-    apply (proj2 (build_check_size_env_ok _ _ _ _ _ H)).
+    apply (proj2 (build_check_size_env_ok _ _ _ _ _ _ _ H)).
   Qed.
 
   Lemma check_size_ok:
@@ -456,14 +456,41 @@ Section PRESERVATION.
     destruct (check_size ce id) eqn: E; try discriminate; destruct u; simpl in H.
     constructor; auto.
   Qed.
-  
+
+  Ltac inv_trans_tac H Estep Ereset s f E :=
+    match type of H with
+      translate ?p ?n = Errors.OK ?tp =>
+      unfold translate in H;
+        destruct (find_class n p) as [(c, cls)|]; try discriminate;
+        destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;
+        destruct (find_method reset c.(c_methods)) eqn: Ereset; try discriminate;
+        destruct (split (map (translate_class p) p)) as (s, f) eqn: E
+    end.
+
+  Tactic Notation "inv_trans" ident(H) "as" ident(Estep) ident(Ereset) "with" ident(s) ident(f) ident(E) :=
+    inv_trans_tac H Estep Ereset s f E.
+  Tactic Notation "inv_trans" ident(H) "as" ident(Estep) ident(Ereset) "with" ident(s) ident(f) :=
+    let E := fresh "E" in
+    inv_trans H as Estep Ereset with s f E.
+  Tactic Notation "inv_trans" ident(H) "as" ident(Estep) ident(Ereset) :=
+    let s := fresh "s" in
+    let f := fresh "f" in
+    inv_trans H as Estep Ereset with s f.
+  Tactic Notation "inv_trans" ident(H) "with" ident(s) ident(f) ident(E) :=
+    let Estep := fresh "Estep" in
+    let Ereset := fresh "Ereset" in
+    inv_trans H as Estep Ereset with s f E.
+  Tactic Notation "inv_trans" ident(H) "with" ident(s) ident(f) :=
+    let E := fresh "E" in
+    inv_trans H as Estep Ereset with s f E.
+  Tactic Notation "inv_trans" ident(H) :=
+    let Estep := fresh "Estep" in
+    let Ereset := fresh "Ereset" in
+    inv_trans H as Estep Ereset.
+      
   Theorem Consistent: composite_env_consistent gcenv.
   Proof.
-    unfold translate in TRANSL.
-    destruct (find_class main_node prog) as [(c, cls)|]; try discriminate.
-    destruct (find_method step (c_methods c)) as [m|]; try discriminate.
-    destruct (find_method reset (c_methods c)); try discriminate.
-    destruct (split (map (translate_class prog) prog)) as (structs, funs).
+    inv_trans TRANSL.
     apply build_ok in TRANSL.
     apply build_composite_env_consistent in TRANSL; auto.
   Qed.
@@ -557,11 +584,7 @@ Section PRESERVATION.
         /\ attr_alignas (co_attr co) = None
         /\ NoDupMembers (co_members co).
     Proof.
-      unfold translate in TRANSL.
-      destruct (find_class main_node prog) as [(main, ?)|]; try discriminate.
-      destruct (find_method step (c_methods main)) as [m|]; try discriminate.
-      destruct (find_method reset (c_methods main)); try discriminate.
-      destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
+      inv_trans TRANSL with structs funs E.
       pose proof (find_class_name _ _ _ _ Findcl); subst.
       apply build_ok in TRANSL.
       assert (In (Composite (c_name owner) Struct (make_members owner) noattr) (concat structs)).
@@ -594,11 +617,7 @@ Section PRESERVATION.
           /\ co.(co_attr) = noattr
           /\ co.(co_sizeof) <= Int.modulus.
       Proof.
-        unfold translate in TRANSL.
-        destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
-        destruct (find_method step (c_methods main)) as [m|]; try discriminate.
-        destruct (find_method reset (c_methods main)); try discriminate.
-        destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
+        inv_trans TRANSL with structs funs E.
         apply build_check_size_env_ok in TRANSL; destruct TRANSL as [BUILD SIZE].
         assert (In (Composite
                       (prefix_fun (c_name owner) (m_name caller))
@@ -685,11 +704,7 @@ Section PRESERVATION.
           /\ list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps))
           /\ f.(fn_body) = return_none (translate_stmt prog owner caller caller.(m_body)).
       Proof.
-        unfold translate in TRANSL.
-        destruct (find_class main_node prog) as [(main, cls)|]; try discriminate.
-        destruct (find_method step (c_methods main)) as [m|]; try discriminate.
-        destruct (find_method reset (c_methods main)); try discriminate.
-        destruct (split (map (translate_class prog) prog)) as (structs, funs) eqn: E.
+        inv_trans TRANSL with structs funs E.
         pose proof (find_class_name _ _ _ _ Findcl);
           pose proof (find_method_name _ _ _ Findmth); subst.
         assert ((AST.prog_defmap tprog) ! (prefix_fun owner.(c_name) caller.(m_name)) =
@@ -711,7 +726,7 @@ Section PRESERVATION.
           inversion TRANSL as [Htprog]; clear TRANSL.
           unfold AST.prog_defmap; simpl.
           apply PTree_Properties.of_list_norepet.
-          - rewrite 3 map_cons, 3 map_app, <-NoDup_norepet; simpl.
+          - rewrite 3 map_cons, 4 map_app, <-app_assoc, <-NoDup_norepet; simpl.
             repeat rewrite glob_bind_vardef_fst.
             repeat constructor.
             + repeat rewrite not_in_cons; repeat split.
@@ -793,7 +808,7 @@ Section PRESERVATION.
                 apply prefixed_fun_prefixed; subst funs.
                 now apply prefixed_funs in Hin.
               * apply main_not_glob.
-          - apply in_cons, in_cons, in_cons, in_app; right; apply in_app; right; apply in_app; left.
+          - apply in_cons, in_cons, in_cons, in_app; right; apply in_app; left.
             unfold translate_method in Findmth; auto.
         }
         apply Genv.find_def_symbol in Hget.
@@ -3055,24 +3070,93 @@ Section PRESERVATION.
       /\ find_method reset c_main.(c_methods) = Some m_reset
       /\ find_method step c_main.(c_methods) = Some m_step.
   Proof.
-    unfold translate in TRANSL.
-    destruct (find_class main_node prog) as [(c, cls)|]; try discriminate.
-    destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate.
-    destruct (find_method reset (c_methods c)) eqn: Ereset; try discriminate.
+    inv_trans TRANSL.
     repeat econstructor; eauto.
   Qed.
 
+  Lemma make_program_defs:
+    forall types gvars gvars_vol defs public main p,
+      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
+      exists gce,
+        build_composite_env types = Errors.OK gce
+        /\ p.(AST.prog_defs) = map (vardef gce false) gvars ++ map (vardef gce true) gvars_vol ++ defs.
+  Proof.
+    unfold make_program'; intros.
+    destruct (build_composite_env' types) as [[gce ?]|?]; try discriminate.
+    destruct (check_size_env gce types) eqn: E; try discriminate.
+    destruct u; inv H; simpl; eauto.
+  Qed.
+  
   Section Init.
     Variables (c_main: class) (prog_main: program) (m_reset m_step: method).
     Hypothesis Find: find_class main_node prog = Some (c_main, prog_main).
     Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
     Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
 
+    Lemma init_mem:
+      exists m, Genv.init_mem tprog = Some m.
+    Proof.
+      inv_trans TRANSL as Estep Ereset with structs funs E.
+      pose proof (build_ok _ _ _ _ _ _ _ TRANSL) as Hbuild.
+      apply make_program_defs in TRANSL; destruct TRANSL as (gce & Hbuild' & Eq); clear TRANSL.
+      rewrite Hbuild in Hbuild'; inv Hbuild'.
+      apply Genv.init_mem_exists.
+      rewrite Eq; clear Eq.
+      simpl. 
+      intros ** [Hinv|[Hinv|[Hinv|Hinv]]];
+        try (split; [inv Hinv; simpl; split; auto; apply Z.divide_0_r
+                    |intros ** Hinio; inv Hinv; simpl in Hinio;
+                     destruct Hinio; [discriminate|contradiction]]).
+      apply in_app in Hinv; destruct Hinv as [Hinv|Hinv].
+      - induction (map glob_bind (m_out m) ++ map glob_bind (m_in m)) as [|(x, t)].
+        + contradict Hinv.
+        + destruct Hinv as [Hinv|]; auto.
+          inv Hinv; simpl; split.
+          * split; auto; apply Z.divide_0_r. 
+          * intros ** Hinio; simpl in Hinio;
+            destruct Hinio; [discriminate|contradiction].
+      - apply in_app in Hinv; destruct Hinv as [Hinv|[Hinv|Hinv]]; try inv Hinv.
+        clear Hbuild WT.
+        remember prog as prog1.
+        replace (translate_class prog1) with (translate_class prog) in E by now rewrite <-Heqprog1.
+        clear Heqprog1.
+        revert structs funs E Hinv.
+        induction prog1 as [|c' prog']; intros ** E Hinv; simpl in E.
+        + inv E; simpl in Hinv; contradiction.
+        + destruct (split (map (translate_class prog) prog')) as (g, d) eqn: Egd; inv E.
+          simpl in Hinv; apply in_app in Hinv; destruct Hinv as [Hinv|]; eauto.
+          unfold make_methods in Hinv.
+          induction (c_methods c'); simpl in Hinv; try contradiction.
+          destruct Hinv as [Hinv|]; auto.
+          inv Hinv.
+    Qed.
+    
     Lemma match_states_main_step:
       exists m e le sb sofs outb outco,
         m |= match_states c_main m_step (hempty, sempty) (e, le) sb sofs outb outco.
     Proof.
-      admit.
+      destruct init_mem as [m].
+      assert (le: temp_env). admit.
+      assert (main: function). admit.
+      assert (b: block). admit.
+      assert (Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some b). admit.
+      assert (Genv.find_funct_ptr tge b = Some (Ctypes.Internal main)). admit.
+      assert (bind_parameter_temps [] [] (create_undef_temps main.(fn_temps)) = Some le). admit.
+      assert (sb: block). admit.
+      assert (sofs: int). admit.
+      assert (le ! self = Some (Vptr sb sofs)). admit.
+      assert (0 <= Int.unsigned sofs). admit.
+      assert (struct_in_bounds gcenv 0 Int.max_unsigned (Int.unsigned sofs)
+     (make_members c_main)). admit.
+      assert (outb: block). admit.
+      assert (le ! out = Some (Vptr outb Int.zero)). admit.
+      assert (outco: composite). admit.
+      assert (gcenv ! (prefix_fun (c_name c_main) (m_name m_step)) = Some outco). admit.
+      exists m, empty_env, le, sb, sofs, outb, outco.
+      rewrite sepemp_right, match_states_conj. split; [|repeat (split; eauto)].
+      - admit.
+      - intros x bx tx Hin.
+        rewrite PTree.gempty in Hin; discriminate.
     Qed.
     
   End Init.

@@ -265,12 +265,12 @@ Definition make_main
   let body := return_zero (Clight.Ssequence init (Clight.Ssequence reset loop)) in
   fundef [] [(* (out_reset_struct, tyout_reset); (out_step_struct, tyout_step) *)] [(self, type_of_inst_p node); (out, pointer_of tyout_step)] Ctypes.type_int32s body.
 
-Definition vardef (init volatile: bool) (x: ident * Ctypes.type)
+Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
   let (x, ty) := x in
   let ty' := Ctypes.merge_attributes ty (Ctypes.mk_attr volatile None) in
   (x, @AST.Gvar Clight.fundef _
-                (AST.mkglobvar ty' (if init then [AST.Init_space Z0] else []) false volatile)).
+                (AST.mkglobvar ty' [AST.Init_space (Ctypes.sizeof env ty')] false volatile)).
 
 Definition build_composite_env' (types: list Ctypes.composite_definition) :
   { ce | Ctypes.build_composite_env types = Errors.OK ce } + Errors.errmsg.
@@ -299,13 +299,14 @@ Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composit
 
 Definition make_program'
            (types: list Ctypes.composite_definition)
+           (gvars gvars_vol: list (ident * Ctypes.type))
            (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
            (public: list ident)
            (main: ident) : Errors.res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
-  | inl (exist ce P) =>
+  | inl (exist ce P) => 
     do _ <- check_size_env ce types;
-    Errors.OK {| Ctypes.prog_defs := defs;
+    Errors.OK {| Ctypes.prog_defs := map (vardef ce false) gvars ++ map (vardef ce true) gvars_vol ++ defs;
                  Ctypes.prog_public := public;
                  Ctypes.prog_main := main;
                  Ctypes.prog_types := types;
@@ -328,15 +329,12 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
         let outs := map glob_bind m.(m_out) in
         let main := make_main prog main_node ins outs m in
         let cs := map (translate_class prog) prog in
-        let f_gvar := vardef true false (f, type_of_inst main_node) in
-        let step_out_gvar := vardef true false (step_out, type_of_inst (prefix_fun main_node step)) in
-        let reset_out_gvar := vardef true false (reset_out, type_of_inst (prefix_fun main_node reset)) in
-        let o_gvars := map (vardef true true) outs in
-        let i_gvars := map (vardef true true) ins in
+        let f_gvar := (f, type_of_inst main_node) in
+        let step_out_gvar := (step_out, type_of_inst (prefix_fun main_node step)) in
+        let reset_out_gvar := (reset_out, type_of_inst (prefix_fun main_node reset)) in
         let (structs, funs) := split cs in
-        let gdefs := f_gvar :: step_out_gvar :: reset_out_gvar
-                            :: o_gvars ++ i_gvars ++ (concat funs) ++ [(main_id, main)] in
-        make_program' (concat structs) gdefs [] main_id
+        let gdefs := concat funs ++ [(main_id, main)] in
+        make_program' (concat structs) [f_gvar; step_out_gvar; reset_out_gvar] (outs ++ ins) gdefs [] main_id
       | None => Errors.Error (Errors.msg "unfound reset function")
       end
     | None => Errors.Error (Errors.msg "unfound step function")
