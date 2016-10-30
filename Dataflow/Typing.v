@@ -6,6 +6,8 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Require Import Morphisms.
+
 (** * CoreDF typing *)
 
 (** 
@@ -136,6 +138,65 @@ Module Type TYPING
     now contradiction Hin.
   Qed.
 
+  Instance wt_clock_Proper:
+    Proper (@Permutation.Permutation (ident * type) ==> @eq clock ==> iff)
+           wt_clock.
+  Proof.
+    intros env' env Henv ck' ck Hck.
+    rewrite Hck; clear Hck ck'.
+    induction ck.
+    - split; auto with dftyping.
+    - destruct IHck.
+      split; inversion_clear 1; constructor;
+        try rewrite Henv in *;
+        auto with dftyping.
+  Qed.
+
+  Instance wt_lexp_Proper:
+    Proper (@Permutation.Permutation (ident * type) ==> @eq lexp ==> iff)
+           wt_lexp.
+  Proof.
+    intros env' env Henv e' e He.
+    rewrite He; clear He.
+    induction e; try destruct IHe;
+      try destruct IHe1, IHe2;
+      split; auto with dftyping;
+        inversion_clear 1;
+        (rewrite Henv in * || rewrite <-Henv in * || idtac);
+        auto with dftyping.
+  Qed.
+
+  Instance wt_lexp_pointwise_Proper:
+    Proper (@Permutation.Permutation (ident * type)
+                                     ==> pointwise_relation lexp iff) wt_lexp.
+  Proof.
+    intros env' env Henv e.
+    now rewrite Henv.
+  Qed.
+  
+  Instance wt_cexp_Proper:
+    Proper (@Permutation.Permutation (ident * type) ==> @eq cexp ==> iff)
+           wt_cexp.
+  Proof.
+    intros env' env Henv e' e He.
+    rewrite He; clear He.
+    induction e; try destruct IHe1, IHe2;
+      split; inversion_clear 1; try rewrite Henv in *;
+        constructor; auto; now rewrite Henv in *.
+  Qed.
+
+  Instance wt_equation_Proper:
+    Proper (@eq global ==> @Permutation.Permutation (ident * type)
+                ==> @eq equation ==> iff)
+           wt_equation.
+  Proof.
+    intros G1 G2 HG env1 env2 Henv eq1 eq2 Heq.
+    rewrite Heq, HG.
+    split; intro WTeq.
+    - inv WTeq; rewrite Henv in *; eauto with dftyping.
+    - inv WTeq; rewrite <-Henv in *; eauto with dftyping.
+  Qed.
+  
 End TYPING.
 
 Module TypingFun

@@ -939,6 +939,41 @@ Section InMembers.
     - inv Eq; now left.
     - right; auto.
   Qed.
+
+  Lemma NoDupMembers_app:
+    forall (ws xs : list (A * B)),
+      NoDupMembers ws ->
+      NoDupMembers xs ->
+      (forall x, InMembers x ws -> ~InMembers x xs) ->
+      NoDupMembers (ws ++ xs).
+  Proof.
+    intros ** Hndws Hndxs Hnin.
+    induction ws as [|w ws IH]; auto.
+    destruct w as (wn & wv).
+    inv Hndws.
+    simpl; apply NoDupMembers_cons; auto using inmembers_cons.
+    apply NotInMembers_app.
+    split; auto using Hnin, inmembers_eq.
+  Qed.
+
+  Lemma NoDup_NoDupA:
+    forall (xs: list A),
+      NoDup xs <-> SetoidList.NoDupA eq xs.
+  Proof.
+    induction xs.
+    - split; intro HH; auto using NoDup_nil.
+    - destruct IHxs.
+      split; intro HH; inv HH; constructor; auto.
+      + rewrite SetoidList.InA_alt.
+        destruct 1 as (y &  Heq & Hin).
+        subst; auto.
+      + match goal with H:~SetoidList.InA _ _ _ |- _
+                        => rename H into Hsl end.
+        rewrite SetoidList.InA_alt in Hsl.
+        intro Hin. apply Hsl.
+        exists a; split; auto.
+  Qed.
+
 End InMembers.
 
 Ltac app_NoDupMembers_det :=
@@ -948,6 +983,40 @@ Ltac app_NoDupMembers_det :=
              H2: In (?x, ?t2) ?xs |- _ =>
       assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
     end.
+
+Lemma NoDupMembers_NoDupA:
+  forall {A} (xs: list (positive * A)),
+    NoDupMembers xs <-> SetoidList.NoDupA (@PM.eq_key A) xs.
+Proof.
+  induction xs as [|[x y] xs IH].
+  - split; intro HH; auto using NoDupMembers_nil.
+  - destruct IH.
+    split; intro HH; inv HH; constructor; auto.
+    + rewrite SetoidList.InA_alt.
+      destruct 1 as (xy & Heq & Hin).
+      unfold PM.eq_key, PM.E.eq in Heq.
+      simpl in Heq.
+      apply H3, fst_InMembers.
+      rewrite Heq.
+      auto using in_map.
+    + match goal with H:~SetoidList.InA _ _ _ |- _
+                      => rename H into Hsl end.
+      rewrite SetoidList.InA_alt in Hsl.
+      intro Hin. apply Hsl.
+      apply InMembers_In in Hin.
+      destruct Hin as (w, Hin).
+      exists (x, w); split; auto.
+      reflexivity.
+Qed.
+
+Lemma NoDupMembers_PM_elements:
+  forall {A} m,
+    NoDupMembers (@PM.elements A m).
+Proof.
+  intros.
+  apply NoDupMembers_NoDupA.
+  apply PM.elements_3w.
+Qed.
 
 Section Lists.
 
@@ -1615,6 +1684,87 @@ Proof.
   - now apply not_in_cons in NotIn.
 Qed.
 
+Lemma PM_In_find':
+  forall {A} x (s: @PM.t A),
+    PM.In x s <-> PM.find x s <> None.
+Proof.
+  split; intro HH.
+  - apply PM.mem_1 in HH.
+    rewrite PM.mem_find in HH.
+    destruct (PM.find x s) as [xv|] eqn:Hf; intuition.
+    discriminate.
+  - apply PM.mem_2.
+    destruct (PM.find x s) eqn:Hfind.
+    now rewrite PM.mem_find, Hfind.
+    now contradiction HH.
+Qed.
+
+Lemma PM_In_find:
+  forall {A} x (s: @PM.t A),
+    PM.In x s <-> (exists v, PM.find x s = Some v).
+Proof.
+  intros. rewrite PM_In_find'.
+  split; intro HH.
+  - destruct (PM.find x s); eauto.
+    now contradiction HH.
+  - destruct HH as (v & HH).
+    rewrite HH. discriminate.
+Qed.
+
+Lemma PM_add_spec:
+  forall {A} y x (xv: A) s,
+    PM.In y (PM.add x xv s) <-> y = x \/ PM.In y s.
+Proof.
+  intros.
+  split; intro HH.
+  - rewrite PM_In_find in HH.
+    destruct HH as (yv & Hfind).
+    destruct (ident_eq_dec y x).
+    + subst; left; auto.
+    + rewrite PM.gso in Hfind; auto.
+      right. apply PM_In_find.
+      exists yv; auto.
+  - destruct HH.
+    + subst. apply PM_In_find.
+      exists xv. apply PM.gss.
+    + rewrite PM_In_find in H.
+      destruct H as (yv & Hfind).
+      rewrite PM_In_find.
+      destruct (ident_eq_dec y x).
+      * subst. exists xv. apply PM.gss.
+      * exists yv. rewrite PM.gso; auto.
+Qed.
+    
+Lemma PM_mem_spec_false:
+  forall {A} x (s: PM.t A),
+    PM.mem x s = false <-> ~PM.In x s.
+Proof.
+  split; intro HH;
+    rewrite PM.mem_find in *;
+    destruct (PM.find x s) eqn:Heq;
+    try discriminate;
+    auto.
+  - rewrite PM_In_find'.
+    intro Hfind; contradiction.
+  - rewrite PM_In_find in HH.
+    contradiction HH; eauto.
+Qed.
+
+Lemma PM_remove_iff:
+  forall {A} x y (s: PM.t A),
+    PM.In y (PM.remove x s) <-> PM.In y s /\ x <> y.
+Proof.
+  split; intro HH.
+  - rewrite PM_In_find' in HH.
+    destruct (ident_eq_dec x y).
+    + subst. rewrite PM.grs in HH. now contradiction HH.
+    + rewrite PM.gro in HH; auto.
+      rewrite PM_In_find'; split; auto.
+  - destruct HH as (HH1 & HH2).
+    rewrite PM_In_find'.
+    rewrite PM.gro; auto.
+    now apply PM_In_find'.
+Qed.
 
 Ltac induction_list_tac e I l H :=
   match type of e with
