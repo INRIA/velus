@@ -1,4 +1,5 @@
 MENHIR?=$(OCAMLBIN)menhir
+OCAMLFIND?=$(OCAMLBIN)ocamlfind
 OCAMLLEX?=$(OCAMLBIN)ocamllex
 OCAMLDEP?=$(OCAMLBIN)ocamldep
 OCAMLC?=$(OCAMLBIN)ocamlc
@@ -21,16 +22,29 @@ Parser2.mly: Parser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@
 
 Parser2.ml Parser2.mli: Parser2.mly
-	$(MENHIR) --no-stdlib $<
+	$(MENHIR) --no-stdlib --table $<
 
+Parser2.cmi: OCAMLFLAGS+=-package menhirLib
 Parser2.cmi: Parser2.mli
-Parser2.cmo: Parser2.ml Parser2.cmi extraction/Ast.cmi
+
+Parser2.cmo: OCAMLFLAGS+=-package menhirLib
 Parser2.cmo: IEXTRACTION:=-I extraction
-Parser2.cmxa: Parser2.ml Parser2.cmi extraction/Ast.cmi
-Parser2.cmxa: IEXTRACTION:=-I extraction
+Parser2.cmo: Parser2.ml Parser2.cmi extraction/Ast.cmi
+
+Parser2.cmx: OCAMLFLAGS+=-package menhirLib
+Parser2.cmx: IEXTRACTION:=-I extraction
+Parser2.cmx: Parser2.ml Parser2.cmi extraction/Ast.cmi
 
 Lexer.ml: Lexer.mll
 	$(OCAMLLEX) $<
+
+Relexer.cmi: Relexer.ml
+Relexer.cmo: IEXTRACTION:=-I extraction
+Relexer.cmo: Relexer.ml extraction/Ast.cmi extraction/Parser.cmi \
+    		Parser2.cmi
+Relexer.cmx: IEXTRACTION:=-I extraction
+Relexer.cmx: Relexer.ml extraction/Ast.cmi extraction/Parser.cmi \
+    		Parser2.cmi
 
 extraction/Parser.cmo: extraction/Parser.ml
 extraction/Parser.cmx: extraction/Parser.ml
@@ -63,11 +77,11 @@ extraction/%:
 .SUFFIXES : .mli .ml .cmi .cmo .cmx
 
 .mli.cmi:
-	$(OCAMLC) -c $(IEXTRACTION) $(OCAMLFLAGS) $<
+	$(OCAMLFIND) $(OCAMLC) -c $(IEXTRACTION) $(OCAMLFLAGS) $<
 
 .ml.cmo:
-	$(OCAMLC) -c $(IEXTRACTION) $(OCAMLFLAGS) $<
+	$(OCAMLFIND) $(OCAMLC) -c $(IEXTRACTION) $(OCAMLFLAGS) $<
 
 .ml.cmx:
-	$(OCAMLOPT) -c $(IEXTRACTION) $(OCAMLFLAGS) $<
+	$(OCAMLFIND) $(OCAMLOPT) -c $(IEXTRACTION) $(OCAMLFLAGS) $<
 
