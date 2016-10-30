@@ -67,6 +67,21 @@ Module Type ELABORATION
     | CONST_CHAR wide l => elab_const_char loc wide l
     end.
 
+  Definition Is_interface_map (G: global)
+                              (nenv: PM.t (list type * list type)) : Prop :=
+    (forall f tysin tysout,
+        PM.find f nenv = Some (tysin, tysout) ->
+        (exists n, find_node f G = Some n
+                   /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
+                   /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout))
+    /\ (forall f, PM.find f nenv = None -> Forall (fun n=> f <> n.(n_name)) G).
+
+  Lemma Is_interface_map_empty:
+    Is_interface_map [] (PM.empty (list type * list type)).
+  Proof.
+    split; setoid_rewrite PM.gempty; intros; try discriminate; auto.
+  Qed.    
+  
   Section ElabExpressions.
 
     (* Map variable names to types. *)
@@ -84,12 +99,7 @@ Module Type ELABORATION
     Hypothesis wt_cenv :
       forall x ck, PM.find x cenv = Some ck -> wt_clock (PM.elements env) ck.
 
-    Hypothesis wt_nenv :
-      forall f tysin tysout,
-        PM.find f nenv = Some (tysin, tysout) ->
-        (exists n, find_node f G = Some n
-                   /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
-                   /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
+    Hypothesis wt_nenv : Is_interface_map G nenv.
 
     Definition find_type (loc: astloc) (x: ident) : res type :=
       match PM.find x env with
@@ -457,8 +467,9 @@ Module Type ELABORATION
       - auto using type_castop with dftyping.
       - unfold find_node_interface in EQ0. NamedDestructCases.
         destruct EQ2.
-        specialize (wt_nenv (ident_of_string s) _ _ Heq).
-        destruct wt_nenv as (n & Hfind & Hin & Hout); clear wt_nenv.
+        destruct wt_nenv as (wt_nenv' & ?).
+        specialize (wt_nenv' (ident_of_string s) _ _ Heq).
+        destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
         inv Hout.
         econstructor; eauto.
         apply Forall2_map_1 with (f:=typeof) in H0.
@@ -486,12 +497,7 @@ Module Type ELABORATION
     (* Map node names to input and output types. *)
     Variable nenv : PM.t (list type * list type).
 
-    Hypothesis wt_nenv :
-      forall f tysin tysout,
-        PM.find f nenv = Some (tysin, tysout) ->
-        (exists n, find_node f G = Some n
-                   /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
-                   /\ Forall2 (fun i ty=> snd i = ty) [n.(n_out)] tysout).
+    Hypothesis wt_nenv : Is_interface_map G nenv.
 
     Fixpoint elab_var_decls' (acc: list (ident * type) * PM.t type)
                (vds: list (string * type_name * Ast.clock * astloc))
@@ -987,32 +993,75 @@ Module Type ELABORATION
 
   End ElabDeclaration.
 
-(*
-  Fixpoint elab_declarations' (nenvg: PM.t (list type * list type) * global)
-                              (decls: list Ast.declaration) : res global :=
-    let (nenv, g) := nenvg in
+  Local Obligation Tactic :=
+    Tactics.program_simpl;
+    match goal with H:OK _ = _ |- _ =>
+      symmetry in H; monadInv H; NamedDestructCases end;
+    simpl in *; unfold find_node_interface in *;
+    match goal with H:match ?x with _ => _ end = Error _ |- _ =>
+      destruct x eqn:Hfind; try discriminate; clear H end.
+
+  Program Fixpoint elab_declarations'
+          (G: global) (nenv: PM.t (list type * list type))
+          (WTG: wt_global G) (Hnenv: Is_interface_map G nenv)
+          (decls: list Ast.declaration)
+          : res {G' | wt_global G'} :=
     match decls with
-    | nil => OK g
+    | nil => OK (exist _ G WTG)
     | d::ds =>
-      do n <- elab_declaration nenv d;
-         let loc := declaration_loc d in
-         if find_node_interface nenv loc n.(n_name)
-         then Error (err_loc loc (MSG "duplicate definition for "
-                                      :: CTX n.(n_name) :: nil))
-         else elab_declarations'
-                (PM.add n.(n_name) (map snd n.(n_in),
-                                    map snd [n.(n_out)]) nenv, n :: g) ds
+      match (do n <- elab_declaration _ _ Hnenv d;
+               let loc := declaration_loc d in
+               if find_node_interface nenv loc n.(n_name)
+               then Error (err_loc loc (MSG "duplicate definition for "
+                                            :: CTX n.(n_name) :: nil))
+               else OK n) with
+      | OK n => elab_declarations' (n::G)
+                      (PM.add n.(n_name) (map snd n.(n_in),
+                                          map snd [n.(n_out)]) nenv) _ _ ds
+      | Error e => Error e
+      end
     end.
+  Next Obligation.
+    constructor; auto.
+    now apply Hnenv.
+  Qed.
+  Next Obligation.
+    split.
+    - intros ** Hf.
+      destruct (ident_eq_dec f n.(n_name)) as [He|Hne].
+      + subst. rewrite PM.gss in Hf.
+        injection Hf; intros; subst tysout tysin; clear Hf.
+        exists n.
+        repeat split.
+        * unfold find_node, find.
+          now rewrite ident_eqb_refl.
+        * apply Forall2_swap_args, Forall2_map_1, Forall2_same, all_In_Forall;
+            auto.
+        * match goal with |- Forall2 ?P _ _ =>
+            change (Forall2 P [n.(n_out)] (map snd [n.(n_out)])) end.
+          apply Forall2_swap_args, Forall2_map_1, Forall2_same, all_In_Forall;
+            auto.
+      + rewrite PM.gso in Hf; auto.
+        destruct Hnenv as (Hnenv & ?).
+        clear EQ.
+        specialize (Hnenv _ _ _ Hf).
+        destruct Hnenv as (n' & ? & ? & ?).
+        exists n'. split; auto.
+        unfold find_node, find.
+        apply not_eq_sym, ident_eqb_neq in Hne.
+        rewrite Hne; auto.
+    - intros f Hf.
+      destruct (ident_eq_dec f n.(n_name)) as [He|Hne].
+      + subst. rewrite PM.gss in Hf. discriminate.
+      + rewrite PM.gso in Hf; auto.
+        constructor; auto.
+        apply Hnenv; auto.
+  Qed.
 
-  Definition elab_declarations (decls: list Ast.declaration) : res global :=
-    elab_declarations' (PM.empty (list type * list type), []) decls.
-
-  Lemma wt_elab_declarations:
-    forall decls g,
-      elab_declarations decls = OK g ->
-      wt_global g.
-  Admitted.
- *)
+  Definition elab_declarations (decls: list Ast.declaration)
+                                                      : res {G | wt_global G} :=
+    elab_declarations' [] (PM.empty (list type * list type))
+                       wtg_nil Is_interface_map_empty decls.
   
 End ELABORATION.
 

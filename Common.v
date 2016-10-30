@@ -473,6 +473,14 @@ Proof.
   induction Hfa2; now constructor.
 Qed.
 
+Lemma Forall2_same:
+  forall {A} P (xs: list A),
+    Forall (fun x => P x x) xs <-> Forall2 P xs xs.
+Proof.
+  induction xs as [|x xs IH]; split; auto;
+    inversion_clear 1; destruct IH; auto.
+Qed.
+
 Lemma In_ex_nth:
   forall {A} (x: A) xs d,
     In x xs ->
