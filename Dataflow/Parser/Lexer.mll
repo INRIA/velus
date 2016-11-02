@@ -137,7 +137,9 @@ let universal_character_name =
 let identifier_nondigit =
     nondigit
 (*| universal_character_name*)
-  | '$'
+(*| '$'*) (* NB: We cannot accept identifiers that contains '$'
+                 since we use '$' as a separator in the names of
+                 Clight identifiers in target code. *)
 
 let identifier = identifier_nondigit (identifier_nondigit|digit)*
 
