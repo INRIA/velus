@@ -148,3 +148,13 @@ Proof.
   apply pos_of_str_injective in E.
   admit.
 Qed.
+
+Lemma self_not_prefixed: ~ prefixed self.
+Proof.
+  intro H.
+  inversion H as [? ? E].
+  unfold prefix, self in E.
+  apply pos_of_str_injective in E.
+  admit.
+Qed.
+  

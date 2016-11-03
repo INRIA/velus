@@ -244,7 +244,7 @@ Definition make_main
                                        (pointer_of  tyout_reset) in
   
   let args_step_in := map make_in_arg ins in
-  let glob_self := Clight.Eaddrof (Clight.Evar (glob_id node) (type_of_inst node)) (type_of_inst_p node) in
+  let glob_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
   let v_self := Clight.Etempvar self (type_of_inst_p node) in
   let v_out := Clight.Etempvar out (pointer_of tyout_step) in
   let args_step := v_self :: v_out :: args_step_in in
@@ -322,7 +322,7 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
     | Some m =>
       match find_method reset c.(c_methods) with
       | Some _ =>
-        let f := glob_id main_node in
+        let f := glob_id self in
         let step_out := glob_id (prefix_out main_node step) in
         let reset_out := glob_id (prefix_out main_node reset) in
         let ins := map glob_bind m.(m_in) in

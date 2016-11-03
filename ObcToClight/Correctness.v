@@ -407,7 +407,6 @@ Qed.
 Section PRESERVATION.
 
   Variable main_node : ident.
-  Hypothesis main_node_not_prefixed: ~ prefixed main_node.
   
   Variable prog: program.
   Variable tprog: Clight.program.
@@ -584,16 +583,24 @@ Section PRESERVATION.
     repeat constructor.
     - repeat rewrite not_in_cons; repeat split.
       + intro E; apply glob_id_injective in E.
-        apply main_node_not_prefixed; rewrite E; constructor. 
+        apply self_not_prefixed; rewrite E; constructor. 
       + intro E; apply glob_id_injective in E.
-        apply main_node_not_prefixed; rewrite E; constructor. 
+        apply self_not_prefixed; rewrite E; constructor. 
       + repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
         intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
         try simpl in E.
-        * apply glob_id_injective in E; subst x.
-          admit.
-        * apply glob_id_injective in E; subst x.
-          admit.
+        *{ apply glob_id_injective in E; subst x.
+           apply In_InMembers in Hin.
+           apply (m_notreserved self m).
+           - apply in_eq.
+           - unfold meth_vars; now repeat (rewrite InMembers_app; right).
+         }
+        *{ apply glob_id_injective in E; subst x.
+           apply In_InMembers in Hin.
+           apply (m_notreserved self m).
+           - apply in_eq.
+           - unfold meth_vars; now rewrite InMembers_app; left.
+         }
         * subst x.
           apply in_map with (f:=fst) in Hin.
           subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
