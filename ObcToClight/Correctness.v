@@ -303,6 +303,7 @@ Lemma NoDup_funs:
 Proof.
   intros ** Wt.
   remember prog as prog'.
+  pattern prog' at 2.
   rewrite Heqprog' at 1.
   rewrite Heqprog' in Wt.
   clear Heqprog'.
@@ -343,7 +344,8 @@ Proof.
   unfold make_methods.
   intros ** Hin.
   remember prog as prog'.
-  rewrite Heqprog' in Hin at 1.
+  pattern prog' at 2 in Hin.
+  rewrite Heqprog' in Hin at 1; simpl in Hin.
   clear Heqprog'.
   induction prog as [|c]; simpl in *.
   - contradiction.
@@ -405,6 +407,8 @@ Qed.
 Section PRESERVATION.
 
   Variable main_node : ident.
+  Hypothesis main_node_not_prefixed: ~ prefixed main_node.
+  
   Variable prog: program.
   Variable tprog: Clight.program.
    
@@ -458,36 +462,28 @@ Section PRESERVATION.
     constructor; auto.
   Qed.
 
-  Ltac inv_trans_tac H Estep Ereset s f E :=
+  Ltac inv_trans_tac H En Estep Ereset s f E :=
     match type of H with
       translate ?p ?n = Errors.OK ?tp =>
       unfold translate in H;
-        destruct (find_class n p) as [(c, cls)|]; try discriminate;
+        destruct (find_class n p) as [(c, cls)|] eqn: En; try discriminate;
         destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;
         destruct (find_method reset c.(c_methods)) eqn: Ereset; try discriminate;
         destruct (split (map (translate_class p) p)) as (s, f) eqn: E
     end.
 
-  Tactic Notation "inv_trans" ident(H) "as" ident(Estep) ident(Ereset) "with" ident(s) ident(f) ident(E) :=
-    inv_trans_tac H Estep Ereset s f E.
-  Tactic Notation "inv_trans" ident(H) "as" ident(Estep) ident(Ereset) "with" ident(s) ident(f) :=
-    let E := fresh "E" in
-    inv_trans H as Estep Ereset with s f E.
-  Tactic Notation "inv_trans" ident(H) "as" ident(Estep) ident(Ereset) :=
-    let s := fresh "s" in
-    let f := fresh "f" in
-    inv_trans H as Estep Ereset with s f.
+  Tactic Notation "inv_trans" ident(H) "as" ident(En) ident(Estep) ident(Ereset) "with" ident(s) ident(f) ident(E) :=
+    inv_trans_tac H En Estep Ereset s f E.
+  Tactic Notation "inv_trans" ident(H) "as" ident(En) ident(Estep) ident(Ereset) "with" ident(s) ident(f) :=
+    inv_trans H as En Estep Ereset with s f E.
+  Tactic Notation "inv_trans" ident(H) "as" ident(En) ident(Estep) ident(Ereset) :=
+    inv_trans H as En Estep Ereset with s f.
   Tactic Notation "inv_trans" ident(H) "with" ident(s) ident(f) ident(E) :=
-    let Estep := fresh "Estep" in
-    let Ereset := fresh "Ereset" in
-    inv_trans H as Estep Ereset with s f E.
+    inv_trans H as En Estep Ereset with s f E.
   Tactic Notation "inv_trans" ident(H) "with" ident(s) ident(f) :=
-    let E := fresh "E" in
-    inv_trans H as Estep Ereset with s f E.
+    inv_trans H as En Estep Ereset with s f E.
   Tactic Notation "inv_trans" ident(H) :=
-    let Estep := fresh "Estep" in
-    let Ereset := fresh "Ereset" in
-    inv_trans H as Estep Ereset.
+    inv_trans H as En Estep Ereset.
       
   Theorem Consistent: composite_env_consistent gcenv.
   Proof.
@@ -588,9 +584,9 @@ Section PRESERVATION.
     repeat constructor.
     - repeat rewrite not_in_cons; repeat split.
       + intro E; apply glob_id_injective in E.
-        admit.
+        apply main_node_not_prefixed; rewrite E; constructor. 
       + intro E; apply glob_id_injective in E.
-        admit.
+        apply main_node_not_prefixed; rewrite E; constructor. 
       + repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
         intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
         try simpl in E.
@@ -3100,35 +3096,39 @@ Section PRESERVATION.
   Qed.
 
   Lemma find_main:
-      exists b main,
-        Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some b
-        /\ Genv.find_funct_ptr tge b = Some (Ctypes.Internal main).
-    Proof.
-      inv_trans TRANSL as Estep Ereset with structs funs E.
-      assert ((AST.prog_defmap tprog) ! main_id =
-              Some (make_main prog main_node
-                              (map glob_bind (m_in m))
-                              (map glob_bind (m_out m)) m)
-             /\ tprog.(Ctypes.prog_main) = main_id)
-        as [Hget Hmain_id]. 
-        { unfold make_program' in TRANSL.
-          destruct (build_composite_env' (concat structs)) as [(ce, P)|]; try discriminate.
-          destruct (check_size_env ce (concat structs)); try discriminate.
-          unfold AST.prog_defmap; simpl; split;
-          [apply PTree_Properties.of_list_norepet; auto|];
-          inversion_clear TRANSL; auto.
-          apply in_cons, in_cons, in_cons, in_app; right; apply in_app; right; apply in_eq.
-        }
-        rewrite Hmain_id.
-        apply Genv.find_def_symbol in Hget.
-        destruct Hget as (b & Findsym & Finddef).
-        exists b. econstructor; split; eauto.
-        change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
-        unfold Genv.find_funct_ptr.
-        unfold Clight.fundef in Finddef.
-        now rewrite Finddef.
-    Qed.
-    
+    exists b,
+      Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some b
+      /\ exists main,
+        Genv.find_funct_ptr tge b = Some (Ctypes.Internal main)
+        /\ exists le,
+          bind_parameter_temps [] [] (create_undef_temps main.(fn_temps)) = Some le.
+  Proof.
+    inv_trans TRANSL as En Estep Ereset with structs funs E.
+    assert ((AST.prog_defmap tprog) ! main_id =
+            Some (make_main prog main_node
+                            (map glob_bind (m_in m))
+                            (map glob_bind (m_out m)) m)
+            /\ tprog.(Ctypes.prog_main) = main_id)
+      as [Hget Hmain_id]. 
+    { unfold make_program' in TRANSL.
+      destruct (build_composite_env' (concat structs)) as [(ce, P)|]; try discriminate.
+      destruct (check_size_env ce (concat structs)); try discriminate.
+      unfold AST.prog_defmap; simpl; split;
+      [apply PTree_Properties.of_list_norepet; auto|];
+      inversion_clear TRANSL; auto.
+      apply in_cons, in_cons, in_cons, in_app; right; apply in_app; right; apply in_eq.
+    }
+    rewrite Hmain_id.
+    apply Genv.find_def_symbol in Hget.
+    destruct Hget as (b & Findsym & Finddef).
+    exists b; split; auto; econstructor; split; eauto.
+    - change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
+      unfold Genv.find_funct_ptr.
+      unfold Clight.fundef in Finddef.
+      now rewrite Finddef.
+    - simpl; eauto.
+  Qed.
+
   Section Init.
     Variables (c_main: class) (prog_main: program) (m_reset m_step: method).
     Hypothesis Find: find_class main_node prog = Some (c_main, prog_main).
@@ -3157,12 +3157,12 @@ Section PRESERVATION.
         edestruct Hperm; eauto.
         admit.
     Qed.
-    
-        
+           
     Lemma init_mem:
       exists m, Genv.init_mem tprog = Some m.
     Proof.
-      inv_trans TRANSL as Estep Ereset with structs funs E.
+      inv_trans TRANSL as En Estep Ereset with structs funs E.
+      clear En.
       pose proof (build_ok _ _ _ _ _ _ _ TRANSL) as Hbuild.
       apply make_program_defs in TRANSL; destruct TRANSL as (gce & Hbuild' & Eq); clear TRANSL.
       rewrite Hbuild in Hbuild'; inv Hbuild'.
@@ -3202,21 +3202,19 @@ Section PRESERVATION.
         m |= match_states c_main m_step (hempty, sempty) (e, le) sb sofs outb outco.
     Proof.
       destruct init_mem as [m].
-      destruct find_main as (b & main & ? & ?).
-      assert (le: temp_env). admit.
-      assert (bind_parameter_temps [] [] (create_undef_temps main.(fn_temps)) = Some le). admit.
+      destruct find_main as (b & ? & main & ? & le & ?).
       assert (sb: block). admit.
       assert (sofs: int). admit.
       assert (le ! self = Some (Vptr sb sofs)). admit.
       assert (0 <= Int.unsigned sofs). admit.
       assert (struct_in_bounds gcenv 0 Int.max_unsigned (Int.unsigned sofs)
-     (make_members c_main)). admit.
+                               (make_members c_main)). admit.
       assert (outb: block). admit.
       assert (le ! out = Some (Vptr outb Int.zero)). admit.
-      assert (outco: composite). admit.
-      assert (gcenv ! (prefix_fun (c_name c_main) (m_name m_step)) = Some outco). admit.
+      edestruct global_out_struct as (outco & ? & ?); eauto.
       exists m, empty_env, le, sb, sofs, outb, outco.
-      rewrite sepemp_right, match_states_conj. split; [|repeat (split; eauto)].
+      rewrite sepemp_right, match_states_conj.
+      split; [|repeat (split; eauto)].
       - admit.
       - intros x bx tx Hin.
         rewrite PTree.gempty in Hin; discriminate.

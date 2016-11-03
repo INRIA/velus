@@ -115,6 +115,15 @@ Proof.
   inversion 1; unfold prefix_fun; constructor.
 Qed.
 
+Lemma prefix_fun_not_out:
+  forall c f c' f', prefix_fun c f <> prefix_out c' f'.
+Proof.
+  unfold prefix_fun, prefix_out.
+  intros ** E.
+  apply prefix_injective in E; destruct E as [E]; contradict E.
+  apply fun_not_out.  
+Qed.
+
 Definition glob_id (id: ident): ident :=
   pos_of_str ("$" ++ (pos_to_str id)).
 
