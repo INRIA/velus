@@ -299,9 +299,10 @@ Qed.
 Lemma NoDup_funs:
   forall prog,
     wt_program prog ->
-    NoDup (map fst (concat (map (fun c => map (translate_method prog c) (c_methods c)) prog))).
+    NoDup (map fst (concat (map (make_methods prog) prog))).
 Proof.
-  intros ** Wt.
+   unfold make_methods.
+   intros ** Wt.
   remember prog as prog'.
   pattern prog' at 2.
   rewrite Heqprog' at 1.
@@ -416,17 +417,10 @@ Section PRESERVATION.
   
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
   Hypothesis WT: wt_program prog.
-
-  Hypothesis main_methods_glob_not_prefixed:
-    forall c cls,
-      find_class main_node prog = Some (c, cls) ->
-      forall f m,
-        find_method f (c_methods c) = Some m ->
-        Forall (fun xt => ~ prefixed (fst xt)) (m.(m_in) ++ m.(m_out)).
-
+  
   Lemma build_check_size_env_ok:
-    forall types gvars gvars_vol defs public main p,
-      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
+    forall types gvars_vol defs public main p,
+      make_program' types gvars_vol defs public main = Errors.OK p ->
       build_composite_env types = Errors.OK p.(prog_comp_env)
       /\ check_size_env p.(prog_comp_env) types = Errors.OK tt.
   Proof.
@@ -437,21 +431,21 @@ Section PRESERVATION.
   Qed.
 
   Lemma build_ok:
-    forall types gvars gvars_vol defs public main p,
-      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
+    forall types gvars_vol defs public main p,
+      make_program' types gvars_vol defs public main = Errors.OK p ->
       build_composite_env types = Errors.OK p.(prog_comp_env).
   Proof.
     intros ** H.
-    apply (proj1 (build_check_size_env_ok _ _ _ _ _ _ _ H)).
+    apply (proj1 (build_check_size_env_ok _ _ _ _ _ _ H)).
   Qed.
 
   Lemma check_size_env_ok:
-    forall types gvars gvars_vol defs public main p,
-      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
+    forall types gvars_vol defs public main p,
+      make_program' types gvars_vol defs public main = Errors.OK p ->
       check_size_env p.(prog_comp_env) types = Errors.OK tt.
   Proof.
     intros ** H.
-    apply (proj2 (build_check_size_env_ok _ _ _ _ _ _ _ H)).
+    apply (proj2 (build_check_size_env_ok _ _ _ _ _ _ H)).
   Qed.
 
   Lemma check_size_ok:
@@ -587,97 +581,31 @@ Section PRESERVATION.
     inversion_clear TRANSL; simpl.
     rewrite 4 map_app, <-app_assoc, <-NoDup_norepet.
     repeat rewrite glob_bind_vardef_fst; simpl.
-    specialize (main_methods_glob_not_prefixed c cls eq_refl).
-    apply main_methods_glob_not_prefixed in Estep.
-    repeat constructor.
-    - repeat rewrite not_in_cons; repeat split.
-      + intro E; apply glob_id_injective in E.
-        apply self_not_prefixed; rewrite E; constructor. 
-      + intro E; apply glob_id_injective in E.
-        apply self_not_prefixed; rewrite E; constructor. 
-      + pose proof (m_notreserved self m (in_eq self _)) as Res; unfold meth_vars in Res.
-        repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
-        intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
-        try simpl in E.
-        * apply glob_id_injective in E; subst x.
-          apply In_InMembers in Hin.
-          apply Res; now repeat (rewrite InMembers_app; right).
-        * apply glob_id_injective in E; subst x.
-          apply In_InMembers in Hin.
-          apply Res; now rewrite InMembers_app; left.
-        * subst x.
-          apply in_map with (f:=fst) in Hin.
-          subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
-          contradict Hin; apply glob_id_not_prefixed. 
-        * unfold glob_id, main_id in Hin.
-          apply pos_of_str_injective in Hin.
-          inv Hin.
-    - repeat rewrite not_in_cons; repeat split.
-      + intro E; apply glob_id_injective, prefix_out_injective in E.
-        unfold step, reset in E; destruct E as [? E].
-        apply pos_of_str_injective in E.
-        discriminate.
-      + repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
-        intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
-        try simpl in E.
-        * apply glob_id_injective in E; subst x.
-          apply (In_Forall (prefix_out main_node step, t)) in Estep.
-          2: rewrite in_app; now right.
-          apply Estep; simpl; constructor.
-        * apply glob_id_injective in E; subst x.
-          apply (In_Forall (prefix_out main_node step, t)) in Estep.
-          2: rewrite in_app; now left.
-          apply Estep; simpl; constructor.
-        * subst x.
-          apply in_map with (f:=fst) in Hin.
-          subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
-          contradict Hin; apply glob_id_not_prefixed.
-        * unfold glob_id, main_id in Hin.
-          apply pos_of_str_injective in Hin.
-          inv Hin.
-    - repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
-      intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
-      try simpl in E.
-      + apply glob_id_injective in E; subst x.
-        apply (In_Forall (prefix_out main_node reset, t)) in Estep.
-        2: rewrite in_app; now right.
-        apply Estep; simpl; constructor.
-      + apply glob_id_injective in E; subst x.
-        apply (In_Forall (prefix_out main_node reset, t)) in Estep.
-        2: rewrite in_app; now left.
-        apply Estep; simpl; constructor.
-      + subst x.
-        apply in_map with (f:=fst) in Hin.
-        subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
-        contradict Hin; apply glob_id_not_prefixed.
-      + unfold glob_id, main_id in Hin.
-        apply pos_of_str_injective in Hin.
-        inv Hin.
-    - repeat apply NoDup_app'; repeat apply Forall_not_In_app;
-      repeat apply Forall_not_In_singleton.
-      + apply NoDup_glob_id, m_nodupout.
-      + apply NoDup_glob_id, m_nodupin.
-      + rewrite Funs.
-        now apply NoDup_funs.
-      + repeat constructor; auto.
-      + intro Hin; subst funs; apply prefixed_funs in Hin.
-        inversion Hin as [? ? E].
-        unfold prefix, main_id in E.
-        unfold prefix_fun, fun_id in E.
-        apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E.
-        inversion E.
-      + apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
-        apply prefixed_fun_prefixed; subst funs.
-        now apply prefixed_funs in Hin.
-      + apply main_not_glob. 
-      + apply NoDupMembers_glob.
-        pose proof (m_nodupvars m) as Nodup.
-        rewrite NoDupMembers_app_assoc, <-app_assoc in Nodup.
-        now apply NoDupMembers_app_r, NoDupMembers_app_assoc in Nodup.
-      + apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
-        apply prefixed_fun_prefixed; subst funs.
-        now apply prefixed_funs in Hin.
-      + apply main_not_glob.
+    repeat apply NoDup_app'; repeat apply Forall_not_In_app;
+    repeat apply Forall_not_In_singleton.
+    - apply NoDup_glob_id, m_nodupout.
+    - apply NoDup_glob_id, m_nodupin.
+    - rewrite Funs.
+      now apply NoDup_funs.
+    - repeat constructor; auto.
+    - intro Hin; subst funs; apply prefixed_funs in Hin.
+      inversion Hin as [? ? E].
+      unfold prefix, main_id in E.
+      unfold prefix_fun, fun_id in E.
+      apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E.
+      inversion E.
+    - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+      apply prefixed_fun_prefixed; subst funs.
+      now apply prefixed_funs in Hin.
+    - apply main_not_glob. 
+    - apply NoDupMembers_glob.
+      pose proof (m_nodupvars m) as Nodup.
+      rewrite NoDupMembers_app_assoc, <-app_assoc in Nodup.
+      now apply NoDupMembers_app_r, NoDupMembers_app_assoc in Nodup.
+    - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+      apply prefixed_fun_prefixed; subst funs.
+      now apply prefixed_funs in Hin.
+    - apply main_not_glob.
   Qed.
   Hint Resolve prog_defs_norepet.
   
@@ -835,7 +763,7 @@ Section PRESERVATION.
           unfold AST.prog_defmap; simpl.
           apply PTree_Properties.of_list_norepet; auto.
           inversion_clear TRANSL.
-          apply in_cons, in_cons, in_cons, in_app; right; apply in_app; left.
+          apply in_app; right; apply in_app; left.
           unfold translate_method in Findmth; auto.
         }
         apply Genv.find_def_symbol in Hget.
@@ -3102,11 +3030,11 @@ Section PRESERVATION.
   Qed.
 
   Lemma make_program_defs:
-    forall types gvars gvars_vol defs public main p,
-      make_program' types gvars gvars_vol defs public main = Errors.OK p ->
+    forall types gvars_vol defs public main p,
+      make_program' types gvars_vol defs public main = Errors.OK p ->
       exists gce,
         build_composite_env types = Errors.OK gce
-        /\ p.(AST.prog_defs) = map (vardef gce false) gvars ++ map (vardef gce true) gvars_vol ++ defs.
+        /\ p.(AST.prog_defs) = map (vardef gce true) gvars_vol ++ defs.
   Proof.
     unfold make_program'; intros.
     destruct (build_composite_env' types) as [[gce ?]|?]; try discriminate.
@@ -3135,7 +3063,7 @@ Section PRESERVATION.
       unfold AST.prog_defmap; simpl; split;
       [apply PTree_Properties.of_list_norepet; auto|];
       inversion_clear TRANSL; auto.
-      apply in_cons, in_cons, in_cons, in_app; right; apply in_app; right; apply in_eq.
+      apply in_app; right; apply in_app; right; apply in_eq.
     }
     rewrite Hmain_id.
     apply Genv.find_def_symbol in Hget.
@@ -3182,17 +3110,14 @@ Section PRESERVATION.
     Proof.
       inv_trans TRANSL as En Estep Ereset with structs funs E.
       clear En.
-      pose proof (build_ok _ _ _ _ _ _ _ TRANSL) as Hbuild.
+      pose proof (build_ok _ _ _ _ _ _ TRANSL) as Hbuild.
       apply make_program_defs in TRANSL; destruct TRANSL as (gce & Hbuild' & Eq); clear TRANSL.
       rewrite Hbuild in Hbuild'; inv Hbuild'.
       apply Genv.init_mem_exists.
       rewrite Eq; clear Eq.
       simpl. 
-      intros ** [Hinv|[Hinv|[Hinv|Hinv]]];
-        try (split; [inv Hinv; simpl; split; auto; apply Z.divide_0_r
-                    |intros ** Hinio; inv Hinv; simpl in Hinio;
-                     destruct Hinio; [discriminate|contradiction]]).
-      apply in_app in Hinv; destruct Hinv as [Hinv|Hinv].
+      intros ** Hinv;
+        apply in_app in Hinv; destruct Hinv as [Hinv|Hinv].
       - induction (map glob_bind (m_out m) ++ map glob_bind (m_in m)) as [|(x, t)].
         + contradict Hinv.
         + destruct Hinv as [Hinv|]; auto.
