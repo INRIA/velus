@@ -416,7 +416,14 @@ Section PRESERVATION.
   
   Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
   Hypothesis WT: wt_program prog.
-  
+
+  Hypothesis main_methods_glob_not_prefixed:
+    forall c cls,
+      find_class main_node prog = Some (c, cls) ->
+      forall f m,
+        find_method f (c_methods c) = Some m ->
+        Forall (fun xt => ~ prefixed (fst xt)) (m.(m_in) ++ m.(m_out)).
+
   Lemma build_check_size_env_ok:
     forall types gvars gvars_vol defs public main p,
       make_program' types gvars gvars_vol defs public main = Errors.OK p ->
@@ -580,27 +587,24 @@ Section PRESERVATION.
     inversion_clear TRANSL; simpl.
     rewrite 4 map_app, <-app_assoc, <-NoDup_norepet.
     repeat rewrite glob_bind_vardef_fst; simpl.
+    specialize (main_methods_glob_not_prefixed c cls eq_refl).
+    apply main_methods_glob_not_prefixed in Estep.
     repeat constructor.
     - repeat rewrite not_in_cons; repeat split.
       + intro E; apply glob_id_injective in E.
         apply self_not_prefixed; rewrite E; constructor. 
       + intro E; apply glob_id_injective in E.
         apply self_not_prefixed; rewrite E; constructor. 
-      + repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
+      + pose proof (m_notreserved self m (in_eq self _)) as Res; unfold meth_vars in Res.
+        repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
         intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
         try simpl in E.
-        *{ apply glob_id_injective in E; subst x.
-           apply In_InMembers in Hin.
-           apply (m_notreserved self m).
-           - apply in_eq.
-           - unfold meth_vars; now repeat (rewrite InMembers_app; right).
-         }
-        *{ apply glob_id_injective in E; subst x.
-           apply In_InMembers in Hin.
-           apply (m_notreserved self m).
-           - apply in_eq.
-           - unfold meth_vars; now rewrite InMembers_app; left.
-         }
+        * apply glob_id_injective in E; subst x.
+          apply In_InMembers in Hin.
+          apply Res; now repeat (rewrite InMembers_app; right).
+        * apply glob_id_injective in E; subst x.
+          apply In_InMembers in Hin.
+          apply Res; now rewrite InMembers_app; left.
         * subst x.
           apply in_map with (f:=fst) in Hin.
           subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
@@ -617,9 +621,13 @@ Section PRESERVATION.
         intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
         try simpl in E.
         * apply glob_id_injective in E; subst x.
-          admit.
+          apply (In_Forall (prefix_out main_node step, t)) in Estep.
+          2: rewrite in_app; now right.
+          apply Estep; simpl; constructor.
         * apply glob_id_injective in E; subst x.
-          admit.
+          apply (In_Forall (prefix_out main_node step, t)) in Estep.
+          2: rewrite in_app; now left.
+          apply Estep; simpl; constructor.
         * subst x.
           apply in_map with (f:=fst) in Hin.
           subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
@@ -631,9 +639,13 @@ Section PRESERVATION.
       intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
       try simpl in E.
       + apply glob_id_injective in E; subst x.
-        admit.
+        apply (In_Forall (prefix_out main_node reset, t)) in Estep.
+        2: rewrite in_app; now right.
+        apply Estep; simpl; constructor.
       + apply glob_id_injective in E; subst x.
-        admit.
+        apply (In_Forall (prefix_out main_node reset, t)) in Estep.
+        2: rewrite in_app; now left.
+        apply Estep; simpl; constructor.
       + subst x.
         apply in_map with (f:=fst) in Hin.
         subst funs; apply prefixed_funs, prefixed_fun_prefixed in Hin.
