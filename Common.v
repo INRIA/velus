@@ -29,9 +29,16 @@ Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb. (* TODO: replace with equiv_decb *)
 
+Definition idents := list ident.
+
 Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
+
+(* The following identifier is (provably) never used in
+   practice. Alternatively, we could assign it a default value. *)
+(* XXX: this could be defined in the module [IDS]. *)
+Axiom default_ident : ident.
 
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
@@ -454,20 +461,20 @@ Proof.
   subst x' y'. rewrite <-combine_nth with (1:=Hlen).
   apply nth_In.
   now rewrite combine_length, <-Hlen, Min.min_idempotent.
-Qed.    
+Qed.
 
 Lemma Forall2_det : forall {A B : Type} (R : A -> B -> Prop),
   (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
   forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
 Proof.
-intros A B R HR xs. induction xs as [x | x xs]; intros ys1 ys2 Hall1 Hall2.
-- inversion Hall1. inversion Hall2; reflexivity. 
+intros A B R HR xs. induction xs as [| x xs]; intros ys1 ys2 Hall1 Hall2.
+- inversion Hall1. inversion Hall2; reflexivity.
 - inversion Hall1. inversion Hall2. f_equal; eauto.
 Qed.
 
 Lemma Forall2_combine:
   forall {A B} P (xs: list A) (ys: list B),
-    Forall2 P xs ys -> Forall (fun x=>P (fst x) (snd x)) (combine xs ys).
+    Forall2 P xs ys -> Forall (fun x => P (fst x) (snd x)) (combine xs ys).
 Proof.
   intros A B P xs ys Hfa2.
   induction Hfa2; now constructor.
@@ -975,6 +982,17 @@ Section Lists.
     f_equal; auto.
   Qed.
 
+  Definition concatMap (f: B -> list A)(xs : list B) : list A :=
+    concat (map f xs).
+
+  Lemma concatMap_cons: forall (f: B -> list A) (x: B) xs,
+      concatMap f (x :: xs) = f x ++ concatMap f xs.
+  Proof. reflexivity. Qed.
+
+  Lemma concatMap_nil: forall (f: B -> list A),
+      concatMap f [] = [].
+  Proof. reflexivity. Qed.
+
   Global Instance In_Permutation_Proper (A:Type):
     Proper (eq ==> Permutation (A:=A) ==> iff) (@In A).
   Proof.
@@ -1038,6 +1056,21 @@ Section Lists.
       destruct Happ as (k1 & k2 & Hl1 & Hl2).
       exists (x :: k1), k2; simpl; split; auto.
       f_equal; auto.
+  Qed.
+
+  Remark map_inj: forall (f: A -> B) xs ys,
+      (forall x y, f x = f y -> x = y) ->
+      map f xs = map f ys -> xs = ys.
+  (* XXX: Is that not defined already?! *)
+  Proof.
+  intros ? ? ? Hinj ?.
+  generalize dependent ys; generalize dependent xs.
+  induction xs as [| x xs IHxs];
+    intro ys; destruct ys as [ | y ys ]; try discriminate; simpl; auto.
+  intro Heq; inv Heq.
+  assert (x = y) by now apply Hinj.
+  assert (xs = ys) by now apply IHxs.
+  now congruence.
   Qed.
 
   Lemma incl_cons':
@@ -1288,6 +1321,18 @@ Section Lists.
     now apply Permutation_app_head.
   Qed.
 
+  Global Instance Permutation_concat_Proper:
+    Proper (Permutation (A:=list A) ==> Permutation (A:=A))
+           (concat).
+  Proof.
+  intros xs ys Hperm. induction Hperm.
+  - reflexivity.
+  - simpl. now rewrite IHHperm.
+  - simpl. do 2 rewrite app_assoc. now rewrite (Permutation_app_comm x y).
+  - now transitivity (concat l').
+  Qed.
+
+
   Lemma partition_switch:
     forall f g,
       (forall x:A, f x = g x) ->
@@ -1371,7 +1416,7 @@ Section Lists.
         eapply IHl'; eauto.
   Qed.
 
-  Remark in_concat:
+  Remark in_concat':
     forall l' (l: list A) x,
       In x l ->
       In l l' ->
@@ -1384,6 +1429,21 @@ Section Lists.
         apply in_app; now left.
       + apply in_app; right.
         eapply IHl'; eauto.
+  Qed.
+
+  Lemma in_concat:
+    forall (ls : list (list A)) (y : A),
+      In y (concat ls) <-> (exists l : list A, In y l /\ In l ls).
+  Proof.
+  split.
+  - induction ls as [|l ls]; [ firstorder | ].
+    intro H. simpl in H. apply in_app in H.
+    destruct H;
+      [
+      | edestruct IHls as (ys & ? & ?) ; auto ];
+      firstorder.
+  - intro H; decompose record H;
+      eapply in_concat'; eauto.
   Qed.
 
   Remark split_map:
@@ -1511,6 +1571,48 @@ Section Lists.
     apply not_In_app in H; auto.
   Qed.
 
+  Lemma NoDup_app'_iff:
+    forall (xs ws: list A),
+      NoDup (xs ++ ws) <->
+       (NoDup xs
+      /\ NoDup ws
+      /\ Forall (fun x => ~ In x ws) xs).
+  Proof.
+  split.
+  - induction xs; auto.
+    rewrite <- app_comm_cons.
+    intro H.
+    inv H.
+    destruct IHxs as [Hxs [Hws Hall]]; trivial; [].
+    repeat split.
+    + constructor; intuition.
+    + assumption.
+    + constructor; intuition.
+  - intros H; decompose record H;
+      now apply NoDup_app'.
+  Qed.
+
+  Lemma in_filter:
+    forall f x (l: list A), In x (filter f l) -> In x l.
+  Proof.
+  intros f x.
+  induction l as [ | i l IHl ]; eauto.
+  simpl; destruct (f i); eauto.
+  intro H; inv H; auto.
+  Qed.
+
+
+  Lemma nodup_filter:
+    forall f (l: list A),
+      NoDup l -> NoDup (filter f l).
+  Proof.
+  intro f. induction l as [ | x l IHl ]; simpl; auto.
+  intro Hnodup. inversion_clear Hnodup as [ | ? ? Hnin_x Hnodup_l ].
+  destruct (f x); auto.
+  constructor; auto.
+  intro; eapply Hnin_x, in_filter; eauto.
+  Qed.
+
   Lemma Forall_not_In_app:
     forall (zs xs ys: list A),
       Forall (fun z => ~ In z xs) zs ->
@@ -1562,6 +1664,31 @@ Proof.
          in_combine_l, in_combine_r.
 Qed.
 
+Lemma Forall2_In:
+  forall {A B} x v xs vs (P : A -> B -> Prop) ,
+    In (x, v) (combine xs vs) ->
+    Forall2 P xs vs ->
+    P x v.
+Proof.
+  intros A B x v xs vs P Hin HP.
+  apply Forall2_combine in HP.
+  rewrite Forall_forall in HP.
+  now apply HP in Hin.
+Qed.
+
+(* XXX: [fold_left] or [fold_right]? *)
+Definition ps_adds (xs: list positive)(s: PS.t)
+  := fold_left (fun defs x0 => PS.add x0 defs) xs s.
+
+Lemma ps_adds_spec: forall s xs y,
+    PS.In y (ps_adds xs s) <-> In y xs \/ PS.In y s.
+Proof.
+  intros s xs y. revert s.
+  induction xs; intro s; simpl.
+  - intuition.
+  - rewrite IHxs. rewrite PS.add_spec. intuition.
+Qed.
+
 (** adds and its properties *)
 
 Definition adds {A} xs (vs : list A) (e : PM.t A) :=
@@ -1585,7 +1712,19 @@ Lemma find_gsss:
     PM.find x (adds (x :: xs) (v :: vs) S) = Some v.
 Proof.
   intros. unfold adds. apply PM.gss.
-Qed.  
+Qed.
+
+Lemma find_In_gsso:
+  forall {A} x ys (vs: list A) env,
+    ~ In x ys -> PM.find x (adds ys vs env) = PM.find x env.
+Proof.
+  intros A x ys vs env Hin.
+  revert vs; induction ys; intro vs; simpl.
+  - unfold adds. simpl. reflexivity.
+  - rewrite find_gsso.
+    + apply IHys. intuition.
+    + intro. apply Hin. now left.
+Qed.
 
 Lemma find_gssn:
   forall {A} d1 (d2: A) n env xs vs x,
