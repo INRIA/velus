@@ -35,7 +35,7 @@ Module Type SYNTAX
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
-  | Emerge : ident -> cexp -> cexp -> cexp 
+  | Emerge : ident -> cexp -> cexp -> cexp
   | Eite   : lexp -> cexp -> cexp -> cexp
   | Eexp   : lexp -> cexp.
 
@@ -156,4 +156,3 @@ Module SyntaxFun
        (Import Op  : OPERATORS) <: SYNTAX Ids Op.
   Include SYNTAX Ids Op.
 End SyntaxFun.
-

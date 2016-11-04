@@ -19,7 +19,7 @@ Open Scope list.
 
 (** ** Identification of node instances *)
 
-(** 
+(**
 
 Each node application in CoreDF turns into a method call in the
 imperative setting. This means that, upon initializing a node, one
@@ -185,7 +185,7 @@ Module Type TRANSLATION
     List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
-  
+
   Program Definition reset_method (eqns: list equation): method :=
     {| m_name := reset;
        m_in   := [];
@@ -355,7 +355,7 @@ Module Type TRANSLATION
       now subst; simpl; left.
       now apply PSF.empty_iff in Hin.
   Qed.
-      
+
   Lemma in_memories_is_fby:
     forall eqs eq,
       In eq eqs ->
@@ -444,6 +444,7 @@ Module Type TRANSLATION
         now apply In_mem.
   Qed.
 
+
   Lemma in_memories_filter_is_fby:
     forall x eqs,
       PS.In x (memories eqs) <-> In x (vars_defined (filter is_fby eqs)).
@@ -463,7 +464,7 @@ Module Type TRANSLATION
         destruct HH as [HH|HH].
         * rewrite PS.add_spec; intuition.
         * apply IHeqs in HH; now left.
-  Qed.        
+  Qed.
 
   Lemma fby_In_filter_memories:
     forall eqs vars x (ty: type) ck c0 e,
@@ -493,6 +494,7 @@ Module Type TRANSLATION
   Proof.
     intros x eqs Hnodup HH.
     rewrite in_memories_filter_is_fby.
+
     induction eqs as [|eq eqs]; [intuition|].
 
       assert (concat_filter:
@@ -596,6 +598,7 @@ Module Type TRANSLATION
 
       eapply n.(n_vout); eauto.
     }
+
     rewrite <-Hfout; clear Hfout.
     rewrite filter_app, filter_mem_fst, <-n_defd.
     remember (memories n.(n_eqs)) as mems.
@@ -740,7 +743,8 @@ Module Type TRANSLATION
   apply Permutation_app_tail.
   now rewrite gather_eqs_snd_spec.
   Qed.
-  
+
+
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -816,7 +820,7 @@ Module Type TRANSLATION
     inversion_clear 1; auto.
     now apply reset_not_step.
   Qed.
-  
+
   (* =translate= *)
   (* definition is needed in signature *)
   Definition translate (G: global) : program :=
@@ -830,7 +834,7 @@ Module Type TRANSLATION
     induction g as [|n g]; auto.
     simpl; rewrite IHg. reflexivity.
   Qed.
-  
+
   Lemma exists_step_method:
     forall node,
     exists stepm,
@@ -913,7 +917,7 @@ Module Type TRANSLATION
       apply IHg in Hfind. destruct Hfind as (cls & prog' & Hfind & Hcls).
       exists cls, prog'. split; auto. simpl. now rewrite Hneq.
   Qed.
-  
+
 End TRANSLATION.
 
 Module TranslationFun

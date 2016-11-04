@@ -17,7 +17,7 @@ Module Type PROPERTIES
        (Mem        : MEMORIES Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
        (Import Par : PARENTS Ids Op Syn Clo).
-  
+
 Lemma Is_free_in_clock_self_or_parent:
   forall x ck,
     Is_free_in_clock x ck

@@ -13,7 +13,7 @@ Require Import Rustre.Dataflow.Memories.
 
 (** * Stack variables: decision procedure *)
 
-(** 
+(**
 
 Decision procedure for the [IsVariable] predicate. We show that it is
 equivalent to its specification.
@@ -30,7 +30,7 @@ Module Type DECIDE
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
-  
+
   Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x vars
@@ -159,7 +159,7 @@ Module Type DECIDE
         try (rewrite ps_adds_spec; auto);
         intuition.
   Qed.
-  
+
 End DECIDE.
 
 Module Decide

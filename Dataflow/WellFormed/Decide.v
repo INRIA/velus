@@ -17,7 +17,7 @@ Require Import List.
 
 (** * Well formed CoreDF programs: decision procedure *)
 
-(** 
+(**
 
 Decision procedure for the [Is_well_sch] predicate. We show that it is
 equivalent to its specification.
@@ -333,7 +333,7 @@ Module Type DECIDE
 
             eapply Hdefd; now eauto.
     Qed.
-    
+
     Lemma well_sch_spec:
       forall args eqns,
         if well_sch args eqns
@@ -366,7 +366,7 @@ Module Type DECIDE
       destruct (well_sch args eqns); [reflexivity|].
       exfalso; apply Hwss; apply H.
     Qed.
-    
+
     Lemma well_sch_dec:
       forall args eqns,
         {Is_well_sch mems args eqns}+{~Is_well_sch mems args eqns}.
@@ -375,7 +375,7 @@ Module Type DECIDE
       pose proof (well_sch_spec args eqns) as Hwss.
       destruct (well_sch args eqns); [left|right]; assumption.
     Qed.
-    
+
   End Decide.
 
 End DECIDE.
@@ -395,7 +395,6 @@ Module Decide
        (Import NoD    : NODUP Ids Op Syn Mem IsD IsV)
        (Import Wef    : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD)
        <: DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
-  
+
   Include DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
 End Decide.
-  

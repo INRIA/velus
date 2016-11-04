@@ -8,7 +8,7 @@ Open Scope list_scope.
 
 (** * CoreDF typing *)
 
-(** 
+(**
 
   Typing judgements for CoreDF and resulting properties.
   Classify CoreDF programs which are statically well-formed.
@@ -143,4 +143,3 @@ Module TypingFun
        (Import Syn : SYNTAX Ids Op) <: TYPING Ids Op Syn.
   Include TYPING Ids Op Syn.
 End TypingFun.
-

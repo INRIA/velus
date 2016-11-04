@@ -12,7 +12,7 @@ Require Import Rustre.Dataflow.Memories.
 
 (** * Defined variables : decision procedure *)
 
-(** 
+(**
 
 Decision procedure for the [Is_defined_in] predicate. We show that it
 is equivalent to its specification.
@@ -54,7 +54,7 @@ Module Type DECIDE
     - split.
       + intro H.
         simpl; rewrite IHeqs.
-        simpl in H; apply IHeqs in H; destruct H; auto.
+        simpl in H; apply IHeqs in H; destruct H; auto;
         destruct eq;
         (* XXX: this is Ltac p0rn *)
         match goal with

@@ -23,7 +23,7 @@ Module Type CORRECTNESS
        (Import Mem   : MEMORIES Ids Op DF.Syn)
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       
+
        (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
        (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
        (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ).
@@ -105,7 +105,7 @@ Module Type CORRECTNESS
       assert (false = negb true) as Hfalse by reflexivity.
       rewrite Hfalse. eauto.
   Qed.
-  
+
   Lemma stmt_eval_Control:
     forall prog mems menv env ck stmt,
       (Is_absent_in mems menv env ck
@@ -363,7 +363,7 @@ Module Type CORRECTNESS
 
   (** ** Correctness of expression's translation *)
 
-  (** 
+  (**
 
 An imperative stack [env] and an imperative memory [menv] are faithful
 to a dataflow environment [R] over a set of identifiers [Is_free] if
@@ -476,11 +476,11 @@ for all [Is_free_exp x e]. *)
     induction e as [|y ty| | |]; simpl; auto.
     destruct (PS.mem y mems); simpl; auto.
   Qed.
-  
+
   Theorem lexp_correct:
     forall R mems menv env c e,
       sem_lexp_instant true R e (present c)
-      -> equiv_env (fun x => Is_free_in_lexp x e) R mems env menv 
+      -> equiv_env (fun x => Is_free_in_lexp x e) R mems env menv
       -> exp_eval menv env (translate_lexp mems e) c.
   Proof.
     Hint Constructors exp_eval.
@@ -496,7 +496,7 @@ for all [Is_free_exp x e]. *)
       unfold translate_lexp;
       destruct (PS.mem y mems) eqn:Hm;
       simpl; rewrite Hm.
-      + auto.  
+      + auto.
       + rewrite mem_spec_false in Hm; auto.
     - simpl. apply eunop with c'.
       + apply IHle; auto.
@@ -511,7 +511,7 @@ for all [Is_free_exp x e]. *)
     forall R mems menv env cs es,
       let vs := map present cs in
       Forall2 (fun e v => sem_lexp_instant true R e v) es vs
-      -> equiv_env (fun x => Exists (Is_free_in_lexp x) es) R mems env menv 
+      -> equiv_env (fun x => Exists (Is_free_in_lexp x) es) R mems env menv
       -> Forall2 (exp_eval menv env) (map (translate_lexp mems) es) cs.
   Proof.
     Hint Constructors Forall2.
@@ -609,20 +609,18 @@ for all [Is_free_exp x e]. *)
   (** *** Correctness of [translate_eqns] *)
 
   Definition equiv_node G prog f :=
-    forall n xss ys M menv inputs output,
+    forall n xss yss M menv inputs outputs,
       Memory_Corres G n f M menv
-      -> msem_node G f xss M ys
-      -> present_list xss n inputs
-      -> ys n = present output
+      -> msem_node G f xss M yss
+      -> xss n = map present inputs
+      -> yss n = map present outputs
       -> exists menv',
-          stmt_call_eval prog menv f step inputs menv' [output]
+          stmt_call_eval prog menv f step inputs menv' outputs
           /\  Memory_Corres G (S n) f M menv'.
 
   Definition equiv_prog G prog :=
     forall f,
       equiv_node G prog f.
-
-
 
   Section IsStepCorrect.
 
@@ -724,7 +722,6 @@ for all [Is_free_exp x e]. *)
       destruct Hsems' as [H0 Hsems']; clear H0.
       apply Forall_cons2 in Hsems'.
       destruct Hsems' as [Hsem Hsems'].
-
       inversion Hsem as
           [bk0 H0 M0 i ck xs ce Hvar Hce HR1 HR2 HR3
           |bk0 H0 M0 y ys ck f Mo les ls xs Hsome Hmfind Hlaes Hvar Hmsem HR1 HR2 HR3
@@ -1232,7 +1229,7 @@ for all [Is_free_exp x e]. *)
                   | H: context[~ Is_defined_in_eqs _ _] |- _ =>
                     eapply H
                   end; eauto.
-                
+
               - eauto.
                 rewrite Hall in Hmc.
                 apply Forall_app in Hmc.
@@ -1264,7 +1261,7 @@ for all [Is_free_exp x e]. *)
              | H: find_node _ [] = Some _ |- _ => inversion H; clear H
              end.
     Qed.
-    
+
     Lemma adds_sem_var_find:
       forall Hn i (iargs: list (ident * type)) ivals c,
         NoDupMembers iargs ->
@@ -1843,7 +1840,7 @@ for all [Is_free_exp x e]. *)
                   Maybe it would be better to put them in envN and execute
                   a statement whose arguments are the corresponding variable
                   names? *)
-    
+
     Open Scope nat_scope.
     (* =step= *)
     Fixpoint dostep (n: nat) P r main obj css menv env: Prop :=
@@ -2079,6 +2076,7 @@ for all [Is_free_exp x e]. *)
             now erewrite IHco; eauto.
     Qed.
 
+
     Theorem is_event_loop_correct:
       (* =translate_correct= *)
       sem_node G main xss yss ->
@@ -2143,7 +2141,7 @@ for all [Is_free_exp x e]. *)
     - constructor; inversion H; subst.
       destruct H2; [left; auto | right; auto].
   Qed.
-  
+
   Lemma IsFusible_translate_cexp:
     forall mems x ce,
       (forall i, Is_free_in_cexp i ce -> x <> i)

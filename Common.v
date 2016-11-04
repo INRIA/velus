@@ -48,7 +48,7 @@ Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
   | Some (_, a) => Some a
   | None => None
   end.
-       
+
 Module Type IDS.
   Parameter self : ident.
   Parameter out  : ident.
@@ -99,7 +99,7 @@ Qed.
 (** *** Operator abstraction *)
 
 Generalizable Variables A.
-  
+
 Lemma equiv_decb_equiv:
   forall `{EqDec A} (x y : A),
     equiv_decb x y = true <-> equiv x y.
@@ -318,7 +318,7 @@ Proof.
     + destruct (Hdec x) as [Hx|Hx]; auto. now intuition.
       right. apply IHxs; intuition.
 Qed.
-  
+
 Lemma Permutation_Forall:
   forall {A} (l l': list A) P,
     Permutation l l' ->
@@ -548,11 +548,11 @@ Section InMembers.
   Proof.
     intros ** Hin.
     induction xs as [|x xs IH]; simpl in Hin.
-    - contradiction. 
+    - contradiction.
     - simpl. destruct x. destruct Hin; subst.
       + exists b; now left.
       + destruct IH as (b'); auto.
-        exists b'; now right. 
+        exists b'; now right.
   Qed.
 
   Theorem nodupmembers_cons:
@@ -642,7 +642,7 @@ Section InMembers.
     now rewrite Hperm.
   Qed.
   *)
-    
+
   Theorem NotInMembers_app:
     forall y ws xs,
       ~InMembers y (ws ++ xs) <-> (~InMembers y xs /\ ~InMembers y ws).
@@ -791,11 +791,11 @@ Section InMembers.
       destruct Nodup as (Notin & ?).
       apply NotInMembers_app in Notin.
       subst.
-      destruct Notin as (? & Notin); now apply Notin. 
+      destruct Notin as (? & Notin); now apply Notin.
     - apply NoDupMembers_remove_1 in Nodup.
       apply IH; auto.
   Qed.
-  
+
   Lemma NoDupMembers_det:
     forall x t t' xs,
       NoDupMembers xs ->
@@ -816,7 +816,7 @@ Section InMembers.
         * inversion H1; auto.
         * exfalso. apply H3. eapply In_InMembers; eauto.
       + apply IHxs; auto.
-        destruct a; rewrite nodupmembers_cons in H; tauto. 
+        destruct a; rewrite nodupmembers_cons in H; tauto.
   Qed.
 
   Global Instance NoDupMembers_Permutation_Proper:
@@ -953,13 +953,13 @@ Ltac app_NoDupMembers_det :=
   | H: NoDupMembers ?xs,
          H1: In (?x, ?t1) ?xs,
              H2: In (?x, ?t2) ?xs |- _ =>
-      assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2 
+      assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2
     end.
 
 Section Lists.
 
   Context {A B : Type}.
-  
+
   Fixpoint concat (l : list (list A)) : list A :=
     match l with
     | nil => nil
@@ -967,11 +967,11 @@ Section Lists.
     end.
 
   Lemma concat_nil : concat nil = nil.
-  Proof eq_refl. 
+  Proof eq_refl.
 
   Lemma concat_cons : forall x l, concat (cons x l) = x ++ concat l.
   Proof. simpl; reflexivity. Qed.
-                               
+
   Lemma concat_app : forall l1 l2, concat (l1 ++ l2) = concat l1 ++ concat l2.
   Proof.
     induction l1; auto.
@@ -1016,7 +1016,7 @@ Section Lists.
       + apply in_eq.
       + right; now apply IHl1.
   Qed.
-  
+
   Remark In_Forall:
     forall (x: A) xs P,
       Forall P xs ->
@@ -1031,7 +1031,7 @@ Section Lists.
   Proof.
     reflexivity.
   Qed.
-                                                   
+
   Remark map_cons':
     forall (f: A -> A) l y ys,
       map f l = y :: ys ->
@@ -1120,7 +1120,7 @@ Section Lists.
         destruct HH as (Hiny & Hincl).
         repeat (apply incl_cons; auto).
     - now rewrite IHHperm1, IHHperm2.
-  Qed.      
+  Qed.
 
   Global Instance Permutation_incl_Proper:
     Proper (@Permutation A ==> @Permutation A ==> iff) (@incl A).
@@ -1161,7 +1161,7 @@ Section Lists.
     forall (P : A -> B -> Prop) l1 l2,
       Forall2 P l1 l2 -> length l1 = length l2.
   Proof.
-    induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.    
+    induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.
   Qed.
 
   (* should be in standard lib... *)
@@ -1214,7 +1214,7 @@ Section Lists.
   Proof.
     split; intro HH; induction HH; auto.
   Qed.
-  
+
   Lemma NoDup_map_inv (f:A->B) l : NoDup (map f l) -> NoDup l.
   Proof.
     induction l; simpl; inversion_clear 1; subst; constructor; auto.
@@ -1229,7 +1229,7 @@ Section Lists.
     - inversion_clear HH. intuition.
     - destruct HH. constructor; auto.
   Qed.
-  
+
   Global Instance NoDup_Permutation_Proper (A:Type):
     Proper (Permutation (A:=A) ==> iff) (@NoDup A).
   Proof.
@@ -1265,7 +1265,7 @@ Section Lists.
     intro Hin. apply Hnin.
     apply in_or_app; now left.
   Qed.
-  
+
   Lemma cons_is_app:
     forall (x: A) xs,
       x :: xs = [x] ++ xs.
@@ -1310,7 +1310,7 @@ Section Lists.
     intros ys ws Hperm.
     now apply Permutation_app_head.
   Qed.
-  
+
   Global Instance Permutation_app_Proper3:
     Proper (Permutation (A:=A) ==> (@eq (list A)) ==> Permutation (A:=A))
            (app (A:=A)).
@@ -1363,7 +1363,7 @@ Section Lists.
     destruct (P x); auto.
     now apply Permutation_cons.
   Qed.
-  
+
   Lemma filter_app:
     forall (p:A->bool) xs ys,
       filter p xs ++ filter p ys = filter p (xs ++ ys).
@@ -1391,7 +1391,7 @@ Section Lists.
     induction xs as [|x xs]; auto.
     simpl. now rewrite Heq, IHxs.
   Qed.
-  
+
   Global Instance pointwise_partition_Proper {A}:
     Proper (pointwise_relation A eq ==> @eq (list A) ==> @eq (list A * list A))
            (@partition A).
@@ -1400,7 +1400,7 @@ Section Lists.
     induction xs as [|x xs]; auto.
     simpl. now rewrite Heq, IHxs.
   Qed.
-  
+
   Remark in_concat_cons:
     forall l' (l: list A) x xs,
       In x l ->
@@ -1467,7 +1467,8 @@ Section Lists.
       contradiction.
     - subst x; apply in_eq.
   Qed.
-  
+
+
   Remark equiv_eq_singleton:
     forall (x: A) l,
       NoDup l ->
@@ -1504,7 +1505,7 @@ Section Lists.
     split.
     - intros [? ?]; now apply Forall_Forall.
     - intro HForall.
-      induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.      
+      induction xs as [|x xs]; split; auto; inv HForall; constructor; tauto.
   Qed.
 
   Lemma NoDup_app_cons:
@@ -1513,8 +1514,8 @@ Section Lists.
       <-> ~In x (ws ++ xs) /\ NoDup (ws ++ xs).
   Proof.
     induction ws; simpl; split; intros ** Nodup.
-    - inv Nodup; auto. 
-    - destruct Nodup; auto. 
+    - inv Nodup; auto.
+    - destruct Nodup; auto.
     - inversion Nodup as [|? ? Notin Nodup']; clear Nodup; subst.
       split.
       + intro H; destruct H.
@@ -1535,10 +1536,10 @@ Section Lists.
         apply in_app_or in Hin.
         destruct Hin; apply Notin', in_app; auto.
         simpl in H; destruct H; auto.
-        subst; contradict Notin; now left.  
+        subst; contradict Notin; now left.
       + rewrite IHws; split; auto.
   Qed.
-  
+
   Lemma NoDup_app_In:
     forall (x: A) xs ws,
       NoDup (xs ++ ws) ->
@@ -1629,9 +1630,9 @@ Section Lists.
       ~ In x ys ->
       Forall (fun y => ~ In y [x]) ys.
   Proof.
-    induction ys; auto; simpl; intros; constructor; auto; intros [|]; auto. 
+    induction ys; auto; simpl; intros; constructor; auto; intros [|]; auto.
   Qed.
-  
+
 End Lists.
 
 Lemma Forall2_map_1:
@@ -1642,7 +1643,7 @@ Proof.
     try (now split; inversion 1; constructor).
   rewrite map_cons.
   split; intro HH.
-  - inversion_clear HH. 
+  - inversion_clear HH.
     apply Forall2_cons; auto.
     apply IHxs; auto.
   - inversion_clear HH.
@@ -1692,7 +1693,7 @@ Qed.
 (** adds and its properties *)
 
 Definition adds {A} xs (vs : list A) (e : PM.t A) :=
-  fold_right (fun (xv: ident * A) env => 
+  fold_right (fun (xv: ident * A) env =>
                 let (x , v) := xv in
                 PM.add x v env) e (combine xs vs).
 
@@ -1705,7 +1706,7 @@ Proof.
   unfold adds.
   destruct vs. destruct xs; reflexivity.
   simpl. rewrite PM.gso; auto.
-Qed.      
+Qed.
 
 Lemma find_gsss:
   forall {A} x v xs (vs: list A) S,
@@ -1834,4 +1835,3 @@ Tactic Notation "induction_list" constr(E) "with" ident(l) :=
 (* Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) := *)
 (*   let H := fresh "H" l in *)
 (*   induction_list_tac E I l H. *)
-

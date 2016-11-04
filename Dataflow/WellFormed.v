@@ -33,7 +33,7 @@ Module Type WELLFORMED
 
     (**
 
-A list of equations is well scheduled if 
+A list of equations is well scheduled if
   - the free stack variables ([~PS.In _ memories]) are defined before
     (i.e. in [eqs]), or they belong to the input argument
   - the free memory variables ([PS.In _ memories]) have not been
@@ -61,7 +61,7 @@ first equation to execute should be the last in the list.
 
   (**
 
-A CoreDF program is well defined if 
+A CoreDF program is well defined if
   - Each node is well-defined, that is
     - The equations are well scheduled
   - Every node call points to a previously-defined node
@@ -122,7 +122,7 @@ A CoreDF program is well defined if
     rewrite <-fst_InMembers. simpl.
     apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup) Hin).
   Qed.
-  
+
   (** ** Properties of [Is_well_sch] *)
 
   Hint Constructors Is_well_sch.
@@ -276,6 +276,5 @@ Module WellFormedFun
        <: WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD.
 
   Include WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD.
-  
-End WellFormedFun.
 
+End WellFormedFun.

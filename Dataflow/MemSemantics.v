@@ -65,7 +65,7 @@ Module Type MEMSEMANTICS
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
        (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
        (Import WeF : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD).
-  
+
   Definition memory := memory (stream val).
 
   Implicit Type M : memory.
@@ -290,7 +290,7 @@ enough: it does not support the internal fixpoint introduced by
   Definition msem_nodes (G: global) : Prop :=
     Forall (fun no => exists xs M ys, msem_node G no.(n_name) xs M ys) G.
 
-  
+
   (** ** Properties *)
 
   (** *** Equation non-activation *)
@@ -597,6 +597,7 @@ enough: it does not support the internal fixpoint introduced by
     erewrite mfind_inst_gso; eauto.
   Qed.
 
+
   (* XXX: I believe that this comment is outdated ([no_dup_defs] is long gone)
 
    - The no_dup_defs hypothesis is essential for the EqApp case.
@@ -631,7 +632,7 @@ enough: it does not support the internal fixpoint introduced by
 
   (** ** Fundamental theorem *)
 
-  (** 
+  (**
 
 We show that the standard semantics implies the existence of a
 dataflow memory for which the non-standard semantics holds true.

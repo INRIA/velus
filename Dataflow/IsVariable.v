@@ -35,14 +35,14 @@ Module Type ISVARIABLE
   (* definition is needed in signature *)
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
-  
+
   (** ** Properties *)
 
-  Lemma not_Is_variable_in_EqDef: 
+  Lemma not_Is_variable_in_EqDef:
     forall x ck y e,
       ~ Is_variable_in_eq x (EqDef y ck e) -> x <> y.
   Proof.
-    Hint Constructors Is_variable_in_eq. 
+    Hint Constructors Is_variable_in_eq.
     intros ** Hxy. subst x. auto.
   Qed.
 
@@ -59,7 +59,7 @@ Module Type ISVARIABLE
     | H: ~ Is_variable_in_eq x (EqApp y _ _ _) |- _ =>
       apply not_Is_variable_in_EqApp in H
     end.
-  
+
   Lemma Is_variable_in_eq_dec:
     forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
   Proof.

@@ -191,7 +191,7 @@ Module Type ISDEFINED
     now repeat constructor.
     constructor 2; intuition.
   Qed.
-  
+
 End ISDEFINED.
 
 Module IsDefined
@@ -204,4 +204,3 @@ Module IsDefined
   Include ISDEFINED Ids Op Syn Mem.
 
 End IsDefined.
-

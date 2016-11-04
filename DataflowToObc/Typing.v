@@ -26,7 +26,7 @@ Module Type TYPING
        (Import Mem   : MEMORIES Ids Op DF.Syn)
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       
+
        (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ).
 
   (** Preservation of well-typing. *)
@@ -80,7 +80,7 @@ Module Type TYPING
 
     (* Set from mems *)
     Variable memset : PS.t.
-    
+
     Hypothesis nvars_to_mems:
       forall x ty,
         In (x, ty) nvars ->
@@ -113,7 +113,7 @@ Module Type TYPING
       induction e; auto.
       simpl; now FromMemset.
     Qed.
-    
+
     Lemma translate_lexp_wt:
       forall e,
         wt_lexp nvars e ->
@@ -126,7 +126,7 @@ Module Type TYPING
     Qed.
 
     Hint Resolve translate_lexp_wt : transty.
-    
+
     Lemma translate_cexp_wt:
       forall p insts x e,
         wt_cexp nvars e ->
@@ -143,7 +143,7 @@ Module Type TYPING
       - constructor; eauto with transty obctyping.
         now rewrite typeof_translate_lexp.
     Qed.
-    
+
     Hint Resolve translate_cexp_wt : transty.
 
     Lemma Control_wt:
@@ -261,7 +261,7 @@ Module Type TYPING
       match goal with H:DF.Syn.typeof e = _ |- _ =>
                       rewrite typeof_translate_lexp, H; auto end.
   Qed.
-  
+
   Lemma wt_reset_method_translate:
     forall g n insts mems,
       wt_node g n ->
@@ -519,7 +519,7 @@ Module Type TYPING
   Qed.
 
   Hint Resolve translate_node_wt : transty.
-  
+
   Lemma translate_wt:
     forall g,
       wt_global g ->
@@ -536,4 +536,3 @@ Module Type TYPING
   Qed.
 
 End TYPING.
-

@@ -1077,5 +1077,5 @@ an absent value *)
     rewrite map_length in Hsem.
     now rewrite Hsem in Hgt0.
   Qed.
-  
+
 End SEMANTICS.
