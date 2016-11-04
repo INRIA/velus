@@ -91,10 +91,10 @@ Module Type CLOCKING
         clk_cexp C ce ck ->
         Well_clocked_eq C (EqDef x ck ce)
   | CEqApp:
-      forall x ck f les,
-        clk_var C x ck ->
+      forall xs ck f les,
+        clk_vars C xs ck ->
         clk_lexps C les ck ->
-        Well_clocked_eq C (EqApp x ck f les)
+        Well_clocked_eq C (EqApp xs ck f les)
   | CEqFby:
       forall x ck v0 le,
         clk_var C x ck ->
@@ -103,12 +103,12 @@ Module Type CLOCKING
 
   Inductive Well_clocked_node C: node -> Prop :=
   | SNode:
-      forall f i o v eqs ingt0 defd vout nodup good,
+      forall f i o v eqs ingt0 outgt0 defd vout nodup good,
         Forall (Well_clocked_eq C) eqs ->
         clk_vars C (map fst i) Cbase ->
-        clk_var C (fst o) Cbase ->
+        clk_vars C (map fst o) Cbase ->
         Well_clocked_node C (mk_node f i o v eqs
-                                     ingt0 defd vout nodup good).
+                                     ingt0 outgt0 defd vout nodup good).
 
   Definition Well_clocked_env C : Prop :=
     forall x ck, PM.find x C = Some ck -> clk_clock C ck.
@@ -150,6 +150,19 @@ Module Type CLOCKING
     unfold Well_clocked_env in Hwc.
     inversion_clear Hcv as [Hfv].
     apply Hwc with (1:=Hfv).
+  Qed.
+
+  Lemma Well_clocked_env_vars:
+    forall C xs ck,
+      0 < length xs 
+      -> Well_clocked_env C
+      -> clk_vars C xs ck
+      -> clk_clock C ck.
+  Proof.
+    intros C xs ck Hlen Hwc Hcv.
+    destruct xs; simpl in *; try now inv Hlen.
+    eapply Forall_cons2 in Hcv as (? & _).
+    eapply Well_clocked_env_var; eauto.
   Qed.
 
   Lemma clk_clock_lexp:

@@ -26,7 +26,7 @@ Module Type ISDEFINED
 
   Inductive Is_defined_in_eq : ident -> equation -> Prop :=
   | DefEqDef: forall x ck e,   Is_defined_in_eq x (EqDef x ck e)
-  | DefEqApp: forall x ck f e, Is_defined_in_eq x (EqApp x ck f e)
+  | DefEqApp: forall x xs ck f e, List.In x xs -> Is_defined_in_eq x (EqApp xs ck f e)
   | DefEqFby: forall x ck v e, Is_defined_in_eq x (EqFby x ck v e).
 
   (* definition is needed in signature *)
@@ -39,10 +39,18 @@ Module Type ISDEFINED
     forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
   Proof.
     intros x eq.
-    destruct eq as [y cae|y f lae|y v0 lae];
-      (destruct (ident_eq_dec x y) as [xeqy|xneqy];
+    destruct eq as [y cae|ys f lae|y v0 lae];
+    match goal with
+    | |- context[ EqApp _ _ _ _ ] =>
+      edestruct in_dec as [Hin_xys | Hnin_xys] ;
+        [ now apply ident_eq_dec
+        | now constructor(constructor(eauto))
+        | now constructor( inversion 1; eauto ) ]
+    | _ =>
+      destruct (ident_eq_dec x y) as [xeqy|xneqy];
         [ rewrite xeqy; left; constructor
-        | right; inversion 1; auto]).
+        | right; inversion 1; auto]
+    end.
   Qed.
 
   Lemma decidable_Is_defined_in_eqs:
@@ -86,13 +94,13 @@ Module Type ISDEFINED
   Qed.
 
   Lemma not_Is_defined_in_eq_EqApp:
-    forall x i ck f le,
-      ~ Is_defined_in_eq x (EqApp i ck f le) -> x <> i.
+    forall x ys ck f le,
+      ~ Is_defined_in_eq x (EqApp ys ck f le) -> ~ List.In x ys.
   Proof.
-    intros ** H xeqi.
-    rewrite xeqi in H.
-    assert (Is_defined_in_eq i (EqApp i ck f le)) by constructor.
-    contradiction.
+    intros ** H.
+    assert (Is_defined_in_eq x (EqApp ys ck f le))
+      by constructor(eauto).
+    now contradiction.
   Qed.
 
   Lemma not_Is_defined_in_eq_EqFby:
@@ -139,32 +147,37 @@ Module Type ISDEFINED
       rewrite List.Exists_cons.
       destruct HH as [HH|HH].
       + right; now apply IHeqs with (1:=HH).
-      + left. 
+      + left.
         apply In_memory_eq_Is_defined_eq in HH; auto.
   Qed.
 
   Lemma Is_defined_in_eqs_var_defined:
     forall x eq,
-      Is_defined_in_eq x eq <-> var_defined eq = x.
+      Is_defined_in_eq x eq <-> List.In x (var_defined eq).
   Proof.
     Hint Constructors Is_defined_in_eq.
     intros x eq.
     destruct eq; simpl;
-      split; intro HH; subst; try inversion_clear HH; auto.
+      split; intro HH; try inversion_clear HH; subst; intuition.
   Qed.
 
   Lemma Is_defined_in_var_defined:
     forall x eqs,
       Is_defined_in_eqs x eqs
-      <-> In x (map var_defined eqs).
+      <-> In x (vars_defined eqs).
   Proof.
     induction eqs as [|eq eqs].
     now apply Exists_nil.
     split; intro HH.
-    - inversion_clear HH as [? ? Hdef|? ? Hdef]; simpl; [left|right].
+    - inversion_clear HH as [? ? Hdef|? ? Hdef];
+        simpl; apply in_app; [left|right].
       + now apply Is_defined_in_eqs_var_defined in Hdef.
       + now apply IHeqs.
-    - destruct HH as [Hdef|Hdef]; simpl; [left|right].
+    - unfold vars_defined in HH.
+      rewrite concatMap_cons in HH.
+      apply in_app in HH.
+      destruct HH as [Hdef|Hdef];
+        simpl;  [left|right].
       + now apply Is_defined_in_eqs_var_defined in Hdef.
       + now apply IHeqs.
   Qed.

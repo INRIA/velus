@@ -34,7 +34,7 @@ Module Type DECIDE
   Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x vars
-    | EqApp x _ _ _ => PS.add x vars
+    | EqApp xs _ _ _ => ps_adds xs vars
     | EqFby _ _ _ _ => vars
     end.
 
@@ -55,16 +55,31 @@ Module Type DECIDE
       auto.
     - split; [ intro H; simpl; rewrite IHeqs
              | destruct 1 as [H|H]; apply IHeqs];
-      solve [
+      first [
           simpl in H; apply IHeqs in H; destruct H;
           [ intuition
-          | destruct eq; try (apply PS.add_spec in H; destruct H);
+          | destruct eq;
             match goal with
-            | H:x=_ |- _ => rewrite H; simpl; rewrite PS.add_spec; intuition
+            | |- context[ EqApp _ _ _ _ ] =>
+              generalize ps_adds_spec; intro add_spec
+            | _ =>
+              generalize PS.add_spec; intro add_spec
+            end;
+            try (apply add_spec in H; destruct H);
+            match goal with
+            | H:x=_ |- _ => rewrite H; simpl; rewrite add_spec; intuition
+            | H: In x ?i |- context [EqApp ?i _ _ _] => simpl; rewrite add_spec; intuition
             | _ => apply not_In_empty in H; contradiction
             | _ => intuition
             end ]
-        | right; destruct eq; try apply PS.add_spec; intuition
+        | now
+            right; destruct eq;
+            match goal with
+            | |- context[ EqApp _ _ _ _ ] =>
+              generalize ps_adds_spec; intro add_spec
+            | _ =>
+              generalize PS.add_spec; intro add_spec
+            end; try apply add_spec; intuition
         ].
   Qed.
 
@@ -82,13 +97,26 @@ Module Type DECIDE
       split.
       + rewrite List.Exists_cons.
         destruct 1. intuition.
-        destruct eq; try (apply not_In_empty in H; intuition);
-        (simpl in H; apply PS.add_spec in H; destruct H;
-         [ rewrite H; left; constructor
-         | apply not_In_empty in H; contradiction ]).
+        destruct eq;
+          match goal with
+          | |- context[ EqApp _ _ _ _ ] =>
+            generalize ps_adds_spec; intro add_spec
+          | _ =>
+            generalize PS.add_spec; intro add_spec
+          end;
+          try (apply not_In_empty in H; intuition);
+          (simpl in H; apply add_spec in H; destruct H;
+           [ try rewrite H; left; constructor; auto
+           | apply not_In_empty in H; contradiction ]).
       + intro H; apply List.Exists_cons in H; destruct H.
-        destruct eq; try inversion H;
-        (right; apply PS.add_spec; intuition).
+        destruct eq;
+          match goal with
+          | |- context[ EqApp _ _ _ _ ] =>
+            generalize ps_adds_spec; intro add_spec
+          | _ =>
+            generalize PS.add_spec; intro add_spec
+          end; try inversion H;
+            (right; apply add_spec; intuition).
         left; apply IHeqs; apply H.
   Qed.
 
@@ -110,10 +138,25 @@ Module Type DECIDE
   Proof.
     split; intro H.
     destruct eq;
-      simpl in *; try (apply PS.add_spec in H; destruct H; [subst i|]);
+      match goal with
+      | |- context[ EqApp _ _ _ _ ] =>
+        generalize ps_adds_spec; intro add_spec
+      | _ =>
+        generalize PS.add_spec; intro add_spec
+      end;
+      simpl in *;
+        try (apply add_spec in H; destruct H; [try subst i|]);
+        try (rewrite add_spec; auto).
         intuition.
-    destruct eq; simpl in *; destruct H;
-      try (apply PS.add_spec in H; destruct H); try apply PS.empty_spec in H;
+    destruct eq eqn:Heq; simpl in *; destruct H;
+      match goal with
+      | _ : _ = EqApp _ _ _ _ |- _ =>
+        generalize ps_adds_spec; intro add_spec
+      | _ =>
+        generalize PS.add_spec; intro add_spec
+      end;
+      try (apply add_spec in H; destruct H); try apply PS.empty_spec in H;
+        try (rewrite ps_adds_spec; auto);
         intuition.
   Qed.
   

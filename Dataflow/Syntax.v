@@ -46,7 +46,7 @@ Module Type SYNTAX
   (* TODO: Why aren't the two others typed? *)
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : ident -> clock -> ident -> lexps -> equation
+  | EqApp : idents -> clock -> ident -> lexps -> equation
   | EqFby : ident -> clock -> const -> lexp -> equation.
 
   Implicit Type eqn: equation.
@@ -62,12 +62,15 @@ Module Type SYNTAX
     | Ewhen e _ _ => typeof e
     end.
 
-  Definition var_defined (eq: equation) : ident :=
+  Definition var_defined (eq: equation) : idents :=
     match eq with
-    | EqDef x _ _ => x
+    | EqDef x _ _ => [x]
     | EqApp x _ _ _ => x
-    | EqFby x _ _ _ => x
+    | EqFby x _ _ _ => [x]
     end.
+
+  Definition vars_defined (eqs: list equation) : idents :=
+    concatMap var_defined eqs.
 
   Definition is_fby (eq: equation) : bool :=
     match eq with
@@ -91,16 +94,18 @@ Module Type SYNTAX
     mk_node {
         n_name : ident;
         n_in   : list (ident * type);
-        n_out  : (ident * type);
+        n_out  : list (ident * type);
         n_vars : list (ident * type);
         n_eqs  : list equation;
 
         n_ingt0 : 0 < length n_in;
-        n_defd  : Permutation (map var_defined n_eqs)
-                              (map fst (n_vars ++ [n_out]));
-        n_vout  : ~In (fst n_out) (map var_defined (filter is_fby n_eqs));
-        n_nodup : NoDupMembers (n_in ++ n_vars ++ [n_out]);
-        n_good  : Forall NotReserved (n_in ++ n_vars ++ [n_out])
+        n_outgt0 : 0 < length n_out;
+        n_defd  : Permutation (vars_defined n_eqs)
+                              (map fst (n_vars ++ n_out));
+        n_vout  : forall out, In out (map fst n_out) ->
+                         ~ In out (vars_defined (filter is_fby n_eqs));
+        n_nodup : NoDupMembers (n_in ++ n_vars ++ n_out);
+        n_good  : Forall NotReserved (n_in ++ n_vars ++ n_out)
       }.
 
   (** ** Program *)
@@ -136,7 +141,7 @@ Module Type SYNTAX
 
   Lemma NoDup_var_defined_n_eqs:
     forall n,
-      NoDup (map var_defined n.(n_eqs)).
+      NoDup (vars_defined n.(n_eqs)).
   Proof.
     intro n.
     rewrite n.(n_defd).

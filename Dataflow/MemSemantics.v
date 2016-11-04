@@ -78,12 +78,13 @@ Module Type MEMSEMANTICS
         sem_caexp bk H ck ce xs ->
         msem_equation G bk H M (EqDef x ck ce)
   | SEqApp:
-      forall bk H M x ck f M' arg ls xs,
+      forall bk H M x xs ck f M' arg ls xss,
+        Some x = hd_error xs ->
         mfind_inst x M = Some M' ->
         sem_laexps bk H ck arg ls ->
-        sem_var bk H x xs ->
-        msem_node G f ls M' xs ->
-        msem_equation G bk H M (EqApp x ck f arg)
+        sem_vars bk H xs xss ->
+        msem_node G f ls M' xss ->
+        msem_equation G bk H M (EqApp xs ck f arg)
   (* =msem_equation:fby= *)
   | SEqFby: forall bk H M ms x ck ls xs c0 le,
       mfind_mem x M = Some ms ->
@@ -98,16 +99,18 @@ Module Type MEMSEMANTICS
   (* =end= *)
 
   with msem_node G :
-            ident -> stream (list value) -> memory -> stream value -> Prop :=
+            ident -> stream (list value) -> memory -> stream (list value) -> Prop :=
        | SNode:
-           forall bk f xss M ys i o v eqs ingt0 vout defd nodup good,
+           forall bk f xss M ys i o v eqs ingt0 outgt0 vout defd nodup good,
              clock_of xss bk ->
              find_node f G = Some (mk_node f i o v eqs
-                                           ingt0 vout defd nodup good) ->
+                                           ingt0 outgt0 vout defd nodup good) ->
              (exists H,
                  sem_vars bk H (map fst i) xss
-                 /\ sem_var bk H (fst o) ys
-                 /\ (forall n, absent_list xss n <-> ys n = absent)
+                 /\ sem_vars bk H (map fst o) ys
+                 /\ same_clock xss
+                 /\ same_clock ys
+                 /\ (forall n, absent_list (xss n) <-> absent_list (ys n))
                  /\ Forall (msem_equation G bk H M) eqs) ->
              msem_node G f xss M ys.
 
@@ -122,7 +125,7 @@ enough: it does not support the internal fixpoint introduced by
   Section msem_node_mult.
     Variable G: global.
 
-    Variable Pn: forall (f : ident) xss (M : memory) (ys : stream value),
+    Variable Pn: forall (f : ident) xss (M : memory) ys,
         msem_node G f xss M ys -> Prop.
     Variable P: forall bk (H : history) (M : memory) (eq : equation),
         msem_equation G bk H M eq -> Prop.
@@ -144,18 +147,20 @@ enough: it does not support the internal fixpoint introduced by
              (H      : history)
              (M      : memory)
              (y      : ident)
+             (ys     : list ident)
              (ck     : clock)
              (f      : ident)
              (M'     : memory)
              (les    : list lexp)
              (ls     : stream (list value))
-             (ys     : stream value)
+             (yss    : stream (list value))
+             (Hsome  : Some y = hd_error ys)
              (Hmfind : mfind_inst y M = Some M')
              (Hls    : sem_laexps bk H ck les ls)
-             (Hys    : sem_var bk H y ys)
-             (Hmsem  : msem_node G f ls M' ys),
+             (Hys    : sem_vars bk H ys yss)
+             (Hmsem  : msem_node G f ls M' yss),
         Pn Hmsem
-        -> P (SEqApp M Hmfind Hls Hys Hmsem).
+        -> P (SEqApp M Hsome Hmfind Hls Hys Hmsem).
 
     Hypothesis EqFby_case:
       forall (bk     : stream bool)
@@ -185,30 +190,35 @@ enough: it does not support the internal fixpoint introduced by
              (f     : ident)
              (xss   : stream (list value))
              (M     : memory)
-             (ys    : stream value)
+             (yss    : stream (list value))
              (i     : list (ident * type))
-             (o     : ident * type)
+             (o     : list (ident * type))
              (v     : list (ident * type))
              (eqs   : list equation)
              (ingt0 : 0 < length i)
-             (defd  : Permutation (map var_defined eqs)
-                                  (map fst (v ++ [o])))
-             (vout  : ~In (fst o) (map var_defined (filter is_fby eqs)))
-             (nodup : NoDupMembers (i ++ v ++ [o]))
-             (good  : Forall NotReserved (i ++ v ++ [o]))
+             (outgt0 : 0 < length o)
+             (defd  : Permutation (vars_defined eqs)
+                                  (map fst (v ++ o)))
+             (vout  : forall x, In x (map fst o) -> ~In x (vars_defined (filter is_fby eqs)))
+             (nodup : NoDupMembers (i ++ v ++ o))
+             (good  : Forall NotReserved (i ++ v ++ o))
              (Hbk   : clock_of xss bk)
              (Hfind : find_node f G =
                       Some (mk_node f i o v eqs
-                                    ingt0 defd vout nodup good))
+                                    ingt0 outgt0 defd vout nodup good))
              (Hnode : exists H : history,
                  sem_vars bk H (map fst i) xss
-                 /\ sem_var bk H (fst o) ys
-                 /\ (forall n, absent_list xss n <-> ys n = absent)
+                 /\ sem_vars bk H (map fst o) yss
+                 /\ same_clock xss
+                 /\ same_clock yss
+                 /\ (forall n, absent_list (xss n) <-> absent_list (yss n))
                  /\ Forall (msem_equation G bk H M) eqs),
         (exists H : history,
             sem_vars bk H (map fst i) xss
-            /\ sem_var bk H (fst o) ys
-            /\ (forall n, absent_list xss n <-> ys n = absent)
+            /\ sem_vars bk H (map fst o) yss
+            /\ same_clock xss
+            /\ same_clock yss
+            /\ (forall n, absent_list (xss n) <-> absent_list (yss n))
             /\ Forall (fun eq=>exists Hsem, P (bk := bk) (eq := eq)(M := M)(H := H) Hsem) eqs)
         -> Pn  (SNode Hbk Hfind Hnode).
 
@@ -216,12 +226,12 @@ enough: it does not support the internal fixpoint introduced by
              (f   : ident)
              (xss : stream (list value))
              (M   : memory)
-             (ys  : stream value)
-             (Hn  : msem_node G f xss M ys) {struct Hn}
+             (yss  : stream (list value))
+             (Hn  : msem_node G f xss M yss) {struct Hn}
       : Pn Hn :=
       match Hn in (msem_node _ f xs M ys) return (Pn Hn) with
       | SNode bk f xs M ys i o v eqs
-              ingt0 defd vout nodup good Hbk Hf Hnode =>
+              ingt0 outgt0 defd vout nodup good Hbk Hf Hnode =>
         SNode_case Hbk Hf Hnode
                    (* Turn: exists H : history,
                       (forall n, sem_var H (v_name i) n (xs n))
@@ -238,8 +248,13 @@ enough: it does not support the internal fixpoint introduced by
                    /\ (forall n, xs n = absent <-> ys n = absent)
                    /\ Forall (fun eq=>exists Hsem, P H M eq Hsem) eqs *)
                    (match Hnode with
-                    | ex_intro H (conj Hxs (conj Hys (conj Hout Heqs))) =>
+                    | ex_intro H (conj Hxs
+                                   (conj Hys
+                                     (conj Hout
+                                       (conj Hsamexs
+                                         (conj Hsameys Heqs))))) =>
                       ex_intro _ H (conj Hxs (conj Hys (conj Hout
+                                     (conj Hsamexs (conj Hsameys
                          (((fix map (eqs : list equation)
                                 (Heqs: Forall (msem_equation G bk H M) eqs) :=
                               match Heqs in Forall _ fs
@@ -251,7 +266,7 @@ enough: it does not support the internal fixpoint introduced by
                                 Forall_cons eq (@ex_intro _ _ Heq
                                                           (msem_equation_mult Heq))
                                             (map eqs Heqs')
-                              end) eqs Heqs)))))
+                              end) eqs Heqs)))))))
                     end)
       end
 
@@ -264,8 +279,8 @@ enough: it does not support the internal fixpoint introduced by
            match Heq in (msem_equation _ _ H M eq) return (P Heq)
            with
            | SEqDef bk H M y ck xs cae Hvar Hexp => EqDef_case M Hvar Hexp
-           | SEqApp bk H M y ck f M' lae ls ys Hmfind Hls Hys Hmsem =>
-             EqApp_case M Hmfind Hls Hys (msem_node_mult Hmsem)
+           | SEqApp bk H M y ys ck f M' lae ls yss Hsome Hmfind Hls Hys Hmsem =>
+             EqApp_case M Hsome Hmfind Hls Hys (msem_node_mult Hmsem)
            | SEqFby bk H M ms x ck ls yS v0 lae Hmfind Hms0 Hls hyS Hy =>
   	         EqFby_case M Hmfind Hms0 Hls hyS Hy
            end.
@@ -285,29 +300,25 @@ enough: it does not support the internal fixpoint introduced by
       clock_of xss bk ->
       msem_equation G bk H M eqn ->
       0 < length (xss n) ->
-      absent_list xss n ->
+      absent_list (xss n) ->
       rhs_absent_instant (bk n) (restr H n) eqn.
   Proof.
     intros * Hck Hsem Hlen Habs.
-    assert (Hbk: bk n = false). 
+    assert (Hbk: bk n = false).
     {
       destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto.
+      exfalso.
       apply Bool.not_false_is_true in Hbk.
       eapply Hck in Hbk.
-      destruct Hbk as [vs Hpres].
-      apply not_absent_present_list in Hpres.
-      now contradict Hpres.
-      assert (length vs = length (xss n)) as Hleq
-          by now rewrite Hpres, map_length.
-      now rewrite Hleq.
+      eapply not_absent_present_list in Hbk; auto.
     }
     rewrite Hbk in *.
     destruct eqn;
       try repeat
           match goal with
-          | |- rhs_absent_instant false _ (EqDef _ _ _) => 
+          | |- rhs_absent_instant false _ (EqDef _ _ _) =>
             constructor
-          | |- rhs_absent_instant false _ (EqFby _ _ _ _) => 
+          | |- rhs_absent_instant false _ (EqFby _ _ _ _) =>
             constructor
           | |- sem_caexp_instant false _ ?ck ?ce absent =>
             apply SCabs
@@ -330,7 +341,7 @@ enough: it does not support the internal fixpoint introduced by
       clock_of xss bk ->
       msem_equations G bk H M eqns ->
       0 < length (xss n) ->
-      absent_list xss n ->
+      absent_list (xss n) ->
       Forall (rhs_absent_instant (bk n) (restr H n)) eqns.
   Proof.
     intros * Hck Hsem Habs.
@@ -360,26 +371,28 @@ enough: it does not support the internal fixpoint introduced by
     intros node G f xs M ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-        | bk H M y ck f M' les ls ys Hmfind Hls Hys Hmsem IH
+        | bk H M y ys ck f M' les ls yss Hsome Hmfind Hls Hys Hmsem IH
         |
-        | bk f xs M ys i o v eqs ingt0 defd vout nodup good Hbk Hf Heqs IH ]
+        | bk f xs M ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hf Heqs IH ]
         using msem_node_mult
         with (P := fun bk H M eq Hsem => ~Is_node_in_eq node.(n_name) eq
                                          -> msem_equation G bk H M eq).
     - econstructor; eauto.
     - intro Hnin.
-      eapply SEqApp with (1:=Hmfind) (2:=Hls) (3:=Hys).
-      apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
+      assert (msem_node G f ls M' yss).
+      {
+        apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
+      }
+
+      eapply SEqApp; eauto.
     - intro; eapply SEqFby; eassumption.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       eapply SNode; eauto.
       clear Heqs.
-      destruct IH as [H [Hxs [Hys [Hout Heqs]]]].
+      destruct IH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs).
       exists H.
-      split; [exact Hxs|].
-      split; [exact Hys|].
-      split; [exact Hout|].
+      repeat (split; auto).
       apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
       apply Is_node_in_Forall in Hord.
       apply Forall_Forall with (1:=Hord) in Heqs.
@@ -401,9 +414,9 @@ enough: it does not support the internal fixpoint introduced by
     revert Hnin'.
     induction Hsem as [
         | bk H M y f M' lae ls ys Hmfind Hls Hys Hmsem IH
-        | 
+        |
         | bk f xs M ys i o v eqs
-             ingt0 defd vout nodup good Hbk Hfind Heqs IH ]
+             ingt0 outgt0 defd vout nodup good Hbk Hfind Heqs IH ]
         using msem_node_mult
         with (P := fun bk H M eq Hsem => ~Is_node_in_eq nd.(n_name) eq
                                          -> msem_equation (nd::G) bk H M eq);
@@ -423,7 +436,7 @@ enough: it does not support the internal fixpoint introduced by
     apply find_node_other with (2:=Hfind) in Hnf.
     econstructor; eauto.
     clear Heqs.
-    destruct IH as [H [Hxs [Hys [Hout Heqs]]]].
+    destruct IH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs).
     exists H.
     intuition; clear Hxs Hys.
     assert (forall g, Is_node_in g eqs
@@ -476,7 +489,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hnini as [Hnini Hninis].
     apply IH with (2:=Hninis) in Heqs.
     constructor; [|now apply Heqs].
-    destruct Heq as [|? ? ? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
+    destruct Heq as [|? ? ? ? ? ? ? ? ? ? ? Hsome Hmfind Hls Hxs Hmsem|]; try now eauto.
     econstructor; eauto.
     inversion_clear Hord as [|? ? Hord' Hnn Hnns].
     apply msem_node_cons2 with (1:=Hord') (3:=Hnns).
@@ -518,7 +531,7 @@ enough: it does not support the internal fixpoint introduced by
     apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
     apply IH in Hseqs.
     - apply Forall_cons; trivial.
-      inversion Hseq as [|? ? ? ? ? ? Hmfind Hmsem|]; subst; eauto; [].
+      inversion Hseq as [|? ? ? ? ? ? ? Hsome Hmfind Hmsem|]; subst; eauto; [].
       apply not_Is_node_in_cons in Hnini.
       destruct Hnini.
       assert (nd.(n_name) <> f).
@@ -573,10 +586,14 @@ enough: it does not support the internal fixpoint introduced by
     apply Forall_cons2 in Hsem.
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-    destruct Hsem as [|? ? ? ? ? ? ? ? ? Hmfind Hls Hxs Hmsem|]; try now eauto.
+    destruct Hsem as [|? ? ? ? ? ? ? ? ? ? ? Hsome Hmfind Hls Hxs Hmsem|]; try now eauto.
     apply not_Is_defined_in_eq_EqApp in Hnd.
     econstructor; eauto.
-    apply not_eq_sym in Hnd.
+    assert (x0 <> x).
+    {
+      intro; subst x.
+      destruct xs; inv Hsome. apply Hnd. constructor (auto).
+    }
     erewrite mfind_inst_gso; eauto.
   Qed.
 
@@ -639,15 +656,67 @@ dataflow memory for which the non-standard semantics holds true.
       constructor ((econstructor; eassumption) || assumption).
     - apply IH in Hsem.
       destruct Hsem as [M' Hmsem].
-      exists (madd_obj x M' M).
+      exists (madd_obj (hd default_ident x) M' M).
+
+      assert (exists i, Some i = hd_error x) as [i Hsome].
+      {
+        assert (Hlen: 0 < length x).
+        {
+          assert (length x = length (xs 0)).
+          {
+            specialize (Hxs 0); simpl in Hxs.
+            eapply Forall2_length; eauto.
+          }
+
+          assert (exists n,   length (map fst n.(n_out)) = length (xs 0)
+                       /\ 0 < length n.(n_out)) as (n & ? & ?).
+          {
+            destruct Hmsem as [ ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hsem].
+            decompose record Hsem.
+            eexists {| n_name := f;
+                       n_in := i;  n_out := o; n_vars := v;
+                       n_eqs := eqs0;
+                       n_ingt0 := ingt0;
+                       n_outgt0 := outgt0;
+                       n_defd := vout;
+                       n_vout := defd;
+                       n_nodup := nodup;
+                       n_good := good |}; simpl.
+            split; auto.
+            match goal with
+            | H: sem_vars _ _ (map fst o) ys |- _ =>
+              specialize (H 0); simpl in H
+            end.
+            eapply Forall2_length; eauto.
+          }
+
+          assert (length (map fst n.(n_out)) = length n.(n_out))
+            by apply map_length.
+
+          now congruence.
+        }
+
+        destruct x; try now inv Hlen.
+        eexists; simpl; eauto.
+      }
+
+      assert (Hhd: hd default_ident x = i).
+      {
+        destruct x; simpl in *; try discriminate.
+        injection Hsome; congruence.
+      } rewrite Hhd; clear Hhd.
+
       constructor.
-      econstructor.
+      econstructor; eauto.
       + now apply mfind_inst_gss.
-      + exact Hls.
-      + exact Hxs.
-      + exact Hmsem.
       + inversion_clear Hwsch.
-        apply msem_equation_madd_obj; auto.
+        assert (Is_defined_in_eq i (EqApp x ck f arg)).
+        {
+          constructor. destruct x; try discriminate.
+          injection Hsome. intro; subst i. constructor (auto).
+        }
+        now apply msem_equation_madd_obj; auto.
+
     - exists (madd_mem x (hold (sem_const c0) ls) M).
       constructor.
       econstructor.
@@ -679,11 +748,11 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros G bk H eqs mems argIn IH Hwsch Heqs.
     induction eqs as [|eq eqs IHeqs]; [exists (empty_memory _); now constructor|].
-    apply Forall_cons2 in Heqs.
-    destruct Heqs as [Heq Heqs].
-    apply IHeqs with (1:=Is_well_sch_cons _ _ _ _ Hwsch) in Heqs.
-    destruct Heqs as [M Heqs].
-    now apply sem_msem_eq with (1:=IH) (2:=Heq) (3:=Hwsch) (4:=Heqs).
+    apply Forall_cons2 in Heqs as [Heq Heqs].
+    eapply IHeqs with (1:=Is_well_sch_cons _ _ _ _ Hwsch)
+      in Heqs
+      as [M Heqs]; eauto.
+    now eapply sem_msem_eq; eauto.
   Qed.
 
   Theorem sem_msem_node:
@@ -697,8 +766,8 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros f xs ys Hwdef Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind HH].
-    destruct HH as [H [Hxs [Hys [Hout Heqs]]]].
+    inversion_clear Hsem' as [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind HH].
+    destruct HH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs).
     pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
     pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
@@ -708,32 +777,49 @@ dataflow memory for which the non-standard semantics holds true.
     - assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
       injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
-      apply Forall_sem_equation_global_tl with (1:=Hord') (2:=Hnini) in Heqs.
+      eapply Forall_sem_equation_global_tl in Heqs; eauto.
       assert (forall f xs ys,
                  sem_node G f xs ys
                  -> exists M, msem_node G f xs M ys) as IHG'
           by auto.
       inversion_clear Hwdef as [|? ? Hw0 neqs Hwsch Hw2 Hw3 Hw4].
       simpl in neqs; unfold neqs in *.
-      pose proof (sem_msem_eqs IHG' Hwsch Heqs) as HH.
-      destruct HH as [M Hmsem].
+      assert (exists M', Forall (msem_equation G bk H M') eqs)
+        as (M & Hmsem)
+          by now eapply sem_msem_eqs; eauto.
       exists M.
-      econstructor. 
+      econstructor.
       + eauto.
       + simpl; rewrite ident_eqb_refl. reflexivity.
       + exists H.
-        split; [exact Hxs|].
-        split; [exact Hys|].
-        split; [exact Hout|].
+        repeat (split; auto).
         eapply msem_equation_cons2; eauto.
     - apply ident_eqb_neq in Hnf.
       apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
       inversion_clear Hord as [|? ? Hord' H0 Hnig].
-      apply IHG with (1:=HwdefG) in Hsem.
-      destruct Hsem as [M Hsem].
+      eapply IHG in Hsem as [M Hsem]; eauto.
       exists M.
-      apply msem_node_cons2 with (1:=Hord') (3:=Hnig).
-      exact Hsem.
+      now eapply msem_node_cons2; eauto.
   Qed.
+
+  (* We use the mem-semantics to assert the absence of applications
+  with no return arguments. This is a bit of a hack, if you ask me. So
+  don't ask. *)
+  Lemma non_trivial_EqApp:
+    forall G bk H M  eqs ,
+      Forall (msem_equation G bk H M) eqs ->
+      forall ck f les, ~ In (EqApp [] ck f les) eqs.
+  Proof.
+  induction eqs; intros ** Hsem ? ? ? Hin.
+  - match goal with
+    | H: In _ [] |- _ => inv H
+    end.
+  - destruct Hin as [Hin_eq | Hin_eqs ]; subst.
+    + inversion_clear Hsem as [ | ? ? Hsem_eq ];
+      inv Hsem_eq; discriminate.
+    + eapply IHeqs. inv Hsem; auto.
+      repeat eexists. eauto.
+  Qed.
+
 
 End MEMSEMANTICS.

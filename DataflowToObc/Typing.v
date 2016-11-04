@@ -160,17 +160,27 @@ Module Type TYPING
 
   End Expressions.
 
+  Definition wt_eqs_vars insts mems vars memset eqs :=
+    Forall
+      (fun eq=> match eq with
+             | EqDef x ck e => In (x, typeofc e) vars
+             | EqApp xs ck f es =>
+                 match xs with
+                 | [] => True
+                 | x :: _ => In (x, f) insts
+                 end
+               /\ Forall (fun x => ~PS.In x memset) xs
+             | EqFby x ck c0 e => In (x, type_const c0) mems
+             end)
+      eqs.
+
   Lemma wt_step_translate_eqns:
     forall g n insts mems vars memset,
       wt_node g n ->
-      Forall (fun eq=> match eq with
-                       | EqDef x ck e => In (x, typeofc e) vars
-                       | EqApp x ck f es => In (x, f) insts /\ ~PS.In x memset
-                       | EqFby x ck c0 e => In (x, type_const c0) mems
-                       end) n.(n_eqs) ->
-      (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ [n.(n_out)]) ->
+      wt_eqs_vars insts mems vars memset n.(n_eqs) ->
+      (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
                     PS.In x memset -> In (x, ty) mems) ->
-      (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ [n.(n_out)]) ->
+      (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
                     ~PS.In x memset -> In (x, ty) vars) ->
       wt_stmt (translate g) insts mems vars
               (translate_eqns memset n.(n_eqs)).
@@ -192,16 +202,51 @@ Module Type TYPING
     simpl. apply IHeqs; auto; clear IHeqs.
     constructor; auto.
     inv WTeq; simpl;
-      apply Control_wt with (nvars:=n.(n_in) ++ n.(n_vars) ++ [n.(n_out)]);
+      apply Control_wt with (nvars:=n.(n_in) ++ n.(n_vars) ++ n.(n_out));
       auto.
     - eapply translate_cexp_wt; eauto.
     - destruct Heq as (Heq1 & Heq2).
+
+      assert (Forall2 (fun y xt => In (y, snd xt) vars) xs (n_out n0)).
+      {
+        assert (length xs = length (n_out n0))
+          by (eapply Forall2_length; eauto).
+
+        apply Forall2_forall2; split; auto;
+          intros def_x [def_y def_yty] dn x [y yty] Hlen Hxn Hytn.
+
+        assert (In x xs)
+          by (rewrite <-Hxn; apply nth_In; auto).
+
+        assert (~ PS.In x memset)
+          by (eapply In_Forall in Heq2; eauto).
+
+        assert (In (x, snd (y, yty)) (n_in n ++ n_vars n ++ n_out n)).
+        {
+          match goal with
+          | H: Forall2 _ xs (n_out n0) |- _ =>
+            apply Forall2_forall2 in H as [_ Hin_vars]
+          end.
+          eapply Hin_vars; eauto.
+        }
+
+        apply Hvars; auto.
+      }
+
       match goal with H:find_node _ _ = Some _ |- _ =>
                       apply find_node_translate in H;
                         destruct H as (cls & prog' & Hfind & Hcls) end.
       match goal with H:cls=translate_node ?n |- _ =>
                       destruct (exists_step_method n) as (stepm & Hstep) end.
-      eapply wt_Call; subst cls; eauto using NoDup.
+      eapply wt_Call; subst cls; eauto.
+      + assert (Hlen: (0 < length xs)%nat).
+        {
+          assert (length xs = length (n_out n0)) as ->
+            by now eapply Forall2_length; eauto.
+
+          now destruct n0.
+        }
+        destruct xs; try now inv Hlen.
       + erewrite find_method_stepm_out; eauto.
       + rewrite (find_method_stepm_in _ _ Hstep).
         apply Forall2_map_1.
@@ -222,7 +267,11 @@ Module Type TYPING
       wt_node g n ->
       Forall (fun eq=> match eq with
                        | EqDef x ck e => True
-                       | EqApp x ck f es => In (x, f) insts
+                       | EqApp xs ck f es =>
+                         match xs with
+                         | [] => True
+                         | x :: _ => In (x, f) insts
+                         end
                        | EqFby x ck c0 e => In (x, type_const c0) mems
                        end) n.(n_eqs) ->
       wt_method (translate g) insts mems (reset_method n.(n_eqs)).
@@ -236,17 +285,29 @@ Module Type TYPING
     end.
     unfold wt_node in WTn.
     induction n.(n_eqs) as [|eq eqs]; auto.
-    apply Forall_cons2 in WTn.
-    destruct WTn as [WTeq WTeqs].
+    apply Forall_cons2 in WTn as [WTeq WTeqs].
     specialize (IHeqs WTeqs).
-    apply Forall_cons2 in Heqs.
-    destruct Heqs as (Heq & Heqs).
+    apply Forall_cons2 in Heqs as [Heq Heqs].
     intros s WTs.
     simpl. apply IHeqs; auto.
     destruct eq; simpl; auto; constructor; inv WTeq; auto with obctyping.
     match goal with H:find_node _ _ = Some _ |- _ =>
                     apply find_node_translate in H;
                       destruct H as (cls & prog' & Hfind & Hcls) end.
+
+    assert (In (hd default_ident i, i0) insts).
+    {
+      assert (Hlen: (0 < length i)%nat).
+      {
+        assert (length i = length (n_out n0)) as ->
+            by now eapply Forall2_length; eauto.
+
+        now destruct n0.
+      }
+
+      destruct i; try now inv Hlen.
+    }
+
     eapply wt_Call with (fm:=reset_method _); simpl;
       eauto using NoDup; subst cls.
     apply exists_reset_method.
@@ -262,20 +323,50 @@ Module Type TYPING
     apply In_Forall with (2:=Hin) in WTn.
     inversion_clear WTn as [| |? ? ? ? Hvars Htye WTc WTl].
     repeat (apply in_app in Hvars; destruct Hvars as [Hv|Hvars]); auto.
-    - apply In_EqFby_Is_defined_in_eqs in Hin.
+    -  (* Case: In (x, type_const c0) (n_in n) *)
+      apply In_EqFby_Is_defined_in_eqs in Hin.
       apply Is_defined_in_var_defined in Hin.
       rewrite n.(n_defd) in Hin.
       apply fst_InMembers in Hin.
       apply In_InMembers in Hv.
       apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup)) in Hv.
       contradiction.
-    - pose proof (n.(n_vout)) as Hnin.
-      inversion_clear Hvars as [Heq|HH]; [|now inversion HH].
-      rewrite Heq in Hnin.
-      assert (In (EqFby x ck c0 e) (filter is_fby n.(n_eqs))) as Heqs'
-          by (apply filter_In; auto).
-      apply in_map with (f:=var_defined) in Heqs'.
-      contradiction.
+    - (* Case: In (x, type_const c0) (n_out n) *)
+      pose proof (n.(n_vout)) as Hnin.
+
+      assert (In x (vars_defined (filter is_fby (n_eqs n)))).
+      {
+        assert (In (EqFby x ck c0 e) (filter is_fby n.(n_eqs))) as Heqs'
+            by (apply filter_In; auto).
+
+        assert (In x (var_defined (EqFby x ck c0 e)))
+          by (simpl; auto).
+
+        assert (In (var_defined (EqFby x ck c0 e))
+                   (map var_defined (filter is_fby (n_eqs n))))
+          by (eapply in_map in Heqs'; eauto).
+
+        eapply in_concat; eauto.
+      }
+
+      assert (In x (map fst (n_out n))).
+      {
+        apply in_map_iff. eexists; esplit; eauto.
+        simpl; auto.
+      }
+
+      edestruct Hnin; eauto.
+  Qed.
+
+  Lemma EqApp_type_in_node:
+    forall g n xs ck f les,
+      wt_node g n ->
+      In (EqApp xs ck f les) (n_eqs n) ->
+      NoDup xs.
+  Proof.
+  intros ** WTn Hin.
+  eapply In_Forall in WTn; eauto.
+  now inversion_clear WTn.
   Qed.
 
   Lemma EqDef_type_in_node:
@@ -286,7 +377,7 @@ Module Type TYPING
          (n.(n_in)
               ++ filter (fun x=> negb (PS.mem (fst x) (memories n.(n_eqs))))
               n.(n_vars)
-                  ++ [n.(n_out)]).
+                  ++ n.(n_out)).
   Proof.
     intros ** WTn Hin.
     apply In_Forall with (2:=Hin) in WTn.
@@ -315,16 +406,18 @@ Module Type TYPING
     constructor; simpl; [|repeat constructor].
     - (* find_class for all applications *)
       unfold wt_node in WTn.
-      rewrite snd_gather_eqs_filter_is_app with (nothing:=(1,1)).
-      induction n.(n_eqs) as [|eq eqs]; simpl; auto.
-      inversion_clear WTn as [|? ? WTeq WTeqs].
-      destruct eq; simpl; auto.
-      constructor; auto.
-      inv WTeq. simpl.
-      match goal with H:find_node _ _ = Some _ |- _ =>
-                      apply find_node_translate in H;
-                        destruct H as (cls & prog' & Hfind & Hcls) end.
-      intro HH; rewrite HH in Hfind; discriminate.
+      rewrite gather_eqs_snd_spec.
+      induction n.(n_eqs) as [|eq eqs]; simpl.
+      + unfold gather_insts; rewrite concatMap_nil; constructor.
+      + inversion_clear WTn as [|? ? WTeq WTeqs].
+        destruct eq; simpl; auto.
+        destruct i; simpl; try now apply IHeqs.
+        constructor; auto.
+        inv WTeq. simpl.
+        match goal with H:find_node _ _ = Some _ |- _ =>
+                        apply find_node_translate in H;
+                          destruct H as (cls & prog' & Hfind & Hcls) end.
+        intro HH; rewrite HH in Hfind; discriminate.
     - (* wt_method step *)
       unfold wt_method; simpl.
       rewrite fst_partition_filter, snd_partition_filter.
@@ -333,37 +426,77 @@ Module Type TYPING
       Typeclasses eauto := 4. (* Why is this necessary? *)
       setoid_rewrite ps_from_list_gather_eqs_memories.
       Typeclasses eauto := 100.
-      apply wt_step_translate_eqns; auto.
-      + apply all_In_Forall. intros eq' Hin.
-        destruct eq'; auto; try split.
-        * apply EqDef_type_in_node with (1:=WTn) (2:=Hin).
-        * rewrite snd_gather_eqs_filter_is_app with (nothing:=(1,1)).
-          apply in_map_iff. exists (EqApp i c i0 l); intuition.
-          apply filter_In; intuition.
-        * apply In_EqApp_Is_variable_in_eqs in Hin.
-          apply Is_variable_in_var_defined in Hin.
-          apply not_in_memories_filter_notb_is_fby in Hin; auto.
-          apply NoDup_var_defined_n_eqs.
-        * apply fby_In_filter_memories with (1:=Hin).
+
+      set (insts := snd (gather_eqs (n_eqs n))).
+      set (mems := filter (fun x => PS.mem (fst x) (memories (n_eqs n))) (n_vars n)).
+      set (vars := (n_in n ++
+                    filter (fun x => negb (PS.mem (fst x) (memories (n_eqs n)))) (n_vars n) ++
+                    n_out n)).
+      set (memset := (memories (n_eqs n))).
+
+      assert (wt_eqs_vars insts mems vars memset n.(n_eqs)).
+      {
+        apply all_In_Forall. intros eq' Hin.
+        destruct eq'; auto.
+        - (* Case: EqDef *)
+          apply EqDef_type_in_node with (1:=WTn) (2:=Hin).
+        - (* Case: EqApp *)
+          repeat split.
+(*
+          + (* Prove: NoDup i *)
+            now eapply EqApp_type_in_node; eauto.
+*)
+          + (* Prove: In (hd default_ident i, i0) insts *)
+            destruct i; auto.
+            unfold insts.
+            rewrite gather_eqs_snd_spec.
+            unfold gather_insts.
+            apply in_concat' with (l0 := [(i, i0)]); try now constructor.
+            eapply in_map_iff.
+            exists (EqApp (i :: i1) c i0 l). eauto.
+          + (* Prove: Forall (fun x : positive => ~ PS.In x memset) i *)
+            unfold memset.
+            apply Forall_forall; intros x Hx.
+            eapply In_EqApp_Is_variable_in_eqs in Hin; eauto.
+            apply Is_variable_in_var_defined in Hin.
+            apply not_in_memories_filter_notb_is_fby in Hin; eauto.
+            apply NoDup_var_defined_n_eqs.
+        - apply fby_In_filter_memories with (1:=Hin).
           eapply EqFby_type_in_node with (1:=WTn) (2:=Hin).
-      + intros x ty Hin Hmem.
+      }
+
+      assert (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
+                    PS.In x memset -> In (x, ty) mems).
+      {
+        intros x ty Hin Hmem.
         pose proof (in_memories_var_defined _ _ Hmem) as Hdef.
         rewrite n.(n_defd) in Hdef.
         apply fst_InMembers in Hdef.
         apply NoDupMembers_app_InMembers with (ws:=n.(n_in)) in Hdef.
         2:now rewrite Permutation.Permutation_app_comm; apply n.(n_nodup).
+        unfold mems.
         repeat (apply in_app in Hin; destruct Hin as [Hin|Hin]); intuition.
-        * contradiction Hdef. apply In_InMembers with (1:=Hin).
-        * apply filter_In; split; auto.
-        * apply in_memories_filter_is_fby in Hmem.
-          contradiction n.(n_vout).
-          inversion_clear Hin as [Heq|]; intuition.
-          now rewrite Heq in *.
-      + intros x ty Hin Hnmem.
+        - (* Case: In x (n_in n) *)
+          contradiction Hdef. apply In_InMembers with (1:=Hin).
+        - (* Case: In x (n_vars n) *)
+          apply filter_In; split; auto.
+        - (* Case: In x (n_out n) *)
+          apply in_memories_filter_is_fby in Hmem.
+          edestruct n_vout; eauto.
+          replace x with (fst (x, ty)); auto.
+          eapply in_map; auto.
+      }
+
+      assert (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
+                    ~PS.In x memset -> In (x, ty) vars). {
+        intros x ty Hin Hnmem.  unfold vars.
         repeat (apply in_app in Hin; destruct Hin as [Hin|Hin]); intuition.
         apply in_app; right; apply in_app; left.
         apply filter_In; split; auto.
         now apply Bool.negb_true_iff, mem_spec_false.
+      }
+
+      apply wt_step_translate_eqns; auto.
     - (* wt_method reset *)
       unfold wt_method; simpl.
       rewrite fst_partition_filter.
@@ -372,10 +505,16 @@ Module Type TYPING
       apply all_In_Forall.
       intros eq Hin.
       destruct eq; auto.
-      + rewrite snd_gather_eqs_filter_is_app with (nothing:=(1,1)).
-        apply in_map_iff. exists (EqApp i c i0 l); intuition.
-        apply filter_In; intuition.
-      + apply fby_In_filter_memories with (1:=Hin).
+      + (* Case: EqApp *)
+        simpl.
+        destruct i; auto.
+        rewrite gather_eqs_snd_spec.
+        apply in_concat' with (l0 := [(i, i0)]); try now constructor.
+        eapply in_map_iff.
+        exists (EqApp (i :: i1) c i0 l).
+        eauto.
+      + (* Case: EqFby *)
+        apply fby_In_filter_memories with (1:=Hin).
         eapply EqFby_type_in_node with (1:=WTn) (2:=Hin).
   Qed.
 

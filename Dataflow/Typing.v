@@ -86,13 +86,14 @@ Module Type TYPING
         wt_clock ck ->
         wt_cexp e ->
         wt_equation (EqDef x ck e)
-    | wt_EqApp: forall n x ck f es,
+    | wt_EqApp: forall n xs ck f es,
         find_node f G = Some n ->
-        In (x, snd n.(n_out)) vars ->
+        Forall2 (fun x xt => In (x, snd xt) vars) xs n.(n_out) ->
         Forall2 (fun e xt => typeof e = snd xt) es n.(n_in) ->
         wt_clock ck ->
         Forall wt_lexp es ->
-        wt_equation (EqApp x ck f es)
+        NoDup xs ->
+        wt_equation (EqApp xs ck f es)
     | wt_EqFby: forall x ck c0 e,
         In (x, type_const c0) vars ->
         typeof e = type_const c0 ->
@@ -103,7 +104,7 @@ Module Type TYPING
   End WellTyped.
 
   Definition wt_node (G: global) (n: node) : Prop
-    := Forall (wt_equation G (n.(n_in) ++ n.(n_vars) ++ [n.(n_out)])) n.(n_eqs).
+    := Forall (wt_equation G (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) n.(n_eqs).
 
   (* TODO: replace Welldef_global; except for the Is_well_sch component.
            Notably, typing arguments replace the ~Is_node_in and

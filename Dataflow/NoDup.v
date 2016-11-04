@@ -45,10 +45,10 @@ Module Type NODUP
         ~Is_defined_in_eqs x eqs ->
         NoDup_defs (EqDef x ck e :: eqs)
   | NDDEqApp:
-      forall x ck f e eqs,
+      forall xs ck f e eqs,
         NoDup_defs eqs ->
-        ~Is_defined_in_eqs x eqs ->
-        NoDup_defs (EqApp x ck f e :: eqs)
+        (forall x, In x xs -> ~Is_defined_in_eqs x eqs) ->
+        NoDup_defs (EqApp xs ck f e :: eqs)
   | NDDEqFby:
       forall x ck v e eqs,
         NoDup_defs eqs ->
@@ -99,16 +99,18 @@ Module Type NODUP
         apply Hndin; now constructor.
         contradiction.
       + destruct Hdin as [Hdin|[Hndin Hdins]].
-        simpl in Hinm.
-        intro He; apply List.Exists_cons in He; destruct He as [He|He].
-        apply Is_defined_in_memories in Hinm.
-        inversion He; subst; clear He.
-        contradiction.
+        * simpl in Hinm.
+          intro He; apply List.Exists_cons in He. 
+          {
+            destruct He as [He|He].
+            - apply Is_defined_in_memories in Hinm.
+              inv He; eapply Hndi; eauto.
+            - eapply IH; eauto.
+              apply Is_variable_in_eqs_Is_defined_in_eqs.
+              auto.
+          }
 
-        inversion Hdin; subst; clear Hdin.
-        apply Is_variable_in_eqs_Is_defined_in_eqs in He.
-        contradiction.
-
+        *
         simpl in Hinm.
         apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
         intro He; apply List.Exists_cons in He; destruct He as [He|He].

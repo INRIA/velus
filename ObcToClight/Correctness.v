@@ -457,7 +457,7 @@ Section PRESERVATION.
         apply find_class_In in Findcl.
         apply in_map with (f:=fun c => Composite (c_name c) Struct (make_members c) noattr :: make_out c)
           in Findcl.
-        apply in_concat with (Composite (c_name owner) Struct (make_members owner) noattr :: make_out owner). 
+        apply in_concat' with (Composite (c_name owner) Struct (make_members owner) noattr :: make_out owner). 
         - apply in_eq.
         - now rewrite Structs.
       }
@@ -586,7 +586,7 @@ Section PRESERVATION.
             in Findcl.
           apply find_method_In in Findmth.
           apply in_map with (f:=translate_method prog owner) in Findmth.
-          eapply in_concat in Findmth; eauto.
+          eapply in_concat' in Findmth; eauto.
           rewrite <-Funs in Findmth.
           unfold make_program' in TRANSL.
           destruct (build_composite_env' (concat structs)) as [(ce, P)|]; try discriminate.

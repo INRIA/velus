@@ -82,19 +82,19 @@ A CoreDF program is well defined if
         -> Welldef_global (nd::nds).
 
   Lemma n_out_variable_in_eqs:
-    forall n,
-      Is_variable_in_eqs (fst n.(n_out)) n.(n_eqs).
+    forall n x,
+      In x (map fst n.(n_out)) ->
+      Is_variable_in_eqs x n.(n_eqs).
   Proof.
     intros.
     apply Is_variable_in_var_defined.
-    eapply not_In_app with (1:=n.(n_vout)).
-    rewrite <-map_app.
-    rewrite Permutation_app_comm.
-    rewrite filter_notb_app.
-    rewrite n.(n_defd).
-    apply in_map. intuition.
+    eapply not_In_app; eauto using n.(n_vout).
+    unfold vars_defined, concatMap.
+    rewrite <- concat_app, <-map_app, Permutation_app_comm,
+            filter_notb_app, n.(n_defd), map_app.
+    now intuition.
   Qed.
-  
+
   Lemma not_Exists_Is_defined_in_eqs_n_in:
     forall n,
       ~Exists (fun ni=>Is_defined_in_eqs ni n.(n_eqs)) (map fst n.(n_in)).
@@ -150,7 +150,7 @@ A CoreDF program is well defined if
     intros argIn x eq eqs mems Hwsch Hfree Hnim.
     destruct eq;
       inversion_clear Hwsch;
-      inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc]; 
+      inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
       subst; intuition;
       match goal with
       | H: context[ Is_variable_in_eqs _ _ \/ In _ _] |- _ =>

@@ -87,10 +87,10 @@ Module Type DECIDE
       match acc with
       | (true, defined, variables) =>
         match var_defined eq with
-        | x => ((PS.for_all (check_var defined variables)
+        | xs => ((PS.for_all (check_var defined variables)
                             (free_in_equation eq PS.empty))
-                  && (negb (PS.mem x defined)),
-                PS.add x defined, variable_eq variables eq)
+                  && (negb (List.existsb (fun x => PS.mem x defined) xs)),
+                fold_left (fun defined x => PS.add x defined) xs defined, variable_eq variables eq)
         end
       | (false, _, _) => (false, PS.empty, PS.empty)
       end.
@@ -198,41 +198,76 @@ Module Type DECIDE
           destruct H as [H1 H2].
           apply PS.for_all_spec in H1; [|now apply check_var_compat].
           apply Bool.negb_true_iff in H2.
-          apply mem_spec_false in H2.
+
+          assert (forall x, In x (var_defined eq) -> ~ PS.In x defined')
+            as Hnot_def.
+          {
+            intros x Hin.
+
+            assert (exists n,
+                       n < length (var_defined eq)
+                     /\ nth n (var_defined eq) default_ident = x)
+              as (n & Hlen & Hnth)
+                by now apply In_ex_nth.
+
+            assert (PS.mem x defined' = false)
+              by now subst x;
+                     eapply existsb_nth
+                       with (f := (fun x => PS.mem x defined')).
+
+            now apply mem_spec_false.
+          }
+
           split; [|split].
           * (* Is_well_sch *)
-            constructor.
-            assumption.
-            intros x Hfree.
-            apply free_in_equation_spec' in Hfree.
-            apply H1 in Hfree.
-            apply check_var_spec in Hfree.
-            destruct Hfree as [Hfree1 Hfree2].
-            split; intro HH; (apply Hfree1 in HH || apply Hfree2 in HH).
-            intro Hdef; apply IHdef in Hdef; apply HH; assumption.
-            apply IHvar; assumption.
-            intros x Hdef Hdefs; apply IHdef in Hdefs.
-            apply Is_defined_in_eqs_var_defined in Hdef.
-            rewrite Hdef in *. auto.
+            assert (forall i,
+                       IsF.Is_free_in_eq i eq ->
+                       (PS.In i mems -> ~ Is_defined_in_eqs i eqs) /\
+                       (~ PS.In i mems -> Is_variable_in_eqs i eqs \/ In i args)).
+            {
+              intros x Hfree.
+              apply free_in_equation_spec' in Hfree.
+              apply H1 in Hfree.
+              apply check_var_spec in Hfree.
+              destruct Hfree as [Hfree1 Hfree2].
+              split; intro HH; (apply Hfree1 in HH || apply Hfree2 in HH).
+              - now intro; apply HH; apply IHdef.
+              - now apply IHvar.
+            }
+
+            assert (forall i, Is_defined_in_eq i eq -> ~ Is_defined_in_eqs i eqs).
+            {
+              intros x Hdef Hdefs; apply IHdef in Hdefs.
+              apply Is_defined_in_eqs_var_defined in Hdef.
+              now eapply Hnot_def; eauto.
+            }
+
+            now constructor.
           * (* defined set *)
             intro x; split; intro HH.
-            apply PS.add_spec in HH.
+            apply ps_adds_spec in HH.
             destruct HH as [HH|HH].
-            subst x; constructor; now apply Is_defined_in_eqs_var_defined.
+            constructor; now apply Is_defined_in_eqs_var_defined.
             apply IHdef in HH.
             constructor (assumption).
-            apply PS.add_spec.
+            apply ps_adds_spec.
             inversion_clear HH.
-            apply Is_defined_in_eqs_var_defined in H; subst x; auto.
+            apply Is_defined_in_eqs_var_defined in H; auto.
             right; apply IHdef; assumption.
           * (* variables set *)
             intro x; split; intro HH.
             apply variable_eq_empty in HH.
             destruct HH as [HH|HH].
             destruct eq;
-              ((apply PS.add_spec in HH;
+              match goal with
+              | |- context[ EqApp _ _ _ _ ] =>
+                generalize ps_adds_spec; intro add_spec
+              | _ =>
+                generalize PS.add_spec; intro add_spec
+              end;
+              ((apply add_spec in HH;
                 destruct HH as [HH|HH];
-                [subst i; left; now repeat constructor
+                [try subst i; left; now repeat constructor
                 |apply PS.empty_spec in HH; contradiction])
                || apply PS.empty_spec in HH; contradiction).
             apply IHvar in HH; intuition; left; constructor (assumption).
@@ -240,7 +275,16 @@ Module Type DECIDE
             destruct HH as [HH|HH].
             apply Is_variable_in_cons in HH.
             destruct HH as [HH|HH]; [left|right].
-            destruct eq; inversion_clear HH; simpl; now intuition.
+            destruct eq;
+              match goal with
+              | |- context[ EqApp _ _ _ _ ] =>
+                generalize ps_adds_spec; intro add_spec
+              | _ =>
+                generalize PS.add_spec; intro add_spec
+              end;
+              inversion_clear HH; simpl;
+                try (rewrite add_spec; auto);
+                intuition.
             apply IHvar; intuition.
             right; apply IHvar; auto.
         + (* good=false *)
@@ -271,10 +315,23 @@ Module Type DECIDE
             contradiction.
           * (* already defined *)
             apply Bool.negb_false_iff in HH.
-            rewrite PS.mem_spec in HH.
-            apply Hdefd with (i:=var_defined eq).
-            apply Is_defined_in_eqs_var_defined; reflexivity.
-            apply IHdef; assumption.
+
+            assert (exists x, In x (var_defined eq) /\ PS.In x defined')
+              as (x & Hdef & Hdef').
+            {
+              apply existsb_exists in HH.
+              destruct HH as (x & Hvar_def & Hmem).
+              rewrite PS.mem_spec in Hmem.
+              now eexists; eauto.
+            }
+
+            assert (Is_defined_in_eq x eq)
+              by now apply Is_defined_in_eqs_var_defined.
+
+            assert (Is_defined_in_eqs x eqs)
+              by now apply IHdef.
+
+            eapply Hdefd; now eauto.
     Qed.
     
     Lemma well_sch_spec:

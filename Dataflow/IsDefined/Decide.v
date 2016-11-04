@@ -27,11 +27,11 @@ Module Type DECIDE
        (Import Syn : SYNTAX Ids Op)
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem).
-  
+
   Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x defs
-    | EqApp x _ _ _ => PS.add x defs
+    | EqApp xs _ _ _ => ps_adds xs defs
     | EqFby x _ _ _ => PS.add x defs
     end.
 
@@ -56,19 +56,42 @@ Module Type DECIDE
         simpl; rewrite IHeqs.
         simpl in H; apply IHeqs in H; destruct H; auto.
         destruct eq;
-          apply PS.add_spec in H;
-          destruct H;
-          try (rewrite H; left; right; apply PS.add_spec); intuition.
+        (* XXX: this is Ltac p0rn *)
+        match goal with
+        | |- context[ EqApp _ _ _ _ ] => generalize ps_adds_spec; intro add_spec
+        | _ => generalize PS.add_spec; intro add_spec
+        end;
+        apply add_spec in H;
+        destruct H;
+        match goal with
+        | H: PS.In x ?m |- context [PS.In x ?m] => now intuition
+        | H: x = _ |- _ => subst x
+        | H: In x ?i |- context [EqApp ?i _ _ _] => idtac
+        end;
+        constructor(constructor(apply add_spec; intuition)).
+
       + destruct 1 as [H|H].
         * simpl in H; rewrite IHeqs in H; apply IHeqs; destruct H; auto.
           right.
           destruct eq;
-            simpl; apply PS.add_spec;
-            apply PS.add_spec in H; destruct H;
+            match goal with
+            | |- context[ EqApp _ _ _ _ ] =>
+              generalize ps_adds_spec; intro add_spec
+            | _ =>
+              generalize PS.add_spec; intro add_spec
+            end;
+            simpl; apply add_spec;
+            apply add_spec in H; destruct H;
             intuition;
             apply not_In_empty in H; contradiction.
         * apply IHeqs; right; destruct eq;
-          apply PS.add_spec; auto.
+            match goal with
+            | |- context[ EqApp _ _ _ _ ] =>
+              generalize ps_adds_spec; intro add_spec
+            | _ =>
+              generalize PS.add_spec; intro add_spec
+            end;
+            apply add_spec; auto.
   Qed.
 
   Lemma Is_defined_in_defined:
@@ -86,11 +109,24 @@ Module Type DECIDE
       + rewrite List.Exists_cons.
         destruct 1. intuition.
         destruct eq;
-          (simpl in H; apply PS.add_spec in H; destruct H;
-           [ rewrite H; left; constructor
+          match goal with
+          | |- context[ EqApp _ _ _ _ ] =>
+            generalize ps_adds_spec; intro add_spec
+          | _ =>
+            generalize PS.add_spec; intro add_spec
+          end;
+          (simpl in H; apply add_spec in H; destruct H;
+           [ try rewrite H; left; constructor; auto
            | apply not_In_empty in H; contradiction]).
       + intro H; apply List.Exists_cons in H; destruct H.
-        inversion H; destruct eq; (right; apply PS.add_spec; intuition).
+        inversion H; destruct eq;
+          match goal with
+          | |- context[ EqApp _ _ _ _ ] =>
+            generalize ps_adds_spec; intro add_spec
+          | _ =>
+            generalize PS.add_spec; intro add_spec
+          end;
+          (right; apply add_spec; intuition).
         left; apply IHeqs; apply H.
   Qed.
 
@@ -111,11 +147,18 @@ Module Type DECIDE
       -> PS.In x (defined_eq S eq).
   Proof.
     intros x eq S HH.
-    destruct eq; try (apply PS.add_spec; now intuition).
-    apply PS.add_spec in HH.
+    destruct eq;
+      match goal with
+      | |- context[ EqApp _ _ _ _ ] =>
+        generalize ps_adds_spec; intro add_spec
+      | _ =>
+        generalize PS.add_spec; intro add_spec
+      end;
+      try (apply add_spec; now intuition).
+    apply add_spec in HH.
     destruct HH as [HH|HH].
-    - rewrite HH; apply PS.add_spec; left; reflexivity.
-    - apply PS.add_spec; right; exact HH.
+    - rewrite HH; apply add_spec; left; reflexivity.
+    - apply add_spec; right; exact HH.
   Qed.
 
   Lemma In_fold_left_memory_eq_defined_eq:

@@ -54,20 +54,40 @@ Proof.
                     |x' ck' f e Hcv Hexp Heq
                     |x' ck' v' e Hcv Hexp];
     subst; inversion Hdef; inversion Hhasck; clear Hdef Hhasck; subst;
-    pose proof (Well_clocked_env_var _ _ _ Hwc Hcv) as Hclock;
-    apply Is_free_in_clock_self_or_parent in Hfree;
-    destruct Hfree as [ck [b [Hck|Hck]]];
-    (rewrite Hck in *;
-      apply clk_clock_sub with (1:=Hwc) in Hclock;
-      apply clk_var_det with (1:=Hcv) in Hclock;
-      apply clock_no_loops with (1:=Hclock))
-    ||
-    (apply clk_clock_parent with (1:=Hwc) (2:=Hck) in Hclock;
-      apply clk_clock_sub with (1:=Hwc) in Hclock;
-      apply clk_var_det with (1:=Hcv) in Hclock;
-      apply clock_parent_parent' in Hck;
-      rewrite <-Hclock in Hck;
-      apply clock_parent_not_refl with (1:=Hck)).
+      match goal with
+      | _: context[ EqApp _ _ _ _ ],
+        Hin: List.In ?x x' |- _ =>
+        (* Case: eq ~ EqApp *)
+        (assert (Hlen : 0 < length x')
+          by now destruct x'; inv Hin; apply Lt.lt_0_Sn);
+        pose proof (In_Forall _ _ _ Hcv Hin) as Hck_x;
+        simpl in *;
+        generalize (Well_clocked_env_vars _ _ _ Hlen Hwc Hcv)
+      | _ =>
+        (* Case: eq ~ EqDef or eq ~ EqFby *)
+        generalize (Well_clocked_env_var _ _ _ Hwc Hcv)
+      end;
+      intro Hclock;
+      apply Is_free_in_clock_self_or_parent in Hfree;
+      destruct Hfree as [ck [b [Hck|Hck]]];
+      try match goal with
+      | _ : _ = Con _ _ _ |- _ =>
+        rewrite Hck in *;
+          apply clk_clock_sub with (1:=Hwc) in Hclock;
+          match reverse goal with
+          | H: clk_var C _ _ |- _ => apply clk_var_det with (1:=H) in Hclock
+          end;
+          apply clock_no_loops with (1:=Hclock)
+      | _ : clock_parent _ _ |- _ =>
+        apply clk_clock_parent with (1:=Hwc) (2:=Hck) in Hclock;
+          apply clk_clock_sub with (1:=Hwc) in Hclock;
+          match reverse goal with
+          | H: clk_var C _ _ |- _ => apply clk_var_det with (1:=H) in Hclock
+          end;
+          apply clock_parent_parent' in Hck;
+          rewrite <-Hclock in Hck;
+          apply clock_parent_not_refl with (1 := Hck)
+      end.
 Qed.
 
 Corollary Well_clocked_EqDef_not_Is_free_in_clock:
