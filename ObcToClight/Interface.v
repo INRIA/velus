@@ -33,9 +33,9 @@ Module Export Op <: OPERATORS.
 
   Definition typecl (ty: Ctypes.type) : option type :=
     match ty with
-    | Ctypes.Tint sz sg (Ctypes.mk_attr false None) => Some (Tint sz sg)
-    | Ctypes.Tlong sg   (Ctypes.mk_attr false (Some 3%N)) => Some (Tlong sg)
-    | Ctypes.Tfloat sz  (Ctypes.mk_attr false None) => Some (Tfloat sz)
+    | Ctypes.Tint sz sg attr => Some (Tint sz sg)
+    | Ctypes.Tlong sg attr => Some (Tlong sg)
+    | Ctypes.Tfloat sz attr => Some (Tfloat sz)
     | _ => None
     end.
 
@@ -815,6 +815,172 @@ Module Export Op <: OPERATORS.
         intuition.
     - destruct sz; inv Hwt; auto.
     - destruct sz; inv Hwt; auto.
+  Qed.
+
+  (* Operator typing *)
+
+  (*
+    Types and concrete syntax
+    -------------------------
+    Tint I8    Signed          "int8"
+    Tint I8    Unsigned        "uint8"
+    Tint I16   Signed          "int16"
+    Tint I16   Unsigned        "uint16"
+    Tint I32   Signed          "int32" / "int"
+    Tint I32   Unsigned        "uint32"
+    Tint IBool Signed          "bool"
+    Tint IBool Unsigned        "bool"
+    Tlong      Signed          "int64"
+    Tlong      Unsigned        "uint64"
+    Tfloat     F32             "float32"
+    Tfloat     F64             "float64" / "real"
+
+    Unary operators (prefix)
+    ------------------------
+    Onotbool      "not"
+    Onotint       "lnot"
+    Oneg          "-"
+
+    Unary cast (mix fix)
+    --------------------
+    "(" e ":" type ")"
+
+    Binary operators (infix)
+    ------------------------
+    Oadd          "+"
+    Osub          "-"
+    Omul          "*"
+    Odiv          "/"
+    Omod          "mod"
+    Oand          "land" / "and"
+    Oor           "lor"  / "or"
+    Oxor          "lxor"
+    Oshl          "lsl"
+    Oshr          "lsr"
+    Oeq           "="
+    One           "<>"
+    Olt           "<"
+    Ogt           ">"
+    Ole           "<="
+    Oge           ">="
+
+    Trinary operators (mixfix)
+    --------------------------
+    "if" / "then" / "else"
+   *)
+
+  Definition type_unop' (uop: unop) (ty: type) : option type :=
+    match uop with
+    | UnaryOp op =>
+        match op with
+        | Cop.Onotbool => if is_bool_type ty then Some bool_type else None
+        | Cop.Onotint => match ty with
+                         | Tint Ctypes.I32 sg => Some (Tint Ctypes.I32 sg)
+                         | Tlong sg           => Some (Tlong sg)
+                         | Tint _ _           => Some (Tint Ctypes.I32 Ctypes.Signed)
+                         | _                  => None
+                         end
+        | Cop.Oneg => match ty with
+                      | Tint Ctypes.I32 sg => Some (Tint Ctypes.I32 sg)
+                      | Tlong sg           => Some (Tlong sg)
+                      | Tint _ _           => Some (Tint Ctypes.I32 Ctypes.Signed)
+                      | Tfloat sz          => Some (Tfloat sz)
+                      end
+        | Cop.Oabsfloat => match ty with
+                           | Tfloat sz => Some (Tfloat Ctypes.F64)
+                           | _         => None
+                           end
+        end
+    | CastOp ty' => Some ty'
+    end.
+
+  Definition type_binop' (op: binop) (ty1 ty2: type) : option type :=
+    match op with
+    | Cop.Oadd | Cop.Osub | Cop.Omul | Cop.Odiv =>
+        match ty1, ty2 with
+        | Tfloat Ctypes.F64              , _                               => Some (Tfloat Ctypes.F64)
+        | _                              , Tfloat Ctypes.F64               => Some (Tfloat Ctypes.F64)
+        | Tfloat Ctypes.F32              , _                               => Some (Tfloat Ctypes.F32)
+        | _                              , Tfloat Ctypes.F32               => Some (Tfloat Ctypes.F32)
+        | Tlong Ctypes.Unsigned          , _                               => Some (Tlong Ctypes.Unsigned)
+        | _                              , Tlong Ctypes.Unsigned           => Some (Tlong Ctypes.Unsigned)
+        | Tlong Ctypes.Signed            , _                               => Some (Tlong Ctypes.Signed)
+        | _                              , Tlong Ctypes.Signed             => Some (Tlong Ctypes.Signed)
+        | Tint Ctypes.I32 Ctypes.Unsigned, _                               => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | _                              , Tint Ctypes.I32 Ctypes.Unsigned => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | Tint _ _                       , Tint _ _                        => Some (Tint Ctypes.I32 Ctypes.Signed)
+        end
+    | Cop.Omod =>
+        match ty1, ty2 with
+        | Tfloat _                       , _                               => None
+        | _                              , Tfloat _                        => None
+        | Tlong Ctypes.Unsigned          , _                               => Some (Tlong Ctypes.Unsigned)
+        | _                              , Tlong Ctypes.Unsigned           => Some (Tlong Ctypes.Unsigned)
+        | Tlong Ctypes.Signed            , _                               => Some (Tlong Ctypes.Signed)
+        | _                              , Tlong Ctypes.Signed             => Some (Tlong Ctypes.Signed)
+        | Tint Ctypes.I32 Ctypes.Unsigned, _                               => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | _                              , Tint Ctypes.I32 Ctypes.Unsigned => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | Tint _ _                       , Tint _ _                        => Some (Tint Ctypes.I32 Ctypes.Signed)
+        end
+    | Cop.Oand | Cop.Oor | Cop.Oxor =>
+        match ty1, ty2 with
+        | Tfloat _                       , _                               => None
+        | _                              , Tfloat _                        => None
+        | Tlong Ctypes.Unsigned          , _                               => Some (Tlong Ctypes.Unsigned)
+        | _                              , Tlong Ctypes.Unsigned           => Some (Tlong Ctypes.Unsigned)
+        | Tlong Ctypes.Signed            , _                               => Some (Tlong Ctypes.Signed)
+        | _                              , Tlong Ctypes.Signed             => Some (Tlong Ctypes.Signed)
+        | Tint Ctypes.IBool sg1          , Tint Ctypes.IBool sg2           => Some (Tint Ctypes.IBool Ctypes.Signed)
+        | Tint Ctypes.I32 Ctypes.Unsigned, _                               => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | _                              , Tint Ctypes.I32 Ctypes.Unsigned => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | Tint _ _                       , Tint _ _                        => Some (Tint Ctypes.I32 Ctypes.Signed)
+        end
+    | Cop.Oshl | Cop.Oshr =>
+        match ty1, ty2 with
+        | Tfloat _                       , _         => None
+        | _                              , Tfloat _  => None
+        | Tlong sg                       , _         => Some (Tlong sg)
+        | Tint Ctypes.I32 Ctypes.Unsigned, _         => Some (Tint Ctypes.I32 Ctypes.Unsigned)
+        | Tint _ _                       , _         => Some (Tint Ctypes.I32 Ctypes.Signed)
+        end
+    | Cop.Oeq | Cop.One | Cop.Olt | Cop.Ogt | Cop.Ole | Cop.Oge => Some bool_type
+    end.
+
+  Lemma type_unop'_correct:
+    forall op ty ty',
+      type_unop' op ty = Some ty' ->
+      type_unop op ty = Some ty'.
+  Proof.
+    intros.
+    destruct op.
+    - destruct u, ty; try destruct i; try destruct s; try destruct f;
+        simpl in *; now DestructCases.
+    - destruct t, ty; try destruct i; try destruct s; try destruct f;
+        try destruct f0; simpl in *; DestructCases; auto.
+  Qed.
+
+  Lemma type_binop'_correct:
+    forall op ty1 ty2,
+      type_binop' op ty1 ty2 = type_binop op ty1 ty2.
+  Proof.
+    intros.
+    unfold type_binop.
+    destruct (binop_always_returns_bool op) eqn:Heq1; simpl;
+      [|destruct
+          (is_bool_binop op && (is_bool_type ty1 && is_bool_type ty2)) eqn:Heq2].
+    - destruct op; simpl in *; try discriminate; auto.
+    - unfold type_binop'.
+      repeat rewrite Bool.andb_true_iff in Heq2.
+      destruct Heq2 as (Heq2 & Heq3 & Heq4).
+      apply is_bool_type_true in Heq3; destruct Heq3 as (sg1 & Heq3).
+      apply is_bool_type_true in Heq4; destruct Heq4 as (sg2 & Heq4).
+      subst; destruct op; try discriminate; auto.
+    - repeat rewrite Bool.andb_false_iff in Heq2.
+      destruct op; simpl in *; try discriminate Heq1;
+      (destruct ty1, ty2; try destruct i; try destruct i0;
+       try destruct s; try destruct s0; try destruct f;
+       try destruct f0; auto);
+        (destruct Heq2 as [Heq2|[Heq2|Heq2]]; discriminate).
   Qed.
   
 End Op.

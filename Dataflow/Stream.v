@@ -74,3 +74,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Qed.
 
 End STREAM.
+
+Module StreamFun (Import Op : OPERATORS) <: STREAM Op.
+  Include STREAM Op.
+End StreamFun.

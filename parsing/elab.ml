@@ -1,5 +1,5 @@
 open Common
-open DataflowToClight.SynDF
+open Instantiator.DF.Syn
 open Interface
 open Camlcoq
 

@@ -136,3 +136,16 @@ Module Type ISPRESENT
 
 End ISPRESENT.
 
+Module IsPresentFun
+       (Import Ids : IDS)
+       (Import Op  : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import SynDF : Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP : Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import Mem   : MEMORIES Ids Op SynDF)
+       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem)
+       <: ISPRESENT Ids Op OpAux SynDF SynMP SemMP Mem Trans.
+
+    Include ISPRESENT Ids Op OpAux SynDF SynMP SemMP Mem Trans.
+End IsPresentFun.

@@ -133,3 +133,11 @@ Module Type PARENTS
 
 End PARENTS.
 
+Module ParentsFun
+       (Ids : IDS)
+       (Op  : OPERATORS)
+       (Import Syn : SYNTAX Ids Op)
+       (Import Clo : CLOCKING Ids Op Syn)
+       <: PARENTS Ids Op Syn Clo.
+  Include PARENTS Ids Op Syn Clo.
+End ParentsFun.

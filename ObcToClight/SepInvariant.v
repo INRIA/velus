@@ -14,16 +14,14 @@ Require Import ZArith.BinInt.
 
 Require Import Program.Tactics.
 
-Require Import Rustre.Obc.Syntax.
-Require Import Rustre.Obc.Semantics.
-Require Import Rustre.Obc.Typing.
-Require Import Rustre.ObcToClight.MoreSeparation.  
+Require Import Rustre.ObcToClight.MoreSeparation.
 Require Import Rustre.ObcToClight.Translation.
-Require Import Rustre.Ident.
 Require Import Rustre.ObcToClight.Interface.
 
-Module Export Sem := SemanticsFun Ids Op OpAux Syn.
-Module Export Typ := Typing Ids Op OpAux Syn Sem.
+Require Import Instantiator.
+Import Obc.Syn.
+Import Obc.Sem.
+Import Obc.Typ.
 
 Open Scope list.
 Open Scope sep_scope.
@@ -928,8 +926,7 @@ Section BlockRep.
       (forall x ty, In (x, ty) flds ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      massert_eqv (sepall (field_range ge flds b 0) flds)
-                  (blockrep (PM.empty val) flds b).
+      sepall (field_range ge flds b 0) flds <-*-> blockrep sempty flds b.
   Proof.
     intros ** Hndups Hchunk.
     unfold blockrep.
@@ -965,8 +962,7 @@ Section BlockRep.
       (forall x ty, In (x, ty) (co_members co) ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      massert_imp (range b 0 (co_sizeof co))
-                  (blockrep (PM.empty val) (co_members co) b).
+      range b 0 (co_sizeof co) -*> blockrep sempty (co_members co) b.
   Proof.
     intros ** Hco Hstruct Hndups Hchunk.
     rewrite split_range_fields

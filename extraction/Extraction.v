@@ -1,6 +1,7 @@
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
 Require Import Rustre.DataflowToClight.
+Require Import Coq.ZArith.BinInt.
 Require Import Rustre.ObcToClight.Translation.
 
 Require ia32.Machregs ia32.Conventions1
@@ -62,7 +63,7 @@ Extract Constant SelectOp.symbol_is_external =>
 
 Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
-Extract Constant Translation.prefix => "(fun p1 p2 -> Camlcoq.(intern_string (extern_atom p1 ^ ""$"" ^  extern_atom p2)))".
+(* Extract Constant Ident.prefix => "(fun p1 p2 -> Camlcoq.(intern_string (extern_atom p1 ^ ""$"" ^  extern_atom p2)))". *)
 
 (* Extract Constant first_unused_ident => "Camlcoq.first_unused_ident". *)
 

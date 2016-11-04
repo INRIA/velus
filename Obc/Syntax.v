@@ -59,6 +59,27 @@ Module Type SYNTAX
     forall f, NoDupMembers (meth_vars f).
   Proof. intro; apply (m_nodupvars f). Qed.
   Hint Resolve NoDupMembers_meth_vars.
+
+  Lemma m_nodupout:
+    forall f, NoDupMembers (m_out f).
+  Proof.
+    intro; pose proof (m_nodupvars f) as Nodup;
+    now repeat apply NoDupMembers_app_r in Nodup.
+  Qed.
+
+  Lemma m_nodupin:
+    forall f, NoDupMembers (m_in f).
+  Proof.
+    intro; pose proof (m_nodupvars f) as Nodup;
+    now apply NoDupMembers_app_l in Nodup.
+  Qed.
+
+  Lemma m_nodupvars':
+    forall f, NoDupMembers (m_vars f).
+  Proof.
+    intro; pose proof (m_nodupvars f) as Nodup;
+    now apply NoDupMembers_app_r, NoDupMembers_app_l in Nodup.
+  Qed.
   
   Lemma m_notreserved:
     forall x m,
@@ -203,7 +224,7 @@ Module Type SYNTAX
       apply in_eq. 
     - apply in_cons; auto.
   Qed.
-
+  
   Lemma exp_dec : forall e1 e2 : exp, {e1 = e2} + {e1 <> e2}.
   Proof.
     decide equality;

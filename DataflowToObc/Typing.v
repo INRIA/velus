@@ -27,7 +27,9 @@ Module Type TYPING
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
 
-       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ).
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
+       (Import Typ   : TYPING Ids Op OpAux Obc.Syn Obc.Sem).
+
 
   (** Preservation of well-typing. *)
 
@@ -419,7 +421,7 @@ Module Type TYPING
                           destruct H as (cls & prog' & Hfind & Hcls) end.
         intro HH; rewrite HH in Hfind; discriminate.
     - (* wt_method step *)
-      unfold wt_method; simpl.
+      unfold wt_method, meth_vars; simpl.
       rewrite fst_partition_filter, snd_partition_filter.
       setoid_rewrite ps_from_list_gather_eqs_memories at 1.
       setoid_rewrite ps_from_list_gather_eqs_memories at 2.
