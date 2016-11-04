@@ -1124,10 +1124,13 @@ for all [Is_free_exp x e]. *)
             rewrite Hmfind in Hmfind'.
             injection Hmfind'; intro He; rewrite <-He in *; clear He Hmfind'.
             exists omenv.
+
+            assert (forall ck f les, ~ In (EqApp [] ck f les) eqs)
+              by now eapply non_trivial_EqApp; eauto.
+
             erewrite stmt_eval_translate_eqns_minst_inv; eauto.
             split; eauto.
             now eapply Memory_Corres_unchanged; eauto.
-            admit.
 
       - (* Case EqFby: y = v0 fby lae *)
         specialize (Hlae n).
