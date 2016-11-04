@@ -108,7 +108,7 @@ Module Export Op <: OPERATORS.
     | _ => false
     end.
 
-  Definition is_bool_unop (op: Cop.unary_operation) : bool :=
+  Definition unop_always_returns_bool (op: Cop.unary_operation) : bool :=
     match op with
     | Cop.Onotbool => true
     | _            => false
@@ -116,7 +116,7 @@ Module Export Op <: OPERATORS.
 
   Definition type_unop (uop: unop) (ty: type) : option type :=
     match uop with
-    | UnaryOp op => if is_bool_unop op && is_bool_type ty then Some bool_type
+    | UnaryOp op => if unop_always_returns_bool op then Some bool_type
                     else match Ctyping.type_unop op (cltype ty) with
                          | Errors.OK ty' => typecl ty'
                          | Errors.Error _ => None
@@ -417,6 +417,31 @@ Module Export Op <: OPERATORS.
     - exists Ctypes.Unsigned; auto.
   Qed.
 
+  Lemma type_castop:
+    forall ty ty',
+      type_unop (CastOp ty') ty = Some ty'.
+  Proof.
+    intros ty ty'.
+    destruct ty, ty';
+      try destruct i, s; try destruct i0; try destruct s0;
+      try destruct f; try destruct f0; auto.
+  Qed.
+
+  Ltac GoalMatchMatch :=
+    repeat match goal with
+           | |- match match ?x with _ => _ end with _ => _ end = _ =>
+             destruct x
+           end; auto.
+  
+  Lemma check_cltype_cast:
+    forall ty ty',
+      Ctyping.check_cast (cltype ty) (cltype ty') = Errors.OK tt.
+  Proof.
+    intros ty ty'.
+    unfold Ctyping.check_cast.
+    destruct ty, ty'; simpl; GoalMatchMatch.
+  Qed.
+  
   Lemma pres_sem_unop:
     forall op ty1 ty v1 v,
       type_unop op ty1 = Some ty ->
@@ -429,13 +454,10 @@ Module Export Op <: OPERATORS.
     unfold type_unop, sem_unop in *.
     destruct op as [uop|].
     - (* UnaryOp *)
-      destruct (is_bool_unop uop && is_bool_type ty1) eqn:Hb.
-      + apply andb_prop in Hb; destruct Hb as (Huop & Hbty).
-        destruct uop; try discriminate Huop.
-        apply is_bool_type_true in Hbty.
-        destruct Hbty as (sg & Hbty); subst.
-        inversion_clear Hv1 as [? ? ? WTn Hor| | |].
-        destruct (Hor eq_refl); subst; simpl in Hsop;
+      destruct (unop_always_returns_bool uop) eqn:Huop.
+      + destruct uop; try discriminate Huop.
+        injection Htop; intros; subst.
+        simpl in Hsop.
         unfold Cop.sem_notbool, Cop.classify_bool in Hsop;
         DestructCases; auto.
       + apply wt_val_wt_val_cltype in Hv1.      
@@ -458,8 +480,8 @@ Module Export Op <: OPERATORS.
         * unfold Cop.sem_absfloat in Hsop.
           destruct v1; DestructCases; repeat split; try discriminate; auto.
     - (* CastOp *)
-      destruct (Ctyping.check_cast (cltype ty1) (cltype t));
-        [injection Htop; intro; subst; clear Htop|discriminate].
+      rewrite check_cltype_cast in Htop.
+      injection Htop; intro; subst.
       apply wt_val_wt_val_cltype in Hv1.
       pose proof (Ctyping.pres_sem_cast _ _ _ _ _ Hv1 Hsop).
       eapply typecl_wt_val_wt_val with (2:=H).
@@ -481,12 +503,6 @@ Module Export Op <: OPERATORS.
           try match goal with |- context [if ?x then _ else _] => destruct x end;
           simpl; auto.
   Qed.
-
-  Ltac GoalMatchMatch :=
-    repeat match goal with
-           | |- match match ?x with _ => _ end with _ => _ end = _ =>
-             destruct x
-           end; auto.
 
   Lemma sem_cast_same:
     forall m v t,
@@ -873,23 +889,22 @@ Module Export Op <: OPERATORS.
     match uop with
     | UnaryOp op =>
         match op with
-        | Cop.Onotbool => if is_bool_type ty then Some bool_type else None
-        | Cop.Onotint => match ty with
-                         | Tint Ctypes.I32 sg => Some (Tint Ctypes.I32 sg)
-                         | Tlong sg           => Some (Tlong sg)
-                         | Tint _ _           => Some (Tint Ctypes.I32 Ctypes.Signed)
-                         | _                  => None
-                         end
-        | Cop.Oneg => match ty with
-                      | Tint Ctypes.I32 sg => Some (Tint Ctypes.I32 sg)
-                      | Tlong sg           => Some (Tlong sg)
-                      | Tint _ _           => Some (Tint Ctypes.I32 Ctypes.Signed)
-                      | Tfloat sz          => Some (Tfloat sz)
-                      end
-        | Cop.Oabsfloat => match ty with
-                           | Tfloat sz => Some (Tfloat Ctypes.F64)
-                           | _         => None
-                           end
+        | Cop.Onotbool           => Some bool_type
+        | Cop.Onotint =>
+          match ty with
+          | Tint Ctypes.I32 sg   => Some ty
+          | Tlong sg             => Some ty
+          | Tint _ _             => Some (Tint Ctypes.I32 Ctypes.Signed)
+          | _                    => None
+          end
+        | Cop.Oneg =>
+          match ty with
+          | Tint Ctypes.I32 sg   => Some ty
+          | Tlong sg             => Some ty
+          | Tint _ _             => Some (Tint Ctypes.I32 Ctypes.Signed)
+          | Tfloat sz            => Some ty
+          end
+        | Cop.Oabsfloat          => Some (Tfloat Ctypes.F64)
         end
     | CastOp ty' => Some ty'
     end.
@@ -947,12 +962,10 @@ Module Export Op <: OPERATORS.
     end.
 
   Lemma type_unop'_correct:
-    forall op ty ty',
-      type_unop' op ty = Some ty' ->
-      type_unop op ty = Some ty'.
+    forall op ty,
+      type_unop' op ty = type_unop op ty.
   Proof.
-    intros.
-    destruct op.
+    intros. destruct op.
     - destruct u, ty; try destruct i; try destruct s; try destruct f;
         simpl in *; now DestructCases.
     - destruct t, ty; try destruct i; try destruct s; try destruct f;
@@ -982,6 +995,24 @@ Module Export Op <: OPERATORS.
        try destruct f0; auto);
         (destruct Heq2 as [Heq2|[Heq2|Heq2]]; discriminate).
   Qed.
-  
+
+
+  Open Scope string_scope.
+
+  Definition string_of_type (ty: type) : String.string :=
+    match ty with
+    | Tint Ctypes.IBool sg            => "bool"
+    | Tint Ctypes.I8 Ctypes.Signed    => "int8"
+    | Tint Ctypes.I8 Ctypes.Unsigned  => "uint8"
+    | Tint Ctypes.I16 Ctypes.Signed   => "int16"
+    | Tint Ctypes.I16 Ctypes.Unsigned => "uint16"
+    | Tint Ctypes.I32 Ctypes.Signed   => "int32"
+    | Tint Ctypes.I32 Ctypes.Unsigned => "uint32"
+    | Tlong Ctypes.Signed             => "int64"
+    | Tlong Ctypes.Unsigned           => "uint64"
+    | Tfloat Ctypes.F32               => "float32"
+    | Tfloat Ctypes.F64               => "float64"
+    end.
+
 End Op.
 

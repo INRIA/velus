@@ -1,0 +1,1094 @@
+Require Import Rustre.Common.
+Require Instantiator.
+
+Require Import Rustre.Dataflow.Parser.Ast.
+Require Import Operators.
+
+Module Import Syn := Instantiator.DF.Syn.
+Module Import Defs := Instantiator.DF.IsD.
+
+Import Interface.Op.
+Import Instantiator.OpAux.
+Import Instantiator.DF.Typ.
+
+Require Import List.
+Import List.ListNotations.
+Open Scope list_scope.
+
+Require compcert.cfrontend.Cop.
+
+Require Import compcert.common.Errors.
+Local Open Scope error_monad_scope.
+
+(* Elaborate an AST into a well-typed Dataflow program. *)
+
+(* TODO: Should we just elaborate the constants in Lexer.mll ? *)
+
+(* CompCert: cparser/Elab: elab_int_constant + cfrontend/C2C: convertIkind *)
+Parameter elab_const_int : astloc -> string -> constant.
+(* CompCert: cparser/Elab: elab_float_constant + cfrontend/C2C: convertIkind *)
+Parameter elab_const_float : floatInfo -> constant.
+(* CompCert: cparser/Elab: elab_char_constant + cfrontend/C2C: convertIkind *)
+Parameter elab_const_char : astloc -> bool -> list char_code -> constant.
+
+(* TODO: How to integrate with pos_of_str? *)
+(* TODO: Should we just turn identifiers into positives in Lexer.mll? *)
+Parameter ident_of_string : string -> ident.
+Parameter string_of_astloc : astloc -> String.string.
+
+Definition err_loc (loc: astloc) (m: errmsg) :=
+  MSG (string_of_astloc loc) :: MSG ": " :: m.  
+
+Local Ltac NamedDestructCases :=
+  repeat progress
+         match goal with
+         | H:match ?e with _ => _ end = OK _ |- _ =>
+           let Heq := fresh "Heq" in
+           destruct e eqn:Heq; try discriminate
+         | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
+         end.
+
+(*
+Module Type ELABORATION
+       (Import Ids    : IDS)
+       (Import OpAux  : OPERATORS_AUX Interface.Op)
+       (Import Syn    : SYNTAX Ids Interface.Op)
+       (Import Typing : TYPING Ids Interface.Op Syn).
+*)
+
+Definition elab_constant (loc: astloc) (c: Ast.constant) : constant :=
+  match c with
+  | CONST_BOOL false  => Cint Integers.Int.zero Ctypes.IBool Ctypes.Signed
+  | CONST_BOOL true   => Cint Integers.Int.one Ctypes.IBool Ctypes.Signed
+  | CONST_INT s       => elab_const_int loc s
+  | CONST_FLOAT fi    => elab_const_float fi
+  | CONST_CHAR wide l => elab_const_char loc wide l
+  end.
+
+Definition Is_interface_map (G: global)
+           (nenv: PM.t (list type * list type)) : Prop :=
+  (forall f tysin tysout,
+      PM.find f nenv = Some (tysin, tysout) ->
+      (exists n, find_node f G = Some n
+                 /\ Forall2 (fun i ty=> snd i = ty) n.(n_in) tysin
+                 /\ Forall2 (fun i ty=> snd i = ty) n.(n_out) tysout))
+  /\ (forall f, PM.find f nenv = None -> Forall (fun n=> f <> n.(n_name)) G).
+
+Lemma Is_interface_map_empty:
+  Is_interface_map [] (PM.empty (list type * list type)).
+Proof.
+  split; setoid_rewrite PM.gempty; intros; try discriminate; auto.
+Qed.    
+  
+Section ElabExpressions.
+
+  (* Map variable names to types. *)
+  Variable env : PM.t type.
+
+  (* Map variable names to clocks. *)
+  Variable cenv : PM.t clock.
+
+  (* Preceding dataflow program. *)
+  Variable G : global.
+
+  (* Map node names to input and output types. *)
+  Variable nenv : PM.t (list type * list type).
+
+  Hypothesis wt_cenv :
+    forall x ck, PM.find x cenv = Some ck -> wt_clock (PM.elements env) ck.
+
+  Hypothesis wt_nenv : Is_interface_map G nenv.
+
+  Definition find_type (loc: astloc) (x: ident) : res type :=
+    match PM.find x env with
+    | None => Error (err_loc loc (CTX x :: msg " is not declared."))
+    | Some ty => OK ty
+    end.
+
+  Definition assert_type (loc: astloc) (x: ident) (ty: type) : res unit :=
+    do xty <- find_type loc x;
+      if xty ==b ty then OK tt
+      else Error (err_loc loc
+                          (CTX x :: MSG " has type " :: MSG (string_of_type xty)
+                               :: MSG " but type " :: MSG (string_of_type ty)
+                               :: MSG " was expected." :: nil)).
+
+  Definition find_clock (loc: astloc) (x: ident) : res clock :=
+    match PM.find x cenv with
+    | None => Error (err_loc loc (CTX x :: msg " is not declared."))
+    | Some ck => OK ck
+    end.
+
+  Definition find_node_interface (loc: astloc) (f: ident)
+    : res (list type * list type) :=
+    match PM.find f nenv with
+    | None => Error (err_loc loc (MSG "node " :: CTX f :: msg " not found."))
+    | Some tys => OK tys
+    end.
+
+  Lemma wt_find_clock:
+    forall loc x ck,
+      find_clock loc x = OK ck -> wt_clock (PM.elements env) ck.
+  Proof.
+    intros ** Hfind.
+    apply wt_cenv with (x:=x).
+    unfold find_clock in Hfind.
+    destruct (PM.find x cenv); try discriminate.
+    now monadInv Hfind.
+  Qed.
+  
+  Fixpoint elab_clock (loc: astloc) (ck: Ast.clock) : res clock :=
+    match ck with
+    | BASE => OK Cbase
+    | ON ck' b sx =>
+      let x := ident_of_string sx in
+      do ok <- assert_type loc x bool_type;
+        do ck' <- elab_clock loc ck';
+        OK (Con ck' x b)
+    end.
+
+  Definition elab_unop (op: Ast.unary_operator) : unop :=
+    match op with
+    | MINUS => UnaryOp Cop.Oneg
+    | NOT   => UnaryOp Cop.Onotint
+    | BNOT  => UnaryOp Cop.Onotbool
+    end.
+
+  Definition elab_binop (op: Ast.binary_operator) : binop :=
+    match op with
+    | ADD  => Cop.Oadd
+    | SUB  => Cop.Osub
+    | MUL  => Cop.Omul
+    | DIV  => Cop.Odiv
+    | MOD  => Cop.Omod
+    | BAND => Cop.Oand
+    | BOR  => Cop.Oor
+    | LAND => Cop.Oand
+    | LOR  => Cop.Oor
+    | XOR  => Cop.Oxor
+    | LSL  => Cop.Oshl
+    | LSR  => Cop.Oshr
+    | EQ   => Cop.Oeq
+    | NE   => Cop.One
+    | LT   => Cop.Olt
+    | GT   => Cop.Ogt
+    | LE   => Cop.Ole
+    | GE   => Cop.Oge
+    end.
+
+  Definition find_type_unop (loc: astloc) (op: unop) (ty: type) : res type :=
+    match type_unop' op ty with
+    | None => Error (err_loc loc (msg "wrong operator argument type"))
+    | Some ty' => OK ty'
+    end.
+
+  Definition find_type_binop (loc: astloc) (op: binop)
+             (ty1 ty2: type) : res type :=
+    match type_binop' op ty1 ty2 with
+    | None => Error (err_loc loc (msg "wrong operator argument type"))
+    | Some ty' => OK ty'
+    end.
+
+  Definition elab_type (loc: astloc) (ty: Ast.type_name) : type' :=
+    match ty with
+    | Tint8    => Tint Ctypes.I8  Ctypes.Signed
+    | Tuint8   => Tint Ctypes.I8  Ctypes.Unsigned
+    | Tint16   => Tint Ctypes.I16 Ctypes.Signed
+    | Tuint16  => Tint Ctypes.I16 Ctypes.Unsigned
+    | Tint32   => Tint Ctypes.I32 Ctypes.Signed
+    | Tuint32  => Tint Ctypes.I32 Ctypes.Unsigned
+    | Tint64   => Tlong Ctypes.Signed
+    | Tuint64  => Tlong Ctypes.Unsigned
+    | Tfloat32 => Tfloat Ctypes.F32
+    | Tfloat64 => Tfloat Ctypes.F64
+    | Tbool    => Tint Ctypes.IBool Ctypes.Signed
+    end.
+  
+  Fixpoint elab_lexp (ae: Ast.expression) : res lexp :=
+    match ae with
+    | CONSTANT c loc => OK (Econst (elab_constant loc c))
+    | VARIABLE sx loc =>
+      let x := ident_of_string sx in
+      do ty <- find_type loc x;
+        OK (Evar x ty)
+    | WHEN ae' b sx loc =>
+      let x := ident_of_string sx in
+      do ok <- assert_type loc x bool_type;
+        do e' <- elab_lexp ae';
+        OK (Ewhen e' x b)
+    | UNARY aop ae' loc =>
+      let op := elab_unop aop in
+      do e' <- elab_lexp ae';
+        do ty' <- find_type_unop loc op (typeof e');
+        OK (Eunop op e' ty')
+    | CAST aty' ae' loc =>
+      let ty' := elab_type loc aty' in
+      do e' <- elab_lexp ae';
+        OK (Eunop (CastOp ty') e' ty')
+    | BINARY aop ae1 ae2 loc =>
+      let op := elab_binop aop in
+      do e1 <- elab_lexp ae1;
+        do e2 <- elab_lexp ae2;
+        do ty' <- find_type_binop loc op (typeof e1) (typeof e2);
+        OK (Ebinop op e1 e2 ty')
+    | _ => Error (err_loc (expression_loc ae) (msg "expression not normalized"))
+    end.
+
+  Fixpoint elab_cexp (ae: Ast.expression) : res cexp :=
+    match ae with
+    | MERGE sx aet aef loc =>
+      let x := ident_of_string sx in
+      do ok <- assert_type loc x bool_type;
+        do et <- elab_cexp aet;
+        do ef <- elab_cexp aef;
+        if typeofc et ==b typeofc ef
+        then OK (Emerge x et ef)
+        else Error (err_loc loc (msg "badly typed merge"))
+    | IFTE ae aet aef loc =>
+      do e <- elab_lexp ae;
+        do et <- elab_cexp aet;
+        do ef <- elab_cexp aef;
+        if (typeof e ==b bool_type) && (typeofc et ==b typeofc ef)
+        then OK (Eite e et ef)
+        else Error (err_loc loc (msg "badly typed if/then/else"))
+    | _ =>
+      do e <- elab_lexp ae;
+        OK (Eexp e)
+    end.
+
+  Definition assert_lexp_type (loc: astloc) (e: lexp) (ty: type) : res unit :=
+    if typeof e ==b ty then OK tt
+    else Error (err_loc loc (MSG "badly typed argument; expected "
+                                 :: msg (string_of_type ty))).
+
+  Fixpoint elab_lexps (loc: astloc) (aes: list expression) (tys: list type)
+    : res (list lexp) :=
+    match aes, tys with
+    | nil, nil => OK nil
+    | ae::aes, ty::tys =>
+      do e <- elab_lexp ae;
+        do ok <- assert_lexp_type (expression_loc ae) e ty;
+        do es <- elab_lexps loc aes tys;
+        OK (e::es)
+    | _, _ => Error (err_loc loc (msg "wrong number of arguments"))
+    end.
+
+  Fixpoint check_lists {A B} (loc: astloc) (f : A -> B -> res unit)
+           (xs: list A) (ys: list B) : res unit :=
+    match xs, ys with
+    | nil, nil => OK tt
+    | x::xs, y::ys => do ok <- f x y; check_lists loc f xs ys
+    | _, _ => Error (err_loc loc (msg "wrong number of arguments"))
+    end.
+
+  Definition elab_equation (aeq: Ast.equation) : res equation :=
+    let '(sxs, ae, loc) := aeq in
+    do xs <- OK (map ident_of_string sxs);
+    do x <- match xs with
+            | x::xs => OK x
+            | _ => Error (err_loc loc (msg "at least one output is required"))
+            end;
+    do ck <- find_clock loc x;
+    match ae with
+    | CALL sf aes loc =>
+      let f := ident_of_string sf in
+      do (tysin, tysout) <- find_node_interface loc f;
+        do es <- elab_lexps loc aes tysin;
+        do ok <- check_lists loc (assert_type loc) xs tysout;
+        OK (EqApp xs ck f es)
+           
+    | FBY av0 ae loc =>
+      let v0 := elab_constant loc av0 in
+      let v0ty := type_const v0 in
+      do e <- elab_lexp ae;
+        do ok <- assert_type loc x v0ty;
+        if typeof e ==b v0ty
+        then OK (EqFby x ck v0 e)
+        else Error (err_loc loc (msg "badly typed fby"))
+                   
+    | _ =>
+      do e <- elab_cexp ae;
+        do ok <- assert_type loc x (typeofc e);
+        OK (EqDef x ck e)
+    end.
+
+  (** Properties *)
+  
+  Lemma find_type_In:
+    forall loc x ty,
+      find_type loc x = OK ty ->
+      In (x, ty) (PM.elements env).
+  Proof.
+    intros ** Hfty.
+    unfold find_type in Hfty.
+    destruct (PM.find x env) eqn:Hfind; try discriminate.
+    injection Hfty; intro; subst.
+    now apply PM.elements_correct in Hfind.
+  Qed.
+  
+  Lemma assert_type_In:
+    forall loc x ty y,
+      assert_type loc x ty = OK y ->
+      In (x, ty) (PM.elements env).
+  Proof.
+    intros loc x ty y Hhty.
+    unfold assert_type in Hhty.
+    monadInv Hhty.
+    destruct (x0 ==b ty) eqn:Heq.
+    2:discriminate EQ0.
+    rewrite equiv_decb_equiv in Heq.
+    rewrite Heq in *.
+    eauto using find_type_In.
+  Qed.
+  
+  Lemma wt_elab_clock:
+    forall loc ack ck,
+      elab_clock loc ack = OK ck ->
+      wt_clock (PM.elements env) ck.
+  Proof.
+    induction ack as [|ack IH]; simpl.
+    now injection 1; intro; subst; auto with dftyping.
+    intros ck Helab.
+    monadInv Helab.
+    constructor; auto.
+    apply assert_type_In with (1:=EQ).
+  Qed.
+
+  Lemma wt_elab_lexp:
+    forall ae e,
+      elab_lexp ae = OK e ->
+      wt_lexp (PM.elements env) e.
+  Proof.
+    induction ae; intros e Helab; monadInv Helab; constructor;
+      eauto using find_type_In, assert_type_In.
+    - unfold find_type_unop in EQ1.
+      rewrite type_unop'_correct in EQ1.
+      now DestructCases.
+    - unfold find_type_binop in EQ0.
+      match goal with H:match ?e with _ => _ end = _ |- _ =>
+                      destruct e eqn:He; try discriminate; injection H end.
+      intro; subst.
+      now rewrite type_binop'_correct in He.
+    - now rewrite type_castop.
+  Qed.
+
+  Lemma wt_elab_lexps:
+    forall loc aes tys es,
+      elab_lexps loc aes tys = OK es ->
+      (Forall (wt_lexp (PM.elements env)) es
+       /\ Forall2 (fun e ty=>typeof e = ty) es tys).
+  Proof.
+    induction aes; simpl; intros ** Helab; DestructCases; auto.
+    monadInv Helab.
+    apply wt_elab_lexp in EQ.
+    specialize (IHaes _ _ EQ0); destruct IHaes.
+    unfold assert_lexp_type in EQ1.
+    NamedDestructCases. rewrite equiv_decb_equiv in Heq.
+    auto.
+  Qed.
+  
+  Lemma wt_elab_cexp:
+    forall ae e,
+      elab_cexp ae = OK e ->
+      wt_cexp (PM.elements env) e.
+  Proof.
+    induction ae; intros e Helab.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - monadInv Helab.
+      specialize (IHae2 _ EQ1); clear EQ1.
+      specialize (IHae3 _ EQ0); clear EQ0.
+      NamedDestructCases.
+      apply andb_prop in Heq; destruct Heq as (Hg1 & Hg2).
+      rewrite equiv_decb_equiv in Hg1, Hg2.
+      eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - apply bind_inversion in Helab.
+      destruct Helab as (le & Helab & Hexp).
+      monadInv Hexp. eauto using wt_elab_lexp with dftyping.
+    - monadInv Helab.
+      specialize (IHae1 _ EQ1); clear EQ1.
+      specialize (IHae2 _ EQ0); clear EQ0.
+      NamedDestructCases.
+      rewrite equiv_decb_equiv in Heq.
+      eauto using assert_type_In with dftyping.
+  Qed.
+
+  Lemma wt_elab_equation:
+    forall aeq eq,
+      elab_equation aeq = OK eq ->
+      wt_equation G (PM.elements env) eq.
+  Proof.
+    intros aeq eq Helab.
+    destruct aeq as ((xs & ae) & loc).
+    destruct ae; simpl in Helab;
+      repeat progress
+             match goal with
+             | H:bind _ _ = _ |- _ => monadInv H
+             | H:elab_lexp _ = OK _ |- _ => apply wt_elab_lexp in H
+             | H:elab_lexps _ _ _ = OK _ |- _ => apply wt_elab_lexps in H
+             | H:find_clock _ _ = OK _ |- _ => apply wt_find_clock in H
+             | H:find_type _ _ = OK _ |- _ => apply find_type_In in H
+             | H:assert_type _ _ _ = OK _ |- _ => apply assert_type_In in H
+             | H:elab_cexp _ = OK _ |- _ => apply wt_elab_cexp in H
+             | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
+             | _ => NamedDestructCases
+             end; auto with dftyping.
+    - unfold find_type_unop in EQ3. NamedDestructCases.
+      rewrite type_unop'_correct in Heq0.
+      auto with dftyping.
+    - unfold find_type_binop in EQ4. NamedDestructCases.
+      rewrite type_binop'_correct in Heq0.
+      auto with dftyping.
+    - apply andb_prop in Heq.
+      destruct Heq as (Heq1 & Heq2).
+      rewrite equiv_decb_equiv in Heq1, Heq2.
+      auto with dftyping.
+    - auto using type_castop with dftyping.
+    - unfold find_node_interface in EQ0. NamedDestructCases.
+      destruct EQ2.
+      destruct wt_nenv as (wt_nenv' & ?).
+      specialize (wt_nenv' (ident_of_string s) _ _ Heq0).
+      destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
+      inv Hout.
+      econstructor; eauto.
+      apply Forall2_map_1 with (f:=typeof) in H0.
+      apply Forall2_swap_args in H0.
+      apply Forall2_map_1 with (f:=snd) in Hin.
+      apply Forall2_swap_args in Hin.
+      apply Forall2_det with (2:=H0) in Hin.
+      2:now intros; subst.
+      cut (Forall2 eq (map typeof x3) (map snd n.(n_in))).
+      + intros Hfa. rewrite Forall2_map_1 in Hfa.
+        apply Forall2_swap_args in Hfa.
+        rewrite Forall2_map_1 in Hfa.
+        now apply Forall2_swap_args in Hfa.
+      + rewrite Hin. clear Hin.
+        induction (map snd n.(n_in)); auto.
+      + admit.
+      + admit.
+      + admit.
+  Qed.
+  
+End ElabExpressions.
+
+Section ElabDeclaration.
+
+  (* Preceding dataflow program. *)
+  Variable G : global.
+
+  (* Map node names to input and output types. *)
+  Variable nenv : PM.t (list type * list type).
+
+  Hypothesis wt_nenv : Is_interface_map G nenv.
+
+  Fixpoint elab_var_decls' (acc: list (ident * type) * PM.t type)
+           (vds: list (string * type_name * Ast.clock * astloc))
+    : res (list (ident * type) * PM.t type) :=
+    match vds with
+    | nil => OK acc
+    | vd::vds =>
+      let (rs, tyenv) := acc in
+      let '(sx, sty, sck, loc) := vd in
+      let x := ident_of_string sx in
+      let ty := elab_type loc sty in
+      if PM.mem x tyenv
+      then Error (err_loc loc (CTX x :: msg " is declared more than once"))
+      else elab_var_decls' ((x, ty)::rs, PM.add x ty tyenv) vds
+    end.
+
+  Definition elab_var_decls (tyenv: PM.t type)
+             (vds: list (string * type_name * Ast.clock * astloc))
+    : res (list (ident * type) * PM.t type) :=
+    elab_var_decls' ([], tyenv) vds.
+  
+  Lemma elab_var_decls_spec:
+    forall ys xs tyenv tyenv',
+      elab_var_decls tyenv ys = OK (xs, tyenv') ->
+      NoDupMembers xs
+      /\ (forall x ty, PM.find x tyenv = Some ty -> PM.find x tyenv' = Some ty)
+      /\ (forall x ty, In (x, ty) xs \/ PM.find x tyenv = Some ty
+                       <-> PM.find x tyenv' = Some ty)
+      /\ (forall x ty, In (x, ty) xs -> ~PM.In x tyenv).
+  Proof.
+    unfold elab_var_decls.
+    cut (forall ys xs tyenv xs' tyenv',
+            elab_var_decls' (xs, tyenv) ys = OK (xs', tyenv') ->
+            NoDupMembers xs ->
+            (forall x, ~PM.In x tyenv -> ~InMembers x xs) ->
+            (forall x ty, In (x, ty) xs -> PM.find x tyenv = Some ty) ->
+            NoDupMembers xs'
+            /\ incl xs xs'
+            /\ (forall x ty, PM.find x tyenv = Some ty -> PM.find x tyenv' = Some ty)
+            /\ (forall x ty, In (x, ty) xs' \/ PM.find x tyenv = Some ty
+                             <-> PM.find x tyenv' = Some ty)
+            /\ (forall x ty, In (x, ty) xs' ->
+                             In (x, ty) xs \/ ~PM.In x tyenv)).
+    { intros HH ys xs tyenv tyenv' Helab.
+      specialize (HH ys nil tyenv xs tyenv' Helab NoDupMembers_nil).
+      destruct HH as (HH1 & HH2 & HH3 & HH4 & HH5); intuition.
+      match goal with H:In _ xs |- _ => apply HH5 in H; destruct H; auto end. }
+    induction ys as [|y ys IH]; intros ** Helab Hnodup Hnin Hin.
+    now simpl in Helab; monadInv1 Helab; intuition.
+    simpl in Helab.
+    destruct y as [[[sx sty] ?] loc].
+    NamedDestructCases.
+    rewrite PM.mem_find in Heq.
+    destruct (PM.find (ident_of_string sx) tyenv) eqn:Hnfind;
+      try discriminate; clear Heq.
+    assert (~InMembers (ident_of_string sx) xs) as Hnxs.
+    { apply Hnin. intro Hmin.
+      apply PM_In_find' in Hmin.
+      contradiction. }
+    assert (NoDupMembers ((ident_of_string sx, elab_type loc sty) :: xs))
+      as Hnodup' by auto using NoDupMembers_cons.
+    apply IH in Helab; clear IH; auto.
+    - destruct Helab as (IH1 & IH2 & IH3 & IH4 & IH5).
+      apply incl_cons' in IH2.
+      destruct IH2 as [Hsxs' Hincl].
+      split; auto.
+      split; auto.
+      split; [|split].
+      + intros x ty Hfind.
+        apply IH3.
+        rewrite PM.gso; auto.
+        intro Hsx; rewrite Hsx in Hfind.
+        rewrite Hnfind in Hfind.
+        discriminate Hfind.
+      + intros x ty.
+        split; intro HH.
+        * destruct HH as [|HH].
+          now apply IH4; left; auto.
+          apply IH3.
+          rewrite PM.gso; auto.
+          intro; subst.
+          rewrite Hnfind in HH.
+          discriminate HH.
+        * apply IH4 in HH.
+          destruct HH as [|HH]; auto.
+          destruct (ident_eq_dec (ident_of_string sx) x) as [He|Hne].
+          2: now rewrite PM.gso in HH; auto.
+          subst. rewrite PM.gss in HH.
+          inv HH. left; auto.
+      + intros x ty Hixs.
+        apply IH5 in Hixs.
+        destruct Hixs as [Hixs|Hixs].
+        * destruct Hixs as [He|]; auto.
+          inv He. rewrite PM_In_find', Hnfind.
+          intuition.
+        * rewrite PM_add_spec in Hixs.
+          apply Decidable.not_or in Hixs.
+          intuition.
+    - intros x Hnin'.
+      rewrite PM_add_spec in Hnin'.
+      apply Decidable.not_or in Hnin'.
+      destruct Hnin' as (Hnsx & Hnin').
+      apply Hnin in Hnin'.
+      inversion_clear 1; now intuition.
+    - intros x ty Hin'.
+      apply in_inv in Hin'.
+      destruct Hin' as [He|Hin'].
+      now inv He; rewrite PM.gss.
+      destruct (ident_eq_dec x (ident_of_string sx)) as [He|Hne].
+      2:now rewrite PM.gso; auto.
+      subst. inversion_clear Hnodup' as [|? ? ? Hnim Hnodm].
+      apply NotInMembers_NotIn with (b:=ty) in Hnim.
+      contradiction.
+  Qed.
+
+  Lemma elab_var_decls_chained:
+    forall ys0 ys1 xs0 xs1 tyenv0 tyenv1 tyenv2,
+      elab_var_decls tyenv0 ys0 = OK (xs0, tyenv1) ->
+      elab_var_decls tyenv1 ys1 = OK (xs1, tyenv2) ->
+      NoDupMembers (xs1 ++ xs0)
+      /\ (forall x ty, PM.find x tyenv0 = Some ty
+                       -> PM.find x tyenv2 = Some ty)
+      /\ (forall x ty, In (x, ty) (xs1 ++ xs0)
+                       \/ PM.find x tyenv0 = Some ty
+                       <-> PM.find x tyenv2 = Some ty)
+      /\ (forall x ty, In (x, ty) (xs1 ++ xs0) -> ~PM.In x tyenv0).
+  Proof.
+    intros ** Helab0 Helab1.
+    apply elab_var_decls_spec in Helab0.
+    apply elab_var_decls_spec in Helab1.
+    destruct Helab0 as (Hnd0 & Hf0 & Hf0' & Hni0).
+    destruct Helab1 as (Hnd1 & Hf1 & Hf1' & Hni1).
+    repeat split; auto.
+    - apply NoDupMembers_app; auto.
+      intros x Hinm1 Hinm0.
+      apply InMembers_In in Hinm1. destruct Hinm1 as (tx1 & Hinm1).
+      apply Hni1 in Hinm1. rewrite PM_In_find in Hinm1.
+      apply Hinm1.
+      apply InMembers_In in Hinm0. destruct Hinm0 as (tx0 & Hinm0).
+      assert (PM.find x tyenv1 = Some tx0) as Hinm1'
+          by (apply Hf0'; now left).
+      eauto.
+    - destruct (Hf1' x ty).
+      destruct 1 as [HH|HH]; auto.
+      destruct (Hf0' x ty).
+      apply in_app in HH; destruct HH; auto.
+    - intro HH. apply Hf1' in HH.
+      rewrite in_app.
+      destruct HH as [|HH]; auto.
+      apply Hf0' in HH.
+      destruct HH; auto.
+    - intros x ty HH.
+      apply in_app in HH.
+      destruct HH as [HH|HH]; eauto.
+      apply Hni1 in HH.
+      intro Hf. rewrite PM_In_find in Hf.
+      destruct Hf as (v & Hf).
+      apply Hf0 in Hf.
+      rewrite PM_In_find' in HH.
+      apply HH. rewrite Hf.
+      discriminate.
+  Qed.
+
+  Lemma elab_var_decls_2chained_nodup:
+    forall ys0 ys1 ys2 xs0 xs1 xs2 tyenv0 tyenv1 tyenv2 tyenv3,
+      elab_var_decls tyenv0 ys0 = OK (xs0, tyenv1) ->
+      elab_var_decls tyenv1 ys1 = OK (xs1, tyenv2) ->
+      elab_var_decls tyenv2 ys2 = OK (xs2, tyenv3) ->
+      NoDupMembers (xs2 ++ xs1 ++ xs0).
+  Proof.
+    intros ** Helab0 Helab1 Helab2.
+    apply elab_var_decls_chained with (1:=Helab0) in Helab1. clear Helab0.
+    apply elab_var_decls_spec in Helab2.
+    destruct Helab1 as (Hnd1 & Hf1 & Hf1' & Hni1).
+    destruct Helab2 as (Hnd2 & Hf2 & Hf2' & Hni2).
+    apply NoDupMembers_app; auto.
+    intros x Hin2 Hin1_0.
+    apply InMembers_In in Hin2.
+    destruct Hin2 as (tx & Hin2).
+    apply Hni2 in Hin2.
+    apply Hin2. rewrite PM_In_find.
+    apply InMembers_In in Hin1_0.
+    destruct Hin1_0 as (xt & Hin1_0).
+    eapply or_introl in Hin1_0.
+    apply Hf1' in Hin1_0.
+    eauto.
+  Qed.
+
+  Lemma elab_var_decls_2chained_perm:
+    forall ys0 ys1 ys2 xs0 xs1 xs2 tyenv1 tyenv2 tyenv3,
+      elab_var_decls (PM.empty type) ys0 = OK (xs0, tyenv1) ->
+      elab_var_decls tyenv1 ys1 = OK (xs1, tyenv2) ->
+      elab_var_decls tyenv2 ys2 = OK (xs2, tyenv3) ->
+      Permutation.Permutation (PM.elements tyenv3) (xs2 ++ xs1 ++ xs0).
+  Proof.
+    intros ** Helab0 Helab1 Helab2.
+    pose proof (elab_var_decls_2chained_nodup _ _ _ _ _ _ _ _ _ _
+                                              Helab0 Helab1 Helab2) as Hnodup.
+    apply Permutation.NoDup_Permutation;
+      auto using NoDupMembers_NoDup, NoDupMembers_PM_elements.
+    apply elab_var_decls_chained with (1:=Helab0) in Helab1. clear Helab0.
+    apply elab_var_decls_spec in Helab2.
+    destruct Helab1 as (Hnd1 & Hf1 & Hf1' & Hni1).
+    destruct Helab2 as (Hnd2 & Hf2 & Hf2' & Hni2).
+    destruct x as (x & xt).      
+    split; intro HH.
+    - apply PM.elements_complete in HH.
+      apply Hf2' in HH.
+      rewrite in_app.
+      destruct HH as [|HH]; auto.
+      apply Hf1' in HH.
+      destruct HH as [|HH]; auto.
+      rewrite PM.gempty in HH.
+      discriminate.
+    - apply PM.elements_correct.
+      apply Hf2'.
+      apply in_app in HH.
+      destruct HH; auto.
+      right; apply Hf1'; auto.
+  Qed.
+
+  Fixpoint check_vars {A} (loc: astloc) (defd: PM.t A) (xs: idents)
+                                                         : res (PM.t A) :=
+    match xs with
+    | nil => OK defd
+    | x::xs => if PM.mem x defd
+               then check_vars loc (PM.remove x defd) xs
+               else Error (err_loc loc
+                                   (CTX x :: msg " is improperly defined"))
+    end.
+  
+  Fixpoint check_defined {A} (loc: astloc) (out: PM.t A) (defd: PM.t A)
+           (eqs: list equation) : res unit :=
+    match eqs with
+    | nil => if PM.is_empty defd then OK tt
+             else Error (err_loc loc (msg "some variables are not defined"))
+    | EqFby x _ _ _::eqs => if PM.mem x defd && (negb (PM.mem x out))
+                            then check_defined loc out (PM.remove x defd) eqs
+                            else Error (err_loc loc
+                                        (CTX x :: msg " is improperly defined"))
+    | EqDef x _ _::eqs => if PM.mem x defd
+                          then check_defined loc out (PM.remove x defd) eqs
+                          else Error (err_loc loc
+                                        (CTX x :: msg " is improperly defined"))
+    | EqApp xs _ _ _::eqs => do defd' <- check_vars loc defd xs;
+                             check_defined loc out defd' eqs
+    end.
+
+  Lemma check_defined_spec:
+    forall {A} eqs loc (out: PM.t A) defd,
+      check_defined loc out defd eqs = OK tt ->
+      (forall x, In x (vars_defined eqs) <-> PM.In x defd)
+      /\ NoDup (concat (map var_defined eqs))
+      /\ (forall x, In x (vars_defined (filter is_fby eqs))
+                    -> ~PM.In x out).
+  Proof.
+    induction eqs as [|eq eqs IH]; simpl; intros loc out defd Hchk;
+      NamedDestructCases.
+    - apply PM.is_empty_2 in Heq.
+      rewrite PM.Empty_alt in Heq.
+      setoid_rewrite PM_In_find.
+      repeat split.
+      + inversion 1.
+      + destruct 1 as (v, HH).
+        now rewrite (Heq x) in HH.
+      + apply NoDup_nil.
+      + inversion 1.
+    - admit.
+      (*
+      apply PM.mem_2 in Heq0.
+      rewrite Bool.negb_true_iff, Bool.andb_false_iff in Heq2.
+      rewrite PM_mem_spec_false in Heq2.
+      specialize (IH _ _ _ Hchk); clear Hchk.
+      destruct IH as (IH1 & IH2 & IH3).
+      repeat split.
+      + destruct 1 as [|HH].
+        now subst x.
+        rewrite IH1, PM_remove_iff in HH.
+        intuition.
+      + destruct (var_defined eq ==b x) eqn:Heq.
+        now rewrite equiv_decb_equiv in Heq; auto.
+        rewrite not_equiv_decb_equiv in Heq.
+        right. apply IH1. apply PM_remove_iff; auto.
+      + constructor; auto.
+        rewrite IH1, PM_remove_iff.
+        intuition.
+      + intros x Hvd.
+        destruct (is_fby eq); auto.
+        destruct Heq2; try discriminate.
+        destruct Hvd as [Hvd|]; auto.
+        rewrite <-Hvd; auto. *)
+    - admit.
+    - admit.
+  Qed.
+
+  Fixpoint elab_clock_decl (tyenv: PM.t type) (acc: PM.t clock)
+           (vds: list (string * type_name * Ast.clock * astloc))
+    : res (PM.t clock) :=
+    match vds with
+    | nil => OK acc
+    | vd::vds =>
+      let '(sx, sty, sck, loc) := vd in
+      let x := ident_of_string sx in
+      do ck <- elab_clock tyenv loc sck;
+        elab_clock_decl tyenv (PM.add x ck acc) vds
+    end.
+
+  Lemma elab_clock_decl_spec:
+    forall vds tyenv clkenv clkenv',
+      elab_clock_decl tyenv clkenv vds = OK clkenv' ->
+      (forall x ck, PM.find x clkenv = Some ck
+                    -> wt_clock (PM.elements tyenv) ck) ->
+      (forall x ck, PM.find x clkenv' = Some ck
+                    -> wt_clock (PM.elements tyenv) ck).
+  Proof.
+    induction vds as [|vd vds IH];
+      intros ** Helab Hclkenv x ck Hfind.
+    - simpl in Helab. monadInv1 Helab. eauto.
+    - simpl in Helab. destruct vd as (((? & ?) & ?) & ?).
+      monadInv Helab.
+      match goal with H:elab_clock _ _ _ = OK ?x |- _ =>
+                      apply wt_elab_clock in H; rename H into WTx; rename x into ck' end.
+      match goal with H:elab_clock_decl _ _ _ = OK _ |- _ =>
+                      specialize (IH _ _ _ H) end.
+      revert Hfind; apply IH.
+      intros y yck Hfind.
+      destruct (ident_eq_dec y (ident_of_string s)).
+      2:rewrite PM.gso in Hfind; now eauto.
+      subst y. rewrite PM.gss in Hfind.
+      injection Hfind; intro HH; rewrite HH in *.
+      assumption.
+  Qed.
+
+  Local Obligation Tactic :=
+    Tactics.program_simpl;
+      repeat progress
+             match goal with
+             | H:_ = bind _ _ |- _ => symmetry in H; monadInv H
+             | H:(if ?b then _ else _) = _ |- _ =>
+               let Hb := fresh "Hb" in
+               destruct b eqn:Hb; try discriminate
+             | H:OK _ = OK _ |- _ => monadInv1 H
+             end.
+
+  Local Ltac MassageElabs outputs locals inputs :=
+    let Helab_out := fresh "Helab_out" in
+    let Helab_locals := fresh "Helab_locals" in
+    let Helab_in := fresh "Helab_in" in
+    let Hclk_out := fresh "Hclk_out" in
+    let Hclk_locals := fresh "Hclk_locals" in
+    let Hclk_in := fresh "Hclk_in" in
+    let clkenv_out := fresh "clkenv_out" in
+    let clkenv_locals := fresh "clkenv_locals" in
+    let clkenv := fresh "clkenv" in
+    let Helabs := fresh "Helabs" in
+    let eqs := fresh "eqs'" in
+    let Hdefd := fresh "Hdefd" in
+    let Houtin := fresh "Houtin" in
+    match goal with H:elab_var_decls _ outputs = OK ?x |- _ =>
+      rename H into Helab_out; destruct x as (xout & tyenv_out) end;
+    match goal with H:elab_var_decls _ locals = OK ?x |- _ =>
+      rename H into Helab_locals; destruct x as (xlocals & tyenv_locals) end;
+    match goal with H:elab_var_decls _ inputs = OK ?x |- _ =>
+      rename H into Helab_in; destruct x as (xin & tyenv_in) end;
+    match goal with H:elab_clock_decl _ _ outputs = OK ?x |- _ =>
+      rename H into Hclk_out; rename x into clkenv_out end;
+    match goal with H:elab_clock_decl _ _ locals = OK ?x |- _ =>
+      rename H into Hclk_locals; rename x into clkenv_locals end;
+    match goal with H:elab_clock_decl _ _ inputs = OK ?x |- _ =>
+      rename H into Hclk_in; rename x into clkenv end;
+    match goal with H:mmap (elab_equation _ _ _) _ = OK ?x |- _ =>
+      rename H into Helabs; rename x into eqs end;
+    match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
+      rename H into Hdefd; destruct x end;
+    try match goal with H:In _ (map fst _) |- _ =>
+      rename H into Houtin end.
+  
+  Local Hint Resolve NoDupMembers_nil NoDup_nil.
+
+  Program Definition elab_declaration (decl: Ast.declaration)
+    : res {n | wt_node G n} :=
+    match decl with
+    | NODE name inputs outputs locals equations loc =>
+      match (do xout   <- elab_var_decls (PM.empty type) outputs;
+             do xlocal <- elab_var_decls (snd xout) locals;
+             do xin    <- elab_var_decls (snd xlocal) inputs;
+             OK (fst xout, fst xlocal, fst xin,
+                 snd xout, snd xlocal, snd xin)) with
+      | Error e => Error e
+      | OK (xout, xlocal, xin, sout, svars, tyenv) =>
+        match (do env1  <- elab_clock_decl tyenv (PM.empty clock) inputs;
+               do env2  <- elab_clock_decl tyenv env1 outputs;
+               do ckenv <- elab_clock_decl tyenv env2 locals;
+               do eqs <- mmap (elab_equation tyenv ckenv nenv) equations;
+               do ok <- check_defined loc sout svars eqs;
+               if existsb (fun x=>PM.mem x tyenv) Ident.Ids.reserved
+               then Error (err_loc loc (msg "illegal variable name"))
+               else if (length xin ==b 0) || (length xout ==b 0)
+                    then Error (err_loc loc (msg "not enough inputs or outputs"))
+                    else OK eqs) with
+        | Error e => Error e
+        | OK eqs => OK {| n_name  := ident_of_string name;
+                          n_in    := xin;
+                          n_out   := xout;
+                          n_vars  := xlocal;
+                          n_eqs   := eqs;
+                          n_ingt0 := _;
+                          n_outgt0:= _;
+                          n_defd  := _;
+                          n_vout  := _;
+                          n_nodup := _;
+                          n_good  := _ |}
+        end
+      end
+    end.
+  Next Obligation.
+    (* 0 < length xin *)
+    match goal with H:(length _ ==b 0) || _ = false |- _ =>
+      rewrite Bool.orb_false_iff in H; destruct H as (Hin & Hout) end.
+    apply not_equiv_decb_equiv in Hin.
+    now apply NPeano.Nat.neq_0_lt_0 in Hin.
+  Qed.
+  Next Obligation.
+    (* 0 < length xout *)
+    match goal with H:(length _ ==b 0) || _ = false |- _ =>
+      rewrite Bool.orb_false_iff in H; destruct H as (Hin & Hout) end.
+    apply not_equiv_decb_equiv in Hout.
+    now apply NPeano.Nat.neq_0_lt_0 in Hout.
+  Qed.
+  Next Obligation.
+    (* Permutation (map var_defined eqs) (map fst (xlocal ++ [(i, t)])) *)
+    MassageElabs outputs locals inputs.
+    simpl in *.
+    apply check_defined_spec in Hdefd.
+    destruct Hdefd as (Hdefd & Hnodup & Hnfby).
+    destruct (elab_var_decls_chained _ _ _ _ _ _ _ Helab_out Helab_locals)
+      as (Hnodup' & Helab_l1 & Helab_l2 & Helab_l3).
+    apply Permutation.NoDup_Permutation; auto.
+    now apply fst_NoDupMembers; auto.
+    intros. rewrite Hdefd, PM_In_find, <-fst_InMembers.
+    split; intro HH.
+    - destruct HH as (ty & HH).
+      apply Helab_l2 in HH.
+      rewrite PM.gempty in HH.
+      destruct HH as [HH|]; try discriminate.
+      now apply In_InMembers in HH.
+    - apply InMembers_In in HH.
+      destruct HH as (tx & HH).
+      exists tx.
+      apply Helab_l2; auto.
+  Qed.
+  Next Obligation.
+    (* ~ In i (map var_defined (filter is_fby eqs)) *)
+    MassageElabs outputs locals inputs.
+    simpl in *.
+    apply check_defined_spec in Hdefd.
+    destruct Hdefd as (Hdefd & Hnodup & Hnfby).
+    intros Hi. apply Hnfby in Hi. apply Hi.
+    apply elab_var_decls_spec in Helab_out.
+    destruct Helab_out as (Heo1 & Heo2 & Heo3 & Heo4).
+    apply fst_InMembers, InMembers_In in Houtin.
+    destruct Houtin as (ty & Houtin).
+    rewrite PM_In_find. exists ty.
+    apply Heo3. auto with datatypes.
+  Qed.
+  Next Obligation.
+    (* NoDupMembers (xin ++ xlocal ++ [(i, t)]) *)
+    MassageElabs outputs local inputs.
+    apply (elab_var_decls_2chained_nodup _ _ _ _ _ _ _ _ _ _
+                                         Helab_out Helab_locals Helab_in).
+  Qed.
+  Next Obligation.
+    (* Forall NotReserved (xin ++ xlocal ++ [(i, t)]) *)
+    MassageElabs outputs locals inputs.
+    simpl in *.
+    rewrite 2 Bool.orb_false_iff in Hb.
+    destruct Hb as (Hb1 & Hb2 & ?).
+    rewrite PM_mem_spec_false in Hb1, Hb2.
+    pose proof (elab_var_decls_2chained_perm
+                  _ _ _ _ _ _ _ _ _ Helab_out Helab_locals Helab_in) as Hperm.
+    rewrite <-Hperm.
+    apply all_In_Forall.
+    intros xtx Hin Hir.
+    destruct xtx as (x, tx).
+    apply PM.elements_complete in Hin.
+    simpl in Hir.
+    assert (PM.In x tyenv_in) as Hintyenv
+        by (apply PM_In_find; eauto).
+    repeat destruct Hir as [Hir|Hir];
+      try contradiction;
+      subst x; auto.
+  Qed.
+  Next Obligation.
+    (* wt_node G n *)
+    unfold wt_node. simpl.
+    repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
+    NamedDestructCases.
+    MassageElabs outputs locals inputs.
+    simpl in *.
+    cut (Forall (wt_equation G (PM.elements tyenv_in)) eqs').
+    - apply Forall_impl_In.
+      intros.
+      now rewrite <-(elab_var_decls_2chained_perm _ _ _ _ _ _ _ _ _
+                                                  Helab_out Helab_locals Helab_in).
+    - apply mmap_inversion in Helabs.
+      apply Forall_forall.
+      intros y Hin.
+      eapply Coqlib.list_forall2_in_right with (1:=Helabs) in Hin.
+      destruct Hin as (aeq & Hin & Helab).
+      apply wt_elab_equation with (G:=G) in Helab; auto.
+      intros x ck Hfind.
+      apply elab_clock_decl_spec with (1:=Hclk_locals) (x:=x); auto.
+      apply elab_clock_decl_spec with (1:=Hclk_out).
+      apply elab_clock_decl_spec with (1:=Hclk_in).
+      intros ** Hnfind.
+      rewrite PM.gempty in Hnfind.
+      discriminate.
+  Qed.
+
+End ElabDeclaration.
+
+Local Obligation Tactic :=
+  Tactics.program_simpl;
+    match goal with H:OK _ = _ |- _ =>
+                    symmetry in H; monadInv H; NamedDestructCases end;
+    simpl in *; unfold find_node_interface in *;
+      match goal with H:match ?x with _ => _ end = Error _ |- _ =>
+                      destruct x eqn:Hfind; try discriminate; clear H end.
+
+Program Fixpoint elab_declarations'
+        (G: global) (nenv: PM.t (list type * list type))
+        (WTG: wt_global G) (Hnenv: Is_interface_map G nenv)
+        (decls: list Ast.declaration)
+  : res {G' | wt_global G'} :=
+  match decls with
+  | nil => OK (exist _ G WTG)
+  | d::ds =>
+    match (do n <- elab_declaration _ _ Hnenv d;
+             let loc := declaration_loc d in
+             if find_node_interface nenv loc n.(n_name)
+             then Error (err_loc loc (MSG "duplicate definition for "
+                                          :: CTX n.(n_name) :: nil))
+             else OK n) with
+    | OK n => elab_declarations' (n::G)
+                                 (PM.add n.(n_name)
+                                         (map snd n.(n_in),
+                                          map snd n.(n_out)) nenv) _ _ ds
+    | Error e => Error e
+    end
+  end.
+Next Obligation.
+  constructor; auto.
+  now apply Hnenv.
+Qed.
+Next Obligation.
+  split.
+  - intros ** Hf.
+    destruct (ident_eq_dec f n.(n_name)) as [He|Hne].
+    + subst. rewrite PM.gss in Hf.
+      injection Hf; intros; subst tysout tysin; clear Hf.
+      exists n.
+      repeat split.
+      * unfold find_node, find.
+        now rewrite ident_eqb_refl.
+      * apply Forall2_swap_args, Forall2_map_1, Forall2_same, all_In_Forall;
+          auto.
+      * match goal with |- Forall2 ?P _ _ =>
+          change (Forall2 P n.(n_out) (map snd n.(n_out))) end.
+        apply Forall2_swap_args, Forall2_map_1, Forall2_same, all_In_Forall;
+          auto.
+    + rewrite PM.gso in Hf; auto.
+      destruct Hnenv as (Hnenv & ?).
+      clear EQ.
+      specialize (Hnenv _ _ _ Hf).
+      destruct Hnenv as (n' & ? & ? & ?).
+      exists n'. split; auto.
+      unfold find_node, find.
+      apply not_eq_sym, ident_eqb_neq in Hne.
+      rewrite Hne; auto.
+  - intros f Hf.
+    destruct (ident_eq_dec f n.(n_name)) as [He|Hne].
+    + subst. rewrite PM.gss in Hf. discriminate.
+    + rewrite PM.gso in Hf; auto.
+      constructor; auto.
+      apply Hnenv; auto.
+Qed.
+
+Definition elab_declarations (decls: list Ast.declaration)
+  : res {G | wt_global G} :=
+  elab_declarations' [] (PM.empty (list type * list type))
+                     wtg_nil Is_interface_map_empty decls.
+
+

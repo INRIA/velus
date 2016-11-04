@@ -35,6 +35,7 @@ Dataflow/WellFormed.v
 Dataflow/WellFormed/Decide.v
 Dataflow/Ordered.v
 Dataflow/NoDup.v
+Dataflow/Parser/Ast.v
 Dataflow.v
 Obc/Syntax.v
 Obc/Typing.v
@@ -52,5 +53,6 @@ ObcToClight/Translation.v
 ObcToClight/Correctness.v
 ObcToClight/MoreSeparation.v
 ObcToClight/SepInvariant.v
+ObcToClight/DataflowElab.v
 DataflowToClight.v
 Instantiator.v
