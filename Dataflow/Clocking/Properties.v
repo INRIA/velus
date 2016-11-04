@@ -34,15 +34,22 @@ Proof.
     destruct Hcp as [Hcp|Hcp]; [rewrite Hcp| inversion Hcp]; now auto.
 Qed.
 
+Section Well_clocked.
+
+
+(** We work under a (valid) clocking environment *)
+Variable C : clockenv.
+Variable Hwc: Well_clocked_env C.
+
 Theorem Well_clocked_eq_not_Is_free_in_clock:
-  forall C eq x ck,
-    Well_clocked_env C
-    -> Well_clocked_eq C eq
+  forall eq x ck,
+      Well_clocked_eq C eq
     -> Is_defined_in_eq x eq
     -> Has_clock_eq ck eq
     -> ~Is_free_in_clock x ck.
 Proof.
-  intros C eq x ck Hwc Hwce Hdef Hhasck Hfree.
+(* XXX: This proof is rather fragile *)
+  intros eq x ck Hwce Hdef Hhasck Hfree.
   inversion Hwce as [x' ck' e Hcv Hexp Heq
                     |x' ck' f e Hcv Hexp Heq
                     |x' ck' v' e Hcv Hexp];
@@ -64,36 +71,35 @@ Proof.
 Qed.
 
 Corollary Well_clocked_EqDef_not_Is_free_in_clock:
-  forall C x ce ck,
-    Well_clocked_env C
-    -> Well_clocked_eq C (EqDef x ck ce)
+  forall x ce ck,
+      Well_clocked_eq C (EqDef x ck ce)
     -> ~Is_free_in_clock x ck.
 Proof.
-  intros C x ce ck Hwc Hwce.
-  apply Well_clocked_eq_not_Is_free_in_clock with (1:=Hwc) (2:=Hwce);
-    now constructor.
+  intros x ce ck Hwce Hwt.
+  now eapply Well_clocked_eq_not_Is_free_in_clock;
+    eauto using Has_clock_eq.
 Qed.
 
 Corollary Well_clocked_EqApp_not_Is_free_in_clock:
-  forall C x f le ck,
-    Well_clocked_env C
-    -> Well_clocked_eq C (EqApp x ck f le)
-    -> ~Is_free_in_clock x ck.
+  forall xs f le ck,
+      Well_clocked_eq C (EqApp xs ck f le)
+    -> forall x, List.In x xs -> ~Is_free_in_clock x ck.
 Proof.
-  intros C x f le ck Hwc Hwce.
-  apply Well_clocked_eq_not_Is_free_in_clock with (1:=Hwc) (2:=Hwce);
-    now constructor.
+  intros x f le ck Hwce Hwt y Hinx.
+  now eapply Well_clocked_eq_not_Is_free_in_clock;
+    eauto using Is_defined_in_eq, Has_clock_eq.
 Qed.
 
 Corollary Well_clocked_EqFby_not_Is_free_in_clock:
-  forall C x v0 le ck,
-    Well_clocked_env C
-    -> Well_clocked_eq C (EqFby x ck v0 le)
+  forall x v0 le ck,
+      Well_clocked_eq C (EqFby x ck v0 le)
     -> ~Is_free_in_clock x ck.
 Proof.
-  intros C x v0 le ck Hwc Hwce.
-  apply Well_clocked_eq_not_Is_free_in_clock with (1:=Hwc) (2:=Hwce);
-    now constructor.
+  intros x v0 le ck Hwce Hwt.
+  now eapply Well_clocked_eq_not_Is_free_in_clock;
+    eauto using Has_clock_eq.
 Qed.
+
+End Well_clocked.
 
 End PROPERTIES.
