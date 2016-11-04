@@ -325,7 +325,7 @@ Proof.
       constructor; auto.
       rewrite in_map_iff; intros ((x, d) & E & Hin).
       simpl in E; subst x.
-      apply in_concat' in Hin; destruct Hin as (l' & Hin & Hin').
+      apply in_concat in Hin; destruct Hin as (l' & Hin' & Hin).
       rewrite in_map_iff in Hin; destruct Hin as (c' & E & Hin); subst l'.
       rewrite in_map_iff in Hin'; destruct Hin' as (m' & E & Hin').
       unfold translate_method in E; inversion E as [[Eq E']]; clear E E'.
@@ -3250,7 +3250,7 @@ Section PRESERVATION.
 
   Definition call_step owner caller c obj args r e le m T le' m' :=
     exec_stmt tge (function_entry2 tge) e le m
-              (binded_funcall prog [r] (c_name owner) caller c obj step args)
+              (binded_funcall prog r (c_name owner) caller c obj step args)
               T le' m' Out_normal.
              
   Section Foo.
@@ -3314,7 +3314,7 @@ Section PRESERVATION.
       - destruct Dostep as (menvN & envN & Dostep & Ev).
         apply IHn in Dostep.
         destruct Dostep as (TN & eN & leN & mN & Dostep & MS).
-        assert (occurs_in (Call [r] node obj step (map Const (css n)))
+        assert (occurs_in (Call r node obj step (map Const (css n)))
                           (m_body caller)). admit.
         eapply stmt_correctness in Ev; eauto.
         + destruct Ev as (le' & m' & T & Exec & MS').
