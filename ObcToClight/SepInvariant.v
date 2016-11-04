@@ -447,7 +447,7 @@ Section StateRepProperties.
              /\ co_members co = make_members cls
              /\ attr_alignas (co_attr co) = None
              /\ NoDupMembers (co_members co)
-             /\ co.(co_sizeof) <= Int.modulus).
+             /\ co.(co_sizeof) <= Int.max_unsigned).
 
   Lemma c_objs_field_offset:
     forall o c cls,

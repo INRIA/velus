@@ -620,7 +620,7 @@ Section PRESERVATION.
         /\ co_members co = make_members owner
         /\ attr_alignas (co_attr co) = None
         /\ NoDupMembers (co_members co)
-        /\ co.(co_sizeof) <= Int.modulus.
+        /\ co.(co_sizeof) <= Int.max_unsigned.
     Proof.
       inv_trans TRANSL with structs funs E.
       pose proof (find_class_name _ _ _ _ Findcl); subst.
@@ -643,7 +643,7 @@ Section PRESERVATION.
       - rewrite Hmembers. apply NoDupMembers_make_members.
       - eapply check_size_ok, In_Forall in SIZE; eauto; simpl in SIZE.
         unfold check_size in SIZE; rewrite Hco in SIZE.
-        destruct (co_sizeof co <=? Int.modulus) eqn: Le; try discriminate.
+        destruct (co_sizeof co <=? Int.max_unsigned) eqn: Le; try discriminate.
         rewrite Zle_is_le_bool; auto.
     Qed.
 
@@ -658,7 +658,7 @@ Section PRESERVATION.
           /\ co.(co_members) = map translate_param caller.(m_out)
           /\ co.(co_attr) = noattr
           /\ NoDupMembers (co_members co)
-          /\ co.(co_sizeof) <= Int.modulus.
+          /\ co.(co_sizeof) <= Int.max_unsigned.
       Proof.
         inv_trans TRANSL with structs funs E.
         apply build_check_size_env_ok in TRANSL; destruct TRANSL as [? SIZE].
@@ -686,7 +686,7 @@ Section PRESERVATION.
           apply (m_nodupout caller).
         - eapply check_size_ok, In_Forall in SIZE; eauto; simpl in SIZE.
           unfold check_size in SIZE; rewrite Hco in SIZE.
-          destruct (co_sizeof co <=? Int.modulus) eqn: Le; try discriminate.
+          destruct (co_sizeof co <=? Int.max_unsigned) eqn: Le; try discriminate.
           rewrite Zle_is_le_bool; auto.
       Qed.
 
@@ -866,7 +866,7 @@ Section PRESERVATION.
     forall ownerid owner prog' callerid caller,
       find_class ownerid prog = Some (owner, prog') ->
       find_method callerid owner.(c_methods) = Some caller ->
-      Forall (fun xt => sizeof tge (snd xt) <= Int.modulus /\
+      Forall (fun xt => sizeof tge (snd xt) <= Int.max_unsigned /\
                      (exists (id : AST.ident) (co : composite),
                          snd xt = Tstruct id noattr /\
                          gcenv ! id = Some co /\
@@ -2160,7 +2160,7 @@ Section PRESERVATION.
     forall vars e m e' m' P,
       m |= P ->
       NoDupMembers vars ->
-      Forall (fun xt => sizeof tge (snd xt) <= Int.modulus) vars ->
+      Forall (fun xt => sizeof tge (snd xt) <= Int.max_unsigned) vars ->
       alloc_variables tge e m vars e' m' ->
       m' |= sepall (range_inst_env e') (var_names vars) ** P.
   Proof.
@@ -2173,7 +2173,10 @@ Section PRESERVATION.
       erewrite alloc_implies; eauto.
       rewrite sep_assoc, sep_swap.
       eapply IHvars; eauto.
-      eapply alloc_rule; eauto; omega.
+      eapply alloc_rule; eauto; try omega.
+      transitivity Int.max_unsigned; auto.
+      unfold Int.max_unsigned.
+      omega.      
   Qed.
 
   Remark alloc_permutation:
@@ -2341,7 +2344,7 @@ Section PRESERVATION.
     forall f m P,
       let vars := instance_methods f in
       Forall (fun xt: positive * Ctypes.type =>
-                sizeof tge (snd xt) <= Int.modulus
+                sizeof tge (snd xt) <= Int.max_unsigned
                 /\ exists (id : AST.ident) (co : composite),
                   snd xt = Tstruct id noattr
                   /\ gcenv ! id = Some co
@@ -2783,7 +2786,7 @@ Section PRESERVATION.
       edestruct subrep_extract as (oblk & outco_callee & ? & ? & Hoblk & Houtco_callee & ?); eauto.
       
       (* recursive funcall evaluation *)
-      assert (wt_mem  match mfind_inst o menv with
+      assert (wt_mem match mfind_inst o menv with
                       | Some om => om
                       | None => hempty
                       end p' cls).
@@ -3066,8 +3069,6 @@ Section PRESERVATION.
     destruct u; inv H; simpl; eauto.
   Qed.
 
-  
-
   Lemma compat_auto_funcall_pres:
     forall f sb ob vs c prog' me tself tout callee_id callee instco m P,
       let vargs := (Vptr sb Int.zero) :: (Vptr ob Int.zero) :: vs in
@@ -3166,12 +3167,15 @@ Section PRESERVATION.
           Genv.find_funct_ptr tge b = Some (Ctypes.Internal main)
           /\ exists le,
             bind_parameter_temps [] [] (create_undef_temps main.(fn_temps)) = Some le
-            /\ exists e m',
+            /\ exists e sb reset_b step_b m',
               alloc_variables tge empty_env m main.(fn_vars) e m'
-              /\ exists sb reset_b reset_co step_b step_co,
-                gcenv ! (prefix_fun main_node reset) = Some reset_co
-                /\ gcenv ! (prefix_fun main_node step) = Some step_co
-                /\ m' |= staterep gcenv prog main_node hempty sb Z0
+              /\ e ! self = Some (sb, type_of_inst main_node)
+              /\ e ! (Ident.prefix out reset) = Some (reset_b, type_of_inst (prefix_fun main_node reset))
+              /\ e ! (Ident.prefix out step) = Some (step_b, type_of_inst (prefix_fun main_node step))
+              /\ exists reset_co step_co,
+                  gcenv ! (prefix_fun main_node reset) = Some reset_co
+                  /\ gcenv ! (prefix_fun main_node step) = Some step_co
+                  /\ m' |= staterep gcenv prog main_node hempty sb Z0
                        ** blockrep gcenv sempty reset_co.(co_members) reset_b
                        ** blockrep gcenv sempty step_co.(co_members) step_b
                        ** P.
@@ -3207,13 +3211,21 @@ Section PRESERVATION.
       destruct (Mem.alloc m2 0 (sizeof tge (type_of_inst (prefix_fun main_node reset))))
         as (m3, reset_b) eqn: AllocRes.
       destruct (Mem.alloc m3 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
-        as (m4, step_b) eqn: AllocStep.          
-      do 2 econstructor; split.
+        as (m4, step_b) eqn: AllocStep.
+      econstructor; exists sb, reset_b, step_b; econstructor; repeat split.
       + repeat (econstructor; eauto).
+      + rewrite 2 PTree.gso, PTree.gss; auto; 
+        intro Eq; apply self_not_prefixed; rewrite Eq; constructor.
+      + rewrite PTree.gso, PTree.gss; auto.
+        intro Eq; apply prefix_injective in Eq; destruct Eq as [? Eq].
+        pose proof methods_nodup as Nodup; unfold methods in Nodup;
+        inversion_clear Nodup as [|? ? Notin].
+        apply Notin; rewrite Eq; apply in_eq.
+      + rewrite PTree.gss; auto.
       + edestruct global_out_struct with (2:=Ereset) as (reset_co & Hrco & ? & Hmr & ? & ? & ?); eauto.
         edestruct global_out_struct with (2:=Estep) as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
         edestruct make_members_co as (co & Hco & ? & ? & ? & ? & ?); eauto.
-        exists sb, reset_b, reset_co, step_b, step_co.
+        exists reset_co, step_co.
         pose proof (find_class_name _ _ _ _ En) as Eq;
           pose proof (find_method_name _ _ _ Estep) as Eq';
           pose proof (find_method_name _ _ _ Ereset) as Eq'';
@@ -3225,11 +3237,14 @@ Section PRESERVATION.
           change (gcenv ! (prefix_fun main_node step))
           with ((prog_comp_env tprog) ! (prefix_fun main_node step)) in Hsco.            
         assert (sizeof tge (type_of_inst main_node) <= Int.modulus)
-          by (simpl; rewrite Hco; auto).
+          by (simpl; rewrite Hco; transitivity Int.max_unsigned;
+              auto; unfold Int.max_unsigned; omega).
         assert (sizeof tge (type_of_inst (prefix_fun main_node reset)) <= Int.modulus)
-          by (simpl; rewrite Hrco; auto).
+          by (simpl; rewrite Hrco; transitivity Int.max_unsigned;
+              auto; unfold Int.max_unsigned; omega).
         assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
-          by (simpl; rewrite Hsco; auto).
+          by (simpl; rewrite Hsco; transitivity Int.max_unsigned;
+              auto; unfold Int.max_unsigned; omega).
         eapply alloc_rule in AllocSelf; eauto; try omega.
         eapply alloc_rule in AllocRes; eauto; try omega.
         eapply alloc_rule in AllocStep; eauto; try omega.
@@ -3287,21 +3302,30 @@ Section PRESERVATION.
     Hypothesis Find: find_class main_node prog = Some (c_main, prog_main).
     Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
     Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
-    
+            
     Lemma match_states_main_reset:
       exists m e le sb sofs outb outco,
         m |= match_states c_main m_reset (hempty, sempty) (e, le) sb sofs outb outco.
     Proof.
       destruct init_mem as [m].
       destruct (find_main m sepemp)
-        as (b & ? & main & ? & le & ? & e & m' & ? & sb & outb & outco & ? & ? & ? & ? & Hm'); auto.
+        as (b & ? & main & ? & le & ? & e & sb & outb & ?
+            & m' & ? & ? & ? & ? & outco & ? & ? & ? & Hm'); auto.
       pose proof (find_class_name _ _ _ _ Find) as Eq;
         pose proof (find_method_name _ _ _ Findreset) as Eq';
         rewrite <-Eq, <-Eq' in *.
       edestruct methods_corres with (2:=Findreset)
         as (? & f & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
-      assert (vargs: list val). admit.
-      assert (length (fn_params f) = length (Vptr sb Int.zero :: Vptr outb Int.zero :: vargs)). admit.
+      (* assert (eval_expr tge e le m *)
+      (*                   (Eaddrof (Evar self (type_of_inst c_main.(c_name))) *)
+      (*                            (type_of_inst_p c_main.(c_name))) (Vptr sb Int.zero)); eauto. *)
+      (* assert (eval_expr tge e le m *)
+      (*                   (Eaddrof (Evar (Ident.prefix out m_reset.(m_name)) *)
+      (*                                  (type_of_inst (prefix_fun c_main.(c_name) m_reset.(m_name)))) *)
+      (*                            (type_of_inst_p (prefix_fun c_main.(c_name) m_reset.(m_name)))) *)
+      (*                   (Vptr outb Int.zero)); eauto. *)
+      assert (vars: list val). admit.
+      assert (length (fn_params f) = length (Vptr sb Int.zero :: Vptr outb Int.zero :: vars)). admit.
       edestruct compat_auto_funcall_pres with (2:=Findreset)
         as (e' & le' & m'' & ? & ? & ? & ? & ? & Hm''); eauto.
       exists m'', e', le', sb, Int.zero, outb, outco.   
@@ -3311,13 +3335,20 @@ Section PRESERVATION.
         sep_assoc, sep_swap45, sep_swap34, sep_swap45,
         blockrep_any_empty, varsrep_any_empty in Hm''; auto.
       - simpl.
-        admit.
+        edestruct  make_members_co as (co & Hco & Hsu & Hm & ? & ? & Hbound); eauto.
+        transitivity co.(co_sizeof); auto.
+        erewrite co_consistent_sizeof; eauto.
+        rewrite Hsu, Hm.
+        apply align_le.
+        erewrite co_consistent_alignof; eauto.
+        apply alignof_composite_pos. 
     Qed.
 
-     Lemma match_states_main_step:
+    Lemma match_states_main_step:
       exists m e le sb sofs outb outco,
         m |= match_states c_main m_step (hempty, sempty) (e, le) sb sofs outb outco.
     Proof.
+      destruct match_states_main_reset as ().
       destruct init_mem as [m].
       destruct (find_main m sepemp)
         as (b & ? & main & ? & le & ? & e & m' & ? & sb & ? & ? & outb & outco & ? & ? & Hm'); auto.

@@ -274,7 +274,7 @@ Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctype
                 (AST.mkglobvar ty' [AST.Init_space (Ctypes.sizeof env ty')] false volatile)).
 
 Definition build_composite_env' (types: list Ctypes.composite_definition) :
-  { ce | Ctypes.build_composite_env types = Errors.OK ce } + Errors.errmsg.
+  { ce | Ctypes.build_composite_env types = OK ce } + errmsg.
 Proof.
   destruct (Ctypes.build_composite_env types) as [ce|msg].
   - left. exists ce; auto.
@@ -284,9 +284,9 @@ Defined.
 Definition check_size (env: Ctypes.composite_env) (id: AST.ident) :=
   match env ! id with
   | Some co =>
-    if (Ctypes.co_sizeof co) <=? Int.modulus
-    then Errors.OK tt else Errors.Error (Errors.msg "2big")
-  | None => Errors.Error (Errors.msg "unknown")
+    if (Ctypes.co_sizeof co) <=? Int.max_unsigned
+    then OK tt else Error (msg "2big")
+  | None => Error (msg "unknown")
   end.
 
 Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composite_definition)
@@ -303,20 +303,20 @@ Definition make_program'
            (gvars_vol: list (ident * Ctypes.type))
            (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
            (public: list ident)
-           (main: ident) : Errors.res (Ctypes.program Clight.function) :=
+           (main: ident) : res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
   | inl (exist ce P) => 
     do _ <- check_size_env ce types;
-    Errors.OK {| Ctypes.prog_defs := map (vardef ce true) gvars_vol ++ defs;
+    OK {| Ctypes.prog_defs := map (vardef ce true) gvars_vol ++ defs;
                  Ctypes.prog_public := public;
                  Ctypes.prog_main := main;
                  Ctypes.prog_types := types;
                  Ctypes.prog_comp_env := ce;
                  Ctypes.prog_comp_env_eq := P |}
-  | inr msg => Errors.Error msg
+  | inr msg => Error msg
   end.
 
-Definition translate (prog: program) (main_node: ident): Errors.res Clight.program :=
+Definition translate (prog: program) (main_node: ident): res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
     match find_method step c.(c_methods) with
@@ -330,9 +330,9 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
         let (structs, funs) := split cs in
         let gdefs := concat funs ++ [(main_id, main)] in
         make_program' (concat structs) (outs ++ ins) gdefs [] main_id
-      | None => Errors.Error (Errors.msg "unfound reset function")
+      | None => Error (msg "unfound reset function")
       end
-    | None => Errors.Error (Errors.msg "unfound step function")
+    | None => Error (msg "unfound step function")
     end
-  | None => Errors.Error (Errors.msg "undefined node")
+  | None => Error (msg "undefined node")
   end.

@@ -80,7 +80,7 @@ Extract Constant Cabs.char_code => "int64".
 Separate Extraction
          ZArith.BinIntDef
          Compiler.transf_clight_program Cabs
-         DataflowToClight
+         DataflowToClight.compile
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg
