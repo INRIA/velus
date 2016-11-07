@@ -62,6 +62,8 @@ Module Type SYNTAX
     | Ewhen e _ _ => typeof e
     end.
 
+  (* XXX: [var_defined] is redundant with [defined_eq], except that it
+  works on lists rather than finite sets. *)
   Definition var_defined (eq: equation) : idents :=
     match eq with
     | EqDef x _ _ => [x]
