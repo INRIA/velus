@@ -650,7 +650,8 @@ Module Type TYPING
   Proof.
     intro; rewrite <-app_nil_l; constructor.
   Qed.
-    
+  Hint Resolve sub_prog_refl.
+  
   Add Parametric Relation: program sub_prog
       reflexivity proved by sub_prog_refl
         as sub_prog_rel.
@@ -734,12 +735,12 @@ Module Type TYPING
       sub_prog prog' prog ->
       wt_mem mem prog c.
   Proof.
-    induction 1 as [? ? ? sale WTmem_inst]; intros ** Sub.
+    induction 1 as [? ? ? ? WTmem_inst]; intros ** Sub.
     constructor; auto.
     induction (c_objs cl) as [|(o, c)]; inv WTmem_inst; auto.
     constructor; eauto.
   Qed.
-  
+
   Hint Constructors sub_prog.  
 
   Lemma find_class_chained:

@@ -3158,6 +3158,87 @@ Section PRESERVATION.
         rewrite <-map_app, fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.
   Qed.
 
+  Lemma corres_auto_funcall:
+    forall me1 clsid fid vs me2 rvs c callee cf ptr_f prog' m1 sb outb outco P,
+      let oty := type_of_inst (prefix_fun clsid fid) in
+      stmt_call_eval prog me1 clsid fid vs me2 rvs ->
+      find_class clsid prog = Some (c, prog') ->
+      find_method fid c.(c_methods) = Some callee ->
+      m1 |= staterep gcenv prog c.(c_name) me1 sb Z0
+           ** blockrep gcenv sempty outco.(co_members) outb
+           ** P ->
+      wt_mem me1 prog' c ->
+      Forall2 (fun (v : val) (xt : ident * type) => wt_val v (snd xt)) vs (m_in callee) ->
+      Globalenvs.Genv.find_symbol tge (prefix_fun clsid fid) = Some ptr_f ->
+      Globalenvs.Genv.find_funct_ptr tge ptr_f = Some (Ctypes.Internal cf) ->
+      length cf.(fn_params) = (2 + length vs)%nat ->
+      gcenv ! (prefix_fun clsid fid) = Some outco ->
+      wt_stmt prog c.(c_objs) c.(c_mems) (meth_vars callee) callee.(m_body) ->
+      exists m2 T,
+        eval_funcall tge (function_entry2 tge) m1 (Internal cf)
+                     ((Vptr sb Int.zero) :: (Vptr outb Int.zero) :: vs) T m2 Vundef
+        /\ m2 |= staterep gcenv prog c.(c_name) me2 sb Z0
+               ** blockrep gcenv (adds (map fst callee.(m_out)) rvs sempty) outco.(co_members) outb
+               ** P.
+  Proof.
+    intros ** Heval Findc Findm Hm1 Wtmem ? Hgetptrf Hgetcf ? ? ?.
+    
+    edestruct pres_sem_stmt_call with (6:=Heval); eauto. 
+    inversion_clear Heval as [? ? ? ? ? ? ? ? ? ? ? Findc' Findm' Hev].
+    rewrite Findc' in Findc; inv Findc;
+    rewrite Findm' in Findm; inv Findm.
+    assert (sub_prog prog' prog) by (eapply find_class_sub; eauto).    
+    eapply stmt_eval_sub_prog in Hev; eauto.
+    eapply wt_mem_sub in Wtmem; eauto; inv Wtmem.
+    
+    (* get the clight function *)
+    edestruct methods_corres
+        as (ptr_f' & cf' & Hgetptrf' & Hgetcf' & ? & Hret & ? & ? & ? & ? & ? & ? & Htr); eauto.
+    rewrite Hgetptrf' in Hgetptrf; inv Hgetptrf;
+    rewrite Hgetcf' in Hgetcf; inv Hgetcf.
+    
+    pose proof (find_class_name _ _ _ _ Findc') as Eq;
+      pose proof (find_method_name _ _ _ Findm') as Eq';
+      rewrite <-Eq, <-Eq' in *.
+
+    edestruct compat_auto_funcall_pres with (vs:=vs) (2:=Findm')
+      as (e & le & m & ? & ? & ? & ? & ? & Hm); eauto; simpl; auto.
+
+    edestruct stmt_correctness with (p:=prog) (s:=callee.(m_body)) as (le' & m' & T & Hexec & MS); eauto.
+    - rewrite match_states_conj; split; [|split; [|repeat split; eauto]].
+      + rewrite Int.unsigned_zero, sep_swap45; eauto. 
+      + rewrite Int.unsigned_zero. split; try omega.
+        simpl.
+        edestruct make_members_co as (co & Hco & Hsu & Hmb & ? & ? & Hbound); eauto.
+        transitivity co.(co_sizeof); auto.
+        erewrite co_consistent_sizeof; eauto.
+        rewrite Hsu, Hmb.
+        apply align_le.
+        erewrite co_consistent_alignof; eauto.
+        apply alignof_composite_pos. 
+      + rewrite Int.unsigned_zero; omega.
+    - rewrite match_states_conj in MS; destruct MS as (Hm_fun' & ?).
+      rewrite sep_swap23, sep_swap5, sep_swap in Hm_fun'.
+      rewrite <-sep_assoc, sep_unwand in Hm_fun'; auto.
+      edestruct free_exists as (m_fun'' & Hfree & Hm_fun''); eauto.
+      exists m_fun''; econstructor; split.
+      *{ eapply eval_funcall_internal; eauto.
+         - constructor; eauto.
+         - rewrite Htr.
+           eapply exec_Sseq_1; eauto.
+           apply exec_Sreturn_none.
+         - rewrite Hret; reflexivity. 
+       }
+      *{ rewrite sep_swap.
+         eapply sep_imp; eauto.
+         - erewrite <-output_match; eauto.
+           rewrite <-translate_param_fst.
+           apply blockrep_findvars. 
+           rewrite translate_param_fst; auto.             
+         - rewrite sep_drop; apply sep_imp'; auto.
+       }
+  Qed.
+  
   Lemma find_main:
     forall m P,
       m |= P ->
@@ -3302,74 +3383,70 @@ Section PRESERVATION.
     Hypothesis Find: find_class main_node prog = Some (c_main, prog_main).
     Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
     Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
-            
-    Lemma match_states_main_reset:
-      exists m e le sb sofs outb outco,
-        m |= match_states c_main m_reset (hempty, sempty) (e, le) sb sofs outb outco.
+
+    Variables (main_b: block) (main_f: function) (sb reset_b step_b: block)
+              (reset_co step_co: composite).
+    Hypothesis Find_s_main: Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some main_b.
+    Hypothesis Findmain: Genv.find_funct_ptr tge main_b = Some (Ctypes.Internal main_f).
+    Hypothesis Getreset_co: gcenv ! (prefix_fun main_node reset) = Some reset_co.
+    Hypothesis Getstep_co: gcenv ! (prefix_fun main_node step) = Some step_co.
+                                                         
+    Lemma match_states_main_after_reset:
+      forall m P me,
+        stmt_call_eval prog hempty c_main.(c_name) m_reset.(m_name) [] me [] ->
+        m |= staterep gcenv prog main_node hempty sb Z0
+            ** blockrep gcenv sempty reset_co.(co_members) reset_b
+            ** P ->
+        exists m',
+          m' |= staterep gcenv prog c_main.(c_name) me sb 0
+               ** blockrep gcenv sempty reset_co.(co_members) reset_b
+               ** P.
     Proof.
-      destruct init_mem as [m].
-      destruct (find_main m sepemp)
-        as (b & ? & main & ? & le & ? & e & sb & outb & ?
-            & m' & ? & ? & ? & ? & outco & ? & ? & ? & Hm'); auto.
+      intros.
       pose proof (find_class_name _ _ _ _ Find) as Eq;
         pose proof (find_method_name _ _ _ Findreset) as Eq';
         rewrite <-Eq, <-Eq' in *.
       edestruct methods_corres with (2:=Findreset)
-        as (? & f & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
-      (* assert (eval_expr tge e le m *)
-      (*                   (Eaddrof (Evar self (type_of_inst c_main.(c_name))) *)
-      (*                            (type_of_inst_p c_main.(c_name))) (Vptr sb Int.zero)); eauto. *)
-      (* assert (eval_expr tge e le m *)
-      (*                   (Eaddrof (Evar (Ident.prefix out m_reset.(m_name)) *)
-      (*                                  (type_of_inst (prefix_fun c_main.(c_name) m_reset.(m_name)))) *)
-      (*                            (type_of_inst_p (prefix_fun c_main.(c_name) m_reset.(m_name)))) *)
-      (*                   (Vptr outb Int.zero)); eauto. *)
-      assert (vars: list val). admit.
-      assert (length (fn_params f) = length (Vptr sb Int.zero :: Vptr outb Int.zero :: vars)). admit.
-      edestruct compat_auto_funcall_pres with (2:=Findreset)
-        as (e' & le' & m'' & ? & ? & ? & ? & ? & Hm''); eauto.
-      exists m'', e', le', sb, Int.zero, outb, outco.   
-      rewrite sepemp_right, match_states_conj.
-      split; [|repeat (split; eauto)]; try rewrite Int.unsigned_zero; try omega.
-      - rewrite <-sep_assoc, sep_swap5, sep_drop, sep_swap4,
-        sep_assoc, sep_swap45, sep_swap34, sep_swap45,
-        blockrep_any_empty, varsrep_any_empty in Hm''; auto.
-      - simpl.
-        edestruct  make_members_co as (co & Hco & Hsu & Hm & ? & ? & Hbound); eauto.
-        transitivity co.(co_sizeof); auto.
-        erewrite co_consistent_sizeof; eauto.
-        rewrite Hsu, Hm.
-        apply align_le.
-        erewrite co_consistent_alignof; eauto.
-        apply alignof_composite_pos. 
+        as (? & f & ? & ? & Hp & ? & ? & ? & ? & ? & ? & ?); eauto.
+      assert (m_reset.(m_in) = []) as Hins. admit.
+      assert (m_reset.(m_out) = []) as Houts. admit.
+      edestruct corres_auto_funcall with (3:=Findreset) as (m'' & ? & ? & Hm''); eauto.
+      - rewrite Hins; auto.
+      - rewrite Hp, Hins; auto.
+      - edestruct wt_program_find_class as [WT_main]; eauto.
+        eapply wt_stmt_sub with (prog':=prog_main); eauto.
+        + eapply wt_class_find_method with (2:=Findreset); auto. 
+        + eapply find_class_sub; eauto.
+      - exists m''.
+        rewrite Houts in Hm''; auto.
     Qed.
 
-    Lemma match_states_main_step:
-      exists m e le sb sofs outb outco,
-        m |= match_states c_main m_step (hempty, sempty) (e, le) sb sofs outb outco.
+    Lemma match_states_main_after_step:
+      forall m' P me me' vs rvs,
+        stmt_call_eval prog me c_main.(c_name) m_step.(m_name) vs me' rvs ->
+        m' |= staterep gcenv prog c_main.(c_name) me sb 0
+             ** blockrep gcenv sempty step_co.(co_members) step_b
+             ** P ->
+        wt_mem me prog_main c_main ->
+        Forall2 (fun v xt => wt_val v (snd xt)) vs m_step.(m_in) ->
+        exists m'',
+          m'' |= staterep gcenv prog c_main.(c_name) me' sb 0
+                ** blockrep gcenv (adds (map fst m_step.(m_out)) rvs sempty) step_co.(co_members) step_b
+                ** P.
     Proof.
-      destruct match_states_main_reset as ().
-      destruct init_mem as [m].
-      destruct (find_main m sepemp)
-        as (b & ? & main & ? & le & ? & e & m' & ? & sb & ? & ? & outb & outco & ? & ? & Hm'); auto.
-      rewrite sep_swap23 in Hm'.
+      intros.
       pose proof (find_class_name _ _ _ _ Find) as Eq;
         pose proof (find_method_name _ _ _ Findstep) as Eq';
         rewrite <-Eq, <-Eq' in *.
       edestruct methods_corres with (2:=Findstep)
-        as (? & f & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
-      assert (vargs: list val). admit.
-      assert (length (fn_params f) = length (Vptr sb Int.zero :: Vptr outb Int.zero :: vargs)). admit.
-      edestruct compat_auto_funcall_pres with (2:=Findstep)
-        as (e' & le' & m'' & ? & ? & ? & ? & ? & Hm''); eauto.
-      exists m'', e', le', sb, Int.zero, outb, outco.   
-      rewrite sepemp_right, match_states_conj.
-      split; [|repeat (split; eauto)]; try rewrite Int.unsigned_zero; try omega.
-      - rewrite <-sep_assoc, sep_swap5, sep_drop, sep_swap4,
-        sep_assoc, sep_swap45, sep_swap34, sep_swap45,
-        blockrep_any_empty, varsrep_any_empty in Hm''; auto.
-      - simpl.
-        admit.
+        as (? & f & ? & ? & Hp & ? & ? & ? & ? & ? & ? & ?); eauto.
+      edestruct corres_auto_funcall with (3:=Findstep) as (m'' & ? & ? & Hm''); eauto.
+      - rewrite Hp; simpl; rewrite map_length.
+        symmetry; erewrite Forall2_length; eauto.
+      - edestruct wt_program_find_class as [WT_main]; eauto.
+        eapply wt_stmt_sub with (prog':=prog_main); eauto.
+        + eapply wt_class_find_method with (2:=Findstep); auto. 
+        + eapply find_class_sub; eauto.
     Qed.
    
   End Init.
