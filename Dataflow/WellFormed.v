@@ -81,47 +81,6 @@ A CoreDF program is well defined if
         -> Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
         -> Welldef_global (nd::nds).
 
-  Lemma n_out_variable_in_eqs:
-    forall n x,
-      In x (map fst n.(n_out)) ->
-      Is_variable_in_eqs x n.(n_eqs).
-  Proof.
-    intros.
-    apply Is_variable_in_var_defined.
-    eapply not_In_app; eauto using n.(n_vout).
-    unfold vars_defined, concatMap.
-    rewrite <- concat_app, <-map_app, Permutation_app_comm,
-            filter_notb_app, n.(n_defd), map_app.
-    now intuition.
-  Qed.
-
-  Lemma not_Exists_Is_defined_in_eqs_n_in:
-    forall n,
-      ~Exists (fun ni=>Is_defined_in_eqs ni n.(n_eqs)) (map fst n.(n_in)).
-  Proof.
-    intros n HH.
-    assert (forall {B} eqs (xs:list (ident*B)),
-      Exists (fun ni=> Is_defined_in_eqs ni eqs) (map fst xs)
-      <-> Exists (fun x=> Is_defined_in_eqs (fst x) eqs) xs) as Hexfst.
-    { intros B eqs. induction xs as [|x xs].
-      - simpl. now rewrite 2 Exists_nil.
-      - simpl. split;
-                 inversion_clear 1;
-                 try (now constructor);
-                 try (constructor (now apply IHxs)). }
-    rewrite Hexfst in HH; clear Hexfst.
-    apply decidable_Exists_not_Forall in HH.
-    2:(intros; apply decidable_Is_defined_in_eqs).
-    apply HH. clear HH.
-    apply Forall_forall.
-    intros x Hin.
-    rewrite Is_defined_in_var_defined.
-    rewrite n.(n_defd).
-    destruct x as [x xty].
-    apply In_InMembers in Hin.
-    rewrite <-fst_InMembers. simpl.
-    apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup) Hin).
-  Qed.
 
   (** ** Properties of [Is_well_sch] *)
 

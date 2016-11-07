@@ -21,6 +21,7 @@ Ltac inv H := inversion H; clear H; subst.
 Module PS := Coq.MSets.MSetPositive.PositiveSet.
 Module PSP := MSetProperties.WPropertiesOn Pos PS.
 Module PSF := MSetFacts.Facts PS.
+Module PSE := MSetEqProperties.WEqPropertiesOn Pos PS.
 Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
 
 Module PM := Coq.FSets.FMapPositive.PositiveMap.

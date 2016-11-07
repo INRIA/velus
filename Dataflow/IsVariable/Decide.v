@@ -83,6 +83,62 @@ Module Type DECIDE
         ].
   Qed.
 
+
+  (* tactic definition needed in signature *)
+  Ltac not_Is_variable x y :=
+    match goal with
+    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ =>
+      apply not_Is_variable_in_EqDef in H
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _) |- _ =>
+      apply not_Is_variable_in_EqApp in H
+    end.
+
+  Lemma Is_variable_in_eq_dec:
+    forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
+  Proof.
+    intros x eq.
+    destruct eq as [y cae|y f lae|y v0 lae];
+      try match goal with
+      | |- context Is_variable_in_eq [EqFby _ _ _ _] =>
+        right; inversion 1
+      | |- context Is_variable_in_eq [EqApp _ _ _ _] =>
+        edestruct in_dec as [ Hin_xy | Hnin_xy ];
+          [ now apply ident_eq_dec
+          | now constructor(constructor(eauto))
+          | now right; intro; inversion 0; eauto]
+      | _ =>
+        destruct (ident_eq_dec x y) as [xeqy|xneqy];
+          [ rewrite xeqy; left; constructor
+          | right; inversion 1; auto]
+      end.
+  Qed.
+
+
+
+  Lemma Is_variable_in_cons:
+    forall x eq eqs,
+      Is_variable_in_eqs x (eq :: eqs) ->
+      Is_variable_in_eq x eq
+      \/ (~Is_variable_in_eq x eq /\ Is_variable_in_eqs x eqs).
+  Proof.
+    intros x eq eqs Hdef.
+    apply List.Exists_cons in Hdef.
+    destruct (Is_variable_in_eq_dec x eq); intuition.
+  Qed.
+
+  Lemma not_Is_variable_in_cons:
+    forall x eq eqs,
+      ~Is_variable_in_eqs x (eq :: eqs)
+      <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in_eqs x eqs.
+  Proof.
+    intros x eq eqs. split.
+    intro H0; unfold Is_variable_in_eqs in H0; auto.
+    destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
+  Qed.
+
+
+
+
   Lemma Is_variable_in_variables:
     forall x eqs,
       PS.In x (variables eqs)

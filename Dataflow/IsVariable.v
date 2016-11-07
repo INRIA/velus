@@ -10,6 +10,7 @@ Require Import Rustre.Dataflow.Syntax.
 Require Import Rustre.Dataflow.IsDefined.
 Require Import Rustre.Dataflow.Memories.
 
+Require Import Coq.Sorting.Permutation.
 
 (** * Stack variables *)
 
@@ -51,34 +52,6 @@ Module Type ISVARIABLE
       ~ Is_variable_in_eq x (EqApp ys ck f e) -> ~ List.In x ys.
   Proof. eauto using Is_variable_in_eq. Qed.
 
-  (* tactic definition needed in signature *)
-  Ltac not_Is_variable x y :=
-    match goal with
-    | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ =>
-      apply not_Is_variable_in_EqDef in H
-    | H: ~ Is_variable_in_eq x (EqApp y _ _ _) |- _ =>
-      apply not_Is_variable_in_EqApp in H
-    end.
-
-  Lemma Is_variable_in_eq_dec:
-    forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
-  Proof.
-    intros x eq.
-    destruct eq as [y cae|y f lae|y v0 lae];
-      try match goal with
-      | |- context Is_variable_in_eq [EqFby _ _ _ _] =>
-        right; inversion 1
-      | |- context Is_variable_in_eq [EqApp _ _ _ _] =>
-        edestruct in_dec as [ Hin_xy | Hnin_xy ];
-          [ now apply ident_eq_dec
-          | now constructor(constructor(eauto))
-          | now right; intro; inversion 0; eauto]
-      | _ =>
-        destruct (ident_eq_dec x y) as [xeqy|xneqy];
-          [ rewrite xeqy; left; constructor
-          | right; inversion 1; auto]
-      end.
-  Qed.
 
   Lemma Is_variable_in_eq_Is_defined_in_eq:
     forall x eq,
@@ -99,27 +72,6 @@ Module Type ISVARIABLE
     constructor (assumption).
   Qed.
 
-  Lemma Is_variable_in_cons:
-    forall x eq eqs,
-      Is_variable_in_eqs x (eq :: eqs) ->
-      Is_variable_in_eq x eq
-      \/ (~Is_variable_in_eq x eq /\ Is_variable_in_eqs x eqs).
-  Proof.
-    intros x eq eqs Hdef.
-    apply List.Exists_cons in Hdef.
-    destruct (Is_variable_in_eq_dec x eq); intuition.
-  Qed.
-
-  Lemma not_Is_variable_in_cons:
-    forall x eq eqs,
-      ~Is_variable_in_eqs x (eq :: eqs)
-      <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in_eqs x eqs.
-  Proof.
-    intros x eq eqs. split.
-    intro H0; unfold Is_variable_in_eqs in H0; auto.
-    destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
-  Qed.
-
   Lemma not_Is_defined_in_eq_not_Is_variable_in_eq:
     forall x eq, ~Is_defined_in_eq x eq -> ~Is_variable_in_eq x eq.
   Proof.
@@ -134,10 +86,14 @@ Module Type ISVARIABLE
     Hint Constructors Is_defined_in_eq.
     induction eqs as [|eq].
     - intro H; contradict H; inversion H.
-    - intro H; apply not_Is_defined_in_cons in H; destruct H as [H0 H1].
-      apply IHeqs in H1; apply not_Is_variable_in_cons.
-      split; [ now apply not_Is_defined_in_eq_not_Is_variable_in_eq
-             | now apply H1].
+    - intros Hndef Hvar.
+      inv Hvar;
+      eapply Hndef.
+      + constructor(now apply Is_variable_in_eq_Is_defined_in_eq).
+      + constructor(
+            now apply Exists_exists in H0 as (eq' & ? & ?);
+                apply Exists_exists; exists eq'; split; auto;
+                apply Is_variable_in_eq_Is_defined_in_eq).
   Qed.
 
   Lemma Is_variable_in_var_defined:
@@ -184,8 +140,22 @@ Module Type ISVARIABLE
       Is_variable_in_eqs x eqs.
   Proof.
     induction eqs; inversion_clear 2.
-    * now subst; repeat constructor.
-    * constructor(apply IHeqs; eauto).
+    - now subst; repeat constructor.
+    - constructor(apply IHeqs; eauto).
+  Qed.
+
+  Lemma n_out_variable_in_eqs:
+    forall n x,
+      In x (map fst n.(n_out)) ->
+      Is_variable_in_eqs x n.(n_eqs).
+  Proof.
+    intros.
+    apply Is_variable_in_var_defined.
+    eapply not_In_app; eauto using n.(n_vout).
+    unfold vars_defined, concatMap.
+    rewrite <- concat_app, <-map_app, Permutation_app_comm,
+            filter_notb_app, n.(n_defd), map_app.
+    now intuition.
   Qed.
 
 End ISVARIABLE.

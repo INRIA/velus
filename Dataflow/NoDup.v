@@ -36,7 +36,7 @@ Module Type NODUP
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
-    
+
   Inductive NoDup_defs : list equation -> Prop :=
   | NDDNil: NoDup_defs nil
   | NDDEqDef:
@@ -57,13 +57,13 @@ Module Type NODUP
 
   (** ** Properties *)
 
-  (* Lemma NoDup_defs_cons: *)
-  (*   forall eq eqs, *)
-  (*     NoDup_defs (eq :: eqs) -> NoDup_defs eqs. *)
-  (* Proof. *)
-  (*   intros eq eqs Hndd. *)
-  (*   destruct eq; inversion_clear Hndd; assumption. *)
-  (* Qed. *)
+  Lemma NoDup_defs_cons:
+    forall eq eqs,
+      NoDup_defs (eq :: eqs) -> NoDup_defs eqs.
+  Proof.
+    intros eq eqs Hndd.
+    destruct eq; inversion_clear Hndd; assumption.
+  Qed.
 
   Lemma not_Is_variable_in_memories:
     forall x eqs,
@@ -71,74 +71,56 @@ Module Type NODUP
       -> NoDup_defs eqs
       -> ~Is_variable_in_eqs x eqs.
   Proof.
-    (* TODO: Too complicated! Find a simpler proof. *)
-    intros x eqs Hinm Hndd.
-    pose proof (Is_defined_in_memories _ _ Hinm) as Hdin.
-    unfold memories, Is_variable_in_eqs in *.
-    induction eqs as [eq|eq eqs IH].
-    - simpl in *; intro; not_In_empty.
-    - apply Is_defined_in_cons in Hdin.
-      inversion Hndd
-        as [|y ck e ? Hndds Hndi|y ck f e ? Hndds Hndi|y ck v0 e ? Hndds Hndi];
-        subst; clear Hndd.
-      + destruct Hdin as [Hdin|[Hndin Hdins]].
-        simpl in Hinm.
-        intro He; apply List.Exists_cons in He; destruct He as [He|He].
-        apply Is_defined_in_memories in Hinm.
-        inversion He; subst; clear He.
-        contradiction.
+    intros x eqs Hinm Hndd Hvar.
 
-        inversion Hdin; subst; clear Hdin.
-        apply Is_variable_in_eqs_Is_defined_in_eqs in He.
-        contradiction.
+    induction eqs as [ | eq eqs IHeqs ].
+    - inv Hvar.
+    - assert (NoDup_defs eqs)
+        by now eapply NoDup_defs_cons; eauto.
 
-        simpl in Hinm.
-        apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
-        intro He; apply List.Exists_cons in He; destruct He as [He|He].
-        inversion He; subst; clear He.
-        apply Hndin; now constructor.
-        contradiction.
-      + destruct Hdin as [Hdin|[Hndin Hdins]].
-        * simpl in Hinm.
-          intro He; apply List.Exists_cons in He. 
-          {
-            destruct He as [He|He].
-            - apply Is_defined_in_memories in Hinm.
-              inv He; eapply Hndi; eauto.
-            - eapply IH; eauto.
-              apply Is_variable_in_eqs_Is_defined_in_eqs.
-              auto.
-          }
+      unfold memories in *; simpl in *.
+      destruct eq; simpl in *;
+      match goal with
+      | _ : context[ EqFby _ _ _ _ ] |- _ =>
+        idtac
+      | _ =>
+        (* Case: eq ~ EqApp or eq ~ EqDef *)
+        (assert (Is_defined_in_eqs x eqs)
+          by now apply Is_defined_in_memories);
+        (assert (Is_variable_in_eqs x eqs)
+          by now inv Hvar; auto; exfalso; inv Hndd;
+            match goal with
+            | H: Is_variable_in_eq ?x (EqDef ?i _ _) |- _ => inv H
+            | H: Is_variable_in_eq ?x (EqApp ?i _ _ _) |- _ => inv H
+            end; firstorder);
+        now apply IHeqs
+      end.
+      (* Case: eq ~ EqFby *)
+      rewrite In_fold_left_memory_eq in Hinm.
+      destruct Hinm.
+      * assert (Is_defined_in_eqs x eqs)
+          by now apply Is_defined_in_memories.
+        assert (Is_variable_in_eqs x eqs)
+          by now inv Hvar; auto; exfalso; inv Hndd;
+            match goal with
+            | H: Is_variable_in_eq ?x (EqFby ?i _ _ _) |- _ => inv H
+            end.
+        now apply IHeqs.
+      * assert (x = i) as ->.
+        {
+          rewrite PSF.add_iff in H0.
+          destruct H0; auto.
+          exfalso; eapply not_In_empty; eauto.
+        }
 
-        *
-        simpl in Hinm.
-        apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
-        intro He; apply List.Exists_cons in He; destruct He as [He|He].
-        inversion He; subst; clear He.
-        apply Hndin; now constructor.
-        contradiction.
-      + destruct Hdin as [Hdin|[Hndin Hdins]].
-        simpl in Hinm.
-        intro He; apply List.Exists_cons in He; destruct He as [He|He].
-        inversion He; subst; clear He.
-        inversion Hdin; subst; clear Hdin.
+        assert (~ Is_variable_in_eqs i eqs)
+          by now apply not_Is_defined_in_not_Is_variable_in;
+          inv Hndd.
 
-        apply Is_variable_in_eqs_Is_defined_in_eqs in He.
-        contradiction.
+        assert (~ Is_variable_in_eq i (EqFby i c c0 l))
+          by now intro His_var; inv His_var.
 
-        simpl in Hinm.
-        apply In_fold_left_memory_eq in Hinm.
-        destruct Hinm as [Hinm|Hinm].
-        apply IH with (2:=Hndds) (3:=Hdins) in Hinm.
-        intro He; apply List.Exists_cons in He; destruct He as [He|He].
-
-        inversion He; subst; clear He.
-        contradiction.
-
-        apply PS.add_spec in Hinm.
-        destruct Hinm as [Hinm|Hinm]; [|now not_In_empty].
-        rewrite Hinm in *.
-        exfalso; apply Hndin; now constructor.
+        now inv Hvar.
   Qed.
 
 End NODUP.
@@ -151,8 +133,7 @@ Module NoDupFun
        (Import IsD : ISDEFINED Ids Op Syn Mem)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
        <: NODUP Ids Op Syn Mem IsD IsV.
-  
+
   Include NODUP Ids Op Syn Mem IsD IsV.
 
 End NoDupFun.
-
