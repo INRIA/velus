@@ -3046,15 +3046,15 @@ Section PRESERVATION.
     eapply (proj1 correctness); eauto.
   Qed.
 
-  Lemma find_main_node:
-    exists c_main prog_main m_reset m_step,
-      find_class main_node prog = Some (c_main, prog_main)
-      /\ find_method reset c_main.(c_methods) = Some m_reset
-      /\ find_method step c_main.(c_methods) = Some m_step.
-  Proof.
-    inv_trans TRANSL.
-    repeat econstructor; eauto.
-  Qed.
+  (* Lemma find_main_node: *)
+  (*   exists c_main prog_main m_reset m_step, *)
+  (*     find_class main_node prog = Some (c_main, prog_main) *)
+  (*     /\ find_method reset c_main.(c_methods) = Some m_reset *)
+  (*     /\ find_method step c_main.(c_methods) = Some m_step. *)
+  (* Proof. *)
+  (*   inv_trans TRANSL. *)
+  (*   repeat econstructor; eauto. *)
+  (* Qed. *)
 
   Lemma make_program_defs:
     forall types gvars_vol defs public main p,
@@ -3242,27 +3242,69 @@ Section PRESERVATION.
   Lemma find_main:
     forall m P,
       m |= P ->
-      exists b,
-        Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some b
-        /\ exists main,
-          Genv.find_funct_ptr tge b = Some (Ctypes.Internal main)
-          /\ exists le,
-            bind_parameter_temps [] [] (create_undef_temps main.(fn_temps)) = Some le
-            /\ exists e sb reset_b step_b m',
-              alloc_variables tge empty_env m main.(fn_vars) e m'
-              /\ e ! self = Some (sb, type_of_inst main_node)
-              /\ e ! (Ident.prefix out reset) = Some (reset_b, type_of_inst (prefix_fun main_node reset))
-              /\ e ! (Ident.prefix out step) = Some (step_b, type_of_inst (prefix_fun main_node step))
-              /\ exists reset_co step_co,
-                  gcenv ! (prefix_fun main_node reset) = Some reset_co
-                  /\ gcenv ! (prefix_fun main_node step) = Some step_co
-                  /\ m' |= staterep gcenv prog main_node hempty sb Z0
-                       ** blockrep gcenv sempty reset_co.(co_members) reset_b
-                       ** blockrep gcenv sempty step_co.(co_members) step_b
-                       ** P.
+      exists c_main prog_main m_reset m_step,
+        find_class main_node prog = Some (c_main, prog_main)
+        /\ find_method reset c_main.(c_methods) = Some m_reset
+        /\ find_method step c_main.(c_methods) = Some m_step 
+        /\ exists b,
+            Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some b
+            /\ exists main,
+              Genv.find_funct_ptr tge b = Some (Ctypes.Internal main)
+              /\ main.(fn_return) = type_int32s
+              /\ main.(fn_callconv) = AST.cc_default
+              /\ main.(fn_params) = []
+              /\ main.(fn_vars) = [(self, type_of_inst main_node);
+                                   (prefix out reset,
+                                    type_of_inst (prefix_fun main_node reset));
+                                   (prefix out step,
+                                    type_of_inst (prefix_fun main_node step))]
+              /\ main.(fn_temps) = []
+              /\ main.(fn_body) =
+                return_zero
+                  (Ssequence
+                     (funcall (prefix_fun main_node reset)
+                              [Eaddrof (Evar self (type_of_inst main_node))
+                                       (type_of_inst_p main_node);
+                                Eaddrof (Evar (prefix out reset)
+                                              (type_of_inst (prefix_fun main_node reset)))
+                                        (pointer_of (type_of_inst (prefix_fun main_node reset)))])
+                     (Sloop
+                        (Ssequence
+                           (funcall (prefix_fun main_node step)
+                                    (Eaddrof (Evar self (type_of_inst main_node))
+                                             (type_of_inst_p main_node)
+                                     :: Eaddrof (Evar (prefix out step) (type_of_inst (prefix_fun main_node step)))
+                                                (pointer_of (type_of_inst (prefix_fun main_node step)))
+                                     :: map make_in_arg (map glob_bind (m_in m_step))))
+                           (fold_right
+                              (fun y s =>
+                                 let '(y2, ty, (y', _)) := y in
+                                 let assign_out :=
+                                     Sassign (Evar y2 ty)
+                                             (Efield (Evar (prefix out step)
+                                                           (type_of_inst (prefix_fun main_node step)))
+                                                     y' ty) in
+                                 Ssequence assign_out s) Sskip (combine (map glob_bind (m_out m_step))
+                                                                        (m_out m_step)))) Sskip))
+              /\ exists sb reset_b step_b m',
+                  alloc_variables tge empty_env m main.(fn_vars)
+                    (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
+                               (PTree.set (prefix out reset) (reset_b, type_of_inst (prefix_fun main_node reset))
+                                          (PTree.set self (sb, type_of_inst main_node) empty_env))) m'
+                    (* /\ e ! self = Some (sb, type_of_inst main_node) *)
+                    (* /\ e ! (Ident.prefix out reset) = Some (reset_b, type_of_inst (prefix_fun main_node reset)) *)
+                    (* /\ e ! (Ident.prefix out step) = Some (step_b, type_of_inst (prefix_fun main_node step)) *)
+                    /\ exists reset_co step_co,
+                        gcenv ! (prefix_fun main_node reset) = Some reset_co
+                        /\ gcenv ! (prefix_fun main_node step) = Some step_co
+                        /\ m' |= staterep gcenv prog main_node hempty sb Z0
+                               ** blockrep gcenv sempty reset_co.(co_members) reset_b
+                               ** blockrep gcenv sempty step_co.(co_members) step_b
+                               ** P.
   Proof.
     intros ** Hm.
     inv_trans TRANSL as En Estep Ereset with structs funs E.
+    do 4 econstructor; repeat (split; eauto).
     assert ((AST.prog_defmap tprog) ! main_id =
             Some (make_main prog main_node
                             (map glob_bind (m_in m0))
@@ -3280,29 +3322,34 @@ Section PRESERVATION.
     rewrite Hmain_id.
     apply Genv.find_def_symbol in Hget.
     destruct Hget as (b & Findsym & Finddef).
-    exists b; split; auto; econstructor; split; eauto.
+    exists b; split; auto; econstructor; repeat split; eauto.
     - change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
       unfold Genv.find_funct_ptr.
       unfold Clight.fundef in Finddef.
       now rewrite Finddef.
+    - eauto.
+    - eauto.
+    - eauto.
+    - eauto.
+    - eauto.
+    - eauto.
     - simpl.
-      econstructor; split; eauto.
       destruct (Mem.alloc m 0 (sizeof tge (type_of_inst main_node)))
         as (m2, sb) eqn: AllocSelf.
       destruct (Mem.alloc m2 0 (sizeof tge (type_of_inst (prefix_fun main_node reset))))
         as (m3, reset_b) eqn: AllocRes.
       destruct (Mem.alloc m3 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
         as (m4, step_b) eqn: AllocStep.
-      econstructor; exists sb, reset_b, step_b; econstructor; repeat split.
+      exists sb, reset_b, step_b; econstructor; repeat split.
       + repeat (econstructor; eauto).
-      + rewrite 2 PTree.gso, PTree.gss; auto; 
-        intro Eq; apply self_not_prefixed; rewrite Eq; constructor.
-      + rewrite PTree.gso, PTree.gss; auto.
-        intro Eq; apply prefix_injective in Eq; destruct Eq as [? Eq].
-        pose proof methods_nodup as Nodup; unfold methods in Nodup;
-        inversion_clear Nodup as [|? ? Notin].
-        apply Notin; rewrite Eq; apply in_eq.
-      + rewrite PTree.gss; auto.
+      (* + rewrite 2 PTree.gso, PTree.gss; auto;  *)
+      (*   intro Eq; apply self_not_prefixed; rewrite Eq; constructor. *)
+      (* + rewrite PTree.gso, PTree.gss; auto. *)
+      (*   intro Eq; apply prefix_injective in Eq; destruct Eq as [? Eq]. *)
+      (*   pose proof methods_nodup as Nodup; unfold methods in Nodup; *)
+      (*   inversion_clear Nodup as [|? ? Notin]. *)
+      (*   apply Notin; rewrite Eq; apply in_eq. *)
+      (* + rewrite PTree.gss; auto. *)
       + edestruct global_out_struct with (2:=Ereset) as (reset_co & Hrco & ? & Hmr & ? & ? & ?); eauto.
         edestruct global_out_struct with (2:=Estep) as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
         edestruct make_members_co as (co & Hco & ? & ? & ? & ? & ?); eauto.
@@ -3377,48 +3424,103 @@ Section PRESERVATION.
         destruct Hinv as [Hinv|]; auto.
         inv Hinv.
   Qed.
-    
+  
   Section Init.
     Variables (c_main: class) (prog_main: program) (m_reset m_step: method).
     Hypothesis Find: find_class main_node prog = Some (c_main, prog_main).
     Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
     Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
 
+    Hypothesis Reset_in: m_reset.(m_in) = [].
+    Hypothesis Reset_out: m_reset.(m_out) = [].
+
+    Variables (rst_ptr stp_ptr: block) (reset_f step_f: function).
+    Hypothesis Getreset_s: Genv.find_symbol tge (prefix_fun main_node reset) = Some rst_ptr.
+    Hypothesis Getreset_f: Genv.find_funct_ptr tge rst_ptr = Some (Internal reset_f).
+    Hypothesis Getstep_s: Genv.find_symbol tge (prefix_fun main_node step) = Some stp_ptr.
+    Hypothesis Getstep_f: Genv.find_funct_ptr tge stp_ptr = Some (Internal step_f).
+                                                  
     Variables (main_b: block) (main_f: function) (sb reset_b step_b: block)
               (reset_co step_co: composite).
     Hypothesis Find_s_main: Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some main_b.
     Hypothesis Findmain: Genv.find_funct_ptr tge main_b = Some (Ctypes.Internal main_f).
+    Hypothesis Caractmain: main_f.(fn_return) = type_int32s
+                           /\ main_f.(fn_callconv) = AST.cc_default
+                           /\ main_f.(fn_params) = []
+                           /\ main_f.(fn_vars) = [(self, type_of_inst main_node);
+                                                  (prefix out reset,
+                                                   type_of_inst (prefix_fun main_node reset));
+                                                  (prefix out step,
+                                                   type_of_inst (prefix_fun main_node step))]
+                           /\ main_f.(fn_temps) = []
+                           /\ main_f.(fn_body) =
+                             return_zero
+                               (Ssequence
+                                  (funcall (prefix_fun main_node reset)
+                                           [Eaddrof (Evar self (type_of_inst main_node))
+                                                    (type_of_inst_p main_node);
+                                             Eaddrof (Evar (prefix out reset)
+                                                           (type_of_inst (prefix_fun main_node reset)))
+                                                     (pointer_of (type_of_inst (prefix_fun main_node reset)))])
+                                  (Sloop
+                                     (Ssequence
+                                        (funcall (prefix_fun main_node step)
+                                                 (Eaddrof (Evar self (type_of_inst main_node))
+                                                          (type_of_inst_p main_node)
+                                                          :: Eaddrof (Evar (prefix out step) (type_of_inst (prefix_fun main_node step)))
+                                                          (pointer_of (type_of_inst (prefix_fun main_node step)))
+                                                          :: map make_in_arg (map glob_bind (m_in m_step))))
+                                        (fold_right
+                                           (fun y s =>
+                                              let '(y2, ty, (y', _)) := y in
+                                              let assign_out :=
+                                                  Sassign (Evar y2 ty)
+                                                          (Efield (Evar (prefix out step)
+                                                                        (type_of_inst (prefix_fun main_node step)))
+                                                                  y' ty) in
+                                              Ssequence assign_out s) Sskip (combine (map glob_bind (m_out m_step))
+                                                                                     (m_out m_step)))) Sskip)).
+
     Hypothesis Getreset_co: gcenv ! (prefix_fun main_node reset) = Some reset_co.
     Hypothesis Getstep_co: gcenv ! (prefix_fun main_node step) = Some step_co.
-                                                         
+
+    Variables (m0 m1: Mem.mem).
+    Hypothesis Initmem: Genv.init_mem tprog = Some m0.
+    Let e1 := (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
+                   (PTree.set (prefix out reset) (reset_b, type_of_inst (prefix_fun main_node reset))
+                              (PTree.set self (sb, type_of_inst main_node) empty_env))).
+    Hypothesis Alloc: alloc_variables tge empty_env m0 main_f.(fn_vars) e1 m1.
+    Hypothesis Hm1: m1 |= staterep gcenv prog main_node hempty sb Z0
+                         ** blockrep gcenv sempty reset_co.(co_members) reset_b
+                         ** blockrep gcenv sempty step_co.(co_members) step_b.
+
+    Variables (me0: heap).
+    Hypothesis ResetNode: stmt_call_eval prog hempty c_main.(c_name) m_reset.(m_name) [] me0 [].
+    
     Lemma match_states_main_after_reset:
-      forall m P me,
-        stmt_call_eval prog hempty c_main.(c_name) m_reset.(m_name) [] me [] ->
-        m |= staterep gcenv prog main_node hempty sb Z0
-            ** blockrep gcenv sempty reset_co.(co_members) reset_b
-            ** P ->
-        exists m',
-          m' |= staterep gcenv prog c_main.(c_name) me sb 0
+      exists m2 T,
+        eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
+                     ([Vptr sb Int.zero; Vptr reset_b Int.zero]) T m2 Vundef
+        /\ m2 |= staterep gcenv prog c_main.(c_name) me0 sb 0
                ** blockrep gcenv sempty reset_co.(co_members) reset_b
-               ** P.
+               ** blockrep gcenv sempty step_co.(co_members) step_b.
     Proof.
-      intros.
       pose proof (find_class_name _ _ _ _ Find) as Eq;
         pose proof (find_method_name _ _ _ Findreset) as Eq';
         rewrite <-Eq, <-Eq' in *.
       edestruct methods_corres with (2:=Findreset)
-        as (? & f & ? & ? & Hp & ? & ? & ? & ? & ? & ? & ?); eauto.
-      assert (m_reset.(m_in) = []) as Hins. admit.
-      assert (m_reset.(m_out) = []) as Houts. admit.
-      edestruct corres_auto_funcall with (3:=Findreset) as (m'' & ? & ? & Hm''); eauto.
-      - rewrite Hins; auto.
-      - rewrite Hp, Hins; auto.
+        as (ptr & f & Get_s & Get_f & Hp & ? & ? & ? & ? & ? & ? & ?); eauto.
+      rewrite Getreset_s in Get_s; inversion Get_s; subst ptr;
+      rewrite Getreset_f in Get_f; inversion Get_f; subst f.
+      edestruct corres_auto_funcall with (3:=Findreset) as (m'' & T & ? & Hm''); eauto.
+      - rewrite Reset_in; auto.
+      - rewrite Hp, Reset_in; auto.
       - edestruct wt_program_find_class as [WT_main]; eauto.
         eapply wt_stmt_sub with (prog':=prog_main); eauto.
         + eapply wt_class_find_method with (2:=Findreset); auto. 
         + eapply find_class_sub; eauto.
-      - exists m''.
-        rewrite Houts in Hm''; auto.
+      - exists m'', T; split; auto.
+        rewrite Reset_out in Hm''; auto.
     Qed.
 
     Lemma match_states_main_after_step:
@@ -3429,18 +3531,22 @@ Section PRESERVATION.
              ** P ->
         wt_mem me prog_main c_main ->
         Forall2 (fun v xt => wt_val v (snd xt)) vs m_step.(m_in) ->
-        exists m'',
-          m'' |= staterep gcenv prog c_main.(c_name) me' sb 0
-                ** blockrep gcenv (adds (map fst m_step.(m_out)) rvs sempty) step_co.(co_members) step_b
-                ** P.
+        exists m'' T,
+          eval_funcall tge (function_entry2 tge) m' (Internal step_f)
+                       (Vptr sb Int.zero :: Vptr step_b Int.zero :: vs) T m'' Vundef
+          /\ m'' |= staterep gcenv prog c_main.(c_name) me' sb 0
+                  ** blockrep gcenv (adds (map fst m_step.(m_out)) rvs sempty) step_co.(co_members) step_b
+                  ** P.
     Proof.
       intros.
       pose proof (find_class_name _ _ _ _ Find) as Eq;
         pose proof (find_method_name _ _ _ Findstep) as Eq';
         rewrite <-Eq, <-Eq' in *.
       edestruct methods_corres with (2:=Findstep)
-        as (? & f & ? & ? & Hp & ? & ? & ? & ? & ? & ? & ?); eauto.
-      edestruct corres_auto_funcall with (3:=Findstep) as (m'' & ? & ? & Hm''); eauto.
+        as (ptr & f & Get_s & Get_f & Hp & ? & ? & ? & ? & ? & ? & ?); eauto.
+      rewrite Getstep_s in Get_s; inversion Get_s; subst ptr;
+      rewrite Getstep_f in Get_f; inversion Get_f; subst f.
+      edestruct corres_auto_funcall with (3:=Findstep) as (m'' & T & ? & Hm''); eauto.
       - rewrite Hp; simpl; rewrite map_length.
         symmetry; erewrite Forall2_length; eauto.
       - edestruct wt_program_find_class as [WT_main]; eauto.
@@ -3448,7 +3554,99 @@ Section PRESERVATION.
         + eapply wt_class_find_method with (2:=Findstep); auto. 
         + eapply find_class_sub; eauto.
     Qed.
-   
+
+    Lemma diverges:
+      exists T, bigstep_program_diverges function_entry2 tprog T.
+    Proof.
+      assert (e1 ! self = Some (sb, type_of_inst main_node)).
+      { subst e1;
+        rewrite 2 PTree.gso, PTree.gss; auto;
+        intro Eq; apply self_not_prefixed; rewrite Eq; constructor. }
+      assert (e1 ! (Ident.prefix out reset) = Some (reset_b, type_of_inst (prefix_fun main_node reset))).
+      { subst e1; rewrite PTree.gso, PTree.gss; auto.
+        intro Eq; apply prefix_injective in Eq; destruct Eq as [? Eq].
+        pose proof methods_nodup as Nodup; unfold methods in Nodup;
+        inversion_clear Nodup as [|? ? Notin].
+        apply Notin; rewrite Eq; apply in_eq. }
+      assert (e1 ! (Ident.prefix out step) = Some (step_b, type_of_inst (prefix_fun main_node step)))
+        by (subst e1; rewrite PTree.gss; auto).
+      
+      pose proof (find_class_name _ _ _ _ Find) as Eq;
+      pose proof (find_method_name _ _ _ Findreset) as Eq';
+      pose proof (find_method_name _ _ _ Findstep) as Eq'';
+      rewrite <-Eq, <-Eq', <-Eq'' in *. 
+      
+      destruct Caractmain as (Hret & Hcc & Hparams & Hvars & Htemps & Hbody).
+
+      destruct match_states_main_after_reset as (m2 & T & Heval & ?).
+          change (eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
+                               [Vptr sb Int.zero; Vptr reset_b Int.zero] T m2 Vundef)
+          with (eval_funcall (globalenv tprog) (function_entry2 (globalenv tprog)) m1 (Internal reset_f)
+                             [Vptr sb Int.zero; Vptr reset_b Int.zero] T m2 Vundef) in Heval.
+          
+      do 2 econstructor; eauto.
+      - simpl; unfold type_of_function; rewrite Hparams, Hret, Hcc; auto. 
+      - econstructor.
+        + econstructor; eauto.
+          *{ rewrite Hvars.
+             unfold var_names.
+             rewrite <-NoDup_norepet, <-fst_NoDupMembers.
+             repeat constructor; auto.
+             - intros [E|[E|E]].
+               + apply self_not_prefixed; rewrite <-E; constructor.
+               + apply self_not_prefixed; rewrite <-E; constructor.
+               + contradict E.
+             - intros [E|E].
+               + apply prefix_injective in E; destruct E as [? E].
+                 rewrite Eq', Eq'' in E.
+                 pose proof methods_nodup as Nodup; unfold methods in Nodup;
+                 inversion_clear Nodup as [|? ? Notin].
+                 apply Notin; rewrite E; apply in_eq.
+               + contradict E.
+           }
+          * rewrite Hparams; constructor.
+          * rewrite Hparams, Htemps; simpl.
+            intros ? ? Hx; contradiction.
+          * rewrite Hparams, Htemps; simpl; auto.
+        + edestruct methods_corres with (2:=Findreset)
+               as (ptr & f & Get_s & Get_f & Hp_rst & Hr_rst & Hcc_rst
+                   & ? & ? & ? & ? & ? & Htr_rst); eauto.
+          rewrite Getreset_s in Get_s; inversion Get_s; subst ptr;
+          rewrite Getreset_f in Get_f; inversion Get_f; subst f.
+
+          rewrite Hbody.
+          eapply execinf_Sseq_1, execinf_Sseq_2.
+          *{ econstructor; simpl; eauto.
+             - eapply eval_Elvalue.
+               + apply eval_Evar_global; eauto.
+                 rewrite <-not_Some_is_None.
+                 intros (b, t) Hget.
+                 subst e1.
+                 rewrite 3 PTree.gso, PTree.gempty in Hget.
+                 * discriminate.
+                 * intro E; apply self_not_prefixed; rewrite <-E; constructor.
+                 * intro E; apply prefix_injective in E; destruct E as [E].
+                   contradict E; apply fun_not_out.
+                 * intro E; apply prefix_injective in E; destruct E as [E].
+                   contradict E; apply fun_not_out.
+               + apply deref_loc_reference; auto.               
+           - apply find_method_In in Findreset.
+             do 2 (econstructor; eauto).
+             constructor. 
+           - unfold Genv.find_funct.
+             destruct (Int.eq_dec Int.zero Int.zero) as [|Neq].
+             + change (Genv.find_funct_ptr (Genv.globalenv tprog) rst_ptr)
+               with (Genv.find_funct_ptr tge rst_ptr); eauto.
+             + exfalso; apply Neq; auto.
+           - simpl; unfold type_of_function;
+             rewrite Hp_rst, Hr_rst, Hcc_rst; simpl; repeat f_equal.
+             rewrite Reset_in; auto.
+           }
+          *{ eapply execinf_Sloop_loop; eauto.
+             - 
+            }
+    Qed.
+  
   End Init.
   
   Open Scope nat_scope.
