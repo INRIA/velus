@@ -273,12 +273,18 @@ Section ElabExpressions.
     | _, _ => Error (err_loc loc (msg "wrong number of arguments"))
     end.
 
-  Fixpoint check_lists {A B} (loc: astloc) (f : A -> B -> res unit)
-           (xs: list A) (ys: list B) : res unit :=
+  Fixpoint check_result_list (loc: astloc) (xs: list ident) (ys: list type)
+                                                                   : res PS.t :=
     match xs, ys with
-    | nil, nil => OK tt
-    | x::xs, y::ys => do ok <- f x y; check_lists loc f xs ys
-    | _, _ => Error (err_loc loc (msg "wrong number of arguments"))
+    | nil, nil => OK PS.empty
+    | x::xs, y::ys => do ok <- assert_type loc x y;
+                      do others <- check_result_list loc xs ys;
+                      if PS.mem x others
+                      then Error (err_loc loc
+                                          (msg "duplicate variable in pattern"))
+
+                      else OK (PS.add x others)
+    | _, _ => Error (err_loc loc (msg "wrong number of pattern variables"))
     end.
 
   Definition elab_equation (aeq: Ast.equation) : res equation :=
@@ -294,7 +300,7 @@ Section ElabExpressions.
       let f := ident_of_string sf in
       do (tysin, tysout) <- find_node_interface loc f;
         do es <- elab_lexps loc aes tysin;
-        do ok <- check_lists loc (assert_type loc) xs tysout;
+        do ok <- check_result_list loc xs tysout;
         OK (EqApp xs ck f es)
            
     | FBY av0 ae loc =>
@@ -432,6 +438,61 @@ Section ElabExpressions.
       eauto using assert_type_In with dftyping.
   Qed.
 
+  Lemma check_result_list_Forall2:
+    forall loc xs txs s,
+      check_result_list loc xs txs = OK s ->
+      Forall2 (fun x tx => In (x, tx) (PM.elements env)) xs txs
+      /\ (forall x, PS.In x s <-> In x xs)
+      /\ NoDup xs.
+  Proof.
+    induction xs as [|x xs]; simpl.
+    - repeat split; DestructCases; auto using NoDup_nil.
+      now apply not_In_empty.
+      contradiction.
+    - intros txs s Hcheck.
+      DestructCases.
+      match goal with H:_ = OK _ |- _ => monadInv H end.
+      NamedDestructCases.
+      apply IHxs in EQ1.
+      destruct EQ1 as (Hin & Hset & Hnodup).
+      apply mem_spec_false in Heq. rewrite Hset in Heq.
+      apply assert_type_In in EQ.
+      repeat split; eauto using NoDup; rewrite PS.add_spec;
+        rewrite Hset; destruct 1; auto.
+  Qed.
+
+  (* TODO: move to Common *)
+  Lemma Forall2_eq:
+    forall {A} (xs: list A) ys,
+      Forall2 eq xs ys <-> xs = ys.
+  Proof.
+    split; intro HH.
+    - induction HH; subst; auto.
+    - subst. induction ys; auto.
+  Qed.
+
+  (* TODO: move to Common *)
+  Lemma Forall2_map_2:
+    forall {A B C} P (f: B -> C) (xs: list A) (ys: list B),
+      Forall2 P xs (map f ys) <-> Forall2 (fun x y=>P x (f y)) xs ys.
+  Proof.
+    intros.
+    now rewrite Forall2_swap_args, Forall2_map_1, Forall2_swap_args.
+  Qed.
+
+  (* TODO: move to Common *)
+  Lemma NoDupMembers_combine_NoDup:
+    forall {A B} (xs: list A) (ys: list B),
+      length xs = length ys ->
+      NoDupMembers (combine xs ys) -> NoDup xs.
+  Proof.
+    induction xs as [|x xs]; intros; auto using NoDup_nil.
+    destruct ys as [|y ys]; [inv H|].
+    simpl in *. injection H. intros Hlen.
+    inv H0. constructor; eauto.
+    rewrite <-In_InMembers_combine in H3; auto.
+  Qed.
+
   Lemma wt_elab_equation:
     forall aeq eq,
       elab_equation aeq = OK eq ->
@@ -450,6 +511,9 @@ Section ElabExpressions.
              | H:assert_type _ _ _ = OK _ |- _ => apply assert_type_In in H
              | H:elab_cexp _ = OK _ |- _ => apply wt_elab_cexp in H
              | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
+             | H:check_result_list _ _ _ = OK ?x |- _ =>
+               apply check_result_list_Forall2 in H;
+                 destruct H as (Hele & Hins & Hnodup)
              | _ => NamedDestructCases
              end; auto with dftyping.
     - unfold find_type_unop in EQ3. NamedDestructCases.
@@ -463,29 +527,24 @@ Section ElabExpressions.
       rewrite equiv_decb_equiv in Heq1, Heq2.
       auto with dftyping.
     - auto using type_castop with dftyping.
-    - unfold find_node_interface in EQ0. NamedDestructCases.
+    - rename x1 into xin, x2 into xout, x3 into ein, xs into sxs, l0 into xs,
+      x0 into ck, a into loc'.
+      unfold find_node_interface in EQ0. NamedDestructCases.
       destruct EQ2.
       destruct wt_nenv as (wt_nenv' & ?).
       specialize (wt_nenv' (ident_of_string s) _ _ Heq0).
       destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
-      inv Hout.
       econstructor; eauto.
-      apply Forall2_map_1 with (f:=typeof) in H0.
-      apply Forall2_swap_args in H0.
-      apply Forall2_map_1 with (f:=snd) in Hin.
-      apply Forall2_swap_args in Hin.
-      apply Forall2_det with (2:=H0) in Hin.
-      2:now intros; subst.
-      cut (Forall2 eq (map typeof x3) (map snd n.(n_in))).
-      + intros Hfa. rewrite Forall2_map_1 in Hfa.
-        apply Forall2_swap_args in Hfa.
-        rewrite Forall2_map_1 in Hfa.
-        now apply Forall2_swap_args in Hfa.
-      + rewrite Hin. clear Hin.
-        induction (map snd n.(n_in)); auto.
-      + admit.
-      + admit.
-      + admit.
+      + apply Forall2_map_1 in Hout.
+        apply Forall2_eq in Hout.
+        rewrite <-Hout in Hele.
+        now apply Forall2_map_2 in Hele.
+      + apply Forall2_map_1 with (f:=typeof) in H0.
+        apply Forall2_eq in H0.
+        rewrite <-H0 in Hin.
+        apply Forall2_map_2, Forall2_swap_args in Hin.
+        apply Forall2_impl_In with (2:=Hin).
+        intros ** Htypeof. now rewrite Htypeof.
   Qed.
   
 End ElabExpressions.
