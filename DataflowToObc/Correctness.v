@@ -1848,12 +1848,12 @@ for all [Is_free_exp x e]. *)
     sunroll (mk_trace' n). reflexivity.
     Qed.
 
-    CoInductive dostep' P : nat -> heap -> trace -> Prop
-      := Step : forall n css ys menv0 menv1 t,
+    CoInductive dostep' P : heap -> trace -> Prop
+      := Step : forall css ys menv0 menv1 t,
           let cs := List.map sem_const css in
           stmt_call_eval P menv0 main step cs menv1 ys ->
-          dostep' P (S n) menv1 t ->
-          dostep' P n menv0
+          dostep' P menv1 t ->
+          dostep' P menv0
                   (Ev (Read css)
                       (Ev (Write (List.map present ys))
                           t)).
@@ -1861,25 +1861,23 @@ for all [Is_free_exp x e]. *)
     Section Dostep'_coind.
 
     Variable P : program.
-    Variable R : nat -> heap -> trace -> Prop.
+    Variable R : heap -> trace -> Prop.
 
-    Print stmt_call_eval.
-
-    Hypothesis StepCase: forall n menv0 t,
-      R n menv0 t ->
+    Hypothesis StepCase: forall menv0 t,
+      R menv0 t ->
       exists css ys t' menv1,
         let cs := map sem_const css in
           stmt_call_eval P menv0 main step cs menv1 ys
-        /\ R (S n) menv1 t'
+        /\ R menv1 t'
         /\ t = Ev (Read css)
                  (Ev (Write (List.map present ys))
                      t').
-    Lemma dostep'_coind : forall n menv t,
-        R n menv t -> dostep' P n menv t.
+    Lemma dostep'_coind : forall menv t,
+        R menv t -> dostep' P menv t.
     Proof.
     cofix COINDHYP.
     intros.
-    edestruct (StepCase _ _ _ H).
+    edestruct (StepCase _ _ H).
     simpl in H0.
     decompose record H0.
     subst t.
@@ -1894,7 +1892,7 @@ for all [Is_free_exp x e]. *)
         msem_node G main xss M ys ->
         exists menv0,
           stmt_call_eval P hempty main reset [] menv0 []
-          /\ dostep' (translate G) 0 menv0 mk_trace.
+          /\ dostep' (translate G) menv0 mk_trace.
     Proof.
     intros M Hdef Hmsem. 
 
@@ -1902,45 +1900,41 @@ for all [Is_free_exp x e]. *)
     subst Hdef.
     exists menv0; split; eauto.
 
-    set (R := fun n (menv: heap) (t: trace) => 
+    set (R := fun (menv: heap) (t: trace) => 
+                exists n,
                   Memory_Corres G n main M menv
                 /\ t = mk_trace' n).
     apply dostep'_coind with (R := R).
     2: now unfold R; eexists; eauto.
     intros. unfold R in H. 
     decompose record H.
-    rewrite unroll_trace in H1. subst t.
+    rewrite unroll_trace in H2. subst t.
+    rename x into n.
 
+    assert (exists coSn, ys n = present coSn) as [coSn Hys].
+    {
+      inversion_clear Hmsem as
+          [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
+             (H' & Hsem_in & Hsem_out & Habs & Hsem_eqns)].
 
-    assert (exists coSn, ys n = present coSn) as [coSn Hys] by admit.
-    (* { *)
-    (*   inversion_clear Hmsem as *)
-    (*       [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind *)
-    (*          (H' & Hsem_in & Hsem_out & Hsamexs & Hsameys & Habs & Hsem_eqns)]. *)
+      admit.
+(*
+      assert (~ ys n = absent).
+      intro Hys_abs. rewrite <- Habs in Hys_abs. 
+      unfold xss in *; simpl in *.
+      destruct (css n); try contradiction.
+
+      assert (present_list (yss n)).
+      {
+            edestruct Hsameys as [Habs_ys|]; eauto.
+            apply Habs in Habs_ys. rewrite HpresN in Habs_ys.
+            destruct ciSn; try now inv Hlen. simpl in Habs_ys.
+            inv Habs_ys. discriminate.
+      }
       
-    (*   assert (Hlen: 0 < length ciSn). *)
-    (*   { *)
-    (*     assert (length ciSn = length (xss n)) as -> *)
-    (*         by now rewrite HpresN, 2 map_length. *)
-        
-    (*     assert (length (map fst i) = length (xss n)) as <- *)
-    (*         by now eapply Forall2_length; *)
-    (*       specialize (Hsem_in n); simpl in Hsem_in; *)
-    (*         eauto. *)
-        
-    (*     now rewrite map_length. *)
-    (*   } *)
-      
-    (*   assert (present_list (yss n)). *)
-    (*   { *)
-    (*         edestruct Hsameys as [Habs_ys|]; eauto. *)
-    (*         apply Habs in Habs_ys. rewrite HpresN in Habs_ys. *)
-    (*         destruct ciSn; try now inv Hlen. simpl in Habs_ys. *)
-    (*         inv Habs_ys. discriminate. *)
-    (*   } *)
-      
-    (*   now apply present_list_spec. *)
-    (* } *)
+      now apply present_list_spec.
+*)
+    }
 
     exists (css n).
     exists ([coSn]).
@@ -1953,8 +1947,8 @@ for all [Is_free_exp x e]. *)
     
     edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
 
-    exists omenvSn. simpl.
-    repeat split; auto.
+    exists omenvSn. unfold R; simpl.
+    repeat split; auto. eexists; eauto.
     rewrite Hys. auto.
     Qed.
 
