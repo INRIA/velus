@@ -70,16 +70,14 @@ Lemma append_sep_injectivity:
     (pre1 ++ (String x post1) = pre2 ++ (String x post2))%string ->
     pre1 = pre2 /\ post1 = post2.
 Proof.
-  induction pre1; induction pre2; intros ** In1 In2 Eq.
-  - inv Eq; auto.
-  - apply not_in_str_cons in In2; destruct In2.
-    admit.
-  - apply not_in_str_cons in In1; destruct In1.
-    admit.
-  - apply not_in_str_cons in In1;
-    apply not_in_str_cons in In2;
-    destruct In1; destruct In2.
-    admit.
+  induction pre1; intros pre2 post1 post2 Hin1 Hin2 Heq.
+  - assert (pre2 = ""%string).
+    { destruct pre2; trivial; []. exfalso. simpl in Heq. inv Heq. apply Hin2. now left. }
+    subst. simpl in Heq. inv Heq. now split.
+  - destruct pre2.
+    + exfalso. apply Hin1. inv Heq. now left.
+    + simpl in Heq. inv Heq. rewrite not_in_str_cons in *.
+      destruct (IHpre1 pre2 post1 post2); try tauto. subst. now split.
 Qed.
 
 Module Export Ids <: IDS.
