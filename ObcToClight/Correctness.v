@@ -3554,8 +3554,170 @@ Section PRESERVATION.
         + eapply wt_class_find_method with (2:=Findstep); auto. 
         + eapply find_class_sub; eauto.
     Qed.
+*)
 
-    Print Corr.dostep'.
+
+
+    CoInductive dostep' tge : mem -> Corr.trace -> Prop
+      := Step : 
+           forall m T ins outs m' ve,
+             let cs := List.map sem_const ins in
+             eval_funcall tge (function_entry2 tge) m (Internal step_f)
+                          (Vptr sb Int.zero :: Vptr step_b Int.zero :: cs) E0 m' Vundef ->
+             m' |= blockrep gcenv (adds (map fst (m_out m_step)) outs ve)
+                            (co_members step_co) step_b ->
+             dostep' tge m' T ->
+             dostep' tge m (Corr.Ev (Corr.Read ins)
+                                      (Corr.Ev (Corr.Write (List.map DF.Str.present outs)) 
+                                               T)).
+
+    Section Dostep'_coind.
+
+    Variable t : genv.
+    Variable R : mem -> Corr.trace -> Prop.
+
+    Hypothesis StepCase: forall me T,
+      R me T ->
+      exists T' ins outs me',
+        let cs := List.map sem_const ins in
+        eval_funcall tge (function_entry2 tge) me (Internal step_f)
+                     (Vptr sb Int.zero :: Vptr step_b Int.zero :: cs) E0 me' Vundef
+        /\ me' |= blockrep gcenv (adds (map fst (m_out m_step)) outs sempty)
+                            (co_members step_co) step_b 
+        /\ R me' T' 
+        /\ T = Corr.Ev (Corr.Read ins)
+                      (Corr.Ev (Corr.Write (List.map DF.Str.present outs)) 
+                               T').
+
+    Lemma dostep'_coind : forall menv t,
+        R menv t -> dostep' tge menv t.
+    Proof.
+    cofix COINDHYP.
+    intros.
+    edestruct (StepCase _ _ H).
+    simpl in H0.
+    decompose record H0. clear H0.
+    subst t0.
+    econstructor; eauto.
+    Qed.
+    
+    End Dostep'_coind.
+
+    Definition mInit := m1.
+
+(*
+    Hypothesis Hwt_val:
+      Forall2 (fun v xt => wt_val v (snd xt)) (map sem_const (css n)) (m_in m_step).
+*)  
+
+    Lemma dostep_imp:
+      forall T, 
+        wt_program prog ->
+        wt_mem me0 prog_main c_main ->
+        Corr.dostep' (c_name c_main) prog me0 T ->
+        exists m0, 
+          eval_funcall tge (function_entry2 tge) mInit (Internal reset_f)
+                       ([Vptr sb Int.zero; Vptr reset_b Int.zero]) E0 m0 Vundef
+          /\ dostep' tge m0  T.
+    Proof.
+    intros Hwt_prog Hwt_mem Hdostep.
+
+    (* Initialisation *)
+    edestruct match_states_main_after_reset as (mem0 & ? & ? & ?).
+    eexists; split; eauto.
+
+    (* Coinduction *)
+    set (R := fun (m: mem) (T: Corr.trace) => 
+                exists me,
+(*                    T = Corr.mk_trace' css yss n 
+                  /\ *) Corr.dostep' (c_name c_main) prog me T
+                  /\ wt_mem me prog_main c_main
+                  /\ m
+                      |= staterep gcenv prog (c_name c_main) me sb 0 **
+                         blockrep gcenv sempty (co_members reset_co) reset_b **
+                         blockrep gcenv sempty (co_members step_co) step_b).
+    apply dostep'_coind with (R := R);
+      unfold R.
+    2: now exists me0; repeat (split; auto).
+
+    clear - Hwt_prog Hwt_mem m_step Find Findstep.
+    intros meN T (heapN & Hdostep & Hwt & Hblock).
+    destruct Hdostep as [cssN ? menvN menvSn T csN Hstmt Hdostep].
+
+    assert (Forall2 (fun v xt => wt_val v (snd xt)) csN (m_in m_step)). 
+    admit.
+
+    assert (exists meSn,
+               eval_funcall tge (function_entry2 tge) meN
+                            (Internal step_f)
+                            (Vptr sb Int.zero :: Vptr step_b Int.zero :: csN) 
+                            E0 meSn Vundef 
+               /\ meSn
+                   |= staterep gcenv prog (c_name c_main) menvSn sb 0
+                   ** blockrep gcenv (adds (map fst (m_out m_step)) ys sempty) 
+                              (co_members step_co) step_b
+                   ** blockrep gcenv sempty (co_members reset_co) reset_b)
+      as (meSn & ? & ?).
+    {
+      assert (m_step.(m_name) = step) as <-
+          by now eapply find_method_name; eauto.
+
+      assert (meN
+                |= staterep gcenv prog (c_name c_main) menvN sb 0 
+                ** blockrep gcenv sempty (co_members step_co) step_b 
+                ** blockrep gcenv sempty (co_members reset_co) reset_b)
+        by now rewrite <- sep_assoc, sep_comm, sep_swap. 
+
+      eapply match_states_main_after_step; eauto.
+    }
+
+    exists T, cssN, ys, meSn.
+
+    assert (c_name c_main = main_node) as <-
+      by now eapply find_class_name; eauto. 
+
+    assert (meSn
+              |= blockrep gcenv (adds (map fst (m_out m_step)) ys sempty) 
+                          (co_members step_co) step_b).
+    {
+      match goal with
+      | H: context[ blockrep _ _ _ step_b ] |- _ =>
+        apply sep_proj2, sep_proj1 in H; auto
+      end.
+    }
+
+    assert (  Corr.dostep' (c_name c_main) prog menvSn T 
+            /\ wt_mem menvSn prog_main c_main
+            /\ meSn
+                |= staterep gcenv prog (c_name c_main) menvSn sb 0 
+                ** blockrep gcenv sempty (co_members reset_co) reset_b 
+                ** blockrep gcenv sempty
+                            (co_members step_co) step_b).
+    {
+      assert (wt_mem menvSn prog_main c_main)
+        by now edestruct pres_sem_stmt_call as (? & ?); eauto.
+
+      assert (meSn
+                |= staterep gcenv prog (c_name c_main) menvSn sb 0 
+                ** blockrep gcenv sempty (co_members reset_co) reset_b 
+                ** blockrep gcenv sempty (co_members step_co) step_b).
+      {
+        rewrite sep_swap in H1.
+        rewrite <- sep_assoc, sep_comm.
+        apply sep_imp 
+        with (P := blockrep gcenv (adds (map fst (m_out m_step)) ys sempty) 
+                            (co_members step_co) step_b)
+             (Q := staterep gcenv prog (c_name c_main) menvSn sb 0 
+                ** blockrep gcenv sempty (co_members reset_co) reset_b); auto.
+        eapply blockrep_any_empty.
+      }
+
+      repeat (split; auto).
+    }
+
+    repeat (split; auto).
+    eexists; eauto.
+    Qed.
 
     (* Lemma dostep_while: *)
     (*   execinf_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 *)
