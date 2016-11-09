@@ -151,6 +151,15 @@ Module Type SYNTAX
     apply (NoDupMembers_app_r _ _ n.(n_nodup)).
   Qed.
 
+  Lemma vars_defined_EqApp:
+    forall xs ck f es eqs,
+      vars_defined (EqApp xs ck f es :: eqs) = xs ++ vars_defined eqs.
+  Proof.
+    unfold vars_defined.
+    intros. rewrite concatMap_cons.
+    reflexivity.
+  Qed.
+
 End SYNTAX.
 
 Module SyntaxFun

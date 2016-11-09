@@ -461,38 +461,6 @@ Section ElabExpressions.
         rewrite Hset; destruct 1; auto.
   Qed.
 
-  (* TODO: move to Common *)
-  Lemma Forall2_eq:
-    forall {A} (xs: list A) ys,
-      Forall2 eq xs ys <-> xs = ys.
-  Proof.
-    split; intro HH.
-    - induction HH; subst; auto.
-    - subst. induction ys; auto.
-  Qed.
-
-  (* TODO: move to Common *)
-  Lemma Forall2_map_2:
-    forall {A B C} P (f: B -> C) (xs: list A) (ys: list B),
-      Forall2 P xs (map f ys) <-> Forall2 (fun x y=>P x (f y)) xs ys.
-  Proof.
-    intros.
-    now rewrite Forall2_swap_args, Forall2_map_1, Forall2_swap_args.
-  Qed.
-
-  (* TODO: move to Common *)
-  Lemma NoDupMembers_combine_NoDup:
-    forall {A B} (xs: list A) (ys: list B),
-      length xs = length ys ->
-      NoDupMembers (combine xs ys) -> NoDup xs.
-  Proof.
-    induction xs as [|x xs]; intros; auto using NoDup_nil.
-    destruct ys as [|y ys]; [inv H|].
-    simpl in *. injection H. intros Hlen.
-    inv H0. constructor; eauto.
-    rewrite <-In_InMembers_combine in H3; auto.
-  Qed.
-
   Lemma wt_elab_equation:
     forall aeq eq,
       elab_equation aeq = OK eq ->
@@ -788,6 +756,56 @@ Section ElabDeclaration.
                else Error (err_loc loc
                                    (CTX x :: msg " is improperly defined"))
     end.
+
+  Lemma check_vars_spec:
+    forall {A} loc xs (defd: PM.t A) s,
+      check_vars loc defd xs = OK s ->
+      (forall x, PM.In x s -> ~In x xs)
+      /\ (forall x, In x xs -> ~PM.In x s)
+      /\ (forall x, PM.In x defd <-> In x xs \/ PM.In x s)
+      /\ NoDup xs.
+  Proof.
+    induction xs as [|x xs]; simpl.
+    - intros. DestructCases. intuition. apply NoDup_nil.
+    - intros defd s Hchk.
+      NamedDestructCases. apply PM.mem_2 in Heq.
+      specialize (IHxs _ _ Hchk); clear Hchk;
+        destruct IHxs as (IH1 & IH2 & IH3 & IH4).
+      repeat split.
+      + intros y HH.
+        specialize (IH2 y).
+        destruct 1; intuition.
+        subst.
+        assert (PM.In y (PM.remove y defd)) as Hir
+            by (apply IH3; intuition).
+        rewrite PM_remove_iff in Hir; intuition.
+      + intros y.
+        specialize (IH2 y).
+        destruct 1 as [HH|HH]; intuition.
+        subst.
+        assert (PM.In y (PM.remove y defd)) as Hir
+            by (apply IH3; intuition).
+        rewrite PM_remove_iff in Hir; intuition.
+      + rename x0 into y. intros HH.
+        destruct (ident_eq_dec x y).
+        now intuition.
+        assert (PM.In y (PM.remove x defd)) as Hir
+            by (apply PM_remove_iff; split; auto).
+        apply IH3 in Hir. intuition.
+      + rename x0 into y.
+        destruct 1 as [[HH|HH]|HH]; subst; auto.
+        * assert (PM.In y (PM.remove x defd)) as Hir
+              by (apply IH3; intuition).
+          rewrite PM_remove_iff in Hir; intuition.
+        * assert (PM.In y (PM.remove x defd)) as Hir
+              by (apply IH3; intuition).
+          rewrite PM_remove_iff in Hir; intuition.
+      + constructor; auto.
+        intro HH.
+        assert (PM.In x (PM.remove x defd)) as Hir
+            by (apply IH3; intuition).
+        rewrite PM_remove_iff in Hir. intuition.
+  Qed.
   
   Fixpoint check_defined {A} (loc: astloc) (out: PM.t A) (defd: PM.t A)
            (eqs: list equation) : res unit :=
@@ -825,11 +843,7 @@ Section ElabDeclaration.
         now rewrite (Heq x) in HH.
       + apply NoDup_nil.
       + inversion 1.
-    - admit.
-      (*
-      apply PM.mem_2 in Heq0.
-      rewrite Bool.negb_true_iff, Bool.andb_false_iff in Heq2.
-      rewrite PM_mem_spec_false in Heq2.
+    - apply PM.mem_2 in Heq0. simpl.
       specialize (IH _ _ _ Hchk); clear Hchk.
       destruct IH as (IH1 & IH2 & IH3).
       repeat split.
@@ -837,20 +851,60 @@ Section ElabDeclaration.
         now subst x.
         rewrite IH1, PM_remove_iff in HH.
         intuition.
-      + destruct (var_defined eq ==b x) eqn:Heq.
-        now rewrite equiv_decb_equiv in Heq; auto.
-        rewrite not_equiv_decb_equiv in Heq.
-        right. apply IH1. apply PM_remove_iff; auto.
+      + intro Hxdef.
+        destruct (var_defined eq ==b [x]) eqn:Heq1;
+          rewrite Heq in Heq1; simpl in Heq1.
+        rewrite equiv_decb_equiv in Heq1; injection Heq1; auto.
+        rewrite not_equiv_decb_equiv in Heq1.
+        right. apply IH1. apply PM_remove_iff; split; auto.
+        intro HH; apply Heq1. now subst.
       + constructor; auto.
         rewrite IH1, PM_remove_iff.
         intuition.
       + intros x Hvd.
         destruct (is_fby eq); auto.
-        destruct Heq2; try discriminate.
-        destruct Hvd as [Hvd|]; auto.
-        rewrite <-Hvd; auto. *)
-    - admit.
-    - admit.
+    - simpl. monadInv Hchk.
+      rename x into defd', i into xs, c into ck, i0 into f, l into es.
+      apply check_vars_spec in EQ.
+      destruct EQ as (Hcv1 & Hcv2 & Hcv3 & Hcv4).
+      specialize (IH _ _ _ EQ0); clear EQ0.
+      destruct IH as (IH1 & IH2 & IH3).
+      rewrite vars_defined_EqApp. setoid_rewrite in_app.
+      repeat split.
+      + destruct 1 as [HH|HH].
+        now apply Hcv3; auto.
+        apply Hcv3. apply IH1 in HH; auto.
+      + intro Hxdef. apply Hcv3 in Hxdef.
+        destruct Hxdef as [|HH]; auto.
+        apply IH1 in HH; auto.
+      + apply NoDup_app'; auto.
+        apply all_In_Forall.
+        intros x Hin Hinc.
+        specialize (Hcv2 x). specialize (IH1 x). intuition.
+      + intros x Hin.
+        now apply IH3 in Hin.
+    - rewrite Bool.andb_true_iff, Bool.negb_true_iff, PM_mem_spec_false in Heq0.
+      destruct Heq0 as (Hidef & Hniout).
+      apply PM.mem_2 in Hidef. simpl.
+      specialize (IH _ _ _ Hchk); clear Hchk.
+      destruct IH as (IH1 & IH2 & IH3).
+      repeat split.
+      + destruct 1 as [|HH].
+        now subst x.
+        rewrite IH1, PM_remove_iff in HH.
+        intuition.
+      + intro Hxdef.
+        destruct (var_defined eq ==b [x]) eqn:Heq1;
+          rewrite Heq in Heq1; simpl in Heq1.
+        rewrite equiv_decb_equiv in Heq1; injection Heq1; auto.
+        rewrite not_equiv_decb_equiv in Heq1.
+        right. apply IH1. apply PM_remove_iff; split; auto.
+        intro HH; apply Heq1. now subst.
+      + constructor; auto.
+        rewrite IH1, PM_remove_iff.
+        intuition.
+      + intros x Hvd.
+        destruct Hvd as [Hvd|]; subst; auto.
   Qed.
 
   Fixpoint elab_clock_decl (tyenv: PM.t type) (acc: PM.t clock)

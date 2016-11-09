@@ -932,6 +932,18 @@ Section InMembers.
     - apply IHxs; auto. now inversion Hndup.
   Qed.
 
+  Lemma NoDupMembers_combine_NoDup:
+    forall (xs: list A) (ys: list B),
+      length xs = length ys ->
+      NoDupMembers (combine xs ys) -> NoDup xs.
+  Proof.
+    induction xs as [|x xs]; intros; auto using NoDup_nil.
+    destruct ys as [|y ys]; [inv H|].
+    simpl in *. injection H. intros Hlen.
+    inv H0. constructor; eauto.
+    rewrite <-In_InMembers_combine in H3; auto.
+  Qed.
+
   Remark InMembers_snd_In:
     forall {C} y l,
       InMembers y (map (@snd C (A * B)) l) ->
@@ -1727,6 +1739,23 @@ Proof.
   - inversion_clear HH.
     apply Forall2_cons; auto.
     apply IHxs; auto.
+Qed.
+
+Lemma Forall2_map_2:
+  forall {A B C} P (f: B -> C) (xs: list A) (ys: list B),
+    Forall2 P xs (map f ys) <-> Forall2 (fun x y=>P x (f y)) xs ys.
+Proof.
+  intros.
+  now rewrite Forall2_swap_args, Forall2_map_1, Forall2_swap_args.
+Qed.
+
+Lemma Forall2_eq:
+  forall {A} (xs: list A) ys,
+    Forall2 eq xs ys <-> xs = ys.
+Proof.
+  split; intro HH.
+  - induction HH; subst; auto.
+  - subst. induction ys; auto.
 Qed.
 
 Lemma Forall_Forall2:
