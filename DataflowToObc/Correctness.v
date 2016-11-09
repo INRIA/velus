@@ -1770,7 +1770,7 @@ for all [Is_free_exp x e]. *)
             now injection 1; intro; subst.
     Qed.
 
-    Inductive event := Read : list const -> event | Write : value -> event.
+    Inductive event := Read : list const -> event | Write : list value -> event.
     CoInductive trace := Ev : event -> trace -> trace.
 
     Definition ev t := match t with Ev a _ => a end.
@@ -1834,51 +1834,55 @@ for all [Is_free_exp x e]. *)
 
     CoFixpoint mk_trace' (n : nat) 
       := Ev (Read (css n)) 
-              (Ev (Write (ys n))
+              (Ev (Write [ys n])
                     (mk_trace' (S n))).
     
     Definition mk_trace := mk_trace' 0.    
 
     Definition unroll_trace : 
       forall n, mk_trace' n = Ev (Read (css n)) 
-                             (Ev (Write (ys n))
+                             (Ev (Write [ys n])
                                  (mk_trace' (S n))).
     Proof. 
     intros.
     sunroll (mk_trace' n). reflexivity.
     Qed.
 
-    CoInductive dostep' P : nat -> heap -> stack -> trace -> Prop
-      := Step : forall n css ys menv0 env0 menv1 env1 t,
-          let cs := map Const css in
-          stmt_eval P menv0 env0 (Call [r] main obj step cs) (menv1, env1) ->
-          (exists y, ys = present y /\ PM.find r env1 = Some y) -> 
-          dostep' P (S n) menv1 env1 t ->
-          dostep' P n menv0 env0 (Ev (Read css) (Ev (Write ys) t)).
+    CoInductive dostep' P : nat -> heap -> trace -> Prop
+      := Step : forall n css ys menv0 menv1 t,
+          let cs := List.map sem_const css in
+          stmt_call_eval P menv0 main step cs menv1 ys ->
+          dostep' P (S n) menv1 t ->
+          dostep' P n menv0
+                  (Ev (Read css)
+                      (Ev (Write (List.map present ys))
+                          t)).
 
     Section Dostep'_coind.
 
     Variable P : program.
-    Variable R : nat -> heap -> stack -> trace -> Prop.
+    Variable R : nat -> heap -> trace -> Prop.
 
-    Hypothesis StepCase: forall n menv0 env0 t,
-      R n menv0 env0 t ->
-      exists css ys t' menv1 env1,
-        let cs := map Const css in
-          stmt_eval P menv0 env0 (Call [r] main obj step cs) (menv1, env1) 
-        /\ (exists y, ys = present y /\ PM.find r env1 = Some y)
-        /\ R (S n) menv1 env1 t'
-        /\ t = (Ev (Read css) (Ev (Write ys) t')).
+    Print stmt_call_eval.
 
-    Lemma dostep'_coind : forall n menv env t,
-        R n menv env t -> dostep' P n menv env t.
+    Hypothesis StepCase: forall n menv0 t,
+      R n menv0 t ->
+      exists css ys t' menv1,
+        let cs := map sem_const css in
+          stmt_call_eval P menv0 main step cs menv1 ys
+        /\ R (S n) menv1 t'
+        /\ t = Ev (Read css)
+                 (Ev (Write (List.map present ys))
+                     t').
+    Lemma dostep'_coind : forall n menv t,
+        R n menv t -> dostep' P n menv t.
     Proof.
     cofix COINDHYP.
     intros.
-    edestruct (StepCase _ _ _ _ H).
+    edestruct (StepCase _ _ _ H).
     simpl in H0.
     decompose record H0.
-    rewrite H6.
+    subst t.
     econstructor; eauto.
     Qed.
     
@@ -1888,48 +1892,25 @@ for all [Is_free_exp x e]. *)
       forall M,
         let P := translate G in
         msem_node G main xss M ys ->
-        exists menv0 env0,
-            stmt_eval (translate G) hempty sempty (Call [] main obj reset []) (menv0, env0) 
-          /\ dostep' (translate G) 0 menv0 env0 mk_trace.
+        exists menv0,
+          stmt_call_eval P hempty main reset [] menv0 []
+          /\ dostep' (translate G) 0 menv0 mk_trace.
     Proof.
     intros M Hdef Hmsem. 
-    assert (exists menv' env',
-               stmt_eval (translate G) hempty sempty
-                         (Call [] main obj reset []) (menv', env')
-               /\ (exists omenv0,   mfind_inst obj menv' = Some omenv0
-                            /\ Memory_Corres G 0 main M omenv0))
-      as (menv0 & env0 & Hstmtr & (omenv0 & Hmf0 & Hmc0)).
-    {
-      pose proof (is_node_reset_correct _ _ Hwdef _ _ _ Hmsem hempty) as Hrst.
-      destruct Hrst as (omenv' & Hcall & Hcor).
-        intros. do 2 eexists.
-        split.
-      - econstructor; eauto.
-        rewrite mfind_inst_empty. eassumption.
-      - exists omenv'.
-        split; auto.
-        apply mfind_inst_gss.
-    }
-    
-    exists menv0, env0; split; auto.
-    set (R := fun n (menv: heap) (env: stack) (t: trace) => 
-                exists omenv,   mfind_inst obj menv = Some omenv
-                         /\ Memory_Corres G n main M omenv
-                         /\ t = mk_trace' n).
+
+    edestruct is_node_reset_correct as (menv0 & Hstmt & Hmem); eauto.
+    subst Hdef.
+    exists menv0; split; eauto.
+
+    set (R := fun n (menv: heap) (t: trace) => 
+                  Memory_Corres G n main M menv
+                /\ t = mk_trace' n).
     apply dostep'_coind with (R := R).
-    2: unfold R; eexists; eauto.
+    2: now unfold R; eexists; eauto.
     intros. unfold R in H. 
-    destruct H as (? & ? & ? & ?).
-    rewrite unroll_trace in H1.
+    decompose record H.
+    rewrite unroll_trace in H1. subst t.
 
-    exists (css n).
-    exists (ys n).
-    exists (mk_trace' (S n)).
-    
-    set (ciSn := css n).
-
-    assert (HpresN: xss n = map present (map sem_const ciSn))
-      by (subst xss; unfold present_list; rewrite map_map; eauto).
 
     assert (exists coSn, ys n = present coSn) as [coSn Hys] by admit.
     (* { *)
@@ -1960,33 +1941,21 @@ for all [Is_free_exp x e]. *)
       
     (*   now apply present_list_spec. *)
     (* } *)
-    
-    assert (exists menvN' envN',
-               stmt_eval (translate G) menv1 env1
-                         (Call [r] main obj step (map Const ciSn))
-                         (menvN', envN')
-               /\ (exists omenvsN, mfind_inst obj menvN' = Some omenvsN
-                             /\ Memory_Corres G (S n) main M omenvsN)
-               /\ PM.find r envN' = Some coSn)
-      as (menvSn & envSn & Hstmt & (omenvSn & Hmfind & Hmc) & Hout).
-    { 
-      edestruct is_node_correct as (omenvsN & Hstmt & HmcSn); eauto.
-      do 2 eexists.
-      repeat split.
-      - econstructor; eauto.
-        2:rewrite H; now eapply Hstmt.
-        clear Hstmt HpresN.
-        induction ciSn; simpl; auto.
-      - exists omenvsN. split; auto.
-        now rewrite mfind_inst_gss.
-      - unfold adds; simpl. rewrite PM.gss; auto.
-    }
 
-    exists menvSn, envSn.
+    exists (css n).
+    exists ([coSn]).
+    exists (mk_trace' (S n)).
+    
+    set (ciSn := css n).
+
+    assert (HpresN: xss n = map present (map sem_const ciSn))
+      by (subst xss; unfold present_list; rewrite map_map; eauto).
+    
+    edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
+
+    exists omenvSn. simpl.
     repeat split; auto.
-    - rewrite Hys; eauto.
-    - unfold R.
-      exists omenvSn. repeat split; auto.
+    rewrite Hys. auto.
     Qed.
 
     Theorem is_event_loop_correct:
