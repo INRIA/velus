@@ -3555,9 +3555,17 @@ Section PRESERVATION.
         + eapply find_class_sub; eauto.
     Qed.
 
+    Print Corr.dostep'.
+
+    (* Lemma dostep_while: *)
+    (*   execinf_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 *)
+    (*  (PTree.empty Values.val) m1 (fn_body main_f) T *)
     Lemma diverges:
-      exists T, bigstep_program_diverges function_entry2 tprog T.
+      forall me0 ve0 r obj css yss T, 
+        Corr.dostep' main_node r obj prog 0 me0 ve0 (Corr.mk_trace css yss) ->
+        bigstep_program_diverges function_entry2 tprog T.
     Proof.
+      intros.
       assert (e1 ! self = Some (sb, type_of_inst main_node)).
       { subst e1;
         rewrite 2 PTree.gso, PTree.gss; auto;
@@ -3578,13 +3586,13 @@ Section PRESERVATION.
       
       destruct Caractmain as (Hret & Hcc & Hparams & Hvars & Htemps & Hbody).
 
-      destruct match_states_main_after_reset as (m2 & T & Heval & ?).
-          change (eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
-                               [Vptr sb Int.zero; Vptr reset_b Int.zero] T m2 Vundef)
-          with (eval_funcall (globalenv tprog) (function_entry2 (globalenv tprog)) m1 (Internal reset_f)
-                             [Vptr sb Int.zero; Vptr reset_b Int.zero] T m2 Vundef) in Heval.
-          
-      do 2 econstructor; eauto.
+      destruct match_states_main_after_reset as (m2 & T' & Heval & ?).
+      change (eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
+                           [Vptr sb Int.zero; Vptr reset_b Int.zero] T' m2 Vundef)
+      with (eval_funcall (globalenv tprog) (function_entry2 (globalenv tprog)) m1 (Internal reset_f)
+                         [Vptr sb Int.zero; Vptr reset_b Int.zero] T' m2 Vundef) in Heval.
+      
+      econstructor; eauto.
       - simpl; unfold type_of_function; rewrite Hparams, Hret, Hcc; auto. 
       - econstructor.
         + econstructor; eauto.
