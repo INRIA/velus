@@ -1849,8 +1849,11 @@ for all [Is_free_exp x e]. *)
     Qed.
 
     CoInductive dostep' P : heap -> trace -> Prop
-      := Step : forall css ys menv0 menv1 t,
+      := Step : forall css ys menv0 menv1 t main_cls prog' fm,
           let cs := List.map sem_const css in
+          find_class main P = Some (main_cls, prog') ->
+          find_method step (c_methods main_cls) = Some fm ->
+          Forall2 (fun v xt => wt_val v (snd xt)) cs (m_in fm) ->
           stmt_call_eval P menv0 main step cs menv1 ys ->
           dostep' P menv1 t ->
           dostep' P menv0
@@ -1865,9 +1868,12 @@ for all [Is_free_exp x e]. *)
 
     Hypothesis StepCase: forall menv0 t,
       R menv0 t ->
-      exists css ys t' menv1,
+      exists css ys t' menv1 main_cls prog' fm,
         let cs := map sem_const css in
-          stmt_call_eval P menv0 main step cs menv1 ys
+          find_class main P = Some (main_cls, prog') 
+        /\ find_method step (c_methods main_cls) = Some fm 
+        /\ Forall2 (fun v xt => wt_val v (snd xt)) cs (m_in fm)
+        /\ stmt_call_eval P menv0 main step cs menv1 ys
         /\ R menv1 t'
         /\ t = Ev (Read css)
                  (Ev (Write (List.map present ys))
@@ -1876,10 +1882,10 @@ for all [Is_free_exp x e]. *)
         R menv t -> dostep' P menv t.
     Proof.
     cofix COINDHYP.
-    intros.
-    edestruct (StepCase _ _ H).
-    simpl in H0.
-    decompose record H0.
+    intros ? t HR.
+    pose proof (StepCase _ _ HR) as Hstep.
+    simpl in Hstep.
+    destruct Hstep as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
     subst t.
     econstructor; eauto.
     Qed.
@@ -1887,14 +1893,19 @@ for all [Is_free_exp x e]. *)
     End Dostep'_coind.
 
     Lemma dostep'_correct: 
-      forall M,
+      forall M main_node,
         let P := translate G in
+        find_node main G = Some main_node ->
         msem_node G main xss M ys ->
+        (forall n, 
+            Forall2 (fun v xt => wt_val v (snd xt)) 
+                    (map sem_const (css n)) 
+                    (main_node.(n_in))) ->
         exists menv0,
           stmt_call_eval P hempty main reset [] menv0 []
           /\ dostep' (translate G) menv0 mk_trace.
     Proof.
-    intros M Hdef Hmsem. 
+    intros M main_node Hdef Hfind_main Hmsem Hwt_var. 
 
     edestruct is_node_reset_correct as (menv0 & Hstmt & Hmem); eauto.
     subst Hdef.
@@ -1947,7 +1958,32 @@ for all [Is_free_exp x e]. *)
     
     edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
 
-    exists omenvSn. unfold R; simpl.
+    assert (exists main_cls prog',
+               find_class main (translate G) = Some (main_cls, prog')
+             /\ main_cls = translate_node main_node)
+      as (main_cls & prog' & Hfind & Hdef_main).
+    {
+      inv Hmsem.
+      rewrite Hfind_main in *.
+      edestruct find_node_translate as (main_cls & prog' & ? & ?); eauto.       
+    }
+
+    assert (exists fm,
+               find_method step (c_methods main_cls) = Some fm)
+      as (fm & Hfm).
+    {
+      subst main_cls.
+      eapply exists_step_method.
+    }
+
+    assert (Forall2 (fun (v : val) (xt : ident * type) => wt_val v (snd xt)) 
+                    (map sem_const ciSn) (m_in fm)).
+    {
+      erewrite find_method_stepm_in.
+      apply Hwt_var. rewrite <- Hdef_main. auto.
+    }
+
+    exists omenvSn, main_cls, prog', fm. unfold R; simpl.
     repeat split; auto. eexists; eauto.
     rewrite Hys. auto.
     Qed.

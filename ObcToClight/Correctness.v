@@ -3771,10 +3771,18 @@ Section PRESERVATION.
 
     clear - Hwt_prog Hwt_mem m_step Find Findstep.
     intros meN T (heapN & Hdostep & Hwt & Hblock).
-    destruct Hdostep as [cssN ? menvN menvSn T csN Hstmt Hdostep].
+    destruct Hdostep as [cssN ? menvN menvSn T main_cls main_meth fm csN Hclass Hmeth Hwt_var Hstmt Hdostep].
 
-    assert (Forall2 (fun v xt => wt_val v (snd xt)) csN (m_in m_step)). 
-    admit.
+    assert (c_name c_main = main_node) as <-
+      by now eapply find_class_name; eauto. 
+
+    assert (c_main = main_cls) as <-
+      by now rewrite Find in Hclass; inv Hclass. 
+
+    assert (fm = m_step) as ->
+        by now rewrite Findstep in Hmeth; inv Hmeth. 
+
+    clear Hclass Hmeth.
 
     assert (exists meSn,
                eval_funcall tge (function_entry2 tge) meN
@@ -3786,7 +3794,7 @@ Section PRESERVATION.
                    ** blockrep gcenv (adds (map fst (m_out m_step)) ys sempty) 
                               (co_members step_co) step_b
                    ** blockrep gcenv sempty (co_members reset_co) reset_b)
-      as (meSn & ? & ?).
+      as (meSn & ? & Hblock_step).
     {
       assert (m_step.(m_name) = step) as <-
           by now eapply find_method_name; eauto.
@@ -3801,9 +3809,6 @@ Section PRESERVATION.
     }
 
     exists T, cssN, ys, meSn.
-
-    assert (c_name c_main = main_node) as <-
-      by now eapply find_class_name; eauto. 
 
     assert (meSn
               |= blockrep gcenv (adds (map fst (m_out m_step)) ys sempty) 
@@ -3831,7 +3836,7 @@ Section PRESERVATION.
                 ** blockrep gcenv sempty (co_members reset_co) reset_b 
                 ** blockrep gcenv sempty (co_members step_co) step_b).
       {
-        rewrite sep_swap in H1.
+        rewrite sep_swap in Hblock_step.
         rewrite <- sep_assoc, sep_comm.
         apply sep_imp 
         with (P := blockrep gcenv (adds (map fst (m_out m_step)) ys sempty) 
@@ -3848,6 +3853,7 @@ Section PRESERVATION.
     eexists; eauto.
     Qed.
 
+    
   
     Lemma dostep_loop:
       forall n m P me css yss t T,
