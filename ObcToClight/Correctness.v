@@ -3401,55 +3401,33 @@ Section PRESERVATION.
                                     type_of_inst (prefix_fun main_node reset));
                                    (prefix out step,
                                     type_of_inst (prefix_fun main_node step))]
-              /\ main.(fn_temps) = []
+              /\ main.(fn_temps) = map translate_param (m_in m_step)
               /\ main.(fn_body) =
                 return_zero
-                  (Ssequence
-                     (funcall (prefix_fun main_node reset)
-                              [Eaddrof (Evar self (type_of_inst main_node))
-                                       (type_of_inst_p main_node);
-                                Eaddrof (Evar (prefix out reset)
-                                              (type_of_inst (prefix_fun main_node reset)))
-                                        (pointer_of (type_of_inst (prefix_fun main_node reset)))])
-                     (Sloop
-                        (Ssequence
-                           (funcall (prefix_fun main_node step)
-                                    (Eaddrof (Evar self (type_of_inst main_node))
-                                             (type_of_inst_p main_node)
-                                     :: Eaddrof (Evar (prefix out step) (type_of_inst (prefix_fun main_node step)))
-                                                (pointer_of (type_of_inst (prefix_fun main_node step)))
-                                     :: map make_in_arg (map glob_bind (m_in m_step))))
-                           (fold_right
-                              (fun y s =>
-                                 let '(y2, ty, (y', _)) := y in
-                                 let assign_out :=
-                                     Sassign (Evar y2 ty)
-                                             (Efield (Evar (prefix out step)
-                                                           (type_of_inst (prefix_fun main_node step)))
-                                                     y' ty) in
-                                 Ssequence assign_out s) Sskip (combine (map glob_bind (m_out m_step))
-                                                                        (m_out m_step)))) Sskip))
+                  (Ssequence (reset_call main_node)
+                             (Sloop (Ssequence (load_in (m_in m_step))
+                                               (Ssequence
+                                                  (step_call main_node (map make_in_arg (m_in m_step)))
+                                                  (write_out main_node (m_out m_step))))
+                                    Sskip))
               /\ exists sb reset_b step_b m',
                   alloc_variables tge empty_env m main.(fn_vars)
-                    (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
+                               (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
                                (PTree.set (prefix out reset)
                                           (reset_b, type_of_inst (prefix_fun main_node reset))
                                           (PTree.set self (sb, type_of_inst main_node) empty_env))) m'
                   /\ exists reset_co step_co,
-                        gcenv ! (prefix_fun main_node reset) = Some reset_co
-                        /\ gcenv ! (prefix_fun main_node step) = Some step_co
-                        /\ m' |= staterep gcenv prog main_node hempty sb Z0
-                               ** blockrep gcenv sempty reset_co.(co_members) reset_b
-                               ** blockrep gcenv sempty step_co.(co_members) step_b
-                               ** P.
+                    gcenv ! (prefix_fun main_node reset) = Some reset_co
+                    /\ gcenv ! (prefix_fun main_node step) = Some step_co
+                    /\ m' |= staterep gcenv prog main_node hempty sb Z0
+                           ** blockrep gcenv sempty reset_co.(co_members) reset_b
+                           ** blockrep gcenv sempty step_co.(co_members) step_b
+                           ** P.
   Proof.
     intros ** Hm.
     inv_trans TRANSL as En Estep Ereset with structs funs E.
     do 4 econstructor; repeat (split; eauto).
-    assert ((AST.prog_defmap tprog) ! main_id =
-            Some (make_main prog main_node
-                            (map glob_bind (m_in m0))
-                            (map glob_bind (m_out m0)) m0)
+    assert ((AST.prog_defmap tprog) ! main_id = Some (make_main main_node m0)
             /\ tprog.(Ctypes.prog_main) = main_id)
       as [Hget Hmain_id]. 
     { unfold make_program' in TRANSL.
@@ -3578,24 +3556,6 @@ Section PRESERVATION.
               (reset_co step_co: composite).
     Hypothesis Find_s_main: Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some main_b.
     Hypothesis Findmain: Genv.find_funct_ptr tge main_b = Some (Ctypes.Internal main_f).
-    Let loop := Sloop
-                  (Ssequence
-                     (funcall (prefix_fun main_node step)
-                              (Eaddrof (Evar self (type_of_inst main_node))
-                                       (type_of_inst_p main_node)
-                               :: Eaddrof (Evar (prefix out step) (type_of_inst (prefix_fun main_node step)))
-                                          (pointer_of (type_of_inst (prefix_fun main_node step)))
-                               :: map make_in_arg (map glob_bind (m_in m_step))))
-                     (fold_right
-                        (fun y s =>
-                           let '(y2, ty, (y', _)) := y in
-                           let assign_out :=
-                               Sassign (Evar y2 ty)
-                                       (Efield (Evar (prefix out step)
-                                                     (type_of_inst (prefix_fun main_node step)))
-                                               y' ty) in
-                           Ssequence assign_out s) Sskip (combine (map glob_bind (m_out m_step))
-                                                                  (m_out m_step)))) Sskip.
     Hypothesis Caractmain: main_f.(fn_return) = type_int32s
                            /\ main_f.(fn_callconv) = AST.cc_default
                            /\ main_f.(fn_params) = []
@@ -3604,17 +3564,16 @@ Section PRESERVATION.
                                                    type_of_inst (prefix_fun main_node reset));
                                                   (prefix out step,
                                                    type_of_inst (prefix_fun main_node step))]
-                           /\ main_f.(fn_temps) = []
+                           /\ main_f.(fn_temps) = map translate_param (m_in m_step)
                            /\ main_f.(fn_body) =
                              return_zero
-                               (Ssequence
-                                  (funcall (prefix_fun main_node reset)
-                                           [Eaddrof (Evar self (type_of_inst main_node))
-                                                    (type_of_inst_p main_node);
-                                             Eaddrof (Evar (prefix out reset)
-                                                           (type_of_inst (prefix_fun main_node reset)))
-                                                     (pointer_of (type_of_inst (prefix_fun main_node reset)))])
-                                  loop).
+                               (Ssequence (reset_call main_node)
+                                          (Sloop
+                                             (Ssequence (load_in (m_in m_step))
+                                                        (Ssequence
+                                                           (step_call main_node
+                                                                      (map make_in_arg (m_in m_step)))
+                                                           (write_out main_node (m_out m_step)))) Sskip)).
 
     Hypothesis Getreset_co: gcenv ! (prefix_fun main_node reset) = Some reset_co.
     Hypothesis Getstep_co: gcenv ! (prefix_fun main_node step) = Some step_co.
