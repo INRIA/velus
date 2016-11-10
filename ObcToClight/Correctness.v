@@ -3381,14 +3381,19 @@ Section PRESERVATION.
          - rewrite sep_drop; apply sep_imp'; auto.
        }
   Qed.
-  
+
+  Definition find_glob (xt: ident * type) :=
+    let (x, t) := xt in
+    exists b, Genv.find_symbol (globalenv tprog) (glob_id x) = Some b.
+           
   Lemma find_main:
     forall m P,
       m |= P ->
       exists c_main prog_main m_reset m_step,
         find_class main_node prog = Some (c_main, prog_main)
         /\ find_method reset c_main.(c_methods) = Some m_reset
-        /\ find_method step c_main.(c_methods) = Some m_step 
+        /\ find_method step c_main.(c_methods) = Some m_step
+        /\ Forall find_glob m_step.(m_in)
         /\ exists b,
             Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some b
             /\ exists main,
@@ -3427,76 +3432,102 @@ Section PRESERVATION.
     intros ** Hm.
     inv_trans TRANSL as En Estep Ereset with structs funs E.
     do 4 econstructor; repeat (split; eauto).
-    assert ((AST.prog_defmap tprog) ! main_id = Some (make_main main_node m0)
-            /\ tprog.(Ctypes.prog_main) = main_id)
-      as [Hget Hmain_id]. 
-    { unfold make_program' in TRANSL.
+    - unfold make_program' in TRANSL.
       destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
       destruct (check_size_env ce (concat structs)); try discriminate.
-      unfold AST.prog_defmap; simpl; split;
-      [apply PTree_Properties.of_list_norepet; auto|];
-      inversion_clear TRANSL; auto.
-      apply in_app; right; apply in_app; right; apply in_eq.
-    }
-    rewrite Hmain_id.
-    apply Genv.find_def_symbol in Hget.
-    destruct Hget as (b & Findsym & Finddef).
-    exists b; split; auto; econstructor; repeat split; eauto.
-    - change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
-      unfold Genv.find_funct_ptr.
-      unfold Clight.fundef in Finddef.
-      now rewrite Finddef.
-    - eauto.
-    - eauto.
-    - eauto.
-    - eauto.
-    - eauto.
-    - eauto.
-    - simpl.
-      destruct (Mem.alloc m 0 (sizeof tge (type_of_inst main_node)))
-        as (m2, sb) eqn: AllocSelf.
-      destruct (Mem.alloc m2 0 (sizeof tge (type_of_inst (prefix_fun main_node reset))))
-        as (m3, reset_b) eqn: AllocRes.
-      destruct (Mem.alloc m3 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
-        as (m4, step_b) eqn: AllocStep.
-      exists sb, reset_b, step_b; econstructor; repeat split.
-      + repeat (econstructor; eauto).
-      + edestruct global_out_struct with (2:=Ereset) as (reset_co & Hrco & ? & Hmr & ? & ? & ?); eauto.
-        edestruct global_out_struct with (2:=Estep) as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
-        edestruct make_members_co as (co & Hco & ? & ? & ? & ? & ?); eauto.
-        exists reset_co, step_co.
-        pose proof (find_class_name _ _ _ _ En) as Eq;
-          pose proof (find_method_name _ _ _ Estep) as Eq';
-          pose proof (find_method_name _ _ _ Ereset) as Eq'';
-          rewrite Eq, Eq', Eq'' in *.
-        split; [|split]; auto.
-        change (gcenv ! main_node) with ((prog_comp_env tprog) ! main_node) in Hco;
-          change (gcenv ! (prefix_fun main_node reset))
-          with ((prog_comp_env tprog) ! (prefix_fun main_node reset)) in Hrco;
-          change (gcenv ! (prefix_fun main_node step))
-          with ((prog_comp_env tprog) ! (prefix_fun main_node step)) in Hsco.            
-        assert (sizeof tge (type_of_inst main_node) <= Int.modulus)
-          by (simpl; rewrite Hco; transitivity Int.max_unsigned;
-              auto; unfold Int.max_unsigned; omega).
-        assert (sizeof tge (type_of_inst (prefix_fun main_node reset)) <= Int.modulus)
-          by (simpl; rewrite Hrco; transitivity Int.max_unsigned;
-              auto; unfold Int.max_unsigned; omega).
-        assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
-          by (simpl; rewrite Hsco; transitivity Int.max_unsigned;
-              auto; unfold Int.max_unsigned; omega).
-        eapply alloc_rule in AllocSelf; eauto; try omega.
-        eapply alloc_rule in AllocRes; eauto; try omega.
-        eapply alloc_rule in AllocStep; eauto; try omega.
-        rewrite sep_swap3.
-        eapply sep_imp; eauto.
-        * simpl; rewrite Hsco; eapply blockrep_empty; eauto.
-          rewrite Hms; eauto.
-        *{ apply sep_imp'.
-           - simpl; rewrite Hrco; eapply blockrep_empty; eauto.
-             rewrite Hmr; eauto.
-           - apply sep_imp'; auto.
-             eapply range_staterep; eauto.
-             apply not_None_is_Some; eauto.
+      inversion TRANSL.
+      apply Forall_forall.
+      intros (x, t) Hin.
+      set (ty := merge_attributes (cltype t) (mk_attr true None)).
+      assert ((AST.prog_defmap tprog) ! (glob_id x) =
+              Some (@AST.Gvar Clight.fundef _
+                              (AST.mkglobvar ty [AST.Init_space (Ctypes.sizeof ce ty)] false true)))
+        as Hget.
+      subst ty.
+      { unfold AST.prog_defmap; simpl. 
+        apply PTree_Properties.of_list_norepet; auto.
+        inversion_clear TRANSL; auto; simpl.
+        rewrite map_app.
+        apply in_app; left; apply in_app; right.
+        apply in_map_iff.
+        exists (glob_id x, cltype t); split; auto.
+        apply in_map_iff.
+        exists (x, t); split; auto.
+      }
+      apply Genv.find_def_symbol in Hget.
+      destruct Hget as (b & Findsym & Finddef).
+      unfold find_glob.
+      exists b; auto.
+    - assert ((AST.prog_defmap tprog) ! main_id = Some (make_main main_node m0)
+              /\ tprog.(Ctypes.prog_main) = main_id)
+        as [Hget Hmain_id]. 
+      { unfold make_program' in TRANSL.
+        destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
+        destruct (check_size_env ce (concat structs)); try discriminate.
+        unfold AST.prog_defmap; simpl; split;
+        [apply PTree_Properties.of_list_norepet; auto|];
+        inversion_clear TRANSL; auto.
+        apply in_app; right; apply in_app; right; apply in_eq.
+      }
+      rewrite Hmain_id.
+      apply Genv.find_def_symbol in Hget.
+      destruct Hget as (b & Findsym & Finddef).
+      exists b; split; auto; econstructor; repeat split; eauto.
+      + change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
+        unfold Genv.find_funct_ptr.
+        unfold Clight.fundef in Finddef.
+        now rewrite Finddef.
+      + eauto.
+      + eauto.
+      + eauto.
+      + eauto.
+      + eauto.
+      + eauto.
+      + simpl.
+        destruct (Mem.alloc m 0 (sizeof tge (type_of_inst main_node)))
+          as (m2, sb) eqn: AllocSelf.
+        destruct (Mem.alloc m2 0 (sizeof tge (type_of_inst (prefix_fun main_node reset))))
+          as (m3, reset_b) eqn: AllocRes.
+        destruct (Mem.alloc m3 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
+          as (m4, step_b) eqn: AllocStep.
+        exists sb, reset_b, step_b; econstructor; repeat split.
+        * repeat (econstructor; eauto).
+        *{ edestruct global_out_struct with (2:=Ereset) as (reset_co & Hrco & ? & Hmr & ? & ? & ?); eauto.
+           edestruct global_out_struct with (2:=Estep) as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
+           edestruct make_members_co as (co & Hco & ? & ? & ? & ? & ?); eauto.
+           exists reset_co, step_co.
+           pose proof (find_class_name _ _ _ _ En) as Eq;
+             pose proof (find_method_name _ _ _ Estep) as Eq';
+             pose proof (find_method_name _ _ _ Ereset) as Eq'';
+             rewrite Eq, Eq', Eq'' in *.
+           split; [|split]; auto.
+           change (gcenv ! main_node) with ((prog_comp_env tprog) ! main_node) in Hco;
+             change (gcenv ! (prefix_fun main_node reset))
+             with ((prog_comp_env tprog) ! (prefix_fun main_node reset)) in Hrco;
+             change (gcenv ! (prefix_fun main_node step))
+             with ((prog_comp_env tprog) ! (prefix_fun main_node step)) in Hsco.            
+           assert (sizeof tge (type_of_inst main_node) <= Int.modulus)
+             by (simpl; rewrite Hco; transitivity Int.max_unsigned;
+                 auto; unfold Int.max_unsigned; omega).
+           assert (sizeof tge (type_of_inst (prefix_fun main_node reset)) <= Int.modulus)
+             by (simpl; rewrite Hrco; transitivity Int.max_unsigned;
+                 auto; unfold Int.max_unsigned; omega).
+           assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
+             by (simpl; rewrite Hsco; transitivity Int.max_unsigned;
+                 auto; unfold Int.max_unsigned; omega).
+           eapply alloc_rule in AllocSelf; eauto; try omega.
+           eapply alloc_rule in AllocRes; eauto; try omega.
+           eapply alloc_rule in AllocStep; eauto; try omega.
+           rewrite sep_swap3.
+           eapply sep_imp; eauto.
+           - simpl; rewrite Hsco; eapply blockrep_empty; eauto.
+             rewrite Hms; eauto.
+           - apply sep_imp'.
+             + simpl; rewrite Hrco; eapply blockrep_empty; eauto.
+               rewrite Hmr; eauto.
+             + apply sep_imp'; auto.
+               eapply range_staterep; eauto.
+               apply not_None_is_Some; eauto.
          }
   Qed.
 
@@ -3535,6 +3566,37 @@ Section PRESERVATION.
         destruct Hinv as [Hinv|]; auto.
         inv Hinv.
   Qed.
+
+  Lemma init_mem_sep:
+    forall b gv m,
+      Genv.find_var_info tge b = Some gv ->
+      AST.init_data_list_size (AST.gvar_init gv) <= Int.modulus ->
+      Genv.init_mem tprog = Some m ->
+      m |= range b 0 (AST.init_data_list_size gv.(AST.gvar_init)).
+  Proof.
+    intros ** Hfind Hsize Hinit.
+    change (Genv.find_var_info tge b = Some gv) with
+    (Genv.find_var_info (Genv.globalenv tprog) b = Some gv) in Hfind.
+    apply Genv.init_mem_characterization with (m:=m) in Hfind; auto.
+    repeat split; auto.
+    - omega.
+    - destruct Hfind as (Hrange & Hperm & ?).
+      unfold Mem.range_perm in Hrange.
+      intros ** Hbound.
+      apply Hrange in Hbound.
+      apply Mem.perm_cur.
+      eapply Mem.perm_implies; eauto.
+      admit.
+  Qed.
+
+  (* Definition volrep (ve: stack) (flds: members) (b: block) : massert := *)
+  (*   sepall (fun xty : ident * Ctypes.type => *)
+  (*             let (x, ty) := xty in *)
+  (*             match field_offset ge x flds, access_mode ty with *)
+  (*             | Errors.OK d, By_value chunk => *)
+  (*               contains chunk b d (match_value ve x) *)
+  (*             | _, _ => sepfalse *)
+  (*             end) flds. *)
   
   Section Init.
     Variables (c_main: class) (prog_main: program) (m_reset m_step: method).
@@ -3544,7 +3606,7 @@ Section PRESERVATION.
 
     Hypothesis Reset_in: m_reset.(m_in) = [].
     Hypothesis Reset_out: m_reset.(m_out) = [].
-    Hypothesis Step_out: m_step.(m_out) <> [].
+    Hypothesis Step_in: Forall find_glob m_step.(m_in).
     
     Variables (rst_ptr stp_ptr: block) (reset_f step_f: function).
     Hypothesis Getreset_s: Genv.find_symbol tge (prefix_fun main_node reset) = Some rst_ptr.
@@ -3583,6 +3645,7 @@ Section PRESERVATION.
     Let e1 := (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
                    (PTree.set (prefix out reset) (reset_b, type_of_inst (prefix_fun main_node reset))
                               (PTree.set self (sb, type_of_inst main_node) empty_env))).
+    Let le := create_undef_temps main_f.(fn_temps).
     Hypothesis Alloc: alloc_variables tge empty_env m0 main_f.(fn_vars) e1 m1.
     Hypothesis Hm1: m1 |= staterep gcenv prog main_node hempty sb Z0
                          ** blockrep gcenv sempty reset_co.(co_members) reset_b
@@ -3648,7 +3711,44 @@ Section PRESERVATION.
         + eapply wt_class_find_method with (2:=Findstep); auto. 
         + eapply find_class_sub; eauto.
     Qed.
-  
+
+    Definition admit {T: Type}: T. Admitted.
+    Lemma exec_read:
+      forall le m P,
+        m |= P ->
+        exists m' T le',
+          exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le m
+                    (load_in (m_in m_step)) T le' m' Out_normal.
+    Proof.
+      clear Caractmain.
+      induction (m_in m_step) as [|(x, t)]; simpl; intros ** Hm.
+      - repeat econstructor.
+      - inversion_clear Step_in as [|? ? Findx].
+        edestruct IHl as (? & ? & ? & ?); eauto.
+        unfold find_glob in Findx; destruct Findx.
+        do 3 econstructor.
+        eapply exec_Sseq_1; eauto.
+        + eapply exec_Sbuiltin.
+          *{ econstructor.
+             - apply eval_Eaddrof, eval_Evar_global; eauto.
+               rewrite <-not_Some_is_None.
+               intros (b, t') Hget.
+               subst e1.
+               rewrite 3 PTree.gso, PTree.gempty in Hget.
+               * discriminate.
+               * intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
+               * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
+               * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
+             - unfold Cop.sem_cast; simpl; eauto.
+             - constructor.
+           }
+          *{ constructor.
+             apply volatile_load_vol; eauto.
+             - exact admit.
+             - exact admit.
+           }
+    Qed.
+          
     Lemma dostep_loop:
       forall n m P me css yss t T,
         Corr.dostep' main_node prog n me (Corr.mk_trace' css yss n) ->
