@@ -1770,6 +1770,11 @@ for all [Is_free_exp x e]. *)
             now injection 1; intro; subst.
     Qed.
 
+(*
+    Require Import Lists.Stream.
+
+    Definition trace := Stream 
+
     Inductive event := Read : list const -> event | Write : list value -> event.
     CoInductive trace := Ev : event -> trace -> trace.
 
@@ -1847,46 +1852,41 @@ for all [Is_free_exp x e]. *)
     intros.
     sunroll (mk_trace' n). reflexivity.
     Qed.
+*)
 
-    CoInductive dostep' P : heap -> trace -> Prop
-      := Step : forall css ys menv0 menv1 t main_cls prog' fm,
-          let cs := List.map sem_const css in
+    CoInductive dostep' P : nat -> heap -> Prop
+      := Step : forall n y menv0 menv1 main_cls prog' fm,
+          let cs := List.map sem_const (css n) in
           find_class main P = Some (main_cls, prog') ->
           find_method step (c_methods main_cls) = Some fm ->
           Forall2 (fun v xt => wt_val v (snd xt)) cs (m_in fm) ->
-          stmt_call_eval P menv0 main step cs menv1 ys ->
-          dostep' P menv1 t ->
-          dostep' P menv0
-                  (Ev (Read css)
-                      (Ev (Write (List.map present ys))
-                          t)).
+          ys n = present y ->
+          stmt_call_eval P menv0 main step cs menv1 [y] ->
+          dostep' P (S n) menv1 ->
+          dostep' P n menv0.
 
     Section Dostep'_coind.
 
     Variable P : program.
-    Variable R : heap -> trace -> Prop.
+    Variable R : nat -> heap -> Prop.
 
-    Hypothesis StepCase: forall menv0 t,
-      R menv0 t ->
-      exists css ys t' menv1 main_cls prog' fm,
-        let cs := map sem_const css in
+    Hypothesis StepCase: forall n menv0,
+      R n menv0 ->
+      exists y menv1 main_cls prog' fm,
+        let cs := map sem_const (css n) in
           find_class main P = Some (main_cls, prog') 
         /\ find_method step (c_methods main_cls) = Some fm 
         /\ Forall2 (fun v xt => wt_val v (snd xt)) cs (m_in fm)
-        /\ stmt_call_eval P menv0 main step cs menv1 ys
-        /\ R menv1 t'
-        /\ t = Ev (Read css)
-                 (Ev (Write (List.map present ys))
-                     t').
-    Lemma dostep'_coind : forall menv t,
-        R menv t -> dostep' P menv t.
+        /\ ys n = present y
+        /\ stmt_call_eval P menv0 main step cs menv1 [y]
+        /\ R (S n) menv1.
+    Lemma dostep'_coind : forall n menv,
+        R n menv -> dostep' P n menv.
     Proof.
     cofix COINDHYP.
-    intros ? t HR.
+    intros ** HR.
     pose proof (StepCase _ _ HR) as Hstep.
-    simpl in Hstep.
-    destruct Hstep as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
-    subst t.
+    destruct Hstep as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
     econstructor; eauto.
     Qed.
     
@@ -1903,7 +1903,7 @@ for all [Is_free_exp x e]. *)
                     (main_node.(n_in))) ->
         exists menv0,
           stmt_call_eval P hempty main reset [] menv0 []
-          /\ dostep' (translate G) menv0 mk_trace.
+          /\ dostep' (translate G) 0 menv0.
     Proof.
     intros M main_node Hdef Hfind_main Hmsem Hwt_var. 
 
@@ -1911,16 +1911,11 @@ for all [Is_free_exp x e]. *)
     subst Hdef.
     exists menv0; split; eauto.
 
-    set (R := fun (menv: heap) (t: trace) => 
-                exists n,
-                  Memory_Corres G n main M menv
-                /\ t = mk_trace' n).
+    set (R := fun n menv => 
+                Memory_Corres G n main M menv).
     apply dostep'_coind with (R := R).
-    2: now unfold R; eexists; eauto.
+    2: now unfold R; eauto.
     intros. unfold R in H. 
-    decompose record H.
-    rewrite unroll_trace in H2. subst t.
-    rename x into n.
 
     assert (exists coSn, ys n = present coSn) as [coSn Hys].
     {
@@ -1947,9 +1942,7 @@ for all [Is_free_exp x e]. *)
 *)
     }
 
-    exists (css n).
-    exists ([coSn]).
-    exists (mk_trace' (S n)).
+    exists (coSn).
     
     set (ciSn := css n).
 
@@ -1984,8 +1977,7 @@ for all [Is_free_exp x e]. *)
     }
 
     exists omenvSn, main_cls, prog', fm. unfold R; simpl.
-    repeat split; auto. eexists; eauto.
-    rewrite Hys. auto.
+    repeat split; auto. 
     Qed.
 
     Theorem is_event_loop_correct:
