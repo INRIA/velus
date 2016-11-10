@@ -225,46 +225,64 @@ Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
   let (x, ty) := bind in
   (glob_id x, cltype ty).
 
-Definition make_in_arg (arg: ident * Ctypes.type): Clight.expr :=
+Definition make_in_arg (arg: ident * type): Clight.expr :=
   let (x, ty) := arg in
-  Clight.Evar x ty.
+  Clight.Etempvar x (cltype ty).
 
-Definition make_main
-           (prog: program) (node: ident) (ins: list (ident * Ctypes.type))
-           (outs: list (ident * Ctypes.type)) (m: method)
-  : AST.globdef Clight.fundef Ctypes.type :=
-  let out_step_struct := Ident.prefix out step in
-  let tyout_step := type_of_inst (prefix_fun node step) in
-  let step_out := Clight.Eaddrof (Clight.Evar out_step_struct tyout_step)
-                                 (pointer_of tyout_step) in
-  
-  let out_reset_struct := Ident.prefix out reset in
-  let tyout_reset := type_of_inst (prefix_fun node reset) in
-  let reset_out := Clight.Eaddrof (Clight.Evar out_reset_struct tyout_reset)
-                                  (pointer_of  tyout_reset) in
+Definition load_in (ins: list (ident * type)): Clight.statement :=
+  fold_right
+    (fun (xt: ident * type) s =>
+       let (x, t) := xt in
+       let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
+       let load :=
+           Clight.Sbuiltin (Some x) (AST.EF_vload (type_chunk t))
+                           (Ctypes.Tcons typtr Ctypes.Tnil)
+                           [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr] in
+       Clight.Ssequence load s) Clight.Sskip ins.
 
-  let p_self := Clight.Eaddrof (Clight.Evar self (type_of_inst node))
-                               (type_of_inst_p node) in
-  
-  let args_step_in := map make_in_arg ins in
-  let args_step := p_self :: step_out :: args_step_in in
-  
-  let reset := funcall (prefix_fun node reset) [p_self; reset_out] in
-  let step := Clight.Ssequence
-                (funcall (prefix_fun node step) args_step)
-                (fold_right
-                   (fun y s =>
-                      let '((y, ty), (y', _)) := y in
-                      let assign_out :=
-                          Clight.Sassign (Clight.Evar y ty)
-                                         (Clight.Efield (Clight.Evar out_step_struct tyout_step) y' ty) in
-                      Clight.Ssequence assign_out s
-                   ) Clight.Sskip (combine outs m.(m_out))) in
-  let loop := Clight.Sloop ((* Clight.Ssequence wait *) step) Clight.Sskip in
-  let body := return_zero (Clight.Ssequence reset loop) in
+Definition write_out (node: ident) (outs: list (ident * type))
+  : Clight.statement :=
+  let out_struct := Ident.prefix out step in
+  let t_struct := type_of_inst (prefix_fun node step) in
+  fold_right
+    (fun (xt: ident * type) s =>
+       let (x, t) := xt in
+       let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
+       let write :=
+           Clight.Sbuiltin None (AST.EF_vstore (type_chunk t))
+                           (Ctypes.Tcons typtr (Ctypes.Tcons (cltype t) Ctypes.Tnil))
+                           [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr;
+                             Clight.Efield (Clight.Evar out_struct t_struct) x (cltype t)] in
+       Clight.Ssequence write s
+    ) Clight.Sskip outs.
+
+Definition reset_call (node: ident): Clight.statement :=
+  let p_self := Clight.Eaddrof (Clight.Evar self (type_of_inst node)) (type_of_inst_p node) in
+  let out_struct := Ident.prefix out reset in
+  let t_struct := type_of_inst (prefix_fun node reset) in
+  let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
+  funcall (prefix_fun node reset) [p_self; p_out].
+
+Definition step_call (node: ident) (args: list Clight.expr): Clight.statement :=
+  let p_self := Clight.Eaddrof (Clight.Evar self (type_of_inst node)) (type_of_inst_p node) in
+  let out_struct := Ident.prefix out step in
+  let t_struct := type_of_inst (prefix_fun node step) in
+  let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
+  funcall (prefix_fun node step) (p_self :: p_out :: args).
+          
+Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type :=
+  let args := map make_in_arg m.(m_in) in
+  let s_step := Clight.Ssequence
+                  (load_in m.(m_in))
+                  (Clight.Ssequence
+                     (step_call node args)
+                     (write_out node m.(m_out))) in
+  let loop := Clight.Sloop s_step Clight.Sskip in
+  let body := return_zero (Clight.Ssequence (reset_call node) loop) in
   fundef [] [(self, type_of_inst node);
-              (out_reset_struct, tyout_reset);
-              (out_step_struct, tyout_step)] [] Ctypes.type_int32s body.
+              (Ident.prefix out reset, type_of_inst (prefix_fun node reset));
+              (Ident.prefix out step, type_of_inst (prefix_fun node step))]
+         (map translate_param m.(m_in)) Ctypes.type_int32s body.
 
 Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
@@ -325,7 +343,7 @@ Definition translate (prog: program) (main_node: ident): res Clight.program :=
       | Some _ =>
         let ins := map glob_bind m.(m_in) in
         let outs := map glob_bind m.(m_out) in
-        let main := make_main prog main_node ins outs m in
+        let main := make_main main_node m in
         let cs := map (translate_class prog) prog in
         let (structs, funs) := split cs in
         let gdefs := concat funs ++ [(main_id, main)] in
