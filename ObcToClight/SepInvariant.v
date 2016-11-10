@@ -1044,13 +1044,14 @@ Section BlockRep.
     Qed.
 
   Lemma blockrep_field_offset:
-    forall m ve flds b x ty P,
+    forall m ve flds b P,
       m |= blockrep ve flds b ** P ->
-      In (x, ty) flds ->
-      exists d, field_offset ge x flds = Errors.OK d
-           /\ 0 <= d <= Int.max_unsigned.
+      forall x ty,
+        In (x, ty) flds ->
+        exists d, field_offset ge x flds = Errors.OK d
+             /\ 0 <= d <= Int.max_unsigned.
   Proof.
-    intros ** Hm Hin.
+    intros ** Hm ? ? Hin.
     unfold blockrep in Hm.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].
