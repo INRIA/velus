@@ -1603,13 +1603,14 @@ for all [Is_free_exp x e]. *)
 
     Variables (G     : global)
               (main  : ident)
-              (css   : stream (list const))
-              (ys    : stream value)
+              (ins   : stream (list const))
+              (outs  : stream const)
               (r     : ident)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
-    Let xss := fun n => map (fun c => present (sem_const c)) (css n).
+    Let xss := fun n => map (fun c => present (sem_const c)) (ins n).
+    Let ys := fun n => present (sem_const (outs n)).
 
     Variable (Hsem: sem_node G main xss ys).
 
@@ -1638,7 +1639,7 @@ for all [Is_free_exp x e]. *)
         msem_node G main xss M ys ->
         forall n,
         exists menv env omenv,
-          dostep (S n) P r main obj css menv env
+          dostep (S n) P r main obj ins menv env
           /\ mfind_inst obj menv = Some omenv
           /\ Memory_Corres G (S n) main M omenv
           /\ (forall co, ys n = present co <-> PM.find r env = Some co).
@@ -1662,7 +1663,7 @@ for all [Is_free_exp x e]. *)
           apply mfind_inst_gss.
       }
 
-      set (ci0 := css 0).
+      set (ci0 := ins 0).
 
       assert (Hpres: present_list xss 0 (map sem_const ci0))
         by (subst xss; unfold present_list; rewrite map_map; eauto).
@@ -1718,7 +1719,7 @@ for all [Is_free_exp x e]. *)
 
         destruct IHn as [menvN [envN [omenvN [HstepN [HmfindN [HmcN HeqN]]]]]].
 
-        set (ciSn := css (S n)).
+        set (ciSn := ins (S n)).
 
         assert (HpresN: present_list xss (S n) (map sem_const ciSn))
           by (subst xss; unfold present_list; rewrite map_map; eauto).
@@ -1770,98 +1771,19 @@ for all [Is_free_exp x e]. *)
             now injection 1; intro; subst.
     Qed.
 
-(*
-    Require Import Lists.Stream.
-
-    Definition trace := Stream 
-
-    Inductive event := Read : list const -> event | Write : list value -> event.
-    CoInductive trace := Ev : event -> trace -> trace.
-
-    Definition ev t := match t with Ev a _ => a end.
-    Definition tl t := match t with Ev _ b => b end.
 
 
-    Lemma unroll_event:
-      forall (t: trace), t = Ev (ev t) (tl t).
-    Proof.
-    intros. destruct t; auto. 
-    Qed.
-    
-    Ltac sunroll x := rewrite (unroll_event x); simpl.
 
-
-    CoInductive bisim: trace -> trace -> Prop :=
-    | bisim_cons: forall s1 s2,
-        ev s1 = ev s2 -> bisim (tl s1) (tl s2) -> bisim s1 s2.
-
-    Remark bisim_refl: forall (t: trace), bisim t t.
-    Proof.
-    cofix COINDHYP; intros; constructor; auto.
-    Qed.
-
-    Remark bisim_sym: forall (s1 s2: trace), bisim s1 s2 -> bisim s2 s1.
-    Proof.
-    cofix COINDHYP; intros. inv H; constructor; auto.
-    Qed.
-
-    Remark bisim_trans:
-      forall (s1 s2 s3: trace), bisim s1 s2 -> bisim s2 s3 -> bisim s1 s3.
-    Proof.
-    cofix COINDHYP; intros. inv H; inv H0; constructor; eauto. congruence.
-    Qed.
-
-    Require Import Setoid.
-
-    Add Parametric Relation : trace bisim
-        reflexivity proved by bisim_refl
-        symmetry proved by bisim_sym
-        transitivity proved by bisim_trans
-          as bisim_R.
-
-    Add Parametric Morphism : Ev 
-        with signature eq ==> bisim ==> bisim
-          as Ev_M.
-    Proof. intros; constructor; auto. Qed.
-    
-    Add Parametric Morphism : ev 
-        with signature bisim ==> eq
-          as ev_M.
-    Proof. intros. inv H; auto. Qed.
-
-    Add Parametric Morphism : tl
-        with signature bisim ==> bisim
-          as tl_M.
-    Proof. intros. inv H; auto. Qed.
-
-    Notation "A == B" := (bisim A B) (at level 70, no associativity).
-
-
-    CoFixpoint mk_trace' (n : nat) 
-      := Ev (Read (css n)) 
-              (Ev (Write [ys n])
-                    (mk_trace' (S n))).
-    
-    Definition mk_trace := mk_trace' 0.    
-
-    Definition unroll_trace : 
-      forall n, mk_trace' n = Ev (Read (css n)) 
-                             (Ev (Write [ys n])
-                                 (mk_trace' (S n))).
-    Proof. 
-    intros.
-    sunroll (mk_trace' n). reflexivity.
-    Qed.
-*)
 
     CoInductive dostep' P : nat -> heap -> Prop
-      := Step : forall n y menv0 menv1 main_cls prog' fm,
-          let cs := List.map sem_const (css n) in
+      := Step : forall n menv0 menv1 main_cls prog' fm,
+          let cins := List.map sem_const (ins n) in
+          let couts := List.map sem_const [outs n] in
           find_class main P = Some (main_cls, prog') ->
           find_method step (c_methods main_cls) = Some fm ->
-          Forall2 (fun v xt => wt_val v (snd xt)) cs (m_in fm) ->
-          ys n = present y ->
-          stmt_call_eval P menv0 main step cs menv1 [y] ->
+          wt_vals cins fm.(m_in) ->
+          wt_vals couts fm.(m_out) ->
+          stmt_call_eval P menv0 main step cins menv1 couts ->
           dostep' P (S n) menv1 ->
           dostep' P n menv0.
 
@@ -1872,13 +1794,14 @@ for all [Is_free_exp x e]. *)
 
     Hypothesis StepCase: forall n menv0,
       R n menv0 ->
-      exists y menv1 main_cls prog' fm,
-        let cs := map sem_const (css n) in
+      exists menv1 main_cls prog' fm,
+        let cins := map sem_const (ins n) in
+        let couts := map sem_const [outs n] in
           find_class main P = Some (main_cls, prog') 
         /\ find_method step (c_methods main_cls) = Some fm 
-        /\ Forall2 (fun v xt => wt_val v (snd xt)) cs (m_in fm)
-        /\ ys n = present y
-        /\ stmt_call_eval P menv0 main step cs menv1 [y]
+        /\ wt_vals cins fm.(m_in)
+        /\ wt_vals couts fm.(m_out) 
+        /\ stmt_call_eval P menv0 main step cins menv1 couts
         /\ R (S n) menv1.
     Lemma dostep'_coind : forall n menv,
         R n menv -> dostep' P n menv.
@@ -1886,7 +1809,7 @@ for all [Is_free_exp x e]. *)
     cofix COINDHYP.
     intros ** HR.
     pose proof (StepCase _ _ HR) as Hstep.
-    destruct Hstep as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
+    destruct Hstep as (? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
     econstructor; eauto.
     Qed.
     
@@ -1898,9 +1821,10 @@ for all [Is_free_exp x e]. *)
         find_node main G = Some main_node ->
         msem_node G main xss M ys ->
         (forall n, 
-            Forall2 (fun v xt => wt_val v (snd xt)) 
-                    (map sem_const (css n)) 
-                    (main_node.(n_in))) ->
+            let cins := map sem_const (ins n) in
+            let couts := map sem_const [outs n] in
+              wt_vals cins main_node.(n_in)
+            /\ wt_vals couts [main_node.(n_out)]) ->
         exists menv0,
           stmt_call_eval P hempty main reset [] menv0 []
           /\ dostep' (translate G) 0 menv0.
@@ -1911,44 +1835,19 @@ for all [Is_free_exp x e]. *)
     subst Hdef.
     exists menv0; split; eauto.
 
-    set (R := fun n menv => 
-                Memory_Corres G n main M menv).
+    set (R := fun n menv => Memory_Corres G n main M menv).
     apply dostep'_coind with (R := R).
     2: now unfold R; eauto.
     intros. unfold R in H. 
 
-    assert (exists coSn, ys n = present coSn) as [coSn Hys].
-    {
-      inversion_clear Hmsem as
-          [? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
-             (H' & Hsem_in & Hsem_out & Habs & Hsem_eqns)].
+    set (cinsN := ins n).
+    set (coutsN := outs n).
 
-      admit.
-(*
-      assert (~ ys n = absent).
-      intro Hys_abs. rewrite <- Habs in Hys_abs. 
-      unfold xss in *; simpl in *.
-      destruct (css n); try contradiction.
-
-      assert (present_list (yss n)).
-      {
-            edestruct Hsameys as [Habs_ys|]; eauto.
-            apply Habs in Habs_ys. rewrite HpresN in Habs_ys.
-            destruct ciSn; try now inv Hlen. simpl in Habs_ys.
-            inv Habs_ys. discriminate.
-      }
-      
-      now apply present_list_spec.
-*)
-    }
-
-    exists (coSn).
-    
-    set (ciSn := css n).
-
-    assert (HpresN: xss n = map present (map sem_const ciSn))
+    assert (HpresN: xss n = map present (map sem_const cinsN))
       by (subst xss; unfold present_list; rewrite map_map; eauto).
     
+    assert (ys n = present (sem_const (outs n))) by now reflexivity.
+
     edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
 
     assert (exists main_cls prog',
@@ -1969,11 +1868,16 @@ for all [Is_free_exp x e]. *)
       eapply exists_step_method.
     }
 
-    assert (Forall2 (fun (v : val) (xt : ident * type) => wt_val v (snd xt)) 
-                    (map sem_const ciSn) (m_in fm)).
+    assert (wt_vals (map sem_const cinsN) fm.(m_in)).
     {
       erewrite find_method_stepm_in.
       apply Hwt_var. rewrite <- Hdef_main. auto.
+    }
+
+    assert (wt_vals (map sem_const [coutsN]) fm.(m_out)).
+    {
+      erewrite find_method_stepm_out.
+      apply Hwt_var. rewrite <- Hdef_main. auto. 
     }
 
     exists omenvSn, main_cls, prog', fm. unfold R; simpl.
@@ -1984,7 +1888,7 @@ for all [Is_free_exp x e]. *)
       (* =translate_correct= *)
       sem_node G main xss ys ->
       forall n, exists menv env,
-          dostep (S n) (translate G) r main obj css menv env
+          dostep (S n) (translate G) r main obj ins menv env
           /\ (forall co, ys n = present co <-> PM.find r env = Some co).
     (* =end= *)
     Proof.
@@ -1994,7 +1898,7 @@ for all [Is_free_exp x e]. *)
           by (eapply sem_msem_node; eauto).
 
       assert (exists menv env omenv,
-                 dostep (S n) (translate G) r main obj css menv env
+                 dostep (S n) (translate G) r main obj ins menv env
                  /\ mfind_inst obj menv = Some omenv
                  /\ Memory_Corres G (S n) main M omenv
                  /\ (forall co, ys n = present co <-> PM.find r env = Some co))

@@ -120,6 +120,9 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     now destruct (equiv_decb v true_val).
   Qed.
   
+  Definition wt_vals vs (xts: list (ident * type)) 
+    := List.Forall2 (fun v xt => wt_val v (snd xt)) vs xts.
+
 End OPERATORS_AUX.
 
 Module OperatorsAux (Import Ops : OPERATORS) <: OPERATORS_AUX Ops.
