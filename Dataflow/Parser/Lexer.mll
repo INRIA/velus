@@ -91,8 +91,10 @@ let currentLoc =
            ast_ident = getident ();})
 
 let string_of_loc { Ast.ast_fname = fname;
-                    Ast.ast_lnum  = lnum; } =
-  Printf.sprintf "%s:%d:" fname lnum
+                    Ast.ast_lnum  = lnum;
+                    Ast.ast_bol   = bol;
+                    Ast.ast_cnum  = cnum } =
+  Printf.sprintf "%s:%d:%d" fname lnum (cnum - bol + 1)
 
 let lexing_loc { Ast.ast_lnum  = lnum;
                  Ast.ast_fname = fname;
