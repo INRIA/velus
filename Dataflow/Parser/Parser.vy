@@ -26,7 +26,7 @@ Import ListNotations.
 %token<Ast.string * Ast.astloc> VAR_NAME
 %token<Ast.constant * Ast.astloc> CONSTANT
 %token<Ast.astloc> TRUE FALSE
-%token<Ast.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON
+%token<Ast.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
 %token<Ast.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
 %token<Ast.astloc> IF THEN ELSE
 
@@ -326,6 +326,8 @@ declared_clock:
 | /* empty */
     { Ast.BASE }
 | WHEN clk=clock
+    { clk }
+| COLONCOLON clk=clock
     { clk }
 
 clock:

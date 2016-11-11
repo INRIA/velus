@@ -275,6 +275,7 @@ rule initial = parse
   | "-"                           { tok MINUS't (currentLoc lexbuf) }
   | "*"                           { tok STAR't (currentLoc lexbuf) }
   | "/"                           { tok SLASH't (currentLoc lexbuf) }
+  | "::"                          { tok COLONCOLON't (currentLoc lexbuf) }
   | ":"                           { tok COLON't (currentLoc lexbuf) }
   | "("                           { tok LPAREN't (currentLoc lexbuf) }
   | ")"                           { tok RPAREN't (currentLoc lexbuf) }
