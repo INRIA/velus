@@ -31,11 +31,13 @@ let () =
     [
       ("and",      fun loc -> tok AND't      loc);
       ("bool",     fun loc -> tok BOOL't     loc);
-      ("float64",  fun loc -> tok FLOAT64't  loc);
+      ("double",   fun loc -> tok FLOAT64't  loc); (* LEGACY *)
       ("else",     fun loc -> tok ELSE't     loc);
       ("false",    fun loc -> tok FALSE't    loc);
       ("fby",      fun loc -> tok FBY't      loc);
+      ("float",    fun loc -> tok FLOAT32't  loc); (* LEGACY *)
       ("float32",  fun loc -> tok FLOAT32't  loc);
+      ("float64",  fun loc -> tok FLOAT64't  loc);
       ("if",       fun loc -> tok IF't       loc);
       ("int",      fun loc -> tok INT32't    loc); (* LEGACY *)
       ("int16",    fun loc -> tok INT16't    loc);
@@ -61,6 +63,7 @@ let () =
       ("tel",      fun loc -> tok TEL't      loc);
       ("then",     fun loc -> tok THEN't     loc);
       ("true",     fun loc -> tok TRUE't     loc);
+      ("uint",     fun loc -> tok UINT32't   loc); (* LEGACY *)
       ("uint16",   fun loc -> tok UINT16't   loc);
       ("uint32",   fun loc -> tok UINT32't   loc);
       ("uint64",   fun loc -> tok UINT64't   loc);
