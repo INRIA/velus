@@ -335,9 +335,13 @@ Definition translate (prog: program) (main_node: ident): Errors.res Clight.progr
         let (structs, funs) := split cs in
         let gdefs := concat funs ++ [(main_id, main)] in
         make_program' (concat structs) [f_gvar; step_out_gvar; reset_out_gvar] (outs ++ ins) gdefs [] main_id
-      | None => Errors.Error (Errors.msg "unfound reset function")
+      | None => Errors.Error
+                  (Errors.msg "ObcToClight: reset function not found")
       end
-    | None => Errors.Error (Errors.msg "unfound step function")
+    | None => Errors.Error
+                (Errors.msg "ObcToClight: step function not found")
     end
-  | None => Errors.Error (Errors.msg "undefined node")
+  | None => Errors.Error [Errors.MSG "ObcToClight: undefined node: '";
+                          Errors.CTX main_node; Errors.MSG "'." ]
   end.
+

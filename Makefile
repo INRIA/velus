@@ -160,7 +160,7 @@ endif
 #                                     #
 #######################################
 
-all: $(VOFILES) 
+all: $(VOFILES) rustre 
 
 spec: $(VIFILES)
 

@@ -9,15 +9,21 @@ open Ctypes
 let print_c = ref false
 let write_cl = ref false
 let write_cm = ref false
-    
-let print_error oc msg =
-  let print_one_error = function
-    | Errors.MSG s -> output_string oc (camlstring_of_coqstring s)
-    | Errors.CTX i -> output_string oc (extern_atom i)
-    | Errors.POS i -> fprintf oc "%ld" (P.to_int32 i)
+let main_node = ref (None : string option)
+
+let set_main_node s =
+  main_node := Some s
+
+let get_main_node decls =
+  let rec get_last_name ds =
+    match ds with
+    | []    -> intern_string "main"
+    | [d]   -> Instantiator.DF.Syn.n_name d
+    | d::ds -> get_last_name ds
   in
-  List.iter print_one_error msg;
-  output_char oc '\n'
+  match !main_node with
+  | Some s -> intern_string s
+  | None   -> get_last_name decls
 
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in
@@ -69,7 +75,7 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
                    Ast.ast_cnum  = cnum;
                    Ast.ast_bol   = bol }) = Relexer.map_token (Streams.hd toks)
       in
-      (* TODO: improve the error messages *)
+      (* TODO: improve error messages *)
       Printf.fprintf stderr "%s:%d:%d: syntax error.\n%!"
         fname lnum (cnum - bol + 1)
   | I.Accepted v ->
@@ -104,8 +110,9 @@ let compile filename =
     | Errors.OK p -> p
     | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
   if Cerrors.check_errors() then exit 2;
-  match DataflowToClight.compile p (intern_string (Filename.basename filename)) with
-  | Error errmsg -> print_error stderr errmsg
+  let main_node = get_main_node p in
+  match DataflowToClight.compile p main_node with
+  | Error errmsg -> Driveraux.print_error stderr errmsg
   | OK p ->
     if !print_c then
       PrintClight.print_program Format.std_formatter p;
@@ -120,7 +127,7 @@ let compile filename =
     if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
     let p = add_builtins p in
     match Compiler.transf_clight_program p with
-    | Error errmsg -> print_error stderr errmsg
+    | Error errmsg -> Driveraux.print_error stderr errmsg
     | OK p -> print_endline "Compilation OK"
 
 let process file =
@@ -132,6 +139,7 @@ let process file =
     raise (Arg.Bad ("don't know what to do with " ^ file))
 
 let speclist = [
+  "-main", Arg.String set_main_node, " Specify the main node";
   "-p", Arg.Set print_c, " Print generated Clight on standard output";
   "-dclight", Arg.Set write_cl, " Save generated Clight in <source>.light.c";
   "-dcminor", Arg.Set write_cm, " Save generated Clight in <source>.minor.c"
@@ -140,4 +148,20 @@ let speclist = [
 let usage_msg = "Usage: rustre [options] <source>"
 
 let _ =
+  Machine.config :=
+    begin match Configuration.arch with
+    | "powerpc" -> if Configuration.system = "linux"
+                   then Machine.ppc_32_bigendian
+                   else Machine.ppc_32_diab_bigendian
+    | "arm"     -> Machine.arm_littleendian
+    | "ia32"    -> if Configuration.abi = "macosx"
+                   then Machine.x86_32_macosx
+                   else Machine.x86_32
+    | _         -> assert false
+    end;
+  Builtins.set C2C.builtins;
+  CPragmas.initialize()
+
+let _ =
   Arg.parse (Arg.align speclist) process usage_msg
+
