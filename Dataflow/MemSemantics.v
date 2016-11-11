@@ -657,7 +657,7 @@ dataflow memory for which the non-standard semantics holds true.
       constructor ((econstructor; eassumption) || assumption).
     - apply IH in Hsem.
       destruct Hsem as [M' Hmsem].
-      exists (madd_obj (hd default_ident x) M' M).
+      exists (madd_obj (hd Ids.default x) M' M).
 
       assert (exists i, Some i = hd_error x) as [i Hsome].
       {
@@ -701,7 +701,7 @@ dataflow memory for which the non-standard semantics holds true.
         eexists; simpl; eauto.
       }
 
-      assert (Hhd: hd default_ident x = i).
+      assert (Hhd: hd Ids.default x = i).
       {
         destruct x; simpl in *; try discriminate.
         injection Hsome; congruence.

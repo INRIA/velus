@@ -206,7 +206,7 @@ Module Type DECIDE
 
             assert (exists n,
                        n < length (var_defined eq)
-                     /\ nth n (var_defined eq) default_ident = x)
+                     /\ nth n (var_defined eq) Ids.default = x)
               as (n & Hlen & Hnth)
                 by now apply In_ex_nth.
 

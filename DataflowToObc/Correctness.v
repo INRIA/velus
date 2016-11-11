@@ -226,7 +226,7 @@ Module Type CORRECTNESS
       destruct Heval as [Hipi Heval].
       + inversion_clear Heval.
         rewrite <- H2.
-        destruct (ident_eq_dec x (hd default_ident y)) as [Hxy|Hxny].
+        destruct (ident_eq_dec x (hd Ids.default y)) as [Hxy|Hxny].
         * exfalso.
           destruct y; simpl in *.
           eapply Hnemp; auto.
@@ -969,7 +969,7 @@ for all [Is_free_exp x e]. *)
               | H: map present inValues = _ |- _ => rewrite H
               end. eauto.
             }
-            assert (Hhd: hd default_ident ys = y).
+            assert (Hhd: hd Ids.default ys = y).
             {
               unfold hd_error in Hsome'.
               destruct ys; try discriminate; simpl.
@@ -1670,7 +1670,7 @@ for all [Is_free_exp x e]. *)
         inversion_clear Hsem
           as [|? ? ? i ? ? ? Mo ? xs' ys' Hsome Hmfind Hxs' Hys' HsemNode|].
 
-        assert (Hhd: hd default_ident is = i)
+        assert (Hhd: hd Ids.default is = i)
           by now destruct is; inv Hsome.
         rewrite Hhd in *.
 
@@ -2284,7 +2284,7 @@ for all [Is_free_exp x e]. *)
         intros i Hfree; apply Hfni; intuition.
       + assert (forall i,
                    Is_free_in_clock i ck ->
-                   ~ Can_write_in i (Call x f (hd default_ident x)
+                   ~ Can_write_in i (Call x f (hd Ids.default x)
                                           step (map (translate_lexp mems) e))).
         {
           intros ** Hwrite.

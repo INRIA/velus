@@ -36,11 +36,6 @@ Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
 
-(* The following identifier is (provably) never used in
-   practice. Alternatively, we could assign it a default value. *)
-(* XXX: this could be defined in the module [IDS]. *)
-Axiom default_ident : ident.
-
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
 
@@ -56,6 +51,8 @@ Module Type IDS.
 
   Parameter step  : ident.
   Parameter reset : ident.
+
+  Parameter default : ident.
 
   Definition reserved : list ident := [ self; out ].
 

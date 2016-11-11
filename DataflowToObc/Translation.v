@@ -145,7 +145,7 @@ Module Type TRANSLATION
       match eqn with
       | EqDef x ck ce => Control ck (translate_cexp x ce)
       | EqApp xs ck f les =>
-        let name := hd default_ident xs in
+        let name := hd Ids.default xs in
         Control ck (Call xs f name step (List.map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
@@ -169,7 +169,7 @@ Module Type TRANSLATION
     | EqDef _ _ _    => s
     | EqFby x _ c0 _ => Comp (AssignSt x (Const c0)) s
     | EqApp xs _ f _  =>
-      let name := hd default_ident xs in
+      let name := hd Ids.default xs in
       Comp (Call [] f name reset []) s
     end.
   (* =end= *)

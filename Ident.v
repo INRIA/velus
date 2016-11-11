@@ -93,6 +93,9 @@ Module Export Ids <: IDS.
 
   Definition methods  : list ident := [ step; reset ].
 
+  (* The following identifier is (provably) never used in practice. *)
+  Definition default : ident := pos_of_str "$$$$".
+
   Lemma reserved_nodup: NoDup reserved.
   Proof.
     constructor.

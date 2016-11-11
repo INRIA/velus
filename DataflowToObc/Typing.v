@@ -297,7 +297,7 @@ Module Type TYPING
                     apply find_node_translate in H;
                       destruct H as (cls & prog' & Hfind & Hcls) end.
 
-    assert (In (hd default_ident i, i0) insts).
+    assert (In (hd Ids.default i, i0) insts).
     {
       assert (Hlen: (0 < length i)%nat).
       {
@@ -448,7 +448,7 @@ Module Type TYPING
           + (* Prove: NoDup i *)
             now eapply EqApp_type_in_node; eauto.
 *)
-          + (* Prove: In (hd default_ident i, i0) insts *)
+          + (* Prove: In (hd Ids.default i, i0) insts *)
             destruct i; auto.
             unfold insts.
             rewrite gather_eqs_snd_spec.
