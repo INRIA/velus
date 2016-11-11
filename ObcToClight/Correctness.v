@@ -3791,13 +3791,17 @@ Section PRESERVATION.
         store_events (v :: vs) (xt :: xts) = [store_event_of_val v xt] ++ store_events vs xts.
     Proof. apply mk_event_cons. Qed.
 
-    Lemma load_events_not_E0: forall vs, load_events vs m_step.(m_in) <> E0.
+    Lemma load_events_not_E0: forall vs, 
+        (* wt_vals vs m_step.(m_in) -> *) load_events vs m_step.(m_in) <> E0.
     Admitted.
-    (* XXX: by [m_step.(m_in)] not being nil (because it comes from a dataflow node *)
+    (* XXX: by [m_step.(m_in)] not being nil (because it comes from a
+    dataflow node, but we need to suppose this) *)
 
-    Lemma store_events_not_E0: forall vs, store_events vs m_step.(m_out) <> E0.
+    Lemma store_events_not_E0: forall vs, 
+        (* wt_vals vs m_step.(m_out) -> *) store_events vs m_step.(m_out) <> E0.
     Admitted.
-    (* XXX: by [m_step.(m_out)] not being nil (because it comes from a dataflow node *)
+    (* XXX: by [m_step.(m_out)] not being nil (because it comes from a
+    dataflow node, but we need to suppose this) *)
 
     CoFixpoint transl_trace (n: nat): traceinf'.
       refine(
@@ -3826,16 +3830,10 @@ Section PRESERVATION.
     (*****************************************************************)
     (** Trace semantics of reads and writes to volatiles             *)
     (*****************************************************************)
-    
-    Axiom temp_in : val -> massert.
-    Axiom temp_ins : list val -> massert.
-    Axiom temp_ins_split : forall v vs, temp_ins (v :: vs) <-*-> temp_in v ** temp_ins vs.
-
-    
+        
     Lemma exec_read:
-      forall cs le me P,
+      forall cs le me ,
         wt_vals cs m_step.(m_in) ->
-        me |= P ->
         exists le', (* XXX: not any le': the one that contains [cs] *)
           exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1
                     le me
@@ -3844,7 +3842,7 @@ Section PRESERVATION.
                     le' me Out_normal.
     Proof.
       clear le Caractmain.
-      induction m_step.(m_in) as [|(x, t)]; simpl; intros ** Hwt Hm.
+      induction m_step.(m_in) as [|(x, t)]; simpl; intros ** Hwt.
       - (* Case: m_step.(m_in) ~ [] *)
         rewrite load_events_nil.
         repeat econstructor; auto.
@@ -3890,9 +3888,8 @@ Section PRESERVATION.
     Admitted.
 
     Lemma exec_write:
-      forall ys le me P,
+      forall ys le me,
         wt_vals [ys] m_step.(m_out) ->
-        me |= P ->
         exists le',
           exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le me
                     (write_out main_node m_step.(m_out)) 
@@ -4152,7 +4149,6 @@ Section PRESERVATION.
 
     (* XXX: previous version: *)
     (*
->>>>>>> 370bce1ae2bc529b20e5be10fd96a8b77f8c0eeb
     Lemma dostep_loop:
       forall n m P me css yss t T,
         Corr.dostep' main_node prog n me (Corr.mk_trace' css yss n) ->
