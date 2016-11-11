@@ -49,6 +49,17 @@ Local Ltac NamedDestructCases :=
          | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
          end.
 
+Definition cast_constant (loc: astloc) (c: constant) (ty: type')
+                                                             : res constant :=
+  match Cop.sem_cast (sem_const c) (cltype (type_const c))
+                     (cltype ty) Memory.Mem.empty, ty with
+  | Some (Values.Vint v),    Tint sz sg        => OK (Cint v sz sg)
+  | Some (Values.Vlong v),   Tlong sg          => OK (Clong v sg)
+  | Some (Values.Vfloat f),  Tfloat Ctypes.F64 => OK (Cfloat f)
+  | Some (Values.Vsingle f), Tfloat Ctypes.F32 => OK (Csingle f)
+  | _, _ => Error (err_loc loc (msg "failed cast of constant"))
+  end.
+
 Definition elab_constant (loc: astloc) (c: Ast.constant) : constant :=
   match c with
   | CONST_BOOL false  => Cint Integers.Int.zero Ctypes.IBool Ctypes.Signed
@@ -196,7 +207,7 @@ Section ElabExpressions.
     | Tfloat64 => Tfloat Ctypes.F64
     | Tbool    => Tint Ctypes.IBool Ctypes.Signed
     end.
-  
+
   Fixpoint elab_lexp (ae: Ast.expression) : res lexp :=
     match ae with
     | CONSTANT c loc => OK (Econst (elab_constant loc c))
@@ -280,6 +291,16 @@ Section ElabExpressions.
     | _, _ => Error (err_loc loc (msg "wrong number of pattern variables"))
     end.
 
+  Definition elab_constant_with_cast (loc: astloc) (ae: Ast.expression)
+                                                              : res constant :=
+    match ae with
+    | CAST aty (CONSTANT ac _) loc =>
+      cast_constant loc (elab_constant loc ac) (elab_type loc aty)
+    | CONSTANT ac loc =>
+      OK (elab_constant loc ac)
+    | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
+    end.
+
   Definition elab_equation (aeq: Ast.equation) : res equation :=
     let '(sxs, ae, loc) := aeq in
     do xs <- OK (map ident_of_camlstring sxs);
@@ -296,8 +317,8 @@ Section ElabExpressions.
       do ok <- check_result_list loc xs tysout;
       OK (EqApp xs ck f es)
            
-    | FBY av0 ae loc =>
-      let v0 := elab_constant loc av0 in
+    | FBY ae0 ae loc =>
+      do v0 <- elab_constant_with_cast loc ae0;
       let v0ty := type_const v0 in
       do e <- elab_lexp ae;
       do ok <- assert_type loc x v0ty;
@@ -819,7 +840,7 @@ Section ElabDeclaration.
     | EqApp xs _ _ _::eqs => do defd' <- check_vars loc defd xs;
                              check_defined loc out defd' eqs
     end.
-
+  
   Lemma check_defined_spec:
     forall {A} eqs loc (out: PM.t A) defd,
       check_defined loc out defd eqs = OK tt ->
