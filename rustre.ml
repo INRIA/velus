@@ -103,6 +103,7 @@ let compile filename =
     match DataflowElab.elab_declarations ast with
     | Errors.OK p -> p
     | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
+  if Cerrors.check_errors() then exit 2;
   match DataflowToClight.compile p (intern_string (Filename.basename filename)) with
   | Error errmsg -> print_error stderr errmsg
   | OK p ->

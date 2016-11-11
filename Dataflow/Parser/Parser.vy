@@ -391,7 +391,7 @@ translation_unit:
 
 translation_unit_file:
 | lst=translation_unit EOF
-    { lst }
+    { List.rev lst }
 | EOF
     { [] }
 
