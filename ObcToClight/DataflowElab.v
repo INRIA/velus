@@ -799,12 +799,15 @@ Section ElabDeclaration.
             by (apply IH3; intuition).
         rewrite PM_remove_iff in Hir. intuition.
   Qed.
-  
+
   Fixpoint check_defined {A} (loc: astloc) (out: PM.t A) (defd: PM.t A)
            (eqs: list equation) : res unit :=
     match eqs with
     | nil => if PM.is_empty defd then OK tt
-             else Error (err_loc loc (msg "some variables are not defined"))
+             else Error (err_loc loc
+                     (MSG "some variables are not defined:"
+                          :: concatMap (fun xv => [MSG " "; CTX (fst xv)])
+                                       (PM.elements defd)))
     | EqFby x _ _ _::eqs => if PM.mem x defd && (negb (PM.mem x out))
                             then check_defined loc out (PM.remove x defd) eqs
                             else Error (err_loc loc
