@@ -110,7 +110,7 @@ let compile source_name filename =
     | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
   if Cerrors.check_errors() then exit 2;
   let main_node = get_main_node p in
-  match DataflowToClight.compile p main_node with
+  match DataflowToClight.compile (List.rev p) main_node with
   | Error errmsg -> Driveraux.print_error stderr errmsg
   | OK p ->
     if !print_c then
