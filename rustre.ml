@@ -6,8 +6,6 @@ open C2C
 open Builtins
 open Ctypes
     
-open Location
-
 let print_c = ref false
 let write_cl = ref false
 let write_cm = ref false
@@ -43,65 +41,91 @@ let add_builtin p (name, (out, ins, b)) =
 let add_builtins p =
   List.fold_left add_builtin p builtins_generic.functions
 
-exception Erroneous_program
+(** Incremental parser to reparse the token stream and generate an
+    error message (the verified and extracted parser does not
+    generate error messages). Adapted directly from menhir's
+    calc-incremental example. *)
 
-let syntax_error loc =
-  Printf.eprintf "%aSyntax error.\n" output_location loc;
-  raise Erroneous_program
+module I = Parser2.MenhirInterpreter
 
-let compilation_error loc =
-  Printf.eprintf "%aCompilation error.\n" output_location loc;
-  raise Erroneous_program
+let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
+  match checkpoint with
+  | I.InputNeeded env ->
+      (* The parser needs a token. Request one from the lexer,
+         and offer it to the parser, which will produce a new
+         checkpoint. Then, repeat. *)
+      let (token, loc) = Relexer.map_token (Streams.hd toks) in
+      let loc = Lexer.lexing_loc loc in
+      let checkpoint = I.offer checkpoint (token, loc, loc) in
+      parsing_loop (Streams.tl toks) checkpoint
+  | I.Shifting _
+  | I.AboutToReduce _ ->
+      let checkpoint = I.resume checkpoint in
+      parsing_loop toks checkpoint
+  | I.HandlingError env ->
+      (* The parser has suspended itself because of a syntax error. Stop. *)
+      let (token, {Ast.ast_fname = fname;
+                   Ast.ast_lnum  = lnum;
+                   Ast.ast_cnum  = cnum;
+                   Ast.ast_bol   = bol }) = Relexer.map_token (Streams.hd toks)
+      in
+      Printf.fprintf stderr
+        "%s:%d:%d: TIM!!!! syntax error.\n%!" (* TODO *)
+        fname lnum (cnum - bol)
+  | I.Accepted v ->
+      assert false (* Parser2 should not succeed where Parser failed. *)
+  | I.Rejected ->
+      (* The parser rejects this input. This cannot happen, here, because
+         we stop as soon as the parser reports [HandlingError]. *)
+      assert false
 
-let parse parsing_fun lexing_fun lexbuf =
-  try
-    parsing_fun lexing_fun lexbuf
-  with
-    Parsing.Parse_error ->
-    begin
-	  let pos1 = Lexing.lexeme_start lexbuf
-	  and pos2 = Lexing.lexeme_end lexbuf in
-	  let l = { loc_fst = pos1;
-		        loc_end = pos2 } in
-	  syntax_error l
-    end
+let reparse toks =
+  let (_, l) = Relexer.map_token (Streams.hd toks) in
+  parsing_loop toks
+    (Parser2.Incremental.translation_unit_file (Lexer.lexing_loc l))
 
-let parse_implementation lexbuf =
-  parse Parser.program Lexer.token lexbuf
+(** Parser *)
+
+let parse toks =
+  Cerrors.reset();
+  let rec inf = Datatypes.S inf in
+  match Parser.translation_unit_file inf toks with
+  | Parser.Parser.Inter.Fail_pr -> (reparse toks; exit 1)
+  | Parser.Parser.Inter.Timeout_pr -> assert false
+  | Parser.Parser.Inter.Parsed_pr (ast, _) ->
+      (Obj.magic ast : Ast.declaration list)
 
 let compile filename =
-  let source_name = filename ^ ".cdf" in
-  let ic = open_in source_name in
-  try
-    initialise_location source_name ic;
-    let lexbuf = Lexing.from_channel ic in
-    let p = parse_implementation lexbuf in
-    let p = Elab.elab_global p in
-    match DataflowToClight.compile p (intern_string (Filename.basename filename)) with
+  let source_name = filename ^ ".ept" in
+  let toks = Lexer.tokens_stream source_name in
+  let ast = parse toks in
+  let p =
+    match DataflowElab.elab_declarations ast with
+    | Errors.OK p -> p
+    | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
+  match DataflowToClight.compile p (intern_string (Filename.basename filename)) with
+  | Error errmsg -> print_error stderr errmsg
+  | OK p ->
+    if !print_c then
+      PrintClight.print_program Format.std_formatter p;
+    (* if !write_cl then *)
+    (*   begin *)
+    (*     let target_name = filename ^ ".light.c" in *)
+    (*     let oc = open_out target_name in *)
+    (*     PrintClight.print_program (Format.formatter_of_out_channel oc) p; *)
+    (*     close_out oc *)
+    (*   end; *)
+    if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
+    if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
+    let p = add_builtins p in
+    match Compiler.transf_clight_program p with
     | Error errmsg -> print_error stderr errmsg
-    | OK p ->
-      if !print_c then
-        PrintClight.print_program Format.std_formatter p;
-      (* if !write_cl then *)
-      (*   begin *)
-      (*     let target_name = filename ^ ".light.c" in *)
-      (*     let oc = open_out target_name in *)
-      (*     PrintClight.print_program (Format.formatter_of_out_channel oc) p; *)
-      (*     close_out oc *)
-      (*   end; *)
-      if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
-      if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
-      let p = add_builtins p in
-      match Compiler.transf_clight_program p with
-      | Error errmsg -> print_error stderr errmsg
-      | OK p -> print_endline "Compilation OK"
-
-  with x -> close_in ic; raise x
+    | OK p -> print_endline "Compilation OK"
 
 let process file =
-  if Filename.check_suffix file ".cdf"
+  if Filename.check_suffix file ".ept"
   then
-    let filename = Filename.chop_suffix file ".cdf" in
+    let filename = Filename.chop_suffix file ".ept" in
     compile filename
   else
     raise (Arg.Bad ("don't know what to do with " ^ file))

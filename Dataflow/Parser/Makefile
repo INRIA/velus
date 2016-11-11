@@ -64,9 +64,11 @@ Ast.vo: Ast.v
 
 clean:
 	@rm -rf Parser.vo Parser.v Parser.glob
-	@rm -rf Parser2.mly Parser2.ml Parser2.mli Parser2.cmi Parser2.cmo
+	@rm -rf Parser2.mly Parser2.ml Parser2.mli
+	@rm -rf Parser2.cmi Parser2.cmo Parser2.cmx Parser2.o
 	@rm -rf Ast.vo Ast.glob
-	@rm -rf Lexer.ml Lexer.cmi Lexer.cmo
+	@rm -rf Lexer.ml Lexer.cmi Lexer.cmo Lexer.cmx
+	@rm -rf Relexer.cmi Relexer.cmo Relexer.cmx Relexer.o
 	@make -C extraction clean_extraction
 
 ## Rules

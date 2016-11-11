@@ -24,7 +24,7 @@ module SSet = Set.Make(String)
 
 let lexicon : (string, Ast.astloc -> token) Hashtbl.t = Hashtbl.create 17
 
-let tok t loc = Coq_existT (t, Obj.magic loc)
+let tok t v = Coq_existT (t, Obj.magic v)
 
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
@@ -84,10 +84,24 @@ let currentLoc =
   in
   fun lb ->
     let p = Lexing.lexeme_start_p lb in
-    Ast.({ lineno   = p.Lexing.pos_lnum;
-            filename = p.Lexing.pos_fname;
-            byteno   = p.Lexing.pos_cnum;
-            ident    = getident ();})
+    Ast.({ ast_lnum  = p.Lexing.pos_lnum;
+           ast_fname = p.Lexing.pos_fname;
+           ast_bol   = p.Lexing.pos_bol;
+           ast_cnum  = p.Lexing.pos_cnum;
+           ast_ident = getident ();})
+
+let string_of_loc { Ast.ast_fname = fname;
+                    Ast.ast_lnum  = lnum; } =
+  Printf.sprintf "%s:%d:" fname lnum
+
+let lexing_loc { Ast.ast_lnum  = lnum;
+                 Ast.ast_fname = fname;
+                 Ast.ast_bol   = bol;
+                 Ast.ast_cnum  = cnum } =
+   Lexing.({ pos_lnum  = lnum;
+             pos_fname = fname;
+             pos_bol   = bol;
+             pos_cnum  = cnum })
 
 (* Error reporting *)
 

@@ -9,11 +9,12 @@ Extraction Blacklist List.
 Cd "extraction".
 
 Extract Constant Ast.astloc =>
-"{ lineno : int;
-   filename: string;
-   byteno: int;
-   ident : int;
- }".
+"{ ast_lnum  : int;
+   ast_fname : string;
+   ast_bol   : int;
+   ast_cnum  : int;
+   ast_ident : int; }".
+
 Extract Constant Ast.string => "String.t".
 Extract Constant Ast.char_code => "int64".
 

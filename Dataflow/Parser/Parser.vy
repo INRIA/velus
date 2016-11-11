@@ -17,7 +17,10 @@
 Require Rustre.Dataflow.Parser.Ast.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
-Require Coq.Program.Syntax.
+Require Import Coq.Program.Syntax.
+
+Require Import List.
+Import ListNotations.
 %}
 
 %token<Ast.string * Ast.astloc> VAR_NAME
@@ -369,7 +372,7 @@ optsemicolon:
 
 declaration:
 | loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN optsemicolon
-  RETURNS LPAREN oparams=parameter_list RPAREN SEMICOLON
+  RETURNS LPAREN oparams=parameter_list RPAREN optsemicolon
   locals=local_decl_list LET eqns=equations TEL
     { Ast.NODE (fst id) iparams oparams locals eqns loc }
 

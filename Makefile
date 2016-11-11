@@ -126,6 +126,7 @@ VFILES:=RMemory.v\
   Dataflow/Typing.v\
   Dataflow/Stream.v\
   Dataflow/Parser/Ast.v\
+  Dataflow/Parser/Parser.v\
   Common.v\
   Ident.v\
   ObcToClight/Interface.v\
@@ -207,13 +208,40 @@ extraction: extraction/STAMP
 
 extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@mkdir -p extraction/extract
-	@rm -f extraction/extract/*.*
+	#@rm -f extraction/extract/*.*
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
-extr:
+Dataflow/Parser/Parser.v: Dataflow/Parser/Parser.vy
+	@$(MENHIR) --no-stdlib --coq $<
+
+Dataflow/Parser/Lexer.ml: Dataflow/Parser/Lexer.mll
+	ocamllex $<
+
+extraction/extract/Lexer.ml: Dataflow/Parser/Lexer.ml
+	cp $< $@
+
+extraction/extract/Relexer.ml: Dataflow/Parser/Relexer.ml
+	cp $< $@
+
+Dataflow/Parser/Parser2.mly: Dataflow/Parser/Parser.vy
+	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@
+
+Dataflow/Parser/Parser2.ml Dataflow/Parser/Parser2.mli: \
+		Dataflow/Parser/Parser2.mly
+	$(MENHIR) --no-stdlib --table $<
+
+extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml
+	cp $< $@
+
+extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli
+	cp $< $@
+
+rustre: extraction/STAMP extraction/extract/Lexer.ml rustre.ml \
+    		extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
+		extraction/extract/Relexer.ml
 	@find CompCert -name '*.cm*' -delete
-	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I CompCert/cparser -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustre.native
+	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustre.native
 	@mv rustre.native rustre
 	@cp CompCert/compcert.ini _build/compcert.ini
 

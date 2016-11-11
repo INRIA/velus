@@ -3,6 +3,8 @@ Require Import ExtrOcamlString.
 Require Import Rustre.DataflowToClight.
 Require Import Coq.ZArith.BinInt.
 Require Import Rustre.ObcToClight.Translation.
+Require Import Rustre.ObcToClight.DataflowElab.
+Require Import Dataflow.Parser.Parser.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping
@@ -67,6 +69,66 @@ Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |>
 
 (* Extract Constant first_unused_ident => "Camlcoq.first_unused_ident". *)
 
+(* Lexing/Parsing/Elaboration *)
+Extract Constant Ast.astloc =>
+"{ ast_lnum  : int;
+   ast_fname : string;
+   ast_bol   : int;
+   ast_cnum  : int;
+   ast_ident : int; }".
+Extract Constant Ast.string => "String.t".
+Extract Constant Ast.char_code => "int64".
+Extract Constant string_of_astloc =>
+  "fun loc -> Camlcoq.coqstring_of_camlstring (Lexer.string_of_loc loc)".
+Extract Constant cabsloc_of_astloc =>
+  "fun { Ast.ast_lnum = lno;  Ast.ast_fname = fname;
+         Ast.ast_cnum = cnum; Ast.ast_ident = id } ->
+       { Cabs.lineno  = lno;  Cabs.filename = fname;
+         Cabs.byteno  = cnum; Cabs.ident    = id }".
+Extract Constant cabs_floatinfo =>
+  "fun { Ast.isHex_FI    = ishex;
+         Ast.integer_FI  = integer;
+         Ast.fraction_FI = fraction;
+         Ast.exponent_FI = exponent;
+         Ast.suffix_FI   = suffix } ->
+       { Cabs.isHex_FI    = ishex;
+         Cabs.integer_FI  = integer;
+         Cabs.fraction_FI = fraction;
+         Cabs.exponent_FI = exponent;
+         Cabs.suffix_FI   = suffix }".
+
+Extract Constant ident_of_camlstring => "Camlcoq.intern_string".
+
+Extract Constant elab_const_int =>
+  "fun loc str ->
+    let (v, k) = Elab.elab_int_constant loc str in
+    match k with
+    | C.ILongLong ->
+        Interface.Op.Clong (Camlcoq.coqint_of_camlint64 v, Ctypes.Signed)
+    | C.IULongLong ->
+        Interface.Op.Clong (Camlcoq.coqint_of_camlint64 v, Ctypes.Unsigned)
+    | _ ->
+        let (sg, sz) = C2C.convertIkind k in
+        Interface.Op.Cint (C2C.convertInt v, sz, sg)".
+
+Extract Constant elab_const_float =>
+  "fun fi ->
+    let (f, k) = Elab.elab_float_constant fi in
+    if k = C.FLongDouble && not !Clflags.option_flongdouble then
+      C2C.unsupported ""'long double' floating-point literal"";
+    match C2C.convertFloat f k with
+    | Csyntax.Eval (Values.Vfloat n, Ctypes.Tfloat(Ctypes.F64, _)) ->
+        Interface.Op.Cfloat n
+    | Csyntax.Eval (Values.Vsingle n, Ctypes.Tfloat(Ctypes.F32, _)) ->
+        Interface.Op.Csingle n
+    | _ -> assert false".
+
+Extract Constant elab_const_char =>
+  "fun loc wide chars ->
+    let (v, k) = Elab.elab_char_constant loc wide chars in
+    let (sg, sz) = C2C.convertIkind k in
+    Interface.Op.Cint (C2C.convertInt v, sz, sg)".
+
 (* Cabs *)
 Extract Constant Cabs.cabsloc =>
 "{ lineno : int;
@@ -80,7 +142,7 @@ Extract Constant Cabs.char_code => "int64".
 Separate Extraction
          ZArith.BinIntDef
          Compiler.transf_clight_program Cabs
-         DataflowToClight
+         DataflowToClight elab_declarations translation_unit_file
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg

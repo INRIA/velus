@@ -16,25 +16,26 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Require compcert.cfrontend.Cop.
+Require compcert.cparser.Cabs.
 
 Require Import compcert.common.Errors.
 Local Open Scope error_monad_scope.
 
 (* Elaborate an AST into a well-typed Dataflow program. *)
 
-(* TODO: Should we just elaborate the constants in Lexer.mll ? *)
+Parameter elab_const_int : Cabs.cabsloc -> string -> constant.
+Parameter elab_const_float : Cabs.floatInfo -> constant.
+Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
 
-(* CompCert: cparser/Elab: elab_int_constant + cfrontend/C2C: convertIkind *)
-Parameter elab_const_int : astloc -> string -> constant.
-(* CompCert: cparser/Elab: elab_float_constant + cfrontend/C2C: convertIkind *)
-Parameter elab_const_float : floatInfo -> constant.
-(* CompCert: cparser/Elab: elab_char_constant + cfrontend/C2C: convertIkind *)
-Parameter elab_const_char : astloc -> bool -> list char_code -> constant.
-
-(* TODO: How to integrate with pos_of_str? *)
-(* TODO: Should we just turn identifiers into positives in Lexer.mll? *)
-Parameter ident_of_string : string -> ident.
+(* CompCert: lib/Camlcoq.ml: camlstring_of_coqstring and coqstring_of_camlstring
+   using Require ExtrOCamlString in the extraction file to extract Coq
+   strings as an OCaml "char list". Then use the Ident.pos_of_string
+   function.
+   TODO: In the long run, we should try to use OCaml strings everywhere. *)
+Parameter ident_of_camlstring : string -> ident.
 Parameter string_of_astloc : astloc -> String.string.
+Parameter cabsloc_of_astloc : astloc -> Cabs.cabsloc.
+Parameter cabs_floatinfo : Ast.floatInfo -> Cabs.floatInfo.
 
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ": " :: m.  
@@ -48,21 +49,13 @@ Local Ltac NamedDestructCases :=
          | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
          end.
 
-(*
-Module Type ELABORATION
-       (Import Ids    : IDS)
-       (Import OpAux  : OPERATORS_AUX Interface.Op)
-       (Import Syn    : SYNTAX Ids Interface.Op)
-       (Import Typing : TYPING Ids Interface.Op Syn).
-*)
-
 Definition elab_constant (loc: astloc) (c: Ast.constant) : constant :=
   match c with
   | CONST_BOOL false  => Cint Integers.Int.zero Ctypes.IBool Ctypes.Signed
   | CONST_BOOL true   => Cint Integers.Int.one Ctypes.IBool Ctypes.Signed
-  | CONST_INT s       => elab_const_int loc s
-  | CONST_FLOAT fi    => elab_const_float fi
-  | CONST_CHAR wide l => elab_const_char loc wide l
+  | CONST_INT s       => elab_const_int (cabsloc_of_astloc loc) s
+  | CONST_FLOAT fi    => elab_const_float (cabs_floatinfo fi)
+  | CONST_CHAR wide l => elab_const_char (cabsloc_of_astloc loc) wide l
   end.
 
 Definition Is_interface_map (G: global)
@@ -141,7 +134,7 @@ Section ElabExpressions.
     match ck with
     | BASE => OK Cbase
     | ON ck' b sx =>
-      let x := ident_of_string sx in
+      let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
         do ck' <- elab_clock loc ck';
         OK (Con ck' x b)
@@ -208,11 +201,11 @@ Section ElabExpressions.
     match ae with
     | CONSTANT c loc => OK (Econst (elab_constant loc c))
     | VARIABLE sx loc =>
-      let x := ident_of_string sx in
+      let x := ident_of_camlstring sx in
       do ty <- find_type loc x;
         OK (Evar x ty)
     | WHEN ae' b sx loc =>
-      let x := ident_of_string sx in
+      let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
         do e' <- elab_lexp ae';
         OK (Ewhen e' x b)
@@ -237,7 +230,7 @@ Section ElabExpressions.
   Fixpoint elab_cexp (ae: Ast.expression) : res cexp :=
     match ae with
     | MERGE sx aet aef loc =>
-      let x := ident_of_string sx in
+      let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
         do et <- elab_cexp aet;
         do ef <- elab_cexp aef;
@@ -289,7 +282,7 @@ Section ElabExpressions.
 
   Definition elab_equation (aeq: Ast.equation) : res equation :=
     let '(sxs, ae, loc) := aeq in
-    do xs <- OK (map ident_of_string sxs);
+    do xs <- OK (map ident_of_camlstring sxs);
     do x <- match xs with
             | x::xs => OK x
             | _ => Error (err_loc loc (msg "at least one output is required"))
@@ -297,7 +290,7 @@ Section ElabExpressions.
     do ck <- find_clock loc x;
     match ae with
     | CALL sf aes loc =>
-      let f := ident_of_string sf in
+      let f := ident_of_camlstring sf in
       do (tysin, tysout) <- find_node_interface loc f;
         do es <- elab_lexps loc aes tysin;
         do ok <- check_result_list loc xs tysout;
@@ -500,7 +493,7 @@ Section ElabExpressions.
       unfold find_node_interface in EQ0. NamedDestructCases.
       destruct EQ2.
       destruct wt_nenv as (wt_nenv' & ?).
-      specialize (wt_nenv' (ident_of_string s) _ _ Heq0).
+      specialize (wt_nenv' (ident_of_camlstring s) _ _ Heq0).
       destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
       econstructor; eauto.
       + apply Forall2_map_1 in Hout.
@@ -535,7 +528,7 @@ Section ElabDeclaration.
     | vd::vds =>
       let (rs, tyenv) := acc in
       let '(sx, sty, sck, loc) := vd in
-      let x := ident_of_string sx in
+      let x := ident_of_camlstring sx in
       let ty := elab_type loc sty in
       if PM.mem x tyenv
       then Error (err_loc loc (CTX x :: msg " is declared more than once"))
@@ -579,13 +572,13 @@ Section ElabDeclaration.
     destruct y as [[[sx sty] ?] loc].
     NamedDestructCases.
     rewrite PM.mem_find in Heq.
-    destruct (PM.find (ident_of_string sx) tyenv) eqn:Hnfind;
+    destruct (PM.find (ident_of_camlstring sx) tyenv) eqn:Hnfind;
       try discriminate; clear Heq.
-    assert (~InMembers (ident_of_string sx) xs) as Hnxs.
+    assert (~InMembers (ident_of_camlstring sx) xs) as Hnxs.
     { apply Hnin. intro Hmin.
       apply PM_In_find' in Hmin.
       contradiction. }
-    assert (NoDupMembers ((ident_of_string sx, elab_type loc sty) :: xs))
+    assert (NoDupMembers ((ident_of_camlstring sx, elab_type loc sty) :: xs))
       as Hnodup' by auto using NoDupMembers_cons.
     apply IH in Helab; clear IH; auto.
     - destruct Helab as (IH1 & IH2 & IH3 & IH4 & IH5).
@@ -611,7 +604,7 @@ Section ElabDeclaration.
           discriminate HH.
         * apply IH4 in HH.
           destruct HH as [|HH]; auto.
-          destruct (ident_eq_dec (ident_of_string sx) x) as [He|Hne].
+          destruct (ident_eq_dec (ident_of_camlstring sx) x) as [He|Hne].
           2: now rewrite PM.gso in HH; auto.
           subst. rewrite PM.gss in HH.
           inv HH. left; auto.
@@ -634,7 +627,7 @@ Section ElabDeclaration.
       apply in_inv in Hin'.
       destruct Hin' as [He|Hin'].
       now inv He; rewrite PM.gss.
-      destruct (ident_eq_dec x (ident_of_string sx)) as [He|Hne].
+      destruct (ident_eq_dec x (ident_of_camlstring sx)) as [He|Hne].
       2:now rewrite PM.gso; auto.
       subst. inversion_clear Hnodup' as [|? ? ? Hnim Hnodm].
       apply NotInMembers_NotIn with (b:=ty) in Hnim.
@@ -914,7 +907,7 @@ Section ElabDeclaration.
     | nil => OK acc
     | vd::vds =>
       let '(sx, sty, sck, loc) := vd in
-      let x := ident_of_string sx in
+      let x := ident_of_camlstring sx in
       do ck <- elab_clock tyenv loc sck;
         elab_clock_decl tyenv (PM.add x ck acc) vds
     end.
@@ -938,7 +931,7 @@ Section ElabDeclaration.
                       specialize (IH _ _ _ H) end.
       revert Hfind; apply IH.
       intros y yck Hfind.
-      destruct (ident_eq_dec y (ident_of_string s)).
+      destruct (ident_eq_dec y (ident_of_camlstring s)).
       2:rewrite PM.gso in Hfind; now eauto.
       subst y. rewrite PM.gss in Hfind.
       injection Hfind; intro HH; rewrite HH in *.
@@ -1013,7 +1006,7 @@ Section ElabDeclaration.
                     then Error (err_loc loc (msg "not enough inputs or outputs"))
                     else OK eqs) with
         | Error e => Error e
-        | OK eqs => OK {| n_name  := ident_of_string name;
+        | OK eqs => OK {| n_name  := ident_of_camlstring name;
                           n_in    := xin;
                           n_out   := xout;
                           n_vars  := xlocal;

@@ -36,6 +36,7 @@ Dataflow/WellFormed/Decide.v
 Dataflow/Ordered.v
 Dataflow/NoDup.v
 Dataflow/Parser/Ast.v
+Dataflow/Parser/Parser.v
 Dataflow.v
 Obc/Syntax.v
 Obc/Typing.v
