@@ -46,6 +46,7 @@ Import ListNotations.
     exclusive_OR_expression inclusive_OR_expression logical_AND_expression
     logical_OR_expression expression
 %type<Ast.constant * Ast.astloc> bool_constant
+%type<Ast.constant * Ast.astloc> constant
 %type<list Ast.expression> argument_expression_list 
 %type<Ast.unary_operator * Ast.astloc> unary_operator
 %type<Ast.var_decls> var_decl
@@ -108,12 +109,16 @@ bool_constant:
 | loc=FALSE
     { (Ast.CONST_BOOL false, loc) }
 
+constant:
+| cst=CONSTANT
+    { cst }
+| cst=bool_constant
+    { cst }
+
 primary_expression:
 | var=VAR_NAME
     { Ast.VARIABLE (fst var) (snd var) }
-| cst=CONSTANT
-    { Ast.CONSTANT (fst cst) (snd cst) }
-| cst=bool_constant
+| cst=constant
     { Ast.CONSTANT (fst cst) (snd cst) }
 | loc=LPAREN expr=expression RPAREN
     { expr }
@@ -136,7 +141,7 @@ argument_expression_list:
 fby_expression:
 | expr=postfix_expression
     { expr }
-| cst=CONSTANT loc=FBY expr=postfix_expression
+| cst=constant loc=FBY expr=postfix_expression
     { Ast.FBY (fst cst) expr loc }
 
 (* 6.5.3 *)
