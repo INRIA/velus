@@ -148,9 +148,9 @@ unary_operator:
 | loc=MINUS
     { (Ast.MINUS, loc) }
 | loc=LNOT
-    { (Ast.BNOT, loc) }
-| loc=NOT
     { (Ast.NOT, loc) }
+| loc=NOT
+    { (Ast.BNOT, loc) }
 
 (* 6.5.4 *)
 cast_expression:
