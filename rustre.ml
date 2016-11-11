@@ -69,9 +69,9 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
                    Ast.ast_cnum  = cnum;
                    Ast.ast_bol   = bol }) = Relexer.map_token (Streams.hd toks)
       in
-      Printf.fprintf stderr
-        "%s:%d:%d: TIM!!!! syntax error.\n%!" (* TODO *)
-        fname lnum (cnum - bol)
+      (* TODO: improve the error messages *)
+      Printf.fprintf stderr "%s:%d:%d: syntax error.\n%!"
+        fname lnum (cnum - bol + 1)
   | I.Accepted v ->
       assert false (* Parser2 should not succeed where Parser failed. *)
   | I.Rejected ->

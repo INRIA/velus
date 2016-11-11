@@ -203,27 +203,27 @@ Section ElabExpressions.
     | VARIABLE sx loc =>
       let x := ident_of_camlstring sx in
       do ty <- find_type loc x;
-        OK (Evar x ty)
+      OK (Evar x ty)
     | WHEN ae' b sx loc =>
       let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
-        do e' <- elab_lexp ae';
-        OK (Ewhen e' x b)
+      do e' <- elab_lexp ae';
+      OK (Ewhen e' x b)
     | UNARY aop ae' loc =>
       let op := elab_unop aop in
       do e' <- elab_lexp ae';
-        do ty' <- find_type_unop loc op (typeof e');
-        OK (Eunop op e' ty')
+      do ty' <- find_type_unop loc op (typeof e');
+      OK (Eunop op e' ty')
     | CAST aty' ae' loc =>
       let ty' := elab_type loc aty' in
       do e' <- elab_lexp ae';
-        OK (Eunop (CastOp ty') e' ty')
+      OK (Eunop (CastOp ty') e' ty')
     | BINARY aop ae1 ae2 loc =>
       let op := elab_binop aop in
       do e1 <- elab_lexp ae1;
-        do e2 <- elab_lexp ae2;
-        do ty' <- find_type_binop loc op (typeof e1) (typeof e2);
-        OK (Ebinop op e1 e2 ty')
+      do e2 <- elab_lexp ae2;
+      do ty' <- find_type_binop loc op (typeof e1) (typeof e2);
+      OK (Ebinop op e1 e2 ty')
     | _ => Error (err_loc (expression_loc ae) (msg "expression not normalized"))
     end.
 
@@ -232,21 +232,21 @@ Section ElabExpressions.
     | MERGE sx aet aef loc =>
       let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
-        do et <- elab_cexp aet;
-        do ef <- elab_cexp aef;
-        if typeofc et ==b typeofc ef
-        then OK (Emerge x et ef)
-        else Error (err_loc loc (msg "badly typed merge"))
+      do et <- elab_cexp aet;
+      do ef <- elab_cexp aef;
+      if typeofc et ==b typeofc ef
+      then OK (Emerge x et ef)
+      else Error (err_loc loc (msg "badly typed merge"))
     | IFTE ae aet aef loc =>
       do e <- elab_lexp ae;
-        do et <- elab_cexp aet;
-        do ef <- elab_cexp aef;
-        if (typeof e ==b bool_type) && (typeofc et ==b typeofc ef)
-        then OK (Eite e et ef)
-        else Error (err_loc loc (msg "badly typed if/then/else"))
+      do et <- elab_cexp aet;
+      do ef <- elab_cexp aef;
+      if (typeof e ==b bool_type) && (typeofc et ==b typeofc ef)
+      then OK (Eite e et ef)
+      else Error (err_loc loc (msg "badly typed if/then/else"))
     | _ =>
       do e <- elab_lexp ae;
-        OK (Eexp e)
+      OK (Eexp e)
     end.
 
   Definition assert_lexp_type (loc: astloc) (e: lexp) (ty: type) : res unit :=
@@ -260,9 +260,9 @@ Section ElabExpressions.
     | nil, nil => OK nil
     | ae::aes, ty::tys =>
       do e <- elab_lexp ae;
-        do ok <- assert_lexp_type (expression_loc ae) e ty;
-        do es <- elab_lexps loc aes tys;
-        OK (e::es)
+      do ok <- assert_lexp_type (expression_loc ae) e ty;
+      do es <- elab_lexps loc aes tys;
+      OK (e::es)
     | _, _ => Error (err_loc loc (msg "wrong number of arguments"))
     end.
 
@@ -292,23 +292,23 @@ Section ElabExpressions.
     | CALL sf aes loc =>
       let f := ident_of_camlstring sf in
       do (tysin, tysout) <- find_node_interface loc f;
-        do es <- elab_lexps loc aes tysin;
-        do ok <- check_result_list loc xs tysout;
-        OK (EqApp xs ck f es)
+      do es <- elab_lexps loc aes tysin;
+      do ok <- check_result_list loc xs tysout;
+      OK (EqApp xs ck f es)
            
     | FBY av0 ae loc =>
       let v0 := elab_constant loc av0 in
       let v0ty := type_const v0 in
       do e <- elab_lexp ae;
-        do ok <- assert_type loc x v0ty;
-        if typeof e ==b v0ty
-        then OK (EqFby x ck v0 e)
-        else Error (err_loc loc (msg "badly typed fby"))
+      do ok <- assert_type loc x v0ty;
+      if typeof e ==b v0ty
+      then OK (EqFby x ck v0 e)
+      else Error (err_loc loc (msg "badly typed fby"))
                    
     | _ =>
       do e <- elab_cexp ae;
-        do ok <- assert_type loc x (typeofc e);
-        OK (EqDef x ck e)
+      do ok <- assert_type loc x (typeofc e);
+      OK (EqDef x ck e)
     end.
 
   (** Properties *)
