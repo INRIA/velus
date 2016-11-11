@@ -101,8 +101,7 @@ let parse toks =
   | Parser.Parser.Inter.Parsed_pr (ast, _) ->
       (Obj.magic ast : Ast.declaration list)
 
-let compile filename =
-  let source_name = filename ^ ".ept" in
+let compile source_name filename =
   let toks = Lexer.tokens_stream source_name in
   let ast = parse toks in
   let p =
@@ -132,9 +131,9 @@ let compile filename =
 
 let process file =
   if Filename.check_suffix file ".ept"
-  then
-    let filename = Filename.chop_suffix file ".ept" in
-    compile filename
+  then compile file (Filename.chop_suffix file ".ept")
+  else if Filename.check_suffix file ".lus"
+  then compile file (Filename.chop_suffix file ".lus")
   else
     raise (Arg.Bad ("don't know what to do with " ^ file))
 
