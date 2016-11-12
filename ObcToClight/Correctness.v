@@ -3837,18 +3837,29 @@ Section PRESERVATION.
         exists le', (* XXX: not any le': the one that contains [cs] *)
           exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1
                     le me
-                    (load_in (m_in m_step)) 
+                    (load_in m_step.(m_in)) 
                     (load_events cs m_step.(m_in))
-                    le' me Out_normal.
+                    le' me Out_normal
+          /\ Forall2 (fun v xt => le' ! (fst xt) = Some v) cs m_step.(m_in)
+          /\ (forall x, ~ InMembers x m_step.(m_in) -> le' ! x = le ! x).
     Proof.
       clear le Caractmain.
-      induction m_step.(m_in) as [|(x, t)]; simpl; intros ** Hwt.
+      assert (Hnodup: NoDupMembers m_step.(m_in)).
+      {
+        clear.
+        destruct m_step as [? m_in ? ? ? Hnodup]; simpl;
+          now apply NoDupMembers_app_l in Hnodup.
+      }
+
+      induction m_step.(m_in) as [|(x, t)]; simpl; 
+        intros ** Hwt;
+        inversion_clear Hwt as [| v ? vs ? Hwt_v Hwts ];
+        inversion_clear Hnodup. 
       - (* Case: m_step.(m_in) ~ [] *)
         rewrite load_events_nil.
         repeat econstructor; auto.
       - (* Case: m_step.(m_in) ~ xt :: xts *)
-        inversion_clear Step_in as [|? ? Findx].
-        inversion_clear Hwt as [| v ? vs ? Hwt_v Hwts ].        
+        inversion_clear Step_in as [|? ? Findx].        
         unfold find_glob in Findx; destruct Findx.
         rewrite load_events_cons.
 
@@ -3858,10 +3869,16 @@ Section PRESERVATION.
                              (Sbuiltin (Some x) (AST.EF_vload (type_chunk t))
                                        (Ctypes.Tcons (Tpointer (cltype t) noattr) Ctypes.Tnil)
                                        [Eaddrof (Evar (glob_id x) (cltype t)) (Tpointer (cltype t) noattr)])
-                             [load_event_of_val v (x, t)] le' me Out_normal)
-          as (le' & Hload).
+                             [load_event_of_val v (x, t)] le' me Out_normal
+                   /\ le' ! x = Some v
+                   /\ forall y, y <> x -> le' ! y = le ! y)
+          as (le' & Hload & Hgss_le' & Hgso_le').
         {
-          eexists.
+          exists (set_opttemp (Some x) v le).
+          repeat split;
+            [ 
+            | now apply  PTree.gss
+            | now intros; eapply PTree.gso ].
           econstructor.
           - econstructor; eauto using eval_exprlist.
             + apply eval_Eaddrof, eval_Evar_global; eauto.
@@ -3875,17 +3892,26 @@ Section PRESERVATION.
               * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
             + unfold Cop.sem_cast; simpl; eauto. 
           - constructor.
+            admit.
+(*
             apply volatile_load_vol; eauto.
             + exact admit.
             + exact admit.
               (* XXX: would like/need to [eapply eventval_of_val_match] *)
+*)
         }
         
-        edestruct IHl with (le := le') as (le'' & ?); eauto.
+        edestruct IHl with (le := le') as (le'' & ? & Hgss & Hgso); eauto.
 
         exists le''.
-        eapply exec_Sseq_1; eauto.
-    Admitted.
+        repeat split.
+        + eapply exec_Sseq_1; eauto.
+        + econstructor; eauto. 
+          now rewrite Hgso.
+        + intros * Hnot_in.
+          apply Decidable.not_or in Hnot_in as [? ?].
+          rewrite Hgso; auto.
+    Qed.
 
     Lemma exec_write:
       forall ys le me,
@@ -4087,6 +4113,15 @@ Section PRESERVATION.
     intros ** Hwt_meInit Hmem Hdostep.
     destruct Hdostep as [n meN meSn Hvals_in Hvals_out Hfuncall HmeSn Hdostep].
 
+    assert (e1 ! self = Some (sb, type_of_inst main_node)).
+    { subst e1;
+        rewrite 2 PTree.gso, PTree.gss; auto;
+          intro Eq; apply self_not_prefixed; rewrite Eq; constructor.
+    }
+    assert (e1 ! (Ident.prefix out step) = Some (step_b, type_of_inst (prefix_fun main_node step)))
+      by (subst e1; rewrite PTree.gss; auto).
+
+
     rewrite unfold_transl_trace.
 
     (* Case: loop body *)
@@ -4107,8 +4142,54 @@ Section PRESERVATION.
       (* load in *)
       edestruct exec_read
          with (le := le)(me := meN)
-         as (le1 & Hload); eauto.
+         as (le1 & Hload & Hgss_le1 & Hgso_le1); eauto.
       
+      assert (
+          eval_exprlist (globalenv tprog) e1 le1 meN
+                        (Eaddrof (Evar self 
+                                       (type_of_inst main_node))
+                                 (type_of_inst_p main_node)
+                      :: Eaddrof (Evar (prefix out step) 
+                                       (type_of_inst (prefix_fun main_node step)))
+                                 (pointer_of (type_of_inst (prefix_fun main_node step)))
+                      :: map make_in_arg (m_in m_step))
+                        (Ctypes.Tcons 
+                           (type_of_inst_p main_node)
+                           (Ctypes.Tcons
+                              (pointer_of (type_of_inst (prefix_fun main_node step)))
+                              (list_type_to_typelist 
+                                 (map Clight.typeof (map make_in_arg (m_in m_step))))))
+                        (Vptr sb Int.zero
+                      :: Vptr step_b Int.zero
+                      :: map sem_const (ins n))).
+      {
+        assert (
+            forall vs,
+              wt_vals vs m_step.(m_in) ->
+              Forall2 (fun v xt => le1 ! (fst xt) = Some v) vs m_step.(m_in) ->
+              eval_exprlist (globalenv tprog) e1 le1 meN
+                              (map make_in_arg m_step.(m_in))
+                              (list_type_to_typelist 
+                                 (map Clight.typeof (map make_in_arg (m_in m_step))))
+                              vs).
+        {
+          clear.
+          induction m_step.(m_in) as [|(x, t)];
+            intros ? Hvals_in;
+            inversion_clear Hvals_in as [| cin ? cins]; 
+            intro Hdef;
+            inversion_clear Hdef;
+            simpl in *; 
+            eauto using eval_exprlist.
+          apply eval_Econs with (v1 := cin)(v2 := cin).
+          econstructor; eauto. 
+          now apply sem_cast_same.
+          apply IHl; eauto.
+        }
+
+        repeat (econstructor; eauto).
+      }
+
       (* call step *)
       assert (exists le2,
                  exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le1 meN
@@ -4117,12 +4198,53 @@ Section PRESERVATION.
         as (le2 & Hcall).
       { clear COINDHYP.
         eexists.
-        eapply exec_Scall; eauto.
-        - exact admit.
-        - exact admit.
-        - exact admit.
-        - exact admit.
-        - exact admit.
+        edestruct methods_corres with (2:=Findstep)
+          as (ptr & f & Get_s & Get_f & Hp_stp & Hr_stp & Hcc_stp
+              & ? & ? & ? & ? & ? & Htr_stp); eauto.
+        rewrite Getstep_s in Get_s; inversion Get_s; subst ptr;
+          rewrite Getstep_f in Get_f; inversion Get_f; subst f.
+
+        eapply exec_Scall; simpl; eauto; simpl.
+        - (* Case: *)
+          match goal with
+          | |- eval_expr _ _ _ _ (Evar _ _) _ => idtac
+          end.
+          (* Esac. *)
+          eapply eval_Elvalue. 
+          + apply eval_Evar_global; eauto.
+            rewrite <-not_Some_is_None.
+            intros (b, t') Hget.
+            subst e1.
+            rewrite 3 PTree.gso, PTree.gempty in Hget.
+            * discriminate.
+            * intro E; apply self_not_prefixed; rewrite <-E; constructor.
+            * intro E; apply prefix_injective in E; destruct E as [E].
+              contradict E; apply fun_not_out.
+            * intro E; apply prefix_injective in E; destruct E as [E].
+              contradict E; apply fun_not_out.
+          + apply deref_loc_reference; auto.
+        - (* Case: *)
+          match goal with
+          | |- Genv.find_funct _ _ = Some _ => idtac
+          end.
+          (* Esac. *)
+          unfold Genv.find_funct.
+          destruct (Int.eq_dec Int.zero Int.zero) as [|Neq]; eauto.
+          exfalso; apply Neq; auto.
+        - (* Case: *)
+          match goal with
+          | |- type_of_function step_f = _ => idtac
+          end.
+          (* Esac. *)
+          assert (c_name c_main = main_node) as <-
+              by now eapply find_class_name; eauto. 
+          assert (m_step.(m_name) = step) as <-
+              by now eapply find_method_name; eauto.
+          simpl; unfold type_of_function;
+            rewrite Hp_stp, Hr_stp, Hcc_stp; simpl; repeat f_equal.
+          clear.
+          induction (m_in m_step) as [|(x, t)]; simpl; auto.
+          rewrite IHl; auto.
       }
 
       (* write out *)
@@ -4137,11 +4259,6 @@ Section PRESERVATION.
     eapply execinf_Sloop_loop with (out1 := Out_normal);
         eauto using out_normal_or_continue, exec_stmt.
 
-    Grab Existential Variables. 
-    exact admit.
-    exact admit.
-    exact admit.
-    exact admit.
     Qed.
 
     End dostep_loop.
