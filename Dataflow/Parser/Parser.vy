@@ -137,16 +137,9 @@ argument_expression_list:
 | exprs=argument_expression_list COMMA expr=expression
     { expr::exprs }
 
-(* Lustre fby operator *)
-fby_expression:
-| expr=postfix_expression
-    { expr }
-| cst=constant loc=FBY expr=postfix_expression
-    { Ast.FBY (fst cst) expr loc }
-
 (* 6.5.3 *)
 unary_expression:
-| expr=fby_expression
+| expr=postfix_expression
     { expr }
 | op=unary_operator expr=cast_expression
     { Ast.UNARY (fst op) expr (snd op) }
@@ -155,9 +148,9 @@ unary_operator:
 | loc=MINUS
     { (Ast.MINUS, loc) }
 | loc=LNOT
-    { (Ast.BNOT, loc) }
-| loc=NOT
     { (Ast.NOT, loc) }
+| loc=NOT
+    { (Ast.BNOT, loc) }
 
 (* 6.5.4 *)
 cast_expression:
@@ -166,15 +159,22 @@ cast_expression:
 | LPAREN expr=cast_expression loc=COLON typ=type_name RPAREN
     { Ast.CAST (fst typ) expr loc }
 
-(* 6.5.5 *)
-multiplicative_expression:
+(* Lustre fby operator *)
+fby_expression:
 | expr=cast_expression
     { expr }
-| expr1=multiplicative_expression loc=STAR expr2=cast_expression
+| v0=cast_expression loc=FBY expr=fby_expression
+    { Ast.FBY v0 expr loc }
+
+(* 6.5.5 *)
+multiplicative_expression:
+| expr=fby_expression
+    { expr }
+| expr1=multiplicative_expression loc=STAR expr2=fby_expression
     { Ast.BINARY Ast.MUL expr1 expr2 loc }
-| expr1=multiplicative_expression loc=SLASH expr2=cast_expression
+| expr1=multiplicative_expression loc=SLASH expr2=fby_expression
     { Ast.BINARY Ast.DIV expr1 expr2 loc }
-| expr1=multiplicative_expression loc=MOD expr2=cast_expression
+| expr1=multiplicative_expression loc=MOD expr2=fby_expression
     { Ast.BINARY Ast.MOD expr1 expr2 loc }
 
 (* 6.5.6 *)

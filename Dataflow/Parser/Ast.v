@@ -71,7 +71,7 @@ Inductive expression :=
 | CALL     : string -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : string -> astloc -> expression
-| FBY      : constant -> expression -> astloc -> expression
+| FBY      : expression -> expression -> astloc -> expression
 | WHEN     : expression -> bool -> string -> astloc -> expression
 | MERGE    : string -> expression -> expression -> astloc -> expression.
 
