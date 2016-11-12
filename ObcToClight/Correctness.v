@@ -3921,8 +3921,92 @@ Section PRESERVATION.
                     (write_out main_node m_step.(m_out)) 
                     (store_events [ys] m_step.(m_out))
                     le' me Out_normal.
-    Admitted.
+    Proof.
     (* XXX: factorize proof (& code) with [exec_read] *)
+    clear Caractmain le.
+    
+    edestruct global_out_struct
+      with (2:=Findstep) 
+      as (step_co' & Hrco & ? & Hmr & ? & ? & ?); eauto.
+    assert (step_co' = step_co) as ->.
+    {
+      assert (c_name c_main = main_node) as <-
+          by now eapply find_class_name; eauto.
+      assert (m_step.(m_name) = step) as <-
+          by now eapply find_method_name; eauto.
+      now rewrite Getstep_co in Hrco; inversion Hrco.
+    }
+    
+    (* XXX: hack while treating a single output: *) 
+    (* we should be doing induction on m_out here *)
+    destruct (m_out m_step) as [|(x, t) ?];
+      intros ** Hwt;
+      inversion_clear Hwt as [| ? ? ? ? ? Hvals];
+      try inv Hvals.
+
+    assert (exists b, Genv.find_symbol (globalenv tprog) (glob_id x) = Some b) 
+      as [? ?] by admit.
+
+    assert (e1 ! (Ident.prefix out step) 
+            = Some (step_b, type_of_inst (prefix_fun main_node step)))
+      by (subst e1; rewrite PTree.gss; auto).
+
+    assert (exists f,
+               field_offset gcenv x (co_members step_co) = Errors.OK f)
+      as [? ?].
+    {
+      assert (c_name c_main = main_node) as <-
+          by now eapply find_class_name; eauto. 
+      assert (m_step.(m_name) = step) as <-
+          by now eapply find_method_name; eauto.
+
+      
+      assert (In (x, cltype t) (co_members step_co))
+        by now rewrite Hmr; simpl; intuition.
+      rewrite <- sep_assoc, sep_swap in Hm1.
+      edestruct blockrep_field_offset as (? & ? & ? & ?); eauto.
+    }
+
+    rewrite store_events_cons, store_events_nil; simpl.
+    change [store_event_of_val ys (x, t)] 
+      with (Eapp [store_event_of_val ys (x, t)] []).
+
+    eexists.
+    eapply exec_Sseq_1; eauto using exec_stmt.
+    eapply exec_Sbuiltin.
+    - repeat 
+        match goal with 
+        | |- eval_exprlist _ _ _ _ _ _ _ => econstructor
+        end.
+      + econstructor.
+        apply eval_Evar_global; eauto.
+        rewrite <-not_Some_is_None.
+        intros (b, t'') Hget.
+        subst e1.
+        rewrite 3 PTree.gso, PTree.gempty in Hget.
+        * discriminate.
+        * intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
+        * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
+        * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
+      + reflexivity. 
+      + eapply eval_Elvalue; eauto.
+        * {
+            eapply eval_Efield_struct; eauto.
+            - eapply eval_Elvalue; eauto.
+              now apply deref_loc_copy.
+            - assert (c_name c_main = main_node) as <-
+                  by now eapply find_class_name; eauto. 
+              assert (m_step.(m_name) = step) as <-
+                  by now eapply find_method_name; eauto.
+              unfold type_of_inst; simpl; eauto.
+          }
+        * exact admit.
+      + eapply sem_cast_same; eauto. 
+    - do 2 econstructor; eauto.
+      + admit.
+      + simpl. exact admit.
+        (* XXX: would like to apply [eventval_of_val_match] *)        
+    Admitted.
 
 
     (*****************************************************************)
