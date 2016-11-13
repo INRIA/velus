@@ -10,6 +10,7 @@ Module Import Defs := Instantiator.DF.IsD.
 Import Interface.Op.
 Import Instantiator.OpAux.
 Import Instantiator.DF.Typ.
+Import Instantiator.DF.Clo.
 
 Require Import List.
 Import List.ListNotations.
@@ -111,17 +112,38 @@ Section ElabExpressions.
 
   Definition assert_type (loc: astloc) (x: ident) (ty: type) : res unit :=
     do xty <- find_type loc x;
-      if xty ==b ty then OK tt
-      else Error (err_loc loc
-                          (CTX x :: MSG " has type " :: MSG (string_of_type xty)
+    if xty ==b ty then OK tt
+    else Error (err_loc loc
+                        (CTX x :: MSG " has type " :: MSG (string_of_type xty)
                                :: MSG " but type " :: MSG (string_of_type ty)
-                               :: MSG " was expected." :: nil)).
-
+                               :: msg " was expected.")).
+  
   Definition find_clock (loc: astloc) (x: ident) : res clock :=
     match PM.find x cenv with
     | None => Error (err_loc loc (CTX x :: msg " is not declared."))
     | Some ck => OK ck
     end.
+
+  Fixpoint msg_of_clock (ck: clock) : errmsg :=
+    match ck with
+    | Cbase          => msg "base"
+    | Con ck x true  => CTX x :: MSG " on " :: msg_of_clock ck
+    | Con ck x false => CTX x :: MSG " onot " :: msg_of_clock ck
+    end.
+  
+  (* TODO: move to Dataflow/Clocking *)
+  Instance clock_EqDec : EqDec clock eq.
+  Proof.
+    intros ck1 ck2. compute. change (ck1 = ck2 -> False) with (ck1 <> ck2).
+    repeat decide equality.
+  Qed.
+
+  Definition assert_clock (loc: astloc) (x: ident) (ck ck': clock) : res unit :=
+    if ck ==b ck' then OK tt
+    else Error (err_loc loc
+                        ((CTX x :: MSG " has clock " :: msg_of_clock ck)
+                                ++ MSG " but clock " :: msg_of_clock ck'
+                                ++ msg " was expected.")).
 
   Definition find_node_interface (loc: astloc) (f: ident)
     : res (list type * list type) :=
@@ -147,8 +169,8 @@ Section ElabExpressions.
     | ON ck' b sx =>
       let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
-        do ck' <- elab_clock loc ck';
-        OK (Con ck' x b)
+      do ck' <- elab_clock loc ck';
+      OK (Con ck' x b)
     end.
 
   Definition elab_unop (op: Ast.unary_operator) : unop :=
@@ -301,6 +323,47 @@ Section ElabExpressions.
     | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
     end.
 
+  (* TODO: Shift these clock calculation functions into Dataflow/Clocking/Decide.v *)
+  Fixpoint clock_of_lexp (le: lexp) : clock :=
+    Cbase (* TODO *).
+
+  Lemma clock_of_lexp_spec:
+    forall le,
+      clk_lexp cenv le (clock_of_lexp le).
+  Admitted.
+
+  Fixpoint clock_of_cexp (e: cexp) : clock :=
+    Cbase (* TODO *).
+  
+  Lemma clock_of_cexp_spec:
+    forall e,
+      clk_cexp cenv e (clock_of_cexp e).
+  Admitted.
+
+  Fixpoint assert_clocks (loc: astloc) (x: ident) (ck: clock) (es: list lexp)
+    : res unit :=
+    match es with
+    | nil => OK tt
+    | e::es =>
+      do ok <- assert_clock loc x ck (clock_of_lexp e);
+      assert_clocks loc x ck es
+    end.
+
+  Lemma assert_clocks_spec:
+    forall loc x ck es,
+      assert_clocks loc x ck es = OK tt ->
+      Forall (fun e=> clk_lexp cenv e ck) es.
+  Admitted.
+
+  Fixpoint check_clock (loc: astloc) (x: ident) (ck: clock) : res unit :=
+    OK tt. (* TODO *)
+  
+  Lemma check_clock_spec:
+    forall loc x ck,
+      check_clock loc x ck = OK tt ->
+      clk_clock cenv ck.
+  Admitted.
+
   Definition elab_equation (aeq: Ast.equation) : res equation :=
     let '(sxs, ae, loc) := aeq in
     do xs <- OK (map ident_of_camlstring sxs);
@@ -315,6 +378,7 @@ Section ElabExpressions.
       do (tysin, tysout) <- find_node_interface loc f;
       do es <- elab_lexps loc aes tysin;
       do ok <- check_result_list loc xs tysout;
+      do ok <- assert_clocks loc x ck es;
       OK (EqApp xs ck f es)
            
     | FBY ae0 ae loc =>
@@ -322,6 +386,7 @@ Section ElabExpressions.
       let v0ty := type_const v0 in
       do e <- elab_lexp ae;
       do ok <- assert_type loc x v0ty;
+      do ok <- assert_clock loc x ck (clock_of_lexp e);
       if typeof e ==b v0ty
       then OK (EqFby x ck v0 e)
       else Error (err_loc loc (msg "badly typed fby"))
@@ -329,8 +394,15 @@ Section ElabExpressions.
     | _ =>
       do e <- elab_cexp ae;
       do ok <- assert_type loc x (typeofc e);
+      do ok <- assert_clock loc x ck (clock_of_cexp e);
       OK (EqDef x ck e)
     end.
+
+  Lemma Well_clocked_elab_equation:
+    forall aeq eq,
+      elab_equation aeq = OK eq ->
+      Well_clocked_eq cenv eq.
+  Admitted.
 
   (** Properties *)
   
@@ -962,6 +1034,15 @@ Section ElabDeclaration.
       assumption.
   Qed.
 
+  Definition check_clock_env (loc: astloc) (cenv: PM.t clock) : res unit :=
+    OK tt. (* TODO *)
+  
+  Lemma check_clock_env_spec:
+    forall loc cenv,
+      check_clock_env loc cenv = OK tt ->
+      Well_clocked_env cenv.
+  Admitted.
+  
   Local Obligation Tactic :=
     Tactics.program_simpl;
       repeat progress
