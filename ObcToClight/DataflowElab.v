@@ -10,7 +10,6 @@ Module Import Defs := Instantiator.DF.IsD.
 Import Interface.Op.
 Import Instantiator.OpAux.
 Import Instantiator.DF.Typ.
-Import Instantiator.DF.Clo.
 
 Require Import List.
 Import List.ListNotations.
@@ -40,6 +39,15 @@ Parameter cabs_floatinfo : Ast.floatInfo -> Cabs.floatInfo.
 
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ": " :: m.  
+
+Local Ltac NamedDestructCases :=
+  repeat progress
+         match goal with
+         | H:match ?e with _ => _ end = OK _ |- _ =>
+           let Heq := fresh "Heq" in
+           destruct e eqn:Heq; try discriminate
+         | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
+         end.
 
 Definition cast_constant (loc: astloc) (c: constant) (ty: type')
                                                              : res constant :=
@@ -74,28 +82,8 @@ Lemma Is_interface_map_empty:
   Is_interface_map [] (PM.empty (list type * list type)).
 Proof.
   split; setoid_rewrite PM.gempty; intros; try discriminate; auto.
-Qed.
-
-(* TODO: move it somewhere else? *)
-Definition opt2err {A} loc (x : ident) (cko : option A) msg_fun :=
-  match cko with
-  | None => Error (err_loc loc (msg_fun x))
-  | Some ck => OK ck
-  end.
-
-Local Ltac NamedDestructCases :=
-  repeat progress
-         match goal with
-         | H:opt2err _ _ ?e _ = OK _ |- _ =>
-           let Heq := fresh "Heq" in
-           unfold opt2err in H; destruct e eqn:Heq; try discriminate
-         | H:match ?e with _ => _ end = OK _ |- _ =>
-           let Heq := fresh "Heq" in
-           destruct e eqn:Heq; try discriminate
-         | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
-         end.
-
-
+Qed.    
+  
 Section ElabExpressions.
 
   (* Map variable names to types. *)
@@ -116,8 +104,10 @@ Section ElabExpressions.
   Hypothesis wt_nenv : Is_interface_map G nenv.
 
   Definition find_type (loc: astloc) (x: ident) : res type :=
-    opt2err loc x (PM.find x env)
-            (fun x => CTX x :: msg " is not declared").
+    match PM.find x env with
+    | None => Error (err_loc loc (CTX x :: msg " is not declared."))
+    | Some ty => OK ty
+    end.
 
   Definition assert_type (loc: astloc) (x: ident) (ty: type) : res unit :=
     do xty <- find_type loc x;
@@ -128,13 +118,17 @@ Section ElabExpressions.
                                :: MSG " was expected." :: nil)).
 
   Definition find_clock (loc: astloc) (x: ident) : res clock :=
-    opt2err loc x (PM.find x cenv)
-            (fun x => CTX x :: msg " is not declared").
+    match PM.find x cenv with
+    | None => Error (err_loc loc (CTX x :: msg " is not declared."))
+    | Some ck => OK ck
+    end.
 
   Definition find_node_interface (loc: astloc) (f: ident)
     : res (list type * list type) :=
-    opt2err loc f (PM.find f nenv)
-            (fun f => MSG "node " :: CTX f :: msg " not found").
+    match PM.find f nenv with
+    | None => Error (err_loc loc (MSG "node " :: CTX f :: msg " not found."))
+    | Some tys => OK tys
+    end.
 
   Lemma wt_find_clock:
     forall loc x ck,
@@ -324,7 +318,7 @@ Section ElabExpressions.
       OK (EqApp xs ck f es)
            
     | FBY ae0 ae loc =>
-      do v0 <- elab_constant_with_cast loc (CONSTANT ae0 loc);
+      do v0 <- elab_constant_with_cast loc ae0;
       let v0ty := type_const v0 in
       do e <- elab_lexp ae;
       do ok <- assert_type loc x v0ty;
@@ -547,11 +541,6 @@ Section ElabDeclaration.
 
   Hypothesis wt_nenv : Is_interface_map G nenv.
 
-  (* Map node names to the clocks. *)
-  Variable cenv : PM.t clock.
-
-  Hypothesis wc_cenv : Is_interface_map G nenv.
-
   Fixpoint elab_var_decls' (acc: list (ident * type) * PM.t type)
            (vds: list (string * type_name * Ast.clock * astloc))
     : res (list (ident * type) * PM.t type) :=
@@ -755,7 +744,7 @@ Section ElabDeclaration.
     apply elab_var_decls_spec in Helab2.
     destruct Helab1 as (Hnd1 & Hf1 & Hf1' & Hni1).
     destruct Helab2 as (Hnd2 & Hf2 & Hf2' & Hni2).
-    destruct x as (x & xt).
+    destruct x as (x & xt).      
     split; intro HH.
     - apply PM.elements_complete in HH.
       apply Hf2' in HH.
@@ -935,66 +924,6 @@ Section ElabDeclaration.
         destruct Hvd as [Hvd|]; subst; auto.
   Qed.
 
-  Fixpoint msg_of_clock (ck: clock) : errmsg :=
-    match ck with
-    | Cbase          => msg "base"
-    | Con ck x true  => CTX x :: MSG " on " :: msg_of_clock ck
-    | Con ck x false => CTX x :: MSG " onot " :: msg_of_clock ck
-    end.
-
-  (* TODO: move it somewhere else? *)
-  Instance clock_EqDec : EqDec clock eq.
-  Proof.
-    intros ck1 ck2. compute. change (ck1 = ck2 -> False) with (ck1 <> ck2).
-    repeat decide equality.
-  Qed.
-
-  Definition check_clock loc str (ck1 ck2 : clock) :=
-    if ck1 ==b ck2 then OK tt else
-    Error (err_loc loc
-           ((str ++ MSG " has clock " :: msg_of_clock ck1)
-            ++ MSG " instead of " :: msg_of_clock ck2)).
-
-  (* Check if the all the clocks of the variables in the list are CBase *)
-  Fixpoint check_clocks loc str C set :=
-    PS.fold (fun x acc => do y <- acc; 
-                          do ck <- opt2err loc x (PM.find x C)
-                                           (fun x => CTX x :: msg " is not defined");
-                          check_clock loc (str :: MSG " " :: CTX x :: []) ck Cbase)
-            set (OK tt).
-
-  (* Check *)
-  Fixpoint check_clocked (loc: astloc) (C: clockenv)
-           (eqs: list equation) : res clockenv := OK C.
-(*     match eqs with
-    | nil => OK C
-    | EqFby x ck _ le :: eqs =>
-        do ck' <- get_Some (PM.find x C)
-        if PS.mem x ins then Error (err_loc loc
-                                    (CTX x :: msg " is an input and should not be defined")) else
-        if PS.mem x outs then do ck' <- get_Some loc x (PM.find x C); check_clock loc x ck
-                               then if ck ==b Cbase
-                                    then check_clocked loc ins outs C eqs
-                                    else Error (err_loc loc
-                                                (MSG "Output " :: CTX x
-                                                 :: MSG "should have clock base instead of "
-                                                 :: msg_of_clock ck))
-                               else if PM.find x C ==b Some ck
-                                    then check_clocked loc ins outs C eqs
-                                    else Error (err_loc loc
-                                                (CTX x :: msg " is improperly clocked"))
-    | EqDef x ck ce :: eqs => OK tt
-    | EqApp xs ck _ les :: eqs => OK tt
-    end. *)
-
-  Lemma check_clocked_spec:
-    forall eqs loc C C',
-      check_clocked loc C eqs = OK C' ->
-      Forall (Well_clocked_eq C') eqs.
-  Proof.
-    admit.
-  Qed.
-
   Fixpoint elab_clock_decl (tyenv: PM.t type) (acc: PM.t clock)
            (vds: list (string * type_name * Ast.clock * astloc))
     : res (PM.t clock) :=
@@ -1080,7 +1009,7 @@ Section ElabDeclaration.
   Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
   Program Definition elab_declaration (decl: Ast.declaration)
-    : res {n | wt_node G n & Well_clocked_node n} :=
+    : res {n | wt_node G n} :=
     match decl with
     | NODE name inputs outputs locals equations loc =>
       match (do xout   <- elab_var_decls (PM.empty type) outputs;
@@ -1101,19 +1030,17 @@ Section ElabDeclaration.
                     then Error (err_loc loc (msg "not enough inputs or outputs"))
                     else OK eqs) with
         | Error e => Error e
-        | OK eqs => OK (exist2 _ _
-                          {| n_name  := ident_of_camlstring name;
-                             n_in    := xin;
-                             n_out   := xout;
-                             n_vars  := xlocal;
-                             n_eqs   := eqs;
-                             n_ingt0 := _;
-                             n_outgt0:= _;
-                             n_defd  := _;
-                             n_vout  := _;
-                             n_nodup := _;
-                             n_good  := _ |}
-                          _ _)
+        | OK eqs => OK {| n_name  := ident_of_camlstring name;
+                          n_in    := xin;
+                          n_out   := xout;
+                          n_vars  := xlocal;
+                          n_eqs   := eqs;
+                          n_ingt0 := _;
+                          n_outgt0:= _;
+                          n_defd  := _;
+                          n_vout  := _;
+                          n_nodup := _;
+                          n_good  := _ |}
         end
       end
     end.
@@ -1220,54 +1147,41 @@ Section ElabDeclaration.
       rewrite PM.gempty in Hnfind.
       discriminate.
   Qed.
-  Next Obligation.
-    (* Well_clocked_node n *)
-    (* TODO *)
-    admit.
-  Qed.
 
 End ElabDeclaration.
-
-(* TODO: move it somewhere else? *)
-Definition proj1_sig2 {A} {P Q : A -> Prop} (Hex : sig2 P Q) :=
-  let '(exist2 x _ _) := Hex in x.
 
 Local Obligation Tactic :=
   Tactics.program_simpl;
     match goal with H:OK _ = _ |- _ =>
                     symmetry in H; monadInv H; NamedDestructCases end;
-    simpl in *; unfold find_node_interface, opt2err in *;
+    simpl in *; unfold find_node_interface in *;
       match goal with H:match ?x with _ => _ end = Error _ |- _ =>
                       destruct x eqn:Hfind; try discriminate; clear H end.
 
 Program Fixpoint elab_declarations'
         (G: global) (nenv: PM.t (list type * list type))
-        (WTG: wt_global G) (WCG: Well_clocked G) (Hnenv: Is_interface_map G nenv)
+        (WTG: wt_global G) (Hnenv: Is_interface_map G nenv)
         (decls: list Ast.declaration)
-  : res {G' | wt_global G' & Well_clocked G'} :=
+  : res {G' | wt_global G'} :=
   match decls with
-  | nil => OK (exist2 _ _ G WTG WCG)
+  | nil => OK (exist _ G WTG)
   | d::ds =>
     match (do n <- elab_declaration _ _ Hnenv d;
              let loc := declaration_loc d in
-             if find_node_interface nenv loc (proj1_sig2 n).(n_name)
+             if find_node_interface nenv loc n.(n_name)
              then Error (err_loc loc (MSG "duplicate definition for "
-                                          :: CTX (proj1_sig2 n).(n_name) :: nil))
+                                          :: CTX n.(n_name) :: nil))
              else OK n) with
-    | OK n => elab_declarations' (proj1_sig2 n::G)
-                                 (PM.add (proj1_sig2 n).(n_name)
-                                         (map snd (proj1_sig2 n).(n_in),
-                                          map snd (proj1_sig2 n).(n_out)) nenv) _ _ _ ds
+    | OK n => elab_declarations' (n::G)
+                                 (PM.add n.(n_name)
+                                         (map snd n.(n_in),
+                                          map snd n.(n_out)) nenv) _ _ ds
     | Error e => Error e
     end
   end.
 Next Obligation.
   constructor; auto.
   now apply Hnenv.
-Qed.
-Next Obligation.
-  (* TODO *)
-  admit.
 Qed.
 Next Obligation.
   split.
@@ -1302,12 +1216,9 @@ Next Obligation.
       apply Hnenv; auto.
 Qed.
 
-Lemma Well_clocked_nil: Well_clocked [].
-Proof. compute. apply Forall_forall. intuition. Qed.
-
 Definition elab_declarations (decls: list Ast.declaration)
-  : res {G | wt_global G & Well_clocked G} :=
+  : res {G | wt_global G} :=
   elab_declarations' [] (PM.empty (list type * list type))
-                     wtg_nil Well_clocked_nil Is_interface_map_empty decls.
+                     wtg_nil Is_interface_map_empty decls.
 
 
