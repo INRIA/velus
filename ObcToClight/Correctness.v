@@ -3608,8 +3608,12 @@ Section PRESERVATION.
     Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
     Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
 
-    Hypothesis Reset_in: m_reset.(m_in) = [].
-    Hypothesis Reset_out: m_reset.(m_out) = [].
+    (* XXX: to be discharged from translation function *)
+    Hypothesis Reset_in_spec: m_reset.(m_in) = [].
+    Hypothesis Reset_out_spec: m_reset.(m_out) = [].
+    Hypothesis Step_in_length: length m_step.(m_in) <> 0%nat.
+    Hypothesis Step_out_length: length m_step.(m_out) <> 0%nat.
+
     Hypothesis Step_in: Forall find_glob m_step.(m_in).
     
     Variables (rst_ptr stp_ptr: block) (reset_f step_f: function).
@@ -3683,14 +3687,14 @@ Section PRESERVATION.
       rewrite Getreset_s in Get_s; inversion Get_s; subst ptr;
       rewrite Getreset_f in Get_f; inversion Get_f; subst f.
       edestruct corres_auto_funcall with (3:=Findreset) as (m'' & ? & Hm''); eauto.
-      - rewrite Reset_in; auto.
-      - rewrite Hp, Reset_in; auto.
+      - rewrite Reset_in_spec; auto.
+      - rewrite Hp, Reset_in_spec; auto.
       - edestruct wt_program_find_class as [WT_main]; eauto.
         eapply wt_stmt_sub with (prog':=prog_main); eauto.
         + eapply wt_class_find_method with (2:=Findreset); auto. 
         + eapply find_class_sub; eauto.
       - exists m''; split; auto.
-        rewrite Reset_out in Hm''; auto.
+        rewrite Reset_out_spec in Hm''; auto.
     Qed.
 
     Lemma match_states_main_after_step:
@@ -3728,6 +3732,8 @@ Section PRESERVATION.
     (*****************************************************************)
     (** Conversion from values to events                             *)
     (*****************************************************************)
+
+    Section finite_traces.
 
     Definition eventval_of_val (v: val): eventval :=
       match v with 
@@ -3791,46 +3797,15 @@ Section PRESERVATION.
         store_events (v :: vs) (xt :: xts) = [store_event_of_val v xt] ++ store_events vs xts.
     Proof. apply mk_event_cons. Qed.
 
-    Lemma load_events_not_E0: forall vs, 
-        (* wt_vals vs m_step.(m_in) -> *) load_events vs m_step.(m_in) <> E0.
-    Admitted.
-    (* XXX: by [m_step.(m_in)] not being nil (because it comes from a
-    dataflow node, but we need to suppose this) *)
 
-    Lemma store_events_not_E0: forall vs, 
-        (* wt_vals vs m_step.(m_out) -> *) store_events vs m_step.(m_out) <> E0.
-    Admitted.
-    (* XXX: by [m_step.(m_out)] not being nil (because it comes from a
-    dataflow node, but we need to suppose this) *)
-
-    CoFixpoint transl_trace (n: nat): traceinf'.
-      refine(
-      (Econsinf' (load_events (map sem_const (ins n)) m_step.(m_in))
-       (Econsinf' (store_events (map sem_const [outs n]) m_step.(m_out))
-        (transl_trace (S n)) _) _));
-        [ apply store_events_not_E0
-        | apply load_events_not_E0 ].
-    Defined.
-
-    Lemma unfold_transl_trace: forall n,
-        traceinf_of_traceinf' (transl_trace n) = 
-        (load_events (map sem_const (ins n)) m_step.(m_in)
-         ++ E0
-         ++ store_events (map sem_const [outs n]) m_step.(m_out))
-         *** E0
-         *** traceinf_of_traceinf' (transl_trace (S n)).
-    Proof.
-    intro.
-    rewrite E0_left, E0_left_inf, (unroll_traceinf' (transl_trace n)).
-    unfold transl_trace at 1.
-    now rewrite 2!traceinf_traceinf'_app, Eappinf_assoc.
-    Qed.
-
+    End finite_traces.
 
     (*****************************************************************)
     (** Trace semantics of reads and writes to volatiles             *)
     (*****************************************************************)
         
+
+
     Lemma exec_read:
       forall cs le me ,
         wt_vals cs m_step.(m_in) ->
@@ -3843,7 +3818,7 @@ Section PRESERVATION.
           /\ Forall2 (fun v xt => le' ! (fst xt) = Some v) cs m_step.(m_in)
           /\ (forall x, ~ InMembers x m_step.(m_in) -> le' ! x = le ! x).
     Proof.
-      clear le Caractmain.
+    clear le Caractmain Step_in_length.
       assert (Hnodup: NoDupMembers m_step.(m_in)).
       {
         clear.
@@ -4180,7 +4155,49 @@ Section PRESERVATION.
             (write_out main_node (m_out m_step))))
         Sskip.
 
-    Section dostep_loop.
+(*    Section dostep_loop. *)
+
+
+    Lemma load_events_not_E0: forall n, 
+        load_events (map sem_const (ins n)) m_step.(m_in) <> E0.
+    Proof.
+    intros n; specialize Hwt_ins with n.
+    destruct m_step.(m_in); auto.
+    inv Hwt_ins; rewrite load_events_cons; discriminate.
+    Qed.
+
+    Lemma store_events_not_E0: forall n, 
+        store_events (map sem_const [outs n]) m_step.(m_out) <> E0.
+    Proof.
+    intros n; specialize Hwt_outs with n.
+    destruct m_step.(m_out); auto.
+    inv Hwt_outs; simpl; rewrite store_events_cons; discriminate.
+    Qed.
+
+    CoFixpoint transl_trace (n: nat): traceinf'.
+      refine(
+      (Econsinf' (load_events (map sem_const (ins n)) m_step.(m_in))
+       (Econsinf' (store_events (map sem_const [outs n]) m_step.(m_out))
+        (transl_trace (S n)) _) _));
+        [ apply store_events_not_E0
+        | apply load_events_not_E0 ].
+    Defined.
+
+    Lemma unfold_transl_trace: forall n,
+        traceinf_of_traceinf' (transl_trace n) = 
+        (load_events (map sem_const (ins n)) m_step.(m_in)
+         ++ E0
+         ++ store_events (map sem_const [outs n]) m_step.(m_out))
+         *** E0
+         *** traceinf_of_traceinf' (transl_trace (S n)).
+    Proof.
+    intro.
+    rewrite E0_left, E0_left_inf, (unroll_traceinf' (transl_trace n)).
+    unfold transl_trace at 1.
+    now rewrite 2!traceinf_traceinf'_app, Eappinf_assoc.
+    Qed.
+
+
 
     Lemma dostep_loop:
       forall n meInit le me,
@@ -4345,7 +4362,7 @@ Section PRESERVATION.
 
     Qed.
 
-    End dostep_loop.
+    End dostep'.
 
 
     (* XXX: previous version: *)
