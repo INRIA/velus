@@ -1,5 +1,8 @@
 -R . Rustre
 
+-arg "-exclude-dir CompCert"
+-arg "-exclude-dir extraction/CompCert"
+
 -R CompCert/lib compcert.lib
 -R CompCert/common compcert.common
 -R CompCert/ia32 compcert.ia32

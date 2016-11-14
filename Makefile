@@ -204,10 +204,10 @@ CompCert/Makefile.config:
 
 test: compcert all extraction extr
 
-extraction: extraction/STAMP
+extraction/extract:
+	@mkdir -p $@
 
-extraction/STAMP: $(VOFILES) extraction/Extraction.v
-	@mkdir -p extraction/extract
+extraction/STAMP: $(VOFILES) extraction/Extraction.v extraction/extract
 	#@rm -f extraction/extract/*.*
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
@@ -218,10 +218,10 @@ Dataflow/Parser/Parser.v: Dataflow/Parser/Parser.vy
 Dataflow/Parser/Lexer.ml: Dataflow/Parser/Lexer.mll
 	ocamllex $<
 
-extraction/extract/Lexer.ml: Dataflow/Parser/Lexer.ml
+extraction/extract/Lexer.ml: Dataflow/Parser/Lexer.ml extraction/extract
 	cp $< $@
 
-extraction/extract/Relexer.ml: Dataflow/Parser/Relexer.ml
+extraction/extract/Relexer.ml: Dataflow/Parser/Relexer.ml extraction/extract
 	cp $< $@
 
 Dataflow/Parser/Parser2.mly: Dataflow/Parser/Parser.vy
@@ -231,10 +231,10 @@ Dataflow/Parser/Parser2.ml Dataflow/Parser/Parser2.mli: \
 		Dataflow/Parser/Parser2.mly
 	$(MENHIR) --no-stdlib --table $<
 
-extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml
+extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml extraction/extract
 	cp $< $@
 
-extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli
+extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli extraction/extract
 	cp $< $@
 
 rustre: extraction/STAMP extraction/extract/Lexer.ml rustre.ml \

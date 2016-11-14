@@ -10,6 +10,7 @@ Module Import Defs := Instantiator.DF.IsD.
 Import Interface.Op.
 Import Instantiator.OpAux.
 Import Instantiator.DF.Typ.
+Import Instantiator.DF.Clo.
 
 Require Import List.
 Import List.ListNotations.
@@ -39,6 +40,13 @@ Parameter cabs_floatinfo : Ast.floatInfo -> Cabs.floatInfo.
 
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ": " :: m.  
+
+(* TODO: move elsewhere *)
+Instance clock_EqDec : EqDec clock eq.
+Proof.
+  intros ck1 ck2. compute. change (ck1 = ck2 -> False) with (ck1 <> ck2).
+  repeat decide equality.
+Qed.
 
 Local Ltac NamedDestructCases :=
   repeat progress
@@ -109,20 +117,40 @@ Section ElabExpressions.
     | Some ty => OK ty
     end.
 
+  Definition msg_of_types (ty ty': type) : errmsg :=
+    MSG "expected '" :: MSG (string_of_type ty)
+        :: MSG "' but got '" :: MSG (string_of_type ty') :: msg "'".
+  
   Definition assert_type (loc: astloc) (x: ident) (ty: type) : res unit :=
     do xty <- find_type loc x;
-      if xty ==b ty then OK tt
-      else Error (err_loc loc
-                          (CTX x :: MSG " has type " :: MSG (string_of_type xty)
-                               :: MSG " but type " :: MSG (string_of_type ty)
-                               :: MSG " was expected." :: nil)).
-
+    if xty ==b ty then OK tt
+    else Error (err_loc loc (CTX x :: MSG ": " :: msg_of_types xty ty)).
+  
   Definition find_clock (loc: astloc) (x: ident) : res clock :=
     match PM.find x cenv with
     | None => Error (err_loc loc (CTX x :: msg " is not declared."))
     | Some ck => OK ck
     end.
 
+  Fixpoint msg_of_clock (ck: clock) : errmsg :=
+    match ck with
+    | Cbase          => msg "."
+    | Con ck x true  => msg_of_clock ck ++ MSG " on " :: CTX x :: nil
+    | Con ck x false => msg_of_clock ck ++ MSG " onot " :: CTX x :: nil
+    end.
+
+  Definition msg_of_clocks (ck ck': clock) : errmsg :=
+    MSG "expected '" :: msg_of_clock ck
+        ++ MSG "' but got '" :: msg_of_clock ck' ++ msg "'".
+  
+  Definition assert_clock (loc: astloc) (x: ident) (ck: clock) : res unit :=
+    do ck' <- find_clock loc x;
+    if ck ==b ck' then OK tt
+    else Error (err_loc loc
+                        ((CTX x :: MSG " has clock " :: msg_of_clock ck)
+                                ++ MSG " but clock " :: msg_of_clock ck'
+                                ++ msg " was expected.")).
+  
   Definition find_node_interface (loc: astloc) (f: ident)
     : res (list type * list type) :=
     match PM.find f nenv with
@@ -147,8 +175,8 @@ Section ElabExpressions.
     | ON ck' b sx =>
       let x := ident_of_camlstring sx in
       do ok <- assert_type loc x bool_type;
-        do ck' <- elab_clock loc ck';
-        OK (Con ck' x b)
+      do ck' <- elab_clock loc ck';
+      OK (Con ck' x b)
     end.
 
   Definition elab_unop (op: Ast.unary_operator) : unop :=
@@ -262,8 +290,8 @@ Section ElabExpressions.
 
   Definition assert_lexp_type (loc: astloc) (e: lexp) (ty: type) : res unit :=
     if typeof e ==b ty then OK tt
-    else Error (err_loc loc (MSG "badly typed argument; expected "
-                                 :: msg (string_of_type ty))).
+    else Error (err_loc loc (MSG "badly typed argument: "
+                                 :: msg_of_types ty (typeof e))).
 
   Fixpoint elab_lexps (loc: astloc) (aes: list expression) (tys: list type)
     : res (list lexp) :=
@@ -301,6 +329,181 @@ Section ElabExpressions.
     | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
     end.
 
+  (* TODO: in the next version, these checks should be integrated into
+           elab_lexp so that we can give more precise locations in
+           error messages (and also avoid traversing the term twice). *)
+  Fixpoint clock_of_lexp (loc: astloc) (le: lexp) : res clock :=
+    match le with
+    | Econst c           => OK Cbase
+    | Evar x ty          => find_clock loc x
+    | Ewhen e x b        =>
+      do eck <- clock_of_lexp loc e;
+      do xck <- find_clock loc x;
+      if eck ==b xck then OK (Con xck x b)
+      else Error (err_loc loc (MSG "badly clocked when: "
+                                   :: msg_of_clocks eck xck))
+    | Eunop op e ty      => clock_of_lexp loc e
+    | Ebinop op e1 e2 ty =>
+      do ck1 <- clock_of_lexp loc e1;
+      do ck2 <- clock_of_lexp loc e2;
+      if ck1 ==b ck2 then OK ck1
+      else Error (err_loc loc (MSG "badly clocked operator: "
+                                   :: msg_of_clocks ck1 ck2))
+    end.
+
+  Lemma find_clock_clk_var:
+    forall loc x ck,
+      find_clock loc x = OK ck ->
+      clk_var cenv x ck.
+  Proof.
+    unfold find_clock.
+    intros loc x ck Hfind.
+    NamedDestructCases; auto using clk_var.
+  Qed.
+  
+  Lemma clock_of_lexp_spec:
+    forall loc le ck,
+      clock_of_lexp loc le = OK ck ->
+      clk_lexp cenv le ck.
+  Proof.
+    induction le; simpl; intros ck HH;
+      repeat match goal with H:_ = OK _ |- _ => monadInv H end;
+      NamedDestructCases;
+      repeat match goal with
+             | H:(_ ==b _) = true |- _ =>
+               rewrite equiv_decb_equiv in H; rewrite H in *; clear H
+             | H:find_clock _ _ = OK _ |- _ =>
+               apply find_clock_clk_var in H
+             end;
+      auto using clk_lexp.
+  Qed.
+
+  Fixpoint clock_of_cexp (loc: astloc) (e: cexp) : res clock :=
+    match e with
+    | Emerge x e1 e2 =>
+      do ck <- find_clock loc x;
+      do ck1 <- clock_of_cexp loc e1;
+      do ck2 <- clock_of_cexp loc e2;
+      if (ck1 ==b (Con ck x true))
+      then if (ck2 ==b (Con ck x false))
+           then OK ck
+           else Error (err_loc loc (MSG "badly clocked merge false branch: "
+                                        :: msg_of_clocks (Con ck x false) ck2))
+      else Error (err_loc loc (MSG "badly clocked merge true branch: "
+                                   :: msg_of_clocks (Con ck x true) ck1))
+    | Eite e e1 e2 =>
+      do ck <- clock_of_lexp loc e;
+      do ck1 <- clock_of_cexp loc e1;
+      do ck2 <- clock_of_cexp loc e2;
+      if (ck1 ==b ck)
+      then if (ck2 ==b ck)
+           then OK ck
+           else Error (err_loc loc (MSG "badly clocked ifte false branch: "
+                                        :: msg_of_clocks ck ck2))
+      else Error (err_loc loc (MSG "badly clocked ifte true branch: "
+                                   :: msg_of_clocks ck ck1))
+    | Eexp e => clock_of_lexp loc e
+    end.
+  
+  Lemma clock_of_cexp_spec:
+    forall loc e ck,
+      clock_of_cexp loc e = OK ck ->
+      clk_cexp cenv e ck.
+  Proof.
+    induction e; simpl; intros ck HH;
+      repeat match goal with H:_ = OK _ |- _ => monadInv H end;
+      NamedDestructCases;
+      repeat match goal with
+             | H:(_ ==b _) = true |- _ =>
+               rewrite equiv_decb_equiv in H; rewrite H in *; clear H
+             | H:find_clock _ _ = OK _ |- _ =>
+               apply find_clock_clk_var in H
+             | H:clock_of_lexp _ _ = OK _ |- _ =>
+               apply clock_of_lexp_spec in H
+             end;
+      auto using clk_cexp.
+  Qed.
+
+  Fixpoint assert_clocks (loc: astloc) (ck: clock) (ys: list ident)
+    : res unit :=
+    match ys with
+    | nil => OK tt
+    | y::ys =>
+      do ok <- assert_clock loc y ck;
+      assert_clocks loc ck ys
+    end.
+
+  Lemma assert_clock_spec:
+    forall loc x ck,
+      assert_clock loc x ck = OK tt ->
+      clk_var cenv x ck.
+  Proof.
+    unfold assert_clock.
+    intros ** Hack.
+    monadInv1 Hack. NamedDestructCases.
+    rewrite equiv_decb_equiv in Heq.
+    rewrite Heq in *.
+    apply find_clock_clk_var with (1:=EQ).
+  Qed.
+  
+  Lemma assert_clocks_spec:
+    forall loc ck xs,
+      assert_clocks loc ck xs = OK tt ->
+      clk_vars cenv xs ck.
+  Proof.
+    induction xs as [|x xs]; simpl; intros HH; try apply Forall_nil.
+    monadInv1 HH.
+    destruct x0.
+    apply IHxs in EQ0.
+    constructor; eauto using assert_clock_spec.
+  Qed.
+
+  Fixpoint assert_lexp_clocks (loc: astloc) (ck: clock) (es: list lexp)
+    : res unit :=
+    match es with
+    | nil => OK tt
+    | e::es =>
+      do ck' <- clock_of_lexp loc e;
+      if ck ==b ck'
+      then assert_lexp_clocks loc ck es
+      else Error (err_loc loc ((MSG "ill-clocked argument expression "
+                                    :: msg_of_clocks ck ck')))
+    end.
+
+  Lemma assert_lexp_clocks_spec:
+    forall loc ck es,
+      assert_lexp_clocks loc ck es = OK tt ->
+      Forall (fun e=> clk_lexp cenv e ck) es.
+  Proof.
+    induction es as [|e es]; intro HH; try apply Forall_nil.
+    simpl in HH. monadInv HH; NamedDestructCases.
+    rewrite equiv_decb_equiv in Heq; rewrite <-Heq in *.
+    constructor; eauto using clock_of_lexp_spec.
+  Qed.
+
+  Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
+    match ck with
+    | Cbase => OK tt
+    | Con ck x b =>
+      do ok <- check_clock loc ck;
+      do xck <- find_clock loc x;
+      if xck ==b ck then OK tt
+      else Error (err_loc loc ((MSG "badly-formed clock "
+                                    :: msg_of_clocks xck ck)))
+    end.
+  
+  Lemma check_clock_spec:
+    forall loc ck,
+      check_clock loc ck = OK tt ->
+      clk_clock cenv ck.
+  Proof.
+    induction ck; simpl; intro HH; auto using clk_clock.
+    monadInv HH; NamedDestructCases.
+    apply find_clock_clk_var in EQ1.
+    rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
+    destruct x. auto.
+  Qed.
+
   Definition elab_equation (aeq: Ast.equation) : res equation :=
     let '(sxs, ae, loc) := aeq in
     do xs <- OK (map ident_of_camlstring sxs);
@@ -315,6 +518,8 @@ Section ElabExpressions.
       do (tysin, tysout) <- find_node_interface loc f;
       do es <- elab_lexps loc aes tysin;
       do ok <- check_result_list loc xs tysout;
+      do ok <- assert_lexp_clocks loc ck es;
+      do ok <- assert_clocks loc ck xs;
       OK (EqApp xs ck f es)
            
     | FBY ae0 ae loc =>
@@ -322,14 +527,23 @@ Section ElabExpressions.
       let v0ty := type_const v0 in
       do e <- elab_lexp ae;
       do ok <- assert_type loc x v0ty;
+      do eck <- clock_of_lexp loc e;
       if typeof e ==b v0ty
-      then OK (EqFby x ck v0 e)
-      else Error (err_loc loc (msg "badly typed fby"))
-                   
+      then if eck ==b ck
+           then OK (EqFby x ck v0 e)
+           else Error (err_loc loc (MSG "ill-clocked fby expression for "
+                                        :: CTX x :: msg_of_clocks ck eck))
+      else Error (err_loc loc (MSG "ill-typed fby expression for "
+                                   :: CTX x :: msg_of_types v0ty (typeof e)))
+
     | _ =>
       do e <- elab_cexp ae;
       do ok <- assert_type loc x (typeofc e);
-      OK (EqDef x ck e)
+      do eck <- clock_of_cexp loc e;
+      if eck ==b ck
+      then OK (EqDef x ck e)
+      else Error (err_loc loc (MSG "ill-clocked expression for "
+                                   :: CTX x :: msg_of_clocks ck eck))
     end.
 
   (** Properties *)
@@ -498,15 +712,15 @@ Section ElabExpressions.
                  destruct H as (Hele & Hins & Hnodup)
              | _ => NamedDestructCases
              end; auto with dftyping.
-    - unfold find_type_unop in EQ3. NamedDestructCases.
-      rewrite type_unop'_correct in Heq0.
+    - unfold find_type_unop in EQ4. NamedDestructCases.
+      rewrite type_unop'_correct in Heq1.
       auto with dftyping.
-    - unfold find_type_binop in EQ4. NamedDestructCases.
-      rewrite type_binop'_correct in Heq0.
+    - unfold find_type_binop in EQ6. NamedDestructCases.
+      rewrite type_binop'_correct in Heq1.
       auto with dftyping.
     - apply andb_prop in Heq.
-      destruct Heq as (Heq1 & Heq2).
-      rewrite equiv_decb_equiv in Heq1, Heq2.
+      destruct Heq as (Heq2 & Heq3).
+      rewrite equiv_decb_equiv in Heq2, Heq3.
       auto with dftyping.
     - auto using type_castop with dftyping.
     - rename x1 into xin, x2 into xout, x3 into ein, xs into sxs, l0 into xs,
@@ -528,7 +742,32 @@ Section ElabExpressions.
         apply Forall2_impl_In with (2:=Hin).
         intros ** Htypeof. now rewrite Htypeof.
   Qed.
-  
+
+  Lemma Well_clocked_elab_equation:
+    forall aeq eq,
+      elab_equation aeq = OK eq ->
+      Well_clocked_eq cenv eq.
+  Proof.
+    intros aeq eq Helab.
+    destruct aeq as ((xs & ae) & loc).
+    destruct ae; simpl in Helab;
+      repeat progress
+             match goal with
+             | H:bind _ _ = _ |- _ => monadInv H
+             | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
+             | H:equiv _ _ |- _ => rewrite <-H in *; clear H
+             | H:clock_of_cexp _ _ = OK _ |- _ => apply clock_of_cexp_spec in H
+             | H:clock_of_lexp _ _ = OK ?x |- _ =>
+               destruct x; apply clock_of_lexp_spec in H
+             | H:find_clock _ _ = OK _ |- _ => apply find_clock_clk_var in H
+             | H:assert_lexp_clocks _ _ _ = OK ?x |- _ =>
+               destruct x; apply assert_lexp_clocks_spec in H
+             | H:assert_clocks _ _ _ = OK ?x |- _ =>
+               destruct x; apply assert_clocks_spec in H
+             | _ => NamedDestructCases
+             end; auto using Well_clocked_eq, clk_cexp, clk_lexp.
+  Qed.
+
 End ElabExpressions.
 
 Section ElabDeclaration.
@@ -962,6 +1201,27 @@ Section ElabDeclaration.
       assumption.
   Qed.
 
+  Fixpoint check_clock_env' (loc: astloc) (cenv: PM.t clock)
+             (xcks: list (positive * clock)) : res unit :=
+    match xcks with
+    | [] => OK tt
+    | (x, ck)::xcks =>
+      do ok <- check_clock cenv loc ck;
+      do xck <- find_clock cenv loc x;
+      if (ck ==b xck) then check_clock_env' loc cenv xcks
+      else Error (err_loc loc (CTX x :: MSG " has an ill-formed clock "
+                                   :: msg_of_clocks xck ck))
+    end.
+  
+  Definition check_clock_env (loc: astloc) (cenv: PM.t clock) : res unit :=
+    check_clock_env' loc cenv (PM.elements cenv).
+
+  Lemma check_clock_env_spec:
+    forall loc cenv,
+      check_clock_env loc cenv = OK tt ->
+      Well_clocked_env cenv.
+  Admitted.
+  
   Local Obligation Tactic :=
     Tactics.program_simpl;
       repeat progress
@@ -987,6 +1247,8 @@ Section ElabDeclaration.
     let eqs := fresh "eqs'" in
     let Hdefd := fresh "Hdefd" in
     let Houtin := fresh "Houtin" in
+    let Hcksin := fresh "Hcksin" in
+    let Hcksout := fresh "Hcksout" in
     match goal with H:elab_var_decls _ outputs = OK ?x |- _ =>
       rename H into Helab_out; destruct x as (xout & tyenv_out) end;
     match goal with H:elab_var_decls _ locals = OK ?x |- _ =>
@@ -1003,13 +1265,19 @@ Section ElabDeclaration.
       rename H into Helabs; rename x into eqs end;
     match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
       rename H into Hdefd; destruct x end;
+    match goal with H1:assert_clocks _ _ _ _ = OK ?r1,
+                    H2:assert_clocks _ _ _ _ = OK ?r2 |- _ =>
+      rename H1 into Hcksin, H2 into Hcksout;
+      destruct r1, r2;              
+      apply assert_clocks_spec in Hcksin;
+      apply assert_clocks_spec in Hcksout end;
     try match goal with H:In _ (map fst _) |- _ =>
       rename H into Houtin end.
   
   Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
   Program Definition elab_declaration (decl: Ast.declaration)
-    : res {n | wt_node G n} :=
+    : res {n | wt_node G n /\ Well_clocked_node n} :=
     match decl with
     | NODE name inputs outputs locals equations loc =>
       match (do xout   <- elab_var_decls (PM.empty type) outputs;
@@ -1022,6 +1290,9 @@ Section ElabDeclaration.
         match (do env1  <- elab_clock_decl tyenv (PM.empty clock) inputs;
                do env2  <- elab_clock_decl tyenv env1 outputs;
                do ckenv <- elab_clock_decl tyenv env2 locals;
+               do ok <- check_clock_env loc ckenv;
+               do ok <- assert_clocks ckenv loc Cbase (map fst xin);
+               do ok <- assert_clocks ckenv loc Cbase (map fst xout);
                do eqs <- mmap (elab_equation tyenv ckenv nenv) equations;
                do ok <- check_defined loc sout svars eqs;
                if existsb (fun x=>PM.mem x tyenv) Ident.Ids.reserved
@@ -1122,30 +1393,49 @@ Section ElabDeclaration.
       subst x; auto.
   Qed.
   Next Obligation.
-    (* wt_node G n *)
-    unfold wt_node. simpl.
-    repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
-    NamedDestructCases.
-    MassageElabs outputs locals inputs.
-    simpl in *.
-    cut (Forall (wt_equation G (PM.elements tyenv_in)) eqs').
-    - apply Forall_impl_In.
-      intros.
-      now rewrite <-(elab_var_decls_2chained_perm _ _ _ _ _ _ _ _ _
-                                                  Helab_out Helab_locals Helab_in).
-    - apply mmap_inversion in Helabs.
+    split.
+    - (* wt_node G n *)
+      unfold wt_node. simpl.
+      repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
+      NamedDestructCases.
+      MassageElabs outputs locals inputs.
+      simpl in *.
+      cut (Forall (wt_equation G (PM.elements tyenv_in)) eqs').
+      + apply Forall_impl_In.
+        intros.
+        now rewrite <-(elab_var_decls_2chained_perm _ _ _ _ _ _ _ _ _
+                                              Helab_out Helab_locals Helab_in).
+      + apply mmap_inversion in Helabs.
+        apply Forall_forall.
+        intros y Hin.
+        eapply Coqlib.list_forall2_in_right with (1:=Helabs) in Hin.
+        destruct Hin as (aeq & Hin & Helab).
+        apply wt_elab_equation with (G:=G) in Helab; auto.
+        intros x ck Hfind.
+        apply elab_clock_decl_spec with (1:=Hclk_locals) (x:=x); auto.
+        apply elab_clock_decl_spec with (1:=Hclk_out).
+        apply elab_clock_decl_spec with (1:=Hclk_in).
+        intros ** Hnfind.
+        rewrite PM.gempty in Hnfind.
+        discriminate.
+    - (* Well_clocked_node n *)
+      cut (exists cenv,
+              Forall (Well_clocked_eq cenv) eqs
+              /\ clk_vars cenv (map fst xin) Cbase
+              /\ clk_vars cenv (map fst xout) Cbase).
+      now (destruct 1 as (cenv & WCeqs & WCin & WCout);
+           eauto using Well_clocked_node).
+      repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
+      NamedDestructCases.
+      MassageElabs outputs locals inputs.
+      simpl in *.
+      exists clkenv_locals; repeat split; auto.
+      apply mmap_inversion in Helabs.
       apply Forall_forall.
       intros y Hin.
       eapply Coqlib.list_forall2_in_right with (1:=Helabs) in Hin.
       destruct Hin as (aeq & Hin & Helab).
-      apply wt_elab_equation with (G:=G) in Helab; auto.
-      intros x ck Hfind.
-      apply elab_clock_decl_spec with (1:=Hclk_locals) (x:=x); auto.
-      apply elab_clock_decl_spec with (1:=Hclk_out).
-      apply elab_clock_decl_spec with (1:=Hclk_in).
-      intros ** Hnfind.
-      rewrite PM.gempty in Hnfind.
-      discriminate.
+      now apply Well_clocked_elab_equation in Helab.
   Qed.
 
 End ElabDeclaration.
@@ -1160,9 +1450,9 @@ Local Obligation Tactic :=
 
 Program Fixpoint elab_declarations'
         (G: global) (nenv: PM.t (list type * list type))
-        (WTG: wt_global G) (Hnenv: Is_interface_map G nenv)
+        (WTG: wt_global G /\ Well_clocked G) (Hnenv: Is_interface_map G nenv)
         (decls: list Ast.declaration)
-  : res {G' | wt_global G'} :=
+  : res {G' | wt_global G' /\ Well_clocked G'} :=
   match decls with
   | nil => OK (exist _ G WTG)
   | d::ds =>
@@ -1180,8 +1470,10 @@ Program Fixpoint elab_declarations'
     end
   end.
 Next Obligation.
-  constructor; auto.
-  now apply Hnenv.
+  split.
+  - constructor; auto.
+    now apply Hnenv.
+  - constructor; auto.
 Qed.
 Next Obligation.
   split.
@@ -1217,8 +1509,8 @@ Next Obligation.
 Qed.
 
 Definition elab_declarations (decls: list Ast.declaration)
-  : res {G | wt_global G} :=
+  : res {G | wt_global G /\ Well_clocked G} :=
   elab_declarations' [] (PM.empty (list type * list type))
-                     wtg_nil Is_interface_map_empty decls.
-
+                     (conj wtg_nil Well_clocked_nil)
+                     Is_interface_map_empty decls.
 

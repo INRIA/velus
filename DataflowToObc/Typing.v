@@ -326,7 +326,7 @@ Module Type TYPING
   Lemma translate_wt_vals_outs:
     forall node stepm outs,
       find_method step (translate_node node).(c_methods) = Some stepm ->
-      wt_vals outs [node.(n_out)] ->
+      wt_vals outs node.(n_out) ->
       wt_vals outs stepm.(m_out).
   Proof. intros; erewrite find_method_stepm_out; eauto. Qed.
 
