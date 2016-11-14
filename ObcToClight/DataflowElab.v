@@ -41,6 +41,13 @@ Parameter cabs_floatinfo : Ast.floatInfo -> Cabs.floatInfo.
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ": " :: m.  
 
+(* TODO: move elsewhere *)
+Instance clock_EqDec : EqDec clock eq.
+Proof.
+  intros ck1 ck2. compute. change (ck1 = ck2 -> False) with (ck1 <> ck2).
+  repeat decide equality.
+Qed.
+
 Local Ltac NamedDestructCases :=
   repeat progress
          match goal with
@@ -136,13 +143,6 @@ Section ElabExpressions.
     MSG "expected " :: msg_of_clock ck
         ++ MSG " but got " :: msg_of_clock ck'.
   
-  (* TODO: move to Dataflow/Clocking *)
-  Instance clock_EqDec : EqDec clock eq.
-  Proof.
-    intros ck1 ck2. compute. change (ck1 = ck2 -> False) with (ck1 <> ck2).
-    repeat decide equality.
-  Qed.
-
   Definition assert_clock (loc: astloc) (x: ident) (ck: clock) : res unit :=
     do ck' <- find_clock loc x;
     if ck ==b ck' then OK tt
@@ -543,12 +543,6 @@ Section ElabExpressions.
                                    :: CTX x :: msg_of_clocks ck eck))
     end.
 
-  Lemma Well_clocked_elab_equation:
-    forall aeq eq,
-      elab_equation aeq = OK eq ->
-      Well_clocked_eq cenv eq.
-  Admitted.
-
   (** Properties *)
   
   Lemma find_type_In:
@@ -745,7 +739,32 @@ Section ElabExpressions.
         apply Forall2_impl_In with (2:=Hin).
         intros ** Htypeof. now rewrite Htypeof.
   Qed.
-  
+
+  Lemma Well_clocked_elab_equation:
+    forall aeq eq,
+      elab_equation aeq = OK eq ->
+      Well_clocked_eq cenv eq.
+  Proof.
+    intros aeq eq Helab.
+    destruct aeq as ((xs & ae) & loc).
+    destruct ae; simpl in Helab;
+      repeat progress
+             match goal with
+             | H:bind _ _ = _ |- _ => monadInv H
+             | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
+             | H:equiv _ _ |- _ => rewrite <-H in *; clear H
+             | H:clock_of_cexp _ _ = OK _ |- _ => apply clock_of_cexp_spec in H
+             | H:clock_of_lexp _ _ = OK ?x |- _ =>
+               destruct x; apply clock_of_lexp_spec in H
+             | H:find_clock _ _ = OK _ |- _ => apply find_clock_clk_var in H
+             | H:assert_lexp_clocks _ _ _ = OK ?x |- _ =>
+               destruct x; apply assert_lexp_clocks_spec in H
+             | H:assert_clocks _ _ _ = OK ?x |- _ =>
+               destruct x; apply assert_clocks_spec in H
+             | _ => NamedDestructCases
+             end; auto using Well_clocked_eq, clk_cexp, clk_lexp.
+  Qed.
+
 End ElabExpressions.
 
 Section ElabDeclaration.
@@ -1179,9 +1198,21 @@ Section ElabDeclaration.
       assumption.
   Qed.
 
-  Definition check_clock_env (loc: astloc) (cenv: PM.t clock) : res unit :=
-    OK tt. (* TODO *)
+  Fixpoint check_clock_env' (loc: astloc) (cenv: PM.t clock)
+             (xcks: list (positive * clock)) : res unit :=
+    match xcks with
+    | [] => OK tt
+    | (x, ck)::xcks =>
+      do ok <- check_clock cenv loc ck;
+      do xck <- find_clock cenv loc x;
+      if (ck ==b xck) then check_clock_env' loc cenv xcks
+      else Error (err_loc loc (CTX x :: MSG " has an ill-formed clock "
+                                   :: msg_of_clocks xck ck))
+    end.
   
+  Definition check_clock_env (loc: astloc) (cenv: PM.t clock) : res unit :=
+    check_clock_env' loc cenv (PM.elements cenv).
+
   Lemma check_clock_env_spec:
     forall loc cenv,
       check_clock_env loc cenv = OK tt ->
