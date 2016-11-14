@@ -66,6 +66,8 @@ Definition compile (g: global) (main_node: ident) :=
   do _ <- (List.fold_left is_well_sch g (OK tt));
   ObcToClight.Translation.translate ((* List.map fuse_class *) (Trans.translate g)) main_node.
 
+Axiom transl_trace:
+  traceinf -> DF.Str.stream (list Interface.Op.const) -> DF.Str.stream (list Interface.Op.const) -> Prop.
 Lemma soundness:
   forall G P main ins outs,
     DF.WeF.Welldef_global G ->
@@ -73,7 +75,8 @@ Lemma soundness:
     DF.Sem.sem_node G main (fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (ins n))
                     (fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (outs n)) ->
     compile G main = OK P ->
-    exists T, bigstep_program_diverges function_entry2 P T.
+    exists T, bigstep_program_diverges function_entry2 P T
+         /\ transl_trace T ins outs.
 Proof.
   intros ** Comp.
   edestruct dostep'_correct as (me0 & Heval & Step); eauto.
@@ -93,19 +96,27 @@ Proof.
   pose proof (exists_reset_method main_node) as Ereset'.
   rewrite Ereset in Ereset'.
   inv Ereset'.
-  econstructor; eapply diverges' with (me0:=me0); eauto. 
-  - apply translate_wt; auto.
-  - admit.
-
-  Grab Existential Variables.
-  + admit.
-  + admit.
-  + apply find_method_stepm_out in Estep.
-    pose proof (n_outgt0 main_node) as Hout.
-    rewrite Estep; intro E; rewrite E in Hout; simpl in Hout.
-    eapply Lt.lt_irrefl; eauto.
-  + apply find_method_stepm_in in Estep.
+  assert (m_in m_step <> nil) as Step_in_spec.
+  { apply find_method_stepm_in in Estep.
     pose proof (n_ingt0 main_node) as Hin.
     rewrite Estep; intro E; rewrite E in Hin; simpl in Hin.
     eapply Lt.lt_irrefl; eauto.
+  }
+  assert (m_out m_step <> nil) as Step_out_spec.
+  { apply find_method_stepm_out in Estep.
+    pose proof (n_outgt0 main_node) as Hout.
+    rewrite Estep; intro E; rewrite E in Hout; simpl in Hout.
+    eapply Lt.lt_irrefl; eauto.
+  }
+  assert (forall n, OpAux.wt_vals (List.map Interface.Op.sem_const (ins n)) (m_in m_step))
+    as Hwt_in by admit.
+  assert (forall n, OpAux.wt_vals (List.map Interface.Op.sem_const (outs n)) (m_out m_step))
+    as Hwt_out by admit.
+  econstructor; split.
+  - eapply diverges'
+    with (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
+                    (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto. 
+    + apply translate_wt; auto.
+    + admit.
+  - admit.
 Qed.
