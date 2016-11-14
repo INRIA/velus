@@ -13,7 +13,6 @@ Require Import Rustre.DataflowToObc.Translation.
 Require Import Rustre.Obc.FuseIfte.
 
 Require Import Rustre.Dataflow.Typing.
-Require Import Rustre.Obc.Typing.
 
 (** ** Well-typing preservation *)
 
@@ -27,8 +26,7 @@ Module Type TYPING
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
 
-       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
-       (Import Typ   : TYPING Ids Op OpAux Obc.Syn Obc.Sem).
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ).
 
 
   (** Preservation of well-typing. *)
@@ -555,3 +553,19 @@ Module Type TYPING
 
 
 End TYPING.
+
+Module TypingFun
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import DF    : DATAFLOW Ids Op OpAux)
+       (Import Obc   : OBC Ids Op OpAux)
+       (Import Mem   : MEMORIES Ids Op DF.Syn)
+
+       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
+
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
+       <: TYPING Ids Op OpAux DF Obc Mem Trans Fus.
+
+       Include TYPING Ids Op OpAux DF Obc Mem Trans Fus.
+End TypingFun.    

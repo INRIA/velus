@@ -25,7 +25,7 @@ Module Type TYPING
        (Import OpAux : OPERATORS_AUX Op)
        (Import Syn   : SYNTAX Ids Op OpAux)
        (Import Sem   : SEMANTICS Ids Op OpAux Syn).
-
+  
   Section WellTyped.
 
     Variable p     : program.
@@ -796,7 +796,7 @@ Module TypingFun
        (Import OpAux : OPERATORS_AUX Op)
        (Import Syn   : SYNTAX Ids Op OpAux)
        (Import Sem   : SEMANTICS Ids Op OpAux Syn)
-           <: TYPING Ids Op OpAux Syn Sem.
+       <: TYPING Ids Op OpAux Syn Sem.
   Include TYPING Ids Op OpAux Syn Sem.
 End TypingFun.
 
