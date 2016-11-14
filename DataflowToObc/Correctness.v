@@ -1609,6 +1609,12 @@ for all [Is_free_exp x e]. *)
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
+    (* XXX: [ins] and [outs] are taken to be constants. We thus assume
+    that inputs are always presents and, indirectly, restrict our
+    theorem to the case were outputs are always present. Note that
+    this is true anyway since inputs and outputs are on the same
+    clock. *)
+
     Let xss := fun n => map (fun c => present (sem_const c)) (ins n).
     Let ys := fun n => present (sem_const (outs n)).
 
