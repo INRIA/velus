@@ -118,8 +118,8 @@ Section ElabExpressions.
     end.
 
   Definition msg_of_types (ty ty': type) : errmsg :=
-    MSG "expected " :: MSG (string_of_type ty)
-        :: MSG " but got " :: MSG (string_of_type ty') :: nil.
+    MSG "expected '" :: MSG (string_of_type ty)
+        :: MSG "' but got '" :: MSG (string_of_type ty') :: msg "'".
   
   Definition assert_type (loc: astloc) (x: ident) (ty: type) : res unit :=
     do xty <- find_type loc x;
@@ -134,14 +134,14 @@ Section ElabExpressions.
 
   Fixpoint msg_of_clock (ck: clock) : errmsg :=
     match ck with
-    | Cbase          => msg "base"
-    | Con ck x true  => CTX x :: MSG " on " :: msg_of_clock ck
-    | Con ck x false => CTX x :: MSG " onot " :: msg_of_clock ck
+    | Cbase          => msg "."
+    | Con ck x true  => msg_of_clock ck ++ MSG " on " :: CTX x :: nil
+    | Con ck x false => msg_of_clock ck ++ MSG " onot " :: CTX x :: nil
     end.
 
   Definition msg_of_clocks (ck ck': clock) : errmsg :=
-    MSG "expected " :: msg_of_clock ck
-        ++ MSG " but got " :: msg_of_clock ck'.
+    MSG "expected '" :: msg_of_clock ck
+        ++ MSG "' but got '" :: msg_of_clock ck' ++ msg "'".
   
   Definition assert_clock (loc: astloc) (x: ident) (ck: clock) : res unit :=
     do ck' <- find_clock loc x;
@@ -329,6 +329,9 @@ Section ElabExpressions.
     | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
     end.
 
+  (* TODO: in the next version, these checks should be integrated into
+           elab_lexp so that we can give more precise locations in
+           error messages (and also avoid traversing the term twice). *)
   Fixpoint clock_of_lexp (loc: astloc) (le: lexp) : res clock :=
     match le with
     | Econst c           => OK Cbase
