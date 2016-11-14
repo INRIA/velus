@@ -3656,10 +3656,6 @@ Section PRESERVATION.
     Let le := create_undef_temps main_f.(fn_temps).
     Hypothesis Alloc: alloc_variables tge empty_env m0 main_f.(fn_vars) e1 m1.
 
-(*    Axiom volatile_vars : list const -> massert. *)
-    Variable ins : DF.Str.stream (list const).
-    Variable outs : DF.Str.stream const.
-
     Variable P : massert.
 
     Hypothesis Hm1: m1 |= staterep gcenv prog main_node hempty sb Z0
@@ -3990,14 +3986,20 @@ Section PRESERVATION.
     
     Section dostep'.
 
+
+    Variable ins : DF.Str.stream (list const).
+    Variable outs : DF.Str.stream const.
+
+    Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) m_step.(m_in).
+    Hypothesis Hwt_outs: forall n, wt_vals (map sem_const [outs n]) m_step.(m_out).
+
+
     (** This coinductive predicate describes the logical behavior of
     the [while] loop. *)
           
     CoInductive dostep' : nat -> mem -> Prop
       := Step : 
            forall n me me',
-             wt_vals (map sem_const (ins n)) m_step.(m_in) ->
-             wt_vals (map sem_const [outs n]) m_step.(m_out) ->
              eval_funcall tge (function_entry2 tge) me (Internal step_f)
                           (Vptr sb Int.zero :: Vptr step_b Int.zero :: map sem_const (ins n))
                           E0 me' Vundef ->
@@ -4016,9 +4018,7 @@ Section PRESERVATION.
     Hypothesis StepCase: forall n me,
       R n me ->
       exists me',
-          wt_vals (map sem_const (ins n)) m_step.(m_in)
-        /\ wt_vals (map sem_const [outs n]) m_step.(m_out)
-        /\ eval_funcall tge (function_entry2 tge) me (Internal step_f)
+          eval_funcall tge (function_entry2 tge) me (Internal step_f)
                        (Vptr sb Int.zero :: Vptr step_b Int.zero :: map sem_const (ins n)) E0 me' Vundef
         /\ me' |= blockrep gcenv (adds (map fst (m_out m_step)) [sem_const (outs n)] sempty)
                             (co_members step_co) step_b 
@@ -4071,19 +4071,14 @@ Section PRESERVATION.
       unfold R.
     2: now exists me0; repeat (split; auto).
 
-    clear - Hwt_prog Hwt_mem m_step Find Findstep.
+    clear - Hwt_ins Hwt_prog Hwt_mem m_step Find Findstep.
 
     intros n meN (? & Hdostep & Hwt & Hblock).
-    destruct Hdostep as [n menvN menvSn main_cls main_meth fm cins couts
-                         Hclass Hmeth Hwt_ins Hwt_outs Hstmt Hdostep].
+    destruct Hdostep as [n menvN menvSn cins couts Hstmt Hdostep].
+    specialize Hwt_ins with n.
 
     assert (c_name c_main = main_node) as <-
       by now eapply find_class_name; eauto. 
-    assert (c_main = main_cls) as <-
-      by now rewrite Find in Hclass; inv Hclass. 
-    assert (fm = m_step) as ->
-        by now rewrite Findstep in Hmeth; inv Hmeth. 
-    clear Hclass Hmeth.
 
     assert (exists meSn,
                eval_funcall tge (function_entry2 tge) meN
@@ -4138,7 +4133,7 @@ Section PRESERVATION.
     repeat (split; eauto).
     Qed.
 
-    End dostep'.
+(*    End dostep'. *)
   
     (*****************************************************************)
     (** Correctness of the main loop                                 *)

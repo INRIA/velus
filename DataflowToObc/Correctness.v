@@ -1771,119 +1771,6 @@ for all [Is_free_exp x e]. *)
             now injection 1; intro; subst.
     Qed.
 
-
-
-
-
-    CoInductive dostep' P : nat -> heap -> Prop
-      := Step : forall n menv0 menv1 main_cls prog' fm,
-          let cins := List.map sem_const (ins n) in
-          let couts := List.map sem_const [outs n] in
-          find_class main P = Some (main_cls, prog') ->
-          find_method step (c_methods main_cls) = Some fm ->
-          wt_vals cins fm.(m_in) ->
-          wt_vals couts fm.(m_out) ->
-          stmt_call_eval P menv0 main step cins menv1 couts ->
-          dostep' P (S n) menv1 ->
-          dostep' P n menv0.
-
-    Section Dostep'_coind.
-
-    Variable P : program.
-    Variable R : nat -> heap -> Prop.
-
-    Hypothesis StepCase: forall n menv0,
-      R n menv0 ->
-      exists menv1 main_cls prog' fm,
-        let cins := map sem_const (ins n) in
-        let couts := map sem_const [outs n] in
-          find_class main P = Some (main_cls, prog') 
-        /\ find_method step (c_methods main_cls) = Some fm 
-        /\ wt_vals cins fm.(m_in)
-        /\ wt_vals couts fm.(m_out) 
-        /\ stmt_call_eval P menv0 main step cins menv1 couts
-        /\ R (S n) menv1.
-    Lemma dostep'_coind : forall n menv,
-        R n menv -> dostep' P n menv.
-    Proof.
-    cofix COINDHYP.
-    intros ** HR.
-    pose proof (StepCase _ _ HR) as Hstep.
-    destruct Hstep as (? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
-    econstructor; eauto.
-    Qed.
-    
-    End Dostep'_coind.
-
-    Lemma dostep'_correct: 
-      forall M main_node,
-        let P := translate G in
-        find_node main G = Some main_node ->
-        msem_node G main xss M ys ->
-        (forall n, 
-            let cins := map sem_const (ins n) in
-            let couts := map sem_const [outs n] in
-              wt_vals cins main_node.(n_in)
-            /\ wt_vals couts [main_node.(n_out)]) ->
-        exists menv0,
-          stmt_call_eval P hempty main reset [] menv0 []
-          /\ dostep' (translate G) 0 menv0.
-    Proof.
-    intros M main_node Hdef Hfind_main Hmsem Hwt_var. 
-
-    edestruct is_node_reset_correct as (menv0 & Hstmt & Hmem); eauto.
-    subst Hdef.
-    exists menv0; split; eauto.
-
-    set (R := fun n menv => Memory_Corres G n main M menv).
-    apply dostep'_coind with (R := R).
-    2: now unfold R; eauto.
-    intros. unfold R in H. 
-
-    set (cinsN := ins n).
-    set (coutsN := outs n).
-
-    assert (HpresN: xss n = map present (map sem_const cinsN))
-      by (subst xss; unfold present_list; rewrite map_map; eauto).
-    
-    assert (ys n = present (sem_const (outs n))) by now reflexivity.
-
-    edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
-
-    assert (exists main_cls prog',
-               find_class main (translate G) = Some (main_cls, prog')
-             /\ main_cls = translate_node main_node)
-      as (main_cls & prog' & Hfind & Hdef_main).
-    {
-      inv Hmsem.
-      rewrite Hfind_main in *.
-      edestruct find_node_translate as (main_cls & prog' & ? & ?); eauto.       
-    }
-
-    assert (exists fm,
-               find_method step (c_methods main_cls) = Some fm)
-      as (fm & Hfm).
-    {
-      subst main_cls.
-      eapply exists_step_method.
-    }
-
-    assert (wt_vals (map sem_const cinsN) fm.(m_in)).
-    {
-      erewrite find_method_stepm_in.
-      apply Hwt_var. rewrite <- Hdef_main. auto.
-    }
-
-    assert (wt_vals (map sem_const [coutsN]) fm.(m_out)).
-    {
-      erewrite find_method_stepm_out.
-      apply Hwt_var. rewrite <- Hdef_main. auto. 
-    }
-
-    exists omenvSn, main_cls, prog', fm. unfold R; simpl.
-    repeat split; auto. 
-    Qed.
-
     Theorem is_event_loop_correct:
       (* =translate_correct= *)
       sem_node G main xss ys ->
@@ -1907,6 +1794,86 @@ for all [Is_free_exp x e]. *)
 
       do 2 eexists; eauto.
     Qed.
+
+
+
+
+    CoInductive dostep' P : nat -> heap -> Prop
+      := Step : forall n menv0 menv1,
+          let cins := List.map sem_const (ins n) in
+          let couts := List.map sem_const [outs n] in
+          stmt_call_eval P menv0 main step cins menv1 couts ->
+          dostep' P (S n) menv1 ->
+          dostep' P n menv0.
+
+    Section Dostep'_coind.
+
+    Variable P : program.
+    Variable R : nat -> heap -> Prop.
+
+    Hypothesis StepCase: forall n menv0,
+      R n menv0 ->
+      exists menv1,
+        let cins := map sem_const (ins n) in
+        let couts := map sem_const [outs n] in
+          stmt_call_eval P menv0 main step cins menv1 couts
+        /\ R (S n) menv1.
+    Lemma dostep'_coind : forall n menv,
+        R n menv -> dostep' P n menv.
+    Proof.
+    cofix COINDHYP.
+    intros ** HR.
+    pose proof (StepCase _ _ HR) as Hstep.
+    destruct Hstep as (? & ? & ? ).
+    econstructor; eauto.
+    Qed.
+    
+    End Dostep'_coind.
+
+    Lemma dostep'_correct_msem: 
+      forall M,
+        let P := translate G in
+        msem_node G main xss M ys ->
+        exists menv0,
+            stmt_call_eval P hempty main reset [] menv0 []
+          /\ dostep' P 0 menv0.
+    Proof.
+    intros M Hdef Hmsem.  
+
+    edestruct is_node_reset_correct as (menv0 & Hstmt & Hmem); eauto.
+    subst Hdef.
+    exists menv0; split; eauto.
+
+    set (R := fun n menv => Memory_Corres G n main M menv).
+    apply dostep'_coind with (R := R).
+    2: now unfold R; eauto.
+    intros. unfold R in H. 
+
+    set (cinsN := ins n).
+    set (coutsN := outs n).
+
+    assert (HpresN: xss n = map present (map sem_const cinsN))
+      by (subst xss; unfold present_list; rewrite map_map; eauto).
+    
+    assert (ys n = present (sem_const coutsN)) by now reflexivity.
+
+    edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
+    Qed.
+
+
+    Theorem dostep'_correct:
+      sem_node G main xss ys ->
+      exists menv0,
+          stmt_call_eval (translate G) hempty main reset [] menv0 []
+        /\ dostep' (translate G) 0 menv0.
+    Proof.
+    intros.
+    assert (exists M, msem_node G main xss M ys) as [M Hmsem]
+        by now eapply sem_msem_node; eauto.
+
+    eapply dostep'_correct_msem; eauto.
+    Qed.
+
 
   End EventLoop.
 
