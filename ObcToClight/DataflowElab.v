@@ -329,18 +329,80 @@ Section ElabExpressions.
     | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
     end.
 
-  (* TODO: Shift these clock calculation functions into Dataflow/Clocking/Decide.v *)
   Fixpoint clock_of_lexp (loc: astloc) (le: lexp) : res clock :=
-    OK Cbase. (* TODO: *)
+    match le with
+    | Econst c           => OK Cbase
+    | Evar x ty          => find_clock loc x
+    | Ewhen e x b        =>
+      do eck <- clock_of_lexp loc e;
+      do xck <- find_clock loc x;
+      if eck ==b xck then OK (Con xck x b)
+      else Error (err_loc loc (MSG "badly clocked when: "
+                                   :: msg_of_clocks eck xck))
+    | Eunop op e ty      => clock_of_lexp loc e
+    | Ebinop op e1 e2 ty =>
+      do ck1 <- clock_of_lexp loc e1;
+      do ck2 <- clock_of_lexp loc e2;
+      if ck1 ==b ck2 then OK ck1
+      else Error (err_loc loc (MSG "badly clocked operator: "
+                                   :: msg_of_clocks ck1 ck2))
+    end.
 
+  Lemma find_clock_clk_var:
+    forall loc x ck,
+      find_clock loc x = OK ck ->
+      clk_var cenv x ck.
+  Proof.
+    unfold find_clock.
+    intros loc x ck Hfind.
+    NamedDestructCases; auto using clk_var.
+  Qed.
+  
   Lemma clock_of_lexp_spec:
     forall loc le ck,
       clock_of_lexp loc le = OK ck ->
       clk_lexp cenv le ck.
-  Admitted.
+  Proof.
+    induction le; simpl; intros ck HH;
+      try match goal with H:OK _ = OK _ |- _ => monadInv1 H end;
+      auto using clk_lexp.
+    - apply find_clock_clk_var in HH.
+      auto using clk_lexp.
+    - monadInv1 HH. NamedDestructCases.
+      rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
+      apply find_clock_clk_var in EQ1.
+      auto using clk_lexp.
+    - monadInv HH. NamedDestructCases.
+      rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
+      auto using clk_lexp.
+  Qed.
 
   Fixpoint clock_of_cexp (loc: astloc) (e: cexp) : res clock :=
-    OK Cbase (* TODO *).
+    match e with
+    | Emerge x e1 e2 =>
+      do ck <- find_clock loc x;
+      do ck1 <- clock_of_cexp loc e1;
+      do ck2 <- clock_of_cexp loc e2;
+      if (ck1 ==b (Con ck x true))
+      then if (ck2 ==b (Con ck x false))
+           then OK ck
+           else Error (err_loc loc (MSG "badly clocked merge false branch: "
+                                        :: msg_of_clocks (Con ck x false) ck2))
+      else Error (err_loc loc (MSG "badly clocked merge true branch: "
+                                   :: msg_of_clocks (Con ck x true) ck1))
+    | Eite e e1 e2 =>
+      do ck <- clock_of_lexp loc e;
+      do ck1 <- clock_of_cexp loc e1;
+      do ck2 <- clock_of_cexp loc e2;
+      if (ck1 ==b ck)
+      then if (ck2 ==b ck)
+           then OK ck
+           else Error (err_loc loc (MSG "badly clocked ifte false branch: "
+                                        :: msg_of_clocks ck ck2))
+      else Error (err_loc loc (MSG "badly clocked ifte true branch: "
+                                   :: msg_of_clocks ck ck1))
+    | Eexp e => clock_of_lexp loc e
+    end.
   
   Lemma clock_of_cexp_spec:
     forall loc e ck,
