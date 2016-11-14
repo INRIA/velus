@@ -14,6 +14,7 @@ Require Import common.Globalenvs.
 Require Import Rustre.Common.
 Require Import Rustre.RMemory.
 Require Import Rustre.Ident.
+Require Import Rustre.Traces. 
 
 Require Import Rustre.ObcToClight.MoreSeparation.
 Require Import Rustre.ObcToClight.SepInvariant.
@@ -3053,16 +3054,6 @@ Section PRESERVATION.
     eapply (proj1 correctness); eauto.
   Qed.
 
-  (* Lemma find_main_node: *)
-  (*   exists c_main prog_main m_reset m_step, *)
-  (*     find_class main_node prog = Some (c_main, prog_main) *)
-  (*     /\ find_method reset c_main.(c_methods) = Some m_reset *)
-  (*     /\ find_method step c_main.(c_methods) = Some m_step. *)
-  (* Proof. *)
-  (*   inv_trans TRANSL. *)
-  (*   repeat econstructor; eauto. *)
-  (* Qed. *)
-
   Lemma make_program_defs:
     forall types gvars_vol defs public main p,
       make_program' types gvars_vol defs public main = Errors.OK p ->
@@ -3475,8 +3466,8 @@ Section PRESERVATION.
     (* XXX: to be discharged from translation function *)
     Hypothesis Reset_in_spec: m_reset.(m_in) = [].
     Hypothesis Reset_out_spec: m_reset.(m_out) = [].
-    Hypothesis Step_in_length: length m_step.(m_in) <> 0%nat.
-    Hypothesis Step_out_length: length m_step.(m_out) <> 0%nat.
+    Hypothesis Step_in_spec: m_step.(m_in) <> [].
+    Hypothesis Step_out_spec: m_step.(m_out) <> [].
 
     Hypothesis Step_in: Forall is_volatile m_step.(m_in).
     Hypothesis Step_out: Forall is_volatile m_step.(m_out).
@@ -3529,6 +3520,31 @@ Section PRESERVATION.
 
     Variables (me0: heap).
     Hypothesis ResetNode: stmt_call_eval prog hempty c_main.(c_name) m_reset.(m_name) [] me0 [].
+
+    Lemma entry_main:
+      function_entry2 (globalenv tprog) main_f [] m0 e1 (create_undef_temps main_f.(fn_temps)) m1.
+    Proof.
+      destruct Caractmain as (Hret & Hcc & Hparams & Hvars & Htemps & Hbody).
+      econstructor; eauto.
+      - rewrite Hvars.
+        unfold var_names.
+        rewrite <-NoDup_norepet, <-fst_NoDupMembers.
+        repeat constructor; auto.
+        + intros [E|[E|E]].
+          * apply self_not_prefixed; rewrite <-E; constructor.
+          * apply self_not_prefixed; rewrite <-E; constructor.
+          * contradict E.
+        + intros [E|E].
+          * apply prefix_injective in E; destruct E as [? E].
+            pose proof methods_nodup as Nodup; unfold methods in Nodup;
+            inversion_clear Nodup as [|? ? Notin].
+            apply Notin; rewrite E; apply in_eq.
+          * contradict E.
+      - rewrite Hparams; constructor.
+      - rewrite Hparams, Htemps; simpl.
+        intros ? ? Hx; contradiction.
+      - rewrite Hparams, Htemps; simpl; auto.
+    Qed.
     
     Lemma match_states_main_after_reset:      
       exists m2,
@@ -3564,7 +3580,7 @@ Section PRESERVATION.
              ** blockrep gcenv sempty step_co.(co_members) step_b
              ** P ->
         wt_mem me prog_main c_main ->
-        Forall2 (fun v xt => wt_val v (snd xt)) vs m_step.(m_in) ->
+        wt_vals vs m_step.(m_in) ->
         exists m'',
           eval_funcall tge (function_entry2 tge) m' (Internal step_f)
                        (Vptr sb Int.zero :: Vptr step_b Int.zero :: vs) E0 m'' Vundef
@@ -3589,78 +3605,10 @@ Section PRESERVATION.
         + eapply find_class_sub; eauto.
     Qed.
 
-    (*****************************************************************)
-    (** Conversion from values to events                             *)
-    (*****************************************************************)
-
-    Section finite_traces.
-
-    Definition eventval_of_val (v: val): eventval :=
-      match v with 
-      | Vint i => EVint i
-      | Vlong i => EVlong i
-      | Vfloat f => EVfloat f
-      | Vsingle f => EVsingle f
-      | Vptr _ _ => (* Not supported *) EVint Int.zero
-      | Vundef => (* Not supported *) EVint Int.zero
-      end.
-
-    Lemma eventval_of_val_match:
-      forall v t, wt_val v t -> 
-             eventval_match (globalenv tprog) 
-                            (eventval_of_val v) 
-                            (AST.type_of_chunk (type_chunk t)) v.
-    Proof.
-      destruct v; intros ** Wt; inv Wt; simpl; try econstructor.
-      destruct sz; try destruct sg; econstructor.
-    Qed.
-    
-    Definition load_event_of_val (v: val)(xt: ident * type): event
-      := Event_vload (type_chunk (snd xt))
-                     (glob_id (fst xt)) 
-                     Int.zero (eventval_of_val v).
-
-    Definition store_event_of_val (v: val)(xt: ident * type): event
-      := Event_vstore (type_chunk (snd xt))
-                      (glob_id (fst xt)) 
-                      Int.zero (eventval_of_val v).
-
-    Definition mk_event (f: val -> ident * type -> event)
-                        (vs: list val)(args: list (ident * type))
-      := map (fun vxt => f (fst vxt) (snd vxt)) (combine vs args). 
-
-    Definition load_events := mk_event load_event_of_val.
-    Definition store_events := mk_event store_event_of_val.
-
-    Lemma mk_event_nil: forall f vs, mk_event f vs [] = [].
-    Proof. intros; destruct vs; simpl; auto. Qed.
-
-    Lemma mk_event_cons: 
-      forall f v vs xt xts, 
-        mk_event f (v :: vs) (xt :: xts) = f v xt :: mk_event f vs xts.
-    Proof. auto. Qed.
-
-    Corollary load_events_nil : forall vs, load_events vs [] = [].
-    Proof. apply mk_event_nil. Qed.
-
-    Corollary load_events_cons : forall v vs xt xts, 
-        load_events (v :: vs) (xt :: xts) = [load_event_of_val v xt] ++ load_events vs xts.
-    Proof. apply mk_event_cons. Qed.
-
-    Corollary store_events_nil : forall vs, store_events vs [] = [].
-    Proof. apply mk_event_nil. Qed.
-
-    Corollary store_events_cons : forall v vs xt xts, 
-        store_events (v :: vs) (xt :: xts) = [store_event_of_val v xt] ++ store_events vs xts.
-    Proof. apply mk_event_cons. Qed.
-
-
-    End finite_traces.
 
     (*****************************************************************)
     (** Trace semantics of reads and writes to volatiles             *)
     (*****************************************************************)
-
 
     Lemma exec_read:
       forall cs le m,
@@ -3674,8 +3622,7 @@ Section PRESERVATION.
           /\ Forall2 (fun v xt => le' ! (fst xt) = Some v) cs m_step.(m_in)
           /\ (forall x, ~ InMembers x m_step.(m_in) -> le' ! x = le ! x).
     Proof.
-      Local Hint Resolve eventval_of_val_match.
-      clear Caractmain Step_in_length.
+      clear Caractmain Step_in_spec.
       pose proof (m_nodupin m_step) as Hnodup.
 
       induction m_step.(m_in) as [|(x, t)]; simpl; 
@@ -3722,6 +3669,7 @@ Section PRESERVATION.
             unfold load_event_of_val; simpl.
             rewrite wt_val_load_result with (ty:=t); auto.
             apply volatile_load_vol; auto.
+            apply eventval_of_val_match; auto.
         }
         
         edestruct IHl with (le := le') as (le'' & ? & Hgss & Hgso); eauto.
@@ -3815,6 +3763,7 @@ Section PRESERVATION.
       - constructor.
         apply volatile_store_vol; auto.
         rewrite <-wt_val_load_result; auto.
+        apply eventval_of_val_match; auto.
     Qed.
 
     (*****************************************************************)
@@ -3827,6 +3776,9 @@ Section PRESERVATION.
     Variable ins : DF.Str.stream (list const).
     Variable outs : DF.Str.stream (list const).
 
+    Variable xs : list (ident * type).
+    Variable ys : list (ident * type).
+    
     Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) m_step.(m_in).
     Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) m_step.(m_out).
 
@@ -3841,8 +3793,8 @@ Section PRESERVATION.
                           (Vptr sb Int.zero :: Vptr step_b Int.zero :: map sem_const (ins n))
                           E0 me' Vundef ->
              me' |= blockrep gcenv (adds (map fst (m_out m_step)) 
-                                         (map sem_const (outs n)) sempty)
-                                   (co_members step_co) step_b
+                                        (map sem_const (outs n)) sempty)
+                 (co_members step_co) step_b
                  ** P ->
              dostep' (S n) me' ->
              dostep' n me.
@@ -3874,9 +3826,7 @@ Section PRESERVATION.
     
     End Dostep'_coind.
 
-
     Definition mInit := m1.
-
 
     Lemma dostep_imp:
         wt_program prog ->
@@ -3987,49 +3937,8 @@ Section PRESERVATION.
             (write_out main_node (m_out m_step))))
         Sskip.
 
-(*    Section dostep_loop. *)
-
-
-    Lemma load_events_not_E0: forall n, 
-        load_events (map sem_const (ins n)) m_step.(m_in) <> E0.
-    Proof.
-    intros n; specialize Hwt_ins with n.
-    destruct m_step.(m_in); auto.
-    inv Hwt_ins; rewrite load_events_cons; discriminate.
-    Qed.
-
-    Lemma store_events_not_E0: forall n, 
-        store_events (map sem_const (outs n)) m_step.(m_out) <> E0.
-    Proof.
-    intros n; specialize Hwt_outs with n.
-    destruct m_step.(m_out); auto.
-    inv Hwt_outs; simpl; rewrite store_events_cons; discriminate.
-    Qed.
-
-    CoFixpoint transl_trace (n: nat): traceinf'.
-      refine(
-      (Econsinf' (load_events (map sem_const (ins n)) m_step.(m_in))
-       (Econsinf' (store_events (map sem_const (outs n)) m_step.(m_out))
-        (transl_trace (S n)) _) _));
-        [ apply store_events_not_E0
-        | apply load_events_not_E0 ].
-    Defined.
-
-    Lemma unfold_transl_trace: forall n,
-        traceinf_of_traceinf' (transl_trace n) = 
-        (load_events (map sem_const (ins n)) m_step.(m_in)
-         ++ E0
-         ++ store_events (map sem_const (outs n)) m_step.(m_out))
-         *** E0
-         *** traceinf_of_traceinf' (transl_trace (S n)).
-    Proof.
-    intro.
-    rewrite E0_left, E0_left_inf, (unroll_traceinf' (transl_trace n)).
-    unfold transl_trace at 1.
-    now rewrite 2!traceinf_traceinf'_app, Eappinf_assoc.
-    Qed.
-
-
+    Definition transl_trace (n: nat): traceinf' :=
+      trace_step m_step ins outs Step_in_spec Step_out_spec Hwt_ins Hwt_outs n.
 
     Lemma dostep_loop:
       forall n meInit le me,
@@ -4054,7 +3963,7 @@ Section PRESERVATION.
       by (subst e1; rewrite PTree.gss; auto).
 
 
-    rewrite unfold_transl_trace.
+    unfold transl_trace, trace_step; rewrite unfold_mk_trace.
 
     (* Case: loop body *)
     assert (exists leSn,
@@ -4189,9 +4098,106 @@ Section PRESERVATION.
 
     Qed.
 
-    End dostep'.
+    Lemma diverges:
+      wt_mem me0 prog_main c_main ->
+      Corr.dostep' (c_name c_main) ins outs prog 0 me0 ->
+      bigstep_program_diverges function_entry2 tprog (traceinf_of_traceinf' (transl_trace 0)).
+    Proof.
+      intros.
+      assert (e1 ! self = Some (sb, type_of_inst main_node)).
+      { subst e1;
+        rewrite 2 PTree.gso, PTree.gss; auto;
+        intro Eq; apply self_not_prefixed; rewrite Eq; constructor. }
+      assert (e1 ! (Ident.prefix out reset) = Some (reset_b, type_of_inst (prefix_fun main_node reset))).
+      { subst e1; rewrite PTree.gso, PTree.gss; auto.
+        intro Eq; apply prefix_injective in Eq; destruct Eq as [? Eq].
+        pose proof methods_nodup as Nodup; unfold methods in Nodup;
+        inversion_clear Nodup as [|? ? Notin].
+        apply Notin; rewrite Eq; apply in_eq. }
+      pose proof (find_class_name _ _ _ _ Find) as Eq;
+      pose proof (find_method_name _ _ _ Findreset) as Eq';
+      rewrite <-Eq, <-Eq' in *.
+      destruct Caractmain as (Hret & Hcc & Hparams & Hvars & Htemps & Hbody).
+      destruct dostep_imp as (m2 & Heval & Step); auto.
+      change (eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
+                           [Vptr sb Int.zero; Vptr reset_b Int.zero] E0 m2 Vundef)
+      with (eval_funcall (globalenv tprog) (function_entry2 (globalenv tprog)) m1 (Internal reset_f)
+                         [Vptr sb Int.zero; Vptr reset_b Int.zero] E0 m2 Vundef) in Heval.
+      econstructor; eauto.
+      - simpl; unfold type_of_function; rewrite Hparams, Hret, Hcc; auto. 
+      - econstructor; eauto.
+        + eapply entry_main. 
+        + edestruct methods_corres with (2:=Findreset)
+               as (ptr & f & Get_s & Get_f & Hp_rst & Hr_rst & Hcc_rst
+                   & ? & ? & ? & ? & ? & Htr_rst); eauto.
+          rewrite Getreset_s in Get_s; inversion Get_s; subst ptr;
+          rewrite Getreset_f in Get_f; inversion Get_f; subst f.
 
+          rewrite <-E0_left_inf, Hbody.
+          eapply execinf_Sseq_1, execinf_Sseq_2.
+          *{ unfold reset_call.
+             rewrite <-Eq, <-Eq'.
+             econstructor; simpl; eauto.
+             - eapply eval_Elvalue.
+               + apply eval_Evar_global; eauto.
+                 rewrite <-not_Some_is_None.
+                 intros (b, t) Hget.
+                 subst e1.
+                 rewrite 3 PTree.gso, PTree.gempty in Hget.
+                 * discriminate.
+                 * intro E; apply self_not_prefixed; rewrite <-E; constructor.
+                 * intro E; apply prefix_injective in E; destruct E as [E].
+                   contradict E; apply fun_not_out.
+                 * intro E; apply prefix_injective in E; destruct E as [E].
+                   contradict E; apply fun_not_out.
+               + apply deref_loc_reference; auto.               
+           - apply find_method_In in Findreset.
+             do 3 (econstructor; eauto).
+           - unfold Genv.find_funct.
+             destruct (Int.eq_dec Int.zero Int.zero) as [|Neq]; eauto.
+             exfalso; apply Neq; auto.
+           - simpl; unfold type_of_function;
+             rewrite Hp_rst, Hr_rst, Hcc_rst; simpl; repeat f_equal.
+             rewrite Reset_in_spec; auto.
+           }
+          * rewrite Eq; eapply dostep_loop; eauto. 
+    Qed.
+
+    End dostep'.
+  
   End Init.
 
+  Lemma diverges':
+    forall me0 ins outs c_main prog_main m_step m_reset,
+      stmt_call_eval prog hempty (c_name c_main) (m_name m_reset) [] me0 [] ->
+      wt_mem me0 prog_main c_main ->
+      Corr.dostep' (c_name c_main) ins outs prog 0 me0 ->
+      find_class main_node prog = Some (c_main, prog_main) ->
+      find_method reset (c_methods c_main) = Some m_reset ->
+      find_method step (c_methods c_main) = Some m_step ->
+      m_in m_reset = [] ->
+      m_out m_reset = [] ->
+      forall (Step_in_spec: m_in m_step <> []) (Step_out_spec: m_out m_step <> [])
+        (Hwt_in: forall n : nat, wt_vals (map sem_const (ins n)) (m_in m_step))
+        (Hwt_out: forall n : nat, wt_vals (map sem_const (outs n)) (m_out m_step)),
+        bigstep_program_diverges function_entry2 tprog
+                                 (traceinf_of_traceinf'
+                                    (transl_trace m_step Step_in_spec Step_out_spec ins outs Hwt_in Hwt_out 0)).
+  Proof.
+    intros until m_reset; intros ? ? ? Findmain Findreset Findstep.
+    destruct init_mem as [m0].
+    edestruct (find_main _ _ (sepemp_trivial m0)) as
+        (c_main' & prog_main' & m_reset' & m_step' & Findmain' & Findreset' & Findstep' & ? & ? &
+        ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
+    rewrite Findmain' in Findmain; inv Findmain; subst.
+    rewrite Findreset' in Findreset; rewrite Findstep' in Findstep; inv Findreset; inv Findstep; subst.
+    edestruct methods_corres with (2:=Findreset')
+        as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
+    edestruct methods_corres with (2:=Findstep')
+        as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
+    intros.
+    eapply diverges; eauto; repeat split; auto.
+  Qed.
+  
 End PRESERVATION.
 

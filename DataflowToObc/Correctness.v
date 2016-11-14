@@ -2111,9 +2111,6 @@ for all [Is_free_exp x e]. *)
       do 2 eexists; eauto.
     Qed.
 
-
-
-
     CoInductive dostep' P : nat -> heap -> Prop
       := Step : forall n menv0 menv1,
           let cins := List.map sem_const (ins n) in
@@ -2121,7 +2118,7 @@ for all [Is_free_exp x e]. *)
           stmt_call_eval P menv0 main step cins menv1 couts ->
           dostep' P (S n) menv1 ->
           dostep' P n menv0.
-
+    
     Section Dostep'_coind.
 
     Variable P : program.

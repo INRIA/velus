@@ -57,3 +57,4 @@ ObcToClight/SepInvariant.v
 ObcToClight/DataflowElab.v
 DataflowToClight.v
 Instantiator.v
+Traces.v

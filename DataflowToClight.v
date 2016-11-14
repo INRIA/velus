@@ -3,6 +3,9 @@ Require Import Rustre.Ident.
 Require Import Rustre.ObcToClight.Translation.
 
 Require Import common.Errors.
+Require Import common.Events.
+Require Import cfrontend.Clight.
+Require Import cfrontend.ClightBigstep.
 
 Require Import Rustre.Instantiator.
 Import DF.Syn.
@@ -11,6 +14,8 @@ Import DF.Mem.
 Import Obc.Syn.
 Import Fus.
 Import Trans.
+Import Corr.
+Require Import ObcToClight.Correctness.
 
 Require Import String.
 
@@ -59,3 +64,15 @@ Definition fuse_class (c: class): class :=
 Definition compile (g: global) (main_node: ident) :=
   do _ <- (List.fold_left is_well_sch g (OK tt));
   ObcToClight.Translation.translate (List.map fuse_class (Trans.translate g)) main_node.
+
+Axiom trace_node: global -> ident -> traceinf.
+Lemma soundness:
+  forall G P main,
+    compile G main = OK P ->
+    bigstep_program_diverges function_entry2 P (trace_node G main).
+Proof.
+  intros ** Comp.
+  unfold compile in Comp.
+  destruct (List.fold_left is_well_sch G (OK tt)); try discriminate; simpl in Comp.
+  pose proof diverges.
+  unfold Translation.translate in Comp.
