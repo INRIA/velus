@@ -1104,6 +1104,8 @@ Section ElabDeclaration.
     let eqs := fresh "eqs'" in
     let Hdefd := fresh "Hdefd" in
     let Houtin := fresh "Houtin" in
+    let Hcksin := fresh "Hcksin" in
+    let Hcksout := fresh "Hcksout" in
     match goal with H:elab_var_decls _ outputs = OK ?x |- _ =>
       rename H into Helab_out; destruct x as (xout & tyenv_out) end;
     match goal with H:elab_var_decls _ locals = OK ?x |- _ =>
@@ -1120,6 +1122,12 @@ Section ElabDeclaration.
       rename H into Helabs; rename x into eqs end;
     match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
       rename H into Hdefd; destruct x end;
+    match goal with H1:assert_clocks _ _ _ _ = OK ?r1,
+                    H2:assert_clocks _ _ _ _ = OK ?r2 |- _ =>
+      rename H1 into Hcksin, H2 into Hcksout;
+      destruct r1, r2;              
+      apply assert_clocks_spec in Hcksin;
+      apply assert_clocks_spec in Hcksout end;
     try match goal with H:In _ (map fst _) |- _ =>
       rename H into Houtin end.
   
@@ -1268,7 +1276,23 @@ Section ElabDeclaration.
         rewrite PM.gempty in Hnfind.
         discriminate.
     - (* Well_clocked_node n *)
-      admit.
+      cut (exists cenv,
+              Forall (Well_clocked_eq cenv) eqs
+              /\ clk_vars cenv (map fst xin) Cbase
+              /\ clk_vars cenv (map fst xout) Cbase).
+      now (destruct 1 as (cenv & WCeqs & WCin & WCout);
+           eauto using Well_clocked_node).
+      repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
+      NamedDestructCases.
+      MassageElabs outputs locals inputs.
+      simpl in *.
+      exists clkenv_locals; repeat split; auto.
+      apply mmap_inversion in Helabs.
+      apply Forall_forall.
+      intros y Hin.
+      eapply Coqlib.list_forall2_in_right with (1:=Helabs) in Hin.
+      destruct Hin as (aeq & Hin & Helab).
+      now apply Well_clocked_elab_equation in Helab.
   Qed.
 
 End ElabDeclaration.

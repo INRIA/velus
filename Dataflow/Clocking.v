@@ -22,6 +22,12 @@ Module Type CLOCKING
 
   Implicit Type C: clockenv.
 
+  (* TODO: rename all as per Dataflow/Typing.
+           clk_var -> wc_var,
+           clk_vars -> wc_vars,
+           clk_clock -> wc_clock,
+           clk_lexp -> wc_lexp,
+           etc. *)
 
   Inductive clk_var C (x: ident) ck: Prop :=
   | Cv:
@@ -126,7 +132,7 @@ Module Type CLOCKING
 
   (** ** Basic properties of clocking *)
 
-  Lemma Well_clocked_nil: Well_clocked [].
+  Lemma Well_clocked_nil: Well_clocked nil.
   Proof.
     apply Forall_nil.
   Qed.
