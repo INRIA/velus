@@ -1212,7 +1212,24 @@ Section ElabDeclaration.
       else Error (err_loc loc (CTX x :: MSG " has an ill-formed clock "
                                    :: msg_of_clocks xck ck))
     end.
-  
+
+  Lemma check_clock_env'_spec : forall loc cenv ckl,
+    check_clock_env' loc cenv ckl = OK tt -> Forall (fun x_ck => clk_clock cenv (snd x_ck)) ckl.
+  Proof.
+    intros loc cenv ckl Hckl. induction ckl as [| [x ck] ckl]; simpl in *.
+    + constructor.
+    + rewrite Forall_forall.
+      monadInv1 Hckl. match goal with x : unit |- _ => destruct x end.
+      intros [x' ck'] Hin.
+      match goal with H : find_clock cenv loc x = OK ?y |- _ => rename y into ck'' end.
+      unfold find_clock in *. destruct (PM.find x cenv); inv EQ1; [].
+      unfold equiv_decb in EQ2. destruct (equiv_dec ck ck'') as [Heq | Heq]; inv EQ2; [].
+      clear Heq ck''. destruct Hin as [Hin | Hin].
+      - rewrite <- Hin. clear Hin x' ck'.
+        eauto using check_clock_spec.
+      - rewrite Forall_forall in IHckl. now apply IHckl.
+  Qed.
+
   Definition check_clock_env (loc: astloc) (cenv: PM.t clock) : res unit :=
     check_clock_env' loc cenv (PM.elements cenv).
 
@@ -1220,7 +1237,12 @@ Section ElabDeclaration.
     forall loc cenv,
       check_clock_env loc cenv = OK tt ->
       Well_clocked_env cenv.
-  Admitted.
+  Proof.
+    unfold check_clock_env.
+    intros loc cenv Hcheck x ck Hin.
+    apply check_clock_env'_spec in Hcheck. rewrite Forall_forall in Hcheck.
+    apply (Hcheck (x, ck)). now apply PM.elements_correct.
+  Qed.
   
   Local Obligation Tactic :=
     Tactics.program_simpl;
