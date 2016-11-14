@@ -364,16 +364,14 @@ Section ElabExpressions.
       clk_lexp cenv le ck.
   Proof.
     induction le; simpl; intros ck HH;
-      try match goal with H:OK _ = OK _ |- _ => monadInv1 H end;
-      auto using clk_lexp.
-    - apply find_clock_clk_var in HH.
-      auto using clk_lexp.
-    - monadInv1 HH. NamedDestructCases.
-      rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
-      apply find_clock_clk_var in EQ1.
-      auto using clk_lexp.
-    - monadInv HH. NamedDestructCases.
-      rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
+      repeat match goal with H:_ = OK _ |- _ => monadInv H end;
+      NamedDestructCases;
+      repeat match goal with
+             | H:(_ ==b _) = true |- _ =>
+               rewrite equiv_decb_equiv in H; rewrite H in *; clear H
+             | H:find_clock _ _ = OK _ |- _ =>
+               apply find_clock_clk_var in H
+             end;
       auto using clk_lexp.
   Qed.
 
@@ -408,7 +406,20 @@ Section ElabExpressions.
     forall loc e ck,
       clock_of_cexp loc e = OK ck ->
       clk_cexp cenv e ck.
-  Admitted.
+  Proof.
+    induction e; simpl; intros ck HH;
+      repeat match goal with H:_ = OK _ |- _ => monadInv H end;
+      NamedDestructCases;
+      repeat match goal with
+             | H:(_ ==b _) = true |- _ =>
+               rewrite equiv_decb_equiv in H; rewrite H in *; clear H
+             | H:find_clock _ _ = OK _ |- _ =>
+               apply find_clock_clk_var in H
+             | H:clock_of_lexp _ _ = OK _ |- _ =>
+               apply clock_of_lexp_spec in H
+             end;
+      auto using clk_cexp.
+  Qed.
 
   Fixpoint assert_clocks (loc: astloc) (ck: clock) (ys: list ident)
     : res unit :=
@@ -419,11 +430,30 @@ Section ElabExpressions.
       assert_clocks loc ck ys
     end.
 
+  Lemma assert_clock_spec:
+    forall loc x ck,
+      assert_clock loc x ck = OK tt ->
+      clk_var cenv x ck.
+  Proof.
+    unfold assert_clock.
+    intros ** Hack.
+    monadInv1 Hack. NamedDestructCases.
+    rewrite equiv_decb_equiv in Heq.
+    rewrite Heq in *.
+    apply find_clock_clk_var with (1:=EQ).
+  Qed.
+  
   Lemma assert_clocks_spec:
     forall loc ck xs,
       assert_clocks loc ck xs = OK tt ->
       clk_vars cenv xs ck.
-  Admitted.
+  Proof.
+    induction xs as [|x xs]; simpl; intros HH; try apply Forall_nil.
+    monadInv1 HH.
+    destruct x0.
+    apply IHxs in EQ0.
+    constructor; eauto using assert_clock_spec.
+  Qed.
 
   Fixpoint assert_lexp_clocks (loc: astloc) (ck: clock) (es: list lexp)
     : res unit :=
@@ -433,26 +463,43 @@ Section ElabExpressions.
       do ck' <- clock_of_lexp loc e;
       if ck ==b ck'
       then assert_lexp_clocks loc ck es
-      else Error (err_loc loc ((MSG "argument expression has clock "
-                                    :: msg_of_clock ck')
-                                 ++ MSG " but clock " :: msg_of_clock ck
-                                 ++ msg " was expected."))
+      else Error (err_loc loc ((MSG "ill-clocked argument expression "
+                                    :: msg_of_clocks ck ck')))
     end.
 
   Lemma assert_lexp_clocks_spec:
     forall loc ck es,
       assert_lexp_clocks loc ck es = OK tt ->
       Forall (fun e=> clk_lexp cenv e ck) es.
-  Admitted.
+  Proof.
+    induction es as [|e es]; intro HH; try apply Forall_nil.
+    simpl in HH. monadInv HH; NamedDestructCases.
+    rewrite equiv_decb_equiv in Heq; rewrite <-Heq in *.
+    constructor; eauto using clock_of_lexp_spec.
+  Qed.
 
-  Fixpoint check_clock (loc: astloc) (x: ident) (ck: clock) : res unit :=
-    OK tt. (* TODO: x and loc are just for error messages *)
+  Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
+    match ck with
+    | Cbase => OK tt
+    | Con ck x b =>
+      do ok <- check_clock loc ck;
+      do xck <- find_clock loc x;
+      if xck ==b ck then OK tt
+      else Error (err_loc loc ((MSG "badly-formed clock "
+                                    :: msg_of_clocks xck ck)))
+    end.
   
   Lemma check_clock_spec:
-    forall loc x ck,
-      check_clock loc x ck = OK tt ->
+    forall loc ck,
+      check_clock loc ck = OK tt ->
       clk_clock cenv ck.
-  Admitted.
+  Proof.
+    induction ck; simpl; intro HH; auto using clk_clock.
+    monadInv HH; NamedDestructCases.
+    apply find_clock_clk_var in EQ1.
+    rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
+    destruct x. auto.
+  Qed.
 
   Definition elab_equation (aeq: Ast.equation) : res equation :=
     let '(sxs, ae, loc) := aeq in
