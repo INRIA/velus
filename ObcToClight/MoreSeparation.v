@@ -587,6 +587,13 @@ Proof.
   unfold disjoint_footprint. auto.
 Qed.
 
+Lemma sepemp_trivial:
+  forall m, m |= sepemp.
+Proof.
+  split.
+Qed.
+Hint Resolve sepemp_trivial.
+
 Lemma sepemp_right:
   forall P,
     P <-*-> (P ** sepemp).

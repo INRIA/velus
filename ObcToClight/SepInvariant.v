@@ -446,7 +446,8 @@ Section StateRepProperties.
              /\ co_su co = Struct
              /\ co_members co = make_members cls
              /\ attr_alignas (co_attr co) = None
-             /\ NoDupMembers (co_members co)).
+             /\ NoDupMembers (co_members co)
+             /\ co.(co_sizeof) <= Int.max_unsigned).
 
   Lemma c_objs_field_offset:
     forall o c cls,
@@ -617,7 +618,7 @@ Section StateRepProperties.
       assert (find_class clsnm prog = Some (cls', prog'')) as Hprog
           by apply find_class_sub_same with (1:=Hfind) (2:=WTp) (3:=Hsub).
       destruct (make_members_co _ _ _ Hprog)
-        as (co & Hg & Hsu & Hmem & Hattr & Hndup).
+        as (co & Hg & Hsu & Hmem & Hattr & Hndup & ?).
 
       (* find_class succeeds for clsnm (deliberately after previous step). *)
       simpl in Hfind. rewrite Hclsnm in Hfind.
@@ -1043,13 +1044,14 @@ Section BlockRep.
     Qed.
 
   Lemma blockrep_field_offset:
-    forall m ve flds b x ty P,
+    forall m ve flds b P,
       m |= blockrep ve flds b ** P ->
-      In (x, ty) flds ->
-      exists d, field_offset ge x flds = Errors.OK d
-           /\ 0 <= d <= Int.max_unsigned.
+      forall x ty,
+        In (x, ty) flds ->
+        exists d, field_offset ge x flds = Errors.OK d
+             /\ 0 <= d <= Int.max_unsigned.
   Proof.
-    intros ** Hm Hin.
+    intros ** Hm ? ? Hin.
     unfold blockrep in Hm.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].

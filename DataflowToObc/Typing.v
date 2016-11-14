@@ -315,6 +315,22 @@ Module Type TYPING
     apply exists_reset_method.
   Qed.
 
+
+  Lemma translate_wt_vals_ins:
+    forall node stepm ins,
+      find_method step (translate_node node).(c_methods) = Some stepm ->
+      wt_vals ins node.(n_in) ->
+      wt_vals ins stepm.(m_in).
+  Proof. intros; erewrite find_method_stepm_in; eauto. Qed.
+
+  Lemma translate_wt_vals_outs:
+    forall node stepm outs,
+      find_method step (translate_node node).(c_methods) = Some stepm ->
+      wt_vals outs [node.(n_out)] ->
+      wt_vals outs stepm.(m_out).
+  Proof. intros; erewrite find_method_stepm_out; eauto. Qed.
+
+
   Lemma EqFby_type_in_node:
     forall g n x ck c0 e,
       wt_node g n ->
@@ -536,5 +552,6 @@ Module Type TYPING
     simpl; rewrite map_c_name_translate.
     auto using NoDup_cons.
   Qed.
+
 
 End TYPING.

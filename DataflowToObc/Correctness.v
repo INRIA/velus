@@ -1825,15 +1825,22 @@ for all [Is_free_exp x e]. *)
 
     Variables (G     : global)
               (main  : ident)
-              (css   : stream (list const))
-              (yss   : stream (list value))
+              (ins   : stream (list const))
+              (outs  : stream (list const))
               (r     : list ident)
               (r_nodup: NoDup r)
-              (r_len: forall n, length r = length (yss n))
+              (r_len: forall n, length r = length (outs n))
               (obj   : ident)
               (Hwdef : Welldef_global G).
 
-    Let xss := fun n => map (fun c => present (sem_const c)) (css n).
+    (* XXX: [ins] and [outs] are taken to be constants. We thus assume
+    that inputs are always presents and, indirectly, restrict our
+    theorem to the case were outputs are always present. Note that
+    this is true anyway since inputs and outputs are on the same
+    clock. *)
+
+    Let xss := fun n => map (fun c => present (sem_const c)) (ins n).
+    Let yss := fun n => map (fun c => present (sem_const c)) (outs n).
 
     Variable (Hsem: sem_node G main xss yss).
 
@@ -1862,7 +1869,7 @@ for all [Is_free_exp x e]. *)
         msem_node G main xss M yss ->
         forall n,
         exists menv env omenv,
-          dostep (S n) P r main obj css menv env
+          dostep (S n) P r main obj ins menv env
           /\ mfind_inst obj menv = Some omenv
           /\ Memory_Corres G (S n) main M omenv
           /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co).
@@ -1886,7 +1893,7 @@ for all [Is_free_exp x e]. *)
           apply mfind_inst_gss.
       }
 
-      set (ci0 := css 0).
+      set (ci0 := ins 0).
 
       assert (Hpres: xss 0 = map present (map sem_const ci0))
         by (subst xss; unfold present_list; rewrite map_map; eauto).
@@ -1946,8 +1953,8 @@ for all [Is_free_exp x e]. *)
           - (* XXX: factorize with n ~ S n case *)
             assert (length r = length co0).
             {
-              symmetry.
-              now rewrite <- map_length with (f := present), <- Hco0.
+              subst yss.
+              rewrite <- map_length with (f := present), <- Hco0, map_length; auto. 
             }
             apply Forall2_forall2; split; auto.
             intros ? v n x c Hlen Hnth_r Hnth_co0.
@@ -1984,7 +1991,7 @@ for all [Is_free_exp x e]. *)
 
         destruct IHn as [menvN [envN [omenvN [HstepN [HmfindN [HmcN HeqN]]]]]].
 
-        set (ciSn := css (S n)).
+        set (ciSn := ins (S n)).
 
         assert (HpresN: xss (S n) = map present (map sem_const ciSn))
           by (subst xss; unfold present_list; rewrite map_map; eauto).
@@ -2040,8 +2047,8 @@ for all [Is_free_exp x e]. *)
             now rewrite mfind_inst_gss.
           - assert (length r = length coSn).
             {
-              symmetry.
-              now rewrite <- map_length with (f := present), <- Hys.
+              subst yss.
+              rewrite <- map_length with (f := present), <- Hys, map_length; auto. 
             }
             apply Forall2_forall2; split; auto.
             intros ? v k x c Hlen Hnth_r Hnth_coSn.
@@ -2084,7 +2091,7 @@ for all [Is_free_exp x e]. *)
       (* =translate_correct= *)
       sem_node G main xss yss ->
       forall n, exists menv env,
-          dostep (S n) (translate G) r main obj css menv env
+          dostep (S n) (translate G) r main obj ins menv env
           /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co).
     (* =end= *)
     Proof.
@@ -2094,7 +2101,7 @@ for all [Is_free_exp x e]. *)
           by (eapply sem_msem_node; eauto).
 
       assert (exists menv env omenv,
-                 dostep (S n) (translate G) r main obj css menv env
+                 dostep (S n) (translate G) r main obj ins menv env
                  /\ mfind_inst obj menv = Some omenv
                  /\ Memory_Corres G (S n) main M omenv
                  /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co))
@@ -2103,6 +2110,87 @@ for all [Is_free_exp x e]. *)
 
       do 2 eexists; eauto.
     Qed.
+
+
+
+
+    CoInductive dostep' P : nat -> heap -> Prop
+      := Step : forall n menv0 menv1,
+          let cins := List.map sem_const (ins n) in
+          let couts := List.map sem_const (outs n) in
+          stmt_call_eval P menv0 main step cins menv1 couts ->
+          dostep' P (S n) menv1 ->
+          dostep' P n menv0.
+
+    Section Dostep'_coind.
+
+    Variable P : program.
+    Variable R : nat -> heap -> Prop.
+
+    Hypothesis StepCase: forall n menv0,
+      R n menv0 ->
+      exists menv1,
+        let cins := map sem_const (ins n) in
+        let couts := map sem_const (outs n) in
+          stmt_call_eval P menv0 main step cins menv1 couts
+        /\ R (S n) menv1.
+    Lemma dostep'_coind : forall n menv,
+        R n menv -> dostep' P n menv.
+    Proof.
+    cofix COINDHYP.
+    intros ** HR.
+    pose proof (StepCase _ _ HR) as Hstep.
+    destruct Hstep as (? & ? & ? ).
+    econstructor; eauto.
+    Qed.
+    
+    End Dostep'_coind.
+
+    Lemma dostep'_correct_msem: 
+      forall M,
+        let P := translate G in
+        msem_node G main xss M yss ->
+        exists menv0,
+            stmt_call_eval P hempty main reset [] menv0 []
+          /\ dostep' P 0 menv0.
+    Proof.
+    intros M Hdef Hmsem.  
+
+    edestruct is_node_reset_correct as (menv0 & Hstmt & Hmem); eauto.
+    subst Hdef.
+    exists menv0; split; eauto.
+
+    set (R := fun n menv => Memory_Corres G n main M menv).
+    apply dostep'_coind with (R := R).
+    2: now unfold R; eauto.
+    intros. unfold R in H. 
+
+    set (cinsN := ins n).
+    set (coutsN := outs n).
+
+    assert (HpresN: xss n = map present (map sem_const cinsN))
+      by (subst xss; unfold present_list; rewrite map_map; eauto).
+    
+    assert (yss n = map present (map sem_const coutsN))
+      by (subst yss; unfold present_list; rewrite map_map; eauto).
+   
+    edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
+    Qed.
+
+
+    Theorem dostep'_correct:
+      sem_node G main xss yss ->
+      exists menv0,
+          stmt_call_eval (translate G) hempty main reset [] menv0 []
+        /\ dostep' (translate G) 0 menv0.
+    Proof.
+    intros.
+    assert (exists M, msem_node G main xss M yss) as [M Hmsem]
+        by now eapply sem_msem_node; eauto.
+
+    eapply dostep'_correct_msem; eauto.
+    Qed.
+
 
   End EventLoop.
 
