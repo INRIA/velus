@@ -1,0 +1,18 @@
+node counter (ini:int; inc:int; restart:bool) returns (n:int)
+var c : int;
+let
+  n = if restart then ini else (c + inc);
+  c = 0 fby n;
+tel
+
+node avgvelocity (delta:int; sec:bool) returns (v:int)
+var h:int; t:int :: . on sec; r:int;
+var rt:int :: . on sec; hh:int :: . onot sec;
+let
+  t = counter (0 when sec, 1 when sec, false when sec);
+  r = counter (0, delta, false);
+  rt = (r when sec) / t;
+  hh = h whenot sec;
+  v = merge sec rt hh;
+  h = 0 fby v;
+tel
