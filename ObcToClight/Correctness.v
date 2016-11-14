@@ -3737,84 +3737,126 @@ Section PRESERVATION.
     Qed.
 
     Lemma exec_write:
-      forall ys ve le m P,
-        wt_vals [ys] m_step.(m_out) ->
-        m |= blockrep gcenv (adds (map fst m_step.(m_out)) [ys] ve) (co_members step_co) step_b ** P ->
+      forall ys ve le m,
+        wt_vals ys m_step.(m_out) ->
+        m |= blockrep gcenv (adds (map fst m_step.(m_out)) ys ve) 
+                      (co_members step_co) step_b 
+          ** P ->
         exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le m
                   (write_out main_node m_step.(m_out)) 
-                  (store_events [ys] m_step.(m_out))
+                  (store_events ys m_step.(m_out))
                   le m Out_normal.
     Proof.
       (* XXX: factorize proof (& code) with [exec_read] *)
-      clear Caractmain Hm1.
-      unfold write_out.
+      clear Caractmain Step_out_length Hm1.
+
+      pose proof (m_nodupout m_step) as Hnodup.
 
       pose proof (find_class_name _ _ _ _ Find) as Eq;
         pose proof (find_method_name _ _ _ Findstep) as Eq';
         rewrite <-Eq, <-Eq' in *.
-      
-      edestruct global_out_struct with (2:=Findstep) 
-        as (step_co' & Hrco & ? & Hmr & ? & ? & ?); eauto.
-      rewrite Getstep_co in Hrco; inversion Hrco; subst step_co'.
-      
-      (* XXX: hack while treating a single output: *) 
-      (* we should be doing induction on m_out here *)
-      destruct (m_out m_step) as [|(x, t) ?];
-        intros ** Hwt Hm;
-        inversion_clear Hwt as [| ? ? ? ? ? Hvals];
-        try inv Hvals.
-      
-      assert (l = []) by admit; subst l.
-      inversion_clear Step_out as [|? ? Findx].        
-      destruct Findx as (bx & Findx & Volx).
 
       assert (e1 ! (Ident.prefix out step) 
               = Some (step_b, type_of_inst (prefix_fun main_node step))) as Findstr
-          by (subst e1; rewrite PTree.gss; auto).            
-      rewrite <-Eq, <-Eq' in Findstr.
+          by (subst e1; rewrite PTree.gss; auto).
+      rewrite <-Eq, <-Eq' in Findstr. 
 
-      assert (In (x, cltype t) (co_members step_co))
-        by now rewrite Hmr; simpl; intuition.
+      edestruct global_out_struct with (2:=Findstep) 
+        as (step_co' & Hrco & ? & Hmr & ? & ? & ?); eauto.
+      rewrite Getstep_co in Hrco; inversion Hrco; subst step_co'.
 
-      edestruct blockrep_field_offset as (? & ? & ? & ?); eauto.
+      intros ** Hwt Hmem.
 
-      rewrite store_events_cons, store_events_nil; simpl.
-      change [store_event_of_val ys (x, t)] 
-      with (Eapp [store_event_of_val ys (x, t)] []).
+      (* This induction is tricky: [co_members step_co ~ m_out m_step]
+      is fixed across the induction while we are going down inside
+      [m_out m_step]. The following assertion allows us to get back
+      into [co_members] whenever necessary. *)
 
-      eapply exec_Sseq_1; eauto using exec_stmt.
-      change le with (set_opttemp None ys le) at 2.
-      eapply exec_Sbuiltin with (vres:=Vundef).
-      - repeat 
-          match goal with 
-          | |- eval_exprlist _ _ _ _ _ _ _ => econstructor
-          end.
-        + econstructor.
-          apply eval_Evar_global; eauto.
-          rewrite <-not_Some_is_None.
-          intros (b, t'') Hget.
-          subst e1.
-          rewrite 3 PTree.gso, PTree.gempty in Hget.
-          * discriminate.
-          * intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
-          * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
-          * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
-        + reflexivity. 
-        + eapply eval_Elvalue; eauto.
-          *{ eapply eval_Efield_struct; eauto.
-             - eapply eval_Elvalue; eauto.
-               now apply deref_loc_copy.
-             - unfold type_of_inst; simpl; eauto.
-           }
-          *{ simpl; eapply blockrep_deref_mem; eauto.
-             - apply find_gsss.
-             - rewrite Int.unsigned_zero; simpl.
-               rewrite Int.unsigned_repr; auto.
-           }
-        + eapply sem_cast_same; eauto. 
-      - constructor.
-        apply volatile_store_vol; auto.
-        rewrite <-wt_val_load_result; auto.
+      assert (Hfield_offs: forall x ty,
+                 In (x, ty) (map translate_param (m_out m_step)) ->
+                 In (x, ty) (co_members step_co)) 
+        by now rewrite Hmr.
+
+      revert ve ys Hwt Hmem Hnodup Hfield_offs Findstr Step_out Eq Eq'.
+      generalize m_step.(m_out) as xts.
+      clear - Getstep_co.
+
+      unfold write_out.
+
+      induction xts as [|(x, t) xts];
+        intros ve ys Hwt;
+        inversion_clear Hwt as [| y ? ys' ? Hwt_y Hwt_ys'];
+        intros Hmem Hnodup Hfield_offs Findstr Step_out Eq Eq' ;
+        eauto using exec_stmt; 
+        simpl.
+      
+      inversion_clear Hnodup.
+
+      inversion_clear Step_out as [|? ? Findx].
+      destruct Findx as (bx & Findx & Volx).
+
+      rewrite store_events_cons.
+      eapply exec_Sseq_1 with (le1 := le); eauto.
+      - (* CASE: *)
+        match goal with
+        | |- exec_stmt _ _ _ _ _ _ [store_event_of_val _ _] _ _ _ => idtac
+        end.
+        (* ESAC. *)
+
+        change le with (set_opttemp None y le) at 2. 
+        eapply exec_Sbuiltin with (vres:=Vundef).
+        + repeat 
+            match goal with 
+            | |- eval_exprlist _ _ _ _ _ _ _ => econstructor
+            end.
+          * {
+              econstructor.
+              apply eval_Evar_global; eauto.
+              rewrite <-not_Some_is_None.
+              intros (b, t'') Hget.
+              subst e1.
+              rewrite 3 PTree.gso, PTree.gempty in Hget.
+              - discriminate.
+              - intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
+              - intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
+              - intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
+            }
+          * reflexivity. 
+          * {
+              assert (In (x, cltype t) (co_members step_co)) 
+                by now eapply Hfield_offs; econstructor(auto).
+
+              edestruct blockrep_field_offset as (? & ? & ? & ?); eauto.
+
+              eapply eval_Elvalue; eauto.
+              - eapply eval_Efield_struct; eauto.
+                + eapply eval_Elvalue; eauto.
+                  * constructor;
+                      rewrite <- Eq'; eauto.
+                  * now apply deref_loc_copy.
+                + unfold type_of_inst; simpl; rewrite Eq'; eauto.
+              - simpl; eapply blockrep_deref_mem; eauto.
+                + simpl; apply find_gsss.
+                + rewrite Int.unsigned_zero; simpl.
+                  rewrite Int.unsigned_repr; auto.
+            }
+          * eapply sem_cast_same; eauto. 
+        + constructor.
+          apply volatile_store_vol; auto.
+          rewrite <-wt_val_load_result; auto.
+
+      - (* CASE: *)
+        match goal with
+        | |- exec_stmt _ _ _ _ _ _ (store_events _ _) _ _ _ => idtac
+        end.
+        (* ESAC. *)
+        eapply IHxts; eauto. 
+        + eapply sep_imp; eauto.
+          simpl.
+          rewrite adds_cons_cons; eauto.
+          now rewrite <- ?fst_InMembers.
+        + intros. 
+          eapply Hfield_offs. econstructor(now auto).
     Qed.
 
     (*****************************************************************)
