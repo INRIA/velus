@@ -126,6 +126,11 @@ Module Type CLOCKING
 
   (** ** Basic properties of clocking *)
 
+  Lemma Well_clocked_nil: Well_clocked [].
+  Proof.
+    apply Forall_nil.
+  Qed.
+
   Lemma clk_var_det:
     forall C x ck1 ck2,
       clk_var C x ck1
