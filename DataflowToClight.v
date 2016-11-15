@@ -201,12 +201,10 @@ Lemma soundness:
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    let xss := fun n => List.map (fun c => present (sem_const c)) (ins n) in
-    let yss := fun n => List.map (fun c => present (sem_const c)) (outs n) in
+    let xss := fun n => map (fun c => present (sem_const c)) (ins n) in
+    let yss := fun n => map (fun c => present (sem_const c)) (outs n) in
     sem_node G main xss yss ->
     df_to_cl G main = OK P ->
-    (* XXX: we may want to use determinacy to strengthen this
-    conclusion: *all* traces are bisim_io *)
     exists T, bigstep_program_diverges function_entry2 P T
          /\ bisim_io G main ins outs T.
 Proof.
@@ -269,4 +267,32 @@ Proof.
     econstructor; eauto;
       rewrite Hstep_in || rewrite Hstep_out;
       apply mk_event_spec; auto.
+Qed.
+
+
+Require Import Behaviors.
+
+Lemma behavior_clight:
+  forall G P main ins outs,
+    Welldef_global G ->
+    wt_global G ->
+    wt_ins G main ins ->
+    wt_outs G main outs ->
+    let xss := fun n => map (fun c => present (sem_const c)) (ins n) in
+    let yss := fun n => map (fun c => present (sem_const c)) (outs n) in
+    sem_node G main xss yss ->
+    df_to_cl G main = OK P ->
+    (forall t, ~ program_behaves (semantics2 P) (Diverges t)) ->
+    exists T, program_behaves (semantics2 P) (Reacts T)
+         /\ bisim_io G main ins outs T.
+Proof.
+  intros ** Hbeh; edestruct soundness as (? & ? & ?); eauto.
+  eexists; split; eauto.
+  assert (Smallstep.bigstep_diverges (bigstep_semantics_fe function_entry2 P) x)
+    by match goal with
+       | H: bigstep_program_diverges _ _ _ |- _ => 
+         destruct H; econstructor; eauto
+       end.
+  edestruct behavior_bigstep_diverges as [|(? & ? & ?)]; eauto using bigstep_semantics_sound.
+  exfalso. eapply Hbeh; eauto.
 Qed.
