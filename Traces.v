@@ -15,7 +15,6 @@ Import Obc.Typ.
 Import Obc.Syn.
 (* Import Obc.Sem. *)
 Import DF.Str.
-Import DF.Syn.
 Import OpAux.
 Import Trans.
 
@@ -142,31 +141,6 @@ Section infinite_traces.
 
 End infinite_traces.
 
-Section Dataflow.
-  Variable (main: node) (ins outs: stream (list const)).
-  
-  Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) main.(n_in).
-  Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) main.(n_out).
-
-  Lemma n_in_spec: main.(n_in) <> [].
-  Proof.
-    pose proof (n_ingt0 main) as H.
-    intro E; rewrite E in H; simpl in H.
-    eapply Lt.lt_irrefl; eauto.
-  Qed.
-  
-  Lemma n_out_spec: main.(n_out) <> [].
-  Proof.
-    pose proof (n_outgt0 main) as H.
-    intro E; rewrite E in H; simpl in H.
-    eapply Lt.lt_irrefl; eauto.
-  Qed.
-  
-  Definition trace_node (n: nat): traceinf' :=
-    mk_trace ins outs main.(n_in) main.(n_out) n_in_spec n_out_spec Hwt_ins Hwt_outs n.
-
-End Dataflow.
-
 Section Obc.
   Variable (m_step: method) (ins outs: stream (list const)).
 
@@ -180,41 +154,3 @@ Section Obc.
     mk_trace ins outs m_step.(m_in) m_step.(m_out) in_spec out_spec Hwt_ins Hwt_outs n.
 
 End Obc.
-
-Section Corres.
-  Variable (main: node) (m_step: method) (ins outs: stream (list const)).
-
-  Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) main.(n_in).
-  Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) main.(n_out).
-
-  Hypothesis Eq_in: main.(n_in) = m_step.(m_in).
-  Hypothesis Eq_out: main.(n_out) = m_step.(m_out).
-
-  Lemma in_spec: m_step.(m_in) <> [].
-  Proof.
-    rewrite <-Eq_in.
-    pose proof (n_ingt0 main) as H.
-    intro E; rewrite E in H; simpl in H.
-    eapply Lt.lt_irrefl; eauto.
-  Qed.
-  
-  Lemma out_spec: m_step.(m_out) <> [].
-  Proof.
-    rewrite <-Eq_out.
-    pose proof (n_outgt0 main) as H.
-    intro E; rewrite E in H; simpl in H.
-    eapply Lt.lt_irrefl; eauto.
-  Qed.
-
-  Lemma Hwt_ins': forall n, wt_vals (map sem_const (ins n)) m_step.(m_in).
-  Proof. now rewrite <-Eq_in. Qed.
-  
-  Lemma Hwt_outs': forall n, wt_vals (map sem_const (outs n)) m_step.(m_out).
-  Proof. now rewrite <-Eq_out. Qed.
-
-  Lemma trace_equiv:
-    forall n,
-      traceinf_sim' (traceinf_of_traceinf' (trace_node main ins outs Hwt_ins Hwt_outs n)) 
-                    (traceinf_of_traceinf' (trace_step m_step ins outs in_spec out_spec Hwt_ins' Hwt_outs' n)).
-  Admitted.
-End Corres.  

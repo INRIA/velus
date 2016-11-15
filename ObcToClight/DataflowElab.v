@@ -16,10 +16,10 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require compcert.cfrontend.Cop.
-Require compcert.cparser.Cabs.
+Require cfrontend.Cop.
+Require cparser.Cabs.
 
-Require Import compcert.common.Errors.
+Require Import common.Errors.
 Local Open Scope error_monad_scope.
 
 (* Elaborate an AST into a well-typed Dataflow program. *)

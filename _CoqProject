@@ -58,3 +58,4 @@ ObcToClight/DataflowElab.v
 DataflowToClight.v
 Instantiator.v
 Traces.v
+ClightToAsm.v

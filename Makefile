@@ -137,7 +137,9 @@ VFILES:=RMemory.v\
   ObcToClight/DataflowElab.v\
   DataflowToClight.v\
   Operators.v\
-  Instantiator.v
+  Instantiator.v\
+  Traces.v\
+  ClightToAsm.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
@@ -237,7 +239,7 @@ extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml extraction/extract
 extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli extraction/extract
 	cp $< $@
 
-rustre: extraction/STAMP extraction/extract/Lexer.ml rustre.ml \
+rustre: compcert extraction/STAMP extraction/extract/Lexer.ml rustre.ml \
     		extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
 		extraction/extract/Relexer.ml
 	@find CompCert -name '*.cm*' -delete
