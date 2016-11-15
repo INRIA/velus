@@ -19,6 +19,8 @@ Import Typ.
 Require Import ObcToClight.Correctness.
 
 Require Import String.
+Require Import List.
+Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
@@ -35,7 +37,7 @@ Definition is_well_sch (res: res unit) (n: node) :=
 Definition fuse_method (m: method): method :=
   match m with
     mk_method name ins vars out body nodup good =>
-    mk_method name ins vars out (fuse body) nodup good 
+    mk_method name ins vars out (fuse body) nodup good
   end.
 
 Lemma map_m_name_fuse_methods:
@@ -46,7 +48,7 @@ Proof.
   simpl. rewrite IHms.
   now destruct m.
 Qed.
-  
+
 Lemma NoDup_m_name_fuse_methods:
   forall methods,
     List.NoDup (List.map m_name methods) ->
@@ -66,17 +68,117 @@ Definition compile (g: global) (main_node: ident) :=
   do _ <- (List.fold_left is_well_sch g (OK tt));
   ObcToClight.Translation.translate ((* List.map fuse_class *) (Trans.translate g)) main_node.
 
-Axiom transl_trace:
-  traceinf -> DF.Str.stream (list Interface.Op.const) -> DF.Str.stream (list Interface.Op.const) -> Prop.
+Section WtStream.
+
+Variable G: global.
+Variable main: ident.
+Variable ins: DF.Str.stream (list Interface.Op.const).
+Variable outs: DF.Str.stream (list Interface.Op.const).
+
+Definition wt_ins :=
+  forall n node, find_node main G = Some node ->
+            OpAux.wt_vals (List.map Interface.Op.sem_const (ins n)) node.(n_in).
+
+Definition wt_outs :=
+  forall n node, find_node main G = Some node ->
+            OpAux.wt_vals (List.map Interface.Op.sem_const (outs n)) node.(n_out).
+
+End WtStream.
+
+Section Bisim.
+
+Variable G: global.
+Variable main: ident.
+Variable ins: DF.Str.stream (list Interface.Op.const).
+Variable outs: DF.Str.stream (list Interface.Op.const).
+
+Inductive eventval_match: eventval -> AST.typ -> Values.val -> Prop :=
+  | ev_match_int: forall i,
+      eventval_match (EVint i) AST.Tint (Values.Vint i)
+  | ev_match_long: forall i,
+      eventval_match (EVlong i) AST.Tlong (Values.Vlong i)
+  | ev_match_float: forall f,
+      eventval_match (EVfloat f) AST.Tfloat (Values.Vfloat f)
+  | ev_match_single: forall f,
+      eventval_match (EVsingle f) AST.Tsingle (Values.Vsingle f).
+
+Lemma eventval_match_compat:
+  forall ge ev t v,
+    eventval_match ev t v -> Events.eventval_match ge ev t v.
+Proof. inversion 1; constructor. Qed.
+
+Lemma eventval_match_of_val:
+  forall v t,
+    Interface.Op.wt_val v t ->
+    eventval_match (Traces.eventval_of_val v)
+                   (AST.type_of_chunk (Interface.Op.type_chunk t))
+                   v.
+Proof.
+intros v t.
+Admitted.
+
+
+
+Inductive mask (f: eventval -> ident * Interface.Op.type -> event):
+  list Values.val -> list (ident * Interface.Op.type) -> trace -> Prop :=
+| MaskNil: mask f [] [] []
+| MaskCons: forall v vs x t xts ev evtval T,
+    eventval_match evtval (AST.type_of_chunk (Interface.Op.type_chunk t)) v ->
+    f evtval (x, t) = ev ->
+    mask f vs xts T ->
+    mask f (v :: vs) ((x, t) :: xts) (ev :: T).
+
+Lemma mk_event_spec:
+  forall (f: eventval -> ident * Interface.Op.type -> event) vs xts,
+    OpAux.wt_vals vs xts ->
+    mask f vs xts (Traces.mk_event (fun v => f (Traces.eventval_of_val v)) vs xts).
+Proof.
+intros ** Hwt. generalize dependent xts.
+induction vs as [|v vs IHvs];
+  intros xts Hwt; destruct xts as [|[x t] xts];
+  inv Hwt; try constructor.
+rewrite Traces.mk_event_cons.
+apply MaskCons with (evtval := Traces.eventval_of_val v); eauto.
+admit.
+Qed.
+
+Definition mask_load :=
+  mask (fun ev xt => Event_vload (Interface.Op.type_chunk (snd xt))
+                               (glob_id (fst xt))
+                               Integers.Int.zero ev).
+
+Definition mask_store :=
+  mask (fun ev xt => Event_vstore (Interface.Op.type_chunk (snd xt))
+                                (glob_id (fst xt))
+                                Integers.Int.zero ev).
+
+CoInductive bisim_io': nat -> traceinf -> Prop
+  := Step: forall n node t t' T,
+      find_node main G = Some node ->
+      mask_load (map Interface.Op.sem_const (ins n)) node.(n_in) t ->
+      mask_store (map Interface.Op.sem_const (outs n)) node.(n_out) t' ->
+      bisim_io' (S n) T ->
+      bisim_io' n (t *** t' *** T).
+
+Definition bisim_io := bisim_io' 0.
+
+End Bisim.
+
+
 Lemma soundness:
   forall G P main ins outs,
     DF.WeF.Welldef_global G ->
     DF.Typ.wt_global G ->
-    DF.Sem.sem_node G main (fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (ins n))
-                    (fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (outs n)) ->
+    wt_ins G main ins ->
+    wt_outs G main outs ->
+    let xss := fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (ins n) in
+    let yss := fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (outs n) in
+    DF.Sem.sem_node G main xss yss ->
     compile G main = OK P ->
+    (* XXX: we may want to use determinacy to strengthen this
+    conclusion: *all* traces are bisim_io *)
     exists T, bigstep_program_diverges function_entry2 P T
-         /\ transl_trace T ins outs.
+         /\ bisim_io G main ins outs T.
 Proof.
   intros ** Comp.
   edestruct dostep'_correct as (me0 & Heval & Step); eauto.
@@ -109,14 +211,32 @@ Proof.
     eapply Lt.lt_irrefl; eauto.
   }
   assert (forall n, OpAux.wt_vals (List.map Interface.Op.sem_const (ins n)) (m_in m_step))
-    as Hwt_in by admit.
+    as Hwt_in
+    by now erewrite find_method_stepm_in; eauto.
   assert (forall n, OpAux.wt_vals (List.map Interface.Op.sem_const (outs n)) (m_out m_step))
-    as Hwt_out by admit.
+    as Hwt_out
+    by now erewrite find_method_stepm_out; eauto.
   econstructor; split.
   - eapply diverges'
     with (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
-                    (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto. 
+                    (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto.
     + apply translate_wt; auto.
     + admit.
-  - admit.
+  - assert (Hstep_in: m_step.(m_in) = main_node.(n_in))
+      by now apply find_method_stepm_in.
+    assert (Hstep_out: m_step.(m_out) = main_node.(n_out))
+      by now apply find_method_stepm_out.
+    clear - H1 H2 H5 Hstep_in Hstep_out.
+    unfold bisim_io.
+    generalize 0%nat.
+    cofix COINDHYP.
+    intro n.
+    unfold transl_trace.
+    unfold Traces.trace_step.
+    rewrite Traces.unfold_mk_trace.
+    rewrite E0_left, E0_left_inf.
+    rewrite Eappinf_assoc.
+    econstructor; eauto;
+      rewrite Hstep_in || rewrite Hstep_out;
+      apply mk_event_spec; auto.
 Qed.
