@@ -1,6 +1,6 @@
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
-Require Import Rustre.DataflowToClight.
+Require Import Rustre.Rustre.
 Require Import Coq.ZArith.BinInt.
 Require Import Rustre.ObcToClight.Translation.
 Require Import Rustre.ObcToClight.DataflowElab.
@@ -65,9 +65,6 @@ Extract Constant SelectOp.symbol_is_external =>
 
 Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
-(* Extract Constant Ident.prefix => "(fun p1 p2 -> Camlcoq.(intern_string (extern_atom p1 ^ ""$"" ^  extern_atom p2)))". *)
-
-(* Extract Constant first_unused_ident => "Camlcoq.first_unused_ident". *)
 
 (* Lexing/Parsing/Elaboration *)
 Extract Constant Ast.astloc =>
@@ -139,10 +136,13 @@ Extract Constant Cabs.cabsloc =>
 Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+(* builtins *)
+Extract Constant Rustre.add_builtins => "add_builtins".
+
 Separate Extraction
          ZArith.BinIntDef
          Compiler.transf_clight_program Cabs
-         DataflowToClight elab_declarations translation_unit_file
+         Rustre.compile elab_declarations translation_unit_file
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg

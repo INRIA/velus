@@ -1,5 +1,4 @@
 <extraction/extract> : include
-<parsing> : include
 <CompCert/lib> or <CompCert/cfrontend> or <CompCert/backend> or <CompCert/common> or <CompCert/driver> or <CompCert/ia32> or <CompCert/cparser> or <CompCert/debug>: include
 true: package(str)
 true: package(unix)

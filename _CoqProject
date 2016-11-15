@@ -55,7 +55,7 @@ ObcToClight/Correctness.v
 ObcToClight/MoreSeparation.v
 ObcToClight/SepInvariant.v
 ObcToClight/DataflowElab.v
-DataflowToClight.v
+Rustre.v
 Instantiator.v
 Traces.v
 ClightToAsm.v

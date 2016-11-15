@@ -1,7 +1,13 @@
-Require Import Coqlib Errors.
-Require Import AST Linking Smallstep Behaviors.
-Require Clight Asm.
-Require Import Compopts Compiler Complements.
+Require Import lib.Coqlib.
+Require Import common.Errors.
+Require Import common.AST.
+Require Import common.Linking.
+Require Import common.Smallstep.
+Require Import common.Behaviors.
+
+Require cfrontend.Clight.
+Require ia32.Asm.
+Require Import driver.Compopts driver.Complements driver.Compiler.
 
 (** Compilation from Clight to Asm *)
 

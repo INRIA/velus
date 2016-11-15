@@ -135,11 +135,11 @@ VFILES:=RMemory.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
   ObcToClight/DataflowElab.v\
+  Rustre.v\
   Operators.v\
   Instantiator.v\
   Traces.v\
-  ClightToAsm.v\
-  Rustre.v
+  ClightToAsm.v
 
 -include $(addsuffix .d,$(VFILES))
 .SECONDARY: $(addsuffix .d,$(VFILES))
@@ -199,7 +199,7 @@ beautify: $(VFILES:=.beautified)
 .PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr compcert
 
 compcert: CompCert/Makefile.config
-	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof extraction
+	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof #extraction
 
 CompCert/Makefile.config:
 	@cd CompCert; ./configure ia32-linux
@@ -210,7 +210,7 @@ extraction/extract:
 	@mkdir -p $@
 
 extraction/STAMP: $(VOFILES) extraction/Extraction.v extraction/extract
-	#@rm -f extraction/extract/*.*
+	@rm -f extraction/extract/*.*
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
@@ -239,12 +239,12 @@ extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml extraction/extract
 extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli extraction/extract
 	cp $< $@
 
-rustre: compcert extraction/STAMP extraction/extract/Lexer.ml rustre.ml \
-    		extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
+rustre: compcert extraction/STAMP extraction/extract/Lexer.ml main.ml \
+        extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
 		extraction/extract/Relexer.ml
 	@find CompCert -name '*.cm*' -delete
-	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustre.native
-	@mv rustre.native rustre
+	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 main.native
+	@mv main.native rustre
 	@cp CompCert/compcert.ini _build/compcert.ini
 
 ####################

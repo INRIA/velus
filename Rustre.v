@@ -76,9 +76,15 @@ Definition df_to_cl (g: global) (main_node: ident): res Clight.program :=
   do _ <- (fold_left is_well_sch g (OK tt));
   ObcToClight.Translation.translate ((* map fuse_class *) (Trans.translate g)) main_node.
 
+Axiom add_builtins: Clight.program -> Clight.program.
+Axiom add_builtins_spec:
+  forall B p,
+    (forall t, B <> Goes_wrong t) ->
+    program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 Definition compile (g: global) (main_node: ident): res Asm.program :=
   let p := df_to_cl g main_node in
   p @@ print print_Clight
+    @@ add_builtins
     @@@ transf_clight2_program.
   
 Section WtStream.
@@ -318,5 +324,10 @@ Proof.
   - intros T1 Div.
     eapply (Hbeh T1).
     eapply diverges_trace_preservation; eauto.
+    apply add_builtins_spec; auto.
+    intros ? ?; discriminate.
   - eapply reacts_trace_preservation in Comp; eauto.
+    apply add_builtins_spec; auto.
+    intros ? ?; discriminate.  
 Qed.
+             
