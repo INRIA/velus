@@ -43,7 +43,6 @@ Module Type SYNTAX
 
   (** ** Equations *)
 
-  (* TODO: Why aren't the two others typed? *)
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
   | EqApp : idents -> clock -> ident -> lexps -> equation
