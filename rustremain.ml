@@ -25,28 +25,6 @@ let get_main_node decls =
   | Some s -> intern_string s
   | None   -> get_last_name decls
 
-let add_builtin p (name, (out, ins, b)) =
-  let env = Env.empty in
-  let id = intern_string name in
-  let id' = coqstring_of_camlstring name in
-  let targs = List.map (convertTyp env) ins |> Translation0.list_type_to_typelist in
-  let tres = convertTyp env out in
-  let sg = signature_of_type targs tres AST.cc_default in
-  let ef =
-    if name = "malloc" then AST.EF_malloc else
-    if name = "free" then AST.EF_free else
-    if Str.string_match re_runtime name 0 then AST.EF_runtime(id', sg) else
-    if Str.string_match re_builtin name 0
-    && List.mem_assoc name builtins.functions
-    then AST.EF_builtin(id', sg)
-    else AST.EF_external(id', sg) in
-  let decl = (id, AST.Gfun (External (ef, targs, tres, AST.cc_default))) in
-  { p with prog_defs = decl :: p.prog_defs }
-
-
-let add_builtins p =
-  List.fold_left add_builtin p builtins_generic.functions
-
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
     generate error messages). Adapted directly from menhir's

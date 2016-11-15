@@ -137,7 +137,7 @@ Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
 (* builtins *)
-Extract Constant Rustre.add_builtins => "add_builtins".
+Extract Constant Rustre.add_builtins => "Rustrelib.add_builtins".
 
 Separate Extraction
          ZArith.BinIntDef

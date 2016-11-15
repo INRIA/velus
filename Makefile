@@ -135,7 +135,7 @@ VFILES:=RMemory.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
   ObcToClight/DataflowElab.v\
-  Rustre.v\
+  RustreCorrectness.v\
   Operators.v\
   Instantiator.v\
   Traces.v\
@@ -239,12 +239,15 @@ extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml extraction/extract
 extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli extraction/extract
 	cp $< $@
 
-rustre: compcert extraction/STAMP extraction/extract/Lexer.ml main.ml \
+extraction/extract/rustrelib.ml: rustrelib.ml extraction/extract
+	cp $< $@
+
+rustre: compcert extraction/STAMP extraction/extract/Lexer.ml rustremain.ml \
         extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
-		extraction/extract/Relexer.ml
+		extraction/extract/Relexer.ml extraction/extract/rustrelib.ml
 	@find CompCert -name '*.cm*' -delete
-	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 main.native
-	@mv main.native rustre
+	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustremain.native
+	@mv rustremain.native rustre
 	@cp CompCert/compcert.ini _build/compcert.ini
 
 ####################
