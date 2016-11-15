@@ -43,7 +43,6 @@ Hint Resolve  Clight.assign_loc_value.
 Hint Resolve Z.divide_refl.
 
 
-Definition admit {T: Type}: T. Admitted.
 
 Lemma type_eq_refl:
   forall {A} t (T F: A),

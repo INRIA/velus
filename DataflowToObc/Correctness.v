@@ -12,7 +12,9 @@ Require Import Rustre.Obc.
 Require Import Rustre.DataflowToObc.Translation.
 Require Import Rustre.DataflowToObc.Correctness.IsPresent.
 Require Import Rustre.DataflowToObc.Correctness.MemoryCorres.
+Require Import Rustre.DataflowToObc.Typing.
 Require Import Rustre.Obc.FuseIfte.
+
 
 Module Type CORRECTNESS
        (Import Ids   : IDS)
@@ -26,7 +28,8 @@ Module Type CORRECTNESS
 
        (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
        (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
-       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ).
+       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
+       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans Fus).
 
   (** ** Technical lemmas *)
 
@@ -1831,7 +1834,8 @@ for all [Is_free_exp x e]. *)
               (r_nodup: NoDup r)
               (r_len: forall n, length r = length (outs n))
               (obj   : ident)
-              (Hwdef : Welldef_global G).
+              (Hwdef : Welldef_global G)
+              (Hwt   : wt_global G).
 
     (* XXX: [ins] and [outs] are taken to be constants. We thus assume
     that inputs are always presents and, indirectly, restrict our
@@ -2143,19 +2147,44 @@ for all [Is_free_exp x e]. *)
     
     End Dostep'_coind.
 
-    Lemma dostep'_correct_msem: 
+    Lemma dostep'_init:
       forall M,
-        let P := translate G in
         msem_node G main xss M yss ->
-        exists menv0,
-            stmt_call_eval P hempty main reset [] menv0 []
-          /\ dostep' P 0 menv0.
+        exists menv0 c_main P',
+            stmt_call_eval (translate G) hempty main reset [] menv0 []
+          /\ Memory_Corres G 0 main M menv0
+          /\ find_class main (translate G) = Some (c_main, P')
+          /\ wt_mem menv0 P' c_main.
     Proof.
-    intros M Hdef Hmsem.  
+    intros M Hmsem.
 
     edestruct is_node_reset_correct as (menv0 & Hstmt & Hmem); eauto.
-    subst Hdef.
-    exists menv0; split; eauto.
+
+    assert (exists nd, find_node main G = Some nd) as [nd ?]
+        by now inv Hmsem; eauto.
+
+    edestruct find_node_translate as (cls & P' & ? & ?); eauto.
+    pose proof exists_reset_method nd.
+
+    assert (wt_program (translate G))
+      by now apply Typing.translate_wt.
+   
+    subst.
+    assert (wt_mem menv0 P' (translate_node nd))
+      by now eapply pres_sem_stmt_call; eauto || constructor.
+
+    firstorder.
+    Qed.
+
+    Lemma dostep'_correct_msem: 
+      forall M menv0,
+        let P := translate G in
+        msem_node G main xss M yss ->
+        stmt_call_eval (translate G) hempty main reset [] menv0 [] ->
+        Memory_Corres G 0 main M menv0 ->
+        dostep' P 0 menv0.
+    Proof.
+    intros M menv0 Hdef Hmsem Hstmt Hmc.  
 
     set (R := fun n menv => Memory_Corres G n main M menv).
     apply dostep'_coind with (R := R).
@@ -2174,20 +2203,22 @@ for all [Is_free_exp x e]. *)
     edestruct is_node_correct as (omenvSn & HstmtSn & HmcSn); eauto.
     Qed.
 
-
     Theorem dostep'_correct:
-      sem_node G main xss yss ->
-      exists menv0,
-          stmt_call_eval (translate G) hempty main reset [] menv0 []
-        /\ dostep' (translate G) 0 menv0.
+      exists menv0 c_main P',
+        stmt_call_eval (translate G) hempty main reset [] menv0 []
+      /\ find_class main (translate G) = Some (c_main, P')
+      /\ wt_mem menv0 P' c_main
+      /\ dostep' (translate G) 0 menv0.
     Proof.
     intros.
     assert (exists M, msem_node G main xss M yss) as [M Hmsem]
         by now eapply sem_msem_node; eauto.
 
+    edestruct dostep'_init as (? & ? & ? & ? & ? & ? & ?); eauto.
+    do 3 eexists.
+    repeat (split; eauto).
     eapply dostep'_correct_msem; eauto.
     Qed.
-
 
   End EventLoop.
 
@@ -2399,9 +2430,10 @@ Module CorrectnessFun
        (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
        (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
        (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
+       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans Fus)
 
-       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus.
+       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus Typing.
 
-  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus.
+  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus Typing.
 
 End CorrectnessFun.

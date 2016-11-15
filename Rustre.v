@@ -1,5 +1,6 @@
 Require Import Rustre.Common.
 Require Import Rustre.Ident.
+Require Import Rustre.DataflowToObc.Typing.
 Require Import Rustre.ObcToClight.Translation.
 Require Import Rustre.Traces.
 Require Import Rustre.ClightToAsm.
@@ -211,12 +212,12 @@ Lemma soundness_cl:
          /\ bisim_io G main ins outs T.
 Proof.
   intros ** Comp.
-  edestruct dostep'_correct as (me0 & Heval & Step); eauto.
+  edestruct dostep'_correct as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   unfold df_to_cl in Comp.
   destruct (fold_left is_well_sch G (OK tt)); try discriminate; simpl in Comp.
   pose proof Comp.
   unfold Translation.translate in Comp.
-  destruct (find_class main (translate G)) as [(c_main, prog_main)|] eqn: Emain; try discriminate.
+  rewrite Emain in *.
   destruct (find_method Ids.step (c_methods c_main)) as [m_step|] eqn: Estep; try discriminate.
   destruct (find_method Ids.reset (c_methods c_main)) as [m_reset|] eqn: Ereset; try discriminate.
   pose proof (find_class_name _ _ _ _ Emain) as Eq;
@@ -248,10 +249,10 @@ Proof.
     by now erewrite find_method_stepm_out; eauto.
   econstructor; split.
   - eapply diverges'
-    with (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
+    with (prog_main := prog_main)
+           (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
                     (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto.
-    + apply Typ.translate_wt; auto.
-    + admit. 
+    apply Typ.translate_wt; auto.
   - assert (Hstep_in: m_step.(m_in) = main_node.(n_in))
       by now apply find_method_stepm_in.
     assert (Hstep_out: m_step.(m_out) = main_node.(n_out))

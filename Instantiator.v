@@ -24,7 +24,8 @@ Module Trans := TranslationFun Ids Op OpAux DF.Syn Obc.Syn Mem.
 Module IsP := IsPresentFun Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans.
 Module MemCor := MemoryCorresFun Ids Op OpAux DF Obc.
 Module Fus := FuseIfteFun Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ.
-Module Corr := DataflowToObc.Correctness.CorrectnessFun Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus.
 Module Typ := DataflowToObc.Typing.TypingFun Ids Op OpAux DF Obc Mem Trans Fus.
+Module Corr := DataflowToObc.Correctness.CorrectnessFun Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus Typ.
+
   
 Module WeFDec := WellFormed.Decide.Decide Ids Op DF.Syn DF.IsF DF.IsFDec DF.Ord DF.Mem DF.IsD DF.IsV DF.IsDDec DF.IsVDec DF.NoD DF.WeF.
