@@ -15,15 +15,11 @@ let set_main_node s =
   main_node := Some s
 
 let get_main_node decls =
-  let rec get_last_name ds =
-    match ds with
-    | []    -> intern_string "main"
-    | [d]   -> Instantiator.DF.Syn.n_name d
-    | d::ds -> get_last_name ds
-  in
   match !main_node with
   | Some s -> intern_string s
-  | None   -> get_last_name decls
+  | None   -> match decls with
+              | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
+              | d::_ -> Instantiator.DF.Syn.n_name d
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
@@ -90,7 +86,9 @@ let compile source_name filename =
     | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
   if Cerrors.check_errors() then exit 2;
   let main_node = get_main_node p in
-  match Rustre.compile (List.rev p) main_node with
+  match Compiler.apply_partial
+          (RustreCorrectness.compile (List.rev p) main_node)
+          Asmexpand.expand_program with
   | Error errmsg -> Driveraux.print_error stderr errmsg
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
