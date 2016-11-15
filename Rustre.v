@@ -250,19 +250,102 @@ Definition bisim_io := bisim_io' 0.
 
 End Bisim.
 
+Lemma fuse_class_c_objs:
+  forall c,
+    (fuse_class c).(c_objs) = c.(c_objs).
+Proof.
+  unfold fuse_class. destruct c; auto.
+Qed.
+
+Lemma fuse_class_c_mems:
+  forall c,
+    (fuse_class c).(c_mems) = c.(c_mems).
+Proof.
+  unfold fuse_class. destruct c; auto.
+Qed.
+
+Lemma fuse_class_c_name:
+  forall c,
+    (fuse_class c).(c_name) = c.(c_name).
+Proof.
+  unfold fuse_class. destruct c; auto.
+Qed.
+
+Lemma fuse_method_m_name:
+  forall m,
+    (fuse_method m).(m_name) = m.(m_name).
+Proof.
+  unfold fuse_method; destruct m; auto.
+Qed.
+
+Lemma map_fuse_class_c_name:
+  forall p,
+    map (fun cls => (fuse_class cls).(c_name)) p = map c_name p.
+Proof.
+  induction p; auto.
+  simpl. now rewrite IHp, fuse_class_c_name.
+Qed.
+
+Lemma fuse_find_method':
+  forall f fm cls,
+    find_method f cls.(c_methods) = Some fm ->
+    find_method f (fuse_class cls).(c_methods) = Some (fuse_method fm).
+Proof.
+  destruct cls; simpl.
+  induction c_methods0 as [|m ms]; inversion 1.
+  simpl.
+  destruct (ident_eq_dec m.(m_name) f) as [He|Hne].
+  - rewrite fuse_method_m_name, He, ident_eqb_refl in *. intuition.
+  - apply ident_eqb_neq in Hne.
+    rewrite fuse_method_m_name, Hne in *.
+    inv c_nodupm0; auto.
+Qed.
+
+Lemma wt_stmt_map_fuse_class:
+  forall p objs mems vars body,
+    wt_stmt p objs mems vars body ->
+    wt_stmt (map fuse_class p) objs mems vars body.
+Proof.
+  induction body; inversion_clear 1; eauto using wt_stmt.
+  eapply wt_Call
+  with (cls:=fuse_class cls) (p':=map fuse_class p') (fm:=fuse_method fm);
+    auto; try (now destruct fm; auto).
+  erewrite fuse_find_class; eauto.
+  now apply fuse_find_method'.
+Qed.
 
 Lemma fuse_wt_program:
   forall G,
-    wt_global G ->
-    wt_program (map fuse_class (translate G)).
+    wt_program G ->
+    wt_program (map fuse_class G).
 Proof.
   intros ** WTG.
-  apply Typ.translate_wt in WTG.
-  induction (translate G) as [|c p]; simpl;
+  (* apply Typ.translate_wt in WTG. *)
+  induction G as [|c p]; simpl;
   inversion_clear WTG as [|? ? Wtc Wtp Nodup]; constructor; auto.
-  - admit.
-  - inv Nodup.
-    admit.
+  - inversion_clear Wtc as (Hos & Hms).
+    constructor.
+    + rewrite fuse_class_c_objs.
+      apply Forall_impl_In with (2:=Hos).
+      intros ic Hin Hfind.
+      apply not_None_is_Some in Hfind.
+      destruct Hfind as ((cls & p') & Hfind).
+      rewrite fuse_find_class with (1:=Hfind).
+      intuition.
+    + destruct c; simpl in *.
+      clear Nodup c_nodup0 c_nodupm0 Hos IHp Wtp.
+      induction c_methods0 as [|m ms]; simpl; auto using Forall_nil.
+      apply Forall_cons2 in Hms.
+      destruct Hms as (WTm & WTms).
+      apply Forall_cons; auto. clear IHms WTms.
+      unfold wt_method in *.
+      destruct m; unfold meth_vars in *; simpl in *.
+      clear m_nodupvars0 m_good0.
+      apply wt_stmt_map_fuse_class.
+      destruct m_body0; simpl; inv WTm; eauto using wt_stmt.
+      admit.
+  - simpl.
+    now rewrite fuse_class_c_name, map_map, map_fuse_class_c_name.
 Qed.
 
 Lemma fuse_call:
