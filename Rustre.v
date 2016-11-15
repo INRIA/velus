@@ -314,13 +314,24 @@ Proof.
   now apply fuse_find_method'.
 Qed.
 
+Lemma wt_stmt_zip:
+  forall p objs mems vars s1 s2,
+    wt_stmt p objs mems vars s1 ->
+    wt_stmt p objs mems vars s2 ->
+    wt_stmt p objs mems vars (zip s1 s2).
+Proof.
+  induction s1, s2; simpl; repeat inversion_clear 1; eauto using wt_stmt.
+  destruct (exp_dec e e0) as [He|Hne].
+  - rewrite He, equiv_decb_refl; eauto using wt_stmt.
+  - apply not_equiv_decb_equiv in Hne. rewrite Hne. eauto using wt_stmt.
+Qed.
+
 Lemma fuse_wt_program:
   forall G,
     wt_program G ->
     wt_program (map fuse_class G).
 Proof.
   intros ** WTG.
-  (* apply Typ.translate_wt in WTG. *)
   induction G as [|c p]; simpl;
   inversion_clear WTG as [|? ? Wtc Wtp Nodup]; constructor; auto.
   - inversion_clear Wtc as (Hos & Hms).
@@ -343,7 +354,10 @@ Proof.
       clear m_nodupvars0 m_good0.
       apply wt_stmt_map_fuse_class.
       destruct m_body0; simpl; inv WTm; eauto using wt_stmt.
-      admit.
+      revert m_body0_1 H1.
+      induction m_body0_2; simpl; eauto using wt_stmt_zip.
+      intros s1 WT1. inv H2.
+      eauto using wt_stmt_zip.
   - simpl.
     now rewrite fuse_class_c_name, map_map, map_fuse_class_c_name.
 Qed.
@@ -372,7 +386,7 @@ Proof.
   admit.
 Qed.
 
-Hint Resolve fuse_wt_program fuse_reset fuse_wt_mem fuse_dostep'.
+Hint Resolve fuse_wt_program fuse_call fuse_wt_mem fuse_dostep'.
 
 Lemma soundness_cl:
   forall G P main ins outs,
@@ -436,6 +450,8 @@ Proof.
     with (1:=Comp') (6:=Emain) (8:=Efusestep) 
                     (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
                     (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto; auto.
+    apply fuse_wt_program.
+    now apply Typ.translate_wt.
   - assert (Hstep_in: (fuse_method m_step).(m_in) = main_node.(n_in))
       by (rewrite fuse_method_in; now apply find_method_stepm_in).
     assert (Hstep_out: (fuse_method m_step).(m_out) = main_node.(n_out))
