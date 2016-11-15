@@ -276,13 +276,13 @@ Lemma behavior_clight:
       exists T, program_behaves (semantics2 P) (Reacts T)
            /\ bisim_io G main ins outs T.
 Proof.
-intros; edestruct soundness as (? & ? & ?); eauto.
+intros ** Hbeh; edestruct soundness as (? & ? & ?); eauto.
 eexists; split; eauto.
 assert (Smallstep.bigstep_diverges (bigstep_semantics_fe function_entry2 P) x)
   by match goal with
      | H: bigstep_program_diverges _ _ _ |- _ => 
        destruct H; econstructor; eauto
      end.
-edestruct behavior_bigstep_diverges; eauto using bigstep_semantics_sound.
-decompose record H9.  exfalso. eapply H5. eauto.
+edestruct behavior_bigstep_diverges as [|(? & ? & ?)]; eauto using bigstep_semantics_sound.
+exfalso. eapply Hbeh; eauto.
 Qed.
