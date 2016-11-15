@@ -1,14 +1,17 @@
 Require Import Rustre.Common.
 Require Import Rustre.Ident.
 Require Import Rustre.ObcToClight.Translation.
+Require Import Rustre.Traces.
 
 Require Import common.Errors.
 Require Import common.Events.
 Require Import cfrontend.Clight.
 Require Import cfrontend.ClightBigstep.
+Require Import lib.Integers.
+Require Import driver.Compiler.
 
 Require Import Rustre.Instantiator.
-Import DF.Syn.
+Import DF.
 Import WeFDec.
 Import DF.Mem.
 Import Obc.Syn.
@@ -16,6 +19,8 @@ Import Fus.
 Import Trans.
 Import Corr.
 Import Typ.
+Import OpAux.
+Import Interface.Op.
 Require Import ObcToClight.Correctness.
 
 Require Import String.
@@ -28,7 +33,7 @@ Definition is_well_sch (res: res unit) (n: node) :=
   match res with
   | OK _ =>
     let eqs := n.(n_eqs) in
-    let ni := List.map fst n.(n_in) in
+    let ni := map fst n.(n_in) in
     if well_sch (memories eqs) ni eqs then OK tt
     else Error (Errors.msg ("node " ++ pos_to_str n.(n_name) ++ " is not well scheduled."))
   | _ => res
@@ -42,7 +47,7 @@ Definition fuse_method (m: method): method :=
 
 Lemma map_m_name_fuse_methods:
   forall methods,
-    List.map m_name (List.map fuse_method methods) = List.map m_name methods.
+    map m_name (map fuse_method methods) = map m_name methods.
 Proof.
   intro ms; induction ms as [|m ms]; auto.
   simpl. rewrite IHms.
@@ -51,8 +56,8 @@ Qed.
 
 Lemma NoDup_m_name_fuse_methods:
   forall methods,
-    List.NoDup (List.map m_name methods) ->
-    List.NoDup (List.map m_name (List.map fuse_method methods)).
+    NoDup (map m_name methods) ->
+    NoDup (map m_name (map fuse_method methods)).
 Proof.
   intros; now rewrite map_m_name_fuse_methods.
 Qed.
@@ -64,24 +69,29 @@ Definition fuse_class (c: class): class :=
              (NoDup_m_name_fuse_methods _ nodupm)
   end.
 
-Definition compile (g: global) (main_node: ident) :=
-  do _ <- (List.fold_left is_well_sch g (OK tt));
-  ObcToClight.Translation.translate ((* List.map fuse_class *) (Trans.translate g)) main_node.
+Definition df_to_cl (g: global) (main_node: ident): res Clight.program :=
+  do _ <- (fold_left is_well_sch g (OK tt));
+  ObcToClight.Translation.translate ((* map fuse_class *) (Trans.translate g)) main_node.
 
+Definition compile (g: global) (main_node: ident): res Asm.program :=
+  let p := df_to_cl g main_node in
+  p @@ print print_Clight
+    @@@ transf_clight_program.
+  
 Section WtStream.
 
 Variable G: global.
 Variable main: ident.
-Variable ins: DF.Str.stream (list Interface.Op.const).
-Variable outs: DF.Str.stream (list Interface.Op.const).
+Variable ins: stream (list const).
+Variable outs: stream (list const).
 
 Definition wt_ins :=
   forall n node, find_node main G = Some node ->
-            OpAux.wt_vals (List.map Interface.Op.sem_const (ins n)) node.(n_in).
+            wt_vals (map sem_const (ins n)) node.(n_in).
 
 Definition wt_outs :=
   forall n node, find_node main G = Some node ->
-            OpAux.wt_vals (List.map Interface.Op.sem_const (outs n)) node.(n_out).
+            wt_vals (map sem_const (outs n)) node.(n_out).
 
 End WtStream.
 
@@ -89,8 +99,8 @@ Section Bisim.
 
 Variable G: global.
 Variable main: ident.
-Variable ins: DF.Str.stream (list Interface.Op.const).
-Variable outs: DF.Str.stream (list Interface.Op.const).
+Variable ins: stream (list const).
+Variable outs: stream (list const).
 
 Inductive eventval_match: eventval -> AST.typ -> Values.val -> Prop :=
   | ev_match_int: forall i,
@@ -106,9 +116,9 @@ Inductive eventval_match: eventval -> AST.typ -> Values.val -> Prop :=
 Lemma eventval_match_of_val:
   (** All well-typed, dataflow values can be turned into event values. *)
   forall v t,
-    Interface.Op.wt_val v t ->
-    eventval_match (Traces.eventval_of_val v)
-                   (AST.type_of_chunk (Interface.Op.type_chunk t))
+    wt_val v t ->
+    eventval_match (eventval_of_val v)
+                   (AST.type_of_chunk (type_chunk t))
                    v.
 Proof.
 intros v t Hwt.
@@ -123,15 +133,15 @@ Remark eventval_match_compat:
 Proof. inversion 1; constructor. Qed.
 
 
-Inductive mask (f: eventval -> ident * Interface.Op.type -> event):
-  list Values.val -> list (ident * Interface.Op.type) -> trace -> Prop :=
+Inductive mask (f: eventval -> ident * type -> event):
+  list Values.val -> list (ident * type) -> trace -> Prop :=
 | MaskNil:
 
   (*---------------*)
     mask f [] [] []
 | MaskCons: forall v vs x t xts ev evtval T,
 
-    eventval_match evtval (AST.type_of_chunk (Interface.Op.type_chunk t)) v ->
+    eventval_match evtval (AST.type_of_chunk (type_chunk t)) v ->
     f evtval (x, t) = ev ->
     mask f vs xts T ->
   (*------------------------------------------*)
@@ -140,29 +150,29 @@ Inductive mask (f: eventval -> ident * Interface.Op.type -> event):
 Definition mask_load :=
   (** Match a list of events loading values from the suitable, global
   volatile variables *)
-  mask (fun ev xt => Event_vload (Interface.Op.type_chunk (snd xt))
-                               (glob_id (fst xt))
-                               Integers.Int.zero ev).
+  mask (fun ev xt => Event_vload (type_chunk (snd xt))
+                              (glob_id (fst xt))
+                              Int.zero ev).
 
 Definition mask_store :=
   (** Match a list of events storing values to the suitable, global
   volatile variables *)
-  mask (fun ev xt => Event_vstore (Interface.Op.type_chunk (snd xt))
-                                (glob_id (fst xt))
-                                Integers.Int.zero ev).
+  mask (fun ev xt => Event_vstore (type_chunk (snd xt))
+                               (glob_id (fst xt))
+                               Int.zero ev).
 
 Lemma mk_event_spec:
   (** The trace generated by [mk_event] is characterized by [mask] *)
-  forall (f: eventval -> ident * Interface.Op.type -> event) vs xts,
-    OpAux.wt_vals vs xts ->
-    mask f vs xts (Traces.mk_event (fun v => f (Traces.eventval_of_val v)) vs xts).
+  forall (f: eventval -> ident * type -> event) vs xts,
+    wt_vals vs xts ->
+    mask f vs xts (mk_event (fun v => f (eventval_of_val v)) vs xts).
 Proof.
 intros ** Hwt. generalize dependent xts.
 induction vs as [|v vs IHvs];
   intros xts Hwt; destruct xts as [|[x t] xts];
   inv Hwt; try constructor.
 rewrite Traces.mk_event_cons.
-apply MaskCons with (evtval := Traces.eventval_of_val v);
+apply MaskCons with (evtval := eventval_of_val v);
   eauto using eventval_match_of_val.
 Qed.
 
@@ -187,14 +197,14 @@ End Bisim.
 
 Lemma soundness:
   forall G P main ins outs,
-    DF.WeF.Welldef_global G ->
-    DF.Typ.wt_global G ->
+    Welldef_global G ->
+    wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    let xss := fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (ins n) in
-    let yss := fun n => List.map (fun c => DF.Str.present (Interface.Op.sem_const c)) (outs n) in
-    DF.Sem.sem_node G main xss yss ->
-    compile G main = OK P ->
+    let xss := fun n => List.map (fun c => present (sem_const c)) (ins n) in
+    let yss := fun n => List.map (fun c => present (sem_const c)) (outs n) in
+    sem_node G main xss yss ->
+    df_to_cl G main = OK P ->
     (* XXX: we may want to use determinacy to strengthen this
     conclusion: *all* traces are bisim_io *)
     exists T, bigstep_program_diverges function_entry2 P T
@@ -202,8 +212,8 @@ Lemma soundness:
 Proof.
   intros ** Comp.
   edestruct dostep'_correct as (me0 & Heval & Step); eauto.
-  unfold compile in Comp.
-  destruct (List.fold_left is_well_sch G (OK tt)); try discriminate; simpl in Comp.
+  unfold df_to_cl in Comp.
+  destruct (fold_left is_well_sch G (OK tt)); try discriminate; simpl in Comp.
   pose proof Comp.
   unfold Translation.translate in Comp.
   destruct (find_class main (translate G)) as [(c_main, prog_main)|] eqn: Emain; try discriminate.
@@ -240,8 +250,8 @@ Proof.
   - eapply diverges'
     with (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
                     (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto.
-    + apply translate_wt; auto.
-    + admit.
+    + apply Typ.translate_wt; auto.
+    + admit. 
   - assert (Hstep_in: m_step.(m_in) = main_node.(n_in))
       by now apply find_method_stepm_in.
     assert (Hstep_out: m_step.(m_out) = main_node.(n_out))
