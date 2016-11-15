@@ -97,13 +97,10 @@ Module Type TRANSLATION
 
     Variable memories : PS.t.
 
-    (* =tovar= *)
     Definition tovar (xt: ident * type) : exp :=
       let (x, ty) := xt in
       if PS.mem x memories then State x ty else Var x ty.
-    (* =end= *)
 
-    (* =control= *)
     (* definition is needed in signature *)
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
@@ -111,9 +108,7 @@ Module Type TRANSLATION
       | Con ck x true  => Control ck (Ifte (tovar (x, bool_type)) s Skip)
       | Con ck x false => Control ck (Ifte (tovar (x, bool_type)) Skip s)
       end.
-    (* =end= *)
 
-    (* =translate_lexp= *)
     (* definition is needed in signature *)
     Fixpoint translate_lexp (e : lexp) : exp :=
       match e with
@@ -123,9 +118,7 @@ Module Type TRANSLATION
       | Eunop op e ty => Unop op (translate_lexp e) ty
       | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
       end.
-    (* =end= *)
 
-    (* =translate_cexp= *)
     (* definition is needed in signature *)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
@@ -137,9 +130,7 @@ Module Type TRANSLATION
                           (translate_cexp x f)
       | Eexp l => Assign x (translate_lexp l)
       end.
-    (* =end= *)
 
-    (* =translate_eqn= *)
     (* definition is needed in signature *)
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
@@ -149,20 +140,16 @@ Module Type TRANSLATION
         Control ck (Call xs f name step (List.map translate_lexp les))
       | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
       end.
-    (* =end= *)
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
   (*      [Is_well_sch]. *) *)
 
-    (* =translate_eqns= *)
     (* definition is needed in signature *)
     Definition translate_eqns (eqns: list equation) : stmt :=
       List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
-    (* =end= *)
 
   End Translate.
 
-  (* =translate_reset_eqn= *)
   (* definition is needed in signature *)
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
@@ -172,13 +159,10 @@ Module Type TRANSLATION
       let name := hd Ids.default xs in
       Comp (Call [] f name reset []) s
     end.
-  (* =end= *)
 
-  (* =translate_reset_eqns= *)
   (* definition is needed in signature *)
   Definition translate_reset_eqns (eqns: list equation): stmt :=
     List.fold_left translate_reset_eqn eqns Skip.
-  (* =end= *)
 
   (* definition is needed in signature *)
   Definition ps_from_list (l: list ident) : PS.t :=

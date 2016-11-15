@@ -100,6 +100,13 @@ Section ElabExpressions.
   (* Map variable names to clocks. *)
   Variable cenv : PM.t clock.
 
+  (* TODO: Consider combining env and cenv into a PM.t (type * clock).
+           The advantage would be to avoid two lookups for every variable.
+           The disadvantage is that the proofs become more complicated.
+           Note also that we must anyway make two passes through the
+           variable declarations, since we can only check that the clocks
+           are well-typed after knowing all of the types. *)
+
   (* Preceding dataflow program. *)
   Variable G : global.
 
