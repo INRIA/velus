@@ -275,8 +275,8 @@ dataflow node at each instant. *)
 CoInductive bisim_io': nat -> traceinf -> Prop
   := Step: forall n node t t' T,
       find_node main G = Some node ->
-      mask_load (map Interface.Op.sem_const (ins n)) node.(n_in) t ->
-      mask_store (map Interface.Op.sem_const (outs n)) node.(n_out) t' ->
+      mask_load (map sem_const (ins n)) node.(n_in) t ->
+      mask_store (map sem_const (outs n)) node.(n_out) t' ->
       bisim_io' (S n) T ->
       bisim_io' n (t *** t' *** T).
 
@@ -536,8 +536,6 @@ Proof.
   admit.
 Qed.
 
-
-
 Lemma Welldef_global_patch:
   forall G,
     Wellsch_global G ->
@@ -572,15 +570,16 @@ Qed.
 
 Hint Resolve fuse_wt_program fuse_call fuse_wt_mem fuse_dostep' Welldef_global_patch ClassIsFusible_translate.
 
+Definition vstr (xss: stream (list const)): stream (list value) :=
+  fun n => map (fun c => present (sem_const c)) (xss n).
+
 Lemma soundness_cl:
   forall G P main ins outs,
     Well_clocked G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    let xss := fun n => map (fun c => present (sem_const c)) (ins n) in
-    let yss := fun n => map (fun c => present (sem_const c)) (outs n) in
-    sem_node G main xss yss ->
+    sem_node G main (vstr ins) (vstr outs) ->
     df_to_cl main G = OK P ->
     exists T, bigstep_program_diverges function_entry2 P T
          /\ bisim_io G main ins outs T.
@@ -667,9 +666,7 @@ Lemma behavior_clight:
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    let xss := fun n => map (fun c => present (sem_const c)) (ins n) in
-    let yss := fun n => map (fun c => present (sem_const c)) (outs n) in
-    sem_node G main xss yss ->
+    sem_node G main (vstr ins) (vstr outs) ->
     df_to_cl main G = OK P ->
     (forall t, ~ program_behaves (semantics2 P) (Diverges t)) ->
     exists T, program_behaves (semantics2 P) (Reacts T)
@@ -692,9 +689,7 @@ Lemma behavior_asm:
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    let xss := fun n => map (fun c => present (sem_const c)) (ins n) in
-    let yss := fun n => map (fun c => present (sem_const c)) (outs n) in
-    sem_node G main xss yss ->
+    sem_node G main (vstr ins) (vstr outs) ->
     compile G main = OK P ->
     (forall t, ~ program_behaves (Asm.semantics P) (Diverges t)) ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
@@ -712,5 +707,4 @@ Proof.
   - eapply reacts_trace_preservation in Comp; eauto.
     apply add_builtins_spec; auto.
     intros ? ?; discriminate.  
-Qed.
-             
+Qed.             
