@@ -218,7 +218,7 @@ Dataflow/Parser/Parser.v: Dataflow/Parser/Parser.vy
 Dataflow/Parser/Lexer.ml: Dataflow/Parser/Lexer.mll
 	ocamllex $<
 
-extraction/extract/Lexer.ml: Dataflow/Parser/Lexer.ml extraction/extract
+extraction/extract/Lexer.ml: Dataflow/Parser/Lexer.ml extraction/extract extraction/STAMP
 	cp $< $@
 
 extraction/extract/Relexer.ml: Dataflow/Parser/Relexer.ml extraction/extract
