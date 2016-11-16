@@ -37,7 +37,7 @@ Import ListNotations.
 %token<Ast.astloc> LET TEL NODE RETURNS VAR FBY
 %token<Ast.astloc> WHEN WHENOT MERGE ON ONOT DOT
 
-%token EOF
+%token<Ast.astloc> EOF
 
 %type<Ast.expression> primary_expression postfix_expression
     fby_expression unary_expression cast_expression

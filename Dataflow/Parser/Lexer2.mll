@@ -288,7 +288,7 @@ rule initial = parse
   | identifier as id              {
       try Hashtbl.find lexicon id (currentLoc lexbuf)
       with Not_found -> tok VAR_NAME't (id, currentLoc lexbuf) }
-  | eof                           { tok EOF't () }
+  | eof                           { tok EOF't (currentLoc lexbuf) }
   | _ as c                        { fatal_error lexbuf "invalid symbol %C" c }
 
 and initial_linebegin = parse

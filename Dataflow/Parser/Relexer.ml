@@ -12,7 +12,7 @@ let map_token (Specif.Coq_existT (tok, l) : Parser.Aut.GramDefs.token) =
                    (Parser2.CONSTANT  v      , snd v)
   | DOT't        -> (Parser2.DOT        (loc l), loc l)
   | ELSE't       -> (Parser2.ELSE       (loc l), loc l)
-  | EOF't        -> (Parser2.EOF               , loc l)
+  | EOF't        -> (Parser2.EOF        (loc l), loc l)
   | EQ't         -> (Parser2.EQ         (loc l), loc l)
   | FALSE't      -> (Parser2.FALSE      (loc l), loc l)
   | FBY't        -> (Parser2.FBY        (loc l), loc l)
