@@ -449,7 +449,20 @@ Lemma fuse_wt_mem:
     wt_mem me p c ->
     wt_mem me (map fuse_class p) (fuse_class c).
 Proof.
-  admit.
+intros ** Hwt_mem.
+induction Hwt_mem
+          using wt_mem_ind_mult
+          with (P := fun me p cl Hwt => wt_mem me (map fuse_class p) (fuse_class cl))
+               (Pinst := fun me p oc Hwt_inst => wt_mem_inst me (map fuse_class p) oc).
+- constructor.
+  + rewrite fuse_class_c_mems; auto.
+  + rewrite fuse_class_c_objs.
+    eapply Forall_forall; intros oc Hin.
+    eapply In_Forall in H as [? ?]; eauto.
+- now constructor.
+- simpl in *.
+  econstructor 2; eauto.
+  apply fuse_find_class. eauto.
 Qed.
 
 Lemma Is_defined_in_vars_defined:
