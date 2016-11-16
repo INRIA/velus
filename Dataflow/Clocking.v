@@ -107,17 +107,18 @@ Module Type CLOCKING
         clk_lexp C le ck ->
         Well_clocked_eq C (EqFby x ck v0 le).
 
+  Definition Well_clocked_env C : Prop :=
+    forall x ck, PM.find x C = Some ck -> clk_clock C ck.
+  
   Inductive Well_clocked_node : node -> Prop :=
   | SNode:
       forall f i o v eqs ingt0 outgt0 defd vout nodup good C,
         Forall (Well_clocked_eq C) eqs ->
         clk_vars C (map fst i) Cbase ->
         clk_vars C (map fst o) Cbase ->
+        Well_clocked_env C ->
         Well_clocked_node (mk_node f i o v eqs
                                    ingt0 outgt0 defd vout nodup good).
-
-  Definition Well_clocked_env C : Prop :=
-    forall x ck, PM.find x C = Some ck -> clk_clock C ck.
 
   Definition Well_clocked G : Prop :=
     Forall (fun nd=> Well_clocked_node nd) G.

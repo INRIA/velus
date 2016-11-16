@@ -436,7 +436,7 @@ Section StateRepProperties.
   Let tge := Clight.globalenv tprog.
   Let gcenv := Clight.genv_cenv tge.
 
-  Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
+  Hypothesis TRANSL: translate main_node prog = Errors.OK tprog.
   Hypothesis gcenv_consistent: composite_env_consistent gcenv.
 
   Hypothesis make_members_co:

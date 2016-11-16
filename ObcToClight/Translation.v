@@ -334,7 +334,7 @@ Definition make_program'
   | inr msg => Error msg
   end.
 
-Definition translate (prog: program) (main_node: ident): res Clight.program :=
+Definition translate (main_node: ident) (prog: program): res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
     match find_method step c.(c_methods) with

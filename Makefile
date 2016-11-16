@@ -196,15 +196,13 @@ beautify: $(VFILES:=.beautified)
 	@echo 'Do not do "make clean" until you are sure that everything went well!'
 	@echo 'If there were a problem, execute "for file in $$(find . -name \*.v.old -print); do mv $${file} $${file%.old}; done" in your shell/'
 
-.PHONY: all opt byte archclean clean install userinstall depend html validate extraction test extr compcert
+.PHONY: opt byte archclean clean install userinstall depend html validate compcert rustre
 
 compcert: CompCert/Makefile.config
-	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof #extraction
+	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof
 
 CompCert/Makefile.config:
 	@cd CompCert; ./configure ia32-linux
-
-test: compcert all extraction extr
 
 extraction/extract:
 	@mkdir -p $@

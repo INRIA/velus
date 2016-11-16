@@ -418,7 +418,7 @@ Section PRESERVATION.
   Let tge := Clight.globalenv tprog.
   Let gcenv := Clight.genv_cenv tge.
   
-  Hypothesis TRANSL: translate prog main_node = Errors.OK tprog.
+  Hypothesis TRANSL: translate main_node prog = Errors.OK tprog.
   Hypothesis WT: wt_program prog.
   
   Lemma build_check_size_env_ok:
@@ -467,7 +467,7 @@ Section PRESERVATION.
 
   Ltac inv_trans_tac H En Estep Ereset s f E :=
     match type of H with
-      translate ?p ?n = Errors.OK ?tp =>
+      translate ?n ?p = Errors.OK ?tp =>
       unfold translate in H;
         destruct (find_class n p) as [(c, cls)|] eqn: En; try discriminate;
         destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;

@@ -178,6 +178,59 @@ Module Type TYPING
       wt_mem mo p' cls ->
       wt_mem_inst me p (o, c).
 
+  (* XXX: why does this fail? *)
+  (*
+  Scheme wt_mem_ind_2 := Minimality for wt_mem Sort Prop
+  with wt_mem_inst_ind_2 := Minimality for wt_mem_inst Sort Prop.
+  Combined Scheme wt_mem_inst_ind' from wt_mem_ind_2, wt_mem_inst_ind_2.
+  *)
+
+  Section wt_mem_mult.
+
+    Variable P : forall me p cl, wt_mem me p cl -> Prop.
+    Variable Pinst : forall me p oc, wt_mem_inst me p oc -> Prop.
+
+    Arguments P {me p cl} H.
+    Arguments Pinst {me p oc} H.
+    Arguments WTmenv {me p cl} Hwt Hinsts.
+    Arguments WTminst_empty {me} p {o} c Hfind.
+    Arguments WTminst {me p o c mo cls p'} Hinst Hclass Hwt.
+
+    Hypothesis WTmenvCase:
+      forall me p cl
+        (x : wt_env me.(mm_values) cl.(c_mems))
+        (ys : Forall (wt_mem_inst me p) cl.(c_objs)),
+        Forall (fun cl => exists H, @Pinst me p cl H) cl.(c_objs) ->
+        @P me p cl (WTmenv x ys).
+
+    Hypothesis WTminst_emptyCase:
+      forall me p o c
+        (Hfind: mfind_inst o me = None),
+        Pinst (WTminst_empty p c Hfind).
+
+    Hypothesis WTminstCase:
+      forall me p o c mo cls p'
+        (Hfind_inst: mfind_inst o me = Some mo)
+        (Hfind_class: find_class c p = Some (cls, p'))
+        (Hwt: wt_mem mo p' cls),
+        P Hwt ->
+        Pinst (WTminst Hfind_inst Hfind_class Hwt).
+
+    Fixpoint wt_mem_ind_mult {me p cl} (H: wt_mem me p cl) {struct H} : P H
+    with wt_mem_inst_ind_mult {me p oc} (H: wt_mem_inst me p oc) {struct H}: Pinst H.
+    - (* Define: wt_mem_ind_mult *)
+      destruct H as [? ? ? Hwt Hrec].
+      apply WTmenvCase.
+      induction Hrec as [| ? ? Hwt' Hrec' ]; constructor; auto.
+      exists Hwt'; auto.
+    - (* Define: wt_mem_ind_inst_mult *)
+      destruct H;
+        clear wt_mem_inst_ind_mult;
+        auto using WTminst_emptyCase, WTminstCase.
+    Qed.
+
+  End wt_mem_mult.
+
   Lemma wt_sempty:
     forall vars,
       wt_env sempty vars.
