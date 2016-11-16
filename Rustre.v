@@ -472,6 +472,8 @@ Lemma fuse_dostep':
 Proof.
   intros ** Hdo.
   inv Hdo.
+  apply fuse_call in H0; auto.
+  econstructor; eauto.
   admit.
 Qed.
 
