@@ -1,5 +1,6 @@
-node count (i:int) returns (o:int) var t:int;
+node count (i:int) returns (o:int)
+var t:int;
 let
   o = t + i;
   t = 0 fby o;
-tel;
+tel

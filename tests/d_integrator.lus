@@ -1,0 +1,12 @@
+node counter (ini:int; inc:int; restart:bool) returns (n:int)
+var c : int;
+let
+  n = if restart then ini else (c + inc);
+  c = 0 fby n;
+tel
+
+node d_integrator (gamma:int) returns (speed:int; position:int)
+let
+  speed = counter(0, gamma, false);
+  position = counter(0, speed, false);
+tel
