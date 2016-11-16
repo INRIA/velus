@@ -1249,6 +1249,7 @@ Section ElabDeclaration.
     let Houtin := fresh "Houtin" in
     let Hcksin := fresh "Hcksin" in
     let Hcksout := fresh "Hcksout" in
+    let WCenv := fresh "WCenv" in
     match goal with H:elab_var_decls _ outputs = OK ?x |- _ =>
       rename H into Helab_out; destruct x as (xout & tyenv_out) end;
     match goal with H:elab_var_decls _ locals = OK ?x |- _ =>
@@ -1265,6 +1266,8 @@ Section ElabDeclaration.
       rename H into Helabs; rename x into eqs end;
     match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
       rename H into Hdefd; destruct x end;
+    match goal with H:check_clock_env _ _ = OK ?x |- _ =>
+      rename H into WCenv; destruct x; apply check_clock_env_spec in WCenv end;
     match goal with H1:assert_clocks _ _ _ _ = OK ?r1,
                     H2:assert_clocks _ _ _ _ = OK ?r2 |- _ =>
       rename H1 into Hcksin, H2 into Hcksout;
@@ -1422,8 +1425,9 @@ Section ElabDeclaration.
       cut (exists cenv,
               Forall (Well_clocked_eq cenv) eqs
               /\ clk_vars cenv (map fst xin) Cbase
-              /\ clk_vars cenv (map fst xout) Cbase).
-      now (destruct 1 as (cenv & WCeqs & WCin & WCout);
+              /\ clk_vars cenv (map fst xout) Cbase
+              /\ Well_clocked_env cenv).
+      now (destruct 1 as (cenv & WCeqs & WCin & WCout & Wcenv);
            eauto using Well_clocked_node).
       repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
       NamedDestructCases.
