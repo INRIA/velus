@@ -35,6 +35,9 @@ Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
+Definition Wellsch_global (G: global) : Prop :=
+  Forall (fun n=>Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G.
+
 Definition is_well_sch (res: res unit) (n: node) :=
   match res with
   | OK _ =>
@@ -505,6 +508,33 @@ Proof.
   apply fuse_call in H0; auto.
   econstructor; eauto.
   admit.
+Qed.
+
+
+
+Lemma Welldef_global_patch:
+  forall G,
+    Wellsch_global G ->
+    wt_global G ->
+    Welldef_global G.
+Proof.
+  induction G as [|n G]; intros; auto using Welldef_global.
+  inv H. inv H0.
+  specialize (IHG H4 H2).
+  constructor; auto.
+  - intro Hni. clear H3 H4.
+    apply Forall_Exists with (1:=H5) in Hni. clear H5.
+    apply Exists_exists in Hni.
+    destruct Hni as (eq & Hin & WTeq & Hni).
+    inv Hni. simpl in *.
+    unfold wt_node in *.
+    admit.
+  - intros f Hni.
+    apply Forall_Exists with (1:=H5) in Hni. clear H5.
+    apply Exists_exists in Hni.
+    destruct Hni as (eq & Hin & WTeq & Hni).
+    destruct eq; inv Hni.
+    inv WTeq. rewrite H7. intuition.
 Qed.
 
 Hint Resolve fuse_wt_program fuse_call fuse_wt_mem fuse_dostep'.
