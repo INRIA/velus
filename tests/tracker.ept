@@ -1,0 +1,66 @@
+node counterA(ini, inc: int; restart: bool) returns (n: int)
+let
+  n = if (true fby false) or restart then ini
+      else (0 fby n) + inc;
+tel
+
+(* normalized and scheduled *)
+
+node counter(ini, inc: int; restart: bool) returns (n: int)
+  var c: int; f: bool;
+let
+  n = if f or restart then ini else c + inc;
+  f = true fby false;
+  c = 0 fby n;
+tel
+
+node d_integrator(gamma: int)
+returns (speed, position: int)
+let
+  speed = counter(0, gamma, false);
+  position = counter(0, speed, false);
+tel
+
+node rising(s: bool) returns (edge: bool)
+var ps : bool;
+let
+    edge = (not ps & s);
+    ps = true fby s;
+tel
+
+node t_tracker(acc, limit: int) returns (p, t: int)
+  var s, pt : int; x : bool; c : int :: . on x;
+let
+  (s, p) = d_integrator(acc);
+  x = rising(s > limit);
+  c = counter((1, 1, false) when x);
+  t = merge x c (pt whenot x);
+  pt = 0 fby t;
+tel
+
+(* Show internal values *)
+
+node icounter(ini, inc: int; restart: bool) returns (n, c: int)
+var f: bool;
+let
+  n = if f or restart then ini else c + inc;
+  f = true fby false;
+  c = 0 fby n;
+tel
+
+node id_integrator(gamma: int)
+returns (speed, speed_c, position, position_c: int)
+let
+  (speed, speed_c) = icounter(0, gamma, false);
+  (position, position_c) = icounter(0, speed, false);
+tel
+
+node tracker(acc, limit: int) returns (s, sc, p, pc : int; x : bool; c, cc, t, pt : int)
+let
+  (s, sc, p, pc) = id_integrator(acc);
+  x = rising(s > limit);
+  (c, cc) = icounter((1, 1, false) when x);
+  t = merge x c (pt whenot x);
+  pt = 0 fby t;
+tel
+

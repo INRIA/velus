@@ -1,0 +1,42 @@
+node count (ini, inc: int; restart: bool) returns (n: int)
+let
+  n = if (true fby false) or restart then ini
+      else (0 fby n) + inc;
+tel
+
+(* normalized and scheduled *)
+node count2 (ini, inc: int; restart: bool) returns (n: int)
+  var c: int; f: bool;
+let
+  n = if f or restart then ini
+      else c + inc;
+  f = true fby false;
+  c = 0 fby n;
+tel
+
+node t_altcounters (b: bool) returns (y: int)
+  var n1, n2: int;
+let
+  n1 = count(0, 1, false);
+  n2 = count(0 whenot b, -1 whenot b, false whenot b);
+  y = merge b (n1 when b) n2;
+tel
+
+(* Show internal values *)
+
+node icount (ini, inc: int; restart: bool) returns (n, c: int)
+  var f: bool;
+let
+  n = if f or restart then ini
+      else c + inc;
+  f = true fby false;
+  c = 0 fby n;
+tel
+
+node altcounters (b: bool) returns (c1, n1, c2, n2, y: int)
+let
+  (n1, c1) = icount(0, 1, false);
+  (n2, c2) = icount(0 whenot b, -1 whenot b, false whenot b);
+  y = merge b (n1 when b) n2;
+tel
+
