@@ -416,7 +416,6 @@ Proof.
   apply stmt_eval_call_ind; intros; eauto using stmt_eval.
   pose proof (find_class_In _ _ _ _ H) as Hinp.
   pose proof (find_method_In _ _ _ H0) as Hinc.
-  SearchAbout find_class app.
   pose proof (find_class_app _ _ _ _ H) as Hprog'.
   apply fuse_find_class in H.
   apply fuse_find_method' in H0.
@@ -591,7 +590,8 @@ Proof.
   destruct (fold_left is_well_sch G (OK tt)) as [u|] eqn: Wellsch;
     try discriminate; simpl in Comp; destruct u.
   apply is_well_sch_global in Wellsch.
-  edestruct dostep'_correct as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
+  edestruct dostep'_correct
+    as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   pose proof Comp as Comp'.
   unfold Translation.translate in Comp.
   pose proof Emain as Emain'.
@@ -607,8 +607,10 @@ Proof.
     rewrite <-Eq, <-Eq'' in Heval; rewrite <-Eq in Step.
   edestruct find_class_translate as (main_node & Findnode & Hmain); eauto.
   pose proof (exists_reset_method main_node) as Ereset.
-  edestruct fuse_find_method with (1:=Efusereset) as (m_reset & Eq_r & Ereset'); subst fuse_m_reset.
-  edestruct fuse_find_method with (1:=Efusestep) as (m_step & Eq_s & Estep); subst fuse_m_step.
+  edestruct fuse_find_method with (1:=Efusereset)
+    as (m_reset & Eq_r & Ereset'); subst fuse_m_reset.
+  edestruct fuse_find_method with (1:=Efusestep)
+    as (m_step & Eq_s & Estep); subst fuse_m_step.
   rewrite Hmain in Ereset'.
   rewrite Ereset in Ereset'.
   inv Ereset'.
