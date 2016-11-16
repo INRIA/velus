@@ -423,11 +423,55 @@ Proof.
   admit.
 Qed.
 
+Lemma NoDup_defs_NoDup_vars_defined:
+  forall eqs,
+    NoDup_defs eqs <-> NoDup (vars_defined eqs).
+Proof.
+  unfold vars_defined.
+  induction eqs; split; intro HH.
+  - rewrite concatMap_nil. auto using NoDup.
+  - constructor.
+  - rewrite concatMap_cons.
+    admit.
+  - admit.
+Qed.
+
+Lemma ClassIsFusible_translate:
+  forall G,
+    Well_clocked G ->
+    Welldef_global G ->
+    Forall ClassIsFusible (translate G).
+Proof.
+  induction G as [|n G].
+  now intros; simpl; auto using Forall_nil.
+  intros WcG WdG.
+  inversion_clear WcG as [|? ? Wcn].
+  simpl; constructor; auto.
+  unfold translate_node, ClassIsFusible.
+  repeat constructor; simpl.
+  - rewrite ps_from_list_gather_eqs_memories.
+    assert (NoDup_defs n.(n_eqs)).
+    apply NoDup_defs_NoDup_vars_defined.
+    apply NoDup_var_defined_n_eqs.
+    pose proof (not_Exists_Is_defined_in_eqs_n_in n) as Hin.
+    inv Wcn. inv WdG. simpl in *.
+    eapply translate_eqns_IsFusible; eauto.
+    + intros. apply not_Is_variable_in_memories; auto.
+    + intros i' Hin' Hdef.
+      apply Hin, Exists_exists.
+      exists i'. intuition.
+  - apply translate_reset_eqns_IsFusible.
+  - inv WdG. apply IHG; auto.
+Qed.      
+
 Lemma fuse_dostep':
   forall c ins outs G me,
+    Forall ClassIsFusible (translate G) ->
     Corr.dostep' c ins outs (translate G) 0 me ->
     Corr.dostep' c ins outs (map fuse_class (translate G)) 0 me.
 Proof.
+  intros ** Hdo.
+  inv Hdo.
   admit.
 Qed.
 

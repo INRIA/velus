@@ -2350,7 +2350,7 @@ for all [Is_free_exp x e]. *)
   Require Import Rustre.Dataflow.Clocking.
   Require Import Rustre.Dataflow.Clocking.Properties.
 
-  Lemma translate_eqns_IsFusible_free_write:
+  Lemma translate_eqns_IsFusible:
     forall C mems inputs eqs,
       Well_clocked_env C
       -> Forall (Well_clocked_eq C) eqs
@@ -2415,6 +2415,19 @@ for all [Is_free_exp x e]. *)
         [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
   Qed.
 
+  Lemma translate_reset_eqns_IsFusible:
+    forall eqs,
+      IsFusible (translate_reset_eqns eqs).
+  Proof.
+    intro eqs.
+    unfold translate_reset_eqns.
+    assert (IsFusible Skip) as Hf by auto.
+    revert Hf. generalize Skip.
+    induction eqs as [|eq eqs]; intros s Hf; auto.
+    simpl. apply IHeqs.
+    destruct eq; simpl; auto.
+  Qed.
+  
 End CORRECTNESS.
 
 Module CorrectnessFun
