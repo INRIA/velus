@@ -76,7 +76,7 @@ Extract Constant Ast.astloc =>
 Extract Constant Ast.string => "String.t".
 Extract Constant Ast.char_code => "int64".
 Extract Constant string_of_astloc =>
-  "fun loc -> Camlcoq.coqstring_of_camlstring (Lexer.string_of_loc loc)".
+  "fun loc -> Camlcoq.coqstring_of_camlstring (Lexer2.string_of_loc loc)".
 Extract Constant cabsloc_of_astloc =>
   "fun { Ast.ast_lnum = lno;  Ast.ast_fname = fname;
          Ast.ast_cnum = cnum; Ast.ast_ident = id } ->

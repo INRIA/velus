@@ -245,7 +245,7 @@ rustre: compcert extraction/STAMP extraction/extract/Lexer2.ml rustremain.ml \
         extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
 		extraction/extract/Relexer.ml extraction/extract/rustrelib.ml
 	@find CompCert -name '*.cm*' -delete
-	ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   rustremain.native
+	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer rustremain.native
 	@mv rustremain.native rustre
 	@cp CompCert/compcert.ini _build/compcert.ini
 
@@ -316,7 +316,7 @@ printenv:
 
 %.v.d: %.v
 	@echo "COQDEP $*.v"
-	@$(COQDEP) -slash -exclude-dir extraction/CompCert $(COQLIBS) "$<" > "$@" || ( RV=$$?; rm -f "$@"; exit $${RV} )
+	@$(COQDEP) -slash $(COQLIBS) "$<" > "$@" || ( RV=$$?; rm -f "$@"; exit $${RV} )
 
 %.v.beautified:
 	$(COQC) $(COQDEBUG) $(COQFLAGS) -beautify $*
