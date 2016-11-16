@@ -20,6 +20,7 @@ Import DF.Mem.
 Import Obc.Syn.
 Import Obc.Sem.
 Import Obc.Typ.
+Import Obc.Equ.
 Import Fus.
 Import Trans.
 Import Corr.
@@ -73,6 +74,9 @@ Definition fuse_class (c: class): class :=
     mk_class name mems objs (map fuse_method methods) nodup
              (NoDup_m_name_fuse_methods _ nodupm)
   end.
+
+Definition ClassIsFusible (c: class) : Prop :=
+  Forall (fun m=> IsFusible m.(m_body)) c.(c_methods).
 
 Lemma fuse_class_name:
   forall c, (fuse_class c).(c_name) = c.(c_name).
@@ -278,6 +282,13 @@ Proof.
   unfold fuse_method; destruct m; auto.
 Qed.
 
+Lemma fuse_method_body:
+  forall fm,
+    (fuse_method fm).(m_body) = fuse fm.(m_body).
+Proof.
+  now destruct fm.
+Qed.
+
 Lemma map_fuse_class_c_name:
   forall p,
     map (fun cls => (fuse_class cls).(c_name)) p = map c_name p.
@@ -362,12 +373,46 @@ Proof.
     now rewrite fuse_class_c_name, map_map, map_fuse_class_c_name.
 Qed.
 
+Lemma fuse_call':
+  (forall p me ve stmt e',
+      stmt_eval p me ve stmt e' ->
+      Forall ClassIsFusible p ->
+      stmt_eval (map fuse_class p) me ve stmt e')
+  /\ (forall p me clsid f vs me' rvs,
+         stmt_call_eval p me clsid f vs me' rvs ->
+         Forall ClassIsFusible p ->
+         stmt_call_eval (map fuse_class p) me clsid f vs me' rvs).
+Proof.
+  apply stmt_eval_call_ind; intros; eauto using stmt_eval.
+  pose proof (find_class_In _ _ _ _ H) as Hinp.
+  pose proof (find_method_In _ _ _ H0) as Hinc.
+  SearchAbout find_class app.
+  pose proof (find_class_app _ _ _ _ H) as Hprog'.
+  apply fuse_find_class in H.
+  apply fuse_find_method' in H0.
+  econstructor; eauto.
+  2:now rewrite fuse_method_out; eassumption.
+  rewrite fuse_method_in.
+  apply In_Forall with (1:=H4) in Hinp.
+  apply In_Forall with (1:=Hinp) in Hinc.
+  rewrite fuse_method_body.
+  rewrite fuse_Comp with (1:=Hinc).
+  apply H2.
+  destruct Hprog' as (cls'' & Hprog & Hfind).
+  rewrite Hprog in H4.
+  apply Forall_app in H4.
+  rewrite Forall_cons2 in H4.
+  intuition.
+Qed.
+
 Lemma fuse_call:
   forall p n me me' f xss rs,
+    Forall ClassIsFusible p ->
     stmt_call_eval p me n f xss me' rs ->
     stmt_call_eval (map fuse_class p) me n f xss me' rs.
 Proof.
-  admit.
+  destruct fuse_call' as (Hf1 & Hf2).
+  intros; apply Hf2; auto.
 Qed.
 
 Lemma fuse_wt_mem:
