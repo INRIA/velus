@@ -555,7 +555,14 @@ Proof.
     destruct Hni as (eq & Hin & WTeq & Hni).
     inv Hni. simpl in *.
     unfold wt_node in *.
-    admit.
+    inv WTeq.
+    assert (find_node n.(n_name) G <> None) as Hfind
+        by (now apply not_None_is_Some; exists n0).
+    apply find_node_Exists in Hfind.
+    apply Forall_Exists with (1:=H6) in Hfind.
+    apply Exists_exists in Hfind.
+    destruct Hfind as (n' & Hin' & Hne & He).
+    intuition.
   - intros f Hni.
     apply Forall_Exists with (1:=H5) in Hni. clear H5.
     apply Exists_exists in Hni.
