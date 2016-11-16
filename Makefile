@@ -162,7 +162,7 @@ endif
 #                                     #
 #######################################
 
-all: $(VOFILES) rustre 
+all: rustre 
 
 spec: $(VIFILES)
 
@@ -216,10 +216,10 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 Dataflow/Parser/Parser.v: Dataflow/Parser/Parser.vy
 	@$(MENHIR) --no-stdlib --coq $<
 
-Dataflow/Parser/Lexer.ml: Dataflow/Parser/Lexer.mll
+Dataflow/Parser/Lexer2.ml: Dataflow/Parser/Lexer2.mll
 	ocamllex $<
 
-extraction/extract/Lexer.ml: Dataflow/Parser/Lexer.ml extraction/extract extraction/STAMP
+extraction/extract/Lexer2.ml: Dataflow/Parser/Lexer2.ml extraction/STAMP
 	cp $< $@
 
 extraction/extract/Relexer.ml: Dataflow/Parser/Relexer.ml extraction/extract
@@ -241,11 +241,11 @@ extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli extraction/extract
 extraction/extract/rustrelib.ml: rustrelib.ml extraction/extract
 	cp $< $@
 
-rustre: compcert extraction/STAMP extraction/extract/Lexer.ml rustremain.ml \
+rustre: compcert extraction/STAMP extraction/extract/Lexer2.ml rustremain.ml \
         extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
 		extraction/extract/Relexer.ml extraction/extract/rustrelib.ml
 	@find CompCert -name '*.cm*' -delete
-	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 rustremain.native
+	ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   rustremain.native
 	@mv rustremain.native rustre
 	@cp CompCert/compcert.ini _build/compcert.ini
 

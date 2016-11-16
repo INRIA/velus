@@ -35,7 +35,7 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
        and offer it to the parser, which will produce a new
        checkpoint. Then, repeat. *)
     let (token, loc) = Relexer.map_token (Streams.hd toks) in
-    let loc = Lexer.lexing_loc loc in
+    let loc = Lexer2.lexing_loc loc in
     let checkpoint = I.offer checkpoint (token, loc, loc) in
     parsing_loop (Streams.tl toks) checkpoint
   | I.Shifting _
@@ -62,7 +62,7 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
 let reparse toks =
   let (_, l) = Relexer.map_token (Streams.hd toks) in
   parsing_loop toks
-    (Parser2.Incremental.translation_unit_file (Lexer.lexing_loc l))
+    (Parser2.Incremental.translation_unit_file (Lexer2.lexing_loc l))
 
 (** Parser *)
 
@@ -78,7 +78,7 @@ let parse toks =
 let compile source_name filename =
   if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
   if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
-  let toks = Lexer.tokens_stream source_name in
+  let toks = Lexer2.tokens_stream source_name in
   let ast = parse toks in
   let p =
     match DataflowElab.elab_declarations ast with
