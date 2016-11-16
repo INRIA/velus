@@ -207,7 +207,8 @@ CompCert/Makefile.config:
 extraction/extract:
 	@mkdir -p $@
 
-extraction/STAMP: $(VOFILES) extraction/Extraction.v extraction/extract
+extraction/STAMP: $(VOFILES) extraction/Extraction.v
+	@mkdir -p extraction/extract
 	@rm -f extraction/extract/*.*
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
