@@ -529,11 +529,13 @@ Lemma fuse_dostep':
     Corr.dostep' c ins outs (translate G) 0 me ->
     Corr.dostep' c ins outs (map fuse_class (translate G)) 0 me.
 Proof.
-  intros ** Hdo.
-  inv Hdo.
-  apply fuse_call in H0; auto.
-  econstructor; eauto.
-  admit.
+  intros c ins outs G.
+  generalize 0%nat.
+  cofix COINDHYP. 
+  (* XXX: Use [Guarded] to check whether the definition is still productive. *)
+  intros n ** Hdo.
+  destruct Hdo.
+  econstructor; eauto using fuse_call.
 Qed.
 
 Lemma Welldef_global_patch:
