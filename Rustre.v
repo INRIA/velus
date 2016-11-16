@@ -48,6 +48,33 @@ Definition is_well_sch (res: res unit) (n: node) :=
   | _ => res
   end.
 
+Lemma Wellsch_global_cons:
+  forall n g,
+    Wellsch_global (n :: g) <->
+    Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs) /\ Wellsch_global g.
+Proof. apply Forall_cons2. Qed.
+
+Lemma is_well_sch_error:
+  forall G e,
+    fold_left is_well_sch G (Error e) = Error e.
+Proof.
+  induction G as [|n G]; simpl; auto.
+Qed.
+
+Lemma is_well_sch_global:
+  forall G,
+    fold_left is_well_sch G (OK tt) = OK tt ->
+    Wellsch_global G.
+Proof.
+  induction G as [|n G]; simpl.
+  - constructor.
+  - intro Fold.
+    rewrite Wellsch_global_cons.
+    destruct (well_sch (memories (n_eqs n)) (map fst (n_in n)) (n_eqs n)) eqn: E.
+    + rewrite Is_well_sch_by_refl in E; split; auto.
+    + rewrite is_well_sch_error in Fold; discriminate. 
+Qed.
+
 Definition fuse_method (m: method): method :=
   match m with
     mk_method name ins vars out body nodup good =>
@@ -537,11 +564,11 @@ Proof.
     inv WTeq. rewrite H7. intuition.
 Qed.
 
-Hint Resolve fuse_wt_program fuse_call fuse_wt_mem fuse_dostep'.
+Hint Resolve fuse_wt_program fuse_call fuse_wt_mem fuse_dostep' Welldef_global_patch ClassIsFusible_translate.
 
 Lemma soundness_cl:
   forall G P main ins outs,
-    Welldef_global G ->
+    Well_clocked G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
@@ -553,9 +580,11 @@ Lemma soundness_cl:
          /\ bisim_io G main ins outs T.
 Proof.
   intros ** Comp.
-  edestruct dostep'_correct as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   unfold df_to_cl in Comp.
-  destruct (fold_left is_well_sch G (OK tt)); try discriminate; simpl in Comp.
+  destruct (fold_left is_well_sch G (OK tt)) as [u|] eqn: Wellsch;
+    try discriminate; simpl in Comp; destruct u.
+  apply is_well_sch_global in Wellsch.
+  edestruct dostep'_correct as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   pose proof Comp as Comp'.
   unfold Translation.translate in Comp.
   pose proof Emain as Emain'.
@@ -625,7 +654,7 @@ Qed.
 
 Lemma behavior_clight:
   forall G P main ins outs,
-    Welldef_global G ->
+    Well_clocked G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
@@ -650,7 +679,7 @@ Qed.
 
 Lemma behavior_asm:
   forall G P main ins outs,
-    Welldef_global G ->
+    Well_clocked G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
