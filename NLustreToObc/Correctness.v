@@ -23,11 +23,11 @@ Module Type CORRECTNESS
        (Import Mem   : MEMORIES Ids Op DF.Syn)
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-
-       (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
-       (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
        (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans).
 
+  Module Import IsP := IsPresentFun Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans.
+  Module Import MemCor := MemoryCorresFun Ids Op OpAux DF Obc.
+  
   (** ** Technical lemmas *)
 
   Lemma exp_eval_tovar:
@@ -2228,15 +2228,11 @@ Module CorrectnessFun
        (Import DF    : NLUSTRE Ids Op OpAux)
        (Import Obc   : OBC Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op DF.Syn)
-
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       
-       (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
-       (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
        (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans)
 
-       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Typing.
+       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans Typing.
 
-  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Typing.
+  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans Typing.
 
 End CorrectnessFun.
