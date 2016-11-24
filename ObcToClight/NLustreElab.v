@@ -4,13 +4,13 @@ Require Instantiator.
 Require Import Velus.NLustre.Parser.Ast.
 Require Import Operators.
 
-Module Import Syn := Instantiator.DF.Syn.
-Module Import Defs := Instantiator.DF.IsD.
+Module Import Syn := Instantiator.NL.Syn.
+Module Import Defs := Instantiator.NL.IsD.
 
 Import Interface.Op.
 Import Instantiator.OpAux.
-Import Instantiator.DF.Typ.
-Import Instantiator.DF.Clo.
+Import Instantiator.NL.Typ.
+Import Instantiator.NL.Clo.
 
 Require Import List.
 Import List.ListNotations.

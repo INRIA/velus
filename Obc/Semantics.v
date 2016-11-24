@@ -173,6 +173,58 @@ Module Type SEMANTICS
         apply IHxs; eauto.
   Qed.
 
+  (** ** Other properties *)
+
+  (** If we add irrelevent values to [env], evaluation does not change. *)
+  Lemma exp_eval_extend_env : forall mem env x v' e v,
+      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval mem (PM.add x v' env) e v.
+  Proof.
+    intros mem env x v' e.
+    induction e (* using exp_ind2 *); intros v1 Hfree Heval.
+    - inv Heval. constructor. not_free. now rewrite PM.gso.
+    - inv Heval. now constructor.
+    - inv Heval. constructor.
+    - inv Heval. constructor 4 with c; trivial.
+      not_free.
+      now apply IHe.
+    - inv Heval. constructor 5 with (c1 := c1) (c2 := c2); trivial; not_free.
+      + now apply IHe1.
+      + now apply IHe2.
+  Qed.
+
+  (** If we add irrelevent values to [mem], evaluation does not change. *)
+  Lemma exp_eval_extend_mem : forall mem env x v' e v,
+      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval (madd_mem x v' mem) env e v.
+  Proof.
+    intros mem env x v' e.
+    induction e (* using exp_ind2 *); intros v1 Hfree Heval.
+    - inversion_clear Heval. now constructor.
+    - inversion_clear Heval. constructor. not_free. now rewrite mfind_mem_gso.
+    - inversion_clear Heval. constructor.
+    - inversion_clear Heval. constructor 4 with c; trivial.
+      not_free.
+      now apply IHe.
+    - inv Heval. constructor 5 with (c1 := c1) (c2 := c2); trivial; not_free.
+      + now apply IHe1.
+      + now apply IHe2.
+  Qed.
+
+  (** If we add objects to [mem], evaluation does not change. *)
+  Lemma exp_eval_extend_mem_by_obj : forall mem env f obj e v,
+      exp_eval mem env e v -> exp_eval (madd_obj f obj mem) env e v.
+  Proof.
+    intros mem env f v' e.
+    induction e (* using exp_ind2 *); intros v1 Heval.
+    - inversion_clear Heval. now constructor.
+    - inversion_clear Heval. constructor. now rewrite mfind_mem_add_inst.
+    - inversion_clear Heval. constructor.
+    - inversion_clear Heval. constructor 4 with c; trivial.
+      now apply IHe.
+    - inv Heval. constructor 5 with (c1 := c1) (c2 := c2); trivial.
+      + now apply IHe1.
+      + now apply IHe2.
+  Qed.
+  
   Lemma mfind_inst_empty:
     forall o, mfind_inst o hempty = None.
   Proof.

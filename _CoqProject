@@ -42,13 +42,14 @@ Obc/Syntax.v
 Obc/Typing.v
 Obc/Semantics.v
 Obc/Equiv.v
-Obc/FuseIfte.v
+Obc/Fusion.v
 Obc.v
 NLustreToObc/Translation.v
 NLustreToObc/Correctness/IsPresent.v
 NLustreToObc/Correctness/MemoryCorres.v
 NLustreToObc/Correctness.v
 NLustreToObc/Typing.v
+NLustreToObc/Fusible.v
 ObcToClight/Interface.v
 ObcToClight/Translation.v
 ObcToClight/Correctness.v

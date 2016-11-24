@@ -3,6 +3,7 @@ Require Export Obc.Syntax.
 Require Export Obc.Semantics.
 Require Export Obc.Typing.
 Require Export Obc.Equiv.
+Require Export Obc.Fusion.
 
 Require Import Velus.Common.
 
@@ -11,6 +12,7 @@ Module Type OBC (Ids: IDS) (Op: OPERATORS) (OpAux: OPERATORS_AUX Op).
   Declare Module Export Sem: SEMANTICS Ids Op OpAux Syn.
   Declare Module Export Equ: EQUIV Ids Op OpAux Syn Sem.
   Declare Module Export Typ: TYPING Ids Op OpAux Syn Sem.
+  Declare Module Export Fus: FUSION Ids Op OpAux Syn Sem Typ Equ.
 End OBC.
 
 Module ObcFun
@@ -22,4 +24,5 @@ Module ObcFun
   Module Export Sem := SemanticsFun Ids Op OpAux Syn.
   Module Export Equ := EquivFun Ids Op OpAux Syn Sem.
   Module Export Typ := TypingFun Ids Op OpAux Syn Sem.
+  Module Export Fus := FusionFun Ids Op OpAux Syn Sem Typ Equ.
 End ObcFun.

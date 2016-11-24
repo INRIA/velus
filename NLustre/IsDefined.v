@@ -131,6 +131,17 @@ Module Type ISDEFINED
     constructor 2; intuition.
   Qed.
 
+  Lemma Is_defined_in_vars_defined:
+    forall x eqs,
+      Is_defined_in_eqs x eqs ->
+      In x (vars_defined eqs).
+  Proof.
+    induction eqs as [|eq eqs]; inversion_clear 1;
+      unfold vars_defined; rewrite concatMap_cons; apply in_app.
+    - left. inv H0; simpl; auto.
+    - intuition.
+  Qed.
+
 End ISDEFINED.
 
 Module IsDefinedFun

@@ -99,12 +99,13 @@ VFILES:=RMemory.v\
   NLustreToObc/Correctness/MemoryCorres.v\
   NLustreToObc/Correctness/IsPresent.v\
   NLustreToObc/Translation.v\
+  NLustreToObc/Fusible.v\
   Obc.v\
-  Obc/FuseIfte.v\
   Obc/Equiv.v\
   Obc/Semantics.v\
   Obc/Syntax.v\
   Obc/Typing.v\
+  Obc/Fusion.v\
   NLustre.v\
   NLustre/NoDup.v\
   NLustre/Ordered.v\

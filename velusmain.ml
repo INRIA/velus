@@ -19,7 +19,7 @@ let get_main_node decls =
   | Some s -> intern_string s
   | None   -> match decls with
               | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
-              | d::_ -> Instantiator.DF.Syn.n_name d
+              | d::_ -> Instantiator.NL.Syn.n_name d
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not

@@ -167,6 +167,8 @@ Module Type SYNTAX
                               then Some (c, p') else find p'
                   end.
 
+  (** Properties of class lookups *)
+  
   Lemma find_class_none:
     forall clsnm cls prog,
       find_class clsnm (cls::prog) = None
@@ -224,6 +226,53 @@ Module Type SYNTAX
       apply in_eq. 
     - apply in_cons; auto.
   Qed.
+  
+  (** Syntactic predicates *)
+
+  Inductive Is_free_in_exp : ident -> exp -> Prop :=
+  | FreeVar: forall i ty,
+      Is_free_in_exp i (Var i ty)
+  | FreeState: forall i ty,
+      Is_free_in_exp i (State i ty)
+  | FreeUnop: forall i op e ty,
+      Is_free_in_exp i e ->
+      Is_free_in_exp i (Unop op e ty)
+  |FreeBinop: forall i op e1 e2 ty,
+      Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
+      Is_free_in_exp i (Binop op e1 e2 ty).
+
+  Lemma not_free_aux1 : forall i op e ty,
+      ~Is_free_in_exp i (Unop op e ty) ->
+      ~Is_free_in_exp i e.
+  Proof.
+    intros i op e ty Hfree H; apply Hfree. now constructor. 
+  Qed.
+  
+  Lemma not_free_aux2 : forall i op e1 e2 ty,
+      ~Is_free_in_exp i (Binop op e1 e2 ty) ->
+      ~Is_free_in_exp i e1 /\ ~Is_free_in_exp i e2.
+  Proof.
+    intros i op e1 e2 ty Hfree; split; intro H; apply Hfree;
+      constructor; [now left | now right].
+  Qed.
+
+  Ltac not_free :=
+    lazymatch goal with
+    | H : ~Is_free_in_exp ?x (Var ?i ?ty) |- _ =>
+        let HH := fresh in
+        assert (HH : i <> x) by (intro; subst; apply H; constructor);
+        clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (State ?i ?ty) |- _ =>
+        let HH := fresh in
+        assert (HH : i <> x) by (intro; subst; apply H; constructor);
+        clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (Unop ?op ?e ?ty) |- _ =>
+        apply not_free_aux1 in H
+    | H : ~Is_free_in_exp ?x (Binop ?op ?e1 ?e2 ?ty) |- _ =>
+        destruct (not_free_aux2 x op e1 e2 ty H)
+    end.
+
+  (** Misc. properties *)
   
   Lemma exp_dec : forall e1 e2 : exp, {e1 = e2} + {e1 <> e2}.
   Proof.

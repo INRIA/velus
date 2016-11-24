@@ -123,6 +123,38 @@ Module Type NODUP
         now inv Hvar.
   Qed.
 
+  Lemma NoDup_defs_NoDup_vars_defined:
+    forall eqs,
+      NoDup (vars_defined eqs) ->
+      NoDup_defs eqs.
+  Proof.
+    unfold vars_defined.
+    induction eqs as [|eq eqs].
+    - rewrite concatMap_nil; auto using NoDup_defs.
+    - rewrite concatMap_cons.
+      intro Hnodup.
+      apply NoDup_app'_iff in Hnodup.
+      destruct Hnodup as (Hnd1 & Hnd2 & Hni).
+      apply IHeqs in Hnd2.
+      destruct eq.
+      + constructor; auto.
+        simpl in *.
+        intro Hdef.
+        inv Hni. apply H1.
+        now apply Is_defined_in_vars_defined.
+      + constructor; auto.
+        intros x Hin Hdef.
+        simpl in *.
+        apply In_Forall with (1:=Hni) in Hin.
+        apply Hin.
+        now apply Is_defined_in_vars_defined.
+      + constructor; auto.
+        simpl in *.
+        intro Hdef.
+        inv Hni. apply H1.
+        now apply Is_defined_in_vars_defined.
+  Qed.
+
 End NODUP.
 
 Module NoDupFun

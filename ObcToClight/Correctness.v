@@ -3814,8 +3814,8 @@ Section PRESERVATION.
     Section dostep'.
 
 
-    Variable ins : DF.Str.stream (list const).
-    Variable outs : DF.Str.stream (list const).
+    Variable ins : NL.Str.stream (list const).
+    Variable outs : NL.Str.stream (list const).
 
     Variable xs : list (ident * type).
     Variable ys : list (ident * type).

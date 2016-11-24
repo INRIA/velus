@@ -13,8 +13,6 @@ Require Import Velus.NLustreToObc.Translation.
 Require Import Velus.NLustreToObc.Correctness.IsPresent.
 Require Import Velus.NLustreToObc.Correctness.MemoryCorres.
 Require Import Velus.NLustreToObc.Typing.
-Require Import Velus.Obc.FuseIfte.
-
 
 Module Type CORRECTNESS
        (Import Ids   : IDS)
@@ -28,8 +26,7 @@ Module Type CORRECTNESS
 
        (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
        (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
-       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
-       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans Fus).
+       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans).
 
   (** ** Technical lemmas *)
 
@@ -2222,212 +2219,6 @@ for all [Is_free_exp x e]. *)
 
   End EventLoop.
 
-  (** ** Correctness of optimized code *)
-
-  Lemma not_Can_write_in_translate_cexp:
-    forall x mems ce i,
-      x <> i -> ~ Can_write_in i (translate_cexp mems x ce).
-  Proof.
-    induction ce; intros j Hxni Hcw.
-    - specialize (IHce1 _ Hxni).
-      specialize (IHce2 _ Hxni).
-      inversion_clear Hcw; intuition.
-    - specialize (IHce1 _ Hxni).
-      specialize (IHce2 _ Hxni).
-      inversion_clear Hcw; intuition.
-    - inversion Hcw; intuition.
-  Qed.
-
-  Lemma Is_free_in_tovar:
-    forall mems i j ty,
-      Is_free_in_exp j (tovar mems (i, ty)) <-> i = j.
-  Proof.
-    unfold tovar.
-    intros mems i j ty.
-    destruct (PS.mem i mems); split; intro HH;
-    (inversion_clear HH; reflexivity || subst; now constructor).
-  Qed.
-
-  Lemma Is_free_translate_lexp:
-    forall j mems l,
-      Is_free_in_exp j (translate_lexp mems l) -> Is_free_in_lexp j l.
-  Proof.
-    induction l; simpl; intro H.
-    - inversion H.
-    - now apply Is_free_in_tovar in H; subst.
-    - constructor; auto.
-    - constructor; inversion H; auto.
-    - constructor; inversion H; subst.
-      destruct H2; [left; auto | right; auto].
-  Qed.
-
-  Lemma IsFusible_translate_cexp:
-    forall mems x ce,
-      (forall i, Is_free_in_cexp i ce -> x <> i)
-      -> IsFusible (translate_cexp mems x ce).
-  Proof.
-    intros ** Hfree.
-    induction ce.
-    - simpl; constructor;
-      [apply IHce1; now auto|apply IHce2; now auto|].
-      intros j Hfree'; split;
-      (apply not_Can_write_in_translate_cexp;
-        apply Is_free_in_tovar in Hfree';
-        subst; apply Hfree; constructor).
-    - simpl; constructor;
-      [apply IHce1; now auto|apply IHce2; now auto|].
-      intros j Hfree'; split;
-      apply not_Can_write_in_translate_cexp;
-      apply Hfree;
-      now constructor; apply Is_free_translate_lexp with mems.
-    - now constructor.
-  Qed.
-
-  Lemma IsFusible_Control_caexp:
-    forall mems ck f ce,
-      (forall i, Is_free_in_caexp i ck ce -> ~Can_write_in i (f ce))
-      -> IsFusible (f ce)
-      -> IsFusible (Control mems ck (f ce)).
-  Proof.
-    induction ck as [|ck IH i b]; [now intuition|].
-    intros f ce Hxni Hfce.
-    simpl.
-    destruct b.
-    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_type)) (f ce) Skip).
-      + intros j Hfree Hcw.
-        apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-        inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
-          [assumption|inversion Hskip].
-      + repeat constructor; [assumption| |now inversion 1].
-        apply Hxni.
-        match goal with
-        | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-        end.
-        unfold tovar in Hfree.
-        destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-    - apply IH with (f:=fun ce=>Ifte (tovar mems (i, bool_type)) Skip (f ce)).
-      + intros j Hfree Hcw.
-        apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-        inversion_clear Hcw as [| |? ? ? ? Hskip| | | |];
-          [inversion Hskip|assumption].
-      + repeat constructor; [assumption|now inversion 1|].
-        apply Hxni.
-        match goal with
-        | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-        end.
-        unfold tovar in Hfree.
-        destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-  Qed.
-
-  Lemma IsFusible_Control_laexp:
-    forall mems ck s,
-      (forall i, Is_free_in_clock i ck -> ~Can_write_in i s)
-      -> IsFusible s
-      -> IsFusible (Control mems ck s).
-  Proof.
-    induction ck as [|ck IH i b]; [now intuition|].
-    intros s Hxni Hfce.
-    simpl.
-    destruct b; apply IH.
-    - intros j Hfree Hcw.
-      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-      inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
-        [assumption|inversion Hskip].
-    - repeat constructor; [assumption| |now inversion 1].
-      apply Hxni.
-      rename H into Hfree.
-      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-    - intros j Hfree Hcw.
-      apply Hxni with (i0:=j); [inversion_clear Hfree; now auto|].
-      inversion_clear Hcw as [| |? ? ? ? Hskip| | | | ];
-        [inversion Hskip|assumption].
-    - repeat constructor; [assumption|now inversion 1|].
-      apply Hxni.
-      rename H into Hfree.
-      destruct (PS.mem i mems); inversion Hfree; subst; now auto.
-  Qed.
-
-  Require Import Velus.NLustre.Clocking.
-  Require Import Velus.NLustre.Clocking.Properties.
-
-  Lemma translate_eqns_IsFusible:
-    forall C mems inputs eqs,
-      wc_env C
-      -> Forall (wc_equation C) eqs
-      -> Is_well_sch mems inputs eqs
-      -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
-      -> (forall input, In input inputs -> ~ Is_defined_in_eqs input eqs)
-      -> IsFusible (translate_eqns mems eqs).
-  Proof.
-    intros ** Hwk Hwks Hwsch Hnvi Hnin.
-    induction eqs as [|eq eqs IH]; [now constructor|].
-    inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
-    specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
-    unfold translate_eqns.
-    simpl; apply IsFusible_fold_left_shift.
-    split.
-    - apply IH.
-      + intros x Hin; apply Hnvi in Hin.
-        apply not_Is_variable_in_cons in Hin.
-        now intuition.
-      + intros x Hin. apply Hnin in Hin.
-        apply not_Is_defined_in_cons in Hin.
-        now intuition.
-    - clear IH.
-      repeat constructor.
-      destruct eq as [x ck e|x ck f e|x ck v0 e]; simpl.
-      + assert (~PS.In x mems) as Hnxm
-            by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-        inversion_clear Hwsch as [|? ? Hwsch' HH Hndef].
-        assert (forall i, Is_free_in_caexp i ck e -> x <> i) as Hfni.
-        { intros i Hfree.
-          assert (Hfree': Is_free_in_eq i (EqDef x ck e)) by auto.
-          eapply HH in Hfree'.
-          destruct Hfree' as [Hm Hnm].
-          assert (~ In x inputs) as Hninp
-            by (intro Hin; eapply Hnin; eauto; do 2 constructor).
-          assert (~PS.In x mems) as Hnxm' by intuition.
-          intro Hxi; rewrite Hxi in *; clear Hxi.
-          specialize (Hnm Hnxm').
-          eapply Hndef; intuition.
-          now eapply Is_variable_in_eqs_Is_defined_in_eqs.
-        }
-        apply IsFusible_Control_caexp.
-        intros i Hfree.
-        apply not_Can_write_in_translate_cexp.
-        eapply Hfni; auto.
-        apply IsFusible_translate_cexp.
-        intros i Hfree; apply Hfni; intuition.
-      + assert (forall i,
-                   Is_free_in_clock i ck ->
-                   ~ Can_write_in i (Call x f (hd Ids.default x)
-                                          step (map (translate_lexp mems) e))).
-        {
-          intros ** Hwrite.
-          assert (In i x) by now inv Hwrite.
-          now eapply wc_EqApp_not_Is_free_in_clock; eauto.
-        }
-
-        now apply IsFusible_Control_laexp.
-      + assert (~Is_free_in_clock x ck) as Hnfree
-            by (eapply wc_EqFby_not_Is_free_in_clock; eauto).
-        apply IsFusible_Control_laexp;
-        [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
-  Qed.
-
-  Lemma translate_reset_eqns_IsFusible:
-    forall eqs,
-      IsFusible (translate_reset_eqns eqs).
-  Proof.
-    intro eqs.
-    unfold translate_reset_eqns.
-    assert (IsFusible Skip) as Hf by auto.
-    revert Hf. generalize Skip.
-    induction eqs as [|eq eqs]; intros s Hf; auto.
-    simpl. apply IHeqs.
-    destruct eq; simpl; auto.
-  Qed.
-  
 End CORRECTNESS.
 
 Module CorrectnessFun
@@ -2442,11 +2233,10 @@ Module CorrectnessFun
        
        (Import IsP   : ISPRESENT Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans)
        (Import MemCor: MEMORYCORRES Ids Op OpAux DF Obc)
-       (Import Fus   : FUSEIFTE Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Obc.Equ)
-       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans Fus)
+       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans)
 
-       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus Typing.
+       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Typing.
 
-  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Fus Typing.
+  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans IsP MemCor Typing.
 
 End CorrectnessFun.

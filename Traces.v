@@ -14,7 +14,7 @@ Require Import Instantiator.
 Import Obc.Typ.
 Import Obc.Syn.
 (* Import Obc.Sem. *)
-Import DF.Str.
+Import NL.Str.
 Import OpAux.
 Import Trans.
 
