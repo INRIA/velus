@@ -126,8 +126,8 @@ VFILES:=RMemory.v\
   NLustre/Syntax.v\
   NLustre/Typing.v\
   NLustre/Stream.v\
-  NLustre/Parser/Ast.v\
-  NLustre/Parser/Parser.v\
+  NLustre/Parser/LustreAst.v\
+  NLustre/Parser/LustreParser.v\
   Common.v\
   Ident.v\
   ObcToClight/Interface.v\
@@ -214,37 +214,40 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
-NLustre/Parser/Parser.v: NLustre/Parser/Parser.vy
+NLustre/Parser/LustreParser.v: NLustre/Parser/LustreParser.vy
 	@$(MENHIR) --no-stdlib --coq $<
 
-NLustre/Parser/Lexer2.ml: NLustre/Parser/Lexer2.mll
+NLustre/Parser/LustreLexer.ml: NLustre/Parser/LustreLexer.mll
 	ocamllex $<
 
-extraction/extract/Lexer2.ml: NLustre/Parser/Lexer2.ml extraction/STAMP
+extraction/extract/LustreLexer.ml: NLustre/Parser/LustreLexer.ml extraction/STAMP
 	cp $< $@
 
 extraction/extract/Relexer.ml: NLustre/Parser/Relexer.ml extraction/extract
 	cp $< $@
 
-NLustre/Parser/Parser2.mly: NLustre/Parser/Parser.vy
+NLustre/Parser/LustreParser2.mly: NLustre/Parser/LustreParser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@
 
-NLustre/Parser/Parser2.ml NLustre/Parser/Parser2.mli: \
-		NLustre/Parser/Parser2.mly
+NLustre/Parser/LustreParser2.ml NLustre/Parser/LustreParser2.mli: \
+		NLustre/Parser/LustreParser2.mly
 	$(MENHIR) --no-stdlib --table $<
 
-extraction/extract/Parser2.ml: NLustre/Parser/Parser2.ml extraction/extract
+extraction/extract/LustreParser2.ml: NLustre/Parser/LustreParser2.ml \
+		extraction/extract
 	cp $< $@
 
-extraction/extract/Parser2.mli: NLustre/Parser/Parser2.mli extraction/extract
+extraction/extract/LustreParser2.mli: NLustre/Parser/LustreParser2.mli \
+    		extraction/extract
 	cp $< $@
 
 extraction/extract/veluslib.ml: veluslib.ml extraction/extract
 	cp $< $@
 
-velus: compcert extraction/STAMP extraction/extract/Lexer2.ml velusmain.ml \
-        extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
-		extraction/extract/Relexer.ml extraction/extract/veluslib.ml
+velus: compcert extraction/STAMP extraction/extract/LustreLexer.ml \
+    	velusmain.ml extraction/extract/LustreParser2.mli \
+	extraction/extract/LustreParser2.ml extraction/extract/Relexer.ml \
+	extraction/extract/veluslib.ml
 	@find CompCert -name '*.cm*' -delete
 	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer velusmain.native
 	@mv velusmain.native velus

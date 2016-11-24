@@ -17,12 +17,12 @@
 {
 open Specif
 open Lexing
-open Parser
+open LustreParser
 open !Aut.GramDefs
 
 module SSet = Set.Make(String)
 
-let lexicon : (string, Ast.astloc -> token) Hashtbl.t = Hashtbl.create 17
+let lexicon : (string, LustreAst.astloc -> token) Hashtbl.t = Hashtbl.create 17
 
 let tok t v = Coq_existT (t, Obj.magic v)
 
@@ -87,22 +87,22 @@ let currentLoc =
   in
   fun lb ->
     let p = Lexing.lexeme_start_p lb in
-    Ast.({ ast_lnum  = p.Lexing.pos_lnum;
-           ast_fname = p.Lexing.pos_fname;
-           ast_bol   = p.Lexing.pos_bol;
-           ast_cnum  = p.Lexing.pos_cnum;
-           ast_ident = getident ();})
+    LustreAst.({ ast_lnum  = p.Lexing.pos_lnum;
+                 ast_fname = p.Lexing.pos_fname;
+                 ast_bol   = p.Lexing.pos_bol;
+                 ast_cnum  = p.Lexing.pos_cnum;
+                 ast_ident = getident ();})
 
-let string_of_loc { Ast.ast_fname = fname;
-                    Ast.ast_lnum  = lnum;
-                    Ast.ast_bol   = bol;
-                    Ast.ast_cnum  = cnum } =
+let string_of_loc { LustreAst.ast_fname = fname;
+                    LustreAst.ast_lnum  = lnum;
+                    LustreAst.ast_bol   = bol;
+                    LustreAst.ast_cnum  = cnum } =
   Printf.sprintf "%s:%d:%d" fname lnum (cnum - bol + 1)
 
-let lexing_loc { Ast.ast_lnum  = lnum;
-                 Ast.ast_fname = fname;
-                 Ast.ast_bol   = bol;
-                 Ast.ast_cnum  = cnum } =
+let lexing_loc { LustreAst.ast_lnum  = lnum;
+                 LustreAst.ast_fname = fname;
+                 LustreAst.ast_bol   = bol;
+                 LustreAst.ast_cnum  = cnum } =
    Lexing.({ pos_lnum  = lnum;
              pos_fname = fname;
              pos_bol   = bol;
@@ -238,35 +238,37 @@ rule initial = parse
   | whitespace_char_no_newline +  { initial lexbuf }
   | "(*"                          { multiline_comment lexbuf; initial lexbuf }
   | "//"                          { singleline_comment lexbuf; initial lexbuf }
-  | integer_constant as s         { tok CONSTANT't (Ast.CONST_INT s,
+  | integer_constant as s         { tok CONSTANT't (LustreAst.CONST_INT s,
                                                     currentLoc lexbuf) }
-  | decimal_floating_constant     { tok CONSTANT't (Ast.CONST_FLOAT
-                                      {Ast.isHex_FI = false;
-                                       Ast.integer_FI = intpart;
-                                       Ast.fraction_FI = frac;
-                                       Ast.exponent_FI = expo;
-                                       Ast.suffix_FI =
+  | decimal_floating_constant     { tok CONSTANT't (LustreAst.CONST_FLOAT
+                                      {LustreAst.isHex_FI = false;
+                                       LustreAst.integer_FI = intpart;
+                                       LustreAst.fraction_FI = frac;
+                                       LustreAst.exponent_FI = expo;
+                                       LustreAst.suffix_FI =
                                          match suffix with
                                          | None -> None
                                          | Some c -> Some (String.make 1 c) },
                                       currentLoc lexbuf) }
-  | hexadecimal_floating_constant { tok CONSTANT't (Ast.CONST_FLOAT
-                                      {Ast.isHex_FI = true;
-                                       Ast.integer_FI = intpart;
-                                       Ast.fraction_FI = frac;
-                                       Ast.exponent_FI = Some expo;
-                                       Ast.suffix_FI =
+  | hexadecimal_floating_constant { tok CONSTANT't (LustreAst.CONST_FLOAT
+                                      {LustreAst.isHex_FI = true;
+                                       LustreAst.integer_FI = intpart;
+                                       LustreAst.fraction_FI = frac;
+                                       LustreAst.exponent_FI = Some expo;
+                                       LustreAst.suffix_FI =
                                          match suffix with
                                            | None -> None
                                            | Some c -> Some (String.make 1 c) },
                                       currentLoc lexbuf)}
   | "'"                           { let l = char_literal lexbuf.lex_start_p []
                                               lexbuf in
-                                    tok CONSTANT't (Ast.CONST_CHAR(false, l),
+                                    tok CONSTANT't
+                                          (LustreAst.CONST_CHAR(false, l),
                                                     currentLoc lexbuf) }
   | "L'"                          { let l = char_literal lexbuf.lex_start_p []
                                               lexbuf in
-                                    tok CONSTANT't (Ast.CONST_CHAR(true, l),
+                                    tok CONSTANT't
+                                          (LustreAst.CONST_CHAR(true, l),
                                                     currentLoc lexbuf) }
   | "<>"                          { tok NEQ't (currentLoc lexbuf) }
   | "<="                          { tok LEQ't (currentLoc lexbuf) }

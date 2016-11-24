@@ -1,7 +1,7 @@
 Require Import Velus.Common.
 Require Instantiator.
 
-Require Import Velus.NLustre.Parser.Ast.
+Require Import Velus.NLustre.Parser.LustreAst.
 Require Import Operators.
 
 Module Import Syn := Instantiator.NL.Syn.
@@ -36,7 +36,7 @@ Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
 Parameter ident_of_camlstring : string -> ident.
 Parameter string_of_astloc : astloc -> String.string.
 Parameter cabsloc_of_astloc : astloc -> Cabs.cabsloc.
-Parameter cabs_floatinfo : Ast.floatInfo -> Cabs.floatInfo.
+Parameter cabs_floatinfo : LustreAst.floatInfo -> Cabs.floatInfo.
 
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ":" :: m.  
@@ -68,7 +68,7 @@ Definition cast_constant (loc: astloc) (c: constant) (ty: type')
   | _, _ => Error (err_loc loc (msg "failed cast of constant"))
   end.
 
-Definition elab_constant (loc: astloc) (c: Ast.constant) : constant :=
+Definition elab_constant (loc: astloc) (c: LustreAst.constant) : constant :=
   match c with
   | CONST_BOOL false  => Cint Integers.Int.zero Ctypes.IBool Ctypes.Signed
   | CONST_BOOL true   => Cint Integers.Int.one Ctypes.IBool Ctypes.Signed
@@ -176,7 +176,7 @@ Section ElabExpressions.
     now monadInv Hfind.
   Qed.
   
-  Fixpoint elab_clock (loc: astloc) (ck: Ast.clock) : res clock :=
+  Fixpoint elab_clock (loc: astloc) (ck: LustreAst.clock) : res clock :=
     match ck with
     | BASE => OK Cbase
     | ON ck' b sx =>
@@ -186,14 +186,14 @@ Section ElabExpressions.
       OK (Con ck' x b)
     end.
 
-  Definition elab_unop (op: Ast.unary_operator) : unop :=
+  Definition elab_unop (op: LustreAst.unary_operator) : unop :=
     match op with
     | MINUS => UnaryOp Cop.Oneg
     | NOT   => UnaryOp Cop.Onotint
     | BNOT  => UnaryOp Cop.Onotbool
     end.
 
-  Definition elab_binop (op: Ast.binary_operator) : binop :=
+  Definition elab_binop (op: LustreAst.binary_operator) : binop :=
     match op with
     | ADD  => Cop.Oadd
     | SUB  => Cop.Osub
@@ -228,7 +228,7 @@ Section ElabExpressions.
     | Some ty' => OK ty'
     end.
 
-  Definition elab_type (loc: astloc) (ty: Ast.type_name) : type' :=
+  Definition elab_type (loc: astloc) (ty: LustreAst.type_name) : type' :=
     match ty with
     | Tint8    => Tint Ctypes.I8  Ctypes.Signed
     | Tuint8   => Tint Ctypes.I8  Ctypes.Unsigned
@@ -243,7 +243,7 @@ Section ElabExpressions.
     | Tbool    => Tint Ctypes.IBool Ctypes.Signed
     end.
 
-  Fixpoint elab_lexp (ae: Ast.expression) : res (lexp * clock) :=
+  Fixpoint elab_lexp (ae: LustreAst.expression) : res (lexp * clock) :=
     match ae with
     | CONSTANT c loc => OK (Econst (elab_constant loc c), Cbase)
     | VARIABLE sx loc =>
@@ -279,7 +279,7 @@ Section ElabExpressions.
     | _ => Error (err_loc (expression_loc ae) (msg "expression not normalized"))
     end.
 
-  Fixpoint elab_cexp (ae: Ast.expression) : res (cexp * clock) :=
+  Fixpoint elab_cexp (ae: LustreAst.expression) : res (cexp * clock) :=
     match ae with
     | MERGE sx aet aef loc =>
       let x := ident_of_camlstring sx in
@@ -351,7 +351,7 @@ Section ElabExpressions.
     | _, _ => Error (err_loc loc (msg "wrong number of pattern variables"))
     end.
 
-  Definition elab_constant_with_cast (loc: astloc) (ae: Ast.expression)
+  Definition elab_constant_with_cast (loc: astloc) (ae: LustreAst.expression)
                                                               : res constant :=
     match ae with
     | CAST aty (CONSTANT ac _) loc =>
@@ -371,7 +371,7 @@ Section ElabExpressions.
     NamedDestructCases; auto using wc_var.
   Qed.
 
-  Definition elab_equation (aeq: Ast.equation) : res equation :=
+  Definition elab_equation (aeq: LustreAst.equation) : res equation :=
     let '(sxs, ae, loc) := aeq in
     do xs <- OK (map ident_of_camlstring sxs);
     do x <- match xs with
@@ -738,7 +738,7 @@ Section ElabDeclaration.
   Hypothesis wt_nenv : Is_interface_map G nenv.
 
   Fixpoint elab_var_decls' (acc: list (ident * type) * PM.t type)
-           (vds: list (string * type_name * Ast.clock * astloc))
+           (vds: list (string * type_name * LustreAst.clock * astloc))
     : res (list (ident * type) * PM.t type) :=
     match vds with
     | nil => OK acc
@@ -753,7 +753,7 @@ Section ElabDeclaration.
     end.
 
   Definition elab_var_decls (tyenv: PM.t type)
-             (vds: list (string * type_name * Ast.clock * astloc))
+             (vds: list (string * type_name * LustreAst.clock * astloc))
     : res (list (ident * type) * PM.t type) :=
     elab_var_decls' ([], tyenv) vds.
   
@@ -1121,7 +1121,7 @@ Section ElabDeclaration.
   Qed.
 
   Fixpoint elab_clock_decl (tyenv: PM.t type) (acc: PM.t clock)
-           (vds: list (string * type_name * Ast.clock * astloc))
+           (vds: list (string * type_name * LustreAst.clock * astloc))
     : res (PM.t clock) :=
     match vds with
     | nil => OK acc
@@ -1258,7 +1258,7 @@ Section ElabDeclaration.
   
   Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
-  Program Definition elab_declaration (decl: Ast.declaration)
+  Program Definition elab_declaration (decl: LustreAst.declaration)
     : res {n | wt_node G n /\ wc_node n} :=
     match decl with
     | NODE name inputs outputs locals equations loc =>
@@ -1434,7 +1434,7 @@ Local Obligation Tactic :=
 Program Fixpoint elab_declarations'
         (G: global) (nenv: PM.t (list type * list type))
         (WTG: wt_global G /\ wc_global G) (Hnenv: Is_interface_map G nenv)
-        (decls: list Ast.declaration)
+        (decls: list LustreAst.declaration)
   : res {G' | wt_global G' /\ wc_global G'} :=
   match decls with
   | nil => OK (exist _ G WTG)
@@ -1491,7 +1491,7 @@ Next Obligation.
       apply Hnenv; auto.
 Qed.
 
-Definition elab_declarations (decls: list Ast.declaration)
+Definition elab_declarations (decls: list LustreAst.declaration)
   : res {G | wt_global G /\ wc_global G} :=
   elab_declarations' [] (PM.empty (list type * list type))
                      (conj wtg_nil wc_global_nil)

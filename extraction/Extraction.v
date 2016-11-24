@@ -4,7 +4,7 @@ Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
 Require Import Velus.ObcToClight.Translation.
 Require Import Velus.ObcToClight.NLustreElab.
-Require Import NLustre.Parser.Parser.
+Require Import NLustre.Parser.LustreParser.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping
@@ -67,27 +67,27 @@ Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
 
 (* Lexing/Parsing/Elaboration *)
-Extract Constant Ast.astloc =>
+Extract Constant LustreAst.astloc =>
 "{ ast_lnum  : int;
    ast_fname : string;
    ast_bol   : int;
    ast_cnum  : int;
    ast_ident : int; }".
-Extract Constant Ast.string => "String.t".
-Extract Constant Ast.char_code => "int64".
+Extract Constant LustreAst.string => "String.t".
+Extract Constant LustreAst.char_code => "int64".
 Extract Constant string_of_astloc =>
-  "fun loc -> Camlcoq.coqstring_of_camlstring (Lexer2.string_of_loc loc)".
+  "fun loc -> Camlcoq.coqstring_of_camlstring (LustreLexer.string_of_loc loc)".
 Extract Constant cabsloc_of_astloc =>
-  "fun { Ast.ast_lnum = lno;  Ast.ast_fname = fname;
-         Ast.ast_cnum = cnum; Ast.ast_ident = id } ->
+  "fun { LustreAst.ast_lnum = lno;  LustreAst.ast_fname = fname;
+         LustreAst.ast_cnum = cnum; LustreAst.ast_ident = id } ->
        { Cabs.lineno  = lno;  Cabs.filename = fname;
          Cabs.byteno  = cnum; Cabs.ident    = id }".
 Extract Constant cabs_floatinfo =>
-  "fun { Ast.isHex_FI    = ishex;
-         Ast.integer_FI  = integer;
-         Ast.fraction_FI = fraction;
-         Ast.exponent_FI = exponent;
-         Ast.suffix_FI   = suffix } ->
+  "fun { LustreAst.isHex_FI    = ishex;
+         LustreAst.integer_FI  = integer;
+         LustreAst.fraction_FI = fraction;
+         LustreAst.exponent_FI = exponent;
+         LustreAst.suffix_FI   = suffix } ->
        { Cabs.isHex_FI    = ishex;
          Cabs.integer_FI  = integer;
          Cabs.fraction_FI = fraction;

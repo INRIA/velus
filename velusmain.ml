@@ -26,7 +26,7 @@ let get_main_node decls =
     generate error messages). Adapted directly from menhir's
     calc-incremental example. *)
 
-module I = Parser2.MenhirInterpreter
+module I = LustreParser2.MenhirInterpreter
 
 let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
   match checkpoint with
@@ -35,7 +35,7 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
        and offer it to the parser, which will produce a new
        checkpoint. Then, repeat. *)
     let (token, loc) = Relexer.map_token (Streams.hd toks) in
-    let loc = Lexer2.lexing_loc loc in
+    let loc = LustreLexer.lexing_loc loc in
     let checkpoint = I.offer checkpoint (token, loc, loc) in
     parsing_loop (Streams.tl toks) checkpoint
   | I.Shifting _
@@ -44,16 +44,17 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
     parsing_loop toks checkpoint
   | I.HandlingError env ->
     (* The parser has suspended itself because of a syntax error. Stop. *)
-    let (token, {Ast.ast_fname = fname;
-                 Ast.ast_lnum  = lnum;
-                 Ast.ast_cnum  = cnum;
-                 Ast.ast_bol   = bol }) = Relexer.map_token (Streams.hd toks)
+    let (token, {LustreAst.ast_fname = fname;
+                 LustreAst.ast_lnum  = lnum;
+                 LustreAst.ast_cnum  = cnum;
+                 LustreAst.ast_bol   = bol }) =
+                  Relexer.map_token (Streams.hd toks)
     in
     (* TODO: improve error messages *)
     Printf.fprintf stderr "%s:%d:%d: syntax error.\n%!"
       fname lnum (cnum - bol + 1)
   | I.Accepted v ->
-    assert false (* Parser2 should not succeed where Parser failed. *)
+    assert false (* LustreParser2 should not succeed where Parser failed. *)
   | I.Rejected ->
     (* The parser rejects this input. This cannot happen, here, because
        we stop as soon as the parser reports [HandlingError]. *)
@@ -62,23 +63,23 @@ let rec parsing_loop toks (checkpoint : unit I.checkpoint) =
 let reparse toks =
   let (_, l) = Relexer.map_token (Streams.hd toks) in
   parsing_loop toks
-    (Parser2.Incremental.translation_unit_file (Lexer2.lexing_loc l))
+    (LustreParser2.Incremental.translation_unit_file (LustreLexer.lexing_loc l))
 
 (** Parser *)
 
 let parse toks =
   Cerrors.reset();
   let rec inf = Datatypes.S inf in
-  match Parser.translation_unit_file inf toks with
-  | Parser.Parser.Inter.Fail_pr -> (reparse toks; exit 1)
-  | Parser.Parser.Inter.Timeout_pr -> assert false
-  | Parser.Parser.Inter.Parsed_pr (ast, _) ->
-    (Obj.magic ast : Ast.declaration list)
+  match LustreParser.translation_unit_file inf toks with
+  | LustreParser.Parser.Inter.Fail_pr -> (reparse toks; exit 1)
+  | LustreParser.Parser.Inter.Timeout_pr -> assert false
+  | LustreParser.Parser.Inter.Parsed_pr (ast, _) ->
+    (Obj.magic ast : LustreAst.declaration list)
 
 let compile source_name filename =
   if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
   if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
-  let toks = Lexer2.tokens_stream source_name in
+  let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let p =
     match NLustreElab.elab_declarations ast with

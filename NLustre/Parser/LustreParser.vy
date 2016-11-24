@@ -14,7 +14,7 @@
    and Nicolas Halbwachs in the Lustre v6 reference manual (2016). */
 
 %{
-Require Velus.NLustre.Parser.Ast.
+Require Velus.NLustre.Parser.LustreAst.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
 Require Import Coq.Program.Syntax.
@@ -23,50 +23,50 @@ Require Import List.
 Import ListNotations.
 %}
 
-%token<Ast.string * Ast.astloc> VAR_NAME
-%token<Ast.constant * Ast.astloc> CONSTANT
-%token<Ast.astloc> TRUE FALSE
-%token<Ast.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
-%token<Ast.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
-%token<Ast.astloc> IF THEN ELSE
+%token<LustreAst.string * LustreAst.astloc> VAR_NAME
+%token<LustreAst.constant * LustreAst.astloc> CONSTANT
+%token<LustreAst.astloc> TRUE FALSE
+%token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
+%token<LustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
+%token<LustreAst.astloc> IF THEN ELSE
 
-%token<Ast.astloc> LPAREN RPAREN COMMA SEMICOLON
-%token<Ast.astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
+%token<LustreAst.astloc> LPAREN RPAREN COMMA SEMICOLON
+%token<LustreAst.astloc> BOOL INT8 UINT8 INT16 UINT16 INT32 UINT32
   INT64 UINT64 FLOAT32 FLOAT64
 
-%token<Ast.astloc> LET TEL NODE RETURNS VAR FBY
-%token<Ast.astloc> WHEN WHENOT MERGE ON ONOT DOT
+%token<LustreAst.astloc> LET TEL NODE RETURNS VAR FBY
+%token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 
-%token<Ast.astloc> EOF
+%token<LustreAst.astloc> EOF
 
-%type<Ast.expression> primary_expression postfix_expression
+%type<LustreAst.expression> primary_expression postfix_expression
     fby_expression unary_expression cast_expression
     multiplicative_expression additive_expression shift_expression
     when_expression relational_expression equality_expression AND_expression
     exclusive_OR_expression inclusive_OR_expression logical_AND_expression
     logical_OR_expression expression
-%type<Ast.constant * Ast.astloc> bool_constant
-%type<Ast.constant * Ast.astloc> constant
-%type<list Ast.expression> argument_expression_list 
-%type<Ast.unary_operator * Ast.astloc> unary_operator
-%type<Ast.var_decls> var_decl
-%type<Ast.var_decls> var_decl_list
-%type<Ast.var_decls> local_var_decl
-%type<list Ast.string (* Reverse order *)> identifier_list
-%type<Ast.type_name * Ast.astloc> type_name
-%type<Ast.clock> declared_clock
-%type<Ast.clock> clock
-%type<Ast.var_decls> local_decl
-%type<Ast.var_decls> local_decl_list
-%type<Ast.var_decls (* Reverse order *)> parameter_list
-%type<list Ast.string> pattern
-%type<Ast.equation> equation
-%type<list Ast.equation> equations
+%type<LustreAst.constant * LustreAst.astloc> bool_constant
+%type<LustreAst.constant * LustreAst.astloc> constant
+%type<list LustreAst.expression> argument_expression_list 
+%type<LustreAst.unary_operator * LustreAst.astloc> unary_operator
+%type<LustreAst.var_decls> var_decl
+%type<LustreAst.var_decls> var_decl_list
+%type<LustreAst.var_decls> local_var_decl
+%type<list LustreAst.string (* Reverse order *)> identifier_list
+%type<LustreAst.type_name * LustreAst.astloc> type_name
+%type<LustreAst.clock> declared_clock
+%type<LustreAst.clock> clock
+%type<LustreAst.var_decls> local_decl
+%type<LustreAst.var_decls> local_decl_list
+%type<LustreAst.var_decls (* Reverse order *)> parameter_list
+%type<list LustreAst.string> pattern
+%type<LustreAst.equation> equation
+%type<list LustreAst.equation> equations
 %type<unit> optsemicolon
-%type<Ast.declaration> declaration
-%type<list Ast.declaration> translation_unit
+%type<LustreAst.declaration> declaration
+%type<list LustreAst.declaration> translation_unit
 
-%start<list Ast.declaration> translation_unit_file
+%start<list LustreAst.declaration> translation_unit_file
 %%
 
 (* Actual grammar *)
@@ -105,9 +105,9 @@ Import ListNotations.
 
 bool_constant:
 | loc=TRUE
-    { (Ast.CONST_BOOL true, loc) }
+    { (LustreAst.CONST_BOOL true, loc) }
 | loc=FALSE
-    { (Ast.CONST_BOOL false, loc) }
+    { (LustreAst.CONST_BOOL false, loc) }
 
 constant:
 | cst=CONSTANT
@@ -117,9 +117,9 @@ constant:
 
 primary_expression:
 | var=VAR_NAME
-    { Ast.VARIABLE (fst var) (snd var) }
+    { LustreAst.VARIABLE (fst var) (snd var) }
 | cst=constant
-    { Ast.CONSTANT (fst cst) (snd cst) }
+    { LustreAst.CONSTANT (fst cst) (snd cst) }
 | loc=LPAREN expr=expression RPAREN
     { expr }
 
@@ -128,7 +128,7 @@ postfix_expression:
 | expr=primary_expression
     { expr }
 | fn=VAR_NAME LPAREN args=argument_expression_list RPAREN
-    { Ast.CALL (fst fn) (rev args) (snd fn) }
+    { LustreAst.CALL (fst fn) (rev args) (snd fn) }
 
 (* Semantic value is in reverse order. *)
 argument_expression_list:
@@ -142,135 +142,135 @@ unary_expression:
 | expr=postfix_expression
     { expr }
 | op=unary_operator expr=cast_expression
-    { Ast.UNARY (fst op) expr (snd op) }
+    { LustreAst.UNARY (fst op) expr (snd op) }
 
 unary_operator:
 | loc=MINUS
-    { (Ast.MINUS, loc) }
+    { (LustreAst.MINUS, loc) }
 | loc=LNOT
-    { (Ast.NOT, loc) }
+    { (LustreAst.NOT, loc) }
 | loc=NOT
-    { (Ast.BNOT, loc) }
+    { (LustreAst.BNOT, loc) }
 
 (* 6.5.4 *)
 cast_expression:
 | expr=unary_expression
     { expr }
 | LPAREN expr=cast_expression loc=COLON typ=type_name RPAREN
-    { Ast.CAST (fst typ) expr loc }
+    { LustreAst.CAST (fst typ) expr loc }
 
 (* Lustre fby operator *)
 fby_expression:
 | expr=cast_expression
     { expr }
 | v0=cast_expression loc=FBY expr=fby_expression
-    { Ast.FBY v0 expr loc }
+    { LustreAst.FBY v0 expr loc }
 
 (* 6.5.5 *)
 multiplicative_expression:
 | expr=fby_expression
     { expr }
 | expr1=multiplicative_expression loc=STAR expr2=fby_expression
-    { Ast.BINARY Ast.MUL expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.MUL expr1 expr2 loc }
 | expr1=multiplicative_expression loc=SLASH expr2=fby_expression
-    { Ast.BINARY Ast.DIV expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.DIV expr1 expr2 loc }
 | expr1=multiplicative_expression loc=MOD expr2=fby_expression
-    { Ast.BINARY Ast.MOD expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.MOD expr1 expr2 loc }
 
 (* 6.5.6 *)
 additive_expression:
 | expr=multiplicative_expression
     { expr }
 | expr1=additive_expression loc=PLUS expr2=multiplicative_expression
-    { Ast.BINARY Ast.ADD expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.ADD expr1 expr2 loc }
 | expr1=additive_expression loc=MINUS expr2=multiplicative_expression
-    { Ast.BINARY Ast.SUB expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.SUB expr1 expr2 loc }
 
 (* 6.5.7 *)
 shift_expression:
 | expr=additive_expression
     { expr }
 | expr1=shift_expression loc=LSL expr2=additive_expression
-    { Ast.BINARY Ast.LSL expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.LSL expr1 expr2 loc }
 | expr1=shift_expression loc=LSR expr2=additive_expression
-    { Ast.BINARY Ast.LSR expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.LSR expr1 expr2 loc }
 
 (* Lustre when operators *)
 when_expression:
 | expr=shift_expression
     { expr }
 | expr=when_expression loc=WHEN id=VAR_NAME
-    { Ast.WHEN expr true (fst id) loc }
+    { LustreAst.WHEN expr true (fst id) loc }
 | expr=when_expression loc=WHENOT id=VAR_NAME
-    { Ast.WHEN expr false (fst id) loc }
+    { LustreAst.WHEN expr false (fst id) loc }
 
 (* 6.5.8 *)
 relational_expression:
 | expr=when_expression
     { expr }
 | expr1=relational_expression loc=LT expr2=when_expression
-    { Ast.BINARY Ast.LT expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.LT expr1 expr2 loc }
 | expr1=relational_expression loc=GT expr2=when_expression
-    { Ast.BINARY Ast.GT expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.GT expr1 expr2 loc }
 | expr1=relational_expression loc=LEQ expr2=when_expression
-    { Ast.BINARY Ast.LE expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.LE expr1 expr2 loc }
 | expr1=relational_expression loc=GEQ expr2=when_expression
-    { Ast.BINARY Ast.GE expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.GE expr1 expr2 loc }
 
 (* 6.5.9 *)
 equality_expression:
 | expr=relational_expression
     { expr }
 | expr1=equality_expression loc=EQ expr2=relational_expression
-    { Ast.BINARY Ast.EQ expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.EQ expr1 expr2 loc }
 | expr1=equality_expression loc=NEQ expr2=relational_expression
-    { Ast.BINARY Ast.NE expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.NE expr1 expr2 loc }
 
 (* 6.5.10 *)
 AND_expression:
 | expr=equality_expression
     { expr }
 | expr1=AND_expression loc=LAND expr2=equality_expression
-    { Ast.BINARY Ast.BAND expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.BAND expr1 expr2 loc }
 
 (* 6.5.11 *)
 exclusive_OR_expression:
 | expr=AND_expression
     { expr }
 | expr1=exclusive_OR_expression loc=LXOR expr2=AND_expression
-    { Ast.BINARY Ast.XOR expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.XOR expr1 expr2 loc }
 | expr1=exclusive_OR_expression loc=XOR expr2=AND_expression
-    { Ast.BINARY Ast.XOR expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.XOR expr1 expr2 loc }
 
 (* 6.5.12 *)
 inclusive_OR_expression:
 | expr=exclusive_OR_expression
     { expr }
 | expr1=inclusive_OR_expression loc=LOR expr2=exclusive_OR_expression
-    { Ast.BINARY Ast.BOR expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.BOR expr1 expr2 loc }
 
 (* 6.5.13 *)
 logical_AND_expression:
 | expr=inclusive_OR_expression
     { expr }
 | expr1=logical_AND_expression loc=AND expr2=inclusive_OR_expression
-    { Ast.BINARY Ast.LAND expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.LAND expr1 expr2 loc }
 
 (* 6.5.14 *)
 logical_OR_expression:
 | expr=logical_AND_expression
     { expr }
 | expr1=logical_OR_expression loc=OR expr2=logical_AND_expression
-    { Ast.BINARY Ast.LOR expr1 expr2 loc }
+    { LustreAst.BINARY LustreAst.LOR expr1 expr2 loc }
 
 (* 6.5.15/16/17, 6.6 + Lustre merge operator *)
 expression:
 | expr=logical_OR_expression
     { expr }
 | loc=IF expr1=expression THEN expr2=expression ELSE expr3=expression
-    { Ast.IFTE expr1 expr2 expr3 loc }
+    { LustreAst.IFTE expr1 expr2 expr3 loc }
 | loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
-    { Ast.MERGE (fst id) expr1 expr2 loc }
+    { LustreAst.MERGE (fst id) expr1 expr2 loc }
 
 (* Declarations are much simpler than in C. We do not have arrays,
    structs/unions, or pointers. We do not have storage-class specifiers,
@@ -300,31 +300,31 @@ identifier_list:
 
 type_name:
 | loc=INT8
-    { (Ast.Tint8, loc) }
+    { (LustreAst.Tint8, loc) }
 | loc=UINT8
-    { (Ast.Tuint8, loc) }
+    { (LustreAst.Tuint8, loc) }
 | loc=INT16
-    { (Ast.Tint16, loc) }
+    { (LustreAst.Tint16, loc) }
 | loc=UINT16
-    { (Ast.Tuint16, loc) }
+    { (LustreAst.Tuint16, loc) }
 | loc=INT32
-    { (Ast.Tint32, loc) }
+    { (LustreAst.Tint32, loc) }
 | loc=UINT32
-    { (Ast.Tuint32, loc) }
+    { (LustreAst.Tuint32, loc) }
 | loc=INT64
-    { (Ast.Tint64, loc) }
+    { (LustreAst.Tint64, loc) }
 | loc=UINT64
-    { (Ast.Tuint64, loc) }
+    { (LustreAst.Tuint64, loc) }
 | loc=FLOAT32
-    { (Ast.Tfloat32, loc) }
+    { (LustreAst.Tfloat32, loc) }
 | loc=FLOAT64
-    { (Ast.Tfloat64, loc) }
+    { (LustreAst.Tfloat64, loc) }
 | loc=BOOL
-    { (Ast.Tbool, loc) }
+    { (LustreAst.Tbool, loc) }
 
 declared_clock:
 | /* empty */
-    { Ast.BASE }
+    { LustreAst.BASE }
 | WHEN clk=clock
     { clk }
 | COLONCOLON clk=clock
@@ -332,11 +332,11 @@ declared_clock:
 
 clock:
 | DOT
-    { Ast.BASE }
+    { LustreAst.BASE }
 | clk=clock ON id=VAR_NAME
-    { Ast.ON clk true (fst id) }
+    { LustreAst.ON clk true (fst id) }
 | clk=clock ONOT id=VAR_NAME
-    { Ast.ON clk false (fst id) }
+    { LustreAst.ON clk false (fst id) }
 
 local_decl:
 | vd=local_var_decl
@@ -381,7 +381,7 @@ declaration:
 | loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=parameter_list RPAREN optsemicolon
   locals=local_decl_list LET eqns=equations TEL
-    { Ast.NODE (fst id) iparams oparams locals eqns loc }
+    { LustreAst.NODE (fst id) iparams oparams locals eqns loc }
 
 translation_unit:
 | def=declaration

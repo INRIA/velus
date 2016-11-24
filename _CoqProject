@@ -35,8 +35,8 @@ NLustre/WellFormed.v
 NLustre/WellFormed/Decide.v
 NLustre/Ordered.v
 NLustre/NoDup.v
-NLustre/Parser/Ast.v
-NLustre/Parser/Parser.v
+NLustre/Parser/LustreAst.v
+NLustre/Parser/LustreParser.v
 NLustre.v
 Obc/Syntax.v
 Obc/Typing.v
