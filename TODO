@@ -30,7 +30,7 @@ Example: Is_free_*, Is_Defined_*, Is_Variable_*, clk_
 
 * Prove the characterizing equivalence of [memories]
 
-Cf. [Dataflow/Memories.v]
+Cf. [NLustre/Memories.v]
 
 * Do we really need [Ordered_nodes] and [NoDup]?
 

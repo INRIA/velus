@@ -6,14 +6,14 @@ Open Scope positive.
 Open Scope list.
 
 Require Import Rustre.Common.
-Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.NLustre.Syntax.
 Require Import Rustre.Obc.Syntax.
 Require Import Rustre.Translation.
 Require Import Rustre.Obc.FuseIfte.
 
-Require Import Rustre.Dataflow.Memories.
-Require Import Rustre.Dataflow.WellFormed.
-Require Import Rustre.Dataflow.WellFormed.Decide.
+Require Import Rustre.NLustre.Memories.
+Require Import Rustre.NLustre.WellFormed.
+Require Import Rustre.NLustre.WellFormed.Decide.
 
 
 (* Common notations *)

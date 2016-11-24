@@ -81,7 +81,7 @@ let compile source_name filename =
   let toks = Lexer2.tokens_stream source_name in
   let ast = parse toks in
   let p =
-    match DataflowElab.elab_declarations ast with
+    match NLustreElab.elab_declarations ast with
     | Errors.OK p -> p
     | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
   if Cerrors.check_errors() then exit 2;

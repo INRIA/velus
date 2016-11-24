@@ -1,6 +1,6 @@
 Require Import Rustre.Common.
 Require Import Rustre.Ident.
-Require Import Rustre.DataflowToObc.Typing.
+Require Import Rustre.NLustreToObc.Typing.
 Require Import Rustre.ObcToClight.Translation.
 Require Import Rustre.Traces.
 Require Import Rustre.ClightToAsm.

@@ -1,6 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Rustre.Common.
-Require Import Rustre.DataflowSyntax.
+Require Import Rustre.NLustre.Syntax.
 
 Inductive value :=
   | absent

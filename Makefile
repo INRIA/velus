@@ -94,39 +94,39 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 ######################
 
 VFILES:=RMemory.v\
-  DataflowToObc/Correctness.v\
-  DataflowToObc/Typing.v\
-  DataflowToObc/Correctness/MemoryCorres.v\
-  DataflowToObc/Correctness/IsPresent.v\
-  DataflowToObc/Translation.v\
+  NLustreToObc/Correctness.v\
+  NLustreToObc/Typing.v\
+  NLustreToObc/Correctness/MemoryCorres.v\
+  NLustreToObc/Correctness/IsPresent.v\
+  NLustreToObc/Translation.v\
   Obc.v\
   Obc/FuseIfte.v\
   Obc/Equiv.v\
   Obc/Semantics.v\
   Obc/Syntax.v\
   Obc/Typing.v\
-  Dataflow.v\
-  Dataflow/NoDup.v\
-  Dataflow/Ordered.v\
-  Dataflow/WellFormed/Decide.v\
-  Dataflow/WellFormed.v\
-  Dataflow/MemSemantics.v\
-  Dataflow/Semantics.v\
-  Dataflow/Clocking/Properties.v\
-  Dataflow/Clocking/Parents.v\
-  Dataflow/Clocking.v\
-  Dataflow/Memories.v\
-  Dataflow/IsDefined/Decide.v\
-  Dataflow/IsDefined.v\
-  Dataflow/IsVariable/Decide.v\
-  Dataflow/IsVariable.v\
-  Dataflow/IsFree/Decide.v\
-  Dataflow/IsFree.v\
-  Dataflow/Syntax.v\
-  Dataflow/Typing.v\
-  Dataflow/Stream.v\
-  Dataflow/Parser/Ast.v\
-  Dataflow/Parser/Parser.v\
+  NLustre.v\
+  NLustre/NoDup.v\
+  NLustre/Ordered.v\
+  NLustre/WellFormed/Decide.v\
+  NLustre/WellFormed.v\
+  NLustre/MemSemantics.v\
+  NLustre/Semantics.v\
+  NLustre/Clocking/Properties.v\
+  NLustre/Clocking/Parents.v\
+  NLustre/Clocking.v\
+  NLustre/Memories.v\
+  NLustre/IsDefined/Decide.v\
+  NLustre/IsDefined.v\
+  NLustre/IsVariable/Decide.v\
+  NLustre/IsVariable.v\
+  NLustre/IsFree/Decide.v\
+  NLustre/IsFree.v\
+  NLustre/Syntax.v\
+  NLustre/Typing.v\
+  NLustre/Stream.v\
+  NLustre/Parser/Ast.v\
+  NLustre/Parser/Parser.v\
   Common.v\
   Ident.v\
   ObcToClight/Interface.v\
@@ -134,7 +134,7 @@ VFILES:=RMemory.v\
   ObcToClight/Correctness.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
-  ObcToClight/DataflowElab.v\
+  ObcToClight/NLustreElab.v\
   RustreCorrectness.v\
   Operators.v\
   Instantiator.v\
@@ -213,29 +213,29 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
-Dataflow/Parser/Parser.v: Dataflow/Parser/Parser.vy
+NLustre/Parser/Parser.v: NLustre/Parser/Parser.vy
 	@$(MENHIR) --no-stdlib --coq $<
 
-Dataflow/Parser/Lexer2.ml: Dataflow/Parser/Lexer2.mll
+NLustre/Parser/Lexer2.ml: NLustre/Parser/Lexer2.mll
 	ocamllex $<
 
-extraction/extract/Lexer2.ml: Dataflow/Parser/Lexer2.ml extraction/STAMP
+extraction/extract/Lexer2.ml: NLustre/Parser/Lexer2.ml extraction/STAMP
 	cp $< $@
 
-extraction/extract/Relexer.ml: Dataflow/Parser/Relexer.ml extraction/extract
+extraction/extract/Relexer.ml: NLustre/Parser/Relexer.ml extraction/extract
 	cp $< $@
 
-Dataflow/Parser/Parser2.mly: Dataflow/Parser/Parser.vy
+NLustre/Parser/Parser2.mly: NLustre/Parser/Parser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@
 
-Dataflow/Parser/Parser2.ml Dataflow/Parser/Parser2.mli: \
-		Dataflow/Parser/Parser2.mly
+NLustre/Parser/Parser2.ml NLustre/Parser/Parser2.mli: \
+		NLustre/Parser/Parser2.mly
 	$(MENHIR) --no-stdlib --table $<
 
-extraction/extract/Parser2.ml: Dataflow/Parser/Parser2.ml extraction/extract
+extraction/extract/Parser2.ml: NLustre/Parser/Parser2.ml extraction/extract
 	cp $< $@
 
-extraction/extract/Parser2.mli: Dataflow/Parser/Parser2.mli extraction/extract
+extraction/extract/Parser2.mli: NLustre/Parser/Parser2.mli extraction/extract
 	cp $< $@
 
 extraction/extract/rustrelib.ml: rustrelib.ml extraction/extract

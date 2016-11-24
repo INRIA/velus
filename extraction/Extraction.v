@@ -3,8 +3,8 @@ Require Import ExtrOcamlString.
 Require Import Rustre.RustreCorrectness.
 Require Import Coq.ZArith.BinInt.
 Require Import Rustre.ObcToClight.Translation.
-Require Import Rustre.ObcToClight.DataflowElab.
-Require Import Dataflow.Parser.Parser.
+Require Import Rustre.ObcToClight.NLustreElab.
+Require Import NLustre.Parser.Parser.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping

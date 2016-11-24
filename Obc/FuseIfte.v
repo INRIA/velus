@@ -3,7 +3,7 @@ Require Import PArith.
 Require Import Rustre.Common.
 Require Import Rustre.Operators.
 Require Import Rustre.Obc.
-Require Import Rustre.Dataflow.Syntax.
+Require Import Rustre.NLustre.Syntax.
 Require Import Rustre.RMemory.
 
 Require Import List.
@@ -16,7 +16,7 @@ Module Type FUSEIFTE
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynDF: Rustre.NLustre.Syntax.SYNTAX Ids Op)
        (Import SynMP: Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
        (Import SemMP: Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
        (Import Equ  : Rustre.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP).
@@ -668,7 +668,7 @@ Module FuseIfteFun
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF: Rustre.Dataflow.Syntax.SYNTAX Ids Op)
+       (Import SynDF: Rustre.NLustre.Syntax.SYNTAX Ids Op)
        (Import SynMP: Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
        (Import SemMP: Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
        (Import Equ  : Rustre.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP)
