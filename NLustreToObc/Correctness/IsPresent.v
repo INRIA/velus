@@ -1,10 +1,10 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.RMemory.
-Require Import Rustre.NLustre.
-Require Import Rustre.Obc.Syntax.
-Require Import Rustre.Obc.Semantics.
-Require Import Rustre.NLustreToObc.Translation.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.RMemory.
+Require Import Velus.NLustre.
+Require Import Velus.Obc.Syntax.
+Require Import Velus.Obc.Semantics.
+Require Import Velus.NLustreToObc.Translation.
 
 
 (** * Tying clock semantics and imperative semantics *)
@@ -22,9 +22,9 @@ Module Type ISPRESENT
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Rustre.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP : Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
        (Import Mem   : MEMORIES Ids Op SynDF)
        (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem).
 
@@ -140,9 +140,9 @@ Module IsPresentFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Rustre.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP : Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
        (Import Mem   : MEMORIES Ids Op SynDF)
        (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem)
        <: ISPRESENT Ids Op OpAux SynDF SynMP SemMP Mem Trans.

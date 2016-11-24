@@ -4,19 +4,19 @@ Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 
 Require Import Coq.FSets.FMapPositive.
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.RMemory.
-Require Import Rustre.NLustre.Stream.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.NLustre.IsVariable.
-Require Import Rustre.NLustre.IsDefined.
-Require Import Rustre.NLustre.Semantics.
-Require Import Rustre.NLustre.Ordered.
-Require Import Rustre.NLustre.WellFormed.
-Require Import Rustre.NLustre.Memories.
-Require Import Rustre.NLustre.IsFree.
-Require Import Rustre.NLustre.NoDup.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.RMemory.
+Require Import Velus.NLustre.Stream.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.IsVariable.
+Require Import Velus.NLustre.IsDefined.
+Require Import Velus.NLustre.Semantics.
+Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.WellFormed.
+Require Import Velus.NLustre.Memories.
+Require Import Velus.NLustre.IsFree.
+Require Import Velus.NLustre.NoDup.
 
 Set Implicit Arguments.
 

@@ -2,17 +2,17 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
+Require Import Velus.Common.
+Require Import Velus.Operators.
 Open Scope positive.
 
-Require Import Rustre.RMemory.
-Require Import Rustre.NLustre.
-Require Import Rustre.Obc.
-Require Import Rustre.NLustreToObc.Translation.
-Require Import Rustre.Obc.FuseIfte.
+Require Import Velus.RMemory.
+Require Import Velus.NLustre.
+Require Import Velus.Obc.
+Require Import Velus.NLustreToObc.Translation.
+Require Import Velus.Obc.FuseIfte.
 
-Require Import Rustre.NLustre.Typing.
+Require Import Velus.NLustre.Typing.
 
 (** ** Well-typing preservation *)
 

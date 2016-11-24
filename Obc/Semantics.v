@@ -1,17 +1,17 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import List.
 
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.RMemory.
-Require Import Rustre.Obc.Syntax.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.RMemory.
+Require Import Velus.Obc.Syntax.
 
 (** * Obc semantics *)
 
 (** 
 
   The semantics of Obc relies on a tree-structure [memory], based
-  on [Rustre.RMemory], to store object instances and a [stack] to keep
+  on [Velus.RMemory], to store object instances and a [stack] to keep
   track of local variables during method calls.
 
  *)

@@ -6,7 +6,7 @@ OCAMLC?=$(OCAMLBIN)ocamlc
 OCAMLOPT?=$(OCAMLBIN)ocamlopt
 COQC?=$(COQBIN)coqc
 
-COQ_LOAD_PATH=-R . Rustre.NLustre.Parser \
+COQ_LOAD_PATH=-R . Velus.NLustre.Parser \
   	      -R ../../CompCert/cparser/validator compcert.cparser.validator
 
 default: Parser.vo Lexer.cmo Parser2.cmo extraction/Parser.cma

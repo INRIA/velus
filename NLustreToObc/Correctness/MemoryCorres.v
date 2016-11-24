@@ -1,10 +1,10 @@
 Require Import List.
 
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.RMemory.
-Require Import Rustre.NLustre.
-Require Import Rustre.Obc.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.RMemory.
+Require Import Velus.NLustre.
+Require Import Velus.Obc.
 
 (** * Correspondence between dataflow and imperative memories *)
 

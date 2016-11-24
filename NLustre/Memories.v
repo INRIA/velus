@@ -1,11 +1,11 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
+Require Import Velus.Common.
+Require Import Velus.Operators.
 Require Import PArith.
 
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Rustre.NLustre.Syntax.
+Require Import Velus.NLustre.Syntax.
 
 (** * Collecting memory cells *)
 

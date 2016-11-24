@@ -1,7 +1,7 @@
-Require Import Rustre.Common.
+Require Import Velus.Common.
 Require Instantiator.
 
-Require Import Rustre.NLustre.Parser.Ast.
+Require Import Velus.NLustre.Parser.Ast.
 Require Import Operators.
 
 Module Import Syn := Instantiator.DF.Syn.

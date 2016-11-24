@@ -2,18 +2,18 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
+Require Import Velus.Common.
+Require Import Velus.Operators.
 Open Scope positive.
 
-Require Import Rustre.RMemory.
-Require Import Rustre.NLustre.
-Require Import Rustre.Obc.
-Require Import Rustre.NLustreToObc.Translation.
-Require Import Rustre.NLustreToObc.Correctness.IsPresent.
-Require Import Rustre.NLustreToObc.Correctness.MemoryCorres.
-Require Import Rustre.NLustreToObc.Typing.
-Require Import Rustre.Obc.FuseIfte.
+Require Import Velus.RMemory.
+Require Import Velus.NLustre.
+Require Import Velus.Obc.
+Require Import Velus.NLustreToObc.Translation.
+Require Import Velus.NLustreToObc.Correctness.IsPresent.
+Require Import Velus.NLustreToObc.Correctness.MemoryCorres.
+Require Import Velus.NLustreToObc.Typing.
+Require Import Velus.Obc.FuseIfte.
 
 
 Module Type CORRECTNESS
@@ -2347,8 +2347,8 @@ for all [Is_free_exp x e]. *)
       destruct (PS.mem i mems); inversion Hfree; subst; now auto.
   Qed.
 
-  Require Import Rustre.NLustre.Clocking.
-  Require Import Rustre.NLustre.Clocking.Properties.
+  Require Import Velus.NLustre.Clocking.
+  Require Import Velus.NLustre.Clocking.Properties.
 
   Lemma translate_eqns_IsFusible:
     forall C mems inputs eqs,

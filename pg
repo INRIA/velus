@@ -51,8 +51,8 @@ COQLOADPATH=""
 
 update_path_vars "$COMPCERT_INCLUDES" "$PWD/CompCert/"
 
-COQPROGARGS="\"-R\" \"$PWD\" \"Rustre\" $COQPROGARGS"
-COQLOADPATH="(\"$PWD\" \"Rustre\") $COQLOADPATH"
+COQPROGARGS="\"-R\" \"$PWD\" \"Velus\" $COQPROGARGS"
+COQLOADPATH="(\"$PWD\" \"Velus\") $COQLOADPATH"
 
 #echo "COQPROGARGS=$COQPROGARGS"
 #echo

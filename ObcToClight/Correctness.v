@@ -11,15 +11,15 @@ Require Import common.Memory.
 Require Import common.Events.
 Require Import common.Globalenvs.
 
-Require Import Rustre.Common.
-Require Import Rustre.RMemory.
-Require Import Rustre.Ident.
-Require Import Rustre.Traces. 
+Require Import Velus.Common.
+Require Import Velus.RMemory.
+Require Import Velus.Ident.
+Require Import Velus.Traces. 
 
-Require Import Rustre.ObcToClight.MoreSeparation.
-Require Import Rustre.ObcToClight.SepInvariant.
-Require Import Rustre.ObcToClight.Translation.
-Require Import Rustre.ObcToClight.Interface.
+Require Import Velus.ObcToClight.MoreSeparation.
+Require Import Velus.ObcToClight.SepInvariant.
+Require Import Velus.ObcToClight.Translation.
+Require Import Velus.ObcToClight.Interface.
 
 Require Import Program.Tactics.
 Require Import List.

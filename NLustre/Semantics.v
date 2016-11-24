@@ -4,11 +4,11 @@ Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 
 Require Import Coq.FSets.FMapPositive.
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.NLustre.Ordered.
-Require Import Rustre.NLustre.Stream.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.Stream.
 
 (** * The CoreDF semantics *)
 

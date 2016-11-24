@@ -1,5 +1,5 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
+Require Import Velus.Common.
+Require Import Velus.Operators.
 Require Import PArith.
 Require Import Coq.Sorting.Permutation.
 

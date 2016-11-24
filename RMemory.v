@@ -1,6 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 
-Require Import Rustre.Common.
+Require Import Velus.Common.
 
 Set Implicit Arguments.
 

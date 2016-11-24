@@ -1,10 +1,10 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.Obc.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.RMemory.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.Obc.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.RMemory.
 
 Require Import List.
 Import List.ListNotations.
@@ -16,10 +16,10 @@ Module Type FUSEIFTE
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF: Rustre.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP: Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP: Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Equ  : Rustre.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP).
+       (Import SynDF: Velus.NLustre.Syntax.SYNTAX Ids Op)
+       (Import SynMP: Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP: Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import Equ  : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP).
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
   | FreeVar: forall i ty,
@@ -668,10 +668,10 @@ Module FuseIfteFun
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF: Rustre.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP: Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP: Rustre.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Equ  : Rustre.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP)
+       (Import SynDF: Velus.NLustre.Syntax.SYNTAX Ids Op)
+       (Import SynMP: Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SemMP: Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import Equ  : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynMP SemMP)
        <: FUSEIFTE Ids Op OpAux SynDF SynMP SemMP Equ.
 
   Include FUSEIFTE Ids Op OpAux SynDF SynMP SemMP Equ.

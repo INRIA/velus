@@ -1,12 +1,12 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.NLustre.IsFree.
-Require Import Rustre.NLustre.IsVariable.
-Require Import Rustre.NLustre.IsDefined.
-Require Import Rustre.NLustre.Memories.
-Require Import Rustre.NLustre.Ordered.
-Require Import Rustre.NLustre.NoDup.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.IsFree.
+Require Import Velus.NLustre.IsVariable.
+Require Import Velus.NLustre.IsDefined.
+Require Import Velus.NLustre.Memories.
+Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NoDup.
 
 Require Import List.
 Import List.ListNotations.

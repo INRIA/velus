@@ -1,8 +1,8 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.RMemory.
-Require Import Rustre.Obc.Syntax.
-Require Import Rustre.Obc.Semantics.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.RMemory.
+Require Import Velus.Obc.Syntax.
+Require Import Velus.Obc.Semantics.
 
 Require Import Morphisms.
 

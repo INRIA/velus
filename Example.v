@@ -1,19 +1,19 @@
 Require Import PArith.
-Require Import Rustre.Nelist.
+Require Import Velus.Nelist.
 Require Import List.
 Import List.ListNotations.
 Open Scope positive.
 Open Scope list.
 
-Require Import Rustre.Common.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.Obc.Syntax.
-Require Import Rustre.Translation.
-Require Import Rustre.Obc.FuseIfte.
+Require Import Velus.Common.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.Obc.Syntax.
+Require Import Velus.Translation.
+Require Import Velus.Obc.FuseIfte.
 
-Require Import Rustre.NLustre.Memories.
-Require Import Rustre.NLustre.WellFormed.
-Require Import Rustre.NLustre.WellFormed.Decide.
+Require Import Velus.NLustre.Memories.
+Require Import Velus.NLustre.WellFormed.
+Require Import Velus.NLustre.WellFormed.Decide.
 
 
 (* Common notations *)

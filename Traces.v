@@ -4,9 +4,9 @@ Require Import common.Globalenvs.
 Require Import cfrontend.Clight.
 Require Import lib.Integers.
 
-Require Import Rustre.Common.
-Require Import Rustre.Ident.
-Require Import Rustre.ObcToClight.Interface.
+Require Import Velus.Common.
+Require Import Velus.Ident.
+Require Import Velus.ObcToClight.Interface.
 
 Require Import List.
 Import List.ListNotations.

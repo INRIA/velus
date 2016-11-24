@@ -1,8 +1,8 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
+Require Import Velus.Common.
+Require Import Velus.Operators.
 
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.NLustre.IsFree.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.IsFree.
 Require Import List.
 
 (** * Free variables: decision procedure *)

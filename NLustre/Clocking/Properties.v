@@ -1,5 +1,5 @@
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
+Require Import Velus.Common.
+Require Import Velus.Operators.
 Require Import NLustre.Syntax.
 Require Import NLustre.Clocking.
 Require Import NLustre.Clocking.Parents.

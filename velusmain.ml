@@ -87,7 +87,7 @@ let compile source_name filename =
   if Cerrors.check_errors() then exit 2;
   let main_node = get_main_node p in
   match Compiler.apply_partial
-          (RustreCorrectness.compile (List.rev p) main_node)
+          (VelusCorrectness.compile (List.rev p) main_node)
           Asmexpand.expand_program with
   | Error errmsg -> Driveraux.print_error stderr errmsg
   | OK asm ->
@@ -110,7 +110,7 @@ let speclist = [
   "-dcminor", Arg.Set write_cm, " Save generated Clight in <source>.minor.c"
 ]
 
-let usage_msg = "Usage: rustre [options] <source>"
+let usage_msg = "Usage: velus [options] <source>"
 
 let _ =
   Machine.config :=

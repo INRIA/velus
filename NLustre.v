@@ -13,7 +13,7 @@ Require Export NLustre.NoDup.
 Require Export NLustre.Clocking.
 Require Export NLustre.Typing.
 
-Require Import Rustre.Common.
+Require Import Velus.Common.
 Require Import NLustre.IsVariable.Decide.
 Require Import NLustre.IsDefined.Decide.
 Require Import NLustre.IsFree.Decide.

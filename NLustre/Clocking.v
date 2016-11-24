@@ -1,7 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.NLustre.Syntax.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.NLustre.Syntax.
 Require Import List.
 
 (** * Well clocked programs *)

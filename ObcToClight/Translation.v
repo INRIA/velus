@@ -3,9 +3,9 @@ Require Import lib.Integers.
 Require Import common.Errors.
 Require Import lib.Maps.
 
-Require Import Rustre.Common.
-Require Import Rustre.ObcToClight.Interface.
-Require Import Rustre.Ident.
+Require Import Velus.Common.
+Require Import Velus.ObcToClight.Interface.
+Require Import Velus.Ident.
 
 Require Import Instantiator.
 Import Obc.Syn.

@@ -1,9 +1,9 @@
-Require Import Rustre.Common.
-Require Import Rustre.Ident.
-Require Import Rustre.NLustreToObc.Typing.
-Require Import Rustre.ObcToClight.Translation.
-Require Import Rustre.Traces.
-Require Import Rustre.ClightToAsm.
+Require Import Velus.Common.
+Require Import Velus.Ident.
+Require Import Velus.NLustreToObc.Typing.
+Require Import Velus.ObcToClight.Translation.
+Require Import Velus.Traces.
+Require Import Velus.ClightToAsm.
 
 Require Import common.Errors.
 Require Import common.Events.
@@ -13,7 +13,7 @@ Require Import cfrontend.ClightBigstep.
 Require Import lib.Integers.
 Require Import driver.Compiler.
 
-Require Import Rustre.Instantiator.
+Require Import Velus.Instantiator.
 Import DF.
 Import WeFDec.
 Import DF.Mem.

@@ -6,8 +6,8 @@ Require Import lib.Maps.
 Require Import lib.Coqlib.
 Require Import lib.Integers.
 
-Require Import Rustre.Common.
-Require Import Rustre.RMemory.
+Require Import Velus.Common.
+Require Import Velus.RMemory.
 
 Require Import List.
 Require Import ZArith.BinInt.

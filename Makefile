@@ -45,7 +45,7 @@ $(call includecmdwithout@,$(COQBIN)coqtop -config)
 #                        #
 ##########################
 
-COQLIBS?=-R . Rustre\
+COQLIBS?=-R . Velus\
   -exclude-dir CompCert\
   -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
@@ -58,7 +58,7 @@ COQLIBS?=-R . Rustre\
   -R CompCert/lib compcert.lib\
   -exclude-dir extraction/CompCert\
 
-COQDOCLIBS?=-R . Rustre\
+COQDOCLIBS?=-R . Velus\
   -R CompCert/cparser compcert.cparser\
   -R CompCert/exportclight compcert.exportclight\
   -R CompCert/flocq compcert.flocq\
@@ -135,7 +135,7 @@ VFILES:=RMemory.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
   ObcToClight/NLustreElab.v\
-  RustreCorrectness.v\
+  VelusCorrectness.v\
   Operators.v\
   Instantiator.v\
   Traces.v\
@@ -162,7 +162,7 @@ endif
 #                                     #
 #######################################
 
-all: rustre 
+all: velus 
 
 spec: $(VIFILES)
 
@@ -196,7 +196,7 @@ beautify: $(VFILES:=.beautified)
 	@echo 'Do not do "make clean" until you are sure that everything went well!'
 	@echo 'If there were a problem, execute "for file in $$(find . -name \*.v.old -print); do mv $${file} $${file%.old}; done" in your shell/'
 
-.PHONY: opt byte archclean clean install userinstall depend html validate compcert rustre
+.PHONY: opt byte archclean clean install userinstall depend html validate compcert velus
 
 compcert: CompCert/Makefile.config
 	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof
@@ -238,15 +238,15 @@ extraction/extract/Parser2.ml: NLustre/Parser/Parser2.ml extraction/extract
 extraction/extract/Parser2.mli: NLustre/Parser/Parser2.mli extraction/extract
 	cp $< $@
 
-extraction/extract/rustrelib.ml: rustrelib.ml extraction/extract
+extraction/extract/veluslib.ml: veluslib.ml extraction/extract
 	cp $< $@
 
-rustre: compcert extraction/STAMP extraction/extract/Lexer2.ml rustremain.ml \
+velus: compcert extraction/STAMP extraction/extract/Lexer2.ml velusmain.ml \
         extraction/extract/Parser2.mli extraction/extract/Parser2.ml \
-		extraction/extract/Relexer.ml extraction/extract/rustrelib.ml
+		extraction/extract/Relexer.ml extraction/extract/veluslib.ml
 	@find CompCert -name '*.cm*' -delete
-	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer rustremain.native
-	@mv rustremain.native rustre
+	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer velusmain.native
+	@mv velusmain.native velus
 	@cp CompCert/compcert.ini _build/compcert.ini
 
 ####################

@@ -4,7 +4,7 @@ Require Export Obc.Semantics.
 Require Export Obc.Typing.
 Require Export Obc.Equiv.
 
-Require Import Rustre.Common.
+Require Import Velus.Common.
 
 Module Type OBC (Ids: IDS) (Op: OPERATORS) (OpAux: OPERATORS_AUX Op).
   Declare Module Export Syn: SYNTAX Ids Op OpAux.

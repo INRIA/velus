@@ -1,9 +1,9 @@
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
-Require Import Rustre.RustreCorrectness.
+Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
-Require Import Rustre.ObcToClight.Translation.
-Require Import Rustre.ObcToClight.NLustreElab.
+Require Import Velus.ObcToClight.Translation.
+Require Import Velus.ObcToClight.NLustreElab.
 Require Import NLustre.Parser.Parser.
 
 Require ia32.Machregs ia32.Conventions1
@@ -137,13 +137,13 @@ Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
 (* builtins *)
-Extract Constant RustreCorrectness.add_builtins => "Rustrelib.add_builtins".
+Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".
 
 Separate Extraction
          ZArith.BinIntDef
          Compiler.transf_clight_program Cabs
          AST.signature_main
-         RustreCorrectness.compile elab_declarations translation_unit_file
+         VelusCorrectness.compile elab_declarations translation_unit_file
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg

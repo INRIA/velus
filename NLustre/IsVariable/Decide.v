@@ -4,12 +4,12 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.NLustre.IsVariable.
-Require Import Rustre.NLustre.IsDefined.
-Require Import Rustre.NLustre.Memories.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.IsVariable.
+Require Import Velus.NLustre.IsDefined.
+Require Import Velus.NLustre.Memories.
 
 (** * Stack variables: decision procedure *)
 

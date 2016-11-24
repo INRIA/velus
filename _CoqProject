@@ -1,4 +1,4 @@
--R . Rustre
+-R . Velus
 
 -R CompCert/lib compcert.lib
 -R CompCert/common compcert.common
@@ -55,7 +55,7 @@ ObcToClight/Correctness.v
 ObcToClight/MoreSeparation.v
 ObcToClight/SepInvariant.v
 ObcToClight/NLustreElab.v
-Rustre.v
+Velus.v
 Instantiator.v
 Traces.v
 ClightToAsm.v

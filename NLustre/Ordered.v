@@ -3,9 +3,9 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.NLustre.Syntax.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.NLustre.Syntax.
 
 (** * Ordering of nodes *)
 

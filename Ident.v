@@ -1,4 +1,4 @@
-Require Import Rustre.Common.
+Require Import Velus.Common.
 Require Import String.
 Require Import Ascii.
 Require Import List.

@@ -1,10 +1,10 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
-Require Import Rustre.Common.
-Require Import Rustre.Operators.
-Require Import Rustre.Obc.Syntax.
-Require Import Rustre.NLustre.Syntax.
-Require Import Rustre.NLustre.Memories.
+Require Import Velus.Common.
+Require Import Velus.Operators.
+Require Import Velus.Obc.Syntax.
+Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.Memories.
 
 Require Import List.
 Require Import Coq.Lists.List.
@@ -40,8 +40,8 @@ Module Type TRANSLATION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Rustre.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op SynDF).
 
   (* definition is needed in signature *)
@@ -908,8 +908,8 @@ Module TranslationFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Rustre.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Rustre.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
        (Import Mem : MEMORIES Ids Op SynDF)
        <: TRANSLATION Ids Op OpAux SynDF SynMP Mem.
 
