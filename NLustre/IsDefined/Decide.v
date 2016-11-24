@@ -17,8 +17,6 @@ Require Import Velus.NLustre.Memories.
 Decision procedure for the [Is_defined_in] predicate. We show that it
 is equivalent to its specification.
 
-Remark: This development is not formally part of the correctness proof.
-
  *)
 
 Module Type DECIDE

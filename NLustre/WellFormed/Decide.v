@@ -22,8 +22,6 @@ Require Import List.
 Decision procedure for the [Is_well_sch] predicate. We show that it is
 equivalent to its specification.
 
-Remark: This development is not formally part of the correctness proof.
-
  *)
 
 Module Type DECIDE
@@ -380,7 +378,7 @@ Module Type DECIDE
 
 End DECIDE.
 
-Module Decide
+Module DecideFun
        (Ids           : IDS)
        (Op            : OPERATORS)
        (Import Syn    : SYNTAX Ids Op)
@@ -397,4 +395,5 @@ Module Decide
        <: DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
 
   Include DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
-End Decide.
+End DecideFun.
+

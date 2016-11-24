@@ -18,9 +18,6 @@ Require Import Velus.NLustre.Memories.
 Decision procedure for the [IsVariable] predicate. We show that it is
 equivalent to its specification.
 
-Remark: This development is used once in the correctness proof, it is
-not clear (to me) whether it is necessary.
-
  *)
 
 Module Type DECIDE

@@ -16,6 +16,7 @@ Require Export NLustre.Typing.
 Require Import Velus.Common.
 Require Import NLustre.IsVariable.Decide.
 Require Import NLustre.IsDefined.Decide.
+Require Import NLustre.WellFormed.Decide.
 Require Import NLustre.IsFree.Decide.
 Require Export NLustre.Clocking.Parents.
 Require Export NLustre.Clocking.Properties.
@@ -28,7 +29,7 @@ Module Type NLUSTRE
   Declare Module Export Str: STREAM Op.
   Declare Module Export Ord: ORDERED Ids Op Syn.
   Declare Module Export IsF: ISFREE Ids Op Syn.
-  Declare Module Export IsFDec: NLustre.IsFree.Decide.DECIDE Ids Op Syn IsF.
+  Declare Module Export IsFDec: IsFree.Decide.DECIDE Ids Op Syn IsF.
   Declare Module Export Sem: SEMANTICS Ids Op OpAux Syn Str Ord.
   Declare Module Export Typ: TYPING Ids Op Syn.
   Declare Module Export Mem: MEMORIES Ids Op Syn.
@@ -39,6 +40,8 @@ Module Type NLUSTRE
   Declare Module Export MemSem: MEMSEMANTICS Ids Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.     
   Declare Module Export IsVDec: IsVariable.Decide.DECIDE Ids Op Syn Mem IsD IsV.
   Declare Module Export IsDDec: IsDefined.Decide.DECIDE Ids Op Syn Mem IsD.
+  Declare Module Export IsWFDec: WellFormed.Decide.DECIDE Ids Op Syn IsF IsFDec
+                                     Ord Mem IsD IsV IsDDec IsVDec NoD WeF.
   Declare Module Export Clo: CLOCKING Ids Op Syn.
   Declare Module Export Par: PARENTS Ids Op Syn Clo.
   Declare Module Export Pro: PROPERTIES Ids Op Syn IsF Clo Mem IsD Par.
@@ -64,7 +67,10 @@ Module NLustreFun
   Module Export MemSem := MemSemanticsFun Ids Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.     
   Module Export IsVDec := IsVariable.Decide.DecideFun Ids Op Syn Mem IsD IsV.
   Module Export IsDDec := IsDefined.Decide.DecideFun Ids Op Syn Mem IsD.
+  Module Export IsWFDec := WellFormed.Decide.DecideFun Ids Op Syn IsF IsFDec Ord
+                                             Mem IsD IsV IsDDec IsVDec NoD WeF.
   Module Export Clo := ClockingFun Ids Op Syn.
   Module Export Par := ParentsFun Ids Op Syn Clo.
   Module Export Pro := PropertiesFun Ids Op Syn IsF Clo Mem IsD Par.
 End NLustreFun.
+

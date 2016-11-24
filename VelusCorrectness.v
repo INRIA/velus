@@ -15,7 +15,7 @@ Require Import driver.Compiler.
 
 Require Import Velus.Instantiator.
 Import NL.
-Import WeFDec.
+Import NL.IsWFDec.
 Import NL.Mem.
 Import Obc.Syn.
 Import Obc.Sem.

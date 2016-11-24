@@ -27,5 +27,3 @@ Module Typ := NLustreToObc.Typing.TypingFun Ids Op OpAux NL Obc Mem Trans.
 Module Corr := NLustreToObc.Correctness.CorrectnessFun Ids Op OpAux NL Obc Mem Trans IsP MemCor Typ.
 Module Fusible := NLustreToObc.Fusible.FusibleFun Ids Op OpAux NL Obc Trans.
 
-Module WeFDec := WellFormed.Decide.Decide Ids Op NL.Syn NL.IsF NL.IsFDec NL.Ord NL.Mem NL.IsD NL.IsV NL.IsDDec NL.IsVDec NL.NoD NL.WeF.
-
