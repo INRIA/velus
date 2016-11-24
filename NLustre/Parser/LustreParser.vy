@@ -1,3 +1,4 @@
+/* *********************************************************************/
 /*                    The Velus Lustre compiler                        */
 /*                                                                     */
 /*  Copyright Institut National de Recherche en Informatique et en     */
