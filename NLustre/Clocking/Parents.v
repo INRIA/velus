@@ -111,14 +111,14 @@ Module Type PARENTS
     intros ck x b Hp; apply clock_parent_strict with (1:=Hp); constructor.
   Qed.
 
-  Lemma clk_clock_parent:
+  Lemma wc_clock_parent:
     forall C ck' ck,
-      Well_clocked_env C
+      wc_env C
       -> clock_parent ck ck'
-      -> clk_clock C ck'
-      -> clk_clock C ck.
+      -> wc_clock C ck'
+      -> wc_clock C ck.
   Proof.
-    Hint Constructors clk_clock.
+    Hint Constructors wc_clock.
     induction ck' as [|ck' IH]; destruct ck as [|ck i' ty' b'];
     try now (inversion 3 || auto).
     intros Hwc Hp Hck.

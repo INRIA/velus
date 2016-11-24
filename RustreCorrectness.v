@@ -510,7 +510,7 @@ Qed.
       
 Lemma ClassIsFusible_translate:
   forall G,
-    Well_clocked G ->
+    wc_global G ->
     Welldef_global G ->
     Forall ClassIsFusible (translate G).
 Proof.
@@ -590,7 +590,7 @@ Definition vstr (xss: stream (list const)): stream (list value) :=
 
 Lemma soundness_cl:
   forall G P main ins outs,
-    Well_clocked G ->
+    wc_global G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
@@ -677,7 +677,7 @@ Qed.
 
 Lemma behavior_clight:
   forall G P main ins outs,
-    Well_clocked G ->
+    wc_global G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
@@ -700,7 +700,7 @@ Qed.
 
 Lemma behavior_asm:
   forall G P main ins outs,
-    Well_clocked G ->
+    wc_global G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->

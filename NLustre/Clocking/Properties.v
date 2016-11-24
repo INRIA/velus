@@ -39,11 +39,11 @@ Section Well_clocked.
 
 (** We work under a (valid) clocking environment *)
 Variable C : clockenv.
-Variable Hwc: Well_clocked_env C.
+Variable Hwc: wc_env C.
 
-Theorem Well_clocked_eq_not_Is_free_in_clock:
+Theorem wc_equation_not_Is_free_in_clock:
   forall eq x ck,
-      Well_clocked_eq C eq
+      wc_equation C eq
     -> Is_defined_in_eq x eq
     -> Has_clock_eq ck eq
     -> ~Is_free_in_clock x ck.
@@ -62,10 +62,10 @@ Proof.
           by now destruct x'; inv Hin; apply Lt.lt_0_Sn);
         pose proof (In_Forall _ _ _ Hcv Hin) as Hck_x;
         simpl in *;
-        generalize (Well_clocked_env_vars _ _ _ Hlen Hwc Hcv)
+        generalize (wc_env_vars _ _ _ Hlen Hwc Hcv)
       | _ =>
         (* Case: eq ~ EqDef or eq ~ EqFby *)
-        generalize (Well_clocked_env_var _ _ _ Hwc Hcv)
+        generalize (wc_env_var _ _ _ Hwc Hcv)
       end;
       intro Hclock;
       apply Is_free_in_clock_self_or_parent in Hfree;
@@ -73,16 +73,16 @@ Proof.
       try match goal with
       | _ : _ = Con _ _ _ |- _ =>
         rewrite Hck in *;
-          apply clk_clock_sub with (1:=Hwc) in Hclock;
+          apply wc_clock_sub with (1:=Hwc) in Hclock;
           match reverse goal with
-          | H: clk_var C _ _ |- _ => apply clk_var_det with (1:=H) in Hclock
+          | H: wc_var C _ _ |- _ => apply wc_var_det with (1:=H) in Hclock
           end;
           apply clock_no_loops with (1:=Hclock)
       | _ : clock_parent _ _ |- _ =>
-        apply clk_clock_parent with (1:=Hwc) (2:=Hck) in Hclock;
-          apply clk_clock_sub with (1:=Hwc) in Hclock;
+        apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock;
+          apply wc_clock_sub with (1:=Hwc) in Hclock;
           match reverse goal with
-          | H: clk_var C _ _ |- _ => apply clk_var_det with (1:=H) in Hclock
+          | H: wc_var C _ _ |- _ => apply wc_var_det with (1:=H) in Hclock
           end;
           apply clock_parent_parent' in Hck;
           rewrite <-Hclock in Hck;
@@ -90,33 +90,33 @@ Proof.
       end.
 Qed.
 
-Corollary Well_clocked_EqDef_not_Is_free_in_clock:
+Corollary wc_EqDef_not_Is_free_in_clock:
   forall x ce ck,
-      Well_clocked_eq C (EqDef x ck ce)
+      wc_equation C (EqDef x ck ce)
     -> ~Is_free_in_clock x ck.
 Proof.
   intros x ce ck Hwce Hwt.
-  now eapply Well_clocked_eq_not_Is_free_in_clock;
+  now eapply wc_equation_not_Is_free_in_clock;
     eauto using Has_clock_eq.
 Qed.
 
-Corollary Well_clocked_EqApp_not_Is_free_in_clock:
+Corollary wc_EqApp_not_Is_free_in_clock:
   forall xs f le ck,
-      Well_clocked_eq C (EqApp xs ck f le)
+      wc_equation C (EqApp xs ck f le)
     -> forall x, List.In x xs -> ~Is_free_in_clock x ck.
 Proof.
   intros x f le ck Hwce Hwt y Hinx.
-  now eapply Well_clocked_eq_not_Is_free_in_clock;
+  now eapply wc_equation_not_Is_free_in_clock;
     eauto using Is_defined_in_eq, Has_clock_eq.
 Qed.
 
-Corollary Well_clocked_EqFby_not_Is_free_in_clock:
+Corollary wc_EqFby_not_Is_free_in_clock:
   forall x v0 le ck,
-      Well_clocked_eq C (EqFby x ck v0 le)
+      wc_equation C (EqFby x ck v0 le)
     -> ~Is_free_in_clock x ck.
 Proof.
   intros x v0 le ck Hwce Hwt.
-  now eapply Well_clocked_eq_not_Is_free_in_clock;
+  now eapply wc_equation_not_Is_free_in_clock;
     eauto using Has_clock_eq.
 Qed.
 

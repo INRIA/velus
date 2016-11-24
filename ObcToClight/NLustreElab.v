@@ -361,14 +361,14 @@ Section ElabExpressions.
     | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
     end.
 
-  Lemma find_clock_clk_var:
+  Lemma find_clock_wc_var:
     forall loc x ck,
       find_clock loc x = OK ck ->
-      clk_var cenv x ck.
+      wc_var cenv x ck.
   Proof.
     unfold find_clock.
     intros loc x ck Hfind.
-    NamedDestructCases; auto using clk_var.
+    NamedDestructCases; auto using wc_var.
   Qed.
 
   Definition elab_equation (aeq: Ast.equation) : res equation :=
@@ -421,20 +421,20 @@ Section ElabExpressions.
   Lemma assert_clock_spec:
     forall loc x ck,
       assert_clock loc x ck = OK tt ->
-      clk_var cenv x ck.
+      wc_var cenv x ck.
   Proof.
     unfold assert_clock.
     intros ** Hack.
     monadInv1 Hack. NamedDestructCases.
     rewrite equiv_decb_equiv in Heq.
     rewrite Heq in *.
-    apply find_clock_clk_var with (1:=EQ).
+    apply find_clock_wc_var with (1:=EQ).
   Qed.
   
   Lemma assert_clocks_spec:
     forall loc ck xs,
       assert_clocks loc ck xs = OK tt ->
-      clk_vars cenv xs ck.
+      wc_vars cenv xs ck.
   Proof.
     induction xs as [|x xs]; simpl; intros HH; try apply Forall_nil.
     monadInv1 HH.
@@ -508,7 +508,7 @@ Section ElabExpressions.
   Lemma wc_elab_lexp:
     forall ae e ck,
       elab_lexp ae = OK (e, ck) ->
-      clk_lexp cenv e ck.
+      wc_lexp cenv e ck.
   Proof.
     induction ae; intros e ck Helab; monadInv Helab;
       NamedDestructCases; try constructor; intros; subst;
@@ -516,9 +516,9 @@ Section ElabExpressions.
              | H:(_ ==b _) = true |- _ =>
                rewrite equiv_decb_equiv in H; rewrite H in *; clear H
              | H:find_clock _ _ = OK _ |- _ =>
-               apply find_clock_clk_var in H
+               apply find_clock_wc_var in H
              end;
-      eauto using clk_lexp.
+      eauto using wc_lexp.
   Qed.
 
   Lemma wt_elab_lexps:
@@ -541,7 +541,7 @@ Section ElabExpressions.
   Lemma wc_elab_lexps:
     forall loc ck aes tys es,
       elab_lexps loc ck aes tys = OK es ->
-      Forall (fun e=>clk_lexp cenv e ck) es.
+      Forall (fun e=>wc_lexp cenv e ck) es.
   Proof.
     induction aes; simpl; intros ** Helab; DestructCases; auto.
     monadInv Helab.
@@ -581,7 +581,7 @@ Section ElabExpressions.
   Lemma wc_elab_cexp:
     forall ae e ck,
       elab_cexp ae = OK (e, ck) ->
-      clk_cexp cenv e ck.
+      wc_cexp cenv e ck.
   Proof.
     induction ae; simpl; intros e ck HH;
       repeat match goal with H:_ = OK _ |- _ => monadInv H end;
@@ -590,9 +590,9 @@ Section ElabExpressions.
              | H:(_ ==b _) = true |- _ =>
                rewrite equiv_decb_equiv in H; rewrite H in *; clear H
              | H:find_clock _ _ = OK _ |- _ =>
-               apply find_clock_clk_var in H
+               apply find_clock_wc_var in H
              end;
-      eauto using clk_cexp, clk_lexp, wc_elab_lexp.
+      eauto using wc_cexp, wc_lexp, wc_elab_lexp.
   Qed.
 
   Lemma check_result_list_Forall2:
@@ -601,7 +601,7 @@ Section ElabExpressions.
       Forall2 (fun x tx => In (x, tx) (PM.elements env)) xs txs
       /\ (forall x, PS.In x s <-> In x xs)
       /\ NoDup xs
-      /\ Forall (fun x=>clk_var cenv x ck) xs.
+      /\ Forall (fun x=>wc_var cenv x ck) xs.
     Proof.
     induction xs as [|x xs]; simpl.
     - repeat split; DestructCases; auto using NoDup_nil.
@@ -675,10 +675,10 @@ Section ElabExpressions.
         intros ** Htypeof. now rewrite Htypeof.
   Qed.
 
-  Lemma Well_clocked_elab_equation:
+  Lemma wc_elab_equation:
     forall aeq eq,
       elab_equation aeq = OK eq ->
-      Well_clocked_eq cenv eq.
+      wc_equation cenv eq.
   Proof.
     intros aeq eq Helab.
     destruct aeq as ((xs & ae) & loc).
@@ -689,7 +689,7 @@ Section ElabExpressions.
              | H:bind2 _ _ = _ |- _ => monadInv H
              | H:elab_lexp _ = OK _ |- _ => apply wc_elab_lexp in H
              | H:elab_lexps _ _ _ _ = OK _ |- _ => apply wc_elab_lexps in H
-             | H:find_clock _ _ = OK _ |- _ => apply find_clock_clk_var in H
+             | H:find_clock _ _ = OK _ |- _ => apply find_clock_wc_var in H
              | H:elab_cexp _ = OK _ |- _ => apply wc_elab_cexp in H
              | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
              | H:equiv _ _ |- _ => rewrite <-H in *; clear H
@@ -699,7 +699,7 @@ Section ElabExpressions.
                  destruct H as (Hele & Hins & Hnodup & Hcks)
              | _ => NamedDestructCases
              end; intros; subst;
-        auto using Well_clocked_eq, clk_cexp, clk_lexp with dftyping.
+        auto using wc_equation, wc_cexp, wc_lexp with dftyping.
   Qed.
 
   Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
@@ -716,11 +716,11 @@ Section ElabExpressions.
   Lemma check_clock_spec:
     forall loc ck,
       check_clock loc ck = OK tt ->
-      clk_clock cenv ck.
+      wc_clock cenv ck.
   Proof.
-    induction ck; simpl; intro HH; auto using clk_clock.
+    induction ck; simpl; intro HH; auto using wc_clock.
     monadInv HH; NamedDestructCases.
-    apply find_clock_clk_var in EQ1.
+    apply find_clock_wc_var in EQ1.
     rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
     destruct x. auto.
   Qed.
@@ -1171,7 +1171,7 @@ Section ElabDeclaration.
     end.
 
   Lemma check_clock_env'_spec : forall loc cenv ckl,
-    check_clock_env' loc cenv ckl = OK tt -> Forall (fun x_ck => clk_clock cenv (snd x_ck)) ckl.
+    check_clock_env' loc cenv ckl = OK tt -> Forall (fun x_ck => wc_clock cenv (snd x_ck)) ckl.
   Proof.
     intros loc cenv ckl Hckl. induction ckl as [| [x ck] ckl]; simpl in *.
     + constructor.
@@ -1193,7 +1193,7 @@ Section ElabDeclaration.
   Lemma check_clock_env_spec:
     forall loc cenv,
       check_clock_env loc cenv = OK tt ->
-      Well_clocked_env cenv.
+      wc_env cenv.
   Proof.
     unfold check_clock_env.
     intros loc cenv Hcheck x ck Hin.
@@ -1216,9 +1216,9 @@ Section ElabDeclaration.
     let Helab_out := fresh "Helab_out" in
     let Helab_locals := fresh "Helab_locals" in
     let Helab_in := fresh "Helab_in" in
-    let Hclk_out := fresh "Hclk_out" in
-    let Hclk_locals := fresh "Hclk_locals" in
-    let Hclk_in := fresh "Hclk_in" in
+    let Hwc_out := fresh "Hwc_out" in
+    let Hwc_locals := fresh "Hwc_locals" in
+    let Hwc_in := fresh "Hwc_in" in
     let clkenv_out := fresh "clkenv_out" in
     let clkenv_locals := fresh "clkenv_locals" in
     let clkenv := fresh "clkenv" in
@@ -1236,11 +1236,11 @@ Section ElabDeclaration.
     match goal with H:elab_var_decls _ inputs = OK ?x |- _ =>
       rename H into Helab_in; destruct x as (xin & tyenv_in) end;
     match goal with H:elab_clock_decl _ _ outputs = OK ?x |- _ =>
-      rename H into Hclk_out; rename x into clkenv_out end;
+      rename H into Hwc_out; rename x into clkenv_out end;
     match goal with H:elab_clock_decl _ _ locals = OK ?x |- _ =>
-      rename H into Hclk_locals; rename x into clkenv_locals end;
+      rename H into Hwc_locals; rename x into clkenv_locals end;
     match goal with H:elab_clock_decl _ _ inputs = OK ?x |- _ =>
-      rename H into Hclk_in; rename x into clkenv end;
+      rename H into Hwc_in; rename x into clkenv end;
     match goal with H:mmap (elab_equation _ _ _) _ = OK ?x |- _ =>
       rename H into Helabs; rename x into eqs end;
     match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
@@ -1259,7 +1259,7 @@ Section ElabDeclaration.
   Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
   Program Definition elab_declaration (decl: Ast.declaration)
-    : res {n | wt_node G n /\ Well_clocked_node n} :=
+    : res {n | wt_node G n /\ wc_node n} :=
     match decl with
     | NODE name inputs outputs locals equations loc =>
       match (do xout   <- elab_var_decls (PM.empty type) outputs;
@@ -1394,20 +1394,20 @@ Section ElabDeclaration.
         destruct Hin as (aeq & Hin & Helab).
         apply wt_elab_equation with (G:=G) in Helab; auto.
         intros x ck Hfind.
-        apply elab_clock_decl_spec with (1:=Hclk_locals) (x:=x); auto.
-        apply elab_clock_decl_spec with (1:=Hclk_out).
-        apply elab_clock_decl_spec with (1:=Hclk_in).
+        apply elab_clock_decl_spec with (1:=Hwc_locals) (x:=x); auto.
+        apply elab_clock_decl_spec with (1:=Hwc_out).
+        apply elab_clock_decl_spec with (1:=Hwc_in).
         intros ** Hnfind.
         rewrite PM.gempty in Hnfind.
         discriminate.
-    - (* Well_clocked_node n *)
+    - (* wc_node n *)
       cut (exists cenv,
-              Forall (Well_clocked_eq cenv) eqs
-              /\ clk_vars cenv (map fst xin) Cbase
-              /\ clk_vars cenv (map fst xout) Cbase
-              /\ Well_clocked_env cenv).
+              Forall (wc_equation cenv) eqs
+              /\ wc_vars cenv (map fst xin) Cbase
+              /\ wc_vars cenv (map fst xout) Cbase
+              /\ wc_env cenv).
       now (destruct 1 as (cenv & WCeqs & WCin & WCout & Wcenv);
-           eauto using Well_clocked_node).
+           eauto using wc_node).
       repeat match goal with H:OK _ = _ |- _ => symmetry in H; monadInv1 H end.
       NamedDestructCases.
       MassageElabs outputs locals inputs.
@@ -1418,7 +1418,7 @@ Section ElabDeclaration.
       intros y Hin.
       eapply Coqlib.list_forall2_in_right with (1:=Helabs) in Hin.
       destruct Hin as (aeq & Hin & Helab).
-      now apply Well_clocked_elab_equation in Helab.
+      now apply wc_elab_equation in Helab.
   Qed.
 
 End ElabDeclaration.
@@ -1433,9 +1433,9 @@ Local Obligation Tactic :=
 
 Program Fixpoint elab_declarations'
         (G: global) (nenv: PM.t (list type * list type))
-        (WTG: wt_global G /\ Well_clocked G) (Hnenv: Is_interface_map G nenv)
+        (WTG: wt_global G /\ wc_global G) (Hnenv: Is_interface_map G nenv)
         (decls: list Ast.declaration)
-  : res {G' | wt_global G' /\ Well_clocked G'} :=
+  : res {G' | wt_global G' /\ wc_global G'} :=
   match decls with
   | nil => OK (exist _ G WTG)
   | d::ds =>
@@ -1492,8 +1492,8 @@ Next Obligation.
 Qed.
 
 Definition elab_declarations (decls: list Ast.declaration)
-  : res {G | wt_global G /\ Well_clocked G} :=
+  : res {G | wt_global G /\ wc_global G} :=
   elab_declarations' [] (PM.empty (list type * list type))
-                     (conj wtg_nil Well_clocked_nil)
+                     (conj wtg_nil wc_global_nil)
                      Is_interface_map_empty decls.
 

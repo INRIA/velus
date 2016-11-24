@@ -2352,8 +2352,8 @@ for all [Is_free_exp x e]. *)
 
   Lemma translate_eqns_IsFusible:
     forall C mems inputs eqs,
-      Well_clocked_env C
-      -> Forall (Well_clocked_eq C) eqs
+      wc_env C
+      -> Forall (wc_equation C) eqs
       -> Is_well_sch mems inputs eqs
       -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
       -> (forall input, In input inputs -> ~ Is_defined_in_eqs input eqs)
@@ -2405,12 +2405,12 @@ for all [Is_free_exp x e]. *)
         {
           intros ** Hwrite.
           assert (In i x) by now inv Hwrite.
-          now eapply Well_clocked_EqApp_not_Is_free_in_clock; eauto.
+          now eapply wc_EqApp_not_Is_free_in_clock; eauto.
         }
 
         now apply IsFusible_Control_laexp.
       + assert (~Is_free_in_clock x ck) as Hnfree
-            by (eapply Well_clocked_EqFby_not_Is_free_in_clock; eauto).
+            by (eapply wc_EqFby_not_Is_free_in_clock; eauto).
         apply IsFusible_Control_laexp;
         [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
   Qed.
