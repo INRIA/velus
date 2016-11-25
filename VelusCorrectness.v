@@ -35,6 +35,8 @@ Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
+Parameter print_obc: bool -> Obc.Syn.program -> unit.
+
 Definition Wellsch_global (G: global) : Prop :=
   Forall (fun n=>Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G.
 
@@ -78,7 +80,9 @@ Qed.
 Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
   do _ <- (fold_left is_well_sch g (OK tt));
   OK g @@ Trans.translate
+       @@ print (print_obc false)
        @@ map Obc.Fus.fuse_class
+       @@ print (print_obc true)
        @@@ Translation.translate main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
@@ -284,6 +288,7 @@ Proof.
   unfold Translation.translate in Comp.
   pose proof Emain as Emain'.
   apply Obc.Fus.fuse_find_class in Emain.
+  repeat rewrite print_identity in *.
   rewrite Emain in *.
   destruct (find_method Ids.step (c_methods (Obc.Fus.fuse_class c_main)))
     as [fuse_m_step|] eqn: Efusestep; try discriminate.

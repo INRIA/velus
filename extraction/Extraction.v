@@ -136,6 +136,8 @@ Extract Constant Cabs.cabsloc =>
 Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
+
 (* builtins *)
 Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".
 

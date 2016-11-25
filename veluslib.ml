@@ -1,4 +1,20 @@
 
+(* Functions called from within the proof, e.g., VelusCorrectness *)
+
+let unfused_obc_destination = ref (None : string option)
+let fused_obc_destination = ref (None : string option)
+
+let print_obc_if fused prog =
+  match
+    (if fused then !fused_obc_destination else !unfused_obc_destination)
+  with
+  | None -> ()
+  | Some f ->
+      let oc = open_out f in
+      Interfacelib.PrintObc.print_program
+        (Format.formatter_of_out_channel oc) prog;
+      close_out oc
+
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in
   let id = Camlcoq.intern_string name in

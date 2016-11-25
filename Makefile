@@ -241,13 +241,18 @@ extraction/extract/LustreParser2.mli: NLustre/Parser/LustreParser2.mli \
     		extraction/extract
 	cp $< $@
 
-extraction/extract/veluslib.ml: veluslib.ml extraction/extract
+extraction/extract/obclib.ml: Obc/obclib.ml extraction/extract
+	cp $< $@
+
+extraction/extract/interfacelib.ml: ObcToClight/interfacelib.ml \
+    		extraction/extract
 	cp $< $@
 
 velus: compcert extraction/STAMP extraction/extract/LustreLexer.ml \
     	velusmain.ml extraction/extract/LustreParser2.mli \
 	extraction/extract/LustreParser2.ml extraction/extract/Relexer.ml \
-	extraction/extract/veluslib.ml
+	veluslib.ml extraction/extract/interfacelib.ml \
+	extraction/extract/obclib.ml
 	@find CompCert -name '*.cm*' -delete
 	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer velusmain.native
 	@mv velusmain.native velus
