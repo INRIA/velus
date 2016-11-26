@@ -171,15 +171,25 @@ module PrintFun (Obc: SYNTAX)
                          Obc.m_vars = locals;
                          Obc.m_out  = outputs;
                          Obc.m_body = body } =
+     fprintf p "@[<v>";
      fprintf p "@[<hov>";
      fprintf p "@[<h>%a@,(@[<hov 0>%a@])@]@ " print_ident name print_decls inputs;
      if outputs <> [] then
        fprintf p "@[<h>returns (@[<hov 0>%a@])@]@ " print_decls outputs;
     if locals <> [] then
        fprintf p "@[<h>var @[<hov 0>%a@] in@]@ " print_decls locals;
-     fprintf p "@[<v 2>{@ ";
+     fprintf p "@]@;{@[<v 1>@;";
      print_stmt p body;
      fprintf p "@;<0 -2>}@]@]"
+
+    let rec print_methods p first ms =
+      match ms with
+      | [] -> ()
+      | m :: ms ->
+          (if first
+           then fprintf p "@[<h 2>%a@]" print_method m
+           else fprintf p "@;@;@[<h 2>%a@]" print_method m);
+          print_methods p false ms
 
     let print_class p { Obc.c_name    = name;
                         Obc.c_mems    = mems;
@@ -195,7 +205,7 @@ module PrintFun (Obc: SYNTAX)
           fprintf p "@[<h>memory %a@ : %a@]" print_ident id PrintOps.print_typ ty)
         p mems;
       fprintf p "@;";
-      List.iter (fun m -> fprintf p "@[<h 2>%a@]@;" print_method m) meths;
+      print_methods p true meths;
       fprintf p "@;<0 -2>}@]"
 
     let print_program p prog =
