@@ -14,9 +14,9 @@ module type PRINT_OPS =
 
     val print_typ   : Format.formatter -> typ   -> unit
     val print_const : Format.formatter -> const -> unit
-    val print_unop  : Format.formatter -> unop
+    val print_unop  : Format.formatter -> unop -> typ
                         -> (Format.formatter -> 'a -> unit) -> 'a -> unit
-    val print_binop : Format.formatter -> binop
+    val print_binop : Format.formatter -> binop -> typ
                         -> (Format.formatter -> 'a -> unit)
                         -> 'a -> 'a -> unit
 

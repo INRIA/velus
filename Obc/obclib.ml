@@ -93,10 +93,10 @@ module PrintFun (Obc: SYNTAX)
           fprintf p "state(%s)" (extern_atom id)
       | Obc.Const c ->
           PrintOps.print_const p c
-      | Obc.Unop (op, e, _) ->
-          PrintOps.print_unop p op expr (prec', e)
-      | Obc.Binop (op, e1, e2, _) ->
-          PrintOps.print_binop p op expr (prec1, e1) (prec2, e2)
+      | Obc.Unop (op, e, ty) ->
+          PrintOps.print_unop p op ty expr (prec', e)
+      | Obc.Binop (op, e1, e2, ty) ->
+          PrintOps.print_binop p op ty expr (prec1, e1) (prec2, e2)
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

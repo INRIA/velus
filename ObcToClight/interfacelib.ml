@@ -17,7 +17,47 @@ open Format
 open Camlcoq
 open Veluscommon
 
-module PrintClightOps =
+module ClightOpNames =
+  struct
+    let name_unop ty = PrintCsyntax.name_unop
+    let name_binop ty = PrintCsyntax.name_binop
+  end
+
+module LustreOpNames =
+  struct
+    let is_bool = function
+    | Interface.Op.Tint (Ctypes.IBool, _) -> true
+    | _ -> false
+
+    let name_unop ty = function
+      | Cop.Onotbool -> "not"
+      | Cop.Onotint  -> "lnot"
+      | Cop.Oneg     -> "-"
+      | Cop.Oabsfloat -> "__builtin_fabs"
+
+    let name_binop ty = function
+      | Cop.Oadd -> "+"
+      | Cop.Osub -> "-"
+      | Cop.Omul -> "*"
+      | Cop.Odiv -> "/"
+      | Cop.Omod -> "mod"
+      | Cop.Oand -> if is_bool ty then "and" else "land"
+      | Cop.Oor  -> if is_bool ty then "or"  else "lor"
+      | Cop.Oxor -> if is_bool ty then "xor" else "lxor"
+      | Cop.Oshl -> "lsl"
+      | Cop.Oshr -> "lsr"
+      | Cop.Oeq  -> "="
+      | Cop.One  -> "<>"
+      | Cop.Olt  -> "<"
+      | Cop.Ogt  -> ">"
+      | Cop.Ole  -> "<="
+      | Cop.Oge  -> ">="
+  end
+
+module PrintClightOpsFun (OpNames : sig
+    val name_unop  : Interface.Op.coq_type -> Cop.unary_operation -> string
+    val name_binop : Interface.Op.coq_type -> Cop.binary_operation -> string
+  end) =
   struct
     module Ops = Interface.Op
 
@@ -43,16 +83,16 @@ module PrintClightOps =
       | Ops.Clong (n, _) ->
           fprintf p "%LdLL"  (camlint64_of_coqint n)
 
-    let print_unop p uop print_exp e =
+    let print_unop p uop ty print_exp e =
       match uop with
       | Ops.UnaryOp op ->
-          fprintf p "%s%a" (PrintCsyntax.name_unop op) print_exp e
+          fprintf p "%s %a" (OpNames.name_unop ty op) print_exp e
       | Ops.CastOp ty ->
           fprintf p "(%a : %a)" print_exp e print_typ ty
 
-    let print_binop p op print_exp e1 e2 =
+    let print_binop p op ty print_exp e1 e2 =
       fprintf p "%a@ %s %a" print_exp e1
-                            (PrintCsyntax.name_binop op)
+                            (OpNames.name_binop ty op)
                             print_exp e2
       
     let prec_unop op = (15, RtoL)
@@ -75,5 +115,5 @@ module PrintObc = Obclib.PrintFun
       type const = Interface.Op.const
       type unop = Interface.Op.unop
       type binop = Interface.Op.binop
-   end) (PrintClightOps)
+   end) (PrintClightOpsFun (ClightOpNames))
 
