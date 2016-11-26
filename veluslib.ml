@@ -1,13 +1,13 @@
 
 (* Functions called from within the proof, e.g., VelusCorrectness *)
 
-let unfused_obc_destination = ref (None : string option)
-let fused_obc_destination = ref (None : string option)
+let obc_destination = ref (None : string option)
 
-let print_obc_if fused prog =
-  match
-    (if fused then !fused_obc_destination else !unfused_obc_destination)
-  with
+let fuse_obc = ref true
+let do_fusion () = !fuse_obc
+
+let print_obc_if prog =
+  match !obc_destination with
   | None -> ()
   | Some f ->
       let oc = open_out f in

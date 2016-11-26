@@ -7,7 +7,6 @@ open Builtins
 open Ctypes
 
 let print_c = ref false
-let write_unfused_obc = ref false
 let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
@@ -79,10 +78,7 @@ let parse toks =
     (Obj.magic ast : LustreAst.declaration list)
 
 let compile source_name filename =
-  if !write_unfused_obc
-    then Veluslib.unfused_obc_destination := Some (filename ^ ".unfused.obc");
-  if !write_obc
-    then Veluslib.fused_obc_destination := Some (filename ^ ".obc");
+  if !write_obc then Veluslib.obc_destination := Some (filename ^ ".obc");
   if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
   if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
   let toks = LustreLexer.tokens_stream source_name in
@@ -114,10 +110,9 @@ let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dobc",    Arg.Set write_obc, " Save generated Obc in <source>.obc";
-  "-dunfusedobc", Arg.Set write_unfused_obc,
-                               " Save unoptimized Obc in <source>.unfused.obc";
   "-dclight", Arg.Set write_cl,  " Save generated Clight in <source>.light.c";
-  "-dcminor", Arg.Set write_cm,  " Save generated Cminor in <source>.minor.c"
+  "-dcminor", Arg.Set write_cm,  " Save generated Cminor in <source>.minor.c";
+  "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
 ]
 
 let usage_msg = "Usage: velus [options] <source>"
