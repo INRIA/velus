@@ -4,7 +4,7 @@ Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
 Require Import Velus.ObcToClight.Translation.
 Require Import Velus.ObcToClight.NLustreElab.
-Require Import NLustre.Parser.LustreParser.
+Require Import Lustre.Parser.LustreParser.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping

@@ -1,7 +1,7 @@
 Require Import Velus.Common.
 Require Instantiator.
 
-Require Import Velus.NLustre.Parser.LustreAst.
+Require Import Velus.Lustre.Parser.LustreAst.
 Require Import Operators.
 
 Module Import Syn := Instantiator.NL.Syn.

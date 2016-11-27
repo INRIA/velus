@@ -15,7 +15,7 @@
    and Nicolas Halbwachs in the Lustre v6 reference manual (2016). */
 
 %{
-Require Velus.NLustre.Parser.LustreAst.
+Require Velus.Lustre.Parser.LustreAst.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
 Require Import Coq.Program.Syntax.

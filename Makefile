@@ -106,6 +106,8 @@ VFILES:=RMemory.v\
   Obc/Syntax.v\
   Obc/Typing.v\
   Obc/Fusion.v\
+  Lustre/Parser/LustreAst.v\
+  Lustre/Parser/LustreParser.v\
   NLustre.v\
   NLustre/NoDup.v\
   NLustre/Ordered.v\
@@ -126,8 +128,6 @@ VFILES:=RMemory.v\
   NLustre/Syntax.v\
   NLustre/Typing.v\
   NLustre/Stream.v\
-  NLustre/Parser/LustreAst.v\
-  NLustre/Parser/LustreParser.v\
   Common.v\
   Ident.v\
   ObcToClight/Interface.v\
@@ -214,30 +214,30 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
-NLustre/Parser/LustreParser.v: NLustre/Parser/LustreParser.vy
+Lustre/Parser/LustreParser.v: Lustre/Parser/LustreParser.vy
 	@$(MENHIR) --no-stdlib --coq $<
 
-NLustre/Parser/LustreLexer.ml: NLustre/Parser/LustreLexer.mll
+Lustre/Parser/LustreLexer.ml: Lustre/Parser/LustreLexer.mll
 	ocamllex $<
 
-extraction/extract/LustreLexer.ml: NLustre/Parser/LustreLexer.ml extraction/STAMP
+extraction/extract/LustreLexer.ml: Lustre/Parser/LustreLexer.ml extraction/STAMP
 	cp $< $@
 
-extraction/extract/Relexer.ml: NLustre/Parser/Relexer.ml extraction/extract
+extraction/extract/Relexer.ml: Lustre/Parser/Relexer.ml extraction/extract
 	cp $< $@
 
-NLustre/Parser/LustreParser2.mly: NLustre/Parser/LustreParser.vy
+Lustre/Parser/LustreParser2.mly: Lustre/Parser/LustreParser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@
 
-NLustre/Parser/LustreParser2.ml NLustre/Parser/LustreParser2.mli: \
-		NLustre/Parser/LustreParser2.mly
+Lustre/Parser/LustreParser2.ml Lustre/Parser/LustreParser2.mli: \
+		Lustre/Parser/LustreParser2.mly
 	$(MENHIR) --no-stdlib --table $<
 
-extraction/extract/LustreParser2.ml: NLustre/Parser/LustreParser2.ml \
+extraction/extract/LustreParser2.ml: Lustre/Parser/LustreParser2.ml \
 		extraction/extract
 	cp $< $@
 
-extraction/extract/LustreParser2.mli: NLustre/Parser/LustreParser2.mli \
+extraction/extract/LustreParser2.mli: Lustre/Parser/LustreParser2.mli \
     		extraction/extract
 	cp $< $@
 

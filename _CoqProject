@@ -16,6 +16,8 @@ Common.v
 Ident.v
 Operators.v
 Example.v
+Lustre/Parser/LustreAst.v
+Lustre/Parser/LustreParser.v
 NLustre/Stream.v
 NLustre/Syntax.v
 NLustre/Typing.v
@@ -35,8 +37,6 @@ NLustre/WellFormed.v
 NLustre/WellFormed/Decide.v
 NLustre/Ordered.v
 NLustre/NoDup.v
-NLustre/Parser/LustreAst.v
-NLustre/Parser/LustreParser.v
 NLustre.v
 Obc/Syntax.v
 Obc/Typing.v
