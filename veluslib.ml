@@ -1,19 +1,25 @@
 
 (* Functions called from within the proof, e.g., VelusCorrectness *)
 
+let snlustre_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
 
 let fuse_obc = ref true
 let do_fusion () = !fuse_obc
 
-let print_obc_if prog =
-  match !obc_destination with
+let print_if flag print prog =
+  match !flag with
   | None -> ()
   | Some f ->
       let oc = open_out f in
-      Interfacelib.PrintObc.print_program
-        (Format.formatter_of_out_channel oc) prog;
+      print (Format.formatter_of_out_channel oc) prog;
       close_out oc
+
+let print_snlustre_if =
+  print_if snlustre_destination Interfacelib.PrintNLustre.print_global
+
+let print_obc_if =
+  print_if obc_destination Interfacelib.PrintObc.print_program
 
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in

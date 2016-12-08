@@ -35,6 +35,7 @@ Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
+Parameter print_snlustre: NL.Syn.global -> unit.
 Parameter print_obc: Obc.Syn.program -> unit.
 Parameter do_fusion : unit -> bool.
 
@@ -80,7 +81,8 @@ Qed.
 
 Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
   do _ <- (fold_left is_well_sch g (OK tt));
-  OK g @@ Trans.translate
+  OK g @@ print print_snlustre
+       @@ Trans.translate
        @@ total_if do_fusion (map Obc.Fus.fuse_class)
        @@ print print_obc
        @@@ Translation.translate main_node.
@@ -285,11 +287,11 @@ Proof.
   edestruct dostep'_correct
     as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   pose proof Comp as Comp'.
+  repeat rewrite print_identity in *.
   unfold Translation.translate in Comp.
   unfold total_if in *. destruct (do_fusion tt).
   - pose proof Emain as Emain'.
     apply Obc.Fus.fuse_find_class in Emain.
-    rewrite print_identity in *.
     rewrite Emain in *.
     destruct (find_method Ids.step (c_methods (Obc.Fus.fuse_class c_main)))
       as [fuse_m_step|] eqn: Efusestep; try discriminate.
@@ -353,8 +355,7 @@ Proof.
         rewrite Hstep_in || rewrite Hstep_out;
         apply mk_event_spec; 
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
-  - rewrite print_identity in *.
-    rewrite Emain in *.
+  - rewrite Emain in *.
     destruct (find_method Ids.step (c_methods c_main))
       as [m_step|] eqn: Estep; try discriminate.
     destruct (find_method Ids.reset (c_methods c_main))

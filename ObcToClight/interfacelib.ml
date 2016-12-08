@@ -108,12 +108,21 @@ module PrintClightOpsFun (OpNames : sig
         | Oor             -> ( 6, LtoR)
   end
 
+module PrintNLustre = Nlustrelib.PrintFun
+  (struct
+      include Instantiator.NL.Syn
+      type typ   = Interface.Op.coq_type
+      type const = Interface.Op.const
+      type unop  = Interface.Op.unop
+      type binop = Interface.Op.binop
+   end) (PrintClightOpsFun (ClightOpNames))
+
 module PrintObc = Obclib.PrintFun
   (struct
       include Instantiator.Obc.Syn
-      type typ = Interface.Op.coq_type
+      type typ   = Interface.Op.coq_type
       type const = Interface.Op.const
-      type unop = Interface.Op.unop
+      type unop  = Interface.Op.unop
       type binop = Interface.Op.binop
    end) (PrintClightOpsFun (ClightOpNames))
 

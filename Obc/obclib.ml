@@ -10,9 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* This pretty-printer draws on the work of Xavier Leroy for the CompCert
-   project (CompCert/cfrontend/PrintCsyntax.ml/PrintClight.ml). *)
-
 open Format
 open Veluscommon
 
@@ -210,7 +207,7 @@ module PrintFun (Obc: SYNTAX)
 
     let print_program p prog =
       fprintf p "@[<v 0>";
-      List.iter (fun cls->fprintf p "%a@;@;" print_class cls) prog;
+      List.iter (fprintf p "%a@;@;" print_class) prog;
       fprintf p "@]@."
   end
 
