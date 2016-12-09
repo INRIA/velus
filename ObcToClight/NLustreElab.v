@@ -1027,7 +1027,11 @@ Section ElabDeclaration.
                                        (PM.elements defd)))
     | EqFby x _ _ _::eqs => if PM.mem x defd && (negb (PM.mem x out))
                             then check_defined loc out (PM.remove x defd) eqs
-                            else Error (err_loc loc
+                            else if PM.mem x out
+                                 then Error (err_loc loc
+                                   (MSG "output variable " :: CTX x
+                                        :: msg " may not be defined using fby."))
+                                 else Error (err_loc loc
                                         (CTX x :: msg " is improperly defined"))
     | EqDef x _ _::eqs => if PM.mem x defd
                           then check_defined loc out (PM.remove x defd) eqs
