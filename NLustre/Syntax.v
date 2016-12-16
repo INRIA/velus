@@ -94,9 +94,9 @@ Module Type SYNTAX
   Record node : Type :=
     mk_node {
         n_name : ident;
-        n_in   : list (ident * type);
-        n_out  : list (ident * type);
-        n_vars : list (ident * type);
+        n_in   : list (ident * (type * clock));
+        n_out  : list (ident * (type * clock));
+        n_vars : list (ident * (type * clock));
         n_eqs  : list equation;
 
         n_ingt0 : 0 < length n_in;

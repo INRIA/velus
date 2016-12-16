@@ -1794,6 +1794,100 @@ Proof.
   - rewrite IHxs. rewrite PS.add_spec. intuition.
 Qed.
 
+(** types and clocks *)
+
+Section TypesAndClocks.
+
+  Context {type clock : Type}.
+
+  (* A Lustre variable is declared with a type and a clock.
+     In the abstract syntax, a declaration is represented as a triple:
+     (x, (ty, ck)) : ident * (type * clock)
+     
+     And nodes include lists of triples for lists of declarations.
+     The following definitions and lemmas facilitate working with such
+     values. *)
+
+  Definition dty (x : ident * (type * clock)) : type := fst (snd x).
+  Definition dck (x : ident * (type * clock)) : clock := snd (snd x).
+
+  Definition idty : list (ident * (type * clock)) -> list (ident * type) :=
+    map (fun xtc => (fst xtc, fst (snd xtc))).
+
+  Definition idck : list (ident * (type * clock)) -> list (ident * clock) :=
+    map (fun xtc => (fst xtc, snd (snd xtc))).
+
+  Lemma idty_app:
+    forall xs ys,
+      idty (xs ++ ys) = idty xs ++ idty ys.
+  Proof.
+    induction xs; auto.
+    simpl; intro; now rewrite IHxs.
+  Qed.
+
+  Lemma InMembers_idty:
+    forall x xs,
+      InMembers x (idty xs) <-> InMembers x xs.
+  Proof.
+    induction xs as [|x' xs]; split; auto; intro HH;
+      destruct x' as (x' & tyck); simpl.
+    - rewrite <-IHxs; destruct HH; auto.
+    - rewrite IHxs. destruct HH; auto.
+  Qed.
+  
+  Lemma NoDupMembers_idty:
+    forall xs,
+      NoDupMembers (idty xs) <-> NoDupMembers xs.
+  Proof.
+    induction xs as [|x xs]; split; inversion_clear 1;
+      eauto using NoDupMembers_nil; destruct x as (x & tyck); simpl in *;
+      constructor; try rewrite InMembers_idty in *;
+      try rewrite IHxs in *; auto.
+  Qed.
+
+  Lemma map_fst_idty:
+    forall xs,
+      map fst (idty xs) = map fst xs.
+  Proof.
+    induction xs; simpl; try rewrite IHxs; auto.
+  Qed.
+
+  Lemma length_idty:
+    forall xs,
+      length (idty xs) = length xs.
+  Proof.
+    induction xs as [|x xs]; auto.
+    destruct x; simpl. now rewrite IHxs.
+  Qed.
+
+  Lemma In_idty_exists:
+    forall x (ty : type) xs,
+      In (x, ty) (idty xs) <-> exists (ck: clock), In (x, (ty, ck)) xs.
+  Proof.
+    induction xs as [|x' xs].
+    - split; inversion_clear 1. inv H0.
+    - split.
+      + inversion_clear 1 as [HH|HH];
+          destruct x' as (x' & ty' & ck'); simpl in *.
+        * inv HH; eauto.
+        * apply IHxs in HH; destruct HH; eauto.
+      + destruct 1 as (ck & HH).
+        inversion_clear HH as [Hin|Hin].
+        * subst; simpl; auto.
+        * constructor 2; apply IHxs; eauto.
+  Qed.
+
+  Global Instance idty_Permutation_Proper:
+    Proper (Permutation (A:=(ident * (type * clock)))
+            ==> Permutation (A:=(ident * type))) idty.
+  Proof.
+    intros xs ys Hperm.
+    unfold idty. rewrite Hperm.
+    reflexivity.
+  Qed.
+
+End TypesAndClocks.
+
 (** adds and its properties *)
 
 Definition adds {A} xs (vs : list A) (e : PM.t A) :=

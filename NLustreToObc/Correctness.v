@@ -919,8 +919,12 @@ for all [Is_free_exp x e]. *)
           assert (exists cs, xs n = map present cs)
             as (outValues & Hxsc).
           {
+            assert ((0 < length (idty i))%nat) as ingt0'
+              by now rewrite length_idty.
+
             assert (Hlen: (0 < length (ls n))%nat)
-              by now (eapply sem_vars_gt0; [apply ingt0| eauto]).
+              by now (eapply sem_vars_gt0;
+                      [apply ingt0'|rewrite map_fst_idty; eauto]).
 
             assert (~ absent_list (xs n)).
             {
@@ -1057,10 +1061,14 @@ for all [Is_free_exp x e]. *)
         + (* y = absent *)
           exists menv', env'.
 
+          assert ((0 < length (idty i))%nat) as ingt0'
+              by now rewrite length_idty.
+          
           assert (Habs: absent_list (ls n) ->
                         Forall (rhs_absent_instant (bk0 n) (restr Hn n)) neqs)
-            by now eapply subrate_property_eqns; eauto;
-                   eapply sem_vars_gt0 with (1:=ingt0) (2:=Hlsn).
+            by (eapply subrate_property_eqns; eauto;
+                eapply sem_vars_gt0 with (1:=ingt0');
+                rewrite map_fst_idty; apply Hlsn).
 
           assert (absent_list (ls n)).
           {
@@ -1419,7 +1427,11 @@ for all [Is_free_exp x e]. *)
               assert (NoDupMembers node.(n_in))
                 by (eapply NoDupMembers_app_l; eauto).
 
-              now eapply adds_sem_var_find.
+              rewrite adds_sem_var_find
+              with (iargs:=idty node.(n_in)) (ivals:=inputs);
+                try rewrite map_fst_idty; auto.
+              reflexivity.
+              now apply NoDupMembers_idty.
             }
 
             assert (forall x,
@@ -1472,7 +1484,7 @@ for all [Is_free_exp x e]. *)
                 clear Hstepm. intro Hstepm.
                 rewrite <-Hstepm, Hnode. clear Hstepm.
                 simpl in *.
-                rewrite ps_from_list_gather_eqs_memories.
+                rewrite ps_from_list_gather_eqs_memories, map_fst_idty.
                 eassumption.
               - rewrite find_method_stepm_out with (1:=Hstepm).
                 specialize (Hout n); simpl in Hout; rewrite Hys in Hout.
@@ -1482,6 +1494,7 @@ for all [Is_free_exp x e]. *)
                   now (eapply Forall2_length; eauto).
                 }
 
+                rewrite map_fst_idty.
                 apply Forall2_forall; [ | now auto ].
                 intros x v Hinx.
 
