@@ -312,7 +312,7 @@ Proof.
   rewrite Heqprog' in Wt.
   clear Heqprog'.
   unfold program in *.
-  induction_list prog as [|c] with cls; simpl (* intro Wt *).
+  induction prog as [|c]; simpl.
   - constructor.
   - inversion_clear Wt as [|? ? ? ? Nodup]; simpl in Nodup;
     inversion_clear Nodup as [|? ? Notinc].
