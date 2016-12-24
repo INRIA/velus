@@ -148,15 +148,16 @@ Module Type FUSIBLE
   Qed.
 
   Lemma translate_eqns_Fusible:
-    forall C mems inputs eqs,
-      wc_env C
-      -> Forall (wc_equation C) eqs
+    forall vars mems inputs eqs,
+      wc_env vars
+      -> NoDupMembers vars
+      -> Forall (wc_equation vars) eqs
       -> Is_well_sch mems inputs eqs
       -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
       -> (forall input, In input inputs -> ~ Is_defined_in_eqs input eqs)
       -> Fusible (translate_eqns mems eqs).
   Proof.
-    intros ** Hwk Hwks Hwsch Hnvi Hnin.
+    intros ** Hwk Hnd Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
     inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
     specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
@@ -245,7 +246,9 @@ Module Type FUSIBLE
       pose proof (not_Exists_Is_defined_in_eqs_n_in n) as Hin.
       inv Wcn. inv WdG. simpl in *.
       eapply translate_eqns_Fusible; eauto.
-      + intros. apply not_Is_variable_in_memories; auto.
+      + apply NoDupMembers_idck, n_nodup.
+      + intros.
+        apply not_Is_variable_in_memories; auto.
       + intros i' Hin' Hdef.
         apply Hin, Exists_exists.
         exists i'. intuition.

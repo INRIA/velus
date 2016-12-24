@@ -55,7 +55,7 @@ Import ListNotations.
 %type<LustreAst.var_decls> local_var_decl
 %type<list LustreAst.string (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
-%type<LustreAst.clock> declared_clock
+%type<LustreAst.preclock> declared_clock
 %type<LustreAst.clock> clock
 %type<LustreAst.var_decls> local_decl
 %type<LustreAst.var_decls> local_decl_list
@@ -325,11 +325,15 @@ type_name:
 
 declared_clock:
 | /* empty */
-    { LustreAst.BASE }
-| WHEN clk=clock
-    { clk }
+    { LustreAst.FULLCK LustreAst.BASE }
+| WHEN id=VAR_NAME
+    { LustreAst.WHENCK true (fst id) }
+| WHEN NOT id=VAR_NAME
+    { LustreAst.WHENCK false (fst id) }
+| WHENOT id=VAR_NAME
+    { LustreAst.WHENCK false (fst id) }
 | COLONCOLON clk=clock
-    { clk }
+    { LustreAst.FULLCK clk }
 
 clock:
 | DOT

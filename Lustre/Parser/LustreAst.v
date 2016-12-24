@@ -63,6 +63,10 @@ Inductive clock :=
 | BASE  : clock
 | ON    : clock -> bool -> string -> clock.
 
+Inductive preclock :=
+| FULLCK : clock -> preclock
+| WHENCK : bool -> string -> preclock.
+
 Inductive expression :=
 | UNARY    : unary_operator -> expression -> astloc -> expression
 | BINARY   : binary_operator -> expression -> expression -> astloc -> expression
@@ -90,7 +94,7 @@ Definition expression_loc (e: expression) : astloc :=
   | MERGE _ _ _ l => l
   end.
     
-Definition var_decls := list (string * type_name * clock * astloc).
+Definition var_decls := list (string * type_name * preclock * astloc).
 
 Definition equation : Type := (list string * expression * astloc)%type.
 

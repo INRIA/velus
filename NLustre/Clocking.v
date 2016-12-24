@@ -18,99 +18,91 @@ Module Type CLOCKING
        (Import Op  : OPERATORS)
        (Import Syn : SYNTAX Ids Op).
 
-  Definition clockenv := PM.t clock.
+  Section WellClocked.
 
-  Implicit Type C: clockenv.
+    Variable vars : list (ident * clock).
 
-  Inductive wc_var C (x: ident) ck: Prop :=
-  | Cv:
-      PM.find x C = Some ck ->
-      wc_var C x ck.
+    Inductive wc_clock : clock -> Prop :=
+    | CCbase:
+        wc_clock Cbase
+    | CCon:
+        forall ck x b,
+          wc_clock ck ->
+          In (x, ck) vars ->
+          wc_clock (Con ck x b).
 
-  Definition wc_vars C (xs: list ident) ck: Prop :=
-    Forall (fun x => wc_var C x ck) xs.
+    Inductive wc_lexp : lexp -> clock -> Prop :=
+    | Cconst:
+        forall c,
+          wc_lexp (Econst c) Cbase
+    | Cvar:
+        forall x ck ty,
+          In (x, ck) vars ->
+          wc_lexp (Evar x ty) ck
+    | Cwhen:
+        forall e x b ck,
+          wc_lexp e ck ->
+          In (x, ck) vars ->
+          wc_lexp (Ewhen e x b) (Con ck x b)
+    | Cunop:
+        forall op e ck ty,
+          wc_lexp e ck ->
+          wc_lexp (Eunop op e ty) ck
+    | Cbinop:
+        forall op e1 e2 ck ty,
+          wc_lexp e1 ck ->
+          wc_lexp e2 ck ->
+          wc_lexp (Ebinop op e1 e2 ty) ck.
 
-  Inductive wc_clock C: clock -> Prop :=
-  | CCbase:
-      wc_clock C Cbase
-  | CCon:
-      forall ck x b,
-        wc_clock C ck ->
-        wc_var C x ck ->
-        wc_clock C (Con ck x b).
+    Inductive wc_cexp : cexp -> clock -> Prop :=
+    | Cmerge:
+        forall x t f ck,
+          In (x, ck) vars ->
+          wc_cexp t (Con ck x true) ->
+          wc_cexp f (Con ck x false) ->
+          wc_cexp (Emerge x t f) ck
+    | Cite:
+        forall b t f ck,
+          wc_lexp b ck ->
+          wc_cexp t ck ->
+          wc_cexp f ck ->
+          wc_cexp (Eite b t f) ck
+    | Cexp:
+        forall e ck,
+          wc_lexp e ck ->
+          wc_cexp (Eexp e) ck.
 
-  Inductive wc_lexp C: lexp -> clock -> Prop :=
-  | Cconst:
-      forall c,
-        wc_lexp C (Econst c) Cbase
-  | Cvar:
-      forall x ck ty,
-        wc_var C x ck ->
-        wc_lexp C (Evar x ty) ck
-  | Cwhen:
-      forall e x b ck,
-        wc_lexp C e ck ->
-        wc_var C x ck ->
-        wc_lexp C (Ewhen e x b) (Con ck x b)
-  | Cunop:
-      forall op e ck ty,
-        wc_lexp C e ck ->
-        wc_lexp C (Eunop op e ty) ck
-  | Cbinop:
-      forall op e1 e2 ck ty,
-        wc_lexp C e1 ck ->
-        wc_lexp C e2 ck ->
-        wc_lexp C (Ebinop op e1 e2 ty) ck.
+    Inductive wc_equation : equation -> Prop :=
+    | CEqDef:
+        forall x ck ce,
+          In (x, ck) vars ->
+          wc_cexp ce ck ->
+          wc_equation (EqDef x ck ce)
+    | CEqApp:
+        forall xs ck f les,
+          Forall (fun x=>In (x, ck) vars) xs ->
+          Forall (fun le => wc_lexp le ck) les ->
+          wc_equation (EqApp xs ck f les)
+    | CEqFby:
+        forall x ck v0 le,
+          In (x, ck) vars ->
+          wc_lexp le ck ->
+          wc_equation (EqFby x ck v0 le).
 
-  Definition wc_lexps C (les: list lexp)(ck: clock): Prop :=
-    Forall (fun le => wc_lexp C le ck) les.
+  End WellClocked.
 
-  Inductive wc_cexp C: cexp -> clock -> Prop :=
-  | Cmerge:
-      forall x t f ck,
-        wc_var C x ck ->
-        wc_cexp C t (Con ck x true) ->
-        wc_cexp C f (Con ck x false) ->
-        wc_cexp C (Emerge x t f) ck
-  | Cite:
-      forall b t f ck,
-        wc_lexp C b ck ->
-        wc_cexp C t ck ->
-        wc_cexp C f ck ->
-        wc_cexp C (Eite b t f) ck
-  | Cexp:
-      forall e ck,
-        wc_lexp C e ck ->
-        wc_cexp C (Eexp e) ck.
+  Definition wc_env vars : Prop :=
+    Forall (fun xck => wc_clock vars (snd xck)) vars.
 
-  Inductive wc_equation C: equation -> Prop :=
-  | CEqDef:
-      forall x ck ce,
-        wc_var C x ck ->
-        wc_cexp C ce ck ->
-        wc_equation C (EqDef x ck ce)
-  | CEqApp:
-      forall xs ck f les,
-        wc_vars C xs ck ->
-        wc_lexps C les ck ->
-        wc_equation C (EqApp xs ck f les)
-  | CEqFby:
-      forall x ck v0 le,
-        wc_var C x ck ->
-        wc_lexp C le ck ->
-        wc_equation C (EqFby x ck v0 le).
-
-  Definition wc_env C : Prop :=
-    forall x ck, PM.find x C = Some ck -> wc_clock C ck.
-  
   Inductive wc_node : node -> Prop :=
   | SNode:
-      forall f i o v eqs ingt0 outgt0 defd vout nodup good C,
-        Forall (wc_equation C) eqs ->
-        wc_vars C (map fst i) Cbase ->
-        wc_vars C (map fst o) Cbase ->
-        wc_env C ->
-        wc_node (mk_node f i o v eqs ingt0 outgt0 defd vout nodup good).
+      forall n,
+        wc_env (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
+        Forall (wc_equation (idck (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
+                                                                    n.(n_eqs) ->
+        Forall (fun xtc=> dck xtc = Cbase) n.(n_in) ->
+        Forall (fun xtc=> dck xtc = Cbase) n.(n_out) ->
+        wc_node n.
 
   Definition wc_global G : Prop :=
     Forall (fun nd=> wc_node nd) G.
@@ -130,50 +122,21 @@ Module Type CLOCKING
     apply Forall_nil.
   Qed.
 
-  Lemma wc_var_det:
-    forall C x ck1 ck2,
-      wc_var C x ck1
-      -> wc_var C x ck2
-      -> ck1 = ck2.
-  Proof.
-    intros C x ck1 ck2.
-    do 2 inversion_clear 1.
-    match goal with
-    | H1: PM.find x C = _, H2: PM.find x C = _ |- _
-      => rewrite H1 in H2; injection H2; now auto
-    end.
-  Qed.
-
   Lemma wc_env_var:
-    forall C x ck,
-      wc_env C
-      -> wc_var C x ck
-      -> wc_clock C ck.
+    forall vars x ck,
+      wc_env vars
+      -> In (x, ck) vars
+      -> wc_clock vars ck.
   Proof.
-    intros C x ck Hwc Hcv.
-    unfold wc_env in Hwc.
-    inversion_clear Hcv as [Hfv].
-    apply Hwc with (1:=Hfv).
-  Qed.
-
-  Lemma wc_env_vars:
-    forall C xs ck,
-      0 < length xs 
-      -> wc_env C
-      -> wc_vars C xs ck
-      -> wc_clock C ck.
-  Proof.
-    intros C xs ck Hlen Hwc Hcv.
-    destruct xs; simpl in *; try now inv Hlen.
-    eapply Forall_cons2 in Hcv as (? & _).
-    eapply wc_env_var; eauto.
+    intros vars x ck Hwc Hcv.
+    now apply In_Forall with (2:=Hcv) in Hwc.
   Qed.
 
   Lemma wc_clock_lexp:
-    forall C le ck,
-      wc_env C
-      -> wc_lexp C le ck
-      -> wc_clock C ck.
+    forall vars le ck,
+      wc_env vars
+      -> wc_lexp vars le ck
+      -> wc_clock vars ck.
   Proof.
     induction le as [| |le IH | |] (* using lexp_ind2 *).
     - inversion_clear 2; now constructor.
@@ -187,10 +150,10 @@ Module Type CLOCKING
   Qed.
 
   Lemma wc_clock_cexp:
-    forall C ce ck,
-      wc_env C
-      -> wc_cexp C ce ck
-      -> wc_clock C ck.
+    forall vars ce ck,
+      wc_env vars
+      -> wc_cexp vars ce ck
+      -> wc_clock vars ck.
   Proof.
     induction ce as [i ce1 IH1 ce2 IH2| |].
     - intros ck Hwc.
@@ -213,12 +176,12 @@ Module Type CLOCKING
   Qed.
 
   Lemma wc_clock_sub:
-    forall C ck x b,
-      wc_env C
-      -> wc_clock C (Con ck x b)
-      -> wc_var C x ck.
+    forall vars ck x b,
+      wc_env vars
+      -> wc_clock vars (Con ck x b)
+      -> In (x, ck) vars.
   Proof.
-    intros C ck x b Hwc Hclock.
+    intros vars ck x b Hwc Hclock.
     inversion_clear Hclock as [|? ? ? Hclock' Hcv'].
     assumption.
   Qed.

@@ -1817,6 +1817,8 @@ Section TypesAndClocks.
   Definition idck : list (ident * (type * clock)) -> list (ident * clock) :=
     map (fun xtc => (fst xtc, snd (snd xtc))).
 
+  (* idty *)
+  
   Lemma idty_app:
     forall xs ys,
       idty (xs ++ ys) = idty xs ++ idty ys.
@@ -1886,6 +1888,77 @@ Section TypesAndClocks.
     reflexivity.
   Qed.
 
+  (* idck *)
+
+  Lemma idck_app:
+    forall xs ys,
+      idck (xs ++ ys) = idck xs ++ idck ys.
+  Proof.
+    induction xs; auto.
+    simpl; intro; now rewrite IHxs.
+  Qed.
+
+  Lemma InMembers_idck:
+    forall x xs,
+      InMembers x (idck xs) <-> InMembers x xs.
+  Proof.
+    induction xs as [|x' xs]; split; auto; intro HH;
+      destruct x' as (x' & tyck); simpl.
+    - rewrite <-IHxs; destruct HH; auto.
+    - rewrite IHxs. destruct HH; auto.
+  Qed.
+  
+  Lemma NoDupMembers_idck:
+    forall xs,
+      NoDupMembers (idck xs) <-> NoDupMembers xs.
+  Proof.
+    induction xs as [|x xs]; split; inversion_clear 1;
+      eauto using NoDupMembers_nil; destruct x as (x & tyck); simpl in *;
+      constructor; try rewrite InMembers_idck in *;
+      try rewrite IHxs in *; auto.
+  Qed.
+
+  Lemma map_fst_idck:
+    forall xs,
+      map fst (idck xs) = map fst xs.
+  Proof.
+    induction xs; simpl; try rewrite IHxs; auto.
+  Qed.
+
+  Lemma length_idck:
+    forall xs,
+      length (idck xs) = length xs.
+  Proof.
+    induction xs as [|x xs]; auto.
+    destruct x; simpl. now rewrite IHxs.
+  Qed.
+
+  Lemma In_idck_exists:
+    forall x (ck : clock) xs,
+      In (x, ck) (idck xs) <-> exists (ty: type), In (x, (ty, ck)) xs.
+  Proof.
+    induction xs as [|x' xs].
+    - split; inversion_clear 1. inv H0.
+    - split.
+      + inversion_clear 1 as [HH|HH];
+          destruct x' as (x' & ty' & ck'); simpl in *.
+        * inv HH; eauto.
+        * apply IHxs in HH; destruct HH; eauto.
+      + destruct 1 as (ty & HH).
+        inversion_clear HH as [Hin|Hin].
+        * subst; simpl; auto.
+        * constructor 2; apply IHxs; eauto.
+  Qed.
+
+  Global Instance idck_Permutation_Proper:
+    Proper (Permutation (A:=(ident * (type * clock)))
+            ==> Permutation (A:=(ident * clock))) idck.
+  Proof.
+    intros xs ys Hperm.
+    unfold idck. rewrite Hperm.
+    reflexivity.
+  Qed.
+  
 End TypesAndClocks.
 
 (** adds and its properties *)
