@@ -95,16 +95,16 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 
 VFILES:=RMemory.v\
   NLustreToObc/Correctness.v\
-  NLustreToObc/Typing.v\
+  NLustreToObc/NLObcTyping.v\
   NLustreToObc/Correctness/MemoryCorres.v\
   NLustreToObc/Correctness/IsPresent.v\
   NLustreToObc/Translation.v\
   NLustreToObc/Fusible.v\
   Obc.v\
   Obc/Equiv.v\
-  Obc/Semantics.v\
-  Obc/Syntax.v\
-  Obc/Typing.v\
+  Obc/ObcSemantics.v\
+  Obc/ObcSyntax.v\
+  Obc/ObcTyping.v\
   Obc/Fusion.v\
   Lustre/Parser/LustreAst.v\
   Lustre/Parser/LustreParser.v\
@@ -114,7 +114,7 @@ VFILES:=RMemory.v\
   NLustre/WellFormed/Decide.v\
   NLustre/WellFormed.v\
   NLustre/MemSemantics.v\
-  NLustre/Semantics.v\
+  NLustre/NLSemantics.v\
   NLustre/Clocking/Properties.v\
   NLustre/Clocking/Parents.v\
   NLustre/Clocking.v\
@@ -125,13 +125,13 @@ VFILES:=RMemory.v\
   NLustre/IsVariable.v\
   NLustre/IsFree/Decide.v\
   NLustre/IsFree.v\
-  NLustre/Syntax.v\
-  NLustre/Typing.v\
+  NLustre/NLSyntax.v\
+  NLustre/NLTyping.v\
   NLustre/Stream.v\
   Common.v\
   Ident.v\
   ObcToClight/Interface.v\
-  ObcToClight/Translation.v\
+  ObcToClight/Generation.v\
   ObcToClight/Correctness.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\

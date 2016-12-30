@@ -6,7 +6,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 
 (** * Defined variables *)
@@ -21,7 +21,7 @@ Require Import Velus.NLustre.Memories.
 Module Type ISDEFINED
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Mem : MEMORIES Ids Op Syn).
 
   (** ** Logical predicates: *)
@@ -147,7 +147,7 @@ End ISDEFINED.
 Module IsDefinedFun
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Mem : MEMORIES Ids Op Syn)
        <: ISDEFINED Ids Op Syn Mem.
 

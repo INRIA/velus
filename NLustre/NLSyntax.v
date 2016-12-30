@@ -9,7 +9,7 @@ Open Scope list_scope.
 
 (** * The CoreDF dataflow language *)
 
-Module Type SYNTAX
+Module Type NLSYNTAX
        (Import Ids : IDS)
        (Import Op  : OPERATORS).
   (** ** Clocks *)
@@ -159,10 +159,10 @@ Module Type SYNTAX
     reflexivity.
   Qed.
 
-End SYNTAX.
+End NLSYNTAX.
 
-Module SyntaxFun
+Module NLSyntaxFun
        (Import Ids : IDS)
-       (Import Op  : OPERATORS) <: SYNTAX Ids Op.
-  Include SYNTAX Ids Op.
-End SyntaxFun.
+       (Import Op  : OPERATORS) <: NLSYNTAX Ids Op.
+  Include NLSYNTAX Ids Op.
+End NLSyntaxFun.

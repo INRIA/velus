@@ -2,8 +2,8 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.Obc.Semantics.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.Obc.ObcSemantics.
 
 Require Import Relations.
 Require Import Morphisms.
@@ -22,8 +22,8 @@ Module Type EQUIV
        (Ids          : IDS)
        (Op           : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux)
-       (Import Sem   : SEMANTICS Ids Op OpAux Syn).
+       (Import Syn   : OBCSYNTAX Ids Op OpAux)
+       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn).
   
   Definition stmt_eval_eq s1 s2: Prop :=
     forall prog menv env menv' env',
@@ -143,8 +143,8 @@ Module EquivFun
        (Ids          : IDS)
        (Op           : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux)
-       (Import Sem   : SEMANTICS Ids Op OpAux Syn)
+       (Import Syn   : OBCSYNTAX Ids Op OpAux)
+       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn)
        <: EQUIV Ids Op OpAux Syn Sem.
   Include EQUIV Ids Op OpAux Syn Sem.
 End EquivFun.

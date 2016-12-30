@@ -2,8 +2,8 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 
 Require Import List.
@@ -40,8 +40,8 @@ Module Type TRANSLATION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op SynDF).
 
   (* definition is needed in signature *)
@@ -918,8 +918,8 @@ Module TranslationFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
+       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import Mem : MEMORIES Ids Op SynDF)
        <: TRANSLATION Ids Op OpAux SynDF SynMP Mem.
 

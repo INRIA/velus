@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import List.
 
 (** * Free variables *)
@@ -17,7 +17,7 @@ variables in the right-hand side of the equation. In particular, if
 Module Type ISFREE
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op).
+       (Import Syn : NLSYNTAX Ids Op).
 
   Inductive Is_free_in_clock : ident -> clock -> Prop :=
   | FreeCon1:
@@ -113,7 +113,7 @@ End ISFREE.
 Module IsFreeFun
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        <: ISFREE Ids Op Syn.
 
   Include ISFREE Ids Op Syn.

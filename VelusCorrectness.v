@@ -1,7 +1,7 @@
 Require Import Velus.Common.
 Require Import Velus.Ident.
-Require Import Velus.NLustreToObc.Typing.
-Require Import Velus.ObcToClight.Translation.
+Require Import Velus.NLustreToObc.NLObcTyping.
+Require Import Velus.ObcToClight.Generation.
 Require Import Velus.Traces.
 Require Import Velus.ClightToAsm.
 
@@ -85,7 +85,7 @@ Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
        @@ Trans.translate
        @@ total_if do_fusion (map Obc.Fus.fuse_class)
        @@ print print_obc
-       @@@ Translation.translate main_node.
+       @@@ Generation.translate main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
@@ -288,7 +288,7 @@ Proof.
     as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   pose proof Comp as Comp'.
   repeat rewrite print_identity in *.
-  unfold Translation.translate in Comp.
+  unfold Generation.translate in Comp.
   unfold total_if in *. destruct (do_fusion tt).
   - pose proof Emain as Emain'.
     apply Obc.Fus.fuse_find_class in Emain.

@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import NLustre.Syntax.
+Require Import NLustre.NLSyntax.
 Require Import NLustre.Clocking.
 Require Import NLustre.Clocking.Parents.
 
@@ -11,7 +11,7 @@ Require Import NLustre.Memories.
 Module Type PROPERTIES
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn)
        (Import Clo : CLOCKING Ids Op Syn)
        (Mem        : MEMORIES Ids Op Syn)
@@ -132,7 +132,7 @@ End PROPERTIES.
 Module PropertiesFun
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn)
        (Import Clo : CLOCKING Ids Op Syn)
        (Mem        : MEMORIES Ids Op Syn)

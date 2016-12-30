@@ -15,7 +15,7 @@ Require Import ZArith.BinInt.
 Require Import Program.Tactics.
 
 Require Import Velus.ObcToClight.MoreSeparation.
-Require Import Velus.ObcToClight.Translation.
+Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.Interface.
 
 Require Import Instantiator.

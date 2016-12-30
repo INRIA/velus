@@ -6,7 +6,7 @@ Require Import Coq.Sorting.Permutation.
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Stream.
 
@@ -19,11 +19,11 @@ Require Import Velus.NLustre.Stream.
 
  *)
 
-Module Type SEMANTICS
+Module Type NLSEMANTICS
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Ids Op Syn).
 
@@ -1078,15 +1078,15 @@ an absent value *)
     now rewrite Hsem in Hgt0.
   Qed.
 
-End SEMANTICS.
+End NLSEMANTICS.
 
-Module SemanticsFun
+Module NLSemanticsFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Ids Op Syn)
-       <: SEMANTICS Ids Op OpAux Syn Str Ord.
-  Include SEMANTICS Ids Op OpAux Syn Str Ord.
-End SemanticsFun.
+       <: NLSEMANTICS Ids Op OpAux Syn Str Ord.
+  Include NLSEMANTICS Ids Op OpAux Syn Str Ord.
+End NLSemanticsFun.

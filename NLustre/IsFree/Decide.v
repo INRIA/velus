@@ -1,7 +1,7 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import List.
 
@@ -21,7 +21,7 @@ Remark: This development is not formally part of the correctness proof.
 Module Type DECIDE
        (Ids        : IDS)
        (Op         : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn).
 
   Lemma Is_free_in_clock_disj:
@@ -338,7 +338,7 @@ End DECIDE.
 Module DecideFun
        (Ids        : IDS)
        (Op         : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn) <: DECIDE Ids Op Syn IsF.
   Include DECIDE Ids Op Syn IsF.
 End DecideFun.

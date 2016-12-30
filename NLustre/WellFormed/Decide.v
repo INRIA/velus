@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsFree.Decide.
 Require Import Velus.NLustre.IsVariable.
@@ -27,7 +27,7 @@ equivalent to its specification.
 Module Type DECIDE
        (Ids           : IDS)
        (Op            : OPERATORS)
-       (Import Syn    : SYNTAX Ids Op)
+       (Import Syn    : NLSYNTAX Ids Op)
        (IsF           : ISFREE Ids Op Syn)
        (Import IsFDec : IsFree.Decide.DECIDE Ids Op Syn IsF)
        (Import Ord    : ORDERED Ids Op Syn)
@@ -381,7 +381,7 @@ End DECIDE.
 Module DecideFun
        (Ids           : IDS)
        (Op            : OPERATORS)
-       (Import Syn    : SYNTAX Ids Op)
+       (Import Syn    : NLSYNTAX Ids Op)
        (IsF           : ISFREE Ids Op Syn)
        (Import IsFDec : IsFree.Decide.DECIDE Ids Op Syn IsF)
        (Import Ord    : ORDERED Ids Op Syn)

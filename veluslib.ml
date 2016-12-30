@@ -26,7 +26,7 @@ let add_builtin p (name, (out, ins, b)) =
   let id = Camlcoq.intern_string name in
   let id' = Camlcoq.coqstring_of_camlstring name in
   let targs = List.map (C2C.convertTyp env) ins
-                |> Translation0.list_type_to_typelist in
+                |> Generation.list_type_to_typelist in
   let tres = C2C.convertTyp env out in
   let sg = Ctypes.signature_of_type targs tres AST.cc_default in
   let ef =

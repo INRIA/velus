@@ -1,17 +1,17 @@
 Require Import Operators.
 Require Export NLustre.Stream.
-Require Export NLustre.Syntax.
+Require Export NLustre.NLSyntax.
 Require Export NLustre.IsFree.
 Require Export NLustre.IsVariable.
 Require Export NLustre.IsDefined.
 Require Export NLustre.Memories.
-Require Export NLustre.Semantics.
+Require Export NLustre.NLSemantics.
 Require Export NLustre.MemSemantics.
 Require Export NLustre.WellFormed.
 Require Export NLustre.Ordered.
 Require Export NLustre.NoDup.
 Require Export NLustre.Clocking.
-Require Export NLustre.Typing.
+Require Export NLustre.NLTyping.
 
 Require Import Velus.Common.
 Require Import NLustre.IsVariable.Decide.
@@ -25,13 +25,13 @@ Module Type NLUSTRE
        (Ids : IDS)
        (Op  : OPERATORS)
        (OpAux: OPERATORS_AUX Op).
-  Declare Module Export Syn: SYNTAX Ids Op.
+  Declare Module Export Syn: NLSYNTAX Ids Op.
   Declare Module Export Str: STREAM Op.
   Declare Module Export Ord: ORDERED Ids Op Syn.
   Declare Module Export IsF: ISFREE Ids Op Syn.
   Declare Module Export IsFDec: IsFree.Decide.DECIDE Ids Op Syn IsF.
-  Declare Module Export Sem: SEMANTICS Ids Op OpAux Syn Str Ord.
-  Declare Module Export Typ: TYPING Ids Op Syn.
+  Declare Module Export Sem: NLSEMANTICS Ids Op OpAux Syn Str Ord.
+  Declare Module Export Typ: NLTYPING Ids Op Syn.
   Declare Module Export Mem: MEMORIES Ids Op Syn.
   Declare Module Export IsD: ISDEFINED Ids Op Syn Mem.
   Declare Module Export IsV: ISVARIABLE Ids Op Syn Mem IsD.
@@ -52,13 +52,13 @@ Module NLustreFun
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        <: NLUSTRE Ids Op OpAux.
-  Module Export Syn := SyntaxFun Ids Op.
+  Module Export Syn := NLSyntaxFun Ids Op.
   Module Export Str := StreamFun Op.
   Module Export Ord := OrderedFun Ids Op Syn.
   Module Export IsF := IsFreeFun Ids Op Syn.
   Module Export IsFDec := IsFree.Decide.DecideFun Ids Op Syn IsF.
-  Module Export Sem := SemanticsFun Ids Op OpAux Syn Str Ord.
-  Module Export Typ := TypingFun Ids Op Syn.
+  Module Export Sem := NLSemanticsFun Ids Op OpAux Syn Str Ord.
+  Module Export Typ := NLTypingFun Ids Op Syn.
   Module Export Mem := MemoriesFun Ids Op Syn.
   Module Export IsD := IsDefinedFun Ids Op Syn Mem.
   Module Export IsV := IsVariableFun Ids Op Syn Mem IsD.

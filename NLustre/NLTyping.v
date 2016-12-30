@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 
 Require Import List.
 Import List.ListNotations.
@@ -17,10 +17,10 @@ Require Import Morphisms.
 
  *)
 
-Module Type TYPING
+Module Type NLTYPING
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op).
+       (Import Syn : NLSYNTAX Ids Op).
 
   (** ** Clocks *)
 
@@ -218,11 +218,11 @@ Module Type TYPING
       intros; rewrite Henv in *; auto.
   Qed.
   
-End TYPING.
+End NLTYPING.
 
-Module TypingFun
+Module NLTypingFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op) <: TYPING Ids Op Syn.
-  Include TYPING Ids Op Syn.
-End TypingFun.
+       (Import Syn : NLSYNTAX Ids Op) <: NLTYPING Ids Op Syn.
+  Include NLTYPING Ids Op Syn.
+End NLTypingFun.

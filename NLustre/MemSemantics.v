@@ -8,10 +8,10 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.RMemory.
 Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
-Require Import Velus.NLustre.Semantics.
+Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.WellFormed.
 Require Import Velus.NLustre.Memories.
@@ -55,13 +55,13 @@ Module Type MEMSEMANTICS
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Ids Op Syn)
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsF : ISFREE Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import Sem : SEMANTICS Ids Op OpAux Syn Str Ord)
+       (Import Sem : NLSEMANTICS Ids Op OpAux Syn Str Ord)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
        (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
        (Import WeF : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD).
@@ -829,13 +829,13 @@ Module MemSemanticsFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Str : STREAM Op)
        (Import Ord : ORDERED Ids Op Syn)
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsF : ISFREE Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import Sem : SEMANTICS Ids Op OpAux Syn Str Ord)
+       (Import Sem : NLSEMANTICS Ids Op OpAux Syn Str Ord)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
        (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
        (Import WeF : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD)

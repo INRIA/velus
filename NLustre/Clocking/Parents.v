@@ -1,12 +1,12 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import NLustre.Syntax.
+Require Import NLustre.NLSyntax.
 Require Import NLustre.Clocking.
 
 Module Type PARENTS
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Clo : CLOCKING Ids Op Syn).
   
   Inductive clock_parent ck : clock -> Prop :=
@@ -135,7 +135,7 @@ End PARENTS.
 Module ParentsFun
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Clo : CLOCKING Ids Op Syn)
        <: PARENTS Ids Op Syn Clo.
   Include PARENTS Ids Op Syn Clo.

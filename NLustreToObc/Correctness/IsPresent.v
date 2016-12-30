@@ -2,8 +2,8 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.RMemory.
 Require Import Velus.NLustre.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.Obc.Semantics.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.Obc.ObcSemantics.
 Require Import Velus.NLustreToObc.Translation.
 
 
@@ -22,9 +22,9 @@ Module Type ISPRESENT
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import SemMP : Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynMP)
        (Import Mem   : MEMORIES Ids Op SynDF)
        (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem).
 
@@ -140,9 +140,9 @@ Module IsPresentFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
+       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op)
+       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import SemMP : Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynMP)
        (Import Mem   : MEMORIES Ids Op SynDF)
        (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem)
        <: ISPRESENT Ids Op OpAux SynDF SynMP SemMP Mem Trans.

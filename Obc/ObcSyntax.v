@@ -12,7 +12,7 @@ Open Scope list_scope.
   Obc is a minimal object-oriented programming language.
  *)
 
-Module Type SYNTAX
+Module Type OBCSYNTAX
        (Import Ids : IDS)
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op).
@@ -292,14 +292,14 @@ Module Type SYNTAX
     intuition.
   Qed.
 
-End SYNTAX.
+End OBCSYNTAX.
 
-Module SyntaxFun
+Module ObcSyntaxFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op) <: SYNTAX Ids Op OpAux.
+       (Import OpAux : OPERATORS_AUX Op) <: OBCSYNTAX Ids Op OpAux.
 
-  Include SYNTAX Ids Op OpAux.
+  Include OBCSYNTAX Ids Op OpAux.
 
-End SyntaxFun.
+End ObcSyntaxFun.
 

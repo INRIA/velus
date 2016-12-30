@@ -2,7 +2,7 @@ Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
 Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
-Require Import Velus.ObcToClight.Translation.
+Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.NLustreElab.
 Require Import Lustre.Parser.LustreParser.
 

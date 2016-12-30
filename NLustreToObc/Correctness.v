@@ -12,7 +12,7 @@ Require Import Velus.Obc.
 Require Import Velus.NLustreToObc.Translation.
 Require Import Velus.NLustreToObc.Correctness.IsPresent.
 Require Import Velus.NLustreToObc.Correctness.MemoryCorres.
-Require Import Velus.NLustreToObc.Typing.
+Require Import Velus.NLustreToObc.NLObcTyping.
 
 Module Type CORRECTNESS
        (Import Ids   : IDS)
@@ -23,7 +23,7 @@ Module Type CORRECTNESS
        (Import Mem   : MEMORIES Ids Op DF.Syn)
 
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans).
+       (Import NLObcTyping: NLOBCTYPING Ids Op OpAux DF Obc Mem Trans).
 
   Module Import IsP := IsPresentFun Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans.
   Module Import MemCor := MemoryCorresFun Ids Op OpAux DF Obc.
@@ -2177,7 +2177,7 @@ for all [Is_free_exp x e]. *)
     pose proof exists_reset_method nd.
 
     assert (wt_program (translate G))
-      by now apply Typing.translate_wt.
+      by now apply NLObcTyping.translate_wt.
    
     subst.
     assert (wt_mem menv0 P' (translate_node nd))
@@ -2242,10 +2242,10 @@ Module CorrectnessFun
        (Import Obc   : OBC Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op DF.Syn)
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans)
+       (Import NLObcTyping: NLOBCTYPING Ids Op OpAux DF Obc Mem Trans)
 
-       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans Typing.
+       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans NLObcTyping.
 
-  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans Typing.
+  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans NLObcTyping.
 
 End CorrectnessFun.

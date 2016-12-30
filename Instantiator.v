@@ -16,7 +16,7 @@ Module NL := NLustreFun Ids Op OpAux.
 Module Obc := ObcFun Ids Op OpAux.
 Module Mem := MemoriesFun Ids Op NL.Syn.
 Module Trans := TranslationFun Ids Op OpAux NL.Syn Obc.Syn Mem.
-Module Typ := NLustreToObc.Typing.TypingFun Ids Op OpAux NL Obc Mem Trans.
+Module Typ := NLustreToObc.NLObcTyping.NLObcTypingFun Ids Op OpAux NL Obc Mem Trans.
 Module Corr := NLustreToObc.Correctness.CorrectnessFun Ids Op OpAux NL Obc Mem Trans Typ.
 Module Fusible := NLustreToObc.Fusible.FusibleFun Ids Op OpAux NL Obc Trans.
 

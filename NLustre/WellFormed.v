@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
@@ -18,7 +18,7 @@ Require Import Coq.Sorting.Permutation.
 Module Type WELLFORMED
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn)
        (Import Ord : ORDERED Ids Op Syn)
        (Import Mem : MEMORIES Ids Op Syn)
@@ -225,7 +225,7 @@ End WELLFORMED.
 Module WellFormedFun
        (Import Ids : IDS)
        (Import Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import IsF : ISFREE Ids Op Syn)
        (Import Ord : ORDERED Ids Op Syn)
        (Import Mem : MEMORIES Ids Op Syn)

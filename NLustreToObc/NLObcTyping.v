@@ -11,11 +11,11 @@ Require Import Velus.NLustre.
 Require Import Velus.Obc.
 Require Import Velus.NLustreToObc.Translation.
 
-Require Import Velus.NLustre.Typing.
+Require Import Velus.NLustre.NLTyping.
 
 (** ** Well-typing preservation *)
 
-Module Type TYPING
+Module Type NLOBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
@@ -590,9 +590,9 @@ Module Type TYPING
   Qed.
 
 
-End TYPING.
+End NLOBCTYPING.
 
-Module TypingFun
+Module NLObcTypingFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
@@ -600,7 +600,7 @@ Module TypingFun
        (Import Obc   : OBC Ids Op OpAux)
        (Import Mem   : MEMORIES Ids Op DF.Syn)
        (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       <: TYPING Ids Op OpAux DF Obc Mem Trans.
+       <: NLOBCTYPING Ids Op OpAux DF Obc Mem Trans.
 
-       Include TYPING Ids Op OpAux DF Obc Mem Trans.
-End TypingFun.    
+       Include NLOBCTYPING Ids Op OpAux DF Obc Mem Trans.
+End NLObcTypingFun.

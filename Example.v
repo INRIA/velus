@@ -6,8 +6,8 @@ Open Scope positive.
 Open Scope list.
 
 Require Import Velus.Common.
-Require Import Velus.NLustre.Syntax.
-Require Import Velus.Obc.Syntax.
+Require Import Velus.NLustre.NLSyntax.
+Require Import Velus.Obc.ObcSyntax.
 Require Import Velus.Translation.
 Require Import Velus.Obc.FuseIfte.
 

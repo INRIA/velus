@@ -2,12 +2,12 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.Obc.Semantics.
-Require Import Velus.Obc.Typing.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.Obc.ObcSemantics.
+Require Import Velus.Obc.ObcTyping.
 Require Import Velus.Obc.Equiv.
 
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.RMemory.
 
 Require Import List.
@@ -20,9 +20,9 @@ Module Type FUSION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynObc: Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemObc: Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynObc)
-       (Import TypObc: Velus.Obc.Typing.TYPING Ids Op OpAux SynObc SemObc)
+       (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc)
+       (Import TypObc: Velus.Obc.ObcTyping.OBCTYPING Ids Op OpAux SynObc SemObc)
        (Import Equ   : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynObc SemObc).
   
   (** ** Determine whether an Obc command can modify a variable. *)
@@ -869,9 +869,9 @@ Module FusionFun
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import OpAux: OPERATORS_AUX Op)
-       (Import SynObc: Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemObc: Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynObc)
-       (Import TypObc: Velus.Obc.Typing.TYPING Ids Op OpAux SynObc SemObc)
+       (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc)
+       (Import TypObc: Velus.Obc.ObcTyping.OBCTYPING Ids Op OpAux SynObc SemObc)
        (Import Equ  : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynObc SemObc)
        <: FUSION Ids Op OpAux SynObc SemObc TypObc Equ.
 

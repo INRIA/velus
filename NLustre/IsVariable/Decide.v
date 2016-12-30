@@ -6,7 +6,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.Memories.
@@ -23,7 +23,7 @@ equivalent to its specification.
 Module Type DECIDE
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
@@ -218,7 +218,7 @@ End DECIDE.
 Module DecideFun
        (Ids : IDS)
        (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
+       (Import Syn : NLSYNTAX Ids Op)
        (Import Mem : MEMORIES Ids Op Syn)
        (Import IsD : ISDEFINED Ids Op Syn Mem)
        (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
