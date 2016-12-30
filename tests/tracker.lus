@@ -21,12 +21,12 @@ let
 tel
 
 node tracker(acc, limit: int) returns (p, t: int)
-  var s, pt : int; x : bool; c : int when . on x;
+  var s, pt : int; x : bool; c : int when x;
 let
   (s, p) = d_integrator(acc);
   x = rising(s > limit);
   c = counter(1 when x, 1 when x, false when x);
-  t = merge x c (pt whenot x);
+  t = merge x c (pt when not x);
   pt = 0 fby t;
 tel
 

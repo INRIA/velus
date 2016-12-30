@@ -289,7 +289,7 @@ var_decl_list:
 | vars=var_decl
     { vars }
 | vars_list=var_decl_list SEMICOLON vars=var_decl
-    { vars ++ vars_list }
+    { vars_list ++ vars }
 
 local_var_decl:
 | loc=VAR vars_list=var_decl_list SEMICOLON
