@@ -22,8 +22,7 @@ open !Aut.GramDefs
 
 module SSet = Set.Make(String)
 
-let makeident str =
-  Camlcoq.(intern_string (camlstring_of_coqstring str))
+let makeident str = Camlcoq.(intern_string str)
 
 let lexicon : (string, LustreAst.astloc -> token) Hashtbl.t = Hashtbl.create 17
 

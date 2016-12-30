@@ -201,9 +201,9 @@ Section ElabExpressions.
   Definition assert_clock (loc: astloc) (x: ident) (xck ck: clock) : res unit :=
     if xck ==b ck then OK tt
     else Error (err_loc loc
-                        ((CTX x :: MSG " has clock " :: msg_of_clock xck)
-                                ++ MSG " but clock " :: msg_of_clock ck
-                                ++ msg " was expected.")).
+                        ((CTX x :: MSG " has clock '" :: msg_of_clock xck)
+                                ++ MSG "' but clock '" :: msg_of_clock ck
+                                ++ msg "' was expected.")).
   
   Definition find_node_interface (loc: astloc) (f: ident)
     : res (list type * list type) :=

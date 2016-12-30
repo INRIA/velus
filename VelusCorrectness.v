@@ -107,11 +107,11 @@ Variable outs: stream (list const).
 
 Definition wt_ins :=
   forall n node, find_node main G = Some node ->
-            wt_vals (map sem_const (ins n)) node.(n_in).
+            wt_vals (map sem_const (ins n)) (idty node.(n_in)).
 
 Definition wt_outs :=
   forall n node, find_node main G = Some node ->
-            wt_vals (map sem_const (outs n)) node.(n_out).
+            wt_vals (map sem_const (outs n)) (idty node.(n_out)).
 
 End WtStream.
 
@@ -205,8 +205,8 @@ dataflow node at each instant. *)
 CoInductive bisim_io': nat -> traceinf -> Prop
   := Step: forall n node t t' T,
       find_node main G = Some node ->
-      mask_load (map sem_const (ins n)) node.(n_in) t ->
-      mask_store (map sem_const (outs n)) node.(n_out) t' ->
+      mask_load (map sem_const (ins n)) (idty node.(n_in)) t ->
+      mask_store (map sem_const (outs n)) (idty node.(n_out)) t' ->
       bisim_io' (S n) T ->
       bisim_io' n (t *** t' *** T).
 
@@ -314,13 +314,13 @@ Proof.
     { rewrite Obc.Fus.fuse_method_in.
       apply find_method_stepm_in in Estep.
       pose proof (n_ingt0 main_node) as Hin.
-      rewrite Estep; intro E; rewrite E in Hin; simpl in Hin.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hin; simpl in Hin.
       eapply Lt.lt_irrefl; eauto. }
     assert (m_out (Obc.Fus.fuse_method m_step) <> nil) as Step_out_spec.
     { rewrite Obc.Fus.fuse_method_out.
       apply find_method_stepm_out in Estep.
       pose proof (n_outgt0 main_node) as Hout.
-      rewrite Estep; intro E; rewrite E in Hout; simpl in Hout.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hout; simpl in Hout.
       eapply Lt.lt_irrefl; eauto. }
     assert (forall n, wt_vals (map sem_const (ins n))
                               (m_in (Obc.Fus.fuse_method m_step)))
@@ -337,9 +337,9 @@ Proof.
                       (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto; auto.
       apply Obc.Fus.fuse_wt_program.
       now apply Typ.translate_wt.
-    + assert (Hstep_in: (Obc.Fus.fuse_method m_step).(m_in) = main_node.(n_in))
+    + assert (Hstep_in: (Obc.Fus.fuse_method m_step).(m_in) = idty main_node.(n_in))
         by (rewrite Obc.Fus.fuse_method_in; now apply find_method_stepm_in).
-      assert (Hstep_out: (Obc.Fus.fuse_method m_step).(m_out) = main_node.(n_out))
+      assert (Hstep_out: (Obc.Fus.fuse_method m_step).(m_out) = idty main_node.(n_out))
         by (rewrite Obc.Fus.fuse_method_out; now apply find_method_stepm_out).
       clear - Findnode Hstep_in Hstep_out.
       unfold bisim_io.
@@ -369,12 +369,12 @@ Proof.
     assert (m_in m_step <> nil) as Step_in_spec.
     { apply find_method_stepm_in in Estep.
       pose proof (n_ingt0 main_node) as Hin.
-      rewrite Estep; intro E; rewrite E in Hin; simpl in Hin.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hin; simpl in Hin.
       eapply Lt.lt_irrefl; eauto. }
     assert (m_out m_step <> nil) as Step_out_spec.
     { apply find_method_stepm_out in Estep.
       pose proof (n_outgt0 main_node) as Hout.
-      rewrite Estep; intro E; rewrite E in Hout; simpl in Hout.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hout; simpl in Hout.
       eapply Lt.lt_irrefl; eauto. }
     rewrite exists_reset_method in Findreset; injection Findreset; intros; subst.
     assert (forall n, wt_vals (map sem_const (ins n)) (m_in m_step)) as Hwt_in
@@ -387,9 +387,9 @@ Proof.
                       (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
                       (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out);
         eauto using Typ.translate_wt.
-    + assert (Hstep_in: m_step.(m_in) = main_node.(n_in))
+    + assert (Hstep_in: m_step.(m_in) = idty main_node.(n_in))
         by now apply find_method_stepm_in.
-      assert (Hstep_out: m_step.(m_out) = main_node.(n_out))
+      assert (Hstep_out: m_step.(m_out) = idty main_node.(n_out))
         by now apply find_method_stepm_out.
       clear - Findnode Hstep_in Hstep_out.
       unfold bisim_io.
