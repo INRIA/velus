@@ -104,7 +104,7 @@ module PrintFun (NL: SYNTAX)
       | NL.Ewhen (e, x, v) ->
           if v
           then fprintf p "%a when %s" lexpr (prec', e) (extern_atom x)
-          else fprintf p "%a whenot %s" lexpr (prec', e) (extern_atom x)
+          else fprintf p "%a when not %s" lexpr (prec', e) (extern_atom x)
       | NL.Eunop  (op, e, ty) ->
           PrintOps.print_unop p op ty lexpr (prec', e)
       | NL.Ebinop (op, e1, e2, ty) ->

@@ -202,6 +202,8 @@ when_expression:
     { expr }
 | expr=when_expression loc=WHEN id=VAR_NAME
     { LustreAst.WHEN expr true (fst id) loc }
+| expr=when_expression loc=WHEN NOT id=VAR_NAME
+    { LustreAst.WHEN expr false (fst id) loc }
 | expr=when_expression loc=WHENOT id=VAR_NAME
     { LustreAst.WHEN expr false (fst id) loc }
 
