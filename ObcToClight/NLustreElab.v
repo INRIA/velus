@@ -728,7 +728,6 @@ Section ElabExpressions.
   Proof.
     induction ck; simpl; intro HH; auto using wc_clock.
     monadInv HH; NamedDestructCases.
-    SearchAbout find_var.
     apply find_var_clock in EQ1.
     rewrite equiv_decb_equiv in Heq. rewrite Heq in *.
     destruct x. auto.
