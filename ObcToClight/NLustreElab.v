@@ -26,6 +26,62 @@ Local Open Scope error_monad_scope.
 
 (* Elaborate an AST into a well-typed NLustre program. *)
 
+(**
+  Lexing and parsing gives a list of LustreAst declarations. Elaboration
+  transforms them into NLustre declarations, whilst simultaneously ensuring
+  that the resulting program is well-typed and well-clocked. Several other
+  well-formedness requirements (node invariants) are also checked.
+
+  The type and clock checking is done during elaboration for two reasons:
+
+  - Source file location information is needed for error messages but is
+    not present in the NLustre AST.
+
+  - The NLustre AST requires type and clock annotations.
+
+  Types and clocks are checked simultaneously. Doing both in one pass is not
+  only more efficient, it also simplifies the proofs.
+
+  Node declarations are first elaborated to produce a map from each identifier
+  to its declared type and clock. A PositiveMap is used for efficiency during
+  checking, but the declarations are maintained in lists as their order is
+  significant. The related proofs use permutations and rewriting to switch
+  between the two representations. The declaration map is then used as an
+  environment for checking and annotating equations and expressions.
+
+  The elaboration of definitions is performed by [elab_var_decls]. Multiple
+  passes may be required for a list of declarations because clocks may be
+  dependent on other declared variables. For example,
+<<
+    a : bool;
+    b : bool when c;
+    c : bool when a;
+>>
+  The function must detect and reject cyclic definitions. For example,
+<<
+    a : bool;
+    b : bool when c;
+    c : bool when b;
+>>
+  We pass the original list of declarations as a `fuel' argument to
+  convince Coq that the function terminates. It would be possible to detect
+  cyclic definitions sooner (the pass completes without treating any
+  definitions), but we do not bother since this is an abnormal case.
+
+  While the worst-case complexity of this function is not great (O(n^2)),
+  you have to work pretty hard to hit (`concertina'-ed inter-dependent
+  declarations), and the typical case (declarations in order of their
+  dependencies) is linear.
+
+  The [elab_var_decls] function builds the map in three cumulative steps:
+  first inputs, then outputs, then locals. This is done to ensure that input
+  clocks are only dependent on other inputs and that output clocks are only
+  dependent on inputs or other outputs. This requirement is not yet needed as
+  an invariant; possibly because we do not currently support clocked inputs
+  and outputs.
+
+ *)
+
 Parameter elab_const_int : Cabs.cabsloc -> string -> constant.
 Parameter elab_const_float : Cabs.floatInfo -> constant.
 Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
@@ -1008,19 +1064,19 @@ Section ElabDeclaration.
 
   Fixpoint elab_var_decls' {A: Type}
            (loc: astloc)
-           (countdown : list A)
+           (fuel : list A)
            (env: PM.t (type * clock))
            (vds: list (ident * (type_name * LustreAst.preclock * astloc)))
     : res (PM.t (type * clock)) :=
       match vds with
       | [] => OK env
       | _ =>
-        match countdown with
+        match fuel with
         | [] => Error (err_loc loc (MSG "incoherent or cyclic clocks: "
                                         :: msg_ident_list (map fst vds)))
-        | _::countdown' =>
+        | _::fuel' =>
           do (env', notdone) <- elab_var_decls_pass (env, []) vds;
-          elab_var_decls' loc countdown' env' notdone
+          elab_var_decls' loc fuel' env' notdone
         end
       end.
   
@@ -1039,8 +1095,8 @@ Section ElabDeclaration.
   Proof.
     unfold elab_var_decls.
     intros loc vds. generalize vds at 1.
-    intro countdown. revert vds.
-    induction countdown as [|cd countdown IH].
+    intro fuel. revert vds.
+    induction fuel as [|cd fuel IH].
     now simpl; intros ** Helab; NamedDestructCases.
     intros ** Hwc Helab.
     destruct vds as [|vd vds].
@@ -1060,8 +1116,8 @@ Section ElabDeclaration.
   Proof.
     unfold elab_var_decls.
     intros loc vds. generalize vds at 1.
-    intro countdown. revert vds.
-    induction countdown as [|cd countdown IH].
+    intro fuel. revert vds.
+    induction fuel as [|cd fuel IH].
     now simpl; intros; NamedDestructCases.
     intros vds env env' Hawt Helab.
     destruct vds as [|vd vds].
