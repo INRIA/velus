@@ -1499,6 +1499,10 @@ Section ElabDeclaration.
              do eqs     <- mmap (elab_equation env nenv) equations;
              do ok      <- check_defined loc (nameset PS.empty xout)
                              (nameset (nameset PS.empty xvar) xout) eqs;
+             do ok <- mmap (fun xtc=>
+                              assert_clock loc (fst xtc) (dck xtc) Cbase) xin;
+             do ok <- mmap (fun xtc=>
+                              assert_clock loc (fst xtc) (dck xtc) Cbase) xout;
              if existsb (fun x=>PM.mem x env) Ident.Ids.reserved
              then Error (err_loc loc (msg "illegal variable name"))
              else if (length xin ==b 0) || (length xout ==b 0)
@@ -1641,8 +1645,20 @@ Section ElabDeclaration.
         apply Coqlib.list_forall2_in_right with (1:=Helabs) in Hxin.
         destruct Hxin as (aeq & Hxin & Helab).
         apply wc_elab_equation in Helab; auto.
-      + admit. (* TODO: check that output clocks are Cbase *)
-      + admit. (* TODO: check that input clocks are Cbase *)
+      + match goal with H:mmap (fun xtc=>assert_clock _ _ _ _) xin = _ |- _
+                        => apply mmap_inversion in H; rename H into Hbase end.
+        apply all_In_Forall.
+        intros x Hxin.
+        apply Coqlib.list_forall2_in_left with (2:=Hxin) in Hbase.
+        destruct Hbase as (ok & ? & Hbase).
+        now apply assert_clock_eq in Hbase.
+      + match goal with H:mmap (fun xtc=>assert_clock _ _ _ _) xout = _ |- _
+                        => apply mmap_inversion in H; rename H into Hbase end.
+        apply all_In_Forall.
+        intros x Hxin.
+        apply Coqlib.list_forall2_in_left with (2:=Hxin) in Hbase.
+        destruct Hbase as (ok & ? & Hbase).
+        now apply assert_clock_eq in Hbase.
   Qed.
 
 End ElabDeclaration.
