@@ -871,7 +871,7 @@ Section ElabDeclaration.
       apply PM.elements_correct in Heq.
       apply In_idty_exists; eauto.
   Qed.
-
+  
   Lemma elab_var_decls_pass_spec:
     forall vds env ovds env' vds',
       elab_var_decls_pass (env, ovds) vds = OK (env', vds') ->
@@ -879,11 +879,9 @@ Section ElabDeclaration.
         vds' = vds2 ++ ovds
         /\ Permutation vds (vds1 ++ vds2)
         /\ NoDupMembers vds1
-        /\ (forall x, InMembers x vds1 ->
-                      ~PM.In x env /\ PM.In x env')
-        /\ (forall x v, PM.find x env = Some v -> PM.find x env' = Some v)
-        /\ (forall x v, PM.find x env' = Some v ->
-                        PM.find x env = Some v \/ InMembers x vds1).
+        /\ (forall x, InMembers x vds1 -> ~PM.In x env /\ PM.In x env')
+        /\ (forall x, PM.In x env -> PM.In x env')
+        /\ (forall x, PM.In x env' -> PM.In x env \/ InMembers x vds1).
   Proof.
     induction vds as [|vd vds IH].
     now intros ** Helab; monadInv Helab; exists [], []; intuition.
@@ -903,7 +901,7 @@ Section ElabDeclaration.
       + constructor; auto.
         intro Hin. apply Hvds1 in Hin.
         destruct Hin as (Hnin & Hin).
-        apply Hnin. apply PM_add_spec; auto.
+        apply Hnin, PM_add_spec; auto.
       + inv H; auto.
         match goal with H:InMembers ?x vds1 |- _ =>
                         apply Hvds1 in H; destruct H as (Hnin & Hin) end.
@@ -911,23 +909,18 @@ Section ElabDeclaration.
       + inv H.
         2:match goal with H:InMembers ?x vds1 |- _ =>
                           now apply Hvds1 in H; destruct H; auto end.
-        apply PM_In_find. eexists. apply Henv, PM.gss.
-      + intros x' v Hfind.
-        apply Henv.
-        destruct (ident_eq_dec x' x).
-        2:now rewrite PM.gso; auto.
-        subst. contradiction Heq.
-        apply PM_In_find. exists v; auto.
-      + intros x' v Hfind.
+        apply Henv, PM_add_spec; auto.
+      + intros x' Hfind.
+        apply Henv, PM_add_spec; auto.
+      + intros x' Hfind.
         apply Henv' in Hfind.
-        destruct Hfind as [Hfind|Hfind].
-        destruct (ident_eq_dec x' x).
-        now subst; right; constructor.
-        now rewrite PM.gso in Hfind; auto.
-        right; constructor 2; auto.
+        destruct Hfind as [Hfind|]; simpl; auto.
+        apply PM_add_spec in Hfind.
+        destruct Hfind as [Hfind|Hfind]; auto.
     - (* (x, (ty, FULLCK (ON ck y yb))) *)
       NamedDestructCases.
-      + monadInv Helab.
+      + (* PM.find y env = Some (yt, cy) *)
+        monadInv Helab.
         apply PM_mem_spec_false in Heq1.
         apply IH in EQ2; clear IH.
         destruct EQ2 as (vds1 & vds2 & Hvds' & Hperm & Hnd
@@ -938,7 +931,7 @@ Section ElabDeclaration.
         * constructor; auto.
           intro Hin. apply Hvds1 in Hin.
           destruct Hin as (Hnin & Hin).
-          apply Hnin. apply PM_add_spec; auto.
+          apply Hnin, PM_add_spec; auto.
         * inv H; auto.
           match goal with H:InMembers ?x vds1 |- _ =>
                           apply Hvds1 in H; destruct H as (Hnin & Hin) end.
@@ -946,21 +939,14 @@ Section ElabDeclaration.
         * inv H.
           2:match goal with H:InMembers ?x vds1 |- _ =>
                             now apply Hvds1 in H; destruct H; auto end.
-          apply PM_In_find. eexists. apply Henv, PM.gss.
-        * intros x' v Hfind.
-          apply Henv.
-          destruct (ident_eq_dec x' x).
-          2:now rewrite PM.gso; auto.
-          subst. contradiction Heq1.
-          apply PM_In_find. exists v; auto.
-        * intros x' v Hfind.
+          apply Henv, PM_add_spec; auto.
+        * intros x' Hfind.
+          apply Henv, PM_add_spec; auto.
+        * intros x' Hfind.
           apply Henv' in Hfind.
-          destruct Hfind as [Hfind|Hfind].
-          destruct (ident_eq_dec x' x).
-          now subst; right; constructor.
-          now rewrite PM.gso in Hfind; auto.
-          right; constructor 2; auto.
-      + (* TODO: add comments, tidy up structure *)
+          rewrite PM_add_spec in Hfind.
+          simpl; intuition.
+      + (* PM.find y env = None *)
         apply IH in Helab; clear IH; auto.
         destruct Helab as (vds1 & vds2 & Hvds' & Hperm & Hnd
                            & Hvds1 & Henv & Henv').
@@ -975,7 +961,8 @@ Section ElabDeclaration.
                           now apply Hvds1 in H end.
     - (* (x, (ty, WHENCK y yb, loc)) *)
       NamedDestructCases.
-      + monadInv Helab.
+      + (* PM.find y env = Some (yt, cy) *)
+        monadInv Helab.
         NamedDestructCases.
         apply PM_mem_spec_false in Heq1.
         apply IH in EQ0; clear IH.
@@ -987,7 +974,7 @@ Section ElabDeclaration.
         * constructor; auto.
           intro Hin. apply Hvds1 in Hin.
           destruct Hin as (Hnin & Hin).
-          apply Hnin. apply PM_add_spec; auto.
+          apply Hnin, PM_add_spec; auto.
         * inv H; auto.
           match goal with H:InMembers ?x vds1 |- _ =>
                           apply Hvds1 in H; destruct H as (Hnin & Hin) end.
@@ -995,21 +982,14 @@ Section ElabDeclaration.
         * inv H.
           2:match goal with H:InMembers ?x vds1 |- _ =>
                             now apply Hvds1 in H; destruct H; auto end.
-          apply PM_In_find. eexists. apply Henv, PM.gss.
-        * intros x' v Hfind.
-          apply Henv.
-          destruct (ident_eq_dec x' x).
-          2:now rewrite PM.gso; auto.
-          subst. contradiction Heq1.
-          apply PM_In_find. exists v; auto.
-        * intros x' v Hfind.
+          apply Henv, PM_add_spec; auto.
+        * intros x' Hfind.
+          apply Henv, PM_add_spec; auto.
+        * intros x' Hfind.
           apply Henv' in Hfind.
-          destruct Hfind as [Hfind|Hfind].
-          destruct (ident_eq_dec x' x).
-          now subst; right; constructor.
-          now rewrite PM.gso in Hfind; auto.
-          right; constructor 2; auto.
-      + (* TODO: add comments, tidy up structure *)
+          rewrite PM_add_spec in Hfind.
+          simpl; intuition.
+      + (* PM.find y env = None *)
         apply IH in Helab; clear IH; auto.
         destruct Helab as (vds1 & vds2 & Hvds' & Hperm & Hnd
                            & Hvds1 & Henv & Henv').
@@ -1093,8 +1073,6 @@ Section ElabDeclaration.
     apply IH in EQ0; auto.
   Qed.
 
-  (* TODO: If this is all we need, would it not be simpler
-     to prove it directly? *)
   Lemma elab_var_decls_permutation:
     forall loc vds env env',
       elab_var_decls loc env vds = OK env' ->
@@ -1138,16 +1116,14 @@ Section ElabDeclaration.
           now setoid_rewrite PM_In_Members in HH.
         * apply fst_InMembers, InMembers_In in HH.
           destruct HH as (v & HH).
-          apply PM.elements_complete, Henv', PM.elements_correct in HH.
-          now apply fst_InMembers, In_InMembers with (b:=v).
+          apply In_PM_In, Henv', PM_In_Members in HH.
+          now apply fst_InMembers.
       + apply in_app.
         apply fst_InMembers, InMembers_In in HH.
         destruct HH as (v & HH).
-        apply PM.elements_complete in HH.
-        apply Henv'' in HH.
+        apply In_PM_In, Henv'' in HH.
         destruct HH as [HH|HH].
-        * right. apply fst_InMembers.
-          now apply PM.elements_correct, In_InMembers in HH.
+        * right. now apply fst_InMembers, PM_In_Members.
         * left. now apply fst_InMembers.
   Qed.
   

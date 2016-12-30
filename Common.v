@@ -2091,6 +2091,15 @@ Section ExtraPositiveMaps.
       rewrite HH. discriminate.
   Qed.
 
+  Lemma In_PM_In:
+    forall x (v: A) env,
+      In (x, v) (PM.elements env) -> PM.In x env.
+  Proof.
+    intros ** Hin.
+    apply PM.elements_complete in Hin.
+    apply PM_In_find. eauto.
+  Qed.
+
   Lemma PM_add_spec:
     forall y x (xv: A) s,
       PM.In y (PM.add x xv s) <-> y = x \/ PM.In y s.
