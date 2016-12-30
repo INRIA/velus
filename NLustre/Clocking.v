@@ -186,6 +186,121 @@ Module Type CLOCKING
     assumption.
   Qed.
 
+  Lemma wc_clock_add:
+    forall x v env ck,
+      ~InMembers x env ->
+      wc_clock env ck ->
+      wc_clock ((x, v) :: env) ck.
+  Proof.
+    induction ck; auto using wc_clock.
+    inversion 2.
+    auto using wc_clock with datatypes.
+  Qed.
+
+  Lemma wc_env_add:
+    forall x env ck,
+      ~InMembers x env ->
+      wc_clock env ck ->
+      wc_env env ->
+      wc_env ((x, ck) :: env).
+  Proof.
+    intros ** Hnm Hwc Hwce.
+    constructor.
+    now apply wc_clock_add; auto.
+    apply all_In_Forall.
+    destruct x0 as (x' & ck').
+    intro Hin.
+    apply In_Forall with (1:=Hwce) in Hin.
+    apply wc_clock_add; auto.
+  Qed.
+
+  Require Import Morphisms.
+  Import Permutation.
+
+  Instance wc_clock_Proper:
+    Proper (@Permutation (ident * clock) ==> @eq clock ==> iff) wc_clock.
+  Proof.
+    intros env' env Henv ck' ck Hck.
+    rewrite Hck; clear Hck ck'.
+    induction ck.
+    - split; auto using wc_clock.
+    - destruct IHck.
+      split; inversion_clear 1; constructor;
+        try rewrite Henv in *;
+        auto using wc_clock.
+  Qed.
+
+  Instance wc_env_Proper:
+    Proper (@Permutation (ident * clock) ==> iff) wc_env.
+  Proof.
+    intros env' env Henv.
+    unfold wc_env.
+    split; intro HH.
+    - apply all_In_Forall.
+      intros x Hin.
+      rewrite <-Henv in Hin.
+      apply In_Forall with (1:=HH) in Hin.
+      now rewrite Henv in Hin.
+    - apply all_In_Forall.
+      intros x Hin.
+      rewrite Henv in Hin.
+      apply In_Forall with (1:=HH) in Hin.
+      now rewrite <-Henv in Hin.
+  Qed.
+
+  Hint Constructors wc_clock wc_lexp wc_cexp wc_equation wc_node : nlclocking.
+  Hint Unfold wc_env.
+  Hint Resolve wc_global_nil Forall_nil : nlclocking.
+  
+  Instance wc_lexp_Proper:
+    Proper (@Permutation (ident * clock) ==> @eq lexp ==> @eq clock ==> iff)
+           wc_lexp.
+  Proof.
+    intros env' env Henv e' e He ck' ck Hck.
+    rewrite He, Hck; clear He Hck e' ck'.
+    revert ck.
+    induction e;
+      split; auto with nlclocking;
+        inversion_clear 1;
+        (rewrite Henv in * || rewrite <-Henv in * || idtac);
+        try edestruct IHe;
+        try edestruct IHe1, IHe2;
+        auto with nlclocking.
+  Qed.
+
+  Instance wc_cexp_Proper:
+    Proper (@Permutation (ident * clock) ==> @eq cexp ==> @eq clock ==> iff)
+           wc_cexp.
+  Proof.
+    intros env' env Henv e' e He ck' ck Hck.
+    rewrite He, Hck; clear He Hck e' ck'.
+    revert ck.
+    induction e;
+      split; inversion_clear 1;
+        (rewrite Henv in * || rewrite <-Henv in *);
+         constructor; auto;
+         now (rewrite <-IHe1 || rewrite IHe1
+              || rewrite <-IHe2 || rewrite IHe2).
+  Qed.
+
+  Instance wc_equation_Proper:
+    Proper (@Permutation (ident * clock) ==> @eq equation ==> iff) wc_equation.
+  Proof.
+    intros env1 env2 Henv eq1 eq2 Heq.
+    rewrite Heq; clear Heq.
+    split; intro WTeq.
+    - inv WTeq; try rewrite Henv in *; eauto with nlclocking.
+      econstructor;
+      match goal with H:Forall _ ?x |- Forall _ ?x =>
+        apply Forall_impl_In with (2:=H) end;
+        intros; rewrite Henv in *; auto.
+    - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
+      econstructor;
+      match goal with H:Forall _ ?x |- Forall _ ?x =>
+        apply Forall_impl_In with (2:=H) end;
+        intros; rewrite <-Henv in *; auto.
+  Qed.
+
 End CLOCKING.
 
 Module ClockingFun

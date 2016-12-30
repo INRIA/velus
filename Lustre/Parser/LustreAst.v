@@ -11,6 +11,10 @@
 (*                                                                     *)
 (* *********************************************************************)
 
+Require Coq.Numbers.BinNums.
+
+Definition ident := Coq.Numbers.BinNums.positive.
+
 (* This module draws on the work of Jacques-Henri Jourdan for the CompCert
    project (CompCert/cparser/Cabs.v). *)
 
@@ -61,23 +65,23 @@ Inductive constant :=
 
 Inductive clock :=
 | BASE  : clock
-| ON    : clock -> bool -> string -> clock.
+| ON    : clock -> ident -> bool -> clock.
 
 Inductive preclock :=
 | FULLCK : clock -> preclock
-| WHENCK : bool -> string -> preclock.
+| WHENCK : ident -> bool -> preclock.
 
 Inductive expression :=
 | UNARY    : unary_operator -> expression -> astloc -> expression
 | BINARY   : binary_operator -> expression -> expression -> astloc -> expression
 | IFTE     : expression -> expression -> expression -> astloc -> expression
 | CAST     : type_name -> expression -> astloc -> expression
-| CALL     : string -> list expression -> astloc -> expression
+| CALL     : ident -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
-| VARIABLE : string -> astloc -> expression
+| VARIABLE : ident -> astloc -> expression
 | FBY      : expression -> expression -> astloc -> expression
-| WHEN     : expression -> bool -> string -> astloc -> expression
-| MERGE    : string -> expression -> expression -> astloc -> expression.
+| WHEN     : expression -> bool -> ident -> astloc -> expression
+| MERGE    : ident -> expression -> expression -> astloc -> expression.
 
 (* TODO: Reorganize to add astloc as usual, with "decorating wrapper"? *)
 Definition expression_loc (e: expression) : astloc :=
@@ -93,14 +97,14 @@ Definition expression_loc (e: expression) : astloc :=
   | WHEN _ _ _ l => l
   | MERGE _ _ _ l => l
   end.
-    
-Definition var_decls := list (string * type_name * preclock * astloc).
 
-Definition equation : Type := (list string * expression * astloc)%type.
+Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
+
+Definition equation : Type := (list ident * expression * astloc)%type.
 
 Inductive declaration :=
-      (*  name      inputs       outputs      locals   *)
-| NODE : string -> var_decls -> var_decls -> var_decls
+      (*  name    inputs       outputs      locals   *)
+| NODE : ident -> var_decls -> var_decls -> var_decls
          -> list equation -> astloc -> declaration.
 
 Definition declaration_loc (d: declaration) : astloc :=

@@ -22,6 +22,9 @@ open !Aut.GramDefs
 
 module SSet = Set.Make(String)
 
+let makeident str =
+  Camlcoq.(intern_string (camlstring_of_coqstring str))
+
 let lexicon : (string, LustreAst.astloc -> token) Hashtbl.t = Hashtbl.create 17
 
 let tok t v = Coq_existT (t, Obj.magic v)
@@ -289,7 +292,7 @@ rule initial = parse
   | "."                           { tok DOT't (currentLoc lexbuf) }
   | identifier as id              {
       try Hashtbl.find lexicon id (currentLoc lexbuf)
-      with Not_found -> tok VAR_NAME't (id, currentLoc lexbuf) }
+      with Not_found -> tok VAR_NAME't (makeident id, currentLoc lexbuf) }
   | eof                           { tok EOF't (currentLoc lexbuf) }
   | _ as c                        { fatal_error lexbuf "invalid symbol %C" c }
 

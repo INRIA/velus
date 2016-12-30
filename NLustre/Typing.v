@@ -140,6 +140,17 @@ Module Type TYPING
     now contradiction Hin.
   Qed.
 
+  Lemma wt_clock_add:
+    forall x v env ck,
+      ~InMembers x env ->
+      wt_clock env ck ->
+      wt_clock ((x, v) :: env) ck.
+  Proof.
+    induction ck; auto with dftyping.
+    inversion 2.
+    auto with dftyping datatypes.
+  Qed.
+
   Instance wt_clock_Proper:
     Proper (@Permutation.Permutation (ident * type) ==> @eq clock ==> iff)
            wt_clock.
