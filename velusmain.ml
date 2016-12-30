@@ -120,6 +120,8 @@ let speclist = [
   "-dobc",    Arg.Set write_obc, " Save generated Obc in <source>.obc";
   "-dclight", Arg.Set write_cl,  " Save generated Clight in <source>.light.c";
   "-dcminor", Arg.Set write_cm,  " Save generated Cminor in <source>.minor.c";
+  "-fullclocks", Arg.Set Interfacelib.PrintNLustre.print_fullclocks,
+                                 " Print 'full' clocks in declarations";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
 ]
 

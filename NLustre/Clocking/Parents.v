@@ -124,11 +124,10 @@ Module Type PARENTS
     intros Hwc Hp Hck.
     inversion Hp as [j c [HR1 HR2 HR3]|ck'' j c Hp' [HR1 HR2 HR3]].
     - rewrite <-HR1 in *; clear HR1 HR2 HR3.
-      inversion_clear Hck as [|? ? ? ? Hck' Hcv].
-      inversion_clear Hck'; auto.
+      now inversion_clear Hck.
     - subst.
       apply IH with (1:=Hwc) (2:=Hp').
-      inversion Hck; assumption.
+      now inversion Hck.
   Qed.
 
 End PARENTS.

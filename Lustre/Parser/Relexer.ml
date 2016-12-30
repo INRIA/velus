@@ -60,7 +60,7 @@ let map_token (Specif.Coq_existT (tok, l) : LustreParser.Aut.GramDefs.token) =
   | UINT8't      -> (LustreParser2.UINT8      (loc l), loc l)
   | VAR't        -> (LustreParser2.VAR        (loc l), loc l)
   | VAR_NAME't   -> let v = (Obj.magic l :
-                                LustreAst.string * LustreAst.astloc) in
+                                LustreAst.ident * LustreAst.astloc) in
                    (LustreParser2.VAR_NAME    v      , snd v)
   | WHEN't       -> (LustreParser2.WHEN       (loc l), loc l)
   | WHENOT't     -> (LustreParser2.WHENOT     (loc l), loc l)

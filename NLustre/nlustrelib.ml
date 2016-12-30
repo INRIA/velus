@@ -10,10 +10,6 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-(* TODO: Printing node variables does not print clocks!
-         Should we pass a clock environment?
-         Or put this information into the node declarations? *)
-
 open Format
 open Veluscommon
 
@@ -54,9 +50,9 @@ module type SYNTAX =
 
     type node = {
       n_name : ident;
-      n_in   : (ident * typ) list;
-      n_out  : (ident * typ) list;
-      n_vars : (ident * typ) list;
+      n_in   : (ident * (typ * clock)) list;
+      n_out  : (ident * (typ * clock)) list;
+      n_vars : (ident * (typ * clock)) list;
       n_eqs  : equation list }
 
     type global = node list
@@ -68,6 +64,7 @@ module PrintFun (NL: SYNTAX)
                                        and type unop  = NL.unop
                                        and type binop = NL.binop) :
   sig
+    val print_fullclocks : bool ref
     val print_lexpr    : formatter -> NL.lexp -> unit
     val print_cexpr    : formatter -> NL.cexp -> unit
     val print_equation : formatter -> NL.equation -> unit
@@ -76,6 +73,7 @@ module PrintFun (NL: SYNTAX)
   end
   =
   struct
+    let print_fullclocks = ref false
 
     let lprecedence = function
       | NL.Econst _ -> (16, NA)
@@ -106,7 +104,7 @@ module PrintFun (NL: SYNTAX)
       | NL.Ewhen (e, x, v) ->
           if v
           then fprintf p "%a when %s" lexpr (prec', e) (extern_atom x)
-          else fprintf p "%a whenot %s" lexpr (prec', e) (extern_atom x)
+          else fprintf p "%a when not %s" lexpr (prec', e) (extern_atom x)
       | NL.Eunop  (op, e, ty) ->
           PrintOps.print_unop p op ty lexpr (prec', e)
       | NL.Ebinop (op, e1, e2, ty) ->
@@ -155,8 +153,30 @@ module PrintFun (NL: SYNTAX)
       in
       print true
 
-    let print_decl p (id, ty) =
-      fprintf p "%s@ : %a" (extern_atom id) PrintOps.print_typ ty
+    let rec print_clock p ck =
+      match ck with
+      | NL.Cbase -> fprintf p "."
+      | NL.Con (ck', x, b) ->
+          fprintf p "%a %s %s"
+            print_clock ck'
+            (if b then "on" else "onot")
+            (extern_atom x)
+
+    let print_clock_decl p ck =
+      match ck with
+      | NL.Cbase -> ()
+      | NL.Con (ck', x, b) ->
+          if !print_fullclocks
+          then fprintf p " :: @[<hov 3>%a@]" print_clock ck
+          else fprintf p " when%s %s"
+                (if b then "" else " not")
+                (extern_atom x)
+
+    let print_decl p (id, (ty, ck)) =
+      fprintf p "%s@ : %a%a"
+        (extern_atom id)
+        PrintOps.print_typ ty
+        print_clock_decl ck
 
     let print_decl_list = print_list print_decl
 

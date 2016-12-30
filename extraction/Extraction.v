@@ -94,8 +94,6 @@ Extract Constant cabs_floatinfo =>
          Cabs.exponent_FI = exponent;
          Cabs.suffix_FI   = suffix }".
 
-Extract Constant ident_of_camlstring => "Camlcoq.intern_string".
-
 Extract Constant elab_const_int =>
   "fun loc str ->
     let (v, k) = Elab.elab_int_constant loc str in
