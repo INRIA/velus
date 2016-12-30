@@ -565,14 +565,14 @@ Section ElabExpressions.
       apply bind_inversion in Helab;
       try (destruct Helab as ((le & ck') & Helab & Hexp);
            monadInv Hexp);
-      eauto using wt_elab_lexp with dftyping.
+      eauto using wt_elab_lexp with nltyping.
     - specialize (IHae2 _ _ EQ); clear EQ.
       specialize (IHae3 _ _ EQ1); clear EQ1.
       NamedDestructCases.
       apply andb_prop in Heq; destruct Heq as (Hg1 & Hg2).
       rewrite equiv_decb_equiv in Hg1, Hg2.
       intros; subst.
-      eauto using wt_elab_lexp with dftyping.
+      eauto using wt_elab_lexp with nltyping.
     - apply find_var_type in Helab.
       specialize (IHae1 _ _ EQ1); clear EQ1.
       specialize (IHae2 _ _ EQ0); clear EQ0.
@@ -580,7 +580,7 @@ Section ElabExpressions.
       rewrite equiv_decb_equiv in Heq.
       apply assert_type_eq in EQ.
       intro; subst.
-      eauto using assert_type_eq with dftyping.
+      eauto using assert_type_eq with nltyping.
   Qed.
 
   Lemma wc_elab_cexp:
@@ -651,18 +651,18 @@ Section ElabExpressions.
                apply check_result_list_Forall2 in H;
                  destruct H as (Hele & Hins & Hnodup & Hcks)
              | _ => NamedDestructCases
-             end; intros; subst; auto with dftyping.
+             end; intros; subst; auto with nltyping.
     - unfold find_type_unop in EQ3. NamedDestructCases.
       rewrite type_unop'_correct in Heq0.
-      eauto with dftyping.
+      eauto with nltyping.
     - unfold find_type_binop in EQ5. NamedDestructCases.
       rewrite type_binop'_correct in Heq1.
-      auto with dftyping.
+      auto with nltyping.
     - apply andb_prop in Heq.
       destruct Heq as (Heq4 & Heq5).
       rewrite equiv_decb_equiv in Heq4, Heq5.
-      auto with dftyping.
-    - auto using type_castop with dftyping.
+      auto with nltyping.
+    - auto using type_castop with nltyping.
     - rename x1 into xin, x2 into xout, i into f, x3 into ein, l0 into xs,
       x0 into ck, a into loc'.
       unfold find_node_interface in EQ0. NamedDestructCases.
@@ -707,7 +707,7 @@ Section ElabExpressions.
                apply check_result_list_Forall2 in H; destruct H
              | _ => NamedDestructCases
              end; intros; subst;
-        auto using wc_equation, wc_cexp, wc_lexp with dftyping.
+        auto using wc_equation, wc_cexp, wc_lexp with nltyping.
   Qed.
 
   Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
@@ -899,7 +899,7 @@ Section ElabDeclaration.
       NamedDestructCases.
       apply PM_mem_spec_false in Heq.
       apply IH in Helab; auto.
-      apply all_wt_clock_add; auto with dftyping.
+      apply all_wt_clock_add; auto with nltyping.
     - (* (x, (ty, FULLCK (ON ck y yb))) *)
       NamedDestructCases.
       2:now apply IH in Helab; auto.

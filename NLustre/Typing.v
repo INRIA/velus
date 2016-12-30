@@ -122,7 +122,7 @@ Module Type TYPING
       Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
       wt_global (n::ns).
 
-  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : dftyping.
+  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : nltyping.
 
   Lemma wt_global_NoDup:
     forall g,
@@ -146,9 +146,9 @@ Module Type TYPING
       wt_clock env ck ->
       wt_clock ((x, v) :: env) ck.
   Proof.
-    induction ck; auto with dftyping.
+    induction ck; auto with nltyping.
     inversion 2.
-    auto with dftyping datatypes.
+    auto with nltyping datatypes.
   Qed.
 
   Instance wt_clock_Proper:
@@ -158,11 +158,11 @@ Module Type TYPING
     intros env' env Henv ck' ck Hck.
     rewrite Hck; clear Hck ck'.
     induction ck.
-    - split; auto with dftyping.
+    - split; auto with nltyping.
     - destruct IHck.
       split; inversion_clear 1; constructor;
         try rewrite Henv in *;
-        auto with dftyping.
+        auto with nltyping.
   Qed.
 
   Instance wt_lexp_Proper:
@@ -173,10 +173,10 @@ Module Type TYPING
     rewrite He; clear He.
     induction e; try destruct IHe;
       try destruct IHe1, IHe2;
-      split; auto with dftyping;
+      split; auto with nltyping;
         inversion_clear 1;
         (rewrite Henv in * || rewrite <-Henv in * || idtac);
-        auto with dftyping.
+        auto with nltyping.
   Qed.
 
   Instance wt_lexp_pointwise_Proper:
@@ -206,12 +206,12 @@ Module Type TYPING
     intros G1 G2 HG env1 env2 Henv eq1 eq2 Heq.
     rewrite Heq, HG.
     split; intro WTeq.
-    - inv WTeq; rewrite Henv in *; eauto with dftyping.
+    - inv WTeq; rewrite Henv in *; eauto with nltyping.
       econstructor; eauto.
       match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
         apply Forall2_impl_In with (2:=H) end.
       intros; rewrite Henv in *; auto.
-    - inv WTeq; rewrite <-Henv in *; eauto with dftyping.
+    - inv WTeq; rewrite <-Henv in *; eauto with nltyping.
       econstructor; eauto.
       match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
         apply Forall2_impl_In with (2:=H) end.
