@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import PArith.
 Require Import Coq.Sorting.Permutation.
 
@@ -10,13 +11,9 @@ Open Scope list_scope.
 (** * The CoreDF dataflow language *)
 
 Module Type NLSYNTAX
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS).
-  (** ** Clocks *)
-
-  Inductive clock : Type :=
-  | Cbase : clock                            (* base clock *)
-  | Con   : clock -> ident -> bool -> clock. (* subclock *)
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS Ids).
 
   (** ** Expressions *)
 
@@ -162,7 +159,9 @@ Module Type NLSYNTAX
 End NLSYNTAX.
 
 Module NLSyntaxFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS) <: NLSYNTAX Ids Op.
-  Include NLSYNTAX Ids Op.
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS Ids)
+       <: NLSYNTAX Ids Op Clks.
+  Include NLSYNTAX Ids Op Clks.
 End NLSyntaxFun.

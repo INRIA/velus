@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsFree.Decide.
@@ -27,17 +28,18 @@ equivalent to its specification.
 Module Type DECIDE
        (Ids           : IDS)
        (Op            : OPERATORS)
-       (Import Syn    : NLSYNTAX Ids Op)
-       (IsF           : ISFREE Ids Op Syn)
-       (Import IsFDec : IsFree.Decide.DECIDE Ids Op Syn IsF)
-       (Import Ord    : ORDERED Ids Op Syn)
-       (Import Mem    : MEMORIES Ids Op Syn)
-       (Import IsD    : ISDEFINED Ids Op Syn Mem)
-       (Import IsV    : ISVARIABLE Ids Op Syn Mem IsD)
-       (Import IsDDec : IsDefined.Decide.DECIDE Ids Op Syn Mem IsD)
-       (Import IsVDec : IsVariable.Decide.DECIDE Ids Op Syn Mem IsD IsV)
-       (Import NoD    : NODUP Ids Op Syn Mem IsD IsV)
-       (Import Wef    : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD).
+       (Import Clks   : CLOCKS Ids)
+       (Import Syn    : NLSYNTAX   Ids Op Clks)
+       (IsF           : ISFREE     Ids Op Clks Syn)
+       (Import IsFDec : IsFree.Decide.DECIDE Ids Op Clks Syn IsF)
+       (Import Ord    : ORDERED    Ids Op Clks Syn)
+       (Import Mem    : MEMORIES   Ids Op Clks Syn)
+       (Import IsD    : ISDEFINED  Ids Op Clks Syn Mem)
+       (Import IsV    : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       (Import IsDDec : IsDefined.Decide.DECIDE Ids Op Clks Syn Mem IsD)
+       (Import IsVDec : IsVariable.Decide.DECIDE Ids Op Clks Syn Mem IsD IsV)
+       (Import NoD    : NODUP      Ids Op Clks Syn Mem IsD IsV)
+       (Import Wef    : WELLFORMED Ids Op Clks Syn IsF Ord Mem IsD IsV NoD).
 
   Section Decide.
 
@@ -379,21 +381,21 @@ Module Type DECIDE
 End DECIDE.
 
 Module DecideFun
-       (Ids           : IDS)
-       (Op            : OPERATORS)
-       (Import Syn    : NLSYNTAX Ids Op)
-       (IsF           : ISFREE Ids Op Syn)
-       (Import IsFDec : IsFree.Decide.DECIDE Ids Op Syn IsF)
-       (Import Ord    : ORDERED Ids Op Syn)
-       (Import Mem    : MEMORIES Ids Op Syn)
-       (Import IsD    : ISDEFINED Ids Op Syn Mem)
-       (Import IsV    : ISVARIABLE Ids Op Syn Mem IsD)
-       (Import IsDDec : IsDefined.Decide.DECIDE Ids Op Syn Mem IsD)
-       (Import IsVDec : IsVariable.Decide.DECIDE Ids Op Syn Mem IsD IsV)
-       (Import NoD    : NODUP Ids Op Syn Mem IsD IsV)
-       (Import Wef    : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD)
-       <: DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
-
-  Include DECIDE Ids Op Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (Clks   : CLOCKS Ids)
+       (Syn    : NLSYNTAX   Ids Op Clks)
+       (IsF    : ISFREE     Ids Op Clks Syn)
+       (IsFDec : IsFree.Decide.DECIDE Ids Op Clks Syn IsF)
+       (Ord    : ORDERED    Ids Op Clks Syn)
+       (Mem    : MEMORIES   Ids Op Clks Syn)
+       (IsD    : ISDEFINED  Ids Op Clks Syn Mem)
+       (IsV    : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       (IsDDec : IsDefined.Decide.DECIDE Ids Op Clks Syn Mem IsD)
+       (IsVDec : IsVariable.Decide.DECIDE Ids Op Clks Syn Mem IsD IsV)
+       (NoD    : NODUP      Ids Op Clks Syn Mem IsD IsV)
+       (Wef    : WELLFORMED Ids Op Clks Syn IsF Ord Mem IsD IsV NoD)
+       <: DECIDE Ids Op Clks Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
+  Include DECIDE Ids Op Clks Syn IsF IsFDec Ord Mem IsD IsV IsDDec IsVDec NoD Wef.
 End DecideFun.
 

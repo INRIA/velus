@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsVariable.
@@ -16,15 +17,16 @@ Require Import Coq.Sorting.Permutation.
 (** * Well formed CoreDF programs *)
 
 Module Type WELLFORMED
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import IsF : ISFREE Ids Op Syn)
-       (Import Ord : ORDERED Ids Op Syn)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
-       (Import NoD : NODUP Ids Op Syn Mem IsD IsV).
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS     Ids)
+       (Import Syn  : NLSYNTAX   Ids Op Clks)
+       (Import IsF  : ISFREE     Ids Op Clks Syn)
+       (Import Ord  : ORDERED    Ids Op Clks Syn)
+       (Import Mem  : MEMORIES   Ids Op Clks Syn)
+       (Import IsD  : ISDEFINED  Ids Op Clks Syn Mem)
+       (Import IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       (Import NoD  : NODUP      Ids Op Clks Syn Mem IsD IsV).
 
   Section IsWellSch.
 
@@ -223,17 +225,16 @@ A CoreDF program is well defined if
 End WELLFORMED.
 
 Module WellFormedFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import IsF : ISFREE Ids Op Syn)
-       (Import Ord : ORDERED Ids Op Syn)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
-       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
-       <: WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD.
-
-  Include WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD.
-
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS Ids)
+       (Syn  : NLSYNTAX   Ids Op Clks)
+       (IsF  : ISFREE     Ids Op Clks Syn)
+       (Ord  : ORDERED    Ids Op Clks Syn)
+       (Mem  : MEMORIES   Ids Op Clks Syn)
+       (IsD  : ISDEFINED  Ids Op Clks Syn Mem)
+       (IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       (NoD  : NODUP Ids Op Clks Syn Mem IsD IsV)
+       <: WELLFORMED Ids Op Clks Syn IsF Ord Mem IsD IsV NoD.
+  Include WELLFORMED Ids Op Clks Syn IsF Ord Mem IsD IsV NoD.
 End WellFormedFun.

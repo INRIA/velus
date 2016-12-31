@@ -6,6 +6,7 @@ Require Import Coq.Sorting.Permutation.
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Stream.
@@ -20,12 +21,13 @@ Require Import Velus.NLustre.Stream.
  *)
 
 Module Type NLSEMANTICS
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Ids Op Syn).
+       (Import Clks  : CLOCKS    Ids)
+       (Import Syn   : NLSYNTAX  Ids Op Clks)
+       (Import Str   : STREAM        Op)
+       (Import Ord   : ORDERED   Ids Op Clks Syn).
 
   (** ** Environment and history *)
 
@@ -1081,12 +1083,13 @@ an absent value *)
 End NLSEMANTICS.
 
 Module NLSemanticsFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Ids Op Syn)
-       <: NLSEMANTICS Ids Op OpAux Syn Str Ord.
-  Include NLSEMANTICS Ids Op OpAux Syn Str Ord.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS    Ids)
+       (Syn   : NLSYNTAX  Ids Op Clks)
+       (Str   : STREAM        Op)
+       (Ord   : ORDERED   Ids Op Clks Syn)
+       <: NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
+  Include NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
 End NLSemanticsFun.

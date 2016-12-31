@@ -4,6 +4,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Open Scope positive.
 
 Require Import Velus.RMemory.
@@ -19,11 +20,12 @@ Module Type NLOBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import DF    : NLUSTRE Ids Op OpAux)
+       (Import Clks  : CLOCKS Ids)
+       (Import DF    : NLUSTRE Ids Op OpAux Clks)
        (Import Obc   : OBC Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op DF.Syn)
+       (Import Mem   : MEMORIES Ids Op Clks DF.Syn)
 
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem).
+       (Import Trans : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem).
 
 
   (** Preservation of well-typing. *)
@@ -593,14 +595,14 @@ Module Type NLOBCTYPING
 End NLOBCTYPING.
 
 Module NLObcTypingFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import DF    : NLUSTRE Ids Op OpAux)
-       (Import Obc   : OBC Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op DF.Syn)
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       <: NLOBCTYPING Ids Op OpAux DF Obc Mem Trans.
-
-       Include NLOBCTYPING Ids Op OpAux DF Obc Mem Trans.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (DF    : NLUSTRE Ids Op OpAux Clks)
+       (Obc   : OBC Ids Op OpAux)
+       (Mem   : MEMORIES Ids Op Clks DF.Syn)
+       (Trans : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem)
+       <: NLOBCTYPING Ids Op OpAux Clks DF Obc Mem Trans.
+   Include NLOBCTYPING Ids Op OpAux Clks DF Obc Mem Trans.
 End NLObcTypingFun.

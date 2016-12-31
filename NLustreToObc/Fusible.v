@@ -2,6 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 
 Require Import Velus.NLustre.
 Require Import Velus.Obc.
@@ -15,10 +16,11 @@ Module Type FUSIBLE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux)
+       (Import Clks  : CLOCKS Ids)
+       (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux Clks)
        (Import Obc   : Velus.Obc.OBC Ids Op OpAux)
        (Import Trans : Velus.NLustreToObc.Translation.TRANSLATION
-                         Ids Op OpAux NLus.Syn Obc.Syn NLus.Mem).
+                         Ids Op OpAux Clks NLus.Syn Obc.Syn NLus.Mem).
 
   (** ** Show that the Obc code that results from translating an NLustre
          program satisfies the [Fusible] invariant, and thus that fusion
@@ -259,16 +261,15 @@ Module Type FUSIBLE
 End FUSIBLE.
 
 Module FusibleFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux)
-       (Import Obc   : Velus.Obc.OBC Ids Op OpAux)
-       (Import Trans : Velus.NLustreToObc.Translation.TRANSLATION
-                         Ids Op OpAux NLus.Syn Obc.Syn NLus.Mem)
-  <: FUSIBLE Ids Op OpAux NLus Obc Trans.
-
-  Include FUSIBLE Ids Op OpAux NLus Obc Trans.
-
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux Clks)
+       (Obc   : Velus.Obc.OBC Ids Op OpAux)
+       (Trans : Velus.NLustreToObc.Translation.TRANSLATION
+                         Ids Op OpAux Clks NLus.Syn Obc.Syn NLus.Mem)
+       <: FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
+  Include FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
 End FusibleFun.
 

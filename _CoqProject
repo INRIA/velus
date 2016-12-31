@@ -14,6 +14,7 @@
 RMemory.v
 Common.v
 Ident.v
+Clocks.v
 Operators.v
 Example.v
 Lustre/Parser/LustreAst.v
@@ -29,7 +30,6 @@ NLustre/IsDefined.v
 NLustre/IsDefined/Decide.v
 NLustre/Memories.v
 NLustre/Clocking.v
-NLustre/Clocking/Parents.v
 NLustre/Clocking/Properties.v
 NLustre/NLSemantics.v
 NLustre/MemSemantics.v

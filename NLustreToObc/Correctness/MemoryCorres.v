@@ -2,6 +2,7 @@ Require Import List.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.RMemory.
 Require Import Velus.NLustre.
 Require Import Velus.Obc.
@@ -9,11 +10,12 @@ Require Import Velus.Obc.
 (** * Correspondence between dataflow and imperative memories *)
 
 Module Type MEMORYCORRES
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (OpAux: OPERATORS_AUX Op)
-       (Import DF: NLUSTRE Ids Op OpAux)
-       (Import MP: OBC Ids Op OpAux).
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (OpAux       : OPERATORS_AUX Op)
+       (Import Clks : CLOCKS Ids)
+       (Import DF   : NLUSTRE Ids Op OpAux Clks)
+       (Import MP   : OBC Ids Op OpAux).
 (**
 
   [Memory_Corres] relates a dataflow [D.memory] with an object [heap]
@@ -462,12 +464,12 @@ Module Type MEMORYCORRES
 End MEMORYCORRES.
 
 Module MemoryCorresFun
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (OpAux: OPERATORS_AUX Op)
-       (Import DF: NLUSTRE Ids Op OpAux)
-       (Import MP: OBC Ids Op OpAux)
-       <: MEMORYCORRES Ids Op OpAux DF MP.
-
-      Include MEMORYCORRES Ids Op OpAux DF MP.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (DF    : NLUSTRE Ids Op OpAux Clks)
+       (MP    : OBC Ids Op OpAux)
+       <: MEMORYCORRES Ids Op OpAux Clks DF MP.
+  Include MEMORYCORRES Ids Op OpAux Clks DF MP.
 End MemoryCorresFun.     

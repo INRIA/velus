@@ -6,6 +6,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.Memories.
@@ -23,11 +24,12 @@ Require Import Coq.Sorting.Permutation.
  *)
 
 Module Type ISVARIABLE
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem).
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (Import Clks : CLOCKS    Ids)
+       (Import Syn  : NLSYNTAX  Ids Op Clks)
+       (Import Mem  : MEMORIES  Ids Op Clks Syn)
+       (Import IsD  : ISDEFINED Ids Op Clks Syn Mem).
 
   Inductive Is_variable_in_eq : ident -> equation -> Prop :=
   | VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
@@ -161,13 +163,12 @@ Module Type ISVARIABLE
 End ISVARIABLE.
 
 Module IsVariableFun
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       <: ISVARIABLE Ids Op Syn Mem IsD.
-
-  Include ISVARIABLE Ids Op Syn Mem IsD.
-
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS Ids)
+       (Syn  : NLSYNTAX  Ids Op Clks)
+       (Mem  : MEMORIES  Ids Op Clks Syn)
+       (IsD  : ISDEFINED Ids Op Clks Syn Mem)
+       <: ISVARIABLE Ids Op Clks Syn Mem IsD.
+  Include ISVARIABLE Ids Op Clks Syn Mem IsD.
 End IsVariableFun.

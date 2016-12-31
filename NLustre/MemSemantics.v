@@ -6,6 +6,7 @@ Require Import Coq.Sorting.Permutation.
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.RMemory.
 Require Import Velus.NLustre.Stream.
 Require Import Velus.NLustre.NLSyntax.
@@ -52,19 +53,20 @@ Set Implicit Arguments.
  *)
 
 Module Type MEMSEMANTICS
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Ids Op Syn)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsF : ISFREE Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import Sem : NLSEMANTICS Ids Op OpAux Syn Str Ord)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
-       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
-       (Import WeF : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX   Op)
+       (Import Clks  : CLOCKS      Ids)
+       (Import Syn   : NLSYNTAX    Ids Op       Clks)
+       (Import Str   : STREAM          Op)
+       (Import Ord   : ORDERED     Ids Op       Clks Syn)
+       (Import Mem   : MEMORIES    Ids Op       Clks Syn)
+       (Import IsF   : ISFREE      Ids Op       Clks Syn)
+       (Import IsD   : ISDEFINED   Ids Op       Clks Syn Mem)
+       (Import Sem   : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
+       (Import IsV   : ISVARIABLE  Ids Op       Clks Syn Mem IsD)
+       (Import NoD   : NODUP       Ids Op       Clks Syn Mem IsD IsV)
+       (Import WeF   : WELLFORMED  Ids Op       Clks Syn IsF Ord Mem IsD IsV NoD).
 
   Definition memory := memory (stream val).
 
@@ -826,19 +828,20 @@ dataflow memory for which the non-standard semantics holds true.
 End MEMSEMANTICS.
 
 Module MemSemanticsFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Ids Op Syn)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsF : ISFREE Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import Sem : NLSEMANTICS Ids Op OpAux Syn Str Ord)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
-       (Import NoD : NODUP Ids Op Syn Mem IsD IsV)
-       (Import WeF : WELLFORMED Ids Op Syn IsF Ord Mem IsD IsV NoD)
-       <: MEMSEMANTICS Ids Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
-  Include MEMSEMANTICS Ids Op OpAux Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (Syn   : NLSYNTAX    Ids Op       Clks)
+       (Str   : STREAM          Op)
+       (Ord   : ORDERED     Ids Op       Clks Syn)
+       (Mem   : MEMORIES    Ids Op       Clks Syn)
+       (IsF   : ISFREE      Ids Op       Clks Syn)
+       (IsD   : ISDEFINED   Ids Op       Clks Syn Mem)
+       (Sem   : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
+       (IsV   : ISVARIABLE  Ids Op       Clks Syn Mem IsD)
+       (NoD   : NODUP       Ids Op       Clks Syn Mem IsD IsV)
+       (WeF   : WELLFORMED  Ids Op       Clks Syn IsF Ord Mem IsD IsV NoD)
+       <: MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
+  Include MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
 End MemSemanticsFun.

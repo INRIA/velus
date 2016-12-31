@@ -6,6 +6,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
@@ -21,12 +22,13 @@ equivalent to its specification.
  *)
 
 Module Type DECIDE
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (Import Clks : CLOCKS     Ids)
+       (Import Syn  : NLSYNTAX   Ids Op Clks)
+       (Import Mem  : MEMORIES   Ids Op Clks Syn)
+       (Import IsD  : ISDEFINED  Ids Op Clks Syn Mem)
+       (Import IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD).
 
   Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
@@ -216,12 +218,13 @@ Module Type DECIDE
 End DECIDE.
 
 Module DecideFun
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
-       <: DECIDE Ids Op Syn Mem IsD IsV.
-  Include DECIDE Ids Op Syn Mem IsD IsV.
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS     Ids)
+       (Syn  : NLSYNTAX   Ids Op Clks)
+       (Mem  : MEMORIES   Ids Op Clks Syn)
+       (IsD  : ISDEFINED  Ids Op Clks Syn Mem)
+       (IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       <: DECIDE Ids Op Clks Syn Mem IsD IsV.
+  Include DECIDE Ids Op Clks Syn Mem IsD IsV.
 End DecideFun.

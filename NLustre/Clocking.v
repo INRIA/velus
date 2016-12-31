@@ -1,6 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import List.
 
@@ -14,9 +15,10 @@ wrt. its clock annotations.
  *)
 
 Module Type CLOCKING
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op).
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS   Ids)
+       (Import Syn  : NLSYNTAX Ids Op Clks).
 
   Section WellClocked.
 
@@ -304,9 +306,10 @@ Module Type CLOCKING
 End CLOCKING.
 
 Module ClockingFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       <: CLOCKING Ids Op Syn.
-  Include CLOCKING Ids Op Syn.
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS   Ids)
+       (Syn  : NLSYNTAX Ids Op Clks)
+       <: CLOCKING Ids Op Clks Syn.
+  Include CLOCKING Ids Op Clks Syn.
 End ClockingFun.

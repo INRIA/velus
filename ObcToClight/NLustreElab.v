@@ -3,7 +3,9 @@ Require Instantiator.
 
 Require Import Velus.Lustre.Parser.LustreAst.
 Require Import Operators.
+Require Import Clocks.
 
+Module Import Clks := Instantiator.Clks.
 Module Import Syn := Instantiator.NL.Syn.
 Module Import Defs := Instantiator.NL.IsD.
 

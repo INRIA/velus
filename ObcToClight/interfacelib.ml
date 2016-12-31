@@ -110,6 +110,7 @@ module PrintClightOpsFun (OpNames : sig
 
 module PrintNLustre = Nlustrelib.PrintFun
   (struct
+      include Instantiator.Clks
       include Instantiator.NL.Syn
       type typ   = Interface.Op.coq_type
       type const = Interface.Op.const

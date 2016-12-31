@@ -116,7 +116,6 @@ VFILES:=RMemory.v\
   NLustre/MemSemantics.v\
   NLustre/NLSemantics.v\
   NLustre/Clocking/Properties.v\
-  NLustre/Clocking/Parents.v\
   NLustre/Clocking.v\
   NLustre/Memories.v\
   NLustre/IsDefined/Decide.v\
@@ -130,6 +129,7 @@ VFILES:=RMemory.v\
   NLustre/Stream.v\
   Common.v\
   Ident.v\
+  Clocks.v\
   ObcToClight/Interface.v\
   ObcToClight/Generation.v\
   ObcToClight/Correctness.v\

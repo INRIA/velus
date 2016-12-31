@@ -1,13 +1,15 @@
 Require Import Velus.Common.
-Require Import Velus.Operators.
-Require Import NLustre.NLSyntax.
-Require Import NLustre.Clocking.
 
-Module Type PARENTS
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Clo : CLOCKING Ids Op Syn).
+Module Type CLOCKS
+       (Ids : IDS).
+
+  (** ** Clocks *)
+
+  Inductive clock : Type :=
+  | Cbase : clock                            (* base clock *)
+  | Con   : clock -> ident -> bool -> clock. (* subclock *)
+
+  (** ** Parent relation *)
   
   Inductive clock_parent ck : clock -> Prop :=
   | CP0: forall x b,
@@ -111,32 +113,8 @@ Module Type PARENTS
     intros ck x b Hp; apply clock_parent_strict with (1:=Hp); constructor.
   Qed.
 
-  Lemma wc_clock_parent:
-    forall C ck' ck,
-      wc_env C
-      -> clock_parent ck ck'
-      -> wc_clock C ck'
-      -> wc_clock C ck.
-  Proof.
-    Hint Constructors wc_clock.
-    induction ck' as [|ck' IH]; destruct ck as [|ck i' ty' b'];
-    try now (inversion 3 || auto).
-    intros Hwc Hp Hck.
-    inversion Hp as [j c [HR1 HR2 HR3]|ck'' j c Hp' [HR1 HR2 HR3]].
-    - rewrite <-HR1 in *; clear HR1 HR2 HR3.
-      now inversion_clear Hck.
-    - subst.
-      apply IH with (1:=Hwc) (2:=Hp').
-      now inversion Hck.
-  Qed.
+End CLOCKS.
 
-End PARENTS.
-
-Module ParentsFun
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : NLSYNTAX Ids Op)
-       (Import Clo : CLOCKING Ids Op Syn)
-       <: PARENTS Ids Op Syn Clo.
-  Include PARENTS Ids Op Syn Clo.
-End ParentsFun.
+Module ClocksFun (Ids : IDS) <: CLOCKS Ids.
+  Include CLOCKS Ids.
+End ClocksFun.

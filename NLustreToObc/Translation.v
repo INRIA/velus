@@ -2,6 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.Obc.ObcSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
@@ -37,12 +38,13 @@ application is assigned to a single variable. We use the name of that
 variable to identify the instance.  *)
 
 Module Type TRANSLATION
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op SynDF).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX Op)
+       (Import Clks   : CLOCKS Ids)
+       (Import SynNL  : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (Import SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import Mem    : MEMORIES Ids Op Clks SynNL).
 
   (* definition is needed in signature *)
   Definition gather_eq
@@ -915,14 +917,13 @@ Module Type TRANSLATION
 End TRANSLATION.
 
 Module TranslationFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
-       (Import Mem : MEMORIES Ids Op SynDF)
-       <: TRANSLATION Ids Op OpAux SynDF SynMP Mem.
-
-  Include TRANSLATION Ids Op OpAux SynDF SynMP Mem.
-
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX Op)
+       (Clks   : CLOCKS Ids)
+       (SynNL  : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Mem    : MEMORIES Ids Op Clks SynNL)
+       <: TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
+  Include TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
 End TranslationFun.
