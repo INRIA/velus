@@ -14,7 +14,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 
-(** * Well formed CoreDF programs *)
+(** * Well formed NLustre programs *)
 
 Module Type WELLFORMED
        (Import Ids  : IDS)
@@ -63,7 +63,7 @@ first equation to execute should be the last in the list.
 
   (**
 
-A CoreDF program is well defined if
+An NLustre program is well defined if
   - Each node is well-defined, that is
     - The equations are well scheduled
   - Every node call points to a previously-defined node

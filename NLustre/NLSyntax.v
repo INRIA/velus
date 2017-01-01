@@ -8,7 +8,7 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-(** * The CoreDF dataflow language *)
+(** * The NLustre dataflow language *)
 
 Module Type NLSYNTAX
        (Import Ids  : IDS)

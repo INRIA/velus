@@ -11,7 +11,7 @@ Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Stream.
 
-(** * The CoreDF semantics *)
+(** * The NLustre semantics *)
 
 (**
 

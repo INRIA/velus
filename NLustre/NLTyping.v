@@ -9,12 +9,12 @@ Open Scope list_scope.
 
 Require Import Morphisms.
 
-(** * CoreDF typing *)
+(** * NLustre typing *)
 
 (**
 
-  Typing judgements for CoreDF and resulting properties.
-  Classify CoreDF programs which are statically well-formed.
+  Typing judgements for NLustre and resulting properties.
+  Classify NLustre programs which are statically well-formed.
 
  *)
 

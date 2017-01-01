@@ -22,7 +22,7 @@ Open Scope list.
 
 (**
 
-Each node application in CoreDF turns into a method call in the
+Each node application in NLustre turns into a method call in the
 imperative setting. This means that, upon initializing a node, one
 must declare a new instance for each its application.
 

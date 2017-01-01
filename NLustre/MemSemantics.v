@@ -21,7 +21,7 @@ Require Import Velus.NLustre.NoDup.
 
 Set Implicit Arguments.
 
-(** * The CoreDF+Memory semantics *)
+(** * The NLustre+Memory semantics *)
 
 (**
 
