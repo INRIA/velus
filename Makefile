@@ -111,18 +111,13 @@ VFILES:=RMemory.v\
   NLustre.v\
   NLustre/NoDup.v\
   NLustre/Ordered.v\
-  NLustre/WellFormed/Decide.v\
   NLustre/WellFormed.v\
   NLustre/MemSemantics.v\
   NLustre/NLSemantics.v\
-  NLustre/Clocking/Properties.v\
   NLustre/Clocking.v\
   NLustre/Memories.v\
-  NLustre/IsDefined/Decide.v\
   NLustre/IsDefined.v\
-  NLustre/IsVariable/Decide.v\
   NLustre/IsVariable.v\
-  NLustre/IsFree/Decide.v\
   NLustre/IsFree.v\
   NLustre/NLSyntax.v\
   NLustre/NLTyping.v\
