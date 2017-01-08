@@ -21,15 +21,6 @@ Module Type ISFREE
        (Import Clks : CLOCKS   Ids)
        (Import Syn  : NLSYNTAX Ids Op Clks).
 
-  Inductive Is_free_in_clock : ident -> clock -> Prop :=
-  | FreeCon1:
-      forall x ck' xc,
-        Is_free_in_clock x (Con ck' x xc)
-  | FreeCon2:
-      forall x y ck' xc,
-        Is_free_in_clock x ck'
-        -> Is_free_in_clock x (Con ck' y xc).
-
   (* Warning: induction scheme is not strong enough. *)
   Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
   | FreeEvar: forall x ty, Is_free_in_lexp x (Evar x ty)

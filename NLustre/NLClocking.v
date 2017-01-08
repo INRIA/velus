@@ -17,7 +17,7 @@ wrt. its clock annotations.
 
  *)
 
-Module Type CLOCKING
+Module Type NLCLOCKING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
        (Import Clks : CLOCKS   Ids)
@@ -29,15 +29,6 @@ Module Type CLOCKING
   Section WellClocked.
 
     Variable vars : list (ident * clock).
-
-    Inductive wc_clock : clock -> Prop :=
-    | CCbase:
-        wc_clock Cbase
-    | CCon:
-        forall ck x b,
-          wc_clock ck ->
-          In (x, ck) vars ->
-          wc_clock (Con ck x b).
 
     Inductive wc_lexp : lexp -> clock -> Prop :=
     | Cconst:
@@ -99,9 +90,6 @@ Module Type CLOCKING
 
   End WellClocked.
 
-  Definition wc_env vars : Prop :=
-    Forall (fun xck => wc_clock vars (snd xck)) vars.
-
   Inductive wc_node : node -> Prop :=
   | SNode:
       forall n,
@@ -128,16 +116,6 @@ Module Type CLOCKING
   Lemma wc_global_nil: wc_global nil.
   Proof.
     apply Forall_nil.
-  Qed.
-
-  Lemma wc_env_var:
-    forall vars x ck,
-      wc_env vars
-      -> In (x, ck) vars
-      -> wc_clock vars ck.
-  Proof.
-    intros vars x ck Hwc Hcv.
-    now apply In_Forall with (2:=Hcv) in Hwc.
   Qed.
 
   Lemma wc_clock_lexp:
@@ -174,92 +152,13 @@ Module Type CLOCKING
       apply wc_clock_lexp with (1:=Hwc) (2:=Hck).
   Qed.
 
-  Lemma clock_no_loops:
-    forall ck x b,
-      Con ck x b <> ck.
-  Proof.
-    induction ck as [|? IH]; [discriminate 1|].
-    injection 1; intros ? Heq.
-    apply IH.  
-  Qed.
-
-  Lemma wc_clock_sub:
-    forall vars ck x b,
-      wc_env vars
-      -> wc_clock vars (Con ck x b)
-      -> In (x, ck) vars.
-  Proof.
-    intros vars ck x b Hwc Hclock.
-    inversion_clear Hclock as [|? ? ? Hclock' Hcv'].
-    assumption.
-  Qed.
-
-  Lemma wc_clock_add:
-    forall x v env ck,
-      ~InMembers x env ->
-      wc_clock env ck ->
-      wc_clock ((x, v) :: env) ck.
-  Proof.
-    induction ck; auto using wc_clock.
-    inversion 2.
-    auto using wc_clock with datatypes.
-  Qed.
-
-  Lemma wc_env_add:
-    forall x env ck,
-      ~InMembers x env ->
-      wc_clock env ck ->
-      wc_env env ->
-      wc_env ((x, ck) :: env).
-  Proof.
-    intros ** Hnm Hwc Hwce.
-    constructor.
-    now apply wc_clock_add; auto.
-    apply all_In_Forall.
-    destruct x0 as (x' & ck').
-    intro Hin.
-    apply In_Forall with (1:=Hwce) in Hin.
-    apply wc_clock_add; auto.
-  Qed.
+  Hint Constructors wc_clock wc_lexp wc_cexp wc_equation wc_node : nlclocking.
+  Hint Unfold wc_env : nlclocking.
+  Hint Resolve wc_global_nil Forall_nil : nlclocking.
 
   Require Import Morphisms.
   Import Permutation.
 
-  Instance wc_clock_Proper:
-    Proper (@Permutation (ident * clock) ==> @eq clock ==> iff) wc_clock.
-  Proof.
-    intros env' env Henv ck' ck Hck.
-    rewrite Hck; clear Hck ck'.
-    induction ck.
-    - split; auto using wc_clock.
-    - destruct IHck.
-      split; inversion_clear 1; constructor;
-        try rewrite Henv in *;
-        auto using wc_clock.
-  Qed.
-
-  Instance wc_env_Proper:
-    Proper (@Permutation (ident * clock) ==> iff) wc_env.
-  Proof.
-    intros env' env Henv.
-    unfold wc_env.
-    split; intro HH.
-    - apply all_In_Forall.
-      intros x Hin.
-      rewrite <-Henv in Hin.
-      apply In_Forall with (1:=HH) in Hin.
-      now rewrite Henv in Hin.
-    - apply all_In_Forall.
-      intros x Hin.
-      rewrite Henv in Hin.
-      apply In_Forall with (1:=HH) in Hin.
-      now rewrite <-Henv in Hin.
-  Qed.
-
-  Hint Constructors wc_clock wc_lexp wc_cexp wc_equation wc_node : nlclocking.
-  Hint Unfold wc_env.
-  Hint Resolve wc_global_nil Forall_nil : nlclocking.
-  
   Instance wc_lexp_Proper:
     Proper (@Permutation (ident * clock) ==> @eq lexp ==> @eq clock ==> iff)
            wc_lexp.
@@ -310,41 +209,6 @@ Module Type CLOCKING
   Qed.
 
   (** Properties *)
-
-  Lemma Is_free_in_clock_self_or_parent:
-    forall x ck,
-      Is_free_in_clock x ck
-      -> exists ck' b, ck = Con ck' x b \/ clock_parent (Con ck' x b) ck.
-  Proof.
-    Hint Constructors clock_parent.
-    induction ck as [|? IH]; [now inversion 1|].
-    intro Hfree.
-    inversion Hfree as [|? ? ? ? Hfree']; clear Hfree; subst.
-    - exists ck, b; now auto.
-    - specialize (IH Hfree'); clear Hfree'.
-      destruct IH as [ck' [b' Hcp]].
-      exists ck', b'; right.
-      destruct Hcp as [Hcp|Hcp]; [rewrite Hcp| inversion Hcp]; now auto.
-  Qed.
-
-  Lemma wc_clock_parent:
-    forall C ck' ck,
-      wc_env C
-      -> clock_parent ck ck'
-      -> wc_clock C ck'
-      -> wc_clock C ck.
-  Proof.
-    Hint Constructors wc_clock.
-    induction ck' as [|ck' IH]; destruct ck as [|ck i' ty' b'];
-    try now (inversion 3 || auto).
-    intros Hwc Hp Hck.
-    inversion Hp as [j c [HR1 HR2 HR3]|ck'' j c Hp' [HR1 HR2 HR3]].
-    - rewrite <-HR1 in *; clear HR1 HR2 HR3.
-      now inversion_clear Hck.
-    - subst.
-      apply IH with (1:=Hwc) (2:=Hp').
-      now inversion Hck.
-  Qed.
   
   Section Well_clocked.
 
@@ -439,9 +303,9 @@ Module Type CLOCKING
 
   End Well_clocked.
 
-End CLOCKING.
+End NLCLOCKING.
 
-Module ClockingFun
+Module NLClockingFun
        (Ids  : IDS)
        (Op   : OPERATORS)
        (Clks : CLOCKS   Ids)
@@ -449,6 +313,6 @@ Module ClockingFun
        (IsF  : ISFREE Ids Op Clks Syn)
        (Mem  : MEMORIES Ids Op Clks Syn)
        (IsD  : ISDEFINED Ids Op Clks Syn Mem)
-       <: CLOCKING Ids Op Clks Syn IsF Mem IsD.
-  Include CLOCKING Ids Op Clks Syn IsF Mem IsD.
-End ClockingFun.
+       <: NLCLOCKING Ids Op Clks Syn IsF Mem IsD.
+  Include NLCLOCKING Ids Op Clks Syn IsF Mem IsD.
+End NLClockingFun.

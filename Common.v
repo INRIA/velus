@@ -28,7 +28,7 @@ Module PM := Coq.FSets.FMapPositive.PositiveMap.
 
 Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
-Definition ident_eqb := Pos.eqb. (* TODO: replace with equiv_decb *)
+Definition ident_eqb := Pos.eqb.
 
 Definition idents := list ident.
 
