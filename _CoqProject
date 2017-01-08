@@ -26,7 +26,7 @@ NLustre/IsFree.v
 NLustre/IsVariable.v
 NLustre/IsDefined.v
 NLustre/Memories.v
-NLustre/Clocking.v
+NLustre/NLClocking.v
 NLustre/NLSemantics.v
 NLustre/MemSemantics.v
 NLustre/WellFormed.v

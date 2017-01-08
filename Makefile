@@ -114,7 +114,7 @@ VFILES:=RMemory.v\
   NLustre/WellFormed.v\
   NLustre/MemSemantics.v\
   NLustre/NLSemantics.v\
-  NLustre/Clocking.v\
+  NLustre/NLClocking.v\
   NLustre/Memories.v\
   NLustre/IsDefined.v\
   NLustre/IsVariable.v\
