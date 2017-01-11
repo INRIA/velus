@@ -5,7 +5,8 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.Memories.
@@ -30,12 +31,13 @@ this generically amounts to:
  *)
 
 Module Type NODUP
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD).
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (Import Clks : CLOCKS     Ids)
+       (Import Syn  : NLSYNTAX   Ids Op Clks)
+       (Import Mem  : MEMORIES   Ids Op Clks Syn)
+       (Import IsD  : ISDEFINED  Ids Op Clks Syn Mem)
+       (Import IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD).
 
   Inductive NoDup_defs : list equation -> Prop :=
   | NDDNil: NoDup_defs nil
@@ -158,14 +160,15 @@ Module Type NODUP
 End NODUP.
 
 Module NoDupFun
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
-       (Import Mem : MEMORIES Ids Op Syn)
-       (Import IsD : ISDEFINED Ids Op Syn Mem)
-       (Import IsV : ISVARIABLE Ids Op Syn Mem IsD)
-       <: NODUP Ids Op Syn Mem IsD IsV.
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS Ids)
+       (Syn  : NLSYNTAX   Ids Op Clks)
+       (Mem  : MEMORIES   Ids Op Clks Syn)
+       (IsD  : ISDEFINED  Ids Op Clks Syn Mem)
+       (IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       <: NODUP Ids Op Clks Syn Mem IsD IsV.
 
-  Include NODUP Ids Op Syn Mem IsD IsV.
+  Include NODUP Ids Op Clks Syn Mem IsD IsV.
 
 End NoDupFun.

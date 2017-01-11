@@ -1,3 +1,4 @@
+/* *********************************************************************/
 /*                    The Velus Lustre compiler                        */
 /*                                                                     */
 /*  Copyright Institut National de Recherche en Informatique et en     */
@@ -14,7 +15,7 @@
    and Nicolas Halbwachs in the Lustre v6 reference manual (2016). */
 
 %{
-Require Velus.NLustre.Parser.LustreAst.
+Require Velus.Lustre.Parser.LustreAst.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
 Require Import Coq.Program.Syntax.
@@ -23,7 +24,7 @@ Require Import List.
 Import ListNotations.
 %}
 
-%token<LustreAst.string * LustreAst.astloc> VAR_NAME
+%token<LustreAst.ident * LustreAst.astloc> VAR_NAME
 %token<LustreAst.constant * LustreAst.astloc> CONSTANT
 %token<LustreAst.astloc> TRUE FALSE
 %token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
@@ -52,14 +53,14 @@ Import ListNotations.
 %type<LustreAst.var_decls> var_decl
 %type<LustreAst.var_decls> var_decl_list
 %type<LustreAst.var_decls> local_var_decl
-%type<list LustreAst.string (* Reverse order *)> identifier_list
+%type<list LustreAst.ident (* Reverse order *)> identifier_list
 %type<LustreAst.type_name * LustreAst.astloc> type_name
-%type<LustreAst.clock> declared_clock
+%type<LustreAst.preclock> declared_clock
 %type<LustreAst.clock> clock
 %type<LustreAst.var_decls> local_decl
 %type<LustreAst.var_decls> local_decl_list
 %type<LustreAst.var_decls (* Reverse order *)> parameter_list
-%type<list LustreAst.string> pattern
+%type<list LustreAst.ident> pattern
 %type<LustreAst.equation> equation
 %type<list LustreAst.equation> equations
 %type<unit> optsemicolon
@@ -201,6 +202,8 @@ when_expression:
     { expr }
 | expr=when_expression loc=WHEN id=VAR_NAME
     { LustreAst.WHEN expr true (fst id) loc }
+| expr=when_expression loc=WHEN NOT id=VAR_NAME
+    { LustreAst.WHEN expr false (fst id) loc }
 | expr=when_expression loc=WHENOT id=VAR_NAME
     { LustreAst.WHEN expr false (fst id) loc }
 
@@ -280,13 +283,13 @@ expression:
 
 var_decl:
 | ids=identifier_list loc=COLON ty=type_name clk=declared_clock
-    { map (fun id=> (id, fst ty, clk, loc)) ids }
+    { map (fun id=> (id, (fst ty, clk, loc))) ids }
 
 var_decl_list:
 | vars=var_decl
     { vars }
 | vars_list=var_decl_list SEMICOLON vars=var_decl
-    { vars ++ vars_list }
+    { vars_list ++ vars }
 
 local_var_decl:
 | loc=VAR vars_list=var_decl_list SEMICOLON
@@ -324,19 +327,23 @@ type_name:
 
 declared_clock:
 | /* empty */
-    { LustreAst.BASE }
-| WHEN clk=clock
-    { clk }
+    { LustreAst.FULLCK LustreAst.BASE }
+| WHEN id=VAR_NAME
+    { LustreAst.WHENCK (fst id) true }
+| WHEN NOT id=VAR_NAME
+    { LustreAst.WHENCK (fst id) false }
+| WHENOT id=VAR_NAME
+    { LustreAst.WHENCK (fst id) false }
 | COLONCOLON clk=clock
-    { clk }
+    { LustreAst.FULLCK clk }
 
 clock:
 | DOT
     { LustreAst.BASE }
 | clk=clock ON id=VAR_NAME
-    { LustreAst.ON clk true (fst id) }
+    { LustreAst.ON clk (fst id) true }
 | clk=clock ONOT id=VAR_NAME
-    { LustreAst.ON clk false (fst id) }
+    { LustreAst.ON clk (fst id) false }
 
 local_decl:
 | vd=local_var_decl

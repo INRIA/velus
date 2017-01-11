@@ -6,11 +6,12 @@ Require Import Coq.Sorting.Permutation.
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Stream.
 
-(** * The CoreDF semantics *)
+(** * The NLustre semantics *)
 
 (**
 
@@ -19,13 +20,14 @@ Require Import Velus.NLustre.Stream.
 
  *)
 
-Module Type SEMANTICS
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
+Module Type NLSEMANTICS
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Ids Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Ids Op Syn).
+       (Import Clks  : CLOCKS    Ids)
+       (Import Syn   : NLSYNTAX  Ids Op Clks)
+       (Import Str   : STREAM        Op)
+       (Import Ord   : ORDERED   Ids Op Clks Syn).
 
   (** ** Environment and history *)
 
@@ -384,9 +386,9 @@ enough: it does not support the internal fixpoint introduced by
              (f     : ident)
              (xss   : stream (list value))
              (yss    : stream (list value))
-             (i     : list (ident * type))
-             (o     : list (ident * type))
-             (v     : list (ident * type))
+             (i     : list (ident * (type * clock)))
+             (o     : list (ident * (type * clock)))
+             (v     : list (ident * (type * clock)))
              (eqs   : list equation)
              (ingt0 : 0 < length i)
              (outgt0 : 0 < length o)
@@ -1078,15 +1080,16 @@ an absent value *)
     now rewrite Hsem in Hgt0.
   Qed.
 
-End SEMANTICS.
+End NLSEMANTICS.
 
-Module SemanticsFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn : SYNTAX Ids Op)
-       (Import Str : STREAM Op)
-       (Import Ord : ORDERED Ids Op Syn)
-       <: SEMANTICS Ids Op OpAux Syn Str Ord.
-  Include SEMANTICS Ids Op OpAux Syn Str Ord.
-End SemanticsFun.
+Module NLSemanticsFun
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS    Ids)
+       (Syn   : NLSYNTAX  Ids Op Clks)
+       (Str   : STREAM        Op)
+       (Ord   : ORDERED   Ids Op Clks Syn)
+       <: NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
+  Include NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
+End NLSemanticsFun.

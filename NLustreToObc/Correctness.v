@@ -4,6 +4,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Open Scope positive.
 
 Require Import Velus.RMemory.
@@ -12,21 +13,22 @@ Require Import Velus.Obc.
 Require Import Velus.NLustreToObc.Translation.
 Require Import Velus.NLustreToObc.Correctness.IsPresent.
 Require Import Velus.NLustreToObc.Correctness.MemoryCorres.
-Require Import Velus.NLustreToObc.Typing.
+Require Import Velus.NLustreToObc.NLObcTyping.
 
 Module Type CORRECTNESS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import DF    : NLUSTRE Ids Op OpAux)
-       (Import Obc   : OBC Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op DF.Syn)
+       (Import Clks  : CLOCKS    Ids)
+       (Import DF    : NLUSTRE   Ids Op OpAux Clks)
+       (Import Obc   : OBC       Ids Op OpAux)
+       (Import Mem   : MEMORIES  Ids Op       Clks DF.Syn)
 
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans).
+       (Import Trans : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem)
+       (Import NLObcTyping: NLOBCTYPING Ids Op OpAux Clks DF Obc Mem Trans).
 
-  Module Import IsP := IsPresentFun Ids Op OpAux DF.Syn Obc.Syn Obc.Sem Mem Trans.
-  Module Import MemCor := MemoryCorresFun Ids Op OpAux DF Obc.
+  Module Import IsP := IsPresentFun Ids Op OpAux Clks DF.Syn Obc.Syn Obc.Sem Mem Trans.
+  Module Import MemCor := MemoryCorresFun Ids Op OpAux Clks DF Obc.
   
   (** ** Technical lemmas *)
 
@@ -919,8 +921,12 @@ for all [Is_free_exp x e]. *)
           assert (exists cs, xs n = map present cs)
             as (outValues & Hxsc).
           {
+            assert ((0 < length (idty i))%nat) as ingt0'
+              by now rewrite length_idty.
+
             assert (Hlen: (0 < length (ls n))%nat)
-              by now (eapply sem_vars_gt0; [apply ingt0| eauto]).
+              by now (eapply sem_vars_gt0;
+                      [apply ingt0'|rewrite map_fst_idty; eauto]).
 
             assert (~ absent_list (xs n)).
             {
@@ -1057,10 +1063,14 @@ for all [Is_free_exp x e]. *)
         + (* y = absent *)
           exists menv', env'.
 
+          assert ((0 < length (idty i))%nat) as ingt0'
+              by now rewrite length_idty.
+          
           assert (Habs: absent_list (ls n) ->
                         Forall (rhs_absent_instant (bk0 n) (restr Hn n)) neqs)
-            by now eapply subrate_property_eqns; eauto;
-                   eapply sem_vars_gt0 with (1:=ingt0) (2:=Hlsn).
+            by (eapply subrate_property_eqns; eauto;
+                eapply sem_vars_gt0 with (1:=ingt0');
+                rewrite map_fst_idty; apply Hlsn).
 
           assert (absent_list (ls n)).
           {
@@ -1419,7 +1429,11 @@ for all [Is_free_exp x e]. *)
               assert (NoDupMembers node.(n_in))
                 by (eapply NoDupMembers_app_l; eauto).
 
-              now eapply adds_sem_var_find.
+              rewrite adds_sem_var_find
+              with (iargs:=idty node.(n_in)) (ivals:=inputs);
+                try rewrite map_fst_idty; auto.
+              reflexivity.
+              now apply NoDupMembers_idty.
             }
 
             assert (forall x,
@@ -1472,7 +1486,7 @@ for all [Is_free_exp x e]. *)
                 clear Hstepm. intro Hstepm.
                 rewrite <-Hstepm, Hnode. clear Hstepm.
                 simpl in *.
-                rewrite ps_from_list_gather_eqs_memories.
+                rewrite ps_from_list_gather_eqs_memories, map_fst_idty.
                 eassumption.
               - rewrite find_method_stepm_out with (1:=Hstepm).
                 specialize (Hout n); simpl in Hout; rewrite Hys in Hout.
@@ -1482,6 +1496,7 @@ for all [Is_free_exp x e]. *)
                   now (eapply Forall2_length; eauto).
                 }
 
+                rewrite map_fst_idty.
                 apply Forall2_forall; [ | now auto ].
                 intros x v Hinx.
 
@@ -2164,7 +2179,7 @@ for all [Is_free_exp x e]. *)
     pose proof exists_reset_method nd.
 
     assert (wt_program (translate G))
-      by now apply Typing.translate_wt.
+      by now apply NLObcTyping.translate_wt.
    
     subst.
     assert (wt_mem menv0 P' (translate_node nd))
@@ -2222,17 +2237,15 @@ for all [Is_free_exp x e]. *)
 End CORRECTNESS.
 
 Module CorrectnessFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import DF    : NLUSTRE Ids Op OpAux)
-       (Import Obc   : OBC Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op DF.Syn)
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       (Import Typing: TYPING Ids Op OpAux DF Obc Mem Trans)
-
-       <: CORRECTNESS Ids Op OpAux DF Obc Mem Trans Typing.
-
-  Include CORRECTNESS Ids Op OpAux DF Obc Mem Trans Typing.
-
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (OpAux       : OPERATORS_AUX   Op)
+       (Clks        : CLOCKS      Ids)
+       (DF          : NLUSTRE     Ids Op OpAux Clks)
+       (Obc         : OBC         Ids Op OpAux)
+       (Mem         : MEMORIES    Ids Op       Clks DF.Syn)
+       (Trans       : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem)
+       (NLObcTyping : NLOBCTYPING Ids Op OpAux Clks DF Obc Mem Trans)
+       <: CORRECTNESS Ids Op OpAux Clks DF Obc Mem Trans NLObcTyping.
+  Include CORRECTNESS Ids Op OpAux Clks DF Obc Mem Trans NLObcTyping.
 End CorrectnessFun.

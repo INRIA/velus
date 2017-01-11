@@ -2,9 +2,9 @@ Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.
 Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
-Require Import Velus.ObcToClight.Translation.
+Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.NLustreElab.
-Require Import NLustre.Parser.LustreParser.
+Require Import Lustre.Parser.LustreParser.
 
 Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping
@@ -94,8 +94,6 @@ Extract Constant cabs_floatinfo =>
          Cabs.exponent_FI = exponent;
          Cabs.suffix_FI   = suffix }".
 
-Extract Constant ident_of_camlstring => "Camlcoq.intern_string".
-
 Extract Constant elab_const_int =>
   "fun loc str ->
     let (v, k) = Elab.elab_int_constant loc str in
@@ -135,6 +133,11 @@ Extract Constant Cabs.cabsloc =>
  }".
 Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
+
+Extract Constant VelusCorrectness.print_snlustre =>
+  "Veluslib.print_snlustre_if".
+Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
+Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
 
 (* builtins *)
 Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".

@@ -1,9 +1,10 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import Velus.RMemory.
 Require Import Velus.NLustre.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.Obc.Semantics.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.Obc.ObcSemantics.
 Require Import Velus.NLustreToObc.Translation.
 
 
@@ -19,14 +20,15 @@ to tie the result of [Control ck] with the dataflow semantics of
 Assumption: the base clock is [true] *)
 
 Module Type ISPRESENT
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Mem   : MEMORIES Ids Op SynDF)
-       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem).
+       (Import Clks  : CLOCKS Ids)
+       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import SemMP : Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynMP)
+       (Import Mem   : MEMORIES Ids Op Clks SynDF)
+       (Import Trans : TRANSLATION Ids Op OpAux Clks SynDF SynMP Mem).
 
   Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
@@ -137,15 +139,15 @@ Module Type ISPRESENT
 End ISPRESENT.
 
 Module IsPresentFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import SemMP : Velus.Obc.Semantics.SEMANTICS Ids Op OpAux SynMP)
-       (Import Mem   : MEMORIES Ids Op SynDF)
-       (Import Trans : TRANSLATION Ids Op OpAux SynDF SynMP Mem)
-       <: ISPRESENT Ids Op OpAux SynDF SynMP SemMP Mem Trans.
-
-    Include ISPRESENT Ids Op OpAux SynDF SynMP SemMP Mem Trans.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (SemMP : Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynMP)
+       (Mem   : MEMORIES Ids Op Clks SynDF)
+       (Trans : TRANSLATION Ids Op OpAux Clks SynDF SynMP Mem)
+       <: ISPRESENT Ids Op OpAux Clks SynDF SynMP SemMP Mem Trans.
+    Include ISPRESENT Ids Op OpAux Clks SynDF SynMP SemMP Mem Trans.
 End IsPresentFun.

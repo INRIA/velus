@@ -4,6 +4,7 @@ Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Open Scope positive.
 
 Require Import Velus.RMemory.
@@ -11,19 +12,20 @@ Require Import Velus.NLustre.
 Require Import Velus.Obc.
 Require Import Velus.NLustreToObc.Translation.
 
-Require Import Velus.NLustre.Typing.
+Require Import Velus.NLustre.NLTyping.
 
 (** ** Well-typing preservation *)
 
-Module Type TYPING
+Module Type NLOBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import DF    : NLUSTRE Ids Op OpAux)
+       (Import Clks  : CLOCKS Ids)
+       (Import DF    : NLUSTRE Ids Op OpAux Clks)
        (Import Obc   : OBC Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op DF.Syn)
+       (Import Mem   : MEMORIES Ids Op Clks DF.Syn)
 
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem).
+       (Import Trans : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem).
 
 
   (** Preservation of well-typing. *)
@@ -136,13 +138,29 @@ Module Type TYPING
              end)
       eqs.
 
+  Lemma nth_idty_exists:
+    forall xdef xtydef (xckdef: clock) xs n x (xty : type),
+      nth n (idty xs) (xdef, xtydef) = (x, xty)
+      -> exists xck, nth n xs (xdef, (xtydef, xckdef)) = (x, (xty, xck)).
+  Proof.
+    induction xs as [|x xs].
+    - intros ** Hnth.
+      exists xckdef.
+      destruct n; inv Hnth; auto.
+    - intros ** Hnth.
+      destruct x as (x & ty & ck).
+      destruct n; inv Hnth.
+      + exists ck; auto.
+      + apply IHxs; auto.
+  Qed.
+  
   Lemma wt_step_translate_eqns:
     forall g n insts mems vars memset,
       wt_node g n ->
       wt_eqs_vars insts mems vars memset n.(n_eqs) ->
-      (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
+      (forall x ty, In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
                     PS.In x memset -> In (x, ty) mems) ->
-      (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
+      (forall x ty, In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
                     ~PS.In x memset -> In (x, ty) vars) ->
       wt_stmt (translate g) insts mems vars
               (translate_eqns memset n.(n_eqs)).
@@ -164,15 +182,15 @@ Module Type TYPING
     simpl. apply IHeqs; auto; clear IHeqs.
     constructor; auto.
     inv WTeq; simpl;
-      apply Control_wt with (nvars:=n.(n_in) ++ n.(n_vars) ++ n.(n_out));
+      apply Control_wt with (nvars:=idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out)));
       auto.
     - eapply translate_cexp_wt; eauto.
     - destruct Heq as (Heq1 & Heq2).
 
-      assert (Forall2 (fun y xt => In (y, snd xt) vars) xs (n_out n0)).
+      assert (Forall2 (fun y xt => In (y, snd xt) vars) xs (idty n0.(n_out))).
       {
-        assert (length xs = length (n_out n0))
-          by (eapply Forall2_length; eauto).
+        assert (length xs = length (idty n0.(n_out)))
+          by (rewrite length_idty; eapply Forall2_length; eauto).
 
         apply Forall2_forall2; split; auto;
           intros def_x [def_y def_yty] dn x [y yty] Hlen Hxn Hytn.
@@ -183,13 +201,16 @@ Module Type TYPING
         assert (~ PS.In x memset)
           by (eapply In_Forall in Heq2; eauto).
 
-        assert (In (x, snd (y, yty)) (n_in n ++ n_vars n ++ n_out n)).
+        assert (In (x, yty) (idty (n_in n ++ n_vars n ++ n_out n))).
         {
           match goal with
           | H: Forall2 _ xs (n_out n0) |- _ =>
             apply Forall2_forall2 in H as [_ Hin_vars]
           end.
-          eapply Hin_vars; eauto.
+          pose proof (nth_idty_exists _ _ Cbase _ _ _ _ Hytn) as Hnth.
+          destruct Hnth as (xck & Hnth).
+          specialize (Hin_vars def_x _ dn x _ Hlen Hxn Hnth).
+          auto.
         }
 
         apply Hvars; auto.
@@ -211,7 +232,7 @@ Module Type TYPING
         destruct xs; try now inv Hlen.
       + erewrite find_method_stepm_out; eauto.
       + rewrite (find_method_stepm_in _ _ Hstep).
-        apply Forall2_map_1.
+        apply Forall2_map_1. apply Forall2_map_2.
         match goal with H:Forall2 _ _ _ |- _ =>
                         apply Forall2_impl_In with (2:=H) end.
         intros; now rewrite typeof_translate_lexp.
@@ -275,31 +296,30 @@ Module Type TYPING
     apply exists_reset_method.
   Qed.
 
-
   Lemma translate_wt_vals_ins:
     forall node stepm ins,
       find_method step (translate_node node).(c_methods) = Some stepm ->
-      wt_vals ins node.(n_in) ->
+      wt_vals ins (idty node.(n_in)) ->
       wt_vals ins stepm.(m_in).
   Proof. intros; erewrite find_method_stepm_in; eauto. Qed.
 
   Lemma translate_wt_vals_outs:
     forall node stepm outs,
       find_method step (translate_node node).(c_methods) = Some stepm ->
-      wt_vals outs node.(n_out) ->
+      wt_vals outs (idty node.(n_out)) ->
       wt_vals outs stepm.(m_out).
   Proof. intros; erewrite find_method_stepm_out; eauto. Qed.
-
 
   Lemma EqFby_type_in_node:
     forall g n x ck c0 e,
       wt_node g n ->
       In (EqFby x ck c0 e) n.(n_eqs) ->
-      In (x, type_const c0) n.(n_vars).
+      In (x, type_const c0) (idty n.(n_vars)).
   Proof.
     intros ** WTn Hin.
     apply In_Forall with (2:=Hin) in WTn.
     inversion_clear WTn as [| |? ? ? ? Hvars Htye WTc WTl].
+    repeat rewrite idty_app in Hvars.
     repeat (apply in_app in Hvars; destruct Hvars as [Hv|Hvars]); auto.
     -  (* Case: In (x, type_const c0) (n_in n) *)
       apply In_EqFby_Is_defined_in_eqs in Hin.
@@ -307,6 +327,7 @@ Module Type TYPING
       rewrite n.(n_defd) in Hin.
       apply fst_InMembers in Hin.
       apply In_InMembers in Hv.
+      apply InMembers_idty in Hv.
       apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup)) in Hv.
       contradiction.
     - (* Case: In (x, type_const c0) (n_out n) *)
@@ -327,9 +348,12 @@ Module Type TYPING
         eapply in_concat; eauto.
       }
 
-      assert (In x (map fst (n_out n))).
+      assert (In x (map fst n.(n_out))).
       {
-        apply in_map_iff. eexists; esplit; eauto.
+        apply In_idty_exists in Hvars.
+        destruct Hvars as (ck' & Hvars).
+        apply in_map_iff.
+        eexists; esplit; eauto.
         simpl; auto.
       }
 
@@ -352,10 +376,9 @@ Module Type TYPING
       wt_node g n ->
       In (EqDef x ck e) (n_eqs n) ->
       In (x, typeofc e)
-         (n.(n_in)
-              ++ filter (fun x=> negb (PS.mem (fst x) (memories n.(n_eqs))))
-              n.(n_vars)
-                  ++ n.(n_out)).
+         (idty (n.(n_in)
+                ++ filter (fun x=> negb (PS.mem (fst x) (memories n.(n_eqs))))
+                n.(n_vars) ++ n.(n_out))).
   Proof.
     intros ** WTn Hin.
     apply In_Forall with (2:=Hin) in WTn.
@@ -365,13 +388,43 @@ Module Type TYPING
     apply Is_defined_in_var_defined in Hdin.
     rewrite n.(n_defd) in Hdin.
     apply fst_InMembers in Hdin.
-    repeat (apply in_app in Hv; destruct Hv as [Hin'|Hv]); intuition.
-    apply in_app; right; apply in_app; left.
-    apply Is_variable_in_var_defined in Hin.
-    apply not_in_memories_filter_notb_is_fby in Hin.
-    2:now apply NoDup_var_defined_n_eqs.
-    apply filter_In; split; auto.
-    now apply Bool.negb_true_iff, mem_spec_false.
+    repeat rewrite idty_app in Hv.    
+    repeat (apply in_app in Hv; destruct Hv as [Hin'|Hv]).
+    - apply In_idty_exists in Hin'.
+      destruct Hin' as (ck' & Hin').
+      rewrite In_idty_exists.
+      exists ck'. intuition.
+    - apply In_idty_exists in Hin'.
+      destruct Hin' as (ck' & Hin').
+      rewrite In_idty_exists.
+      exists ck'.
+      apply in_app; right; apply in_app; left.
+      apply Is_variable_in_var_defined in Hin.
+      apply not_in_memories_filter_notb_is_fby in Hin.
+      2:now apply NoDup_var_defined_n_eqs.
+      apply filter_In; split; auto.
+      now apply Bool.negb_true_iff, mem_spec_false.
+    - apply In_idty_exists in Hv.
+      destruct Hv as (ck' & Hv).
+      rewrite In_idty_exists.
+      exists ck'.
+      apply in_app; right; apply in_app; right.
+      apply Is_variable_in_var_defined in Hin.
+      apply not_in_memories_filter_notb_is_fby in Hin; auto.
+      now apply NoDup_var_defined_n_eqs.
+  Qed.
+
+  Lemma filter_fst_idty:
+    forall P v (xs : list (ident * (type * clock))),
+      In v (filter (fun x => P (fst x)) (idty xs)) ->
+      In v (idty (filter (fun x => P (fst x)) xs)).
+  Proof.
+    induction xs as [|x xs].
+    now inversion 1.
+    intro HH. destruct x as (x & (ty & ck)).
+    simpl in *. destruct (P x); simpl in *.
+    2:now apply IHxs.
+    destruct HH; auto.
   Qed.
 
   Lemma translate_node_wt:
@@ -412,7 +465,7 @@ Module Type TYPING
                     n_out n)).
       set (memset := (memories (n_eqs n))).
 
-      assert (wt_eqs_vars insts mems vars memset n.(n_eqs)).
+      assert (wt_eqs_vars insts (idty mems) (idty vars) memset n.(n_eqs)).
       {
         apply all_In_Forall. intros eq' Hin.
         destruct eq'; auto.
@@ -420,10 +473,6 @@ Module Type TYPING
           apply EqDef_type_in_node with (1:=WTn) (2:=Hin).
         - (* Case: EqApp *)
           repeat split.
-(*
-          + (* Prove: NoDup i *)
-            now eapply EqApp_type_in_node; eauto.
-*)
           + (* Prove: In (hd Ids.default i, i0) insts *)
             destruct i; auto.
             unfold insts.
@@ -439,12 +488,16 @@ Module Type TYPING
             apply Is_variable_in_var_defined in Hin.
             apply not_in_memories_filter_notb_is_fby in Hin; eauto.
             apply NoDup_var_defined_n_eqs.
-        - apply fby_In_filter_memories with (1:=Hin).
-          eapply EqFby_type_in_node with (1:=WTn) (2:=Hin).
+        - (* Case: EqFby *)
+          pose proof (EqFby_type_in_node _ _ _ _ _ _ WTn Hin) as HH.
+          apply fby_In_filter_memories with (1:=Hin) in HH.
+          apply filter_fst_idty
+          with (1:=HH) (P:=fun x=>PS.mem x (memories n.(n_eqs))).
       }
 
-      assert (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
-                    PS.In x memset -> In (x, ty) mems).
+      assert (forall x ty,
+                 In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
+                    PS.In x memset -> In (x, ty) (idty mems)).
       {
         intros x ty Hin Hmem.
         pose proof (in_memories_var_defined _ _ Hmem) as Hdef.
@@ -453,28 +506,51 @@ Module Type TYPING
         apply NoDupMembers_app_InMembers with (ws:=n.(n_in)) in Hdef.
         2:now rewrite Permutation.Permutation_app_comm; apply n.(n_nodup).
         unfold mems.
+        repeat (rewrite idty_app in Hin).
         repeat (apply in_app in Hin; destruct Hin as [Hin|Hin]); intuition.
         - (* Case: In x (n_in n) *)
-          contradiction Hdef. apply In_InMembers with (1:=Hin).
+          contradiction Hdef.
+          rewrite <-InMembers_idty.
+          apply In_InMembers with (1:=Hin).
         - (* Case: In x (n_vars n) *)
+          rewrite In_idty_exists in Hin.
+          destruct Hin as (ck & Hin).
+          rewrite In_idty_exists. exists ck.
           apply filter_In; split; auto.
         - (* Case: In x (n_out n) *)
           apply in_memories_filter_is_fby in Hmem.
           edestruct n_vout; eauto.
-          replace x with (fst (x, ty)); auto.
+          rewrite In_idty_exists in Hin.
+          destruct Hin as (ck & Hin).
+          replace x with (fst (x, (ty, ck))); auto.
           eapply in_map; auto.
       }
 
-      assert (forall x ty, In (x, ty) (n.(n_in) ++ n.(n_vars) ++ n.(n_out)) ->
-                    ~PS.In x memset -> In (x, ty) vars). {
+      assert (forall x ty,
+                 In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
+                 ~PS.In x memset -> In (x, ty) (idty vars)). {
         intros x ty Hin Hnmem.  unfold vars.
-        repeat (apply in_app in Hin; destruct Hin as [Hin|Hin]); intuition.
-        apply in_app; right; apply in_app; left.
-        apply filter_In; split; auto.
-        now apply Bool.negb_true_iff, mem_spec_false.
+        repeat (rewrite idty_app in Hin).
+        repeat (apply in_app in Hin; destruct Hin as [Hin|Hin]).
+        - rewrite In_idty_exists in Hin.
+          destruct Hin as (ck & Hin).
+          rewrite In_idty_exists. exists ck.
+          intuition.
+        - rewrite In_idty_exists in Hin.
+          destruct Hin as (ck & Hin).
+          rewrite In_idty_exists. exists ck.
+          apply in_app; right; apply in_app; left.
+          apply filter_In; split; auto.
+          now apply Bool.negb_true_iff, mem_spec_false.
+        - rewrite In_idty_exists in Hin.
+          destruct Hin as (ck & Hin).
+          rewrite In_idty_exists. exists ck.
+          intuition.
       }
-
+      
+      do 2 rewrite <-idty_app.
       apply wt_step_translate_eqns; auto.
+      
     - (* wt_method reset *)
       unfold wt_method; simpl.
       rewrite fst_partition_filter.
@@ -492,8 +568,10 @@ Module Type TYPING
         exists (EqApp (i :: i1) c i0 l).
         eauto.
       + (* Case: EqFby *)
-        apply fby_In_filter_memories with (1:=Hin).
-        eapply EqFby_type_in_node with (1:=WTn) (2:=Hin).
+          pose proof (EqFby_type_in_node _ _ _ _ _ _ WTn Hin) as HH.
+          apply fby_In_filter_memories with (1:=Hin) in HH.
+          apply filter_fst_idty
+          with (1:=HH) (P:=fun x=>PS.mem x (memories n.(n_eqs))).
   Qed.
 
   Hint Resolve translate_node_wt : transty.
@@ -514,17 +592,17 @@ Module Type TYPING
   Qed.
 
 
-End TYPING.
+End NLOBCTYPING.
 
-Module TypingFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import DF    : NLUSTRE Ids Op OpAux)
-       (Import Obc   : OBC Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op DF.Syn)
-       (Import Trans : TRANSLATION Ids Op OpAux DF.Syn Obc.Syn Mem)
-       <: TYPING Ids Op OpAux DF Obc Mem Trans.
-
-       Include TYPING Ids Op OpAux DF Obc Mem Trans.
-End TypingFun.    
+Module NLObcTypingFun
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (DF    : NLUSTRE Ids Op OpAux Clks)
+       (Obc   : OBC Ids Op OpAux)
+       (Mem   : MEMORIES Ids Op Clks DF.Syn)
+       (Trans : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem)
+       <: NLOBCTYPING Ids Op OpAux Clks DF Obc Mem Trans.
+   Include NLOBCTYPING Ids Op OpAux Clks DF Obc Mem Trans.
+End NLObcTypingFun.

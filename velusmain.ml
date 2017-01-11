@@ -7,6 +7,8 @@ open Builtins
 open Ctypes
 
 let print_c = ref false
+let write_snlustre = ref false
+let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
 let main_node = ref (None : string option)
@@ -77,8 +79,14 @@ let parse toks =
     (Obj.magic ast : LustreAst.declaration list)
 
 let compile source_name filename =
-  if !write_cl then PrintClight.destination := Some (filename ^ ".light.c");
-  if !write_cm then PrintCminor.destination := Some (filename ^ ".minor.c");
+  if !write_snlustre
+    then Veluslib.snlustre_destination := Some (filename ^ ".sn.lus");
+  if !write_obc
+    then Veluslib.obc_destination := Some (filename ^ ".obc");
+  if !write_cl
+    then PrintClight.destination := Some (filename ^ ".light.c");
+  if !write_cm
+    then PrintCminor.destination := Some (filename ^ ".minor.c");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let p =
@@ -107,8 +115,14 @@ let process file =
 let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
-  "-dclight", Arg.Set write_cl, " Save generated Clight in <source>.light.c";
-  "-dcminor", Arg.Set write_cm, " Save generated Clight in <source>.minor.c"
+  "-dsnlustre",Arg.Set write_snlustre,
+                            " Save the parsed SN-Lustre in <source>.sn.lus";
+  "-dobc",    Arg.Set write_obc, " Save generated Obc in <source>.obc";
+  "-dclight", Arg.Set write_cl,  " Save generated Clight in <source>.light.c";
+  "-dcminor", Arg.Set write_cm,  " Save generated Cminor in <source>.minor.c";
+  "-fullclocks", Arg.Set Interfacelib.PrintNLustre.print_fullclocks,
+                                 " Print 'full' clocks in declarations";
+  "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
 ]
 
 let usage_msg = "Usage: velus [options] <source>"

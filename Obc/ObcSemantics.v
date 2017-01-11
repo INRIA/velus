@@ -4,7 +4,7 @@ Require Import List.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.RMemory.
-Require Import Velus.Obc.Syntax.
+Require Import Velus.Obc.ObcSyntax.
 
 (** * Obc semantics *)
 
@@ -16,11 +16,11 @@ Require Import Velus.Obc.Syntax.
 
  *)
 
-Module Type SEMANTICS
+Module Type OBCSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux).
+       (Import Syn   : OBCSYNTAX Ids Op OpAux).
 
   (* TODO: rename types to env/menv and the instances to ve/me *)
   Definition heap : Type := memory val.
@@ -232,13 +232,13 @@ Module Type SEMANTICS
     apply PM.gempty.
   Qed.
   
-End SEMANTICS.
+End OBCSEMANTICS.
 
-Module SemanticsFun
+Module ObcSemanticsFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux) <: SEMANTICS Ids Op OpAux Syn.
-  Include SEMANTICS Ids Op OpAux Syn.
-End SemanticsFun.
+       (Import Syn   : OBCSYNTAX Ids Op OpAux) <: OBCSEMANTICS Ids Op OpAux Syn.
+  Include OBCSEMANTICS Ids Op OpAux Syn.
+End ObcSemanticsFun.
 

@@ -1,10 +1,32 @@
 
+(* Functions called from within the proof, e.g., VelusCorrectness *)
+
+let snlustre_destination = ref (None : string option)
+let obc_destination = ref (None : string option)
+
+let fuse_obc = ref true
+let do_fusion () = !fuse_obc
+
+let print_if flag print prog =
+  match !flag with
+  | None -> ()
+  | Some f ->
+      let oc = open_out f in
+      print (Format.formatter_of_out_channel oc) prog;
+      close_out oc
+
+let print_snlustre_if =
+  print_if snlustre_destination Interfacelib.PrintNLustre.print_global
+
+let print_obc_if =
+  print_if obc_destination Interfacelib.PrintObc.print_program
+
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in
   let id = Camlcoq.intern_string name in
   let id' = Camlcoq.coqstring_of_camlstring name in
   let targs = List.map (C2C.convertTyp env) ins
-                |> Translation0.list_type_to_typelist in
+                |> Generation.list_type_to_typelist in
   let tres = C2C.convertTyp env out in
   let sg = Ctypes.signature_of_type targs tres AST.cc_default in
   let ef =

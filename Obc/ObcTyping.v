@@ -1,8 +1,8 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.RMemory.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.Obc.Semantics.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.Obc.ObcSemantics.
 
 Require Import Morphisms.
 
@@ -19,12 +19,12 @@ Open Scope list_scope.
 
  *)
 
-Module Type TYPING
+Module Type OBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux)
-       (Import Sem   : SEMANTICS Ids Op OpAux Syn).
+       (Import Syn   : OBCSYNTAX Ids Op OpAux)
+       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn).
   
   Section WellTyped.
 
@@ -841,15 +841,15 @@ Module Type TYPING
         now rewrite Hne.
   Qed.
   
-End TYPING.
+End OBCTYPING.
 
-Module TypingFun
+Module ObcTypingFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : SYNTAX Ids Op OpAux)
-       (Import Sem   : SEMANTICS Ids Op OpAux Syn)
-       <: TYPING Ids Op OpAux Syn Sem.
-  Include TYPING Ids Op OpAux Syn Sem.
-End TypingFun.
+       (Import Syn   : OBCSYNTAX Ids Op OpAux)
+       (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn)
+       <: OBCTYPING Ids Op OpAux Syn Sem.
+  Include OBCTYPING Ids Op OpAux Syn Sem.
+End ObcTypingFun.
 

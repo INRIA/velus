@@ -2,6 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 
 Require Import Velus.NLustre.
 Require Import Velus.Obc.
@@ -15,10 +16,11 @@ Module Type FUSIBLE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux)
+       (Import Clks  : CLOCKS Ids)
+       (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux Clks)
        (Import Obc   : Velus.Obc.OBC Ids Op OpAux)
        (Import Trans : Velus.NLustreToObc.Translation.TRANSLATION
-                         Ids Op OpAux NLus.Syn Obc.Syn NLus.Mem).
+                         Ids Op OpAux Clks NLus.Syn Obc.Syn NLus.Mem).
 
   (** ** Show that the Obc code that results from translating an NLustre
          program satisfies the [Fusible] invariant, and thus that fusion
@@ -148,15 +150,16 @@ Module Type FUSIBLE
   Qed.
 
   Lemma translate_eqns_Fusible:
-    forall C mems inputs eqs,
-      wc_env C
-      -> Forall (wc_equation C) eqs
+    forall vars mems inputs eqs,
+      wc_env vars
+      -> NoDupMembers vars
+      -> Forall (wc_equation vars) eqs
       -> Is_well_sch mems inputs eqs
       -> (forall x, PS.In x mems -> ~Is_variable_in_eqs x eqs)
       -> (forall input, In input inputs -> ~ Is_defined_in_eqs input eqs)
       -> Fusible (translate_eqns mems eqs).
   Proof.
-    intros ** Hwk Hwks Hwsch Hnvi Hnin.
+    intros ** Hwk Hnd Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
     inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
     specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
@@ -245,7 +248,9 @@ Module Type FUSIBLE
       pose proof (not_Exists_Is_defined_in_eqs_n_in n) as Hin.
       inv Wcn. inv WdG. simpl in *.
       eapply translate_eqns_Fusible; eauto.
-      + intros. apply not_Is_variable_in_memories; auto.
+      + apply NoDupMembers_idck, n_nodup.
+      + intros.
+        apply not_Is_variable_in_memories; auto.
       + intros i' Hin' Hdef.
         apply Hin, Exists_exists.
         exists i'. intuition.
@@ -256,16 +261,15 @@ Module Type FUSIBLE
 End FUSIBLE.
 
 Module FusibleFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux)
-       (Import Obc   : Velus.Obc.OBC Ids Op OpAux)
-       (Import Trans : Velus.NLustreToObc.Translation.TRANSLATION
-                         Ids Op OpAux NLus.Syn Obc.Syn NLus.Mem)
-  <: FUSIBLE Ids Op OpAux NLus Obc Trans.
-
-  Include FUSIBLE Ids Op OpAux NLus Obc Trans.
-
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux Clks)
+       (Obc   : Velus.Obc.OBC Ids Op OpAux)
+       (Trans : Velus.NLustreToObc.Translation.TRANSLATION
+                         Ids Op OpAux Clks NLus.Syn Obc.Syn NLus.Mem)
+       <: FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
+  Include FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
 End FusibleFun.
 

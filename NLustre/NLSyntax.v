@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import PArith.
 Require Import Coq.Sorting.Permutation.
 
@@ -7,16 +8,12 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-(** * The CoreDF dataflow language *)
+(** * The NLustre dataflow language *)
 
-Module Type SYNTAX
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS).
-  (** ** Clocks *)
-
-  Inductive clock : Type :=
-  | Cbase : clock                            (* base clock *)
-  | Con   : clock -> ident -> bool -> clock. (* subclock *)
+Module Type NLSYNTAX
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS Ids).
 
   (** ** Expressions *)
 
@@ -94,9 +91,9 @@ Module Type SYNTAX
   Record node : Type :=
     mk_node {
         n_name : ident;
-        n_in   : list (ident * type);
-        n_out  : list (ident * type);
-        n_vars : list (ident * type);
+        n_in   : list (ident * (type * clock));
+        n_out  : list (ident * (type * clock));
+        n_vars : list (ident * (type * clock));
         n_eqs  : list equation;
 
         n_ingt0 : 0 < length n_in;
@@ -159,10 +156,12 @@ Module Type SYNTAX
     reflexivity.
   Qed.
 
-End SYNTAX.
+End NLSYNTAX.
 
-Module SyntaxFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS) <: SYNTAX Ids Op.
-  Include SYNTAX Ids Op.
-End SyntaxFun.
+Module NLSyntaxFun
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS Ids)
+       <: NLSYNTAX Ids Op Clks.
+  Include NLSYNTAX Ids Op Clks.
+End NLSyntaxFun.

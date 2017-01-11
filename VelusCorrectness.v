@@ -1,7 +1,7 @@
 Require Import Velus.Common.
 Require Import Velus.Ident.
-Require Import Velus.NLustreToObc.Typing.
-Require Import Velus.ObcToClight.Translation.
+Require Import Velus.NLustreToObc.NLObcTyping.
+Require Import Velus.ObcToClight.Generation.
 Require Import Velus.Traces.
 Require Import Velus.ClightToAsm.
 
@@ -15,7 +15,6 @@ Require Import driver.Compiler.
 
 Require Import Velus.Instantiator.
 Import NL.
-Import NL.IsWFDec.
 Import NL.Mem.
 Import Obc.Syn.
 Import Obc.Sem.
@@ -34,6 +33,10 @@ Require Import List.
 Import List.ListNotations.
 
 Open Scope error_monad_scope.
+
+Parameter print_snlustre: NL.Syn.global -> unit.
+Parameter print_obc: Obc.Syn.program -> unit.
+Parameter do_fusion : unit -> bool.
 
 Definition Wellsch_global (G: global) : Prop :=
   Forall (fun n=>Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G.
@@ -77,9 +80,11 @@ Qed.
 
 Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
   do _ <- (fold_left is_well_sch g (OK tt));
-  OK g @@ Trans.translate
-       @@ map Obc.Fus.fuse_class
-       @@@ Translation.translate main_node.
+  OK g @@ print print_snlustre
+       @@ Trans.translate
+       @@ total_if do_fusion (map Obc.Fus.fuse_class)
+       @@ print print_obc
+       @@@ Generation.translate main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
@@ -87,7 +92,7 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
-Definition compile (g: global) (main_node: ident): res Asm.program :=
+Definition compile (g: global) (main_node: ident) : res Asm.program :=
   df_to_cl main_node g @@ print print_Clight
                        @@ add_builtins
                        @@@ transf_clight2_program.
@@ -101,11 +106,11 @@ Variable outs: stream (list const).
 
 Definition wt_ins :=
   forall n node, find_node main G = Some node ->
-            wt_vals (map sem_const (ins n)) node.(n_in).
+            wt_vals (map sem_const (ins n)) (idty node.(n_in)).
 
 Definition wt_outs :=
   forall n node, find_node main G = Some node ->
-            wt_vals (map sem_const (outs n)) node.(n_out).
+            wt_vals (map sem_const (outs n)) (idty node.(n_out)).
 
 End WtStream.
 
@@ -199,8 +204,8 @@ dataflow node at each instant. *)
 CoInductive bisim_io': nat -> traceinf -> Prop
   := Step: forall n node t t' T,
       find_node main G = Some node ->
-      mask_load (map sem_const (ins n)) node.(n_in) t ->
-      mask_store (map sem_const (outs n)) node.(n_out) t' ->
+      mask_load (map sem_const (ins n)) (idty node.(n_in)) t ->
+      mask_store (map sem_const (outs n)) (idty node.(n_out)) t' ->
       bisim_io' (S n) T ->
       bisim_io' n (t *** t' *** T).
 
@@ -281,72 +286,124 @@ Proof.
   edestruct dostep'_correct
     as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
   pose proof Comp as Comp'.
-  unfold Translation.translate in Comp.
-  pose proof Emain as Emain'.
-  apply Obc.Fus.fuse_find_class in Emain.
-  rewrite Emain in *.
-  destruct (find_method Ids.step (c_methods (Obc.Fus.fuse_class c_main)))
-    as [fuse_m_step|] eqn: Efusestep; try discriminate.
-  destruct (find_method Ids.reset (c_methods (Obc.Fus.fuse_class c_main)))
-    as [fuse_m_reset|] eqn: Efusereset; try discriminate.
-  pose proof (find_class_name _ _ _ _ Emain) as Eq;
-    pose proof (find_method_name _ _ _ Efusestep) as Eq';
-    pose proof (find_method_name _ _ _ Efusereset) as Eq'';
-    rewrite <-Eq, <-Eq'' in Heval; rewrite <-Eq in Step.
-  edestruct find_class_translate as (main_node & Findnode & Hmain); eauto.
-  pose proof (exists_reset_method main_node) as Ereset.
-  edestruct Obc.Fus.fuse_find_method with (1:=Efusereset)
-    as (m_reset & Eq_r & Ereset'); subst fuse_m_reset.
-  edestruct Obc.Fus.fuse_find_method with (1:=Efusestep)
-    as (m_step & Eq_s & Estep); subst fuse_m_step.
-  rewrite Hmain in Ereset'.
-  rewrite Ereset in Ereset'.
-  inv Ereset'.
-  assert (m_in (Obc.Fus.fuse_method m_step) <> nil) as Step_in_spec.
-  { rewrite Obc.Fus.fuse_method_in.
-    apply find_method_stepm_in in Estep.
-    pose proof (n_ingt0 main_node) as Hin.
-    rewrite Estep; intro E; rewrite E in Hin; simpl in Hin.
-    eapply Lt.lt_irrefl; eauto.
-  }
-  assert (m_out (Obc.Fus.fuse_method m_step) <> nil) as Step_out_spec.
-  { rewrite Obc.Fus.fuse_method_out.
-    apply find_method_stepm_out in Estep.
-    pose proof (n_outgt0 main_node) as Hout.
-    rewrite Estep; intro E; rewrite E in Hout; simpl in Hout.
-    eapply Lt.lt_irrefl; eauto.
-  }
-  assert (forall n, wt_vals (map sem_const (ins n)) (m_in (Obc.Fus.fuse_method m_step)))
-    as Hwt_in by now erewrite Obc.Fus.fuse_method_in, find_method_stepm_in; eauto.
-  assert (forall n, wt_vals
-                 (map sem_const (outs n)) (m_out (Obc.Fus.fuse_method m_step)))
-    as Hwt_out
-    by now erewrite Obc.Fus.fuse_method_out, find_method_stepm_out; eauto.
-  econstructor; split.
-  - eapply diverges'
-    with (1:=Comp') (6:=Emain) (8:=Efusestep) 
-                    (me0:=me0) (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
-                    (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto; auto.
-    apply Obc.Fus.fuse_wt_program.
-    now apply Typ.translate_wt.
-  - assert (Hstep_in: (Obc.Fus.fuse_method m_step).(m_in) = main_node.(n_in))
-      by (rewrite Obc.Fus.fuse_method_in; now apply find_method_stepm_in).
-    assert (Hstep_out: (Obc.Fus.fuse_method m_step).(m_out) = main_node.(n_out))
-      by (rewrite Obc.Fus.fuse_method_out; now apply find_method_stepm_out).
-    clear - Findnode Hstep_in Hstep_out.
-    unfold bisim_io.
-    generalize 0%nat.
-    cofix COINDHYP.
-    intro n.
-    unfold transl_trace.
-    unfold Traces.trace_step.
-    rewrite Traces.unfold_mk_trace.
-    rewrite E0_left, E0_left_inf.
-    rewrite Eappinf_assoc.
-    econstructor; eauto;
-      rewrite Hstep_in || rewrite Hstep_out;
-      apply mk_event_spec; 
-      rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
+  repeat rewrite print_identity in *.
+  unfold Generation.translate in Comp.
+  unfold total_if in *. destruct (do_fusion tt).
+  - pose proof Emain as Emain'.
+    apply Obc.Fus.fuse_find_class in Emain.
+    rewrite Emain in *.
+    destruct (find_method Ids.step (c_methods (Obc.Fus.fuse_class c_main)))
+      as [fuse_m_step|] eqn: Efusestep; try discriminate.
+    destruct (find_method Ids.reset (c_methods (Obc.Fus.fuse_class c_main)))
+      as [fuse_m_reset|] eqn: Efusereset; try discriminate.
+    pose proof (find_class_name _ _ _ _ Emain) as Eq;
+      pose proof (find_method_name _ _ _ Efusestep) as Eq';
+      pose proof (find_method_name _ _ _ Efusereset) as Eq'';
+      rewrite <-Eq, <-Eq'' in Heval; rewrite <-Eq in Step.
+    edestruct find_class_translate as (main_node & Findnode & Hmain); eauto.
+    pose proof (exists_reset_method main_node) as Ereset.
+    edestruct Obc.Fus.fuse_find_method with (1:=Efusereset)
+      as (m_reset & Eq_r & Ereset'); subst fuse_m_reset.
+    edestruct Obc.Fus.fuse_find_method with (1:=Efusestep)
+      as (m_step & Eq_s & Estep); subst fuse_m_step.
+    rewrite Hmain in Ereset'.
+    rewrite Ereset in Ereset'.
+    inv Ereset'.
+    assert (m_in (Obc.Fus.fuse_method m_step) <> nil) as Step_in_spec.
+    { rewrite Obc.Fus.fuse_method_in.
+      apply find_method_stepm_in in Estep.
+      pose proof (n_ingt0 main_node) as Hin.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hin; simpl in Hin.
+      eapply Lt.lt_irrefl; eauto. }
+    assert (m_out (Obc.Fus.fuse_method m_step) <> nil) as Step_out_spec.
+    { rewrite Obc.Fus.fuse_method_out.
+      apply find_method_stepm_out in Estep.
+      pose proof (n_outgt0 main_node) as Hout.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hout; simpl in Hout.
+      eapply Lt.lt_irrefl; eauto. }
+    assert (forall n, wt_vals (map sem_const (ins n))
+                              (m_in (Obc.Fus.fuse_method m_step)))
+      as Hwt_in by now erewrite Obc.Fus.fuse_method_in,
+                   find_method_stepm_in; eauto.
+    assert (forall n, wt_vals
+                (map sem_const (outs n)) (m_out (Obc.Fus.fuse_method m_step)))
+      as Hwt_out
+        by now erewrite Obc.Fus.fuse_method_out, find_method_stepm_out; eauto.
+    econstructor; split.
+    + eapply diverges'
+      with (1:=Comp') (6:=Emain) (8:=Efusestep) (me0:=me0)
+                      (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
+                      (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto; auto.
+      apply Obc.Fus.fuse_wt_program.
+      now apply Typ.translate_wt.
+    + assert (Hstep_in: (Obc.Fus.fuse_method m_step).(m_in) = idty main_node.(n_in))
+        by (rewrite Obc.Fus.fuse_method_in; now apply find_method_stepm_in).
+      assert (Hstep_out: (Obc.Fus.fuse_method m_step).(m_out) = idty main_node.(n_out))
+        by (rewrite Obc.Fus.fuse_method_out; now apply find_method_stepm_out).
+      clear - Findnode Hstep_in Hstep_out.
+      unfold bisim_io.
+      generalize 0%nat.
+      cofix COINDHYP.
+      intro n.
+      unfold transl_trace.
+      unfold Traces.trace_step.
+      rewrite Traces.unfold_mk_trace.
+      rewrite E0_left, E0_left_inf.
+      rewrite Eappinf_assoc.
+      econstructor; eauto;
+        rewrite Hstep_in || rewrite Hstep_out;
+        apply mk_event_spec; 
+        rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
+  - rewrite Emain in *.
+    destruct (find_method Ids.step (c_methods c_main))
+      as [m_step|] eqn: Estep; try discriminate.
+    destruct (find_method Ids.reset (c_methods c_main))
+      as [m_reset|] eqn: Ereset; try discriminate.
+    pose proof (find_class_name _ _ _ _ Emain) as Eq;
+      pose proof (find_method_name _ _ _ Estep) as Eq';
+      pose proof (find_method_name _ _ _ Ereset) as Eq'';
+      rewrite <-Eq, <-Eq'' in Heval; rewrite <-Eq in Step.
+    edestruct find_class_translate as (main_node & Findnode & Hmain); eauto.
+    inversion Ereset as [Findreset]; subst.
+    assert (m_in m_step <> nil) as Step_in_spec.
+    { apply find_method_stepm_in in Estep.
+      pose proof (n_ingt0 main_node) as Hin.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hin; simpl in Hin.
+      eapply Lt.lt_irrefl; eauto. }
+    assert (m_out m_step <> nil) as Step_out_spec.
+    { apply find_method_stepm_out in Estep.
+      pose proof (n_outgt0 main_node) as Hout.
+      rewrite Estep; intro E; rewrite <-length_idty, E in Hout; simpl in Hout.
+      eapply Lt.lt_irrefl; eauto. }
+    rewrite exists_reset_method in Findreset; injection Findreset; intros; subst.
+    assert (forall n, wt_vals (map sem_const (ins n)) (m_in m_step)) as Hwt_in
+        by (erewrite find_method_stepm_in; eauto).
+    assert (forall n, wt_vals (map sem_const (outs n)) (m_out m_step)) as Hwt_out
+        by (erewrite find_method_stepm_out; eauto).
+    econstructor; split.
+    + eapply diverges'
+      with (1:=Comp') (6:=Emain) (8:=Estep) (me0:=me0)
+                      (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
+                      (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out);
+        eauto using Typ.translate_wt.
+    + assert (Hstep_in: m_step.(m_in) = idty main_node.(n_in))
+        by now apply find_method_stepm_in.
+      assert (Hstep_out: m_step.(m_out) = idty main_node.(n_out))
+        by now apply find_method_stepm_out.
+      clear - Findnode Hstep_in Hstep_out.
+      unfold bisim_io.
+      generalize 0%nat.
+      cofix COINDHYP.
+      intro n.
+      unfold transl_trace.
+      unfold Traces.trace_step.
+      rewrite Traces.unfold_mk_trace.
+      rewrite E0_left, E0_left_inf.
+      rewrite Eappinf_assoc.
+      econstructor; eauto;
+        rewrite Hstep_in || rewrite Hstep_out;
+        apply mk_event_spec; 
+        rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
 Lemma behavior_clight:

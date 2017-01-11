@@ -18,7 +18,7 @@ Require Import Velus.Traces.
 
 Require Import Velus.ObcToClight.MoreSeparation.
 Require Import Velus.ObcToClight.SepInvariant.
-Require Import Velus.ObcToClight.Translation.
+Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.Interface.
 
 Require Import Program.Tactics.
@@ -312,7 +312,7 @@ Proof.
   rewrite Heqprog' in Wt.
   clear Heqprog'.
   unfold program in *.
-  induction_list prog as [|c] with cls; simpl (* intro Wt *).
+  induction prog as [|c]; simpl.
   - constructor.
   - inversion_clear Wt as [|? ? ? ? Nodup]; simpl in Nodup;
     inversion_clear Nodup as [|? ? Notinc].
@@ -3462,7 +3462,7 @@ Section PRESERVATION.
     Hypothesis Findreset: find_method reset c_main.(c_methods) = Some m_reset.
     Hypothesis Findstep: find_method step c_main.(c_methods) = Some m_step.
 
-    (* XXX: to be discharged from translation function *)
+    (* XXX: to be discharged from generation function *)
     Hypothesis Reset_in_spec: m_reset.(m_in) = [].
     Hypothesis Reset_out_spec: m_reset.(m_out) = [].
     Hypothesis Step_in_spec: m_step.(m_in) <> [].
@@ -3968,7 +3968,7 @@ Section PRESERVATION.
     (*****************************************************************)
 
     Definition loop := 
-      (* XXX: factor it out in [Translation.v] *)
+      (* XXX: factor it out in [Generation.v] *)
       Sloop
         (Ssequence
            (load_in (m_in m_step))

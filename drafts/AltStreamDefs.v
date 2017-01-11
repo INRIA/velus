@@ -1,6 +1,6 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 
 Inductive value :=
   | absent

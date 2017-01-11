@@ -2,8 +2,9 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.Obc.Syntax.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.Clocks.
+Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 
 Require Import List.
@@ -21,7 +22,7 @@ Open Scope list.
 
 (**
 
-Each node application in CoreDF turns into a method call in the
+Each node application in NLustre turns into a method call in the
 imperative setting. This means that, upon initializing a node, one
 must declare a new instance for each its application.
 
@@ -37,12 +38,13 @@ application is assigned to a single variable. We use the name of that
 variable to identify the instance.  *)
 
 Module Type TRANSLATION
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import Mem   : MEMORIES Ids Op SynDF).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX Op)
+       (Import Clks   : CLOCKS Ids)
+       (Import SynNL  : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (Import SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Import Mem    : MEMORIES Ids Op Clks SynNL).
 
   (* definition is needed in signature *)
   Definition gather_eq
@@ -310,8 +312,8 @@ Module Type TRANSLATION
   Qed.
 
   Lemma filter_mem_fst:
-    forall p (xs: list (ident * type)),
-      map fst (filter (fun (x:ident*type)=>PS.mem (fst x) p) xs)
+    forall p (xs: list (ident * (type * clock))),
+      map fst (filter (fun (x:ident*(type*clock))=>PS.mem (fst x) p) xs)
       = filter (fun x=>PS.mem x p) (map fst xs).
   Proof.
     induction xs as [|x xs]; auto.
@@ -728,7 +730,15 @@ Module Type TRANSLATION
   now rewrite gather_eqs_snd_spec.
   Qed.
 
-
+  
+  Lemma Forall_NotReserved_idty:
+    forall A B (xs: list (ident * (A * B))),
+      Forall NotReserved (idty xs) <-> Forall NotReserved xs.
+  Proof.
+    induction xs as [|x xs]; split; inversion_clear 1; simpl; eauto;
+      destruct x as (x & tyck); constructor; try rewrite IHxs in *; auto.
+  Qed.
+  
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -742,12 +752,12 @@ Module Type TRANSLATION
     let dmems := fst partitioned in
     let dvars := snd partitioned in
     {| c_name    := n.(n_name);
-       c_mems    := dmems;
+       c_mems    := idty dmems;
        c_objs    := dobjs;
        c_methods := [ {| m_name := step;
-                         m_in   := n.(n_in);
-                         m_vars := dvars;
-                         m_out  := n.(n_out);
+                         m_in   := idty n.(n_in);
+                         m_vars := idty dvars;
+                         m_out  := idty n.(n_out);
                          m_body := translate_eqns mems n.(n_eqs);
                          m_nodupvars := _;
                          m_good      := _
@@ -757,6 +767,7 @@ Module Type TRANSLATION
     |}.
   (* =end= *)
   Next Obligation.
+    repeat rewrite <-idty_app. rewrite NoDupMembers_idty.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
@@ -768,6 +779,7 @@ Module Type TRANSLATION
     apply n.(n_nodup).
   Qed.
   Next Obligation.
+    repeat rewrite <-idty_app. apply Forall_NotReserved_idty.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
@@ -779,7 +791,7 @@ Module Type TRANSLATION
     apply n.(n_good).
   Qed.
   Next Obligation.
-    rewrite partition_switch
+    rewrite map_fst_idty, partition_switch
     with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
     2:intro x; now rewrite ps_from_list_gather_eqs_memories.
     eapply (NoDup_app_weaken _ (gather_app_vars n.(n_eqs))).
@@ -843,7 +855,7 @@ Module Type TRANSLATION
   Lemma find_method_stepm_out:
     forall node stepm,
       find_method step (translate_node node).(c_methods) = Some stepm ->
-      stepm.(m_out) = node.(n_out).
+      stepm.(m_out) = idty node.(n_out).
   Proof.
     intros node stepm.
     simpl. rewrite ident_eqb_refl.
@@ -855,7 +867,7 @@ Module Type TRANSLATION
   Lemma find_method_stepm_in:
     forall node stepm,
       find_method step (translate_node node).(c_methods) = Some stepm ->
-      stepm.(m_in) = node.(n_in).
+      stepm.(m_in) = idty node.(n_in).
   Proof.
     intros node stepm.
     simpl. rewrite ident_eqb_refl.
@@ -905,14 +917,13 @@ Module Type TRANSLATION
 End TRANSLATION.
 
 Module TranslationFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import SynDF : Velus.NLustre.Syntax.SYNTAX Ids Op)
-       (Import SynMP : Velus.Obc.Syntax.SYNTAX Ids Op OpAux)
-       (Import Mem : MEMORIES Ids Op SynDF)
-       <: TRANSLATION Ids Op OpAux SynDF SynMP Mem.
-
-  Include TRANSLATION Ids Op OpAux SynDF SynMP Mem.
-
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX Op)
+       (Clks   : CLOCKS Ids)
+       (SynNL  : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
+       (Mem    : MEMORIES Ids Op Clks SynNL)
+       <: TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
+  Include TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
 End TranslationFun.

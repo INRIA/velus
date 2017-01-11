@@ -1,6 +1,7 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLSyntax.
 
 Require Import List.
 Import List.ListNotations.
@@ -8,19 +9,20 @@ Open Scope list_scope.
 
 Require Import Morphisms.
 
-(** * CoreDF typing *)
+(** * NLustre typing *)
 
 (**
 
-  Typing judgements for CoreDF and resulting properties.
-  Classify CoreDF programs which are statically well-formed.
+  Typing judgements for NLustre and resulting properties.
+  Classify NLustre programs which are statically well-formed.
 
  *)
 
-Module Type TYPING
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op).
+Module Type NLTYPING
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS   Ids)
+       (Import Syn  : NLSYNTAX Ids Op Clks).
 
   (** ** Clocks *)
 
@@ -90,8 +92,8 @@ Module Type TYPING
         wt_equation (EqDef x ck e)
     | wt_EqApp: forall n xs ck f es,
         find_node f G = Some n ->
-        Forall2 (fun x xt => In (x, snd xt) vars) xs n.(n_out) ->
-        Forall2 (fun e xt => typeof e = snd xt) es n.(n_in) ->
+        Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
+        Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
         wt_clock ck ->
         Forall wt_lexp es ->
         NoDup xs ->
@@ -106,7 +108,8 @@ Module Type TYPING
   End WellTyped.
 
   Definition wt_node (G: global) (n: node) : Prop
-    := Forall (wt_equation G (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) n.(n_eqs).
+    := Forall (wt_equation G (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))))
+              n.(n_eqs).
 
   (* TODO: replace Welldef_global; except for the Is_well_sch component.
            Notably, typing arguments replace the ~Is_node_in and
@@ -121,7 +124,7 @@ Module Type TYPING
       Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
       wt_global (n::ns).
 
-  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : dftyping.
+  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : nltyping.
 
   Lemma wt_global_NoDup:
     forall g,
@@ -139,6 +142,17 @@ Module Type TYPING
     now contradiction Hin.
   Qed.
 
+  Lemma wt_clock_add:
+    forall x v env ck,
+      ~InMembers x env ->
+      wt_clock env ck ->
+      wt_clock ((x, v) :: env) ck.
+  Proof.
+    induction ck; auto with nltyping.
+    inversion 2.
+    auto with nltyping datatypes.
+  Qed.
+
   Instance wt_clock_Proper:
     Proper (@Permutation.Permutation (ident * type) ==> @eq clock ==> iff)
            wt_clock.
@@ -146,11 +160,11 @@ Module Type TYPING
     intros env' env Henv ck' ck Hck.
     rewrite Hck; clear Hck ck'.
     induction ck.
-    - split; auto with dftyping.
+    - split; auto with nltyping.
     - destruct IHck.
       split; inversion_clear 1; constructor;
         try rewrite Henv in *;
-        auto with dftyping.
+        auto with nltyping.
   Qed.
 
   Instance wt_lexp_Proper:
@@ -161,10 +175,10 @@ Module Type TYPING
     rewrite He; clear He.
     induction e; try destruct IHe;
       try destruct IHe1, IHe2;
-      split; auto with dftyping;
+      split; auto with nltyping;
         inversion_clear 1;
         (rewrite Henv in * || rewrite <-Henv in * || idtac);
-        auto with dftyping.
+        auto with nltyping.
   Qed.
 
   Instance wt_lexp_pointwise_Proper:
@@ -194,23 +208,25 @@ Module Type TYPING
     intros G1 G2 HG env1 env2 Henv eq1 eq2 Heq.
     rewrite Heq, HG.
     split; intro WTeq.
-    - inv WTeq; rewrite Henv in *; eauto with dftyping.
+    - inv WTeq; rewrite Henv in *; eauto with nltyping.
       econstructor; eauto.
       match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
         apply Forall2_impl_In with (2:=H) end.
       intros; rewrite Henv in *; auto.
-    - inv WTeq; rewrite <-Henv in *; eauto with dftyping.
+    - inv WTeq; rewrite <-Henv in *; eauto with nltyping.
       econstructor; eauto.
       match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
         apply Forall2_impl_In with (2:=H) end.
       intros; rewrite Henv in *; auto.
   Qed.
   
-End TYPING.
+End NLTYPING.
 
-Module TypingFun
-       (Import Ids : IDS)
-       (Import Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op) <: TYPING Ids Op Syn.
-  Include TYPING Ids Op Syn.
-End TypingFun.
+Module NLTypingFun
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS   Ids)
+       (Syn  : NLSYNTAX Ids Op Clks)
+       <: NLTYPING Ids Op Clks Syn.
+  Include NLTYPING Ids Op Clks Syn.
+End NLTypingFun.

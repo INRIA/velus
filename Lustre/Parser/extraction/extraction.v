@@ -1,5 +1,5 @@
-Require Velus.NLustre.Parser.Ast.
-Require Velus.NLustre.Parser.Parser.
+Require Velus.Lustre.Parser.Ast.
+Require Velus.Lustre.Parser.Parser.
 
 Require Import ExtrOcamlBasic.
 Require Import ExtrOcamlString.

@@ -1,11 +1,12 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
 Require Import PArith.
 
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Velus.NLustre.Syntax.
+Require Import Velus.NLustre.NLSyntax.
 
 (** * Collecting memory cells *)
 
@@ -21,9 +22,10 @@ Require Import Velus.NLustre.Syntax.
  *)
 
 Module Type MEMORIES
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op).
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (Import Clks : CLOCKS   Ids)
+       (Import Syn  : NLSYNTAX Ids Op Clks).
 
   Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
@@ -69,12 +71,11 @@ Module Type MEMORIES
 End MEMORIES.
 
 Module MemoriesFun
-       (Ids : IDS)
-       (Op  : OPERATORS)
-       (Import Syn : SYNTAX Ids Op)
-       <: MEMORIES Ids Op Syn.
-
-  Include MEMORIES Ids Op Syn.
- 
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS   Ids)
+       (Syn  : NLSYNTAX Ids Op Clks)
+       <: MEMORIES Ids Op Clks Syn.
+  Include MEMORIES Ids Op Clks Syn.
 End MemoriesFun.
 

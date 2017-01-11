@@ -95,43 +95,38 @@ COQEXEC="$(COQBIN)coqtop" $(COQLIBS) -batch -load-vernac-source
 
 VFILES:=RMemory.v\
   NLustreToObc/Correctness.v\
-  NLustreToObc/Typing.v\
+  NLustreToObc/NLObcTyping.v\
   NLustreToObc/Correctness/MemoryCorres.v\
   NLustreToObc/Correctness/IsPresent.v\
   NLustreToObc/Translation.v\
   NLustreToObc/Fusible.v\
   Obc.v\
   Obc/Equiv.v\
-  Obc/Semantics.v\
-  Obc/Syntax.v\
-  Obc/Typing.v\
+  Obc/ObcSemantics.v\
+  Obc/ObcSyntax.v\
+  Obc/ObcTyping.v\
   Obc/Fusion.v\
+  Lustre/Parser/LustreAst.v\
+  Lustre/Parser/LustreParser.v\
   NLustre.v\
   NLustre/NoDup.v\
   NLustre/Ordered.v\
-  NLustre/WellFormed/Decide.v\
   NLustre/WellFormed.v\
   NLustre/MemSemantics.v\
-  NLustre/Semantics.v\
-  NLustre/Clocking/Properties.v\
-  NLustre/Clocking/Parents.v\
-  NLustre/Clocking.v\
+  NLustre/NLSemantics.v\
+  NLustre/NLClocking.v\
   NLustre/Memories.v\
-  NLustre/IsDefined/Decide.v\
   NLustre/IsDefined.v\
-  NLustre/IsVariable/Decide.v\
   NLustre/IsVariable.v\
-  NLustre/IsFree/Decide.v\
   NLustre/IsFree.v\
-  NLustre/Syntax.v\
-  NLustre/Typing.v\
+  NLustre/NLSyntax.v\
+  NLustre/NLTyping.v\
   NLustre/Stream.v\
-  NLustre/Parser/LustreAst.v\
-  NLustre/Parser/LustreParser.v\
   Common.v\
   Ident.v\
+  Clocks.v\
   ObcToClight/Interface.v\
-  ObcToClight/Translation.v\
+  ObcToClight/Generation.v\
   ObcToClight/Correctness.v\
   ObcToClight/MoreSeparation.v\
   ObcToClight/SepInvariant.v\
@@ -214,40 +209,48 @@ extraction/STAMP: $(VOFILES) extraction/Extraction.v
 	@$(COQEXEC) extraction/Extraction.v
 	@touch extraction/STAMP
 
-NLustre/Parser/LustreParser.v: NLustre/Parser/LustreParser.vy
+Lustre/Parser/LustreParser.v: Lustre/Parser/LustreParser.vy
 	@$(MENHIR) --no-stdlib --coq $<
 
-NLustre/Parser/LustreLexer.ml: NLustre/Parser/LustreLexer.mll
+Lustre/Parser/LustreLexer.ml: Lustre/Parser/LustreLexer.mll
 	ocamllex $<
 
-extraction/extract/LustreLexer.ml: NLustre/Parser/LustreLexer.ml extraction/STAMP
+extraction/extract/LustreLexer.ml: Lustre/Parser/LustreLexer.ml extraction/STAMP
 	cp $< $@
 
-extraction/extract/Relexer.ml: NLustre/Parser/Relexer.ml extraction/extract
+extraction/extract/Relexer.ml: Lustre/Parser/Relexer.ml extraction/extract
 	cp $< $@
 
-NLustre/Parser/LustreParser2.mly: NLustre/Parser/LustreParser.vy
+Lustre/Parser/LustreParser2.mly: Lustre/Parser/LustreParser.vy
 	$(MENHIR) --no-stdlib --coq --only-preprocess-u $< > $@
 
-NLustre/Parser/LustreParser2.ml NLustre/Parser/LustreParser2.mli: \
-		NLustre/Parser/LustreParser2.mly
+Lustre/Parser/LustreParser2.ml Lustre/Parser/LustreParser2.mli: \
+		Lustre/Parser/LustreParser2.mly
 	$(MENHIR) --no-stdlib --table $<
 
-extraction/extract/LustreParser2.ml: NLustre/Parser/LustreParser2.ml \
+extraction/extract/LustreParser2.ml: Lustre/Parser/LustreParser2.ml \
 		extraction/extract
 	cp $< $@
 
-extraction/extract/LustreParser2.mli: NLustre/Parser/LustreParser2.mli \
+extraction/extract/LustreParser2.mli: Lustre/Parser/LustreParser2.mli \
     		extraction/extract
 	cp $< $@
 
-extraction/extract/veluslib.ml: veluslib.ml extraction/extract
+extraction/extract/nlustrelib.ml: NLustre/nlustrelib.ml extraction/extract
+	cp $< $@
+
+extraction/extract/obclib.ml: Obc/obclib.ml extraction/extract
+	cp $< $@
+
+extraction/extract/interfacelib.ml: ObcToClight/interfacelib.ml \
+    		extraction/extract
 	cp $< $@
 
 velus: compcert extraction/STAMP extraction/extract/LustreLexer.ml \
     	velusmain.ml extraction/extract/LustreParser2.mli \
 	extraction/extract/LustreParser2.ml extraction/extract/Relexer.ml \
-	extraction/extract/veluslib.ml
+	veluslib.ml extraction/extract/interfacelib.ml \
+	extraction/extract/nlustrelib.ml extraction/extract/obclib.ml
 	@find CompCert -name '*.cm*' -delete
 	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer velusmain.native
 	@mv velusmain.native velus
