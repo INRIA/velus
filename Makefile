@@ -272,6 +272,7 @@ clean:
 	rm -f extraction/extract/*
 	rm -f extraction/STAMP
 	ocamlbuild -clean
+	make -C NLustre/Parser clean
 
 archclean:
 	rm -f *.cmx *.o
