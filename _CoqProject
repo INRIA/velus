@@ -1,5 +1,3 @@
--R . Velus
-
 -R CompCert/lib compcert.lib
 -R CompCert/common compcert.common
 -R CompCert/ia32 compcert.ia32
@@ -9,6 +7,8 @@
 -R CompCert/flocq compcert.flocq
 -R CompCert/exportclight compcert.exportclight
 -R CompCert/cparser compcert.cparser
+
+-R . Velus
 
 -install none
 RMemory.v
