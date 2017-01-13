@@ -267,7 +267,7 @@ Hint Resolve Obc.Fus.fuse_wt_program
 Definition vstr (xss: stream (list const)): stream (list value) :=
   fun n => map (fun c => present (sem_const c)) (xss n).
 
-Lemma soundness_cl:
+Lemma behavior_clight:
   forall G P main ins outs,
     wc_global G ->
     wt_global G ->
@@ -275,7 +275,7 @@ Lemma soundness_cl:
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
     df_to_cl main G = OK P ->
-    exists T, bigstep_program_diverges function_entry2 P T
+    exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
   intros ** Comp.
@@ -330,7 +330,7 @@ Proof.
       as Hwt_out
         by now erewrite Obc.Fus.fuse_method_out, find_method_stepm_out; eauto.
     econstructor; split.
-    + eapply diverges'
+    + eapply reacts'
       with (1:=Comp') (6:=Emain) (8:=Efusestep) (me0:=me0)
                       (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
                       (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto; auto.
@@ -381,7 +381,7 @@ Proof.
     assert (forall n, wt_vals (map sem_const (outs n)) (m_out m_step)) as Hwt_out
         by (erewrite find_method_stepm_out; eauto).
     econstructor; split.
-    + eapply diverges'
+    + eapply reacts'
       with (1:=Comp') (6:=Emain) (8:=Estep) (me0:=me0)
                       (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
                       (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out);
@@ -406,29 +406,6 @@ Proof.
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
-Lemma behavior_clight:
-  forall G P main ins outs,
-    wc_global G ->
-    wt_global G ->
-    wt_ins G main ins ->
-    wt_outs G main outs ->
-    sem_node G main (vstr ins) (vstr outs) ->
-    df_to_cl main G = OK P ->
-    (forall t, ~ program_behaves (semantics2 P) (Diverges t)) ->
-    exists T, program_behaves (semantics2 P) (Reacts T)
-         /\ bisim_io G main ins outs T.
-Proof.
-  intros ** Hbeh; edestruct soundness_cl as (? & ? & ?); eauto.
-  eexists; split; eauto.
-  assert (Smallstep.bigstep_diverges (bigstep_semantics_fe function_entry2 P) x)
-    by match goal with
-       | H: bigstep_program_diverges _ _ _ |- _ => 
-         destruct H; econstructor; eauto
-       end.
-  edestruct behavior_bigstep_diverges as [|(? & ? & ?)]; eauto using bigstep_semantics_sound.
-  exfalso. eapply Hbeh; eauto.
-Qed.
-
 Lemma behavior_asm:
   forall G P main ins outs,
     wc_global G ->
@@ -437,21 +414,14 @@ Lemma behavior_asm:
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
     compile G main = OK P ->
-    (forall t, ~ program_behaves (Asm.semantics P) (Diverges t)) ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros ** Comp Hbeh.
+  intros ** Comp.
   unfold compile, print in Comp.
   destruct (df_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.
-  - intros T1 Div.
-    eapply (Hbeh T1).
-    eapply diverges_trace_preservation; eauto.
-    apply add_builtins_spec; auto.
-    intros ? ?; discriminate.
-  - eapply reacts_trace_preservation in Comp; eauto.
-    apply add_builtins_spec; auto.
-    intros ? ?; discriminate.  
+  eapply reacts_trace_preservation in Comp; eauto.
+  apply add_builtins_spec; auto.
+  intros ? ?; discriminate.  
 Qed.
-

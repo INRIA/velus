@@ -10,7 +10,8 @@ Require Import common.Values.
 Require Import common.Memory.
 Require Import common.Events.
 Require Import common.Globalenvs.
-
+Require Import common.Behaviors.
+      
 Require Import Velus.Common.
 Require Import Velus.RMemory.
 Require Import Velus.Ident.
@@ -4205,17 +4206,8 @@ Section PRESERVATION.
           rewrite Eq; eapply dostep_loop; eauto. 
       Qed.
       
-      Lemma diverges:
-        bigstep_program_diverges function_entry2 tprog (traceinf_of_traceinf' (transl_trace 0)).
-      Proof.
-        destruct Caractmain as (Hret & Hcc & Hparams & Hvars & Htemps & Hbody).
-        econstructor; eauto.
-        - simpl; unfold type_of_function; rewrite Hparams, Hret, Hcc; auto. 
-        - apply main_inf; auto.
-      Qed.
-
       Let after_loop := Kseq (Sreturn (Some cl_zero)) Kstop.
-
+       
       Lemma reactive_loop:
         forall n m le,
           dostep' n m ->
@@ -4245,12 +4237,12 @@ Section PRESERVATION.
              }
             * apply step_skip_loop2.
           + simpl; rewrite 2 E0_right; auto.
-        - clear COINDHYP. admit.
+        - intro Evts.
+          apply app_eq_nil in Evts; destruct Evts.
+          apply (load_events_not_E0 ins (m_in m_step) Step_in_spec Hwt_ins n); auto. 
         - apply COINDHYP; auto.
       Qed.
-      
-      Require Import common.Behaviors.
-      
+           
       Lemma reacts:
         program_behaves (semantics2 tprog) (Reacts (traceinf_of_traceinf' (transl_trace 0))).
       Proof.
@@ -4290,7 +4282,7 @@ Section PRESERVATION.
     
   End Init.
 
-  Lemma diverges':
+  Lemma reacts':
     forall me0 ins outs c_main prog_main m_step m_reset,
       stmt_call_eval prog hempty (c_name c_main) (m_name m_reset) [] me0 [] ->
       wt_mem me0 prog_main c_main ->
@@ -4303,9 +4295,10 @@ Section PRESERVATION.
       forall (Step_in_spec: m_in m_step <> []) (Step_out_spec: m_out m_step <> [])
         (Hwt_in: forall n : nat, wt_vals (map sem_const (ins n)) (m_in m_step))
         (Hwt_out: forall n : nat, wt_vals (map sem_const (outs n)) (m_out m_step)),
-        bigstep_program_diverges function_entry2 tprog
-                                 (traceinf_of_traceinf'
-                                    (transl_trace m_step Step_in_spec Step_out_spec ins outs Hwt_in Hwt_out 0)).
+        program_behaves (semantics2 tprog)
+                        (Reacts 
+                           (traceinf_of_traceinf'
+                              (transl_trace m_step Step_in_spec Step_out_spec ins outs Hwt_in Hwt_out 0))).
   Proof.
     intros until m_reset; intros ? ? ? Findmain Findreset Findstep.
     destruct init_mem as [m0].
@@ -4319,8 +4312,7 @@ Section PRESERVATION.
     edestruct methods_corres with (2:=Findstep')
       as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
     intros.
-    eapply diverges; eauto; repeat split; auto.
+    eapply reacts; eauto; repeat split; auto.
   Qed.
 
 End PRESERVATION.
-
