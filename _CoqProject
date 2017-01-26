@@ -10,13 +10,11 @@
 
 -R . Velus
 
--install none
 RMemory.v
 Common.v
 Ident.v
 Clocks.v
 Operators.v
-Example.v
 Lustre/Parser/LustreAst.v
 Lustre/Parser/LustreParser.v
 NLustre/Stream.v
@@ -51,7 +49,7 @@ ObcToClight/Correctness.v
 ObcToClight/MoreSeparation.v
 ObcToClight/SepInvariant.v
 ObcToClight/NLustreElab.v
-Velus.v
+VelusCorrectness.v
 Instantiator.v
 Traces.v
 ClightToAsm.v
