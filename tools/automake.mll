@@ -26,20 +26,17 @@ rule scan = parse
 
   let files_defs = [
     "-include $(addsuffix .d,$(VFILES))";
-    ".SECONDARY: $(addsuffix .d,$(VFILES))";
+    (* ".SECONDARY: $(addsuffix .d,$(VFILES))"; *)
     "";
     "VOFILES:=$(VFILES:.v=.vo)";
     "GLOBFILES:=$(VFILES:.v=.glob)"
   ]
 
   let rules = [
-    ([".PHONY"], ["all"; "clean"; "archclean"; "lol"], []);
+    ([".PHONY"], ["all"; "clean"; "archclean"], []);
     (["all"], ["$(VOFILES)"], []);
-    (["clean"], [], ["@rm -f $(VOFILES) $(VFILES:.v=.v.d)"]);
+    (["clean"], [], ["@rm -f $(VOFILES) $(VFILES:.v=.v.d) $(VFILES:.v=.glob)"]);
     (["archclean"], [], ["@rm -f *.cmx *.o"]);
-    (* (["Makefile.auto"], ["automake"; "_CoqProject"], ["@mv -f $@ $@.bak"; "@./$< < _CoqProject > $@"]); *)
-	(* (["automake"], ["tools/automake.mll"], ["@ocamlopt -o $@ tools/$@.ml"]); *)
-	(* (["tools/automake.mll"], [], ["@ocamllex $@"]); *)
     (["%.vo"; "%.glob"], ["%.v"], ["@echo \"COQC $*.v\""; "@$(COQC) $(COQDEBUG) $(COQFLAGS) $*"]);
     (["%.v.d"], ["%.v"],
      ["@echo \"COQDEP $*.v\"";

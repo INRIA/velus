@@ -1,18 +1,21 @@
 OTHERFLAGS=-exclude-dir CompCert -exclude-dir extraction/CompCert
 export OTHERFLAGS
 
-.PHONY: .FORCE
+.PHONY: all clean proof
+
+all: proof
+
+proof: Makefile.auto
+	@$(MAKE) -s -f $< all	  
+
+clean: Makefile.auto
+	@$(MAKE) -s -f $< $@	  	
 
 Makefile.auto: automake _CoqProject
 	@./$< < _CoqProject > $@
 
-automake: tools/automake.mll
-	ocamllex $<
-	ocamlopt -o $@ tools/$@.ml
+automake: tools/automake.ml
+	@ocamlopt -o $@ $<
 
-%: Makefile.auto .FORCE
-	$(MAKE) -f "Makefile.auto" $(if $@, "all", $@)
-
-.FORCE: ;
-_CoqProject: ;
-tools/automake.mll: ;
+tools/automake.ml: tools/automake.mll
+	@ocamllex $<
