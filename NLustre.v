@@ -13,6 +13,7 @@ Require Export NLustre.Ordered.
 Require Export NLustre.NoDup.
 Require Export NLustre.NLClocking.
 Require Export NLustre.NLTyping.
+Require Export NLustre.NLSchedule.
 
 Require Import Velus.Common.
 
@@ -35,6 +36,10 @@ Module Type NLUSTRE
   Declare Module Export MemSem: MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Mem
                                     IsF IsD Sem IsV NoD WeF.     
   Declare Module Export Clo: NLCLOCKING Ids Op Clks Syn IsF Mem IsD.
+
+  Declare Module Scheduler :
+    NLSCHEDULE Ids Op OpAux Clks Syn Ord IsF Str Sem Typ Mem IsD Clo.
+
 End NLUSTRE.
 
 Module NLustreFun
@@ -57,5 +62,9 @@ Module NLustreFun
   Module Export MemSem := MemSemanticsFun Ids Op OpAux Clks Syn Str Ord Mem IsF
                             IsD Sem IsV NoD WeF.     
   Module Export Clo := NLClockingFun    Ids Op Clks Syn IsF Mem IsD.
+
+  Module Scheduler :=
+    NLScheduleFun Ids Op OpAux Clks Syn Ord IsF Str Sem Typ Mem IsD Clo.
+
 End NLustreFun.
 

@@ -238,3 +238,14 @@ module PrintFun (NL: SYNTAX)
       fprintf p "@]@."
   end
 
+module SchedulerFun (NL: SYNTAX) :
+  sig
+    val schedule : NL.equation list -> BinNums.positive list
+  end
+  =
+  struct
+
+    let schedule eqs = []
+
+  end
+

@@ -1080,6 +1080,19 @@ an absent value *)
     now rewrite Hsem in Hgt0.
   Qed.
 
+  Lemma sem_equations_permutation:
+    forall eqs eqs' G bk H,
+      Forall (sem_equation G bk H) eqs ->
+      Permutation eqs eqs' ->
+      Forall (sem_equation G bk H) eqs'.
+  Proof.
+    intros eqs eqs' G bk H Hsem Hperm.
+    induction Hperm as [|eq eqs eqs' Hperm IH|eq0 eq1 eqs|]; auto.
+    - inv Hsem; auto.
+    - inversion_clear Hsem as [|? ? ? Heqs'].
+      inv Heqs'; auto.
+  Qed.
+  
 End NLSEMANTICS.
 
 Module NLSemanticsFun

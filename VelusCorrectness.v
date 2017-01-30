@@ -34,9 +34,16 @@ Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
+Parameter schedule : list NL.Syn.equation -> list positive.
 Parameter print_snlustre: NL.Syn.global -> unit.
 Parameter print_obc: Obc.Syn.program -> unit.
 Parameter do_fusion : unit -> bool.
+
+Module ExternalSchedule.
+  Definition schedule := schedule.
+End ExternalSchedule.
+
+Module Scheduler := NL.Scheduler ExternalSchedule.
 
 Definition Wellsch_global (G: global) : Prop :=
   Forall (fun n=>Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G.
@@ -79,12 +86,13 @@ Proof.
 Qed.
 
 Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
-  do _ <- (fold_left is_well_sch g (OK tt));
-  OK g @@ print print_snlustre
-       @@ Trans.translate
-       @@ total_if do_fusion (map Obc.Fus.fuse_class)
-       @@ print print_obc
-       @@@ Generation.translate main_node.
+  let gsch := Scheduler.schedule g in
+  do _ <- (fold_left is_well_sch gsch (OK tt));
+  OK gsch @@ print print_snlustre
+          @@ Trans.translate
+          @@ total_if do_fusion (map Obc.Fus.fuse_class)
+          @@ print print_obc
+          @@@ Generation.translate main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
@@ -113,6 +121,32 @@ Definition wt_outs :=
             wt_vals (map sem_const (outs n)) (idty node.(n_out)).
 
 End WtStream.
+
+Lemma scheduler_wt_ins:
+  forall G f ins,
+    wt_ins G f ins ->
+    wt_ins (Scheduler.schedule G) f ins.
+Proof.
+  unfold wt_ins.
+  intros G f ins Hwt n node Hfind.
+  apply Scheduler.scheduler_find_node' in Hfind.
+  destruct Hfind as (node' & Hfind & Hnode).
+  apply Hwt with (n:=n) in Hfind.
+  subst. destruct node'; auto.
+Qed.
+
+Lemma scheduler_wt_outs:
+  forall G f outs,
+    wt_outs G f outs ->
+    wt_outs (Scheduler.schedule G) f outs.
+Proof.
+  unfold wt_outs.
+  intros G f ins Hwt n node Hfind.
+  apply Scheduler.scheduler_find_node' in Hfind.
+  destruct Hfind as (node' & Hfind & Hnode).
+  apply Hwt with (n:=n) in Hfind.
+  subst. destruct node'; auto.
+Qed.
 
 Section Bisim.
 
@@ -212,7 +246,28 @@ CoInductive bisim_io': nat -> traceinf -> Prop
 Definition bisim_io := bisim_io' 0.
 
 End Bisim.
-      
+
+Lemma scheduler_bisim_io:
+  forall G main ins outs T,
+    bisim_io G main ins outs T <->
+    bisim_io (Scheduler.schedule G) main ins outs T.
+Proof.
+  intros G main ins outs T.
+  split; unfold bisim_io; generalize 0%nat; revert T; cofix CH.
+  - intros T n HH.
+    destruct HH.
+    match goal with H:find_node _ _ = _ |- _ =>
+      apply Scheduler.scheduler_find_node in H end.
+    destruct node0; eauto using bisim_io'.
+  - intros T n HH.
+    destruct HH.
+    match goal with H:find_node _ _ = _ |- _ =>
+      apply Scheduler.scheduler_find_node' in H;
+      destruct H as (node & Hfind & Hnode0) end.
+    subst.
+    destruct node; eauto using bisim_io'.
+Qed.
+
 Lemma fuse_dostep':
   forall c ins outs G me,
     Forall Obc.Fus.ClassFusible (translate G) ->
@@ -221,7 +276,7 @@ Lemma fuse_dostep':
 Proof.
   intros c ins outs G.
   generalize 0%nat.
-  cofix COINDHYP. 
+  cofix COINDHYP.
   (* XXX: Use [Guarded] to check whether the definition is still productive. *)
   intros n ** Hdo.
   destruct Hdo.
@@ -278,10 +333,16 @@ Lemma behavior_clight:
     exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros ** Comp.
+  intros ** Hwc Hwt Hwti Hwto Hsem Comp.
+  apply Scheduler.scheduler_wc_global in Hwc.
+  apply Scheduler.scheduler_wt_global in Hwt.
+  apply scheduler_wt_ins in Hwti.
+  apply scheduler_wt_outs in Hwto.
+  apply Scheduler.scheduler_sem_node in Hsem.
+  setoid_rewrite scheduler_bisim_io.
   unfold df_to_cl in Comp.
-  destruct (fold_left is_well_sch G (OK tt)) as [u|] eqn: Wellsch;
-    try discriminate; simpl in Comp; destruct u.
+  destruct (fold_left is_well_sch (Scheduler.schedule G) (OK tt))
+    as [u|] eqn: Wellsch; try discriminate; simpl in Comp; destruct u.
   apply is_well_sch_global in Wellsch.
   edestruct dostep'_correct
     as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
