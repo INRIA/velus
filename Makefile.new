@@ -1,12 +1,35 @@
+# Menhir includes from CompCert
+include CompCert/Makefile.menhir
+comma:= ,
+empty:=
+space:= $(empty) $(empty)
+MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
+
+# flag to prevent coqc from taking CompCert directories into account
 OTHERFLAGS=-exclude-dir CompCert -exclude-dir extraction/CompCert
 export OTHERFLAGS
 
-.PHONY: all clean proof
+.PHONY: all clean compcert parser proof
 
-all: proof
+all: compcert parser proof
 
+# COMPCERT COQ
+compcert: CompCert/Makefile.config
+	@$(MAKE) -s -C CompCert -j 8 compcert.ini driver/Version.ml proof
+
+CompCert/Makefile.config:
+	@cd CompCert; ./configure ia32-linux
+
+# LUSTRE PARSER
+parser: Lustre/Parser/LustreParser.v
+
+Lustre/Parser/LustreParser.v: Lustre/Parser/LustreParser.vy
+	@$(MENHIR) --no-stdlib --coq $<
+
+# VELUS COQ
 proof: Makefile.auto
-	@$(MAKE) -s -f $< all	  
+	@test -f .depend || $(MAKE) -s -f $< depend
+	@$(MAKE) -s -f $< all	  	
 
 clean: Makefile.auto
 	@$(MAKE) -s -f $< $@	  	
@@ -19,3 +42,5 @@ automake: tools/automake.ml
 
 tools/automake.ml: tools/automake.mll
 	@ocamllex $<
+
+# EXTRACTION

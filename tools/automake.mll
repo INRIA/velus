@@ -18,29 +18,20 @@ rule scan = parse
 
 {
   let vars_defs = [
-    "COQDEP=\"coqdep\" -c";
+    "DOCDIR=doc";
+    "COQDEP=\"$(COQBIN)coqdep\" -c";
     "COQFLAGS=-q $(COQLIBS) $(OTHERFLAGS)";
-    "COQC=\"coqc\"";
-    "COQEXEC=\"coqtop\" $(COQLIBS) -batch -load-vernac-source"
-  ]
-
-  let files_defs = [
-    "-include $(addsuffix .d,$(VFILES))";
-    (* ".SECONDARY: $(addsuffix .d,$(VFILES))"; *)
-    "";
-    "VOFILES:=$(VFILES:.v=.vo)";
-    "GLOBFILES:=$(VFILES:.v=.glob)"
+    "COQC=\"$(COQBIN)coqc\"";
+    "COQEXEC=\"$(COQBIN)coqtop\" $(COQLIBS) -batch -load-vernac-source"
   ]
 
   let rules = [
-    ([".PHONY"], ["all"; "clean"; "archclean"], []);
+    ([".PHONY"], ["all"; "clean"; "archclean"; "depend"], []);
     (["all"], ["$(VOFILES)"], []);
-    (["clean"], [], ["@rm -f $(VOFILES) $(VFILES:.v=.v.d) $(VFILES:.v=.glob)"]);
-    (["archclean"], [], ["@rm -f *.cmx *.o"]);
-    (["%.vo"; "%.glob"], ["%.v"], ["@echo \"COQC $*.v\""; "@$(COQC) $(COQDEBUG) $(COQFLAGS) $*"]);
-    (["%.v.d"], ["%.v"],
-     ["@echo \"COQDEP $*.v\"";
-      "@$(COQDEP) -slash $(COQLIBS) \"$<\" > \"$@\" || ( RV=$$?; rm -f \"$@\"; exit $${RV} )"])
+    (["clean"], [], ["rm -f $(VOFILES) $(DOCDIR)/*.glob .depend"]);
+    (["archclean"], [], ["rm -f *.cmx *.o"]);
+    (["depend"], ["$(VFILES)"], ["@echo \"Analyzing Coq dependencies\""; "$(COQDEP) -slash $(COQLIBS) $^ > .depend"]);
+    (["%.vo"; "%.glob"], ["%.v"], ["@echo \"COQC $*.v\""; "$(COQC) -dump-glob $(DOCDIR)/$(*F).glob $(COQFLAGS) $*"])
   ]
 
   let print sep first last l =
@@ -70,12 +61,14 @@ rule scan = parse
 
     print_section "VARIABLES";
     iter print_endline vars_defs;
-
+    print_endline "$(shell mkdir -p $(DOCDIR) >/dev/null)";
+    
     print_section "FILES";
     print_var "COQLIBS" (rev !libs);
     print_var "VFILES" (rev !files);
-    iter print_endline files_defs;
+    print_endline "VOFILES:=$(VFILES:.v=.vo)";
 
     print_section "RULES";
-    iter print_rule rules
+    iter print_rule rules;
+    print_endline "-include .depend"    
 }
