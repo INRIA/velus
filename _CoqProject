@@ -30,6 +30,7 @@ NLustre/MemSemantics.v
 NLustre/WellFormed.v
 NLustre/Ordered.v
 NLustre/NoDup.v
+NLustre/NLSchedule.v
 NLustre.v
 Obc/ObcSyntax.v
 Obc/ObcTyping.v

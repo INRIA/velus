@@ -138,6 +138,8 @@ Extract Constant VelusCorrectness.print_snlustre =>
   "Veluslib.print_snlustre_if".
 Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
 Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
+Extract Constant VelusCorrectness.schedule =>
+  "Interfacelib.Scheduler.schedule".
 
 (* builtins *)
 Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".

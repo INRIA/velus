@@ -122,6 +122,7 @@ VFILES:=RMemory.v\
   NLustre/NLSyntax.v\
   NLustre/NLTyping.v\
   NLustre/Stream.v\
+  NLustre/NLSchedule.v\
   Common.v\
   Ident.v\
   Clocks.v\
