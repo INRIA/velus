@@ -58,16 +58,17 @@ rule scan = parse
     
   let () =
     scan (Lexing.from_channel stdin);
-
-    print_section "VARIABLES";
-    iter print_endline vars_defs;
-    print_endline "$(shell mkdir -p $(DOCDIR) >/dev/null)";
     
     print_section "FILES";
     print_var "COQLIBS" (rev !libs);
     print_var "VFILES" (rev !files);
     print_endline "VOFILES:=$(VFILES:.v=.vo)";
 
+    print_section "VARIABLES";
+    iter print_endline vars_defs;
+    print_endline "$(shell mkdir -p $(DOCDIR) >/dev/null)";
+    print_endline "export $(COQEXEC)";
+    
     print_section "RULES";
     iter print_rule rules;
     print_endline "-include .depend"    

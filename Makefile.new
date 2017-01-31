@@ -9,38 +9,55 @@ MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
 OTHERFLAGS=-exclude-dir CompCert -exclude-dir extraction/CompCert
 export OTHERFLAGS
 
+export MENHIR
+
+COMPCERTDIR=CompCert
+COMPCERTFLAGS=-s -C $(COMPCERTDIR) -j 8
+COMPCERTTARGET=ia32-linux
+
+PARSERDIR=Lustre/Parser
+
+MAKEFILEAUTO=Makefile.auto
+
 .PHONY: all clean compcert parser proof
 
-all: compcert parser proof
+all: compcert parser proof #extraction
 
 # COMPCERT COQ
-compcert: CompCert/Makefile.config
-	@$(MAKE) -s -C CompCert -j 8 compcert.ini driver/Version.ml proof
+compcert: $(COMPCERTDIR)/Makefile.config
+	@$(MAKE) $(COMPCERTFLAGS) compcert.ini driver/Version.ml proof
 
-CompCert/Makefile.config:
-	@cd CompCert; ./configure ia32-linux
+$(COMPCERTDIR)/Makefile.config:
+	@cd $(COMPCERTDIR); ./configure $(COMPCERTTARGET)
 
 # LUSTRE PARSER
-parser: Lustre/Parser/LustreParser.v
-
-Lustre/Parser/LustreParser.v: Lustre/Parser/LustreParser.vy
-	@$(MENHIR) --no-stdlib --coq $<
+parser:
+	@$(MAKE) -s -C $(PARSERDIR) all
 
 # VELUS COQ
-proof: Makefile.auto
+proof: $(MAKEFILEAUTO)
 	@test -f .depend || $(MAKE) -s -f $< depend
 	@$(MAKE) -s -f $< all	  	
 
-clean: Makefile.auto
-	@$(MAKE) -s -f $< $@	  	
-
-Makefile.auto: automake _CoqProject
+$(MAKEFILEAUTO): automake _CoqProject
 	@./$< < _CoqProject > $@
 
+# EXTRACTION
+extraction: extraction/STAMP
+
+extraction/STAMP: $(VOFILES) extraction/Extraction.v
+	rm -f extraction/extracted/*.*
+	$(COQEXEC) extraction/Extraction.v
+	touch extraction/STAMP
+
+# TOOLS
 automake: tools/automake.ml
 	@ocamlopt -o $@ $<
 
 tools/automake.ml: tools/automake.mll
 	@ocamllex $<
 
-# EXTRACTION
+# CLEAN
+clean: 
+	@test -f $(MAKEFILEAUTO) && $(MAKE) -s -f $(MAKEFILEAUTO) $@
+	@$(MAKE) -s -C $(PARSERDIR) $@

@@ -12,7 +12,7 @@ Require ia32.Machregs ia32.Conventions1
         driver.Compiler cparser.Cabs.
 Require ZArith.BinIntDef.
         
-Cd "extraction/extract".
+Cd "extraction/extracted".
 
 Extraction Blacklist Int String List.
 
