@@ -38,6 +38,7 @@ $(COMPCERTDIR)/Makefile.config:
 
 # LUSTRE PARSER
 parser:
+	@echo "Building parser"
 	@$(MAKE) -s -C $(PARSERDIR) all
 
 # VELUS COQ
@@ -71,6 +72,7 @@ automake: tools/automake.ml
 	@ocamlopt -o $@ $<
 
 tools/automake.ml: tools/automake.mll
+	@echo "Building 'automake' tool"
 	@ocamllex $<
 
 # CLEAN
