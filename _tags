@@ -1,6 +1,6 @@
 <CompCert/lib> or <CompCert/cfrontend> or <CompCert/backend> or <CompCert/common> or <CompCert/driver> or <CompCert/ia32> or <CompCert/cparser> or <CompCert/debug>: include
-<extraction/extract> : include
+<extraction/extracted> : include
 true: package(str)
 true: package(unix)
 true: package(menhirLib)
-true: use_menhir
+true: use_menhir, not_hygienic
