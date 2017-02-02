@@ -43,7 +43,7 @@ Module Type EXT_NLSCHEDULER
        (Import Clks  : CLOCKS   Ids)
        (Import Syn   : NLSYNTAX Ids Op Clks).
 
-  Parameter schedule : list equation -> list positive.
+  Parameter schedule : ident -> list equation -> list positive.
   
 End EXT_NLSCHEDULER.
 
@@ -130,8 +130,8 @@ Module Type NLSCHEDULE
 
   Module SchSort := Sort SchEqOrder.
   
-  Definition schedule_eqs (eqs : list equation) : list equation :=
-    let sch := Sch.schedule eqs in
+  Definition schedule_eqs (f : ident) (eqs : list equation) : list equation :=
+    let sch := Sch.schedule f eqs in
     match ocombine sch eqs with
     | None => eqs
     | Some scheqs =>
@@ -148,12 +148,12 @@ Module Type NLSCHEDULE
   Qed.
   
   Lemma schedule_eqs_permutation:
-    forall eqs,
-      Permutation (schedule_eqs eqs) eqs.
+    forall f eqs,
+      Permutation (schedule_eqs f eqs) eqs.
   Proof.
     unfold schedule_eqs.
-    intro eqs.
-    destruct (ocombine (schedule eqs) eqs) eqn:Hoc; auto.
+    intros f eqs.
+    destruct (ocombine (schedule f eqs) eqs) eqn:Hoc; auto.
     rewrite <-SchSort.Permuted_sort.
     pose proof (ocombine_length _ _ _ Hoc) as Hlen.
     apply ocombine_combine in Hoc.
@@ -179,7 +179,7 @@ Module Type NLSCHEDULE
     match n with
       mk_node name nin nout vars eqs
               ingt0 outgt0 defd vout nodup good =>
-      mk_node name nin nout vars (schedule_eqs eqs)
+      mk_node name nin nout vars (schedule_eqs n.(n_name) eqs)
               ingt0 outgt0 _ _ nodup good
     end.
   Next Obligation.

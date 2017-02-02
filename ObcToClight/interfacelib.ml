@@ -116,7 +116,7 @@ module PrintNLustre = Nlustrelib.PrintFun
       type const = Interface.Op.const
       type unop  = Interface.Op.unop
       type binop = Interface.Op.binop
-   end) (PrintClightOpsFun (ClightOpNames))
+   end) (PrintClightOpsFun (LustreOpNames))
 
 module PrintObc = Obclib.PrintFun
   (struct

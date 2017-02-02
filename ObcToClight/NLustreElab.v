@@ -451,7 +451,8 @@ Section ElabExpressions.
       then if eck ==b xck
            then OK (EqFby x xck v0 e)
            else Error (err_loc loc (MSG "ill-clocked fby expression for "
-                                        :: CTX x :: msg_of_clocks xck eck))
+                                      :: CTX x :: MSG " "
+                                      :: msg_of_clocks xck eck))
       else Error (err_loc loc (MSG "ill-typed fby expression for "
                                    :: CTX x :: msg_of_types v0ty (typeof e)))
 
@@ -461,7 +462,8 @@ Section ElabExpressions.
       if eck ==b xck
       then OK (EqDef x xck e)
       else Error (err_loc loc (MSG "ill-clocked expression for "
-                                   :: CTX x :: msg_of_clocks xck eck))
+                                   :: CTX x :: MSG " "
+                                   :: msg_of_clocks xck eck))
     end.
   
   (** Properties *)

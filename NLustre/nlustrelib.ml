@@ -13,6 +13,10 @@
 open Format
 open Veluscommon
 
+open BinNums
+open BinPos
+open FMapPositive
+
 type ident = Common.ident
 type idents = ident list
 
@@ -240,12 +244,263 @@ module PrintFun (NL: SYNTAX)
 
 module SchedulerFun (NL: SYNTAX) :
   sig
-    val schedule : NL.equation list -> BinNums.positive list
+    val schedule : Common.ident -> NL.equation list -> BinNums.positive list
   end
   =
   struct
+    (* Status information for each equation *)
 
-    let schedule eqs = []
+    module EqSet = Set.Make (struct
+      type t = int
+      let compare = (Pervasives.compare : t -> t -> int)
+    end)
+
+    type eq_status = {
+      eq_id               : int;
+      clock_path          : int list;
+      mutable schedule    : positive option;
+      mutable depends_on  : EqSet.t;
+      mutable required_by : EqSet.t;
+    }
+
+    let drop_dep x eq =
+      eq.depends_on <- EqSet.remove x eq.depends_on
+
+    let clock_of_eq = function
+      | NL.EqDef (_, ck, _)
+      | NL.EqApp (_, ck, _, _)
+      | NL.EqFby (_, ck, _, _) -> ck
+
+    let rec clock_path = function
+      | NL.Cbase -> []
+      | NL.Con (ck, x, _) -> int_of_positive x :: clock_path ck
+
+    let new_eq_status i eq =
+    {
+      eq_id = i;
+      schedule = None;
+      depends_on  = EqSet.empty;
+      required_by = EqSet.empty;
+      clock_path = clock_path (clock_of_eq eq)
+    }
+
+    (* Add dependencies between equations *)
+
+    let add_clock_deps add_dep =
+      let rec go = function
+        | NL.Cbase -> ()
+        | NL.Con (ck, x, _) -> (add_dep x; go ck)
+      in
+      go
+
+    let add_exp_deps add_dep =
+      let rec go = function
+        | NL.Econst _ -> ()
+        | NL.Evar (x, _) -> add_dep x
+        | NL.Ewhen (e, x, _) -> (add_dep x; go e)
+        | NL.Eunop (_, e, _) -> go e
+        | NL.Ebinop (_, e1, e2, _) -> (go e1; go e2)
+      in go
+
+    let add_cexp_deps add_dep =
+      let go_exp = add_exp_deps add_dep in 
+      let rec go = function
+        | NL.Emerge (x, ce1, ce2) -> (add_dep x; go ce1; go ce2)
+        | NL.Eite (e, ce1, ce2) -> (go_exp e; go ce1; go ce2)
+        | NL.Eexp e -> go_exp e
+      in go
+
+    let add_dependencies add_dep = function
+      | NL.EqDef (_, ck, ce) ->
+          add_clock_deps add_dep ck;
+          add_cexp_deps add_dep ce
+      | NL.EqApp (_, ck, _ , es) ->
+          add_clock_deps add_dep ck;
+          List.iter (add_exp_deps add_dep) es
+      | NL.EqFby (_, ck, _ , e) ->
+          add_clock_deps add_dep ck;
+          add_exp_deps add_dep e
+
+    (* Map variable identifiers to equation ids *)
+
+    module PM = PositiveMap
+
+    let variable_map_from_eq (m, i) = function
+      | NL.EqDef (x, _, _) ->
+          (PM.add x (i, false) m, i + 1)
+      | NL.EqApp (xs, _, _, _) ->
+          (List.fold_left (fun m x -> PM.add x (i, false) m) m xs, i + 1)
+      | NL.EqFby (x, _, _, _) ->
+          (PM.add x (i, true) m, i + 1)              (* fbys break dependencies *)
+
+    let variable_map eqs =
+      fst (List.fold_left variable_map_from_eq (PM.empty, 0) eqs)
+
+    (* Queuing by clock *)
+
+    type clock_tree = {
+      mutable ready_eqs : eq_status list;
+      mutable subclocks : (int * clock_tree) list
+    }
+
+    let empty_clock_tree () = {
+      ready_eqs = [];
+      subclocks = []
+    }
+
+    let enqueue_eq ct ({ depends_on; clock_path } as eq) =
+      let rec seek ct = function
+        | [] -> ct.ready_eqs <- eq :: ct.ready_eqs
+        | x::ck ->
+            match List.assoc x ct.subclocks with
+            | ct' -> seek ct' ck
+            | exception Not_found -> begin
+                let ct' = empty_clock_tree () in
+                ct.subclocks <- (x, ct') :: ct.subclocks;
+                seek ct' ck
+              end
+      in
+      if EqSet.is_empty depends_on then seek ct clock_path
+
+    let schedule_from_queue ct eqs =
+      let enqueue = enqueue_eq ct in
+
+      let check_dep x y =
+        let eq_y = eqs.(y) in
+        drop_dep x eq_y;
+        enqueue eq_y in
+
+      let next_pos = let np = ref Coq_xH in
+                     fun () -> let r = !np in (np := Pos.succ !np; r) in
+
+      let enschedule ({eq_id; required_by} as eq) =
+        eq.schedule <- Some (next_pos ());
+        EqSet.iter (check_dep eq_id) required_by in
+
+      let rec continue ct =
+        match ct.ready_eqs with
+        | [] -> begin
+            match ct.subclocks with
+            | [] -> ()
+            | (x, ct')::_ ->
+                (* descend into clock tree / introduce an if *)
+                continue ct';
+                (* upon return we know that the subtree is done *)
+                ct.subclocks <- List.remove_assoc x ct.subclocks;
+                (* the if is closed, so reprocess the current level *)
+                continue ct
+            end
+        | ready ->
+            (* clear the list, ready to accept new additions *)
+            ct.ready_eqs <- [];
+            List.iter enschedule ready;
+            continue ct
+      in
+      continue ct
+
+    (* TODO: big flaw: does not optimize merges!
+             Two requirements:
+             1. put like merges together
+             2. descend into subclock after a merge
+                (since the if is already open)
+
+       Q: how to handle nested merges?
+       Look at Heptagon and Zélus...
+     *)
+
+    (* Find and print dependency loops *)
+
+    exception Found of int
+    exception Done of int list
+
+    let find_unscheduled i { schedule } =
+      match schedule with
+      | None -> raise (Found i)
+      | Some _ -> ()
+
+    let find_next_none eqs deps =
+      try
+        EqSet.iter
+          (fun i -> if eqs.(i).schedule = None then raise (Found i)) deps;
+        None
+      with Found i -> Some i
+
+    let find_dep_loop eqs =
+      try
+        Array.iteri find_unscheduled eqs; []
+      with Found start ->
+        let rec track i =
+          if EqSet.is_empty eqs.(i).depends_on
+          then (eqs.(i).schedule <- Some Coq_xH; [i])
+          else begin
+            match find_next_none eqs eqs.(i).depends_on with
+            | None -> failwith "find_dep_loop failed"
+            | Some i' ->
+                eqs.(i).depends_on <- EqSet.empty;
+                let r = track i' in
+                if eqs.(i).schedule <> None
+                then raise (Done (i::r))
+                else i::r
+          end
+        in
+        try track start
+        with Done r -> r
+
+    let print_eq_lhs nleqs fmt i =
+      let open Format in
+      match List.nth nleqs i with
+      | NL.EqDef (x, _, _) ->
+          pp_print_string fmt (extern_atom x)
+      | NL.EqApp (xs, _, _ , _) ->
+          fprintf fmt "{@[<hov 2>%a@]}"
+            (pp_print_list ~pp_sep:pp_print_space pp_print_string)
+            (List.map extern_atom xs)
+      | NL.EqFby (x, _, _ , _) ->
+          pp_print_string fmt (extern_atom x)
+
+    let print_loop nleqs fmt eqs =
+      Format.pp_print_list
+        ~pp_sep:(fun fmt () -> Format.fprintf fmt "@ -> ")
+        (print_eq_lhs nleqs)
+        fmt
+        (find_dep_loop eqs)
+
+    (* Scheduling algorithm *)
+
+    exception IncompleteSchedule
+
+    let extract_schedule { schedule } res =
+      match schedule with
+      | None -> raise IncompleteSchedule
+      | Some s -> s::res
+
+    let schedule f nleqs =
+      let eqs = Array.of_list (List.mapi new_eq_status nleqs) in
+
+      let varmap = variable_map nleqs in
+      let add xi yi =
+        eqs.(xi).depends_on  <- EqSet.add yi eqs.(xi).depends_on;
+        eqs.(yi).required_by <- EqSet.add xi eqs.(yi).required_by
+      in
+      let add_dep xi y =
+        match PM.find y varmap with
+        | None -> ()  (* ignore inputs *)
+        | Some (yi, false) -> add xi yi
+        | Some (yi, true)  -> add yi xi (* reverse-dep for fby *)
+      in
+      ignore (List.fold_left
+                (fun n e -> add_dependencies (add_dep n) e; n + 1) 0 nleqs);
+
+      let ct = empty_clock_tree () in
+      Array.iter (enqueue_eq ct) eqs;
+      schedule_from_queue ct eqs;
+      try
+        Array.fold_right extract_schedule eqs []
+      with IncompleteSchedule ->
+        Format.eprintf
+          "@[<hov 2>node %s@ has@ a@ dependency@ loop:@\n@[<hov 0>%a@].@]@."
+          (extern_atom f) (print_loop nleqs) eqs;
+        []
 
   end
 

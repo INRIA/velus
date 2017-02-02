@@ -24,3 +24,16 @@ module type PRINT_OPS =
     val prec_binop  : binop -> int * associativity
   end
 
+let int_of_positive =
+  let rec go w r = function
+    | BinNums.Coq_xI p -> go (w lsl 1) (r + w) p
+    | BinNums.Coq_xO p -> go (w lsl 1) r p
+    | BinNums.Coq_xH -> r + w
+  in
+  go 1 0
+
+let rec positive_of_int n =
+  if n = 1 then BinNums.Coq_xH
+  else if n land 1 = 0 then BinNums.Coq_xO (positive_of_int (n lsr 1))
+  else BinNums.Coq_xI (positive_of_int (n lsr 1))
+

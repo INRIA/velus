@@ -34,7 +34,7 @@ Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
-Parameter schedule : list NL.Syn.equation -> list positive.
+Parameter schedule : ident -> list NL.Syn.equation -> list positive.
 Parameter print_snlustre: NL.Syn.global -> unit.
 Parameter print_obc: Obc.Syn.program -> unit.
 Parameter do_fusion : unit -> bool.
