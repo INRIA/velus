@@ -8,7 +8,7 @@ let ident = ['A'-'Z' 'a'-'z' '_' '0'-'9'] ['A'-'Z' 'a'-'z' '0'-'9' '_' '-']*
 let path = (ident '/')* ident
 let lib = (ident '.')* ident
 let blank = [' ' '\t']
-            
+
 rule scan = parse
   | '\n' { Lexing.new_line lexbuf; scan lexbuf }
   | ("-R" blank+ ('.' | path) blank+ lib) as s { libs := s :: !libs; scan lexbuf }
@@ -26,10 +26,10 @@ rule scan = parse
   ]
 
   let output_endline oc s = output_string oc (s ^ "\n")
- 
+
   let print oc sep first last l =
     let n = length l in
-    if n = 0 then output_endline oc "" else begin 
+    if n = 0 then output_endline oc "" else begin
       output_string oc first;
       let rec aux = function
         | [] -> ()
@@ -38,14 +38,14 @@ rule scan = parse
       in aux l;
       output_string oc last
     end
-    
+
   let print_rule oc (names, deps, cmds) =
     print oc " " "" ": " names;
     print oc " " "" "\n" deps;
     print oc "\n\t" "\t" "\n\n" cmds
-      
+
   let print_var oc var =
-    print oc "\\\n  " (var ^ "=") "\n\n" 
+    print oc "\\\n  " (var ^ "=") "\n\n"
 
   let print_section oc = Printf.fprintf oc "\n# %s\n\n"
 
@@ -53,22 +53,22 @@ rule scan = parse
   let extraction = ref ""
   let extracted = ref ""
   let makefile = ref ""
-    
+
   let speclist = [
     "-e", Arg.Set_string extraction, " Set the Coq extraction file, use in conjonction with '-f'.";
     "-f", Arg.Set_string extracted, " Set the extracted files directory, default: directory part of '-e'.";
     "-o", Arg.Set_string makefile, " Set the name of the produced Makefile, default: standard output."
   ]
-  
+
   let usage = "automake [OPTIONS] <_CoqProject file>"
-   
+
   let process file =
     let ic = open_in file in
     scan (Lexing.from_channel ic);
     close_in ic;
 
     let oc = if !makefile = "" then stdout else open_out !makefile in
-    
+
     print_section oc "FILES";
     print_var oc "COQLIBS" (rev !libs);
     print_var oc "VFILES" (rev !files);
@@ -106,11 +106,11 @@ rule scan = parse
           "touch " ^ stamp
         ]
       ];
-        
+
     output_endline oc "-include .depend";
-    
-    if !makefile <> "" then close_out oc 
-    
+
+    if !makefile <> "" then close_out oc
+
   let () =
     Arg.parse speclist process usage
 }

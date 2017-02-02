@@ -11,6 +11,7 @@ COQPROJECT=_CoqProject
 
 EXTRACTION=extraction
 EXTRACTED=$(EXTRACTION)/extracted
+$(shell mkdir -p $(EXTRACTED) >/dev/null)
 
 # Menhir includes from CompCert
 include $(COMPCERTDIR)/Makefile.menhir
@@ -44,7 +45,7 @@ parser:
 # VELUS COQ
 proof: compcert $(MAKEFILEAUTO)
 	@test -f .depend || $(MAKE) -s -f $(MAKEFILEAUTO) depend
-	@$(MAKE) -s -f $(MAKEFILEAUTO) all	  	
+	@$(MAKE) -s -f $(MAKEFILEAUTO) all
 
 $(MAKEFILEAUTO): automake $(COQPROJECT)
 	@./$< -e $(EXTRACTION)/Extraction.v -f $(EXTRACTED) -o $@ $(COQPROJECT)
@@ -60,7 +61,7 @@ extraction: parser proof
 						Obc/obclib.ml\
 						ObcToClight/interfacelib.ml
 # VELUS
-velus: extraction $(VELUSMAIN).ml veluslib.ml 
+velus: extraction $(VELUSMAIN).ml veluslib.ml
 	@find $(COMPCERTDIR) -name '*.cm*' -delete
 	@ocamlbuild -use-ocamlfind -j 8 -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20 $(VELUSMAIN).native
 	@mv $(VELUSMAIN).native $@
@@ -76,7 +77,7 @@ tools/automake.ml: tools/automake.mll
 	@ocamllex $<
 
 # CLEAN
-clean: 
+clean:
 	@test -f $(MAKEFILEAUTO) && $(MAKE) -s -f $(MAKEFILEAUTO) $@
 	@rm -f $(MAKEFILEAUTO)
 	@rm -f automake tools/automake.ml tools/automake.cm* tools/automake.o
