@@ -1,0 +1,8 @@
+B _build
+B _build/extraction/extract
+B _build/CompCert/*
+S .
+S Lustre/Parser
+S NLustre
+S Obc
+S ObcToClight
