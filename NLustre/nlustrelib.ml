@@ -267,6 +267,9 @@ module SchedulerFun (NL: SYNTAX) :
       eq.depends_on <- EqSet.remove x eq.depends_on
 
     let clock_of_eq = function
+      (* Push merges down a level to improve grouping *)
+      | NL.EqDef (_, ck, NL.Emerge (y, _, _)) -> NL.Con (ck, y, true)
+      (* Standard cases *)
       | NL.EqDef (_, ck, _)
       | NL.EqApp (_, ck, _, _)
       | NL.EqFby (_, ck, _, _) -> ck
@@ -331,7 +334,7 @@ module SchedulerFun (NL: SYNTAX) :
       | NL.EqApp (xs, _, _, _) ->
           (List.fold_left (fun m x -> PM.add x (i, false) m) m xs, i + 1)
       | NL.EqFby (x, _, _, _) ->
-          (PM.add x (i, true) m, i + 1)              (* fbys break dependencies *)
+          (PM.add x (i, true) m, i + 1)   (* fbys break dependencies *)
 
     let variable_map eqs =
       fst (List.fold_left variable_map_from_eq (PM.empty, 0) eqs)
