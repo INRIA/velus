@@ -248,12 +248,24 @@ module SchedulerFun (NL: SYNTAX) :
   end
   =
   struct
-    (* Status information for each equation *)
+    (** Status information for each equation *)
 
     module EqSet = Set.Make (struct
       type t = int
       let compare = (Pervasives.compare : t -> t -> int)
     end)
+
+    (* For each equation, we track
+       - id: index in the array of equations;
+       - clock_path: sequence of variable identifiers ordered from
+             most rapid to least rapid and ignoring values, i.e.,
+             both "base when a when b" and "base whenot a whenot b"
+             become "[a; b]", reflecting the nesting of if/then/elses
+             to be produced in the target code;
+       - schedule: "None" when unscheduled and "Some i" when scheduled
+             as the ith equation (from 1);
+       - depends_on: these equations must be scheduled beforehand;
+       - required_by: these equations must be scheduled afterward. *)
 
     type eq_status = {
       eq_id               : int;
@@ -266,13 +278,16 @@ module SchedulerFun (NL: SYNTAX) :
     let drop_dep x eq =
       eq.depends_on <- EqSet.remove x eq.depends_on
 
-    let clock_of_eq = function
-      (* Push merges down a level to improve grouping *)
-      | NL.EqDef (_, ck, NL.Emerge (y, _, _)) -> NL.Con (ck, y, true)
+    let grouping_clock_of_eq =
+      let open NL in
+      function
+      (* Push merges/iftes down a level to improve grouping *)
+      | EqDef (_, ck, Eite (Evar (y, _), _, _))
+      | EqDef (_, ck, Emerge (y, _, _)) -> Con (ck, y, true)
       (* Standard cases *)
-      | NL.EqDef (_, ck, _)
-      | NL.EqApp (_, ck, _, _)
-      | NL.EqFby (_, ck, _, _) -> ck
+      | EqDef (_, ck, _)
+      | EqApp (_, ck, _, _)
+      | EqFby (_, ck, _, _) -> ck
 
     let rec clock_path = function
       | NL.Cbase -> []
@@ -284,10 +299,10 @@ module SchedulerFun (NL: SYNTAX) :
       schedule = None;
       depends_on  = EqSet.empty;
       required_by = EqSet.empty;
-      clock_path = clock_path (clock_of_eq eq)
+      clock_path = clock_path (grouping_clock_of_eq eq)
     }
 
-    (* Add dependencies between equations *)
+    (** Add dependencies between equations *)
 
     let add_clock_deps add_dep =
       let rec go = function
@@ -324,22 +339,37 @@ module SchedulerFun (NL: SYNTAX) :
           add_clock_deps add_dep ck;
           add_exp_deps add_dep e
 
-    (* Map variable identifiers to equation ids *)
+    (** Map variable identifiers to equation ids *)
 
     module PM = PositiveMap
 
+    (* Each variable identifier is associated with a pair giving the
+       equation (id) that defines it and whether that equation is a fby. *)
     let variable_map_from_eq (m, i) = function
       | NL.EqDef (x, _, _) ->
           (PM.add x (i, false) m, i + 1)
       | NL.EqApp (xs, _, _, _) ->
           (List.fold_left (fun m x -> PM.add x (i, false) m) m xs, i + 1)
       | NL.EqFby (x, _, _, _) ->
-          (PM.add x (i, true) m, i + 1)   (* fbys break dependencies *)
+          (PM.add x (i, true) m, i + 1)
 
     let variable_map eqs =
       fst (List.fold_left variable_map_from_eq (PM.empty, 0) eqs)
 
-    (* Queuing by clock *)
+    (** Queuing by clock *)
+
+    (* We keep a queue of equations that can be scheduled (i.e., their
+       dependencies have already been scheduled). The queue is organized
+       as a tree according to the equation clock paths. Descending a level
+       in the tree introduces an "if" the target code, while ascending
+       closes one. The idea is to group equations according to their clock
+       paths and schedule as many as possible without changing level.
+
+       When there are no more equations to schedule in a sub-branch, the
+       branch is dropped completely. This may generate more "garbage" than
+       necessary. An alternative would be to add a mutable boolean field
+       at each level indicating whether a subbranch contains equations
+       to schedule. *)
 
     type clock_tree = {
       mutable ready_eqs : eq_status list;
@@ -351,6 +381,8 @@ module SchedulerFun (NL: SYNTAX) :
       subclocks = []
     }
 
+    (* If an equation is ready to schedule, place it in the queue according
+       to its clock path. *)
     let enqueue_eq ct ({ depends_on; clock_path } as eq) =
       let rec seek ct = function
         | [] -> ct.ready_eqs <- eq :: ct.ready_eqs
@@ -373,13 +405,21 @@ module SchedulerFun (NL: SYNTAX) :
         drop_dep x eq_y;
         enqueue eq_y in
 
+      (* Track the scheduled position. *)
       let next_pos = let np = ref Coq_xH in
                      fun () -> let r = !np in (np := Pos.succ !np; r) in
 
+      (* Schedule an equation and update any that depend on it. *)
       let enschedule ({eq_id; required_by} as eq) =
         eq.schedule <- Some (next_pos ());
         EqSet.iter (check_dep eq_id) required_by in
 
+      (* Iteratively schedule at the same level of the clock tree whenever
+         possible (since it does not introduce new "if"s and it maximizes
+         the chances of scheduling more equations later), otherwise descend
+         into the tree if possible, and only ascend when absolutely
+         necessary (since we would have to close and open "if"s to return
+         to the same level). *)
       let rec continue ct =
         match ct.ready_eqs with
         | [] -> begin
@@ -390,7 +430,7 @@ module SchedulerFun (NL: SYNTAX) :
                 continue ct';
                 (* upon return we know that the subtree is done *)
                 ct.subclocks <- List.remove_assoc x ct.subclocks;
-                (* the if is closed, so reprocess the current level *)
+                (* the "if" is closed, so reprocess the current level *)
                 continue ct
             end
         | ready ->
@@ -401,18 +441,12 @@ module SchedulerFun (NL: SYNTAX) :
       in
       continue ct
 
-    (* TODO: big flaw: does not optimize merges!
-             Two requirements:
-             1. put like merges together
-             2. descend into subclock after a merge
-                (since the if is already open)
+    (** Find and print dependency loops *)
 
-       Q: how to handle nested merges?
-       Look at Heptagon and Zélus...
-     *)
+    (* This code exists only to print an explanatory error message when
+       scheduling gets stuck. *)
 
-    (* Find and print dependency loops *)
-
+    (* Use local exceptions in OCaml >= 4.04... *)
     exception Found of int
     exception Done of int list
 
@@ -442,8 +476,9 @@ module SchedulerFun (NL: SYNTAX) :
                 eqs.(i).depends_on <- EqSet.empty;
                 let r = track i' in
                 if eqs.(i).schedule <> None
-                then raise (Done (i::r))
-                else i::r
+                then (* cycle found; ignore any prefix leading to it. *)
+                     raise (Done (i::r))
+                else (* "rewind" along cycle *) i::r
           end
         in
         try track start
@@ -468,7 +503,7 @@ module SchedulerFun (NL: SYNTAX) :
         fmt
         (find_dep_loop eqs)
 
-    (* Scheduling algorithm *)
+    (** Scheduling algorithm *)
 
     exception IncompleteSchedule
 
@@ -489,7 +524,7 @@ module SchedulerFun (NL: SYNTAX) :
         match PM.find y varmap with
         | None -> ()  (* ignore inputs *)
         | Some (yi, false) -> add xi yi
-        | Some (yi, true)  -> add yi xi (* reverse-dep for fby *)
+        | Some (yi, true)  -> add yi xi (* reverse-deps for fby *)
       in
       ignore (List.fold_left
                 (fun n e -> add_dependencies (add_dep n) e; n + 1) 0 nleqs);
