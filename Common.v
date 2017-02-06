@@ -36,35 +36,6 @@ Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
 
-Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
-  existsb (fun y => ident_eqb (fst y) x).
-
-Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
-  match find (fun y => ident_eqb (fst y) x) xs with
-  | Some (_, a) => Some a
-  | None => None
-  end.
-
-Module Type IDS.
-  Parameter self : ident.
-  Parameter out  : ident.
-
-  Parameter step  : ident.
-  Parameter reset : ident.
-
-  Parameter default : ident.
-
-  Definition reserved : idents := [ self; out ].
-
-  Definition methods  : idents := [ step; reset ].
-
-  Axiom reserved_nodup: NoDup reserved.
-  Axiom methods_nodup: NoDup methods.
-
-  Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
-    ~In (fst xty) reserved.
-
-End IDS.
 
 (** ** Properties *)
 
@@ -93,6 +64,49 @@ Lemma In_dec:
 Proof.
   intros i m; unfold PS.In; case (PS.mem i m); auto.
 Qed.
+
+Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
+  existsb (fun y => ident_eqb (fst y) x).
+
+Lemma mem_assoc_ident_false:
+  forall {A} x xs (t: A),
+    mem_assoc_ident x xs = false ->
+    ~ In (x, t) xs.
+Proof.
+  intros ** Hin.
+  apply Bool.not_true_iff_false in H.
+  apply H.
+  apply existsb_exists.
+  exists (x, t); split; auto.
+  apply ident_eqb_refl.
+Qed.
+
+Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
+  match find (fun y => ident_eqb (fst y) x) xs with
+  | Some (_, a) => Some a
+  | None => None
+  end.
+
+Module Type IDS.
+  Parameter self : ident.
+  Parameter out  : ident.
+
+  Parameter step  : ident.
+  Parameter reset : ident.
+
+  Parameter default : ident.
+
+  Definition reserved : idents := [ self; out ].
+
+  Definition methods  : idents := [ step; reset ].
+
+  Axiom reserved_nodup: NoDup reserved.
+  Axiom methods_nodup: NoDup methods.
+
+  Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
+    ~In (fst xty) reserved.
+
+End IDS.
 
 (** *** Operator abstraction *)
 

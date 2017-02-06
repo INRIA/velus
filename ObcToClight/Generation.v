@@ -54,7 +54,7 @@ Fixpoint translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
   | Var x ty =>
     let ty := cltype ty in
     match m.(m_out) with
-    | [] | [_] => Clight.Etempvar x ty
+    | [] (* | [_] *) => Clight.Etempvar x ty
     | xs =>
       if mem_assoc_ident x xs then
         deref_field out (prefix_fun c.(c_name) m.(m_name)) x ty
@@ -84,7 +84,7 @@ Definition funcall (y: option ident) (f: ident) (args: list Clight.expr) : Cligh
 
 Definition assign (x: ident) (ty: Ctypes.type) (clsid: ident) (m: method): Clight.expr -> Clight.statement :=
   match m.(m_out) with
-    | [] | [_] => Clight.Sset x
+    | [] (* | [_] *) => Clight.Sset x
     | xs =>
       if mem_assoc_ident x xs then
         Clight.Sassign (deref_field out (prefix_fun clsid m.(m_name)) x ty)
@@ -119,12 +119,12 @@ Definition binded_funcall
       | [], [] =>
         let args := ptr_obj owner cls obj :: args in
         funcall None (prefix_fun cls f) args
-      | [y], [(y', t)] =>
-        let args := ptr_obj owner cls obj :: args in
-        let c_t := cltype t in
-        Clight.Ssequence
-          (funcall (Some (Ident.prefix f y')) (prefix_fun cls f) args)
-          (assign y c_t owner caller (Clight.Etempvar (Ident.prefix f y') c_t))
+      (* | [y], [(y', t)] => *)
+      (*   let args := ptr_obj owner cls obj :: args in *)
+      (*   let c_t := cltype t in *)
+      (*   Clight.Ssequence *)
+      (*     (funcall (Some (Ident.prefix f y')) (prefix_fun cls f) args) *)
+      (*     (assign y c_t owner caller (Clight.Etempvar (Ident.prefix f y') c_t)) *)
       | _, _ =>
         let tyout := type_of_inst (prefix_fun cls f) in
         let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in 
@@ -186,7 +186,7 @@ Fixpoint rec_instance_methods (s: stmt) (m: M.t ident): M.t ident :=
   | Comp s1 s2 => rec_instance_methods s2 (rec_instance_methods s1 m)
   | Call ys cls o f _ =>
     match ys with
-    | [] | [_] => m
+    | [] (* | [_] *) => m
     | _ => M.add (o, f) cls m
     end
   | _ => m
@@ -201,34 +201,34 @@ Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
          (prefix_out o f, type_of_inst (prefix_fun cid f))
       ) (M.elements out_vars).
 
-Require Import FMapPositive.
-Module M' := PositiveMap.
+(* Require Import FMapPositive. *)
+(* Module M' := PositiveMap. *)
 
-Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: M'.t Ctypes.type): M'.t Ctypes.type :=
-  match s with
-  | Ifte _ s1 s2  
-  | Comp s1 s2 => rec_instance_methods_temp prog s2 (rec_instance_methods_temp prog s1 m)
-  | Call ys cls o f _ =>
-    match find_class cls prog with
-    | Some (c, _) =>
-      match find_method f c.(c_methods) with
-      | Some m' =>
-        match ys, m'.(m_out) with
-        | [_], [(y', t)] => M'.add (Ident.prefix f y') (cltype t) m
-        | _, _ => m
-        end
-      | None => m
-      end
-    | None => m
-    end
-  | _ => m
-  end.
+(* Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: M'.t Ctypes.type): M'.t Ctypes.type := *)
+(*   match s with *)
+(*   | Ifte _ s1 s2   *)
+(*   | Comp s1 s2 => rec_instance_methods_temp prog s2 (rec_instance_methods_temp prog s1 m) *)
+(*   | Call ys cls o f _ => *)
+(*     match find_class cls prog with *)
+(*     | Some (c, _) => *)
+(*       match find_method f c.(c_methods) with *)
+(*       | Some m' => *)
+(*         match ys, m'.(m_out) with *)
+(*         | [_], [(y', t)] => M'.add (Ident.prefix f y') (cltype t) m *)
+(*         | _, _ => m *)
+(*         end *)
+(*       | None => m *)
+(*       end *)
+(*     | None => m *)
+(*     end *)
+(*   | _ => m *)
+(*   end. *)
   
-Definition instance_methods_temp (prog: program) (m: method): M'.t Ctypes.type :=
-  rec_instance_methods_temp prog m.(m_body) (@M'.empty Ctypes.type).
+(* Definition instance_methods_temp (prog: program) (m: method): M'.t Ctypes.type := *)
+(*   rec_instance_methods_temp prog m.(m_body) (@M'.empty Ctypes.type). *)
 
-Definition make_out_temps (out_temps: M'.t Ctypes.type): list (ident * Ctypes.type) :=
-  M'.elements out_temps.
+(* Definition make_out_temps (out_temps: M'.t Ctypes.type): list (ident * Ctypes.type) := *)
+(*   M'.elements out_temps. *)
 
 Definition make_in_arg (arg: ident * type): Clight.expr :=
   let (x, ty) := arg in
@@ -238,7 +238,7 @@ Definition translate_method (prog: program) (c: class) (m: method)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
   let body := translate_stmt prog c m m.(m_body) in
   let out_vars := make_out_vars (instance_methods m) in
-  let out_temps := make_out_temps (instance_methods_temp prog m) in
+  (* let out_temps := make_out_temps (instance_methods_temp prog m) in *)
   let self := (self, type_of_inst_p c.(c_name)) in
   let ins := map translate_param m.(m_in) in
   let out := (out, type_of_inst_p (prefix_fun c.(c_name) m.(m_name))) in
@@ -247,14 +247,14 @@ Definition translate_method (prog: program) (c: class) (m: method)
   match m.(m_out) with
   | [] =>
     let args := self :: ins in
-    fundef args out_vars (out_temps ++ vars) Ctypes.Tvoid (return_none body)
-  | [(y, t) as yt] =>
-    let args := self :: ins in
-    let c_t := cltype t in
-    fundef args out_vars ((y, c_t) :: out_temps ++ vars) c_t (return_some body (make_in_arg yt))
+    fundef args out_vars ( (*out_temps ++ *) vars) Ctypes.Tvoid (return_none body)
+  (* | [(y, t) as yt] => *)
+  (*   let args := self :: ins in *)
+  (*   let c_t := cltype t in *)
+  (*   fundef args out_vars ((y, c_t) :: out_temps ++ vars) c_t (return_some body (make_in_arg yt)) *)
   | _ :: _ =>
     let args := self :: out :: ins in
-    fundef args out_vars (out_temps ++ vars) Ctypes.Tvoid (return_none body)
+    fundef args out_vars ((* out_temps ++ *) vars) Ctypes.Tvoid (return_none body)
   end).
 
 Definition make_methods (prog: program) (c: class)
@@ -278,13 +278,15 @@ Definition translate_out (c: class) (m: method): Ctypes.composite_definition :=
     (map translate_param m.(m_out))
     Ctypes.noattr.
 
-Definition make_out (c: class): list Ctypes.composite_definition :=
+Definition filter_out: list Ctypes.composite_definition -> list Ctypes.composite_definition :=
   filter (fun co => match co with
                  | Ctypes.Composite _ _ [] _
-                 | Ctypes.Composite _ _ [_] _ => false
+                   (* | Ctypes.Composite _ _ [_] _ *) => false
                  | _ => true
-                 end)
-         (map (translate_out c) c.(c_methods)).
+                 end).
+
+Definition make_out (c: class): list Ctypes.composite_definition :=
+  filter_out (map (translate_out c) c.(c_methods)).
 
 Definition translate_class (prog: program) (c: class)
   : list Ctypes.composite_definition * list (ident * AST.globdef Clight.fundef Ctypes.type) :=
@@ -337,9 +339,9 @@ Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident 
   | [] =>
     let args := p_self :: args in
     funcall None (prefix_fun node step) args
-  | [(y, t)] =>
-    let args := p_self :: args in
-    funcall (Some y) (prefix_fun node step) args
+  (* | [(y, t)] => *)
+  (*   let args := p_self :: args in *)
+  (*   funcall (Some y) (prefix_fun node step) args *)
   | _ =>
     let args := p_self :: p_out :: args in
     funcall None (prefix_fun node step) args
@@ -356,7 +358,7 @@ Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes
   let body := return_zero (Clight.Ssequence (reset_call node) loop) in
   let vars := (self, type_of_inst node)
                 :: match m.(m_out) with
-                   | [] | [_] => []
+                   | [] (* | [_]  *) => []
                    | _ =>
                      (Ident.prefix out step, type_of_inst (prefix_fun node step)) :: []
                    end
