@@ -1574,15 +1574,17 @@ Section PRESERVATION.
       (* Var x ty : "x" *)
       - simpl; destruct (mem_assoc_ident x caller.(m_out)) eqn:E.
         + rewrite sep_swap in Hrep.
-         destruct caller.(m_out) eqn: Out.
-          * rewrite match_out_nil in Hrep; auto.
-            rewrite sep_swap3 in Hrep.
-            eapply eval_temp_var; eauto.
-            admit.
-          * simpl in E; rewrite E.
-            eapply eval_out_field; eauto.
+          destruct caller.(m_out) eqn: Out.
+          * simpl in E; discriminate. 
+          * rewrite match_out_cons in Hrep; eauto.
+            destruct Hrep as (Hrep & ? & ?).
+            simpl in E; rewrite E.
+            eapply eval_out_field; eauto; now rewrite Out.
         + rewrite sep_swap4 in Hrep.
-          eapply eval_temp_var; eauto.
+          destruct caller.(m_out) eqn: Out.
+          * eapply eval_temp_var; eauto; now rewrite Out.
+          * simpl in E; rewrite E.
+            eapply eval_temp_var; eauto; now rewrite Out.
 
       (* State x ty : "self->x" *)
       - eapply eval_self_field; eauto.
