@@ -89,9 +89,9 @@ Module Export Ids <: IDS.
   Definition step := pos_of_str "step".
   Definition reset := pos_of_str "reset".
 
-  Definition reserved : list ident := [ self; out ].
+  Definition reserved : idents := [ self; out ].
 
-  Definition methods  : list ident := [ step; reset ].
+  Definition methods  : idents := [ step; reset ].
 
   (* The following identifier is (provably) never used in practice. *)
   Definition default : ident := pos_of_str "$$$$".

@@ -31,7 +31,7 @@ Module Type WELLFORMED
   Section IsWellSch.
 
     Variable memories : PS.t.
-    Variable arg: list ident.
+    Variable arg: idents.
 
     (**
 
@@ -235,7 +235,7 @@ An NLustre program is well defined if
       | (false, _, _) => (false, PS.empty, PS.empty)
       end.
 
-    Definition well_sch (args: list ident) (eqs: list equation) : bool :=
+    Definition well_sch (args: idents) (eqs: list equation) : bool :=
       fst (fst (List.fold_right check_eq
                                 (true,
                                  PS.empty,

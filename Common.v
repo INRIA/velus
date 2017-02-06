@@ -54,9 +54,9 @@ Module Type IDS.
 
   Parameter default : ident.
 
-  Definition reserved : list ident := [ self; out ].
+  Definition reserved : idents := [ self; out ].
 
-  Definition methods  : list ident := [ step; reset ].
+  Definition methods  : idents := [ step; reset ].
 
   Axiom reserved_nodup: NoDup reserved.
   Axiom methods_nodup: NoDup methods.

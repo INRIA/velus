@@ -109,15 +109,15 @@ Module Type FUSION
     - inv Hstmt.
       apply exp_eval_extend_mem_by_obj.
       unfold adds.
-      remember (combine l rvs) as lr eqn:Heq.
-      assert (forall x, In x lr -> In (fst x) l) as Hin
+      remember (combine i rvs) as lr eqn:Heq.
+      assert (forall x, In x lr -> In (fst x) i) as Hin
         by (destruct x; subst; apply in_combine_l).
       clear Heq. induction lr as [|x lr]; auto. 
       destruct x as [x v'].
       apply exp_eval_extend_env.
       + intro HH; apply (Hfree x HH).
         constructor.
-        change (In (fst (x, v')) l).
+        change (In (fst (x, v')) i).
         apply Hin, in_eq. 
       + apply IHlr. intros y Hin'. apply Hin.
         constructor (assumption).

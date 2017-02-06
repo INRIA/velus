@@ -243,7 +243,7 @@ environment.
     Definition sem_var H (x: ident)(xs: stream value): Prop :=
       lift (fun base => sem_var_instant) H x xs.
 
-    Definition sem_vars H (x: list ident)(xs: stream (list value)): Prop :=
+    Definition sem_vars H (x: idents)(xs: stream (list value)): Prop :=
       lift (fun base R => Forall2 (sem_var_instant R)) H x xs.
 
     Definition sem_laexp H ck (e: lexp)(xs: stream value): Prop :=
@@ -353,7 +353,7 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqApp_case :
       forall (bk: stream bool)
              (H     : history)
-             (y     : list ident)
+             (y     : idents)
              (ck    : clock)
              (f     : ident)
              (les   : lexps)

@@ -162,7 +162,7 @@ Fixpoint msg_of_clock (ck: clock) : errmsg :=
   | Con ck x false => msg_of_clock ck ++ MSG " onot " :: CTX x :: nil
   end.
 
-Fixpoint msg_ident_list (xs: list ident) :=
+Fixpoint msg_ident_list (xs: idents) :=
   match xs with
   | [] => []
   | [x] => [CTX x]
@@ -402,7 +402,7 @@ Section ElabExpressions.
     end.
 
   Fixpoint check_result_list (loc: astloc) (ck: clock)
-                                           (xs: list ident) (tys: list type)
+                                           (xs: idents) (tys: list type)
                                                                 : res PS.t :=
     match xs, tys with
     | nil, nil => OK PS.empty

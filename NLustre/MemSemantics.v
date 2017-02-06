@@ -149,7 +149,7 @@ enough: it does not support the internal fixpoint introduced by
              (H      : history)
              (M      : memory)
              (y      : ident)
-             (ys     : list ident)
+             (ys     : idents)
              (ck     : clock)
              (f      : ident)
              (M'     : memory)

@@ -636,7 +636,7 @@ for all [Is_free_exp x e]. *)
               (Hsems: msem_equations G bk H M alleqs)
               (prog: program)
               (Hnode: equiv_prog G prog)
-              (inputs: list ident)
+              (inputs: idents)
               (Hinput: forall input, In input inputs -> ~ PS.In input mems)
               (n: nat)
               (Hbase: bk n = true)
@@ -1655,7 +1655,7 @@ for all [Is_free_exp x e]. *)
               (H: history)
               (M: memory)
               (mems: PS.t)
-              (inputs: list ident).
+              (inputs: idents).
 
 
     Lemma is_reset_correct:
@@ -1842,7 +1842,7 @@ for all [Is_free_exp x e]. *)
               (main  : ident)
               (ins   : stream (list const))
               (outs  : stream (list const))
-              (r     : list ident)
+              (r     : idents)
               (r_nodup: NoDup r)
               (r_len: forall n, length r = length (outs n))
               (obj   : ident)

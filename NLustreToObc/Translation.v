@@ -48,7 +48,7 @@ Module Type TRANSLATION
 
   (* definition is needed in signature *)
   Definition gather_eq
-             (acc: list ident * list (ident * ident)) (eq: equation) :=
+             (acc: idents * list (ident * ident)) (eq: equation) :=
     match eq with
     | EqDef _ _ _   => acc
     | EqApp xs _ f _ =>
@@ -62,14 +62,14 @@ Module Type TRANSLATION
 
   (* definition is needed in signature *)
   Definition gather_eqs
-             (eqs: list equation) : list ident * list (ident * ident) :=
+             (eqs: list equation) : idents * list (ident * ident) :=
     List.fold_left gather_eq eqs ([], []).
 
 
   (* XXX: computationally, the following [gather_*] are useless: they
      are only used to simplify the proofs. See [gather_eqs_fst_spec]
      and [gather_eqs_snd_spec]. *)
-  Definition gather_mem (eqs: list equation): list ident :=
+  Definition gather_mem (eqs: list equation): idents :=
     concatMap (fun eq => match eq with
                         | EqDef _ _ _
                         | EqApp _ _ _ _ => []
@@ -85,7 +85,7 @@ Module Type TRANSLATION
                         | i :: _ => [(i,f)]
                         end
                       end) eqs.
-  Definition gather_app_vars (eqs: list equation): list ident :=
+  Definition gather_app_vars (eqs: list equation): idents :=
     concatMap (fun eq => match eq with
                       | EqDef _ _ _
                       | EqFby _ _ _ _ => []
@@ -167,7 +167,7 @@ Module Type TRANSLATION
     List.fold_left translate_reset_eqn eqns Skip.
 
   (* definition is needed in signature *)
-  Definition ps_from_list (l: list ident) : PS.t :=
+  Definition ps_from_list (l: idents) : PS.t :=
     List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
@@ -187,7 +187,7 @@ Module Type TRANSLATION
   Instance eq_equiv : Equivalence PS.eq.
   Proof. firstorder. Qed.
 
-  Instance List_fold_left_add_Proper (xs: list ident) :
+  Instance List_fold_left_add_Proper (xs: idents) :
     Proper (PS.eq ==> PS.eq)
            (List.fold_left (fun s i => PS.add i s) xs).
   Proof.
