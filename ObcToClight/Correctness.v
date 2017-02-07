@@ -1254,16 +1254,17 @@ Section PRESERVATION.
     - rewrite <-sepemp_left; auto.
   Qed.
 
-  Lemma match_out_cons:
-    forall c f ve le m outb outco P x xs,
-      f.(m_out) = x :: xs ->
+  Lemma match_out_notnil:
+    forall c f ve le m outb outco P,
+      f.(m_out) <> [] ->
       (m |= match_out c f ve le outb outco ** P <->
        m |= blockrep gcenv ve outco.(co_members) outb ** P
        /\ le ! out = Some (Vptr outb Int.zero)
        /\ gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some outco).
   Proof.
     intros ** Notnil.
-    unfold match_out; split; intros ** H; rewrite Notnil in *.
+    unfold match_out; split; intros ** H; destruct f.(m_out);
+      try (contradict Notnil; reflexivity).
     - repeat rewrite sep_assoc in H; repeat rewrite sep_pure in H; tauto.
     - repeat rewrite sep_assoc; repeat rewrite sep_pure; tauto. 
   Qed.
@@ -1552,7 +1553,6 @@ Section PRESERVATION.
     Lemma expr_eval_simu:
       forall me ve e le m sb sofs outb outco P ex v,
         m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
-            (* ** blockrep gcenv ve outco.(co_members) outb *)
             ** match_out owner caller ve le outb outco 
             ** subrep caller e
             ** varsrep caller ve le
@@ -1560,8 +1560,6 @@ Section PRESERVATION.
         wt_env ve (meth_vars caller) ->
         wt_mem me prog owner ->
         le ! self = Some (Vptr sb sofs) ->
-        (* le ! out = Some (Vptr outb Int.zero) -> *)
-        (* gcenv ! (prefix_fun owner.(c_name) caller.(m_name)) = Some outco -> *)
         0 <= Int.unsigned sofs ->
         wt_exp owner.(c_mems) (meth_vars caller) ex ->
         exp_eval me ve ex v ->
@@ -1576,10 +1574,12 @@ Section PRESERVATION.
         + rewrite sep_swap in Hrep.
           destruct caller.(m_out) eqn: Out.
           * simpl in E; discriminate. 
-          * rewrite match_out_cons in Hrep; eauto.
-            destruct Hrep as (Hrep & ? & ?).
-            simpl in E; rewrite E.
-            eapply eval_out_field; eauto; now rewrite Out.
+          *{ rewrite match_out_notnil in Hrep; eauto.
+             - destruct Hrep as (Hrep & ? & ?).
+               simpl in E; rewrite E.
+               eapply eval_out_field; eauto; now rewrite Out.
+             - rewrite Out; intro; discriminate.
+           }
         + rewrite sep_swap4 in Hrep.
           destruct caller.(m_out) eqn: Out.
           * eapply eval_temp_var; eauto; now rewrite Out.
@@ -1639,15 +1639,13 @@ Section PRESERVATION.
     Lemma exprs_eval_simu:
       forall me ve es es' vs e le m sb sofs outb outco P,
         m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
-            ** blockrep gcenv ve outco.(co_members) outb
+            ** match_out owner caller ve le outb outco 
             ** subrep caller e
             ** varsrep caller ve le
             ** P ->
         wt_env ve (meth_vars caller) ->
         wt_mem me prog owner ->
         le ! self = Some (Vptr sb sofs) ->
-        le ! out = Some (Vptr outb Int.zero) ->
-        gcenv ! (prefix_fun owner.(c_name) caller.(m_name)) = Some outco ->
         0 <= Int.unsigned sofs ->
         Forall (wt_exp owner.(c_mems) (meth_vars caller)) es ->
         Forall2 (exp_eval me ve) es vs ->
@@ -1704,14 +1702,14 @@ Section PRESERVATION.
 
   Section MatchStatesAssign.
     Variables (ownerid: ident) (owner: class) (prog': program) (callerid: ident) (caller: method).
-    Hypothesis Findcl: find_class ownerid prog = Some (owner, prog'). 
-    Hypothesis Findmth: find_method callerid owner.(c_methods) = Some caller.
+    Hypothesis Findowner: find_class ownerid prog = Some (owner, prog'). 
+    Hypothesis Findcaller: find_method callerid owner.(c_methods) = Some caller.
 
     Section OutField.
       Variables (m: Mem.mem) (ve: stack) (outco: composite) (outb: block) (P: massert)
                 (le: temp_env) (x: ident) (ty: type).
-      Hypothesis Hrep: m |= varsrep caller ve le ** blockrep gcenv ve outco.(co_members) outb ** P.
-      Hypothesis Hco: gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco.
+      Hypothesis Hrep: m |= match_out owner caller ve le outb outco ** varsrep caller ve le(* blockrep gcenv ve outco.(co_members) outb *) ** P.
+      (* Hypothesis Hco: gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco. *)
       Hypothesis Hvars: In (x, ty) (meth_vars caller).
 
       Lemma match_states_assign_out:
@@ -1721,18 +1719,23 @@ Section PRESERVATION.
           v = Values.Val.load_result (type_chunk ty) v ->
           mem_assoc_ident x (m_out caller) = true ->
           exists m', Memory.Mem.storev (type_chunk ty) m (Vptr outb (Int.repr d)) v = Some m'
-                     /\ m' |= varsrep caller (PM.add x v ve) le
-                            ** blockrep gcenv (PM.add x v ve) outco.(co_members) outb ** P .
+                /\ m' |= varsrep caller (PM.add x v ve) le
+                       ** blockrep gcenv (PM.add x v ve) outco.(co_members) outb ** P .
       Proof.
         intros ** Hoffset Haccess Hlr E.
 
         unfold mem_assoc_ident in E; eapply existsb_In in E; eauto.
-        pose proof (output_match _ _ _ Findcl _ _ Findmth _ Hco) as Eq.
+        assert (m_out caller <> []) as Notnil
+            by (intro H; rewrite H in E; contradiction).
+        rewrite match_out_notnil in Hrep; auto.
+        destruct Hrep as (Hrep' & ? & Hco); clear Hrep; rename Hrep' into Hrep.
+        pose proof (output_match _ _ _ Findowner _ _ Findcaller Notnil _ Hco) as Eq.
         pose proof E as Hin; apply in_map with (f:=translate_param) in Hin;
           rewrite Eq in Hin; eauto.
         pose proof (m_nodupvars caller) as Nodup.
         
         (* get the updated memory *)
+        rewrite sep_swap in Hrep.
         apply sepall_in in Hin.
         destruct Hin as [ws [ys [Hys Heq]]].
         unfold blockrep in Hrep.
@@ -1767,13 +1770,14 @@ Section PRESERVATION.
       Lemma match_states_assign_tempvar:
         forall v,
           mem_assoc_ident x (m_out caller) = false ->
-          m |= varsrep caller (PM.add x v ve) (PTree.set x v le)
-              ** blockrep gcenv (PM.add x v ve) outco.(co_members) outb ** P.
+          m |= match_out owner caller (PM.add x v ve) (PTree.set x v le) outb outco
+              ** varsrep caller (PM.add x v ve) (PTree.set x v le)
+              ** P.
       Proof.
         intros ** E.
-        pose proof (output_match _ _ _ Findcl _ _ Findmth _ Hco) as Eq_outco.
+        
         unfold varsrep in *.
-        rewrite sep_pure in *. 
+        rewrite sep_swap, sep_pure in *. 
         destruct Hrep as (Hpure & Hrep'); clear Hrep; rename Hrep' into Hrep;
           split; auto.
         - induction (m_in caller ++ m_vars caller); simpl in *; auto.
@@ -1789,16 +1793,27 @@ Section PRESERVATION.
               now rewrite match_value_add.
           + now apply IHl.
         - eapply sep_imp; eauto.
-          unfold blockrep in *.
-          rewrite sepall_swapp; eauto.
-          intros (x', t') Hx'.
-          rewrite match_value_add; auto.
-          unfold mem_assoc_ident in E; eapply not_existsb_InMembers in E; eauto.
-          apply In_InMembers in Hx'.
-          intro Hxx'; subst x.
-          apply E.
-          rewrite fst_InMembers, <-translate_param_fst, <-fst_InMembers; auto.
-          now rewrite Eq_outco.
+          unfold match_out; case_eq (m_out caller); intros ** Hout; auto.
+          repeat apply sep_imp'; auto. 
+          + rewrite pure_imp.
+            intro H.
+            rewrite PTree.gso; auto.
+            apply (In_Forall _ _ _ (m_good caller)) in Hvars.
+            intro Eq; subst.
+            unfold NotReserved, reserved in Hvars.
+            apply Hvars; simpl; auto.
+          + unfold blockrep in *.
+            rewrite sepall_swapp; eauto.
+            intros (x', t') Hx'.
+            rewrite match_value_add; auto.
+            unfold mem_assoc_ident in E; eapply not_existsb_InMembers in E; eauto.
+            apply In_InMembers in Hx'.
+            intro Hxx'; subst x.
+            apply E.
+            rewrite fst_InMembers, <-translate_param_fst, <-fst_InMembers; auto.
+            assert (m_out caller <> []) by (intro H; rewrite H in Hout; discriminate).
+            rewrite match_out_notnil in Hrep; auto; destruct Hrep as (? & ? & ?).
+            erewrite output_match; eauto.
       Qed.
     End OutField.
 
@@ -1857,11 +1872,12 @@ Section PRESERVATION.
         NoDup ys ->
         Forall2 (fun y xt => In (y, snd xt) (meth_vars caller)) ys
                 callee.(m_out) ->
-        le1 ! out = Some (Vptr outb Int.zero) ->
+        (* le1 ! out = Some (Vptr outb Int.zero) -> *)
         le1 ! self = Some (Vptr sb sofs) ->
-        gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco ->
+        (* gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco -> *)
         m1 |= blockrep gcenv (adds (map fst callee.(m_out)) rvs ve') instco.(co_members) binst
-             ** blockrep gcenv ve outco.(co_members) outb
+            (* ** blockrep gcenv ve outco.(co_members) outb *)
+             ** match_out owner caller ve le1 outb outco
              ** varsrep caller ve le1
              ** P ->                                       
         wt_vals rvs callee.(m_out) ->
@@ -1873,20 +1889,21 @@ Section PRESERVATION.
                                                       (type_of_inst (prefix_fun clsid f)) callee)
                     E0 le2 m2 Out_normal
           /\ m2 |= blockrep gcenv (adds (map fst callee.(m_out)) rvs ve') instco.(co_members) binst
-                 ** blockrep gcenv (adds ys rvs ve) outco.(co_members) outb
+                 (* ** blockrep gcenv (adds ys rvs ve) outco.(co_members) outb *)
+                 ** match_out owner caller (adds ys rvs ve) le2 outb outco
                  ** varsrep caller (adds ys rvs ve) le2
                  ** P
-          /\ le2 ! out = Some (Vptr outb Int.zero) 
+          (* /\ le2 ! out = Some (Vptr outb Int.zero)  *)
           /\ le2 ! self = Some (Vptr sb sofs). 
     Proof.
       unfold funcall_assign.
       intros ** Findc Findcallee Nodup Incl
-             Hout Hself Houtco Hrep Valids Hinst Hinstco.
+             (* Hout *) Hself (* Houtco *) Hrep Valids Hinst Hinstco.
       assert (length ys = length callee.(m_out)) as Length1
           by (eapply Forall2_length; eauto).
       assert (length rvs = length callee.(m_out)) as Length2
           by (eapply Forall2_length; eauto).
-      revert ve ve' le1 m1 ys rvs Hout Hself Hrep Incl Length1 Length2 Nodup Valids.
+      revert ve ve' le1 m1 ys rvs (* Hout *) Hself Hrep Incl Length1 Length2 Nodup Valids.
       pose proof (m_nodupvars callee) as Nodup'.
       do 2 apply NoDupMembers_app_r in Nodup'.
       induction_list (m_out callee) as [|(y', ty)] with outs; intros;
@@ -1903,8 +1920,11 @@ Section PRESERVATION.
         pose proof (find_method_name _ _ _ Findcallee) as Eq'.
 
         rewrite <-Eq, <-Eq' in Hinstco.
-        pose proof (output_match _ _ _ Findc _ _ Findcallee _ Hinstco) as Eq_instco.
-        pose proof (output_match _ _ _ Findcl _ _ Findmth _ Houtco) as Eq_outco. 
+        assert (m_out callee <> []) as Callenotnil by
+            (intro E; rewrite E, <-app_assoc, <-cons_is_app in Houts;
+             eapply app_cons_not_nil; eauto).
+        pose proof (output_match _ _ _ Findc _ _ Findcallee Callenotnil _ Hinstco) as Eq_instco.
+        (* pose proof (output_match _ _ _ Findcl _ _ Findmth _ Houtco) as Eq_outco.  *)
         
         (* get the o.y' value evaluation *)
         assert (In (y', ty) callee.(m_out)) as Hin
@@ -1929,62 +1949,71 @@ Section PRESERVATION.
         destruct (mem_assoc_ident y (m_out caller)) eqn: E.
         
         (* out->y = o.y' *)
-        + (* get the 'out' variable left value evaluation *)
-          rewrite sep_swap in Hrep.
-          edestruct evall_out_field with (1:=Findcl) (e:=e1)
+        + assert (m_out caller <> []) as Hout
+              by (intro E'; rewrite E' in E; simpl in E; discriminate).
+          (* get the 'out' variable left value evaluation *)
+          pose proof Hrep as Hrep'.
+          rewrite sep_swap, match_out_notnil in Hrep; eauto.
+          destruct Hrep as (Hrep & ? & ?).          
+          edestruct evall_out_field with (1:=Findowner) (3:=Hrep) (e:=e1)
             as (dy & Ev_out_y & Hoffset_y); eauto.  
           
           (* get the updated memory *)
-          rewrite sep_swap23, sep_swap in Hrep.
+          rewrite sep_swap, sep_swap23 in Hrep'.
           edestruct match_states_assign_out with (v:=v)
             as (m2 & Store & Hm2); eauto.
           
           edestruct IHouts with (m1:=m2) (ve:= PM.add y v ve) (ve':=PM.add y' v ve')
-            as (le' & m' & Exec & Hm' & ? & ?); eauto.
-          * rewrite sep_swap3.
+            as (le' & m' & Exec & Hm' & ?); eauto.
+          * rewrite sep_swap3, sep_swap, match_out_notnil, sep_swap; auto; split; auto.            
             simpl in Hm2.
             rewrite adds_cons_cons in Hm2; auto.
             rewrite <-fst_InMembers; auto.
             
-          *{ clear IHouts.            
-             do 2 econstructor; split; [|split; [|split]]; eauto.
+          *{ clear IHouts.
+             unfold assign in Exec.
+             destruct caller.(m_out); try (contradict Hout; reflexivity).
+             simpl in *; rewrite E.
+             do 2 econstructor; split; [|split]; eauto.
              - change E0 with (Eapp E0 E0).
                eapply exec_Sseq_1 with (m1:=m2); eauto.
                eapply ClightBigstep.exec_Sassign; eauto.
                eapply sem_cast_same; eauto.
                eapply assign_loc_value; eauto.
                + eapply acces_cltype; eauto.
-               + rewrite Int.add_zero_l; auto. 
+               + rewrite Int.add_zero_l; auto.
              - simpl; repeat rewrite adds_cons_cons; auto; rewrite <-fst_InMembers; auto.
            }
            
         (* y = o.y' *)
         + edestruct IHouts with (m1:=m1) (le1:=PTree.set y v le1) (ve:= PM.add y v ve) (ve':=PM.add y' v ve')
-            as (le' & m' & Exec & Hm' & ? & ?); eauto.
-          *{ rewrite PTree.gso; auto.
-             intro Heq.
-             apply (m_notreserved out caller).
-             - apply in_cons, in_eq.
-             - subst y. apply In_InMembers in Hvars; auto.
-           }
+            as (le' & m' & Exec & Hm' & ?); eauto.
           *{ rewrite PTree.gso; auto.
              intro Heq.
              apply (m_notreserved self caller).
              - apply in_eq.
              - subst y. apply In_InMembers in Hvars; auto.
            }
-          *{ rewrite sep_swap3 in *.
+          *{ rewrite sep_swap, sep_swap23 in *.
              simpl in Hrep.
              rewrite adds_cons_cons in Hrep; auto.
              - eapply match_states_assign_tempvar; eauto.
              - rewrite <-fst_InMembers; auto.
            }
           *{ clear IHouts.
-             do 2 econstructor; split; [|split; [|split]]; eauto.
-             - change E0 with (Eapp E0 E0).
-               eapply exec_Sseq_1; eauto.
-               apply ClightBigstep.exec_Sset; auto.
-             - simpl; repeat rewrite adds_cons_cons; auto; rewrite <-fst_InMembers; auto.
+             unfold assign in Exec.
+             destruct caller.(m_out).
+             - do 2 econstructor; split; [|split]; eauto.
+               + change E0 with (Eapp E0 E0).
+                 eapply exec_Sseq_1; eauto.
+                 apply ClightBigstep.exec_Sset; auto.
+               + simpl; repeat rewrite adds_cons_cons; auto; rewrite <-fst_InMembers; auto.
+             - simpl in E; rewrite E.
+               do 2 econstructor; split; [|split]; eauto.
+               + change E0 with (Eapp E0 E0).
+                 eapply exec_Sseq_1; eauto.
+                 apply ClightBigstep.exec_Sset; auto.
+               + simpl; repeat rewrite adds_cons_cons; auto; rewrite <-fst_InMembers; auto.
            }
     Qed.
   End MatchStatesAssign.
