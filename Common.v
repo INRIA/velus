@@ -1734,6 +1734,12 @@ Section Lists.
     induction ys; auto; simpl; intros; constructor; auto; intros [|]; auto.
   Qed.
 
+  Lemma length_nil:
+    forall (l: list A), length l = 0 -> l = [].
+  Proof.
+    destruct l; simpl; intro H; auto; discriminate.
+  Qed.
+  
 End Lists.
 
 Lemma Forall2_map_1:
@@ -2076,6 +2082,14 @@ Section ExtraPositiveMaps.
       apply NotIn; subst.
       apply in_eq.
     - now apply not_in_cons in NotIn.
+  Qed.
+
+  Lemma adds_nil_nil:
+    forall e,
+      adds [] [] e = e.
+  Proof.
+    unfold adds.
+    simpl; auto.
   Qed.
 
   Lemma PM_In_find':
