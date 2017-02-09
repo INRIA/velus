@@ -582,13 +582,6 @@ Section StateRepProperties.
                align_chunk_divides_alignof_type
                access_mode_cltype : clalign.
 
-  Lemma range'_range_w:
-    forall {f} b lo hi,
-      massert_imp (range' f b lo hi) (range_w b lo hi).
-  Proof.
-    destruct f; auto using range_range_w.
-  Qed.
-  
   Lemma range_staterep:
     forall {f} b clsnm,
       wt_program prog ->
