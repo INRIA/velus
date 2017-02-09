@@ -113,7 +113,7 @@ Section Staterep.
     let (x, ty) := xty in
     match field_offset ge x (make_members cls) with
     | Errors.OK d =>
-	  contains (type_chunk ty) b (ofs + d) (match_value me.(mm_values) x)
+	  contains_w (type_chunk ty) b (ofs + d) (match_value me.(mm_values) x)
     | Errors.Error _ => sepfalse
     end.
 
@@ -196,7 +196,7 @@ Section Staterep.
 
   Lemma footprint_perm_staterep:
     forall p clsnm me b ofs b' lo hi,
-      footprint_perm (staterep p clsnm me b ofs) b' lo hi.
+      footprint_perm_w (staterep p clsnm me b ofs) b' lo hi.
   Proof.
     induction p as [|cls p' IH]; [now auto|].
     intros; simpl.
@@ -582,18 +582,25 @@ Section StateRepProperties.
                align_chunk_divides_alignof_type
                access_mode_cltype : clalign.
 
+  Lemma range'_range_w:
+    forall {f} b lo hi,
+      massert_imp (range' f b lo hi) (range_w b lo hi).
+  Proof.
+    destruct f; auto using range_range_w.
+  Qed.
+  
   Lemma range_staterep:
-    forall b clsnm,
+    forall {f} b clsnm,
       wt_program prog ->
       find_class clsnm prog <> None ->
-      range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
-            staterep gcenv prog clsnm hempty b 0.
+      range' f b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
+      staterep gcenv prog clsnm hempty b 0.
   Proof.
     intros ** WTp Hfind.
     (* Weaken the goal for proof by induction. *)
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
-           massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
+           massert_imp (range' f b lo (lo + sizeof gcenv (type_of_inst clsnm)))
                        (staterep gcenv prog clsnm hempty b lo)).
     now intro HH; apply HH; apply Z.divide_0_r.
 
@@ -653,6 +660,7 @@ Section StateRepProperties.
         destruct m; simpl. 
         destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
         rewrite match_value_empty, sizeof_translate_chunk; eauto with clalign.
+        apply (massert_imp_trans _ _ _ (range'_range_w _ _ _)).
         apply range_contains'.
         apply field_offset_aligned with (ty:=cltype t) in Hfo.
         now apply Z.divide_add_r; eauto with clalign.
@@ -758,8 +766,8 @@ Section StateRepProperties.
                 let (x0, ty0) := xty in
                 match field_offset gcenv x0 (make_members cls) with
                 | Errors.OK d0 =>
-                  contains (type_chunk ty0) b (ofs + d0)
-                           (match_value (mm_values me) x0)
+                  contains_w (type_chunk ty0) b (ofs + d0)
+                             (match_value (mm_values me) x0)
                 | Errors.Error _ => sepfalse
                 end) at 1.
     - rewrite <-sep_swap2.
@@ -934,7 +942,7 @@ Section BlockRep.
     apply sepall_swapp.
     intros fld Hin.
     destruct fld as [x ty].
-    unfold field_range.
+    unfold field_range'.
     destruct (field_offset ge x flds) eqn:Hoff.
     2:reflexivity.
     apply field_offset_aligned with (ty:=ty) in Hoff.

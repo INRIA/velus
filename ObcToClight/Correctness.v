@@ -1615,7 +1615,7 @@ Section PRESERVATION.
         unfold blockrep in Hrep.
         rewrite Heq in Hrep; simpl in *.
         rewrite Hoffset, Haccess, sep_assoc, sep_swap in Hrep.
-        eapply Separation.storev_rule' with (v:=v) in Hrep; eauto.
+        eapply (@Separation.storev_rule' true) with (v:=v) in Hrep; eauto.
         destruct Hrep as (m' & ? & Hrep'); clear Hrep; rename Hrep' into Hrep.
         exists m'; split; auto.
         unfold blockrep.
@@ -1624,7 +1624,7 @@ Section PRESERVATION.
         eapply sep_imp; eauto.
         - eapply varsrep_corres_out; eauto.
         - apply sep_imp'.
-          + unfold hasvalue.
+          + unfold hasvalue'.
             unfold match_value; simpl.
             rewrite PM.gss.
             now rewrite <-Hlr.
@@ -1699,7 +1699,7 @@ Section PRESERVATION.
       unfold staterep_mems in Hrep.
       rewrite ident_eqb_refl, Heq, Hoffset in Hrep.
       rewrite 2 sep_assoc in Hrep.
-      eapply Separation.storev_rule' with (v:=v) in Hrep; eauto.
+      eapply (@Separation.storev_rule' false) with (v:=v) in Hrep; eauto.
       destruct Hrep as (m' & ? & Hrep).
       exists m'; split; auto.
       rewrite staterep_skip; eauto.
@@ -1708,7 +1708,7 @@ Section PRESERVATION.
       rewrite ident_eqb_refl, Heq, Hoffset.
       rewrite 2 sep_assoc.
       eapply sep_imp; eauto.
-      - unfold hasvalue.
+      - unfold hasvalue'.
         unfold match_value; simpl.
         rewrite PM.gss.
         now rewrite <-Hlr.
