@@ -3,9 +3,35 @@
 
 let snlustre_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
+let sync_destination = ref (None : string option)
+let main_node = ref (None : string option)
+let reaction_counter = Camlcoq.intern_string "$reaction"
 
 let fuse_obc = ref true
 let do_fusion () = !fuse_obc
+
+let rec last = function
+  | []    -> failwith "last"
+  | [x]   -> x
+  | x::xs -> last xs
+
+let get_main_class decls =
+  try
+    let open Instantiator.Obc.Syn in
+    match !main_node with
+    | Some s ->
+        let nm = Camlcoq.intern_string s in
+        List.find (fun c->c.c_name = nm) decls
+    | None -> last decls
+  with _ ->
+    (Printf.eprintf "main class not found"; exit 1)
+
+let get_first_method cl =
+  try
+    let open Instantiator.Obc.Syn in
+    List.hd cl.c_methods
+  with _ ->
+    (Printf.eprintf "class has no methods"; exit 1)
 
 let print_if flag print prog =
   match !flag with
@@ -18,8 +44,27 @@ let print_if flag print prog =
 let print_snlustre_if =
   print_if snlustre_destination Interfacelib.PrintNLustre.print_global
 
-let print_obc_if =
-  print_if obc_destination Interfacelib.PrintObc.print_program
+let print_sync_if prog =
+  match !sync_destination with
+  | None -> ()
+  | Some f ->
+      let open Instantiator.Obc.Syn in
+      let cl = get_main_class prog in
+      let cl_m = get_first_method cl in
+      let oc = open_out f in
+      let f = Format.formatter_of_out_channel oc in
+      Interfacelib.SyncFun.print f cl_m;
+      (*
+      PrintClight.print_function f
+        (Camlcoq.intern_string "$sync")
+        (Interfacelib.SyncFun.make reaction_counter cl_m);
+      *)
+      Format.pp_print_flush f ();
+      close_out oc
+
+let print_obc_if prog =
+  print_sync_if prog;
+  print_if obc_destination Interfacelib.PrintObc.print_program prog
 
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in

@@ -11,13 +11,13 @@ let write_snlustre = ref false
 let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
-let main_node = ref (None : string option)
+let write_sync = ref false
 
 let set_main_node s =
-  main_node := Some s
+  Veluslib.main_node := Some s
 
 let get_main_node decls =
-  match !main_node with
+  match !Veluslib.main_node with
   | Some s -> intern_string s
   | None   -> match decls with
               | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
@@ -83,6 +83,8 @@ let compile source_name filename =
     then Veluslib.snlustre_destination := Some (filename ^ ".sn.lus");
   if !write_obc
     then Veluslib.obc_destination := Some (filename ^ ".obc");
+  if !write_sync
+    then Veluslib.sync_destination := Some (filename ^ ".sync.c");
   if !write_cl
     then PrintClight.destination := Some (filename ^ ".light.c");
   if !write_cm
@@ -114,6 +116,7 @@ let process file =
 
 let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
+  "-sync", Arg.Set write_sync,   " Generate sync() in <source>.sync.c";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dsnlustre",Arg.Set write_snlustre,
                             " Save the parsed SN-Lustre in <source>.sn.lus";

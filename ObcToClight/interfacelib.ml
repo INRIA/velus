@@ -23,6 +23,53 @@ module ClightOpNames =
     let name_binop ty = PrintCsyntax.name_binop
   end
 
+module ClightTypeFormats
+  : TYPE_FORMATS with type typ = Interface.Op.coq_type =
+  struct
+    type typ = Interface.Op.coq_type
+
+    let type_decl ty =
+      let open Interface.Op in
+      match ty with
+      | Tint (sz, sg) -> PrintCsyntax.name_inttype sz sg
+      | Tlong sg      -> PrintCsyntax.name_longtype sg
+      | Tfloat sz     -> PrintCsyntax.name_floattype sz
+
+    let type_printf ty =
+      let open Ctypes in
+      let open Interface.Op in
+      match ty with
+      | Tint (I8, Signed)    -> "%hhd"
+      | Tint (I8, Unsigned)  -> "%hhu"
+      | Tint (I16, Signed)   -> "%hd"
+      | Tint (I16, Unsigned) -> "%hu"
+      | Tint (I32, Signed)   -> "%d"
+      | Tint (I32, Unsigned) -> "%u"
+      | Tint (IBool, _)      -> "%d"
+      | Tlong Signed         -> "%lld"
+      | Tlong Unsigned       -> "%llu"
+      | Tfloat F32           -> "%e"
+      | Tfloat F64           -> "%e"
+
+    let type_scanf ty =
+      let open Ctypes in
+      let open Interface.Op in
+      match ty with
+      | Tint (I8, Signed)    -> "%hhd"
+      | Tint (I8, Unsigned)  -> "%hhu"
+      | Tint (I16, Signed)   -> "%hd"
+      | Tint (I16, Unsigned) -> "%hu"
+      | Tint (I32, Signed)   -> "%d"
+      | Tint (I32, Unsigned) -> "%u"
+      | Tint (IBool, _)      -> "%hhu"    (* nonstandard: CompCert stores
+                                                          bools in 1-byte *)
+      | Tlong Signed         -> "%lld"
+      | Tlong Unsigned       -> "%llu"
+      | Tfloat F32           -> "%f"
+      | Tfloat F64           -> "%lf"
+
+  end
+
 module LustreOpNames =
   struct
     let is_bool = function
@@ -126,6 +173,16 @@ module PrintObc = Obclib.PrintFun
       type unop  = Interface.Op.unop
       type binop = Interface.Op.binop
    end) (PrintClightOpsFun (ClightOpNames))
+
+module SyncFun = Obclib.SyncFun
+  (struct
+      include Instantiator.Obc.Syn
+      type typ   = Interface.Op.coq_type
+      type const = Interface.Op.const
+      type unop  = Interface.Op.unop
+      type binop = Interface.Op.binop
+   end)
+  (ClightTypeFormats)
 
 module Scheduler = Nlustrelib.SchedulerFun
   (struct
