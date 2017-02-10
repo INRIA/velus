@@ -2654,241 +2654,14 @@ Section PRESERVATION.
           unfold PTree.elements in Hin; simpl in Hin.
           contradiction.
   Qed.
-  
-  Lemma compat_funcall_pres:
-    forall f sb sofs ob vs c prog' prog'' o owner d me tself tout callee_id callee instco m P,
-      let vargs := (Vptr sb (Int.add sofs (Int.repr d))) :: (Vptr ob Int.zero) :: vs in
-      c.(c_name) <> owner.(c_name) ->
-      In (o, c.(c_name)) owner.(c_objs) ->
-      field_offset gcenv o (make_members owner) = Errors.OK d ->
-      0 <= (Int.unsigned sofs) + d <= Int.max_unsigned ->
-      0 <= Int.unsigned sofs ->
-      find_class owner.(c_name) prog = Some (owner, prog') ->
-      find_class c.(c_name) prog = Some (c, prog'') ->
-      find_method callee_id c.(c_methods) = Some callee ->
-      callee.(m_out) <> [] ->
-      length f.(fn_params) = length vargs ->
-      fn_params f = (self, tself) :: (out, tout) :: map translate_param callee.(m_in) ->
-      fn_vars f = make_out_vars (instance_methods callee) ->
-      fn_temps f = map translate_param callee.(m_vars) ->
-      list_norepet (var_names f.(fn_params)) ->
-      list_norepet (var_names f.(fn_vars)) ->
-      gcenv ! (prefix_fun c.(c_name) callee.(m_name)) = Some instco ->
-      m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
-          ** blockrep gcenv sempty instco.(co_members) ob
-          ** P ->
-      exists e_fun le_fun m_fun ws xs,
-        bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le_fun
-        /\ alloc_variables tge empty_env m f.(fn_vars) e_fun m_fun
-        /\ (forall x b t, e_fun ! x = Some (b, t) -> exists o f, x = prefix_out o f)
-        /\ le_fun ! self = Some (Vptr sb (Int.add sofs (Int.repr d)))
-        /\ le_fun ! out = Some (Vptr ob Int.zero)
-        /\ c_objs owner = ws ++ (o, c.(c_name)) :: xs
-        /\ m_fun |= sepall (staterep_mems gcenv owner me sb (Int.unsigned sofs)) (c_mems owner)
-                  ** staterep gcenv prog c.(c_name)
-                              (match mfind_inst o me with Some om => om | None => hempty end)
-                              sb (Int.unsigned (Int.add sofs (Int.repr d)))
-                  ** sepall (staterep_objs gcenv prog' owner me sb (Int.unsigned sofs)) (ws ++ xs)
-                  ** blockrep gcenv (adds (map fst callee.(m_in)) vs sempty) instco.(co_members) ob
-                  ** subrep callee e_fun
-                  ** (subrep callee e_fun -* subrep_range e_fun)
-                  ** varsrep callee (adds (map fst callee.(m_in)) vs sempty) le_fun
-                  ** P
-        /\ 0 <= Int.unsigned (Int.add sofs (Int.repr d)) <= Int.max_unsigned.     
-  Proof.
-    intros ** ? Hin Offs ? ? Findowner Findc Hcallee Notnil Hlengths
-           Hparams Hvars Htemps Norep_par Norep_vars ? Hrep.
-    subst vargs; rewrite Hparams, Hvars, Htemps in *.
-    assert (~ InMembers self (meth_vars callee)) as Notin_s
-        by apply m_notreserved, in_eq.
-    assert (~ InMembers out (meth_vars callee)) as Notin_o
-        by apply m_notreserved, in_cons, in_eq.
-    assert (~ InMembers self (map translate_param (m_in callee))).
-    { unfold meth_vars in Notin_s; apply NotInMembers_app in Notin_s.
-      rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto. 
-    }
-    assert (~ InMembers out (map translate_param (m_in callee))).
-    { unfold meth_vars in Notin_o; apply NotInMembers_app in Notin_o.
-      rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
-    }
-    assert (~ InMembers self (map translate_param (m_vars callee))).
-    { unfold meth_vars in Notin_s; rewrite NotInMembers_app_comm, <-app_assoc in Notin_s;
-        apply NotInMembers_app in Notin_s.
-      rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
-    }    
-    assert (~ InMembers out (map translate_param (m_vars callee))).
-    { unfold meth_vars in Notin_o; rewrite NotInMembers_app_comm, <-app_assoc in Notin_o;
-        apply NotInMembers_app in Notin_o.
-      rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
-    }
-    assert (0 <= d <= Int.max_unsigned) by
-        (split; [eapply field_offset_in_range'; eauto | omega]).
-    
-    edestruct
-      (bind_parameter_temps_exists (map translate_param callee.(m_in)) self out
-                                   (map translate_param callee.(m_vars)) vs
-                                   tself tout (Vptr sb (Int.add sofs (Int.repr d))) (Vptr ob Int.zero))
-    with (1:=self_not_out) as (le_fun & Bind & Hinputs); eauto.
-    - pose proof (m_nodupvars callee) as Nodup.
-      rewrite Permutation_app_comm in Nodup.
-      apply NoDupMembers_app_r in Nodup.
-      rewrite fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.
-    - simpl in Hlengths. inversion Hlengths; eauto.
-    - edestruct (alloc_result callee) as (e_fun & m_fun & ? & ? & Hm_fun); eauto.
-      + eapply instance_methods_caract; eauto. 
-      + unfold var_names in Norep_vars.
-        now rewrite fst_NoDupMembers, NoDup_norepet. 
-      + edestruct (bind_parameter_temps_implies' (map translate_param (m_in callee)))
-        with (1:=self_not_out) as (? & ?); eauto.
-        pose proof Hin as Hin'.
-        apply sepall_in in Hin.
-        destruct Hin as (ws & xs & Hin & Heq).             
-        exists e_fun, le_fun, m_fun, ws, xs;
-          split; [|split; [|split; [|split; [|split; [|split; [|split]]]]]]; auto.
-        *{ rewrite <- 5 sep_assoc; rewrite sep_swap.
-           rewrite <-map_app, translate_param_fst in Hinputs.
-           apply sep_pure; split; auto.
-           rewrite sep_assoc, sep_swap, sep_assoc, sep_swap23, sep_swap.
-           eapply sep_imp; eauto.
-           apply sep_imp'; auto.
-           rewrite sep_assoc.
-           apply sep_imp'; auto.
-           - edestruct find_class_app with (1:=Findowner)
-               as (pre_prog & Hprog & FindNone); eauto.
-             rewrite Hprog in WT.
-             eapply wt_program_not_class_in in WT; eauto.
-             rewrite staterep_skip; eauto.
-             simpl.
-             rewrite ident_eqb_refl.
-             rewrite sep_assoc.
-             apply sep_imp'; auto.
-             rewrite Heq, Offs.
-             apply sep_imp'; auto.
-             unfold instance_match.
-             erewrite <-staterep_skip_cons; eauto.
-             erewrite <-staterep_skip_app; eauto.
-             rewrite <-Hprog.
-             unfold Int.add; repeat (rewrite Int.unsigned_repr; auto).
-           - apply sep_imp'; auto.
-             rewrite <-translate_param_fst.
-             erewrite <-output_match; eauto.
-             apply blockrep_nodup.
-             pose proof (m_nodupvars callee) as Nodup.
-             rewrite app_assoc, Permutation_app_comm, app_assoc, Permutation_app_comm in Nodup.
-             apply NoDupMembers_app_r in Nodup; rewrite Permutation_app_comm in Nodup.
-             rewrite <-map_app, fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.
-         }
-        * split; unfold Int.add; repeat (rewrite Int.unsigned_repr; auto); omega.
-  Qed.
-
-  Lemma compat_funcall_pres_noout:
-    forall f sb sofs vs c prog' prog'' o owner d me tself callee_id callee m P,
-      let vargs := (Vptr sb (Int.add sofs (Int.repr d))) :: vs in
-      c.(c_name) <> owner.(c_name) ->
-      In (o, c.(c_name)) owner.(c_objs) ->
-      field_offset gcenv o (make_members owner) = Errors.OK d ->
-      0 <= (Int.unsigned sofs) + d <= Int.max_unsigned ->
-      0 <= Int.unsigned sofs ->
-      find_class owner.(c_name) prog = Some (owner, prog') ->
-      find_class c.(c_name) prog = Some (c, prog'') ->
-      find_method callee_id c.(c_methods) = Some callee ->
-      callee.(m_out) = [] ->
-      length f.(fn_params) = length vargs ->
-      fn_params f = (self, tself) :: map translate_param callee.(m_in) ->
-      fn_vars f = make_out_vars (instance_methods callee) ->
-      fn_temps f = map translate_param callee.(m_vars) ->
-      list_norepet (var_names f.(fn_params)) ->
-      list_norepet (var_names f.(fn_vars)) ->
-      m |= staterep gcenv prog owner.(c_name) me sb (Int.unsigned sofs)
-          ** P ->
-      exists e_fun le_fun m_fun ws xs,
-        bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le_fun
-        /\ alloc_variables tge empty_env m f.(fn_vars) e_fun m_fun
-        /\ (forall x b t, e_fun ! x = Some (b, t) -> exists o f, x = prefix_out o f)
-        /\ le_fun ! self = Some (Vptr sb (Int.add sofs (Int.repr d)))
-        /\ c_objs owner = ws ++ (o, c.(c_name)) :: xs
-        /\ m_fun |= sepall (staterep_mems gcenv owner me sb (Int.unsigned sofs)) (c_mems owner)
-                  ** staterep gcenv prog c.(c_name)
-                              (match mfind_inst o me with Some om => om | None => hempty end)
-                              sb (Int.unsigned (Int.add sofs (Int.repr d)))
-                  ** sepall (staterep_objs gcenv prog' owner me sb (Int.unsigned sofs)) (ws ++ xs)
-                  ** subrep callee e_fun
-                  ** (subrep callee e_fun -* subrep_range e_fun)
-                  ** varsrep callee (adds (map fst callee.(m_in)) vs sempty) le_fun
-                  ** P
-        /\ 0 <= Int.unsigned (Int.add sofs (Int.repr d)) <= Int.max_unsigned.     
-  Proof.
-    intros ** ? Hin Offs ? ? Findowner Findc Hcallee Notnil Hlengths
-           Hparams Hvars Htemps Norep_par Norep_vars Hrep.
-    subst vargs; rewrite Hparams, Hvars, Htemps in *.
-    assert (~ InMembers self (meth_vars callee)) as Notin_s
-        by apply m_notreserved, in_eq.
-    assert (~ InMembers self (map translate_param (m_in callee))).
-    { unfold meth_vars in Notin_s; apply NotInMembers_app in Notin_s.
-      rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto. 
-    }
-    assert (~ InMembers self (map translate_param (m_vars callee))).
-    { unfold meth_vars in Notin_s; rewrite NotInMembers_app_comm, <-app_assoc in Notin_s;
-        apply NotInMembers_app in Notin_s.
-      rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
-    }    
-     assert (0 <= d <= Int.max_unsigned) by
-        (split; [eapply field_offset_in_range'; eauto | omega]).
-    
-    edestruct
-      (bind_parameter_temps_exists_noout (map translate_param callee.(m_in)) self
-                                         (map translate_param callee.(m_vars)) vs
-                                         tself (Vptr sb (Int.add sofs (Int.repr d))))
-      as (le_fun & Bind & Hinputs); eauto.
-    - pose proof (m_nodupvars callee) as Nodup.
-      rewrite Permutation_app_comm in Nodup.
-      apply NoDupMembers_app_r in Nodup.
-      rewrite fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.
-    - edestruct (alloc_result callee) as (e_fun & m_fun & ? & ? & Hm_fun); eauto.
-      + eapply instance_methods_caract; eauto. 
-      + unfold var_names in Norep_vars.
-        now rewrite fst_NoDupMembers, NoDup_norepet. 
-      + assert (le_fun ! self = Some (Vptr sb (Int.add sofs (Int.repr d)))) by
-            (eapply (bind_parameter_temps_implies'_noout (map translate_param (m_in callee))); eauto).
-        pose proof Hin as Hin'.
-        apply sepall_in in Hin.
-        destruct Hin as (ws & xs & Hin & Heq).             
-        exists e_fun, le_fun, m_fun, ws, xs;
-          split; [|split; [|split; [|split; [|split; [|split]]]]]; auto.
-        *{ rewrite <- 4 sep_assoc; rewrite sep_swap.
-           rewrite <-map_app, translate_param_fst in Hinputs.
-           apply sep_pure; split; auto.
-           rewrite sep_assoc, sep_swap, sep_assoc, sep_swap23, sep_swap.
-           eapply sep_imp; eauto.
-           apply sep_imp'; auto.
-           apply sep_imp'; auto.
-           edestruct find_class_app with (1:=Findowner)
-             as (pre_prog & Hprog & FindNone); eauto.
-           rewrite Hprog in WT.
-           eapply wt_program_not_class_in in WT; eauto.
-           rewrite staterep_skip; eauto.
-           simpl.
-           rewrite ident_eqb_refl.
-           rewrite sep_assoc.
-           apply sep_imp'; auto.
-           rewrite Heq, Offs.
-           apply sep_imp'; auto.
-           unfold instance_match.
-           erewrite <-staterep_skip_cons; eauto.
-           erewrite <-staterep_skip_app; eauto.
-           rewrite <-Hprog.
-           unfold Int.add; repeat (rewrite Int.unsigned_repr; auto).
-         }
-        * split; unfold Int.add; repeat (rewrite Int.unsigned_repr; auto); omega.
-  Qed.
 
   Lemma compat_funcall_pres':
     forall f sb sofs ob vs c prog' prog'' o owner d me tself tout callee_id callee instco m P,
-      let vargs := (Vptr sb (Int.add sofs (Int.repr d)))
-                     :: match callee.(m_out) with
-                        | [] => vs
-                        | _ => (Vptr ob Int.zero) :: vs
-                        end
+      let vargs := Vptr sb (Int.add sofs (Int.repr d))
+                        :: match callee.(m_out) with
+                           | [] => vs
+                           | _ => Vptr ob Int.zero :: vs
+                           end
       in
       c.(c_name) <> owner.(c_name) ->
       In (o, c.(c_name)) owner.(c_objs) ->
@@ -3766,7 +3539,7 @@ Section PRESERVATION.
                       rewrite PM.gso; auto.
                 }
          }
-         Grab Existential Variables.
+         Grab Existential Variables. 
          eauto.
          eauto.
          eauto.
@@ -3805,30 +3578,44 @@ Section PRESERVATION.
     destruct (check_size_env gce types) eqn: E; try discriminate.
     destruct u; inv H; simpl; eauto.
   Qed.
-  
+      
   Lemma compat_auto_funcall_pres:
     forall f sb ob vs c prog' me tself tout callee_id callee instco m P,
-      let vargs := (Vptr sb Int.zero) :: (Vptr ob Int.zero) :: vs in
+      let vargs := Vptr sb Int.zero
+                     :: match callee.(m_out) with
+                        | [] => vs
+                        | _ => Vptr ob Int.zero :: vs
+                        end
+      in
       find_class c.(c_name) prog = Some (c, prog') ->
       find_method callee_id c.(c_methods) = Some callee ->
       length f.(fn_params) = length vargs ->
-      fn_params f = (self, tself) :: (out, tout) :: map translate_param callee.(m_in) ->
+      fn_params f = (self, tself)
+                      :: match callee.(m_out) with
+                         | [] => map translate_param callee.(m_in)
+                         | _ => (out, tout) :: map translate_param callee.(m_in)
+                         end ->
       fn_vars f = make_out_vars (instance_methods callee) ->
       fn_temps f = map translate_param callee.(m_vars) ->
       list_norepet (var_names f.(fn_params)) ->
       list_norepet (var_names f.(fn_vars)) ->
-      gcenv ! (prefix_fun c.(c_name) callee.(m_name)) = Some instco ->
+      match callee.(m_out) with
+      | [] => True
+      | _ => gcenv ! (prefix_fun c.(c_name) callee.(m_name)) = Some instco
+      end ->
       m |= staterep gcenv prog c.(c_name) me sb Z0
-          ** blockrep gcenv sempty instco.(co_members) ob
+          ** match callee.(m_out) with
+             | [] => sepemp
+             | _ => blockrep gcenv sempty instco.(co_members) ob
+             end       
           ** P ->
       exists e_fun le_fun m_fun,
         bind_parameter_temps f.(fn_params) vargs (create_undef_temps f.(fn_temps)) = Some le_fun
         /\ alloc_variables tge empty_env m f.(fn_vars) e_fun m_fun
         /\ (forall x b t, e_fun ! x = Some (b, t) -> exists o f, x = prefix_out o f)
         /\ le_fun ! self = Some (Vptr sb Int.zero)
-        /\ le_fun ! out = Some (Vptr ob Int.zero)
         /\ m_fun |= staterep gcenv prog c.(c_name) me sb Z0
-                  ** blockrep gcenv (adds (map fst callee.(m_in)) vs sempty) instco.(co_members) ob
+                  ** match_out c callee (adds (map fst callee.(m_in)) vs sempty) le_fun ob instco
                   ** subrep callee e_fun
                   ** (subrep callee e_fun -* subrep_range e_fun)
                   ** varsrep callee (adds (map fst callee.(m_in)) vs sempty) le_fun
@@ -3858,25 +3645,64 @@ Section PRESERVATION.
     { unfold meth_vars in Notin_o; rewrite NotInMembers_app_comm, <-app_assoc in Notin_o;
         apply NotInMembers_app in Notin_o.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
-    }    
-    edestruct
-    (bind_parameter_temps_exists (map translate_param callee.(m_in)) self out
-                                 (map translate_param callee.(m_vars)) vs
-                                 tself tout (Vptr sb Int.zero) (Vptr ob Int.zero))
-    with (1:=self_not_out) as (le_fun & Bind & Hinputs); eauto.
-    - pose proof (m_nodupvars callee) as Nodup.
+    }
+
+    assert (NoDupMembers (map translate_param (m_in callee))).
+    { pose proof (m_nodupvars callee) as Nodup.
       rewrite Permutation_app_comm in Nodup.
       apply NoDupMembers_app_r in Nodup.
-      rewrite fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.
-    - simpl in Hlengths. inversion Hlengths; eauto.
-    - edestruct (alloc_result callee) as (e_fun & m_fun & ? & ? & Hm_fun); eauto.
-      + eapply instance_methods_caract; eauto. 
-      + unfold var_names in Norep_vars.
-        now rewrite fst_NoDupMembers, NoDup_norepet. 
-      + edestruct (bind_parameter_temps_implies' (map translate_param (m_in callee)))
+      rewrite fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers; auto.      
+    }
+    assert (Forall (fun xt => sizeof tge (snd xt) <= Int.max_unsigned /\
+                           (exists (id : AST.ident) (co : composite),
+                               snd xt = Tstruct id noattr /\
+                               gcenv ! id = Some co /\
+                               co_su co = Struct /\
+                               NoDupMembers (co_members co) /\
+                               (forall (x' : AST.ident) (t' : Ctypes.type),
+                                   In (x', t') (co_members co) ->
+                                   exists chunk : AST.memory_chunk,
+                                     access_mode t' = By_value chunk /\
+                                     (align_chunk chunk | alignof gcenv t'))))
+                   (make_out_vars (instance_methods callee)))
+      by (eapply instance_methods_caract; eauto). 
+    assert (NoDupMembers (make_out_vars (instance_methods callee)))
+      by (unfold var_names in Norep_vars; now rewrite fst_NoDupMembers, NoDup_norepet).
+      
+    destruct (m_out callee) eqn: E.
+    - edestruct
+        (bind_parameter_temps_exists_noout (map translate_param callee.(m_in)) self
+                                           (map translate_param callee.(m_vars)) vs
+                                           tself (Vptr sb (Int.zero)))
+        as (le_fun & Bind & Hinputs); eauto.
+      edestruct (alloc_result callee) as (e_fun & m_fun & ? & ? & Hm_fun); eauto.
+      assert (le_fun ! self = Some (Vptr sb (Int.zero))) by
+          (eapply (bind_parameter_temps_implies'_noout (map translate_param (m_in callee))); eauto).
+      exists e_fun, le_fun, m_fun;
+        split; [|split; [|split; [|split]]]; auto.
+
+      rewrite sep_swap4, <-sepemp_left in Hm_fun.
+      rewrite sep_swap, match_out_nil; auto.
+      rewrite <- 2 sep_assoc, sep_swap.
+      rewrite <-map_app, translate_param_fst in Hinputs.
+      apply sep_pure; split; auto.
+      rewrite sep_assoc, sep_swap, sep_assoc; auto. 
+  
+    - edestruct
+        (bind_parameter_temps_exists (map translate_param callee.(m_in)) self out
+                                     (map translate_param callee.(m_vars)) vs
+                                     tself tout (Vptr sb (Int.zero)) (Vptr ob Int.zero))
+      with (1:=self_not_out) as (le_fun & Bind & Hinputs); eauto.
+      + simpl in Hlengths. inversion Hlengths; eauto.
+      + edestruct (alloc_result callee) as (e_fun & m_fun & ? & ? & Hm_fun); eauto.
+        edestruct (bind_parameter_temps_implies' (map translate_param (m_in callee)))
         with (1:=self_not_out) as (? & ?); eauto.
         exists e_fun, le_fun, m_fun;
-          split; [|split; [|split; [|split; [|split; [|]]]]]; auto.
+          split; [|split; [|split; [|split]]]; auto.
+        assert (m_out callee <> []) by (intro E'; rewrite E' in E; discriminate).
+        rewrite sep_swap, match_out_notnil, sep_swap; auto; split; auto.
+
+
         rewrite <- 3 sep_assoc; rewrite sep_swap.
         rewrite <-map_app, translate_param_fst in Hinputs.
         apply sep_pure; split; auto.
@@ -3902,20 +3728,36 @@ Section PRESERVATION.
       find_class clsid prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some callee ->
       m1 |= staterep gcenv prog c.(c_name) me1 sb Z0
-           ** blockrep gcenv sempty outco.(co_members) outb
+           ** match callee.(m_out) with
+             | [] => sepemp
+             | _ => blockrep gcenv sempty outco.(co_members) outb
+              end
            ** P ->
       wt_mem me1 prog' c ->
       Forall2 (fun (v : val) (xt : ident * type) => wt_val v (snd xt)) vs (m_in callee) ->
       Globalenvs.Genv.find_symbol tge (prefix_fun clsid fid) = Some ptr_f ->
       Globalenvs.Genv.find_funct_ptr tge ptr_f = Some (Ctypes.Internal cf) ->
-      length cf.(fn_params) = (2 + length vs)%nat ->
-      gcenv ! (prefix_fun clsid fid) = Some outco ->
+      length cf.(fn_params) = (match callee.(m_out) with
+                               | [] => 1
+                               | _ => 2
+                               end + length vs)%nat ->
+      match callee.(m_out) with
+      | [] => True
+      | _ => gcenv ! (prefix_fun clsid fid) = Some outco
+      end ->
       wt_stmt prog c.(c_objs) c.(c_mems) (meth_vars callee) callee.(m_body) ->
       exists m2,
         eval_funcall tge (function_entry2 tge) m1 (Internal cf)
-                     ((Vptr sb Int.zero) :: (Vptr outb Int.zero) :: vs) E0 m2 Vundef
+                     (Vptr sb Int.zero
+                           :: match callee.(m_out) with
+                              | [] => vs
+                              | _ => Vptr outb Int.zero :: vs
+                              end) E0 m2 Vundef
         /\ m2 |= staterep gcenv prog c.(c_name) me2 sb Z0
-               ** blockrep gcenv (adds (map fst callee.(m_out)) rvs sempty) outco.(co_members) outb
+               ** match callee.(m_out) with
+                  | [] => sepemp
+                  | _ => blockrep gcenv (adds (map fst callee.(m_out)) rvs sempty) outco.(co_members) outb
+                  end
                ** P.
   Proof.
     intros ** Heval Findc Findm Hm1 Wtmem ? Hgetptrf Hgetcf ? ? ?.
@@ -3930,7 +3772,7 @@ Section PRESERVATION.
     
     (* get the clight function *)
     edestruct methods_corres
-      as (ptr_f' & cf' & Hgetptrf' & Hgetcf' & ? & Hret & ? & ? & ? & ? & ? & ? & Htr); eauto.
+      as (ptr_f' & cf' & Hgetptrf' & Hgetcf' & Hparams & Hret & ? & ? & ? & ? & ? & ? & Htr); eauto.
     rewrite Hgetptrf' in Hgetptrf; inv Hgetptrf;
       rewrite Hgetcf' in Hgetcf; inv Hgetcf.
     
@@ -3938,8 +3780,15 @@ Section PRESERVATION.
       pose proof (find_method_name _ _ _ Findm') as Eq';
       rewrite <-Eq, <-Eq' in *.
 
+    assert (length (fn_params cf) =
+            length (Vptr sb Int.zero :: match m_out callee with
+                                        | [] => vs
+                                        | _ :: _ => Vptr outb Int.zero :: vs
+                                        end))
+      by (destruct callee.(m_out); simpl; auto).
+
     edestruct compat_auto_funcall_pres with (vs:=vs) (2:=Findm')
-      as (e & le & m & ? & ? & ? & ? & ? & Hm); eauto; simpl; auto.
+      as (e & le & m & ? & ? & ? & ? & Hm); eauto; simpl; auto.
 
     edestruct stmt_correctness with (p:=prog) (s:=callee.(m_body)) as (le' & m' & Hexec & MS); eauto.
     - rewrite match_states_conj; split; [|split; [|repeat split; eauto]].
@@ -3968,12 +3817,18 @@ Section PRESERVATION.
          - rewrite Hret; reflexivity. 
        }
       *{ rewrite sep_swap.
-         eapply sep_imp; eauto.
-         - erewrite <-output_match; eauto.
-           rewrite <-translate_param_fst.
-           apply blockrep_findvars. 
-           rewrite translate_param_fst; auto.             
-         - rewrite sep_drop; apply sep_imp'; auto.
+         destruct (m_out callee) eqn: Out.
+         - rewrite match_out_nil, sep_drop in Hm_fun''; auto.
+           rewrite <-sepemp_left; auto.
+         - assert (callee.(m_out) <> []) by (intro E; rewrite E in Out; discriminate).
+           rewrite match_out_notnil in Hm_fun''; auto; destruct Hm_fun'' as (Hm_fun'' & ? & ?).           
+           eapply sep_imp; eauto.
+           + rewrite <-Out.
+             erewrite <-output_match; eauto.
+             rewrite <-translate_param_fst.
+             apply blockrep_findvars.
+             rewrite translate_param_fst, Out; auto.
+           + rewrite sep_drop; apply sep_imp'; auto.
        }
   Qed.
 
@@ -3998,33 +3853,39 @@ Section PRESERVATION.
               /\ main.(fn_return) = type_int32s
               /\ main.(fn_callconv) = AST.cc_default
               /\ main.(fn_params) = []
-              /\ main.(fn_vars) = [(self, type_of_inst main_node);
-                                     (prefix out reset,
-                                      type_of_inst (prefix_fun main_node reset));
-                                     (prefix out step,
-                                      type_of_inst (prefix_fun main_node step))]
+              /\ main.(fn_vars) = (self, type_of_inst main_node)
+                                   :: match m_out m_step with
+                                      | [] => []
+                                      | _ => [(prefix out step,
+                                             type_of_inst (prefix_fun main_node step))]
+                                      end
               /\ main.(fn_temps) = map translate_param (m_in m_step)
               /\ main.(fn_body) =
                  return_zero
                    (Ssequence (reset_call main_node)
                               (Sloop (Ssequence (load_in (m_in m_step))
                                                 (Ssequence
-                                                   (step_call main_node (map make_in_arg (m_in m_step)))
+                                                   (step_call main_node (map make_in_arg (m_in m_step)) (m_out m_step))
                                                    (write_out main_node (m_out m_step))))
                                      Sskip))
-              /\ exists sb reset_b step_b m',
-                  alloc_variables tge empty_env m main.(fn_vars)
-                                                         (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
-                                                                    (PTree.set (prefix out reset)
-                                                                               (reset_b, type_of_inst (prefix_fun main_node reset))
-                                                                               (PTree.set self (sb, type_of_inst main_node) empty_env))) m'
-                  /\ exists reset_co step_co,
-                    gcenv ! (prefix_fun main_node reset) = Some reset_co
-                    /\ gcenv ! (prefix_fun main_node step) = Some step_co
-                    /\ m' |= staterep gcenv prog main_node hempty sb Z0
-                           ** blockrep gcenv sempty reset_co.(co_members) reset_b
-                           ** blockrep gcenv sempty step_co.(co_members) step_b
-                           ** P.
+              /\ exists sb,
+                  match m_out m_step with
+                  | [] =>
+                    exists m',
+                    alloc_variables tge empty_env m main.(fn_vars)
+                      (PTree.set self (sb, type_of_inst main_node) empty_env) m'
+                    /\ m' |= staterep gcenv prog main_node hempty sb Z0 ** P
+                  | _ =>
+                    exists m' step_b,
+                    alloc_variables tge empty_env m main.(fn_vars)
+                      (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
+                        (PTree.set self (sb, type_of_inst main_node) empty_env)) m'
+                    /\ exists step_co,
+                        gcenv ! (prefix_fun main_node step) = Some step_co
+                        /\ m' |= staterep gcenv prog main_node hempty sb Z0
+                               ** blockrep gcenv sempty step_co.(co_members) step_b
+                               ** P
+                  end.
   Proof.
     intros ** Hm.
     inv_trans TRANSL as En Estep Ereset with structs funs E.
@@ -4115,45 +3976,39 @@ Section PRESERVATION.
       + simpl.
         destruct (Mem.alloc m 0 (sizeof tge (type_of_inst main_node)))
           as (m2, sb) eqn: AllocSelf.
-        destruct (Mem.alloc m2 0 (sizeof tge (type_of_inst (prefix_fun main_node reset))))
-          as (m3, reset_b) eqn: AllocRes.
-        destruct (Mem.alloc m3 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
-          as (m4, step_b) eqn: AllocStep.
-        exists sb, reset_b, step_b; econstructor; repeat split.
-        * repeat (econstructor; eauto).
-        *{ edestruct global_out_struct with (2:=Ereset) as (reset_co & Hrco & ? & Hmr & ? & ? & ?); eauto.
-           edestruct global_out_struct with (2:=Estep) as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
-           edestruct make_members_co as (co & Hco & ? & ? & ? & ? & ?); eauto.
-           exists reset_co, step_co.
-           pose proof (find_class_name _ _ _ _ En) as Eq;
-             pose proof (find_method_name _ _ _ Estep) as Eq';
-             pose proof (find_method_name _ _ _ Ereset) as Eq'';
-             rewrite Eq, Eq', Eq'' in *.
-           split; [|split]; auto.
-           change (gcenv ! main_node) with ((prog_comp_env tprog) ! main_node) in Hco;
-             change (gcenv ! (prefix_fun main_node reset))
-             with ((prog_comp_env tprog) ! (prefix_fun main_node reset)) in Hrco;
+        exists sb.
+        destruct m0.(m_out) eqn: Out.
+        *{ exists m2; split.
+           - repeat (econstructor; eauto).
+           - admit.
+         }
+        *{ assert (m0.(m_out) <> []) by (intro E'; rewrite E' in Out; discriminate).
+           destruct (Mem.alloc m2 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
+             as (m3, step_b) eqn: AllocStep.
+           exists m3, step_b; split.
+           - repeat (econstructor; eauto).
+           - edestruct global_out_struct with (2:=Estep) as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
+             edestruct make_members_co as (co & Hco & ? & ? & ? & ? & ?); eauto.
+             exists step_co.
+             pose proof (find_class_name _ _ _ _ En) as Eq;
+               pose proof (find_method_name _ _ _ Estep) as Eq';
+               rewrite Eq, Eq' in *.
+             split; auto.
+             change (gcenv ! main_node) with ((prog_comp_env tprog) ! main_node) in Hco;
              change (gcenv ! (prefix_fun main_node step))
              with ((prog_comp_env tprog) ! (prefix_fun main_node step)) in Hsco.            
-           assert (sizeof tge (type_of_inst main_node) <= Int.modulus)
-             by (simpl; rewrite Hco; transitivity Int.max_unsigned;
-                 auto; unfold Int.max_unsigned; omega).
-           assert (sizeof tge (type_of_inst (prefix_fun main_node reset)) <= Int.modulus)
-             by (simpl; rewrite Hrco; transitivity Int.max_unsigned;
-                 auto; unfold Int.max_unsigned; omega).
-           assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
-             by (simpl; rewrite Hsco; transitivity Int.max_unsigned;
-                 auto; unfold Int.max_unsigned; omega).
-           eapply alloc_rule in AllocSelf; eauto; try omega.
-           eapply alloc_rule in AllocRes; eauto; try omega.
-           eapply alloc_rule in AllocStep; eauto; try omega.
-           rewrite sep_swap3.
-           eapply sep_imp; eauto.
-           - simpl; rewrite Hsco; eapply blockrep_empty; eauto.
-             rewrite Hms; eauto.
-           - apply sep_imp'.
-             + simpl; rewrite Hrco; eapply blockrep_empty; eauto.
-               rewrite Hmr; eauto.
+             assert (sizeof tge (type_of_inst main_node) <= Int.modulus)
+               by (simpl; rewrite Hco; transitivity Int.max_unsigned;
+                   auto; unfold Int.max_unsigned; omega).
+             assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
+               by (simpl; rewrite Hsco; transitivity Int.max_unsigned;
+                   auto; unfold Int.max_unsigned; omega).
+             eapply alloc_rule in AllocSelf; eauto; try omega.
+             eapply alloc_rule in AllocStep; eauto; try omega.
+             rewrite sep_swap.
+             eapply sep_imp; eauto.
+             + simpl; rewrite Hsco; eapply blockrep_empty; eauto.
+               rewrite Hms; eauto.
              + apply sep_imp'; auto.
                eapply range_staterep; eauto.
                apply not_None_is_Some; eauto.
@@ -4193,7 +4048,8 @@ Section PRESERVATION.
         unfold make_methods in Hinv.
         induction (c_methods c'); simpl in Hinv; try contradiction.
         destruct Hinv as [Hinv|]; auto.
-        inv Hinv.
+        unfold translate_method in Hinv.
+        destruct (m_out a); inv Hinv.
   Qed.
   
   Section Init.
@@ -4217,18 +4073,19 @@ Section PRESERVATION.
     Hypothesis Getstep_s: Genv.find_symbol tge (prefix_fun main_node step) = Some stp_ptr.
     Hypothesis Getstep_f: Genv.find_funct_ptr tge stp_ptr = Some (Internal step_f).
     
-    Variables (main_b: block) (main_f: function) (sb reset_b step_b: block)
-              (reset_co step_co: composite).
+    Variables (main_b: block) (main_f: function) (sb step_b: block)
+              (step_co: composite).
     Hypothesis Find_s_main: Genv.find_symbol tge tprog.(Ctypes.prog_main) = Some main_b.
     Hypothesis Findmain: Genv.find_funct_ptr tge main_b = Some (Ctypes.Internal main_f).
     Hypothesis Caractmain: main_f.(fn_return) = type_int32s
                            /\ main_f.(fn_callconv) = AST.cc_default
                            /\ main_f.(fn_params) = []
-                           /\ main_f.(fn_vars) = [(self, type_of_inst main_node);
-                                                   (prefix out reset,
-                                                    type_of_inst (prefix_fun main_node reset));
-                                                   (prefix out step,
-                                                    type_of_inst (prefix_fun main_node step))]
+                           /\ main_f.(fn_vars) = (self, type_of_inst main_node)
+                                                  :: match m_step.(m_out) with
+                                                     | [] => []
+                                                     | _ => [(prefix out step,
+                                                             type_of_inst (prefix_fun main_node step))]
+                                                     end
                            /\ main_f.(fn_temps) = map translate_param (m_in m_step)
                            /\ main_f.(fn_body) =
                              return_zero
@@ -4237,27 +4094,34 @@ Section PRESERVATION.
                                              (Ssequence (load_in (m_in m_step))
                                                         (Ssequence
                                                            (step_call main_node
-                                                                      (map make_in_arg (m_in m_step)))
+                                                                      (map make_in_arg (m_in m_step))
+                                                                      (m_out m_step))
                                                            (write_out main_node (m_out m_step)))) Sskip)).
 
-    Hypothesis Getreset_co: gcenv ! (prefix_fun main_node reset) = Some reset_co.
-    Hypothesis Getstep_co: gcenv ! (prefix_fun main_node step) = Some step_co.
+    Hypothesis Getstep_co: match m_step.(m_out) with
+                           | [] => True
+                           | _ => gcenv ! (prefix_fun main_node step) = Some step_co
+                           end.
 
     Variables (m0 m1: Mem.mem).
     Hypothesis Initmem: Genv.init_mem tprog = Some m0.
-    Let e1 := (PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
-                         (PTree.set (prefix out reset) (reset_b, type_of_inst (prefix_fun main_node reset))
-                                    (PTree.set self (sb, type_of_inst main_node) empty_env))).
+    Let e1 := match m_step.(m_out) with
+              | [] => PTree.set self (sb, type_of_inst main_node) empty_env
+              | _ => PTree.set (prefix out step) (step_b, type_of_inst (prefix_fun main_node step))
+                              (PTree.set self (sb, type_of_inst main_node) empty_env)
+              end.
     Hypothesis Alloc: alloc_variables tge empty_env m0 main_f.(fn_vars) e1 m1.
 
-    Variable P : massert.
+    Variable P: massert.
 
     Hypothesis Hm1: m1 |= staterep gcenv prog main_node hempty sb Z0
-                         ** blockrep gcenv sempty reset_co.(co_members) reset_b
-                         ** blockrep gcenv sempty step_co.(co_members) step_b
+                         ** match m_step.(m_out) with
+                            | [] => sepemp
+                            | _ => blockrep gcenv sempty step_co.(co_members) step_b
+                            end
                          ** P.
 
-    Variables (me0: heap).
+    Variable me0: heap.
     Hypothesis ResetNode: stmt_call_eval prog hempty c_main.(c_name) m_reset.(m_name) [] me0 [].
 
     Let le_main := create_undef_temps main_f.(fn_temps).
@@ -4270,17 +4134,10 @@ Section PRESERVATION.
       - rewrite Hvars.
         unfold var_names.
         rewrite <-NoDup_norepet, <-fst_NoDupMembers.
-        repeat constructor; auto.
-        + intros [E|[E|E]].
-          * apply self_not_prefixed; rewrite <-E; constructor.
-          * apply self_not_prefixed; rewrite <-E; constructor.
-          * contradict E.
-        + intros [E|E].
-          * apply prefix_injective in E; destruct E as [? E].
-            pose proof methods_nodup as Nodup; unfold methods in Nodup;
-              inversion_clear Nodup as [|? ? Notin].
-            apply Notin; rewrite E; apply in_eq.
-          * contradict E.
+        destruct m_step.(m_out); repeat constructor; auto.
+        intros [E|E].
+        + apply self_not_prefixed; rewrite <-E; constructor.
+        + contradict E.
       - rewrite Hparams; constructor.
       - rewrite Hparams, Htemps; simpl.
         intros ? ? Hx; contradiction.
@@ -4290,10 +4147,12 @@ Section PRESERVATION.
     Lemma match_states_main_after_reset:      
       exists m2,
         eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
-                     ([Vptr sb Int.zero; Vptr reset_b Int.zero]) E0 m2 Vundef
+                     [Vptr sb Int.zero] E0 m2 Vundef
         /\ m2 |= staterep gcenv prog c_main.(c_name) me0 sb 0
-               ** blockrep gcenv sempty reset_co.(co_members) reset_b
-               ** blockrep gcenv sempty step_co.(co_members) step_b
+               ** match m_step.(m_out) with
+                  | [] => sepemp
+                  | _ => blockrep gcenv sempty step_co.(co_members) step_b
+                  end
                ** P.
     Proof.
       pose proof (find_class_name _ _ _ _ Find) as Eq;
@@ -4304,29 +4163,46 @@ Section PRESERVATION.
       rewrite Getreset_s in Get_s; inversion Get_s; subst ptr;
         rewrite Getreset_f in Get_f; inversion Get_f; subst f.
       edestruct corres_auto_funcall with (3:=Findreset) as (m'' & ? & Hm''); eauto.
+      - rewrite Reset_out_spec, sep_swap, <-sepemp_left; eauto.
       - rewrite Reset_in_spec; auto.
-      - rewrite Hp, Reset_in_spec; auto.
+      - rewrite Hp, Reset_in_spec, Reset_out_spec; auto.
+      - rewrite Reset_out_spec; auto.
       - edestruct wt_program_find_class as [WT_main]; eauto.
         eapply wt_stmt_sub with (prog':=prog_main); eauto.
         + eapply wt_class_find_method with (2:=Findreset); auto. 
         + eapply find_class_sub; eauto.
-      - exists m''; split; auto.
-        rewrite Reset_out_spec in Hm''; auto.
+      - rewrite Reset_out_spec in *.    
+        exists m''; split; auto.
+        rewrite sep_swap, <-sepemp_left in Hm''; auto.
+
+        Grab Existential Variables.
+        eauto.
+        eauto.
     Qed.
 
     Lemma match_states_main_after_step:
       forall m' P me me' vs rvs,
         stmt_call_eval prog me c_main.(c_name) m_step.(m_name) vs me' rvs ->
         m' |= staterep gcenv prog c_main.(c_name) me sb 0
-             ** blockrep gcenv sempty step_co.(co_members) step_b
+             ** match m_step.(m_out) with
+                | [] => sepemp
+                | _ => blockrep gcenv sempty step_co.(co_members) step_b
+                end
              ** P ->
         wt_mem me prog_main c_main ->
         wt_vals vs m_step.(m_in) ->
         exists m'',
           eval_funcall tge (function_entry2 tge) m' (Internal step_f)
-                       (Vptr sb Int.zero :: Vptr step_b Int.zero :: vs) E0 m'' Vundef
+                       (Vptr sb Int.zero
+                             :: match m_step.(m_out) with
+                                | [] => vs
+                                | _ => Vptr step_b Int.zero :: vs
+                                end) E0 m'' Vundef
           /\ m'' |= staterep gcenv prog c_main.(c_name) me' sb 0
-                  ** blockrep gcenv (adds (map fst m_step.(m_out)) rvs sempty) step_co.(co_members) step_b
+                  ** match m_step.(m_out) with
+                     | [] => sepemp
+                     | _ => blockrep gcenv (adds (map fst m_step.(m_out)) rvs sempty) step_co.(co_members) step_b
+                     end
                   ** P.
     Proof.
       intros.
@@ -4338,8 +4214,8 @@ Section PRESERVATION.
       rewrite Getstep_s in Get_s; inversion Get_s; subst ptr;
         rewrite Getstep_f in Get_f; inversion Get_f; subst f.
       edestruct corres_auto_funcall with (3:=Findstep) as (m'' & ? & Hm''); eauto.
-      - rewrite Hp; simpl; rewrite map_length.
-        symmetry; erewrite Forall2_length; eauto.
+      - destruct m_step.(m_out); rewrite Hp; simpl; rewrite map_length;
+          symmetry; erewrite Forall2_length; eauto.
       - edestruct wt_program_find_class as [WT_main]; eauto.
         eapply wt_stmt_sub with (prog':=prog_main); eauto.
         + eapply wt_class_find_method with (2:=Findstep); auto. 
@@ -4355,8 +4231,7 @@ Section PRESERVATION.
       forall cs le m,
         wt_vals cs m_step.(m_in) ->
         exists le', (* XXX: not any le': the one that contains [cs] *)
-          exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1
-                    le m
+          exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le m
                     (load_in m_step.(m_in)) 
                     (load_events cs m_step.(m_in))
                     le' m Out_normal
@@ -4379,8 +4254,7 @@ Section PRESERVATION.
         rewrite load_events_cons.
 
         assert (exists le',
-                   exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 
-                             le m
+                   exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le m
                              (Sbuiltin (Some x) (AST.EF_vload (type_chunk t))
                                        (Ctypes.Tcons (Tpointer (cltype t) noattr) Ctypes.Tnil)
                                        [Eaddrof (Evar (glob_id x) (cltype t)) (Tpointer (cltype t) noattr)])
@@ -4400,11 +4274,12 @@ Section PRESERVATION.
               rewrite <-not_Some_is_None.
               intros (b, t') Hget.
               subst e1.
-              rewrite 3 PTree.gso, PTree.gempty in Hget.
-              * discriminate.
-              * intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
-              * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
-              * intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
+              assert (glob_id x <> self)
+                by (intro E; unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate).
+              destruct m_step.(m_out).
+              * rewrite PTree.gso, PTree.gempty in Hget; auto; try discriminate.
+              * rewrite 2 PTree.gso, PTree.gempty in Hget; auto; try discriminate.
+                intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
             + unfold Cop.sem_cast; simpl; eauto. 
           - constructor.
             unfold load_event_of_val; simpl.
@@ -4428,7 +4303,10 @@ Section PRESERVATION.
     Lemma exec_write:
       forall ys ve le m,
         wt_vals ys m_step.(m_out) ->
-        m |= blockrep gcenv (adds (map fst m_step.(m_out)) ys ve) (co_members step_co) step_b 
+        m |= match m_step.(m_out) with
+            | [] => sepemp
+            | _ => blockrep gcenv (adds (map fst m_step.(m_out)) ys ve) (co_members step_co) step_b
+            end
             ** P ->
         exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le m
                   (write_out main_node m_step.(m_out)) 
@@ -4436,116 +4314,117 @@ Section PRESERVATION.
                   le m Out_normal.
     Proof.
       (* XXX: factorize proof (& code) with [exec_read] *)
-      clear Caractmain Step_out_spec Hm1.
+      destruct m_step.(m_out) eqn: Out.
+      - exfalso; apply Step_out_spec; auto.
 
-      pose proof (m_nodupout m_step) as Hnodup.
+      - assert (m_step.(m_out) <> []) by (intro E; rewrite E in Out; discriminate).
+        intros ** Hwt Hmem.
+        clear Caractmain Step_out_spec Hm1.
 
-      pose proof (find_class_name _ _ _ _ Find) as Eq;
-        pose proof (find_method_name _ _ _ Findstep) as Eq';
-        rewrite <-Eq, <-Eq' in *.
+        pose proof (m_nodupout m_step) as Hnodup.
+        
+        pose proof (find_class_name _ _ _ _ Find) as Eq;
+          pose proof (find_method_name _ _ _ Findstep) as Eq';
+          rewrite <-Eq, <-Eq' in *.
 
-      assert (e1 ! (Ident.prefix out step) 
-              = Some (step_b, type_of_inst (prefix_fun main_node step))) as Findstr
+        assert (e1 ! (Ident.prefix out step)
+                = Some (step_b, type_of_inst (prefix_fun main_node step))) as Findstr
           by (subst e1; rewrite PTree.gss; auto).
-      rewrite <-Eq, <-Eq' in Findstr. 
+        rewrite <-Eq, <-Eq' in Findstr.
 
-      edestruct global_out_struct with (2:=Findstep) 
-        as (step_co' & Hrco & ? & Hmr & ? & ? & ?); eauto.
-      rewrite Getstep_co in Hrco; inversion Hrco; subst step_co'.
+        edestruct global_out_struct with (2:=Findstep) 
+          as (step_co' & Hrco & ? & Hmr & ? & ? & ?); eauto.
+        rewrite Getstep_co in Hrco; inversion Hrco; subst step_co'.
 
-      intros ** Hwt Hmem.
+        (* This induction is tricky: [co_members step_co ~ m_out m_step]
+           is fixed across the induction while we are going down inside
+           [m_out m_step]. The following assertion allows us to get back
+           into [co_members] whenever necessary. *)
 
-      (* This induction is tricky: [co_members step_co ~ m_out m_step]
-      is fixed across the induction while we are going down inside
-      [m_out m_step]. The following assertion allows us to get back
-      into [co_members] whenever necessary. *)
+        assert (Hfield_offs: forall x ty,
+                   In (x, ty) (map translate_param (m_out m_step)) ->
+                   In (x, ty) (co_members step_co)) 
+          by now rewrite Hmr.
 
-      assert (Hfield_offs: forall x ty,
-                 In (x, ty) (map translate_param (m_out m_step)) ->
-                 In (x, ty) (co_members step_co)) 
-        by now rewrite Hmr.
-
-      revert ve ys Hwt Hmem Hnodup Hfield_offs Findstr Step_out Eq Eq'.
-      generalize m_step.(m_out) as xts.
-      clear - Getstep_co.
-
-      unfold write_out.
-
-      induction xts as [|(x, t) xts];
-        intros ve ys Hwt;
-        inversion_clear Hwt as [| y ? ys' ? Hwt_y Hwt_ys'];
-        intros Hmem Hnodup Hfield_offs Findstr Step_out Eq Eq' ;
-        eauto using exec_stmt; 
-        simpl.
-      
-      inversion_clear Hnodup.
-
-      inversion_clear Step_out as [|? ? Findx].
-      destruct Findx as (bx & Findx & Volx).
-
-      rewrite store_events_cons.
-      eapply exec_Sseq_1 with (le1 := le); eauto.
-      - (* CASE: *)
-        match goal with
-        | |- exec_stmt _ _ _ _ _ _ [store_event_of_val _ _] _ _ _ => idtac
-        end.
-        (* ESAC. *)
-
-        change le with (set_opttemp None y le) at 2. 
-        eapply exec_Sbuiltin with (vres:=Vundef).
-        + repeat 
-            match goal with 
-            | |- eval_exprlist _ _ _ _ _ _ _ => econstructor
-            end.
-          * {
-              econstructor.
-              apply eval_Evar_global; eauto.
-              rewrite <-not_Some_is_None.
-              intros (b, t'') Hget.
-              subst e1.
-              rewrite 3 PTree.gso, PTree.gempty in Hget.
-              - discriminate.
-              - intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
-              - intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
-              - intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
-            }
-          * reflexivity. 
-          * {
-              assert (In (x, cltype t) (co_members step_co)) 
-                by now eapply Hfield_offs; econstructor(auto).
-
-              edestruct blockrep_field_offset as (? & ? & ? & ?); eauto.
-
-              eapply eval_Elvalue; eauto.
-              - eapply eval_Efield_struct; eauto.
-                + eapply eval_Elvalue; eauto.
-                  * constructor;
-                      rewrite <- Eq'; eauto.
-                  * now apply deref_loc_copy.
-                + unfold type_of_inst; simpl; rewrite Eq'; eauto.
-              - simpl; eapply blockrep_deref_mem; eauto.
-                + simpl; apply find_gsss.
-                + rewrite Int.unsigned_zero; simpl.
-                  rewrite Int.unsigned_repr; auto.
-            }
-          * eapply sem_cast_same; eauto. 
-        + constructor.
-          apply volatile_store_vol; auto.
-          rewrite <-wt_val_load_result; auto.
-          apply eventval_of_val_match; auto. 
-
-      - (* CASE: *)
-        match goal with
-        | |- exec_stmt _ _ _ _ _ _ (store_events _ _) _ _ _ => idtac
-        end.
-        (* ESAC. *)
-        eapply IHxts; eauto. 
-        + eapply sep_imp; eauto.
+        revert ve ys Hwt Hmem Hnodup Hfield_offs Findstr Step_out Eq Eq'.
+        rewrite <-Out.
+        generalize m_step.(m_out) as xts.
+        clear - Getstep_co.
+        
+        unfold write_out.
+        
+        induction xts as [|(x, t) xts];
+          intros ve ys Hwt;
+          inversion_clear Hwt as [| y ? ys' ? Hwt_y Hwt_ys'];
+          intros Hmem Hnodup Hfield_offs Findstr Step_out Eq Eq' ;
+          eauto using exec_stmt; 
           simpl.
-          rewrite adds_cons_cons; eauto.
-          now rewrite <- ?fst_InMembers.
-        + intros. 
-          eapply Hfield_offs. econstructor(now auto).
+
+        inversion_clear Hnodup.
+
+        inversion_clear Step_out as [|? ? Findx].
+        destruct Findx as (bx & Findx & Volx).
+        
+        rewrite store_events_cons.
+        eapply exec_Sseq_1 with (le1 := le); eauto.
+        + (* CASE: *)
+          match goal with
+          | |- exec_stmt _ _ _ _ _ _ [store_event_of_val _ _] _ _ _ => idtac
+          end.
+          (* ESAC. *)
+
+          change le with (set_opttemp None y le) at 2. 
+          eapply exec_Sbuiltin with (vres:=Vundef).
+          *{ repeat 
+               match goal with 
+               | |- eval_exprlist _ _ _ _ _ _ _ => econstructor
+               end.
+             - econstructor.
+               apply eval_Evar_global; eauto.
+               rewrite <-not_Some_is_None.
+               intros (b, t'') Hget.
+               subst e1.
+               rewrite 2 PTree.gso, PTree.gempty in Hget.
+               + discriminate.
+               + intro E. unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate.
+               + intro E; apply (glob_id_not_prefixed x); rewrite E; constructor. 
+             - reflexivity. 
+             - assert (In (x, cltype t) (co_members step_co)) 
+                 by now eapply Hfield_offs; econstructor(auto).
+
+               edestruct blockrep_field_offset as (? & ? & ? & ?); eauto.
+
+               eapply eval_Elvalue; eauto.
+               + eapply eval_Efield_struct; eauto.
+                 *{ eapply eval_Elvalue; eauto.
+                    - constructor;
+                        rewrite <- Eq'; eauto.
+                    - now apply deref_loc_copy.
+                  }
+                 * unfold type_of_inst; simpl; rewrite Eq'; eauto.
+               + simpl; eapply blockrep_deref_mem; eauto.
+                 * simpl; apply find_gsss.
+                 * rewrite Int.unsigned_zero; simpl.
+                   rewrite Int.unsigned_repr; auto.
+             - eapply sem_cast_same; eauto.
+           }
+          * constructor.
+            apply volatile_store_vol; auto.
+            rewrite <-wt_val_load_result; auto.
+            apply eventval_of_val_match; auto. 
+
+        + (* CASE: *)
+          match goal with
+          | |- exec_stmt _ _ _ _ _ _ (store_events _ _) _ _ _ => idtac
+          end.
+          (* ESAC. *)
+          eapply IHxts; eauto. 
+          * eapply sep_imp; eauto.
+            simpl.
+            rewrite adds_cons_cons; eauto.
+            now rewrite <- fst_InMembers.
+          * intros. 
+            eapply Hfield_offs. econstructor(now auto).
     Qed.
 
     (*****************************************************************)
@@ -4554,33 +4433,34 @@ Section PRESERVATION.
     
     Section dostep'.
 
-
-      Variable ins : NL.Str.stream (list const).
-      Variable outs : NL.Str.stream (list const).
-
-      Variable xs : list (ident * type).
-      Variable ys : list (ident * type).
+      Variables ins outs: NL.Str.stream (list const).
+      Variables xs ys: list (ident * type).
       
       Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) m_step.(m_in).
       Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) m_step.(m_out).
 
-
       (** This coinductive predicate describes the logical behavior of
-    the [while] loop. *)
+          the [while] loop. *)
       
       CoInductive dostep' : nat -> mem -> Prop
         := Step : 
              forall n me me',
                eval_funcall tge (function_entry2 tge) me (Internal step_f)
-                            (Vptr sb Int.zero :: Vptr step_b Int.zero :: map sem_const (ins n))
-                            E0 me' Vundef ->
-               me' |= blockrep gcenv (adds (map fst (m_out m_step)) 
-                                          (map sem_const (outs n)) sempty)
-                              (co_members step_co) step_b
+                            (Vptr sb Int.zero
+                                  :: match m_step.(m_out) with
+                                     | [] => map sem_const (ins n)
+                                     | _ => Vptr step_b Int.zero :: map sem_const (ins n)
+                                     end) E0 me' Vundef ->
+               me' |= match m_step.(m_out) with
+                     | [] => sepemp
+                     | _ => blockrep gcenv (adds (map fst (m_out m_step)) 
+                                                (map sem_const (outs n)) sempty)
+                                    (co_members step_co) step_b
+                     end
                      ** P ->
                dostep' (S n) me' ->
                dostep' n me.
-
+      
       Section Dostep'_coind.
 
         Variable t : genv.
@@ -4590,9 +4470,16 @@ Section PRESERVATION.
             R n me ->
             exists me',
               eval_funcall tge (function_entry2 tge) me (Internal step_f)
-                           (Vptr sb Int.zero :: Vptr step_b Int.zero :: map sem_const (ins n)) E0 me' Vundef
-              /\ me' |= blockrep gcenv (adds (map fst (m_out m_step)) (map sem_const (outs n)) sempty)
-                               (co_members step_co) step_b 
+                           (Vptr sb Int.zero
+                                 :: match m_step.(m_out) with
+                                    | [] => map sem_const (ins n)
+                                    | _ => Vptr step_b Int.zero :: map sem_const (ins n)
+                                    end) E0 me' Vundef
+              /\ me' |= match m_step.(m_out) with
+                      | [] => sepemp
+                      | _ => blockrep gcenv (adds (map fst (m_out m_step)) (map sem_const (outs n)) sempty)
+                                     (co_members step_co) step_b
+                      end
                       ** P 
               /\ R (S n) me'.
 
@@ -4617,7 +4504,7 @@ Section PRESERVATION.
         wt_program prog ->
          exists m0, 
           eval_funcall tge (function_entry2 tge) mInit (Internal reset_f)
-                       ([Vptr sb Int.zero; Vptr reset_b Int.zero]) E0 m0 Vundef
+                       [Vptr sb Int.zero] E0 m0 Vundef
           /\ dostep' 0 m0.
       Proof.
         intros Hwt_prog (* Hwt_mem Hdostep *).
@@ -4625,7 +4512,7 @@ Section PRESERVATION.
         (* Initialisation *)
         edestruct match_states_main_after_reset as (mem0 & ? & Hmem0).
         eexists; split; eauto.
-        rewrite <- sep_assoc, sep_swap, sep_assoc, sep_swap in Hmem0.
+        (* rewrite <- sep_assoc, sep_swap, sep_assoc, sep_swap in Hmem0. *)
         
         (* Coinduction *)
         set (R := fun n (m: mem) => 
@@ -4634,73 +4521,78 @@ Section PRESERVATION.
                       /\ wt_mem me prog_main c_main
                       /\ m
                           |= staterep gcenv prog (c_name c_main) me sb 0 
-                          ** blockrep gcenv sempty (co_members step_co) step_b 
-                          ** blockrep gcenv sempty (co_members reset_co) reset_b
+                          ** match m_step.(m_out) with
+                             | [] => sepemp
+                             | _ => blockrep gcenv sempty (co_members step_co) step_b
+                             end
                           ** P).
         apply dostep'_coind with (R := R);
           unfold R.
-        2: now exists me0; repeat (split; auto).
+        - clear - Hwt_ins Hwt_prog WT_mem m_step Find Findstep.
 
-                 clear - Hwt_ins Hwt_prog (* Hwt_mem *)WT_mem m_step Find Findstep.
+          intros n meN (? & Hdostep & Hwt & Hblock).
+          destruct Hdostep as [n menvN menvSn cins couts Hstmt Hdostep].
+          specialize Hwt_ins with n.
 
-                 intros n meN (? & Hdostep & Hwt & Hblock).
-                 destruct Hdostep as [n menvN menvSn cins couts Hstmt Hdostep].
-                 specialize Hwt_ins with n.
+          assert (c_name c_main = main_node) as <-
+              by now eapply find_class_name; eauto. 
 
-                 assert (c_name c_main = main_node) as <-
-                     by now eapply find_class_name; eauto. 
-
-                 assert (exists meSn,
-                            eval_funcall tge (function_entry2 tge) meN
-                                         (Internal step_f)
-                                         (Vptr sb Int.zero :: Vptr step_b Int.zero :: cins) 
-                                         E0 meSn Vundef 
-                            /\ meSn
-                                |= staterep gcenv prog (c_name c_main) menvSn sb 0
-                                ** blockrep gcenv (adds (map fst (m_out m_step)) couts sempty) 
-                                (co_members step_co) step_b
-                                ** blockrep gcenv sempty (co_members reset_co) reset_b
-                                ** P)
-                   as (meSn & ? & Hblock_step).
-                 {
-                   assert (m_step.(m_name) = step) as <-
-                       by now eapply find_method_name; eauto.
-
-                   eapply match_states_main_after_step; eauto.
-                 }
-
-                 exists meSn.
-
-                 assert (meSn
-                           |= blockrep gcenv (adds (map fst (m_out m_step)) (map sem_const (outs n)) sempty) 
-                           (co_members step_co) step_b
-                           ** P).
-                 {
-                   now match goal with
-                       | H: context[ blockrep _ _ _ step_b ] |- _ =>
-                         apply sep_proj2 in H;
-                           rewrite sep_swap in H;
-                           apply sep_proj2 in Hblock_step
-                       end.
-                 }
+          assert (exists meSn,
+                     eval_funcall tge (function_entry2 tge) meN
+                                  (Internal step_f)
+                                  (Vptr sb Int.zero
+                                        :: match m_step.(m_out) with
+                                           | [] => cins
+                                           | _ => Vptr step_b Int.zero :: cins
+                                           end) 
+                                  E0 meSn Vundef 
+                     /\ meSn
+                         |= staterep gcenv prog (c_name c_main) menvSn sb 0
+                         ** match m_step.(m_out) with
+                            | [] => sepemp
+                            | _ => blockrep gcenv (adds (map fst (m_out m_step)) couts sempty) 
+                                           (co_members step_co) step_b
+                            end
+                         ** P)
+            as (meSn & ? & Hblock_step).
+          {
+            assert (m_step.(m_name) = step) as <-
+                by now eapply find_method_name; eauto.
+            
+            eapply match_states_main_after_step; eauto.
+          }
+          
+          exists meSn.
+          
+          assert (meSn |= match m_step.(m_out) with
+                         | [] => sepemp
+                         | _ => blockrep gcenv (adds (map fst (m_out m_step)) (map sem_const (outs n)) sempty) 
+                                        (co_members step_co) step_b
+                         end
+                       ** P)
+            by (apply sep_drop in Hblock_step; auto).
                  
-                 assert (wt_mem menvSn prog_main c_main)
-                   by now edestruct pres_sem_stmt_call as (? & ?); eauto.
+          assert (wt_mem menvSn prog_main c_main)
+            by now edestruct pres_sem_stmt_call as (? & ?); eauto.
                  
-                 assert (meSn
-                           |= staterep gcenv prog (c_name c_main) menvSn sb 0 
-                           ** blockrep gcenv sempty (co_members step_co) step_b
-                           ** blockrep gcenv sempty (co_members reset_co) reset_b 
-                           ** P).
-                 {
-                   rewrite sep_swap in Hblock_step |- *.
-                   eapply sep_imp; 
-                     [ eapply Hblock_step
-                     | eapply blockrep_any_empty
-                     | eauto ].
-                 }
+          assert (meSn
+                    |= staterep gcenv prog (c_name c_main) menvSn sb 0 
+                    ** match m_step.(m_out) with
+                       | [] => sepemp
+                       | _ => blockrep gcenv sempty (co_members step_co) step_b
+                       end
+                    ** P).
+          {
+            eapply sep_imp.
+            - eapply Hblock_step.
+            - auto.
+            - destruct m_step.(m_out); eauto.
+              rewrite blockrep_any_empty; auto.
+          }
 
-                 repeat (split; eauto).
+          repeat (split; eauto).
+          
+        - now exists me0; repeat (split; auto).
       Qed.
 
       (*    End dostep'. *)
@@ -4714,7 +4606,7 @@ Section PRESERVATION.
           (load_in (m_in m_step))
           (Ssequence
              (step_call main_node
-                        (map make_in_arg (m_in m_step)))
+                        (map make_in_arg (m_in m_step)) (m_out m_step))
              (write_out main_node (m_out m_step))).
 
       Lemma exec_body:
@@ -4730,13 +4622,12 @@ Section PRESERVATION.
       Proof.
         intros ** Hdostep.
         assert (e1 ! self = Some (sb, type_of_inst main_node)).
-        { subst e1;
-            rewrite 2 PTree.gso, PTree.gss; auto;
+        { destruct m_step.(m_out); subst e1. 
+          - rewrite PTree.gss; auto.
+          - rewrite PTree.gso, PTree.gss; auto;
               intro Eq; apply self_not_prefixed; rewrite Eq; constructor.
         }
-        assert (e1 ! (Ident.prefix out step) = Some (step_b, type_of_inst (prefix_fun main_node step)))
-          by (subst e1; rewrite PTree.gss; auto).
-
+       
         destruct Hdostep as [n meN meSn Hvals_in Hvals_out Hfuncall].
         
         (* load in *)
@@ -4746,22 +4637,28 @@ Section PRESERVATION.
         
         assert (
             eval_exprlist (globalenv tprog) e1 le1 meN
-                          (Eaddrof (Evar self 
-                                         (type_of_inst main_node))
-                                   (type_of_inst_p main_node)
-                                   :: Eaddrof (Evar (prefix out step) 
-                                                    (type_of_inst (prefix_fun main_node step)))
-                                   (pointer_of (type_of_inst (prefix_fun main_node step)))
-                                   :: map make_in_arg (m_in m_step))
+                          (Eaddrof (Evar self (type_of_inst main_node)) (type_of_inst_p main_node)
+                                   :: match m_step.(m_out) with
+                                      | [] => map make_in_arg (m_in m_step)
+                                      | _ => Eaddrof (Evar (prefix out step) 
+                                                          (type_of_inst (prefix_fun main_node step)))
+                                                    (pointer_of (type_of_inst (prefix_fun main_node step)))
+                                                    :: map make_in_arg (m_in m_step)
+                                      end)
                           (Ctypes.Tcons 
                              (type_of_inst_p main_node)
-                             (Ctypes.Tcons
-                                (pointer_of (type_of_inst (prefix_fun main_node step)))
-                                (list_type_to_typelist 
-                                   (map Clight.typeof (map make_in_arg (m_in m_step))))))
+                             match m_step.(m_out) with
+                             | [] => list_type_to_typelist (map Clight.typeof (map make_in_arg (m_in m_step)))
+                             | _ => Ctypes.Tcons
+                                     (pointer_of (type_of_inst (prefix_fun main_node step)))
+                                     (list_type_to_typelist 
+                                        (map Clight.typeof (map make_in_arg (m_in m_step))))
+                             end)
                           (Vptr sb Int.zero
-                                :: Vptr step_b Int.zero
-                                :: map sem_const (ins n))).
+                                :: match m_step.(m_out) with
+                                   | [] => map sem_const (ins n)
+                                   | _ => Vptr step_b Int.zero :: map sem_const (ins n)
+                                   end)).
         {
           assert (
               forall vs,
@@ -4786,14 +4683,15 @@ Section PRESERVATION.
             now apply sem_cast_same.
             apply IHl; eauto.
           }
-
-          repeat (econstructor; eauto).
+          destruct m_step.(m_out);
+            repeat (econstructor; eauto).
+          subst e1; rewrite PTree.gss; auto.
         }
 
         (* call step *)
         assert (exists le2,
                    exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le1 meN
-                             (step_call main_node (map make_in_arg (m_in m_step))) E0 
+                             (step_call main_node (map make_in_arg (m_in m_step)) (m_out m_step)) E0 
                              le2 meSn Out_normal)
           as (le2 & Hcall).
         { eexists.
@@ -4802,48 +4700,56 @@ Section PRESERVATION.
                 & ? & ? & ? & ? & ? & Htr_stp); eauto.
           rewrite Getstep_s in Get_s; inversion Get_s; subst ptr;
             rewrite Getstep_f in Get_f; inversion Get_f; subst f.
-
-          eapply exec_Scall; simpl; eauto; simpl.
-          - (* Case: *)
-            match goal with
-            | |- eval_expr _ _ _ _ (Evar _ _) _ => idtac
-            end.
-            (* Esac. *)
-            eapply eval_Elvalue. 
-            + apply eval_Evar_global; eauto.
-              rewrite <-not_Some_is_None.
-              intros (b, t') Hget.
-              subst e1.
-              rewrite 3 PTree.gso, PTree.gempty in Hget.
-              * discriminate.
-              * intro E; apply self_not_prefixed; rewrite <-E; constructor.
-              * intro E; apply prefix_injective in E; destruct E as [E].
-                contradict E; apply fun_not_out.
-              * intro E; apply prefix_injective in E; destruct E as [E].
-                contradict E; apply fun_not_out.
-            + apply deref_loc_reference; auto.
-          - (* Case: *)
-            match goal with
-            | |- Genv.find_funct _ _ = Some _ => idtac
-            end.
-            (* Esac. *)
-            unfold Genv.find_funct.
-            destruct (Int.eq_dec Int.zero Int.zero) as [|Neq]; eauto.
-            exfalso; apply Neq; auto.
-          - (* Case: *)
-            match goal with
-            | |- type_of_function step_f = _ => idtac
-            end.
-            (* Esac. *)
-            assert (c_name c_main = main_node) as <-
+          unfold step_call.
+          destruct m_step.(m_out) eqn: Out.
+          - eapply exec_Scall; simpl; eauto; simpl.
+            + eapply eval_Elvalue. 
+              *{ apply eval_Evar_global; eauto.
+                 rewrite <-not_Some_is_None.
+                 intros (b, t') Hget.
+                 subst e1.
+                 rewrite PTree.gso, PTree.gempty in Hget.
+                 - discriminate.
+                 - intro E; apply self_not_prefixed; rewrite <-E; constructor.
+               }
+              * apply deref_loc_reference; auto.
+            + unfold Genv.find_funct.
+              destruct (Int.eq_dec Int.zero Int.zero) as [|Neq]; eauto.
+              exfalso; apply Neq; auto.
+            + assert (c_name c_main = main_node) as <-
                 by now eapply find_class_name; eauto. 
-            assert (m_step.(m_name) = step) as <-
+              assert (m_step.(m_name) = step) as <-
                 by now eapply find_method_name; eauto.
-            simpl; unfold type_of_function;
-              rewrite Hp_stp, Hr_stp, Hcc_stp; simpl; repeat f_equal.
-            clear.
-            induction (m_in m_step) as [|(x, t)]; simpl; auto.
-            rewrite IHl; auto.
+              simpl; unfold type_of_function;
+                rewrite Hp_stp, Hr_stp, Hcc_stp; simpl; repeat f_equal.
+              clear.
+              induction (m_in m_step) as [|(x, t)]; simpl; auto.
+              rewrite IHl; auto.
+          - eapply exec_Scall; simpl; eauto; simpl.
+            + eapply eval_Elvalue. 
+              *{ apply eval_Evar_global; eauto.
+                 rewrite <-not_Some_is_None.
+                 intros (b, t') Hget.
+                 subst e1.
+                 rewrite 2 PTree.gso, PTree.gempty in Hget.
+                 - discriminate.
+                 - intro E; apply self_not_prefixed; rewrite <-E; constructor.
+                 - intro E; apply prefix_injective in E; destruct E as [E].
+                   contradict E; apply fun_not_out.
+               }
+              * apply deref_loc_reference; auto.
+            + unfold Genv.find_funct.
+              destruct (Int.eq_dec Int.zero Int.zero) as [|Neq]; eauto.
+              exfalso; apply Neq; auto.
+            + assert (c_name c_main = main_node) as <-
+                  by now eapply find_class_name; eauto. 
+              assert (m_step.(m_name) = step) as <-
+                  by now eapply find_method_name; eauto.
+              simpl; unfold type_of_function;
+                rewrite Hp_stp, Hr_stp, Hcc_stp; simpl; repeat f_equal.
+              clear.
+              induction (m_in m_step) as [|(x, t)]; simpl; auto.
+              rewrite IHl; auto.
         }
         eexists le2, meSn; split; auto.
         repeat eapply exec_Sseq_1; eauto. 
@@ -4880,20 +4786,16 @@ Section PRESERVATION.
           /\ dostep' 0 m2.
       Proof.
         assert (e1 ! self = Some (sb, type_of_inst main_node)).
-        { subst e1;
-            rewrite 2 PTree.gso, PTree.gss; auto;
-              intro Eq; apply self_not_prefixed; rewrite Eq; constructor. }
-        assert (e1 ! (Ident.prefix out reset) = Some (reset_b, type_of_inst (prefix_fun main_node reset))).
-        { subst e1; rewrite PTree.gso, PTree.gss; auto.
-          intro Eq; apply prefix_injective in Eq; destruct Eq as [? Eq].
-          pose proof methods_nodup as Nodup; unfold methods in Nodup;
-            inversion_clear Nodup as [|? ? Notin].
-          apply Notin; rewrite Eq; apply in_eq. }
+        { destruct m_step.(m_out); subst e1. 
+          - rewrite PTree.gss; auto.
+          - rewrite PTree.gso, PTree.gss; auto;
+              intro Eq; apply self_not_prefixed; rewrite Eq; constructor.
+        }
         destruct dostep_imp as (m2 & Heval & Step); auto.
         change (eval_funcall tge (function_entry2 tge) m1 (Internal reset_f)
-                             [Vptr sb Int.zero; Vptr reset_b Int.zero] E0 m2 Vundef)
+                             [Vptr sb Int.zero] E0 m2 Vundef)
         with (eval_funcall (globalenv tprog) (function_entry2 (globalenv tprog)) m1 (Internal reset_f)
-                           [Vptr sb Int.zero; Vptr reset_b Int.zero] E0 m2 Vundef) in Heval.
+                           [Vptr sb Int.zero] E0 m2 Vundef) in Heval.
         pose proof (find_class_name _ _ _ _ Find) as Eq;
           pose proof (find_method_name _ _ _ Findreset) as Eq';
           rewrite <-Eq, <-Eq' in *.
@@ -4912,13 +4814,17 @@ Section PRESERVATION.
             rewrite <-not_Some_is_None.
             intros (b, t) Hget.
             subst e1.
-            rewrite 3 PTree.gso, PTree.gempty in Hget.
-            * discriminate.
-            * intro E; apply self_not_prefixed; rewrite <-E; constructor.
-            * intro E; apply prefix_injective in E; destruct E as [E].
-              contradict E; apply fun_not_out.
-            * intro E; apply prefix_injective in E; destruct E as [E].
-              contradict E; apply fun_not_out.
+            destruct m_step.(m_out).
+            *{ rewrite PTree.gso, PTree.gempty in Hget.
+               - discriminate.
+               - intro E; apply self_not_prefixed; rewrite <-E; constructor.
+             }
+             *{ rewrite 2 PTree.gso, PTree.gempty in Hget.
+                - discriminate.
+                - intro E; apply self_not_prefixed; rewrite <-E; constructor.
+                - intro E; apply prefix_injective in E; destruct E as [E].
+                  contradict E; apply fun_not_out.
+              }
           + apply deref_loc_reference; auto.
         - apply find_method_In in Findreset.
           do 3 (econstructor; eauto).
@@ -4928,6 +4834,7 @@ Section PRESERVATION.
         - simpl; unfold type_of_function;
             rewrite Hp_rst, Hr_rst, Hcc_rst; simpl; repeat f_equal.
           rewrite Reset_in_spec; auto.
+          rewrite Reset_out_spec; auto.
       Qed.
       
       Lemma main_inf:
@@ -5044,7 +4951,7 @@ Section PRESERVATION.
     destruct init_mem as [m0].
     edestruct (find_main _ _ (sepemp_trivial m0)) as
         (c_main' & prog_main' & m_reset' & m_step' & Findmain' & Findreset' & Findstep' & ? & ? &
-         ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?).
+         ? & ? & ? & ? & ? & ? & ? & Hvars & ? & Hbody & ? & Hmout).
     rewrite Findmain' in Findmain; inv Findmain; subst.
     rewrite Findreset' in Findreset; rewrite Findstep' in Findstep; inv Findreset; inv Findstep; subst.
     edestruct methods_corres with (2:=Findreset')
@@ -5052,7 +4959,23 @@ Section PRESERVATION.
     edestruct methods_corres with (2:=Findstep')
       as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
     intros.
-    eapply reacts; eauto; repeat split; auto.
+    case_eq (m_out m_step); intros ** Out;
+      rewrite Out in Hmout, Hvars, Hbody.
+    - destruct Hmout as (? & ? & ?).
+      eapply reacts; try rewrite Out; eauto.
+      + repeat split; auto.
+      + rewrite sep_swap, <-sepemp_left; eauto.
+    - destruct Hmout as (? & ? & ? & ? & ? & ?).
+      eapply reacts; eauto.
+      + repeat split; try rewrite Out; auto.
+      + rewrite Out; eauto.
+      + rewrite Out; eauto.
+      + rewrite Out.
+        eauto. 
+
+        Grab Existential Variables.
+        admit.
+        eauto.
   Qed.
 
 End PRESERVATION.
