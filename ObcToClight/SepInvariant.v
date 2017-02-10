@@ -583,17 +583,17 @@ Section StateRepProperties.
                access_mode_cltype : clalign.
 
   Lemma range_staterep:
-    forall {f} b clsnm,
+    forall b clsnm,
       wt_program prog ->
       find_class clsnm prog <> None ->
-      range' f b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
+      range_w b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
       staterep gcenv prog clsnm hempty b 0.
   Proof.
     intros ** WTp Hfind.
     (* Weaken the goal for proof by induction. *)
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
-           massert_imp (range' f b lo (lo + sizeof gcenv (type_of_inst clsnm)))
+           massert_imp (range_w b lo (lo + sizeof gcenv (type_of_inst clsnm)))
                        (staterep gcenv prog clsnm hempty b lo)).
     now intro HH; apply HH; apply Z.divide_0_r.
 
@@ -653,8 +653,7 @@ Section StateRepProperties.
         destruct m; simpl. 
         destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
         rewrite match_value_empty, sizeof_translate_chunk; eauto with clalign.
-        apply (massert_imp_trans _ _ _ (range'_range_w _ _ _)).
-        apply range_contains'.
+        apply range_contains'; auto with mem.
         apply field_offset_aligned with (ty:=cltype t) in Hfo.
         now apply Z.divide_add_r; eauto with clalign.
         rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
@@ -718,7 +717,7 @@ Section StateRepProperties.
     apply sep_proj1 in Hm. clear ws xs.
     unfold staterep_mems in Hm.
     rewrite Hoff in Hm. clear Hoff.
-    apply loadv_rule in Hm.
+    apply loadv_rule in Hm; auto with mem.
     destruct Hm as [v' [Hloadv Hmatch]].
     unfold match_value in Hmatch.
     unfold mfind_mem in Hv; simpl in Hv.
@@ -764,7 +763,7 @@ Section StateRepProperties.
                 | Errors.Error _ => sepfalse
                 end) at 1.
     - rewrite <-sep_swap2.
-      eapply storev_rule2 with (1:=Hm).
+      eapply storev_rule2 with (2:=Hm); auto with mem.
       + unfold match_value. simpl.
         rewrite PM.gss. symmetry; exact Hlr.
       + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess].
@@ -837,7 +836,7 @@ Section BlockRep.
     do 2 apply sep_proj1 in Hm. clear ws xs.
     rewrite Hoff in Hm. clear Hoff.
     destruct (access_mode ty) eqn:Haccess; try contradiction.
-    apply loadv_rule in Hm.
+    apply loadv_rule in Hm; auto with mem.
     destruct Hm as [v' [Hloadv Hmatch]].
     unfold match_value in Hmatch.
     rewrite Hv in Hmatch. clear Hv.
@@ -871,7 +870,7 @@ Section BlockRep.
     rewrite sepall_swapp.
     - rewrite <-sep_swap2.
       rewrite HP in Hm.
-      eapply storev_rule2 with (1:=Hm).
+      eapply storev_rule2 with (2:=Hm); auto with mem.
       + unfold match_value. rewrite PM.gss. symmetry. exact Hlr.
       + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *.
         * injection Haccess'. intro HR; rewrite <-HR in *; assumption.
@@ -945,7 +944,7 @@ Section BlockRep.
     split; [split|split].
     - intros m Hr.
       rewrite match_value_empty.
-      apply range_contains'.
+      apply range_contains'; auto with mem.
       now apply Zdivides_trans with (1:=Halign) (2:=Hoff).
       rewrite <-sizeof_by_value with (1:=Haccess).
       assumption.

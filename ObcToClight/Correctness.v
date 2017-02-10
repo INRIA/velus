@@ -1615,7 +1615,7 @@ Section PRESERVATION.
         unfold blockrep in Hrep.
         rewrite Heq in Hrep; simpl in *.
         rewrite Hoffset, Haccess, sep_assoc, sep_swap in Hrep.
-        eapply (@Separation.storev_rule' true) with (v:=v) in Hrep; eauto.
+        eapply Separation.storev_rule' with (v:=v) in Hrep; eauto with mem.
         destruct Hrep as (m' & ? & Hrep'); clear Hrep; rename Hrep' into Hrep.
         exists m'; split; auto.
         unfold blockrep.
@@ -1699,7 +1699,7 @@ Section PRESERVATION.
       unfold staterep_mems in Hrep.
       rewrite ident_eqb_refl, Heq, Hoffset in Hrep.
       rewrite 2 sep_assoc in Hrep.
-      eapply (@Separation.storev_rule' false) with (v:=v) in Hrep; eauto.
+      eapply Separation.storev_rule' with (v:=v) in Hrep; eauto with mem.
       destruct Hrep as (m' & ? & Hrep).
       exists m'; split; auto.
       rewrite staterep_skip; eauto.
@@ -3415,7 +3415,8 @@ Section PRESERVATION.
              + simpl; rewrite Hrco; eapply blockrep_empty; eauto.
                rewrite Hmr; eauto.
              + apply sep_imp'; auto.
-               eapply range_staterep; eauto.
+               rewrite (range'_imp _ _ _ _ _ (perm_F_any Writable)).
+               apply range_staterep; eauto.
                apply not_None_is_Some; eauto.
          }
   Qed.

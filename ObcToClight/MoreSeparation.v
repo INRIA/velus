@@ -387,20 +387,20 @@ Proof.
   reflexivity.
 Qed.
 
-Definition footprint_perm' (f: bool) (P: massert) (b: block) (lo hi: Z) : Prop :=
+Definition footprint_perm' (p: permission) (P: massert) (b: block) (lo hi: Z) : Prop :=
   (forall m, m |= P ->
              (forall i k, m_footprint P b i ->
                           lo <= i < hi ->
-                          Mem.perm m b i k (if f then Freeable else Writable))).
+                          Mem.perm m b i k p)).
 
-Notation footprint_perm := (footprint_perm' true).
-Notation footprint_perm_w := (footprint_perm' false).
+Notation footprint_perm := (footprint_perm' Freeable).
+Notation footprint_perm_w := (footprint_perm' Writable).
 
 Lemma footprint_perm_sepconj:
-  forall {f} P Q b lo hi,
-    footprint_perm' f P b lo hi ->
-    footprint_perm' f Q b lo hi ->
-    footprint_perm' f (P ** Q) b lo hi.
+  forall p P Q b lo hi,
+    footprint_perm' p P b lo hi ->
+    footprint_perm' p Q b lo hi ->
+    footprint_perm' p (P ** Q) b lo hi.
 Proof.
   intros f P Q b lo hi HfpP HfpQ.
   intros m HPQ i k Hf Hi.
@@ -411,20 +411,20 @@ Proof.
 Qed.
 
 Lemma footprint_perm_range:
-  forall {f} b lo hi b' lo' hi',
-    footprint_perm' f (range' f b lo hi) b' lo' hi'.
+  forall p b lo hi b' lo' hi',
+    footprint_perm' p (range' p b lo hi) b' lo' hi'.
 Proof.
-  intros f b lo hi b' lo' hi' m Hm i k Hf Hi.
+  intros p b lo hi b' lo' hi' m Hm i k Hf Hi.
   destruct Hf. subst.
   destruct Hm as (Hlo & Hhi & Hp).
   now apply Hp.
 Qed.
 
 Lemma footprint_perm_contains:
-  forall {f} chunk b ofs spec b' lo hi,
-    footprint_perm' f (contains' f chunk b ofs spec) b' lo hi.
+  forall p chunk b ofs spec b' lo hi,
+    footprint_perm' p (contains' p chunk b ofs spec) b' lo hi.
 Proof.
-  intros f chunk b ofs spec b' lo hi m Hm i k Hf Hi.
+  intros p chunk b ofs spec b' lo hi m Hm i k Hf Hi.
   destruct Hf. subst.
   destruct Hm as (Hlo & Hhi & Hv & Hl).
   destruct Hv as (Hperm & j & Hofs).
@@ -437,13 +437,13 @@ Hint Resolve footprint_perm_sepconj
              footprint_perm_contains.
              
 Lemma range_imp_with_wand:
-  forall {f} P b lo hi,
-    (range' f b lo hi) -*> P ->
+  forall p P b lo hi,
+    (range' p b lo hi) -*> P ->
     decidable_footprint P ->
-    footprint_perm' f P b lo hi ->
-    (range' f b lo hi) <-*-> (P ** (P -* range' f b lo hi)).
+    footprint_perm' p P b lo hi ->
+    (range' p b lo hi) <-*-> (P ** (P -* range' p b lo hi)).
 Proof.
-  intros f P b lo hi HRP HPfdec HPperm.
+  intros p P b lo hi HRP HPfdec HPperm.
   split; [|now rewrite sep_unwand].
   split.
   - intros m HR.
@@ -655,7 +655,7 @@ Proof.
 Qed.
 
 Lemma footprint_perm_sepemp:
-  forall {f} b lo hi, footprint_perm' f sepemp b lo hi.
+  forall p b lo hi, footprint_perm' p sepemp b lo hi.
 Proof.
   intros lo hi m. inversion 2.
 Qed.
@@ -692,9 +692,9 @@ Proof.
 Qed.
 
 Lemma footprint_perm_sepfalse:
-  forall {f} b lo hi, footprint_perm' f sepfalse b lo hi.
+  forall p b lo hi, footprint_perm' p sepfalse b lo hi.
 Proof.
-  intros f b lo hi m Hm. inversion Hm.
+  intros p b lo hi m Hm. inversion Hm.
 Qed.
 
 Hint Resolve decidable_footprint_sepfalse footprint_perm_sepfalse.
@@ -912,9 +912,9 @@ Section Sepall.
   Qed.
 
   Lemma footprint_perm_sepall:
-    forall {f} P xs b lo hi,
-      (forall x b lo hi, footprint_perm' f (P x) b lo hi) ->
-      footprint_perm' f (sepall P xs) b lo hi.
+    forall p P xs b lo hi,
+      (forall x b lo hi, footprint_perm' p (P x) b lo hi) ->
+      footprint_perm' p (sepall P xs) b lo hi.
   Proof.
     induction xs as [|x xs IH].
     now (intros; apply footprint_perm_sepemp).
@@ -1019,17 +1019,17 @@ Section SplitRange.
   Hypothesis Hco: env!id = Some co.
   Hypothesis Hstruct: co_su co = Struct.
 
-  Definition field_range' (f: bool) (flds: list (AST.ident * type))
+  Definition field_range' (p: permission) (flds: list (AST.ident * type))
              (b: block) (lo: Z) (fld: AST.ident * type) : massert :=
     let (id, ty) := fld in
     match field_offset env id flds with
-      | Errors.OK ofs  => range' f b (lo + ofs) (lo + ofs + sizeof env ty)
+      | Errors.OK ofs  => range' p b (lo + ofs) (lo + ofs + sizeof env ty)
       | Errors.Error _ => sepfalse
     end.
 
   Lemma decidable_footprint_field_range:
-    forall {f} lo b flds,
-      decidable_footprint (sepall (field_range' f flds b lo) flds).
+    forall p lo b flds,
+      decidable_footprint (sepall (field_range' p flds b lo) flds).
   Proof.
     intros.
     apply decidable_footprint_sepall.
@@ -1038,30 +1038,30 @@ Section SplitRange.
   Qed.
 
   Lemma footprint_perm_field_range:
-    forall {f} flds b pos x b' lo hi,
-      footprint_perm' f (field_range' f flds b pos x) b' lo hi.
+    forall p flds b pos x b' lo hi,
+      footprint_perm' p (field_range' p flds b pos x) b' lo hi.
   Proof.
-    intros f flds b pos x b' lo hi.
+    intros p flds b pos x b' lo hi.
     destruct x as [x ty].
     simpl. destruct (field_offset env x flds); auto.
   Qed.
   
   Lemma split_range_fields':
-    forall {f} b lo flds,
+    forall p b lo flds,
       NoDupMembers flds ->
-      massert_imp (range' f b lo (lo + sizeof_struct env 0 flds))
-                  (sepall (field_range' f flds b lo) flds).
+      massert_imp (range' p b lo (lo + sizeof_struct env 0 flds))
+                  (sepall (field_range' p flds b lo) flds).
   Proof.
-    intros f b lo flds Hndup.
+    intros p b lo flds Hndup.
     cut (forall cur,
             massert_imp
-              (range' f b (lo + cur)
+              (range' p b (lo + cur)
                        (lo + sizeof_struct env cur flds))
               (sepall (fun fld : AST.ident * type =>
                          let (id0, ty) := fld in
                          match field_offset_rec env id0 flds cur with
                          | Errors.OK ofs =>
-                             range' f b (lo + ofs) (lo + ofs + sizeof env ty)
+                             range' p b (lo + ofs) (lo + ofs + sizeof env ty)
                          | Errors.Error _ => sepfalse
                          end) flds)).
     - intro HH.
@@ -1105,12 +1105,12 @@ Section SplitRange.
   Qed.
 
   Lemma split_range_fields:
-    forall {f} b lo,
+    forall p b lo,
       NoDupMembers (co_members co) ->
-      massert_imp (range' f b lo (lo + co_sizeof co))
-                  (sepall (field_range' f (co_members co) b lo) (co_members co)).
+      massert_imp (range' p b lo (lo + co_sizeof co))
+                  (sepall (field_range' p (co_members co) b lo) (co_members co)).
   Proof.
-    intros f b lo Hndup.
+    intros p b lo Hndup.
     apply Henv in Hco.
     rewrite (co_consistent_sizeof _ _ Hco).
     rewrite (co_consistent_alignof _ _ Hco).
@@ -1131,6 +1131,6 @@ Section SplitRange.
 
 End SplitRange.
 
-Notation field_range ge := (field_range' ge true).
-Notation field_range_w ge := (field_range' ge false).
+Notation field_range ge := (field_range' ge Freeable).
+Notation field_range_w ge := (field_range' ge Writable).
 
