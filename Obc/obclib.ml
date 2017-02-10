@@ -89,7 +89,7 @@ module SyncFun (Obc: SYNTAX)
        (TypeFormats.type_scanf ty)
        var_name id
 
-   let print f Obc.({m_name; m_in; m_out}) =
+   let print f {Obc.m_name; Obc.m_in; Obc.m_out} =
      let open Format in
      let print_body f =
        fprintf f "static unsigned int %s = 0;@,@," v_reactions;
