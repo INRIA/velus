@@ -8,6 +8,7 @@ Require Import lib.Integers.
 
 Require Import Velus.Common.
 Require Import Velus.RMemory.
+Require Import Velus.ObcToClight.ObcClightCommon.
 
 Require Import List.
 Require Import ZArith.BinInt.
@@ -71,6 +72,7 @@ Proof.
     + now apply HfP.
     + now apply HfQ.
 Qed.
+
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
 Require Import common.Memory.
@@ -339,6 +341,49 @@ Proof.
   - now rewrite sep_unwand.
 Qed.
 
+Lemma pure_wand_footprint:
+  forall (P: Prop) Q b ofs,
+    wand_footprint (pure P) Q b ofs <-> m_footprint Q b ofs.
+Proof.
+  split.
+  - inversion 1; auto.
+  - split; auto.
+Qed.
+
+Lemma unchanged_on_imp:
+  forall P (Q: block -> Z -> Prop) m m',
+    Mem.unchanged_on P m m' ->
+    (forall b ofs, Q b ofs -> P b ofs) ->
+    Mem.unchanged_on Q m m'.
+Proof.
+  intros ** Hun Hpq.
+  inversion_clear Hun.
+  constructor; auto.
+Qed.
+
+Lemma pure_sepwand:
+  forall (P: Prop) Q,
+    P -> massert_eqv (pure P -* Q) Q.
+Proof.
+  intros P Q HH.
+  constructor.
+  - constructor.
+    + inversion_clear 1 as (Hun & Hf).
+      apply Hun; auto using Mem.unchanged_on_refl.
+    + constructor; auto.
+  - constructor.
+    + intros m Hq. constructor.
+      * intros m' Hun Hmp.
+        apply m_invar with (1:=Hq).
+        apply unchanged_on_imp with (1:=Hun).
+        apply pure_wand_footprint.
+      * intros ** Hwf.
+        apply pure_wand_footprint in Hwf.
+        eauto using m_valid.
+    + simpl. intros ** Hf.
+      now apply pure_wand_footprint in Hf.
+Qed.
+  
 (* Reynold's "rules capturing the adjunctive relationship between separating
    conjunction and separating implication". *)
 
@@ -1133,4 +1178,110 @@ End SplitRange.
 
 Notation field_range ge := (field_range' ge Freeable).
 Notation field_range_w ge := (field_range' ge Writable).
+
+(* * * * * * * * Initial memory * * * * * * * * * * * * * * *)
+
+Import Globalenvs.
+Import AST.
+
+Section Galloc.
+
+  Parameters F V : Type.
+  Parameter p : program (fundef F) V.
+
+  Definition grange (idg : ident * globdef (fundef F) V) :=
+    let (id, g) := idg in
+    match Genv.find_symbol (Genv.globalenv p) id with
+    | None => sepfalse
+    | Some b =>
+      match g with
+      | Gfun f => range' Nonempty b 0 1
+      | Gvar v =>
+        pure (init_data_list_size (gvar_init v) <= Int.modulus)
+             -* range' (Genv.perm_globvar v) b 0
+                       (init_data_list_size v.(gvar_init))
+      end
+    end.
+
+  Lemma init_grange:
+    forall m0,
+      NoDupMembers p.(prog_defs) ->
+      Genv.init_mem p = Some m0 ->
+      m0 |= sepall grange p.(prog_defs).
+  Proof.
+    pose proof (eq_refl p.(prog_defs)) as Hps.
+    revert Hps. generalize p.(prog_defs) at 2 4.
+    intros ps Hps' m0 Hndups Hinit.
+    assert (exists ps', p.(prog_defs) = ps' ++ ps) as Hps
+        by (exists nil; auto).
+    clear Hps'.
+    induction ps; auto.
+    destruct a as (id, g).
+    destruct Hps as (ps' & Hps).
+    assert (m0 |= sepall grange ps) as IH
+        by (apply IHps; exists (ps' ++ (id, g)::nil);
+            now rewrite <- List_shift_first).
+    clear IHps.
+    assert ((prog_defmap p) ! id = Some g) as Hpdm
+        by (apply prog_defmap_norepet;
+            [now apply NoDup_norepet, fst_NoDupMembers|
+             rewrite Hps; intuition]).
+    apply Genv.find_def_symbol in Hpdm.
+    destruct Hpdm as (b & Hfs & Hfd).
+    apply sepall_cons.
+    repeat constructor; auto.
+    - (* m0 |= grange (id, g) *)
+      simpl. rewrite Hfs.
+      destruct g.
+      + (* g = Gfun f *)
+        apply Genv.find_funct_ptr_iff in Hfd.
+        apply Genv.init_mem_characterization_2 with (2:=Hinit) in Hfd.
+        destruct Hfd as (Hperm & Hperm').
+        repeat constructor.
+        * omega.
+        * unfold Int.modulus, Int.wordsize, Wordsize_32.wordsize.
+          rewrite Z.one_succ; apply Zlt_le_succ, Z.gt_lt, two_power_nat_pos.
+        * intros ** HH. assert (i = 0) by omega.
+          subst. now apply Mem.perm_cur.
+      + (* g = Gvar v *)
+        apply Genv.find_var_info_iff in Hfd.
+        eapply Genv.init_mem_characterization with (2:=Hinit) in Hfd.
+        destruct Hfd as (Hrp & Hfd).
+        repeat constructor; auto.
+        * reflexivity.
+        * intros i k Hi.
+          apply Mem.perm_cur.
+          unfold wand_footprint in H.
+          apply Mem.perm_unchanged_on with (1:=H); simpl; auto.
+        * inversion_clear 1 as (? & Hf). simpl in *.
+          destruct Hf as (Hb & Hf). subst.
+          eapply Mem.perm_valid_block; eauto.
+    - (* disjoint_footprint (grange (id, g)) (sepall grange ids) *)
+      rewrite Hps in Hndups.
+      apply NoDupMembers_app_cons in Hndups.
+      destruct Hndups as (Hndups1 & Hndups2).
+      apply NotInMembers_app in Hndups1.
+      apply proj1 in Hndups1.
+      clear Hndups2 Hinit Hps Hfd ps'.
+      induction ps; auto using sepemp_disjoint.
+      destruct a as (id' & g').
+      apply NotInMembers_cons in Hndups1.
+      destruct Hndups1 as (Hndups & Hnid').
+      apply sepall_cons in IH.
+      specialize (IHps Hndups (sep_proj2 _ _ _ IH)).
+      apply sep_proj1 in IH.
+      rewrite sepall_cons.
+      apply disjoint_footprint_sepconj.
+      split; auto. clear IHps.
+      intros b' ofs' Hf1 Hf2.
+      simpl in *.
+      rewrite Hfs in Hf1.
+      destruct (Genv.find_symbol (Genv.globalenv p) id') eqn:Hfs'; [|inv IH].
+      apply Genv.global_addresses_distinct with (1:=Hnid') (2:=Hfs) in Hfs'.
+      apply Hfs'.
+      destruct g, g'; inversion_clear Hf1; inversion_clear Hf2;
+        simpl in *; subst; intuition; now subst b b0.
+  Qed.
+
+End Galloc.
 
