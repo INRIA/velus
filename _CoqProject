@@ -44,6 +44,7 @@ NLustreToObc/Correctness/MemoryCorres.v
 NLustreToObc/Correctness.v
 NLustreToObc/NLObcTyping.v
 NLustreToObc/Fusible.v
+ObcToClight/ObcClightCommon.v
 ObcToClight/Interface.v
 ObcToClight/Generation.v
 ObcToClight/Correctness.v
