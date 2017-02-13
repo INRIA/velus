@@ -4929,6 +4929,23 @@ Section PRESERVATION.
     
   End Init.
 
+  Program Definition dummy_co : composite :=
+    {| co_su := Struct;
+       co_members := [];
+       co_attr := noattr;
+       co_sizeof := 0;
+       co_alignof := 1;
+       co_rank := 0;
+       co_sizeof_pos := _;
+       co_alignof_two_p := _;
+       co_sizeof_alignof := _|}.
+  Next Obligation.
+    exists (0)%nat; now rewrite two_power_nat_O.
+  Defined.
+  Next Obligation.
+    apply Z.divide_0_r.
+  Defined.
+  
   Lemma reacts':
     forall me0 ins outs c_main prog_main m_step m_reset,
       stmt_call_eval prog hempty (c_name c_main) (m_name m_reset) [] me0 [] ->
@@ -4974,7 +4991,7 @@ Section PRESERVATION.
         eauto. 
 
         Grab Existential Variables.
-        admit.
+        exact dummy_co.
         eauto.
   Qed.
 
