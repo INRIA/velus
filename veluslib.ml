@@ -10,6 +10,8 @@ let reaction_counter = Camlcoq.intern_string "$reaction"
 let fuse_obc = ref true
 let do_fusion () = !fuse_obc
 
+let do_sync () = !sync_destination <> None
+
 let rec last = function
   | []    -> failwith "last"
   | [x]   -> x
