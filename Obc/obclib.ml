@@ -79,12 +79,13 @@ module SyncFun (Obc: SYNTAX)
        var_name id
 
    let print_output f (id, ty) =
-     fprintf f "@[<hov 2>printf(\"%s=%s\", %a);@]"
+     fprintf f "@[<hov 2>printf(\"%s=%s\\n\", %a);@]"
        (Camlcoq.extern_atom id)
        (TypeFormats.type_printf ty)
        var_name id
 
    let scan_input f (id, ty) =
+     fprintf f "@[<hov 2>printf(\"%s? \");@]" (extern_atom id);
      fprintf f "@[<hov 2>scanf(\"%s\", &%a);@]"
        (TypeFormats.type_scanf ty)
        var_name id
@@ -96,7 +97,7 @@ module SyncFun (Obc: SYNTAX)
        fprintf f "@[<hov 2>if (%s) {@]@," v_reactions;
        fprintf f "  @[<v 0>%a@]@," (pp_print_list print_output) m_out;
        fprintf f "@[<h>}@]@,@,";
-       fprintf f "@[<hov 2>printf(\"--reaction %%d\", %s);@]@,@," v_reactions;
+       fprintf f "@[<hov 2>printf(\"--reaction %%d\\n\", %s);@]@,@," v_reactions;
        pp_print_list scan_input f m_in;
        fprintf f "@,@,@[<hov 2>%s += 1;@]" v_reactions
      in
