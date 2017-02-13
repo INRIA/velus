@@ -113,7 +113,7 @@ Section Staterep.
     let (x, ty) := xty in
     match field_offset ge x (make_members cls) with
     | Errors.OK d =>
-	  contains (type_chunk ty) b (ofs + d) (match_value me.(mm_values) x)
+	  contains_w (type_chunk ty) b (ofs + d) (match_value me.(mm_values) x)
     | Errors.Error _ => sepfalse
     end.
 
@@ -196,7 +196,7 @@ Section Staterep.
 
   Lemma footprint_perm_staterep:
     forall p clsnm me b ofs b' lo hi,
-      footprint_perm (staterep p clsnm me b ofs) b' lo hi.
+      footprint_perm_w (staterep p clsnm me b ofs) b' lo hi.
   Proof.
     induction p as [|cls p' IH]; [now auto|].
     intros; simpl.
@@ -586,14 +586,14 @@ Section StateRepProperties.
     forall b clsnm,
       wt_program prog ->
       find_class clsnm prog <> None ->
-      range b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
-            staterep gcenv prog clsnm hempty b 0.
+      range_w b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
+      staterep gcenv prog clsnm hempty b 0.
   Proof.
     intros ** WTp Hfind.
     (* Weaken the goal for proof by induction. *)
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
-           massert_imp (range b lo (lo + sizeof gcenv (type_of_inst clsnm)))
+           massert_imp (range_w b lo (lo + sizeof gcenv (type_of_inst clsnm)))
                        (staterep gcenv prog clsnm hempty b lo)).
     now intro HH; apply HH; apply Z.divide_0_r.
 
@@ -653,7 +653,7 @@ Section StateRepProperties.
         destruct m; simpl. 
         destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
         rewrite match_value_empty, sizeof_translate_chunk; eauto with clalign.
-        apply range_contains'.
+        apply range_contains'; auto with mem.
         apply field_offset_aligned with (ty:=cltype t) in Hfo.
         now apply Z.divide_add_r; eauto with clalign.
         rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
@@ -717,7 +717,7 @@ Section StateRepProperties.
     apply sep_proj1 in Hm. clear ws xs.
     unfold staterep_mems in Hm.
     rewrite Hoff in Hm. clear Hoff.
-    apply loadv_rule in Hm.
+    apply loadv_rule in Hm; auto with mem.
     destruct Hm as [v' [Hloadv Hmatch]].
     unfold match_value in Hmatch.
     unfold mfind_mem in Hv; simpl in Hv.
@@ -758,12 +758,12 @@ Section StateRepProperties.
                 let (x0, ty0) := xty in
                 match field_offset gcenv x0 (make_members cls) with
                 | Errors.OK d0 =>
-                  contains (type_chunk ty0) b (ofs + d0)
-                           (match_value (mm_values me) x0)
+                  contains_w (type_chunk ty0) b (ofs + d0)
+                             (match_value (mm_values me) x0)
                 | Errors.Error _ => sepfalse
                 end) at 1.
     - rewrite <-sep_swap2.
-      eapply storev_rule2 with (1:=Hm).
+      eapply storev_rule2 with (2:=Hm); auto with mem.
       + unfold match_value. simpl.
         rewrite PM.gss. symmetry; exact Hlr.
       + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess].
@@ -836,7 +836,7 @@ Section BlockRep.
     do 2 apply sep_proj1 in Hm. clear ws xs.
     rewrite Hoff in Hm. clear Hoff.
     destruct (access_mode ty) eqn:Haccess; try contradiction.
-    apply loadv_rule in Hm.
+    apply loadv_rule in Hm; auto with mem.
     destruct Hm as [v' [Hloadv Hmatch]].
     unfold match_value in Hmatch.
     rewrite Hv in Hmatch. clear Hv.
@@ -870,7 +870,7 @@ Section BlockRep.
     rewrite sepall_swapp.
     - rewrite <-sep_swap2.
       rewrite HP in Hm.
-      eapply storev_rule2 with (1:=Hm).
+      eapply storev_rule2 with (2:=Hm); auto with mem.
       + unfold match_value. rewrite PM.gss. symmetry. exact Hlr.
       + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *.
         * injection Haccess'. intro HR; rewrite <-HR in *; assumption.
@@ -934,7 +934,7 @@ Section BlockRep.
     apply sepall_swapp.
     intros fld Hin.
     destruct fld as [x ty].
-    unfold field_range.
+    unfold field_range'.
     destruct (field_offset ge x flds) eqn:Hoff.
     2:reflexivity.
     apply field_offset_aligned with (ty:=ty) in Hoff.
@@ -944,7 +944,7 @@ Section BlockRep.
     split; [split|split].
     - intros m Hr.
       rewrite match_value_empty.
-      apply range_contains'.
+      apply range_contains'; auto with mem.
       now apply Zdivides_trans with (1:=Halign) (2:=Hoff).
       rewrite <-sizeof_by_value with (1:=Haccess).
       assumption.

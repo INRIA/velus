@@ -8,6 +8,7 @@ Require Import lib.Integers.
 
 Require Import Velus.Common.
 Require Import Velus.RMemory.
+Require Import Velus.ObcToClight.ObcClightCommon.
 
 Require Import List.
 Require Import ZArith.BinInt.
@@ -71,6 +72,7 @@ Proof.
     + now apply HfP.
     + now apply HfQ.
 Qed.
+
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
 Require Import common.Memory.
@@ -134,8 +136,8 @@ Proof.
 Qed.
 
 Lemma decidable_footprint_range:
-  forall b lo hi,
-    decidable_footprint (range b lo hi).
+  forall {f} b lo hi,
+    decidable_footprint (range' f b lo hi).
 Proof.
   unfold decidable_footprint.
   intros.
@@ -149,8 +151,8 @@ Qed.
 Hint Resolve decidable_footprint_range.
 
 Lemma decidable_footprint_contains:
-  forall chunk b ofs spec,
-    decidable_footprint (contains chunk b ofs spec).
+  forall {f} chunk b ofs spec,
+    decidable_footprint (contains' f chunk b ofs spec).
 Proof.
   unfold decidable_footprint.
   intros.
@@ -339,6 +341,49 @@ Proof.
   - now rewrite sep_unwand.
 Qed.
 
+Lemma pure_wand_footprint:
+  forall (P: Prop) Q b ofs,
+    wand_footprint (pure P) Q b ofs <-> m_footprint Q b ofs.
+Proof.
+  split.
+  - inversion 1; auto.
+  - split; auto.
+Qed.
+
+Lemma unchanged_on_imp:
+  forall P (Q: block -> Z -> Prop) m m',
+    Mem.unchanged_on P m m' ->
+    (forall b ofs, Q b ofs -> P b ofs) ->
+    Mem.unchanged_on Q m m'.
+Proof.
+  intros ** Hun Hpq.
+  inversion_clear Hun.
+  constructor; auto.
+Qed.
+
+Lemma pure_sepwand:
+  forall (P: Prop) Q,
+    P -> massert_eqv (pure P -* Q) Q.
+Proof.
+  intros P Q HH.
+  constructor.
+  - constructor.
+    + inversion_clear 1 as (Hun & Hf).
+      apply Hun; auto using Mem.unchanged_on_refl.
+    + constructor; auto.
+  - constructor.
+    + intros m Hq. constructor.
+      * intros m' Hun Hmp.
+        apply m_invar with (1:=Hq).
+        apply unchanged_on_imp with (1:=Hun).
+        apply pure_wand_footprint.
+      * intros ** Hwf.
+        apply pure_wand_footprint in Hwf.
+        eauto using m_valid.
+    + simpl. intros ** Hf.
+      now apply pure_wand_footprint in Hf.
+Qed.
+  
 (* Reynold's "rules capturing the adjunctive relationship between separating
    conjunction and separating implication". *)
 
@@ -387,19 +432,23 @@ Proof.
   reflexivity.
 Qed.
 
-Definition footprint_perm (P: massert) (b: block) (lo hi: Z) : Prop :=
+Definition footprint_perm' (p: permission) (P: massert) (b: block) (lo hi: Z) : Prop :=
   (forall m, m |= P ->
-             (forall i k p, m_footprint P b i ->
-                            lo <= i < hi -> Mem.perm m b i k p)).
+             (forall i k, m_footprint P b i ->
+                          lo <= i < hi ->
+                          Mem.perm m b i k p)).
+
+Notation footprint_perm := (footprint_perm' Freeable).
+Notation footprint_perm_w := (footprint_perm' Writable).
 
 Lemma footprint_perm_sepconj:
-  forall P Q b lo hi,
-    footprint_perm P b lo hi ->
-    footprint_perm Q b lo hi ->
-    footprint_perm (P ** Q) b lo hi.
+  forall p P Q b lo hi,
+    footprint_perm' p P b lo hi ->
+    footprint_perm' p Q b lo hi ->
+    footprint_perm' p (P ** Q) b lo hi.
 Proof.
-  intros P Q b lo hi HfpP HfpQ.
-  intros m HPQ i k p Hf Hi.
+  intros f P Q b lo hi HfpP HfpQ.
+  intros m HPQ i k Hf Hi.
   destruct HPQ as (HP & HQ & Hdj).
   destruct Hf as [HfP|HfQ].
   - now apply HfpP.
@@ -407,23 +456,22 @@ Proof.
 Qed.
 
 Lemma footprint_perm_range:
-  forall b lo hi b' lo' hi',
-    footprint_perm (range b lo hi) b' lo' hi'.
+  forall p b lo hi b' lo' hi',
+    footprint_perm' p (range' p b lo hi) b' lo' hi'.
 Proof.
-  intros b lo hi b' lo' hi' m Hm i k p Hf Hi.
+  intros p b lo hi b' lo' hi' m Hm i k Hf Hi.
   destruct Hf. subst.
   destruct Hm as (Hlo & Hhi & Hp).
   now apply Hp.
 Qed.
 
 Lemma footprint_perm_contains:
-  forall chunk b ofs spec b' lo hi,
-    footprint_perm (contains chunk b ofs spec) b' lo hi.
+  forall p chunk b ofs spec b' lo hi,
+    footprint_perm' p (contains' p chunk b ofs spec) b' lo hi.
 Proof.
-  intros chunk b ofs spec b' lo hi m Hm i k p Hf Hi.
+  intros p chunk b ofs spec b' lo hi m Hm i k Hf Hi.
   destruct Hf. subst.
   destruct Hm as (Hlo & Hhi & Hv & Hl).
-  apply Mem.valid_access_freeable_any with (p:=p) in Hv.
   destruct Hv as (Hperm & j & Hofs).
   apply Mem.perm_cur.
   now apply Hperm.
@@ -434,13 +482,13 @@ Hint Resolve footprint_perm_sepconj
              footprint_perm_contains.
              
 Lemma range_imp_with_wand:
-  forall P b lo hi,
-    (range b lo hi) -*> P ->
+  forall p P b lo hi,
+    (range' p b lo hi) -*> P ->
     decidable_footprint P ->
-    footprint_perm P b lo hi ->
-    (range b lo hi) <-*-> (P ** (P -* range b lo hi)).
+    footprint_perm' p P b lo hi ->
+    (range' p b lo hi) <-*-> (P ** (P -* range' p b lo hi)).
 Proof.
-  intros P b lo hi HRP HPfdec HPperm.
+  intros p P b lo hi HRP HPfdec HPperm.
   split; [|now rewrite sep_unwand].
   split.
   - intros m HR.
@@ -451,7 +499,7 @@ Proof.
         assert (HR':=HR).
         destruct HR' as (Hlo & Hhi & Hperm).
         repeat split; try assumption.
-        intros i k p Hi.
+        intros i k Hi.
         destruct (HPfdec b i) as [HfPi|HnfPi].
         now apply HPperm with (1:=HP) (2:=HfPi) (3:=Hi).
         apply Mem.perm_unchanged_on with (1:=Hun).
@@ -652,7 +700,7 @@ Proof.
 Qed.
 
 Lemma footprint_perm_sepemp:
-  forall b lo hi, footprint_perm sepemp b lo hi.
+  forall p b lo hi, footprint_perm' p sepemp b lo hi.
 Proof.
   intros lo hi m. inversion 2.
 Qed.
@@ -660,11 +708,11 @@ Qed.
 Hint Resolve decidable_footprint_sepemp footprint_perm_sepemp.
 
 Lemma empty_range:
-  forall b lo hi,
+  forall {f} b lo hi,
     hi <= lo ->
     0 <= lo ->
     hi <= Integers.Int.modulus ->
-    sepemp <-*-> (range b lo hi).
+    sepemp <-*-> (range' f b lo hi).
 Proof.
   intros b lo hi Hgt.
   split; [split|split].
@@ -689,9 +737,9 @@ Proof.
 Qed.
 
 Lemma footprint_perm_sepfalse:
-  forall b lo hi, footprint_perm sepfalse b lo hi.
+  forall p b lo hi, footprint_perm' p sepfalse b lo hi.
 Proof.
-  intros b lo hi m Hm. inversion Hm.
+  intros p b lo hi m Hm. inversion Hm.
 Qed.
 
 Hint Resolve decidable_footprint_sepfalse footprint_perm_sepfalse.
@@ -909,9 +957,9 @@ Section Sepall.
   Qed.
 
   Lemma footprint_perm_sepall:
-    forall P xs b lo hi,
-      (forall x b lo hi, footprint_perm (P x) b lo hi) ->
-      footprint_perm (sepall P xs) b lo hi.
+    forall p P xs b lo hi,
+      (forall x b lo hi, footprint_perm' p (P x) b lo hi) ->
+      footprint_perm' p (sepall P xs) b lo hi.
   Proof.
     induction xs as [|x xs IH].
     now (intros; apply footprint_perm_sepemp).
@@ -1016,17 +1064,17 @@ Section SplitRange.
   Hypothesis Hco: env!id = Some co.
   Hypothesis Hstruct: co_su co = Struct.
 
-  Definition field_range (flds: list (AST.ident * type)) (b: block) (lo: Z)
-             (fld: AST.ident * type) : massert :=
+  Definition field_range' (p: permission) (flds: list (AST.ident * type))
+             (b: block) (lo: Z) (fld: AST.ident * type) : massert :=
     let (id, ty) := fld in
     match field_offset env id flds with
-      | Errors.OK ofs  => range b (lo + ofs) (lo + ofs + sizeof env ty)
+      | Errors.OK ofs  => range' p b (lo + ofs) (lo + ofs + sizeof env ty)
       | Errors.Error _ => sepfalse
     end.
 
   Lemma decidable_footprint_field_range:
-    forall lo b flds,
-      decidable_footprint (sepall (field_range flds b lo) flds).
+    forall p lo b flds,
+      decidable_footprint (sepall (field_range' p flds b lo) flds).
   Proof.
     intros.
     apply decidable_footprint_sepall.
@@ -1035,30 +1083,30 @@ Section SplitRange.
   Qed.
 
   Lemma footprint_perm_field_range:
-    forall flds b pos x b' lo hi,
-      footprint_perm (field_range flds b pos x) b' lo hi.
+    forall p flds b pos x b' lo hi,
+      footprint_perm' p (field_range' p flds b pos x) b' lo hi.
   Proof.
-    intros flds b pos x b' lo hi.
+    intros p flds b pos x b' lo hi.
     destruct x as [x ty].
     simpl. destruct (field_offset env x flds); auto.
   Qed.
   
   Lemma split_range_fields':
-    forall b lo flds,
+    forall p b lo flds,
       NoDupMembers flds ->
-      massert_imp (range b lo (lo + sizeof_struct env 0 flds))
-                  (sepall (field_range flds b lo) flds).
+      massert_imp (range' p b lo (lo + sizeof_struct env 0 flds))
+                  (sepall (field_range' p flds b lo) flds).
   Proof.
-    intros b lo flds Hndup.
+    intros p b lo flds Hndup.
     cut (forall cur,
             massert_imp
-              (range b (lo + cur)
+              (range' p b (lo + cur)
                        (lo + sizeof_struct env cur flds))
               (sepall (fun fld : AST.ident * type =>
                          let (id0, ty) := fld in
                          match field_offset_rec env id0 flds cur with
                          | Errors.OK ofs =>
-                             range b (lo + ofs) (lo + ofs + sizeof env ty)
+                             range' p b (lo + ofs) (lo + ofs + sizeof env ty)
                          | Errors.Error _ => sepfalse
                          end) flds)).
     - intro HH.
@@ -1102,12 +1150,12 @@ Section SplitRange.
   Qed.
 
   Lemma split_range_fields:
-    forall b lo,
+    forall p b lo,
       NoDupMembers (co_members co) ->
-      massert_imp (range b lo (lo + co_sizeof co))
-                  (sepall (field_range (co_members co) b lo) (co_members co)).
+      massert_imp (range' p b lo (lo + co_sizeof co))
+                  (sepall (field_range' p (co_members co) b lo) (co_members co)).
   Proof.
-    intros b lo Hndup.
+    intros p b lo Hndup.
     apply Henv in Hco.
     rewrite (co_consistent_sizeof _ _ Hco).
     rewrite (co_consistent_alignof _ _ Hco).
@@ -1127,3 +1175,113 @@ Section SplitRange.
   Qed.
 
 End SplitRange.
+
+Notation field_range ge := (field_range' ge Freeable).
+Notation field_range_w ge := (field_range' ge Writable).
+
+(* * * * * * * * Initial memory * * * * * * * * * * * * * * *)
+
+Import Globalenvs.
+Import AST.
+
+Section Galloc.
+
+  Parameters F V : Type.
+  Parameter p : program (fundef F) V.
+
+  Definition grange (idg : ident * globdef (fundef F) V) :=
+    let (id, g) := idg in
+    match Genv.find_symbol (Genv.globalenv p) id with
+    | None => sepfalse
+    | Some b =>
+      match g with
+      | Gfun f => range' Nonempty b 0 1
+      | Gvar v =>
+        pure (init_data_list_size (gvar_init v) <= Int.modulus)
+             -* range' (Genv.perm_globvar v) b 0
+                       (init_data_list_size v.(gvar_init))
+      end
+    end.
+
+  Lemma init_grange:
+    forall m0,
+      NoDupMembers p.(prog_defs) ->
+      Genv.init_mem p = Some m0 ->
+      m0 |= sepall grange p.(prog_defs).
+  Proof.
+    pose proof (eq_refl p.(prog_defs)) as Hps.
+    revert Hps. generalize p.(prog_defs) at 2 4.
+    intros ps Hps' m0 Hndups Hinit.
+    assert (exists ps', p.(prog_defs) = ps' ++ ps) as Hps
+        by (exists nil; auto).
+    clear Hps'.
+    induction ps; auto.
+    destruct a as (id, g).
+    destruct Hps as (ps' & Hps).
+    assert (m0 |= sepall grange ps) as IH
+        by (apply IHps; exists (ps' ++ (id, g)::nil);
+            now rewrite <- List_shift_first).
+    clear IHps.
+    assert ((prog_defmap p) ! id = Some g) as Hpdm
+        by (apply prog_defmap_norepet;
+            [now apply NoDup_norepet, fst_NoDupMembers|
+             rewrite Hps; intuition]).
+    apply Genv.find_def_symbol in Hpdm.
+    destruct Hpdm as (b & Hfs & Hfd).
+    apply sepall_cons.
+    repeat constructor; auto.
+    - (* m0 |= grange (id, g) *)
+      simpl. rewrite Hfs.
+      destruct g.
+      + (* g = Gfun f *)
+        apply Genv.find_funct_ptr_iff in Hfd.
+        apply Genv.init_mem_characterization_2 with (2:=Hinit) in Hfd.
+        destruct Hfd as (Hperm & Hperm').
+        repeat constructor.
+        * omega.
+        * unfold Int.modulus, Int.wordsize, Wordsize_32.wordsize.
+          rewrite Z.one_succ; apply Zlt_le_succ, Z.gt_lt, two_power_nat_pos.
+        * intros ** HH. assert (i = 0) by omega.
+          subst. now apply Mem.perm_cur.
+      + (* g = Gvar v *)
+        apply Genv.find_var_info_iff in Hfd.
+        eapply Genv.init_mem_characterization with (2:=Hinit) in Hfd.
+        destruct Hfd as (Hrp & Hfd).
+        repeat constructor; auto.
+        * reflexivity.
+        * intros i k Hi.
+          apply Mem.perm_cur.
+          unfold wand_footprint in H.
+          apply Mem.perm_unchanged_on with (1:=H); simpl; auto.
+        * inversion_clear 1 as (? & Hf). simpl in *.
+          destruct Hf as (Hb & Hf). subst.
+          eapply Mem.perm_valid_block; eauto.
+    - (* disjoint_footprint (grange (id, g)) (sepall grange ids) *)
+      rewrite Hps in Hndups.
+      apply NoDupMembers_app_cons in Hndups.
+      destruct Hndups as (Hndups1 & Hndups2).
+      apply NotInMembers_app in Hndups1.
+      apply proj1 in Hndups1.
+      clear Hndups2 Hinit Hps Hfd ps'.
+      induction ps; auto using sepemp_disjoint.
+      destruct a as (id' & g').
+      apply NotInMembers_cons in Hndups1.
+      destruct Hndups1 as (Hndups & Hnid').
+      apply sepall_cons in IH.
+      specialize (IHps Hndups (sep_proj2 _ _ _ IH)).
+      apply sep_proj1 in IH.
+      rewrite sepall_cons.
+      apply disjoint_footprint_sepconj.
+      split; auto. clear IHps.
+      intros b' ofs' Hf1 Hf2.
+      simpl in *.
+      rewrite Hfs in Hf1.
+      destruct (Genv.find_symbol (Genv.globalenv p) id') eqn:Hfs'; [|inv IH].
+      apply Genv.global_addresses_distinct with (1:=Hnid') (2:=Hfs) in Hfs'.
+      apply Hfs'.
+      destruct g, g'; inversion_clear Hf1; inversion_clear Hf2;
+        simpl in *; subst; intuition; now subst b b0.
+  Qed.
+
+End Galloc.
+

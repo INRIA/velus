@@ -126,6 +126,7 @@ VFILES:=RMemory.v\
   Common.v\
   Ident.v\
   Clocks.v\
+  ObcToClight/ObcClightCommon.v\
   ObcToClight/Interface.v\
   ObcToClight/Generation.v\
   ObcToClight/Correctness.v\
