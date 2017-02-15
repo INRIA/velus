@@ -1183,13 +1183,14 @@ Notation field_range_w ge := (field_range' ge Writable).
 
 Import Globalenvs.
 Import AST.
+Import Clight.
 
 Section Galloc.
 
-  Parameters F V : Type.
-  Parameter p : program (fundef F) V.
+  (* Variables F V : Type. *)
+  Variable p : program (* (fundef F) V *).
 
-  Definition grange (idg : ident * globdef (fundef F) V) :=
+  Definition grange (idg : ident * globdef fundef type) :=
     let (id, g) := idg in
     match Genv.find_symbol (Genv.globalenv p) id with
     | None => sepfalse

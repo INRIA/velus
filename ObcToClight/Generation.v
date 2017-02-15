@@ -327,11 +327,11 @@ Definition write_out (node: ident) (outs: list (ident * type))
     ) Clight.Sskip outs.
 
 Definition reset_call (node: ident): Clight.statement :=
-  let p_self := Clight.Eaddrof (Clight.Evar self (type_of_inst node)) (type_of_inst_p node) in
+  let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
   funcall None (prefix_fun node reset) [p_self].
 
 Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident * type)): Clight.statement :=
-  let p_self := Clight.Eaddrof (Clight.Evar self (type_of_inst node)) (type_of_inst_p node) in
+  let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
   let out_struct := Ident.prefix out step in
   let t_struct := type_of_inst (prefix_fun node step) in
   let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
@@ -356,12 +356,11 @@ Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes
                      (write_out node m.(m_out))) in
   let loop := Clight.Sloop s_step Clight.Sskip in
   let body := return_zero (Clight.Ssequence (reset_call node) loop) in
-  let vars := (self, type_of_inst node)
-                :: match m.(m_out) with
-                   | [] (* | [_]  *) => []
-                   | _ =>
-                     (Ident.prefix out step, type_of_inst (prefix_fun node step)) :: []
-                   end
+  let vars :=  match m.(m_out) with
+               | [] (* | [_]  *) => []
+               | _ =>
+                 [(Ident.prefix out step, type_of_inst (prefix_fun node step))]
+               end
   in
   fundef [] vars (map translate_param m.(m_in)) Ctypes.type_int32s body.
 
@@ -399,19 +398,21 @@ Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composit
 
 Definition make_program'
            (types: list Ctypes.composite_definition)
-           (gvars_vol: list (ident * Ctypes.type))
+           (gvars gvars_vol: list (ident * Ctypes.type))
            (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
            (public: idents)
            (main: ident) : res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
   | inl (exist ce P) => 
     do _ <- check_size_env ce types;
-    OK {| Ctypes.prog_defs := map (vardef ce true) gvars_vol ++ defs;
-                 Ctypes.prog_public := public;
-                 Ctypes.prog_main := main;
-                 Ctypes.prog_types := types;
-                 Ctypes.prog_comp_env := ce;
-                 Ctypes.prog_comp_env_eq := P |}
+      OK {| Ctypes.prog_defs := map (vardef ce false) gvars ++
+                                map (vardef ce true) gvars_vol ++
+                                defs;
+            Ctypes.prog_public := public;
+            Ctypes.prog_main := main;
+            Ctypes.prog_types := types;
+            Ctypes.prog_comp_env := ce;
+            Ctypes.prog_comp_env_eq := P |}
   | inr msg => Error msg
   end.
 
@@ -422,13 +423,17 @@ Definition translate (main_node: ident) (prog: program): res Clight.program :=
     | Some m =>
       match find_method reset c.(c_methods) with
       | Some _ =>
+        let f := glob_id self in
+        let f_gvar := (f, type_of_inst main_node) in
         let ins := map glob_bind m.(m_in) in
         let outs := map glob_bind m.(m_out) in
         let main := make_main main_node m in
         let cs := map (translate_class prog) prog in
         let (structs, funs) := split cs in
         let gdefs := concat funs ++ [(main_id, main)] in
-        make_program' (concat structs) (outs ++ ins) gdefs [] main_id
+        make_program' (concat structs)
+                      [f_gvar]
+                      (outs ++ ins) gdefs [] main_id
       | None => Error (msg "ObcToClight: reset function not found")
       end
     | None => Error (msg "ObcToClight: step function not found")
