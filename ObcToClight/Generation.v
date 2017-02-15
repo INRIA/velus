@@ -312,7 +312,7 @@ Definition load_in (ins: list (ident * type)): Clight.statement :=
 
 Definition write_out (node: ident) (outs: list (ident * type))
   : Clight.statement :=
-  let out_struct := glob_id (Ident.prefix out step) in
+  let out_struct := Ident.prefix out step in
   let t_struct := type_of_inst (prefix_fun node step) in
   fold_right
     (fun (xt: ident * type) s =>
@@ -332,7 +332,7 @@ Definition reset_call (node: ident): Clight.statement :=
 
 Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident * type)): Clight.statement :=
   let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
-  let out_struct := glob_id (Ident.prefix out step) in
+  let out_struct := Ident.prefix out step in
   let t_struct := type_of_inst (prefix_fun node step) in
   let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
   match m_out with
@@ -356,14 +356,13 @@ Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes
                      (write_out node m.(m_out))) in
   let loop := Clight.Sloop s_step Clight.Sskip in
   let body := return_zero (Clight.Ssequence (reset_call node) loop) in
-  let vars := (self, type_of_inst node)
-                :: match m.(m_out) with
-                   | [] (* | [_]  *) => []
-                   | _ =>
-                     (Ident.prefix out step, type_of_inst (prefix_fun node step)) :: []
-                   end
+  let vars :=  match m.(m_out) with
+               | [] (* | [_]  *) => []
+               | _ =>
+                 [(Ident.prefix out step, type_of_inst (prefix_fun node step))]
+               end
   in
-  fundef [] [] (map translate_param m.(m_in)) Ctypes.type_int32s body.
+  fundef [] vars (map translate_param m.(m_in)) Ctypes.type_int32s body.
 
 Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
@@ -425,9 +424,7 @@ Definition translate (main_node: ident) (prog: program): res Clight.program :=
       match find_method reset c.(c_methods) with
       | Some _ =>
         let f := glob_id self in
-        let step_out := glob_id (Ident.prefix out step) in
         let f_gvar := (f, type_of_inst main_node) in
-        let step_out_gvar := (step_out, type_of_inst (prefix_fun main_node step)) in
         let ins := map glob_bind m.(m_in) in
         let outs := map glob_bind m.(m_out) in
         let main := make_main main_node m in
@@ -435,11 +432,7 @@ Definition translate (main_node: ident) (prog: program): res Clight.program :=
         let (structs, funs) := split cs in
         let gdefs := concat funs ++ [(main_id, main)] in
         make_program' (concat structs)
-                      (f_gvar
-                         :: match m.(m_out) with
-                            | [] => []
-                            | _ => [step_out_gvar]
-                            end)
+                      [f_gvar]
                       (outs ++ ins) gdefs [] main_id
       | None => Error (msg "ObcToClight: reset function not found")
       end
