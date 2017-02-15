@@ -85,6 +85,7 @@ Module Export Ids <: IDS.
   Definition out := pos_of_str "out".             
   Definition main_id: ident := pos_of_str "main".
   Definition fun_id: ident  := pos_of_str "fun".
+  Definition sync_id: ident := pos_of_str "sync".
   
   Definition step := pos_of_str "step".
   Definition reset := pos_of_str "reset".
@@ -228,6 +229,18 @@ Proof.
   unfold prefix, self in E.
   apply pos_of_str_injective in E.
   assert (In_str "$" "self") as Hin
+      by (rewrite <- E, In_str_app; right; apply In_str_eq).
+  destruct Hin as [|[|[|[|]]]]; try discriminate.
+  contradiction.
+Qed.
+
+Lemma sync_not_prefixed: ~ prefixed sync_id.
+Proof.
+  intro H.
+  inversion H as [? ? E].
+  unfold prefix, sync_id in E.
+  apply pos_of_str_injective in E.
+  assert (In_str "$" "sync") as Hin
       by (rewrite <- E, In_str_app; right; apply In_str_eq).
   destruct Hin as [|[|[|[|]]]]; try discriminate.
   contradiction.
