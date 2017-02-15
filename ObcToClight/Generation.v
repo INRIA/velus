@@ -346,23 +346,39 @@ Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident 
     let args := p_self :: p_out :: args in
     funcall None (prefix_fun node step) args
   end.
-          
-Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type :=
+
+Definition main_loop_body (node: ident) (m: method): Clight.statement :=
   let args := map make_in_arg m.(m_in) in
-  let s_step := Clight.Ssequence
-                  (load_in m.(m_in))
-                  (Clight.Ssequence
-                     (step_call node args m.(m_out))
-                     (write_out node m.(m_out))) in
-  let loop := Clight.Sloop s_step Clight.Sskip in
-  let body := return_zero (Clight.Ssequence (reset_call node) loop) in
+  Clight.Ssequence
+    (funcall None sync_id [])
+    (Clight.Ssequence
+       (load_in m.(m_in))
+       (Clight.Ssequence
+          (step_call node args m.(m_out))
+          (write_out node m.(m_out)))).
+
+Definition main_loop (node: ident) (m: method): Clight.statement :=
+  Clight.Sloop (main_loop_body node m) Clight.Sskip.
+
+Definition main_body (node: ident) (m: method): Clight.statement :=
+  return_zero (Clight.Ssequence (reset_call node) (main_loop node m)).
+
+Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type :=
   let vars :=  match m.(m_out) with
                | [] (* | [_]  *) => []
                | _ =>
                  [(Ident.prefix out step, type_of_inst (prefix_fun node step))]
                end
   in
-  fundef [] vars (map translate_param m.(m_in)) Ctypes.type_int32s body.
+  fundef [] vars (map translate_param m.(m_in)) Ctypes.type_int32s (main_body node m).
+
+Definition ef_sync: Clight.fundef :=
+  let sg := AST.mksignature [] None AST.cc_default in
+  let ef := AST.EF_external "sync" sg in
+  Ctypes.External ef Ctypes.Tnil Ctypes.Tvoid AST.cc_default.
+  
+Definition make_sync: AST.globdef Clight.fundef Ctypes.type :=
+  @AST.Gfun Clight.fundef Ctypes.type ef_sync.
 
 Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
@@ -430,7 +446,7 @@ Definition translate (main_node: ident) (prog: program): res Clight.program :=
         let main := make_main main_node m in
         let cs := map (translate_class prog) prog in
         let (structs, funs) := split cs in
-        let gdefs := concat funs ++ [(main_id, main)] in
+        let gdefs := concat funs ++ [(sync_id, make_sync); (main_id, main)] in
         make_program' (concat structs)
                       [f_gvar]
                       (outs ++ ins) gdefs [] main_id
