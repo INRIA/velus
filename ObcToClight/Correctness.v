@@ -357,6 +357,17 @@ Proof.
   - contradiction.
 Qed.
 
+Lemma sync_not_glob:
+  forall (xs: list (ident * type)),
+    ~ In sync_id (map (fun xt => glob_id (fst xt)) xs).
+Proof.
+  induction xs as [|(x, t)]; simpl; auto.
+  intros [Hin|Hin].
+  - unfold glob_id, sync_id in Hin.
+    apply pos_of_str_injective in Hin; inv Hin.
+  - contradiction.
+Qed.
+
 Lemma NoDupMembers_glob:
   forall (ys xs: list (ident * type)),
     NoDupMembers (xs ++ ys) ->
@@ -565,11 +576,11 @@ Section PRESERVATION.
                (map (fun xt => glob_id (fst xt)) (m_out m) ++
                     map (fun xt => glob_id (fst xt)) (m_in m) ++
                     map fst (concat funs) ++
-                    [main_id])) as Notin_self.
+                    [sync_id; main_id])) as Notin_self.
     { pose proof (m_notreserved self m (in_eq self _)) as Res; unfold meth_vars in Res.
-      repeat rewrite in_app_iff, in_map_iff; rewrite In_singleton;
-        intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|Hin]]];
-        try simpl in E.
+      repeat rewrite in_app_iff, in_map_iff; simpl; 
+        intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|[Hin|[Hin|]]]]];
+        try simpl in E; try contradiction.
       - apply glob_id_injective in E; subst x.
         apply In_InMembers in Hin.
         apply Res; now repeat (rewrite InMembers_app; right).
@@ -580,6 +591,9 @@ Section PRESERVATION.
         apply in_map with (f:=fst) in Hin.
         subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
         contradict Hin; apply glob_id_not_prefixed. 
+      - unfold glob_id, sync_id in Hin.
+        apply pos_of_str_injective in Hin.
+        inv Hin.
       - unfold glob_id, main_id in Hin.
         apply pos_of_str_injective in Hin.
         inv Hin.
@@ -587,14 +601,27 @@ Section PRESERVATION.
     assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m) ++
                        map (fun xt => glob_id (fst xt)) (m_in m) ++
                        map fst (concat funs) ++
-                       [main_id])) as Nodup.
-    { repeat apply NoDup_app'; repeat apply Forall_not_In_app;
+                       [sync_id; main_id])) as Nodup.
+    { rewrite cons_is_app; repeat apply NoDup_app';
+        repeat apply Forall_not_In_app;
         repeat apply Forall_not_In_singleton.
       - apply NoDup_glob_id, m_nodupout.
       - apply NoDup_glob_id, m_nodupin.
       - rewrite Funs.
         now apply NoDup_funs.
       - repeat constructor; auto.
+      - repeat constructor; auto.
+      - simpl.
+        intros [E|]; try contradiction.
+        unfold main_id, sync_id in E.
+        apply pos_of_str_injective in E.
+        inv E.
+      - intro Hin; subst funs; apply prefixed_funs in Hin.
+        inversion Hin as [? ? E].
+        unfold prefix, sync_id in E.
+        unfold prefix_fun, fun_id in E.
+        apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E.
+        inversion E.
       - intro Hin; subst funs; apply prefixed_funs in Hin.
         inversion Hin as [? ? E].
         unfold prefix, main_id in E.
@@ -604,6 +631,7 @@ Section PRESERVATION.
       - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
+      - apply sync_not_glob. 
       - apply main_not_glob. 
       - apply NoDupMembers_glob.
         pose proof (m_nodupvars m) as Nodup.
@@ -612,6 +640,7 @@ Section PRESERVATION.
       - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
+      - apply sync_not_glob.      
       - apply main_not_glob.
     }
     repeat constructor; auto.
@@ -3854,14 +3883,7 @@ Section PRESERVATION.
                                  | _ :: _ => [(prefix out step, type_of_inst (prefix_fun main_node step))]
                                  end
               /\ main.(fn_temps) = map translate_param (m_in m_step)
-              /\ main.(fn_body) =
-                 return_zero
-                   (Ssequence (reset_call main_node)
-                              (Sloop (Ssequence (load_in (m_in m_step))
-                                                (Ssequence
-                                                   (step_call main_node (map make_in_arg (m_in m_step)) (m_out m_step))
-                                                   (write_out main_node (m_out m_step))))
-                                     Sskip))
+              /\ main.(fn_body) = main_body main_node m_step
               /\ match m_out m_step with
                 | [] => True
                 | _ =>
@@ -3945,7 +3967,7 @@ Section PRESERVATION.
       { unfold AST.prog_defmap; simpl; split;
           [apply PTree_Properties.of_list_norepet; auto|];
           inversion_clear TRANSL; auto.
-        apply in_cons, in_app; right; apply in_app; right; apply in_eq.
+        apply in_cons, in_app; right; apply in_app; right; apply in_cons, in_eq.
       }
       rewrite Hmain_id.
       apply Genv.find_def_symbol in Hget.
@@ -3999,6 +4021,32 @@ Section PRESERVATION.
     now left.
   Qed.
 
+  Lemma find_sync:
+    exists b,
+      Genv.find_symbol tge sync_id = Some b
+      /\ Genv.find_funct_ptr tge b = Some ef_sync.
+  Proof.
+    inv_trans TRANSL with structs funs Eq.
+    unfold make_program' in TRANSL.
+    destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
+    destruct (check_size_env ce (concat structs)); try discriminate.
+    unfold translate_class in Eq.
+    apply split_map in Eq; destruct Eq as [? Funs].
+    assert ((AST.prog_defmap tprog) ! sync_id = Some make_sync) as Hget. 
+    { unfold AST.prog_defmap; simpl;
+        apply PTree_Properties.of_list_norepet; auto;
+          inversion_clear TRANSL; auto.
+      apply in_cons, in_app; right; apply in_app; right; apply in_eq.
+    }
+    apply Genv.find_def_symbol in Hget.
+    destruct Hget as (b & Findsym & Finddef).
+    exists b; split; auto.
+    change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
+    unfold Genv.find_funct_ptr.
+    unfold Clight.fundef in Finddef.
+    now rewrite Finddef.
+  Qed.
+
   Lemma init_mem:
     exists m sb,
       Genv.init_mem tprog = Some m
@@ -4018,8 +4066,8 @@ Section PRESERVATION.
         * split; auto; apply Z.divide_0_r.
         * intros ** Hinio; simpl in Hinio;
             destruct Hinio; [discriminate|contradiction].
-      + repeat rewrite in_app in Hinv;
-          destruct Hinv as [Hinv|[Hinv|[Hinv|Hinv]]]; try inv Hinv.
+      + rewrite cons_is_app in Hinv; repeat rewrite in_app in Hinv;
+          destruct Hinv as [Hinv|[Hinv|[[Hinv|Hinv]|[Hinv|Hinv]]]]; try inv Hinv.
         *{ clear TRANSL.
            induction (map glob_bind (m_out m) ++ map glob_bind (m_in m)) as [|(x, t)].
            - contradict Hinv.
@@ -4117,16 +4165,7 @@ Section PRESERVATION.
                                                 | _ :: _ => [(prefix out step, type_of_inst (prefix_fun main_node step))]
                                                 end
                            /\ main_f.(fn_temps) = map translate_param (m_in m_step)
-                           /\ main_f.(fn_body) =
-                             return_zero
-                               (Ssequence (reset_call main_node)
-                                          (Sloop
-                                             (Ssequence (load_in (m_in m_step))
-                                                        (Ssequence
-                                                           (step_call main_node
-                                                                      (map make_in_arg (m_in m_step))
-                                                                      (m_out m_step))
-                                                           (write_out main_node (m_out m_step)))) Sskip)).
+                           /\ main_f.(fn_body) = main_body main_node m_step.
 
     Hypothesis Getstep_co: match m_step.(m_out) with
                            | [] => True
@@ -4629,23 +4668,17 @@ Section PRESERVATION.
       (*****************************************************************)
       (** Correctness of the main loop                                 *)
       (*****************************************************************)
-
-      Definition body :=
-        Ssequence
-          (load_in (m_in m_step))
-          (Ssequence
-             (step_call main_node
-                        (map make_in_arg (m_in m_step)) (m_out m_step))
-             (write_out main_node (m_out m_step))).
-
+      
       Lemma exec_body:
         forall n meN le,
           dostep' n meN ->
           exists leSn meSn,
             exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le meN
-                      body (load_events (map sem_const (ins n)) (m_in m_step)
-                                        ++ E0
-                                        ++ store_events (map sem_const (outs n)) (m_out m_step))
+                      (main_loop_body main_node m_step)
+                      (E0
+                       ++ load_events (map sem_const (ins n)) (m_in m_step)
+                       ++ E0
+                       ++ store_events (map sem_const (outs n)) (m_out m_step))
                       leSn meSn Out_normal
             /\ dostep' (S n) meSn.
       Proof.
@@ -4783,13 +4816,30 @@ Section PRESERVATION.
               rewrite IHl; auto.
         }
         eexists le2, meSn; split; auto.
-        repeat eapply exec_Sseq_1; eauto. 
-        eapply exec_write; eauto.
+        repeat eapply exec_Sseq_1; eauto.
+        - edestruct find_sync as (? & Findsync & Findsync_p).
+          change le with (set_opttemp None Vundef le) at 2.
+          econstructor; simpl; eauto.
+          + econstructor.
+            *{ apply eval_Evar_global; eauto.
+               rewrite <-not_Some_is_None.
+               intros (b, t) Hget.
+               subst e1.
+               destruct m_step.(m_out).
+               - rewrite PTree.gempty in Hget; discriminate.
+               - rewrite PTree.gso, PTree.gempty in Hget.
+                 + discriminate.
+                 + intro E; apply sync_not_prefixed. rewrite E; constructor. 
+             }
+            * simpl; apply deref_loc_reference; auto.
+          + econstructor.
+          + rewrite Genv.find_funct_find_funct_ptr; eauto.
+          + reflexivity.
+          + econstructor.
+            simpl.
+            admit.
+        - eapply exec_write; eauto.
       Qed.    
-
-      Definition loop := 
-        (* XXX: factor it out in [Generation.v] *)
-        Sloop body Sskip.
 
       Definition transl_trace (n: nat): traceinf' :=
         trace_step m_step ins outs Step_in_spec Step_out_spec Hwt_ins Hwt_outs n.
@@ -4799,7 +4849,7 @@ Section PRESERVATION.
           wt_mem meInit prog_main c_main ->
           dostep' n me ->
           execinf_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le me
-                       loop (traceinf_of_traceinf' (transl_trace n)).
+                       (main_loop main_node m_step) (traceinf_of_traceinf' (transl_trace n)).
       Proof.
         cofix COINDHYP.
         intros ** Hdostep.
@@ -4889,7 +4939,7 @@ Section PRESERVATION.
         forall n m le,
           dostep' n m ->
           Smallstep.forever_reactive (step_fe function_entry2) (globalenv tprog)
-                                     (Clight.State main_f loop after_loop e1 le m)
+                                     (Clight.State main_f (main_loop main_node m_step) after_loop e1 le m)
                                      (traceinf_of_traceinf' (transl_trace n)).
       Proof.
         unfold transl_trace, trace_step.
@@ -4898,7 +4948,7 @@ Section PRESERVATION.
         edestruct exec_body with (1:=Hdostep') as (? & ? & Exec_body & ?).
         eapply exec_stmt_steps in Exec_body.
         destruct Exec_body as (? & Star_body & Out_body).
-        unfold body in Star_body.      
+        unfold main_loop_body in Star_body.      
         rewrite unfold_mk_trace.
 
         econstructor; simpl.
@@ -5007,9 +5057,8 @@ Section PRESERVATION.
       as (? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ? & ?); eauto.
     intros.
     case_eq (m_out m_step); intros ** Out;
-      rewrite Out in Hmout, Hvars, Hbody.
-    - (* destruct Hmout as (? & ? & ?). *)
-      eapply reacts; try rewrite Out; eauto.
+      rewrite Out in Hmout, Hvars.
+    - eapply reacts; try rewrite Out; eauto.
       + repeat split; auto.
       + rewrite Hvars; econstructor.
       + erewrite <-sepemp_left, <-sepemp_right; eauto.
