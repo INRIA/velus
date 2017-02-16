@@ -1,3 +1,5 @@
+#!/bin/bash
+
 echo 
 echo "~~~ Welcome to the Velus image. ~~~"
 echo

@@ -22,5 +22,8 @@ RUN opam init -a --compiler=4.02.3 && \
 COPY motd.sh $HOME/
 RUN echo ". ~/motd.sh" >> $HOME/.bashrc
 
+# Compiler instructions
+COPY make.sh $HOME/
+
 # Compile project & give a shell
-CMD ["/bin/bash", "-l", "-c", "cd $HOME/velus && make clean; make && bash"]
+CMD ["/bin/bash", "-c", "make.sh"]
