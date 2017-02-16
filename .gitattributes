@@ -1,0 +1,6 @@
+/docker export-ignore  
+/drafts export-ignore
+.gitattributes export-ignore  
+.gitignore export-ignore
+.gitmodules export-ignore
+TODO export-ignore
