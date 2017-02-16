@@ -2940,8 +2940,6 @@ Section PRESERVATION.
   Qed.
   Hint Resolve stmt_eval_sub_prog.
 
-  Axiom Admit: forall (P: Prop), True -> P.
-  
   Theorem correctness:
     (forall p me1 ve1 s S2,
         stmt_eval p me1 ve1 s S2 ->
