@@ -1,0 +1,132 @@
+(*
+    Production Cell in Lustre
+    1995 Leszek Holenderski
+
+    Published in "Formal Development of Reactive Systems", Claus Lewerentz and
+    Thomas Lindner (eds.), Springer-Verlag, LNCS 891, 1995.
+ *)
+
+node redge (signal: bool) returns (r: bool);
+let
+  r = signal -> (signal and pre (not signal));
+tel;
+
+node fedge (signal: bool) returns (f: bool);
+let
+  f = redge(not signal);
+tel;
+
+node sustain (on, off: bool) returns (s: bool);
+let
+  s = on -> if on then true else if off then false else pre(s);
+tel;
+
+node after (e1, e2: bool) returns (a: bool);
+  var e2_since_last_e1: bool;
+let
+  a = e1 and e2_since_last_e1;
+  e2_since_last_e1 = e2 ->
+    if e2 then true else if pre(e1) then false else pre(e2_since_last_e1);
+tel;
+
+node MovingItem
+  (MaySafelyMove, TryToMove1, TryToMove2: bool)
+returns
+  (start1, start2, stop: bool);
+var
+  MayMove1, MayMove2: bool;
+let
+  MayMove1 = TryToMove1 and MaySafelyMove;
+  MayMove2 = TryToMove2 and MaySafelyMove;
+
+  start1 = redge(MayMove1 and (true -> pre(not TryToMove2)));
+  start2 = redge(MayMove2 and (true -> pre(not TryToMove1)));
+  stop = fedge(MayMove1) or fedge(MayMove2);
+tel;
+
+node Press
+  (Rput1, NearPress1, OutPress1,
+   Rget2, NearPress2, OutPress2,
+   Pbot, Pmid, Ptop: bool)
+returns
+  (Pup, Pdn, Pstop, ArmsMayPassPress: bool);
+var
+  Arm1MayPassPress, Arm2MayPassPress,
+  Arm1OutOfPress, Arm2OutOfPress, ArmsOutOfPress,
+  Arm1CannotCollideWithPress, Arm2CannotCollideWithPress,
+  up, down, stopped: bool;
+let
+  (Pup, Pdn, Pstop) = MovingItem(true, up, down);
+
+  up = sustain(after(ArmsOutOfPress, Rput1), Ptop) or
+       sustain(after(ArmsOutOfPress, Rget2), Pmid);
+  down = sustain(false -> Ptop and pre(Pstop), Pbot);
+  stopped = not sustain(Pup or Pdn, Pstop);
+
+  ArmsOutOfPress = Arm1OutOfPress and Arm2OutOfPress;
+  Arm1OutOfPress = not NearPress1 or OutPress1;
+  Arm2OutOfPress = not NearPress2 or OutPress2;
+
+  ArmsMayPassPress = Arm1MayPassPress and Arm2MayPassPress;
+  Arm1MayPassPress = Arm1OutOfPress or Arm1CannotCollideWithPress;
+  Arm2MayPassPress = Arm2OutOfPress or Arm2CannotCollideWithPress;
+
+  Arm1CannotCollideWithPress = stopped and (Pmid or Ptop) or
+    sustain(Pbot, Pmid) or sustain(Pmid, Pbot);
+  Arm2CannotCollideWithPress = stopped and (Pbot or Ptop);
+tel;
+
+node Rbase
+  (ArmsMayPassPress,
+   Rget1, Rput1, ToTable, ToPress1,
+   Rget2, Rput2, ToDBelt, ToPress2: bool)
+returns
+  (Rleft, Rright, Rstop: bool);
+var
+  left, right, BeforeFirstRput1: bool;
+let
+  (Rleft, Rright, Rstop) = MovingItem(ArmsMayPassPress, left, right);
+
+  left = sustain(Rget1, ToPress2) or
+         sustain(Rput2, ToPress1) or
+         sustain(Rget2, ToDBelt) or
+         sustain(Rget1, ToPress1) and BeforeFirstRput1;
+  right = sustain(true -> Rput1, ToTable);
+
+  BeforeFirstRput1 = sustain((not Rput1) -> false, Rput1);
+tel;
+
+node Rgrips
+  (InPress1, OverTable, ToTable, ToPress1,
+   InPress2, OverDBelt, ToDBelt, ToPress2,
+   Ttop, Pbot, Pmid: bool)
+returns
+  (Rget1, Rput1, Rget2, Rput2: bool);
+let
+  Rget1 = after(OverTable and ToTable and Ttop, true -> pre(Rput1));
+  Rput1 = after(InPress1 and ToPress1 and Pmid, Rget1);
+  Rget2 = after(InPress2 and ToPress2 and Pbot, Rput1);
+  Rput2 = after(OverDBelt and ToDBelt, Rget2);
+tel;
+
+node VerifyMovingItem
+  (MaySafelyMove, TryToMove1, TryToMove2: bool)
+returns
+  (prop: bool);
+var
+  MayMove1, MayMove2: bool;
+  start1, start2, stop, moving: bool;
+let
+  MayMove1 = TryToMove1 and MaySafelyMove;
+  MayMove2 = TryToMove2 and MaySafelyMove;
+  moving = sustain(start1 or start2, stop);
+
+  start1 = redge(MayMove1 and (true -> pre(not TryToMove2)));
+  start2 = redge(MayMove2 and (true -> pre(not TryToMove1)));
+  stop = fedge(MayMove1) or fedge(MayMove2);
+
+  assert #(redge(TryToMove1), redge(TryToMove2));
+  prop = #(start1, start2, stop) and
+         if moving then MaySafelyMove else true;
+tel;
+

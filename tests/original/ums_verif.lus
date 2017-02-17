@@ -1,0 +1,127 @@
+(* ums_verif example from the Lustre v4 distribution. *)
+
+node two_states(set,reset,init: bool) returns (state:bool);
+let
+  state= init -> if set and not pre(state) then true
+      else if reset and pre(state) then false
+      else pre(state);
+tel.
+
+node edge(X: bool) returns (edge : bool);
+let
+  edge = X -> X and not pre(X);
+tel.
+
+node implies(A,B:bool) returns (implies: bool);
+let implies = if A then B else true; tel.
+
+node after (A: bool) returns (X: bool);
+let
+  X = false -> pre(A or X);
+tel.
+
+node always_since (C,A: bool) returns (X: bool);
+let
+  X =   if A then C
+      else if after(A) then C and pre(X)
+      else true;
+tel.
+
+node once_since (C,A: bool) returns (X: bool);
+let
+  X = if A then C
+      else if after(A) then C or pre(X)
+      else true;
+tel.
+
+node always_from_to (C,A,B: bool) returns (X: bool);
+let
+  X = implies (after(A), always_since(C,A) or once_since(B,A));
+tel.
+
+node once_from_to (C,A,B: bool) returns (X: bool);
+let
+  X = implies (after(A) and B, once_since(C,A));
+tel.
+
+node alternating(A,B: bool) returns (X:bool);
+var A_forbiden, B_forbiden: bool;
+let
+  A_forbiden = false -> if pre(A) and not A then true
+            else if pre(B) and not B then false 
+                 else pre(A_forbiden);
+  B_forbiden = true -> if pre(B) and not B then true
+           else if pre(A) and not A then false  
+          else pre(B_forbiden);
+  X = not(A and A_forbiden) and not(B and B_forbiden);
+tel.
+
+node not_between_and (A,B,C: bool) returns (X: bool);
+let
+
+  X = implies(C, not once_since(A,B)); 
+tel.
+
+node UMS(on_A,on_B,on_C,ack_AB,ack_BC: bool)
+     returns (grant_access,grant_exit,
+        do_AB,do_BC: bool);
+var empty_section, only_on_B: bool;
+let
+   grant_access = empty_section and ack_AB;
+   grant_exit = only_on_B and ack_BC;
+   do_AB = not ack_AB and empty_section;
+   do_BC = not ack_BC and only_on_B;
+   empty_section = not(on_A or on_B or on_C);
+   only_on_B = on_B and not(on_A or on_C);
+tel
+
+node UMS_verif(on_A,on_B,on_C,
+         ack_AB,ack_BC: bool)
+     returns(property: bool);
+var
+   grant_access,grant_exit: bool;
+   do_AB,do_BC: bool;
+   no_collision,exclusive_req: bool;
+   no_derail_AB,no_derail_BC: bool;
+   empty_section, only_on_B: bool;
+let
+   empty_section = not(on_A or on_B or on_C);
+   only_on_B = on_B and not(on_A or on_C);
+   
+   -- ASSERTIONS
+   assert not(ack_AB and ack_BC);
+   assert true -> always_from_to(ack_AB,ack_AB,do_BC);
+   assert true -> always_from_to(ack_BC,ack_BC,do_AB);
+   assert empty_section -> true;
+   assert true ->
+    implies(edge(not empty_section),
+      pre grant_access);
+   assert true ->
+    implies(edge(on_C),
+      pre grant_exit);
+   assert true -> implies(edge(not on_A),on_B);
+   assert true -> implies(edge(not on_B),
+        on_A or on_C);
+
+   -- UMS CALL
+   (grant_access,grant_exit,do_AB,do_BC) =
+  UMS(on_A,on_B,on_C,ack_AB,ack_BC);
+
+   -- PROPERTIES
+   no_collision =
+  implies(grant_access,empty_section);
+   exclusive_req =
+  not(do_AB and do_BC);
+   no_derail_AB =
+  always_from_to(ack_AB,
+           grant_access,
+           only_on_B);
+   no_derail_BC =
+  always_from_to(ack_BC,
+           grant_exit,
+           empty_section);
+   property =
+  no_collision and exclusive_req and
+  no_derail_AB and no_derail_BC;
+tel
+

@@ -346,28 +346,6 @@ Proof.
   contradict Pref; apply glob_id_not_prefixed.
 Qed.
 
-Lemma main_not_glob:
-  forall (xs: list (ident * type)),
-    ~ In main_id (map (fun xt => glob_id (fst xt)) xs).
-Proof.
-  induction xs as [|(x, t)]; simpl; auto.
-  intros [Hin|Hin].
-  - unfold glob_id, main_id in Hin.
-    apply pos_of_str_injective in Hin; inv Hin.
-  - contradiction.
-Qed.
-
-Lemma sync_not_glob:
-  forall (xs: list (ident * type)),
-    ~ In sync_id (map (fun xt => glob_id (fst xt)) xs).
-Proof.
-  induction xs as [|(x, t)]; simpl; auto.
-  intros [Hin|Hin].
-  - unfold glob_id, sync_id in Hin.
-    apply pos_of_str_injective in Hin; inv Hin.
-  - contradiction.
-Qed.
-
 Lemma NoDupMembers_glob:
   forall (ys xs: list (ident * type)),
     NoDupMembers (xs ++ ys) ->
@@ -578,9 +556,12 @@ Section PRESERVATION.
                     map fst (concat funs) ++
                     [sync_id; main_id])) as Notin_self.
     { pose proof (m_notreserved self m (in_eq self _)) as Res; unfold meth_vars in Res.
-      repeat rewrite in_app_iff, in_map_iff; simpl; 
-        intros [((x, t) & E & Hin)|[((x, t) & E & Hin)|[((x, t) & E & Hin)|[Hin|[Hin|]]]]];
-        try simpl in E; try contradiction.
+      repeat rewrite in_app_iff, in_map_iff; simpl;  
+        intros [((x, t) & E & Hin) 
+               |[((x, t) & E & Hin) 
+                |[((x, t) & E & Hin) 
+                 |[Hin|[Hin|]]]]]; 
+        try simpl in E; try (apply pos_of_str_injective in Hin; now inv Hin); try contradiction. 
       - apply glob_id_injective in E; subst x.
         apply In_InMembers in Hin.
         apply Res; now repeat (rewrite InMembers_app; right).
@@ -591,24 +572,40 @@ Section PRESERVATION.
         apply in_map with (f:=fst) in Hin.
         subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
         contradict Hin; apply glob_id_not_prefixed. 
-      - unfold glob_id, sync_id in Hin.
-        apply pos_of_str_injective in Hin.
-        inv Hin.
-      - unfold glob_id, main_id in Hin.
-        apply pos_of_str_injective in Hin.
-        inv Hin.
     }
     assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m) ++
                        map (fun xt => glob_id (fst xt)) (m_in m) ++
                        map fst (concat funs) ++
+<<<<<<< HEAD
                        [sync_id; main_id])) as Nodup.
     { rewrite cons_is_app; repeat apply NoDup_app';
         repeat apply Forall_not_In_app;
         repeat apply Forall_not_In_singleton.
+=======
+                       [main_id])) as Nodup.
+    { repeat apply NoDup_app'; repeat apply Forall_not_In_app;
+        repeat apply Forall_not_In_singleton;
+        ((repeat constructor; auto) 
+         || (intros [E|]; try contradiction;  
+            apply pos_of_str_injective in E; inv E) 
+         || (intro Hin; subst funs; apply prefixed_funs in Hin; 
+            inversion Hin as [? ? E]; 
+            unfold prefix_fun, fun_id in E; 
+            apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E; 
+            inv E) 
+         || (match goal with 
+              |- ~ In _ (map (fun xt => glob_id (fst xt)) ?xs) => 
+              clear Notin_self; induction xs as [|(x, t)]; simpl; auto; 
+              intros [Hin|Hin]; try contradiction; 
+              apply pos_of_str_injective in Hin; inv Hin 
+            end) 
+         || idtac). 
+>>>>>>> withsync
       - apply NoDup_glob_id, m_nodupout.
       - apply NoDup_glob_id, m_nodupin.
       - rewrite Funs.
         now apply NoDup_funs.
+<<<<<<< HEAD
       - repeat constructor; auto.
       - repeat constructor; auto.
       - simpl.
@@ -633,6 +630,11 @@ Section PRESERVATION.
         now apply prefixed_funs in Hin.
       - apply sync_not_glob. 
       - apply main_not_glob. 
+=======
+      - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+        apply prefixed_fun_prefixed; subst funs.
+        now apply prefixed_funs in Hin.
+>>>>>>> withsync
       - apply NoDupMembers_glob.
         pose proof (m_nodupvars m) as Nodup.
         rewrite NoDupMembers_app_assoc, <-app_assoc in Nodup.
@@ -640,8 +642,11 @@ Section PRESERVATION.
       - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
+<<<<<<< HEAD
       - apply sync_not_glob.      
       - apply main_not_glob.
+=======
+>>>>>>> withsync
     }
     repeat constructor; auto.
   Qed.
@@ -2969,8 +2974,6 @@ Section PRESERVATION.
   Qed.
   Hint Resolve stmt_eval_sub_prog.
 
-  Axiom Admit: forall (P: Prop), True -> P.
-  
   Theorem correctness:
     (forall p me1 ve1 s S2,
         stmt_eval p me1 ve1 s S2 ->
@@ -4021,32 +4024,6 @@ Section PRESERVATION.
     now left.
   Qed.
 
-  Lemma find_sync:
-    exists b,
-      Genv.find_symbol tge sync_id = Some b
-      /\ Genv.find_funct_ptr tge b = Some ef_sync.
-  Proof.
-    inv_trans TRANSL with structs funs Eq.
-    unfold make_program' in TRANSL.
-    destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
-    destruct (check_size_env ce (concat structs)); try discriminate.
-    unfold translate_class in Eq.
-    apply split_map in Eq; destruct Eq as [? Funs].
-    assert ((AST.prog_defmap tprog) ! sync_id = Some make_sync) as Hget. 
-    { unfold AST.prog_defmap; simpl;
-        apply PTree_Properties.of_list_norepet; auto;
-          inversion_clear TRANSL; auto.
-      apply in_cons, in_app; right; apply in_app; right; apply in_eq.
-    }
-    apply Genv.find_def_symbol in Hget.
-    destruct Hget as (b & Findsym & Finddef).
-    exists b; split; auto.
-    change (Genv.find_funct_ptr tge b) with (Genv.find_funct_ptr (Genv.globalenv tprog) b).
-    unfold Genv.find_funct_ptr.
-    unfold Clight.fundef in Finddef.
-    now rewrite Finddef.
-  Qed.
-
   Lemma init_mem:
     exists m sb,
       Genv.init_mem tprog = Some m
@@ -4668,15 +4645,14 @@ Section PRESERVATION.
       (*****************************************************************)
       (** Correctness of the main loop                                 *)
       (*****************************************************************)
-      
+
       Lemma exec_body:
         forall n meN le,
           dostep' n meN ->
           exists leSn meSn,
             exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le meN
                       (main_loop_body main_node m_step)
-                      (E0
-                       ++ load_events (map sem_const (ins n)) (m_in m_step)
+                      (load_events (map sem_const (ins n)) (m_in m_step)
                        ++ E0
                        ++ store_events (map sem_const (outs n)) (m_out m_step))
                       leSn meSn Out_normal
@@ -4817,28 +4793,7 @@ Section PRESERVATION.
         }
         eexists le2, meSn; split; auto.
         repeat eapply exec_Sseq_1; eauto.
-        - edestruct find_sync as (? & Findsync & Findsync_p).
-          change le with (set_opttemp None Vundef le) at 2.
-          econstructor; simpl; eauto.
-          + econstructor.
-            *{ apply eval_Evar_global; eauto.
-               rewrite <-not_Some_is_None.
-               intros (b, t) Hget.
-               subst e1.
-               destruct m_step.(m_out).
-               - rewrite PTree.gempty in Hget; discriminate.
-               - rewrite PTree.gso, PTree.gempty in Hget.
-                 + discriminate.
-                 + intro E; apply sync_not_prefixed. rewrite E; constructor. 
-             }
-            * simpl; apply deref_loc_reference; auto.
-          + econstructor.
-          + rewrite Genv.find_funct_find_funct_ptr; eauto.
-          + reflexivity.
-          + econstructor.
-            simpl.
-            admit.
-        - eapply exec_write; eauto.
+        eapply exec_write; eauto.
       Qed.    
 
       Definition transl_trace (n: nat): traceinf' :=
@@ -4849,7 +4804,8 @@ Section PRESERVATION.
           wt_mem meInit prog_main c_main ->
           dostep' n me ->
           execinf_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le me
-                       (main_loop main_node m_step) (traceinf_of_traceinf' (transl_trace n)).
+                       (main_loop main_node m_step)
+                       (traceinf_of_traceinf' (transl_trace n)).
       Proof.
         cofix COINDHYP.
         intros ** Hdostep.

@@ -235,7 +235,7 @@ extraction/extract/LustreParser2.ml: Lustre/Parser/LustreParser2.ml \
 	cp $< $@
 
 extraction/extract/LustreParser2.mli: Lustre/Parser/LustreParser2.mli \
-    		extraction/extract
+		extraction/extract
 	cp $< $@
 
 extraction/extract/nlustrelib.ml: NLustre/nlustrelib.ml extraction/extract
@@ -245,11 +245,11 @@ extraction/extract/obclib.ml: Obc/obclib.ml extraction/extract
 	cp $< $@
 
 extraction/extract/interfacelib.ml: ObcToClight/interfacelib.ml \
-    		extraction/extract
+		extraction/extract
 	cp $< $@
 
 velus: compcert extraction/STAMP extraction/extract/LustreLexer.ml \
-    	velusmain.ml extraction/extract/LustreParser2.mli \
+	velusmain.ml extraction/extract/LustreParser2.mli \
 	extraction/extract/LustreParser2.ml extraction/extract/Relexer.ml \
 	veluslib.ml extraction/extract/interfacelib.ml \
 	extraction/extract/nlustrelib.ml extraction/extract/obclib.ml
@@ -257,6 +257,18 @@ velus: compcert extraction/STAMP extraction/extract/LustreLexer.ml \
 	@ocamlbuild -use-ocamlfind -no-hygiene -j 8 -I extraction/extract -cflags $(MENHIR_INCLUDES),-w,-3,-w,-20   -ignore Lexer velusmain.native
 	@mv velusmain.native velus
 	@cp CompCert/compcert.ini _build/compcert.ini
+
+velus.tar.gz: force
+	rm -f $@
+	cd CompCert; git archive --prefix=velus/CompCert/ -o ../compcert.tar HEAD
+	git archive --prefix=velus/ -o velus.tar HEAD
+	tar --concatenate --file=velus.tar compcert.tar
+	rm compcert.tar
+	gzip velus.tar
+
+
+force:
+	@true
 
 ####################
 #                  #

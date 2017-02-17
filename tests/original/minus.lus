@@ -1,0 +1,29 @@
+(* minus example from the Lustre v4 distribution. *)
+
+node TWO_STATES(set,reset,init:bool) returns (state:bool);
+let
+   state = init -> if set and not pre(state) then true
+                   else if reset and pre(state) then false
+                   else pre(state);
+tel;
+
+node ONE_BUTTON(change,init: bool) returns (state:bool);
+let
+   state = init -> if change then not pre(state) else pre(state);
+tel;
+
+node TWO_BUTTONS(on, off,init:bool) returns(state:bool);
+let
+   state = init -> if on then true else if off then false else pre(state);
+tel;
+
+node minus (e1,e2,e3,init:bool) returns (ok:bool);
+var s1,s2,s3,s4:bool;
+let
+   s1= TWO_STATES(e1,e2,init);
+   s2= TWO_BUTTONS(e1,e2,init);
+   assert not(e1 and e2);
+   s3= TWO_STATES(e3,e3,init);
+   s4= ONE_BUTTON(e3,init);
+   ok =(s1=s2) and (s3=s4);
+tel;
