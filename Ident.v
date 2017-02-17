@@ -63,6 +63,18 @@ Qed.
 Axiom pos_to_str_valid:
   forall x, ~ In_str "$" (pos_to_str x).
 
+
+Lemma sep_not_in:
+  forall x pre1 post1 s2,
+    ~ In_str x s2 ->
+    (pre1 ++ (String x post1) <> s2)%string.
+Proof.
+  intros ** Notin E.
+  apply Notin.
+  rewrite <-E, In_str_app.
+  right. apply In_str_eq.
+Qed.
+  
 Lemma append_sep_injectivity:
   forall x pre1 pre2 post1 post2,
     ~ In_str x pre1 ->
@@ -196,7 +208,7 @@ Proof.
 Qed.
 
 Definition glob_id (id: ident): ident :=
-  pos_of_str (String "$" (pos_to_str id)).
+  pos_of_str (String "_" (pos_to_str id)).
 
 Lemma glob_id_injective:
   forall x x',
@@ -217,10 +229,10 @@ Proof.
   inversion H as [? ? E].
   unfold prefix, glob_id in E.
   apply pos_of_str_injective in E.
-  change (String "$" (pos_to_str x))%string with ("" ++ String "$" (pos_to_str x))%string in E.
-  apply append_sep_injectivity in E; try apply pos_to_str_valid; auto.
-  destruct E as [E]; contradict E.
-  apply pos_to_str_not_empty.
+  apply (sep_not_in "$" (pos_to_str pref) (pos_to_str id) (String "_" (pos_to_str x))); auto.
+  rewrite not_in_str_cons; split.
+  - inversion 1.
+  - apply pos_to_str_valid.
 Qed.
 
 Lemma self_not_prefixed: ~ prefixed self.

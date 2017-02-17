@@ -457,7 +457,10 @@ Definition translate (do_sync: bool) (main_node: ident) (prog: program): res Cli
         in
         make_program' (concat structs)
                       [f_gvar]
-                      (outs ++ ins) gdefs [] main_id
+                      (outs ++ ins)
+                      gdefs
+                      (if do_sync then [main_sync_id] else [])
+                      main_id
       | None => Error (msg "ObcToClight: reset function not found")
       end
     | None => Error (msg "ObcToClight: step function not found")
