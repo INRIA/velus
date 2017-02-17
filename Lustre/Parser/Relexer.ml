@@ -3,6 +3,7 @@ let map_token (Specif.Coq_existT (tok, l) : LustreParser.Aut.GramDefs.token) =
   let loc l = (Obj.magic l : LustreAst.astloc) in
   let open LustreParser.Aut.GramDefs in
   match tok with
+  | ASSERT't     -> (LustreParser2.ASSERT     (loc l), loc l)
   | AND't        -> (LustreParser2.AND        (loc l), loc l)
   | BOOL't       -> (LustreParser2.BOOL       (loc l), loc l)
   | COLONCOLON't -> (LustreParser2.COLONCOLON (loc l), loc l)

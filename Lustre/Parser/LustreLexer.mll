@@ -31,6 +31,7 @@ let tok t v = Coq_existT (t, Obj.magic v)
 let () =
   List.iter (fun (key, builder) -> Hashtbl.add lexicon key builder)
     [
+      ("assert",   fun loc -> tok ASSERT't   loc);
       ("and",      fun loc -> tok AND't      loc);
       ("bool",     fun loc -> tok BOOL't     loc);
       ("double",   fun loc -> tok FLOAT64't  loc); (* LEGACY *)

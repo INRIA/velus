@@ -38,6 +38,7 @@ Import ListNotations.
 
 %token<LustreAst.astloc> LET TEL NODE RETURNS VAR FBY
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
+%token<LustreAst.astloc> ASSERT
 
 %token<LustreAst.astloc> EOF
 
@@ -400,6 +401,8 @@ equations:
     { [] }
 | eqs=equations eq=equation
     { eq::eqs }
+| eqs=equations ASSERT expression SEMICOLON
+    { eqs (* ignore assert statements for now *) }
 
 optsemicolon:
 | /* empty */
