@@ -156,14 +156,7 @@ unary_expression:
         LustreAst.LE
         (fold_right (fun es e => LustreAst.BINARY LustreAst.ADD e es loc)
 	  (LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc)
-	  (map (fun e=>
-		 LustreAst.CAST
-		   LustreAst.Tuint32
-		   (LustreAst.BINARY
-		     LustreAst.EQ e
-		     (LustreAst.CONSTANT (LustreAst.CONST_BOOL true) loc)
-		     loc)
-		   loc)
+	  (map (fun e=>LustreAst.CAST LustreAst.Tbool e loc)
 	   args))
 	(LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc)
 	loc
