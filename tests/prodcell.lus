@@ -7,8 +7,10 @@
  *)
 
 node redge (signal: bool) returns (r: bool);
+var nps : bool;
 let
-  r = signal and (true fby not signal);
+  nps = (true fby not signal);
+  r = signal and nps;
 tel;
 
 node fedge (signal: bool) returns (f: bool);
@@ -17,16 +19,19 @@ let
 tel;
 
 node sustain (von, voff: bool) returns (s: bool);
+var ps : bool;
 let
-  s = von or (not voff and (false fby s));
+  ps = false fby s;
+  s = von or (not voff and ps);
 tel;
 
 node after (e1, e2: bool) returns (a: bool);
-  var e2_since_last_e1: bool;
+  var e2_since_last_e1:bool;
+      e2_since_last_e1_2: bool;
 let
   a = e1 and e2_since_last_e1;
-  e2_since_last_e1 =
-    e2 or (false fby (not e1 and e2_since_last_e1));
+  e2_since_last_e1_2 = false fby (not e1 and e2_since_last_e1);
+  e2_since_last_e1 = e2 or e2_since_last_e1_2;
 tel;
 
 node MovingItem
@@ -35,13 +40,18 @@ returns
   (start1, start2, stop: bool);
 var
   MayMove1, MayMove2: bool;
+  stop1, stop2, start1_2, start2_2: bool;
 let
   MayMove1 = TryToMove1 and MaySafelyMove;
   MayMove2 = TryToMove2 and MaySafelyMove;
 
-  start1 = redge(MayMove1 and (true fby not TryToMove2));
-  start2 = redge(MayMove2 and (true fby not TryToMove1));
-  stop = fedge(MayMove1) or fedge(MayMove2);
+  start1_2 = true fby not TryToMove2;
+  start1 = redge(MayMove1 and start1_2);
+  start2_2 = true fby not TryToMove1;
+  start2 = redge(MayMove2 and start2_2);
+  stop1 = fedge(MayMove1);
+  stop2 = fedge(MayMove2);
+  stop = stop1 or stop2;
 tel;
 
 node Press
@@ -55,13 +65,20 @@ var
   Arm1OutOfPress, Arm2OutOfPress, ArmsOutOfPress,
   Arm1CannotCollideWithPress, Arm2CannotCollideWithPress,
   up, down, stopped: bool;
+  sustain1, sustain2, stopped_1, p_Pstop: bool;
+  after_1, after_2, up_1, up_2: bool;
 let
   (Pup, Pdn, Pstop) = MovingItem(true, up, down);
 
-  up = sustain(after(ArmsOutOfPress, Rput1), Ptop) or
-       sustain(after(ArmsOutOfPress, Rget2), Pmid);
-  down = sustain(Ptop and (false fby Pstop), Pbot);
-  stopped = not sustain(Pup or Pdn, Pstop);
+  after_1 = after(ArmsOutOfPress, Rput1);
+  after_2 = after(ArmsOutOfPress, Rget2);
+  up_1 = sustain(after_1, Ptop);
+  up_2 = sustain(after_2, Pmid);
+  up = up_1 or up_2;
+  p_Pstop = false fby Pstop;
+  down = sustain(Ptop and p_Pstop, Pbot);
+  stopped_1 = sustain(Pup or Pdn, Pstop);
+  stopped = not stopped_1;
 
   ArmsOutOfPress = Arm1OutOfPress and Arm2OutOfPress;
   Arm1OutOfPress = not NearPress1 or OutPress1;
@@ -71,8 +88,10 @@ let
   Arm1MayPassPress = Arm1OutOfPress or Arm1CannotCollideWithPress;
   Arm2MayPassPress = Arm2OutOfPress or Arm2CannotCollideWithPress;
 
+  sustain1 = sustain(Pbot, Pmid);
+  sustain2 = sustain(Pmid, Pbot);
   Arm1CannotCollideWithPress = stopped and (Pmid or Ptop) or
-    sustain(Pbot, Pmid) or sustain(Pmid, Pbot);
+    sustain1 or sustain2;
   Arm2CannotCollideWithPress = stopped and (Pbot or Ptop);
 tel;
 
@@ -84,16 +103,19 @@ returns
   (Rleft, Rright, Rstop: bool);
 var
   left, right, BeforeFirstRput1: bool;
+  init, left_1, left_2, left_3, left_4: bool;
 let
   (Rleft, Rright, Rstop) = MovingItem(ArmsMayPassPress, left, right);
 
-  left = sustain(Rget1, ToPress2) or
-         sustain(Rput2, ToPress1) or
-         sustain(Rget2, ToDBelt) or
-         sustain(Rget1, ToPress1) and BeforeFirstRput1;
-  right = sustain((true fby false) or Rput1, ToTable);
+  left_1 = sustain(Rget1, ToPress2);
+  left_2 = sustain(Rput2, ToPress1);
+  left_3 = sustain(Rget2, ToDBelt);
+  left_4 = sustain(Rget1, ToPress1);
+  left = left_1 or left_2 or left_3 or left_4 and BeforeFirstRput1;
+  right = sustain(init or Rput1, ToTable);
 
-  BeforeFirstRput1 = sustain((true fby false) and not Rput1, Rput1);
+  init = true fby false;
+  BeforeFirstRput1 = sustain(init and not Rput1, Rput1);
 tel;
 
 node Rgrips
@@ -102,8 +124,11 @@ node Rgrips
    Ttop, Pbot, Pmid: bool)
 returns
   (Rget1, Rput1, Rget2, Rput2: bool);
+var
+  p_Rput1 : bool;
 let
-  Rget1 = after(OverTable and ToTable and Ttop, true fby Rput1);
+  p_Rput1 = true fby Rput1;
+  Rget1 = after(OverTable and ToTable and Ttop, p_Rput1);
   Rput1 = after(InPress1 and ToPress1 and Pmid, Rget1);
   Rget2 = after(InPress2 and ToPress2 and Pbot, Rput1);
   Rput2 = after(OverDBelt and ToDBelt, Rget2);
@@ -116,17 +141,22 @@ returns
 var
   MayMove1, MayMove2: bool;
   start1, start2, stop, moving: bool;
+  stop_1, stop_2, pn_try1, pn_try2: bool;
 let
   MayMove1 = TryToMove1 and MaySafelyMove;
   MayMove2 = TryToMove2 and MaySafelyMove;
   moving = sustain(start1 or start2, stop);
 
-  start1 = redge(MayMove1 and (true fby not TryToMove2));
-  start2 = redge(MayMove2 and (true fby not TryToMove1));
-  stop = fedge(MayMove1) or fedge(MayMove2);
+  pn_try2 = true fby not TryToMove2;
+  start1 = redge(MayMove1 and pn_try2);
+  pn_try1 = true fby not TryToMove1;
+  start2 = redge(MayMove2 and pn_try1);
+  stop_1 = fedge(MayMove1);
+  stop_2 = fedge(MayMove2);
+  stop = stop_1 or stop_2;
 
   assert #(redge(TryToMove1), redge(TryToMove2));
   prop = #(start1, start2, stop) and
-         (if moving then MaySafelyMove else true);
+         ((moving and MaySafelyMove) or not moving);
 tel;
 
