@@ -21,13 +21,13 @@ To run the compiler:
 
     $ $VELUS_DIR/velus -h
 
-In particular, to compile to Clight:
-
-    $ $VELUS_DIR/velus -dclight $VELUS_DIR/tests/count.lus
-
 In particular, to compile to assembly:
 
     $ $VELUS_DIR/velus $VELUS_DIR/tests/count.lus
+
+In particular, to compile to assembly and dump the intermediary Clight code:
+
+    $ $VELUS_DIR/velus -dclight $VELUS_DIR/tests/count.lus
 
 ## Local installation
 
