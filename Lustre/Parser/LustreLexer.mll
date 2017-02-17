@@ -240,6 +240,7 @@ rule initial = parse
   | whitespace_char_no_newline +  { initial lexbuf }
   | "(*"                          { multiline_comment lexbuf; initial lexbuf }
   | "//"                          { singleline_comment lexbuf; initial lexbuf }
+  | "--"                          { singleline_comment lexbuf; initial lexbuf }
   | integer_constant as s         { tok CONSTANT't (LustreAst.CONST_INT s,
                                                     currentLoc lexbuf) }
   | decimal_floating_constant     { tok CONSTANT't (LustreAst.CONST_FLOAT
