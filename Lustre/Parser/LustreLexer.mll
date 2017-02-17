@@ -277,6 +277,7 @@ rule initial = parse
   | "<="                          { tok LEQ't (currentLoc lexbuf) }
   | ">="                          { tok GEQ't (currentLoc lexbuf) }
   | "="                           { tok EQ't (currentLoc lexbuf) }
+  | "#"                           { tok HASH't (currentLoc lexbuf) }
   | "<"                           { tok LT't (currentLoc lexbuf) }
   | ">"                           { tok GT't (currentLoc lexbuf) }
   | "+"                           { tok PLUS't (currentLoc lexbuf) }

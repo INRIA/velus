@@ -74,6 +74,8 @@ Extract Constant LustreAst.astloc =>
    ast_cnum  : int;
    ast_ident : int; }".
 Extract Constant LustreAst.string => "String.t".
+Extract Constant LustreAst.string_zero => """0""".
+Extract Constant LustreAst.string_one => """1""".
 Extract Constant LustreAst.char_code => "int64".
 Extract Constant string_of_astloc =>
   "fun loc -> Camlcoq.coqstring_of_camlstring (LustreLexer.string_of_loc loc)".

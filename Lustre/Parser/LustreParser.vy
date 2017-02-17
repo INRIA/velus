@@ -28,6 +28,7 @@ Import ListNotations.
 %token<LustreAst.constant * LustreAst.astloc> CONSTANT
 %token<LustreAst.astloc> TRUE FALSE
 %token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
+%token<LustreAst.astloc> HASH
 %token<LustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
 %token<LustreAst.astloc> IF THEN ELSE
 
@@ -144,6 +145,28 @@ unary_expression:
     { expr }
 | op=unary_operator expr=cast_expression
     { LustreAst.UNARY (fst op) expr (snd op) }
+| loc=HASH LPAREN args=argument_expression_list RPAREN
+    {
+      (* Macro expand the Lustre # operator (mutual exclusion: at most
+         one of the variable number of arguments may be true). Compare
+	 with "true" to ensure that non-bool arguments are properly
+	 treated. Is there a prettier way to do this? *)
+      LustreAst.BINARY
+        LustreAst.LE
+        (fold_right (fun es e => LustreAst.BINARY LustreAst.ADD e es loc)
+	  (LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_zero) loc)
+	  (map (fun e=>
+		 LustreAst.CAST
+		   LustreAst.Tuint32
+		   (LustreAst.BINARY
+		     LustreAst.EQ e
+		     (LustreAst.CONSTANT (LustreAst.CONST_BOOL true) loc)
+		     loc)
+		   loc)
+	   args))
+	(LustreAst.CONSTANT (LustreAst.CONST_INT LustreAst.string_one) loc)
+	loc
+    }
 
 unary_operator:
 | loc=MINUS

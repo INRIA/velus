@@ -21,6 +21,10 @@ Definition ident := Coq.Numbers.BinNums.positive.
 (* OCaml's string type. *)
 Parameter string : Type.
 (* OCaml's int64 type, used to represent individual characters in literals. *)
+
+Parameter string_zero : string.
+Parameter string_one : string.
+
 Parameter char_code : Type.
 (* Context information. *)
 Parameter astloc : Type.
