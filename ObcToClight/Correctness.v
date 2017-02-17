@@ -377,11 +377,12 @@ Section PRESERVATION.
   
   Variable prog: program.
   Variable tprog: Clight.program.
+  Variable do_sync: bool.
   
   Let tge := Clight.globalenv tprog.
   Let gcenv := Clight.genv_cenv tge.
   
-  Hypothesis TRANSL: translate main_node prog = Errors.OK tprog.
+  Hypothesis TRANSL: translate do_sync main_node prog = Errors.OK tprog.
   Hypothesis WT: wt_program prog.
   
   Lemma build_check_size_env_ok:
@@ -430,7 +431,7 @@ Section PRESERVATION.
 
   Ltac inv_trans_tac H En Estep Ereset s f E :=
     match type of H with
-      translate ?n ?p = Errors.OK ?tp =>
+      translate ?b ?n ?p = Errors.OK ?tp =>
       unfold translate in H;
       destruct (find_class n p) as [(c, cls)|] eqn: En; try discriminate;
       destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;
@@ -552,16 +553,20 @@ Section PRESERVATION.
     repeat rewrite glob_bind_vardef_fst; simpl.
     assert ( ~ In (glob_id self)
                (map (fun xt => glob_id (fst xt)) (m_out m) ++
-                    map (fun xt => glob_id (fst xt)) (m_in m) ++
-                    map fst (concat funs) ++
-                    [sync_id; main_id])) as Notin_self.
+                map (fun xt => glob_id (fst xt)) (m_in m) ++
+                map fst (concat funs) ++
+                map fst
+                ((if do_sync
+                  then [(sync_id, make_sync); (main_sync_id, make_main do_sync main_node m)]
+                  else [])
+                   ++ [(main_id, make_main false main_node m)]))) as Notin_self.
     { pose proof (m_notreserved self m (in_eq self _)) as Res; unfold meth_vars in Res.
       repeat rewrite in_app_iff, in_map_iff; simpl;  
         intros [((x, t) & E & Hin) 
                |[((x, t) & E & Hin) 
                 |[((x, t) & E & Hin) 
-                 |[Hin|[Hin|]]]]]; 
-        try simpl in E; try (apply pos_of_str_injective in Hin; now inv Hin); try contradiction. 
+                 |Hin]]]; 
+        try simpl in E. 
       - apply glob_id_injective in E; subst x.
         apply In_InMembers in Hin.
         apply Res; now repeat (rewrite InMembers_app; right).
@@ -571,82 +576,64 @@ Section PRESERVATION.
       - subst x.
         apply in_map with (f:=fst) in Hin.
         subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
-        contradict Hin; apply glob_id_not_prefixed. 
+        contradict Hin; apply glob_id_not_prefixed.
+      - destruct do_sync; simpl in Hin.
+        + destruct Hin as [Hin|[Hin|[Hin|]]];
+            try (apply pos_of_str_injective in Hin; now inv Hin); try contradiction.
+        + destruct Hin as [Hin|]; try (apply pos_of_str_injective in Hin; now inv Hin); try contradiction.
     }
     assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m) ++
-                       map (fun xt => glob_id (fst xt)) (m_in m) ++
-                       map fst (concat funs) ++
-<<<<<<< HEAD
-                       [sync_id; main_id])) as Nodup.
-    { rewrite cons_is_app; repeat apply NoDup_app';
-        repeat apply Forall_not_In_app;
-        repeat apply Forall_not_In_singleton.
-=======
-                       [main_id])) as Nodup.
-    { repeat apply NoDup_app'; repeat apply Forall_not_In_app;
-        repeat apply Forall_not_In_singleton;
-        ((repeat constructor; auto) 
-         || (intros [E|]; try contradiction;  
-            apply pos_of_str_injective in E; inv E) 
-         || (intro Hin; subst funs; apply prefixed_funs in Hin; 
-            inversion Hin as [? ? E]; 
-            unfold prefix_fun, fun_id in E; 
-            apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E; 
-            inv E) 
-         || (match goal with 
-              |- ~ In _ (map (fun xt => glob_id (fst xt)) ?xs) => 
-              clear Notin_self; induction xs as [|(x, t)]; simpl; auto; 
-              intros [Hin|Hin]; try contradiction; 
-              apply pos_of_str_injective in Hin; inv Hin 
-            end) 
-         || idtac). 
->>>>>>> withsync
-      - apply NoDup_glob_id, m_nodupout.
-      - apply NoDup_glob_id, m_nodupin.
-      - rewrite Funs.
-        now apply NoDup_funs.
-<<<<<<< HEAD
-      - repeat constructor; auto.
-      - repeat constructor; auto.
-      - simpl.
-        intros [E|]; try contradiction.
-        unfold main_id, sync_id in E.
-        apply pos_of_str_injective in E.
-        inv E.
-      - intro Hin; subst funs; apply prefixed_funs in Hin.
-        inversion Hin as [? ? E].
-        unfold prefix, sync_id in E.
-        unfold prefix_fun, fun_id in E.
-        apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E.
-        inversion E.
-      - intro Hin; subst funs; apply prefixed_funs in Hin.
-        inversion Hin as [? ? E].
-        unfold prefix, main_id in E.
-        unfold prefix_fun, fun_id in E.
-        apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E.
-        inversion E.
-      - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+                   map (fun xt => glob_id (fst xt)) (m_in m) ++
+                   map fst (concat funs) ++
+                   map fst
+                   ((if do_sync
+                     then [(sync_id, make_sync); (main_sync_id, make_main do_sync main_node m)]
+                     else [])
+                      ++ [(main_id, make_main false main_node m)]))) as Nodup.
+    { assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m))) as Hm_out
+        by (apply NoDup_glob_id, m_nodupout).
+      assert (NoDup (map (fun xt => glob_id (fst xt)) (m_in m))) as Hm_in
+          by (apply NoDup_glob_id, m_nodupin).
+      assert (NoDup (map fst (concat funs))) by (rewrite Funs; now apply NoDup_funs).
+      assert (Forall (fun z  => ~ In z (map fst (concat funs)))
+                     (map (fun xt => glob_id (fst xt)) (m_in m))) as Hin_not_funs.
+      { apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
-      - apply sync_not_glob. 
-      - apply main_not_glob. 
-=======
-      - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+      }
+      assert (Forall (fun z => ~ In z (map fst (concat funs)))
+                     (map (fun xt => glob_id (fst xt)) (m_out m))) as Hout_not_funs.
+      { apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
->>>>>>> withsync
-      - apply NoDupMembers_glob.
+      }
+      assert (Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) (m_in m)))
+                     (map (fun xt => glob_id (fst xt)) (m_out m))) as Hout_not_in.
+      { apply NoDupMembers_glob.
         pose proof (m_nodupvars m) as Nodup.
         rewrite NoDupMembers_app_assoc, <-app_assoc in Nodup.
-        now apply NoDupMembers_app_r, NoDupMembers_app_assoc in Nodup.
-      - apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
-        apply prefixed_fun_prefixed; subst funs.
-        now apply prefixed_funs in Hin.
-<<<<<<< HEAD
-      - apply sync_not_glob.      
-      - apply main_not_glob.
-=======
->>>>>>> withsync
+        now apply NoDupMembers_app_r, NoDupMembers_app_assoc in Nodup.        
+      }
+      destruct do_sync; simpl;
+        try change [sync_id; main_sync_id; main_id] with ([sync_id]++[main_sync_id]++[main_id]);
+        repeat apply NoDup_app'; repeat apply Forall_not_In_app;
+          repeat apply Forall_not_In_singleton;
+          ((repeat constructor; auto) 
+           || (intros [E|]; try contradiction;  
+              apply pos_of_str_injective in E; inv E) 
+           || (intro Hin; subst funs; apply prefixed_funs in Hin; 
+              inversion Hin as [? ? E]; 
+              unfold prefix_fun, fun_id in E; 
+              apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E; 
+              inv E) 
+           || (match goal with 
+                |- ~ In _ (map (fun xt => glob_id (fst xt)) ?xs) => 
+                clear Notin_self Hm_out Hm_in Hin_not_funs Hout_not_funs Hout_not_in;
+                induction xs as [|(x, t)]; simpl; auto; 
+                intros [Hin|Hin]; try contradiction; 
+                apply pos_of_str_injective in Hin; inv Hin 
+              end) 
+           || auto). 
     }
     repeat constructor; auto.
   Qed.
@@ -3886,7 +3873,7 @@ Section PRESERVATION.
                                  | _ :: _ => [(prefix out step, type_of_inst (prefix_fun main_node step))]
                                  end
               /\ main.(fn_temps) = map translate_param (m_in m_step)
-              /\ main.(fn_body) = main_body main_node m_step
+              /\ main.(fn_body) = main_body false main_node m_step
               /\ match m_out m_step with
                 | [] => True
                 | _ =>
@@ -3964,13 +3951,14 @@ Section PRESERVATION.
                                                                       (@program_of_program function tprog)) b).
       rewrite Finddef; auto.      
 
-    - assert ((AST.prog_defmap tprog) ! main_id = Some (make_main main_node m0)
+    - assert ((AST.prog_defmap tprog) ! main_id = Some (make_main false main_node m0)
               /\ tprog.(Ctypes.prog_main) = main_id)
         as [Hget Hmain_id]. 
       { unfold AST.prog_defmap; simpl; split;
           [apply PTree_Properties.of_list_norepet; auto|];
           inversion_clear TRANSL; auto.
-        apply in_cons, in_app; right; apply in_app; right; apply in_cons, in_eq.
+        apply in_cons, in_app; right; apply in_app; right.
+        destruct do_sync; [do 2 apply in_cons|]; apply in_eq.
       }
       rewrite Hmain_id.
       apply Genv.find_def_symbol in Hget.
@@ -4043,8 +4031,8 @@ Section PRESERVATION.
         * split; auto; apply Z.divide_0_r.
         * intros ** Hinio; simpl in Hinio;
             destruct Hinio; [discriminate|contradiction].
-      + rewrite cons_is_app in Hinv; repeat rewrite in_app in Hinv;
-          destruct Hinv as [Hinv|[Hinv|[[Hinv|Hinv]|[Hinv|Hinv]]]]; try inv Hinv.
+      + repeat rewrite in_app in Hinv;
+          destruct Hinv as [Hinv|[Hinv|[Hinv|Hinv]]]; try now inv Hinv.
         *{ clear TRANSL.
            induction (map glob_bind (m_out m) ++ map glob_bind (m_in m)) as [|(x, t)].
            - contradict Hinv.
@@ -4069,6 +4057,9 @@ Section PRESERVATION.
              unfold translate_method in Hinv.
              destruct (m_out a); inv Hinv.
          }
+        * destruct do_sync; try now inv Hinv.
+          rewrite cons_is_app, in_app in Hinv.
+          destruct Hinv as [[Hinv|Hinv]|[Hinv|Hinv]]; try inv Hinv.
     - exists m'.
       destruct find_self as (sb & find_step).
       exists sb; split; [|split]; auto.
@@ -4142,7 +4133,7 @@ Section PRESERVATION.
                                                 | _ :: _ => [(prefix out step, type_of_inst (prefix_fun main_node step))]
                                                 end
                            /\ main_f.(fn_temps) = map translate_param (m_in m_step)
-                           /\ main_f.(fn_body) = main_body main_node m_step.
+                           /\ main_f.(fn_body) = main_body false main_node m_step.
 
     Hypothesis Getstep_co: match m_step.(m_out) with
                            | [] => True
@@ -4651,7 +4642,7 @@ Section PRESERVATION.
           dostep' n meN ->
           exists leSn meSn,
             exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le meN
-                      (main_loop_body main_node m_step)
+                      (main_loop_body false main_node m_step)
                       (load_events (map sem_const (ins n)) (m_in m_step)
                        ++ E0
                        ++ store_events (map sem_const (outs n)) (m_out m_step))
@@ -4804,7 +4795,7 @@ Section PRESERVATION.
           wt_mem meInit prog_main c_main ->
           dostep' n me ->
           execinf_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le me
-                       (main_loop main_node m_step)
+                       (main_loop false main_node m_step)
                        (traceinf_of_traceinf' (transl_trace n)).
       Proof.
         cofix COINDHYP.
@@ -4895,7 +4886,7 @@ Section PRESERVATION.
         forall n m le,
           dostep' n m ->
           Smallstep.forever_reactive (step_fe function_entry2) (globalenv tprog)
-                                     (Clight.State main_f (main_loop main_node m_step) after_loop e1 le m)
+                                     (Clight.State main_f (main_loop false main_node m_step) after_loop e1 le m)
                                      (traceinf_of_traceinf' (transl_trace n)).
       Proof.
         unfold transl_trace, trace_step.

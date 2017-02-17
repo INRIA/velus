@@ -86,6 +86,7 @@ Module Export Ids <: IDS.
   Definition main_id: ident := pos_of_str "main".
   Definition fun_id: ident  := pos_of_str "fun".
   Definition sync_id: ident := pos_of_str "sync".
+  Definition main_sync_id: ident := pos_of_str "main_sync".
   
   Definition step := pos_of_str "step".
   Definition reset := pos_of_str "reset".
