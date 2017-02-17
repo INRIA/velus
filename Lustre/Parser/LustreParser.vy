@@ -413,7 +413,7 @@ optsemicolon:
 declaration:
 | loc=NODE id=VAR_NAME LPAREN iparams=parameter_list RPAREN optsemicolon
   RETURNS LPAREN oparams=parameter_list RPAREN optsemicolon
-  locals=local_decl_list LET eqns=equations TEL
+  locals=local_decl_list LET eqns=equations TEL optsemicolon
     { LustreAst.NODE (fst id) iparams oparams locals eqns loc }
 
 translation_unit:
