@@ -1,0 +1,164 @@
+(* ums_verif example from the Lustre v4 distribution. *)
+
+node two_states(set,reset,init: bool) returns (state:bool);
+var first, pre_state : bool;
+let
+  first = true fby false;
+  state=
+      if first then init
+      else if set and not pre_state then true
+      else if reset and pre_state then false
+      else pre_state;
+  pre_state = false fby state;
+tel
+
+node edge(X: bool) returns (edge : bool);
+var first, pre_X : bool;
+let
+  first = true fby false;
+  edge = if first then X else (X and not pre_X);
+  pre_X = false fby X;
+tel
+
+node implies(A,B:bool) returns (implies: bool);
+let implies = if A then B else true; tel
+
+node after (A: bool) returns (X: bool);
+var state_X : bool;
+let
+  state_X = false fby (A or X);
+  X = state_X;
+tel
+
+node always_since (C,A: bool) returns (X: bool);
+var pre_X, after_A : bool;
+let
+  after_A = after(A);
+  X = if A then C
+      else if after_A then C and pre_X
+      else true;
+  pre_X = false fby X;
+tel
+
+node once_since (C,A: bool) returns (X: bool);
+var pre_X, after_A : bool;
+let
+  after_A = after(A);
+  X = if A then C
+      else if after_A then C or pre_X
+      else true;
+  pre_X = false fby X;
+tel
+
+node always_from_to (C,A,B: bool) returns (X: bool);
+var after_A, als, ons : bool;
+let
+  after_A = after(A);
+  als = always_since(C,A);
+  ons = once_since(B,A);
+  X = implies (after_A, als or ons);
+tel
+
+node once_from_to (C,A,B: bool) returns (X: bool);
+var after_A, once_since_CA : bool;
+let
+  after_A = after(A);
+  once_since_CA = once_since(C,A);
+  X = implies (after_A and B, once_since_CA);
+tel
+
+node alternating(A,B: bool) returns (X:bool);
+var A_forbiden, B_forbiden: bool;
+    init, pre_A, pre_B, pre_A_forbiden, pre_B_forbiden : bool;
+let
+  init = true fby false;
+
+  A_forbiden =
+            if init then false
+            else if pre_A and not A then true
+            else if pre_B and not B then false 
+                 else pre_A_forbiden;
+  B_forbiden =
+            if init then true
+            else if pre_B and not B then true
+            else if pre_A and not A then false  
+            else pre_B_forbiden;
+  X = not(A and A_forbiden) and not(B and B_forbiden);
+
+  pre_A = false fby A;
+  pre_A_forbiden = false fby A_forbiden;
+  pre_B = false fby B;
+  pre_B_forbiden = false fby B_forbiden;
+tel
+
+node not_between_and (A,B,C: bool) returns (X: bool);
+var os : bool;
+let
+  os = once_since(A,B);
+  X = implies(C, not os); 
+tel
+
+node UMS(on_A,on_B,on_C,ack_AB,ack_BC: bool)
+     returns (grant_access,grant_exit,
+        do_AB,do_BC: bool);
+var empty_section, only_on_B: bool;
+let
+   grant_access = empty_section and ack_AB;
+   grant_exit = only_on_B and ack_BC;
+   do_AB = not ack_AB and empty_section;
+   do_BC = not ack_BC and only_on_B;
+   empty_section = not(on_A or on_B or on_C);
+   only_on_B = on_B and not(on_A or on_C);
+tel
+
+node UMS_verif(on_A,on_B,on_C,
+         ack_AB,ack_BC: bool)
+     returns(property: bool);
+var
+   grant_access,grant_exit: bool;
+   do_AB,do_BC: bool;
+   no_collision,exclusive_req: bool;
+   no_derail_AB,no_derail_BC: bool;
+   empty_section, only_on_B: bool;
+   init : bool;
+let
+   empty_section = not(on_A or on_B or on_C);
+   only_on_B = on_B and not(on_A or on_C);
+   
+   -- ASSERTIONS
+   init = true fby false;
+   assert not(ack_AB and ack_BC);
+   assert init or always_from_to(ack_AB,ack_AB,do_BC);
+   assert init or always_from_to(ack_BC,ack_BC,do_AB);
+   assert empty_section or not init;
+   assert init or
+    implies(edge(not empty_section),
+      false fby grant_access);
+   assert init or
+    implies(edge(on_C),
+      false fby grant_exit);
+   assert init or implies(edge(not on_A),on_B);
+   assert init or implies(edge(not on_B), on_A or on_C);
+
+   -- UMS CALL
+   (grant_access,grant_exit,do_AB,do_BC) =
+      UMS(on_A,on_B,on_C,ack_AB,ack_BC);
+
+   -- PROPERTIES
+   no_collision =
+  implies(grant_access,empty_section);
+   exclusive_req =
+  not(do_AB and do_BC);
+   no_derail_AB =
+  always_from_to(ack_AB,
+           grant_access,
+           only_on_B);
+   no_derail_BC =
+  always_from_to(ack_BC,
+           grant_exit,
+           empty_section);
+   property =
+  no_collision and exclusive_req and
+  no_derail_AB and no_derail_BC;
+tel
+
