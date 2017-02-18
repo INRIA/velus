@@ -248,6 +248,8 @@ module SchedulerFun (NL: SYNTAX) :
   end
   =
   struct
+    let debug = false
+
     (** Status information for each equation *)
 
     module EqSet = Set.Make (struct
@@ -381,6 +383,39 @@ module SchedulerFun (NL: SYNTAX) :
       subclocks = []
     }
 
+    let pp_print_eq_lhs nleqs fmt i =
+      let open Format in
+      match List.nth nleqs i with
+      | NL.EqDef (x, _, _) ->
+          pp_print_string fmt (extern_atom x)
+      | NL.EqApp (xs, _, _ , _) ->
+          fprintf fmt "{@[<hov 2>%a@]}"
+            (pp_print_list ~pp_sep:pp_print_space pp_print_string)
+            (List.map extern_atom xs)
+      | NL.EqFby (x, _, _ , _) ->
+          pp_print_string fmt (extern_atom x)
+
+    let pp_eq_status f eq =
+      Format.fprintf f "%d" eq.eq_id
+
+    let pp_print_comma f () =
+      Format.fprintf f ",@ "
+
+    let rec pp_branch f (ck, ct) =
+      Format.fprintf f "%d:%a" ck pp_clock_tree ct
+
+    and pp_clock_tree f { ready_eqs; subclocks } =
+      Format.fprintf f "{@[<hv 2>";
+      if ready_eqs <> [] then begin
+        Format.fprintf f "@[<hov 2>eqs=%a@]"
+          (Format.pp_print_list ~pp_sep:pp_print_space pp_eq_status) ready_eqs;
+        if subclocks <> [] then Format.fprintf f ",@ "
+      end;
+      if subclocks <> [] then
+        Format.fprintf f "subs=%a"
+          (Format.pp_print_list ~pp_sep:pp_print_comma pp_branch) subclocks;
+      Format.fprintf f "@]}"
+
     (* If an equation is ready to schedule, place it in the queue according
        to its clock path. *)
     let enqueue_eq ct ({ depends_on; clock_path } as eq) =
@@ -397,8 +432,8 @@ module SchedulerFun (NL: SYNTAX) :
       in
       if EqSet.is_empty depends_on then seek ct clock_path
 
-    let schedule_from_queue ct eqs =
-      let enqueue = enqueue_eq ct in
+    let schedule_from_queue nleqs ct_t eqs =
+      let enqueue = enqueue_eq ct_t in
 
       let check_dep x y =
         let eq_y = eqs.(y) in
@@ -411,6 +446,8 @@ module SchedulerFun (NL: SYNTAX) :
 
       (* Schedule an equation and update any that depend on it. *)
       let enschedule ({eq_id; required_by} as eq) =
+        if debug then Format.eprintf "@;schedule %d (%a)"
+                        eq_id (pp_print_eq_lhs nleqs) eq_id;
         eq.schedule <- Some (next_pos ());
         EqSet.iter (check_dep eq_id) required_by in
 
@@ -421,25 +458,30 @@ module SchedulerFun (NL: SYNTAX) :
          necessary (since we would have to close and open "if"s to return
          to the same level). *)
       let rec continue ct =
+        if debug then Format.eprintf "@;@[<v 2>{ %a" pp_clock_tree ct_t;
         match ct.ready_eqs with
         | [] -> begin
             match ct.subclocks with
-            | [] -> ()
+            | [] -> if debug then Format.eprintf "@;<0 -2>}@]"
             | (x, ct')::_ ->
                 (* descend into clock tree / introduce an if *)
+                if debug then Format.eprintf "@;down into %d" x;
                 continue ct';
+                if debug then Format.eprintf "@;back from %d" x;
                 (* upon return we know that the subtree is done *)
                 ct.subclocks <- List.remove_assoc x ct.subclocks;
                 (* the "if" is closed, so reprocess the current level *)
+                if debug then Format.eprintf "@;<0 -2>}@]";
                 continue ct
             end
         | ready ->
             (* clear the list, ready to accept new additions *)
             ct.ready_eqs <- [];
             List.iter enschedule ready;
+            if debug then Format.eprintf "@;<0 -2>}@]";
             continue ct
       in
-      continue ct
+      continue ct_t
 
     (** Find and print dependency loops *)
 
@@ -484,22 +526,10 @@ module SchedulerFun (NL: SYNTAX) :
         try track start
         with Done r -> r
 
-    let print_eq_lhs nleqs fmt i =
-      let open Format in
-      match List.nth nleqs i with
-      | NL.EqDef (x, _, _) ->
-          pp_print_string fmt (extern_atom x)
-      | NL.EqApp (xs, _, _ , _) ->
-          fprintf fmt "{@[<hov 2>%a@]}"
-            (pp_print_list ~pp_sep:pp_print_space pp_print_string)
-            (List.map extern_atom xs)
-      | NL.EqFby (x, _, _ , _) ->
-          pp_print_string fmt (extern_atom x)
-
     let print_loop nleqs fmt eqs =
       Format.pp_print_list
         ~pp_sep:(fun fmt () -> Format.fprintf fmt "@ -> ")
-        (print_eq_lhs nleqs)
+        (pp_print_eq_lhs nleqs)
         fmt
         (find_dep_loop eqs)
 
@@ -514,6 +544,16 @@ module SchedulerFun (NL: SYNTAX) :
 
     let schedule f nleqs =
       let eqs = Array.of_list (List.mapi new_eq_status nleqs) in
+
+      if debug then begin
+        Format.eprintf "@[<v>--scheduling %s" (extern_atom f);
+        let show_eq i eq =
+          Format.eprintf "@;%d: %a" i (pp_print_eq_lhs nleqs) i
+        in
+        Format.eprintf "@;@[<v 2>equations =";
+        Array.iteri show_eq eqs;
+        Format.eprintf "@]"
+      end;
 
       let varmap = variable_map nleqs in
       let add xi yi =
@@ -531,7 +571,8 @@ module SchedulerFun (NL: SYNTAX) :
 
       let ct = empty_clock_tree () in
       Array.iter (enqueue_eq ct) eqs;
-      schedule_from_queue ct eqs;
+      schedule_from_queue nleqs ct eqs;
+      if debug then Format.eprintf "@;--done@]@.";
       try
         Array.fold_right extract_schedule eqs []
       with IncompleteSchedule ->
