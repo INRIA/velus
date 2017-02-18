@@ -312,9 +312,9 @@ module SchedulerFun (NL: SYNTAX) :
       | EqApp (_, ck, _, _)
       | EqFby (_, ck, _, _) -> ck
 
-    let rec clock_path = function
-      | NL.Cbase -> []
-      | NL.Con (ck, x, _) -> int_of_positive x :: clock_path ck
+    let rec clock_path acc = function
+      | NL.Cbase -> acc
+      | NL.Con (ck, x, _) -> clock_path (int_of_positive x :: acc) ck
 
     let new_eq_status i eq =
     {
@@ -322,7 +322,7 @@ module SchedulerFun (NL: SYNTAX) :
       schedule = None;
       depends_on  = EqSet.empty;
       required_by = EqSet.empty;
-      clock_path = clock_path (grouping_clock_of_eq eq)
+      clock_path = clock_path [] (grouping_clock_of_eq eq)
     }
 
     (** Add dependencies between equations *)
