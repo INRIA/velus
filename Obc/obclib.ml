@@ -149,7 +149,7 @@ module PrintFun (Obc: SYNTAX)
             print_expr_list (true, es)
       | Obc.Call (rs, cls, i, m, es) ->
           fprintf p
-            "@[<hv 2>%a :=@ %s@,(@[<hov 0>%s@]).%s@,(@[<hov 0>%a@])@]"
+            "@[<hv 2>%a :=@ @[<hv 2>%s@,(@[<hov 0>%s@]).%s@,(@[<hov 0>%a@])@]@]"
             (print_list print_ident) rs
             (extern_atom cls)
             (extern_atom i)
