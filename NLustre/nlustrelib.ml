@@ -280,11 +280,32 @@ module SchedulerFun (NL: SYNTAX) :
     let drop_dep x eq =
       eq.depends_on <- EqSet.remove x eq.depends_on
 
+    let rec resolve_variable e =
+      let open NL in
+      match e with
+      | Evar (x, _) -> Some x
+      | Ewhen (e, _, _) -> resolve_variable e
+      | Econst _ | Eunop _ | Ebinop _ -> None
+
+    let rec else_clock s =
+      let open NL in
+      match s with
+      | Eite (e, _, selse) -> begin
+          match resolve_variable e with
+          | None -> []
+          | Some x -> x :: else_clock selse
+          end
+      | _ -> []
+
     let grouping_clock_of_eq =
       let open NL in
       function
       (* Push merges/iftes down a level to improve grouping *)
-      | EqDef (_, ck, Eite (Evar (y, _), _, _))
+      | EqDef (_, ck, (Eite (_, _, _) as ite)) -> begin
+          match else_clock ite with
+          | [] -> ck
+          | ecks -> List.fold_left (fun ck x -> Con (ck, x, true)) Cbase ecks
+          end
       | EqDef (_, ck, Emerge (y, _, _)) -> Con (ck, y, true)
       (* Standard cases *)
       | EqDef (_, ck, _)
@@ -451,6 +472,10 @@ module SchedulerFun (NL: SYNTAX) :
         eq.schedule <- Some (next_pos ());
         EqSet.iter (check_dep eq_id) required_by in
 
+      let pp_clock_int f x =
+        Format.fprintf f "%d (%s)" x (extern_atom (positive_of_int x))
+      in
+
       (* Iteratively schedule at the same level of the clock tree whenever
          possible (since it does not introduce new "if"s and it maximizes
          the chances of scheduling more equations later), otherwise descend
@@ -465,9 +490,9 @@ module SchedulerFun (NL: SYNTAX) :
             | [] -> if debug then Format.eprintf "@;<0 -2>}@]"
             | (x, ct')::_ ->
                 (* descend into clock tree / introduce an if *)
-                if debug then Format.eprintf "@;down into %d" x;
+                if debug then Format.eprintf "@;down into %a" pp_clock_int x;
                 continue ct';
-                if debug then Format.eprintf "@;back from %d" x;
+                if debug then Format.eprintf "@;back from %a" pp_clock_int x;
                 (* upon return we know that the subtree is done *)
                 ct.subclocks <- List.remove_assoc x ct.subclocks;
                 (* the "if" is closed, so reprocess the current level *)
