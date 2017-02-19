@@ -5,3 +5,4 @@
 .gitignore export-ignore
 .gitmodules export-ignore
 TODO export-ignore
+CHECKLIST export-ignore
