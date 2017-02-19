@@ -477,7 +477,7 @@ module SchedulerFun (NL: SYNTAX) :
         match ct.ready_eqs with
         | [] -> begin
             match ct.subclocks with
-            | [] -> if debug then Format.eprintf "@;<0 -2>}@]"
+            | [] -> if debug then Format.eprintf " }@;<0 -2>@]"
             | (x, ct')::_ ->
                 (* descend into clock tree / introduce an if *)
                 if debug then Format.eprintf "@;down into %a" pp_clock_int x;
@@ -486,14 +486,14 @@ module SchedulerFun (NL: SYNTAX) :
                 (* upon return we know that the subtree is done *)
                 ct.subclocks <- List.remove_assoc x ct.subclocks;
                 (* the "if" is closed, so reprocess the current level *)
-                if debug then Format.eprintf "@;<0 -2>}@]";
+                if debug then Format.eprintf " }@;<0 -2>@]";
                 continue ct
             end
         | ready ->
             (* clear the list, ready to accept new additions *)
             ct.ready_eqs <- [];
             List.iter enschedule ready;
-            if debug then Format.eprintf "@;<0 -2>}@]";
+            if debug then Format.eprintf " }@;<0 -2>@]";
             continue ct
       in
       continue ct_t
