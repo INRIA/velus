@@ -26,4 +26,4 @@ RUN echo ". ~/motd.sh" >> $HOME/.bashrc
 COPY make.sh $HOME/
 
 # Compile project & give a shell
-CMD ["/bin/bash", "-c", "make.sh"]
+CMD ["/bin/bash", "-l", "-c", "~/make.sh"]
