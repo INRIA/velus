@@ -348,9 +348,9 @@ module SchedulerFun (NL: SYNTAX) :
       | NL.EqApp (_, ck, _ , es) ->
           add_clock_deps add_dep ck;
           List.iter (add_exp_deps add_dep) es
-      | NL.EqFby (_, ck, _ , e) ->
+      | NL.EqFby (x, ck, _ , e) ->
           add_clock_deps add_dep ck;
-          add_exp_deps add_dep e
+          add_exp_deps (fun y -> if y <> x then add_dep y) e
 
     (** Map variable identifiers to equation ids *)
 
