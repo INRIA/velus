@@ -287,26 +287,16 @@ module SchedulerFun (NL: SYNTAX) :
       | Ewhen (e, _, _) -> resolve_variable e
       | Econst _ | Eunop _ | Ebinop _ -> None
 
-    let rec else_clock s =
-      let open NL in
-      match s with
-      | Eite (e, _, selse) -> begin
-          match resolve_variable e with
-          | None -> []
-          | Some x -> x :: else_clock selse
-          end
-      | _ -> []
-
     let grouping_clock_of_eq =
       let open NL in
       function
       (* Push merges/iftes down a level to improve grouping *)
-      | EqDef (_, ck, (Eite (_, _, _) as ite)) -> begin
-          match else_clock ite with
-          | [] -> ck
-          | ecks -> List.fold_left (fun ck x -> Con (ck, x, true)) Cbase ecks
-          end
       | EqDef (_, ck, Emerge (y, _, _)) -> Con (ck, y, true)
+      | EqDef (_, ck, Eite (e, _, _)) -> begin
+          match resolve_variable e with
+          | None -> ck
+          | Some x -> Con (ck, x, true)
+          end
       (* Standard cases *)
       | EqDef (_, ck, _)
       | EqApp (_, ck, _, _)
