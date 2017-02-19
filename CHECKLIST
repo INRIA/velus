@@ -1,12 +1,16 @@
 * Check that TODOs have been removed
 
-->  git grep 'XXX'
-->  git grep -i 'TODO'
+-> git grep 'XXX'
+-> git grep -i 'TODO'
 
 * Make the tarball
 
-->  make velus.tar.gz
+-> make velus.tar.gz
 
 * Check that no unwanted file has jumped in
 
-->  edit .gitattributes to remove them
+-> edit .gitattributes to remove them
+
+* Package the code in the VM
+
+-> Upload it
