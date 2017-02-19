@@ -1435,6 +1435,31 @@ Section ElabDeclaration.
         assumption.
   Qed.
 
+  Definition check_variable_names {A} (loc: astloc) (env: PM.t A) : res unit :=
+    match find (fun x=>PM.mem x env) Ident.Ids.reserved with
+    | None => OK tt
+    | Some n => Error (err_loc loc
+                 (MSG """" :: CTX n :: msg """ is not a valid variable name"))
+    end.
+
+  Lemma check_variable_names_spec:
+    forall A loc (env: PM.t A),
+      check_variable_names loc env = OK tt ->
+      Forall (fun x=> ~In x Ident.Ids.reserved) (map fst (PM.elements env)).
+  Proof.
+    unfold check_variable_names.
+    intros ** Hcvns.
+    destruct (find (fun x=>PM.mem x env) Ident.Ids.reserved) eqn:Hfind.
+    now inversion Hcvns.
+    apply find_weak_spec in Hfind.
+    apply all_In_Forall.
+    intros xtx Hm Hir.
+    apply fst_InMembers, PM_In_Members in Hm.
+    apply In_Forall with (1:=Hfind) in Hir.
+    apply PM_mem_spec_false in Hir.
+    auto.
+  Qed.
+  
   Local Obligation Tactic :=
     Tactics.program_simpl;
       repeat progress
@@ -1469,6 +1494,7 @@ Section ElabDeclaration.
     let Hf_in  := fresh "Hf_in" in
     let Hf_out := fresh "Hf_out" in
     let Hf_var := fresh "Hf_var" in
+    let Hcvns := fresh "Hcvns" in
     match goal with H:elab_var_decls _ _ inputs = OK ?x |- _ =>
                     (assert (Hwc_in := H);
                      apply elab_var_decls_wc_env in Hwc_in;
@@ -1517,7 +1543,9 @@ Section ElabDeclaration.
                     assert (Hf_out := H);
                     apply mmap_annotate_Forall in Hf_out;
                     apply mmap_annotate_fst in H;
-                    rename H into Hout end.
+                    rename H into Hout end;
+    match goal with H:check_variable_names _ _ = OK ?x |- _ =>
+      rename H into Hcvns; destruct x end.
 
   Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
@@ -1538,11 +1566,10 @@ Section ElabDeclaration.
                               assert_clock loc (fst xtc) (dck xtc) Cbase) xin;
              do ok <- mmap (fun xtc=>
                               assert_clock loc (fst xtc) (dck xtc) Cbase) xout;
-             if existsb (fun x=>PM.mem x env) Ident.Ids.reserved
-             then Error (err_loc loc (msg "illegal variable name"))
-             else if (length xin ==b 0) || (length xout ==b 0)
-                  then Error (err_loc loc (msg "not enough inputs or outputs"))
-                  else OK (xin, xout, xvar, eqs)) with
+             do ok <- check_variable_names loc env;
+             if (length xin ==b 0) || (length xout ==b 0)
+             then Error (err_loc loc (msg "not enough inputs or outputs"))
+             else OK (xin, xout, xvar, eqs)) with
       | Error e => Error e
       | OK (xin, xout, xvar, eqs) => OK {| n_name  := name;
                                            n_in    := xin;
@@ -1620,17 +1647,8 @@ Section ElabDeclaration.
     rewrite <-Forall_map, map_app, map_app.
     rewrite Hvar, Hin, Hout in Helab_var.
     rewrite Permutation_app_comm, Permutation_app_assoc, Helab_var.
-    rewrite 2 Bool.orb_false_iff in Hb.
-    destruct Hb as (Hb1 & Hb2 & ?).
-    rewrite PM_mem_spec_false in Hb1, Hb2.
-
-    apply all_In_Forall.
-    intros xtx Hm Hir.
-    apply fst_InMembers, PM_In_Members in Hm.
-    destruct Hir as [Hir|Hir]; subst.
-    now apply Hb1.
-    rewrite In_singleton in Hir; subst.
-    now apply Hb2.
+    apply check_variable_names_spec in Hcvns.
+    auto.
   Qed.
   Next Obligation.
     split.

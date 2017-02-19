@@ -1801,6 +1801,16 @@ Proof.
   now apply HP in Hin.
 Qed.
 
+Lemma find_weak_spec:
+  forall A p (xs: list A),
+    find p xs = None ->
+    Forall (fun x=>p x = false) xs.
+Proof.
+  induction xs as [|x xs IH]; simpl; auto.
+  intro Hfind.
+  destruct (p x) eqn:Hpx; try inv Hfind; auto.
+Qed.
+
 (* XXX: [fold_left] or [fold_right]? *)
 Definition ps_adds (xs: list positive)(s: PS.t)
   := fold_left (fun defs x0 => PS.add x0 defs) xs s.
