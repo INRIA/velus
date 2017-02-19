@@ -20,7 +20,10 @@ In particular, to compile to assembly and dump the intermediary Clight code:
 
 ## Execution from Docker
 
-Note: this is the easiest method for compiling and running the compiler.
+Note: this is the easiest method for compiling and running the
+compiler, not for interactively editing the compiler. To step through
+the proofs, we recommend using a virtual machine or a local
+installation (see below).
 
 
 We provide a pre-configured compilation environment in a Docker
@@ -29,9 +32,14 @@ container:
     $ cd $VELUS_DIR
     $ sh run.sh
 
-This will start a container, compile the development and give you
-access to a Bash shell from which you will be able to run the
+This will retrieve a container from the dockerhub (~800Mb), start a
+container, compile the development (thus checking the proofs) and give
+you access to a Bash shell from which you will be able to run the
 compiler.
+
+
+The docker accesses the present files: you can transparently edit them
+from the host and compile them in the guest.
 
 ## Execution from Docker
 
