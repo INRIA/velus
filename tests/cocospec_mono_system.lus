@@ -174,229 +174,24 @@ tel
 -- |===| Abstractions of non-linear streams.
 
 node times(x, y: real) returns (z: real) ;
-(*@contract
-var abs_x: real = if x < 0.0 then -x else x ;
-var abs_y: real = if y < 0.0 then -y else y ;
-var abs_z: real = if z < 0.0 then -z else z ;
--- Neutral.
-guarantee (z = y) = ((x = 1.0) or (y = 0.0)) ;
-guarantee (z = x) = ((y = 1.0) or (x = 0.0)) ;
--- Absorbing.
-guarantee (z = 0.0) = ( (x = 0.0) or (y = 0.0) ) ;
--- Sign.
-guarantee (z > 0.0) = (
-  ( (x > 0.0) and (y > 0.0) ) or
-  ( (x < 0.0) and (y < 0.0) )
-) ;
-guarantee (z < 0.0) = (
-  ( (x > 0.0) and (y < 0.0) ) or
-  ( (x < 0.0) and (y > 0.0) )
-) ;
--- Loose proportionality.
-guarantee (abs_z >= abs_y) = ((abs_x >= 1.0) or (y = 0.0)) ;
-guarantee (abs_z >= abs_x) = ((abs_y >= 1.0) or (x = 0.0)) ;
-guarantee (abs_z <= abs_y) = ((abs_x <= 1.0) or (y = 0.0)) ;
-guarantee (abs_z <= abs_x) = ((abs_y <= 1.0) or (x = 0.0)) ;
-*)
 let
   z = x * y ;
 tel
 
 node divid(num, den: real) returns (res: real) ;
-(*@contract
-var abs_num: real = if num < 0.0 then -num else num ;
-var abs_den: real = if den < 0.0 then -den else den ;
-var abs_res: real = if res < 0.0 then -res else res ;
-assume not (den = 0.0) ;
--- Neutral.
-guarantee (res = num) = ((den = 1.0) or (num = 0.0)) ;
-guarantee (res = - num) = ((den = - 1.0) or (num = 0.0)) ;
--- Absorbing.
-guarantee (num = 0.0) = (res = 0.0) ;
--- Sign.
-guarantee (res > 0.0) = (
-  ( (num > 0.0) and (den > 0.0) ) or
-  ( (num < 0.0) and (den < 0.0) )
-) ;
-guarantee (res < 0.0) = (
-  ( (num > 0.0) and (den < 0.0) ) or
-  ( (num < 0.0) and (den > 0.0) )
-) ;
--- Loose proportionality.
-guarantee (abs_res >= abs_num) = ((abs_den <= 1.0) or (num = 0.0)) ;
-guarantee (abs_res <= abs_num) = ((abs_den >= 1.0) or (num = 0.0)) ;
--- Annulation.
-guarantee (res = 1.0) = (num = den) ;
-guarantee (res = - 1.0) = (num = - den) ;
-*)
 let
   res = num / den ;
 tel
 
 (* Division with some bounds on the denominator.
   Bounds MUST BE NUMBERS, otherwise the contract is non-linear. *)
-node divid_bounded_num(
-  num, den: real ; l_bound, u_bound: real
-) returns (res: real) ;
-(*@contract
-  var abs_num: real = if num < 0.0 then -num else num ;
-  var abs_den: real = if den < 0.0 then -den else den ;
-  var abs_res: real = if res < 0.0 then -res else res ;
-  assume not (den = 0.0) ;
-(* Denominator respects its bounds. *)
-  assume l_bound <> 0.0 ;
-  assume u_bound <> 0.0 ;
-  assume l_bound <= u_bound ;
-  assume l_bound <= den ;
-  assume            den <= u_bound ;
--- Neutral.
-  guarantee (res = num) = ((den = 1.0) or (num = 0.0)) ;
-  guarantee (res = - num) = ((den = - 1.0) or (num = 0.0)) ;
--- Absorbing.
-  guarantee (num = 0.0) = (res = 0.0) ;
--- Sign.
-  guarantee (res > 0.0) = (
-  ( (num > 0.0) and (den > 0.0) ) or
-  ( (num < 0.0) and (den < 0.0) )
-) ;
-  guarantee (res < 0.0) = (
-  ( (num > 0.0) and (den < 0.0) ) or
-  ( (num < 0.0) and (den > 0.0) )
-) ;
--- Loose proportionality.
-  guarantee (abs_res >= abs_num) = ((abs_den <= 1.0) or (num = 0.0)) ;
-  guarantee (abs_res <= abs_num) = ((abs_den >= 1.0) or (num = 0.0)) ;
--- Annulation.
-  guarantee (res = 1.0) = (num = den) ;
-  guarantee (res = - 1.0) = (num = - den) ;
-
--- Bounded result.
-  mode num_pos_l_bound_pos (
-    require num >= 0.0 ;
-    require l_bound > 0.0 ;
-    ensure num / u_bound <= res ;
-    ensure                  res <= num / l_bound ;
-  ) ;
-  mode num_pos_u_bound_neg (
-    require num >= 0.0 ;
-    require u_bound < 0.0 ;
-    ensure num / u_bound <= res ;
-    ensure                  res <= num / l_bound ;
-  ) ;
-  mode num_neg_l_bound_pos (
-    require num < 0.0 ;
-    require l_bound > 0.0 ;
-    ensure num / l_bound <= res ;
-    ensure                  res <= num / u_bound ;
-  ) ;
-  mode num_neg_u_bound_neg (
-    require num < 0.0 ;
-    require u_bound < 0.0 ;
-    ensure num / l_bound <= res ;
-    ensure                  res <= num / u_bound ;
-  ) ;
-  mode num_pos_l_bound_neg_u_bound_pos (
-    require num >= 0.0 ;
-    require u_bound > 0.0 ;
-    require l_bound < 0.0 ;
-    ensure res <= num / l_bound or num / u_bound <= res ;
-  ) ;
-  mode num_neg_l_bound_neg_u_bound_pos (
-    require num < 0.0 ;
-    require u_bound > 0.0 ;
-    require l_bound < 0.0 ;
-    ensure res <= num / u_bound or num / l_bound <= res ;
-  ) ;
-*)
+node divid_bounded_num(num, den: real ; l_bound, u_bound: real)
+returns (res: real) ;
 let
   res = num / den ;
 tel
 
 node temporal_divid(num, den: real) returns (res: real) ;
-(*@contract
-  var abs_num: real = if num < 0.0 then -num else num ;
-  var abs_den: real = if den < 0.0 then -den else den ;
-  var abs_res: real = if res < 0.0 then -res else res ;
-  assume not (den = 0.0) ;
--- Neutral.
-  guarantee (res = num) = ((den = 1.0) or (num = 0.0)) ;
-  guarantee (res = - num) = ((den = - 1.0) or (num = 0.0)) ;
--- Absorbing.
-  guarantee (num = 0.0) = (res = 0.0) ;
--- Sign.
-  guarantee (res > 0.0) = (
-  ( (num > 0.0) and (den > 0.0) ) or
-  ( (num < 0.0) and (den < 0.0) )
-) ;
-  guarantee (res < 0.0) = (
-  ( (num > 0.0) and (den < 0.0) ) or
-  ( (num < 0.0) and (den > 0.0) )
-) ;
--- Loose proportionality.
-  guarantee (abs_res >= abs_num) = ((abs_den <= 1.0) or (num = 0.0)) ;
-  guarantee (abs_res <= abs_num) = ((abs_den >= 1.0) or (num = 0.0)) ;
--- Annulation.
-  guarantee (res = 1.0) = (num = den) ;
-  guarantee (res = - 1.0) = (num = - den) ;
-
--- Evolution.
-  mode init (
-    require true -> false ;
-    ensure true -> false ;
-  ) ;
-
-  mode both_inc (
-    require false -> (num > pre num) ;
-    require false -> (den > pre den) ;
-  ) ;
-
-  mode both_dec (
-    require false -> (num < pre num) ;
-    require false -> (den < pre den) ;
-  ) ;
-
-  mode inc_by_num_inc (
-    require false -> (num > pre num) ;
-    require false -> (den = pre den) ;
-    ensure  false -> (res > pre res) ;
-  ) ;
-
-  mode inc_by_den_dec (
-    require false -> (num = pre num) ;
-    require false -> (den < pre den) ;
-    ensure  false -> (res > pre res or res = 0.0) ;
-  ) ;
-
-  mode inc_by_num_inc_den_dec (
-    require false -> (num > pre num) ;
-    require false -> (den < pre den) ;
-    ensure  false -> (res > pre res) ;
-  ) ;
-
-  mode dec_by_num_dec (
-    require false -> (num < pre num) ;
-    require false -> (den = pre den) ;
-    ensure  false -> (res < pre res) ;
-  ) ;
-
-  mode dec_by_den_inc (
-    require false -> (num = pre num) ;
-    require false -> (den > pre den) ;
-    ensure  false -> (res < pre res or res = 0.0) ;
-  ) ;
-
-  mode dec_by_num_dec_den_inc (
-    require false -> (num < pre num) ;
-    require false -> (den > pre den) ;
-    ensure  false -> (res < pre res) ;
-  ) ;
-
-  mode steady (
-    require false -> (num = pre num) ;
-    require false -> (den = pre den) ;
-    ensure  false -> (res = pre res) ;
-  ) ;
-*)
 let
   res = num / den ;
 tel
@@ -406,7 +201,6 @@ tel
 node nl_latitudinal_1(in1, in2, in3: real) returns (vout: real) ;
 var arg : real;
 let
-  -- vout = in1 / in2 * in3 ;
   arg = divid(in1, in2);
   vout = times(in3, arg) ;
 tel
@@ -414,7 +208,6 @@ tel
 node nl_latitudinal_2(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / in2 * in3 ;
   arg = divid(in1, in2) ;
   vout = times(in3, arg) ;
 tel
@@ -422,45 +215,38 @@ tel
 node nl_latitudinal_3(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / in2 * in3 ;
   arg = divid(in1, in2) ;
   vout = times(in3, arg) ;
 tel
 
 node nl_latitudinal_4(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 / in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_latitudinal_5(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 / in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_latitudinal_6(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 / in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_latitudinal_7(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 / in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_latitudinal_8(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 * in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_latitudinal_9(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 * in2 * in3 ;
   arg = times(in2, in3) ;
   vout = times(in1, arg) ;
 tel
@@ -468,7 +254,6 @@ tel
 node nl_latitudinal_10(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 * in2 * in3 ;
   arg = times(in2, in3) ;
   vout = times(in1, arg) ;
 tel
@@ -476,14 +261,12 @@ tel
 node nl_latitudinal_11(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 * in2 * in3 ;
   arg = times(in2, in3) ;
   vout = times(in1, arg) ;
 tel
 
 node nl_latitudinal_12(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 * in2 ;
   vout = times(in1, in2) ;
 tel
 
@@ -491,32 +274,27 @@ tel
 
 node nl_longitudinal_1(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 * in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_longitudinal_2(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 * in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_longitudinal_3(in1, in2, in3: real) returns (vout: real) ;
 let
-  -- vout = in1 * in2 ;
   vout = times(in1, in2) ;
 tel
 
 node nl_longitudinal_4(in1, in2: real) returns (vout: real) ;
 let
-  -- vout = in1 / in2 ;
   vout = divid(in1, in2) ;
 tel
 
 node nl_longitudinal_5(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / (in2 * in3) ;
   arg = times(in2, in3) ;
   vout = divid(in1, arg) ;
 tel
@@ -524,7 +302,6 @@ tel
 node nl_longitudinal_6(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / (in2 * in3) ;
   arg = times(in2, in3) ;
   vout = divid(in1, arg) ;
 tel
@@ -532,7 +309,6 @@ tel
 node nl_longitudinal_7(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / (in2 * in3) ;
   arg = times(in2, in3) ;
   vout = divid(in1, arg) ;
 tel
@@ -540,7 +316,6 @@ tel
 node nl_longitudinal_8(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / in2 * in3 ;
   arg = times(in2, in3) ;
   vout = divid(in1, arg) ;
 tel
@@ -548,7 +323,6 @@ tel
 node nl_longitudinal_9(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / in2 * in3 ;
   arg = times(in2, in3);
   vout = divid(in1, arg) ;
 tel
@@ -556,15 +330,18 @@ tel
 node nl_longitudinal_10(in1, in2, in3: real) returns (vout: real) ;
 var arg: real;
 let
-  -- vout = in1 / in2 * in3 ;
   arg = times(in2, in3);
   vout = divid(in1, arg) ;
 tel
 
 -- System nodes
-node MODE_LOGIC_SpeedMode (Actiavte_1_1 : real; Deactivate_1_1 : real; AltEng_1_1 : bool; CAS_1_1 : real; CASCmdMCP_1_1 : real )
-returns (ATEng_1_1 : bool;
-  CASCmd_2_1 : real) ;
+node MODE_LOGIC_SpeedMode (
+  Activate_1_1, Deactivate_1_1 : real;
+  AltEng_1_1 : bool;
+  CAS_1_1, CASCmdMCP_1_1 : real)
+returns (
+  ATEng_1_1 : bool;
+  CASCmd_2_1 : real);
 var
   Add_1_1, Add_1_1_a, Add_1_1_b : int;
   CompareToConstant_1_1 : bool;
@@ -585,26 +362,31 @@ let
   Add_1_1_b = if LogicalOperator_1_1 then 1 else 0;
   Add_1_1 = Add_1_1_a + Add_1_1_b;
   CompareToConstant_1_1 = not(Deactivate_1_1 = 0.0);
-  CompareToConstant1_1_1 = not(Actiavte_1_1 = 0.0);
+  CompareToConstant1_1_1 = not(Activate_1_1 = 0.0);
   LogicalOperator_1_1 = AltEng_1_1 and SRFlipFlopRepl_dot__LogicalOperator_1_1;
   LogicalOperator2_1_1 = CompareToConstant1_1_1 or LogicalOperator_1_1;
   Switch_1_1 = if Add_1_1 >= 0 then UnitDelay2_1_1 else Switch1_1_1;
   Switch1_1_1 = if Add_1_1 > 1 then CASCmdMCP_1_1 else CAS_1_1;
-  SRFlipFlopRepl_dot__LogicalOperator_1_1 = not(SRFlipFlopRepl_dot__UnitDelay_1_1 and SRFlipFlopRepl_dot__LogicalOperator3_1_1);
-  SRFlipFlopRepl_dot__LogicalOperator1_1_1 = not(SRFlipFlopRepl_dot__LogicalOperator2_1_1 and SRFlipFlopRepl_dot__UnitDelay1_1_1);
+  SRFlipFlopRepl_dot__LogicalOperator_1_1 =
+    not(SRFlipFlopRepl_dot__UnitDelay_1_1
+        and SRFlipFlopRepl_dot__LogicalOperator3_1_1);
+  SRFlipFlopRepl_dot__LogicalOperator1_1_1 =
+    not(SRFlipFlopRepl_dot__LogicalOperator2_1_1
+        and SRFlipFlopRepl_dot__UnitDelay1_1_1);
   SRFlipFlopRepl_dot__LogicalOperator2_1_1 = not LogicalOperator2_1_1;
   SRFlipFlopRepl_dot__LogicalOperator3_1_1 = not CompareToConstant_1_1;
-  SRFlipFlopRepl_dot__UnitDelay_1_1 = false fby SRFlipFlopRepl_dot__LogicalOperator1_1_1;
-  SRFlipFlopRepl_dot__UnitDelay1_1_1 = true fby SRFlipFlopRepl_dot__LogicalOperator_1_1;
+  SRFlipFlopRepl_dot__UnitDelay_1_1 =
+    false fby SRFlipFlopRepl_dot__LogicalOperator1_1_1;
+  SRFlipFlopRepl_dot__UnitDelay1_1_1 =
+    true fby SRFlipFlopRepl_dot__LogicalOperator_1_1;
   UnitDelay2_1_1 = 0.0 fby Switch_1_1;
   ATEng_1_1 = SRFlipFlopRepl_dot__LogicalOperator1_1_1;
   CASCmd_2_1 = UnitDelay2_1_1;
 tel
 
 node MODE_LOGIC_HeadingMode (
-  Actiavte_1_1 : real; Deactivate_1_1 : bool
+  Activate_1_1 : real; Deactivate_1_1 : bool
 ) returns (HeadEng_1_1 : bool) ;
-
 var
   arg : real;
   CompareToConstant_1_1 : bool;
@@ -617,25 +399,28 @@ var
   SRFlipFlopRepl_dot__UnitDelay1_1_1 : bool;
 let 
   arg = if Deactivate_1_1 then 1.0 else 0.0;
-  CompareToConstant_1_1 = not(arg = 0.0000000000);
-  CompareToConstant1_1_1 = not(Actiavte_1_1 = 0.0000000000);
-  SRFlipFlopRepl_dot__LogicalOperator_1_1 = not(SRFlipFlopRepl_dot__UnitDelay_1_1 and SRFlipFlopRepl_dot__LogicalOperator3_1_1);
-  SRFlipFlopRepl_dot__LogicalOperator1_1_1 = not(SRFlipFlopRepl_dot__LogicalOperator2_1_1 and SRFlipFlopRepl_dot__UnitDelay1_1_1);
+  CompareToConstant_1_1 = not(arg = 0.0);
+  CompareToConstant1_1_1 = not(Activate_1_1 = 0.0);
+  SRFlipFlopRepl_dot__LogicalOperator_1_1 =
+    not(SRFlipFlopRepl_dot__UnitDelay_1_1
+        and SRFlipFlopRepl_dot__LogicalOperator3_1_1);
+  SRFlipFlopRepl_dot__LogicalOperator1_1_1 =
+    not(SRFlipFlopRepl_dot__LogicalOperator2_1_1
+        and SRFlipFlopRepl_dot__UnitDelay1_1_1);
   SRFlipFlopRepl_dot__LogicalOperator2_1_1 = not CompareToConstant1_1_1;
   SRFlipFlopRepl_dot__LogicalOperator3_1_1 = not CompareToConstant_1_1;
-  SRFlipFlopRepl_dot__UnitDelay_1_1 = false fby SRFlipFlopRepl_dot__LogicalOperator1_1_1;
-  SRFlipFlopRepl_dot__UnitDelay1_1_1 = true fby SRFlipFlopRepl_dot__LogicalOperator_1_1;
+  SRFlipFlopRepl_dot__UnitDelay_1_1 =
+    false fby SRFlipFlopRepl_dot__LogicalOperator1_1_1;
+  SRFlipFlopRepl_dot__UnitDelay1_1_1 =
+    true fby SRFlipFlopRepl_dot__LogicalOperator_1_1;
   HeadEng_1_1 = SRFlipFlopRepl_dot__LogicalOperator1_1_1;
 tel
 
 node MODE_LOGIC_AltAndFPAMode (
-  ActiavteFPA_1_1 : real; Deactivate_1_1 : bool;
-  Altitude_1_1, AltCmd_1_1, ActiavteAlt_1_1 : real
-) returns (
-  AltEng_1_1 : bool; FPAEng_2_1 : bool
-) ;
-
-
+  ActivateFPA_1_1 : real;
+  Deactivate_1_1 : bool;
+  Altitude_1_1, AltCmd_1_1, ActivateAlt_1_1 : real
+) returns (AltEng_1_1, FPAEng_2_1 : bool);
 var
   arg : real;
   Abs_1_1 : real;
@@ -665,54 +450,74 @@ let
   Abs_1_1 = if Add_1_1 >= 0.0 then Add_1_1 else -Add_1_1;
   Add_1_1 = Altitude_1_1 - AltCmd_1_1;
   arg = if Deactivate_1_1 then 1.0 else 0.0;
-  CompareToConstant_1_1 = not(arg = 0.0000000000);
-  CompareToConstant1_1_1 = not(ActiavteFPA_1_1 = 0.0000000000);
-  CompareToConstant2_1_1 = Abs_1_1 <= 200.0000000000;
-  CompareToConstant3_1_1 = not(ActiavteAlt_1_1 = 0.0000000000);
+  CompareToConstant_1_1 = not(arg = 0.0);
+  CompareToConstant1_1_1 = not(ActivateFPA_1_1 = 0.0);
+  CompareToConstant2_1_1 = Abs_1_1 <= 200.0;
+  CompareToConstant3_1_1 = not(ActivateAlt_1_1 = 0.0);
   LogicalOperator1_1_1 = LogicalOperator2_1_1 or CompareToConstant2_1_1;
   LogicalOperator2_1_1 = not SRFlipFlopRepl_dot__LogicalOperator1_1_1;
-  LogicalOperator3_1_1 = SRFlipFlopRepl_dot__LogicalOperator1_1_1 and LogicalOperator6_1_1;
-  LogicalOperator4_1_1 = SRFlipFlopRepl_dot_1_LogicalOperator1_1_1 and LogicalOperator1_1_1;
-  LogicalOperator6_1_1 = not(SRFlipFlopRepl_dot_1_LogicalOperator1_1_1 and CompareToConstant2_1_1);
-  SRFlipFlopRepl_dot_1_LogicalOperator_1_1 = not(SRFlipFlopRepl_dot_1_UnitDelay_1_1 and SRFlipFlopRepl_dot_1_LogicalOperator3_1_1);
-  SRFlipFlopRepl_dot_1_LogicalOperator1_1_1 = not(SRFlipFlopRepl_dot_1_LogicalOperator2_1_1 and SRFlipFlopRepl_dot_1_UnitDelay1_1_1);
+  LogicalOperator3_1_1 =
+    SRFlipFlopRepl_dot__LogicalOperator1_1_1 and LogicalOperator6_1_1;
+  LogicalOperator4_1_1 =
+    SRFlipFlopRepl_dot_1_LogicalOperator1_1_1 and LogicalOperator1_1_1;
+  LogicalOperator6_1_1 =
+    not(SRFlipFlopRepl_dot_1_LogicalOperator1_1_1 and CompareToConstant2_1_1);
+  SRFlipFlopRepl_dot_1_LogicalOperator_1_1 =
+    not(SRFlipFlopRepl_dot_1_UnitDelay_1_1
+        and SRFlipFlopRepl_dot_1_LogicalOperator3_1_1);
+  SRFlipFlopRepl_dot_1_LogicalOperator1_1_1 =
+    not(SRFlipFlopRepl_dot_1_LogicalOperator2_1_1
+        and SRFlipFlopRepl_dot_1_UnitDelay1_1_1);
   SRFlipFlopRepl_dot_1_LogicalOperator2_1_1 = not CompareToConstant3_1_1;
   SRFlipFlopRepl_dot_1_LogicalOperator3_1_1 = not CompareToConstant_1_1;
-  SRFlipFlopRepl_dot_1_UnitDelay_1_1 = false fby SRFlipFlopRepl_dot_1_LogicalOperator1_1_1;
-  SRFlipFlopRepl_dot_1_UnitDelay1_1_1 = true fby SRFlipFlopRepl_dot_1_LogicalOperator_1_1;
-  SRFlipFlopRepl_dot__LogicalOperator_1_1 = not(SRFlipFlopRepl_dot__UnitDelay_1_1 and SRFlipFlopRepl_dot__LogicalOperator3_1_1);
-  SRFlipFlopRepl_dot__LogicalOperator1_1_1 = not(SRFlipFlopRepl_dot__LogicalOperator2_1_1 and SRFlipFlopRepl_dot__UnitDelay1_1_1);
+  SRFlipFlopRepl_dot_1_UnitDelay_1_1 =
+    false fby SRFlipFlopRepl_dot_1_LogicalOperator1_1_1;
+  SRFlipFlopRepl_dot_1_UnitDelay1_1_1 =
+    true fby SRFlipFlopRepl_dot_1_LogicalOperator_1_1;
+  SRFlipFlopRepl_dot__LogicalOperator_1_1 =
+    not(SRFlipFlopRepl_dot__UnitDelay_1_1
+        and SRFlipFlopRepl_dot__LogicalOperator3_1_1);
+  SRFlipFlopRepl_dot__LogicalOperator1_1_1 =
+    not(SRFlipFlopRepl_dot__LogicalOperator2_1_1
+      and SRFlipFlopRepl_dot__UnitDelay1_1_1);
   SRFlipFlopRepl_dot__LogicalOperator2_1_1 = not CompareToConstant1_1_1;
   SRFlipFlopRepl_dot__LogicalOperator3_1_1 = not CompareToConstant_1_1;
-  SRFlipFlopRepl_dot__UnitDelay_1_1 = false fby SRFlipFlopRepl_dot__LogicalOperator1_1_1;
-  SRFlipFlopRepl_dot__UnitDelay1_1_1 = true fby SRFlipFlopRepl_dot__LogicalOperator_1_1;
+  SRFlipFlopRepl_dot__UnitDelay_1_1 =
+    false fby SRFlipFlopRepl_dot__LogicalOperator1_1_1;
+  SRFlipFlopRepl_dot__UnitDelay1_1_1 =
+    true fby SRFlipFlopRepl_dot__LogicalOperator_1_1;
   AltEng_1_1 = LogicalOperator4_1_1;
   FPAEng_2_1 = LogicalOperator3_1_1;
 tel
 
-node MODE_LOGIC (HeadMode_1_1 : real; ailStick_1_1 : real; elevStick_1_1 : real; AltMode_1_1 : real; FPAMode_1_1 : real; ATMode_1_1 : real; AltCmd_1_1 : real; Altitude_1_1 : real; CAS_1_1 : real; CASCmdMCP_1_1 : real )
-returns (HeadEng_1_1 : bool ;
-  AltEng_2_1 : bool;
-  FPAEng_3_1 : bool;
-  ATEng_4_1 : bool;
-  CASCmd_5_1 : real) ;
-
+node MODE_LOGIC (
+  HeadMode_1_1, ailStick_1_1, elevStick_1_1, AltMode_1_1,
+  FPAMode_1_1, ATMode_1_1, AltCmd_1_1, Altitude_1_1,
+  CAS_1_1, CASCmdMCP_1_1 : real)
+returns (HeadEng_1_1, AltEng_2_1, FPAEng_3_1, ATEng_4_1 : bool;
+         CASCmd_5_1 : real) ;
 var
-  AltAndFPAMode_1_1 : bool; AltAndFPAMode_2_1 : bool;
+  AltAndFPAMode_1_1 : bool;
+  AltAndFPAMode_2_1 : bool;
   CompareToZero_1_1 : bool;
   CompareToZero1_1_1 : bool;
   Constant_1_1 : real;
   HeadingMode_1_1 : bool;
   LogicalOperator_1_1 : bool;
-  SpeedMode_1_1 : bool; SpeedMode_2_1 : real;
+  SpeedMode_1_1 : bool;
+  SpeedMode_2_1 : real;
 let 
-  (AltAndFPAMode_1_1, AltAndFPAMode_2_1) = MODE_LOGIC_AltAndFPAMode(FPAMode_1_1, LogicalOperator_1_1, Altitude_1_1, AltCmd_1_1, AltMode_1_1);
-  CompareToZero_1_1 = not(ailStick_1_1 = 0.0000000000);
-  CompareToZero1_1_1 = not(elevStick_1_1 = 0.0000000000);
-  Constant_1_1 = 0.0000000000;
+  (AltAndFPAMode_1_1, AltAndFPAMode_2_1) =
+    MODE_LOGIC_AltAndFPAMode(FPAMode_1_1, LogicalOperator_1_1, Altitude_1_1,
+                             AltCmd_1_1, AltMode_1_1);
+  CompareToZero_1_1 = not(ailStick_1_1 = 0.0);
+  CompareToZero1_1_1 = not(elevStick_1_1 = 0.0);
+  Constant_1_1 = 0.0;
   HeadingMode_1_1 = MODE_LOGIC_HeadingMode(HeadMode_1_1, LogicalOperator_1_1);
   LogicalOperator_1_1 = CompareToZero_1_1 or CompareToZero1_1_1;
-  (SpeedMode_1_1, SpeedMode_2_1) = MODE_LOGIC_SpeedMode(ATMode_1_1, Constant_1_1, AltAndFPAMode_2_1, CAS_1_1, CASCmdMCP_1_1);
+  (SpeedMode_1_1, SpeedMode_2_1) =
+    MODE_LOGIC_SpeedMode(ATMode_1_1, Constant_1_1, AltAndFPAMode_2_1,
+                         CAS_1_1, CASCmdMCP_1_1);
   HeadEng_1_1 = HeadingMode_1_1;
   AltEng_2_1 = AltAndFPAMode_1_1;
   FPAEng_3_1 = AltAndFPAMode_2_1;
@@ -720,7 +525,8 @@ let
   CASCmd_5_1 = SpeedMode_2_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_2 (In1_1_1 : real; x1_1_1 : real; x2_1_1 : real; y1_1_1 : real; y2_1_1 : real )
+node LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_2 (
+  In1_1_1, x1_1_1, x2_1_1, y1_1_1, y2_1_1 : real )
 returns (Out1_1_1 : real) ;
 var
   arg : real;
@@ -734,13 +540,13 @@ let
   Add2_1_1 = Divide_1_1 + y1_1_1;
   Add3_1_1 =  - y1_1_1 + y2_1_1;
   Add4_1_1 = In1_1_1 - x1_1_1;
-  -- Divide_1_1 = Add4_1_1 / Add1_1_1 * Add3_1_1;
   arg = divid(Add4_1_1, Add1_1_1) ;
   Divide_1_1 = times(arg, Add3_1_1 ) ;
   Out1_1_1 = Add2_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_1 (In1_1_1 : real; x1_1_1 : real; x2_1_1 : real; y1_1_1 : real; y2_1_1 : real )
+node LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_1(
+  In1_1_1, x1_1_1, x2_1_1, y1_1_1, y2_1_1 : real)
 returns (Out1_1_1 : real) ;
 var
   arg : real;
@@ -754,13 +560,13 @@ let
   Add2_1_1 = Divide_1_1 + y1_1_1;
   Add3_1_1 =  - y1_1_1 + y2_1_1;
   Add4_1_1 = In1_1_1 - x1_1_1;
-  -- Divide_1_1 = Add4_1_1 / Add1_1_1 * Add3_1_1;
   arg = divid(Add4_1_1, Add1_1_1);
   Divide_1_1 = times(arg, Add3_1_1 ) ;
   Out1_1_1 = Add2_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_0 (In1_1_1 : real; x1_1_1 : real; x2_1_1 : real; y1_1_1 : real; y2_1_1 : real )
+node LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_0 (
+  In1_1_1, x1_1_1, x2_1_1, y1_1_1, y2_1_1 : real)
 returns (Out1_1_1 : real) ;
 var
   arg : real;
@@ -774,7 +580,6 @@ let
   Add2_1_1 = Divide_1_1 + y1_1_1;
   Add3_1_1 =  - y1_1_1 + y2_1_1;
   Add4_1_1 = In1_1_1 - x1_1_1;
-  -- Divide_1_1 = Add4_1_1 / Add1_1_1 * Add3_1_1;
   arg = divid(Add4_1_1, Add1_1_1);
   Divide_1_1 = times(arg, Add3_1_1 ) ;
   Out1_1_1 = Add2_1_1;
@@ -806,32 +611,35 @@ var
   r8_1_1 : real;
 let 
   Add_1_1 = branch_sharp_1_1_1 + branch_sharp_2_1_1 + branch_sharp_3_1_1;
-  -- branch_sharp_1_1_1 = interpolate1d_sharp_0_1_1 * (if lte1_1_1 then 1.0 else 0.0) * (if gte1_1_1 then 1.0 else 0.0);
   branch_sharp_1_1_1 =
     if lte1_1_1 and gte1_1_1 then interpolate1d_sharp_0_1_1 else 0.0 ;
-  -- branch_sharp_2_1_1 = interpolate1d_sharp_1_1_1 * (if lte2_1_1 then 1.0 else 0.0) * (if gte2_1_1 then 1.0 else 0.0);
   branch_sharp_2_1_1 =
     if lte2_1_1 and gte2_1_1 then interpolate1d_sharp_1_1_1 else 0.0 ;
-  -- branch_sharp_3_1_1 = interpolate1d_sharp_2_1_1 * (if lte3_1_1 then 1.0 else 0.0) * (if gte3_1_1 then 1.0 else 0.0);
   branch_sharp_3_1_1 =
     if lte3_1_1 and gte3_1_1 then interpolate1d_sharp_2_1_1 else 0.0 ;
   gte1_1_1 = In1_1_1 <= r2_1_1;
   gte2_1_1 = In1_1_1 <= r3_1_1;
   gte3_1_1 = In1_1_1 <= r4_1_1;
-  interpolate1d_sharp_0_1_1 = LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_0(In1_1_1, r1_1_1, r2_1_1, r5_1_1, r6_1_1);
-  interpolate1d_sharp_1_1_1 = LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_1(In1_1_1, r2_1_1, r3_1_1, r6_1_1, r7_1_1);
-  interpolate1d_sharp_2_1_1 = LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_2(In1_1_1, r3_1_1, r4_1_1, r7_1_1, r8_1_1);
+  interpolate1d_sharp_0_1_1 =
+    LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_0(
+      In1_1_1, r1_1_1, r2_1_1, r5_1_1, r6_1_1);
+  interpolate1d_sharp_1_1_1 =
+    LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_1(
+      In1_1_1, r2_1_1, r3_1_1, r6_1_1, r7_1_1);
+  interpolate1d_sharp_2_1_1 =
+    LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d_interpolate1d_sharp_2(
+      In1_1_1, r3_1_1, r4_1_1, r7_1_1, r8_1_1);
   lte1_1_1 = In1_1_1 >= r1_1_1;
   lte2_1_1 = In1_1_1 > r2_1_1;
   lte3_1_1 = In1_1_1 > r3_1_1;
-  r1_1_1 = 0.0000000000;
-  r2_1_1 = 120.0000000000;
-  r3_1_1 = 350.0000000000;
-  r4_1_1 = 500.0000000000;
-  r5_1_1 = 1.0000000000;
-  r6_1_1 = 1.0000000000;
-  r7_1_1 = 0.3000000000;
-  r8_1_1 = 0.3000000000;
+  r1_1_1 = 0.0;
+  r2_1_1 = 120.0;
+  r3_1_1 = 350.0;
+  r4_1_1 = 500.0;
+  r5_1_1 = 1.0;
+  r6_1_1 = 1.0;
+  r7_1_1 = 0.3;
+  r8_1_1 = 0.3;
   Out1_1_1 = Add_1_1;
 tel
 
@@ -847,18 +655,19 @@ var
   sum11_1_1 : real;
   sum21_1_1 : real;
 let 
-  a_sharp_1_1_1 = 0.0625000000 * delay_sharp_1_1_1;
-  b0_sharp_0_1_1 = 1.0000000000 * u_1_1;
-  b0_sharp_1_1_1 = -1.0000000000 * a_sharp_1_1_1;
-  delay_sharp_1_1_1 = 0.0000000000 fby sum21_1_1;
+  a_sharp_1_1_1 = 0.0625 * delay_sharp_1_1_1;
+  b0_sharp_0_1_1 = 1.0 * u_1_1;
+  b0_sharp_1_1_1 = -1.0 * a_sharp_1_1_1;
+  delay_sharp_1_1_1 = 0.0 fby sum21_1_1;
   output_sum_1_1 = b0_sharp_0_1_1 + b0_sharp_1_1_1;
-  sample_sharp_1_1_1 = 0.0200000000 * sum11_1_1;
+  sample_sharp_1_1_1 = 0.02 * sum11_1_1;
   sum11_1_1 = u_1_1 - a_sharp_1_1_1;
   sum21_1_1 = sample_sharp_1_1_1 + delay_sharp_1_1_1;
   y_1_1 = output_sum_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_PitchInnerLoop (PitchCmd_1_1 : real; Pitch_1_1 : real; qdeg_1_1 : real; CAS_1_1 : real)
+node LONGITUDINAL_CONTROLLER_PitchInnerLoop (
+  PitchCmd_1_1, Pitch_1_1, qdeg_1_1, CAS_1_1 : real)
 returns (ElevCmd_1_1 : real) ;
 var
   Kpitch_1_1 : real;
@@ -870,15 +679,15 @@ var
   TransferFunc_1_1 : real;
   lookup1d_1_1 : real;
 let 
-  Kpitch_1_1 = 2.0000000000 * Sum_1_1;
-  Kwo_1_1 = 0.5000000000 * TransferFunc_1_1;
+  Kpitch_1_1 = 2.0 * Sum_1_1;
+  Kwo_1_1 = 0.5 * TransferFunc_1_1;
   Mux_1_1 = PitchCmd_1_1 ;
   Mux_1_2 = Pitch_1_1 ;
-  -- Product_1_1 = Sum1_1_1 * lookup1d_1_1 ;
   Product_1_1 = times(Sum1_1_1, lookup1d_1_1);
   Sum_1_1 = PitchCmd_1_1 - Pitch_1_1;
   Sum1_1_1 =  - Kpitch_1_1 + Kwo_1_1;
-  TransferFunc_1_1 = LONGITUDINAL_CONTROLLER_PitchInnerLoop_TransferFunc(qdeg_1_1);
+  TransferFunc_1_1 =
+    LONGITUDINAL_CONTROLLER_PitchInnerLoop_TransferFunc(qdeg_1_1);
   lookup1d_1_1 = LONGITUDINAL_CONTROLLER_PitchInnerLoop_lookup1d(CAS_1_1);
   ElevCmd_1_1 = Product_1_1;
 tel
@@ -888,13 +697,12 @@ returns (Out_1_1 : real) ;
 var
   Switch1_1_1 : real;
 let 
-  -- Switch1_1_1 = if not(Man_1_1 = 0.0) then Auto_1_1 else Man_1_1;
   Switch1_1_1 = if Man_1_1 <> 0.0 then Man_1_1 else Auto_1_1 ;
   Out_1_1 = Switch1_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_FPAControl_integrator_reset (f_lpar_x_rpar__1_1 :
-real; reset_level_1_1 : bool; x0_1_1 : real)
+node LONGITUDINAL_CONTROLLER_FPAControl_integrator_reset (
+  f_lpar_x_rpar__1_1 : real; reset_level_1_1 : bool; x0_1_1 : real)
 returns (F_lpar_x_rpar__1_1 : real) ;
 var
   init : bool;
@@ -919,23 +727,17 @@ var
 let 
   init = true fby false;
   Add_1_1 = Product1_1_1 + Product2_1_1;
-  Constant_1_1 = 0.0000000000;
-  Gain1_1_1 = 1.0000000000 * f_lpar_x_rpar__1_1;
-  -- Actually linear {
-  --   Product_1_1 = x0_1_1 * delay_sharp_1_1_1 ;
-  -- }
-  -- Product_1_1 = times(x0_1_1, delay_sharp_1_1_1) ;
+  Constant_1_1 = 0.0;
+  Gain1_1_1 = 1.0 * f_lpar_x_rpar__1_1;
   Product_1_1 = if init then x0_1_1 else 0.0 ;
-  -- Product1_1_1 = Sum3_1_1 * (if ne0_1_1 then 1.0 else 0.0);
   Product1_1_1 = if ne0_1_1 then Sum3_1_1 else 0.0 ;
-  -- Product2_1_1 = (if eq0_1_1 then 1.0 else 0.0) * Sum3_1_1 * (if ne1_1_1 then 1.0 else 0.0);
   Product2_1_1 = if eq0_1_1 and ne1_1_1 then Sum3_1_1 else 0.0 ;
   Sum1_1_1 = Gain1_1_1 + Sum2_1_1;
   Sum2_1_1 = Sum4_1_1 + Product_1_1;
   Sum3_1_1 =  - delay_sharp_2_1_1 + x0_1_1;
   Sum4_1_1 = delay_sharp_2_1_1 + Add_1_1;
-  delay_sharp_1_1_1 = 1.0000000000 fby Constant_1_1;
-  delay_sharp_2_1_1 = 0.0000000000 fby Sum1_1_1;
+  delay_sharp_1_1_1 = 1.0;
+  delay_sharp_2_1_1 = 0.0 fby Sum1_1_1;
   delay_sharp_3_1_1 = false fby reset_level_1_1;
   eq0_1_1_a =if reset_level_1_1 then 1.0 else 0.0;
   eq0_1_1 = (eq0_1_1_a = zero_1_1);
@@ -943,12 +745,12 @@ let
   ne0_1_1 = not(ne0_1_1_a = zero_1_1);
   ne1_1_1_a = if delay_sharp_3_1_1 then 1.0 else 0.0;
   ne1_1_1 = not(ne1_1_1_a = zero_1_1);
-  zero_1_1 = 0.0000000000;
+  zero_1_1 = 0.0;
   F_lpar_x_rpar__1_1 = delay_sharp_2_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_FPAControl_DynamicSaturation (up_1_1 : real; u_1_1
-: real; lo_1_1 : real)
+node LONGITUDINAL_CONTROLLER_FPAControl_DynamicSaturation(
+  up_1_1, u_1_1, lo_1_1 : real)
 returns (y1_1_1 : real) ;
 var
   LowerRelop1_1_1 : bool;
@@ -963,10 +765,10 @@ let
   y1_1_1 = Switch2_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_FPAControl (engage_1_1 : bool; gamcmd_1_1 : real;
-gamma_1_1 : real; thetadeg_1_1 : real; VT_1_1 : real)
+node LONGITUDINAL_CONTROLLER_FPAControl (
+  engage_1_1 : bool;
+  gamcmd_1_1, gamma_1_1, thetadeg_1_1, VT_1_1 : real)
 returns (PitchCmd_1_1 : real) ;
-
 var
   DynamicSaturation_1_1 : real;
   KIgamerr_1_1 : real;
@@ -978,42 +780,29 @@ var
   Sum_1_1 : real;
   Sum1_1_1 : real;
   Sum2_1_1 : real;
-  -- hddLim1_1_1 : real;
-  -- hddLim2_1_1 : real;
-  -- hddLimProduct_1_1 : real;
   integrator_reset_1_1 : real;
   kt2fps_1_1 : real;
   m1_1_1 : real;
 let 
-  DynamicSaturation_1_1 = LONGITUDINAL_CONTROLLER_FPAControl_DynamicSaturation(Product1_1_1, KIgamerr_1_1, m1_1_1);
-  KIgamerr_1_1 = 1.0000000000 * Sum2_1_1 ;
-  Kgamerr_1_1 = 1.4000000000 * gamma_1_1;
+  DynamicSaturation_1_1 =
+    LONGITUDINAL_CONTROLLER_FPAControl_DynamicSaturation(
+      Product1_1_1, KIgamerr_1_1, m1_1_1);
+  KIgamerr_1_1 = 1.0 * Sum2_1_1 ;
+  Kgamerr_1_1 = 1.4 * gamma_1_1;
   LogicalOperator_1_1 = not engage_1_1;
   Mux_1_1 = gamcmd_1_1 ;
   Mux_1_2 = gamma_1_1 ;
   Mux1_1_1 = Sum2_1_1 ;
   Mux1_1_2 = DynamicSaturation_1_1 ;
-  -- Original code, actually linear {
-  --   hddLim1_1_1 = 4.8300000000;
-  --   hddLim2_1_1 = 57.2958000000;
-  --   hddLimProduct_1_1 = hddLim1_1_1 * hddLim2_1_1;
-  --   Product1_1_1 = hddLimProduct_1_1 * kt2fps_1_1;
-  -- }
-  -- Abstraction, useless as it's linear {
-  --   hddLim1_1_1 = 4.8300000000;
-  --   hddLim2_1_1 = 57.2958000000;
-  --   hddLimProduct_1_1 = times(hddLim1_1_1, hddLim2_1_1) ;
-  --   Product1_1_1 = times(hddLimProduct_1_1, kt2fps_1_1) ;
-  -- }
-  -- Instead we just do {
   Product1_1_1 = (4.83 * 57.2958) * kt2fps_1_1 ;
-  -- }
   Sum_1_1 = thetadeg_1_1 + Kgamerr_1_1;
   Sum1_1_1 = integrator_reset_1_1 - Kgamerr_1_1;
   Sum2_1_1 = gamcmd_1_1 - gamma_1_1;
-  integrator_reset_1_1 = LONGITUDINAL_CONTROLLER_FPAControl_integrator_reset(DynamicSaturation_1_1, LogicalOperator_1_1, Sum_1_1);
-  kt2fps_1_1 = 1.6878000000 * VT_1_1;
-  m1_1_1 = -1.0000000000 * Product1_1_1;
+  integrator_reset_1_1 =
+    LONGITUDINAL_CONTROLLER_FPAControl_integrator_reset(
+      DynamicSaturation_1_1, LogicalOperator_1_1, Sum_1_1);
+  kt2fps_1_1 = 1.6878 * VT_1_1;
+  m1_1_1 = -1.0 * Product1_1_1;
   PitchCmd_1_1 = Sum1_1_1;
 tel
 
@@ -1030,65 +819,44 @@ let
   arg1 = if zero10_1_1 = 0.0 then false else true;
   LogicalOperator5_1_1 = Engage_1_1 and arg1;
   arg2 = if LogicalOperator5_1_1 then 1.0 else 0.0;
-  Switch1_1_1 = if arg2 >= 0.5000000000 then In_1_1 else zero9_1_1;
-  zero10_1_1 = 1.0000000000;
-  zero9_1_1 = 0.0000000000;
+  Switch1_1_1 = if arg2 >= 0.5 then In_1_1 else zero9_1_1;
+  zero10_1_1 = 1.0;
+  zero9_1_1 = 0.0;
   Out_1_1 = Switch1_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_AltitudeControl_VariableLimitSaturation (up_lim_1_1
-: real; SigIn_1_1 : real; Lo_lim_1_1 : real)
+node LONGITUDINAL_CONTROLLER_AltitudeControl_VariableLimitSaturation (
+  up_lim_1_1, SigIn_1_1, Lo_lim_1_1 : real)
 returns (Out1_1_1 : real) ;
 var
   Enforcelowlim_1_1 : real;
   Enforceuplim_1_1 : real;
 let 
-  Enforcelowlim_1_1 = if Lo_lim_1_1 >= SigIn_1_1 then Lo_lim_1_1 else SigIn_1_1;
-  Enforceuplim_1_1 = if Enforcelowlim_1_1 <= up_lim_1_1 then Enforcelowlim_1_1 else up_lim_1_1;
+  Enforcelowlim_1_1 =
+    if Lo_lim_1_1 >= SigIn_1_1 then Lo_lim_1_1 else SigIn_1_1;
+  Enforceuplim_1_1 =
+    if Enforcelowlim_1_1 <= up_lim_1_1 then Enforcelowlim_1_1 else up_lim_1_1;
   Out1_1_1 = Enforceuplim_1_1;
 tel
 
 node
 LONGITUDINAL_CONTROLLER_AltitudeControl_VariableRateLimit_VariableLimitSaturation
-(up_lim_1_1 : real; SigIn_1_1 : real; Lo_lim_1_1 : real)
+  (up_lim_1_1, SigIn_1_1, Lo_lim_1_1 : real)
 returns (Out1_1_1 : real) ;
 var
   Enforcelowlim_1_1 : real;
   Enforceuplim_1_1 : real;
 let 
-  Enforcelowlim_1_1 = if Lo_lim_1_1 >= SigIn_1_1 then Lo_lim_1_1 else SigIn_1_1;
-  Enforceuplim_1_1 = if Enforcelowlim_1_1 <= up_lim_1_1 then Enforcelowlim_1_1 else up_lim_1_1;
+  Enforcelowlim_1_1 =
+    if Lo_lim_1_1 >= SigIn_1_1 then Lo_lim_1_1 else SigIn_1_1;
+  Enforceuplim_1_1 =
+    if Enforcelowlim_1_1 <= up_lim_1_1 then Enforcelowlim_1_1 else up_lim_1_1;
   Out1_1_1 = Enforceuplim_1_1;
 tel
 
 node LONGITUDINAL_CONTROLLER_AltitudeControl_VariableRateLimit (ratelim_1_1 :
 real; input_1_1 : real; ICtrig_1_1 : bool; IC_1_1 : real)
 returns (output_1_1 : real) ;
-
-(* This holds. *)
-(*
---@var clamped = clamp(
-  -ratelim_1_1, 20.0 * (input_1_1 - output_1_1), ratelim_1_1
-) ;
-
---require ratelim_1_1 = 3.2 ;
---require ICtrig_1_1 => input_1_1 = 0.0 ;
-
---mode no_ic_trig ;
---require not ICtrig_1_1 ;
-
---mode ic_trig_init ;
---require ICtrig_1_1 and (true -> not pre ICtrig_1_1) ;
-
---mode ic_trig ;
---require false -> ICtrig_1_1 and pre ICtrig_1_1 ;
---ensure true -> duration(true) >= 3 => output_1_1 <=  3.2 + pre IC_1_1 ;
---ensure true -> duration(true) >= 3 => output_1_1 >= -3.2 + pre IC_1_1 ;
---ensure true -> (
-  (duration(true) = 2 and pre ICtrig_1_1) => output_1_1 = 2.0 * pre IC_1_1
-) ;
-*)
-
 var
   init : bool;
   Gain_1_1 : real;
@@ -1115,28 +883,30 @@ var
   arg1, arg2, arg3 : real;
 let 
   init = true fby false;
-  Gain_1_1 = 20.0000000000 * Sum2_1_1;
-  Gain1_1_1 = -1.0000000000 * ratelim_1_1;
+  Gain_1_1 = 20.0 * Sum2_1_1;
+  Gain1_1_1 = -1.0 * ratelim_1_1;
   Sum2_1_1 = input_1_1 - integrator_reset_delay_sharp_2_1_1;
-  VariableLimitSaturation_1_1 = LONGITUDINAL_CONTROLLER_AltitudeControl_VariableRateLimit_VariableLimitSaturation(ratelim_1_1, Gain_1_1, Gain1_1_1);
+  VariableLimitSaturation_1_1 =
+    LONGITUDINAL_CONTROLLER_AltitudeControl_VariableRateLimit_VariableLimitSaturation(
+      ratelim_1_1, Gain_1_1, Gain1_1_1);
   integrator_reset_Add_1_1 = integrator_reset_Product1_1_1 + integrator_reset_Product2_1_1;
-  integrator_reset_Constant_1_1 = 0.0000000000;
-  integrator_reset_Gain1Reset_1_1 = 1.0000000000 * VariableLimitSaturation_1_1;
-  -- integrator_reset_Product_1_1 = IC_1_1 * integrator_reset_delay_sharp_1_1_1;
+  integrator_reset_Constant_1_1 = 0.0;
+  integrator_reset_Gain1Reset_1_1 = 1.0 * VariableLimitSaturation_1_1;
   integrator_reset_Product_1_1 = if init then IC_1_1 else 0.0 ;
-  -- integrator_reset_Product1_1_1 = integrator_reset_Sum3_1_1 * (if integrator_reset_ne0_1_1 then 1.0 else 0.0);
   integrator_reset_Product1_1_1 =
     if integrator_reset_ne0_1_1 then integrator_reset_Sum3_1_1 else 0.0 ;
-  -- integrator_reset_Product2_1_1 = (if integrator_reset_eq0_1_1 then 1.0 else 0.0) * integrator_reset_Sum3_1_1 * (if integrator_reset_ne1_1_1 then 1.0 else 0.0);
   integrator_reset_Product2_1_1 =
     if integrator_reset_eq0_1_1 and integrator_reset_ne1_1_1
     then integrator_reset_Sum3_1_1 else 0.0 ;
-  integrator_reset_Sum1_1_1 = integrator_reset_Gain1Reset_1_1 + integrator_reset_Sum2Reset_1_1;
-  integrator_reset_Sum2Reset_1_1 = integrator_reset_Sum4_1_1 + integrator_reset_Product_1_1;
-  integrator_reset_Sum3_1_1 =  - integrator_reset_delay_sharp_2_1_1 + IC_1_1;
-  integrator_reset_Sum4_1_1 = integrator_reset_delay_sharp_2_1_1 + integrator_reset_Add_1_1;
-  integrator_reset_delay_sharp_1_1_1 = 1.0000000000 fby integrator_reset_Constant_1_1;
-  integrator_reset_delay_sharp_2_1_1 = 0.0000000000 fby integrator_reset_Sum1_1_1;
+  integrator_reset_Sum1_1_1 =
+    integrator_reset_Gain1Reset_1_1 + integrator_reset_Sum2Reset_1_1;
+  integrator_reset_Sum2Reset_1_1 =
+    integrator_reset_Sum4_1_1 + integrator_reset_Product_1_1;
+  integrator_reset_Sum3_1_1 = - integrator_reset_delay_sharp_2_1_1 + IC_1_1;
+  integrator_reset_Sum4_1_1 =
+    integrator_reset_delay_sharp_2_1_1 + integrator_reset_Add_1_1;
+  integrator_reset_delay_sharp_1_1_1 = 1.0 fby integrator_reset_Constant_1_1;
+  integrator_reset_delay_sharp_2_1_1 = 0.0 fby integrator_reset_Sum1_1_1;
   integrator_reset_delay_sharp_3_1_1 = false fby ICtrig_1_1;
   arg1 = if ICtrig_1_1 then 1.0 else 0.0;
   integrator_reset_eq0_1_1 = (arg1 = integrator_reset_zero_1_1);
@@ -1144,7 +914,7 @@ let
   integrator_reset_ne0_1_1 = not(arg2 = integrator_reset_zero_1_1);
   arg3 = if integrator_reset_delay_sharp_3_1_1 then 1.0 else 0.0;
   integrator_reset_ne1_1_1 = not(arg3 = integrator_reset_zero_1_1);
-  integrator_reset_zero_1_1 = 0.0000000000;
+  integrator_reset_zero_1_1 = 0.0;
   output_1_1 = integrator_reset_delay_sharp_2_1_1;
 tel
 
@@ -1156,17 +926,19 @@ var
   Enforcelowlim_1_1 : real;
   Enforceuplim_1_1 : real;
 let 
-  Constant1_1_1 = 0.0001000000;
-  Constant2_1_1 = 1000.0000000000;
-  Enforcelowlim_1_1 = if Constant1_1_1 >= SigIn_1_1 then Constant1_1_1 else SigIn_1_1;
-  Enforceuplim_1_1 = if Enforcelowlim_1_1 <= Constant2_1_1 then Enforcelowlim_1_1 else Constant2_1_1;
+  Constant1_1_1 = 0.0001;
+  Constant2_1_1 = 1000.0;
+  Enforcelowlim_1_1 =
+    if Constant1_1_1 >= SigIn_1_1 then Constant1_1_1 else SigIn_1_1;
+  Enforceuplim_1_1 =
+    if Enforcelowlim_1_1 <= Constant2_1_1
+    then Enforcelowlim_1_1 else Constant2_1_1;
   Out1_1_1 = Enforceuplim_1_1;
 tel
 
-node LONGITUDINAL_CONTROLLER_AltitudeControl (engage_1_1 : bool; AltCmd_1_1 :
-real; Altitude_1_1 : real; gskts_1_1 : real; hdot_1_1 : real)
+node LONGITUDINAL_CONTROLLER_AltitudeControl (
+  engage_1_1 : bool; AltCmd_1_1, Altitude_1_1, gskts_1_1, hdot_1_1 : real)
 returns (altgamcmd_1_1 : real) ;
-
 var
   Abs_1_1 : real;
   Constant1_1_1 : real;
@@ -1189,34 +961,34 @@ var
   arg, Divide_1_1_a, Divide_1_1_b : real;
 let 
   Abs_1_1 = if hdot_1_1 >= 0.0 then hdot_1_1 else -hdot_1_1;
-  Constant1_1_1 = 0.0000000000;
-  Constant3_1_1 = 10.0000000000;
-  Constant4_1_1 = 3.2000000000;
-  -- Divide_1_1 = VariableRateLimit_1_1 / Saturation1_1_1;
-  -- Divide_1_1 = temporal_divid(VariableRateLimit_1_1, Saturation1_1_1);
-  -- Divide_1_1 = divid_fun(VariableRateLimit_1_1, Saturation1_1_1);
+  Constant1_1_1 = 0.0;
+  Constant3_1_1 = 10.0;
+  Constant4_1_1 = 3.2;
   arg = if gskts_1_1 < 100.0 then 200.0 else Saturation1_1_1;
   Divide_1_1_a = divid_bounded_num(VariableRateLimit_1_1, arg, 168.78, 1000.0);
   Divide_1_1_b = divid_bounded_num(VariableRateLimit_1_1,
                                    Saturation1_1_1, 0.0001, 1000.0);
   Divide_1_1 = if gskts_1_1 >= 100.0 then Divide_1_1_a else Divide_1_1_b;
-  Kh_1_1 = 0.0800000000 * Sum_1_1;
+  Kh_1_1 = 0.08 * Sum_1_1;
   LogicalOperator_1_1 = not engage_1_1;
   Mux_1_1 = AltCmd_1_1 ;
   Mux_1_2 = Altitude_1_1 ;
   Mux1_1_1 = VariableLimitSaturation_1_1 ;
   Mux1_1_2 = VariableRateLimit_1_1 ;
-  Saturation1_1_1 = LONGITUDINAL_CONTROLLER_AltitudeControl_Saturation1(kts2fps_1_1);
+  Saturation1_1_1 =
+    LONGITUDINAL_CONTROLLER_AltitudeControl_Saturation1(kts2fps_1_1);
   Sum_1_1 = AltCmd_1_1 - Altitude_1_1;
   Sum3_1_1 = Abs_1_1 + Constant3_1_1;
-  (* |===| Bug, >= should be >. *)
-  -- Switch_1_1 = if (if engage_1_1 then 1.0 else 0.0) >= 0.0000000000 then Kh_1_1 else Constant1_1_1;
   Switch_1_1 = if engage_1_1 then Kh_1_1 else Constant1_1_1 ;
-  VariableRateLimit_1_1 = LONGITUDINAL_CONTROLLER_AltitudeControl_VariableRateLimit(Constant4_1_1, VariableLimitSaturation_1_1, LogicalOperator_1_1, hdot_1_1);
-  VariableLimitSaturation_1_1 = LONGITUDINAL_CONTROLLER_AltitudeControl_VariableLimitSaturation(Sum3_1_1, Switch_1_1, k_1_1);
-  k_1_1 = -1.0000000000 * Sum3_1_1;
-  kts2fps_1_1 = 1.6878000000 * gskts_1_1;
-  r2d_1_1 = 57.2958000000 * Divide_1_1;
+  VariableRateLimit_1_1 =
+    LONGITUDINAL_CONTROLLER_AltitudeControl_VariableRateLimit(
+      Constant4_1_1, VariableLimitSaturation_1_1, LogicalOperator_1_1, hdot_1_1);
+  VariableLimitSaturation_1_1 =
+    LONGITUDINAL_CONTROLLER_AltitudeControl_VariableLimitSaturation(
+      Sum3_1_1, Switch_1_1, k_1_1);
+  k_1_1 = -1.0 * Sum3_1_1;
+  kts2fps_1_1 = 1.6878 * gskts_1_1;
+  r2d_1_1 = 57.2958 * Divide_1_1;
   altgamcmd_1_1 = r2d_1_1;
 tel
 
@@ -1238,20 +1010,29 @@ var
   k2_1_1 : real;
   k5_1_1 : real;
 let 
-  AltitudeControl_1_1 = LONGITUDINAL_CONTROLLER_AltitudeControl(AltEng_1_1, AltCmd_1_1, Alt_1_1, GsKts_1_1, hdot_1_1);
-  EngageORzero_1_1 = LONGITUDINAL_CONTROLLER_EngageORzero(LogicalOperator_1_1, PitchInnerLoop_1_1);
-  FPAControl_1_1 = LONGITUDINAL_CONTROLLER_FPAControl(FpaEng_1_1, Sum7_1_1, Gamma_1_1, thetaDeg_1_1, VT_1_1);
+  AltitudeControl_1_1 = LONGITUDINAL_CONTROLLER_AltitudeControl(
+    AltEng_1_1, AltCmd_1_1, Alt_1_1, GsKts_1_1, hdot_1_1);
+  EngageORzero_1_1 = LONGITUDINAL_CONTROLLER_EngageORzero(
+    LogicalOperator_1_1, PitchInnerLoop_1_1);
+  FPAControl_1_1 = LONGITUDINAL_CONTROLLER_FPAControl(
+    FpaEng_1_1, Sum7_1_1, Gamma_1_1, thetaDeg_1_1, VT_1_1);
   LogicalOperator_1_1 = AltEng_1_1 or FpaEng_1_1;
-  ManualOverride_1_1 = LONGITUDINAL_CONTROLLER_ManualOverride(ElevStick_1_1, EngageORzero_1_1);
-  PitchInnerLoop_1_1 = LONGITUDINAL_CONTROLLER_PitchInnerLoop(k5_1_1, thetaDeg_1_1, qDeg_1_1, CAS_1_1);
+  ManualOverride_1_1 =
+    LONGITUDINAL_CONTROLLER_ManualOverride(ElevStick_1_1, EngageORzero_1_1);
+  PitchInnerLoop_1_1 =
+    LONGITUDINAL_CONTROLLER_PitchInnerLoop(k5_1_1, thetaDeg_1_1,
+                                           qDeg_1_1, CAS_1_1);
   Sum7_1_1 = FPACmd_1_1 + k2_1_1;
   act_cmd_ge_cmd = Sum7_1_1 >= FPACmd_1_1 ;
   alt_out_loc_pos = k2_1_1 >= 0.0 ;
-  k2_1_1 = 1.0000000000 * AltitudeControl_1_1;
-  k5_1_1 = 1.0000000000 * FPAControl_1_1;
+  k2_1_1 = 1.0 * AltitudeControl_1_1;
+  k5_1_1 = 1.0 * FPAControl_1_1;
   ElevCmd_1_1 = ManualOverride_1_1;
-  pitch_cmd_out = if act_cmd_ge_cmd or not act_cmd_ge_cmd then
-    if alt_out_loc_pos or not alt_out_loc_pos then FPAControl_1_1 else 0.0
+  pitch_cmd_out =
+    if act_cmd_ge_cmd or not act_cmd_ge_cmd
+    then if alt_out_loc_pos or not alt_out_loc_pos
+         then FPAControl_1_1
+         else 0.0
     else 0.0 ;
   alt_cmd_out = AltitudeControl_1_1 ;
 tel
@@ -1282,60 +1063,16 @@ node Mode_plus_Longitudinal (
   cas_cmd_out, alt_cmd_out, pitch_cmd_out, elev_cmd_out : real
 ) ;
 
-(*@contract
-  import logic_longitudinal (
-    head_mode <> 0.0, alt_mode <> 0.0, fpa_mode <> 0.0,
-    alt_in, alt_cmd_in, hdot_in,
-    fpa_in, fpa_cmd_in,
-    pitch_in,
-    speed_in,
-    gskts_in,
-    cas_in,
-    elev_stick_in,
-    ail_stick_in
-  ) returns (
-    head_eng_out, alt_eng_out, fpa_eng_out,
-    alt_cmd_out, pitch_cmd_out, elev_cmd_out
-  ) ;
-*)
-
 let 
-  (
-    head_eng_out,
-    alt_eng_out,
-    fpa_eng_out,
-    at_eng_out,
-    cas_cmd_out
-  ) = MODE_LOGIC(
-    head_mode,
-    ail_stick_in,
-    elev_stick_in,
-    alt_mode,
-    fpa_mode,
-    at_mode,
-    alt_cmd_in,
-    alt_in,
-    cas_in,
-    cas_cmd
-  );
+  (head_eng_out, alt_eng_out, fpa_eng_out, at_eng_out, cas_cmd_out) =
+    MODE_LOGIC(head_mode, ail_stick_in, elev_stick_in, alt_mode, fpa_mode,
+               at_mode, alt_cmd_in, alt_in, cas_in, cas_cmd);
 
   assert (if fall(alt_eng_out) then not fpa_eng_out else true) ;
 
-  (alt_cmd_out, pitch_cmd_out, elev_cmd_out) = LONGITUDINAL_CONTROLLER(
-    fpa_cmd_in,
-    alt_eng_out,
-    fpa_eng_out,
-    alt_cmd_in,
-    alt_in,
-    pitch_in,
-    qbdegf_1_1,
-    gskts_in,
-    hdot_in,
-    speed_in,
-    fpa_in,
-    cas_in,
-    elev_stick_in
-  );
-
+  (alt_cmd_out, pitch_cmd_out, elev_cmd_out) =
+    LONGITUDINAL_CONTROLLER(fpa_cmd_in, alt_eng_out, fpa_eng_out, alt_cmd_in,
+                            alt_in, pitch_in, qbdegf_1_1, gskts_in, hdot_in,
+                            speed_in, fpa_in, cas_in, elev_stick_in);
 tel
 
