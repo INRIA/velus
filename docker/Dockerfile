@@ -1,7 +1,7 @@
 FROM debian:testing
 
 RUN apt-get update && \
-    apt-get install -y sudo opam m4 libgtk2.0-dev emacs proofgeneral
+    apt-get install -y sudo opam m4 
 
 # Add a default omnipotent user
 RUN useradd -m developer && \
@@ -16,7 +16,7 @@ ENV HOME /home/developer
 RUN opam init -a --compiler=4.02.3 && \
     eval `opam config env` && \
     opam repo add coq-released https://coq.inria.fr/opam/released && \
-    opam install -j4 coq.8.4.6 menhir.20170101 coqide.8.4.6
+    opam install -j4 coq.8.4.6 menhir.20170101
 
 # Add instructions on Bash startup
 COPY motd.sh $HOME/
