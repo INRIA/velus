@@ -3,19 +3,7 @@
 This development implements and prove the correctness of a certified
 Lustre compiler backend.
 
-## Execution from Docker
-
-We provide a pre-configured development environment in a Docker
-container:
-
-    $ cd $VELUS_DIR
-    $ sh run.sh
-
-It will start a container, compile the development and give you access
-to a Bash shell (equipped with emacs/proofgeneral & CoqIDE).
-
 ## Using the compiler
-
 
 To run the compiler:
 
@@ -29,7 +17,36 @@ In particular, to compile to assembly and dump the intermediary Clight code:
 
     $ $VELUS_DIR/velus -dclight $VELUS_DIR/tests/count.lus
 
+
+## Execution from Docker
+
+Note: this is the easiest method for compiling and running the compiler.
+
+
+We provide a pre-configured compilation environment in a Docker
+container:
+
+    $ cd $VELUS_DIR
+    $ sh run.sh
+
+This will start a container, compile the development and give you
+access to a Bash shell from which you will be able to run the
+compiler.
+
+## Execution from Docker
+
+Note: this is the easiest method for editing, compiling and running
+the compiler.
+
+
+We provide a Virtualbox image including our development as well as
+Emacs/proofgeneral and CoqIDE editors.
+
 ## Local installation
+
+Note: this is the most efficient method for editing, compiling and
+running the compiler.
+
 
 It also possible to build Velus locally, without resorting to a Docker
 image. Velus has been implemented in Coq.8.4.6. It includes a modified
