@@ -151,4 +151,4 @@ the left, in italics) to their incarnation in the formal development
    * [State representation](./ObcToClight/MoreSeparation.v)
      - _sepall_: `sepall`
    * *match_states*: `staterep`
- - [Section 4.3 "Proof of generation"](ObcToClight/Correctness.v): Lemma `reacts'`
+ - [Section 4.3 "Proof of generation"](VelusCorrectness.v): `Lemma behavior_asm`
