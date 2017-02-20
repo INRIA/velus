@@ -63,18 +63,6 @@ Qed.
 Axiom pos_to_str_valid:
   forall x, ~ In_str "$" (pos_to_str x).
 
-
-Lemma sep_not_in:
-  forall x pre1 post1 s2,
-    ~ In_str x s2 ->
-    (pre1 ++ (String x post1) <> s2)%string.
-Proof.
-  intros ** Notin E.
-  apply Notin.
-  rewrite <-E, In_str_app.
-  right. apply In_str_eq.
-Qed.
-  
 Lemma append_sep_injectivity:
   forall x pre1 pre2 post1 post2,
     ~ In_str x pre1 ->
@@ -208,7 +196,66 @@ Proof.
 Qed.
 
 Definition glob_id (id: ident): ident :=
-  pos_of_str (String "_" (pos_to_str id)).
+  pos_of_str ((pos_to_str id) ++ "$")%string.
+
+Lemma last_det:
+  forall s s' a b,
+    (s ++ String a EmptyString = s' ++ String b EmptyString)%string ->
+    a = b.
+Proof.
+  induction s, s'; simpl; intros.
+  - inv H; auto.
+  - inv H.
+    destruct s'; simpl in *; discriminate.
+  - inv H.
+    destruct s; simpl in *; discriminate.
+  - inv H.
+    eapply IHs; eauto.
+Qed.
+
+Lemma main_not_glob:
+  forall x, glob_id x <> main_id.
+Proof.
+  unfold glob_id, main_id.
+  intros * H.
+  apply pos_of_str_injective in H.
+  change "main"%string with ("mai" ++ "n")%string in H.
+  apply last_det in H.
+  inv H.
+Qed.
+
+Lemma sync_not_glob:
+  forall x, glob_id x <> sync_id.
+Proof.
+  unfold glob_id, sync_id.
+  intros * H.
+  apply pos_of_str_injective in H.
+  change "sync"%string with ("syn" ++ "c")%string in H.
+  apply last_det in H.
+  inv H.
+Qed.
+
+Lemma main_sync_not_glob:
+  forall x, glob_id x <> main_sync_id.
+Proof.
+  unfold glob_id, main_sync_id.
+  intros * H.
+  apply pos_of_str_injective in H.
+  change "main_sync"%string with ("main_syn" ++ "c")%string in H.
+  apply last_det in H.
+  inv H.
+Qed.
+
+Lemma self_not_glob:
+  forall x, glob_id x <> self.
+Proof.
+  unfold glob_id, self.
+  intros * H.
+  apply pos_of_str_injective in H.
+  change "self"%string with ("sel" ++ "f")%string in H.
+  apply last_det in H.
+  inv H.
+Qed.
 
 Lemma glob_id_injective:
   forall x x',
@@ -218,7 +265,8 @@ Proof.
   unfold glob_id.
   intros ** H.
   apply pos_of_str_injective in H.
-  inv H.
+  apply append_sep_injectivity in H; destruct H;
+    try apply pos_to_str_valid.
   now apply pos_to_str_injective.
 Qed.
 
@@ -229,10 +277,9 @@ Proof.
   inversion H as [? ? E].
   unfold prefix, glob_id in E.
   apply pos_of_str_injective in E.
-  apply (sep_not_in "$" (pos_to_str pref) (pos_to_str id) (String "_" (pos_to_str x))); auto.
-  rewrite not_in_str_cons; split.
-  - inversion 1.
-  - apply pos_to_str_valid.
+  apply append_sep_injectivity in E; try apply pos_to_str_valid; auto.
+  destruct E as [? E]; contradict E.
+  apply pos_to_str_not_empty. 
 Qed.
 
 Lemma self_not_prefixed: ~ prefixed self.

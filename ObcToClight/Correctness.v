@@ -578,9 +578,14 @@ Section PRESERVATION.
         subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
         contradict Hin; apply glob_id_not_prefixed.
       - destruct do_sync; simpl in Hin.
-        + destruct Hin as [Hin|[Hin|[Hin|]]];
-            try (apply pos_of_str_injective in Hin; now inv Hin); try contradiction.
-        + destruct Hin as [Hin|]; try (apply pos_of_str_injective in Hin; now inv Hin); try contradiction.
+        + destruct Hin as [Hin|[Hin|[Hin|]]]; try contradiction;
+            try (apply pos_of_str_injective in Hin;
+                 unfold self in Hin; rewrite pos_to_str_equiv in Hin;
+                 inv Hin).
+        + destruct Hin as [Hin|]; try contradiction.
+          apply pos_of_str_injective in Hin;
+            unfold self in Hin; rewrite pos_to_str_equiv in Hin;
+              inv Hin.
     }
     assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m) ++
                    map (fun xt => glob_id (fst xt)) (m_in m) ++
@@ -619,21 +624,24 @@ Section PRESERVATION.
         repeat apply NoDup_app'; repeat apply Forall_not_In_app;
           repeat apply Forall_not_In_singleton;
           ((repeat constructor; auto) 
-           || (intros [E|]; try contradiction;  
-              apply pos_of_str_injective in E; inv E) 
+           || (intros [E|]; try contradiction;
+              apply pos_of_str_injective in E; inv E)
            || (intro Hin; subst funs; apply prefixed_funs in Hin; 
               inversion Hin as [? ? E]; 
               unfold prefix_fun, fun_id in E; 
               apply pos_of_str_injective in E; rewrite pos_to_str_equiv in E; 
               inv E) 
-           || (match goal with 
-                |- ~ In _ (map (fun xt => glob_id (fst xt)) ?xs) => 
+           || (match goal with
+                |- ~ In _ (map (fun xt => glob_id (fst xt)) ?xs) =>
                 clear Notin_self Hm_out Hm_in Hin_not_funs Hout_not_funs Hout_not_in;
-                induction xs as [|(x, t)]; simpl; auto; 
-                intros [Hin|Hin]; try contradiction; 
-                apply pos_of_str_injective in Hin; inv Hin 
-              end) 
-           || auto). 
+                induction xs as [|(x, t)]; simpl; auto;
+                intros [Hin|Hin]; try contradiction
+              end)
+           || auto);
+          try (eapply main_not_glob; now eauto);
+          try (eapply sync_not_glob; now eauto);
+          try (eapply main_sync_not_glob; now eauto).
+    
     }
     repeat constructor; auto.
   Qed.
@@ -4311,8 +4319,7 @@ Section PRESERVATION.
               rewrite <-not_Some_is_None.
               intros (b, t') Hget.
               subst e1.
-              assert (glob_id x <> self)
-                by (intro E; unfold glob_id, self in E; apply pos_of_str_injective in E; discriminate).
+              assert (glob_id x <> self) by (eapply self_not_glob; eauto).
               destruct m_step.(m_out).
               * rewrite PTree.gempty in Hget; auto; try discriminate.
               * rewrite PTree.gso, PTree.gempty in Hget; auto; try discriminate.
