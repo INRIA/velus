@@ -14,6 +14,11 @@
    project (CompCert/cparser/Parser.vy), and of Erwan Jahier, Pascal Raymond,
    and Nicolas Halbwachs in the Lustre v6 reference manual (2016). */
 
+/* TODO: tweak the priority of type casting, (1 + 2 : uint8)
+         should give ((1 + 2) : uint8) ? */
+/* TODO: tweak the priority of land? (x land y = 0) should give
+ 	  ((x land y) = 0) and not (x land (y = 0)) */
+
 %{
 Require Velus.Lustre.Parser.LustreAst.
 
