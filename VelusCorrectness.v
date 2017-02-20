@@ -468,6 +468,14 @@ Proof.
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
+(* The ultimate lemma states that if the dataflow program G is well-clocked
+   and well-typed, for input and output streams that respect the
+   typing interface of the main node and are related by its dataflow
+   semantics, then if compilation suceeds, the behavior of the resulting
+   assembly code is an infinite sequence of volatile loads and
+   stores that corresponds with the input and output streams. That is, if
+   the input stream values are successively loaded by the assembler program
+   it will successively write the corresponding output values. *)
 Theorem behavior_asm:
   forall G P main ins outs,
     wc_global G ->
