@@ -1,0 +1,799 @@
+(* Watch example from the Lustre v4 distribution. 1999 *)
+(* 2016 Bourke: bit-blast C functions *)
+
+-- This is  a program implementing a digital watch, with alarm and stopwatch, 
+-- as specified in the document "ESTEREL Programming Examples: Programming a 
+-- digital watch in ESTEREL V2.1" by G. Berry.  Here is the LUSTRE program. 
+-- The external functions, written in C, have been mainly borrowed from the 
+-- ESTEREL implementation.  They will be given later on.
+
+
+-- TYPES
+
+(*
+type
+   WATCH_TIME_TYPE = uint64
+
+      upper word:
+       msb
+      |76543210|76543210|76543210|76543210|
+                  month  dayinweek     day
+                                         
+      lower word:
+                                       lsb
+      |76543210|76543210|76543210|76543210|
+       24-mode    hours   minutes  seconds
+
+   ALARM_TIME_TYPE = uint32
+      represent the time as an integer
+       msb                             lsb
+      |76543210|76543210|76543210|76543210|
+                mode12h    hours   minutes 
+
+   STOPWATCH_TIME_TYPE = uint32
+
+      represent the time as an integer
+       msb                             lsb
+      |76543210|76543210|76543210|76543210|
+         hours   minutes  seconds  hsecs
+
+   WATCH_TIME_POSITION = uint8
+      0 = seconds
+      1 = hours
+      2 = 10 minutes
+      3 = minutes
+      4 = day
+      5 = day in week
+      6 = month
+
+   ALARM_TIME_POSITION = uint8
+      0 = hours
+      1 = 10 minutes
+      2 = minutes
+
+   DISPLAY_POSITION,
+
+   MAIN_DISPLAY_TYPE = uint64
+   MINI_DISPLAY_TYPE = uint64
+
+   STATUS_TYPE = uint8,
+    0x1 = alarm_set
+    0x2 = chime_set
+    0x4 = stopwatch_running
+    0x8 = stopwatch_lapping
+
+   DISPLAY_TYPE = uint64
+
+   LABELS_TYPE = uint64
+
+       msb                             lsb
+      |76543210|76543210|76543210|76543210|
+       ul_lab    ll_lab   ur_lab   lr_lab
+
+   string
+      represent 3-byte (+NULL) strings as integers
+*)
+
+-- EXTERNAL CONSTANTS 
+
+(*
+const
+   INITIAL_WATCH_TIME : WATCH_TIME_TYPE; = 0
+   INITIAL_STOPWATCH_TIME : STOPWATCH_TIME_TYPE; = 0
+   INITIAL_ALARM_TIME: ALARM_TIME_TYPE; = 0
+   NULL_POSITION: DISPLAY_POSITION; = -1
+   INITIAL_WATCH_POSITION : WATCH_TIME_POSITION; = 0
+   INITIAL_ALARM_POSITION : ALARM_TIME_POSITION; = 0
+   ALARM_DURATION : int; = 30
+   stringST : string; -- the string "ST" = 0x53840000
+   stringAL : string; -- the string "AL" = 0x65760000
+*)
+
+-- EXTERNAL FUNCTIONS
+
+node COMPARE_WATCH_ALARM_TIME (watch_time: WATCH_TIME_TYPE;
+                               alarm_time: ALARM_TIME_TYPE)
+returns (result: bool);
+-- returns true iff "watch_time" and "alarm_time" are equal
+let
+  result = ((watch_time : uint32) land 0x00ffff00)
+            = (alarm_time land 0x00ffff00);
+tel
+
+node INCREMENT_WATCH_TIME (time: WATCH_TIME_TYPE) 
+returns (newtime: WATCH_TIME_TYPE);
+-- returns "new_time" = "time" + 1 second
+var seconds, minutes, hours, day, day_in_week,
+    month_inc, month, nday : uint;
+let
+  seconds = ((time : uint) land 0xff) + 1;
+  minutes = (((time : uint) lsr  8) land 0xff) + (seconds = 60);
+  hours   = (((time : uint) lsr 16) land 0xff) + (minutes = 60);
+
+  day         = (((time lsr 32) : uint) land 0xff) + (hours = 24);
+  day_in_week = (((time lsr 40) : uint) land 0xff) + (hours = 24);
+
+  month_inc = if day < 29 then 0U
+              else if month = 2 then 1U
+              else if day < 30 then 0U
+              else if (month = 4 or month = 6 or
+                       month = 9 or month = 11) then 1U
+              else if day < 31 then 0U
+              else 1U;
+  month   = (((time lsr 48) : uint) land 0xff) + month_inc;
+
+  nday = if month_inc > 0 and month = 1 then 1 else day;
+
+  ntime =     ((seconds mod 60)    : uint64)
+          lor (((minutes mod 60)   : uint64)  lsl 8)
+          lor (((hours mod 24      : uint64)) lsl 16)
+          lor ((nday               : uint64)  lsl 32)
+          lor (((day_in_week mod 7): uint64)  lsl 40)
+          lor (((month mod 12)     : uint64)  lsl 48);
+tel
+
+node TOGGLE_24H_IN_WATCH_MODE (time: WATCH_TIME_TYPE) 
+returns (newtime: WATCH_TIME_TYPE);
+-- changes the 24H/AM-PM status of "time"
+let
+  newtime = time lxor (1LLU lsl 56);
+tel
+
+node WATCH_TIME_POSITION_MASK (position: WATCH_TIME_POSITION)
+returns (mask: uint64);
+let
+  mask =      if position = 0 then 0xffffffffffffff00 -- seconds
+         else if position = 1 then 0xffffffffff00ffff -- hours
+         else if position = 2 then 0xffffffffffff00ff -- 10 minutes
+         else if position = 3 then 0xffffffffffff00ff -- minutes
+         else if position = 4 then 0xffffff00ffffffff -- day
+         else if position = 5 then 0xffff00ffffffffff -- day of week
+         else if position = 6 then 0xff00ffffffffffff -- month
+                              else 0xffffffffffffffff;
+tel
+
+node INCREMENT_WATCH_TIME_IN_SET_MODE 
+        (time: WATCH_TIME_TYPE; position: WATCH_TIME_POSITION) 
+returns (newtime: WATCH_TIME_TYPE);
+-- returns "new_time" = "time" + 1 second, with particular restrictions due
+-- to the set mode
+var ntime, p_minutes, month_inc, nday : uint;
+let
+  seconds = ((time : uint) land 0xff) + 1;
+  p_minutes = ((time : uint) lsr  8) land 0xff;
+  minutes = if position = 3 -- in set minutes mode
+            then p_minutes
+            else if position = 2 -- set 10 minutes mode
+            then (p_minutes / 10) + ((p_minutes + (seconds = 60)) mod 10)
+            else p_minutes + (seconds = 60);
+
+  hours   = (((time : uint) lsr 16) land 0xff)
+            + (position > 3 and minutes = 60);
+
+  day         = (((time lsr 32) : uint) land 0xff)
+                + (position > 5 and hours = 24);
+  day_in_week = (((time lsr 40) : uint) land 0xff)
+                + (position > 5 and hours = 24);
+
+  month_inc = if position > 6 or day < 29 then 0U
+              else if month = 2 then 1U
+              else if day < 30 then 0U
+              else if (month = 4 or month = 6 or
+                       month = 9 or month = 11) then 1U
+              else if day < 31 then 0U
+              else 1U;
+  month   = (((time lsr 48) : uint) land 0xff) + month_inc;
+
+  nday = if month_inc > 0 and month = 1 then 1 else day;
+
+  ntime =     ((seconds mod 60)    : uint64)
+          lor (((minutes mod 60)   : uint64)  lsl 8)
+          lor (((hours mod 24      : uint64)) lsl 16)
+          lor ((nday               : uint64)  lsl 32)
+          lor (((day_in_week mod 7): uint64)  lsl 40)
+          lor (((month mod 12)     : uint64)  lsl 48);
+tel
+
+node MONTH_LENGTH(time: WATCH_TIME_TYPE)
+returns (month_length: uint);
+var month : uint;
+let
+  month = (time lsr 48) land 0xff;
+  month_length =
+    if month = 1 or month = 3 or month = 5 or month = 7
+                 or month = 8 or month = 10 or month = 12
+    then 31
+    else if month = 4 or month = 6 or month = 9 or month = 11
+    then 30
+    else 29;
+tel
+
+node SET_WATCH_TIME(time: WATCH_TIME_TYPE; position: WATCH_TIME_POSITION)
+returns (new_time: WATCH_TIME_TYPE);
+-- increment the field pointed by "position" in "time"
+var mon_len : uint; mask, incr : uint64;
+let
+  mon_len = MONTH_LENGTH(time);
+  new_time = (time lor mask) lor incr;
+  mask = WATCH_TIME_POSITION_MASK(position);
+  incr =
+    if position = 0 -- seconds
+         then 0 (* reset seconds *)
+    else if position = 1 -- hours
+         then (((((time lsr 16) land 0xff) + 1) mod 24) lsl 16)
+    else if position = 2 -- 10 minutes
+         then (((((time lsr 8) land 0xff) + 10) mod 60) lsl 8)
+    else if position = 3 -- minutes
+         then ((((((time lsr 8) land 0xff)) / 10) +
+               ((((time lsr 8) land 0xff) + 1) mod 10)) lsl 8)
+    else if position = 4 -- day
+         then (((((time lsr 32) land 0xff) + 1) mod mon_len) lsl 32)
+    else if position = 5 -- day in week
+         then (((((time lsr 40) land 0xff) + 1) mod 7) lsl 40)
+    else if position = 6 -- month
+         then (((((time lsr 48) land 0xff) + 1) mod 12) lsl 48)
+    else time;
+tel
+
+node CONFIRM_TIME (time: WATCH_TIME_TYPE) 
+returns (new_time: WATCH_TIME_TYPE);
+-- after a manual setting of the watch time, checks it for inconsistencies
+-- of the calendar
+var day, month, month_length, n_month : uint;
+let
+  day = ((time lsr 32) : uint) land 0xff;
+  month = ((time lsr 48) : uint) land 0xff;
+  month_length = MONTH_LENGTH(time);
+  n_month = if day > month_length then (month + 1) mod 12 else month;
+
+  new_time = (time land 0xff00ff00ffffffff)
+             lor ((n_month : uint64) lsl 48)
+             lor (((day mod month_length) : uint64) lsl 32);
+tel
+
+node NEXT_WATCH_TIME_POSITION
+        (position: WATCH_TIME_POSITION) 
+returns (new_position: WATCH_TIME_POSITION);
+-- returns the next position after "position"
+let
+  new_position = (position + 1) mod 7;
+tel
+
+node INCREMENT_STOPWATCH_TIME (time: STOPWATCH_TIME_TYPE) 
+returns (newtime: STOPWATCH_TIME_TYPE);
+-- returns "new_time" = "time" + 1 time unit (1/100 sec.)
+var hsecs, seconds, minutes, hours : uint;
+let
+  hsecs = ((time land 0xff) + 10);
+  seconds = ((time lsr  8) land 0xff) + (hsecs >= 100);
+  minutes = ((time lsr 16) land 0xff) + (seconds >= 60);
+  hours   = ((time lsr 24) land 0xff) + (minutes >= 60);
+  newtime = (hsecs mod 100)
+            lor ((seconds mod 60) lsl  8)
+            lor ((minutes mod 60) lsl 16)
+            lor ((hours   mod 24) lsl 24);
+tel
+
+node TOGGLE_24H_IN_ALARM_MODE (time: ALARM_TIME_TYPE) 
+returns (newtime: ALARM_TIME_TYPE);
+-- changes the 24H/AM-PM status of "time"
+let
+  newtime = time lxor (1U lsl 16);
+tel
+
+node SET_ALARM_TIME 
+        (time: ALARM_TIME_TYPE; position: ALARM_TIME_POSITION) 
+returns (new_time: ALARM_TIME_TYPE);
+-- increment the field pointed by "position" in "time"
+let
+  new_time =
+    if position = 0 -- hours
+    then (time lor 0xffff00ff)
+         lor (((((time lsr 8) land 0xff) + 1) mod 24) lsl 8)
+    else if position = 1 -- 10 minutes
+    then (time land 0xffffff00)
+         lor (((time land 0xff) + 10) mod 60)
+    else if position = 2 -- minutes
+    then (time land 0xffffff00)
+         lor ((((time land 0xff)) / 10) +
+              (((time land 0xff) + 1) mod 10))
+tel
+
+node NEXT_ALARM_TIME_POSITION 
+        (position: ALARM_TIME_POSITION) 
+returns (new_position: ALARM_TIME_POSITION);
+-- returns the next position after "position"
+let
+  new_position = (position + 1) mod 3;
+tel
+
+node IS_O_CLOCK (time: WATCH_TIME_TYPE)
+returns (is_o_clock: bool);
+-- returns true if "time" is on the hour (used for chime)
+let
+  is_o_clock = (time land 0xffffULL) = 0;
+tel
+
+node IS_ZERO_MOD_10_MN (time: STOPWATCH_TIME_TYPE)
+returns (is_zero: bool);
+-- returns true  if "time" is a multiple of 10 minutes (used for stopwatch beep)
+let
+  is_zero = (time land 0xffff = 0) and
+            (((time lsr 24) land 0xff) mod 1 = 0);
+tel
+
+node WATCH_TIME_TO_MAIN_DISPLAY (time: WATCH_TIME_TYPE)
+returns (display: MAIN_DISPLAY_TYPE);
+-- translation of "time" to the main display format
+let
+  display = time;
+tel
+
+node WATCH_TIME_TO_MINI_DISPLAY (time: WATCH_TIME_TYPE)
+returns (display: MINI_DISPLAY_TYPE);
+-- translation of "time" to the mini display format
+-- (used in ALARM and STOPWATCH modes)
+let
+  display = time;
+tel
+
+node WATCH_DATE_TO_MINI_DISPLAY (time: WATCH_TIME_TYPE)
+returns (display:MINI_DISPLAY_TYPE);
+-- translation of the date in "time" to the mini display format
+let
+  display = time;
+tel
+
+node WATCH_DAY_TO_ALPHA_DISPLAY (time: WATCH_TIME_TYPE)
+returns (display: string);
+-- translation of the day of the week in "time" to the alphabetic display format 
+var day = uint32;
+let
+  day = time lsr 32) land 0xff;
+  display =
+         if day = 0 then 0x53550000 -- SU
+    else if day = 1 then 0x4df40000 -- MO
+    else if day = 2 then 0x54550000 -- TU
+    else if day = 3 then 0x57450000 -- WE
+    else if day = 4 then 0x54480000 -- TH
+    else if day = 5 then 0x46510000 -- FR
+    else if day = 6 then 0x53410000 -- SA
+tel
+
+node WATCH_TO_DISPLAY_POS (wpos: WATCH_TIME_POSITION)
+returns (dpos: DISPLAY_POSITION);
+-- translation of a watch position to the display format 
+-- (generally nothing to do)
+let
+  dpos = wpos;
+tel
+
+node ALARM_TO_DISPLAY_POS (apos: ALARM_TIME_POSITION)
+returns (dpos: DISPLAY_POSITION);
+-- translation of an alarm position to the display format 
+-- (generally nothing to do)
+let
+  dpos = apos;
+tel
+
+node STOPWATCH_TIME_TO_MAIN_DISPLAY (time: STOPWATCH_TIME_TYPE) 
+returns (display: MAIN_DISPLAY_TYPE);
+-- translation of "time" to the main display format
+let
+  display = time;
+tel
+
+node ALARM_TIME_TO_MAIN_DISPLAY 
+        (time: ALARM_TIME_TYPE)
+returns (display: MAIN_DISPLAY_TYPE);
+-- translation of "time" to the main display format
+let
+  display = time;
+tel
+
+node MAKE_DISPLAY (main: MAIN_DISPLAY_TYPE;
+                   mini: MINI_DISPLAY_TYPE;
+                   alpha: string;
+                   status: STATUS_TYPE;
+                   enhanced: DISPLAY_POSITION;
+                   labels: LABELS_TYPE)
+returns (display: DISPLAY_TYPE);
+let
+  display = 0;
+tel
+
+node STATUS (alarm_is_set, chime_is_set,
+             stopwatch_running, stopwatch_lapping : bool)
+returns (status: STATUS_TYPE);
+let
+  status = alarm_is_set
+           lor (chime_is_set lsl 1)
+           lor (stopwatch_running lsl 2)
+           lor (stopwatch_lapping lsl 3);
+tel
+
+node LABELS (mode_is_watch, mode_is_stopwatch, mode_is_alarm,
+             mode_is_set_watch, mode_is_set_alarm : bool)
+returns (labels: LABELS_TYPE);
+let
+  labels = 0;
+tel
+
+node EWATCH (second, -- second
+        -- the alarm begins to ring when it is set and the alarm time
+        -- equals the watch time;
+            toggle_24h, -- toggle the 24h/AM-PM mode
+            toggle_chime,
+            in_set, -- is the watch in set mode
+            next_position, -- change the position set in set mode
+            set: bool -- increment the position to be set
+            )
+            returns 
+            (time: WATCH_TIME_TYPE; -- the time
+             enhance: WATCH_TIME_POSITION; -- the position to be enhanced
+             chime_is_set : bool;
+             beep : int
+            );
+        -- the watch has a mode (standard or set), it receives the second, 
+        -- and has three buttons: a button to change the 24H/AM-PM status,
+        -- a button to change the position to be enhanced and manually set, 
+        -- and a button to set (generally increment) this position
+
+var position_set: WATCH_TIME_POSITION; -- the position to be set
+    internal_chime_is_set: int; --TRICHE (pour faire comme esterel)
+let
+  internal_chime_is_set = 
+        0 -> if (toggle_chime) then (if (pre (internal_chime_is_set)) = 0 then 1 else 0) 
+                      else pre(internal_chime_is_set);
+-- (ancienne definition :)
+-- chime_is_set = TWO_STATES(false, toggle_chime, toggle_chime); 
+
+  chime_is_set = (internal_chime_is_set = 1);
+
+  beep = if second then
+         (if (IS_O_CLOCK(time) and (chime_is_set)) then 2 else 0)
+         else 0;
+
+  time = INITIAL_WATCH_TIME ->
+             if not in_set then
+                -- in standard watch mode, the time is incremented at any
+                -- second, and the 24H/AM-PM status is changed on the
+                -- event "toggle_24h. When returning from a manual setting,
+                -- the time must be checked for inconsistencies.
+                if second then INCREMENT_WATCH_TIME(pre(time))
+                else if toggle_24h then TOGGLE_24H_IN_WATCH_MODE(pre(time))
+                else if EDGE(not in_set) then CONFIRM_TIME(pre(time))
+                else pre(time)
+             else
+                -- in set watch mode, a special procedure is applied to
+                -- increment the time. Moreover, the time is changed 
+                -- manually by any "set" command
+                if second then INCREMENT_WATCH_TIME_IN_SET_MODE(pre(time), position_set)
+                else if set then SET_WATCH_TIME(pre(time), position_set)
+                else (pre(time));
+
+        -- the position to be enhanced and set is initialized whenever
+        -- the set watch mode is entered, and changed manually by any
+        -- "next position" command
+  enhance = position_set ;
+  position_set = if true -> EDGE(in_set) then INITIAL_WATCH_POSITION
+                 else if next_position then NEXT_WATCH_TIME_POSITION(pre(position_set))
+                 else pre(position_set);
+tel;
+
+node ESTOPWATCH(hs,-- the 1/100 second, or more generally, the time unit
+              start_stop,lap:bool)
+              returns
+              (time:STOPWATCH_TIME_TYPE; -- the time to be displayed
+               run_state, -- true if the stop-watch is running
+               lap_state : bool; -- true if the display is frozen
+               beep : int
+               );
+-- the stopwatch has two buttons: the start-stop button, and the lap-reset 
+-- button. It outputs the stopwatch time, the components of its state,
+-- and its own beeper command since it depends on the stopwatch internal time.
+
+var reset,must_beep:bool; -- true if the time is reset
+    internal_time: STOPWATCH_TIME_TYPE;
+let
+        -- the lap-reset button is interpreted as a "reset" when the stopwatch
+        -- is neither in lap state not in run state
+  reset = false -> lap and pre(not run_state and not lap_state);
+        -- the stopwatch is initially stopped. Its start-stop state changes
+        -- whenever the start-stop button is pushed
+  run_state = TWO_STATES(false,start_stop,start_stop);
+        -- the stopwatch is initially not in lap state. This state is entered
+        -- whenever the lap button is pushed in run state, and leaved as soon
+        -- as this button is pushed again
+  lap_state = TWO_STATES(false,lap and run_state ,lap);
+        -- the stopwatch displayed time is always equal to the value of the
+        -- internal time at the last instant when the stopwatch was not in
+        -- lap state
+  time = current (internal_time when not lap_state);
+  internal_time = if true -> reset then INITIAL_STOPWATCH_TIME
+                  else if run_state and hs then INCREMENT_STOPWATCH_TIME(pre(internal_time))
+                  else pre(internal_time);
+        -- the stopwatch must beep whenever the start-stop button is pushed
+        -- and whenever the internal time reaches a multiple of 10mn (actually
+        -- 1mn, for simulation purpose
+-- must_beep = start_stop or (IS_ZERO_MOD_10_MN(internal_time) and run_state);
+-- beep = if EDGE(must_beep) then 1 else 0;
+   must_beep = if start_stop then true
+               else if (hs and run_state) then IS_ZERO_MOD_10_MN(internal_time)
+               else false;
+   beep = if must_beep then 1 else 0;
+tel;
+
+node EALARM (toggle_24h, --change the 24h or AM/PM mode 
+             toggle_alarm, --change the status "alarm set" 
+             in_set, --  true when the mode is "Set Alarm" 
+             set, --increment the position set in set mode 
+             next_position, --change the position set 
+             stop_beep,
+             second : bool; 
+             watch_time: WATCH_TIME_TYPE) 
+        returns (time: ALARM_TIME_TYPE; -- the alarm time 
+                 status:bool; -- alarm set 
+                 enhance: ALARM_TIME_POSITION; -- the position to be enhanced 
+                 beep : int); -- the alarm has a mode (standard or set),
+-- and four buttons: a button to change the 24H/AM-PM status,
+-- a button to set or reset the alarm,
+-- a button to change the position to be enhanced and manually set, 
+-- and a button to set (generally increment) this position
+
+var position_set: ALARM_TIME_POSITION;
+    start_beeping : bool;
+    time_out : bool;
+    count, internal_status : int;
+let
+        -- the 24H/AM-PM component of the time is changed by any "toggle_24h"
+        -- command. Otherwis, the alarm time is only changed by the 
+        -- "set" command
+
+  start_beeping = COMPARE_WATCH_ALARM_TIME(watch_time,time) and status;
+  status = (internal_status = 1);
+  internal_status = 0 -> if toggle_alarm then 
+                (if ((pre internal_status) = 0) then 1 else 0)
+                else if(EDGE(not in_set)and((pre internal_status) = 0)) then 1
+                else pre internal_status;
+  count = 0 -> if(start_beeping) then ALARM_DURATION
+          else if (((pre count)<>0)and(second)) then pre count - 1
+          else (0 -> pre count);
+  time_out = false -> (pre count <> 0) and (count = 0);
+
+  beep = if (TWO_STATES(false,start_beeping,stop_beep or time_out)and second)
+         then 4
+         else 0;
+
+  time = INITIAL_ALARM_TIME ->
+              if toggle_24h  then TOGGLE_24H_IN_ALARM_MODE(pre(time))
+              else if set then SET_ALARM_TIME(pre(time), position_set)
+              else pre(time);
+        -- the position to be enhanced and set is initialized whenever
+        -- the set alarm mode is entered, and changed manually by any
+        -- "next position" command
+  enhance =  position_set;
+  position_set = if true -> EDGE(in_set) then INITIAL_ALARM_POSITION
+                 else if next_position then NEXT_ALARM_TIME_POSITION( pre(position_set))
+                 else pre(position_set);
+        -- the alarm is initially not set. It is automatically set when leaving
+        -- the set mode. Otherwise, its status is changed manually by any 
+        -- toggle_alarm command
+tel;
+
+-- BUTTONS computes the various modes and switches required by the
+-- main functions of the wristwatch.  The four inputs are the four
+-- buttons actually found on the wristwatch.
+
+node BUTTONS (UL,LL,UR,LR: bool)
+     returns (mode_is_watch,            -- the display shows the watch
+              mode_is_stopwatch,        -- the display shows the stopwatch
+              mode_is_alarm,            -- the display shows the alarm
+              mode_is_set_watch,        -- the watch is in set mode
+              mode_is_set_alarm,        -- the alarm is in set mode
+
+              toggle_24h,       -- the status '24H/AM-PM' must change
+              toggle_chime,     -- the status of the chime must change
+              toggle_alarm,     -- the status of the alarm must change
+
+              next_watch_time_position, -- the position in the watch
+                                        -- which can be set must change
+              next_alarm_position,      -- the position in the alarm time
+                                        -- which can be set must change
+              set_watch,                -- the current position of 
+                                        -- the watch must be set
+              set_alarm,                -- the current position of 
+                                        -- the alarm time must be set
+
+              start_stop,       -- the start-stop event of the stopwatch
+              lap,              -- the lap-reset event of the stopwatch
+
+              stop_alarm_beep   -- the manual stop of the alarm beep
+                 : bool);
+
+var 
+    mode_is_standard_watch:bool;
+    mode_is_standard_alarm:bool;
+
+let
+  mode_is_watch =
+  true ->
+         if LL then
+            if pre mode_is_watch then pre mode_is_set_watch 
+            else if pre mode_is_stopwatch then false
+            else not pre mode_is_set_alarm 
+         else pre mode_is_watch;
+  mode_is_stopwatch = 
+  false ->
+         if LL then
+            if pre mode_is_watch then not pre mode_is_set_watch else false
+         else pre mode_is_stopwatch;
+  mode_is_alarm = 
+  false ->
+         if LL then
+            if pre mode_is_watch then false
+            else if pre mode_is_stopwatch then true
+            else pre mode_is_set_alarm 
+         else pre mode_is_alarm;
+
+  mode_is_set_watch = if mode_is_watch then
+                        if UL then (false -> not pre mode_is_set_watch)
+                        else (false -> pre mode_is_set_watch)
+                      else false;
+  mode_is_set_alarm = if mode_is_alarm then
+                        if UL then not pre mode_is_set_alarm
+                        else pre mode_is_set_alarm
+                      else false;
+
+  mode_is_standard_watch = mode_is_watch and not mode_is_set_watch;
+  mode_is_standard_alarm = mode_is_alarm and not mode_is_set_alarm;
+
+  toggle_24h = LR and mode_is_standard_watch;
+  toggle_chime = LR and mode_is_standard_alarm;
+  toggle_alarm = UR and mode_is_standard_alarm;
+
+  next_watch_time_position = LL and mode_is_set_watch;
+  next_alarm_position = LL and mode_is_set_alarm;
+  set_watch = LR and mode_is_set_watch;
+  set_alarm = LR and mode_is_set_alarm;
+
+  start_stop = LR and mode_is_stopwatch;
+  lap = UR and mode_is_stopwatch;
+
+  -- in any mode, the UR button stops the alarm beep
+  stop_alarm_beep = UR;
+tel;
+
+node DISPLAY(mode_is_watch, mode_is_stopwatch, mode_is_alarm:bool;
+      watch_time:WATCH_TIME_TYPE;
+      stopwatch_time: STOPWATCH_TIME_TYPE;
+      alarm_time: ALARM_TIME_TYPE; 
+      position_enhanced: DISPLAY_POSITION;
+      status: STATUS_TYPE;
+      labels: LABELS_TYPE)
+   returns
+      (display: DISPLAY_TYPE);
+var main_display:MAIN_DISPLAY_TYPE; 
+    mini_display:MINI_DISPLAY_TYPE;
+    alpha_display:string;
+let
+  display = MAKE_DISPLAY(main_display,mini_display,
+                        alpha_display, status, 
+                        position_enhanced,labels);
+  (main_display,mini_display,alpha_display) =
+    if mode_is_watch then
+        -- in watch mode, the main display shows the watch time, the mini
+        -- display shows the date, and the alphabetic display shows the
+        -- day of the week
+       (WATCH_TIME_TO_MAIN_DISPLAY(watch_time),
+        WATCH_DATE_TO_MINI_DISPLAY(watch_time),
+        WATCH_DAY_TO_ALPHA_DISPLAY(watch_time))
+    else if mode_is_stopwatch then
+        -- in stopwatch mode, the main display shows the stopwatch time,
+        -- the minidisplay shows the watch time, and the string 'ST' is 
+        -- displayed on the alphabetic display
+       (STOPWATCH_TIME_TO_MAIN_DISPLAY(stopwatch_time),
+        WATCH_TIME_TO_MINI_DISPLAY(watch_time),
+        stringST)
+    else
+        -- in alarm mode, the main display shows the alarm time,
+        -- the minidisplay shows the watch time, and the string 'AL' is 
+        -- displayed on the alphabetic display
+       (ALARM_TIME_TO_MAIN_DISPLAY(alarm_time),
+        WATCH_TIME_TO_MINI_DISPLAY(watch_time),
+        stringAL);
+tel;
+
+--UTILITAIRES
+
+node TWO_STATES(init,set,reset: bool) returns (state: bool);
+-- implements a flip-flop, with initial state "init". The state changes from 
+-- 'false' to 'true' whenever the input "set" is true, and from 'true' to 
+-- 'false' -- whenever the input "reset" is true. 
+-- These two inputs are not exclusive.
+let
+  state = init ->
+               if set and not pre(state) then true
+               else if reset and pre(state) then false
+               else pre(state);
+tel;
+
+node EDGE(b:bool) returns (edge:bool);
+-- returns 'true' whenever the value of its parameter rises to 'true'
+let edge = b -> (b and not pre(b)); tel;
+
+node DIVIDE (scale:int)
+            returns (quotient: bool);
+-- the result is true once every "scale" cycles of the node
+var n:int;
+let
+   (n,quotient) = (0,true)  -> (if (pre(n) + 1)  = scale then (0,true) 
+                                else (pre(n)+1,false));
+tel;
+
+node New_Watch (UL,LL,UR,LR,time_unit:bool)
+               returns (display:DISPLAY_TYPE;
+                        beep:int
+                        );
+var
+  watch_time: WATCH_TIME_TYPE;
+  watch_position_enhanced: WATCH_TIME_POSITION; 
+  alarm_time: ALARM_TIME_TYPE;
+  alarm_position_enhanced: ALARM_TIME_POSITION; 
+  stopwatch_time: STOPWATCH_TIME_TYPE;
+  position_enhanced: DISPLAY_POSITION;
+  status: STATUS_TYPE;
+  labels: LABELS_TYPE;
+  alarm_is_set, mode_is_watch, mode_is_stopwatch, mode_is_alarm,
+  stopwatch_running, stopwatch_lapping, chime_is_set,
+  toggle_24h, toggle_chime, toggle_alarm, watch_next_position,
+  alarm_next_position, set_watch, set_alarm, mode_is_set_watch,
+  mode_is_set_alarm, start_stop, lap, stop_alarm_beep, second: bool; 
+  alarm_beep, chime_beep, stopwatch_beep : int;
+
+let
+  assert #(UL,LL,UR,LR,time_unit);
+  display = DISPLAY(mode_is_watch,mode_is_stopwatch,mode_is_alarm,
+                        watch_time,stopwatch_time, alarm_time, 
+                        position_enhanced,status,labels);
+                -- builds the display
+
+  beep = alarm_beep + chime_beep + stopwatch_beep;
+
+  (alarm_time,alarm_is_set,alarm_position_enhanced,alarm_beep) =
+          EALARM(toggle_24h,toggle_alarm,mode_is_set_alarm,
+                        set_alarm,alarm_next_position,stop_alarm_beep,second,watch_time);
+
+
+  labels =     -- the button labels
+        LABELS(mode_is_watch,mode_is_stopwatch,
+        mode_is_alarm, mode_is_set_watch, mode_is_set_alarm);
+
+  position_enhanced =   -- the position to be enhanced
+        if mode_is_set_watch then WATCH_TO_DISPLAY_POS(watch_position_enhanced)
+        else if mode_is_set_alarm then ALARM_TO_DISPLAY_POS(alarm_position_enhanced)
+        else NULL_POSITION;
+
+  status =      -- the status indicators appearing on the screen
+        STATUS(alarm_is_set, chime_is_set, 
+        stopwatch_running, stopwatch_lapping);
+
+  (watch_time, watch_position_enhanced,chime_is_set,chime_beep) =
+          EWATCH(second,toggle_24h,toggle_chime,mode_is_set_watch,
+                          watch_next_position,set_watch);
+
+  (stopwatch_time, stopwatch_running, stopwatch_lapping, stopwatch_beep) =
+          ESTOPWATCH(time_unit, start_stop,lap);
+
+  (mode_is_watch, mode_is_stopwatch, mode_is_alarm,
+   mode_is_set_watch, mode_is_set_alarm,
+   toggle_24h, toggle_chime, toggle_alarm,
+   watch_next_position, alarm_next_position,
+   set_watch, set_alarm,
+   start_stop, lap, stop_alarm_beep) = BUTTONS(UL,LL,UR,LR);
+
+   second = time_unit and (current(DIVIDE(10 when (true->time_unit))));
+                -- converts the time unit (assumed to be the 1/10
+                -- sec.) into the second
+tel;
+
