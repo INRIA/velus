@@ -16,12 +16,17 @@ let write_sync = ref false
 let set_main_node s =
   Veluslib.main_node := Some s
 
+
 let get_main_node decls =
+  let rec last_decl ds =
+    match ds with
+    | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
+    | [LustreAst.NODE (n, _, _, _, _, _)] -> n
+    | _::ds -> last_decl ds
+  in
   match !Veluslib.main_node with
   | Some s -> intern_string s
-  | None   -> match decls with
-              | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
-              | LustreAst.NODE (n, _, _, _, _, _)::_ -> n
+  | None   -> last_decl decls
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
