@@ -27,7 +27,7 @@ realclean: clean
 	@rm -f $(EXAMPLES:.lus=.exe)
 
 clean:
-	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lustre)
+	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
 	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.sync.c)
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.o)
 	@rm -f $(EXAMPLES:.lus=.sync.o)
