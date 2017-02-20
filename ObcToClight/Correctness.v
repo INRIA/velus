@@ -276,7 +276,7 @@ Qed.
 Lemma NoDup_funs:
   forall prog,
     wt_program prog ->
-    NoDup (map fst (concat (map (make_methods prog) prog))).
+    NoDup (map fst (concat (map (make_methods (rev prog)) (rev prog)))).
 Proof.
   unfold make_methods.
   intros ** Wt.
@@ -290,7 +290,9 @@ Proof.
   - constructor.
   - inversion_clear Wt as [|? ? ? ? Nodup]; simpl in Nodup;
       inversion_clear Nodup as [|? ? Notinc].
-    rewrite map_app, map_map.
+    rewrite map_app, concat_app, map_app. simpl.
+    rewrite app_nil_r, map_map.
+    apply NoDup_comm.
     apply NoDup_app'; auto.
     + simpl.
       pose proof (c_nodupm c) as Nodup.
@@ -311,7 +313,7 @@ Proof.
       destruct Eq as [Eq].
       apply Notinc.
       rewrite <- Eq.
-      now apply in_map.
+      now apply in_map, in_rev.
 Qed.
 
 Lemma prefixed_funs:
@@ -436,7 +438,7 @@ Section PRESERVATION.
       destruct (find_class n p) as [(c, cls)|] eqn: En; try discriminate;
       destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;
       destruct (find_method reset c.(c_methods)) eqn: Ereset; try discriminate;
-      destruct (split (map (translate_class p) p)) as (s, f) eqn: E
+      destruct (split (map (translate_class (rev p)) (rev p))) as (s, f) eqn: E
     end.
 
   Tactic Notation "inv_trans" ident(H) "as" ident(En) ident(Estep) ident(Ereset) "with" ident(s) ident(f) ident(E) :=
@@ -668,7 +670,7 @@ Section PRESERVATION.
         apply split_map in E.
         destruct E as [Structs].
         unfold make_struct in Structs.
-        apply find_class_In in Findcl.
+        apply find_class_In, in_rev in Findcl.
         apply in_map with (f:=fun c => Composite (c_name c) Struct (make_members c) noattr :: make_out c)
           in Findcl.
         apply in_concat' with (Composite (c_name owner) Struct (make_members owner) noattr :: make_out owner). 
@@ -712,7 +714,7 @@ Section PRESERVATION.
             apply split_map in E.
             destruct E as [Structs].
             unfold make_out in Structs.
-            apply find_class_In in Findcl.
+            apply find_class_In, in_rev in Findcl.
             apply in_map with (f:=fun c => make_struct c :: filter_out (map (translate_out c) (c_methods c)))
               in Findcl.
             apply find_method_In in Findmth.
@@ -807,22 +809,22 @@ Section PRESERVATION.
           /\ list_norepet (var_names f.(fn_params))
           /\ list_norepet (var_names f.(fn_vars))
           /\ list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps))
-          /\ f.(fn_body) = return_none (translate_stmt prog owner caller caller.(m_body)).
+          /\ f.(fn_body) = return_none (translate_stmt (rev prog) owner caller caller.(m_body)).
       Proof.
         inv_trans TRANSL with structs funs E.
         pose proof (find_class_name _ _ _ _ Findcl);
           pose proof (find_method_name _ _ _ Findmth); subst.
         assert ((AST.prog_defmap tprog) ! (prefix_fun owner.(c_name) caller.(m_name)) =
-                Some (snd (translate_method prog owner caller))) as Hget. 
+                Some (snd (translate_method (rev prog) owner caller))) as Hget. 
         { unfold translate_class in E.
           apply split_map in E.
           destruct E as [? Funs].
           unfold make_methods in Funs.
           apply find_class_In in Findcl.
-          apply in_map with (f:=fun c => map (translate_method prog c) (c_methods c))
+          apply in_rev, in_map with (f:=fun c => map (translate_method (rev prog) c) (c_methods c))
             in Findcl.
           apply find_method_In in Findmth.
-          apply in_map with (f:=translate_method prog owner) in Findmth.
+          apply in_map with (f:=translate_method (rev prog) owner) in Findmth.
           eapply in_concat' in Findmth; eauto.
           rewrite <-Funs in Findmth.
           unfold make_program' in TRANSL.
@@ -921,7 +923,7 @@ Section PRESERVATION.
                     fn_params := (self, type_of_inst_p (c_name owner)) :: map translate_param (m_in caller);
                     fn_vars := make_out_vars (instance_methods caller);
                     fn_temps := map translate_param (m_vars caller);
-                    fn_body := return_none (translate_stmt prog owner caller (m_body caller)) |})
+                    fn_body := return_none (translate_stmt (rev prog) owner caller (m_body caller)) |})
             in Finddef.
           exists loc_f, f.
           try repeat split; auto.
@@ -939,7 +941,7 @@ Section PRESERVATION.
                                    :: map translate_param (m_in caller);
                     fn_vars := make_out_vars (instance_methods caller);
                     fn_temps := map translate_param (m_vars caller);
-                    fn_body := return_none (translate_stmt prog owner caller (m_body caller)) |})
+                    fn_body := return_none (translate_stmt (rev prog) owner caller (m_body caller)) |})
             in Finddef.
           exists loc_f, f.
           try repeat split; auto.
@@ -2982,7 +2984,7 @@ Section PRESERVATION.
           (MS: m1 |= match_states c f (me1, ve1) (e1, le1) sb sofs outb outco ** P),
         exists le2 m2,
           exec_stmt tge (function_entry2 tge) e1 le1 m1
-                    (translate_stmt prog c f s) E0 le2 m2 Out_normal
+                    (translate_stmt (rev prog) c f s) E0 le2 m2 Out_normal
           /\ m2 |= match_states c f S2 (e1, le2) sb sofs outb outco ** P)
     /\
     (forall p me1 clsid fid vs me2 rvs,
@@ -3202,7 +3204,7 @@ Section PRESERVATION.
            exists le1, m2; split; auto.
            - simpl.
              unfold binded_funcall.
-             rewrite Find', Findmeth, Hys, Out.
+             rewrite <-find_class_rev, Find', Findmeth, Hys, Out; auto.
              erewrite E.
              eapply exec_Scall; eauto.
              + reflexivity.
@@ -3257,7 +3259,7 @@ Section PRESERVATION.
            exists le3, m3; split; auto.
            - simpl.
              unfold binded_funcall.
-             rewrite Find', Findmeth, Out.
+             rewrite <-find_class_rev, Find', Findmeth, Out; auto.
              destruct ys; [exfalso; apply Hys; auto|].
              change E0 with (Eapp E0 E0).
              eapply exec_Sseq_1 with (m1:=m2); eauto.
@@ -3410,7 +3412,7 @@ Section PRESERVATION.
                * rewrite Out in Bind; constructor; eauto.
                * rewrite Htr.
                  change E0 with (Eapp E0 E0).
-                 eapply exec_Sseq_1; eauto.
+                 eapply exec_Sseq_1; eauto; 
                  apply exec_Sreturn_none.
                * rewrite Hret; reflexivity.
              + simpl.
@@ -3582,7 +3584,7 @@ Section PRESERVATION.
         (MS: m1 |= match_states c f (me1, ve1) (e1, le1) sb sofs outb outco ** P),
       exists le2 m2,
         exec_stmt tge (function_entry2 tge) e1 le1 m1
-                  (translate_stmt prog c f s) E0 le2 m2 Out_normal
+                  (translate_stmt (rev prog) c f s) E0 le2 m2 Out_normal
         /\ m2 |= match_states c f S2 (e1, le2) sb sofs outb outco ** P.
   Proof.
     intros.
@@ -4052,13 +4054,16 @@ Section PRESERVATION.
          }
         *{ clear En Hbuild WT.
            remember prog as prog1.
-           replace (translate_class prog1) with (translate_class prog) in E by now rewrite <-Heqprog1.
+           replace (translate_class (rev prog1)) with (translate_class (rev prog)) in E
+             by now rewrite <-Heqprog1.
            clear Heqprog1 TRANSL.
            revert structs funs E Hinv.
            induction prog1 as [|c' prog']; intros ** E Hinv; simpl in E.
            - inv E; simpl in Hinv; contradiction.
-           - destruct (split (map (translate_class prog) prog')) as (g, d) eqn: Egd; inv E.
-             simpl in Hinv; apply in_app in Hinv; destruct Hinv as [Hinv|]; eauto.
+           - rewrite map_app in E; simpl in E; rewrite split_last in E.
+             destruct (split (map (translate_class (rev prog)) (rev prog'))) as (g, d) eqn: Egd; inv E.
+             rewrite concat_app in Hinv; simpl in Hinv; rewrite app_nil_r in Hinv;
+               apply in_app in Hinv; destruct Hinv as [|Hinv]; eauto.
              unfold make_methods in Hinv.
              induction (c_methods c'); simpl in Hinv; try contradiction.
              destruct Hinv as [Hinv|]; auto.

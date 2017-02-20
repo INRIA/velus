@@ -226,7 +226,7 @@ Module Type OBCSYNTAX
       apply in_eq. 
     - apply in_cons; auto.
   Qed.
-  
+
   (** Syntactic predicates *)
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=

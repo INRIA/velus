@@ -840,6 +840,17 @@ Module Type OBCTYPING
       + simpl. rewrite <-Hc2. apply ident_eqb_neq in Hne.
         now rewrite Hne.
   Qed.
+
+  Lemma find_class_rev:
+    forall prog c,
+      wt_program prog ->
+      find_class c prog = find_class c (rev prog).
+  Proof.
+    induction prog; simpl; auto.
+    intros.
+    inv H.
+    admit.
+  Qed.
   
 End OBCTYPING.
 

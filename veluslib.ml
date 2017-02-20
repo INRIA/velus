@@ -12,11 +12,6 @@ let do_fusion () = !fuse_obc
 
 let do_sync () = !sync_destination <> None
 
-let rec last = function
-  | []    -> failwith "last"
-  | [x]   -> x
-  | x::xs -> last xs
-
 let get_main_class decls =
   try
     let open Instantiator.Obc.Syn in
@@ -24,7 +19,7 @@ let get_main_class decls =
     | Some s ->
         let nm = Camlcoq.intern_string s in
         List.find (fun c->c.c_name = nm) decls
-    | None -> last decls
+    | None -> List.hd decls
   with _ ->
     (Printf.eprintf "main class not found"; exit 1)
 
