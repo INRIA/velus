@@ -3,11 +3,14 @@
 
 let snlustre_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
+let sync_destination = ref (None : string option)
 let main_node = ref (None : string option)
 let reaction_counter = Camlcoq.intern_string "$reaction"
 
 let fuse_obc = ref true
 let do_fusion () = !fuse_obc
+
+let do_sync () = !sync_destination <> None
 
 let rec last = function
   | []    -> failwith "last"
@@ -43,7 +46,26 @@ let print_if flag print prog =
 let print_snlustre_if =
   print_if snlustre_destination Interfacelib.PrintNLustre.print_global
 
+let print_sync_if prog =
+  match !sync_destination with
+  | None -> ()
+  | Some f ->
+      let open Instantiator.Obc.Syn in
+      let cl = get_main_class prog in
+      let cl_m = get_first_method cl in
+      let oc = open_out f in
+      let f = Format.formatter_of_out_channel oc in
+      Interfacelib.SyncFun.print f cl_m;
+      (*
+      PrintClight.print_function f
+        (Camlcoq.intern_string "$sync")
+        (Interfacelib.SyncFun.make reaction_counter cl_m);
+      *)
+      Format.pp_print_flush f ();
+      close_out oc
+
 let print_obc_if prog =
+  print_sync_if prog;
   print_if obc_destination Interfacelib.PrintObc.print_program prog
 
 let add_builtin p (name, (out, ins, b)) =

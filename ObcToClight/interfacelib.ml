@@ -174,6 +174,16 @@ module PrintObc = Obclib.PrintFun
       type binop = Interface.Op.binop
    end) (PrintClightOpsFun (ClightOpNames))
 
+module SyncFun = Obclib.SyncFun
+  (struct
+      include Instantiator.Obc.Syn
+      type typ   = Interface.Op.coq_type
+      type const = Interface.Op.const
+      type unop  = Interface.Op.unop
+      type binop = Interface.Op.binop
+   end)
+  (ClightTypeFormats)
+
 module Scheduler = Nlustrelib.SchedulerFun
   (struct
       include Instantiator.Clks

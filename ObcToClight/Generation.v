@@ -347,28 +347,40 @@ Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident 
     funcall None (prefix_fun node step) args
   end.
 
-Definition main_loop_body (node: ident) (m: method): Clight.statement := 
+Definition main_loop_body (do_sync: bool) (node: ident) (m: method): Clight.statement :=
   let args := map make_in_arg m.(m_in) in
-  Clight.Ssequence 
-    (load_in m.(m_in)) 
-    (Clight.Ssequence 
-       (step_call node args m.(m_out)) 
-       (write_out node m.(m_out))). 
- 
-Definition main_loop (node: ident) (m: method): Clight.statement := 
-  Clight.Sloop (main_loop_body node m) Clight.Sskip. 
- 
-Definition main_body (node: ident) (m: method): Clight.statement := 
-  return_zero (Clight.Ssequence (reset_call node) (main_loop node m)). 
- 
-Definition make_main (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type := 
+  let body := Clight.Ssequence
+                (load_in m.(m_in))
+                (Clight.Ssequence
+                   (step_call node args m.(m_out))
+                   (write_out node m.(m_out)))
+  in
+  if do_sync
+  then Clight.Ssequence (funcall None sync_id []) body
+  else body.
+
+Definition main_loop (do_sync: bool) (node: ident) (m: method): Clight.statement :=
+  Clight.Sloop (main_loop_body do_sync node m) Clight.Sskip.
+
+Definition main_body (do_sync: bool) (node: ident) (m: method): Clight.statement :=
+  return_zero (Clight.Ssequence (reset_call node) (main_loop do_sync node m)).
+
+Definition make_main (do_sync: bool) (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type :=
   let vars :=  match m.(m_out) with
                | [] (* | [_]  *) => []
                | _ =>
                  [(Ident.prefix out step, type_of_inst (prefix_fun node step))]
                end
   in
-  fundef [] vars (map translate_param m.(m_in)) Ctypes.type_int32s (main_body node m). 
+  fundef [] vars (map translate_param m.(m_in)) Ctypes.type_int32s (main_body do_sync node m).
+
+Definition ef_sync: Clight.fundef :=
+  let sg := AST.mksignature [] None AST.cc_default in
+  let ef := AST.EF_external "sync" sg in
+  Ctypes.External ef Ctypes.Tnil Ctypes.Tvoid AST.cc_default.
+  
+Definition make_sync: AST.globdef Clight.fundef Ctypes.type :=
+  @AST.Gfun Clight.fundef Ctypes.type ef_sync.
 
 Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctypes.type)
   : ident * AST.globdef Clight.fundef Ctypes.type :=
@@ -422,7 +434,7 @@ Definition make_program'
   | inr msg => Error msg
   end.
 
-Definition translate (main_node: ident) (prog: program): res Clight.program :=
+Definition translate (do_sync: bool) (main_node: ident) (prog: program): res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
     match find_method step c.(c_methods) with
@@ -433,13 +445,22 @@ Definition translate (main_node: ident) (prog: program): res Clight.program :=
         let f_gvar := (f, type_of_inst main_node) in
         let ins := map glob_bind m.(m_in) in
         let outs := map glob_bind m.(m_out) in
-        let main := make_main main_node m in
         let cs := map (translate_class prog) prog in
         let (structs, funs) := split cs in
-        let gdefs := concat funs ++ [(main_id, main)] in
+        let main := (main_id, make_main false main_node m) in
+        let gdefs := concat funs
+                            ++ (if do_sync
+                                then [(sync_id, make_sync);
+                                        (main_sync_id, make_main do_sync main_node m)]
+                                else [])
+                            ++ [main]
+        in
         make_program' (concat structs)
                       [f_gvar]
-                      (outs ++ ins) gdefs [] main_id
+                      (outs ++ ins)
+                      gdefs
+                      (if do_sync then [main_sync_id] else [])
+                      main_id
       | None => Error (msg "ObcToClight: reset function not found")
       end
     | None => Error (msg "ObcToClight: step function not found")

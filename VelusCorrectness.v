@@ -38,6 +38,7 @@ Parameter schedule : ident -> list NL.Syn.equation -> list positive.
 Parameter print_snlustre: NL.Syn.global -> unit.
 Parameter print_obc: Obc.Syn.program -> unit.
 Parameter do_fusion : unit -> bool.
+Parameter do_sync : unit -> bool.
 
 Module ExternalSchedule.
   Definition schedule := schedule.
@@ -92,7 +93,7 @@ Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
           @@ Trans.translate
           @@ total_if do_fusion (map Obc.Fus.fuse_class)
           @@ print print_obc
-          @@@ Generation.translate main_node.
+          @@@ Generation.translate (do_sync tt) main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
@@ -413,7 +414,7 @@ Proof.
       rewrite Eappinf_assoc.
       econstructor; eauto;
         rewrite Hstep_in || rewrite Hstep_out;
-        apply mk_event_spec; 
+        apply mk_event_spec;
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
   - rewrite Emain in *.
     destruct (find_method Ids.step (c_methods c_main))
@@ -463,7 +464,7 @@ Proof.
       rewrite Eappinf_assoc.
       econstructor; eauto;
         rewrite Hstep_in || rewrite Hstep_out;
-        apply mk_event_spec; 
+        apply mk_event_spec;
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
@@ -484,5 +485,5 @@ Proof.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.
   eapply reacts_trace_preservation in Comp; eauto.
   apply add_builtins_spec; auto.
-  intros ? ?; discriminate.  
+  intros ? ?; discriminate.
 Qed.

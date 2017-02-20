@@ -436,7 +436,6 @@ Section StateRepProperties.
   Let tge := Clight.globalenv tprog.
   Let gcenv := Clight.genv_cenv tge.
 
-  Hypothesis TRANSL: translate main_node prog = Errors.OK tprog.
   Hypothesis gcenv_consistent: composite_env_consistent gcenv.
 
   Hypothesis make_members_co:
@@ -604,7 +603,7 @@ Section StateRepProperties.
     rewrite Heqprog1 in make_members_co, WTp.
     assert (sub_prog prog1 prog) as Hsub
         by now rewrite Heqprog1.
-    clear TRANSL Heqprog1.
+    clear (* TRANSL *) Heqprog1.
     induction prog1 as [|cls prog' IH]; intros clsnm Hfind lo Halign.
     now apply not_None_is_Some in Hfind; destruct Hfind; discriminate.
     inversion_clear WTp' as [|? ? WTc WTp'' Hnodup]; subst.
