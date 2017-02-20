@@ -452,7 +452,7 @@ Section PRESERVATION.
   Tactic Notation "inv_trans" ident(H) :=
     inv_trans H as En Estep Ereset.
   
-  Theorem Consistent: composite_env_consistent gcenv.
+  Lemma Consistent: composite_env_consistent gcenv.
   Proof.
     inv_trans TRANSL.
     apply build_ok in TRANSL.
@@ -643,7 +643,7 @@ Section PRESERVATION.
     Variables (ownerid: ident) (owner: class) (prog': program).
     Hypothesis Findcl: find_class ownerid prog = Some (owner, prog').
     
-    Theorem make_members_co:
+    Lemma make_members_co:
       exists co,
         gcenv ! ownerid = Some co
         /\ co_su co = Struct
@@ -684,7 +684,7 @@ Section PRESERVATION.
       Section OutStruct.
         Hypothesis Notnil: caller.(m_out) <> [].
         
-        Theorem global_out_struct:
+        Lemma global_out_struct:
           exists co,
             gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some co
             /\ co.(co_su) = Struct 
@@ -782,7 +782,7 @@ Section PRESERVATION.
             * apply M.add_3, M.find_1 in Hin; simpl; auto; discriminate.
       Qed.
       
-      Theorem methods_corres:
+      Lemma methods_corres:
         exists loc_f f,
           Genv.find_symbol tge (prefix_fun ownerid callerid) = Some loc_f
           /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
@@ -966,7 +966,7 @@ Section PRESERVATION.
   Qed.
   Hint Resolve param_chunk.
   
-  Theorem instance_methods_caract:
+  Lemma instance_methods_caract:
     forall ownerid owner prog' callerid caller,
       find_class ownerid prog = Some (owner, prog') ->
       find_method callerid owner.(c_methods) = Some caller ->
@@ -2027,7 +2027,7 @@ Section PRESERVATION.
     Qed.
   End MatchStatesAssign.
 
-  Theorem set_comm:
+  Lemma set_comm:
     forall {A} x x' (v v': A) m,
       x <> x' ->
       PTree.set x v (PTree.set x' v' m) = PTree.set x' v' (PTree.set x v m).
@@ -3561,7 +3561,7 @@ Section PRESERVATION.
          eauto.
   Qed.
 
-  Theorem stmt_correctness:
+  Lemma stmt_correctness:
     forall p me1 ve1 s S2,
       stmt_eval p me1 ve1 s S2 ->
       sub_prog p prog ->
@@ -4973,7 +4973,7 @@ Section PRESERVATION.
     apply Z.divide_0_r.
   Defined.
   
-  Lemma reacts':
+  Theorem reacts':
     forall me0 ins outs c_main prog_main m_step m_reset,
       stmt_call_eval prog hempty (c_name c_main) (m_name m_reset) [] me0 [] ->
       wt_mem me0 prog_main c_main ->

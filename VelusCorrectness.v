@@ -468,7 +468,7 @@ Proof.
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
-Lemma behavior_asm:
+Theorem behavior_asm:
   forall G P main ins outs,
     wc_global G ->
     wt_global G ->

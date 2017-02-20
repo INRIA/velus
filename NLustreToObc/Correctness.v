@@ -134,7 +134,7 @@ Module Type CORRECTNESS
   (** If the clock is absent, then the controlled statement evaluates as
   a [Skip].  *)
 
-  Theorem stmt_eval_Control_absent:
+  Lemma stmt_eval_Control_absent:
     forall prog mems menv env ck stmt,
       Is_absent_in mems menv env ck
       -> stmt_eval prog menv env (Control mems ck stmt) (menv, env).
@@ -145,7 +145,7 @@ Module Type CORRECTNESS
   (** If the clock is present, then the controlled statement evaluates
   as the underlying one.  *)
 
-  Theorem stmt_eval_Control_present:
+  Lemma stmt_eval_Control_present:
     forall prog mems menv env ck stmt menv' env',
       Is_present_in mems menv env ck
       -> stmt_eval prog menv env stmt (menv', env')
@@ -419,7 +419,7 @@ for all [Is_free_exp x e]. *)
       constructor; exact Hvar.
   Qed.
 
-  Theorem clock_correct_true:
+  Lemma clock_correct_true:
     forall base R mems menv env ck,
       equiv_env (fun x => Is_free_in_clock x ck) R mems env menv
       -> sem_clock_instant base R ck true
@@ -440,7 +440,7 @@ for all [Is_free_exp x e]. *)
       destruct In_dec with x mems; intuition.
   Qed.
 
-  Theorem clock_correct_false:
+  Lemma clock_correct_false:
     forall R mems menv env ck,
       equiv_env (fun x => Is_free_in_clock x ck) R mems env menv
       -> sem_clock_instant true R ck false
@@ -471,7 +471,7 @@ for all [Is_free_exp x e]. *)
 
   (** *** Correctness of [translate_lexp] *)
 
-  Theorem typ_correct:
+  Lemma typ_correct:
     forall mems e,
       typeof (translate_lexp mems e) = DF.Syn.typeof e.
   Proof.
@@ -479,7 +479,7 @@ for all [Is_free_exp x e]. *)
     destruct (PS.mem y mems); simpl; auto.
   Qed.
 
-  Theorem lexp_correct:
+  Lemma lexp_correct:
     forall R mems menv env c e,
       sem_lexp_instant true R e (present c)
       -> equiv_env (fun x => Is_free_in_lexp x e) R mems env menv
@@ -509,7 +509,7 @@ for all [Is_free_exp x e]. *)
       + now rewrite 2 typ_correct.
   Qed.
 
-  Theorem lexps_correct:
+  Lemma lexps_correct:
     forall R mems menv env cs es,
       let vs := map present cs in
       Forall2 (fun e v => sem_lexp_instant true R e v) es vs
@@ -528,7 +528,7 @@ for all [Is_free_exp x e]. *)
 
   (** *** Correctness of [translate_cexp] *)
 
-  Theorem cexp_correct:
+  Lemma cexp_correct:
     forall R mems prog menv env c x e,
       sem_cexp_instant true R e (present c)
       -> equiv_env (fun x => Is_free_in_cexp x e) R mems env menv
@@ -1337,7 +1337,7 @@ for all [Is_free_exp x e]. *)
           apply IHxs; auto.
     Qed.
 
-    Theorem is_node_correct:
+    Lemma is_node_correct:
       forall (G: global),
         (* =is_node_correct= *)
         Welldef_global G ->
@@ -1750,7 +1750,7 @@ for all [Is_free_exp x e]. *)
 
   End IsResetCorrect.
 
-  Theorem is_node_reset_correct:
+  Lemma is_node_reset_correct:
     forall (G: global) f,
       Welldef_global G ->
       equiv_reset G (translate G) f.
@@ -2103,7 +2103,7 @@ for all [Is_free_exp x e]. *)
     Qed.
 
 
-    Theorem is_event_loop_correct:
+    Lemma is_event_loop_correct:
       (* =translate_correct= *)
       sem_node G main xss yss ->
       forall n, exists menv env,

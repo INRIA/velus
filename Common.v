@@ -540,19 +540,19 @@ Section InMembers.
       NoDupMembers l ->
       NoDupMembers ((a, b)::l).
 
-  Theorem inmembers_eq:
+  Lemma inmembers_eq:
     forall a b l, InMembers a ((a, b) :: l).
   Proof.
     intros. constructor. reflexivity.
   Qed.
 
-  Theorem inmembers_cons:
+  Lemma inmembers_cons:
     forall a a' l, InMembers a l -> InMembers a (a' :: l).
   Proof.
     intros. destruct a'. simpl. intuition.
   Qed.
 
-  Theorem In_InMembers:
+  Lemma In_InMembers:
     forall a b xs,
       In (a, b) xs -> InMembers a xs.
   Proof.
@@ -562,7 +562,7 @@ Section InMembers.
     - simpl. destruct x. right. intuition.
   Qed.
 
-  Theorem InMembers_In:
+  Lemma InMembers_In:
     forall a xs,
       InMembers a xs -> exists b, In (a, b) xs.
   Proof.
@@ -575,7 +575,7 @@ Section InMembers.
         exists b'; now right.
   Qed.
 
-  Theorem nodupmembers_cons:
+  Lemma nodupmembers_cons:
     forall id ty xs,
       NoDupMembers ((id, ty) :: xs) <->
       ~InMembers id xs /\ NoDupMembers xs.
@@ -586,7 +586,7 @@ Section InMembers.
       constructor; auto.
   Qed.
 
-  Theorem NotInMembers_NotIn:
+  Lemma NotInMembers_NotIn:
     forall a b xs, ~ InMembers a xs -> ~ In (a, b) xs.
   Proof.
     intros ** Hnim Hin.
@@ -594,7 +594,7 @@ Section InMembers.
     intuition.
   Qed.
 
-  Theorem NotInMembers_cons:
+  Lemma NotInMembers_cons:
     forall xs x y,
       ~InMembers y (x::xs) <-> ~InMembers y xs /\ y <> fst x.
   Proof.
@@ -663,7 +663,7 @@ Section InMembers.
   Qed.
   *)
 
-  Theorem NotInMembers_app:
+  Lemma NotInMembers_app:
     forall y ws xs,
       ~InMembers y (ws ++ xs) <-> (~InMembers y xs /\ ~InMembers y ws).
   Proof.
@@ -679,7 +679,7 @@ Section InMembers.
       intro H. apply InMembers_app in H. intuition.
   Qed.
 
-  Theorem NotInMembers_app_comm:
+  Lemma NotInMembers_app_comm:
     forall y ws xs,
       ~InMembers y (ws ++ xs) <-> ~InMembers y (xs ++ ws).
   Proof.
@@ -687,7 +687,7 @@ Section InMembers.
     apply NotInMembers_app; intuition.
   Qed.
 
-  Theorem NoDupMembers_NoDup:
+  Lemma NoDupMembers_NoDup:
     forall xs, NoDupMembers xs -> NoDup xs.
   Proof.
     induction xs as [|x xs IH]; [now constructor|].

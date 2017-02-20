@@ -217,7 +217,7 @@ Module Type NLCLOCKING
     Variable Hnd : NoDupMembers vars.
     Variable Hwc : wc_env vars.
 
-    Theorem wc_equation_not_Is_free_in_clock:
+    Lemma wc_equation_not_Is_free_in_clock:
       forall eq x ck,
         wc_equation vars eq
         -> Is_defined_in_eq x eq

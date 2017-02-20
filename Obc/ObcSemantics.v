@@ -109,7 +109,7 @@ Module Type OBCSEMANTICS
 
   (** ** Determinism of semantics *)
 
-  Theorem exp_eval_det:
+  Lemma exp_eval_det:
     forall menv env e v1 v2,
       exp_eval menv env e v1 ->
       exp_eval menv env e v2 ->
@@ -131,7 +131,7 @@ Module Type OBCSEMANTICS
       now rewrite Hv1 in Hv2; injection Hv2.
   Qed.
 
-  Theorem stmt_eval_fold_left_shift:
+  Lemma stmt_eval_fold_left_shift:
     forall A prog f (xs:list A) iacc menv env menv' env',
       stmt_eval prog menv env
                 (List.fold_left (fun i x => Comp (f x) i) xs iacc)
