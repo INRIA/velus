@@ -21,7 +21,7 @@ let get_main_node decls =
   | Some s -> intern_string s
   | None   -> match decls with
               | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
-              | d::_ -> Instantiator.NL.Syn.n_name d
+              | LustreAst.NODE (n, _, _, _, _, _)::_ -> n
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
@@ -91,12 +91,12 @@ let compile source_name filename =
     then PrintCminor.destination := Some (filename ^ ".minor.c");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
+  let main_node = get_main_node ast in
   let p =
     match NLustreElab.elab_declarations ast with
     | Errors.OK p -> p
     | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
   if Cerrors.check_errors() then exit 2;
-  let main_node = get_main_node p in
   match Compiler.apply_partial
           (VelusCorrectness.compile (List.rev p) main_node)
           Asmexpand.expand_program with
