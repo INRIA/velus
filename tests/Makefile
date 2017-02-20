@@ -9,7 +9,6 @@ EXAMPLES= avgvelocity.lus \
 	  cocospec_mono_system.lus \
 	  count.lus \
 	  cruise.lus \
-	  d_integrator.lus \
 	  emsoft03.lus \
 	  halbwachs.lus \
 	  kind_functionalChain.lus \
