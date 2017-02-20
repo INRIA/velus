@@ -197,7 +197,7 @@ beautify: $(VFILES:=.beautified)
 .PHONY: opt byte archclean clean install userinstall depend html validate compcert velus
 
 compcert: CompCert/Makefile.config
-	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof
+	@cd CompCert; make -j 8 compcert.ini driver/Version.ml proof ccomp
 
 CompCert/Makefile.config:
 	@cd CompCert; ./configure ia32-linux
