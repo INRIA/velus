@@ -20,9 +20,11 @@ source programs must currently be manually normalized (each `fby` and
 may only appear at the top level of an expression; output variables cannot 
 be defined directly by `fby` equations). Also, the `->` and `pre` operators 
 used in many Lustre programs are not yet treated. An equation like
+
     x = e1 -> e2
 
 must instead be "manually compiled" into
+
     x = if init then e1 else e2
     init = true fby false
 
@@ -95,17 +97,17 @@ from the host and compile them in the guest.
 
 ## Execution from the Virtualbox image
 
-We provide a Virtualbox image including our development as well as
-Emacs/proofgeneral and CoqIDE editors.
+We provide a Virtualbox image including our development as well as the
+Emacs/proofgeneral editor.
 
 ## Local installation
 
 Note: this is the most efficient method for editing, compiling, and
 running the compiler.
 
-It also possible to build Vélus locally, without resorting to a Docker
-image. Vélus has been implemented in Coq.8.4.6. It includes a modified
-version of CompCert and depends on menhir.20170101.
+It also possible to build Vélus locally, without resorting to a Docker or
+Virtualbox image. Vélus has been implemented in Coq.8.4.6. It includes a
+modified version of CompCert and depends on menhir.20170101.
 
 To build a self-contained installation for compiling and running
 Vélus, we recommend installing an ad-hoc
@@ -115,7 +117,7 @@ Vélus, we recommend installing an ad-hoc
     $ mkdir opam
     $ opam init --root=opam --compiler=4.02.3
     $ eval `opam config env --root=$VELUS_DIR/opam`
-    $ opam repo add coq-released https://coq.inria.fr/opam/released 
+    $ opam repo add coq-released https://coq.inria.fr/opam/released
     $ opam install -j4 coq.8.4.6 menhir.20170101
 
 To check the proofs and build Vélus:
@@ -123,7 +125,7 @@ To check the proofs and build Vélus:
     $ cd $VELUS
     $ make
 
-## Cross-references 
+## Cross-references
 
 In the following, we relate the definitions presented in the paper (on
 the left, in italics) to their incarnation in the formal development
@@ -188,7 +190,7 @@ the left, in italics) to their incarnation in the formal development
 
  - [Section 4 "Generation of Clight"](./ObcToClight/Generation.v)
    * [Big-step judgement for Clight](./CompCert/cfrontend/ClightBigstep.v)
-   
+
  - [Figure 10 "Operator interface: values](./Operators.v)
 
  - [Section 4.2 "Relating Memories"](./ObcToClight/SepInvariant.v)
@@ -198,5 +200,4 @@ the left, in italics) to their incarnation in the formal development
    * [State representation](./ObcToClight/MoreSeparation.v)
      - _sepall_: `sepall`
    * *match_states*: `staterep`
- - [Section 4.3 "Proof of generation"](VelusCorrectness.v): `Lemma behavior_asm`
-
+ - [Section 4.3 "Proof of generation"](VelusCorrectness.v): `Theorem behavior_asm`
