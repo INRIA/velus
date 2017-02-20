@@ -842,14 +842,27 @@ Module Type OBCTYPING
   Qed.
 
   Lemma find_class_rev:
-    forall prog c,
+    forall prog n,
       wt_program prog ->
-      find_class c prog = find_class c (rev prog).
+      find_class' n (rev prog) = find_class' n prog.
   Proof.
-    induction prog; simpl; auto.
-    intros.
-    inv H.
-    admit.
+    induction prog as [|c prog IH]; simpl; auto.
+    intro n.
+    inversion_clear 1 as [|? ? Hwtc Hwtp Hndup].
+    rewrite find_class'_app, (IH _ Hwtp).
+    simpl in Hndup.
+    apply NoDup_cons' in Hndup.
+    destruct Hndup as [Hnin Hndup].
+    destruct (ident_eqb c.(c_name) n) eqn:Heq.
+    - apply ident_eqb_eq in Heq.
+      rewrite Heq in *.
+      rewrite (not_In_find_class' _ _ Hnin).
+      simpl. apply ident_eqb_eq in Heq.
+      now rewrite Heq.
+    - apply ident_eqb_neq in Heq.
+      destruct (find_class' n prog); auto.
+      simpl. apply ident_eqb_neq in Heq.
+      now rewrite Heq.
   Qed.
   
 End OBCTYPING.

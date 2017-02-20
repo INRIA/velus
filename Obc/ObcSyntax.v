@@ -167,6 +167,13 @@ Module Type OBCSYNTAX
                               then Some (c, p') else find p'
                   end.
 
+  Definition find_class' (n: ident) : program -> option class :=
+    fix find p := match p with
+                  | [] => None
+                  | c :: p' => if ident_eqb c.(c_name) n
+                              then Some c else find p'
+                  end.
+
   (** Properties of class lookups *)
   
   Lemma find_class_none:
@@ -227,6 +234,53 @@ Module Type OBCSYNTAX
     - apply in_cons; auto.
   Qed.
 
+  Lemma find_class_find_class'_Some:
+    forall n prog c,
+      find_class' n prog = Some c ->
+      exists prog', find_class n prog = Some (c, prog').
+  Proof.
+    induction prog as [|c prog IH]; simpl; try now inversion 1.
+    intros c' Hif.
+    destruct (ident_eqb c.(c_name) n).
+    - inversion Hif; subst; eauto.
+    - eauto.
+  Qed.
+
+  Lemma find_class_find_class'_None:
+    forall n prog,
+      find_class' n prog = None <-> find_class n prog = None.
+  Proof.
+    induction prog as [|c prog IH]; simpl.
+    now split; auto.
+    destruct (ident_eqb c.(c_name) n); [split|]; now auto.
+  Qed.
+
+  Lemma find_class'_app:
+    forall n xs ys,
+      find_class' n (xs ++ ys) = match find_class' n xs with
+                                 | None => find_class' n ys
+                                 | Some c => Some c
+                                 end.
+  Proof.
+    induction xs as [|c xs IH]; simpl; auto.
+    intro ys.
+    destruct (ident_eqb c.(c_name) n); auto.
+  Qed.
+
+  Lemma not_In_find_class':
+    forall n prog,
+      ~In n (map c_name prog) ->
+      find_class' n prog = None.
+  Proof.
+    induction prog as [|c prog IH]; auto.
+    simpl; intro Hnin.
+    apply Decidable.not_or in Hnin.
+    destruct Hnin as (Hnin1 & Hnin2).
+    rewrite (IH Hnin2).
+    apply ident_eqb_neq in Hnin1.
+    now rewrite Hnin1.
+  Qed.
+  
   (** Syntactic predicates *)
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
