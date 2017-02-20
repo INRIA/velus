@@ -401,8 +401,8 @@ Definition check_size (env: Ctypes.composite_env) (id: AST.ident) :=
   match env ! id with
   | Some co =>
     if (Ctypes.co_sizeof co) <=? Int.max_unsigned
-    then OK tt else Error (msg "2big")
-  | None => Error (msg "unknown")
+    then OK tt else Error [MSG "ObcToClight: too big structure: '"; CTX id; MSG "'." ]
+  | None => Error [MSG "ObcToClight: undefined structure: '"; CTX id; MSG "'." ]
   end.
 
 Fixpoint check_size_env (env: Ctypes.composite_env) (types: list Ctypes.composite_definition)
