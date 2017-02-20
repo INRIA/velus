@@ -6,8 +6,8 @@ let
 tel
 
 node avgvelocity (delta:int; sec:bool) returns (v:int)
-var h:int; t:int :: . on sec; r:int;
-var rt:int :: . on sec; hh:int :: . onot sec;
+var h:int; t:int when sec; r:int;
+var rt:int when sec; hh:int when not sec;
 let
   t = counter (0 when sec, 1 when sec, false when sec);
   r = counter (0, delta, false);
@@ -16,3 +16,4 @@ let
   v = merge sec rt hh;
   h = 0 fby v;
 tel
+

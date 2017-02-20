@@ -1,42 +1,43 @@
 (* minus example from the Lustre v4 distribution. *)
 
-node TWO_STATES(set,reset,init:bool) returns (state:bool);
+node TWO_STATES(set,reset,vinit:bool) returns (state:bool);
 var first, pre_state : bool;
 let
   first = true fby false;
-  state = if first then init
+  state = if first then vinit
           else if set and not pre_state then true
           else if reset and pre_state then false
           else pre_state;
   pre_state = false fby state;
 tel;
 
-node ONE_BUTTON(change,init: bool) returns (state:bool);
+node ONE_BUTTON(change,vinit: bool) returns (state:bool);
 var first, pre_state : bool;
 let
   first = true fby false;
-  state = if first then init
+  state = if first then vinit
           else if change then not pre_state else pre_state;
   pre_state = false fby state;
 tel;
 
-node TWO_BUTTONS(von,voff,init:bool) returns(state:bool);
+node TWO_BUTTONS(von,voff,vinit:bool) returns(state:bool);
 var first, pre_state : bool;
 let
   first = true fby false;
-  state = if first then init
+  state = if first then vinit
           else if von then true
           else if voff then false else pre_state;
   pre_state = false fby state;
 tel;
 
-node minus (e1,e2,e3,init:bool) returns (ok:bool);
+node minus (e1,e2,e3,vinit:bool) returns (ok:bool);
 var s1,s2,s3,s4:bool;
 let
-   s1= TWO_STATES(e1,e2,init);
-   s2= TWO_BUTTONS(e1,e2,init);
+   s1= TWO_STATES(e1,e2,vinit);
+   s2= TWO_BUTTONS(e1,e2,vinit);
    assert not(e1 and e2);
-   s3= TWO_STATES(e3,e3,init);
-   s4= ONE_BUTTON(e3,init);
+   s3= TWO_STATES(e3,e3,vinit);
+   s4= ONE_BUTTON(e3,vinit);
    ok =(s1=s2) and (s3=s4);
 tel;
+
