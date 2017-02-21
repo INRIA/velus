@@ -12,7 +12,7 @@ Open Scope list_scope.
 
 (** * Obc typing *)
 
-(** 
+(**
 
   Typing judgements for Obc and resulting properties.
   Classify Obc programs which are statically well-formed.
@@ -25,14 +25,14 @@ Module Type OBCTYPING
        (Import OpAux : OPERATORS_AUX Op)
        (Import Syn   : OBCSYNTAX Ids Op OpAux)
        (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn).
-  
+
   Section WellTyped.
 
     Variable p     : program.
     Variable insts : list (ident * ident).
     Variable mems  : list (ident * type).
     Variable vars  : list (ident * type).
-    
+
     Inductive wt_exp : exp -> Prop :=
     | wt_Var: forall x ty,
         In (x, ty) vars ->
@@ -95,7 +95,7 @@ Module Type OBCTYPING
   Definition wt_class (p : program) (cls: class) : Prop
     := (Forall (fun ocls=> find_class (snd ocls) p <> None) cls.(c_objs))
        /\ Forall (wt_method p cls.(c_objs) cls.(c_mems)) cls.(c_methods).
-  
+
   Inductive wt_program : program -> Prop :=
   | wtp_nil:
       wt_program []
@@ -119,7 +119,7 @@ Module Type OBCTYPING
       repeat match goal with H:_ <-> _ |- _ => apply H; clear H end;
       auto with obctyping.
   Qed.
-  
+
   Instance wt_stmt_Proper:
     Proper (@eq program
                 ==> @Permutation.Permutation (ident * ident)
@@ -149,9 +149,9 @@ Module Type OBCTYPING
                       apply Forall_impl with (2:=H) end.
       intros; now rewrite Hys, Hzs.
   Qed.
-  
+
   (** Properties *)
-  
+
   Definition wt_valo (ve: stack) (xty: ident * type) :=
     match PM.find (fst xty) ve with
     | None => True
@@ -162,7 +162,7 @@ Module Type OBCTYPING
     Forall (wt_valo ve) vars.
 
   Hint Unfold wt_env.
-    
+
   Inductive wt_mem : heap -> program -> class -> Prop :=
   | WTmenv: forall me p cl,
       wt_env me.(mm_values) cl.(c_mems) ->
@@ -253,7 +253,7 @@ Module Type OBCTYPING
     apply mfind_inst_empty.
   Qed.
   Hint Resolve wt_sempty wt_hempty.
-  
+
   Lemma venv_find_wt_val:
     forall vars ve x ty v,
       wt_env ve vars ->
@@ -283,8 +283,8 @@ Module Type OBCTYPING
       injection Heq; intros; subst. auto.
     - rewrite (proj2 (ident_eqb_neq cls.(c_name) clsid) Hne) in Heq.
       apply IHp with (1:=WTp) (2:=Heq).
-  Qed.      
-  
+  Qed.
+
   Lemma wt_class_find_method:
     forall p cls f fm,
       wt_class p cls ->
@@ -296,7 +296,7 @@ Module Type OBCTYPING
     apply In_Forall with (1:=WTms).
     apply find_method_In with (1:=Hfindm).
   Qed.
-  
+
   Lemma pres_sem_exp:
     forall mems vars me ve e v,
       wt_env me.(mm_values) mems ->
@@ -341,7 +341,7 @@ Module Type OBCTYPING
     eapply pres_sem_exp with (vars:=vars); eauto.
   Qed.
   Hint Resolve pres_sem_exp'.
-  
+
   Lemma pres_sem_exps:
     forall prog c vars me ve es vs,
       wt_mem me prog c ->
@@ -353,7 +353,7 @@ Module Type OBCTYPING
     induction es, vs; intros ** Wt Ev; inv Wt; inv Ev; eauto.
   Qed.
   Hint Resolve pres_sem_exps.
-  
+
   Lemma wt_valo_add:
     forall env v x y ty,
       (y = x /\ wt_val v ty) \/ (y <> x /\ wt_valo env (y, ty)) ->
@@ -364,7 +364,7 @@ Module Type OBCTYPING
     - subst. now rewrite PM.gss.
     - now rewrite PM.gso with (1:=Hne).
   Qed.
-  
+
   Lemma wt_env_add:
     forall vars env x t v,
       NoDupMembers vars ->
@@ -379,7 +379,7 @@ Module Type OBCTYPING
     apply Forall_cons2 in WTenv.
     destruct WTenv as (WTx & WTenv).
     destruct y as (y & ty).
-    apply nodupmembers_cons in Hndup.    
+    apply nodupmembers_cons in Hndup.
     destruct Hndup as (Hnin & Hndup).
     inv Hin.
     - match goal with H:(y, ty) = _ |- _ => injection H; intros; subst end.
@@ -401,7 +401,7 @@ Module Type OBCTYPING
       + apply IHvars; auto.
   Qed.
   Hint Resolve wt_env_add.
-       
+
   Lemma wt_env_adds:
     forall vars env ys outs rvs,
       NoDupMembers vars ->
@@ -422,7 +422,7 @@ Module Type OBCTYPING
     eapply IHys; eauto.
   Qed.
   Hint Resolve wt_env_adds.
-  
+
   Lemma wt_params:
     forall vs xs es,
       Forall2 (fun e v => wt_val v (typeof e)) es vs ->
@@ -472,7 +472,7 @@ Module Type OBCTYPING
       apply PM.gempty.
   Qed.
   Hint Resolve wt_env_params.
-  
+
   Lemma wt_env_params_exprs:
     forall vs callee es,
       Forall2 (fun e v => wt_val v (typeof e)) es vs ->
@@ -483,7 +483,7 @@ Module Type OBCTYPING
     eapply wt_env_params, wt_params; eauto.
   Qed.
   Hint Resolve wt_env_params_exprs.
-  
+
   Lemma pres_sem_stmt':
     (forall p me ve stmt e',
         stmt_eval p me ve stmt e' ->
@@ -632,7 +632,7 @@ Module Type OBCTYPING
   Proof.
     intros; eapply (proj2 pres_sem_stmt'); eauto.
   Qed.
-  
+
   Lemma wt_program_app:
     forall cls cls',
       wt_program (cls ++ cls') ->
@@ -687,15 +687,15 @@ Module Type OBCTYPING
     apply Hnin.
     inversion_clear WTc as [Ho Hm]; clear Hm.
     apply In_Forall with (1:=Ho) in Hin.
-    apply not_None_is_Some in Hin.    
+    apply not_None_is_Some in Hin.
     destruct Hin as ((cls, p') & Hin).
     simpl in Hin. rewrite <-(find_class_name _ _ _ _ Hin) in *.
     apply find_class_In in Hin.
     now apply in_map.
   Qed.
 
-  Inductive sub_prog: program -> program -> Prop := 
-    sub_prog_intro: forall p p', 
+  Inductive sub_prog: program -> program -> Prop :=
+    sub_prog_intro: forall p p',
       sub_prog p (p' ++ p).
 
   Lemma sub_prog_refl:
@@ -704,7 +704,7 @@ Module Type OBCTYPING
     intro; rewrite <-app_nil_l; constructor.
   Qed.
   Hint Resolve sub_prog_refl.
-  
+
   Add Parametric Relation: program sub_prog
       reflexivity proved by sub_prog_refl
         as sub_prog_rel.
@@ -718,14 +718,14 @@ Module Type OBCTYPING
     inv Hsub.
     rewrite <-app_last_app. constructor.
   Qed.
-  
-  Remark find_class_sub_same: 
-    forall prog1 prog2 clsid cls prog', 
-      find_class clsid prog2 = Some (cls, prog') -> 
-      wt_program prog1 -> 
-      sub_prog prog2 prog1 -> 
-      find_class clsid prog1 = Some (cls, prog'). 
-  Proof. 
+
+  Remark find_class_sub_same:
+    forall prog1 prog2 clsid cls prog',
+      find_class clsid prog2 = Some (cls, prog') ->
+      wt_program prog1 ->
+      sub_prog prog2 prog1 ->
+      find_class clsid prog1 = Some (cls, prog').
+  Proof.
     intros ** Hfind WD Sub.
     inv Sub.
     induction p' as [|cls' p']; simpl; auto.
@@ -744,17 +744,17 @@ Module Type OBCTYPING
       now rewrite Hne, IHp'.
   Qed.
 
-  Lemma find_class_sub: 
-    forall prog clsid cls prog', 
-      find_class clsid prog = Some (cls, prog') -> 
-      sub_prog prog' prog. 
-  Proof. 
-    intros ** Find. 
+  Lemma find_class_sub:
+    forall prog clsid cls prog',
+      find_class clsid prog = Some (cls, prog') ->
+      sub_prog prog' prog.
+  Proof.
+    intros ** Find.
     apply find_class_app in Find.
-    destruct Find as (? & ? & ?); subst. 
-    rewrite List_shift_first. 
-    constructor. 
-  Qed. 
+    destruct Find as (? & ? & ?); subst.
+    rewrite List_shift_first.
+    constructor.
+  Qed.
 
   Lemma wt_stmt_sub:
     forall prog prog' insts mems vars s,
@@ -780,7 +780,7 @@ Module Type OBCTYPING
       eapply find_class_sub_same; eauto.
   Qed.
   Hint Resolve wt_mem_inst_sub.
-  
+
   Lemma wt_mem_sub:
     forall prog prog' c mem,
       wt_mem mem prog' c ->
@@ -794,7 +794,7 @@ Module Type OBCTYPING
     constructor; eauto.
   Qed.
 
-  Hint Constructors sub_prog.  
+  Hint Constructors sub_prog.
 
   Lemma find_class_chained:
     forall prog c1 c2 cls prog' cls' prog'',
@@ -840,7 +840,34 @@ Module Type OBCTYPING
       + simpl. rewrite <-Hc2. apply ident_eqb_neq in Hne.
         now rewrite Hne.
   Qed.
-  
+
+  Lemma find_class_rev:
+    forall prog n c prog',
+      wt_program prog ->
+      find_class n prog = Some (c, prog') ->
+      exists prog'', find_class n (rev prog) = Some (c, prog'').
+  Proof.
+   induction prog as [|c']; simpl; intros ** Find; try discriminate.
+   inversion_clear H as [|? ? Hwtc Hwtp Hndup].
+   simpl in Hndup; apply NoDup_cons' in Hndup.
+   destruct Hndup as [Hnin Hndup].
+   erewrite find_class_app'; eauto.
+   destruct (ident_eqb c'.(c_name) n) eqn:Heq.
+   - inv Find.
+     apply ident_eqb_eq in Heq.
+     rewrite Heq in *.
+     erewrite not_In_find_class; eauto.
+      + simpl. apply ident_eqb_eq in Heq.
+        rewrite Heq; econstructor; eauto.
+      + rewrite map_rev.
+        intro Hin; apply Hnin.
+        apply in_rev; auto.
+   - apply ident_eqb_neq in Heq.
+     edestruct IHprog as (? & Find'); eauto.
+     rewrite Find'.
+     econstructor; eauto.
+  Qed.
+
 End OBCTYPING.
 
 Module ObcTypingFun
@@ -852,4 +879,3 @@ Module ObcTypingFun
        <: OBCTYPING Ids Op OpAux Syn Sem.
   Include OBCTYPING Ids Op OpAux Syn Sem.
 End ObcTypingFun.
-

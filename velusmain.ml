@@ -97,20 +97,15 @@ let compile source_name filename =
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in
-  let p =
-    match NLustreElab.elab_declarations ast with
-    | Errors.OK p -> p
-    | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
-  if Cerrors.check_errors() then exit 2;
   match Compiler.apply_partial
-          (VelusCorrectness.compile (List.rev p) main_node)
+          (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error stderr errmsg
+  | Error errmsg -> Driveraux.print_error stderr errmsg; exit 1
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;
     close_out oc
-    
+
 let process file =
   if Filename.check_suffix file ".ept"
   then compile file (Filename.chop_suffix file ".ept")
@@ -152,4 +147,3 @@ let _ =
 
 let _ =
   Arg.parse (Arg.align speclist) process usage_msg
-

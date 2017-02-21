@@ -27,6 +27,7 @@ Import Typ.
 Import OpAux.
 Import Interface.Op.
 Require Import ObcToClight.Correctness.
+Require Import NLustreElab.
 
 Require Import String.
 Require Import List.
@@ -83,7 +84,7 @@ Proof.
     rewrite Wellsch_global_cons.
     destruct (well_sch (memories (n_eqs n)) (map fst (n_in n)) (n_eqs n)) eqn: E.
     + rewrite Is_well_sch_by_refl in E; split; auto.
-    + rewrite is_well_sch_error in Fold; discriminate. 
+    + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
 Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
@@ -101,11 +102,12 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
-Definition compile (g: global) (main_node: ident) : res Asm.program :=
-  df_to_cl main_node g @@ print print_Clight
-                       @@ add_builtins
-                       @@@ transf_clight2_program.
-  
+Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
+  elab_declarations D @@@ (fun g => df_to_cl main_node (proj1_sig g))
+                      @@ print print_Clight
+                      @@ add_builtins
+                      @@@ transf_clight2_program.
+
 Section WtStream.
 
 Variable G: global.
@@ -468,30 +470,37 @@ Proof.
         rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
-(* The ultimate lemma states that if the dataflow program G is well-clocked
-   and well-typed, for input and output streams that respect the
-   typing interface of the main node and are related by its dataflow
-   semantics, then if compilation suceeds, the behavior of the resulting
-   assembly code is an infinite sequence of volatile loads and
-   stores that corresponds with the input and output streams. That is, if
-   the input stream values are successively loaded by the assembler program
-   it will successively write the corresponding output values. *)
+(** The ultimate lemma states that, if
+    - the parsed declarations [D] elaborate to a dataflow program [G] and
+      witnesses that it satisfies [wt_global G] and [wc_global G],
+    - the values on input streams [ins] are well-typed according to the
+      interface of the [main] node,
+    - similarly for output streams [outs],
+    - the input and output streams are related by the dataflow semantics
+      of the node [main] in [G], and
+    - compilation succeeds in generating an assembler program [P],
+    then the assembler program generates an infinite sequence of volatile
+    reads and writes that correspond to the successive values on the
+    input and output streams. *)
 Theorem behavior_asm:
-  forall G P main ins outs,
-    wc_global G ->
-    wt_global G ->
+  forall D GP P main ins outs,
+    elab_declarations D = OK GP ->
+    let G := proj1_sig GP in
     wt_ins G main ins ->
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
-    compile G main = OK P ->
+    compile D main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros ** Comp.
+  intros D GP P main ins outs Elab ** Comp.
+  destruct GP as (G' & ? & ?); simpl in *.
   unfold compile, print in Comp.
-  destruct (df_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
+  rewrite Elab in Comp; simpl in Comp.
+  destruct (df_to_cl main G') as [p|] eqn: Comp'; simpl in Comp; try discriminate.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.
   eapply reacts_trace_preservation in Comp; eauto.
   apply add_builtins_spec; auto.
   intros ? ?; discriminate.
 Qed.
+

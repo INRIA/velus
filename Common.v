@@ -1374,6 +1374,23 @@ Section Lists.
     destruct xs; simpl; auto.
   Qed.
 
+  Lemma NoDup_comm:
+    forall {A} (xs: list A) ys,
+      NoDup (ys ++ xs) ->
+      NoDup (xs ++ ys).
+  Proof.
+    induction xs; simpl; intros.
+    - rewrite app_nil_r in H; auto.
+    - pose proof H as H'.
+      apply NoDup_remove_1 in H.
+      apply NoDup_remove_2 in H'.
+      constructor; auto.
+      intro Hin; apply H'.
+      apply in_app_iff in Hin.
+      apply in_app_iff.
+      tauto.
+  Qed.
+  
   Lemma in_app:
   forall (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
   Proof.
@@ -1739,7 +1756,20 @@ Section Lists.
   Proof.
     destruct l; simpl; intro H; auto; discriminate.
   Qed.
-  
+
+  Lemma split_last:
+    forall (x: A * B) xs,
+      split (xs ++ [x]) =
+      let (g, d) := split xs in
+      (g ++ [fst x], d ++ [snd x]).
+  Proof.
+    destruct x as [a b].
+    induction xs as [|(a', b')]; auto.
+    simpl.
+    destruct (split xs) as [g d].
+    rewrite IHxs; auto.
+  Qed.  
+
 End Lists.
 
 Lemma Forall2_map_1:
