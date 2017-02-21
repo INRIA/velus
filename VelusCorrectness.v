@@ -27,6 +27,7 @@ Import Typ.
 Import OpAux.
 Import Interface.Op.
 Require Import ObcToClight.Correctness.
+Require Import NLustreElab.
 
 Require Import String.
 Require Import List.
@@ -83,7 +84,7 @@ Proof.
     rewrite Wellsch_global_cons.
     destruct (well_sch (memories (n_eqs n)) (map fst (n_in n)) (n_eqs n)) eqn: E.
     + rewrite Is_well_sch_by_refl in E; split; auto.
-    + rewrite is_well_sch_error in Fold; discriminate. 
+    + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
 Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
@@ -101,11 +102,12 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
+Require Import NLustreElab.
 Definition compile (g: global) (main_node: ident) : res Asm.program :=
   df_to_cl main_node g @@ print print_Clight
                        @@ add_builtins
                        @@@ transf_clight2_program.
-  
+
 Section WtStream.
 
 Variable G: global.
@@ -469,17 +471,18 @@ Proof.
 Qed.
 
 Theorem behavior_asm:
-  forall G P main ins outs,
-    wc_global G ->
-    wt_global G ->
+  forall D G' P main ins outs,
+    let G := proj1_sig G' in
     wt_ins G main ins ->
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
+    elab_declarations D = OK G' ->
     compile G main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros ** Comp.
+  intros ** Elab Comp.
+  destruct G' as (G' & ? & ?); simpl in *.
   unfold compile, print in Comp.
   destruct (df_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.

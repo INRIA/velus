@@ -93,7 +93,7 @@ Definition assign (x: ident) (ty: Ctypes.type) (clsid: ident) (m: method): Cligh
   end.
 
 Definition ptr_obj (owner: ident) (cls obj: ident): Clight.expr :=
-  Clight.Eaddrof (deref_field self owner obj (type_of_inst cls)) (type_of_inst_p cls).  
+  Clight.Eaddrof (deref_field self owner obj (type_of_inst cls)) (type_of_inst_p cls).
 
 Definition funcall_assign
            (ys: idents) (owner: ident) (caller: method)
@@ -102,7 +102,7 @@ Definition funcall_assign
   fold_right
     (fun y s =>
        let '(y, (y', ty)) := y in
-       let ty := cltype ty in 
+       let ty := cltype ty in
        let assign_out := assign y ty owner caller (Clight.Efield (Clight.Evar obj tyout) y' ty) in
        Clight.Ssequence assign_out s
     ) Clight.Sskip (combine ys callee.(m_out)).
@@ -127,7 +127,7 @@ Definition binded_funcall
       (*     (assign y c_t owner caller (Clight.Etempvar (Ident.prefix f y') c_t)) *)
       | _, _ =>
         let tyout := type_of_inst (prefix_fun cls f) in
-        let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in 
+        let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in
         let args := ptr_obj owner cls obj :: out :: args in
         Clight.Ssequence
           (funcall None (prefix_fun cls f) args)
@@ -150,11 +150,11 @@ Fixpoint translate_stmt (prog: program) (c: class) (m: method) (s: stmt)
   | AssignSt x e =>
     Clight.Sassign (deref_field self c.(c_name) x (cltype (typeof e))) (translate_exp c m e)
   | Ifte e s1 s2 =>
-    Clight.Sifthenelse (translate_exp c m e) (translate_stmt prog c m s1) (translate_stmt prog c m s2) 
+    Clight.Sifthenelse (translate_exp c m e) (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Comp s1 s2 =>
     Clight.Ssequence (translate_stmt prog c m s1) (translate_stmt prog c m s2)
   | Call ys cls o f es =>
-    binded_funcall prog ys c.(c_name) m cls o f (map (translate_exp c m) es)  
+    binded_funcall prog ys c.(c_name) m cls o f (map (translate_exp c m) es)
   | Skip => Clight.Sskip
   end.
 
@@ -182,7 +182,7 @@ Module M := FMapAVL.Make(IdentPair).
 
 Fixpoint rec_instance_methods (s: stmt) (m: M.t ident): M.t ident :=
   match s with
-  | Ifte _ s1 s2  
+  | Ifte _ s1 s2
   | Comp s1 s2 => rec_instance_methods s2 (rec_instance_methods s1 m)
   | Call ys cls o f _ =>
     match ys with
@@ -191,7 +191,7 @@ Fixpoint rec_instance_methods (s: stmt) (m: M.t ident): M.t ident :=
     end
   | _ => m
   end.
-  
+
 Definition instance_methods (m: method): M.t ident :=
   rec_instance_methods m.(m_body) (@M.empty ident).
 
@@ -223,7 +223,7 @@ Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
 (*     end *)
 (*   | _ => m *)
 (*   end. *)
-  
+
 (* Definition instance_methods_temp (prog: program) (m: method): M'.t Ctypes.type := *)
 (*   rec_instance_methods_temp prog m.(m_body) (@M'.empty Ctypes.type). *)
 
@@ -292,7 +292,7 @@ Definition translate_class (prog: program) (c: class)
   : list Ctypes.composite_definition * list (ident * AST.globdef Clight.fundef Ctypes.type) :=
   let methods := make_methods prog c in
   let class_struct := make_struct c in
-  let out_structs := make_out c in   
+  let out_structs := make_out c in
   (class_struct :: out_structs, methods).
 
 Definition glob_bind (bind: ident * type): ident * Ctypes.type :=
@@ -378,7 +378,7 @@ Definition ef_sync: Clight.fundef :=
   let sg := AST.mksignature [] None AST.cc_default in
   let ef := AST.EF_external "sync" sg in
   Ctypes.External ef Ctypes.Tnil Ctypes.Tvoid AST.cc_default.
-  
+
 Definition make_sync: AST.globdef Clight.fundef Ctypes.type :=
   @AST.Gfun Clight.fundef Ctypes.type ef_sync.
 
@@ -421,7 +421,7 @@ Definition make_program'
            (public: idents)
            (main: ident) : res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
-  | inl (exist ce P) => 
+  | inl (exist ce P) =>
     do _ <- check_size_env ce types;
       OK {| Ctypes.prog_defs := map (vardef ce false) gvars ++
                                 map (vardef ce true) gvars_vol ++

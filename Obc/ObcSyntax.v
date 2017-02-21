@@ -49,7 +49,7 @@ Module Type OBCSYNTAX
         m_vars : list (ident * type);
         m_out  : list (ident * type);
         m_body : stmt;
-        
+
         m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
         m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
       }.
@@ -80,7 +80,7 @@ Module Type OBCSYNTAX
     intro; pose proof (m_nodupvars f) as Nodup;
     now apply NoDupMembers_app_r, NoDupMembers_app_l in Nodup.
   Qed.
-  
+
   Lemma m_notreserved:
     forall x m,
       In x reserved ->
@@ -94,7 +94,7 @@ Module Type OBCSYNTAX
     - contradiction.
     - now apply IHl.
   Qed.
-  
+
   Record class : Type :=
     mk_class {
         c_name    : ident;
@@ -126,7 +126,7 @@ Module Type OBCSYNTAX
   Qed.
 
   Definition program : Type := list class.
-  
+
   Definition find_method (f: ident): list method -> option method :=
     fix find ms := match ms with
                    | [] => None
@@ -142,8 +142,8 @@ Module Type OBCSYNTAX
     intros ** Hfind.
     induction ms; inversion Hfind as [H].
     destruct (ident_eqb (m_name a) fid) eqn: E.
-    - inversion H; subst. 
-      apply in_eq. 
+    - inversion H; subst.
+      apply in_eq.
     - auto using in_cons.
   Qed.
 
@@ -155,7 +155,7 @@ Module Type OBCSYNTAX
     intros ** Hfind.
     induction fs; inversion Hfind as [H].
     destruct (ident_eqb (m_name a) fid) eqn: E.
-    - inversion H; subst. 
+    - inversion H; subst.
       now apply ident_eqb_eq.
     - now apply IHfs.
   Qed.
@@ -167,15 +167,8 @@ Module Type OBCSYNTAX
                               then Some (c, p') else find p'
                   end.
 
-  Definition find_class' (n: ident) : program -> option class :=
-    fix find p := match p with
-                  | [] => None
-                  | c :: p' => if ident_eqb c.(c_name) n
-                              then Some c else find p'
-                  end.
-
   (** Properties of class lookups *)
-  
+
   Lemma find_class_none:
     forall clsnm cls prog,
       find_class clsnm (cls::prog) = None
@@ -199,7 +192,7 @@ Module Type OBCSYNTAX
     intros ** Hfind.
     induction cls; inversion Hfind as [H].
     destruct (ident_eqb (c_name a) id) eqn: E.
-    - inversion H; subst. 
+    - inversion H; subst.
       exists nil; auto.
     - specialize (IHcls H).
       destruct IHcls as (cls'' & Hcls'' & Hnone).
@@ -216,7 +209,7 @@ Module Type OBCSYNTAX
     intros ** Hfind.
     induction cls; inversion Hfind as [H].
     destruct (ident_eqb (c_name a) id) eqn: E.
-    - inversion H; subst. 
+    - inversion H; subst.
       now apply ident_eqb_eq.
     - now apply IHcls.
   Qed.
@@ -229,37 +222,16 @@ Module Type OBCSYNTAX
     intros ** Hfind.
     induction cls; inversion Hfind as [H].
     destruct (ident_eqb (c_name a) id) eqn: E.
-    - inversion H; subst. 
-      apply in_eq. 
+    - inversion H; subst.
+      apply in_eq.
     - apply in_cons; auto.
   Qed.
 
-  Lemma find_class_find_class'_Some:
-    forall n prog c,
-      find_class' n prog = Some c ->
-      exists prog', find_class n prog = Some (c, prog').
-  Proof.
-    induction prog as [|c prog IH]; simpl; try now inversion 1.
-    intros c' Hif.
-    destruct (ident_eqb c.(c_name) n).
-    - inversion Hif; subst; eauto.
-    - eauto.
-  Qed.
-
-  Lemma find_class_find_class'_None:
-    forall n prog,
-      find_class' n prog = None <-> find_class n prog = None.
-  Proof.
-    induction prog as [|c prog IH]; simpl.
-    now split; auto.
-    destruct (ident_eqb c.(c_name) n); [split|]; now auto.
-  Qed.
-
-  Lemma find_class'_app:
+  Lemma find_class_app':
     forall n xs ys,
-      find_class' n (xs ++ ys) = match find_class' n xs with
-                                 | None => find_class' n ys
-                                 | Some c => Some c
+      find_class n (xs ++ ys) = match find_class n xs with
+                                 | None => find_class n ys
+                                 | Some (c, prog) => Some (c, prog ++ ys)
                                  end.
   Proof.
     induction xs as [|c xs IH]; simpl; auto.
@@ -267,10 +239,10 @@ Module Type OBCSYNTAX
     destruct (ident_eqb c.(c_name) n); auto.
   Qed.
 
-  Lemma not_In_find_class':
+  Lemma not_In_find_class:
     forall n prog,
       ~In n (map c_name prog) ->
-      find_class' n prog = None.
+      find_class n prog = None.
   Proof.
     induction prog as [|c prog IH]; auto.
     simpl; intro Hnin.
@@ -280,7 +252,7 @@ Module Type OBCSYNTAX
     apply ident_eqb_neq in Hnin1.
     now rewrite Hnin1.
   Qed.
-  
+
   (** Syntactic predicates *)
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
@@ -299,9 +271,9 @@ Module Type OBCSYNTAX
       ~Is_free_in_exp i (Unop op e ty) ->
       ~Is_free_in_exp i e.
   Proof.
-    intros i op e ty Hfree H; apply Hfree. now constructor. 
+    intros i op e ty Hfree H; apply Hfree. now constructor.
   Qed.
-  
+
   Lemma not_free_aux2 : forall i op e1 e2 ty,
       ~Is_free_in_exp i (Binop op e1 e2 ty) ->
       ~Is_free_in_exp i e1 /\ ~Is_free_in_exp i e2.
@@ -327,13 +299,13 @@ Module Type OBCSYNTAX
     end.
 
   (** Misc. properties *)
-  
+
   Lemma exp_dec : forall e1 e2 : exp, {e1 = e2} + {e1 <> e2}.
   Proof.
     decide equality;
     try apply equiv_dec.
   Qed.
-  
+
   Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
   Lemma reset_not_step:
@@ -356,4 +328,3 @@ Module ObcSyntaxFun
   Include OBCSYNTAX Ids Op OpAux.
 
 End ObcSyntaxFun.
-
