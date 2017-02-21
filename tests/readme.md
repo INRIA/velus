@@ -34,8 +34,12 @@ with the programs reaction by reaction.
   nested automata and simplifying the results.
 
 * emsoft03.lus
-  Some more examples with clocking from the "Clocks as First Class Abstract 
-  Types" paper in EMSOFT 2003.
+  Examples with clocking from the "Clocks as First Class Abstract Types" 
+  paper in EMSOFT 2003.
+
+* emsoft05.lus
+  Examples with clocking from the "A Conservative Extension of Synchronous 
+  Data-flow with State Machines" paper in EMSOFT 2005.
 
 ## Larger verification examples
 
