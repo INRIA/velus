@@ -472,7 +472,7 @@ Qed.
 
 (** The ultimate lemma states that, if
     - the parsed declarations [D] elaborate to a dataflow program [G] and
-      witnesses that it satisfies [wt_global G] and [wc_global G],
+      a proof [Gp] that it satisfies [wt_global G] and [wc_global G],
     - the values on input streams [ins] are well-typed according to the
       interface of the [main] node,
     - similarly for output streams [outs],
@@ -483,9 +483,8 @@ Qed.
     reads and writes that correspond to the successive values on the
     input and output streams. *)
 Theorem behavior_asm:
-  forall D GP P main ins outs,
-    elab_declarations D = OK GP ->
-    let G := proj1_sig GP in
+  forall D G Gp P main ins outs,
+    elab_declarations D = OK (exist _ G Gp) ->
     wt_ins G main ins ->
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
@@ -493,11 +492,10 @@ Theorem behavior_asm:
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros D GP P main ins outs Elab ** Comp.
-  destruct GP as (G' & ? & ?); simpl in *.
-  unfold compile, print in Comp.
+  intros D G (WT & WC) P main ins outs Elab ** Comp.
+  simpl in *. unfold compile, print in Comp.
   rewrite Elab in Comp; simpl in Comp.
-  destruct (df_to_cl main G') as [p|] eqn: Comp'; simpl in Comp; try discriminate.
+  destruct (df_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.
   eapply reacts_trace_preservation in Comp; eauto.
   apply add_builtins_spec; auto.
