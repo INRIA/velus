@@ -1,7 +1,7 @@
 FROM debian:testing
 
 RUN apt-get update && \
-    apt-get install -y sudo opam m4 
+    apt-get install -y sudo opam m4 libc6-dev-i386
 
 # Add a default omnipotent user
 RUN useradd -m developer && \

@@ -3,4 +3,4 @@
 sudo chown -R developer.developer $HOME/velus
 cd $HOME/velus
 make clean
-make && bash
+make && cd CompCert; make && cd .. && bash
