@@ -19,9 +19,9 @@ let set_main_node s =
 let get_main_node decls =
   match !Veluslib.main_node with
   | Some s -> intern_string s
-  | None   -> match decls with
+  | None   -> match List.rev decls with
               | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
-              | d::_ -> Instantiator.NL.Syn.n_name d
+              | LustreAst.NODE (n, _, _, _, _, _)::_ -> set_main_node (Camlcoq.extern_atom n); n
 
 (** Incremental parser to reparse the token stream and generate an
     error message (the verified and extracted parser does not
@@ -91,21 +91,16 @@ let compile source_name filename =
     then PrintCminor.destination := Some (filename ^ ".minor.c");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
-  let p =
-    match NLustreElab.elab_declarations ast with
-    | Errors.OK p -> p
-    | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
-  if Cerrors.check_errors() then exit 2;
-  let main_node = get_main_node p in
+  let main_node = get_main_node ast in
   match Compiler.apply_partial
-          (VelusCorrectness.compile p main_node)
+          (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error stderr errmsg
+  | Error errmsg -> Driveraux.print_error stderr errmsg; exit 1
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;
     close_out oc
-    
+
 let process file =
   if Filename.check_suffix file ".ept"
   then compile file (Filename.chop_suffix file ".ept")
@@ -147,4 +142,3 @@ let _ =
 
 let _ =
   Arg.parse (Arg.align speclist) process usage_msg
-

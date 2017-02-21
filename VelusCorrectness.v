@@ -102,11 +102,11 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
-Require Import NLustreElab.
-Definition compile (g: global) (main_node: ident) : res Asm.program :=
-  df_to_cl main_node g @@ print print_Clight
-                       @@ add_builtins
-                       @@@ transf_clight2_program.
+Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
+  elab_declarations D @@@ (fun g => df_to_cl main_node (proj1_sig g))
+                      @@ print print_Clight
+                      @@ add_builtins
+                      @@@ transf_clight2_program.
 
 Section WtStream.
 
@@ -477,14 +477,15 @@ Theorem behavior_asm:
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
     elab_declarations D = OK G' ->
-    compile G main = OK P ->
+    compile D main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
   intros ** Elab Comp.
   destruct G' as (G' & ? & ?); simpl in *.
   unfold compile, print in Comp.
-  destruct (df_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
+  rewrite Elab in Comp; simpl in Comp.
+  destruct (df_to_cl main G') as [p|] eqn: Comp'; simpl in Comp; try discriminate.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.
   eapply reacts_trace_preservation in Comp; eauto.
   apply add_builtins_spec; auto.
