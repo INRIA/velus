@@ -1,4 +1,4 @@
-# Vélus: Verified Lustre Compiler
+# A Formally Verified Compiler for Lustre
 
 These source files contain the implementation, models, and proof of 
 correctness of a formally verified Lustre compiler backend.
