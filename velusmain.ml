@@ -93,7 +93,7 @@ let compile source_name filename =
   if !write_cl
     then PrintClight.destination := Some (filename ^ ".light.c");
   if !write_cm
-    then PrintCminor.destination := Some (filename ^ ".minor.c");
+    then PrintCminor.destination := Some (filename ^ ".cm");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in

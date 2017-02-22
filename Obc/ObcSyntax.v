@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Ident.
 
 Open Scope bool_scope.
 Require Import List.
@@ -94,7 +95,7 @@ Module Type OBCSYNTAX
     - contradiction.
     - now apply IHl.
   Qed.
-
+  
   Record class : Type :=
     mk_class {
         c_name    : ident;

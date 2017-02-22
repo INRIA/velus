@@ -18,7 +18,9 @@ Axiom pos_of_str_injective:
 Axiom pos_to_str_not_empty:
   forall x, pos_to_str x <> ("")%string.
 Axiom pos_to_str_equiv:
-  forall x, pos_to_str (pos_of_str x) = x.
+  forall s, pos_to_str (pos_of_str s) = s.
+Axiom pos_of_str_equiv:
+  forall x, pos_of_str (pos_to_str x) = x.
 
 Fixpoint In_str (x: ascii) (s: string): Prop :=
   match s with

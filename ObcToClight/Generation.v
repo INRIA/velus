@@ -77,9 +77,10 @@ Fixpoint list_type_to_typelist (tys: list Ctypes.type): Ctypes.typelist :=
   | ty :: tys => Ctypes.Tcons ty (list_type_to_typelist tys)
   end.
 
-Definition funcall (y: option ident) (f: ident) (args: list Clight.expr) : Clight.statement :=
+Definition funcall (y: option ident) (f: ident) (tret: option Ctypes.type) (args: list Clight.expr) : Clight.statement :=
   let tys := map Clight.typeof args in
-  let sig := Ctypes.Tfunction (list_type_to_typelist tys) Ctypes.Tvoid AST.cc_default in
+  let tret := match tret with Some t => t | None => Ctypes.Tvoid end in
+  let sig := Ctypes.Tfunction (list_type_to_typelist tys) tret AST.cc_default in
   Clight.Scall y (Clight.Evar f sig) args.
 
 Definition assign (x: ident) (ty: Ctypes.type) (clsid: ident) (m: method): Clight.expr -> Clight.statement :=
@@ -118,19 +119,19 @@ Definition binded_funcall
       match ys, m.(m_out) with
       | [], [] =>
         let args := ptr_obj owner cls obj :: args in
-        funcall None (prefix_fun cls f) args
+        funcall None (prefix_fun cls f) None args
       | [y], [(y', t)] =>
         let args := ptr_obj owner cls obj :: args in
         let c_t := cltype t in
         Clight.Ssequence
-          (funcall (Some (Ident.prefix f y')) (prefix_fun cls f) args)
+          (funcall (Some (Ident.prefix f y')) (prefix_fun cls f) (Some c_t) args)
           (assign y c_t owner caller (Clight.Etempvar (Ident.prefix f y') c_t))
       | _, _ =>
         let tyout := type_of_inst (prefix_fun cls f) in
         let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in
         let args := ptr_obj owner cls obj :: out :: args in
         Clight.Ssequence
-          (funcall None (prefix_fun cls f) args)
+          (funcall None (prefix_fun cls f) None args)
           (funcall_assign ys owner caller (prefix_out obj f) tyout m)
       end
     | None => Clight.Sskip
@@ -204,7 +205,7 @@ Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
 Require Import FMapPositive.
 Module M' := PositiveMap.
 
-Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: M'.t Ctypes.type): M'.t Ctypes.type :=
+Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: M'.t type): M'.t type :=
   match s with
   | Ifte _ s1 s2
   | Comp s1 s2 => rec_instance_methods_temp prog s2 (rec_instance_methods_temp prog s1 m)
@@ -214,7 +215,7 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: M'.t Ctypes.typ
       match find_method f c.(c_methods) with
       | Some m' =>
         match ys, m'.(m_out) with
-        | [_], [(y', t)] => M'.add (Ident.prefix f y') (cltype t) m
+        | [_], [(y', t)] => M'.add (Ident.prefix f y') t m
         | _, _ => m
         end
       | None => m
@@ -224,11 +225,11 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: M'.t Ctypes.typ
   | _ => m
   end.
 
-Definition instance_methods_temp (prog: program) (m: method): M'.t Ctypes.type :=
-  rec_instance_methods_temp prog m.(m_body) (@M'.empty Ctypes.type).
+Definition instance_methods_temp (prog: program) (m: method): M'.t type :=
+  rec_instance_methods_temp prog m.(m_body) (@M'.empty type).
 
-Definition make_out_temps (out_temps: M'.t Ctypes.type): list (ident * Ctypes.type) :=
-  M'.elements out_temps.
+Definition make_out_temps (out_temps: M'.t type): list (ident * Ctypes.type) :=
+  map translate_param (M'.elements out_temps).
 
 Definition make_in_arg (arg: ident * type): Clight.expr :=
   let (x, ty) := arg in
@@ -251,7 +252,7 @@ Definition translate_method (prog: program) (c: class) (m: method)
   | [(y, t) as yt] =>
     let args := self :: ins in
     let c_t := cltype t in
-    fundef args out_vars ((y, c_t) :: out_temps ++ vars) c_t (return_some body (make_in_arg yt))
+    fundef args out_vars (translate_param yt :: out_temps ++ vars) c_t (return_some body (make_in_arg yt))
   | _ :: _ =>
     let args := self :: out :: ins in
     fundef args out_vars (out_temps ++ vars) Ctypes.Tvoid (return_none body)
@@ -337,7 +338,7 @@ Definition write_out (node: ident) (outs: list (ident * type))
 
 Definition reset_call (node: ident): Clight.statement :=
   let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
-  funcall None (prefix_fun node reset) [p_self].
+  funcall None (prefix_fun node reset) None [p_self].
 
 Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident * type)): Clight.statement :=
   let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
@@ -347,13 +348,13 @@ Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident 
   match m_out with
   | [] =>
     let args := p_self :: args in
-    funcall None (prefix_fun node step) args
+    funcall None (prefix_fun node step) None args
   | [(y, t)] =>
     let args := p_self :: args in
-    funcall (Some y) (prefix_fun node step) args
+    funcall (Some y) (prefix_fun node step) (Some (cltype t)) args
   | _ =>
     let args := p_self :: p_out :: args in
-    funcall None (prefix_fun node step) args
+    funcall None (prefix_fun node step) None args
   end.
 
 Definition main_loop_body (do_sync: bool) (node: ident) (m: method): Clight.statement :=
@@ -365,7 +366,7 @@ Definition main_loop_body (do_sync: bool) (node: ident) (m: method): Clight.stat
                    (write_out node m.(m_out)))
   in
   if do_sync
-  then Clight.Ssequence (funcall None sync_id []) body
+  then Clight.Ssequence (funcall None sync_id None []) body
   else body.
 
 Definition main_loop (do_sync: bool) (node: ident) (m: method): Clight.statement :=

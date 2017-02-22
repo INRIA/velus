@@ -754,7 +754,7 @@ Section InMembers.
     destruct x. apply NoDupMembers_app_cons in HH. intuition.
   Qed.
 
-   Lemma NoDupMembers_app_assoc:
+   Lemma NoDupMembers_app_comm:
     forall ws xs,
       NoDupMembers (ws ++ xs) <-> NoDupMembers (xs ++ ws).
   Proof.
@@ -793,7 +793,7 @@ Section InMembers.
       NoDupMembers (ws ++ xs) -> NoDupMembers ws.
   Proof.
     intros ** Hndup.
-    apply NoDupMembers_app_assoc in Hndup.
+    apply NoDupMembers_app_comm in Hndup.
     apply NoDupMembers_app_r with (1:=Hndup).
   Qed.
 
