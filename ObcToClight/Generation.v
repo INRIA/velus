@@ -98,7 +98,7 @@ Definition ptr_obj (owner: ident) (cls obj: ident): Clight.expr :=
 
 Definition funcall_assign
            (ys: idents) (owner: ident) (caller: method)
-           (obj: ident) (tyout: Ctypes.type) (callee: method)
+           (obj: ident) (tyout: Ctypes.type) (outs: list (ident * type))
            : Clight.statement :=
   fold_right
     (fun y s =>
@@ -106,7 +106,7 @@ Definition funcall_assign
        let ty := cltype ty in
        let assign_out := assign y ty owner caller (Clight.Efield (Clight.Evar obj tyout) y' ty) in
        Clight.Ssequence assign_out s
-    ) Clight.Sskip (combine ys callee.(m_out)).
+    ) Clight.Sskip (combine ys outs).
 
 Definition binded_funcall
            (prog: program) (ys: idents) (owner: ident)
@@ -126,13 +126,13 @@ Definition binded_funcall
         Clight.Ssequence
           (funcall (Some (Ident.prefix f y')) (prefix_fun cls f) (Some c_t) args)
           (assign y c_t owner caller (Clight.Etempvar (Ident.prefix f y') c_t))
-      | _, _ =>
+      | _, outs =>
         let tyout := type_of_inst (prefix_fun cls f) in
         let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in
         let args := ptr_obj owner cls obj :: out :: args in
         Clight.Ssequence
           (funcall None (prefix_fun cls f) None args)
-          (funcall_assign ys owner caller (prefix_out obj f) tyout m)
+          (funcall_assign ys owner caller (prefix_out obj f) tyout outs)
       end
     | None => Clight.Sskip
     end

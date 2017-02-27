@@ -81,6 +81,18 @@ Proof.
   apply ident_eqb_refl.
 Qed.
 
+Lemma mem_assoc_ident_true:
+  forall {A} x xs,
+    mem_assoc_ident x xs = true ->
+    exists t: A, In (x, t) xs.
+Proof.
+  intros ** Hin.
+  unfold mem_assoc_ident in Hin; rewrite existsb_exists in Hin.
+  destruct Hin as ((x', t) & ? & E).
+  simpl in E; rewrite ident_eqb_eq in E; subst x'.
+  eauto.
+Qed.
+
 Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
   match find (fun y => ident_eqb (fst y) x) xs with
   | Some (_, a) => Some a
@@ -1390,7 +1402,7 @@ Section Lists.
       apply in_app_iff.
       tauto.
   Qed.
-  
+
   Lemma in_app:
   forall (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
   Proof.
@@ -1768,7 +1780,7 @@ Section Lists.
     simpl.
     destruct (split xs) as [g d].
     rewrite IHxs; auto.
-  Qed.  
+  Qed.
 
 End Lists.
 
@@ -1863,7 +1875,7 @@ Section TypesAndClocks.
   (* A Lustre variable is declared with a type and a clock.
      In the abstract syntax, a declaration is represented as a triple:
      (x, (ty, ck)) : ident * (type * clock)
-     
+
      And nodes include lists of triples for lists of declarations.
      The following definitions and lemmas facilitate working with such
      values. *)
@@ -1878,7 +1890,7 @@ Section TypesAndClocks.
     map (fun xtc => (fst xtc, snd (snd xtc))).
 
   (* idty *)
-  
+
   Lemma idty_app:
     forall xs ys,
       idty (xs ++ ys) = idty xs ++ idty ys.
@@ -1896,7 +1908,7 @@ Section TypesAndClocks.
     - rewrite <-IHxs; destruct HH; auto.
     - rewrite IHxs. destruct HH; auto.
   Qed.
-  
+
   Lemma NoDupMembers_idty:
     forall xs,
       NoDupMembers (idty xs) <-> NoDupMembers xs.
@@ -1967,7 +1979,7 @@ Section TypesAndClocks.
     - rewrite <-IHxs; destruct HH; auto.
     - rewrite IHxs. destruct HH; auto.
   Qed.
-  
+
   Lemma NoDupMembers_idck:
     forall xs,
       NoDupMembers (idck xs) <-> NoDupMembers xs.
@@ -2018,7 +2030,7 @@ Section TypesAndClocks.
     unfold idck. rewrite Hperm.
     reflexivity.
   Qed.
-  
+
 End TypesAndClocks.
 
 (** Extra lemmas for positive maps *)
@@ -2191,7 +2203,7 @@ Section ExtraPositiveMaps.
         * subst. exists xv. apply PM.gss.
         * exists yv. rewrite PM.gso; auto.
   Qed.
-  
+
   Lemma PM_mem_spec_false:
     forall x (s: PM.t A),
       PM.mem x s = false <-> ~PM.In x s.
