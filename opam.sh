@@ -17,7 +17,7 @@ make clean
 make -C CompCert/ clean
 ./CompCert/configure $ARCH -prefix $VELUS_DIR/opam/4.02.3
 make -j
-echo "To test the velus compiler, go to the tests/ directory and compile all
+echo "To test the velus compiler, go to the examples/ directory and compile all
 examples with 'make'."
 echo "If you want to use the CoqIDE editor to browse the Coq development, you
 can install it with 'opam install coqide'.  You may need the libgtksourceview2.0-dev package installed in your system."

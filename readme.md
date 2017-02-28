@@ -7,7 +7,7 @@ This file contains instructions for (i) using the compiler, (ii) running
 from docker, a virtual machine, or a local opam installation, and (iii) 
 cross-references from material presented in the paper to the source files.
 
-The `tests/` subdirectory contains another readme file presenting several 
+The `examples/` subdirectory contains another readme file presenting several 
 example programs that can be used to test the compiler.
 
 Since submitting the paper, we have implemented the scheduling pass (the 
@@ -44,10 +44,10 @@ To run the compiler:
 
 In particular, typing
 
-    ./velus tests/count.lus
+    ./velus examples/count.lus
 
-will compile the Lustre program in tests/count.lus into an assembler program 
-tests/count.s.
+will compile the Lustre program in examples/count.lus into an assembler 
+program examples/count.s.
 
 The compiler also accepts the options
 
@@ -72,7 +72,7 @@ The compiler also accepts the options
   but it is useful for testing the dynamic behaviour of compiled programs.
   The alternative entry point can be selected by compiling using CompCert 
   with `-Wl,-emain_sync` (or with by passing `-emain_sync -m32` to `gcc`).
-  See `tests/Makefile` for examples.
+  See `examples/Makefile` for examples.
 
 ## Execution from Docker
 
@@ -137,7 +137,7 @@ the left, in italics) to their incarnation in the formal development
    * equation (_eqn_): `equation`
    * declaration (_d_): `node`
 
- - [Figure 3 "SN-Lustre: example program"](./tests/tracker.lus)
+ - [Figure 3 "SN-Lustre: example program"](./examples/tracker.lus)
 
  - [Figure 4 "Obc: abstract syntax"](./Obc/ObcSyntax.v)
    * expression (_e_): `exp`
