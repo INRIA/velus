@@ -2136,6 +2136,20 @@ Section ExtraPositiveMaps.
     - now apply not_in_cons in NotIn.
   Qed.
 
+  Lemma adds_comm:
+    forall xs x x' (v v': A) vs e,
+      ~ In x xs ->
+      ~ In x' xs ->
+      x <> x' ->
+      adds (x :: x' :: xs) (v :: v' :: vs) e = adds (x' :: x :: xs) (v' :: v :: vs) e.
+  Proof.
+    intros.
+    repeat rewrite adds_cons_cons; auto.
+    - rewrite add_comm; auto.
+    - intros [?|?]; contradiction.
+    - intros [?|?]. symmetry in H2. contradiction. contradiction.
+ Qed.
+
   Lemma adds_nil_nil:
     forall e,
       adds [] [] e = e.
