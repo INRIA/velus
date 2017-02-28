@@ -44,7 +44,7 @@ update_path_vars()
 }
 
 PWD=$(pwd)
-COMPCERT_INCLUDES=$(make -C CompCert print-includes | grep -v 'make:')
+COMPCERT_INCLUDES=$(make --no-print-directory -C CompCert print-includes)
 
 COQPROGARGS=""
 COQLOADPATH=""
