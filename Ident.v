@@ -84,12 +84,12 @@ Qed.
 
 Module Export Ids <: IDS.
   Definition self := pos_of_str "self".
-  Definition out := pos_of_str "out".             
+  Definition out := pos_of_str "out".
   Definition main_id: ident := pos_of_str "main".
   Definition fun_id: ident  := pos_of_str "fun".
   Definition sync_id: ident := pos_of_str "sync".
   Definition main_sync_id: ident := pos_of_str "main_sync".
-  
+
   Definition step := pos_of_str "step".
   Definition reset := pos_of_str "reset".
 
@@ -126,9 +126,9 @@ Module Export Ids <: IDS.
   Proof.
     intro E; unfold fun_id, out in E.
     apply pos_of_str_injective in E.
-    discriminate.    
+    discriminate.
   Qed.
-  
+
   Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
     ~In (fst xty) reserved.
 End Ids.
@@ -140,7 +140,7 @@ Definition prefix_fun (c f: ident): ident :=
   prefix fun_id (prefix c f).
 Definition prefix_out (o f: ident): ident :=
   prefix out (prefix o f).
-  
+
 Lemma prefix_injective:
   forall pref id pref' id',
     prefix pref id = prefix pref' id' ->
@@ -156,7 +156,7 @@ Proof.
     apply pos_to_str_injective in H2; auto.
 Qed.
 
-Lemma prefix_fun_injective: 
+Lemma prefix_fun_injective:
  forall c c' f f',
    prefix_fun c f = prefix_fun c' f' -> c = c' /\ f = f'.
 Proof.
@@ -166,7 +166,7 @@ Proof.
   now apply prefix_injective.
 Qed.
 
-Lemma prefix_out_injective: 
+Lemma prefix_out_injective:
  forall c c' f f',
    prefix_out c f = prefix_out c' f' -> c = c' /\ f = f'.
 Proof.
@@ -194,7 +194,7 @@ Proof.
   unfold prefix_fun, prefix_out.
   intros ** E.
   apply prefix_injective in E; destruct E as [E]; contradict E.
-  apply fun_not_out.  
+  apply fun_not_out.
 Qed.
 
 Definition glob_id (id: ident): ident :=
@@ -281,7 +281,7 @@ Proof.
   apply pos_of_str_injective in E.
   apply append_sep_injectivity in E; try apply pos_to_str_valid; auto.
   destruct E as [? E]; contradict E.
-  apply pos_to_str_not_empty. 
+  apply pos_to_str_not_empty.
 Qed.
 
 Lemma self_not_prefixed: ~ prefixed self.
@@ -296,6 +296,18 @@ Proof.
   contradiction.
 Qed.
 
+Lemma out_not_prefixed: ~ prefixed out.
+Proof.
+  intro H.
+  inversion H as [? ? E].
+  unfold prefix, out in E.
+  apply pos_of_str_injective in E.
+  assert (In_str "$" "out") as Hin
+      by (rewrite <- E, In_str_app; right; apply In_str_eq).
+  destruct Hin as [|[|[|]]]; try discriminate.
+  contradiction.
+Qed.
+
 Lemma sync_not_prefixed: ~ prefixed sync_id.
 Proof.
   intro H.
@@ -307,4 +319,3 @@ Proof.
   destruct Hin as [|[|[|[|]]]]; try discriminate.
   contradiction.
 Qed.
-  
