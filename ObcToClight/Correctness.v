@@ -1925,6 +1925,60 @@ Section PRESERVATION.
     - now apply IHl.
   Qed.
 
+  Lemma varsrep_add':
+    forall f ve le x v y v',
+      ~ InMembers y (m_in f ++ m_vars f) ->
+      varsrep f ve le -*> varsrep f (PM.add x v ve) (PTree.set x v (PTree.set y v' le)).
+  Proof.
+    intros ** Notin.
+    transitivity (varsrep f ve (PTree.set y v' le)).
+    - unfold varsrep.
+      rewrite pure_imp.
+      intro Hforall.
+      induction (m_in f ++ m_vars f) as [|(x', t')]; simpl in *; auto.
+      inv Hforall.
+      apply Decidable.not_or in Notin; destruct Notin.
+      constructor.
+      + rewrite PTree.gso; auto.
+      + now apply IHl.
+    - apply varsrep_add.
+  Qed.
+
+  Lemma varsrep_add'':
+    forall f ve le x v y v',
+      ~ InMembers y (m_in f ++ m_vars f) ->
+      x <> y ->
+      varsrep f (PM.add x v ve) le -*> varsrep f (PM.add x v ve) (PTree.set y v' le).
+  Proof.
+    intros ** Notin ?.
+    unfold varsrep.
+    rewrite pure_imp.
+    intro Hforall.
+    induction (m_in f ++ m_vars f) as [|(x', t')]; simpl in *; auto.
+    inv Hforall.
+    apply Decidable.not_or in Notin; destruct Notin.
+    constructor.
+    - rewrite PTree.gso; auto.
+    - now apply IHl.
+  Qed.
+
+ Lemma varsrep_add''':
+    forall f ve le x v,
+      ~ InMembers x (m_in f ++ m_vars f) ->
+      varsrep f ve le -*> varsrep f ve (PTree.set x v le).
+  Proof.
+    intros ** Notin.
+    unfold varsrep.
+    rewrite pure_imp.
+    intro Hforall.
+    induction (m_in f ++ m_vars f) as [|(x', t')]; simpl in *; auto.
+    inv Hforall.
+    apply Decidable.not_or in Notin; destruct Notin.
+    constructor.
+    - rewrite PTree.gso; auto.
+    - now apply IHl.
+  Qed.
+
   Section MatchStatesAssign.
     Variables (ownerid: ident) (owner: class) (prog': program) (callerid: ident) (caller: method).
     Hypothesis Findowner: find_class ownerid prog = Some (owner, prog').
@@ -3527,6 +3581,22 @@ Section PRESERVATION.
   Qed.
   Hint Resolve stmt_eval_sub_prog.
 
+  Program Definition empty_co: composite :=
+    {|
+      co_su := Struct;
+      co_members := [];
+      co_attr := noattr;
+      co_sizeof := 0;
+      co_alignof := 1;
+      co_rank := 0
+    |}.
+  Next Obligation.
+    exists 0%nat; now rewrite two_power_nat_O.
+  Defined.
+  Next Obligation.
+    apply Z.divide_0_r.
+  Defined.
+
   Theorem correctness:
     (forall p me1 ve1 s S2,
         stmt_eval p me1 ve1 s S2 ->
@@ -3593,7 +3663,11 @@ Section PRESERVATION.
                                :: match callee.(m_out) with
                                   | [] | [_] => vs
                                   | _ => Vptr outb_callee Int.zero :: vs
-                                  end) E0 m2 Vundef
+                                  end) E0 m2
+                         match rvs with
+                         | [v] => v
+                         | _ => Vundef
+                         end
             /\ make_out_vars (instance_methods caller) =
               ws ++ match callee.(m_out) with
                     | [] | [_] => xs
@@ -3723,7 +3797,7 @@ Section PRESERVATION.
       subst.
 
       (* the *self parameter *)
-      edestruct eval_self_inst with (1:=Find) (e:=e1) as (? & ? & ? & ?); eauto.
+      edestruct eval_self_inst with (1:=Find) (e:=e1) as (d & Eval_self & Offs & Bounds); eauto.
 
       (* recursive funcall evaluation *)
       assert (wt_mem match mfind_inst o menv with
@@ -3768,25 +3842,25 @@ Section PRESERVATION.
         exfalso; apply Neq; auto.
       }
       edestruct find_class_rev as (? & Find''); eauto.
+      edestruct pres_sem_stmt_call with (2:=Find') as (WT_omenv & WT_val); eauto.
+      clear WT_omenv.
+      assert (length rvs = length callee.(m_out)) as Hrvs_out by
+            (eapply Forall2_length; eauto).
 
-
-      destruct_list (m_out callee) as (?, ?) ? ? : Out.
-      + assert (ys = []) as Hys by (apply length_nil; rewrite Hys_out; auto).
-        edestruct Hrec_eval with (owner:=owner) (e1:=e1) (m1:=m1) (le1:=le1) (outb_co:=outb_co)
+      destruct_list (m_out callee) as (x', t') x'' outs : Out;
+        destruct_list ys as y y' ys' : Hys; destruct_list rvs  as v v' rvs': Hrvs;
+        simpl in Hys_out; simpl in Hrvs_out; try discriminate.
+      + edestruct Hrec_eval with (owner:=owner) (e1:=e1) (m1:=m1) (le1:=le1) (outb_co:=outb_co)
           as (m2 & xs & ws & ? & Heq & Hm2); eauto.
         * rewrite Out; auto.
         * rewrite Out; auto.
         * rewrite Out; auto.
         * rewrite Out; auto.
         *{ clear Hrec_eval.
-           edestruct pres_sem_stmt_call with (2:=Find'); eauto.
-           assert (length rvs = length callee.(m_out)) as Hrvs_out by
-                 (eapply Forall2_length; eauto).
-           assert (rvs = []) as Hrvs by (apply length_nil; rewrite Hrvs_out, Out; auto).
            exists le1, m2; split; auto.
            - simpl.
              unfold binded_funcall.
-             rewrite Find'', Findmeth, Hys, Out; auto.
+             rewrite Find'', Findmeth, Out; auto.
              erewrite E.
              eapply exec_Scall; eauto.
              + reflexivity.
@@ -3814,14 +3888,180 @@ Section PRESERVATION.
              rewrite sep_swap.
              rewrite Out in Heq; rewrite <-Heq in Hm2; auto.
          }
-      + admit.
+
+      + inv Incl.
+        assert ((PTree.set (prefix (m_name callee) x') v le1) ! self = Some (Vptr sb sofs)).
+        { rewrite PTree.gso; auto.
+          intro Eq; apply self_not_prefixed; rewrite Eq; constructor.
+        }
+        edestruct eval_self_inst with (1:=Find) (e:=e1) (le:=PTree.set (prefix (m_name callee) x') v le1)
+          as (d' & Eval_self' & Offs' & Bounds'); eauto.
+        rewrite Offs in Offs'; inversion Offs'; subst d'.
+        clear Offs' Bounds'.
+        assert (~ InMembers (prefix (m_name callee) x') (m_in caller ++ m_vars caller)) by admit.
+        assert (self <> y).
+        { intro Eq.
+          apply (m_notreserved y caller).
+          - unfold reserved; rewrite Eq; apply in_eq.
+          - eapply In_InMembers; eauto.
+        }
+        (* assert (y <> prefix (m_name callee) x') by admit. *)
+        edestruct Hrec_eval with (owner:=owner) (e1:=e1) (m1:=m1)
+                                                (le1:=PTree.set (prefix (m_name callee) x') v le1)
+                                                (outb_co:=outb_co)
+          as (m2 & xs & ws & ? & Heq & Hm2); eauto; clear Hrec_eval.
+        *{ rewrite sep_swap in *.
+           destruct_list caller.(m_out) as (?, ?) ? ? : Outs.
+           - rewrite match_out_nil in *; auto.
+             eapply sep_imp; eauto.
+             apply sep_imp'; auto.
+             apply sep_imp'; eauto.
+             apply varsrep_add'''; auto.
+           - rewrite match_out_singleton in *; eauto;
+               destruct Hrep as (Hrep & ?); split.
+             + eapply sep_imp; eauto.
+               repeat apply sep_imp'; auto.
+               apply varsrep_add'''; auto.
+             + rewrite PTree.gso; auto.
+               admit.
+           - assert (1 < length caller.(m_out))%nat by (rewrite Outs; simpl; omega).
+             rewrite match_out_notnil in *; auto;
+               destruct Hrep as (? & ? & ? & Hrep & ? & ?);
+               do 2 econstructor; split; [|split; [|split]]; eauto.
+             + eapply sep_imp; eauto.
+               repeat apply sep_imp'; auto.
+               apply varsrep_add'''; auto.
+             + rewrite PTree.gso; auto.
+               intro Eq; apply out_not_prefixed; rewrite Eq; constructor.
+         }
+        * rewrite Out; auto.
+        * rewrite Out; auto.
+        * rewrite Out; auto.
+        * rewrite Out; auto.
+        *{ assert (exists m3 le3,
+                      exec_stmt tge (function_entry2 tge) e1 (PTree.set (prefix (m_name callee) x') v le1) m2
+                                (assign y (cltype t') (c_name owner) caller (Etempvar (prefix (m_name callee) x') (cltype t')))
+                                E0 le3 m3 Out_normal
+                      /\ m3 |= match_states owner caller (madd_obj o omenv' menv, adds [y] [v] env) (e1, le3) sb sofs outb_co ** P) as Hexec.
+           { rewrite Out, <-sepemp_left in Hm2.
+             unfold assign; destruct_list caller.(m_out) as (?, ?) ? ? : Outs'.
+             - do 2 econstructor; split.
+               + repeat econstructor.
+                 simpl; rewrite PTree.gss; eauto.
+               + rewrite match_states_conj; split; [|repeat (split; auto)].
+                 *{ rewrite sep_swap, match_out_nil in *; auto.
+                    eapply sep_imp; eauto.
+                    apply sep_imp'; auto.
+                    - unfold subrep.
+                      rewrite Heq, Out; auto.
+                    - apply sep_imp'; auto.
+                      unfold adds; simpl.
+                      apply varsrep_add; auto.
+                  }
+                 * rewrite PTree.gso; auto.
+             - do 2 econstructor; split.
+               + repeat econstructor.
+                 simpl; rewrite PTree.gss; eauto.
+               + rewrite match_states_conj; split; [|repeat (split; auto)].
+                 *{ rewrite sep_swap, match_out_singleton in *; eauto.
+                    destruct Hm2 as (Hm2 & ?); split.
+                    - eapply sep_imp; eauto.
+                      apply sep_imp'; auto.
+                      + unfold subrep.
+                        rewrite Heq, Out; auto.
+                      + apply sep_imp'; auto.
+                        unfold adds; simpl.
+                        apply varsrep_add; auto.
+                    - unfold adds; simpl.
+                      destruct (ident_eqb i y) eqn: Eq.
+                      + apply ident_eqb_eq in Eq.
+                        subst i.
+                        rewrite PTree.gss, PM.gss; auto.
+                      + apply ident_eqb_neq in Eq.
+                        rewrite PTree.gso, PM.gso; auto.
+                  }
+                 * rewrite PTree.gso; auto.
+             - destruct (mem_assoc_ident y caller.(m_out)) eqn:E'; rewrite <-Outs', E'.
+               + inv WT_val.
+                 rewrite sep_swap, sep_swap34, sep_swap23 in Hm2.
+                 assert (1 < length caller.(m_out))%nat by (rewrite Outs'; simpl; omega).
+                 pose proof Hm2 as Hm2'; rewrite match_out_notnil in Hm2'; auto;
+                   destruct Hm2' as (? & ? & ? & ? & ? & ?).
+                 edestruct evall_out_field with (le:=PTree.set (prefix (m_name callee) x') v le1)
+                                                  (1:=Find) (2:=Hf) as (? & ? & ?); eauto.
+                 edestruct match_states_assign_out with (1:=Find) (2:=Hf) (x:=y) as (m3 & ? & Hm3); eauto.
+                 exists m3, (PTree.set (prefix (m_name callee) x') v le1); split.
+                 *{ econstructor; eauto.
+                    - econstructor; rewrite PTree.gss; eauto.
+                    - apply sem_cast_same; auto.
+                    - econstructor; eauto.
+                      + simpl; eauto.
+                      + rewrite Int.add_zero_l; auto.
+                  }
+                 * rewrite match_states_conj; split; [|repeat (split; auto)].
+                   rewrite sep_swap.
+                   rewrite match_out_notnil in *; auto;
+                     destruct Hm3 as (? & ? & ? & Hm3 & ? & ?);
+                     do 2 econstructor; split; [|split; [|split]]; eauto.
+                   unfold adds; simpl.
+                   rewrite sep_swap34, sep_swap23.
+                   eapply sep_imp; eauto.
+                   repeat apply sep_imp'; auto.
+                   unfold subrep.
+                   rewrite Heq, Out; auto.
+               + do 2 econstructor; split.
+                 * repeat econstructor.
+                   rewrite PTree.gss; eauto.
+                 *{ rewrite match_states_conj; split; [|repeat (split; auto)].
+                    - rewrite sep_swap, sep_swap34, sep_swap23 in Hm2.
+                      eapply match_states_assign_tempvar in Hm2; eauto.
+                      unfold adds; simpl.
+                      rewrite sep_swap23, sep_swap, sep_swap34 in Hm2.
+                      eapply sep_imp; eauto.
+                      repeat apply sep_imp'; auto.
+                      unfold subrep.
+                      rewrite Heq, Out; auto.
+                    - rewrite PTree.gso; auto.
+                  }
+           }
+
+           destruct Hexec as (m3 & le3 & ? & ?).
+           exists le3, m3; split; auto.
+           simpl.
+           unfold binded_funcall.
+           rewrite Find'', Findmeth, Out; auto.
+           change E0 with (Eapp E0 E0).
+           eapply exec_Sseq_1 with (m1:=m2); eauto.
+           change (PTree.set (prefix (m_name callee) x') v le1) with
+           (set_opttemp (Some (prefix (m_name callee) x')) v le1).
+           eapply exec_Scall; eauto.
+           - reflexivity.
+           - simpl.
+             eapply eval_Elvalue.
+             + apply eval_Evar_global; eauto.
+               rewrite <-not_Some_is_None.
+               intros (b, t) Hget.
+               apply He in Hget; destruct Hget as (o' & f' & Eqpref).
+               unfold prefix_fun, prefix_out in Eqpref.
+               apply prefix_injective in Eqpref; destruct Eqpref.
+               apply fun_not_out; auto.
+             + apply deref_loc_reference; auto.
+           - rewrite Out.
+               apply find_method_In in Findmeth.
+               econstructor; eauto.
+               eapply exprs_eval_simu with (1:=Find); eauto.
+           - simpl.
+             unfold type_of_function;
+               rewrite Hparams, Hreturn, Hcc; simpl; repeat f_equal.
+             apply type_pres'; auto.
+         }
+
       + (* the *out parameter *)
-        assert (1 < length ys)%nat as Hys by (rewrite Hys_out; simpl; omega).
         rewrite sep_swap3 in Hrep.
         edestruct wt_program_find_class with (2:=Find) as [WT'']; eauto.
         eapply wt_class_find_method in WT''; eauto.
         pose proof (c_nodupobjs owner) as Nodup.
-        eapply occurs_in_instance_methods in Occurs; eauto.
+        eapply occurs_in_instance_methods in Occurs; eauto; try (simpl; omega).
         (* clear WT' Nodup. *)
         edestruct subrep_extract as (oblk & outco_callee & ? & ? & Hoblk & Houtco_callee & ?); eauto.
         rewrite sep_swap3 in Hrep.
@@ -3835,16 +4075,18 @@ Section PRESERVATION.
            clear Hrec_eval.
            rewrite Out, <-Out in Hm2.
            edestruct pres_sem_stmt_call with (2:=Find'); eauto.
-           rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
+            rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
            rewrite <-Out in Incl.
            edestruct exec_funcall_assign with (1:=Find) (ys:=ys) (m1:=m2)
              as (le3 & m3 & Hexec & Hm3 & ?) ; eauto.
+           - rewrite Hys; auto.
+           - rewrite Hys; auto.
            - rewrite Out, <-Out; eauto.
-           - exists le3, m3; split; auto.
+           - rewrite Hys in Hexec.
+             exists le3, m3; split; auto.
              + simpl.
                unfold binded_funcall.
                rewrite Find'', Findmeth, Out; auto.
-               destruct_list ys; contr.
                change E0 with (Eapp E0 E0).
                eapply exec_Sseq_1 with (m1:=m2); eauto.
                eapply exec_Scall; eauto.
@@ -3853,7 +4095,7 @@ Section PRESERVATION.
                   eapply eval_Elvalue.
                   - apply eval_Evar_global; eauto.
                     rewrite <-not_Some_is_None.
-                    intros (b, t') Hget.
+                    intros (b, t) Hget.
                     apply He in Hget; destruct Hget as (o' & f' & Eqpref).
                     unfold prefix_fun, prefix_out in Eqpref.
                     apply prefix_injective in Eqpref; destruct Eqpref.
@@ -3871,7 +4113,7 @@ Section PRESERVATION.
                * simpl; rewrite <-Out; auto.
              + rewrite match_states_conj; split; [|repeat (split; auto)].
                rewrite sep_swap34.
-               rewrite Out, sep_swap4 in Hm3.
+               rewrite Out, Hys, sep_swap4 in Hm3.
                eapply sep_imp; eauto.
                apply sep_imp'; auto.
                apply sep_imp'; auto.
@@ -3934,7 +4176,7 @@ Section PRESERVATION.
       rewrite Find' in Find''; inversion Find''; subst prog'0 cls; clear Find''.
       rewrite Findmeth in Findmeth'; inversion Findmeth'; subst fm; clear Findmeth'.
 
-      edestruct pres_sem_stmt_call; eauto.
+      edestruct pres_sem_stmt_call as [? WT_val]; eauto.
       destruct (mfind_inst o me); econstructor; eauto.
 
       (* get the clight function *)
@@ -3961,12 +4203,15 @@ Section PRESERVATION.
         apply in_map_iff.
         exists (o, c_name c); split; auto.
       }
+      assert (length rvs = length callee.(m_out)) by (eapply Forall2_length; eauto).
 
-      destruct (m_out callee) eqn: Out.
-      + edestruct (compat_funcall_pres' cf sb sofs outb_callee vs)
+      destruct_list (m_out callee) as (x, t) ? outs : Out;
+        destruct_list rvs as v v' rvs' : Hrvs; contr.
+      + edestruct (compat_funcall_pres' cf sb sofs outb_callee None vs)
           as (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & He_fun & ? & Hobjs & Hm_fun & ? & ?);
           eauto; simpl; auto.
         * rewrite Out; auto.
+        * rewrite Out; eauto.
         * rewrite Out; eauto.
         * rewrite Out; eauto.
         * rewrite Out, sep_swap, <-sepemp_left; eauto.
@@ -4050,7 +4295,105 @@ Section PRESERVATION.
                 }
          }
 
-      + assert (callee.(m_out) <> []) by (intro E'; rewrite E' in Out; discriminate).
+      + edestruct (compat_funcall_pres' cf sb sofs outb_callee None vs)
+          as (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & He_fun & ? & Hobjs & Hm_fun & ? & ?);
+          eauto; simpl; auto.
+        * rewrite Out; auto.
+        * rewrite Out; eauto.
+        * rewrite Out; eauto.
+        * rewrite Out; eauto.
+        * rewrite Out, sep_swap, <-sepemp_left; eauto.
+        *{ specialize (Hrec_exec Hsub c).
+           edestruct Hrec_exec with (le1:=le_fun) (e1:=e_fun) (m1:=m_fun)
+             as (? & m_fun' & ? & MS'); eauto.
+           - eapply wt_mem_sub in WTmem; eauto.
+             inversion_clear WTmem.
+             edestruct make_members_co as (instco' & ? & ? & Hmembers & ?); eauto.
+             edestruct field_offset_type; eauto.
+             eapply struct_in_struct_in_bounds in Hbounds; eauto.
+             rewrite Hmembers in Hbounds.
+             rewrite match_states_conj; split; [|split; [|repeat split; eauto]].
+             + simpl.
+               rewrite sep_swap, sep_swap34, sep_swap23, sep_swap45, sep_swap34,
+               <-sep_assoc, <-sep_assoc, sep_swap45, sep_swap34, sep_swap23,
+               sep_swap45, sep_swap34, sep_assoc, sep_assoc in Hm_fun; eauto.
+             + edestruct field_offset_in_range; eauto.
+               destruct Hbounds; split; try omega.
+               unfold Int.add.
+               repeat (rewrite Int.unsigned_repr; auto); split; try omega.
+           - rewrite match_states_conj in MS'; destruct MS' as (Hm_fun' & ?).
+             rewrite sep_swap23, sep_swap5, sep_swap in Hm_fun'.
+             rewrite <-sep_assoc, sep_unwand in Hm_fun'; auto.
+             edestruct free_exists as (m_fun'' & Hfree & Hm_fun''); eauto.
+             exists m_fun'', [], (make_out_vars (instance_methods caller)); split; [|split]; eauto.
+             + eapply eval_funcall_internal; eauto.
+               * rewrite Out in Bind; constructor; eauto.
+               * rewrite Htr.
+                 change E0 with (Eapp E0 E0).
+                 eapply exec_Sseq_1; eauto;
+                   apply exec_Sreturn_some.
+                 rewrite sep_swap, match_out_singleton in Hm_fun'; eauto;
+                   destruct Hm_fun' as (Hm_fun' & Hfind).
+                 inversion_clear Findvars as [|? ? ? ? Hfind'].
+                 rewrite Hfind' in Hfind.
+                 econstructor; eauto.
+               *{ rewrite Hret. simpl.
+                  split.
+                  - destruct t; simpl; intro; contr.
+                  -  inversion_clear WT_val; apply sem_cast_same; auto.
+                }
+             + simpl.
+               rewrite match_out_singleton in Hm_fun''; eauto;
+                 destruct Hm_fun'' as (Hm_fun'' & ?).
+               rewrite sep_swap5.
+               rewrite <- 3 sep_assoc in Hm_fun''; rewrite sep_swap4 in Hm_fun'';
+                 rewrite 3 sep_assoc in Hm_fun''.
+               unfold varsrep in *; rewrite sep_pure in *.
+               destruct Hm_fun'' as (Hpure & Hm_fun''); split; auto.
+               rewrite sep_swap3, sep_pure in Hm_fun''.
+               destruct Hm_fun'' as (Hpure' & Hm_fun'').
+               rewrite sep_swap, <-sepemp_left.
+               rewrite sep_swap.
+               eapply sep_imp; eauto.
+               apply sep_imp'; auto.
+               rewrite <- 2 sep_assoc.
+               apply sep_imp'; auto.
+               rewrite staterep_skip with (c:=owner); eauto. simpl.
+               rewrite ident_eqb_refl. rewrite sep_assoc, sep_swap2.
+               apply sep_imp'; auto.
+               rewrite sepall_breakout with (ys:=c_objs owner); eauto; simpl.
+               apply sep_imp'.
+               * rewrite Offs.
+                 unfold instance_match, mfind_inst, madd_obj; simpl.
+                 rewrite PM.gss.
+                 rewrite Hprog in WT; eapply wt_program_not_class_in in WT; eauto.
+                 rewrite <-staterep_skip_cons with (prog:=prog'') (cls:=owner); eauto.
+                 rewrite <-staterep_skip_app with (prog:=owner :: prog''); eauto.
+                 rewrite <-Hprog.
+                 unfold Int.add.
+                 assert (0 <= d <= Int.max_unsigned)
+                   by (split; [eapply field_offset_in_range'; eauto | omega]).
+                 repeat (rewrite Int.unsigned_repr; auto).
+               *{ unfold staterep_objs.
+                  apply sepall_swapp.
+                  intros (i, k) Hini.
+                  destruct (field_offset gcenv i (make_members owner)); auto.
+                  unfold instance_match, mfind_inst, madd_obj; simpl.
+                  destruct (ident_eqb i o) eqn: E.
+                  - exfalso.
+                    apply ident_eqb_eq in E; subst i.
+                    pose proof (c_nodupobjs owner) as Nodup.
+                    rewrite Hobjs in Nodup.
+                    rewrite NoDupMembers_app_cons in Nodup.
+                    destruct Nodup as [Notin Nodup].
+                    apply Notin.
+                    eapply In_InMembers; eauto.
+                  - apply ident_eqb_neq in E.
+                    rewrite PM.gso; auto.
+                }
+         }
+
+      + assert (1 < length callee.(m_out))%nat by (rewrite Out; simpl; omega).
         (* extract the out structure *)
         rewrite sep_swap23, sep_swap in Hrep.
         eapply subrep_extract in Hrep; eauto.
@@ -4060,12 +4403,13 @@ Section PRESERVATION.
         rewrite Houtb_callee' in Houtb_callee; inversion Houtb_callee;
           subst outb_callee'; clear Houtb_callee.
         rewrite sep_swap23, sep_swap in Hrep.
-        edestruct (compat_funcall_pres' cf sb sofs outb_callee vs)
+        edestruct (compat_funcall_pres' cf sb sofs outb_callee (Some (outb_callee, outco_callee)) vs)
           as (e_fun & le_fun & m_fun & ws' & xs' & Bind & Alloc & He_fun & ? & Hobjs & Hm_fun & ? & ?);
           eauto; auto.
         * rewrite Out; auto.
         * rewrite Out; eauto.
         * rewrite Out; eauto.
+        * rewrite Out; split; eauto.
         * rewrite sep_swap, Out, sep_swap; eauto.
         *{ specialize (Hrec_exec Hsub c).
            edestruct Hrec_exec with (le1:=le_fun) (e1:=e_fun) (m1:=m_fun)
@@ -4097,7 +4441,9 @@ Section PRESERVATION.
                  eapply exec_Sseq_1; eauto.
                  apply exec_Sreturn_none.
                * rewrite Hret; reflexivity.
-             + rewrite match_out_notnil in Hm_fun''; auto; destruct Hm_fun'' as (Hm_fun'' & ? & ?).
+             + rewrite match_out_notnil in Hm_fun''; auto;
+                 destruct Hm_fun'' as (? & ? & E & Hm_fun'' & ? & ?).
+               symmetry in E; inversion E; subst outb_callee outco_callee.
                rewrite sep_swap5.
                rewrite <- 3 sep_assoc in Hm_fun''; rewrite sep_swap5 in Hm_fun'';
                  rewrite 3 sep_assoc in Hm_fun''.
@@ -4133,19 +4479,19 @@ Section PRESERVATION.
                   - apply sep_imp'; auto.
                     unfold staterep_objs.
                     apply sepall_swapp.
-                    intros (i, k) Hini.
-                    destruct (field_offset gcenv i (make_members owner)); auto.
+                    intros (i', k) Hini.
+                    destruct (field_offset gcenv i' (make_members owner)); auto.
                     unfold instance_match, mfind_inst, madd_obj; simpl.
-                    destruct (ident_eqb i o) eqn: E.
+                    destruct (ident_eqb i' o) eqn: E'.
                     + exfalso.
-                      apply ident_eqb_eq in E; subst i.
+                      apply ident_eqb_eq in E'; subst i'.
                       pose proof (c_nodupobjs owner) as Nodup.
                       rewrite Hobjs in Nodup.
                       rewrite NoDupMembers_app_cons in Nodup.
                       destruct Nodup as [Notin Nodup].
                       apply Notin.
                       eapply In_InMembers; eauto.
-                    + apply ident_eqb_neq in E.
+                    + apply ident_eqb_neq in E'.
                       rewrite PM.gso; auto.
                 }
          }
@@ -4154,6 +4500,10 @@ Section PRESERVATION.
          eauto.
          eauto.
          eauto.
+         exact empty_co.
+         eauto.
+         eauto.
+         exact empty_co.
   Qed.
 
   Lemma stmt_correctness:
