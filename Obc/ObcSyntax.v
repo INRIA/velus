@@ -95,7 +95,13 @@ Module Type OBCSYNTAX
     - contradiction.
     - now apply IHl.
   Qed.
-  
+
+  Lemma m_notprefixed:
+    forall x m,
+      prefixed x ->
+      ~InMembers x (meth_vars m).
+  Admitted.
+
   Record class : Type :=
     mk_class {
         c_name    : ident;

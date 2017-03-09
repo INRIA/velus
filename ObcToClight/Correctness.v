@@ -983,66 +983,75 @@ Section PRESERVATION.
           rewrite <-NoDup_norepet, <-fst_NoDupMembers.
           apply NoDupMembers_make_out_vars.
         }
+        assert (NoDupMembers (m_in caller ++ PM.elements (instance_methods_temp (rev prog) caller) ++ m_vars caller)) as Nodup'.
+        { pose proof (m_nodupvars caller) as Nodup.
+          apply NoDupMembers_app.
+          - apply NoDupMembers_app_l in Nodup; auto.
+          - apply NoDupMembers_app.
+            + apply NoDupMembers_PM_elements.
+            + apply NoDupMembers_app_r, NoDupMembers_app_l in Nodup; auto.
+            + intros x Hin.
+              pose proof (make_out_temps_prefixed x (rev prog) caller) as Pref.
+              unfold make_out_temps in Pref;
+                rewrite InMembers_translate_param_idem in Pref.
+              apply Pref, (m_notprefixed x caller) in Hin.
+              unfold meth_vars in Hin; repeat rewrite NotInMembers_app in Hin; tauto.
+          - intros x Hin.
+            rewrite NotInMembers_app; split.
+            * apply (NoDupMembers_app_InMembers x) in Nodup; auto.
+              apply NotInMembers_app in Nodup; tauto.
+            * pose proof (make_out_temps_prefixed x (rev prog) caller) as Pref.
+              unfold make_out_temps in Pref;
+                rewrite InMembers_translate_param_idem in Pref.
+              intro Hin'; apply Pref, (m_notprefixed x caller) in Hin'.
+              unfold meth_vars in Hin'; repeat rewrite NotInMembers_app in Hin'.
+              contradict Hin; tauto.
+        }
+
+        assert (~In self (var_names (make_out_temps (instance_methods_temp (rev prog) caller) ++ map translate_param (m_vars caller)))).
+        { unfold var_names; rewrite <-fst_InMembers, NotInMembers_app; split; simpl.
+          - rewrite InMembers_translate_param_idem.
+            intro Hin.
+            apply (m_notreserved self caller).
+            + apply in_eq.
+            + unfold meth_vars. repeat rewrite InMembers_app; tauto.
+          - intro Hin. apply make_out_temps_prefixed in Hin.
+            apply self_not_prefixed; auto.
+        }
+
         assert (list_disjoint (var_names ((self, type_of_inst_p owner.(c_name))
                                            :: (out, type_of_inst_p (prefix_fun owner.(c_name) caller.(m_name)))
                                            :: (map translate_param caller.(m_in))))
                               (var_names (make_out_temps (instance_methods_temp (rev prog) caller)
                                                          ++ map translate_param caller.(m_vars)))).
-        { repeat apply list_disjoint_cons_l.
+        { repeat apply list_disjoint_cons_l; auto.
           - apply NoDupMembers_disjoint.
             pose proof (m_nodupvars caller) as Nodup.
-            assert (NoDupMembers (m_in caller ++ PM.elements (instance_methods_temp (rev prog) caller) ++ m_vars caller)) as Nodup' by admit.
             unfold make_out_temps.
             rewrite fst_NoDupMembers; repeat rewrite map_app; repeat rewrite translate_param_fst.
             simpl; rewrite <-2map_app, <-fst_NoDupMembers; auto.
-          - unfold var_names; rewrite <-fst_InMembers.
-            intro Hin.
-            apply (m_notreserved out caller).
-            + apply in_cons, in_eq.
-            + admit.
-          - unfold var_names; rewrite <-fst_InMembers.
-            intro Hin.
-            apply (m_notreserved self caller).
-            + apply in_eq.
-            + (* apply InMembers_app; right; apply InMembers_app; left. *)
-              (* rewrite fst_InMembers, translate_param_fst, <-fst_InMembers in Hin; auto. *)
-              admit.
+          - unfold var_names; rewrite <-fst_InMembers, NotInMembers_app; split; simpl.
+            + rewrite InMembers_translate_param_idem.
+              intro Hin.
+              apply (m_notreserved out caller).
+              * apply in_cons, in_eq.
+              * unfold meth_vars. repeat rewrite InMembers_app; tauto.
+            + intro Hin. apply make_out_temps_prefixed in Hin.
+              apply out_not_prefixed; auto.
         }
         assert (list_disjoint (var_names ((self, type_of_inst_p owner.(c_name))
                                             :: (map translate_param caller.(m_in))))
                               (var_names (make_out_temps (instance_methods_temp (rev prog) caller)
                                                          ++ map translate_param caller.(m_vars)))).
-         { repeat apply list_disjoint_cons_l.
-          - apply NoDupMembers_disjoint.
-            pose proof (m_nodupvars caller) as Nodup.
-            assert (NoDupMembers (m_in caller ++ PM.elements (instance_methods_temp (rev prog) caller) ++ m_vars caller)) as Nodup' by admit.
-            unfold make_out_temps.
-            rewrite fst_NoDupMembers; repeat rewrite map_app; repeat rewrite translate_param_fst.
-            simpl; rewrite <-2map_app, <-fst_NoDupMembers; auto.
-          - unfold var_names; rewrite <-fst_InMembers.
-            intro Hin.
-            apply (m_notreserved self caller).
-            + apply in_eq.
-            + (* apply InMembers_app; right; apply InMembers_app; left. *)
-              (* rewrite fst_InMembers, translate_param_fst, <-fst_InMembers in Hin; auto. *)
-              admit.
+         { repeat apply list_disjoint_cons_l; auto.
+           apply NoDupMembers_disjoint.
+           pose proof (m_nodupvars caller) as Nodup.
+           unfold make_out_temps.
+           rewrite fst_NoDupMembers; repeat rewrite map_app; repeat rewrite translate_param_fst.
+           simpl; rewrite <-2map_app, <-fst_NoDupMembers; auto.
          }
 
-
-        (* + change [translate_param (i, t)] with (map translate_param [(i, t)]). *)
-        (*       rewrite translate_param_fst, <-3map_app, <-fst_NoDupMembers, *)
-        (*       <-cons_is_app, NoDupMembers_app_cons; split; auto. *)
-        (*       do 2 rewrite NoDupMembers_app_comm, <-app_assoc in Nodup. *)
-        (*       rewrite <-cons_is_app in Nodup. *)
-        (*       inv Nodup. *)
-        (*       rewrite NotInMembers_app_comm, <-app_assoc. *)
-        (*       rewrite NotInMembers_app, NotInMembers_app_comm; split; auto. *)
-        (*       admit. *)
-        (*     + simpl; rewrite <-2map_app, <-fst_NoDupMembers; auto. *)
-
-
-
-        destruct_list caller.(m_out) as (y, t) ? ?.
+        destruct_list caller.(m_out) as (y, t) ? ? : Out.
         - set (f:= {|
                     fn_return := Tvoid;
                     fn_callconv := AST.cc_default;
@@ -1080,8 +1089,18 @@ Section PRESERVATION.
           with ((@Genv.find_def Clight.fundef Ctypes.type
                                 (@Genv.globalenv Clight.fundef Ctypes.type (@program_of_program function tprog)) loc_f)).
           now rewrite Finddef.
-          simpl.
-          admit.
+          simpl in *.
+          apply list_disjoint_cons_r; auto.
+          intros [Eq|Hin].
+          + apply (m_notreserved y caller).
+            * rewrite <-Eq; apply in_eq.
+            * unfold meth_vars; repeat rewrite InMembers_app.
+              rewrite Out; right; right; apply inmembers_eq.
+          + pose proof (m_nodupvars caller) as Nodup.
+            unfold var_names in Hin. rewrite <-fst_InMembers, InMembers_translate_param_idem in Hin.
+            apply (NoDupMembers_app_InMembers y) in Nodup; auto.
+            apply Nodup; rewrite InMembers_app, Out; right; apply inmembers_eq.
+
         - set (f:= {|
                     fn_return := Tvoid;
                     fn_callconv := AST.cc_default;
@@ -2322,8 +2341,18 @@ Section PRESERVATION.
         econstructor.
 
       - (* single callee output y *)
-        assert (y <> self) by admit.
-        assert (y <> prefix f y') by admit.
+        inversion_clear Incl as [|? ? ? ? Hin].
+        assert (y <> self).
+        { apply In_InMembers in Hin.
+          intro Eq; apply (m_notreserved y caller); auto.
+          subst; apply in_eq.
+        }
+        assert (y <> prefix f y').
+        { apply In_InMembers in Hin.
+          intro.
+          apply (m_notprefixed y caller); auto.
+          subst; constructor.
+        }
         unfold assign.
         unfold adds; simpl fold_right.
         destruct_list caller.(m_out) as (x, t) (?, ?) caller_outs : Hout.
@@ -2358,7 +2387,6 @@ Section PRESERVATION.
            }
         + (* multiple caller output *)
           rewrite sep_pure in Hrep; destruct Hrep as [? Hrep].
-          assert (In (y, ty) (meth_vars caller)) by (inv Incl; auto).
           assert (1 < length caller.(m_out))%nat by (rewrite Hout; simpl; omega).
           destruct (mem_assoc_ident y (m_out caller)) eqn: E;
             rewrite Hout in E; rewrite E.
@@ -2389,8 +2417,6 @@ Section PRESERVATION.
              }
 
       - (* multiple callee output *)
-        assert (y <> self) by admit.
-        assert (z <> self) by admit.
         inversion Length1 as (Length1'); clear Length1; rename Length1' into Length1.
         inversion Length2 as (Length2'); clear Length2; rename Length2' into Length2.
         inversion_clear Nodup as [|? ? Notin Nodup'']; inversion_clear Nodup'' as [|? ? Notinz Nodup].
@@ -2414,6 +2440,16 @@ Section PRESERVATION.
             by (rewrite Outs; apply in_cons, in_eq).
         rewrite <-Eq, <-Eq' in Hinstco.
         pose proof (output_match _ _ _ Findc _ _ Findcallee Length _ Hinstco) as Eq_instco.
+        assert (y <> self).
+        { apply In_InMembers in Hvars.
+          intro HEq; apply (m_notreserved y caller); auto.
+          subst; apply in_eq.
+        }
+        assert (z <> self).
+        { apply In_InMembers in Hvars'.
+          intro HEq; apply (m_notreserved z caller); auto.
+          subst; apply in_eq.
+        }
 
         assert (exists (le2 : temp_env) (m2 : mem),
                    exec_stmt tge (function_entry2 tge) e1 le1 m1
@@ -2478,7 +2514,12 @@ Section PRESERVATION.
           - simpl; do 2 econstructor; split; eauto.
             econstructor.
           - intros.
-            assert (Y <> self) by admit.
+            assert (Y <> self).
+            { inversion_clear Incl as [|? ? ? ? HinY].
+              apply In_InMembers in HinY.
+              intro HEq; apply (m_notreserved Y caller); auto.
+              subst; apply in_eq.
+            }
             apply not_in_cons in Notiny; destruct Notiny.
             apply not_in_cons in Notinz; destruct Notinz.
             rewrite Eq, Eq' in *; clear Eq Eq'.
@@ -3898,20 +3939,25 @@ Section PRESERVATION.
           as (d' & Eval_self' & Offs' & Bounds'); eauto.
         rewrite Offs in Offs'; inversion Offs'; subst d'.
         clear Offs' Bounds'.
-        assert (~ InMembers (prefix (m_name callee) x') (m_in caller ++ m_vars caller)) by admit.
+        assert (~ InMembers (prefix (m_name callee) x') (m_in caller ++ m_vars caller)).
+        {
+          intro Hin'.
+          apply (m_notprefixed (prefix (m_name callee) x') caller); auto.
+          - constructor.
+          - unfold meth_vars. repeat rewrite InMembers_app; rewrite InMembers_app in Hin'; tauto.
+        }
         assert (self <> y).
         { intro Eq.
           apply (m_notreserved y caller).
           - unfold reserved; rewrite Eq; apply in_eq.
           - eapply In_InMembers; eauto.
         }
-        (* assert (y <> prefix (m_name callee) x') by admit. *)
         edestruct Hrec_eval with (owner:=owner) (e1:=e1) (m1:=m1)
                                                 (le1:=PTree.set (prefix (m_name callee) x') v le1)
                                                 (outb_co:=outb_co)
           as (m2 & xs & ws & ? & Heq & Hm2); eauto; clear Hrec_eval.
         *{ rewrite sep_swap in *.
-           destruct_list caller.(m_out) as (?, ?) ? ? : Outs.
+           destruct_list caller.(m_out) as (y', ?) ? ? : Outs.
            - rewrite match_out_nil in *; auto.
              eapply sep_imp; eauto.
              apply sep_imp'; auto.
@@ -3923,7 +3969,10 @@ Section PRESERVATION.
                repeat apply sep_imp'; auto.
                apply varsrep_add'''; auto.
              + rewrite PTree.gso; auto.
-               admit.
+               intro.
+               apply (m_notprefixed y' caller).
+               * subst; constructor.
+               * unfold meth_vars; rewrite Outs; repeat rewrite InMembers_app; do 2 right; apply inmembers_eq.
            - assert (1 < length caller.(m_out))%nat by (rewrite Outs; simpl; omega).
              rewrite match_out_notnil in *; auto;
                destruct Hrep as (? & ? & ? & Hrep & ? & ?);
