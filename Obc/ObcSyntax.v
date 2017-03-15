@@ -52,7 +52,7 @@ Module Type OBCSYNTAX
         m_body : stmt;
 
         m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
-        m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
+        m_good      : Forall ValidId (m_in ++ m_vars ++ m_out)
       }.
 
   Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
@@ -91,8 +91,8 @@ Module Type OBCSYNTAX
     pose proof m.(m_good) as Good.
     unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
-      inv Hinm; inv Good.
-    - contradiction.
+      inv Hinm; inversion_clear Good as [|? ? Valid].
+    - inv Valid. contradiction.
     - now apply IHl.
   Qed.
 
@@ -100,7 +100,15 @@ Module Type OBCSYNTAX
     forall x m,
       prefixed x ->
       ~InMembers x (meth_vars m).
-  Admitted.
+  Proof.
+    intros ** Hin Hinm.
+    pose proof m.(m_good) as Good.
+    unfold meth_vars in Hinm.
+    induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
+      inv Hinm; inversion_clear Good as [|? ? Valid].
+    - inv Valid. eapply valid_not_prefixed; eauto.
+    - now apply IHl.
+  Qed.
 
   Record class : Type :=
     mk_class {

@@ -118,6 +118,20 @@ Module Type IDS.
   Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
     ~In (fst xty) reserved.
 
+ Parameter prefix : ident -> ident -> ident.
+
+ Parameter valid : ident -> Prop.
+
+ Inductive prefixed: ident -> Prop :=
+   prefixed_intro: forall pref id,
+     valid pref ->
+     prefixed (prefix pref id).
+
+ Axiom valid_not_prefixed: forall x, valid x -> ~prefixed x.
+
+ Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
+   NotReserved xty /\ valid (fst xty).
+
 End IDS.
 
 (** *** Operator abstraction *)

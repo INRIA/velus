@@ -730,15 +730,14 @@ Module Type TRANSLATION
   now rewrite gather_eqs_snd_spec.
   Qed.
 
-  
-  Lemma Forall_NotReserved_idty:
+  Lemma Forall_ValidId_idty:
     forall A B (xs: list (ident * (A * B))),
-      Forall NotReserved (idty xs) <-> Forall NotReserved xs.
+      Forall ValidId (idty xs) <-> Forall ValidId xs.
   Proof.
     induction xs as [|x xs]; split; inversion_clear 1; simpl; eauto;
       destruct x as (x & tyck); constructor; try rewrite IHxs in *; auto.
   Qed.
-  
+
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -779,7 +778,7 @@ Module Type TRANSLATION
     apply n.(n_nodup).
   Qed.
   Next Obligation.
-    repeat rewrite <-idty_app. apply Forall_NotReserved_idty.
+    repeat rewrite <-idty_app. apply Forall_ValidId_idty.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>

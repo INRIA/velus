@@ -1,3 +1,7 @@
+Require Import ZArith.BinInt.
+Require Import String.
+Require Import List.
+
 Require cfrontend.Clight.
 Require Import lib.Integers.
 Require Import common.Errors.
@@ -10,13 +14,10 @@ Require Import Velus.Ident.
 Require Import Instantiator.
 Import Obc.Syn.
 
-Require Import ZArith.BinInt.
-Require Import String.
-Require Import List.
-Import List.ListNotations.
-Open Scope list_scope.
 Open Scope error_monad_scope.
 Open Scope Z.
+Import List.ListNotations.
+Open Scope list_scope.
 
 (* TRANSLATION *)
 Definition type_of_inst (o: ident): Ctypes.type :=
@@ -124,8 +125,8 @@ Definition binded_funcall
         let args := ptr_obj owner cls obj :: args in
         let c_t := cltype t in
         Clight.Ssequence
-          (funcall (Some (Ident.prefix f y')) (prefix_fun cls f) (Some c_t) args)
-          (assign y c_t owner caller (Clight.Etempvar (Ident.prefix f y') c_t))
+          (funcall (Some (prefix f y')) (prefix_fun cls f) (Some c_t) args)
+          (assign y c_t owner caller (Clight.Etempvar (prefix f y') c_t))
       | _, outs =>
         let tyout := type_of_inst (prefix_fun cls f) in
         let out := Clight.Eaddrof (Clight.Evar (prefix_out obj f) tyout) (pointer_of tyout) in
@@ -212,7 +213,7 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: PM.t type): PM.
       match find_method f c.(c_methods) with
       | Some m' =>
         match ys, m'.(m_out) with
-        | [_], [(y', t)] => PM.add (Ident.prefix f y') t m
+        | [_], [(y', t)] => PM.add (prefix f y') t m
         | _, _ => m
         end
       | None => m
@@ -318,7 +319,7 @@ Definition write_out (node: ident) (outs: list (ident * type))
                     [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr;
                        (Clight.Etempvar x (cltype t))]
   | outs =>
-    let out_struct := Ident.prefix out step in
+    let out_struct := prefix out step in
     let t_struct := type_of_inst (prefix_fun node step) in
     fold_right
       (fun (xt: ident * type) s =>
@@ -339,7 +340,7 @@ Definition reset_call (node: ident): Clight.statement :=
 
 Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident * type)): Clight.statement :=
   let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
-  let out_struct := Ident.prefix out step in
+  let out_struct := prefix out step in
   let t_struct := type_of_inst (prefix_fun node step) in
   let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
   match m_out with
@@ -375,7 +376,7 @@ Definition main_body (do_sync: bool) (node: ident) (m: method): Clight.statement
 Definition make_main (do_sync: bool) (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type :=
   let vars :=  match m.(m_out) with
                | [] | [_] => []
-               | _ => [(Ident.prefix out step, type_of_inst (prefix_fun node step))]
+               | _ => [(prefix out step, type_of_inst (prefix_fun node step))]
                end
   in
   let temp := match m.(m_out) with

@@ -238,6 +238,22 @@ Proof.
   - destruct Hin; auto; apply M.find_1 in H; discriminate.
 Qed.
 
+Remark elements_empty: M.elements (@M.empty ident) = [].
+Proof.
+  unfold M.elements, M.Raw.elements.
+  auto.
+Qed.
+
+Lemma valid_rec_instance_methods:
+  forall s m,
+    Forall (fun xt => valid (fst (fst xt))) (M.elements m) ->
+    Forall (fun xt => valid (fst (fst xt))) (M.elements (rec_instance_methods s m)).
+Proof.
+  induction s; simpl; auto.
+  intros.
+  destruct_list i; auto.
+
+
 Lemma NoDupMembers_make_out_vars:
   forall m, NoDupMembers (make_out_vars (instance_methods m)).
 Proof.
@@ -245,13 +261,17 @@ Proof.
   unfold make_out_vars.
   assert (NoDupMembers (M.elements (elt:=ident) (instance_methods m))) as Nodup
       by (rewrite <-setoid_nodup; apply M.elements_3w).
+  pose proof (valid_instance_methods m).
   induction (M.elements (elt:=ident) (instance_methods m)) as [|((o, f), c)];
-    simpl; inversion_clear Nodup as [|? ? ? Notin Nodup']; constructor; auto.
+    simpl; inversion_clear Nodup as [|? ? ? Notin Nodup'];
+      inversion_clear H; constructor; auto.
   intro Hin; apply Notin.
   rewrite fst_InMembers, map_map, in_map_iff in Hin.
   destruct Hin as (((o', f'), c') & Eq & Hin); simpl in *.
-  apply prefix_out_injective in Eq; destruct Eq; subst.
-  eapply In_InMembers; eauto.
+  apply prefix_out_injective in Eq; auto; destruct Eq; subst.
+  - eapply In_InMembers; eauto.
+  - change o' with (fst (fst (o', f', c'))).
+    eapply In_Forall with (x:=(o', f', c')) (xs:=l); auto.
 Qed.
 
 Remark translate_param_fst:
@@ -2109,8 +2129,9 @@ Section PRESERVATION.
               rewrite PTree.gso; auto.
               apply (In_Forall _ _ _ (m_good caller)) in Hvars.
               intro; subst.
-              unfold NotReserved, reserved in Hvars.
-              apply Hvars; simpl; auto.
+              unfold ValidId, NotReserved, reserved in Hvars.
+              destruct Hvars as [NotRes].
+              apply NotRes; simpl; auto.
             * unfold blockrep in *.
               rewrite sepall_swapp; eauto.
               intros (x', t') Hx'.
@@ -5498,7 +5519,7 @@ Section PRESERVATION.
           pose proof (find_method_name _ _ _ Findstep) as Eq';
           rewrite <-Eq, <-Eq' in *.
 
-        assert (e1 ! (Ident.prefix out step)
+        assert (e1 ! (prefix out step)
                 = Some (step_b, type_of_inst (prefix_fun main_node step))) as Findstr
           by (subst e1; rewrite PTree.gss; auto).
         rewrite <-Eq, <-Eq' in Findstr.
