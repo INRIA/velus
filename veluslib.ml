@@ -61,7 +61,7 @@ let print_sync_if prog =
 
 let print_obc_if prog =
   print_sync_if prog;
-  print_if obc_destination Interfacelib.PrintObc.print_program prog
+  print_if obc_destination Interfacelib.PrintObc.print_program (List.rev prog)
 
 let add_builtin p (name, (out, ins, b)) =
   let env = Env.empty in
