@@ -89,16 +89,16 @@ environment.
           sem_var_instant x v ->
           sem_lexp_instant (Evar x ty) v
     | Swhen_eq:
-        forall s x c b v,
-          sem_var_instant x (present c) ->
-          sem_lexp_instant s v ->
-          val_to_bool c = Some b ->
-          sem_lexp_instant (Ewhen s x b) v
+        forall s x sc xc b,
+          sem_var_instant x (present xc) ->
+          sem_lexp_instant s (present sc) ->
+          val_to_bool xc = Some b ->
+          sem_lexp_instant (Ewhen s x b) (present sc)
     | Swhen_abs1:
-        forall s x c b,
-          sem_var_instant x (present c) ->
-          val_to_bool c = Some b ->
-          sem_lexp_instant s absent ->
+        forall s x sc xc b,
+          sem_var_instant x (present xc) ->
+          val_to_bool xc = Some b ->
+          sem_lexp_instant s (present sc) ->
           sem_lexp_instant (Ewhen s x (negb b)) absent
     | Swhen_abs:
         forall s x b,
@@ -155,17 +155,17 @@ environment.
 
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
-        forall x t f v,
+        forall x t f c,
           sem_var_instant x (present true_val) ->
-          sem_cexp_instant t v ->
+          sem_cexp_instant t (present c) ->
           sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x t f) v
+          sem_cexp_instant (Emerge x t f) (present c)
     | Smerge_false:
-        forall x t f v,
+        forall x t f c,
           sem_var_instant x (present false_val) ->
           sem_cexp_instant t absent ->
-          sem_cexp_instant f v ->
-          sem_cexp_instant (Emerge x t f) v
+          sem_cexp_instant f (present c) ->
+          sem_cexp_instant (Emerge x t f) (present c)
     | Smerge_abs:
         forall x t f,
           sem_var_instant x absent ->
@@ -544,40 +544,53 @@ enough: it does not support the internal fixpoint introduced by
           discriminate
         | _ => auto
         end.
-    - do 2 inversion_clear 1; destruct base; congruence.
-    - intros v1 v2 Hsem1 Hsem2.
-      inversion Hsem1; inversion Hsem2; subst;
-      repeat progress match goal with
-      | H1:sem_lexp_instant ?b ?R ?e ?v1,
-           H2:sem_lexp_instant ?b ?R ?e ?v2 |- _ =>
-        apply IHe with (1:=H1) in H2
-      | H1:sem_var_instant ?R ?i ?v1,
-           H2:sem_var_instant ?R ?i ?v2 |- _ =>
-        apply sem_var_instant_det with (1:=H1) in H2
-      | H1:sem_unop _ _ _ = Some ?v1,
-           H2:sem_unop _ _ _ = Some ?v2 |- _ =>
-        rewrite H1 in H2; injection H2; intro; subst
-      | Hp:present _ = present _ |- _ =>
-        injection Hp; intro; subst
-      | H1:val_to_bool _ = Some _,
-        H2:val_to_bool _ = Some (negb _) |- _ =>
-        rewrite H2 in H1; exfalso; injection H1;
-          now apply Bool.no_fixpoint_negb
-      end; subst; try easy.
-    - intros v1 v2 Hsem1 Hsem2.
-      inversion_clear Hsem1; inversion_clear Hsem2;
-      repeat progress match goal with
-      | H1:sem_lexp_instant _ _ e1 _, H2:sem_lexp_instant _ _ e1 _ |- _ =>
-        apply IHe1 with (1:=H1) in H2
-      | H1:sem_lexp_instant _ _ e2 _, H2:sem_lexp_instant _ _ e2 _ |- _ =>
-        apply IHe2 with (1:=H1) in H2
-      | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
-        rewrite H1 in H2; injection H2; intro; subst
-      | H1:sem_binop _ _ _ _ _ = Some ?v1,
-           H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
-        rewrite H1 in H2; injection H2; intro; subst
-      | H:present _ = present _ |- _ => injection H; intro; subst
-      end; subst; try easy.
+      - (* Econst *)
+        do 2 inversion_clear 1; destruct base; congruence.
+      - (* Ewhen *)
+        intros v1 v2 Hsem1 Hsem2.
+        inversion Hsem1; inversion Hsem2; subst;
+          repeat progress match goal with
+          | H1:sem_lexp_instant ?b ?R ?e ?v1,
+            H2:sem_lexp_instant ?b ?R ?e ?v2 |- _ =>
+            apply IHe with (1:=H1) in H2
+          | H1:sem_var_instant ?R ?i ?v1,
+            H2:sem_var_instant ?R ?i ?v2 |- _ =>
+            apply sem_var_instant_det with (1:=H1) in H2
+          | H1:sem_unop _ _ _ = Some ?v1,
+            H2:sem_unop _ _ _ = Some ?v2 |- _ =>
+            rewrite H1 in H2; injection H2; intro; subst
+          | Hp:present _ = present _ |- _ =>
+            injection Hp; intro; subst
+          | H1:val_to_bool _ = Some _,
+            H2:val_to_bool _ = Some (negb _) |- _ =>
+            rewrite H2 in H1; exfalso; injection H1;
+            now apply Bool.no_fixpoint_negb
+          end; subst; try easy.
+      - (* Eunop *)
+        intros v1 v2 Hsem1 Hsem2.
+        inversion_clear Hsem1; inversion_clear Hsem2;
+        repeat progress match goal with
+        | H1:sem_lexp_instant _ _ e _, H2:sem_lexp_instant _ _ e _ |- _ =>
+          apply IHe with (1:=H1) in H2; inversion H2; subst
+        | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
+          rewrite H1 in H2; injection H2; intro; subst
+        | H1:sem_lexp_instant _ _ _ (present _),
+          H2:sem_lexp_instant _ _ _ absent |- _ =>
+          apply IHe with (1:=H1) in H2
+        end; try easy.
+      - (* Ebinop *)
+        intros v1 v2 Hsem1 Hsem2.
+        inversion_clear Hsem1; inversion_clear Hsem2;
+        repeat progress match goal with
+        | H1:sem_lexp_instant _ _ e1 _, H2:sem_lexp_instant _ _ e1 _ |- _ =>
+          apply IHe1 with (1:=H1) in H2
+        | H1:sem_lexp_instant _ _ e2 _, H2:sem_lexp_instant _ _ e2 _ |- _ =>
+          apply IHe2 with (1:=H1) in H2
+        | H1:sem_binop _ _ _ _ _ = Some ?v1,
+          H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
+          rewrite H1 in H2; injection H2; intro; subst
+        | H:present _ = present _ |- _ => injection H; intro; subst
+        end; subst; try easy.
     Qed.
 
     Lemma sem_laexp_instant_det:
