@@ -96,6 +96,28 @@ Module Type OBCSYNTAX
     - now apply IHl.
   Qed.
 
+  Lemma m_good_out:
+    forall m x,
+      In x m.(m_out) ->
+      ValidId x.
+  Proof.
+    intros.
+    pose proof (m_good m) as G.
+    eapply In_Forall; eauto.
+    apply in_app; right; apply in_app; now right.
+  Qed.
+
+  Lemma m_good_in:
+    forall m x,
+      In x m.(m_in) ->
+      ValidId x.
+  Proof.
+    intros.
+    pose proof (m_good m) as G.
+    eapply In_Forall; eauto.
+    apply in_app; now left.
+  Qed.
+
   Lemma m_notprefixed:
     forall x m,
       prefixed x ->
@@ -118,7 +140,8 @@ Module Type OBCSYNTAX
         c_methods : list method;
 
         c_nodup   : NoDup (map fst c_mems ++ map fst c_objs);
-        c_nodupm  : NoDup (map m_name c_methods)
+        c_nodupm  : NoDup (map m_name c_methods);
+        c_good    : Forall (fun xt => valid (fst xt)) c_objs /\ valid c_name
       }.
 
   Lemma c_nodupmems:

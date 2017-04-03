@@ -238,40 +238,80 @@ Proof.
   - destruct Hin; auto; apply M.find_1 in H; discriminate.
 Qed.
 
-Remark elements_empty: M.elements (@M.empty ident) = [].
+Remark elements_empty:
+  M.elements (@M.empty ident) = [].
 Proof.
-  unfold M.elements, M.Raw.elements.
+  unfold M.elements, M.empty; simpl.
   auto.
 Qed.
 
+Remark Forall_add:
+  forall x y a m P,
+    Forall P (M.elements m) ->
+    P ((x, y), a) ->
+    Forall P (M.elements (elt:=ident) (M.add (x, y) a m)).
+Proof.
+  intros ** Hm H.
+  rewrite Forall_forall in *.
+  intros ((x', y'), a') Hin.
+  apply setoid_in_key_elt, M.elements_2 in Hin.
+  destruct (M.E.eq_dec (x, y) (x', y')) as [E|E].
+  - destruct E; simpl in *; subst.
+    apply MapsTo_add_same in Hin.
+    now subst.
+  - apply M.add_3 in Hin; auto.
+    apply M.elements_1, setoid_in_key_elt in Hin; auto.
+Qed.
+
 Lemma valid_rec_instance_methods:
-  forall s m,
+  forall s m p insts mems vars,
+    wt_stmt p insts mems vars s ->
+    Forall (fun xt => valid (fst xt)) insts ->
     Forall (fun xt => valid (fst (fst xt))) (M.elements m) ->
     Forall (fun xt => valid (fst (fst xt))) (M.elements (rec_instance_methods s m)).
 Proof.
-  induction s; simpl; auto.
-  intros.
+  induction s; simpl; inversion 1; intros ** Valid_insts ?; eauto.
   destruct_list i; auto.
+  apply Forall_add; auto.
+  apply (In_Forall (i1, i0)) in Valid_insts; auto.
+Qed.
 
+Lemma valid_instance_methods:
+  forall f m p c,
+    wt_class p c ->
+    find_method f c.(c_methods) = Some m ->
+    Forall (fun xt => valid (fst (fst xt))) (M.elements (instance_methods m)).
+Proof.
+  unfold instance_methods; intros ** WT Find.
+  inversion_clear WT as [? WTm].
+  apply find_method_In in Find.
+  eapply In_Forall in WTm; eauto.
+  eapply valid_rec_instance_methods; eauto.
+  - apply c_good.
+  - now rewrite elements_empty.
+Qed.
 
 Lemma NoDupMembers_make_out_vars:
-  forall m, NoDupMembers (make_out_vars (instance_methods m)).
+   forall f m p c,
+    wt_class p c ->
+    find_method f c.(c_methods) = Some m ->
+    NoDupMembers (make_out_vars (instance_methods m)).
 Proof.
-  intro.
+  intros ** WT Find.
   unfold make_out_vars.
   assert (NoDupMembers (M.elements (elt:=ident) (instance_methods m))) as Nodup
       by (rewrite <-setoid_nodup; apply M.elements_3w).
-  pose proof (valid_instance_methods m).
-  induction (M.elements (elt:=ident) (instance_methods m)) as [|((o, f), c)];
+  pose proof (valid_instance_methods _ _ _ _ WT Find) as Valid.
+  induction (M.elements (elt:=ident) (instance_methods m)) as [|((o, f'), c')];
     simpl; inversion_clear Nodup as [|? ? ? Notin Nodup'];
-      inversion_clear H; constructor; auto.
+      inversion_clear Valid; constructor; auto.
   intro Hin; apply Notin.
   rewrite fst_InMembers, map_map, in_map_iff in Hin.
-  destruct Hin as (((o', f'), c') & Eq & Hin); simpl in *.
+  destruct Hin as (((o', f''), c'') & Eq & Hin); simpl in *.
   apply prefix_out_injective in Eq; auto; destruct Eq; subst.
   - eapply In_InMembers; eauto.
-  - change o' with (fst (fst (o', f', c'))).
-    eapply In_Forall with (x:=(o', f', c')) (xs:=l); auto.
+  - change o' with (fst (fst (o', f'', c''))).
+    eapply In_Forall with (x:=(o', f'', c'')) (xs:=l); auto.
 Qed.
 
 Remark translate_param_fst:
@@ -313,13 +353,18 @@ Qed.
 Lemma NoDup_glob_id:
   forall {A} (xs: list (ident * A)),
     NoDupMembers xs ->
+    Forall (fun x => valid (fst x)) xs ->
     NoDup (map (fun xt => glob_id (fst xt)) xs).
 Proof.
   induction xs as [|(x, t)]; simpl;
-    inversion_clear 1 as [|? ? ? Notin]; constructor; auto.
+    inversion_clear 1 as [|? ? ? Notin];
+    inversion_clear 1; constructor; auto.
   rewrite in_map_iff; intros ((x', t') & E & Hin); apply Notin.
-  simpl in E; apply glob_id_injective in E; subst x'.
-  eapply In_InMembers; eauto.
+  simpl in E; apply glob_id_injective in E; auto.
+  - subst x'.
+    eapply In_InMembers; eauto.
+  - eapply In_Forall in Hin; eauto.
+    now simpl in Hin.
 Qed.
 
 Lemma NoDup_funs:
@@ -348,7 +393,8 @@ Proof.
       induction (c_methods c) as [|m]; simpl;
         inversion_clear Nodup as [|? ? Notin]; constructor; auto.
       rewrite in_map_iff; intros (m' & E & Hin); apply Notin.
-      apply prefix_fun_injective in E; destruct E as [? E]; rewrite <-E.
+      pose proof (c_good c).
+      apply prefix_fun_injective in E; try tauto; destruct E as [? E]; rewrite <-E.
       rewrite in_map_iff; exists m'; auto.
     + induction (c_methods c) as [|m]; simpl; auto.
       constructor; auto.
@@ -358,7 +404,8 @@ Proof.
       rewrite in_map_iff in Hin; destruct Hin as (c' & E & Hin); subst l'.
       rewrite in_map_iff in Hin'; destruct Hin' as (m' & E & Hin').
       unfold translate_method in E; inversion E as [[Eq E']]; clear E E'.
-      apply prefix_fun_injective in Eq.
+      pose proof (c_good c); pose proof (c_good c').
+      apply prefix_fun_injective in Eq; try tauto.
       destruct Eq as [Eq].
       apply Notinc.
       rewrite <- Eq.
@@ -387,28 +434,36 @@ Qed.
 Lemma glob_not_in_prefixed:
   forall (xs: list (ident * type)) ps,
     Forall prefixed ps ->
+    Forall (fun x => valid (fst x)) xs ->
     Forall (fun z => ~ In z ps) (map (fun xt => glob_id (fst xt)) xs).
 Proof.
-  induction xs as [|(x, t)]; simpl; intros ** Pref; auto.
-  constructor; auto.
+  induction xs as [|(x, t)]; simpl; intros ** Pref Valid; auto.
+  inv Valid. constructor; auto.
   intro Hin.
   eapply In_Forall in Pref; eauto.
-  contradict Pref; apply glob_id_not_prefixed.
+  contradict Pref; apply glob_id_not_prefixed; auto.
 Qed.
 
 Lemma NoDupMembers_glob:
   forall (ys xs: list (ident * type)),
     NoDupMembers (xs ++ ys) ->
+    Forall (fun x => valid (fst x)) (xs ++ ys) ->
     Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) xs))
            (map (fun xt => glob_id (fst xt)) ys).
 Proof.
-  induction ys as [|(y, t)]; simpl; intros ** Nodup; auto.
-  rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup].
+  induction ys as [|(y, t)]; simpl; intros ** Nodup Valid; auto.
+  rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup];
+    rewrite Forall_app in Valid; destruct Valid as [Validxs Validys];
+      rewrite Forall_cons2 in Validys; destruct Validys as [Validy Validys].
   constructor; auto.
-  rewrite in_map_iff; intros ((x, t') & E & Hin).
-  simpl in E; apply glob_id_injective in E; subst y.
-  apply Notin.
-  apply InMembers_app; left; eapply In_InMembers; eauto.
+  - rewrite in_map_iff; intros ((x, t') & E & Hin).
+    simpl in E; apply glob_id_injective in E; auto.
+    + subst y.
+      apply Notin.
+      apply InMembers_app; left; eapply In_InMembers; eauto.
+    + eapply In_Forall in Hin; eauto; now simpl in Hin.
+  - apply IHys; auto.
+    rewrite Forall_app; split; auto.
 Qed.
 
 Lemma self_not_out: self <> out.
@@ -680,16 +735,23 @@ Section PRESERVATION.
                 |[((x, t) & E & Hin)
                  |Hin]]];
         try simpl in E.
-      - apply glob_id_injective in E; subst x.
-        apply In_InMembers in Hin.
-        apply Res; now repeat (rewrite InMembers_app; right).
-      - apply glob_id_injective in E; subst x.
-        apply In_InMembers in Hin.
-        apply Res; now rewrite InMembers_app; left.
+      - apply glob_id_injective in E.
+        + subst x.
+          apply In_InMembers in Hin.
+          apply Res; now repeat (rewrite InMembers_app; right).
+        + apply (m_good_out m (x, t)); auto.
+        + apply self_valid.
+      - apply glob_id_injective in E.
+        + subst x.
+          apply In_InMembers in Hin.
+          apply Res; now rewrite InMembers_app; left.
+        + apply (m_good_in m (x, t)); auto.
+        + apply self_valid.
       - subst x.
         apply in_map with (f:=fst) in Hin.
         subst funs. apply prefixed_funs, prefixed_fun_prefixed in Hin.
         contradict Hin; apply glob_id_not_prefixed.
+        apply self_valid.
       - destruct do_sync; simpl in Hin.
         + destruct Hin as [Hin|[Hin|[Hin|]]]; contr;
             try (apply pos_of_str_injective in Hin;
@@ -708,29 +770,36 @@ Section PRESERVATION.
                      then [(sync_id, make_sync); (main_sync_id, make_main do_sync main_node m)]
                      else [])
                       ++ [(main_id, make_main false main_node m)]))) as Nodup.
-    { assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m))) as Hm_out
-        by (apply NoDup_glob_id, m_nodupout).
+    { assert (Forall (fun x : ident * type => valid (fst x)) (m_out m)) as Valid_out
+        by (rewrite Forall_forall; intros (x, t) ?; apply (m_good_out m (x, t)); auto).
+      assert (Forall (fun x : ident * type => valid (fst x)) (m_in m)) as Valid_in
+        by (rewrite Forall_forall; intros (x, t) ?; apply (m_good_in m (x, t)); auto).
+      assert (NoDup (map (fun xt => glob_id (fst xt)) (m_out m))) as Hm_out
+          by (apply NoDup_glob_id; auto; apply m_nodupout).
       assert (NoDup (map (fun xt => glob_id (fst xt)) (m_in m))) as Hm_in
-          by (apply NoDup_glob_id, m_nodupin).
+          by (apply NoDup_glob_id; auto; apply m_nodupin).
       assert (NoDup (map fst (concat funs))) by (rewrite Funs; now apply NoDup_funs).
       assert (Forall (fun z  => ~ In z (map fst (concat funs)))
                      (map (fun xt => glob_id (fst xt)) (m_in m))) as Hin_not_funs.
-      { apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+      { apply glob_not_in_prefixed; auto.
+        apply all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
       }
       assert (Forall (fun z => ~ In z (map fst (concat funs)))
                      (map (fun xt => glob_id (fst xt)) (m_out m))) as Hout_not_funs.
-      { apply glob_not_in_prefixed, all_In_Forall; intros ** Hin.
+      { apply glob_not_in_prefixed; auto.
+        apply all_In_Forall; intros ** Hin.
         apply prefixed_fun_prefixed; subst funs.
         now apply prefixed_funs in Hin.
       }
       assert (Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) (m_in m)))
                      (map (fun xt => glob_id (fst xt)) (m_out m))) as Hout_not_in.
       { apply NoDupMembers_glob.
-        pose proof (m_nodupvars m) as Nodup.
-        rewrite NoDupMembers_app_comm, <-app_assoc in Nodup.
-        now apply NoDupMembers_app_r, NoDupMembers_app_comm in Nodup.
+        - pose proof (m_nodupvars m) as Nodup.
+          rewrite NoDupMembers_app_comm, <-app_assoc in Nodup.
+          now apply NoDupMembers_app_r, NoDupMembers_app_comm in Nodup.
+        - rewrite Forall_app; split; auto.
       }
       destruct do_sync; simpl;
         try change [sync_id; main_sync_id; main_id] with ([sync_id]++[main_sync_id]++[main_id]);
@@ -753,8 +822,9 @@ Section PRESERVATION.
            || auto);
           try (eapply main_not_glob; now eauto);
           try (eapply sync_not_glob; now eauto);
-          try (eapply main_sync_not_glob; now eauto).
-
+          try (eapply main_sync_not_glob; now eauto);
+          try (inv Valid_in; now apply IHl);
+          try (inv Valid_out; now apply IHl).
     }
     repeat constructor; auto.
   Qed.
@@ -1001,7 +1071,8 @@ Section PRESERVATION.
         assert (list_norepet (var_names (make_out_vars (instance_methods caller)))).
         { unfold var_names.
           rewrite <-NoDup_norepet, <-fst_NoDupMembers.
-          apply NoDupMembers_make_out_vars.
+          eapply NoDupMembers_make_out_vars; eauto.
+          eapply wt_program_find_class; eauto.
         }
         assert (NoDupMembers (m_in caller ++ PM.elements (instance_methods_temp (rev prog) caller) ++ m_vars caller)) as Nodup'.
         { pose proof (m_nodupvars caller) as Nodup.
@@ -3928,13 +3999,16 @@ Section PRESERVATION.
              + reflexivity.
              + simpl.
                eapply eval_Elvalue.
-               * apply eval_Evar_global; eauto.
-                 rewrite <-not_Some_is_None.
-                 intros (b, t) Hget.
-                 apply He in Hget; destruct Hget as (o' & f' & Eqpref).
-                 unfold prefix_fun, prefix_out in Eqpref.
-                 apply prefix_injective in Eqpref; destruct Eqpref.
-                 apply fun_not_out; auto.
+               *{ apply eval_Evar_global; eauto.
+                  rewrite <-not_Some_is_None.
+                  intros (b, t) Hget.
+                  apply He in Hget; destruct Hget as (o' & f' & Eqpref).
+                  unfold prefix_fun, prefix_out in Eqpref.
+                  apply prefix_injective in Eqpref; destruct Eqpref.
+                  - apply fun_not_out; auto.
+                  - apply fun_id_valid.
+                  - apply out_valid.
+                }
                * apply deref_loc_reference; auto.
              + rewrite Out.
                apply find_method_In in Findmeth.
@@ -4114,7 +4188,9 @@ Section PRESERVATION.
                apply He in Hget; destruct Hget as (o' & f' & Eqpref).
                unfold prefix_fun, prefix_out in Eqpref.
                apply prefix_injective in Eqpref; destruct Eqpref.
-               apply fun_not_out; auto.
+               * apply fun_not_out; auto.
+               * apply fun_id_valid.
+               * apply out_valid.
              + apply deref_loc_reference; auto.
            - rewrite Out.
                apply find_method_In in Findmeth.
@@ -4169,7 +4245,9 @@ Section PRESERVATION.
                     apply He in Hget; destruct Hget as (o' & f' & Eqpref).
                     unfold prefix_fun, prefix_out in Eqpref.
                     apply prefix_injective in Eqpref; destruct Eqpref.
-                    apply fun_not_out; auto.
+                    + apply fun_not_out; auto.
+                    + apply fun_id_valid.
+                    + apply out_valid.
                   - apply deref_loc_reference; auto.
                 }
                * apply find_method_In in Findmeth.
@@ -5404,6 +5482,7 @@ Section PRESERVATION.
     Proof.
       clear Caractmain Step_in_spec.
       pose proof (m_nodupin m_step) as Hnodup.
+      pose proof (m_good_in m_step) as Good.
 
       induction m_step.(m_in) as [|(x, t)]; simpl;
         intros ** Hwt;
@@ -5442,8 +5521,11 @@ Section PRESERVATION.
               destruct_list m_step.(m_out).
               * rewrite PTree.gempty in Hget; auto; try discriminate.
               * rewrite PTree.gempty in Hget; auto; try discriminate.
-              * rewrite PTree.gso, PTree.gempty in Hget; auto; try discriminate.
-                intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
+              *{ rewrite PTree.gso, PTree.gempty in Hget; auto; try discriminate.
+                 intro E; apply (glob_id_not_prefixed x).
+                 - apply (Good (x, t)), in_eq.
+                 - rewrite E; constructor.
+               }
             + unfold Cop.sem_cast; simpl; eauto.
           - constructor.
             unfold load_event_of_val; simpl.
@@ -5452,6 +5534,8 @@ Section PRESERVATION.
             apply eventval_of_val_match; auto.
         }
 
+        assert (forall x0 : ident * type, In x0 l -> ValidId x0)
+          by (intros; apply Good, in_cons; auto).
         edestruct IHl with (le := le') as (le'' & ? & Hgss & Hgso); eauto.
 
         exists le''.
@@ -5542,7 +5626,8 @@ Section PRESERVATION.
 
         rewrite <-Vs, <-Out in *.
         clear Vs.
-        revert ve vs Hrep Hnodup Hfield_offs Findstr Step_out Eq Eq' Length WT_vals.
+        pose proof (m_good_out m_step) as Good.
+        revert ve vs Hrep Hnodup Hfield_offs Findstr Step_out Eq Eq' Length WT_vals Good.
         generalize m_step.(m_out) as xts.
         clear - Getstep_co.
 
@@ -5568,7 +5653,9 @@ Section PRESERVATION.
                subst e1.
                rewrite PTree.gso, PTree.gempty in Hget.
                + discriminate.
-               + intro E; apply (glob_id_not_prefixed x); rewrite E; constructor.
+               + intro E; apply (glob_id_not_prefixed x).
+                 * apply (Good (x, t)), in_eq.
+                 * rewrite E; constructor.
              - reflexivity.
              - assert (In (x, cltype t) (co_members step_co))
                  by now eapply Hfield_offs; econstructor(auto).
@@ -5601,6 +5688,7 @@ Section PRESERVATION.
             now rewrite <- fst_InMembers.
           * intros.
             eapply Hfield_offs. econstructor(now auto).
+          * intros; apply Good, in_cons; auto.
     Qed.
 
     (*****************************************************************)
@@ -5876,7 +5964,10 @@ Section PRESERVATION.
               subst e1.
               rewrite PTree.gso, PTree.gempty in Hget.
               * discriminate.
-              * intro E; apply (glob_id_not_prefixed self); rewrite E; constructor.
+              *{ intro E; apply (glob_id_not_prefixed self).
+                 - apply self_valid.
+                 - rewrite E; constructor.
+               }
             + constructor.
             + repeat (econstructor; eauto).
               subst e1. rewrite PTree.gss; auto.
@@ -5950,8 +6041,11 @@ Section PRESERVATION.
                  subst e1.
                  rewrite PTree.gso, PTree.gempty in Hget.
                  - discriminate.
-                 - intro E; apply prefix_injective in E; destruct E as [E].
-                   contradict E; apply fun_not_out.
+                 - intro E; apply prefix_injective in E.
+                   + destruct E as [E].
+                     contradict E; apply fun_not_out.
+                   + apply fun_id_valid.
+                   + apply out_valid.
                }
               * apply deref_loc_reference; auto.
             + unfold Genv.find_funct.
@@ -6030,8 +6124,11 @@ Section PRESERVATION.
             * rewrite PTree.gempty in Hget; discriminate.
             *{ rewrite PTree.gso, PTree.gempty in Hget.
                - discriminate.
-               - intro E; apply prefix_injective in E; destruct E as [E].
-                 contradict E; apply fun_not_out.
+               - intro E; apply prefix_injective in E.
+                 + destruct E as [E].
+                   contradict E; apply fun_not_out.
+                 + apply fun_id_valid.
+                 + apply out_valid.
              }
           + apply deref_loc_reference; auto.
         - apply find_method_In in Findreset.
@@ -6045,7 +6142,10 @@ Section PRESERVATION.
           + rewrite PTree.gempty in Hget; discriminate.
           + rewrite PTree.gso, PTree.gempty in Hget.
             * discriminate.
-            * intro E; apply (glob_id_not_prefixed self); rewrite E; constructor.
+            *{ intro E; apply (glob_id_not_prefixed self).
+               - apply self_valid.
+               - rewrite E; constructor.
+             }
         - unfold Genv.find_funct.
           destruct (Int.eq_dec Int.zero Int.zero) as [|Neq]; eauto.
           exfalso; apply Neq; auto.

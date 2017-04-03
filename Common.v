@@ -124,7 +124,6 @@ Module Type IDS.
 
  Inductive prefixed: ident -> Prop :=
    prefixed_intro: forall pref id,
-     valid pref ->
      prefixed (prefix pref id).
 
  Axiom valid_not_prefixed: forall x, valid x -> ~prefixed x.

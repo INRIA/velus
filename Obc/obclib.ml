@@ -29,7 +29,7 @@ module type SYNTAX =
     | Const of const
     | Unop  of unop  * exp * typ
     | Binop of binop * exp * exp * typ
-    
+
     type stmt =
     | Assign   of ident * exp
     | AssignSt of ident * exp
@@ -71,7 +71,7 @@ module SyncFun (Obc: SYNTAX)
    let v_reactions = "num_reactions"
 
    let var_name f id =
-     pp_print_string f (Camlcoq.extern_atom (Ident.glob_id id))
+     pp_print_string f (Camlcoq.extern_atom (Ident.Ids.glob_id id))
 
    let external_variable f (id, ty) =
      fprintf f "@[<hov 2>extern volatile %s %a;@]"
@@ -147,7 +147,7 @@ module SyncFun (Obc: SYNTAX)
               @ [ Sassign (e_init,
                            Ebinop (Cop.Oadd, e_init, long_const 1, tlong))])
            ]
-       
+
        })
     *)
 
@@ -311,4 +311,3 @@ module PrintFun (Obc: SYNTAX)
       List.iter (fprintf p "%a@;@;" print_class) prog;
       fprintf p "@]@."
   end
-

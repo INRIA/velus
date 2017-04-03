@@ -103,10 +103,15 @@ Proof.
   - simpl; intros [|]; destruct H; auto.
 Qed.
 
-Definition sep: ascii := "$"%char.
+Lemma append_assoc:
+  forall s s' s'',
+    (s ++ s' ++ s'' = (s ++ s') ++ s'')%string.
+Proof.
+  induction s; auto; intros; simpl.
+  f_equal; auto.
+Qed.
 
-(* Axiom pos_to_str_valid: *)
-(*   forall x, ~ In_str sep (pos_to_str x). *)
+Definition sep: ascii := "$"%char.
 
 Lemma append_sep_injectivity:
   forall x pre1 pre2 post1 post2,
@@ -123,6 +128,57 @@ Proof.
     + exfalso. apply Hin1. inv Heq. now left.
     + simpl in Heq. inv Heq. rewrite not_in_str_cons in *.
       destruct (IHpre1 pre2 post1 post2); try tauto. subst. now split.
+Qed.
+
+Lemma append_eq_empty:
+  forall s s', (s ++ s' = "" -> s = "" /\ s' = "")%string.
+Proof.
+  induction s; simpl; intros; auto.
+  discriminate.
+Qed.
+
+Lemma append_same_last:
+  forall pre1 post1 pre2 x,
+    (pre1 ++ post1 = pre2 ++ String x "")%string ->
+    (post1 <> "")%string ->
+    exists post1',
+      (post1 = post1' ++ String x "")%string.
+Proof.
+  induction pre1; simpl; intros ** E H; eauto.
+  destruct pre2; simpl in *.
+  - inv E; apply append_eq_empty in H2; destruct H2; contradiction.
+  - inv E; eauto.
+Qed.
+
+Lemma append_string:
+  forall s x s', (s ++ String x s' = (s ++ String x "") ++ s')%string.
+Proof.
+  induction s; simpl; auto; intros.
+  now f_equal.
+Qed.
+
+Lemma append_injectivity_left:
+  forall pre1 pre2 post,
+    (pre1 ++ post = pre2 ++ post)%string ->
+    pre1 = pre2.
+Proof.
+  induction pre1, pre2; simpl; intros ** E; auto.
+  - exfalso.
+    revert dependent pre2; revert a.
+    induction post; intros; try discriminate.
+    inversion E; subst a0.
+    destruct pre2; simpl in *.
+    + apply (IHpost a ""%string); now simpl.
+    + rewrite append_string in H1; eauto.
+  - exfalso.
+    clear IHpre1.
+    revert dependent pre1; revert a.
+    induction post; intros; try discriminate.
+    inversion E; subst a0.
+    destruct pre1; simpl in *.
+    + apply (IHpost a ""%string); now simpl.
+    + rewrite append_string in H1; eauto.
+  - inv E; f_equal; eauto.
 Qed.
 
 Module Export Ids <: IDS.
@@ -182,7 +238,6 @@ Module Export Ids <: IDS.
 
   Inductive prefixed: ident -> Prop :=
     prefixed_intro: forall pref id,
-      valid pref ->
       prefixed (prefix pref id).
 
    Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
@@ -280,7 +335,7 @@ Module Export Ids <: IDS.
     forall x, prefixed_fun x -> prefixed x.
   Proof.
     inversion 1; unfold prefix_fun; constructor.
-    apply fun_id_valid.
+    (* apply fun_id_valid. *)
   Qed.
 
   Lemma prefix_fun_not_out:
@@ -374,13 +429,23 @@ Module Export Ids <: IDS.
       valid x ->
       ~ prefixed (glob_id x).
   Proof.
-    intros ** H.
-    inversion H as [? ? ? E].
+    intros ** V H.
+    inversion H as [? ? E].
     unfold prefix, glob_id in E.
     apply pos_of_str_injective in E.
     apply append_sep_injectivity in E; auto.
-    destruct E as [? E]; contradict E.
-    apply pos_to_str_not_empty.
+    - destruct E as [? E]; contradict E.
+      apply pos_to_str_not_empty.
+    - intro Hin.
+      pose proof E as E'.
+      apply append_same_last in E'.
+      + destruct E' as [post E'].
+        rewrite E', append_assoc in E.
+        apply append_injectivity_left in E.
+        apply V.
+        rewrite <-E, In_str_app.
+        now left.
+      + intro; discriminate.
   Qed.
 
   Remark self_valid: valid self.
@@ -395,7 +460,7 @@ Module Export Ids <: IDS.
   Lemma self_not_prefixed: ~ prefixed self.
   Proof.
     intro H.
-    inversion H as [? ? ? E].
+    inversion H as [? ? E].
     unfold prefix, self in E.
     apply pos_of_str_injective in E.
     apply self_valid; unfold self; rewrite pos_to_str_equiv.
@@ -405,7 +470,7 @@ Module Export Ids <: IDS.
   Lemma out_not_prefixed: ~ prefixed out.
   Proof.
     intro H.
-    inversion H as [? ? ? E].
+    inversion H as [? ? E].
     unfold prefix, out in E.
     apply pos_of_str_injective in E.
     apply out_valid; unfold out; rewrite pos_to_str_equiv.
@@ -424,7 +489,7 @@ Module Export Ids <: IDS.
   Lemma sync_not_prefixed: ~ prefixed sync_id.
   Proof.
     intro H.
-    inversion H as [? ? ? E].
+    inversion H as [? ? E].
     unfold prefix, sync_id in E.
     apply pos_of_str_injective in E.
     apply sync_id_valid; unfold sync_id; rewrite pos_to_str_equiv.

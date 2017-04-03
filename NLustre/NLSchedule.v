@@ -22,7 +22,7 @@ Require Import Velus.NLustre.NLClocking.
 (** * Scheduling of N-Lustre equations *)
 
 (**
-  
+
   The scheduler routines are parameterized over an external scheduler
   (EXT_NLSCHEDULER) that provides a schedule function.
 
@@ -44,7 +44,7 @@ Module Type EXT_NLSCHEDULER
        (Import Syn   : NLSYNTAX Ids Op Clks).
 
   Parameter schedule : ident -> list equation -> list positive.
-  
+
 End EXT_NLSCHEDULER.
 
 Module Type NLSCHEDULE
@@ -129,7 +129,7 @@ Module Type NLSCHEDULE
   End SchEqOrder.
 
   Module SchSort := Sort SchEqOrder.
-  
+
   Definition schedule_eqs (f : ident) (eqs : list equation) : list equation :=
     let sch := Sch.schedule f eqs in
     match ocombine sch eqs with
@@ -146,7 +146,7 @@ Module Type NLSCHEDULE
     induction l, l'; inversion 1; auto.
     simpl. now rewrite (IHl _ H1).
   Qed.
-  
+
   Lemma schedule_eqs_permutation:
     forall f eqs,
       Permutation (schedule_eqs f eqs) eqs.
@@ -180,10 +180,13 @@ Module Type NLSCHEDULE
       mk_node name nin nout vars eqs
               ingt0 outgt0 defd vout nodup good =>
       mk_node name nin nout vars (schedule_eqs n.(n_name) eqs)
-              ingt0 outgt0 _ _ nodup good
+              ingt0 outgt0 _ _ nodup _
     end.
   Next Obligation.
     now setoid_rewrite schedule_eqs_permutation.
+  Qed.
+  Next Obligation.
+    setoid_rewrite schedule_eqs_permutation; auto.
   Qed.
   Next Obligation.
     setoid_rewrite schedule_eqs_permutation; auto.
@@ -312,7 +315,7 @@ Module Type NLSCHEDULE
     intros eq Hsem.
     destruct Hsem; auto.
   Qed.
-  
+
 End NLSCHEDULE.
 
 Module NLScheduleFun
@@ -333,4 +336,3 @@ Module NLScheduleFun
        <: NLSCHEDULE Ids Op OpAux Clks Syn Ord IsF Str Sem Typ Mem IsD Clo Sch.
   Include NLSCHEDULE Ids Op OpAux Clks Syn Ord IsF Str Sem Typ Mem IsD Clo Sch.
 End NLScheduleFun.
-

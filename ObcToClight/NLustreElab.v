@@ -1435,13 +1435,13 @@ Section ElabDeclaration.
         assumption.
   Qed.
 
-  Fixpoint check_variable_names' {A} (loc: astloc) (env: list (ident * A)) : res unit :=
-    match env with
+  Fixpoint check_variable_names' (loc: astloc) (xs: idents) : res unit :=
+    match xs with
     | [] => OK tt
-    | (x, t) :: xs =>
-      if Ident.mem_str Ident.sep (Ident.pos_to_str x) then
-        Error (err_loc loc
-                       (MSG """" :: CTX x :: msg """ is not a valid variable name"))
+    | x :: xs =>
+      if Ident.mem_str Ident.sep (Ident.pos_to_str x)
+      then Error (err_loc loc
+                          (MSG """" :: CTX x :: msg """ is not a valid variable name"))
       else
         match find (fun x' => ident_eqb x x') Ident.Ids.reserved with
         | None => check_variable_names' loc xs
@@ -1451,7 +1451,7 @@ Section ElabDeclaration.
     end.
 
   Definition check_variable_names {A} (loc: astloc) (env: PM.t A) : res unit :=
-    check_variable_names' loc (PM.elements env).
+    check_variable_names' loc (map fst (PM.elements env)).
 
   Lemma check_variable_names_spec:
     forall A loc (env: PM.t A),
@@ -1462,6 +1462,8 @@ Section ElabDeclaration.
     intros ** Hcvns.
     induction (PM.elements env) as [|(x, t)]; auto.
     unfold check_variable_names' in Hcvns.
+    Arguments find: simpl never.
+    simpl in Hcvns.
     destruct (Ident.mem_str Ident.sep (Ident.pos_to_str x)) eqn: E; try discriminate.
     destruct (find (fun x' : positive => ident_eqb x x') Ident.Ids.reserved) eqn: Hfind; try discriminate.
     constructor.
@@ -1475,14 +1477,54 @@ Section ElabDeclaration.
         * simpl in *; subst.
           rewrite ident_eqb_refl in E; discriminate.
         * apply IHi; auto.
-      + clear - E.
-        intros Pref.
-        inversion Pref as [pref id H].
-        pose proof (Ident.Ids.In_sep_prefix pref id) as Hin.
-        rewrite H in Hin.
-        apply Ident.not_mem_In_str in E.
-        contradiction.
+      + apply Ident.not_mem_In_str in E.
+        auto.
     - now apply IHl.
+  Qed.
+
+  Definition check_node_name (loc: astloc) (n: ident) : res unit :=
+    if Ident.mem_str Ident.sep (Ident.pos_to_str n)
+    then Error (err_loc loc
+                     (MSG """" :: CTX n :: msg """ is not a valid node name"))
+    else OK tt.
+
+  Lemma check_node_name_spec:
+    forall loc n,
+      check_node_name loc n = OK tt ->
+      Ident.Ids.valid n.
+  Proof.
+    unfold check_node_name; intros.
+    destruct (Ident.mem_str Ident.sep (Ident.pos_to_str n)) eqn: E; try discriminate.
+    apply Ident.not_mem_In_str in E.
+    auto.
+  Qed.
+
+  Fixpoint check_inst_names' (loc: astloc) (xs: idents) : res unit :=
+    match xs with
+    | [] => OK tt
+    | x :: xs =>
+      if Ident.mem_str Ident.sep (Ident.pos_to_str x)
+      then Error (err_loc loc
+                          (MSG """" :: CTX x :: msg """ is not a valid variable name"))
+      else check_inst_names' loc xs
+    end.
+
+  Definition check_inst_names (loc: astloc) (insts: idents) :=
+    check_inst_names' loc insts.
+
+  Lemma check_inst_names_spec:
+    forall loc insts,
+      check_inst_names loc insts = OK tt ->
+      Forall Ident.Ids.valid insts.
+  Proof.
+    unfold check_inst_names.
+    intros ** Hcins.
+    induction insts as [|x]; auto.
+    unfold check_inst_names' in Hcins.
+    destruct (Ident.mem_str Ident.sep (Ident.pos_to_str x)) eqn: E; try discriminate.
+    constructor.
+    - apply Ident.not_mem_In_str in E; auto.
+    - now apply IHinsts.
   Qed.
 
   Local Obligation Tactic :=
@@ -1520,6 +1562,8 @@ Section ElabDeclaration.
     let Hf_out := fresh "Hf_out" in
     let Hf_var := fresh "Hf_var" in
     let Hcvns := fresh "Hcvns" in
+    let Hnn := fresh "Hnn" in
+    let Hcins := fresh "Hcins" in
     match goal with H:elab_var_decls _ _ inputs = OK ?x |- _ =>
                     (assert (Hwc_in := H);
                      apply elab_var_decls_wc_env in Hwc_in;
@@ -1551,9 +1595,9 @@ Section ElabDeclaration.
                     rewrite <-Helab_out in H;
                     rename H into Helab_var, x into env end;
     match goal with H:mmap (elab_equation _ _) _ = OK ?x |- _ =>
-      rename H into Helabs; rename x into eqs end;
+                    rename H into Helabs; rename x into eqs end;
     match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
-      rename H into Hdefd; destruct x end;
+                    rename H into Hdefd; destruct x end;
     match goal with H:mmap _ inputs = OK _ |- _ =>
                     assert (Hf_in := H);
                     apply mmap_annotate_Forall in Hf_in;
@@ -1570,9 +1614,13 @@ Section ElabDeclaration.
                     apply mmap_annotate_fst in H;
                     rename H into Hout end;
     match goal with H:check_variable_names _ _ = OK ?x |- _ =>
-      rename H into Hcvns; destruct x end.
+                    rename H into Hcvns; destruct x end;
+    match goal with H:check_node_name _ _ = OK ?x |- _ =>
+                    rename H into Hnn; destruct x end;
+    match goal with H:check_inst_names _ _ = OK ?x |- _ =>
+                    rename H into Hcins; destruct x end.
 
-  Local Hint Resolve NoDupMembers_nil NoDup_nil.
+    Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
   Program Definition elab_declaration (decl: LustreAst.declaration)
     : res {n | wt_node G n /\ wc_node n} :=
@@ -1592,6 +1640,8 @@ Section ElabDeclaration.
              do ok <- mmap (fun xtc=>
                               assert_clock loc (fst xtc) (dck xtc) Cbase) xout;
              do ok <- check_variable_names loc env;
+             do ok <- check_node_name loc name;
+             do ok <- check_inst_names loc (vars_defined (filter is_app eqs));
              if (length xin ==b 0) || (length xout ==b 0)
              then Error (err_loc loc (msg "not enough inputs or outputs"))
              else OK (xin, xout, xvar, eqs)) with
@@ -1667,13 +1717,15 @@ Section ElabDeclaration.
     (* Forall NotReserved (xin ++ xlocal ++ xout) *)
     MassageElabs outputs locals inputs.
     unfold Ident.Ids.ValidId, Ident.Ids.NotReserved.
-    change (Forall (fun xty=>(fun x=>~In x Ident.Ids.reserved /\ ~Ident.Ids.prefixed x) (fst xty))
-                   (xin ++ xvar ++ xout)).
-    rewrite <-Forall_map, map_app, map_app.
-    rewrite Hvar, Hin, Hout in Helab_var.
-    rewrite Permutation_app_comm, Permutation_app_assoc, Helab_var, Forall_map.
-    apply check_variable_names_spec in Hcvns.
-    auto.
+    repeat split.
+    - change (Forall (fun xty => (fun x => ~In x Ident.Ids.reserved /\ Ident.Ids.valid x) (fst xty))
+                     (xin ++ xvar ++ xout)).
+      rewrite <-Forall_map, map_app, map_app.
+      rewrite Hvar, Hin, Hout in Helab_var.
+      rewrite Permutation_app_comm, Permutation_app_assoc, Helab_var, Forall_map.
+      eapply check_variable_names_spec; eauto.
+    - eapply check_inst_names_spec; eauto.
+    - eapply check_node_name_spec; eauto.
   Qed.
   Next Obligation.
     split.
