@@ -24,3 +24,12 @@ extraction/CompCert
 html
 *.c
 velus
+
+extraction/extracted
+
+.depend
+automake
+Makefile.auto
+tools/automake.ml
+
+*.exe
