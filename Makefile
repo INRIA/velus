@@ -80,6 +80,8 @@ extraction: proof
 		CompCert/common/*.ml*\
 		CompCert/driver/*.ml*\
 		CompCert/ia32/*.ml*\
+		CompCert/arm/*.ml*\
+		CompCert/powerpc/*.ml*\
 		CompCert/cparser/*.ml*\
 		CompCert/debug/*.ml*
 
