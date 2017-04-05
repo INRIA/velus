@@ -53,7 +53,7 @@ Module Type TRANSLATION
     | EqDef _ _ _   => acc
     | EqApp xs _ f _ =>
       match xs with
-      | [] => (fst acc, snd acc)
+      | [] => acc
       | x :: _ =>
         (fst acc, (x, f) :: snd acc)
       end
@@ -730,15 +730,14 @@ Module Type TRANSLATION
   now rewrite gather_eqs_snd_spec.
   Qed.
 
-  
-  Lemma Forall_NotReserved_idty:
+  Lemma Forall_ValidId_idty:
     forall A B (xs: list (ident * (A * B))),
-      Forall NotReserved (idty xs) <-> Forall NotReserved xs.
+      Forall ValidId (idty xs) <-> Forall ValidId xs.
   Proof.
     induction xs as [|x xs]; split; inversion_clear 1; simpl; eauto;
       destruct x as (x & tyck); constructor; try rewrite IHxs in *; auto.
   Qed.
-  
+
   (* =translate_node= *)
   (* definition is needed in signature *)
   Program Definition translate_node (n: node) : class :=
@@ -758,12 +757,9 @@ Module Type TRANSLATION
                          m_in   := idty n.(n_in);
                          m_vars := idty dvars;
                          m_out  := idty n.(n_out);
-                         m_body := translate_eqns mems n.(n_eqs);
-                         m_nodupvars := _;
-                         m_good      := _
+                         m_body := translate_eqns mems n.(n_eqs)
                       |};
-                      reset_method n.(n_eqs) ];
-       c_nodup   := _
+                      reset_method n.(n_eqs) ]
     |}.
   (* =end= *)
   Next Obligation.
@@ -779,7 +775,7 @@ Module Type TRANSLATION
     apply n.(n_nodup).
   Qed.
   Next Obligation.
-    repeat rewrite <-idty_app. apply Forall_NotReserved_idty.
+    repeat rewrite <-idty_app. apply Forall_ValidId_idty.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.
     match goal with |- context [snd (partition ?p ?l)] =>
@@ -815,6 +811,12 @@ Module Type TRANSLATION
     constructor; auto using NoDup.
     inversion_clear 1; auto.
     now apply reset_not_step.
+  Qed.
+  Next Obligation.
+    pose proof n.(n_good) as (? & ValidApp & ?).
+    split; auto.
+    rewrite <-fst_gather_eqs_var_defined, Forall_app, Forall_map in ValidApp.
+    tauto.
   Qed.
 
   (* =translate= *)

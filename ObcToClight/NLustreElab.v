@@ -149,7 +149,7 @@ Lemma Is_interface_map_empty:
   Is_interface_map [] (PM.empty (list type * list type)).
 Proof.
   split; setoid_rewrite PM.gempty; intros; try discriminate; auto.
-Qed.    
+Qed.
 
 Definition msg_of_types (ty ty': type) : errmsg :=
   MSG "expected '" :: MSG (string_of_type ty)
@@ -199,14 +199,14 @@ Section ElabExpressions.
   Definition assert_type (loc: astloc) (x: ident) (xty ty: type) : res unit :=
     if xty ==b ty then OK tt
     else Error (err_loc loc (CTX x :: MSG ": " :: msg_of_types xty ty)).
-  
+
   Definition assert_clock (loc: astloc) (x: ident) (xck ck: clock) : res unit :=
     if xck ==b ck then OK tt
     else Error (err_loc loc
                         ((CTX x :: MSG " has clock '" :: msg_of_clock xck)
                                 ++ MSG "' but clock '" :: msg_of_clock ck
                                 ++ msg "' was expected.")).
-  
+
   Definition find_node_interface (loc: astloc) (f: ident)
     : res (list type * list type) :=
     match PM.find f nenv with
@@ -378,8 +378,8 @@ Section ElabExpressions.
     | _ =>
       do (e, ck) <- elab_lexp ae;
       OK (Eexp e, ck)
-    end.  
-  
+    end.
+
   Definition assert_lexp_type (loc: astloc) (e: lexp) (ty: type) : res unit :=
     if typeof e ==b ty then OK tt
     else Error (err_loc loc (MSG "badly typed argument: "
@@ -441,7 +441,7 @@ Section ElabExpressions.
       do es <- elab_lexps loc xck aes tysin;
       do ok <- check_result_list loc xck xs tysout;
       OK (EqApp xs xck f es)
-           
+
     | FBY ae0 ae loc =>
       do v0 <- elab_constant_with_cast loc ae0;
       let v0ty := type_const v0 in
@@ -465,7 +465,7 @@ Section ElabExpressions.
                                    :: CTX x :: MSG " "
                                    :: msg_of_clocks xck eck))
     end.
-  
+
   (** Properties *)
 
   Lemma assert_type_eq:
@@ -724,7 +724,7 @@ Section ElabExpressions.
       else Error (err_loc loc ((MSG "badly-formed clock "
                                     :: msg_of_clocks xck ck)))
     end.
-  
+
   Lemma check_clock_spec:
     forall loc ck,
       check_clock loc ck = OK tt ->
@@ -752,7 +752,7 @@ Section ElabDeclaration.
   Definition err_incoherent_clock (loc: astloc) (x: ident) : res unit :=
     Error (err_loc loc (MSG "The declared clock of " :: CTX x
                         :: msg " is incoherent with the other declarations")).
-  
+
   Fixpoint assert_preclock (loc: astloc) (x: ident)
            (pck: LustreAst.clock) (ck: clock) : res unit :=
     match pck, ck with
@@ -765,7 +765,7 @@ Section ElabDeclaration.
       else err_incoherent_clock loc x
     | _, _ => err_incoherent_clock loc x
     end.
-  
+
   Fixpoint elab_var_decls_pass
            (acc: PM.t (type * clock)
                  * list (ident * (type_name * LustreAst.preclock * astloc)))
@@ -783,7 +783,7 @@ Section ElabDeclaration.
           then Error (err_loc loc (CTX x :: msg " is declared more than once"))
           else elab_var_decls_pass
                  (PM.add x (elab_type sty, Cbase) env, notdone) vds
-                            
+
         | FULLCK (ON cy' y b) =>
           match PM.find y env with
           | None => elab_var_decls_pass (env, vd::notdone) vds
@@ -856,7 +856,7 @@ Section ElabDeclaration.
       apply In_idck_exists. exists t.
       apply PM.elements_correct; auto.
   Qed.
-      
+
   Definition all_wt_clock (env: PM.t (type * clock)) : Prop :=
     forall x ty ck, PM.find x env = Some (ty, ck) ->
                     wt_clock (idty (PM.elements env)) ck.
@@ -868,7 +868,7 @@ Section ElabDeclaration.
     rewrite PM.gempty in Hfind.
     discriminate Hfind.
   Qed.
-    
+
   Lemma all_wt_clock_add:
     forall env x ty ck,
       all_wt_clock env ->
@@ -887,7 +887,7 @@ Section ElabDeclaration.
       apply Hawc in Hfind.
       apply wt_clock_add; auto.
   Qed.
-    
+
   Lemma elab_var_decls_pass_all_wt_clock:
     forall vds env ovds env' vds',
       all_wt_clock env ->
@@ -930,7 +930,7 @@ Section ElabDeclaration.
       apply PM.elements_correct in Heq.
       apply In_idty_exists; eauto.
   Qed.
-  
+
   Lemma elab_var_decls_pass_spec:
     forall vds env ovds env' vds',
       elab_var_decls_pass (env, ovds) vds = OK (env', vds') ->
@@ -1062,8 +1062,8 @@ Section ElabDeclaration.
         * match goal with H:InMembers _ vds1 |- _ =>
                           now apply Hvds1 in H end.
   Qed.
-    
-  Opaque elab_var_decls_pass.  
+
+  Opaque elab_var_decls_pass.
 
   Fixpoint elab_var_decls' {A: Type}
            (loc: astloc)
@@ -1082,9 +1082,9 @@ Section ElabDeclaration.
           elab_var_decls' loc fuel' env' notdone
         end
       end.
-  
+
   Definition elab_var_decls
-             (loc: astloc) 
+             (loc: astloc)
              (env: PM.t (type * clock))
              (vds: list (ident * (type_name * LustreAst.preclock * astloc)))
     : res (PM.t (type * clock)) :=
@@ -1185,7 +1185,7 @@ Section ElabDeclaration.
         * right. now apply fst_InMembers, PM_In_Members.
         * left. now apply fst_InMembers.
   Qed.
-  
+
   Fixpoint check_vars (loc: astloc) (defd: PS.t) (xs: idents) : res PS.t :=
     match xs with
     | nil => OK defd
@@ -1266,7 +1266,7 @@ Section ElabDeclaration.
     | EqApp xs _ _ _::eqs => do defd' <- check_vars loc defd xs;
                              check_defined loc out defd' eqs
     end.
-  
+
   Lemma check_defined_spec:
     forall eqs loc out defd,
       check_defined loc out defd eqs = OK tt ->
@@ -1344,7 +1344,7 @@ Section ElabDeclaration.
       + intros x Hvd.
         destruct Hvd as [Hvd|]; subst; auto.
   Qed.
-  
+
   Definition nameset {A: Type} s (xs: list (ident * A)) : PS.t :=
     List.fold_left (fun acc x => PS.add (fst x) acc) xs s.
 
@@ -1386,7 +1386,7 @@ Section ElabDeclaration.
     simpl in *. NamedDestructCases.
     reflexivity.
   Qed.
-  
+
   Lemma mmap_annotate_Forall:
     forall {A} xs (ys: list (ident * A)) env,
       mmap (annotate env) xs = OK ys ->
@@ -1435,31 +1435,98 @@ Section ElabDeclaration.
         assumption.
   Qed.
 
-  Definition check_variable_names {A} (loc: astloc) (env: PM.t A) : res unit :=
-    match find (fun x=>PM.mem x env) Ident.Ids.reserved with
-    | None => OK tt
-    | Some n => Error (err_loc loc
-                 (MSG """" :: CTX n :: msg """ is not a valid variable name"))
+  Fixpoint check_variable_names' (loc: astloc) (xs: idents) : res unit :=
+    match xs with
+    | [] => OK tt
+    | x :: xs =>
+      if Ident.mem_str Ident.sep (Ident.pos_to_str x)
+      then Error (err_loc loc
+                          (MSG """" :: CTX x :: msg """ is not a valid variable name"))
+      else
+        match find (fun x' => ident_eqb x x') Ident.Ids.reserved with
+        | None => check_variable_names' loc xs
+        | Some n => Error (err_loc loc
+                                  (MSG """" :: CTX n :: msg """ is not a valid variable name"))
+        end
     end.
+
+  Definition check_variable_names {A} (loc: astloc) (env: PM.t A) : res unit :=
+    check_variable_names' loc (map fst (PM.elements env)).
 
   Lemma check_variable_names_spec:
     forall A loc (env: PM.t A),
       check_variable_names loc env = OK tt ->
-      Forall (fun x=> ~In x Ident.Ids.reserved) (map fst (PM.elements env)).
+      Forall Ident.Ids.ValidId (PM.elements env).
   Proof.
     unfold check_variable_names.
     intros ** Hcvns.
-    destruct (find (fun x=>PM.mem x env) Ident.Ids.reserved) eqn:Hfind.
-    now inversion Hcvns.
-    apply find_weak_spec in Hfind.
-    apply all_In_Forall.
-    intros xtx Hm Hir.
-    apply fst_InMembers, PM_In_Members in Hm.
-    apply In_Forall with (1:=Hfind) in Hir.
-    apply PM_mem_spec_false in Hir.
+    induction (PM.elements env) as [|(x, t)]; auto.
+    unfold check_variable_names' in Hcvns.
+    Arguments find: simpl never.
+    simpl in Hcvns.
+    destruct (Ident.mem_str Ident.sep (Ident.pos_to_str x)) eqn: E; try discriminate.
+    destruct (find (fun x' : positive => ident_eqb x x') Ident.Ids.reserved) eqn: Hfind; try discriminate.
+    constructor.
+    - constructor.
+      + unfold Ident.Ids.NotReserved.
+        apply find_weak_spec in Hfind.
+        clear - Hfind.
+        induction (Ident.Ids.reserved); auto.
+        inversion_clear Hfind as [|? ? E].
+        intros [Eq|Hin].
+        * simpl in *; subst.
+          rewrite ident_eqb_refl in E; discriminate.
+        * apply IHi; auto.
+      + apply Ident.not_mem_In_str in E.
+        auto.
+    - now apply IHl.
+  Qed.
+
+  Definition check_node_name (loc: astloc) (n: ident) : res unit :=
+    if Ident.mem_str Ident.sep (Ident.pos_to_str n)
+    then Error (err_loc loc
+                     (MSG """" :: CTX n :: msg """ is not a valid node name"))
+    else OK tt.
+
+  Lemma check_node_name_spec:
+    forall loc n,
+      check_node_name loc n = OK tt ->
+      Ident.Ids.valid n.
+  Proof.
+    unfold check_node_name; intros.
+    destruct (Ident.mem_str Ident.sep (Ident.pos_to_str n)) eqn: E; try discriminate.
+    apply Ident.not_mem_In_str in E.
     auto.
   Qed.
-  
+
+  Fixpoint check_inst_names' (loc: astloc) (xs: idents) : res unit :=
+    match xs with
+    | [] => OK tt
+    | x :: xs =>
+      if Ident.mem_str Ident.sep (Ident.pos_to_str x)
+      then Error (err_loc loc
+                          (MSG """" :: CTX x :: msg """ is not a valid variable name"))
+      else check_inst_names' loc xs
+    end.
+
+  Definition check_inst_names (loc: astloc) (insts: idents) :=
+    check_inst_names' loc insts.
+
+  Lemma check_inst_names_spec:
+    forall loc insts,
+      check_inst_names loc insts = OK tt ->
+      Forall Ident.Ids.valid insts.
+  Proof.
+    unfold check_inst_names.
+    intros ** Hcins.
+    induction insts as [|x]; auto.
+    unfold check_inst_names' in Hcins.
+    destruct (Ident.mem_str Ident.sep (Ident.pos_to_str x)) eqn: E; try discriminate.
+    constructor.
+    - apply Ident.not_mem_In_str in E; auto.
+    - now apply IHinsts.
+  Qed.
+
   Local Obligation Tactic :=
     Tactics.program_simpl;
       repeat progress
@@ -1495,6 +1562,8 @@ Section ElabDeclaration.
     let Hf_out := fresh "Hf_out" in
     let Hf_var := fresh "Hf_var" in
     let Hcvns := fresh "Hcvns" in
+    let Hnn := fresh "Hnn" in
+    let Hcins := fresh "Hcins" in
     match goal with H:elab_var_decls _ _ inputs = OK ?x |- _ =>
                     (assert (Hwc_in := H);
                      apply elab_var_decls_wc_env in Hwc_in;
@@ -1526,9 +1595,9 @@ Section ElabDeclaration.
                     rewrite <-Helab_out in H;
                     rename H into Helab_var, x into env end;
     match goal with H:mmap (elab_equation _ _) _ = OK ?x |- _ =>
-      rename H into Helabs; rename x into eqs end;
+                    rename H into Helabs; rename x into eqs end;
     match goal with H:check_defined _ _ _ _ = OK ?x |- _ =>
-      rename H into Hdefd; destruct x end;
+                    rename H into Hdefd; destruct x end;
     match goal with H:mmap _ inputs = OK _ |- _ =>
                     assert (Hf_in := H);
                     apply mmap_annotate_Forall in Hf_in;
@@ -1545,9 +1614,13 @@ Section ElabDeclaration.
                     apply mmap_annotate_fst in H;
                     rename H into Hout end;
     match goal with H:check_variable_names _ _ = OK ?x |- _ =>
-      rename H into Hcvns; destruct x end.
+                    rename H into Hcvns; destruct x end;
+    match goal with H:check_node_name _ _ = OK ?x |- _ =>
+                    rename H into Hnn; destruct x end;
+    match goal with H:check_inst_names _ _ = OK ?x |- _ =>
+                    rename H into Hcins; destruct x end.
 
-  Local Hint Resolve NoDupMembers_nil NoDup_nil.
+    Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
   Program Definition elab_declaration (decl: LustreAst.declaration)
     : res {n | wt_node G n /\ wc_node n} :=
@@ -1567,6 +1640,8 @@ Section ElabDeclaration.
              do ok <- mmap (fun xtc=>
                               assert_clock loc (fst xtc) (dck xtc) Cbase) xout;
              do ok <- check_variable_names loc env;
+             do ok <- check_node_name loc name;
+             do ok <- check_inst_names loc (vars_defined (filter is_app eqs));
              if (length xin ==b 0) || (length xout ==b 0)
              then Error (err_loc loc (msg "not enough inputs or outputs"))
              else OK (xin, xout, xvar, eqs)) with
@@ -1604,7 +1679,7 @@ Section ElabDeclaration.
     apply check_defined_spec in Hdefd.
     destruct Hdefd as (Hdefd & Hnodup & Hnfby).
     repeat setoid_rewrite nameset_spec in Hdefd.
-    setoid_rewrite map_app.    
+    setoid_rewrite map_app.
     apply Permutation.NoDup_Permutation; auto.
     - pose proof (NoDupMembers_PM_elements env) as Hnd.
       apply fst_NoDupMembers in Hnd.
@@ -1641,14 +1716,16 @@ Section ElabDeclaration.
   Next Obligation.
     (* Forall NotReserved (xin ++ xlocal ++ xout) *)
     MassageElabs outputs locals inputs.
-    unfold Ident.Ids.NotReserved.
-    change (Forall (fun xty=>(fun x=>~In x Ident.Ids.reserved) (fst xty))
-                   (xin ++ xvar ++ xout)).
-    rewrite <-Forall_map, map_app, map_app.
-    rewrite Hvar, Hin, Hout in Helab_var.
-    rewrite Permutation_app_comm, Permutation_app_assoc, Helab_var.
-    apply check_variable_names_spec in Hcvns.
-    auto.
+    unfold Ident.Ids.ValidId, Ident.Ids.NotReserved.
+    repeat split.
+    - change (Forall (fun xty => (fun x => ~In x Ident.Ids.reserved /\ Ident.Ids.valid x) (fst xty))
+                     (xin ++ xvar ++ xout)).
+      rewrite <-Forall_map, map_app, map_app.
+      rewrite Hvar, Hin, Hout in Helab_var.
+      rewrite Permutation_app_comm, Permutation_app_assoc, Helab_var, Forall_map.
+      eapply check_variable_names_spec; eauto.
+    - eapply check_inst_names_spec; eauto.
+    - eapply check_node_name_spec; eauto.
   Qed.
   Next Obligation.
     split.
@@ -1674,7 +1751,7 @@ Section ElabDeclaration.
       destruct Hxin as (aeq & Hxin & Helab).
       apply wt_elab_equation with (G:=G) in Helab; auto.
     - (* wc_node n *)
-      constructor; simpl;      
+      constructor; simpl;
         repeat match goal with H:OK _ = _ |- _ =>
           symmetry in H; monadInv1 H end;
         NamedDestructCases; intros; subst;
@@ -1787,4 +1864,3 @@ Definition elab_declarations (decls: list LustreAst.declaration)
   elab_declarations' [] (PM.empty (list type * list type))
                      (conj wtg_nil wc_global_nil)
                      Is_interface_map_empty decls.
-

@@ -24,9 +24,9 @@ Module Type FUSION
        (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc)
        (Import TypObc: Velus.Obc.ObcTyping.OBCTYPING Ids Op OpAux SynObc SemObc)
        (Import Equ   : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynObc SemObc).
-  
+
   (** ** Determine whether an Obc command can modify a variable. *)
-  
+
   Inductive Can_write_in : ident -> stmt -> Prop :=
   | CWIAssign: forall x e,
       Can_write_in x (Assign x e)
@@ -47,7 +47,7 @@ Module Type FUSION
   | CWIComp2: forall x s1 s2,
       Can_write_in x s2 ->
       Can_write_in x (Comp s1 s2).
-  
+
   Lemma cannot_write_in_Ifte:
     forall x e s1 s2,
       ~ Can_write_in x (Ifte e s1 s2)
@@ -112,13 +112,13 @@ Module Type FUSION
       remember (combine i rvs) as lr eqn:Heq.
       assert (forall x, In x lr -> In (fst x) i) as Hin
         by (destruct x; subst; apply in_combine_l).
-      clear Heq. induction lr as [|x lr]; auto. 
+      clear Heq. induction lr as [|x lr]; auto.
       destruct x as [x v'].
       apply exp_eval_extend_env.
       + intro HH; apply (Hfree x HH).
         constructor.
         change (In (fst (x, v')) i).
-        apply Hin, in_eq. 
+        apply Hin, in_eq.
       + apply IHlr. intros y Hin'. apply Hin.
         constructor (assumption).
     - now inv Hstmt.
@@ -165,7 +165,7 @@ Module Type FUSION
   Qed.
 
   (** ** Fusion functions *)
-  
+
   Fixpoint zip s1 s2 : stmt :=
     match s1, s2 with
     | Ifte e1 t1 f1, Ifte e2 t2 f2 =>
@@ -223,11 +223,11 @@ Module Type FUSION
     simpl. rewrite IHms.
     now destruct m.
   Qed.
-  
+
   Program Definition fuse_class (c: class): class :=
     match c with
-      mk_class name mems objs methods nodup nodupm =>
-      mk_class name mems objs (map fuse_method methods) nodup _
+      mk_class name mems objs methods nodup _ _ =>
+      mk_class name mems objs (map fuse_method methods) nodup _ _
     end.
   Next Obligation.
     now rewrite map_m_name_fuse_methods.
@@ -244,11 +244,11 @@ Module Type FUSION
   Proof. destruct m; auto. Qed.
 
   Lemma fuse_method_in:
-    forall m, (fuse_method m).(m_in) = m.(m_in). 
+    forall m, (fuse_method m).(m_in) = m.(m_in).
   Proof. destruct m; auto. Qed.
 
   Lemma fuse_method_out:
-    forall m, (fuse_method m).(m_out) = m.(m_out). 
+    forall m, (fuse_method m).(m_out) = m.(m_out).
   Proof. destruct m; auto. Qed.
 
   Lemma fuse_find_class:
@@ -336,9 +336,9 @@ Module Type FUSION
       rewrite fuse_method_m_name, Hne in *.
       inv c_nodupm0; auto.
   Qed.
-  
+
   (** ** Invariant sufficient to justify semantic preservation of fusion. *)
-  
+
   (*
    The property "Fusible (translate_eqns mems eqs)" is obtained above
    using scheduling assumptions for EqDef, since they are needed to treat
@@ -470,7 +470,7 @@ Module Type FUSION
     - intro Hcan; apply Can_write_in_zip in Hcan; intuition.
     - split; intro Hcan; apply HH; apply Can_write_in_zip; intuition.
   Qed.
-  
+
   Lemma zip_free_write:
     forall s1 s2,
       Fusible s1
@@ -508,7 +508,7 @@ Module Type FUSION
              | _ => idtac
              end.
   Qed.
-  
+
   Lemma zip_Comp':
     forall s1 s2,
       Fusible s1
@@ -525,7 +525,7 @@ Module Type FUSION
              | |- context [equiv_decb ?e1 ?e2]
                => destruct (equiv_decb e1 e2) eqn:Heq;
                     (rewrite equiv_decb_equiv in Heq; rewrite <-Heq in *)
-                    || rewrite not_equiv_decb_equiv in Heq 
+                    || rewrite not_equiv_decb_equiv in Heq
              | H:Fusible ?s1,
                  IH:context [stmt_eval_eq (zip ?s1 _) _]
                |- context [zip ?s1 ?s2]
@@ -535,7 +535,7 @@ Module Type FUSION
       try rewrite Comp_assoc;
       reflexivity.
   Qed.
-  
+
   Lemma fuse'_free_write:
     forall s2 s1,
       Fusible s1
@@ -549,16 +549,16 @@ Module Type FUSION
     apply IHs2_2; [|assumption].
     apply zip_free_write; assumption.
   Qed.
-  
+
   (** fuse_eval_eq *)
-  
+
   Require Import Relations.
   Require Import Morphisms.
   Require Import Setoid.
-  
+
   Definition fuse_eval_eq s1 s2: Prop :=
     stmt_eval_eq s1 s2 /\ (Fusible s1 /\ Fusible s2).
-  
+
   (*
      Print relation.
      Check (fuse_eval_eq : relation stmt).
@@ -571,7 +571,7 @@ Module Type FUSION
   Proof.
     intros s Hfree; unfold Proper, fuse_eval_eq; intuition.
   Qed.
-  
+
   Lemma fuse_eval_eq_trans:
     transitive stmt fuse_eval_eq.
   Proof.
@@ -582,7 +582,7 @@ Module Type FUSION
     destruct Heq2 as [Heq2 ?].
     rewrite Heq1, Heq2; reflexivity.
   Qed.
-  
+
   Lemma fuse_eval_eq_sym:
     symmetric stmt fuse_eval_eq.
   Proof.
@@ -592,19 +592,19 @@ Module Type FUSION
     destruct Heq as [Heq ?].
     rewrite Heq; reflexivity.
   Qed.
-  
+
   Add Relation stmt (fuse_eval_eq)
       symmetry proved by fuse_eval_eq_sym
       transitivity proved by fuse_eval_eq_trans
         as fuse_eval_equiv.
-  
+
   Instance subrelation_stmt_fuse_eval_eq:
     subrelation fuse_eval_eq stmt_eval_eq.
   Proof.
     intros s1 s2 Heq x menv env menv' env'.
     now apply Heq.
   Qed.
-  
+
   Lemma zip_Comp:
     forall s1 s2,
       Fusible s1
@@ -629,7 +629,7 @@ Module Type FUSION
     destruct Heq as [Heq ?].
     rewrite Heq; reflexivity.
   Qed.
-  
+
   Instance fuse_eval_eq_Comp_Proper:
     Proper (fuse_eval_eq ==> fuse_eval_eq ==> fuse_eval_eq) Comp.
   Proof.
@@ -641,7 +641,7 @@ Module Type FUSION
     split; [|intuition].
     rewrite Hseq, Hteq; reflexivity.
   Qed.
-  
+
   Instance zip_fuse_eval_eq_Proper:
     Proper (fuse_eval_eq ==> fuse_eval_eq ==> fuse_eval_eq) zip.
   Proof.
@@ -655,7 +655,7 @@ Module Type FUSION
     rewrite zip_Comp' with (1:=Hfrees').
     rewrite Hseq, Hteq; reflexivity.
   Qed.
-  
+
   Lemma fuse'_Comp:
     forall s2 s1,
       Fusible s1
@@ -862,7 +862,7 @@ Module Type FUSION
       econstructor 2; eauto.
       apply fuse_find_class. eauto.
   Qed.
-  
+
 End FUSION.
 
 Module FusionFun
@@ -878,4 +878,3 @@ Module FusionFun
   Include FUSION Ids Op OpAux SynObc SemObc TypObc Equ.
 
 End FusionFun.
-

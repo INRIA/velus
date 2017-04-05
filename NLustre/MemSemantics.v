@@ -203,7 +203,9 @@ enough: it does not support the internal fixpoint introduced by
                                   (map fst (v ++ o)))
              (vout  : forall x, In x (map fst o) -> ~In x (vars_defined (filter is_fby eqs)))
              (nodup : NoDupMembers (i ++ v ++ o))
-             (good  : Forall NotReserved (i ++ v ++ o))
+             (good  : Forall ValidId (i ++ v ++ o)
+                      /\ Forall valid (vars_defined (filter is_app eqs))
+                      /\ valid f)
              (Hbk   : clock_of xss bk)
              (Hfind : find_node f G =
                       Some (mk_node f i o v eqs

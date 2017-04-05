@@ -396,7 +396,9 @@ enough: it does not support the internal fixpoint introduced by
                                   (map fst (v ++ o)))
              (vout  : forall x, In x (map fst o) -> ~In x (vars_defined (filter is_fby eqs)))
              (nodup : NoDupMembers (i ++ v ++ o))
-             (good  : Forall NotReserved (i ++ v ++ o))
+             (good  : Forall ValidId (i ++ v ++ o)
+                      /\ Forall valid (vars_defined (filter is_app eqs))
+                      /\ valid f)
              (Hck   : clock_of xss bk)
              (Hf    : find_node f G =
                       Some (mk_node f i o v eqs
@@ -1105,7 +1107,7 @@ an absent value *)
     - inversion_clear Hsem as [|? ? ? Heqs'].
       inv Heqs'; auto.
   Qed.
-  
+
 End NLSEMANTICS.
 
 Module NLSemanticsFun

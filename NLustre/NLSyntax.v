@@ -103,7 +103,9 @@ Module Type NLSYNTAX
         n_vout  : forall out, In out (map fst n_out) ->
                          ~ In out (vars_defined (filter is_fby n_eqs));
         n_nodup : NoDupMembers (n_in ++ n_vars ++ n_out);
-        n_good  : Forall NotReserved (n_in ++ n_vars ++ n_out)
+        n_good  : Forall ValidId (n_in ++ n_vars ++ n_out)
+                  /\ Forall valid (vars_defined (filter is_app n_eqs))
+                  /\ valid n_name
       }.
 
   (** ** Program *)

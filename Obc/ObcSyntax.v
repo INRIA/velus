@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Ident.
 
 Open Scope bool_scope.
 Require Import List.
@@ -51,7 +52,7 @@ Module Type OBCSYNTAX
         m_body : stmt;
 
         m_nodupvars : NoDupMembers (m_in ++ m_vars ++ m_out);
-        m_good      : Forall NotReserved (m_in ++ m_vars ++ m_out)
+        m_good      : Forall ValidId (m_in ++ m_vars ++ m_out)
       }.
 
   Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
@@ -90,8 +91,44 @@ Module Type OBCSYNTAX
     pose proof m.(m_good) as Good.
     unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
-      inv Hinm; inv Good.
-    - contradiction.
+      inv Hinm; inversion_clear Good as [|? ? Valid].
+    - inv Valid. contradiction.
+    - now apply IHl.
+  Qed.
+
+  Lemma m_good_out:
+    forall m x,
+      In x m.(m_out) ->
+      ValidId x.
+  Proof.
+    intros.
+    pose proof (m_good m) as G.
+    eapply In_Forall; eauto.
+    apply in_app; right; apply in_app; now right.
+  Qed.
+
+  Lemma m_good_in:
+    forall m x,
+      In x m.(m_in) ->
+      ValidId x.
+  Proof.
+    intros.
+    pose proof (m_good m) as G.
+    eapply In_Forall; eauto.
+    apply in_app; now left.
+  Qed.
+
+  Lemma m_notprefixed:
+    forall x m,
+      prefixed x ->
+      ~InMembers x (meth_vars m).
+  Proof.
+    intros ** Hin Hinm.
+    pose proof m.(m_good) as Good.
+    unfold meth_vars in Hinm.
+    induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
+      inv Hinm; inversion_clear Good as [|? ? Valid].
+    - inv Valid. eapply valid_not_prefixed; eauto.
     - now apply IHl.
   Qed.
 
@@ -103,7 +140,8 @@ Module Type OBCSYNTAX
         c_methods : list method;
 
         c_nodup   : NoDup (map fst c_mems ++ map fst c_objs);
-        c_nodupm  : NoDup (map m_name c_methods)
+        c_nodupm  : NoDup (map m_name c_methods);
+        c_good    : Forall (fun xt => valid (fst xt)) c_objs /\ valid c_name
       }.
 
   Lemma c_nodupmems:

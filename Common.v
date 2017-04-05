@@ -81,6 +81,18 @@ Proof.
   apply ident_eqb_refl.
 Qed.
 
+Lemma mem_assoc_ident_true:
+  forall {A} x xs,
+    mem_assoc_ident x xs = true ->
+    exists t: A, In (x, t) xs.
+Proof.
+  intros ** Hin.
+  unfold mem_assoc_ident in Hin; rewrite existsb_exists in Hin.
+  destruct Hin as ((x', t) & ? & E).
+  simpl in E; rewrite ident_eqb_eq in E; subst x'.
+  eauto.
+Qed.
+
 Definition assoc_ident {A} (x: ident) (xs: list (ident * A)): option A :=
   match find (fun y => ident_eqb (fst y) x) xs with
   | Some (_, a) => Some a
@@ -105,6 +117,19 @@ Module Type IDS.
 
   Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
     ~In (fst xty) reserved.
+
+ Parameter prefix : ident -> ident -> ident.
+
+ Parameter valid : ident -> Prop.
+
+ Inductive prefixed: ident -> Prop :=
+   prefixed_intro: forall pref id,
+     prefixed (prefix pref id).
+
+ Axiom valid_not_prefixed: forall x, valid x -> ~prefixed x.
+
+ Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
+   NotReserved xty /\ valid (fst xty).
 
 End IDS.
 
@@ -754,7 +779,7 @@ Section InMembers.
     destruct x. apply NoDupMembers_app_cons in HH. intuition.
   Qed.
 
-   Lemma NoDupMembers_app_assoc:
+   Lemma NoDupMembers_app_comm:
     forall ws xs,
       NoDupMembers (ws ++ xs) <-> NoDupMembers (xs ++ ws).
   Proof.
@@ -793,7 +818,7 @@ Section InMembers.
       NoDupMembers (ws ++ xs) -> NoDupMembers ws.
   Proof.
     intros ** Hndup.
-    apply NoDupMembers_app_assoc in Hndup.
+    apply NoDupMembers_app_comm in Hndup.
     apply NoDupMembers_app_r with (1:=Hndup).
   Qed.
 
@@ -1390,7 +1415,7 @@ Section Lists.
       apply in_app_iff.
       tauto.
   Qed.
-  
+
   Lemma in_app:
   forall (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
   Proof.
@@ -1768,7 +1793,7 @@ Section Lists.
     simpl.
     destruct (split xs) as [g d].
     rewrite IHxs; auto.
-  Qed.  
+  Qed.
 
 End Lists.
 
@@ -1863,7 +1888,7 @@ Section TypesAndClocks.
   (* A Lustre variable is declared with a type and a clock.
      In the abstract syntax, a declaration is represented as a triple:
      (x, (ty, ck)) : ident * (type * clock)
-     
+
      And nodes include lists of triples for lists of declarations.
      The following definitions and lemmas facilitate working with such
      values. *)
@@ -1878,7 +1903,7 @@ Section TypesAndClocks.
     map (fun xtc => (fst xtc, snd (snd xtc))).
 
   (* idty *)
-  
+
   Lemma idty_app:
     forall xs ys,
       idty (xs ++ ys) = idty xs ++ idty ys.
@@ -1896,7 +1921,7 @@ Section TypesAndClocks.
     - rewrite <-IHxs; destruct HH; auto.
     - rewrite IHxs. destruct HH; auto.
   Qed.
-  
+
   Lemma NoDupMembers_idty:
     forall xs,
       NoDupMembers (idty xs) <-> NoDupMembers xs.
@@ -1967,7 +1992,7 @@ Section TypesAndClocks.
     - rewrite <-IHxs; destruct HH; auto.
     - rewrite IHxs. destruct HH; auto.
   Qed.
-  
+
   Lemma NoDupMembers_idck:
     forall xs,
       NoDupMembers (idck xs) <-> NoDupMembers xs.
@@ -2018,7 +2043,7 @@ Section TypesAndClocks.
     unfold idck. rewrite Hperm.
     reflexivity.
   Qed.
-  
+
 End TypesAndClocks.
 
 (** Extra lemmas for positive maps *)
@@ -2124,6 +2149,20 @@ Section ExtraPositiveMaps.
     - now apply not_in_cons in NotIn.
   Qed.
 
+  Lemma adds_comm:
+    forall xs x x' (v v': A) vs e,
+      ~ In x xs ->
+      ~ In x' xs ->
+      x <> x' ->
+      adds (x :: x' :: xs) (v :: v' :: vs) e = adds (x' :: x :: xs) (v' :: v :: vs) e.
+  Proof.
+    intros.
+    repeat rewrite adds_cons_cons; auto.
+    - rewrite add_comm; auto.
+    - intros [?|?]; contradiction.
+    - intros [?|?]. symmetry in H2. contradiction. contradiction.
+ Qed.
+
   Lemma adds_nil_nil:
     forall e,
       adds [] [] e = e.
@@ -2191,7 +2230,7 @@ Section ExtraPositiveMaps.
         * subst. exists xv. apply PM.gss.
         * exists yv. rewrite PM.gso; auto.
   Qed.
-  
+
   Lemma PM_mem_spec_false:
     forall x (s: PM.t A),
       PM.mem x s = false <-> ~PM.In x s.
