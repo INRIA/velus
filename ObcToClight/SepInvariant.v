@@ -314,7 +314,8 @@ Proof.
   destruct t;
   (destruct i, s || destruct f || idtac);
   (discriminates || contradiction || auto);
-  simpl; try rewrite align_noattr; auto using Z.divide_refl.
+  simpl; try rewrite align_noattr; auto using Z.divide_refl;
+  try (intros; match goal with |- (4 | 8) => exists 2; auto end).
 Qed.
 
 Lemma in_translate_param_chunked:
