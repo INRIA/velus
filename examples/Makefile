@@ -31,13 +31,14 @@ wcet: $(EXAMPLES:.lus=.wcet)
 
 realclean: clean
 	@rm -f $(EXAMPLES:.lus=.exe) $(EXAMPLES:.lus=.ff)
+	@rm -f $(EXAMPLES:.lus=.wcet)
 
 clean:
 	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
 	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.sync.c)
-	@rm -f $(EXAMPLES:.lus=.sync.bkp)
+	@rm -f $(EXAMPLES:.lus=.sync.bkp) $(EXAMPLES:.lus=.ff.bkp)
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.o)
-	@rm -f $(EXAMPLES:.lus=.sync.o)
+	@rm -f $(EXAMPLES:.lus=.sync.o) $(EXAMPLES:.lus=.sync.c.bkp)
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.s.bkp)
 
 # rules
