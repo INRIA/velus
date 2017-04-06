@@ -2,3 +2,5 @@
 *.s
 *.light.c
 *.sn.lus
+*.bkp
+*.wcet
