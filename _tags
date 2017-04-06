@@ -1,6 +1,0 @@
-<extraction/extracted/lib> or <extraction/extracted/cfrontend> or <extraction/extracted/backend> or <extraction/extracted/common> or <extraction/extracted/driver> or <extraction/extracted/ia32> or <extraction/extracted/cparser> or <extraction/extracted/debug>: include
-<extraction/extracted> : include
-true: package(str)
-true: package(unix)
-true: package(menhirLib)
-true: use_menhir, not_hygienic

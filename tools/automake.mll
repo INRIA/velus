@@ -82,8 +82,7 @@ rule scan = parse
     let extr_dir = Filename.dirname !extraction in
     let stamp = Filename.concat extr_dir "STAMP" in
     let extracted = if !extracted = "" then extr_dir else !extracted in
-    let rm_mls = "rm -f " ^ Filename.concat extracted "*.ml" ^ " " ^
-                  Filename.concat extracted "*.mli" in
+    let rm_mls = "rm -f " ^ Filename.concat extracted "*.ml*" in
     let rules = [
       [".PHONY"], ["all"; "clean"; "archclean"; "depend"], [];
       ["all"], ["$(VOFILES)"], [];
