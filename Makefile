@@ -9,7 +9,7 @@ VELUS=velus
 COMPCERTDIR=CompCert
 COMPCERTFLAGS=$(SILENT) -C $(COMPCERTDIR)
 COMPCERTTARGET=ia32-linux
-COMPCERT_INCLUDES=lib cfrontend backend common driver ia32 cparser debug
+COMPCERT_INCLUDES=lib cfrontend backend common driver ia32 cparser debug arm powerpc
 
 PARSERDIR=Lustre/Parser
 PARSERFLAGS=$(SILENT) -C $(PARSERDIR)
