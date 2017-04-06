@@ -97,4 +97,25 @@ Note that the `assert` construct is parsed, but not implemented.
   and Z, Toulouse, France, June 2-6, 2014. (eds.) Frédéric Boniol, Virginie 
   Wiels, Yamine Ait Ameur, Klaus-Dieter Schewe
 
+# Estimating the WCET of the generated functions
+
+[Otawa](http://www.otawa.fr) can estimate the WCETs of the generated 
+assembly programs.
+
+To do this, you will need a cross compiler (e.g., `arm-none-eabi-gcc`) and
+CompCert needs to be configured to target ARM (or PowerPc):
+```
+  cd CompCert
+  configure --toolprefix arm-none-eabi arm-eabi
+```
+
+Cross-compiling the examples for ARM requires an extra declaration:
+```
+EXTRA_CCOMP_ARGS=-WUl,--specs=nosys.specs
+```
+to avoid errors about undefined references to `_exit`.
+
+To build the `wcet` target, the `OTAWA_PATH` variable must be set to the 
+prefix used to install Otawa (see
+[Building Otawa](http://www.tracesgroup.net/otawa//doc/manuals/manual/manual-0.html)).
 
