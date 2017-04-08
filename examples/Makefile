@@ -9,12 +9,12 @@ OTAWA_PATH?=/opt/otawa-core
 
 # Requires lustre-compat branch
 HEPT_PATH?=$(HOME)/Projects/heptagon-working
+HEPT_FLAGS?=-stdlib $(HEPT_PATH)/lib
 
 # For building ARM executables
 CCOMP_EXTRA=-WUl,--specs=nosys.specs
 
 EXAMPLES= avgvelocity.lus \
-	  cocospec_mono_system.lus \
 	  count.lus \
 	  cruise.lus \
 	  emsoft03.lus \
@@ -22,17 +22,19 @@ EXAMPLES= avgvelocity.lus \
 	  kind_functionalChain.lus \
 	  landing_gear.lus \
 	  minus.lus \
-	  new_watch.lus \
 	  pip_ex.lus \
 	  prodcell.lus \
 	  tracker.lus \
-	  ums_verif.lus
+	  ums_verif.lus \
+	  cocospec_mono_system.lus \
+	  new_watch.lus
 
 all: $(EXAMPLES:.lus=.exe)
 
 wcet: $(EXAMPLES:.lus=.wcet)
 
 heptagon: $(EXAMPLES:.lus=.hept.exe)
+hept.wcet: $(EXAMPLES:.lus=.hept.wcet)
 
 realclean: clean
 	@rm -f $(EXAMPLES:.lus=.exe) $(EXAMPLES:.lus=.ff)
@@ -61,7 +63,7 @@ clean:
 %.hept.wcet: %.hept.exe %.hept.ff
 	for f in $$(nm $< | grep -i $(<:.hept.exe=)__ | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
-		| sed -e "s/^\(WCET\[\)[^_]*__/\1$(<:.hept.exe=)(hept)./"; \
+		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept.exe=)./"; \
 	done >$@
 
 %.ff: %.exe
@@ -78,7 +80,7 @@ clean:
 	    -o $@ $(@:.exe=.sync.c) $<
 
 %.hept.exe: %.lus
-	$(HEPT_PATH)/heptc -s $(<:.lus=) -target c $<
+	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
 	 $(CCOMP) -stdlib $(COMPCERT) \
 		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \

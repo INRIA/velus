@@ -4,3 +4,6 @@
 *.sn.lus
 *.bkp
 *.wcet
+*.epci
+*.mls
+*_c
