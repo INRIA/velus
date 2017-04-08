@@ -1,14 +1,17 @@
 VELUS=../velus
 VELUS_OPT=-dobc -dclight
 
-COMPCERT=../CompCert
+COMPCERT=$(realpath ../CompCert)
 CCOMP=$(COMPCERT)/ccomp
 CCOMP_OPT=-stdlib $(COMPCERT)/runtime
 
 OTAWA_PATH?=/opt/otawa-core
 
+# Requires lustre-compat branch
+HEPT_PATH?=$(HOME)/Projects/heptagon-working
+
 # For building ARM executables
-#EXTRA_CCOMP_ARGS=-WUl,--specs=nosys.specs
+CCOMP_EXTRA=-WUl,--specs=nosys.specs
 
 EXAMPLES= avgvelocity.lus \
 	  cocospec_mono_system.lus \
@@ -29,9 +32,12 @@ all: $(EXAMPLES:.lus=.exe)
 
 wcet: $(EXAMPLES:.lus=.wcet)
 
+heptagon: $(EXAMPLES:.lus=.hept.exe)
+
 realclean: clean
 	@rm -f $(EXAMPLES:.lus=.exe) $(EXAMPLES:.lus=.ff)
-	@rm -f $(EXAMPLES:.lus=.wcet)
+	@rm -f $(EXAMPLES:.lus=.hept.exe) $(EXAMPLES:.lus=.hept.ff)
+	@rm -f $(EXAMPLES:.lus=.wcet) $(EXAMPLES:.lus=.hept.wcet)
 
 clean:
 	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
@@ -40,13 +46,22 @@ clean:
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.o)
 	@rm -f $(EXAMPLES:.lus=.sync.o) $(EXAMPLES:.lus=.sync.c.bkp)
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.s.bkp)
+	@rm -f $(EXAMPLES:.lus=hept.ff) $(EXAMPLES:.lus=.hept.ff.bkp)
+	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.epci)
+	@rm -rf $(EXAMPLES:.lus=_c) $(EXAMPLES:.lus=.mls)
 
 # rules
 
 %.wcet: %.exe %.ff
 	for f in $$(nm $< | grep fun_ | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
-		| sed -e "s/^\(WCET\[\)/\1$(<:.exe=)./"; \
+		| sed -e "s/^\(WCET\[\)fun_/\1$(<:.exe=)./"; \
+	done >$@
+
+%.hept.wcet: %.hept.exe %.hept.ff
+	for f in $$(nm $< | grep -i $(<:.hept.exe=)__ | cut -d ' ' -f 3); do \
+	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
+		| sed -e "s/^\(WCET\[\)[^_]*__/\1$(<:.hept.exe=)(hept)./"; \
 	done >$@
 
 %.ff: %.exe
@@ -59,6 +74,14 @@ clean:
 	sed -i.bkp -e 's/\$$/_/g' $@
 
 %.exe: %.s
-	$(CCOMP) $(CCOMP_OPT) -Wl,-emain_sync $(EXTRA_CCOMP_ARGS) \
+	$(CCOMP) -v $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
 	    -o $@ $(@:.exe=.sync.c) $<
+
+%.hept.exe: %.lus
+	$(HEPT_PATH)/heptc -s $(<:.lus=) -target c $<
+	(cd $(<:.lus=_c); \
+	 $(CCOMP) -stdlib $(COMPCERT) \
+		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \
+		 -I $(HEPT_PATH)/lib/c -o ../$@ \
+		 $(<:.lus=)_types.c $(<:.lus=).c _main.c)
 
