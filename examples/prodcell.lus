@@ -1,9 +1,9 @@
 (*
-    Production Cell in Lustre
-    1995 Leszek Holenderski
+    production cell in lustre
+    1995 leszek holenderski
 
-    Published in "Formal Development of Reactive Systems", Claus Lewerentz and
-    Thomas Lindner (eds.), Springer-Verlag, LNCS 891, 1995.
+    published in "formal development of reactive systems", claus lewerentz and
+    thomas lindner (eds.), springer-verlag, lncs 891, 1995.
  *)
 
 node redge (signal: bool) returns (r: bool);
@@ -34,129 +34,129 @@ let
   e2_since_last_e1 = e2 or e2_since_last_e1_2;
 tel;
 
-node MovingItem
-  (MaySafelyMove, TryToMove1, TryToMove2: bool)
+node movingitem
+  (maysafelymove, trytomove1, trytomove2: bool)
 returns
   (start1, start2, stop: bool);
 var
-  MayMove1, MayMove2: bool;
+  maymove1, maymove2: bool;
   stop1, stop2, start1_2, start2_2: bool;
 let
-  MayMove1 = TryToMove1 and MaySafelyMove;
-  MayMove2 = TryToMove2 and MaySafelyMove;
+  maymove1 = trytomove1 and maysafelymove;
+  maymove2 = trytomove2 and maysafelymove;
 
-  start1_2 = true fby not TryToMove2;
-  start1 = redge(MayMove1 and start1_2);
-  start2_2 = true fby not TryToMove1;
-  start2 = redge(MayMove2 and start2_2);
-  stop1 = fedge(MayMove1);
-  stop2 = fedge(MayMove2);
+  start1_2 = true fby not trytomove2;
+  start1 = redge(maymove1 and start1_2);
+  start2_2 = true fby not trytomove1;
+  start2 = redge(maymove2 and start2_2);
+  stop1 = fedge(maymove1);
+  stop2 = fedge(maymove2);
   stop = stop1 or stop2;
 tel;
 
-node Press
-  (Rput1, NearPress1, OutPress1,
-   Rget2, NearPress2, OutPress2,
-   Pbot, Pmid, Ptop: bool)
+node press
+  (rput1, nearpress1, outpress1,
+   rget2, nearpress2, outpress2,
+   pbot, pmid, ptop: bool)
 returns
-  (Pup, Pdn, Pstop, ArmsMayPassPress: bool);
+  (pup, pdn, pstop, armsmaypasspress: bool);
 var
-  Arm1MayPassPress, Arm2MayPassPress,
-  Arm1OutOfPress, Arm2OutOfPress, ArmsOutOfPress,
-  Arm1CannotCollideWithPress, Arm2CannotCollideWithPress,
+  arm1maypasspress, arm2maypasspress,
+  arm1outofpress, arm2outofpress, armsoutofpress,
+  arm1cannotcollidewithpress, arm2cannotcollidewithpress,
   up, down, stopped: bool;
-  sustain1, sustain2, stopped_1, p_Pstop: bool;
+  sustain1, sustain2, stopped_1, p_pstop: bool;
   after_1, after_2, up_1, up_2: bool;
 let
-  (Pup, Pdn, Pstop) = MovingItem(true, up, down);
+  (pup, pdn, pstop) = movingitem(true, up, down);
 
-  after_1 = after(ArmsOutOfPress, Rput1);
-  after_2 = after(ArmsOutOfPress, Rget2);
-  up_1 = sustain(after_1, Ptop);
-  up_2 = sustain(after_2, Pmid);
+  after_1 = after(armsoutofpress, rput1);
+  after_2 = after(armsoutofpress, rget2);
+  up_1 = sustain(after_1, ptop);
+  up_2 = sustain(after_2, pmid);
   up = up_1 or up_2;
-  p_Pstop = false fby Pstop;
-  down = sustain(Ptop and p_Pstop, Pbot);
-  stopped_1 = sustain(Pup or Pdn, Pstop);
+  p_pstop = false fby pstop;
+  down = sustain(ptop and p_pstop, pbot);
+  stopped_1 = sustain(pup or pdn, pstop);
   stopped = not stopped_1;
 
-  ArmsOutOfPress = Arm1OutOfPress and Arm2OutOfPress;
-  Arm1OutOfPress = not NearPress1 or OutPress1;
-  Arm2OutOfPress = not NearPress2 or OutPress2;
+  armsoutofpress = arm1outofpress and arm2outofpress;
+  arm1outofpress = not nearpress1 or outpress1;
+  arm2outofpress = not nearpress2 or outpress2;
 
-  ArmsMayPassPress = Arm1MayPassPress and Arm2MayPassPress;
-  Arm1MayPassPress = Arm1OutOfPress or Arm1CannotCollideWithPress;
-  Arm2MayPassPress = Arm2OutOfPress or Arm2CannotCollideWithPress;
+  armsmaypasspress = arm1maypasspress and arm2maypasspress;
+  arm1maypasspress = arm1outofpress or arm1cannotcollidewithpress;
+  arm2maypasspress = arm2outofpress or arm2cannotcollidewithpress;
 
-  sustain1 = sustain(Pbot, Pmid);
-  sustain2 = sustain(Pmid, Pbot);
-  Arm1CannotCollideWithPress = stopped and (Pmid or Ptop) or
+  sustain1 = sustain(pbot, pmid);
+  sustain2 = sustain(pmid, pbot);
+  arm1cannotcollidewithpress = stopped and (pmid or ptop) or
     sustain1 or sustain2;
-  Arm2CannotCollideWithPress = stopped and (Pbot or Ptop);
+  arm2cannotcollidewithpress = stopped and (pbot or ptop);
 tel;
 
-node Rbase
-  (ArmsMayPassPress,
-   Rget1, Rput1, ToTable, ToPress1,
-   Rget2, Rput2, ToDBelt, ToPress2: bool)
+node rbase
+  (armsmaypasspress,
+   rget1, rput1, totable, topress1,
+   rget2, rput2, todbelt, topress2: bool)
 returns
-  (Rleft, Rright, Rstop: bool);
+  (rleft, rright, rstop: bool);
 var
-  left, right, BeforeFirstRput1: bool;
-  init, left_1, left_2, left_3, left_4: bool;
+  left, right, beforefirstrput1: bool;
+  vinit, left_1, left_2, left_3, left_4: bool;
 let
-  (Rleft, Rright, Rstop) = MovingItem(ArmsMayPassPress, left, right);
+  (rleft, rright, rstop) = movingitem(armsmaypasspress, left, right);
 
-  left_1 = sustain(Rget1, ToPress2);
-  left_2 = sustain(Rput2, ToPress1);
-  left_3 = sustain(Rget2, ToDBelt);
-  left_4 = sustain(Rget1, ToPress1);
-  left = left_1 or left_2 or left_3 or left_4 and BeforeFirstRput1;
-  right = sustain(init or Rput1, ToTable);
+  left_1 = sustain(rget1, topress2);
+  left_2 = sustain(rput2, topress1);
+  left_3 = sustain(rget2, todbelt);
+  left_4 = sustain(rget1, topress1);
+  left = left_1 or left_2 or left_3 or left_4 and beforefirstrput1;
+  right = sustain(vinit or rput1, totable);
 
-  init = true fby false;
-  BeforeFirstRput1 = sustain(init and not Rput1, Rput1);
+  vinit = true fby false;
+  beforefirstrput1 = sustain(vinit and not rput1, rput1);
 tel;
 
-node Rgrips
-  (InPress1, OverTable, ToTable, ToPress1,
-   InPress2, OverDBelt, ToDBelt, ToPress2,
-   Ttop, Pbot, Pmid: bool)
+node rgrips
+  (inpress1, overtable, totable, topress1,
+   inpress2, overdbelt, todbelt, topress2,
+   ttop, pbot, pmid: bool)
 returns
-  (Rget1, Rput1, Rget2, Rput2: bool);
+  (rget1, rput1, rget2, rput2: bool);
 var
-  p_Rput1 : bool;
+  p_rput1 : bool;
 let
-  p_Rput1 = true fby Rput1;
-  Rget1 = after(OverTable and ToTable and Ttop, p_Rput1);
-  Rput1 = after(InPress1 and ToPress1 and Pmid, Rget1);
-  Rget2 = after(InPress2 and ToPress2 and Pbot, Rput1);
-  Rput2 = after(OverDBelt and ToDBelt, Rget2);
+  p_rput1 = true fby rput1;
+  rget1 = after(overtable and totable and ttop, p_rput1);
+  rput1 = after(inpress1 and topress1 and pmid, rget1);
+  rget2 = after(inpress2 and topress2 and pbot, rput1);
+  rput2 = after(overdbelt and todbelt, rget2);
 tel;
 
-node VerifyMovingItem
-  (MaySafelyMove, TryToMove1, TryToMove2: bool)
+node verifymovingitem
+  (maysafelymove, trytomove1, trytomove2: bool)
 returns
   (prop: bool);
 var
-  MayMove1, MayMove2: bool;
+  maymove1, maymove2: bool;
   start1, start2, stop, moving: bool;
   stop_1, stop_2, pn_try1, pn_try2: bool;
 let
-  MayMove1 = TryToMove1 and MaySafelyMove;
-  MayMove2 = TryToMove2 and MaySafelyMove;
+  maymove1 = trytomove1 and maysafelymove;
+  maymove2 = trytomove2 and maysafelymove;
   moving = sustain(start1 or start2, stop);
 
-  pn_try2 = true fby not TryToMove2;
-  start1 = redge(MayMove1 and pn_try2);
-  pn_try1 = true fby not TryToMove1;
-  start2 = redge(MayMove2 and pn_try1);
-  stop_1 = fedge(MayMove1);
-  stop_2 = fedge(MayMove2);
+  pn_try2 = true fby not trytomove2;
+  start1 = redge(maymove1 and pn_try2);
+  pn_try1 = true fby not trytomove1;
+  start2 = redge(maymove2 and pn_try1);
+  stop_1 = fedge(maymove1);
+  stop_2 = fedge(maymove2);
   stop = stop_1 or stop_2;
 
-  assert #(redge(TryToMove1), redge(TryToMove2));
+  assert #(redge(trytomove1), redge(trytomove2));
   prop = #(start1, start2, stop) and
-         ((moving and MaySafelyMove) or not moving);
+         ((moving and maysafelymove) or not moving);
 tel;
 

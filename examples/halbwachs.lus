@@ -1,94 +1,94 @@
-(* Lustre examples from "Synchronous Programming of Reactive Systems",
-   Nicolas Halbwachs, 1993 Kluwer Academic Publishers. *)
+(* lustre examples from "synchronous programming of reactive systems",
+   nicolas halbwachs, 1993 kluwer academic publishers. *)
 
-node COUNTER(init_value, incr_value: int; reset: bool)
-   returns (N: int);
-var init : bool; pre_N : int;
+node counter(vinit_value, incr_value: int; vreset: bool)
+   returns (n: int);
+var vinit : bool; pre_n : int;
 let
-   init = true fby false;
-   pre_N = 0 fby N;
-   N = if reset or init then init_value
-       else pre_N + incr_value;
+   vinit = true fby false;
+   pre_n = 0 fby n;
+   n = if vreset or vinit then vinit_value
+       else pre_n + incr_value;
 tel
 
-node WATCHDOG1 (set, reset, deadline: bool)
+node watchdog1 (set, vreset, deadline: bool)
    returns (alarm: bool);
 var watchdog_is_on: bool;
-    pre_watchdog_is_on, init: bool;
+    pre_watchdog_is_on, vinit: bool;
 let
-   init = true fby false;
+   vinit = true fby false;
    alarm = deadline and watchdog_is_on;
    watchdog_is_on =
-      if init then false
+      if vinit then false
       else if set then true
-      else if reset then false
+      else if vreset then false
       else pre_watchdog_is_on;
    pre_watchdog_is_on = false fby watchdog_is_on;
-   assert not(set and reset);
+   assert not(set and vreset);
 tel
 
-node EDGE (b: bool) returns (edge: bool);
+node edge (b: bool) returns (edge: bool);
 var pre_b : bool;
 let
    pre_b = true fby b;
    edge = b and not pre_b;
 tel
 
-node WATCHDOG2 (set, reset: bool; delay: int)
+node watchdog2 (set, vreset: bool; delay: int)
    returns (alarm: bool);
 var remaining_delay: int; deadline: bool;
     pre_remaining_delay: int;
 let
-   alarm = WATCHDOG1(set, reset, deadline);
-   deadline = EDGE(remaining_delay = 0);
+   alarm = watchdog1(set, vreset, deadline);
+   deadline = edge(remaining_delay = 0);
    remaining_delay = if set then delay else
                      pre_remaining_delay;
    pre_remaining_delay = 0 fby (remaining_delay - 1);
 tel
 
-node WATCHDOG3 (set, reset, time_unit: bool;
+node watchdog3 (set, vreset, time_unit: bool;
                 delay: int)
    returns (alarm: bool);
 var clock: bool;
-    init, pre_alarm : bool;
+    vinit, pre_alarm : bool;
     r : bool when clock;
 let
-   r = WATCHDOG2(set when clock,
-                 reset when clock,
+   r = watchdog2(set when clock,
+                 vreset when clock,
                  delay when clock);
    alarm = merge clock r (pre_alarm when not clock);
    pre_alarm = false fby alarm;
-   clock = init or set or reset or time_unit;
-   init = true fby false;
+   clock = vinit or set or vreset or time_unit;
+   vinit = true fby false;
 tel
 
-node Simple_Stopwatch (start_stop, reset, hs: bool)
+node simple_stopwatch (start_stop, vreset, hs: bool)
    returns (time: int; running: bool);
-var init, pre_running : bool;
+var vinit, pre_running : bool;
     pre_time : int;
 let
-  init = true fby false;
+  vinit = true fby false;
   time =
-    if init then 0
+    if vinit then 0
     else if hs and running then pre_time + 1
-    else if reset then 0 else pre_time;
+    else if vreset then 0 else pre_time;
   pre_time = 0 fby time;
-  running = if init then false
+  running = if vinit then false
             else if start_stop then not pre_running
             else pre_running;
   pre_running = false fby running;
 tel
 
-node Stopwatch (start_stop, reset, hs: bool)
+node stopwatch (start_stop, vreset, hs: bool)
    returns (displayed_time: int; running, frozen: bool);
-var internal_time: int; actual_reset: bool;
-    init, pre_running, pre_frozen, r: bool;
+var internal_time: int; actual_vreset: bool;
+    vinit, pre_running, pre_frozen, r: bool;
     pre_displayed_time: int;
 let
-  init = true fby false;
-  frozen = if init then false
-           else if reset and pre_running then true
-           else if reset and pre_frozen then false
+  vinit = true fby false;
+  frozen = if vinit then false
+           else if vreset and pre_running then true
+           else if vreset and pre_frozen then false
            else pre_frozen;
   displayed_time =
            merge frozen
@@ -96,42 +96,42 @@ let
                  (internal_time when not frozen);
   pre_displayed_time = 0 fby displayed_time;
   (internal_time, running) =
-      Simple_Stopwatch(start_stop, actual_reset, hs);
-  actual_reset = reset and r;
+      simple_stopwatch(start_stop, actual_vreset, hs);
+  actual_vreset = vreset and r;
 
   r = true fby (not running and not frozen);
   pre_running = false fby running;
   pre_frozen = false fby frozen;
 tel
 
-node SWITCH_1(ON, OFF, INIT: bool) returns (STATE: bool);
-var first, pre_STATE : bool;
+node switch_1(von, voff, vinit: bool) returns (vstate: bool);
+var first, pre_vstate : bool;
 let
    first = true fby false;
-   STATE = if first then INIT
-           else if ON then true
-           else if OFF then false
-           else pre_STATE;
-   pre_STATE = false fby STATE;
+   vstate = if first then vinit
+           else if von then true
+           else if voff then false
+           else pre_vstate;
+   pre_vstate = false fby vstate;
 tel
 
-node SWITCH(ON, OFF, INIT: bool) returns (STATE: bool);
-var first, pre_STATE : bool;
+node nswitch(von, voff, vinit: bool) returns (vstate: bool);
+var first, pre_vstate : bool;
 let
    first = true fby false;
-   STATE = if first then INIT
-           else if ON and not pre_STATE then true
-           else if OFF and pre_STATE then false
-           else pre_STATE;
-   pre_STATE = false fby STATE;
+   vstate = if first then vinit
+           else if von and not pre_vstate then true
+           else if voff and pre_vstate then false
+           else pre_vstate;
+   pre_vstate = false fby vstate;
 tel
 
-node COMPARE(ON, OFF, INIT: bool) returns (OK: bool);
-var state, state_1 : bool;
+node compare(von, voff, vinit: bool) returns (ok: bool);
+var vstate, vstate_1 : bool;
 let
-   state = SWITCH(ON, OFF, INIT);
-   state_1 = SWITCH_1(ON, OFF, INIT);
-   OK = (state = state_1);
-   assert not(ON and OFF);
+   vstate = nswitch(von, voff, vinit);
+   vstate_1 = switch_1(von, voff, vinit);
+   ok = (vstate = vstate_1);
+   assert not(von and voff);
 tel
 

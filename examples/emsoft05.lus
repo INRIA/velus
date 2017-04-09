@@ -1,6 +1,6 @@
-(* Examples from the paper
-   "A Conservative Extension of Synchronous Data-flow with State Machines",
-   Colaço, Pagano, and Pouzet, EMSOFT 2005 *)
+(* examples from the paper
+   "a conservative extension of synchronous data-flow with vstate machines",
+   colaço, pagano, and pouzet, emsoft 2005 *)
 
 node chrono(stst, rst : bool) returns (disp_1, disp_2 : int)
 var run, r_2, nr_2, r_1, ns_2, ck, v_3, ck_2 : bool;

@@ -1,18 +1,18 @@
-(* Watch example from the Lustre v4 distribution. 1999 *)
-(* 2016 Bourke: bit-blast C functions *)
+(* watch example from the lustre v4 distribution. 1999 *)
+(* 2016 bourke: bit-blast c functions *)
 
--- This is  a program implementing a digital watch, with alarm and stopwatch, 
--- as specified in the document "ESTEREL Programming Examples: Programming a 
--- digital watch in ESTEREL V2.1" by G. Berry.  Here is the LUSTRE program. 
--- The external functions, written in C, have been mainly borrowed from the 
--- ESTEREL implementation.  They will be given later on.
+-- this is  a program implementing a digital watch, with alarm and stopwatch, 
+-- as specified in the document "esterel programming examples: programming a 
+-- digital watch in esterel v2.1" by g. berry.  here is the lustre program. 
+-- the external functions, written in c, have been mainly borrowed from the 
+-- esterel implementation.  they will be given later on.
 
 
--- TYPES
+-- types
 
 (*
 type
-   WATCH_TIME_TYPE = uint64
+   watch_time_type = uint64
 
       upper word:
        msb
@@ -24,20 +24,20 @@ type
       |76543210|76543210|76543210|76543210|
        24-mode    hours   minutes  seconds
 
-   ALARM_TIME_TYPE = uint32
+   alarm_time_type = uint32
       represent the time as an integer
        msb                             lsb
       |76543210|76543210|76543210|76543210|
                 mode12h    hours   minutes 
 
-   STOPWATCH_TIME_TYPE = uint32
+   stopwatch_time_type = uint32
 
       represent the time as an integer
        msb                             lsb
       |76543210|76543210|76543210|76543210|
          hours   minutes  seconds  hsecs
 
-   WATCH_TIME_POSITION = uint8
+   watch_time_position = uint8
       0 = seconds
       1 = hours
       2 = 10 minutes
@@ -46,52 +46,52 @@ type
       5 = day in week
       6 = month
 
-   ALARM_TIME_POSITION = uint8
+   alarm_time_position = uint8
       0 = hours
       1 = 10 minutes
       2 = minutes
 
-   DISPLAY_POSITION = uint8
+   display_position = uint8
 
-   MAIN_DISPLAY_TYPE = uint64
-   MINI_DISPLAY_TYPE = uint64
+   main_display_type = uint64
+   mini_display_type = uint64
 
-   STATUS_TYPE = uint8,
+   status_type = uint8,
     0x1 = alarm_set
     0x2 = chime_set
     0x4 = stopwatch_running
     0x8 = stopwatch_lapping
 
-   DISPLAY_TYPE = uint64
+   display_type = uint64
 
-   LABELS_TYPE = uint64
+   labels_type = uint64
 
        msb                             lsb
       |76543210|76543210|76543210|76543210|
        ul_lab    ll_lab   ur_lab   lr_lab
 
    string
-      represent 3-byte (+NULL) strings as integers
+      represent 3-byte (+null) strings as integers
 *)
 
--- EXTERNAL CONSTANTS 
+-- external constants 
 
 (*
 const
-   INITIAL_WATCH_TIME : WATCH_TIME_TYPE; = 0
-   INITIAL_STOPWATCH_TIME : STOPWATCH_TIME_TYPE; = 0
-   INITIAL_ALARM_TIME: ALARM_TIME_TYPE; = 0
-   NULL_POSITION: DISPLAY_POSITION; = -1
-   INITIAL_WATCH_POSITION : WATCH_TIME_POSITION; = 0
-   INITIAL_ALARM_POSITION : ALARM_TIME_POSITION; = 0
-   ALARM_DURATION : int; = 30
-   stringST : string; -- the string "ST" = 0x53840000
-   stringAL : string; -- the string "AL" = 0x65760000
+   vinitial_watch_time : watch_time_type; = 0
+   vinitial_stopwatch_time : stopwatch_time_type; = 0
+   vinitial_alarm_time: alarm_time_type; = 0
+   null_position: display_position; = -1
+   vinitial_watch_position : watch_time_position; = 0
+   vinitial_alarm_position : alarm_time_position; = 0
+   alarm_duration : int; = 30
+   stringst : string; -- the string "st" = 0x53840000
+   stringal : string; -- the string "al" = 0x65760000
 *)
 
--- EXTERNAL FUNCTIONS
+-- external functions
 
-node COMPARE_WATCH_ALARM_TIME (watch_time: uint64;
+node compare_watch_alarm_time (watch_time: uint64;
                                alarm_time: uint32)
 returns (result: bool);
 -- returns true iff "watch_time" and "alarm_time" are equal
@@ -100,7 +100,7 @@ let
             = (alarm_time land 0x00ffff00);
 tel
 
-node INCREMENT_WATCH_TIME (time: uint64) 
+node increment_watch_time (time: uint64) 
 returns (newtime: uint64);
 -- returns "new_time" = "time" + 1 second
 var seconds, minutes, hours, day, day_in_week,
@@ -114,16 +114,16 @@ let
   day_in_week = (((time lsr 40) : uint) land 0xff) + (hours = 24);
 
   p_month   = ((time lsr 48) : uint) land 0xff;
-  month_inc = if day < 29 then 0U
-              else if p_month = 2 then 1U
-              else if day < 30 then 0U
+  month_inc = if day < 29 then 0u
+              else if p_month = 2 then 1u
+              else if day < 30 then 0u
               else if (p_month = 4 or p_month = 6 or
-                       p_month = 9 or p_month = 11) then 1U
-              else if day < 31 then 0U
-              else 1U;
+                       p_month = 9 or p_month = 11) then 1u
+              else if day < 31 then 0u
+              else 1u;
   month   = p_month + month_inc;
 
-  nday = if month_inc > 0 and month = 1 then 1U else day;
+  nday = if month_inc > 0 and month = 1 then 1u else day;
 
   newtime =   ((seconds mod 60)    : uint64)
           lor (((minutes mod 60)   : uint64) lsl 8)
@@ -133,14 +133,14 @@ let
           lor (((month mod 12)     : uint64) lsl 48);
 tel
 
-node TOGGLE_24H_IN_WATCH_MODE (time: uint64) 
+node toggle_24h_in_watch_mode (time: uint64) 
 returns (newtime: uint64);
--- changes the 24H/AM-PM status of "time"
+-- changes the 24h/am-pm status of "time"
 let
-  newtime = time lxor (1LLU lsl 56);
+  newtime = time lxor (1llu lsl 56);
 tel
 
-node WATCH_TIME_POSITION_MASK (position: uint8)
+node watch_time_position_mask (position: uint8)
 returns (mask: uint64);
 let
   mask =      if position = 0 then 0xffffffffffffff00 -- seconds
@@ -153,7 +153,7 @@ let
                               else 0xffffffffffffffff;
 tel
 
-node INCREMENT_WATCH_TIME_IN_SET_MODE 
+node increment_watch_time_in_set_mode 
         (time: uint64; position: uint8) 
 returns (newtime: uint64);
 -- returns "new_time" = "time" + 1 second, with particular restrictions due
@@ -178,16 +178,16 @@ let
                 + (position > 5 and hours = 24);
 
   p_month = (((time lsr 48) : uint) land 0xff);
-  month_inc = if position > 6 or day < 29 then 0U
-              else if p_month = 2 then 1U
-              else if day < 30 then 0U
+  month_inc = if position > 6 or day < 29 then 0u
+              else if p_month = 2 then 1u
+              else if day < 30 then 0u
               else if (p_month = 4 or p_month = 6 or
-                       p_month = 9 or p_month = 11) then 1U
-              else if day < 31 then 0U
-              else 1U;
+                       p_month = 9 or p_month = 11) then 1u
+              else if day < 31 then 0u
+              else 1u;
   month   = p_month + month_inc;
 
-  nday = if month_inc > 0 and month = 1 then 1U else day;
+  nday = if month_inc > 0 and month = 1 then 1u else day;
 
   newtime =   ((seconds mod 60)    : uint64)
           lor (((minutes mod 60)   : uint64) lsl 8)
@@ -197,7 +197,7 @@ let
           lor (((month mod 12)     : uint64) lsl 48);
 tel
 
-node MONTH_LENGTH(time: uint64)
+node month_length(time: uint64)
 returns (month_length: uint);
 var month : uint;
 let
@@ -205,23 +205,23 @@ let
   month_length =
     if month = 1 or month = 3 or month = 5 or month = 7
                  or month = 8 or month = 10 or month = 12
-    then 31U
+    then 31u
     else if month = 4 or month = 6 or month = 9 or month = 11
-    then 30U
-    else 29U;
+    then 30u
+    else 29u;
 tel
 
-node SET_WATCH_TIME(time: uint64; position: uint8)
+node set_watch_time(time: uint64; position: uint8)
 returns (new_time: uint64);
 -- increment the field pointed by "position" in "time"
 var mon_len : uint; mask, incr : uint64;
 let
-  mon_len = MONTH_LENGTH(time);
+  mon_len = month_length(time);
   new_time = (time lor mask) lor incr;
-  mask = WATCH_TIME_POSITION_MASK(position);
+  mask = watch_time_position_mask(position);
   incr =
     if position = 0 -- seconds
-         then 0ULL (* reset seconds *)
+         then 0ull (* vreset seconds *)
     else if position = 1 -- hours
          then (((((time lsr 16) land 0xff) + 1) mod 24) lsl 16)
     else if position = 2 -- 10 minutes
@@ -238,7 +238,7 @@ let
     else time;
 tel
 
-node CONFIRM_TIME (time: uint64) 
+node confirm_time (time: uint64) 
 returns (new_time: uint64);
 -- after a manual setting of the watch time, checks it for inconsistencies
 -- of the calendar
@@ -246,7 +246,7 @@ var day, month, month_length, n_month : uint;
 let
   day = ((time lsr 32) : uint) land 0xff;
   month = ((time lsr 48) : uint) land 0xff;
-  month_length = MONTH_LENGTH(time);
+  month_length = month_length(time);
   n_month = if day > month_length then (month + 1) mod 12 else month;
 
   new_time = (time land 0xff00ff00ffffffff)
@@ -254,14 +254,14 @@ let
              lor (((day mod month_length) : uint64) lsl 32);
 tel
 
-node NEXT_WATCH_TIME_POSITION (position: uint8) 
+node next_watch_time_position (position: uint8) 
 returns (new_position: uint8);
 -- returns the next position after "position"
 let
   new_position = (((position + 1) mod 7) : uint8);
 tel
 
-node INCREMENT_STOPWATCH_TIME (time: uint32) 
+node increment_stopwatch_time (time: uint32) 
 returns (newtime: uint32);
 -- returns "new_time" = "time" + 1 time unit (1/100 sec.)
 var hsecs, seconds, minutes, hours : uint;
@@ -276,14 +276,14 @@ let
             lor ((hours   mod 24) lsl 24);
 tel
 
-node TOGGLE_24H_IN_ALARM_MODE (time: uint32) 
+node toggle_24h_in_alarm_mode (time: uint32) 
 returns (newtime: uint32);
--- changes the 24H/AM-PM status of "time"
+-- changes the 24h/am-pm status of "time"
 let
-  newtime = time lxor (1U lsl 16);
+  newtime = time lxor (1u lsl 16);
 tel
 
-node SET_ALARM_TIME 
+node set_alarm_time 
         (time: uint32; position: uint8) 
 returns (new_time: uint32);
 -- increment the field pointed by "position" in "time"
@@ -302,21 +302,21 @@ let
     else time;
 tel
 
-node NEXT_ALARM_TIME_POSITION (position: uint8) 
+node next_alarm_time_position (position: uint8) 
 returns (new_position: uint8);
 -- returns the next position after "position"
 let
   new_position = (((position + 1) mod 3) : uint8);
 tel
 
-node IS_O_CLOCK (time: uint64)
+node is_o_clock (time: uint64)
 returns (is_o_clock: bool);
 -- returns true if "time" is on the hour (used for chime)
 let
-  is_o_clock = (time land 0xffffULL) = 0;
+  is_o_clock = (time land 0xffffull) = 0;
 tel
 
-node IS_ZERO_MOD_10_MN (time: uint32)
+node is_zero_mod_10_mn (time: uint32)
 returns (is_zero: bool);
 -- returns true  if "time" is a multiple of 10 minutes (used for stopwatch beep)
 let
@@ -324,46 +324,46 @@ let
             (((time lsr 24) land 0xff) mod 1 = 0);
 tel
 
-node WATCH_TIME_TO_MAIN_DISPLAY (time: uint64)
+node watch_time_to_main_display (time: uint64)
 returns (display: uint64);
 -- translation of "time" to the main display format
 let
   display = time;
 tel
 
-node WATCH_TIME_TO_MINI_DISPLAY (time: uint64)
+node watch_time_to_mini_display (time: uint64)
 returns (display: uint64);
 -- translation of "time" to the mini display format
--- (used in ALARM and STOPWATCH modes)
+-- (used in alarm and stopwatch modes)
 let
   display = time;
 tel
 
-node WATCH_DATE_TO_MINI_DISPLAY (time: uint64)
+node watch_date_to_mini_display (time: uint64)
 returns (display:uint64);
 -- translation of the date in "time" to the mini display format
 let
   display = time;
 tel
 
-node WATCH_DAY_TO_ALPHA_DISPLAY (time: uint64)
+node watch_day_to_alpha_display (time: uint64)
 returns (display: uint64);
 -- translation of the day of the week in "time" to the alphabetic display format 
 var day : uint32;
 let
   day = ((time lsr 32) : uint32) land 0xff;
   display =
-         if day = 0 then 0x53550000ULL -- SU
-    else if day = 1 then 0x4df40000ULL -- MO
-    else if day = 2 then 0x54550000ULL -- TU
-    else if day = 3 then 0x57450000ULL -- WE
-    else if day = 4 then 0x54480000ULL -- TH
-    else if day = 5 then 0x46510000ULL -- FR
-    else if day = 6 then 0x53410000ULL -- SA
-    else 0x0ULL;
+         if day = 0 then 0x53550000ull -- su
+    else if day = 1 then 0x4df40000ull -- mo
+    else if day = 2 then 0x54550000ull -- tu
+    else if day = 3 then 0x57450000ull -- we
+    else if day = 4 then 0x54480000ull -- th
+    else if day = 5 then 0x46510000ull -- fr
+    else if day = 6 then 0x53410000ull -- sa
+    else 0x0ull;
 tel
 
-node WATCH_TO_DISPLAY_POS (wpos: uint8)
+node watch_to_display_pos (wpos: uint8)
 returns (dpos: uint8);
 -- translation of a watch position to the display format 
 -- (generally nothing to do)
@@ -371,7 +371,7 @@ let
   dpos = wpos;
 tel
 
-node ALARM_TO_DISPLAY_POS (apos: uint8)
+node alarm_to_display_pos (apos: uint8)
 returns (dpos: uint8);
 -- translation of an alarm position to the display format 
 -- (generally nothing to do)
@@ -379,14 +379,14 @@ let
   dpos = apos;
 tel
 
-node STOPWATCH_TIME_TO_MAIN_DISPLAY (time: uint32) 
+node stopwatch_time_to_main_display (time: uint32) 
 returns (display: uint64);
 -- translation of "time" to the main display format
 let
   display = (time : uint64);
 tel
 
-node ALARM_TIME_TO_MAIN_DISPLAY 
+node alarm_time_to_main_display 
         (time: uint32)
 returns (display: uint64);
 -- translation of "time" to the main display format
@@ -394,7 +394,7 @@ let
   display = (time : uint64);
 tel
 
-node MAKE_DISPLAY (main: uint64;
+node make_display (main: uint64;
                    mini: uint64;
                    alpha: uint64;
                    status: uint8;
@@ -402,10 +402,10 @@ node MAKE_DISPLAY (main: uint64;
                    labels: uint64)
 returns (display: uint64);
 let
-  display = 0ULL;
+  display = 0ull;
 tel
 
-node STATUS (alarm_is_set, chime_is_set,
+node status (alarm_is_set, chime_is_set,
              stopwatch_running, stopwatch_lapping : bool)
 returns (status: uint8);
 let
@@ -415,31 +415,31 @@ let
              lor (stopwatch_lapping lsl 3)) : uint8);
 tel
 
-node LABELS (mode_is_watch, mode_is_stopwatch, mode_is_alarm,
+node labels (mode_is_watch, mode_is_stopwatch, mode_is_alarm,
              mode_is_set_watch, mode_is_set_alarm : bool)
 returns (labels: uint64);
 let
   labels = (0 : uint64);
 tel
 
---UTILITAIRES
+--utilitaires
 
-node TWO_STATES(init,set,reset: bool) returns (state: bool);
--- implements a flip-flop, with initial state "init". The state changes from 
+node two_vstates(vinit,set,vreset: bool) returns (vstate: bool);
+-- implements a flip-flop, with vinitial vstate "vinit". the vstate changes from 
 -- 'false' to 'true' whenever the input "set" is true, and from 'true' to 
--- 'false' -- whenever the input "reset" is true. 
--- These two inputs are not exclusive.
-var first, pre_state: bool;
+-- 'false' -- whenever the input "vreset" is true. 
+-- these two inputs are not exclusive.
+var first, pre_vstate: bool;
 let
   first = true fby false;
-  state = if first then init else
-               if set and not pre_state then true
-               else if reset and pre_state then false
-               else pre_state;
-  pre_state = false fby state;
+  vstate = if first then vinit else
+               if set and not pre_vstate then true
+               else if vreset and pre_vstate then false
+               else pre_vstate;
+  pre_vstate = false fby vstate;
 tel;
 
-node EDGE(b:bool) returns (edge:bool);
+node edge(b:bool) returns (edge:bool);
 -- returns 'true' whenever the value of its parameter rises to 'true'
 var pre_b : bool;
 let
@@ -447,21 +447,21 @@ let
   pre_b = false fby b;
 tel;
 
-node DIVIDE (scale:int)
+node divide (scale:int)
             returns (quotient: bool);
 -- the result is true once every "scale" cycles of the node
-var n, pre_n:int; init: bool;
+var n, pre_n:int; vinit: bool;
 let
-  init = true fby false;
-  n = if init or (pre_n + 1 = scale) then 0 else pre_n + 1;
-  quotient = if init or (pre_n + 1 = scale) then true else false;
+  vinit = true fby false;
+  n = if vinit or (pre_n + 1 = scale) then 0 else pre_n + 1;
+  quotient = if vinit or (pre_n + 1 = scale) then true else false;
   pre_n = 0 fby n;
 tel;
 
-node EWATCH (second, -- second
+node ewatch (second, -- second
         -- the alarm begins to ring when it is set and the alarm time
         -- equals the watch time;
-            toggle_24h, -- toggle the 24h/AM-PM mode
+            toggle_24h, -- toggle the 24h/am-pm mode
             toggle_chime,
             in_set, -- is the watch in set mode
             next_position, -- change the position set in set mode
@@ -474,47 +474,47 @@ node EWATCH (second, -- second
              beep : int
             );
         -- the watch has a mode (standard or set), it receives the second, 
-        -- and has three buttons: a button to change the 24H/AM-PM status,
+        -- and has three buttons: a button to change the 24h/am-pm status,
         -- a button to change the position to be enhanced and manually set, 
         -- and a button to set (generally increment) this position
 
 var position_set: uint8; -- the position to be set
-    internal_chime_is_set: int; --TRICHE (pour faire comme esterel)
+    internal_chime_is_set: int; --triche (pour faire comme esterel)
     pre_internal_chime_is_set : int;
     pre_time, r1, r2, r3, r4, r5 : uint64;
-    init, is_o_clock: bool;
+    vinit, is_o_clock: bool;
     pre_position_set: uint8;
     edge_in_set, edge_not_in_set : bool;
     next_pos : uint8;
 let
-  init = true fby false;
+  vinit = true fby false;
   pre_internal_chime_is_set = 0 fby internal_chime_is_set;
   internal_chime_is_set = 
-        if init then 0
+        if vinit then 0
         else if (toggle_chime)
              then (if pre_internal_chime_is_set = 0 then 1 else 0) 
         else pre_internal_chime_is_set;
--- (ancienne definition :)
--- chime_is_set = TWO_STATES(false, toggle_chime, toggle_chime); 
+-- (ancienne defvinition :)
+-- chime_is_set = two_vstates(false, toggle_chime, toggle_chime); 
 
   chime_is_set = (internal_chime_is_set = 1);
 
-  is_o_clock = IS_O_CLOCK(time);
+  is_o_clock = is_o_clock(time);
   beep = if second then
          (if (is_o_clock and chime_is_set) then 2 else 0)
          else 0;
 
-  edge_not_in_set = EDGE(not in_set);
-  r1 = INCREMENT_WATCH_TIME(pre_time);
-  r2 = TOGGLE_24H_IN_WATCH_MODE(pre_time);
-  r3 = CONFIRM_TIME(pre_time);
-  r4 = INCREMENT_WATCH_TIME_IN_SET_MODE(pre_time, position_set);
-  r5 = SET_WATCH_TIME(pre_time, position_set);
-  time = if init then 0ULL else
+  edge_not_in_set = edge(not in_set);
+  r1 = increment_watch_time(pre_time);
+  r2 = toggle_24h_in_watch_mode(pre_time);
+  r3 = confirm_time(pre_time);
+  r4 = increment_watch_time_in_set_mode(pre_time, position_set);
+  r5 = set_watch_time(pre_time, position_set);
+  time = if vinit then 0ull else
              if not in_set then
                 -- in standard watch mode, the time is incremented at any
-                -- second, and the 24H/AM-PM status is changed on the
-                -- event "toggle_24h. When returning from a manual setting,
+                -- second, and the 24h/am-pm status is changed on the
+                -- event "toggle_24h. when returning from a manual setting,
                 -- the time must be checked for inconsistencies.
                 if second then r1
                 else if toggle_24h then r2
@@ -522,80 +522,80 @@ let
                 else pre_time
              else
                 -- in set watch mode, a special procedure is applied to
-                -- increment the time. Moreover, the time is changed 
+                -- increment the time. moreover, the time is changed 
                 -- manually by any "set" command
                 if second then r4
                 else if set then r5
                 else pre_time;
-  pre_time = 0ULL fby time;
+  pre_time = 0ull fby time;
 
-        -- the position to be enhanced and set is initialized whenever
+        -- the position to be enhanced and set is vinitialized whenever
         -- the set watch mode is entered, and changed manually by any
         -- "next position" command
   enhance = position_set ;
-  edge_in_set = EDGE(in_set);
-  next_pos = NEXT_WATCH_TIME_POSITION(pre_position_set);
-  position_set = if init or edge_in_set then (0 : uint8)
+  edge_in_set = edge(in_set);
+  next_pos = next_watch_time_position(pre_position_set);
+  position_set = if vinit or edge_in_set then (0 : uint8)
                  else if next_position then next_pos
                  else pre_position_set;
   pre_position_set = (0 : uint8) fby position_set;
 tel;
 
-node ESTOPWATCH(hs,-- the 1/100 second, or more generally, the time unit
+node estopwatch(hs,-- the 1/100 second, or more generally, the time unit
               start_stop,lap:bool)
               returns
               (time:uint32; -- the time to be displayed
-               run_state, -- true if the stop-watch is running
-               lap_state : bool; -- true if the display is frozen
+               run_vstate, -- true if the stop-watch is running
+               lap_vstate : bool; -- true if the display is frozen
                beep : int
                );
--- the stopwatch has two buttons: the start-stop button, and the lap-reset 
--- button. It outputs the stopwatch time, the components of its state,
+-- the stopwatch has two buttons: the start-stop button, and the lap-vreset 
+-- button. it outputs the stopwatch time, the components of its vstate,
 -- and its own beeper command since it depends on the stopwatch internal time.
 
-var reset,must_beep:bool; -- true if the time is reset
+var vreset,must_beep:bool; -- true if the time is vreset
     internal_time, pre_internal_time, pre_time: uint32;
-    init: bool;
+    vinit: bool;
     r, r1 : bool; r2: uint32;
 let
-  init = true fby false;
-        -- the lap-reset button is interpreted as a "reset" when the stopwatch
-        -- is neither in lap state not in run state
-  reset = lap and r;
-  r = false fby (not run_state and not lap_state);
-        -- the stopwatch is initially stopped. Its start-stop state changes
+  vinit = true fby false;
+        -- the lap-vreset button is interpreted as a "vreset" when the stopwatch
+        -- is neither in lap vstate not in run vstate
+  vreset = lap and r;
+  r = false fby (not run_vstate and not lap_vstate);
+        -- the stopwatch is vinitially stopped. its start-stop vstate changes
         -- whenever the start-stop button is pushed
-  run_state = TWO_STATES(false,start_stop,start_stop);
-        -- the stopwatch is initially not in lap state. This state is entered
-        -- whenever the lap button is pushed in run state, and leaved as soon
+  run_vstate = two_vstates(false,start_stop,start_stop);
+        -- the stopwatch is vinitially not in lap vstate. this vstate is entered
+        -- whenever the lap button is pushed in run vstate, and leaved as soon
         -- as this button is pushed again
-  lap_state = TWO_STATES(false,lap and run_state ,lap);
+  lap_vstate = two_vstates(false,lap and run_vstate ,lap);
         -- the stopwatch displayed time is always equal to the value of the
         -- internal time at the last instant when the stopwatch was not in
-        -- lap state
-  time = if lap_state then internal_time else pre_time;
-  pre_time = 0U fby time;
+        -- lap vstate
+  time = if lap_vstate then internal_time else pre_time;
+  pre_time = 0u fby time;
 
-  r2 = INCREMENT_STOPWATCH_TIME(pre_internal_time);
-  internal_time = if init or reset then 0U
-                  else if run_state and hs then r2
+  r2 = increment_stopwatch_time(pre_internal_time);
+  internal_time = if vinit or vreset then 0u
+                  else if run_vstate and hs then r2
                   else pre_internal_time;
-  pre_internal_time = 0U fby internal_time;
+  pre_internal_time = 0u fby internal_time;
         -- the stopwatch must beep whenever the start-stop button is pushed
         -- and whenever the internal time reaches a multiple of 10mn (actually
         -- 1mn, for simulation purpose
--- must_beep = start_stop or (IS_ZERO_MOD_10_MN(internal_time) and run_state);
--- beep = if EDGE(must_beep) then 1 else 0;
-   r1 = IS_ZERO_MOD_10_MN(internal_time);
+-- must_beep = start_stop or (is_zero_mod_10_mn(internal_time) and run_vstate);
+-- beep = if edge(must_beep) then 1 else 0;
+   r1 = is_zero_mod_10_mn(internal_time);
    must_beep = if start_stop then true
-               else if (hs and run_state) then r1
+               else if (hs and run_vstate) then r1
                else false;
    beep = if must_beep then 1 else 0;
 tel;
 
-node EALARM (toggle_24h, --change the 24h or AM/PM mode 
+node ealarm (toggle_24h, --change the 24h or am/pm mode 
              toggle_alarm, --change the status "alarm set" 
-             in_set, --  true when the mode is "Set Alarm" 
+             in_set, --  true when the mode is "set alarm" 
              set, --increment the position set in set mode 
              next_position, --change the position set 
              stop_beep,
@@ -605,8 +605,8 @@ node EALARM (toggle_24h, --change the 24h or AM/PM mode
                  status:bool; -- alarm set 
                  enhance: uint8; -- the position to be enhanced 
                  beep : int); -- the alarm has a mode (standard or set),
--- and four buttons: a button to change the 24H/AM-PM status,
--- a button to set or reset the alarm,
+-- and four buttons: a button to change the 24h/am-pm status,
+-- a button to set or vreset the alarm,
 -- a button to change the position to be enhanced and manually set, 
 -- and a button to set (generally increment) this position
 
@@ -617,69 +617,69 @@ var position_set, pre_position_set : uint8;
     next_alarm : uint8;
     time_out : bool;
     count, pre_count, internal_status, pre_internal_status : int;
-    init : bool;
+    vinit : bool;
     r1, r2 : uint32;
     r3, r4 : bool;
 let
-  init = true fby false;
-        -- the 24H/AM-PM component of the time is changed by any "toggle_24h"
-        -- command. Otherwis, the alarm time is only changed by the 
+  vinit = true fby false;
+        -- the 24h/am-pm component of the time is changed by any "toggle_24h"
+        -- command. otherwis, the alarm time is only changed by the 
         -- "set" command
 
-  r4 = COMPARE_WATCH_ALARM_TIME(watch_time,time);
+  r4 = compare_watch_alarm_time(watch_time,time);
   start_beeping = r4 and status;
   status = (internal_status = 1);
-  edge_not_in_set = EDGE(not in_set);
-  internal_status = if init then 0 else
+  edge_not_in_set = edge(not in_set);
+  internal_status = if vinit then 0 else
                 if toggle_alarm then 
                 (if (pre_internal_status = 0) then 1 else 0)
                 else if (edge_not_in_set and(pre_internal_status = 0)) then 1
                 else pre_internal_status;
   pre_internal_status = 0 fby internal_status;
-  count = if init then 0
+  count = if vinit then 0
           else if(start_beeping) then 30
           else if ((pre_count<>0)and(second)) then pre_count - 1
           else pre_count;
   pre_count = 0 fby count;
-  time_out = not init and ((pre_count <> 0) and (count = 0));
+  time_out = not vinit and ((pre_count <> 0) and (count = 0));
 
-  r3 = TWO_STATES(false,start_beeping,stop_beep or time_out);
+  r3 = two_vstates(false,start_beeping,stop_beep or time_out);
   beep = if (r3 and second) then 4 else 0;
 
-  r1 = TOGGLE_24H_IN_ALARM_MODE(pre_time);
-  r2 = SET_ALARM_TIME(pre_time, position_set);
-  time = if init then 0U else
+  r1 = toggle_24h_in_alarm_mode(pre_time);
+  r2 = set_alarm_time(pre_time, position_set);
+  time = if vinit then 0u else
               if toggle_24h then r1
               else if set then r2
               else pre_time;
-  pre_time = 0U fby time;
-        -- the position to be enhanced and set is initialized whenever
+  pre_time = 0u fby time;
+        -- the position to be enhanced and set is vinitialized whenever
         -- the set alarm mode is entered, and changed manually by any
         -- "next position" command
   enhance =  position_set;
-  edge_in_set = EDGE(in_set);
-  next_alarm = NEXT_ALARM_TIME_POSITION(pre_position_set);
-  position_set = if init or edge_in_set then (0: uint8)
+  edge_in_set = edge(in_set);
+  next_alarm = next_alarm_time_position(pre_position_set);
+  position_set = if vinit or edge_in_set then (0: uint8)
                  else if next_position then next_alarm
                  else pre_position_set;
   pre_position_set = (0 : uint8) fby position_set;
-        -- the alarm is initially not set. It is automatically set when leaving
-        -- the set mode. Otherwise, its status is changed manually by any 
+        -- the alarm is vinitially not set. it is automatically set when leaving
+        -- the set mode. otherwise, its status is changed manually by any 
         -- toggle_alarm command
 tel;
 
--- BUTTONS computes the various modes and switches required by the
--- main functions of the wristwatch.  The four inputs are the four
+-- buttons computes the various modes and switches required by the
+-- main functions of the wristwatch.  the four inputs are the four
 -- buttons actually found on the wristwatch.
 
-node BUTTONS (UL,LL,UR,LR: bool)
+node buttons (ul,ll,ur,lr: bool)
      returns (mode_is_watch,            -- the display shows the watch
               mode_is_stopwatch,        -- the display shows the stopwatch
               mode_is_alarm,            -- the display shows the alarm
               mode_is_set_watch,        -- the watch is in set mode
               mode_is_set_alarm,        -- the alarm is in set mode
 
-              toggle_24h,       -- the status '24H/AM-PM' must change
+              toggle_24h,       -- the status '24h/am-pm' must change
               toggle_chime,     -- the status of the chime must change
               toggle_alarm,     -- the status of the alarm must change
 
@@ -693,36 +693,36 @@ node BUTTONS (UL,LL,UR,LR: bool)
                                         -- the alarm time must be set
 
               start_stop,       -- the start-stop event of the stopwatch
-              lap,              -- the lap-reset event of the stopwatch
+              lap,              -- the lap-vreset event of the stopwatch
 
               stop_alarm_beep   -- the manual stop of the alarm beep
                  : bool);
 
 var 
-    init: bool;
+    vinit: bool;
     mode_is_standard_watch:bool;
     mode_is_standard_alarm:bool;
     pre_mode_is_watch, pre_mode_is_stopwatch, pre_mode_is_alarm,
     pre_mode_is_set_watch, pre_mode_is_set_alarm: bool;
 let
-  init = true fby false;
+  vinit = true fby false;
   mode_is_watch =
-         if init then true else
-         if LL then
+         if vinit then true else
+         if ll then
             if pre_mode_is_watch then pre_mode_is_set_watch 
             else if pre_mode_is_stopwatch then false
             else not pre_mode_is_set_alarm 
          else pre_mode_is_watch;
   pre_mode_is_watch = false fby mode_is_watch;
   mode_is_stopwatch = 
-         if init then false else
-         if LL then
+         if vinit then false else
+         if ll then
             if pre_mode_is_watch then not pre_mode_is_set_watch else false
          else pre_mode_is_stopwatch;
   pre_mode_is_stopwatch = false fby mode_is_stopwatch;
   mode_is_alarm = 
-         if init then false else
-         if LL then
+         if vinit then false else
+         if ll then
             if pre_mode_is_watch then false
             else if pre_mode_is_stopwatch then true
             else pre_mode_is_set_alarm 
@@ -730,12 +730,12 @@ let
   pre_mode_is_alarm = false fby mode_is_alarm;
 
   mode_is_set_watch = if mode_is_watch then
-                        if UL then (not init and not pre_mode_is_set_watch)
+                        if ul then (not vinit and not pre_mode_is_set_watch)
                         else pre_mode_is_set_watch
                       else false;
   pre_mode_is_set_watch = false fby mode_is_set_watch;
   mode_is_set_alarm = if mode_is_alarm then
-                        if UL then not pre_mode_is_set_alarm
+                        if ul then not pre_mode_is_set_alarm
                         else pre_mode_is_set_alarm
                       else false;
   pre_mode_is_set_alarm = false fby mode_is_set_alarm;
@@ -743,23 +743,23 @@ let
   mode_is_standard_watch = mode_is_watch and not mode_is_set_watch;
   mode_is_standard_alarm = mode_is_alarm and not mode_is_set_alarm;
 
-  toggle_24h = LR and mode_is_standard_watch;
-  toggle_chime = LR and mode_is_standard_alarm;
-  toggle_alarm = UR and mode_is_standard_alarm;
+  toggle_24h = lr and mode_is_standard_watch;
+  toggle_chime = lr and mode_is_standard_alarm;
+  toggle_alarm = ur and mode_is_standard_alarm;
 
-  next_watch_time_position = LL and mode_is_set_watch;
-  next_alarm_position = LL and mode_is_set_alarm;
-  set_watch = LR and mode_is_set_watch;
-  set_alarm = LR and mode_is_set_alarm;
+  next_watch_time_position = ll and mode_is_set_watch;
+  next_alarm_position = ll and mode_is_set_alarm;
+  set_watch = lr and mode_is_set_watch;
+  set_alarm = lr and mode_is_set_alarm;
 
-  start_stop = LR and mode_is_stopwatch;
-  lap = UR and mode_is_stopwatch;
+  start_stop = lr and mode_is_stopwatch;
+  lap = ur and mode_is_stopwatch;
 
-  -- in any mode, the UR button stops the alarm beep
-  stop_alarm_beep = UR;
+  -- in any mode, the ur button stops the alarm beep
+  stop_alarm_beep = ur;
 tel;
 
-node DISPLAY(mode_is_watch, mode_is_stopwatch, mode_is_alarm:bool;
+node display(mode_is_watch, mode_is_stopwatch, mode_is_alarm:bool;
       watch_time:uint64;
       stopwatch_time: uint32;
       alarm_time: uint32; 
@@ -774,13 +774,13 @@ var main_display:uint64;
     alpha_display:uint64;
     r1, r2, r3: uint64;
 let
-  display = MAKE_DISPLAY(main_display,mini_display,
+  display = make_display(main_display,mini_display,
                         alpha_display, status, 
                         position_enhanced,labels);
 
-  r4 = WATCH_TIME_TO_MAIN_DISPLAY(watch_time);
-  r5 = STOPWATCH_TIME_TO_MAIN_DISPLAY(stopwatch_time);
-  r6 = ALARM_TIME_TO_MAIN_DISPLAY(alarm_time);
+  r4 = watch_time_to_main_display(watch_time);
+  r5 = stopwatch_time_to_main_display(stopwatch_time);
+  r6 = alarm_time_to_main_display(alarm_time);
   main_display =
     if mode_is_watch then
         -- in watch mode, the main display shows the watch time, the mini
@@ -789,28 +789,28 @@ let
        r4
     else if mode_is_stopwatch then
         -- in stopwatch mode, the main display shows the stopwatch time,
-        -- the minidisplay shows the watch time, and the string 'ST' is 
+        -- the minidisplay shows the watch time, and the string 'st' is 
         -- displayed on the alphabetic display
        r5
     else
         -- in alarm mode, the main display shows the alarm time,
-        -- the minidisplay shows the watch time, and the string 'AL' is 
+        -- the minidisplay shows the watch time, and the string 'al' is 
         -- displayed on the alphabetic display
        r6;
-  r2 = WATCH_DATE_TO_MINI_DISPLAY(watch_time);
-  r3 = WATCH_TIME_TO_MINI_DISPLAY(watch_time);
+  r2 = watch_date_to_mini_display(watch_time);
+  r3 = watch_time_to_mini_display(watch_time);
   mini_display =
     if mode_is_watch then r2
     else if mode_is_stopwatch then r3
     else r3;
-  r1 = WATCH_DAY_TO_ALPHA_DISPLAY(watch_time);
+  r1 = watch_day_to_alpha_display(watch_time);
   alpha_display =
     if mode_is_watch then r1
-    else if mode_is_stopwatch then 0x53840000LLU
-    else 0x65760000LLU;
+    else if mode_is_stopwatch then 0x53840000llu
+    else 0x65760000llu;
 tel;
 
-node New_Watch (UL,LL,UR,LR,time_unit:bool)
+node new_watch (ul,ll,ur,lr,time_unit:bool)
 returns (display:uint64; beep:int);
 var
   watch_time: uint64;
@@ -827,13 +827,13 @@ var
   alarm_next_position, set_watch, set_alarm, mode_is_set_watch,
   mode_is_set_alarm, start_stop, lap, stop_alarm_beep, second: bool; 
   alarm_beep, chime_beep, stopwatch_beep : int;
-  init, ck, pre_second: bool;
+  vinit, ck, pre_second: bool;
   r : bool when ck;
   r1, r2 : uint8;
 let
-  init = true fby false;
-  assert #(UL,LL,UR,LR,time_unit);
-  display = DISPLAY(mode_is_watch,mode_is_stopwatch,mode_is_alarm,
+  vinit = true fby false;
+  assert #(ul,ll,ur,lr,time_unit);
+  display = display(mode_is_watch,mode_is_stopwatch,mode_is_alarm,
                         watch_time,stopwatch_time, alarm_time, 
                         position_enhanced,status,labels);
                 -- builds the display
@@ -841,41 +841,41 @@ let
   beep = alarm_beep + chime_beep + stopwatch_beep;
 
   (alarm_time,alarm_is_set,alarm_position_enhanced,alarm_beep) =
-          EALARM(toggle_24h,toggle_alarm,mode_is_set_alarm,
+          ealarm(toggle_24h,toggle_alarm,mode_is_set_alarm,
                         set_alarm,alarm_next_position,stop_alarm_beep,second,watch_time);
 
 
   labels =     -- the button labels
-        LABELS(mode_is_watch,mode_is_stopwatch,
+        labels(mode_is_watch,mode_is_stopwatch,
         mode_is_alarm, mode_is_set_watch, mode_is_set_alarm);
 
   position_enhanced =   -- the position to be enhanced
         if mode_is_set_watch then r1
         else if mode_is_set_alarm then r2
         else (-1 : uint8);
-  r1 = WATCH_TO_DISPLAY_POS(watch_position_enhanced);
-  r2 = ALARM_TO_DISPLAY_POS(alarm_position_enhanced);
+  r1 = watch_to_display_pos(watch_position_enhanced);
+  r2 = alarm_to_display_pos(alarm_position_enhanced);
 
   status =      -- the status indicators appearing on the screen
-        STATUS(alarm_is_set, chime_is_set, 
+        status(alarm_is_set, chime_is_set, 
         stopwatch_running, stopwatch_lapping);
 
   (watch_time, watch_position_enhanced,chime_is_set,chime_beep) =
-          EWATCH(second,toggle_24h,toggle_chime,mode_is_set_watch,
+          ewatch(second,toggle_24h,toggle_chime,mode_is_set_watch,
                           watch_next_position,set_watch);
 
   (stopwatch_time, stopwatch_running, stopwatch_lapping, stopwatch_beep) =
-          ESTOPWATCH(time_unit, start_stop,lap);
+          estopwatch(time_unit, start_stop,lap);
 
   (mode_is_watch, mode_is_stopwatch, mode_is_alarm,
    mode_is_set_watch, mode_is_set_alarm,
    toggle_24h, toggle_chime, toggle_alarm,
    watch_next_position, alarm_next_position,
    set_watch, set_alarm,
-   start_stop, lap, stop_alarm_beep) = BUTTONS(UL,LL,UR,LR);
+   start_stop, lap, stop_alarm_beep) = buttons(ul,ll,ur,lr);
 
-   ck = init or time_unit;
-   r = DIVIDE(10 when ck);
+   ck = vinit or time_unit;
+   r = divide(10 when ck);
    second = merge ck ((time_unit when ck) and r)
                      ((time_unit and pre_second) when not ck);
    pre_second = false fby second;

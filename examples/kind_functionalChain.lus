@@ -1,11 +1,11 @@
-(* kind2-mc/kind2-benchmarks/FunctionalChain *)
--- |===| TRIPLEX VOTER SYSTEM.
+(* kind2-mc/kind2-benchmarks/functionalchain *)
+-- |===| triplex voter system.
 
 node voter(input1, input2, input3: real) returns (output: real);
 var
   equalized1,    equalized2,    equalized3 : real;
   equalization1, equalization2, equalization3 : real;
-  satCentering, centering : real;
+  satcentering, centering : real;
   df1, df2, df3 : real;
   st1, st2, st3 : real;
   three_output: real;
@@ -25,17 +25,17 @@ let
   df1 = equalized1 - three_output;
   st1 = if (df1 > 0.5) then 0.5 else (if (df1 < -0.5) then -0.5 else df1);
   equalization1 =
-    0.0 fby (equalization1 + (st1 - satCentering) * 0.05);
+    0.0 fby (equalization1 + (st1 - satcentering) * 0.05);
  
   equalized2 = input2 - equalization2;
   df2 = equalized2 - three_output;
   st2 = if (df2 > 0.5) then 0.5 else (if (df2 < -0.5) then -0.5 else df2);
-  equalization2 = 0.0 fby (equalization2 + (st2 - satCentering) * 0.05);
+  equalization2 = 0.0 fby (equalization2 + (st2 - satcentering) * 0.05);
 
   equalized3 = input3 - equalization3;
   df3 = equalized3 - three_output;
   st3 = if (df3 > 0.5) then 0.5 else (if (df3 < -0.5) then -0.5 else df3);
-  equalization3 = 0.0 fby (equalization3 + (st3 - satCentering) * 0.05);
+  equalization3 = 0.0 fby (equalization3 + (st3 - satcentering) * 0.05);
 
   c1 = equalized1 > equalized2;
   c2 = equalized2 > equalized3;
@@ -52,17 +52,17 @@ let
   centering = if (d1 = d2) then equalization2
                            else (if (d2 = d3) then equalization3
                                               else equalization1);
-  satCentering =
+  satcentering =
     if (centering > 0.25) then 0.25
                           else (if (centering < -0.25) then -0.25
                                                        else centering);
 
   output = three_output / 3.0 ;
 
-  -- Stability property.
+  -- stability property.
   out_stable = (-1.2 <= output) and (output <= 1.2);
 
-  -- Lemma usually known easing the process of proving the property.
+  -- lemma usually known easing the process of proving the property.
   eqs_stable = ( equalization1 <=  2.0 * 1.2) and
                ( equalization1 >= -2.0 * 1.2) and
                ( equalization2 <=  2.0 * 1.2) and
@@ -70,15 +70,15 @@ let
                ( equalization3 <=  2.0 * 1.2) and
                ( equalization3 >= -2.0 * 1.2);
 
---%PROPERTY out_stable;
---%PROPERTY eqs_stable;
+--%property out_stable;
+--%property eqs_stable;
 tel
 
--- |===| CONTROL LAW.
+-- |===| control law.
 
-node controlLaw(in1, in2 : real) returns (integ : real);
+node controllaw(in1, in2 : real) returns (integ : real);
 var
-  init : bool;
+  vinit : bool;
   inp,sum1,dtf : real;
   c1,c2,c3 : bool;
   out_stable: bool;
@@ -86,49 +86,49 @@ var
 let
   assert((-3.6 <= in1) and (in1 <= 3.6) and
          (-3.6 <= in2) and (in2 <= 3.6));
-  init = true fby false;
+  vinit = true fby false;
 
   inp = in1 - 0.0392 * dtf;
-  sum1 = if init then 0.0 else 0.04 * pre_integ + 0.15 * inp;
+  sum1 = if vinit then 0.0 else 0.04 * pre_integ + 0.15 * inp;
 
   c1 = (sum1 <=  1.0 and sum1 >= -1.0);
   c2 = (sum1 >=  1.0 and inp < 0.0);
   c3 = (sum1 <= -1.0 and inp > 0.0);
 
   pre_integ = 0.0 fby integ;
-  integ = if init then 0.0
+  integ = if vinit then 0.0
           else if (c1 or c2 or c3) then pre_integ + inp
           else pre_integ;
 
   pre_dtf = 0.0 fby dtf;
-  dtf = if init then 0.0 else in2 + 0.9608 * pre_dtf;
+  dtf = if vinit then 0.0 else in2 + 0.9608 * pre_dtf;
 
   out_stable = ((-25.0 <= integ) and (integ <= 25.0));
 
-  --%PROPERTY out_stable;
+  --%property out_stable;
 tel
 
--- |===| SATURATION.
+-- |===| saturation.
 
-node saturation(in, min, max: real) returns (vout: real);
+node saturation(vin, min, max: real) returns (vout: real);
 let
-  vout = if (in < min) then min
-                       else (if (in > max) then max
-                                           else in);
+  vout = if (vin < min) then min
+                        else (if (vin > max) then max
+                                             else vin);
 tel
 
 node saturation3(
-  inA, inB, inC, min, max: real
+  ina, inb, inc, min, max: real
 ) returns (
-  outA, outB, outC: real
+  outa, outb, outc: real
 );
 let
-  outA = saturation(inA, min, max);
-  outB = saturation(inB, min, max);
-  outC = saturation(inC, min, max);
+  outa = saturation(ina, min, max);
+  outb = saturation(inb, min, max);
+  outc = saturation(inc, min, max);
 tel
 
--- |===| CHANNEL NODE.
+-- |===| channel node.
 
 node channel(
   in1a, in1b, in1c,
@@ -137,37 +137,37 @@ node channel(
   output: real
 );
 var
-  satMin, satMax,
+  satmin, satmax,
   sat1a, sat1b, sat1c,
   sat2a, sat2b, sat2c,
   v1, v2: real;
   out_stable: bool;
 let
 
-  satMin = -1.2;
-  satMax = 1.2;
+  satmin = -1.2;
+  satmax = 1.2;
 
-  -- Saturating the input sensor signals.
-  (sat1a, sat1b, sat1c) = saturation3(in1a, in1b, in1c, satMin, satMax);
-  (sat2a, sat2b, sat2c) = saturation3(in2a, in2b, in2c, satMin, satMax);
+  -- saturating the input sensor signals.
+  (sat1a, sat1b, sat1c) = saturation3(in1a, in1b, in1c, satmin, satmax);
+  (sat2a, sat2b, sat2c) = saturation3(in2a, in2b, in2c, satmin, satmax);
 
-  -- Values after voting takes place.
+  -- values after voting takes place.
   v1 = voter(sat1a, sat1b, sat1c);
   v2 = voter(sat2a, sat2b, sat2c);
 
-  -- Control law.
-  output = controlLaw(v1, v2);
+  -- control law.
+  output = controllaw(v1, v2);
 
   out_stable = (-25.0 <= output) and (output <= 25.0);
 
-  --%PROPERTY out_stable;
+  --%property out_stable;
 
 tel
 
--- |===| RECONFIGURATION NODE.
+-- |===| reconfiguration node.
 
--- Counts the cycles during which 'signal' is active.
--- Output becomes true when the counter goes above 'n'.
+-- counts the cycles during which 'signal' is active.
+-- output becomes true when the counter goes above 'n'.
 node conf1(signal: bool; n: int) returns (vout: bool);
 var
   pre_cpt, cpt: int;
@@ -182,20 +182,20 @@ let
   vout = cpt >= n;
 tel
 
--- Once x becomes true the node will always output true.
-node latch(in: bool) returns (vout: bool);
+-- once x becomes true the node will always output true.
+node latch(vin: bool) returns (vout: bool);
 var
   pre_vout: bool;
 let
   pre_vout = false fby vout;
-  vout = in or pre_vout;
+  vout = vin or pre_vout;
 tel
 
 
--- Monitors a signal and clamps it inside range.
--- Output 'out_of_range' indicates that the signal
+-- monitors a signal and clamps it inside range.
+-- output 'out_of_range' indicates that the signal
 -- is currently out of range.
--- If the signals stays out of range for more than
+-- if the signals stays out of range for more than
 -- 'n' consecutive steps, the 'corrupt' flag is raised
 -- and stays that way for ever.
 node range_monitor(
@@ -222,10 +222,10 @@ let
 
 tel
 
--- Input command is in command if its failure flag
+-- input command is in command if its failure flag
 -- is not raised and no one else has been in command
 -- for at least n cycles.
--- If not in command, 'safe_command_value' is output.
+-- if not in command, 'safe_command_value' is output.
 node priority(
   command, safe_command_value: real; 
   command_failure, other_in_command: bool;
@@ -241,9 +241,9 @@ let
   safe_command = if in_command then command else safe_command_value;
 tel
 
--- Three channels reconfiguration logic with error
+-- three channels reconfiguration logic with error
 -- confirmation and delayed delegation of command.
--- Each channel takes input from a sensor, which is typically
+-- each channel takes input from a sensor, which is typically
 -- the output of some voting logic system.
 node reconfiguration(
   sensor_value1, sensor_value2, sensor_value3: real
@@ -269,21 +269,21 @@ var
 let
   -- "10^-9" assumption on sensors.
   assert (not corrupt1 or not corrupt2 or not corrupt3);
-  -- This is needed to ensure channels consistently pass command.
+  -- this is needed to ensure channels consistently pass command.
   assert (m1 < m2 and m2 < m3);
-  -- Safe is 0.0 (see 'command = ...').
+  -- safe is 0.0 (see 'command = ...').
   assert (safe_value = 0.0);
 
-  -- Sensor range.
+  -- sensor range.
   max = 25.0;
   min = -25.0;
-  -- Sensor value if corrupt.
+  -- sensor value if corrupt.
   default_value = 0.0;
 
-  -- Safe value for faulty channels.
+  -- safe value for faulty channels.
   safe_value = 0.0;
 
-  -- Constants for the timers of the systems.
+  -- constants for the timers of the systems.
   n1 = 10;
   n2 = 12;
   n3 = 15;
@@ -291,7 +291,7 @@ let
   m2 = 7;
   m3 = 11;
 
-  -- Flags and ranged values on input sensors.
+  -- flags and ranged values on input sensors.
   (out_of_range1, corrupt1, ranged_sensor1) =
     range_monitor(sensor_value1, default_value, min, max, n1);
   (out_of_range2, corrupt2, ranged_sensor2) =
@@ -299,7 +299,7 @@ let
   (out_of_range3, corrupt3, ranged_sensor3) =
     range_monitor(sensor_value3, default_value, min, max, n3);
 
-  -- Channels command values and flags.
+  -- channels command values and flags.
   (safe_command1,  in_command1) =
     priority(ranged_sensor1, safe_value, corrupt1, false, m1);
   (safe_command2,  in_command2) =
@@ -308,28 +308,28 @@ let
     priority(ranged_sensor3, safe_value, corrupt3,
              in_command1 or in_command2, m3);
 
-  -- Actual (safe) command.
+  -- actual (safe) command.
   command = safe_command1 +  safe_command2 +  safe_command3;
-  -- No one is in command when transitionning from one channel to another...
+  -- no one is in command when transitionning from one channel to another...
   no_command = not(in_command1 or in_command2 or in_command3);
 
-  -- ... but it cannot be true forever. Hopefully.
+  -- ... but it cannot be true forever. hopefully.
   arg = conf1(no_command, m3);
   ok = not arg;
 
-  --%PROPERTY ok;
+  --%property ok;
 tel
 
--- |===| TOP NODE.
+-- |===| top node.
 
--- Complete systems has three times two triplicated input signals,
+-- complete systems has three times two triplicated input signals,
 -- i.e. 18 inputs.
 node top(
-  -- First channel inputs.
+  -- first channel inputs.
   in11a, in11b, in11c, in12a, in12b, in12c,
-  -- Second channel inputs.
+  -- second channel inputs.
   in21a, in21b, in21c, in22a, in22b, in22c,
-  -- Third channel inputs.
+  -- third channel inputs.
   in31a, in31b, in31c, in32a, in32b, in32c: real
 ) returns (
   command: real
@@ -347,7 +347,7 @@ let
   channel3 =
     channel(in31a, in31b, in31c, in32a, in32b, in32c);
 
-  command, no_one_in_command =
+  (command, no_one_in_command) =
     reconfiguration(channel1, channel2, channel3);
 
   stability =
@@ -356,8 +356,8 @@ let
   arg = conf1(no_one_in_command, 25);
   no_command_bounded = not arg;
 
-  --%PROPERTY stability;
-  --%PROPERTY no_command_bounded;
-  --%MAIN;
+  --%property stability;
+  --%property no_command_bounded;
+  --%main;
 tel
 

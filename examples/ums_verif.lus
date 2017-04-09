@@ -1,164 +1,164 @@
-(* ums_verif example from the Lustre v4 distribution. *)
+(* ums_verif example from the lustre v4 distribution. *)
 
-node two_states(set,reset,init: bool) returns (state:bool);
-var first, pre_state : bool;
+node two_vstates(set,vreset,vinit: bool) returns (vstate:bool);
+var first, pre_vstate : bool;
 let
   first = true fby false;
-  state=
-      if first then init
-      else if set and not pre_state then true
-      else if reset and pre_state then false
-      else pre_state;
-  pre_state = false fby state;
+  vstate=
+      if first then vinit
+      else if set and not pre_vstate then true
+      else if vreset and pre_vstate then false
+      else pre_vstate;
+  pre_vstate = false fby vstate;
 tel
 
-node edge(X: bool) returns (edge : bool);
-var first, pre_X : bool;
+node edge(x: bool) returns (edge : bool);
+var first, pre_x : bool;
 let
   first = true fby false;
-  edge = if first then X else (X and not pre_X);
-  pre_X = false fby X;
+  edge = if first then x else (x and not pre_x);
+  pre_x = false fby x;
 tel
 
-node implies(A,B:bool) returns (implies: bool);
-let implies = if A then B else true; tel
+node implies(a,b:bool) returns (implies: bool);
+let implies = if a then b else true; tel
 
-node after (A: bool) returns (X: bool);
-var state_X : bool;
+node after (a: bool) returns (x: bool);
+var vstate_x : bool;
 let
-  state_X = false fby (A or X);
-  X = state_X;
+  vstate_x = false fby (a or x);
+  x = vstate_x;
 tel
 
-node always_since (C,A: bool) returns (X: bool);
-var pre_X, after_A : bool;
+node always_since (c,a: bool) returns (x: bool);
+var pre_x, after_a : bool;
 let
-  after_A = after(A);
-  X = if A then C
-      else if after_A then C and pre_X
+  after_a = after(a);
+  x = if a then c
+      else if after_a then c and pre_x
       else true;
-  pre_X = false fby X;
+  pre_x = false fby x;
 tel
 
-node once_since (C,A: bool) returns (X: bool);
-var pre_X, after_A : bool;
+node once_since (c,a: bool) returns (x: bool);
+var pre_x, after_a : bool;
 let
-  after_A = after(A);
-  X = if A then C
-      else if after_A then C or pre_X
+  after_a = after(a);
+  x = if a then c
+      else if after_a then c or pre_x
       else true;
-  pre_X = false fby X;
+  pre_x = false fby x;
 tel
 
-node always_from_to (C,A,B: bool) returns (X: bool);
-var after_A, als, ons : bool;
+node always_from_to (c,a,b: bool) returns (x: bool);
+var after_a, als, ons : bool;
 let
-  after_A = after(A);
-  als = always_since(C,A);
-  ons = once_since(B,A);
-  X = implies (after_A, als or ons);
+  after_a = after(a);
+  als = always_since(c,a);
+  ons = once_since(b,a);
+  x = implies (after_a, als or ons);
 tel
 
-node once_from_to (C,A,B: bool) returns (X: bool);
-var after_A, once_since_CA : bool;
+node once_from_to (c,a,b: bool) returns (x: bool);
+var after_a, once_since_ca : bool;
 let
-  after_A = after(A);
-  once_since_CA = once_since(C,A);
-  X = implies (after_A and B, once_since_CA);
+  after_a = after(a);
+  once_since_ca = once_since(c,a);
+  x = implies (after_a and b, once_since_ca);
 tel
 
-node alternating(A,B: bool) returns (X:bool);
-var A_forbiden, B_forbiden: bool;
-    init, pre_A, pre_B, pre_A_forbiden, pre_B_forbiden : bool;
+node alternating(a,b: bool) returns (x:bool);
+var a_forbiden, b_forbiden: bool;
+    vinit, pre_a, pre_b, pre_a_forbiden, pre_b_forbiden : bool;
 let
-  init = true fby false;
+  vinit = true fby false;
 
-  A_forbiden =
-            if init then false
-            else if pre_A and not A then true
-            else if pre_B and not B then false 
-                 else pre_A_forbiden;
-  B_forbiden =
-            if init then true
-            else if pre_B and not B then true
-            else if pre_A and not A then false  
-            else pre_B_forbiden;
-  X = not(A and A_forbiden) and not(B and B_forbiden);
+  a_forbiden =
+            if vinit then false
+            else if pre_a and not a then true
+            else if pre_b and not b then false 
+                 else pre_a_forbiden;
+  b_forbiden =
+            if vinit then true
+            else if pre_b and not b then true
+            else if pre_a and not a then false  
+            else pre_b_forbiden;
+  x = not(a and a_forbiden) and not(b and b_forbiden);
 
-  pre_A = false fby A;
-  pre_A_forbiden = false fby A_forbiden;
-  pre_B = false fby B;
-  pre_B_forbiden = false fby B_forbiden;
+  pre_a = false fby a;
+  pre_a_forbiden = false fby a_forbiden;
+  pre_b = false fby b;
+  pre_b_forbiden = false fby b_forbiden;
 tel
 
-node not_between_and (A,B,C: bool) returns (X: bool);
+node not_between_and (a,b,c: bool) returns (x: bool);
 var os : bool;
 let
-  os = once_since(A,B);
-  X = implies(C, not os); 
+  os = once_since(a,b);
+  x = implies(c, not os); 
 tel
 
-node UMS(on_A,on_B,on_C,ack_AB,ack_BC: bool)
+node ums(on_a,on_b,on_c,ack_ab,ack_bc: bool)
      returns (grant_access,grant_exit,
-        do_AB,do_BC: bool);
-var empty_section, only_on_B: bool;
+        do_ab,do_bc: bool);
+var empty_section, only_on_b: bool;
 let
-   grant_access = empty_section and ack_AB;
-   grant_exit = only_on_B and ack_BC;
-   do_AB = not ack_AB and empty_section;
-   do_BC = not ack_BC and only_on_B;
-   empty_section = not(on_A or on_B or on_C);
-   only_on_B = on_B and not(on_A or on_C);
+   grant_access = empty_section and ack_ab;
+   grant_exit = only_on_b and ack_bc;
+   do_ab = not ack_ab and empty_section;
+   do_bc = not ack_bc and only_on_b;
+   empty_section = not(on_a or on_b or on_c);
+   only_on_b = on_b and not(on_a or on_c);
 tel
 
-node UMS_verif(on_A,on_B,on_C,
-         ack_AB,ack_BC: bool)
+node ums_verif(on_a,on_b,on_c,
+         ack_ab,ack_bc: bool)
      returns(property: bool);
 var
    grant_access,grant_exit: bool;
-   do_AB,do_BC: bool;
+   do_ab,do_bc: bool;
    no_collision,exclusive_req: bool;
-   no_derail_AB,no_derail_BC: bool;
-   empty_section, only_on_B: bool;
-   init : bool;
+   no_derail_ab,no_derail_bc: bool;
+   empty_section, only_on_b: bool;
+   vinit : bool;
 let
-   empty_section = not(on_A or on_B or on_C);
-   only_on_B = on_B and not(on_A or on_C);
+   empty_section = not(on_a or on_b or on_c);
+   only_on_b = on_b and not(on_a or on_c);
    
-   -- ASSERTIONS
-   init = true fby false;
-   assert not(ack_AB and ack_BC);
-   assert init or always_from_to(ack_AB,ack_AB,do_BC);
-   assert init or always_from_to(ack_BC,ack_BC,do_AB);
-   assert empty_section or not init;
-   assert init or
+   -- assertions
+   vinit = true fby false;
+   assert not(ack_ab and ack_bc);
+   assert vinit or always_from_to(ack_ab,ack_ab,do_bc);
+   assert vinit or always_from_to(ack_bc,ack_bc,do_ab);
+   assert empty_section or not vinit;
+   assert vinit or
     implies(edge(not empty_section),
       false fby grant_access);
-   assert init or
-    implies(edge(on_C),
+   assert vinit or
+    implies(edge(on_c),
       false fby grant_exit);
-   assert init or implies(edge(not on_A),on_B);
-   assert init or implies(edge(not on_B), on_A or on_C);
+   assert vinit or implies(edge(not on_a),on_b);
+   assert vinit or implies(edge(not on_b), on_a or on_c);
 
-   -- UMS CALL
-   (grant_access,grant_exit,do_AB,do_BC) =
-      UMS(on_A,on_B,on_C,ack_AB,ack_BC);
+   -- ums call
+   (grant_access,grant_exit,do_ab,do_bc) =
+      ums(on_a,on_b,on_c,ack_ab,ack_bc);
 
-   -- PROPERTIES
+   -- properties
    no_collision =
   implies(grant_access,empty_section);
    exclusive_req =
-  not(do_AB and do_BC);
-   no_derail_AB =
-  always_from_to(ack_AB,
+  not(do_ab and do_bc);
+   no_derail_ab =
+  always_from_to(ack_ab,
            grant_access,
-           only_on_B);
-   no_derail_BC =
-  always_from_to(ack_BC,
+           only_on_b);
+   no_derail_bc =
+  always_from_to(ack_bc,
            grant_exit,
            empty_section);
    property =
   no_collision and exclusive_req and
-  no_derail_AB and no_derail_BC;
+  no_derail_ab and no_derail_bc;
 tel
 

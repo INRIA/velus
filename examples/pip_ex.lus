@@ -1,56 +1,56 @@
-(* 2014 Bourke. The "Priority Inheritance" protocol, version 2. *)
+(* 2014 bourke. the "priority inheritance" protocol, version 2. *)
 
 node counter_modulo (tick : bool; max : int)
 returns (c : int);
-var pc : int; init : bool;
+var pc : int; vinit : bool;
 let
-  init = true fby false;
+  vinit = true fby false;
   pc = 0 fby c;
-  c = if init then 0 else if tick then (pc + 1) mod max else pc;
+  c = if vinit then 0 else if tick then (pc + 1) mod max else pc;
 tel;
 
 -- high-priority process
 node proc0 (cpu : bool)
 returns (pc : int; sleep : bool; asks_cs0, asks_cs1 : bool);
-var asks_cs0_state, asks_cs1_state : bool;
+var asks_cs0_vstate, asks_cs1_vstate : bool;
 let
     pc = counter_modulo (cpu, 8);
     sleep = cpu and (pc = 8 - 1);
-    asks_cs0_state = false fby (1 <= pc and pc < 6);
-    asks_cs0 = asks_cs0_state;
-    asks_cs1_state = false fby (3 <= pc and pc < 5);
-    asks_cs1 = asks_cs1_state;
+    asks_cs0_vstate = false fby (1 <= pc and pc < 6);
+    asks_cs0 = asks_cs0_vstate;
+    asks_cs1_vstate = false fby (3 <= pc and pc < 5);
+    asks_cs1 = asks_cs1_vstate;
 tel;
 
 -- mid-priority process
 node proc1 (cpu : bool)
 returns (pc : int; sleep : bool; asks_cs1 : bool);
-var asks_cs1_state : bool;
+var asks_cs1_vstate : bool;
 let
     pc = counter_modulo (cpu, 7);
     sleep = cpu and (pc = 7 - 1);
-    asks_cs1_state = false fby (1 <= pc and pc < 5);
-    asks_cs1 = asks_cs1_state;
+    asks_cs1_vstate = false fby (1 <= pc and pc < 5);
+    asks_cs1 = asks_cs1_vstate;
 tel;
 
 -- low-priority process
 node proc2 (cpu : bool)
 returns (pc : int; sleep : bool; asks_cs0 : bool);
-var asks_cs0_state : bool;
+var asks_cs0_vstate : bool;
 let
     pc = counter_modulo (cpu, 11);
     sleep = false;  --the idle process never sleeps
-    asks_cs0_state = false fby (2 <= pc and pc < 8);
-    asks_cs0 = asks_cs0_state;
+    asks_cs0_vstate = false fby (2 <= pc and pc < 8);
+    asks_cs0 = asks_cs0_vstate;
 tel;
 
 -- scheduler
 
-node hold_until (start, reset : bool)
+node hold_until (start, vreset : bool)
 returns (hold : bool);
 var pre_hold : bool;
 let
-    hold = start or (pre_hold and not reset);
+    hold = start or (pre_hold and not vreset);
     pre_hold = false fby hold;
 tel;
 
@@ -193,7 +193,7 @@ let
 
     mutual_exclusion = not (p0_has_cs0 and p2_has_cs0)
                        and not (p0_has_cs1 and p1_has_cs1);
-    --%PROPERTY mutual_exclusion;
+    --%property mutual_exclusion;
 tel;
 
 node max (v1, v2 : int)
@@ -205,14 +205,14 @@ tel;
 node max_time_to_complete (dispatched, finished : bool)
 returns (maxtime : int);
 var time, pre_time, pre_maxtime, arg : int;
-    init : bool;
+    vinit : bool;
 let
-    init = true fby false;
+    vinit = true fby false;
     time = if finished then 0
            else if dispatched then pre_time + 1
            else pre_time;
     pre_time = 0 fby time;
-    arg = if init then time else pre_maxtime;
+    arg = if vinit then time else pre_maxtime;
     maxtime = max(time, arg);
     pre_maxtime = 0 fby maxtime;
 tel;
@@ -255,10 +255,10 @@ let
     cpu_good = (cpu0 and not (cpu1 or cpu2))
                or (cpu1 and not (cpu0 or cpu2))
                or (cpu2 and not (cpu0 or cpu1));
-    --%PROPERTY cpu_good;
+    --%property cpu_good;
 
     max_time0 = max_time_to_complete (dispatch0, psleep0);
     high_priority_wcet = max_time0 <= 8 + 5;
-    --%PROPERTY high_priority_wcet;
+    --%property high_priority_wcet;
 tel;
 

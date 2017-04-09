@@ -1,43 +1,43 @@
-(* minus example from the Lustre v4 distribution. *)
+(* minus example from the lustre v4 distribution. *)
 
-node TWO_STATES(set,reset,vinit:bool) returns (state:bool);
-var first, pre_state : bool;
+node two_vstates(set,vreset,vvinit:bool) returns (vstate:bool);
+var first, pre_vstate : bool;
 let
   first = true fby false;
-  state = if first then vinit
-          else if set and not pre_state then true
-          else if reset and pre_state then false
-          else pre_state;
-  pre_state = false fby state;
+  vstate = if first then vvinit
+          else if set and not pre_vstate then true
+          else if vreset and pre_vstate then false
+          else pre_vstate;
+  pre_vstate = false fby vstate;
 tel;
 
-node ONE_BUTTON(change,vinit: bool) returns (state:bool);
-var first, pre_state : bool;
+node one_button(change,vvinit: bool) returns (vstate:bool);
+var first, pre_vstate : bool;
 let
   first = true fby false;
-  state = if first then vinit
-          else if change then not pre_state else pre_state;
-  pre_state = false fby state;
+  vstate = if first then vvinit
+          else if change then not pre_vstate else pre_vstate;
+  pre_vstate = false fby vstate;
 tel;
 
-node TWO_BUTTONS(von,voff,vinit:bool) returns(state:bool);
-var first, pre_state : bool;
+node two_buttons(von,voff,vvinit:bool) returns(vstate:bool);
+var first, pre_vstate : bool;
 let
   first = true fby false;
-  state = if first then vinit
+  vstate = if first then vvinit
           else if von then true
-          else if voff then false else pre_state;
-  pre_state = false fby state;
+          else if voff then false else pre_vstate;
+  pre_vstate = false fby vstate;
 tel;
 
-node minus (e1,e2,e3,vinit:bool) returns (ok:bool);
+node minus (e1,e2,e3,vvinit:bool) returns (ok:bool);
 var s1,s2,s3,s4:bool;
 let
-   s1= TWO_STATES(e1,e2,vinit);
-   s2= TWO_BUTTONS(e1,e2,vinit);
+   s1= two_vstates(e1,e2,vvinit);
+   s2= two_buttons(e1,e2,vvinit);
    assert not(e1 and e2);
-   s3= TWO_STATES(e3,e3,vinit);
-   s4= ONE_BUTTON(e3,vinit);
+   s3= two_vstates(e3,e3,vvinit);
+   s4= one_button(e3,vvinit);
    ok =(s1=s2) and (s3=s4);
 tel;
 
