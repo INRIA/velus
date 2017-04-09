@@ -56,7 +56,7 @@ let
    r = watchdog2(set when clock,
                  vreset when clock,
                  delay when clock);
-   alarm = merge clock r (pre_alarm when not clock);
+   alarm = merge clock (true -> r) (false -> pre_alarm when not clock);
    pre_alarm = false fby alarm;
    clock = vinit or set or vreset or time_unit;
    vinit = true fby false;
@@ -92,8 +92,8 @@ let
            else pre_frozen;
   displayed_time =
            merge frozen
-                 (pre_displayed_time when frozen)
-                 (internal_time when not frozen);
+                 (true -> pre_displayed_time when frozen)
+                 (false -> internal_time when not frozen);
   pre_displayed_time = 0 fby displayed_time;
   (internal_time, running) =
       simple_stopwatch(start_stop, actual_vreset, hs);
@@ -133,5 +133,11 @@ let
    vstate_1 = switch_1(von, voff, vinit);
    ok = (vstate = vstate_1);
    assert not(von and voff);
+tel
+
+(* dummy node for compilation with Lustre v6 *)
+node halbwachs(vin : bool) returns (vout : bool);
+let
+  vout = vin;
 tel
 

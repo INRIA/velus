@@ -12,8 +12,8 @@ let
   t = counter (0 when sec, 1 when sec, false when sec);
   r = counter (0, delta, false);
   rt = (r when sec) / t;
-  hh = h whenot sec;
-  v = merge sec rt hh;
+  hh = h when not sec;
+  v = merge sec (true -> rt) (false -> hh);
   h = 0 fby v;
 tel
 

@@ -467,3 +467,9 @@ let
 
 tel
 
+(* Dummy node for compilation with Lustre v6. *)
+node landing_gear(vin : bool) returns (vout : bool);
+let
+  vout = vin;
+tel
+

@@ -262,3 +262,22 @@ let
     --%property high_priority_wcet;
 tel;
 
+(* Dummy node for compilation with Lustre v6. *)
+node pip_ex (trigger_p0 : bool)
+returns (dispatch0, dispatch1, dispatch2: bool;
+         cpu0, cpu1, cpu2 : bool;
+         pc0, pc1, pc2 : int;
+         p0_has_cs0, p0_has_cs1,
+         p1_has_cs0, p1_has_cs1,
+         p2_has_cs0, p2_has_cs1 : bool;
+         max_time0 : int);
+let
+  (dispatch0, dispatch1, dispatch2,
+         cpu0, cpu1, cpu2,
+         pc0, pc1, pc2,
+         p0_has_cs0, p0_has_cs1,
+         p1_has_cs0, p1_has_cs1,
+         p2_has_cs0, p2_has_cs1,
+         max_time0) = system(trigger_p0);
+tel
+

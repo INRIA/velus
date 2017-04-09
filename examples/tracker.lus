@@ -27,6 +27,6 @@ let
   x = rising(s > limit);
   (s, p) = d_integrator(acc);
   pt = 0 fby t;
-  t = merge x c (pt when not x);
+  t = merge x (true -> c) (false -> pt when not x);
 tel
 

@@ -168,7 +168,7 @@ let
   pre_vin = 0.0 fby vin;
   vinit = true fby false;
   absv = abs(vin - pre_vin);
-  vout = if vinit then 0 <= inc else absv <= inc ;
+  vout = if vinit then 0.0 <= inc else absv <= inc ;
 tel
 
 -- |===| abstractions of non-linear streams.
@@ -1074,5 +1074,11 @@ let
     longitudinal_controller(fpa_cmd_in, alt_eng_out, fpa_eng_out, alt_cmd_in,
                             alt_in, pitch_in, qbdegf_1_1, gskts_in, hdot_in,
                             speed_in, fpa_in, cas_in, elev_stick_in);
+tel
+
+(* Dummy node for compilation with Lustre v6. *)
+node cocospec_mono_system(vin : bool) returns (vout: bool);
+let
+  vout = vin;
 tel
 
