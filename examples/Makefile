@@ -96,20 +96,20 @@ clean:
 %.hept.wcet: %.hept.exe %.hept.ff
 	for f in $$(nm $< | grep -i $(<:.hept.exe=)__ | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
-		| sed -e "s/^\(WCET\[\)[^_]*__/\1$(<:.hept.exe=)./"; \
+		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept.exe=)./"; \
 	done >$@
 
 %.hept-gcc.wcet: %.hept-gcc.exe %.hept-gcc.ff
 	for f in $$(nm $< | grep -i $(<:.hept-gcc.exe=)__ | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
-		| sed -e "s/^\(WCET\[\)[^_]*__/\1$(<:.hept-gcc.exe=)./"; \
+		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept-gcc.exe=)./"; \
 	done >$@
 
 %.lus6.wcet: %.lus6.exe %.lus6.ff
 	for f in $$(nm $< | egrep -i "$(<:.lus6.exe=)_.*(step|_ctx_reset)" \
 	  | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
-		| sed -e "s/^\(WCET\[\)[^_]*_/\1$(<:.lus6.exe=)./" \
+		| sed -e "s/^\(WCET\[\)$(<:.lus6.exe=)_/\1$(<:.lus6.exe=)./" \
 		      -e "s/_ctx_reset/_reset/"; \
 	done >$@
 
@@ -117,7 +117,7 @@ clean:
 	for f in $$(nm $< | egrep -i "$(<:.lus6-gcc.exe=)_.*(step|_ctx_reset)" \
 	  | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
-		| sed -e "s/^\(WCET\[\)[^_]*_/\1$(<:.lus6-gcc.exe=)./" \
+		| sed -e "s/^\(WCET\[\)$(<:.lus6-gcc.exe=)_/\1$(<:.lus6-gcc.exe=)./" \
 		      -e "s/_ctx_reset/_reset/"; \
 	done >$@
 
@@ -149,14 +149,16 @@ clean:
 		 $(<:.lus=)_types.c $(<:.lus=).c _main.c)
 
 %.lus6.exe: %.lus
-	-lus2lic -2c $<
+	-lus2lic -2c -o $(<:.lus=.c) \
+	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
 	 $(CCOMP) -stdlib $(COMPCERT) \
 		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \
 		 -o $@ lustre_consts.c \
 		 $(<:.lus=)_$(<:.lus=).c $(<:.lus=)_$(<:.lus=)_loop.c
 
 %.lus6-gcc.exe: %.lus
-	-lus2lic -2c $<
+	-lus2lic -2c -o $(<:.lus=.c) \
+	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
 	 $(GCC) -O2 --specs=nosys.specs -o $@ lustre_consts.c \
 		 $(<:.lus=)_$(<:.lus=).c $(<:.lus=)_$(<:.lus=)_loop.c
 

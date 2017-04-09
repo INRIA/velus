@@ -1076,9 +1076,3 @@ let
                             speed_in, fpa_in, cas_in, elev_stick_in);
 tel
 
-(* Dummy node for compilation with Lustre v6. *)
-node cocospec_mono_system(vin : bool) returns (vout: bool);
-let
-  vout = vin;
-tel
-

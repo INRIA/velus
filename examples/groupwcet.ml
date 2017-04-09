@@ -22,7 +22,7 @@ let exts = ref ([] : string list)
 
 let add_ext ext =
   if List.mem ext !exts then ()
-  else exts := ext::!exts
+  else exts := List.sort String.compare (ext::!exts)
 
 let wcet_add ext fname v =
   let fhash =

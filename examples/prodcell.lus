@@ -160,9 +160,3 @@ let
          ((moving and maysafelymove) or not moving);
 tel;
 
-(* Dummy node for compilation with Lustre v6. *)
-node prodcell(vin : bool) returns (vout: bool);
-let
-  vout = vin;
-tel
-

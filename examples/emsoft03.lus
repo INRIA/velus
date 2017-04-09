@@ -60,9 +60,3 @@ let
   pre_rer_input = true fby rer_input;
 tel
 
-(* Dummy node for compilation with Lustre v6 *)
-node emsoft03(vin : bool) returns (vout : bool);
-let
-  vout = vin;
-tel
-

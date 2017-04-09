@@ -361,16 +361,3 @@ let
   --%main;
 tel
 
-(* Dummy node for compilation with Lustre v6. *)
-node kind_functionalChain(
-  in11a, in11b, in11c, in12a, in12b, in12c,
-  in21a, in21b, in21c, in22a, in22b, in22c,
-  in31a, in31b, in31c, in32a, in32b, in32c: real
-) returns (command: real);
-let
-  command = top(
-    in11a, in11b, in11c, in12a, in12b, in12c,
-    in21a, in21b, in21c, in22a, in22b, in22c,
-    in31a, in31b, in31c, in32a, in32b, in32c);
-tel
-
