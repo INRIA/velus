@@ -296,8 +296,8 @@ expression:
     { LustreAst.IFTE expr1 expr2 expr3 loc }
 | loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
     { LustreAst.MERGE (fst id) expr1 expr2 loc }
-| loc=MERGE id=VAR_NAME LPAREN TRUE RARROW expr1=primary_expression RPAREN
-			LPAREN FALSE RARROW expr2=primary_expression RPAREN
+| loc=MERGE id=VAR_NAME LPAREN TRUE RARROW expr1=expression RPAREN
+			LPAREN FALSE RARROW expr2=expression RPAREN
     { LustreAst.MERGE (fst id) expr1 expr2 loc }
 
 (* Declarations are much simpler than in C. We do not have arrays,
