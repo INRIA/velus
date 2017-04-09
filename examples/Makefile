@@ -1,13 +1,8 @@
-VELUS=../velus
-VELUS_OPT=-dobc -dclight -lib
 
-COMPCERT=$(realpath ../CompCert)
-CCOMP=$(COMPCERT)/ccomp
-CCOMP_OPT=-stdlib $(COMPCERT)/runtime
+## local configuration
 
 OTAWA_PATH?=/opt/otawa-core
-
-GCC=arm-none-eabi-gcc
+GCC?=arm-none-eabi-gcc
 
 # Requires lustre-compat branch
 HEPT_PATH?=$(HOME)/Projects/heptagon-working
@@ -15,6 +10,15 @@ HEPT_FLAGS?=-stdlib $(HEPT_PATH)/lib
 
 # For building ARM executables
 CCOMP_EXTRA=-WUl,--specs=nosys.specs
+
+## standard definitions
+
+VELUS=../velus
+VELUS_OPT=-dobc -dclight -lib
+
+COMPCERT=$(realpath ../CompCert)
+CCOMP=$(COMPCERT)/ccomp
+CCOMP_OPT=-stdlib $(COMPCERT)/runtime
 
 EXAMPLES= avgvelocity.lus \
 	  count.lus \
