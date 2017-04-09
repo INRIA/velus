@@ -1,5 +1,5 @@
 VELUS=../velus
-VELUS_OPT=-dobc -dclight
+VELUS_OPT=-dobc -dclight -lib
 
 COMPCERT=$(realpath ../CompCert)
 CCOMP=$(COMPCERT)/ccomp
