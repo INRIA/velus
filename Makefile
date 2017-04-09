@@ -86,15 +86,15 @@ $(MAKEFILEAUTO): automake $(COQPROJECT)
 extraction: proof
 	@echo "${bold}Extracting Velus Ocaml code...${normal}"
 	$(MAKE) -s -f $(MAKEFILEAUTO) $@
-	cp -f -t $(EXTRACTED)\
-		$(PARSERDIR)/LustreLexer.ml\
+	cp -f $(PARSERDIR)/LustreLexer.ml\
 		$(PARSERDIR)/Relexer.ml\
 		$(PARSERDIR)/LustreParser2.ml\
 		$(PARSERDIR)/LustreParser2.mli\
 		NLustre/nlustrelib.ml\
 		Obc/obclib.ml\
 		ObcToClight/interfacelib.ml\
-		$(COMPCERT_INCLUDES:%=$(COMPCERTDIR)/%/*.ml*)
+		$(COMPCERT_INCLUDES:%=$(COMPCERTDIR)/%/*.ml*)\
+		$(EXTRACTED)
 
 # VELUS
 $(VELUS): extraction $(VELUSMAIN).ml veluslib.ml
