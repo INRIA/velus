@@ -40,6 +40,7 @@ Parameter print_snlustre: NL.Syn.global -> unit.
 Parameter print_obc: Obc.Syn.program -> unit.
 Parameter do_fusion : unit -> bool.
 Parameter do_sync : unit -> bool.
+Parameter do_expose : unit -> bool.
 
 Module ExternalSchedule.
   Definition schedule := schedule.
@@ -94,7 +95,7 @@ Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
           @@ Trans.translate
           @@ total_if do_fusion (map Obc.Fus.fuse_class)
           @@ print print_obc
-          @@@ Generation.translate (do_sync tt) main_node.
+          @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:

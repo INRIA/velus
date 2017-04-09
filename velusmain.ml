@@ -126,6 +126,7 @@ let speclist = [
   "-fullclocks", Arg.Set Interfacelib.PrintNLustre.print_fullclocks,
                                  " Print 'full' clocks in declarations";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
+  "-lib", Arg.Set Veluslib.all_expose, " Expose all nodes in generated code";
 ]
 
 let usage_msg = "Usage: velus [options] <source>"

@@ -448,7 +448,8 @@ Definition make_program'
   | inr msg => Error msg
   end.
 
-Definition translate (do_sync: bool) (main_node: ident) (prog: program): res Clight.program :=
+Definition translate (do_sync: bool) (all_public: bool)
+                     (main_node: ident) (prog: program): res Clight.program :=
   match find_class main_node prog with
   | Some (c, _) =>
     match find_method step c.(c_methods) with
@@ -474,7 +475,8 @@ Definition translate (do_sync: bool) (main_node: ident) (prog: program): res Cli
                       [f_gvar]
                       (outs ++ ins)
                       gdefs
-                      (if do_sync then [main_sync_id] else [])
+                      ((if do_sync then [main_sync_id] else [])
+                       ++ (if all_public then map fst (concat funs) else []))
                       main_id
       | None => Error (msg "ObcToClight: reset function not found")
       end

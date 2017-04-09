@@ -12,6 +12,9 @@ let do_fusion () = !fuse_obc
 
 let do_sync () = !sync_destination <> None
 
+let all_expose = ref false
+let do_all_expose () = !all_expose
+
 let get_main_class decls =
   try
     let open Instantiator.Obc.Syn in
