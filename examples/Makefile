@@ -31,7 +31,7 @@ EXAMPLES= avgvelocity.lus \
 
 all: $(EXAMPLES:.lus=.exe)
 
-wcet: $(EXAMPLES:.lus=.wcet)
+wcet: $(EXAMPLES:.lus=.velus.wcet)
 
 heptagon: $(EXAMPLES:.lus=.hept.exe)
 hept.wcet: $(EXAMPLES:.lus=.hept.wcet)
@@ -39,7 +39,7 @@ hept.wcet: $(EXAMPLES:.lus=.hept.wcet)
 realclean: clean
 	@rm -f $(EXAMPLES:.lus=.exe) $(EXAMPLES:.lus=.ff)
 	@rm -f $(EXAMPLES:.lus=.hept.exe) $(EXAMPLES:.lus=.hept.ff)
-	@rm -f $(EXAMPLES:.lus=.wcet) $(EXAMPLES:.lus=.hept.wcet)
+	@rm -f $(EXAMPLES:.lus=.velus.wcet) $(EXAMPLES:.lus=.hept.wcet)
 
 clean:
 	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
@@ -54,7 +54,7 @@ clean:
 
 # rules
 
-%.wcet: %.exe %.ff
+%.velus.wcet: %.exe %.ff
 	for f in $$(nm $< | grep fun_ | cut -d ' ' -f 3); do \
 	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
 		| sed -e "s/^\(WCET\[\)fun_/\1$(<:.exe=)./"; \
