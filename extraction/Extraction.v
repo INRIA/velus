@@ -6,7 +6,7 @@ Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.NLustreElab.
 Require Import Lustre.Parser.LustreParser.
 
-Require arm.Machregs arm.Conventions1
+Require ia32.Machregs ia32.Conventions1
         cfrontend.Initializers cfrontend.Ctyping
         backend.Selection backend.RTLgen
         driver.Compiler cparser.Cabs.
@@ -59,15 +59,9 @@ Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
 
-Extract Constant Archi.abi =>
-  "begin match Configuration.abi with
-   | ""eabi"" -> Softfloat
-   | ""hardfloat"" -> Hardfloat
-   | _ -> assert false
-   end".
-
-Extract Constant Compopts.thumb =>
-  "fun _ -> !Clflags.option_mthumb".
+(* SelectOp *)
+Extract Constant SelectOp.symbol_is_external =>
+  "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
 
 Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".
