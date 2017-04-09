@@ -292,6 +292,7 @@ rule initial = parse
   | ";"                           { tok SEMICOLON't (currentLoc lexbuf) }
   | ","                           { tok COMMA't (currentLoc lexbuf) }
   | "."                           { tok DOT't (currentLoc lexbuf) }
+  | "->"                          { tok RARROW't (currentLoc lexbuf) }
   | identifier as id              {
       try Hashtbl.find lexicon id (currentLoc lexbuf)
       with Not_found -> tok VAR_NAME't (makeident id, currentLoc lexbuf) }

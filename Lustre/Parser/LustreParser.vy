@@ -33,7 +33,7 @@ Import ListNotations.
 %token<LustreAst.constant * LustreAst.astloc> CONSTANT
 %token<LustreAst.astloc> TRUE FALSE
 %token<LustreAst.astloc> LEQ GEQ EQ NEQ LT GT PLUS MINUS STAR SLASH COLON COLONCOLON
-%token<LustreAst.astloc> HASH
+%token<LustreAst.astloc> HASH RARROW
 %token<LustreAst.astloc> LSL LSR LAND LXOR LOR LNOT XOR NOT AND OR MOD
 %token<LustreAst.astloc> IF THEN ELSE
 
@@ -295,6 +295,9 @@ expression:
 | loc=IF expr1=expression THEN expr2=expression ELSE expr3=expression
     { LustreAst.IFTE expr1 expr2 expr3 loc }
 | loc=MERGE id=VAR_NAME expr1=primary_expression expr2=primary_expression
+    { LustreAst.MERGE (fst id) expr1 expr2 loc }
+| loc=MERGE id=VAR_NAME LPAREN TRUE RARROW expr1=primary_expression RPAREN
+			LPAREN FALSE RARROW expr2=primary_expression RPAREN
     { LustreAst.MERGE (fst id) expr1 expr2 loc }
 
 (* Declarations are much simpler than in C. We do not have arrays,

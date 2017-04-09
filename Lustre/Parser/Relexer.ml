@@ -48,6 +48,7 @@ let map_token (Specif.Coq_existT (tok, l) : LustreParser.Aut.GramDefs.token) =
   | ONOT't       -> (LustreParser2.ONOT       (loc l), loc l)
   | OR't         -> (LustreParser2.OR         (loc l), loc l)
   | PLUS't       -> (LustreParser2.PLUS       (loc l), loc l)
+  | RARROW't     -> (LustreParser2.RARROW     (loc l), loc l)
   | RETURNS't    -> (LustreParser2.RETURNS    (loc l), loc l)
   | RPAREN't     -> (LustreParser2.RPAREN     (loc l), loc l)
   | SEMICOLON't  -> (LustreParser2.SEMICOLON  (loc l), loc l)
