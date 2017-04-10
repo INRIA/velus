@@ -1,5 +1,5 @@
 
-## local configuration
+## Local configuration
 
 OTAWA_PATH?=/opt/otawa-core
 GCC?=arm-none-eabi-gcc
@@ -20,7 +20,7 @@ CCOMP_EXTRA=-WUl,--specs=nosys.specs
 # Install Lustre v6 from opam following the instructions at
 #   http://www-verimag.imag.fr/Lustre-V6.html
 
-## standard definitions
+## Derived Configuration
 
 VELUS=../velus
 VELUS_OPT=-dobc -dclight -lib
@@ -44,8 +44,13 @@ EXAMPLES= avgvelocity.lus \
 	  cocospec_mono_system.lus \
 	  # new_watch.lus
 
-all: $(EXAMPLES:.lus=.exe)
-wcet: $(EXAMPLES:.lus=.velus.wcet)
+## Main targets
+
+all: velus
+wcet: velus.wcet
+
+velus: $(EXAMPLES:.lus=.exe)
+velus.wcet: $(EXAMPLES:.lus=.velus.wcet)
 
 hept: $(EXAMPLES:.lus=.hept.exe)
 hept.wcet: $(EXAMPLES:.lus=.hept.wcet)
@@ -77,15 +82,15 @@ clean:
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.s.bkp)
 	@rm -f $(EXAMPLES:.lus=.hept.ff.bkp) $(EXAMPLES:.lus=.hept-gcc.ff.bkp)
 	@rm -f $(EXAMPLES:.lus=.lus6.ff.bkp) $(EXAMPLES:.lus=.lus6-gcc.ff.bkp)
-	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.epci)
-	@rm -rf $(EXAMPLES:.lus=_c) $(EXAMPLES:.lus=.mls)
+	@rm -f $(EXAMPLES:.lus=.epci) $(EXAMPLES:.lus=.mls)
+	@rm -rf $(EXAMPLES:.lus=_c)
 	@rm -f lustre_consts.c lustre_consts.h lustre_consts.o lustre_types.h
 	for f in $(EXAMPLES:.lus=); do \
 	    rm -f "$${f}_$${f}.c" "$${f}_$${f}.h" "$${f}_$${f}_loop.c" \
 	    	"$${f}_$${f}.o" "$${f}_$${f}_loop.o"; \
 	done
 
-# rules
+# Rules
 
 %.velus.wcet: %.exe %.ff
 	for f in $$(nm $< | grep fun_ | cut -d ' ' -f 3); do \
