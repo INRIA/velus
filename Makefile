@@ -6,10 +6,10 @@ VELUSMAIN=velusmain
 VELUS=velus
 
 # CompCert flags
-COMPCERTDIR=CompCert
+include Makefile.config
+include $(COMPCERTDIR)/Makefile.config
 COMPCERTFLAGS=$(SILENT) -C $(COMPCERTDIR)
-COMPCERTTARGET=ia32-linux
-COMPCERT_INCLUDES=lib cfrontend backend common driver ia32 cparser debug #arm powerpc
+COMPCERT_INCLUDES=lib cfrontend backend common driver cparser debug $(ARCH)
 
 PARSERDIR=Lustre/Parser
 PARSERFLAGS=$(SILENT) -C $(PARSERDIR)
@@ -64,9 +64,6 @@ endif
 compcert: $(COMPCERTDIR)/Makefile.config
 	@echo "${bold}Building CompCert...${normal}"
 	$(MAKE) $(COMPCERTFLAGS) #compcert.ini driver/Version.ml proof
-
-$(COMPCERTDIR)/Makefile.config:
-	cd $(COMPCERTDIR); ./configure $(COMPCERTTARGET)
 
 # LUSTRE PARSER
 parser:

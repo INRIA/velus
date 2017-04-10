@@ -1,0 +1,43 @@
+#!/bin/sh
+
+coqproject=_CoqProject
+compcertdir=CompCert
+
+# Parse command-line arguments
+
+while : ; do
+  case "$1" in
+    "") break;;
+    -compcertdir|--compcertdir)
+        compcertdir="$2"; shift;;
+    -prefix|--prefix)
+        prefix="-prefix $2"; shift;;
+    -bindir|--bindir)
+        bindir="-bindir $2"; shift;;
+    -libdir|--libdir)
+        libdir=-"libdir $2"; shift;;
+    -toolprefix|--toolprefix)
+        toolprefix=-"toolprefix $2"; shift;;
+    -no-runtime-lib)
+        runtime_lib="-no-runtime-lib";;
+    -no-standard-headers)
+        standard_headers="-no-standard-headers";;
+    -clightgen)
+        clightgen="-clightgen";;
+    *)
+        target="$1";;
+  esac
+  shift
+done
+
+echo "COMPCERTDIR=$compcertdir" > Makefile.config
+
+cd "$compcertdir"
+./configure $prefix $bindir $libdir $toolprefix $runtime_lib $standard_headers $clightgen $target
+export $(cat Makefile.config | grep ARCH)
+cd ..
+
+sed "s/\(.*\)/-R $compcertdir\/\1 compcert.\1/" < includes > $coqproject
+echo -e "-R $compcertdir/$ARCH compcert.$ARCH" >> $coqproject
+echo "-R . Velus" >> $coqproject
+cat vfiles >> $coqproject
