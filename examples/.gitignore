@@ -7,3 +7,6 @@
 *.epci
 *.mls
 *_c
+.sh
+*.sh
+*.h
