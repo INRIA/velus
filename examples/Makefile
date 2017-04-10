@@ -1,3 +1,4 @@
+.PRECIOUS: %.s
 
 ## Local configuration
 
@@ -77,13 +78,14 @@ clean:
 	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
 	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.sync.c)
 	@rm -f $(EXAMPLES:.lus=.sync.bkp) $(EXAMPLES:.lus=.ff.bkp)
-	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.o)
+	@rm -f $(EXAMPLES:.lus=.o)
 	@rm -f $(EXAMPLES:.lus=.sync.o) $(EXAMPLES:.lus=.sync.c.bkp)
 	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.s.bkp)
 	@rm -f $(EXAMPLES:.lus=.hept.ff.bkp) $(EXAMPLES:.lus=.hept-gcc.ff.bkp)
 	@rm -f $(EXAMPLES:.lus=.lus6.ff.bkp) $(EXAMPLES:.lus=.lus6-gcc.ff.bkp)
 	@rm -f $(EXAMPLES:.lus=.epci) $(EXAMPLES:.lus=.mls)
-	@rm -f $(EXAMPLES:.lus=.hept-gcc.s) $(EXAMPLES:.lus=.lus6-gcc.s)
+	@rm -f $(EXAMPLES:.lus=.hept.s) $(EXAMPLES:.lus=.hept-gcc.s)
+	@rm -f $(EXAMPLES:.lus=.lus6.s) $(EXAMPLES:.lus=.lus6-gcc.s)
 	@rm -rf $(EXAMPLES:.lus=_c)
 	@rm -f lustre_consts.c lustre_consts.h lustre_consts.o lustre_types.h
 	for f in $(EXAMPLES:.lus=); do \
@@ -140,9 +142,11 @@ clean:
 	$(CCOMP) -v $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
 	    -o $@ $(@:.exe=.sync.c) $<
 
-%.hept.exe: %.lus
+%.hept.exe %.hept.s: %.lus
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
+	 $(CCOMP) -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept.s) \
+		 $(<:.lus=).c; \
 	 $(CCOMP) -stdlib $(COMPCERT) \
 		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \
 		 -I $(HEPT_PATH)/lib/c -o ../$@ \
@@ -151,16 +155,16 @@ clean:
 %.hept-gcc.exe %.hept-gcc.s: %.lus
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
-	 $(GCC) -O2 -S -I $(HEPT_PATH)/lib/c \
-		 $(<:.lus=)_types.c $(<:.lus=).c _main.c; \
-	 cp $(<:.lus=.s) ../$(<:.lus=.hept-gcc.s); \
+	 $(GCC) -O2 -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept-gcc.s) \
+		 $(<:.lus=).c; \
 	 $(GCC) -O2 --specs=nosys.specs \
 	 	-I $(HEPT_PATH)/lib/c -o ../$@ \
 		 $(<:.lus=)_types.c $(<:.lus=).c _main.c)
 
-%.lus6.exe: %.lus
+%.lus6.exe %.lus6.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
 	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
+	 $(CCOMP) -S -o $(<:.lus=.lus6.s) $(<:.lus=)_$(<:.lus=).c; \
 	 $(CCOMP) -stdlib $(COMPCERT) \
 		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \
 		 -o $@ lustre_consts.c \
