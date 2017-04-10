@@ -30,6 +30,8 @@ COMPCERT=$(realpath ../CompCert)
 CCOMP=$(COMPCERT)/ccomp
 CCOMP_OPT=-stdlib $(COMPCERT)/runtime
 
+GCC_FLAGS=-mfloat-abi=hard
+
 EXAMPLES= avgvelocity.lus \
 	  count.lus \
 	  cruise.lus \
@@ -156,10 +158,10 @@ clean:
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
 	 $(GCC) -O2 -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept-gcc.s) \
-		 $(<:.lus=).c; \
+		 $(GCC_FLAGS) $(<:.lus=).c; \
 	 $(GCC) -O2 --specs=nosys.specs \
 	 	-I $(HEPT_PATH)/lib/c -o ../$@ \
-		 $(<:.lus=)_types.c $(<:.lus=).c _main.c)
+		 $(GCC_FLAGS) $(<:.lus=)_types.c $(<:.lus=).c _main.c)
 
 %.lus6.exe %.lus6.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
@@ -173,7 +175,7 @@ clean:
 %.lus6-gcc.exe %.lus6-gcc.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
 	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
-	 $(GCC) -O2 -o $(<:.lus=.lus6-gcc.s) -S $(<:.lus=)_$(<:.lus=).c
-	 $(GCC) -O2 --specs=nosys.specs -o $@ lustre_consts.c \
+	 $(GCC) -O2 -o $(<:.lus=.lus6-gcc.s) -S $(GCC_FLAGS) $(<:.lus=)_$(<:.lus=).c
+	 $(GCC) -O2 --specs=nosys.specs -o $@ lustre_consts.c $(GCC_FLAGS) \
 		$(<:.lus=)_$(<:.lus=).c $(<:.lus=)_$(<:.lus=)_loop.c
 
