@@ -46,22 +46,6 @@ let
    pre_remaining_delay = 0 fby (remaining_delay - 1);
 tel
 
-node watchdog3 (set, vreset, time_unit: bool;
-                delay: int)
-   returns (alarm: bool);
-var clock: bool;
-    vinit, pre_alarm : bool;
-    r : bool when clock;
-let
-   r = watchdog2(set when clock,
-                 vreset when clock,
-                 delay when clock);
-   alarm = merge clock (true -> r) (false -> pre_alarm when not clock);
-   pre_alarm = false fby alarm;
-   clock = vinit or set or vreset or time_unit;
-   vinit = true fby false;
-tel
-
 node simple_stopwatch (start_stop, vreset, hs: bool)
    returns (time: int; running: bool);
 var vinit, pre_running : bool;
@@ -133,5 +117,21 @@ let
    vstate_1 = switch_1(von, voff, vinit);
    ok = (vstate = vstate_1);
    assert not(von and voff);
+tel
+
+node watchdog3 (set, vreset, time_unit: bool;
+                delay: int)
+   returns (alarm: bool);
+var clock: bool;
+    vinit, pre_alarm : bool;
+    r : bool when clock;
+let
+   r = watchdog2(set when clock,
+                 vreset when clock,
+                 delay when clock);
+   alarm = merge clock (true -> r) (false -> pre_alarm when not clock);
+   pre_alarm = false fby alarm;
+   clock = vinit or set or vreset or time_unit;
+   vinit = true fby false;
 tel
 

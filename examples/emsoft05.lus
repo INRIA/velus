@@ -2,6 +2,18 @@
    "a conservative extension of synchronous data-flow with vstate machines",
    colaço, pagano, and pouzet, emsoft 2005 *)
 
+node two(x : bool) returns (o : int);
+var o2 : int when ck;
+    o_1 : int;
+    ck, ns : bool;
+let
+  o2 = o_1 when ck;
+  o = merge ck (true -> o2) (false -> 0 when not ck);
+  ns = merge ck (true -> not x when ck) (false -> x when not ck);
+  o_1 = 0 fby o;
+  ck = false fby ns;
+tel
+
 node chrono(stst, rst : bool) returns (disp_1, disp_2 : int)
 var run, r_2, nr_2, r_1, ns_2, ck, v_3, ck_2 : bool;
     v : bool when not ck;
@@ -38,17 +50,5 @@ let
   ck = false fby ns_2;
   v_3 = false fby run;
   v_12 = 0 fby d;
-tel
-
-node two(x : bool) returns (o : int);
-var o2 : int when ck;
-    o_1 : int;
-    ck, ns : bool;
-let
-  o2 = o_1 when ck;
-  o = merge ck (true -> o2) (false -> 0 when not ck);
-  ns = merge ck (true -> not x when ck) (false -> x when not ck);
-  o_1 = 0 fby o;
-  ck = false fby ns;
 tel
 
