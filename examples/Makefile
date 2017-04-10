@@ -148,13 +148,15 @@ clean:
 		 -I $(HEPT_PATH)/lib/c -o ../$@ \
 		 $(<:.lus=)_types.c $(<:.lus=).c _main.c)
 
-%.hept-gcc.exe: %.lus
+%.hept-gcc.exe %.hept-gcc.s: %.lus
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
-	 $(GCC) -O2 --specs=nosys.specs -Wa,-aln=$(<:.lus=.hept-gcc.s) \
-	 	-I $(HEPT_PATH)/lib/c -o ../$@ \
+	 $(GCC) -O2 -S -I $(HEPT_PATH)/lib/c \
 		 $(<:.lus=)_types.c $(<:.lus=).c _main.c; \
-	 cp $(<:.lus=.hept-gcc.s) ../)
+	 cp $(<:.lus=.s) ../$(<:.lus=.hept-gcc.s); \
+	 $(GCC) -O2 --specs=nosys.specs \
+	 	-I $(HEPT_PATH)/lib/c -o ../$@ \
+		 $(<:.lus=)_types.c $(<:.lus=).c _main.c)
 
 %.lus6.exe: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
@@ -164,10 +166,10 @@ clean:
 		 -o $@ lustre_consts.c \
 		 $(<:.lus=)_$(<:.lus=).c $(<:.lus=)_$(<:.lus=)_loop.c
 
-%.lus6-gcc.exe: %.lus
+%.lus6-gcc.exe %.lus6-gcc.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
 	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
-	 $(GCC) -O2 --specs=nosys.specs -Wa,-aln=$(<:.lus=.lus6-gcc.s) \
-	     	-o $@ lustre_consts.c \
+	 $(GCC) -O2 -o $(<:.lus=.lus6-gcc.s) -S $(<:.lus=)_$(<:.lus=).c
+	 $(GCC) -O2 --specs=nosys.specs -o $@ lustre_consts.c \
 		$(<:.lus=)_$(<:.lus=).c $(<:.lus=)_$(<:.lus=)_loop.c
 
