@@ -23,7 +23,12 @@ CCOMP_EXTRA=-WUl,--specs=nosys.specs
 
 ## Derived Configuration
 
-comma = ,
+MAIN_NODES := $(shell cut -d ' ' -f 2 main.txt)
+
+comma := ,
+empty :=
+space := $(empty) $(empty)
+bar := |
 
 ARCH_FLAGS=-mfloat-abi=hard -march=armv7-a -mfpu=vfpv3-d16
 
@@ -107,6 +112,13 @@ clean:
 	    rm -f "$${f}_$${f}.c" "$${f}_$${f}.h" \
 	    	"$${f}_$${f}_loop.c" "$${f}_$${f}.o" "$${f}_$${f}_loop.o"; \
 	done
+
+# Utilities
+
+groupwcet.main:
+	@./groupwcet.ml | \
+	    egrep "^function|$(subst $(space),$(bar),$(MAIN_NODES))" | \
+	    sed -e 's/_step/.step/'
 
 # Rules
 
