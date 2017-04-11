@@ -5,9 +5,12 @@
 VELUSMAIN=velusmain
 VELUS=velus
 
+MAKEFILEAUTO=Makefile.auto
+MAKEFILECONFIG=Makefile.config
+COQPROJECT=_CoqProject
+include $(MAKEFILECONFIG)
+
 # CompCert flags
-include Makefile.config
-include $(COMPCERTDIR)/Makefile.config
 COMPCERTFLAGS=$(SILENT) -C $(COMPCERTDIR)
 COMPCERT_INCLUDES=lib cfrontend backend common driver cparser debug $(ARCH)
 
@@ -16,8 +19,6 @@ PARSERFLAGS=$(SILENT) -C $(PARSERDIR)
 
 TOOLSDIR=tools
 AUTOMAKE=automake
-MAKEFILEAUTO=Makefile.auto
-COQPROJECT=_CoqProject
 
 EXTRACTION=extraction
 EXTRACTED=$(EXTRACTION)/extracted
@@ -43,8 +44,7 @@ TARGET=native
 BUILDDIR=_build
 
 # flag to prevent coqc from taking CompCert directories into account (see Makefile.auto)
-OTHERFLAGS=-exclude-dir $(COMPCERTDIR)
-export OTHERFLAGS
+export OTHERFLAGS=-exclude-dir $(COMPCERTDIR)
 
 bold=$(shell tput bold)
 normal=$(shell tput sgr0)
@@ -71,7 +71,7 @@ parser:
 	$(MAKE) $(PARSERFLAGS) all
 
 # VELUS COQ
-proof: compcert parser $(MAKEFILEAUTO)
+proof: compcert parser $(MAKEFILEAUTO) $(MAKEFILECONFIG)
 	@echo "${bold}Building Velus proof...${normal}"
 	test -f .depend || $(MAKE) -s -f $(MAKEFILEAUTO) depend
 	$(MAKE) -s -f $(MAKEFILEAUTO) all
@@ -123,5 +123,6 @@ clean:
 	ocamlbuild -clean
 
 realclean: clean
+	rm -f $(MAKEFILECONFIG) $(COQPROJECT)
 	$(MAKE) $(COMPCERTFLAGS) $<
 	$(MAKE) $(EXAMPLESFLAGS) $@

@@ -6,12 +6,11 @@
 
 let ident = ['A'-'Z' 'a'-'z' '_' '0'-'9'] ['A'-'Z' 'a'-'z' '0'-'9' '_' '-']*
 let path = (ident '/')* ident
-let lib = (ident '.')* ident
 let blank = [' ' '\t']
 
 rule scan = parse
   | '\n' { Lexing.new_line lexbuf; scan lexbuf }
-  | ("-R" blank+ ('.' | path) blank+ lib) as s { libs := s :: !libs; scan lexbuf }
+  | '-' ident blank+ [^ '\n']* as s { libs := s :: !libs; scan lexbuf }
   | (path ".v") as s { files := s :: !files; scan lexbuf }
   | eof { () }
   | _ { scan lexbuf }

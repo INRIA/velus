@@ -30,14 +30,26 @@ while : ; do
   shift
 done
 
-echo "COMPCERTDIR=$compcertdir" > Makefile.config
-
 cd "$compcertdir"
 ./configure $prefix $bindir $libdir $toolprefix $runtime_lib $standard_headers $clightgen $target
 export $(cat Makefile.config | grep ARCH)
 cd ..
 
+echo "COMPCERTDIR=$compcertdir" > Makefile.config
+echo "ARCH=$ARCH" >> Makefile.config
+
+case $ARCH in
+    ia32)
+        EXCLUDES="arm\npowerpc";;
+    arm)
+        EXCLUDES="ia32\npowerpc";;
+    powerpc)
+        EXCLUDES="ia32\narm";;
+    *)
+esac
+
 sed "s/\(.*\)/-R $compcertdir\/\1 compcert.\1/" < includes > $coqproject
-echo -e "-R $compcertdir/$ARCH compcert.$ARCH" >> $coqproject
+echo "-R $compcertdir/$ARCH compcert.$ARCH" >> $coqproject
+echo -e "$EXCLUDES" | sed "s/\(.*\)/-exclude-dir \1/" >> $coqproject
 echo "-R . Velus" >> $coqproject
 cat vfiles >> $coqproject
