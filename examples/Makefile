@@ -40,6 +40,7 @@ EXAMPLES= avgvelocity.lus \
 	  count.lus \
 	  cruise.lus \
 	  emsoft03.lus \
+	  emsoft05.lus \
 	  halbwachs.lus \
 	  kind_functionalChain.lus \
 	  landing_gear.lus \
@@ -77,7 +78,8 @@ realclean: clean
 	@rm -f $(EXAMPLES:.lus=.hept-gcc.exe) $(EXAMPLES:.lus=.hept-gcc.ff)
 	@rm -f $(EXAMPLES:.lus=.lus6.exe) $(EXAMPLES:.lus=.lus6.ff)
 	@rm -f $(EXAMPLES:.lus=.lus6-gcc.exe) $(EXAMPLES:.lus=.lus6-gcc.ff)
-	@rm -f $(EXAMPLES:.lus=.velus.wcet) $(EXAMPLES:.lus=.hept.wcet)
+	@rm -f $(EXAMPLES:.lus=.velus.wcet)
+	@rm -f $(EXAMPLES:.lus=.hept.wcet) $(EXAMPLES:.lus=.hept-gcc.wcet)
 	@rm -f $(EXAMPLES:.lus=.lus6.wcet) $(EXAMPLES:.lus=.lus6-gcc.wcet)
 
 clean:
@@ -92,11 +94,15 @@ clean:
 	@rm -f $(EXAMPLES:.lus=.epci) $(EXAMPLES:.lus=.mls)
 	@rm -f $(EXAMPLES:.lus=.hept.s) $(EXAMPLES:.lus=.hept-gcc.s)
 	@rm -f $(EXAMPLES:.lus=.lus6.s) $(EXAMPLES:.lus=.lus6-gcc.s)
-	@rm -rf $(EXAMPLES:.lus=_c)
+	@rm -f $(EXAMPLES:.lus=_loop.c) $(EXAMPLES:.lus=_loop.o)
+	@rm -f $(EXAMPLES:.lus=.c) $(EXAMPLES:.lus=.h)
+	@rm -f $(EXAMPLES:.lus=.c) $(EXAMPLES:.lus=.h)
+	@rm -f $(EXAMPLES:.lus=.hept.c) $(EXAMPLES:.lus=.hept-gcc.c)
+	@rm -f $(EXAMPLES:.lus=.lus6.c) $(EXAMPLES:.lus=.lus6-gcc.c)
 	@rm -f lustre_consts.c lustre_consts.h lustre_consts.o lustre_types.h
-	for f in $(EXAMPLES:.lus=); do \
-	    rm -f "$${f}_$${f}.c" "$${f}_$${f}.h" "$${f}_$${f}_loop.c" \
-	    	"$${f}_$${f}.o" "$${f}_$${f}_loop.o"; \
+	@for f in $(EXAMPLES:.lus=); do \
+	    rm -f "$${f}_$${f}.c" "$${f}_$${f}.h" \
+	    	"$${f}_$${f}_loop.c" "$${f}_$${f}.o" "$${f}_$${f}_loop.o"; \
 	done
 
 # Rules
@@ -162,9 +168,9 @@ clean:
 %.hept-gcc.exe %.hept-gcc.c %.hept-gcc.s: %.lus
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
-	 $(GCC) -v -O2 -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept-gcc.s) \
+	 $(GCC) -v -O1 -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept-gcc.s) \
 		 $(GCC_FLAGS) $(<:.lus=).c; \
-	 $(GCC) -v -O2 --specs=nosys.specs \
+	 $(GCC) -v -O1 --specs=nosys.specs \
 		-I $(HEPT_PATH)/lib/c -o ../$@ \
 		 $(GCC_FLAGS) $(<:.lus=_types.c) $(<:.lus=.c) _main.c; \
 	 cp $(<:.lus=.c) ../$(<:.lus=.hept-gcc.c))
@@ -182,8 +188,8 @@ clean:
 %.lus6-gcc.exe %.lus6-gcc.c %.lus6-gcc.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
 	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
-	 $(GCC) -v -O2 -o $(<:.lus=.lus6-gcc.s) -S $(GCC_FLAGS) $(<:.lus=).c
-	 $(GCC) -v -O2 --specs=nosys.specs -o $@ lustre_consts.c $(GCC_FLAGS) \
+	 $(GCC) -v -O1 -o $(<:.lus=.lus6-gcc.s) -S $(GCC_FLAGS) $(<:.lus=).c
+	 $(GCC) -v -O1 --specs=nosys.specs -o $@ lustre_consts.c $(GCC_FLAGS) \
 		$(<:.lus=).c $(<:.lus=)_loop.c
 	 cp $(<:.lus=.c) $(<:.lus=.lus6-gcc.c)
 
