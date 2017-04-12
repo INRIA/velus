@@ -27,6 +27,7 @@ V?=
 ## Derived Configuration
 
 MAIN_NODES := $(shell cut -d ' ' -f 2 main.txt)
+MAIN_NODES_SHORT := $(shell sed -e 's/.* [^.]*\.\(.*\)_step/\1/' main.txt)
 
 comma := ,
 empty :=
@@ -123,6 +124,7 @@ clean:
 	    rm -f "$${f}_$${f}.c" "$${f}_$${f}.h" \
 	    	"$${f}_$${f}_loop.c" "$${f}_$${f}.o" "$${f}_$${f}_loop.o"; \
 	done
+	@rm -f $(MAIN_NODES_SHORT:=.sh)
 
 # Utilities
 
