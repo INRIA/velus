@@ -149,6 +149,12 @@ groupwcet:
 	    egrep "^function|$(subst $(space),$(bar),$(MAIN_NODES))" | \
 	    sed -e 's/_step/.step/' | column -t
 
+groupwcet.latex:
+	@$(MAKE) --silent groupwcet \
+	    | sed -e 's/^\(.*\)\.\(.*\)\.step/\2/' \
+	    	  -e 's/  */ \& /g' \
+		  -e 's/$$/ \\\\/'
+
 rename-inlining: rename-inlining.lus6 rename-inlining.hept
 
 rename-inlining.lus6:
