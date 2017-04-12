@@ -12,6 +12,9 @@ HEPT_FLAGS?=-stdlib $(HEPT_PATH)/lib -memalloc
 # For building ARM executables
 CCOMP_EXTRA=-WUl,--specs=nosys.specs
 
+# Verbose or not
+V?=
+
 # Compiling with Lustre requires both the v4 and v6 distributions
 #
 # Configure Lustre v4 as usual (see distribution README):
@@ -166,15 +169,15 @@ groupwcet.main:
 	sed -i.bkp -e 's/\$$/_/g' $@
 
 %.exe: %.s
-	$(CCOMP) -v $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
+	$(CCOMP) $(V) $(CCOMP_OPT) -Wl,-emain_sync $(CCOMP_EXTRA) \
 	    -o $@ $(@:.exe=.sync.c) $<
 
 %.hept.exe %.hept.c %.hept.s: %.lus
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
-	 $(CCOMP) -v $(CCOMP_OPT) -S -I $(HEPT_PATH)/lib/c \
+	 $(CCOMP) $(V) $(CCOMP_OPT) -S -I $(HEPT_PATH)/lib/c \
 		 -o ../$(<:.lus=.hept.s) $(<:.lus=).c; \
-	 $(CCOMP) -v $(CCOMP_OPT) \
+	 $(CCOMP) $(V) $(CCOMP_OPT) \
 		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \
 		 -I $(HEPT_PATH)/lib/c -o ../$@ \
 		 $(<:.lus=_types.c) $(<:.lus=.c) _main.c; \
@@ -183,9 +186,9 @@ groupwcet.main:
 %.hept-gcc.exe %.hept-gcc.c %.hept-gcc.s: %.lus
 	$(HEPT_PATH)/heptc $(HEPT_FLAGS) -s $(<:.lus=) -target c $<
 	(cd $(<:.lus=_c); \
-	 $(GCC) -v -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept-gcc.s) \
+	 $(GCC) $(V) -S -I $(HEPT_PATH)/lib/c -o ../$(<:.lus=.hept-gcc.s) \
 		 $(GCC_FLAGS) $(<:.lus=).c; \
-	 $(GCC) -v --specs=nosys.specs \
+	 $(GCC) $(V) --specs=nosys.specs \
 		-I $(HEPT_PATH)/lib/c -o ../$@ \
 		 $(GCC_FLAGS) $(<:.lus=_types.c) $(<:.lus=.c) _main.c; \
 	 cp $(<:.lus=.c) ../$(<:.lus=.hept-gcc.c))
@@ -193,9 +196,9 @@ groupwcet.main:
 %.lus6.exe %.lus6.c %.lus6.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
 	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
-	 $(CCOMP) -v $(CCOMP_OPT) -S -o \
+	 $(CCOMP) $(V) $(CCOMP_OPT) -S -o \
 		 $(<:.lus=.lus6.s) $(<:.lus=).c; \
-	 $(CCOMP) -v $(CCOMP_OPT) \
+	 $(CCOMP) $(V) $(CCOMP_OPT) \
 		 -WUl,-L$(COMPCERT)/runtime $(CCOMP_EXTRA) \
 		 -o $@ lustre_consts.c $(<:.lus=).c $(<:.lus=)_loop.c
 	 cp $(<:.lus=.c) $(<:.lus=.lus6.c)
@@ -203,8 +206,8 @@ groupwcet.main:
 %.lus6-gcc.exe %.lus6-gcc.c %.lus6-gcc.s: %.lus
 	-lus2lic -2c -o $(<:.lus=.c) \
 	    -n $$(sed -ne  's/^node \([^ (]*\).*/\1/p' <$< | tail -1) $<
-	 $(GCC) -v -o $(<:.lus=.lus6-gcc.s) -S $(GCC_FLAGS) $(<:.lus=).c
-	 $(GCC) -v --specs=nosys.specs -o $@ lustre_consts.c $(GCC_FLAGS) \
+	 $(GCC) $(V) -o $(<:.lus=.lus6-gcc.s) -S $(GCC_FLAGS) $(<:.lus=).c
+	 $(GCC) $(V) --specs=nosys.specs -o $@ lustre_consts.c $(GCC_FLAGS) \
 		$(<:.lus=).c $(<:.lus=)_loop.c
 	 cp $(<:.lus=.c) $(<:.lus=.lus6-gcc.c)
 
