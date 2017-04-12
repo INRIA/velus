@@ -44,10 +44,10 @@ CCOMP=$(COMPCERT)/ccomp
 CCOMP_OPT=-stdlib $(COMPCERT)/runtime \
 	    -Wa$(comma)$(subst $(space),$(comma),$(ARCH_FLAGS))
 
-GCC_INLINING?=-fno-inline-functions \
+GCC_NOINLINING?=-fno-inline-functions \
 	      -fno-inline-functions-called-once \
 	      -fno-inline-small-functions
-GCC_FLAGS=-O1 $(GCC_INLINING) $(ARCH_FLAGS)
+GCC_FLAGS=-O1 $(GCC_NOINLINING) $(ARCH_FLAGS)
 
 OWCET_FLAGS=--script trivial
 
@@ -128,15 +128,37 @@ clean:
 
 # Utilities
 
-groupwcet.main:
+wcet-help:
+	@echo "# Preparation:"
+	@echo "git format-patch -1 heptagon-hacks"
+	@echo "git format-patch -1 idiv-hacks"
+	@echo "patch -p2 < 0001-Avoid-integer-division-and-modulo-operators.patch"
+	@echo "# WCET builds:"
+	@echo "1. make realclean"
+	@echo "2. patch -p2 < 0001-Patch-to-compile-examples-with-Heptagon.patch"
+	@echo "3. make hept.wcet"
+	@echo "4. make clean GCC_NOINLINING= hept-gcc.wcet rename-inlining.hept"
+	@echo "5. make clean hept-gcc.wcet"
+	@echo "6. git checkout *.lus; patch -p2 < 0001-Avoid-integer-division-and-modulo-operators.patch"
+	@echo "7. make clean GCC_NOINLINING= lus6-gcc.wcet rename-inlining.lus6"
+	@echo "8. make clean velus.wcet lus6.wcet lus6-gcc.wcet"
+	@echo "9. make groupwcet"
+
+groupwcet:
 	@./groupwcet.ml | \
 	    egrep "^function|$(subst $(space),$(bar),$(MAIN_NODES))" | \
 	    sed -e 's/_step/.step/' | column -t
 
-rename-inlining:
+rename-inlining: rename-inlining.lus6 rename-inlining.hept
+
+rename-inlining.lus6:
 	@for f in $(EXAMPLES:.lus=); do \
 	    [ -e $$f.lus6-gcc.wcet ] && mv $$f.lus6-gcc.wcet $$f.lus6-gcci.wcet; \
 	    [ -e $$f.lus6-gcc.exe  ] && mv $$f.lus6-gcc.exe  $$f.lus6-gcci.exe;  \
+	done
+
+rename-inlining.hept:
+	@for f in $(EXAMPLES:.lus=); do \
 	    [ -e $$f.hept-gcc.wcet ] && mv $$f.hept-gcc.wcet $$f.hept-gcci.wcet; \
 	    [ -e $$f.hept-gcc.exe  ] && mv $$f.hept-gcc.exe  $$f.hept-gcci.exe;  \
 	done
