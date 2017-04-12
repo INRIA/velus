@@ -7,7 +7,7 @@ GCC?=arm-none-eabi-gcc
 
 # Requires lustre-compat branch
 HEPT_PATH?=$(HOME)/Projects/heptagon-working
-HEPT_FLAGS?=-stdlib $(HEPT_PATH)/lib -O
+HEPT_FLAGS?=-stdlib $(HEPT_PATH)/lib -memalloc
 
 # For building ARM executables
 CCOMP_EXTRA=-WUl,--specs=nosys.specs
