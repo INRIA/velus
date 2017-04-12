@@ -43,10 +43,10 @@ CCOMP=$(COMPCERT)/ccomp
 CCOMP_OPT=-stdlib $(COMPCERT)/runtime \
 	    -Wa$(comma)$(subst $(space),$(comma),$(ARCH_FLAGS))
 
-GCC_FLAGS=-O1 -fno-inline-functions \
+GCC_INLINING?=-fno-inline-functions \
 	      -fno-inline-functions-called-once \
-	      -fno-inline-small-functions \
-	      $(ARCH_FLAGS)
+	      -fno-inline-small-functions
+GCC_FLAGS=-O1 $(GCC_INLINING) $(ARCH_FLAGS)
 
 EXAMPLES= avgvelocity.lus \
 	  count.lus \
