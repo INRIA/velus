@@ -74,6 +74,7 @@ let print_header () =
   printf "\n"
 
 let print_data () =
+  exts := ("velus" :: (List.filter (fun s -> s <> "velus") !exts));
   print_header ();
   List.iter print_function (wcet_list ())
 
