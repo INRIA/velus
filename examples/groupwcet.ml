@@ -15,14 +15,22 @@ let re_wcetline = Str.regexp "WCET\\[\\(.*\\)\\] *= *\\([0-9]*\\) *cycles"
 (* expected number of function timings (per group) *)
 let exp_num_functions = 200
 
+let main_ext = "velus"
+let calc_percentages = true
+
 module Hash = Hashtbl.Make (struct include String let hash = Hashtbl.hash end)
 
 let wcet = (Hash.create exp_num_functions : int Hash.t Hash.t)
 let exts = ref ([] : string list)
 
+let name_compare s1 s2 =
+  if s1 = main_ext then (if s2 = main_ext then 0 else -1)
+  else if s2 = main_ext then 1
+  else String.compare s1 s2
+
 let add_ext ext =
   if List.mem ext !exts then ()
-  else exts := List.sort String.compare (ext::!exts)
+  else exts := List.sort name_compare (ext::!exts)
 
 let wcet_add ext fname v =
   let fhash =
@@ -57,8 +65,19 @@ let read_file path =
        (add_ext ext; read_lines ext (open_in path))
 
 let print_function fname =
-  let print_value data ext =
-    printf " %s" (try string_of_int (Hash.find data ext) with Not_found -> "?")
+  let print_value data =
+    let mv = try Some (Hash.find data main_ext) with Not_found -> None in
+    fun ext ->
+      try
+        let v = Hash.find data ext in
+        printf " %d" v;
+        if calc_percentages && ext <> main_ext then
+          printf " %s"
+            (match mv with
+             | None -> " ?"
+             | Some mv -> (string_of_int (((mv - v) * 100) / v)));
+      with Not_found ->
+        (printf " ?"; if calc_percentages then printf " ?")
   in
   try
     let data = Hash.find wcet fname in
@@ -69,12 +88,15 @@ let print_function fname =
     eprintf "no data for '%s'\n" fname
 
 let print_header () =
+  let double_name ext =
+    printf " %s" ext; if ext <> main_ext then printf " %%"
+  in
+  let print_name = if calc_percentages then double_name else printf " %s" in
   printf "function";
-  List.iter (printf " %s") !exts;
+  List.iter print_name !exts;
   printf "\n"
 
 let print_data () =
-  exts := ("velus" :: (List.filter (fun s -> s <> "velus") !exts));
   print_header ();
   List.iter print_function (wcet_list ())
 
