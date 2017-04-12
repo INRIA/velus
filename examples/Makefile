@@ -40,7 +40,8 @@ VELUS_OPT=-dobc -dclight -lib
 
 COMPCERT=$(realpath ../CompCert)
 CCOMP=$(COMPCERT)/ccomp
-CCOMP_OPT=-stdlib $(COMPCERT)/runtime $(addprefix "-Wa$(comma)",$(ARCH_FLAGS))
+CCOMP_OPT=-stdlib $(COMPCERT)/runtime \
+	    -Wa$(comma)$(subst $(space),$(comma),$(ARCH_FLAGS))
 
 GCC_FLAGS=-O1 -fno-inline-functions \
 	      -fno-inline-functions-called-once \
@@ -84,32 +85,33 @@ lus6-gcc: $(EXAMPLES:.lus=.lus6-gcc.exe)
 lus6-gcc.wcet: $(EXAMPLES:.lus=.lus6-gcc.wcet)
 
 realclean: clean
-	@rm -f $(EXAMPLES:.lus=.exe) $(EXAMPLES:.lus=.ff)
-	@rm -f $(EXAMPLES:.lus=.hept.exe) $(EXAMPLES:.lus=.hept.ff)
-	@rm -f $(EXAMPLES:.lus=.hept-gcc.exe) $(EXAMPLES:.lus=.hept-gcc.ff)
-	@rm -f $(EXAMPLES:.lus=.lus6.exe) $(EXAMPLES:.lus=.lus6.ff)
-	@rm -f $(EXAMPLES:.lus=.lus6-gcc.exe) $(EXAMPLES:.lus=.lus6-gcc.ff)
+	@rm -f $(EXAMPLES:.lus=.exe)
+	@rm -f $(EXAMPLES:.lus=.hept.exe) $(EXAMPLES:.lus=.hept-gcc.exe)
+	@rm -f $(EXAMPLES:.lus=.lus6.exe) $(EXAMPLES:.lus=.lus6-gcc.exe)
 	@rm -f $(EXAMPLES:.lus=.velus.wcet)
 	@rm -f $(EXAMPLES:.lus=.hept.wcet) $(EXAMPLES:.lus=.hept-gcc.wcet)
 	@rm -f $(EXAMPLES:.lus=.lus6.wcet) $(EXAMPLES:.lus=.lus6-gcc.wcet)
 
 clean:
-	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
-	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.sync.c)
-	@rm -f $(EXAMPLES:.lus=.sync.bkp) $(EXAMPLES:.lus=.ff.bkp)
-	@rm -f $(EXAMPLES:.lus=.o)
-	@rm -f $(EXAMPLES:.lus=.sync.o) $(EXAMPLES:.lus=.sync.c.bkp)
-	@rm -f $(EXAMPLES:.lus=.s) $(EXAMPLES:.lus=.s.bkp)
-	@rm -f $(EXAMPLES:.lus=.hept.ff.bkp) $(EXAMPLES:.lus=.hept-gcc.ff.bkp)
-	@rm -f $(EXAMPLES:.lus=.lus6.ff.bkp) $(EXAMPLES:.lus=.lus6-gcc.ff.bkp)
-	@rm -f $(EXAMPLES:.lus=.epci) $(EXAMPLES:.lus=.mls)
+	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.s)
 	@rm -f $(EXAMPLES:.lus=.hept.s) $(EXAMPLES:.lus=.hept-gcc.s)
 	@rm -f $(EXAMPLES:.lus=.lus6.s) $(EXAMPLES:.lus=.lus6-gcc.s)
-	@rm -f $(EXAMPLES:.lus=_loop.c) $(EXAMPLES:.lus=_loop.o)
-	@rm -f $(EXAMPLES:.lus=.c) $(EXAMPLES:.lus=.h)
-	@rm -f $(EXAMPLES:.lus=.c) $(EXAMPLES:.lus=.h)
+	@rm -f $(EXAMPLES:.lus=.mls) $(EXAMPLES:.lus=.c)
 	@rm -f $(EXAMPLES:.lus=.hept.c) $(EXAMPLES:.lus=.hept-gcc.c)
 	@rm -f $(EXAMPLES:.lus=.lus6.c) $(EXAMPLES:.lus=.lus6-gcc.c)
+	@rm -f $(EXAMPLES:.lus=.hept.ff) $(EXAMPLES:.lus=.hept-gcc.ff)
+	@rm -f $(EXAMPLES:.lus=.lus6.ff) $(EXAMPLES:.lus=.lus6-gcc.ff)
+	@rm -f $(EXAMPLES:.lus=.ff)
+	@rm -f $(EXAMPLES:.lus=.sync.c)
+	@rm -f $(EXAMPLES:.lus=.obc) $(EXAMPLES:.lus=.sn.lus)
+	@rm -f $(EXAMPLES:.lus=.sync.bkp) $(EXAMPLES:.lus=.ff.bkp)
+	@rm -f $(EXAMPLES:.lus=.o) $(EXAMPLES:.lus=.s.bkp)
+	@rm -f $(EXAMPLES:.lus=.sync.o) $(EXAMPLES:.lus=.sync.c.bkp)
+	@rm -f $(EXAMPLES:.lus=.hept.ff.bkp) $(EXAMPLES:.lus=.hept-gcc.ff.bkp)
+	@rm -f $(EXAMPLES:.lus=.lus6.ff.bkp) $(EXAMPLES:.lus=.lus6-gcc.ff.bkp)
+	@rm -f $(EXAMPLES:.lus=.epci) $(EXAMPLES:.lus=.h)
+	@rm -f $(EXAMPLES:.lus=_loop.c) $(EXAMPLES:.lus=_loop.o)
+	@rm -rf $(EXAMPLES:.lus=_c)
 	@rm -f lustre_consts.c lustre_consts.h lustre_consts.o lustre_types.h
 	@for f in $(EXAMPLES:.lus=); do \
 	    rm -f "$${f}_$${f}.c" "$${f}_$${f}.h" \
@@ -121,7 +123,7 @@ clean:
 groupwcet.main:
 	@./groupwcet.ml | \
 	    egrep "^function|$(subst $(space),$(bar),$(MAIN_NODES))" | \
-	    sed -e 's/_step/.step/'
+	    sed -e 's/_step/.step/' | column -t
 
 # Rules
 
