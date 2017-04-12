@@ -48,6 +48,8 @@ GCC_INLINING?=-fno-inline-functions \
 	      -fno-inline-small-functions
 GCC_FLAGS=-O1 $(GCC_INLINING) $(ARCH_FLAGS)
 
+OWCET_FLAGS=--script trivial
+
 EXAMPLES= avgvelocity.lus \
 	  count.lus \
 	  cruise.lus \
@@ -87,10 +89,14 @@ lus6-gcc.wcet: $(EXAMPLES:.lus=.lus6-gcc.wcet)
 realclean: clean
 	@rm -f $(EXAMPLES:.lus=.exe)
 	@rm -f $(EXAMPLES:.lus=.hept.exe) $(EXAMPLES:.lus=.hept-gcc.exe)
+	@rm -f $(EXAMPLES:.lus=.hept-gcci.exe)
 	@rm -f $(EXAMPLES:.lus=.lus6.exe) $(EXAMPLES:.lus=.lus6-gcc.exe)
+	@rm -f $(EXAMPLES:.lus=.lus6-gcci.exe)
 	@rm -f $(EXAMPLES:.lus=.velus.wcet)
 	@rm -f $(EXAMPLES:.lus=.hept.wcet) $(EXAMPLES:.lus=.hept-gcc.wcet)
+	@rm -f $(EXAMPLES:.lus=.hept-gcci.wcet)
 	@rm -f $(EXAMPLES:.lus=.lus6.wcet) $(EXAMPLES:.lus=.lus6-gcc.wcet)
+	@rm -f  $(EXAMPLES:.lus=.lus6-gcci.wcet)
 
 clean:
 	@rm -f $(EXAMPLES:.lus=.light.c) $(EXAMPLES:.lus=.s)
@@ -125,30 +131,38 @@ groupwcet.main:
 	    egrep "^function|$(subst $(space),$(bar),$(MAIN_NODES))" | \
 	    sed -e 's/_step/.step/' | column -t
 
+rename-inlining:
+	@for f in $(EXAMPLES:.lus=); do \
+	    [ -e $$f.lus6-gcc.wcet ] && mv $$f.lus6-gcc.wcet $$f.lus6-gcci.wcet; \
+	    [ -e $$f.lus6-gcc.exe  ] && mv $$f.lus6-gcc.exe  $$f.lus6-gcci.exe;  \
+	    [ -e $$f.hept-gcc.wcet ] && mv $$f.hept-gcc.wcet $$f.hept-gcci.wcet; \
+	    [ -e $$f.hept-gcc.exe  ] && mv $$f.hept-gcc.exe  $$f.hept-gcci.exe;  \
+	done
+
 # Rules
 
 %.velus.wcet: %.exe %.ff
 	for f in $$(nm $< | grep fun_ | cut -d ' ' -f 3); do \
-	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
+	    $(OTAWA_PATH)/bin/owcet $(OWCET_FLAGS) -f $(<:.exe=.ff) $< $$f \
 		| sed -e "s/^\(WCET\[\)fun_/\1$(<:.exe=)./"; \
 	done >$@
 
 %.hept.wcet: %.hept.exe %.hept.ff
 	for f in $$(nm $< | grep -i $(<:.hept.exe=)__ | cut -d ' ' -f 3); do \
-	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
+	    $(OTAWA_PATH)/bin/owcet $(OWCET_FLAGS) -f $(<:.exe=.ff) $< $$f \
 		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept.exe=)./"; \
 	done >$@
 
 %.hept-gcc.wcet: %.hept-gcc.exe %.hept-gcc.ff
 	for f in $$(nm $< | grep -i $(<:.hept-gcc.exe=)__ | cut -d ' ' -f 3); do \
-	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
+	    $(OTAWA_PATH)/bin/owcet $(OWCET_FLAGS) -f $(<:.exe=.ff) $< $$f \
 		| sed -e "s/^\(WCET\[\).*__/\1$(<:.hept-gcc.exe=)./"; \
 	done >$@
 
 %.lus6.wcet: %.lus6.exe %.lus6.ff
 	for f in $$(nm $< | egrep -i "$(<:.lus6.exe=)_.*(step|_ctx_reset)" \
 	  | cut -d ' ' -f 3); do \
-	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
+	    $(OTAWA_PATH)/bin/owcet $(OWCET_FLAGS) -f $(<:.exe=.ff) $< $$f \
 		| sed -e "s/^\(WCET\[\)$(<:.lus6.exe=)_/\1$(<:.lus6.exe=)./" \
 		      -e "s/_ctx_reset/_reset/"; \
 	done >$@
@@ -156,7 +170,7 @@ groupwcet.main:
 %.lus6-gcc.wcet: %.lus6-gcc.exe %.lus6-gcc.ff
 	for f in $$(nm $< | egrep -i "$(<:.lus6-gcc.exe=)_.*(step|_ctx_reset)" \
 	  | cut -d ' ' -f 3); do \
-	    $(OTAWA_PATH)/bin/owcet --script generic -f $(<:.exe=.ff) $< $$f \
+	    $(OTAWA_PATH)/bin/owcet $(OWCET_FLAGS) -f $(<:.exe=.ff) $< $$f \
 		| sed -e "s/^\(WCET\[\)$(<:.lus6-gcc.exe=)_/\1$(<:.lus6-gcc.exe=)./" \
 		      -e "s/_ctx_reset/_reset/"; \
 	done >$@
