@@ -153,6 +153,18 @@ groupwcet.latex:
 	@$(MAKE) --silent groupwcet \
 	    | sed -e 's/^\(.*\)\.\(.*\)\.step/\2/' \
 	    	  -e 's/  */ \& /g' \
+	    	  -e 's/system/pip_ex/g' \
+	    	  -e 's/mode_plus\(_longitudinal\)/mp\1~\\citep{ChampionEtAl:CoCoSpec:2016}/g' \
+	    	  -e 's/\(cruise\)/\1~\\citep{lucy:manual:2006}/g' \
+	    	  -e 's/\(risingedgeretrigger\)/\1~\\citep{ColacoPou:Clocks:2003}/g' \
+	    	  -e 's/\(chrono\)/\1~\\citep{ColacoPagPou:StateMachines:2005}/g' \
+	    	  -e 's/\(watchdog3\)/\1~\\citep{Halbwachs:SyncProg}/g' \
+	    	  -e 's/\(minus\)/\1~\\citep{Raymond:Lustre4:1992}/g' \
+	    	  -e 's/\(ums_verif\)/\1~\\citep{Raymond:Lustre4:1992}/g' \
+		  -e 's/top/functionalchain~\\citep{ChampionEtAl:Kind2:2016}/g' \
+	    	  -e 's/verifymovingitem/prodcell~\\citep{Holenderski:ProdCellLustre:1995}/g' \
+	    	  -e 's/verify/landing_gear~\\citep{BoniolWie:LandingGear:2014}/g' \
+	    	  -e 's/_/\\_/g' \
 		  -e 's/$$/ \\\\/'
 
 rename-inlining: rename-inlining.lus6 rename-inlining.hept
