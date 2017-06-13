@@ -10,7 +10,7 @@ Require Import List.
 
 (** * Well clocked programs *)
 
-(** 
+(**
 
 This family of predicates states that a program is well-clocked
 wrt. its clock annotations.
@@ -78,10 +78,10 @@ Module Type NLCLOCKING
           wc_cexp ce ck ->
           wc_equation (EqDef x ck ce)
     | CEqApp:
-        forall xs ck f les,
-          Forall (fun x=>In (x, ck) vars) xs ->
+        forall xs ck f les r,
+          Forall (fun x => In (x, ck) vars) xs ->
           Forall (fun le => wc_lexp le ck) les ->
-          wc_equation (EqApp xs ck f les)
+          wc_equation (EqApp xs ck f les r)
     | CEqFby:
         forall x ck v0 le,
           In (x, ck) vars ->
@@ -106,8 +106,8 @@ Module Type NLCLOCKING
   Inductive Has_clock_eq: clock -> equation -> Prop :=
   | HcEqDef: forall x ck ce,
       Has_clock_eq ck (EqDef x ck ce)
-  | HcEqApp: forall x f ck les,
-      Has_clock_eq ck (EqApp x ck f les)
+  | HcEqApp: forall x f ck les r,
+      Has_clock_eq ck (EqApp x ck f les r)
   | HcEqFby: forall x v0 ck le,
       Has_clock_eq ck (EqFby x ck v0 le).
 
@@ -132,7 +132,7 @@ Module Type NLCLOCKING
       inversion_clear 1 as [| |? ? ? ck' Hle Hcv | |].
       constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
     - intros ck Hwc; inversion_clear 1; auto.
-    - intros ck Hwc; inversion_clear 1; auto.    
+    - intros ck Hwc; inversion_clear 1; auto.
   Qed.
 
   Lemma wc_clock_cexp:
@@ -209,7 +209,7 @@ Module Type NLCLOCKING
   Qed.
 
   (** Properties *)
-  
+
   Section Well_clocked.
 
     (** We work under a (valid) clocking environment *)
@@ -226,7 +226,7 @@ Module Type NLCLOCKING
     Proof.
       intros eq x' ck' Hwce Hdef Hhasck Hfree.
       inversion Hwce as [x ck e Hcv Hexp Heq
-                        |xs ck f e Hvars Hexp Heq
+                        |xs ck f e r Hvars Hexp Heq
                         |x ck v' e Hcv Hexp].
       - subst eq. inv Hdef. inv Hhasck.
         pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
@@ -282,8 +282,8 @@ Module Type NLCLOCKING
     Qed.
 
     Corollary wc_EqApp_not_Is_free_in_clock:
-      forall xs f le ck,
-        wc_equation vars (EqApp xs ck f le)
+      forall xs f le ck r,
+        wc_equation vars (EqApp xs ck f le r)
         -> forall x, List.In x xs -> ~Is_free_in_clock x ck.
     Proof.
       intros x f le ck Hwce Hwt y Hinx.

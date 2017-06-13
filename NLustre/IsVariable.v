@@ -33,7 +33,7 @@ Module Type ISVARIABLE
 
   Inductive Is_variable_in_eq : ident -> equation -> Prop :=
   | VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
-  | VarEqApp: forall x xs ck f e, List.In x xs -> Is_variable_in_eq x (EqApp xs ck f e).
+  | VarEqApp: forall x xs ck f e r, List.In x xs -> Is_variable_in_eq x (EqApp xs ck f e r).
 
   (* definition is needed in signature *)
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
@@ -50,8 +50,8 @@ Module Type ISVARIABLE
   Qed.
 
   Lemma not_Is_variable_in_EqApp:
-    forall x ys ck f e,
-      ~ Is_variable_in_eq x (EqApp ys ck f e) -> ~ List.In x ys.
+    forall x ys ck f e r,
+      ~ Is_variable_in_eq x (EqApp ys ck f e r) -> ~ List.In x ys.
   Proof. eauto using Is_variable_in_eq. Qed.
 
 
@@ -136,14 +136,14 @@ Module Type ISVARIABLE
   Qed.
 
   Lemma In_EqApp_Is_variable_in_eqs:
-    forall x xs ck f es eqs,
+    forall x xs ck f es eqs r,
       List.In x xs ->
-      In (EqApp xs ck f es) eqs ->
+      In (EqApp xs ck f es r) eqs ->
       Is_variable_in_eqs x eqs.
   Proof.
     induction eqs; inversion_clear 2.
     - now subst; repeat constructor.
-    - constructor(apply IHeqs; eauto).
+    - constructor (eapply IHeqs; eauto).
   Qed.
 
   Lemma n_out_variable_in_eqs:
@@ -165,7 +165,7 @@ Module Type ISVARIABLE
   Fixpoint variable_eq (vars: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x vars
-    | EqApp xs _ _ _ => ps_adds xs vars
+    | EqApp xs _ _ _ _ => ps_adds xs vars
     | EqFby _ _ _ _ => vars
     end.
 
@@ -191,7 +191,7 @@ Module Type ISVARIABLE
           [ intuition
           | destruct eq;
             match goal with
-            | |- context[ EqApp _ _ _ _ ] =>
+            | |- context[ EqApp _ _ _ _ _ ] =>
               generalize ps_adds_spec; intro add_spec
             | _ =>
               generalize PS.add_spec; intro add_spec
@@ -199,14 +199,14 @@ Module Type ISVARIABLE
             try (apply add_spec in H; destruct H);
             match goal with
             | H:x=_ |- _ => rewrite H; simpl; rewrite add_spec; intuition
-            | H: In x ?i |- context [EqApp ?i _ _ _] => simpl; rewrite add_spec; intuition
+            | H: In x ?i |- context [EqApp ?i _ _ _ _] => simpl; rewrite add_spec; intuition
             | _ => apply not_In_empty in H; contradiction
             | _ => intuition
             end ]
         | now
             right; destruct eq;
             match goal with
-            | |- context[ EqApp _ _ _ _ ] =>
+            | |- context[ EqApp _ _ _ _ _ ] =>
               generalize ps_adds_spec; intro add_spec
             | _ =>
               generalize PS.add_spec; intro add_spec
@@ -232,7 +232,7 @@ Module Type ISVARIABLE
       try match goal with
       | |- context Is_variable_in_eq [EqFby _ _ _ _] =>
         right; inversion 1
-      | |- context Is_variable_in_eq [EqApp _ _ _ _] =>
+      | |- context Is_variable_in_eq [EqApp _ _ _ _ _] =>
         edestruct in_dec as [ Hin_xy | Hnin_xy ];
           [ now apply ident_eq_dec
           | now constructor(constructor(eauto))
@@ -286,7 +286,7 @@ Module Type ISVARIABLE
         destruct 1. intuition.
         destruct eq;
           match goal with
-          | |- context[ EqApp _ _ _ _ ] =>
+          | |- context[ EqApp _ _ _ _ _ ] =>
             generalize ps_adds_spec; intro add_spec
           | _ =>
             generalize PS.add_spec; intro add_spec
@@ -298,7 +298,7 @@ Module Type ISVARIABLE
       + intro H; apply List.Exists_cons in H; destruct H.
         destruct eq;
           match goal with
-          | |- context[ EqApp _ _ _ _ ] =>
+          | |- context[ EqApp _ _ _ _ _ ] =>
             generalize ps_adds_spec; intro add_spec
           | _ =>
             generalize PS.add_spec; intro add_spec
@@ -326,7 +326,7 @@ Module Type ISVARIABLE
     split; intro H.
     destruct eq;
       match goal with
-      | |- context[ EqApp _ _ _ _ ] =>
+      | |- context[ EqApp _ _ _ _ _ ] =>
         generalize ps_adds_spec; intro add_spec
       | _ =>
         generalize PS.add_spec; intro add_spec
@@ -337,7 +337,7 @@ Module Type ISVARIABLE
         intuition.
     destruct eq eqn:Heq; simpl in *; destruct H;
       match goal with
-      | _ : _ = EqApp _ _ _ _ |- _ =>
+      | _ : _ = EqApp _ _ _ _ _ |- _ =>
         generalize ps_adds_spec; intro add_spec
       | _ =>
         generalize PS.add_spec; intro add_spec

@@ -89,9 +89,9 @@ Module Type ISFREE
         Is_free_in_caexp i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
-      forall x f ck les i,
-        Is_free_in_laexps i ck les ->
-        Is_free_in_eq i (EqApp x ck f les)
+      forall x f ck les i r,
+        Is_free_in_laexps i ck les \/ (r = Some i) ->
+        Is_free_in_eq i (EqApp x ck f les r)
   | FreeEqFby:
       forall x v ck le i,
         Is_free_in_laexp i ck le ->
@@ -153,7 +153,7 @@ Module Type ISFREE
         rewrite HH; apply PS.add_spec; left; reflexivity.
         apply HF in HH; apply PS.add_spec; right; assumption.
   Defined.
-  
+
   Fixpoint free_in_clock (ck : clock) (fvs: PS.t) : PS.t :=
     match ck with
     | Cbase => fvs
@@ -187,12 +187,17 @@ Module Type ISFREE
 
   Fixpoint free_in_equation (eq: equation) (fvs: PS.t) : PS.t :=
     match eq with
-    | EqDef _ ck cae    => free_in_caexp ck cae fvs
-    | EqApp _ ck f laes => free_in_laexps ck laes fvs
-    | EqFby _ ck v lae  => free_in_laexp ck lae fvs
+    | EqDef _ ck cae      => free_in_caexp ck cae fvs
+    | EqApp _ ck f laes r =>
+      let fvs := free_in_laexps ck laes fvs in
+      match r with
+      | Some x => PS.add x fvs
+      | None => fvs
+      end
+    | EqFby _ ck v lae    => free_in_laexp ck lae fvs
     end.
 
-  (** * Specification lemmas *) 
+  (** * Specification lemmas *)
 
   Lemma free_in_clock_spec:
     forall x ck m, PS.In x (free_in_clock ck m)
@@ -207,7 +212,7 @@ Module Type ISFREE
       + apply IHck; destruct H0 as [H0|H0]; inversion H0;
           solve [right; apply PS.add_spec; intuition | intuition].
   Qed.
-  
+
   Corollary free_in_clock_spec':
     forall x ck, PS.In x (free_in_clock ck PS.empty)
                  <-> Is_free_in_clock x ck.
@@ -248,7 +253,7 @@ Module Type ISFREE
         destruct Hf as [HH|HH]; intuition.
         right. apply IHe1; intuition.
       + apply IHe2; right; apply IHe1; intuition.
-  Qed.          
+  Qed.
 
   Lemma free_in_lexp_spec':
     forall x e, PS.In x (free_in_lexp e PS.empty)
@@ -378,7 +383,7 @@ Module Type ISFREE
                         | intuition]
                        end).
   Qed.
-  
+
   Lemma free_in_caexp_spec':
     forall x ck e, PS.In x (free_in_caexp ck e PS.empty)
                    <-> Is_free_in_caexp x ck e.
@@ -387,11 +392,12 @@ Module Type ISFREE
     intuition not_In_empty.
   Qed.
 
+
   Lemma free_in_equation_spec:
     forall x eq m, PS.In x (free_in_equation eq m)
                    <-> (Is_free_in_eq x eq \/ PS.In x m).
   Proof.
-    destruct eq; split; intro H;
+    Local Ltac aux :=
       repeat (match goal with
               | H:Is_free_in_eq _ _ |- _ => inversion_clear H
               | H:PS.In _ (free_in_equation _ _) |- _ =>
@@ -404,6 +410,23 @@ Module Type ISFREE
                 || apply free_in_laexps_spec
               | _ => intuition
               end).
+
+    destruct eq; split; intro H; aux.
+    - destruct o; aux.
+      simpl in H.
+      apply PS.add_spec in H as [|].
+      + subst; left; constructor; intuition.
+      + apply free_in_laexps_spec in H as [|]; aux.
+    - destruct o; aux.
+      simpl.
+      apply PS.add_spec.
+      rewrite free_in_laexps_spec; intuition.
+    - subst; simpl. now apply PSF.add_1.
+    - destruct o; aux.
+      simpl.
+      apply PS.add_spec.
+      right.
+      rewrite free_in_laexps_spec; intuition.
   Qed.
 
   Lemma free_in_equation_spec':
@@ -424,4 +447,3 @@ Module IsFreeFun
        <: ISFREE Ids Op Clks Syn.
   Include ISFREE Ids Op Clks Syn.
 End IsFreeFun.
-

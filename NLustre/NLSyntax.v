@@ -42,7 +42,7 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : idents -> clock -> ident -> lexps -> equation
+  | EqApp : idents -> clock -> ident -> lexps -> option ident -> equation
   | EqFby : ident -> clock -> const -> lexp -> equation.
 
   Implicit Type eqn: equation.
@@ -63,7 +63,7 @@ Module Type NLSYNTAX
   Definition var_defined (eq: equation) : idents :=
     match eq with
     | EqDef x _ _ => [x]
-    | EqApp x _ _ _ => x
+    | EqApp x _ _ _ _ => x
     | EqFby x _ _ _ => [x]
     end.
 
@@ -78,7 +78,7 @@ Module Type NLSYNTAX
 
   Definition is_app (eq: equation) : bool :=
     match eq with
-    | EqApp _ _ _ _ => true
+    | EqApp _ _ _ _ _ => true
     | _ => false
     end.
 
@@ -150,8 +150,8 @@ Module Type NLSYNTAX
   Qed.
 
   Lemma vars_defined_EqApp:
-    forall xs ck f es eqs,
-      vars_defined (EqApp xs ck f es :: eqs) = xs ++ vars_defined eqs.
+    forall xs ck f es r eqs,
+      vars_defined (EqApp xs ck f es r :: eqs) = xs ++ vars_defined eqs.
   Proof.
     unfold vars_defined.
     intros. rewrite concatMap_cons.

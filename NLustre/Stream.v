@@ -40,20 +40,23 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   (* With auxiliary hold function. *)
 
-  Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
+  Fixpoint hold (r: stream bool) (v0: val) (xs: stream value) (n: nat) : val :=
     match n with
     | 0 => v0
-    | S m => match xs m with
-            | absent => hold v0 xs m
-            | present hv => hv
-            end
+    | S m =>
+      if r n then v0 else
+        match xs m with
+        | absent => hold r v0 xs m
+        | present hv => hv
+        end
     end.
 
-  Definition fby (v0: val) (xs: stream value) (n: nat) : value :=
-    match xs n with
-    | absent => absent
-    | _ => present (hold v0 xs n)
-    end.
+  Definition fby (r: stream bool) (v0: val) (xs: stream value) : stream value :=
+    fun n =>
+      match xs n with
+      | absent => absent
+      | _ => present (hold r v0 xs n)
+      end.
 
   (** ** Properties *)
 

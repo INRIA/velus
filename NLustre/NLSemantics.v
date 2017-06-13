@@ -131,14 +131,14 @@ environment.
 
     Inductive sem_laexp_instant: clock -> lexp -> value -> Prop:=
     | SLtick:
-        forall ck ce c,
-          sem_lexp_instant ce (present c) ->
+        forall ck le c,
+          sem_lexp_instant le (present c) ->
           sem_clock_instant ck true ->
-          sem_laexp_instant ck ce (present c)
+          sem_laexp_instant ck le (present c)
     | SLabs:
-        forall ck ce,
+        forall ck le,
           sem_clock_instant ck false ->
-          sem_laexp_instant ck ce absent.
+          sem_laexp_instant ck le absent.
 
     Inductive sem_laexps_instant: clock -> lexps -> list value -> Prop:=
     | SLticks:
@@ -207,10 +207,10 @@ environment.
           sem_caexp_instant ck cae absent ->
           rhs_absent_instant (EqDef x ck cae)
     | AEqApp:
-        forall x f ck laes vs,
+        forall x f ck laes vs r,
           sem_laexps_instant ck laes vs ->
           Forall (fun c => c = absent) vs ->
-          rhs_absent_instant (EqApp x ck f laes)
+          rhs_absent_instant (EqApp x ck f laes r)
     | AEqFby:
         forall x ck v0 lae,
           sem_laexp_instant ck lae absent ->
@@ -285,28 +285,60 @@ environment.
     forall n,
       present_list (xss n) <-> bs n = true.
 
-  Inductive sem_equation G : stream bool -> history -> equation -> Prop :=
+  Definition sfalse : stream bool := fun n => false.
+
+  Definition reset_of (xs: stream value) : stream bool :=
+    fun n =>
+      match xs n with
+      | present x => x ==b true_val
+      | _ => false
+      end.
+  Definition reset_of' (xs: stream value) (bs: stream bool) : Prop :=
+    forall n,
+      xs n = present true_val <-> bs n = true.
+  Lemma reset_of_equiv:
+    forall xs, reset_of' xs (reset_of xs).
+  Proof.
+    split; intros H.
+    - unfold reset_of; now rewrite H, equiv_decb_refl.
+    - unfold reset_of in H.
+      destruct (xs n); try discriminate.
+      rewrite equiv_decb_equiv in H.
+      now rewrite H.
+  Qed.
+
+  Definition merge_reset (rs rs': stream bool) : stream bool :=
+    fun n => rs n || rs' n.
+
+  Inductive sem_equation G : stream bool -> stream bool -> history -> equation -> Prop :=
   | SEqDef:
-      forall bk H x xs ck ce,
+      forall bk r H x xs ck ce,
         sem_var bk H x xs ->
         sem_caexp bk H ck ce xs ->
-        sem_equation G bk H (EqDef x ck ce)
+        sem_equation G bk r H (EqDef x ck ce)
   | SEqApp:
-      forall bk H x ck f arg ls xs,
+      forall bk r H x ck f arg ls xs,
         sem_laexps bk H ck arg ls ->
         sem_vars bk H x xs ->
-        sem_node G f ls xs ->
-        sem_equation G bk H (EqApp x ck f arg)
-  | SEqFby:
-      forall bk H x ls xs c0 ck le,
+        sem_node G r f ls xs ->
+        sem_equation G bk r H (EqApp x ck f arg None)
+   | SEqReset:
+      forall bk r H x ck f arg y ys ls xs,
+        sem_laexps bk H ck arg ls ->
+        sem_vars bk H x xs ->
+        sem_var bk H y ys ->
+        sem_node G (merge_reset r (reset_of ys)) f ls xs ->
+        sem_equation G bk r H (EqApp x ck f arg (Some y))
+   | SEqFby:
+      forall bk r H x ls xs c0 ck le,
         sem_laexp bk H ck le ls ->
         sem_var bk H x xs ->
-        xs = fby (sem_const c0) ls ->
-        sem_equation G bk H (EqFby x ck c0 le)
+        xs = fby r (sem_const c0) ls ->
+        sem_equation G bk r H (EqFby x ck c0 le)
 
-  with sem_node G: ident -> stream (list value) -> stream (list value) -> Prop :=
+  with sem_node G: stream bool -> ident -> stream (list value) -> stream (list value) -> Prop :=
        | SNode:
-           forall bk f xss yss i o v eqs ingt0 outgt0 defd vout nodup good,
+           forall bk r f xss yss i o v eqs ingt0 outgt0 defd vout nodup good,
              clock_of xss bk ->
              find_node f G = Some (mk_node f i o v eqs
                                            ingt0 outgt0 defd vout nodup good) ->
@@ -321,11 +353,11 @@ environment.
                  /\ (forall n,
                        absent_list (xss n) <-> absent_list (yss n))
                  (* XXX: END *)
-                 /\ Forall (sem_equation G bk H) eqs) ->
-             sem_node G f xss yss.
+                 /\ Forall (sem_equation G bk r H) eqs) ->
+             sem_node G r f xss yss.
 
   Definition sem_nodes (G: global) : Prop :=
-    Forall (fun no => exists xs ys, sem_node G no.(n_name) xs ys) G.
+    Forall (fun no => exists xs ys, sem_node G sfalse no.(n_name) xs ys) G.
 
   (** ** Induction principle for [sem_node] and [sem_equation] *)
 

@@ -30,7 +30,7 @@ Module Type ISDEFINED
 
   Inductive Is_defined_in_eq : ident -> equation -> Prop :=
   | DefEqDef: forall x ck e,   Is_defined_in_eq x (EqDef x ck e)
-  | DefEqApp: forall x xs ck f e, List.In x xs -> Is_defined_in_eq x (EqApp xs ck f e)
+  | DefEqApp: forall x xs ck f e r, List.In x xs -> Is_defined_in_eq x (EqApp xs ck f e r)
   | DefEqFby: forall x ck v e, Is_defined_in_eq x (EqFby x ck v e).
 
   (* definition is needed in signature *)
@@ -53,11 +53,11 @@ Module Type ISDEFINED
   Qed.
 
   Lemma not_Is_defined_in_eq_EqApp:
-    forall x ys ck f le,
-      ~ Is_defined_in_eq x (EqApp ys ck f le) -> ~ List.In x ys.
+    forall x ys ck f le r,
+      ~ Is_defined_in_eq x (EqApp ys ck f le r) -> ~ List.In x ys.
   Proof.
     intros ** H.
-    assert (Is_defined_in_eq x (EqApp ys ck f le)) by eauto.
+    assert (Is_defined_in_eq x (EqApp ys ck f le r)) by eauto.
     contradiction.
   Qed.
 
@@ -149,7 +149,7 @@ Module Type ISDEFINED
   Fixpoint defined_eq (defs: PS.t) (eq: equation) {struct eq} : PS.t :=
     match eq with
     | EqDef x _ _   => PS.add x defs
-    | EqApp xs _ _ _ => ps_adds xs defs
+    | EqApp xs _ _ _ _ => ps_adds xs defs
     | EqFby x _ _ _ => PS.add x defs
     end.
 
@@ -174,7 +174,7 @@ Module Type ISDEFINED
         destruct eq;
         (* XXX: this is Ltac p0rn *)
         match goal with
-        | |- context[ EqApp _ _ _ _ ] => generalize ps_adds_spec; intro add_spec
+        | |- context[ EqApp _ _ _ _ _ ] => generalize ps_adds_spec; intro add_spec
         | _ => generalize PS.add_spec; intro add_spec
         end;
         apply add_spec in H;
@@ -182,7 +182,7 @@ Module Type ISDEFINED
         match goal with
         | H: PS.In x ?m |- context [PS.In x ?m] => now intuition
         | H: x = _ |- _ => subst x
-        | H: In x ?i |- context [EqApp ?i _ _ _] => idtac
+        | H: In x ?i |- context [EqApp ?i _ _ _ _] => idtac
         end;
         constructor(constructor(apply add_spec; intuition)).
 
@@ -191,7 +191,7 @@ Module Type ISDEFINED
           right.
           destruct eq;
             match goal with
-            | |- context[ EqApp _ _ _ _ ] =>
+            | |- context[ EqApp _ _ _ _ _ ] =>
               generalize ps_adds_spec; intro add_spec
             | _ =>
               generalize PS.add_spec; intro add_spec
@@ -202,7 +202,7 @@ Module Type ISDEFINED
             apply not_In_empty in H; contradiction.
         * apply IHeqs; right; destruct eq;
             match goal with
-            | |- context[ EqApp _ _ _ _ ] =>
+            | |- context[ EqApp _ _ _ _ _ ] =>
               generalize ps_adds_spec; intro add_spec
             | _ =>
               generalize PS.add_spec; intro add_spec
@@ -227,7 +227,7 @@ Module Type ISDEFINED
   - (* <== *)
     destruct eq; simpl in *;
     match goal with
-    | |- context[ EqApp _ _ _ _ ] =>
+    | |- context[ EqApp _ _ _ _ _ ] =>
       edestruct (in_dec ident_eq_dec) as [Hin_xys | Hnin_xys];
         [ eauto using Is_defined_in_eq
         | exfalso;
@@ -257,7 +257,7 @@ Module Type ISDEFINED
         intro H; apply List.Exists_cons in H; destruct H.
         inversion H; destruct eq;
           match goal with
-          | |- context[ EqApp _ _ _ _ ] =>
+          | |- context[ EqApp _ _ _ _ _ ] =>
             generalize ps_adds_spec; intro add_spec
           | _ =>
             generalize PS.add_spec; intro add_spec
@@ -270,7 +270,7 @@ Module Type ISDEFINED
         * now intuition.
         * destruct eq;
             match goal with
-            | |- context[ EqApp _ _ _ _ ] =>
+            | |- context[ EqApp _ _ _ _ _ ] =>
               generalize ps_adds_spec; intro add_spec
             | _ =>
               generalize PS.add_spec; intro add_spec
@@ -334,7 +334,7 @@ Module Type ISDEFINED
   - destruct eq;
     rewrite <- PS.mem_spec; unfold defined; simpl;
     match goal with
-    | |- context[ EqApp _ _ _ _ ] =>
+    | |- context[ EqApp _ _ _ _ _ ] =>
       unfold vars_defined;
         rewrite concatMap_cons, in_app
     | _ => idtac
@@ -363,7 +363,7 @@ Module Type ISDEFINED
     intros x eq S HH.
     destruct eq;
       match goal with
-      | |- context[ EqApp _ _ _ _ ] =>
+      | |- context[ EqApp _ _ _ _ _ ] =>
         generalize ps_adds_spec; intro add_spec
       | _ =>
         generalize PS.add_spec; intro add_spec

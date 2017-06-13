@@ -8,7 +8,7 @@ Module Type CLOCKS
 
   Inductive clock : Type :=
   | Cbase : clock                            (* base clock *)
-  | Con   : clock -> ident -> bool -> clock. (* subclock *)
+  | Con   : clock -> ident -> bool -> clock.       (* subclock *)
 
   Inductive Is_free_in_clock : ident -> clock -> Prop :=
   | FreeCon1:
@@ -18,7 +18,7 @@ Module Type CLOCKS
       forall x y ck' xc,
         Is_free_in_clock x ck'
         -> Is_free_in_clock x (Con ck' y xc).
-  
+
   (** ** Well-clocking *)
 
   Inductive wc_clock (vars: list (ident * clock)) : clock -> Prop :=
@@ -53,7 +53,7 @@ Module Type CLOCKS
     inversion 2.
     auto using wc_clock with datatypes.
   Qed.
-  
+
   Lemma wc_env_add:
     forall x env ck,
       ~InMembers x env ->
@@ -115,9 +115,9 @@ Module Type CLOCKS
       apply In_Forall with (1:=HH) in Hin.
       now rewrite <-Henv in Hin.
   Qed.
-  
+
   (** ** Parent relation *)
-  
+
   Inductive clock_parent ck : clock -> Prop :=
   | CP0: forall x b,
       clock_parent ck (Con ck x b)
@@ -183,7 +183,7 @@ Module Type CLOCKS
   Proof.
     induction ck as [|? IH]; [discriminate 1|].
     injection 1; intros ? Heq.
-    apply IH.  
+    apply IH.
   Qed.
 
   Lemma clock_parent_Con:
@@ -263,7 +263,7 @@ Module Type CLOCKS
       apply IH with (1:=Hwc) (2:=Hp').
       now inversion Hck.
   Qed.
-    
+
 End CLOCKS.
 
 Module ClocksFun (Ids : IDS) <: CLOCKS Ids.

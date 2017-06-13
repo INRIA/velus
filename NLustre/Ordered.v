@@ -10,7 +10,7 @@ Require Import Velus.NLustre.NLSyntax.
 
 (** * Ordering of nodes *)
 
-(** 
+(**
 
 The compilation of a whole program is only correct if that program satisfies
 the [Ordered_nodes] predicate, which states that a node may only call nodes
@@ -27,7 +27,7 @@ Module Type ORDERED
        (Import Syn  : NLSYNTAX Ids Op Clks).
 
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
-  | INI: forall x ck f e, Is_node_in_eq f (EqApp x ck f e).
+  | INI: forall x ck f e r, Is_node_in_eq f (EqApp x ck f e r).
 
   (* definition is needed in signature *)
   Definition Is_node_in (f: ident) (eqs: list equation) : Prop :=
@@ -246,4 +246,3 @@ Module OrderedFun
        <: ORDERED Ids Op Clks Syn.
   Include ORDERED Ids Op Clks Syn.
 End OrderedFun.
-
