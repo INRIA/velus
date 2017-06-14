@@ -294,15 +294,15 @@ Module Type NLSCHEDULE
   Qed.
 
   Lemma scheduler_sem_node:
-    forall G f xss yss,
-      sem_node G f xss yss ->
-      sem_node (schedule G) f xss yss.
+    forall G r f xss yss,
+      sem_node G r f xss yss ->
+      sem_node (schedule G) r f xss yss.
   Proof.
     intros G.
     induction 1 using sem_node_mult
-    with (P := fun bk H eq Hsem =>
-                 sem_equation G bk H eq ->
-                 sem_equation (schedule G) bk H eq);
+    with (P := fun bk r H eq Hsem =>
+                 sem_equation G bk r H eq ->
+                 sem_equation (schedule G) bk r H eq);
       try (now inversion_clear 1; eauto).
     match goal with H:find_node _ _ = _ |- _ =>
                     apply scheduler_find_node in H end.

@@ -343,7 +343,7 @@ environment.
              find_node f G = Some (mk_node f i o v eqs
                                            ingt0 outgt0 defd vout nodup good) ->
              (exists H,
-                   sem_vars bk H (map fst i) xss
+                 sem_vars bk H (map fst i) xss
                  /\ sem_vars bk H (map fst o) yss
                  (* XXX: This should be obtained through well-clocking: *)
                  (*  * tuples are synchronised: *)
@@ -368,113 +368,146 @@ enough: it does not support the internal fixpoint introduced by
   Section sem_node_mult.
     Variable G: global.
 
-    Variable P : forall bk H (eq: equation), sem_equation G bk H eq -> Prop.
-    Variable Pn : forall (f: ident) xss ys, sem_node G f xss ys -> Prop.
+    Variable P : forall bk r H (eq: equation), sem_equation G bk r H eq -> Prop.
+    Variable Pn : forall r (f: ident) xss ys, sem_node G r f xss ys -> Prop.
 
     Hypothesis EqDef_case :
-      forall (bk : stream bool)
-             (H    : history)
-             (x    : ident)
-             (ck   : clock)
-             (ce   : cexp)
-             (xs   : stream value)
-             (Hvar : sem_var bk H x xs)
+      forall (bk   : stream bool)
+        (r    : stream bool)
+        (H    : history)
+        (x    : ident)
+        (ck   : clock)
+        (ce   : cexp)
+        (xs   : stream value)
+        (Hvar : sem_var bk H x xs)
         (Hexp : sem_caexp bk H ck ce xs),
-        P bk H (EqDef x ck ce) (SEqDef G bk H x xs ck ce Hvar Hexp).
+        P bk r H (EqDef x ck ce) (SEqDef G bk r H x xs ck ce Hvar Hexp).
 
     Hypothesis EqApp_case :
-      forall (bk: stream bool)
-             (H     : history)
-             (y     : idents)
-             (ck    : clock)
-             (f     : ident)
-             (les   : lexps)
-             (ls    : stream (list value))
-             (ys    : stream (list value))
-             (Hlaes : sem_laexps bk H ck les ls)
-             (Hvar  : sem_vars bk H y ys)
-             (Hnode : sem_node G f ls ys),
-        Pn f ls ys Hnode ->
-        P bk H (EqApp y ck f les)
-          (SEqApp G bk H y ck f les ls ys Hlaes Hvar Hnode).
+      forall (bk    : stream bool)
+        (r     : stream bool)
+        (H     : history)
+        (x     : idents)
+        (ck    : clock)
+        (f     : ident)
+        (les   : lexps)
+        (ls    : stream (list value))
+        (xs    : stream (list value))
+        (Hlaes : sem_laexps bk H ck les ls)
+        (Hvars : sem_vars bk H x xs)
+        (Hnode : sem_node G r f ls xs),
+        Pn r f ls xs Hnode ->
+        P bk r H (EqApp x ck f les None)
+          (SEqApp G bk r H x ck f les ls xs Hlaes Hvars Hnode).
+
+    Hypothesis EqReset_case :
+      forall (bk    : stream bool)
+        (r     : stream bool)
+        (H     : history)
+        (x     : idents)
+        (ck    : clock)
+        (f     : ident)
+        (les   : lexps)
+        (y     : ident)
+        (ys    : stream value)
+        (ls    : stream (list value))
+        (xs    : stream (list value))
+        (Hlaes : sem_laexps bk H ck les ls)
+        (Hvars : sem_vars bk H x xs)
+        (Hvar  : sem_var bk H y ys)
+        (Hnode : sem_node G (merge_reset r (reset_of ys)) f ls xs),
+        Pn (merge_reset r (reset_of ys)) f ls xs Hnode ->
+        P bk r H (EqApp x ck f les (Some y))
+          (SEqReset G bk r H x ck f les y ys ls xs Hlaes Hvars Hvar Hnode).
 
     Hypothesis EqFby_case :
-      forall (bk: stream bool)
-             (H   : history)
-             (y   : ident)
-             (ls  : stream value)
-             (yS  : stream value)
-             (c0  : const)
-             (ck  : clock)
-             (lae : lexp)
-             (Hls : sem_laexp bk H ck lae ls)
-             (Hys : sem_var bk H y yS)
-             (Hfby: yS = fby (sem_const c0) ls),
-        P bk H (EqFby y ck c0 lae)
-          (SEqFby G bk H y ls yS c0 ck lae Hls Hys Hfby).
+      forall (bk  : stream bool)
+        (r   : stream bool)
+        (H   : history)
+        (y   : ident)
+        (ls  : stream value)
+        (yS  : stream value)
+        (c0  : const)
+        (ck  : clock)
+        (lae : lexp)
+        (Hls : sem_laexp bk H ck lae ls)
+        (Hys : sem_var bk H y yS)
+        (Hfby: yS = fby r (sem_const c0) ls),
+        P bk r H (EqFby y ck c0 lae)
+          (SEqFby G bk r H y ls yS c0 ck lae Hls Hys Hfby).
 
     Hypothesis SNode_case :
-      forall (bk    : stream bool)
-             (f     : ident)
-             (xss   : stream (list value))
-             (yss    : stream (list value))
-             (i     : list (ident * (type * clock)))
-             (o     : list (ident * (type * clock)))
-             (v     : list (ident * (type * clock)))
-             (eqs   : list equation)
-             (ingt0 : 0 < length i)
-             (outgt0 : 0 < length o)
-             (defd  : Permutation (vars_defined eqs)
-                                  (map fst (v ++ o)))
-             (vout  : forall x, In x (map fst o) -> ~In x (vars_defined (filter is_fby eqs)))
-             (nodup : NoDupMembers (i ++ v ++ o))
-             (good  : Forall ValidId (i ++ v ++ o)
-                      /\ Forall valid (vars_defined (filter is_app eqs))
-                      /\ valid f)
-             (Hck   : clock_of xss bk)
-             (Hf    : find_node f G =
-                      Some (mk_node f i o v eqs
-                                    ingt0 outgt0 defd vout nodup good))
-             (Heqs  : exists H,
-            sem_vars bk H (map fst i) xss
-            /\ sem_vars bk H (map fst o) yss
-            /\ same_clock xss
-            /\ same_clock yss
-            /\ (forall n, absent_list (xss n) <-> absent_list (yss n))
-            /\ Forall (sem_equation G bk H) eqs),
+      forall (bk     : stream bool)
+        (r      : stream bool)
+        (f      : ident)
+        (xss    : stream (list value))
+        (yss    : stream (list value))
+        (i      : list (ident * (type * clock)))
+        (o      : list (ident * (type * clock)))
+        (v      : list (ident * (type * clock)))
+        (eqs    : list equation)
+        (ingt0  : 0 < length i)
+        (outgt0 : 0 < length o)
+        (defd   : Permutation (vars_defined eqs)
+                             (map fst (v ++ o)))
+        (vout   : forall x, In x (map fst o) -> ~In x (vars_defined (filter is_fby eqs)))
+        (nodup  : NoDupMembers (i ++ v ++ o))
+        (good   : Forall ValidId (i ++ v ++ o)
+                 /\ Forall valid (vars_defined (filter is_app eqs))
+                 /\ valid f)
+        (Hck    : clock_of xss bk)
+        (Hf     : find_node f G =
+                 Some (mk_node f i o v eqs
+                               ingt0 outgt0 defd vout nodup good))
+        (Heqs   :
+           exists H,
+             sem_vars bk H (map fst i) xss
+             /\ sem_vars bk H (map fst o) yss
+             /\ same_clock xss
+             /\ same_clock yss
+             /\ (forall n, absent_list (xss n) <-> absent_list (yss n))
+             /\ Forall (sem_equation G bk r H) eqs),
         (exists H,
             sem_vars bk H (map fst i) xss
             /\ sem_vars bk H (map fst o) yss
             /\ same_clock xss
             /\ same_clock yss
             /\ (forall n, absent_list (xss n) <-> absent_list (yss n))
-            /\ Forall (fun eq=> exists Hsem, P bk H eq Hsem) eqs)
-        -> Pn f xss yss
-              (SNode G bk f xss yss i o v eqs ingt0 outgt0
-                     defd vout nodup good Hck Hf Heqs).
+            /\ Forall (fun eq=> exists Hsem, P bk r H eq Hsem) eqs)
+        -> Pn r f xss yss
+             (SNode G bk r f xss yss i o v eqs ingt0 outgt0
+                    defd vout nodup good Hck Hf Heqs).
 
-    Fixpoint sem_equation_mult (bk: stream bool)
-             (H  : history)
-                         (eq : equation)
-                         (Heq : sem_equation G bk H eq) {struct Heq}
-      : P bk H eq Heq :=
-      match Heq in (sem_equation _ bk H eq) return (P bk H eq Heq) with
-      | SEqDef bk H y xs ck ce Hvar Hexp => EqDef_case bk H y ck ce xs Hvar Hexp
-      | SEqApp bk H y ck f lae ls ys Hlae Hvar Hnode =>
-        EqApp_case bk H y ck f lae ls ys Hlae Hvar Hnode
-                   (sem_node_mult f ls ys Hnode)
-      | SEqFby bk H y ls yS ck v0 lae Hls Hys Hfby =>
-          EqFby_case bk H y ls yS ck v0 lae Hls Hys Hfby
+    Fixpoint sem_equation_mult
+             (bk  : stream bool)
+             (r   : stream bool)
+             (H   : history)
+             (eq  : equation)
+             (Heq : sem_equation G bk r H eq) {struct Heq}
+      : P bk r H eq Heq :=
+      match Heq in (sem_equation _ bk r H eq) return (P bk r H eq Heq) with
+      | SEqDef bk r H x xs ck ce Hvar Hexp =>
+        EqDef_case bk r H x ck ce xs Hvar Hexp
+      | SEqApp bk r H x ck f lae ls xs Hlae Hvars Hnode =>
+        EqApp_case bk r H x ck f lae ls xs Hlae Hvars Hnode
+                   (sem_node_mult r f ls xs Hnode)
+      | SEqReset bk r H x ck f lae y ys ls xs Hlae Hvars Hvar Hnode =>
+        EqReset_case bk r H x ck f lae y ys ls xs Hlae Hvars Hvar Hnode
+                   (sem_node_mult (merge_reset r (reset_of ys)) f ls xs Hnode)
+      | SEqFby bk r H y ls yS ck v0 lae Hls Hys Hfby =>
+          EqFby_case bk r H y ls yS ck v0 lae Hls Hys Hfby
       end
 
-    with sem_node_mult (f  : ident)
-                       (ls : stream (list value))
-                       (ys : stream (list value))
-                       (Hn : sem_node G f ls ys) {struct Hn} : Pn f ls ys Hn :=
-           match Hn in (sem_node _ f ls ys) return (Pn f ls ys Hn) with
-           | SNode bk f ls ys i o v eqs
+    with sem_node_mult
+           (r  : stream bool)
+           (f  : ident)
+           (ls : stream (list value))
+           (ys : stream (list value))
+           (Hn : sem_node G r f ls ys) {struct Hn} : Pn r f ls ys Hn :=
+           match Hn in (sem_node _ r f ls ys) return (Pn r f ls ys Hn) with
+           | SNode bk r f ls ys i o v eqs
                    ingt0 outgt0 defd vout nodup good Hck Hf Hnode =>
-             SNode_case bk f ls ys i o v eqs
+             SNode_case bk r f ls ys i o v eqs
                         ingt0 outgt0 defd vout nodup good Hck Hf Hnode
                         (* Turn: exists H : history,
                         (forall n, sem_var H (v_name i) n (xs n))
@@ -495,16 +528,16 @@ enough: it does not support the internal fixpoint introduced by
                                           (conj Hsamexs
                                             (conj Hsameys
                                               ((((fix map (eqs : list equation)
-                                (Heqs: Forall (sem_equation G bk H) eqs) :=
+                                (Heqs: Forall (sem_equation G bk r H) eqs) :=
                                   match Heqs in Forall _ fs
                                         return (Forall
                                                   (fun eq=> exists Hsem,
-                                                       P bk H eq Hsem) fs)
+                                                       P bk r H eq Hsem) fs)
                                   with
                                   | Forall_nil => Forall_nil _
                                   | Forall_cons eq eqs Heq Heqs' =>
                                     Forall_cons eq (@ex_intro _ _ Heq
-                                                (sem_equation_mult bk H eq Heq))
+                                                (sem_equation_mult bk r H eq Heq))
                                                      (map eqs Heqs')
                                   end) eqs Heqs))))))))
                          end)
@@ -869,24 +902,28 @@ clock to [sem_var_instant] too. *)
   Qed.
 
   Lemma sem_node_cons:
-    forall node G f xs ys,
+    forall node G r f xs ys,
       Ordered_nodes (node::G)
-      -> sem_node (node::G) f xs ys
+      -> sem_node (node::G) r f xs ys
       -> node.(n_name) <> f
-      -> sem_node G f xs ys.
+      -> sem_node G r f xs ys.
   Proof.
-    intros node G f xs ys Hord Hsem Hnf.
+    intros node G r f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-         | bk H y ck f lae ls ys Hlae Hvar Hnode IH
+         | bk r H x ck f lae ls xs Hlae Hvars Hnode IH
+         | bk r H x ck f lae y ys ls xs Hlae Hvars Hvar Hnode IH
          |
-         | bk f xs ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hf Heqs IH]
+         | bk r f xs ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hf Heqs IH]
             using sem_node_mult
-          with (P := fun bk H eq Hsem => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation G bk H eq).
+          with (P := fun bk r H eq Hsem => ~Is_node_in_eq node.(n_name) eq
+                                      -> sem_equation G bk r H eq).
     - econstructor; eassumption.
     - intro Hnin.
-      eapply @SEqApp with (1:=Hlae) (2:=Hvar).
+      eapply @SEqApp with (1:=Hlae) (2:=Hvars).
+      apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
+    - intro Hnin.
+      eapply SEqReset; eauto.
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro; eapply SEqFby; eassumption.
     - intro.
@@ -942,24 +979,25 @@ clock to [sem_var_instant] too. *)
   Qed.
 
   Lemma sem_node_cons2:
-    forall nd G f xs ys,
+    forall nd G r f xs ys,
       Ordered_nodes G
-      -> sem_node G f xs ys
+      -> sem_node G r f xs ys
       -> Forall (fun nd' : node => n_name nd <> n_name nd') G
-      -> sem_node (nd::G) f xs ys.
+      -> sem_node (nd::G) r f xs ys.
   Proof.
     Hint Constructors sem_equation.
-    intros nd G f xs ys Hord Hsem Hnin.
+    intros nd G r f xs ys Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
     induction Hsem as [
-       | bk H y f lae ls ys Hlae Hvar Hnode IH
+       | bk r H x f lae ls xs Hlae Hvars Hnode IH
+       | bk r H x f lae y ys ls xs Hlae Hvars Hvar Hnode IH
        |
-       | bk f xs ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hfind Heqs IH]
+       | bk r f xs ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hfind Heqs IH]
           using sem_node_mult
-        with (P := fun bk H eq Hsem =>
+        with (P := fun bk r H eq Hsem =>
                      ~Is_node_in_eq nd.(n_name) eq
-                     -> sem_equation (nd::G) bk H eq);
+                     -> sem_equation (nd::G) bk r H eq);
       try eauto; intro HH.
     clear HH.
     assert (nd.(n_name) <> f) as Hnf.
@@ -1015,13 +1053,13 @@ clock to [sem_var_instant] too. *)
 
 
   Lemma Forall_sem_equation_global_tl:
-    forall bk nd G H eqs,
+    forall bk r nd G H eqs,
       Ordered_nodes (nd::G)
       -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (nd::G) bk H) eqs
-      -> Forall (sem_equation G bk H) eqs.
+      -> Forall (sem_equation (nd::G) bk r H) eqs
+      -> Forall (sem_equation G bk r H) eqs.
   Proof.
-    intros bk nd G H eqs Hord.
+    intros bk r nd G H eqs Hord.
     induction eqs as [|eq eqs IH]; [trivial|].
     intros Hnini Hsem.
     apply Forall_cons2 in Hsem; destruct Hsem as [Hseq Hseqs].
@@ -1029,8 +1067,15 @@ clock to [sem_var_instant] too. *)
     2:(apply not_Is_node_in_cons in Hnini;
         destruct Hnini; assumption).
     apply Forall_cons with (2:=Hseqs).
-    inversion Hseq as [|? ? ? ? ? ? ? Hsem Hvar Hnode|]; subst.
+    inversion Hseq as [|? ? ? ? ? ? ? Hsem Hvars Hnode
+                          |? ? ? ? ? ? ? ? ? Hsem Hvars Hvar Hnode|]; subst.
     - econstructor; eassumption.
+    - apply not_Is_node_in_cons in Hnini.
+      destruct Hnini as [Hninieq Hnini].
+      assert (nd.(n_name) <> f) as Hnf
+          by (intro HH; apply Hninieq; rewrite HH; constructor).
+      econstructor; eauto.
+      eapply sem_node_cons; eauto.
     - apply not_Is_node_in_cons in Hnini.
       destruct Hnini as [Hninieq Hnini].
       assert (nd.(n_name) <> f) as Hnf
@@ -1128,12 +1173,12 @@ an absent value *)
   Qed.
 
   Lemma sem_equations_permutation:
-    forall eqs eqs' G bk H,
-      Forall (sem_equation G bk H) eqs ->
+    forall eqs eqs' G bk r H,
+      Forall (sem_equation G bk r H) eqs ->
       Permutation eqs eqs' ->
-      Forall (sem_equation G bk H) eqs'.
+      Forall (sem_equation G bk r H) eqs'.
   Proof.
-    intros eqs eqs' G bk H Hsem Hperm.
+    intros eqs eqs' G bk r H Hsem Hperm.
     induction Hperm as [|eq eqs eqs' Hperm IH|eq0 eq1 eqs|]; auto.
     - inv Hsem; auto.
     - inversion_clear Hsem as [|? ? ? Heqs'].

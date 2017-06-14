@@ -47,10 +47,10 @@ Module Type NODUP
         ~Is_defined_in_eqs x eqs ->
         NoDup_defs (EqDef x ck e :: eqs)
   | NDDEqApp:
-      forall xs ck f e eqs,
+      forall xs ck f e r eqs,
         NoDup_defs eqs ->
         (forall x, In x xs -> ~Is_defined_in_eqs x eqs) ->
-        NoDup_defs (EqApp xs ck f e :: eqs)
+        NoDup_defs (EqApp xs ck f e r :: eqs)
   | NDDEqFby:
       forall x ck v e eqs,
         NoDup_defs eqs ->
@@ -93,7 +93,7 @@ Module Type NODUP
           by now inv Hvar; auto; exfalso; inv Hndd;
             match goal with
             | H: Is_variable_in_eq ?x (EqDef ?i _ _) |- _ => inv H
-            | H: Is_variable_in_eq ?x (EqApp ?i _ _ _) |- _ => inv H
+            | H: Is_variable_in_eq ?x (EqApp ?i _ _ _ _) |- _ => inv H
             end; firstorder);
         now apply IHeqs
       end.

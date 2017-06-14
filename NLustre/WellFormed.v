@@ -400,7 +400,7 @@ An NLustre program is well defined if
             destruct HH as [HH|HH].
             destruct eq;
               match goal with
-              | |- context[ EqApp _ _ _ _ ] =>
+              | |- context[ EqApp _ _ _ _ _ ] =>
                 generalize ps_adds_spec; intro add_spec
               | _ =>
                 generalize PS.add_spec; intro add_spec
@@ -417,7 +417,7 @@ An NLustre program is well defined if
             destruct HH as [HH|HH]; [left|right].
             destruct eq;
               match goal with
-              | |- context[ EqApp _ _ _ _ ] =>
+              | |- context[ EqApp _ _ _ _ _ ] =>
                 generalize ps_adds_spec; intro add_spec
               | _ =>
                 generalize PS.add_spec; intro add_spec

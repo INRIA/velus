@@ -58,6 +58,18 @@ if the clocked stream is [absent] at the corresponding instant. *)
       | _ => present (hold r v0 xs n)
       end.
 
+  Definition mfby (r: stream bool) (xs ys: stream value) (ms: stream val) : Prop :=
+    let next (n: nat) (v: val) := if r (S n) then ms 0 else v in
+    forall n,
+      match ys n with
+      | absent =>
+        ms (S n) = next n (ms n)
+        /\ xs n = absent
+      | present v =>
+        ms (S n) = next n v
+        /\ xs n = present (ms n)
+      end.
+
   (** ** Properties *)
 
   Lemma present_injection:
