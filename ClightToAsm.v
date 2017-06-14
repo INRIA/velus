@@ -6,8 +6,10 @@ Require Import common.Smallstep.
 Require Import common.Behaviors.
 
 Require cfrontend.Clight.
-Require ia32.Asm.
 Require Import driver.Compopts driver.Complements driver.Compiler.
+
+(* we omit the prefix to be target-parametric *)
+Require Asm.
 
 (** Compilation from Clight to Asm *)
 
@@ -79,7 +81,7 @@ Proof.
   set (p18 := CleanupLabels.transf_program p17) in *.
   destruct (partial_if debug Debugvar.transf_program p18) as [p19|e] eqn:P19; simpl in T; try discriminate.
   destruct (Stacking.transf_program p19) as [p20|e] eqn:P20; simpl in T; try discriminate.
-  unfold match_prog; simpl. 
+  unfold match_prog; simpl.
   exists p3; split. apply Cshmgenproof.transf_program_match; auto.
   exists p4; split. apply Cminorgenproof.transf_program_match; auto.
   exists p5; split. apply Selectionproof.transf_program_match; auto.
@@ -98,7 +100,7 @@ Proof.
   exists p18; split. apply CleanupLabelsproof.transf_program_match; auto.
   exists p19; split. eapply partial_if_match; eauto. apply Debugvarproof.transf_program_match.
   exists p20; split. apply Stackingproof.transf_program_match; auto.
-  exists tp; split. apply Asmgenproof.transf_program_match; auto. 
+  exists tp; split. apply Asmgenproof.transf_program_match; auto.
   reflexivity.
 Qed.
 
@@ -136,7 +138,7 @@ Proof.
   intros p tp M. unfold match_prog, pass_match in M; simpl in M.
 Ltac DestructM :=
   match goal with
-    [ H: exists p, _ /\ _ |- _ ] => 
+    [ H: exists p, _ /\ _ |- _ ] =>
       let p := fresh "p" in let M := fresh "M" in let MM := fresh "MM" in
       destruct H as (p & M & MM); clear H
   end.
@@ -216,10 +218,3 @@ Proof.
   exploit forward_simulation_behavior_improves; eauto. intros (beh & B & I).
   inv I. auto. destruct H1 as (t & ? & ?); discriminate.
 Qed.
-
-
-
-
-
-
-

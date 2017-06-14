@@ -30,6 +30,8 @@ extraction/extracted
 .depend
 automake
 Makefile.auto
+Makefile.config
 tools/automake.ml
+_CoqProject
 
 *.exe
