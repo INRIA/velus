@@ -35,8 +35,8 @@ cd "$compcertdir"
 export $(cat Makefile.config | grep ARCH)
 cd ..
 
-echo "COMPCERTDIR=$compcertdir" > Makefile.config
-echo "ARCH=$ARCH" >> Makefile.config
+printf "COMPCERTDIR=%s" "$compcertdir" > Makefile.config
+printf "ARCH=%s" "$ARCH" >> Makefile.config
 
 case $ARCH in
     ia32)
@@ -49,7 +49,7 @@ case $ARCH in
 esac
 
 sed "s/\(.*\)/-R $compcertdir\/\1 compcert.\1/" < includes > $coqproject
-echo "-R $compcertdir/$ARCH compcert.$ARCH" >> $coqproject
-echo -e "$EXCLUDES" | sed "s/\(.*\)/-exclude-dir \1/" >> $coqproject
-echo "-R . Velus" >> $coqproject
+printf -- "-R %s compcert.%s" "$compcertdir/$ARCH" "$ARCH" >> $coqproject
+printf "%s" "$EXCLUDES" | sed "s/\(.*\)/-exclude-dir \1/" >> $coqproject
+printf -- "-R . Velus" >> $coqproject
 cat vfiles >> $coqproject
