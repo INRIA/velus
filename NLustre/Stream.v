@@ -39,14 +39,13 @@ if the clocked stream is [absent] at the corresponding instant. *)
   (** ** Synchronous functions *)
 
   (* With auxiliary hold function. *)
-
   Fixpoint hold (r: stream bool) (v0: val) (xs: stream value) (n: nat) : val :=
     match n with
     | 0 => v0
     | S m =>
-      if r n then v0 else
         match xs m with
-        | absent => hold r v0 xs m
+        | absent =>
+          if r m then v0 else hold r v0 xs m
         | present hv => hv
         end
     end.
@@ -55,21 +54,19 @@ if the clocked stream is [absent] at the corresponding instant. *)
     fun n =>
       match xs n with
       | absent => absent
-      | _ => present (hold r v0 xs n)
+      | _ => present (if r n then v0 else hold r v0 xs n)
       end.
 
-  Definition mfby (r: stream bool) (xs ys: stream value) (ms: stream val) : Prop :=
-    let next (n: nat) (v: val) := if r (S n) then ms 0 else v in
+  Definition mfby (r: stream bool) (xs: stream value) (ms: stream val) (ys: stream value) : Prop :=
     forall n,
-      match ys n with
+      match xs n with
       | absent =>
-        ms (S n) = next n (ms n)
-        /\ xs n = absent
+        ms (S n) = (if r n then ms 0 else ms n)
+        /\ ys n = absent
       | present v =>
-        ms (S n) = next n v
-        /\ xs n = present (ms n)
+        ms (S n) = v
+        /\ ys n = present (if r n then ms 0 else ms n)
       end.
-
   (** ** Properties *)
 
   Lemma present_injection:

@@ -293,9 +293,11 @@ environment.
       | present x => x ==b true_val
       | _ => false
       end.
+
   Definition reset_of' (xs: stream value) (bs: stream bool) : Prop :=
     forall n,
       xs n = present true_val <-> bs n = true.
+
   Lemma reset_of_equiv:
     forall xs, reset_of' xs (reset_of xs).
   Proof.

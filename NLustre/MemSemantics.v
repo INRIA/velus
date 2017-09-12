@@ -103,7 +103,7 @@ Module Type MEMSEMANTICS
         ms 0 = sem_const c0 ->
         sem_laexp bk H ck le ls ->
         sem_var bk H x xs ->
-        mfby r xs ls ms ->
+        mfby r ls ms xs ->
         msem_equation G bk r H M (EqFby x ck c0 le)
   (* =end= *)
 
@@ -213,7 +213,7 @@ enough: it does not support the internal fixpoint introduced by
         (Hms0   : ms 0 = sem_const c0)
         (Hls    : sem_laexp bk H ck le ls)
         (HyS    : sem_var bk H y yS)
-        (Hy     : mfby r yS ls ms),
+        (Hy     : mfby r ls ms yS),
         P (SEqFby G M Hmfind Hms0 Hls HyS Hy).
 
     Hypothesis SNode_case:
