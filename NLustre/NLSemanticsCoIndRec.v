@@ -51,70 +51,29 @@ Module Type NLSEMANTICSCOINDREC
         fby1 x c xs ys ->
         fby c (present x ::: xs) (present c ::: ys).
 
-  Definition reset_of : Stream value -> Stream value :=
-    map (fun x => match x with
-               | present x => if (x ==b true_val) then present x else present false_val
-               | _ => present false_val
-               end).
-
-  CoInductive true_s : Stream value -> Stream value -> Prop :=
-   | true_s_A:
-      forall xs ts,
-        true_s xs ts ->
-        true_s (absent ::: xs) (absent ::: ts)
-   | true_s_P:
-      forall x xs ts,
-        true_s xs ts ->
-        true_s (present x ::: xs) (present true_val ::: ts).
-
-  CoFixpoint true_s' (ss: Stream value) : Stream value :=
-    match ss with
-    | absent    ::: ss => absent ::: true_s' ss
-    | present _ ::: ss => present true_val ::: true_s' ss
+  CoFixpoint cut (bs: Stream bool) (xs: Stream value) : Stream value :=
+    match bs, xs with
+      b ::: bs', x ::: xs' => if b then xs else absent ::: cut bs' xs'
     end.
 
-  CoInductive once : Stream value -> Stream value -> Prop :=
-  | once_A:
-      forall bs ys,
-        once bs ys ->
-        once (absent ::: bs) (absent ::: ys)
-  | once_PF:
-      forall bs ys,
-        once bs ys ->
-        once (present false_val ::: bs) (present false_val ::: ys)
-  | once_PT:
-      forall bs ts,
-        true_s bs ts ->
-        once (present true_val ::: bs) ts.
-
-  CoFixpoint once' (ss: Stream value) : Stream value :=
-    match ss with
-    | absent ::: ss => absent ::: once' ss
-    | present s ::: ss =>
-      present s :::
-      if s ==b true_val then
-        true_s' ss
-      else
-        once' ss
+  CoFixpoint cut_bool (bs: Stream bool) : Stream bool :=
+    match bs with
+      b ::: bs => false ::: if b then bs else cut_bool bs
     end.
 
-  CoInductive switch : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | switch_A:
-      forall bs xs ys zs,
-        switch bs xs ys zs ->
-        switch (absent ::: bs) (absent ::: xs) ys (absent ::: zs)
-  | switch_PF:
-      forall bs x xs ys zs,
-        switch bs xs ys zs ->
-        switch (present false_val ::: bs) (present x ::: xs) ys (present x ::: zs)
-  | switch_PT:
-      forall bs x xs ys,
-        switch (present true_val ::: bs) (present x ::: xs) ys ys.
-
-  Definition pre_ini (v0: val) (xs: Stream value) : Stream value :=
-    match xs with
-      x ::: xs => present v0 ::: xs
+  CoFixpoint switch (bs: Stream bool) (xs ys: Stream value) : Stream value :=
+    match bs, xs, ys with
+      b ::: bs', x ::: xs', y ::: ys' => if b then ys else x ::: switch bs' xs' ys'
     end.
+
+  Inductive map2 {A B C: Type} (f: A -> B -> C) : list A -> list B -> list C -> Prop :=
+  | map2_nil:
+      map2 f [] [] []
+  | map2_cons:
+      forall x xs y ys z zs,
+        map2 f xs ys zs ->
+        z = f x y ->
+        map2 f (x :: xs) (y :: ys) (z :: zs).
 
   Section NodeSemantics.
 
@@ -146,15 +105,12 @@ Module Type NLSEMANTICSCOINDREC
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e)
 
-    with sem_reset: ident -> Stream value -> list (Stream value) -> list (Stream value) -> Prop :=
+    with sem_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
          | SReset:
-             forall f r once_r r' xss xss' yss rst oss,
+             forall f r xss yss yss' oss,
                sem_node f xss yss ->
-               once_r = once' r ->
-               Forall2 (fun xs xs' => when true xs once_r xs') xss xss' ->
-               when true r once_r r' ->
-               sem_reset f (pre_ini false_val r') xss' rst ->
-               Forall3 (switch r) yss rst oss ->
+               sem_reset f (cut_bool r) (List.map (cut r) xss) yss' ->
+               map2 (switch r) yss yss' oss ->
                sem_reset f r xss oss
 
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
@@ -173,7 +129,7 @@ Module Type NLSEMANTICSCOINDREC
     Variable G: global.
 
     Variable P_equation: history -> Stream bool -> equation -> Prop.
-    Variable P_reset: ident -> Stream value -> list (Stream value) -> list (Stream value) -> Prop.
+    Variable P_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop.
     Variable P_node: ident -> list (Stream value) -> list (Stream value) -> Prop.
 
     Hypothesis EqDefCase:
@@ -207,15 +163,12 @@ Module Type NLSEMANTICSCOINDREC
         P_equation H b (EqFby x ck c0 e).
 
     Hypothesis ResetCase:
-      forall f r once_r r' xss xss' yss rst oss,
+      forall f r xss yss yss' oss,
         sem_node G f xss yss ->
-        once_r = once' r ->
-        Forall2 (fun xs xs' => when true xs once_r xs') xss xss' ->
-        when true r once_r r' ->
-        sem_reset G f (pre_ini false_val r') xss' rst ->
-        Forall3 (switch r) yss rst oss ->
+        sem_reset G f (cut_bool r) (List.map (cut r) xss) yss' ->
+        map2 (switch r) yss yss' oss ->
         P_node f xss yss ->
-        P_reset f (pre_ini false_val r') xss' rst ->
+        P_reset f (cut_bool r) (List.map (cut r) xss) yss' ->
         P_reset f r xss oss.
 
     Hypothesis NodeCase:
@@ -232,7 +185,7 @@ Module Type NLSEMANTICSCOINDREC
              (Sem: sem_equation G H b e) {struct Sem}
       : P_equation H b e
     with sem_reset_mult
-           (f: ident) (r: Stream value) (xss oss: list (Stream value))
+           (f: ident) (r: Stream bool) (xss oss: list (Stream value))
            (Sem: sem_reset G f r xss oss) {struct Sem}
          : P_reset f r xss oss
     with sem_node_mult

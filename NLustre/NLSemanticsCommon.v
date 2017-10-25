@@ -154,4 +154,10 @@ Module Type NLSEMANTICSCOMMON
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
+  CoFixpoint reset_of : Stream value -> Stream bool :=
+    map (fun x => match x with
+               | present x => x ==b true_val
+               | _ => false
+               end).
+
 End NLSEMANTICSCOMMON.

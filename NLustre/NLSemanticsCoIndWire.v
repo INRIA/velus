@@ -59,12 +59,6 @@ Module Type NLSEMANTICSCOINDWIRE
         fby1 rs x c xs ys ->
         fby (r ::: rs) c (present x ::: xs) (present c ::: ys).
 
-  CoFixpoint reset_of : Stream value -> Stream bool :=
-    map (fun x => match x with
-               | present x => x ==b true_val
-               | _ => false
-               end).
-
   CoFixpoint merge_reset (rs rs' : Stream bool) : Stream bool :=
     match rs, rs' with
       r ::: rs, r' ::: rs' => r || r' ::: merge_reset rs rs'

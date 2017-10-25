@@ -63,77 +63,77 @@ Module Type SEMEQUIV
         now apply fby1_equiv.
     Qed.
 
-    CoInductive synchronised: Stream value -> Stream value -> Prop :=
-    | A_synchro:
-        forall xs ys,
-          synchronised xs ys ->
-          synchronised (absent ::: xs) (absent ::: ys)
-    | P_synchro:
-        forall xs ys x y,
-          synchronised xs ys ->
-          synchronised (present x ::: xs) (present y ::: ys).
+    (* CoInductive synchronised: Stream value -> Stream value -> Prop := *)
+    (* | A_synchro: *)
+    (*     forall xs ys, *)
+    (*       synchronised xs ys -> *)
+    (*       synchronised (absent ::: xs) (absent ::: ys) *)
+    (* | P_synchro: *)
+    (*     forall xs ys x y, *)
+    (*       synchronised xs ys -> *)
+    (*       synchronised (present x ::: xs) (present y ::: ys). *)
 
-    Ltac prove_synchro :=
-      match goal with
-        |- forall s, synchronised s ?s' =>
-        let COFIX := fresh "COFIX" in
-        let s := fresh s in
-        let v := fresh "v" in
-        cofix COFIX; intro s;
-        rewrite unfold_Stream;
-        destruct s as [v]; destruct v; simpl; constructor; auto
-      end.
+    (* Ltac prove_synchro := *)
+    (*   match goal with *)
+    (*     |- forall s, synchronised s ?s' => *)
+    (*     let COFIX := fresh "COFIX" in *)
+    (*     let s := fresh s in *)
+    (*     let v := fresh "v" in *)
+    (*     cofix COFIX; intro s; *)
+    (*     rewrite unfold_Stream; *)
+    (*     destruct s as [v]; destruct v; simpl; constructor; auto *)
+    (*   end. *)
 
-    Lemma true_s'_synchronised:
-      forall s, synchronised s (Rec.true_s' s).
-    Proof. prove_synchro. Qed.
+    (* Lemma true_s'_synchronised: *)
+    (*   forall s, synchronised s (Rec.true_s' s). *)
+    (* Proof. prove_synchro. Qed. *)
 
-    Lemma once'_synchronised:
-      forall s, synchronised s (Rec.once' s).
-    Proof.
-      prove_synchro.
-      destruct (c ==b true_val); auto.
-      apply true_s'_synchronised.
-    Qed.
+    (* Lemma once'_synchronised: *)
+    (*   forall s, synchronised s (Rec.once' s). *)
+    (* Proof. *)
+    (*   prove_synchro. *)
+    (*   destruct (c ==b true_val); auto. *)
+    (*   apply true_s'_synchronised. *)
+    (* Qed. *)
 
-    Lemma when_witness:
-      forall k xs ys,
-        synchronised xs ys ->
-        exists rs, when k xs ys rs.
-    Proof.
-      eexists.
-      revert k xs ys H.
-      cofix.
-      intros.
-      inv H.
-      - constructor.
-    Admitted.
+    (* Lemma when_witness: *)
+    (*   forall k xs ys, *)
+    (*     synchronised xs ys -> *)
+    (*     exists rs, when k xs ys rs. *)
+    (* Proof. *)
+    (*   eexists. *)
+    (*   revert k xs ys H. *)
+    (*   cofix. *)
+    (*   intros. *)
+    (*   inv H. *)
+    (*   - constructor. *)
+    (* Admitted. *)
 
     Lemma WireRec_node_reset:
       forall rs f ess oss,
-        Wire.sem_node G (Wire.merge_reset false_s (Wire.reset_of rs)) f ess oss ->
+        Wire.sem_node G (Wire.merge_reset false_s (reset_of rs)) f ess oss ->
         Rec.sem_node G f ess oss ->
-        Rec.sem_reset G f (Rec.reset_of rs) ess oss.
+        Rec.sem_reset G f (reset_of rs) ess oss.
     Proof.
       intros ** Reset Node.
       destruct Reset.
 
-      assert (exists xss', Forall2 (fun xs xs' => when true xs (Rec.once' (Rec.reset_of rs)) xs') xss xss')
-        as (xss' & When_xss).
-      { clear; induction xss.
-        - eexists; eauto.
-        - edestruct IHxss.
-          edestruct (when_witness true a (Rec.once' (Rec.reset_of rs))).
-          admit.
-          eexists.
-          constructor; eauto.
-      }
+      (* assert (exists xss', Forall2 (fun xs xs' => when true xs (Rec.once' (Rec.reset_of rs)) xs') xss xss') *)
+      (*   as (xss' & When_xss). *)
+      (* { clear; induction xss. *)
+      (*   - eexists; eauto. *)
+      (*   - edestruct IHxss. *)
+      (*     edestruct (when_witness true a (Rec.once' (Rec.reset_of rs))). *)
+      (*     admit. *)
+      (*     eexists. *)
+      (*     constructor; eauto. *)
+      (* } *)
 
-      assert (exists rs', when true (Rec.reset_of rs) (Rec.once' (Rec.reset_of rs)) rs')
-        as (rs' & When_rs) by apply when_witness, once'_synchronised.
+      (* assert (exists rs', when true (Rec.reset_of rs) (Rec.once' (Rec.reset_of rs)) rs') *)
+      (*   as (rs' & When_rs) by apply when_witness, once'_synchronised. *)
 
        econstructor; eauto.
-      - clear; induction xss.
+      - econstructor. clear; induction xss.
         + eexists; eauto.
 
     Admitted.
