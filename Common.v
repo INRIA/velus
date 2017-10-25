@@ -525,6 +525,21 @@ Proof.
     inversion_clear 1; destruct IH; auto.
 Qed.
 
+Section Forall3.
+
+  Context {A B C : Type}.
+  Variable R : A -> B -> C -> Prop.
+
+  Inductive Forall3 : list A -> list B -> list C -> Prop :=
+  | Forall3_nil : Forall3 [] [] []
+  | Forall3_cons : forall (x : A) (y : B) (z: C)
+                          (l0 : list A) (l1 : list B) (l2 : list C),
+      R x y z ->
+      Forall3 l0 l1 l2 ->
+      Forall3 (x :: l0) (y :: l1) (z :: l2).
+
+End Forall3.
+
 Lemma In_ex_nth:
   forall {A} (x: A) xs d,
     In x xs ->

@@ -8,38 +8,14 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Ordered.
 Require Import Streams.
 
-(** * The NLustre semantics *)
-
-(**
-
-  We provide a "standard" dataflow semantics relating an environment
-  of streams to a stream of outputs.
-
- *)
-
-Module Type NLSEMANTICSCOIND
+Module Type NLSEMANTICSCOMMON
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import Clks  : CLOCKS    Ids)
-       (Import Syn   : NLSYNTAX  Ids Op Clks)
-       (Import Ord   : ORDERED   Ids Op Clks Syn).
-
-  (** A synchronous [value] is either an absence or a present constant *)
-
-  Inductive value :=
-  | absent
-  | present (c : val).
-  (* Implicit Type v : value. *)
-
-  Definition value_dec (v1 v2: value) : {v1 = v2} + {v1 <> v2}.
-    decide equality. apply val_dec.
-  Defined.
-
-  Instance: EqDec value eq := { equiv_dec := value_dec }.
+       (Import Syn   : NLSYNTAX  Ids Op Clks).
 
   Definition idents := List.map (@fst ident (type * clock)).
 
@@ -47,8 +23,6 @@ Module Type NLSEMANTICSCOIND
   Delimit Scope stream_scope with Stream.
   Open Scope stream_scope.
 
-  (* XXX: naming the environment type *and* its inhabitant [R] is
-        probably not a good idea *)
   Definition history := PM.t (Stream value).
 
   CoFixpoint const (c: const) (b: Stream bool): Stream value :=
@@ -63,17 +37,17 @@ Module Type NLSEMANTICSCOIND
   | WhenA:
       forall xs cs rs,
         when k xs cs rs ->
-        when k (absent ::: cs) (absent ::: xs) (absent ::: rs)
+        when k (absent ::: xs) (absent ::: cs) (absent ::: rs)
   | WhenPA:
       forall x c xs cs rs,
         when k xs cs rs ->
         val_to_bool c = Some (negb k) ->
-        when k (present c ::: cs) (present x ::: xs) (absent ::: rs)
+        when k (present x ::: xs) (present c ::: cs) (absent ::: rs)
   | WhenPP:
       forall x c xs cs rs,
         when k xs cs rs ->
         val_to_bool c = Some k ->
-        when k (present c ::: cs) (present x ::: xs) (present x ::: rs).
+        when k (present x ::: xs) (present c ::: cs) (present x ::: rs).
 
   CoInductive lift1 (op: unop) (ty: type): Stream value -> Stream value -> Prop :=
   | Lift1A:
@@ -131,27 +105,6 @@ Module Type NLSEMANTICSCOIND
         ite (present false_val ::: s)
               (present t ::: ts) (present f ::: fs) (present f ::: rs).
 
-  CoInductive fby1
-    : val -> val -> Stream value -> Stream value -> Prop :=
-  | Fby1A:
-      forall v c xs ys,
-        fby1 v c xs ys ->
-        fby1 v c (absent ::: xs) (absent ::: ys)
-  | Fby1P:
-      forall v x c xs ys,
-        fby1 x c xs ys ->
-        fby1 v c (present x ::: xs) (present v ::: ys)
-
-  with fby: val -> Stream value -> Stream value -> Prop :=
-  | FbyA:
-      forall c xs ys,
-        fby c xs ys ->
-        fby c (absent ::: xs) (absent ::: ys)
-  | FbyP:
-      forall x c xs ys,
-        fby1 x c xs ys ->
-        fby c (present x ::: xs) (present c ::: ys).
-
   Inductive sem_lexp: history -> Stream bool -> lexp -> Stream value -> Prop :=
   | Sconst:
       forall H b c,
@@ -164,7 +117,7 @@ Module Type NLSEMANTICSCOIND
       forall H b e x k es xs os,
         sem_lexp H b e es ->
         sem_var H x xs ->
-        when k xs es os ->
+        when k es xs os ->
         sem_lexp H b (Ewhen e x k) os
   | Sunop:
       forall H b op e ty es os,
@@ -201,55 +154,4 @@ Module Type NLSEMANTICSCOIND
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
-  Section NodeSemantics.
-
-    Variable G: global.
-
-    Inductive sem_equation: history -> Stream bool -> equation -> Prop :=
-    | SeqDef:
-        forall H b x ck e es,
-          sem_cexp H b e es ->
-          sem_var H x es ->
-          sem_equation H b (EqDef x ck e)
-    | SeqApp:
-        forall H b ys ck f es ess oss,
-          Forall2 (sem_lexp H b) es ess ->
-          sem_node f ess oss ->
-          Forall2 (sem_var H) ys oss ->
-          sem_equation H b (EqApp ys ck f es None)
-    | SeqReset:
-        forall H b ys ck f es x ess oss,
-          Forall2 (sem_lexp H b) es ess ->
-          sem_node f ess oss ->
-          Forall2 (sem_var H) ys oss ->
-          sem_equation H b (EqApp ys ck f es (Some x))
-    | SeqFby:
-        forall H b x ck c0 e es os,
-          sem_lexp H b e es ->
-          fby (sem_const c0) es os ->
-          sem_var H x os ->
-          sem_equation H b (EqFby x ck c0 e)
-
-    with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
-         | SNode:
-             forall H f n xss oss,
-               find_node f G = Some n ->
-               Forall2 (sem_var H) (idents n.(n_in)) xss ->
-               Forall2 (sem_var H) (idents n.(n_out)) oss ->
-               Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
-               sem_node f xss oss.
-
-  End NodeSemantics.
-
-End NLSEMANTICSCOIND.
-
-Module NLSemanticsCoIndFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Clks  : CLOCKS    Ids)
-       (Syn   : NLSYNTAX  Ids Op Clks)
-       (Ord   : ORDERED   Ids Op Clks Syn)
-       <: NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord.
-  Include NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord.
-End NLSemanticsCoIndFun.
+End NLSEMANTICSCOMMON.

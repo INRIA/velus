@@ -3,13 +3,13 @@ Require Import Common.
 Module Type OPERATORS.
 
   (* Types *)
-  
+
   Parameter val : Type.
   Parameter type : Type.
   Parameter const : Type.
 
   (* Booleans *)
-  
+
   Parameter true_val  : val.
   Parameter false_val : val.
   Axiom true_not_false_val : true_val <> false_val.
@@ -17,12 +17,12 @@ Module Type OPERATORS.
   Parameter bool_type : type.
 
   (* Constants *)
-  
+
   Parameter type_const : const -> type.
   Parameter sem_const  : const -> val.
 
   (* Operations *)
-  
+
   Parameter unop  : Type.
   Parameter binop : Type.
 
@@ -30,7 +30,7 @@ Module Type OPERATORS.
   Parameter sem_binop : binop -> val -> type -> val -> type -> option val.
 
   (* Typing *)
-  
+
   Parameter type_unop  : unop -> type -> option type.
   Parameter type_binop : binop -> type -> type -> option type.
 
@@ -56,7 +56,7 @@ Module Type OPERATORS.
       wt_val v ty.
 
   (* Decidability of elements *)
-  
+
   Axiom val_dec   : forall v1  v2  : val,    {v1 = v2}  +  {v1 <> v2}.
   Axiom type_dec  : forall t1  t2  : type,   {t1 = t2}  +  {t1 <> t2}.
   Axiom const_dec : forall c1  c2  : const,  {c1 = c2}  +  {c1 <> c2}.
@@ -74,7 +74,7 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Instance: EqDec const eq := { equiv_dec := const_dec }.
   Instance: EqDec unop  eq := { equiv_dec := unop_dec  }.
   Instance: EqDec binop eq := { equiv_dec := binop_dec }.
-  
+
   Definition val_to_bool (v: val) : option bool :=
     if equiv_decb v true_val then Some true
     else if equiv_decb v false_val then Some false
@@ -85,7 +85,7 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Proof.
     unfold val_to_bool. now rewrite equiv_decb_refl.
   Qed.
-  
+
   Lemma val_to_bool_false:
     val_to_bool false_val = Some false.
   Proof.
@@ -119,13 +119,25 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     unfold val_to_bool in HH; rewrite c in HH.
     now destruct (equiv_decb v true_val).
   Qed.
-  
-  Definition wt_vals vs (xts: list (ident * type)) 
+
+  Definition wt_vals vs (xts: list (ident * type))
     := List.Forall2 (fun v xt => wt_val v (snd xt)) vs xts.
+
+ (** A synchronous [value] is either an absence or a present constant *)
+
+  Inductive value :=
+  | absent
+  | present (c : val).
+  Implicit Type v : value.
+
+  Definition value_dec (v1 v2: value) : {v1 = v2} + {v1 <> v2}.
+    decide equality. apply val_dec.
+  Defined.
+
+  Instance: EqDec value eq := { equiv_dec := value_dec }.
 
 End OPERATORS_AUX.
 
 Module OperatorsAux (Import Ops : OPERATORS) <: OPERATORS_AUX Ops.
   Include OPERATORS_AUX Ops.
 End OperatorsAux.
-
