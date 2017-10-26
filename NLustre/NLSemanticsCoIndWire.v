@@ -30,34 +30,48 @@ Module Type NLSEMANTICSCOINDWIRE
        (Import Comm  : NLSEMANTICSCOMMON Ids Op OpAux Clks Syn)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
-  CoInductive fby1
-    : Stream bool -> val -> val -> Stream value -> Stream value -> Prop :=
-  | Fby1ANR:
-      forall rs v c xs ys,
-        fby1 rs v c xs ys ->
-        fby1 (false ::: rs) v c (absent ::: xs) (absent ::: ys)
-  | Fby1AR:
-      forall rs v c xs ys,
-        fby rs c xs ys ->
-        fby1 (true ::: rs) v c (absent ::: xs) (absent ::: ys)
-  | Fby1PNR:
-      forall rs v x c xs ys,
-        fby1 rs x c xs ys ->
-        fby1 (false ::: rs) v c (present x ::: xs) (present v ::: ys)
-  | Fby1PR:
-      forall rs v x c xs ys,
-        fby1 rs x c xs ys ->
-        fby1 (true ::: rs) v c (present x ::: xs) (present c ::: ys)
+  CoFixpoint fby1 (rs: Stream bool) (v c: val) (xs: Stream value) : Stream value :=
+    match rs, xs with
+    | false ::: rs, absent ::: xs => absent ::: fby1 rs v c xs
+    | true ::: rs, absent ::: xs => absent ::: fby rs c xs
+    | false ::: rs, present x ::: xs => present v ::: fby1 rs x c xs
+    | true ::: rs, present x ::: xs => present c ::: fby1 rs x c xs
+    end
 
-  with fby: Stream bool -> val -> Stream value -> Stream value -> Prop :=
-  | FbyA:
-      forall r rs c xs ys,
-        fby rs c xs ys ->
-        fby (r ::: rs) c (absent ::: xs) (absent ::: ys)
-  | FbyP:
-      forall r rs x c xs ys,
-        fby1 rs x c xs ys ->
-        fby (r ::: rs) c (present x ::: xs) (present c ::: ys).
+  with fby (rs: Stream bool) (c: val) (xs: Stream value) : Stream value :=
+         match xs with
+         | absent ::: xs => absent ::: fby (tl rs) c xs
+         | present x ::: xs => present c ::: fby1 (tl rs) x c xs
+         end.
+
+  (* CoInductive fby1 *)
+  (*   : Stream bool -> val -> val -> Stream value -> Stream value -> Prop := *)
+  (* | Fby1ANR: *)
+  (*     forall rs v c xs ys, *)
+  (*       fby1 rs v c xs ys -> *)
+  (*       fby1 (false ::: rs) v c (absent ::: xs) (absent ::: ys) *)
+  (* | Fby1AR: *)
+  (*     forall rs v c xs ys, *)
+  (*       fby rs c xs ys -> *)
+  (*       fby1 (true ::: rs) v c (absent ::: xs) (absent ::: ys) *)
+  (* | Fby1PNR: *)
+  (*     forall rs v x c xs ys, *)
+  (*       fby1 rs x c xs ys -> *)
+  (*       fby1 (false ::: rs) v c (present x ::: xs) (present v ::: ys) *)
+  (* | Fby1PR: *)
+  (*     forall rs v x c xs ys, *)
+  (*       fby1 rs x c xs ys -> *)
+  (*       fby1 (true ::: rs) v c (present x ::: xs) (present c ::: ys) *)
+
+  (* with fby: Stream bool -> val -> Stream value -> Stream value -> Prop := *)
+  (* | FbyA: *)
+  (*     forall r rs c xs ys, *)
+  (*       fby rs c xs ys -> *)
+  (*       fby (r ::: rs) c (absent ::: xs) (absent ::: ys) *)
+  (* | FbyP: *)
+  (*     forall r rs x c xs ys, *)
+  (*       fby1 rs x c xs ys -> *)
+  (*       fby (r ::: rs) c (present x ::: xs) (present c ::: ys). *)
 
   CoFixpoint merge_reset (rs rs' : Stream bool) : Stream bool :=
     match rs, rs' with
@@ -90,7 +104,7 @@ Module Type NLSEMANTICSCOINDWIRE
     | SeqFby:
         forall H b r x ck c0 e es os,
           sem_lexp H b e es ->
-          fby r (sem_const c0) es os ->
+          os = fby r (sem_const c0) es ->
           sem_var H x os ->
           sem_equation H b r (EqFby x ck c0 e)
 
@@ -138,7 +152,7 @@ Module Type NLSEMANTICSCOINDWIRE
     Hypothesis EqFbyCase:
       forall H b r x ck c0 e es os,
         sem_lexp H b e es ->
-        fby r (sem_const c0) es os ->
+        os = fby r (sem_const c0) es ->
         sem_var H x os ->
         P_equation H b r (EqFby x ck c0 e).
 

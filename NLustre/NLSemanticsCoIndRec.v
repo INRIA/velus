@@ -30,26 +30,46 @@ Module Type NLSEMANTICSCOINDREC
        (Import Comm  : NLSEMANTICSCOMMON Ids Op OpAux Clks Syn)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
-  CoInductive fby1
-    : val -> val -> Stream value -> Stream value -> Prop :=
-  | Fby1A:
-      forall v c xs ys,
-        fby1 v c xs ys ->
-        fby1 v c (absent ::: xs) (absent ::: ys)
-  | Fby1P:
-      forall v x c xs ys,
-        fby1 x c xs ys ->
-        fby1 v c (present x ::: xs) (present v ::: ys)
+  CoFixpoint fby1 (v c: val) (xs: Stream value) : Stream value :=
+    match xs with
+    | absent ::: xs => absent ::: fby1 v c xs
+    | present x ::: xs => present v ::: fby1 x c xs
+    end.
 
-  with fby: val -> Stream value -> Stream value -> Prop :=
-  | FbyA:
-      forall c xs ys,
-        fby c xs ys ->
-        fby c (absent ::: xs) (absent ::: ys)
-  | FbyP:
-      forall x c xs ys,
-        fby1 x c xs ys ->
-        fby c (present x ::: xs) (present c ::: ys).
+  CoFixpoint fby (c: val) (xs: Stream value) : Stream value :=
+    match xs with
+    | absent ::: xs => absent ::: fby c xs
+    | present x ::: xs => present c ::: fby1 x c xs
+    end.
+
+  (* CoInductive fby1 *)
+  (*   : val -> val -> Stream value -> Stream value -> Prop := *)
+  (* | Fby1A: *)
+  (*     forall v c xs ys, *)
+  (*       fby1 v c xs ys -> *)
+  (*       fby1 v c (absent ::: xs) (absent ::: ys) *)
+  (* | Fby1P: *)
+  (*     forall v x c xs ys, *)
+  (*       fby1 x c xs ys -> *)
+  (*       fby1 v c (present x ::: xs) (present v ::: ys). *)
+
+  (* CoInductive fby: val -> Stream value -> Stream value -> Prop := *)
+  (* | FbyA: *)
+  (*     forall c xs ys, *)
+  (*       fby c xs ys -> *)
+  (*       fby c (absent ::: xs) (absent ::: ys) *)
+  (* | FbyP: *)
+  (*     forall x c xs ys, *)
+  (*       fby1 x c xs ys -> *)
+  (*       fby c (present x ::: xs) (present c ::: ys). *)
+
+  (* Lemma foo: forall xs k, exists ys, fby k xs ys. *)
+  (* Proof. *)
+  (*   intros. exists (fby' k xs). *)
+  (*   cofix. *)
+  (*   destruct xs. *)
+  (*   rewrite unfold_Stream. *)
+  (*   simpl. *)
 
   CoFixpoint cut (bs: Stream bool) (xs: Stream value) : Stream value :=
     match bs, xs with
@@ -101,7 +121,7 @@ Module Type NLSEMANTICSCOINDREC
     | SeqFby:
         forall H b x ck c0 e es os,
           sem_lexp H b e es ->
-          fby (sem_const c0) es os ->
+          os = fby (sem_const c0) es ->
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e)
 
@@ -158,7 +178,7 @@ Module Type NLSEMANTICSCOINDREC
     Hypothesis EqFbyCase:
       forall H b x ck c0 e es os,
         sem_lexp H b e es ->
-        fby (sem_const c0) es os ->
+        os = fby (sem_const c0) es ->
         sem_var H x os ->
         P_equation H b (EqFby x ck c0 e).
 
