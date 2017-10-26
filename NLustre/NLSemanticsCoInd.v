@@ -21,7 +21,7 @@ Require Import Streams.
 
  *)
 
-Module Type NLSEMANTICSCOINDREC
+Module Type NLSEMANTICSCOIND
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
@@ -71,20 +71,54 @@ Module Type NLSEMANTICSCOINDREC
   (*   rewrite unfold_Stream. *)
   (*   simpl. *)
 
-  CoFixpoint cut (bs: Stream bool) (xs: Stream value) : Stream value :=
-    match bs, xs with
-      b ::: bs', x ::: xs' => if b then xs else absent ::: cut bs' xs'
+  (* CoFixpoint cut (bs: Stream bool) (xs: Stream value) : Stream value := *)
+  (*   match bs, xs with *)
+  (*     b ::: bs', x ::: xs' => if b then xs else absent ::: cut bs' xs' *)
+  (*   end. *)
+
+  (* CoFixpoint cut_bool (bs: Stream bool) : Stream bool := *)
+  (*   match bs with *)
+  (*     b ::: bs => false ::: if b then bs else cut_bool bs *)
+  (*   end. *)
+
+  (* CoFixpoint switch (bs: Stream bool) (xs ys: Stream value) : Stream value := *)
+  (*   match bs, xs, ys with *)
+  (*     b ::: bs', x ::: xs', y ::: ys' => if b then ys else x ::: switch bs' xs' ys' *)
+  (*   end.  *)
+
+
+  CoFixpoint clip (k n: nat) (bs: Stream bool) (xs: Stream value) : Stream value :=
+    match n, bs, xs with
+    | n, true ::: bs, x ::: xs =>
+      if k ==b n then Streams.const absent
+      else if k ==b n + 1 then x ::: clip (k + 1) n bs xs
+           else absent ::: clip (k + 1) n bs xs
+    | n, false ::: bs, x ::: xs =>
+      if k ==b n then x ::: clip k n bs xs
+      else absent ::: clip k n bs xs
     end.
 
-  CoFixpoint cut_bool (bs: Stream bool) : Stream bool :=
-    match bs with
-      b ::: bs => false ::: if b then bs else cut_bool bs
+  Definition mask := clip 0.
+
+  Fixpoint take {A} (n: nat) (s: Stream A) : list A :=
+    match n with
+    | O => nil
+    | S n =>
+      match s with
+        h ::: t => h :: take n t
+      end
     end.
 
-  CoFixpoint switch (bs: Stream bool) (xs ys: Stream value) : Stream value :=
-    match bs, xs, ys with
-      b ::: bs', x ::: xs', y ::: ys' => if b then ys else x ::: switch bs' xs' ys'
-    end.
+  Definition r :=
+    false ::: false ::: false ::: true ::: false ::: false ::: false ::: false ::: false ::: true ::: false ::: false ::: false ::: true ::: Streams.const false.
+
+  Notation "⊥" := (absent) (at level 50).
+  Notation "⇑" := (present true_val).
+  Notation "⇓" := (present false_val).
+
+  CoFixpoint x := Streams.const (present true_val).
+
+  Eval simpl in (take 16 r, take 16 x, take 16 (mask 0 r x), take 16 (mask 1 r x), take 16 (mask 2 r x), take 16 (mask 3 r x), take 16 (mask 4 r x)).
 
   Inductive map2 {A B C: Type} (f: A -> B -> C) : list A -> list B -> list C -> Prop :=
   | map2_nil:
@@ -127,11 +161,9 @@ Module Type NLSEMANTICSCOINDREC
 
     with sem_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
          | SReset:
-             forall f r xss yss yss' oss,
-               sem_node f xss yss ->
-               sem_reset f (cut_bool r) (List.map (cut r) xss) yss' ->
-               map2 (switch r) yss yss' oss ->
-               sem_reset f r xss oss
+             forall f r xss yss,
+               (forall n, sem_node f (List.map (mask n r) xss) (List.map (mask n r) yss)) ->
+               sem_reset f r xss yss
 
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
          | SNode:
@@ -183,13 +215,10 @@ Module Type NLSEMANTICSCOINDREC
         P_equation H b (EqFby x ck c0 e).
 
     Hypothesis ResetCase:
-      forall f r xss yss yss' oss,
-        sem_node G f xss yss ->
-        sem_reset G f (cut_bool r) (List.map (cut r) xss) yss' ->
-        map2 (switch r) yss yss' oss ->
-        P_node f xss yss ->
-        P_reset f (cut_bool r) (List.map (cut r) xss) yss' ->
-        P_reset f r xss oss.
+      forall f r xss yss,
+        (forall n, sem_node G f (List.map (mask n r) xss) (List.map (mask n r) yss)) ->
+        (forall n, P_node f (List.map (mask n r) xss) (List.map (mask n r) yss)) ->
+        P_reset f r xss yss.
 
     Hypothesis NodeCase:
       forall H f n xss oss,
@@ -224,7 +253,7 @@ Module Type NLSEMANTICSCOINDREC
 
   End SemInd.
 
-End NLSEMANTICSCOINDREC.
+End NLSEMANTICSCOIND.
 
 (* Module NLSemanticsCoIndRecFun *)
 (*        (Ids   : IDS) *)
