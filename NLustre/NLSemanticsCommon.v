@@ -20,6 +20,7 @@ Module Type NLSEMANTICSCOMMON
   Definition idents := List.map (@fst ident (type * clock)).
 
   Infix ":::" := Cons (at level 60, right associativity) : stream_scope.
+  Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.
   Delimit Scope stream_scope with Stream.
   Open Scope stream_scope.
 
