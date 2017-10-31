@@ -111,7 +111,7 @@ Module Type NLSEMANTICSCOIND
     match n, bs, xs with
     | n, true ::: bs, x ::: xs =>
       if k ==b n then Streams.const absent
-      else if k ==b n + 1 then x ::: clip (k + 1) n bs xs
+      else if k ==b n - 1 then x ::: clip (k + 1) n bs xs
            else absent ::: clip (k + 1) n bs xs
     | n, false ::: bs, x ::: xs =>
       if k ==b n then x ::: clip k n bs xs
@@ -123,10 +123,13 @@ Module Type NLSEMANTICSCOIND
   Fixpoint take {A} (n: nat) (s: Stream A) : list A :=
     match n with
     | O => nil
-    | S n =>
-      match s with
-        h ::: t => h :: take n t
-      end
+    | S n => hd s :: take n (tl s)
+    end.
+
+  Fixpoint drop {A} (n: nat) (s: Stream A) {struct n} : Stream A :=
+    match n with
+    | 0 => s
+    | S n => drop n (tl s)
     end.
 
   Definition r :=
@@ -136,18 +139,25 @@ Module Type NLSEMANTICSCOIND
   Notation "⇑" := (present true_val).
   Notation "⇓" := (present false_val).
 
-  CoFixpoint x := Streams.const (present true_val).
+  CoFixpoint x := Streams.const ⇑.
 
-  Eval simpl in (take 16 r, take 16 x, take 16 (mask 0 r x), take 16 (mask 1 r x), take 16 (mask 2 r x), take 16 (mask 3 r x), take 16 (mask 4 r x)).
+  Eval simpl in (take 16 r, take 16 x,
+                 take 16 (mask 0 r x),
+                 take 16 (mask 1 r x),
+                 take 16 (mask 2 r x),
+                 take 16 (mask 3 r x),
+                 take 16 (mask 4 r x)).
 
-  Inductive map2 {A B C: Type} (f: A -> B -> C) : list A -> list B -> list C -> Prop :=
-  | map2_nil:
-      map2 f [] [] []
-  | map2_cons:
-      forall x xs y ys z zs,
-        map2 f xs ys zs ->
-        z = f x y ->
-        map2 f (x :: xs) (y :: ys) (z :: zs).
+  CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value)) : Stream value :=
+    let xss := if hd bs then tl xss else xss in
+    hd (hd xss) ::: flatten_masks (tl bs) (map (@tl value) xss).
+
+  CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value) : Stream (Stream value) :=
+    mask n rs xs ::: masks_from (n + 1) rs xs.
+
+  Definition masks := masks_from 0.
+
+  Eval simpl in take 16 (flatten_masks r (masks r x)).
 
   Section NodeSemantics.
 

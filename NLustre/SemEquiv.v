@@ -437,6 +437,47 @@ Module Type SEMEQUIV
     (*   - constructor. *)
     (* Admitted. *)
 
+    (* Lemma flatten_masks_n_spec: *)
+    (*   forall rs xs n, *)
+    (*     Rec.flatten_masks rs (Rec.masks_from n rs xs) ≡ xs. *)
+    (* Proof. *)
+    (*   cofix; intros. *)
+    (*   unfold_Stv rs; unfold_St xs. *)
+    (*   - constructor; simpl; auto. *)
+    (*     simpl. *)
+
+    Lemma flatten_masks_spec:
+      forall rs xs,
+        Rec.flatten_masks rs (Rec.masks rs xs) ≡ xs.
+    Proof.
+      cofix; intros.
+      unfold_Stv rs; unfold_St xs.
+      - constructor; simpl; auto.
+        admit.
+      - constructor; simpl; auto.
+        admit.
+    Admitted.
+
+    Definition map_history: (Stream value -> Stream value) -> history -> history.
+    Admitted.
+
+    Fact map_history_spec:
+      forall H x xs f,
+        sem_var H x xs ->
+        sem_var (map_history f H) x (f xs).
+    Admitted.
+
+    Definition mask_history (n: nat) (rs: Stream bool) (H: history) : history :=
+      map_history (Rec.mask n rs) H.
+
+    Corollary mask_history_spec:
+      forall n rs H x xs,
+        sem_var H x xs ->
+        sem_var (mask_history n rs H) x (Rec.mask n rs xs).
+    Proof.
+      intros; apply map_history_spec; auto.
+    Qed.
+
     Lemma WireRec_node_reset:
       forall rs f ess oss,
         Wire.sem_node G (Wire.merge_reset false_s (reset_of rs)) f ess oss ->
@@ -446,9 +487,21 @@ Module Type SEMEQUIV
       intros ** Reset (* Node *).
       rewrite merge_reset_with_false in Reset.
       constructor.
-      inv Reset.
+      inversion_clear Reset as [? ? ? ? ? ? ? In Out Sem].
       intro i.
       econstructor; eauto.
+      instantiate (1:=mask_history i (reset_of rs) H).
+      - admit.
+      - admit.
+      - induction (n_eqs n) as [|e]; auto.
+        inversion_clear Sem as [|? ? Sem_e].
+        constructor; auto.
+        remember (clocks_of ess) as b.
+        remember (reset_of rs) as r.
+        induction Sem_e.
+        + apply (mask_history_spec i r)in H3.
+          econstructor; eauto.
+      - econstructor; eauto.
       - econstructor. clear; induction xss.
         + eexists; eauto.
 
