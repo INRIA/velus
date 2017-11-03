@@ -32,9 +32,14 @@ Module Type NLSEMANTICSCOMMON
     | false ::: b' => absent ::: const c b'
     end.
 
-  Notation sem_var H := (fun (x: ident) (s: Stream value) => PM.MapsTo x s H).
+  Inductive sem_var: history -> ident -> Stream value -> Prop :=
+    sem_var_intro:
+      forall H x xs xs',
+        PM.MapsTo x xs' H ->
+        xs ≡ xs' ->
+        sem_var H x xs.
 
-  CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
+   CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
   | WhenA:
       forall xs cs rs,
         when k xs cs rs ->

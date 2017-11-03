@@ -106,19 +106,22 @@ Module Type NLSEMANTICSCOIND
   (*     b ::: bs', x ::: xs', y ::: ys' => if b then ys else x ::: switch bs' xs' ys' *)
   (*   end.  *)
 
-
-  CoFixpoint clip (k n: nat) (bs: Stream bool) (xs: Stream value) : Stream value :=
-    match n, bs, xs with
-    | n, true ::: bs, x ::: xs =>
-      if k ==b n then Streams.const absent
-      else if k ==b n - 1 then x ::: clip (k + 1) n bs xs
-           else absent ::: clip (k + 1) n bs xs
-    | n, false ::: bs, x ::: xs =>
-      if k ==b n then x ::: clip k n bs xs
-      else absent ::: clip k n bs xs
+  CoFixpoint mask {A} (opaque: A) (n: nat) (rs: Stream bool) (xs: Stream A) : Stream A :=
+    match n, rs, xs with
+    | 0,  false ::: rs, x ::: xs =>
+      x ::: mask opaque 0 rs xs
+    | 0, true ::: _, _ ::: _ =>
+      Streams.const opaque
+    | S 0, true ::: rs, x ::: xs =>
+      x ::: mask opaque 0 rs xs
+    | S n, false ::: rs, x ::: xs =>
+      opaque ::: mask opaque (S n) rs xs
+    | S n, true ::: rs, x ::: xs =>
+      opaque ::: mask opaque n rs xs
     end.
 
-  Definition mask := clip 0.
+  Definition mask_v := mask absent.
+  Definition mask_b := mask false.
 
   Fixpoint take {A} (n: nat) (s: Stream A) : list A :=
     match n with
@@ -139,21 +142,22 @@ Module Type NLSEMANTICSCOIND
   Notation "⇑" := (present true_val).
   Notation "⇓" := (present false_val).
 
-  CoFixpoint x := Streams.const ⇑.
+
+  CoFixpoint x := ⇓ ::: ⇑ ::: x.
 
   Eval simpl in (take 16 r, take 16 x,
-                 take 16 (mask 0 r x),
-                 take 16 (mask 1 r x),
-                 take 16 (mask 2 r x),
-                 take 16 (mask 3 r x),
-                 take 16 (mask 4 r x)).
+                 take 16 (mask_v 0 r x),
+                 take 16 (mask_v 1 r x),
+                 take 16 (mask_v 2 r x),
+                 take 16 (mask_v 3 r x),
+                 take 16 (mask_v 4 r x)).
 
   CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value)) : Stream value :=
     let xss := if hd bs then tl xss else xss in
     hd (hd xss) ::: flatten_masks (tl bs) (map (@tl value) xss).
 
   CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value) : Stream (Stream value) :=
-    mask n rs xs ::: masks_from (n + 1) rs xs.
+    mask_v n rs xs ::: masks_from (n + 1) rs xs.
 
   Definition masks := masks_from 0.
 
@@ -192,7 +196,7 @@ Module Type NLSEMANTICSCOIND
     with sem_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
          | SReset:
              forall f r xss yss,
-               (forall n, sem_node f (List.map (mask n r) xss) (List.map (mask n r) yss)) ->
+               (forall n, sem_node f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
                sem_reset f r xss yss
 
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
@@ -246,8 +250,8 @@ Module Type NLSEMANTICSCOIND
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall n, sem_node G f (List.map (mask n r) xss) (List.map (mask n r) yss)) ->
-        (forall n, P_node f (List.map (mask n r) xss) (List.map (mask n r) yss)) ->
+        (forall n, sem_node G f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
+        (forall n, P_node f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
