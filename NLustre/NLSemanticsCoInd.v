@@ -2,6 +2,7 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
+Require Import Setoid.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -10,7 +11,7 @@ Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.NLSemanticsCommon.
 Require Import Velus.NLustre.Ordered.
-Require Import Streams.
+Require Import Velus.NLustre.Streams.
 
 (** * The NLustre semantics *)
 
@@ -123,16 +124,20 @@ Module Type NLSEMANTICSCOIND
   Definition mask_v := mask absent.
   Definition mask_b := mask false.
 
+  Remark mask_const_opaque:
+    forall {A} n rs (opaque: A),
+      mask opaque n rs (Streams.const opaque) ≡ Streams.const opaque.
+  Proof.
+    cofix Cofix; intros.
+    unfold_Stv rs; rewrite (unfold_Stream (Streams.const opaque));
+      constructor; destruct n as [|[]]; simpl; auto; try apply Cofix.
+    reflexivity.
+  Qed.
+
   Fixpoint take {A} (n: nat) (s: Stream A) : list A :=
     match n with
     | O => nil
     | S n => hd s :: take n (tl s)
-    end.
-
-  Fixpoint drop {A} (n: nat) (s: Stream A) {struct n} : Stream A :=
-    match n with
-    | 0 => s
-    | S n => drop n (tl s)
     end.
 
   Definition r :=
@@ -286,6 +291,62 @@ Module Type NLSEMANTICSCOIND
     Combined Scheme sem_equation_node_ind from sem_equation_mult, sem_node_mult, sem_reset_mult.
 
   End SemInd.
+
+  Add Parametric Morphism A opaque n : (mask opaque n)
+      with signature @EqSt bool ==> @EqSt A ==> @EqSt A
+        as mask_EqSt.
+  Proof.
+    revert n; cofix Cofix; intros n rs rs' Ers xs xs' Exs.
+    unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
+      constructor; inv Ers; inv Exs;
+        simpl in *; try discriminate;
+          destruct n as [|[]]; auto; try reflexivity.
+  Qed.
+
+  Add Parametric Morphism G H : (sem_equation G H)
+      with signature @EqSt bool ==> eq ==> Basics.impl
+        as mod_sem_equation_morph.
+  Proof.
+    unfold Basics.impl; intros ** b b' Eb e Sem.
+    induction Sem.
+    - econstructor; eauto.
+      now rewrite <-Eb.
+    - econstructor; eauto.
+      apply Forall2_impl_In with (P:=sem_lexp H b); eauto.
+      intros; now rewrite <-Eb.
+    - econstructor; eauto.
+      apply Forall2_impl_In with (P:=sem_lexp H b); eauto.
+      intros; now rewrite <-Eb.
+    - econstructor; eauto.
+      rewrite <-Eb; eauto.
+  Qed.
+
+  Add Parametric Morphism G : (sem_node G)
+      with signature eq ==> @EqSts value ==> @EqSts value ==> Basics.impl
+        as mod_sem_node_morph.
+  Proof.
+    unfold Basics.impl; intros f xss xss' Exss yss yss' Eyss Sem.
+    induction Sem.
+    econstructor; eauto.
+    + instantiate (1:=H).
+      now rewrite <-Exss.
+    + now rewrite <-Eyss.
+    + apply Forall_impl with (P:=sem_equation G H (clocks_of xss)); auto.
+      intro; now rewrite Exss.
+  Qed.
+
+  Add Parametric Morphism G : (sem_reset G)
+      with signature eq ==> @EqSt bool ==> @EqSts value ==> @EqSts value ==> Basics.impl
+        as mod_sem_reset_morph.
+  Proof.
+    unfold Basics.impl; intros f r r' Er xss xss' Exss yss yss' Eyss Sem.
+    induction Sem as [? ? ? ? Sem].
+    constructor.
+    intro n; specialize (Sem n).
+    eapply mod_sem_node_morph; eauto.
+    - apply map_EqSt; auto; apply mask_EqSt; auto.
+    - apply map_EqSt; auto; apply mask_EqSt; auto.
+  Qed.
 
 End NLSEMANTICSCOIND.
 

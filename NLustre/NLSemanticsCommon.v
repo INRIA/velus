@@ -2,13 +2,14 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
+Require Import Setoid.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Streams.
+Require Import Velus.NLustre.Streams.
 
 Module Type NLSEMANTICSCOMMON
        (Import Ids   : IDS)
@@ -18,11 +19,6 @@ Module Type NLSEMANTICSCOMMON
        (Import Syn   : NLSYNTAX  Ids Op Clks).
 
   Definition idents := List.map (@fst ident (type * clock)).
-
-  Infix ":::" := Cons (at level 60, right associativity) : stream_scope.
-  Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.
-  Delimit Scope stream_scope with Stream.
-  Open Scope stream_scope.
 
   Definition history := PM.t (Stream value).
 
@@ -38,6 +34,12 @@ Module Type NLSEMANTICSCOMMON
         PM.MapsTo x xs' H ->
         xs ≡ xs' ->
         sem_var H x xs.
+
+  Remark MapsTo_sem_var:
+    forall H x xs,
+      PM.MapsTo x xs H ->
+      sem_var H x xs.
+  Proof. econstructor; eauto; reflexivity. Qed.
 
    CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
   | WhenA:
@@ -113,8 +115,9 @@ Module Type NLSEMANTICSCOMMON
 
   Inductive sem_lexp: history -> Stream bool -> lexp -> Stream value -> Prop :=
   | Sconst:
-      forall H b c,
-        sem_lexp H b (Econst c) (const c b)
+      forall H b c cs,
+        cs ≡ const c b ->
+        sem_lexp H b (Econst c) cs
   | Svar:
       forall H b x ty xs,
         sem_var H x xs ->
@@ -160,10 +163,170 @@ Module Type NLSEMANTICSCOMMON
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
-  CoFixpoint reset_of : Stream value -> Stream bool :=
+  Definition reset_of : Stream value -> Stream bool :=
     map (fun x => match x with
                | present x => x ==b true_val
                | _ => false
                end).
+
+ Add Parametric Morphism H : (sem_var H)
+      with signature eq ==> @EqSt value ==> Basics.impl
+        as sem_var_EqSt.
+  Proof.
+    intros x xs xs' E.
+    intros Sem; induction Sem.
+    econstructor; eauto.
+    transitivity xs; auto; symmetry; auto.
+  Qed.
+
+  Add Parametric Morphism : merge
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as merge_EqSt.
+  Proof.
+    cofix Cofix.
+    intros cs cs' Ecs xs xs' Exs ys ys' Eys zs zs' Ezs H.
+    destruct cs' as [[]], xs' as [[]], ys' as [[]], zs' as [[]];
+      inv H; inv Ecs; inv Exs; inv Eys; inv Ezs; simpl in *;
+        try discriminate.
+      + constructor; eapply Cofix; eauto.
+      + rewrite <-H, <-H4, <-H6.
+        constructor; eapply Cofix; eauto.
+      + rewrite <-H, <-H2, <-H6.
+        constructor; eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism : ite
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as ite_EqSt.
+  Proof.
+    cofix Cofix.
+    intros es es' Ees ts ts' Ets fs fs' Efs zs zs' Ezs H.
+    destruct es' as [[]], ts' as [[]], fs' as [[]], zs' as [[]];
+      inv H; inv Ees; inv Ets; inv Efs; inv Ezs; simpl in *;
+        try discriminate.
+      + constructor; eapply Cofix; eauto.
+      + rewrite <-H, <-H2, <-H6.
+        constructor; eapply Cofix; eauto.
+      + rewrite <-H, <-H4, <-H6.
+        constructor; eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism k : (when k)
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as when_EqSt.
+  Proof.
+    cofix Cofix.
+    intros cs cs' Ecs xs xs' Exs ys ys' Eys H.
+    destruct cs' as [[]], xs' as [[]], ys' as [[]];
+      inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
+        try discriminate.
+      + constructor; eapply Cofix; eauto.
+      + constructor.
+        * eapply Cofix; eauto.
+        * now inv H3.
+      + rewrite <-H, <-H5.
+        constructor.
+        * eapply Cofix; eauto.
+        * now inv H3.
+  Qed.
+
+  Add Parametric Morphism op t : (lift1 op t)
+      with signature @EqSt value ==> @EqSt value ==> Basics.impl
+        as lift1_EqSt.
+  Proof.
+    cofix Cofix.
+    intros es es' Ees ys ys' Eys Lift.
+    destruct es' as [[]], ys' as [[]];
+      inv Lift; inv Eys; inv Ees; simpl in *; try discriminate.
+    - constructor; eapply Cofix; eauto.
+    - constructor.
+      + now inv H1; inv H3.
+      + eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism op t1 t2 : (lift2 op t1 t2)
+      with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl
+        as lift2_EqSt.
+  Proof.
+    cofix Cofix.
+    intros e1s e1s' Ee1s e2s e2s' Ee2s ys ys' Eys Lift.
+    destruct e1s' as [[]], e2s' as [[]], ys' as [[]];
+      inv Lift; inv Eys; inv Ee1s; inv Ee2s; simpl in *; try discriminate.
+    - constructor; eapply Cofix; eauto.
+    - constructor.
+      + now inv H1; inv H3; inv H5.
+      + eapply Cofix; eauto.
+  Qed.
+ Add Parametric Morphism c : (const c)
+      with signature @EqSt bool ==> @EqSt value
+        as const_EqSt.
+  Proof.
+    cofix; intros b b' Eb.
+    unfold_Stv b; unfold_Stv b';
+      constructor; inv Eb; simpl in *; try discriminate; auto.
+  Qed.
+
+  Add Parametric Morphism H : (sem_lexp H)
+      with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
+        as sem_lexp_morph.
+  Proof.
+    intros ** b b' Eb e xs xs' Exs Sem.
+    revert b' xs' Eb Exs; induction Sem.
+    - intros. constructor.
+      rewrite <-Eb.
+      transitivity cs; auto.
+      now symmetry.
+    - econstructor; eauto.
+      eapply sem_var_EqSt; eauto.
+    - econstructor; eauto.
+      apply IHSem; auto; try reflexivity.
+      now rewrite <-Exs.
+    - econstructor.
+      + apply IHSem; auto; reflexivity.
+      + now rewrite <-Exs.
+    - econstructor.
+      + apply IHSem1; auto; reflexivity.
+      + apply IHSem2; auto; reflexivity.
+      + now rewrite <-Exs.
+  Qed.
+
+  Add Parametric Morphism H : (sem_cexp H)
+      with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
+        as sem_cexp_morph.
+  Proof.
+    intros ** b b' Eb e xs xs' Exs Sem.
+    revert b' xs' Eb Exs; induction Sem.
+    - econstructor; eauto.
+      + apply IHSem1; auto; reflexivity.
+      + apply IHSem2; auto; reflexivity.
+      + now rewrite <-Exs.
+    - econstructor; eauto.
+      + rewrite <-Eb; eauto.
+      + apply IHSem1; auto; reflexivity.
+      + apply IHSem2; auto; reflexivity.
+      + now rewrite <-Exs.
+    - constructor.
+      now rewrite <-Eb, <-Exs.
+  Qed.
+
+  Add Parametric Morphism : clocks_of
+      with signature @EqSts value ==> @EqSt bool
+        as clocks_of_EqSt.
+  Proof.
+    cofix Cofix.
+    intros xs xs' Exs.
+    constructor; simpl.
+    - clear Cofix.
+      revert dependent xs'.
+      induction xs; intros; try inv Exs; simpl; auto.
+      f_equal; auto.
+      now rewrite H1.
+    - apply Cofix.
+      clear Cofix.
+      revert dependent xs'.
+      induction xs; intros; try inv Exs; simpl; constructor.
+      + now rewrite H1.
+      + now apply IHxs.
+  Qed.
 
 End NLSEMANTICSCOMMON.
