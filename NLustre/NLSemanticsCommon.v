@@ -41,7 +41,7 @@ Module Type NLSEMANTICSCOMMON
       sem_var H x xs.
   Proof. econstructor; eauto; reflexivity. Qed.
 
-   CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
+  CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
   | WhenA:
       forall xs cs rs,
         when k xs cs rs ->
