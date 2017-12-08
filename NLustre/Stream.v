@@ -9,15 +9,17 @@ domain [nat]. To reason about this object, we shall use functional
 extensionality [ Logic.FunctionalExtensionality]. This axiom is
 believed to be consistent with Coq. *)
 
-Module Type STREAM (Import Op : OPERATORS).
+Module Type STREAM
+       (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op).
 
-  (** ** Datatypes *)
+  (* (** ** Datatypes *) *)
 
-  (** A synchronous [value] is either an absence or a present constant *)
+  (* (** A synchronous [value] is either an absence or a present constant *) *)
 
-  Inductive value :=
-  | absent
-  | present (c : val).
+  (* Inductive value := *)
+  (* | absent *)
+  (* | present (c : val). *)
   Implicit Type v : value.
 
   (** A stream is represented by its characteristic function: *)
@@ -194,6 +196,8 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
 End STREAM.
 
-Module StreamFun (Import Op : OPERATORS) <: STREAM Op.
-  Include STREAM Op.
+Module StreamFun
+       (Import Op : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op) <: STREAM Op OpAux.
+  Include STREAM Op OpAux.
 End StreamFun.

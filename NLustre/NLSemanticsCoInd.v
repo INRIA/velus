@@ -318,6 +318,16 @@ Module Type NLSEMANTICSCOIND
 
   Eval simpl in take 16 (flatten_masks r (masks r x)).
 
+  CoInductive same_clock: list (Stream value) -> Prop :=
+  | same_clock_nil:
+      same_clock []
+  | same_clock_cons:
+      forall xs xss,
+        (hd xs = absent -> Forall (fun x => x = absent) (List.map (@hd value) xss)) ->
+        (hd xs <> absent -> Forall (fun x => x <> absent) (List.map (@hd value) xss)) ->
+        same_clock (tl xs :: List.map (@tl value) xss) ->
+        same_clock (xs :: xss).
+
   Section NodeSemantics.
 
     Variable G: global.
@@ -360,6 +370,7 @@ Module Type NLSEMANTICSCOIND
                find_node f G = Some n ->
                Forall2 (sem_var H) (idents n.(n_in)) xss ->
                Forall2 (sem_var H) (idents n.(n_out)) oss ->
+               same_clock (xss ++ oss) ->
                Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
                sem_node f xss oss.
 
@@ -414,6 +425,7 @@ Module Type NLSEMANTICSCOIND
         find_node f G = Some n ->
         Forall2 (sem_var H) (idents n.(n_in)) xss ->
         Forall2 (sem_var H) (idents n.(n_out)) oss ->
+        same_clock (xss ++ oss) ->
         Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
         Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
         P_node f xss oss.
@@ -435,7 +447,7 @@ Module Type NLSEMANTICSCOIND
       - destruct Sem; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        induction H3; auto.
+        induction H4; auto.
     Qed.
 
     Combined Scheme sem_equation_node_ind from sem_equation_mult, sem_node_mult, sem_reset_mult.
@@ -630,6 +642,28 @@ Module Type NLSEMANTICSCOIND
       rewrite <-Eb; eauto.
   Qed.
 
+  Add Parametric Morphism : same_clock
+      with signature @EqSts value ==> Basics.impl
+    as same_clock_morph.
+  Proof.
+    unfold Basics.impl.
+    cofix Cofix; intros xss xss' Exss Same.
+    destruct xss'; constructor; inv Same; inv Exss.
+    - intro. erewrite <-map_EqSt; eauto.
+      + apply H. rewrite H5; auto.
+      + apply hd_EqSt.
+    - intro. erewrite <-map_EqSt; eauto.
+      + apply H0. rewrite H5; auto.
+      + apply hd_EqSt.
+    - eapply Cofix; eauto.
+      constructor.
+      + rewrite H5; reflexivity.
+      + erewrite map_st_EqSt; eauto.
+        instantiate (1 := @tl value).
+        * reflexivity.
+        * apply tl_EqSt.
+  Qed.
+
   Add Parametric Morphism G : (sem_node G)
       with signature eq ==> @EqSts value ==> @EqSts value ==> Basics.impl
         as mod_sem_node_morph.
@@ -640,6 +674,7 @@ Module Type NLSEMANTICSCOIND
     + instantiate (1:=H).
       now rewrite <-Exss.
     + now rewrite <-Eyss.
+    + now rewrite <-Eyss, <-Exss.
     + apply Forall_impl with (P:=sem_equation G H (clocks_of xss)); auto.
       intro; now rewrite Exss.
   Qed.
@@ -653,8 +688,8 @@ Module Type NLSEMANTICSCOIND
     constructor.
     intro n; specialize (Sem n).
     eapply mod_sem_node_morph; eauto.
-    - apply map_EqSt; auto; apply mask_EqSt; auto.
-    - apply map_EqSt; auto; apply mask_EqSt; auto.
+    - apply map_st_EqSt; auto; apply mask_EqSt; auto.
+    - apply map_st_EqSt; auto; apply mask_EqSt; auto.
   Qed.
 
 End NLSEMANTICSCOIND.

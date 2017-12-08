@@ -88,10 +88,23 @@ Add Parametric Relation A : (list (Stream A)) (@EqSts A)
     transitivity proved by (@EqSts_trans A)
       as EqStsrel.
 
-Add Parametric Morphism A : (@cons (Stream A))
+Add Parametric Morphism A : (@List.cons (Stream A))
     with signature @EqSt A ==> @EqSts A ==> @EqSts A
       as cons_EqSt.
 Proof. constructor; auto. Qed.
+
+Add Parametric Morphism A : (@List.app (Stream A))
+    with signature @EqSts A ==> @EqSts A ==> @EqSts A
+      as app_EqSts.
+Proof.
+  intros xss xss' Exss yss yss' Eyss.
+  revert dependent yss; revert dependent xss'.
+  induction xss; induction yss; intros; inv Exss; inv Eyss;
+    simpl; try constructor; auto.
+  - now rewrite 2 app_nil_r.
+  - apply IHxss; auto.
+    constructor; auto.
+Qed.
 
 Add Parametric Morphism
     A B (P: A -> Stream B -> Prop) xs
@@ -112,10 +125,36 @@ Add Parametric Morphism
     A B
   : (@List.map (Stream A) (Stream B))
     with signature (fun (f f': Stream A -> Stream B) => forall xs xs', xs ≡ xs' -> f xs ≡ f' xs') ==> @EqSts A ==> @EqSts B
-      as map_EqSt.
+      as map_st_EqSt.
 Proof.
   intros f f' Ef xs xs' Exs.
   revert xs xs' Exs; induction xs, xs'; intros ** H; inv H; constructor.
   - now apply Ef.
   - now apply IHxs.
+Qed.
+
+Add Parametric Morphism
+    A B
+  : (@List.map (Stream A) B)
+    with signature (fun (f f': Stream A -> B) => forall xs xs', xs ≡ xs' -> f xs = f' xs') ==> @EqSts A ==> eq
+      as map_EqSt.
+Proof.
+  intros f f' Ef xs xs' Exs.
+  revert xs xs' Exs; induction xs, xs'; intros ** H; inv H; auto.
+  simpl; f_equal.
+  - now apply Ef.
+  - now apply IHxs.
+Qed.
+
+Add Parametric Morphism
+    A P
+    (P_compat: Proper (@EqSt A ==> Basics.impl) P)
+  : (@Forall (Stream A) P)
+    with signature @EqSts A ==> Basics.impl
+      as Forall_EqSt.
+Proof.
+  induction x; intros ** E H; inversion E; subst; auto.
+  constructor; inv H.
+  - eapply P_compat; eauto.
+  - apply IHx; auto.
 Qed.

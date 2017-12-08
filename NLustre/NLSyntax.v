@@ -120,6 +120,18 @@ Module Type NLSYNTAX
 
   (** Structural properties *)
 
+  Lemma find_node_name:
+    forall G f n,
+      find_node f G = Some n ->
+      n.(n_name) = f.
+  Proof.
+    unfold find_node.
+    induction G as [|m]; intros; try discriminate.
+    simpl in H.
+    destruct (ident_eqb (n_name m) f) eqn: E; auto.
+    apply ident_eqb_eq; inv H; auto.
+  Qed.
+
   Lemma is_filtered_eqs:
     forall eqs,
       Permutation

@@ -26,7 +26,7 @@ Module Type NLSEMANTICS
        (Import OpAux : OPERATORS_AUX Op)
        (Import Clks  : CLOCKS    Ids)
        (Import Syn   : NLSYNTAX  Ids Op Clks)
-       (Import Str   : STREAM        Op)
+       (Import Str   : STREAM        Op OpAux)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
   (** ** Environment and history *)
@@ -285,7 +285,25 @@ environment.
     forall n,
       present_list (xss n) <-> bs n = true.
 
-  Definition sfalse : stream bool := fun n => false.
+  Definition clock_of' (xss: stream (list value)) : stream bool :=
+    fun n => forallb (fun v => negb (v ==b absent)) (xss n).
+
+  Lemma clock_of_equiv:
+    forall xss, clock_of xss (clock_of' xss).
+  Proof.
+    split; intros H.
+    - unfold clock_of'.
+      rewrite forallb_forall.
+      intros; rewrite Bool.negb_true_iff.
+      rewrite not_equiv_decb_equiv.
+      eapply In_Forall in H; eauto.
+    - unfold clock_of' in H.
+      rewrite forallb_forall in H.
+      apply all_In_Forall; intros ** Hin E.
+      specialize (H _ Hin).
+      rewrite Bool.negb_true_iff, not_equiv_decb_equiv in H.
+      apply H; eauto.
+  Qed.
 
   Definition reset_of (xs: stream value) : stream bool :=
     fun n =>
@@ -350,12 +368,13 @@ environment.
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
          | SNode:
-             forall bk H f xss yss i o v eqs ingt0 outgt0 defd vout nodup good,
+             forall bk H f xss yss n, (* i o v eqs ingt0 outgt0 defd vout nodup good, *)
                clock_of xss bk ->
-               find_node f G = Some (mk_node f i o v eqs
-                                             ingt0 outgt0 defd vout nodup good) ->
-               sem_vars bk H (map fst i) xss ->
-               sem_vars bk H (map fst o) yss ->
+               find_node f G = Some n ->
+                                    (* (mk_node f i o v eqs *)
+                                    (*          ingt0 outgt0 defd vout nodup good) -> *)
+               sem_vars bk H (map fst n.(n_in)) xss ->
+               sem_vars bk H (map fst n.(n_out)) yss ->
                (* XXX: This should be obtained through well-clocking: *)
                (*  * tuples are synchronised: *)
                same_clock xss ->
@@ -363,7 +382,7 @@ environment.
                (*  * output clock matches input clock *)
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
                (* XXX: END *)
-               Forall (sem_equation bk H) eqs ->
+               Forall (sem_equation bk H) n.(n_eqs) ->
                sem_node f xss yss.
 
     Definition sem_nodes : Prop :=
@@ -421,12 +440,13 @@ enough: it does not support the internal fixpoint introduced by
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
-      forall bk H f xss yss i o v eqs ingt0 outgt0 defd vout nodup good,
+      forall bk H f xss yss n, (* i o v eqs ingt0 outgt0 defd vout nodup good, *)
         clock_of xss bk ->
-        find_node f G = Some (mk_node f i o v eqs
-                                      ingt0 outgt0 defd vout nodup good) ->
-        sem_vars bk H (map fst i) xss ->
-        sem_vars bk H (map fst o) yss ->
+        find_node f G = Some n ->
+                             (* (mk_node f i o v eqs *)
+                             (*          ingt0 outgt0 defd vout nodup good) -> *)
+        sem_vars bk H (map fst n.(n_in)) xss ->
+        sem_vars bk H (map fst n.(n_out)) yss ->
         (* XXX: This should be obtained through well-clocking: *)
         (*  * tuples are synchronised: *)
         same_clock xss ->
@@ -434,8 +454,8 @@ enough: it does not support the internal fixpoint introduced by
         (*  * output clock matches input clock *)
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
         (* XXX: END *)
-        Forall (sem_equation G bk H) eqs ->
-        Forall (P_equation bk H) eqs ->
+        Forall (sem_equation G bk H) n.(n_eqs) ->
+        Forall (P_equation bk H) n.(n_eqs) ->
         P_node f xss yss.
 
     Fixpoint sem_equation_mult
@@ -455,7 +475,7 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        clear H1 defd vout good.
+        (* clear H1 defd vout good. *)
         induction H7; auto.
     Qed.
 
@@ -833,7 +853,7 @@ clock to [sem_var_instant] too. *)
                      | bk H x ck f lae y ys ls xs Hlae Hvars Hvar Hnode IH
                      |
                      |
-                     | bk H f xs ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hf ? ? ? ? ? Heqs IH ]
+                     | bk H f xs ys n (* i o v eqs ingt0 outgt0 defd vout nodup good *) Hbk Hf ? ? ? ? ? Heqs IH ]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
                                       -> sem_equation G bk H eq)
@@ -855,38 +875,37 @@ clock to [sem_var_instant] too. *)
       (* destruct IH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs). *)
       (* exists H. *)
       (* repeat (split; eauto). *)
-      set (cnode := {| n_name  := f;
-                       n_in    := i;
-                       n_out   := o;
-                       n_vars  := v;
-                       n_eqs   := eqs;
-                       n_ingt0 := ingt0;
-                       n_outgt0 := outgt0;
-                       n_defd  := defd;
-                       n_vout  := vout;
-                       n_nodup := nodup;
-                       n_good  := good
-                    |}).
-      assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs cnode))
+      (* set (cnode := {| n_name  := f; *)
+      (*                  n_in    := i; *)
+      (*                  n_out   := o; *)
+      (*                  n_vars  := v; *)
+      (*                  n_eqs   := eqs; *)
+      (*                  n_ingt0 := ingt0; *)
+      (*                  n_outgt0 := outgt0; *)
+      (*                  n_defd  := defd; *)
+      (*                  n_vout  := vout; *)
+      (*                  n_nodup := nodup; *)
+      (*                  n_good  := good *)
+      (*               |}). *)
+      assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n))
         by (eapply Is_node_in_Forall; try eassumption;
             eapply find_node_later_not_Is_node_in; try eassumption).
-      simpl in H5.
-      clear Heqs cnode Hf defd good vout;
-        induction eqs; inv IH; inv H5; eauto.
+      clear Heqs (* cnode Hf defd good vout *);
+        induction n.(n_eqs); inv IH; inv H5; eauto.
   Qed.
 
   Lemma find_node_find_again:
-    forall G f i o v eqs ingt0 outgt0 defd vout nodup good g,
+    forall G f n (* i o v eqs ingt0 outgt0 defd vout nodup good *) g,
       Ordered_nodes G
-      -> find_node f G =
-         Some {| n_name := f; n_in := i; n_out := o;
-                 n_vars := v; n_eqs := eqs;
-                 n_ingt0 := ingt0; n_outgt0 := outgt0; n_defd := defd; n_vout := vout;
-                 n_nodup := nodup; n_good := good |}
-      -> Is_node_in g eqs
-      -> Exists (fun nd=> g = nd.(n_name)) G.
+      -> find_node f G = Some n
+         (* Some {| n_name := f; n_in := i; n_out := o; *)
+         (*         n_vars := v; n_eqs := eqs; *)
+         (*         n_ingt0 := ingt0; n_outgt0 := outgt0; n_defd := defd; n_vout := vout; *)
+         (*         n_nodup := nodup; n_good := good |} *)
+      -> Is_node_in g n.(n_eqs)
+      -> Exists (fun nd => g = nd.(n_name)) G.
   Proof.
-    intros G f i o v eqs ingt0 outgt0 defd vout nodup good g Hord Hfind Hini.
+    intros G f n (* i o v eqs ingt0 outgt0 defd vout nodup good *) g Hord Hfind Hini.
     apply find_node_split in Hfind.
     destruct Hfind as [bG [aG Hfind]].
     rewrite Hfind in *.
@@ -915,7 +934,7 @@ clock to [sem_var_instant] too. *)
        | bk H x f lae y ys ls xs Hlae Hvars Hvar Hnode IH
        |
        |
-       | bk H f xs ys i o v eqs ingt0 outgt0 defd vout nodup good Hbk Hfind Hxs Hys ? ? ? Heqs IH]
+       | bk H f xs ys n (* i o v eqs ingt0 outgt0 defd vout nodup good *) Hbk Hfind Hxs Hys ? ? ? Heqs IH]
           using sem_node_mult
         with (P_equation := fun bk H eq =>
                      ~Is_node_in_eq nd.(n_name) eq
@@ -927,6 +946,7 @@ clock to [sem_var_instant] too. *)
       assert (nd.(n_name) <> f) as Hnf.
       { intro Hnf.
         rewrite Hnf in *.
+        pose proof Hfind as Hfind'.
         apply find_node_split in Hfind.
         destruct Hfind as [bG [aG Hge]].
         rewrite Hge in Hnin.
@@ -934,7 +954,8 @@ clock to [sem_var_instant] too. *)
         destruct Hnin as [? Hfg].
         inversion_clear Hfg.
         match goal with H:f<>_ |- False => apply H end.
-        reflexivity. }
+        erewrite find_node_name; eauto.
+      }
       apply find_node_other with (2:=Hfind) in Hnf.
       econstructor; eauto.
       clear Heqs Hxs Hys.
@@ -942,19 +963,18 @@ clock to [sem_var_instant] too. *)
       (* destruct IH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs). *)
       (* exists H. *)
       (* clear Hxs Hys. *)
-      assert (forall g, Is_node_in g eqs
+      assert (forall g, Is_node_in g n.(n_eqs)
                    -> Exists (fun nd=> g = nd.(n_name)) G)
-        as Hniex
-          by (intros g Hini;
-              apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
-              exact Hini).
+        as Hniex by
+            (intros g Hini;
+             eapply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini; eauto).
       assert (Forall
                 (fun eq=> forall g,
                      Is_node_in_eq g eq
-                     -> Exists (fun nd=> g = nd.(n_name)) G) eqs) as HH.
+                     -> Exists (fun nd=> g = nd.(n_name)) G) n.(n_eqs)) as HH.
       {
-        clear defd vout nodup good Hfind Heqs Hnf.
-        induction eqs as [|eq eqs IH]; [now constructor|].
+        clear (* defd vout nodup good  *)Hfind Heqs Hnf.
+        induction n.(n_eqs) as [|eq eqs IH]; [now constructor|].
         constructor.
         - intros g Hini.
           apply Hniex.
@@ -1120,7 +1140,7 @@ Module NLSemanticsFun
        (OpAux : OPERATORS_AUX Op)
        (Clks  : CLOCKS    Ids)
        (Syn   : NLSYNTAX  Ids Op Clks)
-       (Str   : STREAM        Op)
+       (Str   : STREAM        Op OpAux)
        (Ord   : ORDERED   Ids Op Clks Syn)
        <: NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
   Include NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
