@@ -290,22 +290,22 @@ Module Type NLSEMANTICSCOIND
     | S n => hd s :: take n (tl s)
     end.
 
-  Definition r :=
-    false ::: false ::: false ::: true ::: false ::: false ::: false ::: false ::: false ::: true ::: false ::: false ::: false ::: true ::: Streams.const false.
+  (* Definition r := *)
+  (*   false ::: false ::: false ::: true ::: false ::: false ::: false ::: false ::: false ::: true ::: false ::: false ::: false ::: true ::: Streams.const false. *)
 
-  Notation "⊥" := (absent) (at level 50).
-  Notation "⇑" := (present true_val).
-  Notation "⇓" := (present false_val).
+  (* Notation "⊥" := (absent) (at level 50). *)
+  (* Notation "⇑" := (present true_val). *)
+  (* Notation "⇓" := (present false_val). *)
 
 
-  CoFixpoint x := ⇓ ::: ⇑ ::: x.
+  (* CoFixpoint x := ⇓ ::: ⇑ ::: x. *)
 
-  Eval simpl in (take 16 r, take 16 x,
-                 take 16 (mask_v 0 r x),
-                 take 16 (mask_v 1 r x),
-                 take 16 (mask_v 2 r x),
-                 take 16 (mask_v 3 r x),
-                 take 16 (mask_v 4 r x)).
+  (* Eval simpl in (take 16 r, take 16 x, *)
+  (*                take 16 (mask_v 0 r x), *)
+  (*                take 16 (mask_v 1 r x), *)
+  (*                take 16 (mask_v 2 r x), *)
+  (*                take 16 (mask_v 3 r x), *)
+  (*                take 16 (mask_v 4 r x)). *)
 
   CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value)) : Stream value :=
     let xss := if hd bs then tl xss else xss in
@@ -316,17 +316,64 @@ Module Type NLSEMANTICSCOIND
 
   Definition masks := masks_from 0.
 
-  Eval simpl in take 16 (flatten_masks r (masks r x)).
+  (* Eval simpl in take 16 (flatten_masks r (masks r x)). *)
 
-  CoInductive same_clock: list (Stream value) -> Prop :=
-  | same_clock_nil:
-      same_clock []
-  | same_clock_cons:
-      forall xs xss,
-        (hd xs = absent -> Forall (fun x => x = absent) (List.map (@hd value) xss)) ->
-        (hd xs <> absent -> Forall (fun x => x <> absent) (List.map (@hd value) xss)) ->
-        same_clock (tl xs :: List.map (@tl value) xss) ->
-        same_clock (xs :: xss).
+  Definition same_clock (xss: list (Stream value)) : Prop :=
+    forall n,
+      Forall (fun xs => Str_nth n xs = absent) xss
+      \/ Forall (fun xs => Str_nth n xs <> absent) xss.
+    (* same_clock_intro: *)
+    (*   forall xss, *)
+    (*     Forall (fun x => x = absent) (List.map (@hd value) xss) *)
+    (*     \/ Forall (fun x => x <> absent) (List.map (@hd value) xss) -> *)
+    (*     same_clock (List.map (@tl value) xss) -> *)
+    (*     same_clock xss. *)
+
+  Remark same_clock_nil: same_clock [].
+  Proof.
+    constructor; auto.
+  Qed.
+
+  Fact same_clock_app:
+    forall xss yss,
+      same_clock (xss ++ yss) ->
+      same_clock xss /\ same_clock yss.
+  Proof.
+    intros ** H.
+    split; intro; destruct (H n) as [E|Ne];
+      try (left; apply Forall_app in E; tauto);
+      try (right; apply Forall_app in Ne; tauto).
+    (* intros ** H; split; revert xss yss H; cofix Cofix; intros ** H; *)
+    (*   inversion_clear H as [? [He | Hne] Same]; constructor; *)
+    (*     try (left; rewrite map_app, Forall_app in He; tauto); *)
+    (*     try (right; rewrite map_app, Forall_app in Hne; tauto); *)
+    (*     try (rewrite map_app in Same; eapply Cofix; eauto). *)
+  Qed.
+
+  Corollary same_clock_app_l:
+     forall xss yss,
+      same_clock (xss ++ yss) ->
+      same_clock xss.
+  Proof.
+    intros ? ? H; apply same_clock_app in H; tauto.
+  Qed.
+
+  Corollary same_clock_app_r:
+     forall xss yss,
+      same_clock (xss ++ yss) ->
+      same_clock yss.
+  Proof.
+    intros ? ? H; apply same_clock_app in H; tauto.
+  Qed.
+
+  Corollary same_clock_cons:
+    forall xss xs,
+      same_clock (xs :: xss) ->
+      same_clock xss.
+  Proof.
+    intros ? ? H; rewrite cons_is_app in H.
+    eapply same_clock_app_r; eauto.
+  Qed.
 
   Section NodeSemantics.
 
@@ -647,21 +694,36 @@ Module Type NLSEMANTICSCOIND
     as same_clock_morph.
   Proof.
     unfold Basics.impl.
-    cofix Cofix; intros xss xss' Exss Same.
-    destruct xss'; constructor; inv Same; inv Exss.
-    - intro. erewrite <-map_EqSt; eauto.
-      + apply H. rewrite H5; auto.
-      + apply hd_EqSt.
-    - intro. erewrite <-map_EqSt; eauto.
-      + apply H0. rewrite H5; auto.
-      + apply hd_EqSt.
-    - eapply Cofix; eauto.
-      constructor.
-      + rewrite H5; reflexivity.
-      + erewrite map_st_EqSt; eauto.
-        instantiate (1 := @tl value).
-        * reflexivity.
-        * apply tl_EqSt.
+    intros xss xss' Exss Same.
+    intro; specialize (Same n); destruct Same.
+    - left. eapply Forall_EqSt; eauto.
+      intros xs xs' Exs E; rewrite <-Exs; auto.
+    - right. eapply Forall_EqSt; eauto.
+      intros xs xs' Exs E; rewrite <-Exs; auto.
+    (* cofix Cofix; intros xss xss' Exss Same. *)
+    (* constructor; inversion_clear Same as [A [E|Ne]]; inv Exss; try tauto. *)
+    (* - left. erewrite <-map_EqSt; eauto. *)
+    (*   + apply hd_EqSt. *)
+    (*   + constructor; auto. *)
+    (* - right. erewrite <-map_EqSt; eauto. *)
+    (*   + apply hd_EqSt. *)
+    (*   + constructor; auto. *)
+    (* - eapply Cofix; eauto. *)
+    (*   simpl. *)
+    (*   constructor. *)
+    (*   + rewrite H0; reflexivity. *)
+    (*   + erewrite map_st_EqSt; eauto. *)
+    (*     instantiate (1 := @tl value). *)
+    (*     * reflexivity. *)
+    (*     * apply tl_EqSt. *)
+    (* - eapply Cofix; eauto. *)
+    (*   simpl. *)
+    (*   constructor. *)
+    (*   + rewrite H0; reflexivity. *)
+    (*   + erewrite map_st_EqSt; eauto. *)
+    (*     instantiate (1 := @tl value). *)
+    (*     * reflexivity. *)
+    (*     * apply tl_EqSt. *)
   Qed.
 
   Add Parametric Morphism G : (sem_node G)

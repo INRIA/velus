@@ -52,6 +52,14 @@ Proof.
   destruct xs, xs'; inv Exs; simpl; auto.
 Qed.
 
+Add Parametric Morphism A (n: nat) : (@Str_nth A n)
+    with signature @EqSt A ==> eq
+      as Str_nth_EqSt.
+Proof.
+  intros xs xs' Exs.
+  apply eqst_ntheq; auto.
+Qed.
+
 Section EqSts.
   Variable A: Type.
 

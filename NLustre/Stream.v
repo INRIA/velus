@@ -114,46 +114,46 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Definition mask_v := mask absent.
   Definition mask_b := mask false.
 
-  Definition r :=
-    fun n =>
-      match n with
-      | 0 => false
-      | 1 => false
-      | 2 => false
-      | 3 => true
-      | 4 => false
-      | 5 => false
-      | 6 => false
-      | 7 => false
-      | 8 => false
-      | 9 => true
-      | 10 => false
-      | 11 => false
-      | 12 => false
-      | 13 => true
-      | n => false
-      end.
+  (* Definition r := *)
+  (*   fun n => *)
+  (*     match n with *)
+  (*     | 0 => false *)
+  (*     | 1 => false *)
+  (*     | 2 => false *)
+  (*     | 3 => true *)
+  (*     | 4 => false *)
+  (*     | 5 => false *)
+  (*     | 6 => false *)
+  (*     | 7 => false *)
+  (*     | 8 => false *)
+  (*     | 9 => true *)
+  (*     | 10 => false *)
+  (*     | 11 => false *)
+  (*     | 12 => false *)
+  (*     | 13 => true *)
+  (*     | n => false *)
+  (*     end. *)
 
-  Notation "⊥" := (absent) (at level 50).
-  Notation "⇑" := (present true_val).
-  Notation "⇓" := (present false_val).
-  Notation "↑" := (true).
-  Notation "↓" := (false).
+  (* Notation "⊥" := (absent) (at level 50). *)
+  (* Notation "⇑" := (present true_val). *)
+  (* Notation "⇓" := (present false_val). *)
+  (* Notation "↑" := (true). *)
+  (* Notation "↓" := (false). *)
 
-  Fixpoint x n :=
-    match n with
-    | 0 => ⇓
-    | 1 => ⇑
-    | S (S n) => x n
-    end.
+  (* Fixpoint x n := *)
+  (*   match n with *)
+  (*   | 0 => ⇓ *)
+  (*   | 1 => ⇑ *)
+  (*   | S (S n) => x n *)
+  (*   end. *)
 
-  Compute (take 16 r, take 16 x, take 16 (count r),
-           take 16 (mask_v 0 r x),
-           take 16 (mask_v 1 r x),
-           take 16 (mask_v 2 r x),
-           take 16 (mask_v 3 r x),
-           take 16 (mask_v 4 r x)
-          ).
+  (* Compute (take 16 r, take 16 x, take 16 (count r), *)
+  (*          take 16 (mask_v 0 r x), *)
+  (*          take 16 (mask_v 1 r x), *)
+  (*          take 16 (mask_v 2 r x), *)
+  (*          take 16 (mask_v 3 r x), *)
+  (*          take 16 (mask_v 4 r x) *)
+  (*         ). *)
 
   (* Remark mask_const_opaque: *)
   (*   forall {A} n rs (opaque: A), *)

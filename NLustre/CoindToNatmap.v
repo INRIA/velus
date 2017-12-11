@@ -32,23 +32,33 @@ Module Type COINDTONATMAP
 
     Variable G : global.
 
-    Fixpoint to_map {A} (xss: list (Stream A)) : stream (list A) :=
+    Definition to_map {A} (xs: Stream A) : stream A :=
+      fun n => Str_nth n xs.
+
+    Fixpoint to_maps {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
       | [] => fun n => []
-      | xs :: xss => fun n => Str_nth n xs :: to_map xss n
+      | xs :: xss => fun n => to_map xs n :: to_maps xss n
       end.
+
+    Fact to_maps_app:
+      forall A (xss yss: list (Stream A)) n,
+        to_maps (xss ++ yss) n = to_maps xss n ++ to_maps yss n.
+    Proof.
+      intros.
+      induction xss; simpl; auto.
+      f_equal; auto.
+    Qed.
 
     Definition hist_to_map (H: Mod.history) : Sem.history :=
       PM.map (fun xs => fun n => Str_nth n xs) H.
 
     Lemma sem_var_impl:
-      forall H b xs xss,
-      Forall2 (Mod.sem_var H) xs xss ->
-      Sem.sem_vars b (hist_to_map H) xs (to_map xss).
+      forall H b x xs,
+      Mod.sem_var H x xs ->
+      Sem.sem_var b (hist_to_map H) x (to_map xs).
     Proof.
-      induction 1 as [|? ? ? ? Find];
-        simpl; unfold Sem.sem_vars, Sem.lift; auto.
-      intro; constructor; auto.
+      intros ** Find n.
       constructor.
       inv Find.
       unfold Sem.restr, hist_to_map.
@@ -59,10 +69,87 @@ Module Type COINDTONATMAP
       apply eqst_ntheq; symmetry; auto.
     Qed.
 
-    Theorem implies:
-      forall f xss oss,
-        Mod.sem_node G f xss oss ->
-        Sem.sem_node G f (to_map xss) (to_map oss).
+    Lemma sem_vars_impl:
+      forall H b xs xss,
+      Forall2 (Mod.sem_var H) xs xss ->
+      Sem.sem_vars b (hist_to_map H) xs (to_maps xss).
+    Proof.
+      induction 1 as [|? ? ? ? Find];
+        simpl; unfold Sem.sem_vars, Sem.lift; auto.
+      intro; constructor; auto.
+      apply sem_var_impl; auto.
+    Qed.
+
+    Lemma same_clock_impl:
+      forall xss,
+        Mod.same_clock xss ->
+        Sem.same_clock (to_maps xss).
+    Proof.
+      unfold Sem.same_clock, Sem.instant_same_clock.
+      intros.
+      destruct (H n) as [E|Ne].
+      - left; induction xss; simpl; constructor; inv E; auto.
+        apply IHxss; auto.
+        eapply Mod.same_clock_cons; eauto.
+      - right; induction xss; simpl; constructor; inv Ne; auto.
+        apply IHxss; auto.
+        eapply Mod.same_clock_cons; eauto.
+    Qed.
+
+    Lemma same_clock_app_impl:
+      forall xss yss,
+        xss <> [] ->
+        yss <> [] ->
+        Mod.same_clock (xss ++ yss) ->
+        forall n, Sem.absent_list (to_maps xss n) <-> Sem.absent_list (to_maps yss n).
+    Proof.
+      intros ** Hxss Hyss Same n.
+      apply same_clock_impl in Same.
+      unfold Sem.same_clock, Sem.instant_same_clock in Same;
+        specialize (Same n).
+      split; intros Sem.
+      - destruct Same as [E|Ne].
+        + rewrite to_maps_app in E; apply Forall_app in E; tauto.
+        + rewrite to_maps_app in Ne; apply Forall_app in Ne as [NSem].
+          induction xss; simpl in *; inv NSem; inv Sem.
+          * exfalso; now apply Hxss.
+          * contradiction.
+      - destruct Same as [E|Ne].
+        + rewrite to_maps_app in E; apply Forall_app in E; tauto.
+        + rewrite to_maps_app in Ne; apply Forall_app in Ne as [? NSem].
+          induction yss; simpl in *; inv NSem; inv Sem.
+          * exfalso; now apply Hyss.
+          * contradiction.
+    Qed.
+
+    Lemma sem_cexp_impl:
+      forall H b e es ck,
+        Mod.sem_cexp H b e es ->
+        Sem.sem_caexp (to_map b) (hist_to_map H) ck e (to_map es).
+    Proof.
+      induction 1 as [ ? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
+                    |
+                    |]; unfold Sem.sem_caexp, Sem.lift; intro n.
+      - rename H0_ into Hf.
+        destruct (to_map os n) eqn: E.
+        + admit.
+        + constructor.
+          *{ constructor.
+             - eapply sem_var_impl in Hvar.
+               unfold Sem.sem_var, Sem.lift in Hvar.
+               admit.
+             - admit.
+             - admit.
+           }
+          * admit.
+      - admit.
+      - admit.
+    Admitted.
+
+    Lemma sem_equation_impl:
+      forall H b e,
+        Mod.sem_equation G H b e ->
+        Sem.sem_equation G (to_map b) (hist_to_map H) e.
     Proof.
       intros ** Sem.
       induction Sem as [
@@ -70,7 +157,26 @@ Module Type COINDTONATMAP
                       |
                       |
                       |
-                      | ? ? ? ? ? Find]
+                      | ]
+                         using Mod.sem_equation_mult with
+          (P_node := fun f xss oss => True)
+          (P_reset := fun f r xss oss => True).
+      - econstructor.
+        + apply sem_var_impl; eauto.
+        +
+
+    Theorem implies:
+      forall f xss oss,
+        Mod.sem_node G f xss oss ->
+        Sem.sem_node G f (to_maps xss) (to_maps oss).
+    Proof.
+      intros ** Sem.
+      induction Sem as [
+                      |
+                      |
+                      |
+                      |
+                      | ? ? ? ? ? Find Hin Hout Same]
                          using Mod.sem_node_mult with
           (P_equation := fun H b e => True)
           (P_reset := fun f r xss oss => True).
@@ -81,10 +187,21 @@ Module Type COINDTONATMAP
       - auto.
       - econstructor; eauto.
         + apply Sem.clock_of_equiv.
-        + apply sem_var_impl; eauto.
-        + apply sem_var_impl; eauto.
-        + admit.
-        + admit.
+        + apply sem_vars_impl; eauto.
+        + apply sem_vars_impl; eauto.
+        + now apply Mod.same_clock_app_l, same_clock_impl in Same.
+        + now apply Mod.same_clock_app_r, same_clock_impl in Same.
+        + apply same_clock_app_impl; auto.
+          * intro; subst.
+            apply Forall2_length in Hin; simpl in *.
+            unfold Mod.idents in Hin; rewrite map_length in Hin.
+            pose proof n.(n_ingt0) as Nin.
+            rewrite Hin in Nin; contradict Nin; apply Lt.lt_irrefl.
+          * intro; subst.
+            apply Forall2_length in Hout; simpl in *.
+            unfold Mod.idents in Hout; rewrite map_length in Hout.
+            pose proof n.(n_outgt0) as Nout.
+            rewrite Hout in Nout; contradict Nout; apply Lt.lt_irrefl.
         + admit.
         + admit.
     Qed.
