@@ -90,11 +90,11 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Import List.ListNotations.
   Open Scope list_scope.
 
-  Fixpoint take {A} (n: nat) (s: stream A) : list A :=
-    match n with
-    | O => nil
-    | S m => take m s ++ [s m]
-    end.
+  (* Fixpoint take {A} (n: nat) (s: stream A) : list A := *)
+  (*   match n with *)
+  (*   | O => nil *)
+  (*   | S m => take m s ++ [s m] *)
+  (*   end. *)
 
   Fixpoint count (rs: cstream) (n: nat) : nat :=
     match n, rs n with
@@ -106,13 +106,38 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   Definition mask {A} (opaque: A) (k: nat) (rs: cstream) (xs: stream A) : stream A :=
     fun n =>
-      let c := count rs in
-      if beq_nat k (c n) then xs n else opaque.
+      if beq_nat k (count rs n) then xs n else opaque.
+
+  Lemma count_compat:
+    forall n r r',
+      (forall n, r n = r' n) ->
+      count r n = count r' n.
+  Proof.
+    induction n; simpl; intros ** E; rewrite E; auto.
+    erewrite IHn; eauto.
+  Qed.
+
+  Corollary mask_compat:
+    forall {A} r r' k (o: A) xs,
+      (forall n, r n = r' n) ->
+      forall n, mask o k r xs n = mask o k r' xs n.
+  Proof.
+    intros; unfold mask.
+    erewrite count_compat; eauto.
+  Qed.
 
   (* Definition  *)
-  Definition mask_vs := @mask (list value) [].
+  (* Definition mask_vs := @mask (list value) []. *)
   Definition mask_v := mask absent.
   Definition mask_b := mask false.
+
+  (* Corollary mask_vs_compat: *)
+  (*   forall r r' k xs, *)
+  (*     (forall n, r n = r' n) -> *)
+  (*     forall n, mask_vs k r xs n = mask_vs k r' xs n. *)
+  (* Proof. *)
+  (*   unfold mask_vs; intros; apply mask_compat; auto. *)
+  (* Qed. *)
 
   (* Definition r := *)
   (*   fun n => *)

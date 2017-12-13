@@ -51,6 +51,24 @@ Module Type COINDTONATMAP
       unfold to_map, Str_nth; reflexivity.
     Qed.
 
+    Lemma to_map_cons:
+      forall {A} (xs: Stream A) x n,
+        to_map xs n = x ->
+        to_map (x ::: xs) (n + 1) = x.
+    Proof.
+      unfold to_map; intros.
+      rewrite <-Str_nth_plus; auto.
+    Qed.
+
+    Lemma to_map_const:
+      forall {A} (c: A) n,
+        to_map (Streams.const c) n = c.
+    Proof.
+      induction n; rewrite unfold_Stream at 1; simpl.
+      - now rewrite to_map_0.
+      - now rewrite to_map_S.
+    Qed.
+
     Fixpoint to_maps {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
       | [] => fun n => []
@@ -440,64 +458,325 @@ Module Type COINDTONATMAP
             eapply IHn.
     Qed.
 
-    Lemma sem_equation_impl:
-      forall H b e,
-        Mod.sem_equation G H b e ->
-        Sem.sem_equation G (to_map b) (hist_to_map H) e.
+    Lemma fby_impl:
+      forall n c xs,
+      to_map (Mod.fby c xs) n = fby c (to_map xs) n.
     Proof.
-      intros ** Sem.
-      induction Sem as [? ? ? ? ? ? He
-                      |
-                      |
-                      |
-                      |? ? ? ? HNode IHNode
-                      | ]
-                         using Mod.sem_equation_mult with
-          (P_node := fun f xss oss => Mod.sem_node G f xss oss ->
-                                   Sem.sem_node G f (to_maps xss) (to_maps oss))
-          (P_reset := fun f r xss oss => (* Mod.sem_reset G f r xss oss -> *)
-                                      Sem.sem_reset G f (to_map r) (to_maps xss) (to_maps oss)).
-      - econstructor.
-        + apply sem_var_impl; eauto.
-        + apply sem_cexp_impl; auto.
-      - econstructor; auto.
-        + apply sem_lexps_impl; eauto.
-        + apply sem_vars_impl; eauto.
-      - econstructor; auto.
-        + apply sem_lexps_impl; eauto.
-        + apply sem_vars_impl; eauto.
-        + apply sem_var_impl; eauto.
-        + admit.
-      - econstructor; auto.
-        + apply sem_lexp_impl; eauto.
-        + admit.
-      - constructor; intro.
-        apply (IHNode n) in HNode. admit.
-      - admit.
+      induction n; intros.
+      - unfold_Stv xs; rewrite unfold_Stream at 1;
+          unfold fby; simpl; now rewrite to_map_0.
+      - unfold_Stv xs; rewrite unfold_Stream at 1;
+          unfold fby; simpl; repeat rewrite to_map_S;
+            rewrite IHn; unfold fby;
+              destruct (to_map xs n); auto; f_equal;
+                clear IHn; induction n; simpl; auto;
+                  rewrite to_map_S; destruct (to_map xs n); auto.
+    Qed.
+
+    Lemma sem_clock_impl:
+      forall xss,
+        Sem.clock_of (to_maps xss) (to_map (Mod.clocks_of xss)).
+    Proof.
+    Admitted.
+
+    Remark count_true_not_0:
+      forall r n,
+        count (to_map (true ::: r)) n <> 0.
+    Proof.
+      intros.
+      induction n; simpl.
+      - omega.
+      - rewrite to_map_S.
+        destruct (to_map r n); auto.
+    Qed.
+
+    Remark to_map_mask_true_0:
+      forall n r xs,
+      to_map r n = true ->
+      to_map (Mod.mask absent 0 r xs) n = absent.
+    Proof.
+      induction n; intros ** E; rewrite unfold_Stream at 1; simpl;
+        unfold_Stv r; unfold_Stv xs; auto; try rewrite to_map_S.
+      - rewrite to_map_0 in E; discriminate.
+      - pose proof (to_map_const absent); auto.
+      - pose proof (to_map_const absent); auto.
+      - apply IHn.
+        rewrite to_map_S in E; auto.
+      - apply IHn.
+        rewrite to_map_S in E; auto.
+    Qed.
+
+    (* Remark to_map_mask_false_0: *)
+    (*   forall n r xs, *)
+    (*     count (to_map (true ::: r)) n = 1 -> *)
+    (*     to_map r n = false  -> *)
+    (*     to_map (Mod.mask absent 0 r xs) n = to_map xs n. *)
+    (* Proof. *)
+    (*   induction n; intros ** C E; rewrite unfold_Stream at 1; simpl; *)
+    (*     unfold_Stv r; unfold_Stv xs; auto; repeat rewrite to_map_S. *)
+    (*   - rewrite to_map_0 in E; discriminate. *)
+    (*   - simpl in C. *)
+    (*     rewrite to_map_S in C. *)
+    (*     destruct (to_map (true ::: r) n). *)
+    (*     + inv C; exfalso; eapply count_true_not_0; eauto. *)
+    (*     + induction n; simpl in C. *)
+    (*       * admit. *)
+    (*       * *)
+    (*     simpl in C. *)
+    (*     rewrite to_map_S in E. *)
+    (*     symmetry; erewrite <-IHn; eauto. pose proof (to_map_const absent); auto. *)
+    (*   - pose proof (to_map_const absent); auto. *)
+    (*   - apply IHn. *)
+    (*     rewrite to_map_S in E; auto. *)
+    (*   - apply IHn. *)
+    (*     rewrite to_map_S in E; auto. *)
+    (* Qed *)
+
+    Ltac auto_f_equal H :=
+      f_equal;
+      [ idtac |
+        erewrite H; eauto; unfold mask; simpl; rewrite to_map_S;
+        repeat match goal with
+               | H: to_map _ _ = _ |- _ => rewrite H
+               | H: count ?x _ = _ |- _ => rewrite H
+               | H:  EqNat.beq_nat _ _ = _ |- _ => rewrite H
+               end; auto]
+      (* match goal with *)
+
+    (* end *).
+
+    Lemma mask_impl:
+      forall k r xss opaque n,
+        length opaque = length xss ->
+        Sem.absent_list opaque ->
+        to_maps (List.map (Mod.mask_v k r) xss) n
+        = mask opaque k (to_map r) (to_maps xss) n.
+    Proof.
+      induction xss as [|xs], opaque as [|o];
+        simpl; intros ** Length Abs; inv Length; inv Abs.
+      - unfold mask.
+        destruct (EqNat.beq_nat k (count (to_map r) n)); auto.
+      - induction n.
+        + unfold_Stv xs; unfold_Stv r; unfold Mod.mask_v, mask;
+            rewrite unfold_Stream at 1; simpl;
+            destruct k as [|[]]; simpl; f_equal;
+              erewrite IHxss; eauto; unfold mask; auto.
+        + unfold_Stv xs; unfold_Stv r; unfold Mod.mask_v, mask.
+          *{ rewrite unfold_Stream at 1; simpl.
+             destruct k as [|[]]; simpl.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + auto_f_equal IHxss.
+                 pose proof (to_map_const absent); auto.
+               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   pose proof (to_map_const absent); auto.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   apply to_map_mask_true_0; auto.
+               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   admit.
+                 * auto_f_equal IHxss.
+                   admit.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   admit.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+           }
+
+          *{ rewrite unfold_Stream at 1; simpl.
+             destruct k as [|[]]; simpl.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + auto_f_equal IHxss.
+                 apply to_map_mask_true_0; auto.
+               + destruct (count (to_map (false ::: r)) n) eqn: E';
+                   auto_f_equal IHxss.
+                 * admit.
+                 * admit.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (false ::: r)) n) eqn: E';
+                   auto_f_equal IHxss.
+                 * admit.
+                 * admit.
+               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E';
+                   auto_f_equal IHxss.
+                 * admit.
+                 * admit.
+                 * admit.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (false ::: r)) n) eqn: E'.
+                 * auto_f_equal IHxss.
+                   admit.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E'.
+                 * auto_f_equal IHxss.
+                   admit.
+                 * auto_f_equal IHxss.
+                   admit.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+           }
+
+          *{ rewrite unfold_Stream at 1; simpl.
+             destruct k as [|[]]; simpl.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + auto_f_equal IHxss.
+                 pose proof (to_map_const absent); auto.
+               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   pose proof (to_map_const absent); auto.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   apply to_map_mask_true_0; auto.
+               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   admit.
+                 * auto_f_equal IHxss.
+                   admit.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
+                 * exfalso; eapply count_true_not_0; eauto.
+                 * auto_f_equal IHxss.
+                   admit.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+           }
+
+          *{ rewrite unfold_Stream at 1; simpl.
+             destruct k as [|[]]; simpl.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + auto_f_equal IHxss.
+                 apply to_map_mask_true_0; auto.
+               + destruct (count (to_map (false ::: r)) n) eqn: E';
+                   auto_f_equal IHxss.
+                 * admit.
+                 * admit.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (false ::: r)) n) eqn: E';
+                   auto_f_equal IHxss.
+                 * admit.
+                 * admit.
+               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E';
+                   auto_f_equal IHxss.
+                 * admit.
+                 * admit.
+                 * admit.
+             - repeat rewrite to_map_S.
+               destruct (to_map r n) eqn: E.
+               + destruct (count (to_map (false ::: r)) n) eqn: E'.
+                 * auto_f_equal IHxss.
+                   admit.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E'.
+                 * auto_f_equal IHxss.
+                   admit.
+                 * auto_f_equal IHxss.
+                   admit.
+                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
+                    - admit.
+                    - admit.
+                  }
+           }
+
     Qed.
 
     Theorem implies:
-      forall f xss oss,
-        Mod.sem_node G f xss oss ->
-        Sem.sem_node G f (to_maps xss) (to_maps oss).
+      (forall H b e,
+          Mod.sem_equation G H b e ->
+          Sem.sem_equation G (to_map b) (hist_to_map H) e)
+      /\
+      (forall f xss oss,
+          Mod.sem_node G f xss oss ->
+          Sem.sem_node G f (to_maps xss) (to_maps oss))
+      /\
+      (forall f r xss oss,
+          Mod.sem_reset G f r xss oss ->
+          (forall opaque_x opaque_o,
+              length opaque_x = length xss ->
+              length opaque_o = length oss ->
+              Sem.absent_list opaque_x ->
+              Sem.absent_list opaque_o ->
+              Sem.sem_reset G f (to_map r) opaque_x (to_maps xss) opaque_o (to_maps oss))).
     Proof.
-      intros ** Sem.
-      induction Sem as [
-                      |
-                      |
-                      |
-                      |
-                      | ? ? ? ? ? Find Hin Hout Same]
-                         using Mod.sem_node_mult with
-          (P_equation := fun H b e => True)
-          (P_reset := fun f r xss oss => True).
-      - auto.
-      - auto.
-      - auto.
-      - auto.
-      - auto.
+      apply Mod.sem_equation_node_ind.
+      - econstructor.
+        + apply sem_var_impl; eauto.
+        + apply sem_cexp_impl; auto.
       - econstructor; eauto.
-        + apply Sem.clock_of_equiv.
+        + apply sem_lexps_impl; auto.
+        + apply sem_vars_impl; auto.
+      - econstructor; auto.
+        + apply sem_lexps_impl; eauto.
+        + apply sem_vars_impl; eauto.
+        + apply sem_var_impl; eauto.
+        + eapply Sem.sem_reset_compat.
+          * intro; apply to_map_reset.
+          *{ eapply H4.
+             - rewrite map_length; eapply Forall2_length; eauto.
+             - rewrite map_length; eapply Forall2_length; eauto.
+             - clear; induction es; constructor; auto.
+             - clear; induction ys; constructor; auto.
+           }
+      - econstructor; auto; subst.
+        + apply sem_lexp_impl; eauto.
+        + unfold Sem.sem_var, Sem.lift; intro.
+          rewrite <-fby_impl.
+          apply sem_var_impl; auto.
+          exact (to_map b).
+      - intros ** IHNode ? ? ? ? ? ?.
+        constructor; intro.
+        specialize (IHNode n).
+        pose proof (mask_impl n r xss).
+        pose proof (mask_impl n r yss).
+        eapply Sem.sem_node_compat; eauto.
+      - intros ** Hin Hout Same ? ?. econstructor; eauto.
+        + apply sem_clock_impl.
         + apply sem_vars_impl; eauto.
         + apply sem_vars_impl; eauto.
         + now apply Mod.same_clock_app_l, same_clock_impl in Same.
@@ -513,10 +792,7 @@ Module Type COINDTONATMAP
             unfold Mod.idents in Hout; rewrite map_length in Hout.
             pose proof n.(n_outgt0) as Nout.
             rewrite Hout in Nout; contradict Nout; apply Lt.lt_irrefl.
-        + admit.
-        + admit.
     Qed.
-
 
   End Global.
 
