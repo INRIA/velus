@@ -108,6 +108,24 @@ if the clocked stream is [absent] at the corresponding instant. *)
     fun n =>
       if beq_nat k (count rs n) then xs n else opaque.
 
+  Remark count_ge_0:
+    forall n r,
+      0 <= count r n.
+  Proof.
+    induction n; simpl; intros.
+    - destruct (r 0); omega.
+    - destruct (r (S n)); auto.
+  Qed.
+
+  Corollary count_true_ge_1:
+    forall n r,
+      r n = true ->
+      1 <= count r n.
+  Proof.
+    induction n; simpl; intros ** E; rewrite E; auto.
+    apply Le.le_n_S, count_ge_0.
+  Qed.
+
   Lemma count_compat:
     forall n r r',
       (forall n, r n = r' n) ->

@@ -477,17 +477,27 @@ Module Type COINDTONATMAP
       forall xss,
         Sem.clock_of (to_maps xss) (to_map (Mod.clocks_of xss)).
     Proof.
+      induction xss.
+      - split; intros.
+        rewrite unfold_Stream at 1. simpl.
     Admitted.
 
     Remark count_true_not_0:
       forall r n,
         count (to_map (true ::: r)) n <> 0.
     Proof.
-      intros.
-      induction n; simpl.
+      intros; induction n; simpl.
       - omega.
       - rewrite to_map_S.
         destruct (to_map r n); auto.
+    Qed.
+
+    Remark count_true_not_0':
+      forall n r,
+        to_map r n = true ->
+        count (to_map r) n <> 0.
+    Proof.
+      induction n; simpl; intros r E; try rewrite E; auto.
     Qed.
 
     Remark to_map_mask_true_0:
@@ -506,31 +516,352 @@ Module Type COINDTONATMAP
         rewrite to_map_S in E; auto.
     Qed.
 
-    (* Remark to_map_mask_false_0: *)
+    Lemma count_true_shift:
+      forall n r,
+        count (to_map (true ::: r)) n
+        = if to_map r n then count (to_map r) n else S (count (to_map r) n).
+    Proof.
+      induction n; simpl; intros.
+      - destruct (to_map r 0); auto.
+      - specialize (IHn r).
+        rewrite to_map_S.
+        destruct (to_map r n) eqn: E';
+          destruct (to_map r (S n)); rewrite IHn; auto.
+    Qed.
+
+    Lemma count_false_shift:
+      forall n r,
+        count (to_map (false ::: r)) n
+        = if to_map r n then count (to_map r) n - 1 else count (to_map r) n.
+    Proof.
+      induction n; simpl; intros.
+      - destruct (to_map r 0); auto.
+      - specialize (IHn r).
+        rewrite to_map_S.
+        destruct (to_map r n) eqn: E';
+          destruct (to_map r (S n)); rewrite IHn; try omega.
+        + apply Minus.minus_Sn_m, count_true_ge_1; auto.
+        + rewrite Minus.minus_Sn_m; try omega.
+          apply count_true_ge_1; auto.
+    Qed.
+
+    (* Lemma to_map_mask_false_true_1: *)
     (*   forall n r xs, *)
+    (*     to_map r n = false -> *)
     (*     count (to_map (true ::: r)) n = 1 -> *)
-    (*     to_map r n = false  -> *)
     (*     to_map (Mod.mask absent 0 r xs) n = to_map xs n. *)
     (* Proof. *)
-    (*   induction n; intros ** C E; rewrite unfold_Stream at 1; simpl; *)
-    (*     unfold_Stv r; unfold_Stv xs; auto; repeat rewrite to_map_S. *)
-    (*   - rewrite to_map_0 in E; discriminate. *)
-    (*   - simpl in C. *)
-    (*     rewrite to_map_S in C. *)
-    (*     destruct (to_map (true ::: r) n). *)
-    (*     + inv C; exfalso; eapply count_true_not_0; eauto. *)
-    (*     + induction n; simpl in C. *)
-    (*       * admit. *)
-    (*       * *)
-    (*     simpl in C. *)
-    (*     rewrite to_map_S in E. *)
-    (*     symmetry; erewrite <-IHn; eauto. pose proof (to_map_const absent); auto. *)
-    (*   - pose proof (to_map_const absent); auto. *)
-    (*   - apply IHn. *)
-    (*     rewrite to_map_S in E; auto. *)
-    (*   - apply IHn. *)
-    (*     rewrite to_map_S in E; auto. *)
-    (* Qed *)
+    (*   intros ** E C. *)
+    (*   rewrite count_true_shift in C; rewrite E in C; *)
+    (*     injection C; clear C; intro C. *)
+    (*   revert r xs E C; induction n; simpl; intros. *)
+    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+    (*       simpl; repeat rewrite to_map_0; auto. *)
+    (*     rewrite to_map_0 in E; discriminate. *)
+    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+    (*       simpl; repeat rewrite to_map_S; rewrite E in C. *)
+    (*     + exfalso; eapply count_true_not_0; eauto. *)
+    (*     + rewrite to_map_S in E. apply IHn; auto. *)
+    (*       rewrite count_false_shift in C; rewrite E in C; auto. *)
+    (* Qed. *)
+
+    (* Lemma to_map_mask_false_true_SS: *)
+    (*   forall n r xs k, *)
+    (*     to_map r n = false -> *)
+    (*     count (to_map (true ::: r)) n = S (S k) -> *)
+    (*     to_map (Mod.mask absent 0 r xs) n = absent. *)
+    (* Proof. *)
+    (*   intros ** E C. *)
+    (*   rewrite count_true_shift in C; rewrite E in C; *)
+    (*     injection C; clear C; intro C. *)
+    (*   revert r xs E C; induction n; simpl; intros. *)
+    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+    (*       simpl; repeat rewrite to_map_0; auto. *)
+    (*     rewrite to_map_0 in E; discriminate. *)
+    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+    (*       simpl; repeat rewrite to_map_S; rewrite E in C. *)
+    (*     + pose proof (to_map_const absent); auto. *)
+    (*     + rewrite to_map_S in E. apply IHn; auto. *)
+    (*       rewrite count_false_shift in C; rewrite E in C; auto. *)
+    (* Qed. *)
+
+    Lemma to_map_mask_false_true:
+      forall n r xs k k',
+        to_map r n = false ->
+        count (to_map (true ::: r)) n = S k ->
+        to_map (Mod.mask absent k' r xs) n
+        = if EqNat.beq_nat k k' then to_map xs n else absent.
+    Proof.
+      intros ** E C.
+      rewrite count_true_shift, E in C; injection C; clear C; intro C.
+      revert k' k r xs E C; induction n; simpl; intros.
+      - rewrite E in C.
+        destruct (EqNat.beq_nat k k') eqn: E'.
+        + apply EqNat.beq_nat_true in E'; subst.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
+          rewrite to_map_0 in E; discriminate.
+        + apply EqNat.beq_nat_false in E'.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            destruct k' as [|[]]; simpl; try (exfalso; now apply E').
+          * pose proof (to_map_const absent); auto.
+          * apply to_map_0.
+      - destruct (EqNat.beq_nat k k') eqn: E'.
+        + apply EqNat.beq_nat_true in E'; subst.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
+              try discriminate; rewrite to_map_S in E.
+          * inv E'; exfalso; eapply count_true_not_0; eauto.
+          * erewrite IHn; eauto.
+            rewrite count_true_shift, E in E'; injection E'; clear E'; intro E'.
+            rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto.
+          * rewrite count_true_shift, E in E'. inv E'.
+            erewrite IHn; auto.
+            rewrite <-plus_n_O, <-EqNat.beq_nat_refl; auto.
+          * rewrite count_false_shift, E in E'.
+            erewrite IHn; eauto; auto.
+          * rewrite count_false_shift, E in E'.
+            erewrite IHn; eauto; auto.
+          * rewrite count_false_shift, E in E'.
+            erewrite IHn, <-EqNat.beq_nat_refl; auto.
+        + apply EqNat.beq_nat_false in E'.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            destruct k' as [|[]]; simpl; rewrite E in C; subst;
+              repeat rewrite to_map_S; rewrite to_map_S in E;
+                try (exfalso; now apply E').
+          * pose proof (to_map_const absent); auto.
+          * erewrite IHn; eauto.
+            rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
+            <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
+            <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+    Qed.
+
+    Lemma to_map_mask_true_false:
+      forall n r xs k k',
+        to_map r n = true ->
+        count (to_map (false ::: r)) n = k ->
+        to_map (Mod.mask absent (S k') r xs) n
+        = if EqNat.beq_nat k k' then to_map xs n else absent.
+    Proof.
+      intros ** E C.
+      rewrite count_false_shift, E in C.
+      revert k' k r xs E C; induction n; simpl; intros.
+      - rewrite E in C.
+        destruct (EqNat.beq_nat k k') eqn: E'.
+        + apply EqNat.beq_nat_true in E'; subst.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
+          rewrite to_map_0 in E; discriminate.
+        + apply EqNat.beq_nat_false in E'.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            destruct k' as [|[]]; simpl; try (exfalso; now apply E').
+          * pose proof (to_map_const absent); auto.
+          * apply to_map_0.
+      - destruct (EqNat.beq_nat k k') eqn: E'.
+        + apply EqNat.beq_nat_true in E'; subst.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
+              try discriminate; rewrite to_map_S in E; simpl in E';
+                try rewrite <-Minus.minus_n_O in E'.
+          * exfalso; eapply count_true_not_0; eauto.
+          * erewrite IHn; eauto.
+            rewrite count_true_shift, E in E'.
+            rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto.
+          * rewrite count_true_shift, E in E'.
+            erewrite IHn; auto.
+            rewrite E'; simpl; rewrite <-plus_n_O, <-EqNat.beq_nat_refl; auto.
+          * rewrite count_false_shift, E in E'.
+            erewrite IHn; eauto; auto.
+          * rewrite count_false_shift, E in E'.
+            erewrite IHn; eauto; auto.
+          * rewrite count_false_shift, E in E'.
+            erewrite IHn, <-EqNat.beq_nat_refl; auto.
+        + apply EqNat.beq_nat_false in E'.
+          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+            destruct k' as [|[]]; simpl; rewrite E in C; subst;
+              repeat rewrite to_map_S; rewrite to_map_S in E;
+                simpl in E'; try rewrite <-Minus.minus_n_O in E';
+                try (exfalso; now apply E').
+          * apply to_map_mask_true_0; auto.
+          * erewrite IHn; eauto.
+            rewrite count_true_shift, E in E'.
+            rewrite <-plus_n_O.
+            apply count_true_not_0' in E.
+            destruct (count (to_map r) n) as [|[]];
+              try (exfalso; now apply E); try (exfalso; now apply E').
+            auto.
+          * erewrite IHn; eauto.
+            rewrite count_true_shift, E in E'.
+            apply count_true_not_0' in E.
+            destruct (count (to_map r) n) as [|[|]];
+              try (exfalso; now apply E); simpl; auto.
+            rewrite 2 NPeano.Nat.succ_inj_wd_neg, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+          * erewrite IHn; eauto.
+            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+            rewrite <-plus_n_O, E'; auto.
+    Qed.
+
+    Lemma to_map_mask_same:
+      forall n b r xs k k',
+        to_map r n = b ->
+        count (to_map (b ::: r)) n = k ->
+        to_map (Mod.mask absent k' r xs) n
+        = if EqNat.beq_nat k k' then to_map xs n else absent.
+    Proof.
+      intros ** E C.
+      destruct b.
+      - rewrite count_true_shift, E in C.
+        revert k' k r xs E C; induction n; simpl; intros.
+        + rewrite E in C.
+          destruct (EqNat.beq_nat k k') eqn: E'.
+          * apply EqNat.beq_nat_true in E'; subst.
+            unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+              simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
+            rewrite to_map_0 in E; discriminate.
+          *{ apply EqNat.beq_nat_false in E'.
+             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+               destruct k' as [|[]]; simpl; try (exfalso; now apply E').
+             - pose proof (to_map_const absent); auto.
+             - apply to_map_0.
+           }
+        + destruct (EqNat.beq_nat k k') eqn: E'.
+          *{ apply EqNat.beq_nat_true in E'; subst.
+             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+               destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
+                 try discriminate; rewrite to_map_S in E.
+             - inv E'; exfalso; eapply count_true_not_0; eauto.
+             - erewrite IHn; eauto.
+               inv E';
+                 rewrite count_true_shift, E, <-plus_n_O,
+                 <-EqNat.beq_nat_refl; auto.
+             - injection E'; clear E'; intro E'.
+               rewrite count_false_shift in E'; rewrite E in E'.
+               apply NPeano.Nat.sub_0_le in E'.
+               pose proof (count_true_ge_1 _ _ E).
+               apply Le.le_antisym in E'; auto.
+               erewrite IHn; auto.
+               rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto.
+             - injection E'; clear E'; intro E'.
+               erewrite IHn; eauto.
+               inv E'; rewrite count_false_shift, E.
+               pose proof (count_true_ge_1 _ _ E).
+               rewrite Minus.minus_Sn_m; auto.
+               simpl; rewrite <-Minus.minus_n_O, <-plus_n_O,
+                      <-EqNat.beq_nat_refl; auto.
+           }
+          *{ apply EqNat.beq_nat_false in E'.
+             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+               destruct k' as [|[]]; simpl; rewrite E in C; subst;
+                 repeat rewrite to_map_S; rewrite to_map_S in E;
+                   try (exfalso; now apply E').
+             - pose proof (to_map_const absent); auto.
+             - erewrite IHn; eauto.
+               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
+               <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
+               <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               pose proof (count_true_ge_1 _ _ E).
+               rewrite count_false_shift, E, Minus.minus_Sn_m in E';
+                 auto; simpl in E';
+                   rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               pose proof (count_true_ge_1 _ _ E).
+               rewrite count_false_shift, E, Minus.minus_Sn_m in E';
+                 auto; simpl in E';
+                   rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               pose proof (count_true_ge_1 _ _ E).
+               rewrite count_false_shift, E, Minus.minus_Sn_m in E';
+                 auto; simpl in E';
+                   rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+           }
+
+      - rewrite count_false_shift, E in C.
+        revert k' k r xs E C; induction n; simpl; intros.
+        + rewrite E in C.
+          destruct (EqNat.beq_nat k k') eqn: E'.
+          * apply EqNat.beq_nat_true in E'; subst.
+            unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+              simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
+            rewrite to_map_0 in E; discriminate.
+          *{ apply EqNat.beq_nat_false in E'.
+             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+               destruct k' as [|[]]; simpl; try (exfalso; now apply E').
+             - pose proof (to_map_const absent); auto.
+             - apply to_map_0.
+           }
+        + destruct (EqNat.beq_nat k k') eqn: E'.
+          *{ apply EqNat.beq_nat_true in E'; subst.
+             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+               destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
+                 try discriminate; rewrite to_map_S in E.
+             - inv E'; exfalso; eapply count_true_not_0; eauto.
+             - erewrite to_map_mask_false_true; eauto;
+                 rewrite <-EqNat.beq_nat_refl; auto.
+             - erewrite to_map_mask_false_true; eauto;
+                 rewrite <-EqNat.beq_nat_refl; auto.
+             - erewrite IHn; eauto.
+               rewrite count_false_shift, E in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_false_shift, E in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_false_shift, E in E'.
+               rewrite <-plus_n_O, E', <-EqNat.beq_nat_refl; auto.
+           }
+          *{ apply EqNat.beq_nat_false in E'.
+             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
+               destruct k' as [|[]]; simpl; rewrite E in C; subst;
+                 repeat rewrite to_map_S; rewrite to_map_S in E;
+                   try (exfalso; now apply E').
+             - pose proof (to_map_const absent); auto.
+             - erewrite IHn; eauto.
+               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
+               <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
+               <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+             - erewrite IHn; eauto.
+               rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
+               rewrite <-plus_n_O, E'; auto.
+           }
+    Qed.
 
     Ltac auto_f_equal H :=
       f_equal;
@@ -540,10 +871,7 @@ Module Type COINDTONATMAP
                | H: to_map _ _ = _ |- _ => rewrite H
                | H: count ?x _ = _ |- _ => rewrite H
                | H:  EqNat.beq_nat _ _ = _ |- _ => rewrite H
-               end; auto]
-      (* match goal with *)
-
-    (* end *).
+               end; auto].
 
     Lemma mask_impl:
       forall k r xss opaque n,
@@ -557,11 +885,11 @@ Module Type COINDTONATMAP
       - unfold mask.
         destruct (EqNat.beq_nat k (count (to_map r) n)); auto.
       - induction n.
-        + unfold_Stv xs; unfold_Stv r; unfold Mod.mask_v, mask;
+        + unfold_St xs; unfold_Stv r; unfold Mod.mask_v, mask;
             rewrite unfold_Stream at 1; simpl;
             destruct k as [|[]]; simpl; f_equal;
               erewrite IHxss; eauto; unfold mask; auto.
-        + unfold_Stv xs; unfold_Stv r; unfold Mod.mask_v, mask.
+        + unfold_St xs; unfold_Stv r; unfold Mod.mask_v, mask.
           *{ rewrite unfold_Stream at 1; simpl.
              destruct k as [|[]]; simpl.
              - repeat rewrite to_map_S.
@@ -581,24 +909,32 @@ Module Type COINDTONATMAP
                + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  * auto_f_equal IHxss.
-                   admit.
+                   erewrite to_map_mask_false_true; eauto; auto.
                  * auto_f_equal IHxss.
-                   admit.
+                   erewrite to_map_mask_false_true; eauto; auto.
              - repeat rewrite to_map_S.
                destruct (to_map r n) eqn: E.
                + destruct (count (to_map (true ::: r)) n) eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
+                    - erewrite to_map_mask_same; eauto.
+                      apply EqNat.beq_nat_true, eq_S, EqNat.beq_nat_true_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
+                    - erewrite to_map_mask_same; eauto.
+                      apply EqNat.beq_nat_false, not_eq_S, EqNat.beq_nat_false_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
                + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  * auto_f_equal IHxss.
-                   admit.
+                   erewrite to_map_mask_false_true; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
+                    - erewrite to_map_mask_false_true; eauto.
+                      apply EqNat.beq_nat_true, eq_S, EqNat.beq_nat_true_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
+                    - erewrite to_map_mask_false_true; eauto.
+                      apply EqNat.beq_nat_false, not_eq_S, EqNat.beq_nat_false_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
            }
 
@@ -609,121 +945,45 @@ Module Type COINDTONATMAP
                + auto_f_equal IHxss.
                  apply to_map_mask_true_0; auto.
                + destruct (count (to_map (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss.
-                 * admit.
-                 * admit.
+                   auto_f_equal IHxss; erewrite to_map_mask_same; eauto; auto.
              - repeat rewrite to_map_S.
                destruct (to_map r n) eqn: E.
                + destruct (count (to_map (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss.
-                 * admit.
-                 * admit.
+                   auto_f_equal IHxss;
+                   erewrite to_map_mask_true_false; eauto; auto.
                + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E';
-                   auto_f_equal IHxss.
-                 * admit.
-                 * admit.
-                 * admit.
+                   auto_f_equal IHxss; erewrite to_map_mask_same; eauto; auto.
              - repeat rewrite to_map_S.
                destruct (to_map r n) eqn: E.
                + destruct (count (to_map (false ::: r)) n) eqn: E'.
                  * auto_f_equal IHxss.
-                   admit.
+                   erewrite to_map_mask_true_false; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
+                    - erewrite to_map_mask_true_false; eauto.
+                      apply EqNat.beq_nat_true, eq_S,
+                      EqNat.beq_nat_true_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
+                    - erewrite to_map_mask_true_false; eauto.
+                      apply EqNat.beq_nat_false, not_eq_S,
+                      EqNat.beq_nat_false_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
                + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E'.
                  * auto_f_equal IHxss.
-                   admit.
+                   erewrite to_map_mask_same; eauto; auto.
                  * auto_f_equal IHxss.
-                   admit.
+                   erewrite to_map_mask_same; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
+                    - erewrite to_map_mask_same; eauto.
+                      apply EqNat.beq_nat_true, eq_S, eq_S,
+                      EqNat.beq_nat_true_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
+                    - erewrite to_map_mask_same; eauto.
+                      apply EqNat.beq_nat_false, not_eq_S, not_eq_S,
+                      EqNat.beq_nat_false_iff in E'';
+                        rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
            }
-
-          *{ rewrite unfold_Stream at 1; simpl.
-             destruct k as [|[]]; simpl.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + auto_f_equal IHxss.
-                 pose proof (to_map_const absent); auto.
-               + destruct (count (to_map (true ::: r)) n) eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   pose proof (to_map_const absent); auto.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (true ::: r)) n) eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   apply to_map_mask_true_0; auto.
-               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   admit.
-                 * auto_f_equal IHxss.
-                   admit.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (true ::: r)) n) eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
-                  }
-               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   admit.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
-                  }
-           }
-
-          *{ rewrite unfold_Stream at 1; simpl.
-             destruct k as [|[]]; simpl.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + auto_f_equal IHxss.
-                 apply to_map_mask_true_0; auto.
-               + destruct (count (to_map (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss.
-                 * admit.
-                 * admit.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss.
-                 * admit.
-                 * admit.
-               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E';
-                   auto_f_equal IHxss.
-                 * admit.
-                 * admit.
-                 * admit.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (false ::: r)) n) eqn: E'.
-                 * auto_f_equal IHxss.
-                   admit.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
-                  }
-               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E'.
-                 * auto_f_equal IHxss.
-                   admit.
-                 * auto_f_equal IHxss.
-                   admit.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - admit.
-                    - admit.
-                  }
-           }
-
     Qed.
 
     Theorem implies:
@@ -774,7 +1034,7 @@ Module Type COINDTONATMAP
         specialize (IHNode n).
         pose proof (mask_impl n r xss).
         pose proof (mask_impl n r yss).
-        eapply Sem.sem_node_compat; eauto.
+        eapply Sem.sem_node_compat; auto.
       - intros ** Hin Hout Same ? ?. econstructor; eauto.
         + apply sem_clock_impl.
         + apply sem_vars_impl; eauto.
