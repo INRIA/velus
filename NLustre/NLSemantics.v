@@ -330,6 +330,16 @@ environment.
   (* Definition merge_reset (rs rs': stream bool) : stream bool := *)
   (*   fun n => rs n || rs' n. *)
 
+  Definition all_absent {A} (l: list A) : list value :=
+    map (fun _ => absent) l.
+
+  Remark all_absent_spec:
+    forall A (l: list A),
+      absent_list (all_absent l).
+  Proof.
+    induction l; simpl; constructor; auto.
+  Qed.
+
   Section NodeSemantics.
 
     Variable G: global.
@@ -351,7 +361,7 @@ environment.
           sem_laexps bk H ck arg ls ->
           sem_vars bk H x xs ->
           sem_var bk H y ys ->
-          sem_reset f (reset_of ys) (map (fun _ => absent) arg) ls (map (fun _ => absent) x) xs ->
+          sem_reset f (reset_of ys) ls xs ->
           sem_equation bk H (EqApp x ck f arg (Some y))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
@@ -360,11 +370,12 @@ environment.
           xs = fby (sem_const c0) ls ->
           sem_equation bk H (EqFby x ck c0 le)
 
-    with sem_reset: ident -> stream bool -> list value -> stream (list value) -> list value -> stream (list value) -> Prop :=
+    with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
          | SReset:
-             forall f r opaque_x xss opaque_y yss,
-               (forall n, sem_node f (mask opaque_x n r xss) (mask opaque_y n r yss)) ->
-               sem_reset f r opaque_x xss opaque_y yss
+             forall f r xss yss,
+               (forall n, sem_node f (mask (all_absent (xss n)) n r xss)
+                              (mask (all_absent (yss n)) n r yss)) ->
+               sem_reset f r xss yss
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
          | SNode:
@@ -400,7 +411,7 @@ enough: it does not support the internal fixpoint introduced by
     Variable G: global.
 
     Variable P_equation: stream bool -> history -> equation -> Prop.
-    Variable P_reset: ident -> stream bool -> list value -> stream (list value) -> list value -> stream (list value) -> Prop.
+    Variable P_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop.
     Variable P_node: ident -> stream (list value) -> stream (list value) -> Prop.
 
     Hypothesis EqDefCase:
@@ -422,8 +433,8 @@ enough: it does not support the internal fixpoint introduced by
         sem_laexps bk H ck arg ls ->
         sem_vars bk H x xs ->
         sem_var bk H y ys ->
-        sem_reset G f (reset_of ys) (map (fun _ => absent) arg) ls (map (fun _ => absent) x) xs ->
-        P_reset f (reset_of ys) (map (fun _ => absent) arg) ls (map (fun _ => absent) x) xs ->
+        sem_reset G f (reset_of ys) ls xs ->
+        P_reset f (reset_of ys) ls xs ->
         P_equation bk H (EqApp x ck f arg (Some y)).
 
     Hypothesis EqFbyCase:
@@ -434,10 +445,10 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H (EqFby x ck c0 le).
 
     Hypothesis ResetCase:
-      forall f r opaque_x xss opaque_y yss,
-        (forall n, sem_node G f (mask opaque_x n r xss) (mask opaque_y n r yss)) ->
-        (forall n, P_node f (mask opaque_x n r xss) (mask opaque_y n r yss)) ->
-        P_reset f r opaque_x xss opaque_y yss.
+      forall f r xss yss,
+        (forall n, sem_node G f (mask (all_absent (xss n)) n r xss) (mask (all_absent (yss n)) n r yss)) ->
+        (forall n, P_node f (mask (all_absent (xss n)) n r xss) (mask (all_absent (yss n)) n r yss)) ->
+        P_reset f r xss yss.
 
     Hypothesis NodeCase:
       forall bk H f xss yss n, (* i o v eqs ingt0 outgt0 defd vout nodup good, *)
@@ -464,10 +475,9 @@ enough: it does not support the internal fixpoint introduced by
       : P_equation b H e
     with sem_reset_mult
            (f: ident) (r: stream bool)
-           (opaque_x: list value) (xss: stream (list value))
-           (opaque_o: list value) (oss: stream (list value))
-           (Sem: sem_reset G f r opaque_x xss opaque_o oss) {struct Sem}
-         : P_reset f r opaque_x xss opaque_o oss
+           (xss oss: stream (list value))
+           (Sem: sem_reset G f r xss oss) {struct Sem}
+         : P_reset f r xss oss
     with sem_node_mult
            (f: ident) (xss oss: stream (list value))
            (Sem: sem_node G f xss oss) {struct Sem}
@@ -859,8 +869,8 @@ clock to [sem_var_instant] too. *)
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
                                       -> sem_equation G bk H eq)
-           (P_reset := fun f r opaque_x xss opaque_y yss => node.(n_name) <> f ->
-                                                         sem_reset G f r opaque_x xss opaque_y yss).
+           (P_reset := fun f r xss yss => node.(n_name) <> f ->
+                                       sem_reset G f r xss yss).
     - econstructor; eassumption.
     - intro Hnin.
       eapply @SEqApp with (1:=Hlae) (2:=Hvars).
@@ -1191,16 +1201,16 @@ an absent value *)
   Qed.
 
   Corollary sem_reset_compat:
-    forall G f r r' opaque_x xss opaque_o oss,
+    forall G f r r' xss oss,
       (forall n, r n = r' n) ->
-      sem_reset G f r opaque_x xss opaque_o oss ->
-      sem_reset G f r' opaque_x xss opaque_o oss.
+      sem_reset G f r xss oss ->
+      sem_reset G f r' xss oss.
   Proof.
     intros ** E Res.
     inversion_clear Res as [? ? ? ? Node].
     constructor; intro n.
-    pose proof (mask_compat _ _ n opaque_x xss E).
-    pose proof (mask_compat _ _ n opaque_o oss E).
+    pose proof (mask_compat _ _ n (all_absent (xss n)) xss E).
+    pose proof (mask_compat _ _ n (all_absent (oss n)) oss E).
     eapply sem_node_compat; eauto.
   Qed.
 

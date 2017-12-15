@@ -51,15 +51,6 @@ Module Type COINDTONATMAP
       unfold to_map, Str_nth; reflexivity.
     Qed.
 
-    Lemma to_map_cons:
-      forall {A} (xs: Stream A) x n,
-        to_map xs n = x ->
-        to_map (x ::: xs) (n + 1) = x.
-    Proof.
-      unfold to_map; intros.
-      rewrite <-Str_nth_plus; auto.
-    Qed.
-
     Lemma to_map_const:
       forall {A} (c: A) n,
         to_map (Streams.const c) n = c.
@@ -69,6 +60,7 @@ Module Type COINDTONATMAP
       - now rewrite to_map_S.
     Qed.
 
+    (** explain all this weirdness *)
     Fixpoint to_maps {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
       | [] => fun n => []
@@ -85,7 +77,7 @@ Module Type COINDTONATMAP
     Qed.
 
     Definition hist_to_map (H: Mod.history) : Sem.history :=
-      PM.map (fun xs => fun n => Str_nth n xs) H.
+      PM.map to_map H.
 
     Lemma sem_var_impl:
       forall H b x xs,
@@ -126,8 +118,7 @@ Module Type COINDTONATMAP
         apply IHxss; auto.
         eapply Mod.same_clock_cons; eauto.
       - right; induction xss; simpl; constructor; inv Ne; auto.
-        apply IHxss; auto.
-        eapply Mod.same_clock_cons; eauto.
+        apply IHxss; eauto using Mod.same_clock_cons.
     Qed.
 
     Lemma same_clock_app_impl:
@@ -545,46 +536,6 @@ Module Type COINDTONATMAP
           apply count_true_ge_1; auto.
     Qed.
 
-    (* Lemma to_map_mask_false_true_1: *)
-    (*   forall n r xs, *)
-    (*     to_map r n = false -> *)
-    (*     count (to_map (true ::: r)) n = 1 -> *)
-    (*     to_map (Mod.mask absent 0 r xs) n = to_map xs n. *)
-    (* Proof. *)
-    (*   intros ** E C. *)
-    (*   rewrite count_true_shift in C; rewrite E in C; *)
-    (*     injection C; clear C; intro C. *)
-    (*   revert r xs E C; induction n; simpl; intros. *)
-    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
-    (*       simpl; repeat rewrite to_map_0; auto. *)
-    (*     rewrite to_map_0 in E; discriminate. *)
-    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
-    (*       simpl; repeat rewrite to_map_S; rewrite E in C. *)
-    (*     + exfalso; eapply count_true_not_0; eauto. *)
-    (*     + rewrite to_map_S in E. apply IHn; auto. *)
-    (*       rewrite count_false_shift in C; rewrite E in C; auto. *)
-    (* Qed. *)
-
-    (* Lemma to_map_mask_false_true_SS: *)
-    (*   forall n r xs k, *)
-    (*     to_map r n = false -> *)
-    (*     count (to_map (true ::: r)) n = S (S k) -> *)
-    (*     to_map (Mod.mask absent 0 r xs) n = absent. *)
-    (* Proof. *)
-    (*   intros ** E C. *)
-    (*   rewrite count_true_shift in C; rewrite E in C; *)
-    (*     injection C; clear C; intro C. *)
-    (*   revert r xs E C; induction n; simpl; intros. *)
-    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
-    (*       simpl; repeat rewrite to_map_0; auto. *)
-    (*     rewrite to_map_0 in E; discriminate. *)
-    (*   - unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
-    (*       simpl; repeat rewrite to_map_S; rewrite E in C. *)
-    (*     + pose proof (to_map_const absent); auto. *)
-    (*     + rewrite to_map_S in E. apply IHn; auto. *)
-    (*       rewrite count_false_shift in C; rewrite E in C; auto. *)
-    (* Qed. *)
-
     Lemma to_map_mask_false_true:
       forall n r xs k k',
         to_map r n = false ->
@@ -986,6 +937,13 @@ Module Type COINDTONATMAP
            }
     Qed.
 
+    Remark length_all_absent:
+      forall A (xss: list (Stream A)) n,
+        length (Sem.all_absent (to_maps xss n)) = length xss.
+    Proof.
+      induction xss; simpl; auto.
+    Qed.
+
     Theorem implies:
       (forall H b e,
           Mod.sem_equation G H b e ->
@@ -997,12 +955,7 @@ Module Type COINDTONATMAP
       /\
       (forall f r xss oss,
           Mod.sem_reset G f r xss oss ->
-          (forall opaque_x opaque_o,
-              length opaque_x = length xss ->
-              length opaque_o = length oss ->
-              Sem.absent_list opaque_x ->
-              Sem.absent_list opaque_o ->
-              Sem.sem_reset G f (to_map r) opaque_x (to_maps xss) opaque_o (to_maps oss))).
+          Sem.sem_reset G f (to_map r) (to_maps xss) (to_maps oss)).
     Proof.
       apply Mod.sem_equation_node_ind.
       - econstructor.
@@ -1017,24 +970,24 @@ Module Type COINDTONATMAP
         + apply sem_var_impl; eauto.
         + eapply Sem.sem_reset_compat.
           * intro; apply to_map_reset.
-          *{ eapply H4.
-             - rewrite map_length; eapply Forall2_length; eauto.
-             - rewrite map_length; eapply Forall2_length; eauto.
-             - clear; induction es; constructor; auto.
-             - clear; induction ys; constructor; auto.
-           }
+          * eauto.
       - econstructor; auto; subst.
         + apply sem_lexp_impl; eauto.
         + unfold Sem.sem_var, Sem.lift; intro.
           rewrite <-fby_impl.
           apply sem_var_impl; auto.
           exact (to_map b).
-      - intros ** IHNode ? ? ? ? ? ?.
+      - intros ** IHNode.
         constructor; intro.
         specialize (IHNode n).
-        pose proof (mask_impl n r xss).
-        pose proof (mask_impl n r yss).
-        eapply Sem.sem_node_compat; auto.
+        pose proof (mask_impl n r xss) as Hxss.
+        pose proof (mask_impl n r yss) as Hyss.
+        eapply Sem.sem_node_compat.
+        + intro; apply Hxss;
+            [apply length_all_absent | apply Sem.all_absent_spec].
+        + intro; apply Hyss;
+            [apply length_all_absent | apply Sem.all_absent_spec].
+        + auto.
       - intros ** Hin Hout Same ? ?. econstructor; eauto.
         + apply sem_clock_impl.
         + apply sem_vars_impl; eauto.
