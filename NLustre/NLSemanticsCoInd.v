@@ -173,7 +173,7 @@ Module Type NLSEMANTICSCOIND
         sem_cexp H b (Eexp e) es.
 
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
-    existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
+    forallb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
   Definition reset_of : Stream value -> Stream bool :=
     map (fun x => match x with

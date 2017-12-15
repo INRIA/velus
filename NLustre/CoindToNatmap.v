@@ -60,6 +60,15 @@ Module Type COINDTONATMAP
       - now rewrite to_map_S.
     Qed.
 
+    Lemma to_map_tl:
+      forall {A} (xs: Stream A) n,
+        to_map (tl xs) n = to_map xs (S n).
+    Proof.
+      induction n; unfold_St xs; simpl.
+      - now rewrite to_map_S.
+      - now rewrite to_map_S.
+    Qed.
+
     (** explain all this weirdness *)
     Fixpoint to_maps {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
@@ -71,8 +80,15 @@ Module Type COINDTONATMAP
       forall A (xss yss: list (Stream A)) n,
         to_maps (xss ++ yss) n = to_maps xss n ++ to_maps yss n.
     Proof.
-      intros.
-      induction xss; simpl; auto.
+      intros; induction xss; simpl; auto.
+      f_equal; auto.
+    Qed.
+
+    Lemma to_maps_tl:
+      forall xss n,
+        to_maps (List.map (tl (A:=value)) xss) n = to_maps xss (S n).
+    Proof.
+      intros; induction xss; simpl; auto.
       f_equal; auto.
     Qed.
 
@@ -428,10 +444,40 @@ Module Type COINDTONATMAP
       forall xss,
         Sem.clock_of (to_maps xss) (to_map (Mod.clocks_of xss)).
     Proof.
-      induction xss.
-      - split; intros.
-        rewrite unfold_Stream at 1. simpl.
-    Admitted.
+      split; intros ** H.
+      - revert dependent xss; induction n; intros; induction xss as [|xs];
+          rewrite unfold_Stream at 1; simpl in *;
+          try rewrite to_map_0; try rewrite to_map_S; auto.
+        + inversion_clear H as [|? ? ToMap Forall].
+          apply andb_true_intro; split.
+          * unfold_St xs; rewrite to_map_0 in ToMap.
+            apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E.
+            contradiction.
+          * apply IHxss in Forall.
+            clear - Forall; induction xss as [|xs]; simpl; auto.
+        + inversion_clear H.
+          apply IHn. constructor.
+          * now rewrite to_map_tl.
+          * fold (@to_maps value).
+            now rewrite to_maps_tl.
+      - revert dependent xss; induction n; intros; induction xss as [|xs];
+          simpl in *; constructor.
+        + rewrite unfold_Stream in H at 1; simpl in H;
+            rewrite to_map_0 in H; apply andb_prop in H as [].
+          unfold_St xs; rewrite to_map_0; simpl in *.
+          intro; subst; discriminate.
+        + apply IHxss.
+          rewrite unfold_Stream in H at 1; simpl in H;
+            rewrite to_map_0 in H; apply andb_prop in H as [? Forall].
+          clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl;
+            now rewrite to_map_0.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite to_map_S in H.
+          apply IHn in H; inv H.
+          now rewrite <-to_map_tl.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite to_map_S in H.
+          apply IHn in H; inv H.
+          now rewrite <-to_maps_tl.
+    Qed.
 
     Remark count_true_not_0:
       forall r n,
