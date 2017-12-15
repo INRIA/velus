@@ -235,54 +235,48 @@ Module Type COINDTONATMAP
           * now constructor.
           * admit.
         + constructor.
-          admit.
-      - destruct (to_map xs n) eqn: E.
-        + constructor.
-          admit.
-        + constructor.
-          * constructor.
-            apply sem_var_impl with (b := to_map b) in Hvar.
-            unfold Sem.sem_var, Sem.lift in Hvar.
-            specialize (Hvar n).
-            rewrite E in Hvar; apply Hvar.
+          * now constructor.
           * admit.
-      - apply (when_index n) in Hwhen
-          as [(? & ? & Hos)
-             |[(? & ? & ? & ? & ? & Hos)
-              |(? & ? & Hes & Hxs & ? & Hos)]]; rewrite Hos.
+      - apply sem_var_impl with (b := to_map b) in Hvar; eauto.
+        unfold Sem.sem_var, Sem.lift in Hvar.
+        specialize (Hvar n).
+        destruct (to_map xs n) eqn: E.
         + constructor.
-          admit.
-        + constructor.
-          admit.
-        + constructor.
-          * apply sem_var_impl with (b := to_map b) in Hvar.
-            unfold Sem.sem_var, Sem.lift in Hvar.
-            specialize (Hvar n).
-            rewrite Hxs in Hvar.
-            econstructor; eauto.
-            specialize (IHsem_lexp n); rewrite Hes in IHsem_lexp;
-              inv IHsem_lexp; auto.
+          * now constructor.
           * admit.
-      - apply (lift1_index n) in Hlift1
-          as [(? & Hos)|(? & ? & Hes & ? & Hos)]; rewrite Hos.
         + constructor.
-          admit.
-        + constructor.
-          * econstructor; eauto.
-            specialize (IHsem_lexp n); rewrite Hes in IHsem_lexp;
-              inv IHsem_lexp; auto.
+          * now constructor.
           * admit.
-      - apply (lift2_index n) in Hlift2
-          as [(? & ? & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)]; rewrite Hos.
+      - specialize (IHsem_lexp n).
+        apply sem_var_impl with (b := to_map b) in Hvar.
+        unfold Sem.sem_var, Sem.lift in Hvar.
+        specialize (Hvar n).
+        apply (when_index n) in Hwhen
+          as [(Hes & Hxs & Hos)
+             |[(? & ? & Hes & Hxs & ? & Hos)
+              |(? & ? & Hes & Hxs & ? & Hos)]];
+          rewrite Hos; rewrite Hes in IHsem_lexp; rewrite Hxs in Hvar;
+            inv IHsem_lexp.
+        + repeat (constructor; auto).
         + constructor.
-          admit.
-        + constructor.
-          * specialize (IHsem_lexp1 n); rewrite Hes1 in IHsem_lexp1;
-              inv IHsem_lexp1.
-            specialize (IHsem_lexp2 n); rewrite Hes2 in IHsem_lexp2;
-              inv IHsem_lexp2.
-           econstructor; eauto.
+          * rewrite <-(Bool.negb_involutive k).
+            eapply Sem.Swhen_abs1; eauto.
           * admit.
+        + repeat (econstructor; eauto).
+      - specialize (IHsem_lexp n).
+        apply (lift1_index n) in Hlift1
+          as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
+          rewrite Hos; rewrite Hes in IHsem_lexp; inv IHsem_lexp.
+        + repeat (constructor; auto).
+        + repeat (econstructor; eauto).
+      - specialize (IHsem_lexp1 n).
+        specialize (IHsem_lexp2 n).
+        apply (lift2_index n) in Hlift2
+          as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
+          rewrite Hos; rewrite Hes1 in IHsem_lexp1; rewrite Hes2 in IHsem_lexp2;
+            inv IHsem_lexp1; inv IHsem_lexp2.
+        + repeat (constructor; auto).
+        + repeat (econstructor; eauto).
     Qed.
 
     Corollary sem_lexps_impl:
@@ -357,84 +351,50 @@ Module Type COINDTONATMAP
       induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
                     |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
                     |? ? ? ? He]; intro n.
-      - rename H0_ into Hf.
+      - specialize (IHsem_cexp1 n).
+        specialize (IHsem_cexp2 n).
+        apply sem_var_impl with (b := to_map b) in Hvar; eauto.
+        unfold Sem.sem_var, Sem.lift in Hvar.
+        specialize (Hvar n).
+        rename H0_ into Hf.
         apply (merge_index n) in Hmerge
-          as [(? & ? & ? & Hos)
+          as [(Hxs & Hts & Hfs & Hos)
              |[(? & Hxs & Hts & Hfs & Hos)
-              |(? & Hxs & Hts & Hfs & Hos)]]; rewrite Hos.
-        + constructor.
-          admit.
-        + constructor.
-          *{ constructor.
-             - rewrite <-Hxs; apply sem_var_impl; auto.
-               exact (to_map b).
-             - specialize (IHsem_cexp1 n).
-               rewrite Hts in IHsem_cexp1.
-               inv IHsem_cexp1; auto.
-             - specialize (IHsem_cexp2 n).
-               rewrite Hfs in IHsem_cexp2.
-               inv IHsem_cexp2; auto.
-               admit.
-           }
-          * admit.
-        + constructor.
-          *{ apply Sem.Smerge_false.
-             - rewrite <-Hxs; apply sem_var_impl; auto.
-               exact (to_map b).
-             - specialize (IHsem_cexp1 n).
-               rewrite Hts in IHsem_cexp1.
-               inv IHsem_cexp1.
-               admit.
-             - specialize (IHsem_cexp2 n).
-               rewrite Hfs in IHsem_cexp2.
-               inv IHsem_cexp2; auto.
-           }
-          * admit.
+              |(? & Hxs & Hts & Hfs & Hos)]];
+          rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
+            rewrite Hxs in Hvar; inv IHsem_cexp1; inv IHsem_cexp2.
+        + repeat (constructor; auto).
+        + repeat (constructor; auto).
+        + constructor; auto.
+          apply Sem.Smerge_false; auto.
 
-      - apply (ite_index n) in Hite
-          as [(? & ? & ? & Hos)
+      - specialize (IHsem_cexp1 n).
+        specialize (IHsem_cexp2 n).
+        eapply sem_lexp_impl with (ck := ck) in He.
+        unfold Sem.sem_laexp, Sem.lift in He.
+        specialize (He n).
+        apply (ite_index n) in Hite
+          as [(Hes & Hts & Hfs & Hos)
              |[(ct & cf & Hes & Hts & Hfs & Hos)
-              |(ct & cf & Hes & Hts & Hfs & Hos)]]; rewrite Hos.
-        + constructor.
-          admit.
-        + constructor.
-          *{ change (present ct) with (if true then present ct else present cf).
-             econstructor.
-             - eapply sem_lexp_impl with (ck := ck) in He.
-               unfold Sem.sem_laexp, Sem.lift in He.
-               specialize (He n); rewrite Hes in He.
-               inv He; eauto.
-             - specialize (IHsem_cexp1 n); rewrite Hts in IHsem_cexp1;
-                 inv IHsem_cexp1; auto.
-             - specialize (IHsem_cexp2 n); rewrite Hfs in IHsem_cexp2;
-                 inv IHsem_cexp2; auto.
-             - apply val_to_bool_true.
-           }
-          * admit.
-        + constructor.
-          *{ change (present cf) with (if false then present ct else present cf).
-             econstructor.
-             - eapply sem_lexp_impl with (ck := ck) in He.
-               unfold Sem.sem_laexp, Sem.lift in He.
-               specialize (He n); rewrite Hes in He.
-               inv He; eauto.
-             - specialize (IHsem_cexp1 n); rewrite Hts in IHsem_cexp1;
-                 inv IHsem_cexp1; auto.
-             - specialize (IHsem_cexp2 n); rewrite Hfs in IHsem_cexp2;
-                 inv IHsem_cexp2; auto.
-             - apply val_to_bool_false.
-           }
-          * admit.
+              |(ct & cf & Hes & Hts & Hfs & Hos)]];
+          rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
+            rewrite Hes in He; inv IHsem_cexp1; inv IHsem_cexp2; inv He.
+        + repeat (constructor; auto).
+        + constructor; auto.
+          change (present ct) with (if true then present ct else present cf).
+          econstructor; eauto.
+          apply val_to_bool_true.
+        + constructor; auto.
+          change (present cf) with (if false then present ct else present cf).
+          econstructor; eauto.
+          apply val_to_bool_false.
 
       - apply sem_lexp_impl with (ck := ck) in He.
         unfold Sem.sem_laexp, Sem.lift in He.
         specialize (He n).
         inv He.
-        + constructor.
-          * constructor; auto.
-          * admit.
-        + constructor.
-          admit.
+        + repeat (constructor; auto).
+        + repeat (constructor; auto).
     Qed.
 
     Lemma to_map_reset:

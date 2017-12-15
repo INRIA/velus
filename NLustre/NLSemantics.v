@@ -137,6 +137,7 @@ environment.
           sem_laexp_instant ck le (present c)
     | SLabs:
         forall ck le,
+          sem_lexp_instant le absent ->
           sem_clock_instant ck false ->
           sem_laexp_instant ck le absent.
 
@@ -150,6 +151,7 @@ environment.
     | SLabss:
         forall ck ces vs,
           vs = map (fun _ => absent) ces ->
+          sem_lexps_instant ces vs ->
           sem_clock_instant ck false ->
           sem_laexps_instant ck ces vs.
 
@@ -198,6 +200,7 @@ environment.
           sem_caexp_instant ck ce (present c)
     | SCabs:
         forall ck ce,
+          sem_cexp_instant ce absent ->
           sem_clock_instant ck false ->
           sem_caexp_instant ck ce absent.
 
