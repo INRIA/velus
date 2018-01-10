@@ -34,6 +34,8 @@ Module Type NLSEMANTICSCOIND
 
   Definition history := PM.t (Stream value).
 
+  Definition history_tl (H: history) : history := PM.map (@tl value) H.
+
   CoFixpoint const (c: const) (b: Stream bool): Stream value :=
     match b with
     | true  ::: b' => present (sem_const c) ::: const c b'
@@ -193,16 +195,18 @@ Module Type NLSEMANTICSCOIND
         lift2 op (typeof e1) (typeof e2) es1 es2 os ->
         sem_lexp H b (Ebinop op e1 e2 ty) os.
 
-  Inductive sem_laexp: history -> Stream bool -> clock -> lexp -> Stream value -> Prop :=
+  CoInductive sem_laexp: history -> Stream bool -> clock -> lexp -> Stream value -> Prop :=
   | SLtick:
       forall H b ck le e es bs,
         sem_lexp H b le (present e ::: es) ->
         sem_clock H b ck (true ::: bs) ->
+        sem_laexp (history_tl H) (tl b) ck le es ->
         sem_laexp H b ck le (present e ::: es)
   | SLabs:
       forall H b ck le es bs,
         sem_lexp H b le (absent ::: es) ->
         sem_clock H b ck (false ::: bs) ->
+        sem_laexp (history_tl H) (tl b) ck le es ->
         sem_laexp H b ck le (absent ::: es).
 
   Inductive sem_cexp: history -> Stream bool -> cexp -> Stream value -> Prop :=
@@ -713,14 +717,18 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
         as sem_laexp_morph.
   Proof.
+    revert H; cofix Cofix.
     intros ** b b' Eb ck e xs xs' Exs Sem.
-    inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et]; try discriminate.
+    inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et];
+      try discriminate.
     - econstructor.
       + simpl in *; now rewrite <-Eh, <-Et, <-Eb.
       + rewrite <-Eb; eauto.
+      + inv Eb; eapply Cofix; eauto.
     - econstructor.
       + simpl in *; now rewrite <-Et, <-Eb.
       + rewrite <-Eb; eauto.
+      + inv Eb; eapply Cofix; eauto.
   Qed.
 
   Add Parametric Morphism H : (sem_cexp H)

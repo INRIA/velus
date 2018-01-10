@@ -95,6 +95,13 @@ Module Type COINDTONATMAP
     Definition hist_to_map (H: Mod.history) : Sem.history :=
       PM.map to_map H.
 
+    Lemma hist_to_map_tl:
+      forall n H,
+        Sem.restr (hist_to_map H) (S n) = Sem.restr (hist_to_map (Mod.history_tl H)) n.
+    Proof.
+      unfold Sem.restr, Mod.history_tl, hist_to_map. SearchAbout PM.map.
+    Admitted.
+
     Lemma sem_var_impl:
       forall H b x xs,
       Mod.sem_var H x xs ->
@@ -235,34 +242,21 @@ Module Type COINDTONATMAP
     Qed.
 
     Lemma sem_lexp_impl:
-      forall H b e es ck,
+      forall H b e es,
         Mod.sem_lexp H b e es ->
-        Sem.sem_laexp (to_map b) (hist_to_map H) ck e (to_map es).
+        Sem.sem_lexp (to_map b) (hist_to_map H) e (to_map es).
     Proof.
-      unfold Sem.sem_laexp, Sem.lift.
       induction 1 as [? ? ? ? Hconst
-                    |? ? ? ? ? Hvar
-                    |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
-                    |? ? ? ? ? ? ? ? ? Hlift1
-                    |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
+                            |? ? ? ? ? Hvar
+                            |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
+                            |? ? ? ? ? ? ? ? ? Hlift1
+                            |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - apply (const_index n) in Hconst; rewrite Hconst.
-        destruct (to_map b n).
-        + constructor.
-          * now constructor.
-          * admit.
-        + constructor.
-          * now constructor.
-          * admit.
+        destruct (to_map b n); now constructor.
       - apply sem_var_impl with (b := to_map b) in Hvar; eauto.
         unfold Sem.sem_var, Sem.lift in Hvar.
         specialize (Hvar n).
-        destruct (to_map xs n) eqn: E.
-        + constructor.
-          * now constructor.
-          * admit.
-        + constructor.
-          * now constructor.
-          * admit.
+        destruct (to_map xs n) eqn: E; now constructor.
       - specialize (IHsem_lexp n).
         apply sem_var_impl with (b := to_map b) in Hvar.
         unfold Sem.sem_var, Sem.lift in Hvar.
@@ -272,28 +266,64 @@ Module Type COINDTONATMAP
              |[(? & ? & Hes & Hxs & ? & Hos)
               |(? & ? & Hes & Hxs & ? & Hos)]];
           rewrite Hos; rewrite Hes in IHsem_lexp; rewrite Hxs in Hvar;
-            inv IHsem_lexp.
-        + repeat (constructor; auto).
-        + constructor.
-          * rewrite <-(Bool.negb_involutive k).
-            eapply Sem.Swhen_abs1; eauto.
-          * admit.
-        + repeat (econstructor; eauto).
+            try (now econstructor; eauto).
+        rewrite <-(Bool.negb_involutive k).
+        eapply Sem.Swhen_abs1; eauto.
       - specialize (IHsem_lexp n).
         apply (lift1_index n) in Hlift1
           as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
-          rewrite Hos; rewrite Hes in IHsem_lexp; inv IHsem_lexp.
-        + repeat (constructor; auto).
-        + repeat (econstructor; eauto).
+          rewrite Hos; rewrite Hes in IHsem_lexp;
+            econstructor; eauto.
       - specialize (IHsem_lexp1 n).
         specialize (IHsem_lexp2 n).
         apply (lift2_index n) in Hlift2
           as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
           rewrite Hos; rewrite Hes1 in IHsem_lexp1; rewrite Hes2 in IHsem_lexp2;
-            inv IHsem_lexp1; inv IHsem_lexp2.
-        + repeat (constructor; auto).
-        + repeat (econstructor; eauto).
+            econstructor; eauto.
     Qed.
+
+    Lemma sem_laexp_index:
+      forall n H b ck le es,
+        Mod.sem_laexp H b ck le es ->
+        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck false
+         /\ Sem.sem_lexp_instant (to_map b n) (Sem.restr (hist_to_map H) n) le absent
+         /\ to_map es n = absent)
+        \/
+        (exists e,
+            Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck true
+            /\ Sem.sem_lexp_instant (to_map b n) (Sem.restr (hist_to_map H) n) le (present e)
+            /\ to_map es n = present e).
+    Proof.
+      induction n; intros ** Sem.
+      - inversion_clear Sem as [? ? ? ? ? ? ? Sem'|? ? ? ? ? ? Sem'];
+          apply sem_lexp_impl in Sem'; specialize (Sem' 0);
+            repeat rewrite to_map_0; repeat rewrite to_map_0 in Sem'.
+        + right. eexists; intuition; auto.
+          admit.
+        + left; intuition.
+          admit.
+      - unfold_St b; inversion_clear Sem as [? ? ? ? ? ? ? Sem'|? ? ? ? ? ? Sem'];
+          apply sem_lexp_impl in Sem';
+          repeat rewrite to_map_S; rewrite hist_to_map_tl; eauto.
+    Qed.
+
+    Corollary sem_laexp_impl:
+      forall H b e es ck,
+        Mod.sem_laexp H b ck e es ->
+        Sem.sem_laexp (to_map b) (hist_to_map H) ck e (to_map es).
+    Proof.
+      unfold Sem.sem_laexp, Sem.lift.
+      intros ** Sem n.
+      induction n.
+      - induction Sem as [? ? ? ? ? ? ? Sem|]; rewrite to_map_0.
+        + apply sem_lexp_impl in Sem.
+          specialize (Sem 0); rewrite to_map_0 in Sem.
+          constructor; auto.
+          inv H0.
+          *
+
+      induction 1.
+      - simpl. econstructor.
 
     Corollary sem_lexps_impl:
       forall H b ck es ess,
