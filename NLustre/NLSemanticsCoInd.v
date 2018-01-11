@@ -3,6 +3,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 Require Import Setoid.
+Require Import Morphisms.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -133,40 +134,24 @@ Module Type NLSEMANTICSCOIND
         b ≡ b' ->
         sem_clock H b Cbase b'
   | Son:
-      forall H b bk bk' bs ck x k xs c,
-        sem_clock H (b ::: bk) ck (true ::: bk') ->
+      forall H b bk bs ck x k xs c,
+        sem_clock H b ck (true ::: bk) ->
         sem_var H x (present c ::: xs) ->
         val_to_bool c = Some k ->
-        sem_clock H bk (Con ck x k) bs ->
-        sem_clock H (b ::: bk) (Con ck x k) (true ::: bs)
+        sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
+        sem_clock H b (Con ck x k) (true ::: bs)
   | Son_abs1:
-      forall H b bk bk' bs ck x k,
-        sem_clock H (b ::: bk) ck (false ::: bk') ->
-        sem_clock H bk (Con ck x k) bs ->
-        sem_clock H (b ::: bk) (Con ck x k) (false ::: bs)
+      forall H b bk bs ck x k,
+        sem_clock H b ck (false ::: bk) ->
+        sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
+        sem_clock H b (Con ck x k) (false ::: bs)
   | Son_abs2:
-      forall H b bk bk' bs ck x k c xs,
-        sem_clock H (b ::: bk) ck (true ::: bk') ->
+      forall H b bk bs ck x k c xs,
+        sem_clock H b ck (true ::: bk) ->
         sem_var H x (present c ::: xs) ->
         val_to_bool c = Some k ->
-        sem_clock H bk (Con ck x k) bs ->
-        sem_clock H (b ::: bk) (Con ck x (negb k)) (false ::: bs).
-
-  (* CoInductive synced: history -> Stream bool -> clock -> Stream value -> Prop := *)
-  (* | SynBaseP: *)
-  (*     forall H b e es, *)
-  (*       synced H b Cbase es ->   *)
-  (*       synced H (true ::: b) Cbase (present e ::: es) *)
-  (* | SynBaseA: *)
-  (*     forall H b es, *)
-  (*       synced H b Cbase es ->   *)
-  (*       synced H (false ::: b) Cbase (absent ::: es) *)
-  (* | SynOn: *)
-  (*     forall H b ck x k xs es, *)
-  (*       sem_var H x (c ::: xs) -> *)
-  (*       val_to_bool c = Some k -> *)
-  (*       synced H b ck  *)
-  (*       synced H b (Con ck x k) ().   *)
+        sem_clock (history_tl H) (tl b) (Con ck x (negb k)) bs ->
+        sem_clock H b (Con ck x (negb k)) (false ::: bs).
 
   Inductive sem_lexp: history -> Stream bool -> lexp -> Stream value -> Prop :=
   | Sconst:
@@ -195,19 +180,19 @@ Module Type NLSEMANTICSCOIND
         lift2 op (typeof e1) (typeof e2) es1 es2 os ->
         sem_lexp H b (Ebinop op e1 e2 ty) os.
 
-  CoInductive sem_laexp: history -> Stream bool -> clock -> lexp -> Stream value -> Prop :=
-  | SLtick:
-      forall H b ck le e es bs,
-        sem_lexp H b le (present e ::: es) ->
-        sem_clock H b ck (true ::: bs) ->
-        sem_laexp (history_tl H) (tl b) ck le es ->
-        sem_laexp H b ck le (present e ::: es)
-  | SLabs:
-      forall H b ck le es bs,
-        sem_lexp H b le (absent ::: es) ->
-        sem_clock H b ck (false ::: bs) ->
-        sem_laexp (history_tl H) (tl b) ck le es ->
-        sem_laexp H b ck le (absent ::: es).
+  (* CoInductive sem_laexp: history -> Stream bool -> clock -> lexp -> Stream value -> Prop := *)
+  (* | SLtick: *)
+  (*     forall H b ck le e es bs, *)
+  (*       sem_lexp H b le (present e ::: es) -> *)
+  (*       sem_clock H b ck (true ::: bs) -> *)
+  (*       sem_laexp (history_tl H) (tl b) ck le es -> *)
+  (*       sem_laexp H b ck le (present e ::: es) *)
+  (* | SLabs: *)
+  (*     forall H b ck le es bs, *)
+  (*       sem_lexp H b le (absent ::: es) -> *)
+  (*       sem_clock H b ck (false ::: bs) -> *)
+  (*       sem_laexp (history_tl H) (tl b) ck le es -> *)
+  (*       sem_laexp H b ck le (absent ::: es). *)
 
   Inductive sem_cexp: history -> Stream bool -> cexp -> Stream value -> Prop :=
   | Smerge:
@@ -229,17 +214,36 @@ Module Type NLSEMANTICSCOIND
         sem_lexp H b e es ->
         sem_cexp H b (Eexp e) es.
 
-  Inductive sem_caexp: history -> Stream bool -> clock -> cexp -> Stream value -> Prop :=
-  | SCtick:
+  CoInductive sem_aexp {A} (sem: history -> Stream bool -> A -> Stream value -> Prop):
+    history -> Stream bool -> clock -> A -> Stream value -> Prop :=
+  | Stick:
       forall H b ck le e es bs,
-        sem_cexp H b le (present e ::: es) ->
+        sem H b le (present e ::: es) ->
         sem_clock H b ck (true ::: bs) ->
-        sem_caexp H b ck le (present e ::: es)
-  | SCabs:
+        sem_aexp sem (history_tl H) (tl b) ck le es ->
+        sem_aexp sem H b ck le (present e ::: es)
+  | Sabs:
       forall H b ck le es bs,
-        sem_cexp H b le (absent ::: es) ->
+        sem H b le (absent ::: es) ->
         sem_clock H b ck (false ::: bs) ->
-        sem_caexp H b ck le (absent ::: es).
+        sem_aexp sem (history_tl H) (tl b) ck le es ->
+        sem_aexp sem H b ck le (absent ::: es).
+
+  Definition sem_laexp := sem_aexp sem_lexp.
+  Definition sem_caexp := sem_aexp sem_cexp.
+
+  (* Inductive sem_caexp: history -> Stream bool -> clock -> cexp -> Stream value -> Prop := *)
+  (* | SCtick: *)
+  (*     forall H b ck le e es bs, *)
+  (*       sem_cexp H b le (present e ::: es) -> *)
+  (*       sem_clock H b ck (true ::: bs) -> *)
+  (*       sem_caexp (history_tl H) (tl b) ck le es -> *)
+  (*       sem_caexp H b ck le (present e ::: es) *)
+  (* | SCabs: *)
+  (*     forall H b ck le es bs, *)
+  (*       sem_cexp H b le (absent ::: es) -> *)
+  (*       sem_clock H b ck (false ::: bs) -> *)
+  (*       sem_caexp H b ck le (absent ::: es). *)
 
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     forallb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
@@ -671,22 +675,17 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt bool ==> eq ==> @EqSt bool ==> Basics.impl
         as sem_clock_morph.
   Proof.
-    cofix Cofix.
+    revert H; cofix Cofix.
     intros ** b b' Eb ck bk bk' Ebk Sem.
-    destruct ck; intros.
-    - inv Sem.
-      constructor.
+    inv Sem.
+    - constructor.
       now rewrite <-Ebk, <-Eb.
-    - inv Sem.
-      + destruct b' as [[]], bk' as [[]]; inv Ebk; inv Eb; simpl in *; try discriminate;
-          econstructor; eauto; eapply Cofix; eauto; try reflexivity;
-            constructor; auto.
-      + destruct b' as [[]], bk' as [[]]; inv Ebk; inv Eb; simpl in *; try discriminate;
-          econstructor; eauto; eapply Cofix; eauto; try reflexivity;
-            constructor; auto.
-      + destruct b' as [[]], bk' as [[]]; inv Ebk; inv Eb; simpl in *; try discriminate;
-          eapply Son_abs2; eauto; eapply Cofix; eauto; try reflexivity;
-            constructor; auto.
+    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
+        econstructor; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
+    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
+        econstructor; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
+    - destruct bk' as [[]]; inv Ebk; simpl in *; try discriminate;
+        eapply Son_abs2; eauto; eapply Cofix; eauto; try reflexivity; inv Eb; auto.
   Qed.
 
   Add Parametric Morphism H : (sem_lexp H)
@@ -713,24 +712,6 @@ Module Type NLSEMANTICSCOIND
       + now rewrite <-Exs.
   Qed.
 
-  Add Parametric Morphism H : (sem_laexp H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
-        as sem_laexp_morph.
-  Proof.
-    revert H; cofix Cofix.
-    intros ** b b' Eb ck e xs xs' Exs Sem.
-    inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et];
-      try discriminate.
-    - econstructor.
-      + simpl in *; now rewrite <-Eh, <-Et, <-Eb.
-      + rewrite <-Eb; eauto.
-      + inv Eb; eapply Cofix; eauto.
-    - econstructor.
-      + simpl in *; now rewrite <-Et, <-Eb.
-      + rewrite <-Eb; eauto.
-      + inv Eb; eapply Cofix; eauto.
-  Qed.
-
   Add Parametric Morphism H : (sem_cexp H)
       with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
         as sem_cexp_morph.
@@ -750,18 +731,40 @@ Module Type NLSEMANTICSCOIND
       now rewrite <-Eb, <-Exs.
   Qed.
 
+  Add Parametric Morphism A sem H
+    (sem_compat: Proper (eq ==> @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl) sem)
+    : (@sem_aexp A sem H)
+      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
+        as sem_aexp_morph.
+  Proof.
+    revert H sem_compat; cofix Cofix.
+    intros ** b b' Eb ck e xs xs' Exs Sem.
+    inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et];
+      try discriminate.
+    - econstructor.
+      + simpl in *; now rewrite <-Eh, <-Et, <-Eb.
+      + rewrite <-Eb; eauto.
+      + inv Eb; eapply Cofix; eauto.
+    - econstructor.
+      + simpl in *; now rewrite <-Et, <-Eb.
+      + rewrite <-Eb; eauto.
+      + inv Eb; eapply Cofix; eauto.
+  Qed.
+
+  Add Parametric Morphism H : (sem_laexp H)
+      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
+        as sem_laexp_morph.
+  Proof.
+    intros; eapply sem_aexp_morph; eauto.
+    solve_proper.
+  Qed.
+
   Add Parametric Morphism H : (sem_caexp H)
       with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
         as sem_caexp_morph.
   Proof.
-    intros ** b b' Eb ck e xs xs' Exs Sem.
-    inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et]; try discriminate.
-    - econstructor.
-      + simpl in *; now rewrite <-Eh, <-Et, <-Eb.
-      + rewrite <-Eb; eauto.
-    - econstructor.
-      + simpl in *; now rewrite <-Et, <-Eb.
-      + rewrite <-Eb; eauto.
+    intros; eapply sem_aexp_morph; eauto.
+    solve_proper.
   Qed.
 
   Add Parametric Morphism : clocks_of
@@ -823,30 +826,6 @@ Module Type NLSEMANTICSCOIND
       intros xs xs' Exs E; rewrite <-Exs; auto.
     - right. eapply Forall_EqSt; eauto.
       intros xs xs' Exs E; rewrite <-Exs; auto.
-    (* cofix Cofix; intros xss xss' Exss Same. *)
-    (* constructor; inversion_clear Same as [A [E|Ne]]; inv Exss; try tauto. *)
-    (* - left. erewrite <-map_EqSt; eauto. *)
-    (*   + apply hd_EqSt. *)
-    (*   + constructor; auto. *)
-    (* - right. erewrite <-map_EqSt; eauto. *)
-    (*   + apply hd_EqSt. *)
-    (*   + constructor; auto. *)
-    (* - eapply Cofix; eauto. *)
-    (*   simpl. *)
-    (*   constructor. *)
-    (*   + rewrite H0; reflexivity. *)
-    (*   + erewrite map_st_EqSt; eauto. *)
-    (*     instantiate (1 := @tl value). *)
-    (*     * reflexivity. *)
-    (*     * apply tl_EqSt. *)
-    (* - eapply Cofix; eauto. *)
-    (*   simpl. *)
-    (*   constructor. *)
-    (*   + rewrite H0; reflexivity. *)
-    (*   + erewrite map_st_EqSt; eauto. *)
-    (*     instantiate (1 := @tl value). *)
-    (*     * reflexivity. *)
-    (*     * apply tl_EqSt. *)
   Qed.
 
   Add Parametric Morphism G : (sem_node G)
