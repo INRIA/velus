@@ -104,12 +104,41 @@ Module Type COINDTONATMAP
     Definition hist_to_map (H: Mod.history) : Sem.history :=
       PM.map to_map H.
 
+    Lemma option_map_map:
+      forall {A B C} (f: A -> B) (g: B -> C) o,
+        option_map g (option_map f o) = option_map (fun x => g (f x)) o.
+    Proof.
+      destruct o; simpl; auto.
+    Qed.
+
+    Lemma pm_xmapi_xmapi:
+      forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A) x,
+        PM.xmapi (fun _ => g) (PM.xmapi (fun _ => f) m x) x =
+        PM.xmapi (fun _ (x : A) => g (f x)) m x.
+    Proof.
+      induction m; intro; simpl; auto.
+      f_equal; auto.
+      apply option_map_map.
+    Qed.
+
+    Lemma pm_map_map:
+      forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A),
+        PM.map g (PM.map f m) = PM.map (fun x => g (f x)) m.
+    Proof.
+      unfold PM.map, PM.mapi; intros.
+      apply pm_xmapi_xmapi.
+    Qed.
+
     Lemma hist_to_map_tl:
       forall n H,
         Sem.restr (hist_to_map H) (S n) = Sem.restr (hist_to_map (Mod.history_tl H)) n.
     Proof.
-      unfold Sem.restr, Mod.history_tl, hist_to_map. SearchAbout PM.map.
-    Admitted.
+      unfold Sem.restr, Mod.history_tl, hist_to_map.
+      intros.
+      repeat rewrite pm_map_map.
+      (** WTF !?!??! *)
+      reflexivity.
+    Qed.
 
     Lemma sem_var_impl:
       forall H b x xs,
