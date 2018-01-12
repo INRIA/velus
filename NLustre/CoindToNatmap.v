@@ -433,7 +433,7 @@ Module Type COINDTONATMAP
         + left; intuition.
       - inversion_clear Sem as [? ? ? ? ? ? ? Sem'|? ? ? ? ? ? Sem'];
           apply sem_lexp_impl in Sem';
-          repeat rewrite to_map_S; rewrite hist_to_map_tl; eauto.
+          rewrite to_map_S, hist_to_map_tl; eauto.
     Qed.
 
     Corollary sem_laexp_impl:
@@ -446,14 +446,58 @@ Module Type COINDTONATMAP
         rewrite Hes; now constructor.
     Qed.
 
+    Lemma sem_laexps_index:
+      forall n H b ck les ess,
+        Mod.sem_laexps H b ck les ess ->
+        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck false
+         /\ Sem.sem_lexps_instant (to_map b n) (Sem.restr (hist_to_map H) n) les (to_maps ess n)
+         /\ to_maps ess n = List.map (fun _ => absent) les)
+        \/
+        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck true
+         /\ Sem.sem_lexps_instant (to_map b n) (Sem.restr (hist_to_map H) n) les (to_maps ess n)
+         /\ Forall (fun e => e <> absent) (to_maps ess n)).
+    Proof.
+      induction n; intros ** Sem.
+      - inversion_clear Sem as [? ? ? ? ? ? Sem' Hess Hck|? ? ? ? ? ? Sem' Hess Hck];
+          apply (sem_clock_impl 0) in Hck; rewrite to_map_0 in Hck.
+        + right. intuition; auto.
+          *{ clear Hess. induction Sem' as [|? ? ? ? Sem]; simpl; constructor.
+             - now apply sem_lexp_impl in Sem.
+             - eapply IHSem', Mod.sem_laexps_cons; eauto.
+           }
+          * clear - Hess.
+            induction ess; inv Hess; constructor; auto.
+        + left. intuition; auto.
+          *{ clear Hess. induction Sem' as [|? ? ? ? Sem]; simpl; constructor.
+             - now apply sem_lexp_impl in Sem.
+             - eapply IHSem', Mod.sem_laexps_cons; eauto.
+           }
+          * clear - Sem' Hess.
+            induction Sem'; inv Hess; simpl; auto.
+            f_equal; auto.
+      - destruct b; inversion_clear Sem as [? ? ? ? ? ? Sem' Hess Hck|? ? ? ? ? ? Sem' Hess Hck];
+          rewrite to_map_S, hist_to_map_tl, <-to_maps_tl; auto.
+    Qed.
+
     Corollary sem_laexps_impl:
       forall H b ck es ess,
-        Forall2 (Mod.sem_laexp H b ck) es ess ->
+        Mod.sem_laexps H b ck es ess ->
         Sem.sem_laexps (to_map b) (hist_to_map H) ck es (to_maps ess).
     Proof.
-      unfold Sem.sem_laexps, Sem.lift, Sem.sem_laexps.
       intros ** Sem n.
-      admit.
+      apply (sem_laexps_index n) in Sem as [(? & ? & Hes)|(? & ? & Hes)].
+      - eright; eauto.
+      - assert (exists vs, to_maps ess n = List.map present vs) as (vs & ?).
+        { clear - Hes.
+          induction ess as [|es].
+          - exists nil; auto.
+          - simpl in *; inversion_clear Hes as [|? ? E].
+            destruct (to_map es n) as [|v]; try now contradict E.
+            apply IHess in H as (vs & ?).
+            exists (v :: vs); simpl.
+            f_equal; auto.
+        }
+        left with (cs := vs); eauto.
     Qed.
 
     Lemma merge_index:
