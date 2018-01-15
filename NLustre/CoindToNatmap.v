@@ -21,40 +21,68 @@ Require Import Setoid.
 Module Type COINDTONATMAP
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Clks  : CLOCKS    Ids)
-       (Import Syn   : NLSYNTAX  Ids Op Clks)
-       (Import Str   : STREAM        Op OpAux)
-       (Import Ord   : ORDERED   Ids Op Clks Syn)
-       (Indexed      : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
+       (Import OpAux : OPERATORS_AUX        Op)
+       (Import Clks  : CLOCKS           Ids)
+       (Import Syn   : NLSYNTAX         Ids Op Clks)
+       (Import Str   : STREAM               Op OpAux)
+       (Import Ord   : ORDERED          Ids Op       Clks Syn)
+       (Indexed      : NLSEMANTICS      Ids Op OpAux Clks Syn Str Ord)
        (CoInd        : NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord).
 
   Section Global.
 
     Variable G : global.
 
+    (** * BASIC CORRESPONDENCES *)
+
+    (** ** Definitions  *)
+
+    (** Translate a coinductive Stream into an indexed stream.
+        The result stream is the function which associates the [n]th element of
+        the input Stream to each [n].
+     *)
     Definition tr_stream {A} (xs: Stream A) : stream A :=
       fun n => Str_nth n xs.
 
+    (** Translate a list of Streams into a stream of list.
+        - if the input list is void, the result is the constantly void stream
+        - else, the result is the function associating to each [n] the list
+          built by the translated stream of the head of the input list indexed
+          at [n] consed to the result of the recursive call, also indexed at [n].
+     *)
+    Fixpoint tr_streams {A} (xss: list (Stream A)) : stream (list A) :=
+      match xss with
+      | [] => fun n => []
+      | xs :: xss => fun n => tr_stream xs n :: tr_streams xss n
+      end.
+
+    (** Translate an history from coinductive to indexed world.
+        Every element of the history is translated.
+     *)
+    Definition tr_history (H: CoInd.history) : Indexed.history :=
+      PM.map tr_stream H.
+
+    (** ** Properties  *)
+
+    (** Indexing a translated Stream at [0] is taking the head of the source
+        Stream. *)
     Lemma tr_stream_0:
       forall {A} (xs: Stream A) x,
         tr_stream (x ::: xs) 0 = x.
     Proof. reflexivity. Qed.
 
+    (** Indexing a translated Stream at [S n] is indexing the tail of the source
+        Stream at [n]. *)
     Lemma tr_stream_S:
       forall {A} (xs: Stream A) x n,
         tr_stream (x ::: xs) (S n) = tr_stream xs n.
     Proof. reflexivity. Qed.
 
-    Add Parametric Morphism A : (@tr_stream A)
-        with signature @EqSt A ==> eq ==> eq
-          as tr_stream_morph.
-    Proof.
-      intros xs ys Exs n.
-      revert xs ys Exs; induction n; intros; destruct xs, ys; inv Exs.
-      - rewrite 2 tr_stream_0; auto.
-      - rewrite 2 tr_stream_S; auto.
-    Qed.
+    (** Another version of the previous lemma.  *)
+    Lemma tr_stream_tl:
+      forall {A} (xs: Stream A) n,
+        tr_stream (tl xs) n = tr_stream xs (S n).
+    Proof. reflexivity. Qed.
 
     Lemma tr_stream_const:
       forall {A} (c: A) n,
@@ -65,17 +93,16 @@ Module Type COINDTONATMAP
       - now rewrite tr_stream_S.
     Qed.
 
-    Lemma tr_stream_tl:
-      forall {A} (xs: Stream A) n,
-        tr_stream (tl xs) n = tr_stream xs (S n).
-    Proof. reflexivity. Qed.
-
-    (** explain all this weirdness *)
-    Fixpoint tr_streams {A} (xss: list (Stream A)) : stream (list A) :=
-      match xss with
-      | [] => fun n => []
-      | xs :: xss => fun n => tr_stream xs n :: tr_streams xss n
-      end.
+    (** [tr_stream] is compatible wrt to [EqSt]. *)
+    Add Parametric Morphism A : (@tr_stream A)
+        with signature @EqSt A ==> eq ==> eq
+          as tr_stream_morph.
+    Proof.
+      intros xs ys Exs n.
+      revert xs ys Exs; induction n; intros; destruct xs, ys; inv Exs.
+      - rewrite 2 tr_stream_0; auto.
+      - rewrite 2 tr_stream_S; auto.
+    Qed.
 
     Fact tr_streams_app:
       forall A (xss yss: list (Stream A)) n,
@@ -85,6 +112,7 @@ Module Type COINDTONATMAP
       f_equal; auto.
     Qed.
 
+    (** The counterpart of [tr_stream_tl] for lists of Streams. *)
     Lemma tr_streams_tl:
       forall xss n,
         tr_streams (List.map (tl (A:=value)) xss) n = tr_streams xss (S n).
@@ -93,39 +121,18 @@ Module Type COINDTONATMAP
       f_equal; auto.
     Qed.
 
-    Definition tr_history (H: CoInd.history) : Indexed.history :=
-      PM.map tr_stream H.
-
-    (** TODO: MOVE THESE TO COMMON *)
-    Lemma option_map_map:
-      forall {A B C} (f: A -> B) (g: B -> C) o,
-        option_map g (option_map f o) = option_map (fun x => g (f x)) o.
-    Proof. now destruct o. Qed.
-
-    Lemma pm_xmapi_xmapi:
-      forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A) x,
-        PM.xmapi (fun _ => g) (PM.xmapi (fun _ => f) m x) x =
-        PM.xmapi (fun _ (x : A) => g (f x)) m x.
-    Proof.
-      induction m; intro; simpl; auto.
-      f_equal; auto.
-      apply option_map_map.
-    Qed.
-
-    Lemma pm_map_map:
-      forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A),
-        PM.map g (PM.map f m) = PM.map (fun x => g (f x)) m.
-    Proof.
-      unfold PM.map, PM.mapi; intros.
-      apply pm_xmapi_xmapi.
-    Qed.
-
+    (** The counterpart of [tr_stream_tl] for histories. *)
     Lemma tr_history_tl:
       forall n H,
-        Indexed.restr (tr_history H) (S n) = Indexed.restr (tr_history (CoInd.history_tl H)) n.
+        Indexed.restr (tr_history H) (S n)
+        = Indexed.restr (tr_history (CoInd.history_tl H)) n.
     Proof.
       now repeat setoid_rewrite pm_map_map.
     Qed.
+
+    (** * SEMANTICS CORRESPONDENCE *)
+
+    (** ** Variables *)
 
     Lemma sem_var_impl:
       forall H b x xs,
@@ -154,6 +161,8 @@ Module Type COINDTONATMAP
       apply sem_var_impl; auto.
     Qed.
 
+    (** ** Synchronization *)
+
     Lemma same_clock_impl:
       forall xss,
         CoInd.same_clock xss ->
@@ -174,7 +183,8 @@ Module Type COINDTONATMAP
         xss <> [] ->
         yss <> [] ->
         CoInd.same_clock (xss ++ yss) ->
-        forall n, Indexed.absent_list (tr_streams xss n) <-> Indexed.absent_list (tr_streams yss n).
+        forall n, Indexed.absent_list (tr_streams xss n)
+             <-> Indexed.absent_list (tr_streams yss n).
     Proof.
       intros ** Hxss Hyss Same n.
       apply same_clock_impl in Same.
@@ -192,6 +202,17 @@ Module Type COINDTONATMAP
           induction yss; simpl in *; inv NIndexed; try now inv Indexed.
           now contradict Hyss.
     Qed.
+
+    (** ** lexp level synchronous operators specifications
+
+        To ease the use of coinductive hypotheses to prove non-coinductive
+        goals, we give for each coinductive predicate an indexed specification,
+        reflecting the shapes of the involved streams pointwise speaking.
+        In general this specification is a disjunction with a factor for each
+        case of the predicate.
+        The corresponding lemmas simply go by induction on [n] and by inversion
+        of the coinductive hypothesis.
+     *)
 
     Lemma const_index:
       forall n xs c b,
@@ -264,7 +285,12 @@ Module Type COINDTONATMAP
       - inv Lift2; repeat rewrite tr_stream_S; auto.
     Qed.
 
-    Hint Constructors Indexed.sem_clock_instant.
+    (** ** Semantics of clocks *)
+
+    (** Give an indexed specification for [sem_clock] in the previous style,
+        with added complexity as [sem_clock] depends on [H] and [b].
+        We go by induction on the clock [ck] then by induction on [n] and
+        inversion of the coinductive hypothesis as before. *)
     Lemma sem_clock_index:
       forall n H b ck bs,
         CoInd.sem_clock H b ck bs ->
@@ -273,27 +299,34 @@ Module Type COINDTONATMAP
         \/
         (exists ck' x k c,
             ck = Con ck' x k
-            /\ Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
-            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x (present c)
+            /\ Indexed.sem_clock_instant
+                (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
+            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x
+                                      (present c)
             /\ val_to_bool c = Some k
             /\ tr_stream bs n = true)
         \/
         (exists ck' x k,
             ck = Con ck' x k
-            /\ Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck' false
+            /\ Indexed.sem_clock_instant
+                (tr_stream b n) (Indexed.restr (tr_history H) n) ck' false
             /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x absent
             /\ tr_stream bs n = false)
         \/
         (exists ck' x k c,
             ck = Con ck' x (negb k)
-            /\ Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
-            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x (present c)
+            /\ Indexed.sem_clock_instant
+                (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
+            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x
+                                      (present c)
             /\ val_to_bool c = Some k
             /\ tr_stream bs n = false).
     Proof.
-      Local Ltac rew_0 := try match goal with
-                                H: tr_stream _ _ = _ |- _ => now rewrite tr_stream_0 in H
-                              end.
+      Hint Constructors Indexed.sem_clock_instant.
+      Local Ltac rew_0 :=
+        try match goal with
+              H: tr_stream _ _ = _ |- _ => now rewrite tr_stream_0 in H
+            end.
       intros n H b ck; revert n H b; induction ck as [|ck ? x k].
       - inversion_clear 1 as [? ? ? Eb| | |].
         left; intuition.
@@ -329,26 +362,30 @@ Module Type COINDTONATMAP
         + inversion_clear Indexed; rewrite <-tr_stream_tl, tr_history_tl; eauto.
     Qed.
 
+    (** We can then deduce the correspondence lemma for [sem_clock]. *)
     Corollary sem_clock_impl:
       forall n H b ck bs,
         CoInd.sem_clock H b ck bs ->
-        Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck (tr_stream bs n).
+        Indexed.sem_clock_instant (tr_stream b n)
+                                  (Indexed.restr (tr_history H) n) ck
+                                  (tr_stream bs n).
     Proof.
       intros ** Indexed.
-      apply (sem_clock_index n) in Indexed as [(Hck & E)
-                                          |[(? & ? & ? & ? & Hck & ? & ? & ? & E)
-                                           |[(? & ? & ? & Hck & ? & ? & E)
-                                            |(? & ? & ? & ? & Hck & ? & ? & ? & E)]]];
+      apply (sem_clock_index n) in Indexed as [|[|[|]]]; destruct_conjs;
         match goal with H: tr_stream _ _ = _ |- _ => rewrite H end;
         subst; eauto.
     Qed.
 
-    Hint Constructors Indexed.sem_lexp_instant.
+    (** ** Semantics of lexps *)
+
+    (** State the correspondence for [lexp].
+        Goes by induction on the coinductive semantics of [lexp]. *)
     Lemma sem_lexp_impl:
       forall H b e es,
         CoInd.sem_lexp H b e es ->
         Indexed.sem_lexp (tr_stream b) (tr_history H) e (tr_stream es).
     Proof.
+      Hint Constructors Indexed.sem_lexp_instant.
       induction 1 as [? ? ? ? Hconst
                             |? ? ? ? ? Hvar
                             |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
@@ -382,20 +419,27 @@ Module Type COINDTONATMAP
             eauto.
     Qed.
 
+    (** Give an indexed specification for annotated [lexp], using the previous
+        lemma. *)
     Lemma sem_laexp_index:
       forall n H b ck le es,
         CoInd.sem_laexp H b ck le es ->
-        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck false
-         /\ Indexed.sem_lexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
+        (Indexed.sem_clock_instant (tr_stream b n)
+                                   (Indexed.restr (tr_history H) n) ck false
+         /\ Indexed.sem_lexp_instant
+             (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
          /\ tr_stream es n = absent)
         \/
         (exists e,
-            Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck true
-            /\ Indexed.sem_lexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
+            Indexed.sem_clock_instant (tr_stream b n)
+                                      (Indexed.restr (tr_history H) n) ck true
+            /\ Indexed.sem_lexp_instant
+                (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
             /\ tr_stream es n = present e).
     Proof.
       induction n; intros ** Indexed.
-      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck|? ? ? ? ? ? Indexed' Hck];
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
+                                      |? ? ? ? ? ? Indexed' Hck];
           apply sem_lexp_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
               apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
@@ -406,6 +450,8 @@ Module Type COINDTONATMAP
           rewrite tr_stream_S, tr_history_tl; eauto.
     Qed.
 
+    (** We deduce from the previous lemma the correspondence for annotated
+        [lexp]. *)
     Corollary sem_laexp_impl:
       forall H b e es ck,
         CoInd.sem_laexp H b ck e es ->
@@ -416,39 +462,46 @@ Module Type COINDTONATMAP
         rewrite Hes; auto using Indexed.sem_laexp_instant.
     Qed.
 
+    (** Specification for lists of annotated [lexp] (on the same clock). *)
     Lemma sem_laexps_index:
       forall n H b ck les ess,
         CoInd.sem_laexps H b ck les ess ->
-        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck false
-         /\ Indexed.sem_lexps_instant (tr_stream b n) (Indexed.restr (tr_history H) n) les (tr_streams ess n)
+        (Indexed.sem_clock_instant (tr_stream b n)
+                                   (Indexed.restr (tr_history H) n) ck false
+         /\ Indexed.sem_lexps_instant (tr_stream b n)
+                                     (Indexed.restr (tr_history H) n) les
+                                     (tr_streams ess n)
          /\ tr_streams ess n = List.map (fun _ => absent) les)
         \/
-        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck true
-         /\ Indexed.sem_lexps_instant (tr_stream b n) (Indexed.restr (tr_history H) n) les (tr_streams ess n)
+        (Indexed.sem_clock_instant (tr_stream b n)
+                                   (Indexed.restr (tr_history H) n) ck true
+         /\ Indexed.sem_lexps_instant (tr_stream b n)
+                                     (Indexed.restr (tr_history H) n) les
+                                     (tr_streams ess n)
          /\ Forall (fun e => e <> absent) (tr_streams ess n)).
     Proof.
       induction n; intros ** Indexed.
-      - inversion_clear Indexed as [? ? ? ? ? ? Indexed' Hess Hck|? ? ? ? ? ? Indexed' Hess Hck];
-          apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
+      - inversion_clear Indexed as [? ? ? ? ? ? Indexed' Hess Hck
+                                      |? ? ? ? ? ? Indexed' Hess Hck];
+          apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck;
+            assert (Indexed.sem_lexps_instant (tr_stream b 0)
+                                              (Indexed.restr (tr_history H) 0)
+                                              les (tr_streams ess 0))
+            by (clear Hess; induction Indexed' as [|? ? ? ? Indexed]; simpl;
+                constructor; [now apply sem_lexp_impl in Indexed
+                             | eapply IHIndexed', CoInd.sem_laexps_cons; eauto]).
         + right. intuition; auto.
-          *{ clear Hess. induction Indexed' as [|? ? ? ? Indexed]; simpl; constructor.
-             - now apply sem_lexp_impl in Indexed.
-             - eapply IHIndexed', CoInd.sem_laexps_cons; eauto.
-           }
-          * clear - Hess.
-            induction ess; inv Hess; constructor; auto.
+          clear - Hess.
+          induction ess; inv Hess; constructor; auto.
         + left. intuition; auto.
-          *{ clear Hess. induction Indexed' as [|? ? ? ? Indexed]; simpl; constructor.
-             - now apply sem_lexp_impl in Indexed.
-             - eapply IHIndexed', CoInd.sem_laexps_cons; eauto.
-           }
-          * clear - Indexed' Hess.
-            induction Indexed'; inv Hess; simpl; auto.
-            f_equal; auto.
-      - destruct b; inversion_clear Indexed as [? ? ? ? ? ? Indexed' Hess Hck|? ? ? ? ? ? Indexed' Hess Hck];
+          clear - Indexed' Hess.
+          induction Indexed'; inv Hess; simpl; auto.
+          f_equal; auto.
+      - destruct b; inversion_clear Indexed;
           rewrite tr_stream_S, tr_history_tl, <-tr_streams_tl; auto.
     Qed.
 
+    (** Generalization for lists of annotated [lexp] (on the same clock). *)
     Corollary sem_laexps_impl:
       forall H b ck es ess,
         CoInd.sem_laexps H b ck es ess ->
@@ -469,6 +522,8 @@ Module Type COINDTONATMAP
         }
         left with (cs := vs); eauto.
     Qed.
+
+    (** ** cexp level synchronous operators specifications *)
 
     Lemma merge_index:
       forall n xs ts fs rs,
@@ -524,12 +579,32 @@ Module Type COINDTONATMAP
       - inv Ite; repeat rewrite tr_stream_S; auto.
     Qed.
 
+    (** [fby] is not a predicate but a function, so we directly state the
+        correspondence.  *)
+    Lemma fby_impl:
+      forall n c xs,
+      tr_stream (CoInd.fby c xs) n = fby c (tr_stream xs) n.
+    Proof.
+      induction n; intros.
+      - unfold_Stv xs; rewrite unfold_Stream at 1;
+          unfold fby; simpl; now rewrite tr_stream_0.
+      - unfold_Stv xs; rewrite unfold_Stream at 1;
+          unfold fby; simpl; repeat rewrite tr_stream_S;
+            rewrite IHn; unfold fby;
+              destruct (tr_stream xs n); auto; f_equal;
+                clear IHn; induction n; simpl; auto;
+                  rewrite tr_stream_S; destruct (tr_stream xs n); auto.
+    Qed.
+
+    (** ** Semantics of cexps *)
+
+    (** State the correspondence for [cexp].
+        Goes by induction on the coinductive semantics of [cexp]. *)
     Lemma sem_cexp_impl:
       forall H b e es,
         CoInd.sem_cexp H b e es ->
         Indexed.sem_cexp (tr_stream b) (tr_history H) e (tr_stream es).
     Proof.
-      unfold Indexed.sem_caexp, Indexed.lift.
       induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
                     |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
                     |? ? ? ? He]; intro n.
@@ -570,20 +645,27 @@ Module Type COINDTONATMAP
         constructor; auto.
     Qed.
 
+    (** Give an indexed specification for annotated [cexp], using the previous
+        lemma.  *)
     Lemma sem_caexp_index:
       forall n H b ck le es,
         CoInd.sem_caexp H b ck le es ->
-        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck false
-         /\ Indexed.sem_cexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
+        (Indexed.sem_clock_instant (tr_stream b n)
+                                   (Indexed.restr (tr_history H) n) ck false
+         /\ Indexed.sem_cexp_instant
+             (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
          /\ tr_stream es n = absent)
         \/
         (exists e,
-            Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck true
-            /\ Indexed.sem_cexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
+            Indexed.sem_clock_instant (tr_stream b n)
+                                      (Indexed.restr (tr_history H) n) ck true
+            /\ Indexed.sem_cexp_instant
+                (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
             /\ tr_stream es n = present e).
     Proof.
       induction n; intros ** Indexed.
-      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck|? ? ? ? ? ? Indexed' Hck];
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
+                                      |? ? ? ? ? ? Indexed' Hck];
           apply sem_cexp_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
               apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
@@ -594,6 +676,8 @@ Module Type COINDTONATMAP
           repeat rewrite tr_stream_S; rewrite tr_history_tl; eauto.
     Qed.
 
+    (** We deduce from the previous lemma the correspondence for annotated
+        [cexp]. *)
     Corollary sem_caexp_impl:
       forall H b e es ck,
         CoInd.sem_caexp H b ck e es ->
@@ -616,60 +700,11 @@ Module Type COINDTONATMAP
             eapply IHn.
     Qed.
 
-    Lemma fby_impl:
-      forall n c xs,
-      tr_stream (CoInd.fby c xs) n = fby c (tr_stream xs) n.
-    Proof.
-      induction n; intros.
-      - unfold_Stv xs; rewrite unfold_Stream at 1;
-          unfold fby; simpl; now rewrite tr_stream_0.
-      - unfold_Stv xs; rewrite unfold_Stream at 1;
-          unfold fby; simpl; repeat rewrite tr_stream_S;
-            rewrite IHn; unfold fby;
-              destruct (tr_stream xs n); auto; f_equal;
-                clear IHn; induction n; simpl; auto;
-                  rewrite tr_stream_S; destruct (tr_stream xs n); auto.
-    Qed.
+    (** * RESET CORRESPONDENCE  *)
 
-    Lemma sem_clock_tr_stream:
-      forall xss,
-        Indexed.clock_of (tr_streams xss) (tr_stream (CoInd.clocks_of xss)).
-    Proof.
-      split; intros ** H.
-      - revert dependent xss; induction n; intros; induction xss as [|xs];
-          rewrite unfold_Stream at 1; simpl in *;
-          try rewrite tr_stream_0; try rewrite tr_stream_S; auto.
-        + inversion_clear H as [|? ? ToMap Forall].
-          apply andb_true_intro; split.
-          * unfold_St xs; rewrite tr_stream_0 in ToMap.
-            apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E.
-            contradiction.
-          * apply IHxss in Forall.
-            clear - Forall; induction xss as [|xs]; simpl; auto.
-        + inversion_clear H.
-          apply IHn. constructor.
-          * now rewrite tr_stream_tl.
-          * fold (@tr_streams value).
-            now rewrite tr_streams_tl.
-      - revert dependent xss; induction n; intros; induction xss as [|xs];
-          simpl in *; constructor.
-        + rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite tr_stream_0 in H; apply andb_prop in H as [].
-          unfold_St xs; rewrite tr_stream_0; simpl in *.
-          intro; subst; discriminate.
-        + apply IHxss.
-          rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite tr_stream_0 in H; apply andb_prop in H as [? Forall].
-          clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl;
-            now rewrite tr_stream_0.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
-          apply IHn in H; inv H.
-          now rewrite <-tr_stream_tl.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
-          apply IHn in H; inv H.
-          now rewrite <-tr_streams_tl.
-    Qed.
+    (** ** Properties about [count] *)
 
+    (** If a reset occurs directly, the count can't be zero. *)
     Remark count_true_not_0:
       forall r n,
         count (tr_stream (true ::: r)) n <> 0.
@@ -680,6 +715,8 @@ Module Type COINDTONATMAP
         destruct (tr_stream r n); auto.
     Qed.
 
+    (** If a reset occurs at [n], then the count at the same instant can't be
+        zero. *)
     Remark count_true_not_0':
       forall n r,
         tr_stream r n = true ->
@@ -688,26 +725,15 @@ Module Type COINDTONATMAP
       induction n; simpl; intros r E; try rewrite E; auto.
     Qed.
 
-    Remark tr_stream_mask_true_0:
-      forall n r xs,
-      tr_stream r n = true ->
-      tr_stream (CoInd.mask absent 0 r xs) n = absent.
-    Proof.
-      induction n; intros ** E; rewrite unfold_Stream at 1; simpl;
-        unfold_Stv r; unfold_Stv xs; auto; try rewrite tr_stream_S.
-      - rewrite tr_stream_0 in E; discriminate.
-      - pose proof (tr_stream_const absent); auto.
-      - pose proof (tr_stream_const absent); auto.
-      - apply IHn.
-        rewrite tr_stream_S in E; auto.
-      - apply IHn.
-        rewrite tr_stream_S in E; auto.
-    Qed.
-
+    (** When a reset occurs initially, the count at [n] is the count at [n]
+        forgetting the first instant, plus one if no reset occurs at [n] when
+        shifting. *)
     Lemma count_true_shift:
       forall n r,
         count (tr_stream (true ::: r)) n
-        = if tr_stream r n then count (tr_stream r) n else S (count (tr_stream r) n).
+        = if tr_stream r n
+          then count (tr_stream r) n
+          else S (count (tr_stream r) n).
     Proof.
       induction n; simpl; intros.
       - destruct (tr_stream r 0); auto.
@@ -717,10 +743,15 @@ Module Type COINDTONATMAP
           destruct (tr_stream r (S n)); rewrite IHn; auto.
     Qed.
 
+    (** When no reset occurs initially, the count at [n] is the count at [n]
+        forgetting the first instant, minus one if a reset occurs at [n] when
+        shifting. *)
     Lemma count_false_shift:
       forall n r,
         count (tr_stream (false ::: r)) n
-        = if tr_stream r n then count (tr_stream r) n - 1 else count (tr_stream r) n.
+        = if tr_stream r n
+          then count (tr_stream r) n - 1
+          else count (tr_stream r) n.
     Proof.
       induction n; simpl; intros.
       - destruct (tr_stream r 0); auto.
@@ -733,11 +764,35 @@ Module Type COINDTONATMAP
           apply count_true_ge_1; auto.
     Qed.
 
+    (** If a reset occurs at [n], then indexing the 0th mask at [n] falls
+        outside the clipping window, since the 0th mask is the clip before
+        the first reset. *)
+    Remark tr_stream_mask_true_0:
+      forall n r xs,
+      tr_stream r n = true ->
+      tr_stream (CoInd.mask_v 0 r xs) n = absent.
+    Proof.
+      induction n; intros ** E; rewrite unfold_Stream at 1; simpl;
+        unfold_Stv r; unfold_Stv xs; auto; try rewrite tr_stream_S.
+      - rewrite tr_stream_0 in E; discriminate.
+      - pose proof (tr_stream_const absent); auto.
+      - pose proof (tr_stream_const absent); auto.
+      - apply IHn.
+        rewrite tr_stream_S in E; auto.
+      - apply IHn.
+        rewrite tr_stream_S in E; auto.
+    Qed.
+
+    (** When a reset occurs initially and no reset occurs at [n] after shifting,
+        then indexing at [n] the [k']th mask is:
+        - indexing the source stream at [n] if [k'] is equal to the count minus
+          one
+        - absent otherwise. *)
     Lemma tr_stream_mask_false_true:
       forall n r xs k k',
         tr_stream r n = false ->
         count (tr_stream (true ::: r)) n = S k ->
-        tr_stream (CoInd.mask absent k' r xs) n
+        tr_stream (CoInd.mask_v k' r xs) n
         = if EqNat.beq_nat k k' then tr_stream xs n else absent.
     Proof.
       intros ** E C.
@@ -757,8 +812,8 @@ Module Type COINDTONATMAP
       - destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
-              try discriminate; rewrite tr_stream_S in E.
+            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
+              rewrite E in E'; try discriminate; rewrite tr_stream_S in E.
           * inv E'; exfalso; eapply count_true_not_0; eauto.
           * erewrite IHn; eauto.
             rewrite count_true_shift, E in E'; injection E'; clear E'; intro E'.
@@ -797,11 +852,15 @@ Module Type COINDTONATMAP
             rewrite <-plus_n_O, E'; auto.
     Qed.
 
+    (** When no reset occurs initially and a reset occurs at [n] after shifting,
+        then indexing at [n] the [(S k')]th mask is:
+        - indexing the source stream at [n] if [k'] is equal to the count
+        - absent otherwise. *)
     Lemma tr_stream_mask_true_false:
       forall n r xs k k',
         tr_stream r n = true ->
         count (tr_stream (false ::: r)) n = k ->
-        tr_stream (CoInd.mask absent (S k') r xs) n
+        tr_stream (CoInd.mask_v (S k') r xs) n
         = if EqNat.beq_nat k k' then tr_stream xs n else absent.
     Proof.
       intros ** E C.
@@ -821,9 +880,9 @@ Module Type COINDTONATMAP
       - destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
-              try discriminate; rewrite tr_stream_S in E; simpl in E';
-                try rewrite <-Minus.minus_n_O in E'.
+            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
+              rewrite E in E'; try discriminate; rewrite tr_stream_S in E;
+                simpl in E'; try rewrite <-Minus.minus_n_O in E'.
           * exfalso; eapply count_true_not_0; eauto.
           * erewrite IHn; eauto.
             rewrite count_true_shift, E in E'.
@@ -869,11 +928,15 @@ Module Type COINDTONATMAP
             rewrite <-plus_n_O, E'; auto.
     Qed.
 
+   (** When the initial occurence of a reset is the same as at [n] after
+       shifting, then indexing at [n] the [k']th mask is:
+        - indexing the source stream at [n] if [k'] is equal to the count
+        - absent otherwise. *)
     Lemma tr_stream_mask_same:
       forall n b r xs k k',
         tr_stream r n = b ->
         count (tr_stream (b ::: r)) n = k ->
-        tr_stream (CoInd.mask absent k' r xs) n
+        tr_stream (CoInd.mask_v k' r xs) n
         = if EqNat.beq_nat k k' then tr_stream xs n else absent.
     Proof.
       intros ** E C.
@@ -895,8 +958,8 @@ Module Type COINDTONATMAP
         + destruct (EqNat.beq_nat k k') eqn: E'.
           *{ apply EqNat.beq_nat_true in E'; subst.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
-                 try discriminate; rewrite tr_stream_S in E.
+               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
+                 rewrite E in E'; try discriminate; rewrite tr_stream_S in E.
              - inv E'; exfalso; eapply count_true_not_0; eauto.
              - erewrite IHn; eauto.
                inv E';
@@ -968,8 +1031,8 @@ Module Type COINDTONATMAP
         + destruct (EqNat.beq_nat k k') eqn: E'.
           *{ apply EqNat.beq_nat_true in E'; subst.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
-                 try discriminate; rewrite tr_stream_S in E.
+               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
+                 rewrite E in E'; try discriminate; rewrite tr_stream_S in E.
              - inv E'; exfalso; eapply count_true_not_0; eauto.
              - erewrite tr_stream_mask_false_true; eauto;
                  rewrite <-EqNat.beq_nat_refl; auto.
@@ -1021,6 +1084,7 @@ Module Type COINDTONATMAP
                | H:  EqNat.beq_nat _ _ = _ |- _ => rewrite H
                end; auto].
 
+    (** State the correspondence for [mask]. *)
     Lemma mask_impl:
       forall k r xss n,
          tr_streams (List.map (CoInd.mask_v k r) xss) n
@@ -1064,10 +1128,12 @@ Module Type COINDTONATMAP
                  * exfalso; eapply count_true_not_0; eauto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
                     - erewrite tr_stream_mask_same; eauto.
-                      apply EqNat.beq_nat_true, eq_S, EqNat.beq_nat_true_iff in E'';
+                      apply EqNat.beq_nat_true, eq_S,
+                      EqNat.beq_nat_true_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                     - erewrite tr_stream_mask_same; eauto.
-                      apply EqNat.beq_nat_false, not_eq_S, EqNat.beq_nat_false_iff in E'';
+                      apply EqNat.beq_nat_false, not_eq_S,
+                      EqNat.beq_nat_false_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
                + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'.
@@ -1076,10 +1142,12 @@ Module Type COINDTONATMAP
                    erewrite tr_stream_mask_false_true; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
                     - erewrite tr_stream_mask_false_true; eauto.
-                      apply EqNat.beq_nat_true, eq_S, EqNat.beq_nat_true_iff in E'';
+                      apply EqNat.beq_nat_true, eq_S,
+                      EqNat.beq_nat_true_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                     - erewrite tr_stream_mask_false_true; eauto.
-                      apply EqNat.beq_nat_false, not_eq_S, EqNat.beq_nat_false_iff in E'';
+                      apply EqNat.beq_nat_false, not_eq_S,
+                      EqNat.beq_nat_false_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
            }
@@ -1132,6 +1200,9 @@ Module Type COINDTONATMAP
            }
     Qed.
 
+    (** * FINAL LEMMAS *)
+
+
     Remark all_absent_tr_streams:
       forall A n (xss: list (Stream A)),
         Indexed.all_absent (tr_streams xss n) = Indexed.all_absent xss.
@@ -1139,6 +1210,50 @@ Module Type COINDTONATMAP
       induction xss; simpl; auto; now f_equal.
     Qed.
 
+    (** Correspondence for [clocks_of], used to give a base clock for node
+        applications. *)
+    Lemma tr_clocks_of:
+      forall xss,
+        Indexed.clock_of (tr_streams xss) (tr_stream (CoInd.clocks_of xss)).
+    Proof.
+      split; intros ** H.
+      - revert dependent xss; induction n; intros; induction xss as [|xs];
+          rewrite unfold_Stream at 1; simpl in *;
+          try rewrite tr_stream_0; try rewrite tr_stream_S; auto.
+        + inversion_clear H as [|? ? ToMap Forall].
+          apply andb_true_intro; split.
+          * unfold_St xs; rewrite tr_stream_0 in ToMap.
+            apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E.
+            contradiction.
+          * apply IHxss in Forall.
+            clear - Forall; induction xss as [|xs]; simpl; auto.
+        + inversion_clear H.
+          apply IHn. constructor.
+          * now rewrite tr_stream_tl.
+          * fold (@tr_streams value).
+            now rewrite tr_streams_tl.
+      - revert dependent xss; induction n; intros; induction xss as [|xs];
+          simpl in *; constructor.
+        + rewrite unfold_Stream in H at 1; simpl in H;
+            rewrite tr_stream_0 in H; apply andb_prop in H as [].
+          unfold_St xs; rewrite tr_stream_0; simpl in *.
+          intro; subst; discriminate.
+        + apply IHxss.
+          rewrite unfold_Stream in H at 1; simpl in H;
+            rewrite tr_stream_0 in H; apply andb_prop in H as [? Forall].
+          clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl;
+            now rewrite tr_stream_0.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
+          apply IHn in H; inv H.
+          now rewrite <-tr_stream_tl.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
+          apply IHn in H; inv H.
+          now rewrite <-tr_streams_tl.
+    Qed.
+
+    (** The final theorem stating the correspondence for equations, nodes and
+        reset applications. The conjunctive shape is mandatory to use the
+        mutually recursive induction scheme [sem_equation_node_ind]. *)
     Theorem implies:
       (forall H b e,
           CoInd.sem_equation G H b e ->
@@ -1180,7 +1295,7 @@ Module Type COINDTONATMAP
         rewrite 2 all_absent_tr_streams.
         eapply Indexed.sem_node_compat; eauto.
       - intros ** Hin Hout Same ? ?. econstructor; eauto.
-        + apply sem_clock_tr_stream.
+        + apply tr_clocks_of.
         + apply sem_vars_impl; eauto.
         + apply sem_vars_impl; eauto.
         + now apply CoInd.same_clock_app_l, same_clock_impl in Same.

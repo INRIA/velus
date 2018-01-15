@@ -1,6 +1,11 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 
+Require Import Coq.Arith.EqNat.
+Require Import List.
+Import List.ListNotations.
+Open Scope list_scope.
+
 (** * Extensional model of synchronous streams *)
 
 (** Our model is extensional in the sense that it encodes a
@@ -40,35 +45,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   (** ** Synchronous functions *)
 
-  (* With auxiliary hold function. *)
-  (* Fixpoint hold (r: stream bool) (v0: val) (xs: stream value) (n: nat) : val := *)
-  (*   match n with *)
-  (*   | 0 => v0 *)
-  (*   | S m => *)
-  (*       match xs m with *)
-  (*       | absent => *)
-  (*         if r m then v0 else hold r v0 xs m *)
-  (*       | present hv => hv *)
-  (*       end *)
-  (*   end. *)
-
-  (* Definition fby (r: stream bool) (v0: val) (xs: stream value) : stream value := *)
-  (*   fun n => *)
-  (*     match xs n with *)
-  (*     | absent => absent *)
-  (*     | _ => present (if r n then v0 else hold r v0 xs n) *)
-  (*     end. *)
-
-  (* Definition mfby (r: stream bool) (xs: stream value) (ms: stream val) (ys: stream value) : Prop := *)
-  (*   forall n, *)
-  (*     match xs n with *)
-  (*     | absent => *)
-  (*       ms (S n) = (if r n then ms 0 else ms n) *)
-  (*       /\ ys n = absent *)
-  (*     | present v => *)
-  (*       ms (S n) = v *)
-  (*       /\ ys n = present (if r n then ms 0 else ms n) *)
-  (*     end. *)
   Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
     match n with
     | 0 => v0
@@ -85,17 +61,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       | _ => present (hold v0 xs n)
       end.
 
-  Require Import Coq.Arith.EqNat.
-  Require Import List.
-  Import List.ListNotations.
-  Open Scope list_scope.
-
-  (* Fixpoint take {A} (n: nat) (s: stream A) : list A := *)
-  (*   match n with *)
-  (*   | O => nil *)
-  (*   | S m => take m s ++ [s m] *)
-  (*   end. *)
-
+  (** Count the number of resets ticks seen at [n] so far. *)
   Fixpoint count (rs: cstream) (n: nat) : nat :=
     match n, rs n with
     | 0, false => 0
@@ -104,9 +70,13 @@ if the clocked stream is [absent] at the corresponding instant. *)
     | S m, true => 1 + count rs m
     end.
 
+  (** [mask o k rs xs] is the stream which clips the stream [xs] between
+      the [k]th and the [(k+1)]th reset, outputting [o] every elsewhere. *)
   Definition mask {A} (opaque: A) (k: nat) (rs: cstream) (xs: stream A) : stream A :=
     fun n =>
       if beq_nat k (count rs n) then xs n else opaque.
+
+  (** ** Properties *)
 
   Corollary count_true_ge_1:
     forall n r,
@@ -134,83 +104,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
     intros; unfold mask.
     erewrite count_compat; eauto.
   Qed.
-
-  (* Definition  *)
-  (* Definition mask_vs := @mask (list value) []. *)
-  Definition mask_v := mask absent.
-  Definition mask_b := mask false.
-
-  (* Corollary mask_vs_compat: *)
-  (*   forall r r' k xs, *)
-  (*     (forall n, r n = r' n) -> *)
-  (*     forall n, mask_vs k r xs n = mask_vs k r' xs n. *)
-  (* Proof. *)
-  (*   unfold mask_vs; intros; apply mask_compat; auto. *)
-  (* Qed. *)
-
-  (* Definition r := *)
-  (*   fun n => *)
-  (*     match n with *)
-  (*     | 0 => false *)
-  (*     | 1 => false *)
-  (*     | 2 => false *)
-  (*     | 3 => true *)
-  (*     | 4 => false *)
-  (*     | 5 => false *)
-  (*     | 6 => false *)
-  (*     | 7 => false *)
-  (*     | 8 => false *)
-  (*     | 9 => true *)
-  (*     | 10 => false *)
-  (*     | 11 => false *)
-  (*     | 12 => false *)
-  (*     | 13 => true *)
-  (*     | n => false *)
-  (*     end. *)
-
-  (* Notation "⊥" := (absent) (at level 50). *)
-  (* Notation "⇑" := (present true_val). *)
-  (* Notation "⇓" := (present false_val). *)
-  (* Notation "↑" := (true). *)
-  (* Notation "↓" := (false). *)
-
-  (* Fixpoint x n := *)
-  (*   match n with *)
-  (*   | 0 => ⇓ *)
-  (*   | 1 => ⇑ *)
-  (*   | S (S n) => x n *)
-  (*   end. *)
-
-  (* Compute (take 16 r, take 16 x, take 16 (count r), *)
-  (*          take 16 (mask_v 0 r x), *)
-  (*          take 16 (mask_v 1 r x), *)
-  (*          take 16 (mask_v 2 r x), *)
-  (*          take 16 (mask_v 3 r x), *)
-  (*          take 16 (mask_v 4 r x) *)
-  (*         ). *)
-
-  (* Remark mask_const_opaque: *)
-  (*   forall {A} n rs (opaque: A), *)
-  (*     mask opaque n rs (Streams.const opaque) ≡ Streams.const opaque. *)
-  (* Proof. *)
-  (*   cofix Cofix; intros. *)
-  (*   unfold_Stv rs; rewrite (unfold_Stream (Streams.const opaque)); *)
-  (*     constructor; destruct n as [|[]]; simpl; auto; try apply Cofix. *)
-  (*   reflexivity. *)
-  (* Qed. *)
-
-  (* CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value)) : Stream value := *)
-  (*   let xss := if hd bs then tl xss else xss in *)
-  (*   hd (hd xss) ::: flatten_masks (tl bs) (map (@tl value) xss). *)
-
-  (* CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value) : Stream (Stream value) := *)
-  (*   mask_v n rs xs ::: masks_from (n + 1) rs xs. *)
-
-  (* Definition masks := masks_from 0. *)
-
-  (* Eval simpl in take 16 (flatten_masks r (masks r x)). *)
-
-  (** ** Properties *)
 
   Lemma present_injection:
     forall x y, x = y <-> present x = present y.

@@ -217,6 +217,29 @@ Proof.
   split; intro H; [rewrite H|injection H]; auto.
 Qed.
 
+Lemma option_map_map:
+  forall {A B C} (f: A -> B) (g: B -> C) o,
+    option_map g (option_map f o) = option_map (fun x => g (f x)) o.
+Proof. now destruct o. Qed.
+
+Lemma pm_xmapi_xmapi:
+  forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A) x,
+    PM.xmapi (fun _ => g) (PM.xmapi (fun _ => f) m x) x =
+    PM.xmapi (fun _ (x : A) => g (f x)) m x.
+Proof.
+  induction m; intro; simpl; auto.
+  f_equal; auto.
+  apply option_map_map.
+Qed.
+
+Lemma pm_map_map:
+  forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A),
+    PM.map g (PM.map f m) = PM.map (fun x => g (f x)) m.
+Proof.
+  unfold PM.map, PM.mapi; intros.
+  apply pm_xmapi_xmapi.
+Qed.
+
 (* TODO: Is there a more direct way to negate PS.mem_spec?
          I.e., without creating a distinct lemma. *)
 Lemma mem_spec_false:

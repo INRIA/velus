@@ -260,20 +260,7 @@ Module Type NLSEMANTICSCOIND
     - eright; eauto.
   Qed.
 
-  (* Inductive sem_caexp: history -> Stream bool -> clock -> cexp -> Stream value -> Prop := *)
-  (* | SCtick: *)
-  (*     forall H b ck le e es bs, *)
-  (*       sem_cexp H b le (present e ::: es) -> *)
-  (*       sem_clock H b ck (true ::: bs) -> *)
-  (*       sem_caexp (history_tl H) (tl b) ck le es -> *)
-  (*       sem_caexp H b ck le (present e ::: es) *)
-  (* | SCabs: *)
-  (*     forall H b ck le es bs, *)
-  (*       sem_cexp H b le (absent ::: es) -> *)
-  (*       sem_clock H b ck (false ::: bs) -> *)
-  (*       sem_caexp H b ck le (absent ::: es). *)
-
-  CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
+ CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     forallb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
   Definition reset_of : Stream value -> Stream bool :=
@@ -282,81 +269,11 @@ Module Type NLSEMANTICSCOIND
                | _ => false
                end).
 
- (* CoFixpoint fby1 (v: val) (xs: Stream value) : Stream value := *)
-  (*   match xs with *)
-  (*   | absent ::: xs => absent ::: fby1 v xs *)
-  (*   | present x ::: xs => present v ::: fby1 x xs *)
-  (*   end. *)
-
   CoFixpoint fby (c: val) (xs: Stream value) : Stream value :=
     match xs with
     | absent ::: xs => absent ::: fby c xs
     | present x ::: xs => present c ::: fby x xs
     end.
-
-  (* CoInductive fby1' *)
-  (*   : val -> val -> Stream value -> Stream value -> Prop := *)
-  (* | Fby1A: *)
-  (*     forall v c xs ys, *)
-  (*       fby1' v c xs ys -> *)
-  (*       fby1' v c (absent ::: xs) (absent ::: ys) *)
-  (* | Fby1P: *)
-  (*     forall v x c xs ys, *)
-  (*       fby1' x c xs ys -> *)
-  (*       fby1' v c (present x ::: xs) (present v ::: ys). *)
-
-  (* CoInductive fby': val -> Stream value -> Stream value -> Prop := *)
-  (* | FbyA: *)
-  (*     forall c xs ys, *)
-  (*       fby' c xs ys -> *)
-  (*       fby' c (absent ::: xs) (absent ::: ys) *)
-  (* | FbyP: *)
-  (*     forall x c xs ys, *)
-  (*       fby1' x c xs ys -> *)
-  (*       fby' c (present x ::: xs) (present c ::: ys). *)
-
-  (* Fact fby1_spec: *)
-  (*   forall xs ys v c, ys = fby1 v c xs <-> fby1' v c xs ys. *)
-  (* Proof.  *)
-  (*   split. *)
-  (*   - revert xs ys v c; cofix H; intros. *)
-  (*     subst. *)
-  (*     rewrite unfold_Stream. *)
-  (*     destruct xs as [[|w]]; simpl; constructor; auto. *)
-  (*   - intros. *)
-  (*     rewrite unfold_Stream. *)
-  (*     inv H; simpl. *)
-
-  (*     revert xs ys v c; cofix H; intros. *)
-
-  (* Fact foo: *)
-  (*   forall xs ys c, ys = fby c xs <-> fby' c xs ys. *)
-  (* Proof. *)
-  (*   split. *)
-  (*   - revert xs ys k; cofix H; intros. *)
-  (*     subst. *)
-  (*     rewrite unfold_Stream. *)
-  (*     destruct xs as [[|v]]; simpl; constructor; auto. *)
-
-  (*   cofix. *)
-  (*   destruct xs. *)
-  (*   rewrite unfold_Stream. *)
-  (*   simpl. *)
-
-  (* CoFixpoint cut (bs: Stream bool) (xs: Stream value) : Stream value := *)
-  (*   match bs, xs with *)
-  (*     b ::: bs', x ::: xs' => if b then xs else absent ::: cut bs' xs' *)
-  (*   end. *)
-
-  (* CoFixpoint cut_bool (bs: Stream bool) : Stream bool := *)
-  (*   match bs with *)
-  (*     b ::: bs => false ::: if b then bs else cut_bool bs *)
-  (*   end. *)
-
-  (* CoFixpoint switch (bs: Stream bool) (xs ys: Stream value) : Stream value := *)
-  (*   match bs, xs, ys with *)
-  (*     b ::: bs', x ::: xs', y ::: ys' => if b then ys else x ::: switch bs' xs' ys' *)
-  (*   end.  *)
 
   CoFixpoint mask {A} (opaque: A) (n: nat) (rs: Stream bool) (xs: Stream A) : Stream A :=
     match n, rs, xs with
@@ -373,7 +290,6 @@ Module Type NLSEMANTICSCOIND
     end.
 
   Definition mask_v := mask absent.
-  Definition mask_b := mask false.
 
   Remark mask_const_opaque:
     forall {A} n rs (opaque: A),
@@ -391,23 +307,6 @@ Module Type NLSEMANTICSCOIND
     | S n => hd s :: take n (tl s)
     end.
 
-  (* Definition r := *)
-  (*   false ::: false ::: false ::: true ::: false ::: false ::: false ::: false ::: false ::: true ::: false ::: false ::: false ::: true ::: Streams.const false. *)
-
-  (* Notation "⊥" := (absent) (at level 50). *)
-  (* Notation "⇑" := (present true_val). *)
-  (* Notation "⇓" := (present false_val). *)
-
-
-  (* CoFixpoint x := ⇓ ::: ⇑ ::: x. *)
-
-  (* Eval simpl in (take 16 r, take 16 x, *)
-  (*                take 16 (mask_v 0 r x), *)
-  (*                take 16 (mask_v 1 r x), *)
-  (*                take 16 (mask_v 2 r x), *)
-  (*                take 16 (mask_v 3 r x), *)
-  (*                take 16 (mask_v 4 r x)). *)
-
   CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value)) : Stream value :=
     let xss := if hd bs then tl xss else xss in
     hd (hd xss) ::: flatten_masks (tl bs) (map (@tl value) xss).
@@ -417,18 +316,10 @@ Module Type NLSEMANTICSCOIND
 
   Definition masks := masks_from 0.
 
-  (* Eval simpl in take 16 (flatten_masks r (masks r x)). *)
-
   Definition same_clock (xss: list (Stream value)) : Prop :=
     forall n,
       Forall (fun xs => Str_nth n xs = absent) xss
       \/ Forall (fun xs => Str_nth n xs <> absent) xss.
-    (* same_clock_intro: *)
-    (*   forall xss, *)
-    (*     Forall (fun x => x = absent) (List.map (@hd value) xss) *)
-    (*     \/ Forall (fun x => x <> absent) (List.map (@hd value) xss) -> *)
-    (*     same_clock (List.map (@tl value) xss) -> *)
-    (*     same_clock xss. *)
 
   Remark same_clock_nil: same_clock [].
   Proof.
@@ -444,12 +335,7 @@ Module Type NLSEMANTICSCOIND
     split; intro; destruct (H n) as [E|Ne];
       try (left; apply Forall_app in E; tauto);
       try (right; apply Forall_app in Ne; tauto).
-    (* intros ** H; split; revert xss yss H; cofix Cofix; intros ** H; *)
-    (*   inversion_clear H as [? [He | Hne] Same]; constructor; *)
-    (*     try (left; rewrite map_app, Forall_app in He; tauto); *)
-    (*     try (right; rewrite map_app, Forall_app in Hne; tauto); *)
-    (*     try (rewrite map_app in Same; eapply Cofix; eauto). *)
-  Qed.
+   Qed.
 
   Corollary same_clock_app_l:
      forall xss yss,
