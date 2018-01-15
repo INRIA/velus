@@ -141,8 +141,9 @@ Module Type NLSEMANTICSCOIND
         sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
         sem_clock H b (Con ck x k) (true ::: bs)
   | Son_abs1:
-      forall H b bk bs ck x k,
+      forall H b bk bs ck x k xs,
         sem_clock H b ck (false ::: bk) ->
+        sem_var H x (absent ::: xs) ->
         sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
         sem_clock H b (Con ck x k) (false ::: bs)
   | Son_abs2:

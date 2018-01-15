@@ -71,6 +71,7 @@ environment.
     | Son_abs1:
         forall ck x c,
           sem_clock_instant ck false ->
+          sem_var_instant x absent ->
           sem_clock_instant (Con ck x c) false
     | Son_abs2:
         forall ck x c b,
@@ -1049,14 +1050,15 @@ clock to [sem_var_instant] too. *)
 
   (** ** Clocking property *)
 
-  Lemma subrate_clock:
-    forall R ck,
-      sem_clock_instant false R ck false.
-  Proof.
-    Hint Constructors sem_clock_instant.
-    intros R ck.
-    induction ck; eauto.
-  Qed.
+  (* Lemma subrate_clock: *)
+  (*   forall R ck, *)
+  (*     sem_clock_instant false R ck false. *)
+  (* Proof. *)
+  (*   Hint Constructors sem_clock_instant. *)
+  (*   intros R ck. *)
+  (*   induction ck; eauto. *)
+  (*   constructor. *)
+  (* Qed. *)
 
   (* XXX: Similarly, instead of [rhs_absent_instant] and friends, we
 should prove that all the semantic rules taken at [base = false] yield

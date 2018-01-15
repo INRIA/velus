@@ -286,6 +286,7 @@ Module Type COINDTONATMAP
         (exists ck' x k,
             ck = Con ck' x k
             /\ Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck' false
+            /\ Sem.sem_var_instant (Sem.restr (hist_to_map H) n) x absent
             /\ to_map bs n = false)
         \/
         (exists ck' x k c,
@@ -301,7 +302,7 @@ Module Type COINDTONATMAP
         now rewrite Eb.
       - intro n; revert x k; induction n; intros x k H bk bk' Sem.
         + inversion_clear Sem as [|? ? ? ? ? ? ? ? ? SemCk Hvar
-                                     |? ? ? ? ? ? ? SemCk
+                                     |? ? ? ? ? ? ? ? SemCk Hvar
                                      |? ? ? ? ? ? ? ? ? SemCk Hvar].
           * right; left.
             apply sem_var_impl with (b:=to_map bk) in Hvar;
@@ -314,15 +315,21 @@ Module Type COINDTONATMAP
                       H: to_map _ _ = _ |- _ => now rewrite to_map_0 in H
                     end.
             rewrite E, to_map_0; constructor.
+            econstructor; eauto.
           *{ right; right; left.
+             apply sem_var_impl with (b:=to_map bk) in Hvar;
+              unfold Sem.sem_var, Sem.lift in Hvar ; specialize (Hvar 0);
+                rewrite to_map_0 in Hvar.
              do 3 eexists; intuition.
              apply (IHck 0) in SemCk as [(Hck & E)
                                         |[(? & ? & ? & ? & ? & ? & ? & ? & Ebk)
-                                         |[(? & ? & ? & Hck & ? & ?)
+                                         |[(? & ? & ? & Hck & ? & ? & ?)
                                           |(? & ? & ? & ? & Hck & ? & ? & ? & ?)]]];
                try rewrite Hck; eauto.
              - rewrite E, to_map_0; constructor.
              - now rewrite to_map_0 in Ebk.
+             - constructor; auto.
+             - eapply Sem.Son_abs2; eauto.
            }
           *{ right; right; right.
              apply sem_var_impl with (b:=to_map bk) in Hvar;
@@ -334,9 +341,10 @@ Module Type COINDTONATMAP
                                          |[(? & ? & ? & ? & ? & Ebk)
                                           |(? & ? & ? & ? & ? & ? & ? & ? & Ebk)]]];
                try rewrite Hck; eauto.
-               + rewrite E, to_map_0; constructor.
-               + now rewrite to_map_0 in Ebk.
-               + now rewrite to_map_0 in Ebk.
+             + rewrite E, to_map_0; constructor.
+             + econstructor; eauto.
+             + now rewrite to_map_0 in Ebk.
+             + now rewrite to_map_0 in Ebk.
            }
         + inversion_clear Sem; rewrite <-to_map_tl, hist_to_map_tl; eauto.
     Qed.
@@ -349,9 +357,10 @@ Module Type COINDTONATMAP
       intros ** Sem.
       apply (sem_clock_index n) in Sem as [(Hck & E)
                                           |[(? & ? & ? & ? & Hck & ? & ? & ? & E)
-                                           |[(? & ? & ? & Hck & ? & E)
+                                           |[(? & ? & ? & Hck & ? & ? & E)
                                             |(? & ? & ? & ? & Hck & ? & ? & ? & E)]]];
-        rewrite Hck, E; eauto.
+        rewrite Hck, E; try (now econstructor; eauto).
+      eapply Sem.Son_abs2; eauto.
     Qed.
 
     Lemma sem_lexp_impl:
