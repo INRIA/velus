@@ -1044,14 +1044,12 @@ Module Type COINDTONATMAP
                end; auto].
 
     Lemma mask_impl:
-      forall k r xss opaque n,
-        length opaque = length xss ->
-        Sem.absent_list opaque ->
-        to_maps (List.map (Mod.mask_v k r) xss) n
-        = mask opaque k (to_map r) (to_maps xss) n.
+      forall k r xss n,
+         to_maps (List.map (Mod.mask_v k r) xss) n
+        = mask (Sem.all_absent xss) k (to_map r) (to_maps xss) n.
     Proof.
-      induction xss as [|xs], opaque as [|o];
-        simpl; intros ** Length Abs; inv Length; inv Abs.
+      induction xss as [|xs];
+        simpl; intros.
       - unfold mask.
         destruct (EqNat.beq_nat k (count (to_map r) n)); auto.
       - induction n.
@@ -1156,11 +1154,11 @@ Module Type COINDTONATMAP
            }
     Qed.
 
-    Remark length_all_absent:
-      forall A (xss: list (Stream A)) n,
-        length (Sem.all_absent (to_maps xss n)) = length xss.
+    Remark all_absent_to_maps:
+      forall A n (xss: list (Stream A)),
+        Sem.all_absent (to_maps xss n) = Sem.all_absent xss.
     Proof.
-      induction xss; simpl; auto.
+      induction xss; simpl; auto; now f_equal.
     Qed.
 
     Theorem implies:
@@ -1201,12 +1199,8 @@ Module Type COINDTONATMAP
         specialize (IHNode n).
         pose proof (mask_impl n r xss) as Hxss.
         pose proof (mask_impl n r yss) as Hyss.
-        eapply Sem.sem_node_compat.
-        + intro; apply Hxss;
-            [apply length_all_absent | apply Sem.all_absent_spec].
-        + intro; apply Hyss;
-            [apply length_all_absent | apply Sem.all_absent_spec].
-        + auto.
+        rewrite 2 all_absent_to_maps.
+        eapply Sem.sem_node_compat; eauto.
       - intros ** Hin Hout Same ? ?. econstructor; eauto.
         + apply sem_clock_to_map.
         + apply sem_vars_impl; eauto.
