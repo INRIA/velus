@@ -3,6 +3,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 Require Import Morphisms.
+Require Import Coq.Program.Tactics.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -100,9 +101,7 @@ Module Type COINDTONATMAP
     Lemma option_map_map:
       forall {A B C} (f: A -> B) (g: B -> C) o,
         option_map g (option_map f o) = option_map (fun x => g (f x)) o.
-    Proof.
-      destruct o; simpl; auto.
-    Qed.
+    Proof. now destruct o. Qed.
 
     Lemma pm_xmapi_xmapi:
       forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A) x,
@@ -186,15 +185,13 @@ Module Type COINDTONATMAP
       - destruct Same as [E|Ne].
         + rewrite to_maps_app in E; apply Forall_app in E; tauto.
         + rewrite to_maps_app in Ne; apply Forall_app in Ne as [NSem].
-          induction xss; simpl in *; inv NSem; inv Sem.
-          * exfalso; now apply Hxss.
-          * contradiction.
+          induction xss; simpl in *; inv NSem; try now inv Sem.
+          now contradict Hxss.
       - destruct Same as [E|Ne].
         + rewrite to_maps_app in E; apply Forall_app in E; tauto.
         + rewrite to_maps_app in Ne; apply Forall_app in Ne as [? NSem].
-          induction yss; simpl in *; inv NSem; inv Sem.
-          * exfalso; now apply Hyss.
-          * contradiction.
+          induction yss; simpl in *; inv NSem; try now inv Sem.
+          now contradict Hyss.
     Qed.
 
     Lemma const_index:
@@ -268,8 +265,7 @@ Module Type COINDTONATMAP
       - inv Lift2; repeat rewrite to_map_S; auto.
     Qed.
 
-    Require Import Coq.Program.Tactics.
-
+    Hint Constructors Sem.sem_clock_instant.
     Lemma sem_clock_index:
       forall n H b ck bs,
         Mod.sem_clock H b ck bs ->
@@ -296,6 +292,9 @@ Module Type COINDTONATMAP
             /\ val_to_bool c = Some k
             /\ to_map bs n = false).
     Proof.
+      Local Ltac rew_0 := try match goal with
+                                H: to_map _ _ = _ |- _ => now rewrite to_map_0 in H
+                              end.
       intros n H b ck; revert n H b; induction ck as [|ck ? x k].
       - inversion_clear 1 as [? ? ? Eb| | |].
         left; intuition.
@@ -310,42 +309,24 @@ Module Type COINDTONATMAP
                 rewrite to_map_0 in Hvar.
             do 4 eexists; intuition; eauto.
             apply (IHck 0) in SemCk as [(? & E)|[|[]]]; destruct_conjs;
-              subst; eauto;
-                try match goal with
-                      H: to_map _ _ = _ |- _ => now rewrite to_map_0 in H
-                    end.
+              subst; eauto; rew_0.
             rewrite E, to_map_0; constructor.
-            econstructor; eauto.
-          *{ right; right; left.
-             apply sem_var_impl with (b:=to_map bk) in Hvar;
+          * right; right; left.
+            apply sem_var_impl with (b:=to_map bk) in Hvar;
               unfold Sem.sem_var, Sem.lift in Hvar ; specialize (Hvar 0);
                 rewrite to_map_0 in Hvar.
-             do 3 eexists; intuition.
-             apply (IHck 0) in SemCk as [(Hck & E)
-                                        |[(? & ? & ? & ? & ? & ? & ? & ? & Ebk)
-                                         |[(? & ? & ? & Hck & ? & ? & ?)
-                                          |(? & ? & ? & ? & Hck & ? & ? & ? & ?)]]];
-               try rewrite Hck; eauto.
-             - rewrite E, to_map_0; constructor.
-             - now rewrite to_map_0 in Ebk.
-             - constructor; auto.
-             - eapply Sem.Son_abs2; eauto.
-           }
-          *{ right; right; right.
-             apply sem_var_impl with (b:=to_map bk) in Hvar;
-               unfold Sem.sem_var, Sem.lift in Hvar; specialize (Hvar 0);
-                 rewrite to_map_0 in Hvar.
-             do 4 eexists; intuition; eauto.
-             apply (IHck 0) in SemCk as [(Hck & E)
-                                        |[(? & ? & ? & ? & Hck & ? & ? & ? & ?)
-                                         |[(? & ? & ? & ? & ? & Ebk)
-                                          |(? & ? & ? & ? & ? & ? & ? & ? & Ebk)]]];
-               try rewrite Hck; eauto.
-             + rewrite E, to_map_0; constructor.
-             + econstructor; eauto.
-             + now rewrite to_map_0 in Ebk.
-             + now rewrite to_map_0 in Ebk.
-           }
+            do 3 eexists; intuition.
+            apply (IHck 0) in SemCk as [(? & E)|[|[]]]; destruct_conjs;
+              subst; eauto; rew_0.
+            rewrite E, to_map_0; constructor.
+          * right; right; right.
+            apply sem_var_impl with (b:=to_map bk) in Hvar;
+              unfold Sem.sem_var, Sem.lift in Hvar; specialize (Hvar 0);
+                rewrite to_map_0 in Hvar.
+            do 4 eexists; intuition; eauto.
+            apply (IHck 0) in SemCk as [(? & E)|[|[]]]; destruct_conjs;
+              subst; eauto; rew_0.
+            rewrite E, to_map_0; constructor.
         + inversion_clear Sem; rewrite <-to_map_tl, hist_to_map_tl; eauto.
     Qed.
 
@@ -359,10 +340,11 @@ Module Type COINDTONATMAP
                                           |[(? & ? & ? & ? & Hck & ? & ? & ? & E)
                                            |[(? & ? & ? & Hck & ? & ? & E)
                                             |(? & ? & ? & ? & Hck & ? & ? & ? & E)]]];
-        rewrite Hck, E; try (now econstructor; eauto).
-      eapply Sem.Son_abs2; eauto.
+        match goal with H: to_map _ _ = _ |- _ => rewrite H end;
+        subst; eauto.
     Qed.
 
+    Hint Constructors Sem.sem_lexp_instant.
     Lemma sem_lexp_impl:
       forall H b e es,
         Mod.sem_lexp H b e es ->
@@ -374,11 +356,8 @@ Module Type COINDTONATMAP
                             |? ? ? ? ? ? ? ? ? Hlift1
                             |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - apply (const_index n) in Hconst; rewrite Hconst.
-        destruct (to_map b n); eauto using Sem.sem_lexp_instant.
+        destruct (to_map b n); eauto.
       - apply sem_var_impl with (b := to_map b) in Hvar; eauto.
-        unfold Sem.sem_var, Sem.lift in Hvar.
-        specialize (Hvar n).
-        destruct (to_map xs n) eqn: E; eauto using Sem.sem_lexp_instant.
       - specialize (IHsem_lexp n).
         apply sem_var_impl with (b := to_map b) in Hvar.
         unfold Sem.sem_var, Sem.lift in Hvar.
@@ -388,7 +367,7 @@ Module Type COINDTONATMAP
              |[(? & ? & Hes & Hxs & ? & Hos)
               |(? & ? & Hes & Hxs & ? & Hos)]];
           rewrite Hos; rewrite Hes in IHsem_lexp; rewrite Hxs in Hvar;
-            eauto using Sem.sem_lexp_instant.
+            eauto.
         rewrite <-(Bool.negb_involutive k).
         eapply Sem.Swhen_abs1; eauto.
       - specialize (IHsem_lexp n).
@@ -401,7 +380,7 @@ Module Type COINDTONATMAP
         apply (lift2_index n) in Hlift2
           as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
           rewrite Hos; rewrite Hes1 in IHsem_lexp1; rewrite Hes2 in IHsem_lexp2;
-            eauto using Sem.sem_lexp_instant.
+            eauto.
     Qed.
 
     Lemma sem_laexp_index:
@@ -541,8 +520,8 @@ Module Type COINDTONATMAP
     Proof.
       induction n; intros ** Ite.
       - inv Ite; repeat rewrite to_map_0; intuition.
-        + right; left. do 2 eexists; intuition; discriminate.
-        + right; right. do 2 eexists; intuition; discriminate.
+        + right; left. do 2 eexists; now intuition.
+        + right; right. do 2 eexists; now intuition.
       - inv Ite; repeat rewrite to_map_S; auto.
     Qed.
 
@@ -766,7 +745,7 @@ Module Type COINDTONATMAP
       rewrite count_true_shift, E in C; injection C; clear C; intro C.
       revert k' k r xs E C; induction n; simpl; intros.
       - rewrite E in C.
-        destruct (EqNat.beq_nat k k') eqn: E'.
+         destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
             simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
