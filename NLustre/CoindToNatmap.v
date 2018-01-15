@@ -26,76 +26,75 @@ Module Type COINDTONATMAP
        (Import Syn   : NLSYNTAX  Ids Op Clks)
        (Import Str   : STREAM        Op OpAux)
        (Import Ord   : ORDERED   Ids Op Clks Syn)
-       (Sem          : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
-       (Mod          : NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord).
+       (Indexed      : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
+       (CoInd        : NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord).
 
   Section Global.
 
     Variable G : global.
 
-    Definition to_map {A} (xs: Stream A) : stream A :=
+    Definition tr_stream {A} (xs: Stream A) : stream A :=
       fun n => Str_nth n xs.
 
-    Lemma to_map_0:
+    Lemma tr_stream_0:
       forall {A} (xs: Stream A) x,
-        to_map (x ::: xs) 0 = x.
+        tr_stream (x ::: xs) 0 = x.
     Proof. reflexivity. Qed.
 
-    Lemma to_map_S:
+    Lemma tr_stream_S:
       forall {A} (xs: Stream A) x n,
-        to_map (x ::: xs) (S n) = to_map xs n.
+        tr_stream (x ::: xs) (S n) = tr_stream xs n.
     Proof. reflexivity. Qed.
 
-    Add Parametric Morphism A : (@to_map A)
+    Add Parametric Morphism A : (@tr_stream A)
         with signature @EqSt A ==> eq ==> eq
-          as to_map_morph.
+          as tr_stream_morph.
     Proof.
       intros xs ys Exs n.
       revert xs ys Exs; induction n; intros; destruct xs, ys; inv Exs.
-      - rewrite 2 to_map_0; auto.
-      - rewrite 2 to_map_S; auto.
+      - rewrite 2 tr_stream_0; auto.
+      - rewrite 2 tr_stream_S; auto.
     Qed.
 
-    Lemma to_map_const:
+    Lemma tr_stream_const:
       forall {A} (c: A) n,
-        to_map (Streams.const c) n = c.
+        tr_stream (Streams.const c) n = c.
     Proof.
       induction n; rewrite unfold_Stream at 1; simpl.
-      - now rewrite to_map_0.
-      - now rewrite to_map_S.
+      - now rewrite tr_stream_0.
+      - now rewrite tr_stream_S.
     Qed.
 
-    Lemma to_map_tl:
+    Lemma tr_stream_tl:
       forall {A} (xs: Stream A) n,
-        to_map (tl xs) n = to_map xs (S n).
+        tr_stream (tl xs) n = tr_stream xs (S n).
     Proof. reflexivity. Qed.
 
     (** explain all this weirdness *)
-    Fixpoint to_maps {A} (xss: list (Stream A)) : stream (list A) :=
+    Fixpoint tr_streams {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
       | [] => fun n => []
-      | xs :: xss => fun n => to_map xs n :: to_maps xss n
+      | xs :: xss => fun n => tr_stream xs n :: tr_streams xss n
       end.
 
-    Fact to_maps_app:
+    Fact tr_streams_app:
       forall A (xss yss: list (Stream A)) n,
-        to_maps (xss ++ yss) n = to_maps xss n ++ to_maps yss n.
+        tr_streams (xss ++ yss) n = tr_streams xss n ++ tr_streams yss n.
     Proof.
       intros; induction xss; simpl; auto.
       f_equal; auto.
     Qed.
 
-    Lemma to_maps_tl:
+    Lemma tr_streams_tl:
       forall xss n,
-        to_maps (List.map (tl (A:=value)) xss) n = to_maps xss (S n).
+        tr_streams (List.map (tl (A:=value)) xss) n = tr_streams xss (S n).
     Proof.
       intros; induction xss; simpl; auto.
       f_equal; auto.
     Qed.
 
-    Definition hist_to_map (H: Mod.history) : Sem.history :=
-      PM.map to_map H.
-
+    Definition tr_history (H: CoInd.history) : Indexed.history :=
+      PM.map tr_stream H.
 
     (** TODO: MOVE THESE TO COMMON *)
     Lemma option_map_map:
@@ -121,22 +120,22 @@ Module Type COINDTONATMAP
       apply pm_xmapi_xmapi.
     Qed.
 
-    Lemma hist_to_map_tl:
+    Lemma tr_history_tl:
       forall n H,
-        Sem.restr (hist_to_map H) (S n) = Sem.restr (hist_to_map (Mod.history_tl H)) n.
+        Indexed.restr (tr_history H) (S n) = Indexed.restr (tr_history (CoInd.history_tl H)) n.
     Proof.
       now repeat setoid_rewrite pm_map_map.
     Qed.
 
     Lemma sem_var_impl:
       forall H b x xs,
-      Mod.sem_var H x xs ->
-      Sem.sem_var b (hist_to_map H) x (to_map xs).
+      CoInd.sem_var H x xs ->
+      Indexed.sem_var b (tr_history H) x (tr_stream xs).
     Proof.
       intros ** Find n.
       constructor.
       inv Find.
-      unfold Sem.restr, hist_to_map.
+      unfold Indexed.restr, tr_history.
       unfold PM.map.
       rewrite 2 PM.gmapi.
       erewrite PM.find_1; eauto; simpl.
@@ -146,209 +145,209 @@ Module Type COINDTONATMAP
 
     Corollary sem_vars_impl:
       forall H b xs xss,
-      Forall2 (Mod.sem_var H) xs xss ->
-      Sem.sem_vars b (hist_to_map H) xs (to_maps xss).
+      Forall2 (CoInd.sem_var H) xs xss ->
+      Indexed.sem_vars b (tr_history H) xs (tr_streams xss).
     Proof.
       induction 1 as [|? ? ? ? Find];
-        simpl; unfold Sem.sem_vars, Sem.lift; auto.
+        simpl; unfold Indexed.sem_vars, Indexed.lift; auto.
       intro; constructor; auto.
       apply sem_var_impl; auto.
     Qed.
 
     Lemma same_clock_impl:
       forall xss,
-        Mod.same_clock xss ->
-        Sem.same_clock (to_maps xss).
+        CoInd.same_clock xss ->
+        Indexed.same_clock (tr_streams xss).
     Proof.
-      unfold Sem.same_clock, Sem.instant_same_clock.
+      unfold Indexed.same_clock, Indexed.instant_same_clock.
       intros.
       destruct (H n) as [E|Ne].
       - left; induction xss; simpl; constructor; inv E; auto.
         apply IHxss; auto.
-        eapply Mod.same_clock_cons; eauto.
+        eapply CoInd.same_clock_cons; eauto.
       - right; induction xss; simpl; constructor; inv Ne; auto.
-        apply IHxss; eauto using Mod.same_clock_cons.
+        apply IHxss; eauto using CoInd.same_clock_cons.
     Qed.
 
     Lemma same_clock_app_impl:
       forall xss yss,
         xss <> [] ->
         yss <> [] ->
-        Mod.same_clock (xss ++ yss) ->
-        forall n, Sem.absent_list (to_maps xss n) <-> Sem.absent_list (to_maps yss n).
+        CoInd.same_clock (xss ++ yss) ->
+        forall n, Indexed.absent_list (tr_streams xss n) <-> Indexed.absent_list (tr_streams yss n).
     Proof.
       intros ** Hxss Hyss Same n.
       apply same_clock_impl in Same.
-      unfold Sem.same_clock, Sem.instant_same_clock in Same;
+      unfold Indexed.same_clock, Indexed.instant_same_clock in Same;
         specialize (Same n).
-      split; intros Sem.
+      split; intros Indexed.
       - destruct Same as [E|Ne].
-        + rewrite to_maps_app in E; apply Forall_app in E; tauto.
-        + rewrite to_maps_app in Ne; apply Forall_app in Ne as [NSem].
-          induction xss; simpl in *; inv NSem; try now inv Sem.
+        + rewrite tr_streams_app in E; apply Forall_app in E; tauto.
+        + rewrite tr_streams_app in Ne; apply Forall_app in Ne as [NIndexed].
+          induction xss; simpl in *; inv NIndexed; try now inv Indexed.
           now contradict Hxss.
       - destruct Same as [E|Ne].
-        + rewrite to_maps_app in E; apply Forall_app in E; tauto.
-        + rewrite to_maps_app in Ne; apply Forall_app in Ne as [? NSem].
-          induction yss; simpl in *; inv NSem; try now inv Sem.
+        + rewrite tr_streams_app in E; apply Forall_app in E; tauto.
+        + rewrite tr_streams_app in Ne; apply Forall_app in Ne as [? NIndexed].
+          induction yss; simpl in *; inv NIndexed; try now inv Indexed.
           now contradict Hyss.
     Qed.
 
     Lemma const_index:
       forall n xs c b,
-        xs ≡ Mod.const c b ->
-        to_map xs n = if to_map b n then present (sem_const c) else absent.
+        xs ≡ CoInd.const c b ->
+        tr_stream xs n = if tr_stream b n then present (sem_const c) else absent.
     Proof.
       induction n; intros ** E;
         unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
-          repeat rewrite to_map_0; repeat rewrite to_map_S; auto.
+          repeat rewrite tr_stream_0; repeat rewrite tr_stream_S; auto.
     Qed.
 
     Lemma when_index:
       forall n k xs cs rs,
-        Mod.when k xs cs rs ->
-        (to_map xs n = absent
-         /\ to_map cs n = absent
-         /\ to_map rs n = absent)
+        CoInd.when k xs cs rs ->
+        (tr_stream xs n = absent
+         /\ tr_stream cs n = absent
+         /\ tr_stream rs n = absent)
         \/
         (exists x c,
-            to_map xs n = present x
-            /\ to_map cs n = present c
+            tr_stream xs n = present x
+            /\ tr_stream cs n = present c
             /\ val_to_bool c = Some (negb k)
-            /\ to_map rs n = absent)
+            /\ tr_stream rs n = absent)
         \/
         (exists x c,
-            to_map xs n = present x
-            /\ to_map cs n = present c
+            tr_stream xs n = present x
+            /\ tr_stream cs n = present c
             /\ val_to_bool c = Some k
-            /\ to_map rs n = present x).
+            /\ tr_stream rs n = present x).
     Proof.
       induction n; intros ** When.
-      - inv When; repeat rewrite to_map_0; intuition.
+      - inv When; repeat rewrite tr_stream_0; intuition.
         + right; left. do 2 eexists; intuition.
         + right; right. do 2 eexists; intuition.
-      - inv When; repeat rewrite to_map_S; auto.
+      - inv When; repeat rewrite tr_stream_S; auto.
     Qed.
 
     Lemma lift1_index:
       forall n op t xs ys,
-        Mod.lift1 op t xs ys ->
-        (to_map xs n = absent /\ to_map ys n = absent)
+        CoInd.lift1 op t xs ys ->
+        (tr_stream xs n = absent /\ tr_stream ys n = absent)
         \/
         (exists x y,
-            to_map xs n = present x
+            tr_stream xs n = present x
             /\ sem_unop op x t = Some y
-            /\ to_map ys n = present y).
+            /\ tr_stream ys n = present y).
     Proof.
       induction n; intros ** Lift1.
-      - inv Lift1; repeat rewrite to_map_0; intuition.
+      - inv Lift1; repeat rewrite tr_stream_0; intuition.
         right. do 2 eexists; intuition; auto.
-      - inv Lift1; repeat rewrite to_map_S; auto.
+      - inv Lift1; repeat rewrite tr_stream_S; auto.
     Qed.
 
     Lemma lift2_index:
       forall n op t1 t2 xs ys zs,
-        Mod.lift2 op t1 t2 xs ys zs ->
-        (to_map xs n = absent
-         /\ to_map ys n = absent
-         /\ to_map zs n = absent)
+        CoInd.lift2 op t1 t2 xs ys zs ->
+        (tr_stream xs n = absent
+         /\ tr_stream ys n = absent
+         /\ tr_stream zs n = absent)
         \/
         (exists x y z,
-            to_map xs n = present x
-            /\ to_map ys n = present y
+            tr_stream xs n = present x
+            /\ tr_stream ys n = present y
             /\ sem_binop op x t1 y t2 = Some z
-            /\ to_map zs n = present z).
+            /\ tr_stream zs n = present z).
     Proof.
       induction n; intros ** Lift2.
-      - inv Lift2; repeat rewrite to_map_0; intuition.
+      - inv Lift2; repeat rewrite tr_stream_0; intuition.
         right. do 3 eexists; intuition; auto.
-      - inv Lift2; repeat rewrite to_map_S; auto.
+      - inv Lift2; repeat rewrite tr_stream_S; auto.
     Qed.
 
-    Hint Constructors Sem.sem_clock_instant.
+    Hint Constructors Indexed.sem_clock_instant.
     Lemma sem_clock_index:
       forall n H b ck bs,
-        Mod.sem_clock H b ck bs ->
+        CoInd.sem_clock H b ck bs ->
         (ck = Cbase
-         /\ to_map b n = to_map bs n)
+         /\ tr_stream b n = tr_stream bs n)
         \/
         (exists ck' x k c,
             ck = Con ck' x k
-            /\ Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck' true
-            /\ Sem.sem_var_instant (Sem.restr (hist_to_map H) n) x (present c)
+            /\ Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
+            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x (present c)
             /\ val_to_bool c = Some k
-            /\ to_map bs n = true)
+            /\ tr_stream bs n = true)
         \/
         (exists ck' x k,
             ck = Con ck' x k
-            /\ Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck' false
-            /\ Sem.sem_var_instant (Sem.restr (hist_to_map H) n) x absent
-            /\ to_map bs n = false)
+            /\ Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck' false
+            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x absent
+            /\ tr_stream bs n = false)
         \/
         (exists ck' x k c,
             ck = Con ck' x (negb k)
-            /\ Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck' true
-            /\ Sem.sem_var_instant (Sem.restr (hist_to_map H) n) x (present c)
+            /\ Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
+            /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x (present c)
             /\ val_to_bool c = Some k
-            /\ to_map bs n = false).
+            /\ tr_stream bs n = false).
     Proof.
       Local Ltac rew_0 := try match goal with
-                                H: to_map _ _ = _ |- _ => now rewrite to_map_0 in H
+                                H: tr_stream _ _ = _ |- _ => now rewrite tr_stream_0 in H
                               end.
       intros n H b ck; revert n H b; induction ck as [|ck ? x k].
       - inversion_clear 1 as [? ? ? Eb| | |].
         left; intuition.
         now rewrite Eb.
-      - intro n; revert x k; induction n; intros x k H bk bk' Sem.
-        + inversion_clear Sem as [|? ? ? ? ? ? ? ? ? SemCk Hvar
-                                     |? ? ? ? ? ? ? ? SemCk Hvar
-                                     |? ? ? ? ? ? ? ? ? SemCk Hvar].
+      - intro n; revert x k; induction n; intros x k H bk bk' Indexed.
+        + inversion_clear Indexed as [|? ? ? ? ? ? ? ? ? IndexedCk Hvar
+                                     |? ? ? ? ? ? ? ? IndexedCk Hvar
+                                     |? ? ? ? ? ? ? ? ? IndexedCk Hvar].
           * right; left.
-            apply sem_var_impl with (b:=to_map bk) in Hvar;
-              unfold Sem.sem_var, Sem.lift in Hvar ; specialize (Hvar 0);
-                rewrite to_map_0 in Hvar.
+            apply sem_var_impl with (b:=tr_stream bk) in Hvar;
+              unfold Indexed.sem_var, Indexed.lift in Hvar ; specialize (Hvar 0);
+                rewrite tr_stream_0 in Hvar.
             do 4 eexists; intuition; eauto.
-            apply (IHck 0) in SemCk as [(? & E)|[|[]]]; destruct_conjs;
+            apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
-            rewrite E, to_map_0; constructor.
+            rewrite E, tr_stream_0; constructor.
           * right; right; left.
-            apply sem_var_impl with (b:=to_map bk) in Hvar;
-              unfold Sem.sem_var, Sem.lift in Hvar ; specialize (Hvar 0);
-                rewrite to_map_0 in Hvar.
+            apply sem_var_impl with (b:=tr_stream bk) in Hvar;
+              unfold Indexed.sem_var, Indexed.lift in Hvar ; specialize (Hvar 0);
+                rewrite tr_stream_0 in Hvar.
             do 3 eexists; intuition.
-            apply (IHck 0) in SemCk as [(? & E)|[|[]]]; destruct_conjs;
+            apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
-            rewrite E, to_map_0; constructor.
+            rewrite E, tr_stream_0; constructor.
           * right; right; right.
-            apply sem_var_impl with (b:=to_map bk) in Hvar;
-              unfold Sem.sem_var, Sem.lift in Hvar; specialize (Hvar 0);
-                rewrite to_map_0 in Hvar.
+            apply sem_var_impl with (b:=tr_stream bk) in Hvar;
+              unfold Indexed.sem_var, Indexed.lift in Hvar; specialize (Hvar 0);
+                rewrite tr_stream_0 in Hvar.
             do 4 eexists; intuition; eauto.
-            apply (IHck 0) in SemCk as [(? & E)|[|[]]]; destruct_conjs;
+            apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
-            rewrite E, to_map_0; constructor.
-        + inversion_clear Sem; rewrite <-to_map_tl, hist_to_map_tl; eauto.
+            rewrite E, tr_stream_0; constructor.
+        + inversion_clear Indexed; rewrite <-tr_stream_tl, tr_history_tl; eauto.
     Qed.
 
     Corollary sem_clock_impl:
       forall n H b ck bs,
-        Mod.sem_clock H b ck bs ->
-        Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck (to_map bs n).
+        CoInd.sem_clock H b ck bs ->
+        Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck (tr_stream bs n).
     Proof.
-      intros ** Sem.
-      apply (sem_clock_index n) in Sem as [(Hck & E)
+      intros ** Indexed.
+      apply (sem_clock_index n) in Indexed as [(Hck & E)
                                           |[(? & ? & ? & ? & Hck & ? & ? & ? & E)
                                            |[(? & ? & ? & Hck & ? & ? & E)
                                             |(? & ? & ? & ? & Hck & ? & ? & ? & E)]]];
-        match goal with H: to_map _ _ = _ |- _ => rewrite H end;
+        match goal with H: tr_stream _ _ = _ |- _ => rewrite H end;
         subst; eauto.
     Qed.
 
-    Hint Constructors Sem.sem_lexp_instant.
+    Hint Constructors Indexed.sem_lexp_instant.
     Lemma sem_lexp_impl:
       forall H b e es,
-        Mod.sem_lexp H b e es ->
-        Sem.sem_lexp (to_map b) (hist_to_map H) e (to_map es).
+        CoInd.sem_lexp H b e es ->
+        Indexed.sem_lexp (tr_stream b) (tr_history H) e (tr_stream es).
     Proof.
       induction 1 as [? ? ? ? Hconst
                             |? ? ? ? ? Hvar
@@ -356,11 +355,11 @@ Module Type COINDTONATMAP
                             |? ? ? ? ? ? ? ? ? Hlift1
                             |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - apply (const_index n) in Hconst; rewrite Hconst.
-        destruct (to_map b n); eauto.
-      - apply sem_var_impl with (b := to_map b) in Hvar; eauto.
+        destruct (tr_stream b n); eauto.
+      - apply sem_var_impl with (b := tr_stream b) in Hvar; eauto.
       - specialize (IHsem_lexp n).
-        apply sem_var_impl with (b := to_map b) in Hvar.
-        unfold Sem.sem_var, Sem.lift in Hvar.
+        apply sem_var_impl with (b := tr_stream b) in Hvar.
+        unfold Indexed.sem_var, Indexed.lift in Hvar.
         specialize (Hvar n).
         apply (when_index n) in Hwhen
           as [(Hes & Hxs & Hos)
@@ -369,7 +368,7 @@ Module Type COINDTONATMAP
           rewrite Hos; rewrite Hes in IHsem_lexp; rewrite Hxs in Hvar;
             eauto.
         rewrite <-(Bool.negb_involutive k).
-        eapply Sem.Swhen_abs1; eauto.
+        eapply Indexed.Swhen_abs1; eauto.
       - specialize (IHsem_lexp n).
         apply (lift1_index n) in Hlift1
           as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
@@ -385,85 +384,85 @@ Module Type COINDTONATMAP
 
     Lemma sem_laexp_index:
       forall n H b ck le es,
-        Mod.sem_laexp H b ck le es ->
-        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck false
-         /\ Sem.sem_lexp_instant (to_map b n) (Sem.restr (hist_to_map H) n) le absent
-         /\ to_map es n = absent)
+        CoInd.sem_laexp H b ck le es ->
+        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck false
+         /\ Indexed.sem_lexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
+         /\ tr_stream es n = absent)
         \/
         (exists e,
-            Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck true
-            /\ Sem.sem_lexp_instant (to_map b n) (Sem.restr (hist_to_map H) n) le (present e)
-            /\ to_map es n = present e).
+            Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck true
+            /\ Indexed.sem_lexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
+            /\ tr_stream es n = present e).
     Proof.
-      induction n; intros ** Sem.
-      - inversion_clear Sem as [? ? ? ? ? ? ? Sem' Hck|? ? ? ? ? ? Sem' Hck];
-          apply sem_lexp_impl in Sem'; specialize (Sem' 0);
-            repeat rewrite to_map_0; repeat rewrite to_map_0 in Sem';
-              apply (sem_clock_impl 0) in Hck; rewrite to_map_0 in Hck.
+      induction n; intros ** Indexed.
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck|? ? ? ? ? ? Indexed' Hck];
+          apply sem_lexp_impl in Indexed'; specialize (Indexed' 0);
+            repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
+              apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
-      - inversion_clear Sem as [? ? ? ? ? ? ? Sem'|? ? ? ? ? ? Sem'];
-          apply sem_lexp_impl in Sem';
-          rewrite to_map_S, hist_to_map_tl; eauto.
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
+          apply sem_lexp_impl in Indexed';
+          rewrite tr_stream_S, tr_history_tl; eauto.
     Qed.
 
     Corollary sem_laexp_impl:
       forall H b e es ck,
-        Mod.sem_laexp H b ck e es ->
-        Sem.sem_laexp (to_map b) (hist_to_map H) ck e (to_map es).
+        CoInd.sem_laexp H b ck e es ->
+        Indexed.sem_laexp (tr_stream b) (tr_history H) ck e (tr_stream es).
     Proof.
-      intros ** Sem n.
-      apply (sem_laexp_index n) in Sem as [(? & ? & Hes)|(? & ? & ? & Hes)];
-        rewrite Hes; auto using Sem.sem_laexp_instant.
+      intros ** Indexed n.
+      apply (sem_laexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
+        rewrite Hes; auto using Indexed.sem_laexp_instant.
     Qed.
 
     Lemma sem_laexps_index:
       forall n H b ck les ess,
-        Mod.sem_laexps H b ck les ess ->
-        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck false
-         /\ Sem.sem_lexps_instant (to_map b n) (Sem.restr (hist_to_map H) n) les (to_maps ess n)
-         /\ to_maps ess n = List.map (fun _ => absent) les)
+        CoInd.sem_laexps H b ck les ess ->
+        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck false
+         /\ Indexed.sem_lexps_instant (tr_stream b n) (Indexed.restr (tr_history H) n) les (tr_streams ess n)
+         /\ tr_streams ess n = List.map (fun _ => absent) les)
         \/
-        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck true
-         /\ Sem.sem_lexps_instant (to_map b n) (Sem.restr (hist_to_map H) n) les (to_maps ess n)
-         /\ Forall (fun e => e <> absent) (to_maps ess n)).
+        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck true
+         /\ Indexed.sem_lexps_instant (tr_stream b n) (Indexed.restr (tr_history H) n) les (tr_streams ess n)
+         /\ Forall (fun e => e <> absent) (tr_streams ess n)).
     Proof.
-      induction n; intros ** Sem.
-      - inversion_clear Sem as [? ? ? ? ? ? Sem' Hess Hck|? ? ? ? ? ? Sem' Hess Hck];
-          apply (sem_clock_impl 0) in Hck; rewrite to_map_0 in Hck.
+      induction n; intros ** Indexed.
+      - inversion_clear Indexed as [? ? ? ? ? ? Indexed' Hess Hck|? ? ? ? ? ? Indexed' Hess Hck];
+          apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
         + right. intuition; auto.
-          *{ clear Hess. induction Sem' as [|? ? ? ? Sem]; simpl; constructor.
-             - now apply sem_lexp_impl in Sem.
-             - eapply IHSem', Mod.sem_laexps_cons; eauto.
+          *{ clear Hess. induction Indexed' as [|? ? ? ? Indexed]; simpl; constructor.
+             - now apply sem_lexp_impl in Indexed.
+             - eapply IHIndexed', CoInd.sem_laexps_cons; eauto.
            }
           * clear - Hess.
             induction ess; inv Hess; constructor; auto.
         + left. intuition; auto.
-          *{ clear Hess. induction Sem' as [|? ? ? ? Sem]; simpl; constructor.
-             - now apply sem_lexp_impl in Sem.
-             - eapply IHSem', Mod.sem_laexps_cons; eauto.
+          *{ clear Hess. induction Indexed' as [|? ? ? ? Indexed]; simpl; constructor.
+             - now apply sem_lexp_impl in Indexed.
+             - eapply IHIndexed', CoInd.sem_laexps_cons; eauto.
            }
-          * clear - Sem' Hess.
-            induction Sem'; inv Hess; simpl; auto.
+          * clear - Indexed' Hess.
+            induction Indexed'; inv Hess; simpl; auto.
             f_equal; auto.
-      - destruct b; inversion_clear Sem as [? ? ? ? ? ? Sem' Hess Hck|? ? ? ? ? ? Sem' Hess Hck];
-          rewrite to_map_S, hist_to_map_tl, <-to_maps_tl; auto.
+      - destruct b; inversion_clear Indexed as [? ? ? ? ? ? Indexed' Hess Hck|? ? ? ? ? ? Indexed' Hess Hck];
+          rewrite tr_stream_S, tr_history_tl, <-tr_streams_tl; auto.
     Qed.
 
     Corollary sem_laexps_impl:
       forall H b ck es ess,
-        Mod.sem_laexps H b ck es ess ->
-        Sem.sem_laexps (to_map b) (hist_to_map H) ck es (to_maps ess).
+        CoInd.sem_laexps H b ck es ess ->
+        Indexed.sem_laexps (tr_stream b) (tr_history H) ck es (tr_streams ess).
     Proof.
-      intros ** Sem n.
-      apply (sem_laexps_index n) in Sem as [(? & ? & Hes)|(? & ? & Hes)].
+      intros ** Indexed n.
+      apply (sem_laexps_index n) in Indexed as [(? & ? & Hes)|(? & ? & Hes)].
       - eright; eauto.
-      - assert (exists vs, to_maps ess n = List.map present vs) as (vs & ?).
+      - assert (exists vs, tr_streams ess n = List.map present vs) as (vs & ?).
         { clear - Hes.
           induction ess as [|es].
           - exists nil; auto.
           - simpl in *; inversion_clear Hes as [|? ? E].
-            destruct (to_map es n) as [|v]; try now contradict E.
+            destruct (tr_stream es n) as [|v]; try now contradict E.
             apply IHess in H as (vs & ?).
             exists (v :: vs); simpl.
             f_equal; auto.
@@ -473,71 +472,71 @@ Module Type COINDTONATMAP
 
     Lemma merge_index:
       forall n xs ts fs rs,
-        Mod.merge xs ts fs rs ->
-        (to_map xs n = absent
-         /\ to_map ts n = absent
-         /\ to_map fs n = absent
-         /\ to_map rs n = absent)
+        CoInd.merge xs ts fs rs ->
+        (tr_stream xs n = absent
+         /\ tr_stream ts n = absent
+         /\ tr_stream fs n = absent
+         /\ tr_stream rs n = absent)
         \/
         (exists t,
-            to_map xs n = present true_val
-            /\ to_map ts n = present t
-            /\ to_map fs n = absent
-            /\ to_map rs n = present t)
+            tr_stream xs n = present true_val
+            /\ tr_stream ts n = present t
+            /\ tr_stream fs n = absent
+            /\ tr_stream rs n = present t)
         \/
         (exists f,
-            to_map xs n = present false_val
-            /\ to_map ts n = absent
-            /\ to_map fs n = present f
-            /\ to_map rs n = present f).
+            tr_stream xs n = present false_val
+            /\ tr_stream ts n = absent
+            /\ tr_stream fs n = present f
+            /\ tr_stream rs n = present f).
     Proof.
       induction n; intros ** Merge.
-      - inv Merge; repeat rewrite to_map_0; intuition.
+      - inv Merge; repeat rewrite tr_stream_0; intuition.
         + right; left. eexists; intuition.
         + right; right. eexists; intuition.
-      - inv Merge; repeat rewrite to_map_S; auto.
+      - inv Merge; repeat rewrite tr_stream_S; auto.
     Qed.
 
     Lemma ite_index:
       forall n xs ts fs rs,
-        Mod.ite xs ts fs rs ->
-        (to_map xs n = absent
-         /\ to_map ts n = absent
-         /\ to_map fs n = absent
-         /\ to_map rs n = absent)
+        CoInd.ite xs ts fs rs ->
+        (tr_stream xs n = absent
+         /\ tr_stream ts n = absent
+         /\ tr_stream fs n = absent
+         /\ tr_stream rs n = absent)
         \/
         (exists t f,
-            to_map xs n = present true_val
-            /\ to_map ts n = present t
-            /\ to_map fs n = present f
-            /\ to_map rs n = present t)
+            tr_stream xs n = present true_val
+            /\ tr_stream ts n = present t
+            /\ tr_stream fs n = present f
+            /\ tr_stream rs n = present t)
         \/
         (exists t f,
-            to_map xs n = present false_val
-            /\ to_map ts n = present t
-            /\ to_map fs n = present f
-            /\ to_map rs n = present f).
+            tr_stream xs n = present false_val
+            /\ tr_stream ts n = present t
+            /\ tr_stream fs n = present f
+            /\ tr_stream rs n = present f).
     Proof.
       induction n; intros ** Ite.
-      - inv Ite; repeat rewrite to_map_0; intuition.
+      - inv Ite; repeat rewrite tr_stream_0; intuition.
         + right; left. do 2 eexists; now intuition.
         + right; right. do 2 eexists; now intuition.
-      - inv Ite; repeat rewrite to_map_S; auto.
+      - inv Ite; repeat rewrite tr_stream_S; auto.
     Qed.
 
     Lemma sem_cexp_impl:
       forall H b e es,
-        Mod.sem_cexp H b e es ->
-        Sem.sem_cexp (to_map b) (hist_to_map H) e (to_map es).
+        CoInd.sem_cexp H b e es ->
+        Indexed.sem_cexp (tr_stream b) (tr_history H) e (tr_stream es).
     Proof.
-      unfold Sem.sem_caexp, Sem.lift.
+      unfold Indexed.sem_caexp, Indexed.lift.
       induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
                     |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
                     |? ? ? ? He]; intro n.
       - specialize (IHsem_cexp1 n).
         specialize (IHsem_cexp2 n).
-        apply sem_var_impl with (b := to_map b) in Hvar; eauto.
-        unfold Sem.sem_var, Sem.lift in Hvar.
+        apply sem_var_impl with (b := tr_stream b) in Hvar; eauto.
+        unfold Indexed.sem_var, Indexed.lift in Hvar.
         specialize (Hvar n).
         rename H0_ into Hf.
         apply (merge_index n) in Hmerge
@@ -546,7 +545,7 @@ Module Type COINDTONATMAP
               |(? & Hxs & Hts & Hfs & Hos)]];
           rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
             rewrite Hxs in Hvar; try (now constructor; auto).
-        apply Sem.Smerge_false; auto.
+        apply Indexed.Smerge_false; auto.
 
       - specialize (IHsem_cexp1 n).
         specialize (IHsem_cexp2 n).
@@ -573,173 +572,173 @@ Module Type COINDTONATMAP
 
     Lemma sem_caexp_index:
       forall n H b ck le es,
-        Mod.sem_caexp H b ck le es ->
-        (Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck false
-         /\ Sem.sem_cexp_instant (to_map b n) (Sem.restr (hist_to_map H) n) le absent
-         /\ to_map es n = absent)
+        CoInd.sem_caexp H b ck le es ->
+        (Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck false
+         /\ Indexed.sem_cexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
+         /\ tr_stream es n = absent)
         \/
         (exists e,
-            Sem.sem_clock_instant (to_map b n) (Sem.restr (hist_to_map H) n) ck true
-            /\ Sem.sem_cexp_instant (to_map b n) (Sem.restr (hist_to_map H) n) le (present e)
-            /\ to_map es n = present e).
+            Indexed.sem_clock_instant (tr_stream b n) (Indexed.restr (tr_history H) n) ck true
+            /\ Indexed.sem_cexp_instant (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
+            /\ tr_stream es n = present e).
     Proof.
-      induction n; intros ** Sem.
-      - inversion_clear Sem as [? ? ? ? ? ? ? Sem' Hck|? ? ? ? ? ? Sem' Hck];
-          apply sem_cexp_impl in Sem'; specialize (Sem' 0);
-            repeat rewrite to_map_0; repeat rewrite to_map_0 in Sem';
-              apply (sem_clock_impl 0) in Hck; rewrite to_map_0 in Hck.
+      induction n; intros ** Indexed.
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck|? ? ? ? ? ? Indexed' Hck];
+          apply sem_cexp_impl in Indexed'; specialize (Indexed' 0);
+            repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
+              apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
-      - inversion_clear Sem as [? ? ? ? ? ? ? Sem'|? ? ? ? ? ? Sem'];
-          apply sem_cexp_impl in Sem';
-          repeat rewrite to_map_S; rewrite hist_to_map_tl; eauto.
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
+          apply sem_cexp_impl in Indexed';
+          repeat rewrite tr_stream_S; rewrite tr_history_tl; eauto.
     Qed.
 
     Corollary sem_caexp_impl:
       forall H b e es ck,
-        Mod.sem_caexp H b ck e es ->
-        Sem.sem_caexp (to_map b) (hist_to_map H) ck e (to_map es).
+        CoInd.sem_caexp H b ck e es ->
+        Indexed.sem_caexp (tr_stream b) (tr_history H) ck e (tr_stream es).
     Proof.
-      intros ** Sem n.
-      apply (sem_caexp_index n) in Sem as [(? & ? & Hes)|(? & ? & ? & Hes)];
+      intros ** Indexed n.
+      apply (sem_caexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
         rewrite Hes; now constructor.
     Qed.
 
-    Lemma to_map_reset:
+    Lemma tr_stream_reset:
       forall n xs,
-        to_map (Mod.reset_of xs) n = Sem.reset_of (to_map xs) n.
+        tr_stream (CoInd.reset_of xs) n = Indexed.reset_of (tr_stream xs) n.
     Proof.
       induction n; intros.
-      - unfold_Stv xs; unfold Sem.reset_of;
-          rewrite unfold_Stream at 1; simpl; rewrite to_map_0; auto.
-      - unfold_Stv xs; unfold Sem.reset_of;
+      - unfold_Stv xs; unfold Indexed.reset_of;
+          rewrite unfold_Stream at 1; simpl; rewrite tr_stream_0; auto.
+      - unfold_Stv xs; unfold Indexed.reset_of;
           rewrite unfold_Stream at 1; simpl; auto;
             eapply IHn.
     Qed.
 
     Lemma fby_impl:
       forall n c xs,
-      to_map (Mod.fby c xs) n = fby c (to_map xs) n.
+      tr_stream (CoInd.fby c xs) n = fby c (tr_stream xs) n.
     Proof.
       induction n; intros.
       - unfold_Stv xs; rewrite unfold_Stream at 1;
-          unfold fby; simpl; now rewrite to_map_0.
+          unfold fby; simpl; now rewrite tr_stream_0.
       - unfold_Stv xs; rewrite unfold_Stream at 1;
-          unfold fby; simpl; repeat rewrite to_map_S;
+          unfold fby; simpl; repeat rewrite tr_stream_S;
             rewrite IHn; unfold fby;
-              destruct (to_map xs n); auto; f_equal;
+              destruct (tr_stream xs n); auto; f_equal;
                 clear IHn; induction n; simpl; auto;
-                  rewrite to_map_S; destruct (to_map xs n); auto.
+                  rewrite tr_stream_S; destruct (tr_stream xs n); auto.
     Qed.
 
-    Lemma sem_clock_to_map:
+    Lemma sem_clock_tr_stream:
       forall xss,
-        Sem.clock_of (to_maps xss) (to_map (Mod.clocks_of xss)).
+        Indexed.clock_of (tr_streams xss) (tr_stream (CoInd.clocks_of xss)).
     Proof.
       split; intros ** H.
       - revert dependent xss; induction n; intros; induction xss as [|xs];
           rewrite unfold_Stream at 1; simpl in *;
-          try rewrite to_map_0; try rewrite to_map_S; auto.
+          try rewrite tr_stream_0; try rewrite tr_stream_S; auto.
         + inversion_clear H as [|? ? ToMap Forall].
           apply andb_true_intro; split.
-          * unfold_St xs; rewrite to_map_0 in ToMap.
+          * unfold_St xs; rewrite tr_stream_0 in ToMap.
             apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E.
             contradiction.
           * apply IHxss in Forall.
             clear - Forall; induction xss as [|xs]; simpl; auto.
         + inversion_clear H.
           apply IHn. constructor.
-          * now rewrite to_map_tl.
-          * fold (@to_maps value).
-            now rewrite to_maps_tl.
+          * now rewrite tr_stream_tl.
+          * fold (@tr_streams value).
+            now rewrite tr_streams_tl.
       - revert dependent xss; induction n; intros; induction xss as [|xs];
           simpl in *; constructor.
         + rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite to_map_0 in H; apply andb_prop in H as [].
-          unfold_St xs; rewrite to_map_0; simpl in *.
+            rewrite tr_stream_0 in H; apply andb_prop in H as [].
+          unfold_St xs; rewrite tr_stream_0; simpl in *.
           intro; subst; discriminate.
         + apply IHxss.
           rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite to_map_0 in H; apply andb_prop in H as [? Forall].
+            rewrite tr_stream_0 in H; apply andb_prop in H as [? Forall].
           clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl;
-            now rewrite to_map_0.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite to_map_S in H.
+            now rewrite tr_stream_0.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
           apply IHn in H; inv H.
-          now rewrite <-to_map_tl.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite to_map_S in H.
+          now rewrite <-tr_stream_tl.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
           apply IHn in H; inv H.
-          now rewrite <-to_maps_tl.
+          now rewrite <-tr_streams_tl.
     Qed.
 
     Remark count_true_not_0:
       forall r n,
-        count (to_map (true ::: r)) n <> 0.
+        count (tr_stream (true ::: r)) n <> 0.
     Proof.
       intros; induction n; simpl.
       - omega.
-      - rewrite to_map_S.
-        destruct (to_map r n); auto.
+      - rewrite tr_stream_S.
+        destruct (tr_stream r n); auto.
     Qed.
 
     Remark count_true_not_0':
       forall n r,
-        to_map r n = true ->
-        count (to_map r) n <> 0.
+        tr_stream r n = true ->
+        count (tr_stream r) n <> 0.
     Proof.
       induction n; simpl; intros r E; try rewrite E; auto.
     Qed.
 
-    Remark to_map_mask_true_0:
+    Remark tr_stream_mask_true_0:
       forall n r xs,
-      to_map r n = true ->
-      to_map (Mod.mask absent 0 r xs) n = absent.
+      tr_stream r n = true ->
+      tr_stream (CoInd.mask absent 0 r xs) n = absent.
     Proof.
       induction n; intros ** E; rewrite unfold_Stream at 1; simpl;
-        unfold_Stv r; unfold_Stv xs; auto; try rewrite to_map_S.
-      - rewrite to_map_0 in E; discriminate.
-      - pose proof (to_map_const absent); auto.
-      - pose proof (to_map_const absent); auto.
+        unfold_Stv r; unfold_Stv xs; auto; try rewrite tr_stream_S.
+      - rewrite tr_stream_0 in E; discriminate.
+      - pose proof (tr_stream_const absent); auto.
+      - pose proof (tr_stream_const absent); auto.
       - apply IHn.
-        rewrite to_map_S in E; auto.
+        rewrite tr_stream_S in E; auto.
       - apply IHn.
-        rewrite to_map_S in E; auto.
+        rewrite tr_stream_S in E; auto.
     Qed.
 
     Lemma count_true_shift:
       forall n r,
-        count (to_map (true ::: r)) n
-        = if to_map r n then count (to_map r) n else S (count (to_map r) n).
+        count (tr_stream (true ::: r)) n
+        = if tr_stream r n then count (tr_stream r) n else S (count (tr_stream r) n).
     Proof.
       induction n; simpl; intros.
-      - destruct (to_map r 0); auto.
+      - destruct (tr_stream r 0); auto.
       - specialize (IHn r).
-        rewrite to_map_S.
-        destruct (to_map r n) eqn: E';
-          destruct (to_map r (S n)); rewrite IHn; auto.
+        rewrite tr_stream_S.
+        destruct (tr_stream r n) eqn: E';
+          destruct (tr_stream r (S n)); rewrite IHn; auto.
     Qed.
 
     Lemma count_false_shift:
       forall n r,
-        count (to_map (false ::: r)) n
-        = if to_map r n then count (to_map r) n - 1 else count (to_map r) n.
+        count (tr_stream (false ::: r)) n
+        = if tr_stream r n then count (tr_stream r) n - 1 else count (tr_stream r) n.
     Proof.
       induction n; simpl; intros.
-      - destruct (to_map r 0); auto.
+      - destruct (tr_stream r 0); auto.
       - specialize (IHn r).
-        rewrite to_map_S.
-        destruct (to_map r n) eqn: E';
-          destruct (to_map r (S n)); rewrite IHn; try omega.
+        rewrite tr_stream_S.
+        destruct (tr_stream r n) eqn: E';
+          destruct (tr_stream r (S n)); rewrite IHn; try omega.
         + apply Minus.minus_Sn_m, count_true_ge_1; auto.
         + rewrite Minus.minus_Sn_m; try omega.
           apply count_true_ge_1; auto.
     Qed.
 
-    Lemma to_map_mask_false_true:
+    Lemma tr_stream_mask_false_true:
       forall n r xs k k',
-        to_map r n = false ->
-        count (to_map (true ::: r)) n = S k ->
-        to_map (Mod.mask absent k' r xs) n
-        = if EqNat.beq_nat k k' then to_map xs n else absent.
+        tr_stream r n = false ->
+        count (tr_stream (true ::: r)) n = S k ->
+        tr_stream (CoInd.mask absent k' r xs) n
+        = if EqNat.beq_nat k k' then tr_stream xs n else absent.
     Proof.
       intros ** E C.
       rewrite count_true_shift, E in C; injection C; clear C; intro C.
@@ -748,18 +747,18 @@ Module Type COINDTONATMAP
          destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
-          rewrite to_map_0 in E; discriminate.
+            simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
+          rewrite tr_stream_0 in E; discriminate.
         + apply EqNat.beq_nat_false in E'.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
             destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-          * pose proof (to_map_const absent); auto.
-          * apply to_map_0.
+          * pose proof (tr_stream_const absent); auto.
+          * apply tr_stream_0.
       - destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
-              try discriminate; rewrite to_map_S in E.
+            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
+              try discriminate; rewrite tr_stream_S in E.
           * inv E'; exfalso; eapply count_true_not_0; eauto.
           * erewrite IHn; eauto.
             rewrite count_true_shift, E in E'; injection E'; clear E'; intro E'.
@@ -776,9 +775,9 @@ Module Type COINDTONATMAP
         + apply EqNat.beq_nat_false in E'.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
             destruct k' as [|[]]; simpl; rewrite E in C; subst;
-              repeat rewrite to_map_S; rewrite to_map_S in E;
+              repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
                 try (exfalso; now apply E').
-          * pose proof (to_map_const absent); auto.
+          * pose proof (tr_stream_const absent); auto.
           * erewrite IHn; eauto.
             rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
             <-EqNat.beq_nat_false_iff in E'.
@@ -798,12 +797,12 @@ Module Type COINDTONATMAP
             rewrite <-plus_n_O, E'; auto.
     Qed.
 
-    Lemma to_map_mask_true_false:
+    Lemma tr_stream_mask_true_false:
       forall n r xs k k',
-        to_map r n = true ->
-        count (to_map (false ::: r)) n = k ->
-        to_map (Mod.mask absent (S k') r xs) n
-        = if EqNat.beq_nat k k' then to_map xs n else absent.
+        tr_stream r n = true ->
+        count (tr_stream (false ::: r)) n = k ->
+        tr_stream (CoInd.mask absent (S k') r xs) n
+        = if EqNat.beq_nat k k' then tr_stream xs n else absent.
     Proof.
       intros ** E C.
       rewrite count_false_shift, E in C.
@@ -812,18 +811,18 @@ Module Type COINDTONATMAP
         destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
-          rewrite to_map_0 in E; discriminate.
+            simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
+          rewrite tr_stream_0 in E; discriminate.
         + apply EqNat.beq_nat_false in E'.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
             destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-          * pose proof (to_map_const absent); auto.
-          * apply to_map_0.
+          * pose proof (tr_stream_const absent); auto.
+          * apply tr_stream_0.
       - destruct (EqNat.beq_nat k k') eqn: E'.
         + apply EqNat.beq_nat_true in E'; subst.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
-              try discriminate; rewrite to_map_S in E; simpl in E';
+            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
+              try discriminate; rewrite tr_stream_S in E; simpl in E';
                 try rewrite <-Minus.minus_n_O in E'.
           * exfalso; eapply count_true_not_0; eauto.
           * erewrite IHn; eauto.
@@ -841,21 +840,21 @@ Module Type COINDTONATMAP
         + apply EqNat.beq_nat_false in E'.
           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
             destruct k' as [|[]]; simpl; rewrite E in C; subst;
-              repeat rewrite to_map_S; rewrite to_map_S in E;
+              repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
                 simpl in E'; try rewrite <-Minus.minus_n_O in E';
                 try (exfalso; now apply E').
-          * apply to_map_mask_true_0; auto.
+          * apply tr_stream_mask_true_0; auto.
           * erewrite IHn; eauto.
             rewrite count_true_shift, E in E'.
             rewrite <-plus_n_O.
             apply count_true_not_0' in E.
-            destruct (count (to_map r) n) as [|[]];
+            destruct (count (tr_stream r) n) as [|[]];
               try (exfalso; now apply E); try (exfalso; now apply E').
             auto.
           * erewrite IHn; eauto.
             rewrite count_true_shift, E in E'.
             apply count_true_not_0' in E.
-            destruct (count (to_map r) n) as [|[|]];
+            destruct (count (tr_stream r) n) as [|[|]];
               try (exfalso; now apply E); simpl; auto.
             rewrite 2 NPeano.Nat.succ_inj_wd_neg, <-EqNat.beq_nat_false_iff in E'.
             rewrite <-plus_n_O, E'; auto.
@@ -870,12 +869,12 @@ Module Type COINDTONATMAP
             rewrite <-plus_n_O, E'; auto.
     Qed.
 
-    Lemma to_map_mask_same:
+    Lemma tr_stream_mask_same:
       forall n b r xs k k',
-        to_map r n = b ->
-        count (to_map (b ::: r)) n = k ->
-        to_map (Mod.mask absent k' r xs) n
-        = if EqNat.beq_nat k k' then to_map xs n else absent.
+        tr_stream r n = b ->
+        count (tr_stream (b ::: r)) n = k ->
+        tr_stream (CoInd.mask absent k' r xs) n
+        = if EqNat.beq_nat k k' then tr_stream xs n else absent.
     Proof.
       intros ** E C.
       destruct b.
@@ -885,19 +884,19 @@ Module Type COINDTONATMAP
           destruct (EqNat.beq_nat k k') eqn: E'.
           * apply EqNat.beq_nat_true in E'; subst.
             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-              simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
-            rewrite to_map_0 in E; discriminate.
+              simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
+            rewrite tr_stream_0 in E; discriminate.
           *{ apply EqNat.beq_nat_false in E'.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
                destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-             - pose proof (to_map_const absent); auto.
-             - apply to_map_0.
+             - pose proof (tr_stream_const absent); auto.
+             - apply tr_stream_0.
            }
         + destruct (EqNat.beq_nat k k') eqn: E'.
           *{ apply EqNat.beq_nat_true in E'; subst.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
-                 try discriminate; rewrite to_map_S in E.
+               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
+                 try discriminate; rewrite tr_stream_S in E.
              - inv E'; exfalso; eapply count_true_not_0; eauto.
              - erewrite IHn; eauto.
                inv E';
@@ -921,9 +920,9 @@ Module Type COINDTONATMAP
           *{ apply EqNat.beq_nat_false in E'.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
                destruct k' as [|[]]; simpl; rewrite E in C; subst;
-                 repeat rewrite to_map_S; rewrite to_map_S in E;
+                 repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
                    try (exfalso; now apply E').
-             - pose proof (to_map_const absent); auto.
+             - pose proof (tr_stream_const absent); auto.
              - erewrite IHn; eauto.
                rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
                <-EqNat.beq_nat_false_iff in E'.
@@ -958,23 +957,23 @@ Module Type COINDTONATMAP
           destruct (EqNat.beq_nat k k') eqn: E'.
           * apply EqNat.beq_nat_true in E'; subst.
             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-              simpl; rewrite <-E'; repeat rewrite to_map_0; auto.
-            rewrite to_map_0 in E; discriminate.
+              simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
+            rewrite tr_stream_0 in E; discriminate.
           *{ apply EqNat.beq_nat_false in E'.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
                destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-             - pose proof (to_map_const absent); auto.
-             - apply to_map_0.
+             - pose proof (tr_stream_const absent); auto.
+             - apply tr_stream_0.
            }
         + destruct (EqNat.beq_nat k k') eqn: E'.
           *{ apply EqNat.beq_nat_true in E'; subst.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; repeat rewrite to_map_S; rewrite E in E';
-                 try discriminate; rewrite to_map_S in E.
+               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; rewrite E in E';
+                 try discriminate; rewrite tr_stream_S in E.
              - inv E'; exfalso; eapply count_true_not_0; eauto.
-             - erewrite to_map_mask_false_true; eauto;
+             - erewrite tr_stream_mask_false_true; eauto;
                  rewrite <-EqNat.beq_nat_refl; auto.
-             - erewrite to_map_mask_false_true; eauto;
+             - erewrite tr_stream_mask_false_true; eauto;
                  rewrite <-EqNat.beq_nat_refl; auto.
              - erewrite IHn; eauto.
                rewrite count_false_shift, E in E'.
@@ -989,9 +988,9 @@ Module Type COINDTONATMAP
           *{ apply EqNat.beq_nat_false in E'.
              unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
                destruct k' as [|[]]; simpl; rewrite E in C; subst;
-                 repeat rewrite to_map_S; rewrite to_map_S in E;
+                 repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
                    try (exfalso; now apply E').
-             - pose proof (to_map_const absent); auto.
+             - pose proof (tr_stream_const absent); auto.
              - erewrite IHn; eauto.
                rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
                <-EqNat.beq_nat_false_iff in E'.
@@ -1015,71 +1014,71 @@ Module Type COINDTONATMAP
     Ltac auto_f_equal H :=
       f_equal;
       [ idtac |
-        erewrite H; eauto; unfold mask; simpl; rewrite to_map_S;
+        erewrite H; eauto; unfold mask; simpl; rewrite tr_stream_S;
         repeat match goal with
-               | H: to_map _ _ = _ |- _ => rewrite H
+               | H: tr_stream _ _ = _ |- _ => rewrite H
                | H: count ?x _ = _ |- _ => rewrite H
                | H:  EqNat.beq_nat _ _ = _ |- _ => rewrite H
                end; auto].
 
     Lemma mask_impl:
       forall k r xss n,
-         to_maps (List.map (Mod.mask_v k r) xss) n
-        = mask (Sem.all_absent xss) k (to_map r) (to_maps xss) n.
+         tr_streams (List.map (CoInd.mask_v k r) xss) n
+        = mask (Indexed.all_absent xss) k (tr_stream r) (tr_streams xss) n.
     Proof.
       induction xss as [|xs];
         simpl; intros.
       - unfold mask.
-        destruct (EqNat.beq_nat k (count (to_map r) n)); auto.
+        destruct (EqNat.beq_nat k (count (tr_stream r) n)); auto.
       - induction n.
-        + unfold_St xs; unfold_Stv r; unfold Mod.mask_v, mask;
+        + unfold_St xs; unfold_Stv r; unfold CoInd.mask_v, mask;
             rewrite unfold_Stream at 1; simpl;
             destruct k as [|[]]; simpl; f_equal;
               erewrite IHxss; eauto; unfold mask; auto.
-        + unfold_St xs; unfold_Stv r; unfold Mod.mask_v, mask.
+        + unfold_St xs; unfold_Stv r; unfold CoInd.mask_v, mask.
           *{ rewrite unfold_Stream at 1; simpl.
              destruct k as [|[]]; simpl.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
+             - repeat rewrite tr_stream_S.
+               destruct (tr_stream r n) eqn: E.
                + auto_f_equal IHxss.
-                 pose proof (to_map_const absent); auto.
-               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                 pose proof (tr_stream_const absent); auto.
+               + destruct (count (tr_stream (true ::: r)) n) eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  * auto_f_equal IHxss.
-                   pose proof (to_map_const absent); auto.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                   pose proof (tr_stream_const absent); auto.
+             - repeat rewrite tr_stream_S.
+               destruct (tr_stream r n) eqn: E.
+               + destruct (count (tr_stream (true ::: r)) n) eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  * auto_f_equal IHxss.
-                   apply to_map_mask_true_0; auto.
-               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
+                   apply tr_stream_mask_true_0; auto.
+               + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  * auto_f_equal IHxss.
-                   erewrite to_map_mask_false_true; eauto; auto.
+                   erewrite tr_stream_mask_false_true; eauto; auto.
                  * auto_f_equal IHxss.
-                   erewrite to_map_mask_false_true; eauto; auto.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (true ::: r)) n) eqn: E'.
+                   erewrite tr_stream_mask_false_true; eauto; auto.
+             - repeat rewrite tr_stream_S.
+               destruct (tr_stream r n) eqn: E.
+               + destruct (count (tr_stream (true ::: r)) n) eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite to_map_mask_same; eauto.
+                    - erewrite tr_stream_mask_same; eauto.
                       apply EqNat.beq_nat_true, eq_S, EqNat.beq_nat_true_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite to_map_mask_same; eauto.
+                    - erewrite tr_stream_mask_same; eauto.
                       apply EqNat.beq_nat_false, not_eq_S, EqNat.beq_nat_false_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
-               + destruct (count (to_map (true ::: r)) n) as [|[]] eqn: E'.
+               + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'.
                  * exfalso; eapply count_true_not_0; eauto.
                  * auto_f_equal IHxss.
-                   erewrite to_map_mask_false_true; eauto; auto.
+                   erewrite tr_stream_mask_false_true; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite to_map_mask_false_true; eauto.
+                    - erewrite tr_stream_mask_false_true; eauto.
                       apply EqNat.beq_nat_true, eq_S, EqNat.beq_nat_true_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite to_map_mask_false_true; eauto.
+                    - erewrite tr_stream_mask_false_true; eauto.
                       apply EqNat.beq_nat_false, not_eq_S, EqNat.beq_nat_false_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
@@ -1087,45 +1086,45 @@ Module Type COINDTONATMAP
 
           *{ rewrite unfold_Stream at 1; simpl.
              destruct k as [|[]]; simpl.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
+             - repeat rewrite tr_stream_S.
+               destruct (tr_stream r n) eqn: E.
                + auto_f_equal IHxss.
-                 apply to_map_mask_true_0; auto.
-               + destruct (count (to_map (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss; erewrite to_map_mask_same; eauto; auto.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (false ::: r)) n) eqn: E';
+                 apply tr_stream_mask_true_0; auto.
+               + destruct (count (tr_stream (false ::: r)) n) eqn: E';
+                   auto_f_equal IHxss; erewrite tr_stream_mask_same; eauto; auto.
+             - repeat rewrite tr_stream_S.
+               destruct (tr_stream r n) eqn: E.
+               + destruct (count (tr_stream (false ::: r)) n) eqn: E';
                    auto_f_equal IHxss;
-                   erewrite to_map_mask_true_false; eauto; auto.
-               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E';
-                   auto_f_equal IHxss; erewrite to_map_mask_same; eauto; auto.
-             - repeat rewrite to_map_S.
-               destruct (to_map r n) eqn: E.
-               + destruct (count (to_map (false ::: r)) n) eqn: E'.
+                   erewrite tr_stream_mask_true_false; eauto; auto.
+               + destruct (count (tr_stream (false ::: r)) n) as [|[]] eqn: E';
+                   auto_f_equal IHxss; erewrite tr_stream_mask_same; eauto; auto.
+             - repeat rewrite tr_stream_S.
+               destruct (tr_stream r n) eqn: E.
+               + destruct (count (tr_stream (false ::: r)) n) eqn: E'.
                  * auto_f_equal IHxss.
-                   erewrite to_map_mask_true_false; eauto; auto.
+                   erewrite tr_stream_mask_true_false; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite to_map_mask_true_false; eauto.
+                    - erewrite tr_stream_mask_true_false; eauto.
                       apply EqNat.beq_nat_true, eq_S,
                       EqNat.beq_nat_true_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite to_map_mask_true_false; eauto.
+                    - erewrite tr_stream_mask_true_false; eauto.
                       apply EqNat.beq_nat_false, not_eq_S,
                       EqNat.beq_nat_false_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
                   }
-               + destruct (count (to_map (false ::: r)) n) as [|[]] eqn: E'.
+               + destruct (count (tr_stream (false ::: r)) n) as [|[]] eqn: E'.
                  * auto_f_equal IHxss.
-                   erewrite to_map_mask_same; eauto; auto.
+                   erewrite tr_stream_mask_same; eauto; auto.
                  * auto_f_equal IHxss.
-                   erewrite to_map_mask_same; eauto; auto.
+                   erewrite tr_stream_mask_same; eauto; auto.
                  *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite to_map_mask_same; eauto.
+                    - erewrite tr_stream_mask_same; eauto.
                       apply EqNat.beq_nat_true, eq_S, eq_S,
                       EqNat.beq_nat_true_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite to_map_mask_same; eauto.
+                    - erewrite tr_stream_mask_same; eauto.
                       apply EqNat.beq_nat_false, not_eq_S, not_eq_S,
                       EqNat.beq_nat_false_iff in E'';
                         rewrite NPeano.Nat.eqb_sym, E''; auto.
@@ -1133,27 +1132,27 @@ Module Type COINDTONATMAP
            }
     Qed.
 
-    Remark all_absent_to_maps:
+    Remark all_absent_tr_streams:
       forall A n (xss: list (Stream A)),
-        Sem.all_absent (to_maps xss n) = Sem.all_absent xss.
+        Indexed.all_absent (tr_streams xss n) = Indexed.all_absent xss.
     Proof.
       induction xss; simpl; auto; now f_equal.
     Qed.
 
     Theorem implies:
       (forall H b e,
-          Mod.sem_equation G H b e ->
-          Sem.sem_equation G (to_map b) (hist_to_map H) e)
+          CoInd.sem_equation G H b e ->
+          Indexed.sem_equation G (tr_stream b) (tr_history H) e)
       /\
       (forall f xss oss,
-          Mod.sem_node G f xss oss ->
-          Sem.sem_node G f (to_maps xss) (to_maps oss))
+          CoInd.sem_node G f xss oss ->
+          Indexed.sem_node G f (tr_streams xss) (tr_streams oss))
       /\
       (forall f r xss oss,
-          Mod.sem_reset G f r xss oss ->
-          Sem.sem_reset G f (to_map r) (to_maps xss) (to_maps oss)).
+          CoInd.sem_reset G f r xss oss ->
+          Indexed.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss)).
     Proof.
-      apply Mod.sem_equation_node_ind.
+      apply CoInd.sem_equation_node_ind.
       - econstructor.
         + apply sem_var_impl; eauto.
         + apply sem_caexp_impl; auto.
@@ -1164,37 +1163,37 @@ Module Type COINDTONATMAP
         + apply sem_laexps_impl; eauto.
         + apply sem_vars_impl; eauto.
         + apply sem_var_impl; eauto.
-        + eapply Sem.sem_reset_compat.
-          * intro; apply to_map_reset.
+        + eapply Indexed.sem_reset_compat.
+          * intro; apply tr_stream_reset.
           * eauto.
       - econstructor; auto; subst.
         + apply sem_laexp_impl; eauto.
-        + unfold Sem.sem_var, Sem.lift; intro.
+        + unfold Indexed.sem_var, Indexed.lift; intro.
           rewrite <-fby_impl.
           apply sem_var_impl; auto.
-          exact (to_map b).
+          exact (tr_stream b).
       - intros ** IHNode.
         constructor; intro.
         specialize (IHNode n).
         pose proof (mask_impl n r xss) as Hxss.
         pose proof (mask_impl n r yss) as Hyss.
-        rewrite 2 all_absent_to_maps.
-        eapply Sem.sem_node_compat; eauto.
+        rewrite 2 all_absent_tr_streams.
+        eapply Indexed.sem_node_compat; eauto.
       - intros ** Hin Hout Same ? ?. econstructor; eauto.
-        + apply sem_clock_to_map.
+        + apply sem_clock_tr_stream.
         + apply sem_vars_impl; eauto.
         + apply sem_vars_impl; eauto.
-        + now apply Mod.same_clock_app_l, same_clock_impl in Same.
-        + now apply Mod.same_clock_app_r, same_clock_impl in Same.
+        + now apply CoInd.same_clock_app_l, same_clock_impl in Same.
+        + now apply CoInd.same_clock_app_r, same_clock_impl in Same.
         + apply same_clock_app_impl; auto.
           * intro; subst.
             apply Forall2_length in Hin; simpl in *.
-            unfold Mod.idents in Hin; rewrite map_length in Hin.
+            unfold CoInd.idents in Hin; rewrite map_length in Hin.
             pose proof n.(n_ingt0) as Nin.
             rewrite Hin in Nin; contradict Nin; apply Lt.lt_irrefl.
           * intro; subst.
             apply Forall2_length in Hout; simpl in *.
-            unfold Mod.idents in Hout; rewrite map_length in Hout.
+            unfold CoInd.idents in Hout; rewrite map_length in Hout.
             pose proof n.(n_outgt0) as Nout.
             rewrite Hout in Nout; contradict Nout; apply Lt.lt_irrefl.
     Qed.
