@@ -492,8 +492,7 @@ Module Type NLSEMANTICSCOIND
       with signature eq ==> @EqSt value ==> Basics.impl
         as sem_var_EqSt.
   Proof.
-    intros x xs xs' E.
-    intros Sem; induction Sem.
+    (* cofix;  *)intros x xs xs' E; intro Sem; inv Sem.
     econstructor; eauto.
     transitivity xs; auto; symmetry; auto.
   Qed.

@@ -18,7 +18,7 @@ Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.NLustre.NLSemanticsCoInd.
 
 Require Import Setoid.
-Module Type COINDTONATMAP
+Module Type COINDTOINDEXED
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX        Op)
@@ -417,6 +417,14 @@ Module Type COINDTONATMAP
           as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
           rewrite Hos; rewrite Hes1 in IHsem_lexp1; rewrite Hes2 in IHsem_lexp2;
             eauto.
+    Qed.
+
+    Lemma tl_const:
+      forall c b bs,
+        tl (CoInd.const c (b ::: bs)) = CoInd.const c bs.
+    Proof.
+      intros.
+      destruct b; auto.
     Qed.
 
     (** Give an indexed specification for annotated [lexp], using the previous
@@ -1319,4 +1327,4 @@ Module Type COINDTONATMAP
 
   End Global.
 
-End COINDTONATMAP.
+End COINDTOINDEXED.
