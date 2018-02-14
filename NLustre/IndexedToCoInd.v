@@ -424,20 +424,19 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      do 2 eexists; split; [|split].
-      Focus 3.
-
-      intro; specialize (Sem n).
-      inversion Sem.
-      - left; exists sc, xc; intuition; eauto.
-        eauto.
-        instantiate (1 := es); auto.
-      (*   eexact H6. *)
-      (* admit. *)
-      (* - intro n; specialize (Sem n); inv Sem. *)
-      (* - intros n; specialize (Sem n); inv Sem. *)
-      (*   +  *)
-    Admitted.
+      assert (exists ys, Indexed.sem_lexp b H e ys) as (ys & Sem_e) by
+            (apply unlift_choice; intro; specialize (Sem n); inv Sem;
+             eexists; eauto).
+      assert (exists xs, Indexed.sem_var b H x xs) as (xs & Sem_x) by
+             (apply unlift_choice; intro; specialize (Sem n); inv Sem;
+             eexists; eauto).
+      exists ys, xs; intuition.
+      specialize (Sem_e n); specialize (Sem_x n); specialize (Sem n); inv Sem.
+      - left; exists sc, xc; intuition Indexed.sem_det.
+      - right; left; exists sc, xc; intuition; try Indexed.sem_det.
+        now rewrite Bool.negb_involutive.
+      - right; right; intuition Indexed.sem_det.
+    Qed.
 
     Lemma unop_inv:
       forall H b op e ty es,
@@ -455,20 +454,14 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      assert (exists ys, Indexed.sem_lexp b H e ys) as (ys & Sem').
-      { apply unlift_choice.
-        intro; specialize (Sem n); inv Sem;
-          eexists; eauto.
-      }
+      assert (exists ys, Indexed.sem_lexp b H e ys) as (ys & Sem_e) by
+            (apply unlift_choice; intro; specialize (Sem n); inv Sem;
+             eexists; eauto).
       exists ys; intuition.
-      specialize (Sem' n).
-      specialize (Sem n); inv Sem.
-      - left; exists c, c'; intuition.
-        Indexed.sem_det.
-      - right; intuition.
-        Indexed.sem_det.
+      specialize (Sem_e n); specialize (Sem n); inv Sem.
+      - left; exists c, c'; intuition Indexed.sem_det.
+      - right; intuition Indexed.sem_det.
     Qed.
-
 
     Lemma binop_inv:
       forall H b op e1 e2 ty es,
@@ -489,10 +482,18 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      do 2 eexists; split; [|split].
-      - intro; specialize (Sem n).
-        inv Sem.
-    Admitted.
+      assert (exists ys, Indexed.sem_lexp b H e1 ys) as (ys & Sem_e1) by
+            (apply unlift_choice; intro; specialize (Sem n); inv Sem;
+             eexists; eauto).
+      assert (exists zs, Indexed.sem_lexp b H e2 zs) as (zs & Sem_e2) by
+             (apply unlift_choice; intro; specialize (Sem n); inv Sem;
+             eexists; eauto).
+      exists ys, zs; intuition.
+      specialize (Sem_e1 n); specialize (Sem_e2 n); specialize (Sem n); inv Sem.
+      - left; exists c1, c2, c'; intuition Indexed.sem_det.
+      - right; intuition Indexed.sem_det.
+    Qed.
+
     (* Lemma when_index: *)
     (*   forall n k xs cs rs, *)
     (*     CoInd.when k xs cs rs -> *)
