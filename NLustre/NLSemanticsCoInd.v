@@ -38,10 +38,7 @@ Module Type NLSEMANTICSCOIND
   Definition history_tl (H: history) : history := PM.map (@tl value) H.
 
   CoFixpoint const (c: const) (b: Stream bool): Stream value :=
-    match b with
-    | true  ::: b' => present (sem_const c) ::: const c b'
-    | false ::: b' => absent ::: const c b'
-    end.
+    (if hd b then present (sem_const c) else absent) ::: const c (tl b).
 
   Inductive sem_var: history -> ident -> Stream value -> Prop :=
     sem_var_intro:
@@ -83,7 +80,8 @@ Module Type NLSEMANTICSCOIND
         lift1 op ty xs rs ->
         lift1 op ty (present x ::: xs) (present r ::: rs).
 
-  CoInductive lift2 (op: binop) (ty1 ty2: type): Stream value -> Stream value -> Stream value -> Prop :=
+  CoInductive lift2 (op: binop) (ty1 ty2: type)
+    : Stream value -> Stream value -> Stream value -> Prop :=
   | Lift2A:
       forall xs ys rs,
         lift2 op ty1 ty2 xs ys rs ->
@@ -181,20 +179,6 @@ Module Type NLSEMANTICSCOIND
         lift2 op (typeof e1) (typeof e2) es1 es2 os ->
         sem_lexp H b (Ebinop op e1 e2 ty) os.
 
-  (* CoInductive sem_laexp: history -> Stream bool -> clock -> lexp -> Stream value -> Prop := *)
-  (* | SLtick: *)
-  (*     forall H b ck le e es bs, *)
-  (*       sem_lexp H b le (present e ::: es) -> *)
-  (*       sem_clock H b ck (true ::: bs) -> *)
-  (*       sem_laexp (history_tl H) (tl b) ck le es -> *)
-  (*       sem_laexp H b ck le (present e ::: es) *)
-  (* | SLabs: *)
-  (*     forall H b ck le es bs, *)
-  (*       sem_lexp H b le (absent ::: es) -> *)
-  (*       sem_clock H b ck (false ::: bs) -> *)
-  (*       sem_laexp (history_tl H) (tl b) ck le es -> *)
-  (*       sem_laexp H b ck le (absent ::: es). *)
-
   Inductive sem_cexp: history -> Stream bool -> cexp -> Stream value -> Prop :=
   | Smerge:
       forall H b x t f xs ts fs os,
@@ -275,7 +259,8 @@ Module Type NLSEMANTICSCOIND
     | present x ::: xs => present c ::: fby x xs
     end.
 
-  CoFixpoint mask {A} (opaque: A) (n: nat) (rs: Stream bool) (xs: Stream A) : Stream A :=
+  CoFixpoint mask {A} (opaque: A) (n: nat) (rs: Stream bool) (xs: Stream A)
+    : Stream A :=
     match n, rs, xs with
     | 0,  false ::: rs, x ::: xs =>
       x ::: mask opaque 0 rs xs
@@ -307,11 +292,13 @@ Module Type NLSEMANTICSCOIND
     | S n => hd s :: take n (tl s)
     end.
 
-  CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value)) : Stream value :=
+  CoFixpoint flatten_masks (bs: Stream bool) (xss: Stream (Stream value))
+    : Stream value :=
     let xss := if hd bs then tl xss else xss in
     hd (hd xss) ::: flatten_masks (tl bs) (map (@tl value) xss).
 
-  CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value) : Stream (Stream value) :=
+  CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value)
+    : Stream (Stream value) :=
     mask_v n rs xs ::: masks_from (n + 1) rs xs.
 
   Definition masks := masks_from 0.
@@ -392,21 +379,24 @@ Module Type NLSEMANTICSCOIND
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e)
 
-    with sem_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
-         | SReset:
-             forall f r xss yss,
-               (forall n, sem_node f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
-               sem_reset f r xss yss
+    with
+    sem_reset
+    : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
+      SReset:
+        forall f r xss yss,
+          (forall n, sem_node f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
+          sem_reset f r xss yss
 
-    with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
-         | SNode:
-             forall H f n xss oss,
-               find_node f G = Some n ->
-               Forall2 (sem_var H) (idents n.(n_in)) xss ->
-               Forall2 (sem_var H) (idents n.(n_out)) oss ->
-               same_clock (xss ++ oss) ->
-               Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
-               sem_node f xss oss.
+    with
+    sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
+      SNode:
+        forall H f n xss oss,
+          find_node f G = Some n ->
+          Forall2 (sem_var H) (idents n.(n_in)) xss ->
+          Forall2 (sem_var H) (idents n.(n_out)) oss ->
+          same_clock (xss ++ oss) ->
+          Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
+          sem_node f xss oss.
 
   End NodeSemantics.
 
@@ -484,7 +474,8 @@ Module Type NLSEMANTICSCOIND
         induction H4; auto.
     Qed.
 
-    Combined Scheme sem_equation_node_ind from sem_equation_mult, sem_node_mult, sem_reset_mult.
+    Combined Scheme sem_equation_node_ind from
+             sem_equation_mult, sem_node_mult, sem_reset_mult.
 
   End SemInd.
 
@@ -492,7 +483,7 @@ Module Type NLSEMANTICSCOIND
       with signature eq ==> @EqSt value ==> Basics.impl
         as sem_var_EqSt.
   Proof.
-    (* cofix;  *)intros x xs xs' E; intro Sem; inv Sem.
+    intros x xs xs' E; intro Sem; inv Sem.
     econstructor; eauto.
     transitivity xs; auto; symmetry; auto.
   Qed.

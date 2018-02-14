@@ -388,7 +388,18 @@ Module Type INDEXEDTOCOIND
     (*     end *)
     (*   end. *)
 
-     Lemma when_spec:
+    Require Import ClassicalChoice.
+    Lemma unlift_choice:
+      forall {A B} (sem: bool -> Indexed.R -> A -> B -> Prop) b H x,
+        (forall n, exists v, sem (b n) (Indexed.restr H n) x v) ->
+        exists ys, Indexed.lift b sem H x ys.
+    Proof.
+      unfold Indexed.lift.
+      intros ** Sem.
+      apply choice in Sem; auto.
+    Qed.
+
+    Lemma when_inv:
       forall H b e x k es,
         Indexed.sem_lexp b H (Ewhen e x k) es ->
         exists ys xs,
@@ -428,7 +439,7 @@ Module Type INDEXEDTOCOIND
       (*   +  *)
     Admitted.
 
-    Lemma unop_spec:
+    Lemma unop_inv:
       forall H b op e ty es,
         Indexed.sem_lexp b H (Eunop op e ty) es ->
         exists ys,
@@ -444,12 +455,22 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      eexists; split.
-      - intro; specialize (Sem n).
-        inv Sem.
-    Admitted.
+      assert (exists ys, Indexed.sem_lexp b H e ys) as (ys & Sem').
+      { apply unlift_choice.
+        intro; specialize (Sem n); inv Sem;
+          eexists; eauto.
+      }
+      exists ys; intuition.
+      specialize (Sem' n).
+      specialize (Sem n); inv Sem.
+      - left; exists c, c'; intuition.
+        Indexed.sem_det.
+      - right; intuition.
+        Indexed.sem_det.
+    Qed.
 
-    Lemma binop_spec:
+
+    Lemma binop_inv:
       forall H b op e1 e2 ty es,
         Indexed.sem_lexp b H (Ebinop op e1 e2 ty) es ->
         exists ys zs,
@@ -685,7 +706,7 @@ Module Type INDEXEDTOCOIND
         intros n; specialize (Sem n).
         now inv Sem.
 
-      - apply when_spec in Sem as (ys & xs & ? & ? & Spec).
+      - apply when_inv in Sem as (ys & xs & ? & ? & Spec).
         econstructor; eauto using sem_var_impl.
         revert Spec; cofix_str.
         rewrite tr_stream_from_n;
@@ -694,14 +715,14 @@ Module Type INDEXEDTOCOIND
         destruct (Spec n) as [|[]]; destruct_conjs;
           rewrite_strs; auto using CoInd.when.
 
-      - apply unop_spec in Sem as (ys & ? & Spec).
+      - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
         revert Spec; cofix_str.
         rewrite tr_stream_from_n; rewrite (tr_stream_from_n es).
         destruct (Spec n) as [|]; destruct_conjs;
           rewrite_strs; auto using CoInd.lift1.
 
-      - apply binop_spec in Sem as (ys & zs & ? & ? & Spec).
+      - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
         revert Spec; cofix_str.
         rewrite tr_stream_from_n;
