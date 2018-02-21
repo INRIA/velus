@@ -801,6 +801,12 @@ clock to [sem_var_instant] too. *)
 
   Ltac sem_det :=
     match goal with
+    | H1: sem_clock_instant ?bk ?H ?C ?X,
+          H2: sem_clock_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_clock_instant_det; eexact H1 || eexact H2
+    | H1: sem_clock ?bk ?H ?C ?X,
+          H2: sem_clock ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_clock_det; eexact H1 || eexact H2
     | H1: sem_cexp_instant ?bk ?H ?C ?X,
           H2: sem_cexp_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_cexp_instant_det; eexact H1 || eexact H2
