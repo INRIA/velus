@@ -20,13 +20,6 @@ Module Type STREAM
 
   (* (** ** Datatypes *) *)
 
-  (* (** A synchronous [value] is either an absence or a present constant *) *)
-
-  (* Inductive value := *)
-  (* | absent *)
-  (* | present (c : val). *)
-  Implicit Type v : value.
-
   (** A stream is represented by its characteristic function: *)
 
   Notation stream A := (nat -> A).
@@ -78,7 +71,23 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   (** ** Properties *)
 
-  Corollary count_true_ge_1:
+  Lemma hold_abs:
+    forall n c xs,
+      xs n = absent ->
+      hold c xs n = hold c xs (S n).
+  Proof.
+    destruct n; intros ** E; simpl; now rewrite E.
+  Qed.
+
+  Lemma hold_pres:
+    forall v n c xs,
+      xs n = present v ->
+      v = hold c xs (S n).
+  Proof.
+    destruct n; intros ** E; simpl; now rewrite E.
+  Qed.
+
+  Lemma count_true_ge_1:
     forall n r,
       r n = true ->
       1 <= count r n.
