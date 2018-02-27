@@ -15,19 +15,21 @@ Require Import Velus.NLustre.Stream.
 Require Import Velus.NLustre.Streams.
 
 Require Import Velus.NLustre.NLSemantics.
+Require Import Velus.NLustre.NLInterpretor.
 Require Import Velus.NLustre.NLSemanticsCoInd.
 
 Require Import Setoid.
 Module Type INDEXEDTOCOIND
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX        Op)
-       (Import Clks  : CLOCKS           Ids)
-       (Import Syn   : NLSYNTAX         Ids Op Clks)
-       (Import Str   : STREAM               Op OpAux)
-       (Import Ord   : ORDERED          Ids Op       Clks Syn)
-       (Indexed      : NLSEMANTICS      Ids Op OpAux Clks Syn Str Ord)
-       (CoInd        : NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX        Op)
+       (Import Clks   : CLOCKS           Ids)
+       (Import Syn    : NLSYNTAX         Ids Op Clks)
+       (Import Str    : STREAM               Op OpAux)
+       (Import Ord    : ORDERED          Ids Op       Clks Syn)
+       (Indexed       : NLSEMANTICS      Ids Op OpAux Clks Syn Str Ord)
+       (Import Interp : NLINTERPRETOR    Ids Op OpAux Clks Syn Str Ord Indexed)
+       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux Clks Syn Ord).
 
   Section Global.
 
@@ -51,15 +53,19 @@ Module Type INDEXEDTOCOIND
     CoFixpoint tr_streams_at_from {A} (n: nat) (d: A) (xss: stream (list A)) (k: nat)
       : Stream A :=
       nth k (xss n) d ::: tr_streams_at_from (n + 1) d xss k.
-    Definition tr_streams {A} (xss: stream (list A)) (d: A) : list (Stream A) :=
-      let str := tr_streams_at_from 0 d xss in
+    Definition tr_streams_from' {A} (d: A) (n: nat) (xss: stream (list A)) : list (Stream A) :=
+      let str := tr_streams_at_from n d xss in
       let fix build acc k :=
           match k with
           | 0 => acc
           | S k => build (str k :: acc) k
           end
       in
-      build [] (length (xss 0)).
+      build [] (length (xss n)).
+    Definition tr_streams_from: nat -> stream (list value) -> list (Stream value) :=
+      tr_streams_from' absent.
+    Definition tr_streams: stream (list value) -> list (Stream value) :=
+      tr_streams_from 0.
 
     (** Translate an history from indexed to coinductive world.
         Every element of the history is translated.
@@ -135,7 +141,7 @@ Module Type INDEXEDTOCOIND
     (*   f_equal; auto. *)
     (* Qed. *)
 
-    (** The counterpart of [tr_stream_ol] for histories. *)
+    (** The counterpart of [tr_stream_from_tl] for histories. *)
     Lemma tr_history_from_tl:
       forall n H,
         CoInd.history_tl (tr_history_from n H) = tr_history_from (S n) H.
@@ -193,12 +199,32 @@ Module Type INDEXEDTOCOIND
       intros; eapply sem_var_impl_from; eauto.
     Qed.
 
-    Corollary sem_vars_impl:
-      forall H b xs xss,
+    Lemma tr_streams_from_nil:
+      forall n xss,
+        xss n = [] ->
+        tr_streams_from n xss = [].
+    Proof.
+      intros ** E; unfold tr_streams_from, tr_streams_from'; now rewrite E.
+    Qed.
+
+    Lemma tr_streams_from_cons:
+      forall n xss x xs,
+        xss n = x :: xs ->
+        tr_streams_from n xss = tr_streams_at_from n absent xss 0 :: tr_streams_from n xss.
+    Proof.
+      intros ** E; unfold tr_streams_from, tr_streams_from'.
+      rewrite E; simpl.
+    Qed.
+
+    Corollary sem_vars_impl_from:
+      forall n H b xs xss,
       Indexed.sem_vars b H xs xss ->
-      Forall2 (CoInd.sem_var (tr_history H)) xs (tr_streams xss absent).
+      Forall2 (CoInd.sem_var (tr_history_from n H)) xs (tr_streams_from n xss).
     Proof.
       unfold Indexed.sem_vars, Indexed.lift; intros ** Sem.
+      specialize (Sem n); inv Sem.
+      - rewrite tr_streams_from_nil; auto.
+      -
       induction xs.
       - specialize (Sem 0).
         inversion Sem as [E' E|].
@@ -259,21 +285,35 @@ Module Type INDEXEDTOCOIND
         of a stream verifying the general entailment.
      *)
 
-    Require Import ClassicalChoice.
-    Lemma lift_choice:
-      forall {A B} (sem: bool -> Indexed.R -> A -> B -> Prop) b H x,
-        (forall n, exists v, sem (b n) (Indexed.restr H n) x v) ->
-        exists ys, Indexed.lift b sem H x ys.
-    Proof.
-      unfold Indexed.lift.
-      intros ** Sem.
-      apply choice in Sem; auto.
-    Qed.
+    (* Require Import ClassicalChoice. *)
+    (* Lemma lift_choice: *)
+    (*   forall {A B} (sem: bool -> Indexed.R -> A -> B -> Prop) b H x, *)
+    (*     (forall n, exists v, sem (b n) (Indexed.restr H n) x v) -> *)
+    (*     exists ys, Indexed.lift b sem H x ys. *)
+    (* Proof. *)
+    (*   unfold Indexed.lift. *)
+    (*   intros ** Sem. *)
+    (*   apply choice in Sem; auto. *)
+    (* Qed. *)
 
-    Ltac witness_str P Sem n xs Sem_x :=
-      assert (exists xs, P xs) as (xs & Sem_x) by
-          (apply lift_choice; intro; specialize (Sem n); inv Sem;
-           eexists; eauto).
+    (* Ltac witness_str P Sem n xs Sem_x := *)
+    (*   assert (exists xs, P xs) as (xs & Sem_x) by *)
+    (*       (apply lift_choice; intro; specialize (Sem n); inv Sem; *)
+    (*        eexists; eauto). *)
+
+    Ltac interp_str b H x Sem :=
+      let Sem_x := fresh "Sem_" x in
+      let sol sem interp sound :=
+          assert (sem b H x (interp b H x)) as Sem_x by
+              (intro n; specialize (Sem n); unfold interp, lift; inv Sem;
+               erewrite <-sound; eauto)
+      in
+      match type of x with
+      | lexp => sol Indexed.sem_lexp interp_lexp interp_lexp_instant_sound
+      | cexp => sol Indexed.sem_cexp interp_cexp interp_cexp_instant_sound
+      | ident => sol Indexed.sem_var interp_var interp_var_instant_sound
+      | clock => sol Indexed.sem_clock interp_clock interp_clock_instant_sound
+      end.
 
     Lemma when_inv:
       forall H b e x k es,
@@ -300,9 +340,9 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      witness_str (Indexed.sem_lexp b H e) Sem n ys Sem_e.
-      witness_str (Indexed.sem_var b H x) Sem n xs Sem_x.
-      exists ys, xs; intuition.
+      interp_str b H e Sem.
+      interp_str b H x Sem.
+      do 2 eexists; intuition; eauto.
       specialize (Sem_e n); specialize (Sem_x n); specialize (Sem n); inv Sem.
       - left; exists sc, xc; intuition Indexed.sem_det.
       - right; left; exists sc, xc; intuition; try Indexed.sem_det.
@@ -326,8 +366,8 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      witness_str (Indexed.sem_lexp b H e) Sem n ys Sem_e.
-      exists ys; intuition.
+      interp_str b H e Sem.
+      eexists; intuition; eauto.
       specialize (Sem_e n); specialize (Sem n); inv Sem.
       - left; exists c, c'; intuition Indexed.sem_det.
       - right; intuition Indexed.sem_det.
@@ -352,9 +392,9 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      witness_str (Indexed.sem_lexp b H e1) Sem n ys Sem_e1.
-      witness_str (Indexed.sem_lexp b H e2) Sem n zs Sem_e2.
-      exists ys, zs; intuition.
+      interp_str b H e1 Sem.
+      interp_str b H e2 Sem.
+      do 2 eexists; intuition; eauto.
       specialize (Sem_e1 n); specialize (Sem_e2 n); specialize (Sem n); inv Sem.
       - left; exists c1, c2, c'; intuition Indexed.sem_det.
       - right; intuition Indexed.sem_det.
@@ -395,9 +435,9 @@ Module Type INDEXEDTOCOIND
           ).
     Proof.
       intros ** Sem.
-      witness_str (Indexed.sem_clock b H ck) Sem n bs' Sem_ck.
-      witness_str (Indexed.sem_var b H x) Sem n xs Sem_x.
-      exists bs', xs; intuition.
+      interp_str b H ck Sem.
+      interp_str b H x Sem.
+      do 2 eexists; intuition; eauto.
       specialize (Sem_ck n); specialize (Sem_x n); specialize (Sem n); inv Sem.
       - left; exists c; intuition Indexed.sem_det.
       - right; left; intuition Indexed.sem_det.
@@ -637,10 +677,10 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      witness_str (Indexed.sem_var b H x) Sem n xs Sem_x.
-      witness_str (Indexed.sem_cexp b H t) Sem n ts Sem_t.
-      witness_str (Indexed.sem_cexp b H f) Sem n fs Sem_f.
-      exists xs, ts, fs; intuition.
+      interp_str b H x Sem.
+      interp_str b H t Sem.
+      interp_str b H f Sem.
+      do 3 eexists; intuition; eauto.
       specialize (Sem_x n); specialize (Sem_t n); specialize (Sem_f n);
         specialize (Sem n); inv Sem.
       - left; exists c; intuition Indexed.sem_det.
@@ -670,14 +710,23 @@ Module Type INDEXEDTOCOIND
                /\ es n = absent)).
     Proof.
       intros ** Sem.
-      witness_str (Indexed.sem_lexp b H le) Sem n les Sem_le.
-      witness_str (Indexed.sem_cexp b H t) Sem n ts Sem_t.
-      witness_str (Indexed.sem_cexp b H f) Sem n fs Sem_f.
-      exists les, ts, fs; intuition.
+      interp_str b H le Sem.
+      interp_str b H t Sem.
+      interp_str b H f Sem.
+      do 3 eexists; intuition; eauto.
       specialize (Sem_le n); specialize (Sem_t n); specialize (Sem_f n);
         specialize (Sem n); inv Sem.
       - left; exists c, b0, ct, cf; intuition Indexed.sem_det.
       - right; intuition Indexed.sem_det.
+    Qed.
+
+    Lemma lexp_inv:
+      forall H b le es,
+        Indexed.sem_cexp b H (Eexp le) es ->
+        Indexed.sem_lexp b H le es.
+    Proof.
+      intros ** Sem n.
+      now specialize (Sem n); inv Sem.
     Qed.
 
     (** [fby] is not a predicate but a function, so we directly state the
@@ -707,672 +756,679 @@ Module Type INDEXEDTOCOIND
 
     (** State the correspondence for [cexp].
         Goes by induction on the coinductive semantics of [cexp]. *)
-    Lemma sem_cexp_impl:
+    Lemma sem_cexp_impl_from:
+      forall n H b e es,
+        Indexed.sem_cexp b H e es ->
+        CoInd.sem_cexp (tr_history_from n H) (tr_stream_from n b) e
+                       (tr_stream_from n es).
+    Proof.
+      intros ** Sem.
+      revert dependent H; revert b es n.
+      induction e; intros ** Sem; unfold Indexed.sem_cexp, Indexed.lift in Sem.
+
+      - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
+        econstructor; eauto using sem_var_impl_from.
+        revert dependent n; revert Spec; cofix; intros.
+        rewrite tr_stream_from_n;
+          rewrite (tr_stream_from_n ts);
+          rewrite (tr_stream_from_n fs);
+          rewrite (tr_stream_from_n es).
+        destruct (Spec n) as [|[|[]]]; destruct_conjs;
+          rewrite_strs; auto using CoInd.merge.
+
+      - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
+        econstructor; eauto using sem_lexp_impl_from.
+        revert dependent n; revert Spec; cofix; intros.
+        rewrite tr_stream_from_n;
+          rewrite (tr_stream_from_n ts);
+          rewrite (tr_stream_from_n fs);
+          rewrite (tr_stream_from_n es).
+        destruct (Spec n) as [|[]]; destruct_conjs;
+          rewrite_strs; auto using CoInd.ite.
+        destruct H4.
+        + apply val_to_bool_true' in H8; subst; auto using CoInd.ite.
+        + apply val_to_bool_false' in H8; subst; auto using CoInd.ite.
+
+      - apply lexp_inv in Sem; constructor; auto using sem_lexp_impl_from.
+
+    Qed.
+
+    Corollary sem_cexp_impl:
       forall H b e es,
-        CoInd.sem_cexp H b e es ->
-        Indexed.sem_cexp (tr_stream b) (tr_history H) e (tr_stream es).
+        Indexed.sem_cexp b H e es ->
+        CoInd.sem_cexp (tr_history H) (tr_stream b) e (tr_stream es).
     Proof.
-      induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
-                    |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
-                    |? ? ? ? He]; intro n.
-      - specialize (IHsem_cexp1 n).
-        specialize (IHsem_cexp2 n).
-        apply sem_var_impl with (b := tr_stream b) in Hvar; eauto.
-        unfold Indexed.sem_var, Indexed.lift in Hvar.
-        specialize (Hvar n).
-        rename H0_ into Hf.
-        apply (merge_index n) in Hmerge
-          as [(Hxs & Hts & Hfs & Hos)
-             |[(? & Hxs & Hts & Hfs & Hos)
-              |(? & Hxs & Hts & Hfs & Hos)]];
-          rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
-            rewrite Hxs in Hvar; try (now constructor; auto).
-        apply Indexed.Smerge_false; auto.
-
-      - specialize (IHsem_cexp1 n).
-        specialize (IHsem_cexp2 n).
-        eapply sem_lexp_impl in He.
-        specialize (He n).
-        apply (ite_index n) in Hite
-          as [(Hes & Hts & Hfs & Hos)
-             |[(ct & cf & Hes & Hts & Hfs & Hos)
-              |(ct & cf & Hes & Hts & Hfs & Hos)]];
-          rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
-            rewrite Hes in He.
-        + constructor; auto.
-        + change (present ct) with (if true then present ct else present cf).
-          econstructor; eauto.
-          apply val_to_bool_true.
-        + change (present cf) with (if false then present ct else present cf).
-          econstructor; eauto.
-          apply val_to_bool_false.
-
-      - apply sem_lexp_impl in He.
-        specialize (He n).
-        constructor; auto.
+      intros; now apply sem_cexp_impl_from.
     Qed.
 
-    (** Give an indexed specification for annotated [cexp], using the previous
-        lemma.  *)
-    Lemma sem_caexp_index:
-      forall n H b ck le es,
-        CoInd.sem_caexp H b ck le es ->
-        (Indexed.sem_clock_instant (tr_stream b n)
-                                   (Indexed.restr (tr_history H) n) ck false
-         /\ Indexed.sem_cexp_instant
-             (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
-         /\ tr_stream es n = absent)
-        \/
-        (exists e,
-            Indexed.sem_clock_instant (tr_stream b n)
-                                      (Indexed.restr (tr_history H) n) ck true
-            /\ Indexed.sem_cexp_instant
-                (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
-            /\ tr_stream es n = present e).
+    (** An inversion principle for annotated [cexp]. *)
+    Lemma sem_caexp_inv:
+      forall H b e es ck,
+        Indexed.sem_caexp b H ck e es ->
+        Indexed.sem_cexp b H e es
+        /\ exists bs,
+            Indexed.sem_clock b H ck bs
+            /\ (forall n, bs n = match es n with
+                           | present _ => true
+                           | absent => false
+                           end).
     Proof.
-      induction n; intros ** Indexed.
-      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
-                                      |? ? ? ? ? ? Indexed' Hck];
-          apply sem_cexp_impl in Indexed'; specialize (Indexed' 0);
-            repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
-              apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
-        + right. eexists; intuition; auto.
-        + left; intuition.
-      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
-          apply sem_cexp_impl in Indexed';
-          repeat rewrite tr_stream_S; rewrite tr_history_tl; eauto.
+      intros ** Sem; split.
+      - intro n; specialize (Sem n); inv Sem; auto.
+      - exists (fun n => match es n with
+                 | present _ => true
+                 | absent => false
+                 end); split; intro n; specialize (Sem n); inv Sem; auto.
     Qed.
 
-    (** We deduce from the previous lemma the correspondence for annotated
+    (** We deduce from the previous lemmas the correspondence for annotated
         [cexp]. *)
+    Corollary sem_caexp_impl_from:
+      forall n H b e es ck,
+        Indexed.sem_caexp b H ck e es ->
+        CoInd.sem_caexp (tr_history_from n H) (tr_stream_from n b) ck e
+                        (tr_stream_from n es).
+    Proof.
+      cofix Cofix; intros ** Sem.
+      pose proof Sem as Sem';
+        apply sem_caexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
+        apply (sem_cexp_impl_from n) in Sem';
+        apply sem_clock_impl_from with (n:=n) in Sem_ck.
+      rewrite (tr_stream_from_n es) in *.
+      rewrite (tr_stream_from_n bs), Ebs in Sem_ck.
+      destruct (es n); econstructor; eauto;
+        rewrite tr_stream_from_tl, tr_history_from_tl;
+        apply Cofix; auto.
+    Qed.
+
     Corollary sem_caexp_impl:
       forall H b e es ck,
-        CoInd.sem_caexp H b ck e es ->
-        Indexed.sem_caexp (tr_stream b) (tr_history H) ck e (tr_stream es).
-    Proof.
-      intros ** Indexed n.
-      apply (sem_caexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
-        rewrite Hes; now constructor.
-    Qed.
+        Indexed.sem_caexp b H ck e es ->
+        CoInd.sem_caexp (tr_history H) (tr_stream b) ck e (tr_stream es).
+    Proof. apply sem_caexp_impl_from. Qed.
 
-    Lemma tr_stream_reset:
-      forall n xs,
-        tr_stream (CoInd.reset_of xs) n = Indexed.reset_of (tr_stream xs) n.
-    Proof.
-      induction n; intros.
-      - unfold_Stv xs; unfold Indexed.reset_of;
-          rewrite unfold_Stream at 1; simpl; rewrite tr_stream_0; auto.
-      - unfold_Stv xs; unfold Indexed.reset_of;
-          rewrite unfold_Stream at 1; simpl; auto;
-            eapply IHn.
-    Qed.
 
     (** * RESET CORRESPONDENCE  *)
 
-    (** ** Properties about [count] *)
-
-    (** If a reset occurs directly, the count can't be zero. *)
-    Remark count_true_not_0:
-      forall r n,
-        count (tr_stream (true ::: r)) n <> 0.
+    Lemma tr_stream_reset_from:
+      forall n xs,
+        CoInd.reset_of (tr_stream_from n xs) ≡ tr_stream_from n (Indexed.reset_of xs).
     Proof.
-      intros; induction n; simpl.
-      - omega.
-      - rewrite tr_stream_S.
-        destruct (tr_stream r n); auto.
+      cofix; intros.
+      rewrite tr_stream_from_n; rewrite (tr_stream_from_n (Indexed.reset_of xs)).
+      unfold CoInd.reset_of, Indexed.reset_of in *.
+      constructor; simpl; auto.
     Qed.
 
-    (** If a reset occurs at [n], then the count at the same instant can't be
-        zero. *)
-    Remark count_true_not_0':
-      forall n r,
-        tr_stream r n = true ->
-        count (tr_stream r) n <> 0.
-    Proof.
-      induction n; simpl; intros r E; try rewrite E; auto.
-    Qed.
+    Corollary tr_stream_reset:
+      forall xs,
+        CoInd.reset_of (tr_stream xs) ≡ tr_stream (Indexed.reset_of xs).
+    Proof. apply tr_stream_reset_from. Qed.
 
-    (** When a reset occurs initially, the count at [n] is the count at [n]
-        forgetting the first instant, plus one if no reset occurs at [n] when
-        shifting. *)
-    Lemma count_true_shift:
-      forall n r,
-        count (tr_stream (true ::: r)) n
-        = if tr_stream r n
-          then count (tr_stream r) n
-          else S (count (tr_stream r) n).
-    Proof.
-      induction n; simpl; intros.
-      - destruct (tr_stream r 0); auto.
-      - specialize (IHn r).
-        rewrite tr_stream_S.
-        destruct (tr_stream r n) eqn: E';
-          destruct (tr_stream r (S n)); rewrite IHn; auto.
-    Qed.
+   (*  (** ** Properties about [count] *) *)
 
-    (** When no reset occurs initially, the count at [n] is the count at [n]
-        forgetting the first instant, minus one if a reset occurs at [n] when
-        shifting. *)
-    Lemma count_false_shift:
-      forall n r,
-        count (tr_stream (false ::: r)) n
-        = if tr_stream r n
-          then count (tr_stream r) n - 1
-          else count (tr_stream r) n.
-    Proof.
-      induction n; simpl; intros.
-      - destruct (tr_stream r 0); auto.
-      - specialize (IHn r).
-        rewrite tr_stream_S.
-        destruct (tr_stream r n) eqn: E';
-          destruct (tr_stream r (S n)); rewrite IHn; try omega.
-        + apply Minus.minus_Sn_m, count_true_ge_1; auto.
-        + rewrite Minus.minus_Sn_m; try omega.
-          apply count_true_ge_1; auto.
-    Qed.
+   (*  (** If a reset occurs directly, the count can't be zero. *) *)
+   (*  Remark count_true_not_0: *)
+   (*    forall r n, *)
+   (*      count (tr_stream (true ::: r)) n <> 0. *)
+   (*  Proof. *)
+   (*    intros; induction n; simpl. *)
+   (*    - omega. *)
+   (*    - rewrite tr_stream_S. *)
+   (*      destruct (tr_stream r n); auto. *)
+   (*  Qed. *)
 
-    (** If a reset occurs at [n], then indexing the 0th mask at [n] falls
-        outside the clipping window, since the 0th mask is the clip before
-        the first reset. *)
-    Remark tr_stream_mask_true_0:
-      forall n r xs,
-      tr_stream r n = true ->
-      tr_stream (CoInd.mask_v 0 r xs) n = absent.
-    Proof.
-      induction n; intros ** E; rewrite unfold_Stream at 1; simpl;
-        unfold_Stv r; unfold_Stv xs; auto; try rewrite tr_stream_S.
-      - rewrite tr_stream_0 in E; discriminate.
-      - pose proof (tr_stream_const absent); auto.
-      - pose proof (tr_stream_const absent); auto.
-      - apply IHn.
-        rewrite tr_stream_S in E; auto.
-      - apply IHn.
-        rewrite tr_stream_S in E; auto.
-    Qed.
+   (*  (** If a reset occurs at [n], then the count at the same instant can't be *)
+   (*      zero. *) *)
+   (*  Remark count_true_not_0': *)
+   (*    forall n r, *)
+   (*      tr_stream r n = true -> *)
+   (*      count (tr_stream r) n <> 0. *)
+   (*  Proof. *)
+   (*    induction n; simpl; intros r E; try rewrite E; auto. *)
+   (*  Qed. *)
 
-    (** When a reset occurs initially and no reset occurs at [n] after shifting,
-        then indexing at [n] the [k']th mask is:
-        - indexing the source stream at [n] if [k'] is equal to the count minus
-          one
-        - absent otherwise. *)
-    Lemma tr_stream_mask_false_true:
-      forall n r xs k k',
-        tr_stream r n = false ->
-        count (tr_stream (true ::: r)) n = S k ->
-        tr_stream (CoInd.mask_v k' r xs) n
-        = if EqNat.beq_nat k k' then tr_stream xs n else absent.
-    Proof.
-      intros ** E C.
-      rewrite count_true_shift, E in C; injection C; clear C; intro C.
-      revert k' k r xs E C; induction n; simpl; intros.
-      - rewrite E in C.
-         destruct (EqNat.beq_nat k k') eqn: E'.
-        + apply EqNat.beq_nat_true in E'; subst.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
-          rewrite tr_stream_0 in E; discriminate.
-        + apply EqNat.beq_nat_false in E'.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-          * pose proof (tr_stream_const absent); auto.
-          * apply tr_stream_0.
-      - destruct (EqNat.beq_nat k k') eqn: E'.
-        + apply EqNat.beq_nat_true in E'; subst.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
-              rewrite E in E'; try discriminate; rewrite tr_stream_S in E.
-          * inv E'; exfalso; eapply count_true_not_0; eauto.
-          * erewrite IHn; eauto.
-            rewrite count_true_shift, E in E'; injection E'; clear E'; intro E'.
-            rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto.
-          * rewrite count_true_shift, E in E'. inv E'.
-            erewrite IHn; auto.
-            rewrite <-plus_n_O, <-EqNat.beq_nat_refl; auto.
-          * rewrite count_false_shift, E in E'.
-            erewrite IHn; eauto; auto.
-          * rewrite count_false_shift, E in E'.
-            erewrite IHn; eauto; auto.
-          * rewrite count_false_shift, E in E'.
-            erewrite IHn, <-EqNat.beq_nat_refl; auto.
-        + apply EqNat.beq_nat_false in E'.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; rewrite E in C; subst;
-              repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
-                try (exfalso; now apply E').
-          * pose proof (tr_stream_const absent); auto.
-          * erewrite IHn; eauto.
-            rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
-            <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
-            <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-    Qed.
+   (*  (** When a reset occurs initially, the count at [n] is the count at [n] *)
+   (*      forgetting the first instant, plus one if no reset occurs at [n] when *)
+   (*      shifting. *) *)
+   (*  Lemma count_true_shift: *)
+   (*    forall n r, *)
+   (*      count (tr_stream (true ::: r)) n *)
+   (*      = if tr_stream r n *)
+   (*        then count (tr_stream r) n *)
+   (*        else S (count (tr_stream r) n). *)
+   (*  Proof. *)
+   (*    induction n; simpl; intros. *)
+   (*    - destruct (tr_stream r 0); auto. *)
+   (*    - specialize (IHn r). *)
+   (*      rewrite tr_stream_S. *)
+   (*      destruct (tr_stream r n) eqn: E'; *)
+   (*        destruct (tr_stream r (S n)); rewrite IHn; auto. *)
+   (*  Qed. *)
 
-    (** When no reset occurs initially and a reset occurs at [n] after shifting,
-        then indexing at [n] the [(S k')]th mask is:
-        - indexing the source stream at [n] if [k'] is equal to the count
-        - absent otherwise. *)
-    Lemma tr_stream_mask_true_false:
-      forall n r xs k k',
-        tr_stream r n = true ->
-        count (tr_stream (false ::: r)) n = k ->
-        tr_stream (CoInd.mask_v (S k') r xs) n
-        = if EqNat.beq_nat k k' then tr_stream xs n else absent.
-    Proof.
-      intros ** E C.
-      rewrite count_false_shift, E in C.
-      revert k' k r xs E C; induction n; simpl; intros.
-      - rewrite E in C.
-        destruct (EqNat.beq_nat k k') eqn: E'.
-        + apply EqNat.beq_nat_true in E'; subst.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
-          rewrite tr_stream_0 in E; discriminate.
-        + apply EqNat.beq_nat_false in E'.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-          * pose proof (tr_stream_const absent); auto.
-          * apply tr_stream_0.
-      - destruct (EqNat.beq_nat k k') eqn: E'.
-        + apply EqNat.beq_nat_true in E'; subst.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
-              rewrite E in E'; try discriminate; rewrite tr_stream_S in E;
-                simpl in E'; try rewrite <-Minus.minus_n_O in E'.
-          * exfalso; eapply count_true_not_0; eauto.
-          * erewrite IHn; eauto.
-            rewrite count_true_shift, E in E'.
-            rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto.
-          * rewrite count_true_shift, E in E'.
-            erewrite IHn; auto.
-            rewrite E'; simpl; rewrite <-plus_n_O, <-EqNat.beq_nat_refl; auto.
-          * rewrite count_false_shift, E in E'.
-            erewrite IHn; eauto; auto.
-          * rewrite count_false_shift, E in E'.
-            erewrite IHn; eauto; auto.
-          * rewrite count_false_shift, E in E'.
-            erewrite IHn, <-EqNat.beq_nat_refl; auto.
-        + apply EqNat.beq_nat_false in E'.
-          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-            destruct k' as [|[]]; simpl; rewrite E in C; subst;
-              repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
-                simpl in E'; try rewrite <-Minus.minus_n_O in E';
-                try (exfalso; now apply E').
-          * apply tr_stream_mask_true_0; auto.
-          * erewrite IHn; eauto.
-            rewrite count_true_shift, E in E'.
-            rewrite <-plus_n_O.
-            apply count_true_not_0' in E.
-            destruct (count (tr_stream r) n) as [|[]];
-              try (exfalso; now apply E); try (exfalso; now apply E').
-            auto.
-          * erewrite IHn; eauto.
-            rewrite count_true_shift, E in E'.
-            apply count_true_not_0' in E.
-            destruct (count (tr_stream r) n) as [|[|]];
-              try (exfalso; now apply E); simpl; auto.
-            rewrite 2 NPeano.Nat.succ_inj_wd_neg, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-          * erewrite IHn; eauto.
-            rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-            rewrite <-plus_n_O, E'; auto.
-    Qed.
+   (*  (** When no reset occurs initially, the count at [n] is the count at [n] *)
+   (*      forgetting the first instant, minus one if a reset occurs at [n] when *)
+   (*      shifting. *) *)
+   (*  Lemma count_false_shift: *)
+   (*    forall n r, *)
+   (*      count (tr_stream (false ::: r)) n *)
+   (*      = if tr_stream r n *)
+   (*        then count (tr_stream r) n - 1 *)
+   (*        else count (tr_stream r) n. *)
+   (*  Proof. *)
+   (*    induction n; simpl; intros. *)
+   (*    - destruct (tr_stream r 0); auto. *)
+   (*    - specialize (IHn r). *)
+   (*      rewrite tr_stream_S. *)
+   (*      destruct (tr_stream r n) eqn: E'; *)
+   (*        destruct (tr_stream r (S n)); rewrite IHn; try omega. *)
+   (*      + apply Minus.minus_Sn_m, count_true_ge_1; auto. *)
+   (*      + rewrite Minus.minus_Sn_m; try omega. *)
+   (*        apply count_true_ge_1; auto. *)
+   (*  Qed. *)
 
-   (** When the initial occurence of a reset is the same as at [n] after
-       shifting, then indexing at [n] the [k']th mask is:
-        - indexing the source stream at [n] if [k'] is equal to the count
-        - absent otherwise. *)
-    Lemma tr_stream_mask_same:
-      forall n b r xs k k',
-        tr_stream r n = b ->
-        count (tr_stream (b ::: r)) n = k ->
-        tr_stream (CoInd.mask_v k' r xs) n
-        = if EqNat.beq_nat k k' then tr_stream xs n else absent.
-    Proof.
-      intros ** E C.
-      destruct b.
-      - rewrite count_true_shift, E in C.
-        revert k' k r xs E C; induction n; simpl; intros.
-        + rewrite E in C.
-          destruct (EqNat.beq_nat k k') eqn: E'.
-          * apply EqNat.beq_nat_true in E'; subst.
-            unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-              simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
-            rewrite tr_stream_0 in E; discriminate.
-          *{ apply EqNat.beq_nat_false in E'.
-             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-             - pose proof (tr_stream_const absent); auto.
-             - apply tr_stream_0.
-           }
-        + destruct (EqNat.beq_nat k k') eqn: E'.
-          *{ apply EqNat.beq_nat_true in E'; subst.
-             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
-                 rewrite E in E'; try discriminate; rewrite tr_stream_S in E.
-             - inv E'; exfalso; eapply count_true_not_0; eauto.
-             - erewrite IHn; eauto.
-               inv E';
-                 rewrite count_true_shift, E, <-plus_n_O,
-                 <-EqNat.beq_nat_refl; auto.
-             - injection E'; clear E'; intro E'.
-               rewrite count_false_shift in E'; rewrite E in E'.
-               apply NPeano.Nat.sub_0_le in E'.
-               pose proof (count_true_ge_1 _ _ E).
-               apply Le.le_antisym in E'; auto.
-               erewrite IHn; auto.
-               rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto.
-             - injection E'; clear E'; intro E'.
-               erewrite IHn; eauto.
-               inv E'; rewrite count_false_shift, E.
-               pose proof (count_true_ge_1 _ _ E).
-               rewrite Minus.minus_Sn_m; auto.
-               simpl; rewrite <-Minus.minus_n_O, <-plus_n_O,
-                      <-EqNat.beq_nat_refl; auto.
-           }
-          *{ apply EqNat.beq_nat_false in E'.
-             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; rewrite E in C; subst;
-                 repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
-                   try (exfalso; now apply E').
-             - pose proof (tr_stream_const absent); auto.
-             - erewrite IHn; eauto.
-               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
-               <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
-               <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               pose proof (count_true_ge_1 _ _ E).
-               rewrite count_false_shift, E, Minus.minus_Sn_m in E';
-                 auto; simpl in E';
-                   rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               pose proof (count_true_ge_1 _ _ E).
-               rewrite count_false_shift, E, Minus.minus_Sn_m in E';
-                 auto; simpl in E';
-                   rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               pose proof (count_true_ge_1 _ _ E).
-               rewrite count_false_shift, E, Minus.minus_Sn_m in E';
-                 auto; simpl in E';
-                   rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-           }
+   (*  (** If a reset occurs at [n], then indexing the 0th mask at [n] falls *)
+   (*      outside the clipping window, since the 0th mask is the clip before *)
+   (*      the first reset. *) *)
+   (*  Remark tr_stream_mask_true_0: *)
+   (*    forall n r xs, *)
+   (*    tr_stream r n = true -> *)
+   (*    tr_stream (CoInd.mask_v 0 r xs) n = absent. *)
+   (*  Proof. *)
+   (*    induction n; intros ** E; rewrite unfold_Stream at 1; simpl; *)
+   (*      unfold_Stv r; unfold_Stv xs; auto; try rewrite tr_stream_S. *)
+   (*    - rewrite tr_stream_0 in E; discriminate. *)
+   (*    - pose proof (tr_stream_const absent); auto. *)
+   (*    - pose proof (tr_stream_const absent); auto. *)
+   (*    - apply IHn. *)
+   (*      rewrite tr_stream_S in E; auto. *)
+   (*    - apply IHn. *)
+   (*      rewrite tr_stream_S in E; auto. *)
+   (*  Qed. *)
 
-      - rewrite count_false_shift, E in C.
-        revert k' k r xs E C; induction n; simpl; intros.
-        + rewrite E in C.
-          destruct (EqNat.beq_nat k k') eqn: E'.
-          * apply EqNat.beq_nat_true in E'; subst.
-            unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-              simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto.
-            rewrite tr_stream_0 in E; discriminate.
-          *{ apply EqNat.beq_nat_false in E'.
-             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; try (exfalso; now apply E').
-             - pose proof (tr_stream_const absent); auto.
-             - apply tr_stream_0.
-           }
-        + destruct (EqNat.beq_nat k k') eqn: E'.
-          *{ apply EqNat.beq_nat_true in E'; subst.
-             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S;
-                 rewrite E in E'; try discriminate; rewrite tr_stream_S in E.
-             - inv E'; exfalso; eapply count_true_not_0; eauto.
-             - erewrite tr_stream_mask_false_true; eauto;
-                 rewrite <-EqNat.beq_nat_refl; auto.
-             - erewrite tr_stream_mask_false_true; eauto;
-                 rewrite <-EqNat.beq_nat_refl; auto.
-             - erewrite IHn; eauto.
-               rewrite count_false_shift, E in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_false_shift, E in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_false_shift, E in E'.
-               rewrite <-plus_n_O, E', <-EqNat.beq_nat_refl; auto.
-           }
-          *{ apply EqNat.beq_nat_false in E'.
-             unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1;
-               destruct k' as [|[]]; simpl; rewrite E in C; subst;
-                 repeat rewrite tr_stream_S; rewrite tr_stream_S in E;
-                   try (exfalso; now apply E').
-             - pose proof (tr_stream_const absent); auto.
-             - erewrite IHn; eauto.
-               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
-               <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg,
-               <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-             - erewrite IHn; eauto.
-               rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'.
-               rewrite <-plus_n_O, E'; auto.
-           }
-    Qed.
+   (*  (** When a reset occurs initially and no reset occurs at [n] after shifting, *)
+   (*      then indexing at [n] the [k']th mask is: *)
+   (*      - indexing the source stream at [n] if [k'] is equal to the count minus *)
+   (*        one *)
+   (*      - absent otherwise. *) *)
+   (*  Lemma tr_stream_mask_false_true: *)
+   (*    forall n r xs k k', *)
+   (*      tr_stream r n = false -> *)
+   (*      count (tr_stream (true ::: r)) n = S k -> *)
+   (*      tr_stream (CoInd.mask_v k' r xs) n *)
+   (*      = if EqNat.beq_nat k k' then tr_stream xs n else absent. *)
+   (*  Proof. *)
+   (*    intros ** E C. *)
+   (*    rewrite count_true_shift, E in C; injection C; clear C; intro C. *)
+   (*    revert k' k r xs E C; induction n; simpl; intros. *)
+   (*    - rewrite E in C. *)
+   (*       destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*      + apply EqNat.beq_nat_true in E'; subst. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto. *)
+   (*        rewrite tr_stream_0 in E; discriminate. *)
+   (*      + apply EqNat.beq_nat_false in E'. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          destruct k' as [|[]]; simpl; try (exfalso; now apply E'). *)
+   (*        * pose proof (tr_stream_const absent); auto. *)
+   (*        * apply tr_stream_0. *)
+   (*    - destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*      + apply EqNat.beq_nat_true in E'; subst. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; *)
+   (*            rewrite E in E'; try discriminate; rewrite tr_stream_S in E. *)
+   (*        * inv E'; exfalso; eapply count_true_not_0; eauto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_true_shift, E in E'; injection E'; clear E'; intro E'. *)
+   (*          rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto. *)
+   (*        * rewrite count_true_shift, E in E'. inv E'. *)
+   (*          erewrite IHn; auto. *)
+   (*          rewrite <-plus_n_O, <-EqNat.beq_nat_refl; auto. *)
+   (*        * rewrite count_false_shift, E in E'. *)
+   (*          erewrite IHn; eauto; auto. *)
+   (*        * rewrite count_false_shift, E in E'. *)
+   (*          erewrite IHn; eauto; auto. *)
+   (*        * rewrite count_false_shift, E in E'. *)
+   (*          erewrite IHn, <-EqNat.beq_nat_refl; auto. *)
+   (*      + apply EqNat.beq_nat_false in E'. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          destruct k' as [|[]]; simpl; rewrite E in C; subst; *)
+   (*            repeat rewrite tr_stream_S; rewrite tr_stream_S in E; *)
+   (*              try (exfalso; now apply E'). *)
+   (*        * pose proof (tr_stream_const absent); auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg, *)
+   (*          <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg, *)
+   (*          <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*  Qed. *)
 
-    Ltac auto_f_equal H :=
-      f_equal;
-      [ idtac |
-        erewrite H; eauto; unfold mask; simpl; rewrite tr_stream_S;
-        repeat match goal with
-               | H: tr_stream _ _ = _ |- _ => rewrite H
-               | H: count ?x _ = _ |- _ => rewrite H
-               | H:  EqNat.beq_nat _ _ = _ |- _ => rewrite H
-               end; auto].
+   (*  (** When no reset occurs initially and a reset occurs at [n] after shifting, *)
+   (*      then indexing at [n] the [(S k')]th mask is: *)
+   (*      - indexing the source stream at [n] if [k'] is equal to the count *)
+   (*      - absent otherwise. *) *)
+   (*  Lemma tr_stream_mask_true_false: *)
+   (*    forall n r xs k k', *)
+   (*      tr_stream r n = true -> *)
+   (*      count (tr_stream (false ::: r)) n = k -> *)
+   (*      tr_stream (CoInd.mask_v (S k') r xs) n *)
+   (*      = if EqNat.beq_nat k k' then tr_stream xs n else absent. *)
+   (*  Proof. *)
+   (*    intros ** E C. *)
+   (*    rewrite count_false_shift, E in C. *)
+   (*    revert k' k r xs E C; induction n; simpl; intros. *)
+   (*    - rewrite E in C. *)
+   (*      destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*      + apply EqNat.beq_nat_true in E'; subst. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto. *)
+   (*        rewrite tr_stream_0 in E; discriminate. *)
+   (*      + apply EqNat.beq_nat_false in E'. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          destruct k' as [|[]]; simpl; try (exfalso; now apply E'). *)
+   (*        * pose proof (tr_stream_const absent); auto. *)
+   (*        * apply tr_stream_0. *)
+   (*    - destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*      + apply EqNat.beq_nat_true in E'; subst. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; *)
+   (*            rewrite E in E'; try discriminate; rewrite tr_stream_S in E; *)
+   (*              simpl in E'; try rewrite <-Minus.minus_n_O in E'. *)
+   (*        * exfalso; eapply count_true_not_0; eauto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_true_shift, E in E'. *)
+   (*          rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto. *)
+   (*        * rewrite count_true_shift, E in E'. *)
+   (*          erewrite IHn; auto. *)
+   (*          rewrite E'; simpl; rewrite <-plus_n_O, <-EqNat.beq_nat_refl; auto. *)
+   (*        * rewrite count_false_shift, E in E'. *)
+   (*          erewrite IHn; eauto; auto. *)
+   (*        * rewrite count_false_shift, E in E'. *)
+   (*          erewrite IHn; eauto; auto. *)
+   (*        * rewrite count_false_shift, E in E'. *)
+   (*          erewrite IHn, <-EqNat.beq_nat_refl; auto. *)
+   (*      + apply EqNat.beq_nat_false in E'. *)
+   (*        unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*          destruct k' as [|[]]; simpl; rewrite E in C; subst; *)
+   (*            repeat rewrite tr_stream_S; rewrite tr_stream_S in E; *)
+   (*              simpl in E'; try rewrite <-Minus.minus_n_O in E'; *)
+   (*              try (exfalso; now apply E'). *)
+   (*        * apply tr_stream_mask_true_0; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_true_shift, E in E'. *)
+   (*          rewrite <-plus_n_O. *)
+   (*          apply count_true_not_0' in E. *)
+   (*          destruct (count (tr_stream r) n) as [|[]]; *)
+   (*            try (exfalso; now apply E); try (exfalso; now apply E'). *)
+   (*          auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_true_shift, E in E'. *)
+   (*          apply count_true_not_0' in E. *)
+   (*          destruct (count (tr_stream r) n) as [|[|]]; *)
+   (*            try (exfalso; now apply E); simpl; auto. *)
+   (*          rewrite 2 NPeano.Nat.succ_inj_wd_neg, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*        * erewrite IHn; eauto. *)
+   (*          rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*          rewrite <-plus_n_O, E'; auto. *)
+   (*  Qed. *)
 
-    (** State the correspondence for [mask]. *)
-    Lemma mask_impl:
-      forall k r xss n,
-         tr_streams (List.map (CoInd.mask_v k r) xss) n
-        = mask (Indexed.all_absent xss) k (tr_stream r) (tr_streams xss) n.
-    Proof.
-      induction xss as [|xs];
-        simpl; intros.
-      - unfold mask.
-        destruct (EqNat.beq_nat k (count (tr_stream r) n)); auto.
-      - induction n.
-        + unfold_St xs; unfold_Stv r; unfold CoInd.mask_v, mask;
-            rewrite unfold_Stream at 1; simpl;
-            destruct k as [|[]]; simpl; f_equal;
-              erewrite IHxss; eauto; unfold mask; auto.
-        + unfold_St xs; unfold_Stv r; unfold CoInd.mask_v, mask.
-          *{ rewrite unfold_Stream at 1; simpl.
-             destruct k as [|[]]; simpl.
-             - repeat rewrite tr_stream_S.
-               destruct (tr_stream r n) eqn: E.
-               + auto_f_equal IHxss.
-                 pose proof (tr_stream_const absent); auto.
-               + destruct (count (tr_stream (true ::: r)) n) eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   pose proof (tr_stream_const absent); auto.
-             - repeat rewrite tr_stream_S.
-               destruct (tr_stream r n) eqn: E.
-               + destruct (count (tr_stream (true ::: r)) n) eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   apply tr_stream_mask_true_0; auto.
-               + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   erewrite tr_stream_mask_false_true; eauto; auto.
-                 * auto_f_equal IHxss.
-                   erewrite tr_stream_mask_false_true; eauto; auto.
-             - repeat rewrite tr_stream_S.
-               destruct (tr_stream r n) eqn: E.
-               + destruct (count (tr_stream (true ::: r)) n) eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite tr_stream_mask_same; eauto.
-                      apply EqNat.beq_nat_true, eq_S,
-                      EqNat.beq_nat_true_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite tr_stream_mask_same; eauto.
-                      apply EqNat.beq_nat_false, not_eq_S,
-                      EqNat.beq_nat_false_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                  }
-               + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'.
-                 * exfalso; eapply count_true_not_0; eauto.
-                 * auto_f_equal IHxss.
-                   erewrite tr_stream_mask_false_true; eauto; auto.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite tr_stream_mask_false_true; eauto.
-                      apply EqNat.beq_nat_true, eq_S,
-                      EqNat.beq_nat_true_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite tr_stream_mask_false_true; eauto.
-                      apply EqNat.beq_nat_false, not_eq_S,
-                      EqNat.beq_nat_false_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                  }
-           }
+   (* (** When the initial occurence of a reset is the same as at [n] after *)
+   (*     shifting, then indexing at [n] the [k']th mask is: *)
+   (*      - indexing the source stream at [n] if [k'] is equal to the count *)
+   (*      - absent otherwise. *) *)
+   (*  Lemma tr_stream_mask_same: *)
+   (*    forall n b r xs k k', *)
+   (*      tr_stream r n = b -> *)
+   (*      count (tr_stream (b ::: r)) n = k -> *)
+   (*      tr_stream (CoInd.mask_v k' r xs) n *)
+   (*      = if EqNat.beq_nat k k' then tr_stream xs n else absent. *)
+   (*  Proof. *)
+   (*    intros ** E C. *)
+   (*    destruct b. *)
+   (*    - rewrite count_true_shift, E in C. *)
+   (*      revert k' k r xs E C; induction n; simpl; intros. *)
+   (*      + rewrite E in C. *)
+   (*        destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*        * apply EqNat.beq_nat_true in E'; subst. *)
+   (*          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*            simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto. *)
+   (*          rewrite tr_stream_0 in E; discriminate. *)
+   (*        *{ apply EqNat.beq_nat_false in E'. *)
+   (*           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*             destruct k' as [|[]]; simpl; try (exfalso; now apply E'). *)
+   (*           - pose proof (tr_stream_const absent); auto. *)
+   (*           - apply tr_stream_0. *)
+   (*         } *)
+   (*      + destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*        *{ apply EqNat.beq_nat_true in E'; subst. *)
+   (*           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*             destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; *)
+   (*               rewrite E in E'; try discriminate; rewrite tr_stream_S in E. *)
+   (*           - inv E'; exfalso; eapply count_true_not_0; eauto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             inv E'; *)
+   (*               rewrite count_true_shift, E, <-plus_n_O, *)
+   (*               <-EqNat.beq_nat_refl; auto. *)
+   (*           - injection E'; clear E'; intro E'. *)
+   (*             rewrite count_false_shift in E'; rewrite E in E'. *)
+   (*             apply NPeano.Nat.sub_0_le in E'. *)
+   (*             pose proof (count_true_ge_1 _ _ E). *)
+   (*             apply Le.le_antisym in E'; auto. *)
+   (*             erewrite IHn; auto. *)
+   (*             rewrite E', <-plus_n_O, <-EqNat.beq_nat_refl; auto. *)
+   (*           - injection E'; clear E'; intro E'. *)
+   (*             erewrite IHn; eauto. *)
+   (*             inv E'; rewrite count_false_shift, E. *)
+   (*             pose proof (count_true_ge_1 _ _ E). *)
+   (*             rewrite Minus.minus_Sn_m; auto. *)
+   (*             simpl; rewrite <-Minus.minus_n_O, <-plus_n_O, *)
+   (*                    <-EqNat.beq_nat_refl; auto. *)
+   (*         } *)
+   (*        *{ apply EqNat.beq_nat_false in E'. *)
+   (*           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*             destruct k' as [|[]]; simpl; rewrite E in C; subst; *)
+   (*               repeat rewrite tr_stream_S; rewrite tr_stream_S in E; *)
+   (*                 try (exfalso; now apply E'). *)
+   (*           - pose proof (tr_stream_const absent); auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg, *)
+   (*             <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg, *)
+   (*             <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             pose proof (count_true_ge_1 _ _ E). *)
+   (*             rewrite count_false_shift, E, Minus.minus_Sn_m in E'; *)
+   (*               auto; simpl in E'; *)
+   (*                 rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             pose proof (count_true_ge_1 _ _ E). *)
+   (*             rewrite count_false_shift, E, Minus.minus_Sn_m in E'; *)
+   (*               auto; simpl in E'; *)
+   (*                 rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             pose proof (count_true_ge_1 _ _ E). *)
+   (*             rewrite count_false_shift, E, Minus.minus_Sn_m in E'; *)
+   (*               auto; simpl in E'; *)
+   (*                 rewrite <-Minus.minus_n_O, <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*         } *)
 
-          *{ rewrite unfold_Stream at 1; simpl.
-             destruct k as [|[]]; simpl.
-             - repeat rewrite tr_stream_S.
-               destruct (tr_stream r n) eqn: E.
-               + auto_f_equal IHxss.
-                 apply tr_stream_mask_true_0; auto.
-               + destruct (count (tr_stream (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss; erewrite tr_stream_mask_same; eauto; auto.
-             - repeat rewrite tr_stream_S.
-               destruct (tr_stream r n) eqn: E.
-               + destruct (count (tr_stream (false ::: r)) n) eqn: E';
-                   auto_f_equal IHxss;
-                   erewrite tr_stream_mask_true_false; eauto; auto.
-               + destruct (count (tr_stream (false ::: r)) n) as [|[]] eqn: E';
-                   auto_f_equal IHxss; erewrite tr_stream_mask_same; eauto; auto.
-             - repeat rewrite tr_stream_S.
-               destruct (tr_stream r n) eqn: E.
-               + destruct (count (tr_stream (false ::: r)) n) eqn: E'.
-                 * auto_f_equal IHxss.
-                   erewrite tr_stream_mask_true_false; eauto; auto.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite tr_stream_mask_true_false; eauto.
-                      apply EqNat.beq_nat_true, eq_S,
-                      EqNat.beq_nat_true_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite tr_stream_mask_true_false; eauto.
-                      apply EqNat.beq_nat_false, not_eq_S,
-                      EqNat.beq_nat_false_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                  }
-               + destruct (count (tr_stream (false ::: r)) n) as [|[]] eqn: E'.
-                 * auto_f_equal IHxss.
-                   erewrite tr_stream_mask_same; eauto; auto.
-                 * auto_f_equal IHxss.
-                   erewrite tr_stream_mask_same; eauto; auto.
-                 *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss.
-                    - erewrite tr_stream_mask_same; eauto.
-                      apply EqNat.beq_nat_true, eq_S, eq_S,
-                      EqNat.beq_nat_true_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                    - erewrite tr_stream_mask_same; eauto.
-                      apply EqNat.beq_nat_false, not_eq_S, not_eq_S,
-                      EqNat.beq_nat_false_iff in E'';
-                        rewrite NPeano.Nat.eqb_sym, E''; auto.
-                  }
-           }
-    Qed.
+   (*    - rewrite count_false_shift, E in C. *)
+   (*      revert k' k r xs E C; induction n; simpl; intros. *)
+   (*      + rewrite E in C. *)
+   (*        destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*        * apply EqNat.beq_nat_true in E'; subst. *)
+   (*          unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*            simpl; rewrite <-E'; repeat rewrite tr_stream_0; auto. *)
+   (*          rewrite tr_stream_0 in E; discriminate. *)
+   (*        *{ apply EqNat.beq_nat_false in E'. *)
+   (*           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*             destruct k' as [|[]]; simpl; try (exfalso; now apply E'). *)
+   (*           - pose proof (tr_stream_const absent); auto. *)
+   (*           - apply tr_stream_0. *)
+   (*         } *)
+   (*      + destruct (EqNat.beq_nat k k') eqn: E'. *)
+   (*        *{ apply EqNat.beq_nat_true in E'; subst. *)
+   (*           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*             destruct k' as [|[]]; simpl; repeat rewrite tr_stream_S; *)
+   (*               rewrite E in E'; try discriminate; rewrite tr_stream_S in E. *)
+   (*           - inv E'; exfalso; eapply count_true_not_0; eauto. *)
+   (*           - erewrite tr_stream_mask_false_true; eauto; *)
+   (*               rewrite <-EqNat.beq_nat_refl; auto. *)
+   (*           - erewrite tr_stream_mask_false_true; eauto; *)
+   (*               rewrite <-EqNat.beq_nat_refl; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_false_shift, E in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_false_shift, E in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_false_shift, E in E'. *)
+   (*             rewrite <-plus_n_O, E', <-EqNat.beq_nat_refl; auto. *)
+   (*         } *)
+   (*        *{ apply EqNat.beq_nat_false in E'. *)
+   (*           unfold_Stv r; unfold_St xs; rewrite unfold_Stream at 1; *)
+   (*             destruct k' as [|[]]; simpl; rewrite E in C; subst; *)
+   (*               repeat rewrite tr_stream_S; rewrite tr_stream_S in E; *)
+   (*                 try (exfalso; now apply E'). *)
+   (*           - pose proof (tr_stream_const absent); auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg, *)
+   (*             <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_true_shift, E, NPeano.Nat.succ_inj_wd_neg, *)
+   (*             <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*           - erewrite IHn; eauto. *)
+   (*             rewrite count_false_shift, E, <-EqNat.beq_nat_false_iff in E'. *)
+   (*             rewrite <-plus_n_O, E'; auto. *)
+   (*         } *)
+   (*  Qed. *)
+
+   (*  Ltac auto_f_equal H := *)
+   (*    f_equal; *)
+   (*    [ idtac | *)
+   (*      erewrite H; eauto; unfold mask; simpl; rewrite tr_stream_S; *)
+   (*      repeat match goal with *)
+   (*             | H: tr_stream _ _ = _ |- _ => rewrite H *)
+   (*             | H: count ?x _ = _ |- _ => rewrite H *)
+   (*             | H:  EqNat.beq_nat _ _ = _ |- _ => rewrite H *)
+   (*             end; auto]. *)
+
+   (*  (** State the correspondence for [mask]. *) *)
+   (*  Lemma mask_impl: *)
+   (*    forall k r xss n, *)
+   (*       tr_streams (List.map (CoInd.mask_v k r) xss) n *)
+   (*      = mask (Indexed.all_absent xss) k (tr_stream r) (tr_streams xss) n. *)
+   (*  Proof. *)
+   (*    induction xss as [|xs]; *)
+   (*      simpl; intros. *)
+   (*    - unfold mask. *)
+   (*      destruct (EqNat.beq_nat k (count (tr_stream r) n)); auto. *)
+   (*    - induction n. *)
+   (*      + unfold_St xs; unfold_Stv r; unfold CoInd.mask_v, mask; *)
+   (*          rewrite unfold_Stream at 1; simpl; *)
+   (*          destruct k as [|[]]; simpl; f_equal; *)
+   (*            erewrite IHxss; eauto; unfold mask; auto. *)
+   (*      + unfold_St xs; unfold_Stv r; unfold CoInd.mask_v, mask. *)
+   (*        *{ rewrite unfold_Stream at 1; simpl. *)
+   (*           destruct k as [|[]]; simpl. *)
+   (*           - repeat rewrite tr_stream_S. *)
+   (*             destruct (tr_stream r n) eqn: E. *)
+   (*             + auto_f_equal IHxss. *)
+   (*               pose proof (tr_stream_const absent); auto. *)
+   (*             + destruct (count (tr_stream (true ::: r)) n) eqn: E'. *)
+   (*               * exfalso; eapply count_true_not_0; eauto. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 pose proof (tr_stream_const absent); auto. *)
+   (*           - repeat rewrite tr_stream_S. *)
+   (*             destruct (tr_stream r n) eqn: E. *)
+   (*             + destruct (count (tr_stream (true ::: r)) n) eqn: E'. *)
+   (*               * exfalso; eapply count_true_not_0; eauto. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 apply tr_stream_mask_true_0; auto. *)
+   (*             + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'. *)
+   (*               * exfalso; eapply count_true_not_0; eauto. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 erewrite tr_stream_mask_false_true; eauto; auto. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 erewrite tr_stream_mask_false_true; eauto; auto. *)
+   (*           - repeat rewrite tr_stream_S. *)
+   (*             destruct (tr_stream r n) eqn: E. *)
+   (*             + destruct (count (tr_stream (true ::: r)) n) eqn: E'. *)
+   (*               * exfalso; eapply count_true_not_0; eauto. *)
+   (*               *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss. *)
+   (*                  - erewrite tr_stream_mask_same; eauto. *)
+   (*                    apply EqNat.beq_nat_true, eq_S, *)
+   (*                    EqNat.beq_nat_true_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                  - erewrite tr_stream_mask_same; eauto. *)
+   (*                    apply EqNat.beq_nat_false, not_eq_S, *)
+   (*                    EqNat.beq_nat_false_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                } *)
+   (*             + destruct (count (tr_stream (true ::: r)) n) as [|[]] eqn: E'. *)
+   (*               * exfalso; eapply count_true_not_0; eauto. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 erewrite tr_stream_mask_false_true; eauto; auto. *)
+   (*               *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss. *)
+   (*                  - erewrite tr_stream_mask_false_true; eauto. *)
+   (*                    apply EqNat.beq_nat_true, eq_S, *)
+   (*                    EqNat.beq_nat_true_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                  - erewrite tr_stream_mask_false_true; eauto. *)
+   (*                    apply EqNat.beq_nat_false, not_eq_S, *)
+   (*                    EqNat.beq_nat_false_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                } *)
+   (*         } *)
+
+   (*        *{ rewrite unfold_Stream at 1; simpl. *)
+   (*           destruct k as [|[]]; simpl. *)
+   (*           - repeat rewrite tr_stream_S. *)
+   (*             destruct (tr_stream r n) eqn: E. *)
+   (*             + auto_f_equal IHxss. *)
+   (*               apply tr_stream_mask_true_0; auto. *)
+   (*             + destruct (count (tr_stream (false ::: r)) n) eqn: E'; *)
+   (*                 auto_f_equal IHxss; erewrite tr_stream_mask_same; eauto; auto. *)
+   (*           - repeat rewrite tr_stream_S. *)
+   (*             destruct (tr_stream r n) eqn: E. *)
+   (*             + destruct (count (tr_stream (false ::: r)) n) eqn: E'; *)
+   (*                 auto_f_equal IHxss; *)
+   (*                 erewrite tr_stream_mask_true_false; eauto; auto. *)
+   (*             + destruct (count (tr_stream (false ::: r)) n) as [|[]] eqn: E'; *)
+   (*                 auto_f_equal IHxss; erewrite tr_stream_mask_same; eauto; auto. *)
+   (*           - repeat rewrite tr_stream_S. *)
+   (*             destruct (tr_stream r n) eqn: E. *)
+   (*             + destruct (count (tr_stream (false ::: r)) n) eqn: E'. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 erewrite tr_stream_mask_true_false; eauto; auto. *)
+   (*               *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss. *)
+   (*                  - erewrite tr_stream_mask_true_false; eauto. *)
+   (*                    apply EqNat.beq_nat_true, eq_S, *)
+   (*                    EqNat.beq_nat_true_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                  - erewrite tr_stream_mask_true_false; eauto. *)
+   (*                    apply EqNat.beq_nat_false, not_eq_S, *)
+   (*                    EqNat.beq_nat_false_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                } *)
+   (*             + destruct (count (tr_stream (false ::: r)) n) as [|[]] eqn: E'. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 erewrite tr_stream_mask_same; eauto; auto. *)
+   (*               * auto_f_equal IHxss. *)
+   (*                 erewrite tr_stream_mask_same; eauto; auto. *)
+   (*               *{ destruct (EqNat.beq_nat n0 n1) eqn: E''; auto_f_equal IHxss. *)
+   (*                  - erewrite tr_stream_mask_same; eauto. *)
+   (*                    apply EqNat.beq_nat_true, eq_S, eq_S, *)
+   (*                    EqNat.beq_nat_true_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                  - erewrite tr_stream_mask_same; eauto. *)
+   (*                    apply EqNat.beq_nat_false, not_eq_S, not_eq_S, *)
+   (*                    EqNat.beq_nat_false_iff in E''; *)
+   (*                      rewrite NPeano.Nat.eqb_sym, E''; auto. *)
+   (*                } *)
+   (*         } *)
+   (*  Qed. *)
 
     (** * FINAL LEMMAS *)
 
 
-    Remark all_absent_tr_streams:
-      forall A n (xss: list (Stream A)),
-        Indexed.all_absent (tr_streams xss n) = Indexed.all_absent xss.
-    Proof.
-      induction xss; simpl; auto; now f_equal.
-    Qed.
+    (* Remark all_absent_tr_streams: *)
+    (*   forall A n (xss: list (Stream A)), *)
+    (*     Indexed.all_absent (tr_streams xss n) = Indexed.all_absent xss. *)
+    (* Proof. *)
+    (*   induction xss; simpl; auto; now f_equal. *)
+    (* Qed. *)
 
-    (** Correspondence for [clocks_of], used to give a base clock for node
-        applications. *)
-    Lemma tr_clocks_of:
-      forall xss,
-        Indexed.clock_of (tr_streams xss) (tr_stream (CoInd.clocks_of xss)).
-    Proof.
-      split; intros ** H.
-      - revert dependent xss; induction n; intros; induction xss as [|xs];
-          rewrite unfold_Stream at 1; simpl in *;
-          try rewrite tr_stream_0; try rewrite tr_stream_S; auto.
-        + inversion_clear H as [|? ? ToMap Forall].
-          apply andb_true_intro; split.
-          * unfold_St xs; rewrite tr_stream_0 in ToMap.
-            apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E.
-            contradiction.
-          * apply IHxss in Forall.
-            clear - Forall; induction xss as [|xs]; simpl; auto.
-        + inversion_clear H.
-          apply IHn. constructor.
-          * now rewrite tr_stream_tl.
-          * fold (@tr_streams value).
-            now rewrite tr_streams_tl.
-      - revert dependent xss; induction n; intros; induction xss as [|xs];
-          simpl in *; constructor.
-        + rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite tr_stream_0 in H; apply andb_prop in H as [].
-          unfold_St xs; rewrite tr_stream_0; simpl in *.
-          intro; subst; discriminate.
-        + apply IHxss.
-          rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite tr_stream_0 in H; apply andb_prop in H as [? Forall].
-          clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl;
-            now rewrite tr_stream_0.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
-          apply IHn in H; inv H.
-          now rewrite <-tr_stream_tl.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
-          apply IHn in H; inv H.
-          now rewrite <-tr_streams_tl.
-    Qed.
+    (* (** Correspondence for [clocks_of], used to give a base clock for node *)
+    (*     applications. *) *)
+    (* Lemma tr_clocks_of: *)
+    (*   forall xss, *)
+    (*     Indexed.clock_of (tr_streams xss) (tr_stream (CoInd.clocks_of xss)). *)
+    (* Proof. *)
+    (*   split; intros ** H. *)
+    (*   - revert dependent xss; induction n; intros; induction xss as [|xs]; *)
+    (*       rewrite unfold_Stream at 1; simpl in *; *)
+    (*       try rewrite tr_stream_0; try rewrite tr_stream_S; auto. *)
+    (*     + inversion_clear H as [|? ? ToMap Forall]. *)
+    (*       apply andb_true_intro; split. *)
+    (*       * unfold_St xs; rewrite tr_stream_0 in ToMap. *)
+    (*         apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E. *)
+    (*         contradiction. *)
+    (*       * apply IHxss in Forall. *)
+    (*         clear - Forall; induction xss as [|xs]; simpl; auto. *)
+    (*     + inversion_clear H. *)
+    (*       apply IHn. constructor. *)
+    (*       * now rewrite tr_stream_tl. *)
+    (*       * fold (@tr_streams value). *)
+    (*         now rewrite tr_streams_tl. *)
+    (*   - revert dependent xss; induction n; intros; induction xss as [|xs]; *)
+    (*       simpl in *; constructor. *)
+    (*     + rewrite unfold_Stream in H at 1; simpl in H; *)
+    (*         rewrite tr_stream_0 in H; apply andb_prop in H as []. *)
+    (*       unfold_St xs; rewrite tr_stream_0; simpl in *. *)
+    (*       intro; subst; discriminate. *)
+    (*     + apply IHxss. *)
+    (*       rewrite unfold_Stream in H at 1; simpl in H; *)
+    (*         rewrite tr_stream_0 in H; apply andb_prop in H as [? Forall]. *)
+    (*       clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl; *)
+    (*         now rewrite tr_stream_0. *)
+    (*     + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H. *)
+    (*       apply IHn in H; inv H. *)
+    (*       now rewrite <-tr_stream_tl. *)
+    (*     + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H. *)
+    (*       apply IHn in H; inv H. *)
+    (*       now rewrite <-tr_streams_tl. *)
+    (* Qed. *)
 
     (** The final theorem stating the correspondence for equations, nodes and
         reset applications. The conjunctive shape is mandatory to use the
         mutually recursive induction scheme [sem_equation_node_ind]. *)
     Theorem implies:
       (forall H b e,
-          CoInd.sem_equation G H b e ->
-          Indexed.sem_equation G (tr_stream b) (tr_history H) e)
+          Indexed.sem_equation G b H e ->
+          CoInd.sem_equation G (tr_history H) (tr_stream b) e)
       /\
       (forall f xss oss,
-          CoInd.sem_node G f xss oss ->
-          Indexed.sem_node G f (tr_streams xss) (tr_streams oss))
+          Indexed.sem_node G f xss oss ->
+          CoInd.sem_node G f (tr_streams xss) (tr_streams oss))
       /\
       (forall f r xss oss,
-          CoInd.sem_reset G f r xss oss ->
-          Indexed.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss)).
+          Indexed.sem_reset G f r xss oss ->
+          CoInd.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss)).
     Proof.
       apply CoInd.sem_equation_node_ind.
       - econstructor.

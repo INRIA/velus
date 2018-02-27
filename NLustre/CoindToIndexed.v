@@ -696,6 +696,8 @@ Module Type COINDTOINDEXED
         rewrite Hes; now constructor.
     Qed.
 
+    (** * RESET CORRESPONDENCE  *)
+
     Lemma tr_stream_reset:
       forall n xs,
         tr_stream (CoInd.reset_of xs) n = Indexed.reset_of (tr_stream xs) n.
@@ -707,8 +709,6 @@ Module Type COINDTOINDEXED
           rewrite unfold_Stream at 1; simpl; auto;
             eapply IHn.
     Qed.
-
-    (** * RESET CORRESPONDENCE  *)
 
     (** ** Properties about [count] *)
 
