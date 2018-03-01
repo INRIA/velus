@@ -4,6 +4,7 @@ Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 Require Import Morphisms.
 Require Import Coq.Program.Tactics.
+Require Import NPeano.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -50,20 +51,29 @@ Module Type INDEXEDTOCOIND
     (** Translate an indexed stream of list into a list of coinductive streams.
         We build the resulting list index by index.
      *)
-    CoFixpoint tr_streams_at_from {A} (n: nat) (d: A) (xss: stream (list A)) (k: nat)
-      : Stream A :=
-      nth k (xss n) d ::: tr_streams_at_from (n + 1) d xss k.
-    Definition tr_streams_from' {A} (d: A) (n: nat) (xss: stream (list A)) : list (Stream A) :=
+    CoFixpoint tr_streams_at_from
+               {A} (n: nat) (d: A) (xss: stream (list A)) (k: nat): Stream A :=
+      nth k (xss n) d ::: tr_streams_at_from (S n) d xss k.
+
+    Fixpoint build {A} (acc: list (Stream A)) (str: nat -> Stream A) (k m: nat)
+      : list (Stream A) :=
+      match k with
+      | 0 => acc
+      | S k => if S k <=? m then acc else build (str k :: acc) str k m
+      end.
+
+    Definition tr_streams_from_restr' {A} (d: A) (m n: nat) (xss: stream (list A))
+      : list (Stream A) :=
       let str := tr_streams_at_from n d xss in
-      let fix build acc k :=
-          match k with
-          | 0 => acc
-          | S k => build (str k :: acc) k
-          end
-      in
-      build [] (length (xss n)).
+      build [] str (length (xss n)) m.
+
+    Definition tr_streams_from_restr
+      : nat -> nat -> stream (list value) -> list (Stream value) :=
+      tr_streams_from_restr' absent.
+
     Definition tr_streams_from: nat -> stream (list value) -> list (Stream value) :=
-      tr_streams_from' absent.
+      tr_streams_from_restr 0.
+
     Definition tr_streams: stream (list value) -> list (Stream value) :=
       tr_streams_from 0.
 
@@ -199,21 +209,231 @@ Module Type INDEXEDTOCOIND
       intros; eapply sem_var_impl_from; eauto.
     Qed.
 
-    Lemma tr_streams_from_nil:
-      forall n xss,
-        xss n = [] ->
-        tr_streams_from n xss = [].
+    Ltac unfold_tr_streams :=
+      unfold tr_streams_from, tr_streams_from_restr, tr_streams_from_restr'.
+
+    (* Lemma tr_streams_from_nil: *)
+    (*   forall n xss, *)
+    (*     xss n = [] -> *)
+    (*     tr_streams_from n xss = []. *)
+    (* Proof. *)
+    (*   intros ** E; unfold_tr_streams; now rewrite E. *)
+    (* Qed. *)
+
+    Lemma build_app:
+      forall {A} k (acc acc': list (Stream A)) str m,
+        build (acc ++ acc') str k m = build acc str k m ++ acc'.
     Proof.
-      intros ** E; unfold tr_streams_from, tr_streams_from'; now rewrite E.
+      induction k; intros; simpl; auto.
+      destruct m; simpl.
+      - now rewrite <-IHk, app_comm_cons.
+      - destruct (k <=? m); auto.
+        now rewrite <-IHk, app_comm_cons.
     Qed.
 
-    Lemma tr_streams_from_cons:
-      forall n xss x xs,
-        xss n = x :: xs ->
-        tr_streams_from n xss = tr_streams_at_from n absent xss 0 :: tr_streams_from n xss.
+    (* Corollary build_cons: *)
+    (*   forall {A} k a (acc: list (Stream A)) str m, *)
+    (*     build (a :: acc) str k m = build [a] str k m ++ acc. *)
+    (* Proof. *)
+    (*   intros; rewrite cons_is_app. *)
+    (*   apply build_app. *)
+    (* Qed. *)
+
+    Corollary build_nil:
+      forall {A} k (acc: list (Stream A)) str m,
+        build acc str k m = build [] str k m ++ acc.
     Proof.
-      intros ** E; unfold tr_streams_from, tr_streams_from'.
-      rewrite E; simpl.
+      intros; change acc with ([] ++ acc); eapply build_app.
+    Qed.
+
+    (* Lemma tr_streams_from_cons: *)
+    (*   forall n xss x xs, *)
+    (*     xss n = x :: xs -> *)
+    (*     tr_streams_from n xss *)
+    (*     = tr_streams_at_from n absent xss 0 :: tr_streams_from_restr 1 n xss. *)
+    (* Proof. *)
+    (*   intros ** E; unfold_tr_streams; rewrite E; simpl. *)
+    (*   clear E; induction xs. *)
+    (*   - simpl; auto. *)
+    (*   - simpl. *)
+    (*     rewrite build_cons, IHxs. *)
+    (*     destruct (length xs <=? 0); auto. *)
+    (*     symmetry; rewrite build_cons; auto. *)
+    (* Qed. *)
+
+    Definition streams_tl {A} (xss: stream (list A)): stream (list A) :=
+      fun n => List.tl (xss n).
+
+    Definition streams_nth {A} (k: nat) (a: A) (xss: stream (list A)): stream A :=
+      fun n => nth k (xss n) a.
+
+    Definition streams_hd {A}: A -> stream (list A) -> stream A := streams_nth 0.
+
+    Lemma streams_tl_cons:
+      forall {A} (xss: stream (list A)) x xs n,
+        xss n = x :: xs ->
+        xs = streams_tl xss n.
+    Proof.
+      intros ** E; unfold streams_tl; now rewrite E.
+    Qed.
+
+    Lemma streams_hd_cons:
+      forall {A} a (xss: stream (list A)) x xs n,
+        xss n = x :: xs ->
+        x = streams_hd a xss n.
+    Proof.
+      intros ** E; unfold streams_hd, streams_nth; now rewrite E.
+    Qed.
+
+    Fixpoint drop {A} (n: nat) (l: list A) : list A :=
+      match n with
+      | 0 => l
+      | S n => drop n (List.tl l)
+      end.
+
+    Lemma drop_nil:
+      forall {A} n,
+        @drop A n [] = [].
+    Proof.
+      induction n; simpl; auto.
+    Qed.
+
+    Lemma drop_cons:
+      forall {A} n (xs: list A) x,
+        n > 0 ->
+        drop n (x :: xs) = drop (n - 1) xs.
+    Proof.
+      induction n; simpl; intros ** H.
+      - contradict H; omega.
+      - now rewrite Nat.sub_0_r.
+    Qed.
+
+    Lemma tl_length:
+      forall {A} (l: list A),
+        length (List.tl l) = length l - 1.
+    Proof.
+      induction l; simpl; auto; omega.
+    Qed.
+
+    Lemma drop_length:
+      forall {A} n (l: list A),
+        length (drop n l) = length l - n.
+    Proof.
+      induction n; intros; simpl.
+      - omega.
+      - rewrite IHn, tl_length; omega.
+    Qed.
+
+    Lemma nth_drop:
+      forall {A} (xs: list A) n' n x_d,
+        nth n' (drop n xs) x_d = nth (n' + n) xs x_d.
+    Proof.
+      induction xs; intros; simpl.
+      - rewrite drop_nil; simpl; destruct (n' + n); destruct n'; auto.
+      - destruct n; simpl.
+        + now rewrite <-plus_n_O.
+        + destruct n'; simpl; rewrite IHxs; auto.
+          now rewrite Plus.plus_Snm_nSm.
+    Qed.
+
+    Lemma nth_seq:
+      forall {A} n' n (xs: list A) x,
+        n' < length xs - n ->
+        nth n' (seq n (length xs - n)) x = n' + n.
+    Proof.
+      intros; rewrite seq_nth; try omega.
+    Qed.
+
+    (** An inversion principle for [sem_vars]. *)
+    Lemma sem_vars_inv_from:
+      forall H b xs xss,
+        Indexed.sem_vars b H xs xss ->
+        forall n,
+          Forall2 (fun x k => Indexed.sem_var b H x (streams_nth k absent xss))
+                  (drop n xs) (seq n (length xs - n)).
+    Proof.
+      unfold Indexed.sem_vars, Indexed.lift.
+      intros ** Sem n.
+      apply Forall2_forall2; split.
+      - now rewrite drop_length, seq_length.
+      - intros x_d k_d n' x k Length Hdrop Hseq.
+        rewrite drop_length in Length.
+        rewrite nth_drop in Hdrop.
+        rewrite nth_seq in Hseq; auto; subst.
+        intro m; specialize (Sem m).
+        apply Forall2_forall2 in Sem.
+        eapply Sem; eauto.
+        + now apply Nat.lt_add_lt_sub_r.
+        + unfold streams_nth; eauto.
+    Qed.
+
+    Corollary sem_vars_inv:
+      forall H b xs xss,
+        Indexed.sem_vars b H xs xss ->
+        Forall2 (fun x k => Indexed.sem_var b H x (streams_nth k absent xss))
+                xs (seq 0 (length xs)).
+    Proof.
+      intros ** Sem; apply sem_vars_inv_from with (n:=0) in Sem.
+      now rewrite Nat.sub_0_r in Sem.
+    Qed.
+
+    Lemma tr_stream_from_streams_nth:
+      forall n k xss,
+        tr_stream_from n (streams_nth k absent xss) ≡
+        tr_streams_at_from n absent xss k.
+    Proof.
+      cofix Cofix; intros.
+      constructor; simpl; auto.
+    Qed.
+
+    Lemma build_length:
+      forall {A} k (acc: list (Stream A)) str m,
+        length (build acc str k m) = k - m + length acc.
+    Proof.
+      induction k; intros; simpl; auto.
+      destruct m; simpl.
+      - rewrite IHk; simpl; omega.
+      - destruct (k <=? m) eqn: E.
+        + apply leb_le, Nat.sub_0_le in E; now rewrite E.
+        + rewrite IHk; simpl.
+          erewrite Nat.sub_succ_r, <-Nat.add_succ_comm, <-Lt.S_pred; auto.
+          rewrite <-Bool.not_true_iff_false in E.
+          rewrite leb_le, Nat.nle_gt in E.
+          now rewrite <-Nat.lt_add_lt_sub_r, plus_O_n.
+    Qed.
+
+    Lemma nth_build:
+      forall {A} k str n (xs_d: Stream A),
+        n < k ->
+        nth n (build [] str k 0) xs_d = str n.
+    Proof.
+      induction k; intros ** H.
+      - contradict H; omega.
+      - simpl.
+        rewrite build_nil.
+        apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in H as [|].
+        + rewrite app_nth1; auto.
+          rewrite build_length; omega.
+        + subst; rewrite app_nth2; rewrite build_length; simpl; try omega.
+          now rewrite Nat.sub_0_r, <-plus_n_O, Nat.sub_diag.
+    Qed.
+
+    Corollary nth_tr_streams_from:
+      forall n k xss xs_d,
+        k < length (xss n) ->
+        nth k (tr_streams_from n xss) xs_d =
+            tr_streams_at_from n absent xss k.
+    Proof.
+      unfold_tr_streams.
+      intros; now rewrite nth_build.
+    Qed.
+
+    Corollary tr_streams_from_length:
+      forall n xss,
+        length (tr_streams_from n xss) = length (xss n).
+    Proof.
+      unfold_tr_streams; intros.
+      rewrite build_length; simpl; omega.
     Qed.
 
     Corollary sem_vars_impl_from:
@@ -221,16 +441,31 @@ Module Type INDEXEDTOCOIND
       Indexed.sem_vars b H xs xss ->
       Forall2 (CoInd.sem_var (tr_history_from n H)) xs (tr_streams_from n xss).
     Proof.
-      unfold Indexed.sem_vars, Indexed.lift; intros ** Sem.
-      specialize (Sem n); inv Sem.
-      - rewrite tr_streams_from_nil; auto.
-      -
-      induction xs.
-      - specialize (Sem 0).
-        inversion Sem as [E' E|].
-        unfold tr_streams.
-        rewrite <-E; simpl; auto.
-      - Admitted.
+      intros ** Sem.
+      assert (length xs = length (xss n)) as Length by
+            (unfold Indexed.sem_vars, Indexed.lift in Sem; specialize (Sem n);
+             now apply Forall2_length in Sem).
+      apply Forall2_forall2; split.
+      - now rewrite tr_streams_from_length.
+      - apply sem_vars_inv in Sem.
+        intros x_d xs_d n' x xs' En' Ex Exs'.
+        apply Forall2_forall2 in Sem as (? & Sem).
+        assert (nth n' (seq 0 (length xs)) 0 = n') as Nth by
+              (rewrite <-(Nat.sub_0_r (length xs)), plus_n_O; apply nth_seq; omega).
+        eapply Sem in Nth; eauto.
+        apply (sem_var_impl_from n) in Nth.
+        subst.
+        rewrite nth_tr_streams_from, <-tr_stream_from_streams_nth; auto.
+        now rewrite <-Length.
+    Qed.
+
+    Corollary sem_vars_impl:
+      forall H b xs xss,
+      Indexed.sem_vars b H xs xss ->
+      Forall2 (CoInd.sem_var (tr_history H)) xs (tr_streams xss).
+    Proof.
+      apply sem_vars_impl_from.
+    Qed.
 
     (* (** ** Synchronization *) *)
 
