@@ -1,6 +1,8 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 
+Require Import Setoid.
+Require Import Morphisms.
 Require Import Coq.Arith.EqNat.
 Require Import List.
 Import List.ListNotations.
@@ -23,6 +25,37 @@ Module Type STREAM
   (** A stream is represented by its characteristic function: *)
 
   Notation stream A := (nat -> A).
+
+  Definition eq_str {A} (xs xs': stream A) := forall n, xs n = xs' n.
+  Infix "≈" := eq_str (at level 70, no associativity).
+
+  Lemma eq_str_refl:
+    forall {A} (xs: stream A),
+      xs ≈ xs.
+  Proof.
+    intros ** n; reflexivity.
+  Qed.
+
+  Lemma eq_str_sym:
+    forall {A} (xs xs': stream A),
+      xs ≈ xs' -> xs' ≈ xs.
+  Proof.
+    intros ** E n; auto.
+  Qed.
+
+  Lemma eq_str_trans:
+    forall {A} (xs ys zs: stream A),
+      xs ≈ ys -> ys ≈ zs -> xs ≈ zs.
+  Proof.
+    intros ** E1 E2 n; auto.
+    rewrite E1; auto.
+  Qed.
+
+  Add Parametric Relation A : (stream A) (@eq_str A)
+      reflexivity proved by (@eq_str_refl A)
+      symmetry proved by (@eq_str_sym A)
+      transitivity proved by (@eq_str_trans A)
+        as eq_str_rel.
 
   (** A synchronous stream thus maps time to synchronous values: *)
 
@@ -96,22 +129,21 @@ if the clocked stream is [absent] at the corresponding instant. *)
     apply Le.le_n_S; omega.
   Qed.
 
-  Lemma count_compat:
-    forall n r r',
-      (forall n, r n = r' n) ->
-      count r n = count r' n.
+  Add Parametric Morphism : count
+      with signature eq_str ==> eq ==> eq
+        as count_eq_str.
   Proof.
-    induction n; simpl; intros ** E; rewrite E; auto.
-    erewrite IHn; eauto.
+    intros ** E n.
+    induction n; simpl; rewrite E; auto.
+    now rewrite IHn.
   Qed.
 
-  Corollary mask_compat:
-    forall {A} r r' k (o: A) xs,
-      (forall n, r n = r' n) ->
-      forall n, mask o k r xs n = mask o k r' xs n.
+  Add Parametric Morphism (A: Type) : (@mask A)
+      with signature eq ==> eq ==> eq_str ==> eq_str ==> eq_str
+        as mask_eq_str.
   Proof.
-    intros; unfold mask.
-    erewrite count_compat; eauto.
+    intros ** E1 ? ? E2 n; unfold mask.
+    now rewrite E1, E2.
   Qed.
 
   Lemma present_injection:

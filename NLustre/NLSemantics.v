@@ -2,6 +2,8 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
+Require Import Setoid.
+Require Import Morphisms.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -1157,13 +1159,19 @@ an absent value *)
 
   (** Morphisms properties *)
 
-  Lemma clock_of_compat:
-    forall xs xs' bk,
-      (forall n, xs n = xs' n) ->
-      clock_of xs bk ->
-      clock_of xs' bk.
+  Add Parametric Morphism b A B sem H : (@lift b A B sem H)
+      with signature eq ==> @eq_str B ==> Basics.impl
+        as lift_eq_str.
   Proof.
-    unfold clock_of. intros ** E Pres n.
+    intros x xs xs' E Lift n.
+    rewrite <-E; auto.
+  Qed.
+
+  Add Parametric Morphism : clock_of
+      with signature eq_str ==> eq ==> Basics.impl
+        as clock_of_eq_str.
+  Proof.
+    unfold clock_of. intros ** E b Pres n.
     split; intros H.
     - apply Pres.
       specialize (E n).
@@ -1173,56 +1181,41 @@ an absent value *)
       induction H; rewrite <-E; constructor; auto.
   Qed.
 
-  Lemma sem_vars_compat:
-    forall H bk x xs xs',
-      (forall n, xs n = xs' n) ->
-      sem_vars bk H x xs ->
-      sem_vars bk H x xs'.
-  Proof.
-    unfold sem_vars, lift; intros ** E Sem n.
-    specialize (E n); specialize (Sem n).
-    induction Sem; rewrite <-E; constructor; auto.
-  Qed.
+  (* Lemma sem_vars_compat: *)
+  (*   forall H bk x xs xs', *)
+  (*     (forall n, xs n = xs' n) -> *)
+  (*     sem_vars bk H x xs -> *)
+  (*     sem_vars bk H x xs'. *)
+  (* Proof. *)
+  (*   unfold sem_vars, lift; intros ** E Sem n. *)
+  (*   specialize (E n); specialize (Sem n). *)
+  (*   induction Sem; rewrite <-E; constructor; auto. *)
+  (* Qed. *)
 
-  Lemma same_clock_compat:
-    forall xs xs',
-      (forall n, xs n = xs' n) ->
-      same_clock xs ->
-      same_clock xs'.
+  Add Parametric Morphism : same_clock
+      with signature eq_str ==> Basics.impl
+        as same_clock_eq_str.
   Proof.
     unfold same_clock; intros ** E ? ?; rewrite <-E; auto.
   Qed.
 
- Lemma sem_node_compat:
-    forall G f xss xss' yss yss',
-      (forall n, xss n = xss' n) ->
-      (forall n, yss n = yss' n) ->
-      sem_node G f xss yss ->
-      sem_node G f xss' yss'.
+  Add Parametric Morphism G f: (sem_node G f)
+      with signature eq_str ==> eq_str ==> Basics.impl
+        as sem_node_eq_str.
   Proof.
-    intros ** Exss Eyss Node.
+    intros ** E1 ? ? E2 Node.
     inv Node.
-    econstructor; eauto.
-    - eapply clock_of_compat; eauto.
-    - eapply sem_vars_compat; eauto.
-    - eapply sem_vars_compat; eauto.
-    - eapply same_clock_compat; eauto.
-    - eapply same_clock_compat; eauto.
-    - intro; rewrite <-Exss, <-Eyss; auto.
+    econstructor; eauto; intro; try rewrite <-E1; try rewrite <-E2; auto.
   Qed.
 
-  Corollary sem_reset_compat:
-    forall G f r r' xss oss,
-      (forall n, r n = r' n) ->
-      sem_reset G f r xss oss ->
-      sem_reset G f r' xss oss.
+  Add Parametric Morphism G f: (sem_reset G f)
+      with signature eq_str ==> eq_str ==> eq_str ==> Basics.impl
+        as sem_reset_eq_str.
   Proof.
-    intros ** E Res.
+    intros ** E1 ? ? E2 ? ? E3 Res.
     inversion_clear Res as [? ? ? ? Node].
     constructor; intro n.
-    pose proof (mask_compat _ _ n (all_absent (xss n)) xss E).
-    pose proof (mask_compat _ _ n (all_absent (oss n)) oss E).
-    eapply sem_node_compat; eauto.
+    now rewrite <-E1, <- 2 E2, <- 2 E3.
   Qed.
 
 End NLSEMANTICS.

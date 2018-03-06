@@ -479,7 +479,7 @@ Module Type NLSEMANTICSCOIND
 
   End SemInd.
 
- Add Parametric Morphism H : (sem_var H)
+  Add Parametric Morphism H : (sem_var H)
       with signature eq ==> @EqSt value ==> Basics.impl
         as sem_var_EqSt.
   Proof.

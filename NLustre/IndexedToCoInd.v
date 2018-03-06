@@ -229,7 +229,7 @@ Module Type INDEXEDTOCOIND
         seq m (k - m) = m :: seq (S m) (k - S m).
     Proof.
       induction k; intros ** E; simpl.
-      - contradict E; omega.
+      - omega.
       - destruct m; simpl.
         + now rewrite Nat.sub_0_r.
         + rewrite <- 2 seq_shift.
@@ -331,7 +331,7 @@ Module Type INDEXEDTOCOIND
         drop n (x :: xs) = drop (n - 1) xs.
     Proof.
       induction n; simpl; intros ** H.
-      - contradict H; omega.
+      - omega.
       - now rewrite Nat.sub_0_r.
     Qed.
 
@@ -426,7 +426,7 @@ Module Type INDEXEDTOCOIND
         n < length l ->
         nth n (List.map f l) d = f (nth n l d').
     Proof.
-      induction l, n; simpl; intros ** H; try (contradict H; omega); auto.
+      induction l, n; simpl; intros ** H; try omega; auto.
       apply IHl; omega.
     Qed.
 
@@ -831,6 +831,30 @@ Module Type INDEXEDTOCOIND
     (*   unfold build; intros. *)
     (*   now rewrite Nat.sub_0_l. *)
     (* Qed. *)
+    Lemma Forall2_forall2':
+      forall {A B C} P (l1: list A) (l2: list (B -> C)),
+        Forall2 P l1 l2
+        <-> length l1 = length l2
+          /\ forall a b n x1 x2,
+            n < length l1 ->
+            nth n l1 a = x1 ->
+            (forall k, nth n l2 b k = x2 k) ->
+            P x1 x2.
+    Proof.
+      intros. revert l2; induction l1; intro.
+      - split; intro H.
+        + inv H. split; simpl; auto.
+          intros; omega.
+        + destruct H as [H _]. destruct l2; try discriminate; auto.
+      - split; intro H.
+        + inv H. rewrite IHl1 in H4. destruct H4. split; simpl; auto.
+          intros. destruct n; subst; trivial. eapply H1; eauto. omega.
+      + destruct H as [Hlen H].
+        destruct l2; simpl in Hlen; try discriminate. constructor.
+        apply (H a b 0); trivial; simpl; try omega.
+        rewrite IHl1. split; try omega.
+        intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
+    Qed.
 
     Corollary sem_lexps_impl_from:
       forall n H b es ess,

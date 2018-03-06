@@ -699,9 +699,10 @@ Module Type COINDTOINDEXED
     (** * RESET CORRESPONDENCE  *)
 
     Lemma tr_stream_reset:
-      forall n xs,
-        tr_stream (CoInd.reset_of xs) n = Indexed.reset_of (tr_stream xs) n.
+      forall xs,
+        tr_stream (CoInd.reset_of xs) ≈ Indexed.reset_of (tr_stream xs).
     Proof.
+      intros **n; revert xs.
       induction n; intros.
       - unfold_Stv xs; unfold Indexed.reset_of;
           rewrite unfold_Stream at 1; simpl; rewrite tr_stream_0; auto.
@@ -1094,12 +1095,12 @@ Module Type COINDTOINDEXED
 
     (** State the correspondence for [mask]. *)
     Lemma mask_impl:
-      forall k r xss n,
-         tr_streams (List.map (CoInd.mask_v k r) xss) n
-        = mask (Indexed.all_absent xss) k (tr_stream r) (tr_streams xss) n.
+      forall k r xss,
+        tr_streams (List.map (CoInd.mask_v k r) xss)
+        ≈ mask (Indexed.all_absent xss) k (tr_stream r) (tr_streams xss).
     Proof.
       induction xss as [|xs];
-        simpl; intros.
+        simpl; intros ** n.
       - unfold mask.
         destruct (EqNat.beq_nat k (count (tr_stream r) n)); auto.
       - induction n.
@@ -1286,9 +1287,7 @@ Module Type COINDTOINDEXED
         + apply sem_laexps_impl; eauto.
         + apply sem_vars_impl; eauto.
         + apply sem_var_impl; eauto.
-        + eapply Indexed.sem_reset_compat.
-          * intro; apply tr_stream_reset.
-          * eauto.
+        + now rewrite <-tr_stream_reset.
       - econstructor; auto; subst.
         + apply sem_laexp_impl; eauto.
         + unfold Indexed.sem_var, Indexed.lift; intro.
@@ -1298,10 +1297,8 @@ Module Type COINDTOINDEXED
       - intros ** IHNode.
         constructor; intro.
         specialize (IHNode n).
-        pose proof (mask_impl n r xss) as Hxss.
-        pose proof (mask_impl n r yss) as Hyss.
         rewrite 2 all_absent_tr_streams.
-        eapply Indexed.sem_node_compat; eauto.
+        now rewrite <- 2 mask_impl.
       - intros ** Hin Hout Same ? ?. econstructor; eauto.
         + apply tr_clocks_of.
         + apply sem_vars_impl; eauto.
