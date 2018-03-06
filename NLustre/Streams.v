@@ -27,6 +27,13 @@ Add Parametric Relation A : (Stream A) (@EqSt A)
     transitivity proved by (@trans_EqSt A)
       as EqStrel.
 
+Lemma eq_EqSt:
+  forall {A}, inclusion (Stream A) eq (@EqSt A).
+Proof.
+  intros ? xs xs' E.
+  now rewrite E.
+Qed.
+
 Add Parametric Morphism A : (@Cons A)
     with signature eq ==> @EqSt A ==> @EqSt A
       as Cons_EqSt.

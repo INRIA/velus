@@ -590,9 +590,10 @@ Module Type COINDTOINDEXED
     (** [fby] is not a predicate but a function, so we directly state the
         correspondence.  *)
     Lemma fby_impl:
-      forall n c xs,
-      tr_stream (CoInd.fby c xs) n = fby c (tr_stream xs) n.
+      forall c xs,
+      tr_stream (CoInd.fby c xs) ≈ fby c (tr_stream xs).
     Proof.
+      intros ** n; revert c xs.
       induction n; intros.
       - unfold_Stv xs; rewrite unfold_Stream at 1;
           unfold fby; simpl; now rewrite tr_stream_0.
@@ -1290,10 +1291,8 @@ Module Type COINDTOINDEXED
         + now rewrite <-tr_stream_reset.
       - econstructor; auto; subst.
         + apply sem_laexp_impl; eauto.
-        + unfold Indexed.sem_var, Indexed.lift; intro.
-          rewrite <-fby_impl.
+        + rewrite <-fby_impl.
           apply sem_var_impl; auto.
-          exact (tr_stream b).
       - intros ** IHNode.
         constructor; intro.
         specialize (IHNode n).
