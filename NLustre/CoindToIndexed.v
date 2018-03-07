@@ -1309,12 +1309,12 @@ Module Type COINDTOINDEXED
             apply Forall2_length in Hin; simpl in *.
             unfold CoInd.idents in Hin; rewrite map_length in Hin.
             pose proof n.(n_ingt0) as Nin.
-            rewrite Hin in Nin; contradict Nin; apply Lt.lt_irrefl.
+            rewrite Hin in Nin; contradict Nin; omega.
           * intro; subst.
             apply Forall2_length in Hout; simpl in *.
             unfold CoInd.idents in Hout; rewrite map_length in Hout.
             pose proof n.(n_outgt0) as Nout.
-            rewrite Hout in Nout; contradict Nout; apply Lt.lt_irrefl.
+            rewrite Hout in Nout; contradict Nout; omega.
     Qed.
 
     Definition equation_impl := proj1 implies.
