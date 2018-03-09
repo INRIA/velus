@@ -93,11 +93,11 @@ if the clocked stream is [absent] at the corresponding instant. *)
     | 0, false => 0
     | 0, true => 1
     | S m, false => count rs m
-    | S m, true => 1 + count rs m
+    | S m, true => S (count rs m)
     end.
 
   (** [mask o k rs xs] is the stream which clips the stream [xs] between
-      the [k]th and the [(k+1)]th reset, outputting [o] every elsewhere. *)
+      the [k]th and the [(k+1)]th reset, outputting [o] everywhere else. *)
   Definition mask {A} (opaque: A) (k: nat) (rs: cstream) (xs: stream A) : stream A :=
     fun n =>
       if beq_nat k (count rs n) then xs n else opaque.
