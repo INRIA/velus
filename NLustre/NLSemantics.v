@@ -346,6 +346,13 @@ environment.
     induction l; simpl; constructor; auto.
   Qed.
 
+  Remark nth_all_absent:
+    forall (xs: list value) n,
+      nth n (all_absent xs) absent = absent.
+  Proof.
+    induction xs, n; simpl; auto.
+  Qed.
+
   Section NodeSemantics.
 
     Variable G: global.

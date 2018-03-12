@@ -1868,6 +1868,95 @@ Section Lists.
     apply IHl; omega.
   Qed.
 
+  Lemma forallb_exists:
+    forall (f: A -> bool) (l: list A),
+      forallb f l = false <-> (exists x : A, In x l /\ f x = false).
+  Proof.
+    induction l as [|a]; simpl; split; intro H; try discriminate.
+    - destruct H as (? & ? & ?); contradiction.
+    - apply Bool.andb_false_iff in H as [H|H].
+      + exists a; intuition.
+      + apply IHl in H as (x & ? & ?).
+        exists x; intuition.
+    - destruct H as (? & [] & ?).
+      + subst; apply Bool.andb_false_intro1; auto.
+      + apply Bool.andb_false_intro2, IHl.
+        exists x; intuition.
+  Qed.
+
+  Fixpoint drop (n: nat) (l: list A) : list A :=
+    match n with
+    | 0 => l
+    | S n => drop n (List.tl l)
+    end.
+
+  Lemma drop_nil:
+    forall n,
+      drop n [] = [].
+  Proof.
+    induction n; simpl; auto.
+  Qed.
+
+  Lemma drop_cons:
+    forall n xs x,
+      n > 0 ->
+      drop n (x :: xs) = drop (n - 1) xs.
+  Proof.
+    induction n; simpl; intros ** H.
+    - omega.
+    - now rewrite NPeano.Nat.sub_0_r.
+  Qed.
+
+  Lemma tl_length:
+    forall (l: list A),
+      length (tl l) = length l - 1.
+  Proof.
+    induction l; simpl; auto; omega.
+  Qed.
+
+  Lemma drop_length:
+    forall n (l: list A),
+      length (drop n l) = length l - n.
+  Proof.
+    induction n; intros; simpl.
+    - omega.
+    - rewrite IHn, tl_length; omega.
+  Qed.
+
+  Lemma nth_drop:
+    forall (xs: list A) n' n x_d,
+      nth n' (drop n xs) x_d = nth (n' + n) xs x_d.
+  Proof.
+    induction xs; intros; simpl.
+    - rewrite drop_nil; simpl; destruct (n' + n); destruct n'; auto.
+    - destruct n; simpl.
+      + now rewrite <-plus_n_O.
+      + destruct n'; simpl; rewrite IHxs; auto.
+        now rewrite Plus.plus_Snm_nSm.
+  Qed.
+
+  Lemma nth_seq:
+    forall {A} n' n (xs: list A) x,
+      n' < length xs - n ->
+      nth n' (seq n (length xs - n)) x = n' + n.
+  Proof.
+    intros; rewrite seq_nth; try omega.
+  Qed.
+
+  Lemma seq_cons:
+    forall k m,
+      m < k ->
+      seq m (k - m) = m :: seq (S m) (k - S m).
+  Proof.
+    induction k; intros ** E; simpl.
+    - omega.
+    - destruct m; simpl.
+      + now rewrite NPeano.Nat.sub_0_r.
+      + rewrite <- 2 seq_shift.
+        rewrite IHk; auto.
+        omega.
+  Qed.
+
 End Lists.
 
 Lemma Forall2_map_1:

@@ -759,18 +759,23 @@ Module Type COINDTOINDEXED
           apply count_true_ge_1; auto.
     Qed.
 
+    (** State the correspondence for [count]. *)
     Lemma count_impl:
-      forall n r,
-        count (tr_stream r) n = Str_nth n (CoInd.count r).
+      forall r,
+        tr_stream (CoInd.count r) ≈ count (tr_stream r).
     Proof.
-      unfold CoInd.count, Str_nth.
-      induction n; intros; simpl.
-      - rewrite tr_stream_nth; unfold Str_nth; simpl; auto.
-      - destruct (hd r) eqn: R.
-        + rewrite CoInd.count_S_nth, <-IHn.
+      intros ** n.
+      unfold CoInd.count.
+      revert r; induction n; intros; simpl.
+      - rewrite (unfold_Stream (CoInd.count_acc 0 r)); simpl.
+        rewrite tr_stream_0; auto.
+      - rewrite (unfold_Stream (CoInd.count_acc 0 r)); simpl.
+        rewrite tr_stream_S. destruct (hd r) eqn: R.
+        + unfold tr_stream at 1; unfold tr_stream in IHn; unfold Str_nth in *.
+          rewrite CoInd.count_S_nth, IHn.
           destruct r; simpl in *; rewrite R, count_true_shift, tr_stream_S.
           now destruct (tr_stream r n).
-        + rewrite <-IHn.
+        + rewrite IHn.
           destruct r; simpl in *; rewrite R, count_false_shift, tr_stream_S.
           destruct (tr_stream r n) eqn: R'; auto.
           apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; omega.
@@ -789,8 +794,8 @@ Module Type COINDTOINDEXED
       - unfold CoInd.mask_v; rewrite tr_stream_nth, CoInd.mask_nth.
         unfold mask in *.
         rewrite IHxss.
-        rewrite count_impl, NPeano.Nat.eqb_sym.
-        destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
+        rewrite <-count_impl, NPeano.Nat.eqb_sym.
+        unfold tr_stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
     Qed.
 
     (** * FINAL LEMMAS *)
