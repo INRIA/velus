@@ -386,8 +386,8 @@ environment.
     with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
          | SReset:
              forall f r xss yss,
-               (forall n, sem_node f (mask (all_absent (xss n)) n r xss)
-                              (mask (all_absent (yss n)) n r yss)) ->
+               (forall n, sem_node f (mask (all_absent (xss 0)) n r xss)
+                              (mask (all_absent (yss 0)) n r yss)) ->
                sem_reset f r xss yss
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
@@ -459,8 +459,8 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall n, sem_node G f (mask (all_absent (xss n)) n r xss) (mask (all_absent (yss n)) n r yss)) ->
-        (forall n, P_node f (mask (all_absent (xss n)) n r xss) (mask (all_absent (yss n)) n r yss)) ->
+        (forall n, sem_node G f (mask (all_absent (xss 0)) n r xss) (mask (all_absent (yss 0)) n r yss)) ->
+        (forall n, P_node f (mask (all_absent (xss 0)) n r xss) (mask (all_absent (yss 0)) n r yss)) ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:

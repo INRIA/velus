@@ -1156,10 +1156,10 @@ Module Type INDEXEDTOCOIND
     (** Generalizing is too intricate: we can use the generalized lemma above to
         deduce this one. *)
     Corollary mask_impl:
-      forall k (r: stream bool) xss,
+      forall k k' (r: stream bool) xss,
         wf_streams xss ->
         EqSts value
-              (tr_streams (mask (Indexed.all_absent (xss k)) k r xss))
+              (tr_streams (mask (Indexed.all_absent (xss k')) k r xss))
               (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros ** Const; unfold tr_streams, tr_stream.
@@ -1236,17 +1236,43 @@ Module Type INDEXEDTOCOIND
         CoInd.clocks_of (tr_streams xss) ≡ tr_stream bk.
     Proof. apply tr_clocks_of_from. Qed.
 
-    (* Lemma wf_streams_mask: *)
-    (*   forall xss n r, *)
-    (*     wf_streams (mask (Indexed.all_absent (xss n)) n r xss) -> wf_streams xss. *)
-    (* Proof. *)
-    (*   intros ** WF k k'; specialize (WF k k'). *)
-    (*   rewrite mask_length in WF. *)
-    (*   unfold mask in WF. *)
-    (*   destruct (EqNat.beq_nat n (count r k')) eqn: E, (EqNat.beq_nat n (count r k)) eqn: E'; auto. *)
-    (*   admit. *)
-    (*   admit. *)
-    (*   admit. *)
+    Lemma wf_streams_mask:
+      forall xss r m,
+        (forall n, wf_streams (mask (Indexed.all_absent (xss m)) n r xss)) ->
+        wf_streams xss.
+    Proof.
+      unfold wf_streams, mask; intros ** WF k k'.
+      pose proof (WF (count r k) k' k) as WFk;
+        pose proof (WF (count r k') k' k) as WFk'.
+      rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
+      rewrite Nat.eqb_sym in WFk'.
+      destruct (EqNat.beq_nat (count r k) (count r k')); auto.
+      now rewrite WFk, <-WFk'.
+    Qed.
+
+    Ltac assert_const_length xss :=
+      match goal with
+        H: Indexed.sem_vars _ _ _ xss |- _ =>
+        let H' := fresh in
+        let k := fresh in
+        let k' := fresh in
+        assert (wf_streams xss)
+          by (intros k k'; pose proof H as H';
+              unfold Indexed.sem_vars, Indexed.lift in *;
+              specialize (H k); specialize (H' k');
+              apply Forall2_length in H; apply Forall2_length in H';
+              now rewrite H in H')
+      end.
+
+    Lemma sem_node_wf:
+      forall f (xss_f yss_f: nat -> stream (list value)),
+        (forall n, Indexed.sem_node G f (xss_f n) (yss_f n)) ->
+        (forall n, wf_streams (xss_f n)) /\ (forall n, wf_streams (yss_f n)).
+    Proof.
+      intros ** Sem; split; intro n;
+        specialize (Sem n); inv Sem;
+          assert_const_length (xss_f n); assert_const_length (yss_f n); auto.
+    Qed.
 
     (** The final theorem stating the correspondence for equations, nodes and
         reset applications. The conjunctive shape is mandatory to use the
@@ -1282,21 +1308,10 @@ Module Type INDEXEDTOCOIND
           apply sem_var_impl with (b:=bk); auto.
       - intros ** IHNode.
         constructor; intro.
-        rewrite <- 2 mask_impl; auto.
-        admit.
-        admit.
+        apply sem_node_wf in H as (? & ?).
+        rewrite <- 2 mask_impl; auto;
+          eapply wf_streams_mask; eauto.
       - intros ** Hin Hout ? ? ? ? ?.
-        Ltac assert_const_length xss :=
-          match goal with
-            H: Indexed.sem_vars _ _ _ xss |- _ =>
-            let H' := fresh in
-            assert (wf_streams xss)
-              by (intros k k'; pose proof H as H';
-                  unfold Indexed.sem_vars, Indexed.lift in *;
-                  specialize (H k); specialize (H' k');
-                  apply Forall2_length in H; apply Forall2_length in H';
-                  now rewrite H in H')
-          end.
         assert_const_length xss; assert_const_length yss.
         econstructor; eauto; try apply sem_vars_impl with (b:=bk); eauto.
         + apply same_clock_app_impl; auto;
