@@ -88,10 +88,10 @@ Module Type INDEXEDTOCOIND
 
     (** Translate an history from indexed to coinductive world.
         Every element of the history is translated. *)
-    Definition tr_history_from (n: nat) (H: Indexed.history) : CoInd.history :=
+    Definition tr_history_from (n: nat) (H: Indexed.history) : CoInd.History :=
       PM.map (tr_stream_from n) H.
 
-    Definition tr_history : Indexed.history -> CoInd.history :=
+    Definition tr_history : Indexed.history -> CoInd.History :=
       tr_history_from 0.
 
     (** ** Properties  *)
@@ -203,7 +203,7 @@ Module Type INDEXEDTOCOIND
     (** The counterpart of [tr_stream_from_tl] for histories. *)
     Lemma tr_history_from_tl:
       forall n H,
-        CoInd.history_tl (tr_history_from n H) = tr_history_from (S n) H.
+        CoInd.History_tl (tr_history_from n H) = tr_history_from (S n) H.
     Proof.
       now repeat setoid_rewrite pm_map_map.
     Qed.

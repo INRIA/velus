@@ -11,7 +11,6 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.NLSemanticsCommon.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Streams.
 
@@ -34,14 +33,14 @@ Module Type NLSEMANTICSCOIND
 
   Definition idents := List.map (@fst ident (type * clock)).
 
-  Definition history := PM.t (Stream value).
+  Definition History := PM.t (Stream value).
 
-  Definition history_tl (H: history) : history := PM.map (@tl value) H.
+  Definition History_tl (H: History) : History := PM.map (@tl value) H.
 
   CoFixpoint const (c: const) (b: Stream bool): Stream value :=
     (if hd b then present (sem_const c) else absent) ::: const c (tl b).
 
-  Inductive sem_var: history -> ident -> Stream value -> Prop :=
+  Inductive sem_var: History -> ident -> Stream value -> Prop :=
     sem_var_intro:
       forall H x xs xs',
         PM.MapsTo x xs' H ->
@@ -127,7 +126,7 @@ Module Type NLSEMANTICSCOIND
         ite (present false_val ::: s)
               (present t ::: ts) (present f ::: fs) (present f ::: rs).
 
-  CoInductive sem_clock: history -> Stream bool -> clock -> Stream bool -> Prop :=
+  CoInductive sem_clock: History -> Stream bool -> clock -> Stream bool -> Prop :=
   | Sbase:
       forall H b b',
         b ≡ b' ->
@@ -137,23 +136,23 @@ Module Type NLSEMANTICSCOIND
         sem_clock H b ck (true ::: bk) ->
         sem_var H x (present c ::: xs) ->
         val_to_bool c = Some k ->
-        sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
+        sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
         sem_clock H b (Con ck x k) (true ::: bs)
   | Son_abs1:
       forall H b bk bs ck x k xs,
         sem_clock H b ck (false ::: bk) ->
         sem_var H x (absent ::: xs) ->
-        sem_clock (history_tl H) (tl b) (Con ck x k) bs ->
+        sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
         sem_clock H b (Con ck x k) (false ::: bs)
   | Son_abs2:
       forall H b bk bs ck x k c xs,
         sem_clock H b ck (true ::: bk) ->
         sem_var H x (present c ::: xs) ->
         val_to_bool c = Some k ->
-        sem_clock (history_tl H) (tl b) (Con ck x (negb k)) bs ->
+        sem_clock (History_tl H) (tl b) (Con ck x (negb k)) bs ->
         sem_clock H b (Con ck x (negb k)) (false ::: bs).
 
-  Inductive sem_lexp: history -> Stream bool -> lexp -> Stream value -> Prop :=
+  Inductive sem_lexp: History -> Stream bool -> lexp -> Stream value -> Prop :=
   | Sconst:
       forall H b c cs,
         cs ≡ const c b ->
@@ -180,7 +179,7 @@ Module Type NLSEMANTICSCOIND
         lift2 op (typeof e1) (typeof e2) es1 es2 os ->
         sem_lexp H b (Ebinop op e1 e2 ty) os.
 
-  Inductive sem_cexp: history -> Stream bool -> cexp -> Stream value -> Prop :=
+  Inductive sem_cexp: History -> Stream bool -> cexp -> Stream value -> Prop :=
   | Smerge:
       forall H b x t f xs ts fs os,
         sem_var H x xs ->
@@ -200,38 +199,38 @@ Module Type NLSEMANTICSCOIND
         sem_lexp H b e es ->
         sem_cexp H b (Eexp e) es.
 
-  CoInductive sem_aexp {A} (sem: history -> Stream bool -> A -> Stream value -> Prop):
-    history -> Stream bool -> clock -> A -> Stream value -> Prop :=
+  CoInductive sem_aexp {A} (sem: History -> Stream bool -> A -> Stream value -> Prop):
+    History -> Stream bool -> clock -> A -> Stream value -> Prop :=
   | Stick:
       forall H b ck a e es bs,
         sem H b a (present e ::: es) ->
         sem_clock H b ck (true ::: bs) ->
-        sem_aexp sem (history_tl H) (tl b) ck a es ->
+        sem_aexp sem (History_tl H) (tl b) ck a es ->
         sem_aexp sem H b ck a (present e ::: es)
   | Sabs:
       forall H b ck a es bs,
         sem H b a (absent ::: es) ->
         sem_clock H b ck (false ::: bs) ->
-        sem_aexp sem (history_tl H) (tl b) ck a es ->
+        sem_aexp sem (History_tl H) (tl b) ck a es ->
         sem_aexp sem H b ck a (absent ::: es).
 
   Definition sem_laexp := sem_aexp sem_lexp.
   Definition sem_caexp := sem_aexp sem_cexp.
 
-  CoInductive sem_laexps: history -> Stream bool -> clock -> list lexp -> list (Stream value) -> Prop :=
+  CoInductive sem_laexps: History -> Stream bool -> clock -> list lexp -> list (Stream value) -> Prop :=
   | SLsTick:
       forall H b ck les ess bs,
         Forall2 (sem_lexp H b) les ess ->
         Forall (fun es => hd es <> absent) ess ->
         sem_clock H b ck (true ::: bs) ->
-        sem_laexps (history_tl H) (tl b) ck les (List.map (@tl value) ess) ->
+        sem_laexps (History_tl H) (tl b) ck les (List.map (@tl value) ess) ->
         sem_laexps H b ck les ess
   | SLsAbs:
       forall H b ck les ess bs,
         Forall2 (sem_lexp H b) les ess ->
         Forall (fun es => hd es = absent) ess ->
         sem_clock H b ck (false ::: bs) ->
-        sem_laexps (history_tl H) (tl b) ck les (List.map (@tl value) ess) ->
+        sem_laexps (History_tl H) (tl b) ck les (List.map (@tl value) ess) ->
         sem_laexps H b ck les ess.
 
   Lemma sem_laexps_cons:
@@ -415,7 +414,7 @@ Module Type NLSEMANTICSCOIND
 
     Variable G: global.
 
-    Inductive sem_equation: history -> Stream bool -> equation -> Prop :=
+    Inductive sem_equation: History -> Stream bool -> equation -> Prop :=
     | SeqDef:
         forall H b x ck e es,
           sem_caexp H b ck e es ->
@@ -466,7 +465,7 @@ Module Type NLSEMANTICSCOIND
 
     Variable G: global.
 
-    Variable P_equation: history -> Stream bool -> equation -> Prop.
+    Variable P_equation: History -> Stream bool -> equation -> Prop.
     Variable P_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop.
     Variable P_node: ident -> list (Stream value) -> list (Stream value) -> Prop.
 
@@ -517,7 +516,7 @@ Module Type NLSEMANTICSCOIND
         P_node f xss oss.
 
     Fixpoint sem_equation_mult
-             (H: history) (b: Stream bool) (e: equation)
+             (H: History) (b: Stream bool) (e: equation)
              (Sem: sem_equation G H b e) {struct Sem}
       : P_equation H b e
     with sem_reset_mult
