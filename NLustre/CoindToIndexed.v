@@ -155,6 +155,7 @@ Module Type COINDTOINDEXED
       f_equal.
       apply eqst_ntheq; symmetry; auto.
     Qed.
+    Hint Resolve sem_var_impl.
 
     Corollary sem_vars_impl:
       forall H b xs xss,
@@ -166,6 +167,7 @@ Module Type COINDTOINDEXED
       intro; constructor; auto.
       apply sem_var_impl; auto.
     Qed.
+    Hint Resolve sem_vars_impl.
 
     (** ** Synchronization *)
 
@@ -183,6 +185,7 @@ Module Type COINDTOINDEXED
       - right; induction xss; simpl; constructor; inv Ne; auto.
         apply IHxss; eauto using CoInd.same_clock_cons.
     Qed.
+    Hint Resolve same_clock_impl.
 
     Lemma same_clock_app_impl:
       forall xss yss,
@@ -208,6 +211,7 @@ Module Type COINDTOINDEXED
           induction yss; simpl in *; inv NIndexed; try now inv Indexed.
           now contradict Hyss.
     Qed.
+    Hint Resolve same_clock_app_impl.
 
     (** ** lexp level synchronous operators specifications
 
@@ -297,6 +301,7 @@ Module Type COINDTOINDEXED
         with added complexity as [sem_clock] depends on [H] and [b].
         We go by induction on the clock [ck] then by induction on [n] and
         inversion of the coinductive hypothesis as before. *)
+    Hint Constructors Indexed.sem_clock_instant.
     Lemma sem_clock_index:
       forall n H b ck bs,
         CoInd.sem_clock H b ck bs ->
@@ -328,7 +333,6 @@ Module Type COINDTOINDEXED
             /\ val_to_bool c = Some k
             /\ tr_Stream bs n = false).
     Proof.
-      Hint Constructors Indexed.sem_clock_instant.
       Local Ltac rew_0 :=
         try match goal with
               H: tr_Stream _ _ = _ |- _ => now rewrite tr_Stream_0 in H
@@ -381,17 +385,18 @@ Module Type COINDTOINDEXED
         match goal with H: tr_Stream _ _ = _ |- _ => rewrite H end;
         subst; eauto.
     Qed.
+    Hint Resolve sem_clock_impl.
 
     (** ** Semantics of lexps *)
 
     (** State the correspondence for [lexp].
         Goes by induction on the coinductive semantics of [lexp]. *)
+    Hint Constructors Indexed.sem_lexp_instant.
     Lemma sem_lexp_impl:
       forall H b e es,
         CoInd.sem_lexp H b e es ->
         Indexed.sem_lexp (tr_Stream b) (tr_history H) e (tr_Stream es).
     Proof.
-      Hint Constructors Indexed.sem_lexp_instant.
       induction 1 as [? ? ? ? Hconst
                             |? ? ? ? ? Hvar
                             |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
@@ -410,13 +415,11 @@ Module Type COINDTOINDEXED
               |(? & ? & Hes & Hxs & ? & Hos)]];
           rewrite Hos; rewrite Hes in IHsem_lexp; rewrite Hxs in Hvar;
             eauto.
-        rewrite <-(Bool.negb_involutive k).
-        eapply Indexed.Swhen_abs1; eauto.
+        rewrite <-(Bool.negb_involutive k); eauto.
       - specialize (IHsem_lexp n).
         apply (lift1_index n) in Hlift1
           as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
-          rewrite Hos; rewrite Hes in IHsem_lexp;
-            econstructor; eauto.
+          rewrite Hos; rewrite Hes in IHsem_lexp; eauto.
       - specialize (IHsem_lexp1 n).
         specialize (IHsem_lexp2 n).
         apply (lift2_index n) in Hlift2
@@ -424,12 +427,12 @@ Module Type COINDTOINDEXED
           rewrite Hos; rewrite Hes1 in IHsem_lexp1; rewrite Hes2 in IHsem_lexp2;
             eauto.
     Qed.
+    Hint Resolve sem_lexp_impl.
 
     Lemma tl_const:
       forall c b bs,
         tl (CoInd.const c (b ::: bs)) = CoInd.const c bs.
     Proof.
-      intros.
       destruct b; auto.
     Qed.
 
@@ -466,6 +469,7 @@ Module Type COINDTOINDEXED
 
     (** We deduce from the previous lemma the correspondence for annotated
         [lexp]. *)
+    Hint Constructors Indexed.sem_laexp_instant.
     Corollary sem_laexp_impl:
       forall H b e es ck,
         CoInd.sem_laexp H b ck e es ->
@@ -473,8 +477,9 @@ Module Type COINDTOINDEXED
     Proof.
       intros ** Indexed n.
       apply (sem_laexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
-        rewrite Hes; auto using Indexed.sem_laexp_instant.
+        rewrite Hes; auto.
     Qed.
+    Hint Resolve sem_laexp_impl.
 
     (** Specification for lists of annotated [lexp] (on the same clock). *)
     Lemma sem_laexps_index:
@@ -536,6 +541,7 @@ Module Type COINDTOINDEXED
         }
         left with (cs := vs); eauto.
     Qed.
+    Hint Resolve sem_laexps_impl.
 
     (** ** cexp level synchronous operators specifications *)
 
@@ -615,6 +621,7 @@ Module Type COINDTOINDEXED
 
     (** State the correspondence for [cexp].
         Goes by induction on the coinductive semantics of [cexp]. *)
+    Hint Constructors Indexed.sem_cexp_instant.
     Lemma sem_cexp_impl:
       forall H b e es,
         CoInd.sem_cexp H b e es ->
@@ -634,8 +641,7 @@ Module Type COINDTOINDEXED
              |[(? & Hxs & Hts & Hfs & Hos)
               |(? & Hxs & Hts & Hfs & Hos)]];
           rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
-            rewrite Hxs in Hvar; try (now constructor; auto).
-        apply Indexed.Smerge_false; auto.
+            rewrite Hxs in Hvar; auto.
 
       - specialize (IHsem_cexp1 n).
         specialize (IHsem_cexp2 n).
@@ -646,8 +652,7 @@ Module Type COINDTOINDEXED
              |[(ct & cf & Hes & Hts & Hfs & Hos)
               |(ct & cf & Hes & Hts & Hfs & Hos)]];
           rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
-            rewrite Hes in He.
-        + constructor; auto.
+            rewrite Hes in He; auto.
         + change (present ct) with (if true then present ct else present cf).
           econstructor; eauto.
           apply val_to_bool_true.
@@ -655,10 +660,9 @@ Module Type COINDTOINDEXED
           econstructor; eauto.
           apply val_to_bool_false.
 
-      - apply sem_lexp_impl in He.
-        specialize (He n).
-        constructor; auto.
+      - apply sem_lexp_impl in He; auto.
     Qed.
+    Hint Resolve sem_cexp_impl.
 
     (** Give an indexed specification for annotated [cexp], using the previous
         lemma.  *)
@@ -693,6 +697,7 @@ Module Type COINDTOINDEXED
 
     (** We deduce from the previous lemma the correspondence for annotated
         [cexp]. *)
+    Hint Constructors Indexed.sem_caexp_instant.
     Corollary sem_caexp_impl:
       forall H b e es ck,
         CoInd.sem_caexp H b ck e es ->
@@ -700,8 +705,9 @@ Module Type COINDTOINDEXED
     Proof.
       intros ** Indexed n.
       apply (sem_caexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
-        rewrite Hes; now constructor.
+        rewrite Hes; auto.
     Qed.
+    Hint Resolve sem_caexp_impl.
 
     (** * RESET CORRESPONDENCE  *)
 
@@ -849,10 +855,12 @@ Module Type COINDTOINDEXED
           apply IHn in H; inv H.
           now rewrite <-tr_Streams_tl.
     Qed.
+    Hint Resolve tr_clocks_of.
 
     (** The final theorem stating the correspondence for equations, nodes and
         reset applications. The conjunctive shape is mandatory to use the
         mutually recursive induction scheme [sem_equation_node_ind]. *)
+    Hint Constructors Indexed.sem_equation.
     Theorem implies:
       (forall H b e,
           CoInd.sem_equation G H b e ->
@@ -866,43 +874,31 @@ Module Type COINDTOINDEXED
           CoInd.sem_reset G f r xss oss ->
           Indexed.sem_reset G f (tr_Stream r) (tr_Streams xss) (tr_Streams oss)).
     Proof.
-      apply CoInd.sem_equation_node_ind.
-      - econstructor.
-        + apply sem_var_impl; eauto.
-        + apply sem_caexp_impl; auto.
+      apply CoInd.sem_equation_node_ind; eauto.
       - econstructor; eauto.
-        + apply sem_laexps_impl; auto.
-        + apply sem_vars_impl; auto.
-      - econstructor; auto.
-        + apply sem_laexps_impl; eauto.
-        + apply sem_vars_impl; eauto.
-        + apply sem_var_impl; eauto.
-        + now rewrite <-tr_Stream_reset.
-      - econstructor; auto; subst.
-        + apply sem_laexp_impl; eauto.
-        + rewrite <-fby_impl.
-          apply sem_var_impl; auto.
+        now rewrite <-tr_Stream_reset.
+      - econstructor; auto; subst; eauto.
+        rewrite <-fby_impl; auto.
+
       - intros ** IHNode.
         constructor; intro.
         specialize (IHNode n).
         rewrite 2 all_absent_tr_Streams.
         now rewrite <- 2 mask_impl.
-      - intros ** Hin Hout Same ? ?.
-        econstructor; eauto; try apply sem_vars_impl; eauto.
-        + apply tr_clocks_of.
-        + now apply CoInd.same_clock_app_l, same_clock_impl in Same.
-        + now apply CoInd.same_clock_app_r, same_clock_impl in Same.
-        + apply same_clock_app_impl; auto.
-          * intro; subst.
-            apply Forall2_length in Hin; simpl in *.
-            unfold CoInd.idents in Hin; rewrite map_length in Hin.
-            pose proof n.(n_ingt0) as Nin.
-            rewrite Hin in Nin; contradict Nin; omega.
-          * intro; subst.
-            apply Forall2_length in Hout; simpl in *.
-            unfold CoInd.idents in Hout; rewrite map_length in Hout.
-            pose proof n.(n_outgt0) as Nout.
-            rewrite Hout in Nout; contradict Nout; omega.
+
+      - intros ** Same ? ?.
+        pose proof n.(n_ingt0); pose proof n.(n_outgt0).
+        Ltac assert_not_nil xss :=
+          match goal with
+            H: Forall2 _ _ xss |- _ =>
+            assert (xss <> []) by
+                (intro; subst; apply Forall2_length in H; simpl in *;
+                 unfold CoInd.idents in H; rewrite map_length in H; omega)
+          end.
+        assert_not_nil xss; assert_not_nil oss.
+        econstructor; eauto.
+        + apply CoInd.same_clock_app_l in Same; auto.
+        + apply CoInd.same_clock_app_r in Same; auto.
     Qed.
 
     Definition equation_impl := proj1 implies.

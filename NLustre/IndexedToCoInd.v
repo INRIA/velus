@@ -315,7 +315,6 @@ Module Type INDEXEDTOCOIND
       - eapply Forall_In_tr_streams_from_hd'; eauto.
     Qed.
 
-
     (** * SEMANTICS CORRESPONDENCE *)
 
     (** ** Variables *)
@@ -363,6 +362,7 @@ Module Type INDEXEDTOCOIND
       Indexed.sem_var b H x xs ->
       CoInd.sem_var (tr_history H) x (tr_stream xs).
     Proof. apply sem_var_impl_from. Qed.
+    Hint Resolve sem_var_impl_from sem_var_impl.
 
     (** An inversion principle for [sem_vars]. *)
     Lemma sem_vars_inv_from:
@@ -425,6 +425,7 @@ Module Type INDEXEDTOCOIND
       Indexed.sem_vars b H xs xss ->
       Forall2 (CoInd.sem_var (tr_history H)) xs (tr_streams xss).
     Proof. apply sem_vars_impl_from. Qed.
+    Hint Resolve sem_vars_impl_from sem_vars_impl.
 
     (** ** Synchronization *)
 
@@ -440,6 +441,7 @@ Module Type INDEXEDTOCOIND
       - left; apply Forall_tr_streams_nth with (P:=fun x => x = absent); auto.
       - right. apply Forall_tr_streams_nth with (P:=fun x => x <> absent); auto.
     Qed.
+    Hint Resolve same_clock_impl.
 
     Ltac contr := try match goal with
                       | H: ?x <> ?x |- _ => now contradict H
@@ -473,7 +475,8 @@ Module Type INDEXEDTOCOIND
         rewrite <-Same in Hyss.
         clear - Hxss Hyss Nxss; induction (xss n); inv Hxss; inv Hyss; contr.
       - right; apply Forall_app; intuition.
-    Qed.
+   Qed.
+   Hint Resolve same_clock_app_impl.
 
     (** ** lexp level synchronous operators inversion principles
 
@@ -679,11 +682,23 @@ Module Type INDEXEDTOCOIND
           rewrite init_from_tl, tr_history_from_tl; auto.
           rewrite Bool.negb_involutive; auto.
     Qed.
+    Hint Resolve sem_clock_impl_from.
 
     (** ** Semantics of lexps *)
 
+    Ltac use_spec Spec :=
+      match goal with
+        n: nat |- _ =>
+        pose proof (Spec n);
+        repeat match goal with
+                 H: _ \/ _ |- _ => destruct H
+               end;
+        destruct_conjs; rewrite_strs; auto
+      end.
+
     (** State the correspondence for [lexp].
         Goes by induction on [lexp] and uses the previous inversion lemmas. *)
+    Hint Constructors CoInd.when CoInd.lift1 CoInd.lift2.
     Lemma sem_lexp_impl_from:
       forall n H b e es,
         Indexed.sem_lexp b H e es ->
@@ -715,15 +730,13 @@ Module Type INDEXEDTOCOIND
         rewrite init_from_n;
           rewrite (init_from_n xs);
           rewrite (init_from_n es).
-        destruct (Spec n) as [|[]]; destruct_conjs;
-          rewrite_strs; auto using CoInd.when.
+        use_spec Spec.
 
       - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
         revert dependent n; revert Spec; cofix; intros.
         rewrite init_from_n; rewrite (init_from_n es).
-        destruct (Spec n) as [|]; destruct_conjs;
-          rewrite_strs; auto using CoInd.lift1.
+        use_spec Spec.
 
       - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
@@ -731,8 +744,7 @@ Module Type INDEXEDTOCOIND
         rewrite init_from_n;
           rewrite (init_from_n zs);
           rewrite (init_from_n es).
-        destruct (Spec n) as [|[]]; destruct_conjs;
-          rewrite_strs; auto using CoInd.lift2.
+        use_spec Spec.
     Qed.
 
     Corollary sem_lexp_impl:
@@ -740,6 +752,7 @@ Module Type INDEXEDTOCOIND
         Indexed.sem_lexp b H e es ->
         CoInd.sem_lexp (tr_history H) (tr_stream b) e (tr_stream es).
     Proof. apply sem_lexp_impl_from. Qed.
+    Hint Resolve sem_lexp_impl_from sem_lexp_impl.
 
     (** An inversion principle for lists of [lexp]. *)
     Lemma sem_lexps_inv:
@@ -787,6 +800,7 @@ Module Type INDEXEDTOCOIND
         Indexed.sem_lexps b H es ess ->
         Forall2 (CoInd.sem_lexp (tr_history H) (tr_stream b)) es (tr_streams ess).
     Proof. apply sem_lexps_impl_from. Qed.
+    Hint Resolve sem_lexps_impl_from sem_lexps_impl.
 
     (** An inversion principle for annotated [lexp]. *)
     Lemma sem_laexp_inv:
@@ -834,6 +848,7 @@ Module Type INDEXEDTOCOIND
         Indexed.sem_laexp b H ck e es ->
         CoInd.sem_laexp (tr_history H) (tr_stream b) ck e (tr_stream es).
     Proof. apply sem_laexp_impl_from. Qed.
+    Hint Resolve sem_laexp_impl_from sem_laexp_impl.
 
     (** An inversion principle for lists of annotated [lexp]. *)
     Lemma sem_laexps_inv:
@@ -901,6 +916,7 @@ Module Type INDEXEDTOCOIND
         Indexed.sem_laexps b H ck es ess ->
         CoInd.sem_laexps (tr_history H) (tr_stream b) ck es (tr_streams ess).
     Proof. apply sem_laexps_impl_from. Qed.
+    Hint Resolve sem_laexps_impl_from sem_laexps_impl.
 
     (** ** cexp level synchronous operators inversion principles *)
 
@@ -1010,6 +1026,7 @@ Module Type INDEXEDTOCOIND
 
     (** State the correspondence for [cexp].
         Goes by induction on [cexp] and uses the previous inversion lemmas. *)
+    Hint Constructors CoInd.merge CoInd.ite.
     Lemma sem_cexp_impl_from:
       forall n H b e es,
         Indexed.sem_cexp b H e es ->
@@ -1021,30 +1038,27 @@ Module Type INDEXEDTOCOIND
       induction e; intros ** Sem; unfold Indexed.sem_cexp, Indexed.lift in Sem.
 
       - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
-        econstructor; eauto using sem_var_impl_from.
+        econstructor; eauto.
         revert dependent n; revert Spec; cofix; intros.
         rewrite init_from_n;
           rewrite (init_from_n ts);
           rewrite (init_from_n fs);
           rewrite (init_from_n es).
-        destruct (Spec n) as [|[|[]]]; destruct_conjs;
-          rewrite_strs; auto using CoInd.merge.
+        use_spec Spec.
 
       - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
-        econstructor; eauto using sem_lexp_impl_from.
+        econstructor; eauto.
         revert dependent n; revert Spec; cofix; intros.
         rewrite init_from_n;
           rewrite (init_from_n ts);
           rewrite (init_from_n fs);
           rewrite (init_from_n es).
-        destruct (Spec n) as [|[]]; destruct_conjs;
-          rewrite_strs; auto using CoInd.ite.
+        use_spec Spec.
         destruct H4.
-        + apply val_to_bool_true' in H8; subst; auto using CoInd.ite.
-        + apply val_to_bool_false' in H8; subst; auto using CoInd.ite.
+        + apply val_to_bool_true' in H8; subst; auto.
+        + apply val_to_bool_false' in H8; subst; auto.
 
-      - apply lexp_inv in Sem; constructor; auto using sem_lexp_impl_from.
-
+      - apply lexp_inv in Sem; constructor; auto.
     Qed.
 
     Corollary sem_cexp_impl:
@@ -1052,6 +1066,7 @@ Module Type INDEXEDTOCOIND
         Indexed.sem_cexp b H e es ->
         CoInd.sem_cexp (tr_history H) (tr_stream b) e (tr_stream es).
     Proof. apply sem_cexp_impl_from. Qed.
+    Hint Resolve sem_cexp_impl_from sem_cexp_impl.
 
     (** An inversion principle for annotated [cexp]. *)
     Lemma sem_caexp_inv:
@@ -1098,7 +1113,7 @@ Module Type INDEXEDTOCOIND
         Indexed.sem_caexp b H ck e es ->
         CoInd.sem_caexp (tr_history H) (tr_stream b) ck e (tr_stream es).
     Proof. apply sem_caexp_impl_from. Qed.
-
+    Hint Resolve sem_caexp_impl_from sem_caexp_impl.
 
     (** * RESET CORRESPONDENCE  *)
 
@@ -1130,6 +1145,22 @@ Module Type INDEXEDTOCOIND
       destruct (EqNat.beq_nat k (count r n)); auto.
       unfold Indexed.all_absent; rewrite map_length.
       induction k'; induction n; auto.
+    Qed.
+
+    (** If all masks ar well-formed then the underlying stream of lists
+        is well-formed. *)
+    Lemma wf_streams_mask:
+      forall xss r m,
+        (forall n, wf_streams (mask (Indexed.all_absent (xss m)) n r xss)) ->
+        wf_streams xss.
+    Proof.
+      unfold wf_streams, mask; intros ** WF k k'.
+      pose proof (WF (count r k) k' k) as WFk;
+        pose proof (WF (count r k') k' k) as WFk'.
+      rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
+      rewrite Nat.eqb_sym in WFk'.
+      destruct (EqNat.beq_nat (count r k) (count r k')); auto.
+      now rewrite WFk, <-WFk'.
     Qed.
 
     (** State the correspondance for [count].  *)
@@ -1232,22 +1263,6 @@ Module Type INDEXEDTOCOIND
         CoInd.clocks_of (tr_streams xss) ≡ tr_stream bk.
     Proof. apply tr_clocks_of_from. Qed.
 
-    (** If all masks ar well-formed then the underlying stream of lists
-        is well-formed. *)
-    Lemma wf_streams_mask:
-      forall xss r m,
-        (forall n, wf_streams (mask (Indexed.all_absent (xss m)) n r xss)) ->
-        wf_streams xss.
-    Proof.
-      unfold wf_streams, mask; intros ** WF k k'.
-      pose proof (WF (count r k) k' k) as WFk;
-        pose proof (WF (count r k') k' k) as WFk'.
-      rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
-      rewrite Nat.eqb_sym in WFk'.
-      destruct (EqNat.beq_nat (count r k) (count r k')); auto.
-      now rewrite WFk, <-WFk'.
-    Qed.
-
     Ltac assert_const_length xss :=
       match goal with
         H: Indexed.sem_vars _ _ _ xss |- _ =>
@@ -1275,6 +1290,7 @@ Module Type INDEXEDTOCOIND
     (** The final theorem stating the correspondence for equations, nodes and
         reset applications. The conjunctive shape is mandatory to use the
         mutually recursive induction scheme [sem_equation_node_ind]. *)
+    Hint Constructors CoInd.sem_equation.
     Theorem implies:
       (forall b H e,
           Indexed.sem_equation G b H e ->
@@ -1288,43 +1304,36 @@ Module Type INDEXEDTOCOIND
           Indexed.sem_reset G f r xss oss ->
           CoInd.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss)).
     Proof.
-      apply Indexed.sem_equation_node_ind.
-      - econstructor.
-        + apply sem_caexp_impl; eauto.
-        + eapply sem_var_impl; eauto.
+      apply Indexed.sem_equation_node_ind; eauto.
       - econstructor; eauto.
-        + apply sem_laexps_impl; auto.
-        + apply sem_vars_impl with (b:=bk); auto.
-      - econstructor; auto.
-        + apply sem_laexps_impl; eauto.
-        + apply sem_var_impl with (b:=bk); eauto.
-        + rewrite tr_stream_reset; eauto.
-        + apply sem_vars_impl with (b:=bk); eauto.
-      - econstructor; auto; subst.
-        + apply sem_laexp_impl; eauto.
-        + rewrite <-fby_impl.
-          apply sem_var_impl with (b:=bk); auto.
+        now rewrite tr_stream_reset.
+      - econstructor; eauto; subst.
+        rewrite <-fby_impl; eauto.
+
       - intros ** IHNode.
         constructor; intro.
         apply sem_node_wf in H as (? & ?).
         rewrite <- 2 mask_impl; auto;
           eapply wf_streams_mask; eauto.
-      - intros ** Hin Hout ? ? ? ? ?.
+
+      - intros.
+        pose proof n.(n_ingt0); pose proof n.(n_outgt0).
+        Ltac assert_not_nil xss :=
+          match goal with
+            H: Indexed.sem_vars _ _ _ xss |- _ =>
+            let k := fresh in
+            let E := fresh in
+            assert (forall k, xss k <> []) by
+                (intro k; unfold Indexed.sem_vars, Indexed.lift in H;
+                 specialize (H k); intro E; rewrite E in H;
+                 apply Forall2_length in H; rewrite map_length in H;
+                 simpl in H; omega)
+          end.
+        assert_not_nil xss; assert_not_nil yss.
         assert_const_length xss; assert_const_length yss.
-        econstructor; eauto; try apply sem_vars_impl with (b:=bk); eauto.
-        + apply same_clock_app_impl; auto;
-            unfold Indexed.sem_vars, Indexed.lift in *;
-            intros k E.
-          * specialize (Hin k); apply Forall2_length in Hin.
-            rewrite map_length in Hin.
-            pose proof n.(n_ingt0) as Nin.
-            rewrite Hin, E in Nin; contradict Nin; simpl; omega.
-          * specialize (Hout k); apply Forall2_length in Hout.
-            rewrite map_length in Hout.
-            pose proof n.(n_outgt0) as Nout.
-            rewrite Hout, E in Nout; contradict Nout; simpl; omega.
-        + apply Forall_impl with (P:=CoInd.sem_equation G (tr_history H)
-                                                        (tr_stream bk)); auto.
+        econstructor; eauto.
+        apply Forall_impl
+          with (P:=CoInd.sem_equation G (tr_history H) (tr_stream bk)); auto.
           intro; rewrite tr_clocks_of; eauto.
     Qed.
 
