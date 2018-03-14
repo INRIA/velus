@@ -41,7 +41,7 @@ Module Type COINDTOINDEXED
         The result stream is the function which associates the [n]th element of
         the input Stream to each [n].
      *)
-    Definition tr_stream {A} (xs: Stream A) : stream A :=
+    Definition tr_Stream {A} (xs: Stream A) : stream A :=
       fun n => Str_nth n xs.
 
     (** Translate a list of Streams into a stream of list.
@@ -50,84 +50,84 @@ Module Type COINDTOINDEXED
           built by the translated stream of the head of the input list indexed
           at [n] consed to the result of the recursive call, also indexed at [n].
      *)
-    Fixpoint tr_streams {A} (xss: list (Stream A)) : stream (list A) :=
+    Fixpoint tr_Streams {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
       | [] => fun n => []
-      | xs :: xss => fun n => tr_stream xs n :: tr_streams xss n
+      | xs :: xss => fun n => tr_Stream xs n :: tr_Streams xss n
       end.
 
     (** Translate an history from coinductive to indexed world.
         Every element of the history is translated.
      *)
     Definition tr_history (H: CoInd.history) : Indexed.history :=
-      PM.map tr_stream H.
+      PM.map tr_Stream H.
 
     (** ** Properties  *)
 
     (** Indexing a translated Stream at [0] is taking the head of the source
         Stream. *)
-    Lemma tr_stream_0:
+    Lemma tr_Stream_0:
       forall {A} (xs: Stream A) x,
-        tr_stream (x ::: xs) 0 = x.
+        tr_Stream (x ::: xs) 0 = x.
     Proof. reflexivity. Qed.
 
     (** Indexing a translated Stream at [S n] is indexing the tail of the source
         Stream at [n]. *)
-    Lemma tr_stream_S:
+    Lemma tr_Stream_S:
       forall {A} (xs: Stream A) x n,
-        tr_stream (x ::: xs) (S n) = tr_stream xs n.
+        tr_Stream (x ::: xs) (S n) = tr_Stream xs n.
     Proof. reflexivity. Qed.
 
     (** Another version of the previous lemma.  *)
-    Lemma tr_stream_tl:
+    Lemma tr_Stream_tl:
       forall {A} (xs: Stream A) n,
-        tr_stream (tl xs) n = tr_stream xs (S n).
+        tr_Stream (tl xs) n = tr_Stream xs (S n).
     Proof. reflexivity. Qed.
 
     (** A generalized version *)
-    Lemma tr_stream_nth:
+    Lemma tr_Stream_nth:
       forall {A} n (xs: Stream A),
-        tr_stream xs n = Str_nth n xs.
+        tr_Stream xs n = Str_nth n xs.
     Proof. reflexivity. Qed.
 
-    Lemma tr_stream_const:
+    Lemma tr_Stream_const:
       forall {A} (c: A) n,
-        tr_stream (Streams.const c) n = c.
+        tr_Stream (Streams.const c) n = c.
     Proof.
       induction n; rewrite unfold_Stream at 1; simpl.
-      - now rewrite tr_stream_0.
-      - now rewrite tr_stream_S.
+      - now rewrite tr_Stream_0.
+      - now rewrite tr_Stream_S.
     Qed.
 
-    (** [tr_stream] is compatible wrt to [EqSt]. *)
-    Add Parametric Morphism A : (@tr_stream A)
+    (** [tr_Stream] is compatible wrt to [EqSt]. *)
+    Add Parametric Morphism A : (@tr_Stream A)
         with signature @EqSt A ==> eq ==> eq
-          as tr_stream_morph.
+          as tr_Stream_morph.
     Proof.
       intros xs ys Exs n.
       revert xs ys Exs; induction n; intros; destruct xs, ys; inv Exs.
-      - rewrite 2 tr_stream_0; auto.
-      - rewrite 2 tr_stream_S; auto.
+      - rewrite 2 tr_Stream_0; auto.
+      - rewrite 2 tr_Stream_S; auto.
     Qed.
 
-    Fact tr_streams_app:
+    Fact tr_Streams_app:
       forall A (xss yss: list (Stream A)) n,
-        tr_streams (xss ++ yss) n = tr_streams xss n ++ tr_streams yss n.
+        tr_Streams (xss ++ yss) n = tr_Streams xss n ++ tr_Streams yss n.
     Proof.
       intros; induction xss; simpl; auto.
       f_equal; auto.
     Qed.
 
-    (** The counterpart of [tr_stream_tl] for lists of Streams. *)
-    Lemma tr_streams_tl:
+    (** The counterpart of [tr_Stream_tl] for lists of Streams. *)
+    Lemma tr_Streams_tl:
       forall xss n,
-        tr_streams (List.map (tl (A:=value)) xss) n = tr_streams xss (S n).
+        tr_Streams (List.map (tl (A:=value)) xss) n = tr_Streams xss (S n).
     Proof.
       intros; induction xss; simpl; auto.
       f_equal; auto.
     Qed.
 
-    (** The counterpart of [tr_stream_tl] for histories. *)
+    (** The counterpart of [tr_Stream_tl] for histories. *)
     Lemma tr_history_tl:
       forall n H,
         Indexed.restr (tr_history H) (S n)
@@ -143,7 +143,7 @@ Module Type COINDTOINDEXED
     Lemma sem_var_impl:
       forall H b x xs,
       CoInd.sem_var H x xs ->
-      Indexed.sem_var b (tr_history H) x (tr_stream xs).
+      Indexed.sem_var b (tr_history H) x (tr_Stream xs).
     Proof.
       intros ** Find n.
       constructor.
@@ -159,7 +159,7 @@ Module Type COINDTOINDEXED
     Corollary sem_vars_impl:
       forall H b xs xss,
       Forall2 (CoInd.sem_var H) xs xss ->
-      Indexed.sem_vars b (tr_history H) xs (tr_streams xss).
+      Indexed.sem_vars b (tr_history H) xs (tr_Streams xss).
     Proof.
       induction 1 as [|? ? ? ? Find];
         simpl; unfold Indexed.sem_vars, Indexed.lift; auto.
@@ -172,7 +172,7 @@ Module Type COINDTOINDEXED
     Lemma same_clock_impl:
       forall xss,
         CoInd.same_clock xss ->
-        Indexed.same_clock (tr_streams xss).
+        Indexed.same_clock (tr_Streams xss).
     Proof.
       unfold Indexed.same_clock, Indexed.instant_same_clock.
       intros.
@@ -189,8 +189,8 @@ Module Type COINDTOINDEXED
         xss <> [] ->
         yss <> [] ->
         CoInd.same_clock (xss ++ yss) ->
-        forall n, Indexed.absent_list (tr_streams xss n)
-             <-> Indexed.absent_list (tr_streams yss n).
+        forall n, Indexed.absent_list (tr_Streams xss n)
+             <-> Indexed.absent_list (tr_Streams yss n).
     Proof.
       intros ** Hxss Hyss Same n.
       apply same_clock_impl in Same.
@@ -198,13 +198,13 @@ Module Type COINDTOINDEXED
         specialize (Same n).
       split; intros Indexed.
       - destruct Same as [E|Ne].
-        + rewrite tr_streams_app in E; apply Forall_app in E; tauto.
-        + rewrite tr_streams_app in Ne; apply Forall_app in Ne as [NIndexed].
+        + rewrite tr_Streams_app in E; apply Forall_app in E; tauto.
+        + rewrite tr_Streams_app in Ne; apply Forall_app in Ne as [NIndexed].
           induction xss; simpl in *; inv NIndexed; try now inv Indexed.
           now contradict Hxss.
       - destruct Same as [E|Ne].
-        + rewrite tr_streams_app in E; apply Forall_app in E; tauto.
-        + rewrite tr_streams_app in Ne; apply Forall_app in Ne as [? NIndexed].
+        + rewrite tr_Streams_app in E; apply Forall_app in E; tauto.
+        + rewrite tr_Streams_app in Ne; apply Forall_app in Ne as [? NIndexed].
           induction yss; simpl in *; inv NIndexed; try now inv Indexed.
           now contradict Hyss.
     Qed.
@@ -223,72 +223,72 @@ Module Type COINDTOINDEXED
     Lemma const_index:
       forall n xs c b,
         xs ≡ CoInd.const c b ->
-        tr_stream xs n = if tr_stream b n then present (sem_const c) else absent.
+        tr_Stream xs n = if tr_Stream b n then present (sem_const c) else absent.
     Proof.
       induction n; intros ** E;
         unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
-          repeat rewrite tr_stream_0; repeat rewrite tr_stream_S; auto.
+          repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_S; auto.
     Qed.
 
     Lemma when_index:
       forall n k xs cs rs,
         CoInd.when k xs cs rs ->
-        (tr_stream xs n = absent
-         /\ tr_stream cs n = absent
-         /\ tr_stream rs n = absent)
+        (tr_Stream xs n = absent
+         /\ tr_Stream cs n = absent
+         /\ tr_Stream rs n = absent)
         \/
         (exists x c,
-            tr_stream xs n = present x
-            /\ tr_stream cs n = present c
+            tr_Stream xs n = present x
+            /\ tr_Stream cs n = present c
             /\ val_to_bool c = Some (negb k)
-            /\ tr_stream rs n = absent)
+            /\ tr_Stream rs n = absent)
         \/
         (exists x c,
-            tr_stream xs n = present x
-            /\ tr_stream cs n = present c
+            tr_Stream xs n = present x
+            /\ tr_Stream cs n = present c
             /\ val_to_bool c = Some k
-            /\ tr_stream rs n = present x).
+            /\ tr_Stream rs n = present x).
     Proof.
       induction n; intros ** When.
-      - inv When; repeat rewrite tr_stream_0; intuition.
+      - inv When; repeat rewrite tr_Stream_0; intuition.
         + right; left. do 2 eexists; intuition.
         + right; right. do 2 eexists; intuition.
-      - inv When; repeat rewrite tr_stream_S; auto.
+      - inv When; repeat rewrite tr_Stream_S; auto.
     Qed.
 
     Lemma lift1_index:
       forall n op t xs ys,
         CoInd.lift1 op t xs ys ->
-        (tr_stream xs n = absent /\ tr_stream ys n = absent)
+        (tr_Stream xs n = absent /\ tr_Stream ys n = absent)
         \/
         (exists x y,
-            tr_stream xs n = present x
+            tr_Stream xs n = present x
             /\ sem_unop op x t = Some y
-            /\ tr_stream ys n = present y).
+            /\ tr_Stream ys n = present y).
     Proof.
       induction n; intros ** Lift1.
-      - inv Lift1; repeat rewrite tr_stream_0; intuition.
+      - inv Lift1; repeat rewrite tr_Stream_0; intuition.
         right. do 2 eexists; intuition; auto.
-      - inv Lift1; repeat rewrite tr_stream_S; auto.
+      - inv Lift1; repeat rewrite tr_Stream_S; auto.
     Qed.
 
     Lemma lift2_index:
       forall n op t1 t2 xs ys zs,
         CoInd.lift2 op t1 t2 xs ys zs ->
-        (tr_stream xs n = absent
-         /\ tr_stream ys n = absent
-         /\ tr_stream zs n = absent)
+        (tr_Stream xs n = absent
+         /\ tr_Stream ys n = absent
+         /\ tr_Stream zs n = absent)
         \/
         (exists x y z,
-            tr_stream xs n = present x
-            /\ tr_stream ys n = present y
+            tr_Stream xs n = present x
+            /\ tr_Stream ys n = present y
             /\ sem_binop op x t1 y t2 = Some z
-            /\ tr_stream zs n = present z).
+            /\ tr_Stream zs n = present z).
     Proof.
       induction n; intros ** Lift2.
-      - inv Lift2; repeat rewrite tr_stream_0; intuition.
+      - inv Lift2; repeat rewrite tr_Stream_0; intuition.
         right. do 3 eexists; intuition; auto.
-      - inv Lift2; repeat rewrite tr_stream_S; auto.
+      - inv Lift2; repeat rewrite tr_Stream_S; auto.
     Qed.
 
     (** ** Semantics of clocks *)
@@ -301,37 +301,37 @@ Module Type COINDTOINDEXED
       forall n H b ck bs,
         CoInd.sem_clock H b ck bs ->
         (ck = Cbase
-         /\ tr_stream b n = tr_stream bs n)
+         /\ tr_Stream b n = tr_Stream bs n)
         \/
         (exists ck' x k c,
             ck = Con ck' x k
             /\ Indexed.sem_clock_instant
-                (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
+                (tr_Stream b n) (Indexed.restr (tr_history H) n) ck' true
             /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x
                                       (present c)
             /\ val_to_bool c = Some k
-            /\ tr_stream bs n = true)
+            /\ tr_Stream bs n = true)
         \/
         (exists ck' x k,
             ck = Con ck' x k
             /\ Indexed.sem_clock_instant
-                (tr_stream b n) (Indexed.restr (tr_history H) n) ck' false
+                (tr_Stream b n) (Indexed.restr (tr_history H) n) ck' false
             /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x absent
-            /\ tr_stream bs n = false)
+            /\ tr_Stream bs n = false)
         \/
         (exists ck' x k c,
             ck = Con ck' x (negb k)
             /\ Indexed.sem_clock_instant
-                (tr_stream b n) (Indexed.restr (tr_history H) n) ck' true
+                (tr_Stream b n) (Indexed.restr (tr_history H) n) ck' true
             /\ Indexed.sem_var_instant (Indexed.restr (tr_history H) n) x
                                       (present c)
             /\ val_to_bool c = Some k
-            /\ tr_stream bs n = false).
+            /\ tr_Stream bs n = false).
     Proof.
       Hint Constructors Indexed.sem_clock_instant.
       Local Ltac rew_0 :=
         try match goal with
-              H: tr_stream _ _ = _ |- _ => now rewrite tr_stream_0 in H
+              H: tr_Stream _ _ = _ |- _ => now rewrite tr_Stream_0 in H
             end.
       intros n H b ck; revert n H b; induction ck as [|ck ? x k].
       - inversion_clear 1 as [? ? ? Eb| | |].
@@ -342,43 +342,43 @@ Module Type COINDTOINDEXED
                                      |? ? ? ? ? ? ? ? IndexedCk Hvar
                                      |? ? ? ? ? ? ? ? ? IndexedCk Hvar].
           * right; left.
-            apply sem_var_impl with (b:=tr_stream bk) in Hvar;
+            apply sem_var_impl with (b:=tr_Stream bk) in Hvar;
               unfold Indexed.sem_var, Indexed.lift in Hvar ; specialize (Hvar 0);
-                rewrite tr_stream_0 in Hvar.
+                rewrite tr_Stream_0 in Hvar.
             do 4 eexists; intuition; eauto.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
-            rewrite E, tr_stream_0; constructor.
+            rewrite E, tr_Stream_0; constructor.
           * right; right; left.
-            apply sem_var_impl with (b:=tr_stream bk) in Hvar;
+            apply sem_var_impl with (b:=tr_Stream bk) in Hvar;
               unfold Indexed.sem_var, Indexed.lift in Hvar ; specialize (Hvar 0);
-                rewrite tr_stream_0 in Hvar.
+                rewrite tr_Stream_0 in Hvar.
             do 3 eexists; intuition.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
-            rewrite E, tr_stream_0; constructor.
+            rewrite E, tr_Stream_0; constructor.
           * right; right; right.
-            apply sem_var_impl with (b:=tr_stream bk) in Hvar;
+            apply sem_var_impl with (b:=tr_Stream bk) in Hvar;
               unfold Indexed.sem_var, Indexed.lift in Hvar; specialize (Hvar 0);
-                rewrite tr_stream_0 in Hvar.
+                rewrite tr_Stream_0 in Hvar.
             do 4 eexists; intuition; eauto.
             apply (IHck 0) in IndexedCk as [(? & E)|[|[]]]; destruct_conjs;
               subst; eauto; rew_0.
-            rewrite E, tr_stream_0; constructor.
-        + inversion_clear Indexed; rewrite <-tr_stream_tl, tr_history_tl; eauto.
+            rewrite E, tr_Stream_0; constructor.
+        + inversion_clear Indexed; rewrite <-tr_Stream_tl, tr_history_tl; eauto.
     Qed.
 
     (** We can then deduce the correspondence lemma for [sem_clock]. *)
     Corollary sem_clock_impl:
       forall n H b ck bs,
         CoInd.sem_clock H b ck bs ->
-        Indexed.sem_clock_instant (tr_stream b n)
+        Indexed.sem_clock_instant (tr_Stream b n)
                                   (Indexed.restr (tr_history H) n) ck
-                                  (tr_stream bs n).
+                                  (tr_Stream bs n).
     Proof.
       intros ** Indexed.
       apply (sem_clock_index n) in Indexed as [|[|[|]]]; destruct_conjs;
-        match goal with H: tr_stream _ _ = _ |- _ => rewrite H end;
+        match goal with H: tr_Stream _ _ = _ |- _ => rewrite H end;
         subst; eauto.
     Qed.
 
@@ -389,7 +389,7 @@ Module Type COINDTOINDEXED
     Lemma sem_lexp_impl:
       forall H b e es,
         CoInd.sem_lexp H b e es ->
-        Indexed.sem_lexp (tr_stream b) (tr_history H) e (tr_stream es).
+        Indexed.sem_lexp (tr_Stream b) (tr_history H) e (tr_Stream es).
     Proof.
       Hint Constructors Indexed.sem_lexp_instant.
       induction 1 as [? ? ? ? Hconst
@@ -398,10 +398,10 @@ Module Type COINDTOINDEXED
                             |? ? ? ? ? ? ? ? ? Hlift1
                             |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
       - apply (const_index n) in Hconst; rewrite Hconst.
-        destruct (tr_stream b n); eauto.
-      - apply sem_var_impl with (b := tr_stream b) in Hvar; eauto.
+        destruct (tr_Stream b n); eauto.
+      - apply sem_var_impl with (b := tr_Stream b) in Hvar; eauto.
       - specialize (IHsem_lexp n).
-        apply sem_var_impl with (b := tr_stream b) in Hvar.
+        apply sem_var_impl with (b := tr_Stream b) in Hvar.
         unfold Indexed.sem_var, Indexed.lift in Hvar.
         specialize (Hvar n).
         apply (when_index n) in Hwhen
@@ -438,30 +438,30 @@ Module Type COINDTOINDEXED
     Lemma sem_laexp_index:
       forall n H b ck le es,
         CoInd.sem_laexp H b ck le es ->
-        (Indexed.sem_clock_instant (tr_stream b n)
+        (Indexed.sem_clock_instant (tr_Stream b n)
                                    (Indexed.restr (tr_history H) n) ck false
          /\ Indexed.sem_lexp_instant
-             (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
-         /\ tr_stream es n = absent)
+             (tr_Stream b n) (Indexed.restr (tr_history H) n) le absent
+         /\ tr_Stream es n = absent)
         \/
         (exists e,
-            Indexed.sem_clock_instant (tr_stream b n)
+            Indexed.sem_clock_instant (tr_Stream b n)
                                       (Indexed.restr (tr_history H) n) ck true
             /\ Indexed.sem_lexp_instant
-                (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
-            /\ tr_stream es n = present e).
+                (tr_Stream b n) (Indexed.restr (tr_history H) n) le (present e)
+            /\ tr_Stream es n = present e).
     Proof.
       induction n; intros ** Indexed.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
                                       |? ? ? ? ? ? Indexed' Hck];
           apply sem_lexp_impl in Indexed'; specialize (Indexed' 0);
-            repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
-              apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
+            repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
+              apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_lexp_impl in Indexed';
-          rewrite tr_stream_S, tr_history_tl; eauto.
+          rewrite tr_Stream_S, tr_history_tl; eauto.
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated
@@ -469,7 +469,7 @@ Module Type COINDTOINDEXED
     Corollary sem_laexp_impl:
       forall H b e es ck,
         CoInd.sem_laexp H b ck e es ->
-        Indexed.sem_laexp (tr_stream b) (tr_history H) ck e (tr_stream es).
+        Indexed.sem_laexp (tr_Stream b) (tr_history H) ck e (tr_Stream es).
     Proof.
       intros ** Indexed n.
       apply (sem_laexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
@@ -480,27 +480,27 @@ Module Type COINDTOINDEXED
     Lemma sem_laexps_index:
       forall n H b ck les ess,
         CoInd.sem_laexps H b ck les ess ->
-        (Indexed.sem_clock_instant (tr_stream b n)
+        (Indexed.sem_clock_instant (tr_Stream b n)
                                    (Indexed.restr (tr_history H) n) ck false
-         /\ Indexed.sem_lexps_instant (tr_stream b n)
+         /\ Indexed.sem_lexps_instant (tr_Stream b n)
                                      (Indexed.restr (tr_history H) n) les
-                                     (tr_streams ess n)
-         /\ tr_streams ess n = List.map (fun _ => absent) les)
+                                     (tr_Streams ess n)
+         /\ tr_Streams ess n = List.map (fun _ => absent) les)
         \/
-        (Indexed.sem_clock_instant (tr_stream b n)
+        (Indexed.sem_clock_instant (tr_Stream b n)
                                    (Indexed.restr (tr_history H) n) ck true
-         /\ Indexed.sem_lexps_instant (tr_stream b n)
+         /\ Indexed.sem_lexps_instant (tr_Stream b n)
                                      (Indexed.restr (tr_history H) n) les
-                                     (tr_streams ess n)
-         /\ Forall (fun e => e <> absent) (tr_streams ess n)).
+                                     (tr_Streams ess n)
+         /\ Forall (fun e => e <> absent) (tr_Streams ess n)).
     Proof.
       induction n; intros ** Indexed.
       - inversion_clear Indexed as [? ? ? ? ? ? Indexed' Hess Hck
                                       |? ? ? ? ? ? Indexed' Hess Hck];
-          apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck;
-            assert (Indexed.sem_lexps_instant (tr_stream b 0)
+          apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck;
+            assert (Indexed.sem_lexps_instant (tr_Stream b 0)
                                               (Indexed.restr (tr_history H) 0)
-                                              les (tr_streams ess 0))
+                                              les (tr_Streams ess 0))
             by (clear Hess; induction Indexed' as [|? ? ? ? Indexed]; simpl;
                 constructor; [now apply sem_lexp_impl in Indexed
                              | eapply IHIndexed', CoInd.sem_laexps_cons; eauto]).
@@ -512,24 +512,24 @@ Module Type COINDTOINDEXED
           induction Indexed'; inv Hess; simpl; auto.
           f_equal; auto.
       - destruct b; inversion_clear Indexed;
-          rewrite tr_stream_S, tr_history_tl, <-tr_streams_tl; auto.
+          rewrite tr_Stream_S, tr_history_tl, <-tr_Streams_tl; auto.
     Qed.
 
     (** Generalization for lists of annotated [lexp] (on the same clock). *)
     Corollary sem_laexps_impl:
       forall H b ck es ess,
         CoInd.sem_laexps H b ck es ess ->
-        Indexed.sem_laexps (tr_stream b) (tr_history H) ck es (tr_streams ess).
+        Indexed.sem_laexps (tr_Stream b) (tr_history H) ck es (tr_Streams ess).
     Proof.
       intros ** Indexed n.
       apply (sem_laexps_index n) in Indexed as [(? & ? & Hes)|(? & ? & Hes)].
       - eright; eauto.
-      - assert (exists vs, tr_streams ess n = List.map present vs) as (vs & ?).
+      - assert (exists vs, tr_Streams ess n = List.map present vs) as (vs & ?).
         { clear - Hes.
           induction ess as [|es].
           - exists nil; auto.
           - simpl in *; inversion_clear Hes as [|? ? E].
-            destruct (tr_stream es n) as [|v]; try now contradict E.
+            destruct (tr_Stream es n) as [|v]; try now contradict E.
             apply IHess in H as (vs & ?).
             exists (v :: vs); simpl.
             f_equal; auto.
@@ -542,73 +542,73 @@ Module Type COINDTOINDEXED
     Lemma merge_index:
       forall n xs ts fs rs,
         CoInd.merge xs ts fs rs ->
-        (tr_stream xs n = absent
-         /\ tr_stream ts n = absent
-         /\ tr_stream fs n = absent
-         /\ tr_stream rs n = absent)
+        (tr_Stream xs n = absent
+         /\ tr_Stream ts n = absent
+         /\ tr_Stream fs n = absent
+         /\ tr_Stream rs n = absent)
         \/
         (exists t,
-            tr_stream xs n = present true_val
-            /\ tr_stream ts n = present t
-            /\ tr_stream fs n = absent
-            /\ tr_stream rs n = present t)
+            tr_Stream xs n = present true_val
+            /\ tr_Stream ts n = present t
+            /\ tr_Stream fs n = absent
+            /\ tr_Stream rs n = present t)
         \/
         (exists f,
-            tr_stream xs n = present false_val
-            /\ tr_stream ts n = absent
-            /\ tr_stream fs n = present f
-            /\ tr_stream rs n = present f).
+            tr_Stream xs n = present false_val
+            /\ tr_Stream ts n = absent
+            /\ tr_Stream fs n = present f
+            /\ tr_Stream rs n = present f).
     Proof.
       induction n; intros ** Merge.
-      - inv Merge; repeat rewrite tr_stream_0; intuition.
+      - inv Merge; repeat rewrite tr_Stream_0; intuition.
         + right; left. eexists; intuition.
         + right; right. eexists; intuition.
-      - inv Merge; repeat rewrite tr_stream_S; auto.
+      - inv Merge; repeat rewrite tr_Stream_S; auto.
     Qed.
 
     Lemma ite_index:
       forall n xs ts fs rs,
         CoInd.ite xs ts fs rs ->
-        (tr_stream xs n = absent
-         /\ tr_stream ts n = absent
-         /\ tr_stream fs n = absent
-         /\ tr_stream rs n = absent)
+        (tr_Stream xs n = absent
+         /\ tr_Stream ts n = absent
+         /\ tr_Stream fs n = absent
+         /\ tr_Stream rs n = absent)
         \/
         (exists t f,
-            tr_stream xs n = present true_val
-            /\ tr_stream ts n = present t
-            /\ tr_stream fs n = present f
-            /\ tr_stream rs n = present t)
+            tr_Stream xs n = present true_val
+            /\ tr_Stream ts n = present t
+            /\ tr_Stream fs n = present f
+            /\ tr_Stream rs n = present t)
         \/
         (exists t f,
-            tr_stream xs n = present false_val
-            /\ tr_stream ts n = present t
-            /\ tr_stream fs n = present f
-            /\ tr_stream rs n = present f).
+            tr_Stream xs n = present false_val
+            /\ tr_Stream ts n = present t
+            /\ tr_Stream fs n = present f
+            /\ tr_Stream rs n = present f).
     Proof.
       induction n; intros ** Ite.
-      - inv Ite; repeat rewrite tr_stream_0; intuition.
+      - inv Ite; repeat rewrite tr_Stream_0; intuition.
         + right; left. do 2 eexists; now intuition.
         + right; right. do 2 eexists; now intuition.
-      - inv Ite; repeat rewrite tr_stream_S; auto.
+      - inv Ite; repeat rewrite tr_Stream_S; auto.
     Qed.
 
     (** [fby] is not a predicate but a function, so we directly state the
         correspondence.  *)
     Lemma fby_impl:
       forall c xs,
-      tr_stream (CoInd.fby c xs) ≈ fby c (tr_stream xs).
+      tr_Stream (CoInd.fby c xs) ≈ fby c (tr_Stream xs).
     Proof.
       intros ** n; revert c xs.
       induction n; intros.
       - unfold_Stv xs; rewrite unfold_Stream at 1;
-          unfold fby; simpl; now rewrite tr_stream_0.
+          unfold fby; simpl; now rewrite tr_Stream_0.
       - unfold_Stv xs; rewrite unfold_Stream at 1;
-          unfold fby; simpl; repeat rewrite tr_stream_S;
+          unfold fby; simpl; repeat rewrite tr_Stream_S;
             rewrite IHn; unfold fby;
-              destruct (tr_stream xs n); auto; f_equal;
+              destruct (tr_Stream xs n); auto; f_equal;
                 clear IHn; induction n; simpl; auto;
-                  rewrite tr_stream_S; destruct (tr_stream xs n); auto.
+                  rewrite tr_Stream_S; destruct (tr_Stream xs n); auto.
     Qed.
 
     (** ** Semantics of cexps *)
@@ -618,14 +618,14 @@ Module Type COINDTOINDEXED
     Lemma sem_cexp_impl:
       forall H b e es,
         CoInd.sem_cexp H b e es ->
-        Indexed.sem_cexp (tr_stream b) (tr_history H) e (tr_stream es).
+        Indexed.sem_cexp (tr_Stream b) (tr_history H) e (tr_Stream es).
     Proof.
       induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
                     |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
                     |? ? ? ? He]; intro n.
       - specialize (IHsem_cexp1 n).
         specialize (IHsem_cexp2 n).
-        apply sem_var_impl with (b := tr_stream b) in Hvar; eauto.
+        apply sem_var_impl with (b := tr_Stream b) in Hvar; eauto.
         unfold Indexed.sem_var, Indexed.lift in Hvar.
         specialize (Hvar n).
         rename H0_ into Hf.
@@ -665,30 +665,30 @@ Module Type COINDTOINDEXED
     Lemma sem_caexp_index:
       forall n H b ck le es,
         CoInd.sem_caexp H b ck le es ->
-        (Indexed.sem_clock_instant (tr_stream b n)
+        (Indexed.sem_clock_instant (tr_Stream b n)
                                    (Indexed.restr (tr_history H) n) ck false
          /\ Indexed.sem_cexp_instant
-             (tr_stream b n) (Indexed.restr (tr_history H) n) le absent
-         /\ tr_stream es n = absent)
+             (tr_Stream b n) (Indexed.restr (tr_history H) n) le absent
+         /\ tr_Stream es n = absent)
         \/
         (exists e,
-            Indexed.sem_clock_instant (tr_stream b n)
+            Indexed.sem_clock_instant (tr_Stream b n)
                                       (Indexed.restr (tr_history H) n) ck true
             /\ Indexed.sem_cexp_instant
-                (tr_stream b n) (Indexed.restr (tr_history H) n) le (present e)
-            /\ tr_stream es n = present e).
+                (tr_Stream b n) (Indexed.restr (tr_history H) n) le (present e)
+            /\ tr_Stream es n = present e).
     Proof.
       induction n; intros ** Indexed.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
                                       |? ? ? ? ? ? Indexed' Hck];
           apply sem_cexp_impl in Indexed'; specialize (Indexed' 0);
-            repeat rewrite tr_stream_0; repeat rewrite tr_stream_0 in Indexed';
-              apply (sem_clock_impl 0) in Hck; rewrite tr_stream_0 in Hck.
+            repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
+              apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
           apply sem_cexp_impl in Indexed';
-          repeat rewrite tr_stream_S; rewrite tr_history_tl; eauto.
+          repeat rewrite tr_Stream_S; rewrite tr_history_tl; eauto.
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated
@@ -696,7 +696,7 @@ Module Type COINDTOINDEXED
     Corollary sem_caexp_impl:
       forall H b e es ck,
         CoInd.sem_caexp H b ck e es ->
-        Indexed.sem_caexp (tr_stream b) (tr_history H) ck e (tr_stream es).
+        Indexed.sem_caexp (tr_Stream b) (tr_history H) ck e (tr_Stream es).
     Proof.
       intros ** Indexed n.
       apply (sem_caexp_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
@@ -705,37 +705,38 @@ Module Type COINDTOINDEXED
 
     (** * RESET CORRESPONDENCE  *)
 
-    Lemma tr_stream_reset:
+    (** We directly state the correspondence for [reset_of]. *)
+    Lemma tr_Stream_reset:
       forall xs,
-        tr_stream (CoInd.reset_of xs) ≈ Indexed.reset_of (tr_stream xs).
+        tr_Stream (CoInd.reset_of xs) ≈ Indexed.reset_of (tr_Stream xs).
     Proof.
       intros **n; revert xs.
       induction n; intros.
       - unfold_Stv xs; unfold Indexed.reset_of;
-          rewrite unfold_Stream at 1; simpl; rewrite tr_stream_0; auto.
+          rewrite unfold_Stream at 1; simpl; rewrite tr_Stream_0; auto.
       - unfold_Stv xs; unfold Indexed.reset_of;
           rewrite unfold_Stream at 1; simpl; auto;
             eapply IHn.
     Qed.
 
-    (** ** Properties about [count] *)
+    (** ** Properties about [count] and [mask] *)
 
     (** When a reset occurs initially, the count at [n] is the count at [n]
         forgetting the first instant, plus one if no reset occurs at [n] when
         shifting. *)
     Lemma count_true_shift:
       forall n r,
-        count (tr_stream (true ::: r)) n
-        = if tr_stream r n
-          then count (tr_stream r) n
-          else S (count (tr_stream r) n).
+        count (tr_Stream (true ::: r)) n
+        = if tr_Stream r n
+          then count (tr_Stream r) n
+          else S (count (tr_Stream r) n).
     Proof.
       induction n; simpl; intros.
-      - destruct (tr_stream r 0); auto.
+      - destruct (tr_Stream r 0); auto.
       - specialize (IHn r).
-        rewrite tr_stream_S.
-        destruct (tr_stream r n) eqn: E';
-          destruct (tr_stream r (S n)); rewrite IHn; auto.
+        rewrite tr_Stream_S.
+        destruct (tr_Stream r n) eqn: E';
+          destruct (tr_Stream r (S n)); rewrite IHn; auto.
     Qed.
 
     (** When no reset occurs initially, the count at [n] is the count at [n]
@@ -743,17 +744,17 @@ Module Type COINDTOINDEXED
         shifting. *)
     Lemma count_false_shift:
       forall n r,
-        count (tr_stream (false ::: r)) n
-        = if tr_stream r n
-          then count (tr_stream r) n - 1
-          else count (tr_stream r) n.
+        count (tr_Stream (false ::: r)) n
+        = if tr_Stream r n
+          then count (tr_Stream r) n - 1
+          else count (tr_Stream r) n.
     Proof.
       induction n; simpl; intros.
-      - destruct (tr_stream r 0); auto.
+      - destruct (tr_Stream r 0); auto.
       - specialize (IHn r).
-        rewrite tr_stream_S.
-        destruct (tr_stream r n) eqn: E';
-          destruct (tr_stream r (S n)); rewrite IHn; try omega.
+        rewrite tr_Stream_S.
+        destruct (tr_Stream r n) eqn: E';
+          destruct (tr_Stream r (S n)); rewrite IHn; try omega.
         + apply Minus.minus_Sn_m, count_true_ge_1; auto.
         + rewrite Minus.minus_Sn_m; try omega.
           apply count_true_ge_1; auto.
@@ -762,48 +763,48 @@ Module Type COINDTOINDEXED
     (** State the correspondence for [count]. *)
     Lemma count_impl:
       forall r,
-        tr_stream (CoInd.count r) ≈ count (tr_stream r).
+        tr_Stream (CoInd.count r) ≈ count (tr_Stream r).
     Proof.
       intros ** n.
       unfold CoInd.count.
       revert r; induction n; intros; simpl.
       - rewrite (unfold_Stream (CoInd.count_acc 0 r)); simpl.
-        rewrite tr_stream_0; auto.
+        rewrite tr_Stream_0; auto.
       - rewrite (unfold_Stream (CoInd.count_acc 0 r)); simpl.
-        rewrite tr_stream_S. destruct (hd r) eqn: R.
-        + unfold tr_stream at 1; unfold tr_stream in IHn; unfold Str_nth in *.
+        rewrite tr_Stream_S. destruct (hd r) eqn: R.
+        + unfold tr_Stream at 1; unfold tr_Stream in IHn; unfold Str_nth in *.
           rewrite CoInd.count_S_nth, IHn.
-          destruct r; simpl in *; rewrite R, count_true_shift, tr_stream_S.
-          now destruct (tr_stream r n).
+          destruct r; simpl in *; rewrite R, count_true_shift, tr_Stream_S.
+          now destruct (tr_Stream r n).
         + rewrite IHn.
-          destruct r; simpl in *; rewrite R, count_false_shift, tr_stream_S.
-          destruct (tr_stream r n) eqn: R'; auto.
+          destruct r; simpl in *; rewrite R, count_false_shift, tr_Stream_S.
+          destruct (tr_Stream r n) eqn: R'; auto.
           apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; omega.
     Qed.
 
     (** State the correspondence for [mask]. *)
     Lemma mask_impl:
       forall k r xss,
-        tr_streams (List.map (CoInd.mask_v k r) xss)
-        ≈ mask (Indexed.all_absent xss) k (tr_stream r) (tr_streams xss).
+        tr_Streams (List.map (CoInd.mask_v k r) xss)
+        ≈ mask (Indexed.all_absent xss) k (tr_Stream r) (tr_Streams xss).
     Proof.
       induction xss as [|xs];
         simpl; intros ** n.
       - unfold mask.
-        destruct (EqNat.beq_nat k (count (tr_stream r) n)); auto.
-      - unfold CoInd.mask_v; rewrite tr_stream_nth, CoInd.mask_nth.
+        destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto.
+      - unfold CoInd.mask_v; rewrite tr_Stream_nth, CoInd.mask_nth.
         unfold mask in *.
         rewrite IHxss.
         rewrite <-count_impl, NPeano.Nat.eqb_sym.
-        unfold tr_stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
+        unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
     Qed.
 
     (** * FINAL LEMMAS *)
 
 
-    Remark all_absent_tr_streams:
+    Remark all_absent_tr_Streams:
       forall A n (xss: list (Stream A)),
-        Indexed.all_absent (tr_streams xss n) = Indexed.all_absent xss.
+        Indexed.all_absent (tr_Streams xss n) = Indexed.all_absent xss.
     Proof.
       induction xss; simpl; auto; now f_equal.
     Qed.
@@ -812,41 +813,41 @@ Module Type COINDTOINDEXED
         applications. *)
     Lemma tr_clocks_of:
       forall xss,
-        Indexed.clock_of (tr_streams xss) (tr_stream (CoInd.clocks_of xss)).
+        Indexed.clock_of (tr_Streams xss) (tr_Stream (CoInd.clocks_of xss)).
     Proof.
       split; intros ** H.
       - revert dependent xss; induction n; intros; induction xss as [|xs];
           rewrite unfold_Stream at 1; simpl in *;
-          try rewrite tr_stream_0; try rewrite tr_stream_S; auto.
+          try rewrite tr_Stream_0; try rewrite tr_Stream_S; auto.
         + inversion_clear H as [|? ? ToMap Forall].
           apply andb_true_intro; split.
-          * unfold_St xs; rewrite tr_stream_0 in ToMap.
+          * unfold_St xs; rewrite tr_Stream_0 in ToMap.
             apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; intro E.
             contradiction.
           * apply IHxss in Forall.
             clear - Forall; induction xss as [|xs]; simpl; auto.
         + inversion_clear H.
           apply IHn. constructor.
-          * now rewrite tr_stream_tl.
-          * fold (@tr_streams value).
-            now rewrite tr_streams_tl.
+          * now rewrite tr_Stream_tl.
+          * fold (@tr_Streams value).
+            now rewrite tr_Streams_tl.
       - revert dependent xss; induction n; intros; induction xss as [|xs];
           simpl in *; constructor.
         + rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite tr_stream_0 in H; apply andb_prop in H as [].
-          unfold_St xs; rewrite tr_stream_0; simpl in *.
+            rewrite tr_Stream_0 in H; apply andb_prop in H as [].
+          unfold_St xs; rewrite tr_Stream_0; simpl in *.
           intro; subst; discriminate.
         + apply IHxss.
           rewrite unfold_Stream in H at 1; simpl in H;
-            rewrite tr_stream_0 in H; apply andb_prop in H as [? Forall].
+            rewrite tr_Stream_0 in H; apply andb_prop in H as [? Forall].
           clear - Forall; induction xss; rewrite unfold_Stream at 1; simpl;
-            now rewrite tr_stream_0.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
+            now rewrite tr_Stream_0.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_Stream_S in H.
           apply IHn in H; inv H.
-          now rewrite <-tr_stream_tl.
-        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_stream_S in H.
+          now rewrite <-tr_Stream_tl.
+        + rewrite unfold_Stream in H at 1; simpl in H; rewrite tr_Stream_S in H.
           apply IHn in H; inv H.
-          now rewrite <-tr_streams_tl.
+          now rewrite <-tr_Streams_tl.
     Qed.
 
     (** The final theorem stating the correspondence for equations, nodes and
@@ -855,15 +856,15 @@ Module Type COINDTOINDEXED
     Theorem implies:
       (forall H b e,
           CoInd.sem_equation G H b e ->
-          Indexed.sem_equation G (tr_stream b) (tr_history H) e)
+          Indexed.sem_equation G (tr_Stream b) (tr_history H) e)
       /\
       (forall f xss oss,
           CoInd.sem_node G f xss oss ->
-          Indexed.sem_node G f (tr_streams xss) (tr_streams oss))
+          Indexed.sem_node G f (tr_Streams xss) (tr_Streams oss))
       /\
       (forall f r xss oss,
           CoInd.sem_reset G f r xss oss ->
-          Indexed.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss)).
+          Indexed.sem_reset G f (tr_Stream r) (tr_Streams xss) (tr_Streams oss)).
     Proof.
       apply CoInd.sem_equation_node_ind.
       - econstructor.
@@ -876,7 +877,7 @@ Module Type COINDTOINDEXED
         + apply sem_laexps_impl; eauto.
         + apply sem_vars_impl; eauto.
         + apply sem_var_impl; eauto.
-        + now rewrite <-tr_stream_reset.
+        + now rewrite <-tr_Stream_reset.
       - econstructor; auto; subst.
         + apply sem_laexp_impl; eauto.
         + rewrite <-fby_impl.
@@ -884,7 +885,7 @@ Module Type COINDTOINDEXED
       - intros ** IHNode.
         constructor; intro.
         specialize (IHNode n).
-        rewrite 2 all_absent_tr_streams.
+        rewrite 2 all_absent_tr_Streams.
         now rewrite <- 2 mask_impl.
       - intros ** Hin Hout Same ? ?.
         econstructor; eauto; try apply sem_vars_impl; eauto.

@@ -37,32 +37,45 @@ Module Type INDEXEDTOCOIND
 
     Variable G : global.
 
-    Definition wf_streams {A} (xss: stream (list A)) :=
-      forall k' k, length (xss k) = length (xss k').
-
     (** * BASIC CORRESPONDENCES *)
 
     (** ** Definitions  *)
 
+    (** A generic function to build a coinductive Stream. *)
+    CoFixpoint init_from {A} (n: nat) (f: nat -> A) : Stream A :=
+      f n ::: init_from (S n) f.
+
     (** Translate an indexed stream into a coinductive Stream.
         The [n]th element of the result Stream is the result of the application
-        of the input stream on [n].
-     *)
-    CoFixpoint tr_stream_from {A} (n: nat) (xs: stream A) : Stream A :=
-      xs n ::: tr_stream_from (S n) xs.
+        of the input stream on [n]. *)
+    Definition tr_stream_from {A} (n: nat) (xs: stream A) : Stream A :=
+      init_from n xs.
+
     Definition tr_stream {A} : stream A -> Stream A := tr_stream_from 0.
 
-    (** Translate an indexed stream of list into a list of coinductive streams.
-        We build the resulting list index by index.
-     *)
+    (** An indexed stream of lists is well-formed when the length of the lists
+        is uniform over time. *)
+    Definition wf_streams {A} (xss: stream (list A)) :=
+      forall k' k, length (xss k) = length (xss k').
+
+    (** Build a list of indexed streams from an integer range. *)
     Definition seq_streams {A} (str_i: nat -> Stream A) (last_i first_i: nat)
       : list (Stream A) :=
       List.map str_i (seq first_i (last_i - first_i)).
 
-    CoFixpoint nth_tr_streams_from (n: nat) (xss: stream (list value)) (i: nat)
-      : Stream value :=
-      nth i (xss n) absent ::: nth_tr_streams_from (S n) xss i.
+    (** Build the indexed stream corresponding to the [i]th elements of
+        the input stream of lists. *)
+    Definition streams_nth (i: nat) (xss: stream (list value)): stream value :=
+      fun n => nth i (xss n) absent.
 
+    (** Build a coinductive Stream extracting the [i]th element of the list
+        obtained at each instant [n]. *)
+    Definition nth_tr_streams_from (n: nat) (xss: stream (list value)) (i: nat)
+      : Stream value :=
+      init_from n (streams_nth i xss).
+
+    (** Translate an indexed stream of list into a list of coinductive Streams
+        using the two previous functions. *)
     Definition tr_streams_from (n: nat) (xss: stream (list value))
       : list (Stream value) :=
       seq_streams (nth_tr_streams_from n xss) (length (xss n)) 0.
@@ -74,8 +87,7 @@ Module Type INDEXEDTOCOIND
       unfold tr_streams, tr_streams_from.
 
     (** Translate an history from indexed to coinductive world.
-        Every element of the history is translated.
-     *)
+        Every element of the history is translated. *)
     Definition tr_history_from (n: nat) (H: Indexed.history) : CoInd.history :=
       PM.map (tr_stream_from n) H.
 
@@ -84,41 +96,53 @@ Module Type INDEXEDTOCOIND
 
     (** ** Properties  *)
 
-    Lemma tr_stream_from_n:
-      forall {A} (xs: stream A) n,
-        tr_stream_from n xs = xs n ::: tr_stream_from (S n) xs.
+    (** A basic definition-rewriting lemma.  *)
+    Lemma init_from_n:
+      forall {A} (f: nat -> A) n,
+        init_from n f = f n ::: init_from (S n) f.
     Proof.
-      intros.
-      now rewrite unfold_Stream at 1.
+      intros; now rewrite unfold_Stream at 1.
     Qed.
 
-    Lemma tr_stream_from_nth:
-      forall {A} m n (xs: stream A),
-        Str_nth m (tr_stream_from n xs) = xs (m + n).
+    (** [init_from] is compatible wrt to extensional equality. *)
+    Add Parametric Morphism A : (@init_from A)
+        with signature eq ==> eq_str ==> @EqSt A
+          as init_from_morph.
+    Proof.
+      cofix Cofix; intros ** xs xs' E.
+      rewrite init_from_n; rewrite (init_from_n xs').
+      constructor; simpl; auto.
+    Qed.
+
+    (** The [m]th element of the built stream, starting from [n],
+        is the result of the application of [f] at [(m+n)]. *)
+    Lemma init_from_nth:
+      forall {A} m n (f: nat -> A),
+        Str_nth m (init_from n f) = f (m + n).
     Proof.
       unfold Str_nth; induction m; intros; simpl; auto.
       now rewrite IHm, <-plus_n_Sm.
     Qed.
 
-    (** [tr_stream_from] is compatible wrt to extensional equality. *)
-    Add Parametric Morphism A : (@tr_stream_from A)
-        with signature eq ==> eq_str ==> @EqSt A
-          as tr_stream_from_morph.
+    (** Taking the tail of a built Stream from [n] is building it from [S n]. *)
+    Lemma init_from_tl:
+      forall {A} n (f: nat -> A),
+        tl (init_from n f) = init_from (S n) f.
     Proof.
-      cofix Cofix; intros ** xs xs' E.
-      rewrite tr_stream_from_n; rewrite (tr_stream_from_n xs').
-      constructor; simpl; auto.
+      intros; rewrite init_from_n; auto.
     Qed.
 
-    (** Taking the tail of a translated stream from [n] is translating it from
-        [S n]. *)
-    Lemma tr_stream_from_tl:
-      forall {A} n (xs: stream A),
-        tl (tr_stream_from n xs) = tr_stream_from (S n) xs.
+    (** A generalization for multiple tails. *)
+    Lemma init_from_nth_tl:
+      forall {A} n m (f: nat -> A),
+        Str_nth_tl n (init_from m f) = init_from (n + m) f.
     Proof.
-      intros; rewrite tr_stream_from_n; auto.
+      induction n; intros; simpl; auto.
+      now rewrite IHn, Nat.add_succ_r.
     Qed.
 
+    (** The length of the range-built list of Streams is simply the difference
+        between the bounds of the range.  *)
     Lemma seq_streams_length:
       forall {A} k (str: nat -> Stream A) m,
         length (seq_streams str k m) = k - m.
@@ -127,6 +151,8 @@ Module Type INDEXEDTOCOIND
       now rewrite map_length, seq_length.
     Qed.
 
+    (** The [n]th element of the range-built list of Streams starting at 0 is
+        the result of the function at [n]. *)
     Lemma nth_seq_streams:
       forall {A} k str n (xs_d: Stream A),
         n < k ->
@@ -138,16 +164,17 @@ Module Type INDEXEDTOCOIND
       - rewrite seq_length; omega.
     Qed.
 
-    Lemma seq_streams_cons:
-      forall {A} k (str: nat -> Stream A) m,
-        m < k ->
-        seq_streams str k m = str m :: seq_streams str k (S m).
+    Corollary nth_tr_streams_from_nth:
+      forall n k xss xs_d,
+        k < length (xss n) ->
+        nth k (tr_streams_from n xss) xs_d =
+        nth_tr_streams_from n xss k.
     Proof.
-      unfold seq_streams.
-      intros.
-      rewrite seq_cons; auto.
+      unfold_tr_streams.
+      intros; now rewrite nth_seq_streams.
     Qed.
 
+    (** A generalization of [tr_stream_from_tl] for lists. *)
     Lemma tr_streams_from_tl:
       forall n xss,
         wf_streams xss ->
@@ -165,29 +192,7 @@ Module Type INDEXEDTOCOIND
         + rewrite (Len n); omega.
     Qed.
 
-    Definition streams_nth {A} (k: nat) (a: A) (xss: stream (list A)): stream A :=
-      fun n => nth k (xss n) a.
-
-    Lemma tr_stream_from_streams_nth:
-      forall n k xss,
-        tr_stream_from n (streams_nth k absent xss) ≡
-        nth_tr_streams_from n xss k.
-    Proof.
-      cofix Cofix; intros.
-      constructor; simpl; auto.
-    Qed.
-
-    Corollary nth_tr_streams_from_nth:
-      forall n k xss xs_d,
-        k < length (xss n) ->
-        nth k (tr_streams_from n xss) xs_d =
-        nth_tr_streams_from n xss k.
-    Proof.
-      unfold_tr_streams.
-      intros; now rewrite nth_seq_streams.
-    Qed.
-
-    Corollary tr_streams_from_length:
+    Lemma tr_streams_from_length:
       forall n xss,
         length (tr_streams_from n xss) = length (xss n).
     Proof.
@@ -195,24 +200,17 @@ Module Type INDEXEDTOCOIND
       rewrite seq_streams_length; simpl; omega.
     Qed.
 
-    Lemma nth_tr_streams_from_tl:
-      forall n m k xss,
-        Str_nth_tl n (nth_tr_streams_from m xss k) =
-        nth_tr_streams_from (n + m) xss k.
+    (** The counterpart of [tr_stream_from_tl] for histories. *)
+    Lemma tr_history_from_tl:
+      forall n H,
+        CoInd.history_tl (tr_history_from n H) = tr_history_from (S n) H.
     Proof.
-      induction n; intros; simpl; auto.
-      now rewrite IHn, Nat.add_succ_r.
+      now repeat setoid_rewrite pm_map_map.
     Qed.
 
-    Lemma nth_tr_streams_from_str_nth:
-      forall n m k xss,
-        Str_nth n (nth_tr_streams_from m xss k) = nth k (xss (n + m)) absent.
-    Proof.
-      unfold Str_nth.
-      induction n; intros; simpl; auto.
-      now rewrite IHn, Nat.add_succ_r.
-    Qed.
-
+    (** If at instant [n], a property is true for all elements of the list
+        obtained from the indexed stream, then it is true for the [n]th element
+        of the Streams in the translated list. *)
     Lemma Forall_In_tr_streams_nth:
       forall n P xss x,
         wf_streams xss ->
@@ -229,11 +227,12 @@ Module Type INDEXEDTOCOIND
       rewrite nth_seq_streams in Nth; auto.
       apply eq_EqSt in Nth.
       apply (eqst_ntheq n) in Nth.
-      rewrite <-Nth, nth_tr_streams_from_str_nth, <-plus_n_O.
+      rewrite <-Nth; unfold nth_tr_streams_from; rewrite init_from_nth, <-plus_n_O.
       eapply nth_In in Len.
       eapply In_Forall in Ps; eauto.
     Qed.
 
+    (** This states the converse of the previous lemma. *)
     Lemma Forall_In_tr_streams_nth':
       forall n P xss x,
         wf_streams xss ->
@@ -246,8 +245,10 @@ Module Type INDEXEDTOCOIND
           by (clear - Length; induction n; simpl; auto; now rewrite IHn, Length).
       apply In_ex_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
       pose proof Len; rewrite <-E in Len.
-      rewrite (plus_n_O n), <-nth_tr_streams_from_str_nth.
+      change (nth k (xss n) absent) with (streams_nth k xss n).
+      rewrite (plus_n_O n), <-init_from_nth.
       eapply In_Forall in Ps; eauto.
+      change (init_from 0 (streams_nth k xss)) with (nth_tr_streams_from 0 xss k).
       rewrite <-nth_tr_streams_from_nth with (xs_d:=nth_tr_streams_from 0 xss n);
         eauto.
       apply nth_In.
@@ -265,6 +266,7 @@ Module Type INDEXEDTOCOIND
       - eapply Forall_In_tr_streams_nth'; eauto.
     Qed.
 
+    (** A more specific version of [Forall_In_tr_streams_nth]. *)
     Lemma Forall_In_tr_streams_from_hd:
       forall n P xss x,
         Forall P (xss n) ->
@@ -276,8 +278,8 @@ Module Type INDEXEDTOCOIND
       rewrite seq_streams_length, Nat.sub_0_r in Len.
       rewrite nth_seq_streams in Nth; auto.
       apply eq_EqSt in Nth.
-      rewrite <-tr_stream_from_streams_nth in Nth.
-      rewrite tr_stream_from_n in Nth.
+      unfold nth_tr_streams_from in Nth.
+      rewrite init_from_n in Nth.
       inversion Nth as (Hhd).
       rewrite <-Hhd; simpl.
       unfold streams_nth.
@@ -293,11 +295,13 @@ Module Type INDEXEDTOCOIND
     Proof.
       unfold_tr_streams; intros ** Ps Hin.
       apply In_ex_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
-      rewrite (plus_n_O n), <-nth_tr_streams_from_str_nth.
-      unfold Str_nth.
+      change (nth k (xss n) absent) with (streams_nth k xss n).
+      rewrite (plus_n_O n), <-init_from_nth.
       eapply In_Forall in Ps; eauto.
-      rewrite nth_tr_streams_from_tl, <-plus_n_O.
-      erewrite <-nth_seq_streams with (xs_d:=nth_tr_streams_from 0 xss n); eauto.
+      rewrite init_from_nth_tl, <-plus_n_O.
+      change (init_from n (streams_nth k xss)) with (nth_tr_streams_from n xss k).
+      rewrite <-nth_tr_streams_from_nth with (xs_d:=nth_tr_streams_from 0 xss n);
+        eauto.
       apply nth_In.
       now rewrite seq_streams_length, Nat.sub_0_r.
     Qed.
@@ -311,13 +315,6 @@ Module Type INDEXEDTOCOIND
       - eapply Forall_In_tr_streams_from_hd'; eauto.
     Qed.
 
-    (** The counterpart of [tr_stream_from_tl] for histories. *)
-    Lemma tr_history_from_tl:
-      forall n H,
-        CoInd.history_tl (tr_history_from n H) = tr_history_from (S n) H.
-    Proof.
-      now repeat setoid_rewrite pm_map_map.
-    Qed.
 
     (** * SEMANTICS CORRESPONDENCE *)
 
@@ -372,7 +369,7 @@ Module Type INDEXEDTOCOIND
       forall H b xs xss,
         Indexed.sem_vars b H xs xss ->
         forall n,
-          Forall2 (fun x k => Indexed.sem_var b H x (streams_nth k absent xss))
+          Forall2 (fun x k => Indexed.sem_var b H x (streams_nth k xss))
                   (drop n xs) (seq n (length xs - n)).
     Proof.
       unfold Indexed.sem_vars, Indexed.lift.
@@ -393,7 +390,7 @@ Module Type INDEXEDTOCOIND
     Corollary sem_vars_inv:
       forall H b xs xss,
         Indexed.sem_vars b H xs xss ->
-        Forall2 (fun x k => Indexed.sem_var b H x (streams_nth k absent xss))
+        Forall2 (fun x k => Indexed.sem_var b H x (streams_nth k xss))
                 xs (seq 0 (length xs)).
     Proof.
       intros ** Sem; apply sem_vars_inv_from with (n:=0) in Sem.
@@ -419,7 +416,7 @@ Module Type INDEXEDTOCOIND
         eapply Sem in Nth; eauto.
         apply (sem_var_impl_from n) in Nth.
         subst.
-        rewrite nth_tr_streams_from_nth, <-tr_stream_from_streams_nth; auto.
+        rewrite nth_tr_streams_from_nth; auto.
         now rewrite <-Length.
     Qed.
 
@@ -506,6 +503,7 @@ Module Type INDEXEDTOCOIND
         Qed.
     *)
 
+   (** This tactic automatically uses the interpretor to give a witness stream. *)
     Ltac interp_str b H x Sem :=
       let Sem_x := fresh "Sem_" x in
       let sol sem interp sound :=
@@ -612,8 +610,7 @@ Module Type INDEXEDTOCOIND
                H: (_: stream value) (_: nat) = (_: value) |- _ => rewrite H in *
              end.
 
-    (** An inversion principle for [sem_clock], requiring also the axiom of
-        choice.  *)
+    (** An inversion principle for [sem_clock] which also uses the interpretor. *)
     Lemma sem_clock_inv:
       forall H b bs ck x k,
         Indexed.sem_clock b H (Con ck x k) bs ->
@@ -662,31 +659,31 @@ Module Type INDEXEDTOCOIND
       induction ck; intros ** Sem n.
       - constructor.
         revert Sem n; cofix; intros.
-        rewrite tr_stream_from_n; rewrite (tr_stream_from_n bs).
+        rewrite init_from_n; rewrite (init_from_n bs).
         constructor; simpl; auto.
         specialize (Sem n); now inv Sem.
       - apply sem_clock_inv in Sem as (bs' & xs & Sem_bs' & Sem_xs & Spec).
         revert Spec n; cofix; intros.
-        rewrite (tr_stream_from_n bs).
+        rewrite (init_from_n bs).
         apply IHck with (n:=n) in Sem_bs';
-          rewrite (tr_stream_from_n bs') in Sem_bs'.
+          rewrite (init_from_n bs') in Sem_bs'.
         apply (sem_var_impl_from n) in Sem_xs;
-          rewrite (tr_stream_from_n xs) in Sem_xs.
+          rewrite (init_from_n xs) in Sem_xs.
         destruct (Spec n) as [|[]]; destruct_conjs; rewrite_strs.
         + econstructor; eauto.
-          rewrite tr_stream_from_tl, tr_history_from_tl; auto.
+          rewrite init_from_tl, tr_history_from_tl; auto.
         + econstructor; eauto.
-          rewrite tr_stream_from_tl, tr_history_from_tl; auto.
+          rewrite init_from_tl, tr_history_from_tl; auto.
         + rewrite <-(Bool.negb_involutive b0).
           eapply CoInd.Son_abs2; eauto.
-          rewrite tr_stream_from_tl, tr_history_from_tl; auto.
+          rewrite init_from_tl, tr_history_from_tl; auto.
           rewrite Bool.negb_involutive; auto.
     Qed.
 
     (** ** Semantics of lexps *)
 
     (** State the correspondence for [lexp].
-        Goes by induction on [lexp]. *)
+        Goes by induction on [lexp] and uses the previous inversion lemmas. *)
     Lemma sem_lexp_impl_from:
       forall n H b e es,
         Indexed.sem_lexp b H e es ->
@@ -700,7 +697,7 @@ Module Type INDEXEDTOCOIND
       - constructor.
         revert dependent es; revert b; revert n.
         cofix; intros.
-        rewrite tr_stream_from_n; rewrite (tr_stream_from_n b).
+        rewrite init_from_n; rewrite (init_from_n b).
         constructor; simpl.
         + specialize (Sem n);
             inversion_clear Sem as [? ? Hes| | | | | | | |];
@@ -715,25 +712,25 @@ Module Type INDEXEDTOCOIND
       - apply when_inv in Sem as (ys & xs & ? & ? & Spec).
         econstructor; eauto using sem_var_impl_from.
         revert dependent n; revert Spec; cofix; intros.
-        rewrite tr_stream_from_n;
-          rewrite (tr_stream_from_n xs);
-          rewrite (tr_stream_from_n es).
+        rewrite init_from_n;
+          rewrite (init_from_n xs);
+          rewrite (init_from_n es).
         destruct (Spec n) as [|[]]; destruct_conjs;
           rewrite_strs; auto using CoInd.when.
 
       - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
         revert dependent n; revert Spec; cofix; intros.
-        rewrite tr_stream_from_n; rewrite (tr_stream_from_n es).
+        rewrite init_from_n; rewrite (init_from_n es).
         destruct (Spec n) as [|]; destruct_conjs;
           rewrite_strs; auto using CoInd.lift1.
 
       - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
         revert dependent n; revert Spec; cofix; intros.
-        rewrite tr_stream_from_n;
-          rewrite (tr_stream_from_n zs);
-          rewrite (tr_stream_from_n es).
+        rewrite init_from_n;
+          rewrite (init_from_n zs);
+          rewrite (init_from_n es).
         destruct (Spec n) as [|[]]; destruct_conjs;
           rewrite_strs; auto using CoInd.lift2.
     Qed.
@@ -775,7 +772,6 @@ Module Type INDEXEDTOCOIND
       - unfold_tr_streams; rewrite seq_streams_length; simpl; omega.
       - intros ** Nth; subst.
         rewrite nth_tr_streams_from_nth; try omega.
-        rewrite <-tr_stream_from_streams_nth.
         apply sem_lexp_impl_from.
         eapply (Forall2_forall2_eq _ _ (@eq_refl lexp) (eq_str_refl))
           in Sem as (? & Sem); try solve_proper.
@@ -826,10 +822,10 @@ Module Type INDEXEDTOCOIND
         apply sem_laexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
         apply (sem_lexp_impl_from n) in Sem';
         apply sem_clock_impl_from with (n:=n) in Sem_ck.
-      rewrite (tr_stream_from_n es) in *.
-      rewrite (tr_stream_from_n bs), Ebs in Sem_ck.
+      rewrite (init_from_n es) in *.
+      rewrite (init_from_n bs), Ebs in Sem_ck.
       destruct (es n); econstructor; eauto;
-        rewrite tr_stream_from_tl, tr_history_from_tl;
+        rewrite init_from_tl, tr_history_from_tl;
         apply Cofix; auto.
     Qed.
 
@@ -865,7 +861,7 @@ Module Type INDEXEDTOCOIND
           erewrite <-interp_clock_instant_sound; eauto.
     Qed.
 
-    (** Generalization for lists of annotated [lexp] (on the same clock). *)
+    (** Generalization for lists of annotated [lexp]. *)
     Corollary sem_laexps_impl_from:
       forall n H b ck es ess,
         Indexed.sem_laexps b H ck es ess ->
@@ -883,7 +879,7 @@ Module Type INDEXEDTOCOIND
         omega.
       }
       apply sem_clock_impl_from with (n:=n) in Sem_ck.
-      rewrite (tr_stream_from_n bs) in Sem_ck.
+      rewrite (init_from_n bs) in Sem_ck.
       apply sem_lexps_impl_from with (n:=n) in Sem'.
       specialize (Ebs n); destruct Ebs as [(vs & Hess & Hbs)|(Hess & Hbs)];
         rewrite Hbs in Sem_ck.
@@ -892,12 +888,12 @@ Module Type INDEXEDTOCOIND
           rewrite Hess, Forall_map.
           clear; induction vs; constructor; auto.
           intro; discriminate.
-        + rewrite tr_history_from_tl, tr_stream_from_tl, tr_streams_from_tl; auto.
+        + rewrite tr_history_from_tl, init_from_tl, tr_streams_from_tl; auto.
       - eright; eauto.
         + apply Forall_tr_streams_from_hd with (P:=fun x => x = absent).
           rewrite Hess, Forall_map.
           clear; induction es; constructor; auto.
-        + rewrite tr_history_from_tl, tr_stream_from_tl, tr_streams_from_tl; auto.
+        + rewrite tr_history_from_tl, init_from_tl, tr_streams_from_tl; auto.
     Qed.
 
     Corollary sem_laexps_impl:
@@ -994,7 +990,7 @@ Module Type INDEXEDTOCOIND
       tr_stream_from n (fby c xs) ≡ CoInd.fby (hold c xs n) (tr_stream_from n xs).
     Proof.
       cofix Cofix; intros.
-      rewrite tr_stream_from_n; rewrite (tr_stream_from_n xs).
+      rewrite init_from_n; rewrite (init_from_n xs).
       unfold fby at 1.
       destruct (xs n) eqn: E.
       - constructor; simpl; auto.
@@ -1013,7 +1009,7 @@ Module Type INDEXEDTOCOIND
     (** ** Semantics of cexps *)
 
     (** State the correspondence for [cexp].
-        Goes by induction on the coinductive semantics of [cexp]. *)
+        Goes by induction on [cexp] and uses the previous inversion lemmas. *)
     Lemma sem_cexp_impl_from:
       forall n H b e es,
         Indexed.sem_cexp b H e es ->
@@ -1027,20 +1023,20 @@ Module Type INDEXEDTOCOIND
       - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto using sem_var_impl_from.
         revert dependent n; revert Spec; cofix; intros.
-        rewrite tr_stream_from_n;
-          rewrite (tr_stream_from_n ts);
-          rewrite (tr_stream_from_n fs);
-          rewrite (tr_stream_from_n es).
+        rewrite init_from_n;
+          rewrite (init_from_n ts);
+          rewrite (init_from_n fs);
+          rewrite (init_from_n es).
         destruct (Spec n) as [|[|[]]]; destruct_conjs;
           rewrite_strs; auto using CoInd.merge.
 
       - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto using sem_lexp_impl_from.
         revert dependent n; revert Spec; cofix; intros.
-        rewrite tr_stream_from_n;
-          rewrite (tr_stream_from_n ts);
-          rewrite (tr_stream_from_n fs);
-          rewrite (tr_stream_from_n es).
+        rewrite init_from_n;
+          rewrite (init_from_n ts);
+          rewrite (init_from_n fs);
+          rewrite (init_from_n es).
         destruct (Spec n) as [|[]]; destruct_conjs;
           rewrite_strs; auto using CoInd.ite.
         destruct H4.
@@ -1055,9 +1051,7 @@ Module Type INDEXEDTOCOIND
       forall H b e es,
         Indexed.sem_cexp b H e es ->
         CoInd.sem_cexp (tr_history H) (tr_stream b) e (tr_stream es).
-    Proof.
-      intros; now apply sem_cexp_impl_from.
-    Qed.
+    Proof. apply sem_cexp_impl_from. Qed.
 
     (** An inversion principle for annotated [cexp]. *)
     Lemma sem_caexp_inv:
@@ -1092,10 +1086,10 @@ Module Type INDEXEDTOCOIND
         apply sem_caexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
         apply (sem_cexp_impl_from n) in Sem';
         apply sem_clock_impl_from with (n:=n) in Sem_ck.
-      rewrite (tr_stream_from_n es) in *.
-      rewrite (tr_stream_from_n bs), Ebs in Sem_ck.
+      rewrite (init_from_n es) in *.
+      rewrite (init_from_n bs), Ebs in Sem_ck.
       destruct (es n); econstructor; eauto;
-        rewrite tr_stream_from_tl, tr_history_from_tl;
+        rewrite init_from_tl, tr_history_from_tl;
         apply Cofix; auto.
     Qed.
 
@@ -1108,13 +1102,14 @@ Module Type INDEXEDTOCOIND
 
     (** * RESET CORRESPONDENCE  *)
 
+    (** We directly state the correspondence for [reset_of]. *)
     Lemma tr_stream_reset_from:
       forall n xs,
         CoInd.reset_of (tr_stream_from n xs)
         ≡ tr_stream_from n (Indexed.reset_of xs).
     Proof.
       cofix; intros.
-      rewrite tr_stream_from_n; rewrite (tr_stream_from_n (Indexed.reset_of xs)).
+      rewrite init_from_n; rewrite (init_from_n (Indexed.reset_of xs)).
       unfold CoInd.reset_of, Indexed.reset_of in *.
       constructor; simpl; auto.
     Qed.
@@ -1137,6 +1132,7 @@ Module Type INDEXEDTOCOIND
       induction k'; induction n; auto.
     Qed.
 
+    (** State the correspondance for [count].  *)
     Lemma count_impl_from:
       forall n (r: stream bool),
         CoInd.count_acc (if r n then count r n - 1 else count r n)
@@ -1154,7 +1150,7 @@ Module Type INDEXEDTOCOIND
     Qed.
 
     (** Generalizing is too intricate: we can use the generalized lemma above to
-        deduce this one. *)
+        deduce this one which states the correspondence for [mask]. *)
     Corollary mask_impl:
       forall k k' (r: stream bool) xss,
         wf_streams xss ->
@@ -1176,13 +1172,13 @@ Module Type INDEXEDTOCOIND
         rewrite nth_tr_streams_from_nth; auto.
         unfold CoInd.mask_v, mask.
         apply ntheq_eqst; intro m.
-        rewrite nth_tr_streams_from_str_nth, CoInd.mask_nth,
-        nth_tr_streams_from_str_nth.
-        unfold CoInd.count.
+        unfold nth_tr_streams_from.
+        rewrite init_from_nth, CoInd.mask_nth, init_from_nth.
+        unfold CoInd.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
         assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E
             by (simpl; destruct (r 0); auto).
-        rewrite E in Count; rewrite Count, tr_stream_from_nth, Nat.eqb_sym.
+        rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
         destruct (EqNat.beq_nat (count r (m + 0)) k); auto.
         apply Indexed.nth_all_absent.
     Qed.
@@ -1236,6 +1232,8 @@ Module Type INDEXEDTOCOIND
         CoInd.clocks_of (tr_streams xss) ≡ tr_stream bk.
     Proof. apply tr_clocks_of_from. Qed.
 
+    (** If all masks ar well-formed then the underlying stream of lists
+        is well-formed. *)
     Lemma wf_streams_mask:
       forall xss r m,
         (forall n, wf_streams (mask (Indexed.all_absent (xss m)) n r xss)) ->
