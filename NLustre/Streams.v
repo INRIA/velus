@@ -11,6 +11,13 @@ Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.
 Delimit Scope stream_scope with Stream.
 Open Scope stream_scope.
 
+Lemma const_nth:
+  forall {A} n (c: A),
+    Str_nth n (Streams.const c) = c.
+Proof.
+  induction n; simpl; auto.
+Qed.
+
 Ltac unfold_Stv xs :=
   rewrite (unfold_Stream xs);
   destruct xs as [[|]];

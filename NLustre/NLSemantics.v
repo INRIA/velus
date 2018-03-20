@@ -49,6 +49,12 @@ environment.
   Implicit Type R: R.
   Implicit Type H: history.
 
+  Definition absent_list (xs: list value): Prop :=
+    Forall (fun v => v = absent) xs.
+
+  Definition present_list (xs: list value): Prop :=
+    Forall (fun v => v <> absent) xs.
+
   (** ** Instantaneous semantics *)
 
   Section InstantSemantics.
@@ -215,7 +221,7 @@ environment.
     | AEqApp:
         forall x f ck laes vs r,
           sem_laexps_instant ck laes vs ->
-          Forall (fun c => c = absent) vs ->
+          absent_list vs ->
           rhs_absent_instant (EqApp x ck f laes r)
     | AEqFby:
         forall x ck v0 lae,
@@ -274,12 +280,6 @@ environment.
   End LiftSemantics.
 
   (** ** Time-dependent semantics *)
-
-  Definition absent_list (xs: list value): Prop :=
-    Forall (fun v => v = absent) xs.
-
-  Definition present_list (xs: list value): Prop :=
-    Forall (fun v => v <> absent) xs.
 
   Definition instant_same_clock (l : list value) : Prop :=
     absent_list l \/ present_list l.
@@ -1072,7 +1072,7 @@ clock to [sem_var_instant] too. *)
   (*   Hint Constructors sem_clock_instant. *)
   (*   intros R ck. *)
   (*   induction ck; eauto. *)
-  (*   constructor. *)
+  (*   constructor; auto. *)
   (* Qed. *)
 
   (* XXX: Similarly, instead of [rhs_absent_instant] and friends, we

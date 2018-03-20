@@ -20,7 +20,7 @@ Module Type STREAM
        (Import Op : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op).
 
-  (* (** ** Datatypes *) *)
+  (** ** Datatypes *)
 
   (** A stream is represented by its characteristic function: *)
 

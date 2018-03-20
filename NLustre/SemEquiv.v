@@ -33,51 +33,55 @@ Module Type SEMEQUIV
        (Import C2I     : COINDTOINDEXED   Ids Op OpAux Clks Syn Str Ord Indexed        CoInd)
        (Import I2C     : INDEXEDTOCOIND   Ids Op OpAux Clks Syn Str Ord Indexed Interp CoInd).
 
-  Definition stream_equivalence {A} (xs: Stream A) (xs': stream A) :=
-    forall n, Str_nth n xs = xs' n.
+Definition stream_equivalence {A} (xs: Stream A) (xs': stream A) :=
+  forall n, Str_nth n xs = xs' n.
 
-  Definition streams_equivalence {A} (xss: list (Stream A)) (xss': stream (list A)) :=
-    forall n i d, Str_nth n (nth i xss (Streams.const d)) = nth i (xss' n) d.
+Definition streams_equivalence {A} (xss: list (Stream A)) (xss': stream (list A)) :=
+  forall n, Forall2 (fun xs x => Str_nth n xs = x) xss (xss' n).
 
-  Definition history_equivalence (H: CoInd.History) (H': Indexed.history) :=
-    forall x xs xs',
-      (PM.MapsTo x xs H ->
-       PM.MapsTo x xs' H' /\ stream_equivalence xs xs')
-      /\
-      (PM.MapsTo x xs' H' ->
-       PM.MapsTo x xs H /\ stream_equivalence xs xs').
+Definition history_equivalence (H: CoInd.History) (H': Indexed.history) :=
+  forall x xs xs',
+    (PM.MapsTo x xs H ->
+     PM.MapsTo x xs' H' /\ stream_equivalence xs xs')
+    /\
+    (PM.MapsTo x xs' H' ->
+     PM.MapsTo x xs H /\ stream_equivalence xs xs').
 
-  Record unified_stream A :=
-    {
-      coind: Stream A;
-      indexed: stream A;
-      equiv: stream_equivalence coind indexed
-    }.
-  Arguments coind [A] _.
-  Arguments indexed [A] _ _.
+Record unified_stream A :=
+  {
+    coind: Stream A;
+    indexed: stream A;
+    equiv: stream_equivalence coind indexed
+  }.
+Arguments coind [A] _.
+Arguments indexed [A] _ _.
+Arguments equiv [A] _ _.
 
-  Record unified_streams A :=
-    {
-      coind_s: list (Stream A);
-      indexed_s: stream (list A);
-      equiv_s: streams_equivalence coind_s indexed_s
-    }.
+Record unified_streams A :=
+  {
+    coind_s: list (Stream A);
+    indexed_s: stream (list A);
+    equiv_s: streams_equivalence coind_s indexed_s
+  }.
+Arguments coind_s [A] _.
+Arguments indexed_s [A] _ _.
+Arguments equiv_s [A] _ _.
 
-  Record unified_history :=
-    {
-      coind_h: CoInd.History;
-      indexed_h: Indexed.history;
-      equiv_h: history_equivalence coind_h indexed_h
-    }.
+Record unified_history :=
+  {
+    coind_h: CoInd.History;
+    indexed_h: Indexed.history;
+    equiv_h: history_equivalence coind_h indexed_h
+  }.
 
-  Record unified_stream_assert A :=
-    {
-      coind_assert: Stream A -> Prop;
-      indexed_assert: stream A -> Prop;
-      equiv_assert:
-        forall xs,
-          coind_assert (coind xs) <-> indexed_assert (indexed xs)
-    }.
+Record unified_stream_assert A :=
+  {
+    coind_assert: Stream A -> Prop;
+    indexed_assert: stream A -> Prop;
+    equiv_assert:
+      forall xs,
+        coind_assert (coind xs) <-> indexed_assert (indexed xs)
+  }.
 
   Definition sem_var (H: unified_history) (x: ident) : unified_stream_assert value.
   Proof.

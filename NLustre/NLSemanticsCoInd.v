@@ -301,13 +301,6 @@ Module Type NLSEMANTICSCOIND
     induction n; simpl; intros; destruct (hd rs); auto.
   Qed.
 
-  Lemma const_nth:
-    forall {A} n (c: A),
-      Str_nth n (Streams.const c) = c.
-  Proof.
-    induction n; simpl; auto.
-  Qed.
-
   Lemma mask_nth:
     forall {A} n (o: A) k rs xs,
       Str_nth n (mask o k rs xs) =
