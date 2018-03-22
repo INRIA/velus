@@ -31,6 +31,12 @@ Module Type NLSEMANTICS
        (Import Str   : STREAM        Op OpAux)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
+
+  (** An indexed stream of lists is well-formed when the length of the lists
+      is uniform over time. *)
+  Definition wf_streams {A} (xss: stream (list A)) :=
+    forall k' k, length (xss k) = length (xss k').
+
   (** ** Environment and history *)
 
   (**
@@ -507,6 +513,66 @@ enough: it does not support the internal fixpoint introduced by
     Combined Scheme sem_equation_node_ind from sem_equation_mult, sem_node_mult, sem_reset_mult.
 
   End sem_node_mult.
+
+  Ltac assert_const_length xss :=
+    match goal with
+      H: sem_vars _ _ _ xss |- _ =>
+      let H' := fresh in
+      let k := fresh in
+      let k' := fresh in
+      assert (wf_streams xss)
+        by (intros k k'; pose proof H as H';
+            unfold sem_vars, lift in *;
+            specialize (H k); specialize (H' k');
+            apply Forall2_length in H; apply Forall2_length in H';
+            now rewrite H in H')
+    end.
+
+  Lemma mask_length:
+    forall k k' xss r n,
+      wf_streams xss ->
+      length (mask (all_absent (xss k')) k r xss n) = length (xss n).
+  Proof.
+    intros; unfold mask.
+    destruct (EqNat.beq_nat k (count r n)); auto.
+    unfold all_absent; rewrite map_length.
+    induction k'; induction n; auto.
+  Qed.
+
+  (** If all masks ar well-formed then the underlying stream of lists
+      is well-formed. *)
+  Lemma wf_streams_mask:
+    forall xss r m,
+      (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) ->
+      wf_streams xss.
+  Proof.
+    unfold wf_streams, mask; intros ** WF k k'.
+    pose proof (WF (count r k) k' k) as WFk;
+      pose proof (WF (count r k') k' k) as WFk'.
+    rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
+    rewrite NPeano.Nat.eqb_sym in WFk'.
+    destruct (EqNat.beq_nat (count r k) (count r k')); auto.
+    now rewrite WFk, <-WFk'.
+  Qed.
+
+  Lemma sem_node_wf:
+    forall G f xss yss,
+      sem_node G f xss yss ->
+      wf_streams xss /\ wf_streams yss.
+  Proof.
+    intros ** Sem; split; inv Sem;
+      assert_const_length xss; assert_const_length yss; auto.
+  Qed.
+
+  (* Lemma sem_node_wf: *)
+  (*   forall G f (xss_f yss_f: nat -> stream (list value)), *)
+  (*     (forall n, sem_node G f (xss_f n) (yss_f n)) -> *)
+  (*     (forall n, wf_streams (xss_f n)) /\ (forall n, wf_streams (yss_f n)). *)
+  (* Proof. *)
+  (*   intros ** Sem; split; intro n; *)
+  (*     specialize (Sem n); inv Sem; *)
+  (*       assert_const_length (xss_f n); assert_const_length (yss_f n); auto. *)
+  (* Qed. *)
 
 
   (** ** Determinism of the semantics *)

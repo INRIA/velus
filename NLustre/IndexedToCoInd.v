@@ -53,11 +53,6 @@ Module Type INDEXEDTOCOIND
 
     Definition tr_stream {A} : stream A -> Stream A := tr_stream_from 0.
 
-    (** An indexed stream of lists is well-formed when the length of the lists
-        is uniform over time. *)
-    Definition wf_streams {A} (xss: stream (list A)) :=
-      forall k' k, length (xss k) = length (xss k').
-
     (** Build a list of indexed streams from an integer range. *)
     Definition seq_streams {A} (str_i: nat -> Stream A) (last_i first_i: nat)
       : list (Stream A) :=
@@ -177,7 +172,7 @@ Module Type INDEXEDTOCOIND
     (** A generalization of [tr_stream_from_tl] for lists. *)
     Lemma tr_streams_from_tl:
       forall n xss,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         List.map (@tl value) (tr_streams_from n xss) = tr_streams_from (S n) xss.
     Proof.
       intros ** Len.
@@ -213,7 +208,7 @@ Module Type INDEXEDTOCOIND
         of the Streams in the translated list. *)
     Lemma Forall_In_tr_streams_nth:
       forall n P xss x,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         Forall P (xss n) ->
         In x (tr_streams xss) ->
         P (Str_nth n x).
@@ -235,7 +230,7 @@ Module Type INDEXEDTOCOIND
     (** This states the converse of the previous lemma. *)
     Lemma Forall_In_tr_streams_nth':
       forall n P xss x,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         Forall (fun x => P (Str_nth n x)) (tr_streams xss) ->
         In x (xss n) ->
         P x.
@@ -257,7 +252,7 @@ Module Type INDEXEDTOCOIND
 
     Corollary Forall_tr_streams_nth:
       forall xss,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         forall n P,
           (Forall P (xss n) <-> Forall (fun x => P (Str_nth n x)) (tr_streams xss)).
     Proof.
@@ -431,7 +426,7 @@ Module Type INDEXEDTOCOIND
 
     Lemma same_clock_impl:
       forall xss,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         Indexed.same_clock xss ->
         CoInd.same_clock (tr_streams xss).
     Proof.
@@ -451,8 +446,8 @@ Module Type INDEXEDTOCOIND
       forall xss yss,
         (forall n, xss n <> []) ->
         (forall n, yss n <> []) ->
-        wf_streams xss ->
-        wf_streams yss ->
+        Indexed.wf_streams xss ->
+        Indexed.wf_streams yss ->
         Indexed.same_clock xss ->
         Indexed.same_clock yss ->
         (forall n, Indexed.absent_list (xss n) <-> Indexed.absent_list (yss n)) ->
@@ -886,7 +881,7 @@ Module Type INDEXEDTOCOIND
       cofix Cofix; intros ** Sem.
       pose proof Sem as Sem'.
       apply sem_laexps_inv in Sem' as (Sem' & bs & Sem_ck & Ebs).
-      assert (wf_streams ess).
+      assert (Indexed.wf_streams ess).
       { intros k k'.
         apply sem_laexps_inv in Sem as (Sem & ? & ? & ?).
         specialize (Sem k); specialize (Sem' k').
@@ -1136,33 +1131,6 @@ Module Type INDEXEDTOCOIND
 
     (** ** Properties about [count] and [mask] *)
 
-    Lemma mask_length:
-      forall k k' xss r n,
-        wf_streams xss ->
-        length (mask (Indexed.all_absent (xss k')) k r xss n) = length (xss n).
-    Proof.
-      intros; unfold mask.
-      destruct (EqNat.beq_nat k (count r n)); auto.
-      unfold Indexed.all_absent; rewrite map_length.
-      induction k'; induction n; auto.
-    Qed.
-
-    (** If all masks ar well-formed then the underlying stream of lists
-        is well-formed. *)
-    Lemma wf_streams_mask:
-      forall xss r m,
-        (forall n, wf_streams (mask (Indexed.all_absent (xss m)) n r xss)) ->
-        wf_streams xss.
-    Proof.
-      unfold wf_streams, mask; intros ** WF k k'.
-      pose proof (WF (count r k) k' k) as WFk;
-        pose proof (WF (count r k') k' k) as WFk'.
-      rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
-      rewrite Nat.eqb_sym in WFk'.
-      destruct (EqNat.beq_nat (count r k) (count r k')); auto.
-      now rewrite WFk, <-WFk'.
-    Qed.
-
     (** State the correspondance for [count].  *)
     Lemma count_impl_from:
       forall n (r: stream bool),
@@ -1184,7 +1152,7 @@ Module Type INDEXEDTOCOIND
         deduce this one which states the correspondence for [mask]. *)
     Corollary mask_impl:
       forall k k' (r: stream bool) xss,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         EqSts value
               (tr_streams (mask (Indexed.all_absent (xss k')) k r xss))
               (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
@@ -1220,7 +1188,7 @@ Module Type INDEXEDTOCOIND
         applications. *)
     Lemma tr_clocks_of_from:
       forall n xss bk,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         Indexed.clock_of xss bk ->
         CoInd.clocks_of (tr_streams_from n xss) ≡ tr_stream_from n bk.
     Proof.
@@ -1258,34 +1226,10 @@ Module Type INDEXEDTOCOIND
 
     Lemma tr_clocks_of:
       forall xss bk,
-        wf_streams xss ->
+        Indexed.wf_streams xss ->
         Indexed.clock_of xss bk ->
         CoInd.clocks_of (tr_streams xss) ≡ tr_stream bk.
     Proof. apply tr_clocks_of_from. Qed.
-
-    Ltac assert_const_length xss :=
-      match goal with
-        H: Indexed.sem_vars _ _ _ xss |- _ =>
-        let H' := fresh in
-        let k := fresh in
-        let k' := fresh in
-        assert (wf_streams xss)
-          by (intros k k'; pose proof H as H';
-              unfold Indexed.sem_vars, Indexed.lift in *;
-              specialize (H k); specialize (H' k');
-              apply Forall2_length in H; apply Forall2_length in H';
-              now rewrite H in H')
-      end.
-
-    Lemma sem_node_wf:
-      forall f (xss_f yss_f: nat -> stream (list value)),
-        (forall n, Indexed.sem_node G f (xss_f n) (yss_f n)) ->
-        (forall n, wf_streams (xss_f n)) /\ (forall n, wf_streams (yss_f n)).
-    Proof.
-      intros ** Sem; split; intro n;
-        specialize (Sem n); inv Sem;
-          assert_const_length (xss_f n); assert_const_length (yss_f n); auto.
-    Qed.
 
     (** The final theorem stating the correspondence for equations, nodes and
         reset applications. The conjunctive shape is mandatory to use the
@@ -1312,9 +1256,9 @@ Module Type INDEXEDTOCOIND
 
       - intros ** IHNode.
         constructor; intro.
-        apply sem_node_wf in H as (? & ?).
         rewrite <- 2 mask_impl; auto;
-          eapply wf_streams_mask; eauto.
+          eapply Indexed.wf_streams_mask; intro n'; specialize (H n');
+            apply Indexed.sem_node_wf in H as (? & ?); eauto.
 
       - intros.
         pose proof n.(n_ingt0); pose proof n.(n_outgt0).
@@ -1330,7 +1274,7 @@ Module Type INDEXEDTOCOIND
                  simpl in H; omega)
           end.
         assert_not_nil xss; assert_not_nil yss.
-        assert_const_length xss; assert_const_length yss.
+        Indexed.assert_const_length xss; Indexed.assert_const_length yss.
         econstructor; eauto.
         apply Forall_impl
           with (P:=CoInd.sem_equation G (tr_history H) (tr_stream bk)); auto.
