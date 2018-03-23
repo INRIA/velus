@@ -46,23 +46,19 @@ Module Type TRANSLATION
        (Import SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import Mem    : MEMORIES Ids Op Clks SynNL).
 
-  (* definition is needed in signature *)
-  Definition gather_eq
-             (acc: idents * list (ident * ident)) (eq: equation) :=
+  Definition gather_eq (acc: idents * list (ident * ident)) (eq: equation):
+    idents * list (ident * ident) :=
     match eq with
-    | EqDef _ _ _   => acc
-    | EqApp xs _ f _ =>
+    | EqDef _ _ _ => acc
+    | EqApp xs _ f _ _ =>
       match xs with
       | [] => acc
-      | x :: _ =>
-        (fst acc, (x, f) :: snd acc)
+      | x :: _ => (fst acc, (x, f) :: snd acc)
       end
-    | EqFby x _ _ _ => (x::fst acc, snd acc)
+    | EqFby x _ _ _ => (x :: fst acc, snd acc)
     end.
 
-  (* definition is needed in signature *)
-  Definition gather_eqs
-             (eqs: list equation) : idents * list (ident * ident) :=
+  Definition gather_eqs (eqs: list equation) : idents * list (ident * ident) :=
     List.fold_left gather_eq eqs ([], []).
 
 
@@ -71,15 +67,15 @@ Module Type TRANSLATION
      and [gather_eqs_snd_spec]. *)
   Definition gather_mem (eqs: list equation): idents :=
     concatMap (fun eq => match eq with
-                        | EqDef _ _ _
-                        | EqApp _ _ _ _ => []
-                        | EqFby x _ _ _ => [x]
+                      | EqDef _ _ _
+                      | EqApp _ _ _ _ _ => []
+                      | EqFby x _ _ _ => [x]
                       end) eqs.
   Definition gather_insts (eqs: list equation): list (ident * ident) :=
     concatMap (fun eq => match eq with
                       | EqDef _ _ _
                       | EqFby _ _ _ _ => []
-                      | EqApp i _ f _ =>
+                      | EqApp i _ f _ _ =>
                         match i with
                         | [] => []
                         | i :: _ => [(i,f)]
@@ -89,7 +85,7 @@ Module Type TRANSLATION
     concatMap (fun eq => match eq with
                       | EqDef _ _ _
                       | EqFby _ _ _ _ => []
-                      | EqApp xs _ _ _ => tl xs
+                      | EqApp xs _ _ _ _ => tl xs
                       end) eqs.
 
 
@@ -103,70 +99,72 @@ Module Type TRANSLATION
       let (x, ty) := xt in
       if PS.mem x memories then State x ty else Var x ty.
 
-    (* definition is needed in signature *)
+    Definition bool_var (x: ident) : exp := tovar (x, bool_type).
+
     Fixpoint Control (ck: clock) (s: stmt) : stmt :=
       match ck with
-      | Cbase => s
-      | Con ck x true  => Control ck (Ifte (tovar (x, bool_type)) s Skip)
-      | Con ck x false => Control ck (Ifte (tovar (x, bool_type)) Skip s)
+      | Cbase          => s
+      | Con ck x true  => Control ck (Ifte (bool_var x) s Skip)
+      | Con ck x false => Control ck (Ifte (bool_var x) Skip s)
       end.
 
-    (* definition is needed in signature *)
     Fixpoint translate_lexp (e : lexp) : exp :=
       match e with
-      | Econst c => Const c
-      | Evar x ty => tovar (x, ty)
-      | Ewhen e c x => translate_lexp e
-      | Eunop op e ty => Unop op (translate_lexp e) ty
+      | Econst c           => Const c
+      | Evar x ty          => tovar (x, ty)
+      | Ewhen e c x        => translate_lexp e
+      | Eunop op e ty      => Unop op (translate_lexp e) ty
       | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
       end.
 
-    (* definition is needed in signature *)
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
       match e with
-      | Emerge y t f => Ifte (tovar (y, bool_type))
-                            (translate_cexp x t)
-                            (translate_cexp x f)
-      | Eite b t f => Ifte (translate_lexp b)
-                          (translate_cexp x t)
-                          (translate_cexp x f)
-      | Eexp l => Assign x (translate_lexp l)
+      | Emerge y t f =>
+        Ifte (bool_var y) (translate_cexp x t) (translate_cexp x f)
+      | Eite b t f =>
+        Ifte (translate_lexp b) (translate_cexp x t) (translate_cexp x f)
+      | Eexp l =>
+        Assign x (translate_lexp l)
       end.
 
-    (* definition is needed in signature *)
+    Definition reset_stmt (class name r: ident) : stmt :=
+      Ifte (bool_var r) (Call [] class name reset []) Skip.
+
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
-      | EqDef x ck ce => Control ck (translate_cexp x ce)
-      | EqApp xs ck f les =>
+      | EqDef x ck ce =>
+        Control ck (translate_cexp x ce)
+      | EqApp xs ck f les r =>
         let name := hd Ids.default xs in
-        Control ck (Call xs f name step (List.map translate_lexp les))
-      | EqFby x ck v le => Control ck (AssignSt x (translate_lexp le))
+        let call := Control ck (Call xs f name step (List.map translate_lexp les)) in
+        match r with
+        | None => call
+        | Some r => Comp (reset_stmt f name r) call
+        end
+      | EqFby x ck v le =>
+        Control ck (AssignSt x (translate_lexp le))
       end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
   (*      [Is_well_sch]. *) *)
 
-    (* definition is needed in signature *)
     Definition translate_eqns (eqns: list equation) : stmt :=
       List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
 
   End Translate.
 
-  (* definition is needed in signature *)
   Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
     match eqn with
-    | EqDef _ _ _    => s
-    | EqFby x _ c0 _ => Comp (AssignSt x (Const c0)) s
-    | EqApp xs _ f _  =>
+    | EqDef _ _ _      => s
+    | EqFby x _ c0 _   => Comp (AssignSt x (Const c0)) s
+    | EqApp xs _ f _ _ =>
       let name := hd Ids.default xs in
       Comp (Call [] f name reset []) s
     end.
 
-  (* definition is needed in signature *)
   Definition translate_reset_eqns (eqns: list equation): stmt :=
     List.fold_left translate_reset_eqn eqns Skip.
 
-  (* definition is needed in signature *)
   Definition ps_from_list (l: idents) : PS.t :=
     List.fold_left (fun s i=>PS.add i s) l PS.empty.
 
@@ -247,6 +245,12 @@ Module Type TRANSLATION
       rewrite <- HMeq, Hmem; reflexivity.
   Qed.
 
+  Instance bool_var_Proper :
+    Proper (PS.eq ==> eq ==> eq) bool_var.
+  Proof.
+    intros M M' HMeq x x' Hxeq; unfold bool_var; rewrite Hxeq, HMeq; auto.
+  Qed.
+
   Instance translate_lexp_Proper :
     Proper (PS.eq ==> eq ==> eq) translate_lexp.
   Proof.
@@ -285,13 +289,24 @@ Module Type TRANSLATION
       destruct sv; simpl; rewrite IH, HMeq; reflexivity.
   Qed.
 
+  Instance reset_stmt_Proper :
+    Proper (PS.eq ==> eq ==> eq ==> eq ==> eq) reset_stmt.
+  Proof.
+    intros M M' HMeq f f' Hfeq x x' Hxeq r r' Hreq; subst.
+    unfold reset_stmt; rewrite HMeq; auto.
+  Qed.
+
   Instance translate_eqn_Proper :
     Proper (PS.eq ==> eq ==> eq) translate_eqn.
   Proof.
     intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
     destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
-    - rewrite HMeq at 1 2. do 3 f_equal.
-      apply List.map_ext. intro. now rewrite HMeq.
+    - destruct o; rewrite HMeq; auto.
+    - destruct o.
+      + do 3 (rewrite HMeq at 1; f_equal); f_equal.
+        apply List.map_ext. now setoid_rewrite HMeq.
+      + do 2 (rewrite HMeq at 1; f_equal); f_equal.
+        apply List.map_ext. now setoid_rewrite HMeq.
   Qed.
 
   Instance translate_eqns_Proper :
