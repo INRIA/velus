@@ -574,7 +574,8 @@ enough: it does not support the internal fixpoint introduced by
       assert (mfind_inst x' (madd_obj x M' M) = Some M'0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
             rewrite mfind_inst_gso; auto;
-            intro; subst x; destruct xs; inv Hsome; apply Hnd; now constructor); eauto.
+            intro; subst x; destruct xs; inv Hsome; apply Hnd; now constructor);
+      eauto.
   Qed.
 
   (* XXX: I believe that this comment is outdated ([no_dup_defs] is long gone)
@@ -786,11 +787,10 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hwdef Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [? ? ? ? ? ? Hbk Hfind Hxs Hys Hsamexs Hsameys ? Heqs].
+    inversion_clear Hsem' as [??????? Hfind ????? Heqs].
     pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
     pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-    (* simpl in Hnini. *)
     simpl in Hfind.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - assert (Hord':=Hord).
@@ -809,7 +809,7 @@ dataflow memory for which the non-standard semantics holds true.
         inversion_clear Sem as [???? Sem'].
         admit.
       }
-      inversion_clear Hwdef as [|? ? Hw0 neqs Hwsch Hw2 Hw3 Hw4].
+      inversion_clear Hwdef as [|??? neqs].
       simpl in neqs; unfold neqs in *.
       assert (exists M', Forall (msem_equation G bk H M') n.(n_eqs))
         as (M & Hmsem) by now eapply sem_msem_eqs; eauto.
@@ -819,8 +819,8 @@ dataflow memory for which the non-standard semantics holds true.
       + eapply msem_equation_cons2; eauto.
     - apply ident_eqb_neq in Hnf.
       apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
-      inversion_clear Hord as [|? ? Hord' ? Hnig].
-      eapply IHG in Hsem as [M Hsem]; eauto.
+      inv Hord.
+      eapply IHG in Hsem as [M]; eauto.
       exists M.
       now eapply msem_node_cons2; eauto.
   Qed.

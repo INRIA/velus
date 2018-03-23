@@ -1138,7 +1138,7 @@ Module Type INDEXEDTOCOIND
                         (tr_stream_from n r)
         ≡ tr_stream_from n (count r).
     Proof.
-      (** cofix-based proof encounter the guardness criterion (Why ??)  *)
+      (* cofix-based proof encounter the guardness criterion (Why ??)  *)
       intros; apply ntheq_eqst; intro m.
       unfold Str_nth; revert n; induction m; intro; simpl.
       - destruct (r n) eqn: R; auto.
