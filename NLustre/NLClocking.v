@@ -20,11 +20,11 @@ wrt. its clock annotations.
 Module Type NLCLOCKING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS   Ids)
-       (Import Syn  : NLSYNTAX Ids Op Clks)
-       (Import IsF  : ISFREE Ids Op Clks Syn)
-       (Import Mem  : MEMORIES Ids Op Clks Syn)
-       (Import IsD  : ISDEFINED Ids Op Clks Syn Mem).
+       (Import Clks : CLOCKS    Ids)
+       (Import Syn  : NLSYNTAX  Ids Op Clks)
+       (Import Mem  : MEMORIES  Ids Op Clks Syn)
+       (Import IsD  : ISDEFINED Ids Op Clks Syn Mem)
+       (Import IsF  : ISFREE    Ids Op Clks Syn).
 
   Section WellClocked.
 
@@ -308,11 +308,11 @@ End NLCLOCKING.
 Module NLClockingFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (Clks : CLOCKS   Ids)
-       (Syn  : NLSYNTAX Ids Op Clks)
-       (IsF  : ISFREE Ids Op Clks Syn)
-       (Mem  : MEMORIES Ids Op Clks Syn)
+       (Clks : CLOCKS    Ids)
+       (Syn  : NLSYNTAX  Ids Op Clks)
+       (Mem  : MEMORIES  Ids Op Clks Syn)
        (IsD  : ISDEFINED Ids Op Clks Syn Mem)
-       <: NLCLOCKING Ids Op Clks Syn IsF Mem IsD.
-  Include NLCLOCKING Ids Op Clks Syn IsF Mem IsD.
+       (IsF  : ISFREE    Ids Op Clks Syn)
+       <: NLCLOCKING Ids Op Clks Syn Mem IsD IsF.
+  Include NLCLOCKING Ids Op Clks Syn Mem IsD IsF.
 End NLClockingFun.

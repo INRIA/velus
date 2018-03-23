@@ -60,13 +60,13 @@ Module Type MEMSEMANTICS
        (Import Syn   : NLSYNTAX    Ids Op       Clks)
        (Import Str   : STREAM             Op OpAux)
        (Import Ord   : ORDERED     Ids Op       Clks Syn)
-       (Import Mem   : MEMORIES    Ids Op       Clks Syn)
-       (Import IsF   : ISFREE      Ids Op       Clks Syn)
-       (Import IsD   : ISDEFINED   Ids Op       Clks Syn Mem)
        (Import Sem   : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
-       (Import IsV   : ISVARIABLE  Ids Op       Clks Syn Mem IsD)
-       (Import NoD   : NODUP       Ids Op       Clks Syn Mem IsD IsV)
-       (Import WeF   : WELLFORMED  Ids Op       Clks Syn IsF Ord Mem IsD IsV NoD).
+       (Import Mem   : MEMORIES    Ids Op       Clks Syn)
+       (Import IsD   : ISDEFINED   Ids Op       Clks Syn         Mem)
+       (Import IsV   : ISVARIABLE  Ids Op       Clks Syn         Mem IsD)
+       (Import IsF   : ISFREE      Ids Op       Clks Syn)
+       (Import NoD   : NODUP       Ids Op       Clks Syn         Mem IsD IsV)
+       (Import WeF   : WELLFORMED  Ids Op       Clks Syn     Ord Mem IsD IsV IsF NoD).
 
   Definition memory := memory (stream val).
 
@@ -380,9 +380,9 @@ enough: it does not support the internal fixpoint introduced by
       with (P_equation := fun bk H M eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
                             msem_equation (n :: G) bk H M eq)
-           (P_reset := fun f bk xss M yss =>
+           (P_reset := fun f r xss M yss =>
                          Forall (fun n' : node => n_name n <> n_name n') G ->
-                         msem_reset (n :: G) f bk xss M yss); eauto.
+                         msem_reset (n :: G) f r xss M yss); eauto.
     intro HH; clear HH.
     assert (n.(n_name) <> f) as Hnf.
     { intro Hnf.
@@ -850,18 +850,18 @@ End MEMSEMANTICS.
 Module MemSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Clks  : CLOCKS Ids)
+       (OpAux : OPERATORS_AUX   Op)
+       (Clks  : CLOCKS      Ids)
        (Syn   : NLSYNTAX    Ids Op       Clks)
-       (Str   : STREAM          Op OpAux)
+       (Str   : STREAM             Op OpAux)
        (Ord   : ORDERED     Ids Op       Clks Syn)
-       (Mem   : MEMORIES    Ids Op       Clks Syn)
-       (IsF   : ISFREE      Ids Op       Clks Syn)
-       (IsD   : ISDEFINED   Ids Op       Clks Syn Mem)
        (Sem   : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
-       (IsV   : ISVARIABLE  Ids Op       Clks Syn Mem IsD)
-       (NoD   : NODUP       Ids Op       Clks Syn Mem IsD IsV)
-       (WeF   : WELLFORMED  Ids Op       Clks Syn IsF Ord Mem IsD IsV NoD)
-       <: MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
-  Include MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Mem IsF IsD Sem IsV NoD WeF.
+       (Mem   : MEMORIES    Ids Op       Clks Syn)
+       (IsD   : ISDEFINED   Ids Op       Clks Syn         Mem)
+       (IsV   : ISVARIABLE  Ids Op       Clks Syn         Mem IsD)
+       (IsF   : ISFREE      Ids Op       Clks Syn)
+       (NoD   : NODUP       Ids Op       Clks Syn         Mem IsD IsV)
+       (WeF   : WELLFORMED  Ids Op       Clks Syn     Ord Mem IsD IsV IsF NoD)
+       <: MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsV IsF NoD WeF.
+  Include MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsV IsF NoD WeF.
 End MemSemanticsFun.

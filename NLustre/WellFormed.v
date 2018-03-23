@@ -21,11 +21,11 @@ Module Type WELLFORMED
        (Import Op   : OPERATORS)
        (Import Clks : CLOCKS     Ids)
        (Import Syn  : NLSYNTAX   Ids Op Clks)
-       (Import IsF  : ISFREE     Ids Op Clks Syn)
        (Import Ord  : ORDERED    Ids Op Clks Syn)
        (Import Mem  : MEMORIES   Ids Op Clks Syn)
        (Import IsD  : ISDEFINED  Ids Op Clks Syn Mem)
        (Import IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       (Import IsF  : ISFREE     Ids Op Clks Syn)
        (Import NoD  : NODUP      Ids Op Clks Syn Mem IsD IsV).
 
   Section IsWellSch.
@@ -524,12 +524,12 @@ Module WellFormedFun
        (Op   : OPERATORS)
        (Clks : CLOCKS Ids)
        (Syn  : NLSYNTAX   Ids Op Clks)
-       (IsF  : ISFREE     Ids Op Clks Syn)
        (Ord  : ORDERED    Ids Op Clks Syn)
        (Mem  : MEMORIES   Ids Op Clks Syn)
        (IsD  : ISDEFINED  Ids Op Clks Syn Mem)
        (IsV  : ISVARIABLE Ids Op Clks Syn Mem IsD)
+       (IsF  : ISFREE     Ids Op Clks Syn)
        (NoD  : NODUP Ids Op Clks Syn Mem IsD IsV)
-       <: WELLFORMED Ids Op Clks Syn IsF Ord Mem IsD IsV NoD.
-  Include WELLFORMED Ids Op Clks Syn IsF Ord Mem IsD IsV NoD.
+       <: WELLFORMED Ids Op Clks Syn Ord Mem IsD IsV IsF NoD.
+  Include WELLFORMED Ids Op Clks Syn Ord Mem IsD IsV IsF NoD.
 End WellFormedFun.

@@ -53,15 +53,15 @@ Module Type NLSCHEDULE
        (Import OpAux : OPERATORS_AUX       Op)
        (Import Clks  : CLOCKS          Ids)
        (Import Syn   : NLSYNTAX        Ids Op       Clks)
+       (Import Str   : STREAM              Op OpAux)
        (Import Ord   : ORDERED         Ids Op       Clks Syn)
-       (Import IsF   : ISFREE          Ids Op       Clks Syn)
-       (Import Str   : STREAM              Op)
        (Import Sem   : NLSEMANTICS     Ids Op OpAux Clks Syn Str Ord)
-       (Import Typ   : NLTYPING        Ids Op       Clks Syn)
        (Import Mem   : MEMORIES        Ids Op       Clks Syn)
-       (Import IsD   : ISDEFINED       Ids Op       Clks Syn Mem)
-       (Import Clo   : NLCLOCKING      Ids Op       Clks Syn IsF Mem IsD)
-       (Import Sch   : EXT_NLSCHEDULER Ids Op        Clks Syn).
+       (Import IsD   : ISDEFINED       Ids Op       Clks Syn         Mem)
+       (Import IsF   : ISFREE          Ids Op       Clks Syn)
+       (Import Typ   : NLTYPING        Ids Op       Clks Syn)
+       (Import Clo   : NLCLOCKING      Ids Op       Clks Syn         Mem IsD IsF)
+       (Import Sch   : EXT_NLSCHEDULER Ids Op       Clks Syn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -294,26 +294,28 @@ Module Type NLSCHEDULE
   Qed.
 
   Lemma scheduler_sem_node:
-    forall G r f xss yss,
-      sem_node G r f xss yss ->
-      sem_node (schedule G) r f xss yss.
+    forall G f xss yss,
+      sem_node G f xss yss ->
+      sem_node (schedule G) f xss yss.
   Proof.
     intros G.
     induction 1 using sem_node_mult
-    with (P := fun bk r H eq Hsem =>
-                 sem_equation G bk r H eq ->
-                 sem_equation (schedule G) bk r H eq);
+    with (P_equation := fun bk H eq =>
+                          sem_equation G bk H eq ->
+                          sem_equation (schedule G) bk H eq)
+         (P_reset := fun f r xss yss =>
+                       sem_reset G f r xss yss ->
+                       sem_reset (schedule G) f r xss yss);
       try (now inversion_clear 1; eauto).
-    match goal with H:find_node _ _ = _ |- _ =>
+    - constructor; auto.
+    - match goal with H:find_node _ _ = _ |- _ =>
                     apply scheduler_find_node in H end.
-    match goal with H:exists _, _ |- _ =>
-                    destruct H as (HH & Hxss & Hyss & Hsxss & Hsyss & Habs & Hsems) end.
-    econstructor; eauto.
-    exists HH; intuition.
-    rewrite schedule_eqs_permutation.
-    apply Forall_impl with (2:=Hsems).
-    intros eq Hsem.
-    destruct Hsem; auto.
+      econstructor; eauto; destruct n; simpl in *; eauto.
+      rewrite schedule_eqs_permutation.
+      match goal with H: Forall (fun e => sem_equation _ _ _ e -> _) _ |- _ =>
+                      eapply Forall_impl_In with (2:=H) end.
+      intros eq Hin Hsem.
+      eapply Hsem, In_Forall; eauto.
   Qed.
 
 End NLSCHEDULE.
@@ -324,15 +326,15 @@ Module NLScheduleFun
        (OpAux : OPERATORS_AUX       Op)
        (Clks  : CLOCKS          Ids)
        (Syn   : NLSYNTAX        Ids Op       Clks)
+       (Str   : STREAM              Op OpAux)
        (Ord   : ORDERED         Ids Op       Clks Syn)
-       (IsF   : ISFREE          Ids Op       Clks Syn)
-       (Str   : STREAM              Op)
        (Sem   : NLSEMANTICS     Ids Op OpAux Clks Syn Str Ord)
-       (Typ   : NLTYPING        Ids Op       Clks Syn)
        (Mem   : MEMORIES        Ids Op       Clks Syn)
-       (IsD   : ISDEFINED       Ids Op       Clks Syn Mem)
-       (Clo   : NLCLOCKING      Ids Op       Clks Syn IsF Mem IsD)
-       (Sch   : EXT_NLSCHEDULER Ids Op        Clks Syn)
-       <: NLSCHEDULE Ids Op OpAux Clks Syn Ord IsF Str Sem Typ Mem IsD Clo Sch.
-  Include NLSCHEDULE Ids Op OpAux Clks Syn Ord IsF Str Sem Typ Mem IsD Clo Sch.
+       (IsD   : ISDEFINED       Ids Op       Clks Syn         Mem)
+       (IsF   : ISFREE          Ids Op       Clks Syn)
+       (Typ   : NLTYPING        Ids Op       Clks Syn)
+       (Clo   : NLCLOCKING      Ids Op       Clks Syn         Mem IsD IsF)
+       (Sch   : EXT_NLSCHEDULER Ids Op       Clks Syn)
+       <: NLSCHEDULE Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsF Typ Clo Sch.
+  Include NLSCHEDULE Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsF Typ Clo Sch.
 End NLScheduleFun.
