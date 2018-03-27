@@ -2,6 +2,7 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
+Require Import Coq.Arith.Compare_dec.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -70,6 +71,21 @@ Module Type MEMSEMANTICS
 
   Definition memory := memory (stream val).
 
+  Definition mask' {A} (k: nat) (xs: stream A) (rs: cstream) (ys: stream A) : Prop :=
+    forall n, match nat_compare (count rs n) k with
+         | Eq => ys n = xs n
+         | Lt => ys n = xs 0
+         | Gt => ys n = ys (pred n)
+         end.
+
+  Inductive mmask: nat -> cstream -> memory -> memory -> Prop :=
+    mmask_intro:
+      forall k rs M M' x xs xs',
+        mfind_mem x M = Some xs ->
+        mfind_mem x M' = Some xs' ->
+        mask' k xs rs xs' ->
+        mmask k rs M M'.
+
   Inductive mfby: ident -> val -> stream value -> memory -> stream value -> Prop :=
     mfby_intro:
       forall x v0 ls M xs ms,
@@ -120,8 +136,12 @@ Module Type MEMSEMANTICS
     with msem_reset: ident -> stream bool -> stream (list value) -> memory -> stream (list value) -> Prop :=
          | SReset:
              forall f r xss M yss,
-               (forall n, msem_node f (mask (all_absent (xss 0)) n r xss) M
-                               (mask (all_absent (yss 0)) n r yss)) ->
+               (forall n, exists M',
+                     mmask n r M M'
+                     /\ msem_node f
+                                 (mask (all_absent (xss 0)) n r xss)
+                                 M'
+                                 (mask (all_absent (yss 0)) n r yss)) ->
                msem_reset f r xss M yss
 
     with msem_node:
@@ -192,8 +212,18 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis ResetCase:
       forall f r xss M yss,
-        (forall n, msem_node G f (mask (all_absent (xss 0)) n r xss) M (mask (all_absent (yss 0)) n r yss)) ->
-        (forall n, P_node f (mask (all_absent (xss 0)) n r xss) M (mask (all_absent (yss 0)) n r yss)) ->
+        (forall n, exists M',
+              mmask n r M M'
+              /\ msem_node G f
+                          (mask (all_absent (xss 0)) n r xss)
+                          M'
+                          (mask (all_absent (yss 0)) n r yss)) ->
+        (forall n, exists M',
+              mmask n r M M'
+              /\ P_node f
+                       (mask (all_absent (xss 0)) n r xss)
+                       M'
+                       (mask (all_absent (yss 0)) n r yss)) ->
         P_reset f r xss M yss.
 
     Hypothesis NodeCase:
@@ -230,6 +260,7 @@ enough: it does not support the internal fixpoint introduced by
     Proof.
       - destruct Sem; eauto.
       - destruct Sem; eauto.
+        apply ResetCase; intro n; destruct (H n); econstructor; intuition; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         (* clear H1 defd vout good. *)
@@ -327,7 +358,7 @@ enough: it does not support the internal fixpoint introduced by
     Hint Constructors msem_equation msem_reset.
     intros ** Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| | | | | ? ? ? ? ? ? ? ? Hf ? ? ? ? ? ? IH ]
+    induction Hsem as [| | | |?????? IH |???????? Hf ?????? IH ]
         using msem_node_mult
       with (P_equation := fun bk H M eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
@@ -341,6 +372,8 @@ enough: it does not support the internal fixpoint introduced by
     - intro Hnin.
       econstructor; eauto.
       apply IHHsem. intro Hnf; apply Hnin; rewrite Hnf. constructor.
+    - intro; econstructor.
+      intro k; destruct (IH k); econstructor; intuition; eauto.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       econstructor; eauto.
@@ -807,6 +840,8 @@ dataflow memory for which the non-standard semantics holds true.
       { clear - IHG'.
         intros ** Sem.
         inversion_clear Sem as [???? Sem'].
+        (* eexists. *)
+        (* constructor. *)
         admit.
       }
       inversion_clear Hwdef as [|??? neqs].

@@ -6,7 +6,7 @@ Set Implicit Arguments.
 
 (** * Memory *)
 
-(** 
+(**
 
   Both Obc and the Lustre rely on a rather structured notion of
   (static) memory, as found in object-oriented languages. Every node
@@ -24,7 +24,7 @@ Inductive memory (V: Type): Type := mk_memory {
   mm_instances : PM.t (memory V) }.
 (* =end= *)
 
-(** ** Operations *) 
+(** ** Operations *)
 
 Section Operations.
 
@@ -45,13 +45,16 @@ Section Operations.
   Definition madd_obj (id: ident) (M': memory A) (M: memory A) : memory A :=
     mk_memory M.(mm_values)
                   (PM.add id M' M.(mm_instances)).
-  
+
+  (* Fixpoint mmap (f: A -> B) (M: memory A) : memory B := *)
+  (*   mk_memory (PM.map f M.(mm_values)) (PM.map (mmap f) M.(mm_instances)). *)
+
 End Operations.
 
 (** ** Properties *)
 
 Section Properties.
-  
+
   Variable A B: Type.
   Variables (x y: ident)
             (v: A)
