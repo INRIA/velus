@@ -111,12 +111,14 @@ An NLustre program is well defined if
     intros argIn x eq eqs mems Hwsch Hfree Hnim.
     destruct eq;
       inversion_clear Hwsch;
-      inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
+      inversion_clear Hfree;
       subst; intuition;
       match goal with
       | H: context[ Is_variable_in_eqs _ _ \/ In _ _] |- _ =>
         eapply H; eauto
       end.
+    Grab Existential Variables.
+    exact ck_r.
   Qed.
 
   Lemma Is_well_sch_free_variable_in_mems:
@@ -129,11 +131,10 @@ An NLustre program is well defined if
     intros argIn x eq eqs mems Hwsch Hfree Hnim.
     destruct eq;
       inversion_clear Hwsch;
-      inversion_clear Hfree as [? ? ? ? Hc | ? ? ? ? ? Hc | ? ? ? ? ? Hc];
+      inversion_clear Hfree; try destruct o as [[]|];
       match goal with
-      | H: context[In _ _ ] |- _ => eapply H
-      end;
-      auto.
+      | H: context[In _ _ ] |- _ => eapply H; eauto
+      end.
   Qed.
 
   (* Lemma Is_wsch_is_defined_in: *)

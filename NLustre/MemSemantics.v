@@ -102,14 +102,14 @@ Module Type MEMSEMANTICS
           msem_node f ls M' xss ->
           msem_equation bk H M (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk H M x xs ck f M' arg y ys ls xss,
+        forall bk H M x xs ck f M' arg y ck_r ys ls xss,
           Some x = hd_error xs ->
           mfind_inst x M = Some M' ->
           sem_laexps bk H ck arg ls ->
           sem_vars bk H xs xss ->
           sem_var bk H y ys ->
           msem_reset f (reset_of ys) ls M' xss ->
-          msem_equation bk H M (EqApp xs ck f arg (Some y))
+          msem_equation bk H M (EqApp xs ck f arg (Some (y, ck_r)))
     | SEqFby:
         forall bk H M x ck ls xs c0 le,
           sem_laexp bk H ck le ls ->
@@ -173,7 +173,7 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H M (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H M x xs ck f M' arg y ys ls xss,
+      forall bk H M x xs ck f M' arg y ck_r ys ls xss,
         Some x = hd_error xs ->
         mfind_inst x M = Some M' ->
         sem_laexps bk H ck arg ls ->
@@ -181,7 +181,7 @@ enough: it does not support the internal fixpoint introduced by
         sem_var bk H y ys ->
         msem_reset G f (reset_of ys) ls M' xss ->
         P_reset f (reset_of ys) ls M' xss ->
-        P_equation bk H M (EqApp xs ck f arg (Some y)).
+        P_equation bk H M (EqApp xs ck f arg (Some (y, ck_r))).
 
     Hypothesis EqFbyCase:
       forall bk H M x ck ls xs c0 le,
@@ -569,7 +569,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem as [|? ? ? x' ? ? ? ? ? ? ? Hsome
-                         |? ? ? x' ? ? ? ? ? ? ? ? ? Hsome|];
+                         |? ? ? x' ? ? ? ? ? ? ? ? ? ? Hsome|];
       eauto;
       assert (mfind_inst x' (madd_obj x M' M) = Some M'0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -634,7 +634,7 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros ** IH IH' Heq Hwsch Hmeqs.
     inversion Heq as [|? ? ? ? ? ? ? ? Hls Hxs Hsem
-                         |? ? ? ? ? ? ? ? ? ? Hls Hxs Hy Hsem
+                         |? ? ? ? ? ? ? ? ? ? ? Hls Hxs Hy Hsem
                          |? ? ? ? ? ? ? ? Hle Hvar];
       match goal with H:_=eq |- _ => rewrite <-H in * end.
     - exists M.
@@ -735,7 +735,7 @@ dataflow memory for which the non-standard semantics holds true.
       + econstructor; eauto.
         now apply mfind_inst_gss.
       + inversion_clear Hwsch.
-        assert (Is_defined_in_eq i (EqApp x ck f arg (Some y))).
+        assert (Is_defined_in_eq i (EqApp x ck f arg (Some (y, ck_r)))).
         {
           constructor. destruct x; try discriminate.
           injection Hsome. intro; subst i. constructor (auto).

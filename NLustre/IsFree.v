@@ -89,8 +89,8 @@ Module Type ISFREE
         Is_free_in_caexp i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
-      forall x f ck les i r,
-        Is_free_in_laexps i ck les \/ (r = Some i) ->
+      forall x f ck les i r ck_r,
+        Is_free_in_laexps i ck les \/ (r = Some (i, ck_r)) ->
         Is_free_in_eq i (EqApp x ck f les r)
   | FreeEqFby:
       forall x v ck le i,
@@ -191,7 +191,7 @@ Module Type ISFREE
     | EqApp _ ck f laes r =>
       let fvs := free_in_laexps ck laes fvs in
       match r with
-      | Some x => PS.add x fvs
+      | Some (x, _) => PS.add x fvs
       | None => fvs
       end
     | EqFby _ ck v lae    => free_in_laexp ck lae fvs
@@ -408,14 +408,14 @@ Module Type ISFREE
                 apply free_in_caexp_spec
                 || apply free_in_laexp_spec
                 || apply free_in_laexps_spec
-              | _ => intuition
+              | _ => intuition; eauto
               end).
 
     destruct eq; split; intro H; aux.
-    - destruct o; aux.
+    - destruct o as [[]|]; aux.
       simpl in H.
       apply PS.add_spec in H as [|].
-      + subst; left; constructor; intuition.
+      + subst; left; eauto.
       + apply free_in_laexps_spec in H as [|]; aux.
     - destruct o; aux.
       simpl.
@@ -427,6 +427,10 @@ Module Type ISFREE
       apply PS.add_spec.
       right.
       rewrite free_in_laexps_spec; intuition.
+
+      Grab Existential Variables.
+      exact Cbase.
+      exact Cbase.
   Qed.
 
   Lemma free_in_equation_spec':

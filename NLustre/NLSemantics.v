@@ -324,20 +324,20 @@ environment.
       | _ => false
       end.
 
-  Definition reset_of' (xs: stream value) (bs: stream bool) : Prop :=
-    forall n,
-      xs n = present true_val <-> bs n = true.
+  (* Definition reset_of' (xs: stream value) (bs: stream bool) : Prop := *)
+  (*   forall n, *)
+  (*     xs n = present true_val <-> bs n = true. *)
 
-  Lemma reset_of_equiv:
-    forall xs, reset_of' xs (reset_of xs).
-  Proof.
-    split; intros H.
-    - unfold reset_of; now rewrite H, equiv_decb_refl.
-    - unfold reset_of in H.
-      destruct (xs n); try discriminate.
-      rewrite equiv_decb_equiv in H.
-      now rewrite H.
-  Qed.
+  (* Lemma reset_of_equiv: *)
+  (*   forall xs, reset_of' xs (reset_of xs). *)
+  (* Proof. *)
+  (*   split; intros H. *)
+  (*   - unfold reset_of; now rewrite H, equiv_decb_refl. *)
+  (*   - unfold reset_of in H. *)
+  (*     destruct (xs n); try discriminate. *)
+  (*     rewrite equiv_decb_equiv in H. *)
+  (*     now rewrite H. *)
+  (* Qed. *)
 
   (* Definition merge_reset (rs rs': stream bool) : stream bool := *)
   (*   fun n => rs n || rs' n. *)
@@ -376,12 +376,12 @@ environment.
           sem_node f ls xs ->
           sem_equation bk H (EqApp x ck f arg None)
     | SEqReset:
-        forall bk H x ck f arg y ys ls xs,
+        forall bk H x ck f arg y ck_r ys ls xs,
           sem_laexps bk H ck arg ls ->
           sem_vars bk H x xs ->
           sem_var bk H y ys ->
           sem_reset f (reset_of ys) ls xs ->
-          sem_equation bk H (EqApp x ck f arg (Some y))
+          sem_equation bk H (EqApp x ck f arg (Some (y, ck_r)))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
           sem_laexp bk H ck le ls ->
@@ -398,11 +398,9 @@ environment.
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
          | SNode:
-             forall bk H f xss yss n, (* i o v eqs ingt0 outgt0 defd vout nodup good, *)
+             forall bk H f xss yss n,
                clock_of xss bk ->
                find_node f G = Some n ->
-                                    (* (mk_node f i o v eqs *)
-                                    (*          ingt0 outgt0 defd vout nodup good) -> *)
                sem_vars bk H (map fst n.(n_in)) xss ->
                sem_vars bk H (map fst n.(n_out)) yss ->
                (* XXX: This should be obtained through well-clocking: *)
@@ -448,13 +446,13 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H (EqApp x ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H x ck f arg y ys ls xs,
+      forall bk H x ck f arg y ck_r ys ls xs,
         sem_laexps bk H ck arg ls ->
         sem_vars bk H x xs ->
         sem_var bk H y ys ->
         sem_reset G f (reset_of ys) ls xs ->
         P_reset f (reset_of ys) ls xs ->
-        P_equation bk H (EqApp x ck f arg (Some y)).
+        P_equation bk H (EqApp x ck f arg (Some (y, ck_r))).
 
     Hypothesis EqFbyCase:
       forall bk H x ls xs c0 ck le,
@@ -470,11 +468,9 @@ enough: it does not support the internal fixpoint introduced by
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
-      forall bk H f xss yss n, (* i o v eqs ingt0 outgt0 defd vout nodup good, *)
+      forall bk H f xss yss n,
         clock_of xss bk ->
         find_node f G = Some n ->
-                             (* (mk_node f i o v eqs *)
-                             (*          ingt0 outgt0 defd vout nodup good) -> *)
         sem_vars bk H (map fst n.(n_in)) xss ->
         sem_vars bk H (map fst n.(n_out)) yss ->
         (* XXX: This should be obtained through well-clocking: *)
@@ -506,7 +502,6 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        (* clear H1 defd vout good. *)
         induction H7; auto.
     Qed.
 
@@ -563,17 +558,6 @@ enough: it does not support the internal fixpoint introduced by
     intros ** Sem; split; inv Sem;
       assert_const_length xss; assert_const_length yss; auto.
   Qed.
-
-  (* Lemma sem_node_wf: *)
-  (*   forall G f (xss_f yss_f: nat -> stream (list value)), *)
-  (*     (forall n, sem_node G f (xss_f n) (yss_f n)) -> *)
-  (*     (forall n, wf_streams (xss_f n)) /\ (forall n, wf_streams (yss_f n)). *)
-  (* Proof. *)
-  (*   intros ** Sem; split; intro n; *)
-  (*     specialize (Sem n); inv Sem; *)
-  (*       assert_const_length (xss_f n); assert_const_length (yss_f n); auto. *)
-  (* Qed. *)
-
 
   (** ** Determinism of the semantics *)
 
@@ -947,10 +931,10 @@ clock to [sem_var_instant] too. *)
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f lae ls xs Hlae Hvars Hnode IH
-                     | bk H x ck f lae y ys ls xs Hlae Hvars Hvar Hnode IH
+                     | bk H x ck f lae y ck_r ys ls xs Hlae Hvars Hvar Hnode IH
                      |
                      |
-                     | bk H f xs ys n (* i o v eqs ingt0 outgt0 defd vout nodup good *) Hbk Hf ? ? ? ? ? Heqs IH ]
+                     | bk H f xs ys n Hbk Hf ? ? ? ? ? Heqs IH ]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
                                       -> sem_equation G bk H eq)
@@ -968,41 +952,20 @@ clock to [sem_var_instant] too. *)
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       eapply SNode; eauto.
-      (* clear Heqs. *)
-      (* destruct IH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs). *)
-      (* exists H. *)
-      (* repeat (split; eauto). *)
-      (* set (cnode := {| n_name  := f; *)
-      (*                  n_in    := i; *)
-      (*                  n_out   := o; *)
-      (*                  n_vars  := v; *)
-      (*                  n_eqs   := eqs; *)
-      (*                  n_ingt0 := ingt0; *)
-      (*                  n_outgt0 := outgt0; *)
-      (*                  n_defd  := defd; *)
-      (*                  n_vout  := vout; *)
-      (*                  n_nodup := nodup; *)
-      (*                  n_good  := good *)
-      (*               |}). *)
       assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n))
         by (eapply Is_node_in_Forall; try eassumption;
             eapply find_node_later_not_Is_node_in; try eassumption).
-      clear Heqs (* cnode Hf defd good vout *);
-        induction n.(n_eqs); inv IH; inv H5; eauto.
+      clear Heqs; induction n.(n_eqs); inv IH; inv H5; eauto.
   Qed.
 
   Lemma find_node_find_again:
-    forall G f n (* i o v eqs ingt0 outgt0 defd vout nodup good *) g,
+    forall G f n g,
       Ordered_nodes G
       -> find_node f G = Some n
-         (* Some {| n_name := f; n_in := i; n_out := o; *)
-         (*         n_vars := v; n_eqs := eqs; *)
-         (*         n_ingt0 := ingt0; n_outgt0 := outgt0; n_defd := defd; n_vout := vout; *)
-         (*         n_nodup := nodup; n_good := good |} *)
       -> Is_node_in g n.(n_eqs)
       -> Exists (fun nd => g = nd.(n_name)) G.
   Proof.
-    intros G f n (* i o v eqs ingt0 outgt0 defd vout nodup good *) g Hord Hfind Hini.
+    intros G f n g Hord Hfind Hini.
     apply find_node_split in Hfind.
     destruct Hfind as [bG [aG Hfind]].
     rewrite Hfind in *.
@@ -1028,10 +991,10 @@ clock to [sem_var_instant] too. *)
     revert Hnin'.
     induction Hsem as [
        | bk H x ? f lae ls xs Hlae Hvars Hnode IH
-       | bk H x f lae y ys ls xs Hlae Hvars Hvar Hnode IH
+       | bk H x f lae y ck_r ys ls xs Hlae Hvars Hvar Hnode IH
        |
        |
-       | bk H f xs ys n (* i o v eqs ingt0 outgt0 defd vout nodup good *) Hbk Hfind Hxs Hys ? ? ? Heqs IH]
+       | bk H f xs ys n Hbk Hfind Hxs Hys ? ? ? Heqs IH]
           using sem_node_mult
         with (P_equation := fun bk H eq =>
                      ~Is_node_in_eq nd.(n_name) eq
@@ -1057,9 +1020,6 @@ clock to [sem_var_instant] too. *)
       econstructor; eauto.
       clear Heqs Hxs Hys.
       rename IH into Heqs.
-      (* destruct IH as (H & Hxs & Hys & Hout & Hsamexs & Hsameys & Heqs). *)
-      (* exists H. *)
-      (* clear Hxs Hys. *)
       assert (forall g, Is_node_in g n.(n_eqs)
                    -> Exists (fun nd=> g = nd.(n_name)) G)
         as Hniex by
@@ -1070,7 +1030,7 @@ clock to [sem_var_instant] too. *)
                      Is_node_in_eq g eq
                      -> Exists (fun nd=> g = nd.(n_name)) G) n.(n_eqs)) as HH.
       {
-        clear (* defd vout nodup good  *)Hfind Heqs Hnf.
+        clear Hfind Heqs Hnf.
         induction n.(n_eqs) as [|eq eqs IH]; [now constructor|].
         constructor.
         - intros g Hini.
@@ -1110,7 +1070,7 @@ clock to [sem_var_instant] too. *)
         destruct Hnini; assumption).
     apply Forall_cons with (2:=Hseqs).
     inversion Hseq as [|? ? ? ? ? ? ? Hsem Hvars Hnode
-                          |? ? ? ? ? ? ? ? ? Hsem Hvars Hvar Hnode|]; subst.
+                          |? ? ? ? ? ? ? ? ? ? Hsem Hvars Hvar Hnode|]; subst.
     - econstructor; eassumption.
     - apply not_Is_node_in_cons in Hnini.
       destruct Hnini as [Hninieq Hnini].
@@ -1179,7 +1139,6 @@ an absent value *)
   - now inversion H.
   - inversion H. rewrite <- H2. now apply IHxs.
   Qed.
-
 
   Lemma present_list_spec:
     forall xs,
@@ -1253,17 +1212,6 @@ an absent value *)
       specialize (E n).
       induction H; rewrite <-E; constructor; auto.
   Qed.
-
-  (* Lemma sem_vars_compat: *)
-  (*   forall H bk x xs xs', *)
-  (*     (forall n, xs n = xs' n) -> *)
-  (*     sem_vars bk H x xs -> *)
-  (*     sem_vars bk H x xs'. *)
-  (* Proof. *)
-  (*   unfold sem_vars, lift; intros ** E Sem n. *)
-  (*   specialize (E n); specialize (Sem n). *)
-  (*   induction Sem; rewrite <-E; constructor; auto. *)
-  (* Qed. *)
 
   Add Parametric Morphism : same_clock
       with signature eq_str ==> Basics.impl

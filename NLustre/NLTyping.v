@@ -90,14 +90,14 @@ Module Type NLTYPING
         wt_clock ck ->
         wt_cexp e ->
         wt_equation (EqDef x ck e)
-    | wt_EqApp: forall n xs ck f es r x,
+    | wt_EqApp: forall n xs ck f es r x ck_r,
         find_node f G = Some n ->
         Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
         Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
         wt_clock ck ->
         Forall wt_lexp es ->
         NoDup xs ->
-        (r = Some x -> In (x, bool_type) vars) ->
+        (r = Some (x, ck_r) -> In (x, bool_type) vars) ->
         wt_equation (EqApp xs ck f es r)
     | wt_EqFby: forall x ck c0 e,
         In (x, type_const c0) vars ->

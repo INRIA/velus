@@ -127,8 +127,8 @@ Module Type TRANSLATION
         Assign x (translate_lexp l)
       end.
 
-    Definition reset_stmt (class name r: ident) : stmt :=
-      Ifte (bool_var r) (Call [] class name reset []) Skip.
+    Definition reset_stmt (class name r: ident) (ck_r: clock): stmt :=
+      Control ck_r (Ifte (bool_var r) (Call [] class name reset []) Skip).
 
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
@@ -139,7 +139,7 @@ Module Type TRANSLATION
         let call := Control ck (Call xs f name step (List.map translate_lexp les)) in
         match r with
         | None => call
-        | Some r => Comp (reset_stmt f name r) call
+        | Some (r, ck_r) => Comp (reset_stmt f name r ck_r) call
         end
       | EqFby x ck v le =>
         Control ck (AssignSt x (translate_lexp le))

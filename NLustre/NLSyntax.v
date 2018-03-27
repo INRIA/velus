@@ -42,7 +42,7 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : idents -> clock -> ident -> lexps -> option ident -> equation
+  | EqApp : idents -> clock -> ident -> lexps -> option (ident * clock) -> equation
   | EqFby : ident -> clock -> const -> lexp -> equation.
 
   Implicit Type eqn: equation.
@@ -114,7 +114,6 @@ Module Type NLSYNTAX
 
   Implicit Type G: global.
 
-  (* definition is needed in signature *)
   Definition find_node (f : ident) : global -> option node :=
     List.find (fun n=> ident_eqb n.(n_name) f).
 
