@@ -71,20 +71,22 @@ Module Type MEMSEMANTICS
 
   Definition memory := memory (stream val).
 
-  Definition mask' {A} (k: nat) (xs: stream A) (rs: cstream) (ys: stream A) : Prop :=
-    forall n, match nat_compare (count rs n) k with
-         | Eq => ys n = xs n
-         | Lt => ys n = xs 0
-         | Gt => ys n = ys (pred n)
-         end.
+  Definition mask' {A} (k: nat) (rs: cstream) (xs ys: stream A) : Prop :=
+    ys 0 = xs 0
+    /\ forall n, ys n = if EqNat.beq_nat k (count rs n) then xs n else ys (pred n).
 
-  Inductive mmask: nat -> cstream -> memory -> memory -> Prop :=
-    mmask_intro:
-      forall k rs M M' x xs xs',
-        mfind_mem x M = Some xs ->
-        mfind_mem x M' = Some xs' ->
-        mask' k xs rs xs' ->
-        mmask k rs M M'.
+  (* match nat_compare (count rs n) k with *)
+  (*          | Eq => ys n = xs n *)
+  (*          | Lt => ys n = xs 0 *)
+  (*          | Gt => ys n = ys (pred n) *)
+  (*          end. *)
+
+  Definition mmask (k: nat) (rs: cstream) (M M': memory) : Prop :=
+    forall x xs,
+      mfind_mem x M = Some xs ->
+      exists xs',
+        mfind_mem x M' = Some xs'
+        /\ mask' k rs xs xs'.
 
   Inductive mfby: ident -> val -> stream value -> memory -> stream value -> Prop :=
     mfby_intro:
@@ -96,6 +98,52 @@ Module Type MEMSEMANTICS
               | present v => ms (S n) = v    /\ xs n = present (ms n)
               end) ->
         mfby x v0 ls M xs.
+
+  (* Lemma mask'_S: *)
+  (*   forall {A} k rs (xs ys: stream A) n, *)
+  (*     mask' k rs xs ys -> *)
+  (*     (count rs n = k ->  *)
+  (*      ys (S n) = xs (S n) \/ ys (S n) = ys n. *)
+  (* Admitted. *)
+
+  (* Lemma foo: *)
+  (*   forall x v0 ls M xs k rs M', *)
+  (*     mfby x v0 ls M xs -> *)
+  (*     mmask k rs M M' -> *)
+  (*     mfby x v0 (mask absent k rs ls) M' (mask absent k rs xs). *)
+  (* Proof. *)
+  (*   intros ** Fby Mask. *)
+  (*   inversion_clear Fby as [?????? Find ? Spec]. *)
+  (*   apply Mask in Find as (ms' & ? & Mask'). *)
+  (*   (* pose proof Mask' as MaskS. *) *)
+  (*   destruct Mask' as (Hinit & Spec'). *)
+  (*   econstructor; eauto. *)
+  (*   - now rewrite Hinit. *)
+  (*   - pose proof Spec' as SpecS; *)
+  (*       intro n; specialize (Spec n); specialize (Spec' n); *)
+  (*         specialize (SpecS (S n)); simpl in *. *)
+  (*     unfold mask. *)
+  (*     destruct (EqNat.beq_nat k (count rs n)) eqn: E. *)
+  (*     + destruct (rs (S n)). *)
+  (*       *{ apply EqNat.beq_nat_true in E. *)
+  (*          destruct (EqNat.beq_nat k (S (count rs n))) eqn: E'. *)
+  (*          - apply EqNat.beq_nat_true in E'; rewrite E in E'; omega. *)
+  (*          - destruct (ls n); intuition. *)
+  (*            + admit. *)
+  (*            + now rewrite Spec'. *)
+  (*        } *)
+  (*       *{ rewrite E in SpecS. *)
+  (*          destruct (ls n); intuition. *)
+  (*          - now rewrite SpecS, Spec'. *)
+  (*          - now rewrite SpecS. *)
+  (*          - now rewrite Spec'. *)
+  (*        } *)
+  (*     + destruct (rs (S n)). *)
+  (*       * destruct (EqNat.beq_nat k (S (count rs n))) eqn: E'; intuition. *)
+  (*         admit. *)
+  (*       * rewrite E in SpecS. *)
+  (*         intuition. *)
+  (* Qed. *)
 
   Implicit Type M : memory.
 
@@ -392,9 +440,10 @@ enough: it does not support the internal fixpoint introduced by
       msem_reset G f r xs M ys.
   Proof.
     intros ** Sem ?.
-    inv Sem.
-    constructor; intro.
-    eauto using msem_node_cons.
+    inversion_clear Sem as [????? SemN].
+    constructor; intro k.
+    destruct (SemN k).
+    intuition; eauto using msem_node_cons.
   Qed.
 
   Lemma msem_node_cons2:
@@ -408,7 +457,7 @@ enough: it does not support the internal fixpoint introduced by
     intros ** Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
-    induction Hsem as [| | | | | ? ? ? ? ? ? n' ? Hfind ? ? ? ? ? Heqs IH ]
+    induction Hsem as [| | | |?????? IH|?????? n' ? Hfind ????? Heqs IH]
         using msem_node_mult
       with (P_equation := fun bk H M eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
@@ -416,49 +465,51 @@ enough: it does not support the internal fixpoint introduced by
            (P_reset := fun f r xss M yss =>
                          Forall (fun n' : node => n_name n <> n_name n') G ->
                          msem_reset (n :: G) f r xss M yss); eauto.
-    intro HH; clear HH.
-    assert (n.(n_name) <> f) as Hnf.
-    { intro Hnf.
-      rewrite Hnf in *.
-      pose proof (find_node_name _ _ _ Hfind).
-      apply find_node_split in Hfind.
-      destruct Hfind as [bG [aG Hge]].
-      rewrite Hge in Hnin.
-      apply Forall_app in Hnin.
-      destruct Hnin as [H' Hfg]; clear H'.
-      inversion_clear Hfg.
-      match goal with H:f<>_ |- False => now apply H end.
-    }
-    apply find_node_other with (2:=Hfind) in Hnf.
-    econstructor; eauto.
-    assert (forall g, Is_node_in g n'.(n_eqs) -> Exists (fun nd=> g = nd.(n_name)) G)
-      as Hniex by (intros g Hini;
-                   apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
-                   exact Hini).
-    assert (Forall (fun eq => forall g,
-                        Is_node_in_eq g eq -> Exists (fun nd=> g = nd.(n_name)) G)
-                   n'.(n_eqs)) as HH.
-    {
-      clear Heqs IH.
-      induction n'.(n_eqs) as [|eq eqs]; [now constructor|].
-      constructor.
-      - intros g Hini.
-        apply Hniex.
-        constructor 1; apply Hini.
-      - apply IHeqs.
-        intros g Hini; apply Hniex.
-        constructor 2; apply Hini.
-    }
-    apply Forall_Forall with (1:=HH) in IH.
-    apply Forall_impl with (2:=IH).
-    intros eq (Hsem & IH1).
-    apply IH1.
-    intro Hini.
-    apply Hsem in Hini.
-    apply Forall_Exists with (1:=Hnin) in Hini.
-    apply Exists_exists in Hini.
-    destruct Hini as [nd' [Hin [Hneq Heq]]].
-    intuition.
+    - intros; constructor; intro k.
+      destruct (IH k); intuition; eauto.
+    - intro HH; clear HH.
+      assert (n.(n_name) <> f) as Hnf.
+      { intro Hnf.
+        rewrite Hnf in *.
+        pose proof (find_node_name _ _ _ Hfind).
+        apply find_node_split in Hfind.
+        destruct Hfind as [bG [aG Hge]].
+        rewrite Hge in Hnin.
+        apply Forall_app in Hnin.
+        destruct Hnin as [H' Hfg]; clear H'.
+        inversion_clear Hfg.
+        match goal with H:f<>_ |- False => now apply H end.
+      }
+      apply find_node_other with (2:=Hfind) in Hnf.
+      econstructor; eauto.
+      assert (forall g, Is_node_in g n'.(n_eqs) -> Exists (fun nd=> g = nd.(n_name)) G)
+        as Hniex by (intros g Hini;
+                     apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
+                     exact Hini).
+      assert (Forall (fun eq => forall g,
+                          Is_node_in_eq g eq -> Exists (fun nd=> g = nd.(n_name)) G)
+                     n'.(n_eqs)) as HH.
+      {
+        clear Heqs IH.
+        induction n'.(n_eqs) as [|eq eqs]; [now constructor|].
+        constructor.
+        - intros g Hini.
+          apply Hniex.
+          constructor 1; apply Hini.
+        - apply IHeqs.
+          intros g Hini; apply Hniex.
+          constructor 2; apply Hini.
+      }
+      apply Forall_Forall with (1:=HH) in IH.
+      apply Forall_impl with (2:=IH).
+      intros eq (Hsem & IH1).
+      apply IH1.
+      intro Hini.
+      apply Hsem in Hini.
+      apply Forall_Exists with (1:=Hnin) in Hini.
+      apply Exists_exists in Hini.
+      destruct Hini as [nd' [Hin [Hneq Heq]]].
+      intuition.
   Qed.
 
   Lemma msem_reset_cons2:
@@ -469,9 +520,10 @@ enough: it does not support the internal fixpoint introduced by
       msem_reset (n :: G) f r xs M ys.
   Proof.
     intros ** Sem ?.
-    inv Sem.
-    constructor; intro.
-    eauto using msem_node_cons2.
+    inversion_clear Sem as [????? SemN].
+    constructor; intro k.
+    destruct (SemN k).
+    intuition; eauto using msem_node_cons2.
   Qed.
 
   Lemma msem_equation_cons2:
@@ -734,10 +786,10 @@ dataflow memory for which the non-standard semantics holds true.
                        /\ 0 < length n.(n_out)) as (n & ? & ?).
           {
             inversion_clear Hmsem as [? ? ? ? ? Hmsem'].
-            specialize (Hmsem' 0); inv Hmsem'.
+            destruct (Hmsem' 0) as (? & ? & Hmsem); inv Hmsem.
             exists n; split; auto.
-            - unfold sem_vars, lift in H9; specialize (H9 0).
-              apply Forall2_length in H9; rewrite H9.
+            - unfold sem_vars, lift in H10; specialize (H10 0).
+              apply Forall2_length in H10; rewrite H10.
               rewrite mask_length; auto.
               inversion_clear Hsem' as [? ? ? ? Hsem].
               eapply wf_streams_mask.
