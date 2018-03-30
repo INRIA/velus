@@ -71,9 +71,40 @@ Module Type MEMSEMANTICS
 
   Definition memory := memory (stream val).
 
-  Definition mask' {A} (k: nat) (rs: cstream) (xs ys: stream A) : Prop :=
+ Definition mask' {A} (k: nat) (rs: cstream) (xs ys: stream A) : Prop :=
     ys 0 = xs 0
-    /\ forall n, ys n = if EqNat.beq_nat k (count rs n) then xs n else ys (pred n).
+    (* /\ forall n, ys n = if EqNat.beq_nat k (count rs n) then xs n else ys (pred n). *)
+    /\ forall n, ys n = match nat_compare (count rs n) k with
+                     | Lt => xs 0
+                     | Eq => xs (if rs n then 0 else n)
+                     | Gt => if EqNat.beq_nat (count rs n) (S k) && rs n
+                            then xs n else ys (pred n)
+                     end.
+
+  (* Definition mask' {A} (k: nat) (rs: cstream) (xs: stream A) : stream A := *)
+  (*   fun n => *)
+  (*     xs match nat_compare (count rs n) k with *)
+  (*        | Lt => 0 *)
+  (*        | Eq => if rs n then 0 else n *)
+  (*        | Gt => n *)
+  (*        end. *)
+
+  (* Lemma mask'_0: *)
+  (*   forall {A} k rs (xs: stream A), *)
+  (*     mask' k rs xs 0 = xs 0. *)
+  (* Proof. *)
+  (*   intros; unfold mask'. *)
+  (*   destruct (nat_compare (count rs 0) k); auto. *)
+  (*   destruct (rs 0); auto. *)
+  (* Qed. *)
+
+  (* Lemma mask'_spec: *)
+  (*   forall {A} k rs (xs: stream A), *)
+  (*     mask'' k rs xs (mask' k rs xs). *)
+  (* Proof. *)
+  (*   split; auto. *)
+  (*   apply mask'_0. *)
+  (* Qed. *)
 
   (* match nat_compare (count rs n) k with *)
   (*          | Eq => ys n = xs n *)
@@ -82,11 +113,11 @@ Module Type MEMSEMANTICS
   (*          end. *)
 
   Definition mmask (k: nat) (rs: cstream) (M M': memory) : Prop :=
-    forall x xs,
-      mfind_mem x M = Some xs ->
-      exists xs',
-        mfind_mem x M' = Some xs'
-        /\ mask' k rs xs xs'.
+    forall x ms,
+      mfind_mem x M = Some ms ->
+      exists ms',
+        mfind_mem x M' = Some ms'
+        /\ mask' k rs ms ms'.
 
   Inductive mfby: ident -> val -> stream value -> memory -> stream value -> Prop :=
     mfby_intro:
@@ -106,44 +137,79 @@ Module Type MEMSEMANTICS
   (*      ys (S n) = xs (S n) \/ ys (S n) = ys n. *)
   (* Admitted. *)
 
-  (* Lemma foo: *)
-  (*   forall x v0 ls M xs k rs M', *)
-  (*     mfby x v0 ls M xs -> *)
-  (*     mmask k rs M M' -> *)
-  (*     mfby x v0 (mask absent k rs ls) M' (mask absent k rs xs). *)
+  (* Lemma count_S: *)
+  (*   forall k rs n, *)
+  (*     k = count rs n -> *)
+  (*     k <= count rs (S n). *)
   (* Proof. *)
-  (*   intros ** Fby Mask. *)
-  (*   inversion_clear Fby as [?????? Find ? Spec]. *)
-  (*   apply Mask in Find as (ms' & ? & Mask'). *)
-  (*   (* pose proof Mask' as MaskS. *) *)
-  (*   destruct Mask' as (Hinit & Spec'). *)
-  (*   econstructor; eauto. *)
-  (*   - now rewrite Hinit. *)
-  (*   - pose proof Spec' as SpecS; *)
-  (*       intro n; specialize (Spec n); specialize (Spec' n); *)
-  (*         specialize (SpecS (S n)); simpl in *. *)
-  (*     unfold mask. *)
-  (*     destruct (EqNat.beq_nat k (count rs n)) eqn: E. *)
-  (*     + destruct (rs (S n)). *)
-  (*       *{ apply EqNat.beq_nat_true in E. *)
-  (*          destruct (EqNat.beq_nat k (S (count rs n))) eqn: E'. *)
-  (*          - apply EqNat.beq_nat_true in E'; rewrite E in E'; omega. *)
-  (*          - destruct (ls n); intuition. *)
-  (*            + admit. *)
-  (*            + now rewrite Spec'. *)
-  (*        } *)
-  (*       *{ rewrite E in SpecS. *)
-  (*          destruct (ls n); intuition. *)
-  (*          - now rewrite SpecS, Spec'. *)
-  (*          - now rewrite SpecS. *)
-  (*          - now rewrite Spec'. *)
-  (*        } *)
-  (*     + destruct (rs (S n)). *)
-  (*       * destruct (EqNat.beq_nat k (S (count rs n))) eqn: E'; intuition. *)
-  (*         admit. *)
-  (*       * rewrite E in SpecS. *)
-  (*         intuition. *)
+  (*   intros ** E; simpl; rewrite E. *)
+  (*   destruct (rs (S n)); omega. *)
   (* Qed. *)
+
+  Lemma foo:
+    forall x v0 ls M xs k rs M',
+      mfby x v0 ls M xs ->
+      (forall ms,
+          mfind_mem x M = Some ms ->
+          forall n,
+            rs n = true ->
+            ms n = v0) ->
+      mmask k rs M M' ->
+      mfby x v0 (mask absent k rs ls) M' (mask absent k rs xs).
+  Proof.
+    intros ** Fby Rst Mask.
+    inversion_clear Fby as [?????? Find ? Spec].
+    specialize (Rst _ Find).
+    apply Mask in Find as (ms' & Find & Mask').
+    inversion Mask' as (Hinit & Spec').
+    econstructor; eauto.
+    - now rewrite Hinit.
+    - pose proof Spec' as SpecS;
+        intro n; specialize (Spec n); specialize (Spec' n);
+          specialize (SpecS (S n));  simpl in *; specialize (Rst n).
+      unfold mask.
+      destruct (nat_compare (count rs n) k) eqn: E; rewrite SpecS; clear SpecS.
+      + assert (EqNat.beq_nat k (count rs n) = true) as ->
+            by now rewrite NPeano.Nat.eqb_sym, EqNat.beq_nat_true_iff,
+               <-nat_compare_eq_iff.
+        destruct (rs (S n)).
+        *{ assert (nat_compare (S (count rs n)) k = Gt) as ->
+               by (rewrite <-nat_compare_gt; apply Gt.le_gt_S;
+                   apply nat_compare_eq_iff in E; omega).
+           assert (EqNat.beq_nat (S (count rs n)) (S k) = true) as ->
+               by now apply EqNat.beq_nat_true_iff, eq_sym,
+                  eq_S, EqNat.beq_nat_true_iff; simpl.
+           destruct (ls n), (rs n); intuition;
+             try rewrite Spec'; auto.
+           - now rewrite H3, H5.
+           - now rewrite H, <-H5.
+         }
+        *{ rewrite E.
+           destruct (ls n), (rs n); intuition;
+             try rewrite Spec'; auto.
+           - now rewrite H1, H.
+           - now rewrite H, <-H3.
+         }
+      + assert (EqNat.beq_nat k (count rs n) = false) as ->
+            by (apply nat_compare_lt in E; apply EqNat.beq_nat_false_iff;
+                intro; subst; omega).
+        destruct (rs (S n)).
+        * destruct (nat_compare (S (count rs n)) k) eqn: E'; intuition;
+            try rewrite Spec'; auto.
+          apply nat_compare_lt in E; apply nat_compare_gt in E'; omega.
+        * now rewrite E.
+      + assert (EqNat.beq_nat k (count rs n) = false) as ->
+            by (apply nat_compare_gt in E; apply EqNat.beq_nat_false_iff;
+                intro; subst; omega).
+        destruct (rs (S n)).
+        * assert (nat_compare (S (count rs n)) k = Gt) as ->
+              by (rewrite <-nat_compare_gt in *; omega).
+          assert (EqNat.beq_nat (S (count rs n)) (S k) = false) as ->
+              by now apply EqNat.beq_nat_false_iff, not_eq_S,
+                 not_eq_sym, EqNat.beq_nat_false_iff.
+          now rewrite Bool.andb_false_l.
+        * now rewrite E, Bool.andb_false_r.
+  Qed.
 
   Implicit Type M : memory.
 
