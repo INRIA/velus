@@ -1,5 +1,7 @@
 # Object files, in general
 *.vo
+*.vo.aux
+*.aux
 *.glob
 *.o
 *.a
@@ -30,6 +32,7 @@ extraction/extracted
 .depend
 automake
 Makefile.auto
+Makefile.config
 tools/automake.ml
 
 *.exe
