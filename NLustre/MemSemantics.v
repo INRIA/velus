@@ -71,53 +71,68 @@ Module Type MEMSEMANTICS
 
   Definition memory := memory (stream val).
 
- Definition mask' {A} (k: nat) (rs: cstream) (xs ys: stream A) : Prop :=
+  Definition mask'' {A} (k: nat) (rs: cstream) (xs ys: stream A) : Prop :=
     ys 0 = xs 0
-    (* /\ forall n, ys n = if EqNat.beq_nat k (count rs n) then xs n else ys (pred n). *)
     /\ forall n, ys n = match nat_compare (count rs n) k with
-                     | Lt => xs 0
-                     | Eq => xs (if rs n then 0 else n)
-                     | Gt => if EqNat.beq_nat (count rs n) (S k) && rs n
-                            then xs n else ys (pred n)
-                     end.
+                  | Lt => xs 0
+                  | Eq => xs (if rs n then 0 else n)
+                  | Gt => if EqNat.beq_nat (count rs n) (S k) && rs n
+                         then xs n else ys (pred n)
+                  end.
 
-  (* Definition mask' {A} (k: nat) (rs: cstream) (xs: stream A) : stream A := *)
-  (*   fun n => *)
-  (*     xs match nat_compare (count rs n) k with *)
-  (*        | Lt => 0 *)
-  (*        | Eq => if rs n then 0 else n *)
-  (*        | Gt => n *)
-  (*        end. *)
+  Fixpoint mask' {A} (k: nat) (rs: cstream) (xs: stream A) (n: nat) : A :=
+    match n with
+    | 0 => xs 0
+    | S n' =>
+      match nat_compare (count rs n) k with
+      | Lt => xs 0
+      | Eq => xs (if rs n then 0 else n)
+      | Gt => if EqNat.beq_nat (count rs n) (S k) && rs n
+             then xs n else mask' k rs xs n'
+      end
+    end.
 
-  (* Lemma mask'_0: *)
-  (*   forall {A} k rs (xs: stream A), *)
-  (*     mask' k rs xs 0 = xs 0. *)
-  (* Proof. *)
-  (*   intros; unfold mask'. *)
-  (*   destruct (nat_compare (count rs 0) k); auto. *)
-  (*   destruct (rs 0); auto. *)
-  (* Qed. *)
+  Lemma mask'_eq:
+    forall {A} n k rs (xs: stream A),
+      count rs n = k ->
+      mask' k rs xs n = xs (if rs n then 0 else n).
+  Proof.
+    destruct n; intros ** Count; simpl in *.
+    - now destruct (rs 0).
+    - apply nat_compare_eq_iff in Count; now rewrite Count.
+  Qed.
 
-  (* Lemma mask'_spec: *)
-  (*   forall {A} k rs (xs: stream A), *)
-  (*     mask'' k rs xs (mask' k rs xs). *)
-  (* Proof. *)
-  (*   split; auto. *)
-  (*   apply mask'_0. *)
-  (* Qed. *)
+  Lemma mask'_lt:
+    forall {A} n k rs (xs: stream A),
+      count rs n < k ->
+      mask' k rs xs n = xs 0.
+  Proof.
+    destruct n; intros ** Count; simpl in *; auto.
+    apply nat_compare_lt in Count; now rewrite Count.
+  Qed.
 
-  (* match nat_compare (count rs n) k with *)
-  (*          | Eq => ys n = xs n *)
-  (*          | Lt => ys n = xs 0 *)
-  (*          | Gt => ys n = ys (pred n) *)
-  (*          end. *)
+  Lemma mask'_spec:
+    forall {A} k rs (xs: stream A),
+      mask'' k rs xs (mask' k rs xs).
+  Proof.
+    split; auto.
+    induction n; simpl; auto.
+    destruct (nat_compare (if rs 0 then 1 else 0) k), (rs 0); simpl; auto.
+    destruct k; simpl; auto.
+  Qed.
 
-  Definition mmask (k: nat) (rs: cstream) (M M': memory) : Prop :=
+  Definition mmask' (k: nat) (rs: cstream) (M M': memory) : Prop :=
     forall x ms,
       mfind_mem x M = Some ms ->
-      exists ms',
-        mfind_mem x M' = Some ms'
-        /\ mask' k rs ms ms'.
+      mfind_mem x M' = Some (mask' k rs ms).
+
+  Definition mmask (k: nat) (rs: cstream) (M: memory) : memory :=
+    mmap (mask' k rs) M.
+  (* Definition mflatten (Ms: nat -> memory) (M: memory) : Prop := *)
+  (*   forall k, Ms k *)
+
+  Definition memory_reset (rs: cstream) (M: memory) : memory :=
+    mmap (fun ms => fun n => ms (if rs n then 0 else n)) M.
 
   Inductive mfby: ident -> val -> stream value -> memory -> stream value -> Prop :=
     mfby_intro:
@@ -130,72 +145,52 @@ Module Type MEMSEMANTICS
               end) ->
         mfby x v0 ls M xs.
 
-  (* Lemma mask'_S: *)
-  (*   forall {A} k rs (xs ys: stream A) n, *)
-  (*     mask' k rs xs ys -> *)
-  (*     (count rs n = k ->  *)
-  (*      ys (S n) = xs (S n) \/ ys (S n) = ys n. *)
-  (* Admitted. *)
-
-  (* Lemma count_S: *)
-  (*   forall k rs n, *)
-  (*     k = count rs n -> *)
-  (*     k <= count rs (S n). *)
-  (* Proof. *)
-  (*   intros ** E; simpl; rewrite E. *)
-  (*   destruct (rs (S n)); omega. *)
-  (* Qed. *)
-
   Lemma foo:
-    forall x v0 ls M xs k rs M',
+    forall x v0 ls M xs k rs,
       mfby x v0 ls M xs ->
       (forall ms,
           mfind_mem x M = Some ms ->
           forall n,
             rs n = true ->
             ms n = v0) ->
-      mmask k rs M M' ->
-      mfby x v0 (mask absent k rs ls) M' (mask absent k rs xs).
+      mfby x v0 (mask absent k rs ls) (mmask k rs M) (mask absent k rs xs).
   Proof.
-    intros ** Fby Rst Mask.
+    intros ** Fby Rst.
     inversion_clear Fby as [?????? Find ? Spec].
     specialize (Rst _ Find).
-    apply Mask in Find as (ms' & Find & Mask').
-    inversion Mask' as (Hinit & Spec').
-    econstructor; eauto.
-    - now rewrite Hinit.
-    - pose proof Spec' as SpecS;
-        intro n; specialize (Spec n); specialize (Spec' n);
-          specialize (SpecS (S n));  simpl in *; specialize (Rst n).
-      unfold mask.
-      destruct (nat_compare (count rs n) k) eqn: E; rewrite SpecS; clear SpecS.
+    (* apply Mask in Find. *)
+    econstructor.
+    - apply mfind_mem_map; eauto.
+    - auto.
+    - intro n; specialize (Spec n); specialize (Rst n).
+      unfold mask; simpl.
+      destruct (nat_compare (count rs n) k) eqn: E.
       + assert (EqNat.beq_nat k (count rs n) = true) as ->
             by now rewrite NPeano.Nat.eqb_sym, EqNat.beq_nat_true_iff,
                <-nat_compare_eq_iff.
+        rewrite mask'_eq by now apply nat_compare_eq_iff.
         destruct (rs (S n)).
         *{ assert (nat_compare (S (count rs n)) k = Gt) as ->
                by (rewrite <-nat_compare_gt; apply Gt.le_gt_S;
                    apply nat_compare_eq_iff in E; omega).
            assert (EqNat.beq_nat (S (count rs n)) (S k) = true) as ->
                by now apply EqNat.beq_nat_true_iff, eq_sym,
-                  eq_S, EqNat.beq_nat_true_iff; simpl.
-           destruct (ls n), (rs n); intuition;
-             try rewrite Spec'; auto.
-           - now rewrite H3, H5.
-           - now rewrite H, <-H5.
+                  eq_S, EqNat.beq_nat_true_iff.
+           destruct (ls n), (rs n); simpl; intuition; rewrite H.
+           - now rewrite H3.
+           - now rewrite <-H5.
          }
         *{ rewrite E.
-           destruct (ls n), (rs n); intuition;
-             try rewrite Spec'; auto.
-           - now rewrite H1, H.
-           - now rewrite H, <-H3.
+           destruct (ls n), (rs n); intuition; rewrite H.
+           - now rewrite H1.
+           - now rewrite <-H3.
          }
       + assert (EqNat.beq_nat k (count rs n) = false) as ->
             by (apply nat_compare_lt in E; apply EqNat.beq_nat_false_iff;
                 intro; subst; omega).
+        rewrite mask'_lt by now apply nat_compare_lt.
         destruct (rs (S n)).
-        * destruct (nat_compare (S (count rs n)) k) eqn: E'; intuition;
-            try rewrite Spec'; auto.
+        * destruct (nat_compare (S (count rs n)) k) eqn: E'; intuition.
           apply nat_compare_lt in E; apply nat_compare_gt in E'; omega.
         * now rewrite E.
       + assert (EqNat.beq_nat k (count rs n) = false) as ->
@@ -247,15 +242,15 @@ Module Type MEMSEMANTICS
           mfby x (sem_const c0) ls M xs ->
           msem_equation bk H M (EqFby x ck c0 le)
 
-    with msem_reset: ident -> stream bool -> stream (list value) -> memory -> stream (list value) -> Prop :=
+    with msem_reset:
+           ident -> stream bool -> stream (list value) -> memory ->
+           stream (list value) -> Prop :=
          | SReset:
              forall f r xss M yss,
-               (forall n, exists M',
-                     mmask n r M M'
-                     /\ msem_node f
-                                 (mask (all_absent (xss 0)) n r xss)
-                                 M'
-                                 (mask (all_absent (yss 0)) n r yss)) ->
+               (forall k, msem_node f
+                               (mask (all_absent (xss 0)) k r xss)
+                               (mmask k r M)
+                               (mask (all_absent (yss 0)) k r yss)) ->
                msem_reset f r xss M yss
 
     with msem_node:
@@ -326,18 +321,14 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis ResetCase:
       forall f r xss M yss,
-        (forall n, exists M',
-              mmask n r M M'
-              /\ msem_node G f
-                          (mask (all_absent (xss 0)) n r xss)
-                          M'
-                          (mask (all_absent (yss 0)) n r yss)) ->
-        (forall n, exists M',
-              mmask n r M M'
-              /\ P_node f
-                       (mask (all_absent (xss 0)) n r xss)
-                       M'
-                       (mask (all_absent (yss 0)) n r yss)) ->
+        (forall n, msem_node G f
+                        (mask (all_absent (xss 0)) n r xss)
+                        (mmask n r M)
+                        (mask (all_absent (yss 0)) n r yss)) ->
+        (forall k, P_node f
+                     (mask (all_absent (xss 0)) k r xss)
+                     (mmask k r M)
+                     (mask (all_absent (yss 0)) k r yss)) ->
         P_reset f r xss M yss.
 
     Hypothesis NodeCase:
@@ -374,7 +365,6 @@ enough: it does not support the internal fixpoint introduced by
     Proof.
       - destruct Sem; eauto.
       - destruct Sem; eauto.
-        apply ResetCase; intro n; destruct (H n); econstructor; intuition; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         (* clear H1 defd vout good. *)
@@ -486,8 +476,6 @@ enough: it does not support the internal fixpoint introduced by
     - intro Hnin.
       econstructor; eauto.
       apply IHHsem. intro Hnf; apply Hnin; rewrite Hnf. constructor.
-    - intro; econstructor.
-      intro k; destruct (IH k); econstructor; intuition; eauto.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       econstructor; eauto.
@@ -507,9 +495,7 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros ** Sem ?.
     inversion_clear Sem as [????? SemN].
-    constructor; intro k.
-    destruct (SemN k).
-    intuition; eauto using msem_node_cons.
+    constructor; eauto using msem_node_cons.
   Qed.
 
   Lemma msem_node_cons2:
@@ -531,8 +517,6 @@ enough: it does not support the internal fixpoint introduced by
            (P_reset := fun f r xss M yss =>
                          Forall (fun n' : node => n_name n <> n_name n') G ->
                          msem_reset (n :: G) f r xss M yss); eauto.
-    - intros; constructor; intro k.
-      destruct (IH k); intuition; eauto.
     - intro HH; clear HH.
       assert (n.(n_name) <> f) as Hnf.
       { intro Hnf.
@@ -587,9 +571,7 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros ** Sem ?.
     inversion_clear Sem as [????? SemN].
-    constructor; intro k.
-    destruct (SemN k).
-    intuition; eauto using msem_node_cons2.
+    constructor; eauto using msem_node_cons2.
   Qed.
 
   Lemma msem_equation_cons2:
@@ -852,10 +834,10 @@ dataflow memory for which the non-standard semantics holds true.
                        /\ 0 < length n.(n_out)) as (n & ? & ?).
           {
             inversion_clear Hmsem as [? ? ? ? ? Hmsem'].
-            destruct (Hmsem' 0) as (? & ? & Hmsem); inv Hmsem.
+            specialize (Hmsem' 0); inv Hmsem'.
             exists n; split; auto.
-            - unfold sem_vars, lift in H10; specialize (H10 0).
-              apply Forall2_length in H10; rewrite H10.
+            - unfold sem_vars, lift in H9; specialize (H9 0).
+              apply Forall2_length in H9; rewrite H9.
               rewrite mask_length; auto.
               inversion_clear Hsem' as [? ? ? ? Hsem].
               eapply wf_streams_mask.
@@ -958,6 +940,8 @@ dataflow memory for which the non-standard semantics holds true.
       { clear - IHG'.
         intros ** Sem.
         inversion_clear Sem as [???? Sem'].
+        assert (forall n, exists M, msem_node G f (mask (all_absent (xs 0)) n r xs) M (mask (all_absent (ys 0)) n r ys))
+          by (intro; specialize (Sem' n); apply IHG' in Sem'; auto).
         (* eexists. *)
         (* constructor. *)
         admit.

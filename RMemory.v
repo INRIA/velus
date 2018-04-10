@@ -46,8 +46,8 @@ Section Operations.
     mk_memory M.(mm_values)
                   (PM.add id M' M.(mm_instances)).
 
-  (* Fixpoint mmap (f: A -> B) (M: memory A) : memory B := *)
-  (*   mk_memory (PM.map f M.(mm_values)) (PM.map (mmap f) M.(mm_instances)). *)
+  Fixpoint mmap (f: A -> B) (M: memory A) : memory B :=
+    mk_memory (PM.map f M.(mm_values)) (PM.map (mmap f) M.(mm_instances)).
 
 End Operations.
 
@@ -58,6 +58,7 @@ Section Properties.
   Variable A B: Type.
   Variables (x y: ident)
             (v: A)
+            (f: A -> B)
             (menv omenv: memory A).
 
   Lemma mfind_mem_gss:
@@ -95,6 +96,18 @@ Section Properties.
   Proof.
     unfold mfind_mem, madd_obj.
     reflexivity.
+  Qed.
+
+  Lemma mfind_mem_map:
+    forall (f: A -> B),
+      mfind_mem x menv = Some v ->
+      mfind_mem x (mmap f menv) = Some (f v).
+  Proof.
+    intros ** Find.
+    unfold mfind_mem in *.
+    destruct menv; simpl in *.
+    unfold PM.map.
+    now rewrite PM.gmapi, Find.
   Qed.
 
 End Properties.
