@@ -132,6 +132,25 @@ Module Type MEMSEMANTICS
              end
     end.
 
+  Definition mmask' (k: nat) (rs: cstream) (M M': memories) : Prop :=
+    M' 0 = M 0
+    /\ forall n, M' n = match nat_compare (count rs n) k with
+                  | Lt => M 0
+                  | Eq => M (if rs n then 0 else n)
+                  | Gt => if EqNat.beq_nat (count rs n) (S k) && rs n
+                         then M n else M' (pred n)
+                  end.
+
+  Lemma mmask_spec:
+    forall k rs M,
+      mmask' k rs M (mmask k rs M).
+  Proof.
+    split; auto.
+    induction n; simpl; auto.
+    destruct (nat_compare (if rs 0 then 1 else 0) k), (rs 0); simpl; auto.
+    destruct k; simpl; auto.
+  Qed.
+
   (* Lemma mmask_mfind_mem: *)
   (*   forall x M n k rs, *)
   (*     mfind_mem x (M n) <> None -> *)
@@ -164,15 +183,14 @@ Module Type MEMSEMANTICS
 
   Lemma mmask_gt:
     forall n k rs M,
-      count rs (S n) > k ->
-      mmask k rs M (S n) = if EqNat.beq_nat (count rs (S n)) (S k) && rs (S n)
-                           then M (S n) else mmask k rs M n.
+      count rs n > k ->
+      mmask k rs M n = if EqNat.beq_nat (count rs n) (S k) && rs n
+                       then M n else mmask k rs M (pred n).
   Proof.
-    intros ** Count; simpl in *.
-    apply nat_compare_gt in Count; now rewrite Count.
+    destruct n; intros ** Count; simpl in *.
+    - now destruct (EqNat.beq_nat (if rs 0 then 1 else 0) (S k) && rs 0).
+    - apply nat_compare_gt in Count; now rewrite Count.
   Qed.
-
-
 
   (* Definition memory_reset (rs: cstream) (M: memory) : memory := *)
   (*   mmap (fun ms => fun n => ms (if rs n then 0 else n)) M. *)
@@ -984,6 +1002,136 @@ dataflow memory for which the non-standard semantics holds true.
 
   Require Import Coq.Logic.ClassicalChoice.
 
+  Lemma bar:
+    forall x F k M' r,
+      (forall k k', F k 0 = F k' 0) ->
+      sub_inst x (F k) M' ->
+      sub_inst x (mmask k r (fun n => F (count r n) n)) M'.
+  Proof.
+    unfold sub_inst; intros ** Init Sub n.
+    induction n; simpl.
+    - specialize (Sub 0); erewrite Init; eauto.
+    - destruct (nat_compare (count r n) k) eqn: E.
+      + destruct (r (S n)) eqn: Rsn.
+        * assert (nat_compare (S (count r n)) k = Gt) as ->
+              by (rewrite <-nat_compare_gt; apply Gt.le_gt_S;
+                  apply nat_compare_eq_iff in E; omega).
+          assert (EqNat.beq_nat (S (count r n)) (S k) = true) as ->
+              by now apply EqNat.beq_nat_true_iff, eq_S, nat_compare_eq.
+          simpl.
+          (* rewrite mmask_eq in IHn by now apply nat_compare_eq. *)
+(*           destruct (r n) eqn: Rn. *)
+(*           simpl in IHn. ; rewrite Rn in IHn. *)
+(*           unfold count in IHn. *)
+(* assert (EqNat.beq_nat k (count rs n) = true) as -> *)
+(*           by now rewrite NPeano.Nat.eqb_sym, EqNat.beq_nat_true_iff, *)
+(*              <-nat_compare_eq_iff. *)
+(*       rewrite mmask_eq by now apply nat_compare_eq_iff. *)
+(*       destruct (rs (S n)). *)
+(*       + assert (nat_compare (S (count rs n)) k = Gt) as -> *)
+(*             by (rewrite <-nat_compare_gt; apply Gt.le_gt_S; *)
+(*                 apply nat_compare_eq_iff in E; omega). *)
+(*         assert (EqNat.beq_nat (S (count rs n)) (S k) = true) as -> *)
+(*             by now apply EqNat.beq_nat_true_iff, eq_sym, *)
+(*                eq_S, EqNat.beq_nat_true_iff. *)
+(*         destruct (ls n), (rs n); simpl; intuition; *)
+(*           rewrite H2 in Spec; rewrite Find; intuition. *)
+(*       + rewrite E. *)
+(*         destruct (ls n), (rs n); intuition; *)
+(*           rewrite H0 in Spec; rewrite Find; intuition. *)
+(*     - assert (EqNat.beq_nat k (count rs n) = false) as -> *)
+(*           by (apply nat_compare_lt in E; apply EqNat.beq_nat_false_iff; *)
+(*               intro; subst; omega). *)
+(*       rewrite mmask_lt by (now apply nat_compare_lt); rewrite Find. *)
+(*       destruct (rs (S n)). *)
+(*       + destruct (nat_compare (S (count rs n)) k) eqn: E'; intuition. *)
+(*         apply nat_compare_lt in E; apply nat_compare_gt in E'; omega. *)
+(*       + rewrite E; auto. *)
+(*     - assert (EqNat.beq_nat k (count rs n) = false) as -> *)
+(*           by (apply nat_compare_gt in E; apply EqNat.beq_nat_false_iff; *)
+(*               intro; subst; omega). *)
+(*       destruct (rs (S n)). *)
+(*       + assert (nat_compare (S (count rs n)) k = Gt) as -> *)
+(*             by (rewrite <-nat_compare_gt in *; omega). *)
+(*         assert (EqNat.beq_nat (S (count rs n)) (S k) = false) as -> *)
+(*             by (apply EqNat.beq_nat_false_iff, not_eq_S, *)
+(*                 not_eq_sym; apply nat_compare_gt in E; omega). *)
+(*         simpl. *)
+(*         destruct (mfind_mem x (mmask k rs M n)) eqn: Find'; auto. *)
+(*         eapply mmask_mfby; eauto using mfby. *)
+(*       + rewrite E, Bool.andb_false_r. *)
+(*         destruct (mfind_mem x (mmask k rs M n)) eqn: Find'; auto. *)
+          (*         eapply mmask_mfby; eauto using mfby. *)
+          Admitted.
+
+  (* Require Import Morphisms. *)
+
+  Require Import Setoid.
+
+  Add Parametric Morphism k r : (mmask k r)
+      with signature eq_str ==> eq_str
+        as mmask_eq_str.
+  Proof.
+    intros ** E n.
+    induction n; simpl; auto.
+    rewrite IHn.
+    destruct (nat_compare (if r (S n) then S (count r n) else count r n) k); auto.
+    destruct (EqNat.beq_nat (if r (S n) then S (count r n) else count r n) (S k) && r (S n)); auto.
+  Qed.
+
+  Add Parametric Morphism x v0 ls : (mfby x v0 ls)
+      with signature eq_str ==> eq ==> Basics.impl
+        as mfby_eq_str.
+  Proof.
+    intros ** E ? Fby.
+    inversion_clear Fby as [?????? Spec]; constructor.
+    - now rewrite <-E.
+    - intro n; specialize (Spec n).
+      now repeat rewrite <-E.
+  Qed.
+
+  Add Parametric Morphism x : (sub_inst x)
+      with signature eq_str ==> eq ==> Basics.impl
+        as sub_inst_eq_str.
+  Proof.
+    intros ** E ? Sub n; specialize (Sub n).
+    now rewrite <-E.
+  Qed.
+
+  Add Parametric Morphism G bk H: (msem_equation G bk H)
+      with signature eq_str ==> eq ==> Basics.impl
+        as msem_equation_eq_str.
+  Proof.
+    intros ** E ? Eq.
+    induction Eq; eauto using (msem_equation); econstructor; eauto.
+    - now rewrite <-E.
+    - now rewrite <-E.
+    - now rewrite <-E.
+  Qed.
+
+  Add Parametric Morphism G f: (msem_node G f)
+      with signature eq ==> eq_str ==> eq ==> Basics.impl
+        as msem_node_eq_str.
+  Proof.
+    intros ** E ? Node.
+    inversion_clear Node as [?????????????? Heqs].
+    econstructor; eauto.
+    induction (n_eqs n); auto.
+    inv Heqs.
+    constructor; auto.
+    now rewrite <-E.
+  Qed.
+
+  Add Parametric Morphism G f: (msem_reset G f)
+      with signature eq ==> eq ==> eq_str ==> eq ==> Basics.impl
+        as msem_reset_eq_str.
+  Proof.
+    intros ** E ? Res.
+    inversion_clear Res as [????? Node].
+    constructor; intro k.
+    now rewrite <-E.
+  Qed.
+
   Theorem sem_msem_node:
     forall G f xs ys,
       Welldef_global G ->
@@ -1019,56 +1167,30 @@ dataflow memory for which the non-standard semantics holds true.
                                     (mask (all_absent (ys 0)) n r ys)) as Msem
             by (intro; specialize (Sem' n); apply IHG' in Sem'; auto).
         apply choice in Msem as (F & Msem).
-        assert (forall k k', F k 0 = F k' 0) as Init by admit.
+        (* assert (forall k k', F k 0 = F k' 0) as Init by admit. *)
+        (* assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq by admit. *)
+        (* assert (forall n k k', count r n < k -> F k n = F k' 0) as Hlt by admit. *)
         exists (fun n => F (count r n) n).
         constructor.
         intro k; specialize (Msem k).
-        assert (forall n, mmask k r (fun n : nat => F (count r n) n) n = F k n).
-        { induction n; simpl.
-          - apply Init.
-          - rewrite IHn.
-            destruct (nat_compare (count r n) k) eqn: E.
-            + destruct (r (S n)) eqn: R.
-              * assert (nat_compare (S (count r n)) k = Gt) as ->
-                  by (rewrite <-nat_compare_gt; apply Gt.le_gt_S;
-                      apply nat_compare_eq_iff in E; omega).
-                assert (EqNat.beq_nat (S (count r n)) (S k) = true) as ->
-                    by now apply EqNat.beq_nat_true_iff, eq_S, nat_compare_eq.
-                simpl.
-                apply nat_compare_eq_iff in E; rewrite E.
-                admit.
-              * simpl; rewrite E, R.
-                now apply nat_compare_eq_iff in E; rewrite E.
-            + destruct (r (S n)) eqn: R.
-              *{ destruct (nat_compare (S (count r n)) k) eqn: E'.
-                 - admit.
-                 - admit.
-                 - apply nat_compare_lt in E; apply nat_compare_gt in E'; omega.
-               }
-              * rewrite E.
-                admit.
-            + destruct (r (S n)) eqn: R.
-              * assert (nat_compare (S (count r n)) k = Gt) as ->
-                    by (rewrite <-nat_compare_gt in *; omega).
-                assert (EqNat.beq_nat (S (count r n)) (S k) = false) as ->
-                    by (apply EqNat.beq_nat_false_iff, not_eq_S,
-                        not_eq_sym; apply nat_compare_gt in E; omega).
-                simpl.
-                admit.
-              * rewrite E, Bool.andb_false_r.
-                admit.
+
+        assert (mmask' k r (fun n' => F (count r n') n') (F k)) as Spec by admit.
+
+        assert (mmask k r (fun n' => F (count r n') n') ≈ F k) as ->; auto.
+        destruct Spec as (Init & Spec).
+        induction n.
+        - simpl in *; auto.
+        - rewrite Spec.
+          destruct (nat_compare (count r (S n)) k) eqn: E.
+          + apply nat_compare_eq in E; subst.
+            rewrite mmask_eq; auto.
+          + apply nat_compare_lt in E.
+            rewrite mmask_lt; auto.
+          + apply nat_compare_gt in E.
+              rewrite mmask_gt; auto.
+              simpl; rewrite IHn; auto.
         }
-        admit.
-        (* inversion_clear Msem as [?????????????? Heqs]. *)
-        (* econstructor; eauto. *)
-        (* induction (n_eqs n) as [|e]; auto. *)
-        (* inv Heqs; constructor; auto. *)
-        (* induction e. *)
 
-
-        (* eexists. *)
-        (* constructor. *)
-      }
       inversion_clear Hwdef as [|??? neqs].
       simpl in neqs; unfold neqs in *.
       assert (exists M', Forall (msem_equation G bk H M') n.(n_eqs))
