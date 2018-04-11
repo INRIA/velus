@@ -447,7 +447,7 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         (* clear H1 defd vout good. *)
-        induction H7; auto.
+         induction H7; auto.
     Qed.
 
     Combined Scheme msem_equation_node_ind from msem_equation_mult, msem_node_mult, msem_reset_mult.
@@ -1132,6 +1132,64 @@ dataflow memory for which the non-standard semantics holds true.
     now rewrite <-E.
   Qed.
 
+
+  (* Fixpoint depth {A} (m: memory A) : nat := *)
+  (*   match m *)
+
+  (* Program Fixpoint same_mem {A} (m m': memory A) {measure (depth m)}: Prop := *)
+  (*   (forall x a, *)
+  (*       mfind_mem x m = Some a -> *)
+  (*       mfind_mem x m' = Some a) *)
+  (*   /\ *)
+  (*   (forall x m1 m1', *)
+  (*       mfind_inst x m = Some m1 -> *)
+  (*       mfind_inst x m' = Some m1' *)
+  (*       /\ same_mem m1 m1'). *)
+
+  (* Inductive same_mem: memories -> memories -> Prop := *)
+  (*   same_mem_intro: *)
+  (*     forall M M', *)
+  (*       (forall x m m', sub_inst x M m -> *)
+  (*                  sub_inst x M' m' -> *)
+  (*                  same_mem m m') -> *)
+  (*       (forall n x v, mfind_mem x (M n) = Some v -> *)
+  (*                 mfind_mem x (M' n) = Some v) -> *)
+  (*       same_mem M M'. *)
+
+  (* Lemma same_mem_refl: *)
+  (*   forall M, *)
+  (*     same_mem M M. *)
+  (* Proof. *)
+  (*   constructor; intros. *)
+  (*   - constructor. *)
+  (*   intros ** n; reflexivity. *)
+  (* Qed. *)
+
+  (* Lemma eq_str_sym: *)
+  (*   forall {A} (xs xs': stream A), *)
+  (*     xs ≈ xs' -> xs' ≈ xs. *)
+  (* Proof. *)
+  (*   intros ** E n; auto. *)
+  (* Qed. *)
+
+  (* Lemma eq_str_trans: *)
+  (*   forall {A} (xs ys zs: stream A), *)
+  (*     xs ≈ ys -> ys ≈ zs -> xs ≈ zs. *)
+  (* Proof. *)
+  (*   intros ** E1 E2 n; auto. *)
+  (*   rewrite E1; auto. *)
+  (* Qed. *)
+
+  (* Add Parametric Relation A : (stream A) (@eq_str A) *)
+  (*     reflexivity proved by (@eq_str_refl A) *)
+  (*     symmetry proved by (@eq_str_sym A) *)
+  (*     transitivity proved by (@eq_str_trans A) *)
+  (*       as eq_str_rel. *)
+
+
+  (* Lemma msem_node_init: *)
+  (*   forall G f xs M ys, *)
+  (*     msem_node G f xs M ys ->  *)
   Theorem sem_msem_node:
     forall G f xs ys,
       Welldef_global G ->
@@ -1167,17 +1225,49 @@ dataflow memory for which the non-standard semantics holds true.
                                     (mask (all_absent (ys 0)) n r ys)) as Msem
             by (intro; specialize (Sem' n); apply IHG' in Sem'; auto).
         apply choice in Msem as (F & Msem).
-        (* assert (forall k k', F k 0 = F k' 0) as Init by admit. *)
-        (* assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq by admit. *)
-        (* assert (forall n k k', count r n < k -> F k n = F k' 0) as Hlt by admit. *)
+
+        assert (forall k k', F k 0 = F k' 0) as Init.
+        { intros k k'.
+          pose proof (Msem k) as Semk; pose proof (Msem k') as Semk'.
+          inversion_clear Semk as [???????? Find ????? Heqs Hnil];
+            inversion_clear Semk' as [???????? Find' ????? Heqs' Hnil'].
+          rewrite Find in Find'; inv Find'.
+          induction (n_eqs n0) as [|e]; auto.
+          - admit.
+          - inv Heqs; inv Heqs'; auto.
+        }
+
+        assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq by admit.
+
+        assert (forall n k k', count r n < k -> F k n = F k' 0) as Hlt by admit.
+
+        (* assert (forall n k k', count r n > k -> *)
+                          (* F k n = if EqNat.beq_nat (count r n) (S k) && rs n *)
+                                  (* then  n else M' (pred n)F k' 0) as Hlt by admit. *)
+
         exists (fun n => F (count r n) n).
         constructor.
         intro k; specialize (Msem k).
 
-        assert (mmask' k r (fun n' => F (count r n') n') (F k)) as Spec by admit.
+        assert (mmask' k r (fun n' => F (count r n') n') (F k)) as Spec.
+        { split; auto.
+          intro.
+          (* induction n. *)
+          (* - admit. *)
+          - destruct (nat_compare (count r n) k) eqn: E.
+            + apply nat_compare_eq in E; subst.
+              destruct (r n) eqn: Rn; auto.
+            + apply nat_compare_lt in E; auto.
+            + destruct (EqNat.beq_nat (count r n) (S k)) eqn: E'; simpl.
+              * destruct (r n).
+                admit.
+                admit.
+              * admit.
+
+        }
 
         assert (mmask k r (fun n' => F (count r n') n') ≈ F k) as ->; auto.
-        destruct Spec as (Init & Spec).
+        destruct Spec as (? & Spec).
         induction n.
         - simpl in *; auto.
         - rewrite Spec.
