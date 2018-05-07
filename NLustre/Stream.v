@@ -120,6 +120,14 @@ if the clocked stream is [absent] at the corresponding instant. *)
     destruct n; intros ** E; simpl; now rewrite E.
   Qed.
 
+  Lemma count_le:
+    forall r n,
+      count r n <= count r (S n).
+  Proof.
+    intros; simpl.
+    destruct (r (S n)); omega.
+  Qed.
+
   Lemma count_true_ge_1:
     forall n r,
       r n = true ->
