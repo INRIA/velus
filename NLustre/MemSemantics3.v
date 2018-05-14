@@ -1158,6 +1158,33 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
   Admitted.
 
+  Lemma count_ge:
+    forall n r,
+      count r 0 <= count r n.
+  Proof.
+    induction n; intros; simpl in *; auto.
+    destruct (r (S n)); auto.
+  Qed.
+
+  Lemma count_positive:
+    forall r n n',
+      r n = true ->
+      n' < n ->
+      count r n' < count r n.
+  Proof.
+    intros ** Rn Lt.
+    revert dependent n; induction n'; intros; induction n; intros;
+      try omega; simpl in *; rewrite Rn.
+    - apply Lt.le_lt_n_Sm, count_ge.
+    - destruct (r (S n')).
+      + destruct (r n) eqn: E.
+        * apply Lt.lt_n_S, IHn'; auto; omega.
+        * specialize (IHn' _ Rn); simpl in IHn'; rewrite Rn in IHn'.
+          admit.
+      + specialize (IHn' _ Rn); simpl in IHn'; rewrite Rn in IHn'.
+        eapply IHn'; omega.
+  Qed.
+
   Lemma msem_reset_eq:
     forall G f r xs ys M k n,
       msem_node G f (mask (all_absent (xs 0)) k r xs)
@@ -1178,24 +1205,27 @@ dataflow memory for which the non-standard semantics holds true.
         unfold mask.
         assert (EqNat.beq_nat k (count r n') = false) as ->.
         * apply EqNat.beq_nat_false_iff.
-          intros E'.
-          subst.
-          clear - Rn Lt E'.
-          admit.
+          pose proof (count_positive _ Rn Lt).
+          omega.
         * apply all_absent_spec.
   Qed.
 
   Lemma msem_reset_gt:
     forall G f r xs ys M k n,
-      msem_node G f (mask (all_absent (xs 0)) k r xs) M (mask (all_absent (ys 0)) k r ys) ->
-      (* (forall k k', F k 0 = F k' 0) -> *)
+      msem_node G f (mask (all_absent (xs 0)) k r xs)
+                M (mask (all_absent (ys 0)) k r ys) ->
       count r n > k ->
       M n = M (pred n).
   Proof.
     intros ** Msem E.
-    inversion_clear Msem.
-  Admitted.
-
+    assert ((mask (all_absent (xs 0)) k r xs) n = all_absent (xs 0)).
+    { unfold mask.
+      assert (EqNat.beq_nat k (count r n) = false) as ->
+          by (apply EqNat.beq_nat_false_iff; omega); auto.
+    }
+    eapply msem_node_absent_spec; eauto.
+    rewrite H. apply all_absent_spec.
+  Qed.
 
   Require Import Coq.Logic.ClassicalChoice.
   Require Import Coq.Logic.ConstructiveEpsilon.
@@ -1260,41 +1290,38 @@ dataflow memory for which the non-standard semantics holds true.
         }
         clear Msem'.
 
-        (* assert (forall k k', F k 0 = F k' 0) as Init. *)
-        (* { intros k k'. *)
-        (*   pose proof (Msem k) as Semk; pose proof (Msem k') as Semk'. *)
-        (*   inversion_clear Semk as [???????? Find ????? Heqs Hnil]; *)
-        (*     inversion_clear Semk' as [???????? Find' ????? Heqs' Hnil']. *)
-        (*   rewrite Find in Find'; inv Find'. *)
-        (*   induction (n_eqs n0) as [|e]; auto. *)
-        (*   - admit. *)
-        (*   - inv Heqs; inv Heqs'; auto. *)
-        (* } *)
+        assert (forall k k', F k 0 = F k' 0) as Init.
+        { intros k k'.
+          pose proof (Msem k) as Semk; pose proof (Msem k') as Semk'.
+          inversion_clear Semk as [???????? Find ????? Heqs Hnil];
+            inversion_clear Semk' as [???????? Find' ????? Heqs' Hnil'].
+          rewrite Find in Find'; inv Find'.
+          induction (n_eqs n0) as [|e]; auto.
+          - admit.
+          - inv Heqs; inv Heqs'; auto.
+        }
 
-        (* assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq *)
-        (*     by (intros; erewrite Init; eapply msem_reset_eq; eauto). *)
+        assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq.
+        { intros.  erewrite Init.  eapply msem_reset_eq; eauto.  admit. }
 
-        (* assert (forall n k k', count r n < k -> F k n = F k' 0) as Hlt *)
-        (*     by (intros; erewrite Init; eapply msem_reset_lt; eauto). *)
+        assert (forall n k k', count r n < k -> F k n = F k' 0) as Hlt
+            by (intros; erewrite Init; eapply msem_reset_lt; eauto).
 
-        (* assert (forall n k, count r n > k -> F k n = F k (pred n)) as Hgt *)
-        (*     by (intros; eapply msem_reset_gt; eauto). *)
+        assert (forall n k, count r n > k -> F k n = F k (pred n)) as Hgt
+            by (intros; eapply msem_reset_gt; eauto).
 
         exists (fun n => F (count r n) n).
         constructor.
         intro k; specialize (Msem k).
 
         assert (mmask' k r (fun n' => F (count r n') n') (F k)) as Spec.
-        { split; auto. admit.
+        { split; auto.
           intro.
-          destruct (nat_compare (count r n) k) eqn: E.
+          destruct (nat_compare (count r n) k) eqn: E; eauto.
           - apply nat_compare_eq in E; subst.
             destruct (r n) eqn: Rn; auto.
-            admit.
           - apply nat_compare_lt in E; auto.
-            admit.
           - apply nat_compare_gt in E; auto.
-            admit.
         }
 
         assert (mmask k r (fun n' => F (count r n') n') ≈ F k) as ->; auto.
