@@ -137,6 +137,48 @@ if the clocked stream is [absent] at the corresponding instant. *)
     apply Le.le_n_S; omega.
   Qed.
 
+  Lemma count_positive:
+    forall r n' n,
+      r n = true ->
+      n' < n ->
+      count r n' < count r n.
+  Proof.
+    intros ** Rn Lt.
+    destruct n; try omega.
+    simpl; rewrite Rn.
+    clear Rn.
+    apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in Lt; destruct Lt.
+    - induction n; try omega.
+      apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in H; destruct H.
+      + eapply Lt.lt_le_trans; eauto.
+        apply Le.le_n_S, count_le.
+      + subst.
+        apply Lt.le_lt_n_Sm, count_le.
+    - subst; omega.
+  Qed.
+
+  Lemma mask_opaque:
+    forall {A} (xs: stream A) k r (opaque: A) n,
+      count r n <> k ->
+      (mask opaque k r xs) n = opaque.
+  Proof.
+    intros ** E.
+    unfold mask.
+    assert (EqNat.beq_nat k (count r n) = false) as ->
+        by (apply EqNat.beq_nat_false_iff; omega); auto.
+  Qed.
+
+  Lemma mask_transparent:
+    forall {A} (xs: stream A) k r (opaque: A) n,
+      count r n = k ->
+      (mask opaque k r xs) n = xs n.
+  Proof.
+    intros ** E.
+    unfold mask.
+    assert (EqNat.beq_nat k (count r n) = true) as ->
+        by (apply EqNat.beq_nat_true_iff; omega); auto.
+  Qed.
+
   Add Parametric Morphism : count
       with signature eq_str ==> eq ==> eq
         as count_eq_str.

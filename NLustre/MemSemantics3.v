@@ -208,18 +208,18 @@ Module Type MEMSEMANTICS
               end) ->
         mfby x v0 ls M xs.
 
-  Lemma mmask_mfby:
-    forall M x v0 xs ls k rs n,
-      mfby x v0 ls M xs ->
-      mfind_mem x (mmask k rs M n) <> None.
-  Proof.
-    intros ** Fby Find'; inversion_clear Fby as [????? Find Spec].
-    induction n; simpl in Find'.
-    - rewrite Find in Find'; discriminate.
-    - destruct (nat_compare (if rs (S n) then S (count rs n) else count rs n) k), (rs (S n));
-        try (now rewrite Find in Find'; discriminate); auto.
-      specialize (Spec (S n)); rewrite Find' in Spec; auto.
-  Qed.
+  (* Lemma mmask_mfby: *)
+  (*   forall M x v0 xs ls k rs n, *)
+  (*     mfby x v0 ls M xs -> *)
+  (*     mfind_mem x (mmask k rs M n) <> None. *)
+  (* Proof. *)
+  (*   intros ** Fby Find'; inversion_clear Fby as [????? Find Spec]. *)
+  (*   induction n; simpl in Find'. *)
+  (*   - rewrite Find in Find'; discriminate. *)
+  (*   - destruct (nat_compare (if rs (S n) then S (count rs n) else count rs n) k), (rs (S n)); *)
+  (*       try (now rewrite Find in Find'; discriminate); auto. *)
+  (*     specialize (Spec (S n)); rewrite Find' in Spec; auto. *)
+  (* Qed. *)
 
   (* Lemma foo: *)
   (*   forall x v0 ls M xs k rs, *)
@@ -1064,65 +1064,22 @@ dataflow memory for which the non-standard semantics holds true.
     now rewrite <-E.
   Qed.
 
-
-  (* Fixpoint depth {A} (m: memory A) : nat := *)
-  (*   match m *)
-
-  (* Program Fixpoint same_mem {A} (m m': memory A) {measure (depth m)}: Prop := *)
-  (*   (forall x a, *)
-  (*       mfind_mem x m = Some a -> *)
-  (*       mfind_mem x m' = Some a) *)
-  (*   /\ *)
-  (*   (forall x m1 m1', *)
-  (*       mfind_inst x m = Some m1 -> *)
-  (*       mfind_inst x m' = Some m1' *)
-  (*       /\ same_mem m1 m1'). *)
-
-  (* Inductive same_mem: memories -> memories -> Prop := *)
-  (*   same_mem_intro: *)
-  (*     forall M M', *)
-  (*       (forall x m m', sub_inst x M m -> *)
-  (*                  sub_inst x M' m' -> *)
-  (*                  same_mem m m') -> *)
-  (*       (forall n x v, mfind_mem x (M n) = Some v -> *)
-  (*                 mfind_mem x (M' n) = Some v) -> *)
-  (*       same_mem M M'. *)
-
-  (* Lemma same_mem_refl: *)
-  (*   forall M, *)
-  (*     same_mem M M. *)
-  (* Proof. *)
-  (*   constructor; intros. *)
-  (*   - constructor. *)
-  (*   intros ** n; reflexivity. *)
-  (* Qed. *)
-
-  (* Lemma eq_str_sym: *)
-  (*   forall {A} (xs xs': stream A), *)
-  (*     xs ≈ xs' -> xs' ≈ xs. *)
-  (* Proof. *)
-  (*   intros ** E n; auto. *)
-  (* Qed. *)
-
-  (* Lemma eq_str_trans: *)
-  (*   forall {A} (xs ys zs: stream A), *)
-  (*     xs ≈ ys -> ys ≈ zs -> xs ≈ zs. *)
-  (* Proof. *)
-  (*   intros ** E1 E2 n; auto. *)
-  (*   rewrite E1; auto. *)
-  (* Qed. *)
-
-  (* Add Parametric Relation A : (stream A) (@eq_str A) *)
-  (*     reflexivity proved by (@eq_str_refl A) *)
-  (*     symmetry proved by (@eq_str_sym A) *)
-  (*     transitivity proved by (@eq_str_trans A) *)
-  (*       as eq_str_rel. *)
-
   Lemma msem_node_absent_spec:
     forall G f xs M ys n,
       msem_node G f xs M ys ->
       absent_list (xs n) ->
       M n = M (pred n).
+  Proof.
+    intros ** Msem S.
+    inv Msem.
+  Admitted.
+
+  Lemma msem_node_first_present_spec:
+    forall G f xs M ys n,
+      msem_node G f xs M ys ->
+      present_list (xs n) ->
+      (forall n', n' < n -> absent_list (xs n')) ->
+      M n = M 0.
   Proof.
   Admitted.
 
@@ -1134,55 +1091,11 @@ dataflow memory for which the non-standard semantics holds true.
       M n = M 0.
   Proof.
     intros ** Msem E.
-    assert ((mask (all_absent (xs 0)) k r xs) n = all_absent (xs 0)).
-    { unfold mask.
-      assert (EqNat.beq_nat k (count r n) = false) as ->
-          by (apply EqNat.beq_nat_false_iff; omega); auto.
-    }
     induction n; auto.
     assert (count r n < k) by (pose proof (count_le r n); omega).
     erewrite msem_node_absent_spec; eauto.
-    - simpl; apply IHn; auto.
-      unfold mask.
-      assert (EqNat.beq_nat k (count r n) = false) as ->
-          by (apply EqNat.beq_nat_false_iff; omega); auto.
-    - rewrite H. apply all_absent_spec.
-  Qed.
-
-  Lemma msem_node_first_present_spec:
-    forall G f xs M ys n,
-      msem_node G f xs M ys ->
-      present_list (xs n) ->
-      (forall n', n' < n -> absent_list (xs n')) ->
-      M n = M 0.
-  Proof.
-  Admitted.
-
-  Lemma count_ge:
-    forall n r,
-      count r 0 <= count r n.
-  Proof.
-    induction n; intros; simpl in *; auto.
-    destruct (r (S n)); auto.
-  Qed.
-
-  Lemma count_positive:
-    forall r n n',
-      r n = true ->
-      n' < n ->
-      count r n' < count r n.
-  Proof.
-    intros ** Rn Lt.
-    revert dependent n; induction n'; intros; induction n; intros;
-      try omega; simpl in *; rewrite Rn.
-    - apply Lt.le_lt_n_Sm, count_ge.
-    - destruct (r (S n')).
-      + destruct (r n) eqn: E.
-        * apply Lt.lt_n_S, IHn'; auto; omega.
-        * specialize (IHn' _ Rn); simpl in IHn'; rewrite Rn in IHn'.
-          admit.
-      + specialize (IHn' _ Rn); simpl in IHn'; rewrite Rn in IHn'.
-        eapply IHn'; omega.
+    rewrite mask_opaque; try omega.
+    apply all_absent_spec.
   Qed.
 
   Lemma msem_reset_eq:
@@ -1196,7 +1109,19 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros ** Msem Same Rn E.
     destruct (Same n).
-    - admit.
+    - destruct n; auto.
+      simpl in E; rewrite Rn in E.
+      erewrite msem_node_absent_spec; eauto; simpl.
+      + assert (count r n < k) as E' by (pose proof (count_le r n); omega);
+          clear E.
+        clear Rn H.
+        induction n; auto.
+        assert (count r n < k) by (pose proof (count_le r n); omega).
+        erewrite msem_node_absent_spec; eauto.
+        rewrite mask_opaque; try omega.
+        apply all_absent_spec.
+      + rewrite mask_transparent; auto.
+        simpl; now rewrite Rn.
     - eapply msem_node_first_present_spec; eauto.
       + unfold mask.
         assert (EqNat.beq_nat k (count r n) = true) as ->
@@ -1205,7 +1130,7 @@ dataflow memory for which the non-standard semantics holds true.
         unfold mask.
         assert (EqNat.beq_nat k (count r n') = false) as ->.
         * apply EqNat.beq_nat_false_iff.
-          pose proof (count_positive _ Rn Lt).
+          pose proof (count_positive _ _ _ Rn Lt).
           omega.
         * apply all_absent_spec.
   Qed.
@@ -1302,7 +1227,9 @@ dataflow memory for which the non-standard semantics holds true.
         }
 
         assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq.
-        { intros.  erewrite Init.  eapply msem_reset_eq; eauto.  admit. }
+        { intros.  erewrite Init. eapply msem_reset_eq; eauto.
+          admit.
+        }
 
         assert (forall n k k', count r n < k -> F k n = F k' 0) as Hlt
             by (intros; erewrite Init; eapply msem_reset_lt; eauto).
