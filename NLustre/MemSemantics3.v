@@ -121,33 +121,33 @@ Module Type MEMSEMANTICS
   (*   destruct k; simpl; auto. *)
   (* Qed. *)
 
-  Fixpoint mmask (k: nat) (rs: cstream) (M: memories) (n: nat) : memory val :=
+  Definition mmask (k: nat) (rs: cstream) (hold: nat -> nat -> memory val) (M: memories) (n: nat) : memory val :=
     match n with
     | 0 => M 0
     | S n' => match nat_compare (count rs n) k with
              | Lt => M 0
              | Eq => M (if rs n then 0 else n)
              | Gt => (* if EqNat.beq_nat (count rs n) (S k) && rs n *)
-                    (* then M n else *) mmask k rs M n'
+                    (* then M n else *) (* mmask k rs M n' *)hold k n
              end
     end.
 
-  Definition mmask' (k: nat) (rs: cstream) (M M': memories) : Prop :=
+  Definition mmask' (k: nat) (rs: cstream) (hold: nat -> nat -> memory val) (M M': memories) : Prop :=
     M' 0 = M 0
-    /\ forall n, M' n = match nat_compare (count rs n) k with
+    /\ forall n, M' (S n) = match nat_compare (count rs (S n)) k with
                   | Lt => M 0
-                  | Eq => M (if rs n then 0 else n)
+                  | Eq => M (if rs (S n) then 0 else S n)
                   | Gt => (* if EqNat.beq_nat (count rs n) (S k) && rs n *)
-                         (* then M n else *) M' (pred n)
+                         (* then M n else *) (* M' (pred n) *)hold k (S n)
                   end.
 
   Lemma mmask_spec:
-    forall k rs M,
-      mmask' k rs M (mmask k rs M).
+    forall k rs hold M,
+      mmask' k rs hold M (mmask k rs hold M).
   Proof.
     split; auto.
-    induction n; simpl; auto.
-    destruct (nat_compare (if rs 0 then 1 else 0) k), (rs 0); simpl; auto.
+    (* induction n; simpl; auto. *)
+    (* destruct (nat_compare (if rs 0 then 1 else 0) k) eqn: E, (rs 0); simpl; auto. *)
     (* destruct k; simpl; auto. *)
   Qed.
 
@@ -163,9 +163,9 @@ Module Type MEMSEMANTICS
 
 
   Lemma mmask_eq:
-    forall n k rs M,
+    forall n k rs hold M,
       count rs n = k ->
-      mmask k rs M n = M (if rs n then 0 else n).
+      mmask k rs hold M n = M (if rs n then 0 else n).
   Proof.
     destruct n; intros ** Count; simpl in *.
     - now destruct (rs 0).
@@ -173,22 +173,24 @@ Module Type MEMSEMANTICS
   Qed.
 
   Lemma mmask_lt:
-    forall n k rs M,
+    forall n k rs hold M,
       count rs n < k ->
-      mmask k rs M n = M 0.
+      mmask k rs hold M n = M 0.
   Proof.
     destruct n; intros ** Count; simpl in *; auto.
     apply nat_compare_lt in Count; now rewrite Count.
   Qed.
 
   Lemma mmask_gt:
-    forall n k rs M,
+    forall n k rs hold M,
+      hold 0 0 = M 0 ->
       count rs n > k ->
-      mmask k rs M n = (* if EqNat.beq_nat (count rs n) (S k) && rs n *)
-                       (* then M n else *) mmask k rs M (pred n).
+      mmask k rs hold M n = (* if EqNat.beq_nat (count rs n) (S k) && rs n *)
+                       (* then M n else *) (* mmask k rs M (pred n) *)hold k n.
   Proof.
     destruct n; intros ** Count; simpl in *; auto.
-    apply nat_compare_gt in Count; now rewrite Count.
+    - assert (k = 0) by (destruct (rs 0); omega); subst; auto.
+    - apply nat_compare_gt in Count; now rewrite Count.
   Qed.
 
   (* Definition memory_reset (rs: cstream) (M: memory) : memory := *)
@@ -324,10 +326,10 @@ Module Type MEMSEMANTICS
            ident -> stream bool -> stream (list value) -> memories ->
            stream (list value) -> Prop :=
          | SReset:
-             forall f r xss M yss,
+             forall f r xss M yss hold,
                (forall k, msem_node f
                                (mask (all_absent (xss 0)) k r xss)
-                               (mmask k r M)
+                               (mmask k r hold M)
                                (mask (all_absent (yss 0)) k r yss)) ->
                msem_reset f r xss M yss
 
@@ -398,14 +400,14 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H M (EqFby x ck c0 le).
 
     Hypothesis ResetCase:
-      forall f r xss M yss,
+      forall f r xss M yss hold,
         (forall n, msem_node G f
                         (mask (all_absent (xss 0)) n r xss)
-                        (mmask n r M)
+                        (mmask n r hold M)
                         (mask (all_absent (yss 0)) n r yss)) ->
         (forall k, P_node f
                      (mask (all_absent (xss 0)) k r xss)
-                     (mmask k r M)
+                     (mmask k r hold M)
                      (mask (all_absent (yss 0)) k r yss)) ->
         P_reset f r xss M yss.
 
@@ -573,7 +575,7 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros ** Sem ?.
     inversion_clear Sem as [????? SemN].
-    constructor; eauto using msem_node_cons.
+    econstructor; eauto using msem_node_cons.
   Qed.
 
   Lemma msem_node_cons2:
@@ -649,7 +651,7 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     intros ** Sem ?.
     inversion_clear Sem as [????? SemN].
-    constructor; eauto using msem_node_cons2.
+    econstructor; eauto using msem_node_cons2.
   Qed.
 
   Lemma msem_equation_cons2:
@@ -921,7 +923,7 @@ dataflow memory for which the non-standard semantics holds true.
           assert (exists n, length (map fst n.(n_out)) = length (xs 0)
                        /\ 0 < length n.(n_out)) as (n & ? & ?).
           {
-            inversion_clear Hmsem as [? ? ? ? ? Hmsem'].
+            inversion_clear Hmsem as [?????? Hmsem'].
             specialize (Hmsem' 0); inv Hmsem'.
             exists n; split; auto.
             - unfold sem_vars, lift in H9; specialize (H9 0).
@@ -1001,13 +1003,13 @@ dataflow memory for which the non-standard semantics holds true.
 
   Require Import Setoid.
 
-  Add Parametric Morphism k r : (mmask k r)
+  Add Parametric Morphism k r hold : (mmask k r hold)
       with signature eq_str ==> eq_str
         as mmask_eq_str.
   Proof.
     intros ** E n.
     induction n; simpl; auto.
-    rewrite IHn.
+    (* rewrite IHn. *)
     destruct (nat_compare (if r (S n) then S (count r n) else count r n) k); auto.
   Qed.
 
@@ -1059,8 +1061,8 @@ dataflow memory for which the non-standard semantics holds true.
         as msem_reset_eq_str.
   Proof.
     intros ** E ? Res.
-    inversion_clear Res as [????? Node].
-    constructor; intro k.
+    inversion_clear Res as [?????? Node].
+    econstructor; intro k.
     now rewrite <-E.
   Qed.
 
@@ -1072,6 +1074,7 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros ** Msem S.
     inv Msem.
+    (* unfold same_clock, instant_same_clock in *. *)
   Admitted.
 
   Lemma msem_node_first_present_spec:
@@ -1191,7 +1194,6 @@ dataflow memory for which the non-standard semantics holds true.
         assert (forall n, exists M, msem_node G f (mask (all_absent (xs 0)) n r xs) M
                                     (mask (all_absent (ys 0)) n r ys)) as Msem'
             by (intro; specialize (Sem' n); apply IHG' in Sem'; auto).
-
         assert (exists F, forall k, msem_node G f (mask (all_absent (xs 0)) k r xs) (F k)
                                     (mask (all_absent (ys 0)) k r ys))
           as (F & Msem).
@@ -1227,7 +1229,7 @@ dataflow memory for which the non-standard semantics holds true.
         }
 
         assert (forall n k, r n = true -> F (count r n) n = F k 0) as Heq.
-        { intros.  erewrite Init. eapply msem_reset_eq; eauto.
+        { intros. erewrite Init. eapply msem_reset_eq; eauto.
           admit.
         }
 
@@ -1238,20 +1240,20 @@ dataflow memory for which the non-standard semantics holds true.
             by (intros; eapply msem_reset_gt; eauto).
 
         exists (fun n => F (count r n) n).
-        constructor.
+        apply SReset with (hold := F).
         intro k; specialize (Msem k).
 
-        assert (mmask' k r (fun n' => F (count r n') n') (F k)) as Spec.
+        assert (mmask' k r F (fun n' => F (count r n') n') (F k)) as Spec.
         { split; auto.
           intro.
-          destruct (nat_compare (count r n) k) eqn: E; eauto.
+          destruct (nat_compare (count r (S n)) k) eqn: E; eauto.
           - apply nat_compare_eq in E; subst.
-            destruct (r n) eqn: Rn; auto.
+            destruct (r (S n)) eqn: Rsn; auto.
           - apply nat_compare_lt in E; auto.
-          - apply nat_compare_gt in E; auto.
+          (* - apply nat_compare_gt in E; auto. *)
         }
 
-        assert (mmask k r (fun n' => F (count r n') n') ≈ F k) as ->; auto.
+        assert (mmask k r F (fun n' => F (count r n') n') ≈ F k) as ->; auto.
         destruct Spec as (? & Spec).
         induction n; auto.
         rewrite Spec.
