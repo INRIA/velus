@@ -290,9 +290,9 @@ Module Type TRANSLATION
   Qed.
 
   Instance reset_stmt_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq ==> eq) reset_stmt.
+    Proper (PS.eq ==> eq ==> eq ==> eq ==> eq ==> eq) reset_stmt.
   Proof.
-    intros M M' HMeq f f' Hfeq x x' Hxeq r r' Hreq; subst.
+    intros M M' HMeq f f' Hfeq x x' Hxeq r r' Hreq ck ck' Hck; subst.
     unfold reset_stmt; rewrite HMeq; auto.
   Qed.
 
@@ -301,8 +301,8 @@ Module Type TRANSLATION
   Proof.
     intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
     destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
-    - destruct o; rewrite HMeq; auto.
-    - destruct o.
+    - destruct o as [(?&?)|]; rewrite HMeq; auto.
+    - destruct o as [(?&?)|].
       + do 3 (rewrite HMeq at 1; f_equal); f_equal.
         apply List.map_ext. now setoid_rewrite HMeq.
       + do 2 (rewrite HMeq at 1; f_equal); f_equal.
@@ -667,9 +667,9 @@ Module Type TRANSLATION
   {
     induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
     - now rewrite app_nil_r.
-    - destruct eq as [ | | i ck v0 le ]; simpl;
+    - destruct eq as [ | i | i ck v0 le ]; simpl;
         match goal with
-        | |- context[ EqApp _ _ _ _ ] => destruct i
+        | |- context[ EqApp _ _ _ _ _ ] => destruct i
         | _ => idtac
         end; rewrite IHeqs; auto.
       assert (Hmem: gather_mem (EqFby i ck v0 le :: eqs)
@@ -694,11 +694,11 @@ Module Type TRANSLATION
     - now rewrite app_nil_r.
     - destruct eq as [ | is ck f les | ]; simpl;
         match goal with
-        | |- context[ EqApp _ _ _ _ ] => destruct is
+        | |- context[ EqApp _ _ _ _ _ ] => destruct is
         | _ => idtac
         end; rewrite IHeqs; auto.
 
-      assert (Hmem_cons: gather_insts (EqApp (i :: is) ck f les :: eqs)
+      assert (Hmem_cons: gather_insts (EqApp (i :: is) ck f les o :: eqs)
                     = (i, f) :: gather_insts eqs)
         by now unfold gather_insts; rewrite concatMap_cons.
 
@@ -722,11 +722,11 @@ Module Type TRANSLATION
     destruct i as [ | x xs ]; auto.
 
 
-    assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l :: eqs)
+    assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
             = xs ++ gather_app_vars eqs)
       by now unfold gather_app_vars; rewrite concatMap_cons.
 
-    assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l :: eqs))
+    assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l o :: eqs))
             = x :: map fst (gather_insts eqs))
       by now unfold gather_insts; rewrite concatMap_cons.
 

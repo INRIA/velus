@@ -60,6 +60,7 @@ Module Type NLOBCTYPING
     Hint Resolve nvars_to_mems nvars_to_vars : transty.
 
     Ltac FromMemset :=
+      unfold bool_var, tovar;
       match goal with
       | |- context [ PS.mem ?i memset ] =>
         destruct (PS.mem i memset) eqn:Hpsm;
@@ -126,22 +127,22 @@ Module Type NLOBCTYPING
 
   Definition wt_eqs_vars insts mems vars memset eqs :=
     Forall
-      (fun eq=> match eq with
-             | EqDef x ck e => In (x, typeofc e) vars
-             | EqApp xs ck f es =>
-                 match xs with
-                 | [] => True
-                 | x :: _ => In (x, f) insts
-                 end
-               /\ Forall (fun x => ~PS.In x memset) xs
-             | EqFby x ck c0 e => In (x, type_const c0) mems
-             end)
+      (fun eq => match eq with
+              | EqDef x ck e => In (x, typeofc e) vars
+              | EqApp xs ck f es r =>
+                match xs with
+                | [] => True
+                | x :: _ => In (x, f) insts
+                end
+                /\ Forall (fun x => ~PS.In x memset) xs
+              | EqFby x ck c0 e => In (x, type_const c0) mems
+              end)
       eqs.
 
   Lemma nth_idty_exists:
     forall xdef xtydef (xckdef: clock) xs n x (xty : type),
-      nth n (idty xs) (xdef, xtydef) = (x, xty)
-      -> exists xck, nth n xs (xdef, (xtydef, xckdef)) = (x, (xty, xck)).
+      nth n (idty xs) (xdef, xtydef) = (x, xty) ->
+      exists xck, nth n xs (xdef, (xtydef, xckdef)) = (x, (xty, xck)).
   Proof.
     induction xs as [|x xs].
     - intros ** Hnth.
@@ -153,17 +154,16 @@ Module Type NLOBCTYPING
       + exists ck; auto.
       + apply IHxs; auto.
   Qed.
-  
+
   Lemma wt_step_translate_eqns:
     forall g n insts mems vars memset,
       wt_node g n ->
       wt_eqs_vars insts mems vars memset n.(n_eqs) ->
       (forall x ty, In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
-                    PS.In x memset -> In (x, ty) mems) ->
+               PS.In x memset -> In (x, ty) mems) ->
       (forall x ty, In (x, ty) (idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out))) ->
-                    ~PS.In x memset -> In (x, ty) vars) ->
-      wt_stmt (translate g) insts mems vars
-              (translate_eqns memset n.(n_eqs)).
+               ~PS.In x memset -> In (x, ty) vars) ->
+      wt_stmt (translate g) insts mems vars (translate_eqns memset n.(n_eqs)).
   Proof.
     intros ** WTn Heqs Hmems Hvars.
     unfold translate_eqns.
@@ -181,10 +181,11 @@ Module Type NLOBCTYPING
     intros s WTs.
     simpl. apply IHeqs; auto; clear IHeqs.
     constructor; auto.
-    inv WTeq; simpl;
-      apply Control_wt with (nvars:=idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out)));
+    inv WTeq; simpl; try destruct r as [(?&?)|];
+      try apply Control_wt with (nvars:=idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out)));
       auto.
     - eapply translate_cexp_wt; eauto.
+    - admit.
     - destruct Heq as (Heq1 & Heq2).
 
       assert (Forall2 (fun y xt => In (y, snd xt) vars) xs (idty n0.(n_out))).
@@ -193,15 +194,15 @@ Module Type NLOBCTYPING
           by (rewrite length_idty; eapply Forall2_length; eauto).
 
         apply Forall2_forall2; split; auto;
-          intros def_x [def_y def_yty] dn x [y yty] Hlen Hxn Hytn.
+          intros def_x [def_y def_yty] dn x' [y yty] Hlen Hxn Hytn.
 
-        assert (In x xs)
+        assert (In x' xs)
           by (rewrite <-Hxn; apply nth_In; auto).
 
-        assert (~ PS.In x memset)
+        assert (~ PS.In x' memset)
           by (eapply In_Forall in Heq2; eauto).
 
-        assert (In (x, yty) (idty (n_in n ++ n_vars n ++ n_out n))).
+        assert (In (x', yty) (idty (n_in n ++ n_vars n ++ n_out n))).
         {
           match goal with
           | H: Forall2 _ xs (n_out n0) |- _ =>
@@ -209,7 +210,7 @@ Module Type NLOBCTYPING
           end.
           pose proof (nth_idty_exists _ _ Cbase _ _ _ _ Hytn) as Hnth.
           destruct Hnth as (xck & Hnth).
-          specialize (Hin_vars def_x _ dn x _ Hlen Hxn Hnth).
+          specialize (Hin_vars def_x _ dn x' _ Hlen Hxn Hnth).
           auto.
         }
 
@@ -248,15 +249,15 @@ Module Type NLOBCTYPING
   Lemma wt_reset_method_translate:
     forall g n insts mems,
       wt_node g n ->
-      Forall (fun eq=> match eq with
-                       | EqDef x ck e => True
-                       | EqApp xs ck f es =>
-                         match xs with
-                         | [] => True
-                         | x :: _ => In (x, f) insts
-                         end
-                       | EqFby x ck c0 e => In (x, type_const c0) mems
-                       end) n.(n_eqs) ->
+      Forall (fun eq => match eq with
+                     | EqDef x ck e => True
+                     | EqApp xs ck f es r =>
+                       match xs with
+                       | [] => True
+                       | x :: _ => In (x, f) insts
+                       end
+                     | EqFby x ck c0 e => In (x, type_const c0) mems
+                     end) n.(n_eqs) ->
       wt_method (translate g) insts mems (reset_method n.(n_eqs)).
   Proof.
     intros ** WTn Heqs.
@@ -361,14 +362,14 @@ Module Type NLOBCTYPING
   Qed.
 
   Lemma EqApp_type_in_node:
-    forall g n xs ck f les,
+    forall g n xs ck f les r,
       wt_node g n ->
-      In (EqApp xs ck f les) (n_eqs n) ->
+      In (EqApp xs ck f les r) (n_eqs n) ->
       NoDup xs.
   Proof.
-  intros ** WTn Hin.
-  eapply In_Forall in WTn; eauto.
-  now inversion_clear WTn.
+    intros ** WTn Hin.
+    eapply In_Forall in WTn; eauto.
+    now inversion_clear WTn.
   Qed.
 
   Lemma EqDef_type_in_node:
@@ -388,7 +389,7 @@ Module Type NLOBCTYPING
     apply Is_defined_in_var_defined in Hdin.
     rewrite n.(n_defd) in Hdin.
     apply fst_InMembers in Hdin.
-    repeat rewrite idty_app in Hv.    
+    repeat rewrite idty_app in Hv.
     repeat (apply in_app in Hv; destruct Hv as [Hin'|Hv]).
     - apply In_idty_exists in Hin'.
       destruct Hin' as (ck' & Hin').
@@ -480,7 +481,7 @@ Module Type NLOBCTYPING
             unfold gather_insts.
             apply in_concat' with (l0 := [(i, i0)]); try now constructor.
             eapply in_map_iff.
-            exists (EqApp (i :: i1) c i0 l). eauto.
+            exists (EqApp (i :: i1) c i0 l o). eauto.
           + (* Prove: Forall (fun x : positive => ~ PS.In x memset) i *)
             unfold memset.
             apply Forall_forall; intros x Hx.
@@ -547,10 +548,10 @@ Module Type NLOBCTYPING
           rewrite In_idty_exists. exists ck.
           intuition.
       }
-      
+
       do 2 rewrite <-idty_app.
       apply wt_step_translate_eqns; auto.
-      
+
     - (* wt_method reset *)
       unfold wt_method; simpl.
       rewrite fst_partition_filter.
@@ -565,7 +566,7 @@ Module Type NLOBCTYPING
         rewrite gather_eqs_snd_spec.
         apply in_concat' with (l0 := [(i, i0)]); try now constructor.
         eapply in_map_iff.
-        exists (EqApp (i :: i1) c i0 l).
+        exists (EqApp (i :: i1) c i0 l o).
         eauto.
       + (* Case: EqFby *)
           pose proof (EqFby_type_in_node _ _ _ _ _ _ WTn Hin) as HH.
