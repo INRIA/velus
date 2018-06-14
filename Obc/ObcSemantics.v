@@ -8,7 +8,7 @@ Require Import Velus.Obc.ObcSyntax.
 
 (** * Obc semantics *)
 
-(** 
+(**
 
   The semantics of Obc relies on a tree-structure [memory], based
   on [Velus.RMemory], to store object instances and a [stack] to keep
@@ -42,8 +42,9 @@ Module Type OBCSEMANTICS
         mfind_mem x heap = Some v ->
         exp_eval heap stack (State x ty) v
   | econst:
-      forall c,
-        exp_eval heap stack (Const c) (sem_const c)
+      forall c v,
+        v = sem_const c ->
+        exp_eval heap stack (Const c) v
   | eunop :
       forall op e c v ty,
         exp_eval heap stack e c ->
@@ -183,7 +184,7 @@ Module Type OBCSEMANTICS
     induction e (* using exp_ind2 *); intros v1 Hfree Heval.
     - inv Heval. constructor. not_free. now rewrite PM.gso.
     - inv Heval. now constructor.
-    - inv Heval. constructor.
+    - inv Heval. now constructor.
     - inv Heval. constructor 4 with c; trivial.
       not_free.
       now apply IHe.
@@ -200,7 +201,7 @@ Module Type OBCSEMANTICS
     induction e (* using exp_ind2 *); intros v1 Hfree Heval.
     - inversion_clear Heval. now constructor.
     - inversion_clear Heval. constructor. not_free. now rewrite mfind_mem_gso.
-    - inversion_clear Heval. constructor.
+    - inversion_clear Heval. now constructor.
     - inversion_clear Heval. constructor 4 with c; trivial.
       not_free.
       now apply IHe.
@@ -217,21 +218,21 @@ Module Type OBCSEMANTICS
     induction e (* using exp_ind2 *); intros v1 Heval.
     - inversion_clear Heval. now constructor.
     - inversion_clear Heval. constructor. now rewrite mfind_mem_add_inst.
-    - inversion_clear Heval. constructor.
+    - inversion_clear Heval. now constructor.
     - inversion_clear Heval. constructor 4 with c; trivial.
       now apply IHe.
     - inv Heval. constructor 5 with (c1 := c1) (c2 := c2); trivial.
       + now apply IHe1.
       + now apply IHe2.
   Qed.
-  
+
   Lemma mfind_inst_empty:
     forall o, mfind_inst o hempty = None.
   Proof.
     intro o. unfold mfind_inst.
     apply PM.gempty.
   Qed.
-  
+
 End OBCSEMANTICS.
 
 Module ObcSemanticsFun
@@ -241,4 +242,3 @@ Module ObcSemanticsFun
        (Import Syn   : OBCSYNTAX Ids Op OpAux) <: OBCSEMANTICS Ids Op OpAux Syn.
   Include OBCSEMANTICS Ids Op OpAux Syn.
 End ObcSemanticsFun.
-

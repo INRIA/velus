@@ -264,10 +264,10 @@ Module Type NLSCHEDULE
   Proof.
     induction G as [|n G IH].
     now destruct eq; inversion_clear 1; eauto with nltyping.
-    destruct eq; inversion_clear 1; eauto with nltyping.
-    match goal with H:find_node _ _ = _ |- _ =>
-                    apply scheduler_find_node in H end.
-    destruct n0; eauto with nltyping.
+    destruct eq; inversion_clear 1; eauto with nltyping;
+      match goal with H:find_node _ _ = _ |- _ =>
+                      apply scheduler_find_node in H end;
+      destruct n0; eauto with nltyping.
   Qed.
 
   Lemma scheduler_wt_global:

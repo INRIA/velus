@@ -31,6 +31,28 @@ Module Type NLSEMANTICS
        (Import Str   : STREAM        Op OpAux)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
+  Definition absent_list (xs: list value): Prop :=
+    Forall (fun v => v = absent) xs.
+
+  Definition present_list (xs: list value): Prop :=
+    Forall (fun v => v <> absent) xs.
+
+  Definition all_absent {A} (l: list A) : list value :=
+    map (fun _ => absent) l.
+
+  Remark all_absent_spec:
+    forall A (l: list A),
+      absent_list (all_absent l).
+  Proof.
+    induction l; simpl; constructor; auto.
+  Qed.
+
+  Remark nth_all_absent:
+    forall (xs: list value) n,
+      nth n (all_absent xs) absent = absent.
+  Proof.
+    induction xs, n; simpl; auto.
+  Qed.
 
   (** An indexed stream of lists is well-formed when the length of the lists
       is uniform over time. *)
@@ -54,12 +76,6 @@ environment.
 
   Implicit Type R: R.
   Implicit Type H: history.
-
-  Definition absent_list (xs: list value): Prop :=
-    Forall (fun v => v = absent) xs.
-
-  Definition present_list (xs: list value): Prop :=
-    Forall (fun v => v <> absent) xs.
 
   (** ** Instantaneous semantics *)
 
@@ -165,7 +181,7 @@ environment.
           sem_laexps_instant ck ces vs
     | SLabss:
         forall ck ces vs,
-          vs = map (fun _ => absent) ces ->
+          vs = all_absent ces ->
           sem_lexps_instant ces vs ->
           sem_clock_instant ck false ->
           sem_laexps_instant ck ces vs.
@@ -341,23 +357,6 @@ environment.
 
   (* Definition merge_reset (rs rs': stream bool) : stream bool := *)
   (*   fun n => rs n || rs' n. *)
-
-  Definition all_absent {A} (l: list A) : list value :=
-    map (fun _ => absent) l.
-
-  Remark all_absent_spec:
-    forall A (l: list A),
-      absent_list (all_absent l).
-  Proof.
-    induction l; simpl; constructor; auto.
-  Qed.
-
-  Remark nth_all_absent:
-    forall (xs: list value) n,
-      nth n (all_absent xs) absent = absent.
-  Proof.
-    induction xs, n; simpl; auto.
-  Qed.
 
   Section NodeSemantics.
 
@@ -1097,9 +1096,18 @@ clock to [sem_var_instant] too. *)
   (* Proof. *)
   (*   Hint Constructors sem_clock_instant. *)
   (*   intros R ck. *)
-  (*   induction ck; eauto. *)
+  (*   induction ck; auto. *)
   (*   constructor; auto. *)
+  (*   admit. *)
   (* Qed. *)
+
+  Lemma not_subrate_clock:
+    forall R ck,
+      ~ sem_clock_instant false R ck true.
+  Proof.
+    intros ** Sem; induction ck; inv Sem.
+    now apply IHck.
+  Qed.
 
   (* XXX: Similarly, instead of [rhs_absent_instant] and friends, we
 should prove that all the semantic rules taken at [base = false] yield

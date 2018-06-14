@@ -59,7 +59,7 @@ Module Type TRANSLATION
     end.
 
   Definition gather_eqs (eqs: list equation) : idents * list (ident * ident) :=
-    List.fold_left gather_eq eqs ([], []).
+    fold_left gather_eq eqs ([], []).
 
 
   (* XXX: computationally, the following [gather_*] are useless: they
@@ -136,7 +136,7 @@ Module Type TRANSLATION
         Control ck (translate_cexp x ce)
       | EqApp xs ck f les r =>
         let name := hd Ids.default xs in
-        let call := Control ck (Call xs f name step (List.map translate_lexp les)) in
+        let call := Control ck (Call xs f name step (map translate_lexp les)) in
         match r with
         | None => call
         | Some (r, ck_r) => Comp (reset_stmt f name r ck_r) call
@@ -149,7 +149,7 @@ Module Type TRANSLATION
   (*      [Is_well_sch]. *) *)
 
     Definition translate_eqns (eqns: list equation) : stmt :=
-      List.fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
+      fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
 
   End Translate.
 
@@ -163,10 +163,10 @@ Module Type TRANSLATION
     end.
 
   Definition translate_reset_eqns (eqns: list equation): stmt :=
-    List.fold_left translate_reset_eqn eqns Skip.
+    fold_left translate_reset_eqn eqns Skip.
 
   Definition ps_from_list (l: idents) : PS.t :=
-    List.fold_left (fun s i=>PS.add i s) l PS.empty.
+    fold_left (fun s i=>PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
 
@@ -187,7 +187,7 @@ Module Type TRANSLATION
 
   Instance List_fold_left_add_Proper (xs: idents) :
     Proper (PS.eq ==> PS.eq)
-           (List.fold_left (fun s i => PS.add i s) xs).
+           (fold_left (fun s i => PS.add i s) xs).
   Proof.
     induction xs as [|x xs IH]; intros S S' Heq; [exact Heq|].
     assert (PS.eq (PS.add x S) (PS.add x S')) as Heq'
@@ -197,7 +197,7 @@ Module Type TRANSLATION
 
   Instance List_fold_left_memory_eq_Proper (eqs: list equation) :
     Proper (PS.eq ==> PS.eq)
-           (List.fold_left memory_eq eqs).
+           (fold_left memory_eq eqs).
   Proof.
     induction eqs as [|eq eqs IH]; intros S S' Heq; [exact Heq|].
     simpl.
@@ -222,8 +222,8 @@ Module Type TRANSLATION
     induction eqs as [|eq eqs IH]; [reflexivity|].
     unfold memories, gather_eqs.
     assert (forall eqs F S,
-               PS.eq (ps_from_list (fst (List.fold_left gather_eq eqs (F, S))))
-                     (List.fold_left memory_eq eqs (ps_from_list F))) as HH.
+               PS.eq (ps_from_list (fst (fold_left gather_eq eqs (F, S))))
+                     (fold_left memory_eq eqs (ps_from_list F))) as HH.
     {
       clear eq eqs IH; induction eqs as [|eq eqs IH]; [reflexivity|].
       intros F S.
@@ -304,9 +304,9 @@ Module Type TRANSLATION
     - destruct o as [(?&?)|]; rewrite HMeq; auto.
     - destruct o as [(?&?)|].
       + do 3 (rewrite HMeq at 1; f_equal); f_equal.
-        apply List.map_ext. now setoid_rewrite HMeq.
+        apply map_ext. now setoid_rewrite HMeq.
       + do 2 (rewrite HMeq at 1; f_equal); f_equal.
-        apply List.map_ext. now setoid_rewrite HMeq.
+        apply map_ext. now setoid_rewrite HMeq.
   Qed.
 
   Instance translate_eqns_Proper :
@@ -317,8 +317,8 @@ Module Type TRANSLATION
     unfold translate_eqns.
     assert (forall S S',
                S = S' ->
-               List.fold_left (fun i eq => Comp (translate_eqn M eq) i) eqs S
-               = List.fold_left (fun i eq => Comp (translate_eqn M' eq) i) eqs S')
+               fold_left (fun i eq => Comp (translate_eqn M eq) i) eqs S
+               = fold_left (fun i eq => Comp (translate_eqn M' eq) i) eqs S')
       as HH.
     { revert M M' Heq.
       induction eqs as [|eq eqs IH]; intros M M' Heq S S' HSeq; [apply HSeq|].
@@ -837,7 +837,7 @@ Module Type TRANSLATION
   (* =translate= *)
   (* definition is needed in signature *)
   Definition translate (G: global) : program :=
-    List.map translate_node G.
+    map translate_node G.
   (* =end= *)
 
   Lemma map_c_name_translate:

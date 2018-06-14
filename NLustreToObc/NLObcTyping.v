@@ -27,6 +27,18 @@ Module Type NLOBCTYPING
 
        (Import Trans : TRANSLATION Ids Op OpAux Clks DF.Syn Obc.Syn Mem).
 
+  Ltac FromMemset :=
+    unfold bool_var, tovar;
+    match goal with
+    | |- context [ PS.mem ?i ?memset ] =>
+      let Hpsm := fresh "Hpsm" in
+      destruct (PS.mem i memset) eqn:Hpsm;
+      match goal with
+      | H:PS.mem _ _ = true  |- _ => rewrite PS.mem_spec in H
+      | H:PS.mem _ _ = false |- _ => rewrite mem_spec_false in H
+      | _ => idtac
+      end
+    end.
 
   (** Preservation of well-typing. *)
 
@@ -58,18 +70,6 @@ Module Type NLOBCTYPING
         In (x, ty) vars.
 
     Hint Resolve nvars_to_mems nvars_to_vars : transty.
-
-    Ltac FromMemset :=
-      unfold bool_var, tovar;
-      match goal with
-      | |- context [ PS.mem ?i memset ] =>
-        destruct (PS.mem i memset) eqn:Hpsm;
-        match goal with
-        | H:PS.mem _ _ = true  |- _ => rewrite PS.mem_spec in H
-        | H:PS.mem _ _ = false |- _ => rewrite mem_spec_false in H
-        | _ => idtac
-        end
-      end.
 
     Lemma typeof_translate_lexp:
       forall e,
@@ -123,6 +123,113 @@ Module Type NLOBCTYPING
 
     Hint Resolve Control_wt : transty.
 
+    Lemma nth_idty_exists:
+      forall xdef xtydef (xckdef: clock) xs n x (xty : type),
+        nth n (idty xs) (xdef, xtydef) = (x, xty) ->
+        exists xck, nth n xs (xdef, (xtydef, xckdef)) = (x, (xty, xck)).
+    Proof.
+      induction xs as [|x xs].
+      - intros ** Hnth.
+        exists xckdef.
+        destruct n; inv Hnth; auto.
+      - intros ** Hnth.
+        destruct x as (x & ty & ck).
+        destruct n; inv Hnth.
+        + exists ck; auto.
+        + apply IHxs; auto.
+    Qed.
+
+    Lemma step_call_wt:
+      forall g insts n xs f es ,
+        find_node f g = Some n ->
+        Forall2 (fun x xt => In (x, dty xt) nvars) xs n.(n_out) ->
+        Forall2 (fun e xt => DF.Syn.typeof e = dty xt) es n.(n_in) ->
+        Forall (wt_lexp nvars) es ->
+        NoDup xs ->
+        match xs with
+        | [] => True
+        | x0 :: _ => In (x0, f) insts
+        end ->
+        Forall (fun x => ~ PS.In x memset) xs ->
+        wt_stmt (translate g) insts mems vars
+                (Call xs f (hd default xs) step (map (translate_lexp memset) es)).
+    Proof.
+      intros ** Hfind ????? Heq2.
+
+      assert (Forall2 (fun y xt => In (y, snd xt) vars) xs (idty n.(n_out))).
+      {
+        assert (length xs = length (idty n.(n_out)))
+          by (rewrite length_idty; eapply Forall2_length; eauto).
+
+        apply Forall2_forall2; split; auto;
+          intros def_x [def_y def_yty] dn x [y yty] Hlen Hxn Hytn.
+
+        assert (In x xs)
+          by (rewrite <-Hxn; apply nth_In; auto).
+
+        assert (~ PS.In x memset)
+          by (eapply In_Forall in Heq2; eauto).
+
+        assert (In (x, yty) nvars); auto.
+        match goal with
+        | H: Forall2 _ xs n.(n_out) |- _ =>
+          apply Forall2_forall2 in H as [_ Hin_vars]
+        end.
+        pose proof (nth_idty_exists _ _ Cbase _ _ _ _ Hytn) as Hnth.
+        destruct Hnth as (xck & Hnth).
+        specialize (Hin_vars def_x _ dn x _ Hlen Hxn Hnth).
+        auto.
+      }
+
+      apply find_node_translate in Hfind;
+        destruct Hfind as (cls & prog' & Hfind & Hcls).
+      destruct (exists_step_method n) as (stepm & Hstep).
+      eapply wt_Call; subst cls; eauto.
+      + assert (Hlen: (0 < length xs)%nat).
+        {
+          assert (length xs = length n.(n_out)) as ->
+              by now eapply Forall2_length; eauto.
+
+          now destruct n.
+        }
+        destruct xs; try now inv Hlen.
+      + erewrite find_method_stepm_out; eauto.
+      + rewrite (find_method_stepm_in _ _ Hstep).
+        apply Forall2_map_1. apply Forall2_map_2.
+        eapply Forall2_impl_In; eauto.
+        intros; now rewrite typeof_translate_lexp.
+      + apply Forall_map.
+        eapply Forall_impl; eauto.
+        intros; eauto using translate_lexp_wt.
+    Qed.
+
+    Lemma reset_call_wt:
+      forall g insts n xs f,
+        find_node f g = Some n ->
+        Forall2 (fun x xt => In (x, dty xt) nvars) xs n.(n_out) ->
+         match xs with
+        | [] => True
+        | x0 :: _ => In (x0, f) insts
+        end ->
+        Forall (fun x => ~ PS.In x memset) xs ->
+        wt_stmt (translate g) insts mems vars
+                (Call [] f (hd default xs) reset []).
+    Proof.
+      intros ** Hfind ? ? ?.
+      apply find_node_translate in Hfind;
+        destruct Hfind as (cls & prog' & Hfind & Hcls).
+      pose proof (exists_reset_method n) as Hreset.
+      eapply wt_Call; subst cls; eauto; try (simpl; constructor).
+      assert (Hlen: (0 < length xs)%nat).
+      {
+        assert (length xs = length n.(n_out)) as ->
+            by now eapply Forall2_length; eauto.
+
+        now destruct n.
+      }
+      destruct xs; try now inv Hlen.
+    Qed.
+
   End Expressions.
 
   Definition wt_eqs_vars insts mems vars memset eqs :=
@@ -138,22 +245,6 @@ Module Type NLOBCTYPING
               | EqFby x ck c0 e => In (x, type_const c0) mems
               end)
       eqs.
-
-  Lemma nth_idty_exists:
-    forall xdef xtydef (xckdef: clock) xs n x (xty : type),
-      nth n (idty xs) (xdef, xtydef) = (x, xty) ->
-      exists xck, nth n xs (xdef, (xtydef, xckdef)) = (x, (xty, xck)).
-  Proof.
-    induction xs as [|x xs].
-    - intros ** Hnth.
-      exists xckdef.
-      destruct n; inv Hnth; auto.
-    - intros ** Hnth.
-      destruct x as (x & ty & ck).
-      destruct n; inv Hnth.
-      + exists ck; auto.
-      + apply IHxs; auto.
-  Qed.
 
   Lemma wt_step_translate_eqns:
     forall g n insts mems vars memset,
@@ -181,66 +272,19 @@ Module Type NLOBCTYPING
     intros s WTs.
     simpl. apply IHeqs; auto; clear IHeqs.
     constructor; auto.
-    inv WTeq; simpl; try destruct r as [(?&?)|];
+    inv WTeq; simpl;
       try apply Control_wt with (nvars:=idty (n.(n_in) ++ n.(n_vars) ++ n.(n_out)));
       auto.
     - eapply translate_cexp_wt; eauto.
-    - admit.
-    - destruct Heq as (Heq1 & Heq2).
-
-      assert (Forall2 (fun y xt => In (y, snd xt) vars) xs (idty n0.(n_out))).
-      {
-        assert (length xs = length (idty n0.(n_out)))
-          by (rewrite length_idty; eapply Forall2_length; eauto).
-
-        apply Forall2_forall2; split; auto;
-          intros def_x [def_y def_yty] dn x' [y yty] Hlen Hxn Hytn.
-
-        assert (In x' xs)
-          by (rewrite <-Hxn; apply nth_In; auto).
-
-        assert (~ PS.In x' memset)
-          by (eapply In_Forall in Heq2; eauto).
-
-        assert (In (x', yty) (idty (n_in n ++ n_vars n ++ n_out n))).
-        {
-          match goal with
-          | H: Forall2 _ xs (n_out n0) |- _ =>
-            apply Forall2_forall2 in H as [_ Hin_vars]
-          end.
-          pose proof (nth_idty_exists _ _ Cbase _ _ _ _ Hytn) as Hnth.
-          destruct Hnth as (xck & Hnth).
-          specialize (Hin_vars def_x _ dn x' _ Hlen Hxn Hnth).
-          auto.
-        }
-
-        apply Hvars; auto.
-      }
-
-      match goal with H:find_node _ _ = Some _ |- _ =>
-                      apply find_node_translate in H;
-                        destruct H as (cls & prog' & Hfind & Hcls) end.
-      match goal with H:cls=translate_node ?n |- _ =>
-                      destruct (exists_step_method n) as (stepm & Hstep) end.
-      eapply wt_Call; subst cls; eauto.
-      + assert (Hlen: (0 < length xs)%nat).
-        {
-          assert (length xs = length (n_out n0)) as ->
-            by now eapply Forall2_length; eauto.
-
-          now destruct n0.
-        }
-        destruct xs; try now inv Hlen.
-      + erewrite find_method_stepm_out; eauto.
-      + rewrite (find_method_stepm_in _ _ Hstep).
-        apply Forall2_map_1. apply Forall2_map_2.
-        match goal with H:Forall2 _ _ _ |- _ =>
-                        apply Forall2_impl_In with (2:=H) end.
-        intros; now rewrite typeof_translate_lexp.
-      + apply Forall_map.
-        match goal with H:Forall _ _ |- _ =>
-                        apply Forall_impl with (2:=H) end.
-        intros; eauto using translate_lexp_wt.
+    - destruct Heq; eapply step_call_wt; eauto.
+    - destruct Heq.
+      constructor.
+      + unfold reset_stmt.
+        eapply Control_wt; eauto.
+        constructor; auto; try FromMemset; try constructor; auto.
+        eapply reset_call_wt; eauto.
+      + eapply Control_wt; eauto.
+        eapply step_call_wt; eauto.
     - constructor; eauto using translate_lexp_wt.
       match goal with H:DF.Syn.typeof e = _ |- _ =>
                       rewrite typeof_translate_lexp, H; auto end.
@@ -275,26 +319,46 @@ Module Type NLOBCTYPING
     intros s WTs.
     simpl. apply IHeqs; auto.
     destruct eq; simpl; auto; constructor; inv WTeq; auto with obctyping.
-    match goal with H:find_node _ _ = Some _ |- _ =>
-                    apply find_node_translate in H;
-                      destruct H as (cls & prog' & Hfind & Hcls) end.
+    - match goal with H:find_node _ _ = Some _ |- _ =>
+                      apply find_node_translate in H;
+                        destruct H as (cls & prog' & Hfind & Hcls) end.
 
-    assert (In (hd Ids.default i, i0) insts).
-    {
-      assert (Hlen: (0 < length i)%nat).
+      assert (In (hd Ids.default i, i0) insts).
       {
-        assert (length i = length (n_out n0)) as ->
-            by now eapply Forall2_length; eauto.
+        assert (Hlen: (0 < length i)%nat).
+        {
+          assert (length i = length (n_out n0)) as ->
+              by now eapply Forall2_length; eauto.
 
-        now destruct n0.
+          now destruct n0.
+        }
+
+        destruct i; try now inv Hlen.
       }
 
-      destruct i; try now inv Hlen.
-    }
+      eapply wt_Call with (fm:=reset_method _); simpl;
+        eauto using NoDup; subst cls.
+      apply exists_reset_method.
+    - match goal with H:find_node _ _ = Some _ |- _ =>
+                      apply find_node_translate in H;
+                        destruct H as (cls & prog' & Hfind & Hcls) end.
 
-    eapply wt_Call with (fm:=reset_method _); simpl;
-      eauto using NoDup; subst cls.
-    apply exists_reset_method.
+      assert (In (hd Ids.default i, i0) insts).
+      {
+        assert (Hlen: (0 < length i)%nat).
+        {
+          assert (length i = length (n_out n0)) as ->
+              by now eapply Forall2_length; eauto.
+
+          now destruct n0.
+        }
+
+        destruct i; try now inv Hlen.
+      }
+
+      eapply wt_Call with (fm:=reset_method _); simpl;
+        eauto using NoDup; subst cls.
+      apply exists_reset_method.
   Qed.
 
   Lemma translate_wt_vals_ins:
@@ -319,7 +383,7 @@ Module Type NLOBCTYPING
   Proof.
     intros ** WTn Hin.
     apply In_Forall with (2:=Hin) in WTn.
-    inversion_clear WTn as [| |? ? ? ? Hvars Htye WTc WTl].
+    inversion_clear WTn as [| | |? ? ? ? Hvars Htye WTc WTl].
     repeat rewrite idty_app in Hvars.
     repeat (apply in_app in Hvars; destruct Hvars as [Hv|Hvars]); auto.
     -  (* Case: In (x, type_const c0) (n_in n) *)
@@ -383,7 +447,7 @@ Module Type NLOBCTYPING
   Proof.
     intros ** WTn Hin.
     apply In_Forall with (2:=Hin) in WTn.
-    inversion_clear WTn as [? ? ? Hv WTc WTe| |].
+    inversion_clear WTn as [? ? ? Hv WTc WTe| | |].
     apply In_EqDef_Is_variable_in_eqs in Hin.
     pose proof (Is_variable_in_eqs_Is_defined_in_eqs _ _ Hin) as Hdin.
     apply Is_defined_in_var_defined in Hdin.
@@ -445,11 +509,11 @@ Module Type NLOBCTYPING
         destruct eq; simpl; auto.
         destruct i; simpl; try now apply IHeqs.
         constructor; auto.
-        inv WTeq. simpl.
-        match goal with H:find_node _ _ = Some _ |- _ =>
-                        apply find_node_translate in H;
-                          destruct H as (cls & prog' & Hfind & Hcls) end.
-        intro HH; rewrite HH in Hfind; discriminate.
+        inv WTeq; simpl;
+          match goal with H:find_node _ _ = Some _ |- _ =>
+                          apply find_node_translate in H;
+                            destruct H as (cls & prog' & Hfind & Hcls) end;
+          intro HH; rewrite HH in Hfind; discriminate.
     - (* wt_method step *)
       unfold wt_method, meth_vars; simpl.
       rewrite fst_partition_filter, snd_partition_filter.

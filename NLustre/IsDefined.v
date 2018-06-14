@@ -29,9 +29,16 @@ Module Type ISDEFINED
   (** ** Logical predicates: *)
 
   Inductive Is_defined_in_eq : ident -> equation -> Prop :=
-  | DefEqDef: forall x ck e,   Is_defined_in_eq x (EqDef x ck e)
-  | DefEqApp: forall x xs ck f e r, List.In x xs -> Is_defined_in_eq x (EqApp xs ck f e r)
-  | DefEqFby: forall x ck v e, Is_defined_in_eq x (EqFby x ck v e).
+  | DefEqDef:
+      forall x ck e,
+        Is_defined_in_eq x (EqDef x ck e)
+  | DefEqApp:
+      forall x xs ck f e r,
+        In x xs ->
+        Is_defined_in_eq x (EqApp xs ck f e r)
+  | DefEqFby:
+      forall x ck v e,
+        Is_defined_in_eq x (EqFby x ck v e).
 
   (* definition is needed in signature *)
   Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=

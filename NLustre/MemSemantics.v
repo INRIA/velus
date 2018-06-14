@@ -257,7 +257,8 @@ enough: it does not support the internal fixpoint introduced by
          induction H7; auto.
     Qed.
 
-    Combined Scheme msem_equation_node_ind from msem_equation_mult, msem_node_mult, msem_reset_mult.
+    Combined Scheme msem_equation_node_reset_ind from
+             msem_equation_mult, msem_node_mult, msem_reset_mult.
 
   End msem_node_mult.
 
@@ -268,66 +269,54 @@ enough: it does not support the internal fixpoint introduced by
 
   (** *** Equation non-activation *)
 
-  (* Lemma subrate_property_eqn: *)
-  (*   forall G H M bk xss eqn n, *)
-  (*     clock_of xss bk -> *)
-  (*     msem_equation G bk H M eqn -> *)
-  (*     0 < length (xss n) -> *)
-  (*     absent_list (xss n) -> *)
-  (*     rhs_absent_instant (bk n) (restr H n) eqn. *)
-  (* Proof. *)
-  (*   intros * Hck Hsem Hlen Habs. *)
-  (*   assert (Hbk: bk n = false). *)
-  (*   { *)
-  (*     destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto. *)
-  (*     exfalso. *)
-  (*     apply Bool.not_false_is_true in Hbk. *)
-  (*     eapply Hck in Hbk. *)
-  (*     eapply not_absent_present_list in Hbk; auto. *)
-  (*   } *)
-  (*   rewrite Hbk in *. *)
-  (*   destruct eqn. *)
-  (*   constructor. *)
-  (*   apply SCabs; try apply subrate_clock. *)
+  Lemma subrate_property_eqn:
+    forall G H M bk xss eqn n,
+      clock_of xss bk ->
+      msem_equation G bk H M eqn ->
+      0 < length (xss n) ->
+      absent_list (xss n) ->
+      rhs_absent_instant (bk n) (restr H n) eqn.
+  Proof.
+    intros * Hck Hsem Hlen Habs.
+    assert (Hbk: bk n = false).
+    {
+      destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto.
+      exfalso.
+      apply Bool.not_false_is_true in Hbk.
+      eapply Hck in Hbk.
+      eapply not_absent_present_list in Hbk; auto.
+    }
+    induction Hsem as [???????? Hsem |
+                       ????????????? Hsem |
+                       ???????????????? Hsem |
+                       ????????? Hsem];
+      unfold sem_caexp, lift in Hsem; specialize (Hsem n); rewrite Hbk in *;
+        inv Hsem; try (exfalso; now eapply not_subrate_clock; eauto).
+    - eauto using rhs_absent_instant, sem_caexp_instant.
+    - econstructor.
+      + apply SLabss; eauto.
+      + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
+    - econstructor.
+      + apply SLabss; eauto.
+      + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
+    - eauto using rhs_absent_instant, sem_laexp_instant.
+  Qed.
 
-  (*   ; *)
-  (*     try repeat *)
-  (*         match goal with *)
-  (*         | |- rhs_absent_instant false _ (EqDef _ _ _) => *)
-  (*           constructor *)
-  (*         | |- rhs_absent_instant false _ (EqFby _ _ _ _) => *)
-  (*           constructor *)
-  (*         | |- sem_caexp_instant false _ ?ck ?ce absent => *)
-  (*           apply SCabs *)
-  (*         | |- sem_clock_instant false _ ?ck false => *)
-  (*           apply subrate_clock *)
-  (*         | |- sem_laexp_instant false _ ?ck ?le absent => *)
-  (*           apply SLabs *)
-  (*         | |- sem_laexps_instant false _ ?ck ?les _ => *)
-  (*           apply SLabss; eauto *)
-  (*         end. *)
-  (*   clear Hsem Habs. *)
-  (*   apply AEqApp with (vs:=map (fun _ =>absent) l). *)
-  (*   apply SLabss; auto. apply subrate_clock. *)
-  (*   induction l; [constructor|]. *)
-  (*   apply Forall_cons; auto. *)
-  (* Qed. *)
-
-  (* Lemma subrate_property_eqns: *)
-  (*   forall G H M bk xss eqns n, *)
-  (*     clock_of xss bk -> *)
-  (*     msem_equations G bk H M eqns -> *)
-  (*     0 < length (xss n) -> *)
-  (*     absent_list (xss n) -> *)
-  (*     Forall (rhs_absent_instant (bk n) (restr H n)) eqns. *)
-  (* Proof. *)
-  (*   intros * Hck Hsem Habs. *)
-  (*   induction eqns as [|eqn eqns]; auto. *)
-  (*   inversion_clear Hsem. *)
-  (*   constructor. *)
-  (*   eapply subrate_property_eqn; eauto. *)
-  (*   eapply IHeqns; eauto. *)
-  (* Qed. *)
+  Lemma subrate_property_eqns:
+    forall G H M bk xss eqns n,
+      clock_of xss bk ->
+      msem_equations G bk H M eqns ->
+      0 < length (xss n) ->
+      absent_list (xss n) ->
+      Forall (rhs_absent_instant (bk n) (restr H n)) eqns.
+  Proof.
+    intros * Hck Hsem Habs.
+    induction eqns as [|eqn eqns]; auto.
+    inversion_clear Hsem.
+    constructor.
+    eapply subrate_property_eqn; eauto.
+    eapply IHeqns; eauto.
+  Qed.
 
   (** *** Environment cons-ing lemmas *)
 

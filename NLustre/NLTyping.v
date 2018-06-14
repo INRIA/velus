@@ -90,15 +90,24 @@ Module Type NLTYPING
         wt_clock ck ->
         wt_cexp e ->
         wt_equation (EqDef x ck e)
-    | wt_EqApp: forall n xs ck f es r x ck_r,
+    | wt_EqApp: forall n xs ck f es,
         find_node f G = Some n ->
         Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
         Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
         wt_clock ck ->
         Forall wt_lexp es ->
         NoDup xs ->
-        (r = Some (x, ck_r) -> In (x, bool_type) vars) ->
-        wt_equation (EqApp xs ck f es r)
+        wt_equation (EqApp xs ck f es None)
+    | wt_EqReset: forall n xs ck f es r ck_r,
+        find_node f G = Some n ->
+        Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
+        Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
+        wt_clock ck ->
+        Forall wt_lexp es ->
+        NoDup xs ->
+        In (r, bool_type) vars ->
+        wt_clock ck_r ->
+        wt_equation (EqApp xs ck f es (Some (r, ck_r)))
     | wt_EqFby: forall x ck c0 e,
         In (x, type_const c0) vars ->
         typeof e = type_const c0 ->
@@ -209,16 +218,16 @@ Module Type NLTYPING
     intros G1 G2 HG env1 env2 Henv eq1 eq2 Heq.
     rewrite Heq, HG.
     split; intro WTeq.
-    - inv WTeq; rewrite Henv in *; eauto with nltyping.
-      econstructor; eauto.
-      match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
-        apply Forall2_impl_In with (2:=H) end.
-      intros; rewrite Henv in *; auto.
-    - inv WTeq; rewrite <-Henv in *; eauto with nltyping.
-      econstructor; eauto.
-      match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
-        apply Forall2_impl_In with (2:=H) end.
-      intros; rewrite Henv in *; auto.
+    - inv WTeq; rewrite Henv in *; eauto with nltyping;
+        econstructor; eauto;
+          match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
+                          apply Forall2_impl_In with (2:=H) end;
+          intros; rewrite Henv in *; auto.
+    - inv WTeq; rewrite <-Henv in *; eauto with nltyping;
+        econstructor; eauto;
+          match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
+                          apply Forall2_impl_In with (2:=H) end;
+          intros; rewrite Henv in *; auto.
   Qed.
 
 End NLTYPING.
