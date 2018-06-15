@@ -330,133 +330,7 @@ Module Type MEMORYCORRES
       now (inv Hmc0; eauto).
   Qed.
 
-
-  Check msem_equation_node_reset_ind.
-
   Lemma Memory_Corres_unchanged:
-    forall G n,
-      (forall bk H Ms eq,
-          msem_equation G bk H Ms eq ->
-          forall menv,
-            rhs_absent_instant (bk n) (restr H n) eq ->
-            Memory_Corres_eq G (Ms n) menv eq ->
-            Memory_Corres_eq G (Ms (S n)) menv eq)
-      /\
-      (forall f xss Ms yss,
-          msem_node G f xss Ms yss ->
-          forall menv,
-            absent_list (xss n) ->
-            Memory_Corres G f (Ms n) menv ->
-            Memory_Corres G f (Ms (S n)) menv)
-      /\
-      (forall f r xss Ms yss,
-          msem_reset G f r xss Ms yss ->
-          forall menv,
-            absent_list (xss n) ->
-            Memory_Corres G f (Ms n) menv ->
-            Memory_Corres G f (Ms (S n)) menv).
-  Proof.
-    intros.
-    apply msem_equation_node_reset_ind;
-      [ intros ** Habs ? |
-        intros ** Hsome Hmfind Hsem ?? IH ? Hrhsa Hmceq |
-        intros ** Hsome Hmfind Hsem ??? IH ? Hrhsa Hmceq |
-        intros ** Hsem ? Hfby ? Hdefabs Hmceq |
-        intros |
-        intros ** Hfind Hxss ????? IH ? Habs Hmc ].
-
-    (* Case: EqDef *)
-    - inv Habs; constructor; assumption.
-
-    (* Case: EqApp *)
-    - econstructor; eauto.
-      intros Mo Hmfind'.
-      rewrite Hmfind in Hmfind'; inv Hmfind'.
-
-      inversion_clear Hmceq as [|? ? x' ? ? ? ? ? Hsome' Hmc'|].
-      assert (Some x' = Some x) as Hxx' by now rewrite Hsome, <-Hsome'.
-      inv Hxx'.
-
-      edestruct Hmc' as [omenv [Hfindo Hmc]]; eauto.
-      exists omenv.
-      split; [exact Hfindo|].
-      apply IH; auto.
-      inv Hrhsa.
-
-      assert (ls n = vs) as ->
-        by (specialize (Hsem n); simpl in Hsem; sem_det); auto.
-
-    (* Case: EqReset *)
-    - econstructor; eauto.
-      intros Mo Hmfind'.
-      rewrite Hmfind in Hmfind'; inv Hmfind'.
-
-      inversion_clear Hmceq as [|? ? x' ? ? ? ? ? Hsome' Hmc'|].
-      assert (Some x' = Some x) as Hxx' by now rewrite Hsome, <-Hsome'.
-      inv Hxx'.
-
-      edestruct Hmc' as [omenv [Hfindo Hmc]]; eauto.
-      exists omenv.
-      split; [exact Hfindo|].
-      apply IH; auto.
-      inv Hrhsa.
-
-      assert (ls n = vs) as ->
-        by (specialize (Hsem n); simpl in Hsem; sem_det); auto.
-
-     (* Case: EqFby *)
-    - constructor.
-      intros ms0 Hmfind0.
-      inversion_clear Hfby as [????? Hms0 Hy].
-      specialize (Hy n).
-      destruct (mfind_mem x (M n)) eqn: Hmfind; try contradiction.
-      inversion_clear Hmceq as [| |? ? ? ? ? ? Hmenv].
-      apply Hmenv.
-      rewrite <-Hmfind0.
-      inversion_clear Hdefabs as [| |???? Hsem'].
-      unfold sem_laexp, lift in Hsem; specialize (Hsem n).
-      assert (ls n = OpAux.absent) as Hls by sem_det.
-      rewrite Hls in Hy; destruct Hy as [HfindS Hxs].
-      now rewrite HfindS.
-
-    (* Case: Reset *)
-    - (* inversion_clear Hmc as [? ? ? ?  Hfind' Hmceqs]. *)
-      (* inversion_clear Hsem as [????? Hsem']. *)
-      (* econstructor; eauto. *)
-
-
-      admit.
-
-    (* Case: Equation *)
-    - inversion_clear Hmc as [? ? ? ?  Hfind' Hmceqs].
-      rewrite Hfind' in Hfind; inv Hfind.
-
-      assert (0 < length (xss n)).
-      {
-        unfold sem_vars, lift in Hxss.
-        specialize (Hxss n).
-        apply Forall2_length in Hxss.
-        rewrite map_length in Hxss.
-        rewrite <-Hxss.
-        apply n0.(n_ingt0).
-      }
-
-      assert (absent_list (xss n) ->
-              Forall (rhs_absent_instant (bk n) (restr H n)) n0.(n_eqs))
-        as Habs'
-        by (eapply subrate_property_eqns; eauto).
-
-      apply Habs' in Habs.
-      apply Forall_Forall with (1:=Habs) in IH.
-      apply Forall_Forall with (1:=Hmceqs) in IH.
-      clear Habs Hmceqs.
-      econstructor; eauto.
-      apply Forall_impl with (2:=IH); clear IH.
-      intros eq HH.
-      destruct HH as [? [? ?]]; auto.
-   Qed.
-
-  Lemma Memory_Corres_unchanged':
     forall G f n ls Ms ys menv,
       (* Welldef_global G -> *)
       msem_node G f ls Ms ys ->
@@ -544,12 +418,24 @@ Module Type MEMORYCORRES
 
     (* Case: Reset *)
     - intros ** Hsem ? Hmc.
-      inversion_clear Hmc as [? ? ? ?  Hfind' Hmceqs].
-      inversion_clear Hsem as [????? Hsem'].
-      econstructor; eauto.
-
-
-      admit.
+      destruct (r (S n)) eqn: E.
+      + destruct (IH (count r n)) as (Mn & ? & Hmaskn & IHn).
+        destruct (IH (count r (S n))) as (MSn & ? & HmaskSn & IHSn).
+        unfold memory_mask in Hmaskn, HmaskSn.
+        rewrite <-Hmaskn in Hmc; auto.
+        rewrite <-HmaskSn; auto.
+        apply IHSn.
+        * apply absent_list_mask; auto.
+          apply all_absent_spec.
+        * admit.
+      + destruct (IH (count r n)) as (Mn & ? & Hmaskn & IHn).
+        unfold memory_mask in Hmaskn.
+        rewrite <-Hmaskn in Hmc; auto.
+        apply IHn in Hmc.
+        * rewrite <-Hmaskn; auto.
+          simpl; rewrite E; auto.
+        * apply absent_list_mask; auto.
+          apply all_absent_spec.
 
     (* Case: Equation *)
     - intros ** Hmc.

@@ -220,7 +220,7 @@ Module Type ISVARIABLE
     match goal with
     | H: ~ Is_variable_in_eq x (EqDef y _ _) |- _ =>
       apply not_Is_variable_in_EqDef in H
-    | H: ~ Is_variable_in_eq x (EqApp y _ _ _) |- _ =>
+    | H: ~ Is_variable_in_eq x (EqApp y _ _ _ _) |- _ =>
       apply not_Is_variable_in_EqApp in H
     end.
 
