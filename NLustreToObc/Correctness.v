@@ -1756,15 +1756,16 @@ for all [Is_free_exp x e]. *)
 
           inversion_clear Hwd as [|? ? Hwd' eqs Hwsch Hndef_in Hfind Hnodup].
           clear Hwd'.
-          inversion_clear Hmsem as [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hck Heqs
-                                   (H & Hin & Hout & Hrabs & Hall)].
+          inversion_clear Hmsem as [??????? Hck Heqs Hin Hout Hrabs].
           subst eqs nodeName.
           simpl in Heqs; rewrite Hfeq in Heqs; simpl in Heqs.
-          injection Heqs. intro Hnode. rewrite Hnode in *. clear Heqs. simpl in *.
+          injection Heqs. intro Hnode.
+          subst n0.
+          (* rewrite Hnode in *. clear Heqs. simpl in *. *)
 
-          assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs) /\ v = node.(n_vars))
-            as HR by (rewrite Hnode; intuition).
-          destruct HR as (HR1 & HR2 & HR3 & HR4). subst i o eqs0 v.
+          (* assert (i = node.(n_in) /\ o = node.(n_out) /\ eqs0 = node.(n_eqs) /\ v = node.(n_vars)) *)
+            (* as HR by (rewrite Hnode; intuition). *)
+          (* destruct HR as (HR1 & HR2 & HR3 & HR4). subst i o eqs0 v. *)
 
           set (env := adds (map fst node.(n_in)) inputs sempty).
 
@@ -1773,14 +1774,14 @@ for all [Is_free_exp x e]. *)
 
           assert (exists (menv' : heap) (env' : stack),
                      stmt_eval (translate G) menv env
-                               (translate_eqns (memories node.(n_eqs)) node.(n_eqs))
+                               (translate_eqns (DF.Mem.memories node.(n_eqs)) node.(n_eqs))
                        (menv', env') /\
                      (forall x : ident,
                          Is_variable_in_eqs x node.(n_eqs) ->
                          forall c : val,
                            sem_var_instant (restr H n) x (present c) <->
                            PM.find x env' = Some c) /\
-                     Forall (Memory_Corres_eq G (S n) M menv') node.(n_eqs))
+                     Forall (Memory_Corres_eq G (M (S n)) menv') node.(n_eqs))
             as His_step_correct.
           {
             assert (bk n = true).
@@ -1795,7 +1796,7 @@ for all [Is_free_exp x e]. *)
               by now exists [].
 
             assert (forall x,
-                       PS.In x (memories (n_eqs node)) ->
+                       PS.In x (DF.Mem.memories (n_eqs node)) ->
                          Is_defined_in_eqs x (n_eqs node)
                        /\ ~ Is_variable_in_eqs x (n_eqs node)).
             {
@@ -1817,7 +1818,7 @@ for all [Is_free_exp x e]. *)
               specialize (Hin n). rewrite Hxs in Hin.
 
               assert (NoDupMembers node.(n_in))
-                by (eapply NoDupMembers_app_l; eauto).
+                by (eapply NoDupMembers_app_l; eapply n_nodup; eauto).
 
               rewrite adds_sem_var_find
               with (iargs:=idty node.(n_in)) (ivals:=inputs);
@@ -1850,13 +1851,12 @@ for all [Is_free_exp x e]. *)
               apply Exists_exists. exists input; intuition.
             }
 
-            assert (Forall (Memory_Corres_eq G n M menv) (n_eqs node)).
+            assert (Forall (Memory_Corres_eq G (M n) menv) (n_eqs node)).
             {
-              inversion_clear Hmc as [? ? ? ? ? ? ? ? ? ? ? ? ? Hf Hmeqs].
+              inversion_clear Hmc as [???? Hf Hmeqs].
               simpl in Hf.
               rewrite ident_eqb_refl in Hf.
-              injection Hf; intros Heq0 Heq1 Heq2 Heq3.
-              rewrite <-Heq0 in *.
+              injection Hf; intros Heq0; subst n0.
               eapply Memory_Corres_eqs_node_tl; try eassumption.
             }
 
@@ -1874,7 +1874,7 @@ for all [Is_free_exp x e]. *)
                 rewrite ident_eqb_refl in Hstepm.
                 injection Hstepm.
                 clear Hstepm. intro Hstepm.
-                rewrite <-Hstepm, Hnode. clear Hstepm.
+                rewrite <-Hstepm; clear Hstepm.
                 simpl in *.
                 rewrite ps_from_list_gather_eqs_memories, map_fst_idty.
                 eassumption.
@@ -2020,11 +2020,11 @@ for all [Is_free_exp x e]. *)
 
   Definition equiv_reset G prog f :=
     forall xs ys M,
-      msem_node G f xs M ys
-      -> forall menv,
-        exists menv',
-          stmt_call_eval prog menv f reset [] menv' []
-        /\ Memory_Corres G 0 f M menv'.
+      msem_node G f xs M ys ->
+      forall menv,
+      exists menv',
+        stmt_call_eval prog menv f reset [] menv' []
+        /\ Memory_Corres G f (M 0%nat) menv'.
 
   (* TODO: remove/factorize with equiv_prog *)
   Lemma equiv_reset_empty: forall f, equiv_reset [] (translate []) f.
@@ -2043,7 +2043,7 @@ for all [Is_free_exp x e]. *)
     Variables (G: global)
               (HG: Welldef_global G)
               (H: history)
-              (M: memory)
+              (M: stream (memory val))
               (mems: PS.t)
               (inputs: idents).
 
@@ -2057,12 +2057,12 @@ for all [Is_free_exp x e]. *)
         exists menv' env',
           stmt_eval (translate G) menv sempty (translate_reset_eqns eqs)
                     (menv', env')
-          /\ Forall (Memory_Corres_eq G 0 M menv') eqs.
+          /\ Forall (Memory_Corres_eq G (M 0) menv') eqs.
     Proof.
       intros * Hmsem Hwsch Hreset.
       induction eqs as [|eq eqs IH]; [eauto|].
       intro menv.
-      destruct eq as [i ck e | is ck f e | i ck v e];
+      destruct eq as [i ck e | is ck f e [(r, ck_r)|]| i ck v e];
         inversion_clear Hmsem as [| ? ? Hsem Hmsem' ];
         inversion_clear Hwsch;
         edestruct IH as [menv' [env' [Hstmt Hmc]]]; try eassumption.
@@ -2070,10 +2070,13 @@ for all [Is_free_exp x e]. *)
         Hint Constructors Forall.
         Hint Constructors Memory_Corres_eq.
         eauto.
+      - (* EqReset *)
+        instantiate (1:=menv) in Hstmt.
+        admit.
       - (* EqApp *)
         unfold translate_reset_eqns; simpl.
         inversion_clear Hsem
-          as [|? ? ? i ? ? ? Mo ? xs' ys' Hsome Hmfind Hxs' Hys' HsemNode|].
+          as [|? ? ? i ? ? ? Mo ? xs' ys' Hsome Hmfind Hxs' Hys' HsemNode| |].
 
         assert (Hhd: hd Ids.default is = i)
           by now destruct is; inv Hsome.
@@ -2083,7 +2086,7 @@ for all [Is_free_exp x e]. *)
                       | Some m => m | None => hempty end).
         assert (exists omenv',
                    stmt_call_eval (translate G) omenv f reset [] omenv' []
-                   /\ Memory_Corres G 0 f Mo omenv')
+                   /\ Memory_Corres G f (Mo 0%nat) omenv')
           as [omenv' [Hstmt_reset Hmcf]]
           by (eapply Hreset; try eassumption).
         exists (madd_obj i omenv' menv'), env'.
@@ -2094,7 +2097,7 @@ for all [Is_free_exp x e]. *)
           econstructor; [|constructor].
           subst omenv.
           econstructor; eauto.
-        + assert (Memory_Corres_eq G 0 M (madd_obj i omenv' menv') (EqApp is ck f e)).
+        + assert (Memory_Corres_eq G (M 0) (madd_obj i omenv' menv') (EqApp is ck f e None)).
           {
             econstructor; eauto.
             intros M' Hmfind'.
@@ -2104,9 +2107,9 @@ for all [Is_free_exp x e]. *)
             now auto.
           }
 
-          assert (Forall (Memory_Corres_eq G 0 M (madd_obj i omenv' menv')) eqs).
+          assert (Forall (Memory_Corres_eq G (M 0) (madd_obj i omenv' menv')) eqs).
           {
-            assert (Is_defined_in_eq i (EqApp is ck f e)).
+            assert (Is_defined_in_eq i (EqApp is ck f e None)).
             {
               constructor. destruct is; try inv Hsome.
               rewrite <- Hhd; simpl; auto.
@@ -2128,12 +2131,12 @@ for all [Is_free_exp x e]. *)
           exists menv', env'.
           Hint Constructors stmt_eval.
           eauto.
-        + inversion_clear Hsem as [| | ? ? ? ? ? ? ? ? ? ? Hmfind Hms Hlae Hls].
-          rewrite <- Hms.
+        + inversion_clear Hsem as [| | |? ? ? ? ? ? ? ? ? ? ? Hmfby];
+            inversion_clear Hmfby as [????? Hmfind Hms].
+          (* rewrite <- Hms. *)
           constructor; [|apply Memory_Corres_eqs_add_mem; assumption].
-          constructor. intros ms' Hmfind'.
-          rewrite Hmfind in Hmfind'.
-          injection Hmfind'; intro HR; rewrite HR in *; clear HR Hmfind'.
+          constructor. intros v' Hmfind'.
+          rewrite Hmfind in Hmfind'; inv Hmfind'.
           rewrite mfind_mem_gss.
           reflexivity.
     Qed.
@@ -2158,10 +2161,8 @@ for all [Is_free_exp x e]. *)
       destruct (ident_eqb nodeName f) eqn:Heqb.
       + assert (nodeName = f) as Hfeq
             by (apply Pos.eqb_eq; assumption).
-        inversion_clear Hmsem as [? ? ? ? ?  inArgs outArg v eqs
-                                    ingt0 outgt0 defd vout nodup good
-                                    Hbk Hfind (H & Hin & Hout & Hrhs & Hmsem')].
-        rename Hmsem' into Hmsem.
+        inversion_clear Hmsem as [? ? ? ? ? ? ? Hbk Hfind Hin Hout Hrhs].
+        (* rename Hmsem' into Hmsem. *)
 
         specialize (Hin 0)%nat; specialize (Hout 0)%nat;
         simpl in Hin, Hout.
@@ -2169,24 +2170,23 @@ for all [Is_free_exp x e]. *)
         simpl in Hfind; subst nodeName; rewrite Heqb in Hfind;
         injection Hfind; clear Hfind; intro Hfind.
 
-        assert (msem_equations G bk H M eqs).
+        assert (msem_equations G bk H M n.(n_eqs)).
         {
-          inversion_clear Hwdef. subst eqs0; rewrite Hfind in *; simpl in *.
+          inversion_clear Hwdef. subst n.
           now eapply Forall_msem_equation_global_tl; eauto.
         }
 
-        set (inArgs_fst := map fst inArgs).
-        assert (Is_well_sch (memories eqs) inArgs_fst eqs)
-          by (inversion Hwdef; subst inArgs_fst eqs0; now rewrite Hfind in *).
-
+        set (inArgs_fst := map fst n.(n_in)).
+        assert (Is_well_sch (DF.Mem.memories n.(n_eqs)) inArgs_fst n.(n_eqs))
+          by now inversion Hwdef; subst inArgs_fst n.
         assert (Welldef_global G)
           by (inversion Hwdef; assumption).
 
         assert (exists menv' env',
                    stmt_eval (translate G) menv sempty
-                             (translate_reset_eqns eqs)
+                             (translate_reset_eqns n.(n_eqs))
                              (menv', env')
-                   /\ Forall (Memory_Corres_eq G 0 M menv') eqs)
+                   /\ Forall (Memory_Corres_eq G (M 0%nat) menv') n.(n_eqs))
           as [menv' [env' [Hstmt Hmc]]].
         {
           eapply is_reset_correct; try eassumption.
@@ -2195,20 +2195,18 @@ for all [Is_free_exp x e]. *)
 
         exists menv'.
         split.
-        * { econstructor.
-            - simpl. rewrite Heqb. reflexivity.
-            - apply exists_reset_method.
-            - unfold adds. rewrite Hfind. simpl.
-              unfold adds. simpl. eassumption.
-            - constructor.
-          }
-        * {
-            econstructor.
-            - simpl; rewrite Heqb. subst node. reflexivity.
-            - apply Memory_Corres_eqs_node_tl; try assumption.
-              inversion Hwdef. subst eqs0. rewrite Hfind in *.
-              simpl. assumption.
-          }
+        *{ econstructor.
+           - simpl. rewrite Heqb. reflexivity.
+           - apply exists_reset_method.
+           - unfold adds. rewrite Hfind. simpl.
+             unfold adds. simpl. eassumption.
+           - constructor.
+         }
+        *{ econstructor.
+           - simpl; rewrite Heqb. subst node. reflexivity.
+           - apply Memory_Corres_eqs_node_tl; try assumption.
+             inversion Hwdef; now rewrite <-Hfind.
+         }
 
       + assert (nodeName <> f) as Hfneq
             by (apply Pos.eqb_neq; assumption).
@@ -2277,7 +2275,7 @@ for all [Is_free_exp x e]. *)
         exists menv env omenv,
           dostep (S n) P r main obj ins menv env
           /\ mfind_inst obj menv = Some omenv
-          /\ Memory_Corres G (S n) main M omenv
+          /\ Memory_Corres G main (M (S n)) omenv
           /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co).
     Proof.
       intros * Hmsem n.
@@ -2285,7 +2283,7 @@ for all [Is_free_exp x e]. *)
                  stmt_eval (translate G) hempty sempty
                            (Call [] main obj reset []) (menv', env')
                  /\ (exists omenv0, mfind_inst obj menv' = Some omenv0
-                                    /\ Memory_Corres G 0 main M omenv0))
+                                    /\ Memory_Corres G main (M 0) omenv0))
         as (menv0 & env0 & Hstmtr & (omenv0 & Hmf0 & Hmc0)).
       {
         pose proof (is_node_reset_correct _ _ Hwdef _ _ _ Hmsem hempty) as Hrst.
@@ -2307,20 +2305,20 @@ for all [Is_free_exp x e]. *)
       assert (exists co0, yss 0 = map present co0)%nat as [co0 Hco0].
       {
         inversion_clear Hmsem as
-            [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
-                (H & Hsem_in & Hsem_out & Hsamexs & Hsameys & Habs & Hsem_eqns)].
+            [??????? Hbk Hfind
+                Hsem_in Hsem_out Hsamexs Hsameys Habs Hsem_eqns].
 
         assert (Hlen: 0 < length ci0).
         {
           assert (length ci0 = length (xss 0)) as ->
             by now rewrite Hpres, 2 map_length.
 
-          assert (length (map fst i) = length (xss 0)) as <-
+          assert (length (map fst n0.(n_in)) = length (xss 0)) as <-
               by now eapply Forall2_length;
                      specialize (Hsem_in 0); simpl in Hsem_in;
                      eauto.
 
-          now rewrite map_length.
+          rewrite map_length; apply n_ingt0.
         }
 
         assert (present_list (yss 0)).
@@ -2342,7 +2340,7 @@ for all [Is_free_exp x e]. *)
                              (Call r main obj step (map Const ci0))
                              (menv', env')
                    /\ (exists omenv, mfind_inst obj menv' = Some omenv
-                                     /\ Memory_Corres G 1 main M omenv)
+                                     /\ Memory_Corres G main (M 1) omenv)
                    /\ List.Forall2 (fun r co0 => PM.find r env' = Some co0) r co0)
           as (menv' & env' & Hstmt & (omenv & Hmfind & Hmc) & Hout).
         { pose proof (is_node_correct _ Hwdef _ _ _ _ _ omenv0 _ _
@@ -2405,20 +2403,20 @@ for all [Is_free_exp x e]. *)
         assert (exists coSn, yss (S n) = map present coSn) as [coSn Hys].
         {
           inversion_clear Hmsem as
-              [? ? ? ? ? ? ? ? ? ? ? ? ? ? ? Hbk Hfind
-                 (H & Hsem_in & Hsem_out & Hsamexs & Hsameys & Habs & Hsem_eqns)].
+              [??????? Hbk Hfind
+                      Hsem_in Hsem_out Hsamexs Hsameys Habs Hsem_eqns].
 
           assert (Hlen: 0 < length ciSn).
           {
             assert (length ciSn = length (xss (S n))) as ->
                 by now rewrite HpresN, 2 map_length.
 
-            assert (length (map fst i) = length (xss (S n))) as <-
+            assert (length (map fst n0.(n_in)) = length (xss (S n))) as <-
                 by now eapply Forall2_length;
                        specialize (Hsem_in (S n)); simpl in Hsem_in;
                        eauto.
 
-            now rewrite map_length.
+            rewrite map_length; apply n_ingt0.
           }
 
           assert (present_list (yss (S n))).
@@ -2437,7 +2435,7 @@ for all [Is_free_exp x e]. *)
                              (Call r main obj step (map Const ciSn))
                              (menvN', envN')
                    /\ (exists omenvsN, mfind_inst obj menvN' = Some omenvsN
-                                    /\ Memory_Corres G (S (S n)) main M omenvsN)
+                                    /\ Memory_Corres G main (M (S (S n))) omenvsN)
                    /\ Forall2 (fun r coSn => PM.find r envN' = Some coSn) r coSn)
           as (menvSn & envsN & Hstmt & (omenvSn & Hmfind & Hmc) & Hout).
         { pose proof (is_node_correct _ Hwdef _ _ _ _ _ omenvN _ _
@@ -2509,7 +2507,7 @@ for all [Is_free_exp x e]. *)
       assert (exists menv env omenv,
                  dostep (S n) (translate G) r main obj ins menv env
                  /\ mfind_inst obj menv = Some omenv
-                 /\ Memory_Corres G (S n) main M omenv
+                 /\ Memory_Corres G main (M (S n)) omenv
                  /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co))
         as [menv [env [omenv [Hstep [_ [_ Hys]]]]]]
           by (eapply is_event_loop_correctG; eauto).
@@ -2554,7 +2552,7 @@ for all [Is_free_exp x e]. *)
         msem_node G main xss M yss ->
         exists menv0 c_main P',
             stmt_call_eval (translate G) hempty main reset [] menv0 []
-          /\ Memory_Corres G 0 main M menv0
+          /\ Memory_Corres G main (M 0) menv0
           /\ find_class main (translate G) = Some (c_main, P')
           /\ wt_mem menv0 P' c_main.
     Proof.
@@ -2583,12 +2581,12 @@ for all [Is_free_exp x e]. *)
         let P := translate G in
         msem_node G main xss M yss ->
         stmt_call_eval (translate G) hempty main reset [] menv0 [] ->
-        Memory_Corres G 0 main M menv0 ->
+        Memory_Corres G main (M 0) menv0 ->
         dostep' P 0 menv0.
     Proof.
     intros M menv0 Hdef Hmsem Hstmt Hmc.
 
-    set (R := fun n menv => Memory_Corres G n main M menv).
+    set (R := fun n menv => Memory_Corres G main (M n) menv).
     apply dostep'_coind with (R := R).
     2: now unfold R; eauto.
     intros. unfold R in H.
