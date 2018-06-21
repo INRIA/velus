@@ -70,10 +70,11 @@ environment.
     Variable base : bool.
     Variable R: R.
 
-    Inductive sem_var_instant (x: ident) v: Prop :=
+    Inductive sem_var_instant: ident -> value -> Prop :=
     | Sv:
-        PM.find x R = Some v ->
-        sem_var_instant x v.
+        forall x v,
+          PM.find x R = Some v ->
+          sem_var_instant x v.
 
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
@@ -95,6 +96,18 @@ environment.
           sem_var_instant x (present c) ->
           val_to_bool c = Some b ->
           sem_clock_instant (Con ck x (negb b)) false.
+
+    Inductive sem_avar_instant: clock -> ident -> value -> Prop:=
+    | SVtick:
+        forall ck x c,
+          sem_var_instant x (present c) ->
+          sem_clock_instant ck true ->
+          sem_avar_instant ck x (present c)
+    | SVabs:
+        forall ck x,
+          sem_var_instant x absent ->
+          sem_clock_instant ck false ->
+          sem_avar_instant ck x absent.
 
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:
@@ -143,7 +156,7 @@ environment.
           sem_lexp_instant le2 absent ->
           sem_lexp_instant (Ebinop op le1 le2 ty) absent.
 
-    Definition sem_lexps_instant (les: list lexp)(vs: list value) :=
+    Definition sem_lexps_instant (les: list lexp) (vs: list value) :=
       Forall2 sem_lexp_instant les vs.
 
     Inductive sem_laexp_instant: clock -> lexp -> value -> Prop:=
@@ -227,10 +240,16 @@ environment.
           sem_caexp_instant ck cae absent ->
           rhs_absent_instant (EqDef x ck cae)
     | AEqApp:
-        forall x f ck laes vs r,
+        forall x f ck laes vs,
           sem_laexps_instant ck laes vs ->
           absent_list vs ->
-          rhs_absent_instant (EqApp x ck f laes r)
+          rhs_absent_instant (EqApp x ck f laes None)
+    | AEqReset:
+        forall x f ck laes vs r ck_r,
+          sem_laexps_instant ck laes vs ->
+          absent_list vs ->
+          (* sem_avar_instant ck_r r absent -> *)
+          rhs_absent_instant (EqApp x ck f laes (Some (r, ck_r)))
     | AEqFby:
         forall x ck v0 lae,
           sem_laexp_instant ck lae absent ->
@@ -243,47 +262,69 @@ environment.
   Section LiftSemantics.
 
     Variable bk : stream bool.
+    Variable H : history.
 
-    Definition restr H (n: nat): R :=
+    Definition restr (n: nat): R :=
       PM.map (fun xs => xs n) H.
     Hint Unfold restr.
+
+    Inductive silent_eq (n: nat): equation -> Prop :=
+    | SltEqDef:
+        forall x ck cae,
+          rhs_absent_instant (bk n) (restr n) (EqDef x ck cae) ->
+          silent_eq n (EqDef x ck cae)
+    | SltEqApp:
+        forall x f ck laes,
+          rhs_absent_instant (bk n) (restr n) (EqApp x ck f laes None) ->
+          silent_eq n (EqApp x ck f laes None)
+    | SltEqReset:
+        forall x f ck laes r ck_r,
+          rhs_absent_instant (bk n) (restr n) (EqApp x ck f laes (Some (r, ck_r))) ->
+          sem_avar_instant (bk (S n)) (restr (S n)) ck_r r absent ->
+          silent_eq n (EqApp x ck f laes (Some (r, ck_r)))
+    | SltEqFby:
+        forall x ck v0 lae,
+          rhs_absent_instant (bk n) (restr n) (EqFby x ck v0 lae) ->
+          silent_eq n (EqFby x ck v0 lae).
 
     Definition lift1 {A B} (f : A -> B) (s : stream A) : stream B
         := fun n => f (s n).
     Hint Unfold lift1.
 
     Definition lift {A B}
-        (sem: bool -> R -> A -> B -> Prop) H x (ys: stream B): Prop :=
-      forall n, sem (bk n) (restr H n) x (ys n).
+        (sem: bool -> R -> A -> B -> Prop) x (ys: stream B): Prop :=
+      forall n, sem (bk n) (restr n) x (ys n).
     Hint Unfold lift.
 
-    Definition sem_clock H (ck: clock)(xs: stream bool): Prop :=
-      lift sem_clock_instant H ck xs.
+    Definition sem_clock (ck: clock)(xs: stream bool): Prop :=
+      lift sem_clock_instant ck xs.
 
-    Definition sem_var H (x: ident)(xs: stream value): Prop :=
-      lift (fun base => sem_var_instant) H x xs.
+    Definition sem_var (x: ident)(xs: stream value): Prop :=
+      lift (fun base => sem_var_instant) x xs.
 
-    Definition sem_vars H (x: idents)(xs: stream (list value)): Prop :=
-      lift (fun base R => Forall2 (sem_var_instant R)) H x xs.
+    Definition sem_avar ck (x: ident)(xs: stream value): Prop :=
+      lift (fun base R => sem_avar_instant base R ck) x xs.
 
-    Definition sem_laexp H ck (e: lexp)(xs: stream value): Prop :=
-      lift (fun base R => sem_laexp_instant base R ck) H e xs.
+    Definition sem_vars (x: idents)(xs: stream (list value)): Prop :=
+      lift (fun base R => Forall2 (sem_var_instant R)) x xs.
 
-    Definition sem_laexps
-        H (ck: clock)(e: lexps)(xs: stream (list value)): Prop :=
-      lift (fun base R => sem_laexps_instant base R ck) H e xs.
+    Definition sem_laexp ck (e: lexp)(xs: stream value): Prop :=
+      lift (fun base R => sem_laexp_instant base R ck) e xs.
 
-    Definition sem_lexp H (e: lexp)(xs: stream value): Prop :=
-      lift sem_lexp_instant H e xs.
+    Definition sem_laexps (ck: clock)(e: lexps)(xs: stream (list value)): Prop :=
+      lift (fun base R => sem_laexps_instant base R ck) e xs.
 
-    Definition sem_lexps H (e: lexps)(xs: stream (list value)): Prop :=
-      lift sem_lexps_instant H e xs.
+    Definition sem_lexp (e: lexp)(xs: stream value): Prop :=
+      lift sem_lexp_instant e xs.
 
-    Definition sem_caexp H ck (c: cexp)(xs: stream value): Prop :=
-      lift (fun base R => sem_caexp_instant base R ck) H c xs.
+    Definition sem_lexps (e: lexps)(xs: stream (list value)): Prop :=
+      lift sem_lexps_instant e xs.
 
-    Definition sem_cexp H (c: cexp)(xs: stream value): Prop :=
-      lift sem_cexp_instant H c xs.
+    Definition sem_caexp ck (c: cexp)(xs: stream value): Prop :=
+      lift (fun base R => sem_caexp_instant base R ck) c xs.
+
+    Definition sem_cexp (c: cexp)(xs: stream value): Prop :=
+      lift sem_cexp_instant c xs.
 
   End LiftSemantics.
 
@@ -364,7 +405,7 @@ environment.
         forall bk H x ck f arg y ck_r ys ls xs,
           sem_laexps bk H ck arg ls ->
           sem_vars bk H x xs ->
-          sem_var bk H y ys ->
+          sem_avar bk H ck_r y ys ->
           sem_reset f (reset_of ys) ls xs ->
           sem_equation bk H (EqApp x ck f arg (Some (y, ck_r)))
     | SEqFby:
@@ -434,7 +475,7 @@ enough: it does not support the internal fixpoint introduced by
       forall bk H x ck f arg y ck_r ys ls xs,
         sem_laexps bk H ck arg ls ->
         sem_vars bk H x xs ->
-        sem_var bk H y ys ->
+        sem_avar bk H ck_r y ys ->
         sem_reset G f (reset_of ys) ls xs ->
         P_reset f (reset_of ys) ls xs ->
         P_equation bk H (EqApp x ck f arg (Some (y, ck_r))).
@@ -563,6 +604,16 @@ enough: it does not support the internal fixpoint introduced by
       inversion_clear H1 as [Hf1];
         inversion_clear H2 as [Hf2];
         congruence.
+    Qed.
+
+    Lemma sem_avar_instant_det:
+      forall x ck v1 v2,
+        sem_avar_instant base R ck x v1 ->
+        sem_avar_instant base R ck x v2 ->
+        v1 = v2.
+    Proof.
+      intros ** H1 H2.
+      inv H1; inv H2; eapply sem_var_instant_det; eauto.
     Qed.
 
     Lemma sem_clock_instant_det:
@@ -761,14 +812,15 @@ enough: it does not support the internal fixpoint introduced by
   Section LiftDeterminism.
 
     Variable bk : stream bool.
+    Variable H : history.
 
     Require Import Logic.FunctionalExtensionality.
 
     Lemma lift_det:
       forall {A B} (P: bool -> R -> A -> B -> Prop) (bk: stream bool)
-                   H x (xs1 xs2 : stream B),
+        x (xs1 xs2 : stream B),
         (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
-        lift bk P H x xs1 -> lift bk P H x xs2 -> xs1 = xs2.
+        lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.
     Proof.
       intros ** Hpoint H1 H2.
       extensionality n. specialize (H1 n). specialize (H2 n).
@@ -780,27 +832,35 @@ enough: it does not support the internal fixpoint introduced by
       compute; intros; eapply sem_det; eauto.
 
     Lemma sem_var_det:
-      forall H x xs1 xs2,
+      forall x xs1 xs2,
         sem_var bk H x xs1 -> sem_var bk H x xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_var_instant_det.
     Qed.
 
-    Lemma sem_clock_det : forall H ck bs1 bs2,
+    Lemma sem_avar_det:
+      forall ck x xs1 xs2,
+        sem_avar bk H ck x xs1 -> sem_avar bk H ck x xs2 -> xs1 = xs2.
+    Proof.
+      apply_lift sem_avar_instant_det.
+    Qed.
+
+    Lemma sem_clock_det:
+      forall ck bs1 bs2,
         sem_clock bk H ck bs1 -> sem_clock bk H ck bs2 -> bs1 = bs2.
     Proof.
       apply_lift sem_clock_instant_det.
     Qed.
 
     Lemma sem_lexp_det:
-      forall H e xs1 xs2,
+      forall e xs1 xs2,
         sem_lexp bk H e xs1 -> sem_lexp bk H e xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_lexp_instant_det.
     Qed.
 
     Lemma sem_lexps_det:
-      forall H les cs1 cs2,
+      forall les cs1 cs2,
         sem_lexps bk H les cs1 ->
         sem_lexps bk H les cs2 ->
         cs1 = cs2.
@@ -809,28 +869,28 @@ enough: it does not support the internal fixpoint introduced by
     Qed.
 
     Lemma sem_laexp_det:
-      forall H ck e xs1 xs2,
+      forall ck e xs1 xs2,
         sem_laexp bk H ck e xs1 -> sem_laexp bk H ck e xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_laexp_instant_det.
     Qed.
 
     Lemma sem_laexps_det:
-      forall H ck e xs1 xs2,
+      forall ck e xs1 xs2,
         sem_laexps bk H ck e xs1 -> sem_laexps bk H ck e xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_laexps_instant_det.
     Qed.
 
     Lemma sem_cexp_det:
-      forall H c xs1 xs2,
+      forall c xs1 xs2,
         sem_cexp bk H c xs1 -> sem_cexp bk H c xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_cexp_instant_det.
     Qed.
 
     Lemma sem_caexp_det:
-      forall H ck c xs1 xs2,
+      forall ck c xs1 xs2,
         sem_caexp bk H ck c xs1 -> sem_caexp bk H ck c xs2 -> xs1 = xs2.
     Proof.
       apply_lift sem_caexp_instant_det.
@@ -887,6 +947,13 @@ clock to [sem_var_instant] too. *)
     | H1: sem_var ?bk ?H ?C ?X,
           H2: sem_var ?bk ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_var_det; eexact H1 || eexact H2
+    | H1: sem_avar_instant ?bk ?H ?CK ?C ?X,
+          H2: sem_avar_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
+      eapply sem_avar_instant_det; eexact H1 || eexact H2
+    | H1: sem_avar ?bk ?H ?CK ?C ?X,
+          H2: sem_avar ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
+      eapply sem_avar_det; eexact H1 || eexact H2
+
     end.
 
   (** ** Properties of the [global] environment *)
@@ -1225,7 +1292,7 @@ an absent value *)
 
   (** Morphisms properties *)
 
-  Add Parametric Morphism b A B sem H : (@lift b A B sem H)
+  Add Parametric Morphism b A B sem H : (@lift b H A B sem)
       with signature eq ==> @eq_str B ==> Basics.impl
         as lift_eq_str.
   Proof.

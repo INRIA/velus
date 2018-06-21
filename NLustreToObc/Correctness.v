@@ -716,11 +716,9 @@ for all [Is_free_exp x e]. *)
         (* - locals (shown) *)
         exists menv' env',
           stmt_eval prog menv env (translate_eqns mems eqs) (menv', env')
-          /\ (forall x,
-                Is_variable_in_eqs x eqs ->
-                forall c,
-                  sem_var_instant (restr H n) x (present c)
-                  <-> PM.find x env' = Some c)
+          /\ (forall x, Is_variable_in_eqs x eqs ->
+                forall c, sem_var_instant (restr H n) x (present c)
+                     <-> PM.find x env' = Some c)
           (* - written memories (shown) *)
           /\ Forall (Memory_Corres_eq G (M (S n)) menv') eqs.
     Proof.
@@ -1038,6 +1036,7 @@ for all [Is_free_exp x e]. *)
               by now eapply non_trivial_EqApp; eauto.
 
             Hint Constructors stmt_eval.
+            unfold sub_inst in Hfindo.
             erewrite <-stmt_eval_translate_eqns_minst_inv in Hfindo; eauto.
             econstructor; eauto. now rewrite Hfindo.
 
@@ -1108,10 +1107,11 @@ for all [Is_free_exp x e]. *)
           *{ apply Forall_cons.
              - econstructor; eauto.
                intros Mo' Hmfind'.
+               unfold sub_inst_n in Hmfind; unfold sub_inst in Hmfind'.
                rewrite Hmfind in Hmfind'.
                injection Hmfind'; intro Heq; rewrite <-Heq in *; clear Heq Hmfind'.
                exists omenv'.
-               split; [rewrite mfind_inst_gss; reflexivity|exact Hnmc].
+               split; [unfold sub_inst; rewrite mfind_inst_gss; reflexivity|exact Hnmc].
              - now apply Memory_Corres_eqs_add_obj with (1:=IHeqs1) (2:=Hniii).
            }
 
@@ -1186,6 +1186,7 @@ for all [Is_free_exp x e]. *)
           * apply Forall_cons; [|now apply IHeqs1].
             econstructor; eauto.
             intros Mo' Hmfind'.
+            unfold sub_inst_n in Hmfind; unfold sub_inst in Hmfind'.
             rewrite Hmfind in Hmfind'.
             injection Hmfind'; intro He; rewrite <-He in *; clear He Hmfind'.
             exists omenv.
@@ -1193,9 +1194,10 @@ for all [Is_free_exp x e]. *)
             assert (forall ck f les r, ~ In (EqApp [] ck f les r) eqs)
               by now eapply non_trivial_EqApp; eauto.
 
+            unfold sub_inst.
             erewrite stmt_eval_translate_eqns_minst_inv; eauto.
             split; eauto.
-            now eapply Memory_Corres_unchanged; eauto.
+            eapply Memory_Corres_unchanged; eauto.
 
       - (* Case EqReset *)
         (* used variables are defined *)
@@ -2274,7 +2276,7 @@ for all [Is_free_exp x e]. *)
         forall n,
         exists menv env omenv,
           dostep (S n) P r main obj ins menv env
-          /\ mfind_inst obj menv = Some omenv
+          /\ sub_inst obj menv omenv
           /\ Memory_Corres G main (M (S n)) omenv
           /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co).
     Proof.
@@ -2282,7 +2284,7 @@ for all [Is_free_exp x e]. *)
       assert (exists menv' env',
                  stmt_eval (translate G) hempty sempty
                            (Call [] main obj reset []) (menv', env')
-                 /\ (exists omenv0, mfind_inst obj menv' = Some omenv0
+                 /\ (exists omenv0, sub_inst obj menv' omenv0
                                     /\ Memory_Corres G main (M 0) omenv0))
         as (menv0 & env0 & Hstmtr & (omenv0 & Hmf0 & Hmc0)).
       {
@@ -2339,8 +2341,8 @@ for all [Is_free_exp x e]. *)
                    stmt_eval (translate G) menv0 env0
                              (Call r main obj step (map Const ci0))
                              (menv', env')
-                   /\ (exists omenv, mfind_inst obj menv' = Some omenv
-                                     /\ Memory_Corres G main (M 1) omenv)
+                   /\ (exists omenv, sub_inst obj menv' omenv
+                               /\ Memory_Corres G main (M 1) omenv)
                    /\ List.Forall2 (fun r co0 => PM.find r env' = Some co0) r co0)
           as (menv' & env' & Hstmt & (omenv & Hmfind & Hmc) & Hout).
         { pose proof (is_node_correct _ Hwdef _ _ _ _ _ omenv0 _ _
@@ -2434,8 +2436,8 @@ for all [Is_free_exp x e]. *)
                    stmt_eval (translate G) menvN envN
                              (Call r main obj step (map Const ciSn))
                              (menvN', envN')
-                   /\ (exists omenvsN, mfind_inst obj menvN' = Some omenvsN
-                                    /\ Memory_Corres G main (M (S (S n))) omenvsN)
+                   /\ (exists omenvsN, sub_inst obj menvN' omenvsN
+                                 /\ Memory_Corres G main (M (S (S n))) omenvsN)
                    /\ Forall2 (fun r coSn => PM.find r envN' = Some coSn) r coSn)
           as (menvSn & envsN & Hstmt & (omenvSn & Hmfind & Hmc) & Hout).
         { pose proof (is_node_correct _ Hwdef _ _ _ _ _ omenvN _ _
@@ -2506,7 +2508,7 @@ for all [Is_free_exp x e]. *)
 
       assert (exists menv env omenv,
                  dostep (S n) (translate G) r main obj ins menv env
-                 /\ mfind_inst obj menv = Some omenv
+                 /\ sub_inst obj menv omenv
                  /\ Memory_Corres G main (M (S n)) omenv
                  /\ (forall co, yss n = map present co <-> List.Forall2 (fun r co => PM.find r env = Some co) r co))
         as [menv [env [omenv [Hstep [_ [_ Hys]]]]]]

@@ -90,8 +90,8 @@ Module Type MEMSEMANTICS
 
   Section NodeSemantics.
 
-    Definition sub_inst (x: ident) (M M': memories) : Prop :=
-      forall n, mfind_inst x (M n) = Some (M' n).
+    Definition sub_inst_n (x: ident) (M M': memories) : Prop :=
+      forall n, sub_inst x (M n) (M' n).
 
     Variable G: global.
 
@@ -104,20 +104,20 @@ Module Type MEMSEMANTICS
     | SEqApp:
         forall bk H M x xs ck f M' arg ls xss,
           Some x = hd_error xs ->
-          sub_inst x M M' ->
+          sub_inst_n x M M' ->
           sem_laexps bk H ck arg ls ->
           sem_vars bk H xs xss ->
           msem_node f ls M' xss ->
           msem_equation bk H M (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk H M x xs ck f M' arg y ck_r ys ls xss,
+        forall bk H M x xs ck f M' arg r ck_r ys ls xss,
           Some x = hd_error xs ->
-          sub_inst x M M' ->
+          sub_inst_n x M M' ->
           sem_laexps bk H ck arg ls ->
           sem_vars bk H xs xss ->
-          sem_var bk H y ys ->
+          sem_avar bk H ck_r r ys ->
           msem_reset f (reset_of ys) ls M' xss ->
-          msem_equation bk H M (EqApp xs ck f arg (Some (y, ck_r)))
+          msem_equation bk H M (EqApp xs ck f arg (Some (r, ck_r)))
     | SEqFby:
         forall bk H M x ck ls xs c0 le,
           sem_laexp bk H ck le ls ->
@@ -178,7 +178,7 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqAppCase:
       forall bk H M x xs ck f M' arg ls xss,
         Some x = hd_error xs ->
-        sub_inst x M M' ->
+        sub_inst_n x M M' ->
         sem_laexps bk H ck arg ls ->
         sem_vars bk H xs xss ->
         msem_node G f ls M' xss ->
@@ -186,15 +186,15 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H M (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H M x xs ck f M' arg y ck_r ys ls xss,
+      forall bk H M x xs ck f M' arg r ck_r ys ls xss,
         Some x = hd_error xs ->
-        sub_inst x M M' ->
+        sub_inst_n x M M' ->
         sem_laexps bk H ck arg ls ->
         sem_vars bk H xs xss ->
-        sem_var bk H y ys ->
+        sem_avar bk H ck_r r ys ->
         msem_reset G f (reset_of ys) ls M' xss ->
         P_reset f (reset_of ys) ls M' xss ->
-        P_equation bk H M (EqApp xs ck f arg (Some (y, ck_r))).
+        P_equation bk H M (EqApp xs ck f arg (Some (r, ck_r))).
 
     Hypothesis EqFbyCase:
       forall bk H M x ck ls xs c0 le,
@@ -288,17 +288,20 @@ enough: it does not support the internal fixpoint introduced by
     }
     induction Hsem as [???????? Hsem |
                        ????????????? Hsem |
-                       ???????????????? Hsem |
+                       ???????????????? Hsem ? Hvar |
                        ????????? Hsem];
-      unfold sem_caexp, lift in Hsem; specialize (Hsem n); rewrite Hbk in *;
-        inv Hsem; try (exfalso; now eapply not_subrate_clock; eauto).
+      unfold sem_caexp, lift in Hsem; specialize (Hsem n); inv Hsem;
+        try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto).
     - eauto using rhs_absent_instant, sem_caexp_instant.
     - econstructor.
       + apply SLabss; eauto.
       + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
-    - econstructor.
+    - unfold sem_avar, lift in Hvar; specialize (Hvar n); inv Hvar;
+        try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto).
+      econstructor.
       + apply SLabss; eauto.
       + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
+      (* + eauto using sem_avar_instant. *)
     - eauto using rhs_absent_instant, sem_laexp_instant.
   Qed.
 
@@ -592,10 +595,11 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [|??? x' ??????? Hsome
                          |??? x' ?????????? Hsome|];
       eauto;
-      assert (sub_inst x' (add_objs x M' M) M'0)
+      assert (sub_inst_n x' (add_objs x M' M) M'0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
-            unfold sub_inst, add_objs; intro; rewrite mfind_inst_gso; auto;
-            intro; subst x; destruct xs; inv Hsome; apply Hnd; now constructor);
+            unfold sub_inst_n, sub_inst, add_objs in *; intro;
+            rewrite mfind_inst_gso; auto; intro; subst x; destruct xs;
+            inv Hsome; apply Hnd; now constructor);
       eauto.
   Qed.
 

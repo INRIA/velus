@@ -38,6 +38,8 @@ Section Operations.
   Definition mfind_mem x menv := PM.find x menv.(mm_values).
   Definition mfind_inst x menv := PM.find x menv.(mm_instances).
 
+  Definition sub_inst x M M' : Prop := mfind_inst x M = Some M'.
+
   Definition madd_mem (id: ident) (v: A) (M: memory A) : memory A :=
     mk_memory (PM.add id v M.(mm_values))
               M.(mm_instances).

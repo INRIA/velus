@@ -173,7 +173,7 @@ Module Type OBCTYPING
       mfind_inst o me = None ->
       wt_mem_inst me p (o, c)
   | WTminst: forall me p o c mo cls p',
-      mfind_inst o me = Some mo ->
+      sub_inst o me mo ->
       find_class c p = Some (cls, p') ->
       wt_mem mo p' cls ->
       wt_mem_inst me p (o, c).
@@ -210,7 +210,7 @@ Module Type OBCTYPING
 
     Hypothesis WTminstCase:
       forall me p o c mo cls p'
-        (Hfind_inst: mfind_inst o me = Some mo)
+        (Hfind_inst: sub_inst o me mo)
         (Hfind_class: find_class c p = Some (cls, p'))
         (Hwt: wt_mem mo p' cls),
         P Hwt ->
@@ -537,11 +537,10 @@ Module Type OBCTYPING
         inversion_clear WTm as [? ? ? WTv WTi].
         eapply In_Forall in WTi; eauto.
         inversion_clear WTi as [? ? ? ? Hmfind'|? ? ? ? ? ? ? Hmfind' Hcfind' WTm];
-          simpl in Hmfind'; rewrite Hmfind in Hmfind'; try discriminate.
+          rewrite Hmfind' in Hmfind; try discriminate.
         match goal with Hcfind:find_class _ _ = Some (_, p') |- _ =>
                         simpl in Hcfind'; rewrite Hcfind in Hcfind' end.
-        injection Hmfind'; injection Hcfind'. intros; subst.
-        assumption.
+        inv Hmfind; inv Hcfind'; auto.
       + (* Instance memory is well-typed after execution. *)
         inv WTm. constructor; auto.
         apply Forall_forall.
@@ -563,9 +562,12 @@ Module Type OBCTYPING
           2:constructor; simpl; rewrite mfind_inst_gso; now auto.
           match goal with H:Forall _ cls.(c_objs) |- _ =>
                           apply In_Forall with (1:=H) in Hin end.
-          inv Hin; [constructor 1|econstructor 2]; simpl in *;
+          inv Hin; [constructor 1|econstructor 2]; unfold sub_inst in *;
+            simpl in *; eauto;
           match goal with H:o <> o' |- _ =>
-                          try rewrite (mfind_inst_gso _ _ (not_eq_sym n)) end; eauto.
+                          try rewrite (mfind_inst_gso _ _ (not_eq_sym n))
+          end; eauto.
+
     - (* sequential composition *)
       intros p menv env s1 s2
              ** Hstmt1 IH1 Hstmt2 IH2 cls vars Hndups WTp WTm WTe WTstmt.
