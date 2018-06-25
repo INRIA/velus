@@ -268,25 +268,6 @@ environment.
       PM.map (fun xs => xs n) H.
     Hint Unfold restr.
 
-    Inductive silent_eq (n: nat): equation -> Prop :=
-    | SltEqDef:
-        forall x ck cae,
-          rhs_absent_instant (bk n) (restr n) (EqDef x ck cae) ->
-          silent_eq n (EqDef x ck cae)
-    | SltEqApp:
-        forall x f ck laes,
-          rhs_absent_instant (bk n) (restr n) (EqApp x ck f laes None) ->
-          silent_eq n (EqApp x ck f laes None)
-    | SltEqReset:
-        forall x f ck laes r ck_r,
-          rhs_absent_instant (bk n) (restr n) (EqApp x ck f laes (Some (r, ck_r))) ->
-          sem_avar_instant (bk (S n)) (restr (S n)) ck_r r absent ->
-          silent_eq n (EqApp x ck f laes (Some (r, ck_r)))
-    | SltEqFby:
-        forall x ck v0 lae,
-          rhs_absent_instant (bk n) (restr n) (EqFby x ck v0 lae) ->
-          silent_eq n (EqFby x ck v0 lae).
-
     Definition lift1 {A B} (f : A -> B) (s : stream A) : stream B
         := fun n => f (s n).
     Hint Unfold lift1.
@@ -418,8 +399,10 @@ environment.
     with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
          | SReset:
              forall f r xss yss,
-               (forall n, sem_node f (mask (all_absent (xss 0)) n r xss)
-                              (mask (all_absent (yss 0)) n r yss)) ->
+               (forall k, exists xss' yss',
+                     sem_node f xss' yss'
+                     /\ masked k r xss xss'
+                     /\ masked k r yss yss') ->
                sem_reset f r xss yss
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
@@ -489,8 +472,11 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall n, sem_node G f (mask (all_absent (xss 0)) n r xss) (mask (all_absent (yss 0)) n r yss)) ->
-        (forall n, P_node f (mask (all_absent (xss 0)) n r xss) (mask (all_absent (yss 0)) n r yss)) ->
+        (forall k, exists xss' yss',
+              sem_node G f xss' yss'
+              /\ masked k r xss xss'
+              /\ masked k r yss yss'
+              /\ P_node f xss' yss') ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
@@ -525,13 +511,17 @@ enough: it does not support the internal fixpoint introduced by
          : P_node f xss oss.
     Proof.
       - destruct Sem; eauto.
-      - destruct Sem; eauto.
+      - destruct Sem as [???? Sem]; eauto.
+        apply ResetCase; intro k; specialize (Sem k);
+          destruct Sem as (? & ? & ? & ? & ?).
+        econstructor; econstructor; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         induction H7; auto.
     Qed.
 
-    Combined Scheme sem_equation_node_ind from sem_equation_mult, sem_node_mult, sem_reset_mult.
+    Combined Scheme sem_equation_node_ind from
+             sem_equation_mult, sem_node_mult, sem_reset_mult.
 
   End sem_node_mult.
 
@@ -560,6 +550,30 @@ enough: it does not support the internal fixpoint introduced by
     induction k'; induction n; auto.
   Qed.
 
+  (* Lemma masked_length: *)
+  (*   forall {A} k (xss xss': stream (list A)) r n, *)
+  (*     wf_streams xss' -> *)
+  (*     wf_streams xss -> *)
+  (*     masked k r xss xss' ->  *)
+  (*     length (xss' n) = length (xss n). *)
+  (* Proof. *)
+  (*   unfold masked; intros ** Wf' Wf M. *)
+  (*   assert (exists n, length (xss' n) = length (xss n)). *)
+
+  (*   (* pose proof (EqNat.eq_nat 1 2). *) *)
+  (*   (* Print EqNat.eq_nat. *) *)
+  (*   specialize (M n). *)
+  (*   (* rewrite (Wf 0). *) *)
+  (*   destruct (Peano_dec.eq_nat_dec (count r n) k). *)
+  (*   - now rewrite M. *)
+  (*   -  *)
+  (*   auto. *)
+  (*   auto. *)
+  (*   SearchAbout (_ -> _ -> {_} + {_}) nat. *)
+  (*   destruct (EqNat.beq_nat k (count r n)); auto. *)
+  (*   unfold all_absent; rewrite map_length. *)
+  (*   induction k'; induction n; auto. *)
+  (* Qed. *)
   (** If all masks ar well-formed then the underlying stream of lists
       is well-formed. *)
   Lemma wf_streams_mask:
@@ -1000,7 +1014,9 @@ clock to [sem_var_instant] too. *)
       eapply SEqReset; eauto.
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro; eapply SEqFby; eassumption.
-    - constructor; intro. auto.
+    - constructor; intro k.
+      specialize (H k); destruct H as (?&?&?&?&?&?).
+      do 2 eexists; eauto.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       eapply SNode; eauto.
@@ -1053,7 +1069,8 @@ clock to [sem_var_instant] too. *)
                      -> sem_equation (nd::G) bk H eq)
              (P_reset := fun f r xss yss => sem_reset (nd::G) f r xss yss);
       try eauto; try intro HH.
-    - econstructor; eauto.
+    - constructor; intro k; specialize (H k); destruct H as (?&?&?&?&?&?).
+      do 2 eexists; eauto.
     - clear HH.
       assert (nd.(n_name) <> f) as Hnf.
       { intro Hnf.
@@ -1122,7 +1139,7 @@ clock to [sem_var_instant] too. *)
         destruct Hnini; assumption).
     apply Forall_cons with (2:=Hseqs).
     inversion Hseq as [|? ? ? ? ? ? ? Hsem Hvars Hnode
-                          |? ? ? ? ? ? ? ? ? ? Hsem Hvars Hvar Hnode|]; subst.
+                          |? ? ? ? ? ? ? ? ? ? Hsem Hvars Hvar ? Hreset|]; subst.
     - econstructor; eassumption.
     - apply not_Is_node_in_cons in Hnini.
       destruct Hnini as [Hninieq Hnini].
@@ -1135,8 +1152,9 @@ clock to [sem_var_instant] too. *)
       assert (nd.(n_name) <> f) as Hnf
           by (intro HH; apply Hninieq; rewrite HH; constructor).
       econstructor; eauto.
-      inv H1.
-      constructor; intro.
+      inversion_clear Hreset as [???? Hnode].
+      constructor; intro k; specialize (Hnode k); destruct Hnode as (?&?&?&?&?).
+      do 2 eexists; intuition; eauto.
       eapply sem_node_cons; eauto.
     - econstructor; eauto.
   Qed.
@@ -1336,8 +1354,12 @@ an absent value *)
   Proof.
     intros ** E1 ? ? E2 ? ? E3 Res.
     inversion_clear Res as [? ? ? ? Node].
-    constructor; intro n.
-    now rewrite <-E1, <- 2 E2, <- 2 E3.
+    constructor; intro k.
+
+    specialize (Node k); destruct Node as (?&?&?&?&?).
+    do 2 eexists; intuition; eauto; rewrite <-E1.
+    - now rewrite <-E2.
+    - now rewrite <-E3.
   Qed.
 
 End NLSEMANTICS.

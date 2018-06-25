@@ -387,6 +387,48 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve sem_clock_impl.
 
+    (** Give an indexed specification for annotated [var]. *)
+    Lemma sem_avar_index:
+      forall n H b ck x vs,
+        CoInd.sem_avar H b ck x vs ->
+        (Indexed.sem_clock_instant (tr_Stream b n)
+                                   (Indexed.restr (tr_History H) n) ck false
+         /\ Indexed.sem_var_instant (Indexed.restr (tr_History H) n) x absent
+         /\ tr_Stream vs n = absent)
+        \/
+        (exists v,
+            Indexed.sem_clock_instant (tr_Stream b n)
+                                      (Indexed.restr (tr_History H) n) ck true
+            /\ Indexed.sem_var_instant (Indexed.restr (tr_History H) n) x (present v)
+            /\ tr_Stream vs n = present v).
+    Proof.
+      induction n; intros ** Indexed.
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
+                                      |? ? ? ? ? ? Indexed' Hck];
+          apply sem_var_impl with (b:=tr_Stream b) in Indexed'; specialize (Indexed' 0);
+            repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
+              apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck.
+        + right. eexists; intuition; auto.
+        + left; intuition.
+      - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
+          apply sem_var_impl with (b:=tr_Stream b) in Indexed';
+          rewrite tr_Stream_S, tr_History_tl; eauto.
+    Qed.
+
+    (** We deduce from the previous lemma the correspondence for annotated
+        [var]. *)
+    Hint Constructors Indexed.sem_avar_instant.
+    Corollary sem_avar_impl:
+      forall H b x vs ck,
+        CoInd.sem_avar H b ck x vs ->
+        Indexed.sem_avar (tr_Stream b) (tr_History H) ck x (tr_Stream vs).
+    Proof.
+      intros ** Indexed n.
+      apply (sem_avar_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
+        rewrite Hes; auto.
+    Qed.
+    Hint Resolve sem_avar_impl.
+
     (** ** Semantics of lexps *)
 
     (** State the correspondence for [lexp].
@@ -805,6 +847,19 @@ Module Type COINDTOINDEXED
         unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
     Qed.
 
+    Lemma masked_impl:
+      forall {A} k r (xss xss': list (Stream A)),
+        Forall2 (CoInd.masked k r) xss xss' ->
+        masked k (tr_Stream r) (tr_Streams xss) (tr_Streams xss').
+    Proof.
+      unfold CoInd.masked, masked.
+      induction xss as [|xs]; intros ** Masked n C;
+        inversion_clear Masked as [|???? Count]; auto.
+      simpl; f_equal; auto.
+      apply Count; rewrite <-C.
+      apply count_impl.
+    Qed.
+
     (** * FINAL LEMMAS *)
 
 
@@ -881,10 +936,9 @@ Module Type COINDTOINDEXED
         rewrite <-fby_impl; auto.
 
       - intros ** IHNode.
-        constructor; intro.
-        specialize (IHNode n).
-        rewrite 2 all_absent_tr_Streams.
-        now rewrite <- 2 mask_impl.
+        constructor; intro k.
+        specialize (IHNode k); destruct IHNode as (?&?&?&?&?&?).
+        do 2 eexists; intuition eauto; apply masked_impl; auto.
 
       - intros ** Same ? ?.
         pose proof n.(n_ingt0); pose proof n.(n_outgt0).

@@ -199,6 +199,20 @@ Module Type NLSEMANTICSCOIND
         sem_lexp H b e es ->
         sem_cexp H b (Eexp e) es.
 
+  CoInductive sem_avar: History -> Stream bool -> clock -> ident -> Stream value -> Prop :=
+  | SVtick:
+      forall H b ck x v vs bs,
+        sem_var H x (present v ::: vs) ->
+        sem_clock H b ck (true ::: bs) ->
+        sem_avar (History_tl H) (tl b) ck x vs ->
+        sem_avar H b ck x (present v ::: vs)
+  | SVabs:
+      forall H b ck x vs bs,
+        sem_var H x (absent ::: vs) ->
+        sem_clock H b ck (false ::: bs) ->
+        sem_avar (History_tl H) (tl b) ck x vs ->
+        sem_avar H b ck x (absent ::: vs).
+
   CoInductive sem_aexp {A} (sem: History -> Stream bool -> A -> Stream value -> Prop):
     History -> Stream bool -> clock -> A -> Stream value -> Prop :=
   | Stick:
@@ -340,6 +354,9 @@ Module Type NLSEMANTICSCOIND
     reflexivity.
   Qed.
 
+  Definition masked {A} (k: nat) (rs: Stream bool) (xs xs': Stream A) :=
+    forall n, Str_nth n (count rs) = k -> Str_nth n xs' = Str_nth n xs.
+
   Fixpoint take {A} (n: nat) (s: Stream A) : list A :=
     match n with
     | O => nil
@@ -420,12 +437,12 @@ Module Type NLSEMANTICSCOIND
           Forall2 (sem_var H) ys oss ->
           sem_equation H b (EqApp ys ck f es None)
     | SeqReset:
-        forall H b ys ck f es x xs ess oss,
+        forall H b ys ck f es r ck_r rs ess oss,
           sem_laexps H b ck es ess ->
-          sem_var H x xs ->
-          sem_reset f (reset_of xs) ess oss ->
+          sem_avar H b ck_r r rs ->
+          sem_reset f (reset_of rs) ess oss ->
           Forall2 (sem_var H) ys oss ->
-          sem_equation H b (EqApp ys ck f es (Some x))
+          sem_equation H b (EqApp ys ck f es (Some (r, ck_r)))
     | SeqFby:
         forall H b x ck c0 e es os,
           sem_laexp H b ck e es ->
@@ -438,7 +455,10 @@ Module Type NLSEMANTICSCOIND
     : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
       SReset:
         forall f r xss yss,
-          (forall n, sem_node f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
+          (forall k, exists xss' yss',
+                sem_node f xss' yss'
+                /\ Forall2 (masked k r) xss xss'
+                /\ Forall2 (masked k r) yss yss') ->
           sem_reset f r xss yss
 
     with
@@ -477,13 +497,13 @@ Module Type NLSEMANTICSCOIND
         P_equation H b (EqApp ys ck f es None).
 
     Hypothesis EqResetCase:
-      forall H b ys ck f es x xs ess oss,
+      forall H b ys ck f es r ck_r rs ess oss,
         sem_laexps H b ck es ess ->
-        sem_var H x xs ->
-        sem_reset G f (reset_of xs) ess oss ->
+        sem_avar H b ck_r r rs ->
+        sem_reset G f (reset_of rs) ess oss ->
         Forall2 (sem_var H) ys oss ->
-        P_reset f (reset_of xs) ess oss ->
-        P_equation H b (EqApp ys ck f es (Some x)).
+        P_reset f (reset_of rs) ess oss ->
+        P_equation H b (EqApp ys ck f es (Some (r, ck_r))).
 
     Hypothesis EqFbyCase:
       forall H b x ck c0 e es os,
@@ -494,8 +514,11 @@ Module Type NLSEMANTICSCOIND
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall n, sem_node G f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
-        (forall n, P_node f (List.map (mask_v n r) xss) (List.map (mask_v n r) yss)) ->
+        (forall k, exists xss' yss',
+              sem_node G f xss' yss'
+              /\ Forall2 (masked k r) xss xss'
+              /\ Forall2 (masked k r) yss yss'
+              /\ P_node f xss' yss') ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
@@ -522,7 +545,10 @@ Module Type NLSEMANTICSCOIND
          : P_node f xss oss.
     Proof.
       - destruct Sem; eauto.
-      - destruct Sem; eauto.
+      - destruct Sem as [???? Sem]; eauto.
+        apply ResetCase; intro k; specialize (Sem k);
+          destruct Sem as (?&?&?&?&?).
+        do 2 eexists; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         induction H4; auto.
@@ -689,6 +715,24 @@ Module Type NLSEMANTICSCOIND
       now rewrite <-Eb, <-Exs.
   Qed.
 
+  Add Parametric Morphism H : (sem_avar H)
+      with signature @EqSt bool ==> eq ==> eq ==> @EqSt value ==> Basics.impl
+        as sem_avar_morph.
+  Proof.
+    revert H; cofix Cofix.
+    intros ** b b' Eb ck e xs xs' Exs Sem.
+    inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et];
+      try discriminate.
+    - econstructor.
+      + simpl in *; now rewrite <-Eh, <-Et.
+      + rewrite <-Eb; eauto.
+      + inv Eb; eapply Cofix; eauto.
+    - econstructor.
+      + simpl in *; now rewrite <-Et.
+      + rewrite <-Eb; eauto.
+      + inv Eb; eapply Cofix; eauto.
+  Qed.
+
   Add Parametric Morphism A sem H
     (sem_compat: Proper (eq ==> @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl) sem)
     : (@sem_aexp A sem H)
@@ -776,15 +820,37 @@ Module Type NLSEMANTICSCOIND
       + now apply IHxs.
   Qed.
 
-  Add Parametric Morphism A opaque n : (mask opaque n)
+  Add Parametric Morphism A opaque k : (mask opaque k)
       with signature @EqSt bool ==> @EqSt A ==> @EqSt A
         as mask_EqSt.
   Proof.
-    revert n; cofix Cofix; intros n rs rs' Ers xs xs' Exs.
+    revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
     unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
       constructor; inv Ers; inv Exs;
         simpl in *; try discriminate;
-          destruct n as [|[]]; auto; try reflexivity.
+          destruct k as [|[]]; auto; try reflexivity.
+  Qed.
+
+  Add Parametric Morphism : count
+      with signature @EqSt bool ==> @EqSt nat
+        as count_EqSt.
+  Proof.
+    unfold count; generalize 0.
+    cofix Cofix; intros n xs xs' Exs.
+    unfold_Stv xs; unfold_Stv xs'; constructor; inv Exs;
+      simpl in *; try discriminate; auto.
+  Qed.
+
+  Add Parametric Morphism A k : (masked k)
+      with signature @EqSt bool ==> @EqSt A ==> @EqSt A ==> Basics.impl
+        as masked_EqSt.
+  Proof.
+    unfold masked.
+    intros rs rs' Ers xs xs' Exs ys ys' Eys M n C.
+    specialize (M n).
+    rewrite <-Exs, <-Eys.
+    apply M.
+    now rewrite Ers.
   Qed.
 
   Add Parametric Morphism G H : (sem_equation G H)
@@ -830,10 +896,13 @@ Module Type NLSEMANTICSCOIND
     unfold Basics.impl; intros f r r' Er xss xss' Exss yss yss' Eyss Sem.
     induction Sem as [? ? ? ? Sem].
     constructor.
-    intro n; specialize (Sem n).
-    eapply mod_sem_node_morph; eauto.
-    - apply map_st_EqSt; auto; apply mask_EqSt; auto.
-    - apply map_st_EqSt; auto; apply mask_EqSt; auto.
+    intro k; specialize (Sem k); destruct Sem as (?&?&?&?&?).
+    (* assert (Proper (EqSt (A:=value) ==> eq ==> Basics.impl) (masked k r')) *)
+      (* by solve_proper. *)
+    do 2 eexists; intuition; eauto;
+      eapply Forall2_EqSt'; eauto; try solve_proper;
+        eapply Forall2_impl_In with (P:=masked k r); auto;
+          intros; now rewrite <-Er.
   Qed.
 
 End NLSEMANTICSCOIND.

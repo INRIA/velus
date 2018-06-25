@@ -221,7 +221,7 @@ Module Type NLINTERPRETOR
         sem_var_instant R x v ->
         v = interp_var_instant x.
     Proof.
-      unfold interp_var_instant; induction 1 as [H]; now rewrite H.
+      unfold interp_var_instant; induction 1 as [?? H]; now rewrite H.
     Qed.
 
     Ltac rw_lexp_helper :=
@@ -296,6 +296,7 @@ Module Type NLINTERPRETOR
   Section LiftInterpretor.
 
     Variable bk : stream bool.
+    Variable H: history.
 
     (* Definition restr H (n: nat): R := *)
     (*   PM.map (fun xs => xs n) H. *)
@@ -305,16 +306,15 @@ Module Type NLINTERPRETOR
     (*     := fun n => f (s n). *)
     (* Hint Unfold lift1. *)
 
-    Definition lift {A B}
-               (interp: bool -> R -> A -> B) H x: stream B :=
+    Definition lift {A B} (interp: bool -> R -> A -> B) x: stream B :=
       fun n => interp (bk n) (restr H n) x.
     Hint Unfold lift.
 
-    Definition interp_clock H (ck: clock): stream bool :=
-      lift interp_clock_instant H ck.
+    Definition interp_clock (ck: clock): stream bool :=
+      lift interp_clock_instant ck.
 
-    Definition interp_var H (x: ident): stream value :=
-      lift (fun base => interp_var_instant) H x.
+    Definition interp_var (x: ident): stream value :=
+      lift (fun base => interp_var_instant) x.
 
     (* Definition sem_vars H (x: idents)(xs: stream (list value)): Prop := *)
     (*   lift (fun base R => Forall2 (sem_var_instant R)) H x xs. *)
@@ -326,19 +326,19 @@ Module Type NLINTERPRETOR
     (*     H (ck: clock)(e: lexps)(xs: stream (list value)): Prop := *)
     (*   lift (fun base R => sem_laexps_instant base R ck) H e xs. *)
 
-    Definition interp_lexp H (e: lexp): stream value :=
-      lift interp_lexp_instant H e.
+    Definition interp_lexp (e: lexp): stream value :=
+      lift interp_lexp_instant e.
 
-    Definition interp_lexps H (e: lexps): stream (list value) :=
-      lift interp_lexps_instant H e.
+    Definition interp_lexps (e: lexps): stream (list value) :=
+      lift interp_lexps_instant e.
 
-    Definition interp_lexps' H (e: lexps): list (stream value) :=
-      map (interp_lexp H) e.
+    Definition interp_lexps' (e: lexps): list (stream value) :=
+      map interp_lexp e.
 
     Lemma interp_lexps'_sound:
-      forall H es ess,
+      forall es ess,
         sem_lexps bk H es ess ->
-        Forall2 (sem_lexp bk H) es (interp_lexps' H es).
+        Forall2 (sem_lexp bk H) es (interp_lexps' es).
     Proof.
       induction es; intros ** Sem; simpl; auto.
       constructor.
@@ -355,8 +355,8 @@ Module Type NLINTERPRETOR
     (* Definition sem_caexp H ck (c: cexp)(xs: stream value): Prop := *)
     (*   lift (fun base R => sem_caexp_instant base R ck) H c xs. *)
 
-    Definition interp_cexp H (e: cexp): stream value :=
-      lift interp_cexp_instant H e.
+    Definition interp_cexp (e: cexp): stream value :=
+      lift interp_cexp_instant e.
 
     (* Definition sound {A B} H (x: A) (xs: stream B) *)
     (*            (sem: history -> A -> stream B -> Prop) *)

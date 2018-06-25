@@ -102,6 +102,9 @@ if the clocked stream is [absent] at the corresponding instant. *)
     fun n =>
       if beq_nat k (count rs n) then xs n else opaque.
 
+  Definition masked {A} (k: nat) (rs: cstream) (xs xs': stream A) :=
+    forall n, count rs n = k -> xs' n = xs n.
+
   (** ** Properties *)
 
   Lemma hold_abs:
@@ -194,6 +197,17 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Proof.
     intros ** E1 ? ? E2 n; unfold mask.
     now rewrite E1, E2.
+  Qed.
+
+  Add Parametric Morphism (A: Type) : (@masked A)
+      with signature eq ==> eq_str ==> eq_str ==> eq_str ==> Basics.impl
+        as masked_eq_str.
+  Proof.
+    unfold masked.
+    intros k r r' Err' x x' Exx' y y' Eyy' M n C.
+    rewrite <-Exx', <-Eyy'.
+    apply M.
+    now rewrite Err'.
   Qed.
 
   Lemma present_injection:

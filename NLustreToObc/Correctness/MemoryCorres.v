@@ -349,8 +349,7 @@ Module Type MEMORYCORRES
                          using msem_node_mult
       with (P_equation := fun bk H M eq =>
                             forall menv,
-                              (* rhs_absent_instant (bk n) (restr H n) eq -> *)
-                              silent_eq bk H n eq ->
+                              rhs_absent_instant (bk n) (restr H n) eq ->
                               Memory_Corres_eq G (M n) menv eq ->
                               Memory_Corres_eq G (M (S n)) menv eq)
            (P_reset := fun f r xss M yss =>
@@ -364,7 +363,7 @@ Module Type MEMORYCORRES
       inversion_clear 2; constructor; assumption.
 
     (* Case: EqApp *)
-    - intros ** Hslt Hmceq.
+    - intros ** Hrhsa Hmceq.
       econstructor; eauto.
       intros Mo Hmfind'.
       unfold sub_inst_n in Hmfind; unfold sub_inst in Hmfind'.
@@ -378,13 +377,13 @@ Module Type MEMORYCORRES
       exists omenv.
       split; [exact Hfindo|].
       apply IHHmsem; auto.
-      inversion_clear Hslt as [|???? Hrhsa| |]; inv Hrhsa.
+      inv Hrhsa.
 
       assert (ls n = vs) as ->
         by (specialize (Hsem n); simpl in Hsem; sem_det); auto.
 
     (* Case: EqReset *)
-    - intros ** Hslt Hmceq.
+    - intros ** Hrhsa Hmceq.
       econstructor; eauto.
       intros Mo Hmfind'.
       unfold sub_inst_n in Hmfind; unfold sub_inst in Hmfind'.
@@ -397,16 +396,17 @@ Module Type MEMORYCORRES
       edestruct Hmc' as [omenv [Hfindo Hmc]]; eauto.
       exists omenv.
       split; [exact Hfindo|].
-      inversion_clear Hslt as [| |?????? Hrhsa|]; inv Hrhsa.
+      inv Hrhsa.
       apply IHHmsem; auto.
       + assert (ls n = vs) as -> by (specialize (Hsem n); simpl in *; sem_det);
           auto.
       + unfold reset_of.
         unfold sem_avar, lift in Hvar; specialize (Hvar (S n)).
-        assert (ys (S n) = OpAux.absent) as -> by sem_det; auto.
+        (* assert (ys (S n) = OpAux.absent) as -> by sem_det; auto. *)
+        admit.
 
      (* Case: EqFby *)
-    - intros ** Hslt Hmceq.
+    - intros ** Hrhsa Hmceq.
       constructor.
       intros ms0 Hmfind0.
       inversion_clear Hfby as [????? Hms0 Hy].
@@ -415,7 +415,7 @@ Module Type MEMORYCORRES
       inversion_clear Hmceq as [| |? ? ? ? ? ? Hmenv].
       apply Hmenv.
       rewrite <-Hmfind0.
-      inversion_clear Hslt as [| | |???? Hrhsa]; inv Hrhsa.
+      inv Hrhsa.
       unfold sem_laexp, lift in Hsem; specialize (Hsem n).
       assert (ls n = OpAux.absent) as Hls by sem_det.
       rewrite Hls in Hy; destruct Hy as [HfindS Hxs].
@@ -423,14 +423,13 @@ Module Type MEMORYCORRES
 
     (* Case: Reset *)
     - intros ** Hsem E Hmc.
-      destruct (IH (count r n)) as (Mn & ? & Hmaskn & IHn).
-      unfold memory_mask in Hmaskn.
-      rewrite <-Hmaskn in Hmc; auto.
+      destruct (IH (count r n)) as (? & Mn & ? & ? & Hxn & ? & HMn & IHn).
+      (* unfold masked in Hmaskn. *)
+      rewrite <-HMn in Hmc; auto.
       apply IHn in Hmc.
-      * rewrite <-Hmaskn; auto.
+      * rewrite <-HMn; auto.
         simpl; rewrite E; auto.
-      * apply absent_list_mask; auto.
-        apply all_absent_spec.
+      * rewrite Hxn; auto.
       (* destruct (r (S n)) eqn: E. *)
       (* + destruct (IH (count r n)) as (Mn & ? & Hmaskn & IHn). *)
       (*   destruct (IH (count r (S n))) as (MSn & ? & HmaskSn & IHSn). *)
@@ -478,7 +477,6 @@ Module Type MEMORYCORRES
       apply Forall_impl with (2:=IH); clear IH.
       intros eq HH.
       destruct HH as [? [? ?]]; auto.
-      apply H8; auto.
    Qed.
 
 End MEMORYCORRES.

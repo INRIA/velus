@@ -144,6 +144,21 @@ Proof.
 Qed.
 
 Add Parametric Morphism
+    A B (P: Stream A -> B -> Prop)
+    (P_compat: Proper (@EqSt A ==> eq ==> Basics.impl) P)
+  : (@Forall2 (Stream A) B P)
+    with signature @EqSts A ==> eq ==> Basics.impl
+      as Forall2_EqSt'.
+Proof.
+  intros ys ys' Eys xs.
+  revert xs ys ys' Eys;
+    induction xs, ys; intros ** H; inv H; inv Eys; auto.
+  constructor; eauto.
+  - eapply P_compat; eauto.
+  - eapply IHxs; eauto.
+Qed.
+
+Add Parametric Morphism
     A B
   : (@List.map (Stream A) (Stream B))
     with signature (fun (f f': Stream A -> Stream B) => forall xs xs', xs ≡ xs' -> f xs ≡ f' xs') ==> @EqSts A ==> @EqSts B

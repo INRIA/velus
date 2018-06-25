@@ -327,12 +327,12 @@ Module Type INDEXEDTOCOIND
       destruct (PM.find x H) as [xs'|] eqn: E; simpl in *.
       - exists xs'; intuition.
         intro n; specialize (Sem n).
-        inversion_clear Sem as [Find].
+        inversion_clear Sem as [?? Find].
         unfold Indexed.restr, PM.map in Find.
         rewrite PM.gmapi, E in Find.
         now inv Find.
       - specialize (Sem 0).
-        inversion_clear Sem as [Find].
+        inversion_clear Sem as [?? Find].
         unfold Indexed.restr, PM.map in Find.
         now rewrite PM.gmapi, E in Find.
     Qed.
@@ -678,6 +678,54 @@ Module Type INDEXEDTOCOIND
           rewrite Bool.negb_involutive; auto.
     Qed.
     Hint Resolve sem_clock_impl_from.
+
+    (** An inversion principle for annotated [var]. *)
+    Lemma sem_avar_inv:
+      forall H b x vs ck,
+        Indexed.sem_avar b H ck x vs ->
+        Indexed.sem_var b H x vs
+        /\ exists bs,
+            Indexed.sem_clock b H ck bs
+            /\ forall n,
+              bs n = match vs n with
+                     | present _ => true
+                     | absent => false
+                     end.
+    Proof.
+      intros ** Sem; split.
+      - intro n; specialize (Sem n); inv Sem; auto.
+      - exists (fun n => match vs n with
+                 | present _ => true
+                 | absent => false
+                 end); split; intro n; specialize (Sem n); inv Sem; auto.
+    Qed.
+
+    (** We deduce from the previous lemmas the correspondence for annotated
+        [var]. *)
+    Corollary sem_avar_impl_from:
+      forall n H b x vs ck,
+        Indexed.sem_avar b H ck x vs ->
+        CoInd.sem_avar (tr_history_from n H) (tr_stream_from n b) ck x
+                        (tr_stream_from n vs).
+    Proof.
+      cofix Cofix; intros ** Sem.
+      pose proof Sem as Sem';
+        apply sem_avar_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
+        apply (sem_var_impl_from n) in Sem';
+        apply sem_clock_impl_from with (n:=n) in Sem_ck.
+      rewrite (init_from_n vs) in *.
+      rewrite (init_from_n bs), Ebs in Sem_ck.
+      destruct (vs n); econstructor; eauto;
+        rewrite init_from_tl, tr_history_from_tl;
+        apply Cofix; auto.
+    Qed.
+
+    Corollary sem_avar_impl:
+      forall H b x vs ck,
+        Indexed.sem_avar b H ck x vs ->
+        CoInd.sem_avar (tr_history H) (tr_stream b) ck x (tr_stream vs).
+    Proof. apply sem_avar_impl_from. Qed.
+    Hint Resolve sem_avar_impl_from sem_avar_impl.
 
     (** ** Semantics of lexps *)
 
@@ -1159,15 +1207,15 @@ Module Type INDEXEDTOCOIND
     Proof.
       intros ** Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
-      - rewrite map_length, 2 tr_streams_from_length, mask_length; auto.
+      - rewrite map_length, 2 tr_streams_from_length, Indexed.mask_length; auto.
       - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2.
         rewrite tr_streams_from_length in Len.
         rewrite <-Nth1, <-Nth2.
         assert (n' < length (tr_streams_from 0 xss)) by
-            (rewrite mask_length in Len; auto;
+            (rewrite Indexed.mask_length in Len; auto;
              rewrite tr_streams_from_length; auto).
         rewrite map_nth' with (d':=d2), nth_tr_streams_from_nth; auto.
-        rewrite mask_length in Len; auto.
+        rewrite Indexed.mask_length in Len; auto.
         rewrite nth_tr_streams_from_nth; auto.
         unfold CoInd.mask_v, mask.
         apply ntheq_eqst; intro m.
@@ -1180,6 +1228,34 @@ Module Type INDEXEDTOCOIND
         rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
         destruct (EqNat.beq_nat (count r (m + 0)) k); auto.
         apply Indexed.nth_all_absent.
+    Qed.
+
+    Corollary masked_impl:
+      forall k r xss xss',
+        masked k r xss xss' ->
+        length (xss 0) = length (xss' 0) ->
+        Forall2 (CoInd.masked k (tr_stream r)) (tr_streams xss) (tr_streams xss').
+    Proof.
+      unfold masked, CoInd.masked, tr_streams, tr_stream;
+        intros ** Masked Length.
+      apply Forall2_forall2; split.
+      - now rewrite 2 tr_streams_from_length.
+      - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2 m C.
+        rewrite tr_streams_from_length in Len.
+        rewrite <-Nth1, <-Nth2.
+        assert (n' < length (xss' 0)) by omega.
+        rewrite 2 nth_tr_streams_from_nth; auto.
+        unfold nth_tr_streams_from.
+        rewrite 2 init_from_nth.
+        (* rewrite init_from_nth, CoInd.mask_nth, init_from_nth. *)
+        unfold streams_nth.
+        rewrite Masked; auto.
+        pose proof (count_impl_from 0 r) as Count.
+        assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E
+            by (simpl; destruct (r 0); auto).
+        rewrite E in Count.
+        unfold CoInd.count in C; rewrite Count in C.
+        unfold tr_stream_from in C; now rewrite init_from_nth in C.
     Qed.
 
     (** * FINAL LEMMAS *)
@@ -1255,10 +1331,16 @@ Module Type INDEXEDTOCOIND
         rewrite <-fby_impl; eauto.
 
       - intros ** IHNode.
-        constructor; intro.
-        rewrite <- 2 mask_impl; auto;
-          eapply Indexed.wf_streams_mask; intro n'; specialize (H n');
-            apply Indexed.sem_node_wf in H as (? & ?); eauto.
+        constructor; intro k; specialize (IHNode k);
+          destruct IHNode as (?&?&?&?&?&?).
+        do 2 eexists; intuition eauto;
+          apply masked_impl; auto.
+        SearchAbout Indexed.wf_streams.
+        admit.
+        admit.
+        (* rewrite <- 2 mask_impl; auto; *)
+        (*   eapply Indexed.wf_streams_mask; intro n'; specialize (H n'); *)
+        (*     apply Indexed.sem_node_wf in H as (? & ?); eauto. *)
 
       - intros.
         pose proof n.(n_ingt0); pose proof n.(n_outgt0).
