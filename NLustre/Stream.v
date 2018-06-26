@@ -96,11 +96,11 @@ if the clocked stream is [absent] at the corresponding instant. *)
     | S m, true => S (count rs m)
     end.
 
-  (** [mask o k rs xs] is the stream which clips the stream [xs] between
-      the [k]th and the [(k+1)]th reset, outputting [o] everywhere else. *)
-  Definition mask {A} (opaque: A) (k: nat) (rs: cstream) (xs: stream A) : stream A :=
-    fun n =>
-      if beq_nat k (count rs n) then xs n else opaque.
+  (* (** [mask o k rs xs] is the stream which clips the stream [xs] between *)
+  (*     the [k]th and the [(k+1)]th reset, outputting [o] everywhere else. *) *)
+  (* Definition mask {A} (opaque: A) (k: nat) (rs: cstream) (xs: stream A) : stream A := *)
+  (*   fun n => *)
+  (*     if beq_nat k (count rs n) then xs n else opaque. *)
 
   Definition masked {A} (k: nat) (rs: cstream) (xs xs': stream A) :=
     forall n, count rs n = k -> xs' n = xs n.
@@ -160,27 +160,27 @@ if the clocked stream is [absent] at the corresponding instant. *)
     - subst; omega.
   Qed.
 
-  Lemma mask_opaque:
-    forall {A} (xs: stream A) k r (opaque: A) n,
-      count r n <> k ->
-      (mask opaque k r xs) n = opaque.
-  Proof.
-    intros ** E.
-    unfold mask.
-    assert (EqNat.beq_nat k (count r n) = false) as ->
-        by (apply EqNat.beq_nat_false_iff; omega); auto.
-  Qed.
+  (* Lemma mask_opaque: *)
+  (*   forall {A} (xs: stream A) k r (opaque: A) n, *)
+  (*     count r n <> k -> *)
+  (*     (mask opaque k r xs) n = opaque. *)
+  (* Proof. *)
+  (*   intros ** E. *)
+  (*   unfold mask. *)
+  (*   assert (EqNat.beq_nat k (count r n) = false) as -> *)
+  (*       by (apply EqNat.beq_nat_false_iff; omega); auto. *)
+  (* Qed. *)
 
-  Lemma mask_transparent:
-    forall {A} (xs: stream A) k r (opaque: A) n,
-      count r n = k ->
-      (mask opaque k r xs) n = xs n.
-  Proof.
-    intros ** E.
-    unfold mask.
-    assert (EqNat.beq_nat k (count r n) = true) as ->
-        by (apply EqNat.beq_nat_true_iff; omega); auto.
-  Qed.
+  (* Lemma mask_transparent: *)
+  (*   forall {A} (xs: stream A) k r (opaque: A) n, *)
+  (*     count r n = k -> *)
+  (*     (mask opaque k r xs) n = xs n. *)
+  (* Proof. *)
+  (*   intros ** E. *)
+  (*   unfold mask. *)
+  (*   assert (EqNat.beq_nat k (count r n) = true) as -> *)
+  (*       by (apply EqNat.beq_nat_true_iff; omega); auto. *)
+  (* Qed. *)
 
   Add Parametric Morphism : count
       with signature eq_str ==> eq ==> eq
@@ -191,13 +191,13 @@ if the clocked stream is [absent] at the corresponding instant. *)
     now rewrite IHn.
   Qed.
 
-  Add Parametric Morphism (A: Type) : (@mask A)
-      with signature eq ==> eq ==> eq_str ==> eq_str ==> eq_str
-        as mask_eq_str.
-  Proof.
-    intros ** E1 ? ? E2 n; unfold mask.
-    now rewrite E1, E2.
-  Qed.
+  (* Add Parametric Morphism (A: Type) : (@mask A) *)
+  (*     with signature eq ==> eq ==> eq_str ==> eq_str ==> eq_str *)
+  (*       as mask_eq_str. *)
+  (* Proof. *)
+  (*   intros ** E1 ? ? E2 n; unfold mask. *)
+  (*   now rewrite E1, E2. *)
+  (* Qed. *)
 
   Add Parametric Morphism (A: Type) : (@masked A)
       with signature eq ==> eq_str ==> eq_str ==> eq_str ==> Basics.impl

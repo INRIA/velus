@@ -843,7 +843,7 @@ dataflow memory for which the non-standard semantics holds true.
                        /\ masked k r ys yss') as Msem'.
         { intro k; specialize (Sem' k); destruct Sem' as (?&?&Sem'&?).
           apply IHG' in Sem'; destruct Sem'.
-          do 3 eexists; eauto.
+          do 3 eexists; intuition eauto.
         }
         assert (exists F, forall k,  exists xss' yss',
                        msem_node G f xss' (F k) yss'
@@ -873,7 +873,7 @@ dataflow memory for which the non-standard semantics holds true.
         exists (fun n => F (count r n) n).
         constructor.
         intro k; specialize (Msem k); destruct Msem as (?&?&?).
-        do 3 eexists; intuition; eauto.
+        do 3 eexists; intuition eauto.
         intros n Count; auto.
       }
 

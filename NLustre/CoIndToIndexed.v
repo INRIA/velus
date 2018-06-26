@@ -830,22 +830,22 @@ Module Type COINDTOINDEXED
           apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; omega.
     Qed.
 
-    (** State the correspondence for [mask]. *)
-    Lemma mask_impl:
-      forall k r xss,
-        tr_Streams (List.map (CoInd.mask_v k r) xss)
-        ≈ mask (Indexed.all_absent xss) k (tr_Stream r) (tr_Streams xss).
-    Proof.
-      induction xss as [|xs];
-        simpl; intros ** n.
-      - unfold mask.
-        destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto.
-      - unfold CoInd.mask_v; rewrite tr_Stream_nth, CoInd.mask_nth.
-        unfold mask in *.
-        rewrite IHxss.
-        rewrite <-count_impl, NPeano.Nat.eqb_sym.
-        unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
-    Qed.
+    (* (** State the correspondence for [mask]. *) *)
+    (* Lemma mask_impl: *)
+    (*   forall k r xss, *)
+    (*     tr_Streams (List.map (CoInd.mask_v k r) xss) *)
+    (*     ≈ mask (Indexed.all_absent xss) k (tr_Stream r) (tr_Streams xss). *)
+    (* Proof. *)
+    (*   induction xss as [|xs]; *)
+    (*     simpl; intros ** n. *)
+    (*   - unfold mask. *)
+    (*     destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto. *)
+    (*   - unfold CoInd.mask_v; rewrite tr_Stream_nth, CoInd.mask_nth. *)
+    (*     unfold mask in *. *)
+    (*     rewrite IHxss. *)
+    (*     rewrite <-count_impl, NPeano.Nat.eqb_sym. *)
+    (*     unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto. *)
+    (* Qed. *)
 
     Lemma masked_impl:
       forall {A} k r (xss xss': list (Stream A)),
@@ -858,6 +858,14 @@ Module Type COINDTOINDEXED
       simpl; f_equal; auto.
       apply Count; rewrite <-C.
       apply count_impl.
+    Qed.
+
+    Lemma masked_tr_Streams_length:
+      forall {A} k r (xss xss': list (Stream A)),
+        Forall2 (CoInd.masked k r) xss xss' ->
+        length (tr_Streams xss' 0) = length (tr_Streams xss 0).
+    Proof.
+      induction 1; simpl; auto.
     Qed.
 
     (** * FINAL LEMMAS *)
@@ -912,36 +920,36 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve tr_clocks_of.
 
-    (** The final theorem stating the correspondence for equations, nodes and
-        reset applications. The conjunctive shape is mandatory to use the
-        mutually recursive induction scheme [sem_equation_node_ind]. *)
+    (** The final theorem stating the correspondence for nodes applications.
+        We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
     Hint Constructors Indexed.sem_equation.
     Theorem implies:
-      (forall H b e,
-          CoInd.sem_equation G H b e ->
-          Indexed.sem_equation G (tr_Stream b) (tr_History H) e)
-      /\
-      (forall f xss oss,
-          CoInd.sem_node G f xss oss ->
-          Indexed.sem_node G f (tr_Streams xss) (tr_Streams oss))
-      /\
-      (forall f r xss oss,
-          CoInd.sem_reset G f r xss oss ->
-          Indexed.sem_reset G f (tr_Stream r) (tr_Streams xss) (tr_Streams oss)).
+      forall f xss oss,
+        CoInd.sem_node G f xss oss ->
+        Indexed.sem_node G f (tr_Streams xss) (tr_Streams oss).
     Proof.
-      apply CoInd.sem_equation_node_ind; eauto.
+      induction 1 as [| | | |???? IHNode|???????? Same]
+                       using CoInd.sem_node_mult with
+          (P_equation := fun H b e =>
+                           CoInd.sem_equation G H b e ->
+                           Indexed.sem_equation G (tr_Stream b) (tr_History H) e)
+          (P_reset := fun f r xss oss =>
+                        CoInd.sem_reset G f r xss oss ->
+                        Indexed.sem_reset G f (tr_Stream r) (tr_Streams xss) (tr_Streams oss));
+        eauto.
+
       - econstructor; eauto.
-        now rewrite <-tr_Stream_reset.
+        rewrite <-tr_Stream_reset; auto.
+
       - econstructor; auto; subst; eauto.
         rewrite <-fby_impl; auto.
 
-      - intros ** IHNode.
-        constructor; intro k.
-        specialize (IHNode k); destruct IHNode as (?&?&?&?&?&?).
-        do 2 eexists; intuition eauto; apply masked_impl; auto.
+      - constructor; intro k.
+        specialize (IHNode k); destruct IHNode as (?&?&?).
+        do 2 eexists; intuition eauto; try apply masked_impl;
+          try eapply masked_tr_Streams_length; eauto.
 
-      - intros ** Same ? ?.
-        pose proof n.(n_ingt0); pose proof n.(n_outgt0).
+      - pose proof n.(n_ingt0); pose proof n.(n_outgt0).
         Ltac assert_not_nil xss :=
           match goal with
             H: Forall2 _ _ xss |- _ =>
@@ -953,11 +961,10 @@ Module Type COINDTOINDEXED
         econstructor; eauto.
         + apply CoInd.same_clock_app_l in Same; auto.
         + apply CoInd.same_clock_app_r in Same; auto.
+        + apply Forall_impl_In with (P:=CoInd.sem_equation G H (CoInd.clocks_of xss)); auto.
+          intros e ?.
+          pattern e; eapply In_Forall; eauto.
     Qed.
-
-    Definition equation_impl := proj1 implies.
-    Definition node_impl := proj1 (proj2 implies).
-    Definition reset_impl := proj2 (proj2 implies).
 
   End Global.
 

@@ -308,7 +308,7 @@ Module Type NLSCHEDULE
                        sem_reset (schedule G) f r xss yss);
       try (now inversion_clear 1; eauto).
     - constructor; intro k; specialize (H k); destruct H as (?&?&?).
-      do 2 eexists; intuition; eauto.
+      do 2 eexists; intuition eauto.
     - match goal with H:find_node _ _ = _ |- _ =>
                     apply scheduler_find_node in H end.
       econstructor; eauto; destruct n; simpl in *; eauto.

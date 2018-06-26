@@ -402,7 +402,9 @@ environment.
                (forall k, exists xss' yss',
                      sem_node f xss' yss'
                      /\ masked k r xss xss'
-                     /\ masked k r yss yss') ->
+                     /\ masked k r yss yss'
+                     /\ length (xss' 0) = length (xss 0)
+                     /\ length (yss' 0) = length (yss 0)) ->
                sem_reset f r xss yss
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
@@ -476,6 +478,8 @@ enough: it does not support the internal fixpoint introduced by
               sem_node G f xss' yss'
               /\ masked k r xss xss'
               /\ masked k r yss yss'
+              /\ length (xss' 0) = length (xss 0)
+              /\ length (yss' 0) = length (yss 0)
               /\ P_node f xss' yss') ->
         P_reset f r xss yss.
 
@@ -513,8 +517,8 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem; eauto.
       - destruct Sem as [???? Sem]; eauto.
         apply ResetCase; intro k; specialize (Sem k);
-          destruct Sem as (? & ? & ? & ? & ?).
-        econstructor; econstructor; eauto.
+          destruct Sem as (? & ? & ? & ? & ? & ?).
+        do 2 eexists; intuition eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         induction H7; auto.
@@ -539,65 +543,41 @@ enough: it does not support the internal fixpoint introduced by
             now rewrite H in H')
     end.
 
-  Lemma mask_length:
-    forall k k' xss r n,
-      wf_streams xss ->
-      length (mask (all_absent (xss k')) k r xss n) = length (xss n).
-  Proof.
-    intros; unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-    unfold all_absent; rewrite map_length.
-    induction k'; induction n; auto.
-  Qed.
-
-  (* Lemma masked_length: *)
-  (*   forall {A} k (xss xss': stream (list A)) r n, *)
-  (*     wf_streams xss' -> *)
+  (* Lemma mask_length: *)
+  (*   forall k k' xss r n, *)
   (*     wf_streams xss -> *)
-  (*     masked k r xss xss' ->  *)
-  (*     length (xss' n) = length (xss n). *)
+  (*     length (mask (all_absent (xss k')) k r xss n) = length (xss n). *)
   (* Proof. *)
-  (*   unfold masked; intros ** Wf' Wf M. *)
-  (*   assert (exists n, length (xss' n) = length (xss n)). *)
-
-  (*   (* pose proof (EqNat.eq_nat 1 2). *) *)
-  (*   (* Print EqNat.eq_nat. *) *)
-  (*   specialize (M n). *)
-  (*   (* rewrite (Wf 0). *) *)
-  (*   destruct (Peano_dec.eq_nat_dec (count r n) k). *)
-  (*   - now rewrite M. *)
-  (*   -  *)
-  (*   auto. *)
-  (*   auto. *)
-  (*   SearchAbout (_ -> _ -> {_} + {_}) nat. *)
+  (*   intros; unfold mask. *)
   (*   destruct (EqNat.beq_nat k (count r n)); auto. *)
   (*   unfold all_absent; rewrite map_length. *)
   (*   induction k'; induction n; auto. *)
   (* Qed. *)
-  (** If all masks ar well-formed then the underlying stream of lists
-      is well-formed. *)
-  Lemma wf_streams_mask:
-    forall xss r m,
-      (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) ->
-      wf_streams xss.
-  Proof.
-    unfold wf_streams, mask; intros ** WF k k'.
-    pose proof (WF (count r k) k' k) as WFk;
-      pose proof (WF (count r k') k' k) as WFk'.
-    rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
-    rewrite NPeano.Nat.eqb_sym in WFk'.
-    destruct (EqNat.beq_nat (count r k) (count r k')); auto.
-    now rewrite WFk, <-WFk'.
-  Qed.
 
-  Lemma sem_node_wf:
-    forall G f xss yss,
-      sem_node G f xss yss ->
-      wf_streams xss /\ wf_streams yss.
-  Proof.
-    intros ** Sem; split; inv Sem;
-      assert_const_length xss; assert_const_length yss; auto.
-  Qed.
+  (* (** If all masks ar well-formed then the underlying stream of lists *)
+  (*     is well-formed. *) *)
+  (* Lemma wf_streams_mask: *)
+  (*   forall xss r m, *)
+  (*     (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) -> *)
+  (*     wf_streams xss. *)
+  (* Proof. *)
+  (*   unfold wf_streams, mask; intros ** WF k k'. *)
+  (*   pose proof (WF (count r k) k' k) as WFk; *)
+  (*     pose proof (WF (count r k') k' k) as WFk'. *)
+  (*   rewrite <-EqNat.beq_nat_refl in WFk, WFk'. *)
+  (*   rewrite NPeano.Nat.eqb_sym in WFk'. *)
+  (*   destruct (EqNat.beq_nat (count r k) (count r k')); auto. *)
+  (*   now rewrite WFk, <-WFk'. *)
+  (* Qed. *)
+
+  (* Lemma sem_node_wf: *)
+  (*   forall G f xss yss, *)
+  (*     sem_node G f xss yss -> *)
+  (*     wf_streams xss /\ wf_streams yss. *)
+  (* Proof. *)
+  (*   intros ** Sem; split; inv Sem; *)
+  (*     assert_const_length xss; assert_const_length yss; auto. *)
+  (* Qed. *)
 
   (** ** Determinism of the semantics *)
 
@@ -1015,8 +995,8 @@ clock to [sem_var_instant] too. *)
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro; eapply SEqFby; eassumption.
     - constructor; intro k.
-      specialize (H k); destruct H as (?&?&?&?&?&?).
-      do 2 eexists; eauto.
+      specialize (H k); destruct H as (?&?&?).
+      do 2 eexists; intuition eauto.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       eapply SNode; eauto.
@@ -1069,8 +1049,8 @@ clock to [sem_var_instant] too. *)
                      -> sem_equation (nd::G) bk H eq)
              (P_reset := fun f r xss yss => sem_reset (nd::G) f r xss yss);
       try eauto; try intro HH.
-    - constructor; intro k; specialize (H k); destruct H as (?&?&?&?&?&?).
-      do 2 eexists; eauto.
+    - constructor; intro k; specialize (H k); destruct H as (?&?&?).
+      do 2 eexists; intuition eauto.
     - clear HH.
       assert (nd.(n_name) <> f) as Hnf.
       { intro Hnf.
@@ -1153,8 +1133,8 @@ clock to [sem_var_instant] too. *)
           by (intro HH; apply Hninieq; rewrite HH; constructor).
       econstructor; eauto.
       inversion_clear Hreset as [???? Hnode].
-      constructor; intro k; specialize (Hnode k); destruct Hnode as (?&?&?&?&?).
-      do 2 eexists; intuition; eauto.
+      constructor; intro k; specialize (Hnode k); destruct Hnode as (?&?&?).
+      do 2 eexists; intuition eauto.
       eapply sem_node_cons; eauto.
     - econstructor; eauto.
   Qed.
@@ -1209,31 +1189,31 @@ an absent value *)
   now destruct Hsamexs.
   Qed.
 
-  Lemma all_absent_mask:
-    forall xs k k' r n,
-      wf_streams xs ->
-      all_absent (mask (all_absent (xs k')) k r xs n) = all_absent (xs n).
-  Proof.
-    intros ** Wf; unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-    specialize (Wf n k').
-    assert (length (all_absent (xs k')) = length (xs n)) as Length
-        by now (unfold all_absent; rewrite map_length).
-    clear Wf; revert Length; generalize (xs n) as l, (all_absent (xs k')) as l'.
-    induction l, l'; inversion 1; simpl; auto.
-    f_equal; auto.
-  Qed.
+  (* Lemma all_absent_mask: *)
+  (*   forall xs k k' r n, *)
+  (*     wf_streams xs -> *)
+  (*     all_absent (mask (all_absent (xs k')) k r xs n) = all_absent (xs n). *)
+  (* Proof. *)
+  (*   intros ** Wf; unfold mask. *)
+  (*   destruct (EqNat.beq_nat k (count r n)); auto. *)
+  (*   specialize (Wf n k'). *)
+  (*   assert (length (all_absent (xs k')) = length (xs n)) as Length *)
+  (*       by now (unfold all_absent; rewrite map_length). *)
+  (*   clear Wf; revert Length; generalize (xs n) as l, (all_absent (xs k')) as l'. *)
+  (*   induction l, l'; inversion 1; simpl; auto. *)
+  (*   f_equal; auto. *)
+  (* Qed. *)
 
-  Lemma absent_list_mask:
-    forall xs opaque k r n,
-      absent_list (xs n) ->
-      absent_list opaque ->
-      absent_list (mask opaque k r xs n).
-  Proof.
-    intros ** Abs.
-    unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-  Qed.
+  (* Lemma absent_list_mask: *)
+  (*   forall xs opaque k r n, *)
+  (*     absent_list (xs n) -> *)
+  (*     absent_list opaque -> *)
+  (*     absent_list (mask opaque k r xs n). *)
+  (* Proof. *)
+  (*   intros ** Abs. *)
+  (*   unfold mask. *)
+  (*   destruct (EqNat.beq_nat k (count r n)); auto. *)
+  (* Qed. *)
 
   Remark all_absent_spec:
     forall A (l: list A),
@@ -1356,8 +1336,10 @@ an absent value *)
     inversion_clear Res as [? ? ? ? Node].
     constructor; intro k.
 
-    specialize (Node k); destruct Node as (?&?&?&?&?).
-    do 2 eexists; intuition; eauto; rewrite <-E1.
+    specialize (Node k); destruct Node as (?&?&?).
+    do 2 eexists; intuition eauto; try rewrite <-E1.
+    - now rewrite <-E2.
+    - now rewrite <-E3.
     - now rewrite <-E2.
     - now rewrite <-E3.
   Qed.
