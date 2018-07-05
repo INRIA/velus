@@ -1196,66 +1196,66 @@ Module Type INDEXEDTOCOIND
           try (rewrite Nat.sub_succ, Nat.sub_0_r); auto.
     Qed.
 
-    (* (** Generalizing is too intricate: we can use the generalized lemma above to *)
-    (*     deduce this one which states the correspondence for [mask]. *) *)
-    (* Corollary mask_impl: *)
-    (*   forall k k' (r: stream bool) xss, *)
-    (*     Indexed.wf_streams xss -> *)
-    (*     EqSts value *)
-    (*           (tr_streams (mask (Indexed.all_absent (xss k')) k r xss)) *)
-    (*           (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)). *)
-    (* Proof. *)
-    (*   intros ** Const; unfold tr_streams, tr_stream. *)
-    (*   apply Forall2_forall2; split. *)
-    (*   - rewrite map_length, 2 tr_streams_from_length, Indexed.mask_length; auto. *)
-    (*   - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2. *)
-    (*     rewrite tr_streams_from_length in Len. *)
-    (*     rewrite <-Nth1, <-Nth2. *)
-    (*     assert (n' < length (tr_streams_from 0 xss)) by *)
-    (*         (rewrite Indexed.mask_length in Len; auto; *)
-    (*          rewrite tr_streams_from_length; auto). *)
-    (*     rewrite map_nth' with (d':=d2), nth_tr_streams_from_nth; auto. *)
-    (*     rewrite Indexed.mask_length in Len; auto. *)
-    (*     rewrite nth_tr_streams_from_nth; auto. *)
-    (*     unfold CoInd.mask_v, mask. *)
-    (*     apply ntheq_eqst; intro m. *)
-    (*     unfold nth_tr_streams_from. *)
-    (*     rewrite init_from_nth, CoInd.mask_nth, init_from_nth. *)
-    (*     unfold CoInd.count, streams_nth. *)
-    (*     pose proof (count_impl_from 0 r) as Count. *)
-    (*     assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E *)
-    (*         by (simpl; destruct (r 0); auto). *)
-    (*     rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym. *)
-    (*     destruct (EqNat.beq_nat (count r (m + 0)) k); auto. *)
-    (*     apply Indexed.nth_all_absent. *)
-    (* Qed. *)
-
-    Corollary masked_impl:
-      forall k r xss xss',
-        masked k r xss xss' ->
-        length (xss 0) = length (xss' 0) ->
-        Forall2 (CoInd.masked k (tr_stream r)) (tr_streams xss) (tr_streams xss').
+    (** Generalizing is too intricate: we can use the generalized lemma above to *)
+    (*     deduce this one which states the correspondence for [mask]. *)
+    Corollary mask_impl:
+      forall k k' (r: stream bool) xss,
+        Indexed.wf_streams xss ->
+        EqSts value
+              (tr_streams (mask (Indexed.all_absent (xss k')) k r xss))
+              (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
     Proof.
-      unfold masked, CoInd.masked, tr_streams, tr_stream;
-        intros ** Masked Length.
+      intros ** Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
-      - now rewrite 2 tr_streams_from_length.
-      - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2 m C.
+      - rewrite map_length, 2 tr_streams_from_length, Indexed.mask_length; auto.
+      - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2.
         rewrite tr_streams_from_length in Len.
         rewrite <-Nth1, <-Nth2.
-        assert (n' < length (xss' 0)) by omega.
-        rewrite 2 nth_tr_streams_from_nth; auto.
+        assert (n' < length (tr_streams_from 0 xss)) by
+            (rewrite Indexed.mask_length in Len; auto;
+             rewrite tr_streams_from_length; auto).
+        rewrite map_nth' with (d':=d2), nth_tr_streams_from_nth; auto.
+        rewrite Indexed.mask_length in Len; auto.
+        rewrite nth_tr_streams_from_nth; auto.
+        unfold CoInd.mask_v, mask.
+        apply ntheq_eqst; intro m.
         unfold nth_tr_streams_from.
-        rewrite 2 init_from_nth.
-        unfold streams_nth.
-        rewrite Masked; auto.
+        rewrite init_from_nth, CoInd.mask_nth, init_from_nth.
+        unfold CoInd.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
         assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E
             by (simpl; destruct (r 0); auto).
-        rewrite E in Count.
-        unfold CoInd.count in C; rewrite Count in C.
-        unfold tr_stream_from in C; now rewrite init_from_nth in C.
+        rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
+        destruct (EqNat.beq_nat (count r (m + 0)) k); auto.
+        apply Indexed.nth_all_absent.
     Qed.
+
+    (* Corollary masked_impl: *)
+    (*   forall k r xss xss', *)
+    (*     masked k r xss xss' -> *)
+    (*     length (xss 0) = length (xss' 0) -> *)
+    (*     Forall2 (CoInd.masked k (tr_stream r)) (tr_streams xss) (tr_streams xss'). *)
+    (* Proof. *)
+    (*   unfold masked, CoInd.masked, tr_streams, tr_stream; *)
+    (*     intros ** Masked Length. *)
+    (*   apply Forall2_forall2; split. *)
+    (*   - now rewrite 2 tr_streams_from_length. *)
+    (*   - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2 m C. *)
+    (*     rewrite tr_streams_from_length in Len. *)
+    (*     rewrite <-Nth1, <-Nth2. *)
+    (*     assert (n' < length (xss' 0)) by omega. *)
+    (*     rewrite 2 nth_tr_streams_from_nth; auto. *)
+    (*     unfold nth_tr_streams_from. *)
+    (*     rewrite 2 init_from_nth. *)
+    (*     unfold streams_nth. *)
+    (*     rewrite Masked; auto. *)
+    (*     pose proof (count_impl_from 0 r) as Count. *)
+    (*     assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E *)
+    (*         by (simpl; destruct (r 0); auto). *)
+    (*     rewrite E in Count. *)
+    (*     unfold CoInd.count in C; rewrite Count in C. *)
+    (*     unfold tr_stream_from in C; now rewrite init_from_nth in C. *)
+    (* Qed. *)
 
     (** * FINAL LEMMAS *)
 
@@ -1328,10 +1328,11 @@ Module Type INDEXEDTOCOIND
       - econstructor; eauto; subst.
         rewrite <-fby_impl; eauto.
 
-      - constructor; intro k; specialize (IHNode k);
-          destruct IHNode as (?&?&?).
-        do 2 eexists; intuition eauto;
-          apply masked_impl; auto.
+      - constructor; intro k; specialize (IHNode k); destruct IHNode.
+        inversion_clear H as [???? HNode].
+        rewrite <- 2 mask_impl; eauto;
+          eapply Indexed.wf_streams_mask; intro n'; specialize (HNode n');
+            apply Indexed.sem_node_wf in HNode as (? & ?); eauto.
 
       - pose proof n.(n_ingt0); pose proof n.(n_outgt0).
         Ltac assert_not_nil xss :=

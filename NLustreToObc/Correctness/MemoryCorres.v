@@ -423,31 +423,14 @@ Module Type MEMORYCORRES
 
     (* Case: Reset *)
     - intros ** Hsem E Hmc.
-      destruct (IH (count r n)) as (? & Mn & ? & ? & Hxn & ? & HMn & IHn).
+      destruct (IH (count r n)) as (Mn & ? & HMn & IHn).
       (* unfold masked in Hmaskn. *)
       rewrite <-HMn in Hmc; auto.
       apply IHn in Hmc.
       * rewrite <-HMn; auto.
         simpl; rewrite E; auto.
-      * rewrite Hxn; auto.
-      (* destruct (r (S n)) eqn: E. *)
-      (* + destruct (IH (count r n)) as (Mn & ? & Hmaskn & IHn). *)
-      (*   destruct (IH (count r (S n))) as (MSn & ? & HmaskSn & IHSn). *)
-      (*   unfold memory_mask in Hmaskn, HmaskSn. *)
-      (*   rewrite <-Hmaskn in Hmc; auto. *)
-      (*   rewrite <-HmaskSn; auto. *)
-      (*   apply IHSn. *)
-      (*   * apply absent_list_mask; auto. *)
-      (*     apply all_absent_spec. *)
-      (*   * admit. *)
-      (* + destruct (IH (count r n)) as (Mn & ? & Hmaskn & IHn). *)
-      (*   unfold memory_mask in Hmaskn. *)
-      (*   rewrite <-Hmaskn in Hmc; auto. *)
-      (*   apply IHn in Hmc. *)
-      (*   * rewrite <-Hmaskn; auto. *)
-      (*     simpl; rewrite E; auto. *)
-      (*   * apply absent_list_mask; auto. *)
-      (*     apply all_absent_spec. *)
+      * apply absent_list_mask; auto.
+        apply all_absent_spec.
 
     (* Case: Node *)
     - intros ** Hmc.

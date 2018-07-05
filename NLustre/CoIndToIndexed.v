@@ -830,43 +830,43 @@ Module Type COINDTOINDEXED
           apply count_true_ge_1 in R'; rewrite Minus.minus_Sn_m; omega.
     Qed.
 
-    (* (** State the correspondence for [mask]. *) *)
-    (* Lemma mask_impl: *)
-    (*   forall k r xss, *)
-    (*     tr_Streams (List.map (CoInd.mask_v k r) xss) *)
-    (*     ≈ mask (Indexed.all_absent xss) k (tr_Stream r) (tr_Streams xss). *)
+    (** State the correspondence for [mask]. *)
+    Lemma mask_impl:
+      forall k r xss,
+        tr_Streams (List.map (CoInd.mask_v k r) xss)
+        ≈ mask (Indexed.all_absent xss) k (tr_Stream r) (tr_Streams xss).
+    Proof.
+      induction xss as [|xs];
+        simpl; intros ** n.
+      - unfold mask.
+        destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto.
+      - unfold CoInd.mask_v; rewrite tr_Stream_nth, CoInd.mask_nth.
+        unfold mask in *.
+        rewrite IHxss.
+        rewrite <-count_impl, NPeano.Nat.eqb_sym.
+        unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
+    Qed.
+
+    (* Lemma masked_impl: *)
+    (*   forall {A} k r (xss xss': list (Stream A)), *)
+    (*     Forall2 (CoInd.masked k r) xss xss' -> *)
+    (*     masked k (tr_Stream r) (tr_Streams xss) (tr_Streams xss'). *)
     (* Proof. *)
-    (*   induction xss as [|xs]; *)
-    (*     simpl; intros ** n. *)
-    (*   - unfold mask. *)
-    (*     destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto. *)
-    (*   - unfold CoInd.mask_v; rewrite tr_Stream_nth, CoInd.mask_nth. *)
-    (*     unfold mask in *. *)
-    (*     rewrite IHxss. *)
-    (*     rewrite <-count_impl, NPeano.Nat.eqb_sym. *)
-    (*     unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto. *)
+    (*   unfold CoInd.masked, masked. *)
+    (*   induction xss as [|xs]; intros ** Masked n C; *)
+    (*     inversion_clear Masked as [|???? Count]; auto. *)
+    (*   simpl; f_equal; auto. *)
+    (*   apply Count; rewrite <-C. *)
+    (*   apply count_impl. *)
     (* Qed. *)
 
-    Lemma masked_impl:
-      forall {A} k r (xss xss': list (Stream A)),
-        Forall2 (CoInd.masked k r) xss xss' ->
-        masked k (tr_Stream r) (tr_Streams xss) (tr_Streams xss').
-    Proof.
-      unfold CoInd.masked, masked.
-      induction xss as [|xs]; intros ** Masked n C;
-        inversion_clear Masked as [|???? Count]; auto.
-      simpl; f_equal; auto.
-      apply Count; rewrite <-C.
-      apply count_impl.
-    Qed.
-
-    Lemma masked_tr_Streams_length:
-      forall {A} k r (xss xss': list (Stream A)),
-        Forall2 (CoInd.masked k r) xss xss' ->
-        length (tr_Streams xss' 0) = length (tr_Streams xss 0).
-    Proof.
-      induction 1; simpl; auto.
-    Qed.
+    (* Lemma masked_tr_Streams_length: *)
+    (*   forall {A} k r (xss xss': list (Stream A)), *)
+    (*     Forall2 (CoInd.masked k r) xss xss' -> *)
+    (*     length (tr_Streams xss' 0) = length (tr_Streams xss 0). *)
+    (* Proof. *)
+    (*   induction 1; simpl; auto. *)
+    (* Qed. *)
 
     (** * FINAL LEMMAS *)
 
@@ -945,9 +945,9 @@ Module Type COINDTOINDEXED
         rewrite <-fby_impl; auto.
 
       - constructor; intro k.
-        specialize (IHNode k); destruct IHNode as (?&?&?).
-        do 2 eexists; intuition eauto; try apply masked_impl;
-          try eapply masked_tr_Streams_length; eauto.
+        specialize (IHNode k).
+        rewrite 2 all_absent_tr_Streams.
+        now rewrite <- 2 mask_impl.
 
       - pose proof n.(n_ingt0); pose proof n.(n_outgt0).
         Ltac assert_not_nil xss :=

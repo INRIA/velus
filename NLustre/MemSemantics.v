@@ -71,6 +71,9 @@ Module Type MEMSEMANTICS
 
   Definition memories := stream (memory val).
 
+  Definition memory_masked (k: nat) (rs: cstream) (M M': memories) :=
+    forall n, count rs n = k -> M' n = M n.
+
   Inductive mfby: ident -> val -> stream value -> memories -> stream value -> Prop :=
     mfby_intro:
       forall x v0 ls M xs,
@@ -127,11 +130,11 @@ Module Type MEMSEMANTICS
            stream (list value) -> Prop :=
          | SReset:
              forall f r xss M yss,
-               (forall k, exists xss' M' yss',
-                     msem_node f xss' M' yss'
-                     /\ masked k r xss xss'
-                     /\ masked k r yss yss'
-                     /\ masked k r M M') ->
+               (forall k, exists M',
+                     msem_node f (mask (all_absent (xss 0)) k r xss)
+                               M'
+                               (mask (all_absent (yss 0)) k r yss)
+                     /\ memory_masked k r M M') ->
                msem_reset f r xss M yss
 
     with msem_node:
@@ -202,12 +205,14 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis ResetCase:
       forall f r xss M yss,
-        (forall k, exists xss' M' yss',
-              msem_node G f xss' M' yss'
-              /\ masked k r xss xss'
-              /\ masked k r yss yss'
-              /\ masked k r M M'
-              /\ P_node f xss' M' yss') ->
+        (forall k, exists M',
+              msem_node G f (mask (all_absent (xss 0)) k r xss)
+                        M'
+                        (mask (all_absent (yss 0)) k r yss)
+              /\ memory_masked k r M M'
+              /\ P_node f (mask (all_absent (xss 0)) k r xss)
+                       M'
+                       (mask (all_absent (yss 0)) k r yss)) ->
         P_reset f r xss M yss.
 
     Hypothesis NodeCase:
@@ -245,8 +250,7 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem; eauto.
       - destruct Sem; eauto.
         apply ResetCase; auto.
-        intro k; destruct (H k) as (?&?&?&?&?&?&?); eauto.
-        do 3 eexists; intuition; eauto.
+        intro k; destruct (H k) as (?&?&?); eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
          induction H7; auto.
@@ -349,8 +353,7 @@ enough: it does not support the internal fixpoint introduced by
     - intro Hnin.
       econstructor; eauto.
       apply IHHsem. intro Hnf; apply Hnin; rewrite Hnf. constructor.
-    - intro. econstructor. intro k; destruct (IH k) as (?&?&?&?&?&?&?&?); eauto.
-      do 3 eexists; eauto.
+    - intro. econstructor. intro k; destruct (IH k) as (?&?&?&?); eauto.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       econstructor; eauto.
@@ -371,8 +374,7 @@ enough: it does not support the internal fixpoint introduced by
     intros ** Sem ?.
     inversion_clear Sem as [????? SemN].
     constructor.
-    intro k; destruct (SemN k) as (?&?&?&?&?&?&?);
-      do 3 eexists; eauto using msem_node_cons.
+    intro k; destruct (SemN k) as (?&?&?); eauto using msem_node_cons.
   Qed.
 
   Lemma msem_node_cons2:
@@ -394,8 +396,7 @@ enough: it does not support the internal fixpoint introduced by
            (P_reset := fun f r xss M yss =>
                          Forall (fun n' : node => n_name n <> n_name n') G ->
                          msem_reset (n :: G) f r xss M yss); eauto.
-    - intro. constructor; intro k; destruct (IH k) as (?&?&?&?&?&?&?&?); eauto.
-      do 3 eexists; eauto.
+    - intro. constructor; intro k; destruct (IH k) as (?&?&?&?); eauto.
     - intro HH; clear HH.
       assert (n.(n_name) <> f) as Hnf.
       { intro Hnf.
@@ -451,8 +452,7 @@ enough: it does not support the internal fixpoint introduced by
     intros ** Sem ?.
     inversion_clear Sem as [????? SemN].
     constructor.
-    intro k; destruct (SemN k) as (?&?&?&?&?&?&?);
-      do 3 eexists; eauto using msem_node_cons2.
+    intro k; destruct (SemN k) as (?&?&?); eauto using msem_node_cons2.
   Qed.
 
   Lemma msem_equation_cons2:
@@ -725,14 +725,16 @@ dataflow memory for which the non-standard semantics holds true.
                        /\ 0 < length n.(n_out)) as (n & ? & ?).
           {
             inversion_clear Hmsem as [????? Hmsem'].
-            set (rs:=reset_of ys) in *.
-            destruct (Hmsem' (count rs 0)) as (? & ? & ? & Hmsem'' & ? & Mout & ?);
+            destruct (Hmsem' 0) as (? & Hmsem'' & ?);
               inversion_clear Hmsem'' as [?????????? Hout].
-            specialize (Mout 0).
             exists n; split; auto.
             - unfold sem_vars, lift in Hout; specialize (Hout 0).
               apply Forall2_length in Hout; rewrite Hout.
-              rewrite Mout; auto.
+              rewrite mask_length; auto.
+              inversion_clear Hsem' as [???? Hsem].
+              eapply wf_streams_mask.
+              intro n'; specialize (Hsem n');
+                apply sem_node_wf in Hsem as (? & ?); eauto.
             - exact n.(n_outgt0).
           }
 
@@ -837,18 +839,11 @@ dataflow memory for which the non-standard semantics holds true.
       { clear - IHG'.
         intros ** Sem.
         inversion_clear Sem as [???? Sem'].
-        assert (forall k, exists M', exists xss' yss',
-                       msem_node G f xss' M' yss'
-                       /\ masked k r xs xss'
-                       /\ masked k r ys yss') as Msem'.
-        { intro k; specialize (Sem' k); destruct Sem' as (?&?&Sem'&?).
-          apply IHG' in Sem'; destruct Sem'.
-          do 3 eexists; intuition eauto.
-        }
-        assert (exists F, forall k,  exists xss' yss',
-                       msem_node G f xss' (F k) yss'
-                       /\ masked k r xs xss'
-                       /\ masked k r ys yss')
+        assert (forall k, exists M', msem_node G f (mask (all_absent (xs 0)) k r xs) M'
+                                    (mask (all_absent (ys 0)) k r ys)) as Msem'
+            by (intro; specialize (Sem' k); apply IHG' in Sem'; auto).
+        assert (exists F, forall k, msem_node G f (mask (all_absent (xs 0)) k r xs) (F k)
+                                    (mask (all_absent (ys 0)) k r ys))
           as (F & Msem).
         {
           (** Infinite Description  *)
@@ -872,8 +867,8 @@ dataflow memory for which the non-standard semantics holds true.
 
         exists (fun n => F (count r n) n).
         constructor.
-        intro k; specialize (Msem k); destruct Msem as (?&?&?).
-        do 3 eexists; intuition eauto.
+        intro k; specialize (Msem k).
+        eexists; intuition eauto.
         intros n Count; auto.
       }
 

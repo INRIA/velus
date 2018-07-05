@@ -273,16 +273,16 @@ Module Type NLSEMANTICSCOIND
     | present x ::: xs => present c ::: fby x xs
     end.
 
-  (* CoFixpoint mask {A} (opaque: A) (k: nat) (rs: Stream bool) (xs: Stream A) *)
-  (*   : Stream A := *)
-  (*   let mask' k' := mask opaque k' (tl rs) (tl xs) in *)
-  (*   match k, hd rs with *)
-  (*   | 0, true    => Streams.const opaque *)
-  (*   | 0, false   => hd xs  ::: mask' 0 *)
-  (*   | 1, true    => hd xs  ::: mask' 0 *)
-  (*   | S k', true => opaque ::: mask' k' *)
-  (*   | S _, false => opaque ::: mask' k *)
-  (*   end. *)
+  CoFixpoint mask {A} (opaque: A) (k: nat) (rs: Stream bool) (xs: Stream A)
+    : Stream A :=
+    let mask' k' := mask opaque k' (tl rs) (tl xs) in
+    match k, hd rs with
+    | 0, true    => Streams.const opaque
+    | 0, false   => hd xs  ::: mask' 0
+    | 1, true    => hd xs  ::: mask' 0
+    | S k', true => opaque ::: mask' k'
+    | S _, false => opaque ::: mask' k
+    end.
 
   CoFixpoint count_acc (s: nat) (rs: Stream bool): Stream nat :=
     let s := if hd rs then S s else s in
@@ -315,53 +315,53 @@ Module Type NLSEMANTICSCOIND
     induction n; simpl; intros; destruct (hd rs); auto.
   Qed.
 
-  (* Lemma mask_nth: *)
-  (*   forall {A} n (o: A) k rs xs, *)
-  (*     Str_nth n (mask o k rs xs) = *)
-  (*     if beq_nat (Str_nth n (count rs)) k then Str_nth n xs else o. *)
-  (* Proof. *)
-  (*   unfold Str_nth. *)
-  (*   induction n, k as [|[|k]]; intros; *)
-  (*   unfold_Stv rs; simpl; auto. *)
-  (*   - pose proof (count_acc_grow 1 rs) as H. *)
-  (*     apply (ForAll_Str_nth_tl n) in H; inv H. *)
-  (*     assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by omega; *)
-  (*       apply beq_nat_false_iff in E; rewrite E. *)
-  (*     pose proof (const_nth n o); auto. *)
-  (*   - rewrite IHn; unfold count. *)
-  (*     destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) 1) eqn: E; *)
-  (*       rewrite count_S_nth in E. *)
-  (*     + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto. *)
-  (*     + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E; *)
-  (*         rewrite E; auto. *)
-  (*   - rewrite IHn; unfold count. *)
-  (*     destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) (S (S k))) eqn: E; *)
-  (*       rewrite count_S_nth in E. *)
-  (*     + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto. *)
-  (*     + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E; *)
-  (*         rewrite E; auto. *)
-  (* Qed. *)
+  Lemma mask_nth:
+    forall {A} n (o: A) k rs xs,
+      Str_nth n (mask o k rs xs) =
+      if beq_nat (Str_nth n (count rs)) k then Str_nth n xs else o.
+  Proof.
+    unfold Str_nth.
+    induction n, k as [|[|k]]; intros;
+    unfold_Stv rs; simpl; auto.
+    - pose proof (count_acc_grow 1 rs) as H.
+      apply (ForAll_Str_nth_tl n) in H; inv H.
+      assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by omega;
+        apply beq_nat_false_iff in E; rewrite E.
+      pose proof (const_nth n o); auto.
+    - rewrite IHn; unfold count.
+      destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) 1) eqn: E;
+        rewrite count_S_nth in E.
+      + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
+      + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+          rewrite E; auto.
+    - rewrite IHn; unfold count.
+      destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) (S (S k))) eqn: E;
+        rewrite count_S_nth in E.
+      + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
+      + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+          rewrite E; auto.
+  Qed.
 
-  (* Definition mask_v := mask absent. *)
+  Definition mask_v := mask absent.
 
-  (* Remark mask_const_opaque: *)
-  (*   forall {A} n rs (opaque: A), *)
-  (*     mask opaque n rs (Streams.const opaque) ≡ Streams.const opaque. *)
-  (* Proof. *)
-  (*   cofix Cofix; intros. *)
-  (*   unfold_Stv rs; rewrite (unfold_Stream (Streams.const opaque)); *)
-  (*     constructor; destruct n as [|[]]; simpl; auto; try apply Cofix. *)
-  (*   reflexivity. *)
-  (* Qed. *)
+  Remark mask_const_opaque:
+    forall {A} n rs (opaque: A),
+      mask opaque n rs (Streams.const opaque) ≡ Streams.const opaque.
+  Proof.
+    cofix Cofix; intros.
+    unfold_Stv rs; rewrite (unfold_Stream (Streams.const opaque));
+      constructor; destruct n as [|[]]; simpl; auto; try apply Cofix.
+    reflexivity.
+  Qed.
 
-  Definition masked {A} (k: nat) (rs: Stream bool) (xs xs': Stream A) :=
-    forall n, Str_nth n (count rs) = k -> Str_nth n xs' = Str_nth n xs.
+  (* Definition masked {A} (k: nat) (rs: Stream bool) (xs xs': Stream A) := *)
+  (*   forall n, Str_nth n (count rs) = k -> Str_nth n xs' = Str_nth n xs. *)
 
-  (* CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value) *)
-  (*   : Stream (Stream value) := *)
-  (*   mask_v n rs xs ::: masks_from (n + 1) rs xs. *)
+  CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value)
+    : Stream (Stream value) :=
+    mask_v n rs xs ::: masks_from (n + 1) rs xs.
 
-  (* Definition masks := masks_from 0. *)
+  Definition masks := masks_from 0.
 
   Definition same_clock (xss: list (Stream value)) : Prop :=
     forall n,
@@ -444,10 +444,7 @@ Module Type NLSEMANTICSCOIND
     : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
       SReset:
         forall f r xss yss,
-          (forall k, exists xss' yss',
-                sem_node f xss' yss'
-                /\ Forall2 (masked k r) xss xss'
-                /\ Forall2 (masked k r) yss yss') ->
+          (forall k, sem_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
           sem_reset f r xss yss
 
     with
@@ -503,11 +500,8 @@ Module Type NLSEMANTICSCOIND
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall k, exists xss' yss',
-              sem_node G f xss' yss'
-              /\ Forall2 (masked k r) xss xss'
-              /\ Forall2 (masked k r) yss yss'
-              /\ P_node f xss' yss') ->
+        (forall k, sem_node G f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)
+              /\ P_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
@@ -535,9 +529,6 @@ Module Type NLSEMANTICSCOIND
     Proof.
       - destruct Sem; eauto.
       - destruct Sem as [???? Sem]; eauto.
-        apply ResetCase; intro k; specialize (Sem k);
-          destruct Sem as (?&?&?&?&?).
-        do 2 eexists; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         induction H4; auto.
@@ -809,16 +800,16 @@ Module Type NLSEMANTICSCOIND
       + now apply IHxs.
   Qed.
 
-  (* Add Parametric Morphism A opaque k : (mask opaque k) *)
-  (*     with signature @EqSt bool ==> @EqSt A ==> @EqSt A *)
-  (*       as mask_EqSt. *)
-  (* Proof. *)
-  (*   revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs. *)
-  (*   unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs'; *)
-  (*     constructor; inv Ers; inv Exs; *)
-  (*       simpl in *; try discriminate; *)
-  (*         destruct k as [|[]]; auto; try reflexivity. *)
-  (* Qed. *)
+  Add Parametric Morphism A opaque k : (mask opaque k)
+      with signature @EqSt bool ==> @EqSt A ==> @EqSt A
+        as mask_EqSt.
+  Proof.
+    revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
+    unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
+      constructor; inv Ers; inv Exs;
+        simpl in *; try discriminate;
+          destruct k as [|[]]; auto; try reflexivity.
+  Qed.
 
   Add Parametric Morphism : count
       with signature @EqSt bool ==> @EqSt nat
@@ -830,17 +821,17 @@ Module Type NLSEMANTICSCOIND
       simpl in *; try discriminate; auto.
   Qed.
 
-  Add Parametric Morphism A k : (masked k)
-      with signature @EqSt bool ==> @EqSt A ==> @EqSt A ==> Basics.impl
-        as masked_EqSt.
-  Proof.
-    unfold masked.
-    intros rs rs' Ers xs xs' Exs ys ys' Eys M n C.
-    specialize (M n).
-    rewrite <-Exs, <-Eys.
-    apply M.
-    now rewrite Ers.
-  Qed.
+  (* Add Parametric Morphism A k : (masked k) *)
+  (*     with signature @EqSt bool ==> @EqSt A ==> @EqSt A ==> Basics.impl *)
+  (*       as masked_EqSt. *)
+  (* Proof. *)
+  (*   unfold masked. *)
+  (*   intros rs rs' Ers xs xs' Exs ys ys' Eys M n C. *)
+  (*   specialize (M n). *)
+  (*   rewrite <-Exs, <-Eys. *)
+  (*   apply M. *)
+  (*   now rewrite Ers. *)
+  (* Qed. *)
 
   Add Parametric Morphism G H : (sem_equation G H)
       with signature @EqSt bool ==> eq ==> Basics.impl
@@ -885,11 +876,9 @@ Module Type NLSEMANTICSCOIND
     unfold Basics.impl; intros f r r' Er xss xss' Exss yss yss' Eyss Sem.
     induction Sem as [? ? ? ? Sem].
     constructor.
-    intro k; specialize (Sem k); destruct Sem as (?&?&?&?&?).
-    do 2 eexists; intuition; eauto;
-      eapply Forall2_EqSt'; eauto; try solve_proper;
-        eapply Forall2_impl_In with (P:=masked k r); auto;
-          intros; now rewrite <-Er.
+    intro k; specialize (Sem k).
+    eapply mod_sem_node_morph; eauto;
+     apply map_st_EqSt; auto; apply mask_EqSt; auto.
   Qed.
 
 End NLSEMANTICSCOIND.
