@@ -357,11 +357,11 @@ Module Type NLSEMANTICSCOIND
   (* Definition masked {A} (k: nat) (rs: Stream bool) (xs xs': Stream A) := *)
   (*   forall n, Str_nth n (count rs) = k -> Str_nth n xs' = Str_nth n xs. *)
 
-  CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value)
-    : Stream (Stream value) :=
-    mask_v n rs xs ::: masks_from (n + 1) rs xs.
+  (* CoFixpoint masks_from (n: nat) (rs: Stream bool) (xs: Stream value) *)
+  (*   : Stream (Stream value) := *)
+  (*   mask_v n rs xs ::: masks_from (n + 1) rs xs. *)
 
-  Definition masks := masks_from 0.
+  (* Definition masks := masks_from 0. *)
 
   Definition same_clock (xss: list (Stream value)) : Prop :=
     forall n,

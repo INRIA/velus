@@ -61,26 +61,11 @@ Module Type NLINTERPRETOR
         end
       end.
 
-    (* Inductive sem_clock_instant: clock -> bool -> Prop := *)
-    (* | Sbase: *)
-    (*     sem_clock_instant Cbase base *)
-    (* | Son: *)
-    (*     forall ck x c b, *)
-    (*       sem_clock_instant ck true -> *)
-    (*       sem_var_instant x (present c) -> *)
-    (*       val_to_bool c = Some b -> *)
-    (*       sem_clock_instant (Con ck x b) true *)
-    (* | Son_abs1: *)
-    (*     forall ck x c, *)
-    (*       sem_clock_instant ck false -> *)
-    (*       sem_var_instant x absent -> *)
-    (*       sem_clock_instant (Con ck x c) false *)
-    (* | Son_abs2: *)
-    (*     forall ck x c b, *)
-    (*       sem_clock_instant ck true -> *)
-    (*       sem_var_instant x (present c) -> *)
-    (*       val_to_bool c = Some b -> *)
-    (*       sem_clock_instant (Con ck x (negb b)) false. *)
+    Definition interp_annotated_instant {A} (interp: bool -> Sem.R -> A -> value) (ck: clock) (a: A): value :=
+      if interp_clock_instant ck then
+        interp base R  a
+      else
+        absent.
 
     Fixpoint interp_lexp_instant (e: lexp): value :=
       match e with
@@ -120,32 +105,6 @@ Module Type NLINTERPRETOR
     Definition interp_lexps_instant (les: list lexp): list value :=
       map interp_lexp_instant les.
 
-    (* Inductive sem_laexp_instant: clock -> lexp -> value -> Prop:= *)
-    (* | SLtick: *)
-    (*     forall ck le c, *)
-    (*       sem_lexp_instant le (present c) -> *)
-    (*       sem_clock_instant ck true -> *)
-    (*       sem_laexp_instant ck le (present c) *)
-    (* | SLabs: *)
-    (*     forall ck le, *)
-    (*       sem_lexp_instant le absent -> *)
-    (*       sem_clock_instant ck false -> *)
-    (*       sem_laexp_instant ck le absent. *)
-
-    (* Inductive sem_laexps_instant: clock -> lexps -> list value -> Prop:= *)
-    (* | SLticks: *)
-    (*     forall ck ces cs vs, *)
-    (*       vs = map present cs -> *)
-    (*       sem_lexps_instant ces vs -> *)
-    (*       sem_clock_instant ck true -> *)
-    (*       sem_laexps_instant ck ces vs *)
-    (* | SLabss: *)
-    (*     forall ck ces vs, *)
-    (*       vs = map (fun _ => absent) ces -> *)
-    (*       sem_lexps_instant ces vs -> *)
-    (*       sem_clock_instant ck false -> *)
-    (*       sem_laexps_instant ck ces vs. *)
-
     Fixpoint interp_cexp_instant (e: cexp): value :=
       match e with
       | Emerge x t f =>
@@ -170,51 +129,6 @@ Module Type NLINTERPRETOR
       | Eexp e =>
         interp_lexp_instant e
       end.
-
-    (* | Site_eq: *)
-    (*     forall x t f c b ct cf, *)
-    (*       sem_lexp_instant x (present c) -> *)
-    (*       sem_cexp_instant t (present ct) -> *)
-    (*       sem_cexp_instant f (present cf) -> *)
-    (*       val_to_bool c = Some b -> *)
-    (*       sem_cexp_instant (Eite x t f) (if b then present ct else present cf) *)
-    (* | Site_abs: *)
-    (*     forall b t f, *)
-    (*       sem_lexp_instant b absent -> *)
-    (*       sem_cexp_instant t absent -> *)
-    (*       sem_cexp_instant f absent -> *)
-    (*       sem_cexp_instant (Eite b t f) absent *)
-    (* | Sexp: *)
-    (*     forall e v, *)
-    (*       sem_lexp_instant e v -> *)
-    (*       sem_cexp_instant (Eexp e) v. *)
-
-    (* Inductive sem_caexp_instant: clock -> cexp -> value -> Prop := *)
-    (* | SCtick: *)
-    (*     forall ck ce c, *)
-    (*       sem_cexp_instant ce (present c) -> *)
-    (*       sem_clock_instant ck true -> *)
-    (*       sem_caexp_instant ck ce (present c) *)
-    (* | SCabs: *)
-    (*     forall ck ce, *)
-    (*       sem_cexp_instant ce absent -> *)
-    (*       sem_clock_instant ck false -> *)
-    (*       sem_caexp_instant ck ce absent. *)
-
-    (* Inductive rhs_absent_instant: equation -> Prop := *)
-    (* | AEqDef: *)
-    (*     forall x ck cae, *)
-    (*       sem_caexp_instant ck cae absent -> *)
-    (*       rhs_absent_instant (EqDef x ck cae) *)
-    (* | AEqApp: *)
-    (*     forall x f ck laes vs r, *)
-    (*       sem_laexps_instant ck laes vs -> *)
-    (*       Forall (fun c => c = absent) vs -> *)
-    (*       rhs_absent_instant (EqApp x ck f laes r) *)
-    (* | AEqFby: *)
-    (*     forall x ck v0 lae, *)
-    (*       sem_laexp_instant ck lae absent -> *)
-    (*       rhs_absent_instant (EqFby x ck v0 lae). *)
 
     Lemma interp_var_instant_sound:
       forall x v,
@@ -298,14 +212,6 @@ Module Type NLINTERPRETOR
     Variable bk : stream bool.
     Variable H: history.
 
-    (* Definition restr H (n: nat): R := *)
-    (*   PM.map (fun xs => xs n) H. *)
-    (* Hint Unfold restr. *)
-
-    (* Definition lift1 {A B} (f : A -> B) (s : stream A) : stream B *)
-    (*     := fun n => f (s n). *)
-    (* Hint Unfold lift1. *)
-
     Definition lift {A B} (interp: bool -> R -> A -> B) x: stream B :=
       fun n => interp (bk n) (restr H n) x.
     Hint Unfold lift.
@@ -315,16 +221,6 @@ Module Type NLINTERPRETOR
 
     Definition interp_var (x: ident): stream value :=
       lift (fun base => interp_var_instant) x.
-
-    (* Definition sem_vars H (x: idents)(xs: stream (list value)): Prop := *)
-    (*   lift (fun base R => Forall2 (sem_var_instant R)) H x xs. *)
-
-    (* Definition sem_laexp H ck (e: lexp)(xs: stream value): Prop := *)
-    (*   lift (fun base R => sem_laexp_instant base R ck) H e xs. *)
-
-    (* Definition sem_laexps *)
-    (*     H (ck: clock)(e: lexps)(xs: stream (list value)): Prop := *)
-    (*   lift (fun base R => sem_laexps_instant base R ck) H e xs. *)
 
     Definition interp_lexp (e: lexp): stream value :=
       lift interp_lexp_instant e.
@@ -352,42 +248,11 @@ Module Type NLINTERPRETOR
         rewrite <-H2; simpl; auto.
     Qed.
 
-    (* Definition sem_caexp H ck (c: cexp)(xs: stream value): Prop := *)
-    (*   lift (fun base R => sem_caexp_instant base R ck) H c xs. *)
-
     Definition interp_cexp (e: cexp): stream value :=
       lift interp_cexp_instant e.
 
-    (* Definition sound {A B} H (x: A) (xs: stream B) *)
-    (*            (sem: history -> A -> stream B -> Prop) *)
-    (*            (interp: history -> A -> stream B) := *)
-    (*   sem H x xs -> *)
-    (*   forall n, interp H x n = xs n. *)
-
-    (* Lemma lift_sound: *)
-    (*   forall {A B} H (x: A) (xs: stream B) (sem: bool -> R -> A -> B -> Prop) (interp: bool -> R -> A -> B), *)
-    (*     (forall b R v, sem b R x v -> v = interp b R x) -> *)
-    (*     sound H x xs (Sem.lift bk sem) (lift interp). *)
-    (* Proof. *)
-    (*   unfold Sem.lift, lift; intros ** Sound Sem n. *)
-    (*   now specialize (Sem n); apply Sound in Sem. *)
-    (* Qed. *)
-
-    (* Lemma interp_var_sound: *)
-    (*   forall H x xs, *)
-    (*     sound H x xs (sem_var bk) interp_var. *)
-    (* Proof. *)
-    (*   intros; apply lift_sound; intros. *)
-    (*   now apply interp_var_instant_sound. *)
-    (* Qed. *)
-
-    (* Lemma interp_lexp_sound: *)
-    (*   forall H e es, *)
-    (*     sound H e es (sem_lexp bk) interp_lexp. *)
-    (* Proof. *)
-    (*   intros; apply lift_sound; intros. *)
-    (*   now apply interp_lexp_instant_sound. *)
-    (* Qed. *)
+    Definition interp_annotated {A} (interp_instant: bool -> R -> A -> value) (ck: clock) (a: A): stream value :=
+      lift (fun base R => interp_annotated_instant base R interp_instant ck) a.
 
   End LiftInterpretor.
 

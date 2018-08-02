@@ -728,7 +728,7 @@ dataflow memory for which the non-standard semantics holds true.
             destruct (Hmsem' 0) as (? & Hmsem'' & ?);
               inversion_clear Hmsem'' as [?????????? Hout].
             exists n; split; auto.
-            - unfold sem_vars, lift in Hout; specialize (Hout 0).
+            - unfold sem_vars, Sem.lift in Hout; specialize (Hout 0).
               apply Forall2_length in Hout; rewrite Hout.
               rewrite mask_length; auto.
               inversion_clear Hsem' as [???? Hsem].
@@ -779,6 +779,60 @@ dataflow memory for which the non-standard semantics holds true.
       + inversion_clear Hwsch.
         apply msem_equation_madd_mem; eauto.
   Qed.
+
+  (* Fixpoint interp_equation (G: global) (bk: cstream) (H: history) (eq: equation) (M: memories) {struct eq}: memories := *)
+  (*   match eq with *)
+  (*   | EqDef x ck ce => *)
+  (*     M *)
+
+  (*   | EqApp xs ck f arg None => *)
+  (*     fun n => *)
+  (*       match hd_error xs with *)
+  (*       | Some x => *)
+  (*         match mfind_inst x (M n) with *)
+  (*         | Some M' => *)
+  (*           let M' := interp_node G f M' in *)
+  (*           madd_obj x M' (M n) *)
+  (*         | None => *)
+  (*           empty_memory _ *)
+  (*         end *)
+  (*     | None => *)
+  (*       empty_memory _ *)
+  (*     end *)
+
+  (*   | EqApp xs ck f arg (Some (r, ck_r)) => *)
+  (*     let rs := interp_annotated bk H (fun _ => interp_var_instant) ck_r r in *)
+  (*     fun n => *)
+  (*       match hd_error xs with *)
+  (*       | Some x => *)
+  (*         match mfind_inst x (M n) with *)
+  (*         | Some M' => *)
+  (*           let M' := interp_reset G f (reset_of rs n) M' in *)
+  (*           madd_obj x M' (M n) *)
+  (*         | None => *)
+  (*           empty_memory _ *)
+  (*         end *)
+  (*     | None => *)
+  (*       empty_memory _ *)
+  (*     end *)
+
+  (*   | EqFby x ck c0 le => *)
+  (*     let ls := interp_annotated bk H interp_lexp_instant ck le in *)
+  (*     add_mems x (hold (sem_const c0) ls) M *)
+  (*   end *)
+
+  (* with interp_node (G: global) (f: ident) (M: memory val): memory val := *)
+  (*        match find_node f G with *)
+  (*        | Some n => *)
+  (*          List.fold_left (interp_equation G   *)
+  (*          empty_memory _ *)
+  (*        | None => *)
+  (*          empty_memory _ *)
+  (*        end *)
+
+  (* with interp_reset (G: global) (f: ident) (r: bool) (M: memory val): memory val := *)
+  (*        interp_node G f M *)
+  (* . *)
 
   (* XXX: for this lemma, and the ones before/after it, factorize 'G',
 'bk' and possibly other variables in a Section *)

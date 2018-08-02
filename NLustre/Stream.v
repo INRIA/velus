@@ -88,13 +88,16 @@ if the clocked stream is [absent] at the corresponding instant. *)
       end.
 
   (** Count the number of resets ticks seen at [n] so far. *)
+  (* Fixpoint count (rs: cstream) (n: nat) : nat := *)
+  (*   match n, rs n with *)
+  (*   | 0, false => 0 *)
+  (*   | 0, true => 1 *)
+  (*   | S m, false => count rs m *)
+  (*   | S m, true => S (count rs m) *)
+  (*   end. *)
   Fixpoint count (rs: cstream) (n: nat) : nat :=
-    match n, rs n with
-    | 0, false => 0
-    | 0, true => 1
-    | S m, false => count rs m
-    | S m, true => S (count rs m)
-    end.
+    let c := match n with 0 => 0 | S n => count rs n end in
+    if rs n then S c else c.
 
   (** [mask o k rs xs] is the stream which clips the stream [xs] between
       the [k]th and the [(k+1)]th reset, outputting [o] everywhere else. *)

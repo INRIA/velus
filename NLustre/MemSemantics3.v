@@ -19,6 +19,7 @@ Require Import Velus.NLustre.WellFormed.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.NoDup.
+Require Import Velus.NLustre.NLInterpretor.
 
 Set Implicit Arguments.
 
@@ -67,7 +68,8 @@ Module Type MEMSEMANTICS
        (Import IsV   : ISVARIABLE  Ids Op       Clks Syn         Mem IsD)
        (Import IsF   : ISFREE      Ids Op       Clks Syn)
        (Import NoD   : NODUP       Ids Op       Clks Syn         Mem IsD IsV)
-       (Import WeF   : WELLFORMED  Ids Op       Clks Syn     Ord Mem IsD IsV IsF NoD).
+       (Import WeF   : WELLFORMED  Ids Op       Clks Syn     Ord Mem IsD IsV IsF NoD)
+       (Import Interp: NLINTERPRETOR Ids Op OpAux Clks Syn Str Ord Sem).
 
   Definition memory := memory (stream val).
 
@@ -232,7 +234,7 @@ Module Type MEMSEMANTICS
           mfind_inst x M = Some M' ->
           sem_laexps bk H ck arg ls ->
           sem_vars bk H xs xss ->
-          sem_var bk H y ys ->
+          sem_avar bk H ck_r y ys ->
           msem_reset f (reset_of ys) ls M' xss ->
           msem_equation bk H M (EqApp xs ck f arg (Some (y, ck_r)))
     | SEqFby:
@@ -307,7 +309,7 @@ enough: it does not support the internal fixpoint introduced by
         mfind_inst x M = Some M' ->
         sem_laexps bk H ck arg ls ->
         sem_vars bk H xs xss ->
-        sem_var bk H y ys ->
+        sem_avar bk H ck_r y ys ->
         msem_reset G f (reset_of ys) ls M' xss ->
         P_reset f (reset_of ys) ls M' xss ->
         P_equation bk H M (EqApp xs ck f arg (Some (y, ck_r))).
@@ -836,7 +838,7 @@ dataflow memory for which the non-standard semantics holds true.
             inversion_clear Hmsem as [? ? ? ? ? Hmsem'].
             specialize (Hmsem' 0); inv Hmsem'.
             exists n; split; auto.
-            - unfold sem_vars, lift in H9; specialize (H9 0).
+            - unfold sem_vars, Sem.lift in H9; specialize (H9 0).
               apply Forall2_length in H9; rewrite H9.
               rewrite mask_length; auto.
               inversion_clear Hsem' as [? ? ? ? Hsem].
@@ -908,6 +910,59 @@ dataflow memory for which the non-standard semantics holds true.
       as [M Heqs]; eauto.
     eapply sem_msem_eq; eauto.
   Qed.
+
+  Fixpoint interp_equation (G: global) (bk: cstream) (H: history) (M: memory) (eq: equation) {struct eq}: memory :=
+    match eq with
+    | EqDef x ck ce =>
+      M
+
+    | EqApp xs ck f arg None =>
+     match hd_error xs with
+     | Some x =>
+       match mfind_inst x M with
+       | Some M' =>
+         let xss := interp_lexps bk H arg in
+         let M' := interp_node G f xss M' in
+         madd_obj x M' M
+       | None =>
+         empty_memory _
+       end
+     | None =>
+       empty_memory _
+     end
+
+    | EqApp xs ck f arg (Some (r, ck_r)) =>
+      let rs := interp_annotated bk H (fun _ => interp_var_instant) ck_r r in
+      match hd_error xs with
+      | Some x =>
+        match mfind_inst x M with
+        | Some M' =>
+          let M' := interp_reset G f (reset_of rs) M' in
+          madd_obj x M' M
+        | None =>
+          empty_memory _
+        end
+      | None =>
+        empty_memory _
+      end
+
+    | EqFby x ck c0 le =>
+      let ls := interp_annotated bk H interp_lexp_instant ck le in
+      madd_mem x (hold (sem_const c0) ls) M
+    end
+
+  with interp_node (G: global) (f: ident) (xss: stream (list value)) (M: memory): memory :=
+         match find_node f G with
+         | Some n =>
+           let bk := clock_of' xss in
+           fold_left (interp_equation G bk H) n.(n_eqs) M
+         | None =>
+           empty_memory _
+         end
+
+  with interp_reset (G: global) (f: ident) (r: cstream) (M: memory): memory :=
+         interp_node G f M
+  .
 
   Theorem sem_msem_node:
     forall G f xs ys,
