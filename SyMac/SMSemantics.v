@@ -11,9 +11,10 @@ Open Scope list_scope.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.RMemory.
 Require Import Velus.SyMac.SMSyntax.
 (* Require Import Velus.NLustre.Ordered. *)
-Require Import Velus.NLustre.Streams.
+Require Import Velus.NLustre.Stream.
 
 
 Module Type SMSEMANTICS
@@ -22,362 +23,395 @@ Module Type SMSEMANTICS
        (Import OpAux : OPERATORS_AUX Op)
        (Import Clks  : CLOCKS    Ids)
        (Import Syn   : SMSYNTAX  Ids Op Clks)
-       (* (Import Ord   : ORDERED   Ids Op Clks Syn) *)
-.
+       (Import Str   : STREAM        Op OpAux).
 
-  Definition History := PM.t (Stream value).
+  Record residual_v :=
+    Residual_v {
+        last_v: val;
+        inter_v: list value
+      }.
+  Record residual :=
+    Residual {
+        last: stream val;
+        inter: list (stream value)
+      }.
 
-  Definition History_tl (H: History) : History := PM.map (@tl value) H.
+  Fixpoint get_last_v (last_v: val) (inter_v: list value): val :=
+    match inter_v with
+    | [] => last_v
+    | vs :: inter_v =>
+      match vs with
+      | absent => get_last_v last_v inter_v
+      | present v => v
+      end
+    end.
 
-  CoFixpoint const (c: const) (b: Stream bool): Stream value :=
-    (if hd b then present (sem_const c) else absent) ::: const c (tl b).
+  Fixpoint get_last (last: stream val) (inter: list (stream value)) (n: nat): val :=
+    match inter with
+    | [] => last n
+    | vs :: inter =>
+      match vs n with
+      | absent => get_last last inter n
+      | present v => v
+      end
+    end.
 
-  Inductive sem_var: History -> ident -> Stream value -> Prop :=
-    sem_var_intro:
-      forall H x xs xs',
-        PM.MapsTo x xs' H ->
-        xs ≡ xs' ->
-        sem_var H x xs.
+  Definition env := PM.t value.
+  Definition history := PM.t (stream value).
 
-  Remark MapsTo_sem_var:
-    forall H x xs,
-      PM.MapsTo x xs H ->
-      sem_var H x xs.
-  Proof. econstructor; eauto; reflexivity. Qed.
+  Definition memory := RMemory.memory residual_v.
+  Definition memories := RMemory.memory residual.
 
-  CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
-  | WhenA:
-      forall xs cs rs,
-        when k xs cs rs ->
-        when k (absent ::: xs) (absent ::: cs) (absent ::: rs)
-  | WhenPA:
-      forall x c xs cs rs,
-        when k xs cs rs ->
-        val_to_bool c = Some (negb k) ->
-        when k (present x ::: xs) (present c ::: cs) (absent ::: rs)
-  | WhenPP:
-      forall x c xs cs rs,
-        when k xs cs rs ->
-        val_to_bool c = Some k ->
-        when k (present x ::: xs) (present c ::: cs) (present x ::: rs).
+  (** ** Instantaneous semantics *)
 
-  CoInductive lift1 (op: unop) (ty: type): Stream value -> Stream value -> Prop :=
-  | Lift1A:
-      forall xs rs,
-        lift1 op ty xs rs ->
-        lift1 op ty (absent ::: xs) (absent ::: rs)
-  | Lift1P:
-      forall x r xs rs,
-        sem_unop op x ty = Some r ->
-        lift1 op ty xs rs ->
-        lift1 op ty (present x ::: xs) (present r ::: rs).
+  Section InstantSemantics.
 
-  CoInductive lift2 (op: binop) (ty1 ty2: type)
-    : Stream value -> Stream value -> Stream value -> Prop :=
-  | Lift2A:
-      forall xs ys rs,
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (absent ::: xs) (absent ::: ys) (absent ::: rs)
-  | Lift2P:
-      forall x y r xs ys rs,
-        sem_binop op x ty1 y ty2 = Some r ->
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (present x ::: xs) (present y ::: ys) (present r ::: rs).
+    Variable base : bool.
+    Variable R: env.
+    Variable m: memory.
 
-  CoInductive merge
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | MergeA:
-      forall xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (absent ::: xs) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | MergeT:
-      forall t xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present true_val ::: xs)
-              (present t ::: ts) (absent ::: fs) (present t ::: rs)
-  | MergeF:
-      forall f xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present false_val ::: xs)
-              (absent ::: ts) (present f ::: fs) (present f ::: rs).
+    Inductive sem_var_instant: ident -> value -> Prop :=
+      Sv:
+        forall x v,
+          PM.find x R = Some v ->
+          sem_var_instant x v.
 
-  CoInductive ite
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | IteA:
-      forall s ts fs rs,
-        ite s ts fs rs ->
-        ite (absent ::: s) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | IteT:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present true_val ::: s)
-              (present t ::: ts) (present f ::: fs) (present t ::: rs)
-  | IteF:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present false_val ::: s)
-              (present t ::: ts) (present f ::: fs) (present f ::: rs).
+    Inductive sem_res_var_instant: ident -> bool -> value -> Prop :=
+      Srv:
+        forall x b v r,
+          mfind_mem x m = Some r ->
+          v = get_last_v r.(last_v) r.(inter_v) ->
+          sem_res_var_instant x b (if b then present v else absent).
 
-  CoInductive sem_clock: History -> Stream bool -> clock -> Stream bool -> Prop :=
-  | Sbase:
-      forall H b b',
-        b ≡ b' ->
-        sem_clock H b Cbase b'
-  | Son:
-      forall H b bk bs ck x k xs c,
-        sem_clock H b ck (true ::: bk) ->
-        sem_var H x (present c ::: xs) ->
-        val_to_bool c = Some k ->
-        sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (true ::: bs)
-  | Son_abs1:
-      forall H b bk bs ck x k xs,
-        sem_clock H b ck (false ::: bk) ->
-        sem_var H x (absent ::: xs) ->
-        sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (false ::: bs)
-  | Son_abs2:
-      forall H b bk bs ck x k c xs,
-        sem_clock H b ck (true ::: bk) ->
-        sem_var H x (present c ::: xs) ->
-        val_to_bool c = Some k ->
-        sem_clock (History_tl H) (tl b) (Con ck x (negb k)) bs ->
-        sem_clock H b (Con ck x (negb k)) (false ::: bs).
+    Inductive sem_clock_instant: clock -> bool -> Prop :=
+    | Sbase:
+        sem_clock_instant Cbase base
+    | Son:
+        forall ck x c b,
+          sem_clock_instant ck true ->
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
+          sem_clock_instant (Con ck x b) true
+    | Son_abs1:
+        forall ck x c,
+          sem_clock_instant ck false ->
+          sem_var_instant x absent ->
+          sem_clock_instant (Con ck x c) false
+    | Son_abs2:
+        forall ck x c b,
+          sem_clock_instant ck true ->
+          sem_var_instant x (present c) ->
+          val_to_bool c = Some b ->
+          sem_clock_instant (Con ck x (negb b)) false.
 
-  Inductive sem_lexp: History -> Stream bool -> lexp -> Stream value -> Prop :=
-  | Sconst:
-      forall H b c cs,
-        cs ≡ const c b ->
-        sem_lexp H b (Econst c) cs
-  | Svar:
-      forall H b x ty xs,
-        sem_var H x xs ->
-        sem_lexp H b (Evar x ty) xs
-  | Swhen:
-      forall H b e x k es xs os,
-        sem_lexp H b e es ->
-        sem_var H x xs ->
-        when k es xs os ->
-        sem_lexp H b (Ewhen e x k) os
-  | Sunop:
-      forall H b op e ty es os,
-        sem_lexp H b e es ->
-        lift1 op (typeof e) es os ->
-        sem_lexp H b (Eunop op e ty) os
-  | Sbinop:
-      forall H b op e1 e2 ty es1 es2 os,
-        sem_lexp H b e1 es1 ->
-        sem_lexp H b e2 es2 ->
-        lift2 op (typeof e1) (typeof e2) es1 es2 os ->
-        sem_lexp H b (Ebinop op e1 e2 ty) os.
+    Inductive sem_lexp_instant: lexp -> value -> Prop:=
+    | Sconst:
+        forall c v,
+          v = (if base then present (sem_const c) else absent) ->
+          sem_lexp_instant (Econst c) v
+    | Svar:
+        forall x v ty,
+          sem_var_instant x v ->
+          sem_lexp_instant (Evar x ty) v
+    | Slast:
+        forall x ck b v ty,
+          sem_clock_instant ck b ->
+          sem_res_var_instant x b v ->
+          sem_lexp_instant (Elast x ck ty) v
+    | Swhen_eq:
+        forall s x sc xc b,
+          sem_var_instant x (present xc) ->
+          sem_lexp_instant s (present sc) ->
+          val_to_bool xc = Some b ->
+          sem_lexp_instant (Ewhen s x b) (present sc)
+    | Swhen_abs1:
+        forall s x sc xc b,
+          sem_var_instant x (present xc) ->
+          val_to_bool xc = Some b ->
+          sem_lexp_instant s (present sc) ->
+          sem_lexp_instant (Ewhen s x (negb b)) absent
+    | Swhen_abs:
+        forall s x b,
+          sem_var_instant x absent ->
+          sem_lexp_instant s absent ->
+          sem_lexp_instant (Ewhen s x b) absent
+    | Sunop_eq:
+        forall le op c c' ty,
+          sem_lexp_instant le (present c) ->
+          sem_unop op c (typeof le) = Some c' ->
+          sem_lexp_instant (Eunop op le ty) (present c')
+    | Sunop_abs:
+        forall le op ty,
+          sem_lexp_instant le absent ->
+          sem_lexp_instant (Eunop op le ty) absent
+    | Sbinop_eq:
+        forall le1 le2 op c1 c2 c' ty,
+          sem_lexp_instant le1 (present c1) ->
+          sem_lexp_instant le2 (present c2) ->
+          sem_binop op c1 (typeof le1) c2 (typeof le2) = Some c' ->
+          sem_lexp_instant (Ebinop op le1 le2 ty) (present c')
+    | Sbinop_abs:
+        forall le1 le2 op ty,
+          sem_lexp_instant le1 absent ->
+          sem_lexp_instant le2 absent ->
+          sem_lexp_instant (Ebinop op le1 le2 ty) absent.
 
-  Inductive sem_cexp: History -> Stream bool -> cexp -> Stream value -> Prop :=
-  | Smerge:
-      forall H b x t f xs ts fs os,
-        sem_var H x xs ->
-        sem_cexp H b t ts ->
-        sem_cexp H b f fs ->
-        merge xs ts fs os ->
-        sem_cexp H b (Emerge x t f) os
-  | Site:
-      forall H b e t f es ts fs os,
-        sem_lexp H b e es ->
-        sem_cexp H b t ts ->
-        sem_cexp H b f fs ->
-        ite es ts fs os ->
-        sem_cexp H b (Eite e t f) os
-  | Sexp:
-      forall H b e es,
-        sem_lexp H b e es ->
-        sem_cexp H b (Eexp e) es.
+    Definition sem_lexps_instant (les: list lexp) (vs: list value) :=
+      Forall2 sem_lexp_instant les vs.
 
-  CoInductive sem_avar: History -> Stream bool -> clock -> ident -> Stream value -> Prop :=
-  | SVtick:
-      forall H b ck x v vs bs,
-        sem_var H x (present v ::: vs) ->
-        sem_clock H b ck (true ::: bs) ->
-        sem_avar (History_tl H) (tl b) ck x vs ->
-        sem_avar H b ck x (present v ::: vs)
-  | SVabs:
-      forall H b ck x vs bs,
-        sem_var H x (absent ::: vs) ->
-        sem_clock H b ck (false ::: bs) ->
-        sem_avar (History_tl H) (tl b) ck x vs ->
-        sem_avar H b ck x (absent ::: vs).
+    Inductive sem_cexp_instant: cexp -> value -> Prop :=
+    | Smerge_true:
+        forall x t f c,
+          sem_var_instant x (present true_val) ->
+          sem_cexp_instant t (present c) ->
+          sem_cexp_instant f absent ->
+          sem_cexp_instant (Emerge x t f) (present c)
+    | Smerge_false:
+        forall x t f c,
+          sem_var_instant x (present false_val) ->
+          sem_cexp_instant t absent ->
+          sem_cexp_instant f (present c) ->
+          sem_cexp_instant (Emerge x t f) (present c)
+    | Smerge_abs:
+        forall x t f,
+          sem_var_instant x absent ->
+          sem_cexp_instant t absent ->
+          sem_cexp_instant f absent ->
+          sem_cexp_instant (Emerge x t f) absent
+    | Site_eq:
+        forall x t f c b ct cf,
+          sem_lexp_instant x (present c) ->
+          sem_cexp_instant t (present ct) ->
+          sem_cexp_instant f (present cf) ->
+          val_to_bool c = Some b ->
+          sem_cexp_instant (Eite x t f) (if b then present ct else present cf)
+    | Site_abs:
+        forall b t f,
+          sem_lexp_instant b absent ->
+          sem_cexp_instant t absent ->
+          sem_cexp_instant f absent ->
+          sem_cexp_instant (Eite b t f) absent
+    | Sexp:
+        forall e v,
+          sem_lexp_instant e v ->
+          sem_cexp_instant (Eexp e) v.
 
-  CoInductive sem_aexp {A} (sem: History -> Stream bool -> A -> Stream value -> Prop):
-    History -> Stream bool -> clock -> A -> Stream value -> Prop :=
-  | Stick:
-      forall H b ck a e es bs,
-        sem H b a (present e ::: es) ->
-        sem_clock H b ck (true ::: bs) ->
-        sem_aexp sem (History_tl H) (tl b) ck a es ->
-        sem_aexp sem H b ck a (present e ::: es)
-  | Sabs:
-      forall H b ck a es bs,
-        sem H b a (absent ::: es) ->
-        sem_clock H b ck (false ::: bs) ->
-        sem_aexp sem (History_tl H) (tl b) ck a es ->
-        sem_aexp sem H b ck a (absent ::: es).
+    (* Inductive rhs_absent_instant: equation -> Prop := *)
+    (* | AEqDef: *)
+    (*     forall x ck cae, *)
+    (*       sem_caexp_instant ck cae absent -> *)
+    (*       rhs_absent_instant (EqDef x ck cae) *)
+    (* | AEqApp: *)
+    (*     forall x f ck laes vs, *)
+    (*       sem_laexps_instant ck laes vs -> *)
+    (*       absent_list vs -> *)
+    (*       rhs_absent_instant (EqApp x ck f laes None) *)
+    (* | AEqReset: *)
+    (*     forall x f ck laes vs r ck_r, *)
+    (*       sem_laexps_instant ck laes vs -> *)
+    (*       absent_list vs -> *)
+    (*       (* sem_avar_instant ck_r r absent -> *) *)
+    (*       rhs_absent_instant (EqApp x ck f laes (Some (r, ck_r))) *)
+    (* | AEqFby: *)
+    (*     forall x ck v0 lae, *)
+    (*       sem_laexp_instant ck lae absent -> *)
+    (*       rhs_absent_instant (EqFby x ck v0 lae). *)
 
-  Definition sem_laexp := sem_aexp sem_lexp.
-  Definition sem_caexp := sem_aexp sem_cexp.
+  End InstantSemantics.
 
-  CoInductive sem_laexps: History -> Stream bool -> clock -> list lexp -> list (Stream value) -> Prop :=
-  | SLsTick:
-      forall H b ck les ess bs,
-        Forall2 (sem_lexp H b) les ess ->
-        Forall (fun es => hd es <> absent) ess ->
-        sem_clock H b ck (true ::: bs) ->
-        sem_laexps (History_tl H) (tl b) ck les (List.map (@tl value) ess) ->
-        sem_laexps H b ck les ess
-  | SLsAbs:
-      forall H b ck les ess bs,
-        Forall2 (sem_lexp H b) les ess ->
-        Forall (fun es => hd es = absent) ess ->
-        sem_clock H b ck (false ::: bs) ->
-        sem_laexps (History_tl H) (tl b) ck les (List.map (@tl value) ess) ->
-        sem_laexps H b ck les ess.
+  Section InstantAnnotatedSemantics.
+    Variable base : bool.
+    Variable R: env.
+    Variable M: memory.
 
-  Lemma sem_laexps_cons:
-     forall H b ck le les es ess,
-        sem_laexps H b ck (le :: les) (es :: ess) ->
-        sem_laexps H b ck les ess.
-  Proof.
-    cofix Cofix; intros ** Sem.
-    inversion_clear Sem as [? ? ? ? ? ? F2 F1|? ? ? ? ? ? F2 F1]; inv F2; inv F1.
-    - eleft; eauto.
-    - eright; eauto.
-  Qed.
+    Inductive sem_annotated_instant {A} (sem_instant: bool -> env -> memory -> A -> value -> Prop)
+      : clock -> A -> value -> Prop :=
+    | Stick:
+        forall ck a c,
+          sem_instant base R M a (present c) ->
+          sem_clock_instant base R ck true ->
+          sem_annotated_instant sem_instant ck a (present c)
+    | Sabs:
+        forall ck a,
+          sem_instant base R M a absent ->
+          sem_clock_instant base R ck false ->
+          sem_annotated_instant sem_instant ck a absent.
 
-  Section NodeSemantics.
+    Definition sem_laexp_instant := sem_annotated_instant sem_lexp_instant.
+    Definition sem_caexp_instant := sem_annotated_instant sem_cexp_instant.
 
-    Variable G: global.
+    Inductive sem_laexps_instant: clock -> list lexp -> list value -> Prop:=
+    | SLticks:
+        forall ck ces cs vs,
+          vs = map present cs ->
+          sem_lexps_instant base R M ces vs ->
+          sem_clock_instant base R ck true ->
+          sem_laexps_instant ck ces vs
+    | SLabss:
+        forall ck ces vs,
+          vs = all_absent ces ->
+          sem_lexps_instant base R M ces vs ->
+          sem_clock_instant base R ck false ->
+          sem_laexps_instant ck ces vs.
 
-    Inductive sem_equation: History -> Stream bool -> equation -> Prop :=
-    | SeqDef:
-        forall H b x ck e es,
-          sem_caexp H b ck e es ->
-          sem_var H x es ->
-          sem_equation H b (EqDef x ck e)
-    | SeqApp:
-        forall H b ys ck f es ess oss,
-          sem_laexps H b ck es ess ->
-          sem_node f ess oss ->
-          Forall2 (sem_var H) ys oss ->
-          sem_equation H b (EqApp ys ck f es None)
-    | SeqReset:
-        forall H b ys ck f es r ck_r rs ess oss,
-          sem_laexps H b ck es ess ->
-          sem_avar H b ck_r r rs ->
-          sem_reset f (reset_of rs) ess oss ->
-          Forall2 (sem_var H) ys oss ->
-          sem_equation H b (EqApp ys ck f es (Some (r, ck_r)))
-    | SeqFby:
-        forall H b x ck c0 e es os,
-          sem_laexp H b ck e es ->
-          os = fby (sem_const c0) es ->
-          sem_var H x os ->
-          sem_equation H b (EqFby x ck c0 e)
+  End InstantAnnotatedSemantics.
 
-    with
-    sem_reset
-    : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
-      SReset:
-        forall f r xss yss,
-          (forall k, sem_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
-          sem_reset f r xss yss
+  (** ** Liftings of instantaneous semantics *)
 
-    with
-    sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
-      SNode:
-        forall H f n xss oss,
-          find_node f G = Some n ->
-          Forall2 (sem_var H) (idents n.(n_in)) xss ->
-          Forall2 (sem_var H) (idents n.(n_out)) oss ->
-          same_clock (xss ++ oss) ->
-          Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
-          sem_node f xss oss.
+  Section LiftSemantics.
 
-  End NodeSemantics.
+    Variable bk : stream bool.
+    Variable H : history.
+    Variable M: memories.
 
-  Section SemInd.
+    Definition restr_hist (n: nat): env :=
+      PM.map (fun xs => xs n) H.
+    Hint Unfold restr_hist.
 
-    Variable G: global.
+    Definition restr_mem (n: nat): memory :=
+      mmap (fun r => Residual_v (r.(last) n) (List.map (fun xs => xs n) r.(inter))) M.
+    Hint Unfold restr_mem.
 
-    Variable P_equation: History -> Stream bool -> equation -> Prop.
-    Variable P_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop.
-    Variable P_node: ident -> list (Stream value) -> list (Stream value) -> Prop.
+    Definition lift {A B} (sem: bool -> env -> memory -> A -> B -> Prop) x (ys: stream B): Prop :=
+      forall n, sem (bk n) (restr_hist n) (restr_mem n) x (ys n).
+    Hint Unfold lift.
 
-    Hypothesis EqDefCase:
-      forall H b x ck e es,
-        sem_caexp H b ck e es ->
-        sem_var H x es ->
-        P_equation H b (EqDef x ck e).
+    Definition lift' {A B} (sem: bool -> env -> A -> B -> Prop) x (ys: stream B): Prop :=
+      forall n, sem (bk n) (restr_hist n) x (ys n).
+    Hint Unfold lift'.
 
-    Hypothesis EqAppCase:
-      forall H b ys ck f es ess oss,
-        sem_laexps H b ck es ess ->
-        sem_node G f ess oss ->
-        Forall2 (sem_var H) ys oss ->
-        P_node f ess oss ->
-        P_equation H b (EqApp ys ck f es None).
+    Definition lift'' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
+      forall n, sem (restr_hist n) x (ys n).
+    Hint Unfold lift''.
 
-    Hypothesis EqResetCase:
-      forall H b ys ck f es r ck_r rs ess oss,
-        sem_laexps H b ck es ess ->
-        sem_avar H b ck_r r rs ->
-        sem_reset G f (reset_of rs) ess oss ->
-        Forall2 (sem_var H) ys oss ->
-        P_reset f (reset_of rs) ess oss ->
-        P_equation H b (EqApp ys ck f es (Some (r, ck_r))).
+    Definition sem_clock (ck: clock)(xs: stream bool): Prop :=
+      lift' sem_clock_instant ck xs.
 
-    Hypothesis EqFbyCase:
-      forall H b x ck c0 e es os,
-        sem_laexp H b ck e es ->
-        os = fby (sem_const c0) es ->
-        sem_var H x os ->
-        P_equation H b (EqFby x ck c0 e).
+    Definition sem_var (x: ident)(xs: stream value): Prop :=
+      lift'' sem_var_instant x xs.
 
-    Hypothesis ResetCase:
-      forall f r xss yss,
-        (forall k, sem_node G f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)
-              /\ P_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
-        P_reset f r xss yss.
+    Definition sem_vars (x: idents)(xs: stream (list value)): Prop :=
+      lift'' (fun R => Forall2 (sem_var_instant R)) x xs.
 
-    Hypothesis NodeCase:
-      forall H f n xss oss,
-        find_node f G = Some n ->
-        Forall2 (sem_var H) (idents n.(n_in)) xss ->
-        Forall2 (sem_var H) (idents n.(n_out)) oss ->
-        same_clock (xss ++ oss) ->
-        Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
-        Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
-        P_node f xss oss.
+    Definition sem_laexp ck (e: lexp)(xs: stream value): Prop :=
+      lift (fun base R m => sem_laexp_instant base R m ck) e xs.
 
-    Fixpoint sem_equation_mult
-             (H: History) (b: Stream bool) (e: equation)
-             (Sem: sem_equation G H b e) {struct Sem}
-      : P_equation H b e
-    with sem_reset_mult
-           (f: ident) (r: Stream bool) (xss oss: list (Stream value))
-           (Sem: sem_reset G f r xss oss) {struct Sem}
-         : P_reset f r xss oss
-    with sem_node_mult
-           (f: ident) (xss oss: list (Stream value))
-           (Sem: sem_node G f xss oss) {struct Sem}
-         : P_node f xss oss.
-    Proof.
-      - destruct Sem; eauto.
-      - destruct Sem as [???? Sem]; eauto.
-      - destruct Sem; eauto.
-        eapply NodeCase; eauto.
-        induction H4; auto.
-    Qed.
+    Definition sem_laexps (ck: clock)(e: list lexp)(xs: stream (list value)): Prop :=
+      lift (fun base R m => sem_laexps_instant base R m ck) e xs.
 
-    Combined Scheme sem_equation_node_ind from
-             sem_equation_mult, sem_node_mult, sem_reset_mult.
+    Definition sem_lexp (e: lexp)(xs: stream value): Prop :=
+      lift sem_lexp_instant e xs.
 
-  End SemInd.
+    Definition sem_lexps (e: list lexp)(xs: stream (list value)): Prop :=
+      lift sem_lexps_instant e xs.
+
+    Definition sem_caexp ck (c: cexp)(xs: stream value): Prop :=
+      lift (fun base R m => sem_caexp_instant base R m ck) c xs.
+
+    Definition sem_cexp (c: cexp)(xs: stream value): Prop :=
+      lift sem_cexp_instant c xs.
+
+  End LiftSemantics.
+
+  (** ** Time-dependent semantics *)
+
+  Definition instant_same_clock (l : list value) : Prop :=
+    absent_list l \/ present_list l.
+
+  Definition same_clock (l_s : stream (list value)) : Prop :=
+    forall n, instant_same_clock (l_s n).
+
+  Definition clock_of (xss: stream (list value))(bs: stream bool): Prop :=
+    forall n,
+      present_list (xss n) <-> bs n = true.
+
+  (* Definition clock_of' (xss: stream (list value)) : stream bool := *)
+  (*   fun n => forallb (fun v => negb (v ==b absent)) (xss n). *)
+
+  (* Lemma clock_of_equiv: *)
+  (*   forall xss, clock_of xss (clock_of' xss). *)
+  (* Proof. *)
+  (*   split; intros H. *)
+  (*   - unfold clock_of'. *)
+  (*     rewrite forallb_forall. *)
+  (*     intros; rewrite Bool.negb_true_iff. *)
+  (*     rewrite not_equiv_decb_equiv. *)
+  (*     eapply In_Forall in H; eauto. *)
+  (*   - unfold clock_of' in H. *)
+  (*     rewrite forallb_forall in H. *)
+  (*     apply all_In_Forall; intros ** Hin E. *)
+  (*     specialize (H _ Hin). *)
+  (*     rewrite Bool.negb_true_iff, not_equiv_decb_equiv in H. *)
+  (*     apply H; eauto. *)
+  (* Qed. *)
+
+  Inductive next_mem: ident -> stream value -> memories -> Prop :=
+    next_mem_intro:
+      forall x xs M r,
+        mfind_mem x M = Some r ->
+        (forall n,
+            r.(last) (S n) =
+            match xs n with
+            | present v => v
+            | absent => get_last r.(last) r.(inter) n
+            end) ->
+        next_mem x xs M.
+
+  Inductive inter_mem: ident -> stream value -> memories -> memories -> Prop :=
+    inter_mem_intro:
+      forall x xs M r M',
+        mfind_mem x M = Some r ->
+        M' = madd_mem x (Residual r.(last) (xs :: r.(inter))) M ->
+        inter_mem x xs M M'.
+
+  Section ModeSemantics.
+
+    Variable P: program.
+
+    Inductive sem_equation: stream bool -> history -> memories -> memories -> equation -> Prop :=
+    | SEqDef:
+        forall bk H M x xs ck ce,
+          sem_var H x xs ->
+          sem_caexp bk H M ck ce xs ->
+          sem_equation bk H M M (EqDef x ck ce)
+    | SEqNext:
+        forall bk H M x ck ce xs,
+          sem_caexp bk H M ck ce xs ->
+          next_mem x xs M ->
+          sem_equation bk H M M (EqNext x ck ce)
+    | SEqLast:
+        forall bk H M M' x ck ce xs,
+          sem_caexp bk H M ck ce xs ->
+          inter_mem x xs M M' ->
+          sem_equation bk H M M' (EqLast x ck ce)
+    | SEqCall:
+        forall bk H M M' ys x Mx Mx' ck ma i m es ess oss,
+          sem_laexps bk H M ck es ess ->
+          hd_error ys = Some x ->
+          sub_inst x M Mx ->
+          sem_mode ma m Mx ess oss Mx' ->
+          madd_obj x Mx' M = M' ->
+          sem_vars H ys oss ->
+          sem_equation bk H M M' (EqCall ys ck ma i m es)
+
+    with sem_mode: ident -> ident -> memories -> stream (list value) -> stream (list value) -> memories -> Prop :=
+           SMode:
+             forall ma ma_n mo mo_n P' M M' H xss yss bk,
+               clock_of xss bk ->
+               find_machine ma_n P = Some (ma, P') ->
+               find_mode mo_n ma.(ma_modes) = Some mo ->
+               sem_vars H (map fst me.(m_in)) xss ->
+               sem_vars H (map fst me.(m_out)) yss ->
+               (* XXX: This should be obtained through well-clocking: *)
+               (*  * tuples are synchronised: *)
+               same_clock xss ->
+               same_clock yss ->
+               (*  * output clock matches input clock *)
+               (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
+               (* XXX: END *)
+               Forall (sem_equation bk H M M') mo.(m_eqs) ->
+               sem_mode ma_n mo_n M xss yss M'.
+
+  End ModeSemantics.
 
 End SMSEMANTICSCOIND.

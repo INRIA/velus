@@ -1,17 +1,3 @@
--R CompCert/lib compcert.lib
--R CompCert/common compcert.common
--R CompCert/ia32 compcert.ia32
--R CompCert/arm compcert.arm
--R CompCert/powerpc compcert.powerpc
--R CompCert/backend compcert.backend
--R CompCert/cfrontend compcert.cfrontend
--R CompCert/driver compcert.driver
--R CompCert/flocq compcert.flocq
--R CompCert/exportclight compcert.exportclight
--R CompCert/cparser compcert.cparser
-
--R . Velus
-
 RMemory.v
 Common.v
 Ident.v
@@ -28,13 +14,17 @@ NLustre/IsDefined.v
 NLustre/Memories.v
 NLustre/NLClocking.v
 NLustre/NLSemantics.v
+NLustre/NLSemanticsCoInd.v
+NLustre/CoIndToIndexed.v
+NLustre/IndexedToCoInd.v
 NLustre/MemSemantics.v
 NLustre/WellFormed.v
 NLustre/Ordered.v
 NLustre/NoDup.v
 NLustre/NLSchedule.v
-NLustre/NLInterpretor.v
 NLustre.v
+SyMac/SMSyntax.v
+SyMac/SMSemantics.v
 Obc/ObcSyntax.v
 Obc/ObcTyping.v
 Obc/ObcSemantics.v

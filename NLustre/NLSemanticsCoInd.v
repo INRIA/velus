@@ -33,6 +33,8 @@ Module Type NLSEMANTICSCOIND
 
   Definition idents := List.map (@fst ident (type * clock)).
 
+  Definition Memory := memory (Stream val).
+
   Definition History := PM.t (Stream value).
 
   Definition History_tl (H: History) : History := PM.map (@tl value) H.

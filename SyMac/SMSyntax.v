@@ -19,7 +19,7 @@ Module Type SMSYNTAX
   Inductive lexp :=
   | Econst : const -> lexp
   | Evar   : ident -> type -> lexp
-  | Elast  : ident -> type -> lexp
+  | Elast  : ident -> clock -> type -> lexp
   | Ewhen  : lexp -> ident -> bool -> lexp
   | Eunop  : unop -> lexp -> type -> lexp
   | Ebinop : binop -> lexp -> lexp -> type -> lexp.
@@ -35,13 +35,13 @@ Module Type SMSYNTAX
 
   Inductive equation :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqLast: ident -> clock -> const -> equation
   | EqNext: ident -> clock -> cexp -> equation
+  | EqLast: ident -> clock -> cexp -> equation
   | EqCall: idents -> clock -> ident -> ident -> ident -> list lexp -> equation.
-  (* y1, ..., yn = class instance method (e1, ..., em) *)
+  (* y1, ..., yn = class instance mode (e1, ..., em) *)
 
-  Record method :=
-    Method {
+  Record mode :=
+    Mode {
         m_name: ident;
         m_in  : list (ident * type);
         m_vars: list (ident * type);
@@ -54,7 +54,7 @@ Module Type SMSYNTAX
         ma_name   : ident;
         ma_mems   : list (ident * type);
         ma_machs  : list (ident * ident);
-        ma_methods: list method;
+        ma_modes: list mode;
         ma_policy : list (ident * nat)
       }.
 
@@ -64,11 +64,139 @@ Module Type SMSYNTAX
     match le with
     | Econst c => type_const c
     | Evar _ ty
-    | Elast _ ty
+    | Elast _ _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e
     end.
+
+  Fixpoint find_mode (m: ident) (ms: list mode): option mode :=
+    match ms with
+    | [] => None
+    | mo :: ms =>
+      if ident_eqb mo.(m_name) m
+      then Some mo else find_mode m ms
+    end.
+
+  Remark find_mode_In:
+    forall m ms mo,
+      find_mode m ms = Some mo ->
+      In mo ms.
+  Proof.
+    intros ** Hfind.
+    induction ms; inversion Hfind as [H].
+    destruct (ident_eqb (m_name a) m) eqn: E.
+    - inversion H; subst.
+      apply in_eq.
+    - auto using in_cons.
+  Qed.
+
+  Remark find_mode_name:
+    forall m ms mo,
+      find_mode m ms = Some mo ->
+      mo.(m_name) = m.
+  Proof.
+    intros ** Hfind.
+    induction ms; inversion Hfind as [H].
+    destruct (ident_eqb (m_name a) m) eqn: E.
+    - inversion H; subst.
+      now apply ident_eqb_eq.
+    - now apply IHms.
+  Qed.
+
+  Fixpoint find_machine (m: ident) (P: program) : option (machine * program) :=
+   match P with
+   | [] => None
+   | ma :: P =>
+     if ident_eqb ma.(ma_name) m
+     then Some (ma, P) else find_machine m P
+   end.
+
+  (** Properties of machine lookups *)
+
+  Lemma find_machine_none:
+    forall m ma P,
+      find_machine m (ma :: P) = None
+      <-> (ma.(ma_name) <> m /\ find_machine m P = None).
+  Proof.
+    intros.
+    simpl; destruct (ident_eqb (ma_name ma) m) eqn: E.
+    - split; intro HH; try discriminate.
+      destruct HH.
+      apply ident_eqb_eq in E; contradiction.
+    - apply ident_eqb_neq in E; split; intro HH; tauto.
+  Qed.
+
+  Remark find_machine_app:
+    forall m P ma P',
+      find_machine m P = Some (ma, P') ->
+      exists P'',
+        P = P'' ++ ma :: P'
+        /\ find_machine m P'' = None.
+  Proof.
+    intros ** Hfind.
+    induction P; inversion Hfind as [H].
+    destruct (ident_eqb (ma_name a) m) eqn: E.
+    - inversion H; subst.
+      exists nil; auto.
+    - specialize (IHP H).
+      destruct IHP as (P'' & HP'' & Hnone).
+      rewrite HP''.
+      exists (a :: P''); split; auto.
+      simpl; rewrite E; auto.
+  Qed.
+
+  Remark find_machine_name:
+    forall m P ma P',
+      find_machine m P = Some (ma, P') ->
+      ma.(ma_name) = m.
+  Proof.
+    intros ** Hfind.
+    induction P; inversion Hfind as [H].
+    destruct (ident_eqb (ma_name a) m) eqn: E.
+    - inversion H; subst.
+      now apply ident_eqb_eq.
+    - now apply IHP.
+  Qed.
+
+  Remark find_machine_In:
+    forall m P ma P',
+      find_machine m P = Some (ma, P') ->
+      In ma P.
+  Proof.
+    intros ** Hfind.
+    induction P; inversion Hfind as [H].
+    destruct (ident_eqb (ma_name a) m) eqn: E.
+    - inversion H; subst.
+      apply in_eq.
+    - apply in_cons; auto.
+  Qed.
+
+  Lemma find_machine_app':
+    forall m P P',
+      find_machine m (P ++ P') =
+      match find_machine m P with
+      | None => find_machine m P'
+      | Some (ma, P'') => Some (ma, P'' ++ P')
+      end.
+  Proof.
+    induction P as [|ma P]; simpl; auto.
+    intro; destruct (ident_eqb ma.(ma_name) m); auto.
+  Qed.
+
+  Lemma not_In_find_machine:
+    forall m P,
+      ~In m (map ma_name P) ->
+      find_machine m P = None.
+  Proof.
+    induction P as [|ma]; auto.
+    simpl; intro Hnin.
+    apply Decidable.not_or in Hnin.
+    destruct Hnin as (Hnin1 & Hnin2).
+    rewrite (IHP Hnin2).
+    apply ident_eqb_neq in Hnin1.
+    now rewrite Hnin1.
+  Qed.
 
 End SMSYNTAX.
 

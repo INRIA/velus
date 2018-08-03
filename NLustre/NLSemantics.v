@@ -31,15 +31,6 @@ Module Type NLSEMANTICS
        (Import Str   : STREAM        Op OpAux)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
-  Definition absent_list (xs: list value): Prop :=
-    Forall (fun v => v = absent) xs.
-
-  Definition present_list (xs: list value): Prop :=
-    Forall (fun v => v <> absent) xs.
-
-  Definition all_absent {A} (l: list A) : list value :=
-    map (fun _ => absent) l.
-
   (** An indexed stream of lists is well-formed when the length of the lists
       is uniform over time. *)
   Definition wf_streams {A} (xss: stream (list A)) :=
@@ -1199,52 +1190,6 @@ an absent value *)
     intros ** Abs.
     unfold mask.
     destruct (EqNat.beq_nat k (count r n)); auto.
-  Qed.
-
-  Remark all_absent_spec:
-    forall A (l: list A),
-      absent_list (all_absent l).
-  Proof.
-    induction l; simpl; constructor; auto.
-  Qed.
-
-  Remark nth_all_absent:
-    forall (xs: list value) n,
-      nth n (all_absent xs) absent = absent.
-  Proof.
-    induction xs, n; simpl; auto.
-  Qed.
-
-  Lemma absent_list_spec:
-    forall xs,
-      absent_list xs <-> xs = all_absent xs.
-  Proof.
-    induction xs; simpl; split; intro; try constructor(auto).
-    - inv H. apply f_equal. now apply IHxs.
-    - now inversion H.
-    - inversion H. rewrite <- H2. now apply IHxs.
-  Qed.
-
-  Lemma present_list_spec:
-    forall xs,
-      present_list xs <-> exists vs, xs = map present vs.
-  Proof.
-    induction xs as [| x xs IHxs].
-    - split; intro H.
-      + exists []; eauto.
-      + constructor.
-    - split; intro H.
-      + inversion H as [| ? ? Hx Hxs]; subst.
-        apply not_absent_present in Hx as [v Hv].
-        apply IHxs in Hxs as [vs Hvs].
-        exists (v :: vs). simpl.
-        congruence.
-      + destruct H as [vs Hvs].
-        destruct vs; simpl; try discriminate.
-        apply Forall_cons.
-        * intro. subst x; discriminate.
-        * eapply IHxs.
-          exists vs. now inv Hvs.
   Qed.
 
   Lemma sem_vars_gt0:
