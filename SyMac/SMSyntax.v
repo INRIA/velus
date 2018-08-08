@@ -51,11 +51,11 @@ Module Type SMSYNTAX
 
   Record machine :=
     Machine {
-        ma_name   : ident;
-        ma_mems   : list (ident * type);
-        ma_machs  : list (ident * ident);
-        ma_modes: list mode;
-        ma_policy : list (ident * nat)
+        ma_name  : ident;
+        ma_mems  : list (ident * type);
+        ma_machs : list (ident * ident);
+        ma_modes : list mode;
+        ma_policy: list (ident * nat)
       }.
 
   Definition program := list machine.
@@ -68,6 +68,14 @@ Module Type SMSYNTAX
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e
+    end.
+
+  Fixpoint find_rank (m: ident) (pol: list (ident * nat)): option nat :=
+    match pol with
+    | [] => None
+    | p :: pol =>
+      if ident_eqb (fst p) m
+      then Some (snd p) else find_rank m pol
     end.
 
   Fixpoint find_mode (m: ident) (ms: list mode): option mode :=

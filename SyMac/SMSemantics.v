@@ -368,40 +368,47 @@ Module Type SMSEMANTICS
 
     Variable P: program.
 
-    Inductive sem_equation: stream bool -> history -> memories -> memories -> equation -> Prop :=
+    Inductive sem_equation: stream bool -> history -> list memories -> list memories -> equation -> Prop :=
     | SEqDef:
-        forall bk H M x xs ck ce,
+        forall bk H Ms M Ms' x xs ck ce,
+          In M Ms ->
           sem_var H x xs ->
           sem_caexp bk H M ck ce xs ->
-          sem_equation bk H M M (EqDef x ck ce)
+          sem_equation bk H Ms Ms' (EqDef x ck ce)
     | SEqNext:
-        forall bk H M x ck ce xs,
+        forall bk H Ms M Ms' x ck ce xs,
+          In M Ms ->
           sem_caexp bk H M ck ce xs ->
           next_mem x xs M ->
-          sem_equation bk H M M (EqNext x ck ce)
+          sem_equation bk H Ms Ms' (EqNext x ck ce)
     | SEqLast:
-        forall bk H M M' x ck ce xs,
+        forall bk H Ms M Ms' M' x ck ce xs,
+          In M Ms ->
+          In M' Ms' ->
           sem_caexp bk H M ck ce xs ->
           inter_mem x xs M M' ->
-          sem_equation bk H M M' (EqLast x ck ce)
+          sem_equation bk H Ms Ms' (EqLast x ck ce)
     | SEqCall:
-        forall bk H M M' ys x Mx Mx' ck ma i m es ess oss,
+        forall bk H Ms M Ms' M' k ys x Mx Mx' ck ma_n P' ma i m es ess oss,
+          find_machine ma_n P = Some (ma, P') ->
+          find_rank m ma.(ma_policy) = Some k ->
+          nth_error Ms k = Some M ->
           sem_laexps bk H M ck es ess ->
           hd_error ys = Some x ->
           sub_inst x M Mx ->
           sem_mode ma m Mx ess oss Mx' ->
           madd_obj x Mx' M = M' ->
+          nth_error Ms' (k+1) = Some M' ->
           sem_vars H ys oss ->
-          sem_equation bk H M M' (EqCall ys ck ma i m es)
+          sem_equation bk H Ms Ms' (EqCall ys ck ma_n i m es)
 
-    with sem_mode: ident -> ident -> memories -> stream (list value) -> stream (list value) -> memories -> Prop :=
+    with sem_mode: machine -> ident -> memories -> stream (list value) -> stream (list value) -> memories -> Prop :=
            SMode:
-             forall ma ma_n mo mo_n P' M M' H xss yss bk,
+             forall ma mo mo_n Ms M Ms' M' H xss yss bk,
                clock_of xss bk ->
-               find_machine ma_n P = Some (ma, P') ->
                find_mode mo_n ma.(ma_modes) = Some mo ->
-               sem_vars H (map fst me.(m_in)) xss ->
-               sem_vars H (map fst me.(m_out)) yss ->
+               sem_vars H (map fst mo.(m_in)) xss ->
+               sem_vars H (map fst mo.(m_out)) yss ->
                (* XXX: This should be obtained through well-clocking: *)
                (*  * tuples are synchronised: *)
                same_clock xss ->
@@ -409,8 +416,10 @@ Module Type SMSEMANTICS
                (*  * output clock matches input clock *)
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
                (* XXX: END *)
-               Forall (sem_equation bk H M M') mo.(m_eqs) ->
-               sem_mode ma_n mo_n M xss yss M'.
+               Forall (sem_equation bk H Ms Ms') mo.(m_eqs) ->
+               nth_error Ms 0 = Some M ->
+               nth_error Ms' (length ma.(ma_policy) - 1) = Some M' ->
+               sem_mode ma mo_n M xss yss M'.
 
   End ModeSemantics.
 
