@@ -25,50 +25,46 @@ Module Type SMSEMANTICS
        (Import Syn   : SMSYNTAX  Ids Op Clks)
        (Import Str   : STREAM        Op OpAux).
 
-  Record residual_v :=
-    Residual_v {
-        last_v: val;
-        inter_v: list value
-      }.
-  Record residual :=
-    Residual {
-        last: stream val;
-        inter: list (stream value)
-      }.
-
-  Fixpoint get_last_v (last_v: val) (inter_v: list value): val :=
-    match inter_v with
-    | [] => last_v
-    | vs :: inter_v =>
-      match vs with
-      | absent => get_last_v last_v inter_v
-      | present v => v
-      end
-    end.
-
-  Fixpoint get_last (last: stream val) (inter: list (stream value)) (n: nat): val :=
-    match inter with
-    | [] => last n
-    | vs :: inter =>
-      match vs n with
-      | absent => get_last last inter n
-      | present v => v
-      end
-    end.
-
   Definition env := PM.t value.
   Definition history := PM.t (stream value).
 
-  Definition memory := RMemory.memory residual_v.
-  Definition memories := RMemory.memory residual.
+  Definition memory := RMemory.memory (list value).
+  Definition memories := RMemory.memory (list (stream value)).
+
+  Fixpoint find_init (x: ident) (mems: list (ident * const)): option value :=
+    match mems with
+    | [] => None
+    | m :: mems =>
+      if ident_eqb (fst m) x
+      then Some (present (sem_const (snd m))) else find_init x mems
+    end.
+
+  Definition get_mem (k: nat) (init: bool) (x: ident) (m: memory) (mems: list (ident * const)):=
+    if init then find_init x mems
+    else match mfind_mem x m with
+         | Some lv =>
+           match k with
+           | 0 => nth_error lv 0
+           | S k' =>
+             match nth_error lv k' with
+             | Some absent => nth_error lv k
+             | None => None
+             | v => v
+             end
+           end
+         | None => None
+         end.
 
   (** ** Instantaneous semantics *)
 
   Section InstantSemantics.
 
-    Variable base : bool.
+    Variable init: bool.
+    Variable base: bool.
     Variable R: env.
     Variable m: memory.
+    Variable k: nat.
+    Variable mems: list (ident * const).
 
     Inductive sem_var_instant: ident -> value -> Prop :=
       Sv:
@@ -76,12 +72,11 @@ Module Type SMSEMANTICS
           PM.find x R = Some v ->
           sem_var_instant x v.
 
-    Inductive sem_res_var_instant: ident -> bool -> value -> Prop :=
-      Srv:
-        forall x b v r,
-          mfind_mem x m = Some r ->
-          v = get_last_v r.(last_v) r.(inter_v) ->
-          sem_res_var_instant x b (if b then present v else absent).
+    Inductive sem_mem_var_instant: ident -> value -> Prop :=
+      Smv:
+        forall x v,
+          get_mem k init x m mems = Some v ->
+          sem_mem_var_instant x v.
 
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
@@ -116,8 +111,8 @@ Module Type SMSEMANTICS
     | Slast:
         forall x ck b v ty,
           sem_clock_instant ck b ->
-          sem_res_var_instant x b v ->
-          sem_lexp_instant (Elast x ck ty) v
+          sem_mem_var_instant x v ->
+          sem_lexp_instant (Emem x ck ty) v
     | Swhen_eq:
         forall s x sc xc b,
           sem_var_instant x (present xc) ->
@@ -220,20 +215,24 @@ Module Type SMSEMANTICS
   End InstantSemantics.
 
   Section InstantAnnotatedSemantics.
+    Variable init : bool.
     Variable base : bool.
     Variable R: env.
-    Variable M: memory.
+    Variable m: memory.
+    Variable k: nat.
+    Variable mems: list (ident * const).
 
-    Inductive sem_annotated_instant {A} (sem_instant: bool -> env -> memory -> A -> value -> Prop)
+    Inductive sem_annotated_instant {A}
+              (sem_instant: bool -> bool -> env -> memory -> nat -> list (ident * const) -> A -> value -> Prop)
       : clock -> A -> value -> Prop :=
     | Stick:
         forall ck a c,
-          sem_instant base R M a (present c) ->
+          sem_instant init base R m k mems a (present c) ->
           sem_clock_instant base R ck true ->
           sem_annotated_instant sem_instant ck a (present c)
     | Sabs:
         forall ck a,
-          sem_instant base R M a absent ->
+          sem_instant init base R m k mems a absent ->
           sem_clock_instant base R ck false ->
           sem_annotated_instant sem_instant ck a absent.
 
@@ -244,13 +243,13 @@ Module Type SMSEMANTICS
     | SLticks:
         forall ck ces cs vs,
           vs = map present cs ->
-          sem_lexps_instant base R M ces vs ->
+          sem_lexps_instant init base R m k mems ces vs ->
           sem_clock_instant base R ck true ->
           sem_laexps_instant ck ces vs
     | SLabss:
         forall ck ces vs,
           vs = all_absent ces ->
-          sem_lexps_instant base R M ces vs ->
+          sem_lexps_instant init base R m k mems ces vs ->
           sem_clock_instant base R ck false ->
           sem_laexps_instant ck ces vs.
 
@@ -263,17 +262,20 @@ Module Type SMSEMANTICS
     Variable bk : stream bool.
     Variable H : history.
     Variable M: memories.
+    Variable k: nat.
+    Variable mems: list (ident * const).
 
     Definition restr_hist (n: nat): env :=
       PM.map (fun xs => xs n) H.
     Hint Unfold restr_hist.
 
     Definition restr_mem (n: nat): memory :=
-      mmap (fun r => Residual_v (r.(last) n) (List.map (fun xs => xs n) r.(inter))) M.
+      mmap (fun lv => map (fun xs => xs n) lv) M.
     Hint Unfold restr_mem.
 
-    Definition lift {A B} (sem: bool -> env -> memory -> A -> B -> Prop) x (ys: stream B): Prop :=
-      forall n, sem (bk n) (restr_hist n) (restr_mem n) x (ys n).
+    Definition lift {A B} (sem: bool -> bool -> env -> memory -> nat -> list (ident * const) -> A -> B -> Prop)
+               x (ys: stream B): Prop :=
+      forall n, sem (n ==b 0) (bk n) (restr_hist n) (restr_mem n) k mems x (ys n).
     Hint Unfold lift.
 
     Definition lift' {A B} (sem: bool -> env -> A -> B -> Prop) x (ys: stream B): Prop :=
@@ -284,31 +286,31 @@ Module Type SMSEMANTICS
       forall n, sem (restr_hist n) x (ys n).
     Hint Unfold lift''.
 
-    Definition sem_clock (ck: clock)(xs: stream bool): Prop :=
+    Definition sem_clock (ck: clock) (xs: stream bool): Prop :=
       lift' sem_clock_instant ck xs.
 
-    Definition sem_var (x: ident)(xs: stream value): Prop :=
+    Definition sem_var (x: ident) (xs: stream value): Prop :=
       lift'' sem_var_instant x xs.
 
-    Definition sem_vars (x: idents)(xs: stream (list value)): Prop :=
+    Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
       lift'' (fun R => Forall2 (sem_var_instant R)) x xs.
 
-    Definition sem_laexp ck (e: lexp)(xs: stream value): Prop :=
-      lift (fun base R m => sem_laexp_instant base R m ck) e xs.
+    Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
+      lift (fun init base R m k mems => sem_laexp_instant init base R m k mems ck) e xs.
 
-    Definition sem_laexps (ck: clock)(e: list lexp)(xs: stream (list value)): Prop :=
-      lift (fun base R m => sem_laexps_instant base R m ck) e xs.
+    Definition sem_laexps (ck: clock) (e: list lexp) (xs: stream (list value)): Prop :=
+      lift (fun init base R m k mems => sem_laexps_instant init base R m k mems ck) e xs.
 
-    Definition sem_lexp (e: lexp)(xs: stream value): Prop :=
+    Definition sem_lexp (e: lexp) (xs: stream value): Prop :=
       lift sem_lexp_instant e xs.
 
-    Definition sem_lexps (e: list lexp)(xs: stream (list value)): Prop :=
+    Definition sem_lexps (e: list lexp) (xs: stream (list value)): Prop :=
       lift sem_lexps_instant e xs.
 
-    Definition sem_caexp ck (c: cexp)(xs: stream value): Prop :=
-      lift (fun base R m => sem_caexp_instant base R m ck) c xs.
+    Definition sem_caexp ck (c: cexp) (xs: stream value): Prop :=
+      lift (fun init base R m k mems => sem_caexp_instant init base R m k mems ck) c xs.
 
-    Definition sem_cexp (c: cexp)(xs: stream value): Prop :=
+    Definition sem_cexp (c: cexp) (xs: stream value): Prop :=
       lift sem_cexp_instant c xs.
 
   End LiftSemantics.
@@ -345,66 +347,42 @@ Module Type SMSEMANTICS
   (*     apply H; eauto. *)
   (* Qed. *)
 
-  Inductive next_mem: ident -> stream value -> memories -> Prop :=
+  Inductive post_mem: nat -> ident -> stream value -> memories -> Prop :=
     next_mem_intro:
-      forall x xs M r,
-        mfind_mem x M = Some r ->
-        (forall n,
-            r.(last) (S n) =
-            match xs n with
-            | present v => v
-            | absent => get_last r.(last) r.(inter) n
-            end) ->
-        next_mem x xs M.
-
-  Inductive inter_mem: ident -> stream value -> memories -> memories -> Prop :=
-    inter_mem_intro:
-      forall x xs M r M',
-        mfind_mem x M = Some r ->
-        M' = madd_mem x (Residual r.(last) (xs :: r.(inter))) M ->
-        inter_mem x xs M M'.
+      forall k x xs M lvs lv,
+        mfind_mem x M = Some lvs ->
+        nth_error lvs k = Some lv ->
+        (forall n, lv (S n) = xs n) ->
+        post_mem k x xs M.
 
   Section ModeSemantics.
 
     Variable P: program.
 
-    Inductive sem_equation: stream bool -> history -> list memories -> list memories -> equation -> Prop :=
+    Inductive sem_equation: nat -> stream bool -> history -> memories -> list (ident * const) -> equation -> Prop :=
     | SEqDef:
-        forall bk H Ms M Ms' x xs ck ce,
-          In M Ms ->
+        forall k bk H M mems x xs ck ce,
           sem_var H x xs ->
-          sem_caexp bk H M ck ce xs ->
-          sem_equation bk H Ms Ms' (EqDef x ck ce)
-    | SEqNext:
-        forall bk H Ms M Ms' x ck ce xs,
-          In M Ms ->
-          sem_caexp bk H M ck ce xs ->
-          next_mem x xs M ->
-          sem_equation bk H Ms Ms' (EqNext x ck ce)
-    | SEqLast:
-        forall bk H Ms M Ms' M' x ck ce xs,
-          In M Ms ->
-          In M' Ms' ->
-          sem_caexp bk H M ck ce xs ->
-          inter_mem x xs M M' ->
-          sem_equation bk H Ms Ms' (EqLast x ck ce)
+          sem_caexp bk H M k mems ck ce xs ->
+          sem_equation k bk H M mems (EqDef x ck ce)
+    | SEqPost:
+        forall k bk H M mems x ck ce xs,
+          sem_caexp bk H M k mems ck ce xs ->
+          post_mem k x xs M ->
+          sem_equation k bk H M mems (EqPost x ck ce)
     | SEqCall:
-        forall bk H Ms M Ms' M' k ys x Mx Mx' ck ma_n P' ma i m es ess oss,
+        forall k bk H M mems ys x Mx ck ma_n P' ma i m k' es ess oss,
           find_machine ma_n P = Some (ma, P') ->
-          find_rank m ma.(ma_policy) = Some k ->
-          nth_error Ms k = Some M ->
-          sem_laexps bk H M ck es ess ->
+          sem_laexps bk H M k mems ck es ess ->
           hd_error ys = Some x ->
           sub_inst x M Mx ->
-          sem_mode ma m Mx ess oss Mx' ->
-          madd_obj x Mx' M = M' ->
-          nth_error Ms' (k+1) = Some M' ->
+          sem_mode k' ma m Mx ess oss ->
           sem_vars H ys oss ->
-          sem_equation bk H Ms Ms' (EqCall ys ck ma_n i m es)
+          sem_equation k bk H M mems (EqCall ys ck ma_n i m k' es)
 
-    with sem_mode: machine -> ident -> memories -> stream (list value) -> stream (list value) -> memories -> Prop :=
+    with sem_mode: nat -> machine -> ident -> memories -> stream (list value) -> stream (list value) -> Prop :=
            SMode:
-             forall ma mo mo_n Ms M Ms' M' H xss yss bk,
+             forall k ma mo mo_n M H xss yss bk,
                clock_of xss bk ->
                find_mode mo_n ma.(ma_modes) = Some mo ->
                sem_vars H (map fst mo.(m_in)) xss ->
@@ -416,11 +394,9 @@ Module Type SMSEMANTICS
                (*  * output clock matches input clock *)
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
                (* XXX: END *)
-               Forall (sem_equation bk H Ms Ms') mo.(m_eqs) ->
-               nth_error Ms 0 = Some M ->
-               nth_error Ms' (length ma.(ma_policy) - 1) = Some M' ->
-               sem_mode ma mo_n M xss yss M'.
+               Forall (sem_equation k bk H M ma.(ma_mems)) mo.(m_eqs) ->
+               sem_mode k ma mo_n M xss yss.
 
   End ModeSemantics.
 
-End SMSEMANTICSCOIND.
+End SMSEMANTICS.

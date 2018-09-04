@@ -19,7 +19,7 @@ Module Type SMSYNTAX
   Inductive lexp :=
   | Econst : const -> lexp
   | Evar   : ident -> type -> lexp
-  | Elast  : ident -> clock -> type -> lexp
+  | Emem   : ident -> clock -> type -> lexp
   | Ewhen  : lexp -> ident -> bool -> lexp
   | Eunop  : unop -> lexp -> type -> lexp
   | Ebinop : binop -> lexp -> lexp -> type -> lexp.
@@ -35,10 +35,9 @@ Module Type SMSYNTAX
 
   Inductive equation :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqNext: ident -> clock -> cexp -> equation
-  | EqLast: ident -> clock -> cexp -> equation
-  | EqCall: idents -> clock -> ident -> ident -> ident -> list lexp -> equation.
-  (* y1, ..., yn = class instance mode (e1, ..., em) *)
+  | EqPost: ident -> clock -> cexp -> equation
+  | EqCall: idents -> clock -> ident -> ident -> ident -> nat -> list lexp -> equation.
+  (* y1, ..., yn = class instance mode rank (e1, ..., em) *)
 
   Record mode :=
     Mode {
@@ -52,10 +51,10 @@ Module Type SMSYNTAX
   Record machine :=
     Machine {
         ma_name  : ident;
-        ma_mems  : list (ident * type);
+        ma_mems  : list (ident * const);
         ma_machs : list (ident * ident);
-        ma_modes : list mode;
-        ma_policy: list (ident * nat)
+        ma_modes : list mode
+        (* ma_policy: list (ident * nat) *)
       }.
 
   Definition program := list machine.
@@ -64,19 +63,19 @@ Module Type SMSYNTAX
     match le with
     | Econst c => type_const c
     | Evar _ ty
-    | Elast _ _ ty
+    | Emem _ _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e
     end.
 
-  Fixpoint find_rank (m: ident) (pol: list (ident * nat)): option nat :=
-    match pol with
-    | [] => None
-    | p :: pol =>
-      if ident_eqb (fst p) m
-      then Some (snd p) else find_rank m pol
-    end.
+  (* Fixpoint find_rank (m: ident) (pol: list (ident * nat)): option nat := *)
+  (*   match pol with *)
+  (*   | [] => None *)
+  (*   | p :: pol => *)
+  (*     if ident_eqb (fst p) m *)
+  (*     then Some (snd p) else find_rank m pol *)
+  (*   end. *)
 
   Fixpoint find_mode (m: ident) (ms: list mode): option mode :=
     match ms with
