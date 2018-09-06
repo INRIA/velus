@@ -221,6 +221,16 @@ Module Export Ids <: IDS.
     - repeat constructor; auto.
   Qed.
 
+  Lemma reset_not_step:
+    reset <> step.
+  Proof.
+    pose proof methods_nodup as Hndup.
+    unfold methods in Hndup.
+    inversion_clear Hndup.
+    intro Hrs. rewrite Hrs in *.
+    intuition.
+  Qed.
+
   Lemma fun_not_out: fun_id <> out.
   Proof.
     intro E; unfold fun_id, out in E.

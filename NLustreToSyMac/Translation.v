@@ -3,12 +3,12 @@ Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.Obc.ObcSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
+Require Import Velus.SyMac.SMSyntax.
 
 Require Import List.
-Require Import Coq.Lists.List.
+(* Require Import Coq.Lists.List. *)
 Import List.ListNotations.
 Require Import Coq.Sorting.Permutation.
 Require Import Morphisms.
@@ -18,36 +18,16 @@ Open Scope list.
 
 (** * Translation *)
 
-(** ** Identification of node instances *)
-
-(**
-
-Each node application in NLustre turns into a method call in the
-imperative setting. This means that, upon initializing a node, one
-must declare a new instance for each its application.
-
-Remark: it is necessary to distinguish different instantiations of the
-same node (i.e., different objects of the same class). This is done in
-Auger's thesis in the language LSNI, where node applications are
-assigned unique identifiers. His context is richer, in particular,
-because the result of a node application may be assigned to a
-pattern-tuple containing multiple identifiers.
-
-Here, we take advantage of the fact that the result of a node
-application is assigned to a single variable. We use the name of that
-variable to identify the instance.  *)
-
 Module Type TRANSLATION
-       (Import Ids    : IDS)
-       (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX Op)
-       (Import Clks   : CLOCKS Ids)
-       (Import SynNL  : NLSYNTAX Ids Op Clks)
-       (Import SynObc : OBCSYNTAX Ids Op OpAux)
-       (Import Mem    : MEMORIES Ids Op Clks SynNL).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import Clks  : CLOCKS Ids)
+       (Import SynNL : NLSYNTAX Ids Op Clks)
+       (SynSM        : SMSYNTAX Ids Op Clks)
+       (Import Mem   : MEMORIES Ids Op Clks SynNL).
 
-  Definition gather_eq (acc: idents * list (ident * ident)) (eq: equation):
-    idents * list (ident * ident) :=
+  Definition gather_eq (acc: list (ident * const) * list (ident * ident)) (eq: equation):
+    list (ident * const) * list (ident * ident) :=
     match eq with
     | EqDef _ _ _ => acc
     | EqApp xs _ f _ _ =>
@@ -55,10 +35,10 @@ Module Type TRANSLATION
       | [] => acc
       | x :: _ => (fst acc, (x, f) :: snd acc)
       end
-    | EqFby x _ _ _ => (x :: fst acc, snd acc)
+    | EqFby x _ c0 _ => ((x, c0) :: fst acc, snd acc)
     end.
 
-  Definition gather_eqs (eqs: list equation) : idents * list (ident * ident) :=
+  Definition gather_eqs (eqs: list equation) : list (ident * const) * list (ident * ident) :=
     fold_left gather_eq eqs ([], []).
 
 
@@ -95,89 +75,76 @@ Module Type TRANSLATION
 
     Variable memories : PS.t.
 
-    Definition tovar (xt: ident * type) : exp :=
+    Definition tovar (xt: ident * type) : SynSM.lexp :=
       let (x, ty) := xt in
-      if PS.mem x memories then State x ty else Var x ty.
+      if PS.mem x memories then SynSM.Emem x ty else SynSM.Evar x ty.
 
-    Definition bool_var (x: ident) : exp := tovar (x, bool_type).
+    Definition bool_var (x: ident) : SynSM.lexp := tovar (x, bool_type).
 
-    Fixpoint Control (ck: clock) (s: stmt) : stmt :=
-      match ck with
-      | Cbase          => s
-      | Con ck x true  => Control ck (Ifte (bool_var x) s Skip)
-      | Con ck x false => Control ck (Ifte (bool_var x) Skip s)
-      end.
-
-    Fixpoint translate_lexp (e : lexp) : exp :=
+    Fixpoint translate_lexp (e: lexp) : SynSM.lexp :=
       match e with
-      | Econst c           => Const c
+      | Econst c           => SynSM.Econst c
       | Evar x ty          => tovar (x, ty)
-      | Ewhen e c x        => translate_lexp e
-      | Eunop op e ty      => Unop op (translate_lexp e) ty
-      | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
+      | Ewhen e c x        => SynSM.Ewhen (translate_lexp e) c x
+      | Eunop op e ty      => SynSM.Eunop op (translate_lexp e) ty
+      | Ebinop op e1 e2 ty => SynSM.Ebinop op (translate_lexp e1) (translate_lexp e2) ty
       end.
 
-    Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
+    Fixpoint translate_cexp (e: cexp) : SynSM.cexp :=
       match e with
-      | Emerge y t f =>
-        Ifte (bool_var y) (translate_cexp x t) (translate_cexp x f)
-      | Eite b t f =>
-        Ifte (translate_lexp b) (translate_cexp x t) (translate_cexp x f)
-      | Eexp l =>
-        Assign x (translate_lexp l)
+      | Emerge x t f => SynSM.Emerge x (translate_cexp t) (translate_cexp f)
+      | Eite b t f   => SynSM.Eite (translate_lexp b) (translate_cexp t) (translate_cexp f)
+      | Eexp e       => SynSM.Eexp (translate_lexp e)
       end.
 
-    Definition reset_stmt (class name r: ident) (ck_r: clock): stmt :=
-      Control ck_r (Ifte (bool_var r) (Call [] class name reset []) Skip).
-
-    Definition translate_eqn (eqn: equation) : stmt :=
+    Definition translate_eqn (eqn: equation) : list SynSM.equation :=
       match eqn with
       | EqDef x ck ce =>
-        Control ck (translate_cexp x ce)
-      | EqApp xs ck f les r =>
+        [SynSM.EqDef x ck (translate_cexp ce)]
+      | EqApp xs ck f les None =>
         let name := hd Ids.default xs in
-        let call := Control ck (Call xs f name step (map translate_lexp les)) in
-        match r with
-        | None => call
-        | Some (r, ck_r) => Comp (reset_stmt f name r ck_r) call
-        end
+        [SynSM.EqCall xs ck f name step 0 (map translate_lexp les)]
+      | EqApp xs ck f les (Some (r, ck_r)) =>
+        let name := hd Ids.default xs in
+        [SynSM.EqCall [] (Con ck_r r true) f name reset 0 [];
+           SynSM.EqCall xs ck f name step 1 (map translate_lexp les)]
       | EqFby x ck v le =>
-        Control ck (AssignSt x (translate_lexp le))
+        [SynSM.EqPost x ck (SynSM.Eexp (translate_lexp le))]
       end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
   (*      [Is_well_sch]. *) *)
 
-    Definition translate_eqns (eqns: list equation) : stmt :=
-      fold_left (fun i eq => Comp (translate_eqn eq) i) eqns Skip.
+    Definition translate_eqns (eqns: list equation) : list SynSM.equation :=
+      concatMap translate_eqn eqns.
 
   End Translate.
 
-  Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt :=
+  Definition translate_reset_eqn (eqn: equation) : list SynSM.equation :=
     match eqn with
-    | EqDef _ _ _      => s
-    | EqFby x _ c0 _   => Comp (AssignSt x (Const c0)) s
+    | EqDef _ _ _      => []
+    | EqFby x _ c0 _   => [SynSM.EqPost x Cbase (SynSM.Eexp (SynSM.Econst c0))]
     | EqApp xs _ f _ _ =>
       let name := hd Ids.default xs in
-      Comp (Call [] f name reset []) s
+      [SynSM.EqCall [] Cbase f name reset 0 []]
     end.
 
-  Definition translate_reset_eqns (eqns: list equation): stmt :=
-    fold_left translate_reset_eqn eqns Skip.
+  Definition translate_reset_eqns (eqns: list equation): list SynSM.equation :=
+    concatMap translate_reset_eqn eqns.
 
   Definition ps_from_list (l: idents) : PS.t :=
-    fold_left (fun s i=>PS.add i s) l PS.empty.
+    fold_left (fun s i => PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
 
-  Program Definition reset_method (eqns: list equation): method :=
-    {| m_name := reset;
-       m_in   := [];
-       m_vars := [];
-       m_out  := [];
-       m_body := translate_reset_eqns eqns;
-       m_nodupvars := _;
-       m_good      := _
+  Program Definition reset_mode (eqns: list equation): SynSM.mode :=
+    {| SynSM.m_name := reset;
+       SynSM.m_in   := [];
+       SynSM.m_vars := [];
+       SynSM.m_out  := [];
+       SynSM.m_eqs  := translate_reset_eqns eqns
+       (* m_nodupvars := _; *)
+       (* m_good      := _ *)
     |}.
 
   (** Properties of translation functions *)
@@ -217,13 +184,13 @@ Module Type TRANSLATION
   Qed.
 
   Lemma ps_from_list_gather_eqs_memories:
-    forall eqs, PS.eq (ps_from_list (fst (gather_eqs eqs))) (memories eqs).
+    forall eqs, PS.eq (ps_from_list (map fst (fst (gather_eqs eqs)))) (memories eqs).
   Proof.
     induction eqs as [|eq eqs IH]; [reflexivity|].
     unfold memories, gather_eqs.
     assert (forall eqs F S,
-               PS.eq (ps_from_list (fst (fold_left gather_eq eqs (F, S))))
-                     (fold_left memory_eq eqs (ps_from_list F))) as HH.
+               PS.eq (ps_from_list (map fst (fst (fold_left gather_eq eqs (F, S)))))
+                     (fold_left memory_eq eqs (ps_from_list (map fst F)))) as HH.
     {
       clear eq eqs IH; induction eqs as [|eq eqs IH]; [reflexivity|].
       intros F S.
@@ -260,53 +227,49 @@ Module Type TRANSLATION
     + rewrite HMeq; auto.
     + f_equal; auto.
     + f_equal; auto.
+    + f_equal; auto.
   Qed.
 
   Instance translate_cexp_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq) translate_cexp.
+    Proper (PS.eq ==> eq ==> eq) translate_cexp.
   Proof.
-    intros M M' HMeq y y' Hyeq c c' Hceq; rewrite <- Hyeq, <- Hceq;
-    clear y' c' Hyeq Hceq.
+    intros M M' HMeq c c' Hceq; rewrite <- Hceq;
+      clear c' Hceq.
     revert M M' HMeq.
     induction c; intros; simpl.
     - erewrite IHc1; try eassumption.
-      erewrite IHc2; try eassumption.
-      rewrite HMeq; auto.
+      erewrite IHc2; try eassumption; auto.
     - erewrite IHc1; try eassumption.
       erewrite IHc2; try eassumption.
       rewrite HMeq; auto.
     - rewrite HMeq; auto.
   Qed.
 
-  Instance Control_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq) Control.
-  Proof.
-    intros M M' HMeq ck ck' Hckeq e e' Heq; rewrite <-Hckeq, <-Heq;
-    clear ck' e' Hckeq Heq.
-    revert e; induction ck as [ |ck' IH s sv].
-    - reflexivity.
-    - intro e.
-      destruct sv; simpl; rewrite IH, HMeq; reflexivity.
-  Qed.
+  (* Instance Control_Proper : *)
+  (*   Proper (PS.eq ==> eq ==> eq ==> eq) Control. *)
+  (* Proof. *)
+  (*   intros M M' HMeq ck ck' Hckeq e e' Heq; rewrite <-Hckeq, <-Heq; *)
+  (*   clear ck' e' Hckeq Heq. *)
+  (*   revert e; induction ck as [ |ck' IH s sv]. *)
+  (*   - reflexivity. *)
+  (*   - intro e. *)
+  (*     destruct sv; simpl; rewrite IH, HMeq; reflexivity. *)
+  (* Qed. *)
 
-  Instance reset_stmt_Proper :
-    Proper (PS.eq ==> eq ==> eq ==> eq ==> eq ==> eq) reset_stmt.
-  Proof.
-    intros M M' HMeq f f' Hfeq x x' Hxeq r r' Hreq ck ck' Hck; subst.
-    unfold reset_stmt; rewrite HMeq; auto.
-  Qed.
+  (* Instance reset_stmt_Proper : *)
+  (*   Proper (PS.eq ==> eq ==> eq ==> eq ==> eq ==> eq) reset_stmt. *)
+  (* Proof. *)
+  (*   intros M M' HMeq f f' Hfeq x x' Hxeq r r' Hreq ck ck' Hck; subst. *)
+  (*   unfold reset_stmt; rewrite HMeq; auto. *)
+  (* Qed. *)
 
   Instance translate_eqn_Proper :
     Proper (PS.eq ==> eq ==> eq) translate_eqn.
   Proof.
     intros M M' HMeq eq eq' Heq; rewrite <- Heq; clear Heq eq'.
-    destruct eq as [y ck []|y ck f []|y ck v0 []]; simpl; try now rewrite HMeq.
-    - destruct o as [(?&?)|]; rewrite HMeq; auto.
-    - destruct o as [(?&?)|].
-      + do 3 (rewrite HMeq at 1; f_equal); f_equal.
-        apply map_ext. now setoid_rewrite HMeq.
-      + do 2 (rewrite HMeq at 1; f_equal); f_equal.
-        apply map_ext. now setoid_rewrite HMeq.
+    destruct eq; simpl; try now rewrite HMeq.
+    destruct o as [(?&?)|]; [do 3 f_equal|do 2 f_equal];
+      apply map_ext; setoid_rewrite HMeq; auto.
   Qed.
 
   Instance translate_eqns_Proper :
@@ -315,21 +278,15 @@ Module Type TRANSLATION
     intros M M' Heq eqs eqs' Heqs.
     rewrite <- Heqs; clear eqs' Heqs.
     unfold translate_eqns.
-    assert (forall S S',
-               S = S' ->
-               fold_left (fun i eq => Comp (translate_eqn M eq) i) eqs S
-               = fold_left (fun i eq => Comp (translate_eqn M' eq) i) eqs S')
-      as HH.
-    { revert M M' Heq.
-      induction eqs as [|eq eqs IH]; intros M M' Heq S S' HSeq; [apply HSeq|].
-      simpl; apply IH with (1:=Heq); rewrite HSeq, Heq; reflexivity. }
-    rewrite HH with (S':=Skip); reflexivity.
+    unfold concatMap.
+    f_equal.
+    apply map_ext; setoid_rewrite Heq; auto.
   Qed.
 
   Lemma filter_mem_fst:
     forall p (xs: list (ident * (type * clock))),
-      map fst (filter (fun (x:ident*(type*clock))=>PS.mem (fst x) p) xs)
-      = filter (fun x=>PS.mem x p) (map fst xs).
+      map fst (filter (fun (x:ident*(type*clock)) => PS.mem (fst x) p) xs)
+      = filter (fun x => PS.mem x p) (map fst xs).
   Proof.
     induction xs as [|x xs]; auto.
     simpl.
@@ -471,7 +428,7 @@ Module Type TRANSLATION
     forall eqs vars x (ty: type) ck c0 e,
       In (EqFby x ck c0 e) eqs ->
       In (x, ty) vars ->
-      In (x, ty) (filter (fun x=> PS.mem (fst x) (memories eqs)) vars).
+      In (x, ty) (filter (fun x => PS.mem (fst x) (memories eqs)) vars).
   Proof.
     intros ** Heqs Hvars.
     apply filter_In. split; auto.
@@ -557,7 +514,7 @@ Module Type TRANSLATION
     forall n,
       Permutation
         (map fst (fst (partition
-                         (fun x=>PS.mem (fst x) (memories n.(n_eqs)))
+                         (fun x => PS.mem (fst x) (memories n.(n_eqs)))
                          n.(n_vars))))
         (vars_defined (filter is_fby n.(n_eqs))).
   Proof.
@@ -658,54 +615,54 @@ Module Type TRANSLATION
 
 
   Lemma gather_eqs_fst_spec:
-    forall eqs, Permutation (fst (gather_eqs eqs)) (gather_mem eqs).
+    forall eqs, Permutation (map fst (fst (gather_eqs eqs))) (gather_mem eqs).
   Proof.
-  intro eqs.
-  assert (Hgen: forall F S,
-             Permutation (fst (fold_left gather_eq eqs (F, S)))
-                         (F ++ gather_mem eqs)).
-  {
-    induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
-    - now rewrite app_nil_r.
-    - destruct eq as [ | i | i ck v0 le ]; simpl;
-        match goal with
-        | |- context[ EqApp _ _ _ _ _ ] => destruct i
-        | _ => idtac
-        end; rewrite IHeqs; auto.
-      assert (Hmem: gather_mem (EqFby i ck v0 le :: eqs)
-                    = i :: gather_mem eqs)
-        by now unfold gather_mem; rewrite concatMap_cons.
+    intro eqs.
+    assert (Hgen: forall F S,
+               Permutation (map fst (fst (fold_left gather_eq eqs (F, S))))
+                           (map fst F ++ gather_mem eqs)).
+    {
+      induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
+      - now rewrite app_nil_r.
+      - destruct eq as [ | i | i ck v0 le ]; simpl;
+          match goal with
+          | |- context[ EqApp _ _ _ _ _ ] => destruct i
+          | _ => idtac
+          end; rewrite IHeqs; auto.
+        assert (Hmem: gather_mem (EqFby i ck v0 le :: eqs)
+                      = i :: gather_mem eqs)
+          by now unfold gather_mem; rewrite concatMap_cons.
 
-      now rewrite Hmem, <- Permutation_middle, app_comm_cons.
-  }
+        now rewrite Hmem, <- Permutation_middle, app_comm_cons.
+    }
 
-  now apply Hgen.
+    now apply Hgen.
   Qed.
 
   Lemma gather_eqs_snd_spec:
     forall eqs, Permutation (snd (gather_eqs eqs)) (gather_insts eqs).
   Proof.
-  intro eqs.
-  assert (Hgen: forall F S,
-             Permutation (snd (fold_left gather_eq eqs (F, S)))
-                         (S ++ gather_insts eqs)).
-  {
-    induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
-    - now rewrite app_nil_r.
-    - destruct eq as [ | is ck f les | ]; simpl;
-        match goal with
-        | |- context[ EqApp _ _ _ _ _ ] => destruct is
-        | _ => idtac
-        end; rewrite IHeqs; auto.
+    intro eqs.
+    assert (Hgen: forall F S,
+               Permutation (snd (fold_left gather_eq eqs (F, S)))
+                           (S ++ gather_insts eqs)).
+    {
+      induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
+      - now rewrite app_nil_r.
+      - destruct eq as [ | is ck f les | ]; simpl;
+          match goal with
+          | |- context[ EqApp _ _ _ _ _ ] => destruct is
+          | _ => idtac
+          end; rewrite IHeqs; auto.
 
-      assert (Hmem_cons: gather_insts (EqApp (i :: is) ck f les o :: eqs)
-                    = (i, f) :: gather_insts eqs)
-        by now unfold gather_insts; rewrite concatMap_cons.
+        assert (Hmem_cons: gather_insts (EqApp (i :: is) ck f les o :: eqs)
+                           = (i, f) :: gather_insts eqs)
+          by now unfold gather_insts; rewrite concatMap_cons.
 
-      now rewrite Hmem_cons, <- Permutation_middle, app_comm_cons.
-  }
+        now rewrite Hmem_cons, <- Permutation_middle, app_comm_cons.
+    }
 
-  now apply Hgen.
+    now apply Hgen.
   Qed.
 
   Lemma fst_gather_eqs_var_defined:
@@ -713,36 +670,36 @@ Module Type TRANSLATION
       Permutation ((map fst (snd (gather_eqs eqs))) ++ (gather_app_vars eqs))
                   (vars_defined (filter is_app eqs)).
   Proof.
-  intro eqs.
-  assert (Hperm: Permutation (map fst (gather_insts eqs) ++ gather_app_vars eqs)
-                      (vars_defined (filter is_app eqs))).
-  {
-    induction eqs as [|eq eqs]; auto.
-    destruct eq; try (now simpl; auto).
-    destruct i as [ | x xs ]; auto.
+    intro eqs.
+    assert (Hperm: Permutation (map fst (gather_insts eqs) ++ gather_app_vars eqs)
+                               (vars_defined (filter is_app eqs))).
+    {
+      induction eqs as [|eq eqs]; auto.
+      destruct eq; try (now simpl; auto).
+      destruct i as [ | x xs ]; auto.
 
 
-    assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
-            = xs ++ gather_app_vars eqs)
-      by now unfold gather_app_vars; rewrite concatMap_cons.
+      assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
+                    = xs ++ gather_app_vars eqs)
+        by now unfold gather_app_vars; rewrite concatMap_cons.
 
-    assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l o :: eqs))
-            = x :: map fst (gather_insts eqs))
-      by now unfold gather_insts; rewrite concatMap_cons.
+      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l o :: eqs))
+                     = x :: map fst (gather_insts eqs))
+        by now unfold gather_insts; rewrite concatMap_cons.
 
-    rewrite Happ, Hinst.
-    simpl;
-      unfold vars_defined;
-      rewrite concatMap_cons, <- IHeqs.
-    unfold var_defined; simpl.
-    apply Permutation_cons.
-    do 2rewrite <- Permutation_app_assoc.
-    now apply Permutation_app_tail, Permutation_app_comm.
-  }
+      rewrite Happ, Hinst.
+      simpl;
+        unfold vars_defined;
+        rewrite concatMap_cons, <- IHeqs.
+      unfold var_defined; simpl.
+      apply Permutation_cons.
+      do 2rewrite <- Permutation_app_assoc.
+      now apply Permutation_app_tail, Permutation_app_comm.
+    }
 
-  rewrite <- Hperm.
-  apply Permutation_app_tail.
-  now rewrite gather_eqs_snd_spec.
+    rewrite <- Hperm.
+    apply Permutation_app_tail.
+    now rewrite gather_eqs_snd_spec.
   Qed.
 
   Lemma Forall_ValidId_idty:
@@ -754,113 +711,110 @@ Module Type TRANSLATION
   Qed.
 
   (* =translate_node= *)
-  (* definition is needed in signature *)
-  Program Definition translate_node (n: node) : class :=
+  Program Definition translate_node (n: node) : SynSM.machine :=
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
-    let memids := fst gathered in
-    let dobjs := snd gathered in
-    let mems := ps_from_list memids in
-    let partitioned := partition (fun x=>PS.mem (fst x) mems) n.(n_vars) in
-    let dmems := fst partitioned in
-    let dvars := snd partitioned in
-    {| c_name    := n.(n_name);
-       c_mems    := idty dmems;
-       c_objs    := dobjs;
-       c_methods := [ {| m_name := step;
-                         m_in   := idty n.(n_in);
-                         m_vars := idty dvars;
-                         m_out  := idty n.(n_out);
-                         m_body := translate_eqns mems n.(n_eqs)
-                      |};
-                      reset_method n.(n_eqs) ]
+    let mems := fst gathered in
+    let machs := snd gathered in
+    let memids := ps_from_list (map fst mems) in
+    let partitioned := partition (fun x => PS.mem (fst x) memids) n.(n_vars) in
+    let vars := snd partitioned in
+    {| SynSM.ma_name  := n.(n_name);
+       SynSM.ma_mems  := mems;
+       SynSM.ma_machs := machs;
+       SynSM.ma_modes := [ {| SynSM.m_name := step;
+                              SynSM.m_in   := idty n.(n_in);
+                              SynSM.m_vars := idty vars;
+                              SynSM.m_out  := idty n.(n_out);
+                              SynSM.m_eqs  := translate_eqns memids n.(n_eqs)
+                     |};
+                        reset_mode n.(n_eqs) ]
     |}.
-  (* =end= *)
-  Next Obligation.
-    repeat rewrite <-idty_app. rewrite NoDupMembers_idty.
-    rewrite (Permutation_app_comm n.(n_in)).
-    rewrite Permutation_app_assoc.
-    match goal with |- context [snd (partition ?p ?l)] =>
-      apply (NoDupMembers_app_r (fst (partition p l))) end.
-    rewrite <-(Permutation_app_assoc (fst _)).
-    rewrite <- (permutation_partition _ n.(n_vars)).
-    rewrite (Permutation_app_comm n.(n_out)), <-Permutation_app_assoc.
-    rewrite (Permutation_app_comm n.(n_vars)), Permutation_app_assoc.
-    apply n.(n_nodup).
-  Qed.
-  Next Obligation.
-    repeat rewrite <-idty_app. apply Forall_ValidId_idty.
-    rewrite (Permutation_app_comm n.(n_in)).
-    rewrite Permutation_app_assoc.
-    match goal with |- context [snd (partition ?p ?l)] =>
-      apply (Forall_app_weaken (fst (partition p l))) end.
-    rewrite <-(Permutation_app_assoc (fst _)).
-    rewrite <- (permutation_partition _ n.(n_vars)).
-    rewrite <-(Permutation_app_assoc n.(n_vars)).
-    rewrite Permutation_app_comm.
-    apply n.(n_good).
-  Qed.
-  Next Obligation.
-    rewrite map_fst_idty, partition_switch
-    with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))).
-    2:intro x; now rewrite ps_from_list_gather_eqs_memories.
-    eapply (NoDup_app_weaken _ (gather_app_vars n.(n_eqs))).
-    rewrite Permutation_app_assoc.
-    rewrite fst_gather_eqs_var_defined.
-    rewrite fst_partition_memories_var_defined.
-    eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
-    rewrite Permutation_app_comm.
-    unfold vars_defined, concatMap.
-    rewrite <- 2 concat_app.
-    rewrite <- 2 map_app.
-    rewrite (Permutation_app_comm (filter is_fby _)).
-    rewrite is_filtered_eqs.
-    pose proof (n_nodup n) as Hndm.
-    apply NoDupMembers_app_r in Hndm.
-    apply fst_NoDupMembers in Hndm.
-    change (concat (map var_defined (n_eqs n))) with (vars_defined (n_eqs n)).
-    now rewrite n_defd.
-  Qed.
-  Next Obligation.
-    constructor; auto using NoDup.
-    inversion_clear 1; auto.
-    now apply reset_not_step.
-  Qed.
-  Next Obligation.
-    pose proof n.(n_good) as (? & ValidApp & ?).
-    split; auto.
-    rewrite <-fst_gather_eqs_var_defined, Forall_app, Forall_map in ValidApp.
-    tauto.
-  Qed.
+  (* (* =end= *) *)
+  (* Next Obligation. *)
+  (*   repeat rewrite <-idty_app. rewrite NoDupMembers_idty. *)
+  (*   rewrite (Permutation_app_comm n.(n_in)). *)
+  (*   rewrite Permutation_app_assoc. *)
+  (*   match goal with |- context [snd (partition ?p ?l)] => *)
+  (*                   apply (NoDupMembers_app_r (fst (partition p l))) end. *)
+  (*   rewrite <-(Permutation_app_assoc (fst _)). *)
+  (*   rewrite <- (permutation_partition _ n.(n_vars)). *)
+  (*   rewrite (Permutation_app_comm n.(n_out)), <-Permutation_app_assoc. *)
+  (*   rewrite (Permutation_app_comm n.(n_vars)), Permutation_app_assoc. *)
+  (*   apply n.(n_nodup). *)
+  (* Qed. *)
+  (* Next Obligation. *)
+  (*   repeat rewrite <-idty_app. apply Forall_ValidId_idty. *)
+  (*   rewrite (Permutation_app_comm n.(n_in)). *)
+  (*   rewrite Permutation_app_assoc. *)
+  (*   match goal with |- context [snd (partition ?p ?l)] => *)
+  (*                   apply (Forall_app_weaken (fst (partition p l))) end. *)
+  (*   rewrite <-(Permutation_app_assoc (fst _)). *)
+  (*   rewrite <- (permutation_partition _ n.(n_vars)). *)
+  (*   rewrite <-(Permutation_app_assoc n.(n_vars)). *)
+  (*   rewrite Permutation_app_comm. *)
+  (*   apply n.(n_good). *)
+  (* Qed. *)
+  (* Next Obligation. *)
+  (*   rewrite map_fst_idty, partition_switch *)
+  (*     with (g:=fun x=> PS.mem (fst x) (memories n.(n_eqs))). *)
+  (*   2:intro x; now rewrite ps_from_list_gather_eqs_memories. *)
+  (*   eapply (NoDup_app_weaken _ (gather_app_vars n.(n_eqs))). *)
+  (*   rewrite Permutation_app_assoc. *)
+  (*   rewrite fst_gather_eqs_var_defined. *)
+  (*   rewrite fst_partition_memories_var_defined. *)
+  (*   eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))). *)
+  (*   rewrite Permutation_app_comm. *)
+  (*   unfold vars_defined, concatMap. *)
+  (*   rewrite <- 2 concat_app. *)
+  (*   rewrite <- 2 map_app. *)
+  (*   rewrite (Permutation_app_comm (filter is_fby _)). *)
+  (*   rewrite is_filtered_eqs. *)
+  (*   pose proof (n_nodup n) as Hndm. *)
+  (*   apply NoDupMembers_app_r in Hndm. *)
+  (*   apply fst_NoDupMembers in Hndm. *)
+  (*   change (concat (map var_defined (n_eqs n))) with (vars_defined (n_eqs n)). *)
+  (*   now rewrite n_defd. *)
+  (* Qed. *)
+  (* Next Obligation. *)
+  (*   constructor; auto using NoDup. *)
+  (*   inversion_clear 1; auto. *)
+  (*   now apply reset_not_step. *)
+  (* Qed. *)
+  (* Next Obligation. *)
+  (*   pose proof n.(n_good) as (? & ValidApp & ?). *)
+  (*   split; auto. *)
+  (*   rewrite <-fst_gather_eqs_var_defined, Forall_app, Forall_map in ValidApp. *)
+  (*   tauto. *)
+  (* Qed. *)
 
   (* =translate= *)
-  (* definition is needed in signature *)
-  Definition translate (G: global) : program :=
+  Definition translate (G: global) : SynSM.program :=
     map translate_node G.
   (* =end= *)
 
   Lemma map_c_name_translate:
     forall g,
-      map c_name (translate g) = map n_name g.
+      map SynSM.ma_name (translate g) = map n_name g.
   Proof.
     induction g as [|n g]; auto.
     simpl; rewrite IHg. reflexivity.
   Qed.
 
-  Lemma exists_step_method:
+  Lemma exists_step_node:
     forall node,
     exists stepm,
-      find_method step (translate_node node).(c_methods) = Some stepm.
+      SynSM.find_mode step (translate_node node).(SynSM.ma_modes) = Some stepm.
   Proof.
     intro node.
     simpl. rewrite ident_eqb_refl. eauto.
   Qed.
 
-  Lemma exists_reset_method:
+  Lemma exists_reset_mode:
     forall node,
-      find_method reset (translate_node node).(c_methods)
-      = Some (reset_method node.(n_eqs)).
+      SynSM.find_mode reset (translate_node node).(SynSM.ma_modes)
+      = Some (reset_mode node.(n_eqs)).
   Proof.
     intro node.
     assert (ident_eqb step reset = false) as Hsr.
@@ -869,10 +823,10 @@ Module Type TRANSLATION
     simpl. now rewrite Hsr, ident_eqb_refl.
   Qed.
 
-  Lemma find_method_stepm_out:
+  Lemma find_mode_stepm_out:
     forall node stepm,
-      find_method step (translate_node node).(c_methods) = Some stepm ->
-      stepm.(m_out) = idty node.(n_out).
+      SynSM.find_mode step (translate_node node).(SynSM.ma_modes) = Some stepm ->
+      stepm.(SynSM.m_out) = idty node.(n_out).
   Proof.
     intros node stepm.
     simpl. rewrite ident_eqb_refl.
@@ -881,10 +835,10 @@ Module Type TRANSLATION
     reflexivity.
   Qed.
 
-  Lemma find_method_stepm_in:
+  Lemma find_mode_stepm_in:
     forall node stepm,
-      find_method step (translate_node node).(c_methods) = Some stepm ->
-      stepm.(m_in) = idty node.(n_in).
+      SynSM.find_mode step (translate_node node).(SynSM.ma_modes) = Some stepm ->
+      stepm.(SynSM.m_in) = idty node.(n_in).
   Proof.
     intros node stepm.
     simpl. rewrite ident_eqb_refl.
@@ -893,16 +847,16 @@ Module Type TRANSLATION
     reflexivity.
   Qed.
 
-  Lemma find_class_translate:
-    forall n G cls prog',
-      find_class n (translate G) = Some (cls, prog')
-      -> (exists node, find_node n G = Some node
-                       /\ cls = translate_node node).
+  Lemma find_machine_translate:
+    forall n G ma prog',
+      SynSM.find_machine n (translate G) = Some (ma, prog') ->
+      exists node, find_node n G = Some node
+              /\ ma = translate_node node.
   Proof.
     induction G as [|node G]; [now inversion 1|].
     intros ** Hfind.
     simpl in Hfind.
-    destruct (equiv_dec node.(n_name) n) as [Heq|Hneq].
+    destruct (EquivDec.equiv_dec node.(n_name) n) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
       injection Hfind; intros; subst.
       exists node. split; auto.
@@ -915,13 +869,13 @@ Module Type TRANSLATION
   Lemma find_node_translate:
     forall n g node,
       find_node n g = Some node ->
-      exists cls prog', find_class n (translate g) = Some (cls, prog')
-                        /\ cls = translate_node node.
+      exists ma prog', SynSM.find_machine n (translate g) = Some (ma, prog')
+                  /\ ma = translate_node node.
   Proof.
     induction g as [|node g]; [now inversion 1|].
     intros ** Hfind.
     simpl in Hfind.
-    destruct (equiv_dec node.(n_name) n) as [Heq|Hneq].
+    destruct (EquivDec.equiv_dec node.(n_name) n) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
       injection Hfind; intros; subst node0.
       exists (translate_node node), (translate g). split; auto.
@@ -934,13 +888,12 @@ Module Type TRANSLATION
 End TRANSLATION.
 
 Module TranslationFun
-       (Ids    : IDS)
-       (Op     : OPERATORS)
-       (OpAux  : OPERATORS_AUX Op)
-       (Clks   : CLOCKS Ids)
-       (SynNL  : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
-       (SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
-       (Mem    : MEMORIES Ids Op Clks SynNL)
-       <: TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
-  Include TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (Clks  : CLOCKS Ids)
+       (SynNL : NLSYNTAX Ids Op Clks)
+       (SynSM : SMSYNTAX Ids Op Clks)
+       (Mem   : MEMORIES Ids Op Clks SynNL)
+<: TRANSLATION Ids Op Clks SynNL SynSM Mem.
+  Include TRANSLATION Ids Op Clks SynNL SynSM Mem.
 End TranslationFun.

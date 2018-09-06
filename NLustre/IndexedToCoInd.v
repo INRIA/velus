@@ -450,7 +450,7 @@ Module Type INDEXEDTOCOIND
         Indexed.wf_streams yss ->
         Indexed.same_clock xss ->
         Indexed.same_clock yss ->
-        (forall n, Indexed.absent_list (xss n) <-> Indexed.absent_list (yss n)) ->
+        (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
         CoInd.same_clock (tr_streams xss ++ tr_streams yss).
    Proof.
       intros ** Nxss Nyss Cxss Cyss Hxss Hyss Same n.
@@ -1202,7 +1202,7 @@ Module Type INDEXEDTOCOIND
       forall k k' (r: stream bool) xss,
         Indexed.wf_streams xss ->
         EqSts value
-              (tr_streams (mask (Indexed.all_absent (xss k')) k r xss))
+              (tr_streams (mask (all_absent (xss k')) k r xss))
               (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros ** Const; unfold tr_streams, tr_stream.
@@ -1227,7 +1227,7 @@ Module Type INDEXEDTOCOIND
             by (simpl; destruct (r 0); auto).
         rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
         destruct (EqNat.beq_nat (count r (m + 0)) k); auto.
-        apply Indexed.nth_all_absent.
+        apply nth_all_absent.
     Qed.
 
     (* Corollary masked_impl: *)
@@ -1280,7 +1280,7 @@ Module Type INDEXEDTOCOIND
         + apply forallb_exists.
           apply Bool.not_true_iff_false in E.
           rewrite <-Clock in E.
-          unfold Indexed.present_list in E.
+          unfold present_list in E.
           apply decidable_Exists_not_Forall, Exists_exists in E.
           *{ destruct E as (x & Hin & Hx).
              apply In_ex_nth with (d:=x) in Hin as (k & Len & Nth).

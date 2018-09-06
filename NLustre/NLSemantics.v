@@ -48,10 +48,10 @@ environment.
 
   (* XXX: naming the environment type *and* its inhabitant [R] is
         probably not a good idea *)
-  Definition R := PM.t value.
+  Definition env := PM.t value.
   Definition history := PM.t (stream value).
 
-  Implicit Type R: R.
+  Implicit Type R: env.
   Implicit Type H: history.
 
   (** ** Instantaneous semantics *)
@@ -59,7 +59,7 @@ environment.
   Section InstantSemantics.
 
     Variable base : bool.
-    Variable R: R.
+    Variable R: env.
 
     Inductive sem_var_instant: ident -> value -> Prop :=
     | Sv:
@@ -255,7 +255,7 @@ environment.
     Variable bk : stream bool.
     Variable H : history.
 
-    Definition restr (n: nat): R :=
+    Definition restr (n: nat): env :=
       PM.map (fun xs => xs n) H.
     Hint Unfold restr.
 
@@ -264,7 +264,7 @@ environment.
     Hint Unfold lift1.
 
     Definition lift {A B}
-        (sem: bool -> R -> A -> B -> Prop) x (ys: stream B): Prop :=
+        (sem: bool -> env -> A -> B -> Prop) x (ys: stream B): Prop :=
       forall n, sem (bk n) (restr n) x (ys n).
     Hint Unfold lift.
 
@@ -567,7 +567,7 @@ enough: it does not support the internal fixpoint introduced by
   Section InstantDeterminism.
 
     Variable base: bool.
-    Variable R: R.
+    Variable R: env.
 
     Lemma sem_var_instant_det:
       forall x v1 v2,
@@ -792,7 +792,7 @@ enough: it does not support the internal fixpoint introduced by
     Require Import Logic.FunctionalExtensionality.
 
     Lemma lift_det:
-      forall {A B} (P: bool -> R -> A -> B -> Prop) (bk: stream bool)
+      forall {A B} (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
         x (xs1 xs2 : stream B),
         (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
         lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.

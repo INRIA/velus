@@ -262,6 +262,14 @@ if the clocked stream is [absent] at the corresponding instant. *)
     - inversion H. rewrite <- H2. now apply IHxs.
   Qed.
 
+  Lemma all_absent_map:
+    forall A B (l: list A) (f: A -> B),
+      all_absent (map f l) = all_absent l.
+  Proof.
+    unfold all_absent; induction l; intros; simpl; auto.
+    f_equal; auto.
+  Qed.
+
   Lemma present_list_spec:
     forall xs,
       present_list xs <-> exists (vs: list val), xs = map present vs.

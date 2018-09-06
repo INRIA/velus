@@ -19,7 +19,7 @@ Module Type SMSYNTAX
   Inductive lexp :=
   | Econst : const -> lexp
   | Evar   : ident -> type -> lexp
-  | Emem   : ident -> clock -> type -> lexp
+  | Emem   : ident -> type -> lexp
   | Ewhen  : lexp -> ident -> bool -> lexp
   | Eunop  : unop -> lexp -> type -> lexp
   | Ebinop : binop -> lexp -> lexp -> type -> lexp.
@@ -63,7 +63,7 @@ Module Type SMSYNTAX
     match le with
     | Econst c => type_const c
     | Evar _ ty
-    | Emem _ _ ty
+    | Emem _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e

@@ -192,8 +192,8 @@ Module Type COINDTOINDEXED
         xss <> [] ->
         yss <> [] ->
         CoInd.same_clock (xss ++ yss) ->
-        forall n, Indexed.absent_list (tr_Streams xss n)
-             <-> Indexed.absent_list (tr_Streams yss n).
+        forall n, absent_list (tr_Streams xss n)
+             <-> absent_list (tr_Streams yss n).
     Proof.
       intros ** Hxss Hyss Same n.
       apply same_clock_impl in Same.
@@ -834,7 +834,7 @@ Module Type COINDTOINDEXED
     Lemma mask_impl:
       forall k r xss,
         tr_Streams (List.map (CoInd.mask_v k r) xss)
-        ≈ mask (Indexed.all_absent xss) k (tr_Stream r) (tr_Streams xss).
+        ≈ mask (all_absent xss) k (tr_Stream r) (tr_Streams xss).
     Proof.
       induction xss as [|xs];
         simpl; intros ** n.
@@ -873,7 +873,7 @@ Module Type COINDTOINDEXED
 
     Remark all_absent_tr_Streams:
       forall A n (xss: list (Stream A)),
-        Indexed.all_absent (tr_Streams xss n) = Indexed.all_absent xss.
+        all_absent (tr_Streams xss n) = all_absent xss.
     Proof.
       induction xss; simpl; auto; now f_equal.
     Qed.

@@ -116,21 +116,23 @@ Module Type IDS.
   Axiom reserved_nodup: NoDup reserved.
   Axiom methods_nodup: NoDup methods.
 
+  Axiom reset_not_step: reset <> step.
+
   Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
     ~In (fst xty) reserved.
 
- Parameter prefix : ident -> ident -> ident.
+  Parameter prefix : ident -> ident -> ident.
 
- Parameter valid : ident -> Prop.
+  Parameter valid : ident -> Prop.
 
- Inductive prefixed: ident -> Prop :=
-   prefixed_intro: forall pref id,
-     prefixed (prefix pref id).
+  Inductive prefixed: ident -> Prop :=
+    prefixed_intro: forall pref id,
+      prefixed (prefix pref id).
 
- Axiom valid_not_prefixed: forall x, valid x -> ~prefixed x.
+  Axiom valid_not_prefixed: forall x, valid x -> ~prefixed x.
 
- Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
-   NotReserved xty /\ valid (fst xty).
+  Definition ValidId {typ: Type} (xty: ident * typ) : Prop :=
+    NotReserved xty /\ valid (fst xty).
 
 End IDS.
 
@@ -1223,7 +1225,7 @@ Section Lists.
   Qed.
 
   Remark map_cons':
-    forall (f: A -> A) l y ys,
+    forall (f: A -> B) l y ys,
       map f l = y :: ys ->
       exists x xs, y = f x /\ ys = map f xs.
   Proof.
@@ -1233,7 +1235,7 @@ Section Lists.
   Qed.
 
   Remark map_app':
-    forall (f: A -> A) l1 l l2,
+    forall (f: A -> B) l1 l l2,
       map f l = l1 ++ l2 ->
       exists k1 k2, l1 = map f k1 /\ l2 = map f k2.
   Proof.

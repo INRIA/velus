@@ -1,6 +1,5 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.Ident.
 
 Open Scope bool_scope.
 Require Import List.
@@ -345,16 +344,6 @@ Module Type OBCSYNTAX
   Qed.
 
   Instance: EqDec exp eq := { equiv_dec := exp_dec }.
-
-  Lemma reset_not_step:
-    reset <> step.
-  Proof.
-    pose proof (Ids.methods_nodup) as Hndup.
-    unfold methods in Hndup.
-    inversion_clear Hndup.
-    intro Hrs. rewrite Hrs in *.
-    intuition.
-  Qed.
 
 End OBCSYNTAX.
 

@@ -108,11 +108,11 @@ Module Type SMSEMANTICS
         forall x v ty,
           sem_var_instant x v ->
           sem_lexp_instant (Evar x ty) v
-    | Slast:
-        forall x ck b v ty,
-          sem_clock_instant ck b ->
+    | Smem:
+        forall x v ty,
+          (* sem_clock_instant ck b -> *)
           sem_mem_var_instant x v ->
-          sem_lexp_instant (Emem x ck ty) v
+          sem_lexp_instant (Emem x ty) v
     | Swhen_eq:
         forall s x sc xc b,
           sem_var_instant x (present xc) ->
