@@ -1959,6 +1959,22 @@ Section Lists.
         omega.
   Qed.
 
+  Lemma length_hd_error:
+    forall (l: list A),
+      0 < length l ->
+      exists x, hd_error l = Some x.
+  Proof.
+    induction l; simpl; intros ** L; intuition.
+    econstructor; eauto.
+  Qed.
+
+  Fixpoint last_error (l: list A): option A :=
+  match l with
+    | [] => None
+    | [a] => Some a
+    | _ :: l => last_error l
+  end.
+
 End Lists.
 
 Lemma Forall2_map_1:

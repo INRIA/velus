@@ -103,11 +103,11 @@ Module Type TRANSLATION
         [SynSM.EqDef x ck (translate_cexp ce)]
       | EqApp xs ck f les None =>
         let name := hd Ids.default xs in
-        [SynSM.EqCall xs ck f name step 0 (map translate_lexp les)]
+        [SynSM.EqCall xs ck f name step SynSM.Last (map translate_lexp les)]
       | EqApp xs ck f les (Some (r, ck_r)) =>
         let name := hd Ids.default xs in
-        [SynSM.EqCall [] (Con ck_r r true) f name reset 0 [];
-           SynSM.EqCall xs ck f name step 1 (map translate_lexp les)]
+        [SynSM.EqCall [] (Con ck_r r true) f name reset (SynSM.Inter 0) [];
+           SynSM.EqCall xs ck f name step SynSM.Last (map translate_lexp les)]
       | EqFby x ck v le =>
         [SynSM.EqPost x ck (SynSM.Eexp (translate_lexp le))]
       end.
@@ -126,7 +126,7 @@ Module Type TRANSLATION
     | EqFby x _ c0 _   => [SynSM.EqPost x Cbase (SynSM.Eexp (SynSM.Econst c0))]
     | EqApp xs _ f _ _ =>
       let name := hd Ids.default xs in
-      [SynSM.EqCall [] Cbase f name reset 0 []]
+      [SynSM.EqCall [] Cbase f name reset SynSM.Last []]
     end.
 
   Definition translate_reset_eqns (eqns: list equation): list SynSM.equation :=

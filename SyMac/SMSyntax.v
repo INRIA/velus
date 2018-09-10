@@ -33,10 +33,14 @@ Module Type SMSYNTAX
 
   (** ** Equations *)
 
+  Inductive rank :=
+  | Inter (n: nat): rank
+  | Last        : rank.
+
   Inductive equation :=
   | EqDef : ident -> clock -> cexp -> equation
   | EqPost: ident -> clock -> cexp -> equation
-  | EqCall: idents -> clock -> ident -> ident -> ident -> nat -> list lexp -> equation.
+  | EqCall: idents -> clock -> ident -> ident -> ident -> rank -> list lexp -> equation.
   (* y1, ..., yn = class instance mode rank (e1, ..., em) *)
 
   Record mode :=
