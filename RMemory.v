@@ -61,10 +61,10 @@ Section Properties.
   Variables (x y: ident)
             (v: A)
             (f: A -> B)
-            (menv omenv: memory A).
+            (m m': memory A).
 
   Lemma mfind_mem_gss:
-      mfind_mem x (madd_mem x v menv) = Some v.
+      mfind_mem x (madd_mem x v m) = Some v.
   Proof.
     unfold mfind_mem, madd_mem.
     now apply PM.gss.
@@ -72,14 +72,14 @@ Section Properties.
 
   Lemma mfind_mem_gso:
       x <> y
-      -> mfind_mem x (madd_mem y v menv) = mfind_mem x menv.
+      -> mfind_mem x (madd_mem y v m) = mfind_mem x m.
   Proof.
     unfold mfind_mem, madd_mem.
     now apply PM.gso.
   Qed.
 
   Lemma mfind_inst_gss:
-      mfind_inst x (madd_obj x omenv menv) = Some omenv.
+      mfind_inst x (madd_obj x m' m) = Some m'.
   Proof.
     unfold mfind_inst, madd_obj.
     now apply PM.gss.
@@ -87,29 +87,40 @@ Section Properties.
 
   Lemma mfind_inst_gso:
       x <> y
-      -> mfind_inst x (madd_obj y omenv menv) = mfind_inst x menv.
+      -> mfind_inst x (madd_obj y m' m) = mfind_inst x m.
   Proof.
     unfold mfind_inst, madd_obj.
     now apply PM.gso.
   Qed.
 
   Lemma mfind_mem_add_inst:
-      mfind_mem x (madd_obj y omenv menv) = mfind_mem x menv.
+      mfind_mem x (madd_obj y m' m) = mfind_mem x m.
   Proof.
     unfold mfind_mem, madd_obj.
     reflexivity.
   Qed.
 
   Lemma mfind_mem_map:
-    forall (f: A -> B),
-      mfind_mem x menv = Some v ->
-      mfind_mem x (mmap f menv) = Some (f v).
+    mfind_mem x m = Some v ->
+    mfind_mem x (mmap f m) = Some (f v).
   Proof.
     intros ** Find.
     unfold mfind_mem in *.
-    destruct menv; simpl in *.
+    destruct m; simpl in *.
     unfold PM.map.
     now rewrite PM.gmapi, Find.
+  Qed.
+
+  Lemma mm_values_map:
+    PM.map f (mm_values m) = mm_values (mmap f m).
+  Proof.
+    intros; now destruct m.
+  Qed.
+
+  Lemma mm_instances_map:
+    PM.map (mmap f) (mm_instances m) = mm_instances (mmap f m).
+  Proof.
+    intros; now destruct m.
   Qed.
 
 End Properties.

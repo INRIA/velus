@@ -261,7 +261,10 @@ Module Type SMSEMANTICS
           vs = all_absent ces ->
           sem_lexps_instant (* init *) base R m (* mems *) ces vs ->
           sem_clock_instant base R ck false ->
-          sem_laexps_instant ck ces vs.
+          sem_laexps_instant ck ces vs
+    | SNil:
+        forall ck,
+          sem_laexps_instant ck [] [].
 
   End InstantAnnotatedSemantics.
 
@@ -279,8 +282,11 @@ Module Type SMSEMANTICS
       PM.map (fun xs => xs n) H.
     Hint Unfold restr_hist.
 
+    Definition restr_mvalues (n: nat) (mvs: mvalues): mvalue :=
+      {| first_i := mvs.(first) n; inter_i := map (fun vs => vs n) mvs.(inter) |}.
+
     Definition restr_mem (n: nat): memory :=
-      mmap (fun mv => {| first_i := mv.(first) n; inter_i := map (fun vs => vs n) mv.(inter) |}) M.
+      mmap (restr_mvalues n) M.
     Hint Unfold restr_mem.
 
     Definition lift {A B} (sem: (* bool -> *) bool -> env -> memory -> (* list (ident * const) -> *) A -> B -> Prop)
@@ -394,12 +400,12 @@ Module Type SMSEMANTICS
           post_mem k x xs M mems ->
           sem_equation k bk H M mems (EqPost x ck ce)
     | SEqCall:
-        forall k bk H M mems ys x Mx ck ma_n P' ma i m k' es ess oss,
+        forall k bk H M mems ys M' ck ma_n P' ma i m k' es ess oss,
           find_machine ma_n P = Some (ma, P') ->
           sem_laexps bk H M (* mems *) ck es ess ->
-          hd_error ys = Some x ->
-          sub_inst x M Mx ->
-          sem_mode k' ma m Mx ess oss ->
+          (* hd_error ys = Some x -> *)
+          sub_inst i M M' ->
+          sem_mode k' ma m M' ess oss ->
           sem_vars H ys oss ->
           sem_equation k bk H M mems (EqCall ys ck ma_n i m k' es)
 
