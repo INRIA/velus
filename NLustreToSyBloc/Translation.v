@@ -5,7 +5,7 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
-Require Import Velus.SyMac.SMSyntax.
+Require Import Velus.SyBloc.SBSyntax.
 
 Require Import List.
 (* Require Import Coq.Lists.List. *)
@@ -23,7 +23,7 @@ Module Type TRANSLATION
        (Import Op    : OPERATORS)
        (Import Clks  : CLOCKS Ids)
        (Import SynNL : NLSYNTAX Ids Op Clks)
-       (SynSM        : SMSYNTAX Ids Op Clks)
+       (SynSB        : SBSYNTAX Ids Op Clks)
        (Import Mem   : MEMORIES Ids Op Clks SynNL).
 
   Definition gather_eq (acc: list (ident * const) * list (ident * ident)) (eq: equation):
@@ -75,77 +75,55 @@ Module Type TRANSLATION
 
     Variable memories : PS.t.
 
-    Definition tovar (xt: ident * type) : SynSM.lexp :=
+    Definition tovar (xt: ident * type) : SynSB.lexp :=
       let (x, ty) := xt in
-      if PS.mem x memories then SynSM.Emem x ty else SynSM.Evar x ty.
+      if PS.mem x memories then SynSB.Ereg x ty else SynSB.Evar x ty.
 
-    Definition bool_var (x: ident) : SynSM.lexp := tovar (x, bool_type).
+    Definition bool_var (x: ident) : SynSB.lexp := tovar (x, bool_type).
 
-    Fixpoint translate_lexp (e: lexp) : SynSM.lexp :=
+    Fixpoint translate_lexp (e: lexp) : SynSB.lexp :=
       match e with
-      | Econst c           => SynSM.Econst c
+      | Econst c           => SynSB.Econst c
       | Evar x ty          => tovar (x, ty)
-      | Ewhen e c x        => SynSM.Ewhen (translate_lexp e) c x
-      | Eunop op e ty      => SynSM.Eunop op (translate_lexp e) ty
-      | Ebinop op e1 e2 ty => SynSM.Ebinop op (translate_lexp e1) (translate_lexp e2) ty
+      | Ewhen e c x        => SynSB.Ewhen (translate_lexp e) c x
+      | Eunop op e ty      => SynSB.Eunop op (translate_lexp e) ty
+      | Ebinop op e1 e2 ty => SynSB.Ebinop op (translate_lexp e1) (translate_lexp e2) ty
       end.
 
-    Fixpoint translate_cexp (e: cexp) : SynSM.cexp :=
+    Fixpoint translate_cexp (e: cexp) : SynSB.cexp :=
       match e with
-      | Emerge x t f => SynSM.Emerge x (translate_cexp t) (translate_cexp f)
-      | Eite b t f   => SynSM.Eite (translate_lexp b) (translate_cexp t) (translate_cexp f)
-      | Eexp e       => SynSM.Eexp (translate_lexp e)
+      | Emerge x t f => SynSB.Emerge x (translate_cexp t) (translate_cexp f)
+      | Eite b t f   => SynSB.Eite (translate_lexp b) (translate_cexp t) (translate_cexp f)
+      | Eexp e       => SynSB.Eexp (translate_lexp e)
       end.
 
-    Definition translate_eqn (eqn: equation) : list SynSM.equation :=
+    Definition translate_eqn (eqn: equation) : list SynSB.equation :=
       match eqn with
       | EqDef x ck ce =>
-        [SynSM.EqDef x ck (translate_cexp ce)]
+        [SynSB.EqDef x ck (translate_cexp ce)]
       | EqApp xs ck f les None =>
         let name := hd Ids.default xs in
-        [SynSM.EqCall xs ck f name step SynSM.Last (map translate_lexp les)]
+        [SynSB.EqCall xs ck f name (map translate_lexp les)]
       | EqApp xs ck f les (Some (r, ck_r)) =>
         let name := hd Ids.default xs in
-        [SynSM.EqCall [] (Con ck_r r true) f name reset (SynSM.Inter 0) [];
-           SynSM.EqCall xs ck f name step SynSM.Last (map translate_lexp les)]
+        [SynSB.EqReset ck_r f name r;
+           SynSB.EqCall xs ck f name (map translate_lexp les)]
       | EqFby x ck v le =>
-        [SynSM.EqPost x ck (SynSM.Eexp (translate_lexp le))]
+        [SynSB.EqReg x ck (SynSB.Eexp (translate_lexp le))]
       end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
   (*      [Is_well_sch]. *) *)
 
-    Definition translate_eqns (eqns: list equation) : list SynSM.equation :=
+    Definition translate_eqns (eqns: list equation) : list SynSB.equation :=
       concatMap translate_eqn eqns.
 
   End Translate.
-
-  Definition translate_reset_eqn (eqn: equation) : list SynSM.equation :=
-    match eqn with
-    | EqDef _ _ _      => []
-    | EqFby x _ c0 _   => [SynSM.EqPost x Cbase (SynSM.Eexp (SynSM.Econst c0))]
-    | EqApp xs _ f _ _ =>
-      let name := hd Ids.default xs in
-      [SynSM.EqCall [] Cbase f name reset SynSM.Last []]
-    end.
-
-  Definition translate_reset_eqns (eqns: list equation): list SynSM.equation :=
-    concatMap translate_reset_eqn eqns.
 
   Definition ps_from_list (l: idents) : PS.t :=
     fold_left (fun s i => PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
-
-  Program Definition reset_mode (eqns: list equation): SynSM.mode :=
-    {| SynSM.m_name := reset;
-       SynSM.m_in   := [];
-       SynSM.m_vars := [];
-       SynSM.m_out  := [];
-       SynSM.m_eqs  := translate_reset_eqns eqns
-       (* m_nodupvars := _; *)
-       (* m_good      := _ *)
-    |}.
 
   (** Properties of translation functions *)
 
@@ -711,25 +689,22 @@ Module Type TRANSLATION
   Qed.
 
   (* =translate_node= *)
-  Program Definition translate_node (n: node) : SynSM.machine :=
+  Program Definition translate_node (n: node) : SynSB.block :=
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
-    let mems := fst gathered in
-    let machs := snd gathered in
-    let memids := ps_from_list (map fst mems) in
-    let partitioned := partition (fun x => PS.mem (fst x) memids) n.(n_vars) in
+    let regs := fst gathered in
+    let blocks := snd gathered in
+    let regids := ps_from_list (map fst regs) in
+    let partitioned := partition (fun x => PS.mem (fst x) regids) n.(n_vars) in
     let vars := snd partitioned in
-    {| SynSM.ma_name  := n.(n_name);
-       SynSM.ma_mems  := mems;
-       SynSM.ma_machs := machs;
-       SynSM.ma_modes := [ {| SynSM.m_name := step;
-                              SynSM.m_in   := idty n.(n_in);
-                              SynSM.m_vars := idty vars;
-                              SynSM.m_out  := idty n.(n_out);
-                              SynSM.m_eqs  := translate_eqns memids n.(n_eqs)
-                     |};
-                        reset_mode n.(n_eqs) ]
+    {| SynSB.b_name  := n.(n_name);
+       SynSB.b_regs  := regs;
+       SynSB.b_blocks := blocks;
+       SynSB.b_in   := idty n.(n_in);
+       SynSB.b_vars := idty vars;
+       SynSB.b_out  := idty n.(n_out);
+       SynSB.b_eqs  := translate_eqns regids n.(n_eqs)
     |}.
   (* (* =end= *) *)
   (* Next Obligation. *)
@@ -790,68 +765,68 @@ Module Type TRANSLATION
   (* Qed. *)
 
   (* =translate= *)
-  Definition translate (G: global) : SynSM.program :=
+  Definition translate (G: global) : SynSB.program :=
     map translate_node G.
   (* =end= *)
 
   Lemma map_c_name_translate:
     forall g,
-      map SynSM.ma_name (translate g) = map n_name g.
+      map SynSB.b_name (translate g) = map n_name g.
   Proof.
     induction g as [|n g]; auto.
     simpl; rewrite IHg. reflexivity.
   Qed.
 
-  Lemma exists_step_node:
-    forall node,
-    exists stepm,
-      SynSM.find_mode step (translate_node node).(SynSM.ma_modes) = Some stepm.
-  Proof.
-    intro node.
-    simpl. rewrite ident_eqb_refl. eauto.
-  Qed.
+  (* Lemma exists_step_node: *)
+  (*   forall node, *)
+  (*   exists stepm, *)
+  (*     SynSB.find_mode step (translate_node node).(SynSB.ma_modes) = Some stepm. *)
+  (* Proof. *)
+  (*   intro node. *)
+  (*   simpl. rewrite ident_eqb_refl. eauto. *)
+  (* Qed. *)
 
-  Lemma exists_reset_mode:
-    forall node,
-      SynSM.find_mode reset (translate_node node).(SynSM.ma_modes)
-      = Some (reset_mode node.(n_eqs)).
-  Proof.
-    intro node.
-    assert (ident_eqb step reset = false) as Hsr.
-    apply ident_eqb_neq.
-    apply PositiveOrder.neq_sym. apply reset_not_step.
-    simpl. now rewrite Hsr, ident_eqb_refl.
-  Qed.
+  (* Lemma exists_reset_mode: *)
+  (*   forall node, *)
+  (*     SynSB.find_mode reset (translate_node node).(SynSB.ma_modes) *)
+  (*     = Some (reset_mode node.(n_eqs)). *)
+  (* Proof. *)
+  (*   intro node. *)
+  (*   assert (ident_eqb step reset = false) as Hsr. *)
+  (*   apply ident_eqb_neq. *)
+  (*   apply PositiveOrder.neq_sym. apply reset_not_step. *)
+  (*   simpl. now rewrite Hsr, ident_eqb_refl. *)
+  (* Qed. *)
 
-  Lemma find_mode_stepm_out:
-    forall node stepm,
-      SynSM.find_mode step (translate_node node).(SynSM.ma_modes) = Some stepm ->
-      stepm.(SynSM.m_out) = idty node.(n_out).
-  Proof.
-    intros node stepm.
-    simpl. rewrite ident_eqb_refl.
-    injection 1.
-    intro HH; rewrite <-HH.
-    reflexivity.
-  Qed.
+  (* Lemma find_mode_stepm_out: *)
+  (*   forall node stepm, *)
+  (*     SynSB.find_mode step (translate_node node).(SynSB.ma_modes) = Some stepm -> *)
+  (*     stepm.(SynSB.m_out) = idty node.(n_out). *)
+  (* Proof. *)
+  (*   intros node stepm. *)
+  (*   simpl. rewrite ident_eqb_refl. *)
+  (*   injection 1. *)
+  (*   intro HH; rewrite <-HH. *)
+  (*   reflexivity. *)
+  (* Qed. *)
 
-  Lemma find_mode_stepm_in:
-    forall node stepm,
-      SynSM.find_mode step (translate_node node).(SynSM.ma_modes) = Some stepm ->
-      stepm.(SynSM.m_in) = idty node.(n_in).
-  Proof.
-    intros node stepm.
-    simpl. rewrite ident_eqb_refl.
-    injection 1.
-    intro HH; rewrite <-HH.
-    reflexivity.
-  Qed.
+  (* Lemma find_mode_stepm_in: *)
+  (*   forall node stepm, *)
+  (*     SynSB.find_mode step (translate_node node).(SynSB.ma_modes) = Some stepm -> *)
+  (*     stepm.(SynSB.m_in) = idty node.(n_in). *)
+  (* Proof. *)
+  (*   intros node stepm. *)
+  (*   simpl. rewrite ident_eqb_refl. *)
+  (*   injection 1. *)
+  (*   intro HH; rewrite <-HH. *)
+  (*   reflexivity. *)
+  (* Qed. *)
 
-  Lemma find_machine_translate:
-    forall n G ma prog',
-      SynSM.find_machine n (translate G) = Some (ma, prog') ->
+  Lemma find_block_translate:
+    forall n G bl prog',
+      SynSB.find_block n (translate G) = Some (bl, prog') ->
       exists node, find_node n G = Some node
-              /\ ma = translate_node node.
+              /\ bl = translate_node node.
   Proof.
     induction G as [|node G]; [now inversion 1|].
     intros ** Hfind.
@@ -869,8 +844,8 @@ Module Type TRANSLATION
   Lemma find_node_translate:
     forall n g node,
       find_node n g = Some node ->
-      exists ma prog', SynSM.find_machine n (translate g) = Some (ma, prog')
-                  /\ ma = translate_node node.
+      exists bl prog', SynSB.find_block n (translate g) = Some (bl, prog')
+                  /\ bl = translate_node node.
   Proof.
     induction g as [|node g]; [now inversion 1|].
     intros ** Hfind.
@@ -881,8 +856,8 @@ Module Type TRANSLATION
       exists (translate_node node), (translate g). split; auto.
       simpl. now rewrite Heq, ident_eqb_refl.
     - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
-      apply IHg in Hfind. destruct Hfind as (cls & prog' & Hfind & Hcls).
-      exists cls, prog'. split; auto. simpl. now rewrite Hneq.
+      apply IHg in Hfind. destruct Hfind as (bl & prog' & Hfind & Hbl).
+      exists bl, prog'. split; auto. simpl. now rewrite Hneq.
   Qed.
 
 End TRANSLATION.
@@ -892,8 +867,8 @@ Module TranslationFun
        (Op    : OPERATORS)
        (Clks  : CLOCKS Ids)
        (SynNL : NLSYNTAX Ids Op Clks)
-       (SynSM : SMSYNTAX Ids Op Clks)
+       (SynSB : SBSYNTAX Ids Op Clks)
        (Mem   : MEMORIES Ids Op Clks SynNL)
-<: TRANSLATION Ids Op Clks SynNL SynSM Mem.
-  Include TRANSLATION Ids Op Clks SynNL SynSM Mem.
+<: TRANSLATION Ids Op Clks SynNL SynSB Mem.
+  Include TRANSLATION Ids Op Clks SynNL SynSB Mem.
 End TranslationFun.
