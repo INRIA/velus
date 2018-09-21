@@ -679,53 +679,53 @@ Module Type INDEXEDTOCOIND
     Qed.
     Hint Resolve sem_clock_impl_from.
 
-    (** An inversion principle for annotated [var]. *)
-    Lemma sem_avar_inv:
-      forall H b x vs ck,
-        Indexed.sem_avar b H ck x vs ->
-        Indexed.sem_var b H x vs
-        /\ exists bs,
-            Indexed.sem_clock b H ck bs
-            /\ forall n,
-              bs n = match vs n with
-                     | present _ => true
-                     | absent => false
-                     end.
-    Proof.
-      intros ** Sem; split.
-      - intro n; specialize (Sem n); inv Sem; auto.
-      - exists (fun n => match vs n with
-                 | present _ => true
-                 | absent => false
-                 end); split; intro n; specialize (Sem n); inv Sem; auto.
-    Qed.
+    (* (** An inversion principle for annotated [var]. *) *)
+    (* Lemma sem_avar_inv: *)
+    (*   forall H b x vs ck, *)
+    (*     Indexed.sem_avar b H ck x vs -> *)
+    (*     Indexed.sem_var b H x vs *)
+    (*     /\ exists bs, *)
+    (*         Indexed.sem_clock b H ck bs *)
+    (*         /\ forall n, *)
+    (*           bs n = match vs n with *)
+    (*                  | present _ => true *)
+    (*                  | absent => false *)
+    (*                  end. *)
+    (* Proof. *)
+    (*   intros ** Sem; split. *)
+    (*   - intro n; specialize (Sem n); inv Sem; auto. *)
+    (*   - exists (fun n => match vs n with *)
+    (*              | present _ => true *)
+    (*              | absent => false *)
+    (*              end); split; intro n; specialize (Sem n); inv Sem; auto. *)
+    (* Qed. *)
 
-    (** We deduce from the previous lemmas the correspondence for annotated
-        [var]. *)
-    Corollary sem_avar_impl_from:
-      forall n H b x vs ck,
-        Indexed.sem_avar b H ck x vs ->
-        CoInd.sem_avar (tr_history_from n H) (tr_stream_from n b) ck x
-                        (tr_stream_from n vs).
-    Proof.
-      cofix Cofix; intros ** Sem.
-      pose proof Sem as Sem';
-        apply sem_avar_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
-        apply (sem_var_impl_from n) in Sem';
-        apply sem_clock_impl_from with (n:=n) in Sem_ck.
-      rewrite (init_from_n vs) in *.
-      rewrite (init_from_n bs), Ebs in Sem_ck.
-      destruct (vs n); econstructor; eauto;
-        rewrite init_from_tl, tr_history_from_tl;
-        apply Cofix; auto.
-    Qed.
+    (* (** We deduce from the previous lemmas the correspondence for annotated *)
+    (*     [var]. *) *)
+    (* Corollary sem_avar_impl_from: *)
+    (*   forall n H b x vs ck, *)
+    (*     Indexed.sem_avar b H ck x vs -> *)
+    (*     CoInd.sem_avar (tr_history_from n H) (tr_stream_from n b) ck x *)
+    (*                     (tr_stream_from n vs). *)
+    (* Proof. *)
+    (*   cofix Cofix; intros ** Sem. *)
+    (*   pose proof Sem as Sem'; *)
+    (*     apply sem_avar_inv in Sem' as (Sem' & bs & Sem_ck & Ebs); *)
+    (*     apply (sem_var_impl_from n) in Sem'; *)
+    (*     apply sem_clock_impl_from with (n:=n) in Sem_ck. *)
+    (*   rewrite (init_from_n vs) in *. *)
+    (*   rewrite (init_from_n bs), Ebs in Sem_ck. *)
+    (*   destruct (vs n); econstructor; eauto; *)
+    (*     rewrite init_from_tl, tr_history_from_tl; *)
+    (*     apply Cofix; auto. *)
+    (* Qed. *)
 
-    Corollary sem_avar_impl:
-      forall H b x vs ck,
-        Indexed.sem_avar b H ck x vs ->
-        CoInd.sem_avar (tr_history H) (tr_stream b) ck x (tr_stream vs).
-    Proof. apply sem_avar_impl_from. Qed.
-    Hint Resolve sem_avar_impl_from sem_avar_impl.
+    (* Corollary sem_avar_impl: *)
+    (*   forall H b x vs ck, *)
+    (*     Indexed.sem_avar b H ck x vs -> *)
+    (*     CoInd.sem_avar (tr_history H) (tr_stream b) ck x (tr_stream vs). *)
+    (* Proof. apply sem_avar_impl_from. Qed. *)
+    (* Hint Resolve sem_avar_impl_from sem_avar_impl. *)
 
     (** ** Semantics of lexps *)
 

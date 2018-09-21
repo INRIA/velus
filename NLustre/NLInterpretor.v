@@ -35,7 +35,7 @@ Module Type NLINTERPRETOR
   Section InstantInterpretor.
 
     Variable base : bool.
-    Variable R: R.
+    Variable R: env.
 
     Definition interp_var_instant (x: ident): value :=
       match PM.find x R with
@@ -61,7 +61,7 @@ Module Type NLINTERPRETOR
         end
       end.
 
-    Definition interp_annotated_instant {A} (interp: bool -> Sem.R -> A -> value) (ck: clock) (a: A): value :=
+    Definition interp_annotated_instant {A} (interp: bool -> env -> A -> value) (ck: clock) (a: A): value :=
       if interp_clock_instant ck then
         interp base R  a
       else
@@ -212,7 +212,7 @@ Module Type NLINTERPRETOR
     Variable bk : stream bool.
     Variable H: history.
 
-    Definition lift {A B} (interp: bool -> R -> A -> B) x: stream B :=
+    Definition lift {A B} (interp: bool -> env -> A -> B) x: stream B :=
       fun n => interp (bk n) (restr H n) x.
     Hint Unfold lift.
 
@@ -251,7 +251,7 @@ Module Type NLINTERPRETOR
     Definition interp_cexp (e: cexp): stream value :=
       lift interp_cexp_instant e.
 
-    Definition interp_annotated {A} (interp_instant: bool -> R -> A -> value) (ck: clock) (a: A): stream value :=
+    Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value :=
       lift (fun base R => interp_annotated_instant base R interp_instant ck) a.
 
   End LiftInterpretor.

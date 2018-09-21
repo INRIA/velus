@@ -88,17 +88,17 @@ environment.
           val_to_bool c = Some b ->
           sem_clock_instant (Con ck x (negb b)) false.
 
-    Inductive sem_avar_instant: clock -> ident -> value -> Prop:=
-    | SVtick:
-        forall ck x c,
-          sem_var_instant x (present c) ->
-          sem_clock_instant ck true ->
-          sem_avar_instant ck x (present c)
-    | SVabs:
-        forall ck x,
-          sem_var_instant x absent ->
-          sem_clock_instant ck false ->
-          sem_avar_instant ck x absent.
+    (* Inductive sem_avar_instant: clock -> ident -> value -> Prop:= *)
+    (* | SVtick: *)
+    (*     forall ck x c, *)
+    (*       sem_var_instant x (present c) -> *)
+    (*       sem_clock_instant ck true -> *)
+    (*       sem_avar_instant ck x (present c) *)
+    (* | SVabs: *)
+    (*     forall ck x, *)
+    (*       sem_var_instant x absent -> *)
+    (*       sem_clock_instant ck false -> *)
+    (*       sem_avar_instant ck x absent. *)
 
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:
@@ -274,8 +274,8 @@ environment.
     Definition sem_var (x: ident)(xs: stream value): Prop :=
       lift (fun base => sem_var_instant) x xs.
 
-    Definition sem_avar ck (x: ident)(xs: stream value): Prop :=
-      lift (fun base R => sem_avar_instant base R ck) x xs.
+    (* Definition sem_avar ck (x: ident)(xs: stream value): Prop := *)
+    (*   lift (fun base R => sem_avar_instant base R ck) x xs. *)
 
     Definition sem_vars (x: idents)(xs: stream (list value)): Prop :=
       lift (fun base R => Forall2 (sem_var_instant R)) x xs.
@@ -377,7 +377,8 @@ environment.
         forall bk H x ck f arg y ck_r ys ls xs,
           sem_laexps bk H ck arg ls ->
           sem_vars bk H x xs ->
-          sem_avar bk H ck_r y ys ->
+          (* sem_avar bk H ck_r y ys -> *)
+          sem_var bk H y ys ->
           sem_reset f (reset_of ys) ls xs ->
           sem_equation bk H (EqApp x ck f arg (Some (y, ck_r)))
     | SEqFby:
@@ -447,7 +448,8 @@ enough: it does not support the internal fixpoint introduced by
       forall bk H x ck f arg y ck_r ys ls xs,
         sem_laexps bk H ck arg ls ->
         sem_vars bk H x xs ->
-        sem_avar bk H ck_r y ys ->
+        (* sem_avar bk H ck_r y ys -> *)
+        sem_var bk H y ys ->
         sem_reset G f (reset_of ys) ls xs ->
         P_reset f (reset_of ys) ls xs ->
         P_equation bk H (EqApp x ck f arg (Some (y, ck_r))).
@@ -581,15 +583,15 @@ enough: it does not support the internal fixpoint introduced by
         congruence.
     Qed.
 
-    Lemma sem_avar_instant_det:
-      forall x ck v1 v2,
-        sem_avar_instant base R ck x v1 ->
-        sem_avar_instant base R ck x v2 ->
-        v1 = v2.
-    Proof.
-      intros ** H1 H2.
-      inv H1; inv H2; eapply sem_var_instant_det; eauto.
-    Qed.
+    (* Lemma sem_avar_instant_det: *)
+    (*   forall x ck v1 v2, *)
+    (*     sem_avar_instant base R ck x v1 -> *)
+    (*     sem_avar_instant base R ck x v2 -> *)
+    (*     v1 = v2. *)
+    (* Proof. *)
+    (*   intros ** H1 H2. *)
+    (*   inv H1; inv H2; eapply sem_var_instant_det; eauto. *)
+    (* Qed. *)
 
     Lemma sem_clock_instant_det:
       forall ck v1 v2,
@@ -813,12 +815,12 @@ enough: it does not support the internal fixpoint introduced by
       apply_lift sem_var_instant_det.
     Qed.
 
-    Lemma sem_avar_det:
-      forall ck x xs1 xs2,
-        sem_avar bk H ck x xs1 -> sem_avar bk H ck x xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_avar_instant_det.
-    Qed.
+    (* Lemma sem_avar_det: *)
+    (*   forall ck x xs1 xs2, *)
+    (*     sem_avar bk H ck x xs1 -> sem_avar bk H ck x xs2 -> xs1 = xs2. *)
+    (* Proof. *)
+    (*   apply_lift sem_avar_instant_det. *)
+    (* Qed. *)
 
     Lemma sem_clock_det:
       forall ck bs1 bs2,
@@ -922,12 +924,12 @@ clock to [sem_var_instant] too. *)
     | H1: sem_var ?bk ?H ?C ?X,
           H2: sem_var ?bk ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_var_det; eexact H1 || eexact H2
-    | H1: sem_avar_instant ?bk ?H ?CK ?C ?X,
-          H2: sem_avar_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
-      eapply sem_avar_instant_det; eexact H1 || eexact H2
-    | H1: sem_avar ?bk ?H ?CK ?C ?X,
-          H2: sem_avar ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
-      eapply sem_avar_det; eexact H1 || eexact H2
+    (* | H1: sem_avar_instant ?bk ?H ?CK ?C ?X, *)
+    (*       H2: sem_avar_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y => *)
+    (*   eapply sem_avar_instant_det; eexact H1 || eexact H2 *)
+    (* | H1: sem_avar ?bk ?H ?CK ?C ?X, *)
+    (*       H2: sem_avar ?bk ?H ?CK ?C ?Y |- ?X = ?Y => *)
+    (*   eapply sem_avar_det; eexact H1 || eexact H2 *)
 
     end.
 
