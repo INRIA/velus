@@ -29,16 +29,16 @@ Module Type SBSEMANTICS
   Definition history := PM.t (stream value).
 
   Record mvalue :=
-    { content_i: value;
-      reset_i: bool;
-      init_i: const
-    }.
+    Mvalue { content_i: value;
+             reset_i: bool;
+             init_i: const
+           }.
 
   Record mvalues :=
-    { content: stream value;
-      reset: stream bool;
-      init: const
-    }.
+    Mvalues { content: stream value;
+              reset: stream bool;
+              init: const
+            }.
 
   Definition memory := RMemory.memory mvalue.
   Definition memories := RMemory.memory mvalues.
@@ -332,7 +332,7 @@ Module Type SBSEMANTICS
     post_mem_intro:
       forall x xs M mvs,
         mfind_mem x M = Some mvs ->
-        (forall n, mvs.(content) (S n) = xs n) ->
+        mvs.(content) ≈ fby (sem_const mvs.(init)) xs ->
         next_reg x xs M .
 
   Inductive reset_regs: stream bool -> memories -> Prop :=
@@ -341,6 +341,9 @@ Module Type SBSEMANTICS
         (forall x mvs,
             mfind_mem x M = Some mvs ->
             forall n, rs n = true -> mvs.(reset) n = true) ->
+        (forall x M',
+            mfind_inst x M = Some M' ->
+            reset_regs rs M') ->
         reset_regs rs M.
 
   Definition reset_of (xs: stream value) : stream bool :=

@@ -115,7 +115,8 @@ Module Type MEMSEMANTICS
           sub_inst_n x M M' ->
           sem_laexps bk H ck arg ls ->
           sem_vars bk H xs xss ->
-          sem_avar bk H ck_r r ys ->
+          (* sem_avar bk H ck_r r ys -> *)
+          sem_var bk H r ys ->
           msem_reset f (reset_of ys) ls M' xss ->
           msem_equation bk H M (EqApp xs ck f arg (Some (r, ck_r)))
     | SEqFby:
@@ -191,7 +192,8 @@ enough: it does not support the internal fixpoint introduced by
         sub_inst_n x M M' ->
         sem_laexps bk H ck arg ls ->
         sem_vars bk H xs xss ->
-        sem_avar bk H ck_r r ys ->
+        (* sem_avar bk H ck_r r ys -> *)
+        sem_var bk H r ys ->
         msem_reset G f (reset_of ys) ls M' xss ->
         P_reset f (reset_of ys) ls M' xss ->
         P_equation bk H M (EqApp xs ck f arg (Some (r, ck_r))).
@@ -295,7 +297,7 @@ enough: it does not support the internal fixpoint introduced by
     - econstructor.
       + apply SLabss; eauto.
       + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
-    - unfold sem_avar, lift in Hvar; specialize (Hvar n); inv Hvar;
+    - unfold sem_var, lift in Hvar; specialize (Hvar n); inv Hvar;
         try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto).
       econstructor.
       + apply SLabss; eauto.
