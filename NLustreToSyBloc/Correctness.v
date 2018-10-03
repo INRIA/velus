@@ -35,30 +35,30 @@ Module Type CORRECTNESS
        (Import Mem   : MEMORIES    Ids Op       Clks SynNL)
        (Import Trans : TRANSLATION Ids Op       Clks SynNL SynSB Mem).
 
-  Fixpoint memvar_lexp (x: ident) (e: SynSB.lexp) :=
-    match e with
-    | SynSB.Ereg y _ => x = y
-    | SynSB.Ewhen e _ _ => memvar_lexp x e
-    | SynSB.Eunop _ e _ => memvar_lexp x e
-    | SynSB.Ebinop _ e1 e2 _ => memvar_lexp x e1 \/ memvar_lexp x e2
-    | _ => False
-    end.
+  (* Fixpoint memvar_lexp (x: ident) (e: SynSB.lexp) := *)
+  (*   match e with *)
+  (*   | SynSB.Ereg y _ => x = y *)
+  (*   | SynSB.Ewhen e _ _ => memvar_lexp x e *)
+  (*   | SynSB.Eunop _ e _ => memvar_lexp x e *)
+  (*   | SynSB.Ebinop _ e1 e2 _ => memvar_lexp x e1 \/ memvar_lexp x e2 *)
+  (*   | _ => False *)
+  (*   end. *)
 
-  Fixpoint memvar_cexp (x: ident) (ce: SynSB.cexp) :=
-    match ce with
-    | SynSB.Emerge _ e1 e2 => memvar_cexp x e1 \/ memvar_cexp x e2
-    | SynSB.Eite e t f => memvar_lexp x e \/ memvar_cexp x t \/ memvar_cexp x f
-    | SynSB.Eexp e => memvar_lexp x e
-    end.
+  (* Fixpoint memvar_cexp (x: ident) (ce: SynSB.cexp) := *)
+  (*   match ce with *)
+  (*   | SynSB.Emerge _ e1 e2 => memvar_cexp x e1 \/ memvar_cexp x e2 *)
+  (*   | SynSB.Eite e t f => memvar_lexp x e \/ memvar_cexp x t \/ memvar_cexp x f *)
+  (*   | SynSB.Eexp e => memvar_lexp x e *)
+  (*   end. *)
 
-  Definition memory_spec (m: SemSB.memory) (memids: PS.t) (R: env) :=
-    forall x v,
-      PM.find x R = Some v ->
-      PS.mem x memids = true ->
-      SemSB.get_reg x m = Some v.
+  (* Definition memory_spec (m: SemSB.memory) (memids: PS.t) (R: env) := *)
+  (*   forall x v, *)
+  (*     PM.find x R = Some v -> *)
+  (*     PS.mem x memids = true -> *)
+  (*     SemSB.get_reg x m = Some v. *)
 
-  Definition memories_spec (M: SemSB.memories) (memids: PS.t) (H: history) :=
-    forall n, memory_spec (SemSB.restr_mem M n) memids (SemSB.restr_hist H n).
+  (* Definition memories_spec (M: SemSB.memories) (memids: PS.t) (H: history) := *)
+  (*   forall n, memory_spec (SemSB.restr_mem M n) memids (SemSB.restr_hist H n). *)
 
   Section Global.
 
@@ -87,35 +87,21 @@ Module Type CORRECTNESS
         induction 1; eauto using SemSB.sem_clock_instant.
       Qed.
 
-      Variable m: SemSB.memory.
-      Variable memids: PS.t.
-      (* Variable mems: list (ident * const). *)
-      (* Let memids := ps_from_list (map fst mems). *)
-
       Lemma typeof_correctness:
         forall e,
-          SynSB.typeof (translate_lexp memids e) = typeof e.
+          SynSB.typeof (translate_lexp e) = typeof e.
       Proof.
         induction e; intros; simpl; auto.
-        destruct (PS.mem i memids); auto.
       Qed.
       (* Hint Resolve typeof_correctness. *)
 
-      Hypothesis Spec: memory_spec m memids R.
 
       Lemma lexp_instant_correctness:
         forall e v,
           sem_lexp_instant base R e v ->
-          SemSB.sem_lexp_instant base R m (translate_lexp memids e) v.
+          SemSB.sem_lexp_instant base R (translate_lexp e) v.
       Proof.
         induction 1; simpl; eauto using SemSB.sem_lexp_instant.
-        - destruct (PS.mem x memids) eqn: E.
-          + do 2 constructor.
-            unfold SemSB.get_reg.
-            match goal with H: sem_var_instant R x v |- _ =>
-                            inversion_clear H as [?? Find] end.
-            apply Spec; auto.
-          + eauto using SemSB.sem_lexp_instant.
         - econstructor; eauto.
           now rewrite typeof_correctness.
         - econstructor; eauto.
@@ -126,7 +112,7 @@ Module Type CORRECTNESS
       Lemma lexps_instant_correctness:
         forall es vs,
           sem_lexps_instant base R es vs ->
-          SemSB.sem_lexps_instant base R m (map (translate_lexp memids) es) vs.
+          SemSB.sem_lexps_instant base R (map translate_lexp es) vs.
       Proof.
         induction 1; constructor; auto.
       Qed.
@@ -134,122 +120,16 @@ Module Type CORRECTNESS
       Lemma cexp_instant_correctness:
         forall ce v,
           sem_cexp_instant base R ce v ->
-          SemSB.sem_cexp_instant base R m (translate_cexp memids ce) v.
+          SemSB.sem_cexp_instant base R (translate_cexp ce) v.
       Proof.
         induction 1; simpl; eauto using SemSB.sem_cexp_instant.
       Qed.
 
-      Lemma sem_lexp_instant_madd_mem:
-        forall x mv e v,
-          SemSB.sem_lexp_instant base R m e v ->
-          ~ memvar_lexp x e ->
-          SemSB.sem_lexp_instant base R (madd_mem x mv m) e v.
-      Proof.
-        induction 1; simpl; intros; eauto using SemSB.sem_lexp_instant.
-        - do 2 constructor.
-          match goal with H: SemSB.sem_mem_var_instant _ _ _ |- _ => inv H end.
-          unfold SemSB.get_reg in *.
-          rewrite mfind_mem_gso; auto.
-        - econstructor; eauto.
-        - econstructor; eauto.
-      Qed.
-      Hint Resolve sem_lexp_instant_madd_mem.
-
-      Lemma sem_cexp_instant_madd_mem:
-        forall x mv ce v,
-          SemSB.sem_cexp_instant base R m ce v ->
-          ~ memvar_cexp x ce ->
-          SemSB.sem_cexp_instant base R (madd_mem x mv m) ce v.
-      Proof.
-        induction 1; simpl; intros; eauto using SemSB.sem_cexp_instant.
-        - econstructor; eauto.
-        - econstructor 2; eauto.
-        - econstructor; eauto.
-        - econstructor; eauto.
-          + apply IHsem_cexp_instant1; auto.
-          + apply IHsem_cexp_instant2; auto.
-        - econstructor; eauto.
-          + apply IHsem_cexp_instant1; auto.
-          + apply IHsem_cexp_instant2; auto.
-      Qed.
-
-      Lemma sem_lexps_instant_madd_mem:
-        forall x mv es vs,
-          SemSB.sem_lexps_instant base R m es vs ->
-          Forall (fun e => ~ memvar_lexp x e) es ->
-          SemSB.sem_lexps_instant base R (madd_mem x mv m) es vs.
-      Proof.
-        induction 1; simpl; intros Nmv; inv Nmv.
-        - constructor.
-        - constructor; auto.
-          apply IHForall2; auto.
-      Qed.
-
-      Lemma sem_lexp_instant_madd_obj:
-        forall x m' e v,
-          SemSB.sem_lexp_instant base R m e v ->
-          SemSB.sem_lexp_instant base R (madd_obj x m' m) e v.
-      Proof.
-        induction 1; simpl; intros; eauto using SemSB.sem_lexp_instant.
-        do 2 constructor.
-        match goal with H: SemSB.sem_mem_var_instant _ _ _ |- _ => inv H end.
-        unfold SemSB.get_reg in *.
-        now rewrite mfind_mem_add_inst.
-      Qed.
-      Hint Resolve sem_lexp_instant_madd_obj.
-
-      Lemma sem_cexp_instant_madd_obj:
-        forall x m' ce v,
-          SemSB.sem_cexp_instant base R m ce v ->
-          SemSB.sem_cexp_instant base R (madd_obj x m' m) ce v.
-      Proof.
-        induction 1; simpl; intros; eauto using SemSB.sem_cexp_instant.
-      Qed.
-
-      Lemma sem_lexps_instant_madd_obj:
-        forall x m' es vs,
-          SemSB.sem_lexps_instant base R m es vs ->
-          SemSB.sem_lexps_instant base R (madd_obj x m' m) es vs.
-      Proof.
-        induction 1; simpl; intros; constructor; auto.
-      Qed.
 
     End SemInstant.
     Hint Resolve var_instant_correctness clock_instant_correctness
          lexp_instant_correctness lexps_instant_correctness
-         cexp_instant_correctness
-         sem_cexp_instant_madd_mem sem_lexps_instant_madd_mem
-         sem_cexp_instant_madd_obj sem_lexps_instant_madd_obj.
-
-    Lemma pm_map_add:
-      forall {A B} (m: PM.t A) (f: A -> B) x v,
-        PM.map f (PM.add x v m) = PM.add x (f v) (PM.map f m).
-    Proof.
-    Admitted.
-
-    Lemma restr_mem_madd_mem:
-      forall x mvs M n,
-        SemSB.restr_mem (madd_mem x mvs M) n =
-        madd_mem x (SemSB.restr_mvalues n mvs) (SemSB.restr_mem M n).
-    Proof.
-      intros.
-      unfold SemSB.restr_mem, madd_mem; simpl.
-      f_equal.
-      - now rewrite pm_map_add, mm_values_map.
-      - now rewrite mm_instances_map.
-    Qed.
-
-    Lemma restr_mem_madd_obj:
-      forall x M' M n,
-        SemSB.restr_mem (madd_obj x M' M) n =
-        madd_obj x (SemSB.restr_mem M' n) (SemSB.restr_mem M n).
-    Proof.
-      intros.
-      unfold SemSB.restr_mem, madd_obj; simpl.
-      f_equal.
-      - now rewrite mm_values_map.
-      - now rewrite pm_map_add, mm_instances_map.
-    Qed.
+         cexp_instant_correctness.
 
     Section Sem.
 
@@ -274,16 +154,10 @@ Module Type CORRECTNESS
           induction Sem; constructor; auto.
       Qed.
 
-      Variable M: SemSB.memories.
-      Variable memids: PS.t.
-      Hypothesis Spec: memories_spec M memids H.
-      (* Variable mems: list (ident * const). *)
-      (* Let memids := ps_from_list (map fst mems). *)
-
       Lemma laexp_correctness:
         forall ck e xs,
           sem_laexp bk H ck e xs ->
-          SemSB.sem_laexp bk H M ck (translate_lexp memids e) xs.
+          SemSB.sem_laexp bk H ck (translate_lexp e) xs.
       Proof.
         intros ** Sem n; specialize (Sem n); simpl in Sem.
         induction Sem; constructor; auto.
@@ -292,7 +166,7 @@ Module Type CORRECTNESS
       Lemma caexp_correctness:
         forall ck ce xs,
           sem_caexp bk H ck ce xs ->
-          SemSB.sem_caexp bk H M ck (translate_cexp memids ce) xs.
+          SemSB.sem_caexp bk H ck (translate_cexp ce) xs.
       Proof.
         intros ** Sem n; specialize (Sem n); simpl in Sem.
         induction Sem; constructor; auto.
@@ -301,7 +175,7 @@ Module Type CORRECTNESS
       Lemma laexps_correctness:
         forall ck es vs,
           sem_laexps bk H ck es vs ->
-          SemSB.sem_laexps bk H M ck (map (translate_lexp memids) es) vs.
+          SemSB.sem_laexps bk H ck (map translate_lexp es) vs.
       Proof.
         intros ** Sem n; specialize (Sem n); inv Sem.
         - econstructor 1; eauto.
@@ -309,103 +183,18 @@ Module Type CORRECTNESS
           now rewrite all_absent_map.
       Qed.
 
-      Lemma sem_caexp_laexp:
-        forall ck e xs,
-          SemSB.sem_caexp bk H M ck (SynSB.Eexp e) xs
-          <-> SemSB.sem_laexp bk H M ck e xs.
-      Proof.
-        split; intros ** Sem n; specialize (Sem n).
-        - inv Sem; match goal with H: SemSB.sem_cexp_instant _ _ _ _ _ |- _ => inv H end;
-            constructor; auto.
-        - induction Sem; repeat constructor; auto.
-      Qed.
-
-      Lemma sem_caexp_madd_mem:
-        forall x mvs ck ce xs,
-          SemSB.sem_caexp bk H M ck ce xs ->
-          ~ memvar_cexp x ce ->
-          SemSB.sem_caexp bk H (madd_mem x mvs M) ck ce xs.
-      Proof.
-        intros ** Sem ? n; specialize (Sem n); inv Sem;
-          econstructor; eauto;
-            rewrite restr_mem_madd_mem; auto.
-      Qed.
-
-      Lemma sem_laexps_madd_mem:
-        forall x mvs ck es xss,
-          SemSB.sem_laexps bk H M ck es xss ->
-          Forall (fun e => ~ memvar_lexp x e) es ->
-          SemSB.sem_laexps bk H (madd_mem x mvs M) ck es xss.
-      Proof.
-        intros ** Sem ? n; specialize (Sem n); inv Sem.
-        - econstructor; eauto.
-          rewrite restr_mem_madd_mem; auto.
-        - econstructor 2; eauto.
-          rewrite restr_mem_madd_mem; auto.
-        - constructor 3.
-      Qed.
-
-      Lemma sem_caexp_madd_obj:
-        forall x M' ck ce xs,
-          SemSB.sem_caexp bk H M ck ce xs ->
-          SemSB.sem_caexp bk H (madd_obj x M' M) ck ce xs.
-      Proof.
-        intros ** Sem n; specialize (Sem n); inv Sem;
-          econstructor; eauto;
-            rewrite restr_mem_madd_obj; auto.
-      Qed.
-      Hint Resolve sem_caexp_madd_obj.
-
-      Lemma sem_laexps_madd_obj:
-        forall x M' ck es xss,
-          SemSB.sem_laexps bk H M ck es xss ->
-          SemSB.sem_laexps bk H (madd_obj x M' M) ck es xss.
-      Proof.
-        intros ** Sem n; specialize (Sem n); inv Sem.
-        - econstructor; eauto.
-          rewrite restr_mem_madd_obj; auto.
-        - econstructor 2; eauto.
-          rewrite restr_mem_madd_obj; auto.
-        - constructor 3.
-      Qed.
-      Hint Resolve sem_laexps_madd_obj.
-
-      (* Lemma sem_equation_madd_mem: *)
-      (*   forall x mvs eqs, *)
-      (*     (* ~Is_defined_in_eqs x eqs -> *) *)
-      (*     Forall (SemSB.sem_equation P bk H M) eqs -> *)
-      (*     Forall (SemSB.sem_equation P bk H (madd_mem x mvs M)) eqs. *)
-      (* Proof. *)
-      (*   intros ** (* Hnd *) Hsem. *)
-      (*   induction eqs as [|eq eqs IH]; [now constructor|]. *)
-      (*   (* apply not_Is_defined_in_cons in Hnd. *) *)
-      (*   (* destruct Hnd as [Hnd Hnds]. *) *)
-      (*   apply Forall_cons2 in Hsem as [Hsem Hsems]. *)
-      (*   constructor; auto. *)
-      (*   destruct Hsem; eauto using SemSB.sem_equation. *)
-      (*   - econstructor; eauto. *)
-      (*     apply sem_caexp_madd_mem; auto. *)
-      (*     admit. *)
-      (*   - econstructor; eauto. *)
-      (*     apply sem_caexp_madd_mem; eauto. *)
-      (*     admit. *)
-      (*     admit. *)
-      (*   - econstructor; eauto. *)
-      (*     apply sem_laexps_madd_mem; auto. *)
-      (*     admit. *)
-      (* Admitted. *)
       Inductive inst_in_eq: ident -> SynSB.equation -> Prop :=
-      | DefEqReset:
+      | InstInEqReset:
           forall x ck m r,
             inst_in_eq x (SynSB.EqReset ck m x r)
-      | DefEqCall:
+      | InstInEqCall:
           forall x xs ck m es,
             inst_in_eq x (SynSB.EqCall xs ck m x es).
 
       Definition inst_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop :=
         List.Exists (inst_in_eq x) eqs.
 
-      Lemma not_inst_in_eq_cons:
+      Lemma not_inst_in_eqs_cons:
         forall x eq eqs,
           ~ inst_in_eqs x (eq :: eqs)
           <-> ~ inst_in_eq x eq /\ ~ inst_in_eqs x eqs.
@@ -417,31 +206,89 @@ Module Type CORRECTNESS
           inv Hdef_all; eauto.
       Qed.
 
+      Lemma mfby_add_inst:
+        forall i v0 ls M xs x M',
+          SemSB.mfby i v0 ls M xs ->
+          SemSB.mfby i v0 ls (add_inst x M' M) xs.
+      Proof.
+        inversion_clear 1.
+        econstructor; eauto.
+      Qed.
+      Hint Resolve mfby_add_inst.
 
+      Lemma mfby_add_val:
+        forall i v0 ls M xs x mv,
+          i <> x ->
+          SemSB.mfby i v0 ls M xs ->
+          SemSB.mfby i v0 ls (add_val x mv M) xs.
+      Proof.
+        inversion_clear 2.
+        econstructor; eauto.
+        rewrite find_val_gso; auto.
+      Qed.
 
-      Lemma sem_equation_madd_obj:
-        forall M' x eqs,
+      Inductive defined_in_eq: ident -> SynSB.equation -> Prop :=
+      | DefEqDef:
+          forall x ck e,
+            defined_in_eq x (SynSB.EqDef x ck e)
+      | DefEqFby:
+          forall x ck v e,
+            defined_in_eq x (SynSB.EqFby x ck v e)
+      | DefEqCall:
+          forall x xs ck b o es,
+            In x xs ->
+            defined_in_eq x (SynSB.EqCall xs ck b o es).
+
+      Definition defined_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop :=
+        List.Exists (defined_in_eq x) eqs.
+
+      Lemma not_defined_in_eqs_cons:
+        forall x eq eqs,
+          ~ defined_in_eqs x (eq :: eqs)
+          <-> ~ defined_in_eq x eq /\ ~ defined_in_eqs x eqs.
+      Proof.
+        split.
+        - intro Hndef; split; intro;
+            eapply Hndef; constructor(assumption).
+        - intros [? ?] Hdef_all; inv Hdef_all; eauto.
+      Qed.
+
+      Lemma sem_equation_add_inst:
+        forall M M' x eqs,
           ~ inst_in_eqs x eqs ->
           Forall (SemSB.sem_equation P bk H M) eqs ->
-          Forall (SemSB.sem_equation P bk H (madd_obj x M' M)) eqs.
+          Forall (SemSB.sem_equation P bk H (add_inst x M' M)) eqs.
       Proof.
         intros * Hnd Hsem.
         induction eqs as [|eq eqs IH]; [now constructor|].
-        apply not_inst_in_eq_cons in Hnd as [Hnd Hnds].
+        apply not_inst_in_eqs_cons in Hnd as [Hnd].
         apply Forall_cons2 in Hsem as [Hsem Hsems].
         constructor; auto.
         induction eq; inv Hsem; eauto using SemSB.sem_equation.
         - econstructor; eauto.
-          match goal with H: SemSB.next_reg _ _ _ |- _ => inv H end.
-          econstructor; eauto.
+          unfold sub_inst.
+          unfold sub_inst; rewrite find_inst_gso; auto.
+          intro; apply Hnd; subst; constructor.
         - econstructor; eauto.
-          unfold sub_inst; rewrite mfind_inst_gso; auto.
-          intro; apply Hnd; subst.
-          constructor.
-        - econstructor; eauto.
-          unfold sub_inst; rewrite mfind_inst_gso; auto.
-          intro; apply Hnd; subst.
-          constructor.
+          unfold sub_inst; rewrite find_inst_gso; auto.
+          intro; apply Hnd; subst; constructor.
+      Qed.
+
+      Lemma sem_equation_add_val:
+        forall M mv x eqs,
+          ~ defined_in_eqs x eqs ->
+          Forall (SemSB.sem_equation P bk H M) eqs ->
+          Forall (SemSB.sem_equation P bk H (add_val x mv M)) eqs.
+      Proof.
+        intros * Hnd Hsem.
+        induction eqs as [|eq eqs IH]; [now constructor|].
+        apply not_defined_in_eqs_cons in Hnd as [Hnd].
+        apply Forall_cons2 in Hsem as [Hsem Hsems].
+        constructor; auto.
+        induction eq; inv Hsem; eauto using SemSB.sem_equation.
+        econstructor; eauto.
+        apply mfby_add_val; auto.
+        intro; subst; apply Hnd; constructor.
       Qed.
 
     End Sem.
@@ -451,130 +298,452 @@ Module Type CORRECTNESS
     Fixpoint well_formed_eqs (eqs: list SynSB.equation) : Prop :=
         match eqs with
         | [] => True
-        | SynSB.EqReset _ _ x _ :: eqs => ~ inst_in_eqs x eqs /\ well_formed_eqs eqs
-        | SynSB.EqCall _ _ _ x _ :: eqs => ~ inst_in_eqs x eqs /\ well_formed_eqs eqs
-        | _ :: eqs => well_formed_eqs eqs
+        | SynSB.EqReset _ _ x _ :: eqs =>
+          ~ inst_in_eqs x eqs /\ well_formed_eqs eqs
+        | SynSB.EqCall xs _ _ x _ :: eqs =>
+          ~ inst_in_eqs x eqs /\ Forall (fun x => ~ defined_in_eqs x eqs) xs /\ well_formed_eqs eqs
+        | SynSB.EqDef x _ _ :: eqs =>
+          ~ defined_in_eqs x eqs /\well_formed_eqs eqs
+        | SynSB.EqFby x _ _ _ :: eqs =>
+          ~ defined_in_eqs x eqs /\well_formed_eqs eqs
         end.
 
-    Lemma memories_spec_madd_obj:
-      forall M memids H x M',
-        memories_spec M memids H ->
-        memories_spec (madd_obj x M' M) memids H.
+    Lemma Exists_app_l:
+      forall (A : Type) (P : A -> Prop) (ll rr : list A),
+        Exists P ll ->
+        Exists P (ll ++ rr).
     Proof.
-      intros ** Spec n x' v Find Mem.
-      specialize (Spec n x' v Find Mem).
-      unfold SemSB.get_reg in *.
-      now rewrite restr_mem_madd_obj, mfind_mem_add_inst.
+      induction 1.
+      - now constructor.
+      - now constructor 2.
     Qed.
-    Hint Resolve memories_spec_madd_obj.
 
-    Lemma sem_msem_eq:
-      forall bk H eqs M eq memids (* argIn *),
-        (forall f xss oss,
-            sem_node G f xss oss ->
-            exists M, SemSB.sem_block P f M xss oss) ->
-        (forall f r xss oss,
-            sem_reset G f r xss oss ->
-            exists M, SemSB.sem_block P f M xss oss
-                 /\ SemSB.reset_regs r M) ->
-        sem_equation G bk H eq ->
-        memories_spec M memids H ->
-        well_formed_eqs (translate_eqn memids eq ++ eqs) ->
-        (* Is_well_sch mems argIn (eq :: eqs) -> *)
-        Forall (SemSB.sem_equation P bk H M) eqs ->
-        exists M', Forall (SemSB.sem_equation P bk H M') (translate_eqn memids eq ++ eqs).
+    Lemma not_defined_in_eqs_app:
+      forall eqs eqs' x,
+        ~ defined_in_eqs x (eqs ++ eqs') ->
+        ~ defined_in_eqs x eqs /\ ~ defined_in_eqs x eqs'.
     Proof.
-      intros ** IHnode IHreset Heq Spec WF Heqs.
-      inv Heq; simpl.
-      - repeat (econstructor; eauto).
-      - edestruct IHnode as (M' & Block); eauto.
-        exists (madd_obj (hd default x) M' M).
-        econstructor; eauto.
-        + econstructor; eauto.
-          apply mfind_inst_gss.
-        + apply sem_equation_madd_obj; auto.
-          apply WF.
-      - edestruct IHreset as (M' & Block & Reset); eauto.
-        exists (madd_obj (hd default x) M' M).
-        econstructor; eauto.
-        + econstructor; eauto.
-          apply mfind_inst_gss.
-        + econstructor; eauto.
-          * econstructor; eauto.
-            apply mfind_inst_gss.
-          * apply sem_equation_madd_obj; auto.
-            apply WF.
-      - exists (madd_mem x {| SynSB.content := hold (sem_const c0) ls; SynSB.reset := fun _ => false |} M).
-          SearchAbout mfind_inst. apply laexps_correctness; auto.
+      unfold defined_in_eqs.
+      intros * Nd.
+      split; intro; apply Nd.
+      - now apply Exists_app_l.
+      - now apply Exists_app.
+    Qed.
 
-    Theorem correctness:
-      forall f xss oss,
-        sem_node G f xss oss ->
-        exists M, SemSB.sem_block P f M xss oss.
+    Lemma not_inst_in_eqs_app:
+      forall eqs eqs' x,
+        ~ inst_in_eqs x (eqs ++ eqs') ->
+        ~ inst_in_eqs x eqs /\ ~ inst_in_eqs x eqs'.
     Proof.
-      induction 1 as [| | | |???? IHNode|] using sem_node_mult with
-          (P_equation := fun b H e =>
-                           (* sem_equation G b H e -> *)
-                           exists M mems,
-                             memories_spec M (ps_from_list (map (@fst ident const) mems)) H ->
-                             Forall (SemSB.sem_equation P b H M)
-                                    (translate_eqn (ps_from_list (map fst mems)) e))
-          (P_reset := fun f r xss oss =>
-                        (* sem_reset G f r xss oss -> *)
-                        exists M, SemSB.sem_block P f M xss oss
-                             /\ SemSB.reset_regs r M
-          );
-        eauto.
-      - repeat (econstructor; eauto).
+      unfold inst_in_eqs.
+      intros * Nd.
+      split; intro; apply Nd.
+      - now apply Exists_app_l.
+      - now apply Exists_app.
+    Qed.
 
-      -
-        (* intro Sem; clear Sem. *)
-        destruct IHsem_node as (M & Sem).
-        match goal with
-          H: sem_node _ _ _ _ |- _ =>
-          inversion_clear H as [??????? Find]
-        end.
-        apply find_node_translate in Find as (bl & ? & Find & E).
-        subst.
-        simpl.
-        exists (madd_obj (hd default x) M (@empty_memory SemSB.mvalues)).
-        repeat (econstructor; eauto);
-          apply mfind_inst_gss.
+    Lemma well_formed_eqs_app:
+      forall eqs eqs',
+        well_formed_eqs (eqs ++ eqs') ->
+        well_formed_eqs eqs /\ well_formed_eqs eqs'.
+    Proof.
+      induction eqs as [|e]; simpl; auto.
+      destruct e; intros ** [? H]; edestruct IHeqs; eauto;
+        repeat match goal with
+               | H: ~ defined_in_eqs _ (_ ++ _) |- _ => apply not_defined_in_eqs_app in H as (?&?)
+               | H: ~ inst_in_eqs _ (_ ++ _) |- _ => apply not_inst_in_eqs_app in H as (?&?)
+               end; auto.
+      - destruct H; eauto.
+      - destruct H; auto.
+        repeat split; auto.
+        eapply Forall_impl with (1:=not_defined_in_eqs_app eqs eqs') in H.
+        now rewrite <-Forall_Forall' in H.
+    Qed.
 
-      -
-        (* intro Sem; clear Sem. *)
-        destruct IHsem_node as (M & Block & Reset); auto.
-        match goal with H: sem_reset _ _ _ _ _ |- _ => inversion_clear H as [???? Sem] end.
-        simpl.
-        exists (madd_obj (hd default x) M (@empty_memory SemSB.mvalues)).
+
+    (* Lemma memories_spec_add_inst: *)
+    (*   forall M memids H x M', *)
+    (*     memories_spec M memids H -> *)
+    (*     memories_spec (add_inst x M' M) memids H. *)
+    (* Proof. *)
+    (*   intros ** Spec n x' v Find Mem. *)
+    (*   specialize (Spec n x' v Find Mem). *)
+    (*   unfold SemSB.get_reg in *. *)
+    (*   now rewrite restr_mem_add_inst, mfind_mem_add_inst. *)
+    (* Qed. *)
+    (* Hint Resolve memories_spec_add_inst. *)
+
+  End Global.
+  Hint Resolve var_correctness vars_correctness
+       laexp_correctness caexp_correctness laexps_correctness.
+
+  Inductive compat_eq: equation -> list SynSB.equation -> Prop :=
+  | CompatEqDef:
+      forall x ck e eqs,
+        (* ~ defined_in_eqs x eqs -> *)
+        compat_eq (EqDef x ck e) eqs
+  | CompatEqFby:
+      forall x ck c0 e eqs,
+        ~ defined_in_eqs x eqs ->
+        compat_eq (EqFby x ck c0 e) eqs
+  | CompatEqApp:
+      forall xs ck f es r eqs,
+        ~ inst_in_eqs (hd default xs) eqs ->
+        compat_eq (EqApp xs ck f es r) eqs.
+
+  Inductive compat_eqs: list equation -> Prop :=
+  | CompatNil:
+      compat_eqs []
+  | CompatCons:
+      forall eq eqs,
+        compat_eqs eqs ->
+        compat_eq eq (translate_eqns eqs) ->
+        compat_eqs (eq :: eqs).
+
+  Lemma equation_correctness:
+    forall G bk H eqs M eq,
+      (forall f xss oss,
+          sem_node G f xss oss ->
+          exists M, SemSB.sem_block (translate G) f M xss oss) ->
+      (forall f r xss oss,
+          sem_reset G f r xss oss ->
+          exists M, SemSB.sem_block (translate G) f M xss oss
+               /\ SemSB.reset_regs r M) ->
+      sem_equation G bk H eq ->
+      (* well_formed_eqs (translate_eqn eq ++ eqs) -> *)
+      compat_eq eq eqs ->
+      Forall (SemSB.sem_equation (translate G) bk H M) eqs ->
+      exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqn eq ++ eqs).
+  Proof.
+    intros ** IHnode IHreset Heq WF Heqs.
+    inv Heq; simpl; inv WF.
+    - repeat (econstructor; eauto).
+    - edestruct IHnode as (M' & Block); eauto.
+      exists (add_inst (hd default x) M' M).
+      constructor.
+      + econstructor; eauto.
+        apply find_inst_gss.
+      + apply sem_equation_add_inst; auto.
+    - edestruct IHreset as (M' & Block & Reset); eauto.
+      exists (add_inst (hd default x) M' M).
+      constructor.
+      + econstructor; eauto.
+        apply find_inst_gss.
+      + constructor.
+        * econstructor; eauto.
+          apply find_inst_gss.
+        * apply sem_equation_add_inst; auto.
+    - exists (add_val x {| SemSB.content := hold (sem_const c0) ls; SemSB.reset := fun _ => false |} M).
+      constructor.
+      + econstructor; eauto.
         econstructor.
-        pose proof (Sem 0) as Sem0; inv Sem0.
-        edestruct find_node_translate as (bl & P' & ? & ?); eauto.
-        subst.
-        repeat (econstructor; eauto);
-          apply mfind_inst_gss.
+        * apply find_val_gss.
+        * reflexivity.
+        * intro; unfold fby; simpl.
+          destruct (ls n); auto.
+      + apply sem_equation_add_val; auto.
+  Qed.
 
-      -
-        (* intro Sem; clear Sem; simpl. *)
-        exists (madd_mem x {| SemSB.content := xs; SemSB.reset := fun _ => false; SemSB.init := c0 |} (@empty_memory SemSB.mvalues)).
-        exists [(x, c0)].
-        econstructor; eauto.
-        econstructor; eauto.
-        + apply sem_caexp_laexp; eauto.
-        + econstructor.
-          * apply mfind_mem_gss.
-          * simpl; subst; reflexivity.
+  Corollary equations_correctness:
+    forall G bk H eqs,
+      (forall f xss oss,
+          sem_node G f xss oss ->
+          exists M, SemSB.sem_block (translate G) f M xss oss) ->
+      (forall f r xss oss,
+          sem_reset G f r xss oss ->
+          exists M, SemSB.sem_block (translate G) f M xss oss
+               /\ SemSB.reset_regs r M) ->
+      (* well_formed_eqs (translate_eqns eqs) -> *)
+      compat_eqs eqs ->
+      Forall (sem_equation G bk H) eqs ->
+      exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns eqs).
+  Proof.
+    intros ** IHnode IHreset WF Heqs.
+    induction eqs as [|eq eqs IHeqs]; [exists (@empty_memory SemSB.mvalues); now constructor|].
+    apply Forall_cons2 in Heqs as [Heq Heqs].
+    inv WF.
+    eapply IHeqs in Heqs as [M Heqs]; eauto.
+    unfold translate_eqns; rewrite concatMap_cons.
+    eapply equation_correctness; eauto.
+  Qed.
 
-      - admit.
+  Lemma sem_block_cons:
+    forall n G f xs M ys,
+      SemSB.sem_block (translate G) f xs M ys ->
+      Forall (fun n' => n_name n <> n_name n') G ->
+      SemSB.sem_block (translate (n :: G)) f xs M ys.
+  Proof.
+    intros ** Hsem Hnin.
+    induction Hsem
+      as [| | | |????????? Hfind]
+                        using SemSB.sem_block_mult
+      with (P_equation := fun bk H M eq =>
+                            SemSB.sem_equation (translate (n :: G)) bk H M eq);
+      eauto using SemSB.sem_equation.
+    econstructor; eauto.
+    simpl.
+    assert (n.(n_name) <> b) as Hnf.
+    { intro Hnf.
+      rewrite Hnf in *.
+      pose proof (SynSB.find_block_name _ _ _ _ Hfind) as Hb.
+      apply find_block_translate in Hfind as (n' & Hfind' & ?).
+      apply find_node_split in Hfind' as [G' [aG Hge]].
+      rewrite Hge in Hnin.
+      apply Forall_app in Hnin.
+      destruct Hnin as [H' Hfg]; clear H'.
+      inversion_clear Hfg.
+      match goal with H:b<>_ |- False => apply H end.
+      rewrite <-Hb; subst bl; auto.
+    }
+    apply ident_eqb_neq in Hnf; rewrite Hnf.
+    eauto.
+  Qed.
 
-      - eexists.
-        match goal with
-          H: find_node _ _ = _ |- _ => apply find_node_translate in H as (bl & ? & Find & E)
-        end.
-        subst.
-        econstructor; eauto.
-        + simpl; rewrite map_fst_idty; eauto.
-        + simpl; rewrite map_fst_idty; eauto.
-        + simpl.
+  Lemma sem_equation_cons:
+    forall G bk H M eqs n,
+      Ordered_nodes (n :: G) ->
+      Forall (SemSB.sem_equation (translate G) bk H M) (translate_eqns eqs) ->
+      ~Is_node_in n.(n_name) eqs ->
+      Forall (SemSB.sem_equation (translate (n :: G)) bk H M) (translate_eqns eqs).
+  Proof.
+    intros ** Hord Hsem Hnini.
+    induction eqs as [|eq eqs IH]; [now constructor|].
+    unfold translate_eqns in *; rewrite concatMap_cons in Hsem.
+    apply Forall_app in Hsem as [Heq Heqs].
+    apply not_Is_node_in_cons in Hnini.
+    destruct Hnini as [Hnini Hninis].
+    apply IH with (2:=Hninis) in Heqs.
+    rewrite concatMap_cons.
+    apply Forall_app; split; auto.
+    inv Hord.
+    induction eq; simpl in *.
+    - constructor; auto.
+      inversion_clear Heq as [|?? Hsem].
+      inv Hsem; eauto using SemSB.sem_equation.
+    - destruct o as [(r, ckr)|]; inversion_clear Heq as [|?? Hsem Heq'];
+        constructor; inv Hsem; econstructor; eauto.
+      + inversion_clear Heq' as [|?? Hsem'].
+        inv Hsem'; econstructor; eauto.
+        apply sem_block_cons; auto.
+      + apply sem_block_cons; auto.
+    - constructor; auto.
+      inversion_clear Heq as [|?? Hsem].
+      inv Hsem; eauto using SemSB.sem_equation.
+  Qed.
 
-    Qed.
+  Fixpoint path_inst (p: list ident) (M: SemSB.memories) : option SemSB.memories :=
+    match p with
+    | [] => Some M
+    | x :: p =>
+      match find_inst x M with
+      | Some M => path_inst p M
+      | None => None
+      end
+    end.
+
+  Definition reset_content (x: ident) (p: list ident) (F: nat -> SemSB.memories) (r: stream bool) : stream val :=
+    fun n => match path_inst p (F (count r n)) with
+          | Some M =>
+            match find_val x M with
+            | Some mv => mv.(SemSB.content) n
+            | None => false_val
+            end
+          | None => false_val
+          end.
+
+  Definition reset_memories (M0: SemSB.memories) (F: nat -> SemSB.memories) (r: stream bool) :=
+    mmapi (fun p x mv =>
+             {| SemSB.content := reset_content x p F r;
+                SemSB.reset := r |})
+          [] M0.
+
+  Require Import Coq.Logic.ClassicalChoice.
+  Require Import Coq.Logic.ConstructiveEpsilon.
+  Require Import Coq.Logic.Epsilon.
+  Require Import Coq.Logic.IndefiniteDescription.
+  Theorem correctness:
+    forall G f xss oss,
+      (* Welldef_global G -> *)
+      Ordered_nodes G ->
+      sem_node G f xss oss ->
+      exists M, SemSB.sem_block (translate G) f M xss oss.
+  Proof.
+    induction G as [|node].
+    inversion 2;
+      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+    intros ** Hord Hsem.
+    assert (Hsem' := Hsem).
+    inversion_clear Hsem' as [??????? Hfind ????? Heqs].
+    (* pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord. *)
+    (* pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG. *)
+    pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
+    simpl in Hfind.
+    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+    -
+      assert (Hord':=Hord).
+      inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
+      injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
+      eapply Forall_sem_equation_global_tl in Heqs; eauto.
+      assert (forall f xss oss,
+                 sem_node G f xss oss ->
+                 exists M, SemSB.sem_block (translate G) f M xss oss)
+        as IHG' by auto.
+      assert (forall f r xss oss,
+                 sem_reset G f r xss oss ->
+                 exists M, SemSB.sem_block (translate G) f M xss oss
+                      /\ SemSB.reset_regs r M).
+      { clear - IHG'.
+        intros ** Sem.
+        inversion_clear Sem as [???? Sem'].
+        assert (forall k, exists M', SemSB.sem_block (translate G) f M' (mask (all_absent (xss 0)) k r xss)
+                                           (mask (all_absent (oss 0)) k r oss)) as SBsem
+            by (intro; specialize (Sem' k); apply IHG' in Sem'; auto).
+        assert (exists F, forall k, SemSB.sem_block (translate G) f (F k) (mask (all_absent (xss 0)) k r xss)
+                                          (mask (all_absent (oss 0)) k r oss))
+          as (F & SBsem').
+        {
+          (** Infinite Description  *)
+          now apply functional_choice in SBsem.
+
+          (** Epsilon  *)
+          (* assert (inhabited memories) as I *)
+          (*     by (constructor; exact (fun n => @empty_memory val)). *)
+          (* exists (fun n => epsilon *)
+            (*            I (fun M => msem_node G f (mask (all_absent (xs 0)) n r xs) M *)
+          (*                               (mask (all_absent (ys 0)) n r ys))). *)
+          (* intro; now apply epsilon_spec.  *)
+
+          (** Constructive Epsilon  *)
+          (* pose proof (constructive_ground_epsilon memories) as F. *)
+
+          (** Classical Choice  *)
+          (* now apply choice in Msem'.   *)
+        }
+        clear SBsem.
+        exists (reset_memories (F 0) F r).
+
+        pose proof (SBsem' 0) as Sem0; inversion_clear Sem0 as [??????????????? SemEqs].
+        split.
+        + admit.
+          (*  econstructor. *)
+          (* * apply SemSB.clock_of_equiv. *)
+          (* * eauto. *)
+          (* * *)
+        + clear SemEqs.
+          unfold reset_memories.
+          generalize (@nil ident) as p.
+          induction (F 0) as [?? IH] using memory_ind'.
+          constructor.
+          * intros x mvs.
+            unfold reset_memories, find_val.
+            simpl; rewrite Env.find_mapi.
+            intro Find.
+            destruct (Env.find x xvs); inv Find; auto.
+          *{ induction xms as [|[y]].
+             - intros x M'.
+               unfold find_inst; simpl.
+               intros; discriminate.
+             - simpl in IH; inv IH.
+               intros x M'.
+               unfold find_inst.
+               simpl.
+               destruct (Env.POTB.compare x y); simpl;
+                 intro Find; inv Find; eauto.
+           }
+      }
+
+      (* inversion_clear Hwdef as [|??? neqs]. *)
+      (* simpl in neqs; unfold neqs in *. *)
+      assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs)))
+        as (M & Hmsem).
+      { eapply equations_correctness; eauto.
+        admit.
+      }
+      exists M.
+      econstructor; eauto.
+      + simpl; now rewrite Hnf.
+      + simpl; rewrite map_fst_idty; eauto.
+      + simpl; rewrite map_fst_idty; eauto.
+      + eapply sem_equation_cons; eauto.
+    - apply ident_eqb_neq in Hnf.
+      apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
+      inv Hord.
+      eapply IHG in Hsem as [M]; eauto.
+      exists M.
+      now eapply sem_block_cons; eauto.
+  Qed.
+
+  (* Theorem correctness: *)
+  (*   forall f xss oss, *)
+  (*     sem_node G f xss oss -> *)
+  (*     exists M, SemSB.sem_block P f M xss oss. *)
+  (* Proof. *)
+  (*   induction 1 as [| | | |???? IHNode|] using sem_node_mult with *)
+  (*       (P_equation := fun b H e => *)
+  (*                        (* sem_equation G b H e -> *) *)
+  (*                        exists M, *)
+  (*                          (* memories_spec M (ps_from_list (map (@fst ident const) mems)) H -> *) *)
+  (*                          Forall (SemSB.sem_equation P b H M) *)
+  (*                                 (translate_eqn e)) *)
+  (*       (P_reset := fun f r xss oss => *)
+  (*                     (* sem_reset G f r xss oss -> *) *)
+  (*                     exists M, SemSB.sem_block P f M xss oss *)
+  (*                          /\ SemSB.reset_regs r M *)
+  (*       ); *)
+  (*     eauto. *)
+  (*   - repeat (econstructor; eauto). *)
+
+  (*     - *)
+  (*       (* intro Sem; clear Sem. *) *)
+  (*       destruct IHsem_node as (M & Sem). *)
+  (*       match goal with *)
+  (*         H: sem_node _ _ _ _ |- _ => *)
+  (*         inversion_clear H as [??????? Find] *)
+  (*       end. *)
+  (*       apply find_node_translate in Find as (bl & ? & Find & E). *)
+  (*       subst. *)
+  (*       simpl. *)
+  (*       exists (add_inst (hd default x) M (@empty_memory SemSB.mvalues)). *)
+  (*       repeat (econstructor; eauto); *)
+  (*         apply mfind_inst_gss. *)
+
+  (*     - *)
+  (*       (* intro Sem; clear Sem. *) *)
+  (*       destruct IHsem_node as (M & Block & Reset); auto. *)
+  (*       match goal with H: sem_reset _ _ _ _ _ |- _ => inversion_clear H as [???? Sem] end. *)
+  (*       simpl. *)
+  (*       exists (add_inst (hd default x) M (@empty_memory SemSB.mvalues)). *)
+  (*       econstructor. *)
+  (*       + repeat (econstructor; eauto); *)
+  (*           apply mfind_inst_gss. *)
+  (*       + pose proof (Sem 0) as Sem0; inv Sem0. *)
+  (*         edestruct find_node_translate as (bl & P' & ? & ?); eauto. *)
+  (*         subst. *)
+  (*         repeat (econstructor; eauto); *)
+  (*           apply mfind_inst_gss. *)
+
+  (*     - *)
+  (*       (* intro Sem; clear Sem; simpl. *) *)
+  (*       exists (add_val x {| SemSB.content := hold (sem_const c0) ls; SemSB.reset := fun _ => false |} (@empty_memory SemSB.mvalues)). *)
+  (*       econstructor; eauto. *)
+  (*       econstructor; eauto. *)
+  (*       econstructor. *)
+  (*       + apply mfind_mem_gss. *)
+  (*       + reflexivity. *)
+  (*       + simpl; intro; subst. *)
+  (*         unfold fby. *)
+  (*         destruct (ls n); auto. *)
+
+  (*     - admit. *)
+
+  (*     - eexists. *)
+  (*       match goal with *)
+  (*         H: find_node _ _ = _ |- _ => apply find_node_translate in H as (bl & ? & Find & E) *)
+  (*       end. *)
+  (*       subst. *)
+  (*       econstructor; eauto. *)
+  (*       + simpl; rewrite map_fst_idty; eauto. *)
+  (*       + simpl; rewrite map_fst_idty; eauto. *)
+  (*       + simpl. *)
+
+  (*   Qed. *)

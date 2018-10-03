@@ -19,7 +19,6 @@ Module Type SBSYNTAX
   Inductive lexp :=
   | Econst : const -> lexp
   | Evar   : ident -> type -> lexp
-  | Ereg   : ident -> type -> lexp
   | Ewhen  : lexp -> ident -> bool -> lexp
   | Eunop  : unop -> lexp -> type -> lexp
   | Ebinop : binop -> lexp -> lexp -> type -> lexp.
@@ -35,7 +34,7 @@ Module Type SBSYNTAX
 
   Inductive equation :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqReg : ident -> clock -> cexp -> equation
+  | EqFby : ident -> clock -> const -> lexp -> equation
   | EqReset : clock -> ident -> ident -> ident -> equation (* reinit block instance on r *)
   | EqCall: idents -> clock -> ident -> ident -> list lexp -> equation.
   (* y1, ..., yn = block instance (e1, ..., em) *)
@@ -45,7 +44,7 @@ Module Type SBSYNTAX
         b_name  : ident;
         b_in    : list (ident * type);
         b_vars  : list (ident * type);
-        b_regs  : list (ident * const);
+        (* b_regs  : list (ident * const); *)
         b_blocks: list (ident * ident);
         b_out   : list (ident * type);
         b_eqs   : list equation
@@ -57,7 +56,6 @@ Module Type SBSYNTAX
     match le with
     | Econst c => type_const c
     | Evar _ ty
-    | Ereg _ ty
     | Eunop _ _ ty
     | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e

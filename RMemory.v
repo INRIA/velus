@@ -1,7 +1,10 @@
-Require Import Coq.FSets.FMapPositive.
-
 Require Import Velus.Common.
 
+(* Require Import Coq.FSets.FMapPositive. *)
+Require Import List.
+Import List.ListNotations.
+
+Require Velus.Environment.
 Set Implicit Arguments.
 
 (** * Memory *)
@@ -18,38 +21,268 @@ Set Implicit Arguments.
 
 (** ** Datatype *)
 
+Module Env := Environment.
+
+Definition env := Env.t.
+
+Inductive memory (V: Type) :=
+  Mnode: env V -> env (memory V) -> memory V.
+
+Definition values (V: Type) (m: memory V) : env V :=
+  match m with Mnode xvs _ => xvs end.
+
+Definition instances (V: Type) (m: memory V) : env (memory V) :=
+  match m with Mnode _ xms => xms end.
+
+Section memory_ind'.
+  Variable V: Type.
+  Variable P: memory V -> Prop.
+
+  Hypothesis MnodeCase:
+    forall xvs xms,
+      Forall P (map snd xms) ->
+      P (Mnode xvs xms).
+
+  Fixpoint memory_ind' (m : memory V): P m.
+  Proof.
+    destruct m as [? xms].
+    apply MnodeCase.
+    induction xms; simpl; auto.
+  Qed.
+
+End memory_ind'.
+
+(* Require Coq.FSets.FMapList. *)
+(* Module PML := Coq.FSets.FMapList.Make Coq.Structures.OrderedTypeEx.PositiveOrderedTypeBits. *)
+
+(* Check PML.find. *)
+
+(* Inductive mem (A: Type): Type := *)
+(*     { *)
+(*       mems : PML.t A; *)
+(*       insts : PML.t (mem A) *)
+(*     }. *)
+
+
+
+(* Fixpoint tree_ind' (A : Type) (P : tree A -> Prop) *)
+(*          (H: forall n ts, *)
+(*              Forall P (map snd ts) -> *)
+(*              P {| node := n; children := ts |}) *)
+(*          (t : tree A) : P t. *)
+(* Proof. *)
+(*   destruct t as [n ts]. *)
+(*   apply H. *)
+(*   induction ts. *)
+(*   - simpl. apply Forall_nil. *)
+(*   - simpl. apply Forall_cons. *)
+(*     + apply tree_ind'. *)
+(*       exact H. *)
+(*     + exact IHts. *)
+(* Qed. *)
+
+(* Fixpoint size (A: Type) (t: tree A) : nat := *)
+  (* fold_left (fun s t => s + size (snd t)) (children t) 1. *)
+
 (* =memory= *)
-Inductive memory (V: Type): Type := mk_memory {
-  mm_values : PM.t V;
-  mm_instances : PM.t (memory V) }.
+(* Inductive memory (V: Type): Type := mk_memory { *)
+(*   mm_values : PM.t V; *)
+(*   mm_instances : PM.t (memory V) }. *)
 (* =end= *)
+
+(* Check mk_memory. *)
+(* Require Import Coq.FSets.FMapFacts. *)
+
+(* Module Import PMProp := Properties PM. *)
+
+(* Fixpoint depth (V: Type) (m: memory V) : nat := *)
+(*   match PM.elements (m.(mm_instances)) with *)
+(*   | [] => 0 *)
+(*   | (_, m) :: _ => 1 + depth m *)
+(*   end. *)
+
+(* Require Import Program. *)
+(* Definition app_snd (A B C: Type) (f: B -> C) (x: A * B) := f (snd x). *)
+(* Definition instances (V: Type) (ms: PM.t (memory V)) := map snd (PM.elements ms).  *)
+(* Inductive memory' (V: Type): Type := *)
+(*   MNode: PM.t V -> PM.t (memory' V) -> memory' V. *)
+
+(* Check memory'_ind. *)
+
+(* Section MemoryInd. *)
+(*   Variable V: Type. *)
+(*   Variable P: memory' V -> Prop. *)
+
+(*   Hypothesis H: *)
+(*     forall (vs : PM.t V) (ms : PM.t (memory' V)), *)
+(*       (forall x m', PM.find x ms = Some m' -> P m') -> *)
+(*       P (MNode vs ms). *)
+
+(*   Print Forall_cons. *)
+(*   Print map_induction_bis. *)
+
+(*   Fixpoint memory_ind' (m: memory' V):  P m. *)
+(*   Proof. *)
+(*     induction m as [vs ms]. *)
+(*     apply H. *)
+(*     induction ms as [?? Eq| |] using map_induction_bis. *)
+(*     - unfold PM.Equal in Eq. *)
+(*       intros ** Find. *)
+(*       eapply IHms1; rewrite Eq; eauto. *)
+(*     - intros ** Find. *)
+(*       rewrite PM.gempty in Find; discriminate. *)
+(*     - intros y ** Find. *)
+(*       destruct (ident_eq_dec y x). *)
+(*       + subst. *)
+(*         rewrite PM.gss in Find. *)
+(*         apply memory_ind'. *)
+(*       + rewrite PM.gso in Find; auto. *)
+(*         Show Proof. *)
+(*   Defined. *)
+
+
+(*     := *)
+(*     match m with *)
+(*       MNode vs ms => *)
+(*       H vs ms *)
+(*         (map_induction_bis *)
+(*            (P := fun ms0 : PM.t (memory' V) => forall (x : positive) (m' : memory' V), PM.find x ms0 = Some m' -> P m') *)
+(*            (fun (ms1 ms2 : PM.t (memory' V)) (Eq : PM.Equal ms1 ms2) *)
+(*               (IHms1 : forall (x : positive) (m' : memory' V), PM.find x ms1 = Some m' -> P m')  *)
+(*               (x : positive) (m' : memory' V) (Find : PM.find x ms2 = Some m') => *)
+(*               IHms1 x m' (eq_ind_r (fun o : option (memory' V) => o = Some m') Find (Eq x))) *)
+(*            (fun (x : positive) (m' : memory' V) (Find : PM.find x (PM.empty (memory' V)) = Some m') => *)
+(*               (fun Find0 : None = Some m' => *)
+(*                  (fun H0 : False => (fun H1 : False => False_ind (P m') H1) H0) *)
+(*                    (eq_ind None (fun e : option (memory' V) => match e with *)
+(*                                                             | Some _ => False *)
+(*                                                             | None => True *)
+(*                                                             end) I  *)
+(*                            (Some m') Find0)) *)
+(*                 (eq_ind (PM.find x (PM.empty (memory' V)))  *)
+(*                         (fun o : option (memory' V) => o = Some m') Find None  *)
+(*                         (PM.gempty (memory' V) x))) *)
+(*            (fun (x : PM.key) (e : memory' V) (ms0 : PM.t (memory' V))  *)
+(*               (_ : ~ PM.In x ms0) (IHms : forall (x0 : positive) (m' : memory' V), PM.find x0 ms0 = Some m' -> P m') *)
+(*               (y : positive) (m' : memory' V) (Find : PM.find y (PM.add x e ms0) = Some m') => *)
+(*               let s := ident_eq_dec y x in *)
+(*               match s with *)
+(*               | left e0 => *)
+(*                 eq_ind_r (fun y0 : positive => PM.find y0 (PM.add x e ms0) = Some m' -> P m') *)
+(*                          (fun Find0 : PM.find x (PM.add x e ms0) = Some m' => *)
+(*                             (fun _ : Some e = Some m' => memory_ind' m') *)
+(*                               (eq_ind (PM.find x (PM.add x e ms0))  *)
+(*                                       (fun o : option (memory' V) => o = Some m') Find0  *)
+(*                                       (Some e) (PM.gss x e ms0))) e0 Find *)
+(*               | right n => *)
+(*                 (fun Find0 : PM.find y ms0 = Some m' => IHms y m' Find0) *)
+(*                   (eq_ind (PM.find y (PM.add x e ms0))  *)
+(*                           (fun o : option (memory' V) => o = Some m') Find  *)
+(*                           (PM.find y ms0) (PM.gso e ms0 n)) *)
+(*               end) ms) *)
+(*     end. *)
+
+(*     match m with *)
+(*       MNode vs ms => *)
+(*       H vs ms *)
+(*         (let l := map snd (PM.elements ms) in *)
+(*          (fix list_ind' (ms: list (memory' V)): Forall P ms := *)
+(*             match ms with *)
+(*             | [] => Forall_nil P *)
+(*             | m :: ms => *)
+(*               Forall_cons m (memory_ind' m) (list_ind' ms) *)
+(*             end) l) *)
+(*     end. *)
+
+(* Section MemoryInd. *)
+(*   Variable V: Type. *)
+(*   Variable P: memory' V -> Prop. *)
+
+(*   Hypothesis H: *)
+(*     forall (vs : PM.t V) (ms : PM.t (memory' V)), *)
+(*       Forall P (map snd (PM.elements ms)) -> *)
+(*       P (MNode vs ms). *)
+
+(*   Print Forall_cons. *)
+
+(*   Fixpoint memory_ind' (m: memory' V):  P m := *)
+(*     match m with *)
+(*       MNode vs ms => *)
+(*       H vs ms *)
+(*         (let l := map snd (PM.elements ms) in *)
+(*          (fix list_ind' (ms: list (memory' V)): Forall P ms := *)
+(*             match ms with *)
+(*             | [] => Forall_nil P *)
+(*             | m :: ms => *)
+(*               Forall_cons m (memory_ind' m) (list_ind' ms) *)
+(*             end) l) *)
+(*     end. *)
+
+(* Proof. *)
+(*   destruct m as [vs ms]. *)
+(*   apply H. *)
+(*   induction (PM.elements ms) as [|[? m]]; auto. *)
+(* Qed. *)
+
+(*   constructor; auto. *)
+(*   simpl; apply memory_ind'. apply H. *)
+(* Admitted. *)
+
+(* End MemoryInd. *)
+
+(* Fixpoint memory_ind'' (V : Type) (P : memory V -> Prop) *)
+(*          (H: forall (vs : PM.t V) (ms : PM.t (memory V)), *)
+(*              (forall x m', PM.find x ms = Some m' -> P m') -> *)
+(*              P {| mm_values := vs; mm_instances := ms |}) (m : memory V) {struct m} : P m. *)
+(* Proof. *)
+(*   destruct m as [vs ms]. *)
+(*   apply H. *)
+(*   induction ms as [?? Eq| |] using map_induction_bis. *)
+(*   - unfold PM.Equal in Eq. *)
+(*     intros ** Find. *)
+(*     eapply IHms1; rewrite Eq; eauto. *)
+(*   - intros ** Find. *)
+(*     rewrite PM.gempty in Find; discriminate. *)
+(*   - intros y ** Find. *)
+(*     destruct (ident_eq_dec y x). *)
+(*     + subst. *)
+(*       rewrite PM.gss in Find. *)
+(*       apply memory_ind''. *)
+(*       auto. *)
+(*     + rewrite PM.gso in Find; auto. *)
+(*       eapply IHms; eauto. *)
+(* Qed. *)
+
+(* Admitted. *)
 
 (** ** Operations *)
 
 Section Operations.
 
-  Variable A B: Type.
-  Implicit Type menv : memory A.
+  Variable V W: Type.
 
-  Definition empty_memory : memory A :=
-    {| mm_values := PM.empty _;
-       mm_instances := PM.empty _ |}.
+  Definition empty_memory : memory V := Mnode [] [].
 
-  Definition mfind_mem x menv := PM.find x menv.(mm_values).
-  Definition mfind_inst x menv := PM.find x menv.(mm_instances).
+  Definition find_val (x: ident) (m: memory V) : option V :=
+    Env.find x (values m).
 
-  Definition sub_inst x M M' : Prop := mfind_inst x M = Some M'.
+  Definition find_inst (x: ident) (m: memory V) : option (memory V) :=
+    Env.find x (instances m).
 
-  Definition madd_mem (id: ident) (v: A) (M: memory A) : memory A :=
-    mk_memory (PM.add id v M.(mm_values))
-              M.(mm_instances).
+  Definition sub_inst (x: ident) (m m': memory V) : Prop :=
+    find_inst x m = Some m'.
 
-  Definition madd_obj (id: ident) (M': memory A) (M: memory A) : memory A :=
-    mk_memory M.(mm_values)
-                  (PM.add id M' M.(mm_instances)).
+  Definition add_val (x: ident) (v: V) (m: memory V) : memory V :=
+    Mnode (Env.add x v (values m)) (instances m).
 
-  Fixpoint mmap (f: A -> B) (M: memory A) : memory B :=
-    mk_memory (PM.map f M.(mm_values)) (PM.map (mmap f) M.(mm_instances)).
+  Definition add_inst (x: ident) (m': memory V) (m: memory V) : memory V :=
+    Mnode (values m) (Env.add x m' (instances m)).
+
+  Fixpoint mmap (f: V -> W) (m: memory V) : memory W :=
+    Mnode (Env.map f (values m)) (Env.map (mmap f) (instances m)).
+
+  Fixpoint mmapi (f: list ident -> ident -> V -> W) (p: list ident) (m: memory V) : memory W :=
+    Mnode (Env.mapi (f p) (values m)) (Env.mapi (fun i => mmapi f (p ++ [i])) (instances m)).
 
 End Operations.
 
@@ -57,70 +290,81 @@ End Operations.
 
 Section Properties.
 
-  Variable A B: Type.
+  Variable V W: Type.
   Variables (x y: ident)
-            (v: A)
-            (f: A -> B)
-            (m m': memory A).
+            (v: V)
+            (f: V -> W)
+            (m m': memory V).
 
-  Lemma mfind_mem_gss:
-      mfind_mem x (madd_mem x v m) = Some v.
+  Lemma find_val_gss:
+    find_val x (add_val x v m) = Some v.
   Proof.
-    unfold mfind_mem, madd_mem.
-    now apply PM.gss.
+    unfold find_val, add_val.
+    now apply Env.gss.
   Qed.
 
-  Lemma mfind_mem_gso:
-      x <> y
-      -> mfind_mem x (madd_mem y v m) = mfind_mem x m.
+  Lemma find_val_gso:
+    x <> y ->
+    find_val x (add_val y v m) = find_val x m.
   Proof.
-    unfold mfind_mem, madd_mem.
-    now apply PM.gso.
+    unfold find_val, add_val.
+    now apply Env.gso.
   Qed.
 
-  Lemma mfind_inst_gss:
-      mfind_inst x (madd_obj x m' m) = Some m'.
+  Lemma find_inst_gss:
+      find_inst x (add_inst x m' m) = Some m'.
   Proof.
-    unfold mfind_inst, madd_obj.
-    now apply PM.gss.
+    unfold find_inst, add_inst.
+    now apply Env.gss.
   Qed.
 
-  Lemma mfind_inst_gso:
-      x <> y
-      -> mfind_inst x (madd_obj y m' m) = mfind_inst x m.
+  Lemma find_inst_gso:
+    x <> y ->
+    find_inst x (add_inst y m' m) = find_inst x m.
   Proof.
-    unfold mfind_inst, madd_obj.
-    now apply PM.gso.
+    unfold find_inst, add_inst.
+    now apply Env.gso.
   Qed.
 
-  Lemma mfind_mem_add_inst:
-      mfind_mem x (madd_obj y m' m) = mfind_mem x m.
+  Lemma find_val_add_inst:
+      find_val x (add_inst y m' m) = find_val x m.
   Proof.
-    unfold mfind_mem, madd_obj.
+    unfold find_val, add_inst.
     reflexivity.
   Qed.
 
-  Lemma mfind_mem_map:
-    mfind_mem x m = Some v ->
-    mfind_mem x (mmap f m) = Some (f v).
+  Lemma find_val_map:
+    find_val x (mmap f m) = option_map f (find_val x m).
   Proof.
-    intros ** Find.
-    unfold mfind_mem in *.
-    destruct m; simpl in *.
-    unfold PM.map.
-    now rewrite PM.gmapi, Find.
+    unfold find_val.
+    destruct m; simpl.
+    apply Env.find_map.
   Qed.
 
-  Lemma mm_values_map:
-    PM.map f (mm_values m) = mm_values (mmap f m).
-  Proof.
-    intros; now destruct m.
-  Qed.
+  (* Lemma values_mmap: *)
+  (*   Env.map f (values m) = values (mmap f m). *)
+  (* Proof. *)
+  (*   intros; now destruct m. *)
+  (* Qed. *)
 
-  Lemma mm_instances_map:
-    PM.map (mmap f) (mm_instances m) = mm_instances (mmap f m).
-  Proof.
-    intros; now destruct m.
-  Qed.
+  (* Lemma instances_mmap: *)
+  (*   Env.map (mmap f) (instances m) = instances (mmap f m). *)
+  (* Proof. *)
+  (*   intros; now destruct m. *)
+  (* Qed. *)
+
+  (* Lemma values_mmapi: *)
+  (*   forall (g: list ident -> ident -> V -> W) p, *)
+  (*     Env.mapi (g p) (values m) = values (mmapi g p m). *)
+  (* Proof. *)
+  (*   intros; now destruct m. *)
+  (* Qed. *)
+
+  (* Lemma instances_mmapi: *)
+  (*   forall (g: list ident -> ident -> V -> W) p, *)
+  (*     Env.mapi (fun i => mmapi g (p ++ [i])) (instances m) = instances (mmapi g p m). *)
+  (* Proof. *)
+  (*   intros; now destruct m. *)
+  (* Qed. *)
 
 End Properties.
