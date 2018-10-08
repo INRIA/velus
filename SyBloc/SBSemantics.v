@@ -298,6 +298,27 @@ Module Type SBSEMANTICS
       apply H; eauto.
   Qed.
 
+  Lemma clock_of_equiv':
+    forall xss bk,
+      clock_of xss bk ->
+      bk ≈ clock_of' xss.
+  Proof.
+    intros ** H n; specialize (H n).
+    unfold clock_of'.
+    induction (xss n) as [|v]; simpl.
+    - apply H; constructor.
+    - destruct v.
+      + simpl.
+        rewrite <-Bool.not_true_iff_false, <-H.
+        inversion 1; auto.
+      + simpl.
+        apply IHl; rewrite <-H.
+        split; intro P.
+        * constructor; auto.
+          intro; discriminate.
+        * inv P; auto.
+  Qed.
+
   (* Inductive next_reg: ident -> stream value -> memories -> Prop := *)
   (*   post_mem_intro: *)
   (*     forall x xs M mvs, *)

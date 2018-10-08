@@ -50,6 +50,9 @@ Module Type SBSYNTAX
         b_eqs   : list equation
       }.
 
+  Definition bl_vars (bl: block): list (ident * type) :=
+    bl.(b_in) ++ bl.(b_out) ++ bl.(b_vars).
+
   Definition program := list block.
 
   Fixpoint typeof (le: lexp): type :=

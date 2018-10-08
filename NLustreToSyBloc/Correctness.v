@@ -541,21 +541,73 @@ Module Type CORRECTNESS
       end
     end.
 
-  Definition reset_content (x: ident) (p: list ident) (F: nat -> SemSB.memories) (r: stream bool) : stream val :=
-    fun n => match path_inst p (F (count r n)) with
-          | Some M =>
-            match find_val x M with
-            | Some mv => mv.(SemSB.content) n
-            | None => false_val
-            end
-          | None => false_val
-          end.
+  Section Choices.
 
-  Definition reset_memories (M0: SemSB.memories) (F: nat -> SemSB.memories) (r: stream bool) :=
-    mmapi (fun p x mv =>
-             {| SemSB.content := reset_content x p F r;
-                SemSB.reset := r |})
-          [] M0.
+    Variable Fm: nat -> SemSB.memories.
+    Variable Fh: nat -> history.
+    Variable r: stream bool.
+
+    Definition reset_content (x: ident) (p: list ident) : stream val :=
+      fun n => match path_inst p (Fm (count r n)) with
+            | Some M =>
+              match find_val x M with
+              | Some mv => mv.(SemSB.content) n
+              | None => false_val
+              end
+            | None => false_val
+            end.
+
+    Definition reset_memories (M0: SemSB.memories) : SemSB.memories :=
+      mmapi (fun p x mv =>
+               {| SemSB.content := reset_content x p;
+                  SemSB.reset := r |})
+            [] M0.
+
+    Lemma reset_memories_spec:
+      forall k,
+        SemSB.reset_regs r (reset_memories (Fm k)).
+    Proof.
+      intros; unfold reset_memories.
+      generalize (@nil ident) as p.
+      induction (Fm k) as [?? IH] using memory_ind'.
+      constructor.
+      - intros x mvs.
+        unfold reset_memories, find_val.
+        simpl; rewrite Env.find_mapi.
+        intro Find.
+        destruct (Env.find x xvs); inv Find; auto.
+      - induction xms as [|[y]].
+        + intros x M'.
+          unfold find_inst; simpl.
+          intros; discriminate.
+        + simpl in IH; inv IH.
+          intros x M'.
+          unfold find_inst.
+          simpl.
+          destruct (Env.POTB.compare x y); simpl;
+            intro Find; inv Find; eauto.
+    Qed.
+
+    Definition reset_history (H0: history) : history :=
+      PM.mapi (fun x _ => fun n => match PM.find x (Fh (count r n)) with
+                             | Some xs => xs n
+                             | None => absent
+                             end) H0.
+  End Choices.
+  Hint Resolve reset_memories_spec.
+
+  Lemma Forall2_In_l:
+    forall {A B: Type} (l: list A) (l': list B) P x,
+      Forall2 P l l' ->
+      In x l ->
+      exists x', P x x'.
+  Proof.
+    intros ** F2 Hin.
+    induction F2.
+    - contradiction.
+    - inv Hin; eauto.
+  Qed.
+
 
   Require Import Coq.Logic.ClassicalChoice.
   Require Import Coq.Logic.ConstructiveEpsilon.
@@ -579,8 +631,7 @@ Module Type CORRECTNESS
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     simpl in Hfind.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
-    -
-      assert (Hord':=Hord).
+    - assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
       injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
       eapply Forall_sem_equation_global_tl in Heqs; eauto.
@@ -595,13 +646,14 @@ Module Type CORRECTNESS
       { clear - IHG'.
         intros ** Sem.
         inversion_clear Sem as [???? Sem'].
-        assert (forall k, exists M', SemSB.sem_block (translate G) f M' (mask (all_absent (xss 0)) k r xss)
-                                           (mask (all_absent (oss 0)) k r oss)) as SBsem
-            by (intro; specialize (Sem' k); apply IHG' in Sem'; auto).
         assert (exists F, forall k, SemSB.sem_block (translate G) f (F k) (mask (all_absent (xss 0)) k r xss)
                                           (mask (all_absent (oss 0)) k r oss))
-          as (F & SBsem').
+          as (Fm & SBsem').
         {
+          assert (forall k, exists M', SemSB.sem_block (translate G) f M' (mask (all_absent (xss 0)) k r xss)
+                                             (mask (all_absent (oss 0)) k r oss)) as SBsem
+              by (intro; specialize (Sem' k); apply IHG' in Sem'; auto).
+
           (** Infinite Description  *)
           now apply functional_choice in SBsem.
 
@@ -619,37 +671,139 @@ Module Type CORRECTNESS
           (** Classical Choice  *)
           (* now apply choice in Msem'.   *)
         }
-        clear SBsem.
-        exists (reset_memories (F 0) F r).
 
-        pose proof (SBsem' 0) as Sem0; inversion_clear Sem0 as [??????????????? SemEqs].
-        split.
-        + admit.
-          (*  econstructor. *)
-          (* * apply SemSB.clock_of_equiv. *)
-          (* * eauto. *)
-          (* * *)
-        + clear SemEqs.
-          unfold reset_memories.
-          generalize (@nil ident) as p.
-          induction (F 0) as [?? IH] using memory_ind'.
-          constructor.
-          * intros x mvs.
-            unfold reset_memories, find_val.
-            simpl; rewrite Env.find_mapi.
-            intro Find.
-            destruct (Env.find x xvs); inv Find; auto.
-          *{ induction xms as [|[y]].
-             - intros x M'.
-               unfold find_inst; simpl.
-               intros; discriminate.
-             - simpl in IH; inv IH.
-               intros x M'.
-               unfold find_inst.
-               simpl.
-               destruct (Env.POTB.compare x y); simpl;
-                 intro Find; inv Find; eauto.
+        assert (exists bl P', SynSB.find_block f (translate G) = Some (bl, P'))
+          as (bl & P' & Find)
+          by (specialize (SBsem' 0); inv SBsem'; eauto).
+
+
+        assert (exists F, forall k, exists bk,
+                       SemSB.sem_vars (F k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                       /\ SemSB.sem_vars (F k) (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                       /\ Forall (SemSB.sem_equation (translate G) bk (F k) (Fm k)) (SynSB.b_eqs bl)
+                       /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+        as (Fh & Spec).
+        { assert (forall k, exists H bk,
+                       SemSB.sem_vars H (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                       /\ SemSB.sem_vars H (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                       /\ Forall (SemSB.sem_equation (translate G) bk H (Fm k)) (SynSB.b_eqs bl)
+                       /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+          as Spec.
+          { intro; specialize (SBsem' k); inv SBsem'.
+            match goal with
+              H: SynSB.find_block _ _ = _ |- _ => rewrite Find in H; inv H end.
+            do 2 eexists; eauto.
+          }
+          now apply functional_choice in Spec.
+        }
+
+        assert (forall x k n,
+                   In x (map fst (SynSB.bl_vars bl)) ->
+                   exists v, PM.find x (SemSB.restr_hist (Fh k) n) = Some v)
+          as SameDomFh.
+        { clear - Spec.
+          intros ** Hin; unfold SynSB.bl_vars in Hin; do 2 rewrite map_app in Hin.
+          apply in_app in Hin as [Hin|Hin]; [|apply in_app in Hin as [Hin|Hin]].
+          - destruct (Spec k) as (?& In & ?).
+            specialize (In n); simpl in *.
+            eapply Forall2_In_l in In as (?& Sem); eauto.
+            inv Sem; eauto.
+          - destruct (Spec k) as (?&?& Out &?).
+            specialize (Out n); simpl in *.
+            eapply Forall2_In_l in Out as (?& Sem); eauto.
+            inv Sem; eauto.
+          - admit.
+        }
+
+        exists (reset_memories Fm r (Fm 0)).
+
+        split; eauto.
+        eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
+        + apply SemSB.clock_of_equiv.
+        + intro.
+          destruct (Spec (count r n)) as (?& In & ?).
+          clear - In SameDomFh.
+          unfold mask in In; specialize (In n); simpl in *.
+          rewrite <-EqNat.beq_nat_refl in In.
+          unfold SynSB.bl_vars in SameDomFh; rewrite map_app in SameDomFh.
+          induction In as [|x ??? Sem]; constructor; auto.
+          * clear IHIn.
+            inversion_clear Sem as [?? Find]; constructor.
+            assert (exists v, PM.find x (SemSB.restr_hist (Fh 0) n) = Some v)
+                   as (? & Find')
+                   by (apply SameDomFh; constructor; auto).
+            unfold SemSB.restr_hist, reset_history, PM.map in *.
+            repeat rewrite PM.gmapi in *; rewrite option_map_map.
+            destruct (PM.find x (Fh (count r n))); try discriminate.
+            destruct (PM.find x (Fh 0)); try discriminate; auto.
+          *{ apply IHIn; intros x' **.
+             eapply SameDomFh; eauto.
+             destruct (ident_eq_dec x x').
+             - left; auto.
+             - right; auto.
            }
+        + intro.
+          destruct (Spec (count r n)) as (?&?& Out &?).
+          clear - Out SameDomFh.
+          unfold mask in Out; specialize (Out n); simpl in *.
+          rewrite <-EqNat.beq_nat_refl in Out.
+          unfold SynSB.bl_vars in SameDomFh; do 2 rewrite map_app in SameDomFh.
+          induction Out as [|x ??? Sem]; constructor; auto.
+          * clear IHOut.
+            inversion_clear Sem as [?? Find]; constructor.
+            assert (exists v, PM.find x (SemSB.restr_hist (Fh 0) n) = Some v)
+              as (? & Find')
+                   by (apply SameDomFh; rewrite in_app; right; constructor; auto).
+            unfold SemSB.restr_hist, reset_history, PM.map in *.
+            repeat rewrite PM.gmapi in *; rewrite option_map_map.
+            destruct (PM.find x (Fh (count r n))); try discriminate.
+            destruct (PM.find x (Fh 0)); try discriminate; auto.
+          *{ apply IHOut; intros x' ** Hin.
+             eapply SameDomFh; eauto.
+             destruct (ident_eq_dec x x').
+             - rewrite in_app; right; left; auto.
+             - rewrite in_app in Hin; destruct Hin; rewrite in_app.
+               + left; auto.
+               + right; right; auto.
+           }
+        + intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [???????????? Same].
+          unfold mask in Same; specialize (Same n); simpl in *.
+          now rewrite <-EqNat.beq_nat_refl in Same.
+        + intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [????????????? Same].
+          unfold mask in Same; specialize (Same n); simpl in *.
+          now rewrite <-EqNat.beq_nat_refl in Same.
+        + intro.
+          specialize (SBsem' (count r n)); inversion_clear SBsem' as [?????????????? AbsAbs].
+          unfold mask in AbsAbs.
+          specialize (AbsAbs n).
+          now rewrite <-EqNat.beq_nat_refl in AbsAbs.
+        + induction (SynSB.b_eqs bl) as [|eq ? IHeqs]; constructor; auto.
+          *{ clear IHeqs.
+             assert (forall k, exists bk, SemSB.sem_equation (translate G) bk (Fh k) (Fm k) eq
+                                /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+               as Spec'
+                 by (intros; destruct (Spec k) as (?&?&?& Heq &?); inv Heq; eauto).
+             clear Spec.
+             induction eq.
+             - apply SemSB.SEqDef with (xs := fun n => match PM.find i (Fh (count r n)) with
+                                                    | Some xs => xs n
+                                                    | None => absent
+                                                    end).
+               + intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq.
+                 specialize (H6 n); inv H6.
+                 constructor.
+                 unfold SemSB.restr_hist, reset_history, PM.map in *.
+                 repeat rewrite PM.gmapi in *.
+                 rewrite option_map_map.
+                 destruct (PM.find i (Fh (count r n))); try discriminate.
+                 destruct (PM.find i (Fh 0)) eqn: E; simpl in *; auto.
+                 admit.
+               + intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq.
+                 specialize (H8 n); simpl in *.
+                 unfold reset_history.
+                 instantiate (1 := xs).
+          * apply IHeqs.
+            intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
       }
 
       (* inversion_clear Hwdef as [|??? neqs]. *)
