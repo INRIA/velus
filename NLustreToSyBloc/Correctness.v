@@ -12,6 +12,7 @@ Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.SyBloc.SBSemantics.
 Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
+Require Import Velus.SyBloc.SBInterpretor.
 
 Require Import List.
 Import List.ListNotations.
@@ -33,7 +34,9 @@ Module Type CORRECTNESS
        (Import SemNL : NLSEMANTICS Ids Op OpAux Clks SynNL       Str Ord)
        (SemSB        : SBSEMANTICS Ids Op OpAux Clks       SynSB Str)
        (Import Mem   : MEMORIES    Ids Op       Clks SynNL)
-       (Import Trans : TRANSLATION Ids Op       Clks SynNL SynSB Mem).
+       (Import Trans : TRANSLATION Ids Op       Clks SynNL SynSB Mem)
+
+       (Import Interp: SBINTERPRETOR Ids Op OpAux Clks SynSB Str SemSB).
 
   (* Fixpoint memvar_lexp (x: ident) (e: SynSB.lexp) := *)
   (*   match e with *)
@@ -593,6 +596,174 @@ Module Type CORRECTNESS
                              | Some xs => xs n
                              | None => absent
                              end) H0.
+
+    Section InterpReset.
+
+      Variable n: nat.
+
+      Lemma interp_var_instant_reset:
+        forall x,
+          (forall k, PM.find x (Fh k) <> None) ->
+          interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) x =
+          interp_var_instant (SemSB.restr_hist (reset_history (Fh 0)) n) x.
+      Proof.
+        intros ** Spec.
+        unfold interp_var_instant, reset_history, SemSB.restr_hist, PM.map.
+        repeat rewrite PM.gmapi; rewrite option_map_map.
+        destruct (PM.find x (Fh (count r n))) eqn: E.
+        - destruct (PM.find x (Fh 0)) eqn: E'; auto.
+          exfalso; eapply Spec; eauto.
+        - exfalso; eapply Spec; eauto.
+      Qed.
+
+      Lemma sem_var_instant_reset:
+        forall x v,
+          (forall k, PM.find x (Fh k) <> None) ->
+          SemSB.sem_var_instant (SemSB.restr_hist (Fh (count r n)) n) x v ->
+          SemSB.sem_var_instant (SemSB.restr_hist (reset_history (Fh 0)) n) x v.
+      Proof.
+        intros ** Spec Sem.
+        induction Sem; constructor.
+        unfold reset_history, SemSB.restr_hist, PM.map in *.
+        repeat rewrite PM.gmapi in *; rewrite option_map_map.
+        destruct (PM.find x (Fh (count r n))) eqn: E.
+        - destruct (PM.find x (Fh 0)) eqn: E'; auto.
+          exfalso; eapply Spec; eauto.
+        - exfalso; eapply Spec; eauto.
+      Qed.
+
+      Variable bk: stream bool.
+      Variable xss: stream (list value).
+      Hypothesis Clk: SemSB.clock_of (mask (all_absent (xss 0)) (count r n) r xss) bk.
+      Let bk' := SemSB.clock_of' xss.
+
+      Lemma interp_clock_instant_reset:
+        forall ck,
+          interp_clock_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) ck =
+          interp_clock_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) ck.
+      Proof.
+        induction ck; intros; simpl.
+        - apply SemSB.clock_of_equiv' in Clk; rewrite Clk.
+          unfold SemSB.clock_of'.
+          rewrite mask_transparent; auto.
+        - rewrite interp_var_instant_reset; [|admit].
+          rewrite IHck; auto.
+      Qed.
+
+      Lemma sem_clock_instant_reset:
+        forall ck b,
+          SemSB.sem_clock_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) ck b ->
+          SemSB.sem_clock_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) ck b.
+      Proof.
+        induction 1.
+        - apply SemSB.clock_of_equiv' in Clk; rewrite Clk.
+          subst bk'.
+          unfold SemSB.clock_of'.
+          rewrite mask_transparent; constructor.
+        - econstructor; eauto.
+          apply sem_var_instant_reset; eauto.
+          admit.
+        - constructor; auto.
+          apply sem_var_instant_reset; eauto.
+          admit.
+        - eapply SemSB.Son_abs2; eauto.
+          apply sem_var_instant_reset; eauto.
+          admit.
+      Qed.
+      Hint Resolve sem_clock_instant_reset.
+
+      Lemma interp_lexp_instant_reset:
+        forall e,
+          interp_lexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) e =
+          interp_lexp_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) e.
+      Proof.
+        induction e; intros; simpl.
+        - apply SemSB.clock_of_equiv' in Clk; rewrite Clk.
+          unfold SemSB.clock_of'.
+          rewrite mask_transparent; auto.
+        - apply interp_var_instant_reset.
+          admit.
+        - rewrite interp_var_instant_reset, IHe; auto.
+          admit.
+        - rewrite IHe; auto.
+        - rewrite IHe1, IHe2; auto.
+      Qed.
+
+      Lemma sem_lexp_instant_reset:
+        forall e v,
+          SemSB.sem_lexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) e v ->
+          SemSB.sem_lexp_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) e v.
+      Proof.
+        induction 1; eauto using SemSB.sem_lexp_instant.
+        - constructor; subst.
+          apply SemSB.clock_of_equiv' in Clk; rewrite Clk.
+          unfold SemSB.clock_of'.
+          rewrite mask_transparent; auto.
+        - constructor.
+          apply sem_var_instant_reset; auto.
+          admit.
+        - econstructor; eauto.
+          apply sem_var_instant_reset; auto.
+          admit.
+        - eapply SemSB.Swhen_abs1; eauto.
+          apply sem_var_instant_reset; auto.
+          admit.
+        - constructor; auto.
+          apply sem_var_instant_reset; auto.
+          admit.
+      Qed.
+      Hint Resolve sem_lexp_instant_reset.
+
+      Lemma interp_cexp_instant_reset:
+        forall e,
+          interp_cexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) e =
+          interp_cexp_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) e.
+      Proof.
+        induction e; simpl.
+        - rewrite interp_var_instant_reset, IHe1, IHe2; auto.
+          admit.
+        - rewrite interp_lexp_instant_reset, IHe1, IHe2; auto.
+        - apply interp_lexp_instant_reset.
+      Qed.
+
+      Lemma sem_cexp_instant_reset:
+        forall e v,
+          SemSB.sem_cexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) e v ->
+          SemSB.sem_cexp_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) e v.
+      Proof.
+        induction 1; eauto using SemSB.sem_cexp_instant.
+        - econstructor; eauto.
+          apply sem_var_instant_reset; auto.
+          admit.
+        - eapply SemSB.Smerge_false; eauto.
+          apply sem_var_instant_reset; auto.
+          admit.
+        - econstructor; eauto.
+          apply sem_var_instant_reset; auto.
+          admit.
+      Qed.
+      Hint Resolve sem_cexp_instant_reset.
+
+      Lemma interp_caexp_instant_reset:
+        forall ck e,
+          interp_caexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) ck e =
+          interp_caexp_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) ck e.
+      Proof.
+        intros.
+        unfold interp_caexp_instant, interp_annotated_instant.
+        erewrite interp_clock_instant_reset, interp_cexp_instant_reset; eauto.
+      Qed.
+
+      Lemma sem_caexp_instant_reset:
+        forall ck e v,
+          SemSB.sem_caexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) ck e v ->
+          SemSB.sem_caexp_instant (bk' n) (SemSB.restr_hist (reset_history (Fh 0)) n) ck e v.
+      Proof.
+        induction 1; constructor; auto.
+      Qed.
+
+    End InterpReset.
+
   End Choices.
   Hint Resolve reset_memories_spec.
 
@@ -607,6 +778,25 @@ Module Type CORRECTNESS
     - contradiction.
     - inv Hin; eauto.
   Qed.
+
+  Lemma spec_def:
+    forall P bk H M x ck e,
+      (forall n,
+          let v := interp_caexp_instant (bk n) (SemSB.restr_hist H n) ck e in
+          SemSB.sem_var_instant (SemSB.restr_hist H n) x v
+          /\ SemSB.sem_caexp_instant (bk n) (SemSB.restr_hist H n) ck e v) <->
+      SemSB.sem_equation P bk H M (SynSB.EqDef x ck e).
+  Proof.
+    split.
+    - intros ** Spec.
+      apply SemSB.SEqDef with (xs := interp_caexp bk H ck e);
+        intro; destruct (Spec n); auto.
+    - inversion_clear 1 as [???????  Hvar Hexp| | |];
+        intro; specialize (Hvar n); specialize (Hexp n); simpl in *.
+      erewrite <-interp_caexp_instant_sound; eauto.
+  Qed.
+
+
 
 
   Require Import Coq.Logic.ClassicalChoice.
@@ -784,8 +974,35 @@ Module Type CORRECTNESS
                as Spec'
                  by (intros; destruct (Spec k) as (?&?&?& Heq &?); inv Heq; eauto).
              clear Spec.
+             (* set (bk := SemSB.clock_of' xss); set (H := reset_history Fh r (Fh 0)). *)
              induction eq.
-             - apply SemSB.SEqDef with (xs := fun n => match PM.find i (Fh (count r n)) with
+
+
+             - eapply spec_def.
+               intro; destruct (Spec' (count r n)) as (bk & Heq & Hbk).
+               rewrite <-spec_def in Heq; destruct (Heq n) as (Hvar & Hexp).
+               erewrite <-interp_caexp_instant_reset; eauto.
+               split.
+               + apply sem_var_instant_reset; auto.
+                 admit.
+               + eapply sem_caexp_instant_reset; eauto.
+             -
+                 clear - Hvar Hbk.
+                 inversion_clear Hvar as [?? Find].
+                 constructor.
+                 unfold SemSB.restr_hist, reset_history, PM.map in *.
+                 repeat rewrite PM.gmapi in *.
+                 rewrite option_map_map.
+                 destruct (PM.find i (Fh (count r n))); try discriminate.
+                 destruct (PM.find i (Fh 0)) eqn: E; simpl in *; eauto.
+                 * rewrite Find.
+                 admit.
+               + specialize (H8 n); simpl in *.
+                 unfold reset_history.
+
+
+
+               apply SemSB.SEqDef with (xs := fun n => match PM.find i (Fh (count r n)) with
                                                     | Some xs => xs n
                                                     | None => absent
                                                     end).
@@ -801,13 +1018,15 @@ Module Type CORRECTNESS
                + intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq.
                  specialize (H8 n); simpl in *.
                  unfold reset_history.
-                 instantiate (1 := xs).
+                 admit.
+             - admit.
+             - admit.
+             - admit.
+           }
           * apply IHeqs.
             intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
       }
 
-      (* inversion_clear Hwdef as [|??? neqs]. *)
-      (* simpl in neqs; unfold neqs in *. *)
       assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs)))
         as (M & Hmsem).
       { eapply equations_correctness; eauto.
