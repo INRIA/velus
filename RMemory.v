@@ -333,12 +333,21 @@ Section Properties.
     reflexivity.
   Qed.
 
-  Lemma find_val_map:
+  Lemma find_val_mmap:
     find_val x (mmap f m) = option_map f (find_val x m).
   Proof.
     unfold find_val.
     destruct m; simpl.
     apply Env.find_map.
+  Qed.
+
+  Lemma find_val_mmapi:
+    forall (f: list ident -> ident -> V -> W) p,
+      find_val x (mmapi f p m) = option_map (f p x) (find_val x m).
+  Proof.
+    intros; unfold find_val.
+    destruct m; simpl.
+    apply Env.find_mapi.
   Qed.
 
   (* Lemma values_mmap: *)

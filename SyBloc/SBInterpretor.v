@@ -215,6 +215,19 @@ Module Type SBINTERPRETOR
       apply interp_cexp_instant_sound; auto.
     Qed.
 
+    Definition interp_laexp_instant (ck: clock) (e: lexp) : value :=
+      interp_annotated_instant (interp_lexp_instant) ck e.
+
+    Lemma interp_laexp_instant_sound:
+      forall ck e v,
+        sem_laexp_instant base R ck e v ->
+        v = interp_laexp_instant ck e.
+    Proof.
+      unfold interp_laexp_instant, interp_annotated_instant.
+      induction 1; erewrite <-interp_clock_instant_sound; eauto; simpl; auto.
+      apply interp_lexp_instant_sound; auto.
+    Qed.
+
   End InstantInterpretor.
 
   (** ** Liftings of instantaneous semantics *)
@@ -265,6 +278,9 @@ Module Type SBINTERPRETOR
 
     Definition interp_caexp (ck: clock) (e: cexp): stream value :=
       lift (fun base R => interp_caexp_instant base R ck) e.
+
+    Definition interp_laexp (ck: clock) (e: lexp): stream value :=
+      lift (fun base R => interp_laexp_instant base R ck) e.
 
     (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value := *)
     (*   lift (fun base R => interp_annotated_instant base R interp_instant ck) a. *)
