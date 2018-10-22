@@ -350,6 +350,22 @@ Section Properties.
     apply Env.find_mapi.
   Qed.
 
+  Lemma find_inst_mmap:
+    find_inst x (mmap f m) = option_map (mmap f) (find_inst x m).
+  Proof.
+    unfold find_inst.
+    destruct m; simpl.
+    apply Env.find_map.
+  Qed.
+
+  Lemma find_inst_mmapi:
+    forall (f: list ident -> ident -> V -> W) p,
+      find_inst x (mmapi f p m) = option_map (mmapi f (p ++ [x])) (find_inst x m).
+  Proof.
+    intros; unfold find_inst.
+    destruct m; simpl.
+    apply Env.find_mapi.
+  Qed.
   (* Lemma values_mmap: *)
   (*   Env.map f (values m) = values (mmap f m). *)
   (* Proof. *)

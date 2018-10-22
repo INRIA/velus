@@ -333,16 +333,18 @@ Module Type SBSEMANTICS
             find_val x M = Some mvs ->
             forall n, rs n = true -> mvs.(reset) n = true) ->
         (forall x M',
-            find_inst x M = Some M' ->
+            sub_inst x M M' ->
             reset_regs rs M') ->
         reset_regs rs M.
 
+  Definition reset_of_value (v: value) : bool :=
+    match v with
+    | present x => x ==b true_val
+    | absent => false
+    end.
+
   Definition reset_of (xs: stream value) : stream bool :=
-    fun n =>
-      match xs n with
-      | present x => x ==b true_val
-      | _ => false
-      end.
+    fun n => reset_of_value (xs n).
 
   Inductive mfby: ident -> val -> stream value -> memories -> stream value -> Prop :=
     mfby_intro:
