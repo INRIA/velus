@@ -560,22 +560,34 @@ Module Type CORRECTNESS
             | None => false_val
             end.
 
-    Definition reset_memories (M0: SemSB.memories) : SemSB.memories :=
+    Definition reset_memories_path (p: list ident) (M0: SemSB.memories) : SemSB.memories :=
       mmapi (fun p x mv =>
                {| SemSB.content := reset_content x p;
                   SemSB.reset := r |})
-            [] M0.
+            p M0.
 
-    Lemma reset_memories_spec:
-      forall k,
-        SemSB.reset_regs r (reset_memories (Fm k)).
+    Definition reset_memories := reset_memories_path [].
+
+    Lemma sub_inst_reset_memories:
+      forall x M M' p,
+        sub_inst x M M' ->
+        sub_inst x (reset_memories_path p M) (reset_memories_path (p ++ [x]) M').
     Proof.
-      intros; unfold reset_memories.
-      generalize (@nil ident) as p.
+      intros ** Find; unfold sub_inst, reset_memories, reset_memories_path.
+      rewrite find_inst_mmapi, Find; auto.
+    Qed.
+
+    Lemma reset_memories_path_spec:
+      forall k p r',
+        (forall n, r' n = true -> r n = true) ->
+        SemSB.reset_regs r' (reset_memories_path p (Fm k)).
+    Proof.
+      intros ** Spec; unfold reset_memories_path.
+      revert p.
       induction (Fm k) as [?? IH] using memory_ind'.
       constructor.
       - intros x mvs.
-        unfold reset_memories, find_val.
+        unfold reset_memories_path, find_val.
         simpl; rewrite Env.find_mapi.
         intro Find.
         destruct (Env.find x xvs); inv Find; auto.
@@ -587,6 +599,24 @@ Module Type CORRECTNESS
           simpl.
           destruct (Env.POTB.compare x y); simpl;
             intro Find; inv Find; eauto.
+    Qed.
+
+    Corollary reset_memories_path_sub_spec:
+      forall k p r' x M,
+        sub_inst x (Fm k) M ->
+        (forall n, r' n = true -> r n = true) ->
+        SemSB.reset_regs r' (reset_memories_path (p ++ [x]) M).
+    Proof.
+      intros ** Sub Spec; eapply reset_memories_path_spec with (k := k) in Spec.
+      inversion_clear Spec as [??? Inst]; eapply Inst, sub_inst_reset_memories; eauto.
+    Qed.
+
+    Corollary reset_memories_spec:
+      forall k r',
+        (forall n, r' n = true -> r n = true) ->
+        SemSB.reset_regs r (reset_memories (Fm k)).
+    Proof.
+      intros; now apply reset_memories_path_spec.
     Qed.
 
     Definition reset_history (H0: history) : history :=
@@ -781,7 +811,7 @@ Module Type CORRECTNESS
     End InterpReset.
 
   End Choices.
-  Hint Resolve reset_memories_spec.
+  Hint Resolve reset_memories_spec sub_inst_reset_memories.
 
   Lemma Forall2_In_l:
     forall {A B: Type} (l: list A) (l': list B) P x,
@@ -859,6 +889,95 @@ Module Type CORRECTNESS
             sub_inst x M M' ->
             reset_regs_instant n b M') ->
         reset_regs_instant n b M.
+
+  Lemma sub_inst_reset_regs_instant:
+    forall bs M x M',
+      (forall n : nat, reset_regs_instant n (bs n) M) ->
+      sub_inst x M M' ->
+      forall n : nat, reset_regs_instant n (bs n) M'.
+  Proof.
+    intros ** Rst Sub n.
+    revert dependent M'; revert x.
+    specialize (Rst n); induction Rst as [??? Inst IH].
+    constructor.
+    - intros; apply Inst in Sub.
+      inv Sub; eauto.
+    - intros; eapply IH; eauto.
+  Qed.
+
+  Lemma reset_regs_instant_spec:
+    forall bs M,
+      SemSB.reset_regs bs M <->
+      forall n, reset_regs_instant n (bs n) M.
+  Proof.
+    split.
+    - induction 1 as [?? Val ? IH]; intro; constructor.
+      + intros; eapply Val; eauto.
+      + intros; eapply IH; eauto.
+    - induction M as [?? IH] using memory_ind'; intros Rst; constructor.
+      + intros; specialize (Rst n); inv Rst; eauto.
+      + intros ** Sub; pose proof Sub as Sub'.
+        unfold sub_inst, find_inst in Sub.
+        eapply Env.find_in, in_map with (f := snd) in Sub; simpl in Sub.
+        eapply In_Forall in IH; eauto.
+        apply IH.
+        eapply sub_inst_reset_regs_instant; eauto.
+  Qed.
+
+  Corollary reset_regs_instant_spec':
+    forall bs M n,
+      SemSB.reset_regs bs M ->
+      reset_regs_instant n (bs n) M.
+  Proof.
+    intros ** Rst.
+    rewrite reset_regs_instant_spec in Rst; auto.
+  Qed.
+
+  Lemma reset_memories_path_spec_instant:
+    forall k p r' Fm r n,
+      (r' n = true -> r n = true) ->
+      reset_regs_instant n (r' n) (reset_memories_path Fm r p (Fm k)).
+  Proof.
+    intros ** Spec; unfold reset_memories_path.
+    revert p.
+    induction (Fm k) as [?? IH] using memory_ind'.
+    constructor.
+    - intros x mvs.
+      unfold reset_memories_path, find_val.
+      simpl; rewrite Env.find_mapi.
+      intro Find.
+      destruct (Env.find x xvs); inv Find; auto.
+    - induction xms as [|[y]].
+      + intros; discriminate.
+      + simpl in IH; inv IH.
+        intros x M'.
+        unfold sub_inst, find_inst.
+        simpl.
+        destruct (Env.POTB.compare x y); simpl;
+          intro Find; inv Find; eauto.
+  Qed.
+
+  Corollary reset_memories_path_sub_spec_instant:
+      forall p r' x M Fm r k n,
+        sub_inst x (Fm k) M ->
+        (r' n = true -> r n = true) ->
+        reset_regs_instant n (r' n) (reset_memories_path Fm r (p ++ [x]) M).
+  Proof.
+    intros ** Sub Spec; eapply reset_memories_path_spec_instant with (k := k) in Spec.
+    inversion_clear Spec as [??? Inst]; eapply Inst, sub_inst_reset_memories; eauto.
+  Qed.
+
+  Lemma sub_inst_reset_memories':
+    forall x M0 Fm r r',
+      sub_inst x (Fm 0) M0 ->
+      (forall n, r n = true -> r' n = true) ->
+      sub_inst x (reset_memories Fm r (Fm 0)) (reset_memories_path Fm r' [x] M0).
+  Proof.
+    intros ** Sub Spec; unfold sub_inst, reset_memories, reset_memories_path.
+    rewrite find_inst_mmapi, Sub.
+    simpl.
+    admit.
+  Qed.
 
   Lemma spec_EqReset:
     forall P bk H M ck b i r,
@@ -1029,7 +1148,7 @@ Module Type CORRECTNESS
         }
 
         exists (reset_memories Fm r (Fm 0)).
-        assert (SemSB.reset_regs r (reset_memories Fm r (Fm 0))) as RstRegs by auto.
+        assert (SemSB.reset_regs r (reset_memories Fm r (Fm 0))) as RstRegs by eauto.
 
         split; eauto.
         eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
@@ -1116,7 +1235,7 @@ Module Type CORRECTNESS
                exists {| SemSB.content := fun n => (Fmvs (count r n)).(SemSB.content) n;
                     SemSB.reset := r |}.
                split; [|split]; eauto; simpl.
-               + unfold reset_memories.
+               + unfold reset_memories, reset_memories_path.
                  rewrite find_val_mmapi.
                  destruct (find_val i (Fm 0)) eqn: E; simpl.
                  * f_equal.
@@ -1164,35 +1283,25 @@ Module Type CORRECTNESS
              - apply spec_EqReset.
                assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
                    by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
-               exists (mmapi (fun (p : list ident) (x0 : ident) (_ : SemSB.mvalues) => {| SemSB.content := reset_content Fm r x0 p; SemSB.reset := r |}) [i0] M0).
+               exists (reset_memories_path Fm (fun n => r n || SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1)) [i0] M0).
                split.
-               + unfold sub_inst, reset_memories.
-                 rewrite find_inst_mmapi, Find0; auto.
-               +
-                 simpl.
-                 reflexivity.
-                 eauto.
-               assert (exists F, forall k, exists bk,
-                            sub_inst i0 (Fm k) (F k)
-                            /\ (forall n,
-                                  let v := interp_var_instant (SemSB.restr_hist (Fh k) n) i1 in
-                                  SemSB.sem_var_instant (SemSB.restr_hist (Fh k) n) i1 v
-                                  /\ reset_regs_instant n (SemSB.reset_of_value v) (F k))
-                            /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
-                      as (Frst & Spec).
-               { assert (forall k, exists M' bk,
-                              sub_inst i0 (Fm k) M'
-                              /\ (forall n,
-                                    let v := interp_var_instant (SemSB.restr_hist (Fh k) n) i1 in
-                                    SemSB.sem_var_instant (SemSB.restr_hist (Fh k) n) i1 v
-                                    /\ reset_regs_instant n (SemSB.reset_of_value v) M')
-                              /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec.
-                 { intro; destruct (Spec' k) as (?& Heq &?);
-                     rewrite <-spec_EqReset in Heq; destruct Heq as (?&?&?); eauto.
-                 }
-                 now apply functional_choice in Spec.
-               }
-               econstructor. admit.
+               + apply sub_inst_reset_memories'; auto.
+                 intros ** ->; auto.
+               + intro; destruct (Spec' (count r n)) as (?& Heq &?);
+                   apply spec_EqReset in Heq as (?&? & Spec); destruct (Spec n).
+                 erewrite <-interp_var_instant_reset.
+                 *{ split.
+                    - apply sem_var_instant_reset; auto.
+                      admit.
+                    -
+
+                      replace (SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1))
+                        with (SemSB.reset_of (interp_var x (Fh (count r n)) i1) n); auto.
+                      eapply (reset_memories_path_sub_spec_instant []); eauto 1.
+                      unfold SemSB.reset_of, interp_var, lift; intros ** ->; simpl.
+                      apply Bool.orb_true_r.
+                  }
+                 * admit.
 
              - admit.
            }
@@ -1218,78 +1327,3 @@ Module Type CORRECTNESS
       exists M.
       now eapply sem_block_cons; eauto.
   Qed.
-
-  (* Theorem correctness: *)
-  (*   forall f xss oss, *)
-  (*     sem_node G f xss oss -> *)
-  (*     exists M, SemSB.sem_block P f M xss oss. *)
-  (* Proof. *)
-  (*   induction 1 as [| | | |???? IHNode|] using sem_node_mult with *)
-  (*       (P_equation := fun b H e => *)
-  (*                        (* sem_equation G b H e -> *) *)
-  (*                        exists M, *)
-  (*                          (* memories_spec M (ps_from_list (map (@fst ident const) mems)) H -> *) *)
-  (*                          Forall (SemSB.sem_equation P b H M) *)
-  (*                                 (translate_eqn e)) *)
-  (*       (P_reset := fun f r xss oss => *)
-  (*                     (* sem_reset G f r xss oss -> *) *)
-  (*                     exists M, SemSB.sem_block P f M xss oss *)
-  (*                          /\ SemSB.reset_regs r M *)
-  (*       ); *)
-  (*     eauto. *)
-  (*   - repeat (econstructor; eauto). *)
-
-  (*     - *)
-  (*       (* intro Sem; clear Sem. *) *)
-  (*       destruct IHsem_node as (M & Sem). *)
-  (*       match goal with *)
-  (*         H: sem_node _ _ _ _ |- _ => *)
-  (*         inversion_clear H as [??????? Find] *)
-  (*       end. *)
-  (*       apply find_node_translate in Find as (bl & ? & Find & E). *)
-  (*       subst. *)
-  (*       simpl. *)
-  (*       exists (add_inst (hd default x) M (@empty_memory SemSB.mvalues)). *)
-  (*       repeat (econstructor; eauto); *)
-  (*         apply mfind_inst_gss. *)
-
-  (*     - *)
-  (*       (* intro Sem; clear Sem. *) *)
-  (*       destruct IHsem_node as (M & Block & Reset); auto. *)
-  (*       match goal with H: sem_reset _ _ _ _ _ |- _ => inversion_clear H as [???? Sem] end. *)
-  (*       simpl. *)
-  (*       exists (add_inst (hd default x) M (@empty_memory SemSB.mvalues)). *)
-  (*       econstructor. *)
-  (*       + repeat (econstructor; eauto); *)
-  (*           apply mfind_inst_gss. *)
-  (*       + pose proof (Sem 0) as Sem0; inv Sem0. *)
-  (*         edestruct find_node_translate as (bl & P' & ? & ?); eauto. *)
-  (*         subst. *)
-  (*         repeat (econstructor; eauto); *)
-  (*           apply mfind_inst_gss. *)
-
-  (*     - *)
-  (*       (* intro Sem; clear Sem; simpl. *) *)
-  (*       exists (add_val x {| SemSB.content := hold (sem_const c0) ls; SemSB.reset := fun _ => false |} (@empty_memory SemSB.mvalues)). *)
-  (*       econstructor; eauto. *)
-  (*       econstructor; eauto. *)
-  (*       econstructor. *)
-  (*       + apply mfind_mem_gss. *)
-  (*       + reflexivity. *)
-  (*       + simpl; intro; subst. *)
-  (*         unfold fby. *)
-  (*         destruct (ls n); auto. *)
-
-  (*     - admit. *)
-
-  (*     - eexists. *)
-  (*       match goal with *)
-  (*         H: find_node _ _ = _ |- _ => apply find_node_translate in H as (bl & ? & Find & E) *)
-  (*       end. *)
-  (*       subst. *)
-  (*       econstructor; eauto. *)
-  (*       + simpl; rewrite map_fst_idty; eauto. *)
-  (*       + simpl; rewrite map_fst_idty; eauto. *)
-  (*       + simpl. *)
-
-  (*   Qed. *)
