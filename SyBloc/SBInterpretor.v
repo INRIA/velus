@@ -228,6 +228,28 @@ Module Type SBINTERPRETOR
       apply interp_lexp_instant_sound; auto.
     Qed.
 
+    Definition interp_laexps_instant (ck: clock) (es: list lexp) : list value :=
+      let vs := interp_lexps_instant es in
+      let b := interp_clock_instant ck in
+      if forallb (fun v => v ==b absent) vs && negb b || forallb (fun v => v <>b absent) vs && b then vs
+      else [].
+
+    Lemma interp_laexps_instant_sound:
+      forall ck es vs,
+        sem_laexps_instant base R ck es vs ->
+        vs = interp_laexps_instant ck es.
+    Proof.
+      unfold interp_laexps_instant.
+      induction 1 as [|??? Absent|].
+      - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
+        assert (present_list vs) as Present by (apply present_list_spec; eauto).
+        apply present_list_spec_b in Present as ->.
+        simpl; rewrite Bool.orb_true_r; auto.
+      - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
+        apply absent_list_spec', absent_list_spec_b in Absent as ->; auto.
+      - simpl. destruct (negb (interp_clock_instant ck) || interp_clock_instant ck); auto.
+    Qed.
+
   End InstantInterpretor.
 
   (** ** Liftings of instantaneous semantics *)
@@ -239,13 +261,18 @@ Module Type SBINTERPRETOR
 
     Definition lift {A B} (interp: bool -> env -> A -> B) x: stream B :=
       fun n => interp (bk n) (restr_hist H n) x.
-    Hint Unfold lift.
+
+    Definition lift' {A B} (interp: env -> A -> B) x: stream B :=
+      fun n => interp (restr_hist H n) x.
 
     Definition interp_clock (ck: clock): stream bool :=
       lift interp_clock_instant ck.
 
     Definition interp_var (x: ident): stream value :=
-      lift (fun base => interp_var_instant) x.
+      lift' interp_var_instant x.
+
+    Definition interp_vars (xs: idents): stream (list value) :=
+      lift' (fun R => map (interp_var_instant R)) xs.
 
     Definition interp_lexp (e: lexp): stream value :=
       lift interp_lexp_instant e.
@@ -281,6 +308,9 @@ Module Type SBINTERPRETOR
 
     Definition interp_laexp (ck: clock) (e: lexp): stream value :=
       lift (fun base R => interp_laexp_instant base R ck) e.
+
+    Definition interp_laexps (ck: clock) (es: list lexp): stream (list value) :=
+      lift (fun base R => interp_laexps_instant base R ck) es.
 
     (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value := *)
     (*   lift (fun base R => interp_annotated_instant base R interp_instant ck) a. *)

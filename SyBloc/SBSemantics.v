@@ -229,22 +229,18 @@ Module Type SBSEMANTICS
       forall n, sem (bk n) (restr_hist n) x (ys n).
     Hint Unfold lift.
 
-    Definition lift' {A B} (sem: bool -> env -> A -> B -> Prop) x (ys: stream B): Prop :=
-      forall n, sem (bk n) (restr_hist n) x (ys n).
+    Definition lift' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
+      forall n, sem (restr_hist n) x (ys n).
     Hint Unfold lift'.
 
-    Definition lift'' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
-      forall n, sem (restr_hist n) x (ys n).
-    Hint Unfold lift''.
-
     Definition sem_clock (ck: clock) (xs: stream bool): Prop :=
-      lift' sem_clock_instant ck xs.
+      lift sem_clock_instant ck xs.
 
     Definition sem_var (x: ident) (xs: stream value): Prop :=
-      lift'' sem_var_instant x xs.
+      lift' sem_var_instant x xs.
 
     Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
-      lift'' (fun R => Forall2 (sem_var_instant R)) x xs.
+      lift' (fun R => Forall2 (sem_var_instant R)) x xs.
 
     Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
       lift (fun base R => sem_laexp_instant base R ck) e xs.

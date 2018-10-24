@@ -253,13 +253,35 @@ if the clocked stream is [absent] at the corresponding instant. *)
   Qed.
 
   Lemma absent_list_spec:
-    forall xs,
-      absent_list xs <-> xs = all_absent xs.
+    forall A xs (ys: list A),
+      length xs = length ys ->
+      absent_list xs ->
+      xs = all_absent ys.
   Proof.
-    induction xs; simpl; split; intro; try constructor(auto).
-    - inv H. apply f_equal. now apply IHxs.
-    - now inversion H.
-    - inversion H. rewrite <- H2. now apply IHxs.
+    induction xs, ys; simpl; inversion 1; auto.
+    inversion_clear 1; subst; f_equal; auto.
+  Qed.
+
+  Lemma absent_list_spec':
+    forall A xs (ys: list A),
+      xs = all_absent ys ->
+      absent_list xs.
+  Proof.
+    induction xs, ys; simpl; inversion 1; constructor; auto.
+    match goal with H: _ = all_absent _ |- _ => rewrite <-H end.
+    eapply IHxs; eauto.
+  Qed.
+
+  Lemma absent_list_spec_b:
+    forall xs,
+      absent_list xs <-> forallb (fun x => x ==b absent) xs = true.
+  Proof.
+    induction xs; simpl; split; auto.
+    - constructor.
+    - inversion_clear 1; subst; apply andb_true_intro; intuition.
+    - intro H; apply andb_prop in H as (E & Hforall).
+      rewrite equiv_decb_equiv in E; constructor; auto.
+      apply IHxs; auto.
   Qed.
 
   Lemma all_absent_map:
@@ -290,6 +312,20 @@ if the clocked stream is [absent] at the corresponding instant. *)
         * intro. subst x; discriminate.
         * eapply IHxs.
           exists vs. now inv Hvs.
+  Qed.
+
+  Lemma present_list_spec_b:
+    forall xs,
+      present_list xs <-> forallb (fun x => x <>b absent) xs = true.
+  Proof.
+    induction xs; simpl; split; auto.
+    - constructor.
+    - inversion_clear 1 as [|?? NE]; apply andb_true_intro; intuition.
+      apply Bool.negb_true_iff; rewrite not_equiv_decb_equiv; auto.
+    - intro H; apply andb_prop in H as (E & Hforall).
+      apply Bool.negb_true_iff in E; rewrite not_equiv_decb_equiv in E.
+      constructor; auto.
+      apply IHxs; auto.
   Qed.
 
 End STREAM.
