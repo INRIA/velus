@@ -60,6 +60,16 @@ Module Type SBINTERPRETOR
         end
       end.
 
+    (* Lemma not_subrate_interp_clock: *)
+    (*   forall c, *)
+    (*     base = false -> *)
+    (*     interp_clock_instant c = false. *)
+    (* Proof. *)
+    (*   intros; induction c; simpl; auto. *)
+    (*   destruct (interp_var_instant i); auto. *)
+    (*   destruct (val_to_bool c0); auto. *)
+    (*   rewrite IHc; simpl. *)
+
     Fixpoint interp_lexp_instant (e: lexp): value :=
       match e with
       | Econst c =>

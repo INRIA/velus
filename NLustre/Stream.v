@@ -134,6 +134,16 @@ if the clocked stream is [absent] at the corresponding instant. *)
     destruct (r (S n)); omega.
   Qed.
 
+  Lemma count_le':
+    forall r n' n,
+      n' < n ->
+      count r n' <= count r n.
+  Proof.
+    induction 1.
+    - apply count_le.
+    - simpl; destruct (r (S m)); omega.
+  Qed.
+
   Lemma count_true_ge_1:
     forall n r,
       r n = true ->

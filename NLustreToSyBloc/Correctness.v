@@ -1,5 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
+Require Import Logic.FunctionalExtensionality.
+
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
@@ -548,6 +550,7 @@ Module Type CORRECTNESS
 
     Variable Fm: nat -> SemSB.memories.
     Variable Fh: nat -> history.
+    Variable Fmvs: nat -> SemSB.mvalues.
     Variable r: stream bool.
 
     Definition reset_content (x: ident) (p: list ident) : stream val :=
@@ -560,10 +563,41 @@ Module Type CORRECTNESS
             | None => false_val
             end.
 
+    Definition reset_reset (x: ident) (p: list ident) : stream bool :=
+      fun n => match path_inst p (Fm (count r n)) with
+            | Some M =>
+              match find_val x M with
+              | Some mv => r n || mv.(SemSB.reset) n
+              | None => r n
+              end
+            | None => r n
+            end.
+
+    Lemma reset_reset_spec:
+      forall n x p,
+        r n = true ->
+        reset_reset x p n = true.
+    Proof.
+      unfold reset_reset; intros ** ->.
+      destruct (path_inst p (Fm (count r n))); auto.
+      destruct (find_val x m); auto.
+    Qed.
+
+    Lemma reset_reset_spec':
+      forall n x p M mv,
+        path_inst p (Fm (count r n)) = Some M ->
+        find_val x M = Some mv ->
+        mv.(SemSB.reset) n = true ->
+        reset_reset x p n = true.
+    Proof.
+      unfold reset_reset; intros ** ->; intros ->; intros ->.
+      apply Bool.orb_true_r.
+    Qed.
+
     Definition reset_memories_path (p: list ident) (M0: SemSB.memories) : SemSB.memories :=
       mmapi (fun p x mv =>
                {| SemSB.content := reset_content x p;
-                  SemSB.reset := r |})
+                  SemSB.reset := reset_reset x p |})
             p M0.
 
     Definition reset_memories := reset_memories_path [].
@@ -579,7 +613,9 @@ Module Type CORRECTNESS
 
     Lemma reset_memories_path_spec:
       forall k p r',
-        (forall n, r' n = true -> r n = true) ->
+        (forall n,
+            r' n = true ->
+            r n = true) ->
         SemSB.reset_regs r' (reset_memories_path p (Fm k)).
     Proof.
       intros ** Spec; unfold reset_memories_path.
@@ -587,10 +623,11 @@ Module Type CORRECTNESS
       induction (Fm k) as [?? IH] using memory_ind'.
       constructor.
       - intros x mvs.
-        unfold reset_memories_path, find_val.
+        unfold find_val.
         simpl; rewrite Env.find_mapi.
         intro Find.
         destruct (Env.find x xvs); inv Find; auto.
+        intros; simpl; apply reset_reset_spec; auto.
       - induction xms as [|[y]].
         + intros; discriminate.
         + simpl in IH; inv IH.
@@ -624,6 +661,95 @@ Module Type CORRECTNESS
                              | Some xs => xs n
                              | None => absent
                              end) H0.
+
+    Definition reset_mvalues: SemSB.mvalues :=
+    {| SemSB.content := fun n => (Fmvs (count r n)).(SemSB.content) n;
+       SemSB.reset := fun n => r n || (Fmvs (count r n)).(SemSB.reset) n |}.
+
+    Lemma reset_mvalues_spec:
+      forall x e c0 ck xss,
+        (forall k,
+            exists bk : stream bool,
+              find_val x (Fm k) = Some (Fmvs k) /\
+              SemSB.content (Fmvs k) 0 = sem_const c0 /\
+              (forall n : nat,
+                  let v := interp_var_instant (SemSB.restr_hist (Fh k) n) x in
+                  let v' := interp_laexp_instant (bk n) (SemSB.restr_hist (Fh k) n) ck e in
+                  SemSB.sem_var_instant (SemSB.restr_hist (Fh k) n) x v /\
+                  SemSB.sem_laexp_instant (bk n) (SemSB.restr_hist (Fh k) n) ck e v' /\
+                  match v' with
+                  | absent =>
+                    SemSB.content (Fmvs k) (S n) =
+                    (if SemSB.reset (Fmvs k) (S n) then sem_const c0 else SemSB.content (Fmvs k) n) /\
+                    v = absent
+                  | present v'0 =>
+                    SemSB.content (Fmvs k) (S n) = (if SemSB.reset (Fmvs k) (S n) then sem_const c0 else v'0) /\
+                    v = present (SemSB.content (Fmvs k) n)
+                  end) /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) ->
+        forall n, r n = true ->
+             SemSB.content reset_mvalues n = sem_const c0.
+    Proof.
+      intros ** Spec n E.
+      unfold reset_mvalues; simpl.
+      induction n; simpl; rewrite E.
+      - destruct (Spec 1); intuition.
+      - specialize (Spec (S (count r n))); destruct Spec as (bk &?& Init & Heq & Clock).
+        assert (forall n',
+                   n' <= n ->
+                   interp_laexp_instant (bk n') (SemSB.restr_hist (Fh (S (count r n))) n') ck e = absent)
+          as Absent.
+        { assert (forall n',
+                     n' <= n ->
+                     bk n' = false) as Hbk.
+          { clear - Clock.
+            intros ** Lte.
+            specialize (Clock n').
+            rewrite mask_opaque in Clock; auto.
+            - apply Bool.not_true_is_false; intro Ebk.
+              apply Clock in Ebk.
+              clear - Ebk; induction Ebk; auto.
+              admit.
+            - apply Lt.le_lt_or_eq in Lte as [Lt|]; subst; auto.
+              apply (count_le' r) in Lt; omega.
+          }
+          intros.
+          destruct (Heq n') as (?& Hexp &?).
+          destruct (interp_laexp_instant (bk n') (SemSB.restr_hist (Fh (S (count r n))) n') ck e); auto.
+          inversion_clear Hexp as [???? HClock|].
+          rewrite Hbk in HClock; auto; contradict HClock.
+          apply SemSB.not_subrate_clock.
+        }
+        assert (forall n', n' <= n -> SemSB.content (Fmvs (S (count r n))) n' = sem_const c0) as Spec.
+        { intros ** Lte.
+          induction n'; auto.
+          destruct (Heq n') as (?&? & Hfby).
+          rewrite Absent in Hfby; try omega; destruct Hfby as (->).
+          destruct (SemSB.reset (Fmvs (S (count r n))) (S n')); auto.
+          apply IHn'; omega.
+        }
+        destruct (Heq n) as (?&?& Hfby);
+          rewrite Absent in Hfby; auto; destruct Hfby as (->).
+        destruct (SemSB.reset (Fmvs (S (count r n))) (S n)); auto.
+    Qed.
+
+    Lemma find_val_reset_memories:
+      forall x,
+        (forall k, find_val x (Fm k) = Some (Fmvs k)) ->
+        find_val x (reset_memories (Fm 0)) = Some reset_mvalues.
+    Proof.
+      intros ** Spec.
+      unfold reset_mvalues, reset_memories, reset_memories_path.
+      rewrite find_val_mmapi.
+      destruct (find_val x (Fm 0)) eqn: E; simpl.
+      - do 3 f_equal.
+        + unfold reset_content; simpl.
+          extensionality n.
+          rewrite Spec; auto.
+        + unfold reset_reset.
+          extensionality n.
+          simpl; rewrite Spec; auto.
+      - rewrite Spec in E; discriminate.
+    Qed.
 
     Section InterpReset.
 
@@ -939,14 +1065,15 @@ Module Type CORRECTNESS
       reset_regs_instant n (r' n) (reset_memories_path Fm r p (Fm k)).
   Proof.
     intros ** Spec; unfold reset_memories_path.
-    revert p.
-    induction (Fm k) as [?? IH] using memory_ind'.
+    revert dependent p.
+    induction (Fm k) as [?? IH] using memory_ind'; intros.
     constructor.
     - intros x mvs.
       unfold reset_memories_path, find_val.
       simpl; rewrite Env.find_mapi.
       intro Find.
       destruct (Env.find x xvs); inv Find; auto.
+      simpl; intro; apply reset_reset_spec; auto.
     - induction xms as [|[y]].
       + intros; discriminate.
       + simpl in IH; inv IH.
@@ -975,7 +1102,7 @@ Module Type CORRECTNESS
   Proof.
     intros ** Sub Spec; unfold sub_inst, reset_memories, reset_memories_path.
     rewrite find_inst_mmapi, Sub.
-    simpl.
+    simpl. auto.
     admit.
   Qed.
 
@@ -1081,16 +1208,10 @@ Module Type CORRECTNESS
       apply Incl; right; auto.
   Qed.
 
-  Definition reset_mvalues (Fmvs: nat -> SemSB.mvalues) (r: stream bool): SemSB.mvalues :=
-    {| SemSB.content := fun n => (Fmvs (count r n)).(SemSB.content) n;
-       SemSB.reset := fun n => r n || (Fmvs (count r n)).(SemSB.reset) n |}.
-
   Require Import Coq.Logic.ClassicalChoice.
   Require Import Coq.Logic.ConstructiveEpsilon.
   Require Import Coq.Logic.Epsilon.
   Require Import Coq.Logic.IndefiniteDescription.
-
-  Require Import Logic.FunctionalExtensionality.
 
   Theorem correctness:
     forall G f xss oss,
@@ -1279,43 +1400,15 @@ Module Type CORRECTNESS
 
                apply spec_EqFby.
                exists (reset_mvalues Fmvs r).
-               assert (forall n,
-                          r n = true ->
-                          (reset_mvalues Fmvs r).(SemSB.content) n = sem_const c0) as FIRE.
-               { unfold reset_mvalues; induction n; simpl; intros E; rewrite E.
-                 - destruct (Spec 1) as (?&?&?&?); auto.
-                 - simpl in IHn.
-                   destruct (Spec (S (count r n))) as (bk &?&?& Heq & Clock).
-                   destruct (Heq n) as (Hvar & Hexp & Hfby).
-                   assert (bk n = false) as Hbk.
-                   { specialize (Clock n).
-                     rewrite mask_opaque in Clock; auto.
-                     apply Bool.not_true_is_false; intro Ebk.
-                     apply Clock in Ebk.
-                     clear - Ebk; induction Ebk; auto.
-                     admit.
-                   }
-                   destruct (interp_laexp_instant (bk n) (SemSB.restr_hist (Fh (S (count r n))) n) c l0);
-                     destruct Hfby as (->).
-                   + admit.
-                   + admit.
-               }
-               split; [|split]; eauto; simpl.
-               + unfold reset_mvalues, reset_memories, reset_memories_path.
-                 rewrite find_val_mmapi.
-                 destruct (find_val i (Fm 0)) eqn: E; simpl.
-                 *{ do 3 f_equal.
-                    - unfold reset_content; simpl.
-                      extensionality n.
-                      destruct (Spec (count r n)) as (?& -> &?); auto.
-                    - admit.
-                  }
-                 * destruct (Spec 0) as (?& E' &?); rewrite E in E'; discriminate.
-               + destruct (r 0).
+               split; [|split]; eauto.
+               + apply find_val_reset_memories.
+                 intro; destruct (Spec k); intuition.
+               + simpl; destruct (r 0).
                  * destruct (Spec 1) as (?&?&?&?); auto.
                  * destruct (Spec 0) as (?&?&?&?); auto.
-               + clear - Spec FIRE.
+               + clear - Spec.
                  intro; destruct (Spec (count r n)) as (bk & Find & Init & Heq & Clock).
+                 pose proof (reset_mvalues_spec _ _ _ _ _ _ _ _ _ Spec (S n)) as Spec'.
                  clear Spec.
                  erewrite <-interp_var_instant_reset, <-interp_laexp_instant_reset; eauto.
                  *{ destruct (Heq n) as (Hvar & Hexp & Hfby).
@@ -1323,28 +1416,41 @@ Module Type CORRECTNESS
                     - apply sem_var_instant_reset; auto.
                       admit.
                     - eapply sem_laexp_instant_reset; eauto.
-                    - destruct (r (S n)) eqn: E;
-                        destruct (interp_laexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) c l0);
-                        destruct Hfby; split; simpl; auto;
-                          specialize (FIRE _ E); unfold reset_mvalues in FIRE;
-                            simpl in FIRE; rewrite E in FIRE; auto.
+                    - destruct (r (S n)) eqn: E; [rewrite Spec'; auto|];
+                        simpl; rewrite E; simpl; auto.
+                      destruct (interp_laexp_instant (bk n) (SemSB.restr_hist (Fh (count r n)) n) c l0);
+                        intuition.
                   }
                   * admit.
 
              - apply spec_EqReset.
                assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
                    by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
-               exists (reset_memories_path Fm (fun n => r n || SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1)) [i0] M0).
+               (* exists (reset_memories_path Fm (fun n => r n || SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1)) [i0] M0). *)
+               exists (reset_memories_path Fm r [i0] M0).
                split.
-               + apply sub_inst_reset_memories'; auto.
-                 intros ** ->; auto.
+               + unfold sub_inst, reset_memories, reset_memories_path.
+                 rewrite find_inst_mmapi, Find0.
+                 simpl. auto.
+                 (* admit. *)
+                 (* apply sub_inst_reset_memories'; auto. *)
+                 (* intros ** ->; auto. *)
                + intro; destruct (Spec' (count r n)) as (?& Heq &?);
                    apply spec_EqReset in Heq as (?&? & Spec); destruct (Spec n).
                  erewrite <-interp_var_instant_reset.
                  *{ split.
                     - apply sem_var_instant_reset; auto.
                       admit.
-                    - replace (SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1))
+                    - constructor.
+                      + unfold reset_memories_path. intros ** Find' Rst.
+                        rewrite find_val_mmapi in Find'.
+                        destruct (find_val x1 M0) eqn: E; inv Find'.
+                        simpl. unfold reset_reset. simpl.
+                        rewrite H0.
+                        eapply reset_reset_spec'.
+
+
+                      replace (SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1))
                         with (SemSB.reset_of (interp_var (Fh (count r n)) i1) n); auto.
                       eapply (reset_memories_path_sub_spec_instant []); eauto 1.
                       unfold SemSB.reset_of, interp_var, lift'; intros ** ->; simpl.

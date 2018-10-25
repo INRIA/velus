@@ -172,6 +172,14 @@ Module Type SBSEMANTICS
 
   End InstantSemantics.
 
+  Lemma not_subrate_clock:
+    forall R ck,
+      ~ sem_clock_instant false R ck true.
+  Proof.
+    intros ** Sem; induction ck; inv Sem.
+    now apply IHck.
+  Qed.
+
   Section InstantAnnotatedSemantics.
 
     Variable base : bool.
