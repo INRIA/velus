@@ -602,13 +602,24 @@ Module Type CORRECTNESS
 
     Definition reset_memories := reset_memories_path [].
 
-    Lemma sub_inst_reset_memories:
-      forall x M M' p,
+    Lemma sub_inst_reset_memories_path:
+      forall x p M M',
         sub_inst x M M' ->
         sub_inst x (reset_memories_path p M) (reset_memories_path (p ++ [x]) M').
     Proof.
-      intros ** Find; unfold sub_inst, reset_memories, reset_memories_path.
+      intros ** Find; unfold sub_inst, reset_memories_path.
       rewrite find_inst_mmapi, Find; auto.
+    Qed.
+
+    Lemma sub_inst_reset_memories_path':
+      forall x p M M',
+        sub_inst x (reset_memories_path p M) M' ->
+        exists M'', M' = reset_memories_path (p ++ [x]) M''
+               /\ sub_inst x M M''.
+    Proof.
+      unfold sub_inst, reset_memories_path; intros ** Find.
+      rewrite find_inst_mmapi in Find.
+      destruct (find_inst x M) eqn: E; inv Find; eauto.
     Qed.
 
     Lemma reset_memories_path_spec:
@@ -645,7 +656,7 @@ Module Type CORRECTNESS
         SemSB.reset_regs r' (reset_memories_path (p ++ [x]) M).
     Proof.
       intros ** Sub Spec; eapply reset_memories_path_spec with (k := k) in Spec.
-      inversion_clear Spec as [??? Inst]; eapply Inst, sub_inst_reset_memories; eauto.
+      inversion_clear Spec as [??? Inst]; eapply Inst, sub_inst_reset_memories_path; eauto.
     Qed.
 
     Corollary reset_memories_spec:
@@ -937,7 +948,7 @@ Module Type CORRECTNESS
     End InterpReset.
 
   End Choices.
-  Hint Resolve reset_memories_spec sub_inst_reset_memories.
+  Hint Resolve reset_memories_spec sub_inst_reset_memories_path.
 
   Lemma Forall2_In_l:
     forall {A B: Type} (l: list A) (l': list B) P x,
@@ -1061,16 +1072,15 @@ Module Type CORRECTNESS
 
   Lemma reset_memories_path_spec_instant:
     forall k p r' Fm r n,
-      (r' n = true -> r n = true) ->
-      reset_regs_instant n (r' n) (reset_memories_path Fm r p (Fm k)).
+      (r' = true -> r n = true) ->
+      reset_regs_instant n r' (reset_memories_path Fm r p (Fm k)).
   Proof.
     intros ** Spec; unfold reset_memories_path.
     revert dependent p.
     induction (Fm k) as [?? IH] using memory_ind'; intros.
     constructor.
     - intros x mvs.
-      unfold reset_memories_path, find_val.
-      simpl; rewrite Env.find_mapi.
+      unfold reset_memories_path, find_val; simpl; rewrite Env.find_mapi.
       intro Find.
       destruct (Env.find x xvs); inv Find; auto.
       simpl; intro; apply reset_reset_spec; auto.
@@ -1085,26 +1095,26 @@ Module Type CORRECTNESS
   Qed.
 
   Corollary reset_memories_path_sub_spec_instant:
-      forall p r' x M Fm r k n,
-        sub_inst x (Fm k) M ->
-        (r' n = true -> r n = true) ->
-        reset_regs_instant n (r' n) (reset_memories_path Fm r (p ++ [x]) M).
+    forall p r' x M Fm r k n,
+      sub_inst x (Fm k) M ->
+      (r' = true -> r n = true) ->
+      reset_regs_instant n r' (reset_memories_path Fm r (p ++ [x]) M).
   Proof.
     intros ** Sub Spec; eapply reset_memories_path_spec_instant with (k := k) in Spec.
-    inversion_clear Spec as [??? Inst]; eapply Inst, sub_inst_reset_memories; eauto.
+    inversion_clear Spec as [??? Inst]; eapply Inst, sub_inst_reset_memories_path; eauto.
   Qed.
 
-  Lemma sub_inst_reset_memories':
-    forall x M0 Fm r r',
-      sub_inst x (Fm 0) M0 ->
-      (forall n, r n = true -> r' n = true) ->
-      sub_inst x (reset_memories Fm r (Fm 0)) (reset_memories_path Fm r' [x] M0).
-  Proof.
-    intros ** Sub Spec; unfold sub_inst, reset_memories, reset_memories_path.
-    rewrite find_inst_mmapi, Sub.
-    simpl. auto.
-    admit.
-  Qed.
+  (* Lemma sub_inst_reset_memories'': *)
+  (*   forall x M0 Fm r r', *)
+  (*     sub_inst x (Fm 0) M0 -> *)
+  (*     (forall n, r n = true -> r' n = true) -> *)
+  (*     sub_inst x (reset_memories Fm r (Fm 0)) (reset_memories_path Fm r' [x] M0). *)
+  (* Proof. *)
+  (*   intros ** Sub Spec; unfold sub_inst, reset_memories, reset_memories_path. *)
+  (*   rewrite find_inst_mmapi, Sub. *)
+  (*   simpl. auto. *)
+  (*   admit. *)
+  (* Qed. *)
 
   Lemma spec_EqReset:
     forall P bk H M ck b i r,
@@ -1423,30 +1433,97 @@ Module Type CORRECTNESS
                   }
                   * admit.
 
-             - apply spec_EqReset.
-               assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
+             - assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
                    by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
+               apply spec_EqReset.
                (* exists (reset_memories_path Fm (fun n => r n || SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1)) [i0] M0). *)
                exists (reset_memories_path Fm r [i0] M0).
                split.
-               + unfold sub_inst, reset_memories, reset_memories_path.
-                 rewrite find_inst_mmapi, Find0.
-                 simpl. auto.
-                 (* admit. *)
-                 (* apply sub_inst_reset_memories'; auto. *)
-                 (* intros ** ->; auto. *)
-               + intro; destruct (Spec' (count r n)) as (?& Heq &?);
-                   apply spec_EqReset in Heq as (?&? & Spec); destruct (Spec n).
+               + now apply sub_inst_reset_memories_path.
+               + assert (forall x k M',
+                            find_val x M0 <> None ->
+                            sub_inst i0 (Fm k) M' ->
+                            find_val x M' <> None) as FindVal.
+                 { intros ??? Find' Sub.
+                   specialize (Spec' k); destruct Spec' as (?& Heq &?).
+                   (* apply spec_EqReset in Heq. *)
+                   inv Heq.
+                   unfold sub_inst in *. rewrite H9 in Sub; inv Sub.
+                   admit.
+                 }
+
+
+                 intro; destruct (Spec' (count r n)) as (bk & Heq &?);
+                   apply spec_EqReset in Heq as (M' & Sub & Spec);
+                   specialize (Spec n); destruct Spec as (?& RstSpec).
                  erewrite <-interp_var_instant_reset.
                  *{ split.
                     - apply sem_var_instant_reset; auto.
                       admit.
-                    - constructor.
-                      + unfold reset_memories_path. intros ** Find' Rst.
+                    - clear - Sub RstSpec FindVal.
+                      (* generalize (@nil ident) as p; simpl. *)
+                      induction M0 as [?? IH] using memory_ind'.
+                      inversion_clear RstSpec as [?? Val Inst].
+                      constructor.
+                      + unfold reset_memories_path; intros ** Find' Rst; subst.
+                        (* eapply H2; eauto. *)
                         rewrite find_val_mmapi in Find'.
-                        destruct (find_val x1 M0) eqn: E; inv Find'.
-                        simpl. unfold reset_reset. simpl.
-                        rewrite H0.
+                        destruct (find_val x (Mnode xvs xms)) eqn: E; inv Find'.
+                        unfold reset_reset; simpl.
+                        rewrite Sub.
+                        destruct (find_val x M') eqn: E'.
+                        * erewrite Val; eauto 1.
+                          apply Bool.orb_true_r.
+                        * contradict E'; eapply FindVal; eauto;
+                            rewrite E; intro; discriminate.
+                      + (* pose proof (sub_inst_reset_memories Fm r x M0). *)
+                        (* eapply Inst. eauto. *)
+                        (* intros. *)
+
+                        intros ** Find.
+                        apply sub_inst_reset_memories_path' in Find as (?&?&Find); subst.
+                        unfold sub_inst, find_inst in Find.
+                        apply Env.find_in, in_map with (f := snd) in Find; simpl in Find.
+                        eapply In_Forall in IH; eauto.
+
+
+                        eapply Env.find_in, in_map in Find.
+
+                        SearchAbout Env.find In.
+
+
+
+                        replace (SemSB.reset_of_value (interp_var_instant (SemSB.restr_hist (Fh (count r n)) n) i1))
+                          with (SemSB.reset_of (interp_var (Fh (count r n)) i1) n); auto.
+                        eapply reset_memories_path_sub_spec_instant.
+                        SearchAbout reset_regs_instant.
+                        eapply Inst.
+
+
+
+                        apply (sub_inst_reset_memories Fm r _ [i0]) in H0.
+                        SearchAbout sub_inst reset_memories_path.
+                        unfold sub_inst, reset_memories_path in H0.
+                        rewrite find_inst_mmapi in H0.
+                        destruct (find_inst x M0) eqn: E; inv H0.
+
+                        SearchAbout sub_inst reset_memories_path.
+                        unfold sub_inst, reset_memories_path.
+                        intros ** Find; rewrite find_inst_mmapi in Find.
+                        destruct (find_inst x M0) eqn: E; inv Find.
+SearchAbout reset_regs_instant.
+                        eapply Inst.
+                        unfold sub_inst.
+
+                        unfold sub_inst, find_inst in *; simpl.
+
+                        rewrite H.
+                        simpl.
+                        unfold sub_inst, reset_memories_path; intros ** Sub'.
+                        rewrite find_inst_mmapi in Sub'.
+
+
+                          SearchAbout (_ || true).
                         eapply reset_reset_spec'.
 
 
