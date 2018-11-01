@@ -1055,7 +1055,19 @@ Module Type CORRECTNESS
       erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound; eauto; intuition.
       specialize (Spec n); auto.
   Qed.
-Lemma spec_EqReset:
+
+  Inductive reset_regs_instant (n: nat): bool -> SemSB.memories -> Prop :=
+    reset_regs_instant_intro:
+      forall M b,
+        (forall x mvs,
+            find_val x M = Some mvs ->
+            b = true -> mvs.(SemSB.reset) n = true) ->
+        (forall x M',
+            sub_inst x M M' ->
+            reset_regs_instant n b M') ->
+        reset_regs_instant n b M.
+
+  Lemma spec_EqReset:
     forall P bk H M ck b i r,
       (exists M',
           sub_inst i M M'
@@ -1132,16 +1144,6 @@ Lemma spec_EqReset:
           (* sem_equation bk H M (EqCall ys ck b i es) *)
 
 
-  Inductive reset_regs_instant (n: nat): bool -> SemSB.memories -> Prop :=
-    reset_regs_instant_intro:
-      forall M b,
-        (forall x mvs,
-            find_val x M = Some mvs ->
-            b = true -> mvs.(SemSB.reset) n = true) ->
-        (forall x M',
-            sub_inst x M M' ->
-            reset_regs_instant n b M') ->
-        reset_regs_instant n b M.
 
   (* Lemma reset_regs_instant_path: *)
   (*   forall n b M, *)
@@ -1427,7 +1429,7 @@ Lemma spec_EqReset:
         }
 
         exists (reset_memories Fm r (Fm 0)).
-        assert (SemSB.reset_regs r (reset_memories Fm r (Fm 0))) as RstRegs by eauto.
+        (* assert (SemSB.reset_regs r (reset_memories Fm r (Fm 0))) as RstRegs by eauto. *)
 
         split; eauto.
         eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
@@ -1555,6 +1557,7 @@ Lemma spec_EqReset:
 
              - admit.
            }
+
           * apply IHeqs.
             intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
       }
