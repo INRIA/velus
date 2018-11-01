@@ -42,6 +42,9 @@ Module Type SBINTERPRETOR
       | None => absent
       end.
 
+    Definition interp_vars_instant (xs: list ident): list value :=
+      map interp_var_instant xs.
+
     Fixpoint interp_clock_instant (c: clock): bool :=
       match c with
       | Cbase =>
@@ -152,6 +155,15 @@ Module Type SBINTERPRETOR
              | H: sem_binop ?op ?c1 ?t1 ?c2 ?t2 = _ |- context[sem_binop ?op ?c1 ?t1 ?c2 ?t2] =>
                rewrite H
           end.
+
+    Lemma interp_vars_instant_sound:
+      forall xs vs,
+        sem_vars_instant R xs vs ->
+        vs = interp_vars_instant xs.
+    Proof.
+      unfold sem_vars_instant, interp_vars_instant.
+      induction 1; auto; simpl; rw_lexp_helper; f_equal; auto.
+    Qed.
 
     Lemma interp_clock_instant_sound:
       forall c b,
@@ -282,7 +294,7 @@ Module Type SBINTERPRETOR
       lift' interp_var_instant x.
 
     Definition interp_vars (xs: idents): stream (list value) :=
-      lift' (fun R => map (interp_var_instant R)) xs.
+      lift' interp_vars_instant xs.
 
     Definition interp_lexp (e: lexp): stream value :=
       lift interp_lexp_instant e.
@@ -322,6 +334,108 @@ Module Type SBINTERPRETOR
     Definition interp_laexps (ck: clock) (es: list lexp): stream (list value) :=
       lift (fun base R => interp_laexps_instant base R ck) es.
 
+    Check Sem.lift.
+
+    Lemma lift_sound:
+      forall {A B} (sem: bool -> env -> A -> B -> Prop) interp x xs,
+        (forall b R x v, sem b R x v -> v = interp b R x) ->
+        Sem.lift bk H sem x xs ->
+        xs ≈ lift interp x.
+    Proof.
+      intros ** Instant Sem n.
+      specialize (Sem n); unfold lift; auto.
+    Qed.
+
+    Lemma lift'_sound:
+      forall {A B} (sem: env -> A -> B -> Prop) interp x xs,
+        (forall R x v, sem R x v -> v = interp R x) ->
+        Sem.lift' H sem x xs ->
+        xs ≈ lift' interp x.
+    Proof.
+      intros ** Instant Sem n.
+      specialize (Sem n); unfold lift'; auto.
+    Qed.
+
+    Corollary interp_clock_sound:
+      forall ck bs,
+        sem_clock bk H ck bs ->
+        bs ≈ interp_clock ck.
+    Proof.
+      intros; eapply lift_sound; eauto;
+        apply interp_clock_instant_sound.
+    Qed.
+
+    Corollary interp_var_sound:
+      forall x vs,
+        sem_var H x vs ->
+        vs ≈ interp_var x.
+    Proof.
+      intros; eapply lift'_sound; eauto;
+        apply interp_var_instant_sound.
+    Qed.
+
+    Corollary interp_vars_sound:
+      forall xs vss,
+        sem_vars H xs vss ->
+        vss ≈ interp_vars xs.
+    Proof.
+      intros; eapply lift'_sound; eauto;
+        apply interp_vars_instant_sound.
+    Qed.
+
+    Corollary interp_lexp_sound:
+      forall e vs,
+        sem_lexp bk H e vs ->
+        vs ≈ interp_lexp e.
+    Proof.
+      intros; eapply lift_sound; eauto;
+        apply interp_lexp_instant_sound.
+    Qed.
+
+    Corollary interp_lexps_sound:
+      forall es vss,
+        sem_lexps bk H es vss ->
+        vss ≈ interp_lexps es.
+    Proof.
+      intros; eapply lift_sound; eauto;
+        apply interp_lexps_instant_sound.
+    Qed.
+
+    Corollary interp_cexp_sound:
+      forall e vs,
+        sem_cexp bk H e vs ->
+        vs ≈ interp_cexp e.
+    Proof.
+      intros; eapply lift_sound; eauto;
+        apply interp_cexp_instant_sound.
+    Qed.
+
+    Corollary interp_laexp_sound:
+      forall e ck vs,
+        sem_laexp bk H ck e vs ->
+        vs ≈ interp_laexp ck e.
+    Proof.
+      intros; eapply lift_sound; eauto.
+      intros; apply interp_laexp_instant_sound; auto.
+    Qed.
+
+    Corollary interp_laexps_sound:
+      forall es ck vss,
+        sem_laexps bk H ck es vss ->
+        vss ≈ interp_laexps ck es.
+    Proof.
+      intros; eapply lift_sound; eauto.
+      intros; apply interp_laexps_instant_sound; auto.
+    Qed.
+
+    Corollary interp_caexp_sound:
+      forall e ck vs,
+        sem_caexp bk H ck e vs ->
+        vs ≈ interp_caexp ck e.
+    Proof.
+      intros; eapply lift_sound; eauto.
+      intros; apply interp_caexp_instant_sound; auto.
+    Qed.
     (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value := *)
     (*   lift (fun base R => interp_annotated_instant base R interp_instant ck) a. *)
 

@@ -3,8 +3,8 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 (* Require Import Coq.Sorting.Permutation. *)
-(* Require Import Setoid. *)
-(* Require Import Morphisms. *)
+Require Import Setoid.
+Require Import Morphisms.
 (* Require Import Coq.Arith.EqNat. *)
 
 (* Require Import Coq.FSets.FMapPositive. *)
@@ -61,6 +61,9 @@ Module Type SBSEMANTICS
         forall x v,
           PM.find x R = Some v ->
           sem_var_instant x v.
+
+    Definition sem_vars_instant (xs: list ident) (vs: list value) : Prop :=
+      Forall2 sem_var_instant xs vs.
 
     Inductive sem_clock_instant: clock -> bool -> Prop :=
     | Sbase:
@@ -248,7 +251,7 @@ Module Type SBSEMANTICS
       lift' sem_var_instant x xs.
 
     Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
-      lift' (fun R => Forall2 (sem_var_instant R)) x xs.
+      lift' sem_vars_instant x xs.
 
     Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
       lift (fun base R => sem_laexp_instant base R ck) e xs.
@@ -477,5 +480,45 @@ Module Type SBSEMANTICS
              sem_equation_mult, sem_block_mult.
 
   End sem_block_mult.
+
+  (** Morphisms properties *)
+
+  Add Parametric Morphism b A B sem H : (@lift b H A B sem)
+      with signature eq ==> @eq_str B ==> Basics.impl
+        as lift_eq_str.
+  Proof.
+    intros x xs xs' E Lift n.
+    rewrite <-E; auto.
+  Qed.
+
+  Add Parametric Morphism : clock_of
+      with signature eq_str ==> eq ==> Basics.impl
+        as clock_of_eq_str.
+  Proof.
+    unfold clock_of. intros ** E b Pres n.
+    split; intros H.
+    - apply Pres.
+      specialize (E n).
+      induction H; rewrite E; constructor; auto.
+    - apply Pres in H.
+      specialize (E n).
+      induction H; rewrite <-E; constructor; auto.
+  Qed.
+
+  Add Parametric Morphism : same_clock
+      with signature eq_str ==> Basics.impl
+        as same_clock_eq_str.
+  Proof.
+    unfold same_clock; intros ** E ? ?; rewrite <-E; auto.
+  Qed.
+
+  Add Parametric Morphism P b M: (sem_block P b M)
+      with signature eq_str ==> eq_str ==> Basics.impl
+        as sem_node_eq_str.
+  Proof.
+    intros ** E1 ? ? E2 Block.
+    inv Block.
+    econstructor; eauto; intro; try rewrite <-E1; try rewrite <-E2; auto.
+  Qed.
 
 End SBSEMANTICS.
