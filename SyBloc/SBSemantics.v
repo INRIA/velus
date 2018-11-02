@@ -491,6 +491,14 @@ Module Type SBSEMANTICS
     rewrite <-E; auto.
   Qed.
 
+  Add Parametric Morphism A B sem H : (@lift' H A B sem)
+      with signature eq ==> @eq_str B ==> Basics.impl
+        as lift'_eq_str.
+  Proof.
+    intros x xs xs' E Lift n.
+    rewrite <-E; auto.
+  Qed.
+
   Add Parametric Morphism : clock_of
       with signature eq_str ==> eq ==> Basics.impl
         as clock_of_eq_str.
@@ -504,6 +512,22 @@ Module Type SBSEMANTICS
       specialize (E n).
       induction H; rewrite <-E; constructor; auto.
   Qed.
+
+  (* Add Parametric Morphism : reset_of *)
+  (*     with signature eq_str ==> eq_str *)
+  (*       as reset_of_eq_str. *)
+  (* Proof. *)
+  (*   unfold reset_of. intros ** E n. *)
+  (*   now rewrite E. *)
+  (* Qed. *)
+
+  (* Add Parametric Morphism : reset_regs *)
+  (*     with signature eq_str ==> eq ==> Basics.impl *)
+  (*       as reset_regs_eq_str. *)
+  (* Proof. *)
+  (*   intros ** E M Rst. *)
+  (*   induction Rst; constructor; eauto. *)
+  (* Qed. *)
 
   Add Parametric Morphism : same_clock
       with signature eq_str ==> Basics.impl
