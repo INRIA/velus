@@ -501,13 +501,129 @@ Module Type CORRECTNESS
     eapply equation_correctness; eauto.
   Qed.
 
+  Inductive is_block_in_eq: ident -> SynSB.equation -> Prop :=
+    IBI:
+      forall xs ck b i es,
+        is_block_in_eq b (SynSB.EqCall xs ck b i es).
+
+  Definition is_block_in (b: ident) (eqs: list SynSB.equation) : Prop :=
+    Exists (is_block_in_eq b) eqs.
+
+  Lemma not_is_block_in_cons:
+    forall b eq eqs,
+      ~ is_block_in b (eq :: eqs) <-> ~ is_block_in_eq b eq /\ ~ is_block_in b eqs.
+  Proof.
+    intros.
+    split; intro HH.
+    - split; intro; apply HH; unfold is_block_in; intuition.
+    - destruct HH; inversion_clear 1; intuition.
+  Qed.
+
+  Lemma is_block_in_Forall:
+    forall b eqs,
+      ~ is_block_in b eqs <-> Forall (fun eq => ~ is_block_in_eq b eq) eqs.
+  Proof.
+    induction eqs as [|eq eqs IH];
+      [split; [now constructor|now inversion 2]|].
+    split; intro HH.
+    - apply not_is_block_in_cons in HH.
+      destruct HH as [Heq Heqs].
+      constructor; [exact Heq|apply IH with (1:=Heqs)].
+    - apply not_is_block_in_cons.
+      inversion_clear HH as [|? ? Heq Heqs].
+      apply IH in Heqs.
+      intuition.
+  Qed.
+
+  Lemma Exists_app':
+    forall A P (l l': list A),
+      Exists P (l ++ l') <-> Exists P l \/ Exists P l'.
+  Proof.
+    split.
+    - induction l; simpl; auto.
+      inversion_clear 1 as [|?? E]; intuition.
+    - intros [E|E].
+      + induction l; simpl; inv E; auto.
+      + induction l; simpl; auto.
+  Qed.
+
+  Lemma is_block_is_node:
+    forall f eqs,
+      Is_node_in f eqs <-> is_block_in f (translate_eqns eqs).
+  Proof.
+    induction eqs; split; inversion 1 as [?? InEq E|??? E].
+    - inv InEq.
+      unfold translate_eqns, concatMap; simpl.
+      destruct r as [()|].
+      + right; left; econstructor.
+      + left; constructor.
+    - unfold translate_eqns, concatMap; simpl.
+      apply Exists_app; rewrite <-IHeqs; auto.
+    - inv InEq.
+      unfold translate_eqns, concatMap in E; simpl in E.
+      destruct a; try destruct o as [()|]; simpl in E; inv E.
+      left; constructor.
+    - unfold translate_eqns, concatMap in H; simpl in H.
+      apply Exists_app' in H as [E'|E'].
+      + left.
+        destruct a;try destruct o as [()|]; simpl in E';
+          inversion E' as [?? InEq|?? InNil]; try inv InNil; try inv InEq.
+        * inv H3; constructor.
+        * inv H3.
+        * constructor.
+      + right; rewrite IHeqs; auto.
+  Qed.
+
+  Lemma find_block_later_not_is_block_in:
+    forall b n G bl P,
+      Ordered_nodes (n :: G) ->
+      SynSB.find_block b (translate G) = Some (bl, P) ->
+      ~ is_block_in n.(n_name) bl.(SynSB.b_eqs).
+  Proof.
+    intros ** Hord Hfind Hini.
+    pose proof (SynSB.find_block_name _ _ _ _ Hfind) as Hb.
+    apply find_block_translate in Hfind as (n' & Hfind' & E).
+    rewrite E in Hini; simpl in Hini.
+    apply is_block_is_node in Hini.
+    eapply find_node_later_not_Is_node_in; eauto.
+  Qed.
+
   Lemma sem_block_cons:
     forall n G f xs M ys,
-      SemSB.sem_block (translate G) f xs M ys ->
+      Ordered_nodes (n :: G) ->
+      n.(n_name) <> f ->
+      SemSB.sem_block (translate (n :: G)) f xs M ys ->
+      SemSB.sem_block (translate G) f xs M ys.
+  Proof.
+    intros ** Hord Hnf Hsem.
+    revert Hnf.
+    induction Hsem
+      as [| | | |????????? Hfind ????? Heqs IHeqs]
+                        using SemSB.sem_block_mult
+      with (P_equation := fun bk H M eq =>
+                            ~ is_block_in_eq n.(n_name) eq ->
+                            SemSB.sem_equation (translate G) bk H M eq);
+      eauto using SemSB.sem_equation.
+    - intros Hnin.
+      econstructor; eauto.
+      apply IHHsem.
+      intro Hnb; apply Hnin.
+      rewrite Hnb; constructor.
+    - intro; simpl in Hfind; apply ident_eqb_neq in Hnf; rewrite Hnf in Hfind; eauto.
+      econstructor; eauto.
+      assert (Forall (fun eq => ~ is_block_in_eq (n_name n) eq) (SynSB.b_eqs bl)) as NotIns
+        by (eapply is_block_in_Forall, find_block_later_not_is_block_in; eauto).
+      clear Heqs.
+      induction (SynSB.b_eqs bl); inv NotIns; inv IHeqs; constructor; auto.
+  Qed.
+
+  Lemma sem_block_cons2:
+    forall n G f xs M ys,
       Forall (fun n' => n_name n <> n_name n') G ->
+      SemSB.sem_block (translate G) f xs M ys ->
       SemSB.sem_block (translate (n :: G)) f xs M ys.
   Proof.
-    intros ** Hsem Hnin.
+    intros ** Hnin Hsem.
     induction Hsem
       as [| | | |????????? Hfind]
                         using SemSB.sem_block_mult
@@ -536,17 +652,17 @@ Module Type CORRECTNESS
   Lemma sem_equation_cons:
     forall G bk H M eqs n,
       Ordered_nodes (n :: G) ->
-      Forall (SemSB.sem_equation (translate G) bk H M) (translate_eqns eqs) ->
       ~Is_node_in n.(n_name) eqs ->
+      Forall (SemSB.sem_equation (translate G) bk H M) (translate_eqns eqs) ->
       Forall (SemSB.sem_equation (translate (n :: G)) bk H M) (translate_eqns eqs).
   Proof.
-    intros ** Hord Hsem Hnini.
+    intros ** Hord Hnini Hsem.
     induction eqs as [|eq eqs IH]; [now constructor|].
     unfold translate_eqns in *; rewrite concatMap_cons in Hsem.
     apply Forall_app in Hsem as [Heq Heqs].
     apply not_Is_node_in_cons in Hnini.
     destruct Hnini as [Hnini Hninis].
-    apply IH with (2:=Hninis) in Heqs.
+    apply IH with (1:=Hninis) in Heqs.
     rewrite concatMap_cons.
     apply Forall_app; split; auto.
     inv Hord.
@@ -558,8 +674,8 @@ Module Type CORRECTNESS
         constructor; inv Hsem; econstructor; eauto.
       + inversion_clear Heq' as [|?? Hsem'].
         inv Hsem'; econstructor; eauto.
-        apply sem_block_cons; auto.
-      + apply sem_block_cons; auto.
+        apply sem_block_cons2; auto.
+      + apply sem_block_cons2; auto.
     - constructor; auto.
       inversion_clear Heq as [|?? Hsem].
       inv Hsem; eauto using SemSB.sem_equation.
@@ -801,7 +917,6 @@ Module Type CORRECTNESS
           simpl; rewrite Spec; auto.
       - rewrite Spec in E; discriminate.
     Qed.
-
     Section InterpReset.
 
       Variable n: nat.
@@ -1117,128 +1232,127 @@ Module Type CORRECTNESS
     intros ** Rst.
     rewrite reset_regs_instant_spec in Rst; auto.
   Qed.
-  Section InstantEq.
 
-    Variable P: SynSB.program.
+  (* Section InstantEq. *)
 
-    Variable n: nat.
+  (*   Variable P: SynSB.program. *)
 
-    Inductive mfby_instant: ident -> val -> value -> SemSB.memories -> value -> Prop :=
-      mfby_instant_intro:
-        forall x mvs v0 v M v',
-          find_val x M = Some mvs ->
-          mvs.(SemSB.content) 0 = v0 ->
-          match v' with
-          | absent =>
-            mvs.(SemSB.content) (S n) = (if mvs.(SemSB.reset) (S n) then v0 else mvs.(SemSB.content) n)
-            /\ v = absent
-          | present v' =>
-            mvs.(SemSB.content) (S n) = (if mvs.(SemSB.reset) (S n) then v0 else v')
-            /\ v = present (mvs.(SemSB.content) n)
-          end ->
-          mfby_instant x v0 v' M v.
+  (*   Variable n: nat. *)
 
-    Inductive sem_equation_instant: bool -> env -> SemSB.memories -> SynSB.equation -> Prop :=
-    | SEqIDef:
-        forall base R M x v ck ce,
-          (* v = interp_caexp_instant base R ck ce -> *)
-          SemSB.sem_var_instant R x v ->
-          SemSB.sem_caexp_instant base R ck ce v ->
-          sem_equation_instant base R M (SynSB.EqDef x ck ce)
-    | SEqIFby:
-        forall base R M x ck c0 e v v',
-          SemSB.sem_var_instant R x v ->
-          SemSB.sem_laexp_instant base R ck e v' ->
-          mfby_instant x (sem_const c0) v' M v ->
-          sem_equation_instant base R M (SynSB.EqFby x ck c0 e)
-    | SEqIReset:
-        forall base R M ck b i r v M',
-          SemSB.sem_var_instant R r v ->
-          sub_inst i M M' ->
-          reset_regs_instant n (SemSB.reset_of_value v) M' ->
-          sem_equation_instant base R M (SynSB.EqReset ck b i r)
-    | SEqICall:
-        forall base R M ys M' ck b i es ves vys,
-          SemSB.sem_laexps_instant base R ck es ves ->
-          sub_inst i M M' ->
-          sem_block_instant b M' ves vys ->
-          SemSB.sem_vars_instant R ys vys ->
-          sem_equation_instant base R M (SynSB.EqCall ys ck b i es)
+  (*   Inductive mfby_instant: ident -> val -> value -> SemSB.memories -> value -> Prop := *)
+  (*     mfby_instant_intro: *)
+  (*       forall x mvs v0 v M v', *)
+  (*         find_val x M = Some mvs -> *)
+  (*         mvs.(SemSB.content) 0 = v0 -> *)
+  (*         match v' with *)
+  (*         | absent => *)
+  (*           mvs.(SemSB.content) (S n) = (if mvs.(SemSB.reset) (S n) then v0 else mvs.(SemSB.content) n) *)
+  (*           /\ v = absent *)
+  (*         | present v' => *)
+  (*           mvs.(SemSB.content) (S n) = (if mvs.(SemSB.reset) (S n) then v0 else v') *)
+  (*           /\ v = present (mvs.(SemSB.content) n) *)
+  (*         end -> *)
+  (*         mfby_instant x v0 v' M v. *)
 
-    with sem_block_instant: ident -> SemSB.memories -> list value -> list value -> Prop :=
-           SIBlock:
-             forall b bl P' M R vxs vys base,
-               (present_list vxs <-> base = true) ->
-               SynSB.find_block b P = Some (bl, P') ->
-               SemSB.sem_vars_instant R (map fst bl.(SynSB.b_in)) vxs ->
-               SemSB.sem_vars_instant R (map fst bl.(SynSB.b_out)) vys ->
-               SemSB.instant_same_clock vxs ->
-               SemSB.instant_same_clock vys ->
-               (absent_list vxs <-> absent_list vys) ->
-               Forall (sem_equation_instant base R M) bl.(SynSB.b_eqs) ->
-               sem_block_instant b M vxs vys.
-  End InstantEq.
+  (*   Inductive sem_equation_instant: bool -> env -> SemSB.memories -> SynSB.equation -> Prop := *)
+  (*   | SEqIDef: *)
+  (*       forall base R M x v ck ce, *)
+  (*         (* v = interp_caexp_instant base R ck ce -> *) *)
+  (*         SemSB.sem_var_instant R x v -> *)
+  (*         SemSB.sem_caexp_instant base R ck ce v -> *)
+  (*         sem_equation_instant base R M (SynSB.EqDef x ck ce) *)
+  (*   | SEqIFby: *)
+  (*       forall base R M x ck c0 e v v', *)
+  (*         SemSB.sem_var_instant R x v -> *)
+  (*         SemSB.sem_laexp_instant base R ck e v' -> *)
+  (*         mfby_instant x (sem_const c0) v' M v -> *)
+  (*         sem_equation_instant base R M (SynSB.EqFby x ck c0 e) *)
+  (*   | SEqIReset: *)
+  (*       forall base R M ck b i r v M', *)
+  (*         SemSB.sem_var_instant R r v -> *)
+  (*         sub_inst i M M' -> *)
+  (*         reset_regs_instant n (SemSB.reset_of_value v) M' -> *)
+  (*         sem_equation_instant base R M (SynSB.EqReset ck b i r) *)
+  (*   | SEqICall: *)
+  (*       forall base R M ys M' ck b i es ves vys, *)
+  (*         SemSB.sem_laexps_instant base R ck es ves -> *)
+  (*         sub_inst i M M' -> *)
+  (*         sem_block_instant b M' ves vys -> *)
+  (*         SemSB.sem_vars_instant R ys vys -> *)
+  (*         sem_equation_instant base R M (SynSB.EqCall ys ck b i es) *)
 
-  Check sem_equation_instant.
+  (*   with sem_block_instant: ident -> SemSB.memories -> list value -> list value -> Prop := *)
+  (*          SIBlock: *)
+  (*            forall b bl P' M R vxs vys base, *)
+  (*              (present_list vxs <-> base = true) -> *)
+  (*              SynSB.find_block b P = Some (bl, P') -> *)
+  (*              SemSB.sem_vars_instant R (map fst bl.(SynSB.b_in)) vxs -> *)
+  (*              SemSB.sem_vars_instant R (map fst bl.(SynSB.b_out)) vys -> *)
+  (*              SemSB.instant_same_clock vxs -> *)
+  (*              SemSB.instant_same_clock vys -> *)
+  (*              (absent_list vxs <-> absent_list vys) -> *)
+  (*              Forall (sem_equation_instant base R M) bl.(SynSB.b_eqs) -> *)
+  (*              sem_block_instant b M vxs vys. *)
+  (* End InstantEq. *)
 
-  Ltac interp_sound H :=
-    match type of H with
-    | SemSB.sem_var_instant ?R ?x ?v =>
-      assert (v = interp_var_instant R x) by (apply interp_var_instant_sound; auto)
-    | SemSB.sem_laexp_instant ?b ?R ?c ?e ?v =>
-      assert (v = interp_laexp_instant b R c e) by (apply interp_laexp_instant_sound; auto)
-    | SemSB.sem_caexp_instant ?b ?R ?c ?e ?v =>
-      assert (v = interp_caexp_instant b R c e) by (apply interp_caexp_instant_sound; auto)
-    | SemSB.sem_laexps_instant ?b ?R ?c ?es ?vs =>
-      assert (vs = interp_laexps_instant b R c es) by (apply interp_laexps_instant_sound; auto)
-    | SemSB.sem_vars_instant ?R ?xs ?vs =>
-      assert (vs = interp_vars_instant R xs) by (apply interp_vars_instant_sound; auto)
-    end; subst; auto.
+  (* Ltac interp_sound H := *)
+  (*   match type of H with *)
+  (*   | SemSB.sem_var_instant ?R ?x ?v => *)
+  (*     assert (v = interp_var_instant R x) by (apply interp_var_instant_sound; auto) *)
+  (*   | SemSB.sem_laexp_instant ?b ?R ?c ?e ?v => *)
+  (*     assert (v = interp_laexp_instant b R c e) by (apply interp_laexp_instant_sound; auto) *)
+  (*   | SemSB.sem_caexp_instant ?b ?R ?c ?e ?v => *)
+  (*     assert (v = interp_caexp_instant b R c e) by (apply interp_caexp_instant_sound; auto) *)
+  (*   | SemSB.sem_laexps_instant ?b ?R ?c ?es ?vs => *)
+  (*     assert (vs = interp_laexps_instant b R c es) by (apply interp_laexps_instant_sound; auto) *)
+  (*   | SemSB.sem_vars_instant ?R ?xs ?vs => *)
+  (*     assert (vs = interp_vars_instant R xs) by (apply interp_vars_instant_sound; auto) *)
+  (*   end; subst; auto. *)
 
-  Lemma spec_sem_equation:
-    forall e P bk H M,
-      (forall b M xss yss, (forall n, sem_block_instant P n b M (xss n) (yss n)) <-> SemSB.sem_block P b M xss yss) ->
-      ((forall n, sem_equation_instant P n (bk n) (SemSB.restr_hist H n) M e) <-> SemSB.sem_equation P bk H M e).
-  Proof.
-    intros ** Block; split; intros Sem.
-    - induction e.
-      + apply SemSB.SEqDef with (xs := interp_caexp bk H c c0);
-          intro; specialize (Sem n); inversion_clear Sem as [???????? Exp| | |]; interp_sound Exp.
-      + apply SemSB.SEqFby with (xs := interp_var H i) (ls := interp_laexp bk H c l).
-        * intro; specialize (Sem n); inversion_clear Sem as [|????????? Var| |]; interp_sound Var.
-        * intro; specialize (Sem n); inversion_clear Sem as [|?????????? Exp| |]; interp_sound Exp.
-        * pose proof (Sem 0) as Sem0; inversion_clear Sem0 as [|??????????? Fby| |];
-            inversion_clear Fby as [?????? Find].
-          econstructor; eauto.
-          clear - Sem Find.
-          intro; specialize (Sem n); inversion_clear Sem as [|????????? Var Exp Fby| |];
-            inversion_clear Fby as [?????? Find']; rewrite Find' in Find; inv Find;
-              interp_sound Var; interp_sound Exp.
-      + pose proof (Sem 0) as Sem0; inversion_clear Sem0 as [| |?????????? Sub|].
-        eapply SemSB.SEqReset with (rs := interp_var H i1); eauto.
-        * intro; specialize (Sem n); inversion_clear Sem as [| |????????? Var|]; interp_sound Var.
-        * clear - Sem Sub.
-          apply reset_regs_instant_spec.
-          intro; specialize (Sem n); inversion_clear Sem as [| |????????? Var Sub'|];
-            unfold sub_inst in *; rewrite Sub' in Sub; inv Sub; interp_sound Var.
-      + pose proof (Sem 0) as Sem0; inversion_clear Sem0 as [| | |???????????? Sub].
-        eapply SemSB.SEqCall with (ess := interp_laexps bk H c l) (oss := interp_vars H i); eauto.
-        * intro; specialize (Sem n); inversion_clear Sem as [| | |??????????? Exps]; interp_sound Exps.
-        * clear - Block Sem Sub.
-          apply Block; intro; specialize (Sem n); inversion_clear Sem as [| | |??????????? Exps Sub' ? Vars];
-            unfold sub_inst in *; rewrite Sub' in Sub; inv Sub;
-              interp_sound Exps; interp_sound Vars.
-        * intro; specialize (Sem n); inversion_clear Sem as [| | |?????????????? Vars]; interp_sound Vars.
-    - destruct Sem as [|??????????? Fby| |????????????? SemBlock]; intro; eauto using sem_equation_instant.
-      + econstructor; eauto.
-        inversion_clear Fby as [???????? Spec]; specialize (Spec n).
-        econstructor; eauto.
-      + econstructor; eauto.
-        change (SemSB.reset_of_value (rs n)) with (SemSB.reset_of rs n).
-        apply reset_regs_instant_spec'; auto.
-      + econstructor; eauto.
-        apply Block; auto.
-  Qed.
+  (* Lemma spec_sem_equation: *)
+  (*   forall e P bk H M, *)
+  (*     (forall b M xss yss, (forall n, sem_block_instant P n b M (xss n) (yss n)) <-> SemSB.sem_block P b M xss yss) -> *)
+  (*     ((forall n, sem_equation_instant P n (bk n) (SemSB.restr_hist H n) M e) <-> SemSB.sem_equation P bk H M e). *)
+  (* Proof. *)
+  (*   intros ** Block; split; intros Sem. *)
+  (*   - induction e. *)
+  (*     + apply SemSB.SEqDef with (xs := interp_caexp bk H c c0); *)
+  (*         intro; specialize (Sem n); inversion_clear Sem as [???????? Exp| | |]; interp_sound Exp. *)
+  (*     + apply SemSB.SEqFby with (xs := interp_var H i) (ls := interp_laexp bk H c l). *)
+  (*       * intro; specialize (Sem n); inversion_clear Sem as [|????????? Var| |]; interp_sound Var. *)
+  (*       * intro; specialize (Sem n); inversion_clear Sem as [|?????????? Exp| |]; interp_sound Exp. *)
+  (*       * pose proof (Sem 0) as Sem0; inversion_clear Sem0 as [|??????????? Fby| |]; *)
+  (*           inversion_clear Fby as [?????? Find]. *)
+  (*         econstructor; eauto. *)
+  (*         clear - Sem Find. *)
+  (*         intro; specialize (Sem n); inversion_clear Sem as [|????????? Var Exp Fby| |]; *)
+  (*           inversion_clear Fby as [?????? Find']; rewrite Find' in Find; inv Find; *)
+  (*             interp_sound Var; interp_sound Exp. *)
+  (*     + pose proof (Sem 0) as Sem0; inversion_clear Sem0 as [| |?????????? Sub|]. *)
+  (*       eapply SemSB.SEqReset with (rs := interp_var H i1); eauto. *)
+  (*       * intro; specialize (Sem n); inversion_clear Sem as [| |????????? Var|]; interp_sound Var. *)
+  (*       * clear - Sem Sub. *)
+  (*         apply reset_regs_instant_spec. *)
+  (*         intro; specialize (Sem n); inversion_clear Sem as [| |????????? Var Sub'|]; *)
+  (*           unfold sub_inst in *; rewrite Sub' in Sub; inv Sub; interp_sound Var. *)
+  (*     + pose proof (Sem 0) as Sem0; inversion_clear Sem0 as [| | |???????????? Sub]. *)
+  (*       eapply SemSB.SEqCall with (ess := interp_laexps bk H c l) (oss := interp_vars H i); eauto. *)
+  (*       * intro; specialize (Sem n); inversion_clear Sem as [| | |??????????? Exps]; interp_sound Exps. *)
+  (*       * clear - Block Sem Sub. *)
+  (*         apply Block; intro; specialize (Sem n); inversion_clear Sem as [| | |??????????? Exps Sub' ? Vars]; *)
+  (*           unfold sub_inst in *; rewrite Sub' in Sub; inv Sub; *)
+  (*             interp_sound Exps; interp_sound Vars. *)
+  (*       * intro; specialize (Sem n); inversion_clear Sem as [| | |?????????????? Vars]; interp_sound Vars. *)
+  (*   - destruct Sem as [|??????????? Fby| |????????????? SemBlock]; intro; eauto using sem_equation_instant. *)
+  (*     + econstructor; eauto. *)
+  (*       inversion_clear Fby as [???????? Spec]; specialize (Spec n). *)
+  (*       econstructor; eauto. *)
+  (*     + econstructor; eauto. *)
+  (*       change (SemSB.reset_of_value (rs n)) with (SemSB.reset_of rs n). *)
+  (*       apply reset_regs_instant_spec'; auto. *)
+  (*     + econstructor; eauto. *)
+  (*       apply Block; auto. *)
+  (* Qed. *)
 
   (* Lemma spec_sem_block: *)
   (*   forall P b M xss yss, (forall n, sem_block_instant P n b M (xss n) (yss n)) <-> SemSB.sem_block P b M xss yss. *)
@@ -1539,6 +1653,784 @@ Module Type CORRECTNESS
   (* Require Import Coq.Logic.Epsilon. *)
   Require Import Coq.Logic.IndefiniteDescription.
 
+  Theorem reset_correctness:
+    forall G f r xss oss,
+      (forall f xss oss,
+          sem_node G f xss oss ->
+          exists M, SemSB.sem_block (translate G) f M xss oss) ->
+      sem_reset G f r xss oss ->
+      exists M, SemSB.sem_block (translate G) f M xss oss
+           /\ SemSB.reset_regs r M.
+  Proof.
+    intros ** IHNode Sem.
+    inversion_clear Sem as [???? Sem'].
+
+    assert (forall k, exists M', SemSB.sem_block (translate ((* node :: *) G)) f M' (mask (all_absent (xss 0)) k r xss)
+                                       (mask (all_absent (oss 0)) k r oss)) as SBsem
+        by (intro; specialize (Sem' k); apply IHNode in Sem'; auto).
+
+    clear Sem' IHNode.
+    revert dependent f.
+    revert xss oss r.
+    induction G as [|node]; intros.
+    destruct (SBsem 0) as (?& Heq); inv Heq;
+      match goal with Hf: SynSB.find_block _ _ = _ |- _ => inversion Hf end.
+
+    assert (exists F, forall k, SemSB.sem_block (translate (node :: G)) f (F k) (mask (all_absent (xss 0)) k r xss)
+                                      (mask (all_absent (oss 0)) k r oss))
+      as (Fm & SBsem').
+    { (** Infinite Description  *)
+      now apply functional_choice in SBsem.
+
+      (** Epsilon  *)
+      (* assert (inhabited memories) as I *)
+      (*     by (constructor; exact (fun n => @empty_memory val)). *)
+      (* exists (fun n => epsilon *)
+      (*            I (fun M => msem_node G f (mask (all_absent (xs 0)) n r xs) M *)
+      (*                               (mask (all_absent (ys 0)) n r ys))). *)
+      (* intro; now apply epsilon_spec.  *)
+
+      (** Constructive Epsilon  *)
+      (* pose proof (constructive_ground_epsilon memories) as F. *)
+
+      (** Classical Choice  *)
+      (* now apply choice in Msem'.   *)
+    }
+
+    (* exists Fm. *)
+
+
+    exists (reset_memories Fm r (Fm 0)).
+
+    split; eauto.
+
+    assert (exists bl P', SynSB.find_block f (translate (node :: G)) = Some (bl, P'))
+      as (bl & P' & Find)
+        by (specialize (SBsem' 0); inv SBsem'; eauto).
+
+    assert (forall k k', same_skeleton (Fm k) (Fm k')) as SameSkeleton
+        by (intros; pose proof (SBsem' k); specialize (SBsem' k');
+            eapply sem_block_same_skeleton; eauto).
+
+    assert (exists F, forall k, exists bk,
+                   SemSB.sem_vars (F k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                   /\ SemSB.sem_vars (F k) (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                   /\ Forall (SemSB.sem_equation (translate (node :: G)) bk (F k) (Fm k)) (SynSB.b_eqs bl)
+                   /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+      as (Fh & Spec).
+    { assert (forall k, exists H bk,
+                   SemSB.sem_vars H (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                   /\ SemSB.sem_vars H (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                   /\ Forall (SemSB.sem_equation (translate (node :: G)) bk H (Fm k)) (SynSB.b_eqs bl)
+                   /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+        as Spec.
+      { intro; specialize (SBsem' k); inv SBsem'.
+        match goal with
+          H: SynSB.find_block _ _ = _ |- _ => rewrite Find in H; inv H end.
+        eauto 6.
+      }
+      now apply functional_choice in Spec.
+    }
+
+    assert (forall x k n,
+               In x (map fst (SynSB.bl_vars bl)) ->
+               exists v, PM.find x (SemSB.restr_hist (Fh k) n) = Some v)
+      as SameDomFh.
+    { clear - Spec.
+      intros ** Hin; unfold SynSB.bl_vars in Hin; do 2 rewrite map_app in Hin.
+      apply in_app in Hin as [Hin|Hin]; [|apply in_app in Hin as [Hin|Hin]].
+      - destruct (Spec k) as (?& In & ?).
+        specialize (In n); simpl in *.
+        eapply Forall2_In_l in In as (?& Sem); eauto.
+        inv Sem; eauto.
+      - destruct (Spec k) as (?&?& Out &?).
+        specialize (Out n); simpl in *.
+        eapply Forall2_In_l in Out as (?& Sem); eauto.
+        inv Sem; eauto.
+      - admit.
+    }
+
+    (* exists Fm. *)
+
+    eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
+    - apply SemSB.clock_of_equiv.
+    - intro; destruct (Spec (count r n)) as (?& In & ?).
+      eapply sem_var_instant_bl_vars; eauto.
+      intros ? Hin.
+      unfold SynSB.bl_vars; rewrite map_app, in_app; auto.
+    - intro; destruct (Spec (count r n)) as (?&?& Out &?).
+      eapply sem_var_instant_bl_vars; eauto.
+      intros ? Hin.
+      unfold SynSB.bl_vars; rewrite 2 map_app, 2 in_app; auto.
+    - intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [???????????? Same].
+      specialize (Same n); rewrite mask_transparent in Same; auto.
+    - intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [????????????? Same].
+      specialize (Same n); rewrite mask_transparent in Same; auto.
+    - intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [?????????????? AbsAbs].
+      specialize (AbsAbs n); rewrite 2 mask_transparent in AbsAbs; auto.
+    - induction (SynSB.b_eqs bl) as [|eq ? IHeqs]; constructor; auto.
+      + clear IHeqs.
+        assert (forall k, exists bk, SemSB.sem_equation (translate (node :: G)) bk (Fh k) (Fm k) eq
+                           /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+          as Spec'
+            by (intros; destruct (Spec k) as (?&?&?& Heq &?); inv Heq; eauto).
+        clear Spec.
+        set (bk := SemSB.clock_of' xss).
+        set (H := reset_history Fh r (Fh 0)).
+
+        Ltac interp_sound' n :=
+          repeat match goal with
+                 | H: SemSB.sem_var ?H' ?x ?vs |- _ =>
+                   specialize (H n); apply sem_var_instant_reset in H
+                 | H: SemSB.sem_vars ?H' ?xs ?vss |- _ =>
+                   specialize (H n); apply sem_vars_instant_reset in H
+                 | H: SemSB.sem_caexp ?bk ?H' ?c ?e ?vs |- _ =>
+                   specialize (H n); simpl in H; eapply sem_caexp_instant_reset in H; eauto
+                 | H: SemSB.sem_laexp ?bk ?H' ?c ?e ?vs |- _ =>
+                   specialize (H n); simpl in H; eapply sem_laexp_instant_reset in H; eauto
+                 | H: SemSB.sem_laexps ?bk ?H' ?c ?es ?vss |- _ =>
+                   specialize (H n); simpl in H; eapply sem_laexps_instant_reset in H; eauto
+                 end;
+          unfold interp_var, interp_vars, interp_laexp, interp_laexps, interp_caexp, lift, lift';
+          try erewrite <-interp_caexp_instant_sound;
+          try erewrite <-interp_laexp_instant_sound;
+          try erewrite <-interp_laexps_instant_sound;
+          try erewrite <-interp_var_instant_sound;
+          try erewrite <-interp_vars_instant_sound;
+          eauto.
+
+        destruct eq.
+
+        * assert (forall k, PM.find i (Fh k) <> None) by admit.
+          apply SemSB.SEqDef with (xs := interp_caexp bk H c c0);
+            intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq;
+              interp_sound' n.
+
+        *{ assert (forall k, PM.find i (Fh k) <> None) as Hfind by admit.
+           apply SemSB.SEqFby with (xs := interp_var H i) (ls := interp_laexp bk H c l0);
+             try (intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n).
+           assert (exists F, forall k, exists bk xs ls,
+                          SemSB.sem_var (Fh k) i xs
+                          /\ SemSB.sem_laexp bk (Fh k) c l0 ls
+                          /\find_val i (Fm k) = Some (F k)
+                          /\ (F k).(SemSB.content) 0 = sem_const c0
+                          /\ (forall n,
+                                match ls n with
+                                | absent =>
+                                  (F k).(SemSB.content) (S n) =
+                                  (if (F k).(SemSB.reset) (S n) then sem_const c0 else (F k).(SemSB.content) n)
+                                  /\ xs n = absent
+                                | present v' =>
+                                  (F k).(SemSB.content) (S n) =
+                                  (if (F k).(SemSB.reset) (S n) then sem_const c0 else v')
+                                  /\ xs n = present ((F k).(SemSB.content) n)
+                                end)
+                          /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+             as (Fmvs & Spec).
+           { assert (forall k, exists mvs bk xs ls,
+                          SemSB.sem_var (Fh k) i xs
+                          /\ SemSB.sem_laexp bk (Fh k) c l0 ls
+                          /\ find_val i (Fm k) = Some mvs
+                          /\ mvs.(SemSB.content) 0 = sem_const c0
+                          /\ (forall n,
+                                match ls n with
+                                | absent =>
+                                  mvs.(SemSB.content) (S n) =
+                                  (if mvs.(SemSB.reset) (S n) then sem_const c0 else mvs.(SemSB.content) n)
+                                  /\ xs n = absent
+                                | present v' =>
+                                  mvs.(SemSB.content) (S n) =
+                                  (if mvs.(SemSB.reset) (S n) then sem_const c0 else v')
+                                  /\ xs n = present (mvs.(SemSB.content) n)
+                                end)
+                          /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec.
+             { intro; destruct (Spec' k) as (?& Heq &?); inversion_clear Heq as [|??????????? Fby| |]; inv Fby.
+               eauto 10.
+             }
+             now apply functional_choice in Spec.
+           }
+
+           apply SemSB.mfby_intro with (mvs := reset_mvalues Fmvs r).
+           - apply find_val_reset_memories.
+             intro; destruct (Spec k) as (?&?&?&?); intuition.
+           - simpl; destruct (r 0).
+             + destruct (Spec 1) as (?&?&?&?); intuition.
+             + destruct (Spec 0) as (?&?&?&?); intuition.
+           - clear - Spec Hfind.
+             intro; destruct (Spec (count r n)) as (?&?&?&?&?&?&?& Heq &?).
+             pose proof (reset_mvalues_spec _ _ _ _ _ _ _ _ _ Spec (S n)) as Spec'.
+             clear Spec.
+             interp_sound' n.
+             specialize (Heq n).
+             destruct (r (S n)) eqn: E; [rewrite Spec'; auto|];
+               simpl; rewrite E; simpl; auto.
+             destruct (x1 n); intuition.
+         }
+
+        *{ assert (forall k, PM.find i1 (Fh k) <> None) by admit.
+           assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
+               by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
+           apply SemSB.SEqReset with (rs := interp_var H i1) (M' := reset_memories_path Fm r [i0] M0).
+           - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
+           - now apply sub_inst_reset_memories_path.
+           - rewrite reset_regs_instant_spec.
+             intro; destruct (Spec' (count r n)) as (?& Heq &?); inversion_clear Heq as [| |????????? Var|].
+             eapply reset_memories_path_sub_spec_instant'; eauto.
+             + eapply same_skeleton_sub_inst; eauto.
+             + replace (SemSB.reset_of (interp_var H i1) n) with (SemSB.reset_of_value (interp_var H i1 n)); auto.
+               interp_sound' n.
+               replace (SemSB.reset_of_value (rs n)) with (SemSB.reset_of rs n); auto.
+               apply reset_regs_instant_spec'; auto.
+         }
+
+        *{ assert (Forall (fun x => forall k, PM.find x (Fh k) <> None) i) by admit.
+           (* assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0) *)
+           (*     by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto). *)
+           destruct (IHG (interp_laexps bk H c l0)
+                         (interp_vars H i)
+                         r
+                         i0) as (M'&?&?).
+           - intro; destruct (Spec' k) as (?& Heq & Clock);
+               inversion_clear Heq as [| | |??????????? Exps ? Block Vars].
+             assert (ess ≈ mask (all_absent (interp_laexps bk H c l0 0)) k r (interp_laexps bk H c l0)) as Eess.
+             { clear - Clock Exps.
+               intro n.
+               specialize (Exps n); simpl in Exps.
+               destruct (EqNat.beq_nat k (count r n)) eqn: E.
+               - apply EqNat.beq_nat_true in E; subst k.
+                 rewrite mask_transparent; auto.
+                 eapply interp_laexps_instant_sound, sem_laexps_instant_reset; eauto.
+               - apply EqNat.beq_nat_false in E.
+                 specialize (Clock n).
+                 rewrite mask_opaque; rewrite mask_opaque in Clock; auto.
+                 inv Exps.
+                 + assert (x n = false) as Hx.
+                   { apply Bool.not_true_is_false; intro Eq.
+                     apply Clock in Eq.
+                     admit.
+                   }
+                   rewrite Hx in *.
+                   contradict H2.
+                   apply SemSB.not_subrate_clock.
+                 + rewrite H0.
+                   unfold interp_laexps, lift, interp_laexps_instant.
+                   destruct (forallb (fun v : value => v ==b absent) (interp_lexps_instant (bk 0) (SemSB.restr_hist H 0) l0)
+                                     && negb (interp_clock_instant (bk 0) (SemSB.restr_hist H 0) c)
+                             || forallb (fun v : value => v <>b absent) (interp_lexps_instant (bk 0) (SemSB.restr_hist H 0) l0)
+                                       && interp_clock_instant (bk 0) (SemSB.restr_hist H 0) c);
+                     unfold interp_lexps_instant; rewrite all_absent_map; auto.
+                   unfold all_absent at 3; rewrite all_absent_map; auto.
+                 + unfold interp_laexps, lift, interp_laexps_instant; simpl.
+                   destruct (negb (interp_clock_instant (bk 0) (SemSB.restr_hist H 0) c)
+                             || interp_clock_instant (bk 0) (SemSB.restr_hist H 0) c); auto.
+             }
+             assert (oss0 ≈ mask (all_absent (interp_vars H i 0)) k r (interp_vars H i)) as Eoss.
+             { destruct (Spec' 0) as (?& Heq &?);
+                 inversion_clear Heq as  [| | |?????????????? Vars0].
+               inversion_clear Block as [?????????????? Same].
+               clear - Clock Vars Vars0 Same Eess.
+               intro n.
+               specialize (Vars n); specialize (Vars0 n);
+                 specialize (Same n); specialize (Eess n); simpl in *.
+               revert Vars0 Same Eess.
+               generalize (ess n) as l'.
+               generalize (oss1 n) as l.
+               induction Vars as [|???? Var]; intros; inversion_clear Vars0 as [|???? Var0]; simpl.
+               - unfold mask, interp_vars, lift'; simpl.
+                 destruct (EqNat.beq_nat k (count r n)); auto.
+               - inversion_clear Var0 as [?? Find0].
+                 unfold mask in *.
+                 destruct (EqNat.beq_nat k (count r n)) eqn: E; simpl.
+                 + f_equal; eauto.
+                   * inversion_clear Var as [?? Find].
+                     unfold interp_var_instant.
+                     subst H; unfold reset_history; unfold SemSB.restr_hist, PM.map in *.
+                     rewrite 2 PM.gmapi; simpl.
+                     rewrite PM.gmapi in Find0.
+                     destruct (PM.find x0 (Fh 0)); inv Find0; simpl.
+                     rewrite PM.gmapi in Find.
+                     apply EqNat.beq_nat_true in E; subst k.
+                     destruct (PM.find x0 (Fh (count r n))); inv Find; auto.
+                   * eapply (IHVars _ l'); eauto. split; auto.
+                 + specialize (Eess n); simpl in Eess.
+                   rewrite E in Eess.
+                   rewrite Eess in Same.
+                   admit.
+             }
+
+             rewrite Eess, Eoss in Block.
+             econstructor; eauto.
+             eapply sem_block_cons; eauto.
+             admit.
+             admit.
+           - eapply SemSB.SEqCall with (M' := M')
+                                       (ess := interp_laexps bk H c l0)
+                                       (oss := interp_vars H i).
+             + intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
+             + admit.
+               (* now apply sub_inst_reset_memories_path. *)
+             + apply sem_block_cons2; auto.
+               admit.
+             + intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
+
+
+
+
+
+
+
+               change x with ([] ++ x). pose proof (sub_inst_reset_memories_path Fm r i1 []).
+           assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0)
+               by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
+           eapply SemSB.SEqCall with (M' := reset_memories_path Fm r [i1] M0)
+                                     (ess := interp_laexps (SemSB.clock_of' xss) (reset_history Fh r (Fh 0)) c l0)
+                                     (oss := interp_vars (reset_history Fh r (Fh 0)) i).
+           - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
+           - now apply sub_inst_reset_memories_path.
+           - apply sem_block_cons2.
+             + admit.
+             + destruct (IHG (interp_laexps (SemSB.clock_of' xss) (reset_history Fh r (Fh 0)) c l0)
+                             (interp_vars (reset_history Fh r (Fh 0)) i)
+                             r
+                             i0) as (?&?&?&E).
+               * admit.
+               * admit.
+           - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
+
+
+            assert (exists Fess Foss, forall k, exists bk M',
+                          SemSB.sem_laexps bk (Fh k) c l0 (Fess k)
+                          /\ sub_inst i1 (Fm k) M'
+                          /\ SemSB.sem_block (translate (node :: G)) i0 M' (Fess k) (Foss k)
+                          /\ SemSB.sem_vars (Fh k) i (Foss k)
+                          /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+             as (Fxss & Foss & Spec).
+           { assert (forall k, exists ess oss bk M',
+                        SemSB.sem_laexps bk (Fh k) c l0 ess
+                        /\ sub_inst i1 (Fm k) M'
+                        /\ SemSB.sem_block (translate (node :: G)) i0 M' ess oss
+                        /\ SemSB.sem_vars (Fh k) i oss
+                        /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec
+                 by (intro; destruct (Spec' k) as (?& Heq &?); inv Heq; eauto 9).
+             apply functional_choice in Spec as (?& Spec);
+               apply functional_choice in Spec as (?& Spec); eauto.
+           }
+           clear Spec'.
+
+           edestruct IHG with (f := i0)
+                              (r := r)
+                              (xss := fun n => Fxss (count r n) n)
+                              (oss := fun n => Foss (count r n) n)
+             as (M' & ? & Block & ?(* & Rst *)).
+           - clear SBsem'.
+             intro; destruct (Spec k) as (?& M' &?&?& Block &?&?).
+             (* exists M'. *)
+             apply sem_block_cons with (n := node); eauto.
+             + admit.
+             + admit.
+             + admit.
+               (* inversion_clear Block as [???????? Clock]. *)
+               (* econstructor; eauto. *)
+               (* * intro. unfold mask. admit. *)
+               (* * *)
+           - apply sem_block_cons2 with (n := node) in Block.
+             + eapply SemSB.SEqCall with (M' := M') (ess := fun n => Fxss (count r n) n); eauto.
+               * intro; destruct (Spec (count r n)) as (?&?& Exps &?&?&?&?).
+                 (* assert (x n = bk n) as Hbk. *)
+                 (* { specialize (Clock n); rewrite mask_transparent in Clock; auto. *)
+                 (*   subst bk; simpl. *)
+                 (*   clear - Clock; unfold SemSB.clock_of'. *)
+                 (*   induction (xss n) as [|[]]; simpl. *)
+                 (*   - apply Clock; constructor. *)
+                 (*   - apply Bool.not_true_is_false; intro E. *)
+                 (*     rewrite <-Clock in E. *)
+                 (*     inversion_clear E as [|?? E']; apply E'; auto. *)
+                 (*   - rewrite <-IHl; auto. *)
+                 (*     split; intro E. *)
+                 (*     + apply Clock; constructor; auto. *)
+                 (*       intro; discriminate. *)
+                 (*     + apply Clock in E; inv E; auto. *)
+                 (* } *)
+                 (* clear - Exps Clock (* Hbk *). *)
+                 specialize (Exps n); simpl in Exps.
+                 eapply sem_laexps_instant_reset; eauto.
+               * unfold sub_inst, reset_memories, reset_memories_path.
+                 rewrite find_inst_mmapi.
+                 destruct (find_inst i1 (Fm 0)); simpl.
+                 simpl.
+                 admit.
+               * intro; destruct (Spec (count r n)) as (?&?&?&?&?& Vars &?).
+                 specialize (Vars n); simpl in Vars.
+                 eapply sem_vars_instant_reset; eauto.
+                 admit.
+             + admit.
+
+(*                * SearchAbout reset_history.  *)
+(*                  induction Exps. *)
+(*                   -  *)
+(* Print SemSB.clock_of.  *)
+(*                    as (?& Heq &?); inv Heq; interp_sound' n. *)
+(*                  admit. *)
+(*                * destruct (Spec' k) as (?& Heq &?); inv Heq.  *)
+(*                 SearchAbout sem_node cons. *)
+(*              + admit. *)
+(*              + admit. *)
+(*              Check sem_block_cons. *)
+(*              Check sem_node_cons. *)
+(*              SearchAbout sem_node cons. *)
+
+
+
+(*              assert (Forall (fun x => forall k, PM.find x (Fh k) <> None) i) by admit. *)
+(*            assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0) *)
+(*                by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto). *)
+(*            eapply SemSB.SEqCall with (M' := reset_memories_path Fm r [i1] M0) *)
+(*                                      (ess := interp_laexps (SemSB.clock_of' xss) (reset_history Fh r (Fh 0)) c l0) *)
+(*                                      (oss := interp_vars (reset_history Fh r (Fh 0)) i). *)
+(*            - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n. *)
+(*            - now apply sub_inst_reset_memories_path. *)
+(*            - admit. *)
+(*            - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n. *)
+         }
+
+      + apply IHeqs.
+        intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
+  Qed.
+  Theorem reset_correctness:
+    forall G f r xss oss,
+      (forall f xss oss,
+          sem_node G f xss oss ->
+          exists M, SemSB.sem_block (translate G) f M xss oss) ->
+      sem_reset G f r xss oss ->
+      exists M, SemSB.sem_block (translate G) f M xss oss
+           /\ SemSB.reset_regs r M.
+  Proof.
+    intros ** IHNode Sem.
+    inversion_clear Sem as [???? Sem'].
+
+    assert (forall k, exists M', SemSB.sem_block (translate ((* node :: *) G)) f M' (mask (all_absent (xss 0)) k r xss)
+                                       (mask (all_absent (oss 0)) k r oss)) as SBsem
+        by (intro; specialize (Sem' k); apply IHNode in Sem'; auto).
+
+    clear Sem' IHNode.
+    revert dependent f.
+    revert xss oss r.
+    induction G as [|node]; intros.
+    destruct (SBsem 0) as (?& Sem); inv Sem;
+      match goal with Hf: SynSB.find_block _ _ = _ |- _ => inversion Hf end.
+
+    assert (exists F, forall k, SemSB.sem_block (translate (node :: G)) f (F k) (mask (all_absent (xss 0)) k r xss)
+                                      (mask (all_absent (oss 0)) k r oss))
+      as (Fm & SBsem').
+    { (** Infinite Description  *)
+      now apply functional_choice in SBsem.
+
+      (** Epsilon  *)
+      (* assert (inhabited memories) as I *)
+      (*     by (constructor; exact (fun n => @empty_memory val)). *)
+      (* exists (fun n => epsilon *)
+      (*            I (fun M => msem_node G f (mask (all_absent (xs 0)) n r xs) M *)
+      (*                               (mask (all_absent (ys 0)) n r ys))). *)
+      (* intro; now apply epsilon_spec.  *)
+
+      (** Constructive Epsilon  *)
+      (* pose proof (constructive_ground_epsilon memories) as F. *)
+
+      (** Classical Choice  *)
+      (* now apply choice in Msem'.   *)
+    }
+
+    assert (exists bl P', SynSB.find_block f (translate (node :: G)) = Some (bl, P'))
+      as (bl & P' & Find)
+        by (specialize (SBsem' 0); inv SBsem'; eauto).
+
+    assert (forall k k', same_skeleton (Fm k) (Fm k')) as SameSkeleton
+        by (intros; pose proof (SBsem' k); specialize (SBsem' k');
+            eapply sem_block_same_skeleton; eauto).
+
+    assert (exists F, forall k, exists bk,
+                   SemSB.sem_vars (F k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                   /\ SemSB.sem_vars (F k) (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                   /\ Forall (SemSB.sem_equation (translate (node :: G)) bk (F k) (Fm k)) (SynSB.b_eqs bl)
+                   /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+      as (Fh & Spec).
+    { assert (forall k, exists H bk,
+                   SemSB.sem_vars H (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                   /\ SemSB.sem_vars H (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                   /\ Forall (SemSB.sem_equation (translate (node :: G)) bk H (Fm k)) (SynSB.b_eqs bl)
+                   /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+        as Spec.
+      { intro; specialize (SBsem' k); inv SBsem'.
+        match goal with
+          H: SynSB.find_block _ _ = _ |- _ => rewrite Find in H; inv H end.
+        eauto 6.
+      }
+      now apply functional_choice in Spec.
+    }
+
+    assert (forall x k n,
+               In x (map fst (SynSB.bl_vars bl)) ->
+               exists v, PM.find x (SemSB.restr_hist (Fh k) n) = Some v)
+      as SameDomFh.
+    { clear - Spec.
+      intros ** Hin; unfold SynSB.bl_vars in Hin; do 2 rewrite map_app in Hin.
+      apply in_app in Hin as [Hin|Hin]; [|apply in_app in Hin as [Hin|Hin]].
+      - destruct (Spec k) as (?& In & ?).
+        specialize (In n); simpl in *.
+        eapply Forall2_In_l in In as (?& Sem); eauto.
+        inv Sem; eauto.
+      - destruct (Spec k) as (?&?& Out &?).
+        specialize (Out n); simpl in *.
+        eapply Forall2_In_l in Out as (?& Sem); eauto.
+        inv Sem; eauto.
+      - admit.
+    }
+
+    exists (reset_memories Fm r (Fm 0)).
+
+    split; eauto.
+    eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
+    - apply SemSB.clock_of_equiv.
+    - intro; destruct (Spec (count r n)) as (?& In & ?).
+      eapply sem_var_instant_bl_vars; eauto.
+      intros ? Hin.
+      unfold SynSB.bl_vars; rewrite map_app, in_app; auto.
+    - intro; destruct (Spec (count r n)) as (?&?& Out &?).
+      eapply sem_var_instant_bl_vars; eauto.
+      intros ? Hin.
+      unfold SynSB.bl_vars; rewrite 2 map_app, 2 in_app; auto.
+    - intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [???????????? Same].
+      specialize (Same n); rewrite mask_transparent in Same; auto.
+    - intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [????????????? Same].
+      specialize (Same n); rewrite mask_transparent in Same; auto.
+    - intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [?????????????? AbsAbs].
+      specialize (AbsAbs n); rewrite 2 mask_transparent in AbsAbs; auto.
+    - induction (SynSB.b_eqs bl) as [|eq ? IHeqs]; constructor; auto.
+      + clear IHeqs.
+        assert (forall k, exists bk, SemSB.sem_equation (translate (node :: G)) bk (Fh k) (Fm k) eq
+                           /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+          as Spec'
+            by (intros; destruct (Spec k) as (?&?&?& Heq &?); inv Heq; eauto).
+        clear Spec.
+        set (bk := SemSB.clock_of' xss).
+        set (H := reset_history Fh r (Fh 0)).
+
+        Ltac interp_sound' n :=
+          repeat match goal with
+                 | H: SemSB.sem_var ?H' ?x ?vs |- _ =>
+                   specialize (H n); apply sem_var_instant_reset in H
+                 | H: SemSB.sem_vars ?H' ?xs ?vss |- _ =>
+                   specialize (H n); apply sem_vars_instant_reset in H
+                 | H: SemSB.sem_caexp ?bk ?H' ?c ?e ?vs |- _ =>
+                   specialize (H n); simpl in H; eapply sem_caexp_instant_reset in H; eauto
+                 | H: SemSB.sem_laexp ?bk ?H' ?c ?e ?vs |- _ =>
+                   specialize (H n); simpl in H; eapply sem_laexp_instant_reset in H; eauto
+                 | H: SemSB.sem_laexps ?bk ?H' ?c ?es ?vss |- _ =>
+                   specialize (H n); simpl in H; eapply sem_laexps_instant_reset in H; eauto
+                 end;
+          unfold interp_var, interp_vars, interp_laexp, interp_laexps, interp_caexp, lift, lift';
+          try erewrite <-interp_caexp_instant_sound;
+          try erewrite <-interp_laexp_instant_sound;
+          try erewrite <-interp_laexps_instant_sound;
+          try erewrite <-interp_var_instant_sound;
+          try erewrite <-interp_vars_instant_sound;
+          eauto.
+
+        destruct eq.
+
+        * assert (forall k, PM.find i (Fh k) <> None) by admit.
+          apply SemSB.SEqDef with (xs := interp_caexp bk H c c0);
+            intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq;
+              interp_sound' n.
+
+        *{ assert (forall k, PM.find i (Fh k) <> None) as Hfind by admit.
+           apply SemSB.SEqFby with (xs := interp_var H i) (ls := interp_laexp bk H c l0);
+             try (intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n).
+           assert (exists F, forall k, exists bk xs ls,
+                          SemSB.sem_var (Fh k) i xs
+                          /\ SemSB.sem_laexp bk (Fh k) c l0 ls
+                          /\find_val i (Fm k) = Some (F k)
+                          /\ (F k).(SemSB.content) 0 = sem_const c0
+                          /\ (forall n,
+                                match ls n with
+                                | absent =>
+                                  (F k).(SemSB.content) (S n) =
+                                  (if (F k).(SemSB.reset) (S n) then sem_const c0 else (F k).(SemSB.content) n)
+                                  /\ xs n = absent
+                                | present v' =>
+                                  (F k).(SemSB.content) (S n) =
+                                  (if (F k).(SemSB.reset) (S n) then sem_const c0 else v')
+                                  /\ xs n = present ((F k).(SemSB.content) n)
+                                end)
+                          /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+             as (Fmvs & Spec).
+           { assert (forall k, exists mvs bk xs ls,
+                          SemSB.sem_var (Fh k) i xs
+                          /\ SemSB.sem_laexp bk (Fh k) c l0 ls
+                          /\ find_val i (Fm k) = Some mvs
+                          /\ mvs.(SemSB.content) 0 = sem_const c0
+                          /\ (forall n,
+                                match ls n with
+                                | absent =>
+                                  mvs.(SemSB.content) (S n) =
+                                  (if mvs.(SemSB.reset) (S n) then sem_const c0 else mvs.(SemSB.content) n)
+                                  /\ xs n = absent
+                                | present v' =>
+                                  mvs.(SemSB.content) (S n) =
+                                  (if mvs.(SemSB.reset) (S n) then sem_const c0 else v')
+                                  /\ xs n = present (mvs.(SemSB.content) n)
+                                end)
+                          /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec.
+             { intro; destruct (Spec' k) as (?& Heq &?); inversion_clear Heq as [|??????????? Fby| |]; inv Fby.
+               eauto 10.
+             }
+             now apply functional_choice in Spec.
+           }
+
+           apply SemSB.mfby_intro with (mvs := reset_mvalues Fmvs r).
+           - apply find_val_reset_memories.
+             intro; destruct (Spec k) as (?&?&?&?); intuition.
+           - simpl; destruct (r 0).
+             + destruct (Spec 1) as (?&?&?&?); intuition.
+             + destruct (Spec 0) as (?&?&?&?); intuition.
+           - clear - Spec Hfind.
+             intro; destruct (Spec (count r n)) as (?&?&?&?&?&?&?& Heq &?).
+             pose proof (reset_mvalues_spec _ _ _ _ _ _ _ _ _ Spec (S n)) as Spec'.
+             clear Spec.
+             interp_sound' n.
+             specialize (Heq n).
+             destruct (r (S n)) eqn: E; [rewrite Spec'; auto|];
+               simpl; rewrite E; simpl; auto.
+             destruct (x1 n); intuition.
+         }
+
+        *{ assert (forall k, PM.find i1 (Fh k) <> None) by admit.
+           assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
+               by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
+           apply SemSB.SEqReset with (rs := interp_var H i1) (M' := reset_memories_path Fm r [i0] M0).
+           - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
+           - now apply sub_inst_reset_memories_path.
+           - rewrite reset_regs_instant_spec.
+             intro; destruct (Spec' (count r n)) as (?& Heq &?); inversion_clear Heq as [| |????????? Var|].
+             eapply reset_memories_path_sub_spec_instant'; eauto.
+             + eapply same_skeleton_sub_inst; eauto.
+             + replace (SemSB.reset_of (interp_var H i1) n) with (SemSB.reset_of_value (interp_var H i1 n)); auto.
+               interp_sound' n.
+               replace (SemSB.reset_of_value (rs n)) with (SemSB.reset_of rs n); auto.
+               apply reset_regs_instant_spec'; auto.
+         }
+
+        *{
+            (*              assert (Forall (fun x => forall k, PM.find x (Fh k) <> None) i) by admit. *)
+           (* assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0) *)
+           (*     by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto). *)
+           (* eapply SemSB.SEqCall with (M' := reset_memories_path Fm r [i1] M0) *)
+           (*                           (ess := interp_laexps (SemSB.clock_of' xss) (reset_history Fh r (Fh 0)) c l0) *)
+           (*                           (oss := interp_vars (reset_history Fh r (Fh 0)) i). *)
+           (* - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n. *)
+           (* - now apply sub_inst_reset_memories_path. *)
+           (* - admit. *)
+           (* - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n. *)
+
+
+            assert (exists Fess Foss, forall k, exists bk M',
+                          SemSB.sem_laexps bk (Fh k) c l0 (Fess k)
+                          /\ sub_inst i1 (Fm k) M'
+                          /\ SemSB.sem_block (translate (node :: G)) i0 M' (Fess k) (Foss k)
+                          /\ SemSB.sem_vars (Fh k) i (Foss k)
+                          /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
+             as (Fxss & Foss & Spec).
+           { assert (forall k, exists ess oss bk M',
+                        SemSB.sem_laexps bk (Fh k) c l0 ess
+                        /\ sub_inst i1 (Fm k) M'
+                        /\ SemSB.sem_block (translate (node :: G)) i0 M' ess oss
+                        /\ SemSB.sem_vars (Fh k) i oss
+                        /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec
+                 by (intro; destruct (Spec' k) as (?& Heq &?); inv Heq; eauto 9).
+             apply functional_choice in Spec as (?& Spec);
+               apply functional_choice in Spec as (?& Spec); eauto.
+           }
+           clear Spec'.
+
+           edestruct IHG with (f := i0)
+                              (r := r)
+                              (xss := fun n => Fxss (count r n) n)
+                              (oss := fun n => Foss (count r n) n)
+             as (M' & Block & Rst).
+           - clear SBsem'.
+             intro; destruct (Spec k) as (?& M' &?&?& Block &?&?).
+             exists M'.
+             apply sem_block_cons with (n := node); eauto.
+             + admit.
+             + admit.
+             + inversion_clear Block as [???????? Clock].
+               econstructor; eauto.
+               * intro. unfold mask. admit.
+               *
+           - apply sem_block_cons2 with (n := node) in Block.
+             + eapply SemSB.SEqCall with (M' := M'); eauto.
+               * intro; destruct (Spec (count r n)) as (?&?& Exps &?&?&?&?).
+                 (* assert (x n = bk n) as Hbk. *)
+                 (* { specialize (Clock n); rewrite mask_transparent in Clock; auto. *)
+                 (*   subst bk; simpl. *)
+                 (*   clear - Clock; unfold SemSB.clock_of'. *)
+                 (*   induction (xss n) as [|[]]; simpl. *)
+                 (*   - apply Clock; constructor. *)
+                 (*   - apply Bool.not_true_is_false; intro E. *)
+                 (*     rewrite <-Clock in E. *)
+                 (*     inversion_clear E as [|?? E']; apply E'; auto. *)
+                 (*   - rewrite <-IHl; auto. *)
+                 (*     split; intro E. *)
+                 (*     + apply Clock; constructor; auto. *)
+                 (*       intro; discriminate. *)
+                 (*     + apply Clock in E; inv E; auto. *)
+                 (* } *)
+                 (* clear - Exps Clock (* Hbk *). *)
+                 specialize (Exps n); simpl in Exps.
+                 eapply sem_laexps_instant_reset; eauto.
+               * unfold sub_inst, reset_memories, reset_memories_path.
+                 rewrite find_inst_mmapi.
+                 destruct (find_inst i1 (Fm 0)); simpl.
+                 simpl.
+                 admit.
+               * intro; destruct (Spec (count r n)) as (?&?&?&?&?& Vars &?).
+                 specialize (Vars n); simpl in Vars.
+                 eapply sem_vars_instant_reset; eauto.
+                 admit.
+             + admit.
+
+(*                * SearchAbout reset_history.  *)
+(*                  induction Exps. *)
+(*                   -  *)
+(* Print SemSB.clock_of.  *)
+(*                    as (?& Heq &?); inv Heq; interp_sound' n. *)
+(*                  admit. *)
+(*                * destruct (Spec' k) as (?& Heq &?); inv Heq.  *)
+(*                 SearchAbout sem_node cons. *)
+(*              + admit. *)
+(*              + admit. *)
+(*              Check sem_block_cons. *)
+(*              Check sem_node_cons. *)
+(*              SearchAbout sem_node cons. *)
+
+
+
+(*              assert (Forall (fun x => forall k, PM.find x (Fh k) <> None) i) by admit. *)
+(*            assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0) *)
+(*                by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto). *)
+(*            eapply SemSB.SEqCall with (M' := reset_memories_path Fm r [i1] M0) *)
+(*                                      (ess := interp_laexps (SemSB.clock_of' xss) (reset_history Fh r (Fh 0)) c l0) *)
+(*                                      (oss := interp_vars (reset_history Fh r (Fh 0)) i). *)
+(*            - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n. *)
+(*            - now apply sub_inst_reset_memories_path. *)
+(*            - admit. *)
+(*            - intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n. *)
+         }
+
+      + apply IHeqs.
+        intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
+  Qed.
+
   Theorem correctness:
     forall G f xss oss,
       (* Welldef_global G -> *)
@@ -1565,278 +2457,13 @@ Module Type CORRECTNESS
                  sem_node G f xss oss ->
                  exists M, SemSB.sem_block (translate G) f M xss oss)
         as IHG' by auto.
+
       assert (forall f r xss oss,
                  sem_reset G f r xss oss ->
                  exists M, SemSB.sem_block (translate G) f M xss oss
                       /\ SemSB.reset_regs r M).
       { clear - IHG'.
-        intros ** Sem.
-        inversion_clear Sem as [???? Sem'].
-        assert (exists F, forall k, SemSB.sem_block (translate G) f (F k) (mask (all_absent (xss 0)) k r xss)
-                                          (mask (all_absent (oss 0)) k r oss))
-          as (Fm & SBsem').
-        {
-          assert (forall k, exists M', SemSB.sem_block (translate G) f M' (mask (all_absent (xss 0)) k r xss)
-                                             (mask (all_absent (oss 0)) k r oss)) as SBsem
-              by (intro; specialize (Sem' k); apply IHG' in Sem'; auto).
-
-          (** Infinite Description  *)
-          now apply functional_choice in SBsem.
-
-          (** Epsilon  *)
-          (* assert (inhabited memories) as I *)
-          (*     by (constructor; exact (fun n => @empty_memory val)). *)
-          (* exists (fun n => epsilon *)
-            (*            I (fun M => msem_node G f (mask (all_absent (xs 0)) n r xs) M *)
-          (*                               (mask (all_absent (ys 0)) n r ys))). *)
-          (* intro; now apply epsilon_spec.  *)
-
-          (** Constructive Epsilon  *)
-          (* pose proof (constructive_ground_epsilon memories) as F. *)
-
-          (** Classical Choice  *)
-          (* now apply choice in Msem'.   *)
-        }
-
-        assert (exists bl P', SynSB.find_block f (translate G) = Some (bl, P'))
-          as (bl & P' & Find)
-            by (specialize (SBsem' 0); inv SBsem'; eauto).
-
-        assert (forall k k', same_skeleton (Fm k) (Fm k')) as SameSkeleton
-               by (intros; pose proof (SBsem' k); specialize (SBsem' k');
-                   eapply sem_block_same_skeleton; eauto).
-
-        assert (exists F, forall k, exists bk,
-                       SemSB.sem_vars (F k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
-                       /\ SemSB.sem_vars (F k) (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
-                       /\ Forall (SemSB.sem_equation (translate G) bk (F k) (Fm k)) (SynSB.b_eqs bl)
-                       /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
-        as (Fh & Spec).
-        { assert (forall k, exists H bk,
-                       SemSB.sem_vars H (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
-                       /\ SemSB.sem_vars H (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
-                       /\ Forall (SemSB.sem_equation (translate G) bk H (Fm k)) (SynSB.b_eqs bl)
-                       /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
-          as Spec.
-          { intro; specialize (SBsem' k); inv SBsem'.
-            match goal with
-              H: SynSB.find_block _ _ = _ |- _ => rewrite Find in H; inv H end.
-            eauto 6.
-          }
-          now apply functional_choice in Spec.
-        }
-
-        assert (forall x k n,
-                   In x (map fst (SynSB.bl_vars bl)) ->
-                   exists v, PM.find x (SemSB.restr_hist (Fh k) n) = Some v)
-          as SameDomFh.
-        { clear - Spec.
-          intros ** Hin; unfold SynSB.bl_vars in Hin; do 2 rewrite map_app in Hin.
-          apply in_app in Hin as [Hin|Hin]; [|apply in_app in Hin as [Hin|Hin]].
-          - destruct (Spec k) as (?& In & ?).
-            specialize (In n); simpl in *.
-            eapply Forall2_In_l in In as (?& Sem); eauto.
-            inv Sem; eauto.
-          - destruct (Spec k) as (?&?& Out &?).
-            specialize (Out n); simpl in *.
-            eapply Forall2_In_l in Out as (?& Sem); eauto.
-            inv Sem; eauto.
-          - admit.
-        }
-
-        exists (reset_memories Fm r (Fm 0)).
-
-        split; eauto.
-        eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
-        + apply SemSB.clock_of_equiv.
-        + intro; destruct (Spec (count r n)) as (?& In & ?).
-          eapply sem_var_instant_bl_vars; eauto.
-          intros ? Hin.
-          unfold SynSB.bl_vars; rewrite map_app, in_app; auto.
-        + intro; destruct (Spec (count r n)) as (?&?& Out &?).
-          eapply sem_var_instant_bl_vars; eauto.
-          intros ? Hin.
-          unfold SynSB.bl_vars; rewrite 2 map_app, 2 in_app; auto.
-        + intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [???????????? Same].
-          specialize (Same n); rewrite mask_transparent in Same; auto.
-        + intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [????????????? Same].
-          specialize (Same n); rewrite mask_transparent in Same; auto.
-        + intro; specialize (SBsem' (count r n)); inversion_clear SBsem' as [?????????????? AbsAbs].
-          specialize (AbsAbs n); rewrite 2 mask_transparent in AbsAbs; auto.
-        + induction (SynSB.b_eqs bl) as [|eq ? IHeqs]; constructor; auto.
-          *{ clear IHeqs.
-             assert (forall k, exists bk, SemSB.sem_equation (translate G) bk (Fh k) (Fm k) eq
-                                /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
-               as Spec'
-                 by (intros; destruct (Spec k) as (?&?&?& Heq &?); inv Heq; eauto).
-             clear Spec.
-             set (bk := SemSB.clock_of' xss).
-             set (H := reset_history Fh r (Fh 0)).
-
-             Ltac interp_sound' n :=
-               repeat match goal with
-                      | H: SemSB.sem_var ?H' ?x ?vs |- (* SemSB.sem_var_instant ?R ?x ?v *)_ =>
-                        specialize (H n); apply sem_var_instant_reset in H
-                      | H: SemSB.sem_caexp ?bk ?H' ?c ?e ?vs |- (* SemSB.sem_caexp_instant ?b ?R ?e ?v *)_ =>
-                        specialize (H n); simpl in H; eapply sem_caexp_instant_reset in H; eauto
-                      | H: SemSB.sem_laexp ?bk ?H' ?c ?e ?vs |- (* SemSB.sem_caexp_instant ?b ?R ?e ?v *)_ =>
-                        specialize (H n); simpl in H; eapply sem_laexp_instant_reset in H; eauto
-                      end;
-               unfold interp_var, interp_laexp, interp_caexp, lift, lift';
-               try erewrite <-interp_caexp_instant_sound;
-               try erewrite <-interp_laexp_instant_sound;
-               try erewrite <-interp_var_instant_sound;
-               eauto.
-
-             destruct eq.
-
-             - apply SemSB.SEqDef with (xs := interp_caexp bk H c c0);
-                 intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq;
-                   interp_sound' n.
-               + admit.
-               + admit.
-
-             - apply SemSB.SEqFby with (xs := interp_var H i) (ls := interp_laexp bk H c l0);
-                 try (intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n).
-               + admit.
-               + admit.
-               + assert (exists F, forall k, exists bk xs ls,
-                                SemSB.sem_var (Fh k) i xs
-                                /\ SemSB.sem_laexp bk (Fh k) c l0 ls
-                                /\find_val i (Fm k) = Some (F k)
-                                /\ (F k).(SemSB.content) 0 = sem_const c0
-                                /\ (forall n,
-                                      match ls n with
-                                      | absent =>
-                                        (F k).(SemSB.content) (S n) =
-                                        (if (F k).(SemSB.reset) (S n) then sem_const c0 else (F k).(SemSB.content) n)
-                                        /\ xs n = absent
-                                      | present v' =>
-                                        (F k).(SemSB.content) (S n) =
-                                        (if (F k).(SemSB.reset) (S n) then sem_const c0 else v')
-                                        /\ xs n = present ((F k).(SemSB.content) n)
-                                      end)
-                                /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk)
-                   as (Fmvs & Spec).
-                 { assert (forall k, exists mvs bk xs ls,
-                                SemSB.sem_var (Fh k) i xs
-                                /\ SemSB.sem_laexp bk (Fh k) c l0 ls
-                                /\ find_val i (Fm k) = Some mvs
-                                /\ mvs.(SemSB.content) 0 = sem_const c0
-                                /\ (forall n,
-                                      match ls n with
-                                      | absent =>
-                                        mvs.(SemSB.content) (S n) =
-                                        (if mvs.(SemSB.reset) (S n) then sem_const c0 else mvs.(SemSB.content) n)
-                                        /\ xs n = absent
-                                      | present v' =>
-                                        mvs.(SemSB.content) (S n) =
-                                        (if mvs.(SemSB.reset) (S n) then sem_const c0 else v')
-                                        /\ xs n = present (mvs.(SemSB.content) n)
-                                      end)
-                                /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec.
-                   { intro; destruct (Spec' k) as (?& Heq &?); inversion_clear Heq as [|??????????? Fby| |]; inv Fby.
-                     eauto 10.
-                   }
-                   now apply functional_choice in Spec.
-                 }
-
-                 apply SemSB.mfby_intro with (mvs := reset_mvalues Fmvs r).
-                 * apply find_val_reset_memories.
-                   intro; destruct (Spec k) as (?&?&?&?); intuition.
-                 *{ simpl; destruct (r 0).
-                    - destruct (Spec 1) as (?&?&?&?); intuition.
-                    - destruct (Spec 0) as (?&?&?&?); intuition.
-                  }
-                 *{ clear - Spec.
-                    intro; destruct (Spec (count r n)) as (?&?&?&?&?&?&?& Heq &?).
-                    pose proof (reset_mvalues_spec _ _ _ _ _ _ _ _ _ Spec (S n)) as Spec'.
-                    clear Spec.
-                    interp_sound' n.
-                    - specialize (Heq n).
-                      destruct (r (S n)) eqn: E; [rewrite Spec'; auto|];
-                        simpl; rewrite E; simpl; auto.
-                      destruct (x1 n); intuition.
-                    - admit.
-                  }
-
-
-             - assert (exists M0, sub_inst i0 (Fm 0) M0) as (M0 & Find0)
-                   by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
-               apply SemSB.SEqReset with (rs := interp_var H i1) (M' := reset_memories_path Fm r [i0] M0).
-               + intro; destruct (Spec' (count r n)) as (?& Heq &?); inv Heq; interp_sound' n.
-                 admit.
-               + now apply sub_inst_reset_memories_path.
-               + rewrite reset_regs_instant_spec.
-                 intro; destruct (Spec' (count r n)) as (?& Heq &?); inversion_clear Heq as [| |????????? Var|].
-                 eapply reset_memories_path_sub_spec_instant'; eauto.
-                 * eapply same_skeleton_sub_inst; eauto.
-                 *{ replace (SemSB.reset_of (interp_var H i1) n) with (SemSB.reset_of_value (interp_var H i1 n)); auto.
-                    interp_sound' n.
-                    - replace (SemSB.reset_of_value (rs n)) with (SemSB.reset_of rs n); auto.
-                      apply reset_regs_instant_spec'; auto.
-                    - admit.
-                  }
-
-             - (* apply spec_sem_equation. admit. *)
-               (* intro; specialize (Spec' (count r n)). *)
-               (* econstructor. *)
-
-               assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0)
-                     by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
-               eapply SemSB.SEqCall with (M' := reset_memories_path Fm r [i1] M0)
-                                         (ess := interp_laexps (SemSB.clock_of' xss) (reset_history Fh r (Fh 0)) c l0)
-                                         (oss := interp_vars (reset_history Fh r (Fh 0)) i)
-               .
-               + intro; destruct (Spec' (count r n)) as (?& Heq &?); inversion_clear Heq as [| | |??????????? Exps];
-                   specialize (Exps n); simpl in Exps.
-                 unfold interp_laexps, lift.
-                 erewrite <-interp_laexps_instant_reset; eauto.
-                 eapply sem_laexps_instant_reset; eauto.
-                 interp_sound Exps.
-                 rewrite <-H1; auto.
-               + now apply sub_inst_reset_memories_path.
-               + admit.
-               + intro; destruct (Spec' (count r n)) as (?& Heq &?); inversion_clear Heq as [| | |?????????????? Vars];
-                   specialize (Vars n); simpl in Vars.
-                 unfold interp_vars, lift'.
-                 erewrite <-interp_vars_instant_reset; eauto.
-                 *{ apply sem_vars_instant_reset.
-                    - admit.
-                    - interp_sound Vars.
-                      rewrite <-H1; auto.
-                  }
-                 * admit.
-               +
-                 rewrite <-H1; auto.
-
-
-               apply spec_EqCall.
-               assert (exists M0, sub_inst i1 (Fm 0) M0) as (M0 & Find0)
-                   by (destruct (Spec' 0) as (?& Heq & ?); inv Heq; eauto).
-               exists (reset_memories_path Fm r [i1] M0).
-               do 3 eexists.
-                 (* assert (exists bl' P'', SynSB.find_block i0 (translate G) = Some (bl', P'')) *)
-                 (*   as (bl' & P'' & Find') *)
-                 (*     by (destruct (Spec' 0) as (?& Heq &?); *)
-                 (*         inversion_clear Heq as [| | |????????????? Block]; inv Block; eauto). *)
-                 split.
-                 * now apply sub_inst_reset_memories_path.
-                 *  admit.
-               + intro; destruct (Spec' (count r n)) as (bk & Heq &?);
-                   apply spec_EqCall in Heq as (?& Spec);
-                   specialize (Spec n); destruct Spec.
-                 erewrite <-interp_vars_instant_reset, <-interp_laexps_instant_reset; eauto.
-                 *{ split.
-                    - apply sem_vars_instant_reset; auto.
-                      admit.
-                    - eapply sem_laexps_instant_reset; eauto.
-                  }
-                  * admit.
-           }
-
-          * apply IHeqs.
-            intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
+        intros; apply reset_correctness; auto.
       }
 
       assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs)))

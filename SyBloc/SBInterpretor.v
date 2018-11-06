@@ -254,7 +254,7 @@ Module Type SBINTERPRETOR
       let vs := interp_lexps_instant es in
       let b := interp_clock_instant ck in
       if forallb (fun v => v ==b absent) vs && negb b || forallb (fun v => v <>b absent) vs && b then vs
-      else [].
+      else all_absent vs.
 
     Lemma interp_laexps_instant_sound:
       forall ck es vs,
