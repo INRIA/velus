@@ -545,4 +545,27 @@ Module Type SBSEMANTICS
     econstructor; eauto; intro; try rewrite <-E1; try rewrite <-E2; auto.
   Qed.
 
+  Ltac assert_const_length xss :=
+    match goal with
+      H: sem_vars _ _ xss |- _ =>
+      let H' := fresh in
+      let k := fresh in
+      let k' := fresh in
+      assert (wf_streams xss)
+        by (intros k k'; pose proof H as H';
+            unfold sem_vars, lift in *;
+            specialize (H k); specialize (H' k');
+            apply Forall2_length in H; apply Forall2_length in H';
+            now rewrite H in H')
+    end.
+
+  Lemma sem_block_wf:
+    forall P f M xss yss,
+      sem_block P f M xss yss ->
+      wf_streams xss /\ wf_streams yss.
+  Proof.
+    intros ** Sem; split; inv Sem;
+      assert_const_length xss; assert_const_length yss; auto.
+  Qed.
+
 End SBSEMANTICS.

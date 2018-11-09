@@ -833,25 +833,33 @@ Module Type CORRECTNESS
 
     Lemma reset_mvalues_spec:
       forall x e c0 ck xss,
+        (forall n, 0 < length (xss n)) ->
         (forall k,
             exists bk xs ls,
-           SemSB.sem_var (Fh k) x xs /\
-           SemSB.sem_laexp bk (Fh k) ck e ls /\
-           find_val x (Fm k) = Some (Fmvs k) /\
-           SemSB.content (Fmvs k) 0 = sem_const c0 /\
-           (forall n : nat,
-            match ls n with
-            | absent =>
-                SemSB.content (Fmvs k) (S n) = (if SemSB.reset (Fmvs k) (S n) then sem_const c0 else SemSB.content (Fmvs k) n) /\
-                xs n = absent
-            | present v' =>
-                SemSB.content (Fmvs k) (S n) = (if SemSB.reset (Fmvs k) (S n) then sem_const c0 else v') /\
-                xs n = present (SemSB.content (Fmvs k) n)
-            end) /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) ->
+              SemSB.sem_var (Fh k) x xs
+              /\ SemSB.sem_laexp bk (Fh k) ck e ls
+              /\ find_val x (Fm k) = Some (Fmvs k)
+              /\ SemSB.content (Fmvs k) 0 = sem_const c0
+              /\ (forall n : nat,
+                    match ls n with
+                    | absent =>
+                      SemSB.content (Fmvs k) (S n) =
+                      (if SemSB.reset (Fmvs k) (S n)
+                       then sem_const c0
+                       else SemSB.content (Fmvs k) n)
+                      /\ xs n = absent
+                    | present v' =>
+                      SemSB.content (Fmvs k) (S n) =
+                      (if SemSB.reset (Fmvs k) (S n)
+                       then sem_const c0
+                       else v')
+                      /\ xs n = present (SemSB.content (Fmvs k) n)
+                    end)
+              /\ SemSB.clock_of (mask (all_absent (xss 0)) k r xss) bk) ->
         forall n, r n = true ->
              SemSB.content reset_mvalues n = sem_const c0.
     Proof.
-      intros ** Spec n E.
+      intros ** Length Spec n E.
       unfold reset_mvalues; simpl.
       induction n; simpl; rewrite E.
       - destruct (Spec 1) as (?&?&?&?); intuition.
@@ -863,14 +871,14 @@ Module Type CORRECTNESS
         { assert (forall n',
                      n' <= n ->
                      bk n' = false) as Hbk.
-          { clear - Clock.
+          { clear - Clock Length.
             intros ** Lte.
             specialize (Clock n').
             rewrite mask_opaque in Clock; auto.
             - apply Bool.not_true_is_false; intro Ebk.
               apply Clock in Ebk.
-              clear - Ebk; induction Ebk; auto.
-              admit.
+              specialize (Length 0).
+              clear - Ebk Length; induction (xss 0); simpl in *; inv Ebk; auto; omega.
             - apply Lt.le_lt_or_eq in Lte as [Lt|]; subst; auto.
               apply (count_le' r) in Lt; omega.
           }
@@ -1925,9 +1933,22 @@ Module Type CORRECTNESS
            - simpl; destruct (r 0).
              + destruct (Spec 1) as (?&?&?&?); intuition.
              + destruct (Spec 0) as (?&?&?&?); intuition.
-           - clear - Spec Hfind.
+           - assert (forall n, 0 < length (xss n)) as Length.
+             { clear - Sem.
+               intro; destruct (Sem 0) as (Sem');
+                 inversion_clear Sem' as [?????????? Vars];
+                 specialize (Vars n); simpl in Vars.
+               apply Forall2_length in Vars.
+               rewrite mask_length in Vars.
+               - rewrite <-Vars, map_length; apply SynSB.b_ingt0.
+               - eapply wf_streams_mask.
+                 intro k'; destruct (Sem k') as (Sem');
+                   apply SemSB.sem_block_wf in Sem' as (); eauto.
+             }
+
+             clear - Spec Hfind Length.
              intro; destruct (Spec (count r n)) as (?&?&?&?&?&?&?& Heq &?).
-             pose proof (reset_mvalues_spec _ _ _ _ _ _ _ _ _ Spec (S n)) as Spec'.
+             pose proof (reset_mvalues_spec _ _ _ _ _ _ _ _ _ Length Spec (S n)) as Spec'.
              clear Spec.
              interp_sound n.
              specialize (Heq n).

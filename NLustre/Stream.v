@@ -26,6 +26,11 @@ Module Type STREAM
 
   Notation stream A := (nat -> A).
 
+  (** An indexed stream of lists is well-formed when the length of the lists
+      is uniform over time. *)
+  Definition wf_streams {A} (xss: stream (list A)) :=
+    forall k' k, length (xss k) = length (xss k').
+
   Definition eq_str {A} (xs xs': stream A) := forall n, xs n = xs' n.
   Infix "≈" := eq_str (at level 70, no associativity).
 

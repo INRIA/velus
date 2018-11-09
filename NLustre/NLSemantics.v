@@ -31,11 +31,6 @@ Module Type NLSEMANTICS
        (Import Str   : STREAM        Op OpAux)
        (Import Ord   : ORDERED   Ids Op Clks Syn).
 
-  (** An indexed stream of lists is well-formed when the length of the lists
-      is uniform over time. *)
-  Definition wf_streams {A} (xss: stream (list A)) :=
-    forall k' k, length (xss k) = length (xss k').
-
   (** ** Environment and history *)
 
   (**

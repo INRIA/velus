@@ -44,10 +44,11 @@ Module Type SBSYNTAX
         b_name  : ident;
         b_in    : list (ident * type);
         b_vars  : list (ident * type);
-        (* b_regs  : list (ident * const); *)
         b_blocks: list (ident * ident);
         b_out   : list (ident * type);
-        b_eqs   : list equation
+        b_eqs   : list equation;
+
+        b_ingt0 : 0 < length b_in
       }.
 
   Definition bl_vars (bl: block): list (ident * type) :=
