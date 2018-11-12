@@ -1803,7 +1803,8 @@ Module Type CORRECTNESS
          }
 
       + apply IHeqs.
-        intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
+        * intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
+        * intro E; apply NotIn; right; auto.
   Qed.
 
   Theorem reset_correctness:
