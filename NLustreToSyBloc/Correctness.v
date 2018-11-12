@@ -1588,12 +1588,12 @@ Module Type CORRECTNESS
     }
 
     assert (forall x k n,
-               In x (map fst (SynSB.bl_vars bl)) ->
+               In x (map fst (SynSB.b_in bl) ++ map fst (SynSB.b_out bl)) ->
                exists v, PM.find x (SemSB.restr_hist (Fh k) n) = Some v)
       as SameDomFh.
     { clear - Spec.
-      intros ** Hin; unfold SynSB.bl_vars in Hin; do 2 rewrite map_app in Hin.
-      apply in_app in Hin as [Hin|Hin]; [|apply in_app in Hin as [Hin|Hin]].
+      intros ** Hin.
+      apply in_app in Hin as [Hin|Hin].
       - destruct (Spec k) as (?& In & ?).
         specialize (In n); simpl in *.
         eapply Forall2_In_l in In as (?& Sem); eauto.
@@ -1602,19 +1602,16 @@ Module Type CORRECTNESS
         specialize (Out n); simpl in *.
         eapply Forall2_In_l in Out as (?& Sem); eauto.
         inv Sem; eauto.
-      - admit.
     }
 
     eapply SemSB.SBlock with (H := reset_history Fh r (Fh 0)); eauto.
     - apply SemSB.clock_of_equiv.
     - intro; destruct (Spec (count r n)) as (?& In & ?).
       eapply sem_var_instant_bl_vars; eauto.
-      intros ? Hin.
-      unfold SynSB.bl_vars; rewrite map_app, in_app; auto.
+      intros ? ?; rewrite in_app; auto.
     - intro; destruct (Spec (count r n)) as (?&?& Out &?).
       eapply sem_var_instant_bl_vars; eauto.
-      intros ? Hin.
-      unfold SynSB.bl_vars; rewrite 2 map_app, 2 in_app; auto.
+      intros ? ?; rewrite in_app; auto.
     - intro; destruct (Sem (count r n)) as (Sem'); inversion_clear Sem' as [???????????? Same].
       specialize (Same n); rewrite mask_transparent in Same; auto.
     - intro; destruct (Sem (count r n)) as (Sem'); inversion_clear Sem' as [????????????? Same].
