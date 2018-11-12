@@ -1050,7 +1050,7 @@ Module Type CORRECTNESS
         induction 3.
         - eapply SemSB.SLticks; eauto.
         - apply SemSB.SLabss; auto.
-        - apply SemSB.SNil.
+        (* - apply SemSB.SNil. *)
       Qed.
 
       Lemma sem_cexp_instant_reset:
@@ -1074,6 +1074,190 @@ Module Type CORRECTNESS
       Qed.
 
     End InterpReset.
+
+    Lemma sem_spec_var_instant:
+      forall x,
+        (forall k n, exists v, SemSB.sem_var_instant (SemSB.restr_hist (Fh k) n) x v) ->
+        spec_var x.
+    Proof.
+      intros ** Sem k E; destruct (Sem k 0) as (?& Sem');
+        inversion_clear Sem' as [?? Find].
+      unfold SemSB.restr_hist, PM.map in Find.
+      rewrite PM.gmapi, E in Find.
+      discriminate.
+    Qed.
+
+    Corollary sem_spec_var:
+      forall x,
+        (forall k, exists xs, SemSB.sem_var (Fh k) x xs) ->
+        spec_var x.
+    Proof.
+      intros x Sem; apply sem_spec_var_instant.
+      intros; destruct (Sem k) as (?& Sem');
+        specialize (Sem' n); eauto.
+    Qed.
+
+    Lemma sem_spec_vars_instant:
+      forall xs,
+        (forall k n, exists xss, SemSB.sem_vars_instant (SemSB.restr_hist (Fh k) n) xs xss) ->
+        spec_vars xs.
+    Proof.
+      intros ** Sem; induction xs; constructor.
+      - apply sem_spec_var_instant; intros; destruct (Sem k n) as (?& Sem'); inv Sem'; eauto.
+      - apply IHxs; intros; destruct (Sem k n) as (?& Sem'); inv Sem'; eauto.
+    Qed.
+
+    Corollary sem_spec_vars:
+      forall xs,
+        (forall k, exists xss, SemSB.sem_vars (Fh k) xs xss) ->
+        spec_vars xs.
+    Proof.
+      intros ** Sem; apply sem_spec_vars_instant.
+      intros; destruct (Sem k) as (?& Sem'); specialize (Sem' n); eauto.
+    Qed.
+
+    Lemma sem_spec_clock_instant:
+      forall ck,
+        (forall k n, exists base b, SemSB.sem_clock_instant base (SemSB.restr_hist (Fh k) n) ck b) ->
+        spec_clock ck.
+    Proof.
+      intros ** Sem; induction ck; constructor.
+      - apply sem_spec_var_instant; intros.
+        destruct (Sem k n) as (?&?& Clock); inv Clock; eauto.
+      - apply IHck.
+        intros; destruct (Sem k n) as (?&?& Clock); inv Clock; eauto.
+    Qed.
+
+    Corollary sem_spec_clock_caexp:
+      forall ck e,
+        (forall k, exists bk vs, SemSB.sem_caexp bk (Fh k) ck e vs) ->
+        spec_clock ck.
+    Proof.
+      intros ** Sem; apply sem_spec_clock_instant.
+      intros; destruct (Sem k) as (?&?& Sem'); specialize (Sem' n); simpl in Sem'.
+      inv Sem'; eauto.
+    Qed.
+
+    Corollary sem_spec_clock_laexp:
+      forall ck e,
+        (forall k, exists bk vs, SemSB.sem_laexp bk (Fh k) ck e vs) ->
+        spec_clock ck.
+    Proof.
+      intros ** Sem; apply sem_spec_clock_instant.
+      intros; destruct (Sem k) as (?&?& Sem'); specialize (Sem' n); simpl in Sem'.
+      inv Sem'; eauto.
+    Qed.
+
+    Lemma sem_spec_clock_laexps:
+      forall ck es,
+        (* (0 < length es) -> *)
+        (forall k, exists bk vss, SemSB.sem_laexps bk (Fh k) ck es vss) ->
+        spec_clock ck.
+    Proof.
+      intros ** Sem; apply sem_spec_clock_instant.
+      intros; destruct (Sem k) as (?&?& Sem'); specialize (Sem' n); simpl in Sem'.
+      inv Sem'; eauto.
+      (* simpl in *; omega. *)
+    Qed.
+
+    Lemma sem_spec_lexp_instant:
+      forall e,
+        (forall k n, exists base v, SemSB.sem_lexp_instant base (SemSB.restr_hist (Fh k) n) e v) ->
+        spec_lexp e.
+    Proof.
+      intros ** Sem; induction e; auto using spec_lexp.
+      - constructor; apply sem_spec_var_instant;
+          intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+      - constructor.
+        + apply sem_spec_var_instant; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+        + apply IHe; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+      - constructor; apply IHe; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+      - constructor.
+        + apply IHe1; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+        + apply IHe2; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+    Qed.
+
+    Corollary sem_spec_laexp:
+      forall e ck,
+        (forall k, exists bk vs, SemSB.sem_laexp bk (Fh k) ck e vs) ->
+        spec_lexp e.
+    Proof.
+      intros ** Sem.
+      apply sem_spec_lexp_instant; intros.
+      destruct (Sem k) as (?&?& Sem'); specialize (Sem' n); inv Sem'; eauto.
+    Qed.
+
+    Lemma sem_spec_cexp_instant:
+      forall e,
+        (forall k n, exists base v, SemSB.sem_cexp_instant base (SemSB.restr_hist (Fh k) n) e v) ->
+        spec_cexp e.
+    Proof.
+      intros ** Sem; induction e.
+      - constructor.
+        + apply sem_spec_var_instant; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+        + apply IHe1; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+        + apply IHe2; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+      - constructor.
+        + apply sem_spec_lexp_instant; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+        + apply IHe1; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+        + apply IHe2; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+      - constructor; apply sem_spec_lexp_instant; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+    Qed.
+
+    Corollary sem_spec_caexp:
+      forall e ck,
+        (forall k, exists bk vs, SemSB.sem_caexp bk (Fh k) ck e vs) ->
+        spec_cexp e.
+    Proof.
+      intros ** Sem.
+      apply sem_spec_cexp_instant; intros.
+      destruct (Sem k) as (?&?& Sem'); specialize (Sem' n); inv Sem'; eauto.
+    Qed.
+
+    Lemma sem_spec_lexps_instant:
+      forall es,
+        (forall k n, exists base vs, SemSB.sem_lexps_instant base (SemSB.restr_hist (Fh k) n) es vs) ->
+        spec_lexps es.
+    Proof.
+      intros ** Sem; induction es; constructor.
+      - apply sem_spec_lexp_instant; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+      - apply IHes; intros; destruct (Sem k n) as (?&?& Sem'); inv Sem'; eauto.
+    Qed.
+
+    Corollary sem_spec_laexps:
+      forall es ck,
+        (forall k, exists bk vss, SemSB.sem_laexps bk (Fh k) ck es vss) ->
+        spec_lexps es.
+    Proof.
+      intros ** Sem.
+      apply sem_spec_lexps_instant; intros; destruct (Sem k) as (?&?& Sem'); specialize (Sem' n); inv Sem'; eauto.
+      (* do 3 econstructor. *)
+      (* Grab Existential Variables. *)
+      (* exact true. *)
+    Qed.
+
+    Ltac sem_spec H :=
+      let k := fresh in
+      let H' := fresh in
+      match goal with
+      | |- spec_var _ => apply sem_spec_var
+      | |- spec_vars _ => apply sem_spec_vars
+      | _: SynSB.cexp |- spec_clock _ => eapply sem_spec_clock_caexp
+      | _: SynSB.lexp |- spec_clock _ => eapply sem_spec_clock_laexp
+      | _: list SynSB.lexp |- spec_clock _ => eapply sem_spec_clock_laexps
+      | |- spec_cexp _ => eapply sem_spec_caexp
+      | |- spec_lexp _ => eapply sem_spec_laexp
+      | |- spec_lexps _ => eapply sem_spec_laexps
+      end;
+      try (intro k; destruct (H k) as (?&?& H'); inv H'; eauto).
+
+    Lemma sem_spec_eq:
+      forall P eq,
+        (forall k, exists bk M, SemSB.sem_equation P bk (Fh k) M eq) ->
+        spec_eq eq.
+    Proof.
+      intros ** Sem; destruct eq;  constructor (sem_spec Sem).
+    Qed.
 
   End Choices.
   Hint Resolve reset_memories_spec sub_inst_reset_memories_path.
@@ -1241,7 +1425,7 @@ Module Type CORRECTNESS
     - apply EqNat.beq_nat_false in E.
       specialize (Clock n).
       rewrite mask_opaque; rewrite mask_opaque in Clock; auto.
-      inversion_clear Exps as [?????? SemCk|??? Eq|].
+      inversion_clear Exps as [?????? SemCk|??? Eq].
       + assert (bk' n = false) as Hbk'.
         { apply Bool.not_true_is_false; intro Eq.
           apply Clock in Eq.
@@ -1257,9 +1441,9 @@ Module Type CORRECTNESS
                             && interp_clock_instant (bk 0) (SemSB.restr_hist H 0) ck);
           unfold interp_lexps_instant; rewrite all_absent_map; auto.
         unfold all_absent at 3; rewrite all_absent_map; auto.
-      + unfold interp_laexps, lift, interp_laexps_instant; simpl.
-        destruct (negb (interp_clock_instant (bk 0) (SemSB.restr_hist H 0) ck)
-                  || interp_clock_instant (bk 0) (SemSB.restr_hist H 0) ck); auto.
+      (* + unfold interp_laexps, lift, interp_laexps_instant; simpl. *)
+      (*   destruct (negb (interp_clock_instant (bk 0) (SemSB.restr_hist H 0) ck) *)
+      (*             || interp_clock_instant (bk 0) (SemSB.restr_hist H 0) ck); auto. *)
   Qed.
 
   Lemma sem_vars_interp_mask:
@@ -1460,7 +1644,8 @@ Module Type CORRECTNESS
         set (bk := SemSB.clock_of' xss).
         set (H := reset_history Fh r (Fh 0)).
 
-        assert (spec_eq Fh eq) as SpecEq by admit.
+        assert (spec_eq Fh eq) as SpecEq
+            by (eapply sem_spec_eq; intros; destruct (Spec' k) as (?&?&?); eauto).
 
         destruct eq; inv SpecEq.
 

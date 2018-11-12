@@ -262,14 +262,14 @@ Module Type SBINTERPRETOR
         vs = interp_laexps_instant ck es.
     Proof.
       unfold interp_laexps_instant.
-      induction 1 as [|??? Absent|].
+      induction 1 as [|??? Absent].
       - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
         assert (present_list vs) as Present by (apply present_list_spec; eauto).
         apply present_list_spec_b in Present as ->.
         simpl; rewrite Bool.orb_true_r; auto.
       - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
         apply absent_list_spec', absent_list_spec_b in Absent as ->; auto.
-      - simpl. destruct (negb (interp_clock_instant ck) || interp_clock_instant ck); auto.
+      (* - simpl. destruct (negb (interp_clock_instant ck) || interp_clock_instant ck); auto. *)
     Qed.
 
   End InstantInterpretor.

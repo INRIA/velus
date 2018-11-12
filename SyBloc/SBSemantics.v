@@ -217,10 +217,10 @@ Module Type SBSEMANTICS
           vs = all_absent ces ->
           sem_lexps_instant base R ces vs ->
           sem_clock_instant base R ck false ->
-          sem_laexps_instant ck ces vs
-    | SNil:
-        forall ck,
-          sem_laexps_instant ck [] [].
+          sem_laexps_instant ck ces vs.
+    (* | SNil: *)
+    (*     forall ck, *)
+    (*       sem_laexps_instant ck [] []. *)
 
   End InstantAnnotatedSemantics.
 
