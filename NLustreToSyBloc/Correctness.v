@@ -547,6 +547,36 @@ Module Type CORRECTNESS
     eapply find_node_later_not_Is_node_in; eauto.
   Qed.
 
+  Lemma find_block_not_is_block_in:
+    forall b G bl P,
+      Ordered_nodes G ->
+      SynSB.find_block b (translate G) = Some (bl, P) ->
+      ~ is_block_in bl.(SynSB.b_name) bl.(SynSB.b_eqs).
+  Proof.
+    intros ** Hord Hfind Hini.
+    pose proof (SynSB.find_block_name _ _ _ _ Hfind) as Hb.
+    apply find_block_translate in Hfind as (n' & Hfind' & E).
+    apply find_node_split in Hfind' as [G' [aG Hge]].
+    rewrite Hge in Hord.
+    apply Ordered_nodes_append in Hord.
+    inversion_clear Hord as [|? ? Hord' Heqs Hnin].
+    destruct (Heqs (SynSB.b_name bl)) as (Eq).
+    - subst bl; simpl in *.
+      clear - Hini.
+      induction (n_eqs n') as [|eq]; simpl in *.
+      + inv Hini.
+      + unfold translate_eqns, concatMap, is_block_in in Hini; simpl in Hini.
+        unfold is_block_in in Hini; rewrite Exists_app' in Hini.
+        destruct Hini as [Hini|Hini].
+        * left.
+          destruct eq; try destruct o as [()|]; simpl in Hini;
+            inversion_clear Hini as [?? In|?? Nil];
+            try inversion_clear Nil as [?? In|?? Nil']; try inv In; try inv Nil';
+              constructor.
+        * right. apply IHl; auto.
+    - apply Eq; subst bl; reflexivity.
+  Qed.
+
   Lemma sem_block_cons:
     forall n G f xs M ys,
       Ordered_nodes (n :: G) ->
@@ -1631,6 +1661,14 @@ Module Type CORRECTNESS
             apply SemSB.sem_block_wf in Sem' as (); eauto.
       }
 
+      assert (~ is_block_in (n_name node) (SynSB.b_eqs bl)) as NotIn.
+      { pose proof Find as Find'. simpl in Find.
+        destruct (ident_eqb (n_name node) f) eqn: E.
+        - assert (n_name node = SynSB.b_name bl) as -> by (inv Find; auto).
+          eapply find_block_not_is_block_in with (1 := Ord'); eauto.
+        - eapply find_block_later_not_is_block_in; eauto.
+      }
+
       induction (SynSB.b_eqs bl) as [|eq ? IHeqs]; constructor; auto.
       + clear IHeqs.
         assert (forall k, exists bk, SemSB.sem_equation (translate (node :: G)) bk (Fh k) (Fm k) eq
@@ -1748,7 +1786,7 @@ Module Type CORRECTNESS
              erewrite sem_vars_interp_mask with (1 := Vars) (r := r) in Block; eauto.
              - split; auto.
                eapply sem_block_cons; eauto.
-               admit.
+               intro E; apply NotIn; rewrite E; do 2 constructor.
              - intros ** E; apply Same.
                rewrite mask_opaque; auto.
                apply all_absent_spec.
