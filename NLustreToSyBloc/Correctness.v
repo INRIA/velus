@@ -15,6 +15,11 @@ Require Import Velus.SyBloc.SBSemantics.
 Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
 Require Import Velus.SyBloc.SBInterpretor.
+Require Import Velus.NLustre.WellFormed.
+Require Import Velus.NLustre.IsFree.
+Require Import Velus.NLustre.IsVariable.
+Require Import Velus.NLustre.IsDefined.
+Require Import Velus.NLustre.NoDup.
 
 Require Import List.
 Import List.ListNotations.
@@ -27,18 +32,22 @@ Open Scope nat.
 Module Type CORRECTNESS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Clks  : CLOCKS      Ids)
-       (Import SynNL : NLSYNTAX    Ids Op       Clks)
-       (SynSB        : SBSYNTAX    Ids Op       Clks)
-       (Import Str   : STREAM          Op OpAux)
-       (Import Ord   : ORDERED     Ids Op       Clks SynNL)
-       (Import SemNL : NLSEMANTICS Ids Op OpAux Clks SynNL       Str Ord)
-       (SemSB        : SBSEMANTICS Ids Op OpAux Clks       SynSB Str)
-       (Import Mem   : MEMORIES    Ids Op       Clks SynNL)
-       (Import Trans : TRANSLATION Ids Op       Clks SynNL SynSB Mem)
-
-       (Import Interp: SBINTERPRETOR Ids Op OpAux Clks SynSB Str SemSB).
+       (Import OpAux : OPERATORS_AUX     Op)
+       (Import Clks  : CLOCKS        Ids)
+       (Import SynNL : NLSYNTAX      Ids Op       Clks)
+       (SynSB        : SBSYNTAX      Ids Op       Clks)
+       (Import Str   : STREAM            Op OpAux)
+       (Import Ord   : ORDERED       Ids Op       Clks SynNL)
+       (Import SemNL : NLSEMANTICS   Ids Op OpAux Clks SynNL       Str Ord)
+       (SemSB        : SBSEMANTICS   Ids Op OpAux Clks       SynSB Str)
+       (Import Mem   : MEMORIES      Ids Op       Clks SynNL)
+       (Import Trans : TRANSLATION   Ids Op       Clks SynNL SynSB         Mem)
+       (Import Interp: SBINTERPRETOR Ids Op OpAux Clks       SynSB Str     SemSB)
+       (Import IsD   : ISDEFINED     Ids Op       Clks SynNL               Mem)
+       (Import IsV   : ISVARIABLE    Ids Op       Clks SynNL               Mem IsD)
+       (Import IsF   : ISFREE        Ids Op       Clks SynNL)
+       (Import NoD   : NODUP         Ids Op       Clks SynNL               Mem IsD IsV)
+       (Import WeF   : WELLFORMED    Ids Op       Clks SynNL           Ord Mem IsD IsV IsF NoD).
 
   Section Global.
 
@@ -1851,19 +1860,19 @@ Module Type CORRECTNESS
 
   Theorem correctness:
     forall G f xss oss,
-      (* Welldef_global G -> *)
-      Ordered_nodes G ->
+      Welldef_global G ->
+      (* Ordered_nodes G -> *)
       sem_node G f xss oss ->
       exists M, SemSB.sem_block (translate G) f M xss oss.
   Proof.
     induction G as [|node].
     inversion 2;
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
-    intros ** Hord Hsem.
+    intros ** WD Hsem.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [??????? Hfind ????? Heqs].
-    (* pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord. *)
-    (* pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG. *)
+    pose proof (Welldef_global_Ordered_nodes _ WD) as Hord.
+    pose proof (Welldef_global_cons _ _ WD) as WD'.
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     simpl in Hfind.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
@@ -1887,7 +1896,31 @@ Module Type CORRECTNESS
       assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs)))
         as (M & Hmsem).
       { eapply equations_correctness; eauto.
-        admit.
+        inversion_clear WD as [|?? WD'' eqs WSCH NotIn FindNone Neq]; subst eqs.
+        clear Hnneqs.
+        induction (n_eqs n) as [|eq]; constructor.
+        - apply IHl.
+          + inv Heqs; auto.
+          + apply not_Is_node_in_cons in NotIn as (); auto.
+          + admit.
+          + apply not_Is_node_in_cons in NotIn as (); auto.
+          + intros; apply FindNone; right; auto.
+        - destruct eq; constructor.
+          + admit.
+          + inversion_clear WSCH as [|???? NotDef].
+            clear - NotDef.
+            intro E; eapply NotDef; try constructor.
+            clear NotDef; induction l as [|eq].
+            * inv E.
+            *{ unfold translate_eqns, concatMap in E; simpl in E.
+               apply Exists_app' in E; destruct E as [E|E].
+               - left.
+                 destruct eq; try destruct o as [()|]; simpl in E;
+                   inversion_clear E as [?? Def|?? Nil];
+                   try inversion_clear Nil as [?? Def|?? Nil'];
+                   try inv Def; try inv Nil'; constructor; auto.
+               - right; apply IHl; auto.
+             }
       }
       exists M.
       econstructor; eauto.
