@@ -7,6 +7,7 @@ Open Scope list_scope.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 
@@ -20,11 +21,12 @@ Require Import Velus.NLustre.Memories.
  *)
 
 Module Type ISDEFINED
-       (Ids         : IDS)
-       (Op          : OPERATORS)
-       (Import Clks : CLOCKS   Ids)
-       (Import Syn  : NLSYNTAX Ids Op Clks)
-       (Import Mem  : MEMORIES Ids Op Clks Syn).
+       (Ids            : IDS)
+       (Op             : OPERATORS)
+       (Import Clks    : CLOCKS   Ids)
+       (Import ExprSyn : NLEXPRSYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn)
+       (Import Mem     : MEMORIES Ids Op Clks ExprSyn Syn).
 
   (** ** Logical predicates: *)
 
@@ -66,6 +68,16 @@ Module Type ISDEFINED
     intros ** H.
     assert (Is_defined_in_eq x (EqApp ys ck f le r)) by eauto.
     contradiction.
+  Qed.
+
+  Lemma Is_defined_in_EqApp:
+    forall xs ck f es r d,
+      0 < length xs ->
+      Is_defined_in_eq (hd d xs) (EqApp xs ck f es r).
+  Proof.
+    intros ** Length.
+    constructor.
+    destruct xs; simpl in *; auto; omega.
   Qed.
 
   Lemma not_Is_defined_in_eq_EqFby:
@@ -429,11 +441,12 @@ Module Type ISDEFINED
 End ISDEFINED.
 
 Module IsDefinedFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Clks : CLOCKS   Ids)
-       (Syn  : NLSYNTAX Ids Op Clks)
-       (Mem  : MEMORIES Ids Op Clks Syn)
-       <: ISDEFINED Ids Op Clks Syn Mem.
-  Include ISDEFINED Ids Op Clks Syn Mem.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS   Ids)
+       (ExprSyn : NLEXPRSYNTAX Op)
+       (Syn     : NLSYNTAX Ids Op Clks ExprSyn)
+       (Mem     : MEMORIES Ids Op Clks ExprSyn Syn)
+       <: ISDEFINED Ids Op Clks ExprSyn Syn Mem.
+  Include ISDEFINED Ids Op Clks ExprSyn Syn Mem.
 End IsDefinedFun.

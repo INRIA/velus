@@ -23,8 +23,6 @@ NLustre/Ordered.v
 NLustre/NoDup.v
 NLustre/NLSchedule.v
 NLustre.v
-SyMac/SMSyntax.v
-SyMac/SMSemantics.v
 Obc/ObcSyntax.v
 Obc/ObcTyping.v
 Obc/ObcSemantics.v

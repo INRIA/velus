@@ -1,6 +1,8 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
+
 (* Require Import PArith. *)
 (* Require Import Coq.Sorting.Permutation. *)
 
@@ -10,25 +12,10 @@ Open Scope list_scope.
 
 
 Module Type SBSYNTAX
-       (Import Ids  : IDS)
-       (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS Ids).
-
-  (** ** Expressions *)
-
-  Inductive lexp :=
-  | Econst : const -> lexp
-  | Evar   : ident -> type -> lexp
-  | Ewhen  : lexp -> ident -> bool -> lexp
-  | Eunop  : unop -> lexp -> type -> lexp
-  | Ebinop : binop -> lexp -> lexp -> type -> lexp.
-
-  (** ** Control expressions *)
-
-  Inductive cexp :=
-  | Emerge : ident -> cexp -> cexp -> cexp
-  | Eite   : lexp -> cexp -> cexp -> cexp
-  | Eexp   : lexp -> cexp.
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import Clks    : CLOCKS Ids)
+       (Import ExprSyn : NLEXPRSYNTAX Op).
 
   (** ** Equations *)
 
@@ -55,49 +42,6 @@ Module Type SBSYNTAX
     bl.(b_in) ++ bl.(b_out) ++ bl.(b_vars).
 
   Definition program := list block.
-
-  Fixpoint typeof (le: lexp): type :=
-    match le with
-    | Econst c => type_const c
-    | Evar _ ty
-    | Eunop _ _ ty
-    | Ebinop _ _ _ ty => ty
-    | Ewhen e _ _ => typeof e
-    end.
-
-  (* Fixpoint find_mode (m: ident) (ms: list mode): option mode := *)
-  (*   match ms with *)
-  (*   | [] => None *)
-  (*   | mo :: ms => *)
-  (*     if ident_eqb mo.(m_name) m *)
-  (*     then Some mo else find_mode m ms *)
-  (*   end. *)
-
-  (* Remark find_mode_In: *)
-  (*   forall m ms mo, *)
-  (*     find_mode m ms = Some mo -> *)
-  (*     In mo ms. *)
-  (* Proof. *)
-  (*   intros ** Hfind. *)
-  (*   induction ms; inversion Hfind as [H]. *)
-  (*   destruct (ident_eqb (m_name a) m) eqn: E. *)
-  (*   - inversion H; subst. *)
-  (*     apply in_eq. *)
-  (*   - auto using in_cons. *)
-  (* Qed. *)
-
-  (* Remark find_mode_name: *)
-  (*   forall m ms mo, *)
-  (*     find_mode m ms = Some mo -> *)
-  (*     mo.(m_name) = m. *)
-  (* Proof. *)
-  (*   intros ** Hfind. *)
-  (*   induction ms; inversion Hfind as [H]. *)
-  (*   destruct (ident_eqb (m_name a) m) eqn: E. *)
-  (*   - inversion H; subst. *)
-  (*     now apply ident_eqb_eq. *)
-  (*   - now apply IHms. *)
-  (* Qed. *)
 
   Fixpoint find_block (b: ident) (P: program) : option (block * program) :=
    match P with
@@ -199,6 +143,7 @@ Module SBSyntaxFun
        (Ids  : IDS)
        (Op   : OPERATORS)
        (Clks : CLOCKS Ids)
-       <: SBSYNTAX Ids Op Clks.
-  Include SBSYNTAX Ids Op Clks.
+       (ExprSyn : NLEXPRSYNTAX Op)
+       <: SBSYNTAX Ids Op Clks ExprSyn.
+  Include SBSYNTAX Ids Op Clks ExprSyn.
 End SBSyntaxFun.

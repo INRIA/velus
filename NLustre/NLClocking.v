@@ -2,6 +2,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.Memories.
@@ -18,13 +19,14 @@ wrt. its clock annotations.
  *)
 
 Module Type NLCLOCKING
-       (Import Ids  : IDS)
-       (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS    Ids)
-       (Import Syn  : NLSYNTAX  Ids Op Clks)
-       (Import Mem  : MEMORIES  Ids Op Clks Syn)
-       (Import IsD  : ISDEFINED Ids Op Clks Syn Mem)
-       (Import IsF  : ISFREE    Ids Op Clks Syn).
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import Clks    : CLOCKS    Ids)
+       (Import ExprSyn : NLEXPRSYNTAX  Op)
+       (Import Syn     : NLSYNTAX  Ids Op Clks ExprSyn)
+       (Import Mem     : MEMORIES  Ids Op Clks ExprSyn Syn)
+       (Import IsD     : ISDEFINED Ids Op Clks ExprSyn Syn Mem)
+       (Import IsF     : ISFREE    Ids Op Clks ExprSyn Syn).
 
   Section WellClocked.
 
@@ -306,13 +308,14 @@ Module Type NLCLOCKING
 End NLCLOCKING.
 
 Module NLClockingFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Clks : CLOCKS    Ids)
-       (Syn  : NLSYNTAX  Ids Op Clks)
-       (Mem  : MEMORIES  Ids Op Clks Syn)
-       (IsD  : ISDEFINED Ids Op Clks Syn Mem)
-       (IsF  : ISFREE    Ids Op Clks Syn)
-       <: NLCLOCKING Ids Op Clks Syn Mem IsD IsF.
-  Include NLCLOCKING Ids Op Clks Syn Mem IsD IsF.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS    Ids)
+       (ExprSyn : NLEXPRSYNTAX  Op)
+       (Syn     : NLSYNTAX  Ids Op Clks ExprSyn)
+       (Mem     : MEMORIES  Ids Op Clks ExprSyn Syn)
+       (IsD     : ISDEFINED Ids Op Clks ExprSyn Syn Mem)
+       (IsF     : ISFREE    Ids Op Clks ExprSyn Syn)
+       <: NLCLOCKING Ids Op Clks ExprSyn Syn Mem IsD IsF.
+  Include NLCLOCKING Ids Op Clks ExprSyn Syn Mem IsD IsF.
 End NLClockingFun.

@@ -76,22 +76,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   (** ** Synchronous functions *)
 
-  Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
-    match n with
-    | 0 => v0
-    | S m => match xs m with
-            | absent => hold v0 xs m
-            | present hv => hv
-            end
-    end.
-
-  Definition fby (v0: val) (xs: stream value) : stream value :=
-    fun n =>
-      match xs n with
-      | absent => absent
-      | _ => present (hold v0 xs n)
-      end.
-
   (** Count the number of resets ticks seen at [n] so far. *)
   (* Fixpoint count (rs: cstream) (n: nat) : nat := *)
   (*   match n, rs n with *)
@@ -114,22 +98,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
   (*   forall n, count rs n = k -> xs' n = xs n. *)
 
   (** ** Properties *)
-
-  Lemma hold_abs:
-    forall n c xs,
-      xs n = absent ->
-      hold c xs n = hold c xs (S n).
-  Proof.
-    destruct n; intros ** E; simpl; now rewrite E.
-  Qed.
-
-  Lemma hold_pres:
-    forall v n c xs,
-      xs n = present v ->
-      v = hold c xs (S n).
-  Proof.
-    destruct n; intros ** E; simpl; now rewrite E.
-  Qed.
 
   Lemma count_le:
     forall r n,
@@ -341,6 +309,75 @@ if the clocked stream is [absent] at the corresponding instant. *)
       apply Bool.negb_true_iff in E; rewrite not_equiv_decb_equiv in E.
       constructor; auto.
       apply IHxs; auto.
+  Qed.
+
+  Lemma mask_length:
+    forall k k' xss r n,
+      wf_streams xss ->
+      length (mask (all_absent (xss k')) k r xss n) = length (xss n).
+  Proof.
+    intros; unfold mask.
+    destruct (EqNat.beq_nat k (count r n)); auto.
+    unfold all_absent; rewrite map_length.
+    induction k'; induction n; auto.
+  Qed.
+
+  (** If all masks ar well-formed then the underlying stream of lists
+      is well-formed. *)
+  Lemma wf_streams_mask:
+    forall xss r m,
+      (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) ->
+      wf_streams xss.
+  Proof.
+    unfold wf_streams, mask; intros ** WF k k'.
+    pose proof (WF (count r k) k' k) as WFk;
+      pose proof (WF (count r k') k' k) as WFk'.
+    rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
+    rewrite NPeano.Nat.eqb_sym in WFk'.
+    destruct (EqNat.beq_nat (count r k) (count r k')); auto.
+    now rewrite WFk, <-WFk'.
+  Qed.
+
+ (** ** Presence and absence in non-empty lists *)
+
+  Lemma not_absent_present_list:
+    forall xs,
+      0 < length xs ->
+      present_list xs ->
+      ~ absent_list xs.
+  Proof.
+    intros * Hnz Hpres Habs.
+    unfold present_list in Hpres.
+    unfold absent_list in Habs.
+    destruct xs; [now inversion Hnz|].
+    now inv Hpres; inv Habs; auto.
+  Qed.
+
+
+  Lemma all_absent_mask:
+    forall xs k k' r n,
+      wf_streams xs ->
+      all_absent (mask (all_absent (xs k')) k r xs n) = all_absent (xs n).
+  Proof.
+    intros ** Wf; unfold mask.
+    destruct (EqNat.beq_nat k (count r n)); auto.
+    specialize (Wf n k').
+    assert (length (all_absent (xs k')) = length (xs n)) as Length
+        by now (unfold all_absent; rewrite map_length).
+    clear Wf; revert Length; generalize (xs n) as l, (all_absent (xs k')) as l'.
+    induction l, l'; inversion 1; simpl; auto.
+    f_equal; auto.
+  Qed.
+
+  Lemma absent_list_mask:
+    forall xs opaque k r n,
+      absent_list (xs n) ->
+      absent_list opaque ->
+      absent_list (mask opaque k r xs n).
+  Proof.
+    intros ** Abs.
+    unfold mask.
+    destruct (EqNat.beq_nat k (count r n)); auto.
   Qed.
 
 End STREAM.

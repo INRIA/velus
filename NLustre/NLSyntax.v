@@ -1,5 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.Clocks.
 Require Import PArith.
 Require Import Coq.Sorting.Permutation.
@@ -11,32 +12,10 @@ Open Scope list_scope.
 (** * The NLustre dataflow language *)
 
 Module Type NLSYNTAX
-       (Import Ids  : IDS)
-       (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS Ids).
-
-  (** ** Expressions *)
-
-  Inductive lexp : Type :=
-  | Econst : const -> lexp
-  | Evar   : ident -> type -> lexp
-  | Ewhen  : lexp -> ident -> bool -> lexp
-  | Eunop  : unop -> lexp -> type -> lexp
-  | Ebinop : binop -> lexp -> lexp -> type -> lexp.
-
-  Definition lexps := list lexp.
-
-  Implicit Type le: lexp.
-  Implicit Type les: lexps.
-
-  (** ** Control expressions *)
-
-  Inductive cexp : Type :=
-  | Emerge : ident -> cexp -> cexp -> cexp
-  | Eite   : lexp -> cexp -> cexp -> cexp
-  | Eexp   : lexp -> cexp.
-
-  Implicit Type ce: cexp.
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import Clks    : CLOCKS          Ids)
+       (Import ExprSyn : NLEXPRSYNTAX Op).
 
   (** ** Equations *)
 
@@ -48,15 +27,6 @@ Module Type NLSYNTAX
   Implicit Type eqn: equation.
 
   (** ** Node *)
-
-  Fixpoint typeof (le: lexp): type :=
-    match le with
-    | Econst c => type_const c
-    | Evar _ ty
-    | Eunop _ _ ty
-    | Ebinop _ _ _ ty => ty
-    | Ewhen e _ _ => typeof e
-    end.
 
   (* XXX: [var_defined] is redundant with [defined_eq], except that it
   works on lists rather than finite sets. *)
@@ -131,6 +101,20 @@ Module Type NLSYNTAX
     apply ident_eqb_eq; inv H; auto.
   Qed.
 
+  Lemma find_node_other:
+    forall f node G node',
+      node.(n_name) <> f ->
+      (find_node f (node::G) = Some node'
+       <-> find_node f G = Some node').
+  Proof.
+    intros f node G node' Hnf.
+    apply BinPos.Pos.eqb_neq in Hnf.
+    simpl.
+    unfold ident_eqb.
+    rewrite Hnf.
+    reflexivity.
+  Qed.
+
   Lemma is_filtered_eqs:
     forall eqs,
       Permutation
@@ -172,9 +156,10 @@ Module Type NLSYNTAX
 End NLSYNTAX.
 
 Module NLSyntaxFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Clks : CLOCKS Ids)
-       <: NLSYNTAX Ids Op Clks.
-  Include NLSYNTAX Ids Op Clks.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS          Ids)
+       (ExprSyn : NLEXPRSYNTAX Op)
+       <: NLSYNTAX Ids Op Clks ExprSyn.
+  Include NLSYNTAX Ids Op Clks ExprSyn.
 End NLSyntaxFun.

@@ -6,11 +6,12 @@ Require Import PArith.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 
 (** * Collecting memory cells *)
 
-(** 
+(**
 
   The [memories] function collects the set of variables that will turn
   into heap variables after compilation, ie. variables denoting an
@@ -22,10 +23,11 @@ Require Import Velus.NLustre.NLSyntax.
  *)
 
 Module Type MEMORIES
-       (Ids         : IDS)
-       (Op          : OPERATORS)
-       (Import Clks : CLOCKS   Ids)
-       (Import Syn  : NLSYNTAX Ids Op Clks).
+       (Ids            : IDS)
+       (Op             : OPERATORS)
+       (Import Clks    : CLOCKS   Ids)
+       (Import ExprSyn : NLEXPRSYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn).
 
   Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
@@ -71,11 +73,11 @@ Module Type MEMORIES
 End MEMORIES.
 
 Module MemoriesFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Clks : CLOCKS   Ids)
-       (Syn  : NLSYNTAX Ids Op Clks)
-       <: MEMORIES Ids Op Clks Syn.
-  Include MEMORIES Ids Op Clks Syn.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS   Ids)
+       (ExprSyn : NLEXPRSYNTAX Op)
+       (Syn     : NLSYNTAX Ids Op Clks ExprSyn)
+       <: MEMORIES Ids Op Clks ExprSyn Syn.
+  Include MEMORIES Ids Op Clks ExprSyn Syn.
 End MemoriesFun.
-

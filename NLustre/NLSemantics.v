@@ -9,9 +9,11 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Stream.
+Require Import Velus.NLustre.NLExprSemantics.
 
 (** * The NLustre semantics *)
 
@@ -23,334 +25,33 @@ Require Import Velus.NLustre.Stream.
  *)
 
 Module Type NLSEMANTICS
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Clks  : CLOCKS    Ids)
-       (Import Syn   : NLSYNTAX  Ids Op Clks)
-       (Import Str   : STREAM        Op OpAux)
-       (Import Ord   : ORDERED   Ids Op Clks Syn).
-
-  (** ** Environment and history *)
-
-  (**
-
-An history maps variables to streams of values (the variables'
-histories). Taking a snapshot of the history at a given time yields an
-environment.
-
-   *)
-
-  (* XXX: naming the environment type *and* its inhabitant [R] is
-        probably not a good idea *)
-  Definition env := PM.t value.
-  Definition history := PM.t (stream value).
-
-  Implicit Type R: env.
-  Implicit Type H: history.
-
-  (** ** Instantaneous semantics *)
-
-  Section InstantSemantics.
-
-    Variable base : bool.
-    Variable R: env.
-
-    Inductive sem_var_instant: ident -> value -> Prop :=
-    | Sv:
-        forall x v,
-          PM.find x R = Some v ->
-          sem_var_instant x v.
-
-    Inductive sem_clock_instant: clock -> bool -> Prop :=
-    | Sbase:
-        sem_clock_instant Cbase base
-    | Son:
-        forall ck x c b,
-          sem_clock_instant ck true ->
-          sem_var_instant x (present c) ->
-          val_to_bool c = Some b ->
-          sem_clock_instant (Con ck x b) true
-    | Son_abs1:
-        forall ck x c,
-          sem_clock_instant ck false ->
-          sem_var_instant x absent ->
-          sem_clock_instant (Con ck x c) false
-    | Son_abs2:
-        forall ck x c b,
-          sem_clock_instant ck true ->
-          sem_var_instant x (present c) ->
-          val_to_bool c = Some b ->
-          sem_clock_instant (Con ck x (negb b)) false.
-
-    (* Inductive sem_avar_instant: clock -> ident -> value -> Prop:= *)
-    (* | SVtick: *)
-    (*     forall ck x c, *)
-    (*       sem_var_instant x (present c) -> *)
-    (*       sem_clock_instant ck true -> *)
-    (*       sem_avar_instant ck x (present c) *)
-    (* | SVabs: *)
-    (*     forall ck x, *)
-    (*       sem_var_instant x absent -> *)
-    (*       sem_clock_instant ck false -> *)
-    (*       sem_avar_instant ck x absent. *)
-
-    Inductive sem_lexp_instant: lexp -> value -> Prop:=
-    | Sconst:
-        forall c v,
-          v = (if base then present (sem_const c) else absent) ->
-          sem_lexp_instant (Econst c) v
-    | Svar:
-        forall x v ty,
-          sem_var_instant x v ->
-          sem_lexp_instant (Evar x ty) v
-    | Swhen_eq:
-        forall s x sc xc b,
-          sem_var_instant x (present xc) ->
-          sem_lexp_instant s (present sc) ->
-          val_to_bool xc = Some b ->
-          sem_lexp_instant (Ewhen s x b) (present sc)
-    | Swhen_abs1:
-        forall s x sc xc b,
-          sem_var_instant x (present xc) ->
-          val_to_bool xc = Some b ->
-          sem_lexp_instant s (present sc) ->
-          sem_lexp_instant (Ewhen s x (negb b)) absent
-    | Swhen_abs:
-        forall s x b,
-          sem_var_instant x absent ->
-          sem_lexp_instant s absent ->
-          sem_lexp_instant (Ewhen s x b) absent
-    | Sunop_eq:
-        forall le op c c' ty,
-          sem_lexp_instant le (present c) ->
-          sem_unop op c (typeof le) = Some c' ->
-          sem_lexp_instant (Eunop op le ty) (present c')
-    | Sunop_abs:
-        forall le op ty,
-          sem_lexp_instant le absent ->
-          sem_lexp_instant (Eunop op le ty) absent
-    | Sbinop_eq:
-        forall le1 le2 op c1 c2 c' ty,
-          sem_lexp_instant le1 (present c1) ->
-          sem_lexp_instant le2 (present c2) ->
-          sem_binop op c1 (typeof le1) c2 (typeof le2) = Some c' ->
-          sem_lexp_instant (Ebinop op le1 le2 ty) (present c')
-    | Sbinop_abs:
-        forall le1 le2 op ty,
-          sem_lexp_instant le1 absent ->
-          sem_lexp_instant le2 absent ->
-          sem_lexp_instant (Ebinop op le1 le2 ty) absent.
-
-    Definition sem_lexps_instant (les: list lexp) (vs: list value) :=
-      Forall2 sem_lexp_instant les vs.
-
-    Inductive sem_laexp_instant: clock -> lexp -> value -> Prop:=
-    | SLtick:
-        forall ck le c,
-          sem_lexp_instant le (present c) ->
-          sem_clock_instant ck true ->
-          sem_laexp_instant ck le (present c)
-    | SLabs:
-        forall ck le,
-          sem_lexp_instant le absent ->
-          sem_clock_instant ck false ->
-          sem_laexp_instant ck le absent.
-
-    Inductive sem_laexps_instant: clock -> lexps -> list value -> Prop:=
-    | SLticks:
-        forall ck ces cs vs,
-          vs = map present cs ->
-          sem_lexps_instant ces vs ->
-          sem_clock_instant ck true ->
-          sem_laexps_instant ck ces vs
-    | SLabss:
-        forall ck ces vs,
-          vs = all_absent ces ->
-          sem_lexps_instant ces vs ->
-          sem_clock_instant ck false ->
-          sem_laexps_instant ck ces vs.
-
-    Inductive sem_cexp_instant: cexp -> value -> Prop :=
-    | Smerge_true:
-        forall x t f c,
-          sem_var_instant x (present true_val) ->
-          sem_cexp_instant t (present c) ->
-          sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x t f) (present c)
-    | Smerge_false:
-        forall x t f c,
-          sem_var_instant x (present false_val) ->
-          sem_cexp_instant t absent ->
-          sem_cexp_instant f (present c) ->
-          sem_cexp_instant (Emerge x t f) (present c)
-    | Smerge_abs:
-        forall x t f,
-          sem_var_instant x absent ->
-          sem_cexp_instant t absent ->
-          sem_cexp_instant f absent ->
-          sem_cexp_instant (Emerge x t f) absent
-    | Site_eq:
-        forall x t f c b ct cf,
-          sem_lexp_instant x (present c) ->
-          sem_cexp_instant t (present ct) ->
-          sem_cexp_instant f (present cf) ->
-          val_to_bool c = Some b ->
-          sem_cexp_instant (Eite x t f) (if b then present ct else present cf)
-    | Site_abs:
-        forall b t f,
-          sem_lexp_instant b absent ->
-          sem_cexp_instant t absent ->
-          sem_cexp_instant f absent ->
-          sem_cexp_instant (Eite b t f) absent
-    | Sexp:
-        forall e v,
-          sem_lexp_instant e v ->
-          sem_cexp_instant (Eexp e) v.
-
-    Inductive sem_caexp_instant: clock -> cexp -> value -> Prop :=
-    | SCtick:
-        forall ck ce c,
-          sem_cexp_instant ce (present c) ->
-          sem_clock_instant ck true ->
-          sem_caexp_instant ck ce (present c)
-    | SCabs:
-        forall ck ce,
-          sem_cexp_instant ce absent ->
-          sem_clock_instant ck false ->
-          sem_caexp_instant ck ce absent.
-
-    Inductive rhs_absent_instant: equation -> Prop :=
-    | AEqDef:
-        forall x ck cae,
-          sem_caexp_instant ck cae absent ->
-          rhs_absent_instant (EqDef x ck cae)
-    | AEqApp:
-        forall x f ck laes vs,
-          sem_laexps_instant ck laes vs ->
-          absent_list vs ->
-          rhs_absent_instant (EqApp x ck f laes None)
-    | AEqReset:
-        forall x f ck laes vs r ck_r,
-          sem_laexps_instant ck laes vs ->
-          absent_list vs ->
-          (* sem_avar_instant ck_r r absent -> *)
-          rhs_absent_instant (EqApp x ck f laes (Some (r, ck_r)))
-    | AEqFby:
-        forall x ck v0 lae,
-          sem_laexp_instant ck lae absent ->
-          rhs_absent_instant (EqFby x ck v0 lae).
-
-  End InstantSemantics.
-
-  (** ** Liftings of instantaneous semantics *)
-
-  Section LiftSemantics.
-
-    Variable bk : stream bool.
-    Variable H : history.
-
-    Definition restr (n: nat): env :=
-      PM.map (fun xs => xs n) H.
-    Hint Unfold restr.
-
-    Definition lift1 {A B} (f : A -> B) (s : stream A) : stream B
-        := fun n => f (s n).
-    Hint Unfold lift1.
-
-    Definition lift {A B}
-        (sem: bool -> env -> A -> B -> Prop) x (ys: stream B): Prop :=
-      forall n, sem (bk n) (restr n) x (ys n).
-    Hint Unfold lift.
-
-    Definition sem_clock (ck: clock)(xs: stream bool): Prop :=
-      lift sem_clock_instant ck xs.
-
-    Definition sem_var (x: ident)(xs: stream value): Prop :=
-      lift (fun base => sem_var_instant) x xs.
-
-    (* Definition sem_avar ck (x: ident)(xs: stream value): Prop := *)
-    (*   lift (fun base R => sem_avar_instant base R ck) x xs. *)
-
-    Definition sem_vars (x: idents)(xs: stream (list value)): Prop :=
-      lift (fun base R => Forall2 (sem_var_instant R)) x xs.
-
-    Definition sem_laexp ck (e: lexp)(xs: stream value): Prop :=
-      lift (fun base R => sem_laexp_instant base R ck) e xs.
-
-    Definition sem_laexps (ck: clock)(e: lexps)(xs: stream (list value)): Prop :=
-      lift (fun base R => sem_laexps_instant base R ck) e xs.
-
-    Definition sem_lexp (e: lexp)(xs: stream value): Prop :=
-      lift sem_lexp_instant e xs.
-
-    Definition sem_lexps (e: lexps)(xs: stream (list value)): Prop :=
-      lift sem_lexps_instant e xs.
-
-    Definition sem_caexp ck (c: cexp)(xs: stream value): Prop :=
-      lift (fun base R => sem_caexp_instant base R ck) c xs.
-
-    Definition sem_cexp (c: cexp)(xs: stream value): Prop :=
-      lift sem_cexp_instant c xs.
-
-  End LiftSemantics.
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import OpAux   : OPERATORS_AUX       Op)
+       (Import Clks    : CLOCKS          Ids)
+       (Import ExprSyn : NLEXPRSYNTAX        Op)
+       (Import Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Import Str     : STREAM              Op OpAux)
+       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str)
+       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn).
 
   (** ** Time-dependent semantics *)
 
-  Definition instant_same_clock (l : list value) : Prop :=
-    absent_list l \/ present_list l.
+  Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
+    match n with
+    | 0 => v0
+    | S m => match xs m with
+            | absent => hold v0 xs m
+            | present hv => hv
+            end
+    end.
 
-  Definition same_clock (l_s : stream (list value)) : Prop :=
-    forall n, instant_same_clock (l_s n).
-
-  Definition clock_of (xss: stream (list value))(bs: stream bool): Prop :=
-    forall n,
-      present_list (xss n) <-> bs n = true.
-
-  Definition clock_of' (xss: stream (list value)) : stream bool :=
-    fun n => forallb (fun v => negb (v ==b absent)) (xss n).
-
-  Lemma clock_of_equiv:
-    forall xss, clock_of xss (clock_of' xss).
-  Proof.
-    split; intros H.
-    - unfold clock_of'.
-      rewrite forallb_forall.
-      intros; rewrite Bool.negb_true_iff.
-      rewrite not_equiv_decb_equiv.
-      eapply In_Forall in H; eauto.
-    - unfold clock_of' in H.
-      rewrite forallb_forall in H.
-      apply all_In_Forall; intros ** Hin E.
-      specialize (H _ Hin).
-      rewrite Bool.negb_true_iff, not_equiv_decb_equiv in H.
-      apply H; eauto.
-  Qed.
-
-  Definition reset_of (xs: stream value) : stream bool :=
+  Definition fby (v0: val) (xs: stream value) : stream value :=
     fun n =>
       match xs n with
-      | present x => x ==b true_val
-      | _ => false
+      | absent => absent
+      | _ => present (hold v0 xs n)
       end.
-
-  (* Definition reset_of' (xs: stream value) (bs: stream bool) : Prop := *)
-  (*   forall n, *)
-  (*     xs n = present true_val <-> bs n = true. *)
-
-  (* Lemma reset_of_equiv: *)
-  (*   forall xs, reset_of' xs (reset_of xs). *)
-  (* Proof. *)
-  (*   split; intros H. *)
-  (*   - unfold reset_of; now rewrite H, equiv_decb_refl. *)
-  (*   - unfold reset_of in H. *)
-  (*     destruct (xs n); try discriminate. *)
-  (*     rewrite equiv_decb_equiv in H. *)
-  (*     now rewrite H. *)
-  (* Qed. *)
-
-  (* Definition merge_reset (rs rs': stream bool) : stream bool := *)
-  (*   fun n => rs n || rs' n. *)
 
   Section NodeSemantics.
 
@@ -359,34 +60,34 @@ environment.
     Inductive sem_equation: stream bool -> history -> equation -> Prop :=
     | SEqDef:
         forall bk H x xs ck ce,
-          sem_var bk H x xs ->
+          sem_var H x xs ->
           sem_caexp bk H ck ce xs ->
           sem_equation bk H (EqDef x ck ce)
     | SEqApp:
         forall bk H x ck f arg ls xs,
           sem_laexps bk H ck arg ls ->
-          sem_vars bk H x xs ->
+          sem_vars H x xs ->
           sem_node f ls xs ->
           sem_equation bk H (EqApp x ck f arg None)
     | SEqReset:
         forall bk H x ck f arg y ck_r ys ls xs,
           sem_laexps bk H ck arg ls ->
-          sem_vars bk H x xs ->
-          (* sem_avar bk H ck_r y ys -> *)
-          sem_var bk H y ys ->
+          sem_vars H x xs ->
+          sem_var H y ys ->
           sem_reset f (reset_of ys) ls xs ->
           sem_equation bk H (EqApp x ck f arg (Some (y, ck_r)))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
           sem_laexp bk H ck le ls ->
-          sem_var bk H x xs ->
+          sem_var H x xs ->
           xs = fby (sem_const c0) ls ->
           sem_equation bk H (EqFby x ck c0 le)
 
     with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
          | SReset:
              forall f r xss yss,
-               (forall k, sem_node f (mask (all_absent (xss 0)) k r xss)
+               (forall k, sem_node f
+                              (mask (all_absent (xss 0)) k r xss)
                               (mask (all_absent (yss 0)) k r yss)) ->
                sem_reset f r xss yss
 
@@ -395,8 +96,8 @@ environment.
              forall bk H f xss yss n,
                clock_of xss bk ->
                find_node f G = Some n ->
-               sem_vars bk H (map fst n.(n_in)) xss ->
-               sem_vars bk H (map fst n.(n_out)) yss ->
+               sem_vars H (map fst n.(n_in)) xss ->
+               sem_vars H (map fst n.(n_out)) yss ->
                (* XXX: This should be obtained through well-clocking: *)
                (*  * tuples are synchronised: *)
                same_clock xss ->
@@ -427,14 +128,14 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqDefCase:
       forall bk H x xs ck ce,
-        sem_var bk H x xs ->
+        sem_var H x xs ->
         sem_caexp bk H ck ce xs ->
         P_equation bk H (EqDef x ck ce).
 
     Hypothesis EqAppCase:
       forall bk H x ck f arg ls xs,
         sem_laexps bk H ck arg ls ->
-        sem_vars bk H x xs ->
+        sem_vars H x xs ->
         sem_node G f ls xs ->
         P_node f ls xs ->
         P_equation bk H (EqApp x ck f arg None).
@@ -442,9 +143,8 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqResetCase:
       forall bk H x ck f arg y ck_r ys ls xs,
         sem_laexps bk H ck arg ls ->
-        sem_vars bk H x xs ->
-        (* sem_avar bk H ck_r y ys -> *)
-        sem_var bk H y ys ->
+        sem_vars H x xs ->
+        sem_var H y ys ->
         sem_reset G f (reset_of ys) ls xs ->
         P_reset f (reset_of ys) ls xs ->
         P_equation bk H (EqApp x ck f arg (Some (y, ck_r))).
@@ -452,15 +152,17 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqFbyCase:
       forall bk H x ls xs c0 ck le,
         sem_laexp bk H ck le ls ->
-        sem_var bk H x xs ->
+        sem_var H x xs ->
         xs = fby (sem_const c0) ls ->
         P_equation bk H (EqFby x ck c0 le).
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall k, sem_node G f (mask (all_absent (xss 0)) k r xss)
+        (forall k, sem_node G f
+                       (mask (all_absent (xss 0)) k r xss)
                        (mask (all_absent (yss 0)) k r yss)
-              /\ P_node f (mask (all_absent (xss 0)) k r xss)
+              /\ P_node f
+                       (mask (all_absent (xss 0)) k r xss)
                        (mask (all_absent (yss 0)) k r yss)) ->
         P_reset f r xss yss.
 
@@ -468,8 +170,8 @@ enough: it does not support the internal fixpoint introduced by
       forall bk H f xss yss n,
         clock_of xss bk ->
         find_node f G = Some n ->
-        sem_vars bk H (map fst n.(n_in)) xss ->
-        sem_vars bk H (map fst n.(n_out)) yss ->
+        sem_vars H (map fst n.(n_in)) xss ->
+        sem_vars H (map fst n.(n_out)) yss ->
         (* XXX: This should be obtained through well-clocking: *)
         (*  * tuples are synchronised: *)
         same_clock xss ->
@@ -507,46 +209,35 @@ enough: it does not support the internal fixpoint introduced by
 
   End sem_node_mult.
 
-  Ltac assert_const_length xss :=
-    match goal with
-      H: sem_vars _ _ _ xss |- _ =>
-      let H' := fresh in
-      let k := fresh in
-      let k' := fresh in
-      assert (wf_streams xss)
-        by (intros k k'; pose proof H as H';
-            unfold sem_vars, lift in *;
-            specialize (H k); specialize (H' k');
-            apply Forall2_length in H; apply Forall2_length in H';
-            now rewrite H in H')
-    end.
-
-  Lemma mask_length:
-    forall k k' xss r n,
-      wf_streams xss ->
-      length (mask (all_absent (xss k')) k r xss n) = length (xss n).
+  Lemma hold_abs:
+    forall n c xs,
+      xs n = absent ->
+      hold c xs n = hold c xs (S n).
   Proof.
-    intros; unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-    unfold all_absent; rewrite map_length.
-    induction k'; induction n; auto.
+    destruct n; intros ** E; simpl; now rewrite E.
   Qed.
 
-  (** If all masks ar well-formed then the underlying stream of lists
-      is well-formed. *)
-  Lemma wf_streams_mask:
-    forall xss r m,
-      (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) ->
-      wf_streams xss.
+  Lemma hold_pres:
+    forall v n c xs,
+      xs n = present v ->
+      v = hold c xs (S n).
   Proof.
-    unfold wf_streams, mask; intros ** WF k k'.
-    pose proof (WF (count r k) k' k) as WFk;
-      pose proof (WF (count r k') k' k) as WFk'.
-    rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
-    rewrite NPeano.Nat.eqb_sym in WFk'.
-    destruct (EqNat.beq_nat (count r k) (count r k')); auto.
-    now rewrite WFk, <-WFk'.
+    destruct n; intros ** E; simpl; now rewrite E.
   Qed.
+
+  (* Ltac assert_const_length xss := *)
+  (*   match goal with *)
+  (*     H: sem_vars _ _ _ xss |- _ => *)
+  (*     let H' := fresh in *)
+  (*     let k := fresh in *)
+  (*     let k' := fresh in *)
+  (*     assert (wf_streams xss) *)
+  (*       by (intros k k'; pose proof H as H'; *)
+  (*           unfold sem_vars, lift in *; *)
+  (*           specialize (H k); specialize (H' k'); *)
+  (*           apply Forall2_length in H; apply Forall2_length in H'; *)
+  (*           now rewrite H in H') *)
+  (*   end. *)
 
   Lemma sem_node_wf:
     forall G f xss yss,
@@ -557,392 +248,23 @@ enough: it does not support the internal fixpoint introduced by
       assert_const_length xss; assert_const_length yss; auto.
   Qed.
 
-  (** ** Determinism of the semantics *)
-
-  (** *** Instantaneous semantics *)
-
-  Section InstantDeterminism.
-
-    Variable base: bool.
-    Variable R: env.
-
-    Lemma sem_var_instant_det:
-      forall x v1 v2,
-        sem_var_instant R x v1
-        -> sem_var_instant R x v2
-        -> v1 = v2.
-    Proof.
-      intros x v1 v2 H1 H2.
-      inversion_clear H1 as [Hf1];
-        inversion_clear H2 as [Hf2];
-        congruence.
-    Qed.
-
-    (* Lemma sem_avar_instant_det: *)
-    (*   forall x ck v1 v2, *)
-    (*     sem_avar_instant base R ck x v1 -> *)
-    (*     sem_avar_instant base R ck x v2 -> *)
-    (*     v1 = v2. *)
-    (* Proof. *)
-    (*   intros ** H1 H2. *)
-    (*   inv H1; inv H2; eapply sem_var_instant_det; eauto. *)
-    (* Qed. *)
-
-    Lemma sem_clock_instant_det:
-      forall ck v1 v2,
-        sem_clock_instant base R ck v1
-        -> sem_clock_instant base R ck v2
-        -> v1 = v2.
-    Proof.
-      induction ck; repeat inversion 1; subst; intuition;
-      try repeat progress match goal with
-          | H1: sem_clock_instant ?bk ?R ?ck ?l,
-                H2: sem_clock_instant ?bk ?R ?ck ?r |- _ =>
-            apply IHck with (1:=H1) in H2; discriminate
-          | H1: sem_var_instant ?R ?i (present ?l),
-                H2: sem_var_instant ?R ?i (present ?r) |- _ =>
-            apply sem_var_instant_det with (1:=H1) in H2;
-              injection H2; intro; subst
-          | H1: val_to_bool _ = Some ?b, H2: val_to_bool _ = _ |- _ =>
-            rewrite H1 in H2; destruct b; discriminate
-          end.
-    Qed.
-
-    Lemma sem_lexp_instant_det:
-      forall e v1 v2,
-        sem_lexp_instant base R e v1
-        -> sem_lexp_instant base R e v2
-        -> v1 = v2.
-    Proof.
-      induction e (* using lexp_ind2 *);
-        try now (do 2 inversion_clear 1);
-        match goal with
-        | H1:sem_var_instant ?R ?e (present ?b1),
-          H2:sem_var_instant ?R ?e (present ?b2),
-          H3: ?b1 <> ?b2 |- _ =>
-          exfalso; apply H3;
-          cut (present (Vbool b1) = present (Vbool b2)); [now injection 1|];
-          eapply sem_var_instant_det; eassumption
-        | H1:sem_var_instant ?R ?e ?v1,
-          H2:sem_var_instant ?R ?e ?v2 |- ?v1 = ?v2 =>
-          eapply sem_var_instant_det; eassumption
-        | H1:sem_var_instant ?R ?e (present _),
-          H2:sem_var_instant ?R ?e absent |- _ =>
-          apply (sem_var_instant_det _ _ _ _ H1) in H2;
-          discriminate
-        | _ => auto
-        end.
-      - (* Econst *)
-        do 2 inversion_clear 1; destruct base; congruence.
-      - (* Ewhen *)
-        intros v1 v2 Hsem1 Hsem2.
-        inversion Hsem1; inversion Hsem2; subst;
-          repeat progress match goal with
-          | H1:sem_lexp_instant ?b ?R ?e ?v1,
-            H2:sem_lexp_instant ?b ?R ?e ?v2 |- _ =>
-            apply IHe with (1:=H1) in H2
-          | H1:sem_var_instant ?R ?i ?v1,
-            H2:sem_var_instant ?R ?i ?v2 |- _ =>
-            apply sem_var_instant_det with (1:=H1) in H2
-          | H1:sem_unop _ _ _ = Some ?v1,
-            H2:sem_unop _ _ _ = Some ?v2 |- _ =>
-            rewrite H1 in H2; injection H2; intro; subst
-          | Hp:present _ = present _ |- _ =>
-            injection Hp; intro; subst
-          | H1:val_to_bool _ = Some _,
-            H2:val_to_bool _ = Some (negb _) |- _ =>
-            rewrite H2 in H1; exfalso; injection H1;
-            now apply Bool.no_fixpoint_negb
-          end; subst; try easy.
-      - (* Eunop *)
-        intros v1 v2 Hsem1 Hsem2.
-        inversion_clear Hsem1; inversion_clear Hsem2;
-        repeat progress match goal with
-        | H1:sem_lexp_instant _ _ e _, H2:sem_lexp_instant _ _ e _ |- _ =>
-          apply IHe with (1:=H1) in H2; inversion H2; subst
-        | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
-          rewrite H1 in H2; injection H2; intro; subst
-        | H1:sem_lexp_instant _ _ _ (present _),
-          H2:sem_lexp_instant _ _ _ absent |- _ =>
-          apply IHe with (1:=H1) in H2
-        end; try easy.
-      - (* Ebinop *)
-        intros v1 v2 Hsem1 Hsem2.
-        inversion_clear Hsem1; inversion_clear Hsem2;
-        repeat progress match goal with
-        | H1:sem_lexp_instant _ _ e1 _, H2:sem_lexp_instant _ _ e1 _ |- _ =>
-          apply IHe1 with (1:=H1) in H2
-        | H1:sem_lexp_instant _ _ e2 _, H2:sem_lexp_instant _ _ e2 _ |- _ =>
-          apply IHe2 with (1:=H1) in H2
-        | H1:sem_binop _ _ _ _ _ = Some ?v1,
-          H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
-          rewrite H1 in H2; injection H2; intro; subst
-        | H:present _ = present _ |- _ => injection H; intro; subst
-        end; subst; try easy.
-    Qed.
-
-    Lemma sem_laexp_instant_det:
-      forall ck e v1 v2,
-        sem_laexp_instant base R ck e v1
-        -> sem_laexp_instant base R ck e v2
-        -> v1 = v2.
-    Proof.
-      intros ck e v1 v2.
-      do 2 inversion_clear 1;
-        match goal with
-        | H1:sem_lexp_instant _ _ _ _, H2:sem_lexp_instant _ _ _ _ |- _ =>
-          eapply sem_lexp_instant_det; eassumption
-        | H1:sem_clock_instant _ _ _ ?T, H2:sem_clock_instant _ _ _ ?F |- _ =>
-          assert (T = F) by (eapply sem_clock_instant_det; eassumption);
-            try discriminate
-        end; auto.
-    Qed.
-
-    Lemma sem_lexps_instant_det:
-      forall les cs1 cs2,
-        sem_lexps_instant base R les cs1 ->
-        sem_lexps_instant base R les cs2 ->
-        cs1 = cs2.
-    Proof.
-      intros les cs1 cs2. apply Forall2_det. apply sem_lexp_instant_det.
-    Qed.
-
-    Lemma sem_laexps_instant_det:
-      forall ck e v1 v2,
-        sem_laexps_instant base R ck e v1
-        -> sem_laexps_instant base R ck e v2
-        -> v1 = v2.
-    Proof.
-      intros until v2.
-      do 2 inversion_clear 1;
-        match goal with
-        | H1: sem_lexps_instant _ _ _ _, H2: sem_lexps_instant _ _ _ _ |- _ =>
-          eapply sem_lexps_instant_det; eauto
-        | H1:sem_clock_instant _ _ _ ?T, H2:sem_clock_instant _ _ _ ?F |- _ =>
-          let H := fresh in
-          assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
-            try discriminate H
-        end; congruence.
-    Qed.
-
-    Lemma sem_cexp_instant_det:
-      forall e v1 v2,
-        sem_cexp_instant base R e v1
-        -> sem_cexp_instant base R e v2
-        -> v1 = v2.
-    Proof.
-      induction e;
-        do 2 inversion_clear 1;
-        try repeat progress match goal with
-            | H1: sem_cexp_instant ?bk ?R ?e ?l,
-                  H2: sem_cexp_instant ?bk ?R ?e ?r |- _ =>
-              apply IHe1 with (1:=H1) in H2
-              || apply IHe2 with (1:=H1) in H2;
-                injection H2; intro; subst
-            | H1: sem_var_instant ?R ?i (present true_val),
-                  H2: sem_var_instant ?R ?i (present false_val) |- _ =>
-              apply sem_var_instant_det with (1:=H1) in H2;
-                exfalso; injection H2; now apply true_not_false_val
-            | H1: sem_lexp_instant ?bk ?R ?l ?v1,
-                  H2: sem_lexp_instant ?bk ?R ?l ?v2 |- _ =>
-              apply sem_lexp_instant_det with (1:=H1) in H2;
-                discriminate || injection H2; intro; subst
-            | H1: sem_var_instant ?R ?i (present _),
-                  H2: sem_var_instant ?R ?i absent |- _ =>
-              apply sem_var_instant_det with (1:=H1) in H2; discriminate
-            | H1: val_to_bool _ = Some _,
-                  H2:val_to_bool _ = Some _ |- _ =>
-              rewrite H1 in H2; injection H2; intro; subst
-                            end; auto.
-      eapply sem_lexp_instant_det; eassumption.
-    Qed.
-
-    Lemma sem_caexp_instant_det:
-      forall ck e v1 v2,
-        sem_caexp_instant base R ck e v1
-        -> sem_caexp_instant base R ck e v2
-        -> v1 = v2.
-    Proof.
-      intros until v2.
-      do 2 inversion_clear 1;
-        match goal with
-        | H1: sem_cexp_instant _ _ _ _,
-              H2: sem_cexp_instant _ _ _ _ |- _ =>
-          eapply sem_cexp_instant_det; eassumption
-        | H1:sem_clock_instant _ _ _ ?T,
-             H2:sem_clock_instant _ _ _ ?F |- _ =>
-          let H := fresh in
-          assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
-            try discriminate H
-        end; congruence.
-    Qed.
-
-  End InstantDeterminism.
-
-  (** *** Lifted semantics *)
-
-  Section LiftDeterminism.
-
-    Variable bk : stream bool.
-    Variable H : history.
-
-    Require Import Logic.FunctionalExtensionality.
-
-    Lemma lift_det:
-      forall {A B} (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
-        x (xs1 xs2 : stream B),
-        (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
-        lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.
-    Proof.
-      intros ** Hpoint H1 H2.
-      extensionality n. specialize (H1 n). specialize (H2 n).
-      eapply Hpoint; eassumption.
-    Qed.
-
-    Ltac apply_lift sem_det :=
-      intros; eapply lift_det; try eassumption;
-      compute; intros; eapply sem_det; eauto.
-
-    Lemma sem_var_det:
-      forall x xs1 xs2,
-        sem_var bk H x xs1 -> sem_var bk H x xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_var_instant_det.
-    Qed.
-
-    (* Lemma sem_avar_det: *)
-    (*   forall ck x xs1 xs2, *)
-    (*     sem_avar bk H ck x xs1 -> sem_avar bk H ck x xs2 -> xs1 = xs2. *)
-    (* Proof. *)
-    (*   apply_lift sem_avar_instant_det. *)
-    (* Qed. *)
-
-    Lemma sem_clock_det:
-      forall ck bs1 bs2,
-        sem_clock bk H ck bs1 -> sem_clock bk H ck bs2 -> bs1 = bs2.
-    Proof.
-      apply_lift sem_clock_instant_det.
-    Qed.
-
-    Lemma sem_lexp_det:
-      forall e xs1 xs2,
-        sem_lexp bk H e xs1 -> sem_lexp bk H e xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_lexp_instant_det.
-    Qed.
-
-    Lemma sem_lexps_det:
-      forall les cs1 cs2,
-        sem_lexps bk H les cs1 ->
-        sem_lexps bk H les cs2 ->
-        cs1 = cs2.
-    Proof.
-      apply_lift sem_lexps_instant_det.
-    Qed.
-
-    Lemma sem_laexp_det:
-      forall ck e xs1 xs2,
-        sem_laexp bk H ck e xs1 -> sem_laexp bk H ck e xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_laexp_instant_det.
-    Qed.
-
-    Lemma sem_laexps_det:
-      forall ck e xs1 xs2,
-        sem_laexps bk H ck e xs1 -> sem_laexps bk H ck e xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_laexps_instant_det.
-    Qed.
-
-    Lemma sem_cexp_det:
-      forall c xs1 xs2,
-        sem_cexp bk H c xs1 -> sem_cexp bk H c xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_cexp_instant_det.
-    Qed.
-
-    Lemma sem_caexp_det:
-      forall ck c xs1 xs2,
-        sem_caexp bk H ck c xs1 -> sem_caexp bk H ck c xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_caexp_instant_det.
-    Qed.
-
-  (* XXX: every semantics definition, including [sem_var] which doesn't
-need it, takes a base clock value or base clock stream, except
-[sem_var_instant]. For uniformity, we may want to pass a (useless)
-clock to [sem_var_instant] too. *)
-
-  End LiftDeterminism.
-
-  Ltac sem_det :=
-    match goal with
-    | H1: sem_clock_instant ?bk ?H ?C ?X,
-          H2: sem_clock_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_clock_instant_det; eexact H1 || eexact H2
-    | H1: sem_clock ?bk ?H ?C ?X,
-          H2: sem_clock ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_clock_det; eexact H1 || eexact H2
-    | H1: sem_cexp_instant ?bk ?H ?C ?X,
-          H2: sem_cexp_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_cexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_cexp ?bk ?H ?C ?X,
-          H2: sem_cexp ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_cexp_det; eexact H1 || eexact H2
-    | H1: sem_lexps_instant ?bk ?H ?C ?X,
-          H2: sem_lexps_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexps_instant_det; eexact H1 || eexact H2
-    | H1: sem_lexps ?bk ?H ?C ?X,
-          H2: sem_lexps ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexps_det; eexact H1 || eexact H2
-    | H1: sem_laexps_instant ?bk ?H ?ck ?C ?X,
-          H2: sem_laexps_instant ?bk ?H ?ck ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexps_instant_det; eexact H1 || eexact H2
-    | H1: sem_laexps ?bk ?H ?ck ?C ?X,
-          H2: sem_laexps ?bk ?H ?ck ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexps_det; eexact H1 || eexact H2
-    | H1: sem_lexp_instant ?bk ?H ?C ?X,
-          H2: sem_lexp_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_lexp ?bk ?H ?C ?X,
-          H2: sem_lexp ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexp_det; eexact H1 || eexact H2
-    | H1: sem_laexp_instant ?bk ?H ?CK ?C ?X,
-          H2: sem_laexp_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_laexp ?bk ?H ?CK ?C ?X,
-          H2: sem_laexp ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexp_det; eexact H1 || eexact H2
-    | H1: sem_var_instant ?H ?C ?X,
-          H2: sem_var_instant ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_var_instant_det; eexact H1 || eexact H2
-    | H1: sem_var ?bk ?H ?C ?X,
-          H2: sem_var ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_var_det; eexact H1 || eexact H2
-    (* | H1: sem_avar_instant ?bk ?H ?CK ?C ?X, *)
-    (*       H2: sem_avar_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y => *)
-    (*   eapply sem_avar_instant_det; eexact H1 || eexact H2 *)
-    (* | H1: sem_avar ?bk ?H ?CK ?C ?X, *)
-    (*       H2: sem_avar ?bk ?H ?CK ?C ?Y |- ?X = ?Y => *)
-    (*   eapply sem_avar_det; eexact H1 || eexact H2 *)
-
-    end.
+  Lemma sem_EqApp_gt0:
+    forall G bk H xs ck f es r,
+      sem_equation G bk H (EqApp xs ck f es r) ->
+      0 < length xs.
+  Proof.
+    inversion_clear 1 as [|????????? Vars Node|???????????? Vars ? Rst|];
+      [|inversion_clear Rst as [???? Node]; pose proof Node as Node'; specialize (Node 0)];
+      inversion_clear Node as [????????? Out];
+      specialize (Out 0); specialize (Vars 0); simpl in *;
+        apply Forall2_length in Out; apply Forall2_length in Vars;
+          [|rewrite mask_length in Out];
+          try (rewrite <-Out in Vars; rewrite Vars, map_length; apply n_outgt0).
+    eapply wf_streams_mask.
+    intro k; specialize (Node' k); apply sem_node_wf in Node' as (); eauto.
+  Qed.
 
   (** ** Properties of the [global] environment *)
-
-  Lemma find_node_other:
-    forall f node G node',
-      node.(n_name) <> f
-      -> (find_node f (node::G) = Some node'
-         <-> find_node f G = Some node').
-  Proof.
-    intros f node G node' Hnf.
-    apply BinPos.Pos.eqb_neq in Hnf.
-    simpl.
-    unfold ident_eqb.
-    rewrite Hnf.
-    reflexivity.
-  Qed.
 
   Lemma sem_node_cons:
     forall node G f xs ys,
@@ -1113,7 +435,6 @@ clock to [sem_var_instant] too. *)
     - econstructor; eauto.
   Qed.
 
-  (** ** Clocking property *)
 
   (* Lemma subrate_clock: *)
   (*   forall R ck, *)
@@ -1126,82 +447,9 @@ clock to [sem_var_instant] too. *)
   (*   admit. *)
   (* Qed. *)
 
-  Lemma not_subrate_clock:
-    forall R ck,
-      ~ sem_clock_instant false R ck true.
-  Proof.
-    intros ** Sem; induction ck; inv Sem.
-    now apply IHck.
-  Qed.
-
   (* XXX: Similarly, instead of [rhs_absent_instant] and friends, we
 should prove that all the semantic rules taken at [base = false] yield
 an absent value *)
-
-  (** ** Presence and absence in non-empty lists *)
-
-  Lemma not_absent_present_list:
-    forall xs,
-      0 < length xs ->
-      present_list xs ->
-      ~ absent_list xs.
-  Proof.
-  intros * Hnz Hpres Habs.
-  unfold present_list in Hpres.
-  unfold absent_list in Habs.
-  destruct xs; [now inversion Hnz|].
-  now inv Hpres; inv Habs; auto.
-  Qed.
-
-  Lemma present_not_absent_list:
-    forall xs (vs: list val),
-      instant_same_clock xs ->
-      ~ absent_list xs ->
-      present_list xs.
-  Proof.
-  intros ** Hsamexs Hnabs.
-  now destruct Hsamexs.
-  Qed.
-
-  Lemma all_absent_mask:
-    forall xs k k' r n,
-      wf_streams xs ->
-      all_absent (mask (all_absent (xs k')) k r xs n) = all_absent (xs n).
-  Proof.
-    intros ** Wf; unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-    specialize (Wf n k').
-    assert (length (all_absent (xs k')) = length (xs n)) as Length
-        by now (unfold all_absent; rewrite map_length).
-    clear Wf; revert Length; generalize (xs n) as l, (all_absent (xs k')) as l'.
-    induction l, l'; inversion 1; simpl; auto.
-    f_equal; auto.
-  Qed.
-
-  Lemma absent_list_mask:
-    forall xs opaque k r n,
-      absent_list (xs n) ->
-      absent_list opaque ->
-      absent_list (mask opaque k r xs n).
-  Proof.
-    intros ** Abs.
-    unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-  Qed.
-
-  Lemma sem_vars_gt0:
-    forall bk H (xs: list (ident * type)) ls,
-      0 < length xs ->
-      sem_vars bk H (map fst xs) ls ->
-      forall n, 0 < length (ls n).
-  Proof.
-    intros ** Hgt0 Hsem n.
-    unfold sem_vars, lift in Hsem.
-    specialize Hsem with n.
-    apply Forall2_length in Hsem.
-    rewrite map_length in Hsem.
-    now rewrite Hsem in Hgt0.
-  Qed.
 
   Lemma sem_equations_permutation:
     forall eqs eqs' G bk H,
@@ -1217,35 +465,6 @@ an absent value *)
   Qed.
 
   (** Morphisms properties *)
-
-  Add Parametric Morphism b A B sem H : (@lift b H A B sem)
-      with signature eq ==> @eq_str B ==> Basics.impl
-        as lift_eq_str.
-  Proof.
-    intros x xs xs' E Lift n.
-    rewrite <-E; auto.
-  Qed.
-
-  Add Parametric Morphism : clock_of
-      with signature eq_str ==> eq ==> Basics.impl
-        as clock_of_eq_str.
-  Proof.
-    unfold clock_of. intros ** E b Pres n.
-    split; intros H.
-    - apply Pres.
-      specialize (E n).
-      induction H; rewrite E; constructor; auto.
-    - apply Pres in H.
-      specialize (E n).
-      induction H; rewrite <-E; constructor; auto.
-  Qed.
-
-  Add Parametric Morphism : same_clock
-      with signature eq_str ==> Basics.impl
-        as same_clock_eq_str.
-  Proof.
-    unfold same_clock; intros ** E ? ?; rewrite <-E; auto.
-  Qed.
 
   Add Parametric Morphism G f: (sem_node G f)
       with signature eq_str ==> eq_str ==> Basics.impl
@@ -1270,13 +489,15 @@ an absent value *)
 End NLSEMANTICS.
 
 Module NLSemanticsFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Clks  : CLOCKS    Ids)
-       (Syn   : NLSYNTAX  Ids Op Clks)
-       (Str   : STREAM        Op OpAux)
-       (Ord   : ORDERED   Ids Op Clks Syn)
-       <: NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
-  Include NLSEMANTICS Ids Op OpAux Clks Syn Str Ord.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX       Op)
+       (Clks    : CLOCKS          Ids)
+       (ExprSyn : NLEXPRSYNTAX        Op)
+       (Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Str     : STREAM              Op OpAux)
+       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str)
+       (Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
+<: NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str ExprSem Ord.
+  Include NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str ExprSem Ord.
 End NLSemanticsFun.

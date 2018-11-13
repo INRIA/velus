@@ -1975,6 +1975,40 @@ Section Lists.
     | _ :: l => last_error l
   end.
 
+  Lemma Exists_app_l:
+    forall P (l l': list A),
+      Exists P l ->
+      Exists P (l ++ l').
+  Proof.
+    induction 1.
+    - now constructor.
+    - now constructor 2.
+  Qed.
+
+  Lemma Exists_app':
+    forall P (l l': list A),
+      Exists P (l ++ l') <-> Exists P l \/ Exists P l'.
+  Proof.
+    split.
+    - induction l; simpl; auto.
+      inversion_clear 1 as [|?? E]; intuition.
+    - intros [E|E].
+      + induction l; simpl; inv E; auto.
+      + induction l; simpl; auto.
+  Qed.
+
+  Lemma Forall2_In_l:
+    forall (l: list A) (l': list B) P x,
+      Forall2 P l l' ->
+      In x l ->
+      exists x', P x x'.
+  Proof.
+    intros ** F2 Hin.
+    induction F2.
+    - contradiction.
+    - inv Hin; eauto.
+  Qed.
+
 End Lists.
 
 Lemma Forall2_map_1:

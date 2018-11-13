@@ -6,6 +6,7 @@ Open Scope list_scope.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 
 (** * Ordering of nodes *)
@@ -21,10 +22,11 @@ Remark: [Ordered_nodes] is implied by [Welldef_global].
  *)
 
 Module Type ORDERED
-       (Ids         : IDS)
-       (Op          : OPERATORS)
-       (Import Clks : CLOCKS   Ids)
-       (Import Syn  : NLSYNTAX Ids Op Clks).
+       (Ids            : IDS)
+       (Op             : OPERATORS)
+       (Import Clks    : CLOCKS   Ids)
+       (Import ExprSyn : NLEXPRSYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn).
 
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
   | INI: forall x ck f e r, Is_node_in_eq f (EqApp x ck f e r).
@@ -239,10 +241,11 @@ Module Type ORDERED
 End ORDERED.
 
 Module OrderedFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Clks : CLOCKS   Ids)
-       (Syn  : NLSYNTAX Ids Op Clks)
-       <: ORDERED Ids Op Clks Syn.
-  Include ORDERED Ids Op Clks Syn.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (Clks   : CLOCKS   Ids)
+       (ExprSyn: NLEXPRSYNTAX Op)
+       (Syn    : NLSYNTAX Ids Op Clks ExprSyn)
+       <: ORDERED Ids Op Clks ExprSyn Syn.
+  Include ORDERED Ids Op Clks ExprSyn Syn.
 End OrderedFun.
