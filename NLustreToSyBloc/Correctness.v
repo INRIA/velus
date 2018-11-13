@@ -1637,9 +1637,9 @@ Module Type CORRECTNESS
              intro; destruct (Spec' (count r n)) as (?& Heq &?); inversion_clear Heq as [| |????????? Var|].
              eapply reset_memories_path_sub_spec_instant'; eauto.
              + eapply same_skeleton_sub_inst; eauto.
-             + replace (SemSB.reset_of (interp_var H i1) n) with (SemSB.reset_of_value (interp_var H i1 n)); auto.
+             + replace (reset_of (interp_var H i1) n) with (reset_of_value (interp_var H i1 n)); auto.
                interp_sound n.
-               replace (SemSB.reset_of_value (rs n)) with (SemSB.reset_of rs n); auto.
+               replace (reset_of_value (rs n)) with (reset_of rs n); auto.
                apply reset_regs_instant_spec'; auto.
          }
 
