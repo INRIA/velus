@@ -49,6 +49,28 @@ Module Type CORRECTNESS
        (Import NoD   : NODUP         Ids Op       Clks SynNL               Mem IsD IsV)
        (Import WeF   : WELLFORMED    Ids Op       Clks SynNL           Ord Mem IsD IsV IsF NoD).
 
+  Lemma Exists_app_l:
+    forall A P (l l': list A),
+      Exists P l ->
+      Exists P (l ++ l').
+  Proof.
+    induction 1.
+    - now constructor.
+    - now constructor 2.
+  Qed.
+
+  Lemma Exists_app':
+    forall A P (l l': list A),
+      Exists P (l ++ l') <-> Exists P l \/ Exists P l'.
+  Proof.
+    split.
+    - induction l; simpl; auto.
+      inversion_clear 1 as [|?? E]; intuition.
+    - intros [E|E].
+      + induction l; simpl; inv E; auto.
+      + induction l; simpl; auto.
+  Qed.
+
   Section Global.
 
     Variable G: SynNL.global.
@@ -211,6 +233,52 @@ Module Type CORRECTNESS
       Definition inst_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop :=
         List.Exists (inst_in_eq x) eqs.
 
+      Lemma Is_defined_in_EqApp:
+        forall xs ck f es r,
+          0 < length xs ->
+          Is_defined_in_eq (hd default xs) (EqApp xs ck f es r).
+      Proof.
+        intros ** Length.
+        constructor.
+        destruct xs; simpl in *; auto; omega.
+      Qed.
+
+      Lemma sem_EqApp_gt0:
+        forall G bk H xs ck f es r,
+          sem_equation G bk H (EqApp xs ck f es r) ->
+          0 < length xs.
+      Proof.
+        inversion_clear 1 as [|????????? Vars Node|???????????? Vars ? Rst|];
+          [|inversion_clear Rst as [???? Node]; pose proof Node as Node'; specialize (Node 0)];
+          inversion_clear Node as [????????? Out];
+          specialize (Out 0); specialize (Vars 0); simpl in *;
+            apply Forall2_length in Out; apply Forall2_length in Vars;
+              [|rewrite mask_length in Out];
+              try (rewrite <-Out in Vars; rewrite Vars, map_length; apply n_outgt0).
+        eapply wf_streams_mask.
+        intro k; specialize (Node' k); apply sem_node_wf in Node' as (); eauto.
+      Qed.
+
+      Lemma inst_in_Is_defined_in_eqs:
+        forall G bk H xs eqs,
+          Forall (sem_equation G bk H) eqs ->
+          inst_in_eqs (hd default xs) (translate_eqns eqs) ->
+          Is_defined_in_eqs (hd default xs) eqs.
+      Proof.
+        intros ** Sem_eqs In.
+        unfold translate_eqns, concatMap in In.
+        induction eqs as [|eq]; simpl in *;
+          inversion_clear Sem_eqs as [|?? Sem].
+        - inv In.
+        - apply Exists_app' in In as [E|E].
+          + left.
+            destruct eq; try destruct o as [()|]; simpl in *; inversion_clear E as [?? Def|?? Nil];
+              try inversion_clear Nil as [?? Def|?? Nil'];
+              try inv Def; try inv Nil'; match goal with H: hd _ _ = hd _ _ |- _ => rewrite H end;
+                eapply Is_defined_in_EqApp, sem_EqApp_gt0; eauto.
+          + right; apply IHeqs; auto.
+      Qed.
+
       Lemma not_inst_in_eqs_cons:
         forall x eq eqs,
           ~ inst_in_eqs x (eq :: eqs)
@@ -258,6 +326,24 @@ Module Type CORRECTNESS
 
       Definition defined_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop :=
         List.Exists (defined_in_eq x) eqs.
+
+      Lemma defined_in_Is_defined_in_eqs:
+        forall x eqs,
+          defined_in_eqs x (translate_eqns eqs) ->
+          Is_defined_in_eqs x eqs.
+      Proof.
+        intros ** Def.
+        induction eqs as [|eq].
+        - inv Def.
+        - unfold translate_eqns, concatMap in Def; simpl in Def.
+          apply Exists_app' in Def; destruct Def as [E|E].
+          + left.
+            destruct eq; try destruct o as [()|]; simpl in E;
+              inversion_clear E as [?? Def|?? Nil];
+              try inversion_clear Nil as [?? Def|?? Nil'];
+              try inv Def; try inv Nil'; constructor; auto.
+          + right; apply IHeqs; auto.
+      Qed.
 
       Lemma not_defined_in_eqs_cons:
         forall x eq eqs,
@@ -312,28 +398,18 @@ Module Type CORRECTNESS
     Hint Resolve var_correctness vars_correctness
          laexp_correctness caexp_correctness laexps_correctness.
 
-    Fixpoint well_formed_eqs (eqs: list SynSB.equation) : Prop :=
-        match eqs with
-        | [] => True
-        | SynSB.EqReset _ _ x _ :: eqs =>
-          ~ inst_in_eqs x eqs /\ well_formed_eqs eqs
-        | SynSB.EqCall xs _ _ x _ :: eqs =>
-          ~ inst_in_eqs x eqs /\ Forall (fun x => ~ defined_in_eqs x eqs) xs /\ well_formed_eqs eqs
-        | SynSB.EqDef x _ _ :: eqs =>
-          ~ defined_in_eqs x eqs /\well_formed_eqs eqs
-        | SynSB.EqFby x _ _ _ :: eqs =>
-          ~ defined_in_eqs x eqs /\well_formed_eqs eqs
-        end.
-
-    Lemma Exists_app_l:
-      forall (A : Type) (P : A -> Prop) (ll rr : list A),
-        Exists P ll ->
-        Exists P (ll ++ rr).
-    Proof.
-      induction 1.
-      - now constructor.
-      - now constructor 2.
-    Qed.
+    (* Fixpoint well_formed_eqs (eqs: list SynSB.equation) : Prop := *)
+    (*     match eqs with *)
+    (*     | [] => True *)
+    (*     | SynSB.EqReset _ _ x _ :: eqs => *)
+    (*       ~ inst_in_eqs x eqs /\ well_formed_eqs eqs *)
+    (*     | SynSB.EqCall xs _ _ x _ :: eqs => *)
+    (*       ~ inst_in_eqs x eqs /\ Forall (fun x => ~ defined_in_eqs x eqs) xs /\ well_formed_eqs eqs *)
+    (*     | SynSB.EqDef x _ _ :: eqs => *)
+    (*       ~ defined_in_eqs x eqs /\well_formed_eqs eqs *)
+    (*     | SynSB.EqFby x _ _ _ :: eqs => *)
+    (*       ~ defined_in_eqs x eqs /\well_formed_eqs eqs *)
+    (*     end. *)
 
     Lemma not_defined_in_eqs_app:
       forall eqs eqs' x,
@@ -359,23 +435,23 @@ Module Type CORRECTNESS
       - now apply Exists_app.
     Qed.
 
-    Lemma well_formed_eqs_app:
-      forall eqs eqs',
-        well_formed_eqs (eqs ++ eqs') ->
-        well_formed_eqs eqs /\ well_formed_eqs eqs'.
-    Proof.
-      induction eqs as [|e]; simpl; auto.
-      destruct e; intros ** [? H]; edestruct IHeqs; eauto;
-        repeat match goal with
-               | H: ~ defined_in_eqs _ (_ ++ _) |- _ => apply not_defined_in_eqs_app in H as (?&?)
-               | H: ~ inst_in_eqs _ (_ ++ _) |- _ => apply not_inst_in_eqs_app in H as (?&?)
-               end; auto.
-      - destruct H; eauto.
-      - destruct H; auto.
-        repeat split; auto.
-        eapply Forall_impl with (1:=not_defined_in_eqs_app eqs eqs') in H.
-        now rewrite <-Forall_Forall' in H.
-    Qed.
+    (* Lemma well_formed_eqs_app: *)
+    (*   forall eqs eqs', *)
+    (*     well_formed_eqs (eqs ++ eqs') -> *)
+    (*     well_formed_eqs eqs /\ well_formed_eqs eqs'. *)
+    (* Proof. *)
+    (*   induction eqs as [|e]; simpl; auto. *)
+    (*   destruct e; intros ** [? H]; edestruct IHeqs; eauto; *)
+    (*     repeat match goal with *)
+    (*            | H: ~ defined_in_eqs _ (_ ++ _) |- _ => apply not_defined_in_eqs_app in H as (?&?) *)
+    (*            | H: ~ inst_in_eqs _ (_ ++ _) |- _ => apply not_inst_in_eqs_app in H as (?&?) *)
+    (*            end; auto. *)
+    (*   - destruct H; eauto. *)
+    (*   - destruct H; auto. *)
+    (*     repeat split; auto. *)
+    (*     eapply Forall_impl with (1:=not_defined_in_eqs_app eqs eqs') in H. *)
+    (*     now rewrite <-Forall_Forall' in H. *)
+    (* Qed. *)
 
   End Global.
   Hint Resolve var_correctness vars_correctness
@@ -403,6 +479,24 @@ Module Type CORRECTNESS
         compat_eqs eqs ->
         compat_eq eq (translate_eqns eqs) ->
         compat_eqs (eq :: eqs).
+
+  Lemma Is_well_sch_compat:
+    forall G n bk H mems,
+      Forall (sem_equation G bk H) (n_eqs n) ->
+      Is_well_sch mems (map fst (n_in n)) (n_eqs n) ->
+      compat_eqs (n_eqs n).
+  Proof.
+    intros ** Heqs WSCH.
+    induction (n_eqs n) as [|eq];
+      inversion_clear Heqs as [|?? Heq Heqs']; inversion_clear WSCH as [|???? NotDef];
+        constructor; auto.
+    destruct eq; constructor.
+    - intro E; apply (NotDef (hd default i)).
+      + eapply Is_defined_in_EqApp, sem_EqApp_gt0; eauto.
+      + eapply inst_in_Is_defined_in_eqs; eauto.
+    - intro E; eapply NotDef; try constructor.
+      now apply defined_in_Is_defined_in_eqs.
+  Qed.
 
   Lemma equation_correctness:
     forall G bk H eqs M eq,
@@ -503,18 +597,6 @@ Module Type CORRECTNESS
       intuition.
   Qed.
 
-  Lemma Exists_app':
-    forall A P (l l': list A),
-      Exists P (l ++ l') <-> Exists P l \/ Exists P l'.
-  Proof.
-    split.
-    - induction l; simpl; auto.
-      inversion_clear 1 as [|?? E]; intuition.
-    - intros [E|E].
-      + induction l; simpl; inv E; auto.
-      + induction l; simpl; auto.
-  Qed.
-
   Lemma is_block_is_node:
     forall f eqs,
       Is_node_in f eqs <-> is_block_in f (translate_eqns eqs).
@@ -534,11 +616,10 @@ Module Type CORRECTNESS
     - unfold translate_eqns, concatMap in H; simpl in H.
       apply Exists_app' in H as [E'|E'].
       + left.
-        destruct a;try destruct o as [()|]; simpl in E';
-          inversion E' as [?? InEq|?? InNil]; try inv InNil; try inv InEq.
-        * inv H3; constructor.
-        * inv H3.
-        * constructor.
+        destruct a; try destruct o as [()|]; simpl in E';
+          inversion_clear E' as [?? Def|?? Nil];
+          try inversion_clear Nil as [?? Def|?? Nil'];
+          try inv Def; try inv Nil'; constructor.
       + right; rewrite IHeqs; auto.
   Qed.
 
@@ -1861,7 +1942,6 @@ Module Type CORRECTNESS
   Theorem correctness:
     forall G f xss oss,
       Welldef_global G ->
-      (* Ordered_nodes G -> *)
       sem_node G f xss oss ->
       exists M, SemSB.sem_block (translate G) f M xss oss.
   Proof.
@@ -1880,6 +1960,7 @@ Module Type CORRECTNESS
       inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
       injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
       eapply Forall_sem_equation_global_tl in Heqs; eauto.
+
       assert (forall f xss oss,
                  sem_node G f xss oss ->
                  exists M, SemSB.sem_block (translate G) f M xss oss)
@@ -1888,40 +1969,14 @@ Module Type CORRECTNESS
       assert (forall f r xss oss,
                  sem_reset G f r xss oss ->
                  exists M, SemSB.sem_block (translate G) f M xss oss
-                      /\ SemSB.reset_regs r M).
-      { clear - IHG' Hord''.
-        intros; apply reset_correctness; auto.
-      }
+                      /\ SemSB.reset_regs r M)
+        by (intros; apply reset_correctness; auto).
 
       assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs)))
-        as (M & Hmsem).
-      { eapply equations_correctness; eauto.
-        inversion_clear WD as [|?? WD'' eqs WSCH NotIn FindNone Neq]; subst eqs.
-        clear Hnneqs.
-        induction (n_eqs n) as [|eq]; constructor.
-        - apply IHl.
-          + inv Heqs; auto.
-          + apply not_Is_node_in_cons in NotIn as (); auto.
-          + admit.
-          + apply not_Is_node_in_cons in NotIn as (); auto.
-          + intros; apply FindNone; right; auto.
-        - destruct eq; constructor.
-          + admit.
-          + inversion_clear WSCH as [|???? NotDef].
-            clear - NotDef.
-            intro E; eapply NotDef; try constructor.
-            clear NotDef; induction l as [|eq].
-            * inv E.
-            *{ unfold translate_eqns, concatMap in E; simpl in E.
-               apply Exists_app' in E; destruct E as [E|E].
-               - left.
-                 destruct eq; try destruct o as [()|]; simpl in E;
-                   inversion_clear E as [?? Def|?? Nil];
-                   try inversion_clear Nil as [?? Def|?? Nil'];
-                   try inv Def; try inv Nil'; constructor; auto.
-               - right; apply IHl; auto.
-             }
-      }
+        as (M & Hmsem)
+          by (eapply equations_correctness; eauto;
+              inv WD; eapply Is_well_sch_compat; eauto).
+
       exists M.
       econstructor; eauto.
       + simpl; now rewrite Hnf.
