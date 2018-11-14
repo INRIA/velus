@@ -273,23 +273,6 @@ An NLustre program is well defined if
       reflexivity.
     Qed.
 
-    Lemma in_fold_left_add:
-      forall x xs S,
-        PS.In x (fold_left (fun S' x => PS.add x S') xs S)
-        <->
-        In x xs \/ PS.In x S.
-    Proof.
-      induction xs as [|y xs IH].
-      split; intro H; simpl in *;
-        intuition.
-      intro S; split; intro H.
-      - apply IH in H.
-        destruct H.
-        now left; constructor (assumption).
-        apply PS.add_spec in H; simpl; intuition.
-      - simpl; apply IH; simpl in H; intuition.
-    Qed.
-
     Lemma well_sch_pre_spec:
       forall args eqs good defined variables,
         (good, defined, variables)

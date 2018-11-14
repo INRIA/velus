@@ -327,9 +327,16 @@ Section Properties.
   Qed.
 
   Lemma find_val_add_inst:
-      find_val x (add_inst y m' m) = find_val x m.
+    find_val x (add_inst y m' m) = find_val x m.
   Proof.
     unfold find_val, add_inst.
+    reflexivity.
+  Qed.
+
+  Lemma find_inst_add_val:
+    find_inst x (add_val y v m) = find_inst x m.
+  Proof.
+    unfold find_inst, add_val.
     reflexivity.
   Qed.
 

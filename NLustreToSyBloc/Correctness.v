@@ -25,8 +25,6 @@ Require Import Velus.NLustre.NoDup.
 
 Require Import List.
 Import List.ListNotations.
-(* Require Import Coq.Sorting.Permutation. *)
-(* Require Import Morphisms. *)
 
 Open Scope list.
 Open Scope nat.
@@ -53,38 +51,8 @@ Module Type CORRECTNESS
        (Import NoD     : NODUP           Ids Op       Clks ExprSyn SynNL                       Mem IsD IsV)
        (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL                   Ord Mem IsD IsV IsF NoD).
 
-  Inductive same_skeleton: SemSB.memories -> SemSB.memories -> Prop :=
-    same_skeleton_intro:
-      forall M M',
-        (forall x, find_val x M <> None -> find_val x M' <> None) ->
-        (forall x M1,
-            find_inst x M = Some M1 ->
-            exists M2, find_inst x M' = Some M2
-                  /\ same_skeleton M1 M2) ->
-        same_skeleton M M'.
 
-  Lemma same_skeleton_sub_inst:
-    forall M M' x Mx Mx',
-      same_skeleton M M' ->
-      sub_inst x M Mx ->
-      sub_inst x M' Mx' ->
-      same_skeleton Mx Mx'.
-  Proof.
-    inversion_clear 1 as [??? Inst]; intros ** Sub Sub'.
-    apply Inst in Sub as (? & Sub'' & ?).
-    rewrite Sub' in Sub''; inv Sub''; auto.
-  Qed.
-
-  Corollary sem_block_same_skeleton:
-    forall G f M M' xss oss xss' oss',
-      SemSB.sem_block (translate G) f M xss oss ->
-      SemSB.sem_block (translate G) f M' xss' oss' ->
-      same_skeleton M M'.
-  Proof.
-    intros ** Sem Sem'; inversion_clear Sem; inversion_clear Sem'.
-  Admitted.
-
-  Inductive inst_in_eq: ident -> SynSB.equation -> Prop :=
+   Inductive inst_in_eq: ident -> SynSB.equation -> Prop :=
   | InstInEqReset:
       forall x ck m r,
         inst_in_eq x (SynSB.EqReset ck m x r)
@@ -378,35 +346,49 @@ Module Type CORRECTNESS
         sem_equation G bk H eq ->
         compat_eq eq eqs ->
         Forall (SemSB.sem_equation P bk H M) eqs ->
-        exists M', Forall (SemSB.sem_equation P bk H M') (translate_eqn eq ++ eqs).
+        SemSB.well_structured_memories eqs M ->
+        exists M', Forall (SemSB.sem_equation P bk H M') (translate_eqn eq ++ eqs)
+              /\ SemSB.well_structured_memories (translate_eqn eq ++ eqs) M'.
     Proof.
-      intros ** IHnode IHreset Heq WF Heqs.
+      intros ** IHnode IHreset Heq WF Heqs WS.
       inv Heq; simpl; inv WF.
       - repeat (econstructor; eauto).
       - edestruct IHnode as (M' & Block); eauto.
-        exists (add_inst (hd default x) M' M).
-        constructor.
-        + econstructor; eauto.
-          apply find_inst_gss.
-        + apply sem_equation_add_inst; auto.
-      - edestruct IHreset as (M' & Block & Reset); eauto.
-        exists (add_inst (hd default x) M' M).
-        constructor.
-        + econstructor; eauto.
-          apply find_inst_gss.
+        exists (add_inst (hd default x) M' M); split.
         + constructor.
           * econstructor; eauto.
             apply find_inst_gss.
           * apply sem_equation_add_inst; auto.
-      - exists (add_val x {| SemSB.content := hold (sem_const c0) ls; SemSB.reset := fun _ => false |} M).
-        constructor.
-        + econstructor; eauto.
-          econstructor.
-          * apply find_val_gss.
-          * reflexivity.
-          * intro; unfold fby; simpl.
-            destruct (ls n); auto.
-        + apply sem_equation_add_val; auto.
+        + apply SemSB.well_structured_add_inst_call; auto.
+      - edestruct IHreset as (M' & Block & Reset); eauto.
+        exists (add_inst (hd default x) M' M); split.
+        + constructor.
+          * econstructor; eauto.
+            apply find_inst_gss.
+          *{ constructor.
+             - econstructor; eauto.
+               apply find_inst_gss.
+             - apply sem_equation_add_inst; auto.
+           }
+        + apply SemSB.well_structured_add_inst_reset_call; auto.
+      - exists (add_val x {| SemSB.content := hold (sem_const c0) ls; SemSB.reset := fun _ => false |} M); split.
+        + constructor.
+          *{ econstructor; eauto.
+             econstructor.
+             - apply find_val_gss.
+             - reflexivity.
+             - intro; unfold fby; simpl.
+               destruct (ls n); auto.
+           }
+          * apply sem_equation_add_val; auto.
+        + apply SemSB.well_structured_add_val_fby; auto.
+    Qed.
+
+    Lemma well_structured_empty:
+      SemSB.well_structured_memories [] (empty_memory SemSB.mvalues).
+    Proof.
+      constructor; unfold find_val, find_inst, SemSB.fbys, SemSB.insts;
+        simpl; intros; split; intro H; contradict H; auto; apply not_In_empty.
     Qed.
 
     Corollary equations_correctness:
@@ -420,15 +402,19 @@ Module Type CORRECTNESS
                  /\ SemSB.reset_regs r M) ->
         compat_eqs eqs ->
         Forall (sem_equation G bk H) eqs ->
-        exists M', Forall (SemSB.sem_equation P bk H M') (translate_eqns eqs).
+        exists M', Forall (SemSB.sem_equation P bk H M') (translate_eqns eqs)
+              /\ SemSB.well_structured_memories (translate_eqns eqs) M'.
     Proof.
       intros ** IHnode IHreset WF Heqs.
-      induction eqs as [|eq eqs IHeqs]; [exists (@empty_memory SemSB.mvalues); now constructor|].
-      apply Forall_cons2 in Heqs as [Heq Heqs].
-      inv WF.
-      eapply IHeqs in Heqs as [M Heqs]; eauto.
-      unfold translate_eqns; rewrite concatMap_cons.
-      eapply equation_correctness; eauto.
+      induction eqs as [|eq eqs IHeqs].
+      - exists (@empty_memory SemSB.mvalues).
+        split; try now constructor.
+        apply well_structured_empty.
+      - apply Forall_cons2 in Heqs as [Heq Heqs].
+        inv WF.
+        eapply IHeqs in Heqs as [? ()]; eauto.
+        unfold translate_eqns; rewrite concatMap_cons.
+        eapply equation_correctness; eauto.
     Qed.
 
     Lemma find_block_later_not_is_block_in:
@@ -485,7 +471,7 @@ Module Type CORRECTNESS
       intros ** Hord Hnf Hsem.
       revert Hnf.
       induction Hsem
-        as [| | | |????????? Hfind ????? Heqs IHeqs]
+        as [| | | |????????? Hfind ????? Heqs WS IHeqs]
              using SemSB.sem_block_mult
         with (P_equation := fun bk H M eq =>
                               ~ is_block_in_eq n.(n_name) eq ->
@@ -500,7 +486,7 @@ Module Type CORRECTNESS
         econstructor; eauto.
         assert (Forall (fun eq => ~ is_block_in_eq (n_name n) eq) (SynSB.b_eqs bl)) as NotIns
             by (eapply is_block_in_Forall, find_block_later_not_is_block_in; eauto).
-        clear Heqs.
+        clear Heqs WS.
         induction (SynSB.b_eqs bl); inv NotIns; inv IHeqs; constructor; auto.
     Qed.
 
@@ -1242,6 +1228,28 @@ Module Type CORRECTNESS
     rewrite reset_regs_instant_spec in Rst; auto.
   Qed.
 
+  Inductive same_skeleton: SemSB.memories -> SemSB.memories -> Prop :=
+    same_skeleton_intro:
+      forall M M',
+        (forall x, find_val x M <> None -> find_val x M' <> None) ->
+        (forall x M1,
+            find_inst x M = Some M1 ->
+            exists M2, find_inst x M' = Some M2
+                  /\ same_skeleton M1 M2) ->
+        same_skeleton M M'.
+
+  Lemma same_skeleton_sub_inst:
+    forall M M' x Mx Mx',
+      same_skeleton M M' ->
+      sub_inst x M Mx ->
+      sub_inst x M' Mx' ->
+      same_skeleton Mx Mx'.
+  Proof.
+    inversion_clear 1 as [??? Inst]; intros ** Sub Sub'.
+    apply Inst in Sub as (? & Sub'' & ?).
+    rewrite Sub' in Sub''; inv Sub''; auto.
+  Qed.
+
   Lemma reset_memories_path_spec_instant':
     forall r Fm p r' M0 n M',
       same_skeleton M0 M' ->
@@ -1420,6 +1428,159 @@ Module Type CORRECTNESS
       unfold reset_memories_path in Eq; auto.
   Qed.
 
+  (* Lemma foo: *)
+  (*   forall eqs M M', *)
+  (*     SemSB.well_structured_memories eqs M -> *)
+  (*     SemSB.well_structured_memories eqs M' -> *)
+  (*     (* SemSB.sem_equation P bk H M e -> *) *)
+  (*     (* SemSB.sem_equation P bk H M' e -> *) *)
+  (*     same_skeleton M M'. *)
+  (* Proof. *)
+  (*   intros ** WS WS'. *)
+  (*   revert dependent M'. *)
+  (*   induction M using memory_ind'; intros. *)
+  (*   constructor. *)
+  (*   - intros x Find. *)
+  (*     now apply WS, WS' in Find. *)
+  (*   - intros ** Find'. *)
+  (*     assert (find_inst x (Mnode xvs xms) <> None) as Find by (rewrite not_None_is_Some; eauto). *)
+  (*     apply WS, WS' in Find. *)
+  (*     apply not_None_is_Some in Find as (). *)
+  (*     eexists; split; eauto. *)
+  (*     unfold find_inst in Find'; *)
+  (*       apply Env.find_in, in_map with (f := snd) in Find'; simpl in Find'. *)
+  (*     eapply In_Forall in H; eauto. *)
+  (*     apply H. *)
+  (*     SearchAbout Forall In. *)
+  (*     eauto. *)
+  Definition gather_eq (acc: Env.t ident) (eq: SynSB.equation): Env.t ident :=
+    match eq with
+    | SynSB.EqDef _ _ _
+    | SynSB.EqReset _ _ _ _
+    | SynSB.EqFby _ _ _ _ => acc
+    | SynSB.EqCall _ _ f i _ => Env.add i f acc
+    end.
+
+  Definition gather (eqs: list SynSB.equation) : Env.t ident :=
+    fold_left gather_eq eqs [].
+
+  Lemma gather_find:
+    forall e x eqs,
+      Env.find x e = None ->
+      Env.find x (fold_left gather_eq eqs e) = Env.find x (gather eqs).
+  Proof.
+  Admitted.
+
+  Lemma gather_find':
+    forall e x eqs,
+      Env.find x (gather eqs) = None ->
+      Env.find x (fold_left gather_eq eqs e) = Env.find x e.
+  Proof.
+  Admitted.
+
+  Lemma sub_inst_translate_sem_block:
+    forall G f bl P' M xss oss x M',
+      SemSB.sem_block (translate G) f M xss oss ->
+      SynSB.find_block f (translate G) = Some (bl, P') ->
+      sub_inst x M M' ->
+      exists g xss' oss',
+        SemSB.sem_block (translate G) g M' xss' oss'
+        /\ Env.find x (gather bl.(SynSB.b_eqs)) = Some g.
+  Proof.
+    Arguments Env.add: simpl never.
+    inversion_clear 1 as [????????? Find ????? Eqs WS]; intros ** Find' Sub.
+    rewrite Find in Find'; inv Find'.
+    apply find_block_translate in Find as (n & Find &?); subst; simpl in *.
+    assert (find_inst x M <> None) as E by (rewrite not_None_is_Some; eauto).
+    apply WS in E.
+    unfold SemSB.insts in E.
+    unfold translate_eqns, concatMap in *.
+    clear WS.
+    induction (n_eqs n) as [|eq].
+    - contradict E; apply not_In_empty.
+    - destruct eq; try destruct o as [()|]; unfold gather; simpl in *;
+        inversion_clear Eqs as [|?? Heq Heqs]; auto.
+      + set (y := hd default i) in *.
+        inversion_clear Heqs as [|?? Heq'].
+        inversion_clear Heq' as [| | |???????????? Sub'].
+        destruct (ident_eqb x y) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        *{ unfold sub_inst in Sub'; rewrite Sub in Sub'; inv Sub'.
+           do 3 eexists; split; eauto.
+           rewrite gather_find'.
+           - apply Env.gss.
+           - admit.
+         }
+        *{ rewrite gather_find.
+           - apply IHl; auto.
+             apply SemSB.In_fold_left_inst_eq in E as [|E]; auto.
+             rewrite 2 PSE.MP.Dec.F.add_neq_iff in E; auto.
+             contradict E; apply not_In_empty.
+           - rewrite Env.gso; auto.
+         }
+      + set (y := hd default i) in *.
+        inversion_clear Heq as [| | |???????????? Sub'].
+        destruct (ident_eqb x y) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        *{ unfold sub_inst in Sub'; rewrite Sub in Sub'; inv Sub'.
+           do 3 eexists; split; eauto.
+           rewrite gather_find'.
+           - apply Env.gss.
+           - admit.
+         }
+        *{ rewrite gather_find.
+           - apply IHl; auto.
+             apply SemSB.In_fold_left_inst_eq in E as [|E]; auto.
+             rewrite PSE.MP.Dec.F.add_neq_iff in E; auto.
+             contradict E; apply not_In_empty.
+           - rewrite Env.gso; auto.
+         }
+  Qed.
+
+  Lemma sem_block_same_skeleton:
+    forall G M M' f xss oss xss' oss',
+      (* Ordered_nodes G -> *)
+      SemSB.sem_block (translate G) f M xss oss ->
+      SemSB.sem_block (translate G) f M' xss' oss' ->
+      same_skeleton M M'.
+  Proof.
+    induction M as [?? IH] using memory_ind'.
+    intros ** Sem Sem'; pose proof Sem as Sem1; pose proof Sem' as Sem2;
+      inversion_clear Sem as [????????? Find ????? Eqs WS];
+      inversion_clear Sem' as [????????? Find' ????? Eqs' WS'].
+    rewrite Find' in Find; inv Find.
+    constructor.
+    - intros x E.
+      apply WS'.
+      apply WS in E; auto.
+    - intros ** E.
+      pose proof E as E1.
+      assert (find_inst x (Mnode xvs xms) <> None) as E' by (rewrite not_None_is_Some; eauto).
+      apply WS, WS' in E'.
+      apply not_None_is_Some in E' as ().
+      eexists; split; eauto.
+      unfold find_inst in E.
+      apply Env.find_in, in_map with (f := snd) in E; simpl in E.
+      eapply In_Forall in IH; eauto.
+      eapply sub_inst_translate_sem_block in Sem1 as (?&?&?&?& Find1); eauto.
+      eapply sub_inst_translate_sem_block in Sem2 as (?&?&?&?& Find2); eauto.
+      rewrite Find1 in Find2; inv Find2.
+      eauto.
+  Qed.
+
+  Lemma well_structured_reset_memories:
+    forall Fm r M0 eqs,
+    SemSB.well_structured_memories eqs M0 ->
+    SemSB.well_structured_memories eqs (reset_memories Fm r M0).
+  Proof.
+    inversion_clear 1 as [Vals Insts].
+    constructor; intro; unfold reset_memories, reset_memories_path.
+    - rewrite find_val_mmapi, <-Vals.
+      destruct (find_val x M0); simpl; split; auto; intros ** ?; discriminate.
+    - rewrite find_inst_mmapi, <-Insts.
+      destruct (find_inst x M0); simpl; split; auto; intros ** ?; discriminate.
+  Qed.
+
   Ltac interp_sound n :=
     repeat match goal with
            | H: sem_var ?H' ?x ?vs |- _ =>
@@ -1475,25 +1636,27 @@ Module Type CORRECTNESS
         by (destruct (Sem 0) as (Sem'); inv Sem'; eauto).
 
     assert (forall k k', same_skeleton (Fm k) (Fm k')) as SameSkeleton
-        by (intros; pose proof (Sem k) as Sk; specialize (Sem k');
-            destruct Sk, Sem; eapply sem_block_same_skeleton; eauto).
+        by (intros; pose proof (Sem k) as Sk; specialize (Sem k'); destruct Sk, Sem;
+            eapply sem_block_same_skeleton (* with  (1 := Ord') *); eauto).
 
     assert (exists F, forall k, exists bk,
                    sem_vars (F k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
                    /\ sem_vars (F k) (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
                    /\ Forall (SemSB.sem_equation (translate (node :: G)) bk (F k) (Fm k)) (SynSB.b_eqs bl)
-                   /\ clock_of (mask (all_absent (xss 0)) k r xss) bk)
+                   /\ clock_of (mask (all_absent (xss 0)) k r xss) bk
+                   /\ SemSB.well_structured_memories (SynSB.b_eqs bl) (Fm k))
       as (Fh & Spec).
     { assert (forall k, exists H bk,
                    sem_vars H (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
                    /\ sem_vars H (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
                    /\ Forall (SemSB.sem_equation (translate (node :: G)) bk H (Fm k)) (SynSB.b_eqs bl)
-                   /\ clock_of (mask (all_absent (xss 0)) k r xss) bk)
+                   /\ clock_of (mask (all_absent (xss 0)) k r xss) bk
+                   /\ SemSB.well_structured_memories (SynSB.b_eqs bl) (Fm k))
         as Spec.
       { intro; destruct (Sem k) as (Sem'); inv Sem'.
         match goal with
           H: SynSB.find_block _ _ = _ |- _ => rewrite Find in H; inv H end.
-        eauto 6.
+        eauto 7.
       }
       now apply functional_choice in Spec.
     }
@@ -1549,6 +1712,14 @@ Module Type CORRECTNESS
           eapply find_block_not_is_block_in with (1 := Ord'); eauto.
         - eapply find_block_later_not_is_block_in; eauto.
       }
+
+      assert (forall k, exists bk,
+                   sem_vars (Fh k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
+                   /\ sem_vars (Fh k) (map fst (SynSB.b_out bl)) (mask (all_absent (oss 0)) k r oss)
+                   /\ Forall (SemSB.sem_equation (translate (node :: G)) bk (Fh k) (Fm k)) (SynSB.b_eqs bl)
+                   /\ clock_of (mask (all_absent (xss 0)) k r xss) bk) as Spec'
+          by (intro; destruct (Spec k) as (?&?&?&?&?&?); eauto).
+      clear Spec; rename Spec' into Spec.
 
       induction (SynSB.b_eqs bl) as [|eq ? IHeqs]; constructor; auto.
       + clear IHeqs.
@@ -1684,8 +1855,11 @@ Module Type CORRECTNESS
          }
 
       + apply IHeqs.
-        * intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
         * intro E; apply NotIn; right; auto.
+        * intro; destruct (Spec k) as (?&?&?& Heqs &?); inv Heqs; eauto.
+
+    - destruct (Spec 0) as (?&?&?&?&?&?).
+      apply well_structured_reset_memories; auto.
   Qed.
 
   Theorem reset_correctness:
@@ -1749,7 +1923,7 @@ Module Type CORRECTNESS
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - assert (Hord':=Hord).
       inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
-      injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
+      inv Hfind.
       eapply Forall_sem_equation_global_tl in Heqs; eauto.
 
       assert (forall f xss oss,
@@ -1763,8 +1937,9 @@ Module Type CORRECTNESS
                       /\ SemSB.reset_regs r M)
         by (intros; apply reset_correctness; auto).
 
-      assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs)))
-        as (M & Hmsem)
+      assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs))
+                    /\ SemSB.well_structured_memories (translate_eqns n.(n_eqs)) M')
+        as (M & Hmsem & WS)
           by (eapply equations_correctness; eauto;
               inv WD; eapply Is_well_sch_compat; eauto).
 
@@ -1774,8 +1949,9 @@ Module Type CORRECTNESS
       + simpl; rewrite map_fst_idty; eauto.
       + simpl; rewrite map_fst_idty; eauto.
       + eapply sem_equation_cons; eauto.
+      + auto.
     - apply ident_eqb_neq in Hnf.
-      apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
+      eapply sem_node_cons in Hsem; eauto.
       inv Hord.
       eapply IHG in Hsem as [M]; eauto.
       exists M.
