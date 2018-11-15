@@ -16,6 +16,8 @@ Section Global.
 
   Variable A B: Type.
 
+  Definition empty : t A := [].
+
   Fixpoint find (x: ident) (e: t A) : option A :=
     match e with
     | [] => None

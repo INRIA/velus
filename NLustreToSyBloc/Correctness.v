@@ -1464,18 +1464,72 @@ Module Type CORRECTNESS
   Definition gather (eqs: list SynSB.equation) : Env.t ident :=
     fold_left gather_eq eqs [].
 
+  Lemma fold_left_gather_eq_find:
+    forall eqs e e' x,
+      Env.find x e = Env.find x e' ->
+      Env.find x (fold_left gather_eq eqs e) = Env.find x (fold_left gather_eq eqs e').
+  Proof.
+    Arguments Env.add: simpl never.
+    unfold gather; induction eqs as [|eq]; simpl; auto; intros ** E.
+    destruct eq; simpl; auto.
+    apply IHeqs.
+    destruct (ident_eqb x i1) eqn: Eq;
+      [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+    - rewrite 2 Env.gss; auto.
+    - rewrite 2 Env.gso; auto.
+  Qed.
+
   Lemma gather_find:
-    forall e x eqs,
+    forall eqs e x,
       Env.find x e = None ->
       Env.find x (fold_left gather_eq eqs e) = Env.find x (gather eqs).
   Proof.
-  Admitted.
+    intros ** E; apply fold_left_gather_eq_find.
+    rewrite E; reflexivity.
+  Qed.
 
+  (* Lemma gather_find': *)
+  (*   forall eqs e e' x, *)
+  (*     (forall x, Env.find x (gather eqs) <> None -> Env.find x e' = None) -> *)
+  (*     Env.find x (fold_left gather_eq eqs e') = Env.find x e' -> *)
+  (*     Env.find x (fold_left gather_eq eqs e) = Env.find x e. *)
+  (* Proof. *)
+  (*   Arguments Env.add: simpl never. *)
+  (*   unfold gather; induction eqs as [|eq]; simpl; intros ** Spec E; auto. *)
+  (*   destruct eq; simpl in *; eauto. *)
+  (*   erewrite IHeqs. *)
+  (*   - erewrite IHeqs in E. *)
+  (*     + destruct (ident_eqb x i1) eqn: Eq; *)
+  (*         [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq]. *)
+  (*       * assert (Env.find i1 (fold_left gather_eq eqs (Env.add i1 i0 [])) <> None). *)
+  (*         { clear; induction eqs as [|eq]; simpl fold_left. *)
+  (*           - rewrite Env.gss; intro; discriminate. *)
+  (*           - destruct eq; simpl; auto. admit. *)
+  (*         } *)
+  (*         apply Spec in H. *)
+  (*         rewrite Env.gss, H in E; discriminate. *)
+  (*       * apply Env.gso; auto. *)
+  (*     + instantiate (1 := e'). admit. *)
+  (*     +  *)
+
+  (*   - erewrite IHeqs with (e' := Env.add i1 i0 e') in E. *)
+  (*     + admit. *)
+  (*     + rewrite Env.gss. erewrite IHeqs. admit.   *)
+  (*   - erewrite IHeqs with (e' := Env.add i1 i0 e'). *)
+  (*     + apply Env.gso; auto. *)
+  (*     + rewrite Env.gso; auto.  erewrite E. rewrite 2 Env.gso; auto.  *)
+  (*   - apply IHeqs.  *)
+  (*   eapply gather_find in E. *)
+  (*   intros ** E. *)
+  (*   destruct (Env.find x e). *)
+  (*   - *)
   Lemma gather_find':
-    forall e x eqs,
+    forall eqs e x,
       Env.find x (gather eqs) = None ->
       Env.find x (fold_left gather_eq eqs e) = Env.find x e.
   Proof.
+    unfold gather; induction eqs as [|eq]; simpl; intros ** E; auto.
+    destruct eq; simpl in *; auto.
   Admitted.
 
   Lemma sub_inst_translate_sem_block:
