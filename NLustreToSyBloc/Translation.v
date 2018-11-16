@@ -607,6 +607,10 @@ Module Type TRANSLATION
     destruct n; simpl.
     now rewrite length_idty.
   Qed.
+  Next Obligation.
+    destruct n; simpl.
+    now rewrite length_idty.
+  Qed.
 
   Definition translate (G: global) : SynSB.program :=
     map translate_node G.

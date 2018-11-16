@@ -35,7 +35,8 @@ Module Type SBSYNTAX
         b_out   : list (ident * type);
         b_eqs   : list equation;
 
-        b_ingt0 : 0 < length b_in
+        b_ingt0 : 0 < length b_in;
+        b_outgt0 : 0 < length b_out
       }.
 
   Definition bl_vars (bl: block): list (ident * type) :=

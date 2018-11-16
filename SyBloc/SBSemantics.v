@@ -224,6 +224,18 @@ Module Type SBSEMANTICS
       assert_const_length xss; assert_const_length yss; auto.
   Qed.
 
+  Lemma sem_EqCall_gt0:
+    forall P bk H M xs ck b i es,
+      sem_equation P bk H M (EqCall xs ck b i es) ->
+      0 < length xs.
+  Proof.
+    inversion_clear 1 as [| | |????????????? Block' Vars].
+    inversion_clear Block' as [??????????? Out].
+    specialize (Out 0); specialize (Vars 0); simpl in *;
+      apply Forall2_length in Out; apply Forall2_length in Vars.
+    rewrite <-Out in Vars; rewrite Vars, map_length; apply b_outgt0.
+  Qed.
+
   Lemma In_fold_left_fby_eq:
     forall x eqs m,
       PS.In x (fold_left fby_eq eqs m)

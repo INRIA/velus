@@ -52,7 +52,7 @@ Module Type CORRECTNESS
        (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL                   Ord Mem IsD IsV IsF NoD).
 
 
-   Inductive inst_in_eq: ident -> SynSB.equation -> Prop :=
+  Inductive inst_in_eq: ident -> SynSB.equation -> Prop :=
   | InstInEqReset:
       forall x ck m r,
         inst_in_eq x (SynSB.EqReset ck m x r)
@@ -63,23 +63,64 @@ Module Type CORRECTNESS
   Definition inst_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop :=
     List.Exists (inst_in_eq x) eqs.
 
-  Lemma inst_in_Is_defined_in_eqs:
-    forall G bk H xs eqs,
+  Inductive well_formed_app_eq: equation -> Prop :=
+  | wfa_EqDef:
+      forall x ck e,
+        well_formed_app_eq (EqDef x ck e)
+  | wfa_EqFby:
+      forall x ck v0 e,
+        well_formed_app_eq (EqFby x ck v0 e)
+  | wfa_EqApp:
+      forall xs ck f es r,
+        0 < length xs ->
+        well_formed_app_eq (EqApp xs ck f es r).
+
+  Definition well_formed_app := Forall well_formed_app_eq.
+
+  Lemma sem_equations_well_formed_app:
+    forall P bk H M eqs,
+      Forall (SemSB.sem_equation P bk H M) (translate_eqns eqs) ->
+      well_formed_app eqs.
+  Proof.
+    unfold translate_eqns, concatMap.
+    induction eqs as [|eq]; simpl; intros ** Sem; constructor.
+    - destruct eq; try destruct o as [()|]; constructor;
+        simpl in Sem; inversion_clear Sem as [|?? Sem' Sem''].
+      + inversion_clear Sem'' as [|?? Sem].
+        eapply SemSB.sem_EqCall_gt0; eauto.
+      + eapply SemSB.sem_EqCall_gt0; eauto.
+    - apply Forall_app in Sem as (); apply IHeqs; auto.
+  Qed.
+
+  Lemma nl_sem_equations_well_formed_app:
+    forall G bk H eqs,
       Forall (sem_equation G bk H) eqs ->
+      well_formed_app eqs.
+  Proof.
+    induction eqs as [|eq]; simpl; inversion_clear 1; constructor; auto.
+    - destruct eq; try destruct o as [()|]; constructor;
+        eapply sem_EqApp_gt0; eauto.
+    - apply IHeqs; auto.
+  Qed.
+
+  Lemma inst_in_Is_defined_in_eqs:
+    forall xs eqs,
+      well_formed_app eqs ->
       inst_in_eqs (hd default xs) (translate_eqns eqs) ->
       Is_defined_in_eqs (hd default xs) eqs.
   Proof.
-    intros ** Sem_eqs In.
+    intros ** Wfa In.
     unfold translate_eqns, concatMap in In.
     induction eqs as [|eq]; simpl in *;
-      inversion_clear Sem_eqs as [|?? Sem].
+      inversion_clear Wfa as [|?? Wfa_eq].
     - inv In.
     - apply Exists_app' in In as [E|E].
       + left.
-        destruct eq; try destruct o as [()|]; simpl in *; inversion_clear E as [?? Def|?? Nil];
+        destruct eq; try destruct o as [()|]; simpl in *; inv Wfa_eq;
+          inversion_clear E as [?? Def|?? Nil];
           try inversion_clear Nil as [?? Def|?? Nil'];
           try inv Def; try inv Nil'; match goal with H: hd _ _ = hd _ _ |- _ => rewrite H end;
-            eapply Is_defined_in_EqApp, sem_EqApp_gt0; eauto.
+            eapply Is_defined_in_EqApp; eauto.
       + right; apply IHeqs; auto.
   Qed.
 
@@ -207,18 +248,18 @@ Module Type CORRECTNESS
         compat_eqs (eq :: eqs).
 
   Lemma Is_well_sch_compat:
-    forall G n bk H mems,
-      Forall (sem_equation G bk H) (n_eqs n) ->
+    forall n mems,
+      well_formed_app (n_eqs n) ->
       Is_well_sch mems (map fst (n_in n)) (n_eqs n) ->
       compat_eqs (n_eqs n).
   Proof.
-    intros ** Heqs WSCH.
+    intros ** Wfa WSCH.
     induction (n_eqs n) as [|eq];
-      inversion_clear Heqs as [|?? Heq Heqs']; inversion_clear WSCH as [|???? NotDef];
+      inversion_clear Wfa as [|?? Wfa_eq]; inversion_clear WSCH as [|???? NotDef];
         constructor; auto.
-    destruct eq; constructor.
+    destruct eq; inv Wfa_eq; constructor.
     - intro E; apply (NotDef (hd default i)).
-      + eapply Is_defined_in_EqApp, sem_EqApp_gt0; eauto.
+      + eapply Is_defined_in_EqApp; eauto.
       + eapply inst_in_Is_defined_in_eqs; eauto.
     - intro E; eapply NotDef; try constructor.
       now apply defined_in_Is_defined_in_eqs.
@@ -1464,6 +1505,8 @@ Module Type CORRECTNESS
   Definition gather (eqs: list SynSB.equation) : Env.t ident :=
     fold_left gather_eq eqs [].
 
+  Arguments Env.add: simpl never.
+
   Lemma fold_left_gather_eq_find:
     forall eqs e e' x,
       Env.find x e = Env.find x e' ->
@@ -1479,7 +1522,7 @@ Module Type CORRECTNESS
     - rewrite 2 Env.gso; auto.
   Qed.
 
-  Lemma gather_find:
+  Corollary gather_find:
     forall eqs e x,
       Env.find x e = None ->
       Env.find x (fold_left gather_eq eqs e) = Env.find x (gather eqs).
@@ -1488,52 +1531,141 @@ Module Type CORRECTNESS
     rewrite E; reflexivity.
   Qed.
 
-  (* Lemma gather_find': *)
-  (*   forall eqs e e' x, *)
-  (*     (forall x, Env.find x (gather eqs) <> None -> Env.find x e' = None) -> *)
-  (*     Env.find x (fold_left gather_eq eqs e') = Env.find x e' -> *)
-  (*     Env.find x (fold_left gather_eq eqs e) = Env.find x e. *)
-  (* Proof. *)
-  (*   Arguments Env.add: simpl never. *)
-  (*   unfold gather; induction eqs as [|eq]; simpl; intros ** Spec E; auto. *)
-  (*   destruct eq; simpl in *; eauto. *)
-  (*   erewrite IHeqs. *)
-  (*   - erewrite IHeqs in E. *)
-  (*     + destruct (ident_eqb x i1) eqn: Eq; *)
-  (*         [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq]. *)
-  (*       * assert (Env.find i1 (fold_left gather_eq eqs (Env.add i1 i0 [])) <> None). *)
-  (*         { clear; induction eqs as [|eq]; simpl fold_left. *)
-  (*           - rewrite Env.gss; intro; discriminate. *)
-  (*           - destruct eq; simpl; auto. admit. *)
-  (*         } *)
-  (*         apply Spec in H. *)
-  (*         rewrite Env.gss, H in E; discriminate. *)
-  (*       * apply Env.gso; auto. *)
-  (*     + instantiate (1 := e'). admit. *)
-  (*     +  *)
+  Lemma fold_left_gather_eq_find_not_none:
+     forall eqs e x,
+      Env.find x (fold_left gather_eq eqs e) <> None <->
+      Env.find x (gather eqs) <> None \/ Env.find x e <> None.
+  Proof.
+    unfold gather; induction eqs as [|eq]; simpl.
+    - split; intros E; auto.
+      destruct E; auto; discriminate.
+    - split; [intro E|intros [E|]]; rewrite IHeqs; try apply IHeqs in E as [|E]; auto.
+      + destruct eq; simpl gather_eq in *; auto.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * rewrite Env.gss in *; auto.
+        * rewrite Env.gso in E; auto.
+      + destruct eq; simpl gather_eq in *; try now contradict E.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * rewrite Env.gss in *; auto.
+        * rewrite Env.gso in E; auto; discriminate.
+      + destruct eq; simpl gather_eq in *; auto.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * rewrite Env.gss; right; discriminate.
+        * rewrite Env.gso; auto.
+  Qed.
 
-  (*   - erewrite IHeqs with (e' := Env.add i1 i0 e') in E. *)
-  (*     + admit. *)
-  (*     + rewrite Env.gss. erewrite IHeqs. admit.   *)
-  (*   - erewrite IHeqs with (e' := Env.add i1 i0 e'). *)
-  (*     + apply Env.gso; auto. *)
-  (*     + rewrite Env.gso; auto.  erewrite E. rewrite 2 Env.gso; auto.  *)
-  (*   - apply IHeqs.  *)
-  (*   eapply gather_find in E. *)
-  (*   intros ** E. *)
-  (*   destruct (Env.find x e). *)
-  (*   - *)
+  Lemma fold_left_gather_eq_find_some:
+     forall eqs e x y,
+      Env.find x (fold_left gather_eq eqs e) = Some y <->
+      Env.find x (gather eqs) = Some y \/ (Env.find x e = Some y /\ Env.find x (gather eqs) = None).
+  Proof.
+    unfold gather; induction eqs as [|eq]; simpl.
+    - split; intros E; auto.
+      destruct E as [|()]; auto; discriminate.
+    - split; [intro E|intros ** [E|(?&E)]]; rewrite IHeqs; try apply IHeqs in E as [|(E & E')]; auto.
+      + destruct eq; simpl gather_eq in *; auto.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * rewrite Env.gss in *; auto.
+        * rewrite Env.gso in E; auto.
+          right; split; auto.
+          rewrite fold_left_gather_eq_find with (e' := []); auto.
+          apply Env.gso; auto.
+      + destruct eq; simpl gather_eq in *; try now contradict E.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * rewrite Env.gss in *; auto.
+        * rewrite Env.gso in E; auto; discriminate.
+      + destruct eq; simpl gather_eq in *; auto.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * contradict E.
+          rewrite fold_left_gather_eq_find_not_none.
+          right.
+          rewrite Env.gss; discriminate.
+        * rewrite Env.gso; auto.
+          right; split; auto.
+          erewrite fold_left_gather_eq_find; eauto.
+          rewrite Env.gso; auto.
+  Qed.
+
+  Lemma fold_left_gather_eq_find_none:
+     forall eqs e x,
+      Env.find x (fold_left gather_eq eqs e) = None <->
+      Env.find x (gather eqs) = None /\ Env.find x e = None.
+  Proof.
+    unfold gather; induction eqs as [|eq]; simpl.
+    - split; intros E; auto.
+      destruct E; auto.
+    - split; [intro E|intros ** (E&?)];
+        apply IHeqs in E as (E&E'); rewrite IHeqs;
+          destruct eq; simpl gather_eq in *; auto.
+      + split; [split|]; auto.
+        *{ destruct (ident_eqb x i1) eqn: Eq;
+            [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+           - rewrite Env.gss in *; auto.
+           - rewrite Env.gso; auto.
+         }
+        *{ destruct (ident_eqb x i1) eqn: Eq;
+            [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+           - rewrite Env.gss in *; discriminate.
+           - rewrite Env.gso in E'; auto.
+         }
+      + split; auto.
+        destruct (ident_eqb x i1) eqn: Eq;
+          [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+        * rewrite Env.gss in *; discriminate.
+        * rewrite Env.gso in *; auto.
+  Qed.
+
   Lemma gather_find':
     forall eqs e x,
       Env.find x (gather eqs) = None ->
       Env.find x (fold_left gather_eq eqs e) = Env.find x e.
   Proof.
+    intros ** E.
+    destruct (Env.find x e) eqn: E'.
+    - rewrite fold_left_gather_eq_find_some; auto.
+    - rewrite fold_left_gather_eq_find_none; auto.
+  Qed.
+
+  Lemma not_inst_in_gather_none:
+    forall eqs x,
+      ~ inst_in_eqs x eqs ->
+      Env.find x (gather eqs) = None.
+  Proof.
     unfold gather; induction eqs as [|eq]; simpl; intros ** E; auto.
-    destruct eq; simpl in *; auto.
-  Admitted.
+    destruct eq; simpl gather_eq; try (now apply IHeqs; intro; apply E; right).
+      destruct (ident_eqb x i1) eqn: Eq;
+        [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
+    - exfalso; apply E.
+      left; constructor.
+    - rewrite fold_left_gather_eq_find_none; split.
+      + apply IHeqs; intro.
+        apply E; right; auto.
+      + rewrite Env.gso; auto.
+  Qed.
+
+  Lemma Welldef_gloabl_Is_well_sch:
+    forall G f n,
+      Welldef_global G ->
+      find_node f G = Some n ->
+      Is_well_sch (memories n.(n_eqs)) (map fst (n_in n)) n.(n_eqs).
+  Proof.
+    induction G as [|node]; intros ** WD Find.
+    - inv Find.
+    - inv WD.
+      simpl in Find.
+      destruct (ident_eqb node.(n_name) f); eauto.
+      inversion Find; subst n; auto .
+  Qed.
 
   Lemma sub_inst_translate_sem_block:
     forall G f bl P' M xss oss x M',
+      Welldef_global G ->
       SemSB.sem_block (translate G) f M xss oss ->
       SynSB.find_block f (translate G) = Some (bl, P') ->
       sub_inst x M M' ->
@@ -1541,29 +1673,36 @@ Module Type CORRECTNESS
         SemSB.sem_block (translate G) g M' xss' oss'
         /\ Env.find x (gather bl.(SynSB.b_eqs)) = Some g.
   Proof.
-    Arguments Env.add: simpl never.
-    inversion_clear 1 as [????????? Find ????? Eqs WS]; intros ** Find' Sub.
+    intros ** WD Sem Find' Sub.
+    inversion_clear Sem as [????????? Find ????? Eqs WS].
     rewrite Find in Find'; inv Find'.
     apply find_block_translate in Find as (n & Find &?); subst; simpl in *.
     assert (find_inst x M <> None) as E by (rewrite not_None_is_Some; eauto).
     apply WS in E.
     unfold SemSB.insts in E.
     unfold translate_eqns, concatMap in *.
-    clear WS.
+    assert (compat_eqs n.(n_eqs)) as Compat.
+    { eapply Welldef_gloabl_Is_well_sch in WD; eauto.
+      eapply Is_well_sch_compat in WD; eauto.
+      eapply sem_equations_well_formed_app; eauto.
+    }
+    clear WD WS.
     induction (n_eqs n) as [|eq].
     - contradict E; apply not_In_empty.
-    - destruct eq; try destruct o as [()|]; unfold gather; simpl in *;
-        inversion_clear Eqs as [|?? Heq Heqs]; auto.
+    - inversion_clear Compat as [|??? Compat_eq].
+      destruct eq; try destruct o as [()|]; unfold gather; simpl in *;
+        inversion_clear Eqs as [|?? Heq Heqs];
+        inv Compat_eq; auto.
       + set (y := hd default i) in *.
-        inversion_clear Heqs as [|?? Heq'].
-        inversion_clear Heq' as [| | |???????????? Sub'].
+        inversion_clear Heqs as [|?? Heq''].
+        inversion_clear Heq'' as [| | |???????????? Sub'].
         destruct (ident_eqb x y) eqn: Eq;
           [apply ident_eqb_eq in Eq; subst|apply ident_eqb_neq in Eq].
         *{ unfold sub_inst in Sub'; rewrite Sub in Sub'; inv Sub'.
            do 3 eexists; split; eauto.
            rewrite gather_find'.
            - apply Env.gss.
-           - admit.
+           - apply not_inst_in_gather_none; auto.
          }
         *{ rewrite gather_find.
            - apply IHl; auto.
@@ -1580,7 +1719,7 @@ Module Type CORRECTNESS
            do 3 eexists; split; eauto.
            rewrite gather_find'.
            - apply Env.gss.
-           - admit.
+           - apply not_inst_in_gather_none; auto.
          }
         *{ rewrite gather_find.
            - apply IHl; auto.
@@ -1594,6 +1733,7 @@ Module Type CORRECTNESS
   Lemma sem_block_same_skeleton:
     forall G M M' f xss oss xss' oss',
       (* Ordered_nodes G -> *)
+      Welldef_global G ->
       SemSB.sem_block (translate G) f M xss oss ->
       SemSB.sem_block (translate G) f M' xss' oss' ->
       same_skeleton M M'.
@@ -1663,7 +1803,7 @@ Module Type CORRECTNESS
 
   Theorem slices_sem_block:
     forall G f r xss oss Fm P,
-      Ordered_nodes G ->
+      Welldef_global G ->
       (forall k,
           SemSB.sem_block (translate G) f (Fm k)
                           (mask (all_absent (xss 0)) k r xss)
@@ -1672,11 +1812,14 @@ Module Type CORRECTNESS
       SemSB.sem_block (translate G) f (reset_memories Fm r (Fm 0)) xss oss
       /\ forall k, P k (Fm k).
   Proof.
-    intros ** Ord Sem.
+    intros ** WD Sem.
     revert dependent f; revert xss oss r P Fm.
     induction G as [|node]; intros.
     destruct (Sem 0) as (Sem'); inv Sem';
       match goal with Hf: SynSB.find_block _ _ = _ |- _ => inversion Hf end.
+
+    pose proof (Welldef_global_Ordered_nodes _ WD) as Ord.
+    pose proof (Welldef_global_cons _ _ WD) as WD'.
 
     pose proof Ord as Ord'.
     inversion_clear Ord as [|?? Ord'' Hnneqs Hnn].
@@ -1691,7 +1834,7 @@ Module Type CORRECTNESS
 
     assert (forall k k', same_skeleton (Fm k) (Fm k')) as SameSkeleton
         by (intros; pose proof (Sem k) as Sk; specialize (Sem k'); destruct Sk, Sem;
-            eapply sem_block_same_skeleton (* with  (1 := Ord') *); eauto).
+            eapply sem_block_same_skeleton with (1 := WD); eauto).
 
     assert (exists F, forall k, exists bk,
                    sem_vars (F k) (map fst (SynSB.b_in bl)) (mask (all_absent (xss 0)) k r xss)
@@ -1897,7 +2040,7 @@ Module Type CORRECTNESS
                rewrite mask_opaque; auto.
                apply all_absent_spec.
            }
-           edestruct (IHG Ord'' (interp_laexps bk H c l0) (interp_vars H i) r (fun k M => sub_inst i1 (Fm k) M))
+           edestruct (IHG WD' (interp_laexps bk H c l0) (interp_vars H i) r (fun k M => sub_inst i1 (Fm k) M))
              as (?& Sub); eauto.
            eapply SemSB.SEqCall with (M' := reset_memories F r (F 0))
                                      (ess := interp_laexps bk H c l0)
@@ -1918,7 +2061,7 @@ Module Type CORRECTNESS
 
   Theorem reset_correctness:
     forall G f r xss oss,
-      Ordered_nodes G ->
+      Welldef_global G ->
       (forall f xss oss,
           sem_node G f xss oss ->
           exists M, SemSB.sem_block (translate G) f M xss oss) ->
@@ -1993,9 +2136,11 @@ Module Type CORRECTNESS
 
       assert (exists M', Forall (SemSB.sem_equation (translate G) bk H M') (translate_eqns n.(n_eqs))
                     /\ SemSB.well_structured_memories (translate_eqns n.(n_eqs)) M')
-        as (M & Hmsem & WS)
-          by (eapply equations_correctness; eauto;
-              inv WD; eapply Is_well_sch_compat; eauto).
+        as (M & Hmsem & WS).
+      { eapply equations_correctness; eauto.
+        inv WD; eapply Is_well_sch_compat; eauto.
+        eapply nl_sem_equations_well_formed_app; eauto.
+      }
 
       exists M.
       econstructor; eauto.
