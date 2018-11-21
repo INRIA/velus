@@ -1802,20 +1802,18 @@ Module Type CORRECTNESS
   Require Import Coq.Logic.IndefiniteDescription.
 
   Theorem slices_sem_block:
-    forall G f r xss oss Fm P,
+    forall G f r xss oss Fm,
       Welldef_global G ->
       (forall k,
           SemSB.sem_block (translate G) f (Fm k)
                           (mask (all_absent (xss 0)) k r xss)
-                          (mask (all_absent (oss 0)) k r oss)
-          /\ P k (Fm k)) ->
-      SemSB.sem_block (translate G) f (reset_memories Fm r (Fm 0)) xss oss
-      /\ forall k, P k (Fm k).
+                          (mask (all_absent (oss 0)) k r oss)) ->
+      SemSB.sem_block (translate G) f (reset_memories Fm r (Fm 0)) xss oss.
   Proof.
     intros ** WD Sem.
-    revert dependent f; revert xss oss r P Fm.
+    revert dependent f; revert xss oss r Fm.
     induction G as [|node]; intros.
-    destruct (Sem 0) as (Sem'); inv Sem';
+    specialize (Sem 0); inv Sem;
       match goal with Hf: SynSB.find_block _ _ = _ |- _ => inversion Hf end.
 
     pose proof (Welldef_global_Ordered_nodes _ WD) as Ord.
@@ -1824,16 +1822,12 @@ Module Type CORRECTNESS
     pose proof Ord as Ord'.
     inversion_clear Ord as [|?? Ord'' Hnneqs Hnn].
 
-    assert (forall k, P k (Fm k)) as HP by (intro; destruct (Sem k); auto).
-
-    split; auto.
-
     assert (exists bl P', SynSB.find_block f (translate (node :: G)) = Some (bl, P'))
       as (bl & P' & Find)
-        by (destruct (Sem 0) as (Sem'); inv Sem'; eauto).
+        by (specialize (Sem 0); inv Sem; eauto).
 
     assert (forall k k', same_skeleton (Fm k) (Fm k')) as SameSkeleton
-        by (intros; pose proof (Sem k) as Sk; specialize (Sem k'); destruct Sk, Sem;
+        by (intros; pose proof (Sem k) as Sk; specialize (Sem k');
             eapply sem_block_same_skeleton with (1 := WD); eauto).
 
     assert (exists F, forall k, exists bk,
@@ -1850,7 +1844,7 @@ Module Type CORRECTNESS
                    /\ clock_of (mask (all_absent (xss 0)) k r xss) bk
                    /\ SemSB.well_structured_memories (SynSB.b_eqs bl) (Fm k))
         as Spec.
-      { intro; destruct (Sem k) as (Sem'); inv Sem'.
+      { intro; specialize (Sem k); inv Sem.
         match goal with
           H: SynSB.find_block _ _ = _ |- _ => rewrite Find in H; inv H end.
         eauto 7.
@@ -1883,22 +1877,22 @@ Module Type CORRECTNESS
     - intro; destruct (Spec (count r n)) as (?&?& Out &?).
       eapply sem_var_instant_bl_vars; eauto.
       intros ? ?; rewrite in_app; auto.
-    - intro; destruct (Sem (count r n)) as (Sem'); inversion_clear Sem' as [???????????? Same].
+    - intro; specialize (Sem (count r n)); inversion_clear Sem as [???????????? Same].
       specialize (Same n); rewrite mask_transparent in Same; auto.
-    - intro; destruct (Sem (count r n)) as (Sem'); inversion_clear Sem' as [????????????? Same].
+    - intro; specialize (Sem (count r n)); inversion_clear Sem as [????????????? Same].
       specialize (Same n); rewrite mask_transparent in Same; auto.
-    - intro; destruct (Sem (count r n)) as (Sem'); inversion_clear Sem' as [?????????????? AbsAbs].
+    - intro; specialize (Sem (count r n)); inversion_clear Sem as [?????????????? AbsAbs].
       specialize (AbsAbs n); rewrite 2 mask_transparent in AbsAbs; auto.
     - assert (forall n, 0 < length (xss n)) as Length.
       { clear - Sem.
-        intro; destruct (Sem 0) as (Sem');
-          inversion_clear Sem' as [?????????? Vars];
+        pose proof Sem as Sem'.
+        intro; specialize (Sem 0); inversion_clear Sem as [?????????? Vars];
           specialize (Vars n); simpl in Vars.
         apply Forall2_length in Vars.
         rewrite mask_length in Vars.
         - rewrite <-Vars, map_length; apply SynSB.b_ingt0.
         - eapply wf_streams_mask.
-          intro k'; destruct (Sem k') as (Sem');
+          intro k'; specialize (Sem' k');
             apply SemSB.sem_block_wf in Sem' as (); eauto.
       }
 
@@ -1942,7 +1936,7 @@ Module Type CORRECTNESS
            assert (exists F, forall k, exists bk xs ls,
                           sem_var (Fh k) i xs
                           /\ sem_laexp bk (Fh k) c l0 ls
-                          /\find_val i (Fm k) = Some (F k)
+                          /\ find_val i (Fm k) = Some (F k)
                           /\ (F k).(SemSB.content) 0 = sem_const c0
                           /\ (forall n,
                                 match ls n with
@@ -1991,7 +1985,8 @@ Module Type CORRECTNESS
              clear Spec.
              interp_sound n.
              specialize (Heq n).
-             destruct (r (S n)) eqn: E; [rewrite SpecMv; auto|];
+             destruct (r (S n)) eqn: E;
+               [rewrite SpecMv; auto|];
                simpl; rewrite E; simpl; auto.
              destruct (x1 n); intuition.
          }
@@ -2011,12 +2006,12 @@ Module Type CORRECTNESS
                apply reset_regs_instant_spec'; auto.
          }
 
-        *{ assert (exists F, forall k,
-                        SemSB.sem_block (translate G) i0
-                                        (F k)
-                                        (mask (all_absent (interp_laexps bk H c l0 0)) k r (interp_laexps bk H c l0))
-                                        (mask (all_absent (interp_vars H i 0)) k r (interp_vars H i))
-                        /\ sub_inst i1 (Fm k) (F k)) as (F & Spec).
+        *{ assert (exists F, (forall k,
+                            SemSB.sem_block (translate G) i0
+                                            (F k)
+                                            (mask (all_absent (interp_laexps bk H c l0 0)) k r (interp_laexps bk H c l0))
+                                            (mask (all_absent (interp_vars H i 0)) k r (interp_vars H i)))
+                        /\ forall k, sub_inst i1 (Fm k) (F k)) as (F & Spec & Sub).
            { assert (forall k, exists M bk ess oss,
                           sem_laexps bk (Fh k) c l0 ess
                           /\ sub_inst i1 (Fm k) M
@@ -2027,21 +2022,17 @@ Module Type CORRECTNESS
                  inversion_clear Heq as [| | |???? M' ?????? Exps ? Block Vars]; eauto 9.
              }
              apply functional_choice in Spec as (F & Spec).
-             exists F; intro; destruct (Spec k) as (?&?&?& Exps & ? & Block & Vars & ?).
-
+             exists F; split; intro; destruct (Spec k) as (?&?&?& Exps & ? & Block & Vars & ?); auto.
              erewrite sem_laexps_interp_mask in Block; eauto.
              pose proof Block as Block'; inversion_clear Block' as [?????????????? Same].
              destruct (Spec' 0) as (?& Heq &?); inv Heq.
              erewrite sem_vars_interp_mask with (1 := Vars) (r := r) in Block; eauto.
-             - split; auto.
-               eapply sem_block_cons; eauto.
+             - eapply sem_block_cons; eauto.
                intro E; apply NotIn; rewrite E; do 2 constructor.
              - intros ** E; apply Same.
                rewrite mask_opaque; auto.
                apply all_absent_spec.
            }
-           edestruct (IHG WD' (interp_laexps bk H c l0) (interp_vars H i) r (fun k M => sub_inst i1 (Fm k) M))
-             as (?& Sub); eauto.
            eapply SemSB.SEqCall with (M' := reset_memories F r (F 0))
                                      (ess := interp_laexps bk H c l0)
                                      (oss := interp_vars H i).
@@ -2098,7 +2089,7 @@ Module Type CORRECTNESS
       (** Classical Choice  *)
       (* now apply choice in Msem'.   *)
     }
-    edestruct (slices_sem_block G f r xss oss Fm (fun _ _ => True)); eauto.
+    apply slices_sem_block in Sem; eauto.
   Qed.
 
   Theorem correctness:

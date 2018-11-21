@@ -48,6 +48,19 @@ Module Type SBSEMANTICS
             reset_regs rs M') ->
         reset_regs rs M.
 
+  (* Definition next (n: nat) (mvs: mvalues) (v0 v: val) : Prop := *)
+  (*   mvs.(content) (S n) = (if mvs.(reset) (S n) then v0 else v). *)
+
+  (* Inductive fby_spec: nat -> val -> value -> mvalues -> value -> Prop := *)
+  (* | fby_spec_present: *)
+  (*     forall n v0 v mvs, *)
+  (*       next n mvs v0 v -> *)
+  (*       fby_spec n v0 (present v) mv (mv.(content) n) *)
+  (* | fby_spec_absent: *)
+  (*     forall n v0 v mvs, *)
+  (*       next n mvs v0 (mvs.(content) n) -> *)
+  (*       fby_spec n v0 absent mvs absent. *)
+
   Inductive mfby: ident -> val -> stream value -> memories -> stream value -> Prop :=
     mfby_intro:
       forall x mvs v0 ls M xs,
