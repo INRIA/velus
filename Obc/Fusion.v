@@ -108,7 +108,7 @@ Module Type FUSION
       end.
     - inv Hstmt.
       apply exp_eval_extend_mem_by_obj.
-      unfold adds.
+      unfold Env.adds.
       remember (combine i rvs) as lr eqn:Heq.
       assert (forall x, In x lr -> In (fst x) i) as Hin
         by (destruct x; subst; apply in_combine_l).

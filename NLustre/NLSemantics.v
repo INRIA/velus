@@ -32,8 +32,8 @@ Module Type NLSEMANTICS
        (Import ExprSyn : NLEXPRSYNTAX        Op)
        (Import Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
        (Import Str     : STREAM              Op OpAux)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str)
-       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn).
+       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str).
 
   (** ** Time-dependent semantics *)
 
@@ -496,8 +496,8 @@ Module NLSemanticsFun
        (ExprSyn : NLEXPRSYNTAX        Op)
        (Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
        (Str     : STREAM              Op OpAux)
-       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str)
        (Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
-<: NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str ExprSem Ord.
-  Include NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str ExprSem Ord.
+       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str)
+<: NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem.
+  Include NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem.
 End NLSemanticsFun.

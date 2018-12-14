@@ -765,8 +765,8 @@ clock to [sem_var_instant] too. *)
     | H1: sem_laexp ?bk ?H ?CK ?C ?X,
           H2: sem_laexp ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
       eapply sem_laexp_det; eexact H1 || eexact H2
-    | H1: sem_var_instant ?C ?X,
-          H2: sem_var_instant ?C ?Y |- ?X = ?Y =>
+    | H1: sem_var_instant ?H ?C ?X,
+          H2: sem_var_instant ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_var_instant_det; eexact H1 || eexact H2
     | H1: sem_var ?H ?C ?X,
           H2: sem_var ?H ?C ?Y |- ?X = ?Y =>
@@ -774,3 +774,14 @@ clock to [sem_var_instant] too. *)
     end.
 
 End NLEXPRSEMANTICS.
+
+Module NLExprSemanticsFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX    Op)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Str     : STREAM           Op OpAux)
+  <: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str.
+  Include NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str.
+End NLExprSemanticsFun.

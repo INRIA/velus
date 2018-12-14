@@ -33,3 +33,7 @@ Module Type NLEXPRSYNTAX (Import Op: OPERATORS).
     end.
 
 End NLEXPRSYNTAX.
+
+Module NLExprSyntaxFun (Op: OPERATORS) <: NLEXPRSYNTAX Op.
+  Include NLEXPRSYNTAX Op.
+End NLExprSyntaxFun.

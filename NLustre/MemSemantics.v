@@ -10,9 +10,11 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.RMemory.
 Require Import Velus.NLustre.Stream.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
+Require Import Velus.NLustre.NLExprSemantics.
 Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.WellFormed.
@@ -54,20 +56,22 @@ Set Implicit Arguments.
  *)
 
 Module Type MEMSEMANTICS
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
-       (Import Syn   : NLSYNTAX    Ids Op       Clks)
-       (Import Str   : STREAM             Op OpAux)
-       (Import Ord   : ORDERED     Ids Op       Clks Syn)
-       (Import Sem   : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
-       (Import Mem   : MEMORIES    Ids Op       Clks Syn)
-       (Import IsD   : ISDEFINED   Ids Op       Clks Syn         Mem)
-       (Import IsV   : ISVARIABLE  Ids Op       Clks Syn         Mem IsD)
-       (Import IsF   : ISFREE      Ids Op       Clks Syn)
-       (Import NoD   : NODUP       Ids Op       Clks Syn         Mem IsD IsV)
-       (Import WeF   : WELLFORMED  Ids Op       Clks Syn     Ord Mem IsD IsV IsF NoD).
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import OpAux   : OPERATORS_AUX   Op)
+       (Import Clks    : CLOCKS          Ids)
+       (Import ExprSyn : NLEXPRSYNTAX        Op)
+       (Import Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Import Str     : STREAM              Op OpAux)
+       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
+       (Import Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
+       (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
+       (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn Syn                 Mem IsD)
+       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
+       (Import NoD     : NODUP           Ids Op       Clks ExprSyn Syn                 Mem IsD IsV)
+       (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn Syn             Ord Mem IsD IsV IsF NoD).
 
   Definition memories := stream (memory val).
 
@@ -77,12 +81,12 @@ Module Type MEMSEMANTICS
   Inductive mfby: ident -> val -> stream value -> memories -> stream value -> Prop :=
     mfby_intro:
       forall x v0 ls M xs,
-        mfind_mem x (M 0) = Some v0 ->
-        (forall n, match mfind_mem x (M n) with
+        find_val x (M 0) = Some v0 ->
+        (forall n, match find_val x (M n) with
               | Some mv =>
                 match ls n with
-                | absent    => mfind_mem x (M (S n)) = Some mv /\ xs n = absent
-                | present v => mfind_mem x (M (S n)) = Some v  /\ xs n = present mv
+                | absent    => find_val x (M (S n)) = Some mv /\ xs n = absent
+                | present v => find_val x (M (S n)) = Some v  /\ xs n = present mv
                 end
               | None => False
               end) ->
@@ -98,7 +102,7 @@ Module Type MEMSEMANTICS
     Inductive msem_equation: stream bool -> history -> memories -> equation -> Prop :=
     | SEqDef:
         forall bk H M x ck xs ce,
-          sem_var bk H x xs ->
+          sem_var H x xs ->
           sem_caexp bk H ck ce xs ->
           msem_equation bk H M (EqDef x ck ce)
     | SEqApp:
@@ -106,7 +110,7 @@ Module Type MEMSEMANTICS
           Some x = hd_error xs ->
           sub_inst_n x M M' ->
           sem_laexps bk H ck arg ls ->
-          sem_vars bk H xs xss ->
+          sem_vars H xs xss ->
           msem_node f ls M' xss ->
           msem_equation bk H M (EqApp xs ck f arg None)
     | SEqReset:
@@ -114,15 +118,15 @@ Module Type MEMSEMANTICS
           Some x = hd_error xs ->
           sub_inst_n x M M' ->
           sem_laexps bk H ck arg ls ->
-          sem_vars bk H xs xss ->
+          sem_vars H xs xss ->
           (* sem_avar bk H ck_r r ys -> *)
-          sem_var bk H r ys ->
+          sem_var H r ys ->
           msem_reset f (reset_of ys) ls M' xss ->
           msem_equation bk H M (EqApp xs ck f arg (Some (r, ck_r)))
     | SEqFby:
         forall bk H M x ck ls xs c0 le,
           sem_laexp bk H ck le ls ->
-          sem_var bk H x xs ->
+          sem_var H x xs ->
           mfby x (sem_const c0) ls M xs ->
           msem_equation bk H M (EqFby x ck c0 le)
 
@@ -144,8 +148,8 @@ Module Type MEMSEMANTICS
              forall bk H f xss M yss n,
                clock_of xss bk ->
                find_node f G = Some n ->
-               sem_vars bk H (map fst n.(n_in)) xss ->
-               sem_vars bk H (map fst n.(n_out)) yss ->
+               sem_vars H (map fst n.(n_in)) xss ->
+               sem_vars H (map fst n.(n_out)) yss ->
                same_clock xss ->
                same_clock yss ->
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
@@ -172,7 +176,7 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqDefCase:
       forall bk H M x ck xs ce,
-        sem_var bk H x xs ->
+        sem_var H x xs ->
         sem_caexp bk H ck ce xs ->
         P_equation bk H M (EqDef x ck ce).
 
@@ -181,7 +185,7 @@ enough: it does not support the internal fixpoint introduced by
         Some x = hd_error xs ->
         sub_inst_n x M M' ->
         sem_laexps bk H ck arg ls ->
-        sem_vars bk H xs xss ->
+        sem_vars H xs xss ->
         msem_node G f ls M' xss ->
         P_node f ls M' xss ->
         P_equation bk H M (EqApp xs ck f arg None).
@@ -191,9 +195,9 @@ enough: it does not support the internal fixpoint introduced by
         Some x = hd_error xs ->
         sub_inst_n x M M' ->
         sem_laexps bk H ck arg ls ->
-        sem_vars bk H xs xss ->
+        sem_vars H xs xss ->
         (* sem_avar bk H ck_r r ys -> *)
-        sem_var bk H r ys ->
+        sem_var H r ys ->
         msem_reset G f (reset_of ys) ls M' xss ->
         P_reset f (reset_of ys) ls M' xss ->
         P_equation bk H M (EqApp xs ck f arg (Some (r, ck_r))).
@@ -201,7 +205,7 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis EqFbyCase:
       forall bk H M x ck ls xs c0 le,
         sem_laexp bk H ck le ls ->
-        sem_var bk H x xs ->
+        sem_var H x xs ->
         mfby x (sem_const c0) ls M xs ->
         P_equation bk H M (EqFby x ck c0 le).
 
@@ -221,8 +225,8 @@ enough: it does not support the internal fixpoint introduced by
       forall bk H f xss M yss n,
         clock_of xss bk ->
         find_node f G = Some n ->
-        sem_vars bk H (map fst n.(n_in)) xss ->
-        sem_vars bk H (map fst n.(n_out)) yss ->
+        sem_vars H (map fst n.(n_in)) xss ->
+        sem_vars H (map fst n.(n_out)) yss ->
         same_clock xss ->
         same_clock yss ->
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
@@ -270,57 +274,57 @@ enough: it does not support the internal fixpoint introduced by
 
   (** *** Equation non-activation *)
 
-  Lemma subrate_property_eqn:
-    forall G H M bk xss eqn n,
-      clock_of xss bk ->
-      msem_equation G bk H M eqn ->
-      0 < length (xss n) ->
-      absent_list (xss n) ->
-      rhs_absent_instant (bk n) (restr H n) eqn.
-  Proof.
-    intros * Hck Hsem Hlen Habs.
-    assert (Hbk: bk n = false).
-    {
-      destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto.
-      exfalso.
-      apply Bool.not_false_is_true in Hbk.
-      eapply Hck in Hbk.
-      eapply not_absent_present_list in Hbk; auto.
-    }
-    induction Hsem as [???????? Hsem |
-                       ????????????? Hsem |
-                       ???????????????? Hsem ? Hvar |
-                       ????????? Hsem];
-      unfold sem_caexp, lift in Hsem; specialize (Hsem n); inv Hsem;
-        try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto).
-    - eauto using rhs_absent_instant, sem_caexp_instant.
-    - econstructor.
-      + apply SLabss; eauto.
-      + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
-    - unfold sem_var, lift in Hvar; specialize (Hvar n); inv Hvar;
-        try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto).
-      econstructor.
-      + apply SLabss; eauto.
-      + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec.
-      (* + eauto using sem_avar_instant. *)
-    - eauto using rhs_absent_instant, sem_laexp_instant.
-  Qed.
+  (* Lemma subrate_property_eqn: *)
+  (*   forall G H M bk xss eqn n, *)
+  (*     clock_of xss bk -> *)
+  (*     msem_equation G bk H M eqn -> *)
+  (*     0 < length (xss n) -> *)
+  (*     absent_list (xss n) -> *)
+  (*     rhs_absent_instant (bk n) (restr H n) eqn. *)
+  (* Proof. *)
+  (*   intros * Hck Hsem Hlen Habs. *)
+  (*   assert (Hbk: bk n = false). *)
+  (*   { *)
+  (*     destruct (Bool.bool_dec (bk n) false) as [Hbk | Hbk]; eauto. *)
+  (*     exfalso. *)
+  (*     apply Bool.not_false_is_true in Hbk. *)
+  (*     eapply Hck in Hbk. *)
+  (*     eapply not_absent_present_list in Hbk; auto. *)
+  (*   } *)
+  (*   induction Hsem as [???????? Hsem | *)
+  (*                      ????????????? Hsem | *)
+  (*                      ???????????????? Hsem ? Hvar | *)
+  (*                      ????????? Hsem]; *)
+  (*     unfold sem_caexp, lift in Hsem; specialize (Hsem n); inv Hsem; *)
+  (*       try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto). *)
+  (*   - eauto using rhs_absent_instant, sem_caexp_instant. *)
+  (*   - econstructor. *)
+  (*     + apply SLabss; eauto. *)
+  (*     + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec. *)
+  (*   - unfold sem_var, lift in Hvar; specialize (Hvar n); inv Hvar; *)
+  (*       try (exfalso; rewrite Hbk in *; now eapply not_subrate_clock; eauto). *)
+  (*     econstructor. *)
+  (*     + apply SLabss; eauto. *)
+  (*     + match goal with H: ls n = _ |- _ => rewrite H end; apply all_absent_spec. *)
+  (*     (* + eauto using sem_avar_instant. *) *)
+  (*   - eauto using rhs_absent_instant, sem_laexp_instant. *)
+  (* Qed. *)
 
-  Lemma subrate_property_eqns:
-    forall G H M bk xss eqns n,
-      clock_of xss bk ->
-      msem_equations G bk H M eqns ->
-      0 < length (xss n) ->
-      absent_list (xss n) ->
-      Forall (rhs_absent_instant (bk n) (restr H n)) eqns.
-  Proof.
-    intros * Hck Hsem Habs.
-    induction eqns as [|eqn eqns]; auto.
-    inversion_clear Hsem.
-    constructor.
-    eapply subrate_property_eqn; eauto.
-    eapply IHeqns; eauto.
-  Qed.
+  (* Lemma subrate_property_eqns: *)
+  (*   forall G H M bk xss eqns n, *)
+  (*     clock_of xss bk -> *)
+  (*     msem_equations G bk H M eqns -> *)
+  (*     0 < length (xss n) -> *)
+  (*     absent_list (xss n) -> *)
+  (*     Forall (rhs_absent_instant (bk n) (restr H n)) eqns. *)
+  (* Proof. *)
+  (*   intros * Hck Hsem Habs. *)
+  (*   induction eqns as [|eqn eqns]; auto. *)
+  (*   inversion_clear Hsem. *)
+  (*   constructor. *)
+  (*   eapply subrate_property_eqn; eauto. *)
+  (*   eapply IHeqns; eauto. *)
+  (* Qed. *)
 
   (** *** Environment cons-ing lemmas *)
 
@@ -530,41 +534,41 @@ enough: it does not support the internal fixpoint introduced by
 
   (** *** Memory management *)
 
-  Definition add_mems (y: ident) (ms: stream val) (M: memories): memories :=
-    fun n => madd_mem y (ms n) (M n).
+  Definition add_vals (y: ident) (ms: stream val) (M: memories): memories :=
+    fun n => add_val y (ms n) (M n).
 
-  Lemma mfby_add_mems:
+  Lemma mfby_add_vals:
     forall x v0 ls M xs y ms,
       x <> y ->
       mfby x v0 ls M xs ->
-      mfby x v0 ls (add_mems y ms M) xs.
+      mfby x v0 ls (add_vals y ms M) xs.
   Proof.
-    unfold add_mems.
+    unfold add_vals.
     intros ** Fby; inversion_clear Fby as [?????? Spec].
     constructor.
-    - rewrite mfind_mem_gso; auto.
-    - intro n; rewrite 2 mfind_mem_gso; auto.
+    - rewrite find_val_gso; auto.
+    - intro n; rewrite 2 find_val_gso; auto.
       exact (Spec n).
   Qed.
 
-  Definition add_objs (y: ident) (M' M: memories): memories :=
-    fun n => madd_obj y (M' n) (M n).
+  Definition add_insts (y: ident) (M' M: memories): memories :=
+    fun n => add_inst y (M' n) (M n).
 
-  Lemma mfby_add_objs:
+  Lemma mfby_add_insts:
     forall x v0 ls M xs y M',
       mfby x v0 ls M xs ->
-      mfby x v0 ls (add_objs y M' M) xs.
+      mfby x v0 ls (add_insts y M' M) xs.
   Proof.
     inversion 1; econstructor; eauto.
   Qed.
 
-  Hint Resolve mfby_add_mems mfby_add_objs.
+  Hint Resolve mfby_add_vals mfby_add_insts.
 
-  Lemma msem_equation_madd_mem:
+  Lemma msem_equation_madd_val:
     forall G bk H M x ms eqs,
       ~Is_defined_in_eqs x eqs ->
       Forall (msem_equation G bk H M) eqs ->
-      Forall (msem_equation G bk H (add_mems x ms M)) eqs.
+      Forall (msem_equation G bk H (add_vals x ms M)) eqs.
   Proof.
     Hint Constructors msem_equation.
     intros ** Hnd Hsem.
@@ -579,11 +583,11 @@ enough: it does not support the internal fixpoint introduced by
     eapply SEqFby; eauto.
   Qed.
 
-  Lemma msem_equation_madd_obj:
+  Lemma msem_equation_madd_inst:
     forall G bk H M M' x eqs,
       ~Is_defined_in_eqs x eqs ->
       Forall (msem_equation G bk H M) eqs ->
-      Forall (msem_equation G bk H (add_objs x M' M)) eqs.
+      Forall (msem_equation G bk H (add_insts x M' M)) eqs.
   Proof.
     Hint Constructors msem_equation.
     intros * Hnd Hsem.
@@ -596,10 +600,10 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [|??? x' ??????? Hsome
                          |??? x' ?????????? Hsome|];
       eauto;
-      assert (sub_inst_n x' (add_objs x M' M) M'0)
+      assert (sub_inst_n x' (add_insts x M' M) M'0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
-            unfold sub_inst_n, sub_inst, add_objs in *; intro;
-            rewrite mfind_inst_gso; auto; intro; subst x; destruct xs;
+            unfold sub_inst_n, sub_inst, add_insts in *; intro;
+            rewrite find_inst_gso; auto; intro; subst x; destruct xs;
             inv Hsome; apply Hnd; now constructor);
       eauto.
   Qed.
@@ -666,7 +670,7 @@ dataflow memory for which the non-standard semantics holds true.
     - exists M.
       repeat (econstructor; eauto).
     - apply IH in Hsem as [M' Hmsem].
-      exists (add_objs (hd Ids.default x) M' M).
+      exists (add_insts (hd Ids.default x) M' M).
 
       assert (exists i, Some i = hd_error x) as [i Hsome].
       {
@@ -681,6 +685,7 @@ dataflow memory for which the non-standard semantics holds true.
             inv Hmsem.
             exists n; split; auto.
             - eapply Forall2_length; eauto.
+              specialize (H9 0); eauto.
             - exact n.(n_outgt0).
           }
 
@@ -703,18 +708,18 @@ dataflow memory for which the non-standard semantics holds true.
 
       constructor.
       + econstructor; eauto.
-        unfold sub_inst, add_objs; intro; now apply mfind_inst_gss.
+        unfold sub_inst, add_insts; intro; now apply find_inst_gss.
       + inversion_clear Hwsch.
         assert (Is_defined_in_eq i (EqApp x ck f arg None)).
         {
           constructor. destruct x; try discriminate.
           injection Hsome. intro; subst i. constructor (auto).
         }
-        now apply msem_equation_madd_obj; auto.
+        now apply msem_equation_madd_inst; auto.
 
     - pose proof Hsem as Hsem'.
       apply IH' in Hsem as [M' Hmsem].
-      exists (add_objs (hd Ids.default x) M' M).
+      exists (add_insts (hd Ids.default x) M' M).
 
       assert (exists i, Some i = hd_error x) as [i Hsome].
       {
@@ -730,7 +735,7 @@ dataflow memory for which the non-standard semantics holds true.
             destruct (Hmsem' 0) as (? & Hmsem'' & ?);
               inversion_clear Hmsem'' as [?????????? Hout].
             exists n; split; auto.
-            - unfold sem_vars, Sem.lift in Hout; specialize (Hout 0).
+            - unfold sem_vars, lift in Hout; specialize (Hout 0).
               apply Forall2_length in Hout; rewrite Hout.
               rewrite mask_length; auto.
               inversion_clear Hsem' as [???? Hsem].
@@ -760,26 +765,26 @@ dataflow memory for which the non-standard semantics holds true.
 
       constructor.
       + econstructor; eauto.
-        unfold sub_inst, add_objs; intro. now apply mfind_inst_gss.
+        unfold sub_inst, add_insts; intro. now apply find_inst_gss.
       + inversion_clear Hwsch.
         assert (Is_defined_in_eq i (EqApp x ck f arg (Some (y, ck_r)))).
         {
           constructor. destruct x; try discriminate.
           injection Hsome. intro; subst i. constructor (auto).
         }
-        apply msem_equation_madd_obj; auto.
+        apply msem_equation_madd_inst; auto.
 
-    - exists (add_mems x (hold (sem_const c0) ls) M).
+    - exists (add_vals x (hold (sem_const c0) ls) M).
       constructor.
-      + unfold add_mems.
+      + unfold add_vals.
         do 2 (econstructor; eauto).
-        * now apply mfind_mem_gss.
+        * now apply find_val_gss.
         (* * reflexivity. *)
         * rewrite H1; unfold fby; simpl.
           intro n; destruct (ls n); auto;
-            repeat rewrite mfind_mem_gss; auto.
+            repeat rewrite find_val_gss; auto.
       + inversion_clear Hwsch.
-        apply msem_equation_madd_mem; eauto.
+        apply msem_equation_madd_val; eauto.
   Qed.
 
   (* Fixpoint interp_equation (G: global) (bk: cstream) (H: history) (eq: equation) (M: memories) {struct eq}: memories := *)
@@ -794,7 +799,7 @@ dataflow memory for which the non-standard semantics holds true.
   (*         match mfind_inst x (M n) with *)
   (*         | Some M' => *)
   (*           let M' := interp_node G f M' in *)
-  (*           madd_obj x M' (M n) *)
+  (*           madd_inst x M' (M n) *)
   (*         | None => *)
   (*           empty_memory _ *)
   (*         end *)
@@ -810,7 +815,7 @@ dataflow memory for which the non-standard semantics holds true.
   (*         match mfind_inst x (M n) with *)
   (*         | Some M' => *)
   (*           let M' := interp_reset G f (reset_of rs n) M' in *)
-  (*           madd_obj x M' (M n) *)
+  (*           madd_inst x M' (M n) *)
   (*         | None => *)
   (*           empty_memory _ *)
   (*         end *)
@@ -820,7 +825,7 @@ dataflow memory for which the non-standard semantics holds true.
 
   (*   | EqFby x ck c0 le => *)
   (*     let ls := interp_annotated bk H interp_lexp_instant ck le in *)
-  (*     add_mems x (hold (sem_const c0) ls) M *)
+  (*     add_vals x (hold (sem_const c0) ls) M *)
   (*   end *)
 
   (* with interp_node (G: global) (f: ident) (M: memory val): memory val := *)
@@ -967,20 +972,22 @@ dataflow memory for which the non-standard semantics holds true.
 End MEMSEMANTICS.
 
 Module MemSemanticsFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX   Op)
-       (Clks  : CLOCKS      Ids)
-       (Syn   : NLSYNTAX    Ids Op       Clks)
-       (Str   : STREAM             Op OpAux)
-       (Ord   : ORDERED     Ids Op       Clks Syn)
-       (Sem   : NLSEMANTICS Ids Op OpAux Clks Syn Str Ord)
-       (Mem   : MEMORIES    Ids Op       Clks Syn)
-       (IsD   : ISDEFINED   Ids Op       Clks Syn         Mem)
-       (IsV   : ISVARIABLE  Ids Op       Clks Syn         Mem IsD)
-       (IsF   : ISFREE      Ids Op       Clks Syn)
-       (NoD   : NODUP       Ids Op       Clks Syn         Mem IsD IsV)
-       (WeF   : WELLFORMED  Ids Op       Clks Syn     Ord Mem IsD IsV IsF NoD)
-       <: MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsV IsF NoD WeF.
-  Include MEMSEMANTICS Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsV IsF NoD WeF.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX   Op)
+       (Clks    : CLOCKS          Ids)
+       (ExprSyn : NLEXPRSYNTAX        Op)
+       (Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Str     : STREAM              Op OpAux)
+       (Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
+       (Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
+       (IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
+       (IsV     : ISVARIABLE      Ids Op       Clks ExprSyn Syn                 Mem IsD)
+       (IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
+       (NoD     : NODUP           Ids Op       Clks ExprSyn Syn                 Mem IsD IsV)
+       (WeF     : WELLFORMED      Ids Op       Clks ExprSyn Syn             Ord Mem IsD IsV IsF NoD)
+       <: MEMSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD WeF.
+  Include MEMSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD WeF.
 End MemSemanticsFun.

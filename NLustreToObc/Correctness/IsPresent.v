@@ -10,7 +10,7 @@ Require Import Velus.NLustreToObc.Translation.
 
 (** * Tying clock semantics and imperative semantics *)
 
-(** 
+(**
 
 The translation of equations is always guarded by a [Control ck]. When
 [ck] is false, the equation is not executed. It is therefore crucial
@@ -24,11 +24,12 @@ Module Type ISPRESENT
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import Clks  : CLOCKS Ids)
-       (Import SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (Import ExprSyn : Velus.NLustre.NLExprSyntax.NLEXPRSYNTAX         Op)
+       (Import SynNL   : NLSYNTAX         Ids Op       Clks ExprSyn)
        (Import SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (Import SemMP : Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynMP)
-       (Import Mem   : MEMORIES Ids Op Clks SynDF)
-       (Import Trans : TRANSLATION Ids Op OpAux Clks SynDF SynMP Mem).
+       (Import Mem   : MEMORIES Ids Op Clks ExprSyn SynNL)
+       (Import Trans : TRANSLATION Ids Op OpAux Clks ExprSyn SynNL SynMP Mem).
 
   Inductive Is_present_in (mems: PS.t) heap stack
   : clock -> Prop :=
@@ -61,16 +62,16 @@ Module Type ISPRESENT
       + {~exp_eval menv env (tovar mems c) true_val
          /\ ~exp_eval menv env (tovar mems c) false_val}.
   Proof.
-    Ltac no_match := right; split; inversion 1; subst; unfold mfind_mem in *;
+    Ltac no_match := right; split; inversion 1; subst; unfold find_val in *;
                      match goal with
-                     | H: PM.find _ _ = _,
-                       H': PM.find _ _ = _ |- _ => rewrite H in H';
+                     | H: ?f ?x ?e = _,
+                       H': ?f ?x ?e = _ |- _ => rewrite H in H';
                                                    inversion H'
                      end.
     intros menv env mems c.
     unfold tovar; destruct c as [c ty].
     destruct (PS.mem c mems).
-    - case_eq (mfind_mem c menv); [|now no_match].
+    - case_eq (find_val c menv); [|now no_match].
       intro v.
       destruct (val_dec v true_val) as [Ht|Ht].
       + rewrite Ht. left; left; now constructor.
@@ -79,7 +80,7 @@ Module Type ISPRESENT
         rewrite Hf in *.
         left; right; now constructor.
         now no_match; [apply Ht|apply Hf].
-    - case_eq (PM.find c env); [|now no_match].
+    - case_eq (Env.find c env); [|now no_match].
       intro v.
       destruct (val_dec v true_val) as [Ht|Ht].
       + rewrite Ht; left; left; now constructor.
@@ -87,7 +88,7 @@ Module Type ISPRESENT
         rewrite Hf; left; right; now constructor.
         now no_match; [apply Ht|apply Hf].
   Qed.
-  
+
   Lemma Is_present_in_dec:
     forall mems menv env ck,
       {Is_present_in mems menv env ck}+{~Is_present_in mems menv env ck}.
@@ -143,11 +144,12 @@ Module IsPresentFun
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (Clks  : CLOCKS Ids)
-       (SynDF : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
+       (ExprSyn : Velus.NLustre.NLExprSyntax.NLEXPRSYNTAX         Op)
+       (SynNL   : NLSYNTAX         Ids Op       Clks ExprSyn)
        (SynMP : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
        (SemMP : Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynMP)
-       (Mem   : MEMORIES Ids Op Clks SynDF)
-       (Trans : TRANSLATION Ids Op OpAux Clks SynDF SynMP Mem)
-       <: ISPRESENT Ids Op OpAux Clks SynDF SynMP SemMP Mem Trans.
-    Include ISPRESENT Ids Op OpAux Clks SynDF SynMP SemMP Mem Trans.
+       (Mem   : MEMORIES Ids Op Clks ExprSyn SynNL)
+       (Trans : TRANSLATION Ids Op OpAux Clks ExprSyn SynNL SynMP Mem)
+       <: ISPRESENT Ids Op OpAux Clks ExprSyn SynNL SynMP SemMP Mem Trans.
+    Include ISPRESENT Ids Op OpAux Clks ExprSyn SynNL SynMP SemMP Mem Trans.
 End IsPresentFun.

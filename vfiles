@@ -7,13 +7,16 @@ Lustre/Parser/LustreAst.v
 Lustre/Parser/LustreParser.v
 NLustre/Stream.v
 NLustre/NLSyntax.v
+NLustre/NLExprSyntax.v
 NLustre/NLTyping.v
 NLustre/IsFree.v
 NLustre/IsVariable.v
 NLustre/IsDefined.v
 NLustre/Memories.v
 NLustre/NLClocking.v
+NLustre/NLExprSemantics.v
 NLustre/NLSemantics.v
+NLustre/NLInterpretor.v
 NLustre/NLSemanticsCoInd.v
 NLustre/CoIndToIndexed.v
 NLustre/IndexedToCoInd.v

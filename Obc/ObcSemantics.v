@@ -24,10 +24,10 @@ Module Type OBCSEMANTICS
 
   (* TODO: rename types to env/menv and the instances to ve/me *)
   Definition heap : Type := memory val.
-  Definition stack : Type := PM.t val.
+  Definition stack : Type := env val.
 
   (* TODO: rename to vempty/mempty *)
-  Definition sempty: stack := PM.empty val.
+  Definition sempty: stack := Env.empty val.
   Definition hempty: heap := empty_memory _.
 
   Hint Unfold sempty.
@@ -35,11 +35,11 @@ Module Type OBCSEMANTICS
   Inductive exp_eval heap stack: exp -> val -> Prop :=
   | evar:
       forall x v ty,
-        PM.find x stack = Some v ->
+        Env.find x stack = Some v ->
         exp_eval heap stack (Var x ty) v
   | estate:
       forall x v ty,
-        mfind_mem x heap = Some v ->
+        find_val x heap = Some v ->
         exp_eval heap stack (State x ty) v
   | econst:
       forall c v,
@@ -62,19 +62,19 @@ Module Type OBCSEMANTICS
     program -> heap -> stack -> stmt -> heap * stack -> Prop :=
   | Iassign: forall prog menv env x e v env',
       exp_eval menv env e v ->
-      PM.add x v env = env' ->
+      Env.add x v env = env' ->
       stmt_eval prog menv env (Assign x e) (menv, env')
   | Iassignst:
     forall prog menv env x e v menv',
       exp_eval menv env e v ->
-      madd_mem x v menv = menv' ->
+      add_val x v menv = menv' ->
       stmt_eval prog menv env (AssignSt x e) (menv', env)
   | Icall: forall prog menv env es vs clsid o f ys menv' env' omenv omenv' rvs,
-      omenv = match mfind_inst o menv with None => hempty | Some om => om end ->
+      omenv = match find_inst o menv with None => hempty | Some om => om end ->
       Forall2 (exp_eval menv env) es vs ->
       stmt_call_eval prog omenv clsid f vs omenv' rvs ->
-      madd_obj o omenv' menv = menv' ->
-      adds ys rvs env = env' ->
+      add_inst o omenv' menv = menv' ->
+      Env.adds ys rvs env = env' ->
       stmt_eval prog menv env (Call ys clsid o f es) (menv', env')
   | Icomp:
       forall prog menv env a1 a2 env1 menv1 env2 menv2,
@@ -97,9 +97,9 @@ Module Type OBCSEMANTICS
       forall prog menv clsid f fm vs prog' menv' env' cls rvs,
         find_class clsid prog = Some(cls, prog') ->
         find_method f cls.(c_methods) = Some fm ->
-        stmt_eval prog' menv (adds (map fst fm.(m_in)) vs sempty)
+        stmt_eval prog' menv (Env.adds (map fst fm.(m_in)) vs sempty)
                   fm.(m_body) (menv', env') ->
-        Forall2 (fun x v => PM.find x env' = Some v) (map fst fm.(m_out)) rvs ->
+        Forall2 (fun x v => Env.find x env' = Some v) (map fst fm.(m_out)) rvs ->
         stmt_call_eval prog menv clsid f vs menv' rvs.
 
   Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
@@ -177,11 +177,11 @@ Module Type OBCSEMANTICS
 
   (** If we add irrelevent values to [env], evaluation does not change. *)
   Lemma exp_eval_extend_env : forall mem env x v' e v,
-      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval mem (PM.add x v' env) e v.
+      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval mem (Env.add x v' env) e v.
   Proof.
     intros mem env x v' e.
     induction e (* using exp_ind2 *); intros v1 Hfree Heval.
-    - inv Heval. constructor. not_free. now rewrite PM.gso.
+    - inv Heval. constructor. not_free. now rewrite Env.gso.
     - inv Heval. now constructor.
     - inv Heval. now constructor.
     - inv Heval. constructor 4 with c; trivial.
@@ -194,12 +194,12 @@ Module Type OBCSEMANTICS
 
   (** If we add irrelevent values to [mem], evaluation does not change. *)
   Lemma exp_eval_extend_mem : forall mem env x v' e v,
-      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval (madd_mem x v' mem) env e v.
+      ~Is_free_in_exp x e -> exp_eval mem env e v -> exp_eval (add_val x v' mem) env e v.
   Proof.
     intros mem env x v' e.
     induction e (* using exp_ind2 *); intros v1 Hfree Heval.
     - inversion_clear Heval. now constructor.
-    - inversion_clear Heval. constructor. not_free. now rewrite mfind_mem_gso.
+    - inversion_clear Heval. constructor. not_free. now rewrite find_val_gso.
     - inversion_clear Heval. now constructor.
     - inversion_clear Heval. constructor 4 with c; trivial.
       not_free.
@@ -211,12 +211,12 @@ Module Type OBCSEMANTICS
 
   (** If we add objects to [mem], evaluation does not change. *)
   Lemma exp_eval_extend_mem_by_obj : forall mem env f obj e v,
-      exp_eval mem env e v -> exp_eval (madd_obj f obj mem) env e v.
+      exp_eval mem env e v -> exp_eval (add_inst f obj mem) env e v.
   Proof.
     intros mem env f v' e.
     induction e (* using exp_ind2 *); intros v1 Heval.
     - inversion_clear Heval. now constructor.
-    - inversion_clear Heval. constructor. now rewrite mfind_mem_add_inst.
+    - inversion_clear Heval. constructor. now rewrite find_val_add_inst.
     - inversion_clear Heval. now constructor.
     - inversion_clear Heval. constructor 4 with c; trivial.
       now apply IHe.
@@ -225,11 +225,10 @@ Module Type OBCSEMANTICS
       + now apply IHe2.
   Qed.
 
-  Lemma mfind_inst_empty:
-    forall o, mfind_inst o hempty = None.
+  Lemma find_inst_empty:
+    forall o, find_inst o hempty = None.
   Proof.
-    intro o. unfold mfind_inst.
-    apply PM.gempty.
+    intro o. unfold find_inst. auto.
   Qed.
 
 End OBCSEMANTICS.

@@ -46,8 +46,8 @@ Module Type MEMORYCORRES
                Memory_Corres_eq G M menv (EqApp xs ck f le r)
        | MemC_EqFby:
            forall M menv x ck v0 le,
-           (forall v, mfind_mem x M = Some v ->
-                 mfind_mem x menv = Some v) ->
+           (forall v, find_val x M = Some v ->
+                 find_val x menv = Some v) ->
            Memory_Corres_eq G M menv (EqFby x ck v0 le).
 
   (** ** Induction principle for [Memory_Corres] and [Memory_Corres_eq] *)
@@ -79,8 +79,8 @@ Module Type MEMORYCORRES
 
     Hypothesis MemC_EqFbyCase:
       forall M menv x ck v0 le,
-        (forall v, mfind_mem x M = Some v ->
-              mfind_mem x menv = Some v) ->
+        (forall v, find_val x M = Some v ->
+              find_val x menv = Some v) ->
         P_eq M menv (EqFby x ck v0 le).
 
     Fixpoint Memory_Corres_mult
@@ -216,8 +216,8 @@ Module Type MEMORYCORRES
       Is_defined_in_eqs x eqs ->
       ~Is_variable_in_eqs x eqs ->
       Forall (Memory_Corres_eq G M menv) eqs ->
-      (forall v, mfind_mem x M = Some v ->
-            mfind_mem x menv = Some v).
+      (forall v, find_val x M = Some v ->
+            find_val x menv = Some v).
   Proof.
     induction eqs as [|eq eqs IH]; [now inversion 1|].
     intros Hidi Hnvi Hmc ms.
@@ -235,9 +235,9 @@ Module Type MEMORYCORRES
 
   Lemma Memory_Corres_eqs_add_mem:
     forall G M menv y v eqs,
-      mfind_mem y M = Some v ->
+      find_val y M = Some v ->
       Forall (Memory_Corres_eq G M menv) eqs ->
-      Forall (Memory_Corres_eq G M (madd_mem y v menv)) eqs.
+      Forall (Memory_Corres_eq G M (add_val y v menv)) eqs.
   Proof.
     induction eqs as [|eq eqs IH]; [now auto|].
     intros Hmfind Hmc.
@@ -261,8 +261,8 @@ Module Type MEMORYCORRES
       + subst i.
         rewrite Hmfind in Hmfind'.
         injection Hmfind'; intro; subst v.
-        now rewrite mfind_mem_gss.
-      + erewrite mfind_mem_gso; auto.
+        now rewrite find_val_gss.
+      + erewrite find_val_gso; auto.
         inversion_clear Hmc0 as [| |? ? ? ? ? ? Hmc].
         now eapply Hmc.
   Qed.
@@ -291,7 +291,7 @@ Module Type MEMORYCORRES
     forall G M menv eqs y omenv,
       Forall (Memory_Corres_eq G M menv) eqs ->
       ~Is_defined_in_eqs y eqs ->
-      Forall (Memory_Corres_eq G M (madd_obj y omenv menv)) eqs.
+      Forall (Memory_Corres_eq G M (add_inst y omenv menv)) eqs.
   Proof.
     induction eqs as [|eq eqs IH]; [now constructor|].
     intros y omenv Hmce Hniii.
@@ -324,10 +324,10 @@ Module Type MEMORYCORRES
         exists omenv'.
         split; eauto.
         unfold sub_inst.
-        now rewrite mfind_inst_gso.
+        now rewrite find_inst_gso.
     - constructor.
       intros ms Hmfind.
-      rewrite mfind_mem_add_inst.
+      rewrite find_val_add_inst.
       now (inv Hmc0; eauto).
   Qed.
 
@@ -360,7 +360,7 @@ Module Type MEMORYCORRES
                            Memory_Corres G f (M (S n)) menv).
 
     - (* Case: EqDef *)
-      inversion_clear 2; constructor; assumption.
+      (* inversion_clear 2; *) constructor; assumption.
 
     (* Case: EqApp *)
     - intros ** Hrhsa Hmceq.
@@ -411,7 +411,7 @@ Module Type MEMORYCORRES
       intros ms0 Hmfind0.
       inversion_clear Hfby as [????? Hms0 Hy].
       specialize (Hy n).
-      destruct (mfind_mem x (M n)) eqn: Hmfind; try contradiction.
+      destruct (find_val x (M n)) eqn: Hmfind; try contradiction.
       inversion_clear Hmceq as [| |? ? ? ? ? ? Hmenv].
       apply Hmenv.
       rewrite <-Hmfind0.

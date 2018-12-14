@@ -40,16 +40,16 @@ Module Type CORRECTNESS
        (Import Str     : STREAM              Op OpAux)
        (Import Ord     : ORDERED         Ids Op       Clks ExprSyn SynNL)
        (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn             Str)
-       (Import SemNL   : NLSEMANTICS     Ids Op OpAux Clks ExprSyn SynNL       Str ExprSem Ord)
-       (SemSB          : SBSEMANTICS     Ids Op OpAux Clks ExprSyn       SynSB Str ExprSem)
+       (Import SemNL   : NLSEMANTICS     Ids Op OpAux Clks ExprSyn SynNL       Str Ord                     ExprSem)
+       (SemSB          : SBSEMANTICS     Ids Op OpAux Clks ExprSyn       SynSB Str                         ExprSem)
        (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn SynNL)
-       (Import Trans   : TRANSLATION     Ids Op       Clks ExprSyn SynNL SynSB                 Mem)
-       (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn             Str ExprSem)
-       (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn SynNL                       Mem)
-       (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn SynNL                       Mem IsD)
+       (Import Trans   : TRANSLATION     Ids Op       Clks ExprSyn SynNL SynSB         Mem)
+       (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn             Str                         ExprSem)
+       (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn SynNL               Mem)
+       (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn SynNL               Mem IsD)
        (Import IsF     : ISFREE          Ids Op       Clks ExprSyn SynNL)
-       (Import NoD     : NODUP           Ids Op       Clks ExprSyn SynNL                       Mem IsD IsV)
-       (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL                   Ord Mem IsD IsV IsF NoD).
+       (Import NoD     : NODUP           Ids Op       Clks ExprSyn SynNL               Mem IsD IsV)
+       (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL           Ord Mem IsD IsV IsF NoD).
 
 
   Inductive inst_in_eq: ident -> SynSB.equation -> Prop :=

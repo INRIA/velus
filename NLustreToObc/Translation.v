@@ -4,6 +4,7 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.Obc.ObcSyntax.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 
@@ -38,13 +39,14 @@ application is assigned to a single variable. We use the name of that
 variable to identify the instance.  *)
 
 Module Type TRANSLATION
-       (Import Ids    : IDS)
-       (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX Op)
-       (Import Clks   : CLOCKS Ids)
-       (Import SynNL  : NLSYNTAX Ids Op Clks)
-       (Import SynObc : OBCSYNTAX Ids Op OpAux)
-       (Import Mem    : MEMORIES Ids Op Clks SynNL).
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import OpAux   : OPERATORS_AUX Op)
+       (Import Clks    : CLOCKS Ids)
+       (Import ExprSyn : NLEXPRSYNTAX         Op)
+       (Import SynNL   : NLSYNTAX         Ids Op       Clks ExprSyn)
+       (Import SynObc  : OBCSYNTAX Ids Op OpAux)
+       (Import Mem     : MEMORIES Ids Op Clks ExprSyn SynNL).
 
   Definition gather_eq (acc: idents * list (ident * ident)) (eq: equation):
     idents * list (ident * ident) :=
@@ -934,13 +936,14 @@ Module Type TRANSLATION
 End TRANSLATION.
 
 Module TranslationFun
-       (Ids    : IDS)
-       (Op     : OPERATORS)
-       (OpAux  : OPERATORS_AUX Op)
-       (Clks   : CLOCKS Ids)
-       (SynNL  : Velus.NLustre.NLSyntax.NLSYNTAX Ids Op Clks)
-       (SynObc : Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
-       (Mem    : MEMORIES Ids Op Clks SynNL)
-       <: TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
-  Include TRANSLATION Ids Op OpAux Clks SynNL SynObc Mem.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX Op)
+       (Clks    : CLOCKS Ids)
+       (ExprSyn : NLEXPRSYNTAX         Op)
+       (SynNL   : NLSYNTAX         Ids Op       Clks ExprSyn)
+       (SynObc  : OBCSYNTAX Ids Op OpAux)
+       (Mem     : MEMORIES Ids Op Clks ExprSyn SynNL)
+       <: TRANSLATION Ids Op OpAux Clks ExprSyn SynNL SynObc Mem.
+  Include TRANSLATION Ids Op OpAux Clks ExprSyn SynNL SynObc Mem.
 End TranslationFun.

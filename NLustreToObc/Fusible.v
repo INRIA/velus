@@ -20,7 +20,7 @@ Module Type FUSIBLE
        (Import NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux Clks)
        (Import Obc   : Velus.Obc.OBC Ids Op OpAux)
        (Import Trans : Velus.NLustreToObc.Translation.TRANSLATION
-                         Ids Op OpAux Clks NLus.Syn Obc.Syn NLus.Mem).
+                         Ids Op OpAux Clks NLus.ExprSyn NLus.Syn Obc.Syn NLus.Mem).
 
   (** ** Show that the Obc code that results from translating an NLustre
          program satisfies the [Fusible] invariant, and thus that fusion
@@ -272,4 +272,3 @@ Module FusibleFun
        <: FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
   Include FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
 End FusibleFun.
-

@@ -8,9 +8,11 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Stream.
+Require Import Velus.NLustre.NLExprSemantics.
 Require Import Velus.NLustre.NLSemantics.
 
 Require Import Velus.NLustre.IsFree.
@@ -38,30 +40,33 @@ Require Import Velus.NLustre.NLClocking.
  *)
 
 Module Type EXT_NLSCHEDULER
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS   Ids)
-       (Import Syn   : NLSYNTAX Ids Op Clks).
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import Clks    : CLOCKS   Ids)
+       (Import ExprSyn : NLEXPRSYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn).
 
   Parameter schedule : ident -> list equation -> list positive.
 
 End EXT_NLSCHEDULER.
 
 Module Type NLSCHEDULE
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX       Op)
-       (Import Clks  : CLOCKS          Ids)
-       (Import Syn   : NLSYNTAX        Ids Op       Clks)
-       (Import Str   : STREAM              Op OpAux)
-       (Import Ord   : ORDERED         Ids Op       Clks Syn)
-       (Import Sem   : NLSEMANTICS     Ids Op OpAux Clks Syn Str Ord)
-       (Import Mem   : MEMORIES        Ids Op       Clks Syn)
-       (Import IsD   : ISDEFINED       Ids Op       Clks Syn         Mem)
-       (Import IsF   : ISFREE          Ids Op       Clks Syn)
-       (Import Typ   : NLTYPING        Ids Op       Clks Syn)
-       (Import Clo   : NLCLOCKING      Ids Op       Clks Syn         Mem IsD IsF)
-       (Import Sch   : EXT_NLSCHEDULER Ids Op       Clks Syn).
+       (Import Ids     : IDS)
+       (Import Op      : OPERATORS)
+       (Import OpAux   : OPERATORS_AUX       Op)
+       (Import Clks    : CLOCKS          Ids)
+       (Import ExprSyn : NLEXPRSYNTAX         Op)
+       (Import Syn     : NLSYNTAX         Ids Op      Clks ExprSyn)
+       (Import Str     : STREAM              Op OpAux)
+       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
+       (Import Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
+       (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
+       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
+       (Import Typ     : NLTYPING        Ids Op       Clks ExprSyn Syn)
+       (Import Clo     : NLCLOCKING      Ids Op       Clks ExprSyn Syn                 Mem IsD IsF)
+       (Import Sch     : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -321,20 +326,22 @@ Module Type NLSCHEDULE
 End NLSCHEDULE.
 
 Module NLScheduleFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX       Op)
-       (Clks  : CLOCKS          Ids)
-       (Syn   : NLSYNTAX        Ids Op       Clks)
-       (Str   : STREAM              Op OpAux)
-       (Ord   : ORDERED         Ids Op       Clks Syn)
-       (Sem   : NLSEMANTICS     Ids Op OpAux Clks Syn Str Ord)
-       (Mem   : MEMORIES        Ids Op       Clks Syn)
-       (IsD   : ISDEFINED       Ids Op       Clks Syn         Mem)
-       (IsF   : ISFREE          Ids Op       Clks Syn)
-       (Typ   : NLTYPING        Ids Op       Clks Syn)
-       (Clo   : NLCLOCKING      Ids Op       Clks Syn         Mem IsD IsF)
-       (Sch   : EXT_NLSCHEDULER Ids Op       Clks Syn)
-       <: NLSCHEDULE Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsF Typ Clo Sch.
-  Include NLSCHEDULE Ids Op OpAux Clks Syn Str Ord Sem Mem IsD IsF Typ Clo Sch.
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX       Op)
+       (Clks    : CLOCKS          Ids)
+       (ExprSyn : NLEXPRSYNTAX         Op)
+       (Syn     : NLSYNTAX         Ids Op      Clks ExprSyn)
+       (Str     : STREAM              Op OpAux)
+       (Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
+       (Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
+       (IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
+       (IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
+       (Typ     : NLTYPING        Ids Op       Clks ExprSyn Syn)
+       (Clo     : NLCLOCKING      Ids Op       Clks ExprSyn Syn                 Mem IsD IsF)
+       (Sch     : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn)
+       <: NLSCHEDULE Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF Typ Clo Sch.
+  Include NLSCHEDULE Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF Typ Clo Sch.
 End NLScheduleFun.
