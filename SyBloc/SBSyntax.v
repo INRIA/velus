@@ -1,36 +1,68 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
-
-(* Require Import PArith. *)
-(* Require Import Coq.Sorting.Permutation. *)
 
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-
 Module Type SBSYNTAX
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op).
+       (Import Clks    : CLOCKS Ids).
+
+  (** ** Expressions *)
+
+  Inductive lexp : Type :=
+  | Econst : const -> lexp
+  | Evar   : ident -> type -> lexp
+  | Ewhen  : lexp -> ident -> bool -> lexp
+  | Eunop  : unop -> lexp -> type -> lexp
+  | Ebinop : binop -> lexp -> lexp -> type -> lexp
+  | Elast  : ident -> type -> lexp.
+
+  Definition lexps := list lexp.
+
+  (** ** Control expressions *)
+
+  Inductive cexp : Type :=
+  | Emerge : ident -> cexp -> cexp -> cexp
+  | Eite   : lexp -> cexp -> cexp -> cexp
+  | Eexp   : lexp -> cexp.
+
+  (** ** State expressions *)
+
+  (* Inductive sexp : Type := *)
+  (* | ESlast  : ident -> sexp *)
+  (* | ESite   : lexp -> sexp -> sexp -> sexp *)
+  (* | ESreset : ident -> sexp. *)
+
+  Fixpoint typeof (le: lexp): type :=
+    match le with
+    | Econst c => type_const c
+    | Evar _ ty
+    | Eunop _ _ ty
+    | Ebinop _ _ _ ty
+    | Elast _ ty => ty
+    | Ewhen e _ _ => typeof e
+    end.
 
   (** ** Equations *)
 
   Inductive equation :=
-  | EqDef : ident -> clock -> cexp -> equation
-  | EqFby : ident -> clock -> const -> lexp -> equation
-  | EqReset : clock -> ident -> ident -> ident -> equation (* reinit block instance on r *)
-  | EqCall: idents -> clock -> ident -> ident -> list lexp -> equation.
-  (* y1, ..., yn = block instance (e1, ..., em) *)
+  | EqDef   : ident -> clock -> cexp -> equation
+  | EqNext  : ident -> clock -> lexp -> equation
+  | EqReset : ident -> clock -> ident -> ident -> lexp -> equation
+  (* <s> =ck reset block<s> on e *)
+  | EqCall  : ident -> idents -> clock -> ident -> ident -> list lexp -> equation.
+  (* <s> y1, ..., yn =ck block<s>(e1, ..., em) *)
 
   Record block :=
     Block {
         b_name  : ident;
         b_in    : list (ident * type);
         b_vars  : list (ident * type);
+        b_lasts : list (ident * const);
         b_blocks: list (ident * ident);
         b_out   : list (ident * type);
         b_eqs   : list equation;
@@ -38,6 +70,17 @@ Module Type SBSYNTAX
         b_ingt0 : 0 < length b_in;
         b_outgt0 : 0 < length b_out
       }.
+
+  Fixpoint find_const (x: ident) (xs: list (ident * const)) : option const :=
+    match xs with
+    | [] => None
+    | y :: xs =>
+      let (y, c) := y in
+      if ident_eqb y x then Some c else find_const x xs
+    end.
+
+  Definition find_init (x: ident) (bl: block) :=
+    find_const x bl.(b_lasts).
 
   Definition bl_vars (bl: block): list (ident * type) :=
     bl.(b_in) ++ bl.(b_out) ++ bl.(b_vars).
@@ -144,7 +187,6 @@ Module SBSyntaxFun
        (Ids  : IDS)
        (Op   : OPERATORS)
        (Clks : CLOCKS Ids)
-       (ExprSyn : NLEXPRSYNTAX Op)
-       <: SBSYNTAX Ids Op Clks ExprSyn.
-  Include SBSYNTAX Ids Op Clks ExprSyn.
+       <: SBSYNTAX Ids Op Clks.
+  Include SBSYNTAX Ids Op Clks.
 End SBSyntaxFun.

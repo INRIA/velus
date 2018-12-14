@@ -24,7 +24,7 @@ Module Type TRANSLATION
        (Import Clks    : CLOCKS   Ids)
        (Import ExprSyn : NLEXPRSYNTAX Op)
        (Import SynNL   : NLSYNTAX Ids Op Clks ExprSyn)
-       (SynSB          : SBSYNTAX Ids Op Clks ExprSyn)
+       (SynSB          : SBSYNTAX Ids Op Clks)
        (Import Mem     : MEMORIES Ids Op Clks ExprSyn SynNL).
 
   Definition gather_eq (acc: list (ident * const) * list (ident * ident)) (eq: equation):
@@ -74,19 +74,57 @@ Module Type TRANSLATION
 
   Section Translate.
 
+    Variable memories : PS.t.
+
+    Definition tovar (x: ident) (ty: type): SynSB.lexp :=
+      if PS.mem x memories then SynSB.Elast x ty else SynSB.Evar x ty.
+
+    Fixpoint translate_lexp (e: lexp) : SynSB.lexp :=
+      match e with
+      | Econst c          => SynSB.Econst c
+      | Evar x ty         => tovar x ty
+      | Ewhen e x k       => SynSB.Ewhen (translate_lexp e) x k
+      | Eunop o e ty      => SynSB.Eunop o (translate_lexp e) ty
+      | Ebinop o e1 e2 ty => SynSB.Ebinop o (translate_lexp e1) (translate_lexp e2) ty
+      end.
+
+    Fixpoint translate_cexp (e: cexp) : SynSB.cexp :=
+      match e with
+      | Emerge x e1 e2 => SynSB.Emerge x (translate_cexp e1) (translate_cexp e2)
+      | Eite e e1 e2   => SynSB.Eite (translate_lexp e) (translate_cexp e1) (translate_cexp e2)
+      | Eexp e         => SynSB.Eexp (translate_lexp e)
+      end.
+
+    Definition init (ck: clock) : ident.
+    Admitted.
+
+    Definition state (x: ident) : ident.
+    Admitted.
+
+    Definition op_or : binop.
+    Admitted.
+
+    Definition reset_expr (r: option (ident * clock)) (init: ident) : SynSB.lexp :=
+      match r with
+      | Some (r, ck_r) =>
+        SynSB.Ebinop op_or (SynSB.Elast init bool_type) (SynSB.Evar r bool_type) bool_type
+      | None =>
+        SynSB.Elast init bool_type
+      end.
+
     Definition translate_eqn (eqn: equation) : list SynSB.equation :=
       match eqn with
-      | EqDef x ck ce =>
-        [SynSB.EqDef x ck ce]
-      | EqApp xs ck f les None =>
-        let name := hd Ids.default xs in
-        [SynSB.EqCall xs ck f name les]
-      | EqApp xs ck f les (Some (r, ck_r)) =>
-        let name := hd Ids.default xs in
-        [SynSB.EqReset ck_r f name r;
-           SynSB.EqCall xs ck f name les]
-      | EqFby x ck v le =>
-        [SynSB.EqFby x ck v le]
+      | EqDef x ck e =>
+        [ SynSB.EqDef x ck (translate_cexp e) ]
+      | EqApp xs ck f les r =>
+        let s := hd Ids.default xs in
+        let init_ck := init ck in
+        let s0 := state s in
+        let r := reset_expr r init_ck in
+        [ SynSB.EqReset s0 ck f s r;
+          SynSB.EqCall s xs ck f s0 (map translate_lexp les) ]
+      | EqFby x ck _ e =>
+        [ SynSB.EqNext x ck (translate_lexp e) ]
       end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
@@ -590,18 +628,18 @@ Module Type TRANSLATION
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
-    let regs := fst gathered in
+    let lasts := fst gathered in
     let blocks := snd gathered in
-    let regids := ps_from_list (map fst regs) in
-    let partitioned := partition (fun x => PS.mem (fst x) regids) n.(n_vars) in
+    let lastids := ps_from_list (map fst lasts) in
+    let partitioned := partition (fun x => PS.mem (fst x) lastids) n.(n_vars) in
     let vars := snd partitioned in
     {| SynSB.b_name  := n.(n_name);
-       (* SynSB.b_regs  := regs; *)
        SynSB.b_blocks := blocks;
        SynSB.b_in   := idty n.(n_in);
        SynSB.b_vars := idty vars;
+       SynSB.b_lasts := lasts;
        SynSB.b_out  := idty n.(n_out);
-       SynSB.b_eqs  := translate_eqns n.(n_eqs)
+       SynSB.b_eqs  := translate_eqns lastids n.(n_eqs)
     |}.
   Next Obligation.
     destruct n; simpl.
@@ -669,7 +707,7 @@ Module TranslationFun
        (Clks    : CLOCKS Ids)
        (ExprSyn : NLEXPRSYNTAX Op)
        (SynNL   : NLSYNTAX Ids Op Clks ExprSyn)
-       (SynSB   : SBSYNTAX Ids Op Clks ExprSyn)
+       (SynSB   : SBSYNTAX Ids Op Clks)
        (Mem     : MEMORIES Ids Op Clks ExprSyn SynNL)
 <: TRANSLATION Ids Op Clks ExprSyn SynNL SynSB Mem.
   Include TRANSLATION Ids Op Clks ExprSyn SynNL SynSB Mem.
