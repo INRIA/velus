@@ -1,6 +1,5 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.Clocks.
 
 Require Import List.
 Import List.ListNotations.
@@ -8,25 +7,27 @@ Open Scope list_scope.
 
 Module Type SBSYNTAX
        (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS Ids).
+       (Import Op      : OPERATORS).
 
   (** ** Expressions *)
 
+  Inductive var : Type :=
+  | Var  : ident -> var
+  | Last : ident -> var.
+
   Inductive lexp : Type :=
   | Econst : const -> lexp
-  | Evar   : ident -> type -> lexp
-  | Ewhen  : lexp -> ident -> bool -> lexp
+  | Evar   : var -> type -> lexp
+  | Ewhen  : lexp -> var -> bool -> lexp
   | Eunop  : unop -> lexp -> type -> lexp
-  | Ebinop : binop -> lexp -> lexp -> type -> lexp
-  | Elast  : ident -> type -> lexp.
+  | Ebinop : binop -> lexp -> lexp -> type -> lexp.
 
   Definition lexps := list lexp.
 
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
-  | Emerge : ident -> cexp -> cexp -> cexp
+  | Emerge : var -> cexp -> cexp -> cexp
   | Eite   : lexp -> cexp -> cexp -> cexp
   | Eexp   : lexp -> cexp.
 
@@ -42,10 +43,13 @@ Module Type SBSYNTAX
     | Econst c => type_const c
     | Evar _ ty
     | Eunop _ _ ty
-    | Ebinop _ _ _ ty
-    | Elast _ ty => ty
+    | Ebinop _ _ _ ty => ty
     | Ewhen e _ _ => typeof e
     end.
+
+  Inductive clock : Type :=
+  | Cbase : clock
+  | Con   : clock -> var -> bool -> clock.
 
   (** ** Equations *)
 
@@ -186,7 +190,6 @@ End SBSYNTAX.
 Module SBSyntaxFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (Clks : CLOCKS Ids)
-       <: SBSYNTAX Ids Op Clks.
-  Include SBSYNTAX Ids Op Clks.
+       <: SBSYNTAX Ids Op.
+  Include SBSYNTAX Ids Op.
 End SBSyntaxFun.

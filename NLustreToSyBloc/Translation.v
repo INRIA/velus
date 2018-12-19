@@ -24,7 +24,7 @@ Module Type TRANSLATION
        (Import Clks    : CLOCKS   Ids)
        (Import ExprSyn : NLEXPRSYNTAX Op)
        (Import SynNL   : NLSYNTAX Ids Op Clks ExprSyn)
-       (SynSB          : SBSYNTAX Ids Op Clks)
+       (SynSB          : SBSYNTAX Ids Op)
        (Import Mem     : MEMORIES Ids Op Clks ExprSyn SynNL).
 
   Definition gather_eq (acc: list (ident * const) * list (ident * ident)) (eq: equation):
@@ -76,21 +76,21 @@ Module Type TRANSLATION
 
     Variable memories : PS.t.
 
-    Definition tovar (x: ident) (ty: type): SynSB.lexp :=
-      if PS.mem x memories then SynSB.Elast x ty else SynSB.Evar x ty.
+    Definition tovar (x: ident) : SynSB.var :=
+      if PS.mem x memories then SynSB.Last x else SynSB.Var x.
 
     Fixpoint translate_lexp (e: lexp) : SynSB.lexp :=
       match e with
       | Econst c          => SynSB.Econst c
-      | Evar x ty         => tovar x ty
-      | Ewhen e x k       => SynSB.Ewhen (translate_lexp e) x k
+      | Evar x ty         => SynSB.Evar (tovar x) ty
+      | Ewhen e x k       => SynSB.Ewhen (translate_lexp e) (tovar x) k
       | Eunop o e ty      => SynSB.Eunop o (translate_lexp e) ty
       | Ebinop o e1 e2 ty => SynSB.Ebinop o (translate_lexp e1) (translate_lexp e2) ty
       end.
 
     Fixpoint translate_cexp (e: cexp) : SynSB.cexp :=
       match e with
-      | Emerge x e1 e2 => SynSB.Emerge x (translate_cexp e1) (translate_cexp e2)
+      | Emerge x e1 e2 => SynSB.Emerge (tovar x) (translate_cexp e1) (translate_cexp e2)
       | Eite e e1 e2   => SynSB.Eite (translate_lexp e) (translate_cexp e1) (translate_cexp e2)
       | Eexp e         => SynSB.Eexp (translate_lexp e)
       end.
@@ -107,24 +107,31 @@ Module Type TRANSLATION
     Definition reset_expr (r: option (ident * clock)) (init: ident) : SynSB.lexp :=
       match r with
       | Some (r, ck_r) =>
-        SynSB.Ebinop op_or (SynSB.Elast init bool_type) (SynSB.Evar r bool_type) bool_type
+        SynSB.Ebinop op_or (SynSB.Evar (SynSB.Last init) bool_type) (SynSB.Evar (tovar r) bool_type) bool_type
       | None =>
-        SynSB.Elast init bool_type
+        SynSB.Evar (SynSB.Last init) bool_type
+      end.
+
+    Fixpoint translate_clock (ck: clock) : SynSB.clock :=
+      match ck with
+      | Cbase => SynSB.Cbase
+      | Con ck x k => SynSB.Con (translate_clock ck) (tovar x) k
       end.
 
     Definition translate_eqn (eqn: equation) : list SynSB.equation :=
       match eqn with
       | EqDef x ck e =>
-        [ SynSB.EqDef x ck (translate_cexp e) ]
+        [ SynSB.EqDef x (translate_clock ck) (translate_cexp e) ]
       | EqApp xs ck f les r =>
         let s := hd Ids.default xs in
         let init_ck := init ck in
         let s0 := state s in
         let r := reset_expr r init_ck in
+        let ck := translate_clock ck in
         [ SynSB.EqReset s0 ck f s r;
           SynSB.EqCall s xs ck f s0 (map translate_lexp les) ]
       | EqFby x ck _ e =>
-        [ SynSB.EqNext x ck (translate_lexp e) ]
+        [ SynSB.EqNext x (translate_clock ck) (translate_lexp e) ]
       end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
@@ -707,7 +714,7 @@ Module TranslationFun
        (Clks    : CLOCKS Ids)
        (ExprSyn : NLEXPRSYNTAX Op)
        (SynNL   : NLSYNTAX Ids Op Clks ExprSyn)
-       (SynSB   : SBSYNTAX Ids Op Clks)
+       (SynSB   : SBSYNTAX Ids Op)
        (Mem     : MEMORIES Ids Op Clks ExprSyn SynNL)
 <: TRANSLATION Ids Op Clks ExprSyn SynNL SynSB Mem.
   Include TRANSLATION Ids Op Clks ExprSyn SynNL SynSB Mem.
