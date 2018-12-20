@@ -325,21 +325,21 @@ Module Type CORRECTNESS
   (*     + right; rewrite IHeqs; auto. *)
   (* Qed. *)
 
-  Definition compat_env (R: env) (lasts: PS.t) (R': SemSB.env) (S: SemSB.state) : Prop :=
+  Definition compat_env (R: env) (lasts: Env.t const) (R': SemSB.env) (S: SemSB.state) : Prop :=
     forall x v,
       PM.find x R = Some v ->
-      if PS.mem x lasts then
+      if Env.mem x lasts then
         find_val x S = Some v
       else
-        PM.find x (fst R') = Some v.
+        PM.find x R' = Some v.
 
-  Definition compat_hist (H: history) (lasts: PS.t) (H': SemSB.history) (E: SemSB.evolution) : Prop :=
+  Definition compat_hist (H: history) (lasts: Env.t const) (H': SemSB.history) (E: SemSB.evolution) : Prop :=
     forall x vs,
       PM.find x H = Some vs ->
-      if PS.mem x lasts then
+      if Env.mem x lasts then
         find_val x E = Some vs
       else
-        PM.find x (fst H') = Some vs.
+        PM.find x H' = Some vs.
 
   Lemma compat_hist_spec:
     forall H lasts H' E,
@@ -349,7 +349,7 @@ Module Type CORRECTNESS
     unfold compat_hist; intros ** CompatEnv n x v Find.
     unfold restr_hist, PM.map in Find; rewrite PM.gmapi in Find.
     destruct (PM.find x H) eqn: Find'; inv Find.
-    apply CompatEnv in Find'; destruct (PS.mem x lasts).
+    apply CompatEnv in Find'; destruct (Env.mem x lasts).
     - unfold SemSB.restr_evol; rewrite find_val_mmap, Find'; auto.
     - unfold SemSB.restr_hist, PM.map; simpl; rewrite PM.gmapi, Find'; auto.
   Qed.
@@ -362,25 +362,25 @@ Module Type CORRECTNESS
     Section InstantSemantics.
       Variable base: bool.
       Variable R: env.
-      Variable lasts: PS.t.
+      Variable lasts: Env.t const.
       Variable R': SemSB.env.
       Variable S: SemSB.state.
       Hypothesis CompatEnv: compat_env R lasts R' S.
 
-      Lemma var_last_correctness_instant:
+      Lemma state_var_correctness_instant:
         forall x v,
-          PS.mem x lasts = true ->
+          Env.mem x lasts = true ->
           sem_var_instant R x v ->
-          SemSB.sem_var_last_instant S x v.
+          SemSB.sem_state_var_instant S x v.
       Proof.
         intros ** Last Sem; induction Sem as [?? Find]; apply CompatEnv in Find.
         rewrite Last in Find; constructor; auto.
       Qed.
-      Hint Resolve var_last_correctness_instant.
+      Hint Resolve state_var_correctness_instant.
 
       Lemma var_var_correctness_instant:
         forall x v,
-          PS.mem x lasts = false ->
+          Env.mem x lasts = false ->
           sem_var_instant R x v ->
           SemSB.sem_var_var_instant R' x v.
       Proof.
@@ -394,7 +394,7 @@ Module Type CORRECTNESS
           sem_var_instant R x v ->
           SemSB.sem_var_instant R' S (tovar lasts x) v.
       Proof.
-        intros; unfold tovar; destruct (PS.mem x lasts) eqn: E; auto using SemSB.sem_var_instant.
+        intros; unfold tovar; destruct (Env.mem x lasts) eqn: E; auto using SemSB.sem_var_instant.
       Qed.
       Hint Resolve var_correctness_instant.
 
@@ -466,7 +466,7 @@ Module Type CORRECTNESS
 
     End InstantSemantics.
     Hint Resolve
-         var_last_correctness_instant
+         state_var_correctness_instant
          var_var_correctness_instant
          var_correctness_instant
          lexp_correctness_instant
@@ -479,7 +479,7 @@ Module Type CORRECTNESS
 
       Variable bk: stream bool.
       Variable H: history.
-      Variable lasts: PS.t.
+      Variable lasts: Env.t const.
       Variable H': SemSB.history.
       Variable E: SemSB.evolution.
       Hypothesis CompatHist: compat_hist H lasts H' E.
@@ -497,17 +497,17 @@ Module Type CORRECTNESS
         let n := fresh in
         intros ** Sem n; specialize (Sem n); eauto.
 
-      Lemma var_last_correctness:
+      Lemma state_var_correctness:
         forall x vs,
-          PS.mem x lasts = true ->
+          Env.mem x lasts = true ->
           sem_var H x vs ->
-          SemSB.sem_var_last E x vs.
+          SemSB.sem_state_var E x vs.
       Proof. spe. Qed.
-      Hint Resolve var_last_correctness.
+      Hint Resolve state_var_correctness.
 
       Lemma var_var_correctness:
         forall x vs,
-          PS.mem x lasts = false ->
+          Env.mem x lasts = false ->
           sem_var H x vs ->
           SemSB.sem_var_var H' x vs.
       Proof. spe. Qed.
@@ -555,23 +555,120 @@ Module Type CORRECTNESS
       Proof. spe. Qed.
       Hint Resolve caexp_correctness.
 
-      Inductive lasts_spec (lasts: PS.t) : equation -> Prop :=
+      Inductive lasts_spec (lasts: Env.t const) : equation -> Prop :=
       | LSdef:
           forall x ck e,
-            PS.mem x lasts = false ->
+            Env.mem x lasts = false ->
             lasts_spec lasts (EqDef x ck e)
       | LSapp:
           forall xs ck f es r,
-            Forall (fun x => PS.mem x lasts = false) xs ->
+            Forall (fun x => Env.mem x lasts = false) xs ->
             lasts_spec lasts (EqApp xs ck f es r)
       | LSfby:
           forall x ck c0 e,
-            PS.mem x lasts = true ->
+            Env.find x lasts = Some c0 ->
             lasts_spec lasts (EqFby x ck c0 e).
 
+    End Sem.
+    Hint Resolve
+         var_var_correctness
+         laexp_correctness
+         caexp_correctness.
+
+    Inductive relooper: Env.t const -> SemSB.evolution -> SemSB.evolution -> Prop :=
+      relooper_intro:
+        forall E E' lasts,
+        (forall x vs vs' c,
+            find_val x E = Some vs ->
+            find_val x E' = Some vs' ->
+            Env.find x lasts = Some c ->
+            vs = fby (sem_const c) vs') ->
+        relooper lasts E E'.
+
+    Inductive coherent_state: SemSB.evolution -> SemSB.transient_evolutions -> SemSB.evolution -> Prop :=
+      coherent_state_intro:
+        forall E T E',
+          (forall x vs,
+              find_val x E = Some vs ->
+              exists vs', find_val x E' = Some vs') ->
+          coherent_state E T E'.
+
+    Inductive correspondence:
+      history -> Env.t const -> SemSB.history -> SemSB.evolution -> SemSB.transient_evolutions -> SemSB.evolution -> Prop :=
+      correspondence_intro:
+        forall H lasts H' E T E',
+          compat_hist H lasts H' E ->
+          coherent_state E T E' ->
+          relooper lasts E E' ->
+          correspondence H lasts H' E T E'.
+
+    Fact find_mem:
+      forall {A} x e (v: A),
+        Env.find x e = Some v ->
+        Env.mem x e = true.
+    Proof.
+      unfold Env.mem; intros ** ->; auto.
+    Qed.
+    Hint Resolve find_mem.
+
+    Lemma hold_det:
+      forall v0 xs xs',
+        same_clock (fun n => [xs n; xs' n]) ->
+        hold v0 xs ≈ hold v0 xs' ->
+        xs ≈ xs'.
+    Proof.
+      intros ** Same Eq n.
+      specialize (Eq (S n)); simpl in *.
+      specialize (Same n); destruct Same as [Same|Same].
+      + inversion_clear Same as [|??? Same']; inv Same'; congruence.
+      + inversion_clear Same as [|??? Same']; inv Same'; destruct (xs n), (xs' n); congruence.
+    Qed.
+
+    Lemma hold_det':
+      forall n v0 xs xs',
+        instant_same_clock [xs n; xs' n] ->
+        hold v0 xs (S n) = hold v0 xs' (S n) ->
+        xs n = xs' n.
+    Proof.
+      intros ** Same Eq.
+      simpl in *.
+      destruct Same as [Same|Same].
+      + inversion_clear Same as [|??? Same']; inv Same'; congruence.
+      + inversion_clear Same as [|??? Same']; inv Same'; destruct (xs n), (xs' n); congruence.
+    Qed.
+
+
+    (* Lemma fby_det: *)
+    (*   forall v0 xs xs', *)
+    (*     fby v0 xs ≈ fby v0 xs' -> *)
+    (*     xs ≈ xs'. *)
+    (* Proof. *)
+    (*   unfold fby. *)
+    (*   intros ** E n. *)
+    (*   apply hold_det with (v0 := v0). *)
+    (*   - intro m; specialize (E m); simpl in E. *)
+    (*     destruct (xs m), (xs' m); try congruence. *)
+    (*     + left; repeat constructor. *)
+    (*     + right; do 2 (constructor; try congruence; auto). *)
+    (*   - intro m; specialize (E (S m)); revert E; induction m; intros; simpl in *; auto. *)
+    (*     destruct (xs (S m)), (xs' (S m)); try discriminate; auto. *)
+    (*     + destruct (xs m), (xs' m), (xs (S (S m))), (xs' (S (S m))); try congruence; auto. *)
+    (*       admit. *)
+    (*       admit. *)
+    (*     + simpl. *)
+    (*       constructor. simpl. *)
+
+    (*   induction n. *)
+    (*   - pose proof E as E'. *)
+    (*     specialize (E 1); simpl in *. *)
+    (*     destruct (xs 1), (xs' 1); try discriminate. *)
+    (*     + specialize (E' 0); simpl in *. *)
+    (*   destruct (xs n), (xs' n); try discriminate; auto. *)
+    (*   inversion E as [E']. *)
+    (*   clear - E'; induction n; simpl in *. *)
 
     Lemma equation_correctness:
-      forall eqs eq E',
+      forall lasts eq bk H eqs H' E T E',
         (* (forall f xss oss, *)
         (*     sem_node G f xss oss -> *)
         (*     exists M, SemSB.sem_block P f M xss oss) -> *)
@@ -582,9 +679,71 @@ Module Type CORRECTNESS
         sem_equation G bk H eq ->
         lasts_spec lasts eq ->
         (* compat_eq eq eqs -> *)
-        Forall (fun eq => SemSB.sem_equation P bk H' E eq E') eqs ->
+        Forall (SemSB.sem_equation P bk H' E T E') eqs ->
+        correspondence H lasts H' E T E' ->
         (* SemSB.well_structured_memories eqs M -> *)
-        Forall (fun eq => SemSB.sem_equation P bk H' E eq E') (translate_eqn lasts eq ++ eqs).
+        (* exists H' E T E', *)
+        Forall (SemSB.sem_equation P bk H' E T E') (translate_eqn lasts eq ++ eqs).
+    (* /\ SemSB.well_structured_memories (translate_eqn eq ++ eqs) M'. *)
+    Proof.
+      intros ** Heq LastsSpec Heqs Corres;
+        destruct Heq as [| | |????????? Var];
+        inv LastsSpec;
+        inversion_clear Corres as [?????? Compat Coherent Reloop]; simpl.
+      - constructor; eauto.
+        econstructor; eauto.
+      - constructor.
+        + admit.
+        + constructor; auto.
+          admit.
+      - constructor.
+        + admit.
+        + constructor; auto.
+          admit.
+      - constructor; auto.
+        assert (Env.mem x lasts = true) as Mem by eauto.
+        econstructor; eauto.
+        instantiate (1 := ls).
+        pose proof Var as Var'.
+        apply (state_var_correctness H lasts H' E) in Var'; eauto.
+        inversion_clear Reloop as [??? Loop].
+        intro.
+        specialize (Var n); inversion_clear Var as [?? Find].
+        unfold restr_hist, PM.map in Find; rewrite PM.gmapi in Find.
+        destruct (PM.find x H) eqn: Find'; inversion Find as [Fby].
+        constructor.
+        unfold SemSB.restr_evol.
+        rewrite find_val_mmap.
+        apply Compat in Find'; rewrite Mem in Find'.
+        pose proof Find' as Find''.
+        inversion_clear Coherent as [??? Spec].
+        apply Spec in Find'' as (? & Find'').
+        rewrite Find''; unfold SemSB.sample; simpl.
+        eapply Loop in Find'; eauto.
+        rewrite Find' in Fby.
+        admit.
+
+        inv Fby.
+instantiate (1 := ls).
+
+        inv Find.
+        unfold fby in *.
+
+    Lemma equation_correctness:
+      forall eqs eq T E',
+        (* (forall f xss oss, *)
+        (*     sem_node G f xss oss -> *)
+        (*     exists M, SemSB.sem_block P f M xss oss) -> *)
+        (* (forall f r xss oss, *)
+        (*     sem_reset G f r xss oss -> *)
+        (*     exists M, SemSB.sem_block P f M xss oss *)
+        (*          /\ SemSB.reset_regs r M) -> *)
+        sem_equation G bk H eq ->
+        lasts_spec lasts eq ->
+        (* compat_eq eq eqs -> *)
+        Forall (SemSB.sem_equation P bk H' E T E') eqs ->
+        (* SemSB.well_structured_memories eqs M -> *)
+        Forall (SemSB.sem_equation P bk H' E T E') (translate_eqn lasts eq ++ eqs).
     (* /\ SemSB.well_structured_memories (translate_eqn eq ++ eqs) M'. *)
     Proof.
       intros ** Heq LastsSpec Heqs; inv Heq; inv LastsSpec; simpl.

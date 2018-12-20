@@ -7,6 +7,7 @@ Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.SyBloc.SBSyntax.
+Require Velus.Environment.
 
 Require Import List.
 Import List.ListNotations.
@@ -74,10 +75,10 @@ Module Type TRANSLATION
 
   Section Translate.
 
-    Variable memories : PS.t.
+    Variable memories : Environment.t const.
 
     Definition tovar (x: ident) : SynSB.var :=
-      if PS.mem x memories then SynSB.Last x else SynSB.Var x.
+      if Environment.mem x memories then SynSB.Last x else SynSB.Var x.
 
     Fixpoint translate_lexp (e: lexp) : SynSB.lexp :=
       match e with
@@ -95,22 +96,22 @@ Module Type TRANSLATION
       | Eexp e         => SynSB.Eexp (translate_lexp e)
       end.
 
-    Definition init (ck: clock) : ident.
-    Admitted.
+    (* Definition init (ck: clock) : ident. *)
+    (* Admitted. *)
 
-    Definition state (x: ident) : ident.
-    Admitted.
+    (* Definition state (x: ident) : ident. *)
+    (* Admitted. *)
 
-    Definition op_or : binop.
-    Admitted.
+    (* Definition op_or : binop. *)
+    (* Admitted. *)
 
-    Definition reset_expr (r: option (ident * clock)) (init: ident) : SynSB.lexp :=
-      match r with
-      | Some (r, ck_r) =>
-        SynSB.Ebinop op_or (SynSB.Evar (SynSB.Last init) bool_type) (SynSB.Evar (tovar r) bool_type) bool_type
-      | None =>
-        SynSB.Evar (SynSB.Last init) bool_type
-      end.
+    (* Definition reset_expr (r: option (ident * clock)) (init: ident) : SynSB.lexp := *)
+    (*   match r with *)
+    (*   | Some (r, ck_r) => *)
+    (*     SynSB.Ebinop op_or (SynSB.Evar (SynSB.Last init) bool_type) (SynSB.Evar (tovar r) bool_type) bool_type *)
+    (*   | None => *)
+    (*     SynSB.Evar (SynSB.Last init) bool_type *)
+    (*   end. *)
 
     Fixpoint translate_clock (ck: clock) : SynSB.clock :=
       match ck with
@@ -122,14 +123,16 @@ Module Type TRANSLATION
       match eqn with
       | EqDef x ck e =>
         [ SynSB.EqDef x (translate_clock ck) (translate_cexp e) ]
-      | EqApp xs ck f les r =>
+      | EqApp xs ck f les None =>
         let s := hd Ids.default xs in
-        let init_ck := init ck in
-        let s0 := state s in
-        let r := reset_expr r init_ck in
         let ck := translate_clock ck in
-        [ SynSB.EqReset s0 ck f s r;
-          SynSB.EqCall s xs ck f s0 (map translate_lexp les) ]
+        [ SynSB.EqTransient s ck;
+          SynSB.EqCall s xs ck f (map translate_lexp les) ]
+      | EqApp xs ck f les (Some (r, ck_r)) =>
+        let s := hd Ids.default xs in
+        let ck := translate_clock ck in
+        [ SynSB.EqReset s ck f (tovar r);
+          SynSB.EqCall s xs ck f (map translate_lexp les) ]
       | EqFby x ck _ e =>
         [ SynSB.EqNext x (translate_clock ck) (translate_lexp e) ]
       end.
@@ -635,10 +638,10 @@ Module Type TRANSLATION
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
-    let lasts := fst gathered in
+    let lasts := Environment.from_list (fst gathered) in
     let blocks := snd gathered in
-    let lastids := ps_from_list (map fst lasts) in
-    let partitioned := partition (fun x => PS.mem (fst x) lastids) n.(n_vars) in
+    (* let lastids := ps_from_list (map fst lasts) in *)
+    let partitioned := partition (fun x => Environment.mem (fst x) lasts) n.(n_vars) in
     let vars := snd partitioned in
     {| SynSB.b_name  := n.(n_name);
        SynSB.b_blocks := blocks;
@@ -646,7 +649,7 @@ Module Type TRANSLATION
        SynSB.b_vars := idty vars;
        SynSB.b_lasts := lasts;
        SynSB.b_out  := idty n.(n_out);
-       SynSB.b_eqs  := translate_eqns lastids n.(n_eqs)
+       SynSB.b_eqs  := translate_eqns lasts n.(n_eqs)
     |}.
   Next Obligation.
     destruct n; simpl.

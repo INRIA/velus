@@ -29,6 +29,12 @@ Section Global.
       end
     end.
 
+  Definition mem (x: ident) (e: t A) : bool :=
+    match find x e with
+    | Some _ => true
+    | None => false
+    end.
+
   Fixpoint add (x: ident) (a: A) (e: t A) : t A :=
     match e with
     | [] => [(x, a)]
@@ -51,6 +57,41 @@ Section Global.
                 let (x, a) := xa in
                 (x, f x a))
              e.
+
+  (* Function eqb (cmp: A -> A -> bool) (e e' : t A) {struct e} : bool := *)
+  (*   match e, e' with *)
+  (*   | [], [] => true *)
+  (*   | (x, a) :: e, (x', a') :: e' => *)
+  (*     match POTB.compare x x' with *)
+  (*      | EQ _ => cmp a a' && eq cmp e e' *)
+  (*      | _ => false *)
+  (*     end *)
+  (*  | _, _ => false *)
+  (* end. *)
+
+  Definition eq (e e' : t A) : Prop := forall x, find x e = find x e'.
+
+  Lemma eq_refl: reflexive _ eq.
+  Proof.
+    intros ?; unfold eq; reflexivity.
+  Qed.
+
+  Lemma eq_symm: symmetric _ eq.
+  Proof.
+    intros ? ?; unfold eq; auto.
+  Qed.
+
+  Lemma eq_trans: transitive _ eq.
+  Proof.
+    intros ? ? ?; unfold eq; intros E1 E2 e.
+    now rewrite E1, E2.
+  Qed.
+
+  Add Parametric Relation : (t A)  eq
+      reflexivity proved by eq_refl
+      symmetry proved by eq_symm
+      transitivity proved by eq_trans
+        as Eq_eq.
 
   Fact compare_eq:
     forall x,
@@ -142,10 +183,16 @@ Section Global.
       + right; auto.
   Qed.
 
-  Definition adds xs (vs : list A) (e : t A) :=
+  Definition add_list (xvs: list (ident * A)) (e: t A) :=
     fold_right (fun (xv: ident * A) env =>
                   let (x , v) := xv in
-                  add x v env) e (combine xs vs).
+                  add x v env) e xvs.
+
+  Definition adds xs (vs : list A) :=
+    add_list (combine xs vs).
+
+  Definition from_list (xvs: list (ident * A)) :=
+    add_list xvs empty.
 
   Lemma add_comm:
     forall x x' (v v': A) m,
@@ -200,21 +247,30 @@ Section Global.
           apply POTB.lt_not_eq in E''; exfalso; apply E''; reflexivity.
   Qed.
 
+  Lemma add_list_cons_cons:
+    forall x (v: A) xvs e,
+      ~ InMembers x xvs ->
+      add_list ((x, v) :: xvs) e = add_list xvs (add x v e).
+  Proof.
+    unfold add_list.
+    induction xvs as [|(x', v')]; intros ** NotIn; simpl; auto.
+    rewrite <-IHxvs.
+    - simpl.
+      rewrite add_comm; auto.
+      intro Eq.
+      apply NotIn; subst.
+      now constructor.
+    - apply NotInMembers_cons in NotIn; tauto.
+  Qed.
+
   Lemma adds_cons_cons:
     forall xs x (v: A) vs e,
       ~ In x xs ->
       adds (x :: xs) (v :: vs) e = adds xs vs (add x v e).
   Proof.
-    unfold adds.
-    induction xs as [|x']; intros ** NotIn; simpl; auto.
-    destruct vs as [|v']; simpl; auto.
-    rewrite <-IHxs.
-    - simpl.
-      rewrite add_comm; auto.
-      intro Eq.
-      apply NotIn; subst.
-      apply in_eq.
-    - now apply not_in_cons in NotIn.
+    unfold adds; intros ** NotIn.
+    apply add_list_cons_cons.
+    intro; eapply NotIn, InMembers_In_combine; eauto.
   Qed.
 
   Lemma find_gsso:
@@ -239,6 +295,36 @@ Section Global.
     apply not_in_cons in Hnin.
     destruct Hnin as [Hnin Hneq].
     rewrite find_gsso; auto.
+  Qed.
+
+  Add Parametric Morphism x v: (add x v)
+      with signature eq ==> eq
+        as add_eq.
+  Proof.
+    unfold eq; intros ** y.
+    destruct (ident_eq_dec x y).
+    - subst; now rewrite 2 gss.
+    - rewrite 2 gso; auto.
+  Qed.
+
+  Add Parametric Morphism xvs: (add_list xvs)
+      with signature eq ==> eq
+        as add_list_eq.
+  Proof.
+    unfold add_list.
+    induction xvs as [|(y, a)]; intros ** E x; simpl; auto.
+    erewrite add_eq.
+    Focus 2.
+    apply IHxvs; eauto.
+    auto.
+  Qed.
+
+  Lemma add_ps_from_list_cons:
+    forall xvs x v,
+      eq (add x v (from_list xvs))
+         (from_list ((x, v) :: xvs)).
+  Proof.
+    intros; unfold from_list; reflexivity.
   Qed.
 
 End Global.

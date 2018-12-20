@@ -31,8 +31,12 @@ environment.
   Definition state := memory value.
   Definition evolution := memory (stream value).
 
-  Definition env := (PM.t value * PM.t state)%type.
-  Definition history := (PM.t (stream value) * PM.t evolution)%type.
+  Definition transient_states := PM.t state.
+  Definition transient_evolutions := PM.t evolution.
+
+
+  Definition env := PM.t value.
+  Definition history := PM.t (stream value).
 
   (** ** Instantaneous semantics *)
 
@@ -41,18 +45,19 @@ environment.
     Variable base: bool.
     Variable R: env.
     Variable S: state.
+    (* Variable Ts: transient_states. *)
 
     Inductive sem_var_var_instant: ident -> value -> Prop :=
       Svv:
         forall x v,
-          PM.find x (fst R) = Some v ->
+          PM.find x R = Some v ->
           sem_var_var_instant x v.
 
-    Inductive sem_var_last_instant: ident -> value -> Prop :=
+    Inductive sem_state_var_instant: ident -> value -> Prop :=
       Svl:
         forall x v,
           find_val x S = Some v ->
-          sem_var_last_instant x v.
+          sem_state_var_instant x v.
 
     Inductive sem_var_instant: var -> value -> Prop :=
       | Sv:
@@ -61,7 +66,7 @@ environment.
             sem_var_instant (Var x) v
       | Sl:
           forall x v,
-            sem_var_last_instant x v ->
+            sem_state_var_instant x v ->
             sem_var_instant (Last x) v.
 
     Definition sem_vars_instant (xs: idents) (vs: list value) : Prop :=
@@ -231,7 +236,7 @@ environment.
       mmap (sample n) E.
 
     Definition restr_hist (n: nat): env :=
-      (PM.map (sample n) (fst H), PM.map (mmap (sample n)) (snd H)).
+      PM.map (sample n) H.
     Hint Unfold restr_hist.
 
     Definition lift {A B} (sem: bool -> env -> state -> A -> B -> Prop)
@@ -267,8 +272,8 @@ environment.
     Definition sem_var_var (x: ident) (xs: stream value): Prop :=
       lift'' sem_var_var_instant x xs.
 
-    Definition sem_var_last (x: ident) (xs: stream value): Prop :=
-      lift''' sem_var_last_instant x xs.
+    Definition sem_state_var (x: ident) (xs: stream value): Prop :=
+      lift''' sem_state_var_instant x xs.
 
     Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
       lift'' sem_vars_instant x xs.
@@ -439,8 +444,8 @@ environment.
             else xs n
           end.
 
-  Definition reset (bl: block) (r: stream bool) (E: evolution) :=
-    Mnode (Env.mapi (reset_last bl r) (values E)) (instances E).
+  Definition reset_lasts (bl: block) (r: stream bool) (E E0: evolution) :=
+    values E0 = Env.mapi (reset_last bl r) (values E).
 
   Section BlockSemantics.
 
@@ -450,39 +455,49 @@ environment.
       SReset:
         forall b (r: stream bool) E E0 bl P',
           find_block b P = Some (bl, P') ->
-          E0 = reset bl r E ->
+          reset_lasts bl r E E0 ->
+          (forall b' E',
+              sub_inst b' E E' ->
+              exists E0',
+                sub_inst b' E0 E0'
+                /\ sem_reset b' r E' E0') ->
           sem_reset b r E E0.
 
-    Inductive sem_equation: stream bool -> history -> evolution -> equation -> evolution -> Prop :=
+    Inductive sem_equation: stream bool -> history -> evolution -> transient_evolutions -> evolution -> equation -> Prop :=
     | SEqDef:
-        forall bk H E E' x xs ck ce,
+        forall bk H E T E' x xs ck ce,
           sem_var_var H x xs ->
           sem_caexp bk H E ck ce xs ->
-          sem_equation bk H E (EqDef x ck ce) E'
+          sem_equation bk H E T E' (EqDef x ck ce)
     | SEqNext:
-        forall bk H E E' x ck e xs ls,
-          sem_var_last E' x xs ->
+        forall bk H E T E' x ck e xs ls,
+          sem_state_var E' x xs ->
           sem_laexp bk H E ck e ls ->
-          sem_equation bk H E (EqNext x ck e) E'
-    | SEqReset:
-        forall bk H E E' s0 ck b s e ls Es E0,
-          sem_laexp bk H E ck e ls ->
+          sem_equation bk H E T E' (EqNext x ck e)
+    | SEqTransient:
+        forall bk H E T E' s ck Es,
           sub_inst s E Es ->
-          sem_reset b (reset_of ls) Es E0 ->
-          PM.find s0 (snd H) = Some E0 ->
-          sem_equation bk H E (EqReset s0 ck b s e) E'
+          PM.find s T = Some Es ->
+          sem_equation bk H E T E' (EqTransient s ck)
+    | SEqReset:
+        forall bk H E T E' ck b s r rs Es E0,
+          sem_var H E r rs ->
+          sub_inst s E Es ->
+          sem_reset b (reset_of rs) Es E0 ->
+          PM.find s T = Some E0 ->
+          sem_equation bk H E T E' (EqReset s ck b r)
     | SEqCall:
-        forall bk H E E' s' ys ck b s es ess Es oss Es',
+        forall bk H E T E' ys ck b s es ess Es oss Es',
           sem_laexps bk H E ck es ess ->
-          PM.find s (snd H) = Some Es ->
+          PM.find s T = Some Es ->
           sem_block b Es ess oss Es' ->
           sem_vars H ys oss ->
-          sub_inst s' E' Es' ->
-          sem_equation bk H E (EqCall s' ys ck b s es) E'
+          sub_inst s E' Es' ->
+          sem_equation bk H E T E' (EqCall s ys ck b es)
 
     with sem_block: ident -> evolution -> stream (list value) -> stream (list value) -> evolution -> Prop :=
            SBlock:
-             forall b bl P' E E' H xss yss bk,
+             forall b bl P' E T E' H xss yss bk,
                clock_of xss bk ->
                find_block b P = Some (bl, P') ->
                sem_vars H (map fst bl.(b_in)) xss ->
@@ -490,7 +505,7 @@ environment.
                same_clock xss ->
                same_clock yss ->
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
-               Forall (fun eq => sem_equation bk H E eq E') bl.(b_eqs) ->
+               Forall (sem_equation bk H E T E') bl.(b_eqs) ->
                (* well_structured_memories bl.(b_eqs) M -> *)
                sem_block b E xss yss E'.
 
@@ -499,41 +514,47 @@ environment.
   Section sem_block_mult.
     Variable P: program.
 
-    Variable P_equation: stream bool -> history -> evolution -> equation -> evolution -> Prop.
+    Variable P_equation: stream bool -> history -> evolution -> transient_evolutions -> evolution -> equation -> Prop.
     Variable P_block: ident -> evolution -> stream (list value) -> stream (list value) -> evolution -> Prop.
 
     Hypothesis EqDefCase:
-      forall bk H E E' x xs ck ce,
+      forall bk H E T E' x xs ck ce,
         sem_var_var H x xs ->
         sem_caexp bk H E ck ce xs ->
-        P_equation bk H E (EqDef x ck ce) E'.
+        P_equation bk H E T E' (EqDef x ck ce).
 
     Hypothesis EqNextCase:
-      forall bk H E E' x ck e xs ls,
-        sem_var_last E' x xs ->
+      forall bk H E T E' x ck e xs ls,
+        sem_state_var E' x xs ->
         sem_laexp bk H E ck e ls ->
-        P_equation bk H E (EqNext x ck e) E'.
+        P_equation bk H E T E' (EqNext x ck e).
+
+    Hypothesis EqTransientCase:
+      forall bk H E T E' s ck Es,
+        sub_inst s E Es ->
+        PM.find s T = Some Es ->
+        P_equation bk H E T E' (EqTransient s ck).
 
     Hypothesis EqResetCase:
-      forall bk H E E' s0 ck b s e ls Es E0,
-        sem_laexp bk H E ck e ls ->
+      forall bk H E T E' ck b s r rs Es E0,
+        sem_var H E r rs ->
         sub_inst s E Es ->
-        sem_reset P b (reset_of ls) Es E0 ->
-        PM.find s0 (snd H) = Some E0 ->
-        P_equation bk H E (EqReset s0 ck b s e) E'.
+        sem_reset P b (reset_of rs) Es E0 ->
+        PM.find s T = Some E0 ->
+        P_equation bk H E T E' (EqReset s ck b r).
 
     Hypothesis EqCallCase:
-      forall bk H E E' s' ys ck b s es ess Es oss Es',
+      forall bk H E T E' s ys ck b es ess Es oss Es',
         sem_laexps bk H E ck es ess ->
-        PM.find s (snd H) = Some Es ->
+        PM.find s T = Some Es ->
         sem_block P b Es ess oss Es' ->
         sem_vars H ys oss ->
-        sub_inst s' E' Es' ->
+        sub_inst s E' Es' ->
         P_block b Es ess oss Es' ->
-        P_equation bk H E (EqCall s' ys ck b s es) E'.
+        P_equation bk H E T E' (EqCall s ys ck b es).
 
     Hypothesis BlockCase:
-      forall b bl P' H E E' xss yss bk,
+      forall b bl P' H E T E' xss yss bk,
         clock_of xss bk ->
         find_block b P = Some (bl, P') ->
         sem_vars H (map fst bl.(b_in)) xss ->
@@ -541,14 +562,14 @@ environment.
         same_clock xss ->
         same_clock yss ->
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
-        Forall (fun eq => sem_equation P bk H E eq E') bl.(b_eqs) ->
-        Forall (fun eq => P_equation bk H E eq E') bl.(b_eqs) ->
+        Forall (sem_equation P bk H E T E') bl.(b_eqs) ->
+        Forall (P_equation bk H E T E') bl.(b_eqs) ->
         P_block b E xss yss E'.
 
     Fixpoint sem_equation_mult
-            (b: stream bool) (H: history) (E: evolution) (e: equation) (E': evolution)
-            (Sem: sem_equation P b H E e E') {struct Sem}
-      : P_equation b H E e E'
+            (b: stream bool) (H: history) (E: evolution) (T: transient_evolutions) (E': evolution) (e: equation)
+            (Sem: sem_equation P b H E T E' e) {struct Sem}
+      : P_equation b H E T E' e
     with sem_block_mult
            (f: ident) (E: evolution) (xss oss: stream (list value)) (E': evolution)
            (Sem: sem_block P f E xss oss E') {struct Sem}
@@ -705,10 +726,10 @@ environment.
         congruence.
     Qed.
 
-    Lemma sem_var_last_instant_det:
+    Lemma sem_state_var_instant_det:
       forall x v1 v2,
-        sem_var_last_instant S x v1
-        -> sem_var_last_instant S x v2
+        sem_state_var_instant S x v1
+        -> sem_state_var_instant S x v2
         -> v1 = v2.
     Proof.
       intros x v1 v2 H1 H2.
@@ -726,7 +747,7 @@ environment.
       intros x v1 v2 H1 H2.
       inv H1; inv H2.
       - eapply sem_var_var_instant_det; eauto.
-      - eapply sem_var_last_instant_det; eauto.
+      - eapply sem_state_var_instant_det; eauto.
     Qed.
 
     Lemma sem_clock_instant_det:

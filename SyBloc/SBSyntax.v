@@ -54,12 +54,13 @@ Module Type SBSYNTAX
   (** ** Equations *)
 
   Inductive equation :=
-  | EqDef   : ident -> clock -> cexp -> equation
-  | EqNext  : ident -> clock -> lexp -> equation
-  | EqReset : ident -> clock -> ident -> ident -> lexp -> equation
-  (* <s> =ck reset block<s> on e *)
-  | EqCall  : ident -> idents -> clock -> ident -> ident -> list lexp -> equation.
-  (* <s> y1, ..., yn =ck block<s>(e1, ..., em) *)
+  | EqDef       : ident -> clock -> cexp -> equation
+  | EqNext      : ident -> clock -> lexp -> equation
+  | EqReset     : ident -> clock -> ident -> var -> equation
+  (* <trans s> =ck reset block<last s> on e *)
+  | EqTransient : ident -> clock -> equation
+  | EqCall      : ident -> idents -> clock -> ident -> list lexp -> equation.
+  (* <next s> y1, ..., yn =ck block<trans s>(e1, ..., em) *)
 
   Record block :=
     Block {
