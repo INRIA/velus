@@ -588,18 +588,18 @@ Module Type CORRECTNESS
           lasts_eq_spec lasts (EqFby x ck c0 e).
 
     Lemma equation_correctness:
-      forall eq lasts eqs bk H M H' E T E' vars,
-        msem_equation G bk H M eq ->
+      forall eq lasts eqs bk H M M' H' E T vars,
+        msem_equation G bk H M M' eq ->
         compat_state H M H' E ->
         coherent_msem_state H M ->
         lasts_eq_spec lasts eq ->
         lasts_spec lasts M ->
         wc_equation vars eq ->
-        (forall n, Forall (SemSB.sem_equation P (bk n) (H' n) (E n) (T n) (E' n)) eqs) ->
-        forall n, Forall (SemSB.sem_equation P (bk n) (H' n) (E n) (T n) (E' n)) (translate_eqn lasts eq ++ eqs).
+        (forall n, Forall (SemSB.sem_equation P (bk n) (H' n) (E n) (T n) (M' n)) eqs) ->
+        forall n, Forall (SemSB.sem_equation P (bk n) (H' n) (E n) (T n) (M' n)) (translate_eqn lasts eq ++ eqs).
     Proof.
       intros ** Heq Compat CoherentMSem LastsEqSpec LastsSpec WC Heqs n.
-      destruct Heq as [| | |?????????? Var Mfby];
+      destruct Heq as [| | |??????????? Var Mfby];
         inversion_clear LastsEqSpec as [??? Last| |???? Last];
         inv WC;
         simpl.
@@ -623,18 +623,18 @@ Module Type CORRECTNESS
         (* { intro n'; specialize (LastsSpec n' x); unfold Env.mem in LastsSpec. *)
         (*   rewrite Last in LastsSpec. apply not_None_is_Some; auto. *)
         (* } *)
-        inversion_clear Mfby as [?????? Spec].
+        inversion_clear Mfby as [??????? Spec].
         specialize (Spec n); specialize (LastsSpec n x).
         unfold Env.mem in LastsSpec; rewrite Last in LastsSpec.
         apply not_None_is_Some in LastsSpec as (?& Find).
         rewrite Find in Spec.
         destruct (ls n).
-        + constructor.
-          * admit.
-          * admit.
-        + constructor.
-        unfold coherent_msem_state, coherent_msem_state_instant in *.
-        constructor.
+        + constructor; intuition (try congruence).
+          admit.
+        + constructor; intuition (eauto).
+          admit.
+    Qed.
+
 
     Lemma equation_correctness:
       forall lasts eq bk H M eqs H' E T E' vars,
