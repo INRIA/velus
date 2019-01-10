@@ -7,233 +7,31 @@ Require Import Morphisms.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
+Require Import Velus.Clocks.
+Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.RMemory.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.NLustre.Stream.
+Require Import Velus.NLustre.NLExprSemantics.
 
 Module Type SBSEMANTICS
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX       Op)
-       (Import Syn     : SBSYNTAX        Ids Op)
-       (Import Str     : STREAM              Op OpAux).
-
-  (** ** Environment and history *)
-
-  (**
-
-An history maps variables to streams of values (the variables'
-histories). Taking a snapshot of the history at a given time yields an
-environment.
-
-   *)
+       (Import Clks    : CLOCKS          Ids)
+       (Import ExprSyn : NLEXPRSYNTAX        Op)
+       (Import Syn     : SBSYNTAX        Ids Op       Clks ExprSyn)
+       (Import Str     : STREAM              Op OpAux)
+       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str).
 
   Definition state := memory val.
-  (* Definition evolution := memory (stream val). *)
-
-  Definition transient_states := PM.t state.
-  (* Definition transient_evolutions := PM.t evolution. *)
-
-
-  Definition env := PM.t value.
-  (* Definition history := PM.t (stream value). *)
-
-  (** ** Instantaneous semantics *)
-
-  Section ExprSemantics.
-
-    Variable base: bool.
-    Variable R: env.
-    Variable S: state.
-    (* Variable Ts: transient_states. *)
-
-    Inductive sem_var_var: ident -> value -> Prop :=
-      Svv:
-        forall x v,
-          PM.find x R = Some v ->
-          sem_var_var x v.
-
-    Inductive sem_clock: clock -> bool -> Prop :=
-    | Sbase:
-        sem_clock Cbase base
-    | Son:
-        forall ck x c b,
-          sem_clock ck true ->
-          sem_var ck x (present c) ->
-          val_to_bool c = Some b ->
-          sem_clock (Con ck x b) true
-    | Son_abs1:
-        forall ck x c,
-          sem_clock ck false ->
-          sem_var ck x absent ->
-          sem_clock (Con ck x c) false
-    | Son_abs2:
-        forall ck x c b,
-          sem_clock ck true ->
-          sem_var ck x (present c) ->
-          val_to_bool c = Some b ->
-          sem_clock (Con ck x (negb b)) false
-
-    with sem_state_var: clock -> ident -> value -> Prop :=
-         | SsvPresent:
-             forall x v ck,
-               find_val x S = Some v ->
-               sem_clock ck true ->
-               sem_state_var ck x (present v)
-         | SsvAbsent:
-             forall x ck,
-               find_val x S <> None ->
-               sem_clock ck false ->
-               sem_state_var ck x absent
-
-    with sem_var: clock -> var -> value -> Prop :=
-         | Sv:
-             forall x v ck,
-               sem_var_var x v ->
-               sem_var ck (Var x) v
-         | Sl:
-             forall x v ck,
-               sem_state_var ck x v ->
-               sem_var ck (Last x) v.
-
-    Scheme sem_clock_mut := Induction for sem_clock Sort Prop
-             with sem_state_var_mut := Induction for sem_state_var Sort Prop
-             with sem_var_mut := Induction for sem_var Sort Prop.
-
-    Combined Scheme sem_clock_state_var_var_mut from
-             sem_clock_mut, sem_state_var_mut, sem_var_mut.
-
-    Definition sem_vars (xs: idents) (vs: list value) : Prop :=
-      Forall2 sem_var_var xs vs.
-
-    Inductive sem_lexp: clock -> lexp -> value -> Prop:=
-    | Sconst:
-        forall c v ck,
-          v = (if base then present (sem_const c) else absent) ->
-          sem_lexp ck (Econst c) v
-    | Svar:
-        forall x v ty ck,
-          sem_var ck x v ->
-          sem_lexp ck (Evar x ty) v
-    | Swhen_eq:
-        forall s x sc xc b ck,
-          sem_var ck x (present xc) ->
-          sem_lexp ck s (present sc) ->
-          val_to_bool xc = Some b ->
-          sem_lexp (Con ck x b) (Ewhen s x b) (present sc)
-    | Swhen_abs1:
-        forall s x sc xc b ck,
-          sem_var ck x (present xc) ->
-          val_to_bool xc = Some b ->
-          sem_lexp ck s (present sc) ->
-          sem_lexp (Con ck x (negb b)) (Ewhen s x (negb b)) absent
-    | Swhen_abs:
-        forall s x b ck,
-          sem_var ck x absent ->
-          sem_lexp ck s absent ->
-          sem_lexp (Con ck x b) (Ewhen s x b) absent
-    | Sunop_eq:
-        forall le op c c' ty ck,
-          sem_lexp ck le (present c) ->
-          sem_unop op c (typeof le) = Some c' ->
-          sem_lexp ck (Eunop op le ty) (present c')
-    | Sunop_abs:
-        forall le op ty ck,
-          sem_lexp ck le absent ->
-          sem_lexp ck (Eunop op le ty) absent
-    | Sbinop_eq:
-        forall le1 le2 op c1 c2 c' ty ck,
-          sem_lexp ck le1 (present c1) ->
-          sem_lexp ck le2 (present c2) ->
-          sem_binop op c1 (typeof le1) c2 (typeof le2) = Some c' ->
-          sem_lexp ck (Ebinop op le1 le2 ty) (present c')
-    | Sbinop_abs:
-        forall le1 le2 op ty ck,
-          sem_lexp ck le1 absent ->
-          sem_lexp ck le2 absent ->
-          sem_lexp ck (Ebinop op le1 le2 ty) absent.
-
-    Definition sem_lexps (ck: clock) (les: list lexp) (vs: list value) :=
-      Forall2 (sem_lexp ck) les vs.
-
-    Inductive sem_cexp: clock -> cexp -> value -> Prop :=
-    | Smerge_true:
-        forall x t f c ck,
-          sem_var ck x (present true_val) ->
-          sem_cexp (Con ck x true) t (present c) ->
-          sem_cexp (Con ck x false) f absent ->
-          sem_cexp ck (Emerge x t f) (present c)
-    | Smerge_false:
-        forall x t f c ck,
-          sem_var ck x (present false_val) ->
-          sem_cexp (Con ck x true) t absent ->
-          sem_cexp (Con ck x false) f (present c) ->
-          sem_cexp ck (Emerge x t f) (present c)
-    | Smerge_abs:
-        forall x t f ck,
-          sem_var ck x absent ->
-          sem_cexp (Con ck x true) t absent ->
-          sem_cexp (Con ck x false) f absent ->
-          sem_cexp ck (Emerge x t f) absent
-    | Site_eq:
-        forall x t f c b ct cf ck,
-          sem_lexp ck x (present c) ->
-          sem_cexp ck t (present ct) ->
-          sem_cexp ck f (present cf) ->
-          val_to_bool c = Some b ->
-          sem_cexp ck (Eite x t f) (if b then present ct else present cf)
-    | Site_abs:
-        forall b t f ck,
-          sem_lexp ck b absent ->
-          sem_cexp ck t absent ->
-          sem_cexp ck f absent ->
-          sem_cexp ck (Eite b t f) absent
-    | Sexp:
-        forall e v ck,
-          sem_lexp ck e v ->
-          sem_cexp ck (Eexp e) v.
-
-    Inductive sem_annotated {A}
-              (sem: clock -> A -> value -> Prop)
-      : clock -> A -> value -> Prop :=
-    | Stick:
-        forall ck a c,
-          sem ck a (present c) ->
-          sem_clock ck true ->
-          sem_annotated sem ck a (present c)
-    | Sabs:
-        forall ck a,
-          sem ck a absent ->
-          sem_clock ck false ->
-          sem_annotated sem ck a absent.
-
-    Definition sem_laexp := sem_annotated sem_lexp.
-    Definition sem_caexp := sem_annotated sem_cexp.
-
-    Inductive sem_laexps: clock -> list lexp -> list value -> Prop:=
-    | SLticks:
-        forall ck ces cs vs,
-          vs = map present cs ->
-          sem_lexps ck ces vs ->
-          sem_clock ck true ->
-          sem_laexps ck ces vs
-    | SLabss:
-        forall ck ces vs,
-          vs = all_absent ces ->
-          sem_lexps ck ces vs ->
-          sem_clock ck false ->
-          sem_laexps ck ces vs.
-
-  End ExprSemantics.
+  Definition transient_states := Env.t state.
 
   Definition reset_of (v: value) : bool :=
     match v with
     | present x => x ==b true_val
     | absent => false
     end.
-
-  (* Definition reset_of (xs: stream value) : stream bool := *)
-  (*   fun n => reset_of_value (xs n). *)
 
   Definition reset_last (bl: block) (r: bool) (x: ident) (v: val) : val :=
     if r then
@@ -271,32 +69,33 @@ environment.
     Inductive sem_equation: bool -> env -> state -> transient_states -> state -> equation -> Prop :=
     | SEqDef:
         forall base R S T S' x v ck ce,
-          sem_var_var R x v ->
-          sem_caexp base R S ck ce v ->
+          sem_var_instant R x v ->
+          sem_caexp_instant base R ck ce v ->
           sem_equation base R S T S' (EqDef x ck ce)
     | SEqNext:
-        forall base R S T S' x ck e v,
-          sem_state_var base R S' ck x v ->
-          sem_laexp base R S ck e v ->
+        forall base R S T S' x ck e v v',
+          find_val x S' = Some v' ->
+          (forall v'', v = present v'' -> v' = v'') ->
+          sem_laexp_instant base R ck e v ->
           sem_equation base R S T S' (EqNext x ck e)
     | SEqTransient:
         forall base R S T S' s ck Ss,
           sub_inst s S Ss ->
-          PM.find s T = Some Ss ->
+          Env.find s T = Some Ss ->
           sem_equation base R S T S' (EqTransient s ck)
     | SEqReset:
         forall base R S T S' ck b s r vr Ss S0,
-          sem_var base R S ck r vr ->
+          sem_var_instant R r vr ->
           sub_inst s S Ss ->
           sem_reset b (reset_of vr) Ss S0 ->
-          PM.find s T = Some S0 ->
+          Env.find s T = Some S0 ->
           sem_equation base R S T S' (EqReset s ck b r)
     | SEqCall:
         forall base R S T S' ys ck b s es xs Ss os Ss',
-          sem_laexps base R S ck es xs ->
-          PM.find s T = Some Ss ->
+          sem_laexps_instant base R ck es xs ->
+          Env.find s T = Some Ss ->
           sem_block b Ss xs os Ss' ->
-          sem_vars R ys os ->
+          sem_vars_instant R ys os ->
           sub_inst s S' Ss' ->
           sem_equation base R S T S' (EqCall s ys ck b es)
 
@@ -305,15 +104,14 @@ environment.
              forall b bl P' S T S' R xs ys base,
                clock_of xs base ->
                find_block b P = Some (bl, P') ->
-               sem_vars R (map fst bl.(b_in)) xs ->
-               sem_vars R (map fst bl.(b_out)) ys ->
+               sem_vars_instant R (map fst bl.(b_in)) xs ->
+               sem_vars_instant R (map fst bl.(b_out)) ys ->
                same_clock xs ->
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
                Forall (sem_equation base R S T S') bl.(b_eqs) ->
                (* well_structured_memories bl.(b_eqs) M -> *)
                sem_block b S xs ys S'.
-
 
   End Semantics.
 
@@ -325,36 +123,37 @@ environment.
 
     Hypothesis EqDefCase:
       forall base R S T S' x v ck ce,
-        sem_var_var R x v ->
-        sem_caexp base R S ck ce v ->
+        sem_var_instant R x v ->
+        sem_caexp_instant base R ck ce v ->
         P_equation base R S T S' (EqDef x ck ce).
 
     Hypothesis EqNextCase:
-      forall base R S T S' x ck e v,
-        sem_state_var base R S' ck x v ->
-        sem_laexp base R S ck e v ->
+      forall base R S T S' x ck e v v',
+        find_val x S' = Some v' ->
+        (forall v'', v = present v'' -> v' = v'') ->
+        sem_laexp_instant base R ck e v ->
         P_equation base R S T S' (EqNext x ck e).
 
     Hypothesis EqTransientCase:
       forall base R S T S' s ck Ss,
         sub_inst s S Ss ->
-        PM.find s T = Some Ss ->
+        Env.find s T = Some Ss ->
         P_equation base R S T S' (EqTransient s ck).
 
     Hypothesis EqResetCase:
       forall base R S T S' ck b s r vr Ss S0,
-        sem_var base R S ck r vr ->
+        sem_var_instant R r vr ->
         sub_inst s S Ss ->
         sem_reset P b (reset_of vr) Ss S0 ->
-        PM.find s T = Some S0 ->
+        Env.find s T = Some S0 ->
         P_equation base R S T S' (EqReset s ck b r).
 
     Hypothesis EqCallCase:
       forall base R S T S' s ys ck b es xs Ss os Ss',
-        sem_laexps base R S ck es xs ->
-        PM.find s T = Some Ss ->
+        sem_laexps_instant base R ck es xs ->
+        Env.find s T = Some Ss ->
         sem_block P b Ss xs os Ss' ->
-        sem_vars R ys os ->
+        sem_vars_instant R ys os ->
         sub_inst s S' Ss' ->
         P_block b Ss xs os Ss' ->
         P_equation base R S T S' (EqCall s ys ck b es).
@@ -363,8 +162,8 @@ environment.
       forall b bl P' R S T S' xs ys base,
         clock_of xs base ->
         find_block b P = Some (bl, P') ->
-        sem_vars R (map fst bl.(b_in)) xs ->
-        sem_vars R (map fst bl.(b_out)) ys ->
+        sem_vars_instant R (map fst bl.(b_in)) xs ->
+        sem_vars_instant R (map fst bl.(b_out)) ys ->
         same_clock xs ->
         same_clock ys ->
         (absent_list xs <-> absent_list ys) ->
