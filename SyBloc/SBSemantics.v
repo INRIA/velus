@@ -27,12 +27,6 @@ Module Type SBSEMANTICS
   Definition state := memory val.
   Definition transient_states := Env.t state.
 
-  Definition reset_of (v: value) : bool :=
-    match v with
-    | present x => x ==b true_val
-    | absent => false
-    end.
-
   Definition reset_last (bl: block) (r: bool) (x: ident) (v: val) : val :=
     if r then
       match find_init x bl with
@@ -78,26 +72,22 @@ Module Type SBSEMANTICS
           (forall v'', v = present v'' -> v' = v'') ->
           sem_laexp_instant base R ck e v ->
           sem_equation base R S T S' (EqNext x ck e)
-    | SEqTransient:
-        forall base R S T S' s ck Ss,
-          sub_inst s S Ss ->
-          Env.find s T = Some Ss ->
-          sem_equation base R S T S' (EqTransient s ck)
     | SEqReset:
-        forall base R S T S' ck b s r vr Ss S0,
-          sem_var_instant R r vr ->
+        forall base R S T S' ck b s br Ss S0,
+          sem_clock_instant base R ck br ->
           sub_inst s S Ss ->
-          sem_reset b (reset_of vr) Ss S0 ->
+          sem_reset b br Ss S0 ->
           Env.find s T = Some S0 ->
-          sem_equation base R S T S' (EqReset s ck b r)
+          sem_equation base R S T S' (EqReset s ck b)
     | SEqCall:
-        forall base R S T S' ys ck b s es xs Ss os Ss',
+        forall base R S T S' ys rst ck b s es xs Ss os Ss',
           sem_laexps_instant base R ck es xs ->
+          (rst = false -> sub_inst s S Ss) ->
           Env.find s T = Some Ss ->
           sem_block b Ss xs os Ss' ->
           sem_vars_instant R ys os ->
           sub_inst s S' Ss' ->
-          sem_equation base R S T S' (EqCall s ys ck b es)
+          sem_equation base R S T S' (EqCall s ys ck rst b es)
 
     with sem_block: ident -> state -> list value -> list value -> state -> Prop :=
            SBlock:
@@ -134,29 +124,24 @@ Module Type SBSEMANTICS
         sem_laexp_instant base R ck e v ->
         P_equation base R S T S' (EqNext x ck e).
 
-    Hypothesis EqTransientCase:
-      forall base R S T S' s ck Ss,
-        sub_inst s S Ss ->
-        Env.find s T = Some Ss ->
-        P_equation base R S T S' (EqTransient s ck).
-
     Hypothesis EqResetCase:
-      forall base R S T S' ck b s r vr Ss S0,
-        sem_var_instant R r vr ->
+      forall base R S T S' ck b s br Ss S0,
+        sem_clock_instant base R ck br ->
         sub_inst s S Ss ->
-        sem_reset P b (reset_of vr) Ss S0 ->
+        sem_reset P b br Ss S0 ->
         Env.find s T = Some S0 ->
-        P_equation base R S T S' (EqReset s ck b r).
+        P_equation base R S T S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
-      forall base R S T S' s ys ck b es xs Ss os Ss',
+      forall base R S T S' s ys ck rst b es xs Ss os Ss',
         sem_laexps_instant base R ck es xs ->
+        (rst = false -> sub_inst s S Ss) ->
         Env.find s T = Some Ss ->
         sem_block P b Ss xs os Ss' ->
         sem_vars_instant R ys os ->
         sub_inst s S' Ss' ->
         P_block b Ss xs os Ss' ->
-        P_equation base R S T S' (EqCall s ys ck b es).
+        P_equation base R S T S' (EqCall s ys ck rst b es).
 
     Hypothesis BlockCase:
       forall b bl P' R S T S' xs ys base,

@@ -18,11 +18,10 @@ Module Type SBSYNTAX
   Inductive equation :=
   | EqDef       : ident -> clock -> cexp -> equation
   | EqNext      : ident -> clock -> lexp -> equation
-  | EqReset     : ident -> clock -> ident -> ident -> equation
-  (* <trans s> =ck reset block<last s> on e *)
-  | EqTransient : ident -> clock -> equation
-  | EqCall      : ident -> idents -> clock -> ident -> list lexp -> equation.
-  (* <next s> y1, ..., yn =ck block<trans s>(e1, ..., em) *)
+  | EqReset     : ident -> clock -> ident -> equation
+  (* <trans s> =ck reset block<last s> *)
+  | EqCall      : ident -> idents -> clock -> bool -> ident -> list lexp -> equation.
+  (* <next s> y1, ..., yn =ck block<if b then trans s else last s>(e1, ..., em) *)
 
   Record block :=
     Block {
