@@ -631,7 +631,7 @@ Module Type CORRECTNESS
     Qed.
 
     Lemma equation_correctness:
-      forall eq eqs bk H M M',
+      forall eq eqs bk H M M' Is,
         (forall f xss M M' yss,
             msem_node G f xss M M' yss ->
             sem_block_n P f (* (entry_states M *) M xss yss M') ->
@@ -646,11 +646,11 @@ Module Type CORRECTNESS
         (* lasts_eq_spec lasts eq -> *)
         (* lasts_spec lasts M -> *)
         (* wc_equation vars eq -> *)
-        sem_equations_n P bk H (entry_states M M') (instances_n M) M' eqs ->
-        sem_equations_n P bk H (entry_states M M') (instances_n M) M' (translate_eqn eq ++ eqs).
+        sem_equations_n P bk H M Is M' eqs ->
+        sem_equations_n P bk H M Is M' (translate_eqn eq ++ eqs).
     Proof.
       intros ** IHnode IHrst Heq (* Compat CoherentMSem LastsEqSpec LastsSpec WC *) Heqs n.
-      destruct Heq as [| | |??????????? Var Mfby];
+      destruct Heq as [| |????????????????????? Var Reset|??????????? Var Mfby];
         (* inversion_clear LastsEqSpec as [??? Last| |???? Last]; *)
         (* inv WC; *)
         simpl.
@@ -658,23 +658,39 @@ Module Type CORRECTNESS
       - do 2 (econstructor; eauto).
 
       - erewrite hd_error_Some_hd; eauto.
-        (* assert (Env.find x (instances_n M n) = Some (entry_states Mx Mx' n)) by admit.  *)
-        constructor; auto; [|constructor; auto]; econstructor; eauto.
-        + eapply entry_states_sub_inst_n; eauto.
+        do 2 (econstructor; eauto).
         + admit.
-        + unfold instances_n, sub_inst_n, sub_inst, find_inst in *; auto.
         + now apply IHnode.
 
       - erewrite hd_error_Some_hd; eauto.
-        constructor; auto; [|constructor; auto].
+        inversion_clear Reset as [?????? Nodes].
+        assert (forall k, exists Mk Mk',
+                     sem_block_n P f Mk
+                                 (mask (all_absent (ls 0)) k (reset_of ys) ls)
+                                 (mask (all_absent (xss 0)) k (reset_of ys) xss)
+                                 Mk'
+                     /\ memory_masked k (reset_of ys) Mx Mk
+                     /\ memory_masked k (reset_of ys) Mx' Mk') as Blocks
+            by (intro; destruct (Nodes k) as (?&?&?&?&?);
+                do 2 eexists; intuition; eauto); clear Nodes.
+        set (rs := reset_of ys).
+        specialize (Blocks (count rs n)).
+        destruct Blocks as (Mk & Mk' & Blocks & Mmask & Mmask').
+        specialize (Blocks n); specialize (Mmask n); specialize (Mmask' n).
+        rewrite 2 mask_transparent, Mmask, Mmask' in Blocks; auto.
+        specialize (Var n).
+        destruct (reset_of ys n) eqn: E.
+        + admit.
+        + unfold reset_of, reset_of_value in E.
+          destruct (ys n) eqn: E'.
+          *{ constructor; auto; [|constructor; auto].
+             - econstructor; eauto.
+               + constructor; auto.
+                 admit.
+               + econstructor.
+          *{ econstructor; eauto.
+             - constructor. admit.
         + econstructor; eauto.
-          * apply entry_states_sub_inst_n; eauto.
-          * admit.
-        + constructor; auto.
-          econstructor; eauto;
-            unfold instances_n, sub_inst_n, sub_inst, find_inst in *; auto.
-          apply IHnode; auto.
-
           admit.
 
       - econstructor; eauto.

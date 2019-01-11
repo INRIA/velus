@@ -176,6 +176,37 @@ Module Type SBSEMANTICS
 
   End sem_block_mult.
 
+  Inductive well_formed_state: program -> state -> Prop :=
+    well_formed_state_intro:
+      forall P S,
+        (forall x S',
+            find_inst x S = Some S' ->
+            well_formed_state P S'
+            /\ exists bl P', find_block x P = Some (bl, P')) ->
+        well_formed_state P S.
+
+  Lemma sem_reset_false:
+    forall P S b bl P',
+      find_block b P = Some (bl, P') ->
+      well_formed_state P S ->
+      sem_reset P b false S S.
+  Proof.
+    induction S as [?? IH] using memory_ind'; intros ** Find WF.
+    inversion_clear WF as [?? Spec].
+    econstructor; eauto.
+    - unfold reset_lasts, reset_last; simpl.
+      induction xvs as [|(i, Si)]; simpl; auto.
+      rewrite <-IHxvs; auto.
+    - intros ** Sub.
+      exists S'; split; auto.
+      pose proof Sub as WF; apply Spec in WF as (?&?&?&?).
+      unfold sub_inst, find_inst in Sub.
+      apply Environment.find_in, in_map with (f := snd) in Sub.
+      simpl in Sub.
+      eapply In_Forall in IH; eauto.
+  Qed.
+
+
  (*  (** ** Liftings of instantaneous semantics *) *)
 
 (*   Section LiftSemantics. *)
