@@ -275,6 +275,9 @@ Section Operations.
   Definition add_val (x: ident) (v: V) (m: memory V) : memory V :=
     Mnode (Env.add x v (values m)) (instances m).
 
+  Definition add_vals (xs: list ident) (vs: list V) (m: memory V) : memory V :=
+    Mnode (Env.adds xs vs (values m)) (instances m).
+
   Definition add_inst (x: ident) (m': memory V) (m: memory V) : memory V :=
     Mnode (values m) (Env.add x m' (instances m)).
 

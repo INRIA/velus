@@ -31,22 +31,28 @@ Module Type SBSYNTAX
         b_lasts : list (ident * const);
         b_blocks: list (ident * ident);
         b_out   : list (ident * type);
-        b_eqs   : list equation
+        b_eqs   : list equation;
 
         (* b_ingt0 : 0 < length b_in; *)
         (* b_outgt0 : 0 < length b_out *)
+        b_nodup_lasts: NoDupMembers b_lasts;
+        b_nodup_blocks: NoDupMembers b_blocks
       }.
 
-  Fixpoint find_const (x: ident) (xs: list (ident * const)) : option const :=
-    match xs with
-    | [] => None
-    | y :: xs =>
-      let (y, c) := y in
-      if ident_eqb y x then Some c else find_const x xs
-    end.
+  (* TODO: in Common *)
+  (* Fixpoint assoc {A} (x: ident) (xs: list (ident * A)) : option A := *)
+  (*   match xs with *)
+  (*   | [] => None *)
+  (*   | y :: xs => *)
+  (*     let (y, c) := y in *)
+  (*     if ident_eqb y x then Some c else assoc x xs *)
+  (*   end. *)
 
-  Definition find_init (x: ident) (bl: block) :=
-    find_const x bl.(b_lasts).
+  (* Definition find_last (x: ident) (bl: block) := *)
+  (*   assoc x bl.(b_lasts). *)
+
+  (* Definition find_subblock (x: ident) (bl: block) := *)
+  (*   assoc x bl.(b_blocks). *)
 
   Definition bl_vars (bl: block): list (ident * type) :=
     bl.(b_in) ++ bl.(b_out) ++ bl.(b_vars).
@@ -108,6 +114,17 @@ Module Type SBSYNTAX
     - now apply IHP.
   Qed.
 
+  Remark find_block_other:
+    forall b P bl bl' P',
+      bl.(b_name) <> b ->
+      (find_block b (bl :: P) = Some (bl', P')
+       <-> find_block b P = Some (bl', P')).
+  Proof.
+    intros ** Hnb.
+    apply ident_eqb_neq in Hnb.
+    simpl; rewrite Hnb; reflexivity.
+  Qed.
+
   Remark find_block_In:
     forall b P bl P',
       find_block b P = Some (bl, P') ->
@@ -131,6 +148,20 @@ Module Type SBSYNTAX
   Proof.
     induction P as [|bl P]; simpl; auto.
     intro; destruct (ident_eqb bl.(b_name) b); auto.
+  Qed.
+
+  Lemma find_block_split:
+    forall b P bl P',
+      find_block b P = Some (bl, P') ->
+      exists P1,
+        P = P1 ++ bl :: P'.
+  Proof.
+    induction P as [|bl']; simpl; try discriminate.
+    intros ** Find.
+    destruct (ident_eqb (b_name bl') b) eqn:E.
+    - inv Find; exists []; auto.
+    - apply IHP in Find as (P2 & Eq).
+      exists (bl' :: P2); rewrite Eq; auto.
   Qed.
 
   Lemma not_In_find_block:

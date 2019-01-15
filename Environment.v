@@ -284,7 +284,7 @@ Section Global.
     simpl. rewrite gso; auto.
   Qed.
 
-  Lemma NotInMembers_find_adds:
+  Lemma not_In_find_adds:
     forall x xs (v: option A) vs S,
       ~In x xs ->
       find x S = v ->
@@ -295,6 +295,36 @@ Section Global.
     apply not_in_cons in Hnin.
     destruct Hnin as [Hnin Hneq].
     rewrite find_gsso; auto.
+  Qed.
+
+  Lemma In_find_add_list:
+    forall x v xvs S,
+      NoDupMembers xvs ->
+      In (x, v) xvs ->
+      find x (add_list xvs S) = Some v.
+  Proof.
+    induction xvs as [|(x', v') xvs]; try contradiction.
+    inversion_clear 1; inversion_clear 1 as [E|]; simpl.
+    - inv E; now rewrite gss.
+    - rewrite gso; auto.
+      eapply InMembers_neq; eauto.
+      eapply In_InMembers; eauto.
+  Qed.
+
+  Lemma In_find_add_list':
+    forall x v xvs S,
+      NoDupMembers xvs ->
+      find x S = None ->
+      find x (add_list xvs S) = Some v ->
+      In (x, v) xvs.
+  Proof.
+    induction xvs as [|(x', v') xvs]; simpl.
+    - intros ** ->; discriminate.
+    - inversion_clear 1; intros ** Find.
+      destruct (ident_eq_dec x x').
+      + subst; rewrite gss in Find; inv Find; auto.
+      + rewrite gso in Find; auto.
+        right; eauto.
   Qed.
 
   Add Parametric Morphism x v: (add x v)

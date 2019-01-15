@@ -27,16 +27,8 @@ Module Type SBSEMANTICS
   Definition state := memory val.
   Definition transient_states := Env.t state.
 
-  Definition reset_last (bl: block) (r: bool) (x: ident) (v: val) : val :=
-    if r then
-      match find_init x bl with
-      | Some c => sem_const c
-      | None => false_val
-      end
-    else v.
-
-  Definition reset_lasts (bl: block) (r: bool) (S S0: state) : Prop :=
-    values S0 = Env.mapi (reset_last bl r) (values S).
+  Definition reset_lasts (bl: block) (S0: state) : Prop :=
+    forall x c, In (x, c) bl.(b_lasts) <-> find_val x S0 = Some (sem_const c).
 
   Definition same_clock (vs: list value) : Prop :=
     absent_list vs \/ present_list vs.
@@ -48,17 +40,17 @@ Module Type SBSEMANTICS
 
     Variable P: program.
 
-    Inductive sem_reset: ident -> bool -> state -> state -> Prop :=
-      SReset:
-        forall b (r: bool) S S0 bl P',
+    Inductive initial_state: ident -> state -> Prop :=
+      initial_state_intro:
+        forall b S0 bl P',
           find_block b P = Some (bl, P') ->
-          reset_lasts bl r S S0 ->
-          (forall b' S',
-              sub_inst b' S S' ->
+          reset_lasts bl S0 ->
+          (forall x b',
+              In (x, b') bl.(b_blocks) ->
               exists S0',
-                sub_inst b' S0 S0'
-                /\ sem_reset b' r S' S0') ->
-          sem_reset b r S S0.
+                sub_inst x S0 S0'
+                /\ initial_state b' S0') ->
+          initial_state b S0.
 
     Inductive sem_equation: bool -> env -> state -> transient_states -> state -> equation -> Prop :=
     | SEqDef:
@@ -75,11 +67,11 @@ Module Type SBSEMANTICS
           end ->
           sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
-        forall base R S I S' ck b s br Ss S0,
-          sem_clock_instant base R ck br ->
+        forall base R S I S' ck b s r Ss S0,
+          sem_clock_instant base R ck r ->
           sub_inst s S Ss ->
-          sem_reset b br Ss S0 ->
-          Env.find s I = Some S0 ->
+          initial_state b S0 ->
+          Env.find s I = Some (if r then S0 else Ss) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
         forall base R S I S' ys rst ck b s es xs Ss os Ss',
@@ -129,11 +121,11 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqNext x ck e).
 
     Hypothesis EqResetCase:
-      forall base R S I S' ck b s br Ss S0,
-        sem_clock_instant base R ck br ->
+      forall base R S I S' ck b s r Ss S0,
+        sem_clock_instant base R ck r ->
         sub_inst s S Ss ->
-        sem_reset P b br Ss S0 ->
-        Env.find s I = Some S0 ->
+        initial_state P b S0 ->
+        Env.find s I = Some (if r then S0 else Ss) ->
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
@@ -189,26 +181,204 @@ Module Type SBSEMANTICS
             /\ exists bl P', find_block x P = Some (bl, P')) ->
         well_formed_state P S.
 
-  Lemma sem_reset_false:
-    forall P S b bl P',
-      find_block b P = Some (bl, P') ->
-      well_formed_state P S ->
-      sem_reset P b false S S.
+  Inductive Ordered: program -> Prop :=
+  | Ordered_nil:
+      Ordered []
+  | Ordered_cons:
+      forall bl P,
+        Ordered P ->
+        Forall (fun xb =>
+                  snd xb <> bl.(b_name)
+                  /\ exists bl' P', find_block (snd xb) P = Some (bl', P'))
+               bl.(b_blocks) ->
+        Forall (fun bl' => bl.(b_name) <> bl'.(b_name)) P ->
+        Ordered (bl :: P).
+
+  Remark Ordered_nodup:
+    forall P,
+      Ordered P ->
+      NoDup (map b_name P).
   Proof.
-    induction S as [?? IH] using memory_ind'; intros ** Find WF.
-    inversion_clear WF as [?? Spec].
-    econstructor; eauto.
-    - unfold reset_lasts, reset_last; simpl.
-      induction xvs as [|(i, Si)]; simpl; auto.
-      rewrite <-IHxvs; auto.
-    - intros ** Sub.
-      exists S'; split; auto.
-      pose proof Sub as WF; apply Spec in WF as (?&?&?&?).
-      unfold sub_inst, find_inst in Sub.
-      apply Environment.find_in, in_map with (f := snd) in Sub.
-      simpl in Sub.
-      eapply In_Forall in IH; eauto.
+    induction 1 as [|??? Ord Blocks NoDup]; simpl; constructor; auto.
+    clear - NoDup; induction P; inv NoDup; simpl; auto.
+    intros [|]; try congruence.
+    now apply IHP.
   Qed.
+
+  Remark Ordered_split:
+    forall P1 bl P,
+      Ordered (P1 ++ bl :: P) ->
+      Forall (fun xb =>
+                  snd xb <> bl.(b_name)
+                  /\ exists bl' P', find_block (snd xb) P = Some (bl', P'))
+             bl.(b_blocks).
+  Proof.
+    induction P1; simpl; inversion_clear 1; auto.
+  Qed.
+
+  Lemma initial_state_tail:
+    forall S0 bl P b,
+      Ordered (bl :: P) ->
+      b_name bl <> b ->
+      (initial_state P b S0 <->
+      initial_state (bl :: P) b S0).
+  Proof.
+    induction S0 as [?? IH] using memory_ind';
+      intros ** Ord ?; split; intro Init; inversion_clear Init as [???? Find ? Spec].
+    - econstructor; eauto.
+      + apply find_block_other; eauto.
+      + intros ** Find'.
+        specialize (Spec _ _ Find'); destruct Spec as (S0 & Sub & Init).
+        pose proof Sub.
+        unfold sub_inst, find_inst in Sub; simpl in Sub.
+        eapply Env.find_in, in_map with (f := snd) in Sub.
+        eapply In_Forall in IH; eauto.
+        exists S0; split; auto.
+        apply IH; auto using Ordered.
+        apply find_block_split in Find as (P1 & E).
+        rewrite E in Ord.
+        pose proof Ord as Ord'.
+        rewrite app_comm_cons in Ord.
+        apply Ordered_split in Ord.
+        eapply In_Forall in Ord as (?&?&? & Find); eauto; simpl in Find.
+        apply Ordered_nodup in Ord'; simpl in Ord'.
+        inversion_clear Ord' as [|?? NotIn].
+        pose proof Find as Find''.
+        apply find_block_name in Find.
+        apply find_block_In in Find''.
+        intro Eq; subst; apply NotIn.
+        rewrite Eq.
+        apply in_map, in_app; intuition.
+    - econstructor; eauto.
+      + apply find_block_other in Find; eauto.
+      + intros ** Find'.
+        specialize (Spec _ _ Find'); destruct Spec as (S0 & Sub & Init).
+        pose proof Sub.
+        unfold sub_inst, find_inst in Sub; simpl in Sub.
+        eapply Env.find_in, in_map with (f := snd) in Sub.
+        eapply In_Forall in IH; eauto.
+        exists S0; split; auto.
+        rewrite IH; eauto.
+        apply find_block_other in Find; auto.
+        apply find_block_split in Find as (? & Eq).
+        rewrite Eq in Ord; pose proof Ord as Ord'; rewrite app_comm_cons in Ord.
+        apply Ordered_split in Ord.
+        eapply In_Forall in Ord as (?&?&?& Find); eauto; simpl in Find.
+        pose proof Find as Find''.
+        apply find_block_name in Find.
+        apply find_block_In in Find''.
+        apply Ordered_nodup in Ord'.
+        inversion_clear Ord' as [|?? NotIn].
+        intro E; subst; apply NotIn.
+        rewrite E.
+        apply in_map, in_app; intuition.
+  Qed.
+
+  Fact reset_lasts_add_inst:
+    forall bl S0 x S0x,
+      reset_lasts bl S0 ->
+      reset_lasts bl (add_inst x S0x S0).
+  Proof.
+    unfold reset_lasts; intros; now rewrite find_val_add_inst.
+  Qed.
+
+  Lemma find_block_initial_state:
+    forall P b bl P',
+      Ordered P ->
+      find_block b P = Some (bl, P') ->
+      exists S0, initial_state P b S0.
+  Proof.
+    induction P as [|bl']; simpl; try discriminate.
+    inversion_clear 1 as [|??? Subs].
+    destruct (ident_eqb (b_name bl') b) eqn: E.
+    - intros E'; inv E'.
+      destruct bl; simpl in *.
+      induction b_blocks0 as [|(x, b')]; intros.
+      + set (xs := fst (split b_lasts0)).
+        set (vs := List.map sem_const (snd (split b_lasts0))).
+        assert (combine xs vs = List.map (fun (xc: ident * const) => (fst xc, sem_const (snd xc))) b_lasts0)
+          as Eq.
+        { pose proof (split_combine b_lasts0) as Eq.
+          destruct (split b_lasts0).
+          subst xs vs; simpl.
+          rewrite combine_map_snd, Eq; auto.
+        }
+        exists (add_vals xs vs (@empty_memory val)).
+        econstructor; eauto; simpl.
+        * rewrite E; eauto.
+        *{ unfold reset_lasts; simpl; intros.
+           unfold find_val, add_vals, Env.adds; simpl.
+           rewrite Eq.
+           split; intro In.
+           - apply Env.In_find_add_list.
+             + rewrite fst_NoDupMembers, map_map; simpl; rewrite <-fst_NoDupMembers.
+               apply b_nodup_lasts0.
+             + change (x, sem_const c) with ((fun xc => (fst xc, sem_const (snd xc))) (x, c)).
+               apply in_map; auto.
+           - apply Env.In_find_add_list' in In; auto.
+             + admit.
+             + rewrite fst_NoDupMembers, map_map; simpl; rewrite <-fst_NoDupMembers.
+               apply b_nodup_lasts0.
+         }
+        * contradiction.
+      + inversion Subs as [|?? (?&?&?& Find) Subs' E1]; destruct x0; subst; inv E1; simpl in *.
+        apply IHP in Find as (S0x); auto.
+        inversion_clear b_nodup_blocks0 as [|???? Nodup].
+        destruct (IHb_blocks0 Nodup) as (S0 & Init); eauto.
+        exists (add_inst x S0x S0).
+        econstructor; eauto; simpl.
+        * rewrite E; eauto.
+        * apply reset_lasts_add_inst.
+          inversion_clear Init as [???? Find Reset].
+          unfold find_block in Find; simpl in Find; rewrite E in Find; inv Find.
+          unfold reset_lasts in *; eauto.
+        *{ simpl; intros x' b'' [Eq|Hin].
+           - inv Eq.
+             unfold sub_inst.
+             rewrite find_inst_gss.
+             exists S0x; split; auto.
+             apply initial_state_tail; auto using Ordered.
+           - assert (x' <> x).
+             { inv b_nodup_blocks0.
+               eapply InMembers_neq; eauto.
+               eapply In_InMembers; eauto.
+             }
+             unfold sub_inst; rewrite find_inst_gso; auto.
+             inversion_clear Init as [???? Find Reset Spec].
+             unfold find_block in Find; simpl in Find; rewrite E in Find; inv Find; simpl in *.
+             specialize (Spec _ _ Hin); destruct Spec as (S0' &?& Init).
+             exists S0'; split; auto.
+             assert (b_name0 <> b'')
+               by (eapply In_Forall in Subs'; eauto; intuition).
+             apply initial_state_tail; auto using Ordered; simpl.
+             apply initial_state_tail in Init; eauto using Ordered.
+         }
+    - apply ident_eqb_neq in E.
+      intros Find.
+      edestruct IHP; eauto.
+      eexists; apply initial_state_tail; eauto using Ordered.
+  Qed.
+
+  (* Lemma sem_reset_false: *)
+  (*   forall P S b bl P', *)
+  (*     find_block b P = Some (bl, P') -> *)
+  (*     well_formed_state P S -> *)
+  (*     sem_reset P b false S S. *)
+  (* Proof. *)
+  (*   induction S as [?? IH] using memory_ind'; intros ** Find WF. *)
+  (*   inversion_clear WF as [?? Spec]. *)
+  (*   econstructor; eauto. *)
+  (*   - unfold reset_lasts, reset_last; simpl. *)
+  (*     induction xvs as [|(i, Si)]; simpl; auto. *)
+  (*     rewrite <-IHxvs; auto. *)
+  (*   - intros ** Sub. *)
+  (*     exists S'; split; auto. *)
+  (*     pose proof Sub as WF; apply Spec in WF as (?&?&?&?). *)
+  (*     unfold sub_inst, find_inst in Sub. *)
+  (*     apply Environment.find_in, in_map with (f := snd) in Sub. *)
+  (*     simpl in Sub. *)
+  (*     eapply In_Forall in IH; eauto. *)
+  (* Qed. *)
 
 
  (*  (** ** Liftings of instantaneous semantics *) *)
