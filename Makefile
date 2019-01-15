@@ -1,6 +1,7 @@
 #
 # invoke make with 'VERBOSE=1' to verbose the output
 #
+#
 
 VELUSMAIN=velusmain
 VELUS=velus
@@ -8,10 +9,20 @@ VELUS=velus
 MAKEFILEAUTO=Makefile.auto
 MAKEFILECONFIG=Makefile.config
 COQPROJECT=_CoqProject
-include $(MAKEFILECONFIG)
+
+ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
+    ifeq ($(wildcard $(MAKEFILECONFIG)),)
+    $(error Please run ./configure first)
+    endif
+    include $(MAKEFILECONFIG)
+endif
 
 # CompCert flags
+ifeq ($(COMPCERTDIR),)
+COMPCERTFLAGS=$(SILENT) -C ./CompCert
+else
 COMPCERTFLAGS=$(SILENT) -C $(COMPCERTDIR)
+endif
 COMPCERT_INCLUDES=lib cfrontend backend common driver cparser debug $(ARCH)
 
 PARSERDIR=Lustre/Parser
@@ -28,7 +39,9 @@ EXAMPLESDIR=examples
 EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
 
 # Menhir includes from CompCert
+ifeq ($(filter clean realclean, $(MAKECMDGOALS)),)
 include $(COMPCERTDIR)/Makefile.menhir
+endif
 export MENHIR
 comma:= ,
 empty:=
@@ -126,3 +139,4 @@ realclean: clean
 	rm -f $(MAKEFILECONFIG) $(COQPROJECT)
 	$(MAKE) $(COMPCERTFLAGS) $<
 	$(MAKE) $(EXAMPLESFLAGS) $@
+
