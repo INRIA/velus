@@ -62,36 +62,38 @@ Module Type SBSEMANTICS
 
     Inductive sem_equation: bool -> env -> state -> transient_states -> state -> equation -> Prop :=
     | SEqDef:
-        forall base R S T S' x v ck ce,
-          sem_var_instant R x v ->
+        forall base R S I S' x v ck ce,
           sem_caexp_instant base R ck ce v ->
-          sem_equation base R S T S' (EqDef x ck ce)
+          sem_var_instant R x v ->
+          sem_equation base R S I S' (EqDef x ck ce)
     | SEqNext:
-        forall base R S T S' x ck e v v',
-          find_val x S' = Some v' ->
-          (forall v'', v = present v'' -> v' = v'') ->
+        forall base R S I S' x ck e v,
           sem_laexp_instant base R ck e v ->
-          sem_equation base R S T S' (EqNext x ck e)
+          match v with
+          | present v' => find_val x S' = Some v'
+          | absent => find_val x S' = find_val x S
+          end ->
+          sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
-        forall base R S T S' ck b s br Ss S0,
+        forall base R S I S' ck b s br Ss S0,
           sem_clock_instant base R ck br ->
           sub_inst s S Ss ->
           sem_reset b br Ss S0 ->
-          Env.find s T = Some S0 ->
-          sem_equation base R S T S' (EqReset s ck b)
+          Env.find s I = Some S0 ->
+          sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
-        forall base R S T S' ys rst ck b s es xs Ss os Ss',
+        forall base R S I S' ys rst ck b s es xs Ss os Ss',
           sem_laexps_instant base R ck es xs ->
           (rst = false -> sub_inst s S Ss) ->
-          Env.find s T = Some Ss ->
+          Env.find s I = Some Ss ->
           sem_block b Ss xs os Ss' ->
           sem_vars_instant R ys os ->
           sub_inst s S' Ss' ->
-          sem_equation base R S T S' (EqCall s ys ck rst b es)
+          sem_equation base R S I S' (EqCall s ys ck rst b es)
 
     with sem_block: ident -> state -> list value -> list value -> state -> Prop :=
            SBlock:
-             forall b bl P' S T S' R xs ys base,
+             forall b bl P' S I S' R xs ys base,
                clock_of xs base ->
                find_block b P = Some (bl, P') ->
                sem_vars_instant R (map fst bl.(b_in)) xs ->
@@ -99,7 +101,7 @@ Module Type SBSEMANTICS
                same_clock xs ->
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
-               Forall (sem_equation base R S T S') bl.(b_eqs) ->
+               Forall (sem_equation base R S I S') bl.(b_eqs) ->
                (* well_structured_memories bl.(b_eqs) M -> *)
                sem_block b S xs ys S'.
 
@@ -112,39 +114,41 @@ Module Type SBSEMANTICS
     Variable P_block: ident -> state -> list value -> list value -> state -> Prop.
 
     Hypothesis EqDefCase:
-      forall base R S T S' x v ck ce,
-        sem_var_instant R x v ->
+      forall base R S I S' x v ck ce,
         sem_caexp_instant base R ck ce v ->
-        P_equation base R S T S' (EqDef x ck ce).
+        sem_var_instant R x v ->
+        P_equation base R S I S' (EqDef x ck ce).
 
     Hypothesis EqNextCase:
-      forall base R S T S' x ck e v v',
-        find_val x S' = Some v' ->
-        (forall v'', v = present v'' -> v' = v'') ->
+      forall base R S I S' x ck e v,
         sem_laexp_instant base R ck e v ->
-        P_equation base R S T S' (EqNext x ck e).
+        match v with
+        | present v' => find_val x S' = Some v'
+        | absent => find_val x S' = find_val x S
+        end ->
+        P_equation base R S I S' (EqNext x ck e).
 
     Hypothesis EqResetCase:
-      forall base R S T S' ck b s br Ss S0,
+      forall base R S I S' ck b s br Ss S0,
         sem_clock_instant base R ck br ->
         sub_inst s S Ss ->
         sem_reset P b br Ss S0 ->
-        Env.find s T = Some S0 ->
-        P_equation base R S T S' (EqReset s ck b).
+        Env.find s I = Some S0 ->
+        P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
-      forall base R S T S' s ys ck rst b es xs Ss os Ss',
+      forall base R S I S' s ys ck rst b es xs Ss os Ss',
         sem_laexps_instant base R ck es xs ->
         (rst = false -> sub_inst s S Ss) ->
-        Env.find s T = Some Ss ->
+        Env.find s I = Some Ss ->
         sem_block P b Ss xs os Ss' ->
         sem_vars_instant R ys os ->
         sub_inst s S' Ss' ->
         P_block b Ss xs os Ss' ->
-        P_equation base R S T S' (EqCall s ys ck rst b es).
+        P_equation base R S I S' (EqCall s ys ck rst b es).
 
     Hypothesis BlockCase:
-      forall b bl P' R S T S' xs ys base,
+      forall b bl P' R S I S' xs ys base,
         clock_of xs base ->
         find_block b P = Some (bl, P') ->
         sem_vars_instant R (map fst bl.(b_in)) xs ->
@@ -152,14 +156,14 @@ Module Type SBSEMANTICS
         same_clock xs ->
         same_clock ys ->
         (absent_list xs <-> absent_list ys) ->
-        Forall (sem_equation P base R S T S') bl.(b_eqs) ->
-        Forall (P_equation base R S T S') bl.(b_eqs) ->
+        Forall (sem_equation P base R S I S') bl.(b_eqs) ->
+        Forall (P_equation base R S I S') bl.(b_eqs) ->
         P_block b S xs ys S'.
 
     Fixpoint sem_equation_mult
-             (base: bool) (R: env) (S: state) (T: transient_states) (S': state) (e: equation)
-             (Sem: sem_equation P base R S T S' e) {struct Sem}
-      : P_equation base R S T S' e
+             (base: bool) (R: env) (S: state) (I: transient_states) (S': state) (e: equation)
+             (Sem: sem_equation P base R S I S' e) {struct Sem}
+      : P_equation base R S I S' e
     with sem_block_mult
            (f: ident) (S: state) (xs ys: list value) (S': state)
            (Sem: sem_block P f S xs ys S') {struct Sem}

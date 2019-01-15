@@ -607,184 +607,117 @@ Module Type CORRECTNESS
                (E: stream SemSB.state) (xss yss: stream (list value)) (E': stream SemSB.state) :=
       forall n, SemSB.sem_block P f (E n) (xss n) (yss n) (E' n).
 
-    Definition sem_reset_n
-               (P: SynSB.program) (f: ident) (r: stream bool) (E E0: stream SemSB.state) :=
-      forall n, SemSB.sem_reset P f (r n) (E n) (E0 n).
+    (* Definition sem_reset_n *)
+    (*            (P: SynSB.program) (f: ident) (r: stream bool) (E E0: stream SemSB.state) := *)
+    (*   forall n, SemSB.sem_reset P f (r n) (E n) (E0 n). *)
 
-    Definition entry_states (M M': memories) : stream SemSB.state :=
-      fun n => match n with
-            | 0 => M 0
-            | S n => M' n
-            end.
+    (* Definition entry_states (M M': memories) : stream SemSB.state := *)
+    (*   fun n => match n with *)
+    (*         | 0 => M 0 *)
+    (*         | S n => M' n *)
+    (*         end. *)
 
-    Definition instances_n (M: memories) : stream SemSB.transient_states :=
-      fun n => instances (M n).
+    (* Definition instances_n (M: memories) : stream SemSB.transient_states := *)
+    (*   fun n => instances (M n). *)
 
-    Lemma entry_states_sub_inst_n:
-      forall M M' x Mx Mx',
-        sub_inst_n x M Mx ->
-        sub_inst_n x M' Mx' ->
-        sub_inst_n x (entry_states M M') (entry_states Mx Mx').
+    (* Lemma entry_states_sub_inst_n: *)
+    (*   forall M M' x Mx Mx', *)
+    (*     sub_inst_n x M Mx -> *)
+    (*     sub_inst_n x M' Mx' -> *)
+    (*     sub_inst_n x (entry_states M M') (entry_states Mx Mx'). *)
+    (* Proof. *)
+    (*   intros ** S S' n. *)
+    (*   destruct n; simpl; auto. *)
+    (* Qed. *)
+
+    Definition add_n (x: ident) (Mx: stream SemSB.state) (I: stream SemSB.transient_states) :=
+      fun n => Env.add x (Mx n) (I n).
+
+    (* Inductive bar: ident -> SynSB.equation -> Prop := *)
+
+    Lemma sem_equations_n_add_n:
+      forall eqs bk H S S' Is x Sx,
+        sem_equations_n P bk H S Is S' eqs ->
+        sem_equations_n P bk H S (add_n x Sx Is) S' eqs.
     Proof.
-      intros ** S S' n.
-      destruct n; simpl; auto.
+      induction eqs as [|eq eqs]; intros ** Sem n; constructor.
+      - specialize (Sem n); inversion_clear Sem as [|?? Sem'].
+        inv Sem'; eauto using SemSB.sem_equation.
+        + econstructor; eauto.
+          unfold add_n; rewrite Env.gso; auto.
+          admit.
+        + econstructor; eauto.
+          unfold add_n; rewrite Env.gso; auto.
+          admit.
+      - apply IHeqs.
+        intro n'; specialize (Sem n'); inv Sem; auto.
     Qed.
 
     Lemma equation_correctness:
       forall eq eqs bk H M M' Is,
         (forall f xss M M' yss,
             msem_node G f xss M M' yss ->
-            sem_block_n P f (* (entry_states M *) M xss yss M') ->
-        (forall f r xss M M' yss,
-            msem_reset G f r xss M M' yss ->
-            sem_block_n P f (entry_states M M') xss yss M'
-        (* /\ sem_reset_n P f r (entry_states M M')  *)
-        ) ->
+            sem_block_n P f M xss yss M') ->
         msem_equation G bk H M M' eq ->
-        (* compat_state H M H' E -> *)
-        (* coherent_msem_state H M -> *)
-        (* lasts_eq_spec lasts eq -> *)
-        (* lasts_spec lasts M -> *)
-        (* wc_equation vars eq -> *)
         sem_equations_n P bk H M Is M' eqs ->
-        sem_equations_n P bk H M Is M' (translate_eqn eq ++ eqs).
+        exists Is', sem_equations_n P bk H M Is' M' (translate_eqn eq ++ eqs).
     Proof.
-      intros ** IHnode IHrst Heq (* Compat CoherentMSem LastsEqSpec LastsSpec WC *) Heqs n.
-      destruct Heq as [| |????????????????????? Var Reset|??????????? Var Mfby];
-        (* inversion_clear LastsEqSpec as [??? Last| |???? Last]; *)
-        (* inv WC; *)
+      intros ** IHnode Heq Heqs.
+      destruct Heq as [| |?????????????????????? Var Hr Reset|??????????? Var Mfby];
         simpl.
 
-      - do 2 (econstructor; eauto).
+      - do 3 (econstructor; eauto).
 
       - erewrite hd_error_Some_hd; eauto.
-        do 2 (econstructor; eauto).
-        + admit.
-        + now apply IHnode.
+        exists (add_n x Mx Is); intro.
+        constructor; auto.
+        + econstructor; eauto.
+          * apply Env.gss.
+          * now apply IHnode.
+        + now apply sem_equations_n_add_n.
 
       - erewrite hd_error_Some_hd; eauto.
+        exists (fun n => Env.add x (if rs n then Mx n else Mx n) (Is n)); intro.
         inversion_clear Reset as [?????? Nodes].
         assert (forall k, exists Mk Mk',
                      sem_block_n P f Mk
-                                 (mask (all_absent (ls 0)) k (reset_of ys) ls)
-                                 (mask (all_absent (xss 0)) k (reset_of ys) xss)
+                                 (mask (all_absent (ls 0)) k rs ls)
+                                 (mask (all_absent (xss 0)) k rs xss)
                                  Mk'
-                     /\ memory_masked k (reset_of ys) Mx Mk
-                     /\ memory_masked k (reset_of ys) Mx' Mk') as Blocks
+                     /\ memory_masked k rs Mx Mk
+                     /\ memory_masked k rs Mx' Mk') as Blocks
             by (intro; destruct (Nodes k) as (?&?&?&?&?);
                 do 2 eexists; intuition; eauto); clear Nodes.
-        set (rs := reset_of ys).
         specialize (Blocks (count rs n)).
         destruct Blocks as (Mk & Mk' & Blocks & Mmask & Mmask').
         specialize (Blocks n); specialize (Mmask n); specialize (Mmask' n).
         rewrite 2 mask_transparent, Mmask, Mmask' in Blocks; auto.
-        specialize (Var n).
-        destruct (reset_of ys n) eqn: E.
+        specialize (Var n); specialize (Hr n).
+        destruct (rs n) eqn: E.
         + admit.
-        + unfold reset_of, reset_of_value in E.
+        + assert (SemSB.sem_reset P f false (Mx n) (Mx n)).
+          { inv Blocks.
+            eapply SemSB.sem_reset_false; eauto.
+            admit.
+          }
+          assert (Forall (SemSB.sem_equation P (bk n) (restr_hist H n) (M n) (Env.add x (Mx n) (Is n)) (M' n)) eqs)
+            by now apply sem_equations_n_add_n.
+          assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
+            by apply Env.gss.
           destruct (ys n) eqn: E'.
-          *{ constructor; auto; [|constructor; auto].
-             - econstructor; eauto.
-               + constructor; auto.
-                 admit.
-               + econstructor.
-          *{ econstructor; eauto.
-             - constructor. admit.
-        + econstructor; eauto.
-          admit.
+          * do 3 (econstructor; eauto).
+            admit.
+          * do 2 (econstructor; eauto); [|econstructor; eauto].
+            change true with (negb false).
+            eapply Son_abs2; eauto.
+            admit.
 
-      - econstructor; eauto.
+      - do 2 (econstructor; auto).
         inversion_clear Mfby as [??????? Spec].
-        specialize (Spec n); destruct (find_val x (M n)); try contradiction.
-        destruct (ls n) eqn: Els; destruct Spec as (?&?&?);
-          econstructor; eauto.
-        + congruence.
-        + congruence.
+        specialize (Spec n); econstructor; eauto.
+        destruct (find_val x (M n)); try contradiction.
+        destruct (ls n); intuition.
     Qed.
-
-
-    Lemma equation_correctness:
-      forall lasts eq bk H M eqs H' E T E' vars,
-        (* (forall f xss oss, *)
-        (*     sem_node G f xss oss -> *)
-        (*     exists M, SemSB.sem_block P f M xss oss) -> *)
-        (* (forall f r xss oss, *)
-        (*     sem_reset G f r xss oss -> *)
-        (*     exists M, SemSB.sem_block P f M xss oss *)
-        (*          /\ SemSB.reset_regs r M) -> *)
-        msem_equation G bk H M eq ->
-        lasts_eq_spec lasts eq ->
-        (* compat_eq eq eqs -> *)
-        lasts_spec lasts M ->
-        compat_state H M H' E ->
-        coherent_msem_state H M ->
-        relooper lasts E E' ->
-        coherent_state E T E' ->
-        wc_equation vars eq ->
-        Forall (SemSB.sem_equation P bk H' E T E') eqs ->
-        (* correspondence H lasts H' E T E' -> *)
-        (* SemSB.well_structured_memories eqs M -> *)
-        (* exists H' E T E', *)
-        Forall (SemSB.sem_equation P bk H' E T E') (translate_eqn lasts eq ++ eqs).
-    (* /\ SemSB.well_structured_memories (translate_eqn eq ++ eqs) M'. *)
-    Proof.
-      intros ** Heq LastsEqSpec LastsSpec Compat Coherent Reloop Coherent' WC Heqs(* Corres *);
-        destruct Heq as [| | |?????????? Var];
-        inversion_clear LastsEqSpec as [??? Last| |];
-        inv WC;
-        (* inversion_clear Corres as [?????? Compat Coherent Reloop]; *)
-        simpl.
-      - constructor; eauto.
-        econstructor; eauto.
-        eapply var_var_correctness; eauto.
-        intro; specialize (LastsSpec n x); rewrite Last in LastsSpec; auto.
-      - erewrite hd_error_Some_hd; eauto.
-        constructor.
-        + admit.
-        + constructor; auto.
-          admit.
-      - erewrite hd_error_Some_hd; eauto.
-        constructor.
-        + admit.
-        + constructor; auto.
-          admit.
-      - constructor; auto.
-        econstructor; eauto.
-        instantiate (1 := ls).
-        pose proof Var as Var'.
-        assert (forall n : nat, find_val x (M n) <> None) by admit.
-        assert (correct_clock bk H ck xs) by admit.
-        eapply (state_var_correctness bk H M H' E _ _ lasts _ _ _ ck(*H M H' E*)) in Var'; eauto.
-        inversion_clear Reloop as [??? Loop].
-        intro.
-        specialize (Var n); inversion_clear Var as [?? Find].
-        unfold restr_hist, PM.map in Find; rewrite PM.gmapi in Find.
-        destruct (PM.find x H) eqn: Find'; inversion Find as [Eq]; clear Find.
-        destruct (ls n) eqn: Els.
-        + constructor.
-          * unfold SemSB.restr_evol.
-            rewrite find_val_mmap.
-            assert (find_val x E = Some v).
-            assert (exists z, find_val x E' = Some z) as (? & ->); simpl; try congruence.
-            inversion_clear Coherent' as [??? SpecE']; eapply SpecE'.
-            unfold compat_state, compat_state_instant in Compat.
-            instantiate (1 := v).
-
-            apply Compat in Find'; rewrite Mem in Find'.
-        pose proof Find' as Find''.
-        inversion_clear Coherent as [??? Spec].
-        apply Spec in Find'' as (? & Find'').
-        rewrite Find''; unfold SemSB.sample; simpl.
-        eapply Loop in Find'; eauto.
-        rewrite Find' in Fby.
-        admit.
-
-        inv Fby.
-instantiate (1 := ls).
-
-        inv Find.
-        unfold fby in *.
-
 
     Theorem correctness:
       forall f xss M yss,

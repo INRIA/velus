@@ -121,7 +121,7 @@ Module Type MEMSEMANTICS
           msem_node f ls Mx Mx' xss ->
           msem_equation bk H M M' (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys ls xss,
+        forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys rs ls xss,
           Some x = hd_error xs ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
@@ -129,7 +129,8 @@ Module Type MEMSEMANTICS
           sem_vars H xs xss ->
           (* sem_avar bk H ck_r r ys -> *)
           sem_var H r ys ->
-          msem_reset f (reset_of ys) ls Mx Mx' xss ->
+          reset_of ys rs ->
+          msem_reset f rs ls Mx Mx' xss ->
           msem_equation bk H M M' (EqApp xs ck f arg (Some (r, ck_r)))
     | SEqFby:
         forall bk H M M' x ck ls xs c0 le,
@@ -200,7 +201,7 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H M M' (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys ls xss,
+      forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys rs ls xss,
         Some x = hd_error xs ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
@@ -208,8 +209,9 @@ enough: it does not support the internal fixpoint introduced by
         sem_vars H xs xss ->
         (* sem_avar bk H ck_r r ys -> *)
         sem_var H r ys ->
-        msem_reset G f (reset_of ys) ls Mx Mx' xss ->
-        P_reset f (reset_of ys) ls Mx Mx' xss ->
+        reset_of ys rs ->
+        msem_reset G f rs ls Mx Mx' xss ->
+        P_reset f rs ls Mx Mx' xss ->
         P_equation bk H M M' (EqApp xs ck f arg (Some (r, ck_r))).
 
     Hypothesis EqFbyCase:
@@ -609,7 +611,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem as [|???? x' ???????? Hsome
-                         |???? x' ??????????? Hsome|];
+                         |???? x' ???????????? Hsome|];
       eauto;
       assert (sub_inst_n x' (add_insts x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -689,7 +691,7 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros ** IH IH' Heq Hwsch Hmeqs.
     inversion Heq as [|???????? Hls Hxs Hsem
-                         |??????????? Hls Hxs Hy Hsem
+                         |???????????? Hls Hxs Hy Hr Hsem
                          |???????? Hle Hvar];
       match goal with H:_=eq |- _ => rewrite <-H in * end.
 

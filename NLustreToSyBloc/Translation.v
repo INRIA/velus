@@ -648,14 +648,14 @@ Module Type TRANSLATION
        SynSB.b_out  := idty n.(n_out);
        SynSB.b_eqs  := translate_eqns n.(n_eqs)
     |}.
-  Next Obligation.
-    destruct n; simpl.
-    now rewrite length_idty.
-  Qed.
-  Next Obligation.
-    destruct n; simpl.
-    now rewrite length_idty.
-  Qed.
+  (* Next Obligation. *)
+  (*   destruct n; simpl. *)
+  (*   now rewrite length_idty. *)
+  (* Qed. *)
+  (* Next Obligation. *)
+  (*   destruct n; simpl. *)
+  (*   now rewrite length_idty. *)
+  (* Qed. *)
 
   Definition translate (G: global) : SynSB.program :=
     map translate_node G.

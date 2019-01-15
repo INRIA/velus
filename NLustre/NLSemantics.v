@@ -70,11 +70,12 @@ Module Type NLSEMANTICS
           sem_node f ls xs ->
           sem_equation bk H (EqApp x ck f arg None)
     | SEqReset:
-        forall bk H x ck f arg y ck_r ys ls xs,
+        forall bk H x ck f arg y ck_r ys rs ls xs,
           sem_laexps bk H ck arg ls ->
           sem_vars H x xs ->
           sem_var H y ys ->
-          sem_reset f (reset_of ys) ls xs ->
+          reset_of ys rs ->
+          sem_reset f rs ls xs ->
           sem_equation bk H (EqApp x ck f arg (Some (y, ck_r)))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
@@ -141,12 +142,13 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H (EqApp x ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H x ck f arg y ck_r ys ls xs,
+      forall bk H x ck f arg y ck_r ys rs ls xs,
         sem_laexps bk H ck arg ls ->
         sem_vars H x xs ->
         sem_var H y ys ->
-        sem_reset G f (reset_of ys) ls xs ->
-        P_reset f (reset_of ys) ls xs ->
+        reset_of ys rs ->
+        sem_reset G f rs ls xs ->
+        P_reset f rs ls xs ->
         P_equation bk H (EqApp x ck f arg (Some (y, ck_r))).
 
     Hypothesis EqFbyCase:
@@ -253,7 +255,7 @@ enough: it does not support the internal fixpoint introduced by
       sem_equation G bk H (EqApp xs ck f es r) ->
       0 < length xs.
   Proof.
-    inversion_clear 1 as [|????????? Vars Node|???????????? Vars ? Rst|];
+    inversion_clear 1 as [|????????? Vars Node|????????????? Vars ?? Rst|];
       [|inversion_clear Rst as [???? Node]; pose proof Node as Node'; specialize (Node 0)];
       inversion_clear Node as [????????? Out];
       specialize (Out 0); specialize (Vars 0); simpl in *;
@@ -277,7 +279,7 @@ enough: it does not support the internal fixpoint introduced by
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f lae ls xs Hlae Hvars Hnode IH
-                     | bk H x ck f lae y ck_r ys ls xs Hlae Hvars Hvar Hnode IH
+                     | bk H x ck f lae y ck_r ys rs ls xs Hlae Hvars Hvar ? Hnode IH
                      |
                      |
                      | bk H f xs ys n Hbk Hf ? ? ? ? ? Heqs IH ]
@@ -417,7 +419,7 @@ enough: it does not support the internal fixpoint introduced by
         destruct Hnini; assumption).
     apply Forall_cons with (2:=Hseqs).
     inversion Hseq as [|? ? ? ? ? ? ? Hsem Hvars Hnode
-                          |? ? ? ? ? ? ? ? ? ? Hsem Hvars Hvar ? Hreset|]; subst.
+                          |? ? ? ? ? ? ? ? ? ? ? Hsem Hvars Hvar ?? Hreset|]; subst.
     - econstructor; eassumption.
     - apply not_Is_node_in_cons in Hnini.
       destruct Hnini as [Hninieq Hnini].

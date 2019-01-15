@@ -31,10 +31,10 @@ Module Type SBSYNTAX
         b_lasts : list (ident * const);
         b_blocks: list (ident * ident);
         b_out   : list (ident * type);
-        b_eqs   : list equation;
+        b_eqs   : list equation
 
-        b_ingt0 : 0 < length b_in;
-        b_outgt0 : 0 < length b_out
+        (* b_ingt0 : 0 < length b_in; *)
+        (* b_outgt0 : 0 < length b_out *)
       }.
 
   Fixpoint find_const (x: ident) (xs: list (ident * const)) : option const :=

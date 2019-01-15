@@ -300,14 +300,14 @@ environment.
         * inv P; auto.
   Qed.
 
-  Definition reset_of_value (v: value) : bool :=
+  Definition reset_of_value (v: value) : option bool :=
     match v with
-    | present x => x ==b true_val
-    | absent => false
+    | present x => val_to_bool x
+    | absent => Some false
     end.
 
-  Definition reset_of (xs: stream value) : stream bool :=
-    fun n => reset_of_value (xs n).
+  Definition reset_of (vs: stream value) (rs: stream bool) :=
+    forall n, reset_of_value (vs n) = Some (rs n).
 
   (** Morphisms properties *)
 
