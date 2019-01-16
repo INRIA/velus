@@ -1,7 +1,11 @@
 #!/bin/sh
 
-coqproject=_CoqProject
-compcertdir=CompCert
+# https://stackoverflow.com/a/43919044
+a="/$0"; a=${a%/*}; a=${a#/}; a=${a:-.}; BASEDIR=$(cd "$a" && pwd)
+
+# Absolute directories to allow use from subdirectories
+coqproject="$BASEDIR/_CoqProject"
+compcertdir="$BASEDIR/CompCert"
 
 # Parse command-line arguments
 
@@ -30,13 +34,15 @@ while : ; do
   shift
 done
 
-cd "$compcertdir"
-./configure $prefix $bindir $libdir $toolprefix $runtime_lib $standard_headers $clightgen $target
-export $(cat Makefile.config | grep ARCH)
-cd ..
+# Configure CompCert and extract relevant values into Makefile.config
+(cd "$compcertdir" &&
+ ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
+ $standard_headers $clightgen $target)
+export "$(grep ARCH < "$compcertdir"/Makefile.config)"
 
-printf "COMPCERTDIR=%s\nARCH=%s\n" "$compcertdir" "$ARCH" > Makefile.config
+printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 
+# Exclude "the other" architecture directories
 case $ARCH in
     ia32)
         EXCLUDES="arm powerpc";;
@@ -47,8 +53,15 @@ case $ARCH in
     *)
 esac
 
-sed "s/\(.*\)/-R $compcertdir\/\1 compcert.\1/" < includes > $coqproject
-printf -- "-R %s compcert.%s\n" "$compcertdir/$ARCH" "$ARCH" >> $coqproject
-printf "%s\n" "$EXCLUDES" | sed "s/\([^ ]*\)/-exclude-dir \1/g" >> $coqproject
-printf -- "-R . Velus\n" >> $coqproject
-cat vfiles >> $coqproject
+# Generate the _CoqProject file
+{
+    while read -r subdir; do
+      printf -- "-R %s/%s compcert.%s\\n" "$compcertdir" "$subdir" "$subdir"
+    done <includes;
+    printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
+    for dir in $EXCLUDES; do
+	printf -- "-exclude-dir %s\\n" "$dir"
+    done;
+    printf -- "-R \"%s\" Velus\\n" "$BASEDIR";
+    cat vfiles
+} >"$coqproject"
