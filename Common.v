@@ -2022,6 +2022,14 @@ Section Lists.
     - inv Hin; eauto.
   Qed.
 
+  Lemma split_fst_map:
+    forall (l: list (A * B)),
+      fst (split l) = map fst l.
+  Proof.
+    induction l as [|()]; simpl; auto.
+    destruct (split l); simpl in *; congruence.
+  Qed.
+
 End Lists.
 
 Lemma Forall2_map_1:

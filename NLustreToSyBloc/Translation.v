@@ -585,9 +585,9 @@ Module Type TRANSLATION
     now apply Hgen.
   Qed.
 
-  Lemma fst_gather_eqs_var_defined:
+  Lemma fst_snd_gather_eqs_var_defined:
     forall eqs,
-      Permutation ((map fst (snd (gather_eqs eqs))) ++ (gather_app_vars eqs))
+      Permutation (map fst (snd (gather_eqs eqs)) ++ gather_app_vars eqs)
                   (vars_defined (filter is_app eqs)).
   Proof.
     intro eqs.
@@ -622,6 +622,28 @@ Module Type TRANSLATION
     now rewrite gather_eqs_snd_spec.
   Qed.
 
+  Lemma fst_fst_gather_eqs_var_defined:
+    forall eqs,
+      Permutation (map fst (fst (gather_eqs eqs)))
+                  (vars_defined (filter is_fby eqs)).
+  Proof.
+    intro eqs.
+    assert (Hperm: Permutation (gather_mem eqs)
+                               (vars_defined (filter is_fby eqs))).
+    {
+      induction eqs as [|eq eqs]; auto.
+      destruct eq; try (now simpl; auto).
+      simpl.
+      unfold gather_mem, vars_defined; simpl.
+      rewrite 2 concatMap_cons.
+      apply Permutation_cons.
+      auto.
+    }
+
+    rewrite <- Hperm.
+    apply gather_eqs_fst_spec.
+  Qed.
+
   Lemma Forall_ValidId_idty:
     forall A B (xs: list (ident * (A * B))),
       Forall ValidId (idty xs) <-> Forall ValidId xs.
@@ -635,10 +657,10 @@ Module Type TRANSLATION
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
-    let lasts := Environment.from_list (fst gathered) in
+    let lasts := fst gathered in
+    let lasts_ids := ps_from_list (map fst lasts) in
     let blocks := snd gathered in
-    (* let lastids := ps_from_list (map fst lasts) in *)
-    let partitioned := partition (fun x => Environment.mem (fst x) lasts) n.(n_vars) in
+    let partitioned := partition (fun x => PS.mem (fst x) lasts_ids) n.(n_vars) in
     let vars := snd partitioned in
     {| SynSB.b_name  := n.(n_name);
        SynSB.b_blocks := blocks;
@@ -649,8 +671,32 @@ Module Type TRANSLATION
        SynSB.b_eqs  := translate_eqns n.(n_eqs)
     |}.
   Next Obligation.
-    SearchAbout NoDupMembers Permutation.
-SearchAbout gather_eqs fst.
+    rewrite fst_NoDupMembers.
+    rewrite fst_fst_gather_eqs_var_defined.
+    eapply (NoDup_app_weaken _ (vars_defined (filter is_app n.(n_eqs)))).
+    rewrite Permutation_app_comm.
+    eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
+    rewrite Permutation_app_comm.
+    unfold vars_defined, concatMap.
+    rewrite <- 2 concat_app.
+    rewrite <- 2 map_app.
+    rewrite is_filtered_eqs.
+    apply NoDup_var_defined_n_eqs.
+  Qed.
+  Next Obligation.
+    rewrite fst_NoDupMembers.
+    eapply (NoDup_app_weaken _ (gather_app_vars n.(n_eqs))).
+    rewrite fst_snd_gather_eqs_var_defined.
+    eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
+    rewrite Permutation_app_comm.
+    eapply (NoDup_app_weaken _ (vars_defined (filter is_fby n.(n_eqs)))).
+    unfold vars_defined, concatMap.
+    rewrite <- 2 concat_app.
+    rewrite <- 2 map_app.
+    rewrite Permutation_app_assoc.
+    rewrite is_filtered_eqs.
+    apply NoDup_var_defined_n_eqs.
+  Qed.
   (* Next Obligation. *)
   (*   destruct n; simpl. *)
   (*   now rewrite length_idty. *)

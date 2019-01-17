@@ -118,6 +118,42 @@ Module Env.
           intro Hnth. rewrite Hnth in Hin. contradiction.
     Qed.
 
+    Lemma find_adds:
+      forall x v xs vs m,
+        NoDup xs ->
+        List.In (x, v) (combine xs vs) ->
+        find x (adds xs vs m) = Some v.
+    Proof.
+      unfold adds.
+      induction xs as [|x'], vs as [|v']; simpl; try contradiction.
+      inversion_clear 1 as [|?? Notin]; inversion_clear 1 as [E|]; simpl.
+      - inversion E; subst; now rewrite gss.
+      - rewrite gso; auto.
+        intro; subst; apply Notin.
+        eapply in_combine_l; eauto.
+    Qed.
+
+    Lemma adds_nil_nil:
+      forall e,
+        adds List.nil List.nil e = e.
+    Proof. unfold adds; simpl; auto. Qed.
+
+    Lemma find_adds':
+      forall x v xs vs m,
+        NoDup xs ->
+        find x m = None ->
+        find x (adds xs vs m) = Some v ->
+        List.In (x, v) (combine xs vs).
+    Proof.
+      unfold adds.
+      induction xs as [|x'], vs as [|v']; simpl; try congruence.
+      inversion_clear 1; intros ** Find.
+      destruct (Pos.eq_dec x x').
+      - subst; rewrite gss in Find; inversion Find; auto.
+      - rewrite gso in Find; auto.
+        right; eauto.
+    Qed.
+
     Lemma NotIn_find_adds:
       forall x xs (o: option A) vs m,
         ~ List.In x xs ->
@@ -160,11 +196,6 @@ Module Env.
       - intros []; contradiction.
       - intros [|]; congruence.
     Qed.
-
-    Lemma adds_nil_nil:
-      forall e,
-        adds List.nil List.nil e = e.
-    Proof. unfold adds; simpl; auto. Qed.
 
     Lemma In_find:
       forall x (s: t A),

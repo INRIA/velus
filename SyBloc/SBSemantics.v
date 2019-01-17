@@ -75,11 +75,11 @@ Module Type SBSEMANTICS
           (if r then initial_state b Is else sub_inst s S Is) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
-        forall base R S I S' ys rst ck b s es xs Ss os Ss',
+        forall base R S I S' ys rst ck b s es xs Is os Ss',
           sem_laexps_instant base R ck es xs ->
-          (rst = false -> sub_inst s S Ss) ->
-          Env.find s I = Some Ss ->
-          sem_block b Ss xs os Ss' ->
+          (rst = false -> sub_inst s S Is) ->
+          Env.find s I = Some Is ->
+          sem_block b Is xs os Ss' ->
           sem_vars_instant R ys os ->
           sub_inst s S' Ss' ->
           sem_equation base R S I S' (EqCall s ys ck rst b es)
@@ -129,14 +129,14 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
-      forall base R S I S' s ys ck rst b es xs Ss os Ss',
+      forall base R S I S' s ys ck rst b es xs Is os Ss',
         sem_laexps_instant base R ck es xs ->
-        (rst = false -> sub_inst s S Ss) ->
-        Env.find s I = Some Ss ->
-        sem_block P b Ss xs os Ss' ->
+        (rst = false -> sub_inst s S Is) ->
+        Env.find s I = Some Is ->
+        sem_block P b Is xs os Ss' ->
         sem_vars_instant R ys os ->
         sub_inst s S' Ss' ->
-        P_block b Ss xs os Ss' ->
+        P_block b Is xs os Ss' ->
         P_equation base R S I S' (EqCall s ys ck rst b es).
 
     Hypothesis BlockCase:
@@ -223,18 +223,14 @@ Module Type SBSEMANTICS
       (initial_state P b S0 <->
       initial_state (bl :: P) b S0).
   Proof.
-    induction S0 as [?? IH] using Env.Props.P.map_induction. memory_ind';
+    induction S0 as [? IH] using memory_ind';
       intros ** Ord ?; split; intro Init; inversion_clear Init as [???? Find ? Spec].
     - econstructor; eauto.
       + apply find_block_other; eauto.
       + intros ** Find'.
-        specialize (Spec _ _ Find'); destruct Spec as (S0 & Sub & Init).
-        pose proof Sub.
-        unfold sub_inst, find_inst in Sub; simpl in Sub.
-        eapply Env.find_in, in_map with (f := snd) in Sub.
-        eapply In_Forall in IH; eauto.
-        exists S0; split; auto.
-        apply IH; auto using Ordered.
+        specialize (Spec _ _ Find'); destruct Spec as (S0' & Sub & Init).
+        exists S0'; split; auto.
+        rewrite <-IH; eauto.
         apply find_block_split in Find as (P1 & E).
         rewrite E in Ord.
         pose proof Ord as Ord'.
@@ -252,12 +248,8 @@ Module Type SBSEMANTICS
     - econstructor; eauto.
       + apply find_block_other in Find; eauto.
       + intros ** Find'.
-        specialize (Spec _ _ Find'); destruct Spec as (S0 & Sub & Init).
-        pose proof Sub.
-        unfold sub_inst, find_inst in Sub; simpl in Sub.
-        eapply Env.find_in, in_map with (f := snd) in Sub.
-        eapply In_Forall in IH; eauto.
-        exists S0; split; auto.
+        specialize (Spec _ _ Find'); destruct Spec as (S0' & Sub & Init).
+        exists S0'; split; auto.
         rewrite IH; eauto.
         apply find_block_other in Find; auto.
         apply find_block_split in Find as (? & Eq).
@@ -297,7 +289,7 @@ Module Type SBSEMANTICS
       destruct bl; simpl in *.
       induction b_blocks0 as [|(x, b')]; intros.
       + set (xs := fst (split b_lasts0)).
-        set (vs := List.map sem_const (snd (split b_lasts0))).
+        set (vs := map sem_const (snd (split b_lasts0))).
         assert (combine xs vs = List.map (fun (xc: ident * const) => (fst xc, sem_const (snd xc))) b_lasts0)
           as Eq.
         { pose proof (split_combine b_lasts0) as Eq.
@@ -309,18 +301,19 @@ Module Type SBSEMANTICS
         econstructor; eauto; simpl.
         * rewrite E; eauto.
         *{ unfold reset_lasts; simpl; intros.
-           unfold find_val, add_vals, Env.adds; simpl.
-           rewrite Eq.
+           unfold find_val, add_vals; simpl.
            split; intros ** Hin.
-           - apply Env.In_find_add_list.
-             + rewrite fst_NoDupMembers, map_map; simpl; rewrite <-fst_NoDupMembers.
+           - apply Env.find_adds.
+             + subst xs; rewrite split_fst_map, <-fst_NoDupMembers.
                apply b_nodup_lasts0.
-             + change (x, sem_const c) with ((fun xc => (fst xc, sem_const (snd xc))) (x, c)).
+             + setoid_rewrite Eq.
+               change (x, sem_const c) with ((fun x => (fst x, sem_const (snd x))) (x, c)).
                apply in_map; auto.
-           - apply Env.In_find_add_list' in Hin; auto.
-             + apply in_map_iff in Hin as ((x', c) & Ex & Hin); inv Ex; eauto.
-             + rewrite fst_NoDupMembers, map_map; simpl; rewrite <-fst_NoDupMembers.
+           - apply Env.find_adds' in Hin; auto.
+             + setoid_rewrite Eq in Hin; apply in_map_iff in Hin as ((x', c) & Ex & Hin); inv Ex; eauto.
+             + subst xs; rewrite split_fst_map, <-fst_NoDupMembers.
                apply b_nodup_lasts0.
+             + apply Env.gempty.
          }
         * contradiction.
       + inversion Subs as [|?? (?&?&?& Find) Subs' E1]; destruct x0; subst; inv E1; simpl in *.
