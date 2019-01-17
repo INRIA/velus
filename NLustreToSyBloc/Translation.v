@@ -648,6 +648,9 @@ Module Type TRANSLATION
        SynSB.b_out  := idty n.(n_out);
        SynSB.b_eqs  := translate_eqns n.(n_eqs)
     |}.
+  Next Obligation.
+    SearchAbout NoDupMembers Permutation.
+SearchAbout gather_eqs fst.
   (* Next Obligation. *)
   (*   destruct n; simpl. *)
   (*   now rewrite length_idty. *)

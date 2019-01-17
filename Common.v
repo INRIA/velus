@@ -1,4 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
+Require Import Coq.FSets.FMapFacts.
 Require Import List.
 Require Import Coq.Sorting.Permutation.
 Require Import Setoid.
@@ -8,6 +9,8 @@ Require Coq.MSets.MSets.
 Require Export PArith.
 Require Import Omega.
 Require Import Coq.Classes.EquivDec.
+
+Require Import Velus.Environment.
 
 Open Scope list.
 
@@ -25,7 +28,7 @@ Module PSF := MSetFacts.Facts PS.
 Module PSE := MSetEqProperties.WEqPropertiesOn Pos PS.
 Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
 
-Module PM := Coq.FSets.FMapPositive.PositiveMap.
+Module Env := Env.
 
 Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.
@@ -196,51 +199,11 @@ Proof.
   constructor; auto with datatypes.
 Qed.
 
-Lemma add_comm:
-  forall {A} x x' (v v': A) m,
-    x <> x' ->
-    PM.add x v (PM.add x' v' m) = PM.add x' v' (PM.add x v m).
-Proof.
-  induction x, x', m; simpl; intro Neq;
-  ((f_equal; apply IHx; intro Eq; apply Neq; now inv Eq) || now contradict Neq).
-Qed.
-
-Lemma pm_in_dec: forall A i m, PM.In (A:=A) i m \/ ~PM.In (A:=A) i m.
-Proof.
-  unfold PM.In, PM.MapsTo.
-  intros A i m.
-  case (PM.find i m).
-  eauto.
-  right; intro; destruct H; discriminate H.
-Qed.
 
 Lemma Some_injection:
   forall A (x:A) (y:A), x = y <-> Some x = Some y.
 Proof.
   split; intro H; [rewrite H|injection H]; auto.
-Qed.
-
-Lemma option_map_map:
-  forall {A B C} (f: A -> B) (g: B -> C) o,
-    option_map g (option_map f o) = option_map (fun x => g (f x)) o.
-Proof. now destruct o. Qed.
-
-Lemma pm_xmapi_xmapi:
-  forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A) x,
-    PM.xmapi (fun _ => g) (PM.xmapi (fun _ => f) m x) x =
-    PM.xmapi (fun _ (x : A) => g (f x)) m x.
-Proof.
-  induction m; intro; simpl; auto.
-  f_equal; auto.
-  apply option_map_map.
-Qed.
-
-Lemma pm_map_map:
-  forall {A B C} (f: A -> B) (g: B -> C) (m: PM.t A),
-    PM.map g (PM.map f m) = PM.map (fun x => g (f x)) m.
-Proof.
-  unfold PM.map, PM.mapi; intros.
-  apply pm_xmapi_xmapi.
 Qed.
 
 (* TODO: Is there a more direct way to negate PS.mem_spec?
@@ -1116,7 +1079,7 @@ Ltac app_NoDupMembers_det :=
 
 Lemma NoDupMembers_NoDupA:
   forall {A} (xs: list (positive * A)),
-    NoDupMembers xs <-> SetoidList.NoDupA (@PM.eq_key A) xs.
+    NoDupMembers xs <-> SetoidList.NoDupA (@Env.eq_key A) xs.
 Proof.
   induction xs as [|[x y] xs IH].
   - split; intro HH; auto using NoDupMembers_nil.
@@ -1124,7 +1087,7 @@ Proof.
     split; intro HH; inv HH; constructor; auto.
     + rewrite SetoidList.InA_alt.
       destruct 1 as (xy & Heq & Hin).
-      unfold PM.eq_key, PM.E.eq in Heq.
+      unfold Env.eq_key, Env.E.eq in Heq.
       simpl in Heq.
       apply H3, fst_InMembers.
       rewrite Heq.
@@ -1139,13 +1102,63 @@ Proof.
       reflexivity.
 Qed.
 
-Lemma NoDupMembers_PM_elements:
+Lemma NoDupMembers_elements:
   forall {A} m,
-    NoDupMembers (@PM.elements A m).
+    NoDupMembers (@Env.elements A m).
 Proof.
   intros.
   apply NoDupMembers_NoDupA.
-  apply PM.elements_3w.
+  apply Env.elements_3w.
+Qed.
+
+Lemma elements_add:
+  forall {A} x (v: A) m,
+    ~ Env.In x m ->
+    Permutation (Env.elements (Env.add x v m)) ((x,v) :: Env.elements m).
+Proof.
+  intros ** Hin.
+  apply NoDup_Permutation.
+  - apply NoDupMembers_NoDup, NoDupMembers_elements.
+  - constructor.
+    2:now apply NoDupMembers_NoDup, NoDupMembers_elements.
+    intro Hele.
+    apply Env.elements_complete in Hele.
+    apply Hin, Env.In_find; eauto.
+  - destruct x0 as (x', v'). split; intro HH.
+    + apply Env.elements_complete in HH.
+      destruct (ident_eq_dec x' x).
+      * subst.
+        rewrite Env.gss in HH.
+        injection HH; intro; subst.
+        constructor (auto).
+      * rewrite Env.gso in HH; auto.
+        constructor 2.
+        apply Env.elements_correct with (1:=HH).
+    + apply in_inv in HH.
+      destruct HH as [He|Hin'].
+      * inv He. apply Env.elements_correct, Env.gss.
+      * apply Env.elements_correct.
+        destruct (ident_eq_dec x' x).
+        2:now rewrite Env.gso; auto using Env.elements_complete.
+        subst.
+        contradiction Hin.
+        apply Env.elements_complete in Hin'.
+        apply Env.In_find; eauto.
+Qed.
+
+Lemma In_Members:
+  forall {A} x (m : Env.t A),
+    Env.In x m <-> InMembers x (Env.elements m).
+Proof.
+  split; intro HH.
+  - rewrite Env.In_find in HH.
+    destruct HH as (v & HH).
+    apply In_InMembers with (b:=v).
+    now apply Env.elements_correct.
+  - apply InMembers_In in HH.
+    destruct HH as (v & HH).
+    rewrite Env.In_find.
+    eauto using Env.elements_complete.
 Qed.
 
 Section Lists.
@@ -2278,272 +2291,6 @@ Section TypesAndClocks.
 End TypesAndClocks.
 
 (** Extra lemmas for positive maps *)
-
-Section ExtraPositiveMaps.
-
-  Context {A: Type}.
-
-  Definition adds xs (vs : list A) (e : PM.t A) :=
-    fold_right (fun (xv: ident * A) env =>
-                  let (x , v) := xv in
-                  PM.add x v env) e (combine xs vs).
-
-  Lemma find_gsso:
-    forall x x' xs (vs: list A) S,
-      x <> x' ->
-      PM.find x (adds (x' :: xs) vs S) = PM.find x (adds xs (tl vs) S).
-  Proof.
-    intros ** Hneq.
-    unfold adds.
-    destruct vs. destruct xs; reflexivity.
-    simpl. rewrite PM.gso; auto.
-  Qed.
-
-  Lemma find_gsss:
-    forall x v xs (vs: list A) S,
-      PM.find x (adds (x :: xs) (v :: vs) S) = Some v.
-  Proof.
-    intros. unfold adds. apply PM.gss.
-  Qed.
-
-  Lemma find_In_gsso:
-    forall x ys (vs: list A) env,
-      ~ In x ys -> PM.find x (adds ys vs env) = PM.find x env.
-  Proof.
-    intros x ys vs env Hin.
-    revert vs; induction ys; intro vs; simpl.
-    - unfold adds. simpl. reflexivity.
-    - rewrite find_gsso.
-      + apply IHys. intuition.
-      + intro. apply Hin. now left.
-  Qed.
-
-  Lemma find_gssn:
-    forall d1 (d2: A) n env xs vs x,
-      n < length xs ->
-      length xs = length vs ->
-      NoDup xs ->
-      nth n xs d1 = x ->
-      PM.find x (adds xs vs env) = Some (nth n vs d2).
-  Proof.
-    intros ** Hlen Hleq Hndup Hnth.
-    unfold adds.
-    remember (combine xs vs) as xvs eqn:Hxvs.
-    setoid_rewrite <-Hxvs.
-    assert (xs = fst (split xvs)) as Hxs
-        by (now subst xvs; rewrite combine_split with (1:=Hleq)).
-    assert (vs = snd (split xvs)) as Hvs
-        by (now subst xvs; rewrite combine_split with (1:=Hleq)).
-    subst xs vs.
-    clear Hleq. revert n Hlen Hnth.
-    induction xvs as [|xv xvs]; intros n Hlen Hnth.
-    now inversion Hlen.
-    simpl. destruct xv as [x' v'].
-    simpl in *; destruct (split xvs); simpl in *.
-    inversion_clear Hndup as [|? ? Hnin Hndup'].
-    destruct n.
-    - subst. now rewrite PM.gss.
-    - injection Hxvs; intro; subst.
-      rewrite PM.gso.
-      + rewrite (IHxvs Hndup' eq_refl n); auto with arith.
-      + pose proof (nth_In l d1 (Lt.lt_S_n _ _ Hlen)) as Hin.
-        intro Hnth. rewrite Hnth in Hin. contradiction.
-  Qed.
-
-  Lemma NotInMembers_find_adds:
-    forall x xs (v: option A) vs S,
-      ~In x xs ->
-      PM.find x S = v ->
-      PM.find x (adds xs vs S) = v.
-  Proof.
-    induction xs as [|xty xs]; auto.
-    intros v vs S Hnin Hfind.
-    apply not_in_cons in Hnin.
-    destruct Hnin as [Hnin Hneq].
-    rewrite find_gsso; auto.
-  Qed.
-
-  Lemma adds_cons_cons:
-    forall xs x (v: A) vs e,
-      ~ In x xs ->
-      adds (x :: xs) (v :: vs) e = adds xs vs (PM.add x v e).
-  Proof.
-    unfold adds.
-    induction xs as [|x']; intros ** NotIn; simpl; auto.
-    destruct vs as [|v']; simpl; auto.
-    rewrite <-IHxs.
-    - simpl.
-      rewrite add_comm; auto.
-      intro Eq.
-      apply NotIn; subst.
-      apply in_eq.
-    - now apply not_in_cons in NotIn.
-  Qed.
-
-  Lemma adds_comm:
-    forall xs x x' (v v': A) vs e,
-      ~ In x xs ->
-      ~ In x' xs ->
-      x <> x' ->
-      adds (x :: x' :: xs) (v :: v' :: vs) e = adds (x' :: x :: xs) (v' :: v :: vs) e.
-  Proof.
-    intros.
-    repeat rewrite adds_cons_cons; auto.
-    - rewrite add_comm; auto.
-    - intros [?|?]; contradiction.
-    - intros [?|?]. symmetry in H2. contradiction. contradiction.
- Qed.
-
-  Lemma adds_nil_nil:
-    forall e,
-      adds [] [] e = e.
-  Proof.
-    unfold adds.
-    simpl; auto.
-  Qed.
-
-  Lemma PM_In_find':
-    forall x (s: @PM.t A),
-      PM.In x s <-> PM.find x s <> None.
-  Proof.
-    split; intro HH.
-    - apply PM.mem_1 in HH.
-      rewrite PM.mem_find in HH.
-      destruct (PM.find x s) as [xv|] eqn:Hf; intuition.
-      discriminate.
-    - apply PM.mem_2.
-      destruct (PM.find x s) eqn:Hfind.
-      now rewrite PM.mem_find, Hfind.
-      now contradiction HH.
-  Qed.
-
-  Lemma PM_In_find:
-    forall x (s: @PM.t A),
-      PM.In x s <-> (exists v, PM.find x s = Some v).
-  Proof.
-    intros. rewrite PM_In_find'.
-    split; intro HH.
-    - destruct (PM.find x s); eauto.
-      now contradiction HH.
-    - destruct HH as (v & HH).
-      rewrite HH. discriminate.
-  Qed.
-
-  Lemma In_PM_In:
-    forall x (v: A) env,
-      In (x, v) (PM.elements env) -> PM.In x env.
-  Proof.
-    intros ** Hin.
-    apply PM.elements_complete in Hin.
-    apply PM_In_find. eauto.
-  Qed.
-
-  Lemma PM_add_spec:
-    forall y x (xv: A) s,
-      PM.In y (PM.add x xv s) <-> y = x \/ PM.In y s.
-  Proof.
-    intros.
-    split; intro HH.
-    - rewrite PM_In_find in HH.
-      destruct HH as (yv & Hfind).
-      destruct (ident_eq_dec y x).
-      + subst; left; auto.
-      + rewrite PM.gso in Hfind; auto.
-        right. apply PM_In_find.
-        exists yv; auto.
-    - destruct HH.
-      + subst. apply PM_In_find.
-        exists xv. apply PM.gss.
-      + rewrite PM_In_find in H.
-        destruct H as (yv & Hfind).
-        rewrite PM_In_find.
-        destruct (ident_eq_dec y x).
-        * subst. exists xv. apply PM.gss.
-        * exists yv. rewrite PM.gso; auto.
-  Qed.
-
-  Lemma PM_mem_spec_false:
-    forall x (s: PM.t A),
-      PM.mem x s = false <-> ~PM.In x s.
-  Proof.
-    split; intro HH;
-      rewrite PM.mem_find in *;
-      destruct (PM.find x s) eqn:Heq;
-      try discriminate;
-      auto.
-    - rewrite PM_In_find'.
-      intro Hfind; contradiction.
-    - rewrite PM_In_find in HH.
-      contradiction HH; eauto.
-  Qed.
-
-  Lemma PM_remove_iff:
-    forall x y (s: PM.t A),
-      PM.In y (PM.remove x s) <-> PM.In y s /\ x <> y.
-  Proof.
-    split; intro HH.
-    - rewrite PM_In_find' in HH.
-      destruct (ident_eq_dec x y).
-      + subst. rewrite PM.grs in HH. now contradiction HH.
-      + rewrite PM.gro in HH; auto.
-        rewrite PM_In_find'; split; auto.
-    - destruct HH as (HH1 & HH2).
-      rewrite PM_In_find'.
-      rewrite PM.gro; auto.
-      now apply PM_In_find'.
-  Qed.
-
-  Lemma elements_add:
-    forall x (v: A) m,
-      ~PM.In x m ->
-      Permutation (PM.elements (PM.add x v m)) ((x,v) :: PM.elements m).
-  Proof.
-    intros ** Hin.
-    apply NoDup_Permutation.
-    - apply NoDupMembers_NoDup, NoDupMembers_PM_elements.
-    - constructor.
-      2:now apply NoDupMembers_NoDup, NoDupMembers_PM_elements.
-      intro Hele.
-      apply PM.elements_complete in Hele.
-      apply Hin, PM_In_find; eauto.
-    - destruct x0 as (x', v'). split; intro HH.
-      + apply PM.elements_complete in HH.
-        destruct (ident_eq_dec x' x).
-        * subst.
-          rewrite PM.gss in HH.
-          injection HH; intro; subst.
-          constructor (auto).
-        * rewrite PM.gso in HH; auto.
-          constructor 2.
-          apply PM.elements_correct with (1:=HH).
-      + apply in_inv in HH.
-        destruct HH as [He|Hin'].
-        * inv He. apply PM.elements_correct, PM.gss.
-        * apply PM.elements_correct.
-          destruct (ident_eq_dec x' x).
-          2:now rewrite PM.gso; auto using PM.elements_complete.
-          subst.
-          contradiction Hin.
-          apply PM.elements_complete in Hin'.
-          apply PM_In_find; eauto.
-  Qed.
-
-  Lemma PM_In_Members:
-    forall x (m : PM.t A),
-      PM.In x m <-> InMembers x (PM.elements m).
-  Proof.
-    split; intro HH.
-    - rewrite PM_In_find in HH.
-      destruct HH as (v & HH).
-      apply In_InMembers with (b:=v).
-      now apply PM.elements_correct.
-    - apply InMembers_In in HH.
-      destruct HH as (v & HH).
-      rewrite PM_In_find.
-      eauto using PM.elements_complete.
-  Qed.
-
-End ExtraPositiveMaps.
 
 Ltac induction_list_tac e I l H :=
   match type of e with

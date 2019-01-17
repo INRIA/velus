@@ -28,7 +28,9 @@ Module Type SBSEMANTICS
   Definition transient_states := Env.t state.
 
   Definition reset_lasts (bl: block) (S0: state) : Prop :=
-    forall x c, In (x, c) bl.(b_lasts) <-> find_val x S0 = Some (sem_const c).
+    (forall x c,
+        In (x, c) bl.(b_lasts) -> find_val x S0 = Some (sem_const c))
+    /\ forall x v, find_val x S0 = Some v -> exists c, v = sem_const c /\ In (x, c) bl.(b_lasts).
 
   Definition same_clock (vs: list value) : Prop :=
     absent_list vs \/ present_list vs.
@@ -67,11 +69,10 @@ Module Type SBSEMANTICS
           end ->
           sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
-        forall base R S I S' ck b s r Ss S0,
+        forall base R S I S' ck b s r Is,
           sem_clock_instant base R ck r ->
-          sub_inst s S Ss ->
-          initial_state b S0 ->
-          Env.find s I = Some (if r then S0 else Ss) ->
+          Env.find s I = Some Is ->
+          (if r then initial_state b Is else sub_inst s S Is) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
         forall base R S I S' ys rst ck b s es xs Ss os Ss',
@@ -121,11 +122,10 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqNext x ck e).
 
     Hypothesis EqResetCase:
-      forall base R S I S' ck b s r Ss S0,
+      forall base R S I S' ck b s r Is,
         sem_clock_instant base R ck r ->
-        sub_inst s S Ss ->
-        initial_state P b S0 ->
-        Env.find s I = Some (if r then S0 else Ss) ->
+        Env.find s I = Some Is ->
+        (if r then initial_state P b Is else sub_inst s S Is) ->
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
@@ -172,14 +172,14 @@ Module Type SBSEMANTICS
 
   End sem_block_mult.
 
-  Inductive well_formed_state: program -> state -> Prop :=
-    well_formed_state_intro:
-      forall P S,
-        (forall x S',
-            find_inst x S = Some S' ->
-            well_formed_state P S'
-            /\ exists bl P', find_block x P = Some (bl, P')) ->
-        well_formed_state P S.
+  (* Inductive well_formed_state: program -> state -> Prop := *)
+  (*   well_formed_state_intro: *)
+  (*     forall P S, *)
+  (*       (forall x S', *)
+  (*           find_inst x S = Some S' -> *)
+  (*           well_formed_state P S' *)
+  (*           /\ exists bl P', find_block x P = Some (bl, P')) -> *)
+  (*       well_formed_state P S. *)
 
   Inductive Ordered: program -> Prop :=
   | Ordered_nil:
@@ -223,7 +223,7 @@ Module Type SBSEMANTICS
       (initial_state P b S0 <->
       initial_state (bl :: P) b S0).
   Proof.
-    induction S0 as [?? IH] using memory_ind';
+    induction S0 as [?? IH] using Env.Props.P.map_induction. memory_ind';
       intros ** Ord ?; split; intro Init; inversion_clear Init as [???? Find ? Spec].
     - econstructor; eauto.
       + apply find_block_other; eauto.
@@ -279,7 +279,9 @@ Module Type SBSEMANTICS
       reset_lasts bl S0 ->
       reset_lasts bl (add_inst x S0x S0).
   Proof.
-    unfold reset_lasts; intros; now rewrite find_val_add_inst.
+    unfold reset_lasts; intros ** (Rst & Rst'); split; intros ** Hin.
+    - rewrite find_val_add_inst; auto.
+    - rewrite find_val_add_inst in Hin; auto.
   Qed.
 
   Lemma find_block_initial_state:
@@ -309,14 +311,14 @@ Module Type SBSEMANTICS
         *{ unfold reset_lasts; simpl; intros.
            unfold find_val, add_vals, Env.adds; simpl.
            rewrite Eq.
-           split; intro In.
+           split; intros ** Hin.
            - apply Env.In_find_add_list.
              + rewrite fst_NoDupMembers, map_map; simpl; rewrite <-fst_NoDupMembers.
                apply b_nodup_lasts0.
              + change (x, sem_const c) with ((fun xc => (fst xc, sem_const (snd xc))) (x, c)).
                apply in_map; auto.
-           - apply Env.In_find_add_list' in In; auto.
-             + admit.
+           - apply Env.In_find_add_list' in Hin; auto.
+             + apply in_map_iff in Hin as ((x', c) & Ex & Hin); inv Ex; eauto.
              + rewrite fst_NoDupMembers, map_map; simpl; rewrite <-fst_NoDupMembers.
                apply b_nodup_lasts0.
          }

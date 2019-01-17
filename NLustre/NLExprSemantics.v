@@ -31,8 +31,8 @@ environment.
 
    *)
 
-  Definition env := PM.t value.
-  Definition history := PM.t (stream value).
+  Definition env := Env.t value.
+  Definition history := Env.t (stream value).
 
   (** ** Instantaneous semantics *)
 
@@ -44,7 +44,7 @@ environment.
     Inductive sem_var_instant: ident -> value -> Prop :=
       Sv:
         forall x v,
-          PM.find x R = Some v ->
+          Env.find x R = Some v ->
           sem_var_instant x v.
 
     Definition sem_vars_instant (xs: list ident) (vs: list value) : Prop :=
@@ -206,7 +206,7 @@ environment.
     Variable H : history.
 
     Definition restr_hist (n: nat): env :=
-      PM.map (fun xs => xs n) H.
+      Env.map (fun xs => xs n) H.
     Hint Unfold restr_hist.
 
     Definition lift {A B} (sem: bool -> env -> A -> B -> Prop)
