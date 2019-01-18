@@ -38,7 +38,7 @@ Module Type NLINTERPRETOR
     Variable R: env.
 
     Definition interp_var_instant (x: ident): value :=
-      match PM.find x R with
+      match Env.find x R with
       | Some v => v
       | None => absent
       end.

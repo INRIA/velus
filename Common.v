@@ -1167,14 +1167,14 @@ Section Lists.
 
   Fixpoint concat (l : list (list A)) : list A :=
     match l with
-    | nil => nil
-    | cons x l => x ++ concat l
+    | [] => []
+    | x :: l => x ++ concat l
     end.
 
   Lemma concat_nil : concat nil = nil.
   Proof eq_refl.
 
-  Lemma concat_cons : forall x l, concat (cons x l) = x ++ concat l.
+  Lemma concat_cons : forall x l, concat (x :: l) = x ++ concat l.
   Proof. simpl; reflexivity. Qed.
 
   Lemma concat_app : forall l1 l2, concat (l1 ++ l2) = concat l1 ++ concat l2.
@@ -1187,6 +1187,20 @@ Section Lists.
     f_equal; auto.
   Qed.
 
+  Lemma concat_length:
+    forall (l: list (list A)),
+      length (concat l) = fold_left (fun s x => s + length x) l 0.
+  Proof.
+    induction l; simpl; auto.
+    rewrite app_length.
+    rewrite IHl.
+    clear.
+    replace (length a) with (length a + 0) at 2; try omega.
+    generalize 0 as n; generalize (length a) as k.
+    induction l; simpl; intros; auto.
+    rewrite IHl, plus_assoc; auto.
+  Qed.
+
   Definition concatMap (f: B -> list A)(xs : list B) : list A :=
     concat (map f xs).
 
@@ -1197,6 +1211,21 @@ Section Lists.
   Lemma concatMap_nil: forall (f: B -> list A),
       concatMap f [] = [].
   Proof. reflexivity. Qed.
+
+  Lemma fold_left_map:
+    forall {A B C} (l: list A) (f: C -> B -> C) (g: A -> B) a,
+      fold_left f (map g l) a = fold_left (fun a x => f a (g x)) l a.
+  Proof.
+    induction l; simpl; auto.
+  Qed.
+
+  Lemma concatMap_length:
+    forall l f,
+      length (concatMap f l) = fold_left (fun s x => s + length (f x)) l 0.
+  Proof.
+    intros; unfold concatMap.
+    rewrite concat_length, fold_left_map; auto.
+  Qed.
 
   Global Instance In_Permutation_Proper (A:Type):
     Proper (eq ==> Permutation (A:=A) ==> iff) (@In A).

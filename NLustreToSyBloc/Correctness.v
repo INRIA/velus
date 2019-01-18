@@ -17,7 +17,7 @@ Require Import Velus.NLustre.MemSemantics.
 Require Import Velus.SyBloc.SBSemantics.
 Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
-Require Import Velus.NLustre.NLInterpretor.
+(* Require Import Velus.NLustre.NLInterpretor. *)
 Require Import Velus.NLustre.WellFormed.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsVariable.
@@ -46,7 +46,7 @@ Module Type CORRECTNESS
        (SemSB          : SBSEMANTICS     Ids Op OpAux Clks ExprSyn       SynSB Str                         ExprSem)
        (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn SynNL)
        (Import Trans   : TRANSLATION     Ids Op       Clks ExprSyn SynNL SynSB         Mem)
-       (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn             Str                         ExprSem)
+       (* (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn             Str                         ExprSem) *)
        (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn SynNL               Mem)
        (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn SynNL               Mem IsD)
        (Import IsF     : ISFREE          Ids Op       Clks ExprSyn SynNL)
@@ -332,7 +332,7 @@ Module Type CORRECTNESS
   Definition coherent_msem_state_instant (R: env) (M: memory val) : Prop :=
     forall x v v',
       find_val x M = Some v ->
-      PM.find x R = Some (present v') ->
+      Env.find x R = Some (present v') ->
       v' = v.
 
   (* Definition compat_state_instant (R: env) (M: memory val) (R': SemSB.env) (S: SemSB.state) : Prop := *)
@@ -375,226 +375,20 @@ Module Type CORRECTNESS
     Variable G: SynNL.global.
     Let P := translate G.
 
-    (* Section InstantSemantics. *)
-    (*   Variable base: bool. *)
-    (*   Variable R: env. *)
-    (*   Variable M: memory val. *)
-    (*   Variable R': SemSB.env. *)
-    (*   Variable S: SemSB.state. *)
+    (*   Inductive lasts_eq_spec (lasts: Env.t const) : equation -> Prop := *)
+    (* | LSdef: *)
+    (*     forall x ck e, *)
+    (*       Env.mem x lasts = false -> *)
+    (*       lasts_eq_spec lasts (EqDef x ck e) *)
+    (* | LSapp: *)
+    (*     forall xs ck f es r, *)
+    (*       Forall (fun x => Env.mem x lasts = false) xs -> *)
+    (*       lasts_eq_spec lasts (EqApp xs ck f es r) *)
+    (* | LSfby: *)
+    (*     forall x ck c0 e, *)
+    (*       Env.find x lasts = Some c0 -> *)
+    (*       lasts_eq_spec lasts (EqFby x ck c0 e). *)
 
-    (*   Hypothesis CoherentMsem: coherent_msem_state_instant R M. *)
-    (*   Hypothesis CompatEnv: compat_state_instant R M R' S. *)
-
-    (*   Variable lasts: Env.t const. *)
-
-    (*   Hypothesis LastsSpec: lasts_spec_instant lasts M. *)
-
-    (*   Definition correct_clock_instant (ck: clock) (v: value) : Prop := *)
-    (*     sem_clock_instant base R ck (v <>b absent). *)
-
-    (*   Lemma var_var_correctness_instant: *)
-    (*     forall x v, *)
-    (*       find_val x M = None -> *)
-    (*       sem_var_instant R x v -> *)
-    (*       SemSB.sem_var_var R' x v. *)
-    (*   Proof. *)
-    (*     intros ** Last Sem; inversion_clear Sem as [?? Find]; apply CompatEnv in Find. *)
-    (*     rewrite Last in Find; constructor; auto. *)
-    (*   Qed. *)
-    (*   Hint Resolve var_var_correctness_instant. *)
-
-    (*   Lemma clock_correctness_instant: *)
-    (*     forall ck b, *)
-    (*       sem_clock_instant base R ck b -> *)
-    (*       SemSB.sem_clock base R' S (translate_clock lasts ck) b. *)
-    (*   Proof. *)
-    (*     induction 1 as [|?????? Var|????? Var|?????? Var]; simpl; eauto using SemSB.sem_clock. *)
-    (*     - econstructor; eauto. *)
-    (*       inversion_clear Var as [?? Find]. *)
-    (*       pose proof Find as Find'. *)
-    (*       apply CompatEnv in Find. *)
-    (*       unfold tovar; specialize (LastsSpec x). *)
-    (*       destruct (Environment.mem x lasts); constructor. *)
-    (*       + apply not_None_is_Some in LastsSpec as (v & Spec). *)
-    (*         rewrite Spec in Find. *)
-    (*         constructor; auto. *)
-    (*         assert (c = v) as -> by (eapply CoherentMsem; eauto); auto. *)
-    (*       + rewrite LastsSpec in Find. *)
-    (*         constructor; auto. *)
-    (*     - econstructor; eauto. *)
-    (*       inversion_clear Var as [?? Find]. *)
-    (*       apply CompatEnv in Find. *)
-    (*       unfold tovar; specialize (LastsSpec x). *)
-    (*       destruct (Environment.mem x lasts); constructor. *)
-    (*       + apply not_None_is_Some in LastsSpec as (v & Spec). *)
-    (*         rewrite Spec in Find. *)
-    (*         constructor; auto. *)
-    (*         congruence. *)
-    (*       + rewrite LastsSpec in Find. *)
-    (*         econstructor; eauto. *)
-    (*     - eapply SemSB.Son_abs2; eauto. *)
-    (*       inversion_clear Var as [?? Find]. *)
-    (*       pose proof Find as Find'. *)
-    (*       apply CompatEnv in Find. *)
-    (*       unfold tovar; specialize (LastsSpec x). *)
-    (*       destruct (Environment.mem x lasts); constructor. *)
-    (*       + apply not_None_is_Some in LastsSpec as (v & Spec). *)
-    (*         rewrite Spec in Find. *)
-    (*         constructor; auto. *)
-    (*         assert (c = v) as -> by (eapply CoherentMsem; eauto); auto. *)
-    (*       + rewrite LastsSpec in Find. *)
-    (*         constructor; auto. *)
-    (*   Qed. *)
-    (*   Hint Resolve clock_correctness_instant. *)
-
-    (*   Lemma state_var_correctness_instant: *)
-    (*     forall x v ck, *)
-    (*       find_val x M <> None -> *)
-    (*       sem_var_instant R x v -> *)
-    (*       correct_clock_instant ck v -> *)
-    (*       SemSB.sem_state_var base R' S (translate_clock lasts ck) x v. *)
-    (*   Proof. *)
-    (*     intros ** Last Sem Clock; inversion_clear Sem as [?? Find]. *)
-    (*     pose proof Find as Find'; apply CompatEnv in Find. *)
-    (*     apply not_None_is_Some in Last as (v' & Spec). *)
-    (*     rewrite Spec in Find. *)
-    (*     destruct v. *)
-    (*     - constructor; try congruence; auto. *)
-    (*     - constructor; auto. *)
-    (*       assert (c = v') as -> by (eapply CoherentMsem; eauto); auto. *)
-    (*   Qed. *)
-    (*   Hint Resolve state_var_correctness_instant. *)
-
-    (*   Lemma var_correctness_instant: *)
-    (*     forall x v ck, *)
-    (*       sem_var_instant R x v -> *)
-    (*       correct_clock_instant ck v -> *)
-    (*       SemSB.sem_var base R' S (translate_clock lasts ck) (tovar lasts x) v. *)
-    (*   Proof. *)
-    (*     intros; specialize (LastsSpec x); unfold tovar. *)
-    (*     destruct (Env.mem x lasts); auto using SemSB.sem_var. *)
-    (*   Qed. *)
-    (*   Hint Resolve var_correctness_instant. *)
-
-    (*   Lemma typeof_correctness: *)
-    (*     forall e, *)
-    (*       SynSB.typeof (translate_lexp lasts e) = typeof e. *)
-    (*   Proof. *)
-    (*     induction e; intros; simpl; auto. *)
-    (*   Qed. *)
-
-    (*   Fact present_not_absent: *)
-    (*     forall v, present v <>b absent = true. *)
-    (*   Proof. *)
-    (*     reflexivity. *)
-    (*   Qed. *)
-
-    (*   Lemma lexp_correctness_instant: *)
-    (*     forall e v ck vars, *)
-    (*       sem_lexp_instant base R e v -> *)
-    (*       wc_lexp vars e ck -> *)
-    (*       correct_clock_instant ck v -> *)
-    (*       SemSB.sem_lexp base R' S (translate_clock lasts ck) (translate_lexp lasts e) v. *)
-    (*   Proof. *)
-    (*     induction e; do 2 inversion_clear 1; simpl; eauto using SemSB.sem_lexp. *)
-    (*     - inversion 1; eauto using SemSB.sem_lexp. *)
-    (*     - inversion 1; eauto using SemSB.sem_lexp. *)
-    (*       assert (present xc = absent) by (eapply sem_var_instant_det; eauto); *)
-    (*         discriminate. *)
-    (*     - inversion 1; eauto using SemSB.sem_lexp. *)
-    (*       assert (present c = absent) by (eapply sem_var_instant_det; eauto); *)
-    (*         discriminate. *)
-    (*     - econstructor; eauto. *)
-    (*       now rewrite typeof_correctness. *)
-    (*     - econstructor; eauto. *)
-    (*       now rewrite 2 typeof_correctness. *)
-    (*   Qed. *)
-    (*   Hint Resolve lexp_correctness_instant. *)
-
-    (*   Lemma cexp_correctness_instant: *)
-    (*     forall e v ck vars, *)
-    (*       sem_cexp_instant base R e v -> *)
-    (*       wc_cexp vars e ck -> *)
-    (*       correct_clock_instant ck v -> *)
-    (*       SemSB.sem_cexp base R' S (translate_clock lasts ck) (translate_cexp lasts e) v. *)
-    (*   Proof. *)
-    (*     induction e; do 2 inversion 1; subst; simpl; eauto using SemSB.sem_cexp. *)
-    (*     - constructor; auto. *)
-    (*       + eapply (IHe1 _ (Con ck i true)); eauto. *)
-    (*         econstructor; eauto. *)
-    (*         apply val_to_bool_true. *)
-    (*       + eapply (IHe2 _ (Con ck i false)); eauto. *)
-    (*         change false with (negb true). *)
-    (*         eapply Son_abs2; eauto. *)
-    (*         apply val_to_bool_true. *)
-    (*     - intros; apply SemSB.Smerge_false; auto. *)
-    (*       + eapply (IHe1 _ (Con ck i true)); eauto. *)
-    (*         change true with (negb false). *)
-    (*         eapply Son_abs2; eauto. *)
-    (*         apply val_to_bool_false. *)
-    (*       + eapply (IHe2 _ (Con ck i false)); eauto. *)
-    (*         econstructor; eauto. *)
-    (*         apply val_to_bool_false. *)
-    (*     - constructor; auto. *)
-    (*       + eapply (IHe1 _ (Con ck i true)); eauto. *)
-    (*         constructor; auto. *)
-    (*       + eapply (IHe2 _ (Con ck i false)); eauto. *)
-    (*         econstructor; eauto. *)
-    (*     - econstructor; eauto; destruct b; eauto. *)
-    (*   Qed. *)
-    (*   Hint Resolve cexp_correctness_instant. *)
-
-    (*   Lemma laexp_correctness_instant: *)
-    (*     forall e ck v vars, *)
-    (*       sem_laexp_instant base R ck e v -> *)
-    (*       wc_lexp vars e ck -> *)
-    (*       SemSB.sem_laexp base R' S (translate_clock lasts ck) (translate_lexp lasts e) v. *)
-    (*   Proof. *)
-    (*     induction 1; constructor; eauto. *)
-    (*   Qed. *)
-
-    (*   Lemma caexp_correctness_instant: *)
-    (*     forall e ck v vars, *)
-    (*       sem_caexp_instant base R ck e v -> *)
-    (*       wc_cexp vars e ck -> *)
-    (*       SemSB.sem_caexp base R' S (translate_clock lasts ck) (translate_cexp lasts e) v. *)
-    (*   Proof. *)
-    (*     induction 1; constructor; eauto. *)
-    (*   Qed. *)
-
-    (* End InstantSemantics. *)
-    (* Hint Resolve *)
-    (*      state_var_correctness_instant *)
-    (*      var_var_correctness_instant *)
-    (*      var_correctness_instant *)
-    (*      lexp_correctness_instant *)
-    (*      cexp_correctness_instant *)
-    (*      clock_correctness_instant *)
-    (*      laexp_correctness_instant *)
-    (*      caexp_correctness_instant. *)
-
-    Inductive lasts_eq_spec (lasts: Env.t const) : equation -> Prop :=
-    | LSdef:
-        forall x ck e,
-          Env.mem x lasts = false ->
-          lasts_eq_spec lasts (EqDef x ck e)
-    | LSapp:
-        forall xs ck f es r,
-          Forall (fun x => Env.mem x lasts = false) xs ->
-          lasts_eq_spec lasts (EqApp xs ck f es r)
-    | LSfby:
-        forall x ck c0 e,
-          Env.find x lasts = Some c0 ->
-          lasts_eq_spec lasts (EqFby x ck c0 e).
-
-    Fact hd_error_Some_hd:
-      forall {A} d (xs: list A) x,
-        hd_error xs = Some x ->
-        hd d xs = x.
-    Proof.
-      destruct xs; simpl; intros; try discriminate.
-      now inv H.
-    Qed.
 
     Definition sem_equations_n
                (P: SynSB.program) (bk: stream bool) (H: history)
@@ -633,8 +427,6 @@ Module Type CORRECTNESS
     Definition add_n (x: ident) (Mx: stream SemSB.state) (I: stream SemSB.transient_states) :=
       fun n => Env.add x (Mx n) (I n).
 
-    (* Inductive bar: ident -> SynSB.equation -> Prop := *)
-
     Lemma sem_equations_n_add_n:
       forall eqs bk H S S' Is x Sx,
         sem_equations_n P bk H S Is S' eqs ->
@@ -653,17 +445,45 @@ Module Type CORRECTNESS
         intro n'; specialize (Sem n'); inv Sem; auto.
     Qed.
 
+    Lemma foo:
+      forall n0 f xss M M' yss,
+        msem_node G f xss M M' yss ->
+        (forall n, n < n0 -> absent_list (xss n)) ->
+        present_list (xss n0) ->
+        forall n, n <= n0 -> M n = M 0.
+    Proof.
+      intro n0.
+      induction 1 using msem_node_mult
+        with
+          (P_equation := fun bk H M M' eq =>
+                           msem_equation G bk H M M' eq ->
+                           (forall n, n < n0 -> bk n = false) ->
+                           bk n0 = true ->
+                           forall n, n <= n0 -> M n = M 0)
+          (P_reset := fun f r xss M M' yss => True); auto.
+      - inversion_clear 1; intros ** Abs Pres n E.
+
+
     Lemma msem_reset_spec:
       forall G f r xs M' M ys,
         msem_reset G f r xs M M' ys ->
         forall n, r n = true -> M n = M 0.
     Proof.
       inversion_clear 1 as [?????? Nodes].
+      induction n; auto.
       intros ** Hr.
       specialize (Nodes (count r n)).
       destruct Nodes as (Mk & Mk' & Nodes & Mmask & Mmask').
       specialize (Mmask n); specialize (Mmask' n).
-      inversion_clear Nodes.
+      rewrite <-Mmask; auto.
+      inversion_clear Nodes as [??????????????? Heqs].
+      pose proof (n_eqsgt0 n0).
+      destruct Heqs as [|eq ? Heq]; simpl in *; try omega.
+      inversion_clear Heq.
+      - admit.
+      -
+      destruct (n_eqs n0) as [|eq]; simpl in *; try omega.
+      destruct eq.
     Admitted.
 
     Lemma equation_correctness:
@@ -709,43 +529,40 @@ Module Type CORRECTNESS
         assert (forall Mx, sem_equations_n P bk H M (add_n x Mx Is) M' eqs) as Heqs'
             by now intro; apply sem_equations_n_add_n.
         destruct (rs n) eqn: E.
-        + (* assert (Mx n = Mx 0). *)
-          (* { *)
-          (* specialize (Heqs' (fun n => Mx 0) n). *)
-          (* assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0)) *)
-          (*   by apply Env.gss. *)
-          (* admit. *)
-          (* } *)
-          (* constructor; auto; [|constructor; auto]. *)
-          (* *{ destruct (ys n); try discriminate. *)
-          (*    econstructor; eauto. *)
-          (*    eapply Son; eauto. *)
-          (*      admit. *)
-          (*  } *)
-          (* *{ eapply SemSB.SEqCall with (Ss := Mx 0); eauto. *)
-          (*    - congruence. *)
-          (*    - admit. *)
-          (*  } *)
-          admit.
-        + (* assert (SemSB.sem_reset P f false (Mx n) (Mx n)). *)
-          (* { inv Blocks. *)
-          (*   eapply SemSB.sem_reset_false; eauto. *)
-          (*   admit. *)
-          (* } *)
-          specialize (Heqs' Mx n).
+        + specialize (Heqs' (fun n => Mx 0) n).
+          assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
+            by apply Env.gss.
+          assert (Mx n = Mx 0).
+          {
+            admit.
+          }
+          constructor; auto; [|constructor; auto].
+          *{ destruct (ys n); try discriminate.
+             econstructor; eauto.
+             - eapply Son; eauto.
+               admit.
+             - simpl.
+               admit.
+           }
+          *{ eapply SemSB.SEqCall with (Is := Mx 0); eauto.
+             - congruence.
+             - congruence.
+           }
+        + specialize (Heqs' Mx n).
           assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
             by apply Env.gss.
           destruct (ys n) eqn: E'.
-          *{ do 2 (econstructor; eauto).
+          *{ do 2 (econstructor; eauto using SemSB.sem_equation).
              - apply Son_abs1; auto.
                admit.
-             -
-
-            admit.
-          * do 2 (econstructor; eauto); [|econstructor; eauto].
-            change true with (negb false).
-            eapply Son_abs2; eauto.
-            admit.
+             - simpl; auto.
+           }
+          *{ do 2 (econstructor; eauto using SemSB.sem_equation).
+             - change true with (negb false).
+               eapply Son_abs2; eauto.
+               admit.
+             - simpl; auto.
+           }
 
       - do 2 (econstructor; auto).
         inversion_clear Mfby as [??????? Spec].

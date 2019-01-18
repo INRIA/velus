@@ -153,6 +153,18 @@ Module Type NLSYNTAX
     reflexivity.
   Qed.
 
+  Lemma n_eqsgt0:
+    forall n, 0 < length n.(n_eqs).
+  Proof.
+    intro.
+    pose proof (n_defd n) as Defd.
+    pose proof (n_outgt0 n) as Out.
+    unfold vars_defined in Defd.
+    apply Permutation_length in Defd.
+    rewrite concatMap_length, map_length, app_length in Defd.
+    destruct (n_eqs n); simpl in *; omega.
+  Qed.
+
 End NLSYNTAX.
 
 Module NLSyntaxFun
