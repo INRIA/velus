@@ -61,12 +61,12 @@ Module Type SBSEMANTICS
           sem_var_instant R x v ->
           sem_equation base R S I S' (EqDef x ck ce)
     | SEqNext:
-        forall base R S I S' x ck e v,
-          sem_laexp_instant base R ck e v ->
-          match v with
-          | present v' => find_val x S' = Some v'
-          | absent => find_val x S' = find_val x S
-          end ->
+        forall base R S I S' x ck e c b v',
+          find_val x S = Some c ->
+          sem_clock_instant base R ck b ->
+          sem_var_instant R x (if b then present c else absent) ->
+          sem_laexp_instant base R ck e v' ->
+          find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
           sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
         forall base R S I S' ck b s r Is,
@@ -113,12 +113,12 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqDef x ck ce).
 
     Hypothesis EqNextCase:
-      forall base R S I S' x ck e v,
-        sem_laexp_instant base R ck e v ->
-        match v with
-        | present v' => find_val x S' = Some v'
-        | absent => find_val x S' = find_val x S
-        end ->
+      forall base R S I S' x ck e c b v',
+        find_val x S = Some c ->
+        sem_clock_instant base R ck b ->
+        sem_var_instant R x (if b then present c else absent) ->
+        sem_laexp_instant base R ck e v' ->
+        find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
         P_equation base R S I S' (EqNext x ck e).
 
     Hypothesis EqResetCase:

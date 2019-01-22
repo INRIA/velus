@@ -64,33 +64,6 @@ Module Type TRANSLATION
     fold_left gather_eq eqs ([], []).
 
 
-  (* XXX: computationally, the following [gather_*] are useless: they
-     are only used to simplify the proofs. See [gather_eqs_fst_spec]
-     and [gather_eqs_snd_spec]. *)
-  Definition gather_mem (eqs: list equation): idents :=
-    concatMap (fun eq => match eq with
-                      | EqDef _ _ _
-                      | EqApp _ _ _ _ _ => []
-                      | EqFby x _ _ _ => [x]
-                      end) eqs.
-  Definition gather_insts (eqs: list equation): list (ident * ident) :=
-    concatMap (fun eq => match eq with
-                      | EqDef _ _ _
-                      | EqFby _ _ _ _ => []
-                      | EqApp i _ f _ _ =>
-                        match i with
-                        | [] => []
-                        | i :: _ => [(i,f)]
-                        end
-                      end) eqs.
-  Definition gather_app_vars (eqs: list equation): idents :=
-    concatMap (fun eq => match eq with
-                      | EqDef _ _ _
-                      | EqFby _ _ _ _ => []
-                      | EqApp xs _ _ _ _ => tl xs
-                      end) eqs.
-
-
   (** ** Translation *)
 
   Section Translate.
