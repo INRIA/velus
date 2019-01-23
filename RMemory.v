@@ -27,9 +27,6 @@ Inductive memory (V: Type) :=
       instances: env (memory V)
     }.
 
-Definition max (l: list nat) : nat :=
-  fold_left (fun m x => if NPeano.leb x m then m else x) l 0.
-
 (** ** Operations *)
 
 Section Operations.

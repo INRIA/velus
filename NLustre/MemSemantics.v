@@ -78,26 +78,21 @@ Module Type MEMSEMANTICS
   Definition memory_masked (k: nat) (rs: cstream) (M M': memories) :=
     forall n, count rs n = k -> M' n = M n.
 
-  Inductive mfby: ident -> val -> stream value -> memories -> memories -> stream value -> Prop :=
-    mfby_intro:
-      forall x v0 ls M M' xs,
-        find_val x (M 0) = Some v0 ->
-        (forall n, match find_val x (M n) with
-              | Some mv =>
-                match ls n with
-                | absent =>
-                  find_val x (M (S n)) = Some mv
-                  /\ find_val x (M' n) = Some mv
-                  /\ xs n = absent
-                | present v =>
-                  find_val x (M (S n)) = Some v
-                  /\ find_val x (M' n) = Some v
-                  /\ xs n = present mv
-                end
-              | None => False
-              end) ->
-        mfby x v0 ls M M' xs.
-
+  Definition mfby (x: ident) (c0: val) (xs: stream value) (M M': memories) (ys: stream value) : Prop :=
+    find_val x (M 0) = Some c0
+    /\ (forall n, find_val x (M (S n)) = find_val x (M' n))
+    /\ forall n, match find_val x (M n) with
+           | Some mv =>
+             match xs n with
+             | absent =>
+               find_val x (M' n) = Some mv
+               /\ ys n = absent
+             | present v =>
+               find_val x (M' n) = Some v
+               /\ ys n = present mv
+             end
+           | None => False
+           end.
 
   Section NodeSemantics.
 
@@ -106,31 +101,28 @@ Module Type MEMSEMANTICS
 
     Variable G: global.
 
-    Inductive well_formed_memory: memory val -> ident -> Prop :=
-      well_formed_memory_intro:
-        forall M f n,
-          find_node f G = Some n ->
-          (forall i M', sub_inst i M M' ->
-                   exists f', In (i, f') (gather_insts n.(n_eqs))
-                         /\ well_formed_memory M' f') ->
-          (forall i f', In (i, f') (gather_insts n.(n_eqs)) ->
-                   exists M', sub_inst i M M'
-                         /\ well_formed_memory M' f') ->
-          (forall x, (exists v, find_val x M = Some v) <-> In x (gather_mem n.(n_eqs))) ->
-          well_formed_memory M f.
+    (* Inductive well_formed_memory: memory val -> ident -> Prop := *)
+    (*   well_formed_memory_intro: *)
+    (*     forall M f n, *)
+    (*       find_node f G = Some n -> *)
+    (*       (forall i M', sub_inst i M M' -> *)
+    (*                exists f', In (i, f') (gather_insts n.(n_eqs)) *)
+    (*                      /\ well_formed_memory M' f') -> *)
+    (*       (forall i f', In (i, f') (gather_insts n.(n_eqs)) -> *)
+    (*                exists M', sub_inst i M M' *)
+    (*                      /\ well_formed_memory M' f') -> *)
+    (*       (forall x, (exists v, find_val x M = Some v) <-> In x (gather_mem n.(n_eqs))) -> *)
+    (*       well_formed_memory M f. *)
 
-    Definition well_formed_memory_n (M: memories) (f: ident) : Prop :=
-      forall n, well_formed_memory (M n) f.
+    (* Definition well_formed_memory_n (M: memories) (f: ident) : Prop := *)
+    (*   forall n, well_formed_memory (M n) f. *)
 
-    Inductive well_formed_memory_eqs: memory val -> list equation -> Prop :=
-      well_formed_memory_eqs_intro:
-        forall M eqs,
-          (forall i, (exists M', sub_inst i M M') <-> InMembers i (gather_insts eqs)) ->
-          (forall x, (exists v, find_val x M = Some v) <-> In x (gather_mem eqs)) ->
-          well_formed_memory_eqs M eqs.
+    Definition memory_closed (M: memory val) (eqs: list equation) : Prop :=
+      (forall i, find_inst i M <> None -> InMembers i (gather_insts eqs))
+      /\ forall x, find_val x M <> None -> In x (gather_mem eqs).
 
-    Definition well_formed_memory_eqs_n (M: memories) (eqs: list equation) : Prop :=
-      forall n, well_formed_memory_eqs (M n) eqs.
+    Definition memory_closed_n (M: memories) (eqs: list equation) : Prop :=
+      forall n, memory_closed (M n) eqs.
 
     (* Inductive well_formed_memory: memory val -> list equation -> Prop := *)
     (*   well_formed_memory_intro: *)
@@ -197,7 +189,8 @@ Module Type MEMSEMANTICS
                same_clock yss ->
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
                Forall (msem_equation bk H M M') n.(n_eqs) ->
-               well_formed_memory_n M f ->
+               (* well_formed_memory_n M f -> *)
+               memory_closed_n M n.(n_eqs) ->
                msem_node f xss M M' yss.
 
     Definition msem_equations bk H M M' eqs := Forall (msem_equation bk H M M') eqs.
@@ -279,7 +272,8 @@ enough: it does not support the internal fixpoint introduced by
         same_clock yss ->
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
         Forall (msem_equation G bk H M M') n.(n_eqs) ->
-        well_formed_memory_n G M f ->
+        (* well_formed_memory_n G M f -> *)
+        memory_closed_n M n.(n_eqs) ->
         Forall (P_equation bk H M M') n.(n_eqs) ->
         P_node f xss M M' yss.
 
@@ -308,6 +302,7 @@ enough: it does not support the internal fixpoint introduced by
         intro k; destruct (H k) as (?&?&?&?&?); eauto 7.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
+        clear H8.
         induction H7; auto.
     Qed.
 
@@ -459,49 +454,49 @@ enough: it does not support the internal fixpoint introduced by
     intros; edestruct Spec; eauto.
   Qed.
 
-  Lemma well_formed_memory_cons:
-    forall M n G f,
-      Ordered_nodes (n :: G) ->
-      valid_app_node G f ->
-      well_formed_memory (n :: G) M f ->
-      n.(n_name) <> f ->
-      well_formed_memory G M f.
-  Proof.
-    induction M as [? IH] using memory_ind';
-      inversion_clear 2 as [??? Find' AppIn];
-      inversion_clear 1 as [??? Find Insts Insts']; intros.
-    rewrite find_node_tl in Find; auto.
-    rewrite Find in Find'; inv Find'.
-    econstructor; eauto.
-    - intros ** Sub.
-      edestruct Insts as (f' &?&?); eauto.
-      exists f'; split; auto.
-      assert (valid_app_eqs (n_eqs n0)) as Valid
-          by (eapply valid_app_node_eqs; eauto using valid_app_node).
-      assert (Is_node_in f' (n_eqs n0)) as Hin
-          by (apply Is_node_in_gather_insts; eauto).
-      apply Exists_exists in Hin as (?&?& Hin).
-      inv Hin.
-      eapply IH; eauto.
-      + edestruct AppIn; eauto.
-      + eapply find_node_later_not_Is_node_in in Find; eauto.
-        rewrite <-Is_node_in_gather_insts in Find; eauto.
-        intro E; apply Find; rewrite E; eauto.
-    - intros ** Hin.
-      edestruct Insts' as (M' &?&?); eauto.
-      exists M'; split; auto.
-      assert (valid_app_eqs (n_eqs n0)) as Valid
-          by (eapply valid_app_node_eqs; eauto using valid_app_node).
-      assert (Is_node_in f' (n_eqs n0)) as Hin'
-          by (apply Is_node_in_gather_insts; eauto).
-      apply Exists_exists in Hin' as (?&?& Hin').
-      inv Hin'.
-      eapply IH; eauto.
-      + edestruct AppIn; eauto.
-      + eapply find_node_later_not_Is_node_in in Find; eauto.
-        rewrite <-Is_node_in_gather_insts in Find; eauto.
-        intro E; apply Find; rewrite E; eauto.
-  Qed.
+  (* Lemma well_formed_memory_cons: *)
+  (*   forall M n G f, *)
+  (*     Ordered_nodes (n :: G) -> *)
+  (*     valid_app_node G f -> *)
+  (*     well_formed_memory (n :: G) M f -> *)
+  (*     n.(n_name) <> f -> *)
+  (*     well_formed_memory G M f. *)
+  (* Proof. *)
+  (*   induction M as [? IH] using memory_ind'; *)
+  (*     inversion_clear 2 as [??? Find' AppIn]; *)
+  (*     inversion_clear 1 as [??? Find Insts Insts']; intros. *)
+  (*   rewrite find_node_tl in Find; auto. *)
+  (*   rewrite Find in Find'; inv Find'. *)
+  (*   econstructor; eauto. *)
+  (*   - intros ** Sub. *)
+  (*     edestruct Insts as (f' &?&?); eauto. *)
+  (*     exists f'; split; auto. *)
+  (*     assert (valid_app_eqs (n_eqs n0)) as Valid *)
+  (*         by (eapply valid_app_node_eqs; eauto using valid_app_node). *)
+  (*     assert (Is_node_in f' (n_eqs n0)) as Hin *)
+  (*         by (apply Is_node_in_gather_insts; eauto). *)
+  (*     apply Exists_exists in Hin as (?&?& Hin). *)
+  (*     inv Hin. *)
+  (*     eapply IH; eauto. *)
+  (*     + edestruct AppIn; eauto. *)
+  (*     + eapply find_node_later_not_Is_node_in in Find; eauto. *)
+  (*       rewrite <-Is_node_in_gather_insts in Find; eauto. *)
+  (*       intro E; apply Find; rewrite E; eauto. *)
+  (*   - intros ** Hin. *)
+  (*     edestruct Insts' as (M' &?&?); eauto. *)
+  (*     exists M'; split; auto. *)
+  (*     assert (valid_app_eqs (n_eqs n0)) as Valid *)
+  (*         by (eapply valid_app_node_eqs; eauto using valid_app_node). *)
+  (*     assert (Is_node_in f' (n_eqs n0)) as Hin' *)
+  (*         by (apply Is_node_in_gather_insts; eauto). *)
+  (*     apply Exists_exists in Hin' as (?&?& Hin'). *)
+  (*     inv Hin'. *)
+  (*     eapply IH; eauto. *)
+  (*     + edestruct AppIn; eauto. *)
+  (*     + eapply find_node_later_not_Is_node_in in Find; eauto. *)
+  (*       rewrite <-Is_node_in_gather_insts in Find; eauto. *)
+  (*       intro E; apply Find; rewrite E; eauto. *)
+  (* Qed. *)
 
   Lemma msem_node_valid_app_cons:
     forall n G f xs M' M ys,
@@ -575,8 +570,8 @@ enough: it does not support the internal fixpoint introduced by
         apply Forall_Forall with (1:=Hord) in IH.
         apply Forall_impl with (2:=IH).
         intuition.
-      + intro; eapply well_formed_memory_cons; eauto.
-        eapply msem_node_valid_app_cons; eauto.
+      (* + intro; eapply well_formed_memory_cons; eauto. *)
+      (*   eapply msem_node_valid_app_cons; eauto. *)
   Qed.
 
   Corollary msem_reset_cons:
@@ -592,55 +587,55 @@ enough: it does not support the internal fixpoint introduced by
     intro k; destruct (SemN k) as (?&?&?&?); eauto using msem_node_cons.
   Qed.
 
-  Lemma well_formed_memory_cons2:
-    forall M n G f,
-      valid_app_node G f ->
-      well_formed_memory G M f ->
-      Forall (fun n' => n_name n <> n_name n') G ->
-      well_formed_memory (n :: G) M f.
-  Proof.
-    induction M as [? IH] using memory_ind';
-      inversion_clear 1 as [??? Find' AppIn];
-      inversion_clear 1 as [??? Find Insts Insts']; intros ** Hnin.
-    rewrite Find in Find'; inv Find'.
-    assert (n.(n_name) <> f) as Hnf.
-    { intro Hnf.
-      rewrite Hnf in *.
-      pose proof (find_node_name _ _ _ Find).
-      apply find_node_split in Find.
-      destruct Find as [bG [aG Hge]].
-      rewrite Hge in Hnin.
-      apply Forall_app in Hnin.
-      destruct Hnin as [H' Hfg]; clear H'.
-      inversion_clear Hfg.
-      match goal with H:f<>_ |- False => now apply H end.
-    }
-    pose proof Find as Find'.
-    rewrite <-find_node_other in Find; eauto.
-    econstructor; eauto.
-    - intros ** Sub.
-      edestruct Insts as (f' &?&?); eauto.
-      exists f'; split; auto.
-      assert (valid_app_eqs (n_eqs n0)) as Valid
-          by (eapply valid_app_node_eqs with (2 := Find'); eauto using valid_app_node).
-      assert (Is_node_in f' (n_eqs n0)) as Hin
-          by (apply Is_node_in_gather_insts; eauto).
-      apply Exists_exists in Hin as (?&?& Hin).
-      inv Hin.
-      eapply IH; eauto.
-      edestruct AppIn; eauto.
-    - intros ** Hin.
-      edestruct Insts' as (M' &?&?); eauto.
-      exists M'; split; auto.
-      assert (valid_app_eqs (n_eqs n0)) as Valid
-          by (eapply valid_app_node_eqs; eauto using valid_app_node).
-      assert (Is_node_in f' (n_eqs n0)) as Hin'
-          by (apply Is_node_in_gather_insts; eauto).
-      apply Exists_exists in Hin' as (?&?& Hin').
-      inv Hin'.
-      eapply IH; eauto.
-      edestruct AppIn; eauto.
-  Qed.
+  (* Lemma well_formed_memory_cons2: *)
+  (*   forall M n G f, *)
+  (*     valid_app_node G f -> *)
+  (*     well_formed_memory G M f -> *)
+  (*     Forall (fun n' => n_name n <> n_name n') G -> *)
+  (*     well_formed_memory (n :: G) M f. *)
+  (* Proof. *)
+  (*   induction M as [? IH] using memory_ind'; *)
+  (*     inversion_clear 1 as [??? Find' AppIn]; *)
+  (*     inversion_clear 1 as [??? Find Insts Insts']; intros ** Hnin. *)
+  (*   rewrite Find in Find'; inv Find'. *)
+  (*   assert (n.(n_name) <> f) as Hnf. *)
+  (*   { intro Hnf. *)
+  (*     rewrite Hnf in *. *)
+  (*     pose proof (find_node_name _ _ _ Find). *)
+  (*     apply find_node_split in Find. *)
+  (*     destruct Find as [bG [aG Hge]]. *)
+  (*     rewrite Hge in Hnin. *)
+  (*     apply Forall_app in Hnin. *)
+  (*     destruct Hnin as [H' Hfg]; clear H'. *)
+  (*     inversion_clear Hfg. *)
+  (*     match goal with H:f<>_ |- False => now apply H end. *)
+  (*   } *)
+  (*   pose proof Find as Find'. *)
+  (*   rewrite <-find_node_other in Find; eauto. *)
+  (*   econstructor; eauto. *)
+  (*   - intros ** Sub. *)
+  (*     edestruct Insts as (f' &?&?); eauto. *)
+  (*     exists f'; split; auto. *)
+  (*     assert (valid_app_eqs (n_eqs n0)) as Valid *)
+  (*         by (eapply valid_app_node_eqs with (2 := Find'); eauto using valid_app_node). *)
+  (*     assert (Is_node_in f' (n_eqs n0)) as Hin *)
+  (*         by (apply Is_node_in_gather_insts; eauto). *)
+  (*     apply Exists_exists in Hin as (?&?& Hin). *)
+  (*     inv Hin. *)
+  (*     eapply IH; eauto. *)
+  (*     edestruct AppIn; eauto. *)
+  (*   - intros ** Hin. *)
+  (*     edestruct Insts' as (M' &?&?); eauto. *)
+  (*     exists M'; split; auto. *)
+  (*     assert (valid_app_eqs (n_eqs n0)) as Valid *)
+  (*         by (eapply valid_app_node_eqs; eauto using valid_app_node). *)
+  (*     assert (Is_node_in f' (n_eqs n0)) as Hin' *)
+  (*         by (apply Is_node_in_gather_insts; eauto). *)
+  (*     apply Exists_exists in Hin' as (?&?& Hin'). *)
+  (*     inv Hin'. *)
+  (*     eapply IH; eauto. *)
+  (*     edestruct AppIn; eauto. *)
+  (* Qed. *)
 
   Lemma msem_node_valid_app:
     forall G f xs M' M ys,
@@ -733,8 +728,8 @@ enough: it does not support the internal fixpoint introduced by
         apply Exists_exists in Hini.
         destruct Hini as [nd' [Hin [Hneq Heq]]].
         intuition.
-      + intro; eapply well_formed_memory_cons2; eauto.
-        eapply msem_node_valid_app; eauto.
+      (* + intro; eapply well_formed_memory_cons2; eauto. *)
+      (*   eapply msem_node_valid_app; eauto. *)
   Qed.
 
   Lemma msem_reset_cons2:
@@ -829,11 +824,11 @@ enough: it does not support the internal fixpoint introduced by
       mfby x v0 ls (add_val_n y ms M) (add_val_n y ms' M') xs.
   Proof.
     unfold add_val_n.
-    intros ** Fby; inversion_clear Fby as [??????? Spec].
-    constructor.
+    intros ** Fby; destruct Fby as (?&?& Spec).
+    split; [|split].
     - rewrite find_val_gso; auto.
-    - intro n; rewrite 3 find_val_gso; auto.
-      exact (Spec n).
+    - intro; rewrite 2 find_val_gso; auto.
+    - intro n; rewrite 2 find_val_gso; auto; apply Spec.
   Qed.
 
   Definition add_inst_n (y: ident) (M' M: memories): memories :=
@@ -1075,32 +1070,29 @@ dataflow memory for which the non-standard semantics holds true.
 
    *)
 
-  Fixpoint stutter (v0: val) (xs: stream value) (n: nat) : val :=
+  Definition stutter (v0: val) (xs: stream value) (n: nat) : val := (* TODO: inline in proof *)
     match xs n with
     | present v => v
-    | absent => match n with
-               | 0 => v0
-               | S n => stutter v0 xs n
-               end
+    | absent => hold v0 xs n
     end.
 
-  Lemma stutter_hold_absent:
-    forall n v0 xs,
-      xs n = absent ->
-      stutter v0 xs n = hold v0 xs n.
-  Proof.
-    induction n; simpl; intros ** ->; auto.
-    destruct (xs n) eqn: E'; auto.
-    destruct n; simpl; rewrite E'; auto.
-  Qed.
+  (* Lemma stutter_hold_absent: *)
+  (*   forall n v0 xs, *)
+  (*     xs n = absent -> *)
+  (*     stutter v0 xs n = hold v0 xs n. *)
+  (* Proof. *)
+  (*   induction n; simpl. ; intros ** ->; auto. *)
+  (*   destruct (xs n) eqn: E'; auto. *)
+  (*   destruct n; simpl; rewrite E'; auto. *)
+  (* Qed. *)
 
-  Lemma stutter_present:
-    forall n v0 xs c,
-      xs n = present c ->
-      stutter v0 xs n = c.
-  Proof.
-    destruct n; simpl; intros ** ->; auto.
-  Qed.
+  (* Lemma stutter_present: *)
+  (*   forall n v0 xs c, *)
+  (*     xs n = present c -> *)
+  (*     stutter v0 xs n = c. *)
+  (* Proof. *)
+  (*   destruct n; simpl; intros ** ->; auto. *)
+  (* Qed. *)
 
   Fact hd_error_Some_In:
     forall {A} (xs: list A) x,
@@ -1120,64 +1112,51 @@ dataflow memory for which the non-standard semantics holds true.
     now inv H.
   Qed.
 
-  Lemma well_formed_memory_eqs_n_Def:
-    forall G M eqs x ck ce,
-      well_formed_memory_eqs_n G M eqs ->
-      well_formed_memory_eqs_n G M (EqDef x ck ce :: eqs).
-  Proof.
-    intros ** WF n; specialize (WF n); inversion_clear WF;
-      eauto using well_formed_memory_eqs.
-  Qed.
+  (* Lemma memory_closed_n_Def: *)
+  (*   forall M eqs x ck ce, *)
+  (*     memory_closed_n M eqs -> *)
+  (*     memory_closed_n M (EqDef x ck ce :: eqs). *)
+  (* Proof. *)
+  (*   intros ** WF n; specialize (WF n); destruct WF; *)
+  (*     split; auto. *)
+  (* Qed. *)
 
-  Lemma well_formed_memory_eqs_n_App:
-    forall G M eqs i Mx xs ck f es r,
-      well_formed_memory_eqs_n G M eqs ->
+  Lemma memory_closed_n_App:
+    forall M eqs i Mx xs ck f es r,
+      memory_closed_n M eqs ->
       hd_error xs = Some i ->
-      well_formed_memory_eqs_n G (add_inst_n i Mx M) (EqApp xs ck f es r :: eqs).
+      memory_closed_n (add_inst_n i Mx M) (EqApp xs ck f es r :: eqs).
   Proof.
-    intros ** WF Hd n; specialize (WF n); inversion_clear WF as [?? Insts].
-    econstructor; eauto.
-    intro y; split; intros ** Hin.
-    - unfold sub_inst, add_inst_n in Hin; destruct Hin as (?& Sub).
-      destruct (ident_eq_dec y i).
-      + subst.
-        unfold gather_insts, concatMap; simpl.
-        destruct xs; simpl in *; inv Hd; left; auto.
-      + rewrite find_inst_gso in Sub; auto.
-        unfold gather_insts, concatMap; simpl.
-        apply InMembers_app; right; auto.
-        apply Insts; eauto.
-    - unfold sub_inst, add_inst_n.
-      destruct (ident_eq_dec y i).
-      + subst; rewrite find_inst_gss; eauto.
-      + rewrite find_inst_gso; auto.
-        apply Insts.
-        unfold gather_insts, concatMap in Hin; simpl in Hin.
-        destruct xs; simpl in *; inv Hd.
-        destruct Hin; auto; congruence.
+    intros ** WF Hd n; specialize (WF n); destruct WF as (Insts &?).
+    split; auto.
+    intro y; intros ** Hin.
+    unfold sub_inst, add_inst_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    destruct (ident_eq_dec y i).
+    - subst.
+      unfold gather_insts, concatMap; simpl.
+      destruct xs; simpl in *; inv Hd; left; auto.
+    - rewrite find_inst_gso in Find; auto.
+      unfold gather_insts, concatMap; simpl.
+      apply InMembers_app; right; auto.
+      apply Insts; eauto.
+      apply not_None_is_Some; eauto.
   Qed.
 
-  Lemma well_formed_memory_eqs_n_Fby:
-    forall G M eqs x ck v0 e vs,
-      well_formed_memory_eqs_n G M eqs ->
-      well_formed_memory_eqs_n G (add_val_n x vs M) (EqFby x ck v0 e :: eqs).
+  Lemma memory_closed_n_Fby:
+    forall M eqs x ck v0 e vs,
+      memory_closed_n M eqs ->
+      memory_closed_n (add_val_n x vs M) (EqFby x ck v0 e :: eqs).
   Proof.
-    intros ** WF n; specialize (WF n); inversion_clear WF as [??? Vals].
-    econstructor; eauto.
-    intro y; split; intros ** Hin.
-    - unfold add_val_n in Hin; destruct Hin as (?& Find).
-      destruct (ident_eq_dec y x).
-      + subst; simpl; auto.
-      + rewrite find_val_gso in Find; auto.
-        unfold gather_mem, concatMap; simpl.
-        right; apply Vals; eauto.
-    - unfold add_val_n.
-      destruct (ident_eq_dec y x).
-      + subst; rewrite find_val_gss; eauto.
-      + rewrite find_val_gso; auto.
-        apply Vals.
-        unfold gather_mem, concatMap in Hin; simpl in Hin.
-        destruct Hin; auto; congruence.
+    intros ** WF n; specialize (WF n); destruct WF as (?& Vals).
+    split; auto.
+    intro y; intros ** Hin.
+    unfold add_val_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    destruct (ident_eq_dec y x).
+    - subst; simpl; auto.
+    - rewrite find_val_gso in Find; auto.
+      unfold gather_mem, concatMap; simpl.
+      right; apply Vals; eauto.
+      apply not_None_is_Some; eauto.
   Qed.
 
   Lemma sem_msem_eq:
@@ -1189,11 +1168,11 @@ dataflow memory for which the non-standard semantics holds true.
           sem_reset G f r xs ys ->
           exists M M', msem_reset G f r xs M M' ys) ->
       sem_equation G bk H eq ->
-      Is_well_sch mems argIn (eq :: eqs) ->
+      Is_well_sch mems argIn (eq :: eqs) -> (* TODO *)
       Forall (msem_equation G bk H M M') eqs ->
-      well_formed_memory_eqs_n G M eqs ->
+      memory_closed_n M eqs ->
       exists M1 M1', Forall (msem_equation G bk H M1 M1') (eq :: eqs)
-                /\ well_formed_memory_eqs_n G M1 (eq :: eqs).
+                /\ memory_closed_n M1 (eq :: eqs).
   Proof.
     intros ** IH IH' Heq Hwsch Hmeqs WF.
     inversion Heq as [|???????? Hls Hxs Hsem
@@ -1203,7 +1182,6 @@ dataflow memory for which the non-standard semantics holds true.
 
     - exists M, M'.
       econstructor; eauto.
-      now apply well_formed_memory_eqs_n_Def.
 
     - apply IH in Hsem as (Mx & Mx' & Hmsem).
       exists (add_inst_n (hd Ids.default x) Mx M), (add_inst_n (hd Ids.default x) Mx' M').
@@ -1235,7 +1213,7 @@ dataflow memory for which the non-standard semantics holds true.
             assert (Is_defined_in_eq i (EqApp x ck f arg None))
               by (constructor; apply hd_error_Some_In; auto).
             apply msem_equation_madd_inst; auto.
-      + apply well_formed_memory_eqs_n_App; auto.
+      + apply memory_closed_n_App; auto.
 
     - pose proof Hsem as Hsem'.
       apply IH' in Hsem as (Mx & Mx' & Hmsem).
@@ -1275,23 +1253,19 @@ dataflow memory for which the non-standard semantics holds true.
           assert (Is_defined_in_eq i (EqApp x ck f arg (Some (y, ck_r))))
             by (constructor; apply hd_error_Some_In; auto).
           apply msem_equation_madd_inst; auto.
-      + apply well_formed_memory_eqs_n_App; auto.
+      + apply memory_closed_n_App; auto.
 
     - exists (add_val_n x (hold (sem_const c0) ls) M), (add_val_n x (stutter (sem_const c0) ls) M').
       split.
       + constructor.
-        *{unfold add_val_n.
-          do 2 (econstructor; eauto).
-          - now apply find_val_gss.
-          - subst; unfold fby; simpl.
-            intro n; destruct (ls n) eqn: E; auto;
-              repeat rewrite find_val_gss; auto.
-            + rewrite stutter_hold_absent; intuition.
-            + intuition; destruct n; simpl; now rewrite E.
-         }
+        * unfold add_val_n.
+          econstructor; eauto; split; [|split];
+            subst; unfold fby, stutter; simpl;
+              intros; repeat rewrite find_val_gss; auto.
+          destruct (ls n); auto.
         * inversion_clear Hwsch.
           apply msem_equation_madd_val; eauto.
-      + now apply well_formed_memory_eqs_n_Fby.
+      + now apply memory_closed_n_Fby.
   Qed.
 
   (* Lemma msem_equation_same_initial_state_cons: *)
@@ -1510,140 +1484,139 @@ dataflow memory for which the non-standard semantics holds true.
       forall n, n <= n0 -> find_val x (M n) = Some v0.
   Proof.
     intros ** Mfby Abs n E; induction n;
-      inversion_clear Mfby as [?????? Init Spec]; auto.
-    specialize (Spec n).
+      destruct Mfby as (Init & Spec & Spec'); auto.
+    rewrite Spec.
+    specialize (Spec' n).
     destruct (find_val x (M n)); try contradiction.
-    rewrite Abs in Spec; try omega.
-    destruct Spec as [->].
+    rewrite Abs in Spec'; try omega.
+    destruct Spec' as [->].
     apply IHn; omega.
   Qed.
 
+  Lemma msem_equation_absent_until_cons:
+    forall n0 G eq eqs bk H M M' Me Me' mems argIn,
+      (forall f xss M M' yss,
+          msem_node G f xss M M' yss ->
+          (forall n, n < n0 -> absent_list (xss n)) ->
+          forall n, n <= n0 -> M n = M 0) ->
+      (forall n, n < n0 -> bk n = false) ->
+      (forall n, n <= n0 -> M n = M 0) ->
+      msem_equation G bk H Me Me' eq ->
+      Is_well_sch mems argIn (eq :: eqs) ->
+      Forall (msem_equation G bk H M M') eqs ->
+      exists M1 M1',
+        Forall (msem_equation G bk H M1 M1') (eq :: eqs)
+        /\ forall n, n <= n0 -> M1 n = M1 0.
+  Proof.
+    intros ** IHNode Abs Spec Heq Hwsch Hmeqs.
+      inversion Heq as [|
+                        ???????????????? Args ? Node|
+                        ???????????????????? Args ??? Reset|
+                        ?????????? Exps ? Mfby]; subst;
+        inv Hwsch.
+      - do 3 econstructor; eauto.
+      - exists (add_inst_n x Mx M), (add_inst_n x Mx' M'); split.
+        + constructor; auto.
+          * econstructor; eauto;
+              unfold sub_inst_n, sub_inst, add_inst_n;
+              setoid_rewrite find_inst_gss; auto.
+          * assert (Is_defined_in_eq x (EqApp xs ck f arg None))
+              by (constructor; apply hd_error_Some_In; auto).
+            apply msem_equation_madd_inst; auto.
+        + intros.
+          unfold add_inst_n.
+          eapply IHNode in Node; eauto.
+          * rewrite Node, Spec; auto.
+          *{ intros n' ?.
+             specialize (Args n');
+               inversion_clear Args as [?????? Clock|??? E].
+             - rewrite Abs in Clock; auto.
+               contradict Clock; apply not_subrate_clock.
+             - rewrite E; apply all_absent_spec.
+           }
+      - exists (add_inst_n x Mx M), (add_inst_n x Mx' M'); split.
+        + constructor; auto.
+          * econstructor; eauto;
+              unfold sub_inst_n, sub_inst, add_inst_n;
+              setoid_rewrite find_inst_gss; auto.
+          * assert (Is_defined_in_eq x (EqApp xs ck f arg (Some (r, ck_r))))
+              by (constructor; apply hd_error_Some_In; auto).
+            apply msem_equation_madd_inst; auto.
+        + intros.
+          unfold add_inst_n.
+          inversion_clear Reset as [?????? Nodes].
+          destruct (Nodes (count rs 0)) as (Mk0 & Mk'0 & Node0 & Mmask0 & Mmask'0).
+          specialize (Nodes (count rs n)).
+          destruct Nodes as (Mk & Mk' & Node & Mmask & Mmask').
+          eapply IHNode in Node; eauto.
+          * specialize (Mmask n).
+            rewrite <-Mmask, Node, Spec; auto.
+            specialize (Mmask0 0).
+            admit.
+          *{ intros n' ?.
+             apply absent_list_mask.
+             - specialize (Args n');
+                 inversion_clear Args as [?????? Clock|??? E].
+               + rewrite Abs in Clock; auto.
+                 contradict Clock; apply not_subrate_clock.
+               + rewrite E; apply all_absent_spec.
+             - apply all_absent_spec.
+           }
+      - exists (fun n => add_val x (match find_val x (Me n) with
+                            | Some v => v
+                            | None => false_val
+                            end) (M n)),
+        (fun n => add_val x (match find_val x (Me' n) with
+                          | Some v => v
+                          | None => false_val
+                          end) (M' n)).
+        split.
+        + inversion_clear Mfby as [?????? Init Spec'].
+          constructor; auto.
+          *{ do 2 (econstructor; eauto).
+             - rewrite Init, find_val_gss; auto.
+             - intro n; specialize (Spec' n); destruct (find_val x (Me n)) eqn: E; try contradiction.
+               repeat rewrite find_val_gss; auto.
+               destruct (ls n) eqn: E'; auto.
+               + destruct Spec' as (-> & -> & ?); intuition.
+               + destruct Spec' as (-> & -> & ?); intuition.
+           }
+          * apply msem_equation_madd_val; eauto.
+        + intros; unfold add_val_n.
+          erewrite mfby_absent_until; eauto.
+          * inversion_clear Mfby as [?????? Init].
+            rewrite Init, Spec; auto.
+          * intros n' ?.
+            specialize (Exps n');
+              inversion_clear Exps as [???? Clock|]; auto.
+            rewrite Abs in Clock; auto.
+            contradict Clock; apply not_subrate_clock.
+    Qed.
 
-  (* Lemma msem_equation_absent_until_cons: *)
-  (*     forall n0 G eq eqs bk H M M' Me Me' mems argIn, *)
-  (*       (forall f xss M M' yss, *)
-  (*           msem_node G f xss M M' yss -> *)
-  (*           (forall n, n < n0 -> absent_list (xss n)) -> *)
-  (*           forall n, n <= n0 -> M n = M 0) -> *)
-  (*       (forall n, n < n0 -> bk n = false) -> *)
-  (*       (forall n, n <= n0 -> M n = M 0) -> *)
-  (*       msem_equation G bk H Me Me' eq -> *)
-  (*       Is_well_sch mems argIn (eq :: eqs) -> *)
-  (*       Forall (msem_equation G bk H M M') eqs -> *)
-  (*       exists M1 M1', *)
-  (*         Forall (msem_equation G bk H M1 M1') (eq :: eqs) *)
-  (*         /\ forall n, n <= n0 -> M1 n = M1 0. *)
-  (*   Proof. *)
-  (*     intros ** IHNode Abs Spec Heq Hwsch Hmeqs. *)
-  (*     inversion Heq as [| *)
-  (*                       ???????????????? Args ? Node| *)
-  (*                       ???????????????????? Args ??? Reset| *)
-  (*                       ?????????? Exps ? Mfby]; subst; *)
-  (*       inv Hwsch. *)
-  (*     - do 3 econstructor; eauto. *)
-  (*     - exists (add_inst_n x Mx M), (add_inst_n x Mx' M'); split. *)
-  (*       + constructor; auto. *)
-  (*         * econstructor; eauto; *)
-  (*             unfold sub_inst_n, sub_inst, add_inst_n; *)
-  (*             setoid_rewrite find_inst_gss; auto. *)
-  (*         * assert (Is_defined_in_eq x (EqApp xs ck f arg None)) *)
-  (*             by (constructor; apply hd_error_Some_In; auto). *)
-  (*           apply msem_equation_madd_inst; auto. *)
-  (*       + intros. *)
-  (*         unfold add_inst_n. *)
-  (*         eapply IHNode in Node; eauto. *)
-  (*         * rewrite Node, Spec; auto. *)
-  (*         *{ intros n' ?. *)
-  (*            specialize (Args n'); *)
-  (*              inversion_clear Args as [?????? Clock|??? E]. *)
-  (*            - rewrite Abs in Clock; auto. *)
-  (*              contradict Clock; apply not_subrate_clock. *)
-  (*            - rewrite E; apply all_absent_spec. *)
-  (*          } *)
-  (*     - exists (add_inst_n x Mx M), (add_inst_n x Mx' M'); split. *)
-  (*       + constructor; auto. *)
-  (*         * econstructor; eauto; *)
-  (*             unfold sub_inst_n, sub_inst, add_inst_n; *)
-  (*             setoid_rewrite find_inst_gss; auto. *)
-  (*         * assert (Is_defined_in_eq x (EqApp xs ck f arg (Some (r, ck_r)))) *)
-  (*             by (constructor; apply hd_error_Some_In; auto). *)
-  (*           apply msem_equation_madd_inst; auto. *)
-  (*       + intros. *)
-  (*         unfold add_inst_n. *)
-  (*         inversion_clear Reset as [?????? Nodes]. *)
-  (*         destruct (Nodes (count rs 0)) as (Mk0 & Mk'0 & Node0 & Mmask0 & Mmask'0). *)
-  (*         specialize (Nodes (count rs n)). *)
-  (*         destruct Nodes as (Mk & Mk' & Node & Mmask & Mmask'). *)
-  (*         eapply IHNode in Node; eauto. *)
-  (*         * specialize (Mmask n). *)
-  (*           rewrite <-Mmask, Node, Spec; auto. *)
-  (*           specialize (Mmask0 0). *)
-  (*           admit. *)
-  (*         *{ intros n' ?. *)
-  (*            apply absent_list_mask. *)
-  (*            - specialize (Args n'); *)
-  (*                inversion_clear Args as [?????? Clock|??? E]. *)
-  (*              + rewrite Abs in Clock; auto. *)
-  (*                contradict Clock; apply not_subrate_clock. *)
-  (*              + rewrite E; apply all_absent_spec. *)
-  (*            - apply all_absent_spec. *)
-  (*          } *)
-  (*     - exists (fun n => add_val x (match find_val x (Me n) with *)
-  (*                           | Some v => v *)
-  (*                           | None => false_val *)
-  (*                           end) (M n)), *)
-  (*       (fun n => add_val x (match find_val x (Me' n) with *)
-  (*                         | Some v => v *)
-  (*                         | None => false_val *)
-  (*                         end) (M' n)). *)
-  (*       split. *)
-  (*       + inversion_clear Mfby as [?????? Init Spec']. *)
-  (*         constructor; auto. *)
-  (*         *{ do 2 (econstructor; eauto). *)
-  (*            - rewrite Init, find_val_gss; auto. *)
-  (*            - intro n; specialize (Spec' n); destruct (find_val x (Me n)) eqn: E; try contradiction. *)
-  (*              repeat rewrite find_val_gss; auto. *)
-  (*              destruct (ls n) eqn: E'; auto. *)
-  (*              + destruct Spec' as (-> & -> & ?); intuition. *)
-  (*              + destruct Spec' as (-> & -> & ?); intuition. *)
-  (*          } *)
-  (*         * apply msem_equation_madd_val; eauto. *)
-  (*       + intros; unfold add_val_n. *)
-  (*         erewrite mfby_absent_until; eauto. *)
-  (*         * inversion_clear Mfby as [?????? Init]. *)
-  (*           rewrite Init, Spec; auto. *)
-  (*         * intros n' ?. *)
-  (*           specialize (Exps n'); *)
-  (*             inversion_clear Exps as [???? Clock|]; auto. *)
-  (*           rewrite Abs in Clock; auto. *)
-  (*           contradict Clock; apply not_subrate_clock. *)
-  (*   Qed. *)
-
-  (*   Corollary msem_equation_absent_until: *)
-  (*     forall n0 G eqs bk H M M' mems argIn, *)
-  (*       (forall f xss M M' yss, *)
-  (*           msem_node G f xss M M' yss -> *)
-  (*           (forall n, n < n0 -> absent_list (xss n)) -> *)
-  (*           forall n, n <= n0 -> M n = M 0) -> *)
-  (*       (forall n, n < n0 -> bk n = false) -> *)
-  (*       Is_well_sch mems argIn eqs -> *)
-  (*       Forall (msem_equation G bk H M M') eqs -> *)
-  (*       exists M1 M1', *)
-  (*         Forall (msem_equation G bk H M1 M1') eqs *)
-  (*         /\ forall n, n <= n0 -> M1 n = M1 0. *)
-  (* Proof. *)
-  (*   intros ** IH Abs Hwsch Heqs. *)
-  (*   induction eqs as [|eq eqs IHeqs]; [do 2 exists (fun n => empty_memory _); now constructor|]. *)
-  (*   apply Forall_cons2 in Heqs as [Heq Heqs]. *)
-  (*   eapply IHeqs with (1:=Is_well_sch_cons _ _ _ _ Hwsch) *)
-  (*     in Heqs *)
-  (*     as (?&?&?&?); eauto. *)
-  (*   eapply msem_equation_absent_until_cons; eauto. *)
-  (* Qed. *)
+    Corollary msem_equation_absent_until:
+      forall n0 G eqs bk H M M' mems argIn,
+        (forall f xss M M' yss,
+            msem_node G f xss M M' yss ->
+            (forall n, n < n0 -> absent_list (xss n)) ->
+            forall n, n <= n0 -> M n = M 0) ->
+        (forall n, n < n0 -> bk n = false) ->
+        Is_well_sch mems argIn eqs ->
+        Forall (msem_equation G bk H M M') eqs ->
+        exists M1 M1',
+          Forall (msem_equation G bk H M1 M1') eqs
+          /\ forall n, n <= n0 -> M1 n = M1 0.
+  Proof.
+    intros ** IH Abs Hwsch Heqs.
+    induction eqs as [|eq eqs IHeqs]; [do 2 exists (fun n => empty_memory _); now constructor|].
+    apply Forall_cons2 in Heqs as [Heq Heqs].
+    eapply IHeqs with (1:=Is_well_sch_cons _ _ _ _ Hwsch)
+      in Heqs
+      as (?&?&?&?); eauto.
+    eapply msem_equation_absent_until_cons; eauto.
+  Qed.
 
   Lemma well_formed_empty_eqs_n:
-    forall G,
-      well_formed_memory_eqs_n G (fun _ : nat => empty_memory val) [].
+    memory_closed_n (fun _ : nat => empty_memory val) [].
   Proof.
     constructor; simpl.
     - split; intros ** Hin; try contradiction.
@@ -1667,10 +1640,10 @@ dataflow memory for which the non-standard semantics holds true.
       (forall f r xs ys,
           sem_reset G f r xs ys ->
           exists M M', msem_reset G f r xs M M' ys) ->
-      Is_well_sch mems argIn eqs ->
+      Is_well_sch mems argIn eqs -> (* TODO *)
       Forall (sem_equation G bk H) eqs ->
       exists M1 M1', Forall (msem_equation G bk H M1 M1') eqs
-                /\ well_formed_memory_eqs_n G M1 eqs.
+                /\ memory_closed_n M1 eqs.
   Proof.
     intros ** IH Hwsch Heqs.
     induction eqs as [|eq eqs IHeqs].
@@ -1687,6 +1660,18 @@ dataflow memory for which the non-standard semantics holds true.
   Require Import Coq.Logic.ConstructiveEpsilon.
   Require Import Coq.Logic.Epsilon.
   Require Import Coq.Logic.IndefiniteDescription.
+
+  (* Check functional_choice. *)
+
+  (* Lemma functional_choice_sig: *)
+  (*   forall A B (R: A -> B -> Prop), *)
+  (*     (forall x, { y | R x y }) -> *)
+  (*     exists f, forall x, R x (f x). *)
+  (* Proof. *)
+  (*   intros ** Ex. *)
+  (*   exists (fun n => proj1_sig (Ex n)). *)
+  (*   intro x; destruct (Ex x); auto. *)
+  (* Qed. *)
 
   Theorem sem_msem_reset:
     forall G f r xs ys,
@@ -1836,12 +1821,11 @@ dataflow memory for which the non-standard semantics holds true.
       inversion_clear Hwdef as [|??? neqs].
       simpl in neqs; unfold neqs in *.
       assert (exists M1 M1', Forall (msem_equation G bk H M1 M1') n.(n_eqs)
-                        /\ well_formed_memory_eqs_n G M1 n.(n_eqs))
+                        /\ memory_closed_n M1 n.(n_eqs))
         as (M1 & M1' & Hmsem & ?) by now eapply sem_msem_eqs; eauto.
       exists M1, M1'.
       econstructor; eauto.
-      + eapply msem_equation_cons2; eauto.
-      + intro. admit.
+      eapply msem_equation_cons2; eauto.
     - apply ident_eqb_neq in Hnf.
       apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
       inv Hord.
