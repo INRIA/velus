@@ -314,6 +314,18 @@ enough: it does not support the internal fixpoint introduced by
   Definition msem_nodes (G: global) : Prop :=
     Forall (fun no => exists xs M M' ys, msem_node G no.(n_name) xs M M' ys) G.
 
+(*   (** Morphisms properties *) *)
+
+(* Require Import Morphisms. *)
+(*   Add Parametric Morphism G f xs ys: (fun M M' => msem_node G f xs M M' ys) *)
+(*       with signature equal_memory ==> equal_memory ==> Basics.impl *)
+(*         as msem_node_equal_memory. *)
+(*   Proof. *)
+(*     intros ** E1 ? ? E2 Node. *)
+(*     inv Node. *)
+(*     econstructor; eauto; intro; try rewrite <-E1; try rewrite <-E2; auto. *)
+(*   Qed. *)
+
   (** ** Properties *)
 
   (** *** Equation non-activation *)
@@ -1492,6 +1504,39 @@ dataflow memory for which the non-standard semantics holds true.
     destruct Spec' as [->].
     apply IHn; omega.
   Qed.
+
+  Lemma memory_closed_empty:
+    forall M, memory_closed M [] ->
+         M ≋ empty_memory _.
+  Proof.
+    intros ** (Insts & Vals); unfold find_val, find_inst in *.
+    constructor; simpl in *.
+    - intro x.
+      assert (Env.find x (values M) = None) as ->.
+      { apply not_Some_is_None; intros ** E.
+        eapply Vals, not_None_is_Some; eauto.
+      }
+      now rewrite Env.gempty.
+    - split.
+      + setoid_rewrite Env.Props.P.F.empty_in_iff; setoid_rewrite Env.In_find; split; try contradiction.
+        intros (?&?); eapply Insts, not_None_is_Some; eauto.
+      + setoid_rewrite Env.Props.P.F.empty_mapsto_iff; contradiction.
+  Qed.
+
+  Require Import Setoid.
+
+  Lemma msem_node_absent_until:
+    forall n0 G f xss M M' yss,
+      msem_node G f xss M M' yss ->
+      (forall n, n < n0 -> absent_list (xss n)) ->
+      forall n, n <= n0 -> M n ≋ M 0.
+  Proof.
+    inversion_clear 1 as [??????????????? Heqs Hmem].
+    induction (n_eqs n) as [|[]]; intros ** Abs k Spec; inv Heqs; auto.
+    - assert (forall n, M n ≋ empty_memory _) as E
+          by (intro; apply memory_closed_empty; auto).
+      rewrite 2 E; reflexivity.
+    -
 
   Lemma msem_equation_absent_until_cons:
     forall n0 G eq eqs bk H M M' Me Me' mems argIn,
