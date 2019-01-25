@@ -139,7 +139,7 @@ Module Type MEMSEMANTICS
           msem_equation bk H M M' (EqDef x ck ce)
     | SEqApp:
         forall bk H M M' x xs ck f Mx Mx' arg ls xss,
-          Some x = hd_error xs ->
+          hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
           sem_laexps bk H ck arg ls ->
@@ -148,7 +148,7 @@ Module Type MEMSEMANTICS
           msem_equation bk H M M' (EqApp xs ck f arg None)
     | SEqReset:
         forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys rs ls xss,
-          Some x = hd_error xs ->
+          hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
           sem_laexps bk H ck arg ls ->
@@ -1523,141 +1523,228 @@ dataflow memory for which the non-standard semantics holds true.
       + setoid_rewrite Env.Props.P.F.empty_mapsto_iff; contradiction.
   Qed.
 
-  Require Import Setoid.
+  Definition remove_inst_n (x: ident) (M: memories) : memories :=
+    fun n => remove_inst x (M n).
+
+  Definition remove_val_n (x: ident) (M: memories) : memories :=
+    fun n => remove_val x (M n).
+
+  Lemma msem_equation_remove_inst:
+    forall G bk eqs H M M' x,
+      ~Is_defined_in_eqs x eqs ->
+      Forall (msem_equation G bk H M M') eqs ->
+      Forall (msem_equation G bk H (remove_inst_n x M) (remove_inst_n x M')) eqs.
+  Proof.
+    Ltac foo H := unfold sub_inst_n, sub_inst in *; intro n;
+                setoid_rewrite find_inst_gro; auto;
+                intro E; subst; apply H;
+                constructor;
+                apply hd_error_Some_In; auto.
+    induction eqs as [|[]]; intros ** Hnotin Sems;
+      inversion_clear Sems as [|?? Sem]; auto; inversion_clear Sem;
+        apply not_Is_defined_in_cons in Hnotin as (Hnotin &?);
+        constructor; eauto using msem_equation;
+          econstructor; eauto; foo Hnotin.
+  Qed.
+
+  Lemma msem_equation_remove_val:
+    forall G bk eqs H M M' x,
+      ~Is_defined_in_eqs x eqs ->
+      Forall (msem_equation G bk H M M') eqs ->
+      Forall (msem_equation G bk H (remove_val_n x M) (remove_val_n x M')) eqs.
+  Proof.
+    induction eqs as [|[]]; intros ** Hnotin Sems;
+      inversion_clear Sems as [|?? Sem]; auto;
+        inversion_clear Sem as [| | |???????????? Mfby];
+        apply not_Is_defined_in_cons in Hnotin as (Hnotin &?);
+        constructor; eauto using msem_equation.
+    assert (x <> i) by (intro E; subst; apply Hnotin; constructor).
+    destruct Mfby as (?&?& Spec).
+    econstructor; eauto; unfold remove_val_n.
+    split; [|split]; intros; repeat rewrite find_val_gro; auto.
+    apply Spec.
+  Qed.
+
+  (* Lemma foo: *)
+  (*   forall G bk H M M' xs ck f es r eqs, *)
+  (*     let x := hd Ids.default xs in *)
+  (*     ~ Is_defined_in_eqs x eqs -> *)
+  (*     Forall (msem_equation G bk H M M') (EqApp xs ck f es r :: eqs) -> *)
+  (*     msem_equation G bk H M M' (EqApp xs ck f es r) *)
+  (*     /\ Forall (msem_equation G bk H (remove_inst_n x M) (remove_inst_n x M')) eqs. *)
+  (* Proof. *)
+  (*   inversion_clear 2 as [|?? Sem]; (* inversion_clear 1;  *)split; auto. *)
+  (*   apply fuu; eauto.  *)
+  (*   inversion_clear Sem. *)
+  (*   - apply fuu; auto. induction eqs as [|[]]; auto. *)
+  (*     + constructor.  *)
+  (*     assert (Is_defined_in_eq x (EqApp xs ck f es None)) *)
+  (*       by (constructor; apply hd_error_Some_In; auto). *)
+  (*    - split; auto using msem. *)
+  (*   induction eqs. *)
+  (*   - inversion_clear 1; split; auto. *)
+  (*   - *)
+
+
+  (*     exists Mx, forall n, M n ≋ add_inst (hd Ids.default xs) Mx (remove_inst (hd Ids.default xs) (M n)). *)
+  (* Proof. *)
+
+
+  (* Lemma foo: *)
+  (*   forall M x Mx, *)
+  (*     sub_inst_n x M Mx -> *)
+  (*     forall n, M n ≋ add_inst x (Mx n) (remove_inst x (M n)). *)
+  (* Proof. *)
+  (*   intros ** Sub.  *)
+  (*   eexists. *)
+  (*   intro n; specialize (Sub n). *)
+  (*   constructor. *)
+  (*   SearchAbout Env.remove.  *)
+  (*   inversion_clear 1 as [|?? Sem]; inversion_clear Sem. *)
+  (*   - erewrite hd_error_Some_hd; eauto. *)
+  (*     exists Mx.  *)
+  (*     SearchAbout hd hd_error.  *)
+
+  Lemma memory_closed_n_App':
+    forall M eqs i xs ck f es r,
+      memory_closed_n M (EqApp xs ck f es r :: eqs) ->
+      hd_error xs = Some i ->
+      memory_closed_n (remove_inst_n i M) eqs.
+  Proof.
+    intros ** WF Hd n; specialize (WF n); destruct WF as (Insts &?).
+    split; auto.
+    intro y; intros ** Hin.
+    unfold sub_inst, remove_inst_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    destruct (ident_eq_dec y i).
+    - subst; rewrite find_inst_grs in Find; discriminate.
+    - rewrite find_inst_gro in Find; auto.
+      unfold gather_insts, concatMap in Insts; simpl in Insts.
+      destruct xs; simpl in *; inv Hd.
+      edestruct Insts.
+      + apply not_None_is_Some; eauto.
+      + congruence.
+      + auto.
+  Qed.
+
+  Lemma memory_closed_n_Fby':
+    forall M eqs x ck v0 e,
+      memory_closed_n M (EqFby x ck v0 e :: eqs) ->
+      memory_closed_n (remove_val_n x M) eqs.
+  Proof.
+    intros ** WF n; specialize (WF n); destruct WF as (?& Vals).
+    split; auto.
+    intro y; intros ** Hin.
+    unfold remove_val_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    destruct (ident_eq_dec y x).
+    - subst; rewrite find_val_grs in Find; discriminate.
+    - rewrite find_val_gro in Find; auto.
+      unfold gather_mem, concatMap in Vals; simpl in Vals.
+      edestruct Vals.
+      + apply not_None_is_Some; eauto.
+      + congruence.
+      + auto.
+  Qed.
 
   Lemma msem_node_absent_until:
     forall n0 G f xss M M' yss,
+      Welldef_global G ->
       msem_node G f xss M M' yss ->
       (forall n, n < n0 -> absent_list (xss n)) ->
       forall n, n <= n0 -> M n ≋ M 0.
   Proof.
-    inversion_clear 1 as [??????????????? Heqs Hmem].
-    induction (n_eqs n) as [|[]]; intros ** Abs k Spec; inv Heqs; auto.
-    - assert (forall n, M n ≋ empty_memory _) as E
+    induction G as [|node].
+    inversion 2;
+      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+    intros ** Hwdef Hsem Abs n Spec.
+    assert (Hsem' := Hsem).
+    inversion_clear Hsem' as [???????? Clock Hfind Ins ???? Heqs].
+    assert (forall n, n < n0 -> bk n = false) as Absbk.
+    { intros k Spec'; apply Abs in Spec'.
+      rewrite <-Bool.not_true_iff_false.
+      intro E; apply Clock in E.
+      specialize (Ins k).
+      apply Forall2_length in Ins.
+      destruct (xss k).
+      - rewrite map_length in Ins; simpl in Ins.
+        pose proof (n_ingt0 n1); omega.
+      - inv Spec'; inv E;  congruence.
+    }
+    pose proof (Welldef_global_Ordered_nodes _ Hwdef) as Hord.
+    pose proof (Welldef_global_cons _ _ Hwdef) as HwdefG.
+    pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
+    pose proof Hfind.
+    simpl in Hfind.
+    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+    - assert (Hord':=Hord).
+      (* inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn]. *)
+      inv Hfind.
+      (* SearchAbout msem_equation cons.  *)
+      eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      clear Hsem Hnini.
+      revert dependent M; revert M'.
+      inversion_clear Hwdef as [|?? HwdefG' eqs HWsch Hnin Findnot Neqs];
+        clear HwdefG' Hnin Findnot Neqs; subst eqs.
+      apply Is_well_sch_NoDup_defs in HWsch.
+      induction (n_eqs n1) as [|[] ? IHeqs]; intros;
+        inversion_clear Heqs as [|?? Sem Sems];
+        try inversion_clear Sem as [|
+                                    ????????????? Hd ?? Args ? Node|
+                                    ????????????????? Hd ?? Args ??? Reset|
+                                    ?????????? Arg ? Mfby];
+          inv HWsch; eauto.
+      + assert (forall n, M n ≋ empty_memory _) as E
           by (intro; apply memory_closed_empty; auto).
-      rewrite 2 E; reflexivity.
-    -
-
-  Lemma msem_equation_absent_until_cons:
-    forall n0 G eq eqs bk H M M' Me Me' mems argIn,
-      (forall f xss M M' yss,
-          msem_node G f xss M M' yss ->
-          (forall n, n < n0 -> absent_list (xss n)) ->
-          forall n, n <= n0 -> M n = M 0) ->
-      (forall n, n < n0 -> bk n = false) ->
-      (forall n, n <= n0 -> M n = M 0) ->
-      msem_equation G bk H Me Me' eq ->
-      Is_well_sch mems argIn (eq :: eqs) ->
-      Forall (msem_equation G bk H M M') eqs ->
-      exists M1 M1',
-        Forall (msem_equation G bk H M1 M1') (eq :: eqs)
-        /\ forall n, n <= n0 -> M1 n = M1 0.
-  Proof.
-    intros ** IHNode Abs Spec Heq Hwsch Hmeqs.
-      inversion Heq as [|
-                        ???????????????? Args ? Node|
-                        ???????????????????? Args ??? Reset|
-                        ?????????? Exps ? Mfby]; subst;
-        inv Hwsch.
-      - do 3 econstructor; eauto.
-      - exists (add_inst_n x Mx M), (add_inst_n x Mx' M'); split.
-        + constructor; auto.
-          * econstructor; eauto;
-              unfold sub_inst_n, sub_inst, add_inst_n;
-              setoid_rewrite find_inst_gss; auto.
-          * assert (Is_defined_in_eq x (EqApp xs ck f arg None))
-              by (constructor; apply hd_error_Some_In; auto).
-            apply msem_equation_madd_inst; auto.
-        + intros.
-          unfold add_inst_n.
-          eapply IHNode in Node; eauto.
-          * rewrite Node, Spec; auto.
-          *{ intros n' ?.
-             specialize (Args n');
-               inversion_clear Args as [?????? Clock|??? E].
-             - rewrite Abs in Clock; auto.
-               contradict Clock; apply not_subrate_clock.
-             - rewrite E; apply all_absent_spec.
-           }
-      - exists (add_inst_n x Mx M), (add_inst_n x Mx' M'); split.
-        + constructor; auto.
-          * econstructor; eauto;
-              unfold sub_inst_n, sub_inst, add_inst_n;
-              setoid_rewrite find_inst_gss; auto.
-          * assert (Is_defined_in_eq x (EqApp xs ck f arg (Some (r, ck_r))))
-              by (constructor; apply hd_error_Some_In; auto).
-            apply msem_equation_madd_inst; auto.
-        + intros.
-          unfold add_inst_n.
-          inversion_clear Reset as [?????? Nodes].
-          destruct (Nodes (count rs 0)) as (Mk0 & Mk'0 & Node0 & Mmask0 & Mmask'0).
-          specialize (Nodes (count rs n)).
-          destruct Nodes as (Mk & Mk' & Node & Mmask & Mmask').
-          eapply IHNode in Node; eauto.
-          * specialize (Mmask n).
-            rewrite <-Mmask, Node, Spec; auto.
-            specialize (Mmask0 0).
-            admit.
-          *{ intros n' ?.
-             apply absent_list_mask.
-             - specialize (Args n');
-                 inversion_clear Args as [?????? Clock|??? E].
-               + rewrite Abs in Clock; auto.
-                 contradict Clock; apply not_subrate_clock.
-               + rewrite E; apply all_absent_spec.
-             - apply all_absent_spec.
-           }
-      - exists (fun n => add_val x (match find_val x (Me n) with
-                            | Some v => v
-                            | None => false_val
-                            end) (M n)),
-        (fun n => add_val x (match find_val x (Me' n) with
-                          | Some v => v
-                          | None => false_val
-                          end) (M' n)).
-        split.
-        + inversion_clear Mfby as [?????? Init Spec'].
-          constructor; auto.
-          *{ do 2 (econstructor; eauto).
-             - rewrite Init, find_val_gss; auto.
-             - intro n; specialize (Spec' n); destruct (find_val x (Me n)) eqn: E; try contradiction.
-               repeat rewrite find_val_gss; auto.
-               destruct (ls n) eqn: E'; auto.
-               + destruct Spec' as (-> & -> & ?); intuition.
-               + destruct Spec' as (-> & -> & ?); intuition.
-           }
-          * apply msem_equation_madd_val; eauto.
-        + intros; unfold add_val_n.
-          erewrite mfby_absent_until; eauto.
-          * inversion_clear Mfby as [?????? Init].
-            rewrite Init, Spec; auto.
-          * intros n' ?.
-            specialize (Exps n');
-              inversion_clear Exps as [???? Clock|]; auto.
-            rewrite Abs in Clock; auto.
-            contradict Clock; apply not_subrate_clock.
-    Qed.
-
-    Corollary msem_equation_absent_until:
-      forall n0 G eqs bk H M M' mems argIn,
-        (forall f xss M M' yss,
-            msem_node G f xss M M' yss ->
-            (forall n, n < n0 -> absent_list (xss n)) ->
-            forall n, n <= n0 -> M n = M 0) ->
-        (forall n, n < n0 -> bk n = false) ->
-        Is_well_sch mems argIn eqs ->
-        Forall (msem_equation G bk H M M') eqs ->
-        exists M1 M1',
-          Forall (msem_equation G bk H M1 M1') eqs
-          /\ forall n, n <= n0 -> M1 n = M1 0.
-  Proof.
-    intros ** IH Abs Hwsch Heqs.
-    induction eqs as [|eq eqs IHeqs]; [do 2 exists (fun n => empty_memory _); now constructor|].
-    apply Forall_cons2 in Heqs as [Heq Heqs].
-    eapply IHeqs with (1:=Is_well_sch_cons _ _ _ _ Hwsch)
-      in Heqs
-      as (?&?&?&?); eauto.
-    eapply msem_equation_absent_until_cons; eauto.
+        rewrite 2 E; reflexivity.
+      + apply msem_equation_remove_inst with (x := x) in Sems.
+        *{ apply IHeqs in Sems; auto.
+           - erewrite add_remove_inst_same; eauto;
+             symmetry; erewrite add_remove_inst_same; eauto.
+             rewrite Sems.
+             apply IHG with (n := n) in Node; auto.
+             + now rewrite Node.
+             + intros k ** Spec'; specialize (Args k); simpl in Args.
+               rewrite Absbk in Args; auto.
+               inversion_clear Args as [?????? SClock|??? ->].
+               * contradict SClock; apply not_subrate_clock.
+               * apply all_absent_spec.
+           - eapply memory_closed_n_App'; eauto.
+         }
+        * apply hd_error_Some_In in Hd; auto.
+      + apply msem_equation_remove_inst with (x := x) in Sems.
+        *{ apply IHeqs in Sems; auto.
+           - erewrite add_remove_inst_same; eauto;
+               symmetry; erewrite add_remove_inst_same; eauto.
+             rewrite Sems.
+             inversion_clear Reset as [?????? Nodes].
+             destruct (Nodes (count rs n)) as (Mn &?& Node_n & MemMask_n &?),
+                                              (Nodes (count rs 0)) as (M0 &?&?& MemMask_0 &?).
+             apply IHG with (n := n) in Node_n; auto.
+             + rewrite <-(MemMask_n n), <-(MemMask_0 0), Node_n; auto.
+               admit.
+             + intros k ** Spec'; specialize (Args k); simpl in Args.
+               rewrite Absbk in Args; auto.
+               inversion_clear Args as [?????? SClock|??? E].
+               * contradict SClock; apply not_subrate_clock.
+               * apply absent_list_mask; try rewrite E; apply all_absent_spec.
+           - eapply memory_closed_n_App'; eauto.
+         }
+        * apply hd_error_Some_In in Hd; auto.
+      + apply msem_equation_remove_val with (x := i) in Sems; auto.
+        apply IHeqs in Sems; auto.
+        * assert (find_val i (M n) = Some (sem_const c0)).
+          { eapply mfby_absent_until; eauto.
+            intros k ** Spec'; specialize (Arg k); simpl in Arg.
+            rewrite Absbk in Arg; auto.
+            inversion_clear Arg as [???? SClock|]; auto.
+            contradict SClock; apply not_subrate_clock.
+          }
+          destruct Mfby as (Init & Loop & Spec').
+          erewrite add_remove_val_same; eauto;
+            symmetry; erewrite add_remove_val_same; eauto.
+          now rewrite Sems.
+        * eapply memory_closed_n_Fby'; eauto.
+    - eapply msem_node_cons in Hsem; eauto.
+      now apply ident_eqb_neq.
   Qed.
 
   Lemma well_formed_empty_eqs_n:
