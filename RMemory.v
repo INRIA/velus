@@ -276,6 +276,68 @@ Proof.
   constructor; simpl; rewrite E; reflexivity.
 Qed.
 
+Add Parametric Morphism V x: (Env.find x)
+    with signature Env.Equiv equal_memory ==> fun o o' => match o, o' with
+                                                     | None, None => True
+                                                     | Some m, Some m' => @equal_memory V m m'
+                                                     | _, _ => False
+                                                     end
+                                              as find_equiv_memory.
+Proof.
+  intros I1 I2 ** (Hin & HMapsTo).
+  destruct (Env.find x I1) eqn: Find1, (Env.find x I2) eqn: Find2; auto.
+  - eapply HMapsTo; apply Env.find_2; eauto.
+  - apply Env.Props.P.F.not_find_in_iff in Find2.
+    rewrite <-Hin in Find2.
+    apply Find2, Env.In_find; eauto.
+  - apply Env.Props.P.F.not_find_in_iff in Find1.
+    rewrite Hin in Find1.
+    apply Find1, Env.In_find; eauto.
+Qed.
+
+Add Parametric Morphism V x : (@find_inst V x)
+    with signature equal_memory ==>  fun o o' => match o, o' with
+                                            | None, None => True
+                                            | Some m, Some m' => @equal_memory V m m'
+                                            | _, _ => False
+                                            end
+                                     as find_inst_equal_memory.
+Proof.
+  intros ** E.
+  unfold find_inst.
+  inversion E.
+  apply find_equiv_memory; auto.
+Qed.
+
+
+(* Add Parametric Morphism V x: (fun m m' => Env.find x m = Some m') *)
+(*     with signature Env.Equiv equal_memory ==> @equal_memory V ==> Basics.impl *)
+(*       as find_Some_equiv_memory. *)
+(* Proof. *)
+(*   intros ** E ??? Find. *)
+(*   pose proof (find_equiv_memory x E) as E'. *)
+(*   rewrite Find in E'. *)
+(*   destruct (Env.find x y); try contradiction.  *)
+
+(* Add Parametric Morphism V x: (@add_inst V x) *)
+(*     with signature equal_memory ==> equal_memory ==> equal_memory *)
+(*       as add_inst_equal_memory. *)
+(* Proof. *)
+(*   intros ** E1 ?? E2. *)
+(*   constructor; simpl; rewrite E2. *)
+(*   + reflexivity. *)
+(*   + now rewrite E1. *)
+(* Qed. *)
+
+Add Parametric Morphism V x: (@find_val V x)
+    with signature equal_memory ==> eq
+      as find_val_equal_memory.
+Proof.
+  intros ** E.
+  inversion_clear E as [?? Vals].
+  apply Vals.
+Qed.
+
 (** ** Properties *)
 
 Section Properties.

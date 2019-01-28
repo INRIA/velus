@@ -633,24 +633,6 @@ dataflow memory for which the non-standard semantics holds true.
 
    *)
 
-  Fact hd_error_Some_In:
-    forall {A} (xs: list A) x,
-      hd_error xs = Some x ->
-      In x xs.
-  Proof.
-    induction xs; simpl; try discriminate.
-    inversion 1; auto.
-  Qed.
-
-  Fact hd_error_Some_hd:
-    forall {A} d (xs: list A) x,
-      hd_error xs = Some x ->
-      hd d xs = x.
-  Proof.
-    destruct xs; simpl; intros; try discriminate.
-    now inv H.
-  Qed.
-
   Lemma memory_closed_n_App:
     forall M eqs i Mx xs ck f es r,
       memory_closed_n M eqs ->
@@ -1291,6 +1273,25 @@ dataflow memory for which the non-standard semantics holds true.
       apply NoDup_defs_node.
     - eapply msem_node_cons in Hsem; eauto.
       now apply ident_eqb_neq.
+  Qed.
+
+  Theorem msem_reset_spec:
+    forall G f r xs M' M ys,
+      Ordered_nodes G ->
+      msem_reset G f r xs M M' ys ->
+      forall n, r n = true -> M n ≋ M 0.
+  Proof.
+    inversion_clear 2 as [?????? Nodes].
+    intros ** Hr.
+    destruct (Nodes (count r n)) as (Mn & ? & Node_n & Mmask_n &?),
+                                    (Nodes (count r 0)) as (M0 & ? & Node_0 & Mmask_0 &?).
+    rewrite <-Mmask_n, <-Mmask_0; auto.
+    assert (M0 0 ≋ Mn 0) as -> by (eapply same_initial_memory; eauto).
+    eapply msem_node_absent_until; eauto.
+    intros ** Spec.
+    rewrite mask_opaque.
+    - apply all_absent_spec.
+    - eapply count_positive in Spec; eauto; omega.
   Qed.
 
 End MEMSEMANTICS.

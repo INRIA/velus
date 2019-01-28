@@ -18,7 +18,7 @@ Require Import Velus.SyBloc.SBSemantics.
 Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
 (* Require Import Velus.NLustre.NLInterpretor. *)
-Require Import Velus.NLustre.WellFormed.
+(* Require Import Velus.NLustre.WellFormed. *)
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
@@ -43,7 +43,7 @@ Module Type CORRECTNESS
        (Import Ord     : ORDERED         Ids Op       Clks ExprSyn SynNL)
        (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn             Str)
        (Import SemNL   : NLSEMANTICS     Ids Op OpAux Clks ExprSyn SynNL       Str Ord                     ExprSem)
-       (SemSB          : SBSEMANTICS     Ids Op OpAux Clks ExprSyn       SynSB Str                         ExprSem)
+       (Import SemSB          : SBSEMANTICS     Ids Op OpAux Clks ExprSyn       SynSB Str                         ExprSem)
        (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn SynNL)
        (Import Trans   : TRANSLATION     Ids Op       Clks ExprSyn SynNL SynSB         Mem)
        (* (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn             Str                         ExprSem) *)
@@ -51,10 +51,9 @@ Module Type CORRECTNESS
        (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn SynNL               Mem IsD)
        (Import IsF     : ISFREE          Ids Op       Clks ExprSyn SynNL)
        (Import NoD     : NODUP           Ids Op       Clks ExprSyn SynNL               Mem IsD IsV)
-       (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL           Ord Mem IsD IsV IsF NoD)
-       (Import MemSem  : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn SynNL       Str Ord                     ExprSem SemNL Mem IsD IsV IsF NoD WeF)
+       (* (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL           Ord Mem IsD IsV IsF NoD) *)
+       (Import MemSem  : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn SynNL       Str Ord                     ExprSem SemNL Mem IsD IsV IsF NoD)
        (Import NLClk   : NLCLOCKING      Ids Op       Clks ExprSyn SynNL                                                 Mem IsD     IsF).
-
 
   (* Inductive inst_in_eq: ident -> SynSB.equation -> Prop := *)
   (* | InstInEqReset: *)
@@ -98,7 +97,7 @@ Module Type CORRECTNESS
 
   Lemma nl_sem_equations_well_formed_app:
     forall G bk H eqs,
-      Forall (sem_equation G bk H) eqs ->
+      Forall (SemNL.sem_equation G bk H) eqs ->
       well_formed_app eqs.
   Proof.
     induction eqs as [|eq]; simpl; inversion_clear 1; constructor; auto.
@@ -445,58 +444,18 @@ Module Type CORRECTNESS
         intro n'; specialize (Sem n'); inv Sem; auto.
     Qed.
 
-    Lemma foo:
-      forall n0 f xss M M' yss,
-        msem_node G f xss M M' yss ->
-        (forall n, n < n0 -> absent_list (xss n)) ->
-        present_list (xss n0) ->
-        forall n, n <= n0 -> M n = M 0.
-    Proof.
-      intro n0.
-      induction 1 using msem_node_mult
-        with
-          (P_equation := fun bk H M M' eq =>
-                           msem_equation G bk H M M' eq ->
-                           (forall n, n < n0 -> bk n = false) ->
-                           bk n0 = true ->
-                           forall n, n <= n0 -> M n = M 0)
-          (P_reset := fun f r xss M M' yss => True); auto.
-      - inversion_clear 1; intros ** Abs Pres n E.
-
-
-    Lemma msem_reset_spec:
-      forall G f r xs M' M ys,
-        msem_reset G f r xs M M' ys ->
-        forall n, r n = true -> M n = M 0.
-    Proof.
-      inversion_clear 1 as [?????? Nodes].
-      induction n; auto.
-      intros ** Hr.
-      specialize (Nodes (count r n)).
-      destruct Nodes as (Mk & Mk' & Nodes & Mmask & Mmask').
-      specialize (Mmask n); specialize (Mmask' n).
-      rewrite <-Mmask; auto.
-      inversion_clear Nodes as [??????????????? Heqs].
-      pose proof (n_eqsgt0 n0).
-      destruct Heqs as [|eq ? Heq]; simpl in *; try omega.
-      inversion_clear Heq.
-      - admit.
-      -
-      destruct (n_eqs n0) as [|eq]; simpl in *; try omega.
-      destruct eq.
-    Admitted.
-
     Lemma equation_correctness:
       forall eq eqs bk H M M' Is,
         (forall f xss M M' yss,
             msem_node G f xss M M' yss ->
             sem_block_n P f M xss yss M') ->
+        Ordered_nodes G ->
         msem_equation G bk H M M' eq ->
         sem_equations_n P bk H M Is M' eqs ->
         exists Is', sem_equations_n P bk H M Is' M' (translate_eqn eq ++ eqs).
     Proof.
-      intros ** IHnode Heq Heqs.
-      destruct Heq as [| |?????????????????????? Var Hr Reset|??????????? Var Mfby];
+      intros ** IHnode Hord Heq Heqs.
+      destruct Heq as [| |?????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
         simpl.
 
       - do 3 (econstructor; eauto).
@@ -505,12 +464,14 @@ Module Type CORRECTNESS
         exists (add_n x Mx Is); intro.
         constructor; auto.
         + econstructor; eauto.
+          * split; eauto; reflexivity.
           * apply Env.gss.
           * now apply IHnode.
         + now apply sem_equations_n_add_n.
 
       - erewrite hd_error_Some_hd; eauto.
         exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); intro.
+        pose proof (msem_reset_spec Hord Reset) as Spec.
         inversion_clear Reset as [?????? Nodes].
         assert (forall k, exists Mk Mk',
                      sem_block_n P f Mk
@@ -532,21 +493,17 @@ Module Type CORRECTNESS
         + specialize (Heqs' (fun n => Mx 0) n).
           assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
             by apply Env.gss.
-          assert (Mx n = Mx 0).
-          {
-            admit.
-          }
           constructor; auto; [|constructor; auto].
           *{ destruct (ys n); try discriminate.
              econstructor; eauto.
              - eapply Son; eauto.
                admit.
-             - simpl.
+             - instantiate (1 := empty_memory _); simpl.
                admit.
            }
           *{ eapply SemSB.SEqCall with (Is := Mx 0); eauto.
-             - congruence.
-             - congruence.
+             - instantiate (1 := empty_memory _); congruence.
+             - eapply sem_block_equal_memory; eauto; reflexivity.   (* TODO: fix rewriting here? *)
            }
         + specialize (Heqs' Mx n).
           assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
@@ -555,20 +512,25 @@ Module Type CORRECTNESS
           *{ do 2 (econstructor; eauto using SemSB.sem_equation).
              - apply Son_abs1; auto.
                admit.
-             - simpl; auto.
+             - simpl; split; eauto; reflexivity.
+             - econstructor; eauto.
+               instantiate (1 := empty_memory _); discriminate.
            }
           *{ do 2 (econstructor; eauto using SemSB.sem_equation).
              - change true with (negb false).
                eapply Son_abs2; eauto.
                admit.
-             - simpl; auto.
+             - simpl; split; eauto; reflexivity.
+             - econstructor; eauto.
+               instantiate (1 := empty_memory _); discriminate.
            }
 
       - do 2 (econstructor; auto).
-        inversion_clear Mfby as [??????? Spec].
-        specialize (Spec n); econstructor; eauto.
-        destruct (find_val x (M n)); try contradiction.
-        destruct (ls n); intuition.
+        destruct Mfby as (?&?& Spec).
+        specialize (Spec n); destruct (find_val x (M n)) eqn: E; try contradiction.
+        specialize (Var n); specialize (Arg n).
+        pose proof Arg as Arg'.
+        destruct (ls n); destruct Spec as (?& Hxs); rewrite Hxs in Var; inv Arg'; eauto using sem_equation.
     Qed.
 
     Theorem correctness:

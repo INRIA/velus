@@ -2059,6 +2059,24 @@ Section Lists.
     destruct (split l); simpl in *; congruence.
   Qed.
 
+  Fact hd_error_Some_In:
+    forall (xs: list A) x,
+      hd_error xs = Some x ->
+      In x xs.
+  Proof.
+    induction xs; simpl; try discriminate.
+    inversion 1; auto.
+  Qed.
+
+  Fact hd_error_Some_hd:
+    forall d (xs: list A) x,
+      hd_error xs = Some x ->
+      hd d xs = x.
+  Proof.
+    destruct xs; simpl; intros; try discriminate.
+    now inv H.
+  Qed.
+
 End Lists.
 
 Lemma Forall2_map_1:

@@ -69,15 +69,15 @@ Module Type SBSEMANTICS
           find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
           sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
-        forall base R S I S' ck b s r Is,
+        forall base R S I S' ck b s r Is Ss,
           sem_clock_instant base R ck r ->
           Env.find s I = Some Is ->
-          (if r then initial_state b Is else sub_inst s S Is) ->
+          (if r then initial_state b Is else sub_inst s S Ss /\ Is ≋ Ss) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
-        forall base R S I S' ys rst ck b s es xs Is os Ss',
+        forall base R S I S' ys rst ck b s es xs Is os Ss' Ss,
           sem_laexps_instant base R ck es xs ->
-          (rst = false -> sub_inst s S Is) ->
+          (rst = false -> sub_inst s S Ss /\ Is ≋ Ss) ->
           Env.find s I = Some Is ->
           sem_block b Is xs os Ss' ->
           sem_vars_instant R ys os ->
@@ -122,16 +122,16 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqNext x ck e).
 
     Hypothesis EqResetCase:
-      forall base R S I S' ck b s r Is,
+      forall base R S I S' ck b s r Is Ss,
         sem_clock_instant base R ck r ->
         Env.find s I = Some Is ->
-        (if r then initial_state P b Is else sub_inst s S Is) ->
+        (if r then initial_state P b Is else sub_inst s S Ss /\ Is ≋ Ss) ->
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
-      forall base R S I S' s ys ck rst b es xs Is os Ss',
+      forall base R S I S' s ys ck rst b es xs Is os Ss' Ss,
         sem_laexps_instant base R ck es xs ->
-        (rst = false -> sub_inst s S Is) ->
+        (rst = false -> sub_inst s S Ss /\ Is ≋ Ss) ->
         Env.find s I = Some Is ->
         sem_block P b Is xs os Ss' ->
         sem_vars_instant R ys os ->
@@ -171,6 +171,179 @@ Module Type SBSEMANTICS
              sem_equation_mult, sem_block_mult.
 
   End sem_block_mult.
+
+
+  Add Parametric Morphism block : (reset_lasts block)
+      with signature equal_memory ==> Basics.impl
+        as reset_lasts_equal_memory.
+  Proof.
+    intros ** E (InFind & FindIn).
+    split.
+    - intros; rewrite <-E; auto.
+    - intros ** Find; rewrite <-E in Find; auto.
+  Qed.
+
+  Add Parametric Morphism P f : (initial_state P f)
+      with signature equal_memory ==> Basics.impl
+        as initial_state_equal_memory.
+  Proof.
+    intros ** E Init.
+    revert dependent f; revert dependent y.
+    induction x as [? IH] using memory_ind'; intros.
+    inversion_clear Init as [?????? Spec].
+    econstructor; eauto.
+    - now rewrite <-E.
+    - intros ** Hin.
+      apply Spec in Hin as (?& Sub &?).
+      unfold sub_inst in *.
+      pose proof (find_inst_equal_memory x0 E) as Eq;
+        rewrite Sub in Eq; simpl in Eq.
+      destruct (find_inst x0 y); try contradiction.
+        eexists; split; eauto.
+  Qed.
+
+  Lemma sem_equation_equal_memory:
+    forall P bk R eq S1 I1 S1' S2 I2 S2',
+      (forall f xs ys S1 S1' S2 S2',
+          S1 ≋ S2 ->
+          S1' ≋ S2' ->
+          sem_block P f S1 xs ys S1' ->
+          sem_block P f S2 xs ys S2') ->
+      S1 ≋ S2 ->
+      Env.Equiv equal_memory I1 I2 ->
+      S1' ≋ S2' ->
+      sem_equation P bk R S1 I1 S1' eq ->
+      sem_equation P bk R S2 I2 S2' eq.
+  Proof.
+    intros ** IH E EI E' Sem.
+    inversion_clear Sem as [| |???????????? Find Init|????????????????? Spec Find ?? Sub]; eauto using sem_equation.
+    - econstructor; eauto.
+      + now rewrite <-E.
+      + now rewrite <-E'.
+    - pose proof (find_equiv_memory s EI) as Eq;
+        setoid_rewrite Find in Eq; simpl in Eq.
+      destruct (Env.find s I2) eqn: Find'; try contradiction.
+      destruct r.
+      + eapply SEqReset with (Ss := empty_memory val); eauto; simpl.
+        now rewrite <-Eq.
+      + destruct Init as (Sub).
+        pose proof (find_inst_equal_memory s E) as Eq'.
+        rewrite Sub in Eq'.
+        destruct (find_inst s S2) eqn: Init'; try contradiction.
+        econstructor; eauto; simpl.
+        split; eauto.
+        now rewrite <-Eq, <-Eq'.
+    - pose proof (find_equiv_memory s EI) as Eq.
+      rewrite Find in Eq.
+      destruct (Env.find s I2) eqn: Find'; try contradiction.
+      pose proof (find_inst_equal_memory s E') as Eq'.
+      rewrite Sub in Eq'.
+      destruct (find_inst s S2') eqn: Sub'; try contradiction.
+      destruct rst.
+      + econstructor; eauto.
+        instantiate (1 := empty_memory val); discriminate.
+      + pose proof (find_inst_equal_memory s E) as Eq''.
+        destruct Spec as (Sub_i); auto.
+        rewrite Sub_i in Eq''.
+        destruct (find_inst s S2) eqn: FInd; try contradiction.
+        eapply SEqCall with (Is := m); eauto.
+        split; eauto. now rewrite <-Eq, <-Eq''.
+  Qed.
+
+  (* Add Parametric Morphism P bk R eq : (fun S I S' => sem_equation P bk R S I S' eq) *)
+  (*       with signature @equal_memory val ==> Env.Equiv (equal_memory) ==> @equal_memory val ==> Basics.impl *)
+  (*         as sem_equation_equal_memory. *)
+  (* Proof. *)
+  (*   intros ** E ?? EI ?? E' Sem. *)
+  (*   inversion_clear Sem as [| |???????????? Find Init|????????????????? Spec Find ?? Sub]; eauto using sem_equation. *)
+  (*   - econstructor; eauto. *)
+  (*     + now rewrite <-E. *)
+  (*     + now rewrite <-E'. *)
+  (*   - pose proof (find_equiv_memory s EI) as Eq; *)
+  (*       setoid_rewrite Find in Eq; simpl in Eq. *)
+  (*     destruct (Env.find s y0) eqn: Find'; try contradiction. *)
+  (*     destruct r. *)
+  (*     + eapply SEqReset with (Ss := empty_memory val); eauto; simpl. *)
+  (*       now rewrite <-Eq. *)
+  (*     + destruct Init as (Sub). *)
+  (*       pose proof (find_inst_equal_memory s E) as Eq'. *)
+  (*       rewrite Sub in Eq'. *)
+  (*       destruct (find_inst s y) eqn: Init'; try contradiction. *)
+  (*       econstructor; eauto; simpl. *)
+  (*       split; eauto. *)
+  (*       now rewrite <-Eq, <-Eq'.  *)
+  (*   - pose proof (find_equiv_memory s EI) as Eq. *)
+  (*     rewrite Find in Eq. *)
+  (*     destruct (Env.find s y0) eqn: Find'; try contradiction. *)
+  (*     pose proof (find_inst_equal_memory s E') as Eq'. *)
+  (*     rewrite Sub in Eq'. *)
+  (*     destruct (find_inst s y1) eqn: Sub'; try contradiction.   *)
+  (*     destruct rst. *)
+  (*     + econstructor; eauto. *)
+  (*       * instantiate (1 := empty_memory val); discriminate. *)
+  (*       * admit. *)
+  (*     + pose proof (find_inst_equal_memory s E) as Eq''. *)
+  (*       destruct Spec as (Sub_i); auto. *)
+  (*       rewrite Sub_i in Eq''. *)
+  (*       destruct (find_inst s y) eqn: FInd; try contradiction. *)
+  (*       eapply SEqCall with (Is := m); eauto. *)
+  (*       * split; eauto. now rewrite <-Eq, <-Eq''. *)
+  (*       * admit. *)
+  (* Qed. *)
+
+  Add Parametric Morphism P f xs ys : (fun S S' => sem_block P f S xs ys S')
+      with signature equal_memory ==> equal_memory ==> Basics.impl
+        as sem_block_equal_memory.
+  Proof.
+    intros ** Sem.
+    revert dependent y; revert dependent y0.
+    induction Sem as [| |???????????? Find Init|????????????????? Spec Find ?? Sub|] using sem_block_mult with
+                   (P_equation := fun base R S1 I1 S1' eq =>
+                                    forall S2 S2' I2,
+                                      S1 ≋ S2 ->
+                                      Env.Equiv equal_memory I1 I2 ->
+                                      S1' ≋ S2' ->
+                                      sem_equation P base R S2 I2 S2' eq); eauto using sem_equation;
+      try intros ** E EI E'.
+    - econstructor; eauto.
+      + now rewrite <-E.
+      + now rewrite <-E'.
+    - pose proof (find_equiv_memory s EI) as Eq;
+        setoid_rewrite Find in Eq; simpl in Eq.
+      destruct (Env.find s I2) eqn: Find'; try contradiction.
+      destruct r.
+      + eapply SEqReset with (Ss := empty_memory val); eauto; simpl.
+        now rewrite <-Eq.
+      + destruct Init as (Sub).
+        pose proof (find_inst_equal_memory s E) as Eq'.
+        rewrite Sub in Eq'.
+        destruct (find_inst s S2) eqn: Init'; try contradiction.
+        econstructor; eauto; simpl.
+        split; eauto.
+        now rewrite <-Eq, <-Eq'.
+    - pose proof (find_equiv_memory s EI) as Eq.
+      rewrite Find in Eq.
+      destruct (Env.find s I2) eqn: Find'; try contradiction.
+      pose proof (find_inst_equal_memory s E') as Eq'.
+      rewrite Sub in Eq'.
+      destruct (find_inst s S2') eqn: Sub'; try contradiction.
+      destruct rst.
+      + econstructor; eauto.
+        instantiate (1 := empty_memory val); discriminate.
+      + pose proof (find_inst_equal_memory s E) as Eq''.
+        destruct Spec as (Sub_i); auto.
+        rewrite Sub_i in Eq''.
+        destruct (find_inst s S2) eqn: FInd; try contradiction.
+        eapply SEqCall with (Is := m); eauto.
+        split; eauto. now rewrite <-Eq, <-Eq''.
+    - econstructor; eauto.
+      instantiate (1 := I).
+      induction (b_eqs bl); auto;
+        repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
+      constructor; auto.
+      assert (Env.Equiv equal_memory I I) by reflexivity;
+        auto.
+  Qed.
 
   (* Inductive well_formed_state: program -> state -> Prop := *)
   (*   well_formed_state_intro: *)
