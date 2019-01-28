@@ -280,10 +280,9 @@ Qed.
 
 Section Properties.
 
-  Variable V W: Type.
+  Variable V: Type.
   Variables (x y: ident)
             (v: V)
-            (f: V -> W)
             (m m': memory V).
 
   Lemma find_val_gss:
@@ -331,11 +330,12 @@ Section Properties.
   Qed.
 
   Lemma find_val_mmap:
-    find_val x (mmap f m) = option_map f (find_val x m).
+    forall W (f: V -> W),
+      find_val x (mmap f m) = option_map f (find_val x m).
   Proof.
     unfold find_val.
     destruct m; simpl.
-    apply Env.Props.P.F.map_o.
+    intros; apply Env.Props.P.F.map_o.
   Qed.
 
   (* Lemma find_val_mmapi: *)
@@ -348,17 +348,17 @@ Section Properties.
   (* Qed. *)
 
   Lemma find_inst_mmap:
-    find_inst x (mmap f m) = option_map (mmap f) (find_inst x m).
+    forall W (f: V -> W),
+      find_inst x (mmap f m) = option_map (mmap f) (find_inst x m).
   Proof.
     unfold find_inst.
     destruct m; simpl.
-    apply Env.Props.P.F.map_o.
+    intros; apply Env.Props.P.F.map_o.
   Qed.
 
   Lemma add_remove_inst_same:
-    forall {V} (m: memory V) mx,
-      sub_inst x m mx ->
-      m ≋ add_inst x mx (remove_inst x m).
+    sub_inst x m m' ->
+    m ≋ add_inst x m' (remove_inst x m).
   Proof.
     unfold sub_inst, add_inst, find_inst; intros ** Find.
     constructor; simpl.
@@ -381,24 +381,21 @@ Section Properties.
   Qed.
 
   Lemma find_inst_grs:
-    forall {V} (m : memory V),
-      find_inst x (remove_inst x m) = None.
+    find_inst x (remove_inst x m) = None.
   Proof.
     intros; apply Env.grs.
   Qed.
 
   Lemma find_inst_gro:
-    forall {V} (m: memory V),
-      x <> y ->
-      find_inst x (remove_inst y m) = find_inst x m.
+    x <> y ->
+    find_inst x (remove_inst y m) = find_inst x m.
   Proof.
     intros; apply Env.gro; auto.
   Qed.
 
   Lemma add_remove_val_same:
-    forall {V} (m: memory V) v,
-      find_val x m = Some v ->
-      m ≋ add_val x v (remove_val x m).
+    find_val x m = Some v ->
+    m ≋ add_val x v (remove_val x m).
   Proof.
     unfold add_val, find_val; intros ** Find.
     constructor; simpl.
@@ -410,19 +407,30 @@ Section Properties.
   Qed.
 
   Lemma find_val_grs:
-    forall {V} (m : memory V) x,
-      find_val x (remove_val x m) = None.
+    find_val x (remove_val x m) = None.
   Proof.
     intros; apply Env.grs.
   Qed.
 
   Lemma find_val_gro:
-    forall {V} (m: memory V) x y,
-      x <> y ->
-      find_val x (remove_val y m) = find_val x m.
+    x <> y ->
+    find_val x (remove_val y m) = find_val x m.
   Proof.
     intros; apply Env.gro; auto.
   Qed.
+
+  Lemma find_inst_gempty:
+    find_inst x (empty_memory V) = None.
+  Proof.
+    apply Env.gempty.
+  Qed.
+
+  Lemma find_val_gempty:
+    find_val x (empty_memory V) = None.
+  Proof.
+    apply Env.gempty.
+  Qed.
+
 
   (* Lemma find_inst_mmapi: *)
   (*   forall (f: list ident -> ident -> V -> W) p, *)

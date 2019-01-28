@@ -159,6 +159,13 @@ Module Type NODUP
         now apply Is_defined_in_vars_defined.
   Qed.
 
+  Lemma NoDup_defs_node:
+    forall n,
+      NoDup_defs n.(n_eqs).
+  Proof.
+    intro; apply NoDup_defs_NoDup_vars_defined, NoDup_var_defined_n_eqs.
+  Qed.
+
 End NODUP.
 
 Module NoDupFun
