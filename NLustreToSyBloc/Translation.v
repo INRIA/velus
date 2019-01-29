@@ -128,7 +128,7 @@ Module Type TRANSLATION
         [ SynSB.EqCall s xs ck false f les ]
       | EqApp xs ck f les (Some (r, ck_r)) =>
         let s := hd Ids.default xs in
-        [ SynSB.EqReset s (Con ck_r r true) f;
+        [ SynSB.EqReset s (Con ck r true) f;
           SynSB.EqCall s xs ck true f les ]
       | EqFby x ck _ e =>
         [ SynSB.EqNext x ck e ]

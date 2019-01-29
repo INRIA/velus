@@ -354,22 +354,22 @@ Module Type SBSEMANTICS
   (*           /\ exists bl P', find_block x P = Some (bl, P')) -> *)
   (*       well_formed_state P S. *)
 
-  Inductive Ordered: program -> Prop :=
+  Inductive Ordered_blocks: program -> Prop :=
   | Ordered_nil:
-      Ordered []
+      Ordered_blocks []
   | Ordered_cons:
       forall bl P,
-        Ordered P ->
+        Ordered_blocks P ->
         Forall (fun xb =>
                   snd xb <> bl.(b_name)
                   /\ exists bl' P', find_block (snd xb) P = Some (bl', P'))
                bl.(b_blocks) ->
         Forall (fun bl' => bl.(b_name) <> bl'.(b_name)) P ->
-        Ordered (bl :: P).
+        Ordered_blocks (bl :: P).
 
-  Remark Ordered_nodup:
+  Remark Ordered_blocks_nodup:
     forall P,
-      Ordered P ->
+      Ordered_blocks P ->
       NoDup (map b_name P).
   Proof.
     induction 1 as [|??? Ord Blocks NoDup]; simpl; constructor; auto.
@@ -378,9 +378,9 @@ Module Type SBSEMANTICS
     now apply IHP.
   Qed.
 
-  Remark Ordered_split:
+  Remark Ordered_blocks_split:
     forall P1 bl P,
-      Ordered (P1 ++ bl :: P) ->
+      Ordered_blocks (P1 ++ bl :: P) ->
       Forall (fun xb =>
                   snd xb <> bl.(b_name)
                   /\ exists bl' P', find_block (snd xb) P = Some (bl', P'))
@@ -391,7 +391,7 @@ Module Type SBSEMANTICS
 
   Lemma initial_state_tail:
     forall S0 bl P b,
-      Ordered (bl :: P) ->
+      Ordered_blocks (bl :: P) ->
       b_name bl <> b ->
       (initial_state P b S0 <->
       initial_state (bl :: P) b S0).
@@ -408,9 +408,9 @@ Module Type SBSEMANTICS
         rewrite E in Ord.
         pose proof Ord as Ord'.
         rewrite app_comm_cons in Ord.
-        apply Ordered_split in Ord.
+        apply Ordered_blocks_split in Ord.
         eapply In_Forall in Ord as (?&?&? & Find); eauto; simpl in Find.
-        apply Ordered_nodup in Ord'; simpl in Ord'.
+        apply Ordered_blocks_nodup in Ord'; simpl in Ord'.
         inversion_clear Ord' as [|?? NotIn].
         pose proof Find as Find''.
         apply find_block_name in Find.
@@ -427,12 +427,12 @@ Module Type SBSEMANTICS
         apply find_block_other in Find; auto.
         apply find_block_split in Find as (? & Eq).
         rewrite Eq in Ord; pose proof Ord as Ord'; rewrite app_comm_cons in Ord.
-        apply Ordered_split in Ord.
+        apply Ordered_blocks_split in Ord.
         eapply In_Forall in Ord as (?&?&?& Find); eauto; simpl in Find.
         pose proof Find as Find''.
         apply find_block_name in Find.
         apply find_block_In in Find''.
-        apply Ordered_nodup in Ord'.
+        apply Ordered_blocks_nodup in Ord'.
         inversion_clear Ord' as [|?? NotIn].
         intro E; subst; apply NotIn.
         rewrite E.
@@ -451,7 +451,7 @@ Module Type SBSEMANTICS
 
   Lemma find_block_initial_state:
     forall P b bl P',
-      Ordered P ->
+      Ordered_blocks P ->
       find_block b P = Some (bl, P') ->
       exists S0, initial_state P b S0.
   Proof.
@@ -505,7 +505,7 @@ Module Type SBSEMANTICS
              unfold sub_inst.
              rewrite find_inst_gss.
              exists S0x; split; auto.
-             apply initial_state_tail; auto using Ordered.
+             apply initial_state_tail; auto using Ordered_blocks.
            - assert (x' <> x).
              { inv b_nodup_blocks0.
                eapply InMembers_neq; eauto.
@@ -518,13 +518,87 @@ Module Type SBSEMANTICS
              exists S0'; split; auto.
              assert (b_name0 <> b'')
                by (eapply In_Forall in Subs'; eauto; intuition).
-             apply initial_state_tail; auto using Ordered; simpl.
-             apply initial_state_tail in Init; eauto using Ordered.
+             apply initial_state_tail; auto using Ordered_blocks; simpl.
+             apply initial_state_tail in Init; eauto using Ordered_blocks.
          }
     - apply ident_eqb_neq in E.
       intros Find.
       edestruct IHP; eauto.
-      eexists; apply initial_state_tail; eauto using Ordered.
+      eexists; apply initial_state_tail; eauto using Ordered_blocks.
+  Qed.
+
+  Inductive Is_block_in_eq : ident -> equation -> Prop :=
+  | Is_block_inEqCall:
+      forall s ys ck rst f es,
+        Is_block_in_eq f (EqCall s ys ck rst f es)
+  | Is_block_inEqReset:
+      forall s ck f,
+        Is_block_in_eq f (EqReset s ck f).
+
+  Definition Is_block_in (f: ident) (eqs: list equation) : Prop :=
+    List.Exists (Is_block_in_eq f) eqs.
+
+  Lemma not_Is_block_in_cons:
+    forall b eq eqs,
+      ~ Is_block_in b (eq :: eqs) <-> ~Is_block_in_eq b eq /\ ~Is_block_in b eqs.
+  Proof.
+    split; intro HH.
+    - split; intro; apply HH; unfold Is_block_in; intuition.
+    - destruct HH; inversion_clear 1; intuition.
+  Qed.
+
+  Lemma sem_block_cons2:
+    forall b P f xs S S' ys,
+      Ordered_blocks (b :: P) ->
+      sem_block P f xs S S' ys ->
+      (* Forall (fun n' => n_name n <> n_name n') G -> *)
+      sem_block (b :: P) f xs S S' ys.
+  Proof.
+    intros ** Hord Hsem (* Hnin *).
+    (* assert (Hnin':=Hnin). *)
+    (* revert Hnin'. *)
+    induction Hsem as [| | | |??????????? Hfind] using sem_block_mult
+                                           with (P_equation := fun bk H S I S' eq =>
+                                                                 ~Is_block_in_eq b.(b_name) eq ->
+                                                                 sem_equation (b :: P) bk H S I S' eq);
+      eauto using sem_equation.
+    - intros Notin; econstructor; eauto.
+      destruct r; eauto.
+      apply initial_state_tail; auto.
+      intro E; apply Notin; rewrite E; constructor.
+    - inversion_clear Hord as [|???? Hnin].
+      assert (b.(b_name) <> b0) as Hnf.
+      { intro Hnf.
+        rewrite Hnf in *.
+        pose proof (find_block_name _ _ _ _ Hfind).
+        apply find_block_split in Hfind as (?& Hp); subst.
+        apply Forall_app in Hnin.
+        destruct Hnin as [H' Hfg]; clear H'.
+        inv Hfg; congruence.
+      }
+      econstructor; eauto.
+      + apply find_block_other; eauto.
+      + instantiate (1 := I).
+        admit.
+  Qed.
+
+  Lemma sem_equations_cons2:
+    forall P bk H S I S' eqs b,
+      Ordered_blocks (b :: P) ->
+      Forall (sem_equation P bk H S I S') eqs ->
+      ~ Is_block_in b.(b_name) eqs ->
+      Forall (sem_equation (b :: P) bk H S I S') eqs.
+  Proof.
+    intros ** Hord Hsem Hnini.
+    induction eqs as [|[] eqs IH]; auto;
+      apply Forall_cons2 in Hsem as [Heq Heqs]; inv Heq;
+        apply not_Is_block_in_cons in Hnini as [Hnini Hninis];
+        constructor; eauto using sem_equation.
+    - econstructor; eauto.
+      destruct r; eauto.
+      apply initial_state_tail; auto.
+      intro E; apply Hnini; rewrite E; constructor.
+    - eauto using sem_equation, sem_block_cons2.
   Qed.
 
   (* Lemma sem_reset_false: *)
