@@ -47,100 +47,55 @@ Module Type TRANSLATION
   (* XXX: computationally, the following [gather_*] are useless: they
      are only used to simplify the proofs. See [gather_eqs_fst_spec]
      and [gather_eqs_snd_spec]. *)
-  Definition gather_mem (eqs: list equation): idents :=
-    concatMap (fun eq => match eq with
-                      | EqDef _ _ _
-                      | EqApp _ _ _ _ _ => []
-                      | EqFby x _ _ _ => [x]
-                      end) eqs.
-  Definition gather_insts (eqs: list equation): list (ident * ident) :=
-    concatMap (fun eq => match eq with
-                      | EqDef _ _ _
-                      | EqFby _ _ _ _ => []
-                      | EqApp i _ f _ _ =>
-                        match i with
-                        | [] => []
-                        | i :: _ => [(i,f)]
-                        end
-                      end) eqs.
-  Definition gather_app_vars (eqs: list equation): idents :=
-    concatMap (fun eq => match eq with
-                      | EqDef _ _ _
-                      | EqFby _ _ _ _ => []
-                      | EqApp xs _ _ _ _ => tl xs
-                      end) eqs.
+
+  (* Definition gather_mem (eqs: list equation): idents := *)
+  (*   concatMap (fun eq => match eq with *)
+  (*                     | EqDef _ _ _ *)
+  (*                     | EqApp _ _ _ _ _ => [] *)
+  (*                     | EqFby x _ _ _ => [x] *)
+  (*                     end) eqs. *)
+  (* Definition gather_insts (eqs: list equation): list (ident * ident) := *)
+  (*   concatMap (fun eq => match eq with *)
+  (*                     | EqDef _ _ _ *)
+  (*                     | EqFby _ _ _ _ => [] *)
+  (*                     | EqApp i _ f _ _ => *)
+  (*                       match i with *)
+  (*                       | [] => [] *)
+  (*                       | i :: _ => [(i,f)] *)
+  (*                       end *)
+  (*                     end) eqs. *)
+  (* Definition gather_app_vars (eqs: list equation): idents := *)
+  (*   concatMap (fun eq => match eq with *)
+  (*                     | EqDef _ _ _ *)
+  (*                     | EqFby _ _ _ _ => [] *)
+  (*                     | EqApp xs _ _ _ _ => tl xs *)
+  (*                     end) eqs. *)
 
 
   (** ** Translation *)
 
-  Section Translate.
-
-    (* Variable memories : Environment.t const. *)
-
-    (* Definition tovar (x: ident) : SynSB.var := *)
-    (*   if Environment.mem x memories then SynSB.Last x else SynSB.Var x. *)
-
-    (* Fixpoint translate_lexp (e: lexp) : SynSB.lexp := *)
-    (*   match e with *)
-    (*   | Econst c          => SynSB.Econst c *)
-    (*   | Evar x ty         => SynSB.Evar (tovar x) ty *)
-    (*   | Ewhen e x k       => SynSB.Ewhen (translate_lexp e) (tovar x) k *)
-    (*   | Eunop o e ty      => SynSB.Eunop o (translate_lexp e) ty *)
-    (*   | Ebinop o e1 e2 ty => SynSB.Ebinop o (translate_lexp e1) (translate_lexp e2) ty *)
-    (*   end. *)
-
-    (* Fixpoint translate_cexp (e: cexp) : SynSB.cexp := *)
-    (*   match e with *)
-    (*   | Emerge x e1 e2 => SynSB.Emerge (tovar x) (translate_cexp e1) (translate_cexp e2) *)
-    (*   | Eite e e1 e2   => SynSB.Eite (translate_lexp e) (translate_cexp e1) (translate_cexp e2) *)
-    (*   | Eexp e         => SynSB.Eexp (translate_lexp e) *)
-    (*   end. *)
-
-    (* (* Definition init (ck: clock) : ident. *) *)
-    (* (* Admitted. *) *)
-
-    (* (* Definition state (x: ident) : ident. *) *)
-    (* (* Admitted. *) *)
-
-    (* (* Definition op_or : binop. *) *)
-    (* (* Admitted. *) *)
-
-    (* (* Definition reset_expr (r: option (ident * clock)) (init: ident) : SynSB.lexp := *) *)
-    (* (*   match r with *) *)
-    (* (*   | Some (r, ck_r) => *) *)
-    (* (*     SynSB.Ebinop op_or (SynSB.Evar (SynSB.Last init) bool_type) (SynSB.Evar (tovar r) bool_type) bool_type *) *)
-    (* (*   | None => *) *)
-    (* (*     SynSB.Evar (SynSB.Last init) bool_type *) *)
-    (* (*   end. *) *)
-
-    (* Fixpoint translate_clock (ck: clock) : SynSB.clock := *)
-    (*   match ck with *)
-    (*   | Cbase => SynSB.Cbase *)
-    (*   | Con ck x k => SynSB.Con (translate_clock ck) (tovar x) k *)
-    (*   end. *)
-
-    Definition translate_eqn (eqn: equation) : list SynSB.equation :=
-      match eqn with
-      | EqDef x ck e =>
-        [ SynSB.EqDef x ck e ]
-      | EqApp xs ck f les None =>
-        let s := hd Ids.default xs in
-        [ SynSB.EqCall s xs ck false f les ]
-      | EqApp xs ck f les (Some (r, ck_r)) =>
-        let s := hd Ids.default xs in
-        [ SynSB.EqReset s (Con ck r true) f;
+  Definition translate_eqn (eqn: equation) : list SynSB.equation :=
+    match eqn with
+    | EqDef x ck e =>
+      [ SynSB.EqDef x ck e ]
+    | EqApp [] _ _ _ _ =>
+      []                        (* This way we can ensure b_blocks_in_eqs *)
+    | EqApp xs ck f les None =>
+      let s := hd Ids.default xs in
+      [ SynSB.EqCall s xs ck false f les ]
+    | EqApp xs ck f les (Some (r, ck_r)) =>
+      let s := hd Ids.default xs in
+      [ SynSB.EqReset s (Con ck r true) f;
           SynSB.EqCall s xs ck true f les ]
-      | EqFby x ck _ e =>
-        [ SynSB.EqNext x ck e ]
-      end.
+    | EqFby x ck _ e =>
+      [ SynSB.EqNext x ck e ]
+    end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
   (*      [Is_well_sch]. *) *)
 
-    Definition translate_eqns (eqns: list equation) : list SynSB.equation :=
-      concatMap translate_eqn eqns.
-
-  End Translate.
+  Definition translate_eqns (eqns: list equation) : list SynSB.equation :=
+    concatMap translate_eqn eqns.
 
   Definition ps_from_list (l: idents) : PS.t :=
     fold_left (fun s i => PS.add i s) l PS.empty.
@@ -569,17 +524,10 @@ Module Type TRANSLATION
     {
       induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
       - now rewrite app_nil_r.
-      - destruct eq as [ | is ck f les | ]; simpl;
-          match goal with
-          | |- context[ EqApp _ _ _ _ _ ] => destruct is
-          | _ => idtac
-          end; rewrite IHeqs; auto.
-
-        assert (Hmem_cons: gather_insts (EqApp (i :: is) ck f les o :: eqs)
-                           = (i, f) :: gather_insts eqs)
-          by now unfold gather_insts; rewrite concatMap_cons.
-
-        now rewrite Hmem_cons, <- Permutation_middle, app_comm_cons.
+      - destruct eq as [ | is ck f les | ]; simpl; try rewrite IHeqs; auto.
+        unfold gather_insts; rewrite concatMap_cons.
+        destruct is; rewrite IHeqs; auto;
+          rewrite <-app_comm_cons, Permutation_middle; auto.
     }
 
     now apply Hgen.
@@ -594,11 +542,8 @@ Module Type TRANSLATION
     assert (Hperm: Permutation (map fst (gather_insts eqs) ++ gather_app_vars eqs)
                                (vars_defined (filter is_app eqs))).
     {
-      induction eqs as [|eq eqs]; auto.
-      destruct eq; try (now simpl; auto).
+      induction eqs as [|[] eqs]; simpl; auto.
       destruct i as [ | x xs ]; auto.
-
-
       assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
                     = xs ++ gather_app_vars eqs)
         by now unfold gather_app_vars; rewrite concatMap_cons.
@@ -642,6 +587,40 @@ Module Type TRANSLATION
 
     rewrite <- Hperm.
     apply gather_eqs_fst_spec.
+  Qed.
+
+  Lemma In_fst_fold_left_gather_eq:
+    forall eqs xc mems insts,
+      In xc (fst (fold_left gather_eq eqs (mems, insts))) <->
+      In xc mems \/ In xc (fst (fold_left gather_eq eqs ([], insts))).
+  Proof.
+    induction eqs as [|[]]; simpl; intros; auto.
+    - split; auto; intros [|]; auto; contradiction.
+    - destruct i; simpl in *; auto.
+    - rewrite IHeqs; symmetry; rewrite IHeqs.
+      split; intros [Hin|Hin']; auto.
+      + now left; right.
+      + destruct Hin' as [[|]|]; auto; try contradiction.
+        now left; left.
+      + destruct Hin; auto.
+        now right; left; left.
+  Qed.
+
+  Lemma In_snd_fold_left_gather_eq:
+    forall eqs xf mems insts,
+      In xf (snd (fold_left gather_eq eqs (mems, insts))) <->
+      In xf insts \/ In xf (snd (fold_left gather_eq eqs (mems, []))).
+  Proof.
+    induction eqs as [|[]]; simpl; intros; auto.
+    - split; auto; intros [|]; auto; contradiction.
+    - destruct i; simpl in *; auto.
+      rewrite IHeqs; symmetry; rewrite IHeqs.
+      split; intros [Hin|Hin']; auto.
+      + now left; right.
+      + destruct Hin' as [[|]|]; auto; try contradiction.
+        now left; left.
+      + destruct Hin; auto.
+        now right; left; left.
   Qed.
 
   Lemma Forall_ValidId_idty:
@@ -696,6 +675,49 @@ Module Type TRANSLATION
     rewrite Permutation_app_assoc.
     rewrite is_filtered_eqs.
     apply NoDup_var_defined_n_eqs.
+  Qed.
+  Next Obligation.
+    unfold translate_eqns, gather_eqs, concatMap.
+    generalize (@nil (ident * const)).
+    induction (n_eqs n) as [|[]]; simpl.
+    - split; intros ** H.
+      + destruct H; contradiction.
+      + inv H.
+    - setoid_rewrite IHl; split; intros ** H.
+      + right; auto.
+      + inversion_clear H as [?? Hin|]; auto; inv Hin.
+    - destruct o as [[]|].
+      + destruct i.
+        * setoid_rewrite IHl; reflexivity.
+        *{ setoid_rewrite In_snd_fold_left_gather_eq; split.
+           - intros (?&[Hin|Hin]).
+             + destruct Hin as [E|]; try contradiction; inv E; simpl.
+               do 2 constructor.
+             + right; right; eapply IHl; eauto.
+           - intro BlockIn.
+             inversion_clear BlockIn as [?? Hin|?? BlockIn'].
+             + inv Hin; eexists; left; constructor; eauto.
+             + inversion_clear BlockIn' as [?? Hin|?? BlockIn].
+               * inv Hin; eexists; left; constructor; eauto.
+               * eapply IHl in BlockIn as (?&?).
+                 eexists; right; eauto.
+         }
+      + destruct i.
+        * setoid_rewrite IHl; reflexivity.
+        *{ setoid_rewrite In_snd_fold_left_gather_eq; split.
+           - intros (?&[Hin|Hin]).
+             + destruct Hin as [E|]; try contradiction; inv E; simpl.
+               do 2 constructor.
+             + right; eapply IHl; eauto.
+           - intro BlockIn.
+             inversion_clear BlockIn as [?? Hin|?? BlockIn'].
+             + inv Hin; eexists; left; constructor; eauto.
+             + eapply IHl in BlockIn' as (?&?).
+               eexists; right; eauto.
+         }
+    - setoid_rewrite IHl; split; intros ** H.
+      + right; auto.
+      + inversion_clear H as [?? Hin|]; auto; inv Hin.
   Qed.
   (* Next Obligation. *)
   (*   destruct n; simpl. *)

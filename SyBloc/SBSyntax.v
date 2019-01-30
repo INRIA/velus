@@ -23,6 +23,17 @@ Module Type SBSYNTAX
   | EqCall      : ident -> idents -> clock -> bool -> ident -> list lexp -> equation.
   (* <next s> y1, ..., yn =ck block<if b then trans s else last s>(e1, ..., em) *)
 
+  Inductive Is_block_in_eq : ident -> equation -> Prop :=
+  | Is_block_inEqCall:
+      forall s ys ck rst f es,
+        Is_block_in_eq f (EqCall s ys ck rst f es)
+  | Is_block_inEqReset:
+      forall s ck f,
+        Is_block_in_eq f (EqReset s ck f).
+
+  Definition Is_block_in (f: ident) (eqs: list equation) : Prop :=
+    List.Exists (Is_block_in_eq f) eqs.
+
   Record block :=
     Block {
         b_name  : ident;
@@ -36,7 +47,8 @@ Module Type SBSYNTAX
         (* b_ingt0 : 0 < length b_in; *)
         (* b_outgt0 : 0 < length b_out *)
         b_nodup_lasts: NoDupMembers b_lasts;
-        b_nodup_blocks: NoDupMembers b_blocks
+        b_nodup_blocks: NoDupMembers b_blocks;
+        b_blocks_in_eqs: forall f, (exists i, In (i, f) b_blocks) <-> Is_block_in f b_eqs
       }.
 
   (* TODO: in Common *)
@@ -176,6 +188,15 @@ Module Type SBSYNTAX
     rewrite (IHP Hnin2).
     apply ident_eqb_neq in Hnin1.
     now rewrite Hnin1.
+  Qed.
+
+  Lemma not_Is_block_in_cons:
+    forall b eq eqs,
+      ~ Is_block_in b (eq :: eqs) <-> ~Is_block_in_eq b eq /\ ~Is_block_in b eqs.
+  Proof.
+    split; intro HH.
+    - split; intro; apply HH; unfold Is_block_in; intuition.
+    - destruct HH; inversion_clear 1; intuition.
   Qed.
 
 End SBSYNTAX.

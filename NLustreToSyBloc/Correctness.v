@@ -369,41 +369,7 @@ Module Type CORRECTNESS
   (*   - unfold SemSB.restr_hist, PM.map; simpl; rewrite PM.gmapi, Find'; auto. *)
   (* Qed. *)
 
-  Lemma In_fst_fold_left_gather_eq:
-    forall eqs xc mems insts,
-      In xc (fst (fold_left gather_eq eqs (mems, insts))) <->
-      In xc mems \/ In xc (fst (fold_left gather_eq eqs ([], insts))).
-  Proof.
-    induction eqs as [|[]]; simpl; intros; auto.
-    - split; auto; intros [|]; auto; contradiction.
-    - destruct i; simpl in *; auto.
-    - rewrite IHeqs; symmetry; rewrite IHeqs.
-      split; intros [Hin|Hin']; auto.
-      + now left; right.
-      + destruct Hin' as [[|]|]; auto; try contradiction.
-        now left; left.
-      + destruct Hin; auto.
-        now right; left; left.
-  Qed.
-
-  Lemma In_snd_fold_left_gather_eq:
-    forall eqs xf mems insts,
-      In xf (snd (fold_left gather_eq eqs (mems, insts))) <->
-      In xf insts \/ In xf (snd (fold_left gather_eq eqs (mems, []))).
-  Proof.
-    induction eqs as [|[]]; simpl; intros; auto.
-    - split; auto; intros [|]; auto; contradiction.
-    - destruct i; simpl in *; auto.
-      rewrite IHeqs; symmetry; rewrite IHeqs.
-      split; intros [Hin|Hin']; auto.
-      + now left; right.
-      + destruct Hin' as [[|]|]; auto; try contradiction.
-        now left; left.
-      + destruct Hin; auto.
-        now right; left; left.
-  Qed.
-
-  Lemma In_snd_gather_eqs_Is_node_in:
+Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
       In (i, f) (snd (gather_eqs eqs)) ->
       Is_node_in f eqs.
@@ -560,223 +526,206 @@ Module Type CORRECTNESS
       simpl; rewrite <-initial_state_tail; eauto.
   Qed.
 
-  Section Global.
+  Definition sem_equations_n
+             (P: program) (bk: stream bool) (H: history)
+             (E: stream state) (T: stream transient_states) (E': stream state)
+             (eqs: list equation) :=
+    forall n, Forall (sem_equation P (bk n) (restr_hist H n) (E n) (T n) (E' n)) eqs.
 
-    (* Variable G: global. *)
-    (* Let P := translate G. *)
+  Definition sem_block_n
+             (P: program) (f: ident)
+             (E: stream state) (xss yss: stream (list value)) (E': stream state) :=
+    forall n, sem_block P f (E n) (xss n) (yss n) (E' n).
 
-    (*   Inductive lasts_eq_spec (lasts: Env.t const) : equation -> Prop := *)
-    (* | LSdef: *)
-    (*     forall x ck e, *)
-    (*       Env.mem x lasts = false -> *)
-    (*       lasts_eq_spec lasts (EqDef x ck e) *)
-    (* | LSapp: *)
-    (*     forall xs ck f es r, *)
-    (*       Forall (fun x => Env.mem x lasts = false) xs -> *)
-    (*       lasts_eq_spec lasts (EqApp xs ck f es r) *)
-    (* | LSfby: *)
-    (*     forall x ck c0 e, *)
-    (*       Env.find x lasts = Some c0 -> *)
-    (*       lasts_eq_spec lasts (EqFby x ck c0 e). *)
+  Definition add_n (x: ident) (Mx: stream state) (I: stream transient_states) :=
+    fun n => Env.add x (Mx n) (I n).
 
+  Lemma sem_equations_n_add_n:
+    forall P eqs bk H S S' Is x Sx,
+      sem_equations_n P bk H S Is S' eqs ->
+      sem_equations_n P bk H S (add_n x Sx Is) S' eqs.
+  Proof.
+    induction eqs as [|eq eqs]; intros ** Sem n; constructor.
+    - specialize (Sem n); inversion_clear Sem as [|?? Sem'].
+      inv Sem'; eauto using SemSB.sem_equation.
+      + econstructor; eauto.
+        unfold add_n; rewrite Env.gso; auto.
+        admit.
+      + econstructor; eauto.
+        unfold add_n; rewrite Env.gso; auto.
+        admit.
+    - apply IHeqs.
+      intro n'; specialize (Sem n'); inv Sem; auto.
+  Qed.
 
-    Definition sem_equations_n
-               (P: program) (bk: stream bool) (H: history)
-               (E: stream state) (T: stream transient_states) (E': stream state)
-               (eqs: list equation) :=
-      forall n, Forall (sem_equation P (bk n) (restr_hist H n) (E n) (T n) (E' n)) eqs.
+  Lemma equation_correctness:
+    forall G eq eqs bk H M M' Is,
+      (forall f xss M M' yss,
+          msem_node G f xss M M' yss ->
+          sem_block_n (translate G) f M xss yss M') ->
+      Ordered_nodes G ->
+      msem_equation G bk H M M' eq ->
+      sem_equations_n (translate G) bk H M Is M' eqs ->
+      exists Is', sem_equations_n (translate G) bk H M Is' M' (translate_eqn eq ++ eqs).
+  Proof.
+    intros ** IHnode Hord Heq Heqs.
+    destruct Heq as [| |?????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
+      simpl.
 
-    Definition sem_block_n
-               (P: program) (f: ident)
-               (E: stream state) (xss yss: stream (list value)) (E': stream state) :=
-      forall n, sem_block P f (E n) (xss n) (yss n) (E' n).
+    - do 3 (econstructor; eauto).
 
-    Definition add_n (x: ident) (Mx: stream state) (I: stream transient_states) :=
-      fun n => Env.add x (Mx n) (I n).
+    - erewrite hd_error_Some_hd; eauto.
+      destruct xs; try discriminate.
+      exists (add_n x Mx Is); intro.
+      constructor; auto.
+      + econstructor; eauto.
+        * split; eauto; reflexivity.
+        * apply Env.gss.
+        * now apply IHnode.
+      + now apply sem_equations_n_add_n.
 
-    Lemma sem_equations_n_add_n:
-      forall P eqs bk H S S' Is x Sx,
-        sem_equations_n P bk H S Is S' eqs ->
-        sem_equations_n P bk H S (add_n x Sx Is) S' eqs.
-    Proof.
-      induction eqs as [|eq eqs]; intros ** Sem n; constructor.
-      - specialize (Sem n); inversion_clear Sem as [|?? Sem'].
-        inv Sem'; eauto using SemSB.sem_equation.
-        + econstructor; eauto.
-          unfold add_n; rewrite Env.gso; auto.
-          admit.
-        + econstructor; eauto.
-          unfold add_n; rewrite Env.gso; auto.
-          admit.
-      - apply IHeqs.
-        intro n'; specialize (Sem n'); inv Sem; auto.
-    Qed.
+    - erewrite hd_error_Some_hd; eauto.
+      destruct xs; try discriminate.
+      exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); intro.
+      pose proof (msem_reset_spec Hord Reset) as Spec.
+      inversion_clear Reset as [?????? Nodes].
+      destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
+        destruct (Nodes (count rs 0)) as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
+      apply IHnode in Node_n.
+      specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
+      rewrite 2 mask_transparent, Mmask_n, Mmask'_n in Node_n; auto.
+      specialize (Var n); specialize (Hr n).
+      assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
+          by now intro; apply sem_equations_n_add_n.
+      destruct (rs n) eqn: E.
+      + specialize (Heqs' (fun n => Mx 0) n).
+        assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
+          by apply Env.gss.
+        constructor; auto; [|constructor; auto].
+        *{ destruct (ys n); try discriminate.
+           econstructor; eauto.
+           - eapply Son; eauto.
+             admit.
+           - instantiate (1 := empty_memory _); simpl.
+             rewrite <-Mmask_0; auto.
+             eapply msem_node_initial_state; eauto.
+         }
+        *{ eapply SemSB.SEqCall with (Is := Mx 0); eauto.
+           - instantiate (1 := empty_memory _); congruence.
+           - eapply sem_block_equal_memory; eauto; reflexivity.   (* TODO: fix rewriting here? *)
+         }
+      + specialize (Heqs' Mx n).
+        assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
+          by apply Env.gss.
+        destruct (ys n) eqn: E'.
+        *{ do 2 (econstructor; eauto using SemSB.sem_equation).
+           - apply Son_abs1; auto.
+             admit.
+           - simpl; split; eauto; reflexivity.
+           - econstructor; eauto.
+             instantiate (1 := empty_memory _); discriminate.
+         }
+        *{ do 2 (econstructor; eauto using SemSB.sem_equation).
+           - change true with (negb false).
+             eapply Son_abs2; eauto.
+             admit.
+           - simpl; split; eauto; reflexivity.
+           - econstructor; eauto.
+             instantiate (1 := empty_memory _); discriminate.
+         }
 
-    Lemma equation_correctness:
-      forall G eq eqs bk H M M' Is,
-        (forall f xss M M' yss,
-            msem_node G f xss M M' yss ->
-            sem_block_n (translate G) f M xss yss M') ->
-        Ordered_nodes G ->
-        msem_equation G bk H M M' eq ->
-        sem_equations_n (translate G) bk H M Is M' eqs ->
-        exists Is', sem_equations_n (translate G) bk H M Is' M' (translate_eqn eq ++ eqs).
-    Proof.
-      intros ** IHnode Hord Heq Heqs.
-      destruct Heq as [| |?????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
-        simpl.
+    - do 2 (econstructor; auto).
+      destruct Mfby as (?&?& Spec).
+      specialize (Spec n); destruct (find_val x (M n)) eqn: E; try contradiction.
+      specialize (Var n); specialize (Arg n).
+      pose proof Arg as Arg'.
+      destruct (ls n); destruct Spec as (?& Hxs); rewrite Hxs in Var; inv Arg'; eauto using sem_equation.
+  Qed.
 
-      - do 3 (econstructor; eauto).
+  Corollary equations_correctness:
+    forall G bk H M M' eqs,
+      (forall f xss M M' yss,
+          msem_node G f xss M M' yss ->
+          sem_block_n (translate G) f M xss yss M') ->
+      Ordered_nodes G ->
+      Forall (msem_equation G bk H M M') eqs ->
+      exists Is, sem_equations_n (translate G) bk H M Is M' (translate_eqns eqs).
+  Proof.
+    intros ** Hord IH Heqs.
+    unfold translate_eqns, concatMap.
+    induction eqs as [|eq eqs IHeqs]; simpl.
+    - exists (fun n => Env.empty state); constructor.
+    - apply Forall_cons2 in Heqs as [Heq Heqs].
+      eapply IHeqs in Heqs as (?&?).
+      eapply equation_correctness; eauto.
+  Qed.
 
-      - erewrite hd_error_Some_hd; eauto.
-        exists (add_n x Mx Is); intro.
-        constructor; auto.
-        + econstructor; eauto.
-          * split; eauto; reflexivity.
-          * apply Env.gss.
-          * now apply IHnode.
-        + now apply sem_equations_n_add_n.
+  Lemma clock_of_correctness:
+    forall xss bk,
+      ExprSem.clock_of xss bk ->
+      forall n, clock_of (xss n) (bk n).
+  Proof. auto. Qed.
 
-      - erewrite hd_error_Some_hd; eauto.
-        exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); intro.
-        pose proof (msem_reset_spec Hord Reset) as Spec.
-        inversion_clear Reset as [?????? Nodes].
-        destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
-          destruct (Nodes (count rs 0)) as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
-        apply IHnode in Node_n.
-        specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
-        rewrite 2 mask_transparent, Mmask_n, Mmask'_n in Node_n; auto.
-        specialize (Var n); specialize (Hr n).
-        assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
-            by now intro; apply sem_equations_n_add_n.
-        destruct (rs n) eqn: E.
-        + specialize (Heqs' (fun n => Mx 0) n).
-          assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
-            by apply Env.gss.
-          constructor; auto; [|constructor; auto].
-          *{ destruct (ys n); try discriminate.
-             econstructor; eauto.
-             - eapply Son; eauto.
-               admit.
-             - instantiate (1 := empty_memory _); simpl.
-               rewrite <-Mmask_0; auto.
-               eapply msem_node_initial_state; eauto.
-           }
-          *{ eapply SemSB.SEqCall with (Is := Mx 0); eauto.
-             - instantiate (1 := empty_memory _); congruence.
-             - eapply sem_block_equal_memory; eauto; reflexivity.   (* TODO: fix rewriting here? *)
-           }
-        + specialize (Heqs' Mx n).
-          assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
-            by apply Env.gss.
-          destruct (ys n) eqn: E'.
-          *{ do 2 (econstructor; eauto using SemSB.sem_equation).
-             - apply Son_abs1; auto.
-               admit.
-             - simpl; split; eauto; reflexivity.
-             - econstructor; eauto.
-               instantiate (1 := empty_memory _); discriminate.
-           }
-          *{ do 2 (econstructor; eauto using SemSB.sem_equation).
-             - change true with (negb false).
-               eapply Son_abs2; eauto.
-               admit.
-             - simpl; split; eauto; reflexivity.
-             - econstructor; eauto.
-               instantiate (1 := empty_memory _); discriminate.
-           }
+  Lemma same_clock_correctness:
+    forall xss,
+      ExprSem.same_clock xss ->
+      forall n, same_clock (xss n).
+  Proof. auto. Qed.
+  Hint Resolve clock_of_correctness same_clock_correctness.
 
-      - do 2 (econstructor; auto).
-        destruct Mfby as (?&?& Spec).
-        specialize (Spec n); destruct (find_val x (M n)) eqn: E; try contradiction.
-        specialize (Var n); specialize (Arg n).
-        pose proof Arg as Arg'.
-        destruct (ls n); destruct Spec as (?& Hxs); rewrite Hxs in Var; inv Arg'; eauto using sem_equation.
-    Qed.
+  Lemma not_Is_node_in_not_Is_block_in:
+    forall eqs f,
+      ~ Is_node_in f eqs ->
+      ~ Is_block_in f (translate_eqns eqs).
+  Proof.
+    unfold translate_eqns, concatMap.
+    induction eqs as [|eq]; simpl; intros ** Hnin Hin.
+    - inv Hin.
+    - apply not_Is_node_in_cons in Hnin as (Hnineq & Hnin).
+      apply IHeqs in Hnin.
+      destruct eq; simpl in *.
+      + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
+      + destruct i; auto.
+        destruct o as [[]|]; inversion_clear Hin as [?? E|?? Hins]; auto.
+        * inv E; apply Hnineq; constructor.
+        * inversion_clear Hins as [?? E|?? Hins']; auto.
+          inv E; apply Hnineq; constructor.
+        * inv E; apply Hnineq; constructor.
+      + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
+  Qed.
 
-    Corollary equations_correctness:
-      forall G bk H M M' eqs,
-        (forall f xss M M' yss,
-            msem_node G f xss M M' yss ->
-            sem_block_n (translate G) f M xss yss M') ->
-        Ordered_nodes G ->
-        Forall (msem_equation G bk H M M') eqs ->
-        exists Is, sem_equations_n (translate G) bk H M Is M' (translate_eqns eqs).
-    Proof.
-      intros ** Hord IH Heqs.
-      unfold translate_eqns, concatMap.
-      induction eqs as [|eq eqs IHeqs]; simpl.
-      - exists (fun n => Env.empty state); constructor.
-      - apply Forall_cons2 in Heqs as [Heq Heqs].
-        eapply IHeqs in Heqs as (?&?).
-        eapply equation_correctness; eauto.
-    Qed.
-
-    Lemma clock_of_correctness:
-      forall xss bk,
-        ExprSem.clock_of xss bk ->
-        forall n, clock_of (xss n) (bk n).
-    Proof. auto. Qed.
-
-    Lemma same_clock_correctness:
-      forall xss,
-        ExprSem.same_clock xss ->
-        forall n, same_clock (xss n).
-    Proof. auto. Qed.
-    Hint Resolve clock_of_correctness same_clock_correctness.
-
-    Lemma not_Is_node_in_not_Is_block_in:
-      forall eqs f,
-        ~ Is_node_in f eqs ->
-        ~ Is_block_in f (translate_eqns eqs).
-    Proof.
-      unfold translate_eqns, concatMap.
-      induction eqs as [|eq]; simpl; intros ** Hnin Hin.
-      - inv Hin.
-      - apply not_Is_node_in_cons in Hnin as (Hnineq & Hnin).
-        apply IHeqs in Hnin.
-        destruct eq; simpl in *.
-        + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
-        + destruct o as [[]|]; inversion_clear Hin as [?? E|?? Hins]; auto.
-          * inv E; apply Hnineq; constructor.
-          * inversion_clear Hins as [?? E|?? Hins']; auto.
-            inv E; apply Hnineq; constructor.
-          * inv E; apply Hnineq; constructor.
-        + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
-    Qed.
-
-    Theorem correctness:
-      forall G f xss M M' yss,
-        Ordered_nodes G ->
-        msem_node G f xss M M' yss ->
-        sem_block_n (translate G) f M xss yss M'.
-    Proof.
-      induction G as [|node ? IH].
-      inversion 2;
-        match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
-      intros ** Hord Hsem n.
-      assert (Hsem' := Hsem).
-      inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ??? Heqs].
-      pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
-      pose proof Hord; inversion_clear Hord as [|??? NodeIn].
-      pose proof Hfind as Hfind'.
-      simpl in Hfind.
-      assert (Ordered_blocks (translate_node node :: translate G))
-        by (change (translate_node node :: translate G) with (translate (node :: G));
-            apply Ordered_nodes_blocks; auto).
-      destruct (ident_eqb node.(n_name) f) eqn:Hnf.
-      - inversion Hfind; subst n0.
-        apply find_node_translate in Hfind' as (?&?&?&?); subst.
-        eapply Forall_msem_equation_global_tl in Heqs; eauto.
-        apply equations_correctness in Heqs as (?&Heqs); auto.
-        econstructor; eauto.
-        + specialize (Ins n); destruct node; simpl in *.
-          rewrite map_fst_idty; eauto.
-        + specialize (Outs n); destruct node; simpl in *.
-          rewrite map_fst_idty; eauto.
-        + apply sem_equations_cons2; eauto.
-          apply not_Is_node_in_not_Is_block_in; auto.
-      - assert (n_name node <> f) by now apply ident_eqb_neq.
-        eapply msem_node_cons, IH in Hsem; eauto.
-        apply sem_block_cons2; auto using Ordered_blocks.
-    Qed.
+  Theorem correctness:
+    forall G f xss M M' yss,
+      Ordered_nodes G ->
+      msem_node G f xss M M' yss ->
+      sem_block_n (translate G) f M xss yss M'.
+  Proof.
+    induction G as [|node ? IH].
+    inversion 2;
+      match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
+    intros ** Hord Hsem n.
+    assert (Hsem' := Hsem).
+    inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ??? Heqs].
+    pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
+    pose proof Hord; inversion_clear Hord as [|??? NodeIn].
+    pose proof Hfind as Hfind'.
+    simpl in Hfind.
+    assert (Ordered_blocks (translate_node node :: translate G))
+      by (change (translate_node node :: translate G) with (translate (node :: G));
+          apply Ordered_nodes_blocks; auto).
+    destruct (ident_eqb node.(n_name) f) eqn:Hnf.
+    - inversion Hfind; subst n0.
+      apply find_node_translate in Hfind' as (?&?&?&?); subst.
+      eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      apply equations_correctness in Heqs as (?&Heqs); auto.
+      econstructor; eauto.
+      + specialize (Ins n); destruct node; simpl in *.
+        rewrite map_fst_idty; eauto.
+      + specialize (Outs n); destruct node; simpl in *.
+        rewrite map_fst_idty; eauto.
+      + apply sem_equations_cons2; eauto.
+        apply not_Is_node_in_not_Is_block_in; auto.
+    - assert (n_name node <> f) by now apply ident_eqb_neq.
+      eapply msem_node_cons, IH in Hsem; eauto.
+      apply sem_block_cons2; auto using Ordered_blocks.
+  Qed.
