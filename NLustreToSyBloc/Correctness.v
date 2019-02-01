@@ -465,7 +465,7 @@ Lemma In_snd_gather_eqs_Is_node_in:
     intro; generalize (@nil (ident * const)).
     induction eqs as [|[]]; simpl; intros ** Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
-      try inversion_clear Heq as [|????????????? Hd|????????????????? Hd|];
+      try inversion_clear Heq as [|????????????? Hd|???????????????? Hd|];
         try contradiction; eauto.
     - destruct i; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
@@ -540,23 +540,59 @@ Lemma In_snd_gather_eqs_Is_node_in:
   Definition add_n (x: ident) (Mx: stream state) (I: stream transient_states) :=
     fun n => Env.add x (Mx n) (I n).
 
+  Inductive Is_state_in_eq: ident -> equation -> Prop :=
+  | StateEqCall:
+      forall x xs ck rst f es,
+        Is_state_in_eq x (EqCall x xs ck rst f es)
+  | StateEqReset:
+      forall x ck f,
+        Is_state_in_eq x (EqReset x ck f).
+
+  Definition Is_state_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    List.Exists (Is_state_in_eq x) eqs.
+
+  Lemma not_Is_state_in_cons:
+    forall x eq eqs,
+      ~Is_state_in_eqs x (eq :: eqs)
+      <-> ~Is_state_in_eq x eq /\ ~Is_state_in_eqs x eqs.
+  Proof.
+    split.
+    - intro H; split; intro; apply H; constructor(assumption).
+    - intros [? ?] H; inv H; eauto.
+  Qed.
+
   Lemma sem_equations_n_add_n:
     forall P eqs bk H S S' Is x Sx,
       sem_equations_n P bk H S Is S' eqs ->
+      ~ Is_state_in_eqs x eqs ->
       sem_equations_n P bk H S (add_n x Sx Is) S' eqs.
   Proof.
-    induction eqs as [|eq eqs]; intros ** Sem n; constructor.
+    induction eqs as [|eq eqs]; intros ** Sem Notin n; constructor.
     - specialize (Sem n); inversion_clear Sem as [|?? Sem'].
       inv Sem'; eauto using SemSB.sem_equation.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
-        admit.
+        intro E; apply Notin; rewrite E; do 2 constructor.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
-        admit.
+        intro E; apply Notin; rewrite E; do 2 constructor.
     - apply IHeqs.
-      intro n'; specialize (Sem n'); inv Sem; auto.
+      + intro n'; specialize (Sem n'); inv Sem; auto.
+      + apply not_Is_state_in_cons in Notin as []; auto.
   Qed.
+
+  Inductive translate_eqn_nodup_states: SynNL.equation -> list equation -> Prop :=
+    | TrNodupEqDef:
+        forall x ck e eqs,
+          translate_eqn_nodup_states (SynNL.EqDef x ck e) eqs
+    | TrNodupEqApp:
+        forall xs ck f es r eqs x,
+          hd_error xs = Some x ->
+          ~ Is_state_in_eqs x eqs ->
+          translate_eqn_nodup_states (EqApp xs ck f es r) eqs
+    | TrNodupEqFby:
+        forall x ck c e eqs,
+          translate_eqn_nodup_states (EqFby x ck c e) eqs.
 
   Lemma equation_correctness:
     forall G eq eqs bk H M M' Is,
@@ -564,17 +600,22 @@ Lemma In_snd_gather_eqs_Is_node_in:
           msem_node G f xss M M' yss ->
           sem_block_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
+      translate_eqn_nodup_states eq eqs ->
       msem_equation G bk H M M' eq ->
       sem_equations_n (translate G) bk H M Is M' eqs ->
       exists Is', sem_equations_n (translate G) bk H M Is' M' (translate_eqn eq ++ eqs).
   Proof.
-    intros ** IHnode Hord Heq Heqs.
-    destruct Heq as [| |?????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
-      simpl.
+    intros ** IHnode Hord TrNodup Heq Heqs.
+    destruct Heq as [| |????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
+      inv TrNodup; simpl.
 
     - do 3 (econstructor; eauto).
 
-    - erewrite hd_error_Some_hd; eauto.
+    - match goal with
+      | H: hd_error ?l = Some x,
+           H': hd_error ?l = _ |- _ => rewrite H' in H; inv H
+      end.
+      erewrite hd_error_Some_hd; eauto.
       destruct xs; try discriminate.
       exists (add_n x Mx Is); intro.
       constructor; auto.
@@ -582,9 +623,13 @@ Lemma In_snd_gather_eqs_Is_node_in:
         * split; eauto; reflexivity.
         * apply Env.gss.
         * now apply IHnode.
-      + now apply sem_equations_n_add_n.
+      + apply sem_equations_n_add_n; auto.
 
-    - erewrite hd_error_Some_hd; eauto.
+    - match goal with
+      | H: hd_error ?l = Some x,
+           H': hd_error ?l = _ |- _ => rewrite H' in H; inv H
+      end.
+      erewrite hd_error_Some_hd; eauto.
       destruct xs; try discriminate.
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); intro.
       pose proof (msem_reset_spec Hord Reset) as Spec.
@@ -642,22 +687,61 @@ Lemma In_snd_gather_eqs_Is_node_in:
       destruct (ls n); destruct Spec as (?& Hxs); rewrite Hxs in Var; inv Arg'; eauto using sem_equation.
   Qed.
 
+  Lemma not_Is_defined_not_Is_state_in_eqs:
+    forall x eqs,
+      ~ Is_defined_in_eqs x eqs ->
+      ~ Is_state_in_eqs x (translate_eqns eqs).
+  Proof.
+    unfold translate_eqns, concatMap.
+    induction eqs as [|eq]; simpl; intros Notin Hin.
+    - inv Hin.
+    - apply Exists_app' in Hin as [Hin|].
+      + destruct eq; simpl in Hin.
+        * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
+        *{ destruct i; try destruct o; inversion_clear Hin as [?? Hin'|?? Hin'].
+           - inv Hin'; apply Notin; do 3 constructor; auto.
+           - inversion_clear Hin' as [?? Hin|?? Hin]; inv Hin;
+               apply Notin; do 3 constructor; auto.
+           - inv Hin'; apply Notin; do 3 constructor; auto.
+           - inv Hin'.
+         }
+        * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
+      + apply IHeqs; auto.
+        apply not_Is_defined_in_cons in Notin as []; auto.
+  Qed.
+
+  Lemma Nodup_defs_translate_eqns:
+    forall eq eqs G bk H M M',
+      msem_equation G bk H M M' eq ->
+      NoDup_defs (eq :: eqs) ->
+      translate_eqn_nodup_states eq (translate_eqns eqs).
+  Proof.
+    destruct eq; inversion_clear 1; inversion_clear 1; econstructor; eauto.
+    - apply not_Is_defined_not_Is_state_in_eqs.
+      assert (In x i) by (now apply hd_error_Some_In); auto.
+    - apply not_Is_defined_not_Is_state_in_eqs.
+      assert (In x i) by (now apply hd_error_Some_In); auto.
+  Qed.
+
   Corollary equations_correctness:
     forall G bk H M M' eqs,
       (forall f xss M M' yss,
           msem_node G f xss M M' yss ->
           sem_block_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
+      NoDup_defs eqs ->
       Forall (msem_equation G bk H M M') eqs ->
       exists Is, sem_equations_n (translate G) bk H M Is M' (translate_eqns eqs).
   Proof.
-    intros ** Hord IH Heqs.
+    intros ** Heqs.
     unfold translate_eqns, concatMap.
     induction eqs as [|eq eqs IHeqs]; simpl.
     - exists (fun n => Env.empty state); constructor.
     - apply Forall_cons2 in Heqs as [Heq Heqs].
       eapply IHeqs in Heqs as (?&?).
-      eapply equation_correctness; eauto.
+      + eapply equation_correctness; eauto.
+        eapply Nodup_defs_translate_eqns; eauto.
+      + eapply NoDup_defs_cons; eauto.
   Qed.
 
   Lemma clock_of_correctness:
@@ -686,7 +770,7 @@ Lemma In_snd_gather_eqs_Is_node_in:
       destruct eq; simpl in *.
       + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
       + destruct i; auto.
-        destruct o as [[]|]; inversion_clear Hin as [?? E|?? Hins]; auto.
+        destruct o as [|]; inversion_clear Hin as [?? E|?? Hins]; auto.
         * inv E; apply Hnineq; constructor.
         * inversion_clear Hins as [?? E|?? Hins']; auto.
           inv E; apply Hnineq; constructor.
@@ -717,6 +801,7 @@ Lemma In_snd_gather_eqs_Is_node_in:
     - inversion Hfind; subst n0.
       apply find_node_translate in Hfind' as (?&?&?&?); subst.
       eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      pose proof (NoDup_defs_node node).
       apply equations_correctness in Heqs as (?&Heqs); auto.
       econstructor; eauto.
       + specialize (Ins n); destruct node; simpl in *.

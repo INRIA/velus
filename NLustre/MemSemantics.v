@@ -99,22 +99,6 @@ Module Type MEMSEMANTICS
 
     Variable G: global.
 
-    (* Inductive well_formed_memory: memory val -> ident -> Prop := *)
-    (*   well_formed_memory_intro: *)
-    (*     forall M f n, *)
-    (*       find_node f G = Some n -> *)
-    (*       (forall i M', sub_inst i M M' -> *)
-    (*                exists f', In (i, f') (gather_insts n.(n_eqs)) *)
-    (*                      /\ well_formed_memory M' f') -> *)
-    (*       (forall i f', In (i, f') (gather_insts n.(n_eqs)) -> *)
-    (*                exists M', sub_inst i M M' *)
-    (*                      /\ well_formed_memory M' f') -> *)
-    (*       (forall x, (exists v, find_val x M = Some v) <-> In x (gather_mem n.(n_eqs))) -> *)
-    (*       well_formed_memory M f. *)
-
-    (* Definition well_formed_memory_n (M: memories) (f: ident) : Prop := *)
-    (*   forall n, well_formed_memory (M n) f. *)
-
     Definition memory_closed (M: memory val) (eqs: list equation) : Prop :=
       (forall i, find_inst i M <> None -> InMembers i (gather_insts eqs))
       /\ forall x, find_val x M <> None -> In x (gather_mem eqs).
@@ -138,17 +122,16 @@ Module Type MEMSEMANTICS
           msem_node f ls Mx Mx' xss ->
           msem_equation bk H M M' (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys rs ls xss,
+        forall bk H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
           sem_laexps bk H ck arg ls ->
           sem_vars H xs xss ->
-          (* sem_avar bk H ck_r r ys -> *)
-          sem_var H r ys ->
+          sem_var H y ys ->
           reset_of ys rs ->
           msem_reset f rs ls Mx Mx' xss ->
-          msem_equation bk H M M' (EqApp xs ck f arg (Some (r, ck_r)))
+          msem_equation bk H M M' (EqApp xs ck f arg (Some y))
     | SEqFby:
         forall bk H M M' x ck ls xs c0 le,
           sem_laexp bk H ck le ls ->
@@ -219,18 +202,17 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H M M' (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H M M' x xs ck f Mx Mx' arg r ck_r ys rs ls xss,
+      forall bk H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
         Some x = hd_error xs ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
         sem_laexps bk H ck arg ls ->
         sem_vars H xs xss ->
-        (* sem_avar bk H ck_r r ys -> *)
-        sem_var H r ys ->
+        sem_var H y ys ->
         reset_of ys rs ->
         msem_reset G f rs ls Mx Mx' xss ->
         P_reset f rs ls Mx Mx' xss ->
-        P_equation bk H M M' (EqApp xs ck f arg (Some (r, ck_r))).
+        P_equation bk H M M' (EqApp xs ck f arg (Some y)).
 
     Hypothesis EqFbyCase:
       forall bk H M M' x ck ls xs c0 le,
@@ -575,7 +557,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem as [|???? x' ???????? Hsome
-                         |???? x' ???????????? Hsome|];
+                         |???? x' ??????????? Hsome|];
       eauto;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -688,7 +670,7 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros ** IH IH' Heq NoDup Hmeqs WF.
     inversion Heq as [|???????? Hls Hxs Hsem
-                         |???????????? Hls Hxs Hy Hr Hsem
+                         |??????????? Hls Hxs Hy Hr Hsem
                          |???????? Hle Hvar];
       match goal with H:_=eq |- _ => rewrite <-H in * end.
 
@@ -1061,11 +1043,11 @@ dataflow memory for which the non-standard semantics holds true.
       inversion_clear Heqs2 as [|?? Sem2 Sems2];
       try inversion Sem1 as [|
                                    ????????????? Hd1 ???? Node|
-                                   ????????????????? Hd1 ?? Args1 ??? Reset1|
+                                   ???????????????? Hd1 ?? Args1 ??? Reset1|
                                    ?????????? Arg1 ? Mfby1];
       try inversion Sem2 as [|
                                    ????????????? Hd2|
-                                   ????????????????? Hd2 ?? Args2 ??? Reset2|
+                                   ???????????????? Hd2 ?? Args2 ??? Reset2|
                                    ?????????? Arg2 ? Mfby2];
       inv Nodup; subst; try discriminate; eauto.
     - assert (forall n, M1 n ≋ empty_memory _) as ->
@@ -1179,7 +1161,7 @@ dataflow memory for which the non-standard semantics holds true.
       inversion_clear Heqs as [|?? Sem Sems];
       try inversion_clear Sem as [|
                                   ????????????? Hd ?? Args ? Node|
-                                  ????????????????? Hd ?? Args ??? Reset|
+                                  ???????????????? Hd ?? Args ??? Reset|
                                   ?????????? Arg ? Mfby];
       inv Nodup; eauto.
     - assert (forall n, M n ≋ empty_memory _) as E

@@ -80,10 +80,16 @@ Module Type NLCLOCKING
           wc_cexp ce ck ->
           wc_equation (EqDef x ck ce)
     | CEqApp:
+        forall xs ck f les,
+          Forall (fun x => In (x, ck) vars) xs ->
+          Forall (fun le => wc_lexp le ck) les ->
+          wc_equation (EqApp xs ck f les None)
+    | CEqReset:
         forall xs ck f les r,
           Forall (fun x => In (x, ck) vars) xs ->
           Forall (fun le => wc_lexp le ck) les ->
-          wc_equation (EqApp xs ck f les r)
+          In (r, ck) vars ->
+          wc_equation (EqApp xs ck f les (Some r))
     | CEqFby:
         forall x ck v0 le,
           In (x, ck) vars ->
@@ -198,16 +204,16 @@ Module Type NLCLOCKING
     intros env1 env2 Henv eq1 eq2 Heq.
     rewrite Heq; clear Heq.
     split; intro WTeq.
-    - inv WTeq; try rewrite Henv in *; eauto with nlclocking.
-      econstructor;
-      match goal with H:Forall _ ?x |- Forall _ ?x =>
-        apply Forall_impl_In with (2:=H) end;
-        intros; rewrite Henv in *; auto.
-    - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
-      econstructor;
-      match goal with H:Forall _ ?x |- Forall _ ?x =>
-        apply Forall_impl_In with (2:=H) end;
-        intros; rewrite <-Henv in *; auto.
+    - inv WTeq; try rewrite Henv in *; eauto with nlclocking;
+        constructor; auto;
+          match goal with H:Forall _ ?x |- Forall _ ?x =>
+                          apply Forall_impl_In with (2:=H) end;
+          intros; rewrite Henv in *; auto.
+    - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking;
+        constructor; auto;
+          match goal with H:Forall _ ?x |- Forall _ ?x =>
+                          apply Forall_impl_In with (2:=H) end;
+          intros; rewrite <-Henv in *; auto.
   Qed.
 
   (** Properties *)
@@ -228,9 +234,25 @@ Module Type NLCLOCKING
     Proof.
       intros eq x' ck' Hwce Hdef Hhasck Hfree.
       inversion Hwce as [x ck e Hcv Hexp Heq
+                        |xs ck f e Hvars Hexp Heq
                         |xs ck f e r Hvars Hexp Heq
                         |x ck v' e Hcv Hexp].
       - subst eq. inv Hdef. inv Hhasck.
+        pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
+        apply Is_free_in_clock_self_or_parent in Hfree.
+        destruct Hfree as (ck' & b & [Hck|Hck]).
+        + subst ck.
+          apply wc_clock_sub with (1:=Hwc) in Hclock.
+          pose proof (NoDupMembers_det _ _ _ _ Hnd Hcv Hclock) as Hloop.
+          apply clock_no_loops with (1:=Hloop).
+        + apply wc_clock_parent with (1:=Hwc) (2:=Hck) in Hclock.
+          apply wc_clock_sub with (1:=Hwc) in Hclock.
+          rewrite (NoDupMembers_det _ _ _ _ Hnd Hcv Hclock) in *.
+          apply clock_parent_parent' in Hck.
+          apply clock_parent_not_refl with (1:=Hck).
+      - subst eq. rename x' into x. inv Hdef. inv Hhasck.
+        match goal with H:List.In x xs |- _ => rename H into Hin end.
+        pose proof (In_Forall _ _ _ Hvars Hin) as Hcv.
         pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
         apply Is_free_in_clock_self_or_parent in Hfree.
         destruct Hfree as (ck' & b & [Hck|Hck]).

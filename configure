@@ -47,8 +47,8 @@ case $ARCH in
     *)
 esac
 
-sed "s/\(.*\)/-R $compcertdir\/\1 compcert.\1/" < includes > $coqproject
+printf -- "-R . Velus\n" > $coqproject
+sed "s/\(.*\)/-R $compcertdir\/\1 compcert.\1/" < includes >> $coqproject
 printf -- "-R %s compcert.%s\n" "$compcertdir/$ARCH" "$ARCH" >> $coqproject
 printf "%s\n" "$EXCLUDES" | sed "s/\([^ ]*\)/-exclude-dir \1/g" >> $coqproject
-printf -- "-R . Velus\n" >> $coqproject
 cat vfiles >> $coqproject
