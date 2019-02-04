@@ -74,7 +74,7 @@ Module Type NLSYNTAX
                          ~ In out (vars_defined (filter is_fby n_eqs));
         n_nodup : NoDupMembers (n_in ++ n_vars ++ n_out);
         n_good  : Forall ValidId (n_in ++ n_vars ++ n_out)
-                  /\ Forall valid (vars_defined (filter is_app n_eqs))
+                  (* /\ Forall valid (vars_defined (filter is_app n_eqs)) *)
                   /\ valid n_name
       }.
 
@@ -132,6 +132,24 @@ Module Type NLSYNTAX
       apply Permutation_cons_app.
       rewrite Permutation_app_assoc.
       now symmetry.
+  Qed.
+
+  Lemma is_filtered_vars_defined:
+    forall eqs,
+      Permutation
+        (vars_defined (filter is_def eqs) ++ vars_defined (filter is_app eqs) ++ vars_defined (filter is_fby eqs))
+        (vars_defined eqs).
+  Proof.
+    unfold vars_defined, concatMap.
+    induction eqs as [|[] eqs]; simpl; auto.
+    - rewrite Permutation_app_comm, 2 Permutation_app_assoc.
+      apply Permutation_app_head.
+      rewrite <-Permutation_app_assoc, Permutation_app_comm; auto.
+    - symmetry.
+      rewrite <-Permutation_app_assoc.
+      apply Permutation_cons_app.
+      symmetry.
+      rewrite Permutation_app_assoc; auto.
   Qed.
 
   Lemma NoDup_var_defined_n_eqs:

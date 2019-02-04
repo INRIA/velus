@@ -46,10 +46,28 @@ Module Type SBSYNTAX
 
         (* b_ingt0 : 0 < length b_in; *)
         (* b_outgt0 : 0 < length b_out *)
-        b_nodup_lasts: NoDupMembers b_lasts;
-        b_nodup_blocks: NoDupMembers b_blocks;
-        b_blocks_in_eqs: forall f, (exists i, In (i, f) b_blocks) <-> Is_block_in f b_eqs
+        b_nodup : NoDupMembers (b_in ++ b_vars ++ b_out);
+        b_nodup_lasts_blocks: NoDup (map fst b_lasts ++ map fst b_blocks);
+        b_blocks_in_eqs: forall f, (exists i, In (i, f) b_blocks) <-> Is_block_in f b_eqs;
+        b_good: Forall ValidId (b_in ++ b_vars ++ b_out)
+                /\ Forall ValidId b_lasts
+                /\ Forall ValidId b_blocks
+                /\ valid b_name
       }.
+
+  Lemma b_nodup_lasts:
+    forall b, NoDupMembers b.(b_lasts).
+  Proof.
+    intro; pose proof (b_nodup_lasts_blocks b).
+    eapply fst_NoDupMembers, NoDup_app_weaken; eauto.
+  Qed.
+
+  Lemma b_nodup_blocks:
+    forall b, NoDupMembers b.(b_blocks).
+  Proof.
+    intro; pose proof (b_nodup_lasts_blocks b).
+    eapply fst_NoDupMembers, NoDup_app_weaken, NoDup_comm; eauto.
+  Qed.
 
   (* TODO: in Common *)
   (* Fixpoint assoc {A} (x: ident) (xs: list (ident * A)) : option A := *)

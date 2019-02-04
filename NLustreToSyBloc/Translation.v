@@ -622,29 +622,28 @@ Module Type TRANSLATION
        SynSB.b_eqs  := translate_eqns n.(n_eqs)
     |}.
   Next Obligation.
-    rewrite fst_NoDupMembers.
-    rewrite fst_fst_gather_eqs_var_defined.
-    eapply (NoDup_app_weaken _ (vars_defined (filter is_app n.(n_eqs)))).
-    rewrite Permutation_app_comm.
-    eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
-    rewrite Permutation_app_comm.
-    unfold vars_defined, concatMap.
-    rewrite <- 2 concat_app.
-    rewrite <- 2 map_app.
-    rewrite is_filtered_eqs.
-    apply NoDup_var_defined_n_eqs.
+    repeat rewrite <-idty_app. rewrite NoDupMembers_idty.
+    rewrite (Permutation_app_comm n.(n_in)).
+    rewrite Permutation_app_assoc.
+    match goal with |- context [snd (partition ?p ?l)] =>
+                    apply (NoDupMembers_app_r (fst (partition p l))) end.
+    rewrite <-(Permutation_app_assoc (fst _)).
+    rewrite <- (permutation_partition _ n.(n_vars)).
+    rewrite (Permutation_app_comm n.(n_out)), <-Permutation_app_assoc.
+    rewrite (Permutation_app_comm n.(n_vars)), Permutation_app_assoc.
+    apply n.(n_nodup).
   Qed.
   Next Obligation.
-    rewrite fst_NoDupMembers.
+    rewrite fst_fst_gather_eqs_var_defined.
     eapply (NoDup_app_weaken _ (gather_app_vars n.(n_eqs))).
+    rewrite <-app_assoc.
     rewrite fst_snd_gather_eqs_var_defined.
+    rewrite Permutation_app_comm.
     eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
     rewrite Permutation_app_comm.
-    eapply (NoDup_app_weaken _ (vars_defined (filter is_fby n.(n_eqs)))).
     unfold vars_defined, concatMap.
     rewrite <- 2 concat_app.
     rewrite <- 2 map_app.
-    rewrite Permutation_app_assoc.
     rewrite is_filtered_eqs.
     apply NoDup_var_defined_n_eqs.
   Qed.
@@ -690,6 +689,51 @@ Module Type TRANSLATION
     - setoid_rewrite IHl; split; intros ** H.
       + right; auto.
       + inversion_clear H as [?? Hin|]; auto; inv Hin.
+  Qed.
+  Next Obligation.
+    pose proof n.(n_good) as [ValidApp].
+    split; [|split; [|split]]; auto.
+    - repeat rewrite <-idty_app. apply Forall_ValidId_idty.
+      rewrite (Permutation_app_comm n.(n_in)).
+      rewrite Permutation_app_assoc.
+      match goal with |- context [snd (partition ?p ?l)] =>
+                      apply (Forall_app_weaken (fst (partition p l))) end.
+      rewrite <-(Permutation_app_assoc (fst _)).
+      rewrite <- (permutation_partition _ n.(n_vars)).
+      rewrite <-(Permutation_app_assoc n.(n_vars)).
+      rewrite Permutation_app_comm; auto.
+    - pose proof (n_defd n) as Perm.
+      unfold ValidId, NotReserved in *.
+      apply Forall_forall; rewrite Forall_forall in ValidApp.
+      intros ** Hin.
+      apply in_map with (f := fst) in Hin.
+      rewrite fst_fst_gather_eqs_var_defined in Hin.
+      rewrite <-is_filtered_vars_defined in Perm.
+      assert (In (fst x) (vars_defined (filter is_def (n_eqs n)) ++
+                                       vars_defined (filter is_app (n_eqs n)) ++
+                                       vars_defined (filter is_fby (n_eqs n)))) as Hin'
+          by (rewrite 2 in_app; intuition).
+      eapply Permutation_in in Perm; eauto.
+      apply in_map_iff in Perm as (? & E & Perm).
+      rewrite <-E; apply ValidApp.
+      apply in_app; auto.
+    - pose proof (n_defd n) as Perm.
+      unfold ValidId, NotReserved in *.
+      apply Forall_forall; rewrite Forall_forall in ValidApp.
+      intros ** Hin.
+      apply in_map with (f := fst) in Hin.
+      assert (In (fst x) (map fst (snd (gather_eqs (n_eqs n))) ++ gather_app_vars (n_eqs n))) as Hin'
+          by (apply in_app; auto).
+      rewrite fst_snd_gather_eqs_var_defined in Hin'.
+      rewrite <-is_filtered_vars_defined in Perm.
+      assert (In (fst x) (vars_defined (filter is_def (n_eqs n)) ++
+                                       vars_defined (filter is_app (n_eqs n)) ++
+                                       vars_defined (filter is_fby (n_eqs n)))) as Hin''
+          by (rewrite 2 in_app; intuition).
+      eapply Permutation_in in Perm; eauto.
+      apply in_map_iff in Perm as (? & E & Perm).
+      rewrite <-E; apply ValidApp.
+      apply in_app; auto.
   Qed.
   (* Next Obligation. *)
   (*   destruct n; simpl. *)
