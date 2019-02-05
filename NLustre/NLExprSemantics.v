@@ -71,6 +71,13 @@ environment.
           val_to_bool c = Some b ->
           sem_clock_instant (Con ck x (negb b)) false.
 
+    Definition sem_clocked_var_instant (x: ident) (ck: clock) : Prop :=
+      (sem_clock_instant ck true <-> exists c, sem_var_instant x (present c))
+      /\ (sem_clock_instant ck false <-> sem_var_instant x absent).
+
+    Definition sem_clocked_vars_instant (xs: list (ident * clock)) : Prop :=
+      Forall (fun xc => sem_clocked_var_instant (fst xc) (snd xc)) xs.
+
     Inductive sem_lexp_instant: lexp -> value -> Prop:=
     | Sconst:
         forall c v,
@@ -227,6 +234,13 @@ environment.
     Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
       lift' sem_vars_instant x xs.
 
+    Check sem_clocked_vars_instant.
+    Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
+      forall n, sem_clocked_var_instant (bk n) (restr_hist n) x ck.
+
+    Definition sem_clocked_vars (xs: list (ident * clock)) : Prop :=
+      forall n, sem_clocked_vars_instant (bk n) (restr_hist n) xs.
+
     Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
       lift (fun base R => sem_laexp_instant base R ck) e xs.
 
@@ -270,10 +284,10 @@ environment.
       rewrite forallb_forall.
       intros; rewrite Bool.negb_true_iff.
       rewrite not_equiv_decb_equiv.
-      eapply In_Forall in H; eauto.
+      eapply Forall_forall in H; eauto.
     - unfold clock_of' in H.
       rewrite forallb_forall in H.
-      apply all_In_Forall; intros ** Hin E.
+      apply Forall_forall; intros ** Hin E.
       specialize (H _ Hin).
       rewrite Bool.negb_true_iff, not_equiv_decb_equiv in H.
       apply H; eauto.
@@ -726,6 +740,19 @@ need it, takes a base clock value or base clock stream, except
 clock to [sem_var_instant] too. *)
 
   End LiftDeterminism.
+
+  Lemma clock_of_det:
+    forall xss ck1 ck2,
+      clock_of xss ck1 ->
+      clock_of xss ck2 ->
+      forall n, ck2 n = ck1 n.
+  Proof.
+    intros ** Hck1 Hck2 n.
+    specialize (Hck1 n); specialize (Hck2 n).
+    rewrite Hck1 in Hck2; destruct Hck2.
+    destruct ck1, ck2; auto.
+    symmetry; auto.
+  Qed.
 
   Ltac sem_det :=
     match goal with

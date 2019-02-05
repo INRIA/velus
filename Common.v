@@ -63,6 +63,16 @@ Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
 
+Lemma decidable_eq_ident:
+  forall (f g: ident),
+    Decidable.decidable (f = g).
+Proof.
+  intros f g.
+  unfold Decidable.decidable.
+  setoid_rewrite <-ident_eqb_eq.
+  destruct (ident_eqb f g); auto.
+Qed.
+
 Lemma In_dec:
   forall x S, {PS.In x S}+{~PS.In x S}.
 Proof.
@@ -190,14 +200,14 @@ Lemma Forall_cons2:
     List.Forall P (x :: l) <-> P x /\ List.Forall P l.
 Proof. intros; split; inversion_clear 1; auto. Qed.
 
-Lemma all_In_Forall:
-  forall {A} (P: A -> Prop) (xs: list A),
-    (forall x, In x xs -> P x) ->
-    Forall P xs.
-Proof.
-  induction xs; auto.
-  constructor; auto with datatypes.
-Qed.
+(* Lemma all_In_Forall: *)
+(*   forall {A} (P: A -> Prop) (xs: list A), *)
+(*     (forall x, In x xs -> P x) -> *)
+(*     Forall P xs. *)
+(* Proof. *)
+(*   induction xs; auto. *)
+(*   constructor; auto with datatypes. *)
+(* Qed. *)
 
 
 Lemma Some_injection:
@@ -440,103 +450,304 @@ intros A B f l y l' Hmap. destruct l; simpl in Hmap.
 - inversion_clear Hmap. eauto.
 Qed.
 
-Open Scope bool_scope.
+Section Forall2.
 
-Fixpoint forall2b {A B} (f : A -> B -> bool) l1 l2 :=
-  match l1, l2 with
+  Context {A B : Type}.
+
+  Open Scope bool_scope.
+
+  Fixpoint forall2b (f : A -> B -> bool) l1 l2 :=
+    match l1, l2 with
     | nil, nil => true
     | e1 :: l1, e2 :: l2 => f e1 e2 && forall2b f l1 l2
     | _, _ => false
-  end.
+    end.
 
-Lemma Forall2_forall2_eq:
-  forall {A B} (eq_A: A -> A -> Prop) (eq_B: B -> B -> Prop)
-    (eq_A_refl: reflexive A eq_A)
-    (eq_B_refl: reflexive B eq_B)
-    (P: A -> B -> Prop)
-    (P_compat: Proper (eq_A ==> eq_B ==> Basics.impl) P)
-    (l1: list A) (l2: list B),
-    Forall2 P l1 l2
-    <-> length l1 = length l2
-      /\ forall a b n x1 x2,
-        n < length l1 ->
-        eq_A (nth n l1 a) x1 ->
-        eq_B (nth n l2 b) x2 ->
-        P x1 x2.
-Proof.
-  intros. revert l2; induction l1; intro.
-  - split; intro H.
-    + inv H. split; simpl; auto.
-      intros; omega.
-    + destruct H as [H _]. destruct l2; try discriminate; auto.
-  - split; intro H.
-    + inversion_clear H as [|? ? ? ? ? H'].
-      rewrite IHl1 in H'; destruct H' as (? & IH).
-      split; simpl; auto.
-      intros; destruct n.
-      * eapply P_compat; eauto.
-      * eapply IH; eauto; omega.
+  Lemma Forall2_forall2 :
+    forall P l1 l2,
+      Forall2 P l1 l2
+      <-> length l1 = length l2
+          /\ forall (a : A) (b : B) n x1 x2,
+          n < length l1 ->
+          nth n l1 a = x1 ->
+          nth n l2 b = x2 ->
+          P x1 x2.
+  Proof.
+    intros P l1. induction l1; intro l2.
+    * split; intro H.
+    + inversion_clear H. split; simpl; auto. intros. omega.
+    + destruct H as [H _]. destruct l2; try discriminate. constructor.
+      * split; intro H.
+    + inversion_clear H. rewrite IHl1 in H1. destruct H1. split; simpl; auto.
+      intros. destruct n; subst; trivial. eapply H1; eauto. omega.
     + destruct H as [Hlen H].
-      destruct l2; simpl in Hlen; try discriminate.
-      constructor.
-      * apply (H a b 0); simpl; auto; try omega.
-      * rewrite IHl1; split; try omega.
-        intros a' b' **; eapply (H a' b' (S n)); simpl; eauto; omega.
+      destruct l2; simpl in Hlen; try discriminate. constructor.
+      apply (H a b 0); trivial; simpl; try omega.
+      rewrite IHl1. split; try omega.
+      intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
+  Qed.
+
+  Lemma Forall2_forall:
+    forall (P: A -> B -> Prop) xs ys,
+      (forall x y, In (x, y) (combine xs ys) -> P x y) ->
+      length xs = length ys ->
+      Forall2 P xs ys.
+  Proof.
+    intros ** Hin Hlen.
+    apply Forall2_forall2.
+    split; auto.
+    intros x y n x' y' Hnl Hn1 Hn2.
+    apply Hin.
+    subst x' y'. rewrite <-combine_nth with (1:=Hlen).
+    apply nth_In.
+    now rewrite combine_length, <-Hlen, Min.min_idempotent.
+  Qed.
+
+  Lemma Forall2_det : forall (R : A -> B -> Prop),
+      (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
+      forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
+  Proof.
+    intros R HR xs. induction xs as [| x xs]; intros ys1 ys2 Hall1 Hall2.
+    - inversion Hall1. inversion Hall2; reflexivity.
+    - inversion Hall1. inversion Hall2. f_equal; eauto.
+  Qed.
+
+  Lemma Forall2_combine:
+    forall P (xs: list A) (ys: list B),
+      Forall2 P xs ys -> Forall (fun x => P (fst x) (snd x)) (combine xs ys).
+  Proof.
+    intros P xs ys Hfa2.
+    induction Hfa2; now constructor.
+  Qed.
+
+  Lemma Forall2_same:
+    forall P (xs: list A),
+      Forall (fun x => P x x) xs <-> Forall2 P xs xs.
+  Proof.
+    induction xs as [|x xs IH]; split; auto;
+      inversion_clear 1; destruct IH; auto.
+  Qed.
+
+  Lemma Forall2_eq_refl:
+    forall (x: list A), Forall2 eq x x.
+  Proof.
+    induction x; auto.
+  Qed.
+
+  Lemma Forall2_in_left:
+    forall P (xs: list A) (ys: list B) x,
+      Forall2 P xs ys ->
+      In x xs ->
+      exists y, In y ys /\ P x y.
+  Proof.
+    induction 1; simpl. contradiction.
+    destruct 1 as [Heq|Hin].
+    now subst; exists y; auto.
+    apply IHForall2 in Hin. destruct Hin as (y' & Hin & HP).
+    eauto.
+  Qed.
+
+  Lemma Forall2_in_right:
+    forall P (xs: list A) (ys: list B) y,
+      Forall2 P xs ys ->
+      In y ys ->
+      exists x, In x xs /\ P x y.
+  Proof.
+    induction 1; simpl. contradiction.
+    destruct 1 as [Heq|Hin].
+    now subst; exists x; auto.
+    apply IHForall2 in Hin. destruct Hin as (y' & Hin & HP).
+    eauto.
+  Qed.
+
+  Lemma Forall2_chain_In':
+    forall {C} P Q (xs: list A) (ys: list B) (zs: list C) x z,
+      Forall2 P xs ys ->
+      Forall2 Q ys zs ->
+      In (x, z) (combine xs zs) ->
+      exists y, P x y /\ Q y z /\ In (x, y) (combine xs ys)
+                               /\ In (y, z) (combine ys zs).
+  Proof.
+    induction xs as [|x xs IH]; simpl. now intuition.
+    intros ys zs x' z HP HQ Hin.
+    destruct ys as [|y ys]. now inversion HP.
+    destruct zs as [|z' zs]. now inversion HQ.
+    inversion_clear HP. inversion_clear HQ.
+    inversion_clear Hin as [Hin'|Hin'].
+    - inv Hin'. exists y; repeat split; simpl; auto with datatypes.
+    - match goal with Hp:Forall2 P _ _, Hq:Forall2 Q _ _ |- _ =>
+        destruct (IH _ _ _ _ Hp Hq Hin') as (y' & HP & HQ & Hin1 & Hin2) end.
+      exists y'. repeat split; simpl; auto with datatypes.
+  Qed.
+
+  Lemma Forall2_chain_In:
+    forall {C} P Q (xs: list A) (ys: list B) (zs: list C) x z,
+      Forall2 P xs ys ->
+      Forall2 Q ys zs ->
+      In (x, z) (combine xs zs) ->
+      exists y, P x y /\ Q y z.
+  Proof.
+    intros ** HP HQ Hin.
+    destruct (Forall2_chain_In' _ _ _ _ _ _ _ HP HQ Hin)
+      as (y & Hp & Hq & Hin1 & Hin2).
+    eauto.
+  Qed.
+
+  Lemma all_In_Forall2:
+    forall (P: A -> B -> Prop) xs vs,
+      length xs = length vs ->
+      (forall x v, In (x, v) (combine xs vs) -> P x v) ->
+      Forall2 P xs vs.
+  Proof.
+    induction xs as [|x xs IH]; destruct vs as [|v vs];
+      auto; try now inversion 1.
+    inversion 1. intro Hc. constructor.
+    - apply Hc. simpl. auto.
+    - apply IH; auto.
+      intros * Hin. apply Hc. now right.
+  Qed.
+
+  Lemma Forall2_impl_In:
+    forall (P Q: A -> B -> Prop) (l1: list A) (l2: list B),
+      (forall (a: A) (b: B), In a l1 -> In b l2 -> P a b -> Q a b) ->
+      Forall2 P l1 l2 ->
+      Forall2 Q l1 l2.
+  Proof.
+    intros ** HPQ HfaP.
+    induction HfaP; auto.
+    apply Forall2_cons;
+      auto using in_eq, in_cons.
+  Qed.
+
+  Lemma Forall2_swap_args:
+    forall (P: A -> B -> Prop) (xs: list A) (ys: list B),
+      Forall2 P xs ys <-> Forall2 (fun y x => P x y) ys xs.
+  Proof.
+    split; intro HH; induction HH; auto.
+  Qed.
+
+  Lemma Forall2_Forall2:
+    forall (P1: A -> B -> Prop) P2 xs ys,
+      Forall2 P1 xs ys ->
+      Forall2 P2 xs ys ->
+      Forall2 (fun x y => P1 x y /\ P2 x y) xs ys.
+  Proof.
+    intros ** Hfa1 Hfa2.
+    induction Hfa1 as [|x y xs ys H1 Hfa1 IH]; auto.
+    inversion_clear Hfa2. auto.
+  Qed.
+
+  Lemma Forall2_length :
+    forall (P : A -> B -> Prop) l1 l2,
+      Forall2 P l1 l2 -> length l1 = length l2.
+  Proof.
+    induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.
+  Qed.
+
+  Lemma Forall2_eq:
+    forall (xs: list A) ys,
+      Forall2 eq xs ys <-> xs = ys.
+  Proof.
+    split; intro HH.
+    - induction HH; subst; auto.
+    - subst. induction ys; auto.
+  Qed.
+
+  Lemma Forall2_In:
+    forall x v xs vs (P : A -> B -> Prop) ,
+      In (x, v) (combine xs vs) ->
+      Forall2 P xs vs ->
+      P x v.
+  Proof.
+    intros x v xs vs P Hin HP.
+    apply Forall2_combine in HP.
+    rewrite Forall_forall in HP.
+    now apply HP in Hin.
+  Qed.
+
+  Lemma Forall2_left_cons:
+    forall P (x:A) xs (ys : list B),
+      Forall2 P (x::xs) ys ->
+      exists y ys', ys = y::ys' /\ P x y /\ Forall2 P xs ys'.
+  Proof.
+    inversion_clear 1; eauto.
+  Qed.
+
+  Lemma Forall2_right_cons:
+    forall P (xs: list A) (y: B) ys,
+      Forall2 P xs (y::ys) ->
+      exists x xs', xs = x::xs' /\ P x y /\ Forall2 P xs' ys.
+  Proof.
+    inversion_clear 1; eauto.
+  Qed.
+
+  Lemma Forall2_Forall2_exists:
+    forall {C} P Q (xs: list A) (ys: list B),
+      Forall2 (fun x y=> exists z, P x z /\ Q y z) xs ys ->
+      exists (zs: list C), Forall2 P xs zs /\ Forall2 Q ys zs.
+  Proof.
+    intros ** Hfa.
+    induction Hfa; eauto.
+    destruct IHHfa as (zs & HPs & HQs).
+    destruct H as (z & HP & HQ).
+    exists (z::zs); eauto.
+  Qed.
+
+End Forall2.
+
+Lemma Forall2_trans_ex:
+  forall {A B C} (P: A -> B -> Prop) Q xs ys (zs: list C),
+    Forall2 P xs ys ->
+    Forall2 Q ys zs ->
+    Forall2 (fun x z => exists y, In y ys /\ P x y /\ Q y z) xs zs.
+Proof.
+  intros ** HPs HQs'.
+  revert zs HQs'.
+  induction HPs. now inversion 1; auto.
+  inversion_clear 1 as [|? ? ? zs' HQ HQs].
+  apply IHHPs in HQs.
+  constructor; eauto with datatypes.
+  apply Forall2_impl_In with (2:=HQs).
+  intros ** (? & ? & ? & ?).
+  eauto with datatypes.
 Qed.
 
-Lemma Forall2_forall2 :
-  forall {A B : Type} P l1 l2,
-    Forall2 P l1 l2
-    <-> length l1 = length l2
-        /\ forall (a : A) (b : B) n x1 x2,
-             n < length l1 ->
-             nth n l1 a = x1 ->
-             nth n l2 b = x2 ->
-             P x1 x2.
+Lemma Forall2_map_1:
+  forall {A B C} P (f: A -> C) (xs: list A) (ys: list B),
+    Forall2 P (map f xs) ys <-> Forall2 (fun x=>P (f x)) xs ys.
 Proof.
-  intros; apply (Forall2_forall2_eq _ _ (@eq_refl A) (@eq_refl B)).
-  solve_proper.
+  induction xs as [|x xs]; destruct ys as [|y ys];
+    try (now split; inversion 1; constructor).
+  split; intro HH.
+  - inversion_clear HH.
+    apply Forall2_cons; auto.
+    apply IHxs; auto.
+  - inversion_clear HH.
+    apply Forall2_cons; auto.
+    apply IHxs; auto.
 Qed.
 
-Lemma Forall2_forall:
-  forall {A B} (P: A -> B -> Prop) xs ys,
-    (forall x y, In (x, y) (combine xs ys) -> P x y) ->
-    length xs = length ys ->
-    Forall2 P xs ys.
+Lemma Forall2_map_2:
+  forall {A B C} P (f: B -> C) (xs: list A) (ys: list B),
+    Forall2 P xs (map f ys) <-> Forall2 (fun x y=>P x (f y)) xs ys.
 Proof.
-  intros ** Hin Hlen.
-  apply Forall2_forall2.
-  split; auto.
-  intros x y n x' y' Hnl Hn1 Hn2.
-  apply Hin.
-  subst x' y'. rewrite <-combine_nth with (1:=Hlen).
-  apply nth_In.
-  now rewrite combine_length, <-Hlen, Min.min_idempotent.
+  intros.
+  now rewrite Forall2_swap_args, Forall2_map_1, Forall2_swap_args.
 Qed.
 
-Lemma Forall2_det : forall {A B : Type} (R : A -> B -> Prop),
-  (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
-  forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
+(* Show a predicate of two lists by "folding right" progressively. *)
+Lemma forall2_right:
+  forall {A B : Type} (P : list A -> list B -> Prop),
+    P [] [] ->
+    (forall x y xs' ys',
+        P xs' ys' ->
+        P (x::xs') (y::ys')) ->
+    forall xs ys,
+      length xs = length ys ->
+      P xs ys.
 Proof.
-intros A B R HR xs. induction xs as [| x xs]; intros ys1 ys2 Hall1 Hall2.
-- inversion Hall1. inversion Hall2; reflexivity.
-- inversion Hall1. inversion Hall2. f_equal; eauto.
-Qed.
-
-Lemma Forall2_combine:
-  forall {A B} P (xs: list A) (ys: list B),
-    Forall2 P xs ys -> Forall (fun x => P (fst x) (snd x)) (combine xs ys).
-Proof.
-  intros A B P xs ys Hfa2.
-  induction Hfa2; now constructor.
-Qed.
-
-Lemma Forall2_same:
-  forall {A} P (xs: list A),
-    Forall (fun x => P x x) xs <-> Forall2 P xs xs.
-Proof.
-  induction xs as [|x xs IH]; split; auto;
-    inversion_clear 1; destruct IH; auto.
+  intros A B P Pnil HH.
+  induction xs, ys; auto; discriminate.
 Qed.
 
 Section Forall3.
@@ -1251,15 +1462,15 @@ Section Lists.
       + right; now apply IHl1.
   Qed.
 
-  Remark In_Forall:
-    forall (x: A) xs P,
-      Forall P xs ->
-      In x xs ->
-      P x.
-  Proof.
-    intros ** Hforall Hin.
-    induction xs; inversion Hin; inversion Hforall; subst; auto.
-  Qed.
+  (* Remark In_Forall: *)
+  (*   forall (x: A) xs P, *)
+  (*     Forall P xs -> *)
+  (*     In x xs -> *)
+  (*     P x. *)
+  (* Proof. *)
+  (*   intros ** Hforall Hin. *)
+  (*   induction xs; inversion Hin; inversion Hforall; subst; auto. *)
+  (* Qed. *)
 
   Lemma map_cons (x:A)(l:list A) (f: A -> B) : map f (x::l) = (f x) :: (map f l).
   Proof.
@@ -1391,13 +1602,6 @@ Section Lists.
     intros; f_equal; apply IHxs.
   Qed.
 
-  Lemma Forall2_length :
-    forall (P : A -> B -> Prop) l1 l2,
-      Forall2 P l1 l2 -> length l1 = length l2.
-  Proof.
-    induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.
-  Qed.
-
   (* should be in standard lib... *)
   Lemma not_in_cons (x a : A) (l : list A):
     ~ In x (a :: l) <-> x <> a /\ ~ In x l.
@@ -1428,25 +1632,6 @@ Section Lists.
     intros H HP.
     inversion_clear HP.
     auto using in_eq, in_cons.
-  Qed.
-
-  Lemma Forall2_impl_In:
-    forall (P Q: A -> B -> Prop) (l1: list A) (l2: list B),
-      (forall (a: A) (b: B), In a l1 -> In b l2 -> P a b -> Q a b) ->
-      Forall2 P l1 l2 ->
-      Forall2 Q l1 l2.
-  Proof.
-    intros ** HPQ HfaP.
-    induction HfaP; auto.
-    apply Forall2_cons;
-      auto using in_eq, in_cons.
-  Qed.
-
-  Lemma Forall2_swap_args:
-    forall (P: A -> B -> Prop) (xs: list A) (ys: list B),
-      Forall2 P xs ys <-> Forall2 (fun y x => P x y) ys xs.
-  Proof.
-    split; intro HH; induction HH; auto.
   Qed.
 
   Lemma NoDup_map_inv (f:A->B) l : NoDup (map f l) -> NoDup l.
@@ -2079,39 +2264,6 @@ Section Lists.
 
 End Lists.
 
-Lemma Forall2_map_1:
-  forall {A B C} P (f: A -> C) (xs: list A) (ys: list B),
-    Forall2 P (map f xs) ys <-> Forall2 (fun x=>P (f x)) xs ys.
-Proof.
-  induction xs as [|x xs]; destruct ys as [|y ys];
-    try (now split; inversion 1; constructor).
-  rewrite map_cons.
-  split; intro HH.
-  - inversion_clear HH.
-    apply Forall2_cons; auto.
-    apply IHxs; auto.
-  - inversion_clear HH.
-    apply Forall2_cons; auto.
-    apply IHxs; auto.
-Qed.
-
-Lemma Forall2_map_2:
-  forall {A B C} P (f: B -> C) (xs: list A) (ys: list B),
-    Forall2 P xs (map f ys) <-> Forall2 (fun x y=>P x (f y)) xs ys.
-Proof.
-  intros.
-  now rewrite Forall2_swap_args, Forall2_map_1, Forall2_swap_args.
-Qed.
-
-Lemma Forall2_eq:
-  forall {A} (xs: list A) ys,
-    Forall2 eq xs ys <-> xs = ys.
-Proof.
-  split; intro HH.
-  - induction HH; subst; auto.
-  - subst. induction ys; auto.
-Qed.
-
 Lemma Forall_Forall2:
   forall {A B} (P: A -> Prop) (Q: B -> Prop) xs ys,
     Forall P xs ->
@@ -2122,20 +2274,8 @@ Proof.
   intros ** HfP HfQ Hlen.
   apply Forall2_forall with (2:=Hlen).
   intros x y Hin.
-  split; eauto using (In_Forall _ _ _ HfP), (In_Forall _ _ _ HfQ),
-         in_combine_l, in_combine_r.
-Qed.
-
-Lemma Forall2_In:
-  forall {A B} x v xs vs (P : A -> B -> Prop) ,
-    In (x, v) (combine xs vs) ->
-    Forall2 P xs vs ->
-    P x v.
-Proof.
-  intros A B x v xs vs P Hin HP.
-  apply Forall2_combine in HP.
-  rewrite Forall_forall in HP.
-  now apply HP in Hin.
+  rewrite Forall_forall in HfP, HfQ.
+  split; eauto using in_combine_l, in_combine_r.
 Qed.
 
 Lemma find_weak_spec:

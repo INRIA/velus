@@ -438,6 +438,43 @@ Module Type ISDEFINED
     apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup) Hin).
   Qed.
 
+  Lemma Is_defined_in_eqs_In:
+    forall x eqs,
+      Is_defined_in_eqs x eqs ->
+      exists eq, In eq eqs /\ Is_defined_in_eq x eq.
+  Proof.
+    induction eqs as [|eq]. now inversion 1.
+    inversion_clear 1 as [? ? Hdef|? ? Hex].
+    - exists eq; split; auto with datatypes.
+    - apply Exists_exists in Hex as (eq' & Hin & Hdef).
+      exists eq'; split; auto with datatypes.
+  Qed.
+
+
+  Lemma node_output_defined_in_eqs:
+    forall n x,
+      In x (map fst n.(n_out)) ->
+      Is_defined_in_eqs x n.(n_eqs).
+  Proof.
+    intros n x Ho.
+    cut (In x (map fst (n.(n_vars) ++ n.(n_out)))).
+    - intro Hvo. rewrite <-n_defd in Hvo.
+      now apply Is_defined_in_var_defined.
+    - rewrite map_app. apply in_or_app. now right.
+  Qed.
+
+  Lemma node_variable_defined_in_eqs:
+    forall n x,
+      In x (map fst n.(n_vars)) ->
+      Is_defined_in_eqs x n.(n_eqs).
+  Proof.
+    intros n x Ho.
+    cut (In x (map fst (n.(n_vars) ++ n.(n_out)))).
+    - intro Hvo. rewrite <-n_defd in Hvo.
+      now apply Is_defined_in_var_defined.
+    - rewrite map_app. apply in_or_app. now left.
+  Qed.
+
 End ISDEFINED.
 
 Module IsDefinedFun

@@ -17,13 +17,12 @@ Require Import Velus.NLustre.MemSemantics.
 Require Import Velus.SyBloc.SBSemantics.
 Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
-(* Require Import Velus.NLustre.NLInterpretor. *)
-(* Require Import Velus.NLustre.WellFormed. *)
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.NoDup.
 Require Import Velus.NLustre.NLClocking.
+Require Import Velus.NLustre.NLClockingSemantics.
 
 Require Import List.
 Import List.ListNotations.
@@ -32,344 +31,29 @@ Open Scope list.
 Open Scope nat.
 
 Module Type CORRECTNESS
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX     Op)
-       (Import Clks    : CLOCKS          Ids)
-       (Import ExprSyn : NLEXPRSYNTAX        Op)
-       (Import SynNL   : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (Import SynSB          : SBSYNTAX        Ids Op       Clks ExprSyn)
-       (Import Str     : STREAM              Op OpAux)
-       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn SynNL)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn             Str)
-       (Import SemNL   : NLSEMANTICS     Ids Op OpAux Clks ExprSyn SynNL       Str Ord                     ExprSem)
-       (Import SemSB          : SBSEMANTICS     Ids Op OpAux Clks ExprSyn       SynSB Str                         ExprSem)
-       (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn SynNL)
-       (Import Trans   : TRANSLATION     Ids Op       Clks ExprSyn SynNL SynSB         Mem)
-       (* (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn             Str                         ExprSem) *)
-       (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn SynNL               Mem)
-       (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn SynNL               Mem IsD)
-       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn SynNL)
-       (Import NoD     : NODUP           Ids Op       Clks ExprSyn SynNL               Mem IsD IsV)
-       (* (Import WeF     : WELLFORMED      Ids Op       Clks ExprSyn SynNL           Ord Mem IsD IsV IsF NoD) *)
-       (Import MemSem  : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn SynNL       Str Ord                     ExprSem SemNL Mem IsD IsV IsF NoD)
-       (Import NLClk   : NLCLOCKING      Ids Op       Clks ExprSyn SynNL                                                 Mem IsD     IsF).
+       (Import Ids      : IDS)
+       (Import Op       : OPERATORS)
+       (Import OpAux    : OPERATORS_AUX           Op)
+       (Import Clks     : CLOCKS              Ids)
+       (Import ExprSyn  : NLEXPRSYNTAX            Op)
+       (Import SynNL    : NLSYNTAX            Ids Op       Clks ExprSyn)
+       (Import SynSB    : SBSYNTAX            Ids Op       Clks ExprSyn)
+       (Import Str      : STREAM                  Op OpAux)
+       (Import Ord      : ORDERED             Ids Op       Clks ExprSyn SynNL)
+       (Import ExprSem  : NLEXPRSEMANTICS     Ids Op OpAux Clks ExprSyn             Str)
+       (Import SemNL    : NLSEMANTICS         Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem)
+       (Import SemSB    : SBSEMANTICS         Ids Op OpAux Clks ExprSyn       SynSB Str     ExprSem)
+       (Import Mem      : MEMORIES            Ids Op       Clks ExprSyn SynNL)
+       (Import Trans    : TRANSLATION         Ids Op       Clks ExprSyn SynNL SynSB                       Mem)
+       (Import IsD      : ISDEFINED           Ids Op       Clks ExprSyn SynNL                             Mem)
+       (Import IsV      : ISVARIABLE          Ids Op       Clks ExprSyn SynNL                             Mem IsD)
+       (Import IsF      : ISFREE              Ids Op       Clks ExprSyn SynNL)
+       (Import NoD      : NODUP               Ids Op       Clks ExprSyn SynNL                             Mem IsD IsV)
+       (Import MemSem   : MEMSEMANTICS        Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem SemNL Mem IsD IsV IsF NoD)
+       (Import NLClk    : NLCLOCKING          Ids Op       Clks ExprSyn SynNL           Ord               Mem IsD     IsF)
+       (Import NLClkSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem SemNL Mem IsD     IsF     NLClk).
 
-  (* Inductive inst_in_eq: ident -> SynSB.equation -> Prop := *)
-  (* | InstInEqReset: *)
-  (*     forall x ck m r, *)
-  (*       inst_in_eq x (SynSB.EqReset ck m x r) *)
-  (* | InstInEqCall: *)
-  (*     forall x xs ck m es, *)
-  (*       inst_in_eq x (SynSB.EqCall xs ck m x es). *)
-
-  (* Definition inst_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop := *)
-  (*   List.Exists (inst_in_eq x) eqs. *)
-
-  Inductive well_formed_app_eq: SynNL.equation -> Prop :=
-  | wfa_EqDef:
-      forall x ck e,
-        well_formed_app_eq (SynNL.EqDef x ck e)
-  | wfa_EqFby:
-      forall x ck v0 e,
-        well_formed_app_eq (EqFby x ck v0 e)
-  | wfa_EqApp:
-      forall xs ck f es r,
-        0 < length xs ->
-        well_formed_app_eq (EqApp xs ck f es r).
-
-  Definition well_formed_app := Forall well_formed_app_eq.
-
-  (* Lemma sem_equations_well_formed_app: *)
-  (*   forall P bk H M eqs, *)
-  (*     Forall (SemSB.sem_equation P bk H M) (translate_eqns eqs) -> *)
-  (*     well_formed_app eqs. *)
-  (* Proof. *)
-  (*   unfold translate_eqns, concatMap. *)
-  (*   induction eqs as [|eq]; simpl; intros ** Sem; constructor. *)
-  (*   - destruct eq; try destruct o as [()|]; constructor; *)
-  (*       simpl in Sem; inversion_clear Sem as [|?? Sem' Sem'']. *)
-  (*     + inversion_clear Sem'' as [|?? Sem]. *)
-  (*       eapply SemSB.sem_EqCall_gt0; eauto. *)
-  (*     + eapply SemSB.sem_EqCall_gt0; eauto. *)
-  (*   - apply Forall_app in Sem as (); apply IHeqs; auto. *)
-  (* Qed. *)
-
-  Lemma nl_sem_equations_well_formed_app:
-    forall G bk H eqs,
-      Forall (SemNL.sem_equation G bk H) eqs ->
-      well_formed_app eqs.
-  Proof.
-    induction eqs as [|eq]; simpl; inversion_clear 1; constructor; auto.
-    - destruct eq; try destruct o as [()|]; constructor;
-        eapply sem_EqApp_gt0; eauto.
-    - apply IHeqs; auto.
-  Qed.
-
-  (* Lemma inst_in_Is_defined_in_eqs: *)
-  (*   forall xs eqs, *)
-  (*     well_formed_app eqs -> *)
-  (*     inst_in_eqs (hd default xs) (translate_eqns eqs) -> *)
-  (*     Is_defined_in_eqs (hd default xs) eqs. *)
-  (* Proof. *)
-  (*   intros ** Wfa In. *)
-  (*   unfold translate_eqns, concatMap in In. *)
-  (*   induction eqs as [|eq]; simpl in *; *)
-  (*     inversion_clear Wfa as [|?? Wfa_eq]. *)
-  (*   - inv In. *)
-  (*   - apply Exists_app' in In as [E|E]. *)
-  (*     + left. *)
-  (*       destruct eq; try destruct o as [()|]; simpl in *; inv Wfa_eq; *)
-  (*         inversion_clear E as [?? Def|?? Nil]; *)
-  (*         try inversion_clear Nil as [?? Def|?? Nil']; *)
-  (*         try inv Def; try inv Nil'; match goal with H: hd _ _ = hd _ _ |- _ => rewrite H end; *)
-  (*           eapply Is_defined_in_EqApp; eauto. *)
-  (*     + right; apply IHeqs; auto. *)
-  (* Qed. *)
-
-  (* Lemma not_inst_in_eqs_cons: *)
-  (*   forall x eq eqs, *)
-  (*     ~ inst_in_eqs x (eq :: eqs) *)
-  (*     <-> ~ inst_in_eq x eq /\ ~ inst_in_eqs x eqs. *)
-  (* Proof. *)
-  (*   split. *)
-  (*   - intro Hndef; split; intro; *)
-  (*       eapply Hndef; constructor (assumption). *)
-  (*   - intros [? ?] Hdef_all. *)
-  (*     inv Hdef_all; eauto. *)
-  (* Qed. *)
-
-  (* Lemma not_inst_in_eqs_app: *)
-  (*   forall eqs eqs' x, *)
-  (*     ~ inst_in_eqs x (eqs ++ eqs') -> *)
-  (*     ~ inst_in_eqs x eqs /\ ~ inst_in_eqs x eqs'. *)
-  (* Proof. *)
-  (*   unfold inst_in_eqs. *)
-  (*   intros * Nd. *)
-  (*   split; intro; apply Nd. *)
-  (*   - now apply Exists_app_l. *)
-  (*   - now apply Exists_app. *)
-  (* Qed. *)
-
-  (* Lemma mfby_add_inst: *)
-  (*   forall i v0 ls M xs x M', *)
-  (*     SemSB.mfby i v0 ls M xs -> *)
-  (*     SemSB.mfby i v0 ls (add_inst x M' M) xs. *)
-  (* Proof. *)
-  (*   inversion_clear 1. *)
-  (*   econstructor; eauto. *)
-  (* Qed. *)
-  (* Hint Resolve mfby_add_inst. *)
-
-  (* Lemma mfby_add_val: *)
-  (*   forall i v0 ls M xs x mv, *)
-  (*     i <> x -> *)
-  (*     SemSB.mfby i v0 ls M xs -> *)
-  (*     SemSB.mfby i v0 ls (add_val x mv M) xs. *)
-  (* Proof. *)
-  (*   inversion_clear 2. *)
-  (*   econstructor; eauto. *)
-  (*   rewrite find_val_gso; auto. *)
-  (* Qed. *)
-
-  (* Inductive defined_in_eq: ident -> SynSB.equation -> Prop := *)
-  (* | DefEqDef: *)
-  (*     forall x ck e, *)
-  (*       defined_in_eq x (SynSB.EqDef x ck e) *)
-  (* | DefEqFby: *)
-  (*     forall x ck v e, *)
-  (*       defined_in_eq x (SynSB.EqFby x ck v e) *)
-  (* | DefEqCall: *)
-  (*     forall x xs ck b o es, *)
-  (*       In x xs -> *)
-  (*       defined_in_eq x (SynSB.EqCall xs ck b o es). *)
-
-  (* Definition defined_in_eqs (x: ident) (eqs: list SynSB.equation) : Prop := *)
-  (*   List.Exists (defined_in_eq x) eqs. *)
-
-  (* Lemma defined_in_Is_defined_in_eqs: *)
-  (*   forall x eqs, *)
-  (*     defined_in_eqs x (translate_eqns eqs) -> *)
-  (*     Is_defined_in_eqs x eqs. *)
-  (* Proof. *)
-  (*   intros ** Def. *)
-  (*   induction eqs as [|eq]. *)
-  (*   - inv Def. *)
-  (*   - unfold translate_eqns, concatMap in Def; simpl in Def. *)
-  (*     apply Exists_app' in Def; destruct Def as [E|E]. *)
-  (*     + left. *)
-  (*       destruct eq; try destruct o as [()|]; simpl in E; *)
-  (*         inversion_clear E as [?? Def|?? Nil]; *)
-  (*         try inversion_clear Nil as [?? Def|?? Nil']; *)
-  (*         try inv Def; try inv Nil'; constructor; auto. *)
-  (*     + right; apply IHeqs; auto. *)
-  (* Qed. *)
-
-  (* Lemma not_defined_in_eqs_cons: *)
-  (*   forall x eq eqs, *)
-  (*     ~ defined_in_eqs x (eq :: eqs) *)
-  (*     <-> ~ defined_in_eq x eq /\ ~ defined_in_eqs x eqs. *)
-  (* Proof. *)
-  (*   split. *)
-  (*   - intro Hndef; split; intro; *)
-  (*       eapply Hndef; constructor(assumption). *)
-  (*   - intros [? ?] Hdef_all; inv Hdef_all; eauto. *)
-  (* Qed. *)
-
-  (* Lemma not_defined_in_eqs_app: *)
-  (*   forall eqs eqs' x, *)
-  (*     ~ defined_in_eqs x (eqs ++ eqs') -> *)
-  (*     ~ defined_in_eqs x eqs /\ ~ defined_in_eqs x eqs'. *)
-  (* Proof. *)
-  (*   unfold defined_in_eqs. *)
-  (*   intros * Nd. *)
-  (*   split; intro; apply Nd. *)
-  (*   - now apply Exists_app_l. *)
-  (*   - now apply Exists_app. *)
-  (* Qed. *)
-
-  (* Inductive compat_eq: equation -> list SynSB.equation -> Prop := *)
-  (* | CompatEqDef: *)
-  (*     forall x ck e eqs, *)
-  (*       compat_eq (EqDef x ck e) eqs *)
-  (* | CompatEqFby: *)
-  (*     forall x ck c0 e eqs, *)
-  (*       ~ defined_in_eqs x eqs -> *)
-  (*       compat_eq (EqFby x ck c0 e) eqs *)
-  (* | CompatEqApp: *)
-  (*     forall xs ck f es r eqs, *)
-  (*       ~ inst_in_eqs (hd default xs) eqs -> *)
-  (*       compat_eq (EqApp xs ck f es r) eqs. *)
-
-  (* Inductive compat_eqs: list equation -> Prop := *)
-  (* | CompatNil: *)
-  (*     compat_eqs [] *)
-  (* | CompatCons: *)
-  (*     forall eq eqs, *)
-  (*       compat_eqs eqs -> *)
-  (*       compat_eq eq (translate_eqns eqs) -> *)
-  (*       compat_eqs (eq :: eqs). *)
-
-  (* Lemma Is_well_sch_compat: *)
-  (*   forall n mems, *)
-  (*     well_formed_app (n_eqs n) -> *)
-  (*     Is_well_sch mems (map fst (n_in n)) (n_eqs n) -> *)
-  (*     compat_eqs (n_eqs n). *)
-  (* Proof. *)
-  (*   intros ** Wfa WSCH. *)
-  (*   induction (n_eqs n) as [|eq]; *)
-  (*     inversion_clear Wfa as [|?? Wfa_eq]; inversion_clear WSCH as [|???? NotDef]; *)
-  (*       constructor; auto. *)
-  (*   destruct eq; inv Wfa_eq; constructor. *)
-  (*   - intro E; apply (NotDef (hd default i)). *)
-  (*     + eapply Is_defined_in_EqApp; eauto. *)
-  (*     + eapply inst_in_Is_defined_in_eqs; eauto. *)
-  (*   - intro E; eapply NotDef; try constructor. *)
-  (*     now apply defined_in_Is_defined_in_eqs. *)
-  (* Qed. *)
-
-  (* Inductive is_block_in_eq: ident -> SynSB.equation -> Prop := *)
-  (*   IBI: *)
-  (*     forall xs ck b i es, *)
-  (*       is_block_in_eq b (SynSB.EqCall xs ck b i es). *)
-
-  (* Definition is_block_in (b: ident) (eqs: list SynSB.equation) : Prop := *)
-  (*   Exists (is_block_in_eq b) eqs. *)
-
-  (* Lemma not_is_block_in_cons: *)
-  (*   forall b eq eqs, *)
-  (*     ~ is_block_in b (eq :: eqs) <-> ~ is_block_in_eq b eq /\ ~ is_block_in b eqs. *)
-  (* Proof. *)
-  (*   intros. *)
-  (*   split; intro HH. *)
-  (*   - split; intro; apply HH; unfold is_block_in; intuition. *)
-  (*   - destruct HH; inversion_clear 1; intuition. *)
-  (* Qed. *)
-
-  (* Lemma is_block_in_Forall: *)
-  (*   forall b eqs, *)
-  (*     ~ is_block_in b eqs <-> Forall (fun eq => ~ is_block_in_eq b eq) eqs. *)
-  (* Proof. *)
-  (*   induction eqs as [|eq eqs IH]; *)
-  (*     [split; [now constructor|now inversion 2]|]. *)
-  (*   split; intro HH. *)
-  (*   - apply not_is_block_in_cons in HH. *)
-  (*     destruct HH as [Heq Heqs]. *)
-  (*     constructor; [exact Heq|apply IH with (1:=Heqs)]. *)
-  (*   - apply not_is_block_in_cons. *)
-  (*     inversion_clear HH as [|? ? Heq Heqs]. *)
-  (*     apply IH in Heqs. *)
-  (*     intuition. *)
-  (* Qed. *)
-
-  (* Lemma is_block_is_node: *)
-  (*   forall f eqs, *)
-  (*     Is_node_in f eqs <-> is_block_in f (translate_eqns eqs). *)
-  (* Proof. *)
-  (*   induction eqs; split; inversion 1 as [?? InEq E|??? E]. *)
-  (*   - inv InEq. *)
-  (*     unfold translate_eqns, concatMap; simpl. *)
-  (*     destruct r as [()|]. *)
-  (*     + right; left; econstructor. *)
-  (*     + left; constructor. *)
-  (*   - unfold translate_eqns, concatMap; simpl. *)
-  (*     apply Exists_app; rewrite <-IHeqs; auto. *)
-  (*   - inv InEq. *)
-  (*     unfold translate_eqns, concatMap in E; simpl in E. *)
-  (*     destruct a; try destruct o as [()|]; simpl in E; inv E. *)
-  (*     left; constructor. *)
-  (*   - unfold translate_eqns, concatMap in H; simpl in H. *)
-  (*     apply Exists_app' in H as [E'|E']. *)
-  (*     + left. *)
-  (*       destruct a; try destruct o as [()|]; simpl in E'; *)
-  (*         inversion_clear E' as [?? Def|?? Nil]; *)
-  (*         try inversion_clear Nil as [?? Def|?? Nil']; *)
-  (*         try inv Def; try inv Nil'; constructor. *)
-  (*     + right; rewrite IHeqs; auto. *)
-  (* Qed. *)
-
-  Definition coherent_msem_state_instant (R: env) (M: memory val) : Prop :=
-    forall x v v',
-      find_val x M = Some v ->
-      Env.find x R = Some (present v') ->
-      v' = v.
-
-  (* Definition compat_state_instant (R: env) (M: memory val) (R': SemSB.env) (S: SemSB.state) : Prop := *)
-  (*   forall x v, *)
-  (*     PM.find x R = Some v -> *)
-  (*     match find_val x M with *)
-  (*       | Some v => find_val x S = Some v *)
-  (*       | None => PM.find x R' = Some v *)
-  (*     end. *)
-
-  (* Definition coherent_msem_state (R: history) (M: memories) : Prop := *)
-  (*   forall n, coherent_msem_state_instant (restr_hist R n) (M n). *)
-
-  (* Definition compat_state (H: history) (M: memories) (H': stream SemSB.env) (E: stream SemSB.state) : Prop := *)
-  (*   forall n, compat_state_instant (restr_hist H n) (M n) (H' n) (E n). *)
-
-  (* Definition lasts_spec_instant (lasts: Env.t const) (M: memory val) : Prop := *)
-  (*   forall x, *)
-  (*     if Env.mem x lasts then find_val x M <> None else find_val x M = None. *)
-
-  (* Definition lasts_spec (lasts: Env.t const) (M: memories) : Prop := *)
-  (*   forall n, lasts_spec_instant lasts (M n). *)
-
-  (* Lemma compat_hist_spec: *)
-  (*   forall H lasts H' E, *)
-  (*     compat_hist H lasts H' E -> *)
-  (*     forall n, compat_env (restr_hist H n) lasts (SemSB.restr_hist H' n) (SemSB.restr_evol E n). *)
-  (* Proof. *)
-  (*   unfold compat_hist; intros ** CompatEnv n x v Find. *)
-  (*   unfold restr_hist, PM.map in Find; rewrite PM.gmapi in Find. *)
-  (*   destruct (PM.find x H) eqn: Find'; inv Find. *)
-  (*   apply CompatEnv in Find'. *)
-  (*   (* destruct (Env.mem x lasts). *) *)
-  (*   (* - unfold SemSB.restr_evol; rewrite find_val_mmap, Find'; auto. *) *)
-  (*   - unfold SemSB.restr_hist, PM.map; simpl; rewrite PM.gmapi, Find'; auto. *)
-  (* Qed. *)
-
-Lemma In_snd_gather_eqs_Is_node_in:
+  Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
       In (i, f) (snd (gather_eqs eqs)) ->
       Is_node_in f eqs.
@@ -488,7 +172,7 @@ Lemma In_snd_gather_eqs_Is_node_in:
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins ???? Heqs].
+    inversion_clear Hsem' as [???????? Clock Hfind Ins ????? Heqs].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
@@ -789,7 +473,7 @@ Lemma In_snd_gather_eqs_Is_node_in:
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord Hsem n.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ??? Heqs].
+    inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ???? Heqs].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.

@@ -361,7 +361,7 @@ Module Type SBSEMANTICS
         pose proof Ord as Ord'.
         rewrite app_comm_cons in Ord.
         apply Ordered_blocks_split in Ord.
-        eapply In_Forall in Ord as (?&?&? & Find); eauto; simpl in Find.
+        eapply Forall_forall in Ord as (?&?&? & Find); eauto; simpl in Find.
         apply Ordered_blocks_nodup in Ord'; simpl in Ord'.
         inversion_clear Ord' as [|?? NotIn].
         pose proof Find as Find''.
@@ -380,7 +380,7 @@ Module Type SBSEMANTICS
         apply find_block_split in Find as (? & Eq).
         rewrite Eq in Ord; pose proof Ord as Ord'; rewrite app_comm_cons in Ord.
         apply Ordered_blocks_split in Ord.
-        eapply In_Forall in Ord as (?&?&?& Find); eauto; simpl in Find.
+        eapply Forall_forall in Ord as (?&?&?& Find); eauto; simpl in Find.
         pose proof Find as Find''.
         apply find_block_name in Find.
         apply find_block_In in Find''.
@@ -496,11 +496,11 @@ Module Type SBSEMANTICS
     apply Ordered_blocks_split in Hord.
     pose proof (b_blocks_in_eqs bl') as BlocksIn.
     apply BlocksIn in Hini as (? & Hin).
-    eapply In_Forall in Hin; eauto; destruct Hin as (?&(?&?& Find)); simpl in Find.
+    eapply Forall_forall in Hin; eauto; destruct Hin as (?&(?&?& Find)); simpl in Find.
     apply Forall_app_weaken in Hnin; inversion_clear Hnin as [|??? Hnin'].
     pose proof Find as Find'; apply find_block_name in Find'.
     apply find_block_In in Find.
-    eapply In_Forall in Find; eauto.
+    eapply Forall_forall in Find; eauto.
     congruence.
   Qed.
 
@@ -515,7 +515,7 @@ Module Type SBSEMANTICS
     apply Ordered_blocks_split in Hord.
     pose proof (b_blocks_in_eqs bl) as BlocksIn.
     apply BlocksIn in Hini as (? & Hin).
-    eapply In_Forall in Hin; eauto; destruct Hin as (Eq &?); auto.
+    eapply Forall_forall in Hin; eauto; destruct Hin as (Eq &?); auto.
   Qed.
 
   Lemma sem_block_cons2:

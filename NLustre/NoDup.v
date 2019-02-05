@@ -149,7 +149,7 @@ Module Type NODUP
       + constructor; auto.
         intros x Hin Hdef.
         simpl in *.
-        apply In_Forall with (1:=Hni) in Hin.
+        eapply Forall_forall in Hin; eauto.
         apply Hin.
         now apply Is_defined_in_vars_defined.
       + constructor; auto.

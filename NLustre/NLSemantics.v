@@ -106,6 +106,7 @@ Module Type NLSEMANTICS
                (*  * output clock matches input clock *)
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
                (* XXX: END *)
+               sem_clocked_vars bk H (idck n.(n_in)) ->
                Forall (sem_equation bk H) n.(n_eqs) ->
                sem_node f xss yss.
 
@@ -181,6 +182,7 @@ enough: it does not support the internal fixpoint introduced by
         (*  * output clock matches input clock *)
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
         (* XXX: END *)
+        sem_clocked_vars bk H (idck n.(n_in)) ->
         Forall (sem_equation G bk H) n.(n_eqs) ->
         Forall (P_equation bk H) n.(n_eqs) ->
         P_node f xss yss.
@@ -203,11 +205,11 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem as [???? Sem]; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        induction H7; auto.
+        induction H8; auto.
     Qed.
 
-    Combined Scheme sem_equation_node_ind from
-             sem_equation_mult, sem_node_mult, sem_reset_mult.
+    Combined Scheme sem_node_equation_reset_ind from
+             sem_node_mult, sem_equation_mult, sem_reset_mult.
 
   End sem_node_mult.
 
@@ -282,7 +284,7 @@ enough: it does not support the internal fixpoint introduced by
                      | bk H x ck f lae y ys rs ls xs Hlae Hvars Hvar ? Hnode IH
                      |
                      |
-                     | bk H f xs ys n Hbk Hf ? ? ? ? ? Heqs IH ]
+                     | bk H f xs ys n Hbk Hf ? ? ? ? ?? Heqs IH ]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
                                       -> sem_equation G bk H eq)
@@ -304,7 +306,7 @@ enough: it does not support the internal fixpoint introduced by
       assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n))
         by (eapply Is_node_in_Forall; try eassumption;
             eapply find_node_later_not_Is_node_in; try eassumption).
-      clear Heqs; induction n.(n_eqs); inv IH; inv H5; eauto.
+      clear Heqs; induction n.(n_eqs); inv IH; inv H6; eauto.
   Qed.
 
   Lemma find_node_find_again:
@@ -343,7 +345,7 @@ enough: it does not support the internal fixpoint introduced by
        | bk H x f lae y ys ls xs Hlae Hvars Hvar Hnode IH
        |
        |
-       | bk H f xs ys n Hbk Hfind Hxs Hys ? ? ? Heqs IH]
+       | bk H f xs ys n Hbk Hfind Hxs Hys ? ? ?? Heqs IH]
           using sem_node_mult
         with (P_equation := fun bk H eq =>
                      ~Is_node_in_eq nd.(n_name) eq

@@ -162,6 +162,7 @@ Module Type MEMSEMANTICS
                same_clock xss ->
                same_clock yss ->
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
+               sem_clocked_vars bk H (idck n.(n_in)) ->
                Forall (msem_equation bk H M M') n.(n_eqs) ->
                memory_closed_n M n.(n_eqs) ->
                msem_node f xss M M' yss.
@@ -243,6 +244,7 @@ enough: it does not support the internal fixpoint introduced by
         same_clock xss ->
         same_clock yss ->
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
+        sem_clocked_vars bk H (idck n.(n_in)) ->
         Forall (msem_equation G bk H M M') n.(n_eqs) ->
         memory_closed_n M n.(n_eqs) ->
         Forall (P_equation bk H M M') n.(n_eqs) ->
@@ -273,8 +275,8 @@ enough: it does not support the internal fixpoint introduced by
         intro k; destruct (H k) as (?&?&?&?&?); eauto 7.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        clear H8.
-        induction H7; auto.
+        clear H9.
+        induction H8; auto.
     Qed.
 
     Combined Scheme msem_equation_node_reset_ind from
@@ -307,7 +309,7 @@ enough: it does not support the internal fixpoint introduced by
     Hint Constructors msem_node msem_equation msem_reset.
     intros ** Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| | | |?????? IH |????????? Hf ??????? IH]
+    induction Hsem as [| | | |?????? IH |????????? Hf ???????? IH]
         using msem_node_mult
       with (P_equation := fun bk H M M' eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
@@ -357,7 +359,7 @@ enough: it does not support the internal fixpoint introduced by
     intros ** Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
-    induction Hsem as [| | | |?????? IH|??????? n' ? Hfind ????? Heqs WF IH]
+    induction Hsem as [| | | |?????? IH|??????? n' ? Hfind ?????? Heqs WF IH]
         using msem_node_mult
       with (P_equation := fun bk H M M' eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
@@ -870,7 +872,7 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [??????? Hfind ????? Heqs].
+    inversion_clear Hsem' as [??????? Hfind ?????? Heqs].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hfind.
     simpl in Hfind.
@@ -1105,8 +1107,8 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord Hsem1 Hsem2.
     assert (Hsem1' := Hsem1);  assert (Hsem2' := Hsem2).
-    inversion_clear Hsem1' as [???????? Clock1 Hfind1 Ins1 ???? Heqs1];
-      inversion_clear Hsem2' as [???????? Clock2 Hfind2 Ins2 ???? Heqs2].
+    inversion_clear Hsem1' as [???????? Clock1 Hfind1 Ins1 ????? Heqs1];
+      inversion_clear Hsem2' as [???????? Clock2 Hfind2 Ins2 ????? Heqs2].
     rewrite Hfind2 in Hfind1; inv Hfind1.
     pose proof Hord; inv Hord.
     pose proof Hfind2.
@@ -1232,7 +1234,7 @@ dataflow memory for which the non-standard semantics holds true.
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord Hsem Abs n Spec.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins ???? Heqs].
+    inversion_clear Hsem' as [???????? Clock Hfind Ins ????? Heqs].
     assert (forall n, n < n0 -> bk n = false) as Absbk.
     { intros k Spec'; apply Abs in Spec'.
       rewrite <-Bool.not_true_iff_false.

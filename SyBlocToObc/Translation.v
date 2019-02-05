@@ -44,7 +44,7 @@ Module Type TRANSLATION
       | Con ck x false => Control ck (Ifte (bool_var x) Skip s)
       end.
 
-    Fixpoint translate_lexp (e : lexp) : exp :=
+    Fixpoint translate_lexp (e: lexp) : exp :=
       match e with
       | Econst c           => Const c
       | Evar x ty          => tovar (x, ty)
@@ -83,32 +83,10 @@ Module Type TRANSLATION
 
   End Translate.
 
-  (* Definition translate_reset_eqn (s: stmt) (eqn: equation) : stmt := *)
-  (*   match eqn with *)
-  (*   | EqDef _ _ _      => s *)
-  (*   | EqFby x _ c0 _   => Comp (AssignSt x (Const c0)) s *)
-  (*   | EqApp xs _ f _ _ => *)
-  (*     let name := hd Ids.default xs in *)
-  (*     Comp (Call [] f name reset []) s *)
-  (*   end. *)
-
-  (* Definition translate_reset_eqns (eqns: list equation): stmt := *)
-  (*   fold_left translate_reset_eqn eqns Skip. *)
-
   Definition ps_from_list (l: idents) : PS.t :=
     fold_left (fun s i=>PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
-
-  (* Program Definition reset_method (eqns: list equation): method := *)
-  (*   {| m_name := reset; *)
-  (*      m_in   := []; *)
-  (*      m_vars := []; *)
-  (*      m_out  := []; *)
-  (*      m_body := translate_reset_eqns eqns; *)
-  (*      m_nodupvars := _; *)
-  (*      m_good      := _ *)
-  (*   |}. *)
 
   (** Properties of translation functions *)
 
@@ -186,7 +164,7 @@ Module Type TRANSLATION
   Proof.
     intros M M' HMeq e e' Heq; rewrite <- Heq; clear Heq e'.
     revert M M' HMeq.
-    induction e (* using lexp_ind2 *); intros M M' HMeq; simpl; auto.
+    induction e; intros M M' HMeq; simpl; auto.
     + rewrite HMeq; auto.
     + f_equal; auto.
     + f_equal; auto.
