@@ -279,17 +279,19 @@ Module Type CORRECTNESS
           translate_eqn_nodup_states (EqFby x ck c e) eqs.
 
   Lemma equation_correctness:
-    forall G eq eqs bk H M M' Is,
+    forall G eq eqs bk H M M' Is vars,
       (forall f xss M M' yss,
           msem_node G f xss M M' yss ->
           sem_block_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
+      wc_equation G vars eq ->
+      Forall (clock_match bk H) vars ->
       translate_eqn_nodup_states eq eqs ->
       msem_equation G bk H M M' eq ->
       sem_equations_n (translate G) bk H M Is M' eqs ->
       exists Is', sem_equations_n (translate G) bk H M Is' M' (translate_eqn eq ++ eqs).
   Proof.
-    intros ** IHnode Hord TrNodup Heq Heqs.
+    intros ** IHnode Hord WC ClkM TrNodup Heq Heqs.
     destruct Heq as [| |????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
       inv TrNodup; simpl.
 
@@ -326,6 +328,11 @@ Module Type CORRECTNESS
       specialize (Var n); specialize (Hr n).
       assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
           by now intro; apply sem_equations_n_add_n.
+      assert (clock_match bk H (y, ck)) as Cky.
+      { eapply Forall_forall; eauto.
+        inv WC; eauto.
+      }
+      specialize (Cky n); simpl in Cky.
       destruct (rs n) eqn: E.
       + specialize (Heqs' (fun n => Mx 0) n).
         assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
@@ -334,7 +341,8 @@ Module Type CORRECTNESS
         *{ destruct (ys n); try discriminate.
            econstructor; eauto.
            - eapply Son; eauto.
-             admit.
+             destruct Cky as [[]|(?&?&?)]; auto.
+             assert (present c = absent) by sem_det; discriminate.
            - instantiate (1 := empty_memory _); simpl.
              rewrite <-Mmask_0; auto.
              eapply msem_node_initial_state; eauto.
@@ -349,7 +357,8 @@ Module Type CORRECTNESS
         destruct (ys n) eqn: E'.
         *{ do 2 (econstructor; eauto using SemSB.sem_equation).
            - apply Son_abs1; auto.
-             admit.
+             destruct Cky as [[]|(c &?&?)]; auto.
+             assert (present c = absent) by sem_det; discriminate.
            - simpl; split; eauto; reflexivity.
            - econstructor; eauto.
              instantiate (1 := empty_memory _); discriminate.
@@ -357,7 +366,8 @@ Module Type CORRECTNESS
         *{ do 2 (econstructor; eauto using SemSB.sem_equation).
            - change true with (negb false).
              eapply Son_abs2; eauto.
-             admit.
+             destruct Cky as [[]|(?&?&?)]; auto.
+             assert (present c = absent) by sem_det; discriminate.
            - simpl; split; eauto; reflexivity.
            - econstructor; eauto.
              instantiate (1 := empty_memory _); discriminate.
@@ -408,21 +418,23 @@ Module Type CORRECTNESS
   Qed.
 
   Corollary equations_correctness:
-    forall G bk H M M' eqs,
+    forall G bk H M M' eqs vars,
       (forall f xss M M' yss,
           msem_node G f xss M M' yss ->
           sem_block_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
+      Forall (wc_equation G vars) eqs ->
+      Forall (clock_match bk H) vars ->
       NoDup_defs eqs ->
       Forall (msem_equation G bk H M M') eqs ->
       exists Is, sem_equations_n (translate G) bk H M Is M' (translate_eqns eqs).
   Proof.
-    intros ** Heqs.
+    intros ** WC ?? Heqs.
     unfold translate_eqns, concatMap.
-    induction eqs as [|eq eqs IHeqs]; simpl.
+    induction eqs as [|eq eqs IHeqs]; simpl; inv WC.
     - exists (fun n => Env.empty state); constructor.
     - apply Forall_cons2 in Heqs as [Heq Heqs].
-      eapply IHeqs in Heqs as (?&?).
+      apply IHeqs in Heqs as (?&?); auto.
       + eapply equation_correctness; eauto.
         eapply Nodup_defs_translate_eqns; eauto.
       + eapply NoDup_defs_cons; eauto.
@@ -465,13 +477,14 @@ Module Type CORRECTNESS
   Theorem correctness:
     forall G f xss M M' yss,
       Ordered_nodes G ->
+      wc_global G ->
       msem_node G f xss M M' yss ->
       sem_block_n (translate G) f M xss yss M'.
   Proof.
     induction G as [|node ? IH].
-    inversion 2;
+    inversion 3;
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
-    intros ** Hord Hsem n.
+    intros ** Hord WC Hsem n.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ???? Heqs].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
@@ -481,19 +494,32 @@ Module Type CORRECTNESS
     assert (Ordered_blocks (translate_node node :: translate G))
       by (change (translate_node node :: translate G) with (translate (node :: G));
           apply Ordered_nodes_blocks; auto).
+    inversion WC as [|??? (?&?&?& WCeqs)]; subst.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inversion Hfind; subst n0.
       apply find_node_translate in Hfind' as (?&?&?&?); subst.
       eapply Forall_msem_equation_global_tl in Heqs; eauto.
       pose proof (NoDup_defs_node node).
-      apply equations_correctness in Heqs as (?&Heqs); auto.
-      econstructor; eauto.
-      + specialize (Ins n); destruct node; simpl in *.
-        rewrite map_fst_idty; eauto.
-      + specialize (Outs n); destruct node; simpl in *.
-        rewrite map_fst_idty; eauto.
-      + apply sem_equations_cons2; eauto.
-        apply not_Is_node_in_not_Is_block_in; auto.
+      eapply equations_correctness in Heqs as (?&Heqs); eauto.
+      + econstructor; eauto.
+        * specialize (Ins n); destruct node; simpl in *.
+          rewrite map_fst_idty; eauto.
+        * specialize (Outs n); destruct node; simpl in *.
+          rewrite map_fst_idty; eauto.
+        * apply sem_equations_cons2; eauto.
+          apply not_Is_node_in_not_Is_block_in; auto.
+      + rewrite idck_app, Forall_app; split.
+        * eapply sem_clocked_vars_clock_match; eauto.
+          rewrite map_fst_idck; eauto.
+        *{ apply Forall_forall; intros (x, ck) ?.
+           rewrite idck_app in WCeqs.
+           eapply clock_match_eqs with (eqs := node.(n_eqs)); eauto.
+           - rewrite <-idck_app, NoDupMembers_idck.
+             apply n_nodup.
+           - admit.
+           - rewrite map_fst_idck.
+             apply n_defd.
+         }
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons, IH in Hsem; eauto.
       apply sem_block_cons2; auto using Ordered_blocks.
