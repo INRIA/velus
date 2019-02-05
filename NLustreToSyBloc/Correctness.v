@@ -516,7 +516,7 @@ Module Type CORRECTNESS
            eapply clock_match_eqs with (eqs := node.(n_eqs)); eauto.
            - rewrite <-idck_app, NoDupMembers_idck.
              apply n_nodup.
-           - admit.
+           - eapply msem_sem_equations; eauto.
            - rewrite map_fst_idck.
              apply n_defd.
          }
