@@ -81,7 +81,7 @@ Module Type NLSEMANTICS
         forall bk H x ls xs c0 ck le,
           sem_laexp bk H ck le ls ->
           sem_var H x xs ->
-          xs = fby (sem_const c0) ls ->
+          xs ≈ fby (sem_const c0) ls ->
           sem_equation bk H (EqFby x ck c0 le)
 
     with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
@@ -156,7 +156,7 @@ enough: it does not support the internal fixpoint introduced by
       forall bk H x ls xs c0 ck le,
         sem_laexp bk H ck le ls ->
         sem_var H x xs ->
-        xs = fby (sem_const c0) ls ->
+        xs ≈ fby (sem_const c0) ls ->
         P_equation bk H (EqFby x ck c0 le).
 
     Hypothesis ResetCase:

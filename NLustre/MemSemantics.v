@@ -167,8 +167,6 @@ Module Type MEMSEMANTICS
                memory_closed_n M n.(n_eqs) ->
                msem_node f xss M M' yss.
 
-    Definition msem_equations bk H M M' eqs := Forall (msem_equation bk H M M') eqs.
-
   End NodeSemantics.
 
   (** ** Induction principle for [msem_equation] and [msem_node] *)
@@ -279,8 +277,8 @@ enough: it does not support the internal fixpoint introduced by
         induction H8; auto.
     Qed.
 
-    Combined Scheme msem_equation_node_reset_ind from
-             msem_equation_mult, msem_node_mult, msem_reset_mult.
+    Combined Scheme msem_node_equation_reset_ind from
+             msem_node_mult, msem_equation_mult, msem_reset_mult.
 
   End msem_node_mult.
 
@@ -673,7 +671,7 @@ dataflow memory for which the non-standard semantics holds true.
     intros ** IH IH' Heq NoDup Hmeqs WF.
     inversion Heq as [|???????? Hls Hxs Hsem
                          |??????????? Hls Hxs Hy Hr Hsem
-                         |???????? Hle Hvar];
+                         |???????? Hle Hvar Hfby];
       match goal with H:_=eq |- _ => rewrite <-H in * end.
 
     - exists M, M'.
@@ -758,8 +756,8 @@ dataflow memory for which the non-standard semantics holds true.
       + constructor.
         * unfold add_val_n.
           econstructor; eauto; split; [|split];
-            subst; unfold fby; simpl;
-              intros; repeat rewrite find_val_gss; auto.
+            intros; try rewrite Hfby; unfold fby;
+              simpl; repeat rewrite find_val_gss; auto.
           destruct (ls n); auto.
         * inv NoDup.
           apply msem_equation_madd_val; eauto.
@@ -1276,6 +1274,71 @@ dataflow memory for which the non-standard semantics holds true.
     rewrite mask_opaque.
     - apply all_absent_spec.
     - eapply count_positive in Spec; eauto; omega.
+  Qed.
+
+  Lemma mfby_fby:
+    forall x v0 es M M' xs,
+      mfby x v0 es M M' xs ->
+      xs ≈ fby v0 es.
+  Proof.
+    intros ** (Init & Loop & Spec) n.
+    unfold fby.
+    pose proof (Spec n) as Spec'.
+    destruct (find_val x (M n)) eqn: Find_n; try contradiction.
+    destruct (es n); destruct Spec' as (?& Hx); auto.
+    rewrite Hx.
+    clear - Init Loop Spec Find_n.
+    revert dependent v.
+    induction n; intros; simpl; try congruence.
+    specialize (Spec n).
+    destruct (find_val x (M n)); try contradiction.
+    rewrite Loop in Find_n.
+    destruct (es n); destruct Spec; try congruence.
+    apply IHn; congruence.
+  Qed.
+
+  Theorem msem_sem_node_equation_reset:
+    forall G,
+      (forall f xss M M' yss,
+          msem_node G f xss M M' yss ->
+          sem_node G f xss yss)
+      /\
+      (forall bk H M M' eq,
+          msem_equation G bk H M M' eq ->
+          sem_equation G bk H eq)
+      /\
+      (forall f r xss M M' yss,
+          msem_reset G f r xss M M' yss ->
+          sem_reset G f r xss yss).
+  Proof.
+    intros; apply msem_node_equation_reset_ind;
+      [intros|intros|intros|intros|intros ?????? IH|intros];
+      eauto using sem_equation, mfby_fby, sem_node.
+    constructor; intro; destruct (IH k) as (?&?&?); intuition.
+  Qed.
+
+  Corollary msem_sem_node:
+    forall G f xss M M' yss,
+      msem_node G f xss M M' yss ->
+      sem_node G f xss yss.
+  Proof.
+    intros; eapply (proj1 (msem_sem_node_equation_reset G)); eauto.
+  Qed.
+
+  Corollary msem_sem_equation:
+    forall G bk H M M' eq,
+      msem_equation G bk H M M' eq ->
+      sem_equation G bk H eq.
+  Proof.
+    intros; eapply (proj1 (proj2 (msem_sem_node_equation_reset G))); eauto.
+  Qed.
+
+  Corollary msem_sem_equations:
+    forall G bk H M M' eqs,
+      Forall (msem_equation G bk H M M') eqs ->
+      Forall (sem_equation G bk H) eqs.
+  Proof.
+    induction 1; constructor; eauto using msem_sem_equation.
   Qed.
 
 End MEMSEMANTICS.

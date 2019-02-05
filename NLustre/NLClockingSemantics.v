@@ -474,7 +474,7 @@ Module Type NLCLOCKINGSEMANTICS
       [intros ?????? Hvar Hexp|
        intros ???????? Hexps Hvars Hsem|
        intros ??????????? Hexps Hvars ?? Hsem|
-       intros ???????? Hexp Hvar|
+       intros ???????? Hexp Hvar Hfby|
        intros ???? IH|
        intros ?????? Hck Hf Hin Hout ????? IH].
 
@@ -681,11 +681,11 @@ Module Type NLCLOCKINGSEMANTICS
        }
 
     - (* EqFby *)
-      intros ? iface z zck Hnd Hwc Hdef Hin n.
+      intros iface z zck Hnd Hwc Hdef Hin n.
       inv Hdef; inv Hwc.
       match goal with H1:In (?y, _) iface, H2:In (?y, _) iface |- _ =>
         apply NoDupMembers_det with (1:=Hnd) (2:=H1) in H2; subst end.
-      specialize (Hexp n). specialize (Hvar n).
+      specialize (Hexp n); specialize (Hvar n); specialize (Hfby n); rewrite Hfby in *.
       unfold fby in Hvar.
       inv Hexp; match goal with H:_ = ls n |- _ => rewrite <-H in * end; eauto.
 
@@ -745,7 +745,7 @@ Module Type NLCLOCKINGSEMANTICS
      This is a consequence (by induction throughout the node hierarchy) of
      the constraints relating streams to their clocks for each case of
      [sem_equation]. *)
-  Lemma clock_match_node:
+  Corollary clock_match_node:
     forall G f xss yss bk H n,
       Ordered_nodes G ->
       wc_global G ->
@@ -770,7 +770,7 @@ Module Type NLCLOCKINGSEMANTICS
      to [sem_node], and tedious to "transfer" facts known "outside" a
      node to facts known "within" it. At the time of writing, there is no
      determinism lemma for environments constrained by nodes. *)
-  Lemma clock_match_eq:
+  Corollary clock_match_eq:
     forall G bk H iface x ck eq,
       Ordered_nodes G ->
       wc_global G ->
@@ -785,7 +785,7 @@ Module Type NLCLOCKINGSEMANTICS
     eapply (proj1 (proj2 (clock_match_node_eqs_reset G Ord WCG))); eauto.
   Qed.
 
-  Lemma clock_match_eqs:
+  Corollary clock_match_eqs:
     forall G bk H inputs vars eqs,
       Ordered_nodes G ->
       wc_global G ->
