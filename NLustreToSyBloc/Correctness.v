@@ -524,3 +524,5 @@ Module Type CORRECTNESS
       eapply msem_node_cons, IH in Hsem; eauto.
       apply sem_block_cons2; auto using Ordered_blocks.
   Qed.
+
+End CORRECTNESS.

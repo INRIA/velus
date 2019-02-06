@@ -102,7 +102,7 @@ Module Type OBCSYNTAX
   Proof.
     intros.
     pose proof (m_good m) as G.
-    eapply In_Forall; eauto.
+    eapply Forall_forall; eauto.
     apply in_app; right; apply in_app; now right.
   Qed.
 
@@ -113,7 +113,7 @@ Module Type OBCSYNTAX
   Proof.
     intros.
     pose proof (m_good m) as G.
-    eapply In_Forall; eauto.
+    eapply Forall_forall; eauto.
     apply in_app; now left.
   Qed.
 
@@ -351,7 +351,5 @@ Module ObcSyntaxFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op) <: OBCSYNTAX Ids Op OpAux.
-
   Include OBCSYNTAX Ids Op OpAux.
-
 End ObcSyntaxFun.

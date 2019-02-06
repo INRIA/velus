@@ -1,16 +1,14 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.Memories.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.Obc.ObcSyntax.
 
-Require Velus.Environment.
+Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.SyBloc.SBSyntax.
+
+Require Import Velus.Obc.ObcSyntax.
 
 Require Import List.
 Import List.ListNotations.
-Require Import Coq.Sorting.Permutation.
 Require Import Morphisms.
 
 Open Scope positive.
@@ -644,14 +642,6 @@ Module Type TRANSLATION
   (* now rewrite gather_eqs_snd_spec. *)
   (* Qed. *)
 
-  Lemma Forall_ValidId_idty:
-    forall A B (xs: list (ident * (A * B))),
-      Forall ValidId (idty xs) <-> Forall ValidId xs.
-  Proof.
-    induction xs as [|x xs]; split; inversion_clear 1; simpl; eauto;
-      destruct x as (x & tyck); constructor; try rewrite IHxs in *; auto.
-  Qed.
-
   Program Definition step_method (b: block) : method :=
     let memids := map fst b.(b_lasts) in
     let mems := ps_from_list memids in
@@ -684,8 +674,7 @@ Module Type TRANSLATION
     {| c_name    := b.(b_name);
        c_mems    := map (fun xc => (fst xc, type_const (snd xc))) b.(b_lasts);
        c_objs    := b.(b_blocks);
-       c_methods := [ step_method b;
-                        reset_method b ]
+       c_methods := [ step_method b; reset_method b ]
     |}.
   Next Obligation.
     rewrite map_map; simpl; apply b_nodup_lasts_blocks.
@@ -757,9 +746,10 @@ Module Type TRANSLATION
 
   Lemma find_class_translate:
     forall b P cls P',
-      find_class b (translate P) = Some (cls, P')
-      -> (exists block P', find_block b P = Some (block, P')
-                     /\ cls = translate_block block).
+      find_class b (translate P) = Some (cls, P') ->
+      exists block P',
+        find_block b P = Some (block, P')
+        /\ cls = translate_block block.
   Proof.
     induction P as [|block P]; [now inversion 1|].
     intros ** Hfind; simpl in Hfind.
@@ -776,8 +766,9 @@ Module Type TRANSLATION
   Lemma find_block_translate:
     forall b P block P',
       find_block b P = Some (block, P') ->
-      exists cls prog', find_class b (translate P) = Some (cls, prog')
-                        /\ cls = translate_block block.
+      exists cls prog',
+        find_class b (translate P) = Some (cls, prog')
+        /\ cls = translate_block block.
   Proof.
     induction P as [|block P]; [now inversion 1|].
     intros ** Hfind; simpl in Hfind.

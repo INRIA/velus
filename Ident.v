@@ -4,6 +4,8 @@ Require Import Ascii.
 Require Import List.
 Import List.ListNotations.
 
+Open Scope bool_scope.
+
 Axiom pos_to_str: ident -> string.
 Axiom pos_of_str: string -> ident.
 
