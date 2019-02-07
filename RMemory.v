@@ -48,11 +48,14 @@ Section Operations.
   Definition add_val (x: ident) (v: V) (m: memory V) : memory V :=
     Mem (Env.add x v (values m)) (instances m).
 
-  Definition add_vals (xs: list ident) (vs: list V) (m: memory V) : memory V :=
-    Mem (Env.adds xs vs (values m)) (instances m).
+  (* Definition add_vals (xs: list ident) (vs: list V) (m: memory V) : memory V := *)
+  (*   Mem (Env.adds xs vs (values m)) (instances m). *)
 
   Definition add_inst (x: ident) (m': memory V) (m: memory V) : memory V :=
     Mem (values m) (Env.add x m' (instances m)).
+
+  (* Definition add_insts (xs: list ident) (ms: list (memory V)) (m: memory V) : memory V := *)
+  (*   Mem (values m) (Env.adds xs ms (instances m)). *)
 
   Fixpoint mmap (f: V -> W) (m: memory V) : memory W :=
     Mem (Env.map f (values m)) (Env.map (mmap f) (instances m)).

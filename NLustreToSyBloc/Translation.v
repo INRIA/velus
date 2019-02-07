@@ -52,13 +52,11 @@ Module Type TRANSLATION
       [ SynSB.EqDef x ck e ]
     | EqApp [] _ _ _ _ =>
       []                        (* This way we can ensure b_blocks_in_eqs *)
-    | EqApp xs ck f les None =>
-      let s := hd Ids.default xs in
-      [ SynSB.EqCall s xs ck false f les ]
-    | EqApp xs ck f les (Some r) =>
-      let s := hd Ids.default xs in
-      [ SynSB.EqReset s (Con ck r true) f;
-          SynSB.EqCall s xs ck true f les ]
+    | EqApp (x :: xs) ck f les None =>
+      [ SynSB.EqCall x (x :: xs) ck false f les ]
+    | EqApp (x :: xs) ck f les (Some r) =>
+      [ SynSB.EqReset x (Con ck r true) f;
+          SynSB.EqCall x (x :: xs) ck true f les ]
     | EqFby x ck _ e =>
       [ SynSB.EqNext x ck e ]
     end.

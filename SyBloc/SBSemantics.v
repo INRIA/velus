@@ -61,10 +61,9 @@ Module Type SBSEMANTICS
           sem_var_instant R x v ->
           sem_equation base R S I S' (EqDef x ck ce)
     | SEqNext:
-        forall base R S I S' x ck e c b v',
+        forall base R S I S' x ck e c v',
           find_val x S = Some c ->
-          sem_clock_instant base R ck b ->
-          sem_var_instant R x (if b then present c else absent) ->
+          sem_var_instant R x (match v' with present _ => present c | absent => absent end) ->
           sem_laexp_instant base R ck e v' ->
           find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
           sem_equation base R S I S' (EqNext x ck e)
@@ -112,10 +111,9 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqDef x ck ce).
 
     Hypothesis EqNextCase:
-      forall base R S I S' x ck e c b v',
+      forall base R S I S' x ck e c v',
         find_val x S = Some c ->
-        sem_clock_instant base R ck b ->
-        sem_var_instant R x (if b then present c else absent) ->
+        sem_var_instant R x (match v' with present _ => present c | absent => absent end) ->
         sem_laexp_instant base R ck e v' ->
         find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
         P_equation base R S I S' (EqNext x ck e).
@@ -170,7 +168,6 @@ Module Type SBSEMANTICS
              sem_equation_mult, sem_block_mult.
 
   End sem_block_mult.
-
 
   Add Parametric Morphism block : (reset_lasts block)
       with signature equal_memory ==> Basics.impl
@@ -334,11 +331,24 @@ Module Type SBSEMANTICS
     forall P1 bl P,
       Ordered_blocks (P1 ++ bl :: P) ->
       Forall (fun xb =>
-                  snd xb <> bl.(b_name)
+                  find_block (snd xb) P1 = None
+                  /\ snd xb <> bl.(b_name)
                   /\ exists bl' P', find_block (snd xb) P = Some (bl', P'))
              bl.(b_blocks).
   Proof.
-    induction P1; simpl; inversion_clear 1; auto.
+    induction P1; inversion_clear 1 as [|?? Ord]; apply Forall_Forall; auto.
+    - apply Forall_forall; auto.
+    - apply IHP1 in Ord; apply Forall_forall; intros.
+      eapply Forall_forall in Ord as (?&?&(bl' &?& Find)); eauto.
+      rewrite find_block_other; auto.
+      pose proof Find as Find'; apply find_block_name in Find'.
+      apply find_block_In in Find.
+      assert (In bl' (P1 ++ bl :: P)) as Hin
+          by (apply in_app; right; right; auto).
+      eapply Forall_forall in Hin; eauto.
+      congruence.
+    - apply IHP1 in Ord; apply Forall_forall; intros.
+      eapply Forall_forall in Ord as (?&?&?); eauto.
   Qed.
 
   Lemma initial_state_tail:
@@ -351,7 +361,7 @@ Module Type SBSEMANTICS
     induction S0 as [? IH] using memory_ind';
       intros ** Ord ?; split; intro Init; inversion_clear Init as [???? Find ? Spec].
     - econstructor; eauto.
-      + apply find_block_other; eauto.
+      + rewrite find_block_other; eauto.
       + intros ** Find'.
         specialize (Spec _ _ Find'); destruct Spec as (S0' & Sub & Init).
         exists S0'; split; auto.
@@ -361,7 +371,7 @@ Module Type SBSEMANTICS
         pose proof Ord as Ord'.
         rewrite app_comm_cons in Ord.
         apply Ordered_blocks_split in Ord.
-        eapply Forall_forall in Ord as (?&?&? & Find); eauto; simpl in Find.
+        eapply Forall_forall in Ord as (?&?&?&?& Find); eauto; simpl in Find.
         apply Ordered_blocks_nodup in Ord'; simpl in Ord'.
         inversion_clear Ord' as [|?? NotIn].
         pose proof Find as Find''.
@@ -371,16 +381,16 @@ Module Type SBSEMANTICS
         rewrite Eq.
         apply in_map, in_app; intuition.
     - econstructor; eauto.
-      + apply find_block_other in Find; eauto.
+      + rewrite find_block_other in Find; eauto.
       + intros ** Find'.
         specialize (Spec _ _ Find'); destruct Spec as (S0' & Sub & Init).
         exists S0'; split; auto.
         rewrite IH; eauto.
-        apply find_block_other in Find; auto.
+        rewrite find_block_other in Find; auto.
         apply find_block_split in Find as (? & Eq).
         rewrite Eq in Ord; pose proof Ord as Ord'; rewrite app_comm_cons in Ord.
         apply Ordered_blocks_split in Ord.
-        eapply Forall_forall in Ord as (?&?&?& Find); eauto; simpl in Find.
+        eapply Forall_forall in Ord as (?&?&?&?& Find); eauto; simpl in Find.
         pose proof Find as Find''.
         apply find_block_name in Find.
         apply find_block_In in Find''.
@@ -496,7 +506,7 @@ Module Type SBSEMANTICS
     apply Ordered_blocks_split in Hord.
     pose proof (b_blocks_in_eqs bl') as BlocksIn.
     apply BlocksIn in Hini as (? & Hin).
-    eapply Forall_forall in Hin; eauto; destruct Hin as (?&(?&?& Find)); simpl in Find.
+    eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?&?& Find); simpl in Find.
     apply Forall_app_weaken in Hnin; inversion_clear Hnin as [|??? Hnin'].
     pose proof Find as Find'; apply find_block_name in Find'.
     apply find_block_In in Find.
@@ -515,7 +525,7 @@ Module Type SBSEMANTICS
     apply Ordered_blocks_split in Hord.
     pose proof (b_blocks_in_eqs bl) as BlocksIn.
     apply BlocksIn in Hini as (? & Hin).
-    eapply Forall_forall in Hin; eauto; destruct Hin as (Eq &?); auto.
+    eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?); auto.
   Qed.
 
   Lemma sem_block_cons2:
@@ -548,7 +558,7 @@ Module Type SBSEMANTICS
         inv Hfg; congruence.
       }
       econstructor; eauto.
-      + apply find_block_other; eauto.
+      + rewrite find_block_other; eauto.
       + instantiate (1 := I).
         apply Forall_forall.
         rewrite Forall_forall in IHeqs.

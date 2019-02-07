@@ -41,11 +41,8 @@ environment.
     Variable base: bool.
     Variable R: env.
 
-    Inductive sem_var_instant: ident -> value -> Prop :=
-      Sv:
-        forall x v,
-          Env.find x R = Some v ->
-          sem_var_instant x v.
+    Definition sem_var_instant (x: ident) (v: value) : Prop :=
+      Env.find x R = Some v.
 
     Definition sem_vars_instant (xs: list ident) (vs: list value) : Prop :=
       Forall2 sem_var_instant xs vs.
@@ -440,10 +437,7 @@ environment.
         -> sem_var_instant R x v2
         -> v1 = v2.
     Proof.
-      intros x v1 v2 H1 H2.
-      inversion_clear H1 as [Hf1];
-        inversion_clear H2 as [Hf2];
-        congruence.
+      congruence.
     Qed.
 
     Lemma sem_clock_instant_det:

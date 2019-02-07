@@ -378,7 +378,8 @@ Module Type CORRECTNESS
       specialize (Spec n); destruct (find_val x (M n)) eqn: E; try contradiction.
       specialize (Var n); specialize (Arg n).
       pose proof Arg as Arg'.
-      destruct (ls n); destruct Spec as (?& Hxs); rewrite Hxs in Var; inv Arg'; eauto using sem_equation.
+      destruct (ls n); destruct Spec as (?& Hxs); rewrite Hxs in Var; inv Arg';
+        econstructor; eauto; simpl; auto.
   Qed.
 
   Lemma not_Is_defined_not_Is_state_in_eqs:

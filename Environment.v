@@ -12,10 +12,13 @@ Module Env.
 
     Context {A: Type}.
 
-    Definition adds (xs: list positive) (vs : list A) (m : t A) :=
+    Definition adds' (xs: list (positive * A)) (m: t A) :=
       fold_right (fun (xv: positive * A) env =>
                     let (x , v) := xv in
-                    add x v env) m (combine xs vs).
+                    add x v env) m xs.
+
+    Definition adds (xs: list positive) (vs : list A) (m : t A) :=
+      adds' (combine xs vs) m.
 
     Lemma add_comm:
       forall x y a b (m: t A),
@@ -56,6 +59,14 @@ Module Env.
       apply xmapi_xmapi.
     Qed.
 
+    Lemma find_gsso':
+      forall x y a xvs m,
+        x <> y ->
+        find x (adds' ((y, a) :: xvs) m) = find x (adds' xvs m).
+    Proof.
+      intros; simpl; rewrite gso; auto.
+    Qed.
+
     Lemma find_gsso:
       forall x y xs (vs: list A) m,
         x <> y ->
@@ -63,9 +74,16 @@ Module Env.
     Proof.
       intros ** Hneq.
       unfold adds.
-      destruct vs.
+      destruct vs; simpl.
       - destruct xs; reflexivity.
-      - simpl; rewrite gso; auto.
+      - rewrite gso; auto.
+    Qed.
+
+    Lemma find_gsss':
+      forall x a xvs m,
+        find x (adds' ((x, a) :: xvs) m) = Some a.
+    Proof.
+      intros; apply gss.
     Qed.
 
     Lemma find_gsss:
@@ -73,6 +91,18 @@ Module Env.
         find x (adds (x :: xs) (a :: vs) m) = Some a.
     Proof.
       intros; unfold adds; apply gss.
+    Qed.
+
+    Lemma find_In_gsso':
+      forall x xvs m,
+        (forall a, ~ List.In (x, a) xvs) ->
+        find x (adds' xvs m) = find x m.
+    Proof.
+      intros ** Hin.
+      induction xvs as [|(y, a)]; simpl; auto.
+      rewrite gso.
+      - apply IHxvs; intros ??; eapply Hin; right; eauto.
+      - intro; subst; eapply Hin; constructor; eauto.
     Qed.
 
     Lemma find_In_gsso:
@@ -118,11 +148,26 @@ Module Env.
           intro Hnth. rewrite Hnth in Hin. contradiction.
     Qed.
 
-    Lemma find_adds:
-      forall x v xs vs m,
+    Lemma In_find_adds':
+      forall x a xvs m,
+        NoDup (List.map (@fst _ A) xvs) ->
+        List.In (x, a) xvs ->
+        find x (adds' xvs m) = Some a.
+    Proof.
+      unfold adds'.
+      induction xvs as [|(y, b)]; simpl; try contradiction.
+      inversion_clear 1 as [|?? Notin]; inversion_clear 1 as [E|]; simpl.
+      - inversion E; subst; now rewrite gss.
+      - rewrite gso; auto.
+        intro; subst; apply Notin.
+        eapply in_map_iff; exists (y, a); auto.
+    Qed.
+
+    Lemma In_find_adds:
+      forall x a xs vs m,
         NoDup xs ->
-        List.In (x, v) (combine xs vs) ->
-        find x (adds xs vs m) = Some v.
+        List.In (x, a) (combine xs vs) ->
+        find x (adds xs vs m) = Some a.
     Proof.
       unfold adds.
       induction xs as [|x'], vs as [|v']; simpl; try contradiction.
@@ -133,12 +178,33 @@ Module Env.
         eapply in_combine_l; eauto.
     Qed.
 
+    Lemma adds_nil_nil':
+      forall e,
+        adds' List.nil e = e.
+    Proof. simpl; auto. Qed.
+
     Lemma adds_nil_nil:
       forall e,
         adds List.nil List.nil e = e.
-    Proof. unfold adds; simpl; auto. Qed.
+    Proof. simpl; auto. Qed.
 
-    Lemma find_adds':
+    Lemma find_adds_In':
+      forall x a xvs m,
+        NoDup (List.map (@fst _ A) xvs) ->
+        find x m = None ->
+        find x (adds' xvs m) = Some a ->
+        List.In (x, a) xvs.
+    Proof.
+      unfold adds'.
+      induction xvs as [|(y, b)]; simpl; try congruence.
+      inversion_clear 1; intros ** Find.
+      destruct (Pos.eq_dec x y).
+      - subst; rewrite gss in Find; inversion Find; auto.
+      - rewrite gso in Find; auto.
+        right; eauto.
+    Qed.
+
+    Lemma find_adds_In:
       forall x v xs vs m,
         NoDup xs ->
         find x m = None ->
@@ -154,6 +220,20 @@ Module Env.
         right; eauto.
     Qed.
 
+    Lemma NotIn_find_adds':
+      forall x xvs (o: option A) m,
+        (forall a, ~ List.In (x, a) xvs) ->
+        find x m = o ->
+        find x (adds' xvs m) = o.
+    Proof.
+      induction xvs as [|(y, a)]; auto.
+      intros ** Hnin Hfind.
+      rewrite find_gsso'.
+      - apply IHxvs; auto.
+        intros ??; eapply Hnin; right; eauto.
+      - intro; subst; eapply Hnin; constructor; eauto.
+    Qed.
+
     Lemma NotIn_find_adds:
       forall x xs (o: option A) vs m,
         ~ List.In x xs ->
@@ -164,6 +244,20 @@ Module Env.
       intros v vs S Hnin Hfind.
       apply Decidable.not_or in Hnin as [Hnin Hneq].
       rewrite find_gsso; auto.
+    Qed.
+
+    Lemma adds_cons_cons':
+      forall xvs x (a: A) m,
+        (forall a, ~ List.In (x, a) xvs) ->
+        adds' ((x, a) :: xvs) m = adds' xvs (add x a m).
+    Proof.
+      unfold adds'.
+      induction xvs as [|(y, b)]; intros ** NotIn; simpl; auto.
+      rewrite <-IHxvs.
+      - simpl.
+        rewrite add_comm; auto.
+        intro; subst; eapply NotIn; constructor; eauto.
+      - intros ??; eapply NotIn; right; eauto.
     Qed.
 
     Lemma adds_cons_cons:
@@ -181,6 +275,22 @@ Module Env.
         apply NotIn; subst.
         apply in_eq.
       - apply Decidable.not_or in NotIn as []; auto.
+    Qed.
+
+    Lemma adds_comm':
+      forall xvs x y (a b: A) m,
+        (forall a, ~ List.In (x, a) xvs) ->
+        (forall b, ~ List.In (y, b) xvs) ->
+        x <> y ->
+        adds' ((x, a) :: (y, b) :: xvs) m = adds' ((y, b) :: (x, a) :: xvs) m.
+    Proof.
+      intros ** NotInx NotIny ?.
+      repeat rewrite adds_cons_cons'; auto.
+      - rewrite add_comm; auto.
+      - intros ? [E|?]; try inversion E; try contradiction.
+        eapply NotIny; eauto.
+      - intros ? [|?]; try congruence.
+        eapply NotInx; eauto.
     Qed.
 
     Lemma adds_comm:

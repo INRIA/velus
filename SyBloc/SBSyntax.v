@@ -145,14 +145,26 @@ Module Type SBSYNTAX
   Qed.
 
   Remark find_block_other:
-    forall b P bl bl' P',
+    forall b P bl,
       bl.(b_name) <> b ->
-      (find_block b (bl :: P) = Some (bl', P')
-       <-> find_block b P = Some (bl', P')).
+      find_block b (bl :: P) = find_block b P.
   Proof.
     intros ** Hnb.
     apply ident_eqb_neq in Hnb.
     simpl; rewrite Hnb; reflexivity.
+  Qed.
+
+  Remark find_block_other_app:
+    forall P b bl P',
+      find_block b P = None ->
+      bl.(b_name) <> b ->
+      find_block b (P ++ bl :: P') = find_block b P'.
+  Proof.
+    induction P as [|bl']; simpl app.
+    - intros; apply find_block_other; auto.
+    - intros ** Find E.
+      simpl in *.
+      destruct (ident_eqb (b_name bl') b); try discriminate; auto.
   Qed.
 
   Remark find_block_In:
