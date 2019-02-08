@@ -496,6 +496,10 @@ Section Properties.
     apply Env.gempty.
   Qed.
 
+  Lemma add_inst_val_comm:
+    add_inst x m' (add_val y v m) = add_val y v (add_inst x m' m).
+  Proof eq_refl.
+
 
   (* Lemma find_inst_mmapi: *)
   (*   forall (f: list ident -> ident -> V -> W) p, *)

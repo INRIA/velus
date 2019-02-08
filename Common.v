@@ -2262,6 +2262,32 @@ Section Lists.
     now inv H.
   Qed.
 
+  Lemma in_split_l':
+    forall (l : list (A * B)) a,
+      In a (fst (split l)) ->
+      exists b, In (a, b) l.
+  Proof.
+    induction l as [|[]]; simpl; try contradiction.
+    intros ** Hin.
+    destruct (split l); simpl in *.
+    destruct Hin.
+    - subst; eauto.
+    - edestruct IHl; eauto.
+  Qed.
+
+  Lemma in_split_r':
+    forall (l : list (A * B)) b,
+      In b (snd (split l)) ->
+      exists a, In (a, b) l.
+  Proof.
+    induction l as [|[]]; simpl; try contradiction.
+    intros ** Hin.
+    destruct (split l); simpl in *.
+    destruct Hin.
+    - subst; eauto.
+    - edestruct IHl; eauto.
+  Qed.
+
 End Lists.
 
 Lemma Forall_Forall2:

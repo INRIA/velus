@@ -132,43 +132,46 @@ Module Type OBCSEMANTICS
   Lemma stmt_eval_fold_left_shift:
     forall A prog f (xs:list A) iacc me ve me' ve',
       stmt_eval prog me ve
-                (List.fold_left (fun i x => Comp (f x) i) xs iacc)
+                (fold_left (fun i x => Comp (f x) i) xs iacc)
                 (me', ve')
       <->
       exists me'' ve'',
         stmt_eval prog me ve
-                  (List.fold_left (fun i x => Comp (f x) i) xs Skip)
+                  (fold_left (fun i x => Comp (f x) i) xs Skip)
                   (me'', ve'')
         /\
         stmt_eval prog me'' ve'' iacc (me', ve').
   Proof.
-    Hint Constructors stmt_eval.
-    induction xs.
-    - split; [ now eauto | ].
-      intro H; do 2 destruct H.
-      destruct H as [H0 H1].
-      inversion_clear H0; apply H1.
-    - intros.
-      split.
-      + intro H0.
-        apply IHxs in H0.
-        destruct H0 as [me'' H0].
-        destruct H0 as [ve'' H0].
-        destruct H0 as [H0 H1].
-        inversion_clear H1.
-        exists me1. exists ve1.
-        split; try apply IHxs; eauto.
-      + intros;
-        repeat progress
-               match goal with
-               | H:exists _, _ |- _ => destruct H
-               | H:_ /\ _ |- _ => destruct H
-               | H:stmt_eval _ _ _ (Comp _ Skip) _ |- _ => inversion_clear H
-               | H:stmt_eval _ _ _ Skip _ |- _ => inversion H; subst
-               | H:stmt_eval _ _ _ (List.fold_left _ _ _) _ |- _ => apply IHxs in H
-               | _ => eauto
-               end.
-        apply IHxs; eauto.
+    induction xs; simpl.
+    - split; eauto using stmt_eval.
+      intros (?&?& H &?); now inv H.
+    - setoid_rewrite IHxs; split.
+      + intros (?&?&?& H); inv H; eauto 8 using stmt_eval.
+      + intros (?&?&(?&?&?& H)&?);
+          inversion_clear H as [| | |?????????? H'| |]; inv H';
+            eauto using stmt_eval.
+  Qed.
+
+  Lemma stmt_eval_fold_left_lift:
+    forall A prog f (xs: list A) me ve iacc me' ve',
+      stmt_eval prog me ve
+                (fold_left (fun i x => Comp i (f x)) xs iacc)
+                (me', ve')
+      <->
+      exists me'' ve'',
+        stmt_eval prog me ve iacc (me'', ve'')
+        /\ stmt_eval prog me'' ve''
+                    (fold_left (fun i x => Comp i (f x)) xs Skip)
+                    (me', ve').
+  Proof.
+    induction xs; simpl.
+    - split; eauto using stmt_eval.
+      intros (?&?&?& H); now inv H.
+    - setoid_rewrite IHxs; split.
+      + intros (?&?& H &?); inv H; eauto 8 using stmt_eval.
+      + intros (?&?&?&?&?& H &?);
+          inversion_clear H as [| | |????????? H'| |]; inv H';
+            eauto using stmt_eval.
   Qed.
 
   (** ** Other properties *)
