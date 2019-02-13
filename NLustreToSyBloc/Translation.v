@@ -32,11 +32,8 @@ Module Type TRANSLATION
     list (ident * const) * list (ident * ident) :=
     match eq with
     | EqDef _ _ _ => acc
-    | EqApp xs _ f _ _ =>
-      match xs with
-      | [] => acc
-      | x :: _ => (fst acc, (x, f) :: snd acc)
-      end
+    | EqApp [] _ _ _ _ => acc
+    | EqApp (x :: _) _ f _ _ => (fst acc, (x, f) :: snd acc)
     | EqFby x _ c0 _ => ((x, c0) :: fst acc, snd acc)
     end.
 

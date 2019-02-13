@@ -68,15 +68,17 @@ Module Type SBSEMANTICS
           find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
           sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
-        forall base R S I S' ck b s r Is Ss,
+        forall base R S I S' ck b s r Is,
           sem_clock_instant base R ck r ->
           Env.find s I = Some Is ->
-          (if r then initial_state b Is else sub_inst s S Ss /\ Is ≋ Ss) ->
+          (if r
+           then initial_state b Is
+           else exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
-        forall base R S I S' ys rst ck b s es xs Is os Ss' Ss,
+        forall base R S I S' ys rst ck b s es xs Is os Ss',
           sem_laexps_instant base R ck es xs ->
-          (rst = false -> sub_inst s S Ss /\ Is ≋ Ss) ->
+          (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
           Env.find s I = Some Is ->
           sem_block b Is xs os Ss' ->
           sem_vars_instant R ys os ->
@@ -119,16 +121,18 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqNext x ck e).
 
     Hypothesis EqResetCase:
-      forall base R S I S' ck b s r Is Ss,
+      forall base R S I S' ck b s r Is,
         sem_clock_instant base R ck r ->
         Env.find s I = Some Is ->
-        (if r then initial_state P b Is else sub_inst s S Ss /\ Is ≋ Ss) ->
+        (if r
+         then initial_state P b Is
+         else exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
-      forall base R S I S' s ys ck rst b es xs Is os Ss' Ss,
+      forall base R S I S' s ys ck rst b es xs Is os Ss',
         sem_laexps_instant base R ck es xs ->
-        (rst = false -> sub_inst s S Ss /\ Is ≋ Ss) ->
+        (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
         Env.find s I = Some Is ->
         sem_block P b Is xs os Ss' ->
         sem_vars_instant R ys os ->
@@ -212,8 +216,8 @@ Module Type SBSEMANTICS
       sem_equation P bk R S2 I2 S2' eq.
   Proof.
     intros ** IH E EI E' Sem.
-    inversion_clear Sem as [| |???????????? Find Init|
-                            ????????????????? Spec Find ?? Sub];
+    inversion_clear Sem as [| |??????????? Find Init|
+                            ???????????????? Spec Find ?? Sub];
       eauto using sem_equation.
     - econstructor; eauto.
       + now rewrite <-E.
@@ -222,14 +226,14 @@ Module Type SBSEMANTICS
         setoid_rewrite Find in Eq; simpl in Eq.
       destruct (Env.find s I2) eqn: Find'; try contradiction.
       destruct r.
-      + eapply SEqReset with (Ss := empty_memory val); eauto; simpl.
+      + econstructor; eauto; simpl.
         now rewrite <-Eq.
-      + destruct Init as (Sub).
+      + destruct Init as (?& Sub &?).
         pose proof (find_inst_equal_memory s E) as Eq'.
         rewrite Sub in Eq'.
         destruct (find_inst s S2) eqn: Init'; try contradiction.
         econstructor; eauto; simpl.
-        split; eauto.
+        eexists; split; eauto.
         now rewrite <-Eq, <-Eq'.
     - pose proof (find_equiv_memory s EI) as Eq.
       rewrite Find in Eq.
@@ -239,13 +243,14 @@ Module Type SBSEMANTICS
       destruct (find_inst s S2') eqn: Sub'; try contradiction.
       destruct rst.
       + econstructor; eauto.
-        instantiate (1 := empty_memory val); discriminate.
+        discriminate.
       + pose proof (find_inst_equal_memory s E) as Eq''.
-        destruct Spec as (Sub_i); auto.
+        destruct Spec as (?& Sub_i &?); auto.
         rewrite Sub_i in Eq''.
         destruct (find_inst s S2) eqn: FInd; try contradiction.
         eapply SEqCall with (Is := m); eauto.
-        split; eauto. now rewrite <-Eq, <-Eq''.
+        eexists; split; eauto.
+        now rewrite <-Eq, <-Eq''.
   Qed.
 
   Add Parametric Morphism P f xs ys : (fun S S' => sem_block P f S xs ys S')
@@ -254,8 +259,8 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Sem.
     revert dependent y; revert dependent y0.
-    induction Sem as [| |???????????? Find Init|
-                      ????????????????? Spec Find ?? Sub|] using sem_block_mult with
+    induction Sem as [| |??????????? Find Init|
+                      ???????????????? Spec Find ?? Sub|] using sem_block_mult with
                    (P_equation := fun base R S1 I1 S1' eq =>
                                     forall S2 S2' I2,
                                       S1 ≋ S2 ->
@@ -270,14 +275,14 @@ Module Type SBSEMANTICS
         setoid_rewrite Find in Eq; simpl in Eq.
       destruct (Env.find s I2) eqn: Find'; try contradiction.
       destruct r.
-      + eapply SEqReset with (Ss := empty_memory val); eauto; simpl.
+      + econstructor; eauto; simpl.
         now rewrite <-Eq.
-      + destruct Init as (Sub).
+      + destruct Init as (?& Sub &?).
         pose proof (find_inst_equal_memory s E) as Eq'.
         rewrite Sub in Eq'.
         destruct (find_inst s S2) eqn: Init'; try contradiction.
         econstructor; eauto; simpl.
-        split; eauto.
+        eexists; split; eauto.
         now rewrite <-Eq, <-Eq'.
     - pose proof (find_equiv_memory s EI) as Eq.
       rewrite Find in Eq.
@@ -287,13 +292,13 @@ Module Type SBSEMANTICS
       destruct (find_inst s S2') eqn: Sub'; try contradiction.
       destruct rst.
       + econstructor; eauto.
-        instantiate (1 := empty_memory val); discriminate.
+        discriminate.
       + pose proof (find_inst_equal_memory s E) as Eq''.
-        destruct Spec as (Sub_i); auto.
+        destruct Spec as (?& Sub_i &?); auto.
         rewrite Sub_i in Eq''.
         destruct (find_inst s S2) eqn: FInd; try contradiction.
         eapply SEqCall with (Is := m); eauto.
-        split; eauto. now rewrite <-Eq, <-Eq''.
+        eexists; split; eauto. now rewrite <-Eq, <-Eq''.
     - econstructor; eauto.
       instantiate (1 := I).
       induction (b_eqs bl); auto;

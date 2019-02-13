@@ -705,8 +705,7 @@ Module Type TRANSLATION
 
   Lemma exists_step_method:
     forall block,
-    exists stepm,
-      find_method step (translate_block block).(c_methods) = Some stepm.
+      find_method step (translate_block block).(c_methods) = Some (step_method block).
   Proof.
     intro; simpl; rewrite ident_eqb_refl; eauto.
   Qed.
@@ -716,7 +715,6 @@ Module Type TRANSLATION
       find_method reset (translate_block block).(c_methods)
       = Some (reset_method block).
   Proof.
-    intro.
     assert (ident_eqb step reset = false) as Hsr.
     { apply ident_eqb_neq.
       apply PositiveOrder.neq_sym; apply reset_not_step.
@@ -768,14 +766,16 @@ Module Type TRANSLATION
       find_block b P = Some (block, P') ->
       exists cls prog',
         find_class b (translate P) = Some (cls, prog')
-        /\ cls = translate_block block.
+        /\ cls = translate_block block
+        /\ prog' = translate P'.
   Proof.
     induction P as [|block P]; [now inversion 1|].
     intros ** Hfind; simpl in Hfind.
     destruct (equiv_dec block.(b_name) b) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
-      injection Hfind; intros; subst block0.
-      exists (translate_block block), (translate P). split; auto.
+      injection Hfind; intros; subst block0 P'.
+      exists (translate_block block), (translate P).
+      split; [|split]; auto.
       simpl. now rewrite Heq, ident_eqb_refl.
     - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
       apply IHP in Hfind as (cls & prog' & Hfind & Hcls).

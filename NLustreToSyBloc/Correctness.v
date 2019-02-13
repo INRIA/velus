@@ -297,26 +297,26 @@ Module Type CORRECTNESS
 
     - do 3 (econstructor; eauto).
 
-    - match goal with
+    - destruct xs; try discriminate.
+      match goal with
       | H: hd_error ?l = Some x,
-           H': hd_error ?l = _ |- _ => rewrite H' in H; inv H
+           H': hd_error ?l = _ |- _ =>
+        rewrite H' in H; inv H; simpl in H'; inv H'
       end.
-      erewrite hd_error_Some_hd; eauto.
-      destruct xs; try discriminate.
       exists (add_n x Mx Is); intro.
       constructor; auto.
       + econstructor; eauto.
-        * split; eauto; reflexivity.
+        * eexists; split; eauto; reflexivity.
         * apply Env.gss.
         * now apply IHnode.
       + apply sem_equations_n_add_n; auto.
 
-    - match goal with
+    - destruct xs; try discriminate.
+      match goal with
       | H: hd_error ?l = Some x,
-           H': hd_error ?l = _ |- _ => rewrite H' in H; inv H
+           H': hd_error ?l = _ |- _ =>
+        rewrite H' in H; inv H; simpl in H'; inv H'
       end.
-      erewrite hd_error_Some_hd; eauto.
-      destruct xs; try discriminate.
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); intro.
       pose proof (msem_reset_spec Hord Reset) as Spec.
       inversion_clear Reset as [?????? Nodes].
@@ -343,12 +343,11 @@ Module Type CORRECTNESS
            - eapply Son; eauto.
              destruct Cky as [[]|(?&?&?)]; auto.
              assert (present c = absent) by sem_det; discriminate.
-           - instantiate (1 := empty_memory _); simpl.
-             rewrite <-Mmask_0; auto.
+           - simpl; rewrite <-Mmask_0; auto.
              eapply msem_node_initial_state; eauto.
          }
         *{ eapply SemSB.SEqCall with (Is := Mx 0); eauto.
-           - instantiate (1 := empty_memory _); congruence.
+           - congruence.
            - eapply sem_block_equal_memory; eauto; reflexivity.   (* TODO: fix rewriting here? *)
          }
       + specialize (Heqs' Mx n).
@@ -359,18 +358,18 @@ Module Type CORRECTNESS
            - apply Son_abs1; auto.
              destruct Cky as [[]|(c &?&?)]; auto.
              assert (present c = absent) by sem_det; discriminate.
-           - simpl; split; eauto; reflexivity.
+           - simpl; eexists; split; eauto; reflexivity.
            - econstructor; eauto.
-             instantiate (1 := empty_memory _); discriminate.
+             discriminate.
          }
         *{ do 2 (econstructor; eauto using SemSB.sem_equation).
            - change true with (negb false).
              eapply Son_abs2; eauto.
              destruct Cky as [[]|(?&?&?)]; auto.
              assert (present c = absent) by sem_det; discriminate.
-           - simpl; split; eauto; reflexivity.
+           - simpl; eexists; split; eauto; reflexivity.
            - econstructor; eauto.
-             instantiate (1 := empty_memory _); discriminate.
+             discriminate.
          }
 
     - do 2 (econstructor; auto).
