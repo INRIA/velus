@@ -99,41 +99,53 @@ Module Type CORRECTNESS
       Forall (msem_equation G bk H M M') (n_eqs n) ->
       reset_lasts (translate_node n) (M 0).
   Proof.
-    intros ** Closed Heqs.
-    split.
-    - intros ** Hin.
-      destruct n; simpl in *.
-      unfold gather_eqs in *.
-      clear - Heqs Hin.
-      revert Hin; generalize (@nil (ident * ident)).
-      induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction;
-        inversion_clear Heqs as [|?? Heq]; inv Heq; eauto.
-      + destruct i; try discriminate; eauto.
-      + destruct i; try discriminate; eauto.
-      + apply In_fst_fold_left_gather_eq in Hin as [Hin|]; eauto.
-        destruct Hin as [E|]; try contradiction; inv E.
-        match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (?&?) end; auto.
-    - specialize (Closed 0); destruct Closed as [? Vals].
-      intros ** Find.
-      assert (In x (SynNL.gather_mem (n_eqs n))) as Hin
-          by (apply Vals, not_None_is_Some; eauto).
-      destruct n; simpl in *.
-      unfold gather_eqs in *.
-      clear - Hin Find Heqs.
-      revert Hin; generalize (@nil (ident * ident)).
-      induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction;
-        inversion_clear Heqs as [|?? Heq]; inv Heq; eauto.
-      + destruct i; try discriminate; eauto.
-      + destruct i; try discriminate; eauto.
-      + destruct Hin.
-        * subst.
-          match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (Find'&?) end.
-          rewrite Find in Find'; inv Find'.
-          exists c0; split; auto.
-          apply In_fst_fold_left_gather_eq; left; left; auto.
-        * edestruct IH as (c1 &?& Hin); eauto.
-          exists c1; split; auto.
-          apply In_fst_fold_left_gather_eq; right; eauto.
+    intros ** Closed Heqs ?? Hin.
+    destruct n; simpl in *.
+    unfold gather_eqs in *.
+    clear - Heqs Hin.
+    revert Hin; generalize (@nil (ident * ident)).
+    induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction;
+      inversion_clear Heqs as [|?? Heq]; inv Heq; eauto.
+    + destruct i; try discriminate; eauto.
+    + destruct i; try discriminate; eauto.
+    + apply In_fst_fold_left_gather_eq in Hin as [Hin|]; eauto.
+      destruct Hin as [E|]; try contradiction; inv E.
+      match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (?&?) end; auto.
+    (*   intros ** Closed Heqs. *)
+    (* split. *)
+    (* - intros ** Hin. *)
+    (*   destruct n; simpl in *. *)
+    (*   unfold gather_eqs in *. *)
+    (*   clear - Heqs Hin. *)
+    (*   revert Hin; generalize (@nil (ident * ident)). *)
+    (*   induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction; *)
+    (*     inversion_clear Heqs as [|?? Heq]; inv Heq; eauto. *)
+    (*   + destruct i; try discriminate; eauto. *)
+    (*   + destruct i; try discriminate; eauto. *)
+    (*   + apply In_fst_fold_left_gather_eq in Hin as [Hin|]; eauto. *)
+    (*     destruct Hin as [E|]; try contradiction; inv E. *)
+    (*     match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (?&?) end; auto. *)
+    (* - specialize (Closed 0); destruct Closed as [? Vals]. *)
+    (*   intros ** Find. *)
+    (*   assert (In x (SynNL.gather_mem (n_eqs n))) as Hin *)
+    (*       by (apply Vals, not_None_is_Some; eauto). *)
+    (*   destruct n; simpl in *. *)
+    (*   unfold gather_eqs in *. *)
+    (*   clear - Hin Find Heqs. *)
+    (*   revert Hin; generalize (@nil (ident * ident)). *)
+    (*   induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction; *)
+    (*     inversion_clear Heqs as [|?? Heq]; inv Heq; eauto. *)
+    (*   + destruct i; try discriminate; eauto. *)
+    (*   + destruct i; try discriminate; eauto. *)
+    (*   + destruct Hin. *)
+    (*     * subst. *)
+    (*       match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (Find'&?) end. *)
+    (*       rewrite Find in Find'; inv Find'. *)
+    (*       exists c0; split; auto. *)
+    (*       apply In_fst_fold_left_gather_eq; left; left; auto. *)
+    (*     * edestruct IH as (c1 &?& Hin); eauto. *)
+    (*       exists c1; split; auto. *)
+    (*       apply In_fst_fold_left_gather_eq; right; eauto. *)
   Qed.
 
   Lemma msem_eqs_In_snd_gather_eqs_spec:
@@ -177,12 +189,14 @@ Module Type CORRECTNESS
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
     simpl in Hfind.
-    assert (Ordered_blocks (translate_node node :: translate G))
-           by (change (translate_node node :: translate G) with (translate (node :: G));
-               apply Ordered_nodes_blocks; auto).
+    (* assert (Ordered_blocks (translate_node node :: translate G)) *)
+    (*        by (change (translate_node node :: translate G) with (translate (node :: G)); *)
+    (*            apply Ordered_nodes_blocks; auto). *)
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inversion Hfind; subst n.
-      apply find_node_translate in Hfind' as (?&?&?&?); subst.
+      apply find_node_translate in Hfind' as (?&?&Hfind'&?); subst.
+      pose proof Hfind';
+        simpl in Hfind'; rewrite Hnf in Hfind'; inv Hfind'.
       eapply Forall_msem_equation_global_tl in Heqs; eauto.
       econstructor; eauto.
       + eapply msem_eqs_reset_lasts; eauto.
@@ -195,16 +209,12 @@ Module Type CORRECTNESS
         destruct node; simpl in *.
         edestruct msem_eqs_In_snd_gather_eqs_spec
           as (?& Mx &?&?& [Node|(rs & Reset)] & Sub); eauto.
-        * apply IH in Node; auto.
-          eexists; split; eauto.
-          apply initial_state_tail; simpl; auto.
-        * inversion_clear Reset as [?????? Nodes].
-          destruct (Nodes (count rs 0)) as (M0 &?& Node & Mmask &?).
-          apply IH in Node; auto.
-          specialize (Mmask 0); specialize (Sub 0).
-          rewrite <-Mmask in Sub; auto.
-          eexists; split; eauto.
-          apply initial_state_tail; simpl; auto.
+        inversion_clear Reset as [?????? Nodes].
+        destruct (Nodes (count rs 0)) as (M0 &?& Node & Mmask &?).
+        apply IH in Node; auto.
+        specialize (Mmask 0); specialize (Sub 0).
+        rewrite <-Mmask in Sub; auto.
+        eexists; split; eauto.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons in Hsem; eauto.
       simpl; rewrite <-initial_state_tail; eauto.

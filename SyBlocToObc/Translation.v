@@ -658,9 +658,14 @@ Module Type TRANSLATION
     apply b_good.
   Qed.
 
+  Definition reset_mems (mems: list (ident * const)) : stmt :=
+    fold_left (fun s xc => Comp s (AssignSt (fst xc) (Const (snd xc)))) mems Skip.
+
+  Definition reset_insts (insts: list (ident * ident)) : stmt :=
+    fold_left (fun s xf => Comp s (Call [] (snd xf) (fst xf) reset [])) insts Skip.
+
   Definition translate_reset_eqns (b: block) : stmt :=
-    let mems := fold_left (fun s xc => Comp s (AssignSt (fst xc) (Const (snd xc)))) b.(b_lasts) Skip in
-    fold_left (fun s xf => Comp s (Call [] (snd xf) (fst xf) reset [])) b.(b_blocks) mems.
+    Comp (reset_mems b.(b_lasts)) (reset_insts b.(b_blocks)).
 
   Program Definition reset_method (b: block) : method :=
     {| m_name := reset;

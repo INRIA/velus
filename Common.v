@@ -2521,7 +2521,7 @@ Ltac induction_list_tac e I l H :=
     remember e as l eqn:Eq;
       assert (exists l', e = l' ++ l) as Eql by (exists (@nil A); simpl; auto);
       clear Eq; move Eql at top; induction l as I;
-      [clear Eql|
+      [(* clear Eql *)|
        match goal with
          IH: (exists l', e = l' ++ ?l'') -> ?P,
              EQ: (exists l', e = l' ++ ?x::?xs) |- _ =>

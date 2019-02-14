@@ -772,8 +772,9 @@ Module Type TRANSLATION
   Lemma find_node_translate:
     forall n g node,
       find_node n g = Some node ->
-      exists bl prog', SynSB.find_block n (translate g) = Some (bl, prog')
-                  /\ bl = translate_node node.
+      exists bl prog',
+        SynSB.find_block n (translate g) = Some (bl, prog')
+        /\ bl = translate_node node.
   Proof.
     induction g as [|node g]; [now inversion 1|].
     intros ** Hfind.
