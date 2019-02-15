@@ -631,207 +631,679 @@ Module Type CORRECTNESS
     inversion_clear 1; now chase_skip.
   Qed.
 
-  Lemma reset_mems_not_in:
-    forall mems prog me ve me' ve' x,
-      stmt_eval prog me ve (reset_mems mems) (me', ve') ->
-      ~ InMembers x mems ->
-      find_val x me' = find_val x me.
+  (* Lemma reset_mems_not_in: *)
+  (*   forall mems prog me ve me' ve' x, *)
+  (*     stmt_eval prog me ve (reset_mems mems) (me', ve') -> *)
+  (*     ~ InMembers x mems -> *)
+  (*     find_val x me' = find_val x me. *)
+  (* Proof. *)
+  (*   unfold reset_mems. *)
+  (*   induction mems as [|(x, c)]; intros ** StEval Notin; simpl in StEval. *)
+  (*   - chase_skip; auto. *)
+  (*   - apply NotInMembers_cons in Notin as (). *)
+  (*     apply stmt_eval_fold_left_lift in StEval as (?&?& Hcomp & StEval); *)
+  (*       rewrite Comp_Skip_left in Hcomp; inv Hcomp. *)
+  (*     eapply IHmems in StEval; eauto. *)
+  (*     rewrite find_val_gso in StEval; auto. *)
+  (* Qed. *)
+
+  Section BuildMemWith.
+
+    Context {A B V: Type}.
+    Variable f: A -> V.
+    Variable g: ident * B -> memory V.
+
+    Definition build_mem_with (xs: list (ident * A)) (ys: list (ident * B)) (m: memory V): memory V :=
+      fold_left (fun m x => add_inst (fst x) (g x) m) ys
+                (fold_left (fun m y => add_val (fst y) (f (snd y)) m) xs m).
+
+    Definition build_mem_with_spec (xs: list (ident * A)) (ys: list (ident * B)) (m: memory V): memory V :=
+      let (xs, vs) := split xs in
+      let (ys', ws) := split ys in
+      Mem (Env.adds xs (map f vs) (values m)) (Env.adds ys' (map g ys) (instances m)).
+
+    Lemma build_mem_with_spec_values:
+      forall xs ys m,
+        values (build_mem_with_spec xs ys m) =
+        let (xs, vs) := split xs in
+        Env.adds xs (map f vs) (values m).
+    Proof.
+      intros; unfold build_mem_with_spec; destruct (split xs), (split ys); auto.
+    Qed.
+
+    Lemma build_mem_with_spec_instances:
+      forall xs ys m,
+        instances (build_mem_with_spec xs ys m) =
+        let (ys', ws) := split ys in
+        Env.adds ys' (map g ys) (instances m).
+    Proof.
+      intros; unfold build_mem_with_spec; destruct (split xs), (split ys); auto.
+    Qed.
+
+    Lemma build_mem_with_equal:
+      forall ys xs m,
+        NoDupMembers ys ->
+        NoDupMembers xs ->
+        build_mem_with xs ys m ≋ build_mem_with_spec xs ys m.
+    Proof.
+      unfold build_mem_with, build_mem_with_spec.
+      induction ys as [|(y, b)]; intros ** NoDup_ys NoDup_xs; simpl.
+      - rewrite Env.adds_nil_nil.
+        revert m.
+        induction xs as [|(x, a)]; intro; simpl.
+        + now rewrite Env.adds_nil_nil.
+        + inversion_clear NoDup_xs as [|??? Notin].
+          rewrite IHxs; auto.
+          destruct (split xs) eqn: E; simpl.
+          rewrite Env.adds_cons_cons; try reflexivity.
+          replace l with (fst (split xs)); [|now rewrite E].
+          intro Hin; apply Notin.
+          apply in_split_l' in Hin as (?&?).
+          eapply In_InMembers; eauto.
+      - destruct (split xs) eqn: Exs, (split ys) as (l') eqn: Eys; simpl in *.
+        inversion_clear NoDup_ys as [|??? Notin].
+        rewrite Env.adds_cons_cons.
+        + set (m' := add_inst y (g (y, b)) m).
+          change (Env.add y (g (y, b)) (instances m)) with (instances m');
+            change (values m) with (values m').
+          apply (IHys _ m') in NoDup_xs; auto.
+          rewrite Exs in NoDup_xs.
+          rewrite <-NoDup_xs.
+          subst m'; clear; revert m.
+          induction xs as [|(x', a')]; intros; simpl; try reflexivity.
+          rewrite IHxs.
+          now rewrite add_inst_val_comm.
+        + replace l' with (fst (split ys)); [|now rewrite Eys].
+          intro Hin; apply Notin.
+          apply in_split_l' in Hin as (?&?).
+          eapply In_InMembers; eauto.
+    Qed.
+
+  End BuildMemWith.
+
+  Add Parametric Morphism A B V f xs ys m: (fun g => @build_mem_with_spec A B V f g xs ys m)
+      with signature (fun g g' => forall x, g x ≋ g' x) ==> equal_memory
+        as build_mem_with_spec_rec_equal_memory.
   Proof.
-    unfold reset_mems.
-    induction mems as [|(x, c)]; intros ** StEval Notin; simpl in StEval.
-    - chase_skip; auto.
-    - apply NotInMembers_cons in Notin as ().
-      apply stmt_eval_fold_left_lift in StEval as (?&?& Hcomp & StEval);
-        rewrite Comp_Skip_left in Hcomp; inv Hcomp.
-      eapply IHmems in StEval; eauto.
-      rewrite find_val_gso in StEval; auto.
+    intros g g' E.
+    unfold build_mem_with_spec.
+    induction ys as [|(y, b)]; simpl; try reflexivity.
+    destruct (split ys); simpl.
+    unfold Env.adds. simpl.
+    destruct (split xs); simpl.
+    constructor; try reflexivity.
+    simpl.
+    inversion_clear IHys as [??? Insts].
+    unfold Env.adds in Insts; simpl in Insts.
+    now rewrite E, Insts.
   Qed.
 
-  (* Lemma InMembers_rev: *)
-  (*   forall A B (l: list (A * B)) x, *)
-  (*     InMembers x l <-> *)
-  (*     InMembers x (rev l). *)
-  (* Proof. *)
-  (* Admitted. *)
+  Fixpoint reset_state_spec (P: SynSB.program) (me: menv) (b: ident) : menv :=
+    let reset_state_spec_aux (P: SynSB.program) (me: menv) (xb: ident * ident) :=
+        reset_state_spec P match find_inst (fst xb) me with
+                           | Some me' => me'
+                           | None => mempty
+                           end (snd xb)
+    in
+    match P with
+    | [] => me
+    | bl :: P =>
+      if ident_eqb (b_name bl) b
+      then build_mem_with_spec sem_const (reset_state_spec_aux P me) (b_lasts bl) (b_blocks bl) me
+      else reset_state_spec P me b
+    end.
 
-  (* Lemma NoDupMembers_rev: *)
-  (*   forall A B (l: list (A * B)), *)
-  (*     NoDupMembers l <-> *)
-  (*     NoDupMembers (rev l). *)
+  Definition reset_state_spec_aux (P: SynSB.program) (me: menv) (xb: ident * ident) : menv :=
+    reset_state_spec P match find_inst (fst xb) me with
+                       | Some me' => me'
+                       | None => mempty
+                       end (snd xb).
+
+  (* Fixpoint reset_state (P: SynSB.program) (me: menv) (b: ident) : menv := *)
+  (*   let reset_state_aux (P: SynSB.program) (me: menv) (xb: ident * ident) := *)
+  (*       reset_state P match find_inst (fst xb) me with *)
+  (*                          | Some me' => me' *)
+  (*                          | None => mempty *)
+  (*                          end (snd xb) *)
+  (*   in *)
+  (*   match P with *)
+  (*   | [] => me *)
+  (*   | bl :: P => *)
+  (*     if ident_eqb (b_name bl) b *)
+  (*     then build_mem_with sem_const (reset_state_aux P me) (b_lasts bl) (b_blocks bl) me *)
+  (*     else reset_state P me b *)
+  (*   end. *)
+
+  (* Definition reset_state_aux (P: SynSB.program) (me: menv) (xb: ident * ident) : menv := *)
+  (*   reset_state P match find_inst (fst xb) me with *)
+  (*                 | Some me' => me' *)
+  (*                 | None => mempty *)
+  (*                 end (snd xb). *)
+
+  (* Lemma reset_state_equal: *)
+  (*   forall P me b, *)
+  (*     reset_state P me b ≋ reset_state_spec P me b. *)
   (* Proof. *)
-  (* Admitted. *)
+  (*   induction P as [|bl]; intros; simpl; try reflexivity. *)
+  (*   destruct (ident_eqb (b_name bl) b); auto. *)
+  (*   rewrite (build_mem_with_spec_rec_equal_memory _ _ _ _ _ _ _ _ (reset_state_aux P me)). *)
+  (*   - apply build_mem_with_equal. *)
+  (*     + apply b_nodup_blocks. *)
+  (*     + apply b_nodup_lasts. *)
+  (*   - now setoid_rewrite IHP. *)
+  (* Qed. *)
+
+  Lemma reset_state_spec_find_Some:
+    forall P me b P' bl,
+      find_block b P = Some (bl, P') ->
+      reset_state_spec P me b = build_mem_with_spec sem_const
+                                                    (reset_state_spec_aux P' me)
+                                                    (b_lasts bl) (b_blocks bl)
+                                                    me.
+  Proof.
+    intros ** Find.
+    induction P as [|bl'].
+    - inv Find.
+    - simpl in *.
+      destruct (ident_eqb (b_name bl') b); auto.
+      inv Find; auto.
+  Qed.
+
+  Lemma reset_state_spec_find_None:
+    forall P me b,
+      find_block b P = None ->
+      reset_state_spec P me b = me.
+  Proof.
+    intros ** Find.
+    induction P as [|bl']; simpl in *; auto.
+    destruct (ident_eqb (b_name bl') b); try discriminate; auto.
+  Qed.
+
+  (* Lemma reset_state_find_Some: *)
+  (*   forall P me b P' bl, *)
+  (*     find_block b P = Some (bl, P') -> *)
+  (*     reset_state P me b = build_mem_with sem_const *)
+  (*                                         (reset_state_aux P' me) *)
+  (*                                         (b_lasts bl) (b_blocks bl) *)
+  (*                                         me. *)
+  (* Proof. *)
+  (*   intros ** Find. *)
+  (*   induction P as [|bl']. *)
+  (*   - inv Find. *)
+  (*   - simpl in *. *)
+  (*     destruct (ident_eqb (b_name bl') b); auto. *)
+  (*     inv Find; auto. *)
+  (* Qed. *)
+
+  (* Lemma reset_state_find_None: *)
+  (*   forall P me b, *)
+  (*     find_block b P = None -> *)
+  (*     reset_state P me b = me. *)
+  (* Proof. *)
+  (*   intros ** Find. *)
+  (*   induction P as [|bl']; simpl in *; auto. *)
+  (*   destruct (ident_eqb (b_name bl') b); try discriminate; auto. *)
+  (* Qed. *)
+
+  Lemma find_val_reset_state_spec:
+    forall P me b bl P',
+      find_block b P = Some (bl, P') ->
+      (forall x, find_val x me <> None -> InMembers x (b_lasts bl)) ->
+      reset_lasts bl (reset_state_spec P me b).
+      (* (forall x c, *)
+      (*     In (x, c) (b_lasts bl) -> *)
+      (*     find_val x (reset_state_spec P me b) = Some (sem_const c)) *)
+      (* /\ *)
+      (* forall x v, *)
+      (*   find_val x (reset_state_spec P me b) = Some v -> *)
+      (*   exists c, v = sem_const c /\ In (x, c) (b_lasts bl). *)
+  Proof.
+    intros ** Spec_me.
+    unfold reset_lasts, find_val in *.
+    erewrite reset_state_spec_find_Some; eauto.
+    rewrite build_mem_with_spec_values.
+    pose proof (b_nodup_lasts_blocks bl) as NoDup.
+    apply NoDup_app_weaken in NoDup.
+    split; intros ** Hx.
+    - destruct (split (b_lasts bl)) eqn: E.
+      rewrite <-split_fst_map, E in NoDup; auto.
+      apply Env.In_find_adds; auto.
+      rewrite combine_map_snd.
+      pose proof (split_combine (b_lasts bl)) as Eq.
+      rewrite E in Eq.
+      apply in_map_iff.
+      setoid_rewrite Eq.
+      exists (x, c); auto.
+    - destruct (Env.find x (values me)) eqn: Find.
+      + assert (InMembers x (b_lasts bl)) as Hin
+            by (apply Spec_me; rewrite Find; discriminate).
+        clear Spec_me.
+        induction (b_lasts bl) as [|(x', c')]; simpl in *.
+        * inv Hin.
+        *{ destruct (split l) eqn: El.
+           destruct Hin; simpl in *.
+           - subst; rewrite Env.find_gsss in Hx.
+             inv Hx; eauto.
+           - inversion_clear NoDup as [|?? Notin].
+             rewrite Env.find_gsso in Hx.
+             + apply IHl in Hx as (c &?&?); eauto.
+             + intro; subst; apply Notin, fst_InMembers; auto.
+         }
+      + destruct (split (b_lasts bl)) eqn: E.
+        rewrite <-split_fst_map, E in NoDup; auto.
+        apply Env.find_adds_In in Hx; auto.
+        rewrite combine_map_snd in Hx.
+        pose proof (split_combine (b_lasts bl)) as Eq.
+        rewrite E in Eq.
+        apply in_map_iff in Hx as ((?&?)& E' & Hin).
+        inv E'; setoid_rewrite Eq in Hin.
+        exists c; auto.
+  Qed.
+
+  Lemma reset_state_spec_other:
+    forall P b me bl,
+      b <> b_name bl ->
+      reset_state_spec (bl :: P) me b = reset_state_spec P me b.
+  Proof.
+    intros.
+    destruct (find_block b P) as [[]|] eqn: Find.
+    - symmetry; erewrite reset_state_spec_find_Some; eauto.
+      erewrite <-find_block_other in Find; eauto.
+      erewrite reset_state_spec_find_Some; eauto.
+    - symmetry; rewrite reset_state_spec_find_None; auto.
+      rewrite <-find_block_other with (bl := bl) in Find; eauto.
+      rewrite reset_state_spec_find_None; auto.
+  Qed.
+
+  Lemma reset_state_spec_other_app:
+    forall P P' b me bl,
+      find_block b P = None ->
+      b <> b_name bl ->
+      reset_state_spec (P ++ bl :: P') me b = reset_state_spec P' me b.
+  Proof.
+    intros.
+    destruct (find_block b P') as [[]|] eqn: Find.
+    - symmetry; erewrite reset_state_spec_find_Some; eauto.
+      erewrite <-find_block_other_app in Find; eauto.
+      erewrite reset_state_spec_find_Some; eauto.
+    - symmetry; rewrite reset_state_spec_find_None; auto.
+      rewrite <-find_block_other_app with (P := P) (bl := bl) in Find; eauto.
+      rewrite reset_state_spec_find_None; auto.
+  Qed.
+
+  Inductive correct_domain: SynSB.program -> ident -> menv -> Prop :=
+    correct_domain_intro:
+      forall P b me bl P',
+        find_block b P = Some (bl, P') ->
+        (forall x,
+            find_val x me <> None ->
+            InMembers x (b_lasts bl)) ->
+        (forall x me',
+            sub_inst x me me' ->
+            exists b',
+              In (x, b') (b_blocks bl)
+              /\ correct_domain P' b' me') ->
+        correct_domain P b me.
+
+  Lemma correct_domain_empty:
+    forall P b bl P',
+      find_block b P = Some (bl, P') ->
+      correct_domain P b mempty.
+  Proof.
+    intros ** Find.
+    econstructor; eauto.
+    - setoid_rewrite find_val_gempty; intuition.
+    - unfold sub_inst; setoid_rewrite find_inst_gempty; congruence.
+  Qed.
+
+  Lemma correct_domain_other_app:
+    forall me P P' b bl,
+      find_block b P = None ->
+      b <> b_name bl ->
+      (correct_domain (P ++ bl :: P') b me <-> correct_domain P' b me).
+  Proof.
+    split; inversion_clear 1 as [????? Find]; econstructor; eauto.
+    - rewrite find_block_other_app in Find; eauto.
+    - rewrite find_block_other_app; eauto.
+  Qed.
+
+  Lemma initial_reset_state_spec:
+    forall P me b,
+      Ordered_blocks P ->
+      correct_domain P b me ->
+      initial_state P b (reset_state_spec P me b).
+  Proof.
+    induction P as [|node]; intros ** Ord CorrDom;
+      inversion_clear CorrDom as [????? Find Spec_lasts Spec_insts];
+      try now inv Find.
+    econstructor; eauto.
+
+    - split; eapply find_val_reset_state_spec; eauto.
+
+    - intros ** Hin.
+      unfold sub_inst, find_inst.
+      erewrite reset_state_spec_find_Some; eauto.
+      rewrite build_mem_with_spec_instances.
+      pose proof (b_nodup_lasts_blocks bl) as NoDup.
+      apply NoDup_comm, NoDup_app_weaken in NoDup.
+      destruct (split (b_blocks bl)) as (l, l') eqn: Eq.
+      exists (reset_state_spec_aux P' me (x, b')); split.
+      + apply Environment.Env.In_find_adds.
+        * assert (l = map fst (b_blocks bl)) as ->
+              by (now rewrite <-split_fst_map, Eq); auto.
+        * rewrite combine_map_snd.
+          apply in_map_iff.
+          exists (x, (x, b')); split; auto.
+          clear - Hin Eq.
+          revert dependent l; revert l'.
+          induction (b_blocks bl) as [|(y, c) bls]; intros;
+            simpl in *; try contradiction.
+          destruct (split bls).
+          inv Eq; simpl.
+          destruct Hin as [E|]; eauto.
+          inv E; auto.
+      + simpl in Find.
+        apply fst_NoDupMembers in NoDup.
+        destruct (ident_eqb (b_name node) b) eqn: E.
+        * inv Find.
+          inversion_clear Ord as [|??? Blocks].
+          eapply Forall_forall in Blocks as (?&?&?&Find'); eauto.
+          eapply IHP; eauto.
+          simpl; destruct (find_inst x me) eqn: Find_me;
+            try eapply correct_domain_empty; eauto.
+          apply Spec_insts in Find_me as (b'' &?&?).
+          assert (b' = b'') as -> by (eapply NoDupMembers_det; eauto); auto.
+        * pose proof Ord as Ord'.
+          inversion_clear Ord as [|?? Ord'' Blocks]; clear Blocks.
+          apply find_block_app in Find as (P1 & HP &?).
+          rewrite HP in *.
+          apply Ordered_blocks_split in Ord''.
+          eapply Forall_forall in Ord'' as (?&?&?&?& Find'); eauto.
+          simpl in *.
+          rewrite <-find_block_other_app with (P := P1) (bl := bl) in Find'; auto.
+          unfold reset_state_spec_aux.
+          erewrite <-reset_state_spec_other_app, <-initial_state_other_app; eauto.
+          inv Ord'.
+          eapply IHP; eauto.
+          simpl; destruct (find_inst x me) eqn: Find_me;
+            try eapply correct_domain_empty; eauto.
+          rewrite correct_domain_other_app; auto.
+          apply Spec_insts in Find_me as (b'' &?&?).
+          assert (b' = b'') as -> by (eapply NoDupMembers_det; eauto); auto.
+
+    - unfold sub_inst, find_inst.
+      erewrite reset_state_spec_find_Some; eauto.
+      rewrite build_mem_with_spec_instances.
+      pose proof (b_nodup_lasts_blocks bl) as NoDup.
+      apply NoDup_comm, NoDup_app_weaken in NoDup.
+      destruct (split (b_blocks bl)) as (l, l') eqn: Eq.
+      intros ** Find'.
+      apply Env.find_adds_In_spec in Find' as [Hin|(Notin & Find')].
+      + rewrite combine_map_snd in Hin.
+        apply in_map_iff in Hin as ((?& x' & b')& E & Hin); simpl in *; inv E.
+        assert (x = x').
+        { clear - Eq Hin.
+          revert dependent l; revert l'.
+          induction (b_blocks bl) as [|(y, c) bls]; intros;
+            simpl in *.
+          - inv Eq; contradiction.
+          - destruct (split bls); inv Eq.
+            destruct Hin as [E|]; eauto.
+            inv E; auto.
+        }
+        subst x'.
+        assert (In (x, b') (b_blocks bl)).
+        { clear - Hin Eq.
+          revert dependent l; revert l'.
+          induction (b_blocks bl) as [|(y, c) bls]; intros;
+            simpl in *.
+          - inv Eq; contradiction.
+          - destruct (split bls).
+            inv Eq; simpl.
+            destruct Hin as [E|]; eauto.
+            inv E; auto.
+         }
+        exists b'; split; auto.
+        apply fst_NoDupMembers in NoDup.
+        destruct (ident_eqb (b_name node) b) eqn: E.
+        * inv Find.
+          inversion_clear Ord as [|??? Blocks].
+          eapply Forall_forall in Blocks as (?&?&?&Find'); eauto.
+          eapply IHP; eauto.
+          simpl; destruct (find_inst x me) eqn: Find_me;
+            try eapply correct_domain_empty; eauto.
+          apply Spec_insts in Find_me as (b'' &?&?).
+          assert (b' = b'') as -> by (eapply NoDupMembers_det; eauto); auto.
+        * pose proof Ord as Ord'.
+          inversion_clear Ord as [|?? Ord'' Blocks]; clear Blocks.
+          apply find_block_app in Find as (P1 & HP &?).
+          rewrite HP in *.
+          apply Ordered_blocks_split in Ord''.
+          eapply Forall_forall in Ord'' as (?&?&?&?& Find'); eauto.
+          simpl in *.
+          rewrite <-find_block_other_app with (P := P1) (bl := bl) in Find'; auto.
+          unfold reset_state_spec_aux.
+          erewrite <-reset_state_spec_other_app, <-initial_state_other_app; eauto.
+          inv Ord'.
+          eapply IHP; eauto.
+          simpl; destruct (find_inst x me) eqn: Find_me;
+            try eapply correct_domain_empty; eauto.
+          rewrite correct_domain_other_app; auto.
+          apply Spec_insts in Find_me as (b'' &?&?).
+          assert (b' = b'') as -> by (eapply NoDupMembers_det; eauto); auto.
+      + apply Spec_insts in Find' as (b' & Hin &?); eauto.
+        apply NotIn_NotInMembers in Notin.
+        exfalso; apply Notin.
+        eapply In_InMembers.
+        rewrite combine_map_snd.
+        apply in_map_iff.
+        exists (x, (x, b')); split; auto.
+        clear - Hin Eq.
+        revert dependent l; revert l'.
+        induction (b_blocks bl) as [|(y, c) bls]; intros;
+          simpl in *; try contradiction.
+        destruct (split bls).
+        inv Eq; simpl.
+        destruct Hin as [E|]; eauto.
+        inv E; auto.
+      + assert (l = map fst (b_blocks bl)) as ->
+            by (now rewrite <-split_fst_map, Eq); auto.
+  Qed.
+
+  Lemma translate_reset_eqns_comp:
+    forall prog me ve bl me' ve',
+      stmt_eval prog me ve (translate_reset_eqns bl) (me', ve')
+      <-> exists me'' ve'',
+        stmt_eval prog me ve (reset_mems Skip bl.(b_lasts)) (me'', ve'')
+        /\ stmt_eval prog me'' ve'' (reset_insts Skip bl.(b_blocks)) (me', ve').
+  Proof.
+    unfold translate_reset_eqns; unfold reset_insts at 1; split.
+    - intros StEval; rewrite stmt_eval_fold_left_lift in StEval; auto.
+    - intros; rewrite stmt_eval_fold_left_lift; auto.
+  Qed.
+
+  (* Lemma translate_reset_eqns_other: *)
+  (*   forall bl P node b me ve me', *)
+  (*     b_name node <> b -> *)
+  (*     stmt_eval (translate P) me ve (translate_reset_eqns bl) (me', ve) -> *)
+  (*     stmt_eval (translate (node :: P)) me ve (translate_reset_eqns bl) (me', ve). *)
+  (* Proof. *)
+  (*   unfold translate_reset_eqns. *)
+  (*   intro bl. *)
+  (*   induction (b_blocks bl); simpl. *)
+  (*   - induction (b_lasts bl); simpl; intros ** StEval. *)
+  (*     + chase_skip; eauto using stmt_eval. *)
+  (*     + rewrite stmt_eval_fold_left_lift in StEval; setoid_rewrite Comp_Skip_left in StEval. *)
+  (*       destruct StEval as (?&?& Hassg & StEval). *)
+  (*       inv Hassg. *)
+  (*       eapply IHl in StEval; eauto. *)
+  (*       setoid_rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left. *)
+  (*       do 2 eexists; split; eauto using stmt_eval, exp_eval. *)
+  (*   - *)
+  (*       eapply IHl; eauto. *)
+  (*   - induction (b_lasts bl); simpl in *; intros. *)
+  (*     + setoid_rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left. *)
+  (*       edestruct IHl as (?&?&?). *)
+  (*       eexists; split; eauto. *)
+  (*       * do 2 eexists; split; eauto using stmt_eval, exp_eval. *)
+  (*         econstructor; eauto. *)
+
+  Definition add_mems (mems: list (ident * const)) (me: menv) : menv :=
+    let (xs, cs) := split mems in
+    Mem (Env.adds' (combine xs (map sem_const cs)) (values me)) (instances me).
+
+  Lemma add_inst_add_mems:
+    forall x me me' xs,
+      add_inst x me' (add_mems xs me) = add_mems xs (add_inst x me' me).
+  Proof.
+    unfold add_inst, add_mems; intros.
+    destruct (split xs); auto.
+  Qed.
+
+  Lemma find_inst_add_mems:
+    forall x me xs,
+      find_inst x (add_mems xs me) = find_inst x me.
+  Proof.
+    unfold find_inst, add_mems; intros.
+    destruct (split xs); auto.
+  Qed.
 
   Lemma reset_mems_spec:
     forall mems prog me ve,
       NoDupMembers mems ->
-      (forall x, find_val x me <> None -> InMembers x mems) ->
-      exists me',
-        stmt_eval prog me ve (reset_mems mems) (me', ve)
-        /\ (forall x c,
-              In (x, c) mems ->
-              find_val x me' = Some (sem_const c))
-        /\ forall x v,
-            find_val x me' = Some v ->
-            exists c, v = sem_const c /\ In (x, c) mems.
+      stmt_eval prog me ve (reset_mems Skip mems) (add_mems mems me, ve).
   Proof.
-    induction mems as [|(x, c)]; inversion_clear 1; simpl; intros ** Spec.
-    - exists me; intuition; eauto.
-      exfalso; eapply Spec.
-      apply not_None_is_Some; eauto.
-    - edestruct IHl with (me := me); eauto.
-      intros ** Find.
-      apply Spec in Find as [E|]; auto.
-
-
-
-    SearchAbout fold_left fold_right.
-    destruct mems as [|(x, c)]; simpl; intros ** Nodup Spec.
-    - exists me; intuition; eauto using stmt_eval.
-      exfalso; eapply Spec.
-      apply not_None_is_Some; eauto.
-    - setoid_rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
-
-
-      assert (forall y, find_val y (add_val x (sem_const c) me) <> None -> x = y \/ InMembers y mems) as Spec'.
-      { intros ** Find.
-        destruct (ident_eq_dec y x); auto.
-        rewrite find_val_gso in Find; auto.
-      }
-      clear Spec.
-      inversion_clear Nodup as [|??? Notin Nodup'].
-      (* SearchAbout not InMembers.  *)
-      revert dependent me.
-      induction mems as [|(x', c')]; simpl; intros;
-        inversion_clear Nodup'; try apply NotInMembers_cons in Notin as ().
-      + setoid_rewrite Comp_Skip_left.
-        eexists; split; eauto using stmt_eval, exp_eval.
-        split.
-        * intros ** [E|?]; try contradiction.
-          inv E; apply find_val_gss.
-        * intros ** Find.
-          assert (x = x0 \/ False) as [|]
-              by (apply Spec', not_None_is_Some; eauto);
-            try contradiction.
-          subst; rewrite find_val_gss in Find; inv Find; eauto.
-      + setoid_rewrite stmt_eval_fold_left_lift.
-        edestruct IHmems with (me := add_val x' (sem_const c') (add_val x (sem_const c) me)) as (?&?&?) ; auto.
-        * intros ** Find.
-          destruct (ident_eq_dec y x); auto.
-          rewrite find_val_gso in Find; auto.
-
-
-           destruct (ident_eq_dec x0 x).
-           - subst; rewrite find_val_gss in Find; inv Find; eauto.
-           - rewrite find_val_gso in Find; eauto.
-        econstructor; eauto.
-    - exists me; intuition; eauto using stmt_eval.
-      exfalso; eapply Spec.
-      apply not_None_is_Some; eauto.
-    - setoid_rewrite stmt_eval_fold_left_lift.
-      edestruct IHmems with (me := add_val x (sem_const c) me) as (?&?&?) ; auto.
-      + intros y Find.
-        destruct (ident_eq_dec y x).
-        * subst; rewrite find_val_gss in Find.
-        Focus 2.
-      eexists; split; eauto.
-      + do 2 eexists; split; eauto using stmt_eval, exp_eval.
-      + intros ** [E|]; auto.
-        inv E.
-        erewrite reset_mems_not_in; eauto.
-        apply find_val_gss.
+    unfold reset_mems, add_mems.
+    induction mems as [|(x, c)]; simpl; inversion_clear 1 as [|??? Notin].
+    - destruct me; eauto using stmt_eval.
+    - rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
+      do 2 eexists; split; eauto using stmt_eval, exp_eval.
+      destruct (split mems) eqn: Eq; simpl.
+      rewrite Env.adds_add_comm'.
+      + change (instances me) with (instances (add_val x (sem_const c) me)).
+        apply IHmems; auto.
+      + intros ** Hin; apply Notin.
+        rewrite combine_map_snd in Hin.
+        apply in_map_iff in Hin as ((?&?)& E &?); inv E.
+        pose proof (split_combine mems) as E'; rewrite Eq in E'; rewrite <-E'.
+        eapply In_InMembers; eauto.
   Qed.
 
-  Lemma reset_insts_not_in:
-    forall insts prog me ve me' ve' x,
-      stmt_eval prog me ve (reset_insts insts) (me', ve') ->
-      ~ InMembers x insts ->
-      find_inst x me' = find_inst x me.
+  Lemma not_InMembers_In_split:
+    forall A B (xvs: list (A * B)) xs vs x,
+      split xvs = (xs, vs) ->
+      ~ InMembers x xvs ->
+      ~ In x xs.
   Proof.
-    unfold reset_insts.
-    induction insts as [|(x, b)]; intros ** StEval Notin; simpl in StEval.
-    - chase_skip; auto.
-    - apply NotInMembers_cons in Notin as ().
-      apply stmt_eval_fold_left_lift in StEval as (?&?& Hcomp & StEval);
-        rewrite Comp_Skip_left in Hcomp; inv Hcomp.
-      eapply IHinsts in StEval; eauto.
-      rewrite find_inst_gso in StEval; auto.
+    intros ** Eq Notin Hin; apply Notin; clear Notin.
+    revert dependent xs; revert vs.
+    induction xvs as [|()]; simpl; intros.
+    + inv Eq; contradiction.
+    + destruct (split xvs); inv Eq.
+      destruct Hin; auto.
+      right; eauto.
   Qed.
 
-  Lemma translate_reset_eqns_spec:
-    forall P me bl,
+  Lemma reset_insts_spec:
+    forall bl P b me ve,
       (forall x b, In (x, b) bl.(b_blocks) -> exists bl P', find_block b P = Some (bl, P')) ->
       (forall me' b' bl' P',
           find_block b' P = Some (bl', P') ->
           exists me'',
             stmt_call_eval (translate P) me' b' reset [] me'' []
-            /\ initial_state P b' me'') ->
+            /\ me'' ≋ reset_state_spec P me' b') ->
+      b_name bl = b ->
       exists me',
-        stmt_eval (translate P) me vempty (translate_reset_eqns bl) (me', vempty)
-        /\ reset_lasts bl me'
-        /\ (forall x b',
-              In (x, b') bl.(b_blocks) ->
-              exists me'',
-                sub_inst x me' me''
-                /\ initial_state P b' me'').
+        stmt_eval (translate P) (add_mems (b_lasts bl) me) ve (reset_insts Skip (b_blocks bl)) (me', ve)
+        /\ me' ≋ reset_state_spec (bl :: P) me b.
   Proof.
-    intros ** WD IH.
-    pose proof (b_nodup_lasts_blocks bl) as Nodup_lasts;
-      pose proof Nodup_lasts as Nodup_blocks;
-      apply NoDup_app_weaken, fst_NoDupMembers in Nodup_lasts;
-      apply NoDup_comm, NoDup_app_weaken, fst_NoDupMembers in Nodup_blocks.
-    unfold translate_reset_eqns.
     unfold reset_insts.
-
-    setoid_rewrite Comp_spec.
-    cut (exists me'' ve'',
-            stmt_eval (translate P) me vempty (reset_mems (b_lasts bl)) (me'', ve'')
-            /\ reset_lasts bl me''
-            /\ exists me',
-                stmt_eval (translate P) me'' ve''
-                          (fold_left (fun s xf => Comp s (Call [] (snd xf) (fst xf) reset []))
-                                     (b_blocks bl) Skip) (me', vempty)
-                /\ (forall x b',
-                      In (x, b') (b_blocks bl) ->
-                      exists me'', sub_inst x me' me'' /\ initial_state P b' me'')).
-    - intros (me'' & ve'' &?& RstLasts & me' & StEval &?).
-      exists me'; intuition; eauto.
-      clear - RstLasts StEval.
-      revert dependent me''; revert ve''.
-      induction (b_blocks bl) as [|(x, b)]; intros; simpl in *.
-      + now chase_skip.
-      + apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEval').
-        rewrite Comp_Skip_left in StEval; inv StEval.
-        apply IHl in StEval'; auto.
-    - destruct (reset_mems_spec (b_lasts bl) (translate P) me vempty)
-        as (me'' & StEval & RstLasts); auto.
-      exists me'', vempty; intuition; eauto.
-      clear StEval RstLasts Nodup_lasts.
-      revert me''; generalize vempty.
-      induction (b_blocks bl) as [|(x, b')]; simpl; intros; inv Nodup_blocks.
-      + exists me''; intuition; eauto using stmt_eval.
-      + setoid_rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
-        edestruct WD as (?&?&?); try left; eauto.
-        edestruct IH with (b' := b') as (me0 &?&?); eauto.
-        edestruct IHl as (?&?&?); auto.
-        * intros ** Hin; eapply WD; right; eauto.
-        *{ eexists; split.
-           - do 2 eexists; split; eauto using stmt_eval.
-           - intros ** [E|Hin]; eauto.
-             inv E.
-             unfold sub_inst.
-             eexists.
-             erewrite reset_insts_not_in; eauto.
-             rewrite find_inst_gss; eauto.
+    intros ** WD IH E.
+    pose proof (b_nodup_lasts_blocks bl) as Nodup;
+      apply NoDup_comm, NoDup_app_weaken, fst_NoDupMembers in Nodup.
+    simpl; apply ident_eqb_eq in E; rewrite E.
+    clear E.
+    revert me ve.
+    induction (b_blocks bl) as [|(x, b') bls]; simpl; intros;
+      inversion_clear Nodup as [|??? Notin Nodup'].
+    - eexists; split; eauto using stmt_eval.
+      unfold build_mem_with_spec; simpl.
+      unfold add_mems; rewrite Env.adds_nil_nil.
+      unfold Env.adds; reflexivity.
+    - setoid_rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
+      assert (exists bl' P', find_block b' P = Some (bl', P')) as (?&?&?)
+        by (eapply WD; left; eauto).
+      edestruct IH as (me0 &?& Eq0); eauto.
+      edestruct IHbls as (?&?& Eq); auto.
+      + intros; eapply WD; right; eauto.
+      + eexists; split.
+        * do 2 eexists; split; eauto.
+          rewrite add_inst_add_mems; eauto.
+        *{ rewrite Eq.
+           unfold build_mem_with_spec.
+           simpl; destruct (split (b_lasts bl)), (split bls) eqn: E.
+           rewrite Env.adds_cons_cons; try eapply not_InMembers_In_split; eauto.
+           constructor; simpl; try reflexivity.
+           rewrite find_inst_add_mems in Eq0.
+           clear - Eq0 E Nodup' Notin.
+           revert dependent l1; revert l2.
+           induction bls as [|(y, b)]; simpl; intros.
+           - inv E.
+             rewrite 2 Env.adds_nil_nil.
+             now rewrite Eq0.
+           - destruct (split bls); inv E.
+             apply NotInMembers_cons in Notin as ().
+             inversion_clear Nodup' as [|???? Nodup''].
+             edestruct IHbls as (Hins & Maps); eauto.
+             split.
+             + setoid_rewrite Env.In_find.
+               intro; destruct (ident_eq_dec k y).
+               * subst; rewrite 2 Env.find_gsss; eauto; split; eauto.
+               * rewrite 2 Env.find_gsso; auto; simpl.
+                 setoid_rewrite <-Env.In_find; auto.
+             + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
+               intro; destruct (ident_eq_dec k y).
+               * subst; rewrite 2 Env.find_gsss.
+                 do 2 inversion_clear 1.
+                 unfold reset_state_spec_aux.
+                 rewrite find_inst_gso; auto.
+                 reflexivity.
+               * rewrite 2 Env.find_gsso; auto; simpl.
+                 setoid_rewrite <-Env.Props.P.F.find_mapsto_iff.
+                 apply Maps.
          }
   Qed.
 
-  Lemma reset_spec:
+  Lemma translate_reset_eqns_spec:
+    forall P b me ve bl,
+      (forall x b, In (x, b) bl.(b_blocks) -> exists bl P', find_block b P = Some (bl, P')) ->
+      (forall me' b' bl' P',
+          find_block b' P = Some (bl', P') ->
+          exists me'',
+            stmt_call_eval (translate P) me' b' reset [] me'' []
+            /\ me'' ≋ reset_state_spec P me' b') ->
+      b_name bl = b ->
+      exists me',
+        stmt_eval (translate P) me ve (translate_reset_eqns bl) (me', ve)
+        /\ me' ≋ reset_state_spec (bl :: P) me b.
+  Proof.
+    intros.
+    pose proof (b_nodup_lasts_blocks bl) as Nodup_lasts;
+      apply NoDup_app_weaken, fst_NoDupMembers in Nodup_lasts.
+    setoid_rewrite translate_reset_eqns_comp.
+    edestruct reset_insts_spec as (me' & ?&?); eauto.
+    exists me'; split; eauto.
+    do 2 eexists; split; eauto.
+    now apply reset_mems_spec.
+  Qed.
+
+ Lemma reset_spec:
     forall P me b bl P',
       Ordered_blocks P ->
       find_block b P = Some (bl, P') ->
       exists me',
         stmt_call_eval (translate P) me b reset [] me' []
-        /\ initial_state P b me'.
+        /\ me' ≋ reset_state_spec P me b.
   Proof.
     induction P as [|node]; try (now inversion 1); intros ** Ord Find.
     pose proof Find as Find'.
@@ -841,10 +1313,11 @@ Module Type CORRECTNESS
     - inv Find.
       pose proof Find'.
       apply find_block_translate in Find' as (?&?&?&?&?); subst.
-      edestruct translate_reset_eqns_spec with (bl := bl) as (?&?&?&?); eauto.
+      apply ident_eqb_eq in Eq.
+      edestruct translate_reset_eqns_spec with (bl := bl) as (?&?&?); eauto.
       + intros ** Hin; eapply Forall_forall in Hin; eauto.
         destruct Hin; auto.
-      + eexists; split; eauto using initial_state.
+      + eexists; split; eauto.
         econstructor; eauto.
         * apply exists_reset_method.
         * eauto.
@@ -855,8 +1328,8 @@ Module Type CORRECTNESS
       + inv Rst.
         econstructor; eauto.
         simpl; rewrite Eq; auto.
-      + apply initial_state_tail; auto.
-        apply ident_eqb_neq; auto.
+      + apply ident_eqb_neq in Eq.
+        rewrite reset_state_spec_other; auto.
   Qed.
 
   Lemma Memory_Corres_Def:
@@ -994,7 +1467,7 @@ Module Type CORRECTNESS
       ~ Step_in s eqs ->
       Memory_Corres (EqReset s ck b :: eqs) S I S' (add_inst s me' me).
   Proof.
-    intros ** (Lasts & Insts) ???; split; [split|split; [|split]].
+    intros ** (Lasts & Insts) ??; split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|]; eauto.
       + inv Last.
       + apply Lasts; auto.
@@ -1033,9 +1506,80 @@ Module Type CORRECTNESS
           apply Insts; auto.
   Qed.
 
+  Lemma Memory_Corres_Reset_absent:
+    forall s ck b S I S' Is Ss me eqs,
+      Memory_Corres eqs S I S' me ->
+      Env.find s I = Some Is ->
+      sub_inst s S Ss ->
+      Is ≋ Ss ->
+      ~ Reset_in s eqs ->
+      Memory_Corres (EqReset s ck b :: eqs) S I S' me.
+  Proof.
+    intros ** (Lasts & Insts) Find_I Find_S E; split; [split|split; [|split]].
+    - inversion_clear 1 as [?? Last|]; eauto.
+      + inv Last.
+      + apply Lasts; auto.
+    - intro NLast; apply Lasts.
+      intro; apply NLast; right; auto.
+    - intros (Nstep & Nrst).
+      apply Insts; split.
+      + intro; apply Nstep; right; auto.
+      + intro; apply Nrst; right; auto.
+    - intros (Nstep & Rst).
+      unfold sub_inst.
+      inversion_clear Rst as [?? Rst'|].
+      + inv Rst'.
+        intros ** Find.
+        apply (proj1 (Insts s)).
+        * split; auto.
+          intro; apply Nstep; right; auto.
+        * unfold sub_inst in *.
+          rewrite Find in Find_I; inv Find_I.
+          admit.
+      + apply Insts; split; auto.
+        intro; apply Nstep; right; auto.
+    - intros Step.
+      inversion_clear Step as [?? Step'|].
+      + inv Step'.
+      + apply Insts; eauto.
+  Qed.
+
+  Lemma Reset_not_Step_in:
+    forall eqs inputs mems s ck b,
+      Is_well_sch inputs mems (EqReset s ck b :: eqs) ->
+      ~ Step_in s eqs.
+  Proof.
+    inversion_clear 1 as [|????? States].
+    unfold Step_in, Is_state_in_eqs.
+    rewrite Exists_exists.
+    intros (eq' & Hin & IsStin).
+    assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 0) eqs)
+      by (apply States; auto using Is_state_in_eq).
+    eapply Forall_forall in Hin; eauto.
+    apply Hin in IsStin.
+    omega.
+  Qed.
+
+  Lemma Reset_not_Reset_in:
+    forall eqs inputs mems s ck b,
+      Is_well_sch inputs mems (EqReset s ck b :: eqs) ->
+      ~ Reset_in s eqs.
+  Proof.
+    inversion_clear 1 as [|????? States].
+    unfold Reset_in, Is_state_in_eqs.
+    rewrite Exists_exists.
+    intros (eq' & Hin & IsStin).
+    assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 0) eqs)
+      by (apply States; auto using Is_state_in_eq).
+    eapply Forall_forall in Hin; eauto.
+    apply Hin in IsStin.
+    omega.
+  Qed.
+
   Lemma equation_cons_correct:
     forall eq eqs P R S I S' me ve inputs mems,
       sem_equation P true R S I S' eq ->
+      Ordered_blocks P ->
       Is_well_sch inputs mems (eq :: eqs) ->
       Memory_Corres eqs S I S' me ->
       equiv_env (fun x => Is_free_in_eq x eq) R mems me ve ->
@@ -1047,7 +1591,7 @@ Module Type CORRECTNESS
                           ???????????? Hexp|
                           ???????????? Init|
                           ??????????????? Hexps];
-      intros; simpl.
+      intros ** Ord Wsch Corres Equiv; simpl.
 
     - inv Hexp; exists me; eexists; split;
         try solve [eapply stmt_eval_Control_absent'; eauto; auto];
@@ -1064,26 +1608,25 @@ Module Type CORRECTNESS
     - destruct r.
       + pose proof Init.
         inversion_clear Init as [????? Find Rst].
-        edestruct reset_spec as (?&?&?); eauto. admit.
+        edestruct reset_spec as (?&?& Eq); eauto.
         do 2 eexists; split.
         * eapply stmt_eval_Control_present'; eauto; auto.
-        * eapply Memory_Corres_Reset_present; eauto.
-          admit.
+        *{ eapply Memory_Corres_Reset_present; eauto.
+           - eapply initial_state_det; eauto.
+             rewrite Eq.
+             apply initial_reset_state_spec; auto.
+             admit.
+           - eapply Reset_not_Step_in; eauto.
+         }
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
-        admit.
+        destruct Init as (?&?&?).
+        eapply Memory_Corres_Reset_absent; eauto.
+        eapply Reset_not_Reset_in; eauto.
 
     - inv Hexps.
       + admit.
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
-        constructor; auto.
-        constructor.
-        intros.
-        match goal with
-        | H: sub_inst ?s ?S' _, H': sub_inst ?s ?S' _ |- _ =>
-          unfold sub_inst in H, H'; rewrite H in H'; inv H'; auto
-        end.
         admit.
-
   Qed.
 
 

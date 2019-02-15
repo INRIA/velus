@@ -859,6 +859,14 @@ Section InMembers.
     intuition.
   Qed.
 
+  Lemma NotIn_NotInMembers:
+    forall a xs, (forall b, ~ In (a, b) xs) -> ~ InMembers a xs.
+  Proof.
+    intros ** Notin Hin.
+    apply InMembers_In in Hin as (?&?).
+    eapply Notin; eauto.
+  Qed.
+
   Lemma NotInMembers_cons:
     forall xs x y,
       ~InMembers y (x::xs) <-> ~InMembers y xs /\ y <> fst x.

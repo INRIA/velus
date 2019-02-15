@@ -372,7 +372,7 @@ Module Type SBSEMANTICS
       eapply Forall_forall in Ord as (?&?&?); eauto.
   Qed.
 
-  Lemma initial_state_tail:
+  Lemma initial_state_other:
     forall S0 bl P b,
       (* Ordered_blocks (bl :: P) -> *)
       b_name bl <> b ->
@@ -428,6 +428,17 @@ Module Type SBSEMANTICS
   (*       rewrite E. *)
   (*       apply in_map, in_app; intuition. *)
   (* Qed. *)
+
+  Lemma initial_state_other_app:
+    forall S0 P P' b bl,
+      find_block b P = None ->
+      b <> b_name bl ->
+      (initial_state (P ++ bl :: P') b S0 <-> initial_state P' b S0).
+  Proof.
+    split; inversion_clear 1 as [????? Find]; econstructor; eauto.
+    - rewrite find_block_other_app in Find; eauto.
+    - rewrite find_block_other_app; eauto.
+  Qed.
 
   Fact reset_lasts_add_inst:
     forall bl S0 x S0x,
@@ -572,7 +583,7 @@ Module Type SBSEMANTICS
       eauto using sem_equation.
     - intros Notin; econstructor; eauto.
       destruct r; eauto.
-      apply initial_state_tail; auto.
+      apply initial_state_other; auto.
       intro E; apply Notin; rewrite E; constructor.
     - pose proof Hfind as Hfind'; apply find_block_app in Hfind' as (?& E & FindNone).
       pose proof Hord as Hord'; rewrite E, app_comm_cons in Hord';
@@ -614,7 +625,7 @@ Module Type SBSEMANTICS
         constructor; eauto using sem_equation.
     - econstructor; eauto.
       destruct r; eauto.
-      apply initial_state_tail; auto.
+      apply initial_state_other; auto.
       intro E; apply Hnini; rewrite E; constructor.
     - eauto using sem_equation, sem_block_cons2.
   Qed.

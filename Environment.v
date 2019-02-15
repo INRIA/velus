@@ -204,6 +204,25 @@ Module Env.
         right; eauto.
     Qed.
 
+    Lemma find_adds_In_spec':
+      forall x a xvs m,
+        NoDup (List.map (@fst _ A) xvs) ->
+        find x (adds' xvs m) = Some a ->
+        List.In (x, a) xvs
+        \/ ((forall a, ~ List.In (x, a) xvs)
+           /\ find x m = Some a).
+    Proof.
+      unfold adds'.
+      induction xvs as [|(y, c)]; simpl; auto.
+      inversion_clear 1; intros ** Find.
+      destruct (Pos.eq_dec x y).
+      - subst; rewrite gss in Find; inversion Find; auto.
+      - rewrite gso in Find; auto.
+        edestruct IHxvs; eauto.
+        right; intuition; eauto.
+        congruence.
+    Qed.
+
     Lemma find_adds_In:
       forall x v xs vs m,
         NoDup xs ->
@@ -218,6 +237,25 @@ Module Env.
       - subst; rewrite gss in Find; inversion Find; auto.
       - rewrite gso in Find; auto.
         right; eauto.
+    Qed.
+
+    Lemma find_adds_In_spec:
+      forall x v xs vs m,
+        NoDup xs ->
+        find x (adds xs vs m) = Some v ->
+        List.In (x, v) (combine xs vs)
+        \/ ((forall v, ~ List.In (x, v) (combine xs vs))
+           /\ find x m = Some v).
+    Proof.
+      unfold adds.
+      induction xs as [|x'], vs as [|v']; simpl; auto.
+      inversion_clear 1; intros ** Find.
+      destruct (Pos.eq_dec x x').
+      - subst; rewrite gss in Find; inversion Find; auto.
+      - rewrite gso in Find; auto.
+        edestruct IHxs; eauto.
+        right; intuition; eauto.
+        congruence.
     Qed.
 
     Lemma NotIn_find_adds':
@@ -305,6 +343,20 @@ Module Env.
       - rewrite add_comm; auto.
       - intros []; contradiction.
       - intros [|]; congruence.
+    Qed.
+
+    Lemma adds_add_comm':
+      forall xvs x (a: A) m,
+        (forall a, ~ List.In (x, a) xvs) ->
+        add x a (adds' xvs m) = adds' xvs (add x a m).
+    Proof.
+      induction xvs as [|(y, b)]; simpl; auto.
+      intros ** Nin; rewrite <-IHxvs.
+      - apply add_comm.
+        intro; subst.
+        eapply Nin; left; eauto.
+      - intros ** Hin.
+        eapply Nin; eauto.
     Qed.
 
     Lemma In_find:
