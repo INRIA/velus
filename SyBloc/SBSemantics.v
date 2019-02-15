@@ -30,8 +30,7 @@ Module Type SBSEMANTICS
   Definition reset_lasts (bl: block) (S0: state) : Prop :=
     (forall x c,
         In (x, c) bl.(b_lasts) -> find_val x S0 = Some (sem_const c))
-      (* /\ forall x v, find_val x S0 = Some v -> exists c, v = sem_const c /\ In (x, c) bl.(b_lasts). *)
-      .
+    /\ forall x v, find_val x S0 = Some v -> exists c, v = sem_const c /\ In (x, c) bl.(b_lasts).
 
   Definition same_clock (vs: list value) : Prop :=
     absent_list vs \/ present_list vs.
@@ -48,6 +47,11 @@ Module Type SBSEMANTICS
             In (x, b') bl.(b_blocks) ->
             exists S0',
               sub_inst x S0 S0'
+              /\ initial_state P' b' S0') ->
+        (forall x S0',
+            sub_inst x S0 S0' ->
+            exists b',
+              In (x, b') bl.(b_blocks)
               /\ initial_state P' b' S0') ->
         initial_state P b S0.
 
@@ -178,13 +182,13 @@ Module Type SBSEMANTICS
       with signature equal_memory ==> Basics.impl
         as reset_lasts_equal_memory.
   Proof.
-    unfold reset_lasts.
-    intros ** E Rst ?? Hin.
-    rewrite <-E; auto.
-    (* intros ** E (InFind & FindIn). *)
-    (* split. *)
-    (* - intros; rewrite <-E; auto. *)
-    (* - intros ** Find; rewrite <-E in Find; auto. *)
+    (* unfold reset_lasts. *)
+    (* intros ** E Rst ?? Hin. *)
+    (* rewrite <-E; auto. *)
+    intros ** E (InFind & FindIn).
+    split.
+    - intros; rewrite <-E; auto.
+    - intros ** Find; rewrite <-E in Find; auto.
   Qed.
 
   Add Parametric Morphism P f : (initial_state P f)
@@ -194,7 +198,7 @@ Module Type SBSEMANTICS
     intros ** E Init.
     revert dependent P; revert dependent f; revert dependent y.
     induction x as [? IH] using memory_ind'; intros.
-    inversion_clear Init as [??????? Spec].
+    inversion_clear Init as [??????? Spec Spec'].
     econstructor; eauto.
     - now rewrite <-E.
     - intros ** Hin.
@@ -203,6 +207,14 @@ Module Type SBSEMANTICS
       pose proof (find_inst_equal_memory x0 E) as Eq;
         rewrite Sub in Eq; simpl in Eq.
       destruct (find_inst x0 y); try contradiction.
+      eexists; split; eauto.
+    - intros ** Sub.
+      unfold sub_inst in *.
+      pose proof (find_inst_equal_memory x0 E) as Eq;
+        rewrite Sub in Eq; simpl in Eq.
+      destruct (find_inst x0 x) eqn: Sub'; try contradiction.
+      pose proof Sub'.
+      apply Spec' in Sub' as (?&?&?).
       eexists; split; eauto.
   Qed.
 
@@ -422,11 +434,11 @@ Module Type SBSEMANTICS
       reset_lasts bl S0 ->
       reset_lasts bl (add_inst x S0x S0).
   Proof.
-    unfold reset_lasts; intros.
-    rewrite find_val_add_inst; auto.
-    (* unfold reset_lasts; intros ** (Rst & Rst'); split; intros ** Hin. *)
-    (* - rewrite find_val_add_inst; auto. *)
-    (* - rewrite find_val_add_inst in Hin; auto. *)
+    (* unfold reset_lasts; intros. *)
+    (* rewrite find_val_add_inst; auto. *)
+    unfold reset_lasts; intros ** (Rst & Rst'); split; intros ** Hin.
+    - rewrite find_val_add_inst; auto.
+    - rewrite find_val_add_inst in Hin; auto.
   Qed.
 
   (* Lemma find_block_initial_state: *)
@@ -605,6 +617,64 @@ Module Type SBSEMANTICS
       apply initial_state_tail; auto.
       intro E; apply Hnini; rewrite E; constructor.
     - eauto using sem_equation, sem_block_cons2.
+  Qed.
+
+  Lemma reset_lasts_det:
+    forall S S' bl,
+      reset_lasts bl S ->
+      reset_lasts bl S' ->
+      Env.Equal (values S) (values S').
+  Proof.
+    unfold reset_lasts, find_val in *; intros ** Rst Rst' x.
+    destruct (Env.find x (values S)) eqn: E, (Env.find x (values S')) eqn: E'; auto.
+    - apply Rst in E as (c &?&?); apply Rst' in E' as (c' &?&?).
+      subst.
+      do 2 f_equal.
+      eapply NoDupMembers_det; eauto.
+      pose proof (b_nodup_lasts_blocks bl) as Nodup;
+        apply NoDup_app_weaken in Nodup.
+      apply fst_NoDupMembers; auto.
+    - apply Rst in E as (?&?& Hin).
+      apply Rst' in Hin.
+      rewrite E' in Hin; discriminate.
+    - apply Rst' in E' as (?&?& Hin).
+      apply Rst in Hin.
+      rewrite E in Hin; discriminate.
+  Qed.
+
+  Lemma initial_state_det:
+    forall S S' P b,
+      initial_state P b S ->
+      initial_state P b S' ->
+      S ≋ S'.
+  Proof.
+    induction S as [? IH] using memory_ind'.
+    inversion_clear 1 as [??????? Insts1 Insts2];
+      inversion_clear 1 as [??????? Insts1' Insts2'].
+    match goal with
+      H: find_block ?b ?P = _, H': find_block ?b ?P = _ |- _ =>
+      rewrite H in H'; inv H'
+    end.
+    constructor.
+    - eapply reset_lasts_det; eauto.
+    - unfold sub_inst, find_inst in *.
+      split.
+      + setoid_rewrite Env.In_find.
+        split; intros (?& Find).
+        * apply Insts2 in Find as (?& Hin &?).
+          apply Insts1' in Hin as (?&?&?); eauto.
+        * apply Insts2' in Find as (?& Hin &?).
+          apply Insts1 in Hin as (?&?&?); eauto.
+      + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
+        intros ** Find Find'.
+        pose proof Find.
+        apply Insts2 in Find as (?&?&?); apply Insts2' in Find' as (?&?&?).
+        eapply IH; eauto.
+        assert (x = x0) as ->; auto.
+        eapply NoDupMembers_det; eauto.
+        pose proof (b_nodup_lasts_blocks bl0) as Nodup;
+          apply NoDup_comm, NoDup_app_weaken in Nodup.
+        apply fst_NoDupMembers; auto.
   Qed.
 
   (* Lemma sem_reset_false: *)

@@ -647,21 +647,92 @@ Module Type CORRECTNESS
       rewrite find_val_gso in StEval; auto.
   Qed.
 
+  (* Lemma InMembers_rev: *)
+  (*   forall A B (l: list (A * B)) x, *)
+  (*     InMembers x l <-> *)
+  (*     InMembers x (rev l). *)
+  (* Proof. *)
+  (* Admitted. *)
+
+  (* Lemma NoDupMembers_rev: *)
+  (*   forall A B (l: list (A * B)), *)
+  (*     NoDupMembers l <-> *)
+  (*     NoDupMembers (rev l). *)
+  (* Proof. *)
+  (* Admitted. *)
+
   Lemma reset_mems_spec:
     forall mems prog me ve,
       NoDupMembers mems ->
+      (forall x, find_val x me <> None -> InMembers x mems) ->
       exists me',
         stmt_eval prog me ve (reset_mems mems) (me', ve)
-        /\ forall x c,
-          In (x, c) mems ->
-          find_val x me' = Some (sem_const c).
+        /\ (forall x c,
+              In (x, c) mems ->
+              find_val x me' = Some (sem_const c))
+        /\ forall x v,
+            find_val x me' = Some v ->
+            exists c, v = sem_const c /\ In (x, c) mems.
   Proof.
-    unfold reset_mems.
-    induction mems as [|(x, c)]; simpl;
-      inversion_clear 1; intros.
+    induction mems as [|(x, c)]; inversion_clear 1; simpl; intros ** Spec.
+    - exists me; intuition; eauto.
+      exfalso; eapply Spec.
+      apply not_None_is_Some; eauto.
+    - edestruct IHl with (me := me); eauto.
+      intros ** Find.
+      apply Spec in Find as [E|]; auto.
+
+
+
+    SearchAbout fold_left fold_right.
+    destruct mems as [|(x, c)]; simpl; intros ** Nodup Spec.
     - exists me; intuition; eauto using stmt_eval.
+      exfalso; eapply Spec.
+      apply not_None_is_Some; eauto.
+    - setoid_rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
+
+
+      assert (forall y, find_val y (add_val x (sem_const c) me) <> None -> x = y \/ InMembers y mems) as Spec'.
+      { intros ** Find.
+        destruct (ident_eq_dec y x); auto.
+        rewrite find_val_gso in Find; auto.
+      }
+      clear Spec.
+      inversion_clear Nodup as [|??? Notin Nodup'].
+      (* SearchAbout not InMembers.  *)
+      revert dependent me.
+      induction mems as [|(x', c')]; simpl; intros;
+        inversion_clear Nodup'; try apply NotInMembers_cons in Notin as ().
+      + setoid_rewrite Comp_Skip_left.
+        eexists; split; eauto using stmt_eval, exp_eval.
+        split.
+        * intros ** [E|?]; try contradiction.
+          inv E; apply find_val_gss.
+        * intros ** Find.
+          assert (x = x0 \/ False) as [|]
+              by (apply Spec', not_None_is_Some; eauto);
+            try contradiction.
+          subst; rewrite find_val_gss in Find; inv Find; eauto.
+      + setoid_rewrite stmt_eval_fold_left_lift.
+        edestruct IHmems with (me := add_val x' (sem_const c') (add_val x (sem_const c) me)) as (?&?&?) ; auto.
+        * intros ** Find.
+          destruct (ident_eq_dec y x); auto.
+          rewrite find_val_gso in Find; auto.
+
+
+           destruct (ident_eq_dec x0 x).
+           - subst; rewrite find_val_gss in Find; inv Find; eauto.
+           - rewrite find_val_gso in Find; eauto.
+        econstructor; eauto.
+    - exists me; intuition; eauto using stmt_eval.
+      exfalso; eapply Spec.
+      apply not_None_is_Some; eauto.
     - setoid_rewrite stmt_eval_fold_left_lift.
-      edestruct IHmems as (?&?&?); auto.
+      edestruct IHmems with (me := add_val x (sem_const c) me) as (?&?&?) ; auto.
+      + intros y Find.
+        destruct (ident_eq_dec y x).
+        * subst; rewrite find_val_gss in Find.
+        Focus 2.
       eexists; split; eauto.
       + do 2 eexists; split; eauto using stmt_eval, exp_eval.
       + intros ** [E|]; auto.
@@ -915,6 +986,53 @@ Module Type CORRECTNESS
       inv IsSt.
   Qed.
 
+  Lemma Memory_Corres_Reset_present:
+    forall s ck b S I S' Is me eqs me',
+      Memory_Corres eqs S I S' me ->
+      Env.find s I = Some Is ->
+      me' ≋ Is ->
+      ~ Step_in s eqs ->
+      Memory_Corres (EqReset s ck b :: eqs) S I S' (add_inst s me' me).
+  Proof.
+    intros ** (Lasts & Insts) ???; split; [split|split; [|split]].
+    - inversion_clear 1 as [?? Last|]; eauto.
+      + inv Last.
+      + apply Lasts; auto.
+    - intro NLast; apply Lasts.
+      intro; apply NLast; right; auto.
+    - intros (Nstep & Nrst).
+      unfold sub_inst.
+      assert (s0 <> s) as Neq
+          by (intro; subst; apply Nrst; left; constructor).
+      apply find_inst_gso with (m := me) (m' := me') in Neq.
+      setoid_rewrite Neq.
+      apply Insts; split.
+      + intro; apply Nstep; right; auto.
+      + intro; apply Nrst; right; auto.
+    - intros (Nstep & Rst).
+      unfold sub_inst.
+      inversion_clear Rst as [?? Rst'|].
+      + inv Rst'.
+        setoid_rewrite find_inst_gss.
+        intros; exists me'; intuition; congruence.
+      + intros.
+        destruct (ident_eq_dec s0 s).
+        * subst; rewrite find_inst_gss; exists me'; intuition; congruence.
+        * rewrite find_inst_gso; auto.
+          apply (proj1 (proj2 (Insts s0))); auto.
+          split; auto.
+          intro; apply Nstep; right; auto.
+    - intros Step.
+      inversion_clear Step as [?? Step'|].
+      + inv Step'.
+      + intros.
+        unfold sub_inst.
+        destruct (ident_eq_dec s0 s).
+        * subst; intuition.
+        * rewrite find_inst_gso; auto.
+          apply Insts; auto.
+  Qed.
+
   Lemma equation_cons_correct:
     forall eq eqs P R S I S' me ve inputs mems,
       sem_equation P true R S I S' eq ->
@@ -944,11 +1062,13 @@ Module Type CORRECTNESS
       + apply Memory_Corres_Next_absent; auto; congruence.
 
     - destruct r.
-      + inversion_clear Init as [????? Find Rst].
+      + pose proof Init.
+        inversion_clear Init as [????? Find Rst].
         edestruct reset_spec as (?&?&?); eauto. admit.
         do 2 eexists; split.
         * eapply stmt_eval_Control_present'; eauto; auto.
-        * admit.
+        * eapply Memory_Corres_Reset_present; eauto.
+          admit.
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
         admit.
 
