@@ -55,6 +55,10 @@ Module Type SBSEMANTICS
               /\ initial_state P' b' S0') ->
         initial_state P b S0.
 
+  (* Definition state_closed (S: state) (bl: block) : Prop := *)
+  (*   (forall i, find_inst i S <> None -> InMembers i bl.(b_blocks)) *)
+  (*   /\ forall x, find_val x S <> None -> InMembers x bl.(b_lasts). *)
+
   Section Semantics.
 
     Variable P: program.
@@ -101,6 +105,8 @@ Module Type SBSEMANTICS
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
                Forall (sem_equation base R S I S') bl.(b_eqs) ->
+               (* state_closed S bl -> *)
+               (* state_closed S' bl -> *)
                sem_block b S xs ys S'.
 
   End Semantics.
@@ -155,6 +161,8 @@ Module Type SBSEMANTICS
         same_clock ys ->
         (absent_list xs <-> absent_list ys) ->
         Forall (sem_equation P base R S I S') bl.(b_eqs) ->
+        (* state_closed S bl -> *)
+        (* state_closed S' bl -> *)
         Forall (P_equation base R S I S') bl.(b_eqs) ->
         P_block b S xs ys S'.
 
@@ -269,6 +277,20 @@ Module Type SBSEMANTICS
         now rewrite <-Eq, <-Eq''.
   Qed.
 
+  (* Add Parametric Morphism bl : (fun S => state_closed S bl) *)
+  (*     with signature equal_memory ==> Basics.impl *)
+  (*       as state_closed_equal_memory. *)
+  (* Proof. *)
+  (*   intros ?? E (Blocks & Lasts); split. *)
+  (*   - intros ** Find. *)
+  (*     apply Blocks. *)
+  (*     apply not_None_is_Some in Find as (?& Find). *)
+  (*     pose proof (find_inst_equal_memory i E) as E'. *)
+  (*     rewrite Find in E'. *)
+  (*     destruct (find_inst i x); congruence. *)
+  (*   - now setoid_rewrite <-E. *)
+  (* Qed. *)
+
   Add Parametric Morphism P f xs ys : (fun S S' => sem_block P f S xs ys S')
       with signature equal_memory ==> equal_memory ==> Basics.impl
         as sem_block_equal_memory.
@@ -282,12 +304,14 @@ Module Type SBSEMANTICS
                                       S1 ≋ S2 ->
                                       Env.Equiv equal_memory I1 I2 ->
                                       S1' ≋ S2' ->
-                                      sem_equation P base R S2 I2 S2' eq); eauto using sem_equation;
-      try intros ** E EI E'.
-    - econstructor; eauto.
+                                      sem_equation P base R S2 I2 S2' eq);
+      eauto using sem_equation.
+    - intros ** E EI E'.
+      econstructor; eauto.
       + now rewrite <-E.
       + now rewrite <-E'.
-    - pose proof (find_equiv_memory s EI) as Eq;
+    - intros ** E EI E'.
+      pose proof (find_equiv_memory s EI) as Eq;
         setoid_rewrite Find in Eq; simpl in Eq.
       destruct (Env.find s I2) eqn: Find'; try contradiction.
       destruct r.
@@ -300,7 +324,8 @@ Module Type SBSEMANTICS
         econstructor; eauto; simpl.
         eexists; split; eauto.
         now rewrite <-Eq, <-Eq'.
-    - pose proof (find_equiv_memory s EI) as Eq.
+    - intros ** E EI E'.
+      pose proof (find_equiv_memory s EI) as Eq.
       rewrite Find in Eq.
       destruct (Env.find s I2) eqn: Find'; try contradiction.
       pose proof (find_inst_equal_memory s E') as Eq'.
@@ -315,13 +340,16 @@ Module Type SBSEMANTICS
         destruct (find_inst s S2) eqn: FInd; try contradiction.
         eapply SEqCall with (Is := m); eauto.
         eexists; split; eauto. now rewrite <-Eq, <-Eq''.
-    - econstructor; eauto.
-      instantiate (1 := I).
-      induction (b_eqs bl); auto;
-        repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
-      constructor; auto.
-      assert (Env.Equiv equal_memory I I) by reflexivity;
-        auto.
+    - intros ? E ? E'.
+      econstructor; eauto.
+      + instantiate (1 := I).
+        induction (b_eqs bl); auto;
+          repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
+        constructor; auto.
+        assert (Env.Equiv equal_memory I I) by reflexivity;
+          auto.
+      (* + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *) *)
+      (* + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *) *)
   Qed.
 
   Inductive Ordered_blocks: program -> Prop :=
@@ -576,10 +604,11 @@ Module Type SBSEMANTICS
       sem_block (b :: P) f xs S S' ys.
   Proof.
     intros ** Hord Hsem.
-    induction Hsem as [| | | |??????????? Hfind ?????? IHeqs] using sem_block_mult
-                                           with (P_equation := fun bk H S I S' eq =>
-                                                                 ~Is_block_in_eq b.(b_name) eq ->
-                                                                 sem_equation (b :: P) bk H S I S' eq);
+    induction Hsem as [| | | |
+                       ??????????? Hfind ??????(* ?? *) IHeqs] using sem_block_mult
+      with (P_equation := fun bk H S I S' eq =>
+                            ~Is_block_in_eq b.(b_name) eq ->
+                            sem_equation (b :: P) bk H S I S' eq);
       eauto using sem_equation.
     - intros Notin; econstructor; eauto.
       destruct r; eauto.
