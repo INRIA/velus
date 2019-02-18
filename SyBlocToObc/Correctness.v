@@ -1496,14 +1496,6 @@ Module Type CORRECTNESS
     - admit.
   Admitted.
 
-  Lemma sem_block_absent:
-    forall P b xs S ys S',
-      sem_block P b S xs ys S' ->
-      absent_list xs ->
-      absent_list ys /\ S' ≋ S.
-  Proof.
-  Admitted.
-
   Lemma equation_cons_correct:
     forall eq eqs P R S I S' me ve inputs mems,
       sem_equation P true R S I S' eq ->
@@ -1554,7 +1546,7 @@ Module Type CORRECTNESS
     - inv Hexps.
       + admit.
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
-        apply sem_block_absent in Hblock as (); try apply all_absent_spec.
+        apply sem_block_absent in Hblock; try apply all_absent_spec.
         eapply Memory_Corres_Call_absent; eauto.
         eapply Step_not_Step_Reset_in; eauto.
   Qed.

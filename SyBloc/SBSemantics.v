@@ -355,6 +355,14 @@ Module Type SBSEMANTICS
       (* + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *) *)
   Qed.
 
+  Lemma sem_block_absent:
+    forall P b xs S ys S',
+      sem_block P b S xs ys S' ->
+      absent_list xs -> S' ≋ S.
+  Proof.
+    inversion 1; auto.
+  Qed.
+
   Inductive Ordered_blocks: program -> Prop :=
   | Ordered_nil:
       Ordered_blocks []

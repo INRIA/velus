@@ -569,7 +569,7 @@ Module Type CORRECTNESS
           rewrite map_fst_idty; eauto.
         * specialize (Outs n); destruct node; simpl in *.
           rewrite map_fst_idty; eauto.
-        * admit.
+        * intro; eapply msem_node_absent in Hsem; eauto.
         * apply sem_equations_cons2; eauto.
           apply not_Is_node_in_not_Is_block_in; auto.
       + rewrite idck_app, Forall_app; split.
