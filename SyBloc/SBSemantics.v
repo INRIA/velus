@@ -104,6 +104,7 @@ Module Type SBSEMANTICS
                same_clock xs ->
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
+               (absent_list xs -> S' ≋ S) ->
                Forall (sem_equation base R S I S') bl.(b_eqs) ->
                (* state_closed S bl -> *)
                (* state_closed S' bl -> *)
@@ -160,6 +161,7 @@ Module Type SBSEMANTICS
         same_clock xs ->
         same_clock ys ->
         (absent_list xs <-> absent_list ys) ->
+        (absent_list xs -> S' ≋ S) ->
         Forall (sem_equation P base R S I S') bl.(b_eqs) ->
         (* state_closed S bl -> *)
         (* state_closed S' bl -> *)
@@ -342,6 +344,7 @@ Module Type SBSEMANTICS
         eexists; split; eauto. now rewrite <-Eq, <-Eq''.
     - intros ? E ? E'.
       econstructor; eauto.
+      + now rewrite <-E, <-E'.
       + instantiate (1 := I).
         induction (b_eqs bl); auto;
           repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
@@ -605,7 +608,7 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Hord Hsem.
     induction Hsem as [| | | |
-                       ??????????? Hfind ??????(* ?? *) IHeqs] using sem_block_mult
+                       ??????????? Hfind ???????(* ?? *) IHeqs] using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
                             sem_equation (b :: P) bk H S I S' eq);

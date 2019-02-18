@@ -270,7 +270,7 @@ Module Type CORRECTNESS
           rewrite <-Mmask; eauto.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons in Hsem; eauto.
-      simpl; rewrite <-initial_state_tail; eauto.
+      simpl; rewrite <-initial_state_other; eauto.
   Qed.
 
   Definition sem_equations_n
@@ -569,6 +569,7 @@ Module Type CORRECTNESS
           rewrite map_fst_idty; eauto.
         * specialize (Outs n); destruct node; simpl in *.
           rewrite map_fst_idty; eauto.
+        * admit.
         * apply sem_equations_cons2; eauto.
           apply not_Is_node_in_not_Is_block_in; auto.
       + rewrite idck_app, Forall_app; split.

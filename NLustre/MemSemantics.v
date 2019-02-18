@@ -141,7 +141,7 @@ Module Type MEMSEMANTICS
 
     with msem_reset:
            ident -> stream bool -> stream (list value) -> memories -> memories -> stream (list value) -> Prop :=
-         | SReset:
+           SReset:
              forall f r xss M M' yss,
                (forall k, exists Mk Mk',
                      msem_node f (mask (all_absent (xss 0)) k r xss)
@@ -153,7 +153,7 @@ Module Type MEMSEMANTICS
 
     with msem_node:
            ident -> stream (list value) -> memories -> memories -> stream (list value) -> Prop :=
-         | SNode:
+           SNode:
              forall bk H f xss M M' yss n,
                clock_of xss bk ->
                find_node f G = Some n ->
@@ -165,6 +165,7 @@ Module Type MEMSEMANTICS
                sem_clocked_vars bk H (idck n.(n_in)) ->
                Forall (msem_equation bk H M M') n.(n_eqs) ->
                memory_closed_n M n.(n_eqs) ->
+               memory_closed_n M' n.(n_eqs) ->
                msem_node f xss M M' yss.
 
   End NodeSemantics.
@@ -245,6 +246,7 @@ enough: it does not support the internal fixpoint introduced by
         sem_clocked_vars bk H (idck n.(n_in)) ->
         Forall (msem_equation G bk H M M') n.(n_eqs) ->
         memory_closed_n M n.(n_eqs) ->
+        memory_closed_n M' n.(n_eqs) ->
         Forall (P_equation bk H M M') n.(n_eqs) ->
         P_node f xss M M' yss.
 
@@ -273,8 +275,10 @@ enough: it does not support the internal fixpoint introduced by
         intro k; destruct (H k) as (?&?&?&?&?); eauto 7.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        clear H9.
-        induction H8; auto.
+        match goal with
+          H: memory_closed_n M _, H': memory_closed_n M' _, Heqs: Forall _ (n_eqs n)
+          |- _ => clear H H'; induction Heqs; auto
+        end.
     Qed.
 
     Combined Scheme msem_node_equation_reset_ind from
@@ -307,7 +311,7 @@ enough: it does not support the internal fixpoint introduced by
     Hint Constructors msem_node msem_equation msem_reset.
     intros ** Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| | | |?????? IH |????????? Hf ???????? IH]
+    induction Hsem as [| | | |?????? IH |????????? Hf ????????? IH]
         using msem_node_mult
       with (P_equation := fun bk H M M' eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
@@ -357,7 +361,7 @@ enough: it does not support the internal fixpoint introduced by
     intros ** Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
-    induction Hsem as [| | | |?????? IH|??????? n' ? Hfind ?????? Heqs WF IH]
+    induction Hsem as [| | | |?????? IH|??????? n' ? Hfind ?????? Heqs WF WF' IH]
         using msem_node_mult
       with (P_equation := fun bk H M M' eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
@@ -389,7 +393,7 @@ enough: it does not support the internal fixpoint introduced by
                             Is_node_in_eq g eq -> Exists (fun nd=> g = nd.(n_name)) G)
                        n'.(n_eqs)) as HH.
         {
-          clear Heqs IH WF.
+          clear Heqs IH WF WF'.
           induction n'.(n_eqs) as [|eq eqs]; [now constructor|].
           constructor.
           - intros g Hini.
@@ -665,10 +669,12 @@ dataflow memory for which the non-standard semantics holds true.
       NoDup_defs (eq :: eqs) ->
       Forall (msem_equation G bk H M M') eqs ->
       memory_closed_n M eqs ->
+      memory_closed_n M' eqs ->
       exists M1 M1', Forall (msem_equation G bk H M1 M1') (eq :: eqs)
-                /\ memory_closed_n M1 (eq :: eqs).
+                /\ memory_closed_n M1 (eq :: eqs)
+                /\ memory_closed_n M1' (eq :: eqs).
   Proof.
-    intros ** IH IH' Heq NoDup Hmeqs WF.
+    intros ** IH IH' Heq NoDup Hmeqs WF WF'.
     inversion Heq as [|???????? Hls Hxs Hsem
                          |??????????? Hls Hxs Hy Hr Hsem
                          |???????? Hle Hvar Hfby];
@@ -706,7 +712,7 @@ dataflow memory for which the non-standard semantics holds true.
         * inv NoDup.
           apply hd_error_Some_In in Hsome.
           apply msem_equation_madd_inst; auto.
-      + apply memory_closed_n_App; auto.
+      + split; apply memory_closed_n_App; auto.
 
     - pose proof Hsem as Hsem'.
       apply IH' in Hsem as (Mx & Mx' & Hmsem).
@@ -745,7 +751,7 @@ dataflow memory for which the non-standard semantics holds true.
         * inv NoDup.
           apply hd_error_Some_In in Hsome.
           apply msem_equation_madd_inst; auto.
-      + apply memory_closed_n_App; auto.
+      + split; apply memory_closed_n_App; auto.
 
     - exists (add_val_n x (hold (sem_const c0) ls) M), (add_val_n x (fun n =>
                                                                   match ls n with
@@ -761,7 +767,7 @@ dataflow memory for which the non-standard semantics holds true.
           destruct (ls n); auto.
         * inv NoDup.
           apply msem_equation_madd_val; eauto.
-      + now apply memory_closed_n_Fby.
+      + split; apply memory_closed_n_Fby; auto.
   Qed.
 
   Lemma memory_closed_empty':
@@ -785,14 +791,15 @@ dataflow memory for which the non-standard semantics holds true.
       NoDup_defs eqs ->
       Forall (sem_equation G bk H) eqs ->
       exists M1 M1', Forall (msem_equation G bk H M1 M1') eqs
-                /\ memory_closed_n M1 eqs.
+                /\ memory_closed_n M1 eqs
+                /\ memory_closed_n M1' eqs.
   Proof.
     intros ** IH NoDup Heqs.
     induction eqs as [|eq eqs IHeqs].
     - exists (fun n => empty_memory _), (fun n => empty_memory _); split; auto.
-      apply memory_closed_empty'.
+      split; apply memory_closed_empty'.
     - apply Forall_cons2 in Heqs as [Heq Heqs].
-      eapply IHeqs in Heqs as (?&?&?&?).
+      eapply IHeqs in Heqs as (?&?&?&?&?).
       + eapply sem_msem_eq; eauto.
       + eapply NoDup_defs_cons; eauto.
   Qed.
@@ -888,8 +895,9 @@ dataflow memory for which the non-standard semantics holds true.
                  exists M M', msem_reset G f r xs M M' ys) as IHG''
           by (intros; now apply sem_msem_reset).
       assert (exists M1 M1', Forall (msem_equation G bk H M1 M1') n.(n_eqs)
-                        /\ memory_closed_n M1 n.(n_eqs))
-        as (M1 & M1' & Hmsem & ?)
+                        /\ memory_closed_n M1 n.(n_eqs)
+                        /\ memory_closed_n M1' n.(n_eqs))
+        as (M1 & M1' & Hmsem & ?&?)
           by (eapply sem_msem_eqs; eauto; apply NoDup_defs_node).
       exists M1, M1'.
       econstructor; eauto.
@@ -1129,34 +1137,46 @@ dataflow memory for which the non-standard semantics holds true.
     forall n0 x v0 ls M M' xs,
       mfby x v0 ls M M' xs ->
       (forall n, n < n0 -> ls n = absent) ->
-      forall n, n <= n0 -> find_val x (M n) = Some v0.
+      forall n, (n <= n0 -> find_val x (M n) = Some v0)
+           /\ (n < n0 -> find_val x (M' n) = Some v0).
   Proof.
-    intros ** Mfby Abs n E; induction n;
-      destruct Mfby as (Init & Spec & Spec'); auto.
-    rewrite Spec.
-    specialize (Spec' n).
-    destruct (find_val x (M n)); try contradiction.
-    rewrite Abs in Spec'; try omega.
-    destruct Spec' as [->].
-    apply IHn; omega.
+    intros ** Mfby Abs n; induction n;
+      destruct Mfby as (Init & Spec & Spec').
+    - split; auto.
+      intros; specialize (Spec' 0); rewrite Init, Abs in Spec';
+        intuition.
+    - assert (S n <= n0 -> find_val x (M (S n)) = Some v0) as E.
+      + intros.
+        rewrite Spec.
+        specialize (Spec' n).
+        destruct (find_val x (M n)); try contradiction.
+        rewrite Abs in Spec'; try omega.
+        destruct Spec' as [->].
+        apply IHn; omega.
+      + split; auto.
+        intros.
+        specialize (Spec' (S n)).
+        rewrite E in Spec'; try omega.
+        rewrite Abs in Spec'; try omega.
+        intuition.
   Qed.
 
   Lemma msem_eqs_absent_until:
-    forall M M' G n0 eqs bk H n,
+    forall M M' G n0 eqs bk H,
     (forall f xss M M' yss,
         msem_node G f xss M M' yss ->
         (forall n, n < n0 -> absent_list (xss n)) ->
-        forall n, n <= n0 -> M n ≋ M 0) ->
+        forall n, (n <= n0 -> M n ≋ M 0) /\ (n < n0 -> M' n ≋ M n)) ->
     Ordered_nodes G ->
-    n <= n0 ->
     (forall n, n < n0 -> bk n = false) ->
     NoDup_defs eqs ->
     memory_closed_n M eqs ->
+    memory_closed_n M' eqs ->
     Forall (msem_equation G bk H M M') eqs ->
-    M n ≋ M 0.
+    forall n, (n <= n0 -> M n ≋ M 0) /\ (n < n0 -> M' n ≋ M n).
   Proof.
-    intros ** IH Hord Spec Absbk Nodup Closed Heqs.
-    revert dependent M; revert M'.
+    intros ** IH Hord Absbk Nodup Closed Closed' Heqs n.
+    revert dependent M; revert dependent M'.
     induction eqs as [|[] ? IHeqs]; intros;
       inversion_clear Heqs as [|?? Sem Sems];
       try inversion_clear Sem as [|
@@ -1166,15 +1186,18 @@ dataflow memory for which the non-standard semantics holds true.
       inv Nodup; eauto.
     - assert (forall n, M n ≋ empty_memory _) as E
           by (intro; apply memory_closed_empty; auto).
-      rewrite 2 E; reflexivity.
+      assert (forall n, M' n ≋ empty_memory _) as E'
+          by (intro; apply memory_closed_empty; auto).
+     rewrite 2 E, E'; split; reflexivity.
 
     - apply msem_equation_remove_inst with (x := x) in Sems.
-      + apply IHeqs in Sems; auto.
-        *{ erewrite add_remove_inst_same; eauto;
-           symmetry; erewrite add_remove_inst_same; eauto.
-           rewrite Sems.
-           apply IH with (n := n) in Node; auto.
-           - now rewrite Node.
+      + apply IHeqs in Sems as (Sems & Sems'); auto.
+        *{ apply IH with (n := n) in Node as (Node & Node'); auto.
+           - erewrite add_remove_inst_same; eauto; split; intro.
+             + symmetry; erewrite add_remove_inst_same; eauto.
+               now rewrite Sems, Node.
+             + erewrite add_remove_inst_same; eauto.
+               now rewrite Sems', Node'.
            - intros k ** Spec'; specialize (Args k); simpl in Args.
              rewrite Absbk in Args; auto.
              inversion_clear Args as [?????? SClock|??? ->].
@@ -1182,19 +1205,23 @@ dataflow memory for which the non-standard semantics holds true.
              + apply all_absent_spec.
          }
         * eapply memory_closed_n_App'; eauto.
+        * eapply memory_closed_n_App'; eauto.
       + apply hd_error_Some_In in Hd; auto.
 
     - apply msem_equation_remove_inst with (x := x) in Sems.
-      + apply IHeqs in Sems; auto.
-        *{ erewrite add_remove_inst_same; eauto;
-           symmetry; erewrite add_remove_inst_same; eauto.
-           rewrite Sems.
-           inversion_clear Reset as [?????? Nodes].
-           destruct (Nodes (count rs n)) as (Mn &?& Node_n & MemMask_n &?),
+      + apply IHeqs in Sems as (Sems & Sems'); auto.
+        *{ inversion_clear Reset as [?????? Nodes].
+           destruct (Nodes (count rs n)) as (Mn &?& Node_n & MemMask_n & MemMask_n'),
                                             (Nodes (count rs 0)) as (M0 &?&?& MemMask_0 &?).
            assert (Mn 0 ≋ M0 0) as E by (eapply same_initial_memory; eauto).
-           apply IH with (n := n) in Node_n; auto.
-           - now rewrite <-(MemMask_n n), <-(MemMask_0 0), Node_n, E.
+           apply IH with (n := n) in Node_n as (Node_n & Node_n'); auto.
+           - erewrite add_remove_inst_same; eauto; split; intro.
+             + symmetry; rewrite add_remove_inst_same; eauto.
+               rewrite Sems, <-(MemMask_n n), <-(MemMask_0 0), Node_n, E; auto.
+               reflexivity.
+             + rewrite add_remove_inst_same; eauto.
+               rewrite Sems', <-(MemMask_n' n), <-(MemMask_n n), Node_n'; auto.
+               reflexivity.
            - intros k ** Spec'; specialize (Args k); simpl in Args.
              rewrite Absbk in Args; auto.
              inversion_clear Args as [?????? SClock|??? E'].
@@ -1202,11 +1229,13 @@ dataflow memory for which the non-standard semantics holds true.
              + apply absent_list_mask; try rewrite E'; apply all_absent_spec.
          }
         * eapply memory_closed_n_App'; eauto.
+        * eapply memory_closed_n_App'; eauto.
       + apply hd_error_Some_In in Hd; auto.
 
     - apply msem_equation_remove_val with (x := i) in Sems; auto.
-      apply IHeqs in Sems; auto.
-      + assert (find_val i (M n) = Some (sem_const c0)).
+      apply IHeqs in Sems as (Sems & Sems'); auto.
+      + assert ((n <= n0 -> find_val i (M n) = Some (sem_const c0))
+                /\ (n < n0 -> find_val i (M' n) = Some (sem_const c0))) as ().
         { eapply mfby_absent_until; eauto.
           intros k ** Spec'; specialize (Arg k); simpl in Arg.
           rewrite Absbk in Arg; auto.
@@ -1214,9 +1243,13 @@ dataflow memory for which the non-standard semantics holds true.
           contradict SClock; apply not_subrate_clock.
         }
         destruct Mfby as (Init & Loop & Spec').
-        erewrite add_remove_val_same; eauto;
+        split; intros; erewrite add_remove_val_same; eauto.
+        * symmetry; erewrite add_remove_val_same; eauto.
+          now rewrite Sems.
+        * assert (n <= n0) by omega.
           symmetry; erewrite add_remove_val_same; eauto.
-        now rewrite Sems.
+          now rewrite Sems'.
+      + eapply memory_closed_n_Fby'; eauto.
       + eapply memory_closed_n_Fby'; eauto.
   Qed.
 
@@ -1225,12 +1258,12 @@ dataflow memory for which the non-standard semantics holds true.
       Ordered_nodes G ->
       msem_node G f xss M M' yss ->
       (forall n, n < n0 -> absent_list (xss n)) ->
-      forall n, n <= n0 -> M n ≋ M 0.
+      forall n, (n <= n0 -> M n ≋ M 0) /\ (n < n0 -> M' n ≋ M n).
   Proof.
     induction G as [|node].
     inversion 2;
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
-    intros ** Hord Hsem Abs n Spec.
+    intros ** Hord Hsem Abs n.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [???????? Clock Hfind Ins ????? Heqs].
     assert (forall n, n < n0 -> bk n = false) as Absbk.
