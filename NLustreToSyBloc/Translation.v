@@ -617,6 +617,9 @@ Module Type TRANSLATION
        SynSB.b_eqs  := translate_eqns n.(n_eqs)
     |}.
   Next Obligation.
+    rewrite length_idty; apply n_ingt0.
+  Qed.
+  Next Obligation.
     repeat rewrite <-idty_app. rewrite NoDupMembers_idty.
     rewrite (Permutation_app_comm n.(n_in)).
     rewrite Permutation_app_assoc.

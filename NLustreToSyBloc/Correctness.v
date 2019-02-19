@@ -223,23 +223,15 @@ Module Type CORRECTNESS
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
     simpl in Hfind.
-    (* assert (Ordered_blocks (translate_node node :: translate G)) *)
-    (*        by (change (translate_node node :: translate G) with (translate (node :: G)); *)
-    (*            apply Ordered_nodes_blocks; auto). *)
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inversion Hfind; subst n.
       apply find_node_translate in Hfind' as (?&?&Hfind'&?); subst.
       pose proof Hfind';
         simpl in Hfind'; rewrite Hnf in Hfind'; inv Hfind'.
-      eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      eapply msem_equations_cons in Heqs; eauto.
       econstructor; eauto.
       + eapply msem_eqs_reset_lasts; eauto.
       + intros ** Hin.
-        (* assert (b' <> n_name node). *)
-        (* { destruct node; simpl in *. *)
-        (*   apply In_snd_gather_eqs_Is_node_in in Hin. *)
-        (*   apply NodeIn; auto. *)
-        (* } *)
         destruct node; simpl in *.
         edestruct msem_eqs_In_snd_gather_eqs_spec
           as (?& Mx &?&?& [Node|(rs & Reset)] & Sub); eauto.
@@ -561,7 +553,7 @@ Module Type CORRECTNESS
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inversion Hfind; subst n0.
       apply find_node_translate in Hfind' as (?&?&?&?); subst.
-      eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      eapply msem_equations_cons in Heqs; eauto.
       pose proof (NoDup_defs_node node).
       eapply equations_correctness in Heqs as (?&Heqs); eauto.
       + econstructor; eauto.
@@ -570,7 +562,7 @@ Module Type CORRECTNESS
         * specialize (Outs n); destruct node; simpl in *.
           rewrite map_fst_idty; eauto.
         * intro; eapply msem_node_absent in Hsem; eauto.
-        * apply sem_equations_cons2; eauto.
+        * apply sem_equations_cons; eauto.
           apply not_Is_node_in_not_Is_block_in; auto.
       + rewrite idck_app, Forall_app; split.
         * eapply sem_clocked_vars_clock_match; eauto.
