@@ -229,6 +229,19 @@ Module Type OBCSEMANTICS
       + now apply IHe2.
   Qed.
 
+  Lemma stmt_call_eval_cons:
+    forall prog c' c me f vs me' rvs,
+      c_name c <> c' ->
+      (stmt_call_eval (c :: prog) me c' f vs me' rvs
+       <-> stmt_call_eval prog me c' f vs me' rvs).
+  Proof.
+    intros ** Neq; rewrite <-ident_eqb_neq in Neq; split; intros Sem.
+    - inversion_clear Sem as [??????????? Find].
+      simpl in Find; rewrite Neq in Find; eauto using stmt_call_eval.
+    - inv Sem; econstructor; eauto.
+      simpl; rewrite Neq; auto.
+  Qed.
+
 End OBCSEMANTICS.
 
 Module ObcSemanticsFun

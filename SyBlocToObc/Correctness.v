@@ -182,6 +182,9 @@ Module Type CORRECTNESS
         Is_free_in_laexps y ck es ->
         Is_free_in_eq y (EqCall s x ck rst b es).
 
+  Definition Is_free_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    Exists (Is_free_in_eq x) eqs.
+
   Definition step_with_reset (s: ident) (eq: equation) : bool :=
     match eq with
     | EqCall s' _ _ true _ _ => ident_eqb s s'
@@ -1597,6 +1600,34 @@ Module Type CORRECTNESS
     - admit.
   Admitted.
 
+  (* Lemma fuu: *)
+  (*   forall eqs x ck e inputs mems, *)
+  (*     Is_well_sch' inputs mems (EqNext x ck e :: eqs) -> *)
+  (*     ~ Is_free_in_eqs x eqs. *)
+  (* Proof. *)
+  (*   (* inversion_clear 1.  *) *)
+  (*   induction eqs; intros ** WSCH Free. *)
+  (*   - intros; inversion Free. *)
+  (*   - inversion_clear WSCH. *)
+  (*     inversion_clear H.  *)
+  (*     inversion_clear Free. *)
+  (*     + apply H5 in H.  *)
+  (*       admit. *)
+  (*     + eapply IHeqs; eauto using Is_well_sch'. *)
+  (*       econstructor; eauto.  *)
+  (*     inversion_clear  *)
+  (*     SearchAbout not Exists.  *)
+  (*   induction eqs. *)
+
+
+  Lemma equiv_env_Is_free_in_eqs_cons:
+    forall eq eqs R mems me ve,
+      equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me ve ->
+      equiv_env (fun x => Is_free_in_eq x eq) R mems me ve.
+  Proof.
+    eauto.
+  Qed.
+
   Lemma equation_cons_correct:
     forall eq eqs P R S I S' me ve inputs mems,
       (forall b S xs ys S' me,
@@ -1609,29 +1640,53 @@ Module Type CORRECTNESS
       Ordered_blocks P ->
       Is_well_sch' inputs mems (eq :: eqs) ->
       Memory_Corres_eqs eqs S I S' me ->
-      equiv_env (fun x => Is_free_in_eq x eq) R mems me ve ->
+      equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me ve ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_eqn mems eq) (me', ve')
-        /\ Memory_Corres_eqs (eq :: eqs) S I S' me'.
+        /\ Memory_Corres_eqs (eq :: eqs) S I S' me'
+        /\ equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me' ve'.
   Proof.
     intros ** IH Sem Ord Wsch Corres Equiv;
-    inversion Sem as [????????? Hexp|
-                      ???????????? Hexp|
+      pose proof Equiv as Equiv'; apply equiv_env_Is_free_in_eqs_cons in Equiv';
+    inversion Sem as [????????? Hexp Hvar|
+                      ??????????? Hvar Hexp|
                       ???????????? Init|
                       ??????????????? Hexps Find_S Find_I Hblock];
     subst; simpl.
 
     - inv Hexp; exists me; eexists; split;
-        try solve [eapply stmt_eval_Control_absent'; eauto; auto];
-        try apply Memory_Corres_eqs_Def; auto.
-      eapply stmt_eval_Control_present'; eauto; auto.
-      eapply cexp_correct; eauto.
+        try solve [eapply stmt_eval_Control_absent'; eauto; auto].
+      + eapply stmt_eval_Control_present'; eauto; auto.
+        eapply cexp_correct; eauto.
+      + split; try apply Memory_Corres_eqs_Def; auto.
+        intros x' c' Free Hvar'.
+        destruct (ident_eq_dec x' x).
+        * subst; rewrite Env.gss.
+          assert (c' = c)
+            by (eapply sem_var_instant_det in Hvar; eauto; inv Hvar; auto).
+          subst.
+          eapply Equiv in Free; apply Free in Hvar'.
+          cases.
+        * rewrite Env.gso; auto.
+          apply Equiv; auto.
+      + split; try apply Memory_Corres_eqs_Def; auto.
 
     - inv Hexp; eexists; exists ve; split;
         try solve [eapply stmt_eval_Control_absent'; eauto; auto].
       + eapply stmt_eval_Control_present'; eauto using stmt_eval, lexp_correct; auto.
-      + apply Memory_Corres_eqs_Next_present; auto.
-      + apply Memory_Corres_eqs_Next_absent; auto; congruence.
+      + split; try apply Memory_Corres_eqs_Next_present; auto.
+        intros x' c' Free Hvar'.
+        destruct (ident_eq_dec x' x).
+        * subst; rewrite find_val_gss.
+          assert (c' = c)
+            by (eapply sem_var_instant_det in Hvar; eauto; inv Hvar; auto).
+          subst.
+          eapply Equiv in Free; apply Free in Hvar'.
+          cases.
+          admit.
+        * rewrite find_val_gso; auto.
+          apply Equiv; auto.
+      + split; try apply Memory_Corres_eqs_Next_absent; auto; congruence.
 
     - destruct r.
       + pose proof Init.
@@ -1639,7 +1694,8 @@ Module Type CORRECTNESS
         edestruct reset_spec as (me' &?& Eq); eauto.
         do 2 eexists; split.
         * eapply stmt_eval_Control_present'; eauto; auto.
-        *{ eapply Memory_Corres_eqs_Reset_present; eauto.
+        *{ split; auto.
+           eapply Memory_Corres_eqs_Reset_present; eauto.
            - eapply initial_state_det; eauto.
              rewrite Eq.
              apply initial_reset_state_spec; auto.
@@ -1648,6 +1704,7 @@ Module Type CORRECTNESS
          }
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
         destruct Init as (?&?&?).
+        split; auto.
         eapply Memory_Corres_eqs_Reset_absent; eauto.
         eapply Reset_not_Reset_in; eauto.
 
@@ -1663,7 +1720,9 @@ Module Type CORRECTNESS
         *{ do 2 eexists; split.
            - eapply stmt_eval_Control_present'; eauto; auto.
              econstructor; eauto using lexps_correct.
-           - eapply Memory_Corres_eqs_Call_present; eauto.
+           - split.
+             + eapply Memory_Corres_eqs_Call_present; eauto.
+             + admit.
          }
         *{ destruct rst; apply Corres in Wsch as (Inst).
            - apply Inst in Find_I as (?& -> &?); auto.
@@ -1671,6 +1730,7 @@ Module Type CORRECTNESS
              apply Inst in Find_S as (?& -> &?); rewrite E; auto.
          }
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
+        split; auto.
         apply sem_block_absent in Hblock as (); try apply all_absent_spec.
         eapply Memory_Corres_eqs_Call_absent; eauto.
   Qed.
@@ -1793,11 +1853,12 @@ Module Type CORRECTNESS
       Ordered_blocks P ->
       Is_well_sch' inputs mems (eq :: eqs) ->
       Memory_Corres_eqs eqs S I S' me' ->
-      equiv_env (fun x => Is_free_in_eq x eq) R mems me' ve' ->
+      equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me' ve' ->
       stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve') ->
       exists me'' ve'',
         stmt_eval (translate P) me ve (translate_eqns mems (eq :: eqs)) (me'', ve'')
-        /\ Memory_Corres_eqs (eq :: eqs) S I S' me''.
+        /\ Memory_Corres_eqs (eq :: eqs) S I S' me''
+        /\ equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me'' ve''.
   Proof.
     intros.
     edestruct equation_cons_correct as (me'' & ve'' &?&?); eauto.
@@ -1857,15 +1918,18 @@ Module Type CORRECTNESS
       me ≋ S ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve')
-        /\ Memory_Corres_eqs eqs S I S' me'.
+        /\ Memory_Corres_eqs eqs S I S' me'
+        /\ equiv_env (fun x => Is_free_in_eqs x eqs) R mems me' ve'.
   Proof.
     induction eqs; simpl;
       intros ** Heqs Ord Wsch E; inv Heqs.
-    - do 3 econstructor; eauto using stmt_eval.
-      now apply Memory_Corres_eqs_empty_equal_memory.
+    - do 3 econstructor; eauto using stmt_eval; split.
+      + now apply Memory_Corres_eqs_empty_equal_memory.
+      + inversion 1.
     - inv Wsch.
-      edestruct IHeqs as (me' & ve' &?&?); eauto.
+      edestruct IHeqs as (me' & ve' &?&?&?); eauto.
       eapply equations_cons_correct; eauto using Is_well_sch'.
+
       admit.
   Qed.
 
@@ -1945,19 +2009,6 @@ Module Type CORRECTNESS
          }
   Qed.
 
-  Lemma stmt_call_eval_cons:
-    forall prog c' c me f vs me' rvs,
-      c_name c <> c' ->
-      (stmt_call_eval (c :: prog) me c' f vs me' rvs
-       <-> stmt_call_eval prog me c' f vs me' rvs).
-  Proof.
-    intros ** Neq; rewrite <-ident_eqb_neq in Neq; split; intros Sem.
-    - inversion_clear Sem as [??????????? Find].
-      simpl in Find; rewrite Neq in Find; eauto using stmt_call_eval.
-    - inv Sem; econstructor; eauto.
-      simpl; rewrite Neq; auto.
-  Qed.
-
   Theorem correctness:
     forall P b S xs ys S' me,
       Ordered_blocks P ->
@@ -1978,7 +2029,7 @@ Module Type CORRECTNESS
       apply sem_equations_cons in Heqs; auto.
       + inv Ord.
         edestruct equations_correct with (ve := Env.adds (map fst (m_in (step_method bl))) xs vempty)
-          as (me' & ve' &?&?); eauto.
+          as (me' & ve' &?&?&?); eauto.
         exists me'; split.
         *{ apply find_block_translate in Find' as (?&?&?&?&?); subst.
            econstructor; eauto.
@@ -1997,6 +2048,5 @@ Module Type CORRECTNESS
         simpl; apply ident_eqb_neq; auto.
       + eapply find_block_later_not_Is_block_in; eauto.
   Qed.
-
 
 End CORRECTNESS.
