@@ -358,9 +358,28 @@ Module Type SBSEMANTICS
   Lemma sem_block_absent:
     forall P b xs S ys S',
       sem_block P b S xs ys S' ->
-      absent_list xs -> S' ≋ S.
+      absent_list xs ->
+      absent_list ys /\ S' ≋ S.
   Proof.
-    inversion 1; auto.
+    inversion 1; tauto.
+  Qed.
+
+  Lemma sem_block_present:
+    forall P b S xs ys S',
+      sem_block P b S xs ys S' ->
+      present_list xs ->
+      present_list ys.
+  Proof.
+    inversion_clear 1 as [???????????? Ins ?? Same AbsEq];
+      intros ** Pres.
+    destruct Same as [Abs|]; auto.
+    apply AbsEq in Abs.
+    apply Forall2_length in Ins.
+    pose proof (b_ingt0 bl) as Length.
+    rewrite map_length in Ins; rewrite Ins in Length.
+    clear - Abs Pres Length; destruct xs; simpl in *.
+    - omega.
+    - inv Abs; inv Pres; congruence.
   Qed.
 
   Inductive Ordered_blocks: program -> Prop :=
@@ -608,6 +627,40 @@ Module Type SBSEMANTICS
     eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?); auto.
   Qed.
 
+  Lemma sem_block_cons:
+    forall P b f xs S S' ys,
+      Ordered_blocks (b :: P) ->
+      sem_block (b :: P) f xs S S' ys ->
+      b.(b_name) <> f ->
+      sem_block P f xs S S' ys.
+  Proof.
+    intros ** Hord Hsem Hnf.
+    revert Hnf.
+    induction Hsem as [| | |????????????????????? IH|
+                       ??????????? Hf ??????? IH]
+        using sem_block_mult
+      with (P_equation := fun bk H S I S' eq =>
+                            ~Is_block_in_eq b.(b_name) eq ->
+                            sem_equation P bk H S I S' eq);
+      eauto using sem_equation.
+    - intro Hnin; econstructor; eauto.
+      destruct r; eauto.
+      rewrite initial_state_other; eauto.
+      intro E; apply Hnin; rewrite E; constructor.
+    - intro Hnin; econstructor; eauto.
+      apply IH; intro E; apply Hnin; rewrite E; constructor.
+    - intros.
+      pose proof Hf.
+      rewrite find_block_other in Hf; auto.
+      econstructor; eauto.
+      eapply find_block_later_not_Is_block_in in Hord; eauto.
+      apply Forall_forall; intros.
+      eapply Forall_forall in IH; eauto.
+      apply IH.
+      intro; apply Hord.
+      apply Exists_exists; eauto.
+  Qed.
+
   Lemma sem_block_cons2:
     forall b P f xs S S' ys,
       Ordered_blocks (b :: P) ->
@@ -651,23 +704,32 @@ Module Type SBSEMANTICS
         apply Exists_exists; eauto.
   Qed.
 
-  Lemma sem_equations_cons2:
+  Lemma sem_equations_cons:
     forall P bk H S I S' eqs b,
       Ordered_blocks (b :: P) ->
-      Forall (sem_equation P bk H S I S') eqs ->
       ~ Is_block_in b.(b_name) eqs ->
-      Forall (sem_equation (b :: P) bk H S I S') eqs.
+      (Forall (sem_equation P bk H S I S') eqs <->
+       Forall (sem_equation (b :: P) bk H S I S') eqs).
   Proof.
-    intros ** Hord Hsem Hnini.
-    induction eqs as [|[] eqs IH]; auto;
-      apply Forall_cons2 in Hsem as [Heq Heqs]; inv Heq;
-        apply not_Is_block_in_cons in Hnini as [Hnini Hninis];
-        constructor; eauto using sem_equation.
-    - econstructor; eauto.
-      destruct r; eauto.
-      apply initial_state_other; auto.
-      intro E; apply Hnini; rewrite E; constructor.
-    - eauto using sem_equation, sem_block_cons2.
+    intros ** Hord Hnini.
+    induction eqs as [|eq eqs IH]; [now constructor|].
+    apply not_Is_block_in_cons in Hnini as [Hnini Hninis].
+    split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
+      apply IH in Heqs; auto; constructor; auto.
+    - destruct Heq; eauto using sem_equation.
+      + econstructor; eauto.
+        destruct r; eauto.
+        apply initial_state_other; auto.
+        intro E; apply Hnini; rewrite E; constructor.
+      + eauto using sem_equation, sem_block_cons2.
+    - destruct Heq; eauto using sem_equation.
+      + econstructor; eauto.
+        destruct r; auto.
+        rewrite initial_state_other; eauto.
+        intro E; apply Hnini; rewrite E; constructor.
+      + econstructor; eauto.
+        eapply sem_block_cons; eauto.
+        intro E; apply Hnini; rewrite E; constructor.
   Qed.
 
   Lemma reset_lasts_det:

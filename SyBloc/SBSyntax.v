@@ -44,7 +44,7 @@ Module Type SBSYNTAX
         b_out   : list (ident * type);
         b_eqs   : list equation;
 
-        (* b_ingt0 : 0 < length b_in; *)
+        b_ingt0 : 0 < length b_in;
         (* b_outgt0 : 0 < length b_out *)
         b_nodup : NoDupMembers (b_in ++ b_vars ++ b_out);
         b_nodup_lasts_blocks: NoDup (map fst b_lasts ++ map fst b_blocks);

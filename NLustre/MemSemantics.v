@@ -330,11 +330,11 @@ enough: it does not support the internal fixpoint introduced by
       pose proof Hf.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       econstructor; eauto.
-      + apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
-        apply Is_node_in_Forall in Hord.
-        apply Forall_Forall with (1:=Hord) in IH.
-        apply Forall_impl with (2:=IH).
-        intuition.
+      apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
+      apply Is_node_in_Forall in Hord.
+      apply Forall_Forall with (1:=Hord) in IH.
+      apply Forall_impl with (2:=IH).
+      intuition.
   Qed.
 
   Corollary msem_reset_cons:
@@ -428,26 +428,27 @@ enough: it does not support the internal fixpoint introduced by
     intro k; destruct (SemN k) as (?&?&?&?); eauto using msem_node_cons2.
   Qed.
 
-  Lemma msem_equation_cons2:
+  Lemma msem_equations_cons:
     forall G bk H M M' eqs n,
       Ordered_nodes (n :: G) ->
-      Forall (msem_equation G bk H M M') eqs ->
       ~Is_node_in n.(n_name) eqs ->
-      Forall (msem_equation (n :: G) bk H M M') eqs.
+      (Forall (msem_equation G bk H M M') eqs <->
+       Forall (msem_equation (n :: G) bk H M M') eqs).
   Proof.
-    Hint Constructors msem_equation.
-    intros ** Hord Hsem Hnini.
+    intros ** Hord Hnini.
     induction eqs as [|eq eqs IH]; [now constructor|].
-    apply Forall_cons2 in Hsem.
-    destruct Hsem as [Heq Heqs].
-    apply not_Is_node_in_cons in Hnini.
-    destruct Hnini as [Hnini Hninis].
-    apply IH with (2:=Hninis) in Heqs.
-    constructor; [|now apply Heqs].
-    inv Hord.
-    destruct Heq; eauto.
-    - eauto using msem_node_cons2.
-    - eauto using msem_reset_cons2.
+    apply not_Is_node_in_cons in Hnini as [Hnini Hninis].
+    split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
+      apply IH in Heqs; auto; constructor; auto.
+    - inv Hord.
+      destruct Heq; eauto.
+      + eauto using msem_node_cons2.
+      + eauto using msem_reset_cons2.
+    - inv Heq; eauto;
+        assert (n.(n_name) <> f)
+        by (intro HH; apply Hnini; rewrite HH; constructor).
+      + eauto using msem_node_cons.
+      + eauto using msem_reset_cons.
   Qed.
 
   Lemma find_node_msem_node:
@@ -468,31 +469,6 @@ enough: it does not support the internal fixpoint introduced by
     exists xs, M, M', ys.
     rewrite Hf in *.
     exact Hmsem.
-  Qed.
-
-  (* TODO: Tidy this up... *)
-  Lemma Forall_msem_equation_global_tl:
-    forall n G bk H M M' eqs,
-      Ordered_nodes (n :: G) ->
-      ~ Is_node_in n.(n_name) eqs ->
-      Forall (msem_equation (n :: G) bk H M M') eqs ->
-      Forall (msem_equation G bk H M M') eqs.
-  Proof.
-    intros ??????? Hord.
-    induction eqs as [|eq eqs IH]; trivial; [].
-    intros Hnini Hmsem.
-    apply Forall_cons2 in Hmsem; destruct Hmsem as [Hseq Hseqs].
-    apply IH in Hseqs.
-    - apply Forall_cons; trivial.
-      apply not_Is_node_in_cons in Hnini.
-      destruct Hnini.
-      inv Hseq; eauto;
-        assert (n.(n_name) <> f)
-        by (intro HH; apply H0; rewrite HH; constructor).
-      + eauto using msem_node_cons.
-      + eauto using msem_reset_cons.
-    - apply not_Is_node_in_cons in Hnini.
-      now destruct Hnini.
   Qed.
 
   (** *** Memory management *)
@@ -901,7 +877,7 @@ dataflow memory for which the non-standard semantics holds true.
           by (eapply sem_msem_eqs; eauto; apply NoDup_defs_node).
       exists M1, M1'.
       econstructor; eauto.
-      eapply msem_equation_cons2; eauto.
+      rewrite <-msem_equations_cons; eauto.
     - apply ident_eqb_neq in Hnf.
       apply sem_node_cons with (1:=Hord) (3:=Hnf) in Hsem.
       inv Hord.
@@ -1122,8 +1098,8 @@ dataflow memory for which the non-standard semantics holds true.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inv Hfind2.
       assert (~ Is_node_in (n_name n) (n_eqs n)) by (eapply find_node_not_Is_node_in; eauto).
-      eapply Forall_msem_equation_global_tl in Heqs1; eauto.
-      eapply Forall_msem_equation_global_tl in Heqs2; eauto.
+      eapply msem_equations_cons in Heqs1; eauto.
+      eapply msem_equations_cons in Heqs2; eauto.
       eapply msem_eqs_same_initial_memory; eauto.
       apply NoDup_defs_node.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
@@ -1256,7 +1232,7 @@ dataflow memory for which the non-standard semantics holds true.
     simpl in Hfind.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inv Hfind.
-      eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      eapply msem_equations_cons in Heqs; eauto.
       eapply msem_eqs_absent_until; eauto.
       apply NoDup_defs_node.
     - eapply msem_node_cons in Hsem; eauto.
@@ -1413,7 +1389,7 @@ dataflow memory for which the non-standard semantics holds true.
     simpl in Hfind.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inv Hfind.
-      eapply Forall_msem_equation_global_tl in Heqs; eauto.
+      eapply msem_equations_cons in Heqs; eauto.
       eapply msem_eqs_absent; eauto.
       apply NoDup_defs_node.
     - eapply msem_node_cons in Hsem; eauto.
