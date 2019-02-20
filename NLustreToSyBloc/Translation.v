@@ -689,6 +689,96 @@ Module Type TRANSLATION
       + inversion_clear H as [?? Hin|]; auto; inv Hin.
   Qed.
   Next Obligation.
+    unfold gather_eqs, translate_eqns, concatMap.
+    generalize (@nil (ident * ident)).
+    induction (n_eqs n) as [|[]]; simpl; intros; try now constructor.
+    - split; intros ** H.
+      + right; eapply IHl; eauto.
+      + inversion_clear H as [?? Last|]; try inv Last.
+        apply IHl; auto.
+    - destruct i; simpl; auto.
+      destruct o; split; intros ** H.
+      + eapply Exists_app, IHl; eauto.
+      + apply Exists_app' in H as [H|].
+        * inversion_clear H as [?? Last|?? Lasts]; try inv Last.
+          inversion_clear Lasts as [?? Last|?? Last]; inv Last.
+        * apply IHl; auto.
+      + eapply Exists_app, IHl; eauto.
+      + apply Exists_app' in H as [H|].
+        * inversion_clear H as [?? Last|?? Last]; inv Last.
+        * apply IHl; auto.
+    - split; intros ** H.
+      + apply InMembers_In in H as (?& H).
+        apply In_fst_fold_left_gather_eq in H as [H|H].
+        * inversion_clear H as [H'|H']; inv H'.
+          left; constructor.
+        * right; eapply IHl, In_InMembers; eauto.
+      + inversion_clear H as [?? H'|?? H'].
+        * inv H'.
+          eapply In_InMembers, In_fst_fold_left_gather_eq; left.
+          constructor; eauto.
+        * eapply IHl, InMembers_In in H' as (?&?).
+          eapply In_InMembers, In_fst_fold_left_gather_eq; right; eauto.
+  Qed.
+  Next Obligation.
+    unfold gather_eqs, translate_eqns, concatMap.
+    generalize (@nil (ident * const)).
+    induction (n_eqs n) as [|[]]; simpl; intros.
+    - split; try contradiction.
+      intros (?& H); inv H.
+    - split; intros ** H.
+      + apply IHl in H as (k &?).
+        exists k; right; auto.
+      + destruct H as [? H].
+        inversion_clear H as [?? St|]; try inv St.
+        apply IHl; eauto.
+    - destruct i; simpl; auto.
+      destruct o; split; intros ** H.
+      + apply InMembers_In in H as (?& H).
+        apply In_snd_fold_left_gather_eq in H.
+        destruct H as [H|H].
+        * inversion_clear H as [H'|H']; inv H'.
+          exists 0%nat; apply Exists_app_l; do 2 constructor.
+        * apply In_InMembers in H; apply IHl in H as (k &?).
+          exists k; apply Exists_app; auto.
+      + destruct H as (k& H).
+        apply Exists_app' in H as [H|].
+        *{ inversion_clear H as [?? H'|?? H'].
+           - inv H'.
+             eapply In_InMembers, In_snd_fold_left_gather_eq; left; constructor; auto.
+           - inversion_clear H' as [?? H|?? H]; inv H.
+             eapply In_InMembers, In_snd_fold_left_gather_eq; left; constructor; auto.
+         }
+        * assert (InMembers s (snd (fold_left gather_eq l0 (l1, [])))) as H'
+              by (apply IHl; eauto).
+          apply InMembers_In in H' as ().
+          eapply In_InMembers, In_snd_fold_left_gather_eq; right; eauto.
+      + apply InMembers_In in H as (?& H).
+        apply In_snd_fold_left_gather_eq in H.
+        destruct H as [H|H].
+        * inversion_clear H as [H'|H']; inv H'.
+          exists 1%nat; apply Exists_app_l; do 2 constructor.
+        * apply In_InMembers in H; apply IHl in H as (k &?).
+          exists k; apply Exists_app; auto.
+      + destruct H as (k& H).
+        apply Exists_app' in H as [H|].
+        *{ inversion_clear H as [?? H'|?? H'].
+           - inv H'.
+             eapply In_InMembers, In_snd_fold_left_gather_eq; left; constructor; auto.
+           - inversion_clear H' as [?? H|?? H]; inv H.
+         }
+        * assert (InMembers s (snd (fold_left gather_eq l0 (l1, [])))) as H'
+              by (apply IHl; eauto).
+          apply InMembers_In in H' as ().
+          eapply In_InMembers, In_snd_fold_left_gather_eq; right; eauto.
+    - split; intros ** H.
+      + apply IHl in H as (k&?).
+        exists k; right; auto.
+      + destruct H as (?& H).
+        inversion_clear H as [?? H'|]; try inv H'.
+        apply IHl; eauto.
+  Qed.
+  Next Obligation.
     pose proof n.(n_good) as [ValidApp].
     split; [|split; [|split]]; auto.
     - repeat rewrite <-idty_app. apply Forall_ValidId_idty.

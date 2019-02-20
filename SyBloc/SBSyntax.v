@@ -23,6 +23,14 @@ Module Type SBSYNTAX
   | EqCall      : ident -> idents -> clock -> bool -> ident -> list lexp -> equation.
   (* <next s> y1, ..., yn =ck block<if b then trans s else last s>(e1, ..., em) *)
 
+  Inductive Is_last_in_eq: ident -> equation -> Prop :=
+    LastEqNext:
+      forall x ck e,
+        Is_last_in_eq x (EqNext x ck e).
+
+  Definition Is_last_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    Exists (Is_last_in_eq x) eqs.
+
   Inductive Is_block_in_eq : ident -> equation -> Prop :=
   | Is_block_inEqCall:
       forall s ys ck rst f es,
@@ -32,7 +40,18 @@ Module Type SBSYNTAX
         Is_block_in_eq f (EqReset s ck f).
 
   Definition Is_block_in (f: ident) (eqs: list equation) : Prop :=
-    List.Exists (Is_block_in_eq f) eqs.
+    Exists (Is_block_in_eq f) eqs.
+
+  Inductive Is_state_in_eq: ident -> nat -> equation -> Prop :=
+  | StateEqReset:
+      forall s ck b,
+        Is_state_in_eq s 0 (EqReset s ck b)
+  | StateEqCall:
+      forall s xs ck rst b es,
+        Is_state_in_eq s 1 (EqCall s xs ck rst b es).
+
+  Definition Is_state_in_eqs (s: ident) (k: nat) (eqs: list equation) : Prop :=
+    Exists (Is_state_in_eq s k) eqs.
 
   Record block :=
     Block {
@@ -49,6 +68,8 @@ Module Type SBSYNTAX
         b_nodup : NoDupMembers (b_in ++ b_vars ++ b_out);
         b_nodup_lasts_blocks: NoDup (map fst b_lasts ++ map fst b_blocks);
         b_blocks_in_eqs: forall f, (exists i, In (i, f) b_blocks) <-> Is_block_in f b_eqs;
+        b_lasts_in_eqs: forall s, InMembers s b_lasts <-> Is_last_in_eqs s b_eqs;
+        b_states_in_eqs: forall s, InMembers s b_blocks <-> (exists k, Is_state_in_eqs s k b_eqs);
         b_good: Forall ValidId (b_in ++ b_vars ++ b_out)
                 /\ Forall ValidId b_lasts
                 /\ Forall ValidId b_blocks

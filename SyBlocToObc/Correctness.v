@@ -156,14 +156,6 @@ Module Type CORRECTNESS
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
     Exists (Is_variable_in_eq x) eqs.
 
-  Inductive Is_state_in_eq: ident -> nat -> equation -> Prop :=
-  | StateEqReset:
-      forall s ck b,
-        Is_state_in_eq s 0 (EqReset s ck b)
-  | StateEqCall:
-      forall s xs ck rst b es,
-        Is_state_in_eq s 1 (EqCall s xs ck rst b es).
-
   Inductive Is_free_in_eq: ident -> equation -> Prop :=
   | FreeEqDef:
       forall x ck e y,
@@ -190,9 +182,6 @@ Module Type CORRECTNESS
     | EqCall s' _ _ true _ _ => ident_eqb s s'
     | _ => false
     end.
-
-  Definition Is_state_in_eqs (s: ident) (k: nat) (eqs: list equation) : Prop :=
-    Exists (Is_state_in_eq s k) eqs.
 
   Definition Reset_in (s: ident) := Is_state_in_eqs s 0.
 
@@ -289,14 +278,6 @@ Module Type CORRECTNESS
   Definition Is_well_sch (inputs: list ident) (mems: PS.t) (eqs: list equation) : Prop :=
     Is_well_sch' inputs mems eqs
     /\ forall s, Reset_in s eqs -> Step_in s eqs.
-
-  Inductive Is_last_in_eq: ident -> equation -> Prop :=
-    LastEqNext:
-      forall x ck e,
-        Is_last_in_eq x (EqNext x ck e).
-
-  Definition Is_last_in_eqs (x: ident) (eqs: list equation) : Prop :=
-    Exists (Is_last_in_eq x) eqs.
 
   Lemma Is_last_in_eq_defined_not_variable:
     forall x eq,
@@ -1935,79 +1916,90 @@ Module Type CORRECTNESS
       + now apply Equiv.
   Qed.
 
-  Lemma sem_equations_not_last_in_eqs:
-    forall P base R S I S' eqs x,
-      Forall (sem_equation P base R S I S') eqs ->
-      ~ Is_last_in_eqs x eqs ->
-      find_val x S' = find_val x S.
-  Proof.
-  Admitted.
-
-  Lemma sem_equations_not_step_reset_in_eqs:
-    forall P base R S I S' eqs s,
-      Forall (sem_equation P base R S I S') eqs ->
-      ~ Step_in s eqs /\ ~ Reset_in s eqs ->
-      (forall Ss,
-          find_inst s S = Some Ss ->
-          exists Ss',
-            find_inst s S' = Some Ss'
-            /\ Ss' ≋ Ss)
-      /\ (forall Ss',
-            find_inst s S' = Some Ss' ->
-            exists Ss,
-              find_inst s S = Some Ss
-              /\ Ss' ≋ Ss).
-  Proof.
-  Admitted.
-
   Lemma Memory_Corres_eqs_equal_memory:
-    forall P R eqs S I S' me,
+    forall P R eqs S I S' me lasts blocks,
       Memory_Corres_eqs eqs S I S' me ->
       Forall (sem_equation P true R S I S') eqs ->
+      state_closed S lasts blocks ->
+      state_closed S' lasts blocks ->
+      (forall x, In x lasts <-> Is_last_in_eqs x eqs) ->
+      (forall s, In s blocks <-> exists k, Is_state_in_eqs s k eqs) ->
       (forall s, Reset_in s eqs -> Step_in s eqs) ->
       me ≋ S'.
   Proof.
-    intros ** (Lasts & Insts) Heqs WSCH.
+    intros ** (Lasts & Insts) Heqs Closed Closed' SpecLast SpecInst WSCH.
     split.
     - intro x; destruct (Is_last_in_eqs_dec x eqs) as [Last|Nlast].
       + apply Lasts in Last; auto.
-      + eapply sem_equations_not_last_in_eqs in Heqs; eauto.
+      + assert (find_val x S = None).
+        { apply not_Some_is_None; intros ** Find;
+            apply Nlast, SpecLast, Closed.
+          apply not_None_is_Some; eauto.
+        }
+        assert (find_val x S' = None) as E'.
+        { apply not_Some_is_None; intros ** Find;
+            apply Nlast, SpecLast, Closed'.
+          apply not_None_is_Some; eauto.
+        }
+        unfold value_corres, find_val in *.
         apply Lasts in Nlast.
-        rewrite Nlast in Heqs; auto.
+        rewrite E'; rewrite <-Nlast; auto.
     - split.
       + setoid_rewrite Env.In_find; intro s.
-        destruct (Step_in_dec s eqs) as [Step|].
+        destruct (Step_in_dec s eqs) as [Step|Nstep].
         *{ apply Insts in Step as (Inst & Inst').
            unfold sub_inst, find_inst in *; split; intros (?&?).
            - edestruct Inst' as (?&?&?); eauto.
            - edestruct Inst as (?&?&?); eauto.
          }
-        *{ destruct (Reset_in_dec s eqs) as [Rst|].
+        *{ destruct (Reset_in_dec s eqs) as [Rst|Nrst].
            - apply WSCH in Rst; contradiction.
-           - assert (state_corres s S me) as (Inst & Inst') by (apply Insts; auto).
-             eapply sem_equations_not_step_reset_in_eqs in Heqs as (Inst1 & Inst1'); eauto.
-             unfold sub_inst, find_inst in *; split; intros (?&?).
-             + edestruct Inst' as (?&?&?); eauto.
-               edestruct Inst1 as (?&?&?); eauto.
-             + edestruct Inst1' as (?&?&?); eauto.
-               edestruct Inst as (?&?&?); eauto.
+           - assert (~ exists k, Is_state_in_eqs s k eqs) as Nstate.
+             { intros (?& State).
+               apply Exists_exists in State as (?&?& State).
+               inv State.
+               - apply Nrst, Exists_exists; eauto using Is_state_in_eq.
+               - apply Nstep, Exists_exists; eauto using Is_state_in_eq.
+             }
+             assert (state_corres s S me) as (?& Inst') by (apply Insts; auto).
+             assert (find_inst s S = None).
+             { apply not_Some_is_None; intros ** Find;
+                 apply Nstate, SpecInst, Closed.
+               apply not_None_is_Some; eauto.
+             }
+             assert (find_inst s S' = None) as E'.
+             { apply not_Some_is_None; intros ** Find;
+                 apply Nstate, SpecInst, Closed'.
+               apply not_None_is_Some; eauto.
+             }
+             unfold sub_inst in *.
+             assert (find_inst s me = None) as E.
+             { apply not_Some_is_None; intros ** Find;
+                 apply Inst' in Find as (?&?&?).
+               congruence.
+             }
+             setoid_rewrite E'; setoid_rewrite E; reflexivity.
          }
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros s me_s Ss' Find Find'.
-        destruct (Step_in_dec s eqs) as [Step|].
+        destruct (Step_in_dec s eqs) as [Step|Nstep].
         * apply Insts in Step as (Inst).
           unfold sub_inst, find_inst in *.
           apply Inst in Find' as (?& Find' &?).
           rewrite Find' in Find; inv Find; auto.
-        *{ destruct (Reset_in_dec s eqs) as [Rst|].
+        *{ destruct (Reset_in_dec s eqs) as [Rst|Nrst].
            - apply WSCH in Rst; contradiction.
-           - assert (state_corres s S me) as (?& Inst') by (apply Insts; auto).
-             eapply sem_equations_not_step_reset_in_eqs in Heqs as (?& Inst1'); eauto.
-             unfold sub_inst, find_inst in *.
-             apply Inst1' in Find' as (?& Find' &?).
-             apply Inst' in Find as (?& Find &?).
-             rewrite Find' in Find; inv Find.
-             now etransitivity; eauto.
+           - assert (~ (Step_in s eqs \/ Reset_in s eqs)) as NstpRst by tauto.
+             assert (~ exists k, Is_state_in_eqs s k eqs) as Nstate.
+             { intros (?& State).
+               apply Exists_exists in State as (?&?& State).
+               inv State.
+               - apply Nrst, Exists_exists; eauto using Is_state_in_eq.
+               - apply Nstep, Exists_exists; eauto using Is_state_in_eq.
+             }
+             exfalso.
+             apply Nstate, SpecInst, Closed'.
+             apply not_None_is_Some; eauto.
          }
   Qed.
 
@@ -2039,8 +2031,11 @@ Module Type CORRECTNESS
            - eauto.
            - simpl. admit.
          }
-        * eapply Memory_Corres_eqs_equal_memory; eauto.
-          admit.
+        *{ eapply Memory_Corres_eqs_equal_memory; eauto.
+           - setoid_rewrite <-fst_InMembers; apply b_lasts_in_eqs.
+           - setoid_rewrite <-fst_InMembers; apply b_states_in_eqs.
+           - admit.
+         }
       + eapply find_block_not_Is_block_in; eauto.
     - apply sem_equations_cons in Heqs; auto.
       + inv Ord.
