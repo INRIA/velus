@@ -529,6 +529,17 @@ Module Type CORRECTNESS
       + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
   Qed.
 
+  Lemma memory_closed_state_closed:
+    forall M eqs (n: nat),
+      memory_closed (M n) eqs ->
+      state_closed (M n) (map fst (fst (gather_eqs eqs))) (map fst (snd (gather_eqs eqs))).
+  Proof.
+    intros ** (?&?); split.
+    - now setoid_rewrite gather_eqs_fst_spec.
+    - now setoid_rewrite gather_eqs_snd_spec;
+        setoid_rewrite <-fst_InMembers.
+  Qed.
+
   Theorem correctness:
     forall G f xss M M' yss,
       Ordered_nodes G ->
@@ -564,6 +575,8 @@ Module Type CORRECTNESS
         * intro; eapply msem_node_absent in Hsem; eauto.
         * apply sem_equations_cons; eauto.
           apply not_Is_node_in_not_Is_block_in; auto.
+        * now apply memory_closed_state_closed.
+        * now apply memory_closed_state_closed.
       + rewrite idck_app, Forall_app; split.
         * eapply sem_clocked_vars_clock_match; eauto.
           rewrite map_fst_idck; eauto.

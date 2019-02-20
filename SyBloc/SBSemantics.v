@@ -55,9 +55,9 @@ Module Type SBSEMANTICS
               /\ initial_state P' b' S0') ->
         initial_state P b S0.
 
-  (* Definition state_closed (S: state) (bl: block) : Prop := *)
-  (*   (forall i, find_inst i S <> None -> InMembers i bl.(b_blocks)) *)
-  (*   /\ forall x, find_val x S <> None -> InMembers x bl.(b_lasts). *)
+  Definition state_closed (S: state) (lasts: list ident) (blocks: list ident) : Prop :=
+    (forall x, find_val x S <> None -> In x lasts)
+    /\ forall s, find_inst s S <> None -> In s blocks.
 
   Section Semantics.
 
@@ -106,8 +106,8 @@ Module Type SBSEMANTICS
                (absent_list xs <-> absent_list ys) ->
                (absent_list xs -> S' ≋ S) ->
                Forall (sem_equation base R S I S') bl.(b_eqs) ->
-               (* state_closed S bl -> *)
-               (* state_closed S' bl -> *)
+               state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
+               state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
                sem_block b S xs ys S'.
 
   End Semantics.
@@ -163,8 +163,8 @@ Module Type SBSEMANTICS
         (absent_list xs <-> absent_list ys) ->
         (absent_list xs -> S' ≋ S) ->
         Forall (sem_equation P base R S I S') bl.(b_eqs) ->
-        (* state_closed S bl -> *)
-        (* state_closed S' bl -> *)
+        state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
+        state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
         Forall (P_equation base R S I S') bl.(b_eqs) ->
         P_block b S xs ys S'.
 
@@ -279,19 +279,19 @@ Module Type SBSEMANTICS
         now rewrite <-Eq, <-Eq''.
   Qed.
 
-  (* Add Parametric Morphism bl : (fun S => state_closed S bl) *)
-  (*     with signature equal_memory ==> Basics.impl *)
-  (*       as state_closed_equal_memory. *)
-  (* Proof. *)
-  (*   intros ?? E (Blocks & Lasts); split. *)
-  (*   - intros ** Find. *)
-  (*     apply Blocks. *)
-  (*     apply not_None_is_Some in Find as (?& Find). *)
-  (*     pose proof (find_inst_equal_memory i E) as E'. *)
-  (*     rewrite Find in E'. *)
-  (*     destruct (find_inst i x); congruence. *)
-  (*   - now setoid_rewrite <-E. *)
-  (* Qed. *)
+  Add Parametric Morphism lasts blocks : (fun S => state_closed S lasts blocks)
+      with signature equal_memory ==> Basics.impl
+        as state_closed_equal_memory.
+  Proof.
+    intros ?? E (Lasts & Blocks); split.
+    - now setoid_rewrite <-E.
+    - intros ** Find.
+      apply Blocks.
+      apply not_None_is_Some in Find as (?& Find).
+      pose proof (find_inst_equal_memory s E) as E'.
+      rewrite Find in E'.
+      destruct (find_inst s x); congruence.
+  Qed.
 
   Add Parametric Morphism P f xs ys : (fun S S' => sem_block P f S xs ys S')
       with signature equal_memory ==> equal_memory ==> Basics.impl
@@ -351,8 +351,8 @@ Module Type SBSEMANTICS
         constructor; auto.
         assert (Env.Equiv equal_memory I I) by reflexivity;
           auto.
-      (* + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *) *)
-      (* + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *) *)
+      + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *)
+      + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *)
   Qed.
 
   Lemma sem_block_absent:
@@ -637,7 +637,7 @@ Module Type SBSEMANTICS
     intros ** Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [| | |????????????????????? IH|
-                       ??????????? Hf ??????? IH]
+                       ??????????? Hf ????????? IH]
         using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
@@ -669,7 +669,7 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Hord Hsem.
     induction Hsem as [| | | |
-                       ??????????? Hfind ???????(* ?? *) IHeqs] using sem_block_mult
+                       ??????????? Hfind ????????? IHeqs] using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
                             sem_equation (b :: P) bk H S I S' eq);

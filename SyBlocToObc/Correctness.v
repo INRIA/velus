@@ -1926,11 +1926,13 @@ Module Type CORRECTNESS
     - do 3 econstructor; eauto using stmt_eval; split.
       + now apply Memory_Corres_eqs_empty_equal_memory.
       + inversion 1.
-    - inv Wsch.
-      edestruct IHeqs as (me' & ve' &?&?&?); eauto.
+    - inversion_clear Wsch as [|??? FreeSpec].
+      edestruct IHeqs as (me' & ve' &?&?& Equiv); eauto.
       eapply equations_cons_correct; eauto using Is_well_sch'.
-
-      admit.
+      intros x v FreeEqs Var.
+      inversion_clear FreeEqs as [?? Free|].
+      + apply FreeSpec in Free. admit.
+      + now apply Equiv.
   Qed.
 
   Lemma sem_equations_not_last_in_eqs:
