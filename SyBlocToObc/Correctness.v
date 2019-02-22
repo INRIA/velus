@@ -53,6 +53,22 @@ Module Type CORRECTNESS
              destruct x
            end; auto.
 
+  Ltac cases_eqn E :=
+    repeat match goal with
+           | H: context [ match negb ?x with _ => _ end ] |- _ =>
+             let E := fresh E in
+             destruct x eqn: E; simpl; try solve [inv H; auto]
+           | H: context [ match ?x with _ => _ end ] |- _ =>
+             let E := fresh E in
+             destruct x eqn: E; try solve [inv H; auto]
+           | |- context [ match negb ?x with _ => _ end ] =>
+             let E := fresh E in
+             destruct x eqn: E; simpl
+           | |- context [ match ?x with _ => _ end ] =>
+             let E := fresh E in
+             destruct x eqn: E
+           end; auto.
+
   Definition equiv_env
              (in_domain: ident -> Prop) (R: env) (mems: PS.t) (me: menv) (ve: venv) : Prop :=
     forall x c,
@@ -1621,14 +1637,16 @@ Module Type CORRECTNESS
       Ordered_blocks P ->
       Is_well_sch' inputs mems (eq :: eqs) ->
       Memory_Corres_eqs eqs S I S' me ->
-      equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me ve ->
+      (* equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me ve -> *)
+      equiv_env (fun x => Is_free_in_eq x eq) R mems me ve ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_eqn mems eq) (me', ve')
         /\ Memory_Corres_eqs (eq :: eqs) S I S' me'
-        /\ equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me' ve'.
+        /\ equiv_env (fun x => Is_free_in_eq x eq) R mems me' ve'.
+        (* /\ equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me' ve'. *)
   Proof.
     intros ** IH Sem Ord Wsch Corres Equiv;
-      pose proof Equiv as Equiv'; apply equiv_env_Is_free_in_eqs_cons in Equiv';
+      (* pose proof Equiv as Equiv'; apply equiv_env_Is_free_in_eqs_cons in Equiv'; *)
     inversion Sem as [????????? Hexp Hvar|
                       ??????????? Hvar Hexp|
                       ???????????? Init|
@@ -1717,51 +1735,51 @@ Module Type CORRECTNESS
   Qed.
 
 
-  (* Lemma stmt_eval_translate_cexp_menv_inv: *)
-  (*   forall prog me ve mems x me' ve' e, *)
-  (*     stmt_eval prog me ve (translate_cexp mems x e) (me', ve') -> *)
-  (*     me' = me. *)
-  (* Proof. *)
-  (*   induction e; simpl; inversion_clear 1; auto; cases. *)
-  (* Qed. *)
+  Lemma stmt_eval_translate_cexp_menv_inv:
+    forall prog me ve mems x me' ve' e,
+      stmt_eval prog me ve (translate_cexp mems x e) (me', ve') ->
+      me' = me.
+  Proof.
+    induction e; simpl; inversion_clear 1; auto; cases.
+  Qed.
 
-  (* Lemma not_Is_defined_in_eq_stmt_eval_menv_inv: *)
-  (*   forall eq x P me ve mems me' ve', *)
-  (*     ~ Is_defined_in_eq x eq -> *)
-  (*     stmt_eval (translate P) me ve (translate_eqn mems eq) (me', ve') -> *)
-  (*     find_val x me' = find_val x me. *)
-  (* Proof. *)
-  (*   destruct eq; simpl; intros ** NIsDef StEval; *)
-  (*     apply stmt_eval_Control_fwd in StEval; *)
-  (*     destruct StEval as [(?& StEval)|(?&?&?)]; try congruence. *)
-  (*   - now apply stmt_eval_translate_cexp_menv_inv in StEval as ->. *)
-  (*   - inv StEval. *)
-  (*     apply not_Is_defined_in_eq_EqNext in NIsDef. *)
-  (*     rewrite find_val_gso; auto. *)
-  (*   - inv StEval; apply find_val_add_inst. *)
-  (*   - inv StEval; apply find_val_add_inst. *)
-  (* Qed. *)
+  Lemma not_Is_defined_in_eq_stmt_eval_menv_inv:
+    forall eq x P me ve mems me' ve',
+      ~ Is_defined_in_eq x eq ->
+      stmt_eval (translate P) me ve (translate_eqn mems eq) (me', ve') ->
+      find_val x me' = find_val x me.
+  Proof.
+    destruct eq; simpl; intros ** NIsDef StEval;
+      apply stmt_eval_Control_fwd in StEval;
+      destruct StEval as [(?& StEval)|(?&?&?)]; try congruence.
+    - now apply stmt_eval_translate_cexp_menv_inv in StEval as ->.
+    - inv StEval.
+      apply not_Is_defined_in_eq_EqNext in NIsDef.
+      rewrite find_val_gso; auto.
+    - inv StEval; apply find_val_add_inst.
+    - inv StEval; apply find_val_add_inst.
+  Qed.
 
-  (* Corollary not_Is_defined_in_eqs_stmt_eval_menv_inv: *)
-  (*   forall eqs x P me ve mems me' ve', *)
-  (*     ~ Is_defined_in_eqs x eqs -> *)
-  (*     stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve') -> *)
-  (*     find_val x me' = find_val x me. *)
-  (* Proof. *)
-  (*   unfold translate_eqns. *)
-  (*   induction eqs as [|eq]; simpl; intros ** NIsDef StEval. *)
-  (*   - now inv StEval. *)
-  (*   - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp); *)
-  (*       rewrite Comp_Skip_right in Hcomp. *)
-  (*     apply not_Is_defined_in_cons in NIsDef as (?& Spec). *)
-  (*     eapply IHeqs with (me' := me'') in Spec; eauto. *)
-  (*     rewrite <-Spec. *)
-  (*     eapply not_Is_defined_in_eq_stmt_eval_menv_inv; eauto. *)
-  (* Qed. *)
+  Corollary not_Is_defined_in_eqs_stmt_eval_menv_inv:
+    forall eqs x P me ve mems me' ve',
+      ~ Is_defined_in_eqs x eqs ->
+      stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve') ->
+      find_val x me' = find_val x me.
+  Proof.
+    unfold translate_eqns.
+    induction eqs as [|eq]; simpl; intros ** NIsDef StEval.
+    - now inv StEval.
+    - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
+        rewrite Comp_Skip_right in Hcomp.
+      apply not_Is_defined_in_cons in NIsDef as (?& Spec).
+      eapply IHeqs with (me' := me'') in Spec; eauto.
+      rewrite <-Spec.
+      eapply not_Is_defined_in_eq_stmt_eval_menv_inv; eauto.
+  Qed.
 
   (* Lemma _stmt_eval_menv_inv: *)
   (*   forall eq x P me ve mems me' ve', *)
-  (*     (* ~ Is_defined_in_eq x eq -> *) *)
+  (*     ~ Is_defined_in_eq x eq -> *)
   (*     stmt_eval (translate P) me ve (translate_eqn mems eq) (me', ve') -> *)
   (*     find_inst x me' = find_inst x me. *)
   (* Proof. *)
@@ -1769,7 +1787,7 @@ Module Type CORRECTNESS
   (*     apply stmt_eval_Control_fwd in StEval; *)
   (*     destruct StEval as [(?& StEval)|(?&?&?)]; try congruence. *)
   (*   - now apply stmt_eval_translate_cexp_menv_inv in StEval as ->. *)
-  (*   - inv StEval; apply find_inst_add_val.  *)
+  (*   - inv StEval; apply find_inst_add_val. *)
   (*   - inv StEval. ; apply find_val_add_inst. *)
   (*   - inv StEval; apply find_val_add_inst. *)
   (* Qed. *)
@@ -1822,31 +1840,36 @@ Module Type CORRECTNESS
   (* Admitted. *)
 
 
-  Lemma equations_cons_correct:
-    forall eq eqs P R S I S' me ve me' ve' inputs mems,
-      (forall b S xs ys S' me,
-          sem_block P b S (map present xs) (map present ys) S' ->
-          me ≋ S ->
-          exists me',
-            stmt_call_eval (translate P) me b step xs me' ys
-            /\ me' ≋ S') ->
-      sem_equation P true R S I S' eq ->
-      Ordered_blocks P ->
-      Is_well_sch' inputs mems (eq :: eqs) ->
-      Memory_Corres_eqs eqs S I S' me' ->
-      equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me' ve' ->
-      stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve') ->
-      exists me'' ve'',
-        stmt_eval (translate P) me ve (translate_eqns mems (eq :: eqs)) (me'', ve'')
-        /\ Memory_Corres_eqs (eq :: eqs) S I S' me''
-        /\ equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me'' ve''.
-  Proof.
-    intros.
-    edestruct equation_cons_correct as (me'' & ve'' &?&?); eauto.
-    exists me'', ve''; split; auto.
-    unfold translate_eqns; simpl; rewrite stmt_eval_fold_left_shift.
-    exists me', ve'; split; eauto using stmt_eval.
-  Qed.
+  (* Lemma equations_cons_correct: *)
+  (*   forall eq eqs P R S I S' me ve me' ve' inputs mems, *)
+  (*     (forall b S xs ys S' me, *)
+  (*         sem_block P b S (map present xs) (map present ys) S' -> *)
+  (*         me ≋ S -> *)
+  (*         exists me', *)
+  (*           stmt_call_eval (translate P) me b step xs me' ys *)
+  (*           /\ me' ≋ S') -> *)
+  (*     sem_equation P true R S I S' eq -> *)
+  (*     Ordered_blocks P -> *)
+  (*     Is_well_sch' inputs mems (eq :: eqs) -> *)
+  (*     Memory_Corres_eqs eqs S I S' me' -> *)
+  (*     (* equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me' ve' -> *) *)
+  (*     stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve') -> *)
+  (*     exists me'' ve'', *)
+  (*       stmt_eval (translate P) me ve (translate_eqns mems (eq :: eqs)) (me'', ve'') *)
+  (*       /\ Memory_Corres_eqs (eq :: eqs) S I S' me'' *)
+  (*       /\ equiv_env (fun x => Is_free_in_eqs x (eq :: eqs)) R mems me'' ve''. *)
+  (* Proof. *)
+  (*   intros ** WSCH Corres StEval. *)
+  (*   assert (equiv_env (fun x => Is_free_in_eq x eq) R mems me' ve'). *)
+  (*   { inversion_clear WSCH as [|??? FreeSpec]. *)
+  (*     intros x v Free Hvar; apply FreeSpec in Free. *)
+  (*     cases_eqn E. *)
+  (*     - destruct Corres. erewrite not_Is_defined_in_eqs_stmt_eval_menv_inv; eauto. *)
+  (*   edestruct equation_cons_correct as (me'' & ve'' &?&?); eauto. *)
+  (*   exists me'', ve''; split; auto. *)
+  (*   unfold translate_eqns; simpl; rewrite stmt_eval_fold_left_shift. *)
+  (*   exists me', ve'; split; eauto using stmt_eval. *)
+  (* Qed. *)
 
   Lemma value_corres_equal_memory:
     forall x S me,
@@ -1885,6 +1908,103 @@ Module Type CORRECTNESS
       + inv StpRst.
   Qed.
 
+  Lemma Is_well_sch'_app:
+    forall mems inputs eqs eqs',
+      Is_well_sch' mems inputs (eqs ++ eqs') ->
+      Is_well_sch' mems inputs eqs'.
+  Proof.
+    induction eqs; auto; simpl.
+    inversion 1; auto.
+  Qed.
+
+  Lemma sem_equations_is_last_in:
+    forall eqs P base R S I S' x v,
+      Forall (sem_equation P base R S I S') eqs ->
+      Is_last_in_eqs x eqs ->
+      sem_var_instant R x (present v) ->
+      find_val x S = Some v.
+  Proof.
+    induction eqs; inversion_clear 1 as [|?? Sem];
+      inversion_clear 1 as [?? Last|]; eauto; intros.
+    inv Last; inv Sem.
+    cases; congruence.
+  Qed.
+
+  (* Lemma Memory_Corres_cons: *)
+  (*   forall eqs eq S I S' me, *)
+  (*     Memory_Corres_eqs (eq :: eqs) S I S' me -> *)
+  (*     Memory_Corres_eqs eqs S I S' me. *)
+  (* Proof. *)
+  (*   intros ** (Lasts & Blocks); split. *)
+  (*   - split; intros ** NLast. *)
+  (*     + apply Lasts; right; auto.  *)
+  (*     + destruct eq; try now apply Lasts; inversion_clear 1 as [?? Last|]; auto; inv Last. *)
+  (*       destruct (ident_eq_dec x i). *)
+  (*       subst. *)
+  (*       apply Lasts.  *)
+  (*       admit. *)
+  (*       apply Lasts; inversion_clear 1 as [?? Last|]; auto; inv Last; congruence.   *)
+
+  (*       destruct (Is_last_in_eqs_dec x eqs). *)
+  (*       * admit. *)
+  (*       * apply Lasts; setoid_rewrite Exists_app'; intros [|]; auto.   SearchAbout Exists app. *)
+
+  Lemma equations_app_correct:
+    forall eqs' eqs P R S I S' me ve inputs mems,
+      (forall b S xs ys S' me,
+          sem_block P b S (map present xs) (map present ys) S' ->
+          me ≋ S ->
+          exists me',
+            stmt_call_eval (translate P) me b step xs me' ys
+            /\ me' ≋ S') ->
+      Forall (sem_equation P true R S I S') (eqs ++ eqs') ->
+      Ordered_blocks P ->
+      Is_well_sch' inputs mems (eqs ++ eqs') ->
+      (forall x, PS.In x mems -> Is_last_in_eqs x (eqs ++ eqs')) ->
+      Memory_Corres_eqs eqs' S I S' me ->
+      (* me ≋ S -> *)
+      exists me' ve',
+        stmt_eval (translate P) me ve (translate_eqns mems eqs) (me', ve')
+        /\ Memory_Corres_eqs (eqs ++ eqs') S I S' me'
+        /\ equiv_env (fun x => Is_free_in_eqs x eqs) R mems me' ve'.
+  Proof.
+    induction eqs' as [|eq]; simpl;
+      intros ** Heqs Ord Wsch SpecLast Corres.
+    - rewrite app_nil_r in *.
+      (* clear SpecLast.  *)
+      induction eqs.
+      + do 3 econstructor; eauto using stmt_eval; split; auto.
+        inversion 1.
+      + inv Heqs; inv Wsch.
+        destruct IHeqs as (me' & ve' &?&?&?); auto.
+        edestruct equation_cons_correct; eauto using Is_well_sch'.
+        eapply equation_cons_correct.
+      do 3 econstructor; eauto using stmt_eval; split; auto.
+      inversion 1.
+    - pose proof Wsch as Wsch'; apply Is_well_sch'_app in Wsch'.
+      pose proof Heqs as Heqs'; apply Forall_app_weaken in Heqs'; inv Heqs'.
+      (* inversion_clear Wsch' as [|??? FreeSpec]. *)
+      rewrite List_shift_first in Wsch, Heqs, SpecLast.
+      edestruct IHeqs' with (ve := ve) (me := me) as (me' & ve' &?&?& Equiv); eauto.
+      admit.
+      (* assert (equiv_env (fun x => Is_free_in_eq x eq) R mems me' ve').  *)
+      edestruct equation_cons_correct with (ve := ve') (me := me') as (me'' & ve'' &?&?&?);
+        eauto using Is_well_sch'.
+      + admit.
+      + inversion_clear Wsch' as [|??? FreeSpec].
+        intros x v Free Hvar; apply FreeSpec in Free.
+        cases_eqn E.
+        * erewrite not_Is_defined_in_eqs_stmt_eval_menv_inv; eauto.
+          apply SpecLast in E.
+          eapply sem_equations_is_last_in in Heqs; eauto.
+          apply Corres in E.
+
+      + exists me'', ve''; intuition.
+        * unfold translate_eqns; simpl.
+          rewrite stmt_eval_fold_left_shift; setoid_rewrite Comp_Skip_right; eauto.
+        * admit.
+  Qed.
+
   Lemma equations_correct:
     forall eqs P R S I S' me ve inputs mems,
       (forall b S xs ys S' me,
@@ -1902,18 +2022,23 @@ Module Type CORRECTNESS
         /\ Memory_Corres_eqs eqs S I S' me'
         /\ equiv_env (fun x => Is_free_in_eqs x eqs) R mems me' ve'.
   Proof.
-    induction eqs; simpl;
+    induction eqs as [|eq]; simpl;
       intros ** Heqs Ord Wsch E; inv Heqs.
     - do 3 econstructor; eauto using stmt_eval; split.
       + now apply Memory_Corres_eqs_empty_equal_memory.
       + inversion 1.
     - inversion_clear Wsch as [|??? FreeSpec].
-      edestruct IHeqs as (me' & ve' &?&?& Equiv); eauto.
-      eapply equations_cons_correct; eauto using Is_well_sch'.
-      intros x v FreeEqs Var.
-      inversion_clear FreeEqs as [?? Free|].
-      + apply FreeSpec in Free. admit.
-      + now apply Equiv.
+      edestruct IHeqs with (ve := ve) as (me' & ve' &?&?& Equiv); eauto.
+      (* assert (equiv_env (fun x => Is_free_in_eq x eq) R mems me' ve').  *)
+      edestruct equation_cons_correct with (ve := ve') as (me'' & ve'' &?&?&?);
+        eauto using Is_well_sch'.
+      + intros x v Free Hvar; apply FreeSpec in Free.
+        cases_eqn E.
+        *
+      + exists me'', ve''; intuition.
+        * unfold translate_eqns; simpl.
+          rewrite stmt_eval_fold_left_shift; setoid_rewrite Comp_Skip_right; eauto.
+        * admit.
   Qed.
 
   Lemma Memory_Corres_eqs_equal_memory:
