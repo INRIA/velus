@@ -104,7 +104,7 @@ Module Type SBSEMANTICS
                same_clock xs ->
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
-               (absent_list xs -> S' ≋ S) ->
+               (absent_list xs -> S' ≋ S) -> (* TODO: property of the semantics *)
                Forall (sem_equation base R S I S') bl.(b_eqs) ->
                state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
                state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
