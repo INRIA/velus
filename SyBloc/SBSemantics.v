@@ -52,7 +52,7 @@ Module Type SBSEMANTICS
             sub_inst x S0 S0' ->
             exists b',
               In (x, b') bl.(b_blocks)
-              /\ initial_state P' b' S0') ->
+              /\ initial_state P' b' S0') -> (* TODO: remove *)
         initial_state P b S0.
 
   Definition state_closed (S: state) (lasts: list ident) (blocks: list ident) : Prop :=
@@ -744,9 +744,7 @@ Module Type SBSEMANTICS
       subst.
       do 2 f_equal.
       eapply NoDupMembers_det; eauto.
-      pose proof (b_nodup_lasts_blocks bl) as Nodup;
-        apply NoDup_app_weaken in Nodup.
-      apply fst_NoDupMembers; auto.
+      apply b_nodup_lasts.
     - apply Rst in E as (?&?& Hin).
       apply Rst' in Hin.
       rewrite E' in Hin; discriminate.
@@ -785,9 +783,7 @@ Module Type SBSEMANTICS
         eapply IH; eauto.
         assert (x = x0) as ->; auto.
         eapply NoDupMembers_det; eauto.
-        pose proof (b_nodup_lasts_blocks bl0) as Nodup;
-          apply NoDup_comm, NoDup_app_weaken in Nodup.
-        apply fst_NoDupMembers; auto.
+        apply b_nodup_blocks.
   Qed.
 
   (* Lemma sem_reset_false: *)

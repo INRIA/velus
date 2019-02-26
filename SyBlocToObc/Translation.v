@@ -82,7 +82,7 @@ Module Type TRANSLATION
   End Translate.
 
   Definition ps_from_list (l: idents) : PS.t :=
-    fold_left (fun s i=>PS.add i s) l PS.empty.
+    fold_left (fun s i => PS.add i s) l PS.empty.
 
   Hint Constructors NoDupMembers.
 
@@ -113,8 +113,9 @@ Module Type TRANSLATION
   (* Qed. *)
 
   Lemma add_ps_from_list_cons:
-    forall xs x, PS.eq (PS.add x (ps_from_list xs))
-                  (ps_from_list (x::xs)).
+    forall xs x,
+      PS.eq (PS.add x (ps_from_list xs))
+            (ps_from_list (x :: xs)).
   Proof.
     intros; unfold ps_from_list; simpl.
     generalize PS.empty as S.
@@ -652,7 +653,7 @@ Module Type TRANSLATION
        m_body := translate_eqns mems b.(b_eqs)
     |}.
   Next Obligation.
-    apply b_nodup.
+    apply b_nodup_vars.
   Qed.
   Next Obligation.
     apply b_good.

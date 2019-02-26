@@ -136,6 +136,17 @@ Module Type TRANSLATION
       now rewrite IHxs.
   Qed.
 
+  Lemma notb_filter_mem_fst:
+    forall p (xs: list (ident * (type * clock))),
+      map fst (filter (notb (fun (x:ident*(type*clock)) => PS.mem (fst x) p)) xs)
+      = filter (notb (fun x => PS.mem x p)) (map fst xs).
+  Proof.
+    unfold notb; simpl.
+    induction xs as [|x xs]; auto; simpl.
+    destruct (negb (PS.mem (fst x) p)); simpl;
+      now rewrite IHxs.
+  Qed.
+
   Lemma in_memories_var_defined:
     forall x eqs,
       PS.In x (memories eqs) ->
@@ -456,6 +467,85 @@ Module Type TRANSLATION
   Qed.
 
 
+  Lemma snd_partition_memories_var_defined:
+    forall n,
+      Permutation
+        (map fst (snd (partition
+                         (fun x => PS.mem (fst x) (memories n.(n_eqs)))
+                         n.(n_vars)) ++ n.(n_out)))
+        (vars_defined (filter (notb is_fby) n.(n_eqs))).
+  Proof.
+    intro n.
+    match goal with |- Permutation (map fst (snd (partition ?p ?l) ++ _)) _ =>
+      assert (Permutation (map fst (snd (partition p l)))
+                          (map fst (filter (notb p) n.(n_vars))))
+                      as Hperm
+                        by (apply Permutation_map_aux, snd_partition_filter)
+    end.
+    rewrite map_app, Hperm, <-map_app; clear Hperm.
+
+    assert (filter (notb (fun x => PS.mem (fst x) (memories n.(n_eqs)))) n.(n_out) = n.(n_out))
+      as Hfout.
+    { simpl.
+      pose proof (n_vout n) as Out.
+      setoid_rewrite <-in_memories_filter_is_fby in Out.
+      unfold notb.
+      induction (n_out n) as [|(x, t)]; simpl; auto.
+      destruct (PS.mem x (memories (n_eqs n))) eqn: E; simpl.
+      - apply PSE.MP.Dec.F.mem_iff in E.
+        exfalso; eapply Out; eauto.
+        simpl; auto.
+      - rewrite IHl; auto.
+        intros ???; eapply Out; eauto.
+        simpl; auto.
+    }
+
+    rewrite <-Hfout; clear Hfout.
+    rewrite filter_app, notb_filter_mem_fst, <-n_defd.
+    remember (memories n.(n_eqs)) as mems.
+    set (P := fun eqs eq =>  In eq eqs ->
+                          forall x, In x (var_defined eq) ->
+                               PS.mem x mems = is_fby eq).
+    assert (forall eq, P n.(n_eqs) eq) as Peq.
+    { subst P mems.
+      intro. intro Hin.
+      apply in_memories_is_fby; auto.
+      rewrite n_defd.
+      apply fst_NoDupMembers.
+      pose proof (n.(n_nodup)) as Hnodup.
+      now apply NoDupMembers_app_r in Hnodup.
+    }
+    clear Heqmems.
+    unfold notb, vars_defined, concatMap.
+    induction n.(n_eqs) as [|eq eqs]; auto.
+    assert (forall eq, P eqs eq) as Peq'
+        by (intros e Hin; apply Peq; constructor (assumption)).
+    specialize (IHeqs Peq'). clear Peq'.
+    destruct eq eqn:Heq; simpl;
+      specialize (Peq eq); red in Peq; subst eq;
+        simpl in Peq.
+
+    + rewrite Peq; eauto.
+      simpl; auto.
+
+    + assert (Hmem_in: forall x, In x i -> PS.mem x mems = false)
+        by now apply Peq; eauto.
+
+      assert (Hfilter: filter (fun x => negb (PS.mem x mems)) i = i).
+      { clear - Hmem_in.
+        induction i as [ | a i IHi] ; auto; simpl.
+        rewrite Hmem_in; simpl; try now constructor.
+        rewrite IHi; auto.
+        intros.
+        apply Hmem_in. constructor(assumption).
+      }
+
+      rewrite <-filter_app; setoid_rewrite Hfilter.
+      apply Permutation_app_head; auto.
+
+    + rewrite Peq; eauto.
+  Qed.
+
   Lemma gather_eqs_fst_spec:
     forall eqs, Permutation (map fst (fst (gather_eqs eqs))) (gather_mem eqs).
   Proof.
@@ -620,16 +710,14 @@ Module Type TRANSLATION
     rewrite length_idty; apply n_ingt0.
   Qed.
   Next Obligation.
-    repeat rewrite <-idty_app. rewrite NoDupMembers_idty.
-    rewrite (Permutation_app_comm n.(n_in)).
-    rewrite Permutation_app_assoc.
-    match goal with |- context [snd (partition ?p ?l)] =>
-                    apply (NoDupMembers_app_r (fst (partition p l))) end.
-    rewrite <-(Permutation_app_assoc (fst _)).
-    rewrite <- (permutation_partition _ n.(n_vars)).
-    rewrite (Permutation_app_comm n.(n_out)), <-Permutation_app_assoc.
-    rewrite (Permutation_app_comm n.(n_vars)), Permutation_app_assoc.
-    apply n.(n_nodup).
+    rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
+    setoid_rewrite ps_from_list_gather_eqs_memories.
+    apply NoDup_comm.
+    rewrite app_assoc, map_fst_idty, <-map_app, <-permutation_partition.
+    rewrite 2 map_fst_idty.
+    apply NoDup_comm.
+    rewrite app_assoc, <-2 map_app, <-app_assoc.
+    apply fst_NoDupMembers, n_nodup.
   Qed.
   Next Obligation.
     rewrite fst_fst_gather_eqs_var_defined.
@@ -721,6 +809,63 @@ Module Type TRANSLATION
           eapply In_InMembers, In_fst_fold_left_gather_eq; right; eauto.
   Qed.
   Next Obligation.
+    rewrite <-idty_app, InMembers_idty.
+    rewrite fst_InMembers.
+    assert (Permutation (map fst
+                             (snd
+                                (partition
+                                   (fun x0 =>
+                                      PS.mem (fst x0) (ps_from_list (map fst (fst (gather_eqs (n_eqs n))))))
+                                   (n_vars n)) ++ n_out n))
+                        (map fst
+                             (snd
+                                (partition
+                                   (fun x0 =>
+                                      PS.mem (fst x0) (memories (n_eqs n)))
+                                   (n_vars n)) ++ n_out n))) as E.
+    { rewrite 2 map_app; apply Permutation_app_tail, Permutation_map.
+      now setoid_rewrite ps_from_list_gather_eqs_memories.
+    }
+    rewrite E; clear E.
+    rewrite snd_partition_memories_var_defined.
+    unfold translate_eqns, vars_defined, concatMap.
+    induction (n_eqs n) as [|eq]; simpl.
+    - split; inversion 1.
+    - destruct eq; simpl.
+      + split.
+        *{ intros [?|?].
+           - subst; left; constructor; auto.
+           - right; apply IHl; auto.
+         }
+        *{ inversion_clear 1 as [?? Var|].
+           - inv Var; auto.
+           - right; apply IHl; auto.
+         }
+      + destruct i; simpl; auto.
+        split.
+        *{ intros [?|Hin].
+           - subst; apply Exists_app_l; destruct o.
+             + right; left; do 2 constructor; auto.
+             + left; do 2 constructor; auto.
+           - apply in_app in Hin as [?|?].
+             + apply Exists_app_l; destruct o.
+               * right; left; constructor; right; auto.
+               * left; constructor; right; auto.
+             + apply Exists_app, IHl; auto.
+         }
+        *{ destruct o; intros IsVars; apply Exists_app' in IsVars as [Var|?]; rewrite in_app.
+           - inversion_clear Var as [?? Var'|?? Var']; inversion_clear Var' as [?? Var|?? Var];
+               inv Var; simpl in *; intuition.
+           - rewrite IHl; intuition.
+           - inversion_clear Var as [?? Var'|?? Var']; inv Var'; simpl in *; intuition.
+           - rewrite IHl; intuition.
+         }
+      + split; intros ** H.
+        * right; apply IHl; auto.
+        * inversion_clear H as [?? Var|]; try inv Var.
+          apply IHl; auto.
+  Qed.
+  Next Obligation.
     unfold gather_eqs, translate_eqns, concatMap.
     generalize (@nil (ident * const)).
     induction (n_eqs n) as [|[]]; simpl; intros.
@@ -777,6 +922,23 @@ Module Type TRANSLATION
       + destruct H as (?& H).
         inversion_clear H as [?? H'|]; try inv H'.
         apply IHl; eauto.
+  Qed.
+  Next Obligation.
+    unfold translate_eqns, concatMap in *.
+    induction (n_eqs n) as [|[]]; simpl in *.
+    - inv H.
+    - inversion_clear H as [?? Rst|?]; try inv Rst.
+      right; apply IHl; auto.
+    - destruct i; simpl in *; auto.
+      destruct o.
+      + inversion_clear H as [?? Rst|?? Rst];
+          inversion_clear Rst as [?? Rst'|]; try inv Rst'.
+        * right; left; constructor; auto.
+        * apply Exists_app; apply IHl; auto.
+      + inversion_clear H as [?? Rst|]; try inv Rst.
+        apply Exists_app; apply IHl; auto.
+    - inversion_clear H as [?? Rst|?]; try inv Rst.
+      right; apply IHl; auto.
   Qed.
   Next Obligation.
     pose proof n.(n_good) as [ValidApp].

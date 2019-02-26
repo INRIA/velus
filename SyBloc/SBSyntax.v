@@ -42,6 +42,33 @@ Module Type SBSYNTAX
   Definition Is_block_in (f: ident) (eqs: list equation) : Prop :=
     Exists (Is_block_in_eq f) eqs.
 
+  Inductive Is_defined_in_eq: ident -> equation -> Prop :=
+  | DefEqDef:
+      forall x ck e,
+        Is_defined_in_eq x (EqDef x ck e)
+  | DefEqNext:
+      forall x ck e,
+        Is_defined_in_eq x (EqNext x ck e)
+  | DefEqCall:
+      forall x s xs ck rst b es,
+        In x xs ->
+        Is_defined_in_eq x (EqCall s xs ck rst b es).
+
+  Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    Exists (Is_defined_in_eq x) eqs.
+
+  Inductive Is_variable_in_eq: ident -> equation -> Prop :=
+  | VarEqDef:
+      forall x ck e,
+        Is_variable_in_eq x (EqDef x ck e)
+  | VarEqCall:
+      forall x s xs ck rst b es,
+        In x xs ->
+        Is_variable_in_eq x (EqCall s xs ck rst b es).
+
+  Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
+    Exists (Is_variable_in_eq x) eqs.
+
   Inductive Is_state_in_eq: ident -> nat -> equation -> Prop :=
   | StateEqReset:
       forall s ck b,
@@ -52,6 +79,10 @@ Module Type SBSYNTAX
 
   Definition Is_state_in_eqs (s: ident) (k: nat) (eqs: list equation) : Prop :=
     Exists (Is_state_in_eq s k) eqs.
+
+  Definition Reset_in (s: ident) := Is_state_in_eqs s 0.
+
+  Definition Step_in (s: ident) := Is_state_in_eqs s 1.
 
   Record block :=
     Block {
@@ -65,11 +96,18 @@ Module Type SBSYNTAX
 
         b_ingt0 : 0 < length b_in;
         (* b_outgt0 : 0 < length b_out *)
-        b_nodup : NoDupMembers (b_in ++ b_vars ++ b_out);
+        b_nodup : NoDup (map fst b_in ++ map fst b_lasts ++ map fst b_vars ++ map fst b_out);
         b_nodup_lasts_blocks: NoDup (map fst b_lasts ++ map fst b_blocks);
+
         b_blocks_in_eqs: forall f, (exists i, In (i, f) b_blocks) <-> Is_block_in f b_eqs;
-        b_lasts_in_eqs: forall s, InMembers s b_lasts <-> Is_last_in_eqs s b_eqs;
+        b_lasts_in_eqs: forall x, InMembers x b_lasts <-> Is_last_in_eqs x b_eqs;
+        b_vars_out_in_eqs: forall x, InMembers x (b_vars ++ b_out) <-> Is_variable_in_eqs x b_eqs;
+        (* b_out_not_last: forall x, InMembers x b_out -> ~ Is_last_in_eqs x b_eqs; *)
+
         b_states_in_eqs: forall s, InMembers s b_blocks <-> (exists k, Is_state_in_eqs s k b_eqs);
+
+        b_no_single_reset: forall s, Reset_in s b_eqs -> Step_in s b_eqs;
+
         b_good: Forall ValidId (b_in ++ b_vars ++ b_out)
                 /\ Forall ValidId b_lasts
                 /\ Forall ValidId b_blocks
@@ -79,15 +117,62 @@ Module Type SBSYNTAX
   Lemma b_nodup_lasts:
     forall b, NoDupMembers b.(b_lasts).
   Proof.
-    intro; pose proof (b_nodup_lasts_blocks b).
-    eapply fst_NoDupMembers, NoDup_app_weaken; eauto.
+    intro; pose proof (b_nodup b) as Nodup.
+    apply fst_NoDupMembers.
+    apply NoDup_comm, NoDup_app_weaken, NoDup_app_weaken in Nodup; auto.
   Qed.
 
   Lemma b_nodup_blocks:
     forall b, NoDupMembers b.(b_blocks).
   Proof.
-    intro; pose proof (b_nodup_lasts_blocks b).
-    eapply fst_NoDupMembers, NoDup_app_weaken, NoDup_comm; eauto.
+    intro; pose proof (b_nodup_lasts_blocks b) as Nodup.
+    apply NoDup_comm, NoDup_app_weaken in Nodup.
+    apply fst_NoDupMembers; auto.
+  Qed.
+
+  Lemma b_nodup_vars:
+    forall b, NoDupMembers (b_in b ++ b_vars b ++ b_out b).
+  Proof.
+    intro; pose proof (b_nodup b) as Nodup.
+    apply NoDup_comm in Nodup.
+    rewrite <-app_assoc in Nodup.
+    apply NoDup_comm, NoDup_app_weaken in Nodup.
+    apply NoDup_comm in Nodup.
+    rewrite app_assoc in Nodup.
+    rewrite <-2 map_app, <-app_assoc in Nodup.
+    apply fst_NoDupMembers; auto.
+  Qed.
+
+  Lemma Is_defined_Is_variable_Is_last_in_eqs:
+    forall eqs x,
+      Is_defined_in_eqs x eqs ->
+      Is_variable_in_eqs x eqs \/ Is_last_in_eqs x eqs.
+  Proof.
+    induction eqs; inversion_clear 1 as [?? Def|?? Defs].
+    - inv Def.
+      + left; left; constructor; auto.
+      + right; left; constructor; auto.
+      + left; left; constructor; auto.
+    - apply IHeqs in Defs as [].
+      + left; right; auto.
+      + right; right; auto.
+  Qed.
+
+  Lemma b_ins_not_def:
+    forall b x,
+      InMembers x b.(b_in) ->
+      ~ Is_defined_in_eqs x b.(b_eqs).
+  Proof.
+    intros ** Hin Hdef.
+    pose proof (b_nodup b) as Nodup.
+    eapply (NoDup_app_In x) in Nodup.
+    - apply Is_defined_Is_variable_Is_last_in_eqs in Hdef as [Var|Last];
+        apply Nodup, in_app.
+      + apply b_vars_out_in_eqs in Var.
+        right; rewrite <-map_app; apply fst_InMembers; auto.
+      + apply b_lasts_in_eqs in Last.
+        left; apply fst_InMembers; auto.
+    - apply fst_InMembers; auto.
   Qed.
 
   (* TODO: in Common *)
@@ -104,9 +189,6 @@ Module Type SBSYNTAX
 
   (* Definition find_subblock (x: ident) (bl: block) := *)
   (*   assoc x bl.(b_blocks). *)
-
-  Definition bl_vars (bl: block): list (ident * type) :=
-    bl.(b_in) ++ bl.(b_out) ++ bl.(b_vars).
 
   Definition program := list block.
 

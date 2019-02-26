@@ -487,22 +487,6 @@ Section Forall2.
       intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
   Qed.
 
-  Lemma Forall2_forall:
-    forall (P: A -> B -> Prop) xs ys,
-      (forall x y, In (x, y) (combine xs ys) -> P x y) ->
-      length xs = length ys ->
-      Forall2 P xs ys.
-  Proof.
-    intros ** Hin Hlen.
-    apply Forall2_forall2.
-    split; auto.
-    intros x y n x' y' Hnl Hn1 Hn2.
-    apply Hin.
-    subst x' y'. rewrite <-combine_nth with (1:=Hlen).
-    apply nth_In.
-    now rewrite combine_length, <-Hlen, Min.min_idempotent.
-  Qed.
-
   Lemma Forall2_det : forall (R : A -> B -> Prop),
       (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
       forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
@@ -642,6 +626,30 @@ Section Forall2.
       Forall2 P l1 l2 -> length l1 = length l2.
   Proof.
     induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.
+  Qed.
+
+  Lemma Forall2_forall:
+    forall (P: A -> B -> Prop) xs ys,
+      ((forall x y, In (x, y) (combine xs ys) -> P x y)
+       /\ length xs = length ys)
+      <->
+      Forall2 P xs ys.
+  Proof.
+    split.
+    - intros ** (Hin & Hlen).
+      apply Forall2_forall2.
+      split; auto.
+      intros x y n x' y' Hnl Hn1 Hn2.
+      apply Hin.
+      subst x' y'. rewrite <-combine_nth with (1:=Hlen).
+      apply nth_In.
+      now rewrite combine_length, <-Hlen, Min.min_idempotent.
+    - intros H; split.
+      + intros ** Hin.
+        apply Forall2_combine in H.
+        eapply Forall_forall in Hin; eauto.
+        auto.
+      + eapply Forall2_length; eauto.
   Qed.
 
   Lemma Forall2_eq:
@@ -2306,7 +2314,7 @@ Lemma Forall_Forall2:
     Forall2 (fun x y=> P x /\ Q y) xs ys.
 Proof.
   intros ** HfP HfQ Hlen.
-  apply Forall2_forall with (2:=Hlen).
+  apply Forall2_forall; split; auto.
   intros x y Hin.
   rewrite Forall_forall in HfP, HfQ.
   split; eauto using in_combine_l, in_combine_r.

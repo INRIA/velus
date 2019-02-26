@@ -188,6 +188,18 @@ Module Env.
         adds List.nil List.nil e = e.
     Proof. simpl; auto. Qed.
 
+    Lemma adds_nil_l:
+      forall e vs,
+        adds List.nil vs e = e.
+    Proof. simpl; auto. Qed.
+
+    Lemma adds_nil_r:
+      forall e xs,
+        adds xs List.nil e = e.
+    Proof.
+      unfold adds; destruct xs; simpl; auto.
+    Qed.
+
     Lemma find_adds_In':
       forall x a xvs m,
         NoDup (List.map (@fst _ A) xvs) ->
