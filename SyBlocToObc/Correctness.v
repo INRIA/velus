@@ -967,60 +967,17 @@ Module Type CORRECTNESS
             inv E; auto.
         }
         subst x'.
-        assert (In (x, b') (b_blocks bl)).
-        { clear - Hin Eq.
-          revert dependent l; revert l'.
-          induction (b_blocks bl) as [|(y, c) bls]; intros;
-            simpl in *.
-          - inv Eq; contradiction.
-          - destruct (split bls).
-            inv Eq; simpl.
-            destruct Hin as [E|]; eauto.
-            inv E; auto.
-         }
-        exists b'; split; auto.
-        apply fst_NoDupMembers in NoDup.
-        destruct (ident_eqb (b_name node) b) eqn: E.
-        * inv Find.
-          inversion_clear Ord as [|??? Blocks].
-          eapply Forall_forall in Blocks as (?&?&?&Find'); eauto.
-          eapply IHP; eauto.
-          simpl; destruct (find_inst x me) eqn: Find_me;
-            try eapply correct_domain_empty; eauto.
-          apply Spec_insts in Find_me as (b'' &?&?).
-          assert (b' = b'') as -> by (eapply NoDupMembers_det; eauto); auto.
-        * pose proof Ord as Ord'.
-          inversion_clear Ord as [|?? Ord'' Blocks]; clear Blocks.
-          apply find_block_app in Find as (P1 & HP &?).
-          rewrite HP in *.
-          apply Ordered_blocks_split in Ord''.
-          eapply Forall_forall in Ord'' as (?&?&?&?& Find'); eauto.
-          simpl in *.
-          rewrite <-find_block_other_app with (P := P1) (bl := bl) in Find'; auto.
-          unfold reset_state_spec_aux.
-          erewrite <-reset_state_spec_other_app, <-initial_state_other_app; eauto.
-          inv Ord'.
-          eapply IHP; eauto.
-          simpl; destruct (find_inst x me) eqn: Find_me;
-            try eapply correct_domain_empty; eauto.
-          rewrite correct_domain_other_app; auto.
-          apply Spec_insts in Find_me as (b'' &?&?).
-          assert (b' = b'') as -> by (eapply NoDupMembers_det; eauto); auto.
-      + apply Spec_insts in Find' as (b' & Hin &?); eauto.
-        apply NotIn_NotInMembers in Notin.
-        exfalso; apply Notin.
-        eapply In_InMembers.
-        rewrite combine_map_snd.
-        apply in_map_iff.
-        exists (x, (x, b')); split; auto.
+        exists b'.
         clear - Hin Eq.
         revert dependent l; revert l'.
         induction (b_blocks bl) as [|(y, c) bls]; intros;
-          simpl in *; try contradiction.
-        destruct (split bls).
-        inv Eq; simpl.
-        destruct Hin as [E|]; eauto.
-        inv E; auto.
+          simpl in *.
+        * inv Eq; contradiction.
+        * destruct (split bls).
+            inv Eq; simpl.
+            destruct Hin as [E|]; eauto.
+            inv E; auto.
+      + apply Spec_insts in Find' as (?&?&?); eauto.
       + assert (l = map fst (b_blocks bl)) as ->
             by (now rewrite <-split_fst_map, Eq); auto.
   Qed.

@@ -51,8 +51,7 @@ Module Type SBSEMANTICS
         (forall x S0',
             sub_inst x S0 S0' ->
             exists b',
-              In (x, b') bl.(b_blocks)
-              /\ initial_state P' b' S0') -> (* TODO: remove *)
+              In (x, b') bl.(b_blocks)) ->
         initial_state P b S0.
 
   Definition state_closed (S: state) (lasts: list ident) (blocks: list ident) : Prop :=
@@ -223,9 +222,8 @@ Module Type SBSEMANTICS
       pose proof (find_inst_equal_memory x0 E) as Eq;
         rewrite Sub in Eq; simpl in Eq.
       destruct (find_inst x0 x) eqn: Sub'; try contradiction.
-      pose proof Sub'.
-      apply Spec' in Sub' as (?&?&?).
-      eexists; split; eauto.
+      apply Spec' in Sub' as (?&?).
+      eexists; eauto.
   Qed.
 
   Lemma sem_equation_equal_memory:
@@ -772,14 +770,17 @@ Module Type SBSEMANTICS
       split.
       + setoid_rewrite Env.In_find.
         split; intros (?& Find).
-        * apply Insts2 in Find as (?& Hin &?).
+        * apply Insts2 in Find as (?& Hin).
           apply Insts1' in Hin as (?&?&?); eauto.
-        * apply Insts2' in Find as (?& Hin &?).
+        * apply Insts2' in Find as (?& Hin).
           apply Insts1 in Hin as (?&?&?); eauto.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros ** Find Find'.
-        pose proof Find.
-        apply Insts2 in Find as (?&?&?); apply Insts2' in Find' as (?&?&?).
+        pose proof Find as Find1; pose proof Find' as Find1'.
+        apply Insts2 in Find as (?& Hin); apply Insts2' in Find' as (?& Hin').
+        pose proof Hin; pose proof Hin'.
+        apply Insts1 in Hin as (?& Find2 &?); apply Insts1' in Hin' as (?& Find2' & ?).
+        rewrite Find2 in Find1; inv Find1; rewrite Find2' in Find1'; inv Find1'.
         eapply IH; eauto.
         assert (x = x0) as ->; auto.
         eapply NoDupMembers_det; eauto.

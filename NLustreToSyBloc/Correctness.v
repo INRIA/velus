@@ -99,19 +99,6 @@ Module Type CORRECTNESS
       Forall (msem_equation G bk H M M') (n_eqs n) ->
       reset_lasts (translate_node n) (M 0).
   Proof.
-    (* intros ** Closed Heqs ?? Hin. *)
-    (* destruct n; simpl in *. *)
-    (* unfold gather_eqs in *. *)
-    (* clear - Heqs Hin. *)
-    (* revert Hin; generalize (@nil (ident * ident)). *)
-    (* induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction; *)
-    (*   inversion_clear Heqs as [|?? Heq]; inv Heq; eauto. *)
-    (* + destruct i; try discriminate; eauto. *)
-    (* + destruct i; try discriminate; eauto. *)
-    (* + apply In_fst_fold_left_gather_eq in Hin as [Hin|]; eauto. *)
-    (*   destruct Hin as [E|]; try contradiction; inv E. *)
-    (*   match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (?&?) end; auto. *)
-
     intros ** Closed Heqs.
     split.
     - intros ** Hin.
@@ -174,39 +161,6 @@ Module Type CORRECTNESS
       do 4 eexists; split; eauto.
   Qed.
 
-  (* Lemma msem_eqs_In_snd_gather_eqs_spec': *)
-  (*   forall eqs G bk H M M' x f Mx_n n, *)
-  (*     Forall (msem_equation G bk H M M') eqs -> *)
-  (*     memory_closed_n M eqs -> *)
-  (*     sub_inst x (M n) Mx_n -> *)
-  (*     exists xss Mx Mx' yss, *)
-  (*       Mx n = Mx_n *)
-  (*       /\ (msem_node G f xss Mx Mx' yss *)
-  (*        \/ exists r, msem_reset G f r xss Mx Mx' yss) *)
-  (*       /\ In (x, f) (snd (gather_eqs eqs)). *)
-  (* Proof. *)
-  (*   unfold gather_eqs. *)
-  (*   intros. *)
-  (*   unfold memory_closed_n, memory_closed, sub_inst in *. *)
-  (*   assert (InMembers x (gather_insts eqs *)
-  (*   eapply H1 in H2.  *)
-  (*   intro; generalize (@nil (ident * const)). *)
-  (*   induction eqs as [|[]]; simpl; intros ** Heqs Hin; *)
-  (*     inversion_clear Heqs as [|?? Heq]; *)
-  (*     try inversion_clear Heq as [|????????????? Hd|???????????????? Hd|]; *)
-  (*     try contradiction; eauto. *)
-  (*   - *)
-  (*   - destruct i; try discriminate. *)
-  (*     apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto. *)
-  (*     destruct Hin as [E|]; try contradiction; inv E; inv Hd. *)
-  (*     do 4 eexists; split; eauto. *)
-  (*   - destruct i; try discriminate. *)
-  (*     apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto. *)
-  (*     destruct Hin as [E|]; try contradiction; inv E; inv Hd. *)
-  (*     do 4 eexists; split; eauto. *)
-  (* Qed. *)
-  (* Admitted. *)
-
   Lemma msem_node_initial_state:
     forall G f xss M M' yss,
       Ordered_nodes G ->
@@ -246,20 +200,7 @@ Module Type CORRECTNESS
             by (apply (Closed 0); rewrite Sub; discriminate).
         rewrite <-gather_eqs_snd_spec in Hin.
         apply InMembers_In in Hin as (?&?).
-        destruct node; simpl in *.
-        edestruct msem_eqs_In_snd_gather_eqs_spec
-          as (?& Mx &?&?& [Node|(rs & Reset)] & Hin'); eauto.
-        * eexists; split; eauto.
-          specialize (Hin' 0); unfold sub_inst in *.
-          rewrite Sub in Hin'; inv Hin'; eauto.
-        * inversion_clear Reset as [?????? Nodes].
-          destruct (Nodes (count rs 0)) as (M0 &?& Node & Mmask &?).
-          apply IH in Node; auto.
-          specialize (Mmask 0).
-          eexists; split; eauto.
-          specialize (Hin' 0); unfold sub_inst in *.
-          rewrite Sub in Hin'; inv Hin'; eauto.
-          rewrite <-Mmask; eauto.
+        destruct node; simpl in *; eauto.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons in Hsem; eauto.
       simpl; rewrite <-initial_state_other; eauto.
