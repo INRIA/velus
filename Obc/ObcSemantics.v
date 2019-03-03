@@ -129,6 +129,92 @@ Module Type OBCSEMANTICS
       now rewrite Hv1 in Hv2; injection Hv2.
   Qed.
 
+  Lemma exps_eval_det:
+    forall me ve es vs1 vs2,
+      Forall2 (exp_eval me ve) es vs1 ->
+      Forall2 (exp_eval me ve) es vs2 ->
+      vs1 = vs2.
+  Proof.
+    intros ** Sem1 Sem2; revert dependent vs2; induction Sem1;
+      inversion_clear 1; auto.
+    f_equal; auto.
+    eapply exp_eval_det; eauto.
+  Qed.
+
+  Lemma stmt_eval_call_eval_det:
+    (forall prog me ve s meve1,
+        stmt_eval prog me ve s meve1 ->
+        forall meve2,
+          stmt_eval prog me ve s meve2 ->
+          meve1 = meve2)
+    /\
+    (forall prog me clsid f vs me1 rvs1,
+        stmt_call_eval prog me clsid f vs me1 rvs1 ->
+        forall me2 rvs2,
+          stmt_call_eval prog me clsid f vs me2 rvs2 ->
+          me1 = me2 /\ rvs1 = rvs2).
+  Proof.
+    apply stmt_eval_call_ind; intros ** Sem; inversion Sem; subst;
+      try match goal with
+            H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
+            eapply exp_eval_det in H; eauto; subst
+          end; auto.
+    - match goal with
+        H: Forall2 _ _ _, H': Forall2 _ _ _ |- _ =>
+        eapply exps_eval_det with (2 := H') in H; eauto; inv H
+      end.
+      match goal with
+        H: stmt_call_eval _ _ _ _ _ ?me' ?rvs', H': stmt_call_eval _ _ _ _ _ ome' rvs |- _ =>
+        assert (ome' = me' /\ rvs = rvs') as E; eauto; inv E
+      end; auto.
+    - match goal with
+        H: stmt_eval _ ?me ?ve ?s ?mv1, H': stmt_eval _ ?me ?ve ?s ?mv2 |- _ =>
+        let E := fresh in assert (mv1 = mv2) as E; eauto; inv E
+      end; eauto.
+    - match goal with
+        H: val_to_bool ?v = _, H': val_to_bool ?v = _ |- _ =>
+        rewrite H in H'; inv H'
+      end.
+      destruct b; eauto.
+    - match goal with
+        H: find_class ?c ?p = _, H': find_class ?c ?p = _ |- _ =>
+        rewrite H in H'; inv H'
+      end;
+        match goal with
+          H: find_method ?f ?m = _, H': find_method ?f ?m = _ |- _ =>
+          rewrite H in H'; inv H'
+        end.
+      match goal with
+        H: stmt_eval _ _ _ _ ?mv |- _ =>
+        assert ((me', ve') = mv) as E; eauto; inv E
+      end.
+      intuition.
+      match goal with
+        H: Forall2 _ ?xs _, H': Forall2 _ ?xs ?ys |- _ =>
+        clear - H H'; revert dependent ys; induction H; intros; inv H'; auto
+      end.
+      f_equal; auto; congruence.
+  Qed.
+
+  Lemma stmt_eval_det:
+    forall prog s me ve me1 ve1 me2 ve2,
+      stmt_eval prog me ve s (me1, ve1) ->
+      stmt_eval prog me ve s (me2, ve2) ->
+      me1 = me2 /\ ve1 = ve2.
+  Proof.
+    intros ** Sem1 Sem2; apply (proj1 stmt_eval_call_eval_det) with (2 := Sem2) in Sem1; auto.
+    intuition; congruence.
+  Qed.
+
+  Lemma stmt_call_eval_det:
+    forall prog me clsid f vs me1 rvs1 me2 rvs2,
+        stmt_call_eval prog me clsid f vs me1 rvs1 ->
+        stmt_call_eval prog me clsid f vs me2 rvs2 ->
+        me1 = me2 /\ rvs1 = rvs2.
+  Proof.
+    intros; eapply (proj2 stmt_eval_call_eval_det); eauto.
+  Qed.
+
   Lemma stmt_eval_fold_left_shift:
     forall A prog f (xs:list A) iacc me ve me' ve',
       stmt_eval prog me ve

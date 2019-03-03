@@ -500,6 +500,15 @@ Section Properties.
     add_inst x m' (add_val y v m) = add_val y v (add_inst x m' m).
   Proof eq_refl.
 
+  Lemma add_val_comm:
+    forall w,
+      x <> y ->
+      add_val x v (add_val y w m) = add_val y w (add_val x v m).
+  Proof.
+    intros; unfold add_val; simpl.
+    now rewrite Env.add_comm.
+  Qed.
+
 
   (* Lemma find_inst_mmapi: *)
   (*   forall (f: list ident -> ident -> V -> W) p, *)
