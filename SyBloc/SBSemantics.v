@@ -428,6 +428,38 @@ Module Type SBSEMANTICS
       eapply Forall_forall in Ord as (?&?&?); eauto.
   Qed.
 
+  Lemma Ordered_blocks_find_In_blocks:
+    forall P b bl P',
+      Ordered_blocks P ->
+      find_block b P = Some (bl, P') ->
+      forall x b,
+        In (x, b) bl.(b_blocks) ->
+        exists bl P'', find_block b P' = Some (bl, P'').
+  Proof.
+    induction P as [|block]; try now inversion 2.
+    intros ** Ord Find ?? Hin.
+    inv Ord.
+    simpl in Find.
+    destruct (ident_eqb (b_name block) b) eqn: E; eauto.
+    inv Find.
+    eapply Forall_forall in Hin; eauto.
+    destruct Hin; eauto.
+  Qed.
+
+  Lemma Ordered_blocks_find_block:
+    forall P b bl P',
+      Ordered_blocks P ->
+      find_block b P = Some (bl, P') ->
+      Ordered_blocks P'.
+  Proof.
+    induction P as [|block]; try now inversion 2.
+    intros ** Ord Find.
+    inv Ord.
+    simpl in Find.
+    destruct (ident_eqb (b_name block) b) eqn: E; eauto.
+    inv Find; auto.
+  Qed.
+
   Lemma initial_state_other:
     forall S0 bl P b,
       (* Ordered_blocks (bl :: P) -> *)
