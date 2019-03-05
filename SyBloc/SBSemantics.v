@@ -2,6 +2,7 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Require Import Permutation.
 Require Import Setoid.
 Require Import Morphisms.
 
@@ -103,7 +104,6 @@ Module Type SBSEMANTICS
                same_clock xs ->
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
-               (absent_list xs -> S' ≋ S) -> (* TODO: property of the semantics *)
                Forall (sem_equation base R S I S') bl.(b_eqs) ->
                state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
                state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
@@ -160,7 +160,6 @@ Module Type SBSEMANTICS
         same_clock xs ->
         same_clock ys ->
         (absent_list xs <-> absent_list ys) ->
-        (absent_list xs -> S' ≋ S) ->
         Forall (sem_equation P base R S I S') bl.(b_eqs) ->
         state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
         state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
@@ -342,7 +341,6 @@ Module Type SBSEMANTICS
         eexists; split; eauto. now rewrite <-Eq, <-Eq''.
     - intros ? E ? E'.
       econstructor; eauto.
-      + now rewrite <-E, <-E'.
       + instantiate (1 := I).
         induction (b_eqs bl); auto;
           repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
@@ -353,31 +351,13 @@ Module Type SBSEMANTICS
       + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *)
   Qed.
 
-  Lemma sem_block_absent:
-    forall P b xs S ys S',
-      sem_block P b S xs ys S' ->
-      absent_list xs ->
-      absent_list ys /\ S' ≋ S.
+  Add Parametric Morphism S : (state_closed S)
+      with signature (@Permutation ident) ==> (@Permutation ident) ==> Basics.impl
+        as state_closed_permutation.
   Proof.
-    inversion 1; tauto.
-  Qed.
-
-  Lemma sem_block_present:
-    forall P b S xs ys S',
-      sem_block P b S xs ys S' ->
-      present_list xs ->
-      present_list ys.
-  Proof.
-    inversion_clear 1 as [???????????? Ins ?? Same AbsEq];
-      intros ** Pres.
-    destruct Same as [Abs|]; auto.
-    apply AbsEq in Abs.
-    apply Forall2_length in Ins.
-    pose proof (b_ingt0 bl) as Length.
-    rewrite map_length in Ins; rewrite Ins in Length.
-    clear - Abs Pres Length; destruct xs; simpl in *.
-    - omega.
-    - inv Abs; inv Pres; congruence.
+    intros ?? E ?? E' (Lasts & Blocks); split.
+    - now setoid_rewrite <-E.
+    - now setoid_rewrite <-E'.
   Qed.
 
   Inductive Ordered_blocks: program -> Prop :=
@@ -667,7 +647,7 @@ Module Type SBSEMANTICS
     intros ** Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [| | |????????????????????? IH|
-                       ??????????? Hf ????????? IH]
+                       ??????????? Hf ???????? IH]
         using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
@@ -699,7 +679,7 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Hord Hsem.
     induction Hsem as [| | | |
-                       ??????????? Hfind ????????? IHeqs] using sem_block_mult
+                       ??????????? Hfind ???????? IHeqs] using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
                             sem_equation (b :: P) bk H S I S' eq);
@@ -817,6 +797,207 @@ Module Type SBSEMANTICS
         assert (x = x0) as ->; auto.
         eapply NoDupMembers_det; eauto.
         apply b_nodup_blocks.
+  Qed.
+
+  Lemma sem_block_present:
+    forall P b S xs ys S',
+      sem_block P b S xs ys S' ->
+      present_list xs ->
+      present_list ys.
+  Proof.
+    inversion_clear 1 as [???????????? Ins ?? Same AbsEq];
+      intros ** Pres.
+    destruct Same as [Abs|]; auto.
+    apply AbsEq in Abs.
+    apply Forall2_length in Ins.
+    pose proof (b_ingt0 bl) as Length.
+    rewrite map_length in Ins; rewrite Ins in Length.
+    clear - Abs Pres Length; destruct xs; simpl in *.
+    - omega.
+    - inv Abs; inv Pres; congruence.
+  Qed.
+
+  Lemma not_in_nil:
+    forall A (l: list A),
+      (forall x, ~ In x l) ->
+      l = [].
+  Proof.
+    induction l as [|y]; auto; intros Notin.
+    exfalso; apply (Notin y); constructor; auto.
+  Qed.
+
+  Lemma state_closed_empty:
+    forall S,
+      state_closed S [] [] ->
+      S ≋ @empty_memory _.
+  Proof.
+    intros ** (Vals & Insts); simpl in *.
+    constructor.
+    - unfold find_val, empty_memory in *.
+      intro; simpl.
+      rewrite Env.gempty.
+      apply not_Some_is_None; intros ** Find.
+      eapply Vals, not_None_is_Some; eauto.
+    - unfold find_inst, empty_memory in *; simpl.
+      split.
+      + setoid_rewrite Env.Props.P.F.empty_in_iff;
+          setoid_rewrite Env.In_find.
+        split; try contradiction.
+        intros (?& Find); eapply Insts, not_None_is_Some; eauto.
+      + setoid_rewrite Env.Props.P.F.empty_mapsto_iff;
+          contradiction.
+  Qed.
+
+  Lemma sem_equation_remove_val:
+    forall P base eqs R S I S' x,
+      ~ Is_last_in x eqs ->
+      Forall (sem_equation P base R S I S') eqs ->
+      Forall (sem_equation P base R (remove_val x S) I (remove_val x S')) eqs.
+  Proof.
+    induction eqs as [|[]]; intros ** Hnotin Sems;
+      inversion_clear Sems as [|?? Sem]; auto;
+        inversion_clear Sem;
+          apply not_Is_last_in_cons in Hnotin as (Hnotin &?);
+          constructor; eauto using sem_equation.
+    assert (x <> i) by (intro E; subst; apply Hnotin; constructor).
+    econstructor; eauto; rewrite find_val_gro; auto.
+  Qed.
+
+  Lemma sem_equation_remove_inst:
+    forall P base eqs R S I S' s,
+      (forall k, ~ Is_state_in s k eqs) ->
+      Forall (sem_equation P base R S I S') eqs ->
+      Forall (sem_equation P base R (remove_inst s S) I (remove_inst s S')) eqs.
+  Proof.
+    induction eqs as [|[]]; intros ** Hnotin Sems;
+      inversion_clear Sems as [|?? Sem]; auto;
+        inversion_clear Sem;
+        apply not_Is_state_in_cons' in Hnotin as (Hnotin &?);
+        constructor; eauto using sem_equation.
+    - econstructor; eauto.
+      destruct r; auto.
+      assert (s <> i) by (intro E; subst; eapply Hnotin; constructor).
+      unfold sub_inst; rewrite find_inst_gro; auto.
+    - assert (s <> i) by (intro E; subst; eapply Hnotin; constructor).
+      econstructor; eauto; unfold sub_inst; rewrite find_inst_gro; auto.
+  Qed.
+
+  Lemma state_closed_Next:
+    forall S eqs x ck e,
+      state_closed S (lasts_of (EqNext x ck e :: eqs)) (states_of (EqNext x ck e :: eqs)) ->
+      state_closed (remove_val x S) (lasts_of eqs) (states_of eqs).
+  Proof.
+    intros ** (Vals &?).
+    split; auto.
+    intro y; intros ** Find.
+    apply not_None_is_Some in Find as (?& Find).
+    destruct (ident_eq_dec y x).
+    - subst; rewrite find_val_grs in Find; discriminate.
+    - rewrite find_val_gro in Find; auto.
+      edestruct Vals; eauto.
+      + apply not_None_is_Some; eauto.
+      + congruence.
+  Qed.
+
+  Lemma state_closed_Reset:
+    forall S eqs s ck b,
+      state_closed S (lasts_of (EqReset s ck b :: eqs)) (states_of (EqReset s ck b :: eqs)) ->
+      state_closed (remove_inst s S) (lasts_of eqs) (states_of eqs).
+  Proof.
+    intros ** (?& Blocks).
+    split; auto.
+    intro y; intros ** Find.
+    unfold sub_inst in Find; apply not_None_is_Some in Find as (?& Find).
+    destruct (ident_eq_dec y s).
+    - subst; rewrite find_inst_grs in Find; discriminate.
+    - rewrite find_inst_gro in Find; auto.
+      edestruct Blocks; eauto.
+      + apply not_None_is_Some; eauto.
+      + congruence.
+  Qed.
+
+  Lemma state_closed_Call:
+    forall S eqs s xs ck rst b es,
+      state_closed S (lasts_of (EqCall s xs ck rst b es :: eqs)) (states_of (EqCall s xs ck rst b es :: eqs)) ->
+      state_closed (remove_inst s S) (lasts_of eqs) (states_of eqs).
+  Proof.
+    intros ** (?& Blocks).
+    split; auto.
+    intro y; intros ** Find.
+    unfold sub_inst in Find; apply not_None_is_Some in Find as (?& Find).
+    destruct (ident_eq_dec y s).
+    - subst; rewrite find_inst_grs in Find; discriminate.
+    - rewrite find_inst_gro in Find; auto.
+      edestruct Blocks; eauto.
+      + apply not_None_is_Some; eauto.
+      + congruence.
+  Qed.
+
+  Lemma sem_equations_absent:
+    forall S I S' P eqs base R,
+    (forall b xs S ys S',
+        sem_block P b S xs ys S' ->
+        absent_list xs ->
+        S' ≋ S) ->
+    (* Ordered_nodes G -> *)
+    base = false ->
+    (* NoDup_defs eqs -> *)
+    state_closed S (lasts_of eqs) (states_of eqs) ->
+    state_closed S' (lasts_of eqs) (states_of eqs) ->
+    Forall (sem_equation P base R S I S') eqs ->
+    S' ≋ S.
+  Proof.
+    intros ** IH (* Hord *) Abs (* Nodup *) Closed Closed' Heqs.
+    revert dependent S; revert dependent S'.
+    induction eqs as [|[] ? IHeqs]; intros;
+      inversion_clear Heqs as [|?? Sem Sems];
+      try inversion_clear Sem as [|?????????? Find ? Exp Find'| |];
+      eauto.
+
+    - apply state_closed_empty in Closed;
+          apply state_closed_empty in Closed'.
+      now rewrite Closed, Closed'.
+
+    - apply sem_equation_remove_val with (x := i) in Sems; auto.
+      + apply IHeqs in Sems; try eapply state_closed_Next; eauto.
+        apply add_remove_val_same in Find; apply add_remove_val_same in Find'.
+        rewrite Abs in Exp; inversion Exp as [???? Clock|];
+          [contradict Clock; apply not_subrate_clock|]; subst.
+        now rewrite Find, Find', Sems.
+      + admit.
+
+    - apply sem_equation_remove_inst with (s := i) in Sems.
+      + apply IHeqs in Sems; try eapply state_closed_Reset; eauto.
+        admit.
+      + admit.
+
+    - apply sem_equation_remove_inst with (s := i) in Sems.
+      + apply IHeqs in Sems; try eapply state_closed_Call; eauto.
+        admit.
+      + admit.
+  Qed.
+
+  Lemma sem_block_absent:
+    forall P b xs S ys S',
+      sem_block P b S xs ys S' ->
+      absent_list xs ->
+      absent_list ys /\ S' ≋ S.
+  Proof.
+    intros ** Sem Abs; split.
+    - inversion_clear Sem; intuition.
+    - revert dependent xs; revert b S S' ys.
+      induction P as [|block]; intros;
+        inversion_clear Sem as [??????????? Find ????? Heqs Closed Closed'];
+        try now inv Find.
+      simpl in Find.
+      destruct (ident_eqb (b_name block) b) eqn: E.
+      + inv Find.
+        rewrite b_lasts_in_eqs, b_states_in_eqs in Closed, Closed'.
+        apply sem_equations_cons in Heqs.
+        * admit.
+        * admit.
+        * admit.
+      + admit.
   Qed.
 
   (* Lemma sem_reset_false: *)
