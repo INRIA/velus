@@ -951,7 +951,9 @@ Module Type SBSEMANTICS
     revert dependent S; revert dependent S'.
     induction eqs as [|[] ? IHeqs]; intros;
       inversion_clear Heqs as [|?? Sem Sems];
-      try inversion_clear Sem as [|?????????? Find ? Exp Find'| |];
+      try inversion_clear Sem as [|?????????? Find ? Exp Find'|
+                                  ?????????? Clock ? Init|
+                                 ??????????????? Exps Rst ? SemBlock ? Find'];
       eauto.
 
     - apply state_closed_empty in Closed;
@@ -968,12 +970,31 @@ Module Type SBSEMANTICS
 
     - apply sem_equation_remove_inst with (s := i) in Sems.
       + apply IHeqs in Sems; try eapply state_closed_Reset; eauto.
+        rewrite Abs in Clock.
+        assert (r = false) as E
+          by (rewrite <-Bool.not_true_iff_false;
+              intro E; subst; contradict Clock; apply not_subrate_clock).
+        rewrite E in Init; destruct Init as (?& Find &?).
+        unfold sub_inst in Find; apply add_remove_inst_same in Find.
+        rewrite Find.
         admit.
       + admit.
 
     - apply sem_equation_remove_inst with (s := i) in Sems.
       + apply IHeqs in Sems; try eapply state_closed_Call; eauto.
-        admit.
+        assert (absent_list xs).
+        { rewrite Abs in Exps; inversion_clear Exps as [?????? Clock|];
+            [contradict Clock; apply not_subrate_clock|].
+          subst; apply all_absent_spec.
+        }
+        apply IH in SemBlock; auto.
+        unfold sub_inst in *; apply add_remove_inst_same in Find'.
+        rewrite Find', SemBlock.
+        destruct b.
+        * admit.
+        * destruct Rst as (?& Find & E); auto.
+          apply add_remove_inst_same in Find.
+          now rewrite Find, E, Sems.
       + admit.
   Qed.
 
@@ -981,23 +1002,37 @@ Module Type SBSEMANTICS
     forall P b xs S ys S',
       sem_block P b S xs ys S' ->
       absent_list xs ->
-      absent_list ys /\ S' ≋ S.
+      absent_list ys /\ (Ordered_blocks P -> S' ≋ S).
   Proof.
     intros ** Sem Abs; split.
     - inversion_clear Sem; intuition.
-    - revert dependent xs; revert b S S' ys.
+    - intro Ord.
+      revert dependent xs; revert b S S' ys.
       induction P as [|block]; intros;
-        inversion_clear Sem as [??????????? Find ????? Heqs Closed Closed'];
+        inversion_clear Sem as [?????????? Clock Find Ins ???? Heqs Closed Closed'];
         try now inv Find.
-      simpl in Find.
-      destruct (ident_eqb (b_name block) b) eqn: E.
+      pose proof Find; simpl in Find.
+      destruct (ident_eqb (b_name block) b) eqn: Es.
       + inv Find.
         rewrite b_lasts_in_eqs, b_states_in_eqs in Closed, Closed'.
-        apply sem_equations_cons in Heqs.
-        * admit.
-        * admit.
-        * admit.
-      + admit.
+        assert ( ~ Is_block_in (b_name bl) (b_eqs bl))
+          by (eapply find_block_not_Is_block_in; eauto).
+        apply sem_equations_cons in Heqs; auto.
+        assert (base = false).
+        { rewrite <-Bool.not_true_iff_false.
+          intro E; apply Clock in E.
+          apply Forall2_length in Ins.
+          destruct xs.
+          - rewrite map_length in Ins; simpl in Ins.
+            pose proof (b_ingt0 bl); omega.
+          - inv E; inv Abs; congruence.
+        }
+        inv Ord.
+        eapply sem_equations_absent; eauto.
+      + inv Ord; eapply IHP; eauto.
+        econstructor; eauto.
+        apply sem_equations_cons in Heqs; eauto using Ordered_blocks.
+        eapply find_block_later_not_Is_block_in; eauto using Ordered_blocks.
   Qed.
 
   (* Lemma sem_reset_false: *)
