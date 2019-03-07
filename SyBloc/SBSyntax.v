@@ -111,17 +111,17 @@ Module Type SBSYNTAX
       inversion_clear 1 as [?? Last|]; try inv Last; auto.
   Qed.
 
-  Fixpoint states_of (eqs: list equation) : list ident :=
+  Fixpoint states_of (eqs: list equation) : list (ident * ident) :=
     match eqs with
     | [] => []
-    | EqReset s _ _ :: eqs => s :: states_of eqs
-    | EqCall s _ _ _ _ _ :: eqs => s :: states_of eqs
+    | EqReset s _ b :: eqs => (s, b) :: states_of eqs
+    | EqCall s _ _ _ b _ :: eqs => (s, b) :: states_of eqs
     | _ :: eqs => states_of eqs
     end.
 
   Lemma states_of_in:
     forall eqs s,
-      (exists k, Is_state_in s k eqs) <-> In s (states_of eqs).
+      (exists k, Is_state_in s k eqs) <-> InMembers s (states_of eqs).
   Proof.
     induction eqs as [|[]]; simpl.
     - setoid_rewrite Exists_nil; split; try contradiction; intros ** (); eauto.
@@ -163,7 +163,7 @@ Module Type SBSYNTAX
         (* b_out_not_last: forall x, InMembers x b_out -> ~ Is_last_in_eqs x b_eqs; *)
 
         (* b_states_in_eqs: forall s, InMembers s b_blocks <-> (exists k, Is_state_in s k b_eqs); *)
-        b_states_in_eqs: Permutation (map fst b_blocks) (states_of b_eqs);
+        b_states_in_eqs: forall s b, In (s, b) (b_blocks) <-> In (s, b) (states_of b_eqs);
 
         b_no_single_reset: forall s, Reset_in s b_eqs -> Step_in s b_eqs;
 
@@ -197,13 +197,13 @@ Module Type SBSYNTAX
     apply fst_NoDupMembers; auto.
   Qed.
 
-  Lemma b_nodup_states_of:
-    forall b, NoDup (states_of b.(b_eqs)).
-  Proof.
-    setoid_rewrite <-b_states_in_eqs;
-      setoid_rewrite <-fst_NoDupMembers.
-    apply b_nodup_blocks.
-  Qed.
+  (* Lemma b_nodup_states_of: *)
+  (*   forall b, NoDup (states_of b.(b_eqs)). *)
+  (* Proof. *)
+  (*   setoid_rewrite <-b_states_in_eqs; *)
+  (*     setoid_rewrite <-fst_NoDupMembers. *)
+  (*   apply b_nodup_blocks. *)
+  (* Qed. *)
 
   Lemma b_nodup_vars:
     forall b, NoDupMembers (b_in b ++ b_vars b ++ b_out b).

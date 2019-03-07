@@ -28,16 +28,29 @@ Module Type SBSEMANTICS
   Definition state := memory val.
   Definition transient_states := Env.t state.
 
+  Definition state_closed_lasts (lasts: list ident) (S: state) : Prop :=
+    forall x, find_val x S <> None -> In x lasts.
+
+  Inductive state_closed: program -> ident -> state -> Prop :=
+    state_closed_intro:
+      forall P b S bl P',
+        find_block b P = Some (bl, P') ->
+        state_closed_lasts (map fst bl.(b_lasts)) S ->
+        (forall x S',
+            sub_inst x S S' ->
+            exists b',
+              In (x, b') (b_blocks bl)
+              /\ state_closed P' b' S') ->
+        state_closed P b S.
+
+  (* Definition state_closed' (S: state) (lasts: list ident) (blocks: list ident) : Prop := *)
+  (*   state_closed_lasts lasts S *)
+  (*   /\ forall s, find_inst s S <> None -> In s blocks. *)
+
   Definition reset_lasts (bl: block) (S0: state) : Prop :=
-    (forall x c,
-        In (x, c) bl.(b_lasts) -> find_val x S0 = Some (sem_const c))
-    /\ forall x v, find_val x S0 = Some v -> exists c, v = sem_const c /\ In (x, c) bl.(b_lasts).
-
-  Definition same_clock (vs: list value) : Prop :=
-    absent_list vs \/ present_list vs.
-
-  Definition clock_of (vs: list value) (b: bool): Prop :=
-    present_list vs <-> b = true.
+    forall x c,
+      In (x, c) bl.(b_lasts) ->
+      find_val x S0 = Some (sem_const c).
 
   Inductive initial_state: program -> ident -> state -> Prop :=
     initial_state_intro:
@@ -49,15 +62,13 @@ Module Type SBSEMANTICS
             exists S0',
               sub_inst x S0 S0'
               /\ initial_state P' b' S0') ->
-        (forall x S0',
-            sub_inst x S0 S0' ->
-            exists b',
-              In (x, b') bl.(b_blocks)) ->
         initial_state P b S0.
 
-  Definition state_closed (S: state) (lasts: list ident) (blocks: list ident) : Prop :=
-    (forall x, find_val x S <> None -> In x lasts)
-    /\ forall s, find_inst s S <> None -> In s blocks.
+  Definition same_clock (vs: list value) : Prop :=
+    absent_list vs \/ present_list vs.
+
+  Definition clock_of (vs: list value) (b: bool): Prop :=
+    present_list vs <-> b = true.
 
   Section Semantics.
 
@@ -105,8 +116,8 @@ Module Type SBSEMANTICS
                same_clock ys ->
                (absent_list xs <-> absent_list ys) ->
                Forall (sem_equation base R S I S') bl.(b_eqs) ->
-               state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
-               state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
+               state_closed P b S ->
+               state_closed P b S' ->
                sem_block b S xs ys S'.
 
   End Semantics.
@@ -161,8 +172,8 @@ Module Type SBSEMANTICS
         same_clock ys ->
         (absent_list xs <-> absent_list ys) ->
         Forall (sem_equation P base R S I S') bl.(b_eqs) ->
-        state_closed S (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
-        state_closed S' (map fst bl.(b_lasts)) (map fst bl.(b_blocks)) ->
+        state_closed P b S ->
+        state_closed P b S' ->
         Forall (P_equation base R S I S') bl.(b_eqs) ->
         P_block b S xs ys S'.
 
@@ -190,13 +201,8 @@ Module Type SBSEMANTICS
       with signature equal_memory ==> Basics.impl
         as reset_lasts_equal_memory.
   Proof.
-    (* unfold reset_lasts. *)
-    (* intros ** E Rst ?? Hin. *)
-    (* rewrite <-E; auto. *)
-    intros ** E (InFind & FindIn).
-    split.
-    - intros; rewrite <-E; auto.
-    - intros ** Find; rewrite <-E in Find; auto.
+    intros ** E Rst ?? Hin.
+    rewrite <-E; auto.
   Qed.
 
   Add Parametric Morphism P f : (initial_state P f)
@@ -206,7 +212,7 @@ Module Type SBSEMANTICS
     intros ** E Init.
     revert dependent P; revert dependent f; revert dependent y.
     induction x as [? IH] using memory_ind'; intros.
-    inversion_clear Init as [??????? Spec Spec'].
+    inversion_clear Init as [??????? Spec].
     econstructor; eauto.
     - now rewrite <-E.
     - intros ** Hin.
@@ -216,13 +222,6 @@ Module Type SBSEMANTICS
         rewrite Sub in Eq; simpl in Eq.
       destruct (find_inst x0 y); try contradiction.
       eexists; split; eauto.
-    - intros ** Sub.
-      unfold sub_inst in *.
-      pose proof (find_inst_equal_memory x0 E) as Eq;
-        rewrite Sub in Eq; simpl in Eq.
-      destruct (find_inst x0 x) eqn: Sub'; try contradiction.
-      apply Spec' in Sub' as (?&?).
-      eexists; eauto.
   Qed.
 
   Lemma sem_equation_equal_memory:
@@ -276,19 +275,46 @@ Module Type SBSEMANTICS
         now rewrite <-Eq, <-Eq''.
   Qed.
 
-  Add Parametric Morphism lasts blocks : (fun S => state_closed S lasts blocks)
+  Add Parametric Morphism lasts : (state_closed_lasts lasts)
+      with signature equal_memory ==> Basics.impl
+        as state_closed_lasts_equal_memory.
+  Proof.
+    unfold state_closed_lasts.
+    intros ** E Closed ? Find.
+    apply Closed; rewrite E; auto.
+  Qed.
+
+  Add Parametric Morphism P b : (state_closed P b)
       with signature equal_memory ==> Basics.impl
         as state_closed_equal_memory.
   Proof.
-    intros ?? E (Lasts & Blocks); split.
+    intros m m' E Closed; revert dependent m'; revert dependent b; revert P ;
+      induction m as [? IH] using memory_ind'; intros.
+    inversion_clear Closed as [??????? Insts].
+    econstructor; eauto.
     - now setoid_rewrite <-E.
-    - intros ** Find.
-      apply Blocks.
-      apply not_None_is_Some in Find as (?& Find).
-      pose proof (find_inst_equal_memory s E) as E'.
-      rewrite Find in E'.
-      destruct (find_inst s x); congruence.
+    - intros ** Sub; unfold sub_inst in *.
+      pose proof (find_inst_equal_memory x E) as Eq.
+      rewrite Sub in Eq.
+      destruct (find_inst x m) eqn: Find; try contradiction.
+      pose proof Find as Find'.
+      apply Insts in Find' as (?&?&?).
+      eexists; intuition; eauto.
   Qed.
+
+  (* Add Parametric Morphism lasts blocks : (fun S => state_closed' S lasts blocks) *)
+  (*     with signature equal_memory ==> Basics.impl *)
+  (*       as state_closed_equal_memory'. *)
+  (* Proof. *)
+  (*   intros ?? E (Lasts & Blocks); split. *)
+  (*   - now setoid_rewrite <-E. *)
+  (*   - intros ** Find. *)
+  (*     apply Blocks. *)
+  (*     apply not_None_is_Some in Find as (?& Find). *)
+  (*     pose proof (find_inst_equal_memory s E) as E'. *)
+  (*     rewrite Find in E'. *)
+  (*     destruct (find_inst s x); congruence. *)
+  (* Qed. *)
 
   Add Parametric Morphism P f xs ys : (fun S S' => sem_block P f S xs ys S')
       with signature equal_memory ==> equal_memory ==> Basics.impl
@@ -347,18 +373,27 @@ Module Type SBSEMANTICS
         constructor; auto.
         assert (Env.Equiv equal_memory I I) by reflexivity;
           auto.
-      + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *)
-      + eapply state_closed_equal_memory; eauto. (* TODO: fix rewriting *)
+      + now rewrite <-E'.
+      + now rewrite <-E.
   Qed.
 
-  Add Parametric Morphism S : (state_closed S)
-      with signature (@Permutation ident) ==> (@Permutation ident) ==> Basics.impl
-        as state_closed_permutation.
+  Add Parametric Morphism : (state_closed_lasts)
+      with signature (@Permutation ident) ==> eq ==> Basics.impl
+        as state_closed_lasts_permutation.
   Proof.
-    intros ?? E ?? E' (Lasts & Blocks); split.
-    - now setoid_rewrite <-E.
-    - now setoid_rewrite <-E'.
+    unfold state_closed_lasts.
+    intros ** E ? Closed ? Find.
+    rewrite <-E; auto.
   Qed.
+
+  (* Add Parametric Morphism S : (state_closed' S) *)
+  (*     with signature (@Permutation ident) ==> (@Permutation ident) ==> Basics.impl *)
+  (*       as state_closed_permutation'. *)
+  (* Proof. *)
+  (*   intros ?? E ?? E' (Lasts & Blocks); split. *)
+  (*   - now rewrite <-E. *)
+  (*   - now setoid_rewrite <-E'. *)
+  (* Qed. *)
 
   Inductive Ordered_blocks: program -> Prop :=
   | Ordered_nil:
@@ -513,13 +548,18 @@ Module Type SBSEMANTICS
       reset_lasts bl S0 ->
       reset_lasts bl (add_inst x S0x S0).
   Proof.
-    (* unfold reset_lasts; intros. *)
-    (* rewrite find_val_add_inst; auto. *)
-    unfold reset_lasts; intros ** (Rst & Rst'); split; intros ** Hin.
-    - rewrite find_val_add_inst; auto.
-    - rewrite find_val_add_inst in Hin; auto.
+    unfold reset_lasts;
+      setoid_rewrite find_val_add_inst; auto.
   Qed.
 
+  Fact state_closed_lasts_add_inst:
+    forall lasts S x Sx,
+      state_closed_lasts lasts S ->
+      state_closed_lasts lasts (add_inst x Sx S).
+  Proof.
+    unfold state_closed_lasts;
+      setoid_rewrite find_val_add_inst; auto.
+  Qed.
   (* Lemma find_block_initial_state: *)
   (*   forall P b bl P', *)
   (*     Ordered_blocks P -> *)
@@ -637,6 +677,18 @@ Module Type SBSEMANTICS
     eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?); auto.
   Qed.
 
+  Lemma state_closed_other:
+    forall S bl P b,
+      (* Ordered_blocks (bl :: P) -> *)
+      b_name bl <> b ->
+      (state_closed P b S <->
+      state_closed (bl :: P) b S).
+  Proof.
+    split; inversion_clear 1 as [????? Find]; econstructor; eauto.
+    - rewrite find_block_other; eauto.
+    - rewrite find_block_other in Find; eauto.
+  Qed.
+
   Lemma sem_block_cons:
     forall P b f xs S S' ys,
       Ordered_blocks (b :: P) ->
@@ -647,7 +699,7 @@ Module Type SBSEMANTICS
     intros ** Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [| | |????????????????????? IH|
-                       ??????????? Hf ???????? IH]
+                       ??????????? Hf ?????? Closed Closed' IH]
         using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
@@ -662,6 +714,7 @@ Module Type SBSEMANTICS
     - intros.
       pose proof Hf.
       rewrite find_block_other in Hf; auto.
+      rewrite <-state_closed_other in Closed, Closed'; auto.
       econstructor; eauto.
       eapply find_block_later_not_Is_block_in in Hord; eauto.
       apply Forall_forall; intros.
@@ -679,7 +732,7 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Hord Hsem.
     induction Hsem as [| | | |
-                       ??????????? Hfind ???????? IHeqs] using sem_block_mult
+                       ??????????? Hfind ?????? Closed Closed' IHeqs] using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
                             sem_equation (b :: P) bk H S I S' eq);
@@ -701,6 +754,7 @@ Module Type SBSEMANTICS
         destruct Hnin as [H' Hfg]; clear H'.
         inv Hfg; congruence.
       }
+      rewrite state_closed_other in Closed, Closed'; eauto.
       econstructor; eauto.
       + rewrite find_block_other; eauto.
       + instantiate (1 := I).
@@ -743,60 +797,73 @@ Module Type SBSEMANTICS
   Qed.
 
   Lemma reset_lasts_det:
-    forall S S' bl,
+    forall P b S S' bl P',
+      state_closed P b S ->
+      state_closed P b S' ->
+      find_block b P = Some (bl, P') ->
       reset_lasts bl S ->
       reset_lasts bl S' ->
       Env.Equal (values S) (values S').
   Proof.
-    unfold reset_lasts, find_val in *; intros ** Rst Rst' x.
+    intros ** Closed Closed' Find Rst Rst' x.
+    inversion_clear Closed as [????? Find' Spec];
+      rewrite Find' in Find; inv Find.
+    inversion_clear Closed' as [????? Find Spec'];
+      rewrite Find' in Find; inv Find.
+    unfold state_closed_lasts, reset_lasts, find_val in *.
     destruct (Env.find x (values S)) eqn: E, (Env.find x (values S')) eqn: E'; auto.
-    - apply Rst in E as (c &?&?); apply Rst' in E' as (c' &?&?).
-      subst.
-      do 2 f_equal.
-      eapply NoDupMembers_det; eauto.
-      apply b_nodup_lasts.
-    - apply Rst in E as (?&?& Hin).
+    - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
+      apply Spec, fst_InMembers, InMembers_In in E1 as (?& Hin).
+      pose proof Hin as Hin'.
+      apply Rst in Hin; apply Rst' in Hin'.
+      congruence.
+    - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
+      apply Spec, fst_InMembers, InMembers_In in E1 as (?& Hin).
       apply Rst' in Hin.
-      rewrite E' in Hin; discriminate.
-    - apply Rst' in E' as (?&?& Hin).
+      congruence.
+    - assert (Env.find x (values S') <> None) as E1 by (apply not_None_is_Some; eauto).
+      apply Spec', fst_InMembers, InMembers_In in E1 as (?& Hin).
       apply Rst in Hin.
-      rewrite E in Hin; discriminate.
+      congruence.
   Qed.
 
   Lemma initial_state_det:
     forall S S' P b,
+      state_closed P b S ->
+      state_closed P b S' ->
       initial_state P b S ->
       initial_state P b S' ->
       S ≋ S'.
   Proof.
     induction S as [? IH] using memory_ind'.
-    inversion_clear 1 as [??????? Insts1 Insts2];
-      inversion_clear 1 as [??????? Insts1' Insts2'].
-    match goal with
-      H: find_block ?b ?P = _, H': find_block ?b ?P = _ |- _ =>
-      rewrite H in H'; inv H'
-    end.
+    inversion_clear 1 as [??????? Insts2];
+      inversion_clear 1 as [??????? Insts2'];
+      inversion_clear 1 as [??????? Insts1];
+      inversion_clear 1 as [??????? Insts1'].
+    repeat match goal with
+             H: find_block ?b ?P = _, H': find_block ?b ?P = _ |- _ =>
+             rewrite H in H'; inv H'
+           end.
     constructor.
-    - eapply reset_lasts_det; eauto.
+    - eapply reset_lasts_det; eauto using state_closed.
     - unfold sub_inst, find_inst in *.
       split.
       + setoid_rewrite Env.In_find.
         split; intros (?& Find).
-        * apply Insts2 in Find as (?& Hin).
+        * apply Insts2 in Find as (?& Hin &?).
           apply Insts1' in Hin as (?&?&?); eauto.
-        * apply Insts2' in Find as (?& Hin).
+        * apply Insts2' in Find as (?& Hin &?).
           apply Insts1 in Hin as (?&?&?); eauto.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros ** Find Find'.
         pose proof Find as Find1; pose proof Find' as Find1'.
-        apply Insts2 in Find as (?& Hin); apply Insts2' in Find' as (?& Hin').
+        apply Insts2 in Find as (?& Hin &?); apply Insts2' in Find' as (?& Hin' &?).
         pose proof Hin; pose proof Hin'.
         apply Insts1 in Hin as (?& Find2 &?); apply Insts1' in Hin' as (?& Find2' & ?).
         rewrite Find2 in Find1; inv Find1; rewrite Find2' in Find1'; inv Find1'.
-        eapply IH; eauto.
-        assert (x = x0) as ->; auto.
-        eapply NoDupMembers_det; eauto.
-        apply b_nodup_blocks.
+        assert (x = x0) as E
+            by (eapply NoDupMembers_det; eauto; apply b_nodup_blocks).
+        eapply IH; subst; eauto.
   Qed.
 
   Lemma sem_block_present:
@@ -826,27 +893,27 @@ Module Type SBSEMANTICS
     exfalso; apply (Notin y); constructor; auto.
   Qed.
 
-  Lemma state_closed_empty:
-    forall S,
-      state_closed S [] [] ->
-      S ≋ @empty_memory _.
-  Proof.
-    intros ** (Vals & Insts); simpl in *.
-    constructor.
-    - unfold find_val, empty_memory in *.
-      intro; simpl.
-      rewrite Env.gempty.
-      apply not_Some_is_None; intros ** Find.
-      eapply Vals, not_None_is_Some; eauto.
-    - unfold find_inst, empty_memory in *; simpl.
-      split.
-      + setoid_rewrite Env.Props.P.F.empty_in_iff;
-          setoid_rewrite Env.In_find.
-        split; try contradiction.
-        intros (?& Find); eapply Insts, not_None_is_Some; eauto.
-      + setoid_rewrite Env.Props.P.F.empty_mapsto_iff;
-          contradiction.
-  Qed.
+  (* Lemma state_closed'_empty: *)
+  (*   forall S, *)
+  (*     state_closed' S [] [] -> *)
+  (*     S ≋ @empty_memory _. *)
+  (* Proof. *)
+  (*   intros ** (Vals & Insts); simpl in *. *)
+  (*   constructor. *)
+  (*   - unfold find_val, empty_memory in *. *)
+  (*     intro; simpl. *)
+  (*     rewrite Env.gempty. *)
+  (*     apply not_Some_is_None; intros ** Find. *)
+  (*     eapply Vals, not_None_is_Some; eauto. *)
+  (*   - unfold find_inst, empty_memory in *; simpl. *)
+  (*     split. *)
+  (*     + setoid_rewrite Env.Props.P.F.empty_in_iff; *)
+  (*         setoid_rewrite Env.In_find. *)
+  (*       split; try contradiction. *)
+  (*       intros (?& Find); eapply Insts, not_None_is_Some; eauto. *)
+  (*     + setoid_rewrite Env.Props.P.F.empty_mapsto_iff; *)
+  (*         contradiction. *)
+  (* Qed. *)
 
   Lemma sem_equation_remove_val:
     forall P base eqs R S I S' x,
@@ -882,121 +949,121 @@ Module Type SBSEMANTICS
       econstructor; eauto; unfold sub_inst; rewrite find_inst_gro; auto.
   Qed.
 
-  Lemma state_closed_Next:
-    forall S eqs x ck e,
-      state_closed S (lasts_of (EqNext x ck e :: eqs)) (states_of (EqNext x ck e :: eqs)) ->
-      state_closed (remove_val x S) (lasts_of eqs) (states_of eqs).
-  Proof.
-    intros ** (Vals &?).
-    split; auto.
-    intro y; intros ** Find.
-    apply not_None_is_Some in Find as (?& Find).
-    destruct (ident_eq_dec y x).
-    - subst; rewrite find_val_grs in Find; discriminate.
-    - rewrite find_val_gro in Find; auto.
-      edestruct Vals; eauto.
-      + apply not_None_is_Some; eauto.
-      + congruence.
-  Qed.
+  (* Lemma state_closed_Next: *)
+  (*   forall S eqs x ck e, *)
+  (*     state_closed S (lasts_of (EqNext x ck e :: eqs)) (states_of (EqNext x ck e :: eqs)) -> *)
+  (*     state_closed (remove_val x S) (lasts_of eqs) (states_of eqs). *)
+  (* Proof. *)
+  (*   intros ** (Vals &?). *)
+  (*   split; auto. *)
+  (*   intro y; intros ** Find. *)
+  (*   apply not_None_is_Some in Find as (?& Find). *)
+  (*   destruct (ident_eq_dec y x). *)
+  (*   - subst; rewrite find_val_grs in Find; discriminate. *)
+  (*   - rewrite find_val_gro in Find; auto. *)
+  (*     edestruct Vals; eauto. *)
+  (*     + apply not_None_is_Some; eauto. *)
+  (*     + congruence. *)
+  (* Qed. *)
 
-  Lemma state_closed_Reset:
-    forall S eqs s ck b,
-      state_closed S (lasts_of (EqReset s ck b :: eqs)) (states_of (EqReset s ck b :: eqs)) ->
-      state_closed (remove_inst s S) (lasts_of eqs) (states_of eqs).
-  Proof.
-    intros ** (?& Blocks).
-    split; auto.
-    intro y; intros ** Find.
-    unfold sub_inst in Find; apply not_None_is_Some in Find as (?& Find).
-    destruct (ident_eq_dec y s).
-    - subst; rewrite find_inst_grs in Find; discriminate.
-    - rewrite find_inst_gro in Find; auto.
-      edestruct Blocks; eauto.
-      + apply not_None_is_Some; eauto.
-      + congruence.
-  Qed.
+  (* Lemma state_closed_Reset: *)
+  (*   forall S eqs s ck b, *)
+  (*     state_closed S (lasts_of (EqReset s ck b :: eqs)) (states_of (EqReset s ck b :: eqs)) -> *)
+  (*     state_closed (remove_inst s S) (lasts_of eqs) (states_of eqs). *)
+  (* Proof. *)
+  (*   intros ** (?& Blocks). *)
+  (*   split; auto. *)
+  (*   intro y; intros ** Find. *)
+  (*   unfold sub_inst in Find; apply not_None_is_Some in Find as (?& Find). *)
+  (*   destruct (ident_eq_dec y s). *)
+  (*   - subst; rewrite find_inst_grs in Find; discriminate. *)
+  (*   - rewrite find_inst_gro in Find; auto. *)
+  (*     edestruct Blocks; eauto. *)
+  (*     + apply not_None_is_Some; eauto. *)
+  (*     + congruence. *)
+  (* Qed. *)
 
-  Lemma state_closed_Call:
-    forall S eqs s xs ck rst b es,
-      state_closed S (lasts_of (EqCall s xs ck rst b es :: eqs)) (states_of (EqCall s xs ck rst b es :: eqs)) ->
-      state_closed (remove_inst s S) (lasts_of eqs) (states_of eqs).
-  Proof.
-    intros ** (?& Blocks).
-    split; auto.
-    intro y; intros ** Find.
-    unfold sub_inst in Find; apply not_None_is_Some in Find as (?& Find).
-    destruct (ident_eq_dec y s).
-    - subst; rewrite find_inst_grs in Find; discriminate.
-    - rewrite find_inst_gro in Find; auto.
-      edestruct Blocks; eauto.
-      + apply not_None_is_Some; eauto.
-      + congruence.
-  Qed.
+  (* Lemma state_closed_Call: *)
+  (*   forall S eqs s xs ck rst b es, *)
+  (*     state_closed S (lasts_of (EqCall s xs ck rst b es :: eqs)) (states_of (EqCall s xs ck rst b es :: eqs)) -> *)
+  (*     state_closed (remove_inst s S) (lasts_of eqs) (states_of eqs). *)
+  (* Proof. *)
+  (*   intros ** (?& Blocks). *)
+  (*   split; auto. *)
+  (*   intro y; intros ** Find. *)
+  (*   unfold sub_inst in Find; apply not_None_is_Some in Find as (?& Find). *)
+  (*   destruct (ident_eq_dec y s). *)
+  (*   - subst; rewrite find_inst_grs in Find; discriminate. *)
+  (*   - rewrite find_inst_gro in Find; auto. *)
+  (*     edestruct Blocks; eauto. *)
+  (*     + apply not_None_is_Some; eauto. *)
+  (*     + congruence. *)
+  (* Qed. *)
 
-  Lemma sem_equations_absent:
-    forall S I S' P eqs base R,
-    (forall b xs S ys S',
-        sem_block P b S xs ys S' ->
-        absent_list xs ->
-        S' ≋ S) ->
-    (* Ordered_nodes G -> *)
-    base = false ->
-    (* NoDup_defs eqs -> *)
-    state_closed S (lasts_of eqs) (states_of eqs) ->
-    state_closed S' (lasts_of eqs) (states_of eqs) ->
-    Forall (sem_equation P base R S I S') eqs ->
-    S' ≋ S.
-  Proof.
-    intros ** IH (* Hord *) Abs (* Nodup *) Closed Closed' Heqs.
-    revert dependent S; revert dependent S'.
-    induction eqs as [|[] ? IHeqs]; intros;
-      inversion_clear Heqs as [|?? Sem Sems];
-      try inversion_clear Sem as [|?????????? Find ? Exp Find'|
-                                  ?????????? Clock ? Init|
-                                 ??????????????? Exps Rst ? SemBlock ? Find'];
-      eauto.
+  (* Lemma sem_equations_absent: *)
+  (*   forall S I S' P eqs base R, *)
+  (*   (forall b xs S ys S', *)
+  (*       sem_block P b S xs ys S' -> *)
+  (*       absent_list xs -> *)
+  (*       S' ≋ S) -> *)
+  (*   (* Ordered_nodes G -> *) *)
+  (*   base = false -> *)
+  (*   (* NoDup_defs eqs -> *) *)
+  (*   state_closed S (lasts_of eqs) (states_of eqs) -> *)
+  (*   state_closed S' (lasts_of eqs) (states_of eqs) -> *)
+  (*   Forall (sem_equation P base R S I S') eqs -> *)
+  (*   S' ≋ S. *)
+  (* Proof. *)
+  (*   intros ** IH (* Hord *) Abs (* Nodup *) Closed Closed' Heqs. *)
+  (*   revert dependent S; revert dependent S'. *)
+  (*   induction eqs as [|[] ? IHeqs]; intros; *)
+  (*     inversion_clear Heqs as [|?? Sem Sems]; *)
+  (*     try inversion_clear Sem as [|?????????? Find ? Exp Find'| *)
+  (*                                 ?????????? Clock ? Init| *)
+  (*                                ??????????????? Exps Rst ? SemBlock ? Find']; *)
+  (*     eauto. *)
 
-    - apply state_closed_empty in Closed;
-          apply state_closed_empty in Closed'.
-      now rewrite Closed, Closed'.
+  (*   - apply state_closed_empty in Closed; *)
+  (*         apply state_closed_empty in Closed'. *)
+  (*     now rewrite Closed, Closed'. *)
 
-    - apply sem_equation_remove_val with (x := i) in Sems; auto.
-      + apply IHeqs in Sems; try eapply state_closed_Next; eauto.
-        apply add_remove_val_same in Find; apply add_remove_val_same in Find'.
-        rewrite Abs in Exp; inversion Exp as [???? Clock|];
-          [contradict Clock; apply not_subrate_clock|]; subst.
-        now rewrite Find, Find', Sems.
-      + admit.
+  (*   - apply sem_equation_remove_val with (x := i) in Sems; auto. *)
+  (*     + apply IHeqs in Sems; try eapply state_closed_Next; eauto. *)
+  (*       apply add_remove_val_same in Find; apply add_remove_val_same in Find'. *)
+  (*       rewrite Abs in Exp; inversion Exp as [???? Clock|]; *)
+  (*         [contradict Clock; apply not_subrate_clock|]; subst. *)
+  (*       now rewrite Find, Find', Sems. *)
+  (*     + admit. *)
 
-    - apply sem_equation_remove_inst with (s := i) in Sems.
-      + apply IHeqs in Sems; try eapply state_closed_Reset; eauto.
-        rewrite Abs in Clock.
-        assert (r = false) as E
-          by (rewrite <-Bool.not_true_iff_false;
-              intro E; subst; contradict Clock; apply not_subrate_clock).
-        rewrite E in Init; destruct Init as (?& Find &?).
-        unfold sub_inst in Find; apply add_remove_inst_same in Find.
-        rewrite Find.
-        admit.
-      + admit.
+  (*   - apply sem_equation_remove_inst with (s := i) in Sems. *)
+  (*     + apply IHeqs in Sems; try eapply state_closed_Reset; eauto. *)
+  (*       rewrite Abs in Clock. *)
+  (*       assert (r = false) as E *)
+  (*         by (rewrite <-Bool.not_true_iff_false; *)
+  (*             intro E; subst; contradict Clock; apply not_subrate_clock). *)
+  (*       rewrite E in Init; destruct Init as (?& Find &?). *)
+  (*       unfold sub_inst in Find; apply add_remove_inst_same in Find. *)
+  (*       rewrite Find. *)
+  (*       admit. *)
+  (*     + admit. *)
 
-    - apply sem_equation_remove_inst with (s := i) in Sems.
-      + apply IHeqs in Sems; try eapply state_closed_Call; eauto.
-        assert (absent_list xs).
-        { rewrite Abs in Exps; inversion_clear Exps as [?????? Clock|];
-            [contradict Clock; apply not_subrate_clock|].
-          subst; apply all_absent_spec.
-        }
-        apply IH in SemBlock; auto.
-        unfold sub_inst in *; apply add_remove_inst_same in Find'.
-        rewrite Find', SemBlock.
-        destruct b.
-        * admit.
-        * destruct Rst as (?& Find & E); auto.
-          apply add_remove_inst_same in Find.
-          now rewrite Find, E, Sems.
-      + admit.
-  Qed.
+  (*   - apply sem_equation_remove_inst with (s := i) in Sems. *)
+  (*     + apply IHeqs in Sems; try eapply state_closed_Call; eauto. *)
+  (*       assert (absent_list xs). *)
+  (*       { rewrite Abs in Exps; inversion_clear Exps as [?????? Clock|]; *)
+  (*           [contradict Clock; apply not_subrate_clock|]. *)
+  (*         subst; apply all_absent_spec. *)
+  (*       } *)
+  (*       apply IH in SemBlock; auto. *)
+  (*       unfold sub_inst in *; apply add_remove_inst_same in Find'. *)
+  (*       rewrite Find', SemBlock. *)
+  (*       destruct b. *)
+  (*       * admit. *)
+  (*       * destruct Rst as (?& Find & E); auto. *)
+  (*         apply add_remove_inst_same in Find. *)
+  (*         now rewrite Find, E, Sems. *)
+  (*     + admit. *)
+  (* Qed. *)
 
   Lemma sem_block_absent:
     forall P b xs S ys S',
@@ -1012,9 +1079,8 @@ Module Type SBSEMANTICS
         inversion_clear Sem as [?????????? Clock Find Ins ???? Heqs Closed Closed'];
         try now inv Find.
       pose proof Find; simpl in Find.
-      destruct (ident_eqb (b_name block) b) eqn: Es.
+      destruct (ident_eqb (b_name block) b) eqn: Eq.
       + inv Find.
-        rewrite b_lasts_in_eqs, b_states_in_eqs in Closed, Closed'.
         assert ( ~ Is_block_in (b_name bl) (b_eqs bl))
           by (eapply find_block_not_Is_block_in; eauto).
         apply sem_equations_cons in Heqs; auto.
@@ -1027,12 +1093,41 @@ Module Type SBSEMANTICS
             pose proof (b_ingt0 bl); omega.
           - inv E; inv Abs; congruence.
         }
-        inv Ord.
-        eapply sem_equations_absent; eauto.
+        inversion_clear Closed as [?????? Lasts Insts];
+          inversion_clear Closed' as [?????? Lasts' Insts'].
+        repeat match goal with
+                 H: find_block ?b ?P = _, H': find_block ?b ?P = _ |- _ =>
+                 rewrite H in H'; inv H'
+               end.
+        rewrite b_lasts_in_eqs in Lasts, Lasts'.
+        (* rewrite b_states_in_eqs in Insts.  *)
+        (* inv Ord. *)
+        (* eapply sem_equations_absent; eauto. *)
+        admit.
       + inv Ord; eapply IHP; eauto.
+        apply ident_eqb_neq in Eq.
+        rewrite <-state_closed_other in Closed, Closed'; eauto.
         econstructor; eauto.
         apply sem_equations_cons in Heqs; eauto using Ordered_blocks.
         eapply find_block_later_not_Is_block_in; eauto using Ordered_blocks.
+  Qed.
+
+  Lemma state_closed_lasts_empty:
+    forall lasts,
+      state_closed_lasts lasts (empty_memory _).
+  Proof.
+    unfold state_closed_lasts; setoid_rewrite find_val_gempty; intuition.
+  Qed.
+
+  Lemma state_closed_empty:
+    forall P b bl P',
+      find_block b P = Some (bl, P') ->
+      state_closed P b (empty_memory _).
+  Proof.
+    intros ** Find.
+    econstructor; eauto.
+    - apply state_closed_lasts_empty.
+    - unfold sub_inst; setoid_rewrite find_inst_gempty; congruence.
   Qed.
 
   (* Lemma sem_reset_false: *)
