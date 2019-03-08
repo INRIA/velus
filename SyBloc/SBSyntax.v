@@ -92,7 +92,7 @@ Module Type SBSYNTAX
     | _ :: eqs => lasts_of eqs
     end.
 
-  Lemma lasts_of_in:
+  Lemma lasts_of_In:
     forall eqs x,
       Is_last_in x eqs <-> In x (lasts_of eqs).
   Proof.
@@ -119,7 +119,7 @@ Module Type SBSYNTAX
     | _ :: eqs => states_of eqs
     end.
 
-  Lemma states_of_in:
+  Lemma states_of_In:
     forall eqs s,
       (exists k, Is_state_in s k eqs) <-> InMembers s (states_of eqs).
   Proof.
@@ -245,7 +245,7 @@ Module Type SBSYNTAX
         apply Nodup, in_app.
       + apply b_vars_out_in_eqs in Var.
         right; rewrite <-map_app; apply fst_InMembers; auto.
-      + apply lasts_of_in in Last; rewrite <-b_lasts_in_eqs in Last; auto.
+      + apply lasts_of_In in Last; rewrite <-b_lasts_in_eqs in Last; auto.
     - apply fst_InMembers; auto.
   Qed.
 

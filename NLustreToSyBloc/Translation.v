@@ -777,36 +777,43 @@ Module Type TRANSLATION
       + inversion_clear H as [?? Hin|]; auto; inv Hin.
   Qed.
   Next Obligation.
-    unfold gather_eqs, translate_eqns, concatMap.
-    generalize (@nil (ident * ident)).
-    induction (n_eqs n) as [|[]]; simpl; intros; try now constructor.
-    - split; intros ** H.
-      + right; eapply IHl; eauto.
-      + inversion_clear H as [?? Last|]; try inv Last.
-        apply IHl; auto.
-    - destruct i; simpl; auto.
-      destruct o; split; intros ** H.
-      + eapply Exists_app, IHl; eauto.
-      + apply Exists_app' in H as [H|].
-        * inversion_clear H as [?? Last|?? Lasts]; try inv Last.
-          inversion_clear Lasts as [?? Last|?? Last]; inv Last.
-        * apply IHl; auto.
-      + eapply Exists_app, IHl; eauto.
-      + apply Exists_app' in H as [H|].
-        * inversion_clear H as [?? Last|?? Last]; inv Last.
-        * apply IHl; auto.
-    - split; intros ** H.
-      + apply InMembers_In in H as (?& H).
-        apply In_fst_fold_left_gather_eq in H as [H|H].
-        * inversion_clear H as [H'|H']; inv H'.
-          left; constructor.
-        * right; eapply IHl, In_InMembers; eauto.
-      + inversion_clear H as [?? H'|?? H'].
-        * inv H'.
-          eapply In_InMembers, In_fst_fold_left_gather_eq; left.
-          constructor; eauto.
-        * eapply IHl, InMembers_In in H' as (?&?).
-          eapply In_InMembers, In_fst_fold_left_gather_eq; right; eauto.
+    pose proof (translate_node_obligation_3 n) as Nodup.
+    apply NoDup_app_weaken in Nodup.
+    apply NoDup_Permutation; auto.
+    - clear Nodup; pose proof (NoDup_var_defined_n_eqs n) as Nodup.
+      unfold vars_defined, translate_eqns, concatMap in *.
+      induction (n_eqs n) as [|[] eqs]; simpl in *; intros; auto; try now constructor.
+      + inv Nodup; auto.
+      + apply NoDup_comm, NoDup_app_weaken in Nodup.
+        destruct i; simpl; eauto.
+        destruct o; simpl; eauto.
+      + inversion_clear Nodup as [|?? Notin]; constructor; auto.
+        clear - Notin.
+        induction eqs as [|[]]; simpl in *; auto.
+        * assert (~ In i (concat (map var_defined eqs)))
+            by (intro; apply Notin, in_app; auto).
+          destruct i0; simpl; auto.
+          destruct o; simpl; auto.
+        * intros [?|?]; auto.
+          apply IHeqs; auto.
+    - clear.
+      unfold gather_eqs, translate_eqns, concatMap in *.
+      generalize (@nil (ident * ident)).
+      induction (n_eqs n) as [|[]]; simpl in *; intros; auto; try now constructor.
+      + destruct i; simpl; auto.
+        destruct o; simpl; auto.
+      + rewrite in_map_iff; setoid_rewrite In_fst_fold_left_gather_eq.
+        split.
+        *{ intros (() & E & [Hin|?]); inv E.
+           - inv Hin; try contradiction.
+             left; simpl; congruence.
+           - right; eapply IHl, in_map_iff; eauto.
+         }
+        *{ intros [E|Hin].
+           - subst; exists (x, c0); intuition.
+           - eapply IHl, in_map_iff in Hin as (xc&?&?).
+             exists xc; intuition; eauto.
+         }
   Qed.
   Next Obligation.
     rewrite <-idty_app, InMembers_idty.
@@ -868,60 +875,23 @@ Module Type TRANSLATION
   Next Obligation.
     unfold gather_eqs, translate_eqns, concatMap.
     generalize (@nil (ident * const)).
-    induction (n_eqs n) as [|[]]; simpl; intros.
-    - split; try contradiction.
-      intros (?& H); inv H.
-    - split; intros ** H.
-      + apply IHl in H as (k &?).
-        exists k; right; auto.
-      + destruct H as [? H].
-        inversion_clear H as [?? St|]; try inv St.
-        apply IHl; eauto.
+    induction (n_eqs n) as [|[]]; simpl; intros; auto.
+    - split; contradiction.
     - destruct i; simpl; auto.
-      destruct o; split; intros ** H.
-      + apply InMembers_In in H as (?& H).
-        apply In_snd_fold_left_gather_eq in H.
-        destruct H as [H|H].
-        * inversion_clear H as [H'|H']; inv H'.
-          exists 0%nat; apply Exists_app_l; do 2 constructor.
-        * apply In_InMembers in H; apply IHl in H as (k &?).
-          exists k; apply Exists_app; auto.
-      + destruct H as (k& H).
-        apply Exists_app' in H as [H|].
-        *{ inversion_clear H as [?? H'|?? H'].
-           - inv H'.
-             eapply In_InMembers, In_snd_fold_left_gather_eq; left; constructor; auto.
-           - inversion_clear H' as [?? H|?? H]; inv H.
-             eapply In_InMembers, In_snd_fold_left_gather_eq; left; constructor; auto.
-         }
-        * assert (InMembers s (snd (fold_left gather_eq l0 (l1, [])))) as H'
-              by (apply IHl; eauto).
-          apply InMembers_In in H' as ().
-          eapply In_InMembers, In_snd_fold_left_gather_eq; right; eauto.
-      + apply InMembers_In in H as (?& H).
-        apply In_snd_fold_left_gather_eq in H.
-        destruct H as [H|H].
-        * inversion_clear H as [H'|H']; inv H'.
-          exists 1%nat; apply Exists_app_l; do 2 constructor.
-        * apply In_InMembers in H; apply IHl in H as (k &?).
-          exists k; apply Exists_app; auto.
-      + destruct H as (k& H).
-        apply Exists_app' in H as [H|].
-        *{ inversion_clear H as [?? H'|?? H'].
-           - inv H'.
-             eapply In_InMembers, In_snd_fold_left_gather_eq; left; constructor; auto.
-           - inversion_clear H' as [?? H|?? H]; inv H.
-         }
-        * assert (InMembers s (snd (fold_left gather_eq l0 (l1, [])))) as H'
-              by (apply IHl; eauto).
-          apply InMembers_In in H' as ().
-          eapply In_InMembers, In_snd_fold_left_gather_eq; right; eauto.
-    - split; intros ** H.
-      + apply IHl in H as (k&?).
-        exists k; right; auto.
-      + destruct H as (?& H).
-        inversion_clear H as [?? H'|]; try inv H'.
-        apply IHl; eauto.
+      destruct o; simpl; split; intros ** Hin.
+      + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
+        * inv Hin; try contradiction; auto.
+        * apply IHl in Hin; auto.
+      + apply In_snd_fold_left_gather_eq; destruct Hin as [|[]].
+        * left; constructor; auto.
+        * left; constructor; auto.
+        * right; apply IHl; auto.
+      + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
+        * inv Hin; try contradiction; auto.
+        * apply IHl in Hin; auto.
+      + apply In_snd_fold_left_gather_eq; destruct Hin as [|].
+        * left; constructor; auto.
+        * right; apply IHl; auto.
   Qed.
   Next Obligation.
     unfold translate_eqns, concatMap in *.
