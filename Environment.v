@@ -387,6 +387,19 @@ Module Env.
       apply In_find; eauto.
     Qed.
 
+    Lemma Equiv_empty:
+      forall m eq,
+        (forall x, find x m = None) ->
+        Equiv eq m (empty A).
+    Proof.
+      intros ** Spec.
+      constructor.
+      - setoid_rewrite Props.P.F.empty_in_iff; setoid_rewrite In_find.
+        split; try contradiction.
+        intros (?& ?); congruence.
+      - setoid_rewrite Props.P.F.empty_mapsto_iff; contradiction.
+    Qed.
+
   End Extra.
 
 End Env.
