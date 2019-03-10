@@ -101,7 +101,7 @@ Module Type MEMSEMANTICS
 
     Definition memory_closed (M: memory val) (eqs: list equation) : Prop :=
       (forall i, find_inst i M <> None -> InMembers i (gather_insts eqs))
-      /\ forall x, find_val x M <> None -> In x (gather_mem eqs).
+      /\ forall x, find_val x M <> None -> In x (gather_mems eqs).
 
     Definition memory_closed_n (M: memories) (eqs: list equation) : Prop :=
       forall n, memory_closed (M n) eqs.
@@ -628,7 +628,7 @@ dataflow memory for which the non-standard semantics holds true.
     destruct (ident_eq_dec y x).
     - subst; simpl; auto.
     - rewrite find_val_gso in Find; auto.
-      unfold gather_mem, concatMap; simpl.
+      unfold gather_mems, concatMap; simpl.
       right; apply Vals; eauto.
       apply not_None_is_Some; eauto.
   Qed.
@@ -1000,7 +1000,7 @@ dataflow memory for which the non-standard semantics holds true.
     destruct (ident_eq_dec y x).
     - subst; rewrite find_val_grs in Find; discriminate.
     - rewrite find_val_gro in Find; auto.
-      unfold gather_mem, concatMap in Vals; simpl in Vals.
+      unfold gather_mems, concatMap in Vals; simpl in Vals.
       edestruct Vals.
       + apply not_None_is_Some; eauto.
       + congruence.

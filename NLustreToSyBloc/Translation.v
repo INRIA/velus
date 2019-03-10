@@ -547,12 +547,12 @@ Module Type TRANSLATION
   Qed.
 
   Lemma gather_eqs_fst_spec:
-    forall eqs, Permutation (map fst (fst (gather_eqs eqs))) (gather_mem eqs).
+    forall eqs, Permutation (map fst (fst (gather_eqs eqs))) (gather_mems eqs).
   Proof.
     intro eqs.
     assert (Hgen: forall F S,
                Permutation (map fst (fst (fold_left gather_eq eqs (F, S))))
-                           (map fst F ++ gather_mem eqs)).
+                           (map fst F ++ gather_mems eqs)).
     {
       induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
       - now rewrite app_nil_r.
@@ -561,9 +561,9 @@ Module Type TRANSLATION
           | |- context[ EqApp _ _ _ _ _ ] => destruct i
           | _ => idtac
           end; rewrite IHeqs; auto.
-        assert (Hmem: gather_mem (EqFby i ck v0 le :: eqs)
-                      = i :: gather_mem eqs)
-          by now unfold gather_mem; rewrite concatMap_cons.
+        assert (Hmem: gather_mems (EqFby i ck v0 le :: eqs)
+                      = i :: gather_mems eqs)
+          by now unfold gather_mems; rewrite concatMap_cons.
 
         now rewrite Hmem, <- Permutation_middle, app_comm_cons.
     }
@@ -630,13 +630,13 @@ Module Type TRANSLATION
                   (vars_defined (filter is_fby eqs)).
   Proof.
     intro eqs.
-    assert (Hperm: Permutation (gather_mem eqs)
+    assert (Hperm: Permutation (gather_mems eqs)
                                (vars_defined (filter is_fby eqs))).
     {
       induction eqs as [|eq eqs]; auto.
       destruct eq; try (now simpl; auto).
       simpl.
-      unfold gather_mem, vars_defined; simpl.
+      unfold gather_mems, vars_defined; simpl.
       rewrite 2 concatMap_cons.
       apply Permutation_cons.
       auto.
