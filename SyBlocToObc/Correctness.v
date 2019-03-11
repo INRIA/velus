@@ -197,12 +197,6 @@ Module Type CORRECTNESS
   Definition Is_free_in (x: ident) (eqs: list equation) : Prop :=
     Exists (Is_free_in_eq x) eqs.
 
-  Definition step_with_reset (s: ident) (eq: equation) : bool :=
-    match eq with
-    | EqCall s' _ _ true _ _ => ident_eqb s s'
-    | _ => false
-    end.
-
   Definition is_step_in_eq_b (s: ident) (eq: equation) : bool :=
     match eq with
     | EqCall s' _ _ _ _ _ => ident_eqb s s'
@@ -288,7 +282,6 @@ Module Type CORRECTNESS
         (forall s k,
             Is_state_in_eq s k eq ->
             Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < k) eqs) ->
-        (forall s, if step_with_reset s eq then Reset_in s eqs else ~ Reset_in s eqs) ->
         Is_well_sch inputs mems (eq :: eqs).
 
   Lemma Is_last_in_eq_defined_not_variable:

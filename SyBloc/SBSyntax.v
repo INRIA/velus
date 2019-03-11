@@ -114,32 +114,46 @@ Module Type SBSYNTAX
   Fixpoint states_of (eqs: list equation) : list (ident * ident) :=
     match eqs with
     | [] => []
-    | EqReset s _ b :: eqs => (s, b) :: states_of eqs
     | EqCall s _ _ _ b _ :: eqs => (s, b) :: states_of eqs
     | _ :: eqs => states_of eqs
     end.
 
-  Lemma states_of_In:
+  Lemma states_of_InMembers:
     forall eqs s,
-      (exists k, Is_state_in s k eqs) <-> InMembers s (states_of eqs).
+      Step_in s eqs <-> InMembers s (states_of eqs).
   Proof.
     induction eqs as [|[]]; simpl.
     - setoid_rewrite Exists_nil; split; try contradiction; intros ** (); eauto.
-    - setoid_rewrite <-IHeqs; split; intros ** (); try (eexists; right; eauto).
-      inversion_clear 1 as [?? Block|]; try inv Block; eauto.
-    - setoid_rewrite <-IHeqs; split; intros ** (); try (eexists; right; eauto).
-      inversion_clear 1 as [?? Block|]; try inv Block; eauto.
+    - setoid_rewrite <-IHeqs; split; try (right; auto);
+        inversion_clear 1 as [?? Step|]; try inv Step; auto.
+    - setoid_rewrite <-IHeqs; split; try (right; auto);
+        inversion_clear 1 as [?? Step|]; try inv Step; auto.
+    - setoid_rewrite <-IHeqs; split; try (right; auto);
+        inversion_clear 1 as [?? Step|]; try inv Step; auto.
     - setoid_rewrite <-IHeqs; split.
-      + intros ** (); inversion_clear 1 as [?? Block|]; try inv Block; eauto.
-      + intros [E|(?&?)].
-        * subst; eexists; left; constructor.
-        * eexists; right; eauto.
-    - setoid_rewrite <-IHeqs; split.
-      + intros ** (); inversion_clear 1 as [?? Block|]; try inv Block; eauto.
-      + intros [E|(?&?)].
-        * subst; eexists; left; constructor.
-        * eexists; right; eauto.
+      + inversion_clear 1 as [?? Block|]; try inv Block; eauto.
+      + intros [E|?].
+        * subst; left; constructor.
+        * right; eauto.
   Qed.
+
+  Lemma states_of_In:
+    forall eqs s b,
+      In (s, b) (states_of eqs) ->
+      exists xs ck rst es, In (EqCall s xs ck rst b es) eqs.
+  Proof.
+    induction eqs as [|[]]; simpl; try contradiction; intros ** Hin;
+      try now edestruct IHeqs as (?&?&?&?&?); eauto 6.
+    destruct Hin as [E|].
+    - inv E; eauto 6.
+    - edestruct IHeqs as (?&?&?&?&?); eauto 6.
+  Qed.
+
+  Definition step_with_reset (s: ident) (eq: equation) : bool :=
+    match eq with
+    | EqCall s' _ _ true _ _ => ident_eqb s s'
+    | _ => false
+    end.
 
   Record block :=
     Block {
@@ -166,6 +180,9 @@ Module Type SBSYNTAX
         b_states_in_eqs: forall s b, In (s, b) (b_blocks) <-> In (s, b) (states_of b_eqs);
 
         b_no_single_reset: forall s, Reset_in s b_eqs -> Step_in s b_eqs;
+        b_reset_in: Forall (fun eq => forall s, if step_with_reset s eq
+                                        then Reset_in s b_eqs
+                                        else ~ Reset_in s b_eqs) b_eqs;
 
         b_good: Forall ValidId (b_in ++ b_vars ++ b_out)
                 /\ Forall ValidId b_lasts

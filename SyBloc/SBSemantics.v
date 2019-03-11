@@ -991,86 +991,86 @@ Module Type SBSEMANTICS
   (*         contradiction. *)
   (* Qed. *)
 
-  Lemma sem_equation_remove_val:
-    forall P base eqs R S I S' x,
-      ~ Is_last_in x eqs ->
-      Forall (sem_equation P base R S I S') eqs ->
-      Forall (sem_equation P base R (remove_val x S) I (remove_val x S')) eqs.
-  Proof.
-    induction eqs as [|[]]; intros ** Hnotin Sems;
-      inversion_clear Sems as [|?? Sem]; auto;
-        inversion_clear Sem;
-          apply not_Is_last_in_cons in Hnotin as (Hnotin &?);
-          constructor; eauto using sem_equation.
-    assert (x <> i) by (intro E; subst; apply Hnotin; constructor).
-    econstructor; eauto; rewrite find_val_gro; auto.
-  Qed.
+  (* Lemma sem_equation_remove_val: *)
+  (*   forall P base eqs R S I S' x, *)
+  (*     ~ Is_last_in x eqs -> *)
+  (*     Forall (sem_equation P base R S I S') eqs -> *)
+  (*     Forall (sem_equation P base R (remove_val x S) I (remove_val x S')) eqs. *)
+  (* Proof. *)
+  (*   induction eqs as [|[]]; intros ** Hnotin Sems; *)
+  (*     inversion_clear Sems as [|?? Sem]; auto; *)
+  (*       inversion_clear Sem; *)
+  (*         apply not_Is_last_in_cons in Hnotin as (Hnotin &?); *)
+  (*         constructor; eauto using sem_equation. *)
+  (*   assert (x <> i) by (intro E; subst; apply Hnotin; constructor). *)
+  (*   econstructor; eauto; rewrite find_val_gro; auto. *)
+  (* Qed. *)
 
-  Lemma sem_equation_remove_inst:
-    forall P base eqs R S I S' s,
-      (forall k, ~ Is_state_in s k eqs) ->
-      Forall (sem_equation P base R S I S') eqs ->
-      Forall (sem_equation P base R (remove_inst s S) I (remove_inst s S')) eqs.
-  Proof.
-    induction eqs as [|[]]; intros ** Hnotin Sems;
-      inversion_clear Sems as [|?? Sem]; auto;
-        inversion_clear Sem;
-        apply not_Is_state_in_cons' in Hnotin as (Hnotin &?);
-        constructor; eauto using sem_equation.
-    - econstructor; eauto.
-      destruct r; auto.
-      assert (s <> i) by (intro E; subst; eapply Hnotin; constructor).
-      unfold sub_inst; rewrite find_inst_gro; auto.
-    - assert (s <> i) by (intro E; subst; eapply Hnotin; constructor).
-      econstructor; eauto; unfold sub_inst; rewrite find_inst_gro; auto.
-  Qed.
+  (* Lemma sem_equation_remove_inst: *)
+  (*   forall P base eqs R S I S' s, *)
+  (*     (forall k, ~ Is_state_in s k eqs) -> *)
+  (*     Forall (sem_equation P base R S I S') eqs -> *)
+  (*     Forall (sem_equation P base R (remove_inst s S) I (remove_inst s S')) eqs. *)
+  (* Proof. *)
+  (*   induction eqs as [|[]]; intros ** Hnotin Sems; *)
+  (*     inversion_clear Sems as [|?? Sem]; auto; *)
+  (*       inversion_clear Sem; *)
+  (*       apply not_Is_state_in_cons' in Hnotin as (Hnotin &?); *)
+  (*       constructor; eauto using sem_equation. *)
+  (*   - econstructor; eauto. *)
+  (*     destruct r; auto. *)
+  (*     assert (s <> i) by (intro E; subst; eapply Hnotin; constructor). *)
+  (*     unfold sub_inst; rewrite find_inst_gro; auto. *)
+  (*   - assert (s <> i) by (intro E; subst; eapply Hnotin; constructor). *)
+  (*     econstructor; eauto; unfold sub_inst; rewrite find_inst_gro; auto. *)
+  (* Qed. *)
 
-  Lemma state_closed_lasts_Next:
-    forall S eqs x ck e,
-      state_closed_lasts (lasts_of (EqNext x ck e :: eqs)) S ->
-      state_closed_lasts (lasts_of eqs) (remove_val x S).
-  Proof.
-    unfold state_closed_lasts.
-    intros ** Vals y Find.
-    apply not_None_is_Some in Find as (?& Find).
-    destruct (ident_eq_dec y x).
-    - subst; rewrite find_val_grs in Find; discriminate.
-    - rewrite find_val_gro in Find; auto.
-      edestruct Vals; eauto; try congruence.
-      congruence.
-  Qed.
+  (* Lemma state_closed_lasts_Next: *)
+  (*   forall S eqs x ck e, *)
+  (*     state_closed_lasts (lasts_of (EqNext x ck e :: eqs)) S -> *)
+  (*     state_closed_lasts (lasts_of eqs) (remove_val x S). *)
+  (* Proof. *)
+  (*   unfold state_closed_lasts. *)
+  (*   intros ** Vals y Find. *)
+  (*   apply not_None_is_Some in Find as (?& Find). *)
+  (*   destruct (ident_eq_dec y x). *)
+  (*   - subst; rewrite find_val_grs in Find; discriminate. *)
+  (*   - rewrite find_val_gro in Find; auto. *)
+  (*     edestruct Vals; eauto; try congruence. *)
+  (*     congruence. *)
+  (* Qed. *)
 
-  Lemma state_closed_insts_Reset:
-    forall P S eqs s ck b,
-      state_closed_insts P (states_of (EqReset s ck b :: eqs)) S ->
-      state_closed_insts P (states_of eqs) (remove_inst s S).
-  Proof.
-    unfold state_closed_insts, sub_inst.
-    intros ** Blocks s' ? Find.
-    destruct (ident_eq_dec s' s).
-    - subst; rewrite find_inst_grs in Find; discriminate.
-    - rewrite find_inst_gro in Find; auto.
-      edestruct Blocks as (?& Hin &?); eauto.
-      eexists; split; eauto.
-      inversion_clear Hin as [E|]; auto.
-      inv E; congruence.
-  Qed.
+  (* Lemma state_closed_insts_Reset: *)
+  (*   forall P S eqs s ck b, *)
+  (*     state_closed_insts P (states_of (EqReset s ck b :: eqs)) S -> *)
+  (*     state_closed_insts P (states_of eqs) (remove_inst s S). *)
+  (* Proof. *)
+  (*   unfold state_closed_insts, sub_inst. *)
+  (*   intros ** Blocks s' ? Find. *)
+  (*   destruct (ident_eq_dec s' s). *)
+  (*   - subst; rewrite find_inst_grs in Find; discriminate. *)
+  (*   - rewrite find_inst_gro in Find; auto. *)
+  (*     edestruct Blocks as (?& Hin &?); eauto. *)
+  (*     eexists; split; eauto. *)
+  (*     inversion_clear Hin as [E|]; auto. *)
+  (*     inv E; congruence. *)
+  (* Qed. *)
 
-  Lemma state_closed_insts_Call:
-    forall P S eqs s xs ck rst b es,
-      state_closed_insts P (states_of (EqCall s xs ck rst b es :: eqs)) S ->
-      state_closed_insts P (states_of eqs) (remove_inst s S).
-  Proof.
-    unfold state_closed_insts, sub_inst.
-    intros ** Blocks s' ? Find.
-    destruct (ident_eq_dec s' s).
-    - subst; rewrite find_inst_grs in Find; discriminate.
-    - rewrite find_inst_gro in Find; auto.
-      edestruct Blocks as (?& Hin &?); eauto.
-      eexists; split; eauto.
-      inversion_clear Hin as [E|]; auto.
-      inv E; congruence.
-  Qed.
+  (* Lemma state_closed_insts_Call: *)
+  (*   forall P S eqs s xs ck rst b es, *)
+  (*     state_closed_insts P (states_of (EqCall s xs ck rst b es :: eqs)) S -> *)
+  (*     state_closed_insts P (states_of eqs) (remove_inst s S). *)
+  (* Proof. *)
+  (*   unfold state_closed_insts, sub_inst. *)
+  (*   intros ** Blocks s' ? Find. *)
+  (*   destruct (ident_eq_dec s' s). *)
+  (*   - subst; rewrite find_inst_grs in Find; discriminate. *)
+  (*   - rewrite find_inst_gro in Find; auto. *)
+  (*     edestruct Blocks as (?& Hin &?); eauto. *)
+  (*     eexists; split; eauto. *)
+  (*     inversion_clear Hin as [E|]; auto. *)
+  (*     inv E; congruence. *)
+  (* Qed. *)
 
   Lemma state_closed_lasts_nil:
     forall S,
@@ -1085,85 +1085,119 @@ Module Type SBSEMANTICS
 
   (* TODO: constructor sur equal_memory + inversion sur la semantique + predicats sur la syntaxe *)
 
+
   Lemma sem_equations_absent:
     forall S I S' P eqs base R,
     (forall b xs S ys S',
         sem_block P b S xs ys S' ->
         absent_list xs ->
         S' ≋ S) ->
-    (* Ordered_nodes G -> *)
     base = false ->
-    (* NoDup_defs eqs -> *)
     state_closed_lasts (lasts_of eqs) S ->
     state_closed_lasts (lasts_of eqs) S' ->
     state_closed_insts P (states_of eqs) S ->
     state_closed_insts P (states_of eqs) S' ->
-    transient_states_closed P (states_of eqs) I ->
-    (* (forall s b, In (s, b) (states_of eqs) ->  *)
+    Forall (fun eq => forall s, if step_with_reset s eq
+                        then Reset_in s eqs
+                        else ~ Reset_in s eqs) eqs ->
     Forall (sem_equation P base R S I S') eqs ->
     S' ≋ S.
   Proof.
-    intros ** IH (* Hord *) Abs (* Nodup *) Lasts Lasts' Insts Insts' Trans Heqs.
-    revert dependent S; revert dependent S'.
-    induction eqs as [|[] ? IHeqs]; intros;
-      inversion_clear Heqs as [|?? Sem Sems];
-      try inversion_clear Sem as [|?????????? Find ? Exp Find'|
-                                  ?????????? Clock FindI Init|
-                                 ??????????????? Exps Rst ? SemBlock ? Find'];
-      eauto.
+    intros ** IH Abs Lasts Lasts' Insts Insts' Spec Heqs.
+    constructor; subst.
 
-    - apply state_closed_lasts_nil in Lasts; apply state_closed_lasts_nil in Lasts'.
-      constructor.
-      + now rewrite Lasts, Lasts'.
-      + assert (forall s, find_inst s S = None) as Find
-          by (setoid_rewrite <-not_Some_is_None; intros ** Find;
-              apply Insts in Find as (?&?&?); auto).
-        assert (forall s, find_inst s S' = None) as Find'
-          by (setoid_rewrite <-not_Some_is_None; intros ** Find';
-              apply Insts' in Find' as (?&?&?); auto).
-        unfold find_inst in *.
-        eapply Env.Equiv_empty in Find; eapply Env.Equiv_empty in Find'.
-        now rewrite Find, Find'.
-
-    - apply sem_equation_remove_val with (x := i) in Sems; auto.
-      + apply IHeqs in Sems; try eapply state_closed_lasts_Next; eauto.
-        apply add_remove_val_same in Find; apply add_remove_val_same in Find'.
-        rewrite Abs in Exp; inversion Exp as [???? Clock|];
+    - clear Insts Insts' Spec.
+      intros x.
+      unfold state_closed_lasts, find_val in *.
+      specialize (Lasts x); specialize (Lasts' x).
+      destruct (Env.find x (values S)) eqn: Find;
+        destruct (Env.find x (values S')) eqn: Find'; auto.
+      + assert (In x (lasts_of eqs)) as Hin by (apply Lasts; congruence).
+        clear Lasts Lasts'.
+        induction eqs as [|[]]; simpl in Hin; try contradiction;
+          inversion_clear Heqs as [|?? Heq]; auto.
+        destruct Hin; auto; subst.
+        inversion_clear Heq as [|?????????? Find1 ? Exp Find1'| |]; unfold find_val in *.
+        rewrite Find1 in Find; inv Find.
+        inversion Exp as [???? Clock|];
           [contradict Clock; apply not_subrate_clock|]; subst.
-        now rewrite Find, Find', Sems.
-      + admit.
+        congruence.
+      + assert (In x (lasts_of eqs)) as Hin by (apply Lasts; congruence).
+        clear Lasts Lasts'.
+        induction eqs as [|[]]; simpl in Hin; try contradiction;
+          inversion_clear Heqs as [|?? Heq]; auto.
+        destruct Hin; auto; subst.
+        inversion_clear Heq as [|?????????? Find1 ? Exp Find1'| |]; unfold find_val in *.
+        rewrite Find1 in Find; inv Find.
+        inversion Exp as [???? Clock|];
+          [contradict Clock; apply not_subrate_clock|]; subst.
+        congruence.
+      + assert (In x (lasts_of eqs)) as Hin by (apply Lasts'; congruence).
+        clear Lasts Lasts'.
+        induction eqs as [|[]]; simpl in Hin; try contradiction;
+          inversion_clear Heqs as [|?? Heq]; auto.
+        destruct Hin; auto; subst.
+        inversion_clear Heq as [|?????????? Find1 ? Exp Find1'| |]; unfold find_val in *.
+        congruence.
 
-    - apply sem_equation_remove_inst with (s := i) in Sems.
-      + inversion_clear Trans as [|?? Closed]; apply IHeqs in Sems;
-          try eapply state_closed_insts_Reset; eauto.
-        rewrite Abs in Clock.
-        assert (r = false) as E
-            by (rewrite <-Bool.not_true_iff_false;
-                intro E; subst; contradict Clock; apply not_subrate_clock).
-        rewrite E in Init; destruct Init as (?& Find &?).
-        unfold sub_inst in Find; apply add_remove_inst_same in Find.
-        rewrite Find.
-        apply Closed in FindI.
-        admit.
-      + admit.
-
-    - apply sem_equation_remove_inst with (s := i) in Sems.
-      + inversion_clear Trans as [|?? Closed]; apply IHeqs in Sems;
-          try eapply state_closed_insts_Call; eauto.
+    - clear Lasts Lasts'.
+      constructor.
+      + setoid_rewrite Env.In_find.
+        unfold state_closed_insts, sub_inst, find_inst in *.
+        intro s; split; intros (?& Find).
+        *{ apply Insts' in Find as (b & Hin &?).
+           apply states_of_In in Hin as (?&?& rst &?& Hin).
+           pose proof Heqs as Heqs'.
+           eapply Forall_forall in Heqs; eauto.
+           eapply Forall_forall in Spec; eauto.
+           specialize (Spec s); unfold step_with_reset in Spec;
+             rewrite ident_eqb_refl in Spec.
+           destruct rst.
+           - apply Exists_exists in Spec as (?& Rst & E); inv E.
+             eapply Forall_forall in Rst; eauto.
+             inversion_clear Rst as [| |?????????? Clock FindI Init|].
+             assert (r = false)
+               by (rewrite <-Bool.not_true_iff_false;
+                   intro E; subst; contradict Clock; apply not_subrate_clock); subst.
+             destruct Init as (?&?&?); eauto.
+           - inversion_clear Heqs as [| | |??????????????? Exps Rst ? SemBlock ? Find'].
+             destruct Rst as (?&?&?); eauto.
+         }
+        * apply Insts in Find as (b & Hin &?).
+          apply states_of_In in Hin as (?&?&?&?& Hin).
+          eapply Forall_forall in Heqs; eauto.
+          inv Heqs; eauto.
+      + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
+        intros s ** Find' Find.
+        pose proof Find as Hin.
+        apply Insts in Hin as (b & Hin &?).
+        apply states_of_In in Hin as (?&?& rst &?& Hin).
+        pose proof Heqs as Heqs'.
+        eapply Forall_forall in Heqs; eauto.
+        eapply Forall_forall in Spec; eauto.
+        specialize (Spec s); unfold step_with_reset in Spec;
+          rewrite ident_eqb_refl in Spec.
+        inversion_clear Heqs as [| | |??????????????? Exps Rst' FindI' SemBlock ? Find1'].
+        unfold sub_inst, find_inst in *; rewrite Find1' in Find'; inv Find'.
         assert (absent_list xs).
-        { rewrite Abs in Exps; inversion_clear Exps as [?????? Clock|];
-            [contradict Clock; apply not_subrate_clock|].
+        { inversion_clear Exps as [?????? Clock'|];
+            [contradict Clock'; apply not_subrate_clock|].
           subst; apply all_absent_spec.
         }
         apply IH in SemBlock; auto.
-        unfold sub_inst in *; apply add_remove_inst_same in Find'.
-        rewrite Find', SemBlock.
-        destruct b.
-        * admit.
-        * destruct Rst as (?& Find & E); auto.
-          apply add_remove_inst_same in Find.
-          now rewrite Find, E, Sems.
-      + admit.
+        rewrite SemBlock.
+        destruct rst.
+        * apply Exists_exists in Spec as (?& Rst & E); inv E.
+          eapply Forall_forall in Rst; eauto.
+          inversion_clear Rst as [| |?????????? Clock FindI Init|];
+            setoid_rewrite FindI' in FindI; inv FindI.
+          assert (r = false)
+            by (rewrite <-Bool.not_true_iff_false;
+                intro E; subst; contradict Clock; apply not_subrate_clock); subst.
+          destruct Init as (?& Find1 &?); eauto.
+          unfold sub_inst, find_inst in *; rewrite Find1 in Find; inv Find; auto.
+        * destruct Rst' as (?& Find1 &?); auto.
+          rewrite Find1 in Find; inv Find; auto.
   Qed.
 
   Lemma sem_block_absent:
