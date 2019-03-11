@@ -1083,16 +1083,12 @@ Module Type SBSEMANTICS
     eapply Lasts, not_None_is_Some; eauto.
   Qed.
 
-  (* TODO: constructor sur equal_memory + inversion sur la semantique + predicats sur la syntaxe *)
-
-
   Lemma sem_equations_absent:
-    forall S I S' P eqs base R,
+    forall S I S' P eqs R,
     (forall b xs S ys S',
         sem_block P b S xs ys S' ->
         absent_list xs ->
         S' ≋ S) ->
-    base = false ->
     state_closed_lasts (lasts_of eqs) S ->
     state_closed_lasts (lasts_of eqs) S' ->
     state_closed_insts P (states_of eqs) S ->
@@ -1100,11 +1096,11 @@ Module Type SBSEMANTICS
     Forall (fun eq => forall s, if step_with_reset s eq
                         then Reset_in s eqs
                         else ~ Reset_in s eqs) eqs ->
-    Forall (sem_equation P base R S I S') eqs ->
+    Forall (sem_equation P false R S I S') eqs ->
     S' ≋ S.
   Proof.
-    intros ** IH Abs Lasts Lasts' Insts Insts' Spec Heqs.
-    constructor; subst.
+    intros ** IH Lasts Lasts' Insts Insts' Spec Heqs.
+    constructor.
 
     - clear Insts Insts' Spec.
       intros x.
@@ -1237,10 +1233,8 @@ Module Type SBSEMANTICS
         rewrite b_lasts_in_eqs in Lasts, Lasts'.
         setoid_rewrite b_states_in_eqs in Insts;
           setoid_rewrite b_states_in_eqs in Insts'.
-        (* rewrite b_states_in_eqs in Insts.  *)
-        (* inv Ord. *)
-        (* eapply sem_equations_absent; eauto. *)
-        admit.
+        inv Ord; eapply sem_equations_absent; eauto.
+        apply b_reset_in.
       + inv Ord; eapply IHP; eauto.
         apply ident_eqb_neq in Eq.
         rewrite <-state_closed_other in Closed, Closed'; eauto.
