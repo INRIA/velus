@@ -882,8 +882,7 @@ Module Type TRANSLATION
       + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
         * inv Hin; try contradiction; auto.
         * apply IHl in Hin; auto.
-      + apply In_snd_fold_left_gather_eq; destruct Hin as [|[]].
-        * left; constructor; auto.
+      + apply In_snd_fold_left_gather_eq; destruct Hin as [|].
         * left; constructor; auto.
         * right; apply IHl; auto.
       + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
@@ -910,6 +909,18 @@ Module Type TRANSLATION
     - inversion_clear H as [?? Rst|?]; try inv Rst.
       right; apply IHl; auto.
   Qed.
+  Next Obligation.
+    unfold translate_eqns, concatMap.
+    induction (n_eqs n) as [|[]]; simpl.
+    - constructor; auto.
+    - constructor; simpl; auto.
+    - destruct i; simpl; auto.
+      destruct o; simpl.
+      + constructor; simpl; auto.
+        constructor; simpl; auto.
+          econstructor.
+      + constructor.
+      + apply Forall_app; intuition. SearchAbout Forall app.
   Next Obligation.
     pose proof n.(n_good) as [ValidApp].
     split; [|split; [|split]]; auto.

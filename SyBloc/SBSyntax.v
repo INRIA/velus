@@ -149,10 +149,11 @@ Module Type SBSYNTAX
     - edestruct IHeqs as (?&?&?&?&?); eauto 6.
   Qed.
 
-  Definition step_with_reset (s: ident) (eq: equation) : bool :=
+  Definition step_with_reset_spec (eqs: list equation) (eq: equation) :=
     match eq with
-    | EqCall s' _ _ true _ _ => ident_eqb s s'
-    | _ => false
+    | EqCall s _ _ true _ _ => Reset_in s eqs
+    | EqCall s _ _ false _ _ => ~ Reset_in s eqs
+    | _ => True
     end.
 
   Record block :=
@@ -180,9 +181,7 @@ Module Type SBSYNTAX
         b_states_in_eqs: forall s b, In (s, b) (b_blocks) <-> In (s, b) (states_of b_eqs);
 
         b_no_single_reset: forall s, Reset_in s b_eqs -> Step_in s b_eqs;
-        b_reset_in: Forall (fun eq => forall s, if step_with_reset s eq
-                                        then Reset_in s b_eqs
-                                        else ~ Reset_in s b_eqs) b_eqs;
+        b_reset_in: Forall (step_with_reset_spec b_eqs) b_eqs;
 
         b_good: Forall ValidId (b_in ++ b_vars ++ b_out)
                 /\ Forall ValidId b_lasts
