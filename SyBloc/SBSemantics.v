@@ -327,6 +327,16 @@ Module Type SBSEMANTICS
     auto.
   Qed.
 
+  Add Parametric Morphism P : (transient_states_closed P)
+      with signature @Permutation (ident * ident) ==> eq ==> Basics.impl
+        as transient_states_closed_Permutation.
+  Proof.
+    intros ** E ? Closed.
+    apply Forall_forall; intros ** Hin ? Find.
+    rewrite <-E in Hin; eapply Forall_forall in Hin; eauto.
+    auto.
+  Qed.
+
   (* Add Parametric Morphism lasts blocks : (fun S => state_closed' S lasts blocks) *)
   (*     with signature equal_memory ==> Basics.impl *)
   (*       as state_closed_equal_memory'. *)
@@ -703,7 +713,6 @@ Module Type SBSEMANTICS
 
   Lemma state_closed_other:
     forall S bl P b,
-      (* Ordered_blocks (bl :: P) -> *)
       b_name bl <> b ->
       (state_closed P b S <->
       state_closed (bl :: P) b S).
@@ -711,6 +720,50 @@ Module Type SBSEMANTICS
     split; inversion_clear 1 as [????? Find]; econstructor; eauto.
     - rewrite find_block_other; eauto.
     - rewrite find_block_other in Find; eauto.
+  Qed.
+
+  Lemma state_closed_find_block_other:
+    forall S bl P P' b s b',
+      Ordered_blocks P ->
+      find_block b P = Some (bl, P') ->
+      In (s, b') bl.(b_blocks) ->
+      state_closed P b' S ->
+      state_closed P' b' S.
+  Proof.
+    intros ** Ord Find Hin Closed; inversion_clear Closed as [????? Find'].
+    econstructor; eauto.
+    apply find_block_app in Find as (?&?&?); subst.
+    apply Ordered_blocks_split in Ord.
+    eapply Forall_forall in Ord as (FindNone & Neq &?&?&?); eauto; simpl in *.
+    rewrite find_block_app', FindNone in Find'.
+    simpl in Find'; destruct (ident_eqb (b_name bl) b') eqn:Eq; auto.
+    apply ident_eqb_eq in Eq; congruence.
+  Qed.
+
+  Lemma transient_states_closed_find_block_other:
+    forall I bl P P' b,
+      Ordered_blocks P ->
+      find_block b P = Some (bl, P') ->
+      transient_states_closed P bl.(b_blocks) I ->
+      transient_states_closed P' bl.(b_blocks) I.
+  Proof.
+    intros ** Ord Find Closed.
+    apply Forall_forall; intros ** () ???.
+    eapply Forall_forall in Closed; eauto.
+    eapply state_closed_find_block_other; eauto.
+  Qed.
+
+  Lemma transient_states_closed_cons:
+    forall I bl P,
+      Ordered_blocks (bl :: P) ->
+      transient_states_closed P bl.(b_blocks) I ->
+      transient_states_closed (bl :: P) bl.(b_blocks) I.
+  Proof.
+    intros ** Ord Closed; inversion_clear Ord as [|??? Blocks].
+    apply Forall_forall; intros ** () Hin ? Find.
+    eapply Forall_forall in Closed; eauto.
+    eapply Forall_forall in Blocks as (?&?); eauto.
+    apply state_closed_other; auto.
   Qed.
 
   Lemma sem_block_cons:

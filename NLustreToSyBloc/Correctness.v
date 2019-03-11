@@ -191,31 +191,10 @@ Module Type CORRECTNESS
   Definition add_n (x: ident) (Mx: stream state) (I: stream transient_states) :=
     fun n => Env.add x (Mx n) (I n).
 
-  Inductive Is_state_in_eq: ident -> equation -> Prop :=
-  | StateEqCall:
-      forall x xs ck rst f es,
-        Is_state_in_eq x (EqCall x xs ck rst f es)
-  | StateEqReset:
-      forall x ck f,
-        Is_state_in_eq x (EqReset x ck f).
-
-  Definition Is_state_in_eqs (x: ident) (eqs: list equation) : Prop :=
-    List.Exists (Is_state_in_eq x) eqs.
-
-  Lemma not_Is_state_in_cons:
-    forall x eq eqs,
-      ~Is_state_in_eqs x (eq :: eqs)
-      <-> ~Is_state_in_eq x eq /\ ~Is_state_in_eqs x eqs.
-  Proof.
-    split.
-    - intro H; split; intro; apply H; constructor(assumption).
-    - intros [? ?] H; inv H; eauto.
-  Qed.
-
   Lemma sem_equations_n_add_n:
     forall P eqs bk H S S' Is x Sx,
       sem_equations_n P bk H S Is S' eqs ->
-      ~ Is_state_in_eqs x eqs ->
+      (forall k, ~ Is_state_in x k eqs) ->
       sem_equations_n P bk H S (add_n x Sx Is) S' eqs.
   Proof.
     induction eqs as [|eq eqs]; intros ** Sem Notin n; constructor.
@@ -223,13 +202,13 @@ Module Type CORRECTNESS
       inv Sem'; eauto using SemSB.sem_equation.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
-        intro E; apply Notin; rewrite E; do 2 constructor.
+        intro E; eapply Notin; rewrite E; do 2 constructor.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
-        intro E; apply Notin; rewrite E; do 2 constructor.
+        intro E; eapply Notin; rewrite E; do 2 constructor.
     - apply IHeqs.
       + intro n'; specialize (Sem n'); inv Sem; auto.
-      + apply not_Is_state_in_cons in Notin as []; auto.
+      + apply not_Is_state_in_cons' in Notin as []; auto.
   Qed.
 
   Inductive translate_eqn_nodup_states: SynNL.equation -> list equation -> Prop :=
@@ -239,24 +218,11 @@ Module Type CORRECTNESS
     | TrNodupEqApp:
         forall xs ck f es r eqs x,
           hd_error xs = Some x ->
-          ~ Is_state_in_eqs x eqs ->
+          (forall k, ~ Is_state_in x k eqs) ->
           translate_eqn_nodup_states (EqApp xs ck f es r) eqs
     | TrNodupEqFby:
         forall x ck c e eqs,
           translate_eqn_nodup_states (EqFby x ck c e) eqs.
-
-  (* Lemma transient_states_closed_add: *)
-  (*   forall P insts I x f M, *)
-  (*     transient_states_closed P insts I -> *)
-  (*     transient_states_closed P ([(x, f)] ++ insts) (Env.add x M I). *)
-  (* Proof. *)
-  (*   intros ** Trans. *)
-  (*   apply Forall_app; split. *)
-  (*   - constructor; auto. *)
-  (*     setoid_rewrite Env.gss; inversion_clear 1. *)
-  (*     admit. *)
-  (*   - SearchAbout Forall app. *)
-  (*   unfold transient_states_closed.  *)
 
   Inductive memory_closed_rec: global -> ident -> memory val -> Prop :=
     memory_closed_rec_intro:
@@ -378,34 +344,43 @@ Module Type CORRECTNESS
       eapply find_node_later_not_Is_node_in; eauto using Ordered_nodes.
   Qed.
 
-  (* Lemma state_closed_find_block_other: *)
-  (*   forall S bl P P' b b', *)
-  (*     find_block b P = Some (bl, P') -> *)
-  (*     state_closed P b' S -> *)
-  (*     state_closed P' b' S. *)
-  (* Proof. *)
-  (*   inversion_clear 2. *)
-  (*   - econstructor; eauto. *)
-  (*     SearchAbout find_block Ordered_blocks.  *)
-
   Lemma memory_closed_rec_state_closed:
     forall M G f,
+      Ordered_nodes G ->
       memory_closed_rec G f M ->
       state_closed (translate G) f M.
   Proof.
     induction M as [? IH] using memory_ind'.
-    inversion_clear 1 as [???? Find ? Insts].
+    intros ** Ord Closed; inversion_clear Closed as [???? Find ? Insts].
     apply find_node_translate in Find as (?&?&?&?); subst.
-    econstructor; eauto.  ; simpl. (* IN BLOCLS ! *)
+    econstructor; eauto; simpl.
     - intros ** ??; rewrite gather_eqs_fst_spec; auto.
     - unfold sub_inst in *.
       intros ** Find; pose proof Find as Find'.
-      apply Insts in Find as (?&?& Closed).
-      setoid_rewrite gather_eqs_snd_spec; eexists; split; eauto.
+      apply Insts in Find as (?& Hin & Closed).
+      rewrite <-gather_eqs_snd_spec in Hin.
+      eexists; split; eauto.
       eapply IH in Closed; eauto.
-      SearchAbout state_closed cons.
+      apply Ordered_nodes_blocks in Ord.
+      eapply state_closed_find_block_other; eauto.
+  Qed.
 
-      SearchAbout gather_mems.
+  Lemma transient_states_closed_add:
+    forall P insts I x f M,
+      transient_states_closed P insts I ->
+      state_closed P f M ->
+      ~ InMembers x insts ->
+      transient_states_closed P ([(x, f)] ++ insts) (Env.add x M I).
+  Proof.
+    intros ** Trans Closed Notin.
+    apply Forall_app; split.
+    - constructor; auto.
+      setoid_rewrite Env.gss; inversion 1; subst; auto.
+    - induction Trans as [|(y,?) ? Closed'];
+        try apply NotInMembers_cons in Notin as (); constructor; auto.
+      intros ** Find; apply Closed'.
+      rewrite Env.gso in Find; auto.
+  Qed.
 
   Lemma equation_correctness:
     forall G eq eqs bk H M M' Is vars insts,
@@ -417,15 +392,16 @@ Module Type CORRECTNESS
       Forall (clock_match bk H) vars ->
       translate_eqn_nodup_states eq eqs ->
       (forall n, transient_states_closed (translate G) insts (Is n)) ->
+      (forall x, InMembers x insts -> exists k, Is_state_in x k eqs) ->
       msem_equation G bk H M M' eq ->
       sem_equations_n (translate G) bk H M Is M' eqs ->
       exists Is',
         sem_equations_n (translate G) bk H M Is' M' (translate_eqn eq ++ eqs)
         /\ forall n, transient_states_closed (translate G) (gather_inst_eq eq ++ insts) (Is' n).
   Proof.
-    intros ** IHnode Hord WC ClkM TrNodup Closed Heq Heqs.
+    intros ** IHnode Hord WC ClkM TrNodup Closed SpecInsts Heq Heqs.
     destruct Heq as [| |????????????????????? Var Hr Reset|?????????? Arg Var Mfby];
-      inv TrNodup; simpl.
+      inversion_clear TrNodup as [|???????? Notin|]; simpl.
 
     - eexists; split; eauto.
       do 2 (econstructor; eauto).
@@ -444,7 +420,9 @@ Module Type CORRECTNESS
            - now apply IHnode.
          }
         * apply sem_equations_n_add_n; auto.
-      + apply msem_node_memory_closed_rec_n in H5; auto.   admit.
+      + intro; apply transient_states_closed_add; auto.
+        * eapply memory_closed_rec_state_closed, msem_node_memory_closed_rec_n; eauto.
+        * intro Hin; apply SpecInsts in Hin as (); eapply Notin; eauto.
 
     - destruct xs; try discriminate.
       match goal with
@@ -452,13 +430,13 @@ Module Type CORRECTNESS
            H': hd_error ?l = _ |- _ =>
         rewrite H' in H; inv H; simpl in H'; inv H'
       end.
-      exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split.
-      + intro.
-        pose proof (msem_reset_spec Hord Reset) as Spec.
-        inversion_clear Reset as [?????? Nodes].
+      pose proof (msem_reset_spec Hord Reset) as Spec.
+      exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split;
+        intro;
+        inversion_clear Reset as [?????? Nodes];
         destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
-          destruct (Nodes (count rs 0)) as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
-        apply IHnode in Node_n.
+        destruct (Nodes (count rs 0)) as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
+      + apply IHnode in Node_n.
         specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
         rewrite 2 mask_transparent, Mmask_n, Mmask'_n in Node_n; auto.
         specialize (Var n); specialize (Hr n).
@@ -466,7 +444,7 @@ Module Type CORRECTNESS
             by now intro; apply sem_equations_n_add_n.
         assert (clock_match bk H (y, ck)) as Cky.
         { eapply Forall_forall; eauto.
-        inv WC; eauto.
+          inv WC; eauto.
         }
         specialize (Cky n); simpl in Cky.
         destruct (rs n) eqn: E.
@@ -505,7 +483,11 @@ Module Type CORRECTNESS
              + econstructor; eauto.
                discriminate.
          }
-      + admit.
+      + apply transient_states_closed_add; auto.
+        * apply memory_closed_rec_state_closed; auto.
+          rewrite <-Mmask_0, <-Mmask_n; auto.
+          specialize (Spec n); destruct (rs n); eapply msem_node_memory_closed_rec_n; eauto.
+        * intro Hin; apply SpecInsts in Hin as (); eapply Notin; eauto.
 
     - do 3 (econstructor; auto).
       destruct Mfby as (?&?& Spec).
@@ -519,10 +501,10 @@ Module Type CORRECTNESS
   Lemma not_Is_defined_not_Is_state_in_eqs:
     forall x eqs,
       ~ Is_defined_in_eqs x eqs ->
-      ~ Is_state_in_eqs x (translate_eqns eqs).
+      (forall k, ~ Is_state_in x k (translate_eqns eqs)).
   Proof.
     unfold translate_eqns, concatMap.
-    induction eqs as [|eq]; simpl; intros Notin Hin.
+    induction eqs as [|eq]; simpl; intros Notin k Hin.
     - inv Hin.
     - apply Exists_app' in Hin as [Hin|].
       + destruct eq; simpl in Hin.
@@ -535,7 +517,7 @@ Module Type CORRECTNESS
            - inv Hin'.
          }
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
-      + apply IHeqs; auto.
+      + eapply IHeqs; eauto.
         apply not_Is_defined_in_cons in Notin as []; auto.
   Qed.
 
@@ -550,6 +532,25 @@ Module Type CORRECTNESS
       assert (In x i) by (now apply hd_error_Some_In); auto.
     - apply not_Is_defined_not_Is_state_in_eqs.
       assert (In x i) by (now apply hd_error_Some_In); auto.
+  Qed.
+
+  Lemma gather_insts_Is_state_in_translate_eqns:
+    forall eqs x,
+      InMembers x (gather_insts eqs) ->
+      exists k, Is_state_in x k (translate_eqns eqs).
+  Proof.
+    unfold gather_insts, translate_eqns, concatMap.
+    induction eqs as [|[]]; simpl; try contradiction; intros ** Hin.
+    - edestruct IHeqs; eauto; eexists; right; eauto.
+    - destruct i; simpl in *; auto.
+      destruct o.
+      + destruct Hin; subst.
+        * exists 1; apply Exists_app'; left; right; left; constructor.
+        * edestruct IHeqs; eauto; eexists; apply Exists_app; eauto.
+      + destruct Hin; subst.
+        * exists 1; apply Exists_app'; left; left; constructor.
+        * edestruct IHeqs; eauto; eexists; apply Exists_app; eauto.
+    - edestruct IHeqs; eauto; eexists; right; eauto.
   Qed.
 
   Corollary equations_correctness:
@@ -571,8 +572,10 @@ Module Type CORRECTNESS
     - exists (fun n => Env.empty state); split; constructor.
     - apply Forall_cons2 in Heqs as [Heq Heqs].
       apply IHeqs in Heqs as (?&?&?); auto.
-      + eapply equation_correctness; eauto.
-        eapply Nodup_defs_translate_eqns; eauto.
+      + unfold gather_insts, concatMap; simpl.
+        eapply equation_correctness; eauto.
+        * eapply Nodup_defs_translate_eqns; eauto.
+        * apply gather_insts_Is_state_in_translate_eqns.
       + eapply NoDup_defs_cons; eauto.
   Qed.
 
@@ -619,15 +622,15 @@ Module Type CORRECTNESS
     setoid_rewrite gather_eqs_fst_spec; auto.
   Qed.
 
-  Lemma memory_closed_state_closed_insts:
-    forall P M eqs (n: nat),
-      memory_closed (M n) eqs ->
-      state_closed_insts P (snd (gather_eqs eqs)) (M n).
-  Proof.
-    intros ** (?&?) ???.
-    setoid_rewrite gather_eqs_snd_spec.
-    admit.
-  Qed.
+  (* Lemma memory_closed_state_closed_insts: *)
+  (*   forall P M eqs (n: nat), *)
+  (*     memory_closed (M n) eqs -> *)
+  (*     state_closed_insts P (snd (gather_eqs eqs)) (M n). *)
+  (* Proof. *)
+  (*   intros ** (?&?) ???. *)
+  (*   setoid_rewrite gather_eqs_snd_spec. *)
+  (*   admit. *)
+  (* Qed. *)
 
   Theorem correctness:
     forall G f xss M M' yss,
@@ -655,7 +658,7 @@ Module Type CORRECTNESS
       apply find_node_translate in Hfind' as (?&?&?&?); subst.
       eapply msem_equations_cons in Heqs; eauto.
       pose proof (NoDup_defs_node node).
-      eapply equations_correctness in Heqs as (I & Heqs); eauto.
+      eapply equations_correctness in Heqs as (I & Heqs &?); eauto.
       + econstructor; eauto.
         * specialize (Ins n); destruct node; simpl in *.
           rewrite map_fst_idty; eauto.
@@ -668,7 +671,8 @@ Module Type CORRECTNESS
            - now apply memory_closed_state_closed_lasts.
            - admit.
          }
-        *  simpl. SearchAbout gather_eqs snd. unfold transient_states_closed; simpl. admit.
+        * eapply transient_states_closed_find_block_other, transient_states_closed_cons; eauto.
+          simpl; rewrite gather_eqs_snd_spec; auto.
         *{ econstructor; eauto.
            - now apply memory_closed_state_closed_lasts.
            - admit.
