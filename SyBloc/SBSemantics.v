@@ -687,8 +687,7 @@ Module Type SBSEMANTICS
     apply find_block_split in Hfind as (? & E); rewrite E, app_comm_cons in Hord.
     pose proof Hord as Hord'; inversion_clear Hord' as [|??? Sub Hnin]; clear Sub.
     apply Ordered_blocks_split in Hord.
-    pose proof (b_blocks_in_eqs bl') as BlocksIn.
-    apply BlocksIn in Hini as (? & Hin).
+    apply b_blocks_in_eqs in Hini as (?& Hin).
     eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?&?& Find); simpl in Find.
     apply Forall_app_weaken in Hnin; inversion_clear Hnin as [|??? Hnin'].
     pose proof Find as Find'; apply find_block_name in Find'.
@@ -706,8 +705,7 @@ Module Type SBSEMANTICS
     intros ** Hord Hfind Hini.
     apply find_block_split in Hfind as (?& E); rewrite E in Hord.
     apply Ordered_blocks_split in Hord.
-    pose proof (b_blocks_in_eqs bl) as BlocksIn.
-    apply BlocksIn in Hini as (? & Hin).
+    apply b_blocks_in_eqs in Hini as (?& Hin).
     eapply Forall_forall in Hin; eauto; destruct Hin as (?&?&?); auto.
   Qed.
 
@@ -1091,11 +1089,13 @@ Module Type SBSEMANTICS
         S' ≋ S) ->
     state_closed_lasts (lasts_of eqs) S ->
     state_closed_lasts (lasts_of eqs) S' ->
-    state_closed_insts P (states_of eqs) S ->
-    state_closed_insts P (states_of eqs) S' ->
-    Forall (fun eq => forall s, if step_with_reset s eq
-                        then Reset_in s eqs
-                        else ~ Reset_in s eqs) eqs ->
+    state_closed_insts P (calls_of eqs) S ->
+    state_closed_insts P (calls_of eqs) S' ->
+    (forall s rst, Step_with_reset_in s rst eqs ->
+              if rst then Reset_in s eqs else ~ Reset_in s eqs) ->
+    (* Forall (fun eq => forall s, if step_with_reset s eq *)
+    (*                     then Reset_in s eqs *)
+    (*                     else ~ Reset_in s eqs) eqs -> *)
     Forall (sem_equation P false R S I S') eqs ->
     S' ≋ S.
   Proof.
@@ -1142,14 +1142,14 @@ Module Type SBSEMANTICS
         unfold state_closed_insts, sub_inst, find_inst in *.
         intro s; split; intros (?& Find).
         *{ apply Insts' in Find as (b & Hin &?).
-           apply states_of_In in Hin as (?&?& rst &?& Hin).
+           apply calls_of_In in Hin as (?&?& rst &?& Hin).
            pose proof Heqs as Heqs'.
            eapply Forall_forall in Heqs; eauto.
-           eapply Forall_forall in Spec; eauto.
-           specialize (Spec s); unfold step_with_reset in Spec;
-             rewrite ident_eqb_refl in Spec.
+           assert (Step_with_reset_in s rst eqs) as Spec'
+               by (apply Exists_exists; eexists; split; eauto; constructor).
+           apply Spec in Spec'.
            destruct rst.
-           - apply Exists_exists in Spec as (?& Rst & E); inv E.
+           - apply Exists_exists in Spec' as (?& Rst & E); inv E.
              eapply Forall_forall in Rst; eauto.
              inversion_clear Rst as [| |?????????? Clock FindI Init|].
              assert (r = false)
@@ -1160,19 +1160,19 @@ Module Type SBSEMANTICS
              destruct Rst as (?&?&?); eauto.
          }
         * apply Insts in Find as (b & Hin &?).
-          apply states_of_In in Hin as (?&?&?&?& Hin).
+          apply calls_of_In in Hin as (?&?&?&?& Hin).
           eapply Forall_forall in Heqs; eauto.
           inv Heqs; eauto.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros s ** Find' Find.
         pose proof Find as Hin.
         apply Insts in Hin as (b & Hin &?).
-        apply states_of_In in Hin as (?&?& rst &?& Hin).
+        apply calls_of_In in Hin as (?&?& rst &?& Hin).
         pose proof Heqs as Heqs'.
         eapply Forall_forall in Heqs; eauto.
-        eapply Forall_forall in Spec; eauto.
-        specialize (Spec s); unfold step_with_reset in Spec;
-          rewrite ident_eqb_refl in Spec.
+        assert (Step_with_reset_in s rst eqs) as Spec'
+               by (apply Exists_exists; eexists; split; eauto; constructor).
+        apply Spec in Spec'.
         inversion_clear Heqs as [| | |??????????????? Exps Rst' FindI' SemBlock ? Find1'].
         unfold sub_inst, find_inst in *; rewrite Find1' in Find'; inv Find'.
         assert (absent_list xs).
@@ -1183,7 +1183,7 @@ Module Type SBSEMANTICS
         apply IH in SemBlock; auto.
         rewrite SemBlock.
         destruct rst.
-        * apply Exists_exists in Spec as (?& Rst & E); inv E.
+        * apply Exists_exists in Spec' as (?& Rst & E); inv E.
           eapply Forall_forall in Rst; eauto.
           inversion_clear Rst as [| |?????????? Clock FindI Init|];
             setoid_rewrite FindI' in FindI; inv FindI.
@@ -1231,8 +1231,8 @@ Module Type SBSEMANTICS
                  rewrite H in H'; inv H'
                end.
         rewrite b_lasts_in_eqs in Lasts, Lasts'.
-        setoid_rewrite b_states_in_eqs in Insts;
-          setoid_rewrite b_states_in_eqs in Insts'.
+        setoid_rewrite b_blocks_calls_of in Insts;
+          setoid_rewrite b_blocks_calls_of in Insts'.
         inv Ord; eapply sem_equations_absent; eauto.
         apply b_reset_in.
       + inv Ord; eapply IHP; eauto.

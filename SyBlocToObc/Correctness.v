@@ -1496,25 +1496,44 @@ Module Type CORRECTNESS
     omega.
   Qed.
 
+  Inductive Step_with_reset_spec: list equation -> Prop :=
+  | Step_with_reset_nil:
+      Step_with_reset_spec []
+  | Step_with_reset_EqDef:
+      forall x ck e eqs,
+        Step_with_reset_spec eqs ->
+        Step_with_reset_spec (EqDef x ck e :: eqs)
+  | Step_with_reset_EqNext:
+      forall x ck e eqs,
+        Step_with_reset_spec eqs ->
+        Step_with_reset_spec (EqNext x ck e :: eqs)
+  | Step_with_reset_EqReset:
+      forall s ck b eqs,
+        Step_with_reset_spec eqs ->
+        Step_with_reset_spec (EqReset s ck b :: eqs)
+  | Step_with_reset_EqCall:
+      forall s xs ck (rst: bool) b es eqs,
+        Step_with_reset_spec eqs ->
+        (if rst then Reset_in s eqs else ~ Reset_in s eqs) ->
+        Step_with_reset_spec (EqCall s xs ck rst b es :: eqs).
+
   Lemma Step_not_Step_Reset_in:
     forall eqs inputs mems s ys ck rst b es,
       Is_well_sch inputs mems (EqCall s ys ck rst b es :: eqs) ->
+      Step_with_reset_spec (EqCall s ys ck rst b es :: eqs) ->
       ~ Step_in s eqs
       /\ if rst then Reset_in s eqs else ~ Reset_in s eqs.
   Proof.
-    inversion_clear 1 as [|????? States StepReset].
-    unfold Step_in, Reset_in, Is_state_in.
-    split.
-    - rewrite Exists_exists.
-      intros (eq' & Hin & IsStin).
-      assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 1) eqs)
+    inversion_clear 1 as [|????? States].
+    inversion_clear 1.
+    split; auto.
+    setoid_rewrite Exists_exists.
+    intros (eq' & Hin & IsStin).
+    assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 1) eqs)
         by (apply States; auto using Is_state_in_eq).
-      eapply Forall_forall in Hin; eauto.
-      apply Hin in IsStin.
-      omega.
-    - destruct rst; specialize (StepReset s);
-        simpl in StepReset; auto.
-      rewrite ident_eqb_refl in StepReset; auto.
+    eapply Forall_forall in Hin; eauto.
+    apply Hin in IsStin.
+    omega.
   Qed.
 
   Lemma equiv_env_Is_free_in_cons:
@@ -1548,8 +1567,9 @@ Module Type CORRECTNESS
       sem_equation P true R S I S' eq ->
       Ordered_blocks P ->
       Is_well_sch inputs mems (eq :: eqs) ->
-      (forall s b Ss, In (s, b) (states_of (eq :: eqs)) -> sub_inst s S Ss -> state_closed P b Ss) ->
-      transient_states_closed P (states_of (eq :: eqs)) I ->
+      Step_with_reset_spec (eq :: eqs) ->
+      (forall s b Ss, In (s, b) (resets_of (eq :: eqs)) -> sub_inst s S Ss -> state_closed P b Ss) ->
+      transient_states_closed P (resets_of (eq :: eqs)) I ->
       Memory_Corres_eqs eqs S I S' me ->
       equiv_env (fun x => Is_free_in_eq x eq) R mems me ve ->
       exists me' ve',
@@ -1560,7 +1580,7 @@ Module Type CORRECTNESS
             sem_var_instant R x (present c) ->
             Env.find x ve' = Some c.
   Proof.
-    intros ** IH Sem Ord Wsch Closed TransClosed Corres Equiv;
+    intros ** IH Sem Ord Wsch StepReset Closed TransClosed Corres Equiv;
       inversion Sem as [????????? Hexp Hvar|
                         ??????????? Hvar Hexp|
                         ???????????? Init|
@@ -1623,7 +1643,7 @@ Module Type CORRECTNESS
         eapply Memory_Corres_eqs_Reset_absent; eauto.
         eapply Reset_not_Reset_in; eauto.
 
-    - apply Step_not_Step_Reset_in in Wsch.
+    - apply Step_not_Step_Reset_in in Wsch; auto.
       inv Hexps.
       + assert (exists cs', os = map present cs') as (cs' & ?).
         { apply present_list_spec.
@@ -1834,6 +1854,15 @@ Module Type CORRECTNESS
     inversion 1; auto.
   Qed.
 
+  Lemma Step_with_reset_spec_app:
+    forall eqs eqs',
+      Step_with_reset_spec (eqs ++ eqs') ->
+      Step_with_reset_spec eqs'.
+  Proof.
+    induction eqs; auto; simpl.
+    inversion 1; auto.
+  Qed.
+
   Lemma sem_equations_is_last_in:
     forall eqs P base R S I S' x v,
       Forall (sem_equation P base R S I S') eqs ->
@@ -1869,13 +1898,6 @@ Module Type CORRECTNESS
       intro; apply Hnd; constructor; auto.
   Qed.
 
-  Lemma states_of_app:
-    forall eqs eqs',
-      states_of (eqs ++ eqs') = states_of eqs ++ states_of eqs'.
-  Proof.
-    induction eqs as [|[]]; intros; simpl; try f_equal; auto.
-  Qed.
-
   Lemma equations_app_correct:
     forall eqs' eqs P R S I S' me ve inputs mems,
       (forall b S xs ys S' me,
@@ -1887,8 +1909,9 @@ Module Type CORRECTNESS
       Forall (sem_equation P true R S I S') (eqs ++ eqs') ->
       Ordered_blocks P ->
       Is_well_sch inputs mems (eqs ++ eqs') ->
-      (forall s b Ss, In (s, b) (states_of (eqs ++ eqs')) -> sub_inst s S Ss -> state_closed P b Ss) ->
-      transient_states_closed P (states_of (eqs ++ eqs')) I ->
+      Step_with_reset_spec (eqs ++ eqs') ->
+      (forall s b Ss, In (s, b) (resets_of (eqs ++ eqs')) -> sub_inst s S Ss -> state_closed P b Ss) ->
+      transient_states_closed P (resets_of (eqs ++ eqs')) I ->
       (forall x, PS.In x mems -> Is_last_in x (eqs ++ eqs')) ->
       (forall x, In x inputs -> ~ Is_defined_in x (eqs ++ eqs')) ->
       (forall x c,
@@ -1905,20 +1928,21 @@ Module Type CORRECTNESS
             Env.find x ve' = Some c.
   Proof.
     induction eqs' as [|eq]; simpl;
-      intros ** Heqs Ord Wsch Closed TransClosed SpecLast SpecInput EquivInput Corres.
+      intros ** Heqs Ord Wsch StepReset Closed TransClosed SpecLast SpecInput EquivInput Corres.
     - exists me, ve. split; eauto using stmt_eval; split; auto.
       + now apply Memory_Corres_eqs_empty_equal_memory.
       + inversion 1.
     - pose proof Wsch as Wsch'; apply Is_well_sch_app in Wsch'.
+      pose proof StepReset as StepReset'; apply Step_with_reset_spec_app in StepReset'.
       pose proof Heqs as Heqs'; apply Forall_app_weaken in Heqs'; inv Heqs'.
-      rewrite List_shift_first in Wsch, Heqs, SpecLast, SpecInput, Closed, TransClosed.
+      rewrite List_shift_first in Wsch, StepReset, Heqs, SpecLast, SpecInput, Closed, TransClosed.
       edestruct IHeqs' with (ve := ve) (me := me) as (me' & ve' &?&?&?); eauto.
       edestruct equation_cons_correct with (ve := ve') (me := me') as (me'' & ve'' &?&?&?);
         eauto using Is_well_sch.
       + intros; eapply Closed; eauto.
-        rewrite <-List_shift_first, states_of_app, in_app; auto.
+        rewrite <-List_shift_first, resets_of_app, in_app; auto.
       + unfold transient_states_closed in *.
-        rewrite <-List_shift_first, states_of_app, Forall_app in TransClosed; tauto.
+        rewrite <-List_shift_first, resets_of_app, Forall_app in TransClosed; tauto.
       + intros x v Free Hvar.
         inversion_clear Wsch' as [|??? FreeSpec].
         apply FreeSpec in Free.
@@ -1950,9 +1974,10 @@ Module Type CORRECTNESS
             /\ me' ≋ S') ->
       Forall (sem_equation P true R S I S') eqs ->
       Ordered_blocks P ->
-      (forall s b Ss, In (s, b) (states_of eqs) -> sub_inst s S Ss -> state_closed P b Ss) ->
-      transient_states_closed P (states_of eqs) I ->
+      (forall s b Ss, In (s, b) (resets_of eqs) -> sub_inst s S Ss -> state_closed P b Ss) ->
+      transient_states_closed P (resets_of eqs) I ->
       Is_well_sch inputs mems eqs ->
+      Step_with_reset_spec eqs ->
       (forall x, PS.In x mems -> Is_last_in x eqs) ->
       (forall x, In x inputs -> ~ Is_defined_in x eqs) ->
       (forall x c,
@@ -1990,7 +2015,7 @@ Module Type CORRECTNESS
       state_closed_lasts lasts S' ->
       state_closed_insts P blocks S' ->
       (forall x, In x lasts <-> Is_last_in x eqs) ->
-      (forall s, InMembers s blocks <-> exists k, Is_state_in s k eqs) ->
+      (forall s, InMembers s blocks -> exists k, Is_state_in s k eqs) ->
       (forall s, Reset_in s eqs -> Step_in s eqs) ->
       me ≋ S'.
   Proof.
@@ -2106,6 +2131,30 @@ Module Type CORRECTNESS
     admit.
   Qed.
 
+  Lemma Forall_incl:
+    forall A (l l': list A) P,
+      Forall P l ->
+      incl l' l ->
+      Forall P l'.
+  Proof.
+    intros ** H Incl.
+    apply Forall_forall; intros ** Hin.
+    apply Incl in Hin.
+    eapply Forall_forall in H; eauto.
+  Qed.
+
+  Lemma calls_of_Is_state_in:
+    forall eqs s,
+      InMembers s (calls_of eqs) -> exists k, Is_state_in s k eqs.
+  Proof.
+    intros ** Hin; exists 1.
+    induction eqs as [|[]]; simpl in *; try contradiction;
+      try (now right; apply IHeqs; auto).
+    destruct Hin as [E|].
+    - subst; left; constructor.
+    - right; apply IHeqs; auto.
+  Qed.
+
   Theorem correctness:
     forall P b S xs ys S' me,
       Ordered_blocks P ->
@@ -2131,12 +2180,17 @@ Module Type CORRECTNESS
         * inversion_clear Closed as [????? Find ? Insts]; rewrite Find in Find'; inv Find'.
           intros ** b' ? Hin Sub.
           apply Insts in Sub as (b'' &?&?).
-          apply b_states_in_eqs in Hin.
+          apply b_reset_incl in Hin.
+          rewrite <-b_blocks_calls_of in Hin.
           assert (b' = b'') as ->; auto.
           eapply NoDupMembers_det in Hin; eauto.
           apply b_nodup_blocks.
-        * eapply transient_states_closed_In; eauto.
-          intros (); now setoid_rewrite b_states_in_eqs.
+        *{ eapply Forall_incl.
+           - eapply transient_states_closed_In; eauto.
+             intros (); now setoid_rewrite b_blocks_calls_of.
+           - apply b_reset_incl.
+         }
+        * admit.
         * intros; apply lasts_of_In, ps_from_list_In; auto.
           rewrite <-b_lasts_in_eqs; auto.
         * intros; apply b_ins_not_def, fst_InMembers; auto.
@@ -2168,11 +2222,8 @@ Module Type CORRECTNESS
                        end.
               eapply Memory_Corres_eqs_equal_memory; eauto.
               + intro; now rewrite b_lasts_in_eqs, lasts_of_In.
-              + setoid_rewrite states_of_In; split; intros ** Hin;
-                  apply InMembers_In in Hin as (?& Hin);
-                  apply b_states_in_eqs in Hin;
-                  eapply In_InMembers; eauto.
-              + apply b_no_single_reset.
+              + setoid_rewrite b_blocks_calls_of; apply calls_of_Is_state_in.
+              + intros ** Rst; apply b_no_single_reset, Step_with_reset_in_Step_in in Rst; auto.
           }
       + eapply find_block_not_Is_block_in; eauto.
     - apply sem_equations_cons in Heqs; auto.

@@ -734,86 +734,50 @@ Module Type TRANSLATION
     apply NoDup_var_defined_n_eqs.
   Qed.
   Next Obligation.
-    unfold translate_eqns, gather_eqs, concatMap.
-    generalize (@nil (ident * const)).
+    setoid_rewrite gather_eqs_snd_spec.
+    unfold gather_insts, translate_eqns, concatMap.
     induction (n_eqs n) as [|[]]; simpl.
-    - split; intros ** H.
-      + destruct H; contradiction.
-      + inv H.
-    - setoid_rewrite IHl; split; intros ** H.
-      + right; auto.
-      + inversion_clear H as [?? Hin|]; auto; inv Hin.
-    - destruct o as [|].
-      + destruct i.
-        * setoid_rewrite IHl; reflexivity.
-        *{ setoid_rewrite In_snd_fold_left_gather_eq; split.
-           - intros (?&[Hin|Hin]).
-             + destruct Hin as [E|]; try contradiction; inv E; simpl.
-               do 2 constructor.
-             + right; right; eapply IHl; eauto.
-           - intro BlockIn.
-             inversion_clear BlockIn as [?? Hin|?? BlockIn'].
-             + inv Hin; eexists; left; constructor; eauto.
-             + inversion_clear BlockIn' as [?? Hin|?? BlockIn].
-               * inv Hin; eexists; left; constructor; eauto.
-               * eapply IHl in BlockIn as (?&?).
-                 eexists; right; eauto.
+    - split; inversion 1; contradiction.
+    - rewrite IHl; split; try now inversion_clear 1.
+      right; auto.
+    - destruct i; simpl; auto.
+      destruct o; simpl.
+      + split.
+        *{ intros (?& [E|?]).
+           - inv E; left; constructor.
+           - right; right; apply IHl; eauto.
          }
-      + destruct i.
-        * setoid_rewrite IHl; reflexivity.
-        *{ setoid_rewrite In_snd_fold_left_gather_eq; split.
-           - intros (?&[Hin|Hin]).
-             + destruct Hin as [E|]; try contradiction; inv E; simpl.
-               do 2 constructor.
-             + right; eapply IHl; eauto.
-           - intro BlockIn.
-             inversion_clear BlockIn as [?? Hin|?? BlockIn'].
-             + inv Hin; eexists; left; constructor; eauto.
-             + eapply IHl in BlockIn' as (?&?).
-               eexists; right; eauto.
+        *{ inversion_clear 1 as [?? Rst|?? Rst].
+           - inv Rst; eauto.
+           - inversion_clear Rst as [?? Rst'|?? Rst'].
+             + inv Rst'; eauto.
+             + apply IHl in Rst' as (); eauto.
          }
-    - setoid_rewrite IHl; split; intros ** H.
-      + right; auto.
-      + inversion_clear H as [?? Hin|]; auto; inv Hin.
+      + split.
+        *{ intros (?& [E|?]).
+           - inv E; left; constructor.
+           - right; apply IHl; eauto.
+         }
+        *{ inversion_clear 1 as [?? Rst|?? Rst].
+           - inv Rst; eauto.
+           - apply IHl in Rst as (); eauto.
+         }
+    - rewrite IHl; split; try now inversion_clear 1.
+      right; auto.
   Qed.
   Next Obligation.
-    pose proof (translate_node_obligation_3 n) as Nodup.
-    apply NoDup_app_weaken in Nodup.
-    apply NoDup_Permutation; auto.
-    - clear Nodup; pose proof (NoDup_var_defined_n_eqs n) as Nodup.
-      unfold vars_defined, translate_eqns, concatMap in *.
-      induction (n_eqs n) as [|[] eqs]; simpl in *; intros; auto; try now constructor.
-      + inv Nodup; auto.
-      + apply NoDup_comm, NoDup_app_weaken in Nodup.
-        destruct i; simpl; eauto.
-        destruct o; simpl; eauto.
-      + inversion_clear Nodup as [|?? Notin]; constructor; auto.
-        clear - Notin.
-        induction eqs as [|[]]; simpl in *; auto.
-        * assert (~ In i (concat (map var_defined eqs)))
-            by (intro; apply Notin, in_app; auto).
-          destruct i0; simpl; auto.
-          destruct o; simpl; auto.
-        * intros [?|?]; auto.
-          apply IHeqs; auto.
-    - clear.
-      unfold gather_eqs, translate_eqns, concatMap in *.
-      generalize (@nil (ident * ident)).
-      induction (n_eqs n) as [|[]]; simpl in *; intros; auto; try now constructor.
-      + destruct i; simpl; auto.
-        destruct o; simpl; auto.
-      + rewrite in_map_iff; setoid_rewrite In_fst_fold_left_gather_eq.
-        split.
-        *{ intros (() & E & [Hin|?]); inv E.
-           - inv Hin; try contradiction.
-             left; simpl; congruence.
-           - right; eapply IHl, in_map_iff; eauto.
-         }
-        *{ intros [E|Hin].
-           - subst; exists (x, c0); intuition.
-           - eapply IHl, in_map_iff in Hin as (xc&?&?).
-             exists xc; intuition; eauto.
-         }
+    rewrite gather_eqs_snd_spec.
+    unfold gather_insts, translate_eqns, concatMap.
+    induction (n_eqs n) as [|[]]; simpl; auto.
+    destruct i; simpl; auto.
+    destruct o; simpl; auto.
+  Qed.
+  Next Obligation.
+    rewrite gather_eqs_fst_spec.
+    unfold gather_mems, translate_eqns, concatMap.
+    induction (n_eqs n) as [|[]]; simpl; auto.
+    destruct i; simpl; auto.
+    destruct o; simpl; auto.
   Qed.
   Next Obligation.
     rewrite <-idty_app, InMembers_idty.
@@ -872,26 +836,26 @@ Module Type TRANSLATION
         * inversion_clear H as [?? Var|]; try inv Var.
           apply IHl; auto.
   Qed.
-  Next Obligation.
-    unfold gather_eqs, translate_eqns, concatMap.
-    generalize (@nil (ident * const)).
-    induction (n_eqs n) as [|[]]; simpl; intros; auto.
-    - split; contradiction.
-    - destruct i; simpl; auto.
-      destruct o; simpl; split; intros ** Hin.
-      + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
-        * inv Hin; try contradiction; auto.
-        * apply IHl in Hin; auto.
-      + apply In_snd_fold_left_gather_eq; destruct Hin as [|].
-        * left; constructor; auto.
-        * right; apply IHl; auto.
-      + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
-        * inv Hin; try contradiction; auto.
-        * apply IHl in Hin; auto.
-      + apply In_snd_fold_left_gather_eq; destruct Hin as [|].
-        * left; constructor; auto.
-        * right; apply IHl; auto.
-  Qed.
+  (* Next Obligation. *)
+  (*   unfold gather_eqs, translate_eqns, concatMap. *)
+  (*   generalize (@nil (ident * const)). *)
+  (*   induction (n_eqs n) as [|[]]; simpl; intros; auto. *)
+  (*   - split; contradiction. *)
+  (*   - destruct i; simpl; auto. *)
+  (*     destruct o; simpl; split; intros ** Hin. *)
+  (*     + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin]. *)
+  (*       * inv Hin; try contradiction; auto. *)
+  (*       * apply IHl in Hin; auto. *)
+  (*     + apply In_snd_fold_left_gather_eq; destruct Hin as [|]. *)
+  (*       * left; constructor; auto. *)
+  (*       * right; apply IHl; auto. *)
+  (*     + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin]. *)
+  (*       * inv Hin; try contradiction; auto. *)
+  (*       * apply IHl in Hin; auto. *)
+  (*     + apply In_snd_fold_left_gather_eq; destruct Hin as [|]. *)
+  (*       * left; constructor; auto. *)
+  (*       * right; apply IHl; auto. *)
+  (* Qed. *)
   Next Obligation.
     unfold translate_eqns, concatMap in *.
     induction (n_eqs n) as [|[]]; simpl in *.
@@ -902,7 +866,7 @@ Module Type TRANSLATION
       destruct o.
       + inversion_clear H as [?? Rst|?? Rst];
           inversion_clear Rst as [?? Rst'|]; try inv Rst'.
-        * right; left; constructor; auto.
+        * right; left; constructor.
         * apply Exists_app; apply IHl; auto.
       + inversion_clear H as [?? Rst|]; try inv Rst.
         apply Exists_app; apply IHl; auto.
@@ -910,17 +874,54 @@ Module Type TRANSLATION
       right; apply IHl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns, concatMap.
-    induction (n_eqs n) as [|[]]; simpl.
-    - constructor; auto.
-    - constructor; simpl; auto.
-    - destruct i; simpl; auto.
-      destruct o; simpl.
-      + constructor; simpl; auto.
-        constructor; simpl; auto.
-          econstructor.
-      + constructor.
-      + apply Forall_app; intuition. SearchAbout Forall app.
+    unfold translate_eqns, concatMap in *.
+    destruct rst.
+    - induction (n_eqs n) as [|[]]; simpl in *.
+      + inv H.
+      + inversion_clear H as [?? Step|]; try inv Step.
+        right; apply IHl; auto.
+      + destruct i; simpl in *; auto.
+        destruct o; simpl in *;
+          inversion_clear H as [?? Step|?? Step']; try inv Step.
+        *{ inversion_clear Step' as [?? Step|]; try inv Step.
+           - left; constructor.
+           - right; right; apply IHl; auto.
+         }
+        * right; apply IHl; auto.
+      + inversion_clear H as [?? Step|]; try inv Step.
+        right; apply IHl; auto.
+    - pose proof (translate_node_obligation_5 n) as Eq;
+      pose proof (translate_node_obligation_3 n) as Nodup;
+      pose proof (translate_node_obligation_8 n) as ResetSpec;
+      eapply NoDup_comm, NoDup_app_weaken in Nodup;
+      rewrite Eq in Nodup; clear Eq; simpl in ResetSpec.
+      unfold translate_eqns, concatMap in *.
+      intros ** Reset.
+      apply ResetSpec in Reset; clear ResetSpec.
+      induction (n_eqs n) as [|[]]; simpl in *.
+      + inv H.
+      + inversion_clear H as [?? Step|]; try inv Step.
+        inversion_clear Reset as [?? Rst|]; try inv Rst.
+        apply IHl; auto.
+      + destruct i; simpl in *; auto.
+        destruct o; simpl in *; inversion_clear Nodup as [|?? Notin];
+          inversion_clear Reset as [?? Rst|?? Rst']; try inv Rst;
+            inversion_clear H as [?? Step|?? Step']; try inv Step.
+        *{ inversion_clear Step' as [?? Step|?? Hin]; try inv Step.
+           inversion_clear Rst' as [?? Rst|]; try inv Rst.
+           - apply Notin.
+             clear - Hin; induction Hin as [?? Step|[]];
+               try inv Step; simpl; auto.
+           - apply IHl; auto.
+         }
+        * apply Notin.
+          clear - Rst'; induction Rst' as [?? Step|[]];
+            try inv Step; simpl; auto.
+        * apply IHl; auto.
+      + inversion_clear H as [?? Step|]; try inv Step.
+        inversion_clear Reset as [?? Rst|]; try inv Rst.
+        apply IHl; auto.
+  Qed.
   Next Obligation.
     pose proof n.(n_good) as [ValidApp].
     split; [|split; [|split]]; auto.
