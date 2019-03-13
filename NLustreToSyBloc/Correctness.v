@@ -14,6 +14,8 @@ Require Import Velus.NLustre.Stream.
 Require Import Velus.NLustre.NLExprSemantics.
 Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.NLustre.MemSemantics.
+Require Import Velus.SyBloc.SBIsBlock.
+Require Import Velus.SyBloc.SBOrdered.
 Require Import Velus.SyBloc.SBSemantics.
 Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
@@ -38,20 +40,24 @@ Module Type CORRECTNESS
        (Import ExprSyn  : NLEXPRSYNTAX            Op)
        (Import SynNL    : NLSYNTAX            Ids Op       Clks ExprSyn)
        (Import SynSB    : SBSYNTAX            Ids Op       Clks ExprSyn)
+       (Import Block    : SBISBLOCK           Ids Op       Clks ExprSyn SynSB)
+       (Import SBOrd    : SBORDERED           Ids Op       Clks ExprSyn SynSB Block)
        (Import Str      : STREAM                  Op OpAux)
        (Import Ord      : ORDERED             Ids Op       Clks ExprSyn SynNL)
        (Import ExprSem  : NLEXPRSEMANTICS     Ids Op OpAux Clks ExprSyn             Str)
        (Import SemNL    : NLSEMANTICS         Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem)
-       (Import SemSB    : SBSEMANTICS         Ids Op OpAux Clks ExprSyn       SynSB Str     ExprSem)
+       (Import SemSB    : SBSEMANTICS         Ids Op OpAux Clks ExprSyn SynSB Block SBOrd Str ExprSem)
        (Import Mem      : MEMORIES            Ids Op       Clks ExprSyn SynNL)
-       (Import Trans    : TRANSLATION         Ids Op       Clks ExprSyn SynNL SynSB                       Mem)
-       (Import IsD      : ISDEFINED           Ids Op       Clks ExprSyn SynNL                             Mem)
-       (Import IsV      : ISVARIABLE          Ids Op       Clks ExprSyn SynNL                             Mem IsD)
+       (Import Trans    : TRANSLATION         Ids Op       Clks ExprSyn SynNL SynSB Mem)
+       (Import IsD      : ISDEFINED           Ids Op       Clks ExprSyn SynNL       Mem)
+       (Import IsV      : ISVARIABLE          Ids Op       Clks ExprSyn SynNL       Mem IsD)
        (Import IsF      : ISFREE              Ids Op       Clks ExprSyn SynNL)
-       (Import NoD      : NODUP               Ids Op       Clks ExprSyn SynNL                             Mem IsD IsV)
-       (Import MemSem   : MEMSEMANTICS        Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem SemNL Mem IsD IsV IsF NoD)
-       (Import NLClk    : NLCLOCKING          Ids Op       Clks ExprSyn SynNL           Ord               Mem IsD     IsF)
-       (Import NLClkSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem SemNL Mem IsD     IsF     NLClk).
+       (Import NoD      : NODUP               Ids Op       Clks ExprSyn SynNL       Mem IsD IsV)
+       (Import MemSem   : MEMSEMANTICS        Ids Op OpAux Clks ExprSyn SynNL
+                                              Str Ord ExprSem SemNL Mem IsD IsV IsF NoD)
+       (Import NLClk    : NLCLOCKING          Ids Op       Clks ExprSyn SynNL       Ord Mem IsD IsF)
+       (Import NLClkSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn SynNL
+                                              Str Ord ExprSem SemNL Mem IsD  IsF NLClk).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -208,7 +214,7 @@ Module Type CORRECTNESS
         intro E; eapply Notin; rewrite E; do 2 constructor.
     - apply IHeqs.
       + intro n'; specialize (Sem n'); inv Sem; auto.
-      + apply not_Is_state_in_cons' in Notin as []; auto.
+      + apply not_Is_state_in_cons in Notin as []; auto.
   Qed.
 
   Inductive translate_eqn_nodup_states: SynNL.equation -> list equation -> Prop :=

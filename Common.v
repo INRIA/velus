@@ -2252,6 +2252,18 @@ Section Lists.
     - inv Hin; eauto.
   Qed.
 
+  Lemma Forall2_in_left_combine:
+    forall (l: list A) (l': list B) P x,
+      Forall2 P l l' ->
+      In x l ->
+      exists y, In (x, y) (combine l l') /\ P x y.
+  Proof.
+    induction 1; inversion_clear 1.
+    - subst; exists y; simpl; intuition.
+    - simpl; destruct IHForall2; auto.
+      eexists; intuition; eauto.
+  Qed.
+
   Lemma split_fst_map:
     forall (l: list (A * B)),
       fst (split l) = map fst l.
@@ -2304,6 +2316,18 @@ Section Lists.
     - edestruct IHl; eauto.
   Qed.
 
+  Lemma Forall_incl:
+    forall (l l': list A) P,
+      Forall P l ->
+      incl l' l ->
+      Forall P l'.
+  Proof.
+    intros ** H Incl.
+    apply Forall_forall; intros ** Hin.
+    apply Incl in Hin.
+    eapply Forall_forall in H; eauto.
+  Qed.
+
 End Lists.
 
 Lemma Forall_Forall2:
@@ -2331,10 +2355,14 @@ Proof.
 Qed.
 
 (* XXX: [fold_left] or [fold_right]? *)
-Definition ps_adds (xs: list positive)(s: PS.t)
-  := fold_left (fun defs x0 => PS.add x0 defs) xs s.
+Definition ps_adds (xs: list positive) (s: PS.t) :=
+  fold_left (fun s x => PS.add x s) xs s.
 
-Lemma ps_adds_spec: forall s xs y,
+Definition ps_from_list (l: list positive) : PS.t :=
+  ps_adds l PS.empty.
+
+Lemma ps_adds_spec:
+  forall s xs y,
     PS.In y (ps_adds xs s) <-> In y xs \/ PS.In y s.
 Proof.
   intros s xs y. revert s.
@@ -2343,21 +2371,49 @@ Proof.
   - rewrite IHxs. rewrite PS.add_spec. intuition.
 Qed.
 
-Lemma in_fold_left_add:
-  forall x xs S,
-    PS.In x (fold_left (fun S' x => PS.add x S') xs S)
-    <->
-    In x xs \/ PS.In x S.
+Instance eq_equiv : Equivalence PS.eq.
+Proof. firstorder. Qed.
+
+Instance ps_adds_Proper (xs: idents) :
+  Proper (PS.eq ==> PS.eq) (ps_adds xs).
 Proof.
-  induction xs as [|y xs IH].
-  split; intro H; simpl in *;
-    intuition.
-  intro S; split; intro H.
-  - apply IH in H.
-    destruct H.
-    now left; constructor (assumption).
-    apply PS.add_spec in H; simpl; intuition.
-  - simpl; apply IH; simpl in H; intuition.
+  induction xs as [|x xs IH]; intros S S' Heq; [exact Heq|].
+  assert (PS.eq (PS.add x S) (PS.add x S')) as Heq'
+      by (rewrite Heq; reflexivity).
+  simpl; rewrite Heq'; reflexivity.
+Qed.
+
+Lemma add_ps_from_list_cons:
+  forall xs x,
+    PS.eq (PS.add x (ps_from_list xs))
+          (ps_from_list (x :: xs)).
+Proof.
+  intros; unfold ps_from_list; simpl.
+  generalize PS.empty as S.
+  induction xs as [|y xs IH]; [ reflexivity | ].
+  intro S; simpl; rewrite IH; rewrite PSP.add_add; reflexivity.
+Qed.
+
+Lemma ps_from_list_In:
+  forall xs x,
+    PS.In x (ps_from_list xs) <-> In x xs.
+Proof.
+  induction xs; simpl.
+  - split; try contradiction; apply not_In_empty.
+  - split; intros ** Hin.
+    + rewrite <-IHxs.
+      rewrite <-add_ps_from_list_cons in Hin.
+      apply PSE.MP.Dec.F.add_iff in Hin as []; auto.
+    + rewrite <-IHxs in Hin; rewrite <-add_ps_from_list_cons, PS.add_spec; intuition.
+Qed.
+
+Instance ps_from_list_Permutation:
+  Proper (@Permutation.Permutation ident ==> fun xs xs' => forall x, PS.In x xs -> PS.In x xs')
+         ps_from_list.
+Proof.
+  intros ** ?? E ? Hin.
+  apply ps_from_list_In; apply ps_from_list_In in Hin.
+  now rewrite <-E.
 Qed.
 
 (** types and clocks *)
@@ -2574,3 +2630,31 @@ Tactic Notation "induction_list" constr(E) "with" ident(l) :=
 Tactic Notation "induction_list" ident(E) "as" simple_intropattern(I) "with" ident(l) :=
   let H := fresh "H" l in
   induction_list_tac E I l H.
+
+Ltac cases :=
+  repeat match goal with
+         | H: context [ match negb ?x with _ => _ end ] |- _ =>
+           destruct x; simpl; try solve [inv H; auto]
+         | H: context [ match ?x with _ => _ end ] |- _ =>
+           destruct x; try solve [inv H; auto]
+         | |- context [ match negb ?x with _ => _ end ] =>
+           destruct x; simpl
+         | |- context [ match ?x with _ => _ end ] =>
+           destruct x
+         end; auto.
+
+Ltac cases_eqn E :=
+  repeat match goal with
+         | H: context [ match negb ?x with _ => _ end ] |- _ =>
+           let E := fresh E in
+           destruct x eqn: E; simpl; try solve [inv H; auto]
+         | H: context [ match ?x with _ => _ end ] |- _ =>
+           let E := fresh E in
+           destruct x eqn: E; try solve [inv H; auto]
+         | |- context [ match negb ?x with _ => _ end ] =>
+           let E := fresh E in
+           destruct x eqn: E; simpl
+         | |- context [ match ?x with _ => _ end ] =>
+           let E := fresh E in
+           destruct x eqn: E
+         end; auto.

@@ -328,6 +328,41 @@ Module Type OBCSEMANTICS
       simpl; rewrite Neq; auto.
   Qed.
 
+  Lemma Comp_spec:
+    forall prog s s' me ve me' ve',
+      stmt_eval prog me ve (Comp s s') (me', ve') <->
+      (exists me'' ve'',
+          stmt_eval prog me ve s (me'', ve'')
+          /\ stmt_eval prog me'' ve'' s' (me', ve')).
+  Proof.
+    split.
+    - inversion 1; eauto.
+    - intros (?&?&?&?); eauto using stmt_eval.
+  Qed.
+
+  Ltac chase_skip :=
+    match goal with
+      H: stmt_eval _ _ _ Skip _ |- _ => inv H
+    end.
+
+  Lemma Comp_Skip_right:
+    forall prog me ve s me' ve',
+      stmt_eval prog me ve (Comp s Skip) (me', ve')
+      <-> stmt_eval prog me ve s (me', ve').
+  Proof.
+    split; eauto using stmt_eval.
+    inversion_clear 1; now chase_skip.
+  Qed.
+
+  Lemma Comp_Skip_left:
+    forall prog me ve s me' ve',
+      stmt_eval prog me ve (Comp Skip s) (me', ve')
+      <-> stmt_eval prog me ve s (me', ve').
+  Proof.
+    split; eauto using stmt_eval.
+    inversion_clear 1; now chase_skip.
+  Qed.
+
 End OBCSEMANTICS.
 
 Module ObcSemanticsFun

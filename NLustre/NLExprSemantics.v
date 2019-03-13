@@ -231,7 +231,6 @@ environment.
     Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
       lift' sem_vars_instant x xs.
 
-    Check sem_clocked_vars_instant.
     Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
       forall n, sem_clocked_var_instant (bk n) (restr_hist n) x ck.
 
@@ -311,14 +310,8 @@ environment.
         * inv P; auto.
   Qed.
 
-  Definition reset_of_value (v: value) : option bool :=
-    match v with
-    | present x => val_to_bool x
-    | absent => Some false
-    end.
-
   Definition reset_of (vs: stream value) (rs: stream bool) :=
-    forall n, reset_of_value (vs n) = Some (rs n).
+    forall n, value_to_bool (vs n) = Some (rs n).
 
   (** Morphisms properties *)
 

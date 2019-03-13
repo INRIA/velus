@@ -24,51 +24,15 @@ Module Type SBSYNTAX
   | EqCall      : ident -> idents -> clock -> bool -> ident -> list lexp -> equation.
   (* <next s> y1, ..., yn =ck block<if b then trans s else last s>(e1, ..., em) *)
 
-  Inductive Is_last_in_eq: ident -> equation -> Prop :=
-    LastEqNext:
-      forall x ck e,
-        Is_last_in_eq x (EqNext x ck e).
+  Definition variables_eq (eq: equation): idents :=
+    match eq with
+    | EqNext _ _ _
+    | EqReset _ _ _ => []
+    | EqDef x _ _ => [x]
+    | EqCall _ xs _ _ _ _ => xs
+    end.
 
-  Definition Is_last_in (x: ident) (eqs: list equation) : Prop :=
-    Exists (Is_last_in_eq x) eqs.
-
-  Inductive Is_block_in_eq : ident -> equation -> Prop :=
-  | Is_block_inEqCall:
-      forall s ys ck rst f es,
-        Is_block_in_eq f (EqCall s ys ck rst f es)
-  | Is_block_inEqReset:
-      forall s ck f,
-        Is_block_in_eq f (EqReset s ck f).
-
-  Definition Is_block_in (f: ident) (eqs: list equation) : Prop :=
-    Exists (Is_block_in_eq f) eqs.
-
-  Inductive Is_defined_in_eq: ident -> equation -> Prop :=
-  | DefEqDef:
-      forall x ck e,
-        Is_defined_in_eq x (EqDef x ck e)
-  | DefEqNext:
-      forall x ck e,
-        Is_defined_in_eq x (EqNext x ck e)
-  | DefEqCall:
-      forall x s xs ck rst b es,
-        In x xs ->
-        Is_defined_in_eq x (EqCall s xs ck rst b es).
-
-  Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
-    Exists (Is_defined_in_eq x) eqs.
-
-  Inductive Is_variable_in_eq: ident -> equation -> Prop :=
-  | VarEqDef:
-      forall x ck e,
-        Is_variable_in_eq x (EqDef x ck e)
-  | VarEqCall:
-      forall x s xs ck rst b es,
-        In x xs ->
-        Is_variable_in_eq x (EqCall s xs ck rst b es).
-
-  Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
-    Exists (Is_variable_in_eq x) eqs.
+  Definition variables := concatMap variables_eq.
 
   Inductive Is_state_in_eq: ident -> nat -> equation -> Prop :=
   | StateEqReset:
@@ -93,41 +57,12 @@ Module Type SBSYNTAX
   Definition Step_with_reset_in (s: ident) (rst: bool) (eqs: list equation) : Prop :=
     Exists (Step_with_reset_in_eq s rst) eqs.
 
-  Lemma Step_with_reset_in_Step_in:
-    forall eqs s rst,
-      Step_with_reset_in s rst eqs ->
-      Step_in s eqs.
-  Proof.
-    induction 1 as [?? Step|].
-    - inv Step; left; constructor.
-    - right; auto.
-  Qed.
-
   Fixpoint lasts_of (eqs: list equation) : list ident :=
     match eqs with
     | [] => []
     | EqNext x _ _ :: eqs => x :: (lasts_of eqs)
     | _ :: eqs => lasts_of eqs
     end.
-
-  Lemma lasts_of_In:
-    forall eqs x,
-      Is_last_in x eqs <-> In x (lasts_of eqs).
-  Proof.
-    induction eqs as [|[]]; simpl.
-    - now setoid_rewrite Exists_nil.
-    - setoid_rewrite <-IHeqs; split; try right; auto.
-      inversion_clear 1 as [?? Last|]; try inv Last; auto.
-    - setoid_rewrite <-IHeqs; split.
-      + inversion_clear 1 as [?? Last|]; try inv Last; auto.
-      + intros [E|?].
-        * subst; left; constructor.
-        * right; auto.
-    - setoid_rewrite <-IHeqs; split; try right; auto.
-      inversion_clear 1 as [?? Last|]; try inv Last; auto.
-    - setoid_rewrite <-IHeqs; split; try right; auto.
-      inversion_clear 1 as [?? Last|]; try inv Last; auto.
-  Qed.
 
   Fixpoint calls_of (eqs: list equation) : list (ident * ident) :=
     match eqs with
@@ -136,88 +71,12 @@ Module Type SBSYNTAX
     | _ :: eqs => calls_of eqs
     end.
 
-  Lemma calls_of_InMembers:
-    forall eqs s,
-      Step_in s eqs <-> InMembers s (calls_of eqs).
-  Proof.
-    induction eqs as [|[]]; simpl.
-    - setoid_rewrite Exists_nil; split; try contradiction; intros ** (); eauto.
-    - setoid_rewrite <-IHeqs; split; try (right; auto);
-        inversion_clear 1 as [?? Step|]; try inv Step; auto.
-    - setoid_rewrite <-IHeqs; split; try (right; auto);
-        inversion_clear 1 as [?? Step|]; try inv Step; auto.
-    - setoid_rewrite <-IHeqs; split; try (right; auto);
-        inversion_clear 1 as [?? Step|]; try inv Step; auto.
-    - setoid_rewrite <-IHeqs; split.
-      + inversion_clear 1 as [?? Block|]; try inv Block; eauto.
-      + intros [E|?].
-        * subst; left; constructor.
-        * right; eauto.
-  Qed.
-
-  Lemma calls_of_In:
-    forall eqs s b,
-      In (s, b) (calls_of eqs) ->
-      exists xs ck rst es, In (EqCall s xs ck rst b es) eqs.
-  Proof.
-    induction eqs as [|[]]; simpl; try contradiction; intros ** Hin;
-      try now edestruct IHeqs as (?&?&?&?&?); eauto 6.
-    destruct Hin as [E|].
-    - inv E; eauto 6.
-    - edestruct IHeqs as (?&?&?&?&?); eauto 6.
-  Qed.
-
-  Lemma calls_of_app:
-    forall eqs eqs',
-      calls_of (eqs ++ eqs') = calls_of eqs ++ calls_of eqs'.
-  Proof.
-    induction eqs as [|[]]; intros; simpl; try f_equal; auto.
-  Qed.
-
   Fixpoint resets_of (eqs: list equation) : list (ident * ident) :=
     match eqs with
     | [] => []
     | EqReset s _ b :: eqs => (s, b) :: resets_of eqs
     | _ :: eqs => resets_of eqs
     end.
-
-  (* Lemma resets_of_InMembers: *)
-  (*   forall eqs s, *)
-  (*     Reset_in s eqs <-> InMembers s (resets_of eqs). *)
-  (* Proof. *)
-  (*   induction eqs as [|[]]; simpl. *)
-  (*   - setoid_rewrite Exists_nil; split; try contradiction; intros ** (); eauto. *)
-  (*   - setoid_rewrite <-IHeqs; split; try (right; auto); *)
-  (*       inversion_clear 1 as [?? Rst|]; try inv Rst; auto. *)
-  (*   - setoid_rewrite <-IHeqs; split; try (right; auto); *)
-  (*       inversion_clear 1 as [?? Rst|]; try inv Rst; auto. *)
-  (*   - setoid_rewrite <-IHeqs; split. *)
-  (*     + inversion_clear 1 as [?? Block|]; try inv Block; eauto. *)
-  (*     + intros [E|?]. *)
-  (*       * subst; left; constructor. *)
-  (*       * right; eauto. *)
-  (*   - setoid_rewrite <-IHeqs; split; try (right; auto); *)
-  (*       inversion_clear 1 as [?? Rst|]; try inv Rst; auto. *)
-  (* Qed. *)
-
-  Lemma resets_of_In:
-    forall eqs s b,
-      In (s, b) (resets_of eqs) ->
-      exists ck, In (EqReset s ck b) eqs.
-  Proof.
-    induction eqs as [|[]]; simpl; try contradiction; intros ** Hin;
-      try now edestruct IHeqs; eauto 6.
-    destruct Hin as [E|].
-    - inv E; eauto 6.
-    - edestruct IHeqs; eauto 6.
-  Qed.
-
-  Lemma resets_of_app:
-    forall eqs eqs',
-      resets_of (eqs ++ eqs') = resets_of eqs ++ resets_of eqs'.
-  Proof.
-    induction eqs as [|[]]; intros; simpl; try f_equal; auto.
-  Qed.
 
   Record block :=
     Block {
@@ -230,19 +89,15 @@ Module Type SBSYNTAX
         b_eqs   : list equation;
 
         b_ingt0 : 0 < length b_in;
-        (* b_outgt0 : 0 < length b_out *)
+
         b_nodup : NoDup (map fst b_in ++ map fst b_lasts ++ map fst b_vars ++ map fst b_out);
         b_nodup_lasts_blocks: NoDup (map fst b_lasts ++ map fst b_blocks);
 
-        b_blocks_in_eqs: forall f, (exists i, In (i, f) b_blocks) <-> Is_block_in f b_eqs;
+        b_blocks_in_eqs: forall f, In f (map snd b_blocks) <-> In f (map snd (calls_of b_eqs ++ resets_of b_eqs));
         b_blocks_calls_of: Permutation b_blocks (calls_of b_eqs);
-        (* b_lasts_in_eqs: forall x, InMembers x b_lasts <-> Is_last_in_eqs x b_eqs; *)
-        b_lasts_in_eqs: Permutation (map fst b_lasts) (lasts_of b_eqs);
-        b_vars_out_in_eqs: forall x, InMembers x (b_vars ++ b_out) <-> Is_variable_in x b_eqs;
-        (* b_out_not_last: forall x, InMembers x b_out -> ~ Is_last_in_eqs x b_eqs; *)
 
-        (* b_states_in_eqs: forall s, InMembers s b_blocks <-> (exists k, Is_state_in s k b_eqs); *)
-        (* b_nodup_resets: NoDup (resets_of b_eqs); *)
+        b_lasts_in_eqs: Permutation (map fst b_lasts) (lasts_of b_eqs);
+        b_vars_out_in_eqs: Permutation (map fst b_vars ++ map fst b_out) (variables b_eqs);
 
         b_no_single_reset: forall s, Reset_in s b_eqs -> Step_with_reset_in s true b_eqs;
         b_reset_in: forall s rst, Step_with_reset_in s rst b_eqs ->
@@ -263,14 +118,6 @@ Module Type SBSYNTAX
     apply NoDup_comm, NoDup_app_weaken, NoDup_app_weaken in Nodup; auto.
   Qed.
 
-  Lemma b_nodup_lasts_of:
-    forall b, NoDup (lasts_of b.(b_eqs)).
-  Proof.
-    setoid_rewrite <-b_lasts_in_eqs;
-      setoid_rewrite <-fst_NoDupMembers.
-    apply b_nodup_lasts.
-  Qed.
-
   Lemma b_nodup_blocks:
     forall b, NoDupMembers b.(b_blocks).
   Proof.
@@ -278,14 +125,6 @@ Module Type SBSYNTAX
     apply NoDup_comm, NoDup_app_weaken in Nodup.
     apply fst_NoDupMembers; auto.
   Qed.
-
-  (* Lemma b_nodup_states_of: *)
-  (*   forall b, NoDup (states_of b.(b_eqs)). *)
-  (* Proof. *)
-  (*   setoid_rewrite <-b_states_in_eqs; *)
-  (*     setoid_rewrite <-fst_NoDupMembers. *)
-  (*   apply b_nodup_blocks. *)
-  (* Qed. *)
 
   Lemma b_nodup_vars:
     forall b, NoDupMembers (b_in b ++ b_vars b ++ b_out b).
@@ -300,51 +139,13 @@ Module Type SBSYNTAX
     apply fst_NoDupMembers; auto.
   Qed.
 
-  Lemma Is_defined_Is_variable_Is_last_in:
-    forall eqs x,
-      Is_defined_in x eqs ->
-      Is_variable_in x eqs \/ Is_last_in x eqs.
+  Lemma b_nodup_variables:
+    forall b, NoDup (variables b.(b_eqs)).
   Proof.
-    induction eqs; inversion_clear 1 as [?? Def|?? Defs].
-    - inv Def.
-      + left; left; constructor; auto.
-      + right; left; constructor; auto.
-      + left; left; constructor; auto.
-    - apply IHeqs in Defs as [].
-      + left; right; auto.
-      + right; right; auto.
+    intro; rewrite <-b_vars_out_in_eqs, <-map_app.
+    apply fst_NoDupMembers.
+    eapply NoDupMembers_app_r, b_nodup_vars.
   Qed.
-
-  Lemma b_ins_not_def:
-    forall b x,
-      InMembers x b.(b_in) ->
-      ~ Is_defined_in x b.(b_eqs).
-  Proof.
-    intros ** Hin Hdef.
-    pose proof (b_nodup b) as Nodup.
-    eapply (NoDup_app_In x) in Nodup.
-    - apply Is_defined_Is_variable_Is_last_in in Hdef as [Var|Last];
-        apply Nodup, in_app.
-      + apply b_vars_out_in_eqs in Var.
-        right; rewrite <-map_app; apply fst_InMembers; auto.
-      + apply lasts_of_In in Last; rewrite <-b_lasts_in_eqs in Last; auto.
-    - apply fst_InMembers; auto.
-  Qed.
-
-  (* TODO: in Common *)
-  (* Fixpoint assoc {A} (x: ident) (xs: list (ident * A)) : option A := *)
-  (*   match xs with *)
-  (*   | [] => None *)
-  (*   | y :: xs => *)
-  (*     let (y, c) := y in *)
-  (*     if ident_eqb y x then Some c else assoc x xs *)
-  (*   end. *)
-
-  (* Definition find_last (x: ident) (bl: block) := *)
-  (*   assoc x bl.(b_lasts). *)
-
-  (* Definition find_subblock (x: ident) (bl: block) := *)
-  (*   assoc x bl.(b_blocks). *)
 
   Definition program := list block.
 
@@ -357,19 +158,6 @@ Module Type SBSYNTAX
    end.
 
   (** Properties of block lookups *)
-
-  Lemma find_block_none:
-    forall b bl P,
-      find_block b (bl :: P) = None
-      <-> (bl.(b_name) <> b /\ find_block b P = None).
-  Proof.
-    intros.
-    simpl; destruct (ident_eqb (b_name bl) b) eqn: E.
-    - split; intro HH; try discriminate.
-      destruct HH.
-      apply ident_eqb_eq in E; contradiction.
-    - apply ident_eqb_neq in E; split; intro HH; tauto.
-  Qed.
 
   Remark find_block_app:
     forall b P bl P',
@@ -413,19 +201,6 @@ Module Type SBSYNTAX
     simpl; rewrite Hnb; reflexivity.
   Qed.
 
-  Remark find_block_other_app:
-    forall P b bl P',
-      find_block b P = None ->
-      bl.(b_name) <> b ->
-      find_block b (P ++ bl :: P') = find_block b P'.
-  Proof.
-    induction P as [|bl']; simpl app.
-    - intros; apply find_block_other; auto.
-    - intros ** Find E.
-      simpl in *.
-      destruct (ident_eqb (b_name bl') b); try discriminate; auto.
-  Qed.
-
   Remark find_block_In:
     forall b P bl P',
       find_block b P = Some (bl, P') ->
@@ -451,62 +226,150 @@ Module Type SBSYNTAX
     intro; destruct (ident_eqb bl.(b_name) b); auto.
   Qed.
 
-  Lemma find_block_split:
-    forall b P bl P',
-      find_block b P = Some (bl, P') ->
-      exists P1,
-        P = P1 ++ bl :: P'.
+  Lemma Step_with_reset_in_Step_in:
+    forall eqs s rst,
+      Step_with_reset_in s rst eqs ->
+      Step_in s eqs.
   Proof.
-    induction P as [|bl']; simpl; try discriminate.
-    intros ** Find.
-    destruct (ident_eqb (b_name bl') b) eqn:E.
-    - inv Find; exists []; auto.
-    - apply IHP in Find as (P2 & Eq).
-      exists (bl' :: P2); rewrite Eq; auto.
+    induction 1 as [?? Step|].
+    - inv Step; left; constructor.
+    - right; auto.
   Qed.
 
-  Lemma not_In_find_block:
-    forall b P,
-      ~In b (map b_name P) ->
-      find_block b P = None.
+  Lemma Step_with_reset_in_cons_not_call:
+    forall eqs eq s rst,
+      (forall s ys ck rst f es, eq <> EqCall s ys ck rst f es) ->
+      (Step_with_reset_in s rst (eq :: eqs) <-> Step_with_reset_in s rst eqs).
   Proof.
-    induction P as [|bl]; auto.
-    simpl; intro Hnin.
-    apply Decidable.not_or in Hnin.
-    destruct Hnin as (Hnin1 & Hnin2).
-    rewrite (IHP Hnin2).
-    apply ident_eqb_neq in Hnin1.
-    now rewrite Hnin1.
+    intros ** Neq; split.
+    - inversion_clear 1 as [?? Step|]; auto.
+      inv Step; exfalso; eapply Neq; eauto.
+    - right; auto.
   Qed.
 
-  Lemma not_Is_block_in_cons:
-    forall b eq eqs,
-      ~ Is_block_in b (eq :: eqs) <-> ~Is_block_in_eq b eq /\ ~Is_block_in b eqs.
+  Lemma Step_with_reset_in_cons_call:
+    forall eqs s (rst: bool) s' ys ck rst' f es,
+      s <> s' ->
+      (Step_with_reset_in s rst (EqCall s' ys ck rst' f es :: eqs) <-> Step_with_reset_in s rst eqs).
   Proof.
-    split; intro HH.
-    - split; intro; apply HH; unfold Is_block_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
+    intros ** Neq; split.
+    - inversion_clear 1 as [?? Step|]; auto.
+      inv Step; congruence.
+    - right; auto.
   Qed.
 
-  Lemma not_Is_last_in_cons:
-    forall x eq eqs,
-      ~ Is_last_in x (eq :: eqs) <-> ~ Is_last_in_eq x eq /\ ~ Is_last_in x eqs.
+  Lemma calls_of_In:
+    forall eqs s b,
+      In (s, b) (calls_of eqs) ->
+      exists xs ck rst es, In (EqCall s xs ck rst b es) eqs.
   Proof.
-    split; intros HH.
-    - split; intro; apply HH; unfold Is_last_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
+    induction eqs as [|[]]; simpl; try contradiction; intros ** Hin;
+      try now edestruct IHeqs as (?&?&?&?&?); eauto 6.
+    destruct Hin as [E|].
+    - inv E; eauto 6.
+    - edestruct IHeqs as (?&?&?&?&?); eauto 6.
+  Qed.
+
+  Lemma calls_of_Is_state_in:
+    forall eqs s,
+      InMembers s (calls_of eqs) -> exists k, Is_state_in s k eqs.
+  Proof.
+    intros ** Hin; exists 1.
+    induction eqs as [|[]]; simpl in *; try contradiction;
+      try (now right; apply IHeqs; auto).
+    destruct Hin as [E|].
+    - subst; left; constructor.
+    - right; apply IHeqs; auto.
+  Qed.
+
+  Lemma resets_of_app:
+    forall eqs eqs',
+      resets_of (eqs ++ eqs') = resets_of eqs ++ resets_of eqs'.
+  Proof.
+    induction eqs as [|[]]; intros; simpl; try f_equal; auto.
+  Qed.
+
+  Definition is_step_in_eq_b (s: ident) (eq: equation) : bool :=
+    match eq with
+    | EqCall s' _ _ _ _ _ => ident_eqb s s'
+    | _ => false
+    end.
+
+  Definition is_step_in_eqs_b (s: ident) (eqs: list equation) : bool :=
+    existsb (is_step_in_eq_b s) eqs.
+
+  Definition is_reset_in_eq_b (s: ident) (eq: equation) : bool :=
+    match eq with
+    | EqReset s' _ _ => ident_eqb s s'
+    | _ => false
+    end.
+
+  Definition is_reset_in_eqs_b (s: ident) (eqs: list equation) : bool :=
+    existsb (is_reset_in_eq_b s) eqs.
+
+  Fact Step_in_eq_reflect:
+    forall s eq,
+      Is_state_in_eq s 1 eq <-> is_step_in_eq_b s eq = true.
+  Proof.
+    destruct eq; simpl; split;
+      try discriminate; try now inversion 1.
+    - inversion_clear 1; apply ident_eqb_refl.
+    - rewrite ident_eqb_eq; intros; subst; constructor.
+  Qed.
+
+  Corollary Step_in_reflect:
+    forall s eqs,
+      Step_in s eqs <-> is_step_in_eqs_b s eqs = true.
+  Proof.
+    setoid_rewrite existsb_exists; setoid_rewrite Exists_exists.
+    split; intros (?&?& Step); apply Step_in_eq_reflect in Step; eauto.
+  Qed.
+
+  Lemma Step_in_dec:
+    forall s eqs,
+      { Step_in s eqs } + { ~ Step_in s eqs }.
+  Proof.
+    intros;
+      eapply Bool.reflect_dec, Bool.iff_reflect, Step_in_reflect.
+  Qed.
+
+  Fact Reset_in_eq_reflect:
+    forall s eq,
+      Is_state_in_eq s 0 eq <-> is_reset_in_eq_b s eq = true.
+  Proof.
+    destruct eq; simpl; split;
+      try discriminate; try now inversion 1.
+    - inversion_clear 1; apply ident_eqb_refl.
+    - rewrite ident_eqb_eq; intros; subst; constructor.
+  Qed.
+
+  Corollary Reset_in_reflect:
+    forall s eqs,
+      Reset_in s eqs <-> is_reset_in_eqs_b s eqs = true.
+  Proof.
+    setoid_rewrite existsb_exists; setoid_rewrite Exists_exists.
+    split; intros (?&?& Step); apply Reset_in_eq_reflect in Step; eauto.
+  Qed.
+
+  Lemma Reset_in_dec:
+    forall s eqs,
+      { Reset_in s eqs } + { ~ Reset_in s eqs }.
+  Proof.
+    intros;
+      eapply Bool.reflect_dec, Bool.iff_reflect, Reset_in_reflect.
+  Qed.
+
+  Lemma variables_app:
+    forall eqs eqs',
+      variables (eqs ++ eqs') = variables eqs ++ variables eqs'.
+  Proof.
+    unfold variables, concatMap.
+    induction eqs as [|[]]; simpl; intros; auto.
+    - f_equal; auto.
+    - rewrite <-app_assoc; f_equal; auto.
   Qed.
 
   Lemma not_Is_state_in_cons:
-    forall s k eq eqs,
-      ~ Is_state_in s k (eq :: eqs) <-> ~ Is_state_in_eq s k eq /\ ~ Is_state_in s k eqs.
-  Proof.
-    split; intros HH.
-    - split; intro; apply HH; unfold Is_state_in; intuition.
-    - destruct HH; inversion_clear 1; intuition.
-  Qed.
-
-  Lemma not_Is_state_in_cons':
     forall s eq eqs,
       (forall k, ~ Is_state_in s k (eq :: eqs)) <-> (forall k, ~ Is_state_in_eq s k eq) /\ (forall k, ~ Is_state_in s k eqs).
   Proof.

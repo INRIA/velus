@@ -175,13 +175,9 @@ enough: it does not support the internal fixpoint introduced by
         find_node f G = Some n ->
         sem_vars H (map fst n.(n_in)) xss ->
         sem_vars H (map fst n.(n_out)) yss ->
-        (* XXX: This should be obtained through well-clocking: *)
-        (*  * tuples are synchronised: *)
         same_clock xss ->
         same_clock yss ->
-        (*  * output clock matches input clock *)
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
-        (* XXX: END *)
         sem_clocked_vars bk H (idck n.(n_in)) ->
         Forall (sem_equation G bk H) n.(n_eqs) ->
         Forall (P_equation bk H) n.(n_eqs) ->
@@ -438,22 +434,6 @@ enough: it does not support the internal fixpoint introduced by
       constructor; intro k; specialize (Hnode k); eauto using sem_node_cons.
     - econstructor; eauto.
   Qed.
-
-
-  (* Lemma subrate_clock: *)
-  (*   forall R ck, *)
-  (*     sem_clock_instant false R ck false. *)
-  (* Proof. *)
-  (*   Hint Constructors sem_clock_instant. *)
-  (*   intros R ck. *)
-  (*   induction ck; auto. *)
-  (*   constructor; auto. *)
-  (*   admit. *)
-  (* Qed. *)
-
-  (* XXX: Similarly, instead of [rhs_absent_instant] and friends, we
-should prove that all the semantic rules taken at [base = false] yield
-an absent value *)
 
   Lemma sem_equations_permutation:
     forall eqs eqs' G bk H,

@@ -100,7 +100,7 @@ Module Type NLTYPING
         Forall wt_lexp es ->
         NoDup xs ->
         wt_equation (EqApp xs ck f es None)
-    | wt_EqReset: forall n xs ck f es r ck_r,
+    | wt_EqReset: forall n xs ck f es r,
         find_node f G = Some n ->
         Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
         Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
@@ -108,8 +108,7 @@ Module Type NLTYPING
         Forall wt_lexp es ->
         NoDup xs ->
         In (r, bool_type) vars ->
-        wt_clock ck_r ->
-        wt_equation (EqApp xs ck f es (Some (r, ck_r)))
+        wt_equation (EqApp xs ck f es (Some r))
     | wt_EqFby: forall x ck c0 e,
         In (x, type_const c0) vars ->
         typeof e = type_const c0 ->
@@ -150,7 +149,7 @@ Module Type NLTYPING
     inversion_clear WTg as [|? ? ? WTn Hn].
     change (Forall (fun n' => (fun i=> a.(n_name) <> i) n'.(n_name)) g) in Hn.
     apply Forall_map in Hn.
-    apply In_Forall with (1:=Hn) in Hin.
+    apply Forall_forall with (1:=Hn) in Hin.
     now contradiction Hin.
   Qed.
 

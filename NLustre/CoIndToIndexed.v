@@ -64,7 +64,7 @@ Module Type COINDTOINDEXED
         Every element of the history is translated.
      *)
     Definition tr_History (H: CoInd.History) : ExprIdx.history :=
-      PM.map tr_Stream H.
+      Env.map tr_Stream H.
 
     (** ** Properties  *)
 
@@ -137,7 +137,7 @@ Module Type COINDTOINDEXED
         ExprIdx.restr_hist (tr_History H) (S n)
         = ExprIdx.restr_hist (tr_History (CoInd.History_tl H)) n.
     Proof.
-      now repeat setoid_rewrite pm_map_map.
+      now repeat setoid_rewrite Env.map_map.
     Qed.
 
     (** * SEMANTICS CORRESPONDENCE *)
@@ -150,14 +150,11 @@ Module Type COINDTOINDEXED
       ExprIdx.sem_var (tr_History H) x (tr_Stream xs).
     Proof.
       intros ** Find n.
-      constructor.
-      inv Find.
+      unfold ExprIdx.sem_var_instant.
+      inversion_clear Find as [???? Find' E].
       unfold ExprIdx.restr_hist, tr_History.
-      unfold PM.map.
-      rewrite 2 PM.gmapi.
-      erewrite PM.find_1; eauto; simpl.
-      f_equal.
-      apply eqst_ntheq; symmetry; auto.
+      unfold Env.map.
+      rewrite 2 Env.gmapi, Find', E; simpl; auto.
     Qed.
     Hint Resolve sem_var_impl.
 
@@ -757,18 +754,18 @@ Module Type COINDTOINDEXED
 
     (** * RESET CORRESPONDENCE  *)
 
-    (** We directly state the correspondence for [reset_of]. *)
-    Lemma tr_Stream_reset:
-      forall xs,
-        tr_Stream (CoInd.reset_of xs) ≈ ExprIdx.reset_of (tr_Stream xs).
+    (** We state the correspondence for [reset_of]. *)
+    Lemma reset_of_impl:
+      forall xs rs,
+        CoInd.reset_of xs rs ->
+        ExprIdx.reset_of (tr_Stream xs) (tr_Stream rs).
     Proof.
-      intros **n; revert xs.
-      induction n; intros.
-      - unfold_Stv xs; unfold ExprIdx.reset_of;
-          rewrite unfold_Stream at 1; simpl; rewrite tr_Stream_0; auto.
-      - unfold_Stv xs; unfold ExprIdx.reset_of;
-          rewrite unfold_Stream at 1; simpl; auto;
-            eapply IHn.
+      intros ** n; revert dependent xs; revert rs.
+      induction n; intros ** Rst.
+      - unfold_Stv xs; unfold_Stv rs; rewrite tr_Stream_0; auto;
+          inv Rst; simpl in *; auto.
+      - unfold_Stv xs; unfold_Stv rs; rewrite 2 tr_Stream_S;
+          inv Rst; simpl in *; auto.
     Qed.
 
     (** ** Properties about [count] and [mask] *)
@@ -851,26 +848,6 @@ Module Type COINDTOINDEXED
         unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
     Qed.
 
-    (* Lemma masked_impl: *)
-    (*   forall {A} k r (xss xss': list (Stream A)), *)
-    (*     Forall2 (CoInd.masked k r) xss xss' -> *)
-    (*     masked k (tr_Stream r) (tr_Streams xss) (tr_Streams xss'). *)
-    (* Proof. *)
-    (*   unfold CoInd.masked, masked. *)
-    (*   induction xss as [|xs]; intros ** Masked n C; *)
-    (*     inversion_clear Masked as [|???? Count]; auto. *)
-    (*   simpl; f_equal; auto. *)
-    (*   apply Count; rewrite <-C. *)
-    (*   apply count_impl. *)
-    (* Qed. *)
-
-    (* Lemma masked_tr_Streams_length: *)
-    (*   forall {A} k r (xss xss': list (Stream A)), *)
-    (*     Forall2 (CoInd.masked k r) xss xss' -> *)
-    (*     length (tr_Streams xss' 0) = length (tr_Streams xss 0). *)
-    (* Proof. *)
-    (*   induction 1; simpl; auto. *)
-    (* Qed. *)
 
     (** * FINAL LEMMAS *)
 
@@ -924,6 +901,40 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve tr_clocks_of.
 
+    Lemma sem_clocked_vars_impl:
+      forall H b xs,
+        CoInd.sem_clocked_vars H b xs ->
+        ExprIdx.sem_clocked_vars (tr_Stream b) (tr_History H) xs.
+    Proof.
+      intros ** Sem n.
+      revert dependent H; revert b.
+      induction n; intros.
+      - induction Sem as [|() ? (Sem & Sem')]; constructor; auto.
+        split.
+        + simpl. split.
+          *{ unfold_Stv b; rewrite tr_Stream_0.
+             - inversion 1; subst; simpl in *.
+               + edestruct Sem' as (?& Var).
+                 * constructor; reflexivity.
+                 *{ edestruct Sem as (?& Clock & Synchro); eauto.
+                    apply sem_var_impl in Var.
+                    specialize (Var 0).
+                    inversion_clear Clock as [??? E| | |].
+                    inv Synchro.
+                    - rewrite tr_Stream_0 in Var; eauto.
+                    - inv E; discriminate.
+                  }
+               + admit.
+
+             - admit.
+           }
+          * admit.
+        + admit.
+      - rewrite tr_History_tl, <-tr_Stream_tl.
+        apply IHn.
+        admit.
+
+
     (** The final theorem stating the correspondence for nodes applications.
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
     Hint Constructors Indexed.sem_equation.
@@ -943,10 +954,10 @@ Module Type COINDTOINDEXED
         eauto.
 
       - econstructor; eauto.
-        rewrite <-tr_Stream_reset; auto.
+        apply reset_of_impl; auto.
 
       - econstructor; auto; subst; eauto.
-        rewrite <-fby_impl; auto.
+        rewrite <-fby_impl; reflexivity.
 
       - constructor; intro k.
         specialize (IHNode k).
@@ -965,9 +976,10 @@ Module Type COINDTOINDEXED
         econstructor; eauto.
         + apply CoInd.same_clock_app_l in Same; auto.
         + apply CoInd.same_clock_app_r in Same; auto.
+        + admit.
         + apply Forall_impl_In with (P:=CoInd.sem_equation G H (CoInd.clocks_of xss)); auto.
           intros e ?.
-          pattern e; eapply In_Forall; eauto.
+          pattern e; eapply Forall_forall; eauto.
     Qed.
 
   End Global.

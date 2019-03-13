@@ -39,6 +39,8 @@ Module Type NLUSTRE
   Declare Module Export WeF    : WELLFORMED      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD IsV IsF NoD.
   Declare Module Export MemSem : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD WeF.
   Declare Module Export Clo    : NLCLOCKING      Ids Op       Clks ExprSyn Syn                     Mem IsD     IsF.
+  Declare Module Export CloSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn SynNL
+                                                     Str Ord ExprSem SemNL Mem IsD  IsF NLClk.
 
   Declare Module Scheduler     : NLSCHEDULE      Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD     IsF          Typ Clo.
 
@@ -65,6 +67,8 @@ Module NLustreFun
   Module Export WeF     := WellFormedFun      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD IsV IsF NoD.
   Module Export MemSem  := MemSemanticsFun    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD WeF.
   Module Export Clo     := NLClockingFun      Ids Op       Clks ExprSyn Syn                     Mem IsD     IsF.
+  Module Export CloSem  := NLClockingSemanticsFun Ids Op OpAux Clks ExprSyn SynNL
+                                                  Str Ord ExprSem SemNL Mem IsD  IsF Clo.
 
   Module Scheduler      := NLScheduleFun      Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF              Typ Clo.
 

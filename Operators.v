@@ -134,6 +134,12 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     decide equality. apply val_dec.
   Defined.
 
+  Definition value_to_bool (v: value) : option bool :=
+    match v with
+    | present x => val_to_bool x
+    | absent => Some false
+    end.
+
   Instance: EqDec value eq := { equiv_dec := value_dec }.
 
 End OPERATORS_AUX.

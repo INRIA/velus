@@ -132,7 +132,7 @@ Module Type NLINTERPRETOR
         sem_var_instant R x v ->
         v = interp_var_instant x.
     Proof.
-      unfold interp_var_instant; induction 1 as [?? H]; now rewrite H.
+      unfold interp_var_instant; now intros ** ->.
     Qed.
 
     Ltac rw_lexp_helper :=
@@ -260,7 +260,6 @@ Module Type NLINTERPRETOR
         simpl; rewrite Bool.orb_true_r; auto.
       - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
         apply absent_list_spec', absent_list_spec_b in Absent as ->; auto.
-      (* - simpl. destruct (negb (interp_clock_instant ck) || interp_clock_instant ck); auto. *)
     Qed.
 
   End InstantInterpretor.
