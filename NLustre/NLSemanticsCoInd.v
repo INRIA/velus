@@ -868,6 +868,17 @@ Module Type NLSEMANTICSCOIND
      apply map_st_EqSt; auto; apply mask_EqSt; auto.
   Qed.
 
+  Add Parametric Morphism : (synchronized)
+      with signature @EqSt value ==> @EqSt bool ==> Basics.impl
+        as synchronized_EqSt.
+  Proof.
+    cofix.
+    intros xs xs' Exs bs bs' Ebs Synchro.
+    unfold_Stv xs'; unfold_Stv bs'; inv Synchro;
+      inv Exs; inv Ebs; try discriminate;
+        constructor; eapply synchronized_EqSt_Proper; eauto.
+  Qed.
+
 End NLSEMANTICSCOIND.
 
 (* Module NLSemanticsCoIndRecFun *)

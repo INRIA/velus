@@ -87,3 +87,13 @@ Module Type SBISLAST
   Qed.
 
 End SBISLAST.
+
+Module SBIsLastFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+<: SBISLAST Ids Op Clks ExprSyn Syn.
+  Include SBISLAST Ids Op Clks ExprSyn Syn.
+End SBIsLastFun.

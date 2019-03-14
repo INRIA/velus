@@ -339,3 +339,14 @@ Module Type SBMEMORYCORRES
   Qed.
 
 End SBMEMORYCORRES.
+
+Module SBMemoryCorresFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+       (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
+<: SBMEMORYCORRES Ids Op Clks ExprSyn Syn Last.
+  Include SBMEMORYCORRES Ids Op Clks ExprSyn Syn Last.
+End SBMemoryCorresFun.

@@ -4,28 +4,15 @@ Require Import Velus.Clocks.
 Require Import Velus.RMemory.
 
 Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.Stream.
+Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.NLExprSemantics.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.SyBloc.SBIsBlock.
-Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.SyBloc.SBSemantics.
+Require Import Velus.NLustre.IsFree.
 
-Require Import Velus.Obc.ObcSyntax.
-Require Import Velus.Obc.ObcSemantics.
-
-Require Import Velus.SyBloc.SBIsLast.
-Require Import Velus.SyBloc.SBIsVariable.
-Require Import Velus.SyBloc.SBIsDefined.
-Require Import Velus.SyBloc.SBIsFree.
-
-Require Import Velus.SyBlocToObc.SBMemoryCorres.
+Require Import Velus.SyBloc.
+Require Import Velus.Obc.
 
 Require Import Velus.SyBlocToObc.Translation.
-
-Require Import Velus.SyBloc.SBWellDefined.
-
-Require Import Velus.NLustre.NLSyntax.
+Require Import Velus.SyBlocToObc.SBMemoryCorres.
 
 Require Import List.
 Import List.ListNotations.
@@ -40,23 +27,14 @@ Module Type CORRECTNESS
        (Import OpAux   : OPERATORS_AUX       Op)
        (Import Clks    : CLOCKS          Ids)
        (Import ExprSyn : NLEXPRSYNTAX        Op)
-       (SynNL          : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (Import SynSB   : SBSYNTAX        Ids Op       Clks ExprSyn)
-       (Import Block   : SBISBLOCK       Ids Op       Clks ExprSyn SynSB)
-       (Import Ord     : SBORDERED       Ids Op       Clks ExprSyn SynSB Block)
        (Import Str     : STREAM              Op OpAux)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn                 Str)
-       (Import SemSB   : SBSEMANTICS     Ids Op OpAux Clks ExprSyn SynSB Block Ord Str ExprSem)
-       (Import SynObc  : OBCSYNTAX       Ids Op OpAux)
-       (Import SemObc  : OBCSEMANTICS    Ids Op OpAux                    SynObc)
-       (Import Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SynSB SynObc)
-       (Import Last    : SBISLAST        Ids Op       Clks ExprSyn SynSB)
-       (Import Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SynSB Last)
-       (Import Var     : SBISVARIABLE    Ids Op       Clks ExprSyn SynSB)
-       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn SynNL)
-       (Import Def     : SBISDEFINED     Ids Op       Clks ExprSyn SynSB Var Last)
-       (Import Free    : SBISFREE        Ids Op       Clks ExprSyn SynSB SynNL IsF)
-       (Import Wdef    : SBWELLDEFINED   Ids Op       Clks ExprSyn SynSB Block Ord Var Last Def SynNL IsF Free).
+       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
+       (SynNL          : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn             SynNL)
+       (Import SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF)
+       (Import Obc     : OBC             Ids Op OpAux)
+       (Import Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
+       (Import Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SB.Syn SB.Last).
 
   Definition equiv_env
              (in_domain: ident -> Prop) (R: env) (mems: PS.t) (me: menv) (ve: venv) : Prop :=
@@ -1293,3 +1271,21 @@ Module Type CORRECTNESS
   Qed.
 
 End CORRECTNESS.
+
+Module CorrectnessFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX       Op)
+       (Clks    : CLOCKS          Ids)
+       (ExprSyn : NLEXPRSYNTAX        Op)
+       (Str     : STREAM              Op OpAux)
+       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
+       (SynNL          : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (IsF     : ISFREE          Ids Op       Clks ExprSyn             SynNL)
+       (SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF)
+       (Obc     : OBC             Ids Op OpAux)
+       (Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
+       (Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SB.Syn SB.Last)
+<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF SB Obc Trans Corres.
+  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF SB Obc Trans Corres.
+End CorrectnessFun.

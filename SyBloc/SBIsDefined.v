@@ -93,3 +93,15 @@ Module Type SBISDEFINED
   Qed.
 
 End SBISDEFINED.
+
+Module SBIsDefinedFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+       (Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
+       (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
+<: SBISDEFINED Ids Op Clks ExprSyn Syn Var Last.
+  Include SBISDEFINED Ids Op Clks ExprSyn Syn Var Last.
+End SBIsDefinedFun.

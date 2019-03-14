@@ -112,6 +112,7 @@ Module Type FUSION
       remember (combine i rvs) as lr eqn:Heq.
       assert (forall x, In x lr -> In (fst x) i) as Hin
         by (destruct x; subst; apply in_combine_l).
+      setoid_rewrite <-Heq.
       clear Heq. induction lr as [|x lr]; auto.
       destruct x as [x v'].
       apply exp_eval_extend_env.
@@ -155,7 +156,7 @@ Module Type FUSION
         [apply val_to_bool_true' in Hv'
         |apply val_to_bool_false' in Hv']; subst;
           inversion_clear Hs as [| | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ];
-          apply Icomp with (menv1:=menv'') (env1:=env'').
+          apply Icomp with (me1:=menv'') (ve1:=env'').
       + apply Iifte with (1:=Hx) (2:=Hv) (3:=Hs1).
       + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
         apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
@@ -734,8 +735,8 @@ Module Type FUSION
     econstructor; eauto.
     2:now rewrite fuse_method_out; eassumption.
     rewrite fuse_method_in.
-    apply In_Forall with (1:=H4) in Hinp.
-    apply In_Forall with (1:=Hinp) in Hinc.
+    apply Forall_forall with (1:=H4) in Hinp.
+    apply Forall_forall with (1:=Hinp) in Hinc.
     rewrite fuse_method_body.
     rewrite fuse_Comp with (1:=Hinc).
     apply H2.
@@ -856,7 +857,7 @@ Module Type FUSION
       + rewrite fuse_class_c_mems; auto.
       + rewrite fuse_class_c_objs.
         eapply Forall_forall; intros oc Hin.
-        eapply In_Forall in H as [? ?]; eauto.
+        eapply Forall_forall in H as [? ?]; eauto.
     - now constructor.
     - simpl in *.
       econstructor 2; eauto.

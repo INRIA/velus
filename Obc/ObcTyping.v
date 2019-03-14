@@ -152,23 +152,23 @@ Module Type OBCTYPING
 
   (** Properties *)
 
-  Definition wt_valo (ve: stack) (xty: ident * type) :=
+  Definition wt_valo (ve: venv) (xty: ident * type) :=
     match Env.find (fst xty) ve with
     | None => True
     | Some v => wt_val v (snd xty)
     end.
 
-  Definition wt_env (ve: stack) (vars: list (ident * type)) :=
+  Definition wt_env (ve: venv) (vars: list (ident * type)) :=
     Forall (wt_valo ve) vars.
 
   Hint Unfold wt_env.
 
-  Inductive wt_mem : heap -> program -> class -> Prop :=
+  Inductive wt_mem : menv -> program -> class -> Prop :=
   | WTmenv: forall me p cl,
       wt_env (values me) cl.(c_mems) ->
       Forall (wt_mem_inst me p) cl.(c_objs) ->
       wt_mem me p cl
-  with wt_mem_inst : heap -> program -> (ident * ident) -> Prop :=
+  with wt_mem_inst : menv -> program -> (ident * ident) -> Prop :=
   | WTminst_empty: forall me p o c,
       find_inst o me = None ->
       wt_mem_inst me p (o, c)
@@ -231,27 +231,27 @@ Module Type OBCTYPING
 
   End wt_mem_mult.
 
-  Lemma wt_sempty:
+  Lemma wt_vempty:
     forall vars,
-      wt_env sempty vars.
+      wt_env vempty vars.
   Proof.
     induction vars as [|v vars]; auto.
     apply Forall_cons; auto.
-    unfold wt_valo; simpl; auto.
+    unfold wt_valo; rewrite Env.gempty; auto.
   Qed.
 
-  Lemma wt_hempty:
+  Lemma wt_mempty:
     forall p cls,
-      wt_mem hempty p cls.
+      wt_mem mempty p cls.
   Proof.
     constructor.
-    now apply wt_sempty.
-    induction (cls.(c_objs)) as [|(o, c) os]; auto.
-    apply Forall_cons; auto.
-    apply WTminst_empty.
-    apply find_inst_empty.
+    - now apply wt_vempty.
+    - induction (cls.(c_objs)) as [|(o, c) os]; auto.
+      apply Forall_cons; auto.
+      apply WTminst_empty.
+      apply find_inst_gempty.
   Qed.
-  Hint Resolve wt_sempty wt_hempty.
+  Hint Resolve wt_vempty wt_mempty.
 
   Lemma venv_find_wt_val:
     forall vars ve x ty v,
@@ -261,7 +261,7 @@ Module Type OBCTYPING
       wt_val v ty.
   Proof.
     intros ** WTe Hin Hfind.
-    apply In_Forall with (1:=WTe) in Hin.
+    apply Forall_forall with (1:=WTe) in Hin.
     unfold wt_valo in Hin.
     simpl in Hin.
     now rewrite Hfind in Hin.
@@ -292,7 +292,7 @@ Module Type OBCTYPING
   Proof.
     intros p cls f fm WTc Hfindm.
     destruct WTc as (Hfo & WTms).
-    apply In_Forall with (1:=WTms).
+    apply Forall_forall with (1:=WTms).
     apply find_method_In with (1:=Hfindm).
   Qed.
 
@@ -438,7 +438,7 @@ Module Type OBCTYPING
   Lemma wt_env_params:
     forall vs callee,
       Forall2 (fun v xt => wt_val v (snd xt)) vs (m_in callee) ->
-      wt_env (Env.adds (map fst (m_in callee)) vs sempty) (meth_vars callee).
+      wt_env (Env.adds (map fst (m_in callee)) vs vempty) (meth_vars callee).
   Proof.
     intros ** Wt.
     unfold wt_env.
@@ -467,7 +467,8 @@ Module Type OBCTYPING
         apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
       }
       unfold wt_valo; simpl.
-      rewrite Env.NotInMembers_find_adds with (v:=None); auto.
+      erewrite Env.NotIn_find_adds with (o := None); auto.
+      apply Env.gempty.
   Qed.
   Hint Resolve wt_env_params.
 
@@ -475,7 +476,7 @@ Module Type OBCTYPING
     forall vs callee es,
       Forall2 (fun e v => wt_val v (typeof e)) es vs ->
       Forall2 (fun (e : exp) (xt : ident * type) => typeof e = snd xt) es (m_in callee) ->
-      wt_env (Env.adds (map fst (m_in callee)) vs sempty) (meth_vars callee).
+      wt_env (Env.adds (map fst (m_in callee)) vs vempty) (meth_vars callee).
   Proof.
     intros ** Wt Eq.
     eapply wt_env_params, wt_params; eauto.
@@ -530,10 +531,9 @@ Module Type OBCTYPING
       inv WTstmt.
       edestruct IH; eauto; clear IH; [|split]; eauto.
       + (* Instance memory is well-typed before execution. *)
-        destruct (find_inst o menv) eqn:Hmfind;
-        auto using wt_hempty.
+        destruct (find_inst o me) eqn:Hmfind; auto.
         inversion_clear WTm as [? ? ? WTv WTi].
-        eapply In_Forall in WTi; eauto.
+        eapply Forall_forall in WTi; eauto.
         inversion_clear WTi as [? ? ? ? Hmfind'|? ? ? ? ? ? ? Hmfind' Hcfind' WTm];
           rewrite Hmfind' in Hmfind; try discriminate.
         match goal with Hcfind:find_class _ _ = Some (_, p') |- _ =>
@@ -556,10 +556,10 @@ Module Type OBCTYPING
           match goal with H:In (o, clsid) cls.(c_objs) |- _ =>
                           apply NoDupMembers_det with (1:=Hndup) (2:=H) in Hin end.
           subst clsid'. assumption.
-        * destruct (find_inst o' menv) eqn:Heq.
+        * destruct (find_inst o' me) eqn:Heq.
           2:constructor; simpl; rewrite find_inst_gso; now auto.
           match goal with H:Forall _ cls.(c_objs) |- _ =>
-                          apply In_Forall with (1:=H) in Hin end.
+                          apply Forall_forall with (1:=H) in Hin end.
           inv Hin; [constructor 1|econstructor 2]; unfold sub_inst in *;
             simpl in *; eauto;
           match goal with H:o <> o' |- _ =>
@@ -664,7 +664,7 @@ Module Type OBCTYPING
     destruct (ident_eqb k.(c_name) c'.(c_name)) eqn: Heq; auto.
     apply ident_eqb_eq in Heq; rewrite Heq in *; clear Heq.
     inversion_clear WTc as [Ho Hm].
-    apply In_Forall with (1:=Ho) in Hin.
+    apply Forall_forall with (1:=Ho) in Hin.
     apply not_None_is_Some in Hin.
     destruct Hin as ((cls, p') & Hin).
     simpl in Hin.
@@ -686,7 +686,7 @@ Module Type OBCTYPING
     inversion_clear Hnodup as [|? ? Hnin Hnodup'].
     apply Hnin.
     inversion_clear WTc as [Ho Hm]; clear Hm.
-    apply In_Forall with (1:=Ho) in Hin.
+    apply Forall_forall with (1:=Ho) in Hin.
     apply not_None_is_Some in Hin.
     destruct Hin as ((cls, p') & Hin).
     simpl in Hin. rewrite <-(find_class_name _ _ _ _ Hin) in *.

@@ -64,3 +64,13 @@ Module Type SBISBLOCK
   Qed.
 
 End SBISBLOCK.
+
+Module SBIsBlockFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+<: SBISBLOCK Ids Op Clks ExprSyn Syn.
+  Include SBISBLOCK Ids Op Clks ExprSyn Syn.
+End SBIsBlockFun.

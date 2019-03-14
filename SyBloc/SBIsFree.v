@@ -42,3 +42,15 @@ Module Type SBISFREE
     Exists (Is_free_in_eq x) eqs.
 
 End SBISFREE.
+
+Module SBIsFreeFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+       (SynNL          : NLSYNTAX     Ids Op Clks ExprSyn)
+       (IsF     : ISFREE       Ids Op Clks ExprSyn SynNL)
+<: SBISFREE Ids Op Clks ExprSyn Syn SynNL IsF.
+  Include SBISFREE Ids Op Clks ExprSyn Syn SynNL IsF.
+End SBIsFreeFun.

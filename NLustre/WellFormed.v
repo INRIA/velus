@@ -119,8 +119,6 @@ An NLustre program is well defined if
       | H: context[ Is_variable_in_eqs _ _ \/ In _ _] |- _ =>
         eapply H; eauto
       end.
-    Grab Existential Variables.
-    exact ck_r.
   Qed.
 
   Lemma Is_well_sch_free_variable_in_mems:
@@ -233,17 +231,15 @@ An NLustre program is well defined if
         | xs => ((PS.for_all (check_var defined variables)
                             (free_in_equation eq PS.empty))
                   && (negb (List.existsb (fun x => PS.mem x defined) xs)),
-                fold_left (fun defined x => PS.add x defined) xs defined, variable_eq variables eq)
+                ps_adds xs defined, variable_eq variables eq)
         end
       | (false, _, _) => (false, PS.empty, PS.empty)
       end.
 
     Definition well_sch (args: idents) (eqs: list equation) : bool :=
-      fst (fst (List.fold_right check_eq
-                                (true,
-                                 PS.empty,
-                                 fold_left (fun a b => PS.add b a) args PS.empty)
-                                eqs)).
+      fst (fst (fold_right check_eq
+                           (true, PS.empty, ps_from_list args)
+                           eqs)).
 
     Lemma not_for_all_spec:
       forall (s : PS.t) (f : BinNums.positive -> bool),
@@ -275,15 +271,13 @@ An NLustre program is well defined if
 
     Lemma well_sch_pre_spec:
       forall args eqs good defined variables,
-        (good, defined, variables)
-        = List.fold_right check_eq (true, PS.empty,
-                            fold_left (fun a b => PS.add b a) args PS.empty) eqs
-        ->
-        (good = true
-         -> (Is_well_sch mems args eqs
-             /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
-             /\ (forall x, PS.In x variables <->
-                              Is_variable_in_eqs x eqs \/ In x args)))
+        (good, defined, variables) = fold_right check_eq
+                                                (true, PS.empty, ps_from_list args)
+                                                eqs ->
+        (good = true ->
+         (Is_well_sch mems args eqs
+          /\ (forall x, PS.In x defined <-> Is_defined_in_eqs x eqs)
+          /\ (forall x, PS.In x variables <-> Is_variable_in_eqs x eqs \/ In x args)))
         /\ (good = false -> ~Is_well_sch mems args eqs).
     Proof.
       induction eqs as [|eq].
@@ -295,16 +289,13 @@ An NLustre program is well defined if
                  | H:PS.In _ PS.empty |- _ => apply PS.empty_spec in H; contradiction
                  | H:Is_defined_in_eqs _ nil |- _ => inversion H
                  | H:Is_variable_in_eqs _ nil |- _ => inversion H
-                 | H: context[fold_left _ _ _] |- _ =>
-                   apply in_fold_left_add in H
+                 | H: PS.In _ (ps_from_list _) |- _ => apply ps_from_list_In in H; auto
                  | _ => intuition
                  end.
-        apply in_fold_left_add; auto.
+        apply ps_from_list_In; auto.
       - (* case cons: *)
         intros good defined variables HH.
-        destruct (fold_right check_eq (true, PS.empty,
-                    fold_left (fun (a : PS.t) (b : positive) => PS.add b a)
-                              args PS.empty) eqs)
+        destruct (fold_right check_eq (true, PS.empty, ps_from_list args) eqs)
           as [[good' defined'] variables'] eqn:Heq.
         specialize IHeqs with good' defined' variables'.
         pose proof (IHeqs (eq_refl (good', defined', variables'))) as IH;
@@ -469,9 +460,7 @@ An NLustre program is well defined if
       intros args eqns.
       pose proof (well_sch_pre_spec args eqns).
       unfold well_sch.
-      destruct (fold_right check_eq
-                  (true, PS.empty,
-                   fold_left (fun a b => PS.add b a) args PS.empty) eqns)
+      destruct (fold_right check_eq (true, PS.empty, ps_from_list args) eqns)
         as [[good defined] variables].
       simpl.
       specialize H with good defined variables.

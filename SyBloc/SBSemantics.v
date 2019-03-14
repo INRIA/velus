@@ -811,3 +811,18 @@ Module Type SBSEMANTICS
   Qed.
 
 End SBSEMANTICS.
+
+Module SBSemanticsFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX       Op)
+       (Clks    : CLOCKS          Ids)
+       (ExprSyn : NLEXPRSYNTAX        Op)
+       (Syn     : SBSYNTAX        Ids Op       Clks ExprSyn)
+       (Block   : SBISBLOCK       Ids Op       Clks ExprSyn Syn)
+       (Ord     : SBORDERED       Ids Op       Clks ExprSyn Syn Block)
+       (Str     : STREAM              Op OpAux)
+       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
+<: SBSEMANTICS Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem.
+  Include SBSEMANTICS Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem.
+End SBSemanticsFun.

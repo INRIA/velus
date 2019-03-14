@@ -901,39 +901,26 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve tr_clocks_of.
 
-    Lemma sem_clocked_vars_impl:
-      forall H b xs,
-        CoInd.sem_clocked_vars H b xs ->
-        ExprIdx.sem_clocked_vars (tr_Stream b) (tr_History H) xs.
+    (** Give an indexed specification for Streams synchronization. *)
+    Lemma synchronized_index:
+      forall n xs bs,
+        CoInd.synchronized xs bs ->
+        (tr_Stream bs n = true <-> tr_Stream xs n <> absent).
     Proof.
-      intros ** Sem n.
-      revert dependent H; revert b.
-      induction n; intros.
-      - induction Sem as [|() ? (Sem & Sem')]; constructor; auto.
-        split.
-        + simpl. split.
-          *{ unfold_Stv b; rewrite tr_Stream_0.
-             - inversion 1; subst; simpl in *.
-               + edestruct Sem' as (?& Var).
-                 * constructor; reflexivity.
-                 *{ edestruct Sem as (?& Clock & Synchro); eauto.
-                    apply sem_var_impl in Var.
-                    specialize (Var 0).
-                    inversion_clear Clock as [??? E| | |].
-                    inv Synchro.
-                    - rewrite tr_Stream_0 in Var; eauto.
-                    - inv E; discriminate.
-                  }
-               + admit.
+      induction n.
+      - inversion_clear 1; rewrite 2 tr_Stream_0; intuition; discriminate.
+      - intros ** Synchro.
+        rewrite <-2 tr_Stream_tl; apply IHn.
+        inv Synchro; auto.
+    Qed.
 
-             - admit.
-           }
-          * admit.
-        + admit.
-      - rewrite tr_History_tl, <-tr_Stream_tl.
-        apply IHn.
-        admit.
-
+    Lemma sem_clocked_vars_impl:
+      forall H b xcs,
+        CoInd.sem_clocked_vars H b xcs ->
+        ExprIdx.sem_clocked_vars (tr_Stream b) (tr_History H) xcs.
+    Proof.
+    Admitted.
+    Hint Resolve sem_clocked_vars_impl.
 
     (** The final theorem stating the correspondence for nodes applications.
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
@@ -976,7 +963,6 @@ Module Type COINDTOINDEXED
         econstructor; eauto.
         + apply CoInd.same_clock_app_l in Same; auto.
         + apply CoInd.same_clock_app_r in Same; auto.
-        + admit.
         + apply Forall_impl_In with (P:=CoInd.sem_equation G H (CoInd.clocks_of xss)); auto.
           intros e ?.
           pattern e; eapply Forall_forall; eauto.

@@ -10,6 +10,7 @@ Require cfrontend.Ctyping.
 Require common.Memory.
 Require lib.Maps.
 
+Open Scope bool_scope.
 (* Interface avec CompCert *)
 
 Definition empty_composite_env : Ctypes.composite_env := (Maps.PTree.empty _).
@@ -51,7 +52,7 @@ Module Export Op <: OPERATORS.
     | Tfloat Ctypes.F32               => AST.Mfloat32
     | Tfloat Ctypes.F64               => AST.Mfloat64
     end.
-  
+
   Definition true_val := Values.Vtrue.
   Definition false_val := Values.Vfalse.
 
@@ -137,7 +138,7 @@ Module Export Op <: OPERATORS.
     | Cop.Oge  => true
     | _        => false
     end.
-  
+
   Definition is_bool_binop (op: binop) : bool :=
     match op with
     | Cop.Oand => true
@@ -207,7 +208,7 @@ Module Export Op <: OPERATORS.
 
   Hint Unfold wt_val.
   Hint Constructors wt_val'.
-  
+
   Lemma wt_val_true:
     wt_val true_val bool_type.
   Proof.
@@ -318,7 +319,7 @@ Module Export Op <: OPERATORS.
   Local Hint Immediate good_bool_vtrue good_bool_vfalse good_bool_vlong
         good_bool_vfloat good_bool_vsingle good_bool_tlong
         good_bool_tfloat.
-  
+
   Lemma good_bool_not_bool:
     forall v ty,
       (forall sg a, ty <> Ctypes.Tint Ctypes.IBool sg a) ->
@@ -331,9 +332,9 @@ Module Export Op <: OPERATORS.
   Qed.
 
   Local Hint Resolve good_bool_not_bool.
-    
+
   Opaque good_bool.
-  
+
   Lemma good_bool_zero_or_one:
     forall i sz sg a,
       good_bool (Values.Vint i) (Ctypes.Tint sz sg a) ->
@@ -358,7 +359,7 @@ Module Export Op <: OPERATORS.
   Qed.
 
   Local Hint Resolve wt_val_Vfalse_bool_type wt_val_Vtrue_bool_type.
-  
+
   Lemma wt_val_of_bool_bool_type:
     forall v,
       wt_val (Values.Val.of_bool v) bool_type.
@@ -367,7 +368,7 @@ Module Export Op <: OPERATORS.
   Qed.
 
   Local Hint Resolve wt_val_of_bool_bool_type.
-    
+
   Lemma typecl_wt_val_wt_val:
     forall cty ty v,
       typecl cty = Some ty ->
@@ -432,7 +433,7 @@ Module Export Op <: OPERATORS.
            | |- match match ?x with _ => _ end with _ => _ end = _ =>
              destruct x
            end; auto.
-  
+
   Lemma check_cltype_cast:
     forall ty ty',
       Ctyping.check_cast (cltype ty) (cltype ty') = Errors.OK tt.
@@ -441,7 +442,7 @@ Module Export Op <: OPERATORS.
     unfold Ctyping.check_cast.
     destruct ty, ty'; simpl; GoalMatchMatch.
   Qed.
-  
+
   Lemma pres_sem_unop:
     forall op ty1 ty v1 v,
       type_unop op ty1 = Some ty ->
@@ -460,7 +461,7 @@ Module Export Op <: OPERATORS.
         simpl in Hsop.
         unfold Cop.sem_notbool, Cop.classify_bool in Hsop;
         DestructCases; auto.
-      + apply wt_val_wt_val_cltype in Hv1.      
+      + apply wt_val_wt_val_cltype in Hv1.
         destruct (Ctyping.type_unop uop (cltype ty1)) as [cty|] eqn:Hok;
           [|discriminate].
         assert (Hok':=Hok).
@@ -548,7 +549,7 @@ Module Export Op <: OPERATORS.
   Proof.
     destruct b; auto.
   Qed.
-  
+
   Lemma option_map_of_bool_true_false:
     forall e x,
       Coqlib.option_map Values.Val.of_bool e = Some x ->
@@ -626,7 +627,7 @@ Module Export Op <: OPERATORS.
            Ctyping.shift_op_type in Htype.
     DestructCases; discriminate.
   Qed.
-    
+
   Lemma pres_sem_binop:
     forall op ty1 ty2 ty v1 v2 v,
       type_binop op ty1 ty2 = Some ty ->
@@ -719,7 +720,7 @@ Module Export Op <: OPERATORS.
                       || apply Ctyping.intsize_eq
                       || apply Ctyping.floatsize_eq).
   Qed.
-  
+
   Lemma const_dec : forall c1 c2 : const, {c1 = c2} + {c1 <> c2}.
   Proof.
     decide equality; (apply Ctyping.signedness_eq
@@ -771,7 +772,7 @@ Module Export Op <: OPERATORS.
              | _ => ContradictNotVptr
              end.
   Qed.
-  
+
   Lemma sem_cast_any_mem:
     forall v ty1 ty2 M1 M2,
       (forall b ofs, v <> Values.Vptr b ofs) ->
@@ -813,7 +814,7 @@ Module Export Op <: OPERATORS.
     - destruct sz; auto.
     - destruct f; auto.
   Qed.
-    
+
   Lemma wt_val_load_result:
     forall ty v,
       wt_val v ty ->
@@ -1015,4 +1016,3 @@ Module Export Op <: OPERATORS.
     end.
 
 End Op.
-

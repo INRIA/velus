@@ -463,6 +463,41 @@ Section Forall2.
     | _, _ => false
     end.
 
+  Lemma Forall2_forall2_eq:
+    forall (eq_A: A -> A -> Prop) (eq_B: B -> B -> Prop)
+      (eq_A_refl: reflexive A eq_A)
+      (eq_B_refl: reflexive B eq_B)
+      (P: A -> B -> Prop)
+      (P_compat: Proper (eq_A ==> eq_B ==> Basics.impl) P)
+      (l1: list A) (l2: list B),
+      Forall2 P l1 l2
+      <-> length l1 = length l2
+        /\ forall a b n x1 x2,
+          n < length l1 ->
+          eq_A (nth n l1 a) x1 ->
+          eq_B (nth n l2 b) x2 ->
+          P x1 x2.
+  Proof.
+    intros. revert l2; induction l1; intro.
+    - split; intro H.
+      + inv H. split; simpl; auto.
+        intros; omega.
+      + destruct H as [H _]. destruct l2; try discriminate; auto.
+    - split; intro H.
+      + inversion_clear H as [|? ? ? ? ? H'].
+        rewrite IHl1 in H'; destruct H' as (? & IH).
+        split; simpl; auto.
+        intros; destruct n.
+        * eapply P_compat; eauto.
+        * eapply IH; eauto; omega.
+      + destruct H as [Hlen H].
+        destruct l2; simpl in Hlen; try discriminate.
+        constructor.
+        * apply (H a b 0); simpl; auto; try omega.
+        * rewrite IHl1; split; try omega.
+          intros a' b' **; eapply (H a' b' (S n)); simpl; eauto; omega.
+  Qed.
+
   Lemma Forall2_forall2 :
     forall P l1 l2,
       Forall2 P l1 l2

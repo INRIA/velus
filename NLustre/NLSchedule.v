@@ -40,33 +40,33 @@ Require Import Velus.NLustre.NLClocking.
  *)
 
 Module Type EXT_NLSCHEDULER
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS   Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op)
-       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import Clks   : CLOCKS   Ids)
+       (Import ExprSyn: NLEXPRSYNTAX Op)
+       (Import Syn    : NLSYNTAX Ids Op Clks ExprSyn).
 
   Parameter schedule : ident -> list equation -> list positive.
 
 End EXT_NLSCHEDULER.
 
 Module Type NLSCHEDULE
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX       Op)
-       (Import Clks    : CLOCKS          Ids)
-       (Import ExprSyn : NLEXPRSYNTAX         Op)
-       (Import Syn     : NLSYNTAX         Ids Op      Clks ExprSyn)
-       (Import Str     : STREAM              Op OpAux)
-       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
-       (Import Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
-       (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
-       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
-       (Import Typ     : NLTYPING        Ids Op       Clks ExprSyn Syn)
-       (Import Clo     : NLCLOCKING      Ids Op       Clks ExprSyn Syn                 Mem IsD IsF)
-       (Import Sch     : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX       Op)
+       (Import Clks   : CLOCKS          Ids)
+       (Import ExprSyn: NLEXPRSYNTAX        Op)
+       (Import Syn    : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Import Ord    : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (Import IsF    : ISFREE          Ids Op       Clks ExprSyn Syn)
+       (Import Str    : STREAM              Op OpAux)
+       (Import Mem    : MEMORIES        Ids Op       Clks ExprSyn Syn)
+       (Import IsD    : ISDEFINED       Ids Op       Clks ExprSyn Syn Mem)
+       (Import ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn             Str)
+       (Import Sem    : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Import Typ    : NLTYPING        Ids Op       Clks ExprSyn Syn)
+       (Import Clo    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsF)
+       (Import Sch    : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -193,35 +193,13 @@ Module Type NLSCHEDULE
   Next Obligation.
     setoid_rewrite schedule_eqs_permutation; auto.
   Qed.
-  Next Obligation.
-    setoid_rewrite schedule_eqs_permutation; auto.
-  Qed.
 
   Definition schedule (G: global) : global :=
     map schedule_node G.
 
   Lemma schedule_node_name:
-    forall n,
-      (schedule_node n).(n_name) = n.(n_name).
-  Proof.
-    destruct n; auto.
-  Qed.
-
-  Lemma scheduler_wc_global:
-    forall G,
-      wc_global G ->
-      wc_global (schedule G).
-  Proof.
-    intros G HG.
-    induction G as [|n G Hwc IH]; auto.
-    inv HG.
-    constructor; [|now apply Hwc].
-    inv H1.
-    destruct n.
-    constructor; auto.
-    simpl in *.
-    now rewrite schedule_eqs_permutation.
-  Qed.
+    forall n, (schedule_node n).(n_name) = n.(n_name).
+  Proof. destruct n; auto. Qed.
 
   Lemma schedule_map_name:
     forall G,
@@ -268,11 +246,11 @@ Module Type NLSCHEDULE
       wt_equation (schedule G) vars eq.
   Proof.
     induction G as [|n G IH].
-    now destruct eq; inversion_clear 1; eauto with nltyping.
-    destruct eq; inversion_clear 1; eauto with nltyping;
-      match goal with H:find_node _ _ = _ |- _ =>
-                      apply scheduler_find_node in H end;
-      destruct n0; eauto with nltyping.
+    - now destruct eq; inversion_clear 1; eauto with nltyping.
+    - destruct eq; inversion_clear 1; eauto with nltyping;
+        match goal with H:find_node _ _ = _ |- _ =>
+                        apply scheduler_find_node in H end;
+        destruct n0; eauto with nltyping.
   Qed.
 
   Lemma scheduler_wt_global:
@@ -298,6 +276,39 @@ Module Type NLSCHEDULE
       destruct n; auto.
   Qed.
 
+  Lemma schedule_wc_equation:
+    forall G vars eq,
+      wc_equation G vars eq ->
+      wc_equation (schedule G) vars eq.
+  Proof.
+    induction G as [|n G IH]; auto.
+    intros vars eq Hwc.
+    destruct eq; inv Hwc; eauto using wc_equation.
+    econstructor; auto.
+    - now eapply scheduler_find_node; eauto.
+    - match goal with H:exists _, _ |- _ =>
+                      destruct H as (isub & osub & Hn_in & Hn_out) end.
+      exists isub, osub.
+      match goal with H:find_node _ _ = Some ?n0 |- _ => destruct n0 end; auto.
+  Qed.
+
+  Lemma scheduler_wc_global:
+    forall G,
+      wc_global G ->
+      wc_global (schedule G).
+  Proof.
+    intros G HG.
+    induction G as [|n G Hwc IH]; auto.
+    inversion HG as [|? G' WCG (WCi & WCo & WCv & WCeqs)]. subst.
+    specialize (Hwc WCG).
+    simpl. constructor; auto.
+    destruct n.
+    repeat (split; simpl; auto).
+    rewrite schedule_eqs_permutation.
+    apply Forall_impl with (2:=WCeqs).
+    apply schedule_wc_equation.
+  Qed.
+
   Lemma scheduler_sem_node:
     forall G f xss yss,
       sem_node G f xss yss ->
@@ -305,43 +316,37 @@ Module Type NLSCHEDULE
   Proof.
     intros G.
     induction 1 using sem_node_mult
-    with (P_equation := fun bk H eq =>
-                          sem_equation G bk H eq ->
-                          sem_equation (schedule G) bk H eq)
-         (P_reset := fun f r xss yss =>
-                       sem_reset G f r xss yss ->
-                       sem_reset (schedule G) f r xss yss);
-      try (now inversion_clear 1; eauto).
-    - constructor; intro k; specialize (H k); destruct H; auto.
-    - match goal with H:find_node _ _ = _ |- _ =>
-                    apply scheduler_find_node in H end.
-      econstructor; eauto; destruct n; simpl in *; eauto.
-      rewrite schedule_eqs_permutation.
-      match goal with H: Forall (fun e => sem_equation _ _ _ e -> _) _ |- _ =>
-                      eapply Forall_impl_In with (2:=H) end.
-      intros eq Hin Hsem.
-      eapply Hsem, In_Forall; eauto.
+    with (P_equation := fun bk H eq => sem_equation (schedule G) bk H eq)
+         (P_reset := fun f rs xss yss => sem_reset (schedule G) f rs xss yss);
+      eauto using sem_equation.
+    - constructor; firstorder.
+    - match goal with H:Forall _ n.(n_eqs) |- _ => rename H into HH end.
+      match goal with H:find_node _ _ = _ |- _ =>
+                      apply scheduler_find_node in H end.
+      destruct n; simpl in *.
+      econstructor; eauto; simpl.
+      rewrite schedule_eqs_permutation; auto.
   Qed.
 
 End NLSCHEDULE.
 
 Module NLScheduleFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX       Op)
-       (Clks    : CLOCKS          Ids)
-       (ExprSyn : NLEXPRSYNTAX         Op)
-       (Syn     : NLSYNTAX         Ids Op      Clks ExprSyn)
-       (Str     : STREAM              Op OpAux)
-       (Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
-       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
-       (Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
-       (Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
-       (IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
-       (IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
-       (Typ     : NLTYPING        Ids Op       Clks ExprSyn Syn)
-       (Clo     : NLCLOCKING      Ids Op       Clks ExprSyn Syn                 Mem IsD IsF)
-       (Sch     : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn)
-       <: NLSCHEDULE Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF Typ Clo Sch.
-  Include NLSCHEDULE Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF Typ Clo Sch.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX       Op)
+       (Clks   : CLOCKS          Ids)
+       (ExprSyn: NLEXPRSYNTAX        Op)
+       (Syn    : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Ord    : ORDERED         Ids Op       Clks ExprSyn Syn)
+       (IsF    : ISFREE          Ids Op       Clks ExprSyn Syn)
+       (Str    : STREAM              Op OpAux)
+       (Mem    : MEMORIES        Ids Op       Clks ExprSyn Syn)
+       (IsD    : ISDEFINED       Ids Op       Clks ExprSyn Syn Mem)
+       (ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn             Str)
+       (Sem    : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Typ    : NLTYPING        Ids Op       Clks ExprSyn Syn)
+       (Clo    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsF)
+       (Sch    : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn)
+<: NLSCHEDULE Ids Op OpAux Clks ExprSyn Syn Ord IsF Str Mem IsD ExprSem Sem Typ Clo Sch.
+  Include NLSCHEDULE Ids Op OpAux Clks ExprSyn Syn Ord IsF Str Mem IsD ExprSem Sem Typ Clo Sch.
 End NLScheduleFun.

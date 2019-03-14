@@ -120,3 +120,14 @@ Module Type SBORDERED
   Qed.
 
 End SBORDERED.
+
+Module SBOrderedFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+       (Block   : SBISBLOCK    Ids Op Clks ExprSyn Syn)
+<: SBORDERED Ids Op Clks ExprSyn Syn Block.
+  Include SBORDERED Ids Op Clks ExprSyn Syn Block.
+End SBOrderedFun.

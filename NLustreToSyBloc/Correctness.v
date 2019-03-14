@@ -5,26 +5,15 @@ Require Import Logic.FunctionalExtensionality.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Memories.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.NLustre.Ordered.
-Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.NLExprSemantics.
-Require Import Velus.NLustre.NLSemantics.
-Require Import Velus.NLustre.MemSemantics.
-Require Import Velus.SyBloc.SBIsBlock.
-Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.SyBloc.SBSemantics.
-Require Import Velus.NLustreToSyBloc.Translation.
 Require Import Velus.RMemory.
-Require Import Velus.NLustre.IsFree.
-Require Import Velus.NLustre.IsVariable.
-Require Import Velus.NLustre.IsDefined.
-Require Import Velus.NLustre.NoDup.
-Require Import Velus.NLustre.NLClocking.
-Require Import Velus.NLustre.NLClockingSemantics.
+
+Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.NLustre.NLExprSemantics.
+
+Require Import Velus.NLustre.
+Require Import Velus.SyBloc.
+
+Require Import Velus.NLustreToSyBloc.Translation.
 
 Require Import List.
 Import List.ListNotations.
@@ -35,29 +24,14 @@ Open Scope nat.
 Module Type CORRECTNESS
        (Import Ids      : IDS)
        (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX           Op)
-       (Import Clks     : CLOCKS              Ids)
-       (Import ExprSyn  : NLEXPRSYNTAX            Op)
-       (Import SynNL    : NLSYNTAX            Ids Op       Clks ExprSyn)
-       (Import SynSB    : SBSYNTAX            Ids Op       Clks ExprSyn)
-       (Import Block    : SBISBLOCK           Ids Op       Clks ExprSyn SynSB)
-       (Import SBOrd    : SBORDERED           Ids Op       Clks ExprSyn SynSB Block)
-       (Import Str      : STREAM                  Op OpAux)
-       (Import Ord      : ORDERED             Ids Op       Clks ExprSyn SynNL)
-       (Import ExprSem  : NLEXPRSEMANTICS     Ids Op OpAux Clks ExprSyn             Str)
-       (Import SemNL    : NLSEMANTICS         Ids Op OpAux Clks ExprSyn SynNL       Str Ord ExprSem)
-       (Import SemSB    : SBSEMANTICS         Ids Op OpAux Clks ExprSyn SynSB Block SBOrd Str ExprSem)
-       (Import Mem      : MEMORIES            Ids Op       Clks ExprSyn SynNL)
-       (Import Trans    : TRANSLATION         Ids Op       Clks ExprSyn SynNL SynSB Mem)
-       (Import IsD      : ISDEFINED           Ids Op       Clks ExprSyn SynNL       Mem)
-       (Import IsV      : ISVARIABLE          Ids Op       Clks ExprSyn SynNL       Mem IsD)
-       (Import IsF      : ISFREE              Ids Op       Clks ExprSyn SynNL)
-       (Import NoD      : NODUP               Ids Op       Clks ExprSyn SynNL       Mem IsD IsV)
-       (Import MemSem   : MEMSEMANTICS        Ids Op OpAux Clks ExprSyn SynNL
-                                              Str Ord ExprSem SemNL Mem IsD IsV IsF NoD)
-       (Import NLClk    : NLCLOCKING          Ids Op       Clks ExprSyn SynNL       Ord Mem IsD IsF)
-       (Import NLClkSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn SynNL
-                                              Str Ord ExprSem SemNL Mem IsD  IsF NLClk).
+       (Import OpAux    : OPERATORS_AUX       Op)
+       (Import Clks     : CLOCKS          Ids)
+       (Import ExprSyn  : NLEXPRSYNTAX        Op)
+       (Import Str      : STREAM              Op OpAux)
+       (Import ExprSem  : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
+       (Import NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem)
+       (Import SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem NL.Syn NL.IsF)
+       (Import Trans    : TRANSLATION     Ids Op       Clks ExprSyn             NL.Syn SB.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -205,7 +179,7 @@ Module Type CORRECTNESS
   Proof.
     induction eqs as [|eq eqs]; intros ** Sem Notin n; constructor.
     - specialize (Sem n); inversion_clear Sem as [|?? Sem'].
-      inv Sem'; eauto using SemSB.sem_equation.
+      inv Sem'; eauto using sem_equation.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
         intro E; eapply Notin; rewrite E; do 2 constructor.
@@ -217,10 +191,10 @@ Module Type CORRECTNESS
       + apply not_Is_state_in_cons in Notin as []; auto.
   Qed.
 
-  Inductive translate_eqn_nodup_states: SynNL.equation -> list equation -> Prop :=
+  Inductive translate_eqn_nodup_states: NL.Syn.equation -> list equation -> Prop :=
     | TrNodupEqDef:
         forall x ck e eqs,
-          translate_eqn_nodup_states (SynNL.EqDef x ck e) eqs
+          translate_eqn_nodup_states (NL.Syn.EqDef x ck e) eqs
     | TrNodupEqApp:
         forall xs ck f es r eqs x,
           hd_error xs = Some x ->
@@ -514,7 +488,7 @@ Module Type CORRECTNESS
                assert (present c = absent) by sem_det; discriminate.
              + simpl; rewrite <-Mmask_0; auto.
              eapply msem_node_initial_state; eauto.
-           - eapply SemSB.SEqCall with (Is := Mx 0); eauto.
+           - eapply SEqCall with (Is := Mx 0); eauto.
              + congruence.
              + eapply sem_block_equal_memory; eauto; reflexivity.   (* TODO: fix rewriting here? *)
          }
@@ -522,14 +496,14 @@ Module Type CORRECTNESS
            assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
              by apply Env.gss.
            destruct (ys n) eqn: E'.
-           - do 2 (econstructor; eauto using SemSB.sem_equation).
+           - do 2 (econstructor; eauto using sem_equation).
              + apply Son_abs1; auto.
                destruct Cky as [[]|(c &?&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
              + simpl; eexists; split; eauto; reflexivity.
              + econstructor; eauto.
                discriminate.
-           - do 2 (econstructor; eauto using SemSB.sem_equation).
+           - do 2 (econstructor; eauto using sem_equation).
              + change true with (negb false).
                eapply Son_abs2; eauto.
                destruct Cky as [[]|(?&?&?)]; auto.
@@ -575,7 +549,7 @@ Module Type CORRECTNESS
          }
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
       + eapply IHeqs; eauto.
-        apply not_Is_defined_in_cons in Notin as []; auto.
+        eapply NL.IsD.not_Is_defined_in_cons in Notin as []; auto.
   Qed.
 
   Lemma Nodup_defs_translate_eqns:
@@ -727,3 +701,18 @@ Module Type CORRECTNESS
   Qed.
 
 End CORRECTNESS.
+
+Module CorrectnessFun
+       (Ids      : IDS)
+       (Op       : OPERATORS)
+       (OpAux    : OPERATORS_AUX       Op)
+       (Clks     : CLOCKS          Ids)
+       (ExprSyn  : NLEXPRSYNTAX        Op)
+       (Str      : STREAM              Op OpAux)
+       (ExprSem  : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
+       (NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem)
+       (SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem NL.Syn NL.IsF)
+       (Trans    : TRANSLATION     Ids Op       Clks ExprSyn             NL.Syn SB.Syn NL.Mem)
+<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem NL SB Trans.
+  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem NL SB Trans.
+End CorrectnessFun.

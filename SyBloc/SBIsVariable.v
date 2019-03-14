@@ -87,3 +87,13 @@ Module Type SBISVARIABLE
   Qed.
 
 End SBISVARIABLE.
+
+Module SBIsVariableFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+<: SBISVARIABLE Ids Op Clks ExprSyn Syn.
+  Include SBISVARIABLE Ids Op Clks ExprSyn Syn.
+End SBIsVariableFun.

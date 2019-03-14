@@ -208,3 +208,21 @@ Module Type SBWELLDEFINED
   Qed.
 
 End SBWELLDEFINED.
+
+Module SBWellDefinedFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (Clks    : CLOCKS       Ids)
+       (ExprSyn : NLEXPRSYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
+       (Block   : SBISBLOCK    Ids Op Clks ExprSyn Syn)
+       (Ord     : SBORDERED    Ids Op Clks ExprSyn Syn Block)
+       (Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
+       (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
+       (Def     : SBISDEFINED  Ids Op Clks ExprSyn Syn Var Last)
+       (SynNL          : NLSYNTAX     Ids Op Clks ExprSyn)
+       (IsF     : ISFREE       Ids Op Clks ExprSyn     SynNL)
+       (Free    : SBISFREE     Ids Op Clks ExprSyn Syn SynNL IsF)
+<: SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def SynNL IsF Free.
+  Include SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def SynNL IsF Free.
+End SBWellDefinedFun.
