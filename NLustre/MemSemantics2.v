@@ -787,7 +787,8 @@ dataflow memory for which the non-standard semantics holds true.
            rewrite 2 mask_transparent in Abs; auto).
     assert (forall k, Forall (msem_equation G (Fbk k) (fun _ : nat => false) (FH k) (F k) (F' k)) (n_eqs node))
       as Heqs by (intro k; destruct (Node k); intuition).
-    clear - Heqs.
+    assert (forall k n, r n = true -> F k n ≋ F k 0) as RstSpec by admit.
+    clear - Heqs RstSpec.
     induction (n_eqs node) as [|eq]; constructor; auto.
     - assert (forall k, msem_equation G (Fbk k) (fun _ : nat => false) (FH k) (F k) (F' k) eq) as Heq
           by (intro k; specialize (Heqs k); inv Heqs; auto).
@@ -810,11 +811,19 @@ dataflow memory for which the non-standard semantics holds true.
           try (intro n; destruct (Heq' (count r n)) as (?&?&?); eauto).
         split; [|split].
         * destruct (Heq' (count r 0)) as (?&?&?&?); auto.
-        * intro n; destruct (Heq' (count r n)) as (?&?&?&?&?); auto.
-          admit.
-        * intro n; destruct (Heq' (count r n)) as (?&?&?&?&?); auto.
-          admit.
-
+        * intro n; destruct (Heq' (count r n)) as (?&?& Init & Loop &?).
+          rewrite <-Loop; simpl.
+          destruct (r (S n)) eqn: R; auto.
+          rewrite RstSpec; auto; symmetry; rewrite RstSpec; auto.
+          destruct (Heq' (S (count r n))) as (?&?& Init' &?&?); auto.
+          now rewrite Init, Init'.
+        * intro n; destruct (Heq' (count r n)) as (?&?& Init &?& Spec); auto.
+          specialize (Spec n).
+          destruct (find_val i (F (count r n) n)) eqn: Find; auto.
+          destruct (Fls (count r n) n); auto.
+          destruct (r n) eqn: R; auto.
+          rewrite RstSpec, Init in Find; auto.
+          inv Find; auto.
     - apply IHl.
       intro k; specialize (Heqs k); inv Heqs; auto.
   Qed.
