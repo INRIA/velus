@@ -271,13 +271,12 @@ Module Env.
     Qed.
 
     Lemma NotIn_find_adds':
-      forall x xvs (o: option A) m,
+      forall x xvs m,
         (forall a, ~ List.In (x, a) xvs) ->
-        find x m = o ->
-        find x (adds' xvs m) = o.
+        find x (adds' xvs m) = find x m.
     Proof.
       induction xvs as [|(y, a)]; auto.
-      intros ** Hnin Hfind.
+      intros ** Hnin.
       rewrite find_gsso'.
       - apply IHxvs; auto.
         intros ??; eapply Hnin; right; eauto.
@@ -285,13 +284,12 @@ Module Env.
     Qed.
 
     Lemma NotIn_find_adds:
-      forall x xs (o: option A) vs m,
+      forall x xs vs m,
         ~ List.In x xs ->
-        find x m = o ->
-        find x (adds xs vs m) = o.
+        find x (adds xs vs m) = find x m.
     Proof.
       induction xs as [|xty xs]; auto.
-      intros v vs S Hnin Hfind.
+      intros v vs Hnin.
       apply Decidable.not_or in Hnin as [Hnin Hneq].
       rewrite find_gsso; auto.
     Qed.

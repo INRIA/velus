@@ -467,8 +467,7 @@ Module Type OBCTYPING
         apply InMembers_app; right; apply InMembers_app; right; apply inmembers_eq.
       }
       unfold wt_valo; simpl.
-      erewrite Env.NotIn_find_adds with (o := None); auto.
-      apply Env.gempty.
+      rewrite Env.NotIn_find_adds, Env.gempty; auto.
   Qed.
   Hint Resolve wt_env_params.
 

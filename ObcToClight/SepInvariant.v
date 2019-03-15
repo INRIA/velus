@@ -27,34 +27,34 @@ Open Scope list.
 Open Scope sep_scope.
 Open Scope Z.
 
-Definition match_value (e: PM.t val) (x: ident) (v': val) : Prop :=
-  match PM.find x e with
+Definition match_value (e: Env.t val) (x: ident) (v': val) : Prop :=
+  match Env.find x e with
   | None => True
   | Some v => v' = v
   end.
 
 Lemma match_value_empty:
-  forall x, match_value (PM.empty val) x = (fun _ => True).
+  forall x, match_value (Env.empty _) x = (fun _ => True).
 Proof.
   intro. unfold match_value.
-  rewrite PM.gempty; auto.
+  rewrite Env.gempty; auto.
 Qed.
 
 Lemma match_value_add:
   forall x x' v e,
     x <> x' ->
-    match_value (PM.add x' v e) x = match_value e x.
+    match_value (Env.add x' v e) x = match_value e x.
 Proof.
   intros ** Hneq.
   unfold match_value. simpl.
-  rewrite PM.gso with (1:=Hneq).
+  rewrite Env.gso with (1:=Hneq).
   reflexivity.
 Qed.
 
 Remark match_find_var_det:
   forall ve x v1 v2,
     match_value ve x v1 ->
-    PM.find x ve = Some v2 ->
+    Env.find x ve = Some v2 ->
     v1 = v2.
 Proof.
   unfold match_value; simpl.
@@ -64,22 +64,22 @@ Qed.
 
 Ltac app_match_find_var_det :=
   match goal with
-  | H1: PM.find ?x ?ve = Some ?v1,
+  | H1: Env.find ?x ?ve = Some ?v1,
         H2: match_value ?ve ?x ?v2 |- _ =>
     assert (v2 = v1) by (apply (match_find_var_det _ _ _ _ H2 H1)); subst v1; clear H2
   end.
 
-Definition instance_match (me: heap) (i: ident): heap :=
-  match mfind_inst i me with
-  | None => hempty
+Definition instance_match (me: menv) (i: ident): menv :=
+  match find_inst i me with
+  | None => mempty
   | Some i => i
   end.
 
 Lemma instance_match_empty:
-  forall x, instance_match hempty x = hempty.
+  forall x, instance_match mempty x = mempty.
 Proof.
-  intros. unfold instance_match, mfind_inst; simpl.
-  now rewrite PM.gempty. 
+  intros. unfold instance_match, find_inst; simpl.
+  now rewrite Env.gempty.
 Qed.
 
 Remark field_offset_rec_in_range':
@@ -109,16 +109,16 @@ Qed.
 Section Staterep.
   Variable ge : composite_env.
 
-  Definition staterep_mems (cls: class) (me: heap) (b: block) (ofs: Z) (xty: ident * type) :=
+  Definition staterep_mems (cls: class) (me: menv) (b: block) (ofs: Z) (xty: ident * type) :=
     let (x, ty) := xty in
     match field_offset ge x (make_members cls) with
     | Errors.OK d =>
-	  contains_w (type_chunk ty) b (ofs + d) (match_value me.(mm_values) x)
+	  contains_w (type_chunk ty) b (ofs + d) (match_value me.(values) x)
     | Errors.Error _ => sepfalse
     end.
 
   Fixpoint staterep
-           (p: program) (clsnm: ident) (me: heap) (b: block) (ofs: Z): massert :=
+           (p: program) (clsnm: ident) (me: menv) (b: block) (ofs: Z): massert :=
     match p with
     | nil => sepfalse
     | cls :: p' =>
@@ -136,7 +136,7 @@ Section Staterep.
       else staterep p' clsnm me b ofs
     end.
 
-  Definition staterep_objs (p': program) (cls: class) (me: heap) (b: block) (ofs: Z) (o: ident * ident) :=
+  Definition staterep_objs (p': program) (cls: class) (me: menv) (b: block) (ofs: Z) (o: ident * ident) :=
     let (i, c) := o in
     match field_offset ge i (make_members cls) with
     | Errors.OK d =>
@@ -175,7 +175,7 @@ Section Staterep.
   Proof.
     intros ** Find.
     pose proof (find_class_name _ _ _ _ Find); subst.
-    pose proof (find_class_app _ _ _ _ Find) as (? & Hprog & FindNone). 
+    pose proof (find_class_app _ _ _ _ Find) as (? & Hprog & FindNone).
     rewrite Hprog.
     rewrite staterep_skip_app; auto.
   Qed.
@@ -380,7 +380,7 @@ Section StructInBounds.
       destruct (IH _ Hfo) as (ty & Hft).
       exists ty; assumption.
   Qed.
-  
+
   Lemma struct_in_bounds_field:
     forall min max ofs flds id d,
       struct_in_bounds min max ofs flds ->
@@ -425,7 +425,7 @@ Section StructInBounds.
     rewrite H2p.
     apply two_power_nat_pos.
   Qed.
-  
+
 End StructInBounds.
 
 Section StateRepProperties.
@@ -587,14 +587,14 @@ Section StateRepProperties.
       wt_program prog ->
       find_class clsnm prog <> None ->
       range_w b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
-      staterep gcenv prog clsnm hempty b 0.
+      staterep gcenv prog clsnm mempty b 0.
   Proof.
     intros ** WTp Hfind.
     (* Weaken the goal for proof by induction. *)
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
            massert_imp (range_w b lo (lo + sizeof gcenv (type_of_inst clsnm)))
-                       (staterep gcenv prog clsnm hempty b lo)).
+                       (staterep gcenv prog clsnm mempty b lo)).
     now intro HH; apply HH; apply Z.divide_0_r.
 
     (* Setup an induction on prog. *)
@@ -650,7 +650,7 @@ Section StateRepProperties.
         apply Forall_cons2 in Hcoal1.
         destruct Hcoal1 as [Hcoal1 Hcoal2].
         apply sep_imp'; auto with datatypes.
-        destruct m; simpl. 
+        destruct m; simpl.
         destruct (field_offset gcenv i (co_members co)) eqn:Hfo; auto.
         rewrite match_value_empty, sizeof_translate_chunk; eauto with clalign.
         apply range_contains'; auto with mem.
@@ -665,7 +665,7 @@ Section StateRepProperties.
         induction cls.(c_objs) as [|o os]; auto.
         simpl. apply sep_imp'.
         2:now inv Ho; apply Forall_cons2 in Hcoal2; intuition.
-        apply In_Forall with (x:=o) in Ho; auto with datatypes.
+        apply Forall_forall with (x:=o) in Ho; auto with datatypes.
         destruct o as [o c].
         apply Forall_cons2 in Hcoal2.
         destruct Hcoal2 as [Hcoal2 Hcoal3].
@@ -703,7 +703,7 @@ Section StateRepProperties.
       access_mode (cltype ty) = By_value (type_chunk ty) ->
       m |= staterep gcenv (cls::prog') cls.(c_name) me b ofs ** P ->
       In (x, ty) cls.(c_mems) ->
-      mfind_mem x me = Some v ->
+      find_val x me = Some v ->
       field_offset gcenv x (make_members cls) = Errors.OK d ->
       Clight.deref_loc (cltype ty) m b (Int.repr (ofs + d)) v.
   Proof.
@@ -720,7 +720,7 @@ Section StateRepProperties.
     apply loadv_rule in Hm; auto with mem.
     destruct Hm as [v' [Hloadv Hmatch]].
     unfold match_value in Hmatch.
-    unfold mfind_mem in Hv; simpl in Hv.
+    unfold find_val in Hv; simpl in Hv.
     rewrite Hv in Hmatch; clear Hv.
     rewrite Hmatch in Hloadv; clear Hmatch.
     apply Clight.deref_loc_value with (2:=Hloadv); auto.
@@ -728,7 +728,7 @@ Section StateRepProperties.
 
   Lemma staterep_assign_mem:
     forall P cls prog' m m' me b ofs x ty d v,
-      (P me -*> P (madd_mem x v me)) ->
+      (P me -*> P (add_val x v me)) ->
       access_mode (cltype ty) = By_value (type_chunk ty) ->
       NoDup cls.(c_objs) ->
       NoDupMembers cls.(c_mems) ->
@@ -737,8 +737,8 @@ Section StateRepProperties.
       field_offset gcenv x (make_members cls) = Errors.OK d ->
       v = Values.Val.load_result (type_chunk ty) v ->
       Clight.assign_loc gcenv (cltype ty) m b (Int.repr (ofs + d)) v m' ->
-      m' |= staterep gcenv (cls::prog') cls.(c_name) (madd_mem x v me) b ofs
-               ** P (madd_mem x v me).
+      m' |= staterep gcenv (cls::prog') cls.(c_name) (add_val x v me) b ofs
+               ** P (add_val x v me).
   Proof.
     intros ** HPimp Hty Hcls Hmem Hm Hin Hoff Hlr Hal.
     rewrite <-HPimp; clear HPimp.
@@ -759,13 +759,13 @@ Section StateRepProperties.
                 match field_offset gcenv x0 (make_members cls) with
                 | Errors.OK d0 =>
                   contains_w (type_chunk ty0) b (ofs + d0)
-                             (match_value (mm_values me) x0)
+                             (match_value (values me) x0)
                 | Errors.Error _ => sepfalse
                 end) at 1.
     - rewrite <-sep_swap2.
       eapply storev_rule2 with (2:=Hm); auto with mem.
       + unfold match_value. simpl.
-        rewrite PM.gss. symmetry; exact Hlr.
+        rewrite Env.gss. symmetry; exact Hlr.
       + clear Hlr. inversion Hal as [? ? ? Haccess|? ? ? ? Haccess].
         * rewrite Hty in Haccess.
           injection Haccess. intro; subst. assumption.
@@ -773,7 +773,7 @@ Section StateRepProperties.
     - apply NoDupMembers_remove_1 in Hmem.
       apply NoDupMembers_NoDup with (1:=Hmem).
     - intros x' Hin'; destruct x' as [x' ty'].
-      unfold madd_mem; simpl.
+      unfold add_val; simpl.
       rewrite match_value_add; [reflexivity|].
       apply NoDupMembers_app_cons in Hmem.
       destruct Hmem as [Hmem].
@@ -811,7 +811,7 @@ Section BlockRep.
   Hypothesis ge_consistent : composite_env_consistent ge.
 
   (* TODO: name predicate "blockrep" and write sepall blockrep xs *)
-  Definition blockrep (ve: stack) (flds: members) (b: block) : massert :=
+  Definition blockrep (ve: venv) (flds: members) (b: block) : massert :=
     sepall (fun xty : ident * Ctypes.type =>
               let (x, ty) := xty in
               match field_offset ge x flds, access_mode ty with
@@ -824,7 +824,7 @@ Section BlockRep.
     forall m ve co b x ty d v P,
       m |= blockrep ve (co_members co) b ** P ->
       In (x, ty) (co_members co) ->
-      PM.find x ve = Some v ->
+      Env.find x ve = Some v ->
       field_offset ge x (co_members co) = Errors.OK d ->
       Clight.deref_loc ty m b (Int.repr d) v.
   Proof.
@@ -853,8 +853,8 @@ Section BlockRep.
       access_mode ty = By_value chunk ->
       v = Val.load_result chunk v ->
       Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' ->
-      massert_imp (P ve) (P (PM.add x v ve)) ->
-      m' |= blockrep (PM.add x v ve) (co_members co) b ** P (PM.add x v ve).
+      massert_imp (P ve) (P (Env.add x v ve)) ->
+      m' |= blockrep (Env.add x v ve) (co_members co) b ** P (Env.add x v ve).
   Proof.
     Opaque sepconj.
     intros ** Hndup Hm Hin Hoff Haccess Hlr Hal HP.
@@ -871,7 +871,7 @@ Section BlockRep.
     - rewrite <-sep_swap2.
       rewrite HP in Hm.
       eapply storev_rule2 with (2:=Hm); auto with mem.
-      + unfold match_value. rewrite PM.gss. symmetry. exact Hlr.
+      + unfold match_value. rewrite Env.gss. symmetry. exact Hlr.
       + inversion Hal as [? ? ? Haccess'|]; rewrite Haccess in *.
         * injection Haccess'. intro HR; rewrite <-HR in *; assumption.
         * discriminate.
@@ -927,7 +927,7 @@ Section BlockRep.
       (forall x ty, In (x, ty) flds ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      sepall (field_range ge flds b 0) flds <-*-> blockrep sempty flds b.
+      sepall (field_range ge flds b 0) flds <-*-> blockrep vempty flds b.
   Proof.
     intros ** Hndups Hchunk.
     unfold blockrep.
@@ -963,7 +963,7 @@ Section BlockRep.
       (forall x ty, In (x, ty) (co_members co) ->
                     exists chunk, access_mode ty = By_value chunk
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
-      range b 0 (co_sizeof co) -*> blockrep sempty (co_members co) b.
+      range b 0 (co_sizeof co) -*> blockrep vempty (co_members co) b.
   Proof.
     intros ** Hco Hstruct Hndups Hchunk.
     rewrite split_range_fields
@@ -974,7 +974,7 @@ Section BlockRep.
 
   Lemma blockrep_any_empty:
     forall flds ve b,
-      blockrep ve flds b -*> blockrep sempty flds b.
+      blockrep ve flds b -*> blockrep vempty flds b.
   Proof.
     intros flds ve b.
     apply sepall_weakenp.
@@ -989,7 +989,7 @@ Section BlockRep.
   Lemma blockrep_nodup:
     forall xs vs flds ve ob,
       NoDupMembers (xs ++ flds) ->
-      blockrep ve flds ob <-*-> blockrep (adds (map fst xs) vs ve) flds ob.
+      blockrep ve flds ob <-*-> blockrep (Env.adds (map fst xs) vs ve) flds ob.
   Proof.
     intros ** Nodup.
     unfold blockrep.
@@ -998,12 +998,12 @@ Section BlockRep.
     destruct (field_offset ge x flds); auto.
     destruct (access_mode t); auto.
     revert vs ve.
-    induction xs as [|(x', t')], vs; unfold adds in *; simpl; auto.
+    induction xs as [|(x', t')], vs; unfold Env.adds in *; simpl; auto.
     rewrite <-app_comm_cons, nodupmembers_cons in Nodup.
     destruct Nodup as [Notin Nodup].
     intro ve.
     unfold match_value in *.
-    rewrite PM.gso.
+    rewrite Env.gso.
     + apply IHxs; auto.
     + intro; subst; apply Notin.
       rewrite InMembers_app; right.
@@ -1012,10 +1012,10 @@ Section BlockRep.
 
   Lemma blockrep_findvars:
     forall ve xs vs b,
-      Forall2 (fun x v => PM.find x ve = Some v) (map fst xs) vs ->
-      blockrep ve xs b -*> blockrep (adds (map fst xs) vs sempty) xs b.
+      Forall2 (fun x v => Env.find x ve = Some v) (map fst xs) vs ->
+      blockrep ve xs b -*> blockrep (Env.adds (map fst xs) vs vempty) xs b.
     Proof.
-      unfold  adds; simpl.
+      unfold  Env.adds; simpl.
       intros ** Findvars.
       unfold blockrep.
       apply sepall_weakenp.
@@ -1027,18 +1027,18 @@ Section BlockRep.
       intros v Findx.
       revert vs Findvars.
       induction xs as [|(x', t')], vs; simpl; intro Findvars;
-      try (rewrite PM.gempty; auto).
+      try (rewrite Env.gempty; auto).
       inversion Findvars as [|y ? ys ? Find Findvars']; subst; clear Findvars.
       destruct (split xs) as (g, d).
       simpl in *.
       destruct (ident_eqb x x') eqn: E.
       - apply ident_eqb_eq in E; subst x'.
         rewrite Find in Findx.
-        rewrite PM.gss; auto.
+        rewrite Env.gss; auto.
       - apply ident_eqb_neq in E.
         destruct Hin as [Eq|?].
         + inv Eq; now contradict E.
-        + rewrite PM.gso.
+        + rewrite Env.gso.
           apply IHxs; auto.
           exact E.
     Qed.
@@ -1066,4 +1066,3 @@ Section BlockRep.
 End BlockRep.
 
 Hint Resolve footprint_perm_blockrep footprint_decidable_blockrep.
-

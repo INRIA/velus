@@ -203,7 +203,7 @@ Definition make_out_vars (out_vars: M.t ident): list (ident * Ctypes.type) :=
          (prefix_out o f, type_of_inst (prefix_fun cid f))
       ) (M.elements out_vars).
 
-Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: PM.t type): PM.t type :=
+Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: Env.t type): Env.t type :=
   match s with
   | Ifte _ s1 s2
   | Comp s1 s2 => rec_instance_methods_temp prog s2 (rec_instance_methods_temp prog s1 m)
@@ -213,7 +213,7 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: PM.t type): PM.
       match find_method f c.(c_methods) with
       | Some m' =>
         match ys, m'.(m_out) with
-        | [_], [(y', t)] => PM.add (prefix f y') t m
+        | [_], [(y', t)] => Env.add (prefix f y') t m
         | _, _ => m
         end
       | None => m
@@ -223,11 +223,11 @@ Fixpoint rec_instance_methods_temp (prog: program) (s: stmt) (m: PM.t type): PM.
   | _ => m
   end.
 
-Definition instance_methods_temp (prog: program) (m: method): PM.t type :=
-  rec_instance_methods_temp prog m.(m_body) (@PM.empty type).
+Definition instance_methods_temp (prog: program) (m: method): Env.t type :=
+  rec_instance_methods_temp prog m.(m_body) (Env.empty _).
 
-Definition make_out_temps (out_temps: PM.t type): list (ident * Ctypes.type) :=
-  map translate_param (PM.elements out_temps).
+Definition make_out_temps (out_temps: Env.t type): list (ident * Ctypes.type) :=
+  map translate_param (Env.elements out_temps).
 
 Definition make_in_arg (arg: ident * type): Clight.expr :=
   let (x, ty) := arg in

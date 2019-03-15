@@ -11,19 +11,16 @@ Require Import Velus.ObcToClight.Interface.
 Require Import List.
 Import List.ListNotations.
 Require Import Instantiator.
-Import Obc.Typ.
 Import Obc.Syn.
-(* Import Obc.Sem. *)
-Import NL.Str.
+Import Str.
 Import OpAux.
-Import Trans.
 
 Section finite_traces.
-  
+
   Variable p: Clight.program.
-  
+
   Definition eventval_of_val (v: val): eventval :=
-    match v with 
+    match v with
     | Vint i => EVint i
     | Vlong i => EVlong i
     | Vfloat f => EVfloat f
@@ -33,28 +30,28 @@ Section finite_traces.
     end.
 
   Lemma eventval_of_val_match:
-    forall v t, wt_val v t -> 
-           eventval_match (globalenv p) 
-                          (eventval_of_val v) 
+    forall v t, wt_val v t ->
+           eventval_match (globalenv p)
+                          (eventval_of_val v)
                           (AST.type_of_chunk (type_chunk t)) v.
   Proof.
     destruct v; intros ** Wt; inv Wt; simpl; try econstructor.
     destruct sz; try destruct sg; econstructor.
   Qed.
-  
+
   Definition load_event_of_val (v: val)(xt: ident * type): event
     := Event_vload (type_chunk (snd xt))
-                   (glob_id (fst xt)) 
+                   (glob_id (fst xt))
                    Int.zero (eventval_of_val v).
 
   Definition store_event_of_val (v: val)(xt: ident * type): event
     := Event_vstore (type_chunk (snd xt))
-                    (glob_id (fst xt)) 
+                    (glob_id (fst xt))
                     Int.zero (eventval_of_val v).
 
   Definition mk_event (f: val -> ident * type -> event)
              (vs: list val)(args: list (ident * type))
-    := map (fun vxt => f (fst vxt) (snd vxt)) (combine vs args). 
+    := map (fun vxt => f (fst vxt) (snd vxt)) (combine vs args).
 
   Definition load_events := mk_event load_event_of_val.
   Definition store_events := mk_event store_event_of_val.
@@ -62,22 +59,22 @@ Section finite_traces.
   Lemma mk_event_nil: forall f vs, mk_event f vs [] = [].
   Proof. intros; destruct vs; simpl; auto. Qed.
 
-  Lemma mk_event_cons: 
-    forall f v vs xt xts, 
+  Lemma mk_event_cons:
+    forall f v vs xt xts,
       mk_event f (v :: vs) (xt :: xts) = f v xt :: mk_event f vs xts.
   Proof. auto. Qed.
 
   Corollary load_events_nil : forall vs, load_events vs [] = [].
   Proof. apply mk_event_nil. Qed.
 
-  Corollary load_events_cons : forall v vs xt xts, 
+  Corollary load_events_cons : forall v vs xt xts,
       load_events (v :: vs) (xt :: xts) = [load_event_of_val v xt] ++ load_events vs xts.
   Proof. apply mk_event_cons. Qed.
 
   Corollary store_events_nil : forall vs, store_events vs [] = [].
   Proof. apply mk_event_nil. Qed.
 
-  Corollary store_events_cons : forall v vs xt xts, 
+  Corollary store_events_cons : forall v vs xt xts,
       store_events (v :: vs) (xt :: xts) = [store_event_of_val v xt] ++ store_events vs xts.
   Proof. apply mk_event_cons. Qed.
 
@@ -97,7 +94,7 @@ Section infinite_traces.
   Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) xs.
   Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) ys.
 
-  Lemma load_events_not_E0: forall n, 
+  Lemma load_events_not_E0: forall n,
       load_events (map sem_const (ins n)) xs <> E0.
   Proof.
     clear - Hwt_ins xs_spec.
@@ -106,7 +103,7 @@ Section infinite_traces.
     inv Hwt_ins; rewrite load_events_cons; discriminate.
   Qed.
 
-  Lemma store_events_not_E0: forall n, 
+  Lemma store_events_not_E0: forall n,
       store_events (map sem_const (outs n)) ys <> E0.
   Proof.
     clear - Hwt_outs ys_spec.
@@ -116,7 +113,7 @@ Section infinite_traces.
   Qed.
 
   CoFixpoint mk_trace (n: nat): traceinf'.
-  clear - mk_trace n ins outs xs ys. 
+  clear - mk_trace n ins outs xs ys.
   refine(
       (Econsinf' (load_events (map sem_const (ins n)) xs)
                  (Econsinf' (store_events (map sem_const (outs n)) ys)
@@ -126,7 +123,7 @@ Section infinite_traces.
   Defined.
 
   Lemma unfold_mk_trace: forall n,
-      traceinf_of_traceinf' (mk_trace n) = 
+      traceinf_of_traceinf' (mk_trace n) =
       (load_events (map sem_const (ins n)) xs
                    ++ E0
                    ++ store_events (map sem_const (outs n)) ys)
