@@ -212,6 +212,14 @@ Module Type SBSEMANTICS
 
   End sem_block_mult.
 
+  CoInductive dostep: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop :=
+    dostep_intro:
+      forall P b xss yss Sn S' n,
+        (n = 0 -> initial_state P b Sn) ->
+        sem_block P b Sn (xss n) (yss n) S' ->
+        dostep P b xss yss S' (S n) ->
+        dostep P b xss yss Sn n.
+
   Add Parametric Morphism block : (reset_lasts block)
       with signature equal_memory ==> Basics.impl
         as reset_lasts_equal_memory.

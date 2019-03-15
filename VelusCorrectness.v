@@ -323,9 +323,6 @@ Hint Resolve Obc.Fus.fuse_wt_program
      Obc.Fus.fuse_call Obc.Fus.fuse_wt_mem fuse_dostep' Welldef_global_patch
      Fusible.ClassFusible_translate.
 
-Definition vstr (xss: stream (list const)): stream (list value) :=
-  fun n => map (fun c => present (sem_const c)) (xss n).
-
 Lemma behavior_clight:
   forall G P main ins outs,
     wc_global G ->
@@ -502,4 +499,3 @@ Proof.
   apply add_builtins_spec; auto.
   intros ? ?; discriminate.
 Qed.
-

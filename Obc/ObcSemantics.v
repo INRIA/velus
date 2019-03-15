@@ -1,5 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import List.
+Import List.ListNotations.
+Open Scope list_scope.
 
 Require Import Velus.Common.
 Require Import Velus.Operators.
@@ -104,6 +106,15 @@ Module Type OBCSEMANTICS
   with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
   Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
 
+  Fixpoint dostep (prog: program) (ys: idents) (clsid obj: ident) (css: nat -> list const) (me: menv) (ve: venv) (n: nat) : Prop :=
+    match n with
+    | 0 =>
+      stmt_eval prog mempty vempty (Call [] clsid obj reset []) (me, ve)
+    | S n =>
+      let cs := map Const (css n) in
+      exists me_n ve_n, dostep prog ys clsid obj css me_n ve_n n
+                   /\ stmt_eval prog me_n ve_n (Call ys clsid obj step cs) (me, ve)
+    end.
 
   (** ** Determinism of semantics *)
 

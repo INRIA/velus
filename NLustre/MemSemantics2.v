@@ -72,11 +72,9 @@ Module Type MEMSEMANTICS
        (Import NoD     : NODUP           Ids Op       Clks ExprSyn Syn                 Mem IsD IsV).
 
   Definition memories := stream (memory val).
+  Definition history := stream env.
 
-  Definition memory_masked (k: nat) (rs: cstream) (M M': memories) :=
-    forall n, count rs n = k -> M' n = M n.
-
-  Definition mfby (x: ident) (c0: val) (xs: stream value) (M M': memories) (ys: stream value) : Prop :=
+  Definition mfby (x: ident) (c0: val) (xs: stream value) (rs: stream bool) (M M': memories) (ys: stream value) : Prop :=
     find_val x (M 0) = Some c0
     /\ (forall n, find_val x (M (S n)) = find_val x (M' n))
     /\ forall n, match find_val x (M n) with
@@ -87,7 +85,7 @@ Module Type MEMSEMANTICS
                /\ ys n = absent
              | present v =>
                find_val x (M' n) = Some v
-               /\ ys n = present mv
+               /\ ys n = present (if rs n then c0 else mv)
              end
            | None => False
            end.
@@ -106,67 +104,56 @@ Module Type MEMSEMANTICS
     Definition memory_closed_n (M: memories) (eqs: list equation) : Prop :=
       forall n, memory_closed (M n) eqs.
 
-    Inductive msem_equation: stream bool -> history -> memories -> memories -> equation -> Prop :=
+    Inductive msem_equation: stream bool -> stream bool -> history -> memories -> memories -> equation -> Prop :=
     | SEqDef:
-        forall bk H M M' x ck xs ce,
-          sem_var H x xs ->
-          sem_caexp bk H ck ce xs ->
-          msem_equation bk H M M' (EqDef x ck ce)
+        forall bk rs H M M' x ck xs ce,
+          (forall n, sem_var_instant (H n) x (xs n)) ->
+          (forall n, sem_caexp_instant (bk n) (H n) ck ce (xs n)) ->
+          msem_equation bk rs H M M' (EqDef x ck ce)
     | SEqApp:
-        forall bk H M M' x xs ck f Mx Mx' arg ls xss,
+        forall bk rs H M M' x xs ck f Mx Mx' arg ls xss,
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
-          sem_laexps bk H ck arg ls ->
-          sem_vars H xs xss ->
-          msem_node f ls Mx Mx' xss ->
-          msem_equation bk H M M' (EqApp xs ck f arg None)
+          (forall n, sem_laexps_instant (bk n) (H n) ck arg (ls n)) ->
+          (forall n, sem_vars_instant (H n) xs (xss  n))->
+          msem_node f rs ls Mx Mx' xss ->
+          msem_equation bk rs H M M' (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
+        forall bk rs' rs'' H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
-          sem_laexps bk H ck arg ls ->
-          sem_vars H xs xss ->
-          sem_var H y ys ->
+          (forall n, sem_laexps_instant (bk n) (H n) ck arg (ls n)) ->
+          (forall n, sem_vars_instant (H n) xs (xss n)) ->
+          (forall n, sem_var_instant (H n) y (ys n)) ->
           reset_of ys rs ->
-          msem_reset f rs ls Mx Mx' xss ->
-          msem_equation bk H M M' (EqApp xs ck f arg (Some y))
+          (forall n, rs'' n = rs n || rs' n) ->
+          msem_node f rs'' ls Mx Mx' xss ->
+          msem_equation bk rs' H M M' (EqApp xs ck f arg (Some y))
     | SEqFby:
-        forall bk H M M' x ck ls xs c0 le,
-          sem_laexp bk H ck le ls ->
-          sem_var H x xs ->
-          mfby x (sem_const c0) ls M M' xs ->
-          msem_equation bk H M M' (EqFby x ck c0 le)
-
-    with msem_reset:
-           ident -> stream bool -> stream (list value) -> memories -> memories -> stream (list value) -> Prop :=
-           SReset:
-             forall f r xss M M' yss,
-               (forall k, exists Mk Mk',
-                     msem_node f (mask (all_absent (xss 0)) k r xss)
-                               Mk Mk'
-                               (mask (all_absent (yss 0)) k r yss)
-                     /\ memory_masked k r M Mk
-                     /\ memory_masked k r M' Mk') ->
-               msem_reset f r xss M M' yss
+        forall bk rs H M M' x ck ls xs c0 le,
+          (forall n, sem_laexp_instant (bk n) (H n) ck le (ls n)) ->
+          (forall n, sem_var_instant (H n) x (xs n)) ->
+          mfby x (sem_const c0) ls rs M M' xs ->
+          msem_equation bk rs H M M' (EqFby x ck c0 le)
 
     with msem_node:
-           ident -> stream (list value) -> memories -> memories -> stream (list value) -> Prop :=
+           ident -> stream bool -> stream (list value) -> memories -> memories -> stream (list value) -> Prop :=
            SNode:
-             forall bk H f xss M M' yss n,
+             forall bk rs H f xss M M' yss node,
                clock_of xss bk ->
-               find_node f G = Some n ->
-               sem_vars H (map fst n.(n_in)) xss ->
-               sem_vars H (map fst n.(n_out)) yss ->
+               find_node f G = Some node ->
+               (forall n, sem_vars_instant (H n) (map fst node.(n_in)) (xss n)) ->
+               (forall n, sem_vars_instant (H n) (map fst node.(n_out)) (yss n)) ->
                same_clock xss ->
                same_clock yss ->
                (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
-               sem_clocked_vars bk H (idck n.(n_in)) ->
-               Forall (msem_equation bk H M M') n.(n_eqs) ->
-               memory_closed_n M n.(n_eqs) ->
-               memory_closed_n M' n.(n_eqs) ->
-               msem_node f xss M M' yss.
+               (forall n, sem_clocked_vars_instant (bk n) (H n) (idck node.(n_in))) ->
+               Forall (msem_equation bk rs H M M') node.(n_eqs) ->
+               memory_closed_n M node.(n_eqs) ->
+               memory_closed_n M' node.(n_eqs) ->
+               msem_node f rs xss M M' yss.
 
   End NodeSemantics.
 
@@ -180,114 +167,92 @@ enough: it does not support the internal fixpoint introduced by
 
     Variable G: global.
 
-    Variable P_equation: stream bool -> history -> memories -> memories -> equation -> Prop.
-    Variable P_reset: ident -> stream bool -> stream (list value) -> memories -> memories -> stream (list value) -> Prop.
-    Variable P_node: ident -> stream (list value) -> memories -> memories -> stream (list value) -> Prop.
+    Variable P_equation: stream bool -> stream bool -> history -> memories -> memories -> equation -> Prop.
+    Variable P_node: ident -> stream bool -> stream (list value) -> memories -> memories -> stream (list value) -> Prop.
 
     Hypothesis EqDefCase:
-      forall bk H M M' x ck xs ce,
-        sem_var H x xs ->
-        sem_caexp bk H ck ce xs ->
-        P_equation bk H M M' (EqDef x ck ce).
+      forall bk rs H M M' x ck xs ce,
+        (forall n, sem_var_instant (H n) x (xs n)) ->
+        (forall n, sem_caexp_instant (bk n) (H n) ck ce (xs n)) ->
+        P_equation bk rs H M M' (EqDef x ck ce).
 
     Hypothesis EqAppCase:
-      forall bk H M M' x xs ck f Mx Mx' arg ls xss,
-        Some x = hd_error xs ->
+      forall bk rs H M M' x xs ck f Mx Mx' arg ls xss,
+        hd_error xs = Some x ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
-        sem_laexps bk H ck arg ls ->
-        sem_vars H xs xss ->
-        msem_node G f ls Mx Mx' xss ->
-        P_node f ls Mx Mx' xss ->
-        P_equation bk H M M' (EqApp xs ck f arg None).
+        (forall n, sem_laexps_instant (bk n) (H n) ck arg (ls n)) ->
+        (forall n, sem_vars_instant (H n) xs (xss  n))->
+        msem_node G f rs ls Mx Mx' xss ->
+        P_node f rs ls Mx Mx' xss ->
+        P_equation bk rs H M M' (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
-        Some x = hd_error xs ->
+      forall bk rs' rs'' H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
+        hd_error xs = Some x ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
-        sem_laexps bk H ck arg ls ->
-        sem_vars H xs xss ->
-        sem_var H y ys ->
+        (forall n, sem_laexps_instant (bk n) (H n) ck arg (ls n)) ->
+        (forall n, sem_vars_instant (H n) xs (xss n)) ->
+        (forall n, sem_var_instant (H n) y (ys n)) ->
         reset_of ys rs ->
-        msem_reset G f rs ls Mx Mx' xss ->
-        P_reset f rs ls Mx Mx' xss ->
-        P_equation bk H M M' (EqApp xs ck f arg (Some y)).
+        (forall n, rs'' n = rs n || rs' n) ->
+        msem_node G f rs'' ls Mx Mx' xss ->
+        P_node f rs'' ls Mx Mx' xss ->
+        P_equation bk rs' H M M' (EqApp xs ck f arg (Some y)).
 
     Hypothesis EqFbyCase:
-      forall bk H M M' x ck ls xs c0 le,
-        sem_laexp bk H ck le ls ->
-        sem_var H x xs ->
-        mfby x (sem_const c0) ls M M' xs ->
-        P_equation bk H M M' (EqFby x ck c0 le).
-
-    Hypothesis ResetCase:
-      forall f r xss M M' yss,
-        (forall k, exists Mk Mk',
-              msem_node G f (mask (all_absent (xss 0)) k r xss)
-                        Mk Mk'
-                        (mask (all_absent (yss 0)) k r yss)
-              /\ memory_masked k r M Mk
-              /\ memory_masked k r M' Mk'
-              /\ P_node f (mask (all_absent (xss 0)) k r xss)
-                       Mk Mk'
-                       (mask (all_absent (yss 0)) k r yss)) ->
-        P_reset f r xss M M' yss.
+      forall bk rs H M M' x ck ls xs c0 le,
+        (forall n, sem_laexp_instant (bk n) (H n) ck le (ls n)) ->
+        (forall n, sem_var_instant (H n) x (xs n)) ->
+        mfby x (sem_const c0) ls rs M M' xs ->
+        P_equation bk rs H M M' (EqFby x ck c0 le).
 
     Hypothesis NodeCase:
-      forall bk H f xss M M' yss n,
+      forall bk rs H f xss M M' yss node,
         clock_of xss bk ->
-        find_node f G = Some n ->
-        sem_vars H (map fst n.(n_in)) xss ->
-        sem_vars H (map fst n.(n_out)) yss ->
+        find_node f G = Some node ->
+        (forall n, sem_vars_instant (H n) (map fst node.(n_in)) (xss n)) ->
+        (forall n, sem_vars_instant (H n) (map fst node.(n_out)) (yss n)) ->
         same_clock xss ->
         same_clock yss ->
         (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
-        sem_clocked_vars bk H (idck n.(n_in)) ->
-        Forall (msem_equation G bk H M M') n.(n_eqs) ->
-        memory_closed_n M n.(n_eqs) ->
-        memory_closed_n M' n.(n_eqs) ->
-        Forall (P_equation bk H M M') n.(n_eqs) ->
-        P_node f xss M M' yss.
+        (forall n, sem_clocked_vars_instant (bk n) (H n) (idck node.(n_in))) ->
+        Forall (msem_equation G bk rs H M M') node.(n_eqs) ->
+        memory_closed_n M node.(n_eqs) ->
+        memory_closed_n M' node.(n_eqs) ->
+        Forall (P_equation bk rs H M M') node.(n_eqs) ->
+        P_node f rs xss M M' yss.
 
     Fixpoint msem_equation_mult
-             (b: stream bool) (H: history) (M M': memories) (e: equation)
-             (Sem: msem_equation G b H M M' e) {struct Sem}
-      : P_equation b H M M' e
-    with msem_reset_mult
-           (f: ident) (r: stream bool)
-           (xss: stream (list value))
-           (M M': memories)
-           (oss: stream (list value))
-           (Sem: msem_reset G f r xss M M' oss) {struct Sem}
-         : P_reset f r xss M M' oss
+             (b rs: stream bool) (H: history) (M M': memories) (e: equation)
+             (Sem: msem_equation G b rs H M M' e) {struct Sem}
+      : P_equation b rs H M M' e
     with msem_node_mult
            (f: ident)
+           (rs: stream bool)
            (xss: stream (list value))
            (M M': memories)
            (oss: stream (list value))
-           (Sem: msem_node G f xss M M' oss) {struct Sem}
-         : P_node f xss M M' oss.
+           (Sem: msem_node G f rs xss M M' oss) {struct Sem}
+         : P_node f rs xss M M' oss.
     Proof.
       - destruct Sem; eauto.
       - destruct Sem; eauto.
-        apply ResetCase; auto.
-        intro k; destruct (H k) as (?&?&?&?&?); eauto 7.
-      - destruct Sem; eauto.
         eapply NodeCase; eauto.
         match goal with
-          H: memory_closed_n M _, H': memory_closed_n M' _, Heqs: Forall _ (n_eqs n)
+          H: memory_closed_n M _, H': memory_closed_n M' _, Heqs: Forall _ (n_eqs _)
           |- _ => clear H H'; induction Heqs; auto
         end.
     Qed.
 
     Combined Scheme msem_node_equation_reset_ind from
-             msem_node_mult, msem_equation_mult, msem_reset_mult.
+             msem_node_mult, msem_equation_mult.
 
   End msem_node_mult.
 
   Definition msem_nodes (G: global) : Prop :=
-    Forall (fun no => exists xs M M' ys, msem_node G no.(n_name) xs M M' ys) G.
+    Forall (fun no => exists rs xs M M' ys, msem_node G no.(n_name) rs xs M M' ys) G.
 
 
   (** ** Properties *)
@@ -302,30 +267,26 @@ enough: it does not support the internal fixpoint introduced by
    TODO: try this when the other elements are stabilised. *)
 
   Lemma msem_node_cons:
-    forall n G f xs M M' ys,
+    forall n G f rs xs M M' ys,
       Ordered_nodes (n :: G) ->
-      msem_node (n :: G) f xs M M' ys ->
+      msem_node (n :: G) f rs xs M M' ys ->
       n.(n_name) <> f ->
-      msem_node G f xs M M' ys.
+      msem_node G f rs xs M M' ys.
   Proof.
-    Hint Constructors msem_node msem_equation msem_reset.
+    Hint Constructors msem_node msem_equation.
     intros ** Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| | | |?????? IH |????????? Hf ????????? IH]
+    induction Hsem as [| | | |?????????? Hf ????????? IH]
         using msem_node_mult
-      with (P_equation := fun bk H M M' eq =>
+      with (P_equation := fun bk rs H M M' eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
-                            msem_equation G bk H M M' eq)
-           (P_reset := fun f r xss M M' yss =>
-                         n_name n <> f ->
-                         msem_reset G f r xss M M' yss); eauto.
+                            msem_equation G bk rs H M M' eq); eauto.
     - intro Hnin.
       econstructor; eauto.
       apply IHHsem. intro Hnf; apply Hnin; rewrite Hnf. constructor.
     - intro Hnin.
       econstructor; eauto.
       apply IHHsem. intro Hnf; apply Hnin; rewrite Hnf. constructor.
-    - intro. econstructor. intro k; destruct (IH k) as (?&?&?&?&?&?); eauto 6.
     - intro.
       pose proof Hf.
       rewrite find_node_tl with (1:=Hnf) in Hf.
@@ -337,103 +298,73 @@ enough: it does not support the internal fixpoint introduced by
       intuition.
   Qed.
 
-  Corollary msem_reset_cons:
-    forall n G f r xs M M' ys,
-      Ordered_nodes (n :: G) ->
-      msem_reset (n :: G) f r xs M M' ys ->
-      n.(n_name) <> f ->
-      msem_reset G f r xs M M' ys.
-  Proof.
-    intros ** Sem ?.
-    inversion_clear Sem as [?????? SemN].
-    constructor.
-    intro k; destruct (SemN k) as (?&?&?&?); eauto using msem_node_cons.
-  Qed.
-
   Lemma msem_node_cons2:
-    forall n G f xs M M' ys,
+    forall n G f rs xs M M' ys,
       Ordered_nodes G ->
-      msem_node G f xs M M' ys ->
+      msem_node G f rs xs M M' ys ->
       Forall (fun n' => n_name n <> n_name n') G ->
-      msem_node (n :: G) f xs M M' ys.
+      msem_node (n :: G) f rs xs M M' ys.
   Proof.
     Hint Constructors msem_equation.
     intros ** Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
-    induction Hsem as [| | | |?????? IH|??????? n' ? Hfind ?????? Heqs WF WF' IH]
+    induction Hsem as [| | | |???????? n' ? Hfind ?????? Heqs WF WF' IH]
         using msem_node_mult
-      with (P_equation := fun bk H M M' eq =>
+      with (P_equation := fun bk rs H M M' eq =>
                             ~Is_node_in_eq n.(n_name) eq ->
-                            msem_equation (n :: G) bk H M M' eq)
-           (P_reset := fun f r xss M M' yss =>
-                         Forall (fun n' : node => n_name n <> n_name n') G ->
-                         msem_reset (n :: G) f r xss M M' yss); eauto.
-    - intro. constructor; intro k; destruct (IH k) as (?&?&?&?&?&?); eauto 6.
-    - intro HH; clear HH.
-      assert (n.(n_name) <> f) as Hnf.
-      { intro Hnf.
-        rewrite Hnf in *.
-        pose proof (find_node_name _ _ _ Hfind).
-        apply find_node_split in Hfind.
-        destruct Hfind as [bG [aG Hge]].
-        rewrite Hge in Hnin.
-        apply Forall_app in Hnin.
-        destruct Hnin as [H' Hfg]; clear H'.
-        inversion_clear Hfg.
-        match goal with H:f<>_ |- False => now apply H end.
+                            msem_equation (n :: G) bk rs H M M' eq); eauto.
+    intro HH; clear HH.
+    assert (n.(n_name) <> f) as Hnf.
+    { intro Hnf.
+      rewrite Hnf in *.
+      pose proof (find_node_name _ _ _ Hfind).
+      apply find_node_split in Hfind.
+      destruct Hfind as [bG [aG Hge]].
+      rewrite Hge in Hnin.
+      apply Forall_app in Hnin.
+      destruct Hnin as [H' Hfg]; clear H'.
+      inversion_clear Hfg.
+      match goal with H:f<>_ |- False => now apply H end.
+    }
+    apply find_node_other with (2:=Hfind) in Hnf.
+    econstructor; eauto.
+    + assert (forall g, Is_node_in g n'.(n_eqs) -> Exists (fun nd=> g = nd.(n_name)) G)
+        as Hniex by (intros g Hini;
+                     apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
+                     exact Hini).
+      assert (Forall (fun eq => forall g,
+                          Is_node_in_eq g eq -> Exists (fun nd=> g = nd.(n_name)) G)
+                     n'.(n_eqs)) as HH.
+      {
+        clear Heqs IH WF WF'.
+        induction n'.(n_eqs) as [|eq eqs]; [now constructor|].
+        constructor.
+        - intros g Hini.
+          apply Hniex.
+          constructor 1; apply Hini.
+        - apply IHeqs.
+          intros g Hini; apply Hniex.
+          constructor 2; apply Hini.
       }
-      apply find_node_other with (2:=Hfind) in Hnf.
-      econstructor; eauto.
-      + assert (forall g, Is_node_in g n'.(n_eqs) -> Exists (fun nd=> g = nd.(n_name)) G)
-          as Hniex by (intros g Hini;
-                       apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
-                       exact Hini).
-        assert (Forall (fun eq => forall g,
-                            Is_node_in_eq g eq -> Exists (fun nd=> g = nd.(n_name)) G)
-                       n'.(n_eqs)) as HH.
-        {
-          clear Heqs IH WF WF'.
-          induction n'.(n_eqs) as [|eq eqs]; [now constructor|].
-          constructor.
-          - intros g Hini.
-            apply Hniex.
-            constructor 1; apply Hini.
-          - apply IHeqs.
-            intros g Hini; apply Hniex.
-            constructor 2; apply Hini.
-        }
-        apply Forall_Forall with (1:=HH) in IH.
-        apply Forall_impl with (2:=IH).
-        intros eq (Hsem & IH1).
-        apply IH1.
-        intro Hini.
-        apply Hsem in Hini.
-        apply Forall_Exists with (1:=Hnin) in Hini.
-        apply Exists_exists in Hini.
-        destruct Hini as [nd' [Hin [Hneq Heq]]].
-        intuition.
-  Qed.
-
-  Lemma msem_reset_cons2:
-    forall n G f r xs M M' ys,
-      Ordered_nodes G ->
-      msem_reset G f r xs M M' ys ->
-      Forall (fun n' => n_name n <> n_name n') G ->
-      msem_reset (n :: G) f r xs M M' ys.
-  Proof.
-    intros ** Sem ?.
-    inversion_clear Sem as [?????? SemN].
-    constructor.
-    intro k; destruct (SemN k) as (?&?&?&?); eauto using msem_node_cons2.
+      apply Forall_Forall with (1:=HH) in IH.
+      apply Forall_impl with (2:=IH).
+      intros eq (Hsem & IH1).
+      apply IH1.
+      intro Hini.
+      apply Hsem in Hini.
+      apply Forall_Exists with (1:=Hnin) in Hini.
+      apply Exists_exists in Hini.
+      destruct Hini as [nd' [Hin [Hneq Heq]]].
+      intuition.
   Qed.
 
   Lemma msem_equations_cons:
-    forall G bk H M M' eqs n,
+    forall G bk rs H M M' eqs n,
       Ordered_nodes (n :: G) ->
       ~Is_node_in n.(n_name) eqs ->
-      (Forall (msem_equation G bk H M M') eqs <->
-       Forall (msem_equation (n :: G) bk H M M') eqs).
+      (Forall (msem_equation G bk rs H M M') eqs <->
+       Forall (msem_equation (n :: G) bk rs H M M') eqs).
   Proof.
     intros ** Hord Hnini.
     induction eqs as [|eq eqs IH]; [now constructor|].
@@ -441,22 +372,19 @@ enough: it does not support the internal fixpoint introduced by
     split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
       apply IH in Heqs; auto; constructor; auto.
     - inv Hord.
-      destruct Heq; eauto.
-      + eauto using msem_node_cons2.
-      + eauto using msem_reset_cons2.
+      destruct Heq; eauto using msem_node_cons2.
     - inv Heq; eauto;
         assert (n.(n_name) <> f)
-        by (intro HH; apply Hnini; rewrite HH; constructor).
-      + eauto using msem_node_cons.
-      + eauto using msem_reset_cons.
+        by (intro HH; apply Hnini; rewrite HH; constructor);
+        eauto using msem_node_cons.
   Qed.
 
   Lemma find_node_msem_node:
     forall G f,
       msem_nodes G ->
       find_node f G <> None ->
-      exists xs M M' ys,
-        msem_node G f xs M M' ys.
+      exists rs xs M M' ys,
+        msem_node G f rs xs M M' ys.
   Proof.
     intros G f Hnds Hfind.
     apply find_node_Exists in Hfind.
@@ -465,10 +393,9 @@ enough: it does not support the internal fixpoint introduced by
     unfold msem_nodes in Hnds.
     rewrite Forall_forall in Hnds.
     apply Hnds in Hin.
-    destruct Hin as [xs [M [M' [ys Hmsem]]]].
-    exists xs, M, M', ys.
-    rewrite Hf in *.
-    exact Hmsem.
+    destruct Hin as (rs & xs & M & M' & ys &?).
+    exists rs, xs, M, M', ys.
+    rewrite Hf in *; auto.
   Qed.
 
   (** *** Memory management *)
@@ -477,10 +404,10 @@ enough: it does not support the internal fixpoint introduced by
     fun n => add_val y (ms n) (M n).
 
   Lemma mfby_add_val_n:
-    forall x v0 ls M M' xs y ms ms',
+    forall x v0 rs ls M M' xs y ms ms',
       x <> y ->
-      mfby x v0 ls M M' xs ->
-      mfby x v0 ls (add_val_n y ms M) (add_val_n y ms' M') xs.
+      mfby x v0 rs ls M M' xs ->
+      mfby x v0 rs ls (add_val_n y ms M) (add_val_n y ms' M') xs.
   Proof.
     unfold add_val_n.
     intros ** Fby; destruct Fby as (?&?& Spec).
@@ -494,9 +421,9 @@ enough: it does not support the internal fixpoint introduced by
     fun n => add_inst y (M' n) (M n).
 
   Lemma mfby_add_inst_n:
-    forall x v0 ls M M' xs y My My',
-      mfby x v0 ls M M' xs ->
-      mfby x v0 ls (add_inst_n y My M) (add_inst_n y My' M') xs.
+    forall x v0 rs ls M M' xs y My My',
+      mfby x v0 rs ls M M' xs ->
+      mfby x v0 rs ls (add_inst_n y My M) (add_inst_n y My' M') xs.
   Proof.
     inversion 1; econstructor; eauto.
   Qed.
@@ -504,10 +431,10 @@ enough: it does not support the internal fixpoint introduced by
   Hint Resolve mfby_add_val_n mfby_add_inst_n.
 
   Lemma msem_equation_madd_val:
-    forall G bk H M M' x ms ms' eqs,
+    forall G bk rs H M M' x ms ms' eqs,
       ~Is_defined_in_eqs x eqs ->
-      Forall (msem_equation G bk H M M') eqs ->
-      Forall (msem_equation G bk H (add_val_n x ms M) (add_val_n x ms' M')) eqs.
+      Forall (msem_equation G bk rs H M M') eqs ->
+      Forall (msem_equation G bk rs H (add_val_n x ms M) (add_val_n x ms' M')) eqs.
   Proof.
     Hint Constructors msem_equation.
     intros ** Hnd Hsem.
@@ -523,10 +450,10 @@ enough: it does not support the internal fixpoint introduced by
   Qed.
 
   Lemma msem_equation_madd_inst:
-    forall G bk H M M' Mx Mx' x eqs,
+    forall G bk rs H M M' Mx Mx' x eqs,
       ~Is_defined_in_eqs x eqs ->
-      Forall (msem_equation G bk H M M') eqs ->
-      Forall (msem_equation G bk H (add_inst_n x Mx M) (add_inst_n x Mx' M')) eqs.
+      Forall (msem_equation G bk rs H M M') eqs ->
+      Forall (msem_equation G bk rs H (add_inst_n x Mx M) (add_inst_n x Mx' M')) eqs.
   Proof.
     Hint Constructors msem_equation.
     intros * Hnd Hsem.
@@ -536,8 +463,8 @@ enough: it does not support the internal fixpoint introduced by
     apply Forall_cons2 in Hsem.
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-    destruct Hsem as [|???? x' ???????? Hsome
-                         |???? x' ??????????? Hsome|];
+    destruct Hsem as [|????? x' ???????? Hsome
+                         |?????? x' ??????????? Hsome|];
       eauto;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -633,20 +560,21 @@ dataflow memory for which the non-standard semantics holds true.
       apply not_None_is_Some; eauto.
   Qed.
 
+
   Lemma sem_msem_eq:
     forall G bk H eqs M M' eq,
       (forall f xs ys,
           sem_node G f xs ys ->
-          exists M M', msem_node G f xs M M' ys) ->
+          exists M M', msem_node G f (fun n => false) xs M M' ys) ->
       (forall f r xs ys,
           sem_reset G f r xs ys ->
-          exists M M', msem_reset G f r xs M M' ys) ->
+          exists M M', msem_node G f r xs M M' ys) ->
       sem_equation G bk H eq ->
       NoDup_defs (eq :: eqs) ->
-      Forall (msem_equation G bk H M M') eqs ->
+      Forall (msem_equation G bk (fun n => false) (restr_hist H) M M') eqs ->
       memory_closed_n M eqs ->
       memory_closed_n M' eqs ->
-      exists M1 M1', Forall (msem_equation G bk H M1 M1') (eq :: eqs)
+      exists M1 M1', Forall (msem_equation G bk (fun n => false) (restr_hist H) M1 M1') (eq :: eqs)
                 /\ memory_closed_n M1 (eq :: eqs)
                 /\ memory_closed_n M1' (eq :: eqs).
   Proof.
@@ -670,10 +598,10 @@ dataflow memory for which the non-standard semantics holds true.
           assert (exists n, length (map fst n.(n_out)) = length (xs 0)
                        /\ 0 < length n.(n_out)) as (n & ? & ?).
           { inv Hmsem.
-            exists n; split; auto.
+            exists node0; split; auto.
             - eapply Forall2_length; eauto.
               specialize (H9 0); eauto.
-            - exact n.(n_outgt0).
+            - exact node0.(n_outgt0).
           }
           assert (length (map fst n.(n_out)) = length n.(n_out))
             by apply map_length.
@@ -701,18 +629,11 @@ dataflow memory for which the non-standard semantics holds true.
 
           assert (exists n, length (map fst n.(n_out)) = length (xs 0)
                        /\ 0 < length n.(n_out)) as (n & ? & ?).
-          { inversion_clear Hmsem as [?????? Hmsem'].
-            destruct (Hmsem' 0) as (?&?& Hmsem'' & ?);
-              inversion_clear Hmsem'' as [??????????? Hout].
-            exists n; split; auto.
-            - unfold sem_vars, lift in Hout; specialize (Hout 0).
-              apply Forall2_length in Hout; rewrite Hout.
-              rewrite mask_length; auto.
-              inversion_clear Hsem' as [???? Hsem].
-              eapply wf_streams_mask.
-              intro n'; specialize (Hsem n');
-                apply sem_node_wf in Hsem as (? & ?); eauto.
-            - exact n.(n_outgt0).
+          { inv Hmsem.
+            exists node0; split; auto.
+            - eapply Forall2_length; eauto.
+              specialize (H9 0); eauto.
+            - exact node0.(n_outgt0).
           }
           assert (length (map fst n.(n_out)) = length n.(n_out))
             by apply map_length.
@@ -723,7 +644,8 @@ dataflow memory for which the non-standard semantics holds true.
       erewrite hd_error_Some_hd; eauto; split.
       + constructor.
         * econstructor; eauto;
-            unfold sub_inst, add_inst_n; intro; now apply find_inst_gss.
+            try (unfold sub_inst, add_inst_n; intro; now apply find_inst_gss).
+          now setoid_rewrite Bool.orb_false_r.
         * inv NoDup.
           apply hd_error_Some_In in Hsome.
           apply msem_equation_madd_inst; auto.
@@ -738,8 +660,8 @@ dataflow memory for which the non-standard semantics holds true.
       + constructor.
         * unfold add_val_n.
           econstructor; eauto; split; [|split];
-            intros; try rewrite Hfby; unfold fby;
-              simpl; repeat rewrite find_val_gss; auto.
+             intros; try rewrite Hfby; unfold fby;
+               simpl; repeat rewrite find_val_gss; auto.
           destruct (ls n); auto.
         * inv NoDup.
           apply msem_equation_madd_val; eauto.
@@ -760,13 +682,13 @@ dataflow memory for which the non-standard semantics holds true.
     forall G bk H eqs,
       (forall f xs ys,
           sem_node G f xs ys ->
-          exists M M', msem_node G f xs M M' ys) ->
+          exists M M', msem_node G f (fun n => false) xs M M' ys) ->
       (forall f r xs ys,
           sem_reset G f r xs ys ->
-          exists M M', msem_reset G f r xs M M' ys) ->
+          exists M M', msem_node G f r xs M M' ys) ->
       NoDup_defs eqs ->
       Forall (sem_equation G bk H) eqs ->
-      exists M1 M1', Forall (msem_equation G bk H M1 M1') eqs
+      exists M1 M1', Forall (msem_equation G bk (fun n => false) (restr_hist H) M1 M1') eqs
                 /\ memory_closed_n M1 eqs
                 /\ memory_closed_n M1' eqs.
   Proof.
@@ -801,21 +723,23 @@ dataflow memory for which the non-standard semantics holds true.
     forall G f r xs ys,
       (forall f xs ys,
           sem_node G f xs ys ->
-          exists M M', msem_node G f xs M M' ys) ->
+          exists M M', msem_node G f (fun n => false) xs M M' ys) ->
       sem_reset G f r xs ys ->
-      exists M M', msem_reset G f r xs M M' ys.
+      exists M M', msem_node G f r xs M M' ys.
   Proof.
     intros ** IH Sem.
     inversion_clear Sem as [???? Sem'].
-    assert (forall k, exists Mk Mk', msem_node G f (mask (all_absent (xs 0)) k r xs)
-                                     Mk Mk'
-                                     (mask (all_absent (ys 0)) k r ys)) as Msem'
-        by (intro; specialize (Sem' k); apply IH in Sem'; auto).
-    assert (exists F F', forall k, msem_node G f (mask (all_absent (xs 0)) k r xs)
+
+    assert (exists F F', forall k, msem_node G f (fun n => false)
+                                   (mask (all_absent (xs 0)) k r xs)
                                    (F k) (F' k)
                                    (mask (all_absent (ys 0)) k r ys))
       as (F & F' & Msem).
-    {
+    { assert (forall k, exists Mk Mk', msem_node G f (fun n => false)
+                                       (mask (all_absent (xs 0)) k r xs)
+                                       Mk Mk'
+                                       (mask (all_absent (ys 0)) k r ys)) as Msem'
+          by (intro; specialize (Sem' k); apply IH in Sem'; auto).
       (** Infinite Description  *)
       do 2 apply functional_choice in Msem' as (?&Msem'); eauto.
 
@@ -833,20 +757,73 @@ dataflow memory for which the non-standard semantics holds true.
       (** Classical Choice  *)
       (* now apply choice in Msem'.   *)
     }
-    clear Msem'.
-
+    assert (exists node, find_node f G = Some node)
+      as (node & Find) by (specialize (Msem 0); inv Msem; eauto).
+    assert (forall k, exists bk Hk,
+                 clock_of (mask (all_absent (xs 0)) k r xs) bk
+                 /\ (forall n, sem_vars_instant (Hk n) (map fst node.(n_in)) (mask (all_absent (xs 0)) k r xs n))
+                 /\ (forall n, sem_vars_instant (Hk n) (map fst node.(n_out)) (mask (all_absent (ys 0)) k r ys n))
+                 /\ same_clock (mask (all_absent (xs 0)) k r xs)
+                 /\ same_clock (mask (all_absent (ys 0)) k r ys)
+                 /\ (forall n, absent_list (mask (all_absent (xs 0)) k r xs n)
+                         <-> absent_list (mask (all_absent (ys 0)) k r ys n))
+                 /\ (forall n, sem_clocked_vars_instant (bk n) (Hk n) (idck node.(n_in)))
+                 /\ Forall (msem_equation G bk (fun n => false) Hk (F k) (F' k)) node.(n_eqs)
+                 /\ memory_closed_n (F k) node.(n_eqs)
+                 /\ memory_closed_n (F' k) node.(n_eqs)) as Node
+      by (intro; specialize (Msem k);
+          inversion_clear Msem as [?????????? Find'];
+          rewrite Find' in Find; inv Find; do 2 eexists; intuition; eauto).
+    apply functional_choice in Node as (Fbk & Node);
+      apply functional_choice in Node as (FH & Node).
     exists (fun n => F (count r n) n), (fun n => F' (count r n) n).
-    constructor.
-    intro k; specialize (Msem k).
-    do 2 eexists; intuition eauto;
-      intros n Count; auto.
+    eapply SNode with (bk := fun n => Fbk (count r n) n) (H := fun n => FH (count r n) n); eauto;
+      try (intro n; specialize (Node (count r n));
+           destruct Node as (Clock & Ins & Outs & Same & Same' & Abs & VarsCk & Closed & Closed' &?);
+           specialize (Clock n); specialize (Ins n); specialize (Outs n);
+           specialize (Same n); specialize (Same' n);
+           specialize (Abs n); specialize (VarsCk n);
+           rewrite mask_transparent in Clock, Ins, Outs, Same, Same';
+           rewrite 2 mask_transparent in Abs; auto).
+    assert (forall k, Forall (msem_equation G (Fbk k) (fun _ : nat => false) (FH k) (F k) (F' k)) (n_eqs node))
+      as Heqs by (intro k; destruct (Node k); intuition).
+    clear - Heqs.
+    induction (n_eqs node) as [|eq]; constructor; auto.
+    - assert (forall k, msem_equation G (Fbk k) (fun _ : nat => false) (FH k) (F k) (F' k) eq) as Heq
+          by (intro k; specialize (Heqs k); inv Heqs; auto).
+      clear Heqs.
+      destruct eq.
+      + assert (forall k, exists xs, (forall n, sem_var_instant (FH k n) i (xs n))
+                           /\ forall n, sem_caexp_instant (Fbk k n) (FH k n) c c0 (xs n)) as Heq'
+            by (intro k; specialize (Heq k); inv Heq; eauto).
+        apply functional_choice in Heq' as (Fxs & Heq').
+        eapply SEqDef with (xs := fun n => Fxs (count r n) n); intro n;
+          destruct (Heq' (count r n)); auto.
+      + admit.
+      + assert (forall k, exists ls xs, (forall n, sem_laexp_instant (Fbk k n) (FH k n) c l0 (ls n))
+                              /\ (forall n, sem_var_instant (FH k n) i (xs n))
+                              /\ mfby i (sem_const c0) ls (fun n => false) (F k) (F' k) xs) as Heq'
+            by (intro k; specialize (Heq k); inv Heq; eauto).
+        apply functional_choice in Heq' as (Fls & Heq');
+          apply functional_choice in Heq' as (Fxs & Heq').
+        eapply SEqFby with (xs := fun n => Fxs (count r n) n) (ls := fun n => Fls (count r n) n);
+          try (intro n; destruct (Heq' (count r n)) as (?&?&?); eauto).
+        split; [|split].
+        * destruct (Heq' (count r 0)) as (?&?&?&?); auto.
+        * intro n; destruct (Heq' (count r n)) as (?&?&?&?&?); auto.
+          admit.
+        * intro n; destruct (Heq' (count r n)) as (?&?&?&?&?); auto.
+          admit.
+
+    - apply IHl.
+      intro k; specialize (Heqs k); inv Heqs; auto.
   Qed.
 
   Theorem sem_msem_node:
     forall G f xs ys,
       Ordered_nodes G ->
       sem_node G f xs ys ->
-      exists M M', msem_node G f xs M M' ys.
+      exists M M', msem_node G f (fun n => false) xs M M' ys.
   Proof.
     induction G as [|node].
     inversion 2;
@@ -864,13 +841,13 @@ dataflow memory for which the non-standard semantics holds true.
       eapply Forall_sem_equation_global_tl in Heqs; eauto.
       assert (forall f xs ys,
                  sem_node G f xs ys ->
-                 exists M M', msem_node G f xs M M' ys) as IHG'
+                 exists M M', msem_node G f (fun n => false) xs M M' ys) as IHG'
           by auto.
       assert (forall f r xs ys,
                  sem_reset G f r xs ys ->
-                 exists M M', msem_reset G f r xs M M' ys) as IHG''
+                 exists M M', msem_node G f r xs M M' ys) as IHG''
           by (intros; now apply sem_msem_reset).
-      assert (exists M1 M1', Forall (msem_equation G bk H M1 M1') n.(n_eqs)
+      assert (exists M1 M1', Forall (msem_equation G bk (fun n => false) H M1 M1') n.(n_eqs)
                         /\ memory_closed_n M1 n.(n_eqs)
                         /\ memory_closed_n M1' n.(n_eqs))
         as (M1 & M1' & Hmsem & ?&?)

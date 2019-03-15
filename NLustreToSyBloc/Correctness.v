@@ -700,6 +700,69 @@ Module Type CORRECTNESS
       apply sem_block_cons2; auto using Ordered_blocks.
   Qed.
 
+  Section DostepCoind.
+
+    Variable R: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop.
+
+    Hypothesis Step:
+      forall P b xss yss Sn n,
+        R P b xss yss Sn n ->
+        (n = 0 -> initial_state P b Sn)
+        /\ exists S', sem_block P b Sn (xss n) (yss n) S'
+                /\ R P b xss yss S' (S n).
+
+    Lemma dostep_coind:
+      forall P b xss yss S n,
+        R P b xss yss S n ->
+        dostep P b xss yss S n.
+    Proof.
+      cofix COFIX; intros ** HR.
+      apply Step in HR as (?&?&?&?).
+      econstructor; eauto.
+    Qed.
+
+  End DostepCoind.
+
+  (* Theorem correctness_dostep: *)
+  (*   forall n G f xss M M' yss, *)
+  (*     Ordered_nodes G -> *)
+  (*     wc_global G -> *)
+  (*     msem_node G f xss M M' yss -> *)
+  (*     exists S, dostep (translate G) f xss yss S n. *)
+  (* Proof. *)
+  (*   induction n.  *)
+  (*   generalize 0. *)
+  (*   cofix COFIX; intros ** Sem. *)
+  (*   econstructor. *)
+  (*   - intro; subst; eapply msem_node_initial_state; eauto. *)
+  (*   - apply correctness; eauto. *)
+  (*   - SearchAbout msem_node. eapply COFIX.  SearchAbout initial_state. *)
+  Theorem correctness_dostep:
+    forall G f xss M M' yss,
+      Ordered_nodes G ->
+      wc_global G ->
+      msem_node G f xss M M' yss ->
+      dostep (translate G) f xss yss (M 0) 0.
+  Proof.
+    (* intros; apply dostep_coind with (R := fun P b xss yss S n => *)
+    (*                                         P = translate G *)
+    (*                                         /\ S = M n  *)
+    (*                                         /\ msem_node G b xss M M' yss); auto. *)
+    (* intros ** (?&?& Sem); subst. *)
+    (* split. *)
+    (* - intro; subst; eapply msem_node_initial_state; eauto. *)
+    (* - pose proof Sem. apply correctness in Sem; auto. *)
+    (*   exists (M' n); intuition. intros ** (?&?). intuition. *)
+    (*   exists (M' n); intuition. *)
+    generalize 0.
+    cofix COFIX; intros ** Sem.
+    econstructor.
+    - intro; subst; eapply msem_node_initial_state; eauto.
+    - apply correctness; eauto.
+    - assert (M' n = M (S n)) as -> by admit.
+      eapply COFIX; eauto.
+  Qed.
+
 End CORRECTNESS.
 
 Module CorrectnessFun

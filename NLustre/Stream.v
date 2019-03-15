@@ -380,6 +380,9 @@ if the clocked stream is [absent] at the corresponding instant. *)
     destruct (EqNat.beq_nat k (count r n)); auto.
   Qed.
 
+  Definition vstr (xss: stream (list const)): stream (list value) :=
+    fun n => map (fun c => present (sem_const c)) (xss n).
+
 End STREAM.
 
 Module StreamFun
