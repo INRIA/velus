@@ -16,6 +16,7 @@ Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.NLExprSemantics.
 Require Import Velus.NLustre.NLSemantics.
+Require Import Velus.NLustre.NLInterpretor.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.NLustre.IsFree.
@@ -65,6 +66,7 @@ Module Type MEMSEMANTICS
        (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
        (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn     Str)
        (Import Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
+       (Import Interp  : NLINTERPRETOR   Ids Op OpAux Clks ExprSyn     Str     ExprSem)
        (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
        (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
        (Import IsV     : ISVARIABLE      Ids Op       Clks ExprSyn Syn                 Mem IsD)
@@ -719,8 +721,193 @@ dataflow memory for which the non-standard semantics holds true.
   (*   intro x; destruct (Ex x); auto. *)
   (* Qed. *)
 
+  Require Import Setoid.
+  Add Parametric Morphism G: (msem_equation G)
+      with signature eq_str ==> eq ==> eq ==> eq ==> eq ==> eq ==> Basics.impl
+        as msem_equation_eq_str.
+  Proof.
+    intros b b' E ** Sem.
+    inversion_clear Sem; econstructor; eauto;
+      intro; rewrite <-E; auto.
+  Qed.
+
+  Add Parametric Morphism G r H M M' eqs: (fun bk => Forall (msem_equation G bk r H M M') eqs)
+      with signature eq_str ==> Basics.impl
+        as msem_equations_eq_str.
+  Proof.
+    intros b b' E ** Sem.
+    apply Forall_forall; intros ** Hin; eapply Forall_forall in Sem; eauto.
+    rewrite <-E; auto.
+  Qed.
+
+  (* Ltac interp_sound n := *)
+  (*   repeat match goal with *)
+  (*          | H: forall n, sem_var_instant ?H' ?x ?vs |- _ => *)
+  (*            specialize (H n); apply sem_var_instant_reset in H *)
+  (*          | H: sem_vars ?H' ?xs ?vss |- _ => *)
+  (*            specialize (H n); apply sem_vars_instant_reset in H *)
+  (*          | H: sem_caexp ?bk ?H' ?c ?e ?vs |- _ => *)
+  (*            specialize (H n); simpl in H; eapply sem_caexp_instant_reset in H; eauto *)
+  (*          | H: sem_laexp ?bk ?H' ?c ?e ?vs |- _ => *)
+  (*            specialize (H n); simpl in H; eapply sem_laexp_instant_reset in H; eauto *)
+  (*          | H: sem_laexps ?bk ?H' ?c ?es ?vss |- _ => *)
+  (*            specialize (H n); simpl in H; eapply sem_laexps_instant_reset in H; eauto *)
+  (*          end; *)
+  (*   unfold interp_var, interp_vars, interp_laexp, interp_laexps, interp_caexp, lift, lift'; *)
+  (*   try erewrite <-interp_caexp_instant_sound; *)
+  (*   try erewrite <-interp_laexp_instant_sound; *)
+  (*   try erewrite <-interp_laexps_instant_sound; *)
+  (*   try erewrite <-interp_var_instant_sound; *)
+  (*   try erewrite <-interp_vars_instant_sound; *)
+  (*   eauto. *)
+
+  Lemma msem_node_slices:
+    forall G f r xs ys F F',
+      Ordered_nodes G ->
+      (forall k,
+          msem_node G f (fun nat => false)
+                    (mask (all_absent (xs 0)) k r xs)
+                    (F k) (F' k)
+                    (mask (all_absent (ys 0)) k r ys)) ->
+      msem_node G f r xs (fun n => F (count r n) n) (fun n => F' (count r n) n) ys.
+  Proof.
+    induction G as [|n]; intros ** Ord Sems;
+      try (specialize (Sems 0); inversion_clear Sems as [?????????? Find]; now inv Find).
+    assert (exists node, find_node f (n :: G) = Some node) as (node & Find)
+        by (specialize (Sems 0); inv Sems; eauto).
+    pose proof Find as Find'.
+    simpl in Find'.
+    destruct (ident_eqb (n_name n) f) eqn: E.
+    - inv Find'.
+      assert (forall k, exists Hk,
+                   let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
+                   (forall n, sem_vars_instant (Hk n) (map fst node.(n_in)) (mask (all_absent (xs 0)) k r xs n))
+                   /\ (forall n, sem_vars_instant (Hk n) (map fst node.(n_out)) (mask (all_absent (ys 0)) k r ys n))
+                   /\ same_clock (mask (all_absent (xs 0)) k r xs)
+                   /\ same_clock (mask (all_absent (ys 0)) k r ys)
+                   /\ (forall n, absent_list (mask (all_absent (xs 0)) k r xs n)
+                           <-> absent_list (mask (all_absent (ys 0)) k r ys n))
+                   /\ (forall n, sem_clocked_vars_instant (bk n) (Hk n) (idck node.(n_in)))
+                   /\ Forall (msem_equation (node :: G) bk (fun n => false) Hk (F k) (F' k)) node.(n_eqs)
+                   /\ memory_closed_n (F k) node.(n_eqs)
+                   /\ memory_closed_n (F' k) node.(n_eqs)) as Node.
+      { intro; specialize (Sems k);
+          inversion_clear Sems as [????????? Clock Find'];
+          rewrite Find' in Find; inv Find; do 2 eexists; intuition; eauto;
+            apply clock_of_equiv' in Clock.
+        - rewrite <-Clock; auto.
+        - eapply msem_equations_eq_str; eauto.
+      }
+      apply functional_choice in Node as (FH & Node).
+      eapply SNode with (H := fun n => FH (count r n) n); eauto;
+        try eapply clock_of_equiv;
+        try (intro n; specialize (Node (count r n));
+           destruct Node as (Ins & Outs & Same & Same' & Abs & VarsCk & ? & Closed & Closed');
+           specialize (Ins n); specialize (Outs n);
+           specialize (Same n); specialize (Same' n);
+           specialize (Abs n); specialize (VarsCk n);
+           rewrite mask_transparent in Ins, Outs, Same, Same';
+           rewrite 2 mask_transparent in Abs;
+           unfold clock_of' in VarsCk; rewrite mask_transparent in VarsCk;
+           auto).
+      assert (forall k, let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
+                   Forall (msem_equation (node :: G) bk (fun _ : nat => false) (FH k) (F k) (F' k)) (n_eqs node))
+        as Heqs by (intro k; destruct (Node k); intuition).
+      assert (forall k n, r n = true -> F k n ≋ F k 0) as RstSpec by admit.
+      clear - Heqs RstSpec.
+      induction (n_eqs node) as [|eq]; constructor; auto.
+      + assert (forall k, let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
+                     msem_equation (node :: G) bk (fun _ : nat => false) (FH k) (F k) (F' k) eq) as Heq
+            by (intro k; specialize (Heqs k); inv Heqs; auto).
+        clear Heqs.
+        set (H := fun n : nat => FH (count r n) n).
+        set (bk := fun n => clock_of' (mask (all_absent (xs 0)) (count r n) r xs) n).
+        assert (forall n, clock_of' xs n = bk n) as Clock
+            by (intro; subst bk; simpl; unfold clock_of'; rewrite mask_transparent; auto).
+        destruct eq.
+        * apply SEqDef with (xs := fun n => interp_caexp_instant (bk n) (H n) c c0);
+            intro n; specialize (Heq (count r n)); inv Heq;
+              erewrite <-interp_caexp_instant_sound; try rewrite Clock; eauto.
+        *{ assert (exists x, hd_error i = Some x) as (x & Hx) by (specialize (Heq 0); inv Heq; eauto).
+           assert (exists Fx, forall k, sub_inst_n x (F k) (Fx k)) as (Fx & HMx).
+           { assert (forall k, exists Mxk, sub_inst_n x (F k) Mxk) as HMx
+               by (intro k; specialize (Heq k);
+                   inversion_clear Heq as [|?????????????? Hd|?????????????????? Hd|];
+                   rewrite Hd in Hx; inv Hx; eauto).
+             apply functional_choice in HMx; auto.
+           }
+           assert (exists Fx', forall k, sub_inst_n x (F' k) (Fx' k)) as (Fx' & HMx').
+           { assert (forall k, exists Mxk, sub_inst_n x (F' k) Mxk) as HMx'
+               by (intro k; specialize (Heq k);
+                   inversion_clear Heq as [|?????????????? Hd|?????????????????? Hd|];
+                   rewrite Hd in Hx; inv Hx; eauto).
+             apply functional_choice in HMx'; auto.
+           }
+           destruct o.
+           - eapply SEqReset with (Mx := fun n => Fx (count r n) n)
+                                  (Mx' := fun n => Fx' (count r n) n)
+                                  (ys := fun n => interp_var_instant (H n) i1)
+                                  (xss := fun n => interp_vars_instant (H n) i)
+                                  (ls := fun n => interp_laexps_instant (bk n) (H n) c l0)
+                                  (rs := fun n => match interp_var_instant (H n) i1 with
+                                               | absent => false
+                                               | present v => match val_to_bool v with
+                                                             | Some b => b
+                                                             | None => false
+                                                             end
+                                               end); eauto;
+               try (intro n; specialize (Heq (count r n)); inv Heq;
+                    try erewrite <-interp_var_instant_sound;
+                    try erewrite <-interp_vars_instant_sound;
+                    try erewrite <-interp_laexps_instant_sound;
+                    try rewrite Clock; eauto).
+             + specialize (HMx (count r n)); auto.
+             + specialize (HMx' (count r n)); auto.
+             + specialize (H17 n).
+               destruct (ys n); simpl; auto.
+               simpl in *.
+               destruct (val_to_bool c0); auto; discriminate.
+             + unfold reset_of in *; eauto.  instantiate (1 := n). specialize (Heq 0); inv Heq; eauto.
+             admit.
+           - admit.
+         }
+        *{ apply SEqFby with (xs := fun n => interp_var_instant (H n) i)
+                             (ls := fun n => interp_laexp_instant (bk n) (H n) c l0);
+           try (intro n; specialize (Heq (count r n)); inv Heq;
+                try erewrite <-interp_laexp_instant_sound;
+                try erewrite <-interp_var_instant_sound; try rewrite Clock; eauto).
+           split.
+           - specialize (Heq (count r 0)); inversion_clear Heq as [| | |????????????? (?&?)]; auto.
+           - pose proof Heq as Heq'.
+             split; intro n; specialize (Heq (count r n));
+               inversion_clear Heq as [| | |????????????? (Init & Loop & Spec)].
+             + rewrite <-Loop; simpl.
+               destruct (r (S n)) eqn: R; auto.
+               rewrite RstSpec; auto; symmetry; rewrite RstSpec; auto.
+               specialize (Heq' (S (count r n)));
+                 inversion_clear Heq' as [| | |????????????? (Init' &?)].
+               now rewrite Init, Init'.
+             + erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound; eauto.
+               specialize (Spec n).
+               destruct (find_val i (F (count r n) n)) eqn: Find; auto.
+               destruct (ls n); auto.
+               destruct (r n) eqn: R; auto.
+               rewrite RstSpec, Init in Find; auto.
+               inv Find; auto.
+         }
+      + apply IHl.
+        intro k; specialize (Heqs k); inv Heqs; auto.
+    - inv Ord.
+      apply msem_node_cons2; auto.
+      apply IHG; auto.
+      intro k; specialize (Sems k); apply msem_node_cons in Sems;
+        auto using Ordered_nodes.
+      apply ident_eqb_neq; auto.
+  Qed.
+
   Theorem sem_msem_reset:
     forall G f r xs ys,
+      Ordered_nodes G ->
       (forall f xs ys,
           sem_node G f xs ys ->
           exists M M', msem_node G f (fun n => false) xs M M' ys) ->
@@ -757,76 +944,10 @@ dataflow memory for which the non-standard semantics holds true.
       (** Classical Choice  *)
       (* now apply choice in Msem'.   *)
     }
-    assert (exists node, find_node f G = Some node)
-      as (node & Find) by (specialize (Msem 0); inv Msem; eauto).
-    assert (forall k, exists bk Hk,
-                 clock_of (mask (all_absent (xs 0)) k r xs) bk
-                 /\ (forall n, sem_vars_instant (Hk n) (map fst node.(n_in)) (mask (all_absent (xs 0)) k r xs n))
-                 /\ (forall n, sem_vars_instant (Hk n) (map fst node.(n_out)) (mask (all_absent (ys 0)) k r ys n))
-                 /\ same_clock (mask (all_absent (xs 0)) k r xs)
-                 /\ same_clock (mask (all_absent (ys 0)) k r ys)
-                 /\ (forall n, absent_list (mask (all_absent (xs 0)) k r xs n)
-                         <-> absent_list (mask (all_absent (ys 0)) k r ys n))
-                 /\ (forall n, sem_clocked_vars_instant (bk n) (Hk n) (idck node.(n_in)))
-                 /\ Forall (msem_equation G bk (fun n => false) Hk (F k) (F' k)) node.(n_eqs)
-                 /\ memory_closed_n (F k) node.(n_eqs)
-                 /\ memory_closed_n (F' k) node.(n_eqs)) as Node
-      by (intro; specialize (Msem k);
-          inversion_clear Msem as [?????????? Find'];
-          rewrite Find' in Find; inv Find; do 2 eexists; intuition; eauto).
-    apply functional_choice in Node as (Fbk & Node);
-      apply functional_choice in Node as (FH & Node).
     exists (fun n => F (count r n) n), (fun n => F' (count r n) n).
-    eapply SNode with (bk := fun n => Fbk (count r n) n) (H := fun n => FH (count r n) n); eauto;
-      try (intro n; specialize (Node (count r n));
-           destruct Node as (Clock & Ins & Outs & Same & Same' & Abs & VarsCk & Closed & Closed' &?);
-           specialize (Clock n); specialize (Ins n); specialize (Outs n);
-           specialize (Same n); specialize (Same' n);
-           specialize (Abs n); specialize (VarsCk n);
-           rewrite mask_transparent in Clock, Ins, Outs, Same, Same';
-           rewrite 2 mask_transparent in Abs; auto).
-    assert (forall k, Forall (msem_equation G (Fbk k) (fun _ : nat => false) (FH k) (F k) (F' k)) (n_eqs node))
-      as Heqs by (intro k; destruct (Node k); intuition).
-    assert (forall k n, r n = true -> F k n ≋ F k 0) as RstSpec by admit.
-    clear - Heqs RstSpec.
-    induction (n_eqs node) as [|eq]; constructor; auto.
-    - assert (forall k, msem_equation G (Fbk k) (fun _ : nat => false) (FH k) (F k) (F' k) eq) as Heq
-          by (intro k; specialize (Heqs k); inv Heqs; auto).
-      clear Heqs.
-      destruct eq.
-      + assert (forall k, exists xs, (forall n, sem_var_instant (FH k n) i (xs n))
-                           /\ forall n, sem_caexp_instant (Fbk k n) (FH k n) c c0 (xs n)) as Heq'
-            by (intro k; specialize (Heq k); inv Heq; eauto).
-        apply functional_choice in Heq' as (Fxs & Heq').
-        eapply SEqDef with (xs := fun n => Fxs (count r n) n); intro n;
-          destruct (Heq' (count r n)); auto.
-      + admit.
-      + assert (forall k, exists ls xs, (forall n, sem_laexp_instant (Fbk k n) (FH k n) c l0 (ls n))
-                              /\ (forall n, sem_var_instant (FH k n) i (xs n))
-                              /\ mfby i (sem_const c0) ls (fun n => false) (F k) (F' k) xs) as Heq'
-            by (intro k; specialize (Heq k); inv Heq; eauto).
-        apply functional_choice in Heq' as (Fls & Heq');
-          apply functional_choice in Heq' as (Fxs & Heq').
-        eapply SEqFby with (xs := fun n => Fxs (count r n) n) (ls := fun n => Fls (count r n) n);
-          try (intro n; destruct (Heq' (count r n)) as (?&?&?); eauto).
-        split; [|split].
-        * destruct (Heq' (count r 0)) as (?&?&?&?); auto.
-        * intro n; destruct (Heq' (count r n)) as (?&?& Init & Loop &?).
-          rewrite <-Loop; simpl.
-          destruct (r (S n)) eqn: R; auto.
-          rewrite RstSpec; auto; symmetry; rewrite RstSpec; auto.
-          destruct (Heq' (S (count r n))) as (?&?& Init' &?&?); auto.
-          now rewrite Init, Init'.
-        * intro n; destruct (Heq' (count r n)) as (?&?& Init &?& Spec); auto.
-          specialize (Spec n).
-          destruct (find_val i (F (count r n) n)) eqn: Find; auto.
-          destruct (Fls (count r n) n); auto.
-          destruct (r n) eqn: R; auto.
-          rewrite RstSpec, Init in Find; auto.
-          inv Find; auto.
-    - apply IHl.
-      intro k; specialize (Heqs k); inv Heqs; auto.
+    apply msem_node_slices; auto.
   Qed.
+
 
   Theorem sem_msem_node:
     forall G f xs ys,

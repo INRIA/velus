@@ -368,6 +368,12 @@ environment.
     unfold same_clock; intros ** E ? ?; rewrite <-E; auto.
   Qed.
 
+  (* Add Parametric Morphism : sem_vars_instant *)
+  (*     with signature eq_str ==> Basics.impl *)
+  (*       as same_clock_eq_str. *)
+  (* Proof. *)
+  (*   unfold same_clock; intros ** E ? ?; rewrite <-E; auto. *)
+  (* Qed. *)
   (** ** Clocking property *)
 
   Lemma not_subrate_clock:
