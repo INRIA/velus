@@ -92,6 +92,9 @@ Module Type MEMSEMANTICS
            | None => False
            end.
 
+  Definition or_str (b b': stream bool) : stream bool :=
+    fun n => b n || b' n.
+
   Section NodeSemantics.
 
     Definition sub_inst_n (x: ident) (M M': memories) : Prop :=
@@ -122,7 +125,7 @@ Module Type MEMSEMANTICS
           msem_node f rs ls Mx Mx' xss ->
           msem_equation bk rs H M M' (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk rs' rs'' H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
+        forall bk rs' H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
@@ -130,8 +133,7 @@ Module Type MEMSEMANTICS
           (forall n, sem_vars_instant (H n) xs (xss n)) ->
           (forall n, sem_var_instant (H n) y (ys n)) ->
           reset_of ys rs ->
-          (forall n, rs'' n = rs n || rs' n) ->
-          msem_node f rs'' ls Mx Mx' xss ->
+          msem_node f (or_str rs rs') ls Mx Mx' xss ->
           msem_equation bk rs' H M M' (EqApp xs ck f arg (Some y))
     | SEqFby:
         forall bk rs H M M' x ck ls xs c0 le,
@@ -190,7 +192,7 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk rs H M M' (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk rs' rs'' H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
+      forall bk rs' H M M' x xs ck f Mx Mx' arg y ys rs ls xss,
         hd_error xs = Some x ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
@@ -198,9 +200,8 @@ enough: it does not support the internal fixpoint introduced by
         (forall n, sem_vars_instant (H n) xs (xss n)) ->
         (forall n, sem_var_instant (H n) y (ys n)) ->
         reset_of ys rs ->
-        (forall n, rs'' n = rs n || rs' n) ->
-        msem_node G f rs'' ls Mx Mx' xss ->
-        P_node f rs'' ls Mx Mx' xss ->
+        msem_node G f (or_str rs rs') ls Mx Mx' xss ->
+        P_node f (or_str rs rs') ls Mx Mx' xss ->
         P_equation bk rs' H M M' (EqApp xs ck f arg (Some y)).
 
     Hypothesis EqFbyCase:
@@ -255,6 +256,84 @@ enough: it does not support the internal fixpoint introduced by
 
   Definition msem_nodes (G: global) : Prop :=
     Forall (fun no => exists rs xs M M' ys, msem_node G no.(n_name) rs xs M M' ys) G.
+
+
+  Require Import Setoid.
+
+  Add Parametric Morphism G: (msem_equation G)
+      with signature eq_str ==> eq ==> eq ==> eq_str ==> eq_str ==> eq ==> Basics.impl
+        as msem_equation_eq_str.
+  Proof.
+    intros b b' Eb r H M M1 EM M' M1' EM' eq ** Sem.
+    inversion_clear Sem.
+    - econstructor; eauto.
+      intro; now rewrite <-Eb.
+    - econstructor; eauto.
+      + intro; now rewrite <-EM.
+      + intro; now rewrite <-EM'.
+      + intro; now rewrite <-Eb.
+    - econstructor; eauto.
+      + intro; now rewrite <-EM.
+      + intro; now rewrite <-EM'.
+      + intro; now rewrite <-Eb.
+    - econstructor; eauto.
+      + intro; rewrite <-Eb; auto.
+      + destruct H3 as (?&?&?); split; [|split].
+        * now rewrite <-EM.
+        * intro; now rewrite <-EM, <-EM'.
+        * intro; rewrite <-EM, <-EM'; apply H4.
+  Qed.
+
+  Add Parametric Morphism G r H eqs: (fun bk M M' => Forall (msem_equation G bk r H M M') eqs)
+      with signature eq_str ==> eq_str ==> eq_str ==> Basics.impl
+        as msem_equations_eq_str.
+  Proof.
+    intros b b' Eb M M1 EM M' M1' EM' ** Sem.
+    apply Forall_forall; intros ** Hin; eapply Forall_forall in Sem; eauto.
+    rewrite <-Eb, <-EM, <-EM'; auto.
+  Qed.
+
+  Add Parametric Morphism G f r: (msem_node G f r)
+      with signature eq_str ==> eq_str ==> eq_str ==> eq_str ==> Basics.impl
+        as msem_node_eq_str.
+  Proof.
+    intros xs xs' Exs M M1 EM M' M1' EM' ys ys' Eys Node.
+    inv Node.
+    econstructor; eauto; intros; try rewrite <-Exs; try rewrite <-Eys; eauto.
+    - eapply msem_equations_eq_str; eauto.
+      reflexivity.
+    - intro; now rewrite <-EM.
+    - intro; now rewrite <-EM'.
+  Qed.
+
+  Add Parametric Morphism : (or_str)
+      with signature eq_str ==> eq_str ==> eq_str
+        as or_str_eq_str.
+  Proof.
+    unfold or_str; intros ** n; congruence.
+  Qed.
+
+  Add Parametric Morphism G f: (msem_node G f)
+      with signature eq_str ==> eq ==> eq ==> eq ==> eq ==> Basics.impl
+        as msem_node_eq_str_rst.
+  Proof.
+    intros r r' Er ** Node.
+    revert dependent r'.
+    induction Node as [| | |????????????? Fby|????????????????? Heqs ?? IHeqs]
+                     using msem_node_mult
+      with (P_equation := fun bk r H M M' eq =>
+                            forall r',
+                              r ≈ r' ->
+                              msem_equation G bk r' H M M' eq);
+      intros ** Er; eauto using msem_equation.
+    - econstructor; eauto.
+      apply IHNode; rewrite Er; reflexivity.
+    - destruct Fby as (?&?& Spec); econstructor; eauto; split; [|split]; auto.
+      intro; rewrite <-Er; apply Spec.
+    - econstructor; eauto.
+      apply Forall_forall; intros.
+      eapply Forall_forall in IHeqs; eauto.
+  Qed.
 
 
   (** ** Properties *)
@@ -466,7 +545,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem as [|????? x' ???????? Hsome
-                         |?????? x' ??????????? Hsome|];
+                         |????? x' ??????????? Hsome|];
       eauto;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -647,7 +726,8 @@ dataflow memory for which the non-standard semantics holds true.
       + constructor.
         * econstructor; eauto;
             try (unfold sub_inst, add_inst_n; intro; now apply find_inst_gss).
-          now setoid_rewrite Bool.orb_false_r.
+          eapply msem_node_eq_str_rst; eauto.
+          unfold or_str; intro; rewrite Bool.orb_false_r; auto.
         * inv NoDup.
           apply hd_error_Some_In in Hsome.
           apply msem_equation_madd_inst; auto.
@@ -721,24 +801,6 @@ dataflow memory for which the non-standard semantics holds true.
   (*   intro x; destruct (Ex x); auto. *)
   (* Qed. *)
 
-  Require Import Setoid.
-  Add Parametric Morphism G: (msem_equation G)
-      with signature eq_str ==> eq ==> eq ==> eq ==> eq ==> eq ==> Basics.impl
-        as msem_equation_eq_str.
-  Proof.
-    intros b b' E ** Sem.
-    inversion_clear Sem; econstructor; eauto;
-      intro; rewrite <-E; auto.
-  Qed.
-
-  Add Parametric Morphism G r H M M' eqs: (fun bk => Forall (msem_equation G bk r H M M') eqs)
-      with signature eq_str ==> Basics.impl
-        as msem_equations_eq_str.
-  Proof.
-    intros b b' E ** Sem.
-    apply Forall_forall; intros ** Hin; eapply Forall_forall in Sem; eauto.
-    rewrite <-E; auto.
-  Qed.
 
   (* Ltac interp_sound n := *)
   (*   repeat match goal with *)
@@ -761,15 +823,35 @@ dataflow memory for which the non-standard semantics holds true.
   (*   try erewrite <-interp_vars_instant_sound; *)
   (*   eauto. *)
 
+
+  Lemma or_str_comm:
+    forall b b',
+      or_str b b' ≈ or_str b' b.
+  Proof.
+    unfold or_str; intros ** n.
+    apply Bool.orb_comm.
+  Qed.
+
+  Lemma or_str_assoc:
+    forall b b' b'',
+      or_str b (or_str b' b'') ≈ or_str (or_str b b') b''.
+  Proof.
+    unfold or_str; intros ** n.
+    apply Bool.orb_assoc.
+  Qed.
+
   Lemma msem_node_slices:
-    forall G f r xs ys F F',
+    forall G f r r' xs ys F F',
       Ordered_nodes G ->
       (forall k,
-          msem_node G f (fun nat => false)
+          msem_node G f r'
                     (mask (all_absent (xs 0)) k r xs)
                     (F k) (F' k)
                     (mask (all_absent (ys 0)) k r ys)) ->
-      msem_node G f r xs (fun n => F (count r n) n) (fun n => F' (count r n) n) ys.
+      msem_node G f (or_str r r')
+                xs
+                (fun n => F (count r n) n) (fun n => F' (count r n) n)
+                ys.
   Proof.
     induction G as [|n]; intros ** Ord Sems;
       try (specialize (Sems 0); inversion_clear Sems as [?????????? Find]; now inv Find).
@@ -788,7 +870,7 @@ dataflow memory for which the non-standard semantics holds true.
                    /\ (forall n, absent_list (mask (all_absent (xs 0)) k r xs n)
                            <-> absent_list (mask (all_absent (ys 0)) k r ys n))
                    /\ (forall n, sem_clocked_vars_instant (bk n) (Hk n) (idck node.(n_in)))
-                   /\ Forall (msem_equation (node :: G) bk (fun n => false) Hk (F k) (F' k)) node.(n_eqs)
+                   /\ Forall (msem_equation (node :: G) bk r' Hk (F k) (F' k)) node.(n_eqs)
                    /\ memory_closed_n (F k) node.(n_eqs)
                    /\ memory_closed_n (F' k) node.(n_eqs)) as Node.
       { intro; specialize (Sems k);
@@ -796,7 +878,7 @@ dataflow memory for which the non-standard semantics holds true.
           rewrite Find' in Find; inv Find; do 2 eexists; intuition; eauto;
             apply clock_of_equiv' in Clock.
         - rewrite <-Clock; auto.
-        - eapply msem_equations_eq_str; eauto.
+        - eapply msem_equations_eq_str; eauto; reflexivity.
       }
       apply functional_choice in Node as (FH & Node).
       eapply SNode with (H := fun n => FH (count r n) n); eauto;
@@ -811,13 +893,14 @@ dataflow memory for which the non-standard semantics holds true.
            unfold clock_of' in VarsCk; rewrite mask_transparent in VarsCk;
            auto).
       assert (forall k, let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
-                   Forall (msem_equation (node :: G) bk (fun _ : nat => false) (FH k) (F k) (F' k)) (n_eqs node))
+                   Forall (msem_equation (node :: G) bk r' (FH k) (F k) (F' k)) (n_eqs node))
         as Heqs by (intro k; destruct (Node k); intuition).
       assert (forall k n, r n = true -> F k n ≋ F k 0) as RstSpec by admit.
-      clear - Heqs RstSpec.
+      pose proof (find_node_not_Is_node_in _ _ _ Ord Find) as Hnini.
+      clear - Heqs RstSpec IHG Ord Hnini.
       induction (n_eqs node) as [|eq]; constructor; auto.
       + assert (forall k, let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
-                     msem_equation (node :: G) bk (fun _ : nat => false) (FH k) (F k) (F' k) eq) as Heq
+                     msem_equation (node :: G) bk r' (FH k) (F k) (F' k) eq) as Heq
             by (intro k; specialize (Heqs k); inv Heqs; auto).
         clear Heqs.
         set (H := fun n : nat => FH (count r n) n).
@@ -825,52 +908,113 @@ dataflow memory for which the non-standard semantics holds true.
         assert (forall n, clock_of' xs n = bk n) as Clock
             by (intro; subst bk; simpl; unfold clock_of'; rewrite mask_transparent; auto).
         destruct eq.
+
         * apply SEqDef with (xs := fun n => interp_caexp_instant (bk n) (H n) c c0);
             intro n; specialize (Heq (count r n)); inv Heq;
               erewrite <-interp_caexp_instant_sound; try rewrite Clock; eauto.
+
         *{ assert (exists x, hd_error i = Some x) as (x & Hx) by (specialize (Heq 0); inv Heq; eauto).
            assert (exists Fx, forall k, sub_inst_n x (F k) (Fx k)) as (Fx & HMx).
            { assert (forall k, exists Mxk, sub_inst_n x (F k) Mxk) as HMx
                by (intro k; specialize (Heq k);
-                   inversion_clear Heq as [|?????????????? Hd|?????????????????? Hd|];
+                   inversion_clear Heq as [|?????????????? Hd|????????????????? Hd|];
                    rewrite Hd in Hx; inv Hx; eauto).
              apply functional_choice in HMx; auto.
            }
            assert (exists Fx', forall k, sub_inst_n x (F' k) (Fx' k)) as (Fx' & HMx').
            { assert (forall k, exists Mxk, sub_inst_n x (F' k) Mxk) as HMx'
                by (intro k; specialize (Heq k);
-                   inversion_clear Heq as [|?????????????? Hd|?????????????????? Hd|];
+                   inversion_clear Heq as [|?????????????? Hd|????????????????? Hd|];
                    rewrite Hd in Hx; inv Hx; eauto).
              apply functional_choice in HMx'; auto.
            }
            destruct o.
-           - eapply SEqReset with (Mx := fun n => Fx (count r n) n)
-                                  (Mx' := fun n => Fx' (count r n) n)
-                                  (ys := fun n => interp_var_instant (H n) i1)
-                                  (xss := fun n => interp_vars_instant (H n) i)
-                                  (ls := fun n => interp_laexps_instant (bk n) (H n) c l0)
-                                  (rs := fun n => match interp_var_instant (H n) i1 with
-                                               | absent => false
-                                               | present v => match val_to_bool v with
-                                                             | Some b => b
-                                                             | None => false
-                                                             end
-                                               end); eauto;
-               try (intro n; specialize (Heq (count r n)); inv Heq;
-                    try erewrite <-interp_var_instant_sound;
-                    try erewrite <-interp_vars_instant_sound;
-                    try erewrite <-interp_laexps_instant_sound;
-                    try rewrite Clock; eauto).
+           eapply SEqReset with
+               (Mx := fun n => Fx (count r n) n)
+               (Mx' := fun n => Fx' (count r n) n)
+               (xss := fun n => interp_vars_instant (H n) i)
+               (ls := fun n => interp_laexps_instant (bk n) (H n) c l0)
+               (ys := fun n => interp_var_instant (H n) i1)
+               (rs := fun n => match interp_var_instant (H n) i1 with
+                            | absent => false
+                            | present v => match val_to_bool v with
+                                          | Some b => b
+                                          | None => false
+                                          end
+                            end); eauto;
+             try (intro n; specialize (Heq (count r n));
+                  inversion_clear Heq as [| |??????????????????????? Rst|];
+                  try erewrite <-interp_var_instant_sound;
+                  try erewrite <-interp_vars_instant_sound;
+                  try erewrite <-interp_laexps_instant_sound;
+                  try rewrite Clock; eauto).
              + specialize (HMx (count r n)); auto.
              + specialize (HMx' (count r n)); auto.
-             + specialize (H17 n).
+             + specialize (Rst n).
                destruct (ys n); simpl; auto.
                simpl in *.
-               destruct (val_to_bool c0); auto; discriminate.
-             + unfold reset_of in *; eauto.  instantiate (1 := n). specialize (Heq 0); inv Heq; eauto.
-             admit.
-           - admit.
+               cases; auto; discriminate.
+             + inv Ord.
+               apply msem_node_cons2; auto.
+               rewrite or_str_comm, <-or_str_assoc.
+               apply IHG; auto.
+               intro k; specialize (Heq k);
+                 inversion_clear Heq as [| |????????????????? Hd' HFx HFx' Exps Vars Var Rst Node|].
+               rewrite Hd' in Hx; inv Hx.
+               eapply msem_node_cons in Node; auto using Ordered_nodes.
+               *{ rewrite or_str_comm.
+                  eapply msem_node_eq_str.
+                  - instantiate (1 := ls).
+                    intro n; specialize (Exps n).
+                    apply interp_laexps_instant_sound in Exps; rewrite Exps.
+                    destruct (NPeano.Nat.eq_dec (count r n) k).
+                    + rewrite mask_transparent; auto.
+                      subst bk H; simpl.
+                      congruence; auto.
+                    + rewrite mask_opaque; auto.
+                      subst bk H; simpl.
+                      unfold clock_of'.
+                      rewrite 1 mask_opaque; auto.
+                      rewrite mask_transparent; simpl; auto.
+                      admit.
+                  -  intro; specialize (HMx k n); specialize (HFx n).
+                     unfold sub_inst in *; rewrite HFx in HMx; inv HMx; eauto.
+                  - intro; specialize (HMx' k n); specialize (HFx' n).
+                    unfold sub_inst in *; rewrite HFx' in HMx'; inv HMx'; eauto.
+                  - instantiate (1 := xss).
+                    intro n; specialize (Vars n).
+                    apply interp_vars_instant_sound in Vars; rewrite Vars.
+                    destruct (NPeano.Nat.eq_dec (count r n) k).
+                    + rewrite mask_transparent; auto.
+                      subst H; simpl.
+                      congruence; auto.
+                    + rewrite mask_opaque; auto.
+                      subst bk H; simpl.
+                      admit.
+                  - assert (rs ≈ fun n =>
+                                   match interp_var_instant (H n) i1 with
+                                   | absent => false
+                                   | present v => match val_to_bool v with
+                                                 | Some b => b
+                                                 | None => false
+                                                 end
+                                   end) as <-; auto.
+                    intro; specialize (Var n);
+                      apply interp_var_instant_sound in Var.
+                    specialize (Rst n); rewrite Var in Rst.
+                    subst H; simpl.
+                    destruct (NPeano.Nat.eq_dec (count r n) k) as [E|].
+                    + rewrite E.
+                      destruct (interp_var_instant (FH k n) i1); simpl in Rst; auto.
+                      * inv Rst; auto.
+                      * now rewrite Rst.
+                    + admit.
+                }
+               * intro; subst; apply Hnini; left; constructor.
+
+             + admit.
          }
+
         *{ apply SEqFby with (xs := fun n => interp_var_instant (H n) i)
                              (ls := fun n => interp_laexp_instant (bk n) (H n) c l0);
            try (intro n; specialize (Heq (count r n)); inv Heq;
@@ -891,12 +1035,15 @@ dataflow memory for which the non-standard semantics holds true.
                specialize (Spec n).
                destruct (find_val i (F (count r n) n)) eqn: Find; auto.
                destruct (ls n); auto.
-               destruct (r n) eqn: R; auto.
+               unfold or_str.
+               destruct (r n) eqn: R; auto; simpl.
                rewrite RstSpec, Init in Find; auto.
-               inv Find; auto.
+               inv Find.
+               destruct (r' n); auto.
          }
       + apply IHl.
-        intro k; specialize (Heqs k); inv Heqs; auto.
+        * intro k; specialize (Heqs k); inv Heqs; auto.
+        * apply not_Is_node_in_cons in Hnini as (?&?); auto.
     - inv Ord.
       apply msem_node_cons2; auto.
       apply IHG; auto.
