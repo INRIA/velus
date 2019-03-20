@@ -278,10 +278,10 @@ enough: it does not support the internal fixpoint introduced by
       + intro; now rewrite <-Eb.
     - econstructor; eauto.
       + intro; rewrite <-Eb; auto.
-      + destruct H3 as (?&?&?); split; [|split].
+      + destruct H3 as (?&?& Spec); split; intuition.
         * now rewrite <-EM.
-        * intro; now rewrite <-EM, <-EM'.
-        * intro; rewrite <-EM, <-EM'; apply H4.
+        * now rewrite <-EM, <-EM'.
+        * rewrite <-EM, <-EM'; apply Spec.
   Qed.
 
   Add Parametric Morphism G r H eqs: (fun bk M M' => Forall (msem_equation G bk r H M M') eqs)
@@ -328,8 +328,8 @@ enough: it does not support the internal fixpoint introduced by
       intros ** Er; eauto using msem_equation.
     - econstructor; eauto.
       apply IHNode; rewrite Er; reflexivity.
-    - destruct Fby as (?&?& Spec); econstructor; eauto; split; [|split]; auto.
-      intro; rewrite <-Er; apply Spec.
+    - destruct Fby as (?&?& Spec); econstructor; eauto; split; intuition; eauto.
+      rewrite <-Er; apply Spec.
     - econstructor; eauto.
       apply Forall_forall; intros.
       eapply Forall_forall in IHeqs; eauto.
@@ -492,10 +492,10 @@ enough: it does not support the internal fixpoint introduced by
   Proof.
     unfold add_val_n.
     intros ** Fby; destruct Fby as (?&?& Spec).
-    split; [|split].
+    split; intuition.
     - rewrite find_val_gso; auto.
-    - intro; rewrite 2 find_val_gso; auto.
-    - intro n; rewrite 2 find_val_gso; auto; apply Spec.
+    - rewrite 2 find_val_gso; auto.
+    - rewrite 2 find_val_gso; auto; apply Spec.
   Qed.
 
   Definition add_inst_n (y: ident) (M' M: memories): memories :=
@@ -741,7 +741,7 @@ dataflow memory for which the non-standard semantics holds true.
         split.
       + constructor.
         * unfold add_val_n.
-          econstructor; eauto; split; [|split];
+          econstructor; eauto; split; intuition;
              intros; try rewrite Hfby; unfold fby;
                simpl; repeat rewrite find_val_gss; auto.
           destruct (ls n); auto.
@@ -784,10 +784,6 @@ dataflow memory for which the non-standard semantics holds true.
       + eapply NoDup_defs_cons; eauto.
   Qed.
 
-  Require Import Coq.Logic.ClassicalChoice.
-  Require Import Coq.Logic.ConstructiveEpsilon.
-  Require Import Coq.Logic.Epsilon.
-  Require Import Coq.Logic.IndefiniteDescription.
 
   (* Check functional_choice. *)
 
@@ -878,7 +874,7 @@ dataflow memory for which the non-standard semantics holds true.
     assert (x <> i) by (intro E; subst; apply Hnotin; constructor).
     destruct Mfby as (?&?& Spec).
     econstructor; eauto; unfold remove_val_n.
-    split; [|split]; intros; repeat rewrite find_val_gro; auto.
+    split; intuition; intros; repeat rewrite find_val_gro; auto.
     apply Spec.
   Qed.
 
@@ -931,12 +927,12 @@ dataflow memory for which the non-standard semantics holds true.
       forall n, n <= n0 -> find_val x (M n) = Some v0.
   Proof.
     intros ** Mfby Abs n E; induction n;
-      destruct Mfby as (Init & Spec & Spec'); auto.
-    rewrite Spec.
-    specialize (Spec' n).
+      destruct Mfby as (Init & Loop & Spec); auto.
+    rewrite Loop.
+    specialize (Spec n).
     destruct (find_val x (M n)); try contradiction.
-    rewrite Abs in Spec'; try omega.
-    destruct Spec' as [->].
+    rewrite Abs in Spec; try omega.
+    destruct Spec as [->].
     apply IHn; omega.
   Qed.
 
@@ -1134,7 +1130,7 @@ dataflow memory for which the non-standard semantics holds true.
     forall G f r' r xs ys F F',
       Ordered_nodes G ->
       (forall k,
-          msem_node G f r'
+          msem_node G f (mask false k r r')
                     (mask (all_absent (xs 0)) k r xs)
                     (F k) (F' k)
                     (mask (all_absent (ys 0)) k r ys)) ->
@@ -1165,11 +1161,115 @@ dataflow memory for which the non-standard semantics holds true.
     apply Bool.orb_assoc.
   Qed.
 
+  Lemma mask_or_str:
+    forall b b' k r,
+      mask false k r (or_str b b') ≈ or_str (mask false k r b) (mask false k r b').
+  Proof.
+    unfold or_str; intros ** n.
+    destruct (NPeano.Nat.eq_dec k (count r n)) eqn: E.
+    - rewrite 3 mask_transparent; auto.
+    - rewrite 3 mask_opaque; auto.
+  Qed.
+
+  Lemma sem_interp_laexps_instant_mask:
+    forall ck es ls xs r FH k,
+    let bk := fun n : nat => clock_of' (mask (all_absent (xs 0)) (count r n) r xs) n in
+    let H := fun n : nat => FH (count r n) n in
+    0 < length (xs 0) ->
+    (forall n, sem_laexps_instant (clock_of' (mask (all_absent (xs 0)) k r xs) n) (FH k n) ck es (ls n)) ->
+    ls ≈ mask (all_absent (interp_laexps_instant (bk 0) (H 0) ck es)) k r
+       (fun n => interp_laexps_instant (bk n) (H n) ck es).
+  Proof.
+    intros ** Length Exps n.
+    specialize (Exps n).
+    destruct (NPeano.Nat.eq_dec k (count r n)) eqn: E.
+    - subst.
+      rewrite mask_transparent; auto.
+      eapply interp_laexps_instant_sound; auto.
+    - rewrite mask_opaque; auto.
+      assert (clock_of' (mask (all_absent (xs 0)) k r xs) n = false) as Hbk.
+      { unfold clock_of'; rewrite mask_opaque; auto.
+        induction (xs 0); simpl in *; auto; omega.
+      }
+      rewrite Hbk in Exps.
+      inversion_clear Exps as [?????? SemCk|??? Eq].
+      + contradict SemCk; apply not_subrate_clock.
+      + rewrite Eq.
+        unfold interp_laexps_instant.
+        destruct (forallb (fun v => v ==b absent) (interp_lexps_instant (bk 0) (H 0) es)
+                          && negb (interp_clock_instant (bk 0) (H 0) ck)
+                  || forallb (fun v => v <>b absent) (interp_lexps_instant (bk 0) (H 0) es)
+                            && interp_clock_instant (bk 0) (H 0) ck);
+          unfold interp_lexps_instant; rewrite all_absent_map; auto.
+        unfold all_absent at 3; rewrite all_absent_map; auto.
+  Qed.
+
+  Lemma sem_interp_vars_instant_mask:
+    forall xs xss r FH k,
+    let H := fun n : nat => FH (count r n) n in
+    (forall n, k <> count r n -> absent_list (xss n)) ->
+    (forall n, sem_vars_instant (FH k n) xs (xss n)) ->
+    xss ≈ mask (all_absent (interp_vars_instant (H 0) xs)) k r (fun n => interp_vars_instant (H n) xs).
+  Proof.
+    intros ** Abs Vars n.
+    specialize (Vars n).
+    destruct (NPeano.Nat.eq_dec k (count r n)) eqn: E.
+    - subst.
+      rewrite mask_transparent; auto.
+      induction Vars as [|???? Var]; intros; simpl; auto.
+      f_equal; auto.
+      unfold interp_var_instant; subst H; simpl.
+      rewrite Var; auto.
+    - rewrite mask_opaque; auto.
+      apply absent_list_spec; auto.
+      apply Forall2_length in Vars.
+      unfold interp_vars_instant.
+      rewrite map_length; auto.
+  Qed.
+
+  Lemma sem_interp_var_instant_mask:
+    forall x xs r FH k,
+      let H := fun n : nat => FH (count r n) n in
+      (forall n, k <> count r n -> xs n = absent) ->
+      (forall n, sem_var_instant (FH k n) x (xs n)) ->
+      xs ≈ mask absent k r (fun n => interp_var_instant (H n) x).
+  Proof.
+    intros ** Var n.
+    specialize (Var n).
+    destruct (NPeano.Nat.eq_dec k (count r n)) eqn: E.
+    - subst.
+      rewrite mask_transparent; auto.
+      unfold interp_var_instant; subst H; simpl.
+      rewrite Var; auto.
+    - rewrite mask_opaque; auto.
+  Qed.
+
+  Lemma msem_node_wf:
+    forall G f r xss M M' yss,
+      msem_node G f r xss M M' yss ->
+      wf_streams xss /\ wf_streams yss.
+  Proof.
+    intros ** Sem; split; inversion_clear Sem as [??????????? Ins Outs].
+    - intros k k'; pose proof Ins as Ins'.
+      specialize (Ins k); specialize (Ins' k');
+        apply Forall2_length in Ins; apply Forall2_length in Ins';
+          now rewrite Ins in Ins'.
+    - intros k k'; pose proof Outs as Outs'.
+      specialize (Outs k); specialize (Outs' k');
+        apply Forall2_length in Outs; apply Forall2_length in Outs';
+          now rewrite Outs in Outs'.
+  Qed.
+
+ Require Import Coq.Logic.ClassicalChoice.
+  Require Import Coq.Logic.ConstructiveEpsilon.
+  Require Import Coq.Logic.Epsilon.
+  Require Import Coq.Logic.IndefiniteDescription.
+
   Lemma msem_node_slices:
     forall G f r r' xs ys F F',
       Ordered_nodes G ->
       (forall k,
-          msem_node G f r'
+          msem_node G f (mask false k r r')
                     (mask (all_absent (xs 0)) k r xs)
                     (F k) (F' k)
                     (mask (all_absent (ys 0)) k r ys)) ->
@@ -1199,7 +1299,7 @@ dataflow memory for which the non-standard semantics holds true.
                    /\ (forall n, absent_list (mask (all_absent (xs 0)) k r xs n)
                            <-> absent_list (mask (all_absent (ys 0)) k r ys n))
                    /\ (forall n, sem_clocked_vars_instant (bk n) (Hk n) (idck node.(n_in)))
-                   /\ Forall (msem_equation (node :: G) bk r' Hk (F k) (F' k)) node.(n_eqs)
+                   /\ Forall (msem_equation (node :: G) bk (mask false k r r') Hk (F k) (F' k)) node.(n_eqs)
                    /\ memory_closed_n (F k) node.(n_eqs)
                    /\ memory_closed_n (F' k) node.(n_eqs)) as Node.
       { intro; specialize (Sems k);
@@ -1210,29 +1310,40 @@ dataflow memory for which the non-standard semantics holds true.
         - eapply msem_equations_eq_str; eauto; reflexivity.
       }
       apply functional_choice in Node as (FH & Node).
-      assert (forall k n, F k (S n) ≋ F' k n) as Loop
-          by (intros; specialize (Sems k); eapply msem_node_loop; eauto).
+      assert (0 < length (xs 0)) as Length.
+      { clear - Sems; pose proof Sems as Sems'.
+        specialize (Sems 0); inversion_clear Sems as [??????????? Ins]; specialize (Ins 0).
+        apply Forall2_length in Ins.
+        rewrite mask_length in Ins.
+        - rewrite <-Ins, map_length; apply n_ingt0.
+        - eapply wf_streams_mask.
+          intro k'; specialize (Sems' k').
+          eapply msem_node_wf in Sems' as (); eauto.
+      }
+      (* assert (forall k n, F k (S n) ≋ F' k n) as Loop *)
+      (*     by (intros; specialize (Sems k); eapply msem_node_loop; eauto). *)
       assert (forall n, r n = true -> F (count r n) n ≋ F (count r n) 0) as RstSpec
           by (intros; eapply msem_nodes_reset_spec; eauto).
-      eapply SNode with (H := fun n => FH (count r n) n); eauto;
+      eapply SNode with (H := fun n => FH (count r n) n);
         try eapply clock_of_equiv;
-        try (intro n; specialize (Node (count r n));
-           destruct Node as (Ins & Outs & Same & Same' & Abs & VarsCk & ? & Closed & Closed');
-           specialize (Ins n); specialize (Outs n);
-           specialize (Same n); specialize (Same' n);
-           specialize (Abs n); specialize (VarsCk n);
-           rewrite mask_transparent in Ins, Outs, Same, Same';
-           rewrite 2 mask_transparent in Abs;
-           unfold clock_of' in VarsCk; rewrite mask_transparent in VarsCk;
-           auto).
+        eauto;
+        try (now intro n; specialize (Node (count r n));
+             destruct Node as (Ins & Outs & Same & Same' & Abs & VarsCk & ? & Closed & Closed');
+             specialize (Ins n); specialize (Outs n);
+             specialize (Same n); specialize (Same' n);
+             specialize (Abs n); specialize (VarsCk n);
+             rewrite mask_transparent in Ins, Outs, Same, Same';
+             rewrite 2 mask_transparent in Abs;
+             unfold clock_of' in VarsCk; rewrite mask_transparent in VarsCk;
+             auto).
       + assert (forall k, let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
-                     Forall (msem_equation (node :: G) bk r' (FH k) (F k) (F' k)) (n_eqs node))
+                     Forall (msem_equation (node :: G) bk (mask false k r r') (FH k) (F k) (F' k)) (n_eqs node))
           as Heqs by (intro k; destruct (Node k); intuition).
         pose proof (find_node_not_Is_node_in _ _ _ Ord Find) as Hnini.
-        clear - Heqs Loop RstSpec IHG Ord Hnini.
+        clear - Heqs (* Loop *) RstSpec IHG Ord Hnini Length.
         induction (n_eqs node) as [|eq]; constructor; auto.
         *{ assert (forall k, let bk := clock_of' (mask (all_absent (xs 0)) k r xs) in
-                        msem_equation (node :: G) bk r' (FH k) (F k) (F' k) eq) as Heq
+                        msem_equation (node :: G) bk (mask false k r r') (FH k) (F k) (F' k) eq) as Heq
                by (intro k; specialize (Heqs k); inv Heqs; auto).
            clear Heqs.
            set (H := fun n : nat => FH (count r n) n).
@@ -1272,12 +1383,12 @@ dataflow memory for which the non-standard semantics holds true.
                    (ls := fun n => interp_laexps_instant (bk n) (H n) c l0)
                    (ys := fun n => interp_var_instant (H n) i1)
                    (rs := fun n => match interp_var_instant (H n) i1 with
-                            | absent => false
-                            | present v => match val_to_bool v with
-                                          | Some b => b
-                                          | None => false
-                                          end
-                            end); eauto;
+                                | absent => false
+                                | present v => match val_to_bool v with
+                                              | Some b => b
+                                              | None => false
+                                              end
+                                end); eauto;
              try (intro n; specialize (Heq (count r n));
                   inversion_clear Heq as [| |??????????????????????? Rst|];
                   try erewrite <-interp_var_instant_sound;
@@ -1302,56 +1413,81 @@ dataflow memory for which the non-standard semantics holds true.
                   rewrite Hd' in Hx; inv Hx.
                   eapply msem_node_cons in Node; auto using Ordered_nodes.
                   - rewrite or_str_comm.
-                    eapply msem_node_eq_str.
-                    + instantiate (1 := ls).
-                      intro n; specialize (Exps n).
-                      apply interp_laexps_instant_sound in Exps; rewrite Exps.
-                      destruct (NPeano.Nat.eq_dec (count r n) k).
-                      * rewrite mask_transparent; auto.
-                        subst bk H; simpl.
-                        congruence; auto.
-                      * rewrite mask_opaque; auto.
-                        subst bk H; simpl.
-                        unfold clock_of'.
-                        rewrite 1 mask_opaque; auto.
-                        rewrite mask_transparent; simpl; auto.
-                        admit.
-                    + intro; specialize (HMx k n); specialize (HFx n).
-                      unfold sub_inst in *; rewrite HFx in HMx; inv HMx; eauto.
-                    + intro; specialize (HMx' k n); specialize (HFx' n).
-                      unfold sub_inst in *; rewrite HFx' in HMx'; inv HMx'; eauto.
-                    + instantiate (1 := xss).
-                      intro n; specialize (Vars n).
-                      apply interp_vars_instant_sound in Vars; rewrite Vars.
-                      destruct (NPeano.Nat.eq_dec (count r n) k).
-                      * rewrite mask_transparent; auto.
-                        subst H; simpl.
-                        congruence; auto.
-                      * rewrite mask_opaque; auto.
-                        subst bk H; simpl.
-                        admit.
-                    + assert (rs ≈ fun n =>
-                                     match interp_var_instant (H n) i1 with
-                                     | absent => false
-                                     | present v => match val_to_bool v with
-                                                   | Some b => b
-                                                   | None => false
-                                                   end
-                                     end) as <-; auto.
-                      intro; specialize (Var n);
-                        apply interp_var_instant_sound in Var.
-                      specialize (Rst n); rewrite Var in Rst.
-                      subst H; simpl.
-                      destruct (NPeano.Nat.eq_dec (count r n) k) as [E|].
-                      *{ rewrite E.
-                         destruct (interp_var_instant (FH k n) i1); simpl in Rst; auto.
-                         - inv Rst; auto.
-                         - now rewrite Rst.
+                    apply sem_interp_laexps_instant_mask in Exps; eauto.
+                    apply sem_interp_vars_instant_mask with (r := r) in Vars.
+                    + eapply msem_node_eq_str; eauto.
+                      * intro; specialize (HMx k n); specialize (HFx n).
+                        unfold sub_inst in *; rewrite HFx in HMx; inv HMx; eauto.
+                      * intro; specialize (HMx' k n); specialize (HFx' n).
+                        unfold sub_inst in *; rewrite HFx' in HMx'; inv HMx'; eauto.
+                      *{ rewrite mask_or_str.
+                         assert (rs ≈ mask false k r
+                                    (fun n =>
+                                       match interp_var_instant (H n) i1 with
+                                       | absent => false
+                                       | present v => match val_to_bool v with
+                                                     | Some b => b
+                                                     | None => false
+                                                     end
+                                       end)) as <-; auto.
+                         intro; specialize (Var n); apply interp_var_instant_sound in Var.
+                         specialize (Rst n); rewrite Var in Rst.
+                         subst H; simpl.
+                         destruct (NPeano.Nat.eq_dec (count r n) k) as [E|].
+                         - rewrite mask_transparent, E; auto.
+                           destruct (interp_var_instant (FH k n) i1); simpl in Rst.
+                           + inv Rst; auto.
+                           + now rewrite Rst.
+                         - rewrite mask_opaque; auto.
+                           assert (interp_var_instant (FH k n) i1 = absent) as Abs by admit.
+                           rewrite Abs in Rst; inv Rst; auto.
                        }
-                      * admit.
+                    + inversion_clear Node as [??????????????? Abs].
+                      intros; apply Abs.
+                      rewrite Exps, mask_opaque; auto.
+                      apply all_absent_spec.
                   - intro; subst; apply Hnini; left; constructor.
                 }
-             + admit.
+
+             + eapply SEqApp with
+                   (Mx := fun n => match n with
+                                | 0 => Fx (count r 0) 0
+                                | S n => Fx' (count r n) n
+                                end)
+                   (Mx' := fun n => Fx' (count r n) n)
+                   (xss := fun n => interp_vars_instant (H n) i)
+                   (ls := fun n => interp_laexps_instant (bk n) (H n) c l0);
+                 eauto;
+                 try (intro n; specialize (Heq (count r n));
+                      inversion_clear Heq as [| |??????????????????????? Rst|];
+                      try erewrite <-interp_vars_instant_sound;
+                      try erewrite <-interp_laexps_instant_sound;
+                      try rewrite Clock; eauto).
+               *{ destruct n.
+                  - specialize (HMx (count r 0)); auto.
+                  - specialize (HMx' (count r n)); auto.
+                }
+               * specialize (HMx' (count r n)); auto.
+               *{ inv Ord.
+                  apply msem_node_cons2; auto.
+                  apply IHG; auto.
+                  intro k; specialize (Heq k);
+                    inversion_clear Heq as [|?????????????? Hd' HFx HFx' Exps Vars Node| |].
+                  rewrite Hd' in Hx; inv Hx.
+                  eapply msem_node_cons in Node; auto using Ordered_nodes.
+                  - apply sem_interp_laexps_instant_mask in Exps; eauto.
+                    apply sem_interp_vars_instant_mask with (r := r) in Vars.
+                    + eapply msem_node_eq_str; eauto.
+                      * intro; specialize (HMx k n); specialize (HFx n).
+                        unfold sub_inst in *; rewrite HFx in HMx; inv HMx; eauto.
+                      * intro; specialize (HMx' k n); specialize (HFx' n).
+                        unfold sub_inst in *; rewrite HFx' in HMx'; inv HMx'; eauto.
+                    + inversion_clear Node as [??????????????? Abs].
+                      intros; apply Abs.
+                      rewrite Exps, mask_opaque; auto.
+                      apply all_absent_spec.
+                  - intro; subst; apply Hnini; left; constructor.
+                }
 
            - apply SEqFby with (xs := fun n => interp_var_instant (H n) i)
                                (ls := fun n => interp_laexp_instant (bk n) (H n) c l0);
@@ -1359,44 +1495,56 @@ dataflow memory for which the non-standard semantics holds true.
                     try erewrite <-interp_laexp_instant_sound;
                     try erewrite <-interp_var_instant_sound; try rewrite Clock; eauto).
              split; [|split].
-             + specialize (Heq (count r 0)); inversion_clear Heq as [| | |????????????? (?&?)]; auto.
+             + specialize (Heq (count r 0)); inversion_clear Heq as [| | |????????????? (?&?&?)]; auto.
              + intro n; specialize (Heq (count r n));
                  inversion_clear Heq as [| | |????????????? (Init & Loop' & Spec)]; auto.
              + pose proof Heq as Heq'.
-               intro n; specialize (Heq (count r n));
-                 inversion_clear Heq as [| | |????????????? (Init & Loop' & Spec)]; auto.
-               erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound; eauto.
-               (* assert (find_val i match n with *)
-               (*                    | 0 => F (count r 0) 0 *)
-               (*                    | S n0 => F' (count r n0) n0 *)
-               (*                    end = find_val i match n with *)
-               (*                                     | 0 => F (count r 0) 0 *)
-               (*                                     | S n => F (count r n) (S n) *)
-               (*                                     end) as -> *)
-               (*     by (destruct n; auto; rewrite Loop; auto). *)
-               destruct n.
-               * specialize (Spec 0).
+               induction n.
+               * specialize (Heq (count r 0));
+                   inversion_clear Heq as [| | |????????????? (Init & ? & Spec)]; auto.
+                 erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound; eauto.
+                 specialize (Spec 0).
                  rewrite Init in *.
-                 destruct (ls 0); auto.
-                 unfold or_str; destruct (r 0), (r' 0); auto.
-               *{ destruct (find_val i (F' (count r n) n)) eqn: Find'; rewrite <-Loop in Find'.
-                  - destruct (ls (S n)).
-                    + destruct Spec as (->); intuition.
-                      pose proof Find as Find1.
-                      simpl in Find1.
-                      destruct (r (S n)) eqn: R; try congruence.
-
-                      * rewrite RstSpec, Init in Find; auto.
-                        inv Find; auto.
-               unfold or_str.
-               destruct (r n) eqn: R; auto; simpl.
-               rewrite RstSpec, Init in Find; auto.
-               inv Find.
-               destruct (r' n); auto.
+                 cases.
+               *{ subst H bk; simpl in *.
+                  specialize (Heq (count r n));
+                    inversion_clear Heq as [| | |????????????? (Init_n & Loop_n & Spec_n)]; auto.
+                  erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound in IHn; eauto.
+                  destruct (r (S n)) eqn: R; unfold or_str; rewrite R; simpl.
+                  - specialize (Heq' (S (count r n)));
+                      inversion_clear Heq' as [| | |??????????? Exp ? (Init_Sn & Loop_Sn & Spec_Sn)]; auto.
+                    erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound; eauto.
+                    specialize (Spec_Sn (S n)).
+                    assert (find_val i (F (S (count r n)) (S n)) = Some (sem_const c0)) as Find.
+                    { rewrite <-Init_Sn.
+                      replace (S (count r n)) with (count r (S n)).
+                      - rewrite RstSpec; auto.
+                      - simpl; rewrite R; auto.
+                    }
+                    rewrite Find in Spec_Sn.
+                    destruct (ls0 (S n)).
+                    + admit.
+                    + destruct (find_val i match n with
+                                           | 0 => F (if r 0 then 1 else 0) 0
+                                           | S n0 => F' (count r n0) n0
+                                           end) eqn: Find_n; try contradiction.
+                      destruct (ls n); destruct IHn as (->); intuition; cases.
+                  - erewrite <-interp_laexp_instant_sound, <-interp_var_instant_sound; eauto.
+                    specialize (Spec_n (S n)).
+                    destruct (find_val i (F (count r n) (S n))) eqn: Find; try contradiction.
+                    rewrite Loop_n in Find; rewrite Find.
+                    destruct (ls (S n)); auto.
+                    rewrite mask_transparent in Spec_n; auto.
+                    simpl; rewrite R; omega.
+                }
          }
-      + apply IHl.
-        * intro k; specialize (Heqs k); inv Heqs; auto.
-        * apply not_Is_node_in_cons in Hnini as (?&?); auto.
+        *{ apply IHl.
+           - intro k; specialize (Heqs k); inv Heqs; auto.
+           - apply not_Is_node_in_cons in Hnini as (?&?); auto.
+         }
+      + destruct n.
+        * destruct (Node (count r 0)) as (?&?&?&?&?&?&?&?&?); auto.
+        * destruct (Node (count r n)) as (?&?&?&?&?&?&?&?&?); auto.
     - inv Ord.
       apply msem_node_cons2; auto.
       apply IHG; auto.
@@ -1416,17 +1564,22 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros ** IH Sem.
     inversion_clear Sem as [???? Sem'].
-
-    assert (exists F F', forall k, msem_node G f (fun n => false)
+    assert (exists F F', forall k, msem_node G f (mask false k r (fun n => false))
                                    (mask (all_absent (xs 0)) k r xs)
                                    (F k) (F' k)
                                    (mask (all_absent (ys 0)) k r ys))
       as (F & F' & Msem).
-    { assert (forall k, exists Mk Mk', msem_node G f (fun n => false)
+    { assert (forall k, exists Mk Mk', msem_node G f (mask false k r (fun n => false))
                                        (mask (all_absent (xs 0)) k r xs)
                                        Mk Mk'
-                                       (mask (all_absent (ys 0)) k r ys)) as Msem'
-          by (intro; specialize (Sem' k); apply IH in Sem'; auto).
+                                       (mask (all_absent (ys 0)) k r ys)) as Msem'.
+      { intro; specialize (Sem' k); apply IH in Sem' as (?&?&?); auto.
+        do 2 eexists; eapply msem_node_eq_str_rst; eauto.
+        intro; destruct (NPeano.Nat.eq_dec k (count r n)) eqn: E.
+        - rewrite mask_transparent; auto.
+        - rewrite mask_opaque; auto.
+      }
+
       (** Infinite Description  *)
       do 2 apply functional_choice in Msem' as (?&Msem'); eauto.
 
@@ -1444,8 +1597,8 @@ dataflow memory for which the non-standard semantics holds true.
       (** Classical Choice  *)
       (* now apply choice in Msem'.   *)
     }
-    exists (fun n => F (count r n) n), (fun n => F' (count r n) n).
     apply msem_node_slices in Msem; auto.
+    do 2 eexists.
     eapply msem_node_eq_str_rst; eauto; try reflexivity.
     unfold or_str; intro; apply Bool.orb_false_r.
   Qed.
