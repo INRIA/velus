@@ -437,6 +437,15 @@ Proof.
   intros. now rewrite combine_map_fst, combine_map_snd, map_map.
 Qed.
 
+Lemma map_snd_combine:
+  forall {A B} (l: list A) (l': list B),
+    length l = length l' ->
+    map snd (combine l l') = l'.
+Proof.
+  induction l, l'; inversion 1; auto.
+  simpl. now rewrite (IHl _ H1).
+Qed.
+
 Definition not_In_empty: forall x : ident, ~(PS.In x PS.empty) := PS.empty_spec.
 
 Ltac not_In_empty :=

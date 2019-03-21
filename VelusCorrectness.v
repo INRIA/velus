@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Ident.
-Require Import Velus.NLustreToObc.NLObcTyping.
+(* Require Import Velus.NLustreToObc.NLObcTyping. *)
 Require Import Velus.ObcToClight.Generation.
 Require Import Velus.Traces.
 Require Import Velus.ClightToAsm.
@@ -21,8 +21,8 @@ Import Obc.Sem.
 Import Obc.Typ.
 Import Obc.Equ.
 Import Fusion.
-Import Trans.
-Import Corr.
+(* Import Trans. *)
+(* Import Corr. *)
 Import Typ.
 Import OpAux.
 Import Interface.Op.
@@ -35,21 +35,21 @@ Import List.ListNotations.
 
 Open Scope error_monad_scope.
 
-Parameter schedule : ident -> list NL.Syn.equation -> list positive.
+Parameter schedule      : ident -> list SB.Syn.equation -> list positive.
 Parameter print_snlustre: NL.Syn.global -> unit.
-Parameter print_obc: Obc.Syn.program -> unit.
-Parameter do_fusion : unit -> bool.
-Parameter do_sync : unit -> bool.
-Parameter do_expose : unit -> bool.
+Parameter print_obc     : Obc.Syn.program -> unit.
+Parameter do_fusion     : unit -> bool.
+Parameter do_sync       : unit -> bool.
+Parameter do_expose     : unit -> bool.
 
 Module ExternalSchedule.
   Definition schedule := schedule.
 End ExternalSchedule.
 
-Module Scheduler := NL.Scheduler ExternalSchedule.
+Module Scheduler := SB.Scheduler ExternalSchedule.
 
-Definition Wellsch_global (G: global) : Prop :=
-  Forall (fun n=>Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G.
+(* Definition Wellsch_program (P: SB.Syn.program) : Prop := *)
+(*   Forall (fun n => Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G. *)
 
 Definition is_well_sch (res: res unit) (n: node) :=
   match res with

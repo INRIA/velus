@@ -86,6 +86,13 @@ Module Type SBISVARIABLE
       eapply Bool.reflect_dec, Bool.iff_reflect, Is_variable_in_eq_reflect.
   Qed.
 
+  Definition variables_eq (vars: PS.t) (eq: equation) : PS.t :=
+    match eq with
+    | EqDef x _ _ => PS.add x vars
+    | EqCall _ xs _ _ _ _ => ps_adds xs vars
+    | _ => vars
+    end.
+
 End SBISVARIABLE.
 
 Module SBIsVariableFun

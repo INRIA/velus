@@ -106,15 +106,50 @@ Module Type OBCSEMANTICS
   with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
   Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
 
-  Fixpoint dostep (prog: program) (ys: idents) (clsid obj: ident) (css: nat -> list const) (me: menv) (ve: venv) (n: nat) : Prop :=
-    match n with
-    | 0 =>
-      stmt_eval prog mempty vempty (Call [] clsid obj reset []) (me, ve)
-    | S n =>
-      let cs := map Const (css n) in
-      exists me_n ve_n, dostep prog ys clsid obj css me_n ve_n n
-                   /\ stmt_eval prog me_n ve_n (Call ys clsid obj step cs) (me, ve)
-    end.
+  (* Fixpoint dostep (prog: program) (ys: idents) (clsid obj: ident) (css: nat -> list const) (me: menv) (ve: venv) (n: nat) : Prop := *)
+  (*   match n with *)
+  (*   | 0 => *)
+  (*     stmt_eval prog mempty vempty (Call [] clsid obj reset []) (me, ve) *)
+  (*   | S n => *)
+  (*     let cs := map Const (css n) in *)
+  (*     exists me_n ve_n, dostep prog ys clsid obj css me_n ve_n n *)
+  (*                  /\ stmt_eval prog me_n ve_n (Call ys clsid obj step cs) (me, ve) *)
+  (*   end. *)
+
+  CoInductive dostep (prog: program) (clsid: ident) (ins outs: nat -> list const): nat -> menv -> Prop :=
+    Step : forall n me me',
+      let cins := map sem_const (ins n) in
+      let couts := map sem_const (outs n) in
+      (* (n = 0 -> stmt_call_eval prog me clsid step cins me' couts) *)
+      stmt_call_eval prog me clsid step cins me' couts ->
+      dostep prog clsid ins outs (S n) me' ->
+      dostep prog clsid ins outs n me.
+
+    Section Dostep_coind.
+
+    Variable R: program -> ident -> (nat -> list const) -> (nat -> list const) -> nat -> menv -> Prop.
+
+    Hypothesis StepCase:
+      forall prog clsid ins outs n me,
+      R prog clsid ins outs n me ->
+      exists me',
+        let cins := map sem_const (ins n) in
+        let couts := map sem_const (outs n) in
+          stmt_call_eval prog me clsid step cins me' couts
+          /\ R prog clsid ins outs (S n) me'.
+
+    Lemma dostep_coind:
+      forall prog clsid ins outs n me,
+        R prog clsid ins outs n me ->
+        dostep prog clsid ins outs n me.
+    Proof.
+      cofix COINDHYP.
+      intros ** HR.
+      destruct StepCase with (1 := HR) as (?&?&?).
+      econstructor; eauto.
+    Qed.
+
+    End Dostep_coind.
 
   (** ** Determinism of semantics *)
 

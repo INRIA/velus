@@ -15,6 +15,7 @@ Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.SyBloc.SBIsFree.
 Require Import Velus.SyBloc.SBWellDefined.
+Require Import Velus.SyBloc.SBSchedule.
 
 Module Type SYBLOC
        (Ids    : IDS)
@@ -36,6 +37,8 @@ Module Type SYBLOC
   Declare Module Export Def  : SBISDEFINED   Ids Op       Clks ExprSyn Syn Var Last.
   Declare Module Export Free : SBISFREE      Ids Op       Clks ExprSyn Syn SynNL FreeNL.
   Declare Module Export Wdef : SBWELLDEFINED Ids Op       Clks ExprSyn Syn Block Ord Var Last Def SynNL FreeNL Free.
+
+  Declare Module Scheduler   : SBSCHEDULE    Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem Sem.
 
 End SYBLOC.
 
@@ -61,4 +64,5 @@ Module SyBlocFun
   Module Export Free  := SBIsFreeFun      Ids Op       Clks ExprSyn Syn SynNL FreeNL.
   Module Export Wdef  := SBWellDefinedFun Ids Op       Clks ExprSyn Syn Block Ord Var Last Def SynNL FreeNL Free.
 
+  Module Scheduler    := SBScheduleFun    Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem Sem.
 End SyBlocFun.

@@ -3,6 +3,7 @@ Common.v
 Ident.v
 Clocks.v
 Operators.v
+Environment.v
 Lustre/Parser/LustreAst.v
 Lustre/Parser/LustreParser.v
 NLustre/NLSemanticsCoInd.v
@@ -13,9 +14,7 @@ NLustre/Stream.v
 NLustre/NLInterpretor.v
 NLustre/IsFree.v
 NLustre/Ordered.v
-NLustre/WellFormed.v
 NLustre/NLExprSemantics.v
-NLustre/NLSchedule.v
 NLustre/Memories.v
 NLustre/NLTyping.v
 NLustre/IsVariable.v
@@ -37,6 +36,7 @@ SyBloc/SBIsDefined.v
 SyBloc/SBIsFree.v
 SyBloc/SBSyntax.v
 SyBloc/SBWellDefined.v
+SyBloc/SBSchedule.v
 SyBloc.v
 NLustreToSyBloc/Correctness.v
 NLustreToSyBloc/Translation.v
@@ -46,6 +46,9 @@ Obc/ObcSemantics.v
 Obc/Equiv.v
 Obc/Fusion.v
 Obc.v
+SyBlocToObc/Correctness.v
+SyBlocToObc/SBMemoryCorres.v
+SyBlocToObc/Translation.v
 ObcToClight/ObcClightCommon.v
 ObcToClight/Interface.v
 ObcToClight/Generation.v

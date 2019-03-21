@@ -92,6 +92,22 @@ Module Type SBISDEFINED
       inv Hdef_all; eauto.
   Qed.
 
+  Definition defined_eq (eq: equation): idents :=
+    match eq with
+    | EqNext x _ _
+    | EqDef x _ _ => [x]
+    | EqCall _ xs _ _ _ _ => xs
+    | EqReset _ _ _ => []
+    end.
+
+  Lemma Is_defined_in_defined_eq:
+    forall x eq,
+      Is_defined_in_eq x eq <-> In x (defined_eq eq).
+  Proof.
+    destruct eq; split; try inversion_clear 1; subst;
+      simpl; auto using Is_defined_in_eq; try contradiction.
+  Qed.
+
 End SBISDEFINED.
 
 Module SBIsDefinedFun

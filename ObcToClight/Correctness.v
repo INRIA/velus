@@ -5696,7 +5696,7 @@ Section PRESERVATION.
     (** Clight version of Corr.dostep'                               *)
     (*****************************************************************)
 
-    Section dostep'.
+    Section dostep.
 
       Variables ins outs: Str.stream (list const).
       Variables xs ys: list (ident * type).
@@ -5707,7 +5707,7 @@ Section PRESERVATION.
       (** This coinductive predicate describes the logical behavior of
           the [while] loop. *)
 
-      CoInductive dostep' : nat -> mem -> Prop
+      CoInductive dostep : nat -> mem -> Prop
         := Step :
              forall n me me',
                eval_funcall tge (function_entry2 tge) me (Internal step_f)
@@ -5715,7 +5715,7 @@ Section PRESERVATION.
                                   :: match m_step.(m_out) with
                                      | []  | [_] => map sem_const (ins n)
                                      | _ => Vptr step_b Int.zero :: map sem_const (ins n)
-                                     end) E0 me'
+                                    end) E0 me'
                             match map sem_const (outs n) with
                             | [v] => v
                             | _ => Vundef
@@ -5728,13 +5728,13 @@ Section PRESERVATION.
                                     (co_members step_co) step_b
                      end
                      ** P ->
-               dostep' (S n) me' ->
-               dostep' n me.
+               dostep (S n) me' ->
+               dostep n me.
 
-      Section Dostep'_coind.
+      Section Dostep_coind.
 
-        Variable t : genv.
-        Variable R : nat -> mem -> Prop.
+        Variable t: genv.
+        Variable R: nat -> mem -> Prop.
 
         Hypothesis StepCase: forall n me,
             R n me ->
@@ -5757,8 +5757,9 @@ Section PRESERVATION.
                       ** P
               /\ R (S n) me'.
 
-        Lemma dostep'_coind : forall n me,
-            R n me  -> dostep' n me.
+        Lemma dostep_coind:
+          forall n me,
+            R n me  -> dostep n me.
         Proof.
           cofix COINDHYP.
           intros ? ? HR.
@@ -5767,19 +5768,19 @@ Section PRESERVATION.
           econstructor; eauto.
         Qed.
 
-      End Dostep'_coind.
+      End Dostep_coind.
 
       Definition mInit := m1.
 
       Hypothesis WT_mem: wt_mem me0 prog_main c_main.
-      Hypothesis Dostep': Corr.dostep' (c_name c_main) ins outs prog 0 me0.
+      Hypothesis Dostep: Obc.Sem.dostep prog (c_name c_main) ins outs 0 me0.
 
       Lemma dostep_imp:
         wt_program prog ->
          exists m0,
           eval_funcall tge (function_entry2 tge) mInit (Internal reset_f)
                        [Vptr sb Int.zero] E0 m0 Vundef
-          /\ dostep' 0 m0.
+          /\ dostep 0 m0.
       Proof.
         intros Hwt_prog (* Hwt_mem Hdostep *).
 
@@ -5791,7 +5792,7 @@ Section PRESERVATION.
         (* Coinduction *)
         set (R := fun n (m: mem) =>
                     exists me,
-                      Corr.dostep' (c_name c_main) ins outs prog n me
+                      Obc.Sem.dostep prog (c_name c_main) ins outs n me
                       /\ wt_mem me prog_main c_main
                       /\ m
                           |= staterep gcenv prog (c_name c_main) me sb 0
@@ -5800,7 +5801,7 @@ Section PRESERVATION.
                              | _ => blockrep gcenv vempty (co_members step_co) step_b
                              end
                           ** P).
-        apply dostep'_coind with (R := R);
+        apply dostep_coind with (R := R);
           unfold R.
         - clear - Hwt_ins Hwt_prog WT_mem m_step Find Findstep.
 
@@ -5881,7 +5882,7 @@ Section PRESERVATION.
 
       Lemma exec_body:
         forall n meN le,
-          dostep' n meN ->
+          dostep n meN ->
           exists leSn meSn,
             exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le meN
                       (main_loop_body false main_node m_step)
@@ -5889,7 +5890,7 @@ Section PRESERVATION.
                        ++ E0
                        ++ store_events (map sem_const (outs n)) (m_out m_step))
                       leSn meSn Out_normal
-            /\ dostep' (S n) meSn.
+            /\ dostep (S n) meSn.
       Proof.
         intros ** Hdostep.
 
@@ -6077,7 +6078,7 @@ Section PRESERVATION.
       Lemma dostep_loop:
         forall n meInit le me,
           wt_mem meInit prog_main c_main ->
-          dostep' n me ->
+          dostep n me ->
           execinf_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1 le me
                        (main_loop false main_node m_step)
                        (traceinf_of_traceinf' (transl_trace n)).
@@ -6095,7 +6096,7 @@ Section PRESERVATION.
           exec_stmt (globalenv tprog) (function_entry2 (globalenv tprog)) e1
                     le_main m1 (reset_call (c_name c_main)) E0
                     le_main m2 Out_normal
-          /\ dostep' 0 m2.
+          /\ dostep 0 m2.
       Proof.
         destruct dostep_imp as (m2 & Heval & Step); auto.
         change (eval_funcall tge (function_entry2 tge) m0 (Internal reset_f)
@@ -6177,7 +6178,7 @@ Section PRESERVATION.
 
       Lemma reactive_loop:
         forall n m le,
-          dostep' n m ->
+          dostep n m ->
           Smallstep.forever_reactive (step_fe function_entry2) (globalenv tprog)
                                      (Clight.State main_f (main_loop false main_node m_step) after_loop e1 le m)
                                      (traceinf_of_traceinf' (transl_trace n)).
@@ -6245,7 +6246,7 @@ Section PRESERVATION.
           + rewrite Eq; apply reactive_loop; auto.
       Qed.
 
-    End dostep'.
+    End dostep.
 
   End Init.
 
@@ -6253,7 +6254,7 @@ Section PRESERVATION.
     forall me0 ins outs c_main prog_main m_step m_reset,
       stmt_call_eval prog mempty (c_name c_main) (m_name m_reset) [] me0 [] ->
       wt_mem me0 prog_main c_main ->
-      Corr.dostep' (c_name c_main) ins outs prog 0 me0 ->
+      Obc.Sem.dostep prog (c_name c_main) ins outs 0 me0 ->
       find_class main_node prog = Some (c_main, prog_main) ->
       find_method reset (c_methods c_main) = Some m_reset ->
       find_method step (c_methods c_main) = Some m_step ->

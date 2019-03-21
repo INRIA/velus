@@ -10,13 +10,11 @@ Require Export NLustre.Memories.
 Require Import NLustre.NLExprSemantics.
 Require Export NLustre.NLSemantics.
 Require Export NLustre.MemSemantics.
-Require Export NLustre.WellFormed.
 Require Export NLustre.Ordered.
 Require Export NLustre.NoDup.
 Require Export NLustre.NLClocking.
 Require Export NLustre.NLClockingSemantics.
 Require Export NLustre.NLTyping.
-Require Export NLustre.NLSchedule.
 
 Require Import Velus.Common.
 
@@ -38,13 +36,10 @@ Module Type NLUSTRE
   Declare Module Export IsD    : ISDEFINED       Ids Op       Clks ExprSyn Syn                     Mem.
   Declare Module Export IsV    : ISVARIABLE      Ids Op       Clks ExprSyn Syn                     Mem IsD.
   Declare Module Export NoD    : NODUP           Ids Op       Clks ExprSyn Syn                     Mem IsD IsV.
-  Declare Module Export WeF    : WELLFORMED      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD IsV IsF NoD.
   Declare Module Export MemSem : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD.
   Declare Module Export Clo    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD     IsF.
   Declare Module Export CloSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn
                                                      Str Ord ExprSem Sem Mem IsD  IsF Clo.
-
-  Declare Module Scheduler     : NLSCHEDULE      Ids Op OpAux Clks ExprSyn Syn Ord IsF Str Mem IsD ExprSem Sem Typ Clo.
 
 End NLUSTRE.
 
@@ -66,12 +61,9 @@ Module NLustreFun
   Module Export IsD     := IsDefinedFun       Ids Op       Clks ExprSyn Syn                     Mem.
   Module Export IsV     := IsVariableFun      Ids Op       Clks ExprSyn Syn                     Mem IsD.
   Module Export NoD     := NoDupFun           Ids Op       Clks ExprSyn Syn                     Mem IsD IsV.
-  Module Export WeF     := WellFormedFun      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD IsV IsF NoD.
   Module Export MemSem  := MemSemanticsFun    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD.
   Module Export Clo     := NLClockingFun      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD     IsF.
   Module Export CloSem  := NLClockingSemanticsFun Ids Op OpAux Clks ExprSyn Syn
                                                   Str Ord ExprSem Sem Mem IsD  IsF Clo.
-
-  Module Scheduler      := NLScheduleFun      Ids Op OpAux Clks ExprSyn Syn Ord IsF Str Mem IsD ExprSem Sem Typ Clo.
 
 End NLustreFun.

@@ -26,10 +26,9 @@ Module Type SBSYNTAX
 
   Definition variables_eq (eq: equation): idents :=
     match eq with
-    | EqNext _ _ _
-    | EqReset _ _ _ => []
     | EqDef x _ _ => [x]
     | EqCall _ xs _ _ _ _ => xs
+    | _ => []
     end.
 
   Definition variables := concatMap variables_eq.
