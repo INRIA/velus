@@ -116,40 +116,40 @@ Module Type OBCSEMANTICS
   (*                  /\ stmt_eval prog me_n ve_n (Call ys clsid obj step cs) (me, ve) *)
   (*   end. *)
 
-  CoInductive dostep (prog: program) (clsid: ident) (ins outs: nat -> list const): nat -> menv -> Prop :=
+  CoInductive loop_call (prog: program) (clsid f: ident) (ins outs: nat -> list const): nat -> menv -> Prop :=
     Step : forall n me me',
       let cins := map sem_const (ins n) in
       let couts := map sem_const (outs n) in
       (* (n = 0 -> stmt_call_eval prog me clsid step cins me' couts) *)
-      stmt_call_eval prog me clsid step cins me' couts ->
-      dostep prog clsid ins outs (S n) me' ->
-      dostep prog clsid ins outs n me.
+      stmt_call_eval prog me clsid f cins me' couts ->
+      loop_call prog clsid f ins outs (S n) me' ->
+      loop_call prog clsid f ins outs n me.
 
-    Section Dostep_coind.
+    Section LoopCallCoind.
 
-    Variable R: program -> ident -> (nat -> list const) -> (nat -> list const) -> nat -> menv -> Prop.
+    Variable R: program -> ident -> ident -> (nat -> list const) -> (nat -> list const) -> nat -> menv -> Prop.
 
-    Hypothesis StepCase:
-      forall prog clsid ins outs n me,
-      R prog clsid ins outs n me ->
+    Hypothesis LoopCase:
+      forall prog clsid f ins outs n me,
+      R prog clsid f ins outs n me ->
       exists me',
         let cins := map sem_const (ins n) in
         let couts := map sem_const (outs n) in
-          stmt_call_eval prog me clsid step cins me' couts
-          /\ R prog clsid ins outs (S n) me'.
+          stmt_call_eval prog me clsid f cins me' couts
+          /\ R prog clsid f ins outs (S n) me'.
 
-    Lemma dostep_coind:
-      forall prog clsid ins outs n me,
-        R prog clsid ins outs n me ->
-        dostep prog clsid ins outs n me.
+    Lemma loop_call_coind:
+      forall prog clsid f ins outs n me,
+        R prog clsid f ins outs n me ->
+        loop_call prog clsid f ins outs n me.
     Proof.
       cofix COINDHYP.
       intros ** HR.
-      destruct StepCase with (1 := HR) as (?&?&?).
+      destruct LoopCase with (1 := HR) as (?&?&?).
       econstructor; eauto.
     Qed.
 
-    End Dostep_coind.
+    End LoopCallCoind.
 
   (** ** Determinism of semantics *)
 

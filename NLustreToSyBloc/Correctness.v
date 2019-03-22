@@ -150,7 +150,7 @@ Module Type CORRECTNESS
         destruct (Nodes (count rs 0)) as (M0 &?& Node & Mmask &?).
         apply IH in Node; auto.
         specialize (Mmask 0); specialize (Sub 0).
-        rewrite <-Mmask in Sub; auto.
+        rewrite Mmask in Sub; auto.
         eexists; split; eauto.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons in Hsem; eauto.
@@ -284,7 +284,7 @@ Module Type CORRECTNESS
     - inversion_clear Rst as [?????? Nodes].
       specialize (Nodes (count rs n)); destruct Nodes as (?&?& Node & Mask &?).
       apply IH in Node.
-      rewrite <-Mask; auto.
+      rewrite Mask; auto.
   Qed.
 
   Lemma msem_equations_memory_closed_rec':
@@ -312,7 +312,7 @@ Module Type CORRECTNESS
     - inversion_clear Rst as [?????? Nodes].
       specialize (Nodes (count rs n)); destruct Nodes as (?&?& Node &?& Mask).
       apply IH in Node.
-      rewrite <-Mask; auto.
+      rewrite Mask; auto.
   Qed.
 
   Lemma msem_node_memory_closed_rec_n:
@@ -467,7 +467,7 @@ Module Type CORRECTNESS
         destruct (Nodes (count rs 0)) as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
       + apply IHnode in Node_n.
         specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
-        rewrite 2 mask_transparent, Mmask_n, Mmask'_n in Node_n; auto.
+        rewrite 2 mask_transparent, <-Mmask_n, <-Mmask'_n in Node_n; auto.
         specialize (Var n); specialize (Hr n).
         assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
             by now intro; apply sem_equations_n_add_n.
@@ -486,7 +486,7 @@ Module Type CORRECTNESS
              + eapply Son; eauto.
                destruct Cky as [[]|(?&?&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
-             + simpl; rewrite <-Mmask_0; auto.
+             + simpl; rewrite Mmask_0; auto.
              eapply msem_node_initial_state; eauto.
            - eapply SEqCall with (Is := Mx 0); eauto.
              + congruence.
@@ -514,7 +514,7 @@ Module Type CORRECTNESS
          }
       + apply transient_states_closed_add; auto.
         * apply memory_closed_rec_state_closed; auto.
-          rewrite <-Mmask_0, <-Mmask_n; auto.
+          rewrite Mmask_0, Mmask_n; auto.
           specialize (Spec n); destruct (rs n);
             apply msem_node_memory_closed_rec_n in Node_n as ();
             apply msem_node_memory_closed_rec_n in Node_0 as (); auto.

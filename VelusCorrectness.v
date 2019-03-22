@@ -14,8 +14,12 @@ Require Import lib.Integers.
 Require Import driver.Compiler.
 
 Require Import Velus.Instantiator.
+Import SB.Syn.
 Import NL.
-Import NL.Mem.
+(* Import NL.Syn. *)
+(* Import NL.Sem. *)
+(* Import NL.Mem. *)
+(* Import NL.Typ. *)
 Import Obc.Syn.
 Import Obc.Sem.
 Import Obc.Typ.
@@ -23,7 +27,7 @@ Import Obc.Equ.
 Import Fusion.
 (* Import Trans. *)
 (* Import Corr. *)
-Import Typ.
+Import Str.
 Import OpAux.
 Import Interface.Op.
 Require Import ObcToClight.Correctness.
@@ -36,7 +40,7 @@ Import List.ListNotations.
 Open Scope error_monad_scope.
 
 Parameter schedule      : ident -> list SB.Syn.equation -> list positive.
-Parameter print_snlustre: NL.Syn.global -> unit.
+Parameter print_snlustre: global -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
 Parameter do_fusion     : unit -> bool.
 Parameter do_sync       : unit -> bool.
@@ -48,54 +52,52 @@ End ExternalSchedule.
 
 Module Scheduler := SB.Scheduler ExternalSchedule.
 
-(* Definition Wellsch_program (P: SB.Syn.program) : Prop := *)
-(*   Forall (fun n => Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs)) G. *)
+Definition is_well_sch_block (r: res unit) (b: block) : res unit :=
+  do _ <- r;
+    let args := map fst b.(b_in) in
+    let mems := ps_from_list (map fst b.(b_lasts)) in
+    if SB.Wdef.well_sch mems args b.(b_eqs)
+    then OK tt
+    else Error (Errors.msg ("block " ++ pos_to_str b.(b_name) ++ " is not well scheduled.")).
 
-Definition is_well_sch (res: res unit) (n: node) :=
-  match res with
-  | OK _ =>
-    let eqs := n.(n_eqs) in
-    let ni := map fst n.(n_in) in
-    if well_sch (memories eqs) ni eqs then OK tt
-    else Error (Errors.msg ("node " ++ pos_to_str n.(n_name) ++ " is not well scheduled."))
-  | _ => res
-  end.
-
-Lemma Wellsch_global_cons:
-  forall n g,
-    Wellsch_global (n :: g) <->
-    Is_well_sch (memories n.(n_eqs)) (map fst n.(n_in)) n.(n_eqs) /\ Wellsch_global g.
-Proof. apply Forall_cons2. Qed.
+Definition is_well_sch (P: SB.Syn.program) : res SB.Syn.program :=
+  do _ <- fold_left is_well_sch_block P (OK tt);
+    OK P.
 
 Lemma is_well_sch_error:
   forall G e,
-    fold_left is_well_sch G (Error e) = Error e.
+    fold_left is_well_sch_block G (Error e) = Error e.
 Proof.
   induction G as [|n G]; simpl; auto.
 Qed.
 
-Lemma is_well_sch_global:
-  forall G,
-    fold_left is_well_sch G (OK tt) = OK tt ->
-    Wellsch_global G.
+Lemma is_well_sch_program:
+  forall P,
+    fold_left is_well_sch_block P (OK tt) = OK tt ->
+    SB.Wdef.Well_scheduled P.
 Proof.
-  induction G as [|n G]; simpl.
+  induction P as [|bl]; simpl.
   - constructor.
   - intro Fold.
-    rewrite Wellsch_global_cons.
-    destruct (well_sch (memories (n_eqs n)) (map fst (n_in n)) (n_eqs n)) eqn: E.
-    + rewrite Is_well_sch_by_refl in E; split; auto.
+    destruct (SB.Wdef.well_sch (ps_from_list (map fst (SB.Syn.b_lasts bl)))
+                               (map fst (SB.Syn.b_in bl)) (SB.Syn.b_eqs bl)) eqn: E.
+    + apply SB.Wdef.Is_well_sch_by_refl in E; constructor; auto.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
-Definition df_to_cl (main_node: ident) (g: global): res Clight.program :=
-  let gsch := Scheduler.schedule g in
-  do _ <- (fold_left is_well_sch gsch (OK tt));
-  OK gsch @@ print print_snlustre
-          @@ Trans.translate
-          @@ total_if do_fusion (map Obc.Fus.fuse_class)
-          @@ print print_obc
-          @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
+Definition schedule_program (P: SB.Syn.program) : res SB.Syn.program :=
+  is_well_sch (Scheduler.schedule P).
+
+Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
+  OK g
+     @@ print print_snlustre
+     @@ NL2SB.translate
+     (* @@ print print_sb *)
+     @@@ schedule_program
+     @@ SB2Obc.translate
+     @@ total_if do_fusion (map Obc.Fus.fuse_class)
+     @@ print print_obc
+     @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
 
 Axiom add_builtins: Clight.program -> Clight.program.
 Axiom add_builtins_spec:
@@ -104,10 +106,10 @@ Axiom add_builtins_spec:
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
-  elab_declarations D @@@ (fun g => df_to_cl main_node (proj1_sig g))
-                      @@ print print_Clight
-                      @@ add_builtins
-                      @@@ transf_clight2_program.
+  elab_declarations D @@@ (fun g => nl_to_cl main_node (proj1_sig g))
+                    @@ print print_Clight
+                    @@ add_builtins
+                    @@@ transf_clight2_program.
 
 Section WtStream.
 
@@ -117,40 +119,42 @@ Variable ins: stream (list const).
 Variable outs: stream (list const).
 
 Definition wt_ins :=
-  forall n node, find_node main G = Some node ->
-            wt_vals (map sem_const (ins n)) (idty node.(n_in)).
+  forall n node,
+    find_node main G = Some node ->
+    wt_vals (map sem_const (ins n)) (idty node.(n_in)).
 
 Definition wt_outs :=
-  forall n node, find_node main G = Some node ->
-            wt_vals (map sem_const (outs n)) (idty node.(n_out)).
+  forall n node,
+    find_node main G = Some node ->
+    wt_vals (map sem_const (outs n)) (idty node.(n_out)).
 
 End WtStream.
 
-Lemma scheduler_wt_ins:
-  forall G f ins,
-    wt_ins G f ins ->
-    wt_ins (Scheduler.schedule G) f ins.
-Proof.
-  unfold wt_ins.
-  intros G f ins Hwt n node Hfind.
-  apply Scheduler.scheduler_find_node' in Hfind.
-  destruct Hfind as (node' & Hfind & Hnode).
-  apply Hwt with (n:=n) in Hfind.
-  subst. destruct node'; auto.
-Qed.
+(* Lemma scheduler_wt_ins: *)
+(*   forall G f ins, *)
+(*     wt_ins G f ins -> *)
+(*     wt_ins (Scheduler.schedule G) f ins. *)
+(* Proof. *)
+(*   unfold wt_ins. *)
+(*   intros G f ins Hwt n node Hfind. *)
+(*   apply Scheduler.scheduler_find_node' in Hfind. *)
+(*   destruct Hfind as (node' & Hfind & Hnode). *)
+(*   apply Hwt with (n:=n) in Hfind. *)
+(*   subst. destruct node'; auto. *)
+(* Qed. *)
 
-Lemma scheduler_wt_outs:
-  forall G f outs,
-    wt_outs G f outs ->
-    wt_outs (Scheduler.schedule G) f outs.
-Proof.
-  unfold wt_outs.
-  intros G f ins Hwt n node Hfind.
-  apply Scheduler.scheduler_find_node' in Hfind.
-  destruct Hfind as (node' & Hfind & Hnode).
-  apply Hwt with (n:=n) in Hfind.
-  subst. destruct node'; auto.
-Qed.
+(* Lemma scheduler_wt_outs: *)
+(*   forall G f outs, *)
+(*     wt_outs G f outs -> *)
+(*     wt_outs (Scheduler.schedule G) f outs. *)
+(* Proof. *)
+(*   unfold wt_outs. *)
+(*   intros G f ins Hwt n node Hfind. *)
+(*   apply Scheduler.scheduler_find_node' in Hfind. *)
+(*   destruct Hfind as (node' & Hfind & Hnode). *)
+(*   apply Hwt with (n:=n) in Hfind. *)
+(*   subst. destruct node'; auto. *)
+(* Qed. *)
 
 Section Bisim.
 
@@ -251,77 +255,79 @@ Definition bisim_io := bisim_io' 0.
 
 End Bisim.
 
-Lemma scheduler_bisim_io:
-  forall G main ins outs T,
-    bisim_io G main ins outs T <->
-    bisim_io (Scheduler.schedule G) main ins outs T.
-Proof.
-  intros G main ins outs T.
-  split; unfold bisim_io; generalize 0%nat; revert T; cofix CH.
-  - intros T n HH.
-    destruct HH.
-    match goal with H:find_node _ _ = _ |- _ =>
-      apply Scheduler.scheduler_find_node in H end.
-    destruct node0; eauto using bisim_io'.
-  - intros T n HH.
-    destruct HH.
-    match goal with H:find_node _ _ = _ |- _ =>
-      apply Scheduler.scheduler_find_node' in H;
-      destruct H as (node & Hfind & Hnode0) end.
-    subst.
-    destruct node; eauto using bisim_io'.
-Qed.
+(* Lemma scheduler_bisim_io: *)
+(*   forall G main ins outs T, *)
+(*     bisim_io G main ins outs T <-> *)
+(*     bisim_io (Scheduler.schedule G) main ins outs T. *)
+(* Proof. *)
+(*   intros G main ins outs T. *)
+(*   split; unfold bisim_io; generalize 0%nat; revert T; cofix CH. *)
+(*   - intros T n HH. *)
+(*     destruct HH. *)
+(*     match goal with H:find_node _ _ = _ |- _ => *)
+(*       apply Scheduler.scheduler_find_node in H end. *)
+(*     destruct node0; eauto using bisim_io'. *)
+(*   - intros T n HH. *)
+(*     destruct HH. *)
+(*     match goal with H:find_node _ _ = _ |- _ => *)
+(*       apply Scheduler.scheduler_find_node' in H; *)
+(*       destruct H as (node & Hfind & Hnode0) end. *)
+(*     subst. *)
+(*     destruct node; eauto using bisim_io'. *)
+(* Qed. *)
 
-Lemma fuse_dostep':
-  forall c ins outs G me,
-    Forall Obc.Fus.ClassFusible (translate G) ->
-    Corr.dostep' c ins outs (translate G) 0 me ->
-    Corr.dostep' c ins outs (map Obc.Fus.fuse_class (translate G)) 0 me.
+Lemma fuse_loop_call:
+  forall f c ins outs G me,
+    Forall Obc.Fus.ClassFusible (SB2Obc.translate G) ->
+    Obc.Sem.loop_call (SB2Obc.translate G) c f ins outs 0 me ->
+    Obc.Sem.loop_call (map Obc.Fus.fuse_class (SB2Obc.translate G)) c f ins outs 0 me.
 Proof.
-  intros c ins outs G.
+  intros f c ins outs G.
   generalize 0%nat.
   cofix COINDHYP.
-  (* XXX: Use [Guarded] to check whether the definition is still productive. *)
   intros n ** Hdo.
   destruct Hdo.
   econstructor; eauto using Obc.Fus.fuse_call.
 Qed.
 
-Lemma Welldef_global_patch:
-  forall G,
-    Wellsch_global G ->
-    wt_global G ->
-    Welldef_global G.
-Proof.
-  induction G as [|n G]; intros; auto using Welldef_global.
-  inv H. inv H0.
-  specialize (IHG H4 H2).
-  constructor; auto.
-  - intro Hni. clear H3 H4.
-    apply Forall_Exists with (1:=H5) in Hni. clear H5.
-    apply Exists_exists in Hni.
-    destruct Hni as (eq & Hin & WTeq & Hni).
-    inv Hni. simpl in *.
-    unfold wt_node in *.
-    inv WTeq.
-    assert (find_node n.(n_name) G <> None) as Hfind
-        by (now apply not_None_is_Some; exists n0).
-    apply find_node_Exists in Hfind.
-    apply Forall_Exists with (1:=H6) in Hfind.
-    apply Exists_exists in Hfind.
-    destruct Hfind as (n' & Hin' & Hne & He).
-    intuition.
-  - intros f Hni.
-    apply Forall_Exists with (1:=H5) in Hni. clear H5.
-    apply Exists_exists in Hni.
-    destruct Hni as (eq & Hin & WTeq & Hni).
-    destruct eq; inv Hni.
-    inv WTeq. rewrite H7. intuition.
-Qed.
+(* Lemma Welldef_global_patch: *)
+(*   forall G, *)
+(*     Wellsch_global G -> *)
+(*     wt_global G -> *)
+(*     Welldef_global G. *)
+(* Proof. *)
+(*   induction G as [|n G]; intros; auto using Welldef_global. *)
+(*   inv H. inv H0. *)
+(*   specialize (IHG H4 H2). *)
+(*   constructor; auto. *)
+(*   - intro Hni. clear H3 H4. *)
+(*     apply Forall_Exists with (1:=H5) in Hni. clear H5. *)
+(*     apply Exists_exists in Hni. *)
+(*     destruct Hni as (eq & Hin & WTeq & Hni). *)
+(*     inv Hni. simpl in *. *)
+(*     unfold wt_node in *. *)
+(*     inv WTeq. *)
+(*     assert (find_node n.(n_name) G <> None) as Hfind *)
+(*         by (now apply not_None_is_Some; exists n0). *)
+(*     apply find_node_Exists in Hfind. *)
+(*     apply Forall_Exists with (1:=H6) in Hfind. *)
+(*     apply Exists_exists in Hfind. *)
+(*     destruct Hfind as (n' & Hin' & Hne & He). *)
+(*     intuition. *)
+(*   - intros f Hni. *)
+(*     apply Forall_Exists with (1:=H5) in Hni. clear H5. *)
+(*     apply Exists_exists in Hni. *)
+(*     destruct Hni as (eq & Hin & WTeq & Hni). *)
+(*     destruct eq; inv Hni. *)
+(*     inv WTeq. rewrite H7. intuition. *)
+(* Qed. *)
 
 Hint Resolve Obc.Fus.fuse_wt_program
-     Obc.Fus.fuse_call Obc.Fus.fuse_wt_mem fuse_dostep' Welldef_global_patch
-     Fusible.ClassFusible_translate.
+     Obc.Fus.fuse_call Obc.Fus.fuse_wt_mem
+     fuse_loop_call
+     (* Welldef_global_patch *)
+     (* Fusible.ClassFusible_translate *)
+.
 
 Lemma behavior_clight:
   forall G P main ins outs,
@@ -330,27 +336,35 @@ Lemma behavior_clight:
     wt_ins G main ins ->
     wt_outs G main outs ->
     sem_node G main (vstr ins) (vstr outs) ->
-    df_to_cl main G = OK P ->
+    nl_to_cl main G = OK P ->
     exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros ** Hwc Hwt Hwti Hwto Hsem Comp.
-  apply Scheduler.scheduler_wc_global in Hwc.
-  apply Scheduler.scheduler_wt_global in Hwt.
-  apply scheduler_wt_ins in Hwti.
-  apply scheduler_wt_outs in Hwto.
-  apply Scheduler.scheduler_sem_node in Hsem.
-  setoid_rewrite scheduler_bisim_io.
-  unfold df_to_cl in Comp.
-  destruct (fold_left is_well_sch (Scheduler.schedule G) (OK tt))
-    as [u|] eqn: Wellsch; try discriminate; simpl in Comp; destruct u.
-  apply is_well_sch_global in Wellsch.
-  edestruct dostep'_correct
-    as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto.
-  pose proof Comp as Comp'.
-  repeat rewrite print_identity in *.
-  unfold Generation.translate in Comp.
-  unfold total_if in *. destruct (do_fusion tt).
+  intros ** Hwc Hwt Hwti Hwto Hsem COMP.
+  (* apply Scheduler.scheduler_wc_global in Hwc. *)
+  (* apply Scheduler.scheduler_wt_global in Hwt. *)
+  (* apply scheduler_wt_ins in Hwti. *)
+  (* apply scheduler_wt_outs in Hwto. *)
+  (* apply Scheduler.scheduler_sem_node in Hsem. *)
+  (* setoid_rewrite scheduler_bisim_io. *)
+  unfold nl_to_cl in COMP.
+  simpl in COMP; repeat rewrite print_identity in COMP.
+  destruct (schedule_program (NL2SB.translate G)) eqn: Sch;
+    simpl in COMP; try discriminate.
+  unfold schedule_program, is_well_sch in Sch; simpl in Sch.
+  destruct (fold_left is_well_sch_block (Scheduler.schedule (NL2SB.translate G))
+                      (OK tt)) eqn: Wsch; simpl in *; try discriminate; destruct u.
+  inv Sch.
+  apply is_well_sch_program in Wsch.
+  repeat rewrite print_identity in COMP.
+  pose proof COMP as COMP'.
+
+  (* edestruct dostep'_correct *)
+  (*   as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto. *)
+  unfold Generation.translate in COMP.
+  unfold total_if in *.
+  admit.
+  destruct (do_fusion tt).
   - pose proof Emain as Emain'.
     apply Obc.Fus.fuse_find_class in Emain.
     rewrite Emain in *.

@@ -73,8 +73,8 @@ Module Type MEMSEMANTICS
 
   Definition memories := stream (memory val).
 
-  Definition memory_masked (k: nat) (rs: cstream) (M M': memories) :=
-    forall n, count rs n = k -> M' n = M n.
+  Definition memory_masked (k: nat) (rs: cstream) (M Mk: memories) :=
+    forall n, count rs n = k -> M n = Mk n.
 
   Definition mfby (x: ident) (c0: val) (xs: stream value) (M M': memories) (ys: stream value) : Prop :=
     find_val x (M 0) = Some c0
@@ -1066,7 +1066,7 @@ dataflow memory for which the non-standard semantics holds true.
       destruct (Nodes1 (count rs 0)) as (M01 &?& Node1 & MemMask1 &?),
                                         (Nodes2 (count rs0 0)) as (M02 &?&?& MemMask2 &?).
       eapply IH in Node1; eauto.
-      now rewrite <-MemMask1, <-MemMask2, Node1; auto.
+      now rewrite MemMask1, MemMask2, Node1; auto.
 
     - apply msem_equation_remove_val with (x := i) in Sems1;
         apply msem_equation_remove_val with (x := i) in Sems2; auto.
@@ -1176,7 +1176,7 @@ dataflow memory for which the non-standard semantics holds true.
            apply IH with (n := n) in Node_n; auto.
            - erewrite add_remove_inst_same; eauto;
                symmetry; rewrite add_remove_inst_same; eauto.
-             rewrite Sems, <-(MemMask_n n), <-(MemMask_0 0), Node_n, E; reflexivity.
+             rewrite Sems, (MemMask_n n), (MemMask_0 0), Node_n, E; reflexivity.
            - intros k ** Spec'; specialize (Args k); simpl in Args.
              rewrite Absbk in Args; auto.
              inversion_clear Args as [?????? SClock|??? E'].
@@ -1249,7 +1249,7 @@ dataflow memory for which the non-standard semantics holds true.
     intros ** Hr.
     destruct (Nodes (count r n)) as (Mn & ? & Node_n & Mmask_n &?),
                                     (Nodes (count r 0)) as (M0 & ? & Node_0 & Mmask_0 &?).
-    rewrite <-Mmask_n, <-Mmask_0; auto.
+    rewrite Mmask_n, Mmask_0; auto.
     assert (M0 0 ≋ Mn 0) as -> by (eapply same_initial_memory; eauto).
     eapply msem_node_absent_until; eauto.
     intros ** Spec.
@@ -1325,7 +1325,7 @@ dataflow memory for which the non-standard semantics holds true.
         apply IH with (n := n) in Node_n; auto.
         * erewrite add_remove_inst_same; eauto;
             symmetry; rewrite add_remove_inst_same; eauto.
-          rewrite Sems, <-(MemMask_n n), <-(MemMask_n' n), Node_n; reflexivity.
+          rewrite Sems, (MemMask_n n), (MemMask_n' n), Node_n; reflexivity.
         *{ specialize (Args n); simpl in Args.
            rewrite Absbk in Args.
            inversion_clear Args as [?????? SClock|??? E'].

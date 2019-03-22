@@ -5773,7 +5773,7 @@ Section PRESERVATION.
       Definition mInit := m1.
 
       Hypothesis WT_mem: wt_mem me0 prog_main c_main.
-      Hypothesis Dostep: Obc.Sem.dostep prog (c_name c_main) ins outs 0 me0.
+      Hypothesis LoopCall: Obc.Sem.loop_call prog (c_name c_main) step ins outs 0 me0.
 
       Lemma dostep_imp:
         wt_program prog ->
@@ -5792,7 +5792,7 @@ Section PRESERVATION.
         (* Coinduction *)
         set (R := fun n (m: mem) =>
                     exists me,
-                      Obc.Sem.dostep prog (c_name c_main) ins outs n me
+                      Obc.Sem.loop_call prog (c_name c_main) step ins outs n me
                       /\ wt_mem me prog_main c_main
                       /\ m
                           |= staterep gcenv prog (c_name c_main) me sb 0
@@ -6254,7 +6254,7 @@ Section PRESERVATION.
     forall me0 ins outs c_main prog_main m_step m_reset,
       stmt_call_eval prog mempty (c_name c_main) (m_name m_reset) [] me0 [] ->
       wt_mem me0 prog_main c_main ->
-      Obc.Sem.dostep prog (c_name c_main) ins outs 0 me0 ->
+      Obc.Sem.loop_call prog (c_name c_main) step ins outs 0 me0 ->
       find_class main_node prog = Some (c_main, prog_main) ->
       find_method reset (c_methods c_main) = Some m_reset ->
       find_method step (c_methods c_main) = Some m_step ->

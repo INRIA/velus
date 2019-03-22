@@ -274,7 +274,7 @@ Module Type NLSEMANTICSCOIND
 
   CoFixpoint fby (c: val) (xs: Stream value) : Stream value :=
     match xs with
-    | absent ::: xs => absent ::: fby c xs
+    | absent    ::: xs => absent    ::: fby c xs
     | present x ::: xs => present c ::: fby x xs
     end.
 

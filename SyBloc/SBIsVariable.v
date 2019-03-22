@@ -93,6 +93,24 @@ Module Type SBISVARIABLE
     | _ => vars
     end.
 
+  Lemma variables_eq_empty:
+    forall x eq vars,
+      PS.In x (variables_eq vars eq)
+      <-> PS.In x (variables_eq PS.empty eq) \/ PS.In x vars.
+  Proof.
+    split; intro Hin.
+    - destruct eq; simpl in *; auto.
+      + apply PSE.MP.Dec.F.add_iff in Hin as [|]; subst; intuition.
+      + rewrite ps_adds_spec in *; tauto.
+    - destruct eq; simpl in *; destruct Hin as [Hin|Hin]; auto.
+      + rewrite PSE.MP.Dec.F.add_iff in *; intuition; pose proof (not_In_empty x); contradiction.
+      + rewrite PSE.MP.Dec.F.add_iff; auto.
+      + pose proof (not_In_empty x); contradiction.
+      + pose proof (not_In_empty x); contradiction.
+      + rewrite ps_adds_spec in *; intuition; pose proof (not_In_empty x); contradiction.
+      + rewrite ps_adds_spec; tauto.
+  Qed.
+
 End SBISVARIABLE.
 
 Module SBIsVariableFun
