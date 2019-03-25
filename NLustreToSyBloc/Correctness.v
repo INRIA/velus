@@ -147,11 +147,13 @@ Module Type CORRECTNESS
         edestruct msem_eqs_In_snd_gather_eqs_spec
           as (?& Mx &?&?& [Node|(rs & Reset)] & Sub); eauto.
         inversion_clear Reset as [?????? Nodes].
-        destruct (Nodes (count rs 0)) as (M0 &?& Node & Mmask &?).
+        destruct (Nodes (if rs 0 then pred (count rs 0) else count rs 0))
+          as (M0 &?& Node & Mmask &?).
         apply IH in Node; auto.
         specialize (Mmask 0); specialize (Sub 0).
-        rewrite Mmask in Sub; auto.
-        eexists; split; eauto.
+        rewrite Mmask in Sub.
+        * eexists; split; eauto.
+        * simpl; cases.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons in Hsem; eauto.
       simpl; rewrite <-initial_state_other; eauto.
@@ -282,9 +284,12 @@ Module Type CORRECTNESS
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
     - inversion_clear Rst as [?????? Nodes].
-      specialize (Nodes (count rs n)); destruct Nodes as (?&?& Node & Mask &?).
+      specialize (Nodes (if rs n then pred (count rs n) else count rs n));
+        destruct Nodes as (?&?& Node & Mask &?).
       apply IH in Node.
       rewrite Mask; auto.
+      cases_eqn Hr; apply count_true_ge_1 in Hr.
+      erewrite <-Lt.S_pred; eauto.
   Qed.
 
   Lemma msem_equations_memory_closed_rec':
@@ -459,24 +464,81 @@ Module Type CORRECTNESS
            H': hd_error ?l = _ |- _ =>
         rewrite H' in H; inv H; simpl in H'; inv H'
       end.
-      pose proof (msem_reset_spec Hord Reset) as Spec.
+      assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
+          by now intro; apply sem_equations_n_add_n.
+      assert (clock_match bk H (y, ck)) as Cky
+          by (eapply Forall_forall; eauto; inv WC; eauto).
+      (* pose proof (msem_reset_spec Hord Reset) as Spec. *)
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split;
         intro;
-        inversion_clear Reset as [?????? Nodes];
-        destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
-        destruct (Nodes (count rs 0)) as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
-      + apply IHnode in Node_n.
-        specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
-        rewrite 2 mask_transparent, <-Mmask_n, <-Mmask'_n in Node_n; auto.
-        specialize (Var n); specialize (Hr n).
-        assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
-            by now intro; apply sem_equations_n_add_n.
-        assert (clock_match bk H (y, ck)) as Cky.
-        { eapply Forall_forall; eauto.
-          inv WC; eauto.
-        }
-        specialize (Cky n); simpl in Cky.
-        destruct (rs n) eqn: E.
+        inversion_clear Reset as [?????? Nodes](* ; *)
+        (* destruct (Nodes (if rs n then pred (count rs n) else count rs n)) *)
+        (*   as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n), *)
+        (*      (Nodes (count rs 0)) *)
+        (*     as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0) *).
+      + destruct (rs n) eqn: Hrst.
+        *{ destruct (Nodes (if rs 0 then pred (count rs 0) else count rs 0))
+             as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
+           destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n).
+           assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
+             by apply Env.gss.
+           specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky.
+           specialize (Heqs' (fun n => Mx 0) n).
+           rewrite Hrst in Hr.
+           destruct (ys n) eqn: E'; try discriminate.
+           do 2 (econstructor; eauto using sem_equation).
+           - eapply Son; eauto.
+             destruct Cky as [[]|(?&?&?)]; auto.
+             assert (present c = absent) by sem_det; discriminate.
+           - simpl; rewrite Mmask_0.
+             + eapply msem_node_initial_state; eauto.
+             + simpl; cases.
+           - econstructor; eauto.
+             + discriminate.
+             + apply IHnode in Node_n.
+               specialize (Node_n n).
+               rewrite 2 mask_transparent, <-Mmask'_n in Node_n; auto.
+
+
+                 simpl in *.
+                 destruct (rs 0); simpl in *.  admit.
+                 SearchAbout count. admit.
+         }
+        *{ destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n).
+           apply IHnode in Node_n.
+           specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
+           rewrite 2 mask_transparent, <-Mmask_n, <-Mmask'_n in Node_n; auto.
+           specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky.
+           specialize (Heqs' Mx n).
+           assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
+             by apply Env.gss.
+           destruct (ys n) eqn: E'.
+           - do 2 (econstructor; eauto using sem_equation).
+             + apply Son_abs1; auto.
+               destruct Cky as [[]|(c &?&?)]; auto.
+               assert (present c = absent) by sem_det; discriminate.
+             + simpl; eexists; split; eauto; reflexivity.
+             + econstructor; eauto.
+               discriminate.
+           - rewrite Hrst in Hr.
+             do 2 (econstructor; eauto using sem_equation).
+             + change true with (negb false).
+               eapply Son_abs2; eauto.
+               destruct Cky as [[]|(?&?&?)]; auto.
+               assert (present c = absent) by sem_det; discriminate.
+             + simpl; eexists; split; eauto; reflexivity.
+             + econstructor; eauto.
+               discriminate.
+         }
+      + apply transient_states_closed_add; auto.
+        * apply memory_closed_rec_state_closed; auto.
+          rewrite Mmask_0, Mmask_n; auto.
+          specialize (Spec n); destruct (rs n);
+            apply msem_node_memory_closed_rec_n in Node_n as ();
+            apply msem_node_memory_closed_rec_n in Node_0 as (); auto.
+        * intro Hin; apply SpecInsts in Hin as (); eapply Notin; eauto.
+
+          destruct (rs n) eqn: E.
         *{ specialize (Heqs' (fun n => Mx 0) n).
            assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
              by apply Env.gss.

@@ -36,10 +36,10 @@ Module Type NLUSTRE
   Declare Module Export IsD    : ISDEFINED       Ids Op       Clks ExprSyn Syn                     Mem.
   Declare Module Export IsV    : ISVARIABLE      Ids Op       Clks ExprSyn Syn                     Mem IsD.
   Declare Module Export NoD    : NODUP           Ids Op       Clks ExprSyn Syn                     Mem IsD IsV.
-  Declare Module Export MemSem : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD.
   Declare Module Export Clo    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD     IsF.
   Declare Module Export CloSem : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn
                                                      Str Ord ExprSem Sem Mem IsD  IsF Clo.
+  Declare Module Export MemSem : MEMSEMANTICS    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD Clo CloSem.
 
 End NLUSTRE.
 
@@ -61,9 +61,9 @@ Module NLustreFun
   Module Export IsD     := IsDefinedFun       Ids Op       Clks ExprSyn Syn                     Mem.
   Module Export IsV     := IsVariableFun      Ids Op       Clks ExprSyn Syn                     Mem IsD.
   Module Export NoD     := NoDupFun           Ids Op       Clks ExprSyn Syn                     Mem IsD IsV.
-  Module Export MemSem  := MemSemanticsFun    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD.
   Module Export Clo     := NLClockingFun      Ids Op       Clks ExprSyn Syn     Ord             Mem IsD     IsF.
   Module Export CloSem  := NLClockingSemanticsFun Ids Op OpAux Clks ExprSyn Syn
                                                   Str Ord ExprSem Sem Mem IsD  IsF Clo.
+  Module Export MemSem  := MemSemanticsFun    Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsF NoD Clo CloSem.
 
 End NLustreFun.
