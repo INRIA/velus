@@ -78,9 +78,9 @@ Module Type MEMSEMANTICS
   Definition memories := stream (memory val).
 
   Definition memory_masked (k: nat) (rs: cstream) (M Mk: memories) :=
-    forall n, ((count rs n = k /\ rs n = false)
-          \/ (count rs n = S k /\ rs n = true)) ->
-         M n = Mk n.
+    forall n,
+      count rs n = (if rs n then S k else k) ->
+      M n = Mk n.
 
   Definition memory_masked' (k: nat) (rs: cstream) (M Mk: memories) :=
     forall n, count rs n = k -> M n = Mk n.
@@ -849,7 +849,7 @@ dataflow memory for which the non-standard semantics holds true.
     intro k; specialize (Msem k).
     do 2 eexists; intuition eauto;
       intros n Count; auto.
-    destruct Count as [(-> & ->)|(-> & ->)]; simpl; auto.
+    rewrite Count; cases.
   Qed.
 
   Theorem sem_msem_node:
@@ -1019,30 +1019,28 @@ dataflow memory for which the non-standard semantics holds true.
 
   Lemma msem_eqs_same_initial_memory:
     forall M1 M1' G eqs bk1 H1 M2 M2' bk2 H2,
-    (forall f xss1 M1 M1' yss1 xss2 M2 M2' yss2,
-        msem_node G f xss1 M1 M1' yss1 ->
-        msem_node G f xss2 M2 M2' yss2 ->
-        M1 0 ≋ M2 0) ->
-    NoDup_defs eqs ->
-    memory_closed_n M1 eqs ->
-    memory_closed_n M2 eqs ->
-    Forall (msem_equation G bk1 H1 M1 M1') eqs ->
-    Forall (msem_equation G bk2 H2 M2 M2') eqs ->
-    M1 0 ≋ M2 0.
+      (forall f xss1 M1 M1' yss1 xss2 M2 M2' yss2,
+          msem_node G f xss1 M1 M1' yss1 ->
+          msem_node G f xss2 M2 M2' yss2 ->
+          M1 0 ≋ M2 0) ->
+      NoDup_defs eqs ->
+      memory_closed_n M1 eqs ->
+      memory_closed_n M2 eqs ->
+      Forall (msem_equation G bk1 H1 M1 M1') eqs ->
+      Forall (msem_equation G bk2 H2 M2 M2') eqs ->
+      M1 0 ≋ M2 0.
   Proof.
     intros ** IH Nodup Closed1 Closed2 Heqs1 Heqs2.
     revert dependent M1; revert dependent M2; revert M1' M2'.
     induction eqs as [|[] ? IHeqs]; intros;
       inversion_clear Heqs1 as [|?? Sem1 Sems1];
       inversion_clear Heqs2 as [|?? Sem2 Sems2];
-      try inversion Sem1 as [|
-                                   ????????????? Hd1 ???? Node|
-                                   ???????????????? Hd1 ?? Args1 ? Var ? Reset1|
-                                   ?????????? Arg1 ? Mfby1];
-      try inversion Sem2 as [|
-                                   ????????????? Hd2|
-                                   ???????????????? Hd2 ?? Args2 ??? Reset2|
-                                   ?????????? Arg2 ? Mfby2];
+      try inversion Sem1 as [|????????????? Hd1 ???? Node|
+                             ???????????????? Hd1 ?? Args1 ? Var ? Reset1|
+                             ?????????? Arg1 ? Mfby1];
+      try inversion Sem2 as [|????????????? Hd2|
+                             ???????????????? Hd2 ?? Args2 ??? Reset2|
+                             ?????????? Arg2 ? Mfby2];
       inv Nodup; subst; try discriminate; eauto.
     - assert (forall n, M1 n ≋ empty_memory _) as ->
           by (intro; apply memory_closed_empty; auto).
@@ -1258,25 +1256,6 @@ dataflow memory for which the non-standard semantics holds true.
       now apply ident_eqb_neq.
   Qed.
 
-  (* Theorem msem_reset_spec: *)
-  (*   forall G f r xs M' M ys, *)
-  (*     Ordered_nodes G -> *)
-  (*     msem_reset G f r xs M M' ys -> *)
-  (*     forall n, r n = true -> M n ≋ M 0. *)
-  (* Proof. *)
-  (*   inversion_clear 2 as [?????? Nodes]. *)
-  (*   intros ** Hr. *)
-  (*   destruct (Nodes (if count r n)) as (Mn & ? & Node_n & Mmask_n &?), *)
-  (*                                   (Nodes (count r 0)) as (M0 & ? & Node_0 & Mmask_0 &?). *)
-  (*   rewrite Mmask_n, Mmask_0; auto. *)
-  (*   assert (M0 0 ≋ Mn 0) as -> by (eapply same_initial_memory; eauto). *)
-  (*   eapply msem_node_absent_until; eauto. *)
-  (*   intros ** Spec. *)
-  (*   rewrite mask_opaque. *)
-  (*   - apply all_absent_spec. *)
-  (*   - eapply count_positive in Spec; eauto; omega. *)
-  (* Qed. *)
-
   (** Absent  *)
 
   Lemma mfby_absent:
@@ -1289,8 +1268,7 @@ dataflow memory for which the non-standard semantics holds true.
       destruct Mfby as (Init & Spec & Spec').
     - specialize (Spec' 0); rewrite Init, Abs in Spec'.
       intuition; congruence.
-    - (* rewrite Spec. *)
-      specialize (Spec' (S n)).
+    - specialize (Spec' (S n)).
       destruct (find_val x (M (S n))); try contradiction.
       rewrite Abs in Spec'.
       intuition.
@@ -1347,6 +1325,7 @@ dataflow memory for which the non-standard semantics holds true.
         erewrite add_remove_inst_same; eauto;
           symmetry; rewrite add_remove_inst_same; eauto.
         rewrite Sems.
+        specialize (MemMask_n' n); specialize (MemMask_n n).
         destruct (rs n) eqn: Hr.
         *{ inversion_clear WC_eq as [|???????? WC_reset|].
            assert (In (y, c) vars) as Hin by auto.
@@ -1360,7 +1339,7 @@ dataflow memory for which the non-standard semantics holds true.
              rewrite Absbk; apply not_subrate_clock.
          }
         *{ apply IH with (n := n) in Node_n; auto.
-           - rewrite (MemMask_n n), (MemMask_n' n), Node_n; auto; reflexivity.
+           - rewrite MemMask_n, MemMask_n', Node_n; auto; reflexivity.
            - specialize (Args n); simpl in Args.
              rewrite Absbk in Args.
              inversion_clear Args as [?????? SClock|??? E'].
@@ -1439,7 +1418,6 @@ dataflow memory for which the non-standard semantics holds true.
 
     - (* EqApp *)
       intros IHHsem iface z zck Hndup Hwc Hdef Hiface.
-      (* rename ys into yss, y into ys, z into y, zck into yck. *)
       inversion_clear Hdef as [|? ? ? ? ? Hyys|].
       inversion_clear Hsem as [cks' H' ????? node Hco' Hfind Hvi Hvo].
       specialize (IHHsem _ _ _ Hfind Hco' Hvi Hvo).
@@ -1531,7 +1509,6 @@ dataflow memory for which the non-standard semantics holds true.
 
     - (* EqReset *)
       intros IHHsem iface z zck Hndup Hwc Hdef Hiface n.
-      (* rename ys into yss, y into ys, z into y, zck into yck. *)
       inversion_clear Hdef as [|? ? ? ? ? Hyys|].
       inversion_clear Hsem as [?????? Hsems].
       specialize (Hsems (count rs n)); destruct Hsems as (?&?& Hsem &?).
@@ -1654,7 +1631,6 @@ dataflow memory for which the non-standard semantics holds true.
       apply in_map with (f:=fst), node_output_defined_in_eqs in Hxin.
       apply Is_defined_in_eqs_In in Hxin as (eq & Heqin & Hxeq).
       eapply Forall_forall in IH; eauto.
-        (* as (Hsem & IH). *)
       apply wc_find_node with (1:=WCG) in Hf
         as (G'' & G' & HG & (WCi & WCo & WCv & WCeqs)).
       eapply Forall_forall in WCeqs; eauto.
@@ -1693,11 +1669,6 @@ dataflow memory for which the non-standard semantics holds true.
           eapply in_app; eauto.
   Qed.
 
-
-  (* When a node's inputs match their clocks, then so do its outputs.
-     This is a consequence (by induction throughout the node hierarchy) of
-     the constraints relating streams to their clocks for each case of
-     [sem_equation]. *)
   Corollary clock_match_msem_node:
     forall G f xss M M' yss bk H n,
       Ordered_nodes G ->
@@ -1714,15 +1685,6 @@ dataflow memory for which the non-standard semantics holds true.
     eapply (proj1 (clock_match_msem_node_eqs_reset Ord WCG)); eauto.
   Qed.
 
-  (* A "version" of [clock_match_node] for "within" a node. Much of the
-     reasoning from [clock_match_node] is unfortunately repeated here. It's
-     not clear whether this is inevitable or whether there is a smarter way
-     to do the induction (maybe by tweaking [sem_node_mult]). The essential
-     difficulty is that the internal environment ([H]) is existentially
-     quantified for a node, which makes it hard to state the lemma relative
-     to [sem_node], and tedious to "transfer" facts known "outside" a
-     node to facts known "within" it. At the time of writing, there is no
-     determinism lemma for environments constrained by nodes. *)
   Corollary clock_match_msem_eq:
     forall G bk H M M' iface x ck eq,
       Ordered_nodes G ->
@@ -1792,7 +1754,6 @@ dataflow memory for which the non-standard semantics holds true.
     simpl in Hfind.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inv Hfind.
-      (* pose proof Heqs. *)
       eapply msem_equations_cons in Heqs; eauto.
       eapply msem_eqs_absent; eauto.
       + rewrite idck_app, Forall_app; split.
@@ -1814,18 +1775,18 @@ dataflow memory for which the non-standard semantics holds true.
   (** Relooper for free *)
 
   Lemma msem_eqs_relooper:
-    forall M M' G eqs bk H n,
-    (forall f xss M M' yss n,
-        msem_node G f xss M M' yss ->
-        M (S n) ≋ M' n) ->
-    Ordered_nodes G ->
-    NoDup_defs eqs ->
-    memory_closed_n M eqs ->
-    memory_closed_n M' eqs ->
-    Forall (msem_equation G bk H M M') eqs ->
-    M (S n) ≋ M' n.
+    forall M M' G eqs bk H,
+      (forall f xss M M' yss,
+          msem_node G f xss M M' yss ->
+          forall n, M (S n) ≋ M' n) ->
+      Ordered_nodes G ->
+      NoDup_defs eqs ->
+      memory_closed_n M eqs ->
+      memory_closed_n M' eqs ->
+      Forall (msem_equation G bk H M M') eqs ->
+      forall n, M (S n) ≋ M' n.
   Proof.
-    intros ** IH Hord Nodup Closed Closed' Heqs.
+    intros ** IH Hord Nodup Closed Closed' Heqs n.
     revert dependent M; revert dependent M'.
     induction eqs as [|[] ? IHeqs]; intros;
       inversion_clear Heqs as [|?? Sem Sems];
@@ -1856,8 +1817,7 @@ dataflow memory for which the non-standard semantics holds true.
         destruct (Nodes (count rs n))
           as (Mn & Mn' & Node_n & MemMask_n & MemMask_n').
         apply IH with (n := n) in Node_n.
-        rewrite Sems, (MemMask_n' n), (MemMask_n (S n)), Node_n; auto; try reflexivity.
-        simpl; cases.
+        rewrite Sems, (MemMask_n' n), (MemMask_n (S n)), Node_n; auto; reflexivity.
       + apply hd_error_Some_In in Hd; auto.
 
     - apply msem_equation_remove_val with (x := i) in Sems; auto.
@@ -1872,15 +1832,15 @@ dataflow memory for which the non-standard semantics holds true.
   Qed.
 
   Theorem msem_node_relooper:
-    forall G f xss M M' yss n,
+    forall G f xss M M' yss,
       Ordered_nodes G ->
       msem_node G f xss M M' yss ->
-      M (S n) ≋ M' n.
+      forall n, M (S n) ≋ M' n.
   Proof.
     induction G as [|node].
     inversion 2;
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
-    intros ** Hord Hsem.
+    intros ** Hord Hsem n.
     assert (Hsem' := Hsem).
     inversion_clear Hsem' as [???????? Clock Hfind Ins ????? Heqs].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.

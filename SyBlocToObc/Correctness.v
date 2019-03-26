@@ -1270,6 +1270,34 @@ Module Type CORRECTNESS
       + eapply find_block_later_not_Is_block_in; eauto.
   Qed.
 
+  Corollary correctness_loop_call:
+    forall P f ins outs S0,
+      Well_defined P ->
+      loop P f (vstr ins) (vstr outs) S0 0 ->
+      exists me0,
+        stmt_call_eval (translate P) mempty f reset [] me0 []
+        /\ loop_call (translate P) f step ins outs 0 me0
+        /\ me0 ≋ S0.
+  Proof.
+    intros ** Wdef Loop.
+    pose proof Loop as Loop'; inversion_clear Loop' as [???????? Sem].
+    inv Sem.
+    assert (Ordered_blocks P) as Ord by apply Wdef.
+    eapply reset_spec with (me := mempty) in Ord as (me' &?&?& Closed); eauto.
+    assert (me' ≋ S0) as Eq
+        by (eapply initial_state_det; eauto;
+            eapply Closed, state_closed_empty; eauto).
+    exists me'; intuition.
+    clear - Loop Wdef Eq.
+    revert Loop Eq; revert me' S0.
+    generalize 0.
+    cofix COFIX; intros.
+    inversion_clear Loop as [???????? Sem].
+    unfold vstr in Sem; rewrite <-2 map_map with (g := present) (f := sem_const) in Sem.
+    eapply correctness with (1:= Wdef) (3 := Eq) in Sem as (?&?&?).
+    econstructor; eauto.
+  Qed.
+
 End CORRECTNESS.
 
 Module CorrectnessFun

@@ -468,23 +468,20 @@ Module Type CORRECTNESS
           by now intro; apply sem_equations_n_add_n.
       assert (clock_match bk H (y, ck)) as Cky
           by (eapply Forall_forall; eauto; inv WC; eauto).
-      (* pose proof (msem_reset_spec Hord Reset) as Spec. *)
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split;
         intro;
-        inversion_clear Reset as [?????? Nodes](* ; *)
-        (* destruct (Nodes (if rs n then pred (count rs n) else count rs n)) *)
-        (*   as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n), *)
-        (*      (Nodes (count rs 0)) *)
-        (*     as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0) *).
+        inversion_clear Reset as [?????? Nodes];
+        destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
+        specialize (Mmask_n n);
+        destruct (Nodes (if rs 0 then pred (count rs 0) else count rs 0))
+          as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0);
+        specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky;
+          pose proof Node_n as Node_n'; apply IHnode in Node_n; specialize (Node_n n);
+            rewrite 2 mask_transparent, <-Mmask'_n in Node_n; auto.
       + destruct (rs n) eqn: Hrst.
-        *{ destruct (Nodes (if rs 0 then pred (count rs 0) else count rs 0))
-             as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0).
-           destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n).
-           assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
+        *{ assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
              by apply Env.gss.
-           specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky.
            specialize (Heqs' (fun n => Mx 0) n).
-           rewrite Hrst in Hr.
            destruct (ys n) eqn: E'; try discriminate.
            do 2 (econstructor; eauto using sem_equation).
            - eapply Son; eauto.
@@ -495,68 +492,21 @@ Module Type CORRECTNESS
              + simpl; cases.
            - econstructor; eauto.
              + discriminate.
-             + apply IHnode in Node_n.
-               specialize (Node_n n).
-               rewrite 2 mask_transparent, <-Mmask'_n in Node_n; auto.
-
-
-                 simpl in *.
-                 destruct (rs 0); simpl in *.  admit.
-                 SearchAbout count. admit.
+             + assert (Mn n ≋ Mn 0) as Eq.
+               { eapply msem_node_absent_until; eauto.
+                 intros ** Spec.
+                 rewrite mask_opaque.
+                 - apply all_absent_spec.
+                 - eapply count_positive in Spec; eauto; omega.
+               }
+               eapply same_initial_memory with (2 := Node_n') in Node_0; eauto.
+               rewrite Mmask_0, <-Node_0, <-Eq; auto.
+               simpl; cases.
          }
-        *{ destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n).
-           apply IHnode in Node_n.
-           specialize (Node_n n); specialize (Mmask_n n); specialize (Mmask'_n n).
-           rewrite 2 mask_transparent, <-Mmask_n, <-Mmask'_n in Node_n; auto.
-           specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky.
+        *{ rewrite <-Mmask_n in Node_n; auto.
+           assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
+             by apply Env.gss.
            specialize (Heqs' Mx n).
-           assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
-             by apply Env.gss.
-           destruct (ys n) eqn: E'.
-           - do 2 (econstructor; eauto using sem_equation).
-             + apply Son_abs1; auto.
-               destruct Cky as [[]|(c &?&?)]; auto.
-               assert (present c = absent) by sem_det; discriminate.
-             + simpl; eexists; split; eauto; reflexivity.
-             + econstructor; eauto.
-               discriminate.
-           - rewrite Hrst in Hr.
-             do 2 (econstructor; eauto using sem_equation).
-             + change true with (negb false).
-               eapply Son_abs2; eauto.
-               destruct Cky as [[]|(?&?&?)]; auto.
-               assert (present c = absent) by sem_det; discriminate.
-             + simpl; eexists; split; eauto; reflexivity.
-             + econstructor; eauto.
-               discriminate.
-         }
-      + apply transient_states_closed_add; auto.
-        * apply memory_closed_rec_state_closed; auto.
-          rewrite Mmask_0, Mmask_n; auto.
-          specialize (Spec n); destruct (rs n);
-            apply msem_node_memory_closed_rec_n in Node_n as ();
-            apply msem_node_memory_closed_rec_n in Node_0 as (); auto.
-        * intro Hin; apply SpecInsts in Hin as (); eapply Notin; eauto.
-
-          destruct (rs n) eqn: E.
-        *{ specialize (Heqs' (fun n => Mx 0) n).
-           assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
-             by apply Env.gss.
-           constructor; auto; [|constructor; auto].
-           - destruct (ys n); try discriminate.
-             econstructor; eauto.
-             + eapply Son; eauto.
-               destruct Cky as [[]|(?&?&?)]; auto.
-               assert (present c = absent) by sem_det; discriminate.
-             + simpl; rewrite Mmask_0; auto.
-             eapply msem_node_initial_state; eauto.
-           - eapply SEqCall with (Is := Mx 0); eauto.
-             + congruence.
-             + eapply sem_block_equal_memory; eauto; reflexivity.   (* TODO: fix rewriting here? *)
-         }
-        *{ specialize (Heqs' Mx n).
-           assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
-             by apply Env.gss.
            destruct (ys n) eqn: E'.
            - do 2 (econstructor; eauto using sem_equation).
              + apply Son_abs1; auto.
@@ -575,11 +525,14 @@ Module Type CORRECTNESS
                discriminate.
          }
       + apply transient_states_closed_add; auto.
-        * apply memory_closed_rec_state_closed; auto.
-          rewrite Mmask_0, Mmask_n; auto.
-          specialize (Spec n); destruct (rs n);
-            apply msem_node_memory_closed_rec_n in Node_n as ();
-            apply msem_node_memory_closed_rec_n in Node_0 as (); auto.
+        *{ apply memory_closed_rec_state_closed; auto.
+           destruct (rs n) eqn: Hrst.
+           - rewrite Mmask_0.
+             + apply msem_node_memory_closed_rec_n in Node_0; intuition.
+             + simpl; cases.
+           - rewrite Mmask_n; auto.
+             apply msem_node_memory_closed_rec_n in Node_n'; intuition.
+         }
         * intro Hin; apply SpecInsts in Hin as (); eapply Notin; eauto.
 
     - do 3 (econstructor; auto).
@@ -750,10 +703,9 @@ Module Type CORRECTNESS
           rewrite map_fst_idck; eauto.
         *{ apply Forall_forall; intros (x, ck) ?.
            rewrite idck_app in WCeqs.
-           eapply clock_match_eqs with (eqs := node.(n_eqs)); eauto.
+           eapply clock_match_msem_eqs with (eqs := node.(n_eqs)); eauto.
            - rewrite <-idck_app, NoDupMembers_idck.
              apply n_nodup.
-           - eapply msem_sem_equations; eauto.
            - rewrite map_fst_idck.
              apply n_defd.
          }
@@ -762,68 +714,26 @@ Module Type CORRECTNESS
       apply sem_block_cons2; auto using Ordered_blocks.
   Qed.
 
-  Section DostepCoind.
-
-    Variable R: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop.
-
-    Hypothesis Step:
-      forall P b xss yss Sn n,
-        R P b xss yss Sn n ->
-        (n = 0 -> initial_state P b Sn)
-        /\ exists S', sem_block P b Sn (xss n) (yss n) S'
-                /\ R P b xss yss S' (S n).
-
-    Lemma dostep_coind:
-      forall P b xss yss S n,
-        R P b xss yss S n ->
-        dostep P b xss yss S n.
-    Proof.
-      cofix COFIX; intros ** HR.
-      apply Step in HR as (?&?&?&?).
-      econstructor; eauto.
-    Qed.
-
-  End DostepCoind.
-
-  (* Theorem correctness_dostep: *)
-  (*   forall n G f xss M M' yss, *)
-  (*     Ordered_nodes G -> *)
-  (*     wc_global G -> *)
-  (*     msem_node G f xss M M' yss -> *)
-  (*     exists S, dostep (translate G) f xss yss S n. *)
-  (* Proof. *)
-  (*   induction n.  *)
-  (*   generalize 0. *)
-  (*   cofix COFIX; intros ** Sem. *)
-  (*   econstructor. *)
-  (*   - intro; subst; eapply msem_node_initial_state; eauto. *)
-  (*   - apply correctness; eauto. *)
-  (*   - SearchAbout msem_node. eapply COFIX.  SearchAbout initial_state. *)
-  (* Theorem correctness_dostep: *)
-  (*   forall G f xss M M' yss, *)
-  (*     Ordered_nodes G -> *)
-  (*     wc_global G -> *)
-  (*     msem_node G f xss M M' yss -> *)
-  (*     dostep (translate G) f xss yss (M 0) 0. *)
-  (* Proof. *)
-  (*   (* intros; apply dostep_coind with (R := fun P b xss yss S n => *) *)
-  (*   (*                                         P = translate G *) *)
-  (*   (*                                         /\ S = M n  *) *)
-  (*   (*                                         /\ msem_node G b xss M M' yss); auto. *) *)
-  (*   (* intros ** (?&?& Sem); subst. *) *)
-  (*   (* split. *) *)
-  (*   (* - intro; subst; eapply msem_node_initial_state; eauto. *) *)
-  (*   (* - pose proof Sem. apply correctness in Sem; auto. *) *)
-  (*   (*   exists (M' n); intuition. intros ** (?&?). intuition. *) *)
-  (*   (*   exists (M' n); intuition. *) *)
-  (*   generalize 0. *)
-  (*   cofix COFIX; intros ** Sem. *)
-  (*   econstructor. *)
-  (*   - intro; subst; eapply msem_node_initial_state; eauto. *)
-  (*   - apply correctness; eauto. *)
-  (*   - assert (M' n = M (S n)) as -> by admit. *)
-  (*     eapply COFIX; eauto. *)
-  (* Qed. *)
+  Corollary correctness_loop:
+    forall G f xss M M' yss,
+      Ordered_nodes G ->
+      wc_global G ->
+      msem_node G f xss M M' yss ->
+      loop (translate G) f xss yss (M 0) 0.
+  Proof.
+    intros; apply loop_coind with (R := fun P b xss yss S n =>
+                                          P = translate G
+                                          /\ S ≋ M n
+                                          /\ msem_node G b xss M M' yss);
+    try now intuition.
+    intros ** (?& E & Sem); subst; split.
+    - intro; subst; rewrite E.
+      eapply msem_node_initial_state; eauto.
+    - pose proof Sem; apply correctness in Sem; auto.
+      exists (M' n); intuition eauto.
+      + rewrite E; auto.
+      + rewrite msem_node_relooper; eauto; reflexivity.
+  Qed.
 
 End CORRECTNESS.
 

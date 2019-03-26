@@ -212,13 +212,36 @@ Module Type SBSEMANTICS
 
   End sem_block_mult.
 
-  CoInductive dostep: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop :=
-    dostep_intro:
-      forall P b xss yss Sn S' n,
+  CoInductive loop: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop :=
+    loop_intro:
+      forall P b xss yss Sn Sn' n,
         (n = 0 -> initial_state P b Sn) ->
-        sem_block P b Sn (xss n) (yss n) S' ->
-        dostep P b xss yss S' (S n) ->
-        dostep P b xss yss Sn n.
+        sem_block P b Sn (xss n) (yss n) Sn' ->
+        loop P b xss yss Sn' (S n) ->
+        loop P b xss yss Sn n.
+
+  Section LoopCoind.
+
+    Variable R: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop.
+
+    Hypothesis Loop:
+      forall P b xss yss Sn n,
+        R P b xss yss Sn n ->
+        (n = 0 -> initial_state P b Sn)
+        /\ exists Sn', sem_block P b Sn (xss n) (yss n) Sn'
+                 /\ R P b xss yss Sn' (S n).
+
+    Lemma loop_coind:
+      forall P b xss yss S n,
+        R P b xss yss S n ->
+        loop P b xss yss S n.
+    Proof.
+      cofix COFIX; intros ** HR.
+      apply Loop in HR as (?&?&?&?).
+      econstructor; eauto.
+    Qed.
+
+  End LoopCoind.
 
   Add Parametric Morphism block : (reset_lasts block)
       with signature equal_memory ==> Basics.impl
@@ -294,12 +317,12 @@ Module Type SBSEMANTICS
     auto.
   Qed.
 
-  Add Parametric Morphism P f xs ys : (fun S S' => sem_block P f S xs ys S')
-      with signature equal_memory ==> equal_memory ==> Basics.impl
+  Add Parametric Morphism P f: (sem_block P f)
+      with signature equal_memory ==> eq ==> eq ==> equal_memory ==> Basics.impl
         as sem_block_equal_memory.
   Proof.
-    intros ** Sem.
-    revert dependent y; revert dependent y0.
+    intros S1 S2 ??? S1' S2' ** Sem.
+    revert dependent S2; revert dependent S2'.
     induction Sem as [| |??????????? Find Init|
                       ???????????????? Spec Find ?? Sub|] using sem_block_mult with
                    (P_equation := fun base R S1 I1 S1' eq =>
@@ -361,6 +384,19 @@ Module Type SBSEMANTICS
     unfold state_closed_lasts.
     intros ** E ? Closed ? Find.
     rewrite <-E; auto.
+  Qed.
+
+  Add Parametric Morphism P b xss yss : (loop P b xss yss)
+      with signature equal_memory ==> eq ==> Basics.impl
+        as loop_equal_memory.
+  Proof.
+    cofix COFIX.
+    intros ** E n Loop.
+    inv Loop.
+    econstructor; eauto.
+    - intros; rewrite <-E; auto.
+    - eapply sem_block_equal_memory; eauto.
+      reflexivity.
   Qed.
 
   Lemma initial_state_other:

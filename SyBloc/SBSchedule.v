@@ -422,6 +422,18 @@ Module Type SBSCHEDULE
       rewrite schedule_eqs_permutation; eauto.
   Qed.
 
+  Lemma scheduler_ordered:
+    forall P,
+      Ordered_blocks P ->
+      Ordered_blocks (schedule P).
+  Proof.
+    induction 1 as [|????? Names]; simpl; constructor; simpl; auto.
+    - apply Forall_forall; intros (?&?) Hin;
+        eapply Forall_forall in Hin; eauto; destruct Hin as (?& Find); intuition.
+      destruct Find as (?&?& Find); apply scheduler_find_block in Find; eauto.
+    - clear - Names; induction P; simpl; inv Names; constructor; auto.
+  Qed.
+
 End SBSCHEDULE.
 
 Module SBScheduleFun

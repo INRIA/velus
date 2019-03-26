@@ -117,7 +117,8 @@ Module Type OBCSEMANTICS
   (*   end. *)
 
   CoInductive loop_call (prog: program) (clsid f: ident) (ins outs: nat -> list const): nat -> menv -> Prop :=
-    Step : forall n me me',
+    Step:
+      forall n me me',
       let cins := map sem_const (ins n) in
       let couts := map sem_const (outs n) in
       (* (n = 0 -> stmt_call_eval prog me clsid step cins me' couts) *)
