@@ -11,7 +11,7 @@ Require Import Velus.SyBloc.SBIsVariable.
 Require Import Velus.SyBloc.SBIsLast.
 Require Import Velus.SyBloc.SBIsDefined.
 
-Require Import Velus.NLustre.NLSyntax.
+Require Import Velus.NLustre.IsFreeExpr.
 Require Import Velus.SyBloc.SBIsFree.
 
 Require Import List.
@@ -29,9 +29,8 @@ Module Type SBWELLDEFINED
        (Import Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
        (Import Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
        (Import Def     : SBISDEFINED  Ids Op Clks ExprSyn Syn Var Last)
-       (SynNL          : NLSYNTAX     Ids Op Clks ExprSyn)
-       (Import IsF     : ISFREE       Ids Op Clks ExprSyn     SynNL)
-       (Import Free    : SBISFREE     Ids Op Clks ExprSyn Syn SynNL IsF).
+       (Import IsFExpr : ISFREEEXPR   Ids Op Clks ExprSyn)
+       (Import Free    : SBISFREE     Ids Op Clks ExprSyn Syn IsFExpr).
 
   Inductive Is_well_sch (inputs: list ident) (mems: PS.t): list equation -> Prop :=
   | WSchNil:
@@ -63,12 +62,32 @@ Module Type SBWELLDEFINED
     Ordered_blocks P /\ Well_scheduled P.
 
   Lemma Is_well_sch_app:
-    forall mems inputs eqs eqs',
-      Is_well_sch mems inputs (eqs ++ eqs') ->
-      Is_well_sch mems inputs eqs'.
+    forall inputs mems eqs eqs',
+      Is_well_sch inputs mems (eqs ++ eqs') ->
+      Is_well_sch inputs mems eqs'.
   Proof.
     induction eqs; auto; simpl.
     inversion 1; auto.
+  Qed.
+
+  Lemma Is_last_in_not_Is_variable_in:
+    forall eqs inputs mems x,
+      Is_well_sch inputs mems eqs ->
+      Is_last_in x eqs ->
+      ~ Is_variable_in x eqs.
+  Proof.
+    induction eqs; intros ** Wsch Last Var;
+      inversion_clear Last as [?? IsLast|];
+      inversion_clear Var as [?? IsVar|?? IsVar_in];
+      inversion_clear Wsch as [|???? Defs].
+    - inv IsLast; inv IsVar.
+    - apply Is_variable_in_Is_defined_in in IsVar_in.
+      eapply Defs; eauto.
+      inv IsLast; constructor.
+    - apply Is_variable_in_eq_Is_defined_in_eq in IsVar.
+      eapply Defs; eauto.
+      apply Is_defined_Is_variable_Is_last_in; auto.
+    - eapply IHeqs; eauto.
   Qed.
 
   Lemma Reset_not_Step_in:
@@ -633,9 +652,8 @@ Module SBWellDefinedFun
        (Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
        (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
        (Def     : SBISDEFINED  Ids Op Clks ExprSyn Syn Var Last)
-       (SynNL          : NLSYNTAX     Ids Op Clks ExprSyn)
-       (IsF     : ISFREE       Ids Op Clks ExprSyn     SynNL)
-       (Free    : SBISFREE     Ids Op Clks ExprSyn Syn SynNL IsF)
-<: SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def SynNL IsF Free.
-  Include SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def SynNL IsF Free.
+       (IsFExpr : ISFREEEXPR   Ids Op Clks ExprSyn)
+       (Free    : SBISFREE     Ids Op Clks ExprSyn Syn IsFExpr)
+<: SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def IsFExpr Free.
+  Include SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def IsFExpr Free.
 End SBWellDefinedFun.

@@ -61,8 +61,8 @@ Module Type SBSEMANTICS
            blocks.
 
   Definition reset_lasts (bl: block) (S0: state) : Prop :=
-    forall x c,
-      In (x, c) bl.(b_lasts) ->
+    forall x c ck,
+      In (x, (c, ck)) bl.(b_lasts) ->
       find_val x S0 = Some (sem_const c).
 
   Inductive initial_state: program -> ident -> state -> Prop :=
@@ -247,8 +247,8 @@ Module Type SBSEMANTICS
       with signature equal_memory ==> Basics.impl
         as reset_lasts_equal_memory.
   Proof.
-    intros ** E Rst ?? Hin.
-    rewrite <-E; auto.
+    intros ** E Rst ??? Hin.
+    rewrite <-E; apply Rst in Hin; auto.
   Qed.
 
   Add Parametric Morphism P f : (initial_state P f)
@@ -606,16 +606,16 @@ Module Type SBSEMANTICS
     unfold state_closed_lasts, reset_lasts, find_val in *.
     destruct (Env.find x (values S)) eqn: E, (Env.find x (values S')) eqn: E'; auto.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
-      apply Spec, fst_InMembers, InMembers_In in E1 as (?& Hin).
+      apply Spec, fst_InMembers, InMembers_In in E1 as (()& Hin).
       pose proof Hin as Hin'.
       apply Rst in Hin; apply Rst' in Hin'.
       congruence.
     - assert (Env.find x (values S) <> None) as E1 by (apply not_None_is_Some; eauto).
-      apply Spec, fst_InMembers, InMembers_In in E1 as (?& Hin).
+      apply Spec, fst_InMembers, InMembers_In in E1 as (()& Hin).
       apply Rst' in Hin.
       congruence.
     - assert (Env.find x (values S') <> None) as E1 by (apply not_None_is_Some; eauto).
-      apply Spec', fst_InMembers, InMembers_In in E1 as (?& Hin).
+      apply Spec', fst_InMembers, InMembers_In in E1 as (()& Hin).
       apply Rst in Hin.
       congruence.
   Qed.

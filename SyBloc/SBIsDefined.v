@@ -37,17 +37,45 @@ Module Type SBISDEFINED
 
   Lemma Is_defined_Is_variable_Is_last_in:
     forall eqs x,
-      Is_defined_in x eqs ->
+      Is_defined_in x eqs <->
       Is_variable_in x eqs \/ Is_last_in x eqs.
   Proof.
-    induction eqs; inversion_clear 1 as [?? Def|?? Defs].
-    - inv Def.
-      + left; left; constructor; auto.
-      + right; left; constructor; auto.
-      + left; left; constructor; auto.
-    - apply IHeqs in Defs as [].
-      + left; right; auto.
-      + right; right; auto.
+    induction eqs; split.
+    - inversion 1.
+    - intros [E|E]; inversion E.
+    - inversion_clear 1 as [?? Def|?? Defs].
+      + inv Def.
+        * left; left; constructor; auto.
+        * right; left; constructor; auto.
+        * left; left; constructor; auto.
+      + apply IHeqs in Defs as [].
+        * left; right; auto.
+        * right; right; auto.
+    - intros [E|E]; inversion_clear E as [?? E'|].
+      + inv E'.
+        * left; constructor.
+        * left; constructor; auto.
+      + right; apply IHeqs; auto.
+      + inv E'; left; constructor.
+      + right; apply IHeqs; auto.
+  Qed.
+
+  Lemma Is_variable_in_eq_Is_defined_in_eq:
+    forall x eq,
+      Is_variable_in_eq x eq ->
+      Is_defined_in_eq x eq.
+  Proof.
+    destruct eq; inversion_clear 1; auto using Is_defined_in_eq.
+  Qed.
+
+  Lemma Is_variable_in_Is_defined_in:
+    forall x eqs,
+      Is_variable_in x eqs ->
+      Is_defined_in x eqs.
+  Proof.
+    induction eqs; inversion_clear 1 as [?? Var|].
+    - inv Var; left; constructor; auto.
+    - right; auto; apply IHeqs; auto.
   Qed.
 
   Lemma b_ins_not_def:

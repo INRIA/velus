@@ -2,18 +2,12 @@ Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Logic.FunctionalExtensionality.
 
-Require Import Velus.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.RMemory.
-
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.NLExprSemantics.
-
 Require Import Velus.NLustre.
 Require Import Velus.SyBloc.
 
 Require Import Velus.NLustreToSyBloc.Translation.
+
+Require Import Velus.RMemory.
 
 Require Import List.
 Import List.ListNotations.
@@ -29,8 +23,10 @@ Module Type CORRECTNESS
        (Import ExprSyn  : NLEXPRSYNTAX        Op)
        (Import Str      : STREAM              Op OpAux)
        (Import ExprSem  : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (Import NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem)
-       (Import SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem NL.Syn NL.IsF)
+       (Import IsFExpr  : ISFREEEXPR      Ids Op       Clks ExprSyn)
+       (Import CloExpr  : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (Import NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
+       (Import SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
        (Import Trans    : TRANSLATION     Ids Op       Clks ExprSyn             NL.Syn SB.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
@@ -40,7 +36,7 @@ Module Type CORRECTNESS
   Proof.
     unfold gather_eqs.
     intro.
-    generalize (@nil (ident * const)).
+    generalize (@nil (ident * (const * clock))).
     induction eqs as [|[]]; simpl; try contradiction; intros ** Hin; auto.
     - right; eapply IHeqs; eauto.
     - destruct i.
@@ -79,7 +75,7 @@ Module Type CORRECTNESS
       Forall (msem_equation G bk H M M') (n_eqs n) ->
       reset_lasts (translate_node n) (M 0).
   Proof.
-    intros ** Closed Heqs ?? Hin.
+    intros ** Closed Heqs ??? Hin.
     destruct n; simpl in *.
     unfold gather_eqs in *.
     clear - Heqs Hin.
@@ -103,7 +99,7 @@ Module Type CORRECTNESS
         /\ sub_inst_n x M Mx.
   Proof.
     unfold gather_eqs.
-    intro; generalize (@nil (ident * const)).
+    intro; generalize (@nil (ident * (const * clock))).
     induction eqs as [|[]]; simpl; intros ** Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
       try inversion_clear Heq as [|????????????? Hd|???????????????? Hd|];
@@ -419,7 +415,7 @@ Module Type CORRECTNESS
           msem_node G f xss M M' yss ->
           sem_block_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
-      wc_equation G vars eq ->
+      NL.Clo.wc_equation G vars eq ->
       Forall (clock_match bk H) vars ->
       translate_eqn_nodup_states eq eqs ->
       (forall n, transient_states_closed (translate G) insts (Is n)) ->
@@ -605,7 +601,7 @@ Module Type CORRECTNESS
           msem_node G f xss M M' yss ->
           sem_block_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
-      Forall (wc_equation G vars) eqs ->
+      Forall (NL.Clo.wc_equation G vars) eqs ->
       Forall (clock_match bk H) vars ->
       NoDup_defs eqs ->
       Forall (msem_equation G bk H M M') eqs ->
@@ -688,10 +684,6 @@ Module Type CORRECTNESS
       apply msem_node_memory_closed_rec_n in Hsem as (); auto.
       eapply equations_correctness in Heqs as (I & Heqs &?); eauto.
       + econstructor; eauto.
-        * specialize (Ins n); destruct node; simpl in *.
-          rewrite map_fst_idty; eauto.
-        * specialize (Outs n); destruct node; simpl in *.
-          rewrite map_fst_idty; eauto.
         * apply sem_equations_cons; eauto.
           apply not_Is_node_in_not_Is_block_in; auto.
         * apply memory_closed_rec_state_closed; auto.
@@ -745,9 +737,11 @@ Module CorrectnessFun
        (ExprSyn  : NLEXPRSYNTAX        Op)
        (Str      : STREAM              Op OpAux)
        (ExprSem  : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem)
-       (SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem NL.Syn NL.IsF)
+       (IsFExpr  : ISFREEEXPR      Ids Op       Clks ExprSyn)
+       (CloExpr  : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
+       (SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
        (Trans    : TRANSLATION     Ids Op       Clks ExprSyn             NL.Syn SB.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem NL SB Trans.
-  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem NL SB Trans.
+<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr NL SB Trans.
+  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr NL SB Trans.
 End CorrectnessFun.

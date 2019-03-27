@@ -4,8 +4,7 @@ Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
-Require Import Velus.NLustre.NLSyntax.
-Require Export Velus.NLustre.IsFree.
+Require Export Velus.NLustre.IsFreeExpr.
 
 Require Import List.
 Import List.ListNotations.
@@ -14,11 +13,10 @@ Open Scope list_scope.
 Module Type SBISFREE
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (SynNL          : NLSYNTAX     Ids Op Clks ExprSyn)
-       (Import IsF     : ISFREE       Ids Op Clks ExprSyn SynNL).
+       (Import Clks    : CLOCKS     Ids)
+       (Import ExprSyn : NLEXPRSYNTAX   Op)
+       (Import Syn     : SBSYNTAX   Ids Op Clks ExprSyn)
+       (Import IsFExpr : ISFREEEXPR Ids Op Clks ExprSyn).
 
   Inductive Is_free_in_eq: ident -> equation -> Prop :=
   | FreeEqDef:
@@ -91,11 +89,10 @@ End SBISFREE.
 Module SBIsFreeFun
        (Ids     : IDS)
        (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (SynNL          : NLSYNTAX     Ids Op Clks ExprSyn)
-       (IsF     : ISFREE       Ids Op Clks ExprSyn SynNL)
-<: SBISFREE Ids Op Clks ExprSyn Syn SynNL IsF.
-  Include SBISFREE Ids Op Clks ExprSyn Syn SynNL IsF.
+       (Clks    : CLOCKS     Ids)
+       (ExprSyn : NLEXPRSYNTAX   Op)
+       (Syn     : SBSYNTAX   Ids Op Clks ExprSyn)
+       (IsFExpr : ISFREEEXPR Ids Op Clks ExprSyn)
+<: SBISFREE Ids Op Clks ExprSyn Syn IsFExpr.
+  Include SBISFREE Ids Op Clks ExprSyn Syn IsFExpr.
 End SBIsFreeFun.

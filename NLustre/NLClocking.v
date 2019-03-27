@@ -4,11 +4,16 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
+Require Import Velus.NLustre.IsFreeExpr.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLClockingExpr.
+
 Require Import List.
+Require Import Morphisms.
+Import Permutation.
 
 (** * Well clocked programs *)
 
@@ -22,106 +27,43 @@ wrt. its clock annotations.
 Module Type NLCLOCKING
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS    Ids)
-       (Import ExprSyn : NLEXPRSYNTAX  Op)
-       (Import Syn     : NLSYNTAX  Ids Op Clks ExprSyn)
-       (Import Ord     : ORDERED   Ids Op Clks ExprSyn Syn)
-       (Import Mem     : MEMORIES  Ids Op Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED Ids Op Clks ExprSyn Syn Mem)
-       (Import IsF     : ISFREE    Ids Op Clks ExprSyn Syn).
+       (Import Clks    : CLOCKS         Ids)
+       (Import ExprSyn : NLEXPRSYNTAX       Op)
+       (Import Syn     : NLSYNTAX       Ids Op Clks ExprSyn)
+       (Import Ord     : ORDERED        Ids Op Clks ExprSyn Syn)
+       (Import Mem     : MEMORIES       Ids Op Clks ExprSyn Syn)
+       (Import IsD     : ISDEFINED      Ids Op Clks ExprSyn Syn Mem)
+       (Import IsFExpr : ISFREEEXPR     Ids Op Clks ExprSyn)
+       (Import IsF     : ISFREE         Ids Op Clks ExprSyn Syn IsFExpr)
+       (Import CloExpr : NLCLOCKINGEXPR Ids Op Clks ExprSyn).
 
-  Section WellClocked.
-
-    Variable G    : global.
-    Variable vars : list (ident * clock).
-
-    Inductive wc_lexp : lexp -> clock -> Prop :=
-    | Cconst:
-        forall c,
-          wc_lexp (Econst c) Cbase
-    | Cvar:
-        forall x ck ty,
-          In (x, ck) vars ->
-          wc_lexp (Evar x ty) ck
-    | Cwhen:
-        forall e x b ck,
-          wc_lexp e ck ->
-          In (x, ck) vars ->
-          wc_lexp (Ewhen e x b) (Con ck x b)
-    | Cunop:
-        forall op e ck ty,
-          wc_lexp e ck ->
-          wc_lexp (Eunop op e ty) ck
-    | Cbinop:
-        forall op e1 e2 ck ty,
-          wc_lexp e1 ck ->
-          wc_lexp e2 ck ->
-          wc_lexp (Ebinop op e1 e2 ty) ck.
-
-    Inductive wc_cexp : cexp -> clock -> Prop :=
-    | Cmerge:
-        forall x t f ck,
-          In (x, ck) vars ->
-          wc_cexp t (Con ck x true) ->
-          wc_cexp f (Con ck x false) ->
-          wc_cexp (Emerge x t f) ck
-    | Cite:
-        forall b t f ck,
-          wc_lexp b ck ->
-          wc_cexp t ck ->
-          wc_cexp f ck ->
-          wc_cexp (Eite b t f) ck
-    | Cexp:
-        forall e ck,
-          wc_lexp e ck ->
-          wc_cexp (Eexp e) ck.
-
-    (* TODO: move to Common *)
-    Definition orelse {A B: Type}
-                      (f: A -> option B) (g: A -> option B) (x: A) : option B :=
-      match f x with
-      | None => g x
-      | r => r
-      end.
-
-    Definition subvar_eq (vo : option ident) (le : lexp) : Prop :=
-      match vo with
-      | Some v => match le with
-                  | Evar x _ => v = x
-                  | _ => False
-                  end
-      | None => True
-      end.
-
-    Inductive wc_equation : equation -> Prop :=
-    | CEqDef:
-        forall x ck ce,
-          In (x, ck) vars ->
-          wc_cexp ce ck ->
-          wc_equation (EqDef x ck ce)
-    | CEqApp:
-        forall xs ck f les r n,
-          find_node f G = Some n ->
-          (exists isub osub,
-              Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
-                                  /\ (exists lck, wc_lexp le lck
-                                            /\ instck ck isub (dck xtc) = Some lck))
-                      n.(n_in) les
-              /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
-                                   /\ (exists xck, In (x, xck) vars
-                                             /\ instck ck (orelse isub osub)
-                                                      (dck xtc) = Some xck))
-                        n.(n_out) xs
-              /\ (forall x, ~InMembers x n.(n_out) -> osub x = None)) ->
-          (forall y, r = Some y -> In (y, ck) vars) ->
-          wc_equation (EqApp xs ck f les r)
-    | CEqFby:
-        forall x ck v0 le,
-          In (x, ck) vars ->
-          wc_lexp le ck ->
-          wc_equation (EqFby x ck v0 le).
-
-  End WellClocked.
+  Inductive wc_equation (G: global) (vars: list (ident * clock)): equation -> Prop :=
+  | CEqDef:
+      forall x ck ce,
+        In (x, ck) vars ->
+        wc_cexp vars ce ck ->
+        wc_equation G vars (EqDef x ck ce)
+  | CEqApp:
+      forall xs ck f les r n,
+        find_node f G = Some n ->
+        (exists isub osub,
+            Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
+                                /\ (exists lck, wc_lexp vars le lck
+                                          /\ instck ck isub (dck xtc) = Some lck))
+                    n.(n_in) les
+            /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
+                                 /\ (exists xck, In (x, xck) vars
+                                           /\ instck ck (orelse isub osub)
+                                                    (dck xtc) = Some xck))
+                      n.(n_out) xs
+            /\ (forall x, ~InMembers x n.(n_out) -> osub x = None)) ->
+        (forall y, r = Some y -> In (y, ck) vars) ->
+        wc_equation G vars (EqApp xs ck f les r)
+  | CEqFby:
+      forall x ck v0 le,
+        In (x, ck) vars ->
+        wc_lexp vars le ck ->
+        wc_equation G vars (EqFby x ck v0 le).
 
   Definition wc_node (G: global) (n: node) : Prop :=
     wc_env (idck (n.(n_in))) /\
@@ -146,79 +88,9 @@ Module Type NLCLOCKING
   | HcEqFby: forall x v0 ck le,
       Has_clock_eq ck (EqFby x ck v0 le).
 
-  (** ** Basic properties of clocking *)
-
-  Lemma wc_clock_lexp:
-    forall vars le ck,
-      wc_env vars
-      -> wc_lexp vars le ck
-      -> wc_clock vars ck.
-  Proof.
-    induction le as [| |le IH | |] (* using lexp_ind2 *).
-    - inversion_clear 2; now constructor.
-    - intros ck Hwc; inversion_clear 1 as [|? ? ? Hcv| | |].
-      apply wc_env_var with (1:=Hwc) (2:=Hcv).
-    - intros ck Hwc.
-      inversion_clear 1 as [| |? ? ? ck' Hle Hcv | |].
-      constructor; [now apply IH with (1:=Hwc) (2:=Hle)|assumption].
-    - intros ck Hwc; inversion_clear 1; auto.
-    - intros ck Hwc; inversion_clear 1; auto.
-  Qed.
-
-  Lemma wc_clock_cexp:
-    forall vars ce ck,
-      wc_env vars
-      -> wc_cexp vars ce ck
-      -> wc_clock vars ck.
-  Proof.
-    induction ce as [i ce1 IH1 ce2 IH2| |].
-    - intros ck Hwc.
-      inversion_clear 1 as [? ? ? ? Hcv Hct Hcf| |].
-      apply IH1 with (1:=Hwc) in Hct.
-      inversion_clear Hct; assumption.
-    - intros ck Hwc; inversion_clear 1 as [|? ? ? ? Hl H1 H2|].
-      now apply IHce1.
-    - intros ck Hwc; inversion_clear 1 as [| |? ? Hck].
-      apply wc_clock_lexp with (1:=Hwc) (2:=Hck).
-  Qed.
-
   Hint Constructors wc_clock wc_lexp wc_cexp wc_equation wc_global : nlclocking.
   Hint Unfold wc_env wc_node : nlclocking.
   Hint Resolve Forall_nil : nlclocking.
-
-  Require Import Morphisms.
-  Import Permutation.
-
-  Instance wc_lexp_Proper:
-    Proper (@Permutation (ident * clock) ==> @eq lexp ==> @eq clock ==> iff)
-           wc_lexp.
-  Proof.
-    intros env' env Henv e' e He ck' ck Hck.
-    rewrite He, Hck; clear He Hck e' ck'.
-    revert ck.
-    induction e;
-      split; auto with nlclocking;
-        inversion_clear 1;
-        (rewrite Henv in * || rewrite <-Henv in * || idtac);
-        try edestruct IHe;
-        try edestruct IHe1, IHe2;
-        auto with nlclocking.
-  Qed.
-
-  Instance wc_cexp_Proper:
-    Proper (@Permutation (ident * clock) ==> @eq cexp ==> @eq clock ==> iff)
-           wc_cexp.
-  Proof.
-    intros env' env Henv e' e He ck' ck Hck.
-    rewrite He, Hck; clear He Hck e' ck'.
-    revert ck.
-    induction e;
-      split; inversion_clear 1;
-        (rewrite Henv in * || rewrite <-Henv in *);
-         constructor; auto;
-         now (rewrite <-IHe1 || rewrite IHe1
-              || rewrite <-IHe2 || rewrite IHe2).
-  Qed.
 
   Instance wc_equation_Proper:
     Proper (@eq global ==> @Permutation (ident * clock) ==> @eq equation ==> iff)
@@ -451,13 +323,15 @@ End NLCLOCKING.
 Module NLClockingFun
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS    Ids)
-       (Import ExprSyn : NLEXPRSYNTAX  Op)
-       (Import Syn     : NLSYNTAX  Ids Op Clks ExprSyn)
-       (Import Ord     : ORDERED   Ids Op Clks ExprSyn Syn)
-       (Import Mem     : MEMORIES  Ids Op Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED Ids Op Clks ExprSyn Syn Mem)
-       (Import IsF     : ISFREE    Ids Op Clks ExprSyn Syn)
-  <: NLCLOCKING Ids Op Clks ExprSyn Syn Ord Mem IsD IsF.
-  Include NLCLOCKING Ids Op Clks ExprSyn Syn Ord Mem IsD IsF.
+       (Import Clks    : CLOCKS         Ids)
+       (Import ExprSyn : NLEXPRSYNTAX       Op)
+       (Import Syn     : NLSYNTAX       Ids Op Clks ExprSyn)
+       (Import Ord     : ORDERED        Ids Op Clks ExprSyn Syn)
+       (Import Mem     : MEMORIES       Ids Op Clks ExprSyn Syn)
+       (Import IsD     : ISDEFINED      Ids Op Clks ExprSyn Syn Mem)
+       (Import IsFExpr : ISFREEEXPR     Ids Op Clks ExprSyn)
+       (Import IsF     : ISFREE         Ids Op Clks ExprSyn Syn IsFExpr)
+       (Import CloExpr : NLCLOCKINGEXPR Ids Op Clks ExprSyn)
+  <: NLCLOCKING Ids Op Clks ExprSyn Syn Ord Mem IsD IsFExpr IsF CloExpr.
+  Include NLCLOCKING Ids Op Clks ExprSyn Syn Ord Mem IsD IsFExpr IsF CloExpr.
 End NLClockingFun.

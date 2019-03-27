@@ -80,11 +80,11 @@ Module Type SBSYNTAX
   Record block :=
     Block {
         b_name  : ident;
-        b_in    : list (ident * type);
-        b_vars  : list (ident * type);
-        b_lasts : list (ident * const);
+        b_in    : list (ident * (type * clock));
+        b_vars  : list (ident * (type * clock));
+        b_lasts : list (ident * (const * clock));
         b_blocks: list (ident * ident);
-        b_out   : list (ident * type);
+        b_out   : list (ident * (type * clock));
         b_eqs   : list equation;
 
         b_ingt0 : 0 < length b_in;

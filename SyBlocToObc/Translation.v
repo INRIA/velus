@@ -81,24 +81,34 @@ Module Type TRANSLATION
 
   End Translate.
 
+  Lemma ValidIds_idty:
+    forall A B (xs: list (ident * (A * B))),
+    Forall ValidId xs ->
+    Forall ValidId (idty xs).
+  Proof.
+    induction 1; constructor; auto.
+  Qed.
+
   Program Definition step_method (b: block) : method :=
     let memids := map fst b.(b_lasts) in
     let mems := ps_from_list memids in
     {| m_name := step;
-       m_in   := b.(b_in);
-       m_vars := b.(b_vars);
-       m_out  := b.(b_out);
+       m_in   := idty b.(b_in);
+       m_vars := idty b.(b_vars);
+       m_out  := idty b.(b_out);
        m_body := translate_eqns mems b.(b_eqs)
     |}.
   Next Obligation.
-    apply b_nodup_vars.
+    rewrite <-2 idty_app;
+      apply NoDupMembers_idty, b_nodup_vars.
   Qed.
   Next Obligation.
-    apply b_good.
+    rewrite <-2 idty_app;
+      apply ValidIds_idty, b_good.
   Qed.
 
-  Definition reset_mems (mems: list (ident * const)) : stmt :=
-    fold_left (fun s xc => Comp s (AssignSt (fst xc) (Const (snd xc)))) mems Skip.
+  Definition reset_mems (mems: list (ident * (const * clock))) : stmt :=
+    fold_left (fun s xc => Comp s (AssignSt (fst xc) (Const (fst (snd xc))))) mems Skip.
 
   Definition reset_insts (insts: list (ident * ident)) : stmt :=
     fold_left (fun s xf => Comp s (Call [] (snd xf) (fst xf) reset [])) insts Skip.
@@ -118,7 +128,7 @@ Module Type TRANSLATION
 
   Program Definition translate_block (b: block) : class :=
     {| c_name    := b.(b_name);
-       c_mems    := map (fun xc => (fst xc, type_const (snd xc))) b.(b_lasts);
+       c_mems    := map (fun xc => (fst xc, type_const (fst (snd xc)))) b.(b_lasts);
        c_objs    := b.(b_blocks);
        c_methods := [ step_method b; reset_method b ]
     |}.
@@ -163,7 +173,7 @@ Module Type TRANSLATION
   Lemma find_method_stepm_out:
     forall block stepm,
       find_method step (translate_block block).(c_methods) = Some stepm ->
-      stepm.(m_out) = block.(b_out).
+      stepm.(m_out) = idty block.(b_out).
   Proof.
     intros ??; simpl.
     rewrite ident_eqb_refl.
@@ -173,7 +183,7 @@ Module Type TRANSLATION
   Lemma find_method_stepm_in:
     forall block stepm,
       find_method step (translate_block block).(c_methods) = Some stepm ->
-      stepm.(m_in) = block.(b_in).
+      stepm.(m_in) = idty block.(b_in).
   Proof.
     intros ??; simpl.
     rewrite ident_eqb_refl.

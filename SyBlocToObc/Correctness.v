@@ -1,18 +1,10 @@
-Require Import Velus.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.RMemory.
-
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.NLExprSemantics.
-Require Import Velus.NLustre.IsFree.
-
 Require Import Velus.SyBloc.
 Require Import Velus.Obc.
 
 Require Import Velus.SyBlocToObc.Translation.
 Require Import Velus.SyBlocToObc.SBMemoryCorres.
+
+Require Import Velus.RMemory.
 
 Require Import List.
 Import List.ListNotations.
@@ -29,9 +21,9 @@ Module Type CORRECTNESS
        (Import ExprSyn : NLEXPRSYNTAX        Op)
        (Import Str     : STREAM              Op OpAux)
        (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (SynNL          : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn             SynNL)
-       (Import SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF)
+       (Import IsFExpr : ISFREEEXPR      Ids Op       Clks ExprSyn)
+       (Import CloExpr : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (Import SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
        (Import Obc     : OBC             Ids Op OpAux)
        (Import Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
        (Import Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SB.Syn SB.Last).
@@ -285,8 +277,8 @@ Module Type CORRECTNESS
 
   (** Reset correctness *)
 
-  Definition add_mems (mems: list (ident * const)) (me: menv) : menv :=
-    Mem (fold_left (fun vs xc => Env.add (fst xc) (sem_const (snd xc)) vs) mems (values me))
+  Definition add_mems (mems: list (ident * (const * clock))) (me: menv) : menv :=
+    Mem (fold_left (fun vs xc => Env.add (fst xc) (sem_const (fst (snd xc))) vs) mems (values me))
         (instances me).
 
   Lemma find_inst_add_mems:
@@ -295,8 +287,8 @@ Module Type CORRECTNESS
   Proof. reflexivity. Qed.
 
   Lemma add_mems_cons:
-    forall x c xs me,
-      add_mems ((x, c) :: xs) me = add_mems xs (add_val x (sem_const c) me).
+    forall x c ck xs me,
+      add_mems ((x, (c, ck)) :: xs) me = add_mems xs (add_val x (sem_const c) me).
   Proof. reflexivity. Qed.
 
   Lemma add_mems_nil:
@@ -305,25 +297,25 @@ Module Type CORRECTNESS
   Proof. destruct me; reflexivity. Qed.
 
   Lemma add_mems_gss:
-    forall x c xs me,
+    forall x c ck xs me,
       ~ InMembers x xs ->
-      find_val x (add_mems ((x, c) :: xs) me) = Some (sem_const c).
+      find_val x (add_mems ((x, (c, ck)) :: xs) me) = Some (sem_const c).
   Proof.
     intros ** Notin; rewrite add_mems_cons.
-    revert me; induction xs as [|()]; intros.
+    revert me; induction xs as [|(?,())]; intros.
     - now rewrite add_mems_nil, find_val_gss.
     - apply NotInMembers_cons in Notin as ().
       rewrite add_mems_cons, add_val_comm; auto.
   Qed.
 
   Lemma find_val_add_mems_in:
-    forall x c xs me,
+    forall x c ck xs me,
       NoDupMembers xs ->
-      In (x, c) xs ->
+      In (x, (c, ck)) xs ->
       find_val x (add_mems xs me) = Some (sem_const c).
   Proof.
     intros ** Nodup Hin.
-    revert me; induction xs as [|()]; intros.
+    revert me; induction xs as [|(?,())]; intros.
     - inversion Hin.
     - inv Nodup.
       destruct Hin as [E|?].
@@ -335,19 +327,19 @@ Module Type CORRECTNESS
   Lemma find_val_add_mems_inv:
     forall x xs me v,
       find_val x (add_mems xs me) = Some v ->
-      (NoDupMembers xs -> InMembers x xs -> exists c, v = sem_const c /\ In (x, c) xs)
+      (NoDupMembers xs -> InMembers x xs -> exists c ck, v = sem_const c /\ In (x, (c, ck)) xs)
       /\
       (~ InMembers x xs -> find_val x me = Some v).
   Proof.
     intros ** Find; split; [intros ** Nodup Hin|intros ** Hin].
-    - revert dependent me; induction xs as [|(x', c)]; intros;
+    - revert dependent me; induction xs as [|(x', (c, ck))]; intros;
         inv Hin; inv Nodup.
       + rewrite add_mems_gss in Find; auto; inv Find.
-        exists c; intuition.
+        exists c, ck; intuition.
       + rewrite add_mems_cons in Find.
-        edestruct IHxs as (?&?&?); eauto.
-        eexists; intuition; eauto; right; auto.
-    - revert dependent me; induction xs as [|(x', c')]; intros.
+        edestruct IHxs as (?&?&?&?); eauto.
+        do 2 eexists; intuition; eauto; right; eauto.
+    - revert dependent me; induction xs as [|(x', (c', ck'))]; intros.
       + now rewrite add_mems_nil in Find.
       + rewrite add_mems_cons in Find.
         apply NotInMembers_cons in Hin as ().
@@ -360,7 +352,7 @@ Module Type CORRECTNESS
       stmt_eval prog me ve (reset_mems mems) (add_mems mems me, ve).
   Proof.
     unfold reset_mems.
-    induction mems as [|(x, c)]; simpl; intros.
+    induction mems as [|(x, (c, ck))]; simpl; intros.
     - rewrite add_mems_nil; eauto using stmt_eval.
     - rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
       do 2 eexists; split; eauto using stmt_eval, exp_eval.
@@ -386,7 +378,7 @@ Module Type CORRECTNESS
       reset_lasts bl (add_mems bl.(b_lasts) me).
   Proof.
     unfold reset_lasts; intros.
-    apply find_val_add_mems_in; auto.
+    eapply find_val_add_mems_in; eauto.
     apply b_nodup_lasts.
   Qed.
 
@@ -424,7 +416,7 @@ Module Type CORRECTNESS
     unfold reset_insts.
     induction blocks; simpl.
     - inversion_clear 1; auto.
-    - intros ** StEval Lasts ?? Hin.
+    - intros ** StEval Lasts ??? Hin.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHblocks in StEvals; eauto.
       rewrite Comp_Skip_left in StEval; inv StEval.
@@ -487,7 +479,7 @@ Module Type CORRECTNESS
       stmt_call_eval (translate P) me b reset [] me' [] ->
       reset_lasts bl me'.
   Proof.
-    intros ** Find Spec Rst ?? Hin.
+    intros ** Find Spec Rst ??? Hin.
     eapply call_reset_inv in Rst as (Rst); eauto;
       apply translate_reset_comp in Rst as ().
     eapply reset_insts_reset_lasts; eauto.
@@ -1228,7 +1220,7 @@ Module Type CORRECTNESS
         * intros; apply lasts_of_In, ps_from_list_In; auto.
           rewrite <-b_lasts_in_eqs; auto.
         * intros; apply b_ins_not_def, fst_InMembers; auto.
-        *{ intros ** Hin Hvar; apply Env.In_find_adds; simpl.
+        *{ intros ** Hin Hvar; apply Env.In_find_adds; simpl; rewrite map_fst_idty.
            - pose proof (b_nodup bl) as Nodup.
              apply NoDup_app_weaken in Nodup; auto.
            - eapply Forall2_in_left_combine in Hin; eauto.
@@ -1244,7 +1236,7 @@ Module Type CORRECTNESS
               + simpl.
                 unfold sem_vars_instant in Outs; rewrite Forall2_map_2 in Outs.
                 apply Forall2_forall in Outs as (Outs & Length).
-                apply Forall2_forall; split; auto.
+                apply Forall2_forall; split; rewrite map_fst_idty; auto.
                 intros ** Hin.
                 apply Equiv; auto.
                 apply Is_variable_in_variables; rewrite <-b_vars_out_in_eqs, in_app.
@@ -1308,12 +1300,12 @@ Module CorrectnessFun
        (ExprSyn : NLEXPRSYNTAX        Op)
        (Str     : STREAM              Op OpAux)
        (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (SynNL          : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (IsF     : ISFREE          Ids Op       Clks ExprSyn             SynNL)
-       (SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF)
+       (IsFExpr : ISFREEEXPR      Ids Op       Clks ExprSyn)
+       (CloExpr : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
        (Obc     : OBC             Ids Op OpAux)
        (Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
        (Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SB.Syn SB.Last)
-<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF SB Obc Trans Corres.
-  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem SynNL IsF SB Obc Trans Corres.
+<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans Corres.
+  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans Corres.
 End CorrectnessFun.

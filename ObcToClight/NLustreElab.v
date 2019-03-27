@@ -13,6 +13,7 @@ Module Import Defs := Instantiator.NL.IsD.
 Import Interface.Op.
 Import Instantiator.OpAux.
 Import Instantiator.NL.Typ.
+Import Instantiator.CloExpr.
 Import Instantiator.NL.Clo.
 
 Require Import List.

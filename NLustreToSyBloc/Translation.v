@@ -28,16 +28,16 @@ Module Type TRANSLATION
        (SynSB          : SBSYNTAX Ids Op Clks ExprSyn)
        (Import Mem     : MEMORIES Ids Op Clks ExprSyn SynNL).
 
-  Definition gather_eq (acc: list (ident * const) * list (ident * ident)) (eq: equation):
-    list (ident * const) * list (ident * ident) :=
+  Definition gather_eq (acc: list (ident * (const * clock)) * list (ident * ident)) (eq: equation):
+    list (ident * (const * clock)) * list (ident * ident) :=
     match eq with
     | EqDef _ _ _ => acc
     | EqApp [] _ _ _ _ => acc
     | EqApp (x :: _) _ f _ _ => (fst acc, (x, f) :: snd acc)
-    | EqFby x _ c0 _ => ((x, c0) :: fst acc, snd acc)
+    | EqFby x ck c0 _ => ((x, (c0, ck)) :: fst acc, snd acc)
     end.
 
-  Definition gather_eqs (eqs: list equation) : list (ident * const) * list (ident * ident) :=
+  Definition gather_eqs (eqs: list equation) : list (ident * (const * clock)) * list (ident * ident) :=
     fold_left gather_eq eqs ([], []).
 
   (** ** Translation *)
@@ -227,33 +227,31 @@ Module Type TRANSLATION
       destruct x as (x & tyck); constructor; try rewrite IHxs in *; auto.
   Qed.
 
+  Hint Resolve n_ingt0.
+
   (* =translate_node= *)
   Program Definition translate_node (n: node) : SynSB.block :=
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
     let lasts := fst gathered in
-    let lasts_ids := ps_from_list (map fst lasts) in
+    let lasts_ids := ps_from_list (map fst (fst gathered)) in
     let blocks := snd gathered in
     let partitioned := partition (fun x => PS.mem (fst x) lasts_ids) n.(n_vars) in
     let vars := snd partitioned in
     {| SynSB.b_name  := n.(n_name);
        SynSB.b_blocks := blocks;
-       SynSB.b_in   := idty n.(n_in);
-       SynSB.b_vars := idty vars;
+       SynSB.b_in   := n.(n_in);
+       SynSB.b_vars := vars;
        SynSB.b_lasts := lasts;
-       SynSB.b_out  := idty n.(n_out);
+       SynSB.b_out  := n.(n_out);
        SynSB.b_eqs  := translate_eqns n.(n_eqs)
     |}.
-  Next Obligation.
-    rewrite length_idty; apply n_ingt0.
-  Qed.
   Next Obligation.
     rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
     setoid_rewrite ps_from_list_gather_eqs_memories.
     apply NoDup_comm.
-    rewrite app_assoc, map_fst_idty, <-map_app, <-permutation_partition.
-    rewrite 2 map_fst_idty.
+    rewrite app_assoc, <-map_app, <-permutation_partition.
     apply NoDup_comm.
     rewrite app_assoc, <-2 map_app, <-app_assoc.
     apply fst_NoDupMembers, n_nodup.
@@ -297,7 +295,7 @@ Module Type TRANSLATION
     destruct o; simpl; auto.
   Qed.
   Next Obligation.
-    rewrite 2 map_fst_idty, <-map_app.
+    rewrite <-map_app.
     assert (Permutation (map fst
                              (snd
                                 (partition
@@ -400,8 +398,7 @@ Module Type TRANSLATION
   Next Obligation.
     pose proof n.(n_good) as [ValidApp].
     split; [|split; [|split]]; auto.
-    - repeat rewrite <-idty_app. apply Forall_ValidId_idty.
-      rewrite (Permutation_app_comm n.(n_in)).
+    - rewrite (Permutation_app_comm n.(n_in)).
       rewrite Permutation_app_assoc.
       match goal with |- context [snd (partition ?p ?l)] =>
                       apply (Forall_app_weaken (fst (partition p l))) end.

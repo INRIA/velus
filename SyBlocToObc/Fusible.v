@@ -6,8 +6,8 @@ Require Import Velus.Clocks.
 
 Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLExprSemantics.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.IsFree.
+Require Import Velus.NLustre.IsFreeExpr.
+Require Import Velus.NLustre.NLClockingExpr.
 Require Import Velus.SyBloc.
 Require Import Velus.Obc.
 Require Import Velus.SyBlocToObc.Translation.
@@ -24,9 +24,9 @@ Module Type FUSIBLE
        (Import ExprSyn: NLEXPRSYNTAX        Op)
        (Import Str    : STREAM              Op OpAux)
        (Import ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (Import SynNL  : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (Import FreeNL : ISFREE          Ids Op       Clks ExprSyn     SynNL)
-       (Import SB     : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem SynNL FreeNL)
+       (Import IsFExpr: ISFREEEXPR          Ids Op       Clks ExprSyn)
+       (Import CloExpr: NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (Import SB     : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
        (Import Obc    : OBC             Ids Op OpAux)
        (Import Trans  : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn).
 
@@ -149,124 +149,137 @@ Module Type FUSIBLE
 
   Lemma translate_eqns_Fusible:
     forall vars mems inputs eqs,
-      wc_env vars
-      -> NoDupMembers vars
-      -> Forall (wc_equation vars) eqs
-      -> Is_well_sch mems inputs eqs
-      -> (forall x, PS.In x mems -> ~Is_variable_in x eqs)
-      -> (forall input, In input inputs -> ~ Is_defined_in input eqs)
-      -> Fusible (translate_eqns mems eqs).
+      wc_env vars ->
+      NoDupMembers vars ->
+      Forall (wc_equation vars) eqs ->
+      Is_well_sch inputs mems eqs ->
+      (forall x, PS.In x mems -> ~ Is_variable_in x eqs) ->
+      (forall input, In input inputs -> ~ Is_defined_in input eqs) ->
+      Fusible (translate_eqns mems eqs).
   Proof.
     intros ** Hwk Hnd Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
-    inversion Hwks as [|eq' eqs' Hwkeq Hwks']; subst.
-    specialize (IH Hwks' (Is_well_sch_cons _ _ _ _ Hwsch)).
+    inversion_clear Hwks as [|?? Hwkeq];
+      inversion_clear Hwsch as [|??? HH Hndef].
     unfold translate_eqns.
     simpl; apply Fusible_fold_left_shift.
     split.
-    - apply IH.
+    - apply IH; auto.
       + intros x Hin; apply Hnvi in Hin.
-        apply not_Is_variable_in_cons in Hin.
-        now intuition.
-      + intros x Hin. apply Hnin in Hin.
-        apply not_Is_defined_in_cons in Hin.
-        now intuition.
+        intro; apply Hin; right; auto.
+      + intros x Hin; apply Hnin in Hin.
+        intro; apply Hin; right; auto.
     - clear IH.
       repeat constructor.
-      destruct eq as [x ck e|x ck f e|x ck v0 e]; simpl.
+      destruct eq as [x ck e|x ck e|x ck v0 e|s xs ck ? f es]; simpl.
       + assert (~PS.In x mems) as Hnxm
             by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
-        inversion_clear Hwsch as [|? ? Hwsch' HH Hndef].
         assert (forall i, Is_free_in_caexp i ck e -> x <> i) as Hfni.
         { intros i Hfree.
           assert (Hfree': Is_free_in_eq i (EqDef x ck e)) by auto.
           eapply HH in Hfree'.
-          destruct Hfree' as [Hm Hnm].
-          assert (~ In x inputs) as Hninp
-              by (intro Hin; eapply Hnin; eauto; do 2 constructor).
-          assert (~PS.In x mems) as Hnxm' by intuition.
-          intro Hxi; rewrite Hxi in *; clear Hxi.
-          specialize (Hnm Hnxm').
-          eapply Hndef; intuition.
-          now eapply Is_variable_in_eqs_Is_defined_in_eqs.
+          intro; subst.
+          apply mem_spec_false in Hnxm; rewrite Hnxm in Hfree'.
+          destruct Hfree' as [Hvar|Hin].
+          - eapply Hndef; eauto using Is_defined_in_eq.
+            apply Is_variable_in_Is_defined_in; auto.
+          - eapply Hnin; eauto.
+            left; constructor.
         }
         apply Fusible_Control_caexp.
-        intros i Hfree.
-        apply not_Can_write_in_translate_cexp.
-        eapply Hfni; auto.
-        apply Fusible_translate_cexp.
-        intros i Hfree; apply Hfni; intuition.
-      + assert (forall i,
-                   Is_free_in_clock i ck ->
-                   ~ Can_write_in i (Call x f (hd Ids.default x)
-                                          step (map (translate_lexp mems) e))).
-        {
-          intros ** Hwrite.
-          assert (In i x) by now inv Hwrite.
-          now eapply wc_EqApp_not_Is_free_in_clock; eauto.
-        }
-
-        now apply Fusible_Control_laexp.
-      + assert (~Is_free_in_clock x ck) as Hnfree
-            by (eapply wc_EqFby_not_Is_free_in_clock; eauto).
-        apply Fusible_Control_laexp;
-          [intros i Hfree Hcw; inversion Hcw; subst; contradiction|intuition].
+        * intros; apply not_Can_write_in_translate_cexp.
+          eapply Hfni; auto.
+        * apply Fusible_translate_cexp.
+          intros; apply Hfni; intuition.
+      + apply Fusible_Control_laexp; auto.
+        assert (~Is_free_in_clock x ck) as Hnfree
+            by (eapply wc_EqNext_not_Is_free_in_clock; eauto).
+        inversion 2; subst;  contradiction.
+      + apply Fusible_Control_laexp; auto.
+        inversion 2; contradiction.
+      + apply Fusible_Control_laexp; auto.
+        intros ** Hwrite.
+        assert (In x xs) by now inv Hwrite.
+        now eapply wc_EqCall_not_Is_free_in_clock; eauto.
   Qed.
 
-  Lemma translate_reset_eqns_Fusible:
-    forall eqs,
-      Fusible (translate_reset_eqns eqs).
+  Lemma reset_mems_Fusible:
+    forall mems,
+      Fusible (reset_mems mems).
   Proof.
-    intro eqs.
-    unfold translate_reset_eqns.
+    intro; unfold reset_mems.
     assert (Fusible Skip) as Hf by auto.
-    revert Hf. generalize Skip.
-    induction eqs as [|eq eqs]; intros s Hf; auto.
-    simpl. apply IHeqs.
-    destruct eq; simpl; auto.
+    revert Hf; generalize Skip.
+    induction mems as [|(x, (c, ck))]; intros s Hf; simpl; auto.
+  Qed.
+  Hint Resolve reset_mems_Fusible.
+
+  Lemma reset_insts_Fusible:
+    forall blocks,
+      Fusible (reset_insts blocks).
+  Proof.
+    intro; unfold reset_insts.
+    assert (Fusible Skip) as Hf by auto.
+    revert Hf; generalize Skip.
+    induction blocks as [|(x, f)]; intros s Hf; simpl; auto.
+  Qed.
+  Hint Resolve reset_insts_Fusible.
+
+  Lemma NoDup_swap:
+    forall A (x y z: list A),
+      NoDup (x ++ y ++ z) <->
+      NoDup (y ++ x ++ z).
+  Proof.
+    induction x; simpl; try reflexivity.
+    split; intros ** Nodup.
+    - inversion_clear Nodup as [|?? Notin]; apply NoDup_app_cons; split.
+      + intro Hin; apply Notin; rewrite 2 in_app.
+        apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
+      + now apply IHx.
+    - apply NoDup_app_cons in Nodup as (Notin &?).
+      constructor.
+      + intro Hin; apply Notin; rewrite 2 in_app.
+        apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
+      + now apply IHx.
   Qed.
 
   Lemma ClassFusible_translate:
-    forall G,
-      wc_global G ->
-      Welldef_global G ->
-      Forall ClassFusible (translate G).
+    forall P,
+      wc_program P ->
+      Well_scheduled P ->
+      Forall ClassFusible (translate P).
   Proof.
-    induction G as [|n G].
-    now intros; simpl; auto using Forall_nil.
-    intros WcG WdG.
-    inversion_clear WcG as [|? ? Wcn].
-    simpl; constructor; auto.
-    unfold translate_node, ClassFusible.
-    repeat constructor; simpl.
-    - rewrite ps_from_list_gather_eqs_memories.
-      assert (NoDup_defs n.(n_eqs)).
-      apply NoDup_defs_NoDup_vars_defined.
-      apply NoDup_var_defined_n_eqs.
-      pose proof (not_Exists_Is_defined_in_eqs_n_in n) as Hin.
-      inv Wcn. inv WdG. simpl in *.
-      eapply translate_eqns_Fusible; eauto.
-      + apply NoDupMembers_idck, n_nodup.
-      + intros.
-        apply not_Is_variable_in_memories; auto.
-      + intros i' Hin' Hdef.
-        apply Hin, Exists_exists.
-        exists i'. intuition.
-    - apply translate_reset_eqns_Fusible.
-    - inv WdG. apply IHG; auto.
+    induction P as [|b]; intros ** WC Wsch;
+      inversion_clear WC as [|??? WCb];
+      inversion_clear Wsch as [|??? Wsch'];
+      simpl; constructor; auto.
+    unfold translate_block, ClassFusible; simpl.
+    repeat constructor; simpl; auto.
+    inversion_clear WCb as [? (?&?&?)].
+    eapply translate_eqns_Fusible; eauto.
+    - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
+      rewrite 2 map_app, <-app_assoc, NoDup_swap.
+      apply NoDup_comm; rewrite <-app_assoc; apply b_nodup.
+    - intros; eapply Is_last_in_not_Is_variable_in; eauto.
+      rewrite lasts_of_In, <-ps_from_list_In, <-b_lasts_in_eqs; auto.
+    - intros; apply b_ins_not_def, fst_InMembers; auto.
   Qed.
 
 End FUSIBLE.
 
 Module FusibleFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Clks  : CLOCKS Ids)
-       (NLus  : Velus.NLustre.NLUSTRE Ids Op OpAux Clks)
-       (Obc   : Velus.Obc.OBC Ids Op OpAux)
-       (Trans : Velus.NLustreToObc.Translation.TRANSLATION
-                         Ids Op OpAux Clks NLus.Syn Obc.Syn NLus.Mem)
-       <: FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
-  Include FUSIBLE Ids Op OpAux Clks NLus Obc Trans.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX       Op)
+       (Clks   : CLOCKS          Ids)
+       (ExprSyn: NLEXPRSYNTAX        Op)
+       (Str    : STREAM              Op OpAux)
+       (ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
+       (IsFExpr: ISFREEEXPR          Ids Op       Clks ExprSyn)
+       (CloExpr: NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (SB     : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
+       (Obc    : OBC             Ids Op OpAux)
+       (Trans  : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
+  <: FUSIBLE Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans.
+  Include FUSIBLE Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans.
 End FusibleFun.

@@ -6,9 +6,11 @@ Require Import Velus.NLustre.Stream.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.NLExprSyntax.
 Require Import Velus.NLustre.NLSyntax.
+Require Import Velus.NLustre.IsFreeExpr.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.NLustre.IsDefined.
+Require Import Velus.NLustre.NLClockingExpr.
 Require Import Velus.NLustre.NLClocking.
 Require Import Velus.NLustre.NLExprSemantics.
 Require Import Velus.NLustre.NLSemantics.
@@ -38,8 +40,10 @@ Module Type NLCLOCKINGSEMANTICS
        (Import Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
        (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
        (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
-       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
-       (Import Clkg    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsF).
+       (Import IsFExpr : ISFREEEXPR      Ids Op       Clks ExprSyn)
+       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn IsFExpr)
+       (Import CloExpr : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (Import Clkg    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsFExpr IsF CloExpr).
 
   Definition clock_match (base: stream bool) (H: history) (xc : ident * clock) : Prop :=
     forall n,
@@ -823,8 +827,10 @@ Module NLClockingSemanticsFun
        (Import Sem     : NLSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
        (Import Mem     : MEMORIES        Ids Op       Clks ExprSyn Syn)
        (Import IsD     : ISDEFINED       Ids Op       Clks ExprSyn Syn                 Mem)
-       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn)
-       (Import Clkg    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsF)
-<: NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF Clkg.
-  Include NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsF Clkg.
+       (Import IsFExpr : ISFREEEXPR      Ids Op       Clks ExprSyn)
+       (Import IsF     : ISFREE          Ids Op       Clks ExprSyn Syn IsFExpr)
+       (Import CloExpr : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
+       (Import Clkg    : NLCLOCKING      Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsFExpr IsF CloExpr)
+<: NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsFExpr IsF CloExpr Clkg.
+  Include NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsFExpr IsF CloExpr Clkg.
 End NLClockingSemanticsFun.
