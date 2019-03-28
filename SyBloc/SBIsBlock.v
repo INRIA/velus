@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
@@ -12,8 +12,8 @@ Module Type SBISBLOCK
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn).
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn).
 
   Inductive Is_block_in_eq : ident -> equation -> Prop :=
   | Is_block_inEqCall:
@@ -69,8 +69,8 @@ Module SBIsBlockFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-<: SBISBLOCK Ids Op Clks ExprSyn Syn.
-  Include SBISBLOCK Ids Op Clks ExprSyn Syn.
+       (CESyn : CESYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
+<: SBISBLOCK Ids Op Clks CESyn Syn.
+  Include SBISBLOCK Ids Op Clks CESyn Syn.
 End SBIsBlockFun.

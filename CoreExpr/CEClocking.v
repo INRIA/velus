@@ -2,26 +2,19 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 
 Require Import List.
 Require Import Morphisms.
 Import Permutation.
 
-(** * Well clocked programs *)
+(** * Well clocked expressions *)
 
-(**
-
-This family of predicates states that a program is well-clocked
-wrt. its clock annotations.
-
- *)
-
-Module Type NLCLOCKINGEXPR
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS     Ids)
-       (Import ExprSyn : NLEXPRSYNTAX  Op).
+Module Type CECLOCKING
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS Ids)
+       (Import Syn  : CESYNTAX Op).
 
   (* TODO: move to Common *)
   Definition orelse {A B: Type}
@@ -157,13 +150,13 @@ Module Type NLCLOCKINGEXPR
               || rewrite <-IHe2 || rewrite IHe2).
   Qed.
 
-End NLCLOCKINGEXPR.
+End CECLOCKING.
 
-Module NLClockingExprFun
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS     Ids)
-       (Import ExprSyn : NLEXPRSYNTAX   Op)
-  <: NLCLOCKINGEXPR Ids Op Clks ExprSyn.
-  Include NLCLOCKINGEXPR Ids Op Clks ExprSyn.
-End NLClockingExprFun.
+Module CEClockingFun
+       (Import Ids  : IDS)
+       (Import Op   : OPERATORS)
+       (Import Clks : CLOCKS Ids)
+       (Import Syn  : CESYNTAX Op)
+  <: CECLOCKING Ids Op Clks Syn.
+  Include CECLOCKING Ids Op Clks Syn.
+End CEClockingFun.

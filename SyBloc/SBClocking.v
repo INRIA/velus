@@ -2,9 +2,9 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.NLustre.NLClockingExpr.
+Require Import Velus.CoreExpr.CEClocking.
 Require Import Velus.SyBloc.SBIsLast.
 Require Import Velus.SyBloc.SBIsVariable.
 Require Import Velus.SyBloc.SBIsDefined.
@@ -24,12 +24,12 @@ Module Type SBCLOCKING
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS         Ids)
-       (Import ExprSyn : NLEXPRSYNTAX       Op)
-       (Import Syn     : SBSYNTAX       Ids Op Clks ExprSyn)
-       (Import Last    : SBISLAST       Ids Op Clks ExprSyn Syn)
-       (Import Var     : SBISVARIABLE   Ids Op Clks ExprSyn Syn)
-       (Import Def     : SBISDEFINED    Ids Op Clks ExprSyn Syn Var Last)
-       (Import CloExpr : NLCLOCKINGEXPR Ids Op Clks ExprSyn).
+       (Import CESyn : CESYNTAX       Op)
+       (Import Syn     : SBSYNTAX       Ids Op Clks CESyn)
+       (Import Last    : SBISLAST       Ids Op Clks CESyn Syn)
+       (Import Var     : SBISVARIABLE   Ids Op Clks CESyn Syn)
+       (Import Def     : SBISDEFINED    Ids Op Clks CESyn Syn Var Last)
+       (Import CEClo : CECLOCKING Ids Op Clks CESyn).
 
 
   Inductive wc_equation (vars: list (ident * clock)): equation -> Prop :=
@@ -272,12 +272,12 @@ Module SBClockingFun
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS         Ids)
-       (Import ExprSyn : NLEXPRSYNTAX       Op)
-       (Import Syn     : SBSYNTAX       Ids Op Clks ExprSyn)
-       (Import Last    : SBISLAST       Ids Op Clks ExprSyn Syn)
-       (Import Var     : SBISVARIABLE   Ids Op Clks ExprSyn Syn)
-       (Import Def     : SBISDEFINED    Ids Op Clks ExprSyn Syn Var Last)
-       (Import CloExpr : NLCLOCKINGEXPR Ids Op Clks ExprSyn)
-  <: SBCLOCKING Ids Op Clks ExprSyn Syn Last Var Def CloExpr.
-  Include SBCLOCKING Ids Op Clks ExprSyn Syn Last Var Def CloExpr.
+       (Import CESyn : CESYNTAX       Op)
+       (Import Syn     : SBSYNTAX       Ids Op Clks CESyn)
+       (Import Last    : SBISLAST       Ids Op Clks CESyn Syn)
+       (Import Var     : SBISVARIABLE   Ids Op Clks CESyn Syn)
+       (Import Def     : SBISDEFINED    Ids Op Clks CESyn Syn Var Last)
+       (Import CEClo : CECLOCKING Ids Op Clks CESyn)
+  <: SBCLOCKING Ids Op Clks CESyn Syn Last Var Def CEClo.
+  Include SBCLOCKING Ids Op Clks CESyn Syn Last Var Def CEClo.
 End SBClockingFun.

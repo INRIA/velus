@@ -7,7 +7,7 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.Memories.
@@ -35,11 +35,11 @@ Module Type NODUP
        (Ids            : IDS)
        (Op             : OPERATORS)
        (Import Clks    : CLOCKS     Ids)
-       (Import ExprSyn : NLEXPRSYNTAX   Op)
-       (Import Syn     : NLSYNTAX   Ids Op Clks ExprSyn)
-       (Import Mem     : MEMORIES   Ids Op Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED  Ids Op Clks ExprSyn Syn Mem)
-       (Import IsV     : ISVARIABLE Ids Op Clks ExprSyn Syn Mem IsD).
+       (Import CESyn : CESYNTAX   Op)
+       (Import Syn     : NLSYNTAX   Ids Op Clks CESyn)
+       (Import Mem     : MEMORIES   Ids Op Clks CESyn Syn)
+       (Import IsD     : ISDEFINED  Ids Op Clks CESyn Syn Mem)
+       (Import IsV     : ISVARIABLE Ids Op Clks CESyn Syn Mem IsD).
 
   Inductive NoDup_defs : list equation -> Prop :=
   | NDDNil: NoDup_defs nil
@@ -172,13 +172,13 @@ Module NoDupFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS Ids)
-       (ExprSyn : NLEXPRSYNTAX   Op)
-       (Syn     : NLSYNTAX   Ids Op Clks ExprSyn)
-       (Mem     : MEMORIES   Ids Op Clks ExprSyn Syn)
-       (IsD     : ISDEFINED  Ids Op Clks ExprSyn Syn Mem)
-       (IsV     : ISVARIABLE Ids Op Clks ExprSyn Syn Mem IsD)
-       <: NODUP Ids Op Clks ExprSyn Syn Mem IsD IsV.
+       (CESyn : CESYNTAX   Op)
+       (Syn     : NLSYNTAX   Ids Op Clks CESyn)
+       (Mem     : MEMORIES   Ids Op Clks CESyn Syn)
+       (IsD     : ISDEFINED  Ids Op Clks CESyn Syn Mem)
+       (IsV     : ISVARIABLE Ids Op Clks CESyn Syn Mem IsD)
+       <: NODUP Ids Op Clks CESyn Syn Mem IsD IsV.
 
-  Include NODUP Ids Op Clks ExprSyn Syn Mem IsD IsV.
+  Include NODUP Ids Op Clks CESyn Syn Mem IsD IsV.
 
 End NoDupFun.

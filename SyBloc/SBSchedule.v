@@ -8,12 +8,12 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.SyBloc.SBIsBlock.
 Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.NLExprSemantics.
+Require Import Velus.CoreExpr.Stream.
+Require Import Velus.CoreExpr.CESemantics.
 Require Import Velus.SyBloc.SBSemantics.
 
 Require Import RMemory.
@@ -40,8 +40,8 @@ Module Type EXT_NLSCHEDULER
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import Clks   : CLOCKS   Ids)
-       (Import ExprSyn: NLEXPRSYNTAX Op)
-       (Import Syn    : SBSYNTAX Ids Op Clks ExprSyn).
+       (Import CESyn: CESYNTAX Op)
+       (Import Syn    : SBSYNTAX Ids Op Clks CESyn).
 
   Parameter schedule : ident -> list equation -> list positive.
 
@@ -52,14 +52,14 @@ Module Type SBSCHEDULE
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX       Op)
        (Import Clks   : CLOCKS          Ids)
-       (Import ExprSyn: NLEXPRSYNTAX        Op)
-       (Import Syn    : SBSYNTAX        Ids Op       Clks ExprSyn)
-       (Import Block  : SBISBLOCK       Ids Op       Clks ExprSyn Syn)
-       (Import Ord    : SBORDERED       Ids Op       Clks ExprSyn Syn Block)
+       (Import CESyn: CESYNTAX        Op)
+       (Import Syn    : SBSYNTAX        Ids Op       Clks CESyn)
+       (Import Block  : SBISBLOCK       Ids Op       Clks CESyn Syn)
+       (Import Ord    : SBORDERED       Ids Op       Clks CESyn Syn Block)
        (Import Str    : STREAM              Op OpAux)
-       (Import ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn               Str)
-       (Import Sem    : SBSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem)
-       (Import Sch    : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn).
+       (Import CESem: CESEMANTICS Ids Op OpAux Clks CESyn               Str)
+       (Import Sem    : SBSEMANTICS     Ids Op OpAux Clks CESyn Syn Block Ord Str CESem)
+       (Import Sch    : EXT_NLSCHEDULER Ids Op       Clks CESyn Syn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -422,6 +422,17 @@ Module Type SBSCHEDULE
       rewrite schedule_eqs_permutation; eauto.
   Qed.
 
+  Corollary scheduler_loop:
+    forall P f xss yss S0,
+      loop P f xss yss S0 0 ->
+      loop (schedule P) f xss yss S0 0.
+  Proof.
+    generalize 0%nat.
+    cofix COFIX; inversion_clear 1.
+    econstructor; eauto.
+    apply scheduler_sem_block; eauto.
+  Qed.
+
   Lemma scheduler_ordered:
     forall P,
       Ordered_blocks P ->
@@ -441,14 +452,14 @@ Module SBScheduleFun
        (Op     : OPERATORS)
        (OpAux  : OPERATORS_AUX       Op)
        (Clks   : CLOCKS          Ids)
-       (ExprSyn: NLEXPRSYNTAX        Op)
-       (Syn    : SBSYNTAX        Ids Op       Clks ExprSyn)
-       (Block  : SBISBLOCK       Ids Op       Clks ExprSyn Syn)
-       (Ord    : SBORDERED       Ids Op       Clks ExprSyn Syn Block)
+       (CESyn: CESYNTAX        Op)
+       (Syn    : SBSYNTAX        Ids Op       Clks CESyn)
+       (Block  : SBISBLOCK       Ids Op       Clks CESyn Syn)
+       (Ord    : SBORDERED       Ids Op       Clks CESyn Syn Block)
        (Str    : STREAM              Op OpAux)
-       (ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn               Str)
-       (Sem    : SBSEMANTICS     Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem)
-       (Sch    : EXT_NLSCHEDULER Ids Op       Clks ExprSyn Syn)
-<: SBSCHEDULE Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem Sem Sch.
-  Include SBSCHEDULE Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem Sem Sch.
+       (CESem: CESEMANTICS Ids Op OpAux Clks CESyn               Str)
+       (Sem    : SBSEMANTICS     Ids Op OpAux Clks CESyn Syn Block Ord Str CESem)
+       (Sch    : EXT_NLSCHEDULER Ids Op       Clks CESyn Syn)
+<: SBSCHEDULE Ids Op OpAux Clks CESyn Syn Block Ord Str CESem Sem Sch.
+  Include SBSCHEDULE Ids Op OpAux Clks CESyn Syn Block Ord Str CESem Sem Sch.
 End SBScheduleFun.

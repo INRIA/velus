@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
@@ -13,12 +13,12 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBMEMORYCORRES
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Import Last    : SBISLAST     Ids Op Clks ExprSyn Syn).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import Clks  : CLOCKS   Ids)
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn   : SBSYNTAX Ids Op Clks CESyn)
+       (Import Last  : SBISLAST Ids Op Clks CESyn Syn).
 
   Definition state := memory val.
   Definition menv := memory val.
@@ -341,12 +341,12 @@ Module Type SBMEMORYCORRES
 End SBMEMORYCORRES.
 
 Module SBMemoryCorresFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
-<: SBMEMORYCORRES Ids Op Clks ExprSyn Syn Last.
-  Include SBMEMORYCORRES Ids Op Clks ExprSyn Syn Last.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (Clks  : CLOCKS   Ids)
+       (CESyn : CESYNTAX     Op)
+       (Syn   : SBSYNTAX Ids Op Clks CESyn)
+       (Last  : SBISLAST Ids Op Clks CESyn Syn)
+<: SBMEMORYCORRES Ids Op Clks CESyn Syn Last.
+  Include SBMEMORYCORRES Ids Op Clks CESyn Syn Last.
 End SBMemoryCorresFun.

@@ -2,7 +2,7 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 
 Require Import Velus.Obc.ObcSyntax.
@@ -11,19 +11,18 @@ Require Import List.
 Import List.ListNotations.
 Require Import Morphisms.
 
-Open Scope positive.
 Open Scope list.
 
 (** * Translation *)
 
 Module Type TRANSLATION
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX Op)
-       (Import Clks    : CLOCKS    Ids)
-       (Import ExprSyn : NLEXPRSYNTAX  Op)
-       (Import SynSB   : SBSYNTAX  Ids Op       Clks ExprSyn)
-       (Import SynObc  : OBCSYNTAX Ids Op OpAux).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX Op)
+       (Import Clks   : CLOCKS    Ids)
+       (Import CESyn  : CESYNTAX      Op)
+       (Import SynSB  : SBSYNTAX  Ids Op       Clks CESyn)
+       (Import SynObc : OBCSYNTAX Ids Op OpAux).
 
   Section Translate.
 
@@ -233,13 +232,13 @@ Module Type TRANSLATION
 End TRANSLATION.
 
 Module TranslationFun
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX Op)
-       (Import Clks    : CLOCKS    Ids)
-       (Import ExprSyn : NLEXPRSYNTAX  Op)
-       (Import SynSB   : SBSYNTAX  Ids Op       Clks ExprSyn)
-       (Import SynObc  : OBCSYNTAX Ids Op OpAux)
-       <: TRANSLATION Ids Op OpAux Clks ExprSyn SynSB SynObc.
-  Include TRANSLATION Ids Op OpAux Clks ExprSyn SynSB SynObc.
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX Op)
+       (Import Clks   : CLOCKS    Ids)
+       (Import CESyn  : CESYNTAX      Op)
+       (Import SynSB  : SBSYNTAX  Ids Op       Clks CESyn)
+       (Import SynObc : OBCSYNTAX Ids Op OpAux)
+       <: TRANSLATION Ids Op OpAux Clks CESyn SynSB SynObc.
+  Include TRANSLATION Ids Op OpAux Clks CESyn SynSB SynObc.
 End TranslationFun.

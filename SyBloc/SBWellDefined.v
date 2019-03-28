@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
@@ -11,7 +11,7 @@ Require Import Velus.SyBloc.SBIsVariable.
 Require Import Velus.SyBloc.SBIsLast.
 Require Import Velus.SyBloc.SBIsDefined.
 
-Require Import Velus.NLustre.IsFreeExpr.
+Require Import Velus.CoreExpr.CEIsFree.
 Require Import Velus.SyBloc.SBIsFree.
 
 Require Import List.
@@ -22,15 +22,15 @@ Module Type SBWELLDEFINED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Import Block   : SBISBLOCK    Ids Op Clks ExprSyn Syn)
-       (Import Ord     : SBORDERED    Ids Op Clks ExprSyn Syn Block)
-       (Import Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
-       (Import Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
-       (Import Def     : SBISDEFINED  Ids Op Clks ExprSyn Syn Var Last)
-       (Import IsFExpr : ISFREEEXPR   Ids Op Clks ExprSyn)
-       (Import Free    : SBISFREE     Ids Op Clks ExprSyn Syn IsFExpr).
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn)
+       (Import Block   : SBISBLOCK    Ids Op Clks CESyn Syn)
+       (Import Ord     : SBORDERED    Ids Op Clks CESyn Syn Block)
+       (Import Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
+       (Import Last    : SBISLAST     Ids Op Clks CESyn Syn)
+       (Import Def     : SBISDEFINED  Ids Op Clks CESyn Syn Var Last)
+       (Import CEIsF : CEISFREE   Ids Op Clks CESyn)
+       (Import Free    : SBISFREE     Ids Op Clks CESyn Syn CEIsF).
 
   Inductive Is_well_sch (inputs: list ident) (mems: PS.t): list equation -> Prop :=
   | WSchNil:
@@ -645,15 +645,15 @@ Module SBWellDefinedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Block   : SBISBLOCK    Ids Op Clks ExprSyn Syn)
-       (Ord     : SBORDERED    Ids Op Clks ExprSyn Syn Block)
-       (Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
-       (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
-       (Def     : SBISDEFINED  Ids Op Clks ExprSyn Syn Var Last)
-       (IsFExpr : ISFREEEXPR   Ids Op Clks ExprSyn)
-       (Free    : SBISFREE     Ids Op Clks ExprSyn Syn IsFExpr)
-<: SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def IsFExpr Free.
-  Include SBWELLDEFINED Ids Op Clks ExprSyn Syn Block Ord Var Last Def IsFExpr Free.
+       (CESyn : CESYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
+       (Block   : SBISBLOCK    Ids Op Clks CESyn Syn)
+       (Ord     : SBORDERED    Ids Op Clks CESyn Syn Block)
+       (Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
+       (Last    : SBISLAST     Ids Op Clks CESyn Syn)
+       (Def     : SBISDEFINED  Ids Op Clks CESyn Syn Var Last)
+       (CEIsF : CEISFREE   Ids Op Clks CESyn)
+       (Free    : SBISFREE     Ids Op Clks CESyn Syn CEIsF)
+<: SBWELLDEFINED Ids Op Clks CESyn Syn Block Ord Var Last Def CEIsF Free.
+  Include SBWELLDEFINED Ids Op Clks CESyn Syn Block Ord Var Last Def CEIsF Free.
 End SBWellDefinedFun.

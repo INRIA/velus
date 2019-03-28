@@ -10,7 +10,7 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
-Require Import Velus.NLustre.Stream.
+Require Import Velus.CoreExpr.Stream.
 Require Import Velus.NLustre.Streams.
 Require Import Velus.NLustre.NLSemanticsCoInd.
 Require Import Velus.NLustre.NLSemantics.

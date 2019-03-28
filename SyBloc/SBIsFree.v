@@ -1,10 +1,10 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
-Require Export Velus.NLustre.IsFreeExpr.
+Require Export Velus.CoreExpr.CEIsFree.
 
 Require Import List.
 Import List.ListNotations.
@@ -14,9 +14,9 @@ Module Type SBISFREE
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS     Ids)
-       (Import ExprSyn : NLEXPRSYNTAX   Op)
-       (Import Syn     : SBSYNTAX   Ids Op Clks ExprSyn)
-       (Import IsFExpr : ISFREEEXPR Ids Op Clks ExprSyn).
+       (Import CESyn : CESYNTAX   Op)
+       (Import Syn     : SBSYNTAX   Ids Op Clks CESyn)
+       (Import CEIsF : CEISFREE Ids Op Clks CESyn).
 
   Inductive Is_free_in_eq: ident -> equation -> Prop :=
   | FreeEqDef:
@@ -90,9 +90,9 @@ Module SBIsFreeFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS     Ids)
-       (ExprSyn : NLEXPRSYNTAX   Op)
-       (Syn     : SBSYNTAX   Ids Op Clks ExprSyn)
-       (IsFExpr : ISFREEEXPR Ids Op Clks ExprSyn)
-<: SBISFREE Ids Op Clks ExprSyn Syn IsFExpr.
-  Include SBISFREE Ids Op Clks ExprSyn Syn IsFExpr.
+       (CESyn : CESYNTAX   Op)
+       (Syn     : SBSYNTAX   Ids Op Clks CESyn)
+       (CEIsF : CEISFREE Ids Op Clks CESyn)
+<: SBISFREE Ids Op Clks CESyn Syn CEIsF.
+  Include SBISFREE Ids Op Clks CESyn Syn CEIsF.
 End SBIsFreeFun.

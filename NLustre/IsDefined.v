@@ -7,7 +7,7 @@ Open Scope list_scope.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 
@@ -24,9 +24,9 @@ Module Type ISDEFINED
        (Ids            : IDS)
        (Op             : OPERATORS)
        (Import Clks    : CLOCKS   Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op)
-       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn)
-       (Import Mem     : MEMORIES Ids Op Clks ExprSyn Syn).
+       (Import CESyn : CESYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op Clks CESyn)
+       (Import Mem     : MEMORIES Ids Op Clks CESyn Syn).
 
   (** ** Logical predicates: *)
 
@@ -481,9 +481,9 @@ Module IsDefinedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS   Ids)
-       (ExprSyn : NLEXPRSYNTAX Op)
-       (Syn     : NLSYNTAX Ids Op Clks ExprSyn)
-       (Mem     : MEMORIES Ids Op Clks ExprSyn Syn)
-       <: ISDEFINED Ids Op Clks ExprSyn Syn Mem.
-  Include ISDEFINED Ids Op Clks ExprSyn Syn Mem.
+       (CESyn : CESYNTAX Op)
+       (Syn     : NLSYNTAX Ids Op Clks CESyn)
+       (Mem     : MEMORIES Ids Op Clks CESyn Syn)
+       <: ISDEFINED Ids Op Clks CESyn Syn Mem.
+  Include ISDEFINED Ids Op Clks CESyn Syn Mem.
 End IsDefinedFun.

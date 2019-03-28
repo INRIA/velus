@@ -1,34 +1,26 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
-Require Import Velus.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
 
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.NLExprSemantics.
-Require Import Velus.NLustre.IsFreeExpr.
-Require Import Velus.NLustre.NLClockingExpr.
 Require Import Velus.SyBloc.
 Require Import Velus.Obc.
 Require Import Velus.SyBlocToObc.Translation.
+
+Require Import Velus.Common.
 
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Module Type FUSIBLE
+Module Type SB2OBCINVARIANTS
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX       Op)
        (Import Clks   : CLOCKS          Ids)
-       (Import ExprSyn: NLEXPRSYNTAX        Op)
        (Import Str    : STREAM              Op OpAux)
-       (Import ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (Import IsFExpr: ISFREEEXPR          Ids Op       Clks ExprSyn)
-       (Import CloExpr: NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
-       (Import SB     : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
+       (Import CE     : COREEXPR       Ids Op OpAux Clks Str)
+       (Import SB     : SYBLOC          Ids Op OpAux Clks Str CE)
        (Import Obc    : OBC             Ids Op OpAux)
-       (Import Trans  : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn).
+       (Import Trans  : TRANSLATION     Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn).
 
   (** ** Show that the Obc code that results from translating a SyBloc
          program satisfies the [Fusible] invariant, and thus that fusion
@@ -265,21 +257,18 @@ Module Type FUSIBLE
     - intros; apply b_ins_not_def, fst_InMembers; auto.
   Qed.
 
-End FUSIBLE.
+End SB2OBCINVARIANTS.
 
-Module FusibleFun
+Module SB2ObcInvariantsFun
        (Ids    : IDS)
        (Op     : OPERATORS)
        (OpAux  : OPERATORS_AUX       Op)
        (Clks   : CLOCKS          Ids)
-       (ExprSyn: NLEXPRSYNTAX        Op)
        (Str    : STREAM              Op OpAux)
-       (ExprSem: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (IsFExpr: ISFREEEXPR          Ids Op       Clks ExprSyn)
-       (CloExpr: NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
-       (SB     : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
+       (CE     : COREEXPR       Ids Op OpAux Clks Str)
+       (SB     : SYBLOC          Ids Op OpAux Clks Str CE)
        (Obc    : OBC             Ids Op OpAux)
-       (Trans  : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
-  <: FUSIBLE Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans.
-  Include FUSIBLE Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans.
-End FusibleFun.
+       (Trans  : TRANSLATION     Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn)
+  <: SB2OBCINVARIANTS Ids Op OpAux Clks Str CE SB Obc Trans.
+  Include SB2OBCINVARIANTS Ids Op OpAux Clks Str CE SB Obc Trans.
+End SB2ObcInvariantsFun.

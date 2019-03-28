@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.Clocks.
 
 Require Import Permutation.
@@ -12,7 +12,7 @@ Module Type SBSYNTAX
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op).
+       (Import CESyn : CESYNTAX     Op).
 
   (** ** Equations *)
 
@@ -383,7 +383,7 @@ Module SBSyntaxFun
        (Ids  : IDS)
        (Op   : OPERATORS)
        (Clks : CLOCKS          Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       <: SBSYNTAX Ids Op Clks ExprSyn.
-  Include SBSYNTAX Ids Op Clks ExprSyn.
+       (CESyn : CESYNTAX     Op)
+       <: SBSYNTAX Ids Op Clks CESyn.
+  Include SBSYNTAX Ids Op Clks CESyn.
 End SBSyntaxFun.

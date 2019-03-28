@@ -9,19 +9,19 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.RMemory.
-Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.Stream.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.IsVariable.
 Require Import Velus.NLustre.IsDefined.
-Require Import Velus.NLustre.NLExprSemantics.
+Require Import Velus.CoreExpr.CESemantics.
 Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.NLustre.Ordered.
 Require Import Velus.NLustre.Memories.
-Require Import Velus.NLustre.IsFreeExpr.
+Require Import Velus.CoreExpr.CEIsFree.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.NoDup.
-Require Import NLustre.NLClockingExpr.
+Require Import CoreExpr.CEClocking.
 Require Import NLustre.NLClocking.
 Require Import NLustre.NLClockingSemantics.
 
@@ -63,21 +63,21 @@ Module Type MEMSEMANTICS
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX           Op)
        (Import Clks    : CLOCKS              Ids)
-       (Import ExprSyn : NLEXPRSYNTAX            Op)
-       (Import Syn     : NLSYNTAX            Ids Op       Clks ExprSyn)
+       (Import CESyn : CESYNTAX            Op)
+       (Import Syn     : NLSYNTAX            Ids Op       Clks CESyn)
        (Import Str     : STREAM                  Op OpAux)
-       (Import Ord     : ORDERED             Ids Op       Clks ExprSyn Syn)
-       (Import ExprSem : NLEXPRSEMANTICS     Ids Op OpAux Clks ExprSyn     Str)
-       (Import Sem     : NLSEMANTICS         Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
-       (Import Mem     : MEMORIES            Ids Op       Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED           Ids Op       Clks ExprSyn Syn                 Mem)
-       (Import IsV     : ISVARIABLE          Ids Op       Clks ExprSyn Syn                 Mem IsD)
-       (Import IsFExpr : ISFREEEXPR          Ids Op       Clks ExprSyn)
-       (Import IsF     : ISFREE              Ids Op       Clks ExprSyn Syn IsFExpr)
-       (Import NoD     : NODUP               Ids Op       Clks ExprSyn Syn                 Mem IsD IsV)
-       (Import CloExpr : NLCLOCKINGEXPR      Ids Op       Clks ExprSyn)
-       (Import Clo     : NLCLOCKING          Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsFExpr IsF CloExpr)
-       (Import CloSem  : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsFExpr IsF CloExpr Clo).
+       (Import Ord     : ORDERED             Ids Op       Clks CESyn Syn)
+       (Import CESem : CESEMANTICS     Ids Op OpAux Clks CESyn     Str)
+       (Import Sem     : NLSEMANTICS         Ids Op OpAux Clks CESyn Syn Str Ord CESem)
+       (Import Mem     : MEMORIES            Ids Op       Clks CESyn Syn)
+       (Import IsD     : ISDEFINED           Ids Op       Clks CESyn Syn                 Mem)
+       (Import IsV     : ISVARIABLE          Ids Op       Clks CESyn Syn                 Mem IsD)
+       (Import CEIsF : CEISFREE          Ids Op       Clks CESyn)
+       (Import IsF     : ISFREE              Ids Op       Clks CESyn Syn CEIsF)
+       (Import NoD     : NODUP               Ids Op       Clks CESyn Syn                 Mem IsD IsV)
+       (Import CEClo : CECLOCKING      Ids Op       Clks CESyn)
+       (Import Clo     : NLCLOCKING          Ids Op       Clks CESyn Syn     Ord         Mem IsD CEIsF IsF CEClo)
+       (Import CloSem  : NLCLOCKINGSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem Sem Mem IsD CEIsF IsF CEClo Clo).
 
   Definition memories := stream (memory val).
 
@@ -1933,21 +1933,21 @@ Module MemSemanticsFun
        (Op      : OPERATORS)
        (OpAux   : OPERATORS_AUX       Op)
        (Clks    : CLOCKS              Ids)
-       (ExprSyn : NLEXPRSYNTAX            Op)
-       (Syn     : NLSYNTAX            Ids Op       Clks ExprSyn)
+       (CESyn : CESYNTAX            Op)
+       (Syn     : NLSYNTAX            Ids Op       Clks CESyn)
        (Str     : STREAM                  Op OpAux)
-       (Ord     : ORDERED             Ids Op       Clks ExprSyn Syn)
-       (ExprSem : NLEXPRSEMANTICS     Ids Op OpAux Clks ExprSyn     Str)
-       (Sem     : NLSEMANTICS         Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem)
-       (Mem     : MEMORIES            Ids Op       Clks ExprSyn Syn)
-       (IsD     : ISDEFINED           Ids Op       Clks ExprSyn Syn                 Mem)
-       (IsV     : ISVARIABLE          Ids Op       Clks ExprSyn Syn                 Mem IsD)
-       (IsFExpr : ISFREEEXPR          Ids Op       Clks ExprSyn)
-       (IsF     : ISFREE              Ids Op       Clks ExprSyn Syn IsFExpr)
-       (NoD     : NODUP               Ids Op       Clks ExprSyn Syn                 Mem IsD IsV)
-       (CloExpr : NLCLOCKINGEXPR      Ids Op       Clks ExprSyn)
-       (Clo     : NLCLOCKING          Ids Op       Clks ExprSyn Syn     Ord         Mem IsD IsFExpr IsF CloExpr)
-       (CloSem  : NLCLOCKINGSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsFExpr IsF CloExpr Clo)
-<: MEMSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsFExpr IsF NoD CloExpr Clo CloSem.
-  Include MEMSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem Sem Mem IsD IsV IsFExpr IsF NoD CloExpr Clo CloSem.
+       (Ord     : ORDERED             Ids Op       Clks CESyn Syn)
+       (CESem : CESEMANTICS     Ids Op OpAux Clks CESyn     Str)
+       (Sem     : NLSEMANTICS         Ids Op OpAux Clks CESyn Syn Str Ord CESem)
+       (Mem     : MEMORIES            Ids Op       Clks CESyn Syn)
+       (IsD     : ISDEFINED           Ids Op       Clks CESyn Syn                 Mem)
+       (IsV     : ISVARIABLE          Ids Op       Clks CESyn Syn                 Mem IsD)
+       (CEIsF : CEISFREE          Ids Op       Clks CESyn)
+       (IsF     : ISFREE              Ids Op       Clks CESyn Syn CEIsF)
+       (NoD     : NODUP               Ids Op       Clks CESyn Syn                 Mem IsD IsV)
+       (CEClo : CECLOCKING      Ids Op       Clks CESyn)
+       (Clo     : NLCLOCKING          Ids Op       Clks CESyn Syn     Ord         Mem IsD CEIsF IsF CEClo)
+       (CloSem  : NLCLOCKINGSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem Sem Mem IsD CEIsF IsF CEClo Clo)
+<: MEMSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem Sem Mem IsD IsV CEIsF IsF NoD CEClo Clo CloSem.
+  Include MEMSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem Sem Mem IsD IsV CEIsF IsF NoD CEClo Clo CloSem.
 End MemSemanticsFun.

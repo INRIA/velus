@@ -2,14 +2,14 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.IsFreeExpr.
+Require Import Velus.CoreExpr.CEIsFree.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.NLustre.IsDefined.
 Require Import Velus.NLustre.Ordered.
-Require Import Velus.NLustre.NLClockingExpr.
+Require Import Velus.CoreExpr.CEClocking.
 
 Require Import List.
 Require Import Morphisms.
@@ -25,17 +25,17 @@ wrt. its clock annotations.
  *)
 
 Module Type NLCLOCKING
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS         Ids)
-       (Import ExprSyn : NLEXPRSYNTAX       Op)
-       (Import Syn     : NLSYNTAX       Ids Op Clks ExprSyn)
-       (Import Ord     : ORDERED        Ids Op Clks ExprSyn Syn)
-       (Import Mem     : MEMORIES       Ids Op Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED      Ids Op Clks ExprSyn Syn Mem)
-       (Import IsFExpr : ISFREEEXPR     Ids Op Clks ExprSyn)
-       (Import IsF     : ISFREE         Ids Op Clks ExprSyn Syn IsFExpr)
-       (Import CloExpr : NLCLOCKINGEXPR Ids Op Clks ExprSyn).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import Clks  : CLOCKS     Ids)
+       (Import CESyn : CESYNTAX       Op)
+       (Import Syn   : NLSYNTAX   Ids Op Clks CESyn)
+       (Import Ord   : ORDERED    Ids Op Clks CESyn Syn)
+       (Import Mem   : MEMORIES   Ids Op Clks CESyn Syn)
+       (Import IsD   : ISDEFINED  Ids Op Clks CESyn Syn Mem)
+       (Import CEIsF : CEISFREE   Ids Op Clks CESyn)
+       (Import IsF   : ISFREE     Ids Op Clks CESyn Syn CEIsF)
+       (Import CEClo : CECLOCKING Ids Op Clks CESyn).
 
   Inductive wc_equation (G: global) (vars: list (ident * clock)): equation -> Prop :=
   | CEqDef:
@@ -321,17 +321,17 @@ Module Type NLCLOCKING
 End NLCLOCKING.
 
 Module NLClockingFun
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS         Ids)
-       (Import ExprSyn : NLEXPRSYNTAX       Op)
-       (Import Syn     : NLSYNTAX       Ids Op Clks ExprSyn)
-       (Import Ord     : ORDERED        Ids Op Clks ExprSyn Syn)
-       (Import Mem     : MEMORIES       Ids Op Clks ExprSyn Syn)
-       (Import IsD     : ISDEFINED      Ids Op Clks ExprSyn Syn Mem)
-       (Import IsFExpr : ISFREEEXPR     Ids Op Clks ExprSyn)
-       (Import IsF     : ISFREE         Ids Op Clks ExprSyn Syn IsFExpr)
-       (Import CloExpr : NLCLOCKINGEXPR Ids Op Clks ExprSyn)
-  <: NLCLOCKING Ids Op Clks ExprSyn Syn Ord Mem IsD IsFExpr IsF CloExpr.
-  Include NLCLOCKING Ids Op Clks ExprSyn Syn Ord Mem IsD IsFExpr IsF CloExpr.
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import Clks  : CLOCKS     Ids)
+       (Import CESyn : CESYNTAX       Op)
+       (Import Syn   : NLSYNTAX   Ids Op Clks CESyn)
+       (Import Ord   : ORDERED    Ids Op Clks CESyn Syn)
+       (Import Mem   : MEMORIES   Ids Op Clks CESyn Syn)
+       (Import IsD   : ISDEFINED  Ids Op Clks CESyn Syn Mem)
+       (Import CEIsF : CEISFREE   Ids Op Clks CESyn)
+       (Import IsF   : ISFREE     Ids Op Clks CESyn Syn CEIsF)
+       (Import CEClo : CECLOCKING Ids Op Clks CESyn)
+  <: NLCLOCKING Ids Op Clks CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
+  Include NLCLOCKING Ids Op Clks CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
 End NLClockingFun.

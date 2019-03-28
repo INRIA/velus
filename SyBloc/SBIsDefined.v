@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
@@ -15,10 +15,10 @@ Module Type SBISDEFINED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Import Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
-       (Import Last    : SBISLAST     Ids Op Clks ExprSyn Syn).
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn)
+       (Import Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
+       (Import Last    : SBISLAST     Ids Op Clks CESyn Syn).
 
   Inductive Is_defined_in_eq: ident -> equation -> Prop :=
   | DefEqDef:
@@ -142,10 +142,10 @@ Module SBIsDefinedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Var     : SBISVARIABLE Ids Op Clks ExprSyn Syn)
-       (Last    : SBISLAST     Ids Op Clks ExprSyn Syn)
-<: SBISDEFINED Ids Op Clks ExprSyn Syn Var Last.
-  Include SBISDEFINED Ids Op Clks ExprSyn Syn Var Last.
+       (CESyn : CESYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
+       (Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
+       (Last    : SBISLAST     Ids Op Clks CESyn Syn)
+<: SBISDEFINED Ids Op Clks CESyn Syn Var Last.
+  Include SBISDEFINED Ids Op Clks CESyn Syn Var Last.
 End SBIsDefinedFun.

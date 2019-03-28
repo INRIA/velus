@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.Clocks.
 Require Import PArith.
 Require Import Coq.Sorting.Permutation.
@@ -12,10 +12,10 @@ Open Scope list_scope.
 (** * The NLustre dataflow language *)
 
 Module Type NLSYNTAX
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS          Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import Clks  : CLOCKS          Ids)
+       (Import CESyn : CESYNTAX Op).
 
   (** ** Equations *)
 
@@ -221,7 +221,7 @@ Module NLSyntaxFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS          Ids)
-       (ExprSyn : NLEXPRSYNTAX Op)
-       <: NLSYNTAX Ids Op Clks ExprSyn.
-  Include NLSYNTAX Ids Op Clks ExprSyn.
+       (CESyn : CESYNTAX Op)
+       <: NLSYNTAX Ids Op Clks CESyn.
+  Include NLSYNTAX Ids Op Clks CESyn.
 End NLSyntaxFun.

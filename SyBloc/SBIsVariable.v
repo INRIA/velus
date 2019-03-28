@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.Clocks.
 
@@ -12,8 +12,8 @@ Module Type SBISVARIABLE
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn).
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn).
 
   Inductive Is_variable_in_eq: ident -> equation -> Prop :=
   | VarEqDef:
@@ -117,8 +117,8 @@ Module SBIsVariableFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-<: SBISVARIABLE Ids Op Clks ExprSyn Syn.
-  Include SBISVARIABLE Ids Op Clks ExprSyn Syn.
+       (CESyn : CESYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
+<: SBISVARIABLE Ids Op Clks CESyn Syn.
+  Include SBISVARIABLE Ids Op Clks CESyn Syn.
 End SBIsVariableFun.

@@ -1,9 +1,9 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 
-(** * The NLustre dataflow language *)
+(** * The core dataflow expresion syntax *)
 
-Module Type NLEXPRSYNTAX (Import Op: OPERATORS).
+Module Type CESYNTAX (Import Op: OPERATORS).
 
   (** ** Expressions *)
 
@@ -32,8 +32,8 @@ Module Type NLEXPRSYNTAX (Import Op: OPERATORS).
     | Ewhen e _ _ => typeof e
     end.
 
-End NLEXPRSYNTAX.
+End CESYNTAX.
 
-Module NLExprSyntaxFun (Op: OPERATORS) <: NLEXPRSYNTAX Op.
-  Include NLEXPRSYNTAX Op.
-End NLExprSyntaxFun.
+Module CESyntaxFun (Op: OPERATORS) <: CESYNTAX Op.
+  Include CESYNTAX Op.
+End CESyntaxFun.

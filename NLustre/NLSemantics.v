@@ -9,11 +9,11 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
-Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.NLExprSemantics.
+Require Import Velus.CoreExpr.Stream.
+Require Import Velus.CoreExpr.CESemantics.
 
 (** * The NLustre semantics *)
 
@@ -25,15 +25,15 @@ Require Import Velus.NLustre.NLExprSemantics.
  *)
 
 Module Type NLSEMANTICS
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX       Op)
-       (Import Clks    : CLOCKS          Ids)
-       (Import ExprSyn : NLEXPRSYNTAX        Op)
-       (Import Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (Import Str     : STREAM              Op OpAux)
-       (Import Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX   Op)
+       (Import Clks  : CLOCKS      Ids)
+       (Import CESyn : CESYNTAX        Op)
+       (Import Syn   : NLSYNTAX    Ids Op       Clks CESyn)
+       (Import Str   : STREAM          Op OpAux)
+       (Import Ord   : ORDERED     Ids Op       Clks CESyn Syn)
+       (Import CESem : CESEMANTICS Ids Op OpAux Clks CESyn      Str).
 
   (** ** Time-dependent semantics *)
 
@@ -473,15 +473,15 @@ enough: it does not support the internal fixpoint introduced by
 End NLSEMANTICS.
 
 Module NLSemanticsFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX       Op)
-       (Clks    : CLOCKS          Ids)
-       (ExprSyn : NLEXPRSYNTAX        Op)
-       (Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
-       (Str     : STREAM              Op OpAux)
-       (Ord     : ORDERED         Ids Op       Clks ExprSyn Syn)
-       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn      Str)
-<: NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem.
-  Include NLSEMANTICS Ids Op OpAux Clks ExprSyn Syn Str Ord ExprSem.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX   Op)
+       (Clks  : CLOCKS      Ids)
+       (CESyn : CESYNTAX        Op)
+       (Syn   : NLSYNTAX    Ids Op       Clks CESyn)
+       (Str   : STREAM          Op OpAux)
+       (Ord   : ORDERED     Ids Op       Clks CESyn Syn)
+       (CESem : CESEMANTICS Ids Op OpAux Clks CESyn      Str)
+<: NLSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem.
+  Include NLSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem.
 End NLSemanticsFun.

@@ -1,9 +1,9 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.IsFreeExpr.
+Require Import Velus.CoreExpr.CEIsFree.
 Require Import List.
 
 (** * Free variables *)
@@ -18,12 +18,12 @@ variables in the right-hand side of the equation. In particular, if
  *)
 
 Module Type ISFREE
-       (Ids            : IDS)
-       (Op             : OPERATORS)
-       (Import Clks    : CLOCKS     Ids)
-       (Import ExprSyn : NLEXPRSYNTAX   Op)
-       (Import Syn     : NLSYNTAX   Ids Op Clks ExprSyn)
-       (Import IsFExpr : ISFREEEXPR Ids Op Clks ExprSyn).
+       (Ids          : IDS)
+       (Op           : OPERATORS)
+       (Import Clks  : CLOCKS     Ids)
+       (Import CESyn : CESYNTAX   Op)
+       (Import Syn   : NLSYNTAX   Ids Op Clks CESyn)
+       (Import CEIsF : CEISFREE Ids Op Clks CESyn).
 
   Inductive Is_free_in_eq : ident -> equation -> Prop :=
   | FreeEqDef:
@@ -108,12 +108,12 @@ Module Type ISFREE
 End ISFREE.
 
 Module IsFreeFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS     Ids)
-       (ExprSyn : NLEXPRSYNTAX   Op)
-       (Syn     : NLSYNTAX   Ids Op Clks ExprSyn)
-       (IsFExpr : ISFREEEXPR Ids Op Clks ExprSyn)
-       <: ISFREE Ids Op Clks ExprSyn Syn IsFExpr.
-  Include ISFREE Ids Op Clks ExprSyn Syn IsFExpr.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (Clks  : CLOCKS     Ids)
+       (CESyn : CESYNTAX   Op)
+       (Syn   : NLSYNTAX   Ids Op Clks CESyn)
+       (CEIsF : CEISFREE Ids Op Clks CESyn)
+       <: ISFREE Ids Op Clks CESyn Syn CEIsF.
+  Include ISFREE Ids Op Clks CESyn Syn CEIsF.
 End IsFreeFun.

@@ -9,25 +9,25 @@ Require Import Morphisms.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.RMemory.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.SyBloc.SBIsBlock.
 Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.NLExprSemantics.
+Require Import Velus.CoreExpr.Stream.
+Require Import Velus.CoreExpr.CESemantics.
 
 Module Type SBSEMANTICS
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX       Op)
        (Import Clks    : CLOCKS          Ids)
-       (Import ExprSyn : NLEXPRSYNTAX        Op)
-       (Import Syn     : SBSYNTAX        Ids Op       Clks ExprSyn)
-       (Import Block   : SBISBLOCK       Ids Op       Clks ExprSyn Syn)
-       (Import Ord     : SBORDERED       Ids Op       Clks ExprSyn Syn Block)
+       (Import CESyn : CESYNTAX        Op)
+       (Import Syn     : SBSYNTAX        Ids Op       Clks CESyn)
+       (Import Block   : SBISBLOCK       Ids Op       Clks CESyn Syn)
+       (Import Ord     : SBORDERED       Ids Op       Clks CESyn Syn Block)
        (Import Str     : STREAM              Op OpAux)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str).
+       (Import CESem : CESEMANTICS Ids Op OpAux Clks CESyn Str).
 
   Definition state := memory val.
   Definition transient_states := Env.t state.
@@ -861,12 +861,12 @@ Module SBSemanticsFun
        (Op      : OPERATORS)
        (OpAux   : OPERATORS_AUX       Op)
        (Clks    : CLOCKS          Ids)
-       (ExprSyn : NLEXPRSYNTAX        Op)
-       (Syn     : SBSYNTAX        Ids Op       Clks ExprSyn)
-       (Block   : SBISBLOCK       Ids Op       Clks ExprSyn Syn)
-       (Ord     : SBORDERED       Ids Op       Clks ExprSyn Syn Block)
+       (CESyn : CESYNTAX        Op)
+       (Syn     : SBSYNTAX        Ids Op       Clks CESyn)
+       (Block   : SBISBLOCK       Ids Op       Clks CESyn Syn)
+       (Ord     : SBORDERED       Ids Op       Clks CESyn Syn Block)
        (Str     : STREAM              Op OpAux)
-       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-<: SBSEMANTICS Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem.
-  Include SBSEMANTICS Ids Op OpAux Clks ExprSyn Syn Block Ord Str ExprSem.
+       (CESem : CESEMANTICS Ids Op OpAux Clks CESyn Str)
+<: SBSEMANTICS Ids Op OpAux Clks CESyn Syn Block Ord Str CESem.
+  Include SBSEMANTICS Ids Op OpAux Clks CESyn Syn Block Ord Str CESem.
 End SBSemanticsFun.

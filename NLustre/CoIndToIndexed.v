@@ -9,13 +9,13 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Ordered.
-Require Import Velus.NLustre.Stream.
+Require Import Velus.CoreExpr.Stream.
 Require Import Velus.NLustre.Streams.
 
-Require Import Velus.NLustre.NLExprSemantics.
+Require Import Velus.CoreExpr.CESemantics.
 Require Import Velus.NLustre.NLSemantics.
 Require Import Velus.NLustre.NLSemanticsCoInd.
 
@@ -25,13 +25,13 @@ Module Type COINDTOINDEXED
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX        Op)
        (Import Clks    : CLOCKS           Ids)
-       (Import ExprSyn : NLEXPRSYNTAX        Op)
-       (Import Syn     : NLSYNTAX        Ids Op       Clks ExprSyn)
+       (Import CESyn : CESYNTAX        Op)
+       (Import Syn     : NLSYNTAX        Ids Op       Clks CESyn)
        (Import Str     : STREAM               Op OpAux)
-       (Import Ord     : ORDERED          Ids Op       Clks ExprSyn Syn)
-       (ExprIdx        : NLEXPRSEMANTICS  Ids Op OpAux Clks ExprSyn     Str)
-       (Indexed        : NLSEMANTICS      Ids Op OpAux Clks ExprSyn Syn Str Ord ExprIdx)
-       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux Clks ExprSyn Syn).
+       (Import Ord     : ORDERED          Ids Op       Clks CESyn Syn)
+       (ExprIdx        : CESEMANTICS  Ids Op OpAux Clks CESyn     Str)
+       (Indexed        : NLSEMANTICS      Ids Op OpAux Clks CESyn Syn Str Ord ExprIdx)
+       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux Clks CESyn Syn).
 
   Section Global.
 

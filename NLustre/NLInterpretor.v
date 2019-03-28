@@ -7,9 +7,9 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.Stream.
-Require Import Velus.NLustre.NLExprSemantics.
+Require Import Velus.CoreExpr.CESyntax.
+Require Import Velus.CoreExpr.Stream.
+Require Import Velus.CoreExpr.CESemantics.
 
 (** * The NLustre semantics *)
 
@@ -24,9 +24,9 @@ Module Type NLINTERPRETOR
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import Clks  : CLOCKS      Ids)
-       (Import ExprSyn : NLEXPRSYNTAX    Op)
+       (Import CESyn : CESYNTAX    Op)
        (Import Str   : STREAM          Op OpAux)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str).
+       (Import CESem : CESEMANTICS Ids Op OpAux Clks CESyn Str).
 
   (** ** Instantaneous semantics *)
 
@@ -327,7 +327,7 @@ Module Type NLINTERPRETOR
     Lemma lift_sound:
       forall {A B} (sem: bool -> env -> A -> B -> Prop) interp x xs,
         (forall b R x v, sem b R x v -> v = interp b R x) ->
-        ExprSem.lift bk H sem x xs ->
+        CESem.lift bk H sem x xs ->
         xs ≈ lift interp x.
     Proof.
       intros ** Instant Sem n.
@@ -337,7 +337,7 @@ Module Type NLINTERPRETOR
     Lemma lift'_sound:
       forall {A B} (sem: env -> A -> B -> Prop) interp x xs,
         (forall R x v, sem R x v -> v = interp R x) ->
-        ExprSem.lift' H sem x xs ->
+        CESem.lift' H sem x xs ->
         xs ≈ lift' interp x.
     Proof.
       intros ** Instant Sem n.

@@ -5,6 +5,7 @@ Require Import Velus.SyBlocToObc.Translation.
 Require Import Velus.SyBlocToObc.SBMemoryCorres.
 
 Require Import Velus.RMemory.
+Require Import Velus.Common.
 
 Require Import List.
 Import List.ListNotations.
@@ -14,19 +15,16 @@ Open Scope nat.
 Open Scope list.
 
 Module Type CORRECTNESS
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX       Op)
-       (Import Clks    : CLOCKS          Ids)
-       (Import ExprSyn : NLEXPRSYNTAX        Op)
-       (Import Str     : STREAM              Op OpAux)
-       (Import ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (Import IsFExpr : ISFREEEXPR      Ids Op       Clks ExprSyn)
-       (Import CloExpr : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
-       (Import SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
-       (Import Obc     : OBC             Ids Op OpAux)
-       (Import Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
-       (Import Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SB.Syn SB.Last).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX      Op)
+       (Import Clks   : CLOCKS         Ids)
+       (Import Str    : STREAM             Op OpAux)
+       (Import CE     : COREEXPR       Ids Op OpAux Clks Str)
+       (Import SB     : SYBLOC         Ids Op OpAux Clks Str CE)
+       (Import Obc    : OBC            Ids Op OpAux)
+       (Import Trans  : TRANSLATION    Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn)
+       (Import Corres : SBMEMORYCORRES Ids Op       Clks CE.Syn SB.Syn SB.Last).
 
   Definition equiv_env
              (in_domain: ident -> Prop) (R: env) (mems: PS.t) (me: menv) (ve: venv) : Prop :=
@@ -164,7 +162,7 @@ Module Type CORRECTNESS
 
     Lemma typeof_correct:
       forall e,
-        typeof (translate_lexp mems e) = ExprSyn.typeof e.
+        typeof (translate_lexp mems e) = CE.Syn.typeof e.
     Proof.
       induction e; intros; simpl; auto; cases.
     Qed.
@@ -1293,19 +1291,16 @@ Module Type CORRECTNESS
 End CORRECTNESS.
 
 Module CorrectnessFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX       Op)
-       (Clks    : CLOCKS          Ids)
-       (ExprSyn : NLEXPRSYNTAX        Op)
-       (Str     : STREAM              Op OpAux)
-       (ExprSem : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (IsFExpr : ISFREEEXPR      Ids Op       Clks ExprSyn)
-       (CloExpr : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
-       (SB      : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
-       (Obc     : OBC             Ids Op OpAux)
-       (Trans   : TRANSLATION     Ids Op OpAux Clks ExprSyn SB.Syn Obc.Syn)
-       (Corres  : SBMEMORYCORRES  Ids Op       Clks ExprSyn SB.Syn SB.Last)
-<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans Corres.
-  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr SB Obc Trans Corres.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (OpAux  : OPERATORS_AUX      Op)
+       (Clks   : CLOCKS         Ids)
+       (Str    : STREAM             Op OpAux)
+       (CE     : COREEXPR       Ids Op OpAux Clks Str)
+       (SB     : SYBLOC         Ids Op OpAux Clks Str CE)
+       (Obc    : OBC            Ids Op OpAux)
+       (Trans  : TRANSLATION    Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn)
+       (Corres : SBMEMORYCORRES Ids Op       Clks CE.Syn SB.Syn SB.Last)
+<: CORRECTNESS Ids Op OpAux Clks Str CE SB Obc Trans Corres.
+  Include CORRECTNESS Ids Op OpAux Clks Str CE SB Obc Trans Corres.
 End CorrectnessFun.

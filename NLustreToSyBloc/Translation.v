@@ -3,7 +3,7 @@ Require Import PArith.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.SyBloc.SBSyntax.
@@ -20,13 +20,13 @@ Open Scope list.
 (** * Translation *)
 
 Module Type TRANSLATION
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS   Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op)
-       (Import SynNL   : NLSYNTAX Ids Op Clks ExprSyn)
-       (SynSB          : SBSYNTAX Ids Op Clks ExprSyn)
-       (Import Mem     : MEMORIES Ids Op Clks ExprSyn SynNL).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import Clks  : CLOCKS   Ids)
+       (Import CESyn : CESYNTAX     Op)
+       (Import SynNL : NLSYNTAX Ids Op Clks CESyn)
+       (SynSB        : SBSYNTAX Ids Op Clks CESyn)
+       (Import Mem   : MEMORIES Ids Op Clks CESyn SynNL).
 
   Definition gather_eq (acc: list (ident * (const * clock)) * list (ident * ident)) (eq: equation):
     list (ident * (const * clock)) * list (ident * ident) :=
@@ -485,13 +485,13 @@ Module Type TRANSLATION
 End TRANSLATION.
 
 Module TranslationFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS Ids)
-       (ExprSyn : NLEXPRSYNTAX Op)
-       (SynNL   : NLSYNTAX Ids Op Clks ExprSyn)
-       (SynSB   : SBSYNTAX Ids Op Clks ExprSyn)
-       (Mem     : MEMORIES Ids Op Clks ExprSyn SynNL)
-<: TRANSLATION Ids Op Clks ExprSyn SynNL SynSB Mem.
-  Include TRANSLATION Ids Op Clks ExprSyn SynNL SynSB Mem.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (Clks  : CLOCKS Ids)
+       (CESyn : CESYNTAX     Op)
+       (SynNL : NLSYNTAX Ids Op Clks CESyn)
+       (SynSB : SBSYNTAX Ids Op Clks CESyn)
+       (Mem   : MEMORIES Ids Op Clks CESyn SynNL)
+<: TRANSLATION Ids Op Clks CESyn SynNL SynSB Mem.
+  Include TRANSLATION Ids Op Clks CESyn SynNL SynSB Mem.
 End TranslationFun.

@@ -9,17 +9,17 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.RMemory.
-Require Import Velus.NLustre.NLExprSyntax.
-Require Import Velus.NLustre.Stream.
+Require Import Velus.CoreExpr.CESyntax.
+Require Import Velus.CoreExpr.Stream.
 
 
-Module Type NLEXPRSEMANTICS
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX    Op)
-       (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Str     : STREAM           Op OpAux).
+Module Type CESEMANTICS
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import Clks  : CLOCKS Ids)
+       (Import Syn   : CESYNTAX      Op)
+       (Import Str   : STREAM        Op OpAux).
 
   (** ** Environment and history *)
 
@@ -793,15 +793,15 @@ clock to [sem_var_instant] too. *)
       eapply sem_var_det; eexact H1 || eexact H2
     end.
 
-End NLEXPRSEMANTICS.
+End CESEMANTICS.
 
-Module NLExprSemanticsFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX    Op)
-       (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Str     : STREAM           Op OpAux)
-  <: NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str.
-  Include NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str.
-End NLExprSemanticsFun.
+Module CESemanticsFun
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Clks  : CLOCKS Ids)
+       (Syn   : CESYNTAX      Op)
+       (Str   : STREAM        Op OpAux)
+  <: CESEMANTICS Ids Op OpAux Clks Syn Str.
+  Include CESEMANTICS Ids Op OpAux Clks Syn Str.
+End CESemanticsFun.

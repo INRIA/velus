@@ -1,6 +1,6 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.SyBloc.SBSyntax.
 Require Import Velus.SyBloc.SBIsBlock.
 Require Import Velus.Clocks.
@@ -13,9 +13,9 @@ Module Type SBORDERED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import Clks    : CLOCKS       Ids)
-       (Import ExprSyn : NLEXPRSYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Import Block   : SBISBLOCK    Ids Op Clks ExprSyn Syn).
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn)
+       (Import Block   : SBISBLOCK    Ids Op Clks CESyn Syn).
 
   Inductive Ordered_blocks: program -> Prop :=
   | Ordered_nil:
@@ -125,9 +125,9 @@ Module SBOrderedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS       Ids)
-       (ExprSyn : NLEXPRSYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks ExprSyn)
-       (Block   : SBISBLOCK    Ids Op Clks ExprSyn Syn)
-<: SBORDERED Ids Op Clks ExprSyn Syn Block.
-  Include SBORDERED Ids Op Clks ExprSyn Syn Block.
+       (CESyn : CESYNTAX     Op)
+       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
+       (Block   : SBISBLOCK    Ids Op Clks CESyn Syn)
+<: SBORDERED Ids Op Clks CESyn Syn Block.
+  Include SBORDERED Ids Op Clks CESyn Syn Block.
 End SBOrderedFun.

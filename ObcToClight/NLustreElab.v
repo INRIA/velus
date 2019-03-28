@@ -6,14 +6,15 @@ Require Import Operators.
 Require Import Clocks.
 
 Module Import Clks := Instantiator.Clks.
-Module Import ExprSyn := Instantiator.ExprSyn.
+Module Import CESyn := Instantiator.CE.Syn.
 Module Import Syn := Instantiator.NL.Syn.
 Module Import Defs := Instantiator.NL.IsD.
 
 Import Interface.Op.
 Import Instantiator.OpAux.
+Import Instantiator.CE.Typ.
 Import Instantiator.NL.Typ.
-Import Instantiator.CloExpr.
+Import Instantiator.CE.Clo.
 Import Instantiator.NL.Clo.
 
 Require Import List.

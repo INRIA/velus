@@ -1,7 +1,7 @@
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import List.
 
 (** * Free variables *)
@@ -9,17 +9,14 @@ Require Import List.
 (**
 
 The predicate [Is_free x t : Prop] states that the variable [x] is
-used in the term [t]. If [t] is an equation, this collects the
-variables in the right-hand side of the equation. In particular, if
-[t] is [x = v0 fby x], [x] will (perhaps confusingly) be free.
-
+used in the term [t].
  *)
 
-Module Type ISFREEEXPR
-       (Ids            : IDS)
-       (Op             : OPERATORS)
-       (Import Clks    : CLOCKS   Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op).
+Module Type CEISFREE
+       (Ids         : IDS)
+       (Op          : OPERATORS)
+       (Import Clks : CLOCKS   Ids)
+       (Import Syn  : CESYNTAX Op).
 
   (* Warning: induction scheme is not strong enough. *)
   Inductive Is_free_in_lexp : ident -> lexp -> Prop :=
@@ -366,13 +363,13 @@ Module Type ISFREEEXPR
     intuition not_In_empty.
   Qed.
 
-End ISFREEEXPR.
+End CEISFREE.
 
-Module IsFreeExprFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS   Ids)
-       (ExprSyn : NLEXPRSYNTAX Op)
-       <: ISFREEEXPR Ids Op Clks ExprSyn.
-  Include ISFREEEXPR Ids Op Clks ExprSyn.
-End IsFreeExprFun.
+Module CEIsFreeFun
+       (Ids  : IDS)
+       (Op   : OPERATORS)
+       (Clks : CLOCKS   Ids)
+       (Syn  : CESYNTAX Op)
+       <: CEISFREE Ids Op Clks Syn.
+  Include CEISFREE Ids Op Clks Syn.
+End CEIsFreeFun.

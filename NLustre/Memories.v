@@ -7,7 +7,7 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 
 Require Import Morphisms.
@@ -30,8 +30,8 @@ Module Type MEMORIES
        (Ids            : IDS)
        (Op             : OPERATORS)
        (Import Clks    : CLOCKS   Ids)
-       (Import ExprSyn : NLEXPRSYNTAX Op)
-       (Import Syn     : NLSYNTAX Ids Op Clks ExprSyn).
+       (Import CESyn : CESYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op Clks CESyn).
 
   Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
@@ -362,8 +362,8 @@ Module MemoriesFun
        (Ids     : IDS)
        (Op      : OPERATORS)
        (Clks    : CLOCKS   Ids)
-       (ExprSyn : NLEXPRSYNTAX Op)
-       (Syn     : NLSYNTAX Ids Op Clks ExprSyn)
-       <: MEMORIES Ids Op Clks ExprSyn Syn.
-  Include MEMORIES Ids Op Clks ExprSyn Syn.
+       (CESyn : CESYNTAX Op)
+       (Syn     : NLSYNTAX Ids Op Clks CESyn)
+       <: MEMORIES Ids Op Clks CESyn Syn.
+  Include MEMORIES Ids Op Clks CESyn Syn.
 End MemoriesFun.

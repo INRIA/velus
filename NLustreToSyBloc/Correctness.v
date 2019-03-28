@@ -7,6 +7,7 @@ Require Import Velus.SyBloc.
 
 Require Import Velus.NLustreToSyBloc.Translation.
 
+Require Import Velus.Common.
 Require Import Velus.RMemory.
 
 Require Import List.
@@ -16,18 +17,15 @@ Open Scope list.
 Open Scope nat.
 
 Module Type CORRECTNESS
-       (Import Ids      : IDS)
-       (Import Op       : OPERATORS)
-       (Import OpAux    : OPERATORS_AUX       Op)
-       (Import Clks     : CLOCKS          Ids)
-       (Import ExprSyn  : NLEXPRSYNTAX        Op)
-       (Import Str      : STREAM              Op OpAux)
-       (Import ExprSem  : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (Import IsFExpr  : ISFREEEXPR      Ids Op       Clks ExprSyn)
-       (Import CloExpr  : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
-       (Import NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
-       (Import SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
-       (Import Trans    : TRANSLATION     Ids Op       Clks ExprSyn             NL.Syn SB.Syn NL.Mem).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX   Op)
+       (Import Clks  : CLOCKS      Ids)
+       (Import Str   : STREAM          Op OpAux)
+       (Import CE    : COREEXPR    Ids Op OpAux Clks Str)
+       (Import NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
+       (Import SB    : SYBLOC      Ids Op OpAux Clks Str CE)
+       (Import Trans : TRANSLATION Ids Op       Clks     CE.Syn NL.Syn SB.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -623,13 +621,13 @@ Module Type CORRECTNESS
 
   Lemma clock_of_correctness:
     forall xss bk,
-      ExprSem.clock_of xss bk ->
+      CE.Sem.clock_of xss bk ->
       forall n, clock_of (xss n) (bk n).
   Proof. auto. Qed.
 
   Lemma same_clock_correctness:
     forall xss,
-      ExprSem.same_clock xss ->
+      CE.Sem.same_clock xss ->
       forall n, same_clock (xss n).
   Proof. auto. Qed.
   Hint Resolve clock_of_correctness same_clock_correctness.
@@ -730,18 +728,15 @@ Module Type CORRECTNESS
 End CORRECTNESS.
 
 Module CorrectnessFun
-       (Ids      : IDS)
-       (Op       : OPERATORS)
-       (OpAux    : OPERATORS_AUX       Op)
-       (Clks     : CLOCKS          Ids)
-       (ExprSyn  : NLEXPRSYNTAX        Op)
-       (Str      : STREAM              Op OpAux)
-       (ExprSem  : NLEXPRSEMANTICS Ids Op OpAux Clks ExprSyn Str)
-       (IsFExpr  : ISFREEEXPR      Ids Op       Clks ExprSyn)
-       (CloExpr  : NLCLOCKINGEXPR  Ids Op       Clks ExprSyn)
-       (NL       : NLUSTRE         Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
-       (SB       : SYBLOC          Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr)
-       (Trans    : TRANSLATION     Ids Op       Clks ExprSyn             NL.Syn SB.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr NL SB Trans.
-  Include CORRECTNESS Ids Op OpAux Clks ExprSyn Str ExprSem IsFExpr CloExpr NL SB Trans.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX   Op)
+       (Clks  : CLOCKS      Ids)
+       (Str   : STREAM          Op OpAux)
+       (CE    : COREEXPR    Ids Op OpAux Clks Str)
+       (NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
+       (SB    : SYBLOC      Ids Op OpAux Clks Str CE)
+       (Trans : TRANSLATION Ids Op       Clks     CE.Syn NL.Syn SB.Syn NL.Mem)
+<: CORRECTNESS Ids Op OpAux Clks Str CE NL SB Trans.
+  Include CORRECTNESS Ids Op OpAux Clks Str CE NL SB Trans.
 End CorrectnessFun.

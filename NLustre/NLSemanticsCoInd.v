@@ -10,7 +10,7 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLExprSyntax.
+Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.NLustre.Streams.
 
@@ -28,8 +28,8 @@ Module Type NLSEMANTICSCOIND
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX Op)
        (Import Clks    : CLOCKS    Ids)
-       (Import ExprSyn : NLEXPRSYNTAX  Op)
-       (Import Syn     : NLSYNTAX  Ids Op Clks ExprSyn).
+       (Import CESyn : CESYNTAX  Op)
+       (Import Syn     : NLSYNTAX  Ids Op Clks CESyn).
 
   Definition idents := List.map (@fst ident (type * clock)).
 
