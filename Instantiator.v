@@ -33,9 +33,11 @@ Require Import SyBlocToObc.Translation.
 Require Import SyBlocToObc.SBMemoryCorres.
 Require Import SyBlocToObc.Correctness.
 Require Import SyBlocToObc.SB2ObcInvariants.
+Require Import SyBlocToObc.SB2ObcTyping.
 
 Module SB2Obc     := TranslationFun    Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn.
 Module MemCorres  := SBMemoryCorresFun Ids Op       Clks CE.Syn SB.Syn SB.Last.
 Module SB2ObcCorr := CorrectnessFun    Ids Op OpAux Clks Str CE SB Obc SB2Obc MemCorres.
 
 Module SB2ObcInvariants := SB2ObcInvariantsFun Ids Op OpAux Clks Str CE SB Obc SB2Obc.
+Module SB2ObcTyping     := SB2ObcTypingFun     Ids Op OpAux Clks Str CE SB Obc SB2Obc.

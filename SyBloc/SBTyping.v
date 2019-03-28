@@ -27,35 +27,36 @@ Module Type SBTYPING
        (Import Syn   : SBSYNTAX Ids Op Clks CESyn)
        (Import CETyp : CETYPING Ids Op Clks CESyn).
 
-  Inductive wt_equation (P: program) (vars: list (ident * type)): equation -> Prop :=
+  Inductive wt_equation (P: program) (vars: list (ident * type)) (lasts: list (ident * type)): equation -> Prop :=
   | wt_EqDef:
       forall x ck e,
         In (x, typeofc e) vars ->
-        wt_clock vars ck ->
-        wt_cexp vars e ->
-        wt_equation P vars (EqDef x ck e)
+        wt_clock (vars ++ lasts) ck ->
+        wt_cexp (vars ++ lasts) e ->
+        wt_equation P vars lasts (EqDef x ck e)
   | wt_EqNext:
       forall x ck e,
-        In (x, typeof e) vars ->
-        wt_clock vars ck ->
-        wt_lexp vars e ->
-        wt_equation P vars (EqNext x ck e)
+        In (x, typeof e) lasts ->
+        wt_clock (vars ++ lasts) ck ->
+        wt_lexp (vars ++ lasts) e ->
+        wt_equation P vars lasts (EqNext x ck e)
   | wt_EqReset:
-      forall s ck f,
-        wt_clock vars ck ->
-        wt_equation P vars (EqReset s ck f)
+      forall s ck f b P',
+        find_block f P = Some (b, P') ->
+        wt_clock (vars ++ lasts) ck ->
+        wt_equation P vars lasts (EqReset s ck f)
   | wt_EqCall:
       forall s xs ck rst f es b P',
         find_block f P = Some (b, P') ->
         Forall2 (fun x xt => In (x, dty xt) vars) xs b.(b_out) ->
         Forall2 (fun e xt => typeof e = dty xt) es b.(b_in) ->
-        wt_clock vars ck ->
-        Forall (wt_lexp vars) es ->
-        wt_equation P vars (EqCall s xs ck rst f es).
+        wt_clock (vars ++ lasts) ck ->
+        Forall (wt_lexp (vars ++ lasts)) es ->
+        wt_equation P vars lasts (EqCall s xs ck rst f es).
 
   Definition wt_block (P: program) (b: block) : Prop :=
-    Forall (wt_equation P (idty (b.(b_in) ++ b.(b_vars) ++ b.(b_out))
-                                ++ map (fun x => (fst x, type_const (fst (snd x)))) b.(b_lasts)))
+    Forall (wt_equation P (idty (b.(b_in) ++ b.(b_vars) ++ b.(b_out)))
+                        (map (fun x => (fst x, type_const (fst (snd x)))) b.(b_lasts)))
            b.(b_eqs).
 
   (* TODO: replace Welldef_global; except for the Is_well_sch component.
@@ -92,19 +93,18 @@ Module Type SBTYPING
 
   Instance wt_equation_Proper:
     Proper (@eq program ==> @Permutation.Permutation (ident * type)
+                ==> @Permutation.Permutation (ident * type)
                 ==> @eq equation ==> iff)
            wt_equation.
   Proof.
-    intros G1 G2 HG env1 env2 Henv eq1 eq2 Heq.
-    rewrite Heq, HG.
+    intros G1 G2 HG env1 env2 Henv lasts1 lasts2 Hlasts eq1 eq2 Heq.
+    subst.
     split; intro WTeq.
-    - inv WTeq; rewrite Henv in *; eauto;
-        econstructor; eauto;
-          match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
-                          apply Forall2_impl_In with (2:=H) end;
-          intros; rewrite Henv in *; auto.
-    - inv WTeq; rewrite <-Henv in *; eauto;
-        econstructor; eauto;
+    - inv WTeq; rewrite Henv, Hlasts in *; econstructor; eauto;
+        match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
+                        apply Forall2_impl_In with (2:=H) end;
+        intros; rewrite Henv in *; auto.
+    - inv WTeq; rewrite <-Henv, <-Hlasts in *; econstructor; eauto;
           match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                           apply Forall2_impl_In with (2:=H) end;
           intros; rewrite Henv in *; auto.

@@ -2089,6 +2089,24 @@ Section Lists.
       now apply NoDup_app'.
   Qed.
 
+  Lemma NoDup_swap:
+    forall (x y z: list A),
+      NoDup (x ++ y ++ z) <->
+      NoDup (y ++ x ++ z).
+  Proof.
+    induction x; simpl; try reflexivity.
+    split; intros ** Nodup.
+    - inversion_clear Nodup as [|?? Notin]; apply NoDup_app_cons; split.
+      + intro Hin; apply Notin; rewrite 2 in_app.
+        apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
+      + now apply IHx.
+    - apply NoDup_app_cons in Nodup as (Notin &?).
+      constructor.
+      + intro Hin; apply Notin; rewrite 2 in_app.
+        apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
+      + now apply IHx.
+  Qed.
+
   Lemma in_filter:
     forall f x (l: list A), In x (filter f l) -> In x l.
   Proof.
@@ -2097,7 +2115,6 @@ Section Lists.
   simpl; destruct (f i); eauto.
   intro H; inv H; auto.
   Qed.
-
 
   Lemma nodup_filter:
     forall f (l: list A),

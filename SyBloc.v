@@ -9,6 +9,7 @@ Require Export Velus.SyBloc.SBIsDefined.
 Require Export Velus.SyBloc.SBIsFree.
 Require Export Velus.SyBloc.SBWellDefined.
 Require Export Velus.SyBloc.SBSchedule.
+Require Export Velus.SyBloc.SBTyping.
 Require Export Velus.SyBloc.SBClocking.
 
 Require Import Velus.Common.
@@ -30,6 +31,7 @@ Module Type SYBLOC
   Declare Module Export Def  : SBISDEFINED   Ids Op       Clks CE.Syn Syn Var Last.
   Declare Module Export Free : SBISFREE      Ids Op       Clks CE.Syn Syn CE.IsF.
   Declare Module Export Wdef : SBWELLDEFINED Ids Op       Clks CE.Syn Syn Block Ord Var Last Def CE.IsF Free.
+  Declare Module Export Typ  : SBTYPING      Ids Op       Clks CE.Syn Syn CE.Typ.
   Declare Module Export Clo  : SBCLOCKING    Ids Op       Clks CE.Syn Syn Last Var Def CE.Clo.
 
   Declare Module Scheduler   : SBSCHEDULE    Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem Sem.
@@ -54,6 +56,7 @@ Module SyBlocFun
   Module Export Def   := SBIsDefinedFun   Ids Op       Clks CE.Syn Syn Var Last.
   Module Export Free  := SBIsFreeFun      Ids Op       Clks CE.Syn Syn CE.IsF.
   Module Export Wdef  := SBWellDefinedFun Ids Op       Clks CE.Syn Syn Block Ord Var Last Def CE.IsF Free.
+  Module Export Typ   := SBTypingFun      Ids Op       Clks CE.Syn Syn CE.Typ.
   Module Export Clo   := SBClockingFun    Ids Op       Clks CE.Syn Syn Last Var Def CE.Clo.
 
   Module Scheduler    := SBScheduleFun    Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem Sem.

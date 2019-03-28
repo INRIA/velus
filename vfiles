@@ -56,6 +56,7 @@ SyBlocToObc/Correctness.v
 SyBlocToObc/SBMemoryCorres.v
 SyBlocToObc/Translation.v
 SyBlocToObc/SB2ObcInvariants.v
+SyBlocToObc/SB2ObcTyping.v
 ObcToClight/ObcClightCommon.v
 ObcToClight/Interface.v
 ObcToClight/Generation.v

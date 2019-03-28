@@ -217,24 +217,6 @@ Module Type SB2OBCINVARIANTS
   Qed.
   Hint Resolve reset_insts_Fusible.
 
-  Lemma NoDup_swap:
-    forall A (x y z: list A),
-      NoDup (x ++ y ++ z) <->
-      NoDup (y ++ x ++ z).
-  Proof.
-    induction x; simpl; try reflexivity.
-    split; intros ** Nodup.
-    - inversion_clear Nodup as [|?? Notin]; apply NoDup_app_cons; split.
-      + intro Hin; apply Notin; rewrite 2 in_app.
-        apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
-      + now apply IHx.
-    - apply NoDup_app_cons in Nodup as (Notin &?).
-      constructor.
-      + intro Hin; apply Notin; rewrite 2 in_app.
-        apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
-      + now apply IHx.
-  Qed.
-
   Lemma ClassFusible_translate:
     forall P,
       wc_program P ->

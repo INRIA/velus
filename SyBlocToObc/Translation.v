@@ -150,6 +150,14 @@ Module Type TRANSLATION
   Definition translate (P: SynSB.program) : program :=
     map translate_block P.
 
+  Lemma map_c_name_translate:
+    forall P,
+      map c_name (translate P) = map b_name P.
+  Proof.
+    induction P; auto.
+    simpl; rewrite IHP; auto.
+  Qed.
+
   Lemma exists_step_method:
     forall block,
       find_method step (translate_block block).(c_methods) = Some (step_method block).
@@ -227,6 +235,13 @@ Module Type TRANSLATION
     - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
       apply IHP in Hfind as (cls & prog' & Hfind & Hcls).
       exists cls, prog'. split; auto. simpl. now rewrite Hneq.
+  Qed.
+
+  Lemma typeof_correct:
+    forall mems e,
+      typeof (translate_lexp mems e) = CESyn.typeof e.
+  Proof.
+    induction e; intros; simpl; auto; cases.
   Qed.
 
 End TRANSLATION.

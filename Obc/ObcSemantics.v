@@ -392,24 +392,6 @@ Module Type OBCSEMANTICS
       H: stmt_eval _ _ _ Skip _ |- _ => inv H
     end.
 
-  Lemma Comp_Skip_right:
-    forall prog me ve s me' ve',
-      stmt_eval prog me ve (Comp s Skip) (me', ve')
-      <-> stmt_eval prog me ve s (me', ve').
-  Proof.
-    split; eauto using stmt_eval.
-    inversion_clear 1; now chase_skip.
-  Qed.
-
-  Lemma Comp_Skip_left:
-    forall prog me ve s me' ve',
-      stmt_eval prog me ve (Comp Skip s) (me', ve')
-      <-> stmt_eval prog me ve s (me', ve').
-  Proof.
-    split; eauto using stmt_eval.
-    inversion_clear 1; now chase_skip.
-  Qed.
-
 End OBCSEMANTICS.
 
 Module ObcSemanticsFun

@@ -24,13 +24,13 @@ Module Type EQUIV
        (Import OpAux : OPERATORS_AUX Op)
        (Import Syn   : OBCSYNTAX Ids Op OpAux)
        (Import Sem   : OBCSEMANTICS Ids Op OpAux Syn).
-  
+
   Definition stmt_eval_eq s1 s2: Prop :=
     forall prog menv env menv' env',
       stmt_eval prog menv env s1 (menv', env')
       <->
       stmt_eval prog menv env s2 (menv', env').
-  
+
   Lemma stmt_eval_eq_refl:
     reflexive stmt stmt_eval_eq.
   Proof. now apply iff_refl. Qed.
@@ -89,25 +89,15 @@ Module Type EQUIV
   Lemma stmt_eval_eq_Comp_Skip1:
     forall s, stmt_eval_eq (Comp Skip s) s.
   Proof.
-    intros s prog menv env menv' env'.
-    split.
-    - inversion_clear 1;
-      try match goal with
-          | H:stmt_eval _ _ _ Skip _ |- _ => inversion H; subst; assumption
-          end.
-    - intro HH; econstructor; [now econstructor|eassumption].
+    split; eauto using stmt_eval.
+    inversion_clear 1; now chase_skip.
   Qed.
 
   Lemma stmt_eval_eq_Comp_Skip2:
     forall s, stmt_eval_eq (Comp s Skip) s.
   Proof.
-    intros s prog menv env menv' env'.
-    split.
-    - inversion_clear 1;
-      try match goal with
-          | H:stmt_eval _ _ _ Skip _ |- _ => inversion H; subst; assumption
-          end.
-    - intro HH; econstructor; [eassumption|now constructor].
+    split; eauto using stmt_eval.
+    inversion_clear 1; now chase_skip.
   Qed.
 
   Instance stmt_eval_eq_Ifte_Proper:
@@ -136,7 +126,7 @@ Module Type EQUIV
           try apply val_to_bool_false';
           easy.
   Qed.
-  
+
 End EQUIV.
 
 Module EquivFun
@@ -148,4 +138,3 @@ Module EquivFun
        <: EQUIV Ids Op OpAux Syn Sem.
   Include EQUIV Ids Op OpAux Syn Sem.
 End EquivFun.
-

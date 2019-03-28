@@ -319,10 +319,13 @@ Qed.
 (*     inv WTeq. rewrite H7. intuition. *)
 (* Qed. *)
 
-Hint Resolve Obc.Fus.fuse_wt_program
-     Obc.Fus.fuse_call Obc.Fus.fuse_wt_mem
+Hint Resolve
+     Obc.Fus.fuse_wt_program
+     Obc.Fus.fuse_call
+     Obc.Fus.fuse_wt_mem
      fuse_loop_call
      (* Welldef_global_patch *)
+     SB2ObcTyping.translate_wt
      ClassFusible_translate.
 
 Lemma find_node_trace_spec:
@@ -364,12 +367,6 @@ Lemma behavior_clight:
          /\ bisim_io G main ins outs T.
 Proof.
   intros ** Hwc Hwt Hwti Hwto Hsem COMP.
-  (* apply Scheduler.scheduler_wc_global in Hwc. *)
-  (* apply Scheduler.scheduler_wt_global in Hwt. *)
-  (* apply scheduler_wt_ins in Hwti. *)
-  (* apply scheduler_wt_outs in Hwto. *)
-  (* apply Scheduler.scheduler_sem_node in Hsem. *)
-  (* setoid_rewrite scheduler_bisim_io. *)
   unfold nl_to_cl in COMP.
   simpl in COMP; repeat rewrite print_identity in COMP.
   destruct (schedule_program (NL2SB.translate G)) eqn: Sch;
@@ -381,16 +378,13 @@ Proof.
   apply is_well_sch_program in Wsch.
   repeat rewrite print_identity in COMP.
   pose proof COMP as COMP'.
-
-  (* edestruct dostep'_correct *)
-  (*   as (me0 & c_main & prog_main & Heval & Emain & Hwt_mem & Step); eauto. *)
-  assert (Ordered_nodes G) by admit.
   assert (exists n, find_node main G = Some n) as (main_node & Find)
       by (inv Hsem; eauto).
   pose proof Find as Find_node.
   apply NL2SB.find_node_translate in Find as (bl & P' & Find& ?); subst.
   apply Scheduler.scheduler_find_block in Find.
   apply SB2Obc.find_block_translate in Find as (c_main &?& Find &?&?); subst.
+  assert (Ordered_nodes G) by admit.
   apply sem_msem_node in Hsem as (M & M' & Hsem); auto.
   assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G)))
     by (split; auto; apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto).
@@ -400,104 +394,69 @@ Proof.
     set (sch_tr_G := Scheduler.schedule tr_G) in *;
     set (tr_sch_tr_G := SB2Obc.translate sch_tr_G) in *;
     set (tr_main_node := NL2SB.translate_node main_node) in *;
-    set (sch_tr_main_node := Scheduler.schedule_block tr_main_node) in *;
-    set (tr_sch_tr_main_node := SB2Obc.translate_block sch_tr_main_node) in *.
+    set (sch_tr_main_node := Scheduler.schedule_block tr_main_node) in *.
+  pose proof (SB2Obc.exists_reset_method sch_tr_main_node) as Find_reset.
+  pose proof (SB2Obc.exists_step_method sch_tr_main_node) as Find_step.
+  set (m_step := SB2Obc.step_method sch_tr_main_node) in *;
+    set (m_reset := SB2Obc.reset_method sch_tr_main_node) in *.
+  assert (wt_program tr_sch_tr_G) by admit.
+  assert (wt_mem me0 (SB2Obc.translate (Scheduler.schedule P'))
+                 (SB2Obc.translate_block sch_tr_main_node))
+    by (eapply pres_sem_stmt_call with (f := reset) in Find as ();
+        eauto; simpl; constructor).
+  assert (m_in m_step <> nil) as Step_in_spec.
+  { apply SB2Obc.find_method_stepm_in in Find_step.
+    rewrite Find_step; simpl.
+    pose proof (n_ingt0 main_node) as Hin.
+    intro E; rewrite <-length_idty, E in Hin; simpl in Hin; omega.
+  }
+  assert (m_out m_step <> nil) as Step_out_spec.
+  { apply SB2Obc.find_method_stepm_out in Find_step.
+    rewrite Find_step; simpl.
+    pose proof (n_outgt0 main_node) as Hout.
+    intro E; rewrite <-length_idty, E in Hout; simpl in Hout; omega.
+  }
+  assert (forall n, wt_vals (map sem_const (ins n)) (m_in m_step)) as Hwt_in
+      by (erewrite SB2Obc.find_method_stepm_in; eauto; simpl; eauto).
+  assert (forall n, wt_vals (map sem_const (outs n)) (m_out m_step)) as Hwt_out
+      by (erewrite SB2Obc.find_method_stepm_out; eauto; simpl; eauto).
+  pose proof (find_class_name _ _ _ _ Find) as Eq;
+    pose proof (find_method_name _ _ _ Find_step) as Eq';
+    pose proof (find_method_name _ _ _ Find_reset) as Eq'';
+    rewrite <-Eq, <-Eq'' in Rst; rewrite <-Eq in Hsem.
   unfold Generation.translate in COMP.
   unfold total_if in *.
   destruct (do_fusion tt).
-  - pose proof Find as Find'.
-    apply Obc.Fus.fuse_find_class in Find.
-    rewrite Find in *.
-    destruct (find_method Ids.step (c_methods (Obc.Fus.fuse_class tr_sch_tr_main_node)))
-      as [fuse_m_step|] eqn: Efusestep,
-                             (find_method reset (c_methods (Obc.Fus.fuse_class tr_sch_tr_main_node)))
-        as [fuse_m_reset|] eqn: Efusereset; try discriminate.
-    pose proof (find_class_name _ _ _ _ Find) as Eq;
-      pose proof (find_method_name _ _ _ Efusestep) as Eq';
-      pose proof (find_method_name _ _ _ Efusereset) as Eq'';
-      rewrite <-Eq, <-Eq'' in Rst; rewrite <-Eq in Hsem.
-    edestruct Obc.Fus.fuse_find_method with (1:=Efusereset)
-      as (m_reset & Eq_r & Ereset); subst fuse_m_reset.
-    edestruct Obc.Fus.fuse_find_method with (1:=Efusestep)
-      as (m_step & Eq_s & Estep); subst fuse_m_step.
-    subst tr_sch_tr_main_node.
-    rewrite SB2Obc.exists_reset_method in Ereset; inv Ereset.
-    assert (m_in (Obc.Fus.fuse_method m_step) <> nil) as Step_in_spec.
-    { rewrite Obc.Fus.fuse_method_in.
-      apply SB2Obc.find_method_stepm_in in Estep.
-      rewrite Estep; simpl.
-      pose proof (n_ingt0 main_node) as Hin.
-      intro E; rewrite <-length_idty, E in Hin; simpl in Hin; omega.
-    }
-    assert (m_out (Obc.Fus.fuse_method m_step) <> nil) as Step_out_spec.
-    { rewrite Obc.Fus.fuse_method_out.
-      apply SB2Obc.find_method_stepm_out in Estep.
-      rewrite Estep; simpl.
-      pose proof (n_outgt0 main_node) as Hout.
-      intro E; rewrite <-length_idty, E in Hout; simpl in Hout; omega.
-    }
-    assert (forall n, wt_vals (map sem_const (ins n))
-                         (m_in (Obc.Fus.fuse_method m_step))) as Hwt_in
-        by (erewrite Obc.Fus.fuse_method_in, SB2Obc.find_method_stepm_in;
-                    eauto; simpl; eauto).
-    assert (forall n, wt_vals (map sem_const (outs n))
-                         (m_out (Obc.Fus.fuse_method m_step))) as Hwt_out
-        by (erewrite Obc.Fus.fuse_method_out, SB2Obc.find_method_stepm_out;
-            eauto; simpl; eauto).
-    econstructor; split.
+  - pose proof Find as Find';
+      pose proof Find_step as Find_step';
+      pose proof Find_reset as Find_reset'.
+    apply Obc.Fus.fuse_find_class in Find;
+      apply Obc.Fus.fuse_find_method' in Find_step;
+      apply Obc.Fus.fuse_find_method' in Find_reset.
+    rewrite Find, Find_step, Find_reset in *.
+    rewrite <-Obc.Fus.fuse_method_in in Step_in_spec, Hwt_in;
+      rewrite <-Obc.Fus.fuse_method_out in Step_out_spec, Hwt_out.
+    econstructor; split; eauto.
     + eapply reacts'
-        with (1:=COMP') (6:=Find) (8:=Efusestep) (me0:=me0)
+        with (1:=COMP') (6:=Find) (8:=Find_step) (me0:=me0)
              (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
              (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto.
-       * apply Obc.Fus.fuse_wt_program; auto. admit.
-       * apply Obc.Fus.fuse_call; auto.
-         apply ClassFusible_translate; auto.  admit.
-       * apply Obc.Fus.fuse_wt_mem. admit.
-       * apply fuse_loop_call; eauto.
-         apply ClassFusible_translate; auto. admit.
+      * apply Obc.Fus.fuse_call; auto.
+        apply ClassFusible_translate; auto.
+        admit.
+      * apply fuse_loop_call; eauto.
+        apply ClassFusible_translate; auto.
+        admit.
     + eapply find_node_trace_spec; eauto.
-      * erewrite Obc.Fus.fuse_method_in, SB2Obc.find_method_stepm_in; eauto; reflexivity.
-      * erewrite Obc.Fus.fuse_method_out, SB2Obc.find_method_stepm_out; eauto; reflexivity.
 
-  - rewrite Find in *.
-    destruct (find_method Ids.step (c_methods tr_sch_tr_main_node))
-      as [m_step|] eqn: Estep,
-                        (find_method Ids.reset (c_methods tr_sch_tr_main_node))
-        as [m_reset|] eqn: Ereset; try discriminate.
-    pose proof (find_class_name _ _ _ _ Find) as Eq;
-      pose proof (find_method_name _ _ _ Estep) as Eq';
-      pose proof (find_method_name _ _ _ Ereset) as Eq'';
-      rewrite <-Eq, <-Eq'' in Rst; rewrite <-Eq in Hsem.
-    subst tr_sch_tr_main_node.
-    pose proof Ereset;
-      rewrite SB2Obc.exists_reset_method in Ereset; inv Ereset.
-    assert (m_in m_step <> nil) as Step_in_spec.
-    { apply SB2Obc.find_method_stepm_in in Estep.
-      rewrite Estep; simpl.
-      pose proof (n_ingt0 main_node) as Hin.
-      intro E; rewrite <-length_idty, E in Hin; simpl in Hin; omega.
-    }
-    assert (m_out m_step <> nil) as Step_out_spec.
-    { apply SB2Obc.find_method_stepm_out in Estep.
-      rewrite Estep; simpl.
-      pose proof (n_outgt0 main_node) as Hout.
-      intro E; rewrite <-length_idty, E in Hout; simpl in Hout; omega.
-    }
-    assert (forall n, wt_vals (map sem_const (ins n)) (m_in m_step)) as Hwt_in
-        by (erewrite SB2Obc.find_method_stepm_in; eauto; simpl; eauto).
-    assert (forall n, wt_vals (map sem_const (outs n)) (m_out m_step)) as Hwt_out
-        by (erewrite SB2Obc.find_method_stepm_out; eauto; simpl; eauto).
+  - rewrite Find, Find_step, Find_reset in *.
     econstructor; split.
     + eapply reacts'
-        with (1:=COMP') (6:=Find) (8:=Estep) (me0:=me0)
+        with (1:=COMP') (6:=Find) (8:=Find_step) (me0:=me0)
              (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
              (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out);
         eauto.
-      * admit.
-      * admit.
     + eapply find_node_trace_spec; eauto.
-      * erewrite SB2Obc.find_method_stepm_in; eauto; reflexivity.
-      * erewrite SB2Obc.find_method_stepm_out; eauto; reflexivity.
 Qed.
 
 (** The ultimate lemma states that, if

@@ -160,13 +160,6 @@ Module Type CORRECTNESS
 
     Variable (mems: PS.t).
 
-    Lemma typeof_correct:
-      forall e,
-        typeof (translate_lexp mems e) = CE.Syn.typeof e.
-    Proof.
-      induction e; intros; simpl; auto; cases.
-    Qed.
-
     Variable (R: env).
     Variable (me: menv) (ve: venv).
 
@@ -352,7 +345,7 @@ Module Type CORRECTNESS
     unfold reset_mems.
     induction mems as [|(x, (c, ck))]; simpl; intros.
     - rewrite add_mems_nil; eauto using stmt_eval.
-    - rewrite stmt_eval_fold_left_lift; setoid_rewrite Comp_Skip_left.
+    - rewrite stmt_eval_fold_left_lift; setoid_rewrite stmt_eval_eq_Comp_Skip1.
       do 2 eexists; split; eauto using stmt_eval, exp_eval.
       rewrite add_mems_cons; auto.
   Qed.
@@ -417,7 +410,7 @@ Module Type CORRECTNESS
     - intros ** StEval Lasts ??? Hin.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHblocks in StEvals; eauto.
-      rewrite Comp_Skip_left in StEval; inv StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
       now apply reset_lasts_add_inst.
   Qed.
 
@@ -433,7 +426,7 @@ Module Type CORRECTNESS
     - intros ** StEval Lasts ? Hin.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHblocks in StEvals; eauto.
-      rewrite Comp_Skip_left in StEval; inv StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
       now apply state_closed_lasts_add_inst.
   Qed.
 
@@ -448,7 +441,7 @@ Module Type CORRECTNESS
     - intros ** StEval.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHblocks in StEvals; eauto.
-      rewrite Comp_Skip_left in StEval; inv StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
       apply Env.adds_nil_l.
   Qed.
 
@@ -510,7 +503,7 @@ Module Type CORRECTNESS
     - intros ** StEval Notin; apply NotInMembers_cons in Notin as (); simpl in *.
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHblocks in StEvals; eauto.
-      rewrite Comp_Skip_left in StEval; inv StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
       rewrite StEvals, find_inst_gso; auto.
   Qed.
 
@@ -537,14 +530,14 @@ Module Type CORRECTNESS
     - inv E.
       unfold sub_inst.
       erewrite reset_insts_not_InMembers with (me' := me'); eauto.
-      rewrite Comp_Skip_left in StEval; inv StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
       match goal with H: Forall2 _ _ _ |- _ => inv H end.
       rewrite find_inst_gss.
       assert (rvs = []) as <-; eauto.
       apply not_None_is_Some in Find' as (()).
       eapply call_reset_inv; eauto.
     - assert (find_inst x me = find_inst x me_x') as ->; eauto.
-      rewrite Comp_Skip_left in StEval; inv StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
       rewrite find_inst_gso; auto.
       intro; subst; eapply Notin, In_InMembers; eauto.
   Qed.
@@ -562,7 +555,7 @@ Module Type CORRECTNESS
     - intros ** StEval Sub.
       apply stmt_eval_fold_left_lift in StEval as (me_x' &?& StEval & StEvals).
       eapply IHblocks in StEvals as [|Sub']; eauto.
-      rewrite Comp_Skip_left in StEval.
+      rewrite stmt_eval_eq_Comp_Skip1 in StEval.
       inv StEval.
       destruct (ident_eq_dec x x'); auto.
       unfold sub_inst in Sub'; rewrite find_inst_gso in Sub'; auto.
@@ -858,7 +851,7 @@ Module Type CORRECTNESS
     induction eqs as [|eq]; simpl; intros ** NIsDef StEval.
     - now inv StEval.
     - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
-        rewrite Comp_Skip_right in Hcomp.
+        rewrite stmt_eval_eq_Comp_Skip2 in Hcomp.
       apply not_Is_defined_in_cons in NIsDef as (?& Spec).
       eapply IHeqs with (me' := me'') in Spec; eauto.
       rewrite <-Spec.
@@ -897,7 +890,7 @@ Module Type CORRECTNESS
     induction eqs as [|eq]; simpl; intros ** NIsDef StEval.
     - now inv StEval.
     - apply stmt_eval_fold_left_shift in StEval as (me'' & ve'' &?& Hcomp);
-        rewrite Comp_Skip_right in Hcomp.
+        rewrite stmt_eval_eq_Comp_Skip2 in Hcomp.
       apply not_Is_defined_in_cons in NIsDef as (?& Spec).
       eapply IHeqs with (ve' := ve'') in Spec; eauto.
       rewrite <-Spec.
@@ -1037,7 +1030,7 @@ Module Type CORRECTNESS
           erewrite not_Is_defined_in_stmt_eval_venv_inv; eauto.
       + exists me'', ve''; split; [|split]; auto.
         * unfold translate_eqns; simpl.
-          rewrite stmt_eval_fold_left_shift; setoid_rewrite Comp_Skip_right; eauto.
+          rewrite stmt_eval_fold_left_shift; setoid_rewrite stmt_eval_eq_Comp_Skip2; eauto.
         * intros x v IsVar Hvar.
           destruct (Is_variable_in_eq_dec x eq) as [|Nvar]; auto.
           erewrite not_Is_variable_in_eq_stmt_eval_env_inv; eauto.
