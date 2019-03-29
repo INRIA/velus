@@ -8,6 +8,7 @@ open Ctypes
 
 let print_c = ref false
 let write_snlustre = ref false
+let write_sybloc = ref false
 let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
@@ -15,7 +16,6 @@ let write_sync = ref false
 
 let set_main_node s =
   Veluslib.main_node := Some s
-
 
 let get_main_node decls =
   let rec last_decl ds =
@@ -86,6 +86,8 @@ let parse toks =
 let compile source_name filename =
   if !write_snlustre
     then Veluslib.snlustre_destination := Some (filename ^ ".sn.lus");
+    if !write_sybloc
+    then Veluslib.sybloc_destination := Some (filename ^ ".syb");
   if !write_obc
     then Veluslib.obc_destination := Some (filename ^ ".obc");
   if !write_sync
@@ -120,6 +122,7 @@ let speclist = [
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dsnlustre",Arg.Set write_snlustre,
                             " Save the parsed SN-Lustre in <source>.sn.lus";
+  "-dsybloc", Arg.Set write_sybloc, " Save generated SyBloc in <source>.syb";
   "-dobc",    Arg.Set write_obc, " Save generated Obc in <source>.obc";
   "-dclight", Arg.Set write_cl,  " Save generated Clight in <source>.light.c";
   "-dcminor", Arg.Set write_cm,  " Save generated Cminor in <source>.minor.c";

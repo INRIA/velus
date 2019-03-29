@@ -2,7 +2,9 @@ B _build
 B _build/extraction/extracted
 S .
 S Lustre/Parser
+S CoreExpr
 S NLustre
+S SyBloc
 S Obc
 S ObcToClight
 S CompCert/common

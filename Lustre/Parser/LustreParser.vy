@@ -55,7 +55,7 @@ Import ListNotations.
     logical_OR_expression expression
 %type<LustreAst.constant * LustreAst.astloc> bool_constant
 %type<LustreAst.constant * LustreAst.astloc> constant
-%type<list LustreAst.expression> argument_expression_list 
+%type<list LustreAst.expression> argument_expression_list
 %type<LustreAst.unary_operator * LustreAst.astloc> unary_operator
 %type<LustreAst.var_decls> var_decl
 %type<LustreAst.var_decls> var_decl_list
@@ -98,7 +98,7 @@ Import ListNotations.
            !                 not                 not
            %                 mod                 mod
            ^               lxor, xor          xor, ^
-           ~                 lnot                
+           ~                 lnot
            <<                lsl
            >>                lsr
            &                 land
@@ -428,4 +428,3 @@ translation_unit_file:
     { List.rev lst }
 | EOF
     { [] }
-

@@ -87,7 +87,9 @@ extraction: proof
 		$(PARSERDIR)/Relexer.ml\
 		$(PARSERDIR)/LustreParser2.ml\
 		$(PARSERDIR)/LustreParser2.mli\
+		CoreExpr/coreexprlib.ml\
 		NLustre/nlustrelib.ml\
+		SyBloc/sybloclib.ml\
 		Obc/obclib.ml\
 		ObcToClight/interfacelib.ml\
 		$(COMPCERT_INCLUDES:%=$(COMPCERTDIR)/%/*.ml*)\

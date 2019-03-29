@@ -10,7 +10,7 @@ Require Export PArith.
 Require Import Omega.
 Require Import Coq.Classes.EquivDec.
 
-Require Import Velus.Environment.
+Require Export Velus.Environment.
 
 Open Scope list.
 
@@ -27,8 +27,6 @@ Module PSP := MSetProperties.WPropertiesOn Pos PS.
 Module PSF := MSetFacts.Facts PS.
 Module PSE := MSetEqProperties.WEqPropertiesOn Pos PS.
 Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
-
-Module Env := Env.
 
 Definition ident := positive.
 Definition ident_eq_dec := Pos.eq_dec.

@@ -42,6 +42,7 @@ Open Scope error_monad_scope.
 
 Parameter schedule      : ident -> list SB.Syn.equation -> list positive.
 Parameter print_snlustre: global -> unit.
+Parameter print_sybloc  : SB.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
 Parameter do_fusion     : unit -> bool.
 Parameter do_sync       : unit -> bool.
@@ -93,7 +94,7 @@ Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
   OK g
      @@ print print_snlustre
      @@ NL2SB.translate
-     (* @@ print print_sb *)
+     @@ print print_sybloc
      @@@ schedule_program
      @@ SB2Obc.translate
      @@ total_if do_fusion (map Obc.Fus.fuse_class)

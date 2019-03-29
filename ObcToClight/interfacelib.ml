@@ -141,7 +141,7 @@ module PrintClightOpsFun (OpNames : sig
       fprintf p "%a@ %s %a" print_exp e1
                             (OpNames.name_binop ty op)
                             print_exp e2
-      
+
     let prec_unop op = (15, RtoL)
     let prec_binop =
       let open Cop in function
@@ -155,42 +155,50 @@ module PrintClightOpsFun (OpNames : sig
         | Oor             -> ( 6, LtoR)
   end
 
+module Basics = struct
+  type typ   = Interface.Op.coq_type
+  type const = Interface.Op.const
+  type unop  = Interface.Op.unop
+  type binop = Interface.Op.binop
+end
+
+module CE = struct
+  include Basics
+  include Instantiator.Clks
+  include Instantiator.CE.Syn
+end
+
 module PrintNLustre = Nlustrelib.PrintFun
-  (struct
-      include Instantiator.Clks
+    (CE)
+    (struct
+      include CE
       include Instantiator.NL.Syn
-      type typ   = Interface.Op.coq_type
-      type const = Interface.Op.const
-      type unop  = Interface.Op.unop
-      type binop = Interface.Op.binop
-   end) (PrintClightOpsFun (LustreOpNames))
+    end)
+    (PrintClightOpsFun (LustreOpNames))
+
+module PrintSyBloc = Sybloclib.PrintFun
+    (CE)
+    (struct
+      include CE
+      include Instantiator.SB.Syn
+    end)
+    (PrintClightOpsFun (LustreOpNames))
 
 module PrintObc = Obclib.PrintFun
   (struct
-      include Instantiator.Obc.Syn
-      type typ   = Interface.Op.coq_type
-      type const = Interface.Op.const
-      type unop  = Interface.Op.unop
-      type binop = Interface.Op.binop
+    include Basics
+    include Instantiator.Obc.Syn
    end) (PrintClightOpsFun (ClightOpNames))
 
 module SyncFun = Obclib.SyncFun
   (struct
-      include Instantiator.Obc.Syn
-      type typ   = Interface.Op.coq_type
-      type const = Interface.Op.const
-      type unop  = Interface.Op.unop
-      type binop = Interface.Op.binop
+    include Basics
+    include Instantiator.Obc.Syn
    end)
   (ClightTypeFormats)
 
-module Scheduler = Nlustrelib.SchedulerFun
-  (struct
-      include Instantiator.Clks
-      include Instantiator.NL.Syn
-      type typ   = Interface.Op.coq_type
-      type const = Interface.Op.const
-      type unop  = Interface.Op.unop
-      type binop = Interface.Op.binop
-   end)
-
+module Scheduler = Sybloclib.SchedulerFun
+    (struct
+      include CE
+      include Instantiator.SB.Syn
+    end)

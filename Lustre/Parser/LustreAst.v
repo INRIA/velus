@@ -115,4 +115,3 @@ Definition declaration_loc (d: declaration) : astloc :=
   match d with
   | NODE name inputs outputs locals eqs loc => loc
   end.
-

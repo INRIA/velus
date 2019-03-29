@@ -11,7 +11,7 @@ Require ia32.Machregs ia32.Conventions1
         backend.Selection backend.RTLgen
         driver.Compiler cparser.Cabs.
 Require ZArith.BinIntDef.
-        
+
 Cd "extraction/extracted".
 
 Extraction Blacklist Int String List.
@@ -138,6 +138,7 @@ Extract Constant Cabs.char_code => "int64".
 
 Extract Constant VelusCorrectness.print_snlustre =>
   "Veluslib.print_snlustre_if".
+Extract Constant VelusCorrectness.print_sybloc => "Veluslib.print_sybloc_if".
 Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
 Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
 Extract Constant VelusCorrectness.do_sync => "Veluslib.do_sync".
