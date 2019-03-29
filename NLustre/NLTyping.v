@@ -3,6 +3,7 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
+Require Import Velus.NLustre.Ordered.
 Require Import Velus.CoreExpr.CETyping.
 
 Require Import List.
@@ -26,6 +27,7 @@ Module Type NLTYPING
        (Import Clks  : CLOCKS   Ids)
        (Import CESyn : CESYNTAX     Op)
        (Import Syn   : NLSYNTAX Ids Op Clks CESyn)
+       (Import Ord   : ORDERED  Ids Op Clks CESyn Syn)
        (Import CETyp : CETYPING Ids Op Clks CESyn).
 
   Inductive wt_equation (G: global) (vars: list (ident * type)): equation -> Prop :=
@@ -113,6 +115,24 @@ Module Type NLTYPING
           intros; rewrite Henv in *; auto.
   Qed.
 
+  Lemma wt_global_Ordered_nodes:
+    forall G,
+      wt_global G ->
+      Ordered_nodes G.
+  Proof.
+    induction G as [|n G]; intros ** WT; auto using Ordered_nodes.
+    inv WT.
+    constructor; auto.
+    intros **  Hni.
+    eapply Forall_Exists, Exists_exists in Hni as (eq & Hin & WTeq & Hni); eauto.
+    inv Hni; inv WTeq;
+      assert (Exists (fun n' => f = n_name n') G) as Hn
+        by (apply find_node_Exists, not_None_is_Some; eauto);
+      split; auto; intro; subst;
+        eapply Forall_Exists, Exists_exists in Hn as (?&?&?&?); eauto;
+          contradiction.
+  Qed.
+
 End NLTYPING.
 
 Module NLTypingFun
@@ -121,7 +141,8 @@ Module NLTypingFun
        (Clks  : CLOCKS   Ids)
        (CESyn : CESYNTAX     Op)
        (Syn   : NLSYNTAX Ids Op Clks CESyn)
+       (Ord   : ORDERED  Ids Op Clks CESyn Syn)
        (CETyp : CETYPING Ids Op Clks CESyn)
-       <: NLTYPING Ids Op Clks CESyn Syn CETyp.
-  Include NLTYPING Ids Op Clks CESyn Syn CETyp.
+       <: NLTYPING Ids Op Clks CESyn Syn Ord CETyp.
+  Include NLTYPING Ids Op Clks CESyn Syn Ord CETyp.
 End NLTypingFun.

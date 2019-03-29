@@ -14,7 +14,7 @@ Import List.ListNotations.
 Require Import Coq.Sorting.Permutation.
 Require Import Morphisms.
 
-Open Scope positive.
+(* Open Scope positive. *)
 Open Scope list.
 
 (** * Translation *)

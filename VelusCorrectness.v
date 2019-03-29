@@ -321,12 +321,14 @@ Qed.
 
 Hint Resolve
      Obc.Fus.fuse_wt_program
-     Obc.Fus.fuse_call
+(*      Obc.Fus.fuse_call *)
      Obc.Fus.fuse_wt_mem
      fuse_loop_call
-     (* Welldef_global_patch *)
-     SB2ObcTyping.translate_wt
-     ClassFusible_translate.
+(*      NL2SBTyping.translate_wt *)
+(*      Scheduler.scheduler_wt_program *)
+(*      SB2ObcTyping.translate_wt *)
+(*      ClassFusible_translate. *)
+.
 
 Lemma find_node_trace_spec:
   forall G f node ins outs m
@@ -384,7 +386,7 @@ Proof.
   apply NL2SB.find_node_translate in Find as (bl & P' & Find& ?); subst.
   apply Scheduler.scheduler_find_block in Find.
   apply SB2Obc.find_block_translate in Find as (c_main &?& Find &?&?); subst.
-  assert (Ordered_nodes G) by admit.
+  assert (Ordered_nodes G) by (eapply wt_global_Ordered_nodes; eauto).
   apply sem_msem_node in Hsem as (M & M' & Hsem); auto.
   assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G)))
     by (split; auto; apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto).
@@ -399,7 +401,9 @@ Proof.
   pose proof (SB2Obc.exists_step_method sch_tr_main_node) as Find_step.
   set (m_step := SB2Obc.step_method sch_tr_main_node) in *;
     set (m_reset := SB2Obc.reset_method sch_tr_main_node) in *.
-  assert (wt_program tr_sch_tr_G) by admit.
+  assert (wt_program tr_sch_tr_G)
+    by (apply SB2ObcTyping.translate_wt, Scheduler.scheduler_wt_program,
+        NL2SBTyping.translate_wt; auto).
   assert (wt_mem me0 (SB2Obc.translate (Scheduler.schedule P'))
                  (SB2Obc.translate_block sch_tr_main_node))
     by (eapply pres_sem_stmt_call with (f := reset) in Find as ();
@@ -448,7 +452,6 @@ Proof.
         apply ClassFusible_translate; auto.
         admit.
     + eapply find_node_trace_spec; eauto.
-
   - rewrite Find, Find_step, Find_reset in *.
     econstructor; split.
     + eapply reacts'

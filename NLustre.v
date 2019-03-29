@@ -25,7 +25,7 @@ Module Type NLUSTRE
   Declare Module Export Ord    : ORDERED         Ids Op       Clks CE.Syn Syn.
   Declare Module Export IsF    : ISFREE          Ids Op       Clks CE.Syn Syn CE.IsF.
   Declare Module Export Sem    : NLSEMANTICS     Ids Op OpAux Clks CE.Syn Syn Str Ord CE.Sem.
-  Declare Module Export Typ    : NLTYPING        Ids Op       Clks CE.Syn Syn CE.Typ.
+  Declare Module Export Typ    : NLTYPING        Ids Op       Clks CE.Syn Syn     Ord CE.Typ.
   Declare Module Export Mem    : MEMORIES        Ids Op       Clks CE.Syn Syn.
   Declare Module Export IsD    : ISDEFINED       Ids Op       Clks CE.Syn Syn                     Mem.
   Declare Module Export IsV    : ISVARIABLE      Ids Op       Clks CE.Syn Syn                     Mem IsD.
@@ -49,7 +49,7 @@ Module NLustreFun
   Module Export Ord     := OrderedFun         Ids Op       Clks CE.Syn Syn.
   Module Export IsF     := IsFreeFun          Ids Op       Clks CE.Syn Syn CE.IsF.
   Module Export Sem     := NLSemanticsFun     Ids Op OpAux Clks CE.Syn Syn Str Ord CE.Sem.
-  Module Export Typ     := NLTypingFun        Ids Op       Clks CE.Syn Syn CE.Typ.
+  Module Export Typ     := NLTypingFun        Ids Op       Clks CE.Syn Syn     Ord CE.Typ.
   Module Export Mem     := MemoriesFun        Ids Op       Clks CE.Syn Syn.
   Module Export IsD     := IsDefinedFun       Ids Op       Clks CE.Syn Syn                     Mem.
   Module Export IsV     := IsVariableFun      Ids Op       Clks CE.Syn Syn                     Mem IsD.

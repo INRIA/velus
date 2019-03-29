@@ -34,7 +34,7 @@ Module Type SYBLOC
   Declare Module Export Typ  : SBTYPING      Ids Op       Clks CE.Syn Syn CE.Typ.
   Declare Module Export Clo  : SBCLOCKING    Ids Op       Clks CE.Syn Syn Last Var Def CE.Clo.
 
-  Declare Module Scheduler   : SBSCHEDULE    Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem Sem.
+  Declare Module Scheduler   : SBSCHEDULE    Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem Sem CE.Typ Typ.
 
 End SYBLOC.
 
@@ -59,5 +59,5 @@ Module SyBlocFun
   Module Export Typ   := SBTypingFun      Ids Op       Clks CE.Syn Syn CE.Typ.
   Module Export Clo   := SBClockingFun    Ids Op       Clks CE.Syn Syn Last Var Def CE.Clo.
 
-  Module Scheduler    := SBScheduleFun    Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem Sem.
+  Module Scheduler    := SBScheduleFun    Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem Sem CE.Typ Typ.
 End SyBlocFun.

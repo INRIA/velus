@@ -15,6 +15,8 @@ Require Import Velus.SyBloc.SBOrdered.
 Require Import Velus.CoreExpr.Stream.
 Require Import Velus.CoreExpr.CESemantics.
 Require Import Velus.SyBloc.SBSemantics.
+Require Import Velus.CoreExpr.CETyping.
+Require Import Velus.SyBloc.SBTyping.
 
 Require Import RMemory.
 
@@ -40,7 +42,7 @@ Module Type EXT_NLSCHEDULER
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import Clks   : CLOCKS   Ids)
-       (Import CESyn: CESYNTAX Op)
+       (Import CESyn  : CESYNTAX Op)
        (Import Syn    : SBSYNTAX Ids Op Clks CESyn).
 
   Parameter schedule : ident -> list equation -> list positive.
@@ -52,13 +54,15 @@ Module Type SBSCHEDULE
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX       Op)
        (Import Clks   : CLOCKS          Ids)
-       (Import CESyn: CESYNTAX        Op)
+       (Import CESyn: CESYNTAX              Op)
        (Import Syn    : SBSYNTAX        Ids Op       Clks CESyn)
        (Import Block  : SBISBLOCK       Ids Op       Clks CESyn Syn)
        (Import Ord    : SBORDERED       Ids Op       Clks CESyn Syn Block)
        (Import Str    : STREAM              Op OpAux)
-       (Import CESem: CESEMANTICS Ids Op OpAux Clks CESyn               Str)
+       (Import CESem  : CESEMANTICS     Ids Op OpAux Clks CESyn               Str)
        (Import Sem    : SBSEMANTICS     Ids Op OpAux Clks CESyn Syn Block Ord Str CESem)
+       (Import CETyp  : CETYPING        Ids Op       Clks CESyn)
+       (Import Typ    : SBTYPING        Ids Op       Clks CESyn Syn CETyp)
        (Import Sch    : EXT_NLSCHEDULER Ids Op       Clks CESyn Syn).
 
   Section OCombine.
@@ -296,41 +300,43 @@ Module Type SBSCHEDULE
     inv Hfind; eauto.
   Qed.
 
-  (* Lemma scheduler_wt_equation: *)
-  (*   forall G vars eq, *)
-  (*     wt_equation G vars eq -> *)
-  (*     wt_equation (schedule G) vars eq. *)
-  (* Proof. *)
-  (*   induction G as [|n G IH]. *)
-  (*   - now destruct eq; inversion_clear 1; eauto with nltyping. *)
-  (*   - destruct eq; inversion_clear 1; eauto with nltyping; *)
-  (*       match goal with H:find_node _ _ = _ |- _ => *)
-  (*                       apply scheduler_find_node in H end; *)
-  (*       destruct n0; eauto with nltyping. *)
-  (* Qed. *)
+  Lemma scheduler_wt_equation:
+    forall P vars lasts eq,
+      wt_equation P vars lasts eq ->
+      wt_equation (schedule P) vars lasts eq.
+  Proof.
+    induction P as [|b].
+    - destruct eq; inversion_clear 1; eauto.
+    - destruct eq; inversion_clear 1; eauto;
+        match goal with H:find_block _ _ = _ |- _ =>
+                        apply scheduler_find_block in H end;
+        eauto using wt_equation.
+  Qed.
 
-  (* Lemma scheduler_wt_global: *)
-  (*   forall G, *)
-  (*     wt_global G -> *)
-  (*     wt_global (schedule G). *)
-  (* Proof. *)
-  (*   intros G HG. *)
-  (*   induction G as [|n G Hwt IH]; auto. *)
-  (*   inv HG. simpl. *)
-  (*   apply wtg_cons; auto. *)
-  (*   - unfold wt_node in *. *)
-  (*     destruct n; simpl in *. *)
-  (*     rewrite schedule_eqs_permutation. *)
-  (*     eapply Forall_impl with (2:=H2). *)
-  (*     apply scheduler_wt_equation. *)
-  (*   - change (Forall (fun n'=> *)
-  (*                       (fun x => n_name (schedule_node n) <> x) n'.(n_name)) *)
-  (*                    (schedule G)). *)
-  (*     rewrite <-Forall_map. *)
-  (*     rewrite schedule_map_name. *)
-  (*     rewrite Forall_map. *)
-  (*     destruct n; auto. *)
-  (* Qed. *)
+  Lemma scheduler_wt_block:
+    forall P b,
+      wt_block P b ->
+      wt_block (schedule P) (schedule_block b).
+  Proof.
+    unfold wt_block; simpl; intros ** WT.
+    rewrite schedule_eqs_permutation.
+    apply Forall_impl with (2 := WT), scheduler_wt_equation.
+  Qed.
+
+  Lemma scheduler_wt_program:
+    forall P,
+      wt_program P ->
+      wt_program (schedule P).
+  Proof.
+    induction P as [|b]; inversion_clear 1; simpl;
+      constructor; auto.
+    - now apply scheduler_wt_block.
+    - change (Forall (fun b'=>
+                        (fun x => b_name (schedule_block b) <> x) b'.(b_name))
+                     (schedule P)).
+      rewrite <-Forall_map, schedule_map_name, Forall_map.
+      destruct b; auto.
+  Qed.
 
   (* Lemma schedule_wc_equation: *)
   (*   forall G vars eq, *)
@@ -452,14 +458,16 @@ Module SBScheduleFun
        (Op     : OPERATORS)
        (OpAux  : OPERATORS_AUX       Op)
        (Clks   : CLOCKS          Ids)
-       (CESyn: CESYNTAX        Op)
+       (CESyn: CESYNTAX              Op)
        (Syn    : SBSYNTAX        Ids Op       Clks CESyn)
        (Block  : SBISBLOCK       Ids Op       Clks CESyn Syn)
        (Ord    : SBORDERED       Ids Op       Clks CESyn Syn Block)
        (Str    : STREAM              Op OpAux)
-       (CESem: CESEMANTICS Ids Op OpAux Clks CESyn               Str)
+       (CESem  : CESEMANTICS     Ids Op OpAux Clks CESyn               Str)
        (Sem    : SBSEMANTICS     Ids Op OpAux Clks CESyn Syn Block Ord Str CESem)
+       (CETyp  : CETYPING        Ids Op       Clks CESyn)
+       (Typ    : SBTYPING        Ids Op       Clks CESyn Syn CETyp)
        (Sch    : EXT_NLSCHEDULER Ids Op       Clks CESyn Syn)
-<: SBSCHEDULE Ids Op OpAux Clks CESyn Syn Block Ord Str CESem Sem Sch.
-  Include SBSCHEDULE Ids Op OpAux Clks CESyn Syn Block Ord Str CESem Sem Sch.
+<: SBSCHEDULE Ids Op OpAux Clks CESyn Syn Block Ord Str CESem Sem CETyp Typ Sch.
+  Include SBSCHEDULE Ids Op OpAux Clks CESyn Syn Block Ord Str CESem Sem CETyp Typ Sch.
 End SBScheduleFun.
