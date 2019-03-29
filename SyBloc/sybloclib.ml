@@ -115,19 +115,18 @@ module PrintFun
     let rec print_equation p eq =
       match eq with
       | SB.EqDef (x, ck, e) ->
-        fprintf p "@[<hov 2>%s =@ %a;@]"
+        fprintf p "@[<hov 2>%s =@ %a@]"
           (extern_atom x) print_cexpr e
       | SB.EqNext (x, ck, e) ->
-        fprintf p "@[<hov 2>next@ %s =@ %a;@]"
+        fprintf p "@[<hov 2>next@ %s =@ %a@]"
           (extern_atom x) print_lexpr e
       | SB.EqReset (s, ck, f) ->
-          fprintf p "@[<hov 2>reset<%s>(%s)@ every@ %a;@]"
-            (extern_atom s)
+        fprintf p "@[<hov 2>reset(%s<%s>)@ every@ %a@]"
             (extern_atom f)
+            (extern_atom s)
             print_clock ck
       | SB.EqCall (s, xs, ck, _, f, es) ->
-        fprintf p "@[<hov 2><next %s>@ %a =@ %s<%s>(@[<hv 0>%a@]);@]"
-          (extern_atom s)
+        fprintf p "@[<hov 2>%a =@ %s<%s>(@[<hv 0>%a@])@]"
           print_multiple_results xs
           (extern_atom f)
           (extern_atom s)
@@ -154,7 +153,7 @@ module PrintFun
                         SB.b_eqs    = eqs } =
       fprintf p "@[<v>";
       fprintf p "@[<hov 0>";
-      fprintf p "@[<h>block %s<>(%a)@]@;"
+      fprintf p "@[<h>block %s (%a)@]@;"
         (extern_atom name)
         print_decl_list inputs;
       fprintf p "@[<h>returns (%a)@]@;"
@@ -190,6 +189,7 @@ module SchedulerFun (SB: SYNTAX) :
         fun () -> let r = !np in (np := Pos.succ !np; r)
       in
       List.rev (List.map (fun _ -> next_pos ()) eqs)
+
     (* let debug = false
      *
      * (\** Status information for each equation *\)

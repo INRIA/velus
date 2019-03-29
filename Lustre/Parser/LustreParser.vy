@@ -45,6 +45,8 @@ Import ListNotations.
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
 
+%token<LustreAst.astloc> EVERY
+
 %token<LustreAst.astloc> EOF
 
 %type<LustreAst.expression> primary_expression postfix_expression
@@ -136,7 +138,10 @@ postfix_expression:
 | expr=primary_expression
     { expr }
 | fn=VAR_NAME LPAREN args=argument_expression_list RPAREN
-    { LustreAst.CALL (fst fn) (rev args) (snd fn) }
+    { LustreAst.CALL (fst fn) (rev args) None (snd fn) }
+| fn=VAR_NAME LPAREN args=argument_expression_list RPAREN
+  EVERY r=VAR_NAME
+    { LustreAst.CALL (fst fn) (rev args) (Some (fst r)) (snd fn) }
 
 (* Semantic value is in reverse order. *)
 argument_expression_list:

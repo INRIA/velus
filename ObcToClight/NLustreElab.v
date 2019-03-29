@@ -439,11 +439,19 @@ Section ElabExpressions.
             end;
     do (xty, xck) <- find_var loc x;
     match ae with
-    | CALL f aes loc =>
+    | CALL f aes r loc =>
       do (tysin, tysout) <- find_node_interface loc f;
       do es <- elab_lexps loc xck aes tysin;
       do ok <- check_result_list loc xck xs tysout;
-      OK (EqApp xs xck f es None)
+      match r with
+      | None => OK (EqApp xs xck f es None)
+      | Some r =>
+        do (rty, rck) <- find_var loc r;
+          do ok <- assert_type loc r rty bool_type;
+          if rck ==b xck then OK (EqApp xs xck f es (Some r))
+          else Error (err_loc loc (MSG "badly clocked reset: "
+                                       :: msg_of_clocks xck rck))
+      end
 
     | FBY ae0 ae loc =>
       do v0 <- elab_constant_with_cast loc ae0;
@@ -675,6 +683,24 @@ Section ElabExpressions.
       unfold find_node_interface in EQ0. NamedDestructCases.
       destruct EQ2.
       destruct wt_nenv as (wt_nenv' & ?).
+      specialize (wt_nenv' f _ _ Heq0).
+      destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
+      econstructor; eauto.
+      + apply Forall2_map_1 in Hout.
+        apply Forall2_eq in Hout.
+        rewrite <-Hout in Hele.
+        now apply Forall2_map_2 in Hele.
+      + apply Forall2_map_1 with (f0:=typeof) in H2.
+        apply Forall2_eq in H2.
+        rewrite <-H2 in Hin.
+        apply Forall2_map_2, Forall2_swap_args in Hin.
+        apply Forall2_impl_In with (2:=Hin).
+        intros ** Htypeof. now rewrite Htypeof.
+    - rename x1 into xin, x2 into xout, i into f, x3 into ein, l0 into xs,
+      x0 into ck, a into loc'.
+      unfold find_node_interface in EQ0. NamedDestructCases.
+      destruct EQ2.
+      destruct wt_nenv as (wt_nenv' & ?).
       specialize (wt_nenv' f _ _ Heq).
       destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
       econstructor; eauto.
@@ -715,6 +741,7 @@ Section ElabExpressions.
              | _ => NamedDestructCases
              end; intros; subst;
         eauto using wc_equation, wc_cexp, wc_lexp with nltyping.
+    admit.
     admit.
   Qed.
 

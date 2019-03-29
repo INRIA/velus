@@ -36,6 +36,7 @@ let () =
       ("bool",     fun loc -> tok BOOL't     loc);
       ("double",   fun loc -> tok FLOAT64't  loc); (* LEGACY *)
       ("else",     fun loc -> tok ELSE't     loc);
+      ("every",    fun loc -> tok EVERY't    loc);
       ("false",    fun loc -> tok FALSE't    loc);
       ("fby",      fun loc -> tok FBY't      loc);
       ("float",    fun loc -> tok FLOAT32't  loc); (* LEGACY *)
@@ -360,4 +361,3 @@ and singleline_comment = parse
     in
     Lazy.from_fun loop
 }
-

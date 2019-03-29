@@ -80,7 +80,7 @@ Inductive expression :=
 | BINARY   : binary_operator -> expression -> expression -> astloc -> expression
 | IFTE     : expression -> expression -> expression -> astloc -> expression
 | CAST     : type_name -> expression -> astloc -> expression
-| CALL     : ident -> list expression -> astloc -> expression
+| CALL     : ident -> list expression -> option ident -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
 | FBY      : expression -> expression -> astloc -> expression
@@ -94,7 +94,7 @@ Definition expression_loc (e: expression) : astloc :=
   | BINARY _ _ _ l => l
   | IFTE _ _ _ l => l
   | CAST _ _ l => l
-  | CALL _ _ l => l
+  | CALL _ _ _ l => l
   | CONSTANT _ l => l
   | VARIABLE _ l => l
   | FBY _ _ l => l
