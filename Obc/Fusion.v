@@ -747,6 +747,19 @@ Module Type FUSION
     intuition.
   Qed.
 
+  Corollary fuse_loop_call:
+    forall f c ins outs prog me,
+      Forall ClassFusible prog ->
+      loop_call prog c f ins outs 0 me ->
+      loop_call (map fuse_class prog) c f ins outs 0 me.
+  Proof.
+    intros ?????; generalize 0%nat.
+    cofix COINDHYP.
+    intros n ** Hdo.
+    destruct Hdo.
+    econstructor; eauto using fuse_call.
+  Qed.
+
   (** ** Fusion preserves well-typing. *)
 
   Lemma wt_stmt_map_fuse_class:

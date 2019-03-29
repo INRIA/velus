@@ -22,10 +22,12 @@ Require Import Coq.ZArith.BinInt.
 Require Import NLustreToSyBloc.Translation.
 Require Import NLustreToSyBloc.Correctness.
 Require Import NLustreToSyBloc.NL2SBTyping.
+Require Import NLustreToSyBloc.NL2SBClocking.
 
-Module NL2SB       := TranslationFun Ids Op       Clks     CE.Syn NL.Syn SB.Syn NL.Mem.
-Module NL2SBCorr   := CorrectnessFun Ids Op OpAux Clks Str CE NL SB NL2SB.
-Module NL2SBTyping := NL2SBTypingFun Ids Op OpAux Clks Str CE NL SB NL2SB.
+Module NL2SB         := TranslationFun   Ids Op       Clks     CE.Syn NL.Syn SB.Syn NL.Mem.
+Module NL2SBCorr     := CorrectnessFun   Ids Op OpAux Clks Str CE NL SB NL2SB.
+Module NL2SBTyping   := NL2SBTypingFun   Ids Op OpAux Clks Str CE NL SB NL2SB.
+Module NL2SBClocking := NL2SBClockingFun Ids Op OpAux Clks Str CE NL SB NL2SB.
 
 Require Import Obc.
 

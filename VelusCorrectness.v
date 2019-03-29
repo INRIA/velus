@@ -131,32 +131,6 @@ Definition wt_outs :=
 
 End WtStream.
 
-(* Lemma scheduler_wt_ins: *)
-(*   forall G f ins, *)
-(*     wt_ins G f ins -> *)
-(*     wt_ins (Scheduler.schedule G) f ins. *)
-(* Proof. *)
-(*   unfold wt_ins. *)
-(*   intros G f ins Hwt n node Hfind. *)
-(*   apply Scheduler.scheduler_find_node' in Hfind. *)
-(*   destruct Hfind as (node' & Hfind & Hnode). *)
-(*   apply Hwt with (n:=n) in Hfind. *)
-(*   subst. destruct node'; auto. *)
-(* Qed. *)
-
-(* Lemma scheduler_wt_outs: *)
-(*   forall G f outs, *)
-(*     wt_outs G f outs -> *)
-(*     wt_outs (Scheduler.schedule G) f outs. *)
-(* Proof. *)
-(*   unfold wt_outs. *)
-(*   intros G f ins Hwt n node Hfind. *)
-(*   apply Scheduler.scheduler_find_node' in Hfind. *)
-(*   destruct Hfind as (node' & Hfind & Hnode). *)
-(*   apply Hwt with (n:=n) in Hfind. *)
-(*   subst. destruct node'; auto. *)
-(* Qed. *)
-
 Section Bisim.
 
   Variable G: global.
@@ -252,82 +226,17 @@ dataflow node at each instant. *)
 
 End Bisim.
 
-(* Lemma scheduler_bisim_io: *)
-(*   forall G main ins outs T, *)
-(*     bisim_io G main ins outs T <-> *)
-(*     bisim_io (Scheduler.schedule G) main ins outs T. *)
-(* Proof. *)
-(*   intros G main ins outs T. *)
-(*   split; unfold bisim_io; generalize 0%nat; revert T; cofix CH. *)
-(*   - intros T n HH. *)
-(*     destruct HH. *)
-(*     match goal with H:find_node _ _ = _ |- _ => *)
-(*       apply Scheduler.scheduler_find_node in H end. *)
-(*     destruct node0; eauto using bisim_io'. *)
-(*   - intros T n HH. *)
-(*     destruct HH. *)
-(*     match goal with H:find_node _ _ = _ |- _ => *)
-(*       apply Scheduler.scheduler_find_node' in H; *)
-(*       destruct H as (node & Hfind & Hnode0) end. *)
-(*     subst. *)
-(*     destruct node; eauto using bisim_io'. *)
-(* Qed. *)
-
-Lemma fuse_loop_call:
-  forall f c ins outs G me,
-    Forall Obc.Fus.ClassFusible (SB2Obc.translate G) ->
-    Obc.Sem.loop_call (SB2Obc.translate G) c f ins outs 0 me ->
-    Obc.Sem.loop_call (map Obc.Fus.fuse_class (SB2Obc.translate G)) c f ins outs 0 me.
-Proof.
-  intros f c ins outs G.
-  generalize 0%nat.
-  cofix COINDHYP.
-  intros n ** Hdo.
-  destruct Hdo.
-  econstructor; eauto using Obc.Fus.fuse_call.
-Qed.
-
-(* Lemma Welldef_global_patch: *)
-(*   forall G, *)
-(*     Wellsch_global G -> *)
-(*     wt_global G -> *)
-(*     Welldef_global G. *)
-(* Proof. *)
-(*   induction G as [|n G]; intros; auto using Welldef_global. *)
-(*   inv H. inv H0. *)
-(*   specialize (IHG H4 H2). *)
-(*   constructor; auto. *)
-(*   - intro Hni. clear H3 H4. *)
-(*     apply Forall_Exists with (1:=H5) in Hni. clear H5. *)
-(*     apply Exists_exists in Hni. *)
-(*     destruct Hni as (eq & Hin & WTeq & Hni). *)
-(*     inv Hni. simpl in *. *)
-(*     unfold wt_node in *. *)
-(*     inv WTeq. *)
-(*     assert (find_node n.(n_name) G <> None) as Hfind *)
-(*         by (now apply not_None_is_Some; exists n0). *)
-(*     apply find_node_Exists in Hfind. *)
-(*     apply Forall_Exists with (1:=H6) in Hfind. *)
-(*     apply Exists_exists in Hfind. *)
-(*     destruct Hfind as (n' & Hin' & Hne & He). *)
-(*     intuition. *)
-(*   - intros f Hni. *)
-(*     apply Forall_Exists with (1:=H5) in Hni. clear H5. *)
-(*     apply Exists_exists in Hni. *)
-(*     destruct Hni as (eq & Hin & WTeq & Hni). *)
-(*     destruct eq; inv Hni. *)
-(*     inv WTeq. rewrite H7. intuition. *)
-(* Qed. *)
-
 Hint Resolve
      Obc.Fus.fuse_wt_program
-(*      Obc.Fus.fuse_call *)
+     Obc.Fus.fuse_call
      Obc.Fus.fuse_wt_mem
-     fuse_loop_call
+     Obc.Fus.fuse_loop_call
 (*      NL2SBTyping.translate_wt *)
 (*      Scheduler.scheduler_wt_program *)
 (*      SB2ObcTyping.translate_wt *)
-(*      ClassFusible_translate. *)
+     ClassFusible_translate
+     Scheduler.scheduler_wc_program
+     NL2SBClocking.translate_wc
 .
 
 Lemma find_node_trace_spec:
@@ -441,16 +350,14 @@ Proof.
     rewrite <-Obc.Fus.fuse_method_in in Step_in_spec, Hwt_in;
       rewrite <-Obc.Fus.fuse_method_out in Step_out_spec, Hwt_out.
     econstructor; split; eauto.
-    + eapply reacts'
-        with (1:=COMP') (6:=Find) (8:=Find_step) (me0:=me0)
+    + assert (Forall Obc.Fus.ClassFusible tr_sch_tr_G)
+        by (apply ClassFusible_translate; auto;
+            apply Scheduler.scheduler_wc_program; eauto;
+            apply NL2SBClocking.translate_wc; auto).
+      eapply reacts'
+        with (1:=COMP') (6:=Find) (7:=Find_reset) (8:=Find_step) (me0:=me0)
              (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
              (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto.
-      * apply Obc.Fus.fuse_call; auto.
-        apply ClassFusible_translate; auto.
-        admit.
-      * apply fuse_loop_call; eauto.
-        apply ClassFusible_translate; auto.
-        admit.
     + eapply find_node_trace_spec; eauto.
   - rewrite Find, Find_step, Find_reset in *.
     econstructor; split.

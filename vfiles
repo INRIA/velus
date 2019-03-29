@@ -47,6 +47,7 @@ SyBloc.v
 NLustreToSyBloc/Correctness.v
 NLustreToSyBloc/Translation.v
 NLustreToSyBloc/NL2SBTyping.v
+NLustreToSyBloc/NL2SBClocking.v
 Obc/ObcSyntax.v
 Obc/ObcTyping.v
 Obc/ObcSemantics.v

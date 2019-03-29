@@ -1,6 +1,5 @@
 B _build
-B _build/extraction/extract
-B _build/CompCert/*
+B _build/extraction/extracted
 S .
 S Lustre/Parser
 S NLustre
