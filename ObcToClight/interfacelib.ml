@@ -198,6 +198,7 @@ module SyncFun = Obclib.SyncFun
   (ClightTypeFormats)
 
 module Scheduler = Sybloclib.SchedulerFun
+    (CE)
     (struct
       include CE
       include Instantiator.SB.Syn
