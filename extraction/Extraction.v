@@ -6,11 +6,13 @@ Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.NLustreElab.
 Require Import Lustre.Parser.LustreParser.
 
-Require ia32.Machregs ia32.Conventions1
-        cfrontend.Initializers cfrontend.Ctyping
+Require cfrontend.Initializers cfrontend.Ctyping
         backend.Selection backend.RTLgen
         driver.Compiler cparser.Cabs.
 Require ZArith.BinIntDef.
+
+(* Processor-specific extraction directives *)
+Load extractionMachdep.
 
 Cd "extraction/extracted".
 
@@ -39,6 +41,8 @@ Extract Constant Compopts.optim_CSE =>
 "fun _ -> !Clflags.option_fcse".
 Extract Constant Compopts.optim_redundancy =>
   "fun _ -> !Clflags.option_fredundancy".
+Extract Constant Compopts.thumb =>
+  "fun _ -> !Clflags.option_mthumb".
 Extract Constant Compopts.debug =>
   "fun _ -> !Clflags.option_g".
 
@@ -58,10 +62,6 @@ Extract Constant Allocation.regalloc => "Regalloc.regalloc".
 
 (* Linearize *)
 Extract Constant Linearize.enumerate_aux => "Linearizeaux.enumerate_aux".
-
-(* SelectOp *)
-Extract Constant SelectOp.symbol_is_external =>
-  "fun id -> Configuration.system = ""macosx"" && C2C.atom_is_extern id".
 
 Extract Constant Ident.pos_of_str => "(fun str -> Camlcoq.(str |> camlstring_of_coqstring |> intern_string))".
 Extract Constant Ident.pos_to_str => "(fun pos -> Camlcoq.(pos |> extern_atom |> coqstring_of_camlstring))".

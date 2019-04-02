@@ -1233,7 +1233,9 @@ Section PRESERVATION.
     destruct t'; simpl.
     - destruct i, s; econstructor; split; eauto.
     - econstructor; split; eauto.
-    - destruct f; econstructor; split; eauto.
+    - destruct f; econstructor; split; eauto;
+        try match goal with |- (align_chunk AST.Mfloat64 | align_attr noattr 8) =>
+                            exists 2; auto end.
   Qed.
   Hint Resolve param_chunk.
 

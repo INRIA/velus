@@ -1,3 +1,5 @@
+include ../../variables.mk
+
 .PHONY: all clean
 
 all: LustreParser.v LustreLexer.ml LustreParser2.ml LustreParser2.mli

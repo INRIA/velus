@@ -402,7 +402,7 @@ Definition vardef (env: Ctypes.composite_env) (volatile: bool) (x: ident * Ctype
                 (AST.mkglobvar ty' [AST.Init_space (Ctypes.sizeof env ty')] false volatile)).
 
 Definition build_composite_env' (types: list Ctypes.composite_definition) :
-  { ce | Ctypes.build_composite_env types = OK ce } + errmsg.
+  res { ce | Ctypes.build_composite_env types = OK ce }.
 Proof.
   destruct (Ctypes.build_composite_env types) as [ce|msg].
   - left. exists ce; auto.
@@ -435,7 +435,7 @@ Definition make_program'
            (public: idents)
            (main: ident) : res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
-  | inl (exist ce P) =>
+  | OK (exist ce P) =>
     do _ <- check_size_env ce types;
       OK {| Ctypes.prog_defs := map (vardef ce false) gvars ++
                                 map (vardef ce true) gvars_vol ++
@@ -445,7 +445,7 @@ Definition make_program'
             Ctypes.prog_types := types;
             Ctypes.prog_comp_env := ce;
             Ctypes.prog_comp_env_eq := P |}
-  | inr msg => Error msg
+  | Error msg => Error msg
   end.
 
 Definition translate (do_sync: bool) (all_public: bool)

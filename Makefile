@@ -2,63 +2,11 @@
 # invoke make with 'VERBOSE=1' to verbose the output
 #
 
-VELUSMAIN=velusmain
-VELUS=velus
-
-MAKEFILEAUTO=Makefile.auto
-MAKEFILECONFIG=Makefile.config
-COQPROJECT=_CoqProject
-include $(MAKEFILECONFIG)
-
-# CompCert flags
-COMPCERTFLAGS=$(SILENT) -C $(COMPCERTDIR)
-COMPCERT_INCLUDES=lib cfrontend backend common driver cparser debug $(ARCH)
-
-PARSERDIR=Lustre/Parser
-PARSERFLAGS=$(SILENT) -C $(PARSERDIR)
-
-TOOLSDIR=tools
-AUTOMAKE=automake
-
-EXTRACTION=extraction
-EXTRACTED=$(EXTRACTION)/extracted
-$(shell mkdir -p $(EXTRACTED) >/dev/null)
-
-EXAMPLESDIR=examples
-EXAMPLESFLAGS=$(SILENT) -C $(EXAMPLESDIR)
-
-# Menhir includes from CompCert
-include $(COMPCERTDIR)/Makefile.menhir
-export MENHIR
-comma:= ,
-empty:=
-space:= $(empty) $(empty)
-MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
-
-# ocamlbuild flags
-VERBOSITY=-verbose 1
-FLAGS=-use-ocamlfind -use-menhir -pkgs str,unix,menhirLib \
-	-cflags $(MENHIR_INCLUDES)$(WARNINGS) \
-	-I $(EXTRACTED) -no-hygiene $(VERBOSITY)
-TARGET=native
-BUILDDIR=_build
-
-# flag to prevent coqc from taking CompCert directories into account (see Makefile.auto)
-export OTHERFLAGS=-exclude-dir $(COMPCERTDIR)
-
-bold=$(shell tput bold)
-normal=$(shell tput sgr0)
+include variables.mk
 
 .PHONY: all clean compcert parser proof extraction $(VELUS) $(EXAMPLESDIR)
 
 all: $(VELUS)
-
-ifndef VERBOSE
-SILENT=-s
-WARNINGS=,-w,-3-20
-VERBOSITY=
-.SILENT:
-endif
 
 # COMPCERT COQ
 compcert: $(COMPCERTDIR)/Makefile.config
