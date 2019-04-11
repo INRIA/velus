@@ -766,6 +766,18 @@ Module Type NLSEMANTICSCOIND
         constructor; eapply synchronized_EqSt_Proper; eauto.
   Qed.
 
+  Lemma sem_var_det:
+    forall x H xs xs',
+      sem_var H x xs ->
+      sem_var H x xs' ->
+      xs ≡ xs'.
+  Proof.
+    inversion_clear 1 as [???? Find E];
+      inversion_clear 1 as [???? Find' E'];
+      rewrite Find in Find'; inv Find'.
+    etransitivity; eauto; symmetry; auto.
+  Qed.
+
 End NLSEMANTICSCOIND.
 
 (* Module NLSemanticsCoIndRecFun *)

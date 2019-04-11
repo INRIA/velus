@@ -24,17 +24,17 @@ Require Import Velus.NLustre.NLSemanticsCoInd.
 
 Require Import Setoid.
 Module Type INDEXEDTOCOIND
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX        Op)
-       (Import CESyn   : CESYNTAX             Op)
-       (Import Syn     : NLSYNTAX         Ids Op       CESyn)
-       (Import Str     : STREAM               Op OpAux)
-       (Import Ord     : ORDERED          Ids Op       CESyn Syn)
-       (CESem          : CESEMANTICS      Ids Op OpAux CESyn     Str)
-       (Indexed        : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Interp  : NLINTERPRETOR    Ids Op OpAux CESyn Str         CESem)
-       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
+       (Import Ids    : IDS)
+       (Import Op     : OPERATORS)
+       (Import OpAux  : OPERATORS_AUX        Op)
+       (Import CESyn  : CESYNTAX             Op)
+       (Import Syn    : NLSYNTAX         Ids Op       CESyn)
+       (Import Str    : STREAM               Op OpAux)
+       (Import Ord    : ORDERED          Ids Op       CESyn Syn)
+       (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
+       (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
+       (Import Interp : NLINTERPRETOR    Ids Op OpAux CESyn Str         CESem)
+       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
 
   Section Global.
 
@@ -255,10 +255,10 @@ Module Type INDEXEDTOCOIND
     (** An inversion principle for [sem_var]. *)
     Lemma sem_var_inv:
       forall H x xs,
-      CESem.sem_var H x xs ->
-      exists xs',
-        Env.find x H = Some xs'
-        /\ xs ≈ xs'.
+        CESem.sem_var H x xs ->
+        exists xs',
+          Env.find x H = Some xs'
+          /\ xs ≈ xs'.
     Proof.
       unfold CESem.sem_var, CESem.lift'.
       intros ** Sem.
@@ -275,8 +275,8 @@ Module Type INDEXEDTOCOIND
 
     Lemma sem_var_impl_from:
       forall n H x xs,
-      CESem.sem_var H x xs ->
-      CoInd.sem_var (tr_history_from n H) x (tr_stream_from n xs).
+        CESem.sem_var H x xs ->
+        CoInd.sem_var (tr_history_from n H) x (tr_stream_from n xs).
     Proof.
       intros ** Sem.
       apply sem_var_inv in Sem as (? & Find & E).
@@ -288,8 +288,8 @@ Module Type INDEXEDTOCOIND
 
     Corollary sem_var_impl:
       forall H x xs,
-      CESem.sem_var H x xs ->
-      CoInd.sem_var (tr_history H) x (tr_stream xs).
+        CESem.sem_var H x xs ->
+        CoInd.sem_var (tr_history H) x (tr_stream xs).
     Proof. apply sem_var_impl_from. Qed.
     Hint Resolve sem_var_impl_from sem_var_impl.
 
@@ -385,7 +385,7 @@ Module Type INDEXEDTOCOIND
         Qed.
     *)
 
-   (** This tactic automatically uses the interpretor to give a witness stream. *)
+    (** This tactic automatically uses the interpretor to give a witness stream. *)
     Ltac interp_str b H x Sem :=
       let Sem_x := fresh "Sem_" x in
       let sol sem interp sound :=
@@ -489,8 +489,6 @@ Module Type INDEXEDTOCOIND
       - left; exists c1, c2, c'; intuition CESem.sem_det.
       - right; intuition CESem.sem_det.
     Qed.
-
-    (** ** Semantics of clocks *)
 
     Ltac rewrite_strs :=
       repeat match goal with
@@ -1049,12 +1047,87 @@ Module Type INDEXEDTOCOIND
         CoInd.clocks_of (tr_streams xss) ≡ tr_stream (CESem.clock_of xss).
     Proof. apply tr_clocks_of_from. Qed.
 
+    Lemma sem_clocked_var_inv:
+      forall b H x xs ck,
+        CESem.sem_var H x xs ->
+        CESem.sem_clocked_var b H x ck ->
+        exists bs,
+          CESem.sem_clock b H ck bs
+          /\ (forall n, bs n = true <-> xs n <> absent).
+    Proof.
+      intros ** Var Sem.
+      assert (CESem.sem_clock b H ck (interp_clock b H ck)) as SemCk.
+      { intro n; specialize (Sem n); specialize (Var n); destruct Sem as (Sem & Sem').
+        unfold interp_clock, lift.
+        destruct (xs n).
+        - erewrite <-interp_clock_instant_sound; eauto; apply Sem'; auto.
+        - erewrite <-interp_clock_instant_sound; eauto; apply Sem; eauto.
+      }
+      exists (interp_clock b H ck); split; auto.
+      intro n; specialize (Var n); specialize (SemCk n); specialize (Sem n);
+        destruct Sem as (Sem & Sem').
+      split.
+      - intros E E'.
+        rewrite E in SemCk; apply Sem in SemCk as (?&?).
+        rewrite E' in Var.
+        eapply CESem.sem_var_instant_det in Var; eauto; discriminate.
+      - intro E; apply not_absent_present in E as (?& E).
+        rewrite E in Var.
+        assert (CESem.sem_clock_instant (b n) (CESem.restr_hist H n) ck true)
+          by (apply Sem; eauto).
+        eapply CESem.sem_clock_instant_det; eauto.
+    Qed.
+
+    Lemma sem_clocked_var_impl_from:
+      forall n H b x xs ck,
+        CESem.sem_var H x xs ->
+        CESem.sem_clocked_var b H x ck ->
+        CoInd.sem_clocked_var (tr_history_from n H) (tr_stream_from n b) x ck.
+    Proof.
+      intros ** Var Sem; eapply sem_clocked_var_inv in Sem as (bs & Clock & Spec); eauto.
+      apply sem_var_impl_from with (n := n) in Var;
+        apply sem_clock_impl_from with (n := n) in Clock.
+      split; eauto.
+      intros ** Var'.
+      eapply CoInd.sem_var_det in Var; eauto.
+      eexists; split; eauto.
+      rewrite Var.
+      clear - Spec.
+      generalize n; clear n.
+      cofix COFIX; intros.
+      rewrite init_from_n, (init_from_n bs).
+      destruct (xs n) eqn: E.
+      - assert (bs n = false) as ->
+            by (rewrite <-Bool.not_true_iff_false, Spec; auto).
+        constructor; auto.
+      - assert (bs n = true) as ->
+            by (apply Spec; intro; congruence).
+        constructor; auto.
+    Qed.
+
+    Corollary sem_clocked_var_impl:
+      forall H b x xs ck,
+        CESem.sem_var H x xs ->
+        CESem.sem_clocked_var b H x ck ->
+        CoInd.sem_clocked_var (tr_history H) (tr_stream b) x ck.
+    Proof. apply sem_clocked_var_impl_from. Qed.
+
     Lemma sem_clocked_vars_impl:
-      forall H b xs,
+      forall H b xs xss,
+        CESem.sem_vars H (List.map fst xs) xss ->
         CESem.sem_clocked_vars b H xs ->
         CoInd.sem_clocked_vars (tr_history H) (tr_stream b) xs.
     Proof.
-    Admitted.
+      unfold CESem.sem_clocked_vars; intros ** Vars Sem.
+      apply Forall_forall; intros (x, ck) Hin.
+      apply sem_vars_inv in Vars.
+      pose proof Hin as Hin'.
+      apply in_map with (f := fst) in Hin.
+      eapply Forall2_in_left in Vars as (?&?&?); eauto.
+      eapply sem_clocked_var_impl; eauto.
+      intro n; specialize (Sem n).
+      eapply Forall_forall in Sem; eauto.
+    Qed.
     Hint Resolve sem_clocked_vars_impl.
 
     (** The final theorem stating the correspondence for nodes applications.
@@ -1098,6 +1171,8 @@ Module Type INDEXEDTOCOIND
         CESem.assert_const_length xss.
         econstructor; eauto.
         + rewrite tr_clocks_of; eauto.
+          eapply sem_clocked_vars_impl; eauto.
+          rewrite map_fst_idck; eauto.
         + apply Forall_forall; intros ** Hin.
           rewrite tr_clocks_of; auto.
           eapply Forall_forall in Heqs; eapply Forall_forall in IH; eauto.

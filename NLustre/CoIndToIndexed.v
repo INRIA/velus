@@ -341,13 +341,11 @@ Module Type COINDTOINDEXED
 
     (** We can then deduce the correspondence lemma for [sem_clock]. *)
     Corollary sem_clock_impl:
-      forall n H b ck bs,
+      forall H b ck bs,
         CoInd.sem_clock H b ck bs ->
-        CESem.sem_clock_instant (tr_Stream b n)
-                                  (CESem.restr_hist (tr_History H) n) ck
-                                  (tr_Stream bs n).
+        CESem.sem_clock (tr_Stream b) (tr_History H) ck (tr_Stream bs).
     Proof.
-      intros ** Indexed.
+      intros ** Indexed n.
       apply (sem_clock_index n) in Indexed as [|[|[|]]]; destruct_conjs;
         match goal with H: tr_Stream _ _ = _ |- _ => rewrite H end;
         subst; eauto.
@@ -472,7 +470,7 @@ Module Type COINDTOINDEXED
                                       |? ? ? ? ? ? Indexed' Hck];
           apply sem_lexp_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
-              apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck.
+              eapply (sem_clock_impl) in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
@@ -638,7 +636,7 @@ Module Type COINDTOINDEXED
                                       |? ? ? ? ? ? Indexed' Hck];
           apply sem_cexp_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
-              apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck.
+              apply sem_clock_impl in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
@@ -784,23 +782,64 @@ Module Type COINDTOINDEXED
 
     (** Give an indexed specification for Streams synchronization. *)
     Lemma synchronized_index:
-      forall n xs bs,
+      forall xs bs,
         CoInd.synchronized xs bs ->
-        (tr_Stream bs n = true <-> tr_Stream xs n <> absent).
+        forall n, tr_Stream bs n = true <-> tr_Stream xs n <> absent.
     Proof.
-      induction n.
-      - inversion_clear 1; rewrite 2 tr_Stream_0; intuition; discriminate.
-      - intros ** Synchro.
-        rewrite <-2 tr_Stream_tl; apply IHn.
-        inv Synchro; auto.
+      intros ** Sync n; revert dependent xs; revert bs; induction n; intros.
+      - inversion_clear Sync; rewrite 2 tr_Stream_0; intuition; discriminate.
+      - rewrite <-2 tr_Stream_tl; apply IHn.
+        inv Sync; auto.
+    Qed.
+
+    Lemma sem_clocked_var_impl:
+      forall H b x ck xs,
+        CoInd.sem_var H x xs ->
+        CoInd.sem_clocked_var H b x ck ->
+        CESem.sem_clocked_var (tr_Stream b) (tr_History H) x ck.
+    Proof.
+      intros ** Var (Sem & Sem').
+      pose proof Var as Var'.
+      apply Sem in Var as (bs & Clock & Sync); rename Var' into Var.
+      apply sem_var_impl in Var;
+        apply sem_clock_impl in Clock.
+      pose proof (synchronized_index _ _ Sync) as Spec.
+      intro n; specialize (Var n); specialize (Clock n).
+      split; split.
+      - intros ** Clock'.
+        eapply CESem.sem_clock_instant_det in Clock; eauto.
+        symmetry in Clock; apply Spec, not_absent_present in Clock as (?& E).
+        rewrite E in Var; eauto.
+      - intros (?& Var').
+        eapply CESem.sem_var_instant_det in Var; eauto.
+        assert (tr_Stream bs n = true) as <-; auto.
+        apply Spec; intro; congruence.
+      - intros ** Clock'.
+        eapply CESem.sem_clock_instant_det in Clock; eauto.
+        symmetry in Clock; rewrite <-Bool.not_true_iff_false, Spec in Clock.
+        assert (tr_Stream xs n = absent) as <-; auto.
+        apply Decidable.not_not in Clock; auto.
+        apply decidable_eq_value.
+      - intros Var'.
+        eapply CESem.sem_var_instant_det in Var; eauto.
+        assert (tr_Stream bs n = false) as <-; auto.
+        rewrite <-Bool.not_true_iff_false, Spec; auto.
     Qed.
 
     Lemma sem_clocked_vars_impl:
-      forall H b xcs,
+      forall H b xcs xss,
+        Forall2 (CoInd.sem_var H) (List.map fst xcs) xss ->
         CoInd.sem_clocked_vars H b xcs ->
         CESem.sem_clocked_vars (tr_Stream b) (tr_History H) xcs.
     Proof.
-    Admitted.
+      intros ** Vars Sem n.
+      apply Forall_forall; intros (x, ck) Hin; simpl.
+      pose proof Hin as Hin'.
+      apply in_map with (f := fst) in Hin.
+      eapply Forall2_in_left in Vars as (?&?&?); eauto.
+      eapply sem_clocked_var_impl; eauto.
+      eapply Forall_forall in Sem; eauto; auto.
+    Qed.
     Hint Resolve sem_clocked_vars_impl.
 
     (** The final theorem stating the correspondence for nodes applications.
@@ -823,9 +862,11 @@ Module Type COINDTOINDEXED
 
       - econstructor; eauto.
         intro; rewrite tr_clocks_of; auto.
+        apply sem_clock_impl; auto.
 
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.
+          apply sem_clock_impl; auto.
         + apply reset_of_impl; auto.
 
       - econstructor; auto; subst; eauto.
@@ -838,7 +879,8 @@ Module Type COINDTOINDEXED
 
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.
-          apply sem_clocked_vars_impl; auto.
+          eapply sem_clocked_vars_impl; auto.
+          rewrite map_fst_idck; eauto.
         + apply Forall_forall; intros ** Hin.
           rewrite tr_clocks_of.
           eapply Forall_forall in IH; eauto; eapply Forall_forall in Heqs; eauto.

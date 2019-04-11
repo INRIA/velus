@@ -171,6 +171,21 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     unfold nequiv_decb; setoid_rewrite Bool.negb_involutive; auto.
   Qed.
 
+  Lemma value_eqb_eq:
+    forall (x y: value), x ==b y = true <-> x = y.
+  Proof.
+    setoid_rewrite equiv_decb_equiv; reflexivity.
+  Qed.
+
+  Lemma decidable_eq_value:
+    forall (x y: value),
+      Decidable.decidable (x = y).
+  Proof.
+    intros; unfold Decidable.decidable.
+    setoid_rewrite <-value_eqb_eq.
+    destruct (x ==b y); auto.
+  Qed.
+
 End OPERATORS_AUX.
 
 Module OperatorsAux (Import Ops : OPERATORS) <: OPERATORS_AUX Ops.
