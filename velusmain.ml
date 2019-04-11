@@ -7,6 +7,7 @@ open Builtins
 open Ctypes
 
 let print_c = ref false
+let write_lustre = ref false
 let write_snlustre = ref false
 let write_sybloc = ref false
 let write_obc = ref false
@@ -21,7 +22,7 @@ let get_main_node decls =
   let rec last_decl ds =
     match ds with
     | [] -> (Printf.fprintf stderr "no nodes found"; exit 1)
-    | [LustreAst.NODE (n, _, _, _, _, _)] -> n
+    | [LustreAst.NODE (n, _, _, _, _, _, _)] -> n
     | _::ds -> last_decl ds
   in
   match !Veluslib.main_node with
@@ -83,7 +84,22 @@ let parse toks =
   | LustreParser.Parser.Inter.Parsed_pr (ast, _) ->
     (Obj.magic ast : LustreAst.declaration list)
 
+(* XXX *)
+let hacked_compile d main_node =
+  let open Compiler in
+  let open VelusCorrectness in
+  apply_partial
+    (apply_total
+      (apply_total
+        (apply_partial (Instantiator.LtoNL.to_global d)
+                       (fun g -> df_to_cl main_node g))
+        (print print_Clight)) add_builtins) ClightToAsm.transf_clight2_program
+(* XXX *)
+
 let compile source_name filename =
+  Format.printf "compile@."; (* XXX *)
+  if !write_lustre
+    then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
   if !write_snlustre
     then Veluslib.snlustre_destination := Some (filename ^ ".sn.lus");
     if !write_sybloc
@@ -99,6 +115,23 @@ let compile source_name filename =
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in
+  (* XXX Elaboration testing. Compilation disconnected. XXX *)
+  let p =
+    match LustreElab.elab_declarations ast with
+    | Errors.OK p -> p
+    | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
+  Format.printf "%a@." Interfacelib.PrintLustre.print_global p;
+  (* XXX *)
+  match Compiler.apply_partial
+          (hacked_compile p main_node)
+          Asmexpand.expand_program with
+  | Error errmsg -> Driveraux.print_error stderr errmsg; exit 1
+  | OK asm ->
+    let oc = open_out (filename ^ ".s") in
+    PrintAsm.print_program oc asm;
+    close_out oc
+  (* XXX *)
+(*
   match Compiler.apply_partial
           (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with
@@ -107,6 +140,7 @@ let compile source_name filename =
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;
     close_out oc
+ *)
 
 let process file =
   if Filename.check_suffix file ".ept"
@@ -116,19 +150,29 @@ let process file =
   else
     raise (Arg.Bad ("don't know what to do with " ^ file))
 
+let set_fullclocks () =
+  Interfacelib.PrintNLustre.print_fullclocks := true;
+  Interfacelib.PrintLustre.print_fullclocks := true
+
 let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
   "-sync", Arg.Set write_sync,   " Generate sync() in <source>.sync.c";
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
+  "-dlustre",Arg.Set write_lustre,
+                            " Save the parsed Lustre in <source>.parsed.lus";
   "-dsnlustre",Arg.Set write_snlustre,
                             " Save the parsed SN-Lustre in <source>.sn.lus";
   "-dsybloc", Arg.Set write_sybloc, " Save generated SyBloc in <source>.syb";
   "-dobc",    Arg.Set write_obc, " Save generated Obc in <source>.obc";
   "-dclight", Arg.Set write_cl,  " Save generated Clight in <source>.light.c";
   "-dcminor", Arg.Set write_cm,  " Save generated Cminor in <source>.minor.c";
-  "-fullclocks", Arg.Set Interfacelib.PrintNLustre.print_fullclocks,
+  "-fullclocks", Arg.Unit set_fullclocks,
                                  " Print 'full' clocks in declarations";
+  "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
+                                 " Show result clocks of nested applications";
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
+  "-noaddwhens", Arg.Clear Veluslib.add_when_to_constants,
+                               " Do not automatically add 'when' to constants";
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
 ]
 
@@ -151,3 +195,4 @@ let _ =
 
 let _ =
   Arg.parse (Arg.align speclist) process usage_msg
+

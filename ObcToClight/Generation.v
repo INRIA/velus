@@ -70,6 +70,8 @@ Fixpoint translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
     translate_unop op (translate_exp c m e) (cltype ty)
   | Binop op e1 e2 ty =>
     translate_binop op (translate_exp c m e1) (translate_exp c m e2) (cltype ty)
+  | Valid e =>
+    translate_exp c m e
   end.
 
 Fixpoint list_type_to_typelist (tys: list Ctypes.type): Ctypes.typelist :=

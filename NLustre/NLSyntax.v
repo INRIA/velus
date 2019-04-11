@@ -14,7 +14,6 @@ Open Scope list_scope.
 Module Type NLSYNTAX
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS          Ids)
        (Import CESyn : CESYNTAX Op).
 
   (** ** Equations *)
@@ -215,13 +214,24 @@ Module Type NLSYNTAX
   Definition gather_insts := concatMap gather_inst_eq.
   Definition gather_app_vars := concatMap gather_app_vars_eq.
 
+(*  Lemma find_node_In:
+    forall f G n,
+      find_node f G = Some n ->
+      In n G.
+  Proof.
+    intros ** Hfind.
+    apply find_node_split in Hfind.
+    destruct Hfind as (bG & aG & Hge).
+    rewrite Hge. auto using in_app with datatypes.
+  Qed.
+*)
+
 End NLSYNTAX.
 
 Module NLSyntaxFun
        (Ids     : IDS)
        (Op      : OPERATORS)
-       (Clks    : CLOCKS          Ids)
-       (CESyn : CESYNTAX Op)
-       <: NLSYNTAX Ids Op Clks CESyn.
-  Include NLSYNTAX Ids Op Clks CESyn.
+       (CESyn   : CESYNTAX Op)
+       <: NLSYNTAX Ids Op CESyn.
+  Include NLSYNTAX Ids Op CESyn.
 End NLSyntaxFun.

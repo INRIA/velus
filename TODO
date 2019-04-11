@@ -1,3 +1,5 @@
+* Rename AST into ParseTree (or similar)
+
 * Refactor [lexp] to [exp]
 
 Using modules to deal with namespace conflicts when importing both
@@ -12,12 +14,6 @@ single, common notation.
 * Remove [sem_var_instant]
 
 It's not really a semantic rule.
-
-* Remove the [rhs_absent_instant] predicate
-
-It is just used re-stating the fact that, if the base clock is
-[false], the equations do not produce any ouput. At the moment, the
-proof uses it as an indirection to use that result.
 
 * Type of CoreDF programs
 
@@ -73,3 +69,17 @@ And use a qualified import to disambiguate.
 * [equiv_env] is misleading
 
 It is not an [equivalence], rather a [faithful] map.
+
+* Allocate explicit identifiers to node instances.
+
+Currently, the instance name of a node application
+[y0, ..., yn = f(e0, ..., em)] comes from the first result variable, i.e.,
+[y0].
+This approach has two disadvantages.
+
+(1) There is no way to translate calls with no return values.
+
+(2) translate_eqn uses [hd Ids.default ys] which necessitates awkward lemmas
+    and conditions to rule out the default case, e.g.,
+    [not_Is_Defined_in_eq_stmt_eval_mobj_inv] and [non_trivial_EqApp].
+

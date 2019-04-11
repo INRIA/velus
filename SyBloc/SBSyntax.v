@@ -9,10 +9,9 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBSYNTAX
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
-       (Import CESyn : CESYNTAX     Op).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import CESyn : CESYNTAX Op).
 
   (** ** Equations *)
 
@@ -89,7 +88,7 @@ Module Type SBSYNTAX
 
         b_ingt0 : 0 < length b_in;
 
-        b_nodup : NoDup (map fst b_in ++ map fst b_lasts ++ map fst b_vars ++ map fst b_out);
+        b_nodup : NoDup (map fst b_in ++ map fst b_vars ++ map fst b_out ++ map fst b_lasts);
         b_nodup_lasts_blocks: NoDup (map fst b_lasts ++ map fst b_blocks);
 
         b_blocks_in_eqs: forall f, In f (map snd b_blocks) <-> In f (map snd (calls_of b_eqs ++ resets_of b_eqs));
@@ -114,7 +113,8 @@ Module Type SBSYNTAX
   Proof.
     intro; pose proof (b_nodup b) as Nodup.
     apply fst_NoDupMembers.
-    apply NoDup_comm, NoDup_app_weaken, NoDup_app_weaken in Nodup; auto.
+    rewrite 2 app_assoc in Nodup.
+    apply NoDup_comm, NoDup_app_weaken in Nodup; auto.
   Qed.
 
   Lemma b_nodup_blocks:
@@ -129,11 +129,8 @@ Module Type SBSYNTAX
     forall b, NoDupMembers (b_in b ++ b_vars b ++ b_out b).
   Proof.
     intro; pose proof (b_nodup b) as Nodup.
-    apply NoDup_comm in Nodup.
-    rewrite <-app_assoc in Nodup.
-    apply NoDup_comm, NoDup_app_weaken in Nodup.
-    apply NoDup_comm in Nodup.
-    rewrite app_assoc in Nodup.
+    rewrite 2 app_assoc in Nodup.
+    apply NoDup_app_weaken in Nodup.
     rewrite <-2 map_app, <-app_assoc in Nodup.
     apply fst_NoDupMembers; auto.
   Qed.
@@ -380,10 +377,9 @@ Module Type SBSYNTAX
 End SBSYNTAX.
 
 Module SBSyntaxFun
-       (Ids  : IDS)
-       (Op   : OPERATORS)
-       (Clks : CLOCKS          Ids)
-       (CESyn : CESYNTAX     Op)
-       <: SBSYNTAX Ids Op Clks CESyn.
-  Include SBSYNTAX Ids Op Clks CESyn.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (CESyn : CESYNTAX Op)
+       <: SBSYNTAX Ids Op CESyn.
+  Include SBSYNTAX Ids Op CESyn.
 End SBSyntaxFun.

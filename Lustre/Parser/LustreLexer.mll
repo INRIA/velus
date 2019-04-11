@@ -241,6 +241,8 @@ rule initial = parse
   | '\n'                          { new_line lexbuf; initial_linebegin lexbuf }
   | whitespace_char_no_newline +  { initial lexbuf }
   | "(*"                          { multiline_comment lexbuf; initial lexbuf }
+  | "/*"                          { multiline_comment2 lexbuf; initial lexbuf }
+  | "--"                          { singleline_comment lexbuf; initial lexbuf }
   | "//"                          { singleline_comment lexbuf; initial lexbuf }
   | "--"                          { singleline_comment lexbuf; initial lexbuf }
   | integer_constant as s         { tok CONSTANT't (LustreAst.CONST_INT s,
@@ -341,9 +343,21 @@ and multiline_comment = parse
   | "*)"   { () }
   | "(*"   { multiline_comment lexbuf;
              multiline_comment lexbuf }
+  | "/*"   { multiline_comment2 lexbuf;
+             multiline_comment2 lexbuf }
   | eof    { error lexbuf "unterminated comment" }
   | '\n'   { new_line lexbuf; multiline_comment lexbuf }
   | _      { multiline_comment lexbuf }
+
+and multiline_comment2 = parse
+  | "*/"   { () }
+  | "/*"   { multiline_comment2 lexbuf;
+             multiline_comment2 lexbuf }
+  | "(*"   { multiline_comment lexbuf;
+             multiline_comment lexbuf }
+  | eof    { error lexbuf "unterminated comment" }
+  | '\n'   { new_line lexbuf; multiline_comment2 lexbuf }
+  | _      { multiline_comment2 lexbuf }
 
 (* Single-line comment terminated by a newline *)
 and singleline_comment = parse

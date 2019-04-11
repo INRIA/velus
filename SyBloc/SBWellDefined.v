@@ -19,18 +19,17 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBWELLDEFINED
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn)
-       (Import Block   : SBISBLOCK    Ids Op Clks CESyn Syn)
-       (Import Ord     : SBORDERED    Ids Op Clks CESyn Syn Block)
-       (Import Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
-       (Import Last    : SBISLAST     Ids Op Clks CESyn Syn)
-       (Import Def     : SBISDEFINED  Ids Op Clks CESyn Syn Var Last)
-       (Import CEIsF : CEISFREE   Ids Op Clks CESyn)
-       (Import Free    : SBISFREE     Ids Op Clks CESyn Syn CEIsF).
+       (Import Syn   : SBSYNTAX     Ids Op CESyn)
+       (Import Block : SBISBLOCK    Ids Op CESyn Syn)
+       (Import Ord   : SBORDERED    Ids Op CESyn Syn Block)
+       (Import Var   : SBISVARIABLE Ids Op CESyn Syn)
+       (Import Last  : SBISLAST     Ids Op CESyn Syn)
+       (Import Def   : SBISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import CEIsF : CEISFREE   Ids Op CESyn)
+       (Import Free  : SBISFREE     Ids Op CESyn Syn CEIsF).
 
   Inductive Is_well_sch (inputs: list ident) (mems: PS.t): list equation -> Prop :=
   | WSchNil:
@@ -57,9 +56,6 @@ Module Type SBWELLDEFINED
           Well_scheduled P ->
           Is_well_sch (map fst (b_in bl)) (ps_from_list (map fst (b_lasts bl))) (b_eqs bl) ->
           Well_scheduled (bl :: P).
-
-  Definition Well_defined (P: program) : Prop :=
-    Ordered_blocks P /\ Well_scheduled P.
 
   Lemma Is_well_sch_app:
     forall inputs mems eqs eqs',
@@ -121,6 +117,87 @@ Module Type SBWELLDEFINED
     apply Hin in IsStin.
     omega.
   Qed.
+
+   (** The [normal_args] predicate defines a normalization condition on
+      node arguments -- those that are not on the base clock can only
+      be instantiated with constants or variables -- that is necessary
+      for correct generation of Obc/Clight.
+
+      To see why this is necessary. Consider the NLustre equation: y =
+            f(1, 3 when ck / x)
+
+      with x on the clock ck, and y on the base clock. The generated
+            Obc code is y := f(1, 3 / x)
+
+      which has no semantics when ck = false, since x = None then 3 /
+      x is not given a meaning.
+
+      Consider what would happen were the semantics of 3 / x =
+      None. There are two possible problems.
+
+      If x is a local variable, then x = None in Obc implies that x =
+      VUndef in Clight and 3 / VUndef has no semantics. I.e., the Obc
+      program having a semantics would not be enough to guarantee that
+      the Clight program generated from it does.
+
+      If x is a state variable, then x = None in Obc implies that x
+      could be anything in Clight (though it would be defined since
+      state variables are stored in a global structure). We might then
+      prove that x is never 0 (when ck = true) in the original Lustre
+      program. This would guarantee the absence of division by zero in
+      the generated Obc (since x is None when ck = false), but not in
+      the generated Clight code; since None in Obc means "don't care"
+      in Clight, x may well contain the value 0 when ck is false (for
+      instance, if ck = false at the first reaction).
+ *)
+
+
+  Inductive normal_args_eq (P: program) : equation -> Prop :=
+  | CEqDef:
+      forall x ck e,
+        normal_args_eq P (EqDef x ck e)
+  | CEqNext:
+      forall x ck e,
+        normal_args_eq P (EqNext x ck e)
+  | CEqReset:
+      forall s ck f,
+        normal_args_eq P (EqReset s ck f)
+  | CEqCall:
+      forall s xs ck rst f es b P',
+        find_block f P = Some (b, P') ->
+        Forall2 noops_lexp (map dck b.(b_in)) es ->
+        normal_args_eq P (EqCall s xs ck rst f es).
+
+  Definition normal_args_block (P: program) (b: block) : Prop :=
+    Forall (normal_args_eq P) b.(b_eqs).
+
+  Fixpoint normal_args (P: list block) : Prop :=
+    match P with
+    | [] => True
+    | b :: P' => normal_args_block P b /\ normal_args P'
+    end.
+
+  Lemma normal_args_block_cons:
+    forall block P,
+      normal_args_block (block :: P) block ->
+      ~ Is_block_in block.(b_name) block.(b_eqs) ->
+      normal_args_block P block.
+  Proof.
+    intros block P Hnarg Hord.
+    apply Forall_forall.
+    intros eq Hin.
+    destruct eq; eauto using normal_args_eq.
+    apply Forall_forall with (2:=Hin) in Hnarg.
+    inversion_clear Hnarg as [| | |???????? Hfind Hnargs].
+    rewrite find_block_other in Hfind;
+      eauto using normal_args_eq.
+    intro; subst; apply Hord.
+    apply Exists_exists.
+    eexists; intuition eauto using Is_block_in_eq.
+  Qed.
+
+  Definition Well_defined (P: program) : Prop :=
+    Ordered_blocks P /\ Well_scheduled P /\ normal_args P.
 
   Inductive Step_with_reset_spec: list equation -> Prop :=
   | Step_with_reset_nil:
@@ -257,15 +334,15 @@ Module Type SBWELLDEFINED
         split; intro Hin.
         + apply PS.mem_spec in Hin.
           rewrite Hin, Bool.negb_true_iff in Hif.
-          apply mem_spec_false in Hif. exact Hif.
-        + apply mem_spec_false in Hin.
+          apply PSP.Dec.F.not_mem_iff in Hif. exact Hif.
+        + apply PSP.Dec.F.not_mem_iff in Hin.
           rewrite Hin, PS.mem_spec in Hif. exact Hif.
       - destruct 1 as [Hin Hnin].
         destruct PSP.In_dec with x mems as [H|H].
         + assert (PS.mem x mems = true) as H' by auto.
-          rewrite H', Bool.negb_true_iff, mem_spec_false.
+          rewrite H', Bool.negb_true_iff, <-PSP.Dec.F.not_mem_iff.
           now apply Hin with (1:=H).
-        + assert (PS.mem x mems = false) as H' by now apply mem_spec_false.
+        + assert (PS.mem x mems = false) as H' by now apply PSP.Dec.F.not_mem_iff.
           rewrite H', PS.mem_spec.
           now apply Hnin with (1:=H).
     Qed.
@@ -642,18 +719,17 @@ Module Type SBWELLDEFINED
 End SBWELLDEFINED.
 
 Module SBWellDefinedFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
+       (Ids   : IDS)
+       (Op    : OPERATORS)
        (CESyn : CESYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
-       (Block   : SBISBLOCK    Ids Op Clks CESyn Syn)
-       (Ord     : SBORDERED    Ids Op Clks CESyn Syn Block)
-       (Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
-       (Last    : SBISLAST     Ids Op Clks CESyn Syn)
-       (Def     : SBISDEFINED  Ids Op Clks CESyn Syn Var Last)
-       (CEIsF : CEISFREE   Ids Op Clks CESyn)
-       (Free    : SBISFREE     Ids Op Clks CESyn Syn CEIsF)
-<: SBWELLDEFINED Ids Op Clks CESyn Syn Block Ord Var Last Def CEIsF Free.
-  Include SBWELLDEFINED Ids Op Clks CESyn Syn Block Ord Var Last Def CEIsF Free.
+       (Syn   : SBSYNTAX     Ids Op CESyn)
+       (Block : SBISBLOCK    Ids Op CESyn Syn)
+       (Ord   : SBORDERED    Ids Op CESyn Syn Block)
+       (Var   : SBISVARIABLE Ids Op CESyn Syn)
+       (Last  : SBISLAST     Ids Op CESyn Syn)
+       (Def   : SBISDEFINED  Ids Op CESyn Syn Var Last)
+       (CEIsF : CEISFREE   Ids Op CESyn)
+       (Free  : SBISFREE     Ids Op CESyn Syn CEIsF)
+<: SBWELLDEFINED Ids Op CESyn Syn Block Ord Var Last Def CEIsF Free.
+  Include SBWELLDEFINED Ids Op CESyn Syn Block Ord Var Last Def CEIsF Free.
 End SBWellDefinedFun.

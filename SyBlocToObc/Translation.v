@@ -19,14 +19,14 @@ Module Type TRANSLATION
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX Op)
-       (Import Clks   : CLOCKS    Ids)
        (Import CESyn  : CESYNTAX      Op)
-       (Import SynSB  : SBSYNTAX  Ids Op       Clks CESyn)
+       (Import SynSB  : SBSYNTAX  Ids Op       CESyn)
        (Import SynObc : OBCSYNTAX Ids Op OpAux).
 
   Section Translate.
 
     Variable memories : PS.t.
+    Variable clkvars  : Env.t clock.
 
     Definition tovar (xt: ident * type) : exp :=
       let (x, ty) := xt in
@@ -60,6 +60,22 @@ Module Type TRANSLATION
         Assign x (translate_lexp l)
       end.
 
+    Definition var_on_base_clock (ck: clock) (e: lexp) : bool :=
+      match e with
+      | Evar x _ =>
+        negb (PS.mem x memories)
+             && match Env.find x clkvars with
+                | Some ck' => clock_eq ck ck'
+                | None => false
+                end
+      | _ => false
+      end.
+
+    Definition translate_arg (ck: clock) (e : lexp) : exp :=
+      if var_on_base_clock ck e
+      then Valid (translate_lexp e)
+      else translate_lexp e.
+
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce =>
@@ -67,7 +83,7 @@ Module Type TRANSLATION
       | EqNext x ck le =>
         Control ck (AssignSt x (translate_lexp le))
       | EqCall s xs ck rst f es =>
-        Control ck (Call xs f s step (map translate_lexp es))
+        Control ck (Call xs f s step (map (translate_arg ck) es))
       | EqReset s ck f =>
         Control ck (Call [] f s reset [])
       end.
@@ -91,11 +107,15 @@ Module Type TRANSLATION
   Program Definition step_method (b: block) : method :=
     let memids := map fst b.(b_lasts) in
     let mems := ps_from_list memids in
+    let clkvars := Env.adds_with snd b.(b_out)
+                    (Env.adds_with snd b.(b_vars)
+                      (Env.from_list_with snd b.(b_in)))
+    in
     {| m_name := step;
        m_in   := idty b.(b_in);
        m_vars := idty b.(b_vars);
        m_out  := idty b.(b_out);
-       m_body := translate_eqns mems b.(b_eqs)
+       m_body := translate_eqns mems clkvars b.(b_eqs)
     |}.
   Next Obligation.
     rewrite <-2 idty_app;
@@ -244,16 +264,23 @@ Module Type TRANSLATION
     induction e; intros; simpl; auto; cases.
   Qed.
 
+  Corollary typeof_arg_correct:
+    forall mems clkvars ck e,
+      typeof (translate_arg mems clkvars ck e) = CESyn.typeof e.
+  Proof.
+    unfold translate_arg; intros.
+    cases; simpl; apply typeof_correct.
+  Qed.
+
 End TRANSLATION.
 
 Module TranslationFun
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX Op)
-       (Import Clks   : CLOCKS    Ids)
        (Import CESyn  : CESYNTAX      Op)
-       (Import SynSB  : SBSYNTAX  Ids Op       Clks CESyn)
+       (Import SynSB  : SBSYNTAX  Ids Op       CESyn)
        (Import SynObc : OBCSYNTAX Ids Op OpAux)
-       <: TRANSLATION Ids Op OpAux Clks CESyn SynSB SynObc.
-  Include TRANSLATION Ids Op OpAux Clks CESyn SynSB SynObc.
+       <: TRANSLATION Ids Op OpAux CESyn SynSB SynObc.
+  Include TRANSLATION Ids Op OpAux CESyn SynSB SynObc.
 End TranslationFun.

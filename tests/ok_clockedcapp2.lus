@@ -1,0 +1,38 @@
+
+node f(x: bool; s: bool; t: bool when s)
+returns (y: bool when z; z: bool);
+let
+  z = false fby (not z);
+  y = x when z;
+tel
+
+(* y :: 'a on x on z   z:: 'a on x    x :: 'a   *)
+node g(y: bool when z; z: bool when x; x: bool)
+returns (o: bool when x)
+let
+  o = false fby (not z);
+tel
+
+node h(x: bool; z: bool when x)
+returns (y: bool);
+var u: bool when w;
+    v: bool when w;
+    w: bool when x;
+let
+  y = merge x w false;
+  (* The correct form is:
+        w = g(f(true when x, z, false when x when z), x);
+
+     This example tests whether the compiler infers the missing
+     "when" across node applications. *)
+  w = g(f(true, z, false), x);
+
+  u = true when w;
+  (* The correct form is:
+        v = g(f(true when x when w, u, false when x when w when u), x);
+
+     This example tests whether the compiler infers the missing
+     "when" across node applications. *)
+  v = g(f(true, u, false), w);
+tel
+

@@ -17,12 +17,11 @@ Module Type NL2SBCLOCKING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
        (Import Str   : STREAM          Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (Import NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
-       (Import SB    : SYBLOC      Ids Op OpAux Clks Str CE)
-       (Import Trans : TRANSLATION Ids Op       Clks CE.Syn NL.Syn SB.Syn NL.Mem).
+       (Import CE    : COREEXPR    Ids Op OpAux Str)
+       (Import NL    : NLUSTRE     Ids Op OpAux Str CE)
+       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Import Trans : TRANSLATION Ids Op       CE.Syn NL.Syn SB.Syn NL.Mem).
 
 
   (* Lemma translate_eqn_wt: *)
@@ -277,7 +276,7 @@ Module Type NL2SBCLOCKING
     forall G vars eq,
       wc_env vars ->
       NL.Clo.wc_equation G vars eq ->
-      Forall (wc_equation vars) (translate_eqn eq).
+      Forall (wc_equation (translate G) vars) (translate_eqn eq).
   Proof.
     inversion_clear 2 as [|??????? (?&?& Ins & Outs &?)|]; simpl; auto using Forall_cons.
     cases.
@@ -285,15 +284,12 @@ Module Type NL2SBCLOCKING
       + do 2 (constructor; auto).
         eapply wc_env_var; eauto.
       + constructor; auto.
-        constructor.
-        * admit.
-        * admit.
+        admit.
     - constructor; auto.
-      constructor.
-      + admit.
-      + admit.
+      admit.
   Qed.
 
+  (* TODO: move *)
   Lemma Permutation_swap:
     forall A (xs ys zs: list A),
       Permutation (xs ++ ys ++ zs) (ys ++ xs ++ zs).
@@ -304,6 +300,7 @@ Module Type NL2SBCLOCKING
     rewrite Permutation_app_comm, <-app_assoc; auto.
   Qed.
 
+  (* TODO: move *)
   Lemma filter_fst_idck:
     forall A B (xs: list (ident * (A * B))) P,
       idck (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idck xs).
@@ -392,10 +389,10 @@ Module Type NL2SBCLOCKING
   Qed.
 
   Lemma wc_equations_permutation:
-    forall vars vars' eqs,
+    forall P vars vars' eqs,
       Permutation vars vars' ->
-      Forall (wc_equation vars) eqs ->
-      Forall (wc_equation vars') eqs.
+      Forall (wc_equation P vars) eqs ->
+      Forall (wc_equation P vars') eqs.
   Proof.
     intros ** E WC.
     eapply Forall_impl with (2 := WC); eauto.
@@ -405,7 +402,7 @@ Module Type NL2SBCLOCKING
   Lemma translate_node_wc:
     forall G n,
       wc_node G n ->
-      wc_block (translate_node n).
+      wc_block (translate G) (translate_node n).
   Proof.
     inversion_clear 1 as [? (?& Env & Heqs)].
     constructor; simpl; auto.
@@ -448,12 +445,11 @@ Module NL2SBClockingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Clks  : CLOCKS      Ids)
        (Str   : STREAM          Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
-       (SB    : SYBLOC      Ids Op OpAux Clks Str CE)
-       (Trans : TRANSLATION Ids Op       Clks CE.Syn NL.Syn SB.Syn NL.Mem)
-<: NL2SBCLOCKING Ids Op OpAux Clks Str CE NL SB Trans.
-  Include NL2SBCLOCKING Ids Op OpAux Clks Str CE NL SB Trans.
+       (CE    : COREEXPR    Ids Op OpAux Str)
+       (NL    : NLUSTRE     Ids Op OpAux Str CE)
+       (SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Trans : TRANSLATION Ids Op       CE.Syn NL.Syn SB.Syn NL.Mem)
+<: NL2SBCLOCKING Ids Op OpAux Str CE NL SB Trans.
+  Include NL2SBCLOCKING Ids Op OpAux Str CE NL SB Trans.
 End NL2SBClockingFun.

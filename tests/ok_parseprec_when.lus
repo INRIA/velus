@@ -1,0 +1,31 @@
+
+node f1(a : bool; b : int when a) returns (y : int when a);
+let
+  y = b * 2;        (* b * (2 when a) *)
+tel
+
+node f2(a : bool; b : int when a) returns (y : int when a);
+let
+  y = b + 1;        (* b + (1 when a) *)
+tel
+
+node f3(a : bool; b : int when a) returns (y : bool when a);
+let
+  y = b < 1;        (* b < (1 when a) *)
+tel
+
+node f4(a : bool; b : bool when a) returns (y : bool when a);
+let
+  y = b = false;    (* b = (false when a)  *)
+tel
+
+node f5(a : bool; b : bool when a) returns (y : bool when a);
+let
+  y = b and false;  (* b & (false when a)  *)
+tel
+
+node f6(a : bool; b : bool when a) returns (y : bool when a);
+let
+  y = b or false;   (* b or (false when a) *)
+tel
+

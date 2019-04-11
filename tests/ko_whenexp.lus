@@ -1,0 +1,12 @@
+
+node f(a: bool; b: bool when a) returns (y: bool);
+let
+    y = true fby false;
+tel
+
+node wrong(x: bool) returns (y: bool; z: bool);
+let
+    y = f(x, true when x);          (* OK *)
+    z = f(not x, true when not x);  (* KO *)
+tel
+

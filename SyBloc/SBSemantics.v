@@ -18,16 +18,15 @@ Require Import Velus.CoreExpr.Stream.
 Require Import Velus.CoreExpr.CESemantics.
 
 Module Type SBSEMANTICS
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX       Op)
-       (Import Clks    : CLOCKS          Ids)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX   Op)
        (Import CESyn : CESYNTAX        Op)
-       (Import Syn     : SBSYNTAX        Ids Op       Clks CESyn)
-       (Import Block   : SBISBLOCK       Ids Op       Clks CESyn Syn)
-       (Import Ord     : SBORDERED       Ids Op       Clks CESyn Syn Block)
-       (Import Str     : STREAM              Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux Clks CESyn Str).
+       (Import Syn   : SBSYNTAX    Ids Op       CESyn)
+       (Import Block : SBISBLOCK   Ids Op       CESyn Syn)
+       (Import Ord   : SBORDERED   Ids Op       CESyn Syn Block)
+       (Import Str   : STREAM          Op OpAux)
+       (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
 
   Definition state := memory val.
   Definition transient_states := Env.t state.
@@ -80,9 +79,6 @@ Module Type SBSEMANTICS
   Definition same_clock (vs: list value) : Prop :=
     absent_list vs \/ present_list vs.
 
-  Definition clock_of (vs: list value) (b: bool): Prop :=
-    present_list vs <-> b = true.
-
   Section Semantics.
 
     Variable P: program.
@@ -110,7 +106,8 @@ Module Type SBSEMANTICS
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
         forall base R S I S' ys rst ck b s es xs Is os Ss',
-          sem_laexps_instant base R ck es xs ->
+          sem_lexps_instant base R es xs ->
+          sem_clock_instant base R ck (clock_of_instant xs) ->
           (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
           Env.find s I = Some Is ->
           sem_block b Is xs os Ss' ->
@@ -120,15 +117,12 @@ Module Type SBSEMANTICS
 
     with sem_block: ident -> state -> list value -> list value -> state -> Prop :=
            SBlock:
-             forall b bl P' S I S' R xs ys base,
-               clock_of xs base ->
+             forall b bl P' S I S' R xs ys,
                find_block b P = Some (bl, P') ->
                sem_vars_instant R (map fst bl.(b_in)) xs ->
                sem_vars_instant R (map fst bl.(b_out)) ys ->
-               same_clock xs ->
-               same_clock ys ->
-               (absent_list xs <-> absent_list ys) ->
-               Forall (sem_equation base R S I S') bl.(b_eqs) ->
+               sem_clocked_vars_instant (clock_of_instant xs) R (idck bl.(b_in)) ->
+               Forall (sem_equation (clock_of_instant xs) R S I S') bl.(b_eqs) ->
                state_closed P b S ->
                transient_states_closed P' bl.(b_blocks) I ->
                state_closed P b S' ->
@@ -167,7 +161,8 @@ Module Type SBSEMANTICS
 
     Hypothesis EqCallCase:
       forall base R S I S' s ys ck rst b es xs Is os Ss',
-        sem_laexps_instant base R ck es xs ->
+        sem_lexps_instant base R es xs ->
+        sem_clock_instant base R ck (clock_of_instant xs) ->
         (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
         Env.find s I = Some Is ->
         sem_block P b Is xs os Ss' ->
@@ -177,19 +172,16 @@ Module Type SBSEMANTICS
         P_equation base R S I S' (EqCall s ys ck rst b es).
 
     Hypothesis BlockCase:
-      forall b bl P' R S I S' xs ys base,
-        clock_of xs base ->
+      forall b bl P' R S I S' xs ys,
         find_block b P = Some (bl, P') ->
         sem_vars_instant R (map fst bl.(b_in)) xs ->
         sem_vars_instant R (map fst bl.(b_out)) ys ->
-        same_clock xs ->
-        same_clock ys ->
-        (absent_list xs <-> absent_list ys) ->
-        Forall (sem_equation P base R S I S') bl.(b_eqs) ->
+        sem_clocked_vars_instant (clock_of_instant xs) R (idck bl.(b_in)) ->
+        Forall (sem_equation P (clock_of_instant xs) R S I S') bl.(b_eqs) ->
         state_closed P b S ->
         transient_states_closed P' bl.(b_blocks) I ->
         state_closed P b S' ->
-        Forall (P_equation base R S I S') bl.(b_eqs) ->
+        Forall (P_equation (clock_of_instant xs) R S I S') bl.(b_eqs) ->
         P_block b S xs ys S'.
 
     Fixpoint sem_equation_mult
@@ -324,7 +316,7 @@ Module Type SBSEMANTICS
     intros S1 S2 ??? S1' S2' ** Sem.
     revert dependent S2; revert dependent S2'.
     induction Sem as [| |??????????? Find Init|
-                      ???????????????? Spec Find ?? Sub|] using sem_block_mult with
+                      ????????????????? Spec Find ?? Sub|] using sem_block_mult with
                    (P_equation := fun base R S1 I1 S1' eq =>
                                     forall S2 S2' I2,
                                       S1 ≋ S2 ->
@@ -492,9 +484,9 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| | |????????????????????? IH|
-                       ??????????? Hf ?????? Closed ? Closed' IH]
-        using sem_block_mult
+    induction Hsem as [| | |?????????????????????? IH|
+                       ????????? Hf ???? Closed ? Closed' IH]
+                        using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
                             sem_equation P bk H S I S' eq);
@@ -526,7 +518,7 @@ Module Type SBSEMANTICS
   Proof.
     intros ** Hord Hsem.
     induction Hsem as [| | | |
-                       ??????????? Hfind ?????? Closed ? Closed' IHeqs] using sem_block_mult
+                       ????????? Hfind ???? Closed ? Closed' IHeqs] using sem_block_mult
       with (P_equation := fun bk H S I S' eq =>
                             ~Is_block_in_eq b.(b_name) eq ->
                             sem_equation (b :: P) bk H S I S' eq);
@@ -659,25 +651,25 @@ Module Type SBSEMANTICS
         eapply IH; subst; eauto.
   Qed.
 
-  Lemma sem_block_present:
-    forall P b S xs ys S',
-      sem_block P b S xs ys S' ->
-      present_list xs ->
-      present_list ys.
-  Proof.
-    inversion_clear 1 as [???????????? Ins ?? Same AbsEq];
-      intros ** Pres.
-    destruct Same as [Abs|]; auto.
-    apply AbsEq in Abs.
-    apply Forall2_length in Ins.
-    pose proof (b_ingt0 bl) as Length.
-    rewrite map_length in Ins; rewrite Ins in Length.
-    clear - Abs Pres Length; destruct xs; simpl in *.
-    - omega.
-    - inv Abs; inv Pres; congruence.
-  Qed.
+  (* Lemma sem_block_present: *)
+  (*   forall P b S xs ys S', *)
+  (*     sem_block P b S xs ys S' -> *)
+  (*     present_list xs -> *)
+  (*     present_list ys. *)
+  (* Proof. *)
+  (*   inversion_clear 1 as [???????????? Ins ?? Same AbsEq]; *)
+  (*     intros ** Pres. *)
+  (*   destruct Same as [Abs|]; auto. *)
+  (*   apply AbsEq in Abs. *)
+  (*   apply Forall2_length in Ins. *)
+  (*   pose proof (b_ingt0 bl) as Length. *)
+  (*   rewrite map_length in Ins; rewrite Ins in Length. *)
+  (*   clear - Abs Pres Length; destruct xs; simpl in *. *)
+  (*   - omega. *)
+  (*   - inv Abs; inv Pres; congruence. *)
+  (* Qed. *)
 
-  Lemma sem_equations_absent:
+  Lemma sem_equations_absent_states:
     forall S I S' P eqs R,
     (forall b xs S ys S',
         sem_block P b S xs ys S' ->
@@ -749,7 +741,7 @@ Module Type SBSEMANTICS
                by (rewrite <-Bool.not_true_iff_false;
                    intro E; subst; contradict Clock; apply not_subrate_clock); subst.
              destruct Init as (?&?&?); eauto.
-           - inversion_clear Heqs as [| | |??????????????? Exps Rst ? SemBlock ? Find'].
+           - inversion_clear Heqs as [| | |????????????????? Rst].
              destruct Rst as (?&?&?); eauto.
          }
         * apply Insts in Find as (b & Hin &?).
@@ -766,13 +758,9 @@ Module Type SBSEMANTICS
         assert (Step_with_reset_in s rst eqs) as Spec'
                by (apply Exists_exists; eexists; split; eauto; constructor).
         apply Spec in Spec'.
-        inversion_clear Heqs as [| | |??????????????? Exps Rst' FindI' SemBlock ? Find1'].
+        inversion_clear Heqs as [| | |??????????????? Exps Clk Rst' FindI' SemBlock ? Find1'].
         unfold sub_inst, find_inst in *; rewrite Find1' in Find'; inv Find'.
-        assert (absent_list xs).
-        { inversion_clear Exps as [?????? Clock'|];
-            [contradict Clock'; apply not_subrate_clock|].
-          subst; apply all_absent_spec.
-        }
+        assert (absent_list xs) by (eapply clock_of_instant_false, not_subrate_clock_impl; eauto).
         apply IH in SemBlock; auto.
         rewrite SemBlock.
         destruct rst.
@@ -789,35 +777,62 @@ Module Type SBSEMANTICS
           rewrite Find1 in Find; inv Find; auto.
   Qed.
 
+  Lemma sem_equations_absent_vars:
+    forall eqs S I S' P R x,
+    (forall b xs S ys S',
+        sem_block P b S xs ys S' ->
+        absent_list xs ->
+        absent_list ys) ->
+    In x (variables eqs) ->
+    Forall (sem_equation P false R S I S') eqs ->
+    sem_var_instant R x absent.
+  Proof.
+    unfold variables, concatMap.
+    induction eqs as [|[]]; simpl; intros ** IH Spec Heqs; try contradiction;
+      inversion_clear Heqs as [|?? Heq];
+      inversion_clear Heq as [????????? Exp| | |]; eauto.
+    - destruct Spec; eauto; subst.
+      apply sem_caexp_instant_absent in Exp; subst; auto.
+    - assert (absent_list xs) as Abs
+          by (eapply clock_of_instant_false, not_subrate_clock_impl; eauto).
+      eapply IH in Abs; eauto.
+      apply in_app in Spec as [Hin|]; eauto.
+      eapply Forall2_in_left in Hin; eauto.
+      destruct Hin as (v &?&?).
+      eapply Forall_forall in Abs; eauto.
+      subst; auto.
+  Qed.
+
   Lemma sem_block_absent:
     forall P b xs S ys S',
+      Ordered_blocks P ->
       sem_block P b S xs ys S' ->
       absent_list xs ->
-      absent_list ys /\ (Ordered_blocks P -> S' ≋ S).
+      absent_list ys /\ S' ≋ S.
   Proof.
-    intros ** Sem Abs; split.
-    - inversion_clear Sem; intuition.
-    - intro Ord.
-      revert dependent xs; revert b S S' ys.
-      induction P as [|block]; intros;
-        inversion_clear Sem as [?????????? Clock Find Ins ???? Heqs Closed ? Closed'];
-        try now inv Find.
-      pose proof Find; simpl in Find.
-      destruct (ident_eqb (b_name block) b) eqn: Eq.
-      + inv Find.
-        assert ( ~ Is_block_in (b_name bl) (b_eqs bl))
-          by (eapply find_block_not_Is_block_in; eauto).
-        apply sem_equations_cons in Heqs; auto.
-        assert (base = false).
-        { rewrite <-Bool.not_true_iff_false.
-          intro E; apply Clock in E.
-          apply Forall2_length in Ins.
-          destruct xs.
-          - rewrite map_length in Ins; simpl in Ins.
-            pose proof (b_ingt0 bl); omega.
-          - inv E; inv Abs; congruence.
-        }
-        inversion_clear Closed as [?????? Lasts Insts];
+    intros ** Ord Sem Abs.
+    revert dependent xs; revert b S S' ys.
+    induction P as [|block]; intros;
+      inversion_clear Sem as [????????? Find Ins ?? Heqs Closed ? Closed'];
+      try now inv Find.
+    pose proof Find; simpl in Find.
+    destruct (ident_eqb (b_name block) b) eqn: Eq.
+    - inv Find.
+      assert ( ~ Is_block_in (b_name bl) (b_eqs bl))
+        by (eapply find_block_not_Is_block_in; eauto).
+      apply sem_equations_cons in Heqs; auto.
+      assert (clock_of_instant xs = false) as E by (apply clock_of_instant_false; auto);
+        rewrite E in *.
+      inv Ord; split.
+      + apply Forall_forall; intros v Hin.
+        eapply Forall2_in_right in Hin; eauto.
+        destruct Hin as (x & ?&?).
+        eapply sem_var_instant_det; eauto.
+        eapply sem_equations_absent_vars; eauto.
+        * intros; eapply IHP; eauto.
+        * rewrite <-b_vars_out_in_eqs.
+          apply in_app; auto.
+      + inversion_clear Closed as [?????? Lasts Insts];
           inversion_clear Closed' as [?????? Lasts' Insts'].
         repeat match goal with
                  H: find_block ?b ?P = _, H': find_block ?b ?P = _ |- _ =>
@@ -826,14 +841,15 @@ Module Type SBSEMANTICS
         rewrite b_lasts_in_eqs in Lasts, Lasts'.
         setoid_rewrite b_blocks_calls_of in Insts;
           setoid_rewrite b_blocks_calls_of in Insts'.
-        inv Ord; eapply sem_equations_absent; eauto.
-        apply b_reset_in.
-      + inv Ord; eapply IHP; eauto.
-        apply ident_eqb_neq in Eq.
-        rewrite <-state_closed_other in Closed, Closed'; eauto.
-        econstructor; eauto.
-        apply sem_equations_cons in Heqs; eauto using Ordered_blocks.
-        eapply find_block_later_not_Is_block_in; eauto using Ordered_blocks.
+        eapply sem_equations_absent_states; eauto.
+        * intros; eapply IHP; eauto.
+        * apply b_reset_in.
+    - inv Ord; eapply IHP; eauto.
+      apply ident_eqb_neq in Eq.
+      rewrite <-state_closed_other in Closed, Closed'; eauto.
+      econstructor; eauto.
+      apply sem_equations_cons in Heqs; eauto using Ordered_blocks.
+      eapply find_block_later_not_Is_block_in; eauto using Ordered_blocks.
   Qed.
 
   Lemma state_closed_lasts_empty:
@@ -854,19 +870,33 @@ Module Type SBSEMANTICS
     - unfold sub_inst; setoid_rewrite find_inst_gempty; congruence.
   Qed.
 
+  Lemma sem_block_find_val:
+    forall P f S xs ys S' x bl P',
+      sem_block P f S xs ys S' ->
+      find_block f P = Some (bl, P') ->
+      In x (map fst (b_lasts bl)) ->
+      find_val x S <> None.
+  Proof.
+    inversion_clear 1 as [????????? Find ??? Heqs]; intros Find' Hin.
+    rewrite Find in Find'; inv Find'.
+    rewrite b_lasts_in_eqs in Hin.
+    induction Heqs as [|[] ? Heq]; simpl in *; try contradiction; auto.
+    destruct Hin; subst; auto.
+    inv Heq; congruence.
+  Qed.
+
 End SBSEMANTICS.
 
 Module SBSemanticsFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX       Op)
-       (Clks    : CLOCKS          Ids)
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX   Op)
        (CESyn : CESYNTAX        Op)
-       (Syn     : SBSYNTAX        Ids Op       Clks CESyn)
-       (Block   : SBISBLOCK       Ids Op       Clks CESyn Syn)
-       (Ord     : SBORDERED       Ids Op       Clks CESyn Syn Block)
-       (Str     : STREAM              Op OpAux)
-       (CESem : CESEMANTICS Ids Op OpAux Clks CESyn Str)
-<: SBSEMANTICS Ids Op OpAux Clks CESyn Syn Block Ord Str CESem.
-  Include SBSEMANTICS Ids Op OpAux Clks CESyn Syn Block Ord Str CESem.
+       (Syn   : SBSYNTAX    Ids Op       CESyn)
+       (Block : SBISBLOCK   Ids Op       CESyn Syn)
+       (Ord   : SBORDERED   Ids Op       CESyn Syn Block)
+       (Str   : STREAM          Op OpAux)
+       (CESem : CESEMANTICS Ids Op OpAux CESyn Str)
+<: SBSEMANTICS Ids Op OpAux CESyn Syn Block Ord Str CESem.
+  Include SBSEMANTICS Ids Op OpAux CESyn Syn Block Ord Str CESem.
 End SBSemanticsFun.

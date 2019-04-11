@@ -1,0 +1,9 @@
+
+node f(x: bool; y: bool when x)
+returns (z: bool);
+var w: bool when x;
+let
+  w = false fby (not y);
+  z = merge x (true -> w) (false -> true);
+tel
+

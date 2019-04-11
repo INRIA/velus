@@ -9,11 +9,10 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBISVARIABLE
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn).
+       (Import Syn   : SBSYNTAX Ids Op CESyn).
 
   Inductive Is_variable_in_eq: ident -> equation -> Prop :=
   | VarEqDef:
@@ -114,11 +113,10 @@ Module Type SBISVARIABLE
 End SBISVARIABLE.
 
 Module SBIsVariableFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
+       (Ids   : IDS)
+       (Op    : OPERATORS)
        (CESyn : CESYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
-<: SBISVARIABLE Ids Op Clks CESyn Syn.
-  Include SBISVARIABLE Ids Op Clks CESyn Syn.
+       (Syn   : SBSYNTAX Ids Op CESyn)
+<: SBISVARIABLE Ids Op CESyn Syn.
+  Include SBISVARIABLE Ids Op CESyn Syn.
 End SBIsVariableFun.

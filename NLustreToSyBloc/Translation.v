@@ -22,11 +22,10 @@ Open Scope list.
 Module Type TRANSLATION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS   Ids)
        (Import CESyn : CESYNTAX     Op)
-       (Import SynNL : NLSYNTAX Ids Op Clks CESyn)
-       (SynSB        : SBSYNTAX Ids Op Clks CESyn)
-       (Import Mem   : MEMORIES Ids Op Clks CESyn SynNL).
+       (Import SynNL : NLSYNTAX Ids Op CESyn)
+       (SynSB        : SBSYNTAX Ids Op CESyn)
+       (Import Mem   : MEMORIES Ids Op CESyn SynNL).
 
   Definition gather_eq (acc: list (ident * (const * clock)) * list (ident * ident)) (eq: equation):
     list (ident * (const * clock)) * list (ident * ident) :=
@@ -251,10 +250,12 @@ Module Type TRANSLATION
     rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
     setoid_rewrite ps_from_list_gather_eqs_memories.
     apply NoDup_comm.
-    rewrite app_assoc, <-map_app, <-permutation_partition.
+    rewrite <-app_assoc.
+    apply NoDup_swap.
+    rewrite <-app_assoc, (app_assoc _ _ (map fst (n_in n))), <-map_app, <-permutation_partition.
     apply NoDup_comm.
-    rewrite app_assoc, <-2 map_app, <-app_assoc.
-    apply fst_NoDupMembers, n_nodup.
+    rewrite <-app_assoc.
+    apply NoDup_swap; rewrite <-2 map_app; apply fst_NoDupMembers, n_nodup.
   Qed.
   Next Obligation.
     rewrite fst_fst_gather_eqs_var_defined.
@@ -401,7 +402,7 @@ Module Type TRANSLATION
     - rewrite (Permutation_app_comm n.(n_in)).
       rewrite Permutation_app_assoc.
       match goal with |- context [snd (partition ?p ?l)] =>
-                      apply (Forall_app_weaken (fst (partition p l))) end.
+                      apply (Forall_app_weaken _ (fst (partition p l))) end.
       rewrite <-(Permutation_app_assoc (fst _)).
       rewrite <- (permutation_partition _ n.(n_vars)).
       rewrite <-(Permutation_app_assoc n.(n_vars)).
@@ -487,11 +488,10 @@ End TRANSLATION.
 Module TranslationFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (Clks  : CLOCKS Ids)
        (CESyn : CESYNTAX     Op)
-       (SynNL : NLSYNTAX Ids Op Clks CESyn)
-       (SynSB : SBSYNTAX Ids Op Clks CESyn)
-       (Mem   : MEMORIES Ids Op Clks CESyn SynNL)
-<: TRANSLATION Ids Op Clks CESyn SynNL SynSB Mem.
-  Include TRANSLATION Ids Op Clks CESyn SynNL SynSB Mem.
+       (SynNL : NLSYNTAX Ids Op CESyn)
+       (SynSB : SBSYNTAX Ids Op CESyn)
+       (Mem   : MEMORIES Ids Op CESyn SynNL)
+<: TRANSLATION Ids Op CESyn SynNL SynSB Mem.
+  Include TRANSLATION Ids Op CESyn SynNL SynSB Mem.
 End TranslationFun.

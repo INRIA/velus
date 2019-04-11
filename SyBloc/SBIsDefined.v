@@ -12,13 +12,12 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBISDEFINED
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn)
-       (Import Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
-       (Import Last    : SBISLAST     Ids Op Clks CESyn Syn).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import CESyn : CESYNTAX         Op)
+       (Import Syn   : SBSYNTAX     Ids Op CESyn)
+       (Import Var   : SBISVARIABLE Ids Op CESyn Syn)
+       (Import Last  : SBISLAST     Ids Op CESyn Syn).
 
   Inductive Is_defined_in_eq: ident -> equation -> Prop :=
   | DefEqDef:
@@ -87,7 +86,7 @@ Module Type SBISDEFINED
     pose proof (b_nodup b) as Nodup.
     eapply (NoDup_app_In x) in Nodup.
     - apply Is_defined_Is_variable_Is_last_in in Hdef as [Var|Last];
-        apply Nodup, in_app.
+        apply Nodup; rewrite app_assoc, in_app.
       + apply Is_variable_in_variables in Var; rewrite <-b_vars_out_in_eqs in Var;
           auto.
       + apply lasts_of_In in Last; rewrite <-b_lasts_in_eqs in Last; auto.
@@ -128,6 +127,8 @@ Module Type SBISDEFINED
     | EqReset _ _ _ => []
     end.
 
+  Definition defined := concatMap defined_eq.
+
   Lemma Is_defined_in_defined_eq:
     forall x eq,
       Is_defined_in_eq x eq <-> In x (defined_eq eq).
@@ -136,16 +137,65 @@ Module Type SBISDEFINED
       simpl; auto using Is_defined_in_eq; try contradiction.
   Qed.
 
+  Lemma Is_defined_in_defined:
+    forall x eqs,
+      Is_defined_in x eqs <-> In x (defined eqs).
+  Proof.
+    unfold defined, concatMap.
+    induction eqs; simpl.
+    - split; inversion 1.
+    - split; rewrite in_app.
+      + inversion_clear 1.
+        * left; apply Is_defined_in_defined_eq; auto.
+        * right; apply IHeqs; auto.
+      + intros [?|?].
+        * left; apply Is_defined_in_defined_eq; auto.
+        * right; apply IHeqs; auto.
+  Qed.
+
+  Lemma block_output_defined_in_eqs:
+    forall b x,
+      In x (map fst b.(b_out)) ->
+      Is_defined_in x b.(b_eqs).
+  Proof.
+    intros ** Ho.
+    cut (In x (map fst b.(b_vars) ++ map fst b.(b_out))).
+    - intro Hvo; apply Is_variable_in_Is_defined_in, Is_variable_in_variables.
+      now rewrite <-b_vars_out_in_eqs.
+    - apply in_or_app; auto.
+  Qed.
+
+  Lemma Is_defined_in_In:
+    forall x eqs,
+      Is_defined_in x eqs ->
+      exists eq, In eq eqs /\ Is_defined_in_eq x eq.
+  Proof.
+    induction eqs as [|eq]. now inversion 1.
+    inversion_clear 1 as [? ? Hdef|? ? Hex].
+    - exists eq; split; auto with datatypes.
+    - apply Exists_exists in Hex as (eq' & Hin & Hdef).
+      exists eq'; split; auto with datatypes.
+  Qed.
+
+  Lemma b_defined:
+    forall b,
+      Permutation.Permutation (defined (b_eqs b)) (variables (b_eqs b) ++ lasts_of (b_eqs b)).
+  Proof.
+    unfold defined, variables, concatMap; intro;
+      induction (b_eqs b) as [|[]]; simpl; auto.
+    - now apply Permutation.Permutation_cons_app.
+    - now rewrite <-app_assoc; apply Permutation.Permutation_app_head.
+  Qed.
+
 End SBISDEFINED.
 
 Module SBIsDefinedFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
-       (CESyn : CESYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
-       (Var     : SBISVARIABLE Ids Op Clks CESyn Syn)
-       (Last    : SBISLAST     Ids Op Clks CESyn Syn)
-<: SBISDEFINED Ids Op Clks CESyn Syn Var Last.
-  Include SBISDEFINED Ids Op Clks CESyn Syn Var Last.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (CESyn : CESYNTAX         Op)
+       (Syn   : SBSYNTAX     Ids Op CESyn)
+       (Var   : SBISVARIABLE Ids Op CESyn Syn)
+       (Last  : SBISLAST     Ids Op CESyn Syn)
+<: SBISDEFINED Ids Op CESyn Syn Var Last.
+  Include SBISDEFINED Ids Op CESyn Syn Var Last.
 End SBIsDefinedFun.

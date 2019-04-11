@@ -15,10 +15,9 @@ Open Scope list_scope.
 Module Type SBMEMORYCORRES
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS   Ids)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : SBSYNTAX Ids Op Clks CESyn)
-       (Import Last  : SBISLAST Ids Op Clks CESyn Syn).
+       (Import Syn   : SBSYNTAX Ids Op CESyn)
+       (Import Last  : SBISLAST Ids Op CESyn Syn).
 
   Definition state := memory val.
   Definition menv := memory val.
@@ -343,10 +342,9 @@ End SBMEMORYCORRES.
 Module SBMemoryCorresFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (Clks  : CLOCKS   Ids)
        (CESyn : CESYNTAX     Op)
-       (Syn   : SBSYNTAX Ids Op Clks CESyn)
-       (Last  : SBISLAST Ids Op Clks CESyn Syn)
-<: SBMEMORYCORRES Ids Op Clks CESyn Syn Last.
-  Include SBMEMORYCORRES Ids Op Clks CESyn Syn Last.
+       (Syn   : SBSYNTAX Ids Op CESyn)
+       (Last  : SBISLAST Ids Op CESyn Syn)
+<: SBMEMORYCORRES Ids Op CESyn Syn Last.
+  Include SBMEMORYCORRES Ids Op CESyn Syn Last.
 End SBMemoryCorresFun.

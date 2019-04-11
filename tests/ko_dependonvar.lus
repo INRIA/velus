@@ -1,0 +1,8 @@
+
+node f (a : bool) returns (y : bool when c);
+var c : bool;
+let
+    y = true when c;
+    c = true;
+tel
+

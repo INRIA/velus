@@ -23,10 +23,9 @@ Require Import Velus.NLustre.Memories.
 Module Type ISDEFINED
        (Ids            : IDS)
        (Op             : OPERATORS)
-       (Import Clks    : CLOCKS   Ids)
-       (Import CESyn : CESYNTAX Op)
-       (Import Syn     : NLSYNTAX Ids Op Clks CESyn)
-       (Import Mem     : MEMORIES Ids Op Clks CESyn Syn).
+       (Import CESyn   : CESYNTAX     Op)
+       (Import Syn     : NLSYNTAX Ids Op CESyn)
+       (Import Mem     : MEMORIES Ids Op CESyn Syn).
 
   (** ** Logical predicates: *)
 
@@ -480,10 +479,9 @@ End ISDEFINED.
 Module IsDefinedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
-       (Clks    : CLOCKS   Ids)
-       (CESyn : CESYNTAX Op)
-       (Syn     : NLSYNTAX Ids Op Clks CESyn)
-       (Mem     : MEMORIES Ids Op Clks CESyn Syn)
-       <: ISDEFINED Ids Op Clks CESyn Syn Mem.
-  Include ISDEFINED Ids Op Clks CESyn Syn Mem.
+       (CESyn   : CESYNTAX     Op)
+       (Syn     : NLSYNTAX Ids Op CESyn)
+       (Mem     : MEMORIES Ids Op CESyn Syn)
+       <: ISDEFINED Ids Op CESyn Syn Mem.
+  Include ISDEFINED Ids Op CESyn Syn Mem.
 End IsDefinedFun.

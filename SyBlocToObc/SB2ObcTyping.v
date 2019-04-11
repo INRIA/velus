@@ -17,12 +17,11 @@ Module Type SB2OBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
        (Import Str   : STREAM          Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (Import SB    : SYBLOC      Ids Op OpAux Clks Str CE)
+       (Import CE    : COREEXPR    Ids Op OpAux Str)
+       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
        (Import Obc   : OBC         Ids Op OpAux)
-       (Import Trans : TRANSLATION Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn).
+       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn).
 
   Lemma wt_stmt_fold_left_shift:
     forall A xs P insts mems vars (f: A -> stmt) acc,
@@ -82,6 +81,15 @@ Module Type SB2OBCTYPING
       - constructor; auto; now rewrite 2 typeof_correct.
     Qed.
     Hint Resolve translate_lexp_wt.
+
+    Corollary translate_arg_wt:
+      forall e clkvars ck,
+        wt_lexp nvars e ->
+        wt_exp mems vars (translate_arg memset clkvars ck e).
+    Proof.
+      unfold translate_arg; intros; cases; auto using wt_exp.
+    Qed.
+    Hint Resolve translate_arg_wt.
 
     Remark typeof_bool_var_is_bool_type:
       forall x,
@@ -172,9 +180,7 @@ Module Type SB2OBCTYPING
       { subst vars mems.
         apply fst_NoDupMembers.
         rewrite 3 map_app, 3 map_fst_idty, map_map; simpl.
-        rewrite <-app_assoc, NoDup_swap.
-        apply NoDup_comm; rewrite <-app_assoc.
-        apply b_nodup.
+        rewrite <-2 app_assoc. apply b_nodup.
       }
       intros ** Hin; apply in_app in Hin as [Hin|Hin].
       - pose proof Hin.
@@ -207,8 +213,9 @@ Module Type SB2OBCTYPING
       + apply exists_step_method.
       + simpl; clear - Outs; induction Outs; simpl; constructor; auto.
       + simpl; clear - Ins; induction Ins; simpl; constructor; auto.
-        now rewrite typeof_correct.
+        now rewrite typeof_arg_correct.
       + clear - Exps NvarsSpec; induction Exps; simpl; constructor; eauto.
+        eapply translate_arg_wt; eauto.
   Qed.
   Hint Resolve step_wt.
 
@@ -321,12 +328,11 @@ Module SB2ObcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Clks  : CLOCKS      Ids)
        (Str   : STREAM          Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (SB    : SYBLOC      Ids Op OpAux Clks Str CE)
+       (CE    : COREEXPR    Ids Op OpAux Str)
+       (SB    : SYBLOC      Ids Op OpAux Str CE)
        (Obc   : OBC         Ids Op OpAux)
-       (Trans : TRANSLATION Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn)
-<: SB2OBCTYPING Ids Op OpAux Clks Str CE SB Obc Trans.
-  Include SB2OBCTYPING Ids Op OpAux Clks Str CE SB Obc Trans.
+       (Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn)
+<: SB2OBCTYPING Ids Op OpAux Str CE SB Obc Trans.
+  Include SB2OBCTYPING Ids Op OpAux Str CE SB Obc Trans.
 End SB2ObcTypingFun.

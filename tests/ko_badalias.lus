@@ -1,0 +1,17 @@
+
+node f(a : bool when c;
+       b : bool when d;
+       c, d : bool)
+returns (y: bool);
+let
+    y = true fby false;
+tel
+
+node wrong(w : bool when z;
+           x : bool when z;
+           y, z : bool)
+returns (u: bool);
+let
+    u = f(w, x, y, z);
+tel
+

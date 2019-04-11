@@ -43,9 +43,8 @@ Require Import RMemory.
 Module Type EXT_NLSCHEDULER
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS   Ids)
        (Import CESyn : CESYNTAX Op)
-       (Import Syn   : SBSYNTAX Ids Op Clks CESyn).
+       (Import Syn   : SBSYNTAX Ids Op CESyn).
 
   Parameter schedule : ident -> list equation -> list positive.
 
@@ -55,19 +54,18 @@ Module Type SBSCHEDULE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX       Op)
-       (Import Clks  : CLOCKS          Ids)
        (Import Str   : STREAM              Op OpAux)
-       (Import CE    : COREEXPR        Ids Op OpAux Clks Str)
-       (Import Syn   : SBSYNTAX        Ids Op       Clks CE.Syn)
-       (Import Block : SBISBLOCK       Ids Op       Clks CE.Syn Syn)
-       (Import Ord   : SBORDERED       Ids Op       Clks CE.Syn Syn Block)
-       (Import Sem   : SBSEMANTICS     Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem)
-       (Import Typ   : SBTYPING        Ids Op       Clks CE.Syn Syn CE.Typ)
-       (Import Var   : SBISVARIABLE    Ids Op       Clks CE.Syn Syn)
-       (Import Last  : SBISLAST        Ids Op       Clks CE.Syn Syn)
-       (Import Def   : SBISDEFINED     Ids Op       Clks CE.Syn Syn Var Last)
-       (Import Clo   : SBCLOCKING      Ids Op       Clks CE.Syn Syn Last Var Def CE.Clo)
-       (Import Sch   : EXT_NLSCHEDULER Ids Op       Clks CE.Syn Syn).
+       (Import CE    : COREEXPR        Ids Op OpAux Str)
+       (Import Syn   : SBSYNTAX        Ids Op       CE.Syn)
+       (Import Block : SBISBLOCK       Ids Op       CE.Syn Syn)
+       (Import Ord   : SBORDERED       Ids Op       CE.Syn Syn Block)
+       (Import Sem   : SBSEMANTICS     Ids Op OpAux CE.Syn Syn Block Ord Str CE.Sem)
+       (Import Typ   : SBTYPING        Ids Op       CE.Syn Syn CE.Typ)
+       (Import Var   : SBISVARIABLE    Ids Op       CE.Syn Syn)
+       (Import Last  : SBISLAST        Ids Op       CE.Syn Syn)
+       (Import Def   : SBISDEFINED     Ids Op       CE.Syn Syn Var Last)
+       (Import Clo   : SBCLOCKING      Ids Op       CE.Syn Syn Last Var Def Block Ord CE.Clo)
+       (Import Sch   : EXT_NLSCHEDULER Ids Op       CE.Syn Syn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -342,15 +340,33 @@ Module Type SBSCHEDULE
       destruct b; auto.
   Qed.
 
+  Lemma scheduler_wc_equation:
+    forall P vars eq,
+      wc_equation P vars eq ->
+      wc_equation (schedule P) vars eq.
+  Proof.
+    induction P as [|b P IH]; auto.
+    intros vars eq Hwc.
+    destruct eq; inv Hwc; eauto using wc_equation.
+    econstructor; auto.
+    - now apply scheduler_find_block; eauto.
+    - match goal with H:exists _, _ |- _ =>
+                      destruct H as (isub & osub & Hn_in & Hn_out) end.
+      exists isub, osub.
+      match goal with H:find_block _ _ = Some (?b, _) |- _ => destruct b end; auto.
+  Qed.
+
   Lemma scheduler_wc_block:
-    forall b,
-      wc_block b ->
-      wc_block (schedule_block b).
+    forall P b,
+      wc_block P b ->
+      wc_block (schedule P) (schedule_block b).
   Proof.
     inversion_clear 1 as [? (?&?& Heqs)].
     constructor; simpl; auto.
     intuition.
     rewrite schedule_eqs_permutation; auto.
+    induction Heqs; constructor; auto.
+    apply scheduler_wc_equation; auto.
   Qed.
 
   Lemma scheduler_wc_program:
@@ -447,19 +463,18 @@ Module SBScheduleFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX       Op)
-       (Clks  : CLOCKS          Ids)
        (Str   : STREAM              Op OpAux)
-       (CE    : COREEXPR        Ids Op OpAux Clks Str)
-       (Syn   : SBSYNTAX        Ids Op       Clks CE.Syn)
-       (Block : SBISBLOCK       Ids Op       Clks CE.Syn Syn)
-       (Ord   : SBORDERED       Ids Op       Clks CE.Syn Syn Block)
-       (Sem   : SBSEMANTICS     Ids Op OpAux Clks CE.Syn Syn Block Ord Str CE.Sem)
-       (Typ   : SBTYPING        Ids Op       Clks CE.Syn Syn CE.Typ)
-       (Var   : SBISVARIABLE    Ids Op       Clks CE.Syn Syn)
-       (Last  : SBISLAST        Ids Op       Clks CE.Syn Syn)
-       (Def   : SBISDEFINED     Ids Op       Clks CE.Syn Syn Var Last)
-       (Clo   : SBCLOCKING      Ids Op       Clks CE.Syn Syn Last Var Def CE.Clo)
-       (Sch   : EXT_NLSCHEDULER Ids Op       Clks CE.Syn Syn)
-<: SBSCHEDULE Ids Op OpAux Clks Str CE Syn Block Ord Sem Typ Var Last Def Clo Sch.
-  Include SBSCHEDULE Ids Op OpAux Clks Str CE Syn Block Ord Sem Typ Var Last Def Clo Sch.
+       (CE    : COREEXPR        Ids Op OpAux Str)
+       (Syn   : SBSYNTAX        Ids Op       CE.Syn)
+       (Block : SBISBLOCK       Ids Op       CE.Syn Syn)
+       (Ord   : SBORDERED       Ids Op       CE.Syn Syn Block)
+       (Sem   : SBSEMANTICS     Ids Op OpAux CE.Syn Syn Block Ord Str CE.Sem)
+       (Typ   : SBTYPING        Ids Op       CE.Syn Syn CE.Typ)
+       (Var   : SBISVARIABLE    Ids Op       CE.Syn Syn)
+       (Last  : SBISLAST        Ids Op       CE.Syn Syn)
+       (Def   : SBISDEFINED     Ids Op       CE.Syn Syn Var Last)
+       (Clo   : SBCLOCKING      Ids Op       CE.Syn Syn Last Var Def Block Ord CE.Clo)
+       (Sch   : EXT_NLSCHEDULER Ids Op       CE.Syn Syn)
+<: SBSCHEDULE Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Sch.
+  Include SBSCHEDULE Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Sch.
 End SBScheduleFun.

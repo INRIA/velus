@@ -1,6 +1,7 @@
 
 (* Functions called from within the proof, e.g., VelusCorrectness *)
 
+let lustre_destination = ref (None : string option)
 let snlustre_destination = ref (None : string option)
 let sybloc_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
@@ -12,6 +13,10 @@ let fuse_obc = ref true
 let do_fusion () = !fuse_obc
 
 let do_sync () = !sync_destination <> None
+
+(* try to automatically constants in "when"s? *)
+let add_when_to_constants = ref true
+let do_add_when_to_constants () = !add_when_to_constants
 
 let expose = ref false
 let do_expose () = !expose
@@ -41,6 +46,9 @@ let print_if flag print prog =
       let oc = open_out f in
       print (Format.formatter_of_out_channel oc) prog;
       close_out oc
+
+let print_lustre_if =
+  print_if lustre_destination Interfacelib.PrintLustre.print_global
 
 let print_snlustre_if =
   print_if snlustre_destination Interfacelib.PrintNLustre.print_global

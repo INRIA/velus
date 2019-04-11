@@ -12,7 +12,6 @@ Require Import Morphisms.
 Module Type CETYPING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS Ids)
        (Import Syn  : CESYNTAX Op).
 
   (** ** Clocks *)
@@ -141,8 +140,7 @@ End CETYPING.
 Module CETypingFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (Clks : CLOCKS Ids)
        (Syn  : CESYNTAX Op)
-       <: CETYPING Ids Op Clks Syn.
-  Include CETYPING Ids Op Clks Syn.
+       <: CETYPING Ids Op Syn.
+  Include CETYPING Ids Op Syn.
 End CETypingFun.

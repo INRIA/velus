@@ -13,7 +13,6 @@ Import Permutation.
 Module Type CECLOCKING
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS Ids)
        (Import Syn  : CESYNTAX Op).
 
   (* TODO: move to Common *)
@@ -155,8 +154,7 @@ End CECLOCKING.
 Module CEClockingFun
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import Clks : CLOCKS Ids)
        (Import Syn  : CESYNTAX Op)
-  <: CECLOCKING Ids Op Clks Syn.
-  Include CECLOCKING Ids Op Clks Syn.
+  <: CECLOCKING Ids Op Syn.
+  Include CECLOCKING Ids Op Syn.
 End CEClockingFun.

@@ -1,0 +1,9 @@
+
+node f (a : bool;
+        b : bool when a;
+        c : bool when b)
+returns (y : bool);
+let
+    y = true;
+tel
+

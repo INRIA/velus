@@ -34,7 +34,7 @@ Scheme Equality for ascii.
 Fixpoint mem_str (x: ascii) (s: string): bool :=
   match s with
   | EmptyString => false
-  | String x' s => ascii_beq x' x || mem_str x s
+  | String x' s => (ascii_beq x' x || mem_str x s)%bool
   end.
 
 Lemma mem_In_str:

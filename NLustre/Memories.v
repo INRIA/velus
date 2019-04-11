@@ -29,9 +29,8 @@ Require Import Permutation.
 Module Type MEMORIES
        (Ids            : IDS)
        (Op             : OPERATORS)
-       (Import Clks    : CLOCKS   Ids)
-       (Import CESyn : CESYNTAX Op)
-       (Import Syn     : NLSYNTAX Ids Op Clks CESyn).
+       (Import CESyn   : CESYNTAX     Op)
+       (Import Syn     : NLSYNTAX Ids Op CESyn).
 
   Definition memory_eq (mems: PS.t) (eq: equation) : PS.t :=
     match eq with
@@ -105,7 +104,7 @@ Module Type MEMORIES
     destruct Hin as [|Hin].
     - subst eq'.
       assert (PS.mem x (fold_left memory_eq eqs PS.empty) = false).
-      { apply mem_spec_false; intro.
+      { apply PSP.Dec.F.not_mem_iff; intro.
         eapply Forall_forall in Hndup_def; eauto.
         eapply Hndup_def; eauto.
         now apply in_memories_var_defined.
@@ -125,7 +124,7 @@ Module Type MEMORIES
       destruct (PS.mem x (fold_left memory_eq eqs PS.empty)) eqn: E.
       + rewrite PS.mem_spec in *.
         rewrite In_fold_left_memory_eq; auto.
-      + rewrite mem_spec_false in *.
+      + rewrite <-PSP.Dec.F.not_mem_iff in *.
         rewrite In_fold_left_memory_eq, PS.add_spec, PSF.empty_iff.
         intros [?|[?|?]]; auto.
   Qed.
@@ -361,9 +360,8 @@ End MEMORIES.
 Module MemoriesFun
        (Ids     : IDS)
        (Op      : OPERATORS)
-       (Clks    : CLOCKS   Ids)
-       (CESyn : CESYNTAX Op)
-       (Syn     : NLSYNTAX Ids Op Clks CESyn)
-       <: MEMORIES Ids Op Clks CESyn Syn.
-  Include MEMORIES Ids Op Clks CESyn Syn.
+       (CESyn   : CESYNTAX     Op)
+       (Syn     : NLSYNTAX Ids Op CESyn)
+       <: MEMORIES Ids Op CESyn Syn.
+  Include MEMORIES Ids Op CESyn Syn.
 End MemoriesFun.

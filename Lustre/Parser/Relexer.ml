@@ -22,6 +22,7 @@ let map_token (Specif.Coq_existT (tok, l) : LustreParser.Aut.GramDefs.token) =
   | FBY't        -> (LustreParser2.FBY        (loc l), loc l)
   | FLOAT32't    -> (LustreParser2.FLOAT32    (loc l), loc l)
   | FLOAT64't    -> (LustreParser2.FLOAT64    (loc l), loc l)
+  | FUNCTION't   -> (LustreParser2.FUNCTION   (loc l), loc l)
   | GEQ't        -> (LustreParser2.GEQ        (loc l), loc l)
   | GT't         -> (LustreParser2.GT         (loc l), loc l)
   | IF't         -> (LustreParser2.IF         (loc l), loc l)

@@ -1,0 +1,21 @@
+
+node swap (a, b : bool)
+returns (x, y : bool);
+let
+  x = b;
+  y = a;
+tel
+
+node shuffle (a, b, c, d : bool)
+returns (w, x, y, z : bool);
+let
+  (w, x) = swap(a, b);
+  (y, z) = swap(c, d);
+tel
+
+node main (a, b, c, d : bool)
+returns (w, x, y, z : bool);
+let
+  (w, x, y, z) = shuffle(shuffle(swap(a, b), swap(c, d)));
+tel
+

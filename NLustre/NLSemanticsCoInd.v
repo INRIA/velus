@@ -27,9 +27,8 @@ Module Type NLSEMANTICSCOIND
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX Op)
-       (Import Clks    : CLOCKS    Ids)
-       (Import CESyn : CESYNTAX  Op)
-       (Import Syn     : NLSYNTAX  Ids Op Clks CESyn).
+       (Import CESyn   : CESYNTAX      Op)
+       (Import Syn     : NLSYNTAX  Ids Op CESyn).
 
   Definition idents := List.map (@fst ident (type * clock)).
 
@@ -235,35 +234,8 @@ Module Type NLSEMANTICSCOIND
   Definition sem_laexp := sem_aexp sem_lexp.
   Definition sem_caexp := sem_aexp sem_cexp.
 
-  CoInductive sem_laexps: History -> Stream bool -> clock -> list lexp -> list (Stream value) -> Prop :=
-  | SLsTick:
-      forall H b ck les ess bs,
-        Forall2 (sem_lexp H b) les ess ->
-        Forall (fun es => hd es <> absent) ess ->
-        sem_clock H b ck (true ::: bs) ->
-        sem_laexps (History_tl H) (tl b) ck les (List.map (@tl value) ess) ->
-        sem_laexps H b ck les ess
-  | SLsAbs:
-      forall H b ck les ess bs,
-        Forall2 (sem_lexp H b) les ess ->
-        Forall (fun es => hd es = absent) ess ->
-        sem_clock H b ck (false ::: bs) ->
-        sem_laexps (History_tl H) (tl b) ck les (List.map (@tl value) ess) ->
-        sem_laexps H b ck les ess.
-
-  Lemma sem_laexps_cons:
-     forall H b ck le les es ess,
-        sem_laexps H b ck (le :: les) (es :: ess) ->
-        sem_laexps H b ck les ess.
-  Proof.
-    cofix Cofix; intros ** Sem.
-    inversion_clear Sem as [? ? ? ? ? ? F2 F1|? ? ? ? ? ? F2 F1]; inv F2; inv F1.
-    - eleft; eauto.
-    - eright; eauto.
-  Qed.
-
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
-    forallb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
+    existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
   CoInductive reset_of: Stream value -> Stream bool -> Prop :=
     reset_of_intro:
@@ -359,52 +331,6 @@ Module Type NLSEMANTICSCOIND
     reflexivity.
   Qed.
 
-  Definition same_clock (xss: list (Stream value)) : Prop :=
-    forall n,
-      Forall (fun xs => Str_nth n xs = absent) xss
-      \/ Forall (fun xs => Str_nth n xs <> absent) xss.
-
-  Remark same_clock_nil: same_clock [].
-  Proof.
-    constructor; auto.
-  Qed.
-
-  Fact same_clock_app:
-    forall xss yss,
-      same_clock (xss ++ yss) ->
-      same_clock xss /\ same_clock yss.
-  Proof.
-    intros ** H.
-    split; intro; destruct (H n) as [E|Ne];
-      try (left; apply Forall_app in E; tauto);
-      try (right; apply Forall_app in Ne; tauto).
-   Qed.
-
-  Corollary same_clock_app_l:
-     forall xss yss,
-      same_clock (xss ++ yss) ->
-      same_clock xss.
-  Proof.
-    intros ? ? H; apply same_clock_app in H; tauto.
-  Qed.
-
-  Corollary same_clock_app_r:
-     forall xss yss,
-      same_clock (xss ++ yss) ->
-      same_clock yss.
-  Proof.
-    intros ? ? H; apply same_clock_app in H; tauto.
-  Qed.
-
-  Corollary same_clock_cons:
-    forall xss xs,
-      same_clock (xs :: xss) ->
-      same_clock xss.
-  Proof.
-    intros ? ? H; rewrite cons_is_app in H.
-    eapply same_clock_app_r; eauto.
-  Qed.
-
   Section NodeSemantics.
 
     Variable G: global.
@@ -417,13 +343,15 @@ Module Type NLSEMANTICSCOIND
           sem_equation H b (EqDef x ck e)
     | SeqApp:
         forall H b ys ck f es ess oss,
-          sem_laexps H b ck es ess ->
+          Forall2 (sem_lexp H b) es ess ->
+          sem_clock H b ck (clocks_of ess) ->
           sem_node f ess oss ->
           Forall2 (sem_var H) ys oss ->
           sem_equation H b (EqApp ys ck f es None)
     | SeqReset:
         forall H b xs ck f es y ys rs ess oss,
-          sem_laexps H b ck es ess ->
+          Forall2 (sem_lexp H b) es ess ->
+          sem_clock H b ck (clocks_of ess) ->
           sem_var H y ys ->
           reset_of ys rs ->
           sem_reset f rs ess oss ->
@@ -451,7 +379,6 @@ Module Type NLSEMANTICSCOIND
           find_node f G = Some n ->
           Forall2 (sem_var H) (idents n.(n_in)) xss ->
           Forall2 (sem_var H) (idents n.(n_out)) oss ->
-          same_clock (xss ++ oss) ->
           sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
           Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
           sem_node f xss oss.
@@ -474,7 +401,8 @@ Module Type NLSEMANTICSCOIND
 
     Hypothesis EqAppCase:
       forall H b ys ck f es ess oss,
-        sem_laexps H b ck es ess ->
+        Forall2 (sem_lexp H b) es ess ->
+        sem_clock H b ck (clocks_of ess) ->
         sem_node G f ess oss ->
         Forall2 (sem_var H) ys oss ->
         P_node f ess oss ->
@@ -482,7 +410,8 @@ Module Type NLSEMANTICSCOIND
 
     Hypothesis EqResetCase:
       forall H b xs ck f es y ys rs ess oss,
-        sem_laexps H b ck es ess ->
+        Forall2 (sem_lexp H b) es ess ->
+        sem_clock H b ck (clocks_of ess) ->
         sem_var H y ys ->
         reset_of ys rs ->
         sem_reset G f rs ess oss ->
@@ -508,7 +437,6 @@ Module Type NLSEMANTICSCOIND
         find_node f G = Some n ->
         Forall2 (sem_var H) (idents n.(n_in)) xss ->
         Forall2 (sem_var H) (idents n.(n_out)) oss ->
-        same_clock (xss ++ oss) ->
         sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
         Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
         Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
@@ -731,37 +659,6 @@ Module Type NLSEMANTICSCOIND
     solve_proper.
   Qed.
 
-  Add Parametric Morphism H : (sem_laexps H)
-      with signature @EqSt bool ==> eq ==> eq ==> @EqSts value ==> Basics.impl
-        as sem_laexps_morph.
-  Proof.
-    revert H; cofix Cofix.
-    intros ** b b' Eb ck les ess ess' Eess Sem.
-    inversion_clear Sem as [? ? ? ? ? ? F2|].
-    - eleft.
-      + eapply Forall2_EqSt; eauto.
-        * solve_proper.
-        * apply Forall2_impl_In with (P:=sem_lexp H b); eauto.
-          intros; now rewrite <-Eb.
-      + eapply Forall_EqSt; eauto.
-        solve_proper.
-      + rewrite <-Eb; eauto.
-      + inv Eb; eapply Cofix; eauto.
-        apply map_st_EqSt; auto.
-        inversion 1; auto.
-    - eright.
-      + eapply Forall2_EqSt; eauto.
-        * solve_proper.
-        * apply Forall2_impl_In with (P:=sem_lexp H b); eauto.
-          intros; now rewrite <-Eb.
-      + eapply Forall_EqSt; eauto.
-        solve_proper.
-      + rewrite <-Eb; eauto.
-      + inv Eb; eapply Cofix; eauto.
-        apply map_st_EqSt; auto.
-        inversion 1; auto.
-  Qed.
-
   Add Parametric Morphism : clocks_of
       with signature @EqSts value ==> @EqSt bool
         as clocks_of_EqSt.
@@ -808,20 +705,11 @@ Module Type NLSEMANTICSCOIND
         as mod_sem_equation_morph.
   Proof.
     unfold Basics.impl; intros ** b b' Eb e Sem.
-    induction Sem; econstructor; eauto; now rewrite <-Eb.
-  Qed.
-
-  Add Parametric Morphism : same_clock
-      with signature @EqSts value ==> Basics.impl
-    as same_clock_morph.
-  Proof.
-    unfold Basics.impl.
-    intros xss xss' Exss Same.
-    intro; specialize (Same n); destruct Same.
-    - left. eapply Forall_EqSt; eauto.
-      intros xs xs' Exs E; rewrite <-Exs; auto.
-    - right. eapply Forall_EqSt; eauto.
-      intros xs xs' Exs E; rewrite <-Exs; auto.
+    induction Sem; econstructor; eauto; try now rewrite <-Eb.
+    - eapply Forall2_impl_In with (P := sem_lexp H b); auto.
+      intros; now rewrite <-Eb.
+    - eapply Forall2_impl_In with (P := sem_lexp H b); auto.
+      intros; now rewrite <-Eb.
   Qed.
 
   Add Parametric Morphism H : (sem_clocked_var H)
@@ -850,7 +738,6 @@ Module Type NLSEMANTICSCOIND
     + instantiate (1:=H).
       now rewrite <-Exss.
     + now rewrite <-Eyss.
-    + now rewrite <-Eyss, <-Exss.
     + now rewrite <-Exss.
     + apply Forall_impl with (P:=sem_equation G H (clocks_of xss)); auto.
       intro; now rewrite Exss.
@@ -886,8 +773,8 @@ End NLSEMANTICSCOIND.
 (*        (Op    : OPERATORS) *)
 (*        (OpAux : OPERATORS_AUX Op) *)
 (*        (Clks  : CLOCKS    Ids) *)
-(*        (Syn   : NLSYNTAX  Ids Op Clks) *)
-(*        (Ord   : ORDERED   Ids Op Clks Syn) *)
-(*        <: NLSEMANTICSCOINDREC Ids Op OpAux Clks Syn Ord. *)
-(*   Include NLSEMANTICSCOINDREC Ids Op OpAux Clks Syn Ord. *)
+(*        (Syn   : NLSYNTAX  Ids Op) *)
+(*        (Ord   : ORDERED   Ids Op Syn) *)
+(*        <: NLSEMANTICSCOINDREC Ids Op OpAux Syn Ord. *)
+(*   Include NLSEMANTICSCOINDREC Ids Op OpAux Syn Ord. *)
 (* End NLSemanticsCoIndRecFun. *)

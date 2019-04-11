@@ -1,0 +1,21 @@
+
+node mok (a, b, c : bool)
+returns (x: bool when a; y : bool when b);
+let
+  (x, y) = ((false fby c) when a, c when b);
+tel
+
+node kom (a, b : bool; y : bool when a; z : bool when b)
+returns (u, v: bool);
+let
+  u = merge a (true -> y) (false -> false);
+  v = merge b (true -> z) (false -> false);
+tel
+
+node main (a, b, c : bool)
+returns (w, x : bool);
+let
+  (w, x) = kom(a, b, if c then mok(a, b, c)
+                          else mok(a, b, not c));
+tel
+

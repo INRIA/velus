@@ -1,0 +1,9 @@
+
+node multivars (a: bool) returns (y: bool);
+var b : bool;
+var c : bool;
+let
+    b = a;
+    c = b;
+    y = c;
+tel

@@ -1,0 +1,11 @@
+
+node f (a, b : bool)
+returns (y : bool);
+var w : bool when a;
+    x : bool when not a;
+let
+    w = (not b) when a;
+    x = b when not a;
+    y = merge a (true -> w) (false -> x);
+tel
+

@@ -12,17 +12,20 @@ all: $(VELUS)
 compcert: $(COMPCERTDIR)/Makefile.config
 	@echo "${bold}Building CompCert...${normal}"
 	$(MAKE) $(COMPCERTFLAGS) #compcert.ini driver/Version.ml proof
+	@echo "${bold}OK.${normal}"
 
 # LUSTRE PARSER
 parser:
 	@echo "${bold}Building Lustre parser...${normal}"
 	$(MAKE) $(PARSERFLAGS) all
+	@echo "${bold}OK.${normal}"
 
 # VELUS COQ
 proof: compcert parser $(MAKEFILEAUTO) $(MAKEFILECONFIG)
 	@echo "${bold}Building Velus proof...${normal}"
 	test -f .depend || $(MAKE) -s -f $(MAKEFILEAUTO) depend
 	$(MAKE) -s -f $(MAKEFILEAUTO) all
+	@echo "${bold}OK.${normal}"
 
 $(MAKEFILEAUTO): automake $(COQPROJECT)
 	./$< -e $(EXTRACTION)/Extraction.v -f $(EXTRACTED) -o $@ $(COQPROJECT)
@@ -36,12 +39,14 @@ extraction: proof
 		$(PARSERDIR)/LustreParser2.ml\
 		$(PARSERDIR)/LustreParser2.mli\
 		CoreExpr/coreexprlib.ml\
+		Lustre/lustrelib.ml\
 		NLustre/nlustrelib.ml\
 		SyBloc/sybloclib.ml\
 		Obc/obclib.ml\
 		ObcToClight/interfacelib.ml\
 		$(COMPCERT_INCLUDES:%=$(COMPCERTDIR)/%/*.ml*)\
 		$(EXTRACTED)
+	@echo "${bold}OK.${normal}"
 
 # VELUS
 $(VELUS): extraction $(VELUSMAIN).ml veluslib.ml

@@ -1,0 +1,15 @@
+
+node notnot (x : bool) returns (y, z : bool);
+var w : bool;
+let
+  w = false fby x;
+  y = w or y;
+  z = w and x;
+tel
+
+node binop (x : bool)
+returns (y : bool);
+let
+    y = notnot(x) or notnot(not x);
+tel
+

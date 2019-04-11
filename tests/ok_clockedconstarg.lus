@@ -1,0 +1,21 @@
+
+node f(x: bool; y: bool when x)
+returns (z: bool);
+var w: bool;
+let
+  w = merge x (true -> y and (z when x))
+              (false -> z when not x);
+  z = false fby w;
+tel
+
+node g(x: bool)
+returns (y: bool);
+let
+  (* The correct form is:
+        y = f(x, false when x)
+     
+     This example tests whether the compiler infers the missing
+     "when" in the arguments of a node. *)
+  y = f(x, false);
+tel
+

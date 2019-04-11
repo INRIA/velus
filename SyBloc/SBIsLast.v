@@ -9,11 +9,10 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBISLAST
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn).
+       (Import Syn   : SBSYNTAX Ids Op CESyn).
 
   Inductive Is_last_in_eq: ident -> equation -> Prop :=
     LastEqNext:
@@ -89,11 +88,10 @@ Module Type SBISLAST
 End SBISLAST.
 
 Module SBIsLastFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
+       (Ids   : IDS)
+       (Op    : OPERATORS)
        (CESyn : CESYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
-<: SBISLAST Ids Op Clks CESyn Syn.
-  Include SBISLAST Ids Op Clks CESyn Syn.
+       (Syn   : SBSYNTAX Ids Op CESyn)
+<: SBISLAST Ids Op CESyn Syn.
+  Include SBISLAST Ids Op CESyn Syn.
 End SBIsLastFun.

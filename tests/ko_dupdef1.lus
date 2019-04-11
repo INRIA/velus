@@ -1,0 +1,8 @@
+
+node wrong(x: bool) returns (y: bool; z: bool);
+let
+    y = false;      (* OK *)
+    z = true;       (* OK *)
+    y = false;      (* KO *)
+tel
+

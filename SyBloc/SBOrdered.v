@@ -10,12 +10,11 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBORDERED
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS       Ids)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn     : SBSYNTAX     Ids Op Clks CESyn)
-       (Import Block   : SBISBLOCK    Ids Op Clks CESyn Syn).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import CESyn : CESYNTAX      Op)
+       (Import Syn   : SBSYNTAX  Ids Op CESyn)
+       (Import Block : SBISBLOCK Ids Op CESyn Syn).
 
   Inductive Ordered_blocks: program -> Prop :=
   | Ordered_nil:
@@ -52,6 +51,16 @@ Module Type SBORDERED
       congruence.
     - apply IHP1 in Ord; apply Forall_forall; intros.
       eapply Forall_forall in Ord as (?&?&?); eauto.
+  Qed.
+
+  Lemma Ordered_blocks_append:
+    forall P P',
+      Ordered_blocks (P ++ P') ->
+      Ordered_blocks P'.
+  Proof.
+    induction P; [intuition|].
+    intros ** HnPP.
+    apply IHP; inversion_clear HnPP; assumption.
   Qed.
 
   Lemma Ordered_blocks_find_In_blocks:
@@ -122,12 +131,11 @@ Module Type SBORDERED
 End SBORDERED.
 
 Module SBOrderedFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS       Ids)
-       (CESyn : CESYNTAX     Op)
-       (Syn     : SBSYNTAX     Ids Op Clks CESyn)
-       (Block   : SBISBLOCK    Ids Op Clks CESyn Syn)
-<: SBORDERED Ids Op Clks CESyn Syn Block.
-  Include SBORDERED Ids Op Clks CESyn Syn Block.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (CESyn : CESYNTAX      Op)
+       (Syn   : SBSYNTAX  Ids Op CESyn)
+       (Block : SBISBLOCK Ids Op CESyn Syn)
+<: SBORDERED Ids Op CESyn Syn Block.
+  Include SBORDERED Ids Op CESyn Syn Block.
 End SBOrderedFun.

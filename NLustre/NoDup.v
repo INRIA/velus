@@ -32,14 +32,13 @@ this generically amounts to:
  *)
 
 Module Type NODUP
-       (Ids            : IDS)
-       (Op             : OPERATORS)
-       (Import Clks    : CLOCKS     Ids)
-       (Import CESyn : CESYNTAX   Op)
-       (Import Syn     : NLSYNTAX   Ids Op Clks CESyn)
-       (Import Mem     : MEMORIES   Ids Op Clks CESyn Syn)
-       (Import IsD     : ISDEFINED  Ids Op Clks CESyn Syn Mem)
-       (Import IsV     : ISVARIABLE Ids Op Clks CESyn Syn Mem IsD).
+       (Ids          : IDS)
+       (Op           : OPERATORS)
+       (Import CESyn : CESYNTAX       Op)
+       (Import Syn   : NLSYNTAX   Ids Op CESyn)
+       (Import Mem   : MEMORIES   Ids Op CESyn Syn)
+       (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
+       (Import IsV   : ISVARIABLE Ids Op CESyn Syn Mem IsD).
 
   Inductive NoDup_defs : list equation -> Prop :=
   | NDDNil: NoDup_defs nil
@@ -169,16 +168,15 @@ Module Type NODUP
 End NODUP.
 
 Module NoDupFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS Ids)
-       (CESyn : CESYNTAX   Op)
-       (Syn     : NLSYNTAX   Ids Op Clks CESyn)
-       (Mem     : MEMORIES   Ids Op Clks CESyn Syn)
-       (IsD     : ISDEFINED  Ids Op Clks CESyn Syn Mem)
-       (IsV     : ISVARIABLE Ids Op Clks CESyn Syn Mem IsD)
-       <: NODUP Ids Op Clks CESyn Syn Mem IsD IsV.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (CESyn : CESYNTAX       Op)
+       (Syn   : NLSYNTAX   Ids Op CESyn)
+       (Mem   : MEMORIES   Ids Op CESyn Syn)
+       (IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
+       (IsV   : ISVARIABLE Ids Op CESyn Syn Mem IsD)
+       <: NODUP Ids Op CESyn Syn Mem IsD IsV.
 
-  Include NODUP Ids Op Clks CESyn Syn Mem IsD IsV.
+  Include NODUP Ids Op CESyn Syn Mem IsD IsV.
 
 End NoDupFun.

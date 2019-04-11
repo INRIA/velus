@@ -4,6 +4,7 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Obc.ObcSyntax.
 Require Import Velus.Obc.ObcSemantics.
+Require Import Velus.Obc.ObcInvariants.
 Require Import Velus.Obc.ObcTyping.
 Require Import Velus.Obc.Equiv.
 
@@ -14,156 +15,15 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Ltac inv H := inversion H; subst; clear H.
-
 Module Type FUSION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
-       (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc)
-       (Import TypObc: Velus.Obc.ObcTyping.OBCTYPING Ids Op OpAux SynObc SemObc)
-       (Import Equ   : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynObc SemObc).
-
-  (** ** Determine whether an Obc command can modify a variable. *)
-
-  Inductive Can_write_in : ident -> stmt -> Prop :=
-  | CWIAssign: forall x e,
-      Can_write_in x (Assign x e)
-  | CWIAssignSt: forall x e,
-      Can_write_in x (AssignSt x e)
-  | CWIIfteTrue: forall x e s1 s2,
-      Can_write_in x s1 ->
-      Can_write_in x (Ifte e s1 s2)
-  | CWIIfteFalse: forall x e s1 s2,
-      Can_write_in x s2 ->
-      Can_write_in x (Ifte e s1 s2)
-  | CWICall_ap: forall x xs cls i f es,
-      In x xs ->
-      Can_write_in x (Call xs cls i f es)
-  | CWIComp1: forall x s1 s2,
-      Can_write_in x s1 ->
-      Can_write_in x (Comp s1 s2)
-  | CWIComp2: forall x s1 s2,
-      Can_write_in x s2 ->
-      Can_write_in x (Comp s1 s2).
-
-  Lemma cannot_write_in_Ifte:
-    forall x e s1 s2,
-      ~ Can_write_in x (Ifte e s1 s2)
-      <->
-      ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
-  Proof.
-    Hint Constructors Can_write_in.
-    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
-  Qed.
-
-  Lemma cannot_write_in_Comp:
-    forall x s1 s2,
-      ~ Can_write_in x (Comp s1 s2)
-      <->
-      ~ Can_write_in x s1 /\ ~ Can_write_in x s2.
-  Proof.
-    Hint Constructors Can_write_in.
-    intros; split; intro; try (intro HH; inversion_clear HH); intuition.
-  Qed.
-
-  Ltac cannot_write :=
-    repeat progress
-           match goal with
-           | |- forall x, Is_free_in_exp x _ -> _ => intros
-           | Hfw: (forall x, Is_free_in_exp x ?e -> _),
-                  Hfree: Is_free_in_exp ?x ?e |- _
-             => pose proof (Hfw x Hfree); clear Hfw
-           | |- _ /\ _ => split
-           | |- ~Can_write_in _ _ => intro
-           | H: Can_write_in _ (Comp _ _) |- _ => inversion_clear H
-           | _ => now intuition
-           end.
-
-  Lemma cannot_write_exp_eval:
-    forall prog s menv env menv' env' e v,
-      (forall x, Is_free_in_exp x e -> ~ Can_write_in x s)
-      -> exp_eval menv env e v
-      -> stmt_eval prog menv env s (menv', env')
-      -> exp_eval menv' env' e v.
-  Proof.
-    Hint Constructors Is_free_in_exp Can_write_in exp_eval.
-    induction s; intros menv env menv' env' e' v Hfree Hexp Hstmt.
-    - inv Hstmt.
-      apply exp_eval_extend_env; trivial.
-      intro Habs. apply (Hfree i); auto.
-    - inv Hstmt.
-      apply exp_eval_extend_mem; trivial.
-      intro Habs. apply (Hfree i); auto.
-    - inv Hstmt. destruct b; [eapply IHs1|eapply IHs2];
-                   try eassumption; try now cannot_write.
-    - inv Hstmt.
-      match goal with
-      | Hs1: stmt_eval _ _ _ s1 _,
-             Hs2: stmt_eval _ _ _ s2 _ |- _
-        => apply IHs1 with (2:=Hexp) in Hs1;
-          [apply IHs2 with (2:=Hs1) (3:=Hs2)|];
-          now cannot_write
-      end.
-    - inv Hstmt.
-      apply exp_eval_extend_mem_by_obj.
-      unfold Env.adds.
-      remember (combine i rvs) as lr eqn:Heq.
-      assert (forall x, In x lr -> In (fst x) i) as Hin
-        by (destruct x; subst; apply in_combine_l).
-      setoid_rewrite <-Heq.
-      clear Heq. induction lr as [|x lr]; auto.
-      destruct x as [x v'].
-      apply exp_eval_extend_env.
-      + intro HH; apply (Hfree x HH).
-        constructor.
-        change (In (fst (x, v')) i).
-        apply Hin, in_eq.
-      + apply IHlr. intros y Hin'. apply Hin.
-        constructor (assumption).
-    - now inv Hstmt.
-  Qed.
-
-  Lemma lift_Ifte:
-    forall e s1 s2 t1 t2,
-      (forall x, Is_free_in_exp x e
-            -> (~Can_write_in x s1 /\ ~Can_write_in x s2))
-      -> stmt_eval_eq (Comp (Ifte e s1 s2) (Ifte e t1 t2))
-                      (Ifte e (Comp s1 t1) (Comp s2 t2)).
-  Proof.
-    Hint Constructors stmt_eval.
-    intros e s1 s2 t1 t2 Hfw prog menv env menv' env'.
-    split; intro Hstmt.
-    - inversion_clear Hstmt as [| | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
-      inversion_clear Hs as   [| | | |? ? ? ? ? bs ? ? ? ? Hx1 Hse Hss|];
-        inversion_clear Ht as [| | | |? ? ? ? ? bt ? ? ? ? Hx3 Hte Hts|];
-        destruct bs; destruct bt; econstructor; try eassumption;
-          repeat progress match goal with
-          | H:val_to_bool _ = Some true |- _ => apply val_to_bool_true' in H
-          | H:val_to_bool _ = Some false |- _ => apply val_to_bool_false' in H
-          end; subst.
-      + econstructor (eassumption).
-      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
-        apply exp_eval_det with (1:=Hx3) in Hx1.
-        exfalso; now apply true_not_false_val.
-      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
-        apply exp_eval_det with (1:=Hx3) in Hx1.
-        exfalso; now apply true_not_false_val.
-      + econstructor (eassumption).
-    - inversion_clear Hstmt as [| | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
-      destruct b; assert (Hv':=Hv);
-        [apply val_to_bool_true' in Hv'
-        |apply val_to_bool_false' in Hv']; subst;
-          inversion_clear Hs as [| | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ];
-          apply Icomp with (me1:=menv'') (ve1:=env'').
-      + apply Iifte with (1:=Hx) (2:=Hv) (3:=Hs1).
-      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
-        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
-      + apply Iifte with (1:=Hx) (2:=Hv) (3:=Hs1).
-      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
-        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
-  Qed.
+       (Import SynObc: OBCSYNTAX     Ids Op OpAux)
+       (Import SemObc: OBCSEMANTICS  Ids Op OpAux SynObc)
+       (Import InvObc: OBCINVARIANTS Ids Op OpAux SynObc SemObc)
+       (Import TypObc: OBCTYPING     Ids Op OpAux SynObc SemObc)
+       (Import Equ   : EQUIV         Ids Op OpAux SynObc SemObc TypObc).
 
   (** ** Fusion functions *)
 
@@ -461,6 +321,43 @@ Module Type FUSION
              end.
   Qed.
 
+  Lemma lift_Ifte:
+    forall e s1 s2 t1 t2,
+      (forall x, Is_free_in_exp x e
+            -> (~Can_write_in x s1 /\ ~Can_write_in x s2))
+      -> stmt_eval_eq (Comp (Ifte e s1 s2) (Ifte e t1 t2))
+                      (Ifte e (Comp s1 t1) (Comp s2 t2)).
+  Proof.
+    Hint Constructors stmt_eval.
+    intros e s1 s2 t1 t2 Hfw prog menv env menv' env'.
+    split; intro Hstmt.
+    - inversion_clear Hstmt as [| | |? ? ? ? ? env'' menv'' ? ? Hs Ht| | ].
+      inversion_clear Hs as   [| | | |? ? ? ? ? bs ? ? ? ? Hx1 Hse Hss|];
+        inversion_clear Ht as [| | | |? ? ? ? ? bt ? ? ? ? Hx3 Hte Hts|];
+        destruct bs; destruct bt; econstructor; try eassumption;
+          repeat progress match goal with
+          | H:val_to_bool _ = Some true |- _ => apply val_to_bool_true' in H
+          | H:val_to_bool _ = Some false |- _ => apply val_to_bool_false' in H
+          end; subst; eauto.
+      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
+        apply exp_eval_det with (1:=Hx3) in Hx1.
+        exfalso; apply true_not_false_val. injection Hx1; auto.
+      + apply cannot_write_exp_eval with (3:=Hss) in Hx1; [|now cannot_write].
+        apply exp_eval_det with (1:=Hx3) in Hx1.
+        exfalso; apply true_not_false_val. injection Hx1; auto.
+    - inversion_clear Hstmt as [| | | |? ? ? ? ? ? ? ? ? ? Hx Hv Hs|].
+      destruct b; assert (Hv':=Hv);
+        [apply val_to_bool_true' in Hv'
+        |apply val_to_bool_false' in Hv']; subst;
+          inversion_clear Hs as [| | |? ? ? ? ? env'' menv'' ? ? Hs1 Ht1| | ];
+          apply Icomp with (me1:=menv'') (ve1:=env'');
+          eauto.
+      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
+        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
+      + apply cannot_write_exp_eval with (3:=Hs1) in Hx; [|now cannot_write].
+        apply Iifte with (1:=Hx) (2:=Hv) (3:=Ht1).
+  Qed.
+
   Lemma Cannot_write_in_zip:
     forall s1 s2 x,
       (~Can_write_in x s1 /\ ~Can_write_in x s2)
@@ -733,17 +630,18 @@ Module Type FUSION
     apply fuse_find_class in H.
     apply fuse_find_method' in H0.
     econstructor; eauto.
+    now rewrite fuse_method_in.
     2:now rewrite fuse_method_out; eassumption.
     rewrite fuse_method_in.
-    apply Forall_forall with (1:=H4) in Hinp.
+    apply Forall_forall with (1:=H5) in Hinp.
     apply Forall_forall with (1:=Hinp) in Hinc.
     rewrite fuse_method_body.
     rewrite fuse_Comp with (1:=Hinc).
-    apply H2.
+    apply H3.
     destruct Hprog' as (cls'' & Hprog & Hfind).
-    rewrite Hprog in H4.
-    apply Forall_app in H4.
-    rewrite Forall_cons2 in H4.
+    rewrite Hprog in H5.
+    apply Forall_app in H5.
+    rewrite Forall_cons2 in H5.
     intuition.
   Qed.
 
@@ -877,18 +775,120 @@ Module Type FUSION
       apply fuse_find_class. eauto.
   Qed.
 
+  (** ** Fusion preserves [Can_write_in]. *)
+
+  Lemma Can_write_in_fuse':
+    forall s1 s2 x,
+      Can_write_in x (Comp s1 s2) <-> Can_write_in x (fuse' s1 s2).
+  Proof.
+    intros s1 s2; revert s1; induction s2; simpl;
+      try setoid_rewrite <-Can_write_in_zip;
+      try setoid_rewrite Can_write_in_Comp;
+      try reflexivity.
+    setoid_rewrite <-IHs2_2.
+    setoid_rewrite Can_write_in_Comp.
+    setoid_rewrite <-Can_write_in_zip.
+    intuition.
+  Qed.
+
+  Lemma Can_write_in_fuse:
+    forall s x,
+      Can_write_in x s <-> Can_write_in x (fuse s).
+  Proof.
+    destruct s; simpl; try reflexivity.
+    apply Can_write_in_fuse'.
+  Qed.
+
+  (** ** Fusion preserves [No_Overwrites]. *)
+
+  Lemma No_Overwrites_zip:
+    forall s1 s2,
+      No_Overwrites (Comp s1 s2) ->
+      No_Overwrites (zip s1 s2).
+  Proof.
+    induction s1; destruct s2; intros Hno; inv Hno; simpl; auto;
+      repeat (match goal with
+        | |- context [ ?e1 ==b ?e2 ] => destruct (e1 ==b e2)
+        | |- No_Overwrites (Ifte _ _ _) => constructor
+        | |- No_Overwrites (Comp _ _) => constructor
+        | |- No_Overwrites (zip _ _) => apply IHs1_1 || apply IHs1_2
+        | |- ~Can_write_in _ (zip _ _) => apply Cannot_write_in_zip; auto
+        | |- _ /\ _ => split
+        | Hfa:(forall x, Can_write_in x (Assign ?y ?e) -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x (Assign ?y ?e) |- _ =>
+          specialize (Hfa x Hcw)
+        | Hfa:(forall x, Can_write_in x (AssignSt ?y ?e) -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x (AssignSt ?y ?e) |- _ =>
+          specialize (Hfa x Hcw)
+        | Hfa:(forall x, Can_write_in x (Ifte ?e ?s1 ?s2) -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x ?s2 |- _ =>
+          specialize (Hfa x (CWIIfteFalse x e s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in x (Ifte ?e ?s1 ?s2) -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x ?s1 |- _ =>
+          specialize (Hfa x (CWIIfteTrue x e s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in x (Comp ?s1 ?s2) -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x ?s1 |- _ =>
+          specialize (Hfa x (CWIComp1 x s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in x (Comp ?s1 ?s2) -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x ?s2 |- _ =>
+          specialize (Hfa x (CWIComp2 x s1 s2 Hcw))
+        | Hfa:(forall x, Can_write_in x (Call ?xs ?f ?o ?m ?es)
+                         -> ~Can_write_in x _),
+              Hcw:Can_write_in ?x (Call ?xs ?f ?o ?m ?es) |- _ =>
+          specialize (Hfa x Hcw)
+        | H:~Can_write_in ?x (Ifte ?e ?s1 ?s2) |- _ =>
+          apply cannot_write_in_Ifte in H as (? & ?); auto
+        | H:No_Overwrites (Ifte _ _ _) |- _ => inversion_clear H
+        | H:No_Overwrites (Comp _ _) |- _ => inversion_clear H
+        | H:Can_write_in ?x (Ifte _ _ _) |- _ => inversion_clear H
+        | H:Can_write_in ?x (Comp _ _) |- _ => inversion_clear H
+        | H:Can_write_in ?x (zip _ _) |- _ =>
+          apply Can_write_in_zip in H as [?|?]
+              end; intros; auto).
+  Qed.
+
+  Lemma No_Overwrites_fuse':
+    forall s1 s2,
+      No_Overwrites (Comp s1 s2) ->
+      No_Overwrites (fuse' s1 s2).
+  Proof.
+    intros s1 s2; revert s1; induction s2; simpl; inversion_clear 1;
+      try apply No_Overwrites_zip; auto.
+    match goal with H:No_Overwrites (Comp _ _) |- _ => inv H end.
+    apply IHs2_2; constructor; auto.
+    - intros x Hcw.
+      apply Can_write_in_zip in Hcw as [Hcw|Hcw]; auto.
+      match goal with H:forall x, Can_write_in x s1 -> _ |- _ => apply H in Hcw end.
+      apply cannot_write_in_Comp in Hcw as (? & ?); auto.
+    - intros x Hcw; apply Cannot_write_in_zip; auto.
+    - apply No_Overwrites_zip.
+      constructor; auto. intros x Hcw.
+      match goal with H:forall x, Can_write_in x s1 -> _ |- _ => apply H in Hcw end.
+      apply cannot_write_in_Comp in Hcw as (? & ?); auto.
+  Qed.
+
+  Lemma No_Overwrites_fuse:
+    forall s,
+      No_Overwrites s ->
+      No_Overwrites (fuse s).
+  Proof.
+    destruct s; intros Hnoo; auto.
+    now apply No_Overwrites_fuse'.
+  Qed.
+
 End FUSION.
 
 Module FusionFun
-       (Import Ids  : IDS)
-       (Import Op   : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (Import SynObc: Velus.Obc.ObcSyntax.OBCSYNTAX Ids Op OpAux)
-       (Import SemObc: Velus.Obc.ObcSemantics.OBCSEMANTICS Ids Op OpAux SynObc)
-       (Import TypObc: Velus.Obc.ObcTyping.OBCTYPING Ids Op OpAux SynObc SemObc)
-       (Import Equ  : Velus.Obc.Equiv.EQUIV Ids Op OpAux SynObc SemObc)
-       <: FUSION Ids Op OpAux SynObc SemObc TypObc Equ.
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX     Op)
+       (Import SynObc: OBCSYNTAX     Ids Op OpAux)
+       (Import SemObc: OBCSEMANTICS  Ids Op OpAux SynObc)
+       (Import InvObc: OBCINVARIANTS Ids Op OpAux SynObc SemObc)
+       (Import TypObc: OBCTYPING     Ids Op OpAux SynObc SemObc)
+       (Import Equ   : EQUIV         Ids Op OpAux SynObc SemObc TypObc)
+       <: FUSION Ids Op OpAux SynObc SemObc InvObc TypObc Equ.
 
-  Include FUSION Ids Op OpAux SynObc SemObc TypObc Equ.
+  Include FUSION Ids Op OpAux SynObc SemObc InvObc TypObc Equ.
 
 End FusionFun.

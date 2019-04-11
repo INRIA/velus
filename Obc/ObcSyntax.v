@@ -22,15 +22,17 @@ Module Type OBCSYNTAX
   | State : ident -> type -> exp                (* state variable  *)
   | Const : const-> exp                         (* constant *)
   | Unop  : unop -> exp -> type -> exp          (* unary operator *)
-  | Binop : binop -> exp -> exp -> type -> exp. (* binary operator *)
+  | Binop : binop -> exp -> exp -> type -> exp  (* binary operator *)
+  | Valid : exp -> exp.                         (* valid value assertion *)
 
-  Definition typeof (e: exp): type :=
+  Fixpoint typeof (e: exp): type :=
     match e with
     | Const c => type_const c
     | Var _ ty
     | State _ ty
     | Unop _ _ ty
     | Binop _ _ _ ty => ty
+    | Valid e => typeof e
     end.
 
   Inductive stmt : Type :=
@@ -90,8 +92,8 @@ Module Type OBCSYNTAX
     pose proof m.(m_good) as Good.
     unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
-      inv Hinm; inversion_clear Good as [|? ? Valid].
-    - inv Valid. contradiction.
+      inv Hinm; inversion_clear Good as [|? ? Valid'].
+    - inv Valid'. contradiction.
     - now apply IHl.
   Qed.
 
@@ -126,8 +128,8 @@ Module Type OBCSYNTAX
     pose proof m.(m_good) as Good.
     unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
-      inv Hinm; inversion_clear Good as [|? ? Valid].
-    - inv Valid. eapply valid_not_prefixed; eauto.
+      inv Hinm; inversion_clear Good as [|? ? Valid'].
+    - inv Valid'. eapply valid_not_prefixed; eauto.
     - now apply IHl.
   Qed.
 
@@ -171,6 +173,18 @@ Module Type OBCSYNTAX
                                 then Some m else find ms'
                    end.
 
+  Definition find_class (n: ident) : program -> option (class * list class) :=
+    fix find p := match p with
+                  | [] => None
+                  | c :: p' => if ident_eqb c.(c_name) n
+                              then Some (c, p') else find p'
+                  end.
+
+  Definition Forall_methods P p :=
+    Forall (fun c => Forall P c.(c_methods)) p.
+
+  (** Properties of method lookups *)
+
   Remark find_method_In:
     forall fid ms f,
       find_method fid ms = Some f ->
@@ -197,12 +211,17 @@ Module Type OBCSYNTAX
     - now apply IHfs.
   Qed.
 
-  Definition find_class (n: ident) : program -> option (class * list class) :=
-    fix find p := match p with
-                  | [] => None
-                  | c :: p' => if ident_eqb c.(c_name) n
-                              then Some (c, p') else find p'
-                  end.
+  Lemma find_method_map:
+    forall f,
+      (forall m, (f m).(m_name) = m.(m_name)) ->
+      forall n ms,
+        find_method n (map f ms) = option_map f (find_method n ms).
+  Proof.
+    intros f Hfname.
+    induction ms as [|m ms IH]; auto. simpl.
+    destruct (ident_eqb (f m).(m_name) n) eqn:Heq;
+      rewrite Hfname in Heq; rewrite Heq; auto.
+  Qed.
 
   (** Properties of class lookups *)
 
@@ -290,6 +309,29 @@ Module Type OBCSYNTAX
     now rewrite Hnin1.
   Qed.
 
+  Lemma find_class_ltsuffix:
+    forall n prog c prog',
+      find_class n prog = Some (c, prog') ->
+      ltsuffix prog' prog.
+  Proof.
+    induction prog as [|c prog IH]. now inversion 1.
+    red; simpl. intros c' prog' Hfind.
+    destruct (ident_eqb c.(c_name) n).
+    - inv Hfind.
+      exists [c']. simpl; split; auto; discriminate.
+    - destruct (IH _ _ Hfind) as (xs & Hprog & Hxs). subst.
+      exists (c::xs); simpl; split; auto; discriminate.
+  Qed.
+
+  Lemma find_class_ltsuffix2:
+    forall n prog1 prog2 c1 c2 prog1' prog2',
+      find_class n prog1 = Some (c1, prog1') ->
+      find_class n prog2 = Some (c2, prog2') ->
+      ltsuffix2 (prog1', prog2') (prog1, prog2).
+  Proof.
+    split; eauto using find_class_ltsuffix.
+  Qed.
+
   (** Syntactic predicates *)
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=
@@ -300,15 +342,18 @@ Module Type OBCSYNTAX
   | FreeUnop: forall i op e ty,
       Is_free_in_exp i e ->
       Is_free_in_exp i (Unop op e ty)
-  |FreeBinop: forall i op e1 e2 ty,
+  | FreeBinop: forall i op e1 e2 ty,
       Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
-      Is_free_in_exp i (Binop op e1 e2 ty).
+      Is_free_in_exp i (Binop op e1 e2 ty)
+  | FreeValid: forall i e,
+      Is_free_in_exp i e ->
+      Is_free_in_exp i (Valid e).
 
   Lemma not_free_aux1 : forall i op e ty,
       ~Is_free_in_exp i (Unop op e ty) ->
       ~Is_free_in_exp i e.
   Proof.
-    intros i op e ty Hfree H; apply Hfree. now constructor.
+    auto using Is_free_in_exp.
   Qed.
 
   Lemma not_free_aux2 : forall i op e1 e2 ty,
@@ -317,6 +362,13 @@ Module Type OBCSYNTAX
   Proof.
     intros i op e1 e2 ty Hfree; split; intro H; apply Hfree;
       constructor; [now left | now right].
+  Qed.
+
+  Lemma not_free_aux3 : forall i e,
+      ~Is_free_in_exp i (Valid e) ->
+      ~Is_free_in_exp i e.
+  Proof.
+    auto using Is_free_in_exp.
   Qed.
 
   Ltac not_free :=
@@ -333,6 +385,8 @@ Module Type OBCSYNTAX
         apply not_free_aux1 in H
     | H : ~Is_free_in_exp ?x (Binop ?op ?e1 ?e2 ?ty) |- _ =>
         destruct (not_free_aux2 x op e1 e2 ty H)
+    | H : ~Is_free_in_exp ?x (Valid ?e ?ty) |- _ =>
+        apply not_free_aux3 in H
     end.
 
   (** Misc. properties *)
@@ -345,6 +399,151 @@ Module Type OBCSYNTAX
 
   Instance: EqDec exp eq := { equiv_dec := exp_dec }.
 
+(*
+  (** Simple Static Analysis of Obc statements *)
+
+  Definition naked_var (e: exp) : option ident :=
+    match e with
+    | Var x _ => Some x
+    | _ => None
+    end.
+
+  Inductive Is_naked_arg_in (x: ident) : stmt -> Prop :=
+  | NACall: forall xs c i m es,
+        Exists (fun e=> naked_var e = Some x) es ->
+        Is_naked_arg_in x (Call xs c i m es)
+  | NAIfte1: forall e s1 s2,
+        Is_naked_arg_in x s1 ->
+        Is_naked_arg_in x (Ifte e s1 s2)
+  | NAIfte2: forall e s1 s2,
+        Is_naked_arg_in x s2 ->
+        Is_naked_arg_in x (Ifte e s1 s2)
+  | NAComp1: forall s1 s2,
+        Is_naked_arg_in x s1 ->
+        Is_naked_arg_in x (Comp s1 s2)
+  | NAComp2: forall s1 s2,
+        Is_naked_arg_in x s2 ->
+        Is_naked_arg_in x (Comp s1 s2).
+
+  Inductive Must_write_in (x: ident) : stmt -> Prop :=
+  | MWIAssign: forall e,
+      Must_write_in x (Assign x e)
+  | MWIAssignSg: forall e,
+      Must_write_in x (AssignSt x e)
+  | MWIIfte: forall e s1 s2,
+      Must_write_in x s1 ->
+      Must_write_in x s2 ->
+      Must_write_in x (Ifte e s1 s2)
+  | MWIComp1: forall s1 s2,
+      Must_write_in x s1 ->
+      Must_write_in x (Comp s1 s2)
+  | MWIComp2: forall s1 s2,
+      Must_write_in x s2 ->
+      Must_write_in x (Comp s1 s2)
+  | MWICall: forall xs cl o m es,
+      In x xs ->
+      Must_write_in x (Call xs cl o m es).
+
+  Function analyze_obc' (na : PS.t) (mw: PS.t) (s: stmt) : PS.t * PS.t :=
+    match s with
+    | Assign x e => (na, PS.add x mw)
+    | AssignSt x e => (na, PS.add x mw)
+    | Ifte e s1 s2 =>
+      let (na1, mw1) := analyze_obc' na mw s1 in
+      let (na2, mw2) := analyze_obc' na1 mw s2 in
+      (na2, PS.inter mw1 mw2)
+    | Comp s1 s2 =>
+      let (na1, mw1) := analyze_obc' na mw s1 in
+      analyze_obc' na1 mw1 s2
+    | Call xs cl i m es =>
+      (ps_from_fo_list' naked_var es na, ps_from_list' xs mw)
+    | Skip => (na, mw)
+    end.
+
+  Definition analyze_obc : stmt -> PS.t * PS.t :=
+    analyze_obc' PS.empty PS.empty.
+
+  Lemma analyze_obc'_spec_na:
+    forall s na mw na' mw' x,
+      analyze_obc' na mw s = (na', mw') ->
+      PS.In x na' ->
+      PS.In x na \/ Is_naked_arg_in x s.
+  Proof.
+    induction s; simpl; intros na mw na' mw' x Hao Hin.
+    - inv Hao; auto.
+    - inv Hao; auto.
+    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
+      destruct (analyze_obc' na1 mw s2) as (na2, mw2) eqn:Hao2.
+      inversion Hao; subst; clear Hao.
+      eapply IHs2 in Hao2; eauto.
+      destruct Hao2; auto using Is_naked_arg_in.
+      eapply IHs1 in Hao1; eauto.
+      destruct Hao1; auto using Is_naked_arg_in.
+    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
+      eapply IHs2 in Hao; eauto.
+      destruct Hao; auto using Is_naked_arg_in.
+      eapply IHs1 in Hao1; eauto.
+      destruct Hao1; auto using Is_naked_arg_in.
+    - inv Hao. apply In_ps_from_fo_list' in Hin.
+      destruct Hin as [|Hin]; auto. right.
+      constructor. apply Exists_exists.
+      induction l as [|e es IH]. now inversion Hin.
+      inversion Hin as [Hna|Hin']; eauto with datatypes.
+      apply IH in Hin' as (e' & Ha & Hb); eauto with datatypes.
+    - inv Hao; auto.
+  Qed.
+
+  Lemma analyze_obc'_spec_mw:
+    forall s na mw na' mw' x,
+      analyze_obc' na mw s = (na', mw') ->
+      PS.In x mw' ->
+      PS.In x mw \/ Must_write_in x s.
+  Proof.
+    induction s; simpl; intros na mw na' mw' x Hao Hin.
+    - inv Hao. apply PS.add_spec in Hin as [Hin|Hin]; subst;
+                 auto using Must_write_in.
+    - inv Hao. apply PS.add_spec in Hin as [Hin|Hin]; subst;
+                 auto using Must_write_in.
+    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
+      destruct (analyze_obc' na1 mw s2) as (na2, mw2) eqn:Hao2.
+      inversion Hao; subst; clear Hao.
+      apply PS.inter_spec in Hin as (Hin1 & Hin2).
+      eapply IHs2 in Hao2; eauto.
+      destruct Hao2; auto using Must_write_in.
+      eapply IHs1 in Hao1; eauto.
+      destruct Hao1; auto using Must_write_in.
+    - destruct (analyze_obc' na mw s1) as (na1, mw1) eqn:Hao1.
+      eapply IHs2 in Hao; eauto.
+      destruct Hao; auto using Must_write_in.
+      eapply IHs1 in Hao1; eauto.
+      destruct Hao1; auto using Must_write_in.
+    - inv Hao. apply In_ps_from_list' in Hin.
+      destruct Hin; auto using Must_write_in.
+    - inv Hao; auto.
+  Qed.
+
+  Lemma analyze_obc_spec_na:
+    forall s na mw,
+      analyze_obc s = (na, mw) ->
+      forall x, PS.In x na -> Is_naked_arg_in x s.
+  Proof.
+    intros ** Ha x Hin.
+    eapply analyze_obc'_spec_na in Ha; eauto.
+    destruct Ha as [Ha|]; auto.
+    now apply not_In_empty in Ha.
+  Qed.
+
+  Lemma analyze_obc_spec_mw:
+    forall s na mw,
+      analyze_obc s = (na, mw) ->
+      forall x, PS.In x mw -> Must_write_in x s.
+  Proof.
+    intros ** Ha x Hin.
+    eapply analyze_obc'_spec_mw in Ha; eauto.
+    destruct Ha as [Ha|]; auto.
+    now apply not_In_empty in Ha.
+  Qed.
+*)
 End OBCSYNTAX.
 
 Module ObcSyntaxFun

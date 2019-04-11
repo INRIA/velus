@@ -85,6 +85,14 @@ Module Export Op <: OPERATORS.
     | Csingle f    => Values.Vsingle f
     end.
 
+  Definition init_type (ty: type) : const :=
+    match ty with
+    | Tint sz sg => Cint Integers.Int.zero sz sg
+    | Tlong sg   => Clong Integers.Int64.zero sg
+    | Tfloat Ctypes.F64 => Cfloat Floats.Float.zero
+    | Tfloat Ctypes.F32 => Csingle Floats.Float32.zero
+    end.
+
   Inductive unop' : Type :=
   | UnaryOp: Cop.unary_operation -> unop'
   | CastOp:  type -> unop'.
@@ -147,6 +155,8 @@ Module Export Op <: OPERATORS.
     | _        => false
     end.
 
+  Open Scope bool.
+
   Definition type_binop (op: binop) (ty1 ty2: type) : option type :=
     if binop_always_returns_bool op
        || (is_bool_binop op && (is_bool_type ty1 && is_bool_type ty2))
@@ -164,11 +174,11 @@ Module Export Op <: OPERATORS.
      Allowing that, in particular, values read from uninitialized
      memory are well-typed. Our typing invariant is slightly stronger,
      since Vundef is not well-typed. We treat uninitialized memory
-     in Obc using None. The ObcToClight correctness proof works
-     because we assume that the source Obc program has a semantics,
-     which precludes reading None values. In other words, all
-     values that we read successfully in Obc are well-typed (and
-     never Vundef).
+     in Obc using None. The ObcToClight correctness proof works by
+     treating a None in Obc as a don't care in Clight (i.e., the
+     variable is associated to a value but we don't know or care what
+     it is). All Some values that we read successfully in Obc are
+     otherwise well-typed (and never Vundef).
 
      There is a special case in wt_val_int because in Clight a boolean
      value is considered well-typed if Int.zero_ext 8 n = n.
@@ -232,6 +242,26 @@ Module Export Op <: OPERATORS.
     - apply wt_val_long.
     - apply wt_val_float.
     - apply wt_val_single.
+  Qed.
+
+  Lemma wt_init_type:
+    forall ty, wt_val (sem_const (init_type ty)) ty.
+  Proof.
+    destruct ty.
+    - apply wt_val_int.
+      + apply Ctyping.pres_cast_int_int.
+      + intro; subst; simpl; auto.
+    - apply wt_val_long.
+    - destruct f.
+      + apply wt_val_single.
+      + apply wt_val_float.
+  Qed.
+
+  Lemma type_init_type:
+    forall ty, type_const (init_type ty) = ty.
+  Proof.
+    destruct ty; auto.
+    destruct f; auto.
   Qed.
 
   Ltac DestructCases :=
@@ -758,21 +788,7 @@ Module Export Op <: OPERATORS.
              | _ => ContradictNotVptr
              end.
   Qed.
-
-  Lemma sem_cast_operation_any_mem:
-    forall v ty1 ty2 M1 M2,
-      (forall b ofs, v <> Values.Vptr b ofs) ->
-      Cop.sem_cast v ty1 ty2 M1
-      = Cop.sem_cast v ty1 ty2 M2.
-  Proof.
-    intros ** Hnptr.
-    destruct v; simpl; unfold Cop.sem_cast;
-      repeat match goal with
-             | |- (match ?x with _ => _ end) = _ => destruct x; auto
-             | _ => ContradictNotVptr
-             end.
-  Qed.
-
+  
   Lemma sem_cast_any_mem:
     forall v ty1 ty2 M1 M2,
       (forall b ofs, v <> Values.Vptr b ofs) ->

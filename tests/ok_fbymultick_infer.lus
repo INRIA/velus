@@ -1,0 +1,13 @@
+
+node fbyfby1 (a, b : bool)
+returns (x : bool when a; y : bool when b);
+let
+  (x, y) = (true, false) fby (false when a, true when b);
+tel
+
+node fbyfby2 (a, b : bool)
+returns (x : bool when a; y : bool when b);
+let
+  (x, y) = (true, false) fby (false, true);
+tel
+

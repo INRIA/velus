@@ -24,11 +24,10 @@ Require Import Morphisms.
 Module Type NLTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS   Ids)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : NLSYNTAX Ids Op Clks CESyn)
-       (Import Ord   : ORDERED  Ids Op Clks CESyn Syn)
-       (Import CETyp : CETYPING Ids Op Clks CESyn).
+       (Import Syn   : NLSYNTAX Ids Op CESyn)
+       (Import Ord   : ORDERED  Ids Op CESyn Syn)
+       (Import CETyp : CETYPING Ids Op CESyn).
 
   Inductive wt_equation (G: global) (vars: list (ident * type)): equation -> Prop :=
   | wt_EqDef: forall x ck e,
@@ -138,11 +137,10 @@ End NLTYPING.
 Module NLTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (Clks  : CLOCKS   Ids)
        (CESyn : CESYNTAX     Op)
-       (Syn   : NLSYNTAX Ids Op Clks CESyn)
-       (Ord   : ORDERED  Ids Op Clks CESyn Syn)
-       (CETyp : CETYPING Ids Op Clks CESyn)
-       <: NLTYPING Ids Op Clks CESyn Syn Ord CETyp.
-  Include NLTYPING Ids Op Clks CESyn Syn Ord CETyp.
+       (Syn   : NLSYNTAX Ids Op CESyn)
+       (Ord   : ORDERED  Ids Op CESyn Syn)
+       (CETyp : CETYPING Ids Op CESyn)
+       <: NLTYPING Ids Op CESyn Syn Ord CETyp.
+  Include NLTYPING Ids Op CESyn Syn Ord CETyp.
 End NLTypingFun.

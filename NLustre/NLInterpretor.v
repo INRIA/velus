@@ -23,10 +23,9 @@ Module Type NLINTERPRETOR
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
-       (Import CESyn : CESYNTAX    Op)
+       (Import CESyn : CESYNTAX        Op)
        (Import Str   : STREAM          Op OpAux)
-       (Import CESem : CESEMANTICS Ids Op OpAux Clks CESyn Str).
+       (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
 
   (** ** Instantaneous semantics *)
 
@@ -241,27 +240,6 @@ Module Type NLINTERPRETOR
       apply interp_lexp_instant_sound; auto.
     Qed.
 
-    Definition interp_laexps_instant (ck: clock) (es: list lexp) : list value :=
-      let vs := interp_lexps_instant es in
-      let b := interp_clock_instant ck in
-      if forallb (fun v => v ==b absent) vs && negb b || forallb (fun v => v <>b absent) vs && b then vs
-      else all_absent vs.
-
-    Lemma interp_laexps_instant_sound:
-      forall ck es vs,
-        sem_laexps_instant base R ck es vs ->
-        vs = interp_laexps_instant ck es.
-    Proof.
-      unfold interp_laexps_instant.
-      induction 1 as [|??? Absent].
-      - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
-        assert (present_list vs) as Present by (apply present_list_spec; eauto).
-        apply present_list_spec_b in Present as ->.
-        simpl; rewrite Bool.orb_true_r; auto.
-      - erewrite <-interp_lexps_instant_sound, <-interp_clock_instant_sound; eauto.
-        apply absent_list_spec', absent_list_spec_b in Absent as ->; auto.
-    Qed.
-
   End InstantInterpretor.
 
   (** ** Liftings of instantaneous semantics *)
@@ -320,9 +298,6 @@ Module Type NLINTERPRETOR
 
     Definition interp_laexp (ck: clock) (e: lexp): stream value :=
       lift (fun base R => interp_laexp_instant base R ck) e.
-
-    Definition interp_laexps (ck: clock) (es: list lexp): stream (list value) :=
-      lift (fun base R => interp_laexps_instant base R ck) es.
 
     Lemma lift_sound:
       forall {A B} (sem: bool -> env -> A -> B -> Prop) interp x xs,
@@ -407,15 +382,6 @@ Module Type NLINTERPRETOR
       intros; apply interp_laexp_instant_sound; auto.
     Qed.
 
-    Corollary interp_laexps_sound:
-      forall es ck vss,
-        sem_laexps bk H ck es vss ->
-        vss ≈ interp_laexps ck es.
-    Proof.
-      intros; eapply lift_sound; eauto.
-      intros; apply interp_laexps_instant_sound; auto.
-    Qed.
-
     Corollary interp_caexp_sound:
       forall e ck vs,
         sem_caexp bk H ck e vs ->
@@ -436,9 +402,9 @@ End NLINTERPRETOR.
 (*        (Op    : OPERATORS) *)
 (*        (OpAux : OPERATORS_AUX Op) *)
 (*        (Clks  : CLOCKS    Ids) *)
-(*        (Syn   : NLSYNTAX  Ids Op Clks) *)
+(*        (Syn   : NLSYNTAX  Ids Op) *)
 (*        (Str   : STREAM        Op OpAux) *)
-(*        (Ord   : ORDERED   Ids Op Clks Syn) *)
-(*        <: NLSEMANTICS Ids Op OpAux Clks Syn Str Ord. *)
-(*   Include NLSEMANTICS Ids Op OpAux Clks Syn Str Ord. *)
+(*        (Ord   : ORDERED   Ids Op Syn) *)
+(*        <: NLSEMANTICS Ids Op OpAux Syn Str Ord. *)
+(*   Include NLSEMANTICS Ids Op OpAux Syn Str Ord. *)
 (* End NLSemanticsFun. *)

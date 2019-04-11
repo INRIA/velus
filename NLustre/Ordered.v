@@ -24,9 +24,8 @@ Remark: [Ordered_nodes] is implied by [Welldef_global].
 Module Type ORDERED
        (Ids            : IDS)
        (Op             : OPERATORS)
-       (Import Clks    : CLOCKS   Ids)
-       (Import CESyn : CESYNTAX Op)
-       (Import Syn     : NLSYNTAX Ids Op Clks CESyn).
+       (Import CESyn   : CESYNTAX Op)
+       (Import Syn     : NLSYNTAX Ids Op CESyn).
 
   Inductive Is_node_in_eq : ident -> equation -> Prop :=
   | INI: forall x ck f e r, Is_node_in_eq f (EqApp x ck f e r).
@@ -161,7 +160,6 @@ Module Type ORDERED
       apply IH; inversion_clear HnGG; assumption.
     Qed.
 
-
     (* Lemma Ordered_nodes_cons_find_node_None: *)
     (*   forall node G, *)
     (*     Ordered_nodes (node::G) *)
@@ -243,9 +241,8 @@ End ORDERED.
 Module OrderedFun
        (Ids    : IDS)
        (Op     : OPERATORS)
-       (Clks   : CLOCKS   Ids)
-       (CESyn: CESYNTAX Op)
-       (Syn    : NLSYNTAX Ids Op Clks CESyn)
-       <: ORDERED Ids Op Clks CESyn Syn.
-  Include ORDERED Ids Op Clks CESyn Syn.
+       (CESyn  : CESYNTAX Op)
+       (Syn    : NLSYNTAX Ids Op CESyn)
+       <: ORDERED Ids Op CESyn Syn.
+  Include ORDERED Ids Op CESyn Syn.
 End OrderedFun.

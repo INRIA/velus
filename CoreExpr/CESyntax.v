@@ -32,6 +32,18 @@ Module Type CESYNTAX (Import Op: OPERATORS).
     | Ewhen e _ _ => typeof e
     end.
 
+  (** Predicate used in [normal_args] in NLustre and SyBloc. *)
+  Fixpoint noops_lexp (ck: clock) (le : lexp) : Prop :=
+    match ck with
+    | Cbase => True
+    | Con ck' _ _ =>
+      match le with
+      | Econst _ | Evar _ _ => True
+      | Ewhen le' _ _ => noops_lexp ck' le'
+      | _ => False
+      end
+    end.
+
 End CESYNTAX.
 
 Module CESyntaxFun (Op: OPERATORS) <: CESYNTAX Op.

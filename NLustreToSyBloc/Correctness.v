@@ -20,12 +20,11 @@ Module Type CORRECTNESS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
        (Import Str   : STREAM          Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (Import NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
-       (Import SB    : SYBLOC      Ids Op OpAux Clks Str CE)
-       (Import Trans : TRANSLATION Ids Op       Clks     CE.Syn NL.Syn SB.Syn NL.Mem).
+       (Import CE    : COREEXPR    Ids Op OpAux Str)
+       (Import NL    : NLUSTRE     Ids Op OpAux Str CE)
+       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Import Trans : TRANSLATION Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -123,7 +122,7 @@ Module Type CORRECTNESS
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins ????? Heqs Closed].
+    inversion_clear Hsem' as [???????? Clock Hfind Ins ?? Heqs Closed].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
@@ -272,8 +271,8 @@ Module Type CORRECTNESS
     destruct eq; simpl in Hin; try contradiction.
     destruct i; try contradiction.
     inversion_clear Hin as [E|]; try contradiction; inv E.
-    inversion_clear Heq as [|????????????? Hd Sub ??? Node|
-                            ???????????????? Hd Sub ????? Rst|];
+    inversion_clear Heq as [|????????????? Hd Sub|
+                            ???????????????? Hd Sub ?????? Rst|];
       unfold sub_inst_n, sub_inst in Sub;
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
@@ -303,8 +302,8 @@ Module Type CORRECTNESS
     destruct eq; simpl in Hin; try contradiction.
     destruct i; try contradiction.
     inversion_clear Hin as [E|]; try contradiction; inv E.
-    inversion_clear Heq as [|????????????? Hd ? Sub ?? Node|
-                            ???????????????? Hd ? Sub ???? Rst|];
+    inversion_clear Heq as [|????????????? Hd ? Sub|
+                            ???????????????? Hd ? Sub ????? Rst|];
       unfold sub_inst_n, sub_inst in Sub;
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
@@ -321,7 +320,7 @@ Module Type CORRECTNESS
       memory_closed_rec_n G f M /\ memory_closed_rec_n G f M'.
   Proof.
     induction G as [|node]; intros ????? Ord;
-      inversion_clear 1 as [????????? Find ?????? Heqs Closed Closed'];
+      inversion_clear 1 as [????????? Find ??? Heqs Closed Closed'];
       try now inv Find.
     pose proof Find; simpl in Find.
     destruct (ident_eqb node.(n_name) f) eqn:Eq.
@@ -425,8 +424,8 @@ Module Type CORRECTNESS
         /\ forall n, transient_states_closed (translate G) (gather_inst_eq eq ++ insts) (Is' n).
   Proof.
     intros ** IHnode Hord WC ClkM TrNodup Closed SpecInsts Heq Heqs.
-    destruct Heq as [|?????????????????? Node|
-                     ????????????????????? Var Hr Reset|
+    destruct Heq as [|??????????????????? Node|
+                     ?????????????????????? Var Hr Reset|
                      ?????????? Arg Var Mfby];
       inversion_clear TrNodup as [|???????? Notin|]; simpl.
 
@@ -479,7 +478,7 @@ Module Type CORRECTNESS
            destruct (ys n) eqn: E'; try discriminate.
            do 2 (econstructor; eauto using sem_equation).
            - eapply Son; eauto.
-             destruct Cky as [[]|(?&?&?)]; auto.
+             destruct Cky as [[]|((?&?)&?)]; auto.
              assert (present c = absent) by sem_det; discriminate.
            - simpl; rewrite Mmask_0.
              + eapply msem_node_initial_state; eauto.
@@ -504,7 +503,7 @@ Module Type CORRECTNESS
            destruct (ys n) eqn: E'.
            - do 2 (econstructor; eauto using sem_equation).
              + apply Son_abs1; auto.
-               destruct Cky as [[]|(c &?&?)]; auto.
+               destruct Cky as [[]|((c &?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
              + simpl; eexists; split; eauto; reflexivity.
              + econstructor; eauto.
@@ -512,7 +511,7 @@ Module Type CORRECTNESS
            - do 2 (econstructor; eauto using sem_equation).
              + change true with (negb false).
                eapply Son_abs2; eauto.
-               destruct Cky as [[]|(?&?&?)]; auto.
+               destruct Cky as [[]|((?&?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
              + simpl; eexists; split; eauto; reflexivity.
              + econstructor; eauto.
@@ -619,19 +618,6 @@ Module Type CORRECTNESS
       + eapply NoDup_defs_cons; eauto.
   Qed.
 
-  Lemma clock_of_correctness:
-    forall xss bk,
-      CE.Sem.clock_of xss bk ->
-      forall n, clock_of (xss n) (bk n).
-  Proof. auto. Qed.
-
-  Lemma same_clock_correctness:
-    forall xss,
-      CE.Sem.same_clock xss ->
-      forall n, same_clock (xss n).
-  Proof. auto. Qed.
-  Hint Resolve clock_of_correctness same_clock_correctness.
-
   Lemma not_Is_node_in_not_Is_block_in:
     forall eqs f,
       ~ Is_node_in f eqs ->
@@ -665,7 +651,7 @@ Module Type CORRECTNESS
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros ** Hord WC Hsem n.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ???? Heqs Closed Closed'].
+    inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ? Heqs Closed Closed'].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
@@ -731,12 +717,11 @@ Module CorrectnessFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Clks  : CLOCKS      Ids)
        (Str   : STREAM          Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
-       (SB    : SYBLOC      Ids Op OpAux Clks Str CE)
-       (Trans : TRANSLATION Ids Op       Clks     CE.Syn NL.Syn SB.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux Clks Str CE NL SB Trans.
-  Include CORRECTNESS Ids Op OpAux Clks Str CE NL SB Trans.
+       (CE    : COREEXPR    Ids Op OpAux Str)
+       (NL    : NLUSTRE     Ids Op OpAux Str CE)
+       (SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Trans : TRANSLATION Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem)
+<: CORRECTNESS Ids Op OpAux Str CE NL SB Trans.
+  Include CORRECTNESS Ids Op OpAux Str CE NL SB Trans.
 End CorrectnessFun.

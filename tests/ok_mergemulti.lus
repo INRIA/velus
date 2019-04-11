@@ -1,0 +1,18 @@
+
+node f (a : bool)
+returns (x, y : bool)
+let
+    x = a;
+    y = not a;
+tel
+
+node multimerge (a, b : bool)
+returns (y, z : bool)
+var w : bool when a;
+    x : bool when not a;
+let
+    w = (not b) when a;
+    x = b when not a;
+    (y, z) = merge a (true -> f(w)) (false -> f(x));
+tel
+

@@ -27,15 +27,14 @@ wrt. its clock annotations.
 Module Type NLCLOCKING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS     Ids)
        (Import CESyn : CESYNTAX       Op)
-       (Import Syn   : NLSYNTAX   Ids Op Clks CESyn)
-       (Import Ord   : ORDERED    Ids Op Clks CESyn Syn)
-       (Import Mem   : MEMORIES   Ids Op Clks CESyn Syn)
-       (Import IsD   : ISDEFINED  Ids Op Clks CESyn Syn Mem)
-       (Import CEIsF : CEISFREE   Ids Op Clks CESyn)
-       (Import IsF   : ISFREE     Ids Op Clks CESyn Syn CEIsF)
-       (Import CEClo : CECLOCKING Ids Op Clks CESyn).
+       (Import Syn   : NLSYNTAX   Ids Op CESyn)
+       (Import Ord   : ORDERED    Ids Op CESyn Syn)
+       (Import Mem   : MEMORIES   Ids Op CESyn Syn)
+       (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
+       (Import CEIsF : CEISFREE   Ids Op CESyn)
+       (Import IsF   : ISFREE     Ids Op CESyn Syn CEIsF)
+       (Import CEClo : CECLOCKING Ids Op CESyn).
 
   Inductive wc_equation (G: global) (vars: list (ident * clock)): equation -> Prop :=
   | CEqDef:
@@ -323,15 +322,14 @@ End NLCLOCKING.
 Module NLClockingFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS     Ids)
        (Import CESyn : CESYNTAX       Op)
-       (Import Syn   : NLSYNTAX   Ids Op Clks CESyn)
-       (Import Ord   : ORDERED    Ids Op Clks CESyn Syn)
-       (Import Mem   : MEMORIES   Ids Op Clks CESyn Syn)
-       (Import IsD   : ISDEFINED  Ids Op Clks CESyn Syn Mem)
-       (Import CEIsF : CEISFREE   Ids Op Clks CESyn)
-       (Import IsF   : ISFREE     Ids Op Clks CESyn Syn CEIsF)
-       (Import CEClo : CECLOCKING Ids Op Clks CESyn)
-  <: NLCLOCKING Ids Op Clks CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
-  Include NLCLOCKING Ids Op Clks CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
+       (Import Syn   : NLSYNTAX   Ids Op CESyn)
+       (Import Ord   : ORDERED    Ids Op CESyn Syn)
+       (Import Mem   : MEMORIES   Ids Op CESyn Syn)
+       (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
+       (Import CEIsF : CEISFREE   Ids Op CESyn)
+       (Import IsF   : ISFREE     Ids Op CESyn Syn CEIsF)
+       (Import CEClo : CECLOCKING Ids Op CESyn)
+  <: NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
+  Include NLCLOCKING Ids Op CESyn Syn Ord Mem IsD CEIsF IsF CEClo.
 End NLClockingFun.

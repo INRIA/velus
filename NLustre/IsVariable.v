@@ -25,17 +25,16 @@ Require Import Coq.Sorting.Permutation.
  *)
 
 Module Type ISVARIABLE
-       (Ids            : IDS)
-       (Op             : OPERATORS)
-       (Import Clks    : CLOCKS    Ids)
-       (Import CESyn : CESYNTAX  Op)
-       (Import Syn     : NLSYNTAX  Ids Op Clks CESyn)
-       (Import Mem     : MEMORIES  Ids Op Clks CESyn Syn)
-       (Import IsD     : ISDEFINED Ids Op Clks CESyn Syn Mem).
+       (Ids          : IDS)
+       (Op           : OPERATORS)
+       (Import CESyn : CESYNTAX      Op)
+       (Import Syn   : NLSYNTAX  Ids Op CESyn)
+       (Import Mem   : MEMORIES  Ids Op CESyn Syn)
+       (Import IsD   : ISDEFINED Ids Op CESyn Syn Mem).
 
   Inductive Is_variable_in_eq : ident -> equation -> Prop :=
   | VarEqDef: forall x ck e,   Is_variable_in_eq x (EqDef x ck e)
-  | VarEqApp: forall x xs ck f e r, List.In x xs -> Is_variable_in_eq x (EqApp xs ck f e r).
+  | VarEqApp: forall x xs ck f e r, In x xs -> Is_variable_in_eq x (EqApp xs ck f e r).
 
   (* definition is needed in signature *)
   Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
@@ -352,13 +351,12 @@ Module Type ISVARIABLE
 End ISVARIABLE.
 
 Module IsVariableFun
-      (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS    Ids)
-       (CESyn : CESYNTAX  Op)
-       (Syn     : NLSYNTAX  Ids Op Clks CESyn)
-       (Mem     : MEMORIES  Ids Op Clks CESyn Syn)
-       (IsD     : ISDEFINED Ids Op Clks CESyn Syn Mem)
-       <: ISVARIABLE Ids Op Clks CESyn Syn Mem IsD.
-  Include ISVARIABLE Ids Op Clks CESyn Syn Mem IsD.
+      (Ids    : IDS)
+       (Op    : OPERATORS)
+       (CESyn : CESYNTAX      Op)
+       (Syn   : NLSYNTAX  Ids Op CESyn)
+       (Mem   : MEMORIES  Ids Op CESyn Syn)
+       (IsD   : ISDEFINED Ids Op CESyn Syn Mem)
+       <: ISVARIABLE Ids Op CESyn Syn Mem IsD.
+  Include ISVARIABLE Ids Op CESyn Syn Mem IsD.
 End IsVariableFun.

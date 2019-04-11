@@ -28,14 +28,11 @@ Module Type NLSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
        (Import CESyn : CESYNTAX        Op)
-       (Import Syn   : NLSYNTAX    Ids Op       Clks CESyn)
+       (Import Syn   : NLSYNTAX    Ids Op       CESyn)
        (Import Str   : STREAM          Op OpAux)
-       (Import Ord   : ORDERED     Ids Op       Clks CESyn Syn)
-       (Import CESem : CESEMANTICS Ids Op OpAux Clks CESyn      Str).
-
-  (** ** Time-dependent semantics *)
+       (Import Ord   : ORDERED     Ids Op       CESyn Syn)
+       (Import CESem : CESEMANTICS Ids Op OpAux CESyn      Str).
 
   Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
     match n with
@@ -65,14 +62,16 @@ Module Type NLSEMANTICS
           sem_equation bk H (EqDef x ck ce)
     | SEqApp:
         forall bk H x ck f arg ls xs,
-          sem_laexps bk H ck arg ls ->
+          sem_lexps bk H arg ls ->
           sem_vars H x xs ->
+          sem_clock bk H ck (clock_of ls) ->
           sem_node f ls xs ->
           sem_equation bk H (EqApp x ck f arg None)
     | SEqReset:
         forall bk H x ck f arg y ys rs ls xs,
-          sem_laexps bk H ck arg ls ->
+          sem_lexps bk H arg ls ->
           sem_vars H x xs ->
+          sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
           reset_of ys rs ->
           sem_reset f rs ls xs ->
@@ -95,17 +94,10 @@ Module Type NLSEMANTICS
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
          | SNode:
              forall bk H f xss yss n,
-               clock_of xss bk ->
+               bk = clock_of xss ->
                find_node f G = Some n ->
                sem_vars H (map fst n.(n_in)) xss ->
                sem_vars H (map fst n.(n_out)) yss ->
-               (* XXX: This should be obtained through well-clocking: *)
-               (*  * tuples are synchronised: *)
-               same_clock xss ->
-               same_clock yss ->
-               (*  * output clock matches input clock *)
-               (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
-               (* XXX: END *)
                sem_clocked_vars bk H (idck n.(n_in)) ->
                Forall (sem_equation bk H) n.(n_eqs) ->
                sem_node f xss yss.
@@ -114,6 +106,90 @@ Module Type NLSEMANTICS
       Forall (fun no => exists xs ys, sem_node no.(n_name) xs ys) G.
 
   End NodeSemantics.
+
+  (* The integration of (static) clocks into the (dynamic) semantics:
+
+     1. Without a clocking constraint on [x = c fby e] (sem_laexp =
+        sem_lexp with clocking constraint) the semantics is
+        non-deterministic.
+
+        e.g., [x = true fby x] is satisfied by very many streams:
+        present true, present true, present true, present true, ...
+        absent, absent, absent, absent, absent, ...
+        absent, present true, absent, present true, absent, ...
+        etc.
+
+        The additional constraint interprets the clock [ck] in the
+        context [H] and only accepts those streams that are present
+        iff the clock is true. This is the semantics that would anyway
+        be "chosen" by the generated code, which respects the syntactic
+        clocks.
+
+     2. The clocking constraint on [x = e] is used in the proofs of
+        [subrate_property_eqn(s)] and [sem_node_absent_absent], and
+        later in the corresponding proofs of the MemSemantics. It
+        essentially allows showing that all the outputs of a node
+        are absent when the node's clock is false, and thus justifying
+        that the compiled step function is not executed at such
+        instants.
+
+        The [clockof] clause in [xs = f(es)] is sufficient to give
+        this property. In other words, a constraint explicitly linking
+        stream values to clock values is not needed in this case.
+
+     3. The [sem_clocked_vars] clause in [sem_node] requires that the
+        streams passed as node arguments align with the instantiated
+        clocks of the node interface.
+
+        This is done to make possible the assertion, critical in
+        [is_step_correct], that all arguments on the base clock of an
+        application are present when that clock is true (and thus that
+        the compiled expressions calculate the correct value). I.e., to
+        link the static clocks to dynamic facts.
+
+        NB: Every in-built 'assumption' like this is a risk since it does
+            not have to be justified and may thus be forgotten or
+            violated. The clause
+                [sem_clocked_vars bk H (idck n.(n_in))]
+            requires that, for a semantics to exist, the input streams
+            of the top-level program must correspond with the clocks of
+            the interface to the top-level program (with the base clock
+            always equal to true). This oligation, however, will only
+            appear in the development when a lemma that asserts the
+            existence of a semantics is added.
+        TODO: add a note to this effect near the final theorem.
+
+        Alternative approaches:
+
+        a. Proof of clock alignment
+
+           Show that the clock true/false values and stream present/absent
+           values align as a consequence of the definitions without
+           adding additional constraints.
+
+           The required reasoning seems to be related to, and may be as
+           tricky as, the proof of the existence of a semantics. By
+           assuming the required properties in the model, we simply push
+           the obligation into the semantic existence proof, likely
+           in the Lustre rather than NLustre model.
+
+        b. Restrict node arguments to variables and constants
+
+           Requiring normalization of node arguments eliminates the need
+           to reason about evaluation correctness and thus the extra
+           constraint. This is the simplest approach, but the code
+           generated in the common case (all arguments on the base clock)
+           is somehow less satisfying.
+
+           In any case, normalization ends up imposing the clocking
+           constraint from [x = e] for each normalized argument.
+
+        c. Incorporate a stronger invariant into [is_step_correct]
+
+           It may be possible to strengthen the invariant used in
+           [is_step_correct], but this lemma is already quite involved,
+           and this approach seems a bit ad hoc.
+   *)
 
   (** ** Induction principle for [sem_node] and [sem_equation] *)
 
@@ -136,16 +212,18 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqAppCase:
       forall bk H x ck f arg ls xs,
-        sem_laexps bk H ck arg ls ->
+        sem_lexps bk H arg ls ->
         sem_vars H x xs ->
+        sem_clock bk H ck (clock_of ls) ->
         sem_node G f ls xs ->
         P_node f ls xs ->
         P_equation bk H (EqApp x ck f arg None).
 
     Hypothesis EqResetCase:
       forall bk H x ck f arg y ys rs ls xs,
-        sem_laexps bk H ck arg ls ->
+        sem_lexps bk H arg ls ->
         sem_vars H x xs ->
+        sem_clock bk H ck (clock_of ls) ->
         sem_var H y ys ->
         reset_of ys rs ->
         sem_reset G f rs ls xs ->
@@ -171,13 +249,10 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis NodeCase:
       forall bk H f xss yss n,
-        clock_of xss bk ->
+        bk = clock_of xss ->
         find_node f G = Some n ->
         sem_vars H (map fst n.(n_in)) xss ->
         sem_vars H (map fst n.(n_out)) yss ->
-        same_clock xss ->
-        same_clock yss ->
-        (forall n, absent_list (xss n) <-> absent_list (yss n)) ->
         sem_clocked_vars bk H (idck n.(n_in)) ->
         Forall (sem_equation G bk H) n.(n_eqs) ->
         Forall (P_equation bk H) n.(n_eqs) ->
@@ -201,7 +276,7 @@ enough: it does not support the internal fixpoint introduced by
       - destruct Sem as [???? Sem]; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
-        induction H8; auto.
+        match goal with H: Forall _ (n_eqs _) |- _ => induction H; auto end.
     Qed.
 
     Combined Scheme sem_node_equation_reset_ind from
@@ -225,20 +300,6 @@ enough: it does not support the internal fixpoint introduced by
     destruct n; intros ** E; simpl; now rewrite E.
   Qed.
 
-  (* Ltac assert_const_length xss := *)
-  (*   match goal with *)
-  (*     H: sem_vars _ _ _ xss |- _ => *)
-  (*     let H' := fresh in *)
-  (*     let k := fresh in *)
-  (*     let k' := fresh in *)
-  (*     assert (wf_streams xss) *)
-  (*       by (intros k k'; pose proof H as H'; *)
-  (*           unfold sem_vars, lift in *; *)
-  (*           specialize (H k); specialize (H' k'); *)
-  (*           apply Forall2_length in H; apply Forall2_length in H'; *)
-  (*           now rewrite H in H') *)
-  (*   end. *)
-
   Lemma sem_node_wf:
     forall G f xss yss,
       sem_node G f xss yss ->
@@ -248,20 +309,13 @@ enough: it does not support the internal fixpoint introduced by
       assert_const_length xss; assert_const_length yss; auto.
   Qed.
 
-  Lemma sem_EqApp_gt0:
-    forall G bk H xs ck f es r,
-      sem_equation G bk H (EqApp xs ck f es r) ->
-      0 < length xs.
+  Lemma sem_reset_wf:
+    forall G f r xss yss,
+      sem_reset G f r xss yss ->
+      wf_streams xss /\ wf_streams yss.
   Proof.
-    inversion_clear 1 as [|????????? Vars Node|???????????? Vars ?? Rst|];
-      [|inversion_clear Rst as [???? Node]; pose proof Node as Node'; specialize (Node 0)];
-      inversion_clear Node as [????????? Out];
-      specialize (Out 0); specialize (Vars 0); simpl in *;
-        apply Forall2_length in Out; apply Forall2_length in Vars;
-          [|rewrite mask_length in Out];
-          try (rewrite <-Out in Vars; rewrite Vars, map_length; apply n_outgt0).
-    eapply wf_streams_mask.
-    intro k; specialize (Node' k); apply sem_node_wf in Node' as (); eauto.
+    intros ** Sem; split; inversion_clear Sem as [???? Nodes]; eapply wf_streams_mask;
+      intro k; specialize (Nodes k); apply sem_node_wf in Nodes as (); eauto.
   Qed.
 
   (** ** Properties of the [global] environment *)
@@ -276,11 +330,11 @@ enough: it does not support the internal fixpoint introduced by
     intros node G f xs ys Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [
-                     | bk H x ck f lae ls xs Hlae Hvars Hnode IH
-                     | bk H x ck f lae y ys rs ls xs Hlae Hvars Hvar ? Hnode IH
+                     | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnode IH
                      |
                      |
-                     | bk H f xs ys n Hbk Hf ? ? ? ? ?? Heqs IH ]
+                     | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
                                       -> sem_equation G bk H eq)
@@ -288,7 +342,7 @@ enough: it does not support the internal fixpoint introduced by
                                        sem_reset G f r xss yss).
     - econstructor; eassumption.
     - intro Hnin.
-      eapply @SEqApp with (1:=Hlae) (2:=Hvars).
+      econstructor; eauto.
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro Hnin.
       eapply SEqReset; eauto.
@@ -299,10 +353,10 @@ enough: it does not support the internal fixpoint introduced by
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       eapply SNode; eauto.
-      assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n))
+      assert (Forall (fun eq => ~ Is_node_in_eq (n_name node) eq) (n_eqs n)) as IHeqs
         by (eapply Is_node_in_Forall; try eassumption;
             eapply find_node_later_not_Is_node_in; try eassumption).
-      clear Heqs; induction n.(n_eqs); inv IH; inv H6; eauto.
+      clear Heqs; induction n.(n_eqs); inv IH; inv IHeqs; eauto.
   Qed.
 
   Lemma find_node_find_again:
@@ -325,6 +379,51 @@ enough: it does not support the internal fixpoint introduced by
     intuition.
   Qed.
 
+  Lemma sem_reset_cons:
+    forall node G r f xs ys,
+      Ordered_nodes (node::G)
+      -> sem_reset (node::G) f r xs ys
+      -> node.(n_name) <> f
+      -> sem_reset G f r xs ys.
+  Proof.
+    intros ** Ord Rst Hnf.
+    inversion_clear Rst as [???? Nodes].
+    constructor; intro k; specialize (Nodes k).
+    eapply sem_node_cons; eauto.
+  Qed.
+
+  Lemma sem_equation_global_tl:
+    forall bk nd G H eq,
+      Ordered_nodes (nd::G) ->
+      ~ Is_node_in_eq nd.(n_name) eq ->
+      sem_equation (nd::G) bk H eq ->
+      sem_equation G bk H eq.
+  Proof.
+    intros bk nd G H eq Hord Hnini Hsem.
+    destruct eq; inversion Hsem; subst; eauto using sem_equation.
+    - econstructor; eauto.
+      eapply sem_node_cons; eauto.
+      intro HH; rewrite HH in *; auto using Is_node_in_eq.
+    - econstructor; eauto.
+      eapply sem_reset_cons; eauto.
+      intro HH; rewrite HH in *; auto using Is_node_in_eq.
+  Qed.
+
+  Lemma Forall_sem_equation_global_tl:
+    forall bk nd G H eqs,
+      Ordered_nodes (nd::G)
+      -> ~ Is_node_in nd.(n_name) eqs
+      -> Forall (sem_equation (nd::G) bk H) eqs
+      -> Forall (sem_equation G bk H) eqs.
+  Proof.
+    intros bk nd G H eqs Hord Hnini.
+    apply Forall_impl_In.
+    intros eq Hin Hsem.
+    eapply sem_equation_global_tl; eauto.
+    apply Is_node_in_Forall in Hnini.
+    apply Forall_forall with (1:=Hnini) (2:=Hin).
+  Qed.
+
   Lemma sem_node_cons2:
     forall nd G f xs ys,
       Ordered_nodes G
@@ -337,16 +436,16 @@ enough: it does not support the internal fixpoint introduced by
     assert (Hnin':=Hnin).
     revert Hnin'.
     induction Hsem as [
-       | bk H x ? f lae ls xs Hlae Hvars Hnode IH
-       | bk H x f lae y ys ls xs Hlae Hvars Hvar Hnode IH
-       |
-       |
-       | bk H f xs ys n Hbk Hfind Hxs Hys ? ? ?? Heqs IH]
-          using sem_node_mult
-        with (P_equation := fun bk H eq =>
-                     ~Is_node_in_eq nd.(n_name) eq
-                     -> sem_equation (nd::G) bk H eq)
-             (P_reset := fun f r xss yss => sem_reset (nd::G) f r xss yss);
+                     | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnode IH
+                     |
+                     |
+                     | bk H f xs ys n Hbk Hfind Hxs Hys ? Heqs IH]
+                        using sem_node_mult
+      with (P_equation := fun bk H eq =>
+                            ~Is_node_in_eq nd.(n_name) eq
+                            -> sem_equation (nd::G) bk H eq)
+           (P_reset := fun f r xss yss => sem_reset (nd::G) f r xss yss);
       try eauto; try intro HH.
     - constructor; intro k; specialize (H k); destruct H; auto.
     - clear HH.
@@ -400,41 +499,6 @@ enough: it does not support the internal fixpoint introduced by
       intuition.
   Qed.
 
-
-  Lemma Forall_sem_equation_global_tl:
-    forall bk nd G H eqs,
-      Ordered_nodes (nd::G)
-      -> ~ Is_node_in nd.(n_name) eqs
-      -> Forall (sem_equation (nd::G) bk H) eqs
-      -> Forall (sem_equation G bk H) eqs.
-  Proof.
-    intros bk nd G H eqs Hord.
-    induction eqs as [|eq eqs IH]; [trivial|].
-    intros Hnini Hsem.
-    apply Forall_cons2 in Hsem; destruct Hsem as [Hseq Hseqs].
-    apply IH in Hseqs.
-    2:(apply not_Is_node_in_cons in Hnini;
-        destruct Hnini; assumption).
-    apply Forall_cons with (2:=Hseqs).
-    inversion Hseq as [|? ? ? ? ? ? ? Hsem Hvars Hnode
-                          |? ? ? ? ? ? ? ? ? ? Hsem Hvars Hvar ?? Hreset|]; subst.
-    - econstructor; eassumption.
-    - apply not_Is_node_in_cons in Hnini.
-      destruct Hnini as [Hninieq Hnini].
-      assert (nd.(n_name) <> f) as Hnf
-          by (intro HH; apply Hninieq; rewrite HH; constructor).
-      econstructor; eauto.
-      eapply sem_node_cons; eauto.
-    - apply not_Is_node_in_cons in Hnini.
-      destruct Hnini as [Hninieq Hnini].
-      assert (nd.(n_name) <> f) as Hnf
-          by (intro HH; apply Hninieq; rewrite HH; constructor).
-      econstructor; eauto.
-      inversion_clear Hreset as [???? Hnode].
-      constructor; intro k; specialize (Hnode k); eauto using sem_node_cons.
-    - econstructor; eauto.
-  Qed.
-
   Lemma sem_equations_permutation:
     forall eqs eqs' G bk H,
       Forall (sem_equation G bk H) eqs ->
@@ -448,15 +512,26 @@ enough: it does not support the internal fixpoint introduced by
       inv Heqs'; auto.
   Qed.
 
-  (** Morphisms properties *)
+(** Morphisms properties *)
+
+  Add Parametric Morphism G: (sem_equation G)
+      with signature eq_str ==> eq ==> eq ==> Basics.impl
+        as sem_equation_eq_str.
+  Proof.
+    intros ** E ?? Sem.
+    induction Sem; econstructor; eauto;
+      eapply lift_eq_str; eauto; reflexivity.
+  Qed.
 
   Add Parametric Morphism G f: (sem_node G f)
       with signature eq_str ==> eq_str ==> Basics.impl
         as sem_node_eq_str.
   Proof.
     intros ** E1 ? ? E2 Node.
-    inv Node.
-    econstructor; eauto; intro; try rewrite <-E1; try rewrite <-E2; auto.
+    inversion_clear Node as [??????????? Heqs]; subst.
+    econstructor; eauto; try intro n; try rewrite <-E1; try rewrite <-E2; eauto.
+    induction Heqs; constructor; auto.
+    rewrite <-E1; auto.
   Qed.
 
   Add Parametric Morphism G f: (sem_reset G f)
@@ -476,12 +551,11 @@ Module NLSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Clks  : CLOCKS      Ids)
        (CESyn : CESYNTAX        Op)
-       (Syn   : NLSYNTAX    Ids Op       Clks CESyn)
+       (Syn   : NLSYNTAX    Ids Op       CESyn)
        (Str   : STREAM          Op OpAux)
-       (Ord   : ORDERED     Ids Op       Clks CESyn Syn)
-       (CESem : CESEMANTICS Ids Op OpAux Clks CESyn      Str)
-<: NLSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem.
-  Include NLSEMANTICS Ids Op OpAux Clks CESyn Syn Str Ord CESem.
+       (Ord   : ORDERED     Ids Op       CESyn Syn)
+       (CESem : CESEMANTICS Ids Op OpAux CESyn      Str)
+<: NLSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
+  Include NLSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
 End NLSemanticsFun.

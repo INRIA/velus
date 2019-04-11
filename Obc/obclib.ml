@@ -29,6 +29,7 @@ module type SYNTAX =
     | Const of const
     | Unop  of unop  * exp * typ
     | Binop of binop * exp * exp * typ
+    | Valid of exp
 
     type stmt =
     | Assign   of ident * exp
@@ -174,8 +175,9 @@ module PrintFun (Obc: SYNTAX)
       | Obc.Const _ -> (16, NA)
       | Obc.Unop (op, _, _)     -> PrintOps.prec_unop op
       | Obc.Binop (op, _, _, _) -> PrintOps.prec_binop op
+      | Obc.Valid _ -> (16, NA)
 
-    let rec expr p (prec, e) =
+    let rec expr prec p e =
       let (prec', assoc) = precedence e in
       let (prec1, prec2) =
         if assoc = LtoR
@@ -192,33 +194,18 @@ module PrintFun (Obc: SYNTAX)
       | Obc.Const c ->
           PrintOps.print_const p c
       | Obc.Unop (op, e, ty) ->
-          PrintOps.print_unop p op ty expr (prec', e)
+          PrintOps.print_unop p op ty (expr prec') e
       | Obc.Binop (op, e1, e2, ty) ->
-          PrintOps.print_binop p op ty expr (prec1, e1) (prec2, e2)
+          PrintOps.print_binop p op ty (expr prec1) e1 (expr prec2) e2
+      | Obc.Valid e ->
+          fprintf p "{%a}" (expr 0) e
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
-    let print_expr p e = expr p (0, e)
+    let print_expr = expr 0
 
-    let rec print_expr_list p (first, rl) =
-      match rl with
-      | [] -> ()
-      | r :: rl ->
-          if not first then fprintf p ",@ ";
-          expr p (2, r);
-          print_expr_list p (false, rl)
-
-    let print_list print_ele p =
-      let rec print first rl =
-        match rl with
-        | [] -> ()
-        | r :: rl ->
-            (if first
-             then print_ele p r
-             else fprintf p ",@;<1 0>%a" print_ele r);
-            print false rl
-      in
-      print true
+    let print_comma_list print =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") print
 
     let print_decl_list print_ele p =
       List.iter (fun e->fprintf p "%a;@;" print_ele e)
@@ -247,20 +234,20 @@ module PrintFun (Obc: SYNTAX)
             (extern_atom cls)
             (extern_atom i)
             (extern_atom m)
-            print_expr_list (true, es)
+            (print_comma_list print_expr) es
       | Obc.Call (rs, cls, i, m, es) ->
           fprintf p
             "@[<hv 2>%a :=@ @[<hv 2>%s@,(@[<hov 0>%s@]).%s@,(@[<hov 0>%a@])@]@]"
-            (print_list print_ident) rs
+            (print_comma_list print_ident) rs
             (extern_atom cls)
             (extern_atom i)
             (extern_atom m)
-            print_expr_list (true, es)
+            (print_comma_list print_expr) es
       | Obc.Skip ->
           fprintf p "skip"
 
     let print_decls =
-      print_list
+      print_comma_list
         (fun p (id, ty) ->
           fprintf p "%a@ : %a" print_ident id PrintOps.print_typ ty)
 

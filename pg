@@ -46,6 +46,7 @@ update_path_vars()
 PWD=$(pwd)
 COMPCERT_INCLUDES=$(make --no-print-directory -C CompCert print-includes)
 
+COQPROGNAME=$(which coqtop)
 COQPROGARGS=""
 COQLOADPATH=""
 
@@ -58,9 +59,9 @@ COQLOADPATH="(\"$PWD\" \"Velus\") $COQLOADPATH"
 #echo
 #echo "COQLOADPATH=$COQLOADPATH"
 
-emacs --eval "(setq coq-use-project-file nil)"		\
+emacs --eval "(setq coq-prog-name \"$COQPROGNAME\")"	\
+      --eval "(setq coq-use-project-file nil)"		\
       --eval "(setq coq-prog-args '($COQPROGARGS))"	\
       --eval "(setq coq-load-path '($COQLOADPATH))"     \
       --eval "(setq compile-before-require nil)"	\
       "$@"
-

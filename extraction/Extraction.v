@@ -3,7 +3,7 @@ Require Import ExtrOcamlString.
 Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
 Require Import Velus.ObcToClight.Generation.
-Require Import Velus.ObcToClight.NLustreElab.
+Require Import Velus.ObcToClight.LustreElab.
 Require Import Lustre.Parser.LustreParser.
 
 Require cfrontend.Initializers cfrontend.Ctyping
@@ -126,6 +126,15 @@ Extract Constant elab_const_char =>
     let (sg, sz) = C2C.convertIkind k in
     Interface.Op.Cint (C2C.convertInt v, sz, sg)".
 
+(* XXX *)
+Extract Constant NLustreElab.elab_const_int    => "LustreElab.elab_const_int".
+Extract Constant NLustreElab.elab_const_float  => "LustreElab.elab_const_float".
+Extract Constant NLustreElab.elab_const_char   => "LustreElab.elab_const_char".
+Extract Constant NLustreElab.string_of_astloc  => "LustreElab.string_of_astloc".
+Extract Constant NLustreElab.cabsloc_of_astloc => "LustreElab.cabsloc_of_astloc".
+Extract Constant NLustreElab.cabs_floatinfo    => "LustreElab.cabs_floatinfo".
+(* XXX *)
+
 (* Cabs *)
 Extract Constant Cabs.cabsloc =>
 "{ lineno : int;
@@ -136,6 +145,11 @@ Extract Constant Cabs.cabsloc =>
 Extract Constant Cabs.string => "String.t".
 Extract Constant Cabs.char_code => "int64".
 
+Extract Constant LustreElab.do_add_when_to_constants =>
+    "Veluslib.do_add_when_to_constants".
+
+Extract Constant VelusCorrectness.print_lustre =>
+  "Veluslib.print_lustre_if".
 Extract Constant VelusCorrectness.print_snlustre =>
   "Veluslib.print_snlustre_if".
 Extract Constant VelusCorrectness.print_sybloc => "Veluslib.print_sybloc_if".
@@ -154,6 +168,7 @@ Separate Extraction
          Compiler.transf_clight_program Cabs
          AST.signature_main
          VelusCorrectness.compile elab_declarations translation_unit_file
+         Instantiator.LtoNL.to_global (* XXX *)
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg

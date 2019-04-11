@@ -22,10 +22,9 @@ Require Import Morphisms.
 Module Type SBTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import Clks  : CLOCKS   Ids)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : SBSYNTAX Ids Op Clks CESyn)
-       (Import CETyp : CETYPING Ids Op Clks CESyn).
+       (Import Syn   : SBSYNTAX Ids Op CESyn)
+       (Import CETyp : CETYPING Ids Op CESyn).
 
   Inductive wt_equation (P: program) (vars: list (ident * type)) (lasts: list (ident * type)): equation -> Prop :=
   | wt_EqDef:
@@ -115,10 +114,9 @@ End SBTYPING.
 Module SBTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (Clks  : CLOCKS   Ids)
        (CESyn : CESYNTAX     Op)
-       (Syn   : SBSYNTAX Ids Op Clks CESyn)
-       (CETyp : CETYPING Ids Op Clks CESyn)
-       <: SBTYPING Ids Op Clks CESyn Syn CETyp.
-  Include SBTYPING Ids Op Clks CESyn Syn CETyp.
+       (Syn   : SBSYNTAX Ids Op CESyn)
+       (CETyp : CETYPING Ids Op CESyn)
+       <: SBTYPING Ids Op CESyn Syn CETyp.
+  Include SBTYPING Ids Op CESyn Syn CETyp.
 End SBTypingFun.

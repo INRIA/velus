@@ -1,0 +1,26 @@
+
+node f (a : bool)
+returns (x, y : bool)
+let
+    x = a;
+    y = false fby not a;
+tel
+
+node multimerge (a, b : bool)
+returns (y : bool)
+var w1, w2, w3, w4 : bool when a;
+    x : bool when not a;
+let
+    (* Works in Lustre v6.
+
+       Fails in Heptagon with:
+        >    (w1, w2, w3, w4) = (f(b), f(not b)) when a;
+        >                       ^^^^^^^^^^^^^^^^^^^^^^^
+        Type Clash: this expression has type ((bool * bool) * (bool * bool)),
+        but is expected to have type (bool * bool * bool * bool).
+    *)
+    (w1, w2, w3, w4) = (f(b), f(not b)) when a;
+    x = b when not a;
+    y = merge a (true -> w1) (false -> x);
+tel
+

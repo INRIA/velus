@@ -76,25 +76,26 @@ Inductive preclock :=
 | WHENCK : ident -> bool -> preclock.
 
 Inductive expression :=
-| UNARY    : unary_operator -> expression -> astloc -> expression
-| BINARY   : binary_operator -> expression -> expression -> astloc -> expression
-| IFTE     : expression -> expression -> expression -> astloc -> expression
-| CAST     : type_name -> expression -> astloc -> expression
-| CALL     : ident -> list expression -> option ident -> astloc -> expression
+| UNARY    : unary_operator -> list expression -> astloc -> expression
+| BINARY   : binary_operator -> list expression -> list expression -> astloc
+             -> expression
+| IFTE     : list expression -> list expression -> list expression -> astloc
+             -> expression
+| CAST     : type_name -> list expression -> astloc -> expression
+| APP      : ident -> list expression -> option ident -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
-| FBY      : expression -> expression -> astloc -> expression
-| WHEN     : expression -> bool -> ident -> astloc -> expression
-| MERGE    : ident -> expression -> expression -> astloc -> expression.
+| FBY      : list expression -> list expression -> astloc -> expression
+| WHEN     : list expression -> ident -> bool -> astloc -> expression
+| MERGE    : ident -> list expression -> list expression -> astloc -> expression.
 
-(* TODO: Reorganize to add astloc as usual, with "decorating wrapper"? *)
 Definition expression_loc (e: expression) : astloc :=
   match e with
   | UNARY _ _ l => l
   | BINARY _ _ _ l => l
   | IFTE _ _ _ l => l
   | CAST _ _ l => l
-  | CALL _ _ _ l => l
+  | APP _ _ _ l => l
   | CONSTANT _ l => l
   | VARIABLE _ l => l
   | FBY _ _ l => l
@@ -104,14 +105,98 @@ Definition expression_loc (e: expression) : astloc :=
 
 Definition var_decls : Type := list (ident * (type_name * preclock * astloc)).
 
-Definition equation : Type := (list ident * expression * astloc)%type.
+Definition equation : Type := (list ident * list expression * astloc)%type.
 
 Inductive declaration :=
-      (*  name    inputs       outputs      locals   *)
-| NODE : ident -> var_decls -> var_decls -> var_decls
+      (*  name  has_state  inputs       outputs      locals   *)
+| NODE : ident -> bool -> var_decls -> var_decls -> var_decls
          -> list equation -> astloc -> declaration.
 
 Definition declaration_loc (d: declaration) : astloc :=
   match d with
-  | NODE name inputs outputs locals eqs loc => loc
+  | NODE name has_state inputs outputs locals eqs loc => loc
   end.
+
+(** Custom induction schemes *)
+
+Require Import List.
+
+Section expression_ind2.
+  Variable P : expression -> Prop.
+
+  Hypothesis UNARYCase:
+    forall u es a,
+      Forall P es ->
+      P (UNARY u es a).
+
+  Hypothesis BINARYCase:
+    forall b es1 es2 a,
+      Forall P es1 ->
+      Forall P es2 ->
+      P (BINARY b es1 es2 a).
+
+  Hypothesis IFTECase:
+    forall es ets efs a,
+      Forall P es ->
+      Forall P ets ->
+      Forall P efs ->
+      P (IFTE es ets efs a).
+
+  Hypothesis CASTCase:
+    forall t es a,
+      Forall P es ->
+      P (CAST t es a).
+
+  Hypothesis APPCase:
+    forall f es r a,
+      Forall P es ->
+      P (APP f es r a).
+
+  Hypothesis CONSTANTCase:
+    forall c a,
+      P (CONSTANT c a).
+
+  Hypothesis VARIABLECase:
+    forall x a,
+      P (VARIABLE x a).
+
+  Hypothesis FBYCase:
+    forall e0s es a,
+      Forall P e0s ->
+      Forall P es ->
+      P (FBY e0s es a).
+
+  Hypothesis WHENCase:
+    forall es x b a,
+      Forall P es ->
+      P (WHEN es x b a).
+
+  Hypothesis MERGECase:
+    forall x ets efs a,
+      Forall P ets ->
+      Forall P efs ->
+      P (MERGE x ets efs a).
+
+  Local Ltac SolveForall :=
+    match goal with
+    | |- Forall ?P ?l => induction l; auto
+    | _ => idtac
+    end.
+  
+  Fixpoint expression_ind2 (e: expression) : P e.
+  Proof.
+    destruct e.
+    - apply UNARYCase; SolveForall.
+    - apply BINARYCase; SolveForall.
+    - apply IFTECase; SolveForall.
+    - apply CASTCase; SolveForall.
+    - apply APPCase; SolveForall.
+    - apply CONSTANTCase; SolveForall.
+    - apply VARIABLECase; SolveForall.
+    - apply FBYCase; SolveForall.
+    - apply WHENCase; SolveForall.
+    - apply MERGECase; SolveForall.
+  Qed.
+
+End expression_ind2.
+

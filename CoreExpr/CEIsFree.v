@@ -15,7 +15,6 @@ used in the term [t].
 Module Type CEISFREE
        (Ids         : IDS)
        (Op          : OPERATORS)
-       (Import Clks : CLOCKS   Ids)
        (Import Syn  : CESYNTAX Op).
 
   (* Warning: induction scheme is not strong enough. *)
@@ -368,8 +367,7 @@ End CEISFREE.
 Module CEIsFreeFun
        (Ids  : IDS)
        (Op   : OPERATORS)
-       (Clks : CLOCKS   Ids)
        (Syn  : CESYNTAX Op)
-       <: CEISFREE Ids Op Clks Syn.
-  Include CEISFREE Ids Op Clks Syn.
+       <: CEISFREE Ids Op Syn.
+  Include CEISFREE Ids Op Syn.
 End CEIsFreeFun.

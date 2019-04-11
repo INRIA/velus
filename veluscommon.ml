@@ -17,8 +17,9 @@ module type PRINT_OPS =
     val print_unop  : Format.formatter -> unop -> typ
                         -> (Format.formatter -> 'a -> unit) -> 'a -> unit
     val print_binop : Format.formatter -> binop -> typ
-                        -> (Format.formatter -> 'a -> unit)
-                        -> 'a -> 'a -> unit
+                        -> (Format.formatter -> 'a -> unit) -> 'a
+                        -> (Format.formatter -> 'a -> unit) -> 'a
+                        -> unit
 
     val prec_unop   : unop  -> int * associativity
     val prec_binop  : binop -> int * associativity

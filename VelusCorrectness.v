@@ -1,6 +1,5 @@
 Require Import Velus.Common.
 Require Import Velus.Ident.
-(* Require Import Velus.NLustreToObc.NLObcTyping. *)
 Require Import Velus.ObcToClight.Generation.
 Require Import Velus.Traces.
 Require Import Velus.ClightToAsm.
@@ -16,18 +15,13 @@ Require Import driver.Compiler.
 Require Import Velus.Instantiator.
 Import SB.Syn.
 Import NL.
-(* Import NL.Syn. *)
-(* Import NL.Sem. *)
-(* Import NL.Mem. *)
-(* Import NL.Typ. *)
 Import Obc.Syn.
 Import Obc.Sem.
 Import Obc.Typ.
 Import Obc.Equ.
+Import Obc.Def.
 Import Fusion.
 Import SB2ObcInvariants.
-(* Import Trans. *)
-(* Import Corr. *)
 Import Str.
 Import OpAux.
 Import Interface.Op.

@@ -1,0 +1,28 @@
+
+node f(x: bool; y: bool when x)
+returns (z: bool);
+var w: bool;
+let
+  w = merge x (true -> y and (z when x))
+              (false -> z when not x);
+  z = false fby w;
+tel
+
+node h(x: bool)
+returns (y: bool);
+let
+  y = true fby not x;
+tel
+
+node g(x: bool)
+returns (y: bool);
+let
+  (* The only way this expression could be correct, would be to
+     name the output of h(x) and use it to sample the constant
+     argument:
+        w = h(x);
+        y = f(w, false when w);
+   *)
+  y = f(h(x), false);
+tel
+

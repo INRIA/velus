@@ -17,12 +17,11 @@ Module Type NL2SBTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Clks  : CLOCKS      Ids)
        (Import Str   : STREAM          Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (Import NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
-       (Import SB    : SYBLOC      Ids Op OpAux Clks Str CE)
-       (Import Trans : TRANSLATION Ids Op       Clks CE.Syn NL.Syn SB.Syn NL.Mem).
+       (Import CE    : COREEXPR    Ids Op OpAux Str)
+       (Import NL    : NLUSTRE     Ids Op OpAux Str CE)
+       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Import Trans : TRANSLATION Ids Op       CE.Syn NL.Syn SB.Syn NL.Mem).
 
   Lemma translate_eqn_wt:
     forall G vars vars' mems eq,
@@ -298,12 +297,11 @@ Module NL2SBTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Clks  : CLOCKS      Ids)
        (Str   : STREAM          Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Clks Str)
-       (NL    : NLUSTRE     Ids Op OpAux Clks Str CE)
-       (SB    : SYBLOC      Ids Op OpAux Clks Str CE)
-       (Trans : TRANSLATION Ids Op       Clks CE.Syn NL.Syn SB.Syn NL.Mem)
-<: NL2SBTYPING Ids Op OpAux Clks Str CE NL SB Trans.
-  Include NL2SBTYPING Ids Op OpAux Clks Str CE NL SB Trans.
+       (CE    : COREEXPR    Ids Op OpAux Str)
+       (NL    : NLUSTRE     Ids Op OpAux Str CE)
+       (SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Trans : TRANSLATION Ids Op       CE.Syn NL.Syn SB.Syn NL.Mem)
+<: NL2SBTYPING Ids Op OpAux Str CE NL SB Trans.
+  Include NL2SBTYPING Ids Op OpAux Str CE NL SB Trans.
 End NL2SBTypingFun.

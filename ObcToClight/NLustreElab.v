@@ -1,11 +1,10 @@
-Require Import Velus.Common.
 Require Instantiator.
 
 Require Import Velus.Lustre.Parser.LustreAst.
+Require Import Velus.Common.
 Require Import Operators.
 Require Import Clocks.
 
-Module Import Clks := Instantiator.Clks.
 Module Import CESyn := Instantiator.CE.Syn.
 Module Import Syn := Instantiator.NL.Syn.
 Module Import Defs := Instantiator.NL.IsD.
@@ -29,7 +28,7 @@ Import Permutation.
 Require Import common.Errors.
 Local Open Scope error_monad_scope.
 
-(* Elaborate an AST into a well-typed NLustre program. *)
+(* Elaborate an AST into a well-typed and well-clocked NLustre program. *)
 
 (**
   Lexing and parsing gives a list of LustreAst declarations. Elaboration
@@ -102,13 +101,6 @@ Parameter cabs_floatinfo : LustreAst.floatInfo -> Cabs.floatInfo.
 
 Definition err_loc (loc: astloc) (m: errmsg) :=
   MSG (string_of_astloc loc) :: MSG ":" :: m.
-
-(* TODO: move elsewhere *)
-Instance clock_EqDec : EqDec clock eq.
-Proof.
-  intros ck1 ck2. compute. change (ck1 = ck2 -> False) with (ck1 <> ck2).
-  repeat decide equality.
-Qed.
 
 Local Ltac NamedDestructCases :=
   repeat progress
@@ -322,23 +314,23 @@ Section ElabExpressions.
     | VARIABLE x loc =>
       do (ty, ck) <- find_var loc x;
       OK (Evar x ty, ck)
-    | WHEN ae' b x loc =>
+    | WHEN [ae'] x b loc =>
       do (xty, xck) <- find_var loc x;
       do ok <- assert_type loc x xty bool_type;
       do (e', eck) <- elab_lexp ae';
       if eck ==b xck then OK (Ewhen e' x b, Con xck x b)
       else Error (err_loc loc (MSG "badly clocked when: "
                                    :: msg_of_clocks eck xck))
-    | UNARY aop ae' loc =>
+    | UNARY aop [ae'] loc =>
       let op := elab_unop aop in
       do (e', ck) <- elab_lexp ae';
       do ty' <- find_type_unop loc op (typeof e');
       OK (Eunop op e' ty', ck)
-    | CAST aty' ae' loc =>
+    | CAST aty' [ae'] loc =>
       let ty' := elab_type aty' in
       do (e', ck) <- elab_lexp ae';
       OK (Eunop (CastOp ty') e' ty', ck)
-    | BINARY aop ae1 ae2 loc =>
+    | BINARY aop [ae1] [ae2] loc =>
       let op := elab_binop aop in
       do (e1, ck1) <- elab_lexp ae1;
       do (e2, ck2) <- elab_lexp ae2;
@@ -351,7 +343,7 @@ Section ElabExpressions.
 
   Fixpoint elab_cexp (ae: LustreAst.expression) : res (cexp * clock) :=
     match ae with
-    | MERGE x aet aef loc =>
+    | MERGE x [aet] [aef] loc =>
       do (xty, xck) <- find_var loc x;
       do ok <- assert_type loc x xty bool_type;
       do (et, ckt) <- elab_cexp aet;
@@ -365,7 +357,7 @@ Section ElabExpressions.
            else Error (err_loc loc (MSG "badly clocked merge true branch: "
                                         :: msg_of_clocks (Con xck x true) ckt))
       else Error (err_loc loc (msg "badly typed merge"))
-    | IFTE ae aet aef loc =>
+    | IFTE [ae] [aet] [aef] loc =>
       do (e, ck) <- elab_lexp ae;
       do (et, ckt) <- elab_cexp aet;
       do (ef, ckf) <- elab_cexp aef;
@@ -424,22 +416,27 @@ Section ElabExpressions.
   Definition elab_constant_with_cast (loc: astloc) (ae: LustreAst.expression)
                                                               : res constant :=
     match ae with
-    | CAST aty (CONSTANT ac _) loc =>
+    | CAST aty [CONSTANT ac _] loc =>
       cast_constant loc (elab_constant loc ac) (elab_type aty)
     | CONSTANT ac loc =>
       OK (elab_constant loc ac)
-    | _ => Error (err_loc loc (msg "fbys only take (casted) constants at left."))
+    | _ => Error (err_loc loc
+                    (msg "fbys only take single (casted) constants at left."))
     end.
 
   Definition elab_equation (aeq: LustreAst.equation) : res equation :=
-    let '(xs, ae, loc) := aeq in
+    let '(xs, aes, loc) := aeq in
     do x <- match xs with
             | x::xs => OK x
             | _ => Error (err_loc loc (msg "at least one output is required"))
             end;
+    do ae <- match aes with
+             | [ae] => OK ae
+             | _ => Error (err_loc loc (msg "equation not normalized"))
+             end;
     do (xty, xck) <- find_var loc x;
     match ae with
-    | CALL f aes r loc =>
+    | APP f aes r loc =>
       do (tysin, tysout) <- find_node_interface loc f;
       do es <- elab_lexps loc xck aes tysin;
       do ok <- check_result_list loc xck xs tysout;
@@ -453,7 +450,7 @@ Section ElabExpressions.
                                        :: msg_of_clocks xck rck))
       end
 
-    | FBY ae0 ae loc =>
+    | FBY [ae0] [ae] loc =>
       do v0 <- elab_constant_with_cast loc ae0;
       let v0ty := type_const v0 in
       do (e, eck) <- elab_lexp ae;
@@ -466,6 +463,8 @@ Section ElabExpressions.
                                       :: msg_of_clocks xck eck))
       else Error (err_loc loc (MSG "ill-typed fby expression for "
                                    :: CTX x :: msg_of_types v0ty (typeof e)))
+    | FBY _ _ loc =>
+      Error (err_loc (expression_loc ae) (msg "fby not normalized"))
 
     | _ =>
       do (e, eck) <- elab_cexp ae;
@@ -501,13 +500,68 @@ Section ElabExpressions.
     now rewrite Heq.
   Qed.
 
+  Local Ltac MonadInvLExprWithLists :=
+    match goal with
+    | H:elab_lexp (UNARY _ [_] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (UNARY _ [] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (UNARY _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (UNARY _ (_::?es) _) = OK _ |- _ =>
+      destruct es; MonadInvLExprWithLists
+    | H:elab_lexp (UNARY _ ?es _) = OK _ |- _ =>
+      destruct es; MonadInvLExprWithLists
+
+    | H:elab_lexp (BINARY _ [_] [_] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (BINARY _ [] _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (BINARY _ (_::_) [] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (BINARY _ (_::?es1) [] _) = OK _ |- _ =>
+      destruct es1; MonadInvLExprWithLists
+    | H:elab_lexp (BINARY _ (_::_::_) _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (BINARY _ _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (BINARY _ (_::?es1) (_::?es2) _) = OK _ |- _ =>
+      destruct es1; destruct es2; MonadInvLExprWithLists
+    | H:elab_lexp (BINARY _ ?es1 ?es2 _) = OK _ |- _ =>
+      destruct es1; destruct es2; MonadInvLExprWithLists
+
+    | H:elab_lexp (CAST _ [_] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (CAST _ [] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (CAST _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (CAST _ (_::?es) _) = OK _ |- _ =>
+      destruct es; MonadInvLExprWithLists
+    | H:elab_lexp (CAST _ ?es _) = OK _ |- _ =>
+      destruct es; MonadInvLExprWithLists
+
+    | H:elab_lexp (FBY [_] [_] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (FBY [] _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (FBY (_::_) [] _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (FBY (_::?es1) [] _) = OK _ |- _ =>
+      destruct es1; MonadInvLExprWithLists
+    | H:elab_lexp (FBY (_::_::_) _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (FBY _ (_::_::_) _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (FBY (_::?es1) (_::?es2) _) = OK _ |- _ =>
+      destruct es1; destruct es2; MonadInvLExprWithLists
+    | H:elab_lexp (FBY ?es1 ?es2 _) = OK _ |- _ =>
+      destruct es1; destruct es2; MonadInvLExprWithLists
+
+    | H:elab_lexp (WHEN [_] _ _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (WHEN [] _ _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (WHEN (_::_::_) _ _ _) = OK _ |- _ => monadInv H
+    | H:elab_lexp (WHEN (_::?es) _ _ _) = OK _ |- _ =>
+      destruct es; MonadInvLExprWithLists
+    | H:elab_lexp (WHEN ?es _ _ _) = OK _ |- _ =>
+      destruct es; MonadInvLExprWithLists
+
+    | H:elab_lexp _ = OK _ |- _ => monadInv H
+    end.
+
   Lemma wt_elab_lexp:
     forall ae e ck,
       elab_lexp ae = OK (e, ck) ->
       wt_lexp (idty (Env.elements env)) e.
   Proof.
-    induction ae; intros e ck Helab; monadInv Helab;
+    induction ae using expression_ind2;
+      intros e ck Helab; MonadInvLExprWithLists;
       NamedDestructCases; try constructor; intros; subst;
+      repeat progress match goal with H:Forall _ [_] |- _ => inv H end;
       eauto using wt_lexp, find_var_type, assert_type_eq.
     - unfold find_type_unop in EQ1.
       rewrite type_unop'_correct in EQ1.
@@ -529,9 +583,11 @@ Section ElabExpressions.
       elab_lexp ae = OK (e, ck) ->
       wc_lexp (idck (Env.elements env)) e ck.
   Proof.
-    induction ae; intros e ck Helab; monadInv Helab;
-      NamedDestructCases; try constructor; intros; subst;
-      repeat match goal with
+    induction ae using expression_ind2; intros e ck Helab;
+      MonadInvLExprWithLists; NamedDestructCases;
+        try constructor; intros; subst;
+          repeat match goal with
+             | H:Forall _ [_] |- _ => inv H
              | H:(_ ==b _) = true |- _ =>
                rewrite equiv_decb_equiv in H; rewrite H in *; clear H
              | H:find_var _ _ = OK _ |- _ =>
@@ -576,21 +632,28 @@ Section ElabExpressions.
       elab_cexp ae = OK (e, ck) ->
       wt_cexp (idty (Env.elements env)) e.
   Proof.
-    induction ae; intros e ck Helab;
-      apply bind_inversion in Helab;
+    induction ae using expression_ind2; intros e ck Helab;
+      try apply bind_inversion in Helab;
       try (destruct Helab as ((le & ck') & Helab & Hexp);
            monadInv Hexp);
       eauto using wt_elab_lexp with nltyping.
-    - specialize (IHae2 _ _ EQ); clear EQ.
-      specialize (IHae3 _ _ EQ1); clear EQ1.
+    - destruct es; [inv Helab|]; destruct es; [|inv Helab].
+      destruct ets; [inv Helab|]; destruct ets; [|inv Helab].
+      destruct efs; [inv Helab|]; destruct efs; [|inv Helab].
+      apply bind_inversion in Helab.
+      destruct Helab as ((le & ck') & Helab & Hexp); monadInv Hexp.
+      repeat match goal with H:Forall _ [_] |- _ => inv H end.
       NamedDestructCases.
       apply andb_prop in Heq; destruct Heq as (Hg1 & Hg2).
       rewrite equiv_decb_equiv in Hg1, Hg2.
       intros; subst.
       eauto using wt_elab_lexp with nltyping.
-    - apply find_var_type in Helab.
-      specialize (IHae1 _ _ EQ1); clear EQ1.
-      specialize (IHae2 _ _ EQ0); clear EQ0.
+    - destruct ets; [inv Helab|]; destruct ets; [|inv Helab].
+      destruct efs; [inv Helab|]; destruct efs; [|inv Helab].
+      apply bind_inversion in Helab.
+      repeat match goal with H:Forall _ [_] |- _ => inv H end.
+      destruct Helab as ((le & ck') & Helab & Hexp); monadInv Hexp.
+      apply find_var_type in Helab.
       NamedDestructCases.
       rewrite equiv_decb_equiv in Heq.
       apply assert_type_eq in EQ.
@@ -603,14 +666,18 @@ Section ElabExpressions.
       elab_cexp ae = OK (e, ck) ->
       wc_cexp (idck (Env.elements env)) e ck.
   Proof.
-    induction ae; simpl; intros e ck HH;
-      repeat match goal with H:_ = OK _ |- _ => monadInv H end;
-      NamedDestructCases; intros; subst;
+    induction ae using expression_ind2; simpl; intros e ck HH;
+      try apply bind_inversion in HH;
+      try (destruct HH as ((le & ck') & Helab & Hexp);
+           monadInv Hexp);
       repeat match goal with
+             | H:Forall _ [_] |- _ => inv H
+             | H:_ = OK _ |- _ => monadInv H
              | H:(_ ==b _) = true |- _ =>
                rewrite equiv_decb_equiv in H; rewrite H in *; clear H
              | H:find_var _ _ = OK _ |- _ =>
                apply find_var_clock in H
+             | _ => NamedDestructCases; intros; subst
              end;
       eauto using wc_cexp, wc_lexp, wc_elab_lexp.
   Qed.
@@ -633,7 +700,7 @@ Section ElabExpressions.
       NamedDestructCases.
       apply IHxs in EQ2.
       destruct EQ2 as (Hin & Hset & Hnodup & Hclk).
-      apply mem_spec_false in Heq. rewrite Hset in Heq.
+      apply PSE.MP.Dec.F.not_mem_iff in Heq. rewrite Hset in Heq.
       apply assert_type_eq in EQ1.
       apply assert_clock_eq in EQ0.
       subst.
@@ -667,23 +734,12 @@ Section ElabExpressions.
                  destruct H as (Hele & Hins & Hnodup & Hcks)
              | _ => NamedDestructCases
              end; intros; subst; auto with nltyping.
-    - unfold find_type_unop in EQ3. NamedDestructCases.
-      rewrite type_unop'_correct in Heq0.
-      eauto with nltyping.
-    - unfold find_type_binop in EQ5. NamedDestructCases.
-      rewrite type_binop'_correct in Heq1.
-      auto with nltyping.
-    - apply andb_prop in Heq.
-      destruct Heq as (Heq4 & Heq5).
-      rewrite equiv_decb_equiv in Heq4, Heq5.
-      auto with nltyping.
-    - auto using type_castop with nltyping.
     - rename x1 into xin, x2 into xout, i into f, x3 into ein, l0 into xs,
       x0 into ck, a into loc'.
-      unfold find_node_interface in EQ0. NamedDestructCases.
+      unfold find_node_interface in EQ. NamedDestructCases.
       destruct EQ2.
       destruct wt_nenv as (wt_nenv' & ?).
-      specialize (wt_nenv' f _ _ Heq0).
+      specialize (wt_nenv' f _ _ Heq).
       destruct wt_nenv' as (n & Hfind & Hin & Hout); clear wt_nenv.
       econstructor; eauto.
       + apply Forall2_map_1 in Hout.
@@ -698,7 +754,7 @@ Section ElabExpressions.
         intros ** Htypeof. now rewrite Htypeof.
     - rename x1 into xin, x2 into xout, i into f, x3 into ein, l0 into xs,
       x0 into ck, a into loc'.
-      unfold find_node_interface in EQ0. NamedDestructCases.
+      unfold find_node_interface in EQ. NamedDestructCases.
       destruct EQ2.
       destruct wt_nenv as (wt_nenv' & ?).
       specialize (wt_nenv' f _ _ Heq).
@@ -741,9 +797,7 @@ Section ElabExpressions.
              | _ => NamedDestructCases
              end; intros; subst;
         eauto using wc_equation, wc_cexp, wc_lexp with nltyping.
-    admit.
-    admit.
-  Qed.
+  Admitted.
 
   Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
     match ck with
@@ -855,18 +909,18 @@ Section ElabDeclaration.
       NamedDestructCases.
       apply Env.Props.P.F.not_mem_in_iff in Heq.
       apply IH in Helab; auto.
-      rewrite elements_add; auto.
+      rewrite Env.elements_add; auto.
       simpl; apply wc_env_add; auto.
-      now rewrite InMembers_idck, <-In_Members.
+      now rewrite InMembers_idck, <-Env.In_Members.
     - (* (x, (ty, FULLCK (ON ck y yb))) *)
       NamedDestructCases.
       2:now apply IH in Helab; auto.
       monadInv Helab.
       apply Env.Props.P.F.not_mem_in_iff in Heq1.
       apply IH in EQ2; auto.
-      rewrite elements_add; auto.
+      rewrite Env.elements_add; auto.
       simpl; apply wc_env_add; auto.
-      now rewrite InMembers_idck, <-In_Members.
+      now rewrite InMembers_idck, <-Env.In_Members.
       constructor.
       2:now apply In_idck_exists; exists t; apply Env.elements_correct.
       apply wc_env_var with (1:=Hwce) (x:=y).
@@ -878,9 +932,9 @@ Section ElabDeclaration.
       monadInv Helab. NamedDestructCases.
       apply Env.Props.P.F.not_mem_in_iff in Heq1.
       apply IH in EQ0; auto.
-      rewrite elements_add; auto.
+      rewrite Env.elements_add; auto.
       simpl; apply wc_env_add; auto.
-      now rewrite InMembers_idck, <-In_Members.
+      now rewrite InMembers_idck, <-Env.In_Members.
       constructor.
       2:now apply In_idck_exists; exists t; apply Env.elements_correct.
       apply wc_env_var with (1:=Hwce) (x:=y).
@@ -908,8 +962,8 @@ Section ElabDeclaration.
       all_wt_clock (Env.add x (ty, ck) env).
   Proof.
     intros env x ty ck Hawc Hnin Hwtc y yt yc Hfind.
-    rewrite elements_add; auto; simpl.
-    rewrite In_Members, <-InMembers_idty in Hnin.
+    rewrite Env.elements_add; auto; simpl.
+    rewrite Env.In_Members, <-InMembers_idty in Hnin.
     destruct (ident_eq_dec y x).
     - subst. rewrite Env.gss in Hfind.
       injection Hfind; intros; subst.
@@ -1189,31 +1243,31 @@ Section ElabDeclaration.
     apply Permutation_app_head.
     apply NoDup_Permutation.
     - apply NoDup_app'; try apply fst_NoDupMembers;
-        auto using NoDupMembers_elements.
+        auto using Env.NoDupMembers_elements.
       apply Forall_forall.
       intros x Hin.
       apply fst_InMembers in Hin.
       rewrite <-fst_InMembers.
       apply Hvds in Hin.
-      now rewrite In_Members in Hin.
-    - apply fst_NoDupMembers, NoDupMembers_elements.
+      now rewrite Env.In_Members in Hin.
+    - apply fst_NoDupMembers, Env.NoDupMembers_elements.
     - split; intro HH.
       + apply in_app in HH.
         destruct HH as [HH|HH].
         * apply fst_InMembers in HH.
           apply Hvds in HH.
           rewrite <-fst_InMembers.
-          now setoid_rewrite In_Members in HH.
+          now setoid_rewrite Env.In_Members in HH.
         * apply fst_InMembers, InMembers_In in HH.
           destruct HH as (v & HH).
-          apply Env.elements_In, Henv', In_Members in HH.
+          apply Env.elements_In, Henv', Env.In_Members in HH.
           now apply fst_InMembers.
       + apply in_app.
         apply fst_InMembers, InMembers_In in HH.
         destruct HH as (v & HH).
         apply Env.elements_In, Henv'' in HH.
         destruct HH as [HH|HH].
-        * right. now apply fst_InMembers, In_Members.
+        * right. now apply fst_InMembers, Env.In_Members.
         * left. now apply fst_InMembers.
   Qed.
 
@@ -1352,7 +1406,7 @@ Section ElabDeclaration.
         specialize (Hcv2 x). specialize (IH1 x). intuition.
       + intros x Hin.
         now apply IH3 in Hin.
-    - rewrite Bool.andb_true_iff, Bool.negb_true_iff, mem_spec_false in Heq0.
+    - rewrite Bool.andb_true_iff, Bool.negb_true_iff, <-PSE.MP.Dec.F.not_mem_iff in Heq0.
       destruct Heq0 as (Hidef & Hniout).
       rewrite PS.mem_spec in Hidef. simpl.
       specialize (IH _ _ _ Hchk); clear Hchk.
@@ -1442,7 +1496,7 @@ Section ElabDeclaration.
       Permutation xs (Env.elements env).
   Proof.
     intros ** Hperm Hfa.
-    pose proof (NoDupMembers_elements env) as Hnd.
+    pose proof (Env.NoDupMembers_elements env) as Hnd.
     apply NoDup_Permutation.
     - apply fst_NoDupMembers in Hnd.
       rewrite <-Hperm in Hnd.
@@ -1656,7 +1710,7 @@ Section ElabDeclaration.
   Program Definition elab_declaration (decl: LustreAst.declaration)
     : res {n | wt_node G n /\ wc_node G n} :=
     match decl with
-    | NODE name inputs outputs locals equations loc =>
+    | NODE name has_state inputs outputs locals equations loc =>
       match (do env_in  <- elab_var_decls loc (Env.empty (type * clock)) inputs;
              do env_out <- elab_var_decls loc env_in outputs;
              do env     <- elab_var_decls loc env_out locals;
@@ -1712,7 +1766,7 @@ Section ElabDeclaration.
     repeat setoid_rewrite nameset_spec in Hdefd.
     setoid_rewrite map_app.
     apply Permutation.NoDup_Permutation; auto.
-    - pose proof (NoDupMembers_elements env) as Hnd.
+    - pose proof (Env.NoDupMembers_elements env) as Hnd.
       apply fst_NoDupMembers in Hnd.
       rewrite <-Helab_var, app_assoc in Hnd.
       apply NoDup_app_weaken in Hnd.
@@ -1736,7 +1790,7 @@ Section ElabDeclaration.
   Next Obligation.
     (* NoDupMembers (xin ++ xlocal ++ xout) *)
     MassageElabs outputs local inputs.
-    pose proof (NoDupMembers_elements env) as Hnd.
+    pose proof (Env.NoDupMembers_elements env) as Hnd.
     apply fst_NoDupMembers in Hnd.
     rewrite <-Helab_var in Hnd.
     rewrite Permutation_app_comm, Permutation_app_assoc.
@@ -1781,7 +1835,7 @@ Section ElabDeclaration.
       apply Coqlib.list_forall2_in_right with (1:=Helabs) in Hxin.
       destruct Hxin as (aeq & Hxin & Helab).
       apply wt_elab_equation with (G:=G) in Helab; auto.
-    - (* wc_node n *)
+    - (* wc_node G n *)
       constructor; simpl;
         repeat match goal with H:OK _ = _ |- _ =>
           symmetry in H; monadInv1 H end;
@@ -1801,6 +1855,31 @@ Section ElabDeclaration.
         2:now rewrite <-Helab_var, map_app, map_app,
           Permutation_app_comm, Permutation_app_assoc.
         admit.
+        (*
+        apply Forall_forall.
+        intros y Hxin.
+        rewrite Hf.
+        apply mmap_inversion in Helabs.
+        apply Coqlib.list_forall2_in_right with (1:=Helabs) in Hxin.
+        destruct Hxin as (aeq & Hxin & Helab).
+        apply wc_elab_equation in Helab; auto.
+        *)
+(*
+      + match goal with H:mmap (fun xtc=>assert_clock _ _ _ _) xin = _ |- _
+                        => apply mmap_inversion in H; rename H into Hbase end.
+        apply all_In_Forall.
+        intros x Hxin.
+        apply Coqlib.list_forall2_in_left with (2:=Hxin) in Hbase.
+        destruct Hbase as (ok & ? & Hbase).
+        now apply assert_clock_eq in Hbase.
+      + match goal with H:mmap (fun xtc=>assert_clock _ _ _ _) xout = _ |- _
+                        => apply mmap_inversion in H; rename H into Hbase end.
+        apply all_In_Forall.
+        intros x Hxin.
+        apply Coqlib.list_forall2_in_left with (2:=Hxin) in Hbase.
+        destruct Hbase as (ok & ? & Hbase).
+        now apply assert_clock_eq in Hbase.
+*)
   Qed.
 
 End ElabDeclaration.

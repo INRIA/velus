@@ -986,10 +986,34 @@ Section BlockRep.
     intros. now rewrite match_value_empty.
   Qed.
 
+  Lemma match_value_remove:
+    forall x y ve,
+      x <> y ->
+      match_value (Env.remove y ve) x = match_value ve x.
+  Proof.
+    intros x y ve Hnxy.
+    unfold match_value.
+    now rewrite Env.gro with (1:=Hnxy).
+  Qed.
+
+  Lemma match_value_updates_gso:
+    forall x xs vs ve,
+      ~In x xs ->
+      match_value (Env.updates xs vs ve) x = match_value ve x.
+  Proof.
+    induction xs as [|x' xs IH]; auto.
+    intros vs ve Hnin.
+    apply not_in_cons in Hnin as (Hxx' & Hnin).
+    destruct vs as [|v vs]. now unfold Env.updates.
+    destruct v.
+    now rewrite Env.updates_cons_cons, match_value_add; auto.
+    rewrite Env.updates_cons_cons_None, match_value_remove; auto.
+  Qed.
+
   Lemma blockrep_nodup:
     forall xs vs flds ve ob,
       NoDupMembers (xs ++ flds) ->
-      blockrep ve flds ob <-*-> blockrep (Env.adds (map fst xs) vs ve) flds ob.
+      blockrep ve flds ob <-*-> blockrep (Env.updates (map fst xs) vs ve) flds ob.
   Proof.
     intros ** Nodup.
     unfold blockrep.
@@ -998,24 +1022,19 @@ Section BlockRep.
     destruct (field_offset ge x flds); auto.
     destruct (access_mode t); auto.
     revert vs ve.
-    induction xs as [|(x', t')], vs; unfold Env.adds in *; simpl; auto.
-    rewrite <-app_comm_cons, nodupmembers_cons in Nodup.
-    destruct Nodup as [Notin Nodup].
-    intro ve.
-    unfold match_value in *.
-    rewrite Env.gso.
-    + apply IHxs; auto.
-    + intro; subst; apply Notin.
-      rewrite InMembers_app; right.
-      eapply In_InMembers; eauto.
+    assert (~InMembers x xs) as Hnxs
+      by (eapply NoDupMembers_app_comm, NoDupMembers_app_InMembers in Nodup;
+          eauto using In_InMembers).
+    rewrite fst_InMembers in Hnxs.
+    now setoid_rewrite match_value_updates_gso with (1:=Hnxs).
   Qed.
 
   Lemma blockrep_findvars:
     forall ve xs vs b,
-      Forall2 (fun x v => Env.find x ve = Some v) (map fst xs) vs ->
-      blockrep ve xs b -*> blockrep (Env.adds (map fst xs) vs vempty) xs b.
+      Forall2 (fun x v => Env.find x ve = v) (map fst xs) vs ->
+      blockrep ve xs b -*> blockrep (Env.adds_opt (map fst xs) vs vempty) xs b.
     Proof.
-      unfold  Env.adds; simpl.
+      unfold Env.adds_opt; simpl.
       intros ** Findvars.
       unfold blockrep.
       apply sepall_weakenp.
@@ -1023,24 +1042,35 @@ Section BlockRep.
       destruct (field_offset ge x xs); auto.
       destruct (access_mode t); auto.
       apply contains_imp.
-      unfold match_value.
-      intros v Findx.
+      apply In_InMembers in Hin.
+      intros v Hmv.
       revert vs Findvars.
       induction xs as [|(x', t')], vs; simpl; intro Findvars;
-      try (rewrite Env.gempty; auto).
-      inversion Findvars as [|y ? ys ? Find Findvars']; subst; clear Findvars.
-      destruct (split xs) as (g, d).
-      simpl in *.
+        try (now inversion Hin).
+      inversion_clear Findvars as [|? ? ? ? Find Findvars'].
+      unfold match_value.
       destruct (ident_eqb x x') eqn: E.
       - apply ident_eqb_eq in E; subst x'.
-        rewrite Find in Findx.
-        rewrite Env.gss; auto.
+        destruct o.
+        + rewrite Env.gss; auto.
+          now apply match_find_var_det with (1:=Hmv).
+        + destruct (InMembers_dec x xs AST.ident_eq) as [Hin'|Hni].
+          * specialize (IHxs Hin' _ Findvars'). unfold match_value; auto.
+          * revert Hni. clear. revert vs. induction xs.
+            now simpl; rewrite Env.gempty.
+            intros vs Hnm. simpl.
+            apply NotInMembers_cons in Hnm as (Hnm & Hne).
+            destruct vs; simpl; try rewrite Env.gempty; auto.
+            specialize (IHxs vs Hnm).
+            destruct o; simpl; auto.
+            rewrite Env.gso; auto.
       - apply ident_eqb_neq in E.
         destruct Hin as [Eq|?].
         + inv Eq; now contradict E.
-        + rewrite Env.gso.
-          apply IHxs; auto.
-          exact E.
+        + destruct o.
+          * rewrite Env.gso; auto.
+            apply IHxs; auto.
+          * apply IHxs; auto.
     Qed.
 
   Lemma blockrep_field_offset:

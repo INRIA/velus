@@ -12,15 +12,14 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SB2OBCINVARIANTS
-       (Import Ids    : IDS)
-       (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX       Op)
-       (Import Clks   : CLOCKS          Ids)
-       (Import Str    : STREAM              Op OpAux)
-       (Import CE     : COREEXPR       Ids Op OpAux Clks Str)
-       (Import SB     : SYBLOC          Ids Op OpAux Clks Str CE)
-       (Import Obc    : OBC             Ids Op OpAux)
-       (Import Trans  : TRANSLATION     Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX       Op)
+       (Import Str   : STREAM              Op OpAux)
+       (Import CE    : COREEXPR    Ids Op OpAux Str)
+       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Import Obc   : OBC         Ids Op OpAux)
+       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn).
 
   (** ** Show that the Obc code that results from translating a SyBloc
          program satisfies the [Fusible] invariant, and thus that fusion
@@ -50,7 +49,7 @@ Module Type SB2OBCINVARIANTS
     - inversion H.
     - now apply Is_free_in_tovar in H; subst.
     - constructor; inversion H; auto.
-    - constructor; inversion_clear H as [| | |????? [?|?]]; subst;
+    - constructor; inversion_clear H as [| | |????? [?|?]|]; subst;
         [left; auto | right; auto].
   Qed.
 
@@ -140,14 +139,14 @@ Module Type SB2OBCINVARIANTS
   Qed.
 
   Lemma translate_eqns_Fusible:
-    forall vars mems inputs eqs,
+    forall P vars mems clkvars inputs eqs,
       wc_env vars ->
       NoDupMembers vars ->
-      Forall (wc_equation vars) eqs ->
+      Forall (wc_equation P vars) eqs ->
       Is_well_sch inputs mems eqs ->
       (forall x, PS.In x mems -> ~ Is_variable_in x eqs) ->
       (forall input, In input inputs -> ~ Is_defined_in input eqs) ->
-      Fusible (translate_eqns mems eqs).
+      Fusible (translate_eqns mems clkvars eqs).
   Proof.
     intros ** Hwk Hnd Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
@@ -171,7 +170,7 @@ Module Type SB2OBCINVARIANTS
           assert (Hfree': Is_free_in_eq i (EqDef x ck e)) by auto.
           eapply HH in Hfree'.
           intro; subst.
-          apply mem_spec_false in Hnxm; rewrite Hnxm in Hfree'.
+          apply PSE.MP.Dec.F.not_mem_iff in Hnxm; rewrite Hnxm in Hfree'.
           destruct Hfree' as [Hvar|Hin].
           - eapply Hndef; eauto using Is_defined_in_eq.
             apply Is_variable_in_Is_defined_in; auto.
@@ -232,8 +231,8 @@ Module Type SB2OBCINVARIANTS
     inversion_clear WCb as [? (?&?&?)].
     eapply translate_eqns_Fusible; eauto.
     - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
-      rewrite 2 map_app, <-app_assoc, NoDup_swap.
-      apply NoDup_comm; rewrite <-app_assoc; apply b_nodup.
+      rewrite 2 map_app, <-2 app_assoc.
+      apply b_nodup.
     - intros; eapply Is_last_in_not_Is_variable_in; eauto.
       rewrite lasts_of_In, <-ps_from_list_In, <-b_lasts_in_eqs; auto.
     - intros; apply b_ins_not_def, fst_InMembers; auto.
@@ -242,15 +241,14 @@ Module Type SB2OBCINVARIANTS
 End SB2OBCINVARIANTS.
 
 Module SB2ObcInvariantsFun
-       (Ids    : IDS)
-       (Op     : OPERATORS)
-       (OpAux  : OPERATORS_AUX       Op)
-       (Clks   : CLOCKS          Ids)
-       (Str    : STREAM              Op OpAux)
-       (CE     : COREEXPR       Ids Op OpAux Clks Str)
-       (SB     : SYBLOC          Ids Op OpAux Clks Str CE)
-       (Obc    : OBC             Ids Op OpAux)
-       (Trans  : TRANSLATION     Ids Op OpAux Clks CE.Syn SB.Syn Obc.Syn)
-  <: SB2OBCINVARIANTS Ids Op OpAux Clks Str CE SB Obc Trans.
-  Include SB2OBCINVARIANTS Ids Op OpAux Clks Str CE SB Obc Trans.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX   Op)
+       (Str   : STREAM          Op OpAux)
+       (CE    : COREEXPR    Ids Op OpAux Str)
+       (SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Obc   : OBC         Ids Op OpAux)
+       (Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn)
+  <: SB2OBCINVARIANTS Ids Op OpAux Str CE SB Obc Trans.
+  Include SB2OBCINVARIANTS Ids Op OpAux Str CE SB Obc Trans.
 End SB2ObcInvariantsFun.

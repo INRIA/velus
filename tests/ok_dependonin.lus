@@ -1,0 +1,6 @@
+
+node f (a : bool) returns (y : bool when a);
+let
+    y = true when a;
+tel
+

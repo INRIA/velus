@@ -20,6 +20,7 @@ Module Type OPERATORS.
 
   Parameter type_const : const -> type.
   Parameter sem_const  : const -> val.
+  Parameter init_type  : type -> const.
 
   (* Operations *)
 
@@ -39,6 +40,9 @@ Module Type OPERATORS.
   Axiom wt_val_true  : wt_val true_val bool_type.
   Axiom wt_val_false : wt_val false_val bool_type.
   Axiom wt_val_const : forall c, wt_val (sem_const c) (type_const c).
+
+  Axiom wt_init_type : forall ty, wt_val (sem_const (init_type ty)) ty.
+  Axiom type_init_type : forall ty, type_const (init_type ty) = ty.
 
   Axiom pres_sem_unop:
     forall op ty1 ty v1 v,
@@ -123,7 +127,13 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Definition wt_vals vs (xts: list (ident * type))
     := List.Forall2 (fun v xt => wt_val v (snd xt)) vs xts.
 
- (** A synchronous [value] is either an absence or a present constant *)
+  Definition wt_valo (vo: option val) (ty: type) : Prop :=
+    match vo with
+    | None => True
+    | Some v => wt_val v ty
+    end.
+
+  (** A synchronous [value] is either an absence or a present constant *)
 
   Inductive value :=
   | absent
@@ -141,6 +151,25 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     end.
 
   Instance: EqDec value eq := { equiv_dec := value_dec }.
+
+  Lemma not_absent_bool:
+    forall x, x <> absent <-> x <>b absent = true.
+  Proof.
+    unfold nequiv_decb.
+    setoid_rewrite Bool.negb_true_iff.
+    split; intro Hx.
+    - destruct x. now contradiction Hx.
+      now apply not_equiv_decb_equiv.
+    - destruct x. now apply not_equiv_decb_equiv.
+      apply not_equiv_decb_equiv in Hx; auto.
+  Qed.
+
+  Lemma neg_eq_value:
+    forall (x y: value),
+      negb (x <>b y) = (x ==b y).
+  Proof.
+    unfold nequiv_decb; setoid_rewrite Bool.negb_involutive; auto.
+  Qed.
 
 End OPERATORS_AUX.
 

@@ -55,13 +55,13 @@ esac
 
 # Generate the _CoqProject file
 {
+    printf -- "-R \"%s\" Velus\\n" "$BASEDIR";
     while read -r subdir; do
       printf -- "-R \"%s/%s\" compcert.%s\\n" "$compcertdir" "$subdir" "$subdir"
     done <includes;
     printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
     for dir in $EXCLUDES; do
-	      printf -- "-exclude-dir \"%s/%s\"\\n" "$compcertdir" "$dir"
+	      printf -- "-exclude-dir \"%s\"\\n" "$dir"
     done;
-    printf -- "-R \"%s\" Velus\\n" "$BASEDIR";
     cat vfiles
 } >"$coqproject"

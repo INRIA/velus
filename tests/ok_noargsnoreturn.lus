@@ -1,0 +1,7 @@
+
+node noargsnoreturns() returns ();
+var w : bool;
+let
+    w = false fby (not w);
+tel
+

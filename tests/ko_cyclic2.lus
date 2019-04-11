@@ -1,0 +1,10 @@
+
+node f (x : bool) returns (y:bool);
+var a : bool when b;
+    b : bool when a;
+let
+    y = true;
+    a = true;
+    b = true;
+tel
+

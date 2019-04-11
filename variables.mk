@@ -61,6 +61,9 @@ BUILDDIR=_build
 export OTHERFLAGS=-exclude-dir CompCert
 
 bold=$(shell tput bold)
+blue=$(shell tput setaf 4)
+red=$(shell tput setaf 9)
+green=$(shell tput setaf 10)
 normal=$(shell tput sgr0)
 
 ifndef VERBOSE

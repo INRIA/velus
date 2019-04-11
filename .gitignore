@@ -26,6 +26,8 @@ extraction/CompCert
 html
 *.c
 velus
+*.orig
+*.conflicts
 
 extraction/extracted
 
@@ -37,3 +39,4 @@ tools/automake.ml
 _CoqProject
 
 *.exe
+*.out

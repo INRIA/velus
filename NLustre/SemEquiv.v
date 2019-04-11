@@ -23,15 +23,15 @@ Module Type SEMEQUIV
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX Op)
-       (Import Clks    : CLOCKS           Ids)
-       (Import Syn     : NLSYNTAX         Ids Op       Clks)
+       (Import    : CLOCKS           Ids)
+       (Import Syn     : NLSYNTAX         Ids Op      )
        (Import Str     : STREAM               Op OpAux)
-       (Import Ord     : ORDERED          Ids Op       Clks Syn)
-       (Indexed : NLSEMANTICS      Ids Op OpAux Clks Syn Str Ord)
-       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux Clks Syn     Ord)
-       (Import Interp  : NLINTERPRETOR    Ids Op OpAux Clks Syn Str Ord Indexed)
-       (Import C2I     : COINDTOINDEXED   Ids Op OpAux Clks Syn Str Ord Indexed        CoInd)
-       (Import I2C     : INDEXEDTOCOIND   Ids Op OpAux Clks Syn Str Ord Indexed Interp CoInd).
+       (Import Ord     : ORDERED          Ids Op       Syn)
+       (Indexed : NLSEMANTICS      Ids Op OpAux Syn Str Ord)
+       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux Syn     Ord)
+       (Import Interp  : NLINTERPRETOR    Ids Op OpAux Syn Str Ord Indexed)
+       (Import C2I     : COINDTOINDEXED   Ids Op OpAux Syn Str Ord Indexed        CoInd)
+       (Import I2C     : INDEXEDTOCOIND   Ids Op OpAux Syn Str Ord Indexed Interp CoInd).
 
 Definition stream_equivalence {A} (xs: Stream A) (xs': stream A) :=
   forall n, Str_nth n xs = xs' n.

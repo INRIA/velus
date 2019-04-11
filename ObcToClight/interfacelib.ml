@@ -137,11 +137,11 @@ module PrintClightOpsFun (OpNames : sig
       | Ops.CastOp ty ->
           fprintf p "(%a : %a)" print_exp e print_typ ty
 
-    let print_binop p op ty print_exp e1 e2 =
-      fprintf p "%a@ %s %a" print_exp e1
+    let print_binop p op ty print_exp1 e1 print_exp2 e2 =
+      fprintf p "%a@ %s %a" print_exp1 e1
                             (OpNames.name_binop ty op)
-                            print_exp e2
-
+                            print_exp2 e2
+      
     let prec_unop op = (15, RtoL)
     let prec_binop =
       let open Cop in function

@@ -1,0 +1,8 @@
+
+node fbyfby (i : bool)
+returns (x, y : bool);
+let
+  x = true fby y;
+  y = true fby (not x);
+tel
+

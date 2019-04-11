@@ -17,7 +17,6 @@ Module Type CESEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
-       (Import Clks  : CLOCKS Ids)
        (Import Syn   : CESYNTAX      Op)
        (Import Str   : STREAM        Op OpAux).
 
@@ -186,20 +185,6 @@ environment.
     Definition sem_laexp_instant := sem_annotated_instant sem_lexp_instant.
     Definition sem_caexp_instant := sem_annotated_instant sem_cexp_instant.
 
-    Inductive sem_laexps_instant: clock -> list lexp -> list value -> Prop:=
-    | SLticks:
-        forall ck ces cs vs,
-          vs = map present cs ->
-          sem_lexps_instant base R ces vs ->
-          sem_clock_instant base R ck true ->
-          sem_laexps_instant ck ces vs
-    | SLabss:
-        forall ck ces vs,
-          vs = all_absent ces ->
-          sem_lexps_instant base R ces vs ->
-          sem_clock_instant base R ck false ->
-          sem_laexps_instant ck ces vs.
-
   End InstantAnnotatedSemantics.
 
   (** ** Liftings of instantaneous semantics *)
@@ -240,9 +225,6 @@ environment.
     Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
       lift (fun base R => sem_laexp_instant base R ck) e xs.
 
-    Definition sem_laexps (ck: clock) (e: list lexp) (xs: stream (list value)): Prop :=
-      lift (fun base R => sem_laexps_instant base R ck) e xs.
-
     Definition sem_lexp (e: lexp) (xs: stream value): Prop :=
       lift sem_lexp_instant e xs.
 
@@ -259,91 +241,78 @@ environment.
 
   (** ** Time-dependent semantics *)
 
-  Definition instant_same_clock (l : list value) : Prop :=
-    absent_list l \/ present_list l.
+  Definition clock_of_instant (vs: list value) : bool :=
+    existsb (fun v => v <>b absent) vs.
 
-  Definition same_clock (l_s : stream (list value)) : Prop :=
-    forall n, instant_same_clock (l_s n).
-
-  Definition clock_of (xss: stream (list value))(bs: stream bool): Prop :=
-    forall n,
-      present_list (xss n) <-> bs n = true.
-
-  Definition clock_of' (xss: stream (list value)) : stream bool :=
-    fun n => forallb (fun v => negb (v ==b absent)) (xss n).
-
-  Lemma clock_of_equiv:
-    forall xss, clock_of xss (clock_of' xss).
+  Lemma clock_of_instant_false:
+    forall xs,
+      clock_of_instant xs = false <-> absent_list xs.
   Proof.
-    split; intros H.
-    - unfold clock_of'.
-      rewrite forallb_forall.
-      intros; rewrite Bool.negb_true_iff.
-      rewrite not_equiv_decb_equiv.
-      eapply Forall_forall in H; eauto.
-    - unfold clock_of' in H.
-      rewrite forallb_forall in H.
-      apply Forall_forall; intros ** Hin E.
-      specialize (H _ Hin).
-      rewrite Bool.negb_true_iff, not_equiv_decb_equiv in H.
-      apply H; eauto.
+    unfold absent_list.
+    induction xs; simpl.
+    - constructor; constructor.
+    - rewrite Bool.orb_false_iff, Forall_cons2, IHxs, nequiv_decb_false, equiv_decb_equiv;
+        intuition.
   Qed.
 
-  Lemma clock_of_equiv':
-    forall xss bk,
-      clock_of xss bk ->
-      bk ≈ clock_of' xss.
+  Lemma clock_of_instant_true:
+    forall xs,
+      clock_of_instant xs = true <-> Exists (fun v => v <> absent) xs.
   Proof.
-    intros ** H n; specialize (H n).
-    unfold clock_of'.
-    induction (xss n) as [|v]; simpl.
-    - apply H; constructor.
-    - destruct v.
-      + simpl.
-        rewrite <-Bool.not_true_iff_false, <-H.
-        inversion 1; auto.
-      + simpl.
-        apply IHl; rewrite <-H.
-        split; intro P.
-        * constructor; auto.
-          intro; discriminate.
-        * inv P; auto.
+    induction xs; simpl.
+    - split; inversion 1.
+    - rewrite Bool.orb_true_iff, Exists_cons, IHxs, <-not_absent_bool; reflexivity.
   Qed.
+
+  Definition clock_of (xss: stream (list value)): stream bool :=
+    fun n => clock_of_instant (xss n).
 
   Definition reset_of (vs: stream value) (rs: stream bool) :=
     forall n, value_to_bool (vs n) = Some (rs n).
 
   (** Morphisms properties *)
 
-  Add Parametric Morphism b A B sem H : (@lift b H A B sem)
-      with signature eq ==> @eq_str B ==> Basics.impl
+  Add Parametric Morphism A B H sem e: (fun b xs => @lift b H A B sem e xs)
+      with signature eq_str ==> @eq_str B ==> Basics.impl
         as lift_eq_str.
   Proof.
-    intros x xs xs' E Lift n.
-    rewrite <-E; auto.
+    intros ?? E ?? E' Lift n.
+    rewrite <-E, <-E'; auto.
   Qed.
 
-  Add Parametric Morphism A B sem H : (@lift' H A B sem)
-      with signature eq ==> @eq_str B ==> Basics.impl
+  Add Parametric Morphism A B sem H e: (@lift' H A B sem e)
+      with signature @eq_str B ==> Basics.impl
         as lift'_eq_str.
   Proof.
-    intros x xs xs' E Lift n.
+    intros ** E Lift n.
     rewrite <-E; auto.
   Qed.
 
+  (* Add Parametric Morphism : (sem_laexp) *)
   Add Parametric Morphism : clock_of
-      with signature eq_str ==> eq ==> Basics.impl
+      with signature eq_str ==> eq_str
         as clock_of_eq_str.
   Proof.
-    unfold clock_of. intros ** E b Pres n.
-    split; intros H.
-    - apply Pres.
-      specialize (E n).
-      induction H; rewrite E; constructor; auto.
-    - apply Pres in H.
-      specialize (E n).
-      induction H; rewrite <-E; constructor; auto.
+    unfold clock_of. intros ** E n.
+    rewrite E; auto.
   Qed.
+
+  Add Parametric Morphism : (sem_clocked_var)
+      with signature eq_str ==> eq ==> eq ==> eq ==> Basics.impl
+        as sem_clocked_var_eq_str.
+  Proof.
+    intros ** E ??? Sem n.
+    rewrite <-E; auto.
+  Qed.
+
+  Add Parametric Morphism : (sem_clocked_vars)
+      with signature eq_str ==> eq ==> eq ==> Basics.impl
+        as sem_clocked_vars_eq_str.
+  Proof.
+    intros ** E ?? Sem n.
+    rewrite <-E; auto.
+  Qed.
+
 
   (* Add Parametric Morphism : reset_of *)
   (*     with signature eq_str ==> eq_str *)
@@ -361,13 +330,6 @@ environment.
   (*   induction Rst; constructor; eauto. *)
   (* Qed. *)
 
-  Add Parametric Morphism : same_clock
-      with signature eq_str ==> Basics.impl
-        as same_clock_eq_str.
-  Proof.
-    unfold same_clock; intros ** E ? ?; rewrite <-E; auto.
-  Qed.
-
   (* Add Parametric Morphism : sem_vars_instant *)
   (*     with signature eq_str ==> Basics.impl *)
   (*       as same_clock_eq_str. *)
@@ -384,14 +346,14 @@ environment.
     now apply IHck.
   Qed.
 
-  Lemma present_not_absent_list:
-    forall xs (vs: list val),
-      instant_same_clock xs ->
-      ~ absent_list xs ->
-      present_list xs.
+  Corollary not_subrate_clock_impl:
+    forall R ck b,
+      sem_clock_instant false R ck b ->
+      b = false.
   Proof.
-    intros ** Hsamexs Hnabs.
-    now destruct Hsamexs.
+    intros ** Sem.
+    destruct b; auto.
+    contradict Sem; apply not_subrate_clock.
   Qed.
 
   Lemma sem_vars_gt0:
@@ -405,6 +367,15 @@ environment.
     apply Forall2_length in Hsem.
     rewrite map_length in Hsem.
     now rewrite Hsem in Hgt0.
+  Qed.
+
+  Lemma sem_caexp_instant_absent:
+    forall R ck e v,
+      sem_caexp_instant false R ck e v ->
+      v = absent.
+  Proof.
+    inversion_clear 1; auto.
+    exfalso; eapply not_subrate_clock; eauto.
   Qed.
 
   Ltac assert_const_length xss :=
@@ -558,24 +529,6 @@ environment.
       intros les cs1 cs2. apply Forall2_det. apply sem_lexp_instant_det.
     Qed.
 
-    Lemma sem_laexps_instant_det:
-      forall ck e v1 v2,
-        sem_laexps_instant base R ck e v1
-        -> sem_laexps_instant base R ck e v2
-        -> v1 = v2.
-    Proof.
-      intros until v2.
-      do 2 inversion_clear 1;
-        match goal with
-        | H1: sem_lexps_instant _ _ _ _, H2: sem_lexps_instant _ _ _ _ |- _ =>
-          eapply sem_lexps_instant_det; eauto
-        | H1:sem_clock_instant _ _ _ ?T, H2:sem_clock_instant _ _ _ ?F |- _ =>
-          let H := fresh in
-          assert (H: T = F) by (eapply sem_clock_instant_det; eassumption);
-            try discriminate H
-        end; congruence.
-    Qed.
-
     Lemma sem_cexp_instant_det:
       forall e v1 v2,
         sem_cexp_instant base R e v1
@@ -706,13 +659,6 @@ environment.
       apply_lift sem_laexp_instant_det.
     Qed.
 
-    Lemma sem_laexps_det:
-      forall ck e xs1 xs2,
-        sem_laexps bk H ck e xs1 -> sem_laexps bk H ck e xs2 -> xs1 = xs2.
-    Proof.
-      apply_lift sem_laexps_instant_det.
-    Qed.
-
     Lemma sem_cexp_det:
       forall c xs1 xs2,
         sem_cexp bk H c xs1 -> sem_cexp bk H c xs2 -> xs1 = xs2.
@@ -734,18 +680,16 @@ clock to [sem_var_instant] too. *)
 
   End LiftDeterminism.
 
-  Lemma clock_of_det:
-    forall xss ck1 ck2,
-      clock_of xss ck1 ->
-      clock_of xss ck2 ->
-      forall n, ck2 n = ck1 n.
-  Proof.
-    intros ** Hck1 Hck2 n.
-    specialize (Hck1 n); specialize (Hck2 n).
-    rewrite Hck1 in Hck2; destruct Hck2.
-    destruct ck1, ck2; auto.
-    symmetry; auto.
-  Qed.
+  (* Lemma clock_of_det: *)
+  (*   forall xss ck1 ck2, *)
+  (*     clock_of xss ck1 -> *)
+  (*     clock_of xss ck2 -> *)
+  (*     ck2 ≈ ck1. *)
+  (* Proof. *)
+  (*   intros ** Hck1 Hck2 n. *)
+  (*   specialize (Hck1 n); specialize (Hck2 n). *)
+  (*   congruence. *)
+  (* Qed. *)
 
   Ltac sem_det :=
     match goal with
@@ -767,12 +711,6 @@ clock to [sem_var_instant] too. *)
     | H1: sem_lexps ?bk ?H ?C ?X,
           H2: sem_lexps ?bk ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_lexps_det; eexact H1 || eexact H2
-    | H1: sem_laexps_instant ?bk ?H ?ck ?C ?X,
-          H2: sem_laexps_instant ?bk ?H ?ck ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexps_instant_det; eexact H1 || eexact H2
-    | H1: sem_laexps ?bk ?H ?ck ?C ?X,
-          H2: sem_laexps ?bk ?H ?ck ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexps_det; eexact H1 || eexact H2
     | H1: sem_lexp_instant ?bk ?H ?C ?X,
           H2: sem_lexp_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_lexp_instant_det; eexact H1 || eexact H2
@@ -799,9 +737,8 @@ Module CESemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Clks  : CLOCKS Ids)
        (Syn   : CESYNTAX      Op)
        (Str   : STREAM        Op OpAux)
-  <: CESEMANTICS Ids Op OpAux Clks Syn Str.
-  Include CESEMANTICS Ids Op OpAux Clks Syn Str.
+  <: CESEMANTICS Ids Op OpAux Syn Str.
+  Include CESEMANTICS Ids Op OpAux Syn Str.
 End CESemanticsFun.

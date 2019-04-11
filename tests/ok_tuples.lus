@@ -1,0 +1,30 @@
+
+node swap (a, b : bool)
+returns (x, y : bool);
+let
+  x = true fby b;
+  y = a;
+tel
+
+node shuffle (a, b, c, d : bool)
+returns (w, x, y, z : bool);
+let
+  (w, x) = swap(a, b);
+  (y, z) = swap(c, d);
+tel
+
+node main (a, b, c, d : bool)
+returns (w, x, y, z : bool);
+let
+  /* Accepted by Lustre v6.
+     Rejected by Heptagon:
+        >  (w, x, y, z) = shuffle(((a, (b, (c)), d)));
+        >                 ^^^^^^^^^^^^^^^^^^^^^^^^^^^
+        Type Clash: arguments of type (bool * (bool * bool) * bool) were given,
+        but (bool * bool * bool * bool) was expected.
+
+     What does Scade do?
+   */
+  (w, x, y, z) = shuffle(((a, (b, (c)), d)));
+tel
+

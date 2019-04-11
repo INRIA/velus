@@ -1,0 +1,6 @@
+
+node f1(a : bool; b : int when a) returns (y : int when a);
+let
+  y = b * 2 when a;      (* (b * 2) when a *)
+tel
+

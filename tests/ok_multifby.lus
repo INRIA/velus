@@ -1,0 +1,7 @@
+
+node swapdelay (a, b : bool)
+returns (x, y : bool);
+let
+  (x, y) = (true, false) fby (a, b);
+tel
+

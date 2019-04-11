@@ -11,12 +11,11 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Module Type SBISFREE
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import Clks    : CLOCKS     Ids)
-       (Import CESyn : CESYNTAX   Op)
-       (Import Syn     : SBSYNTAX   Ids Op Clks CESyn)
-       (Import CEIsF : CEISFREE Ids Op Clks CESyn).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import CESyn : CESYNTAX     Op)
+       (Import Syn   : SBSYNTAX Ids Op CESyn)
+       (Import CEIsF : CEISFREE Ids Op CESyn).
 
   Inductive Is_free_in_eq: ident -> equation -> Prop :=
   | FreeEqDef:
@@ -87,12 +86,11 @@ Module Type SBISFREE
 End SBISFREE.
 
 Module SBIsFreeFun
-       (Ids     : IDS)
-       (Op      : OPERATORS)
-       (Clks    : CLOCKS     Ids)
-       (CESyn : CESYNTAX   Op)
-       (Syn     : SBSYNTAX   Ids Op Clks CESyn)
-       (CEIsF : CEISFREE Ids Op Clks CESyn)
-<: SBISFREE Ids Op Clks CESyn Syn CEIsF.
-  Include SBISFREE Ids Op Clks CESyn Syn CEIsF.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (CESyn : CESYNTAX     Op)
+       (Syn   : SBSYNTAX Ids Op CESyn)
+       (CEIsF : CEISFREE Ids Op CESyn)
+<: SBISFREE Ids Op CESyn Syn CEIsF.
+  Include SBISFREE Ids Op CESyn Syn CEIsF.
 End SBIsFreeFun.
