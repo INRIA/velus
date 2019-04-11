@@ -176,7 +176,7 @@ Module Type OBCTYPING
       find_inst o me = None ->
       wt_mem_inst me p (o, c)
   | WTminst: forall me p o c mo cls p',
-      sub_inst o me mo ->
+      find_inst o me = Some mo ->
       find_class c p = Some (cls, p') ->
       wt_mem mo p' cls ->
       wt_mem_inst me p (o, c).
@@ -213,7 +213,7 @@ Module Type OBCTYPING
 
     Hypothesis WTminstCase:
       forall me p o c mo cls p'
-        (Hfind_inst: sub_inst o me mo)
+        (Hfind_inst: find_inst o me = Some mo)
         (Hfind_class: find_class c p = Some (cls, p'))
         (Hwt: wt_mem mo p' cls),
         P Hwt ->
@@ -645,7 +645,7 @@ Module Type OBCTYPING
           2:constructor; simpl; rewrite find_inst_gso; now auto.
           match goal with H:Forall _ cls.(c_objs) |- _ =>
                           apply Forall_forall with (1:=H) in Hin end.
-          inv Hin; [constructor 1|econstructor 2]; unfold sub_inst in *;
+          inv Hin; [constructor 1|econstructor 2];
             simpl in *; eauto;
           match goal with H:o <> o' |- _ =>
                           try rewrite (find_inst_gso _ _ (not_eq_sym n))

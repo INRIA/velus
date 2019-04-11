@@ -42,20 +42,11 @@ Section Operations.
   Definition find_inst (x: ident) (m: memory V) : option (memory V) :=
     Env.find x (instances m).
 
-  Definition sub_inst (x: ident) (m m': memory V) : Prop :=
-    find_inst x m = Some m'.
-
   Definition add_val (x: ident) (v: V) (m: memory V) : memory V :=
     Mem (Env.add x v (values m)) (instances m).
 
-  (* Definition add_vals (xs: list ident) (vs: list V) (m: memory V) : memory V := *)
-  (*   Mem (Env.adds xs vs (values m)) (instances m). *)
-
   Definition add_inst (x: ident) (m': memory V) (m: memory V) : memory V :=
     Mem (values m) (Env.add x m' (instances m)).
-
-  (* Definition add_insts (xs: list ident) (ms: list (memory V)) (m: memory V) : memory V := *)
-  (*   Mem (values m) (Env.adds xs ms (instances m)). *)
 
   Fixpoint mmap (f: V -> W) (m: memory V) : memory W :=
     Mem (Env.map f (values m)) (Env.map (mmap f) (instances m)).
@@ -65,9 +56,6 @@ Section Operations.
 
   Definition remove_val (x: ident) (m: memory V) : memory V :=
     Mem (Env.remove x (values m)) (instances m).
-
-  (* Fixpoint mmapi (f: list ident -> ident -> V -> W) (p: list ident) (m: memory V) : memory W := *)
-  (*   Mnode (Env.mapi (f p) (values m)) (Env.mapi (fun i => mmapi f (p ++ [i])) (instances m)). *)
 
 End Operations.
 
@@ -80,12 +68,12 @@ Section MemoryInd.
 
   Hypothesis MemCase:
     forall m,
-      (forall m' x, sub_inst x m m' -> P m') ->
+      (forall m' x, find_inst x m = Some m' -> P m') ->
       P m.
 
   Fixpoint memory_ind' (m : memory V): P m.
   Proof.
-    unfold sub_inst, find_inst in MemCase.
+    unfold find_inst in MemCase.
     destruct m as [? xms].
     apply MemCase; simpl.
     induction xms; intros ** Find.
@@ -403,15 +391,6 @@ Section Properties.
     intros; apply Env.Props.P.F.map_o.
   Qed.
 
-  (* Lemma find_val_mmapi: *)
-  (*   forall (f: list ident -> ident -> V -> W) p, *)
-  (*     find_val x (mmapi f p m) = option_map (f p x) (find_val x m). *)
-  (* Proof. *)
-  (*   intros; unfold find_val. *)
-  (*   destruct m; simpl. *)
-  (*   apply Env.find_mapi. *)
-  (* Qed. *)
-
   Lemma find_inst_mmap:
     forall W (f: V -> W),
       find_inst x (mmap f m) = option_map (mmap f) (find_inst x m).
@@ -422,10 +401,10 @@ Section Properties.
   Qed.
 
   Lemma add_remove_inst_same:
-    sub_inst x m m' ->
+    find_inst x m = Some m' ->
     m ≋ add_inst x m' (remove_inst x m).
   Proof.
-    unfold sub_inst, add_inst, find_inst; intros ** Find.
+    unfold add_inst, find_inst; intros ** Find.
     constructor; simpl.
     - reflexivity.
     - split.
@@ -508,40 +487,5 @@ Section Properties.
     intros; unfold add_val; simpl.
     now rewrite Env.add_comm.
   Qed.
-
-
-  (* Lemma find_inst_mmapi: *)
-  (*   forall (f: list ident -> ident -> V -> W) p, *)
-  (*     find_inst x (mmapi f p m) = option_map (mmapi f (p ++ [x])) (find_inst x m). *)
-  (* Proof. *)
-  (*   intros; unfold find_inst. *)
-  (*   destruct m; simpl. *)
-  (*   apply Env.find_mapi. *)
-  (* Qed. *)
-  (* Lemma values_mmap: *)
-  (*   Env.map f (values m) = values (mmap f m). *)
-  (* Proof. *)
-  (*   intros; now destruct m. *)
-  (* Qed. *)
-
-  (* Lemma instances_mmap: *)
-  (*   Env.map (mmap f) (instances m) = instances (mmap f m). *)
-  (* Proof. *)
-  (*   intros; now destruct m. *)
-  (* Qed. *)
-
-  (* Lemma values_mmapi: *)
-  (*   forall (g: list ident -> ident -> V -> W) p, *)
-  (*     Env.mapi (g p) (values m) = values (mmapi g p m). *)
-  (* Proof. *)
-  (*   intros; now destruct m. *)
-  (* Qed. *)
-
-  (* Lemma instances_mmapi: *)
-  (*   forall (g: list ident -> ident -> V -> W) p, *)
-  (*     Env.mapi (fun i => mmapi g (p ++ [i])) (instances m) = instances (mmapi g p m). *)
-  (* Proof. *)
-  (*   intros; now destruct m. *)
-  (* Qed. *)
 
 End Properties.

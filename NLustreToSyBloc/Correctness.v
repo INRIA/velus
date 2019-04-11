@@ -220,7 +220,7 @@ Module Type CORRECTNESS
       (memory_closed_rec (node :: G) f M
        <-> memory_closed_rec G f M).
   Proof.
-    induction M as [? IH] using memory_ind'; unfold sub_inst in *.
+    induction M as [? IH] using memory_ind'.
     split; inversion_clear 1 as [???? Find ? Insts].
     - apply find_node_other in Find; auto.
       econstructor; eauto.
@@ -273,7 +273,6 @@ Module Type CORRECTNESS
     inversion_clear Hin as [E|]; try contradiction; inv E.
     inversion_clear Heq as [|????????????? Hd Sub|
                             ???????????????? Hd Sub ?????? Rst|];
-      unfold sub_inst_n, sub_inst in Sub;
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
     - inversion_clear Rst as [?????? Nodes].
@@ -304,7 +303,6 @@ Module Type CORRECTNESS
     inversion_clear Hin as [E|]; try contradiction; inv E.
     inversion_clear Heq as [|????????????? Hd ? Sub|
                             ???????????????? Hd ? Sub ????? Rst|];
-      unfold sub_inst_n, sub_inst in Sub;
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
     - inversion_clear Rst as [?????? Nodes].
@@ -379,8 +377,7 @@ Module Type CORRECTNESS
     apply find_node_translate in Find as (?&?&?&?); subst.
     econstructor; eauto; simpl.
     - intros ** ??; rewrite gather_eqs_fst_spec; auto.
-    - unfold sub_inst in *.
-      intros ** Find; pose proof Find as Find'.
+    - intros ** Find; pose proof Find as Find'.
       apply Insts in Find as (?& Hin & Closed).
       rewrite <-gather_eqs_snd_spec in Hin.
       eexists; split; eauto.

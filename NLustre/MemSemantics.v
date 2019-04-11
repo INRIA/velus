@@ -109,7 +109,7 @@ Module Type MEMSEMANTICS
   Section NodeSemantics.
 
     Definition sub_inst_n (x: ident) (M M': memories) : Prop :=
-      forall n, sub_inst x (M n) (M' n).
+      forall n, find_inst x (M n) = Some (M' n).
 
     Variable G: global.
 
@@ -553,12 +553,12 @@ enough: it does not support the internal fixpoint introduced by
       eauto;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
-            unfold sub_inst_n, sub_inst, add_inst_n in *; intro;
+            unfold add_inst_n in *; intro;
             rewrite find_inst_gso; auto; intro; subst x; destruct xs;
             inv Hsome; apply Hnd; now constructor);
       assert (sub_inst_n x' (add_inst_n x Mx' M') Mx'0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
-            unfold sub_inst_n, sub_inst, add_inst_n in *; intro;
+            unfold add_inst_n in *; intro;
             rewrite find_inst_gso; auto; intro; subst x; destruct xs;
             inv Hsome; apply Hnd; now constructor);
       eauto.
@@ -616,7 +616,7 @@ dataflow memory for which the non-standard semantics holds true.
     intros ** WF Hd n; specialize (WF n); destruct WF as (Insts &?).
     split; auto.
     intro y; intros ** Hin.
-    unfold sub_inst, add_inst_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    unfold add_inst_n in Hin; apply not_None_is_Some in Hin as (?& Find).
     destruct (ident_eq_dec y i).
     - subst.
       unfold gather_insts, concatMap; simpl.
@@ -696,7 +696,7 @@ dataflow memory for which the non-standard semantics holds true.
       erewrite hd_error_Some_hd; eauto; split.
       + constructor.
         * econstructor; eauto;
-            unfold sub_inst, add_inst_n; intro; now apply find_inst_gss.
+            unfold add_inst_n; intro; now apply find_inst_gss.
         * inv NoDup.
           apply hd_error_Some_In in Hsome.
           apply msem_equation_madd_inst; auto.
@@ -735,7 +735,7 @@ dataflow memory for which the non-standard semantics holds true.
       erewrite hd_error_Some_hd; eauto; split.
       + constructor.
         * econstructor; eauto;
-            unfold sub_inst, add_inst_n; intro; now apply find_inst_gss.
+            unfold add_inst_n; intro; now apply find_inst_gss.
         * inv NoDup.
           apply hd_error_Some_In in Hsome.
           apply msem_equation_madd_inst; auto.
@@ -918,7 +918,7 @@ dataflow memory for which the non-standard semantics holds true.
       Forall (msem_equation G bk H M M') eqs ->
       Forall (msem_equation G bk H (remove_inst_n x M) (remove_inst_n x M')) eqs.
   Proof.
-    Ltac foo H := unfold sub_inst_n, sub_inst in *; intro n;
+    Ltac foo H := unfold sub_inst_n in *; intro n;
                 setoid_rewrite find_inst_gro; auto;
                 intro E; subst; apply H;
                 constructor;
@@ -957,7 +957,7 @@ dataflow memory for which the non-standard semantics holds true.
     intros ** WF Hd n; specialize (WF n); destruct WF as (Insts &?).
     split; auto.
     intro y; intros ** Hin.
-    unfold sub_inst, remove_inst_n in Hin; apply not_None_is_Some in Hin as (?& Find).
+    unfold remove_inst_n in Hin; apply not_None_is_Some in Hin as (?& Find).
     destruct (ident_eq_dec y i).
     - subst; rewrite find_inst_grs in Find; discriminate.
     - rewrite find_inst_gro in Find; auto.

@@ -40,7 +40,7 @@ Module Type SBSEMANTICS
         find_block b P = Some (bl, P') ->
         state_closed_lasts (map fst bl.(b_lasts)) S ->
         (forall x S',
-            sub_inst x S S' ->
+            find_inst x S = Some S' ->
             exists b',
               In (x, b') (b_blocks bl)
               /\ state_closed P' b' S') ->
@@ -48,7 +48,7 @@ Module Type SBSEMANTICS
 
   Definition state_closed_insts (P: program) (blocks: list (ident * ident)) (S: state) : Prop :=
     forall s Ss,
-      sub_inst s S Ss ->
+      find_inst s S = Some Ss ->
       exists b, In (s, b) blocks
            /\ state_closed P b Ss.
 
@@ -72,7 +72,7 @@ Module Type SBSEMANTICS
         (forall x b',
             In (x, b') bl.(b_blocks) ->
             exists S0',
-              sub_inst x S0 S0'
+              find_inst x S0 = Some S0'
               /\ initial_state P' b' S0') ->
         initial_state P b S0.
 
@@ -102,17 +102,17 @@ Module Type SBSEMANTICS
           Env.find s I = Some Is ->
           (if r
            then initial_state P b Is
-           else exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
+           else exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
         forall base R S I S' ys rst ck b s es xs Is os Ss',
           sem_lexps_instant base R es xs ->
           sem_clock_instant base R ck (clock_of_instant xs) ->
-          (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
+          (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
           Env.find s I = Some Is ->
           sem_block b Is xs os Ss' ->
           sem_vars_instant R ys os ->
-          sub_inst s S' Ss' ->
+          find_inst s S' = Some Ss' ->
           sem_equation base R S I S' (EqCall s ys ck rst b es)
 
     with sem_block: ident -> state -> list value -> list value -> state -> Prop :=
@@ -156,18 +156,18 @@ Module Type SBSEMANTICS
         Env.find s I = Some Is ->
         (if r
          then initial_state P b Is
-         else exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
+         else exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
       forall base R S I S' s ys ck rst b es xs Is os Ss',
         sem_lexps_instant base R es xs ->
         sem_clock_instant base R ck (clock_of_instant xs) ->
-        (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
+        (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
         Env.find s I = Some Is ->
         sem_block P b Is xs os Ss' ->
         sem_vars_instant R ys os ->
-        sub_inst s S' Ss' ->
+        find_inst s S' = Some Ss' ->
         P_block b Is xs os Ss' ->
         P_equation base R S I S' (EqCall s ys ck rst b es).
 
@@ -255,7 +255,6 @@ Module Type SBSEMANTICS
     - now rewrite <-E.
     - intros ** Hin.
       apply Spec in Hin as (?& Sub &?).
-      unfold sub_inst in *.
       pose proof (find_inst_equal_memory x0 E) as Eq;
         rewrite Sub in Eq; simpl in Eq.
       destruct (find_inst x0 y); try contradiction.
@@ -280,7 +279,7 @@ Module Type SBSEMANTICS
     inversion_clear Closed as [??????? Insts].
     econstructor; eauto.
     - now setoid_rewrite <-E.
-    - intros ** Sub; unfold sub_inst in *.
+    - intros ** Sub.
       pose proof (find_inst_equal_memory x E) as Eq.
       rewrite Sub in Eq.
       destruct (find_inst x m) eqn: Find; try contradiction.
@@ -631,7 +630,7 @@ Module Type SBSEMANTICS
            end.
     constructor.
     - eapply reset_lasts_det; eauto using state_closed.
-    - unfold sub_inst, find_inst in *.
+    - unfold find_inst in *.
       split.
       + setoid_rewrite Env.In_find.
         split; intros (?& Find).
@@ -724,7 +723,7 @@ Module Type SBSEMANTICS
     - clear Lasts Lasts'.
       constructor.
       + setoid_rewrite Env.In_find.
-        unfold state_closed_insts, sub_inst, find_inst in *.
+        unfold state_closed_insts, find_inst in *.
         intro s; split; intros (?& Find).
         *{ apply Insts' in Find as (b & Hin &?).
            apply calls_of_In in Hin as (?&?& rst &?& Hin).
@@ -759,7 +758,7 @@ Module Type SBSEMANTICS
                by (apply Exists_exists; eexists; split; eauto; constructor).
         apply Spec in Spec'.
         inversion_clear Heqs as [| | |??????????????? Exps Clk Rst' FindI' SemBlock ? Find1'].
-        unfold sub_inst, find_inst in *; rewrite Find1' in Find'; inv Find'.
+        unfold find_inst in *; rewrite Find1' in Find'; inv Find'.
         assert (absent_list xs) by (eapply clock_of_instant_false, not_subrate_clock_impl; eauto).
         apply IH in SemBlock; auto.
         rewrite SemBlock.
@@ -772,7 +771,7 @@ Module Type SBSEMANTICS
             by (rewrite <-Bool.not_true_iff_false;
                 intro E; subst; contradict Clock; apply not_subrate_clock); subst.
           destruct Init as (?& Find1 &?); eauto.
-          unfold sub_inst, find_inst in *; rewrite Find1 in Find; inv Find; auto.
+          unfold find_inst in *; rewrite Find1 in Find; inv Find; auto.
         * destruct Rst' as (?& Find1 &?); auto.
           rewrite Find1 in Find; inv Find; auto.
   Qed.
@@ -867,7 +866,7 @@ Module Type SBSEMANTICS
     intros ** Find.
     econstructor; eauto.
     - apply state_closed_lasts_empty.
-    - unfold sub_inst; setoid_rewrite find_inst_gempty; congruence.
+    - setoid_rewrite find_inst_gempty; congruence.
   Qed.
 
   Lemma sem_block_find_val:

@@ -28,23 +28,23 @@ Module Type SBMEMORYCORRES
 
   Definition state_corres (s: ident) (S: state) (me: menv) : Prop :=
     (forall Ss,
-        sub_inst s S Ss ->
+        find_inst s S = Some Ss ->
         exists me',
-          sub_inst s me me'
+          find_inst s me = Some me'
           /\ me' ≋ Ss)
     /\ forall me',
-      sub_inst s me me' ->
+      find_inst s me = Some me' ->
       exists Ss,
-        sub_inst s S Ss.
+        find_inst s S = Some Ss.
 
   Definition transient_state_corres (s: ident) (I: transient_states) (me: menv) : Prop :=
     (forall Is,
         Env.find s I = Some Is ->
         exists me',
-          sub_inst s me me'
+          find_inst s me = Some me'
           /\ me' ≋ Is)
     /\ forall me',
-      sub_inst s me me' ->
+      find_inst s me = Some me' ->
       exists Is,
         Env.find s I = Some Is.
 
@@ -116,18 +116,18 @@ Module Type SBMEMORYCORRES
     - intros (Nstep & Nrst).
       assert (~ Step_in s eqs) by (intro; apply Nstep; right; auto).
       assert (~ Reset_in s eqs) by (intro; apply Nrst; right; auto).
-      split; unfold sub_inst; setoid_rewrite find_inst_add_val;
+      split; setoid_rewrite find_inst_add_val;
         apply Insts; auto.
     - intros (Nstep & Rst).
       assert (~ Step_in s eqs) by (intro; apply Nstep; right; auto).
       assert (Reset_in s eqs)
         by (inversion_clear Rst as [?? IsSt|]; auto; inv IsSt).
-      split; unfold sub_inst; setoid_rewrite find_inst_add_val;
+      split; setoid_rewrite find_inst_add_val;
         apply Insts; auto.
     - intros Step.
       assert (Step_in s eqs)
         by (inversion_clear Step as [?? IsSt|]; auto; inv IsSt).
-      split; unfold sub_inst; setoid_rewrite find_inst_add_val;
+      split; setoid_rewrite find_inst_add_val;
         apply Insts; auto.
   Qed.
 
@@ -179,28 +179,28 @@ Module Type SBMEMORYCORRES
         by (intro; subst; apply Nrst; left; constructor).
       assert (~ Step_in s0 eqs) by (intro; apply Nstep; right; auto).
       assert (~ Reset_in s0 eqs) by (intro; apply Nrst; right; auto).
-      split; unfold sub_inst; rewrite find_inst_gso; auto;
+      split; rewrite find_inst_gso; auto;
         apply Insts; auto.
     - intros (Nstep & Rst).
       inversion_clear Rst as [?? Rst'|].
       + inv Rst'.
-        split; unfold sub_inst; setoid_rewrite find_inst_gss.
+        split; setoid_rewrite find_inst_gss.
         * intros; exists me'; intuition; congruence.
         * inversion 1; subst; intros; exists Is; eauto.
       + destruct (ident_eq_dec s0 s).
-        *{ split; subst; unfold sub_inst; rewrite find_inst_gss.
+        *{ split; subst; rewrite find_inst_gss.
            - exists me'; intuition; congruence.
            - inversion 1; subst; intros; exists Is; eauto.
          }
         * assert (~ Step_in s0 eqs) by (intro; apply Nstep; right; auto).
-          split; unfold sub_inst; rewrite find_inst_gso; auto;
+          split; rewrite find_inst_gso; auto;
             apply (proj1 (proj2 (Insts s0))); auto.
     - intros Step.
       inversion_clear Step as [?? Step'|].
       + inv Step'.
       + destruct (ident_eq_dec s0 s).
         * split; subst; intuition.
-        * split; unfold sub_inst; rewrite find_inst_gso; auto;
+        * split; rewrite find_inst_gso; auto;
             apply Insts; auto.
   Qed.
 
@@ -208,7 +208,7 @@ Module Type SBMEMORYCORRES
     forall s ck b S I S' Is Ss me eqs,
       Memory_Corres_eqs eqs S I S' me ->
       Env.find s I = Some Is ->
-      sub_inst s S Ss ->
+      find_inst s S = Some Ss ->
       Is ≋ Ss ->
       ~ Reset_in s eqs ->
       Memory_Corres_eqs (EqReset s ck b :: eqs) S I S' me.
@@ -227,14 +227,14 @@ Module Type SBMEMORYCORRES
       inversion_clear Rst as [?? Rst'|].
       + inv Rst'.
         assert (~ Step_in s eqs) by (intro; apply Nstep; right; auto).
-        split; unfold sub_inst.
+        split.
         * intros ** Find.
           rewrite Find in Find_I; inv Find_I.
           setoid_rewrite E.
           apply (proj1 (Insts s)); auto.
         * assert (state_corres s S me) as StCorr by (apply Insts; auto).
           intros ** Find; apply StCorr in Find as (?& Find).
-          unfold sub_inst in *; rewrite Find in Find_S; inv Find_S.
+          rewrite Find in Find_S; inv Find_S.
           exists Is; eauto.
       + apply Insts; split; auto.
         intro; apply Nstep; right; auto.
@@ -247,7 +247,7 @@ Module Type SBMEMORYCORRES
   Lemma Memory_Corres_eqs_Call_present:
     forall s ys ck (rst: bool) b es S I S' Ss' eqs me me',
       Memory_Corres_eqs eqs S I S' me ->
-      sub_inst s S' Ss' ->
+      find_inst s S' = Some Ss' ->
       me' ≋ Ss' ->
       Memory_Corres_eqs (EqCall s ys ck rst b es :: eqs) S I S' (add_inst s me' me).
   Proof.
@@ -263,27 +263,27 @@ Module Type SBMEMORYCORRES
           by (intro; subst; apply Nstep; left; constructor).
       assert (~ Step_in s0 eqs) by (intro; apply Nstep; right; auto).
       assert (~ Reset_in s0 eqs) by (intro; apply Nrst; right; auto).
-      split; unfold sub_inst; rewrite find_inst_gso; auto;
+      split; rewrite find_inst_gso; auto;
         apply Insts; auto.
     - intros (Nstep & Rst).
       assert (s0 <> s) as Neq
           by (intro; subst; apply Nstep; left; constructor).
       assert (~ Step_in s0 eqs) by (intro; apply Nstep; right; auto).
       inversion_clear Rst as [?? Rst'|]; try inv Rst'.
-      split; unfold sub_inst; rewrite find_inst_gso; auto;
+      split; rewrite find_inst_gso; auto;
         apply Insts; auto.
     - intros Step.
       inversion_clear Step as [?? Step'|].
       + inv Step'.
-        split; unfold sub_inst; rewrite find_inst_gss.
+        split; rewrite find_inst_gss.
         * exists me'; intuition; congruence.
         * inversion 1; subst; exists Ss'; intuition.
       + destruct (ident_eq_dec s0 s).
-        *{ split; subst; unfold sub_inst; rewrite find_inst_gss.
+        *{ split; subst; rewrite find_inst_gss.
            - exists me'; intuition; congruence.
            - inversion 1; subst; exists Ss'; intuition.
          }
-        * split; unfold sub_inst; rewrite find_inst_gso; auto;
+        * split; rewrite find_inst_gso; auto;
             apply Insts; auto.
   Qed.
 
@@ -291,8 +291,8 @@ Module Type SBMEMORYCORRES
     forall s ys ck (rst: bool) b es S I S' Is Ss' eqs me,
       Memory_Corres_eqs eqs S I S' me ->
       Env.find s I = Some Is ->
-      (rst = false -> exists Ss, sub_inst s S Ss /\ Is ≋ Ss) ->
-      sub_inst s S' Ss' ->
+      (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
+      find_inst s S' = Some Ss' ->
       Ss' ≋ Is ->
       ~ Step_in s eqs /\ (if rst then Reset_in s eqs else ~ Reset_in s eqs) ->
       Memory_Corres_eqs (EqCall s ys ck rst b es :: eqs) S I S' me.
@@ -318,7 +318,7 @@ Module Type SBMEMORYCORRES
       + inv Step'.
         destruct rst.
         *{ apply Insts in Find_I as (me' & Sub &?); auto.
-           split; intros ** Sub'; unfold sub_inst in *.
+           split; intros ** Sub'.
            - rewrite Find_S' in Sub'; inv Sub'.
              exists me'; rewrite E; auto.
            - rewrite Sub' in Sub; inv Sub.
@@ -326,7 +326,7 @@ Module Type SBMEMORYCORRES
          }
         *{ destruct Find_S as (Ss & Find_S &?); auto.
            apply Insts in Find_S as (me' & Sub &?); auto.
-           split; intros ** Sub'; unfold sub_inst in *.
+           split; intros ** Sub'.
            - rewrite Find_S' in Sub'; inv Sub'.
              exists me'; split; auto.
              transitivity Ss; auto.
