@@ -198,6 +198,19 @@ Module Type OBCINVARIANTS
       apply Hcall in He; eauto using Env.updates_mono, Forall2_exp_eval_not_None.
   Qed.
 
+  Lemma no_vars_in_args_spec:
+    forall me ve es vos,
+      Forall2 (exp_eval me ve) es vos ->
+      Forall (fun e => forall x ty, e <> Var x ty) es ->
+      Forall (fun vo => vo <> None) vos.
+  Proof.
+    induction 1 as [|???? Exp]; auto.
+    inversion_clear 1 as [|?? E].
+    constructor; auto.
+    intro; subst.
+    inv Exp; eapply E; eauto.
+  Qed.
+
 End OBCINVARIANTS.
 
 Module ObcInvariantsFun

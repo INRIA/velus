@@ -986,34 +986,48 @@ Section BlockRep.
     intros. now rewrite match_value_empty.
   Qed.
 
-  Lemma match_value_remove:
-    forall x y ve,
-      x <> y ->
-      match_value (Env.remove y ve) x = match_value ve x.
-  Proof.
-    intros x y ve Hnxy.
-    unfold match_value.
-    now rewrite Env.gro with (1:=Hnxy).
-  Qed.
+  (* Lemma match_value_remove: *)
+  (*   forall x y ve, *)
+  (*     x <> y -> *)
+  (*     match_value (Env.remove y ve) x = match_value ve x. *)
+  (* Proof. *)
+  (*   intros x y ve Hnxy. *)
+  (*   unfold match_value. *)
+  (*   now rewrite Env.gro with (1:=Hnxy). *)
+  (* Qed. *)
 
-  Lemma match_value_updates_gso:
+  (* Lemma match_value_updates_gso: *)
+  (*   forall x xs vs ve, *)
+  (*     ~In x xs -> *)
+  (*     match_value (Env.updates xs vs ve) x = match_value ve x. *)
+  (* Proof. *)
+  (*   induction xs as [|x' xs IH]; auto. *)
+  (*   intros vs ve Hnin. *)
+  (*   apply not_in_cons in Hnin as (Hxx' & Hnin). *)
+  (*   destruct vs as [|v vs]. now unfold Env.updates. *)
+  (*   destruct v. *)
+  (*   now rewrite Env.updates_cons_cons, match_value_add; auto. *)
+  (*   rewrite Env.updates_cons_cons_None, match_value_remove; auto. *)
+  (* Qed. *)
+
+  Lemma match_value_adds_gso:
     forall x xs vs ve,
       ~In x xs ->
-      match_value (Env.updates xs vs ve) x = match_value ve x.
+      NoDup xs ->
+      match_value (Env.adds xs vs ve) x = match_value ve x.
   Proof.
     induction xs as [|x' xs IH]; auto.
-    intros vs ve Hnin.
+    intros vs ve Hnin Hndp.
     apply not_in_cons in Hnin as (Hxx' & Hnin).
-    destruct vs as [|v vs]. now unfold Env.updates.
-    destruct v.
-    now rewrite Env.updates_cons_cons, match_value_add; auto.
-    rewrite Env.updates_cons_cons_None, match_value_remove; auto.
+    inv Hndp.
+    destruct vs as [|v vs]; auto.
+    rewrite Env.adds_cons_cons, match_value_add; auto.
   Qed.
 
   Lemma blockrep_nodup:
     forall xs vs flds ve ob,
       NoDupMembers (xs ++ flds) ->
-      blockrep ve flds ob <-*-> blockrep (Env.updates (map fst xs) vs ve) flds ob.
+      blockrep ve flds ob <-*-> blockrep (Env.adds (map fst xs) vs ve) flds ob.
   Proof.
     intros ** Nodup.
     unfold blockrep.
@@ -1026,7 +1040,9 @@ Section BlockRep.
       by (eapply NoDupMembers_app_comm, NoDupMembers_app_InMembers in Nodup;
           eauto using In_InMembers).
     rewrite fst_InMembers in Hnxs.
-    now setoid_rewrite match_value_updates_gso with (1:=Hnxs).
+    intros; erewrite match_value_adds_gso; auto.
+    eapply fst_NoDupMembers, NoDupMembers_app_l; eauto.
+    (* now setoid_rewrite match_value_updates_gso with (1:=Hnxs). *)
   Qed.
 
   Lemma blockrep_findvars:

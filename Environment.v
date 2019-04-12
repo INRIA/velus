@@ -188,10 +188,13 @@ Module Env.
       Lemma adds_with_cons:
         forall xvs x b m,
           ~ InMembers x xvs ->
-          adds_with f ((x, b) :: xvs) m = adds_with f xvs (add x (f b) m).
+          adds_with f ((x, b) :: xvs) m = add x (f b) (adds_with f xvs m).
       Proof.
         unfold adds_with.
-        induction xvs as [|(y, b)]; intros ** NotIn; simpl; auto.
+        induction xvs as [|(y, b')]; intros ** NotIn; simpl; auto.
+        apply NotInMembers_cons in NotIn as ().
+        rewrite <-IHxvs; auto. simpl.
+        rewrite add_comm; auto.
       Qed.
 
     End AddsWith.
@@ -205,24 +208,24 @@ Module Env.
       apply adds_with_app.
     Qed.
 
-    (* Lemma gsso': *)
-    (*   forall x xvs m, *)
-    (*     ~ InMembers x xvs -> *)
-    (*     find x (adds' xvs m) = find x m. *)
-    (* Proof. *)
-    (*   setoid_rewrite adds'_is_adds_with_identity. *)
-    (*   apply gsso_with. *)
-    (* Qed. *)
+    Lemma gsso':
+      forall x xvs m,
+        ~ InMembers x xvs ->
+        find x (adds' xvs m) = find x m.
+    Proof.
+      setoid_rewrite adds'_is_adds_with_identity.
+      apply gsso_with.
+    Qed.
 
-    (* Corollary gsso: *)
-    (*   forall x xs (vs: list A) m, *)
-    (*     ~ List.In x xs -> *)
-    (*     find x (adds xs vs m) = find x m. *)
-    (* Proof. *)
-    (*   intros; unfold adds. *)
-    (*   apply gsso'. *)
-    (*   intros ** Hin; apply InMembers_In_combine in Hin; auto. *)
-    (* Qed. *)
+    Corollary gsso:
+      forall x xs (vs: list A) m,
+        ~ List.In x xs ->
+        find x (adds xs vs m) = find x m.
+    Proof.
+      intros; unfold adds.
+      apply gsso'.
+      intros ** Hin; apply InMembers_In_combine in Hin; auto.
+    Qed.
 
     Lemma from_list_find_In:
       forall xvs x a,
@@ -381,16 +384,16 @@ Module Env.
     Lemma adds'_cons:
       forall xvs x (a: A) m,
         ~ InMembers x xvs ->
-        adds' ((x, a) :: xvs) m = adds' xvs (add x a m).
+        adds' ((x, a) :: xvs) m = add x a (adds' xvs m).
     Proof.
       setoid_rewrite adds'_is_adds_with_identity.
-      apply adds_with_cons.
+      intros; apply adds_with_cons; auto.
     Qed.
 
     Corollary adds_cons_cons:
       forall xs x (a: A) vs m,
         ~ List.In x xs ->
-        adds (x :: xs) (a :: vs) m = adds xs vs (add x a m).
+        adds (x :: xs) (a :: vs) m = add x a (adds xs vs m).
     Proof.
       unfold adds; intros.
       simpl combine; eapply adds'_cons.
@@ -659,6 +662,30 @@ Module Env.
         * rewrite find_gsso_opt; auto.
           intro HH; apply IH in HH.
           now constructor 2.
+  Qed.
+
+  Lemma updates_is_adds:
+    forall xs vs (m: t A),
+      NoDup xs ->
+      updates xs (List.map (@Some A) vs) m = adds xs vs m.
+  Proof.
+    unfold updates, adds; intros ** Hndp.
+    revert vs.
+    induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
+    rewrite IHxs, <-adds'_cons; simpl; auto.
+    intro; eapply Notin, InMembers_In_combine; eauto.
+  Qed.
+
+  Lemma adds_opt_is_adds:
+    forall xs vs (m: t A),
+      NoDup xs ->
+      adds_opt xs (List.map (@Some A) vs) m = adds xs vs m.
+  Proof.
+    unfold adds_opt, adds; intros ** Hndp.
+    revert vs.
+    induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
+    rewrite IHxs, <-adds'_cons; simpl; auto.
+    intro; eapply Notin, InMembers_In_combine; eauto.
   Qed.
 
   Lemma find_guso:
