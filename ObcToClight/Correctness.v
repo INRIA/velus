@@ -3993,7 +3993,7 @@ Section PRESERVATION.
       subst; clear Spec.
       rewrite map_length in Length_i.
       assert (NoDup (map fst (m_in callee))) by apply fst_NoDupMembers, m_nodupin.
-      rewrite adds_opt_is_adds in WT_env_i; auto.
+      rewrite Env.adds_opt_is_adds in WT_env_i; auto.
       pose proof WT_val_i; rewrite Forall2_map_1 in WT_val_i; simpl in WT_val_i.
       rewrite Forall2_map_2 in Evs.
 
@@ -4241,7 +4241,7 @@ Section PRESERVATION.
            rewrite Forall2_map_1 in WT_val_o; simpl in WT_val_o.
            rewrite sep_swap3, sep_swap45, sep_swap34 in Hm2.
            assert (NoDup (map fst (m_out callee))) by apply fst_NoDupMembers, m_nodupout.
-           rewrite adds_opt_is_adds in Hm2; auto.
+           rewrite Env.adds_opt_is_adds in Hm2; auto.
            rewrite <-Out in Incl.
            edestruct exec_funcall_assign with (1:=Find) (ys:=ys) (m1:=m2)
              as (le3 & m3 & Hexec & Hm3 & ?) ; eauto.
@@ -4279,8 +4279,8 @@ Section PRESERVATION.
                  rewrite Hparams, Hreturn, Hcc; simpl; repeat f_equal.
                  apply type_pres'; auto.
                * simpl; rewrite <-Out; auto.
-             + rewrite updates_is_adds; auto.
-               rewrite updates_is_adds in WT_env'; auto.
+             + rewrite Env.updates_is_adds; auto.
+               rewrite Env.updates_is_adds in WT_env'; auto.
                rewrite match_states_conj; split; [|repeat (split; auto)].
                rewrite sep_swap34.
                rewrite Out, Hys, sep_swap4 in Hm3.
@@ -4352,17 +4352,14 @@ Section PRESERVATION.
       edestruct pres_sem_stmt_call as [? WT_val]; eauto using stmt_call_eval.
       destruct (find_inst o me0); econstructor; eauto.
 
-      assert (No_Naked_Vars (m_body callee)) by admit.
+      (* assert (No_Naked_Vars (m_body callee)) by admit. *)
 
-      assert (exists rvs, rvos = map Some rvs) as (rvs) .
-      { apply not_None_is_Some_Forall, Forall_forall.
-        intros ** Hin' ?; subst.
-        eapply Forall2_in_right in Findvars as (?&?&E); eauto.
-        apply Env.Props.P.F.not_find_in_iff in E; eapply E, stmt_eval_mono' with (3 := StEval); eauto.
-        - intros; eapply SPEC_IO, stmt_call_eval_sub_prog, find_class_sub; eauto.
-        - SearchAbout Env.In Env.adds_opt. admit. SearchAbout sub_prog . SearchAbout Env.find None Env.In. ; eauto).
-      inv H0.
-      eapply SPEC_IO; eauto using stmt_call_eval.
+      assert (exists rvs, rvos = map Some rvs) as (rvs).
+      { apply not_None_is_Some_Forall; eapply SPEC_IO.
+        2: eauto using stmt_call_eval.
+        clear; induction vs; simpl; constructor; auto; discriminate.
+      }
+      subst.
 
       (* get the clight function *)
       edestruct methods_corres
