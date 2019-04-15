@@ -38,7 +38,9 @@ done
 (cd "$compcertdir" &&
  ./configure $prefix $bindir $libdir $toolprefix $runtime_lib \
  $standard_headers $clightgen $target)
-export "$(grep ARCH < "$compcertdir"/Makefile.config)"
+if [ -x "$compcertdir"/Makefile.config ]; then
+    export "$(grep ARCH < "$compcertdir"/Makefile.config)"
+fi
 
 printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 
