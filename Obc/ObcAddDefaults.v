@@ -153,6 +153,8 @@ Module Type OBCADDDEFAULTS
     rewrite map_map. now setoid_rewrite add_defaults_method_m_name.
   Qed.
 
+  Definition add_defaults := map add_defaults_class.
+
   Lemma find_method_add_defaults_method:
     forall n ms m,
       find_method n ms = Some m ->
@@ -197,8 +199,8 @@ Module Type OBCADDDEFAULTS
   Lemma find_class_add_defaults_class:
     forall p n c p',
       find_class n p = Some (c, p') ->
-      find_class n (map add_defaults_class p)
-      = Some (add_defaults_class c, map add_defaults_class p').
+      find_class n (add_defaults p)
+      = Some (add_defaults_class c, add_defaults p').
   Proof.
     induction p as [|c p' IH]. discriminate.
     simpl in *. rewrite add_defaults_class_c_name.
@@ -210,7 +212,7 @@ Module Type OBCADDDEFAULTS
   Lemma find_class_add_defaults_class_not_None:
     forall n p,
       find_class n p <> None ->
-      find_class n (map add_defaults_class p) <> None.
+      find_class n (add_defaults p) <> None.
   Proof.
     intros n p Hfind.
     apply not_None_is_Some in Hfind as ((c & p') & Hfind).
@@ -799,7 +801,7 @@ Module Type OBCADDDEFAULTS
   Lemma wt_method_add_defaults:
     forall p insts mem m,
       wt_method p insts mem m ->
-      wt_method (map add_defaults_class p) insts mem m.
+      wt_method (add_defaults p) insts mem m.
   Proof.
     unfold wt_method, meth_vars. intros ** WTm.
     destruct m as [n ins vars outs s nodup good]; simpl in *.
@@ -1576,7 +1578,7 @@ Module Type OBCADDDEFAULTS
       wt_program p ->
       forall ome ome' clsid f vos rvos,
         Forall (fun vo => vo <> None) vos ->
-        stmt_call_eval (map add_defaults_class p) ome clsid f vos ome' rvos ->
+        stmt_call_eval (add_defaults p) ome clsid f vos ome' rvos ->
         Forall (fun x => x <> None) rvos.
   Proof.
     induction p as [|c p' IH]; simpl. now inversion 3.
@@ -1710,7 +1712,7 @@ Module Type OBCADDDEFAULTS
   Lemma wt_add_defaults_class:
     forall p,
       wt_program p ->
-      wt_program (map add_defaults_class p).
+      wt_program (add_defaults p).
   Proof.
     induction p as [|c p' IH]; auto.
     inversion_clear 1 as [|? ? WTc WTp Hpnd].
@@ -1728,7 +1730,7 @@ Module Type OBCADDDEFAULTS
         apply Forall_map, Forall_impl_In with (2:=WTms).
         intros m Him WTm. apply wt_method_add_defaults.
         now apply wt_add_defaults_method.
-    - simpl; constructor.
+    - simpl; constructor; unfold add_defaults.
       + destruct c; simpl in *. rewrite map_map.
         now setoid_rewrite add_defaults_class_c_name.
       + rewrite map_map. now setoid_rewrite add_defaults_class_c_name.
@@ -1901,33 +1903,33 @@ Module Type OBCADDDEFAULTS
       Forall_methods (fun m => No_Overwrites m.(m_body)) p ->
       Forall_methods (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
                                       (map fst m.(m_in))) p ->
-      program_refines (fun _ _ => all_in1) (map add_defaults_class p) p.
+      program_refines (fun _ _ => all_in1) (add_defaults p) p.
   Proof.
     intros p WTp Hnoo Hncw.
     cut (Forall2 (fun c1 c2 => c1 = add_defaults_class c2)
-                 (map add_defaults_class p) p).
+                 (add_defaults p) p).
     2:now apply Forall2_map_1, Forall2_same, Forall_forall.
     apply program_refines_by_class' with (1:=WTp).
     apply all_In_Forall2.
-    now rewrite map_length.
+    now unfold add_defaults; rewrite map_length.
     intros c1 c2 Hin p1' p2' WTp' WTc Hpr Hadc Hx; subst.
     rewrite add_defaults_class_c_name; split; auto.
     apply in_combine_r in Hin.
     apply Forall_forall with (2:=Hin) in Hnoo.
     apply Forall_forall with (2:=Hin) in Hncw.
     apply add_defaults_class_refines with (1:=Hpr); auto.
-    assert (p1' = map add_defaults_class p2') as Hp1'
+    assert (p1' = add_defaults p2') as Hp1'
         by (now clear Hpr WTp' WTc; induction Hadc; auto; subst; simpl).
     subst. now apply stmt_call_eval_add_defaults_class_not_None.
   Qed.
 
   Lemma No_Naked_Vars_add_defaults_class:
     forall p,
-      Forall_methods (fun m => No_Naked_Vars m.(m_body)) (map add_defaults_class p).
+      Forall_methods (fun m => No_Naked_Vars m.(m_body)) (add_defaults p).
   Proof.
     intros p.
     apply Forall_forall; intros c' Hcin.
-    apply in_map_iff in Hcin as (c & Hc' & Hcin); subst.
+    unfold add_defaults in *; apply in_map_iff in Hcin as (c & Hc' & Hcin); subst.
     apply Forall_forall; intros m' Hmin.
     destruct c as (name, mems, objs, methods, Hnodup, Hnodupm, Hgood); simpl in *.
     apply in_map_iff in Hmin as (m & Hm & Hmin); subst.

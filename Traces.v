@@ -82,8 +82,8 @@ End finite_traces.
 
 Section infinite_traces.
 
-  Variable ins : stream (list const).
-  Variable outs : stream (list const).
+  Variable ins : stream (list val).
+  Variable outs : stream (list val).
 
   Variable xs : list (ident * type).
   Variable ys : list (ident * type).
@@ -91,11 +91,11 @@ Section infinite_traces.
   Hypothesis xs_spec: xs <> [].
   Hypothesis ys_spec: ys <> [].
 
-  Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) xs.
-  Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) ys.
+  Hypothesis Hwt_ins: forall n, wt_vals (ins n) xs.
+  Hypothesis Hwt_outs: forall n, wt_vals (outs n) ys.
 
   Lemma load_events_not_E0: forall n,
-      load_events (map sem_const (ins n)) xs <> E0.
+      load_events (ins n) xs <> E0.
   Proof.
     clear - Hwt_ins xs_spec.
     intros n; specialize Hwt_ins with n.
@@ -104,7 +104,7 @@ Section infinite_traces.
   Qed.
 
   Lemma store_events_not_E0: forall n,
-      store_events (map sem_const (outs n)) ys <> E0.
+      store_events (outs n) ys <> E0.
   Proof.
     clear - Hwt_outs ys_spec.
     intros n; specialize Hwt_outs with n.
@@ -115,8 +115,8 @@ Section infinite_traces.
   CoFixpoint mk_trace (n: nat): traceinf'.
   clear - mk_trace n ins outs xs ys.
   refine(
-      (Econsinf' (load_events (map sem_const (ins n)) xs)
-                 (Econsinf' (store_events (map sem_const (outs n)) ys)
+      (Econsinf' (load_events (ins n) xs)
+                 (Econsinf' (store_events (outs n) ys)
                             (mk_trace (S n)) _) _));
     [ apply store_events_not_E0
     | apply load_events_not_E0 ].
@@ -124,9 +124,9 @@ Section infinite_traces.
 
   Lemma unfold_mk_trace: forall n,
       traceinf_of_traceinf' (mk_trace n) =
-      (load_events (map sem_const (ins n)) xs
+      (load_events (ins n) xs
                    ++ E0
-                   ++ store_events (map sem_const (outs n)) ys)
+                   ++ store_events (outs n) ys)
         *** E0
         *** traceinf_of_traceinf' (mk_trace (S n)).
   Proof.
@@ -139,13 +139,13 @@ Section infinite_traces.
 End infinite_traces.
 
 Section Obc.
-  Variable (m_step: method) (ins outs: stream (list const)).
+  Variable (m_step: method) (ins outs: stream (list val)).
 
   Hypothesis in_spec: m_step.(m_in) <> [].
   Hypothesis out_spec: m_step.(m_out) <> [].
 
-  Hypothesis Hwt_ins: forall n, wt_vals (map sem_const (ins n)) m_step.(m_in).
-  Hypothesis Hwt_outs: forall n, wt_vals (map sem_const (outs n)) m_step.(m_out).
+  Hypothesis Hwt_ins: forall n, wt_vals (ins n) m_step.(m_in).
+  Hypothesis Hwt_outs: forall n, wt_vals (outs n) m_step.(m_out).
 
   Definition trace_step (n: nat): traceinf' :=
     mk_trace ins outs m_step.(m_in) m_step.(m_out) in_spec out_spec Hwt_ins Hwt_outs n.

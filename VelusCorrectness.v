@@ -92,6 +92,7 @@ Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
      @@@ schedule_program
      @@ SB2Obc.translate
      @@ total_if do_fusion (map Obc.Fus.fuse_class)
+     @@ Obc.Def.add_defaults
      @@ print print_obc
      @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
 
@@ -111,18 +112,18 @@ Section WtStream.
 
 Variable G: global.
 Variable main: ident.
-Variable ins: stream (list const).
-Variable outs: stream (list const).
+Variable ins: stream (list val).
+Variable outs: stream (list val).
 
 Definition wt_ins :=
   forall n node,
     find_node main G = Some node ->
-    wt_vals (map sem_const (ins n)) (idty node.(n_in)).
+    wt_vals (ins n) (idty node.(n_in)).
 
 Definition wt_outs :=
   forall n node,
     find_node main G = Some node ->
-    wt_vals (map sem_const (outs n)) (idty node.(n_out)).
+    wt_vals (outs n) (idty node.(n_out)).
 
 End WtStream.
 
@@ -130,8 +131,8 @@ Section Bisim.
 
   Variable G: global.
   Variable main: ident.
-  Variable ins: stream (list const).
-  Variable outs: stream (list const).
+  Variable ins: stream (list val).
+  Variable outs: stream (list val).
 
   Inductive eventval_match: eventval -> AST.typ -> Values.val -> Prop :=
   | ev_match_int: forall i,
@@ -209,11 +210,12 @@ corresponds to an infinite stream that alternates between loads and
 stores of the values passed and, respectively, retrieved from the
 dataflow node at each instant. *)
 
-  CoInductive bisim_io': nat -> traceinf -> Prop
-    := Step: forall n node t t' T,
+  CoInductive bisim_io': nat -> traceinf -> Prop :=
+    Step:
+      forall n node t t' T,
         find_node main G = Some node ->
-        mask_load (map sem_const (ins n)) (idty node.(n_in)) t ->
-        mask_store (map sem_const (outs n)) (idty node.(n_out)) t' ->
+        mask_load (ins n) (idty node.(n_in)) t ->
+        mask_store (outs n) (idty node.(n_out)) t' ->
         bisim_io' (S n) T ->
         bisim_io' n (t *** t' *** T).
 
@@ -238,8 +240,8 @@ Lemma find_node_trace_spec:
   forall G f node ins outs m
     (Step_in_spec : m_in m <> [])
     (Step_out_spec : m_out m <> [])
-    (Hwt_in : forall n, wt_vals (map sem_const (ins n)) (m_in m))
-    (Hwt_out : forall n, wt_vals (map sem_const (outs n)) (m_out m)),
+    (Hwt_in : forall n, wt_vals (ins n) (m_in m))
+    (Hwt_out : forall n, wt_vals (outs n) (m_out m)),
     find_node f G = Some node ->
     m_in m = idty (n_in node) ->
     m_out m = idty (n_out node) ->
@@ -261,13 +263,16 @@ Proof.
     rewrite <-Hstep_in || rewrite <-Hstep_out; auto.
 Qed.
 
+Definition pstr (xss: stream (list val)) : stream (list value) :=
+  fun n => map present (xss n).
+
 Lemma behavior_clight:
   forall G P main ins outs,
     wc_global G ->
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    sem_node G main (vstr ins) (vstr outs) ->
+    sem_node G main (pstr ins) (pstr outs) ->
     nl_to_cl main G = OK P ->
     exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_io G main ins outs T.
@@ -291,11 +296,28 @@ Proof.
   apply Scheduler.scheduler_find_block in Find.
   apply SB2Obc.find_block_translate in Find as (c_main &?& Find &?&?); subst.
   assert (Ordered_nodes G) by (eapply wt_global_Ordered_nodes; eauto).
+  assert (forall n, 0 < length (ins n)) as Length.
+  { inversion_clear Hsem as [???????? Ins].
+    intro k; specialize (Ins k); apply Forall2_length in Ins.
+    unfold pstr in Ins; rewrite 2 map_length in Ins.
+    rewrite <-Ins.
+    apply n_ingt0.
+  }
   apply sem_msem_node in Hsem as (M & M' & Hsem); auto.
-  assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G)))
-    by (split; auto; apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto).
+  assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G))).
+  { split; [|split]; auto.
+    - apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto.
+    - admit.
+  }
   apply NL2SBCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
-  apply SB2ObcCorr.correctness_loop_call in Hsem as (me0 & Rst & Hsem &?); auto.
+  assert (forall n, Forall2 SB2ObcCorr.eq_if_present (pstr ins n) (map Some (ins n)))
+    by (unfold pstr; intros; clear; induction (ins n); constructor; simpl; auto).
+  assert (forall n, Exists (fun v => v <> absent) (pstr ins n))
+         by (unfold pstr; intros; specialize (Length n);
+             destruct (ins n); simpl in *; try omega;
+             constructor; discriminate).
+  apply SB2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins n))
+    in Hsem as (me0 & Rst & Hsem &?); auto.
   set (tr_G := NL2SB.translate G) in *;
     set (sch_tr_G := Scheduler.schedule tr_G) in *;
     set (tr_sch_tr_G := SB2Obc.translate sch_tr_G) in *;
