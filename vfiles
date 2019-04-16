@@ -13,7 +13,6 @@ Lustre/LSemantics.v
 Lustre/LSyntax.v
 Lustre/Parser/LustreParser.v
 Lustre/Parser/LustreAst.v
-Lustre/Parser/Extraction.v
 Lustre/LTyping.v
 Lustre/LClocking.v
 Lustre.v
@@ -28,7 +27,6 @@ CoreExpr/CEClockingSemantics.v
 CoreExpr.v
 
 NLustre/NLSemanticsCoInd.v
-NLustre/SemEquiv.v
 NLustre/NLClocking.v
 NLustre/CoIndToIndexed.v
 NLustre/NLInterpretor.v
