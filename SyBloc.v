@@ -36,7 +36,7 @@ Module Type SYBLOC
   Declare Module Export CloSem : SBCLOCKINGSEMANTICS Ids Op OpAux CE.Syn Syn Str Last Var Def Block Ord
                                                      CE.Sem Sem CE.Clo Clo CE.CloSem.
 
-  Declare Module Scheduler   : SBSCHEDULE    Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo.
+  Declare Module Scheduler   : SBSCHEDULE    Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Free Wdef.
 
 End SYBLOC.
 
@@ -62,5 +62,5 @@ Module SyBlocFun
   Module Export CloSem := SBClockingSemanticsFun Ids Op OpAux CE.Syn Syn Str Last Var Def Block Ord
                                                      CE.Sem Sem CE.Clo Clo CE.CloSem.
 
-  Module Scheduler    := SBScheduleFun    Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo.
+  Module Scheduler    := SBScheduleFun    Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Free Wdef.
 End SyBlocFun.

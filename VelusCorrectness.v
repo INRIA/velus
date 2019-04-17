@@ -92,7 +92,7 @@ Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
      @@@ schedule_program
      @@ SB2Obc.translate
      @@ total_if do_fusion (map Obc.Fus.fuse_class)
-     @@ Obc.Def.add_defaults
+     @@ add_defaults
      @@ print print_obc
      @@@ Generation.translate (do_sync tt) (do_expose tt) main_node.
 
@@ -230,10 +230,15 @@ Hint Resolve
      Obc.Fus.fuse_loop_call
 (*      NL2SBTyping.translate_wt *)
 (*      Scheduler.scheduler_wt_program *)
-(*      SB2ObcTyping.translate_wt *)
+     (*      SB2ObcTyping.translate_wt *)
+     wt_add_defaults_class
+     wt_mem_add_defaults
+     stmt_call_eval_add_defaults
+     loop_call_add_defaults
      ClassFusible_translate
      Scheduler.scheduler_wc_program
      NL2SBClocking.translate_wc
+     No_Naked_Vars_add_defaults_class
 .
 
 Lemma find_node_trace_spec:
@@ -265,6 +270,14 @@ Qed.
 
 Definition pstr (xss: stream (list val)) : stream (list value) :=
   fun n => map present (xss n).
+
+Lemma value_to_option_pstr:
+  forall xs,
+    (fun n => map SB2ObcCorr.value_to_option (pstr xs n)) ≈ (fun n => map Some (xs n)).
+Proof.
+  intros; unfold SB2ObcCorr.value_to_option, pstr; intro.
+  rewrite map_map; auto.
+Qed.
 
 Lemma behavior_clight:
   forall G P main ins outs,
@@ -307,7 +320,8 @@ Proof.
   assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G))).
   { split; [|split]; auto.
     - apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto.
-    - admit.
+    - apply Scheduler.scheduler_normal_args, NL2SBNormalArgs.translate_normal_args.
+      admit.
   }
   apply NL2SBCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
   assert (forall n, Forall2 SB2ObcCorr.eq_if_present (pstr ins n) (map Some (ins n)))
@@ -318,6 +332,7 @@ Proof.
              constructor; discriminate).
   apply SB2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins n))
     in Hsem as (me0 & Rst & Hsem &?); auto.
+  setoid_rewrite value_to_option_pstr in Hsem.
   set (tr_G := NL2SB.translate G) in *;
     set (sch_tr_G := Scheduler.schedule tr_G) in *;
     set (tr_sch_tr_G := SB2Obc.translate sch_tr_G) in *;
@@ -346,14 +361,13 @@ Proof.
     pose proof (n_outgt0 main_node) as Hout.
     intro E; rewrite <-length_idty, E in Hout; simpl in Hout; omega.
   }
-  assert (forall n, wt_vals (map sem_const (ins n)) (m_in m_step)) as Hwt_in
+  assert (forall n, wt_vals (ins n) (m_in m_step)) as Hwt_in
       by (erewrite SB2Obc.find_method_stepm_in; eauto; simpl; eauto).
-  assert (forall n, wt_vals (map sem_const (outs n)) (m_out m_step)) as Hwt_out
+  assert (forall n, wt_vals (outs n) (m_out m_step)) as Hwt_out
       by (erewrite SB2Obc.find_method_stepm_out; eauto; simpl; eauto).
-  pose proof (find_class_name _ _ _ _ Find) as Eq;
-    pose proof (find_method_name _ _ _ Find_step) as Eq';
+  pose proof (find_method_name _ _ _ Find_step) as Eq';
     pose proof (find_method_name _ _ _ Find_reset) as Eq'';
-    rewrite <-Eq, <-Eq'' in Rst; rewrite <-Eq in Hsem.
+    rewrite <-Eq'' in Rst.
   unfold Generation.translate in COMP.
   unfold total_if in *.
   destruct (do_fusion tt).
@@ -363,7 +377,13 @@ Proof.
     apply Obc.Fus.fuse_find_class in Find;
       apply Obc.Fus.fuse_find_method' in Find_step;
       apply Obc.Fus.fuse_find_method' in Find_reset.
+    apply find_class_add_defaults_class in Find.
+    apply find_method_add_defaults_method in Find_step;
+      apply find_method_add_defaults_method in Find_reset;
+      rewrite find_method_map_add_defaults_method in Find_step, Find_reset.
     rewrite Find, Find_step, Find_reset in *.
+    pose proof (find_class_name _ _ _ _ Find) as Eq;
+      rewrite <-Eq in Rst, Hsem.
     rewrite <-Obc.Fus.fuse_method_in in Step_in_spec, Hwt_in;
       rewrite <-Obc.Fus.fuse_method_out in Step_out_spec, Hwt_out.
     econstructor; split; eauto.
@@ -372,17 +392,27 @@ Proof.
             apply Scheduler.scheduler_wc_program; eauto;
             apply NL2SBClocking.translate_wc; auto).
       eapply reacts'
-        with (1:=COMP') (6:=Find) (7:=Find_reset) (8:=Find_step) (me0:=me0)
+        with (1:=COMP') (8:=Find) (9:=Find_reset) (10:=Find_step) (me0:=me0)
              (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
              (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out); eauto.
+      * intros ** Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
+      * change [] with (map Some (@nil val)); eauto.
     + eapply find_node_trace_spec; eauto.
-  - rewrite Find, Find_step, Find_reset in *.
+  - apply find_class_add_defaults_class in Find.
+    apply find_method_add_defaults_method in Find_step;
+      apply find_method_add_defaults_method in Find_reset;
+      rewrite find_method_map_add_defaults_method in Find_step, Find_reset.
+    rewrite Find, Find_step, Find_reset in *.
+    pose proof (find_class_name _ _ _ _ Find) as Eq;
+      rewrite <-Eq in Rst, Hsem.
     econstructor; split.
     + eapply reacts'
-        with (1:=COMP') (6:=Find) (8:=Find_step) (me0:=me0)
+        with (1:=COMP') (8:=Find) (10:=Find_step) (me0:=me0)
              (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)
              (Hwt_in:=Hwt_in) (Hwt_out:=Hwt_out);
         eauto.
+      * intros ** Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
+      * change [] with (map Some (@nil val)); eauto.
     + eapply find_node_trace_spec; eauto.
 Qed.
 

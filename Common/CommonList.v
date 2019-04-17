@@ -885,6 +885,16 @@ Section Permutation.
     subst. now apply Permutation_map_aux.
   Qed.
 
+  Lemma Permutation_swap:
+    forall (xs ys zs: list A),
+      Permutation (xs ++ ys ++ zs) (ys ++ xs ++ zs).
+  Proof.
+    induction xs; simpl; intros; auto.
+    rewrite cons_is_app, <-app_last_app, 3 app_assoc.
+    apply Permutation_app_tail.
+    rewrite Permutation_app_comm, <-app_assoc; auto.
+  Qed.
+
 End Permutation.
 
 Section Pointwise.

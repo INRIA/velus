@@ -19,6 +19,8 @@ Require Import Velus.SyBloc.SBIsVariable.
 Require Import Velus.SyBloc.SBIsLast.
 Require Import Velus.SyBloc.SBIsDefined.
 Require Import Velus.SyBloc.SBClocking.
+Require Import Velus.SyBloc.SBIsFree.
+Require Import Velus.SyBloc.SBWellDefined.
 
 Require Import RMemory.
 
@@ -65,6 +67,8 @@ Module Type SBSCHEDULE
        (Import Last  : SBISLAST        Ids Op       CE.Syn Syn)
        (Import Def   : SBISDEFINED     Ids Op       CE.Syn Syn Var Last)
        (Import Clo   : SBCLOCKING      Ids Op       CE.Syn Syn Last Var Def Block Ord CE.Clo)
+       (Import Free  : SBISFREE        Ids Op       CE.Syn Syn                        CE.IsF)
+       (Import Wdef  : SBWELLDEFINED   Ids Op       CE.Syn Syn Block Ord Var Last Def CE.IsF Free)
        (Import Sch   : EXT_NLSCHEDULER Ids Op       CE.Syn Syn).
 
   Section OCombine.
@@ -457,6 +461,40 @@ Module Type SBSCHEDULE
     - clear - Names; induction P; simpl; inv Names; constructor; auto.
   Qed.
 
+  Lemma scheduler_normal_args_eq:
+    forall P eq,
+      normal_args_eq P eq ->
+      normal_args_eq (schedule P) eq.
+  Proof.
+    induction 1; eauto using normal_args_eq.
+    econstructor; auto.
+    - apply scheduler_find_block; eauto.
+    - auto.
+  Qed.
+
+Lemma scheduler_normal_args_block:
+  forall P b,
+    normal_args_block P b ->
+    normal_args_block (schedule P) (schedule_block b).
+Proof.
+  intros ** Normal.
+  apply Forall_forall; simpl.
+  setoid_rewrite schedule_eqs_permutation.
+  intros; eapply Forall_forall in Normal; eauto.
+  apply scheduler_normal_args_eq; auto.
+Qed.
+
+Lemma scheduler_normal_args:
+  forall P,
+    normal_args P ->
+    normal_args (schedule P).
+Proof.
+  induction P as [|b]; auto.
+  intros (?&?); split; auto.
+  change (schedule_block b :: schedule P) with (schedule (b :: P)).
+  apply scheduler_normal_args_block; auto.
+Qed.
+
 End SBSCHEDULE.
 
 Module SBScheduleFun
@@ -474,7 +512,9 @@ Module SBScheduleFun
        (Last  : SBISLAST        Ids Op       CE.Syn Syn)
        (Def   : SBISDEFINED     Ids Op       CE.Syn Syn Var Last)
        (Clo   : SBCLOCKING      Ids Op       CE.Syn Syn Last Var Def Block Ord CE.Clo)
+       (Free  : SBISFREE        Ids Op       CE.Syn Syn                        CE.IsF)
+       (Wdef  : SBWELLDEFINED   Ids Op       CE.Syn Syn Block Ord Var Last Def CE.IsF Free)
        (Sch   : EXT_NLSCHEDULER Ids Op       CE.Syn Syn)
-<: SBSCHEDULE Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Sch.
-  Include SBSCHEDULE Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Sch.
+<: SBSCHEDULE Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Free Wdef Sch.
+  Include SBSCHEDULE Ids Op OpAux Str CE Syn Block Ord Sem Typ Var Last Def Clo Free Wdef Sch.
 End SBScheduleFun.

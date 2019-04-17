@@ -278,35 +278,15 @@ Module Type NL2SBCLOCKING
       NL.Clo.wc_equation G vars eq ->
       Forall (wc_equation (translate G) vars) (translate_eqn eq).
   Proof.
-    inversion_clear 2 as [|??????? (?&?& Ins & Outs &?)|]; simpl; auto using Forall_cons.
+    inversion_clear 2 as [|?????? Find (?&?& Ins & Outs &?)|];
+      simpl; auto using Forall_cons.
+    apply find_node_translate in Find as (?&?&?&?); subst.
     cases.
-    - constructor; auto.
+    - constructor.
       + do 2 (constructor; auto).
         eapply wc_env_var; eauto.
-      + constructor; auto.
-        admit.
-    - constructor; auto.
-      admit.
-  Qed.
-
-  (* TODO: move *)
-  Lemma Permutation_swap:
-    forall A (xs ys zs: list A),
-      Permutation (xs ++ ys ++ zs) (ys ++ xs ++ zs).
-  Proof.
-    induction xs; simpl; intros; auto.
-    rewrite cons_is_app, <-app_last_app, 3 app_assoc.
-    apply Permutation_app_tail.
-    rewrite Permutation_app_comm, <-app_assoc; auto.
-  Qed.
-
-  (* TODO: move *)
-  Lemma filter_fst_idck:
-    forall A B (xs: list (ident * (A * B))) P,
-      idck (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idck xs).
-  Proof.
-    induction xs; simpl; intros; auto.
-    cases; simpl; now rewrite IHxs.
+      + do 2 (econstructor; eauto).
+    - do 2 (econstructor; eauto).
   Qed.
 
   Lemma gather_eqs_n_vars_wc:
@@ -340,7 +320,7 @@ Module Type NL2SBCLOCKING
                    InMembers x (n_vars n)) as Spec
           by (intro; rewrite <-fst_partition_memories_var_defined, fst_partition_filter,
                      filter_mem_fst, filter_In, fst_InMembers; intuition).
-      pose proof (filter_fst_idck _ _(n_vars n)
+      pose proof (filter_fst_idck (n_vars n)
                                   (fun x => PS.mem x (Mem.memories (n_eqs n)))) as E;
         setoid_rewrite E; clear E.
       setoid_rewrite filter_In.

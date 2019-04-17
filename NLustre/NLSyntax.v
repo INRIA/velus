@@ -214,7 +214,7 @@ Module Type NLSYNTAX
   Definition gather_insts := concatMap gather_inst_eq.
   Definition gather_app_vars := concatMap gather_app_vars_eq.
 
-(*  Lemma find_node_In:
+ (*  Lemma find_node_In:
     forall f G n,
       find_node f G = Some n ->
       In n G.

@@ -11,6 +11,7 @@ Require Export NLustre.NoDup.
 Require Export NLustre.NLClocking.
 Require Export NLustre.NLClockingSemantics.
 Require Export NLustre.NLTyping.
+Require Export NLustre.NLNormalArgs.
 
 Require Import Velus.Common.
 
@@ -22,6 +23,7 @@ Module Type NLUSTRE
        (CE    : COREEXPR Ids  Op OpAux Str).
   Declare Module Export Syn    : NLSYNTAX        Ids Op       CE.Syn.
   Declare Module Export Ord    : ORDERED         Ids Op       CE.Syn Syn.
+  Declare Module Export Norm   : NLNORMALARGS    Ids Op       CE.Syn Syn.
   Declare Module Export IsF    : ISFREE          Ids Op       CE.Syn Syn CE.IsF.
   Declare Module Export Sem    : NLSEMANTICS     Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.
   Declare Module Export Typ    : NLTYPING        Ids Op       CE.Syn Syn     Ord CE.Typ.
@@ -42,17 +44,18 @@ Module NLustreFun
        (Str   : STREAM        Op OpAux)
        (CE    : COREEXPR Ids  Op OpAux Str)
 <: NLUSTRE Ids Op OpAux Str CE.
-  Module Export Syn     := NLSyntaxFun        Ids Op       CE.Syn.
-  Module Export Ord     := OrderedFun         Ids Op       CE.Syn Syn.
-  Module Export IsF     := IsFreeFun          Ids Op       CE.Syn Syn CE.IsF.
-  Module Export Sem     := NLSemanticsFun     Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.
-  Module Export Typ     := NLTypingFun        Ids Op       CE.Syn Syn     Ord CE.Typ.
-  Module Export Mem     := MemoriesFun        Ids Op       CE.Syn Syn.
-  Module Export IsD     := IsDefinedFun       Ids Op       CE.Syn Syn                     Mem.
-  Module Export IsV     := IsVariableFun      Ids Op       CE.Syn Syn                     Mem IsD.
-  Module Export NoD     := NoDupFun           Ids Op       CE.Syn Syn                     Mem IsD IsV.
-  Module Export Clo     := NLClockingFun      Ids Op       CE.Syn Syn     Ord             Mem IsD CE.IsF IsF CE.Clo.
-  Module Export CloSem  := NLClockingSemanticsFun Ids Op OpAux CE.Syn Syn Str Ord CE.Sem
-                                                  Sem Mem IsD CE.IsF IsF CE.Clo Clo CE.CloSem.
-  Module Export MemSem  := MemSemanticsFun    Ids Op OpAux CE.Syn Syn Str Ord CE.Sem Sem Mem IsD IsV CE.IsF IsF NoD CE.Clo Clo CE.CloSem CloSem.
+  Module Export Syn    := NLSyntaxFun        Ids Op       CE.Syn.
+  Module Export Ord    := OrderedFun         Ids Op       CE.Syn Syn.
+  Module Export Norm   := NLNormalArgsFun    Ids Op       CE.Syn Syn.
+  Module Export IsF    := IsFreeFun          Ids Op       CE.Syn Syn CE.IsF.
+  Module Export Sem    := NLSemanticsFun     Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.
+  Module Export Typ    := NLTypingFun        Ids Op       CE.Syn Syn     Ord CE.Typ.
+  Module Export Mem    := MemoriesFun        Ids Op       CE.Syn Syn.
+  Module Export IsD    := IsDefinedFun       Ids Op       CE.Syn Syn                     Mem.
+  Module Export IsV    := IsVariableFun      Ids Op       CE.Syn Syn                     Mem IsD.
+  Module Export NoD    := NoDupFun           Ids Op       CE.Syn Syn                     Mem IsD IsV.
+  Module Export Clo    := NLClockingFun      Ids Op       CE.Syn Syn     Ord             Mem IsD CE.IsF IsF CE.Clo.
+  Module Export CloSem := NLClockingSemanticsFun Ids Op OpAux CE.Syn Syn Str Ord CE.Sem
+                                                 Sem Mem IsD CE.IsF IsF CE.Clo Clo CE.CloSem.
+  Module Export MemSem := MemSemanticsFun    Ids Op OpAux CE.Syn Syn Str Ord CE.Sem Sem Mem IsD IsV CE.IsF IsF NoD CE.Clo Clo CE.CloSem CloSem.
 End NLustreFun.

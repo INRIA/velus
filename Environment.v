@@ -297,6 +297,25 @@ Module Env.
       apply NoDup_NoDupMembers_combine; auto.
     Qed.
 
+    Lemma In_adds_spec':
+      forall x xvs (m: t A),
+        In x (adds' xvs m) <-> (InMembers x xvs \/ In x m).
+    Proof.
+      induction xvs as [|(x', v')]; simpl.
+      - firstorder.
+      - intro; rewrite IHxvs, Props.P.F.add_in_iff.
+        intuition.
+    Qed.
+
+    Corollary In_adds_spec:
+      forall x xs vs (m: t A),
+        length xs = length vs ->
+        (In x (adds xs vs m) <-> (List.In x xs \/ In x m)).
+    Proof.
+      unfold adds; intros.
+      rewrite In_adds_spec', <-In_InMembers_combine; auto; intuition.
+    Qed.
+
     (* Lemma adds_nil_nil': *)
     (*   forall e, *)
     (*     adds' List.nil e = e. *)

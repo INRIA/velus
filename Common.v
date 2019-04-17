@@ -759,6 +759,14 @@ Section TypesAndClocks.
     reflexivity.
   Qed.
 
+  Lemma filter_fst_idck:
+    forall (xs: list (ident * (type * clock))) P,
+      idck (filter (fun x => P (fst x)) xs) = filter (fun x => P (fst x)) (idck xs).
+  Proof.
+    induction xs; simpl; intros; auto.
+    cases; simpl; now rewrite IHxs.
+  Qed.
+
 End TypesAndClocks.
 
 (** Sets and maps of identifiers as efficient list lookups *)

@@ -1,4 +1,5 @@
 Require Import Coq.FSets.FMapPositive.
+Require Import Setoid.
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -151,15 +152,15 @@ Module Type OBCSEMANTICS
       loop_call prog clsid f ins outs (S n) me' ->
       loop_call prog clsid f ins outs n me.
 
-    Section LoopCallCoind.
+  Section LoopCallCoind.
 
     Variable R: program -> ident -> ident -> (nat -> list (option val)) -> (nat -> list (option val)) -> nat -> menv -> Prop.
 
     Hypothesis LoopCase:
       forall prog clsid f ins outs n me,
-      R prog clsid f ins outs n me ->
-      exists me',
-        (* let cins := present_consts (ins n) in *)
+        R prog clsid f ins outs n me ->
+        exists me',
+          (* let cins := present_consts (ins n) in *)
         (* let couts := present_consts (outs n) in *)
           stmt_call_eval prog me clsid f (ins n) me' (outs n)
           /\ R prog clsid f ins outs (S n) me'.
@@ -175,7 +176,19 @@ Module Type OBCSEMANTICS
       econstructor; eauto.
     Qed.
 
-    End LoopCallCoind.
+  End LoopCallCoind.
+
+
+  Add Parametric Morphism P f m: (loop_call P f m)
+        with signature (fun a b => forall n, a n = b n) ==> (fun a b => forall n, a n = b n) ==> eq ==> eq ==> Basics.impl
+          as loop_call_eq_str.
+  Proof.
+    cofix COFIX.
+    intros ** E ?? E' ?? Loop.
+    inv Loop; econstructor.
+    - rewrite <-E, <-E'; eauto.
+    - eapply COFIX; eauto.
+  Qed.
 
   (** ** Determinism of semantics *)
 

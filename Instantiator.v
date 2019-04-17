@@ -30,11 +30,13 @@ Require Import NLustreToSyBloc.Translation.
 Require Import NLustreToSyBloc.Correctness.
 Require Import NLustreToSyBloc.NL2SBTyping.
 Require Import NLustreToSyBloc.NL2SBClocking.
+Require Import NLustreToSyBloc.NL2SBNormalArgs.
 
-Module NL2SB         := TranslationFun   Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem.
-Module NL2SBCorr     := CorrectnessFun   Ids Op OpAux Str CE NL SB NL2SB.
-Module NL2SBTyping   := NL2SBTypingFun   Ids Op OpAux Str CE NL SB NL2SB.
-Module NL2SBClocking := NL2SBClockingFun Ids Op OpAux Str CE NL SB NL2SB.
+Module NL2SB           := TranslationFun     Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem.
+Module NL2SBCorr       := CorrectnessFun     Ids Op OpAux Str CE NL SB NL2SB.
+Module NL2SBTyping     := NL2SBTypingFun     Ids Op OpAux Str CE NL SB NL2SB.
+Module NL2SBClocking   := NL2SBClockingFun   Ids Op OpAux Str CE NL SB NL2SB.
+Module NL2SBNormalArgs := NL2SBNormalArgsFun Ids Op OpAux Str CE NL SB NL2SB.
 
 Require Import Obc.
 

@@ -1709,6 +1709,26 @@ Module Type OBCADDDEFAULTS
     apply output_or_local_in_typing_env; auto.
   Qed.
 
+  Lemma wt_mem_add_defaults:
+    forall p c me,
+      wt_mem me p c ->
+      wt_mem me (add_defaults p) (add_defaults_class c).
+  Proof.
+    induction 1 as [???? WTmem_inst IH| |] using wt_mem_ind_mult
+      with (Pinst := fun me P oc WT_mem_inst => wt_mem_inst me (add_defaults P) oc).
+    - constructor.
+      + destruct cl; auto.
+      + assert (c_objs (add_defaults_class cl) = c_objs cl) as E
+            by (destruct cl; auto).
+        rewrite E; clear E.
+        induction (c_objs cl) as [|(o, c)]; inv WTmem_inst; auto.
+        inversion_clear IH as [|?? (?&?)].
+        constructor; eauto.
+    - constructor; auto.
+    - eright; eauto.
+      apply find_class_add_defaults_class; auto.
+  Qed.
+
   Lemma wt_add_defaults_class:
     forall p,
       wt_program p ->
@@ -1934,6 +1954,40 @@ Module Type OBCADDDEFAULTS
     destruct c as (name, mems, objs, methods, Hnodup, Hnodupm, Hgood); simpl in *.
     apply in_map_iff in Hmin as (m & Hm & Hmin); subst.
     apply No_Naked_Vars_add_defaults_method.
+  Qed.
+
+  Lemma stmt_call_eval_add_defaults:
+    forall P me f m vs me' rvs,
+      wt_program P ->
+      stmt_call_eval P me f m (map Some vs) me' (map Some rvs) ->
+      stmt_call_eval (add_defaults P) me f m (map Some vs) me' (map Some rvs).
+  Proof.
+    intros ** Call.
+    eapply program_refines_stmt_call_eval in Call as (rvos &?& Spec); eauto.
+    - assert (rvos = map Some rvs) as ->; eauto.
+      rewrite Forall2_map_2 in Spec.
+      clear - Spec; induction Spec; simpl; auto; f_equal; auto.
+    - apply add_defaults_program_refines; auto.
+      + admit.
+      + admit.
+    - split;
+        rewrite Env.adds_opt_is_adds; try apply fst_NoDupMembers, m_nodupin; intro;
+          rewrite Env.In_adds_spec, fst_InMembers, Env.Props.P.F.empty_in_iff; intuition;
+            now rewrite map_length in *.
+    - apply Forall2_same, Forall_forall; auto.
+  Qed.
+
+  Corollary loop_call_add_defaults:
+    forall f c ins outs prog me,
+      wt_program prog ->
+      loop_call prog c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me ->
+      loop_call (add_defaults prog) c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me.
+  Proof.
+    intros ?????; generalize 0%nat.
+    cofix COINDHYP.
+    intros n ** Hdo.
+    destruct Hdo.
+    econstructor; eauto using stmt_call_eval_add_defaults.
   Qed.
 
 End OBCADDDEFAULTS.
