@@ -238,6 +238,220 @@ Module Type SB2OBCINVARIANTS
     - intros; apply b_ins_not_def, fst_InMembers; auto.
   Qed.
 
+  (** Translating gives [No_Overwrites] Obc. *)
+
+  Lemma Can_write_in_Control:
+    forall mems ck s x,
+      Can_write_in x (Control mems ck s) <-> Can_write_in x s.
+  Proof.
+    induction ck; simpl; try reflexivity.
+    destruct b; setoid_rewrite IHck; split; auto;
+      inversion_clear 1; auto;
+        match goal with H:Can_write_in _ Skip |- _ => inv H end.
+  Qed.
+
+  Lemma No_Overwrites_Control:
+    forall mems ck s,
+      No_Overwrites (Control mems ck s) <-> No_Overwrites s.
+  Proof.
+    induction ck; simpl; try reflexivity.
+    destruct b; setoid_rewrite IHck; split; auto;
+      inversion_clear 1; auto.
+  Qed.
+
+  Lemma Can_write_in_translate_cexp:
+    forall mems e x y,
+      Can_write_in x (translate_cexp mems y e) <-> x = y.
+  Proof.
+    induction e; simpl;
+      try setoid_rewrite Can_write_in_Ifte;
+      try setoid_rewrite IHe1;
+      try setoid_rewrite IHe2.
+    now intuition. now intuition.
+    split. now inversion_clear 1.
+    now intro; subst; auto.
+  Qed.
+
+  Lemma No_Overwrites_translate_cexp:
+    forall mems x e,
+      No_Overwrites (translate_cexp mems x e).
+  Proof.
+    induction e; simpl; auto.
+  Qed.
+
+  Lemma Can_write_in_translate_eqn_Is_defined_in_eq:
+    forall mems clkvars eq x,
+      Can_write_in x (translate_eqn mems clkvars eq) <-> Is_defined_in_eq x eq.
+  Proof.
+    destruct eq; simpl; split; intro HH;
+      rewrite Can_write_in_Control in *;
+      try rewrite Can_write_in_translate_cexp in *;
+      subst; try inversion_clear HH; auto using Is_defined_in_eq.
+    contradiction.
+  Qed.
+
+  Lemma Can_write_in_translate_eqns_Is_defined_in_eqs:
+    forall mems clkvars eqs x,
+      Can_write_in x (translate_eqns mems clkvars eqs) <-> Is_defined_in x eqs.
+  Proof.
+    unfold translate_eqns.
+    intros mems clkvars eqs x.
+    match goal with |- ?P <-> ?Q => cut (P <-> (Q \/ Can_write_in x Skip)) end.
+    now intro HH; setoid_rewrite HH; split; auto; intros [|H]; [intuition| inv H].
+    generalize Skip.
+    induction eqs as [|eq eqs IH]; simpl; intro s.
+    now split; intro HH; auto; destruct HH as [HH|HH]; auto; inv HH.
+    rewrite IH, Can_write_in_Comp, Can_write_in_translate_eqn_Is_defined_in_eq.
+    split.
+    - intros [HH|[HH|HH]]; auto; left; constructor (assumption).
+    - intros [HH|HH]; [inv HH|]; auto.
+  Qed.
+
+  Lemma translate_node_cannot_write_inputs:
+    forall b m,
+      In m (translate_block b).(c_methods) ->
+      Forall (fun x => ~Can_write_in x m.(m_body)) (map fst m.(m_in)).
+  Proof.
+    intros ** Hin.
+    destruct Hin as [|[|]]; simpl in *; subst; simpl;
+      auto; try contradiction.
+    apply Forall_forall; intros x Hin.
+    apply fst_InMembers, InMembers_idty in Hin.
+    rewrite Can_write_in_translate_eqns_Is_defined_in_eqs.
+    now apply b_ins_not_def.
+  Qed.
+
+  Corollary translate_cannot_write_inputs:
+    forall P,
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m)))
+                     (translate P).
+  Proof.
+    intros; apply Forall_forall; intros ** HinP; apply Forall_forall; intros.
+    unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
+    eapply translate_node_cannot_write_inputs; eauto.
+  Qed.
+
+  (* Here, we use [Is_well_sch] because it simplifies the inductive proof
+     (many of the required lemmas already exist), but in fact, the weaker
+     property that no two equations define the same variable is sufficient. *)
+
+  Lemma translate_eqns_No_Overwrites:
+    forall clkvars mems inputs eqs,
+      Is_well_sch inputs mems eqs ->
+      No_Overwrites (translate_eqns mems clkvars eqs).
+  Proof.
+    unfold translate_eqns.
+    intros clkvars mems inputs eqs.
+    pose proof NoOSkip as Hs; revert Hs.
+    assert (forall x, Is_defined_in x eqs -> ~Can_write_in x Skip) as Hdcw
+        by inversion 2; revert Hdcw.
+    assert (forall x, Can_write_in x Skip -> ~Is_defined_in x eqs) as Hcwd
+        by inversion 1; revert Hcwd.
+    generalize Skip.
+    induction eqs as [|eq eqs IH]; auto.
+    intros s Hcwd Hdcw Hno Hwsch.
+    inversion_clear Hwsch as [|? ? Hwsch' Hfree Hddef Hstates];
+      clear Hfree Hstates.
+    simpl. apply IH; auto.
+    - setoid_rewrite Can_write_in_Comp.
+      setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+      intros x [Hdef|Hcw]; auto.
+      apply Hcwd, not_Is_defined_in_cons in Hcw as (? & ?); auto.
+    - setoid_rewrite cannot_write_in_Comp.
+      setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+      intros H Hdefs. split.
+      + intro Hdef; apply Hddef in Hdef. contradiction.
+      + apply Hdcw. now constructor 2.
+    - constructor; auto.
+      + setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+        intros x Hdef. apply Hdcw. now constructor.
+      + setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+        intros x Hcw. apply Hcwd, not_Is_defined_in_cons in Hcw as (? & ?); auto.
+      + destruct eq; simpl; setoid_rewrite No_Overwrites_Control;
+          auto using No_Overwrites_translate_cexp.
+  Qed.
+
+  Lemma not_Can_write_in_reset_insts:
+    forall x blocks,
+      ~ Can_write_in x (reset_insts blocks).
+  Proof.
+    unfold reset_insts; intros.
+    assert (~ Can_write_in x Skip) as CWIS by inversion 1.
+    revert CWIS; generalize Skip.
+    induction blocks; simpl; auto.
+    intros; apply IHblocks.
+    inversion_clear 1 as [| | | | | |??? CWI]; try inv CWI; contradiction.
+  Qed.
+
+  Lemma No_Overwrites_reset_inst:
+    forall blocks,
+      No_Overwrites (reset_insts blocks).
+  Proof.
+    unfold reset_insts; intros.
+    assert (No_Overwrites Skip) as NOS by constructor.
+    revert NOS; generalize Skip.
+    induction blocks; simpl; auto.
+    intros; apply IHblocks.
+    constructor; auto.
+    - inversion 2; contradiction.
+    - inversion 1; contradiction.
+  Qed.
+
+  Lemma No_Overwrites_reset_mems:
+    forall lasts,
+      NoDupMembers lasts ->
+      No_Overwrites (reset_mems lasts).
+  Proof.
+    unfold reset_mems; intros ** Nodup.
+    assert (No_Overwrites Skip) as NOS by constructor.
+    assert (forall x, InMembers x lasts -> ~ Can_write_in x Skip) as CWIS by inversion 2.
+    revert NOS CWIS; generalize Skip.
+    induction lasts as [|(x, (c0, ck))]; simpl; auto; inv Nodup.
+    intros; apply IHlasts; auto.
+    - constructor; auto.
+      + inversion 2; subst; eapply CWIS; eauto.
+      + inversion_clear 1; auto.
+    - inversion_clear 2 as [| | | | | |??? CWI];
+        try inv CWI; subst; auto.
+      eapply CWIS; eauto.
+  Qed.
+
+  Corollary translate_reset_No_Overwrites:
+    forall b,
+      No_Overwrites (translate_reset b).
+  Proof.
+    intro; unfold translate_reset.
+    constructor.
+    - intros; apply not_Can_write_in_reset_insts.
+    - intros ** CWI ?; eapply not_Can_write_in_reset_insts; eauto.
+    - apply No_Overwrites_reset_mems, b_nodup_lasts.
+    - apply No_Overwrites_reset_inst.
+  Qed.
+
+  Lemma translate_node_No_Overwrites:
+    forall b m,
+      Is_well_sch (map fst (b_in b)) (ps_from_list (map fst (b_lasts b))) (b_eqs b) ->
+      In m (translate_block b).(c_methods) ->
+      No_Overwrites m.(m_body).
+  Proof.
+    intros ** Hin.
+    destruct Hin as [|[|]]; simpl in *; subst; simpl;
+      try contradiction.
+    - eapply translate_eqns_No_Overwrites; eauto.
+    - apply translate_reset_No_Overwrites.
+  Qed.
+
+  Corollary translate_No_Overwrites:
+    forall P,
+      Well_scheduled P ->
+      Forall_methods (fun m => No_Overwrites m.(m_body)) (translate P).
+  Proof.
+    intros ** Wsch; apply Forall_forall; intros ** HinP; apply Forall_forall; intros.
+    unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
+    eapply Forall_forall in Wsch; eauto.
+    eapply translate_node_No_Overwrites; eauto.
+  Qed.
+
 End SB2OBCINVARIANTS.
 
 Module SB2ObcInvariantsFun

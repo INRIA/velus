@@ -799,6 +799,27 @@ Module Type FUSION
     apply Can_write_in_fuse'.
   Qed.
 
+  Corollary fuse_cannot_write_inputs:
+    forall p,
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m))) p ->
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m)))
+                     (map fuse_class p).
+  Proof.
+    intros ** HH.
+    apply Forall_forall; intros ** Hin;
+      apply Forall_forall; intros ** Hin';
+        apply Forall_forall; intros ? Hin''.
+    apply in_map_iff in Hin as (c &?&?); subst.
+    eapply Forall_forall in HH; eauto.
+    destruct c; simpl in *.
+    apply in_map_iff in Hin' as (m &?&?); subst.
+    eapply Forall_forall in HH; eauto.
+    destruct m; simpl in *.
+    eapply Forall_forall in HH; eauto.
+    now rewrite <-Can_write_in_fuse.
+  Qed.
+
+
   (** ** Fusion preserves [No_Overwrites]. *)
 
   Lemma No_Overwrites_zip:
@@ -874,6 +895,23 @@ Module Type FUSION
   Proof.
     destruct s; intros Hnoo; auto.
     now apply No_Overwrites_fuse'.
+  Qed.
+
+  Corollary fuse_No_Overwrites:
+    forall p,
+      Forall_methods (fun m => No_Overwrites (m_body m)) p ->
+      Forall_methods (fun m => No_Overwrites (m_body m)) (map fuse_class p).
+  Proof.
+    intros ** HH.
+    apply Forall_forall; intros ** Hin;
+      apply Forall_forall; intros ** Hin'.
+    apply in_map_iff in Hin as (c &?&?); subst.
+    eapply Forall_forall in HH; eauto.
+    destruct c; simpl in *.
+    apply in_map_iff in Hin' as (m &?& Hin'); subst.
+    eapply Forall_forall with (2 := Hin') in HH; eauto.
+    destruct m; simpl in *.
+    now apply No_Overwrites_fuse.
   Qed.
 
 End FUSION.

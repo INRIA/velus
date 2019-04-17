@@ -72,6 +72,7 @@ Lemma is_well_sch_program:
     fold_left is_well_sch_block P (OK tt) = OK tt ->
     SB.Wdef.Well_scheduled P.
 Proof.
+  unfold SB.Wdef.Well_scheduled.
   induction P as [|bl]; simpl.
   - constructor.
   - intro Fold.
@@ -239,6 +240,11 @@ Hint Resolve
      Scheduler.scheduler_wc_program
      NL2SBClocking.translate_wc
      No_Naked_Vars_add_defaults_class
+     stmt_call_eval_add_defaults
+     Obc.Fus.fuse_No_Overwrites
+     translate_No_Overwrites
+     Obc.Fus.fuse_cannot_write_inputs
+     translate_cannot_write_inputs
 .
 
 Lemma find_node_trace_spec:
@@ -386,6 +392,12 @@ Proof.
       rewrite <-Eq in Rst, Hsem.
     rewrite <-Obc.Fus.fuse_method_in in Step_in_spec, Hwt_in;
       rewrite <-Obc.Fus.fuse_method_out in Step_out_spec, Hwt_out.
+    assert (Forall_methods (fun m => Obc.Inv.No_Overwrites (m_body m)) (map Obc.Fus.fuse_class tr_sch_tr_G))
+           by (apply Obc.Fus.fuse_No_Overwrites, translate_No_Overwrites; auto).
+    assert (Forall_methods
+              (fun m => Forall (fun x => ~ Obc.Inv.Can_write_in x (m_body m)) (map fst (m_in m)))
+              (map Obc.Fus.fuse_class tr_sch_tr_G))
+      by (apply Obc.Fus.fuse_cannot_write_inputs, translate_cannot_write_inputs).
     econstructor; split; eauto.
     + assert (Forall Obc.Fus.ClassFusible tr_sch_tr_G)
         by (apply ClassFusible_translate; auto;
@@ -405,6 +417,12 @@ Proof.
     rewrite Find, Find_step, Find_reset in *.
     pose proof (find_class_name _ _ _ _ Find) as Eq;
       rewrite <-Eq in Rst, Hsem.
+    assert (Forall_methods (fun m => Obc.Inv.No_Overwrites (m_body m)) tr_sch_tr_G)
+      by (apply translate_No_Overwrites; auto).
+    assert (Forall_methods
+              (fun m => Forall (fun x => ~ Obc.Inv.Can_write_in x (m_body m)) (map fst (m_in m)))
+              tr_sch_tr_G)
+           by (apply translate_cannot_write_inputs).
     econstructor; split.
     + eapply reacts'
         with (1:=COMP') (8:=Find) (10:=Find_step) (me0:=me0)

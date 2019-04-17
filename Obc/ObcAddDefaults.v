@@ -1957,19 +1957,20 @@ Module Type OBCADDDEFAULTS
   Qed.
 
   Lemma stmt_call_eval_add_defaults:
-    forall P me f m vs me' rvs,
-      wt_program P ->
-      stmt_call_eval P me f m (map Some vs) me' (map Some rvs) ->
-      stmt_call_eval (add_defaults P) me f m (map Some vs) me' (map Some rvs).
+    forall p me f m vs me' rvs,
+      wt_program p ->
+      Forall_methods (fun m => No_Overwrites m.(m_body)) p ->
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
+                                      (map fst m.(m_in))) p ->
+      stmt_call_eval p me f m (map Some vs) me' (map Some rvs) ->
+      stmt_call_eval (add_defaults p) me f m (map Some vs) me' (map Some rvs).
   Proof.
     intros ** Call.
-    eapply program_refines_stmt_call_eval in Call as (rvos &?& Spec); eauto.
+    eapply program_refines_stmt_call_eval in Call as (rvos &?& Spec);
+      eauto using add_defaults_program_refines.
     - assert (rvos = map Some rvs) as ->; eauto.
       rewrite Forall2_map_2 in Spec.
       clear - Spec; induction Spec; simpl; auto; f_equal; auto.
-    - apply add_defaults_program_refines; auto.
-      + admit.
-      + admit.
     - split;
         rewrite Env.adds_opt_is_adds; try apply fst_NoDupMembers, m_nodupin; intro;
           rewrite Env.In_adds_spec, fst_InMembers, Env.Props.P.F.empty_in_iff; intuition;
@@ -1978,10 +1979,13 @@ Module Type OBCADDDEFAULTS
   Qed.
 
   Corollary loop_call_add_defaults:
-    forall f c ins outs prog me,
-      wt_program prog ->
-      loop_call prog c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me ->
-      loop_call (add_defaults prog) c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me.
+    forall f c ins outs p me,
+      wt_program p ->
+      Forall_methods (fun m => No_Overwrites m.(m_body)) p ->
+      Forall_methods (fun m => Forall (fun x => ~ Can_write_in x m.(m_body))
+                                      (map fst m.(m_in))) p ->
+      loop_call p c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me ->
+      loop_call (add_defaults p) c f (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me.
   Proof.
     intros ?????; generalize 0%nat.
     cofix COINDHYP.

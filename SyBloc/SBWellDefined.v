@@ -48,14 +48,8 @@ Module Type SBWELLDEFINED
             Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < k) eqs) ->
         Is_well_sch inputs mems (eq :: eqs).
 
-  Inductive Well_scheduled: program -> Prop :=
-    | Well_scheduled_nil:
-        Well_scheduled []
-    | Well_scheduled_cons:
-        forall bl P,
-          Well_scheduled P ->
-          Is_well_sch (map fst (b_in bl)) (ps_from_list (map fst (b_lasts bl))) (b_eqs bl) ->
-          Well_scheduled (bl :: P).
+  Definition Well_scheduled: program -> Prop :=
+    Forall (fun bl => Is_well_sch (map fst (b_in bl)) (ps_from_list (map fst (b_lasts bl))) (b_eqs bl)).
 
   Lemma Is_well_sch_app:
     forall inputs mems eqs eqs',
