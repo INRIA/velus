@@ -488,6 +488,62 @@ Proof.
     apply PS.add_spec in Hadd as [HH|HH]; subst; auto.
 Qed.
 
+Lemma In_PS_elements:
+  forall x s,
+    In x (PS.elements s) <-> PS.In x s.
+Proof.
+  intros x s. split; intro HH.
+  - now apply (SetoidList.In_InA Pos.eq_equiv), PSF.elements_2 in HH.
+  - cut (exists z, eq x z /\ In z (PS.elements s)).
+    + intros (? & ? & ?); subst; auto.
+    + now apply SetoidList.InA_alt, PSF.elements_1.
+Qed.
+
+Lemma Permutation_elements_add:
+  forall xs x s,
+    Permutation (PS.elements s) xs ->
+    ~PS.In x s ->
+    Permutation (PS.elements (PS.add x s)) (x::xs).
+Proof.
+  intros ** Hperm Hnin.
+  setoid_rewrite <- Hperm; clear Hperm.
+  apply NoDup_Permutation.
+  - apply NoDup_NoDupA, PS.elements_spec2w.
+  - constructor; [|now apply NoDup_NoDupA, PS.elements_spec2w].
+    setoid_rewrite PSF.elements_iff in Hnin; auto.
+  - clear. intro z.
+    setoid_rewrite In_PS_elements.
+    setoid_rewrite PS.add_spec.
+    split; intros [HH|HH]; subst; auto.
+    + now constructor.
+    + now constructor 2; apply In_PS_elements.
+    + apply In_PS_elements in HH; auto.
+Qed.
+
+Add Morphism PS.elements
+    with signature PS.Equal ==> @Permutation positive
+        as PS_elements_Equal.
+Proof.
+  intros x y Heq.
+  apply NoDup_Permutation;
+    (try apply NoDup_NoDupA, PS.elements_spec2w).
+  now setoid_rewrite In_PS_elements.
+Qed.
+
+Lemma Permutation_PS_elements_of_list:
+  forall xs,
+    NoDup xs ->
+    Permutation (PS.elements (PSP.of_list xs)) xs.
+Proof.
+  induction xs as [|x xs IH]; auto.
+  rewrite NoDup_cons'. intros (Hxni & Hnd).
+  simpl. specialize (IH Hnd).
+  setoid_rewrite (Permutation_elements_add xs); auto.
+  rewrite PSP.of_list_1.
+  rewrite SetoidList.InA_alt.
+  intros (y & Hxy & Hyin); subst; auto.
+Qed.
+
 Definition ps_adds (xs: list positive) (s: PS.t) :=
   fold_left (fun s x => PS.add x s) xs s.
 
@@ -560,6 +616,44 @@ Proof.
   apply ps_adds_spec in Hin.
   rewrite PSF.add_iff in Hin.
   destruct Hin as [|[Hin|Hin]]; intuition.
+Qed.
+
+Lemma Permutation_PS_elements_ps_adds:
+  forall xs S,
+    NoDup xs ->
+    Forall (fun x => ~PS.In x S) xs ->
+    Permutation (PS.elements (ps_adds xs S)) (xs ++ PS.elements S).
+Proof.
+  induction xs as [|x xs IH]; auto.
+  intros S Hnd Hni.
+  apply NoDup_Permutation.
+  - apply NoDup_NoDupA, PS.elements_spec2w.
+  - apply NoDup_app'; auto.
+    apply NoDup_NoDupA, PS.elements_spec2w.
+    apply Forall_impl_In with (2:=Hni).
+    setoid_rewrite In_PS_elements; auto.
+  - apply NoDup_cons' in Hnd as (Hnxs & Hnd).
+    apply Forall_cons2 in Hni as (HnS & Hni).
+    simpl; intro y.
+    setoid_rewrite (IH _ Hnd).
+    + repeat rewrite in_app.
+      repeat rewrite In_PS_elements.
+      rewrite PS.add_spec.
+      split; intros [HH|[HH|HH]]; auto.
+    + apply Forall_impl_In with (2:=Hni).
+      intros z Hzxs Hnzs HzxS.
+      apply PSF.add_3 in HzxS; auto.
+      intro; subst; auto.
+Qed.
+
+Lemma Subset_ps_adds:
+  forall xs S S',
+    PS.Subset S S' ->
+    PS.Subset (ps_adds xs S) (ps_adds xs S').
+Proof.
+  induction xs as [|x xs IH]; auto.
+  intros S S' Hsub. simpl. apply IH.
+  rewrite Hsub. reflexivity.
 Qed.
 
 Definition ps_removes (xs: list positive) (s: PS.t)

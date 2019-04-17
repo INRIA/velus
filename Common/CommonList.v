@@ -89,6 +89,15 @@ Section Extra.
     induction l; simpl; auto.
   Qed.
 
+  Lemma fold_left_map_fst:
+    forall {B C} f xs (acc : C),
+      fold_left (fun acc xy => f acc (fst xy)) xs acc
+      = fold_left f (map (@fst A B) xs) acc.
+  Proof.
+    induction xs; auto.
+    simpl. now setoid_rewrite IHxs.
+  Qed.
+
   Remark not_In_app:
     forall (x: A) l1 l2,
       ~ In x l2 ->
@@ -145,6 +154,16 @@ Section Extra.
     - subst x; apply in_eq.
   Qed.
 
+  Lemma In_weaken_cons:
+    forall {A} (y x:A) xs,
+      In x (y::xs) ->
+      x <> y ->
+      In x xs.
+  Proof.
+    intros ** Hin Hnxy.
+    inv Hin; congruence.
+  Qed.
+
   Lemma in_filter:
     forall f x (l: list A), In x (filter f l) -> In x l.
   Proof.
@@ -160,6 +179,13 @@ Section Extra.
       Forall (fun y => ~ In y [x]) ys.
   Proof.
     induction ys; auto; simpl; intros; constructor; auto; intros [|]; auto.
+  Qed.
+
+  Global Add Parametric Morphism {A} : (@length A)
+      with signature @Permutation.Permutation A ==> eq
+        as length_permutation.
+  Proof.
+    intros. now apply Permutation.Permutation_length.
   Qed.
 
   Lemma length_nil:
@@ -818,6 +844,14 @@ Section Permutation.
   - simpl. now rewrite IHHperm.
   - simpl. do 2 rewrite app_assoc. now rewrite (Permutation_app_comm x y).
   - now transitivity (concat l').
+  Qed.
+
+  Lemma Permutation_rev_append:
+    forall {A} (xs zs : list A),
+      Permutation (rev_append zs xs) (zs ++ xs).
+  Proof.
+    setoid_rewrite rev_append_rev.
+    symmetry. apply Permutation_app_tail, Permutation_rev.
   Qed.
 
   Definition notb (f: A -> bool) (x: A) := negb (f x).

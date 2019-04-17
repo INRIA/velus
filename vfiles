@@ -8,6 +8,7 @@ RMemory.v
 Common/CommonList.v
 Common/CommonTactics.v
 Common.v
+CheckGraph.v
 
 Lustre/LSemantics.v
 Lustre/LSyntax.v

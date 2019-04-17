@@ -512,6 +512,31 @@ Module Env.
           reflexivity.
     Qed.
 
+    Lemma InA_map_fst:
+      forall {A} x xs y,
+        SetoidList.InA eq x (List.map (@fst positive A) xs)
+        <-> SetoidList.InA (@eq_key A) (x, y) xs.
+    Proof.
+      induction xs as [|(i, a) xs IH]; simpl; split; try (now inversion 1).
+      - inversion 1 as [|? ? HH]; subst. now constructor.
+        apply (IH y) in HH. inv H; constructor (assumption).
+      - inversion 1 as [|? ? HH]; subst. now constructor.
+        apply IH in HH. inv H; constructor (assumption).
+    Qed.
+
+    Lemma NoDupA_map_fst:
+      forall {A} xs,
+        SetoidList.NoDupA eq (List.map (@fst positive A) xs)
+        <-> SetoidList.NoDupA (@eq_key A) xs.
+    Proof.
+      induction xs as [|(i, a) xs IH]; simpl.
+      - split; inversion 1; auto.
+      - split; inversion 1 as [|? ? Hni Hnd];
+          subst; constructor; try (apply IH; auto).
+        + rewrite InA_map_fst in Hni; eassumption.
+        + rewrite InA_map_fst; eassumption.
+    Qed.
+
     Lemma NoDupMembers_elements:
       forall m,
         NoDupMembers (@elements A m).
