@@ -292,12 +292,13 @@ Lemma behavior_clight:
     wt_global G ->
     wt_ins G main ins ->
     wt_outs G main outs ->
+    normal_args G ->
     sem_node G main (pstr ins) (pstr outs) ->
     nl_to_cl main G = OK P ->
     exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_io G main ins outs T.
 Proof.
-  intros ** Hwc Hwt Hwti Hwto Hsem COMP.
+  intros ** Hwc Hwt Hwti Hwto Hnorm Hsem COMP.
   unfold nl_to_cl in COMP.
   simpl in COMP; repeat rewrite print_identity in COMP.
   destruct (schedule_program (NL2SB.translate G)) eqn: Sch;
@@ -327,8 +328,7 @@ Proof.
   assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G))).
   { split; [|split]; auto.
     - apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto.
-    - apply Scheduler.scheduler_normal_args, NL2SBNormalArgs.translate_normal_args.
-      admit.
+    - apply Scheduler.scheduler_normal_args, NL2SBNormalArgs.translate_normal_args; auto.
   }
   apply NL2SBCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
   assert (forall n, Forall2 SB2ObcCorr.eq_if_present (pstr ins n) (map Some (ins n)))
@@ -461,6 +461,7 @@ Proof.
   simpl in *. unfold compile, print in Comp.
   rewrite Elab in Comp; simpl in Comp.
   destruct (nl_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
+  assert (normal_args G) by admit.
   edestruct behavior_clight as (T & Beh & Bisim); eauto.
   eapply reacts_trace_preservation in Comp; eauto.
   apply add_builtins_spec; auto.
