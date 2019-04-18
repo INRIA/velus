@@ -17,7 +17,7 @@ open BinNums
 open BinPos
 open FMapPositive
 
-type ident = Common.ident
+type ident = ClockDefs.ident
 type idents = ident list
 
 let extern_atom = Camlcoq.extern_atom
@@ -62,82 +62,51 @@ module PrintFun
                           and type unop  = CE.unop
                           and type binop = CE.binop) :
   sig
-    val print_equation : formatter -> SB.equation -> unit
-    val print_block    : Format.formatter -> SB.block -> unit
-    val print_program   : Format.formatter -> SB.program -> unit
+    val print_equation   : formatter -> SB.equation -> unit
+    val print_block      : Format.formatter -> SB.block -> unit
+    val print_program    : Format.formatter -> SB.program -> unit
+    val print_fullclocks : bool ref
   end
   =
   struct
 
     include Coreexprlib.PrintFun (CE) (PrintOps)
 
-    let print_clock_decl p ck =
-      match ck with
-      | CE.Cbase -> ()
-      | CE.Con (ck', x, b) ->
-        fprintf p " :: @[<hov 3>%a@]" print_clock ck
-
-    let print_decl p (id, (ty, ck)) =
-      fprintf p "%s@ : %a%a"
-        (extern_atom id)
-        PrintOps.print_typ ty
-        print_clock_decl ck
-
-    let print_decl_list = print_list print_decl
-
     let print_last p (id, (c0, ck)) =
-      fprintf p "%s@ = %a:%a"
-        (extern_atom id)
+      fprintf p "%a@ = %a:%a"
+        print_ident id
         PrintOps.print_const c0
         print_clock_decl ck
 
-    let print_last_list = print_list print_last
-
     let print_block p (id, f) =
-      fprintf p "<%s>@ : %s"
-        (extern_atom id)
-        (extern_atom f)
-
-    let print_block_list = print_list print_block
-
-    let print_ident p i = fprintf p "%s" (extern_atom i)
-
-    let print_multiple_results p xs =
-      match xs with
-      | [x] -> print_ident p x
-      | xs  -> fprintf p "(%a)" (print_list print_ident) xs
+      fprintf p "<%a>@ : %a"
+        print_ident id
+        print_ident f
 
     let rec print_equation p eq =
       match eq with
       | SB.EqDef (x, ck, e) ->
-        fprintf p "@[<hov 2>%s =@ %a@]"
-          (extern_atom x) print_cexpr e
+        fprintf p "@[<hov 2>%a =@ %a@]"
+          print_ident x
+          print_cexp e
       | SB.EqNext (x, ck, e) ->
-        fprintf p "@[<hov 2>next@ %s =@ %a@]"
-          (extern_atom x) print_lexpr e
+        fprintf p "@[<hov 2>next@ %a =@ %a@]"
+          print_ident x
+          print_lexp e
       | SB.EqReset (s, ck, f) ->
-        fprintf p "@[<hov 2>reset(%s<%s>)@ every@ (%a)@]"
-            (extern_atom f)
-            (extern_atom s)
+        fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
+            print_ident f
+            print_ident s
             print_clock ck
       | SB.EqCall (s, xs, ck, _, f, es) ->
-        fprintf p "@[<hov 2>%a =@ %s<%s>(@[<hv 0>%a@])@]"
-          print_multiple_results xs
-          (extern_atom f)
-          (extern_atom s)
-          (print_list print_lexpr) es
+        fprintf p "@[<hov 2>%a =@ %a<%a>(@[<hv 0>%a@])@]"
+          print_pattern xs
+          print_ident f
+          print_ident s
+          (print_comma_list print_lexp) es
 
     let print_equations p =
-      let rec print first eqs =
-        match eqs with
-        | [] -> ()
-        | eq :: eqs ->
-          (if first
-           then print_equation p eq
-           else fprintf p "@;%a" print_equation eq);
-          print false eqs
-      in
-      print true
+      pp_print_list ~pp_sep:pp_force_newline print_equation p
 
     let print_block p { SB.b_name   = name;
                         SB.b_in     = inputs;
@@ -146,30 +115,26 @@ module PrintFun
                         SB.b_lasts  = lasts;
                         SB.b_blocks = blocks;
                         SB.b_eqs    = eqs } =
-      fprintf p "@[<v>";
-      fprintf p "@[<hov 0>";
-      fprintf p "@[<h>block %s (%a)@]@;"
-        (extern_atom name)
-        print_decl_list inputs;
-      fprintf p "@[<h>returns (%a)@]@;"
-        print_decl_list outputs;
-      fprintf p "@]@;";
-      if List.length locals > 0 then
-        fprintf p "@[<h>var @[<hov 4>%a@];@]@;"
-          print_decl_list locals;
-      if List.length lasts > 0 then
-        fprintf p "@[<h>init @[<hov 4>%a@];@]@;"
-          print_last_list lasts;
-      if List.length blocks > 0 then
-        fprintf p "@[<h>sub @[<hov 4>%a@];@]@;"
-          print_block_list blocks;
-      fprintf p "@[<v 2>let@;%a@;<0 -2>@]" print_equations (List.rev eqs);
-      fprintf p "tel@]"
+      fprintf p "@[<v>\
+                 @[<hov 0>\
+                 @[<h>block %a (%a)@]@;\
+                 @[<h>returns (%a)@]@;\
+                 @]@;\
+                 %a%a%a\
+                 @[<v 2>let@;%a@;<0 -2>@]\
+                 tel@]"
+        print_ident name
+        print_decl_list inputs
+        print_decl_list outputs
+        (print_comma_list_as "var" print_decl) locals
+        (print_comma_list_as "init" print_last) lasts
+        (print_comma_list_as "sub" print_block) blocks
+        print_equations (List.rev eqs)
 
     let print_program p prog =
-      fprintf p "@[<v 0>";
-      List.iter (fprintf p "@;%a@;" print_block) prog;
-      fprintf p "@]@."
+      fprintf p "@[<v 0>%a@]@."
+        (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_block)
+        (List.rev prog)
   end
 
 module SchedulerFun
@@ -181,7 +146,7 @@ module SchedulerFun
                  and type cexp  = CE.cexp
                  and type lexps = CE.lexps) :
   sig
-    val schedule : Common.ident -> SB.equation list -> BinNums.positive list
+    val schedule : ident -> SB.equation list -> BinNums.positive list
   end
   =
   struct

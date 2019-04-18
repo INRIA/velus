@@ -17,7 +17,7 @@ open BinNums
 open BinPos
 open FMapPositive
 
-type ident = Common.ident
+type ident = ClockDefs.ident
 type idents = ident list
 
 let extern_atom = Camlcoq.extern_atom
@@ -103,18 +103,20 @@ module PrintFun (L: SYNTAX)
       | L.Eite _   -> ( 5, LtoR)
       | L.Eapp _   -> ( 4, NA)
 
+    let print_ident p i = pp_print_string p (extern_atom i)
+
     let rec print_clock p ck =
       match ck with
       | L.Cbase -> fprintf p "."
       | L.Con (ck', x, b) ->
-          fprintf p "%a %s %s"
+          fprintf p "%a %s %a"
             print_clock ck'
             (if b then "on" else "onot")
-            (extern_atom x)
+            print_ident x
 
     let print_ckid p = function
       | L.Vidx i -> fprintf p "?c%d" (int_of_positive i)
-      | L.Vnm x  -> pp_print_string p (extern_atom x)
+      | L.Vnm x  -> print_ident p x
 
     let rec print_sclock p sck =
       match sck with
@@ -128,10 +130,15 @@ module PrintFun (L: SYNTAX)
     let print_nclock p = function
       | L.Cstream sck -> print_sclock p sck
       | L.Cnamed (cid, sck) ->
-          fprintf p "(%a : @[<hov 2>%a@])" print_ckid cid print_sclock sck
+        fprintf p "(%a : @[<hov 2>%a@])"
+          print_ckid cid
+          print_sclock sck
 
     let print_ncks =
       pp_print_list ~pp_sep:(fun p () -> fprintf p " *@ ") print_nclock
+
+    let print_comma_list p =
+      pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") p
 
     let rec exp prec p e =
       let (prec', assoc) = precedence e in
@@ -144,30 +151,39 @@ module PrintFun (L: SYNTAX)
       else fprintf p "@[<hov 2>";
       begin match e with
       | L.Econst c ->
-          PrintOps.print_const p c
+        PrintOps.print_const p c
       | L.Evar (id, _) ->
-          fprintf p "%s" (extern_atom id)
+        print_ident p id
       | L.Eunop  (op, e, (ty, _)) ->
-          PrintOps.print_unop p op ty (exp prec') e
+        PrintOps.print_unop p op ty (exp prec') e
       | L.Ebinop (op, e1, e2, (ty, _)) ->
-          PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
+        PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
       | L.Efby (e0s, es, _) ->
-          fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
+        fprintf p "%a fby@ %a" (exp_list prec1) e0s (exp_list prec2) es
       | L.Ewhen (e, x, v, _) ->
-          if v
-          then fprintf p "%a when %s" (exp_list prec') e (extern_atom x)
-          else fprintf p "%a when not %s" (exp_list prec') e (extern_atom x)
+        fprintf p "%a when%s %a"
+          (exp_list prec') e
+          (if v then "" else " not")
+          print_ident x
       | L.Emerge (id, e1s, e2s, _) ->
-          fprintf p "merge %s@ %a@ %a"
-            (extern_atom id) (exp_list 16) e1s (exp_list 16) e2s
+        fprintf p "merge %a@ %a@ %a"
+          print_ident id
+          (exp_list 16) e1s
+          (exp_list 16) e2s
       | L.Eite (e, e1s, e2s, _) ->
-          fprintf p "if %a@ then %a@ else %a"
-            (exp 16) e (exp_list 16) e1s (exp_list 16) e2s
+        fprintf p "if %a@ then %a@ else %a"
+          (exp 16) e
+          (exp_list 16) e1s
+          (exp_list 16) e2s
       | L.Eapp (f, es, anns) ->
-          if !print_appclocks
-          then fprintf p "%s@[<v 1>%a@ (* @[<hov>%a@] *)@]"
-                 (extern_atom f) exp_arg_list es print_ncks (List.map snd anns)
-          else fprintf p "%s%a" (extern_atom f) exp_arg_list es
+        if !print_appclocks
+        then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
+            print_ident f
+            exp_arg_list es
+            print_ncks (List.map snd anns)
+        else fprintf p "%a%a"
+            print_ident f
+            exp_arg_list es
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
@@ -178,7 +194,7 @@ module PrintFun (L: SYNTAX)
 
     and exp_arg_list p es =
       fprintf p "(@[<hv 0>%a@])"
-        (pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") (exp 0)) es
+        (print_comma_list (exp 0)) es
 
     let print_exp = exp 0
 
@@ -188,31 +204,33 @@ module PrintFun (L: SYNTAX)
       | L.Con (ck', x, b) ->
           if !print_fullclocks
           then fprintf p " :: @[<hov 3>%a@]" print_clock ck
-          else fprintf p " when%s %s"
-                (if b then "" else " not")
-                (extern_atom x)
+          else fprintf p " when%s %a"
+              (if b then "" else " not")
+              print_ident x
 
     let print_decl p (id, (ty, ck)) =
-      fprintf p "%s@ : %a%a"
-        (extern_atom id)
+      fprintf p "%a@ : %a%a"
+        print_ident id
         PrintOps.print_typ ty
         print_clock_decl ck
 
-    let print_decl_list =
-      pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") print_decl
-
-    let print_ident p i = pp_print_string p (extern_atom i)
+    let print_decl_list = print_comma_list print_decl
 
     let print_pattern p xs =
       match xs with
       | [x] -> print_ident p x
-      | xs  ->
-        fprintf p "(@[<hv 0>%a@])"
-          (pp_print_list ~pp_sep:(fun p () -> fprintf p ",@ ") print_ident) xs
+      | xs  -> fprintf p "(@[<hv 0>%a@])"
+                 (print_comma_list print_ident) xs
 
     let rec print_equation p (xs, es) =
       fprintf p "@[<hov 2>%a =@ %a;@]"
         print_pattern xs (exp_list 0) es
+
+    let print_comma_list_as name px p xs =
+    if List.length xs > 0 then
+      fprintf p "@[<h>%s @[<hov 4>%a@];@]@;"
+        name
+        (print_comma_list px) xs
 
     let print_node p { L.n_name     = name;
                        L.n_hasstate = hasstate;
@@ -220,25 +238,23 @@ module PrintFun (L: SYNTAX)
                        L.n_out      = outputs;
                        L.n_vars     = locals;
                        L.n_eqs      = eqs } =
-      fprintf p "@[<v>";
-      fprintf p "@[<hov 0>";
-        fprintf p "@[<h>%s %s (%a)@]@;"
-          (if hasstate then "node" else "fun")
-          (extern_atom name)
-          print_decl_list inputs;
-        fprintf p "@[<h>returns (%a)@]@;"
-          print_decl_list outputs;
-      fprintf p "@]@;";
-      if List.length locals > 0 then
-        fprintf p "@[<h>var @[<hov 4>%a@];@]@;"
-          print_decl_list locals;
-      fprintf p "@[<v 2>let@;%a@;<0 -2>@]"
-        (pp_print_list print_equation) (List.rev eqs);
-      fprintf p "tel@]"
+      fprintf p "@[<v>\
+                 @[<hov 0>\
+                 @[<h>%s %a (%a)@]@;\
+                 @[<h>returns (%a)@]@;\
+                 @]@;\
+                 %a\
+                 @[<v 2>let@;%a@;<0 -2>@]\
+                 tel@]"
+        (if hasstate then "node" else "fun")
+        print_ident name
+        print_decl_list inputs
+        print_decl_list outputs
+        (print_comma_list_as "var" print_decl) locals
+        (pp_print_list print_equation) (List.rev eqs)
 
     let print_global p prog =
-      fprintf p "@[<v 0>";
-      List.iter (fprintf p "@;%a@;" print_node) (List.rev prog);
-      fprintf p "@]@."
+      fprintf p "@[<v 0>%a@]@."
+        (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_node)
+        (List.rev prog)
   end
-

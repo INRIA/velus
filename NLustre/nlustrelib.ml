@@ -17,10 +17,8 @@ open BinNums
 open BinPos
 open FMapPositive
 
-type ident = Common.ident
+type ident = ClockDefs.ident
 type idents = ident list
-
-let extern_atom = Camlcoq.extern_atom
 
 module type SYNTAX =
   sig
@@ -59,94 +57,63 @@ module PrintFun
                           and type unop  = CE.unop
                           and type binop = CE.binop) :
   sig
+    val print_equation   : formatter -> NL.equation -> unit
+    val print_node       : Format.formatter -> NL.node -> unit
+    val print_global     : Format.formatter -> NL.global -> unit
     val print_fullclocks : bool ref
-    val print_equation : formatter -> NL.equation -> unit
-    val print_node     : Format.formatter -> NL.node -> unit
-    val print_global   : Format.formatter -> NL.global -> unit
   end
   =
   struct
 
     include Coreexprlib.PrintFun (CE) (PrintOps)
 
-    let print_fullclocks = ref false
-
-    let print_clock_decl p ck =
-      match ck with
-      | CE.Cbase -> ()
-      | CE.Con (ck', x, b) ->
-        if !print_fullclocks
-        then fprintf p " :: @[<hov 3>%a@]" print_clock ck
-        else fprintf p " when%s %s"
-            (if b then "" else " not")
-            (extern_atom x)
-
-    let print_decl p (id, (ty, ck)) =
-      fprintf p "%s@ : %a%a"
-        (extern_atom id)
-        PrintOps.print_typ ty
-        print_clock_decl ck
-
-    let print_ident p i = pp_print_string p (extern_atom i)
-
-    let print_pattern p xs =
-      match xs with
-      | [x] -> print_ident p x
-      | xs  -> fprintf p "(@[<hv 0>%a@])" (print_comma_list print_ident) xs
-
     let rec print_equation p eq =
       match eq with
       | NL.EqDef (x, ck, e) ->
-          fprintf p "@[<hov 2>%s =@ %a;@]"
-            (extern_atom x) print_cexpr e
+          fprintf p "@[<hov 2>%a =@ %a;@]"
+            print_ident x
+            print_cexp e
       | NL.EqApp (xs, ck, f, es, None) ->
-          fprintf p "@[<hov 2>%a =@ %s(@[<hv 0>%a@]);@]"
+          fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@]);@]"
             print_pattern xs
-            (extern_atom f)
-            (print_list print_lexpr) es
+            print_ident f
+            (print_comma_list print_lexp) es
       | NL.EqApp (xs, ck, f, es, Some r) ->
-        fprintf p "@[<hov 2>%a =@ %s(@[<hv 0>%a@])@ every@ %s;@]"
-          print_multiple_results xs
-          (extern_atom f)
-          (print_list print_lexpr) es
-          (extern_atom r)
+        fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@])@ every@ %a;@]"
+          print_pattern xs
+          print_ident f
+          (print_comma_list print_lexp) es
+          print_ident r
       | NL.EqFby (x, ck, v0, e) ->
-          fprintf p "@[<hov 2>%s =@ %a fby@ %a;@]"
-            (extern_atom x) PrintOps.print_const v0 print_lexp e
+          fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
+            print_ident x
+            PrintOps.print_const v0
+            print_lexp e
 
     let print_equations p =
-      let rec print first eqs =
-        match eqs with
-        | [] -> ()
-        | eq :: eqs ->
-            (if first
-             then print_equation p eq
-             else fprintf p "@;%a" print_equation eq);
-            print false eqs
-      in
-      print true
+      pp_print_list ~pp_sep:pp_force_newline print_equation p
 
     let print_node p { NL.n_name = name;
                        NL.n_in   = inputs;
                        NL.n_out  = outputs;
                        NL.n_vars = locals;
                        NL.n_eqs  = eqs } =
-      fprintf p "@[<v>";
-      fprintf p "@[<hov 0>";
-        fprintf p "@[<h>node %s (%a)@]@;"
-          (extern_atom name)
-          (print_comma_list print_decl) inputs;
-        fprintf p "@[<h>returns (%a)@]@;"
-          (print_comma_list print_decl) outputs;
-      fprintf p "@]@;";
-      if List.length locals > 0 then
-        fprintf p "@[<h>var @[<hov 4>%a@];@]@;"
-          (print_comma_list print_decl) locals;
-      fprintf p "@[<v 2>let@;%a@;<0 -2>@]" print_equations (List.rev eqs);
-      fprintf p "tel@]"
+      fprintf p "@[<v>\
+                 @[<hov 0>\
+                 @[<h>node %a (%a)@]@;\
+                 @[<h>returns (%a)@]@;\
+                 @]@;\
+                 %a\
+                 @[<v 2>let@;%a@;<0 -2>@]\
+                 tel@]"
+        print_ident name
+        print_decl_list inputs
+        print_decl_list outputs
+        (print_comma_list_as "var" print_decl) locals
+        print_equations (List.rev eqs)
 
     let print_global p prog =
-      fprintf p "@[<v 0>";
-      List.iter (fprintf p "@;%a@;" print_node) prog;
-      fprintf p "@]@."
+      fprintf p "@[<v 0>%a@]@."
+        (pp_print_list ~pp_sep:(fun p () -> fprintf p "@;@;") print_node)
+        (List.rev prog)
   end

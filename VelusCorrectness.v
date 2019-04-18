@@ -104,7 +104,8 @@ Axiom add_builtins_spec:
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
-  elab_declarations D @@@ (fun g => nl_to_cl main_node (proj1_sig g))
+  elab_declarations D
+                    @@@ (fun g => nl_to_cl main_node (proj1_sig g))
                     @@ print print_Clight
                     @@ add_builtins
                     @@@ transf_clight2_program.
@@ -451,7 +452,7 @@ Theorem behavior_asm:
     elab_declarations D = OK (exist _ G Gp) ->
     wt_ins G main ins ->
     wt_outs G main outs ->
-    sem_node G main (vstr ins) (vstr outs) ->
+    sem_node G main (pstr ins) (pstr outs) ->
     compile D main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.

@@ -141,7 +141,7 @@ module PrintClightOpsFun (OpNames : sig
       fprintf p "%a@ %s %a" print_exp1 e1
                             (OpNames.name_binop ty op)
                             print_exp2 e2
-      
+
     let prec_unop op = (15, RtoL)
     let prec_binop =
       let open Cop in function
@@ -162,9 +162,19 @@ module Basics = struct
   type binop = Interface.Op.binop
 end
 
+module PrintOps = PrintClightOpsFun (LustreOpNames)
+
+module PrintLustre = Lustrelib.PrintFun
+    (struct
+      include ClockDefs
+      include Instantiator.L.Syn
+      include Basics
+    end)
+    (PrintOps)
+
 module CE = struct
   include Basics
-  include Instantiator.Clks
+  include ClockDefs
   include Instantiator.CE.Syn
 end
 
@@ -174,7 +184,7 @@ module PrintNLustre = Nlustrelib.PrintFun
       include CE
       include Instantiator.NL.Syn
     end)
-    (PrintClightOpsFun (LustreOpNames))
+    (PrintOps)
 
 module PrintSyBloc = Sybloclib.PrintFun
     (CE)
@@ -182,13 +192,14 @@ module PrintSyBloc = Sybloclib.PrintFun
       include CE
       include Instantiator.SB.Syn
     end)
-    (PrintClightOpsFun (LustreOpNames))
+    (PrintOps)
 
 module PrintObc = Obclib.PrintFun
   (struct
     include Basics
     include Instantiator.Obc.Syn
-   end) (PrintClightOpsFun (ClightOpNames))
+   end)
+  (PrintOps)
 
 module SyncFun = Obclib.SyncFun
   (struct

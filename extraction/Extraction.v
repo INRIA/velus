@@ -148,17 +148,16 @@ Extract Constant Cabs.char_code => "int64".
 Extract Constant LustreElab.do_add_when_to_constants =>
     "Veluslib.do_add_when_to_constants".
 
-Extract Constant VelusCorrectness.print_lustre =>
-  "Veluslib.print_lustre_if".
+(* Extract Constant VelusCorrectness.print_lustre => *)
+(*   "Veluslib.print_lustre_if". *)
 Extract Constant VelusCorrectness.print_snlustre =>
   "Veluslib.print_snlustre_if".
 Extract Constant VelusCorrectness.print_sybloc => "Veluslib.print_sybloc_if".
-Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
-Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
-Extract Constant VelusCorrectness.do_sync => "Veluslib.do_sync".
-Extract Constant VelusCorrectness.do_expose => "Veluslib.do_expose".
-Extract Constant VelusCorrectness.schedule =>
-  "Interfacelib.Scheduler.schedule".
+Extract Constant VelusCorrectness.print_obc    => "Veluslib.print_obc_if".
+Extract Constant VelusCorrectness.do_fusion    => "Veluslib.do_fusion".
+Extract Constant VelusCorrectness.do_sync      => "Veluslib.do_sync".
+Extract Constant VelusCorrectness.do_expose    => "Veluslib.do_expose".
+Extract Constant VelusCorrectness.schedule     => "Interfacelib.Scheduler.schedule".
 
 (* builtins *)
 Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".
@@ -168,7 +167,7 @@ Separate Extraction
          Compiler.transf_clight_program Cabs
          AST.signature_main
          VelusCorrectness.compile elab_declarations translation_unit_file
-         Instantiator.LtoNL.to_global (* XXX *)
+         Instantiator.L2NL.to_global (* XXX *)
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg

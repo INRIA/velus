@@ -91,9 +91,12 @@ let hacked_compile d main_node =
   apply_partial
     (apply_total
       (apply_total
-        (apply_partial (Instantiator.LtoNL.to_global d)
-                       (fun g -> df_to_cl main_node g))
-        (print print_Clight)) add_builtins) ClightToAsm.transf_clight2_program
+         (apply_partial
+            (Instantiator.L2NL.to_global d)
+            (nl_to_cl main_node))
+         (print print_Clight))
+      add_builtins)
+    ClightToAsm.transf_clight2_program
 (* XXX *)
 
 let compile source_name filename =
@@ -151,8 +154,9 @@ let process file =
     raise (Arg.Bad ("don't know what to do with " ^ file))
 
 let set_fullclocks () =
+  Interfacelib.PrintLustre.print_fullclocks := true;
   Interfacelib.PrintNLustre.print_fullclocks := true;
-  Interfacelib.PrintLustre.print_fullclocks := true
+  Interfacelib.PrintSyBloc.print_fullclocks := true
 
 let speclist = [
   "-main", Arg.String set_main_node, " Specify the main node";
@@ -195,4 +199,3 @@ let _ =
 
 let _ =
   Arg.parse (Arg.align speclist) process usage_msg
-

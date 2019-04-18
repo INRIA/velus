@@ -1,7 +1,7 @@
 B _build
 B _build/extraction/extracted
 S .
-S Lustre/Parser
+S Lustre
 S CoreExpr
 S NLustre
 S SyBloc

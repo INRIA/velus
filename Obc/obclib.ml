@@ -13,7 +13,7 @@
 open Format
 open Veluscommon
 
-type ident = Common.ident
+type ident = ClockDefs.ident
 let extern_atom = Camlcoq.extern_atom
 
 module type SYNTAX =
