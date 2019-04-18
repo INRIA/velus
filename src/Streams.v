@@ -2,6 +2,7 @@ From Coq Require Import List.
 From Coq Require Export Lists.Streams.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
+From Coq Require Import Arith.EqNat.
 
 From Velus Require Import Common.
 
@@ -194,4 +195,83 @@ Proof.
   constructor; inv H.
   - eapply P_compat; eauto.
   - apply IHx; auto.
+Qed.
+
+CoFixpoint mask {A} (opaque: A) (k: nat) (rs: Stream bool) (xs: Stream A)
+  : Stream A :=
+  let mask' k' := mask opaque k' (tl rs) (tl xs) in
+  match k, hd rs with
+  | 0, true    => Streams.const opaque
+  | 0, false   => hd xs  ::: mask' 0
+  | 1, true    => hd xs  ::: mask' 0
+  | S k', true => opaque ::: mask' k'
+  | S _, false => opaque ::: mask' k
+  end.
+
+CoFixpoint count_acc (s: nat) (rs: Stream bool): Stream nat :=
+  let s := if hd rs then S s else s in
+  s ::: count_acc s (tl rs).
+
+Definition count := count_acc 0.
+
+Lemma count_acc_grow_trans:
+  forall s s' rs,
+    s' <= s ->
+    ForAll (fun x => s' <= hd x) (count_acc s rs).
+Proof.
+  cofix Cofix; intros.
+  constructor; simpl; destruct (hd rs); auto.
+Qed.
+
+Corollary count_acc_grow:
+  forall s rs,
+    ForAll (fun x => s <= hd x) (count_acc s rs).
+Proof.
+  intros; apply count_acc_grow_trans; auto.
+Qed.
+
+Lemma count_S_nth:
+  forall n s rs,
+    hd (Str_nth_tl n (count_acc (S s) rs)) =
+    S (hd (Str_nth_tl n (count_acc s rs))).
+Proof.
+  unfold Str_nth.
+  induction n; simpl; intros; destruct (hd rs); auto.
+Qed.
+
+Lemma mask_nth:
+  forall {A} n (o: A) k rs xs,
+    Str_nth n (mask o k rs xs) =
+    if beq_nat (Str_nth n (count rs)) k then Str_nth n xs else o.
+Proof.
+  unfold Str_nth.
+  induction n, k as [|[|k]]; intros;
+    unfold_Stv rs; simpl; auto.
+  - pose proof (count_acc_grow 1 rs) as H.
+    apply (ForAll_Str_nth_tl n) in H; inv H.
+    assert (hd (Str_nth_tl n (count_acc 1 rs)) <> 0) as E by omega;
+      apply beq_nat_false_iff in E; rewrite E.
+    pose proof (const_nth n o); auto.
+  - rewrite IHn; unfold count.
+    destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) 1) eqn: E;
+      rewrite count_S_nth in E.
+    + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
+    + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+        rewrite E; auto.
+  - rewrite IHn; unfold count.
+    destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) (S (S k))) eqn: E;
+      rewrite count_S_nth in E.
+    + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
+    + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+        rewrite E; auto.
+Qed.
+
+Remark mask_const_opaque:
+  forall {A} n rs (opaque: A),
+    mask opaque n rs (Streams.const opaque) ≡ Streams.const opaque.
+Proof.
+  cofix Cofix; intros.
+  unfold_Stv rs; rewrite (unfold_Stream (Streams.const opaque));
+    constructor; destruct n as [|[]]; simpl; auto; try apply Cofix.
+  reflexivity.
 Qed.

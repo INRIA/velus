@@ -57,7 +57,7 @@ module type SYNTAX =
     | Ewhen  of exp list * ident * bool * lann
     | Emerge of ident * exp list * exp list * lann
     | Eite   of exp * exp list * exp list * lann
-    | Eapp   of ident * exp list * ann list
+    | Eapp   of ident * exp list * exp option * ann list
 
     type equation = idents * exp list
 
@@ -175,7 +175,7 @@ module PrintFun (L: SYNTAX)
           (exp 16) e
           (exp_list 16) e1s
           (exp_list 16) e2s
-      | L.Eapp (f, es, anns) ->
+      | L.Eapp (f, es, None, anns) ->
         if !print_appclocks
         then fprintf p "%a@[<v 1>%a@ (* @[<hov>%a@] *)@]"
             print_ident f
@@ -184,6 +184,17 @@ module PrintFun (L: SYNTAX)
         else fprintf p "%a%a"
             print_ident f
             exp_arg_list es
+      | L.Eapp (f, es, Some r, anns) ->
+        if !print_appclocks
+        then fprintf p "%a@[<v 1>%a@ every@ %a@ (* @[<hov>%a@] *)@]"
+            print_ident f
+            exp_arg_list es
+            (exp prec') r
+            print_ncks (List.map snd anns)
+        else fprintf p "%a%a@ every@ %a"
+            print_ident f
+            exp_arg_list es
+            (exp prec') r
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

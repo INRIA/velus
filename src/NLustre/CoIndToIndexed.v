@@ -15,13 +15,14 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import CoreExpr.Stream.
-From Velus Require Import NLustre.Streams.
+From Velus Require Import Streams.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import NLustre.NLSemantics.
 From Velus Require Import NLustre.NLSemanticsCoInd.
 
 From Coq Require Import Setoid.
+
 Module Type COINDTOINDEXED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
@@ -722,17 +723,17 @@ Module Type COINDTOINDEXED
     (** State the correspondence for [count]. *)
     Lemma count_impl:
       forall r,
-        tr_Stream (CoInd.count r) ≈ count (tr_Stream r).
+        tr_Stream (Streams.count r) ≈ count (tr_Stream r).
     Proof.
-      intros * n.
-      unfold CoInd.count.
+      intros ** n.
+      unfold Streams.count.
       revert r; induction n; intros; simpl.
-      - rewrite (unfold_Stream (CoInd.count_acc 0 r)); simpl.
+      - rewrite (unfold_Stream (count_acc 0 r)); simpl.
         rewrite tr_Stream_0; auto.
-      - rewrite (unfold_Stream (CoInd.count_acc 0 r)); simpl.
+      - rewrite (unfold_Stream (count_acc 0 r)); simpl.
         rewrite tr_Stream_S. destruct (hd r) eqn: R.
         + unfold tr_Stream at 1; unfold tr_Stream in IHn; unfold Str_nth in *.
-          rewrite CoInd.count_S_nth, IHn.
+          rewrite count_S_nth, IHn.
           destruct r; simpl in *; rewrite R, count_true_shift, tr_Stream_S.
           now destruct (tr_Stream r n).
         + rewrite IHn.
@@ -751,11 +752,11 @@ Module Type COINDTOINDEXED
         simpl; intros * n.
       - unfold mask.
         destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto.
-      - unfold CoInd.mask_v; rewrite tr_Stream_nth, CoInd.mask_nth.
+      - unfold CoInd.mask_v; rewrite tr_Stream_nth, mask_nth.
         unfold mask in *.
         rewrite IHxss.
-        rewrite <-count_impl, Nat.eqb_sym.
-        unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (CoInd.count r))); auto.
+        rewrite <-count_impl, NPeano.Nat.eqb_sym.
+        unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (Streams.count r))); auto.
     Qed.
 
 

@@ -17,7 +17,7 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import CoreExpr.Stream.
-From Velus Require Import NLustre.Streams.
+From Velus Require Import Streams.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
@@ -997,8 +997,8 @@ CESem.sem_lexp b H (Ewhen e x k) es
     (** State the correspondance for [count].  *)
     Lemma count_impl_from:
       forall n (r: stream bool),
-        CoInd.count_acc (if r n then count r n - 1 else count r n)
-                        (tr_stream_from n r)
+        count_acc (if r n then count r n - 1 else count r n)
+                  (tr_stream_from n r)
         ≡ tr_stream_from n (count r).
     Proof.
       (* cofix-based proof encounter the guardness criterion (Why ??)  *)
@@ -1035,8 +1035,8 @@ CESem.sem_lexp b H (Ewhen e x k) es
         unfold CoInd.mask_v, mask.
         apply ntheq_eqst; intro m.
         unfold nth_tr_streams_from.
-        rewrite init_from_nth, CoInd.mask_nth, init_from_nth.
-        unfold CoInd.count, streams_nth.
+        rewrite init_from_nth, mask_nth, init_from_nth.
+        unfold Streams.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
         assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E
             by (simpl; destruct (r 0); auto).

@@ -364,7 +364,7 @@ Section ElabExpressions.
   Definition single_annot (loc: astloc) (e: exp) : res (type * sclock) :=
     match e with
     | Econst c => OK (type_const c, Sbase)
-    | Eapp _ _ [(ty, nck)]
+    | Eapp _ _ _ [(ty, nck)]
     | Evar _ (ty, nck)
     | Eunop _ _ (ty, nck)
     | Ebinop _ _ _ (ty, nck)
@@ -388,7 +388,7 @@ Section ElabExpressions.
       let ck := stripname nck in
       map (fun ty=> ((ty, ck), loc)) tys
     | Efby _ _ anns
-    | Eapp _ _ anns =>
+    | Eapp _ _ _ anns =>
       map (fun tc => ((fst tc, stripname (snd tc)), loc)) anns
     end.
 
@@ -407,7 +407,7 @@ Section ElabExpressions.
     | Eite _ _ _ (tys, nck) =>
       map (fun ty=> ((ty, nck), loc)) tys
     | Efby _ _ anns
-    | Eapp _ _ anns => map (fun tc => (tc, loc)) anns
+    | Eapp _ _ _ anns => map (fun tc => (tc, loc)) anns
     end.
 
   Definition lannots_ty {A B} (tcl : list ((type * A) * B)) : list type :=
@@ -818,7 +818,7 @@ Section ElabExpressions.
                        (lannots_ty ants, Cstream eck), loc))
     | IFTE _ _ _ loc => err_not_singleton loc
 
-    | APP f aes r loc =>
+    | APP f aes None loc =>
       do (tyck_in, tyck_out) <- find_node_interface loc f;
       (* approximate lcks list to infer whens *)
       do aimap <- approx_imap (Env.empty ident) tyck_in aes;
@@ -834,7 +834,27 @@ Section ElabExpressions.
       do ianns <- mmap (inst_annot loc bck isubst) tyck_in;
       do oanns <- mmap (inst_annot loc bck osubst) tyck_out;
       do ok <- check_inputs loc ianns anns;
-      OK (fidx2, (Eapp f (map fst eas) oanns, loc))
+      OK (fidx2, (Eapp f (map fst eas) None oanns, loc))
+
+    | APP f aes (Some r) loc =>
+      do (tyck_in, tyck_out) <- find_node_interface loc f;
+      (* approximate lcks list to infer whens *)
+      do aimap <- approx_imap (Env.empty ident) tyck_in aes;
+      let abck := approx_base_clock lcks tyck_out in
+      let alcks := map (fun xtc=>approx_clock abck aimap (dck xtc)) tyck_in in
+      (* elaborate and check arguments *)
+      do (lfidx', eas) <- mmaps (elab_arg elab_exp') (alcks, fidx) aes;
+      let fidx1 := snd lfidx' in
+      let anns := lnannots eas in
+      let bck := calculate_base_clock tyck_in anns in
+      let isubst := make_imap (Env.empty ckid) tyck_in anns in
+      let (fidx2, osubst) := fold_left make_omap tyck_out (fidx1, isubst) in
+      do ianns <- mmap (inst_annot loc bck isubst) tyck_in;
+      do oanns <- mmap (inst_annot loc bck osubst) tyck_out;
+      do ok <- check_inputs loc ianns anns;
+      do (rty, rck) <- find_var loc r;
+      do ok <- assert_id_type loc r rty bool_type;
+      OK (fidx2, (Eapp f (map fst eas) (Some (Evar r (rty, Cnamed (Vnm r) (sclk rck)))) oanns, loc))
     end.
 
   Fixpoint check_pat (gloc: astloc)
@@ -1169,13 +1189,21 @@ Section ElabExpressions.
       destruct es. 2:now inversion Helab. simpl in Helab.
       now monadInv2 Helab.
     - (* APP *)
-      monadInv Hlen. monadInv Helab.
-      setoid_rewrite surjective_pairing in EQ4.
-      simpl in EQ4. monadInv2 EQ4.
-      rewrite EQ0 in EQ. monadInv EQ.
-      simpl. rewrite Coqlib.list_length_map.
-      monadInv EQ4. symmetry.
-      eauto using Coqlib.list_forall2_length.
+      destruct r.
+      + monadInv Hlen. monadInv Helab.
+        setoid_rewrite surjective_pairing in EQ4.
+        simpl in EQ4. monadInv2 EQ4.
+        rewrite EQ0 in EQ. monadInv EQ.
+        simpl. rewrite Coqlib.list_length_map.
+        monadInv EQ4. symmetry.
+        eauto using Coqlib.list_forall2_length.
+      + monadInv Hlen. monadInv Helab.
+        setoid_rewrite surjective_pairing in EQ4.
+        simpl in EQ4. monadInv2 EQ4.
+        rewrite EQ0 in EQ. monadInv EQ.
+        simpl. rewrite Coqlib.list_length_map.
+        monadInv EQ4. symmetry.
+        eauto using Coqlib.list_forall2_length.
     - (* CONSTANT *)
       monadInv Hlen.
       inversion_clear Helab.
@@ -1432,33 +1460,62 @@ Section ElabExpressions.
       apply IH with (1:=Hafind) (3:=Hnd) (4:=Hai) (5:=EQ1) (6:=Hfind).
       auto using inmembers_cons.
     - (* APP *)
-      monadInv Hmm. monadInv2 EQ. monadInv2 EQ1. monadInv2 EQ.
-      setoid_rewrite surjective_pairing in EQ6. simpl in EQ6.
-      monadInv2 EQ6.
-      rewrite lnannots_cons.
-      match goal with Hl: approx_imap _ (skipn (length ?xtc) _) _ = OK _ |- _ =>
-        eapply find_make_imap_skipn with (n:=length xtc) end.
-      + match goal with Hai: approx_imap _ _ _ = OK _ |- _ =>
-          eapply IH in Hai; eauto using inmembers_skipn, NoDupMembers_skipn end.
-        match goal with H:Env.find ?x ?s = Some _ |- _ =>
-          assert (Env.In x s) as Hin by (apply Env.In_find; eauto) end.
-        apply map_imap_InMembers in Hin.
-        destruct Hin as [Hin|Hin]; auto using InMembers_skipn_firstn.
-        intro Him. apply inmembers_firstn in Him.
-        apply Hnsa in Him. auto.
-      + rewrite skipn_app.
-        match goal with Hai: approx_imap _ _ _ = OK _,
-                        Hee: mmaps (elab_arg elab_exp') _ _ = OK _ |- _ =>
-          eapply IH with (1:=Hafind) (4:=Hai) (5:=Hee) (6:=Hfind);
-          eauto using inmembers_skipn, NoDupMembers_skipn
-        end.
-        simpl. rewrite Coqlib.list_length_map.
-        match goal with Hf1: find_node_interface _ _ = OK _,
-                        Hf2: find_node_interface _ _ = OK _ |- _ =>
-          rewrite Hf1 in Hf2; monadInv Hf2 end.
-        match goal with H:mmap _ ?xtc = OK ?ann |- length ?xtc = length ?ann =>
-          monadInv H end.
-        eauto using Coqlib.list_forall2_length.
+      monadInv Hmm. monadInv2 EQ. monadInv2 EQ1.
+      destruct o.
+      + monadInv2 EQ.
+        setoid_rewrite surjective_pairing in EQ6. simpl in EQ6.
+        monadInv2 EQ6.
+        rewrite lnannots_cons.
+        match goal with Hl: approx_imap _ (skipn (length ?xtc) _) _ = OK _ |- _ =>
+                        eapply find_make_imap_skipn with (n:=length xtc) end.
+        * match goal with Hai: approx_imap _ _ _ = OK _ |- _ =>
+                          eapply IH in Hai; eauto using inmembers_skipn, NoDupMembers_skipn end.
+          match goal with H:Env.find ?x ?s = Some _ |- _ =>
+                          assert (Env.In x s) as Hin by (apply Env.In_find; eauto) end.
+          apply map_imap_InMembers in Hin.
+          destruct Hin as [Hin|Hin]; auto using InMembers_skipn_firstn.
+          intro Him. apply inmembers_firstn in Him.
+          apply Hnsa in Him. auto.
+        * rewrite skipn_app.
+          match goal with Hai: approx_imap _ _ _ = OK _,
+                               Hee: mmaps (elab_arg elab_exp') _ _ = OK _ |- _ =>
+                          eapply IH with (1:=Hafind) (4:=Hai) (5:=Hee) (6:=Hfind);
+                            eauto using inmembers_skipn, NoDupMembers_skipn
+          end.
+          simpl. rewrite Coqlib.list_length_map.
+          match goal with Hf1: find_node_interface _ _ = OK _,
+                               Hf2: find_node_interface _ _ = OK _ |- _ =>
+                          rewrite Hf1 in Hf2; monadInv Hf2 end.
+          match goal with H:mmap _ ?xtc = OK ?ann |- length ?xtc = length ?ann =>
+                          monadInv H end.
+          eauto using Coqlib.list_forall2_length.
+      + monadInv2 EQ.
+        setoid_rewrite surjective_pairing in EQ6. simpl in EQ6.
+        monadInv2 EQ6.
+        rewrite lnannots_cons.
+        match goal with Hl: approx_imap _ (skipn (length ?xtc) _) _ = OK _ |- _ =>
+                        eapply find_make_imap_skipn with (n:=length xtc) end.
+        * match goal with Hai: approx_imap _ _ _ = OK _ |- _ =>
+                          eapply IH in Hai; eauto using inmembers_skipn, NoDupMembers_skipn end.
+          match goal with H:Env.find ?x ?s = Some _ |- _ =>
+                          assert (Env.In x s) as Hin by (apply Env.In_find; eauto) end.
+          apply map_imap_InMembers in Hin.
+          destruct Hin as [Hin|Hin]; auto using InMembers_skipn_firstn.
+          intro Him. apply inmembers_firstn in Him.
+          apply Hnsa in Him. auto.
+        * rewrite skipn_app.
+          match goal with Hai: approx_imap _ _ _ = OK _,
+                               Hee: mmaps (elab_arg elab_exp') _ _ = OK _ |- _ =>
+                          eapply IH with (1:=Hafind) (4:=Hai) (5:=Hee) (6:=Hfind);
+                            eauto using inmembers_skipn, NoDupMembers_skipn
+          end.
+          simpl. rewrite Coqlib.list_length_map.
+          match goal with Hf1: find_node_interface _ _ = OK _,
+                               Hf2: find_node_interface _ _ = OK _ |- _ =>
+                          rewrite Hf1 in Hf2; monadInv Hf2 end.
+          match goal with H:mmap _ ?xtc = OK ?ann |- length ?xtc = length ?ann =>
+                          monadInv H end.
+          eauto using Coqlib.list_forall2_length.
     - (* CONSTANT *)
       monadInv Hmm.
       match goal with H:context [add_whens ?loc _ ?const] |- _ =>
@@ -1784,48 +1841,94 @@ Section ElabExpressions.
         end.
         eauto with datatypes.
     - (* APP *)
-      simpl in Helab. monadInv Helab.
-      setoid_rewrite surjective_pairing in EQ3.
-      simpl in EQ3. monadInv EQ3.
-      rewrite lnannots_cons in *.
-      simpl in Helabs.
-      match goal with H:context [ skipn (length ?x) _ ] |- _ =>
-                      remember (length x) as len eqn:Hlen end.
-      rewrite <-firstn_skipn with (n:=len) in Hin.
-      apply in_app in Hin.
-      apply make_imap_notvnm_skipn with (n:=len) in Hfind.
-      + rewrite skipn_app in Hfind.
-        2:now rewrite Hlen; unfold lannots_ty; simpl;
-          repeat rewrite Coqlib.list_length_map.
-        destruct Hin as [Hin|Hin].
-        * rewrite find_make_imap_not_in_members in Hfind.
-          2:now eauto using InMembers_firstn_skipn, In_InMembers.
-          eapply Hnsa; eauto using In_firstn.
-        * apply check_inputs_app with (n:=len) in Hchk.
-          rewrite skipn_app with (n:=len) in Hchk.
-          2:rewrite Hlen; now unfold lannots_ty; simpl;
-            repeat rewrite Coqlib.list_length_map.
-          apply IH with (3:=Helabs) (5:=Hchk) (6:=Hfind) (7:=Hin);
-            auto using NoDupMembers_skipn, mmap_skipn.
-          intros; eapply Hnsa; eauto using In_skipn.
-      + simpl. rewrite CommonList.firstn_app.
-        2:now rewrite Coqlib.list_length_map; auto.
-        apply Forall_forall.
-        intros ((zty, zck), zloc) Hzin.
-        apply in_map_iff in Hzin.
-        destruct Hzin as (zann & Hzeq & Hzin).
-        destruct zann. inversion Hzeq; subst; clear Hzeq.
-        match goal with H: context [fold_left make_omap ?xs ?s] |- _ =>
-          apply mmap_inversion in H end.
-        match goal with H: Coqlib.list_forall2 _ _ _ |- _ =>
-           apply Coqlib.list_forall2_in_right with (2:=Hzin) in H;
-             destruct EQ3 as ((y, (t, c)) & Hzin2 & Hann) end.
-        simpl in Hann. monadInv Hann.
-        apply In_InMembers in Hzin2.
-        eapply find_make_omap_vidx in Hzin2.
-        destruct Hzin2 as [idx Hzin2].
-        match goal with H:_ = OK (zty, zck) |- _ =>
-          now rewrite Hzin2 in H; monadInv H end.
+      simpl in Helab.
+      destruct o.
+      + monadInv Helab.
+        setoid_rewrite surjective_pairing in EQ3.
+        simpl in EQ3. monadInv EQ3.
+        rewrite lnannots_cons in *.
+        simpl in Helabs.
+        match goal with H:context [ skipn (length ?x) _ ] |- _ =>
+                        remember (length x) as len eqn:Hlen end.
+        rewrite <-firstn_skipn with (n:=len) in Hin.
+        apply in_app in Hin.
+        apply make_imap_notvnm_skipn with (n:=len) in Hfind.
+        *{ rewrite skipn_app in Hfind.
+           2:now rewrite Hlen; unfold lannots_ty; simpl;
+             repeat rewrite Coqlib.list_length_map.
+           destruct Hin as [Hin|Hin].
+           - rewrite find_make_imap_not_in_members in Hfind.
+             2:now eauto using InMembers_firstn_skipn, In_InMembers.
+             eapply Hnsa; eauto using In_firstn.
+           - apply check_inputs_app with (n:=len) in Hchk.
+             rewrite skipn_app with (n:=len) in Hchk.
+             2:rewrite Hlen; now unfold lannots_ty; simpl;
+               repeat rewrite Coqlib.list_length_map.
+             apply IH with (3:=Helabs) (5:=Hchk) (6:=Hfind) (7:=Hin);
+               auto using NoDupMembers_skipn, mmap_skipn.
+             intros; eapply Hnsa; eauto using In_skipn.
+         }
+        * simpl. rewrite firstn_app.
+          2:now rewrite Coqlib.list_length_map; auto.
+          apply Forall_forall.
+          intros ((zty, zck), zloc) Hzin.
+          apply in_map_iff in Hzin.
+          destruct Hzin as (zann & Hzeq & Hzin).
+          destruct zann. inversion Hzeq; subst; clear Hzeq.
+          match goal with H: context [fold_left make_omap ?xs ?s] |- _ =>
+                          apply mmap_inversion in H end.
+          match goal with H: Coqlib.list_forall2 _ _ _ |- _ =>
+                          apply Coqlib.list_forall2_in_right with (2:=Hzin) in H;
+                            destruct EQ3 as ((y, (t, c)) & Hzin2 & Hann) end.
+          simpl in Hann. monadInv Hann.
+          apply In_InMembers in Hzin2.
+          eapply find_make_omap_vidx in Hzin2.
+          destruct Hzin2 as [idx Hzin2].
+          match goal with H:_ = OK (zty, zck) |- _ =>
+                          now rewrite Hzin2 in H; monadInv H end.
+      + monadInv Helab.
+        setoid_rewrite surjective_pairing in EQ3.
+        simpl in EQ3. monadInv EQ3.
+        rewrite lnannots_cons in *.
+        simpl in Helabs.
+        match goal with H:context [ skipn (length ?x) _ ] |- _ =>
+                        remember (length x) as len eqn:Hlen end.
+        rewrite <-firstn_skipn with (n:=len) in Hin.
+        apply in_app in Hin.
+        apply make_imap_notvnm_skipn with (n:=len) in Hfind.
+        *{ rewrite skipn_app in Hfind.
+           2:now rewrite Hlen; unfold lannots_ty; simpl;
+             repeat rewrite Coqlib.list_length_map.
+           destruct Hin as [Hin|Hin].
+           - rewrite find_make_imap_not_in_members in Hfind.
+             2:now eauto using InMembers_firstn_skipn, In_InMembers.
+             eapply Hnsa; eauto using In_firstn.
+           - apply check_inputs_app with (n:=len) in Hchk.
+             rewrite skipn_app with (n:=len) in Hchk.
+             2:rewrite Hlen; now unfold lannots_ty; simpl;
+               repeat rewrite Coqlib.list_length_map.
+             apply IH with (3:=Helabs) (5:=Hchk) (6:=Hfind) (7:=Hin);
+               auto using NoDupMembers_skipn, mmap_skipn.
+             intros; eapply Hnsa; eauto using In_skipn.
+         }
+        * simpl. rewrite firstn_app.
+          2:now rewrite Coqlib.list_length_map; auto.
+          apply Forall_forall.
+          intros ((zty, zck), zloc) Hzin.
+          apply in_map_iff in Hzin.
+          destruct Hzin as (zann & Hzeq & Hzin).
+          destruct zann. inversion Hzeq; subst; clear Hzeq.
+          match goal with H: context [fold_left make_omap ?xs ?s] |- _ =>
+                          apply mmap_inversion in H end.
+          match goal with H: Coqlib.list_forall2 _ _ _ |- _ =>
+                          apply Coqlib.list_forall2_in_right with (2:=Hzin) in H;
+                            destruct EQ3 as ((y, (t, c)) & Hzin2 & Hann) end.
+          simpl in Hann. monadInv Hann.
+          apply In_InMembers in Hzin2.
+          eapply find_make_omap_vidx in Hzin2.
+          destruct Hzin2 as [idx Hzin2].
+          match goal with H:_ = OK (zty, zck) |- _ =>
+                          now rewrite Hzin2 in H; monadInv H end.
     - (* CONSTANT *)
       monadInv Helab.
       match goal with H:context [add_whens ?loc _ ?const] |- _ =>
@@ -2002,8 +2105,10 @@ Section ElabExpressions.
     - (* Eapp *)
       apply Forall_map.
       inversion_clear Hwt.
-      eapply Forall_impl; eauto.
-      intros (?, ?); inversion 1; auto.
+      + eapply Forall_impl; eauto.
+        intros (?, ?); inversion 1; auto.
+      + eapply Forall_impl; eauto.
+        intros (?, ?); inversion 1; auto.
   Qed.
 
   Lemma build_whens_typeof:
@@ -2159,8 +2264,10 @@ Section ElabExpressions.
       apply in_map_iff in Hin.
       destruct Hin as (ty' & HH & Hin).
       inv HH. inv Hwt.
-      eapply Forall_forall in Hin; eauto.
-      now simpl in Hin.
+      + eapply Forall_forall in Hin; eauto.
+        now simpl in Hin.
+      + eapply Forall_forall in Hin; eauto.
+        now simpl in Hin.
   Qed.
 
   Lemma map_fst_discardname_types:
@@ -2250,15 +2357,17 @@ Section ElabExpressions.
           apply Forall_forall with (1:=Hfa) (2:=Hin) in Helab; now auto
         end.
     - (* Eunop (CastOp) *) eauto using type_castop with ltyping.
+    - (* EappReset *)
+      admit.
     - (* Eapp *)
       match goal with x:(list sclock * positive)%type |- _ =>
                       destruct x as (sclks & fidx'') end.
       match goal with x:(Env.t ident)%type |- _ => rename x into aimap end.
       setoid_rewrite surjective_pairing in EQ3.
       NamedDestructCases. simpl in *.
-      monadInv EQ3.
-      match goal with |- context [Eapp f (map fst ?x1) ?x2] =>
-        rename x1 into els, x2 into oann end.
+      inv Heq0. monadInv EQ3.
+      match goal with |- context [Eapp f (map fst ?x1) _ ?x2] =>
+                      rename x1 into els, x2 into oann end.
       match goal with H:check_inputs _ ?x _ = OK ?any |- _ =>
                       rename x into iann; destruct any end.
       unfold find_node_interface in *. NamedDestructCases.
@@ -3016,6 +3125,8 @@ Section ElabExpressions.
              end; auto.
       apply Is_index_in_nclocks_Cstream.
       now rewrite Hclockof.
+    - (* EappReset *)
+      admit.
     - (* Eapp *)
       setoid_rewrite surjective_pairing in EQ3.
       simpl in EQ3. monadInv EQ3.
@@ -3529,6 +3640,8 @@ Section ElabExpressions.
           apply Forall_forall with (1:=Hfa) (2:=Hin) in Helab; now auto
         end.
     - (* Eunop (CastOp) *) eauto with lclocking.
+    - (* EappReset *)
+      admit.
     - (* Eapp *)
       setoid_rewrite surjective_pairing in EQ3.
       simpl in EQ3. monadInv2 EQ3.
