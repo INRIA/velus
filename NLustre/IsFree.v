@@ -100,7 +100,7 @@ Module Type ISFREE
                <-> Is_free_in_eq x eq.
   Proof.
     intros; rewrite (free_in_equation_spec x eq PS.empty).
-    intuition not_In_empty.
+    intuition.
   Qed.
 
 End ISFREE.

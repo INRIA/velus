@@ -95,7 +95,7 @@ Module Type CEISFREE
     inversion_clear HH; [left; reflexivity|right; assumption].
     destruct HH as [HH|HH].
     rewrite HH; constructor.
-    constructor (assumption).
+    now constructor 2.
   Qed.
 
   Lemma Is_free_in_when_disj:
@@ -104,9 +104,7 @@ Module Type CEISFREE
   Proof.
     intros y e x c; split; intro HH.
     inversion_clear HH; auto.
-    destruct HH as [HH|HH].
-    rewrite HH; constructor (fail).
-    constructor (assumption).
+    destruct HH as [HH|HH]; try rewrite HH; auto using Is_free_in_lexp.
   Qed.
 
   Fixpoint free_in_clock_dec (ck : clock) (T: PS.t)
@@ -116,7 +114,7 @@ Module Type CEISFREE
         | Cbase => exist _ T _
         | Con ck' x c =>
           match free_in_clock_dec ck' T with
-          | exist S' HF => exist _ (PS.add x S') _
+          | exist _ S' HF => exist _ (PS.add x S') _
           end
         end).
     - intro x; split; intro HH.
@@ -127,8 +125,7 @@ Module Type CEISFREE
         destruct HH as [HH|HH].
         rewrite HH; left; constructor.
         apply HF in HH.
-        destruct HH as [HH|HH]; [left|right].
-        constructor (assumption). assumption.
+        destruct HH as [HH|HH]; [left|right]; auto using Is_free_in_clock.
       + rewrite Is_free_in_clock_disj in HH.
         apply or_assoc in HH.
         destruct HH as [HH|HH].
@@ -187,8 +184,9 @@ Module Type CEISFREE
     forall x ck, PS.In x (free_in_clock ck PS.empty)
                  <-> Is_free_in_clock x ck.
   Proof.
-    intros; pose proof (free_in_clock_spec x ck PS.empty) as H0;
-      intuition not_In_empty.
+    intros.
+    rewrite (free_in_clock_spec x ck PS.empty).
+    split; [intros [HH|HH]|intro HH]; intuition.
   Qed.
 
   Lemma free_in_lexp_spec:
@@ -229,8 +227,7 @@ Module Type CEISFREE
     forall x e, PS.In x (free_in_lexp e PS.empty)
                 <-> Is_free_in_lexp x e.
   Proof.
-    intros; pose proof (free_in_lexp_spec x e PS.empty);
-      intuition not_In_empty.
+    setoid_rewrite (free_in_lexp_spec _ _ PS.empty); intuition.
   Qed.
 
   Lemma free_in_laexp_spec:
@@ -254,8 +251,7 @@ Module Type CEISFREE
     forall x ck e, PS.In x (free_in_laexp ck e PS.empty)
                    <-> Is_free_in_laexp x ck e.
   Proof.
-    intros; pose proof (free_in_laexp_spec x ck e PS.empty);
-      intuition not_In_empty.
+    setoid_rewrite (free_in_laexp_spec _ _ _ PS.empty); intuition.
   Qed.
 
   Lemma free_in_fold_left_lexp_spec : forall x l m,
@@ -286,8 +282,7 @@ Module Type CEISFREE
     forall x ck l, PS.In x (free_in_laexps ck l PS.empty)
                    <-> Is_free_in_laexps x ck l.
   Proof.
-    intros; pose proof (free_in_laexps_spec x ck l PS.empty);
-      intuition not_In_empty.
+    setoid_rewrite (free_in_laexps_spec _ _ _ PS.empty); intuition.
   Qed.
 
   Ltac destruct_Is_free :=
@@ -334,8 +329,7 @@ Module Type CEISFREE
     forall x e, PS.In x (free_in_cexp e PS.empty)
                 <-> Is_free_in_cexp x e.
   Proof.
-    intros; pose proof (free_in_cexp_spec x e PS.empty);
-      intuition not_In_empty.
+    setoid_rewrite (free_in_cexp_spec _ _ PS.empty); intuition.
   Qed.
 
   Lemma free_in_caexp_spec:
@@ -358,8 +352,7 @@ Module Type CEISFREE
     forall x ck e, PS.In x (free_in_caexp ck e PS.empty)
                    <-> Is_free_in_caexp x ck e.
   Proof.
-    intros; rewrite (free_in_caexp_spec x ck e PS.empty).
-    intuition not_In_empty.
+    setoid_rewrite (free_in_caexp_spec _ _ _ PS.empty); intuition.
   Qed.
 
 End CEISFREE.

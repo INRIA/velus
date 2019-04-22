@@ -18,6 +18,8 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Require Import Omega.
+
 Module Type SBWELLDEFINED
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
@@ -66,7 +68,7 @@ Module Type SBWELLDEFINED
       Is_last_in x eqs ->
       ~ Is_variable_in x eqs.
   Proof.
-    induction eqs; intros ** Wsch Last Var;
+    induction eqs; intros * Wsch Last Var;
       inversion_clear Last as [?? IsLast|];
       inversion_clear Var as [?? IsVar|?? IsVar_in];
       inversion_clear Wsch as [|???? Defs].
@@ -249,11 +251,11 @@ Module Type SBWELLDEFINED
       Is_well_sch inputs mems eqs ->
       Step_with_reset_spec eqs.
   Proof.
-    induction eqs as [|[]]; intros ** Spec WSCH;
+    induction eqs as [|[]]; intros * Spec WSCH;
       inversion_clear WSCH as [|??? Free Def States];
       constructor;
       clear Free Def;
-      try (eapply IHeqs; eauto; intros ** Step; specialize (Spec s rst));
+      try (eapply IHeqs; eauto; intros * Step; specialize (Spec s rst));
       try (setoid_rewrite Step_with_reset_in_cons_not_call in Spec; [|discriminate]).
     - apply Spec in Step.
       destruct rst.
@@ -356,7 +358,7 @@ Module Type SBWELLDEFINED
     Qed.
 
     Definition check_state (s: ident) (k: nat) (sk: ident * nat) : bool :=
-      if ident_eqb (fst sk) s then NPeano.ltb (snd sk) k else true.
+      if ident_eqb (fst sk) s then Nat.ltb (snd sk) k else true.
 
     Lemma check_state_spec:
       forall s k s' k',
@@ -366,12 +368,12 @@ Module Type SBWELLDEFINED
     Proof.
       intros; unfold check_state; simpl.
       split.
-      - intros ** E Eq; subst.
+      - intros * E Eq; subst.
         rewrite ident_eqb_refl in E.
-        apply NPeano.ltb_lt; auto.
+        apply Nat.ltb_lt; auto.
       - intros Spec.
         destruct (ident_eqb s' s) eqn: E; auto.
-        apply NPeano.ltb_lt, Spec.
+        apply Nat.ltb_lt, Spec.
         symmetry; apply ident_eqb_eq; auto.
     Qed.
 
@@ -420,7 +422,7 @@ Module Type SBWELLDEFINED
       forall A B (x y: A * B),
         RelationPairs.RelProd Logic.eq Logic.eq x y <-> x = y.
     Proof.
-      split; intros ** E; subst; auto.
+      split; intros * E; subst; auto.
       destruct x, y.
       inversion_clear E as [Fst Snd]; inv Fst; inv Snd; simpl in *; subst; auto.
     Qed.
@@ -429,7 +431,7 @@ Module Type SBWELLDEFINED
       forall A (f: (positive * nat) -> A),
         Morphisms.Proper (Morphisms.respectful (RelationPairs.RelProd Logic.eq Logic.eq) Logic.eq) f.
     Proof.
-      intros ** x y E.
+      intros * x y E.
       apply pair_eq in E; subst; auto.
     Qed.
     Hint Resolve PNS_compat.
@@ -474,7 +476,7 @@ Module Type SBWELLDEFINED
         Is_free_in_eq x eq ->
         if PS.mem x mems then ~ Is_defined_in x eqs else Is_variable_in x eqs \/ In x args.
     Proof.
-      intros ** DefSpec VarSpec E Hfree.
+      intros * DefSpec VarSpec E Hfree.
       apply free_in_eq_spec', E, check_var_spec in Hfree as (Hin & Hnin).
       destruct (PS.mem x mems) eqn: Mem.
       - rewrite <-DefSpec; apply PSE.MP.Dec.F.mem_iff, Hin in Mem; auto.
@@ -488,7 +490,7 @@ Module Type SBWELLDEFINED
         Is_defined_in_eq x eq ->
         ~ Is_defined_in x eqs.
     Proof.
-      intros ** DefSpec E Hdef Hdefs.
+      intros * DefSpec E Hdef Hdefs.
       apply DefSpec in Hdefs; apply Is_defined_in_defined_eq in Hdef.
       apply In_ex_nth with (d := Ids.default) in Hdef as (?&?&?); subst.
       eapply existsb_nth with (d := Ids.default) in E; eauto.
@@ -514,7 +516,7 @@ Module Type SBWELLDEFINED
                  negb (existsb (fun x => PS.mem x defs) (defined_eq eq)) = false ->
         ~ Is_well_sch args mems (eq :: eqs).
     Proof.
-      intros ** DefSpec VarSpec E Wsch.
+      intros * DefSpec VarSpec E Wsch.
       inversion_clear Wsch as [|??? Hfree Hdefs].
       apply Bool.andb_false_iff in E as [E|E].
       - apply PS_not_for_all_spec in E; auto.
@@ -536,7 +538,7 @@ Module Type SBWELLDEFINED
         (forall x, PS.In x defs <-> Is_defined_in x eqs) ->
         (PS.In x (ps_adds (defined_eq eq) defs) <-> Is_defined_in x (eq :: eqs)).
     Proof.
-      intros ** DefSpec; split; intro Hin;
+      intros * DefSpec; split; intro Hin;
         [apply ps_adds_spec in Hin as [|]|apply ps_adds_spec; inv Hin];
         try (now left; apply Is_defined_in_defined_eq; auto);
         try (now right; apply DefSpec; auto); auto.
@@ -547,7 +549,7 @@ Module Type SBWELLDEFINED
         (forall x, PS.In x vars <-> Is_variable_in x eqs \/ In x args) ->
         (PS.In x (variables_eq vars eq) <-> Is_variable_in x (eq :: eqs) \/ In x args).
     Proof.
-      intros ** VarSpec; split; intro Hin.
+      intros * VarSpec; split; intro Hin.
       - apply variables_eq_empty in Hin as [Hin|Hin].
         + destruct eq; simpl in *; try (contradict Hin; apply not_In_empty).
           *{ apply PSE.MP.Dec.F.add_iff in Hin as [|Hin]; subst.
@@ -599,7 +601,7 @@ Module Type SBWELLDEFINED
                  | _ => intuition
                  end.
         apply ps_from_list_In; auto.
-      - simpl; intros ** HH.
+      - simpl; intros * HH.
         destruct (fold_right check_eq (true, PS.empty, ps_from_list args, PNS.empty) eqs)
           as [[[ok' defs'] vars'] states'].
         specialize (IHeqs ok' defs'  vars' states' eq_refl).
@@ -621,7 +623,7 @@ Module Type SBWELLDEFINED
                + constructor; auto.
                  * intros; eapply free_spec; eauto.
                  * intros; eapply def_spec; eauto.
-                 * intros ** Hin; apply Is_state_in_state_eq in Hin; rewrite Hin in St; inv St.
+                 * intros * Hin; apply Is_state_in_state_eq in Hin; rewrite Hin in St; inv St.
                    apply Forall_forall; intros.
                    assert (Is_state_in s k' eqs) as Hst
                        by (apply Exists_exists; eexists; intuition; eauto).
@@ -657,7 +659,7 @@ Module Type SBWELLDEFINED
                + constructor; auto.
                  * intros; eapply free_spec; eauto.
                  * intros; eapply def_spec; eauto.
-                 * intros ** Hin; apply Is_state_in_state_eq in Hin; rewrite Hin in St; inv St.
+                 * intros * Hin; apply Is_state_in_state_eq in Hin; rewrite Hin in St; inv St.
                + subst; setoid_rewrite StateSpec.
                  split.
                  * right; auto.

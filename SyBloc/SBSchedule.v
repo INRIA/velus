@@ -3,6 +3,8 @@ Import List.ListNotations.
 Open Scope list_scope.
 Require Import Coq.Sorting.Permutation.
 Require Import Coq.Sorting.Mergesort.
+Require Import Morphisms.
+Require Import Setoid.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -58,18 +60,18 @@ Module Type SBSCHEDULE
        (Import OpAux : OPERATORS_AUX       Op)
        (Import Str   : STREAM              Op OpAux)
        (Import CE    : COREEXPR        Ids Op OpAux Str)
-       (Import Syn   : SBSYNTAX        Ids Op       CE.Syn)
-       (Import Block : SBISBLOCK       Ids Op       CE.Syn Syn)
-       (Import Ord   : SBORDERED       Ids Op       CE.Syn Syn Block)
-       (Import Sem   : SBSEMANTICS     Ids Op OpAux CE.Syn Syn Block Ord Str CE.Sem)
-       (Import Typ   : SBTYPING        Ids Op       CE.Syn Syn CE.Typ)
-       (Import Var   : SBISVARIABLE    Ids Op       CE.Syn Syn)
-       (Import Last  : SBISLAST        Ids Op       CE.Syn Syn)
-       (Import Def   : SBISDEFINED     Ids Op       CE.Syn Syn Var Last)
-       (Import Clo   : SBCLOCKING      Ids Op       CE.Syn Syn Last Var Def Block Ord CE.Clo)
-       (Import Free  : SBISFREE        Ids Op       CE.Syn Syn                        CE.IsF)
-       (Import Wdef  : SBWELLDEFINED   Ids Op       CE.Syn Syn Block Ord Var Last Def CE.IsF Free)
-       (Import Sch   : EXT_NLSCHEDULER Ids Op       CE.Syn Syn).
+       (Import SBSyn : SBSYNTAX        Ids Op       CE.Syn)
+       (Import Block : SBISBLOCK       Ids Op       CE.Syn SBSyn)
+       (Import Ord   : SBORDERED       Ids Op       CE.Syn SBSyn Block)
+       (Import SBSem : SBSEMANTICS     Ids Op OpAux CE.Syn SBSyn Block Ord Str CE.Sem)
+       (Import SBTyp : SBTYPING        Ids Op       CE.Syn SBSyn CE.Typ)
+       (Import Var   : SBISVARIABLE    Ids Op       CE.Syn SBSyn)
+       (Import Last  : SBISLAST        Ids Op       CE.Syn SBSyn)
+       (Import Def   : SBISDEFINED     Ids Op       CE.Syn SBSyn Var Last)
+       (Import SBClo : SBCLOCKING      Ids Op       CE.Syn SBSyn Last Var Def Block Ord CE.Clo)
+       (Import Free  : SBISFREE        Ids Op       CE.Syn SBSyn                        CE.IsF)
+       (Import Wdef  : SBWELLDEFINED   Ids Op       CE.Syn SBSyn Block Ord Var Last Def CE.IsF Free)
+       (Import Sch   : EXT_NLSCHEDULER Ids Op       CE.Syn SBSyn).
 
   Section OCombine.
     Context {A B: Type}.
@@ -92,7 +94,7 @@ Module Type SBSCHEDULE
     Proof.
       induction l, l'; simpl;
         try (now inversion_clear 1; auto).
-      intros ** HH; cases_eqn Hoc; inv HH.
+      intros * HH; cases_eqn Hoc; inv HH.
       erewrite IHl; eauto.
     Qed.
 
@@ -156,9 +158,6 @@ Module Type SBSCHEDULE
     rewrite <-Hoc, map_snd_combine; auto.
   Qed.
 
-  Require Import Morphisms.
-  Require Import Setoid.
-
   Add Parametric Morphism : (calls_of)
       with signature @Permutation equation ==> @Permutation (ident * ident)
         as calls_of_permutation.
@@ -193,7 +192,7 @@ Module Type SBSCHEDULE
       with signature @Permutation equation ==> @Permutation ident
         as variables_permutation.
   Proof.
-    unfold variables, concatMap.
+    unfold variables.
     induction 1; simpl; auto.
     - now rewrite IHPermutation.
     - rewrite <-2 Permutation_app_assoc; apply Permutation_app_tail, Permutation_app_comm.
@@ -219,7 +218,7 @@ Module Type SBSCHEDULE
       with signature @Permutation equation ==> Basics.impl
         as Is_state_in_permutation.
   Proof.
-    unfold Is_state_in; intros ** E St.
+    unfold Is_state_in; intros * E St.
     now rewrite <-E.
   Qed.
 
@@ -285,7 +284,7 @@ Module Type SBSCHEDULE
       find_block f (schedule P) = Some (schedule_block b, schedule P').
   Proof.
     induction P as [|bl]; [now inversion 1|].
-    intros ** Hfind.
+    intros * Hfind.
     simpl in *.
     destruct (ident_eqb bl.(b_name) f); auto.
     inv Hfind; auto.
@@ -300,7 +299,7 @@ Module Type SBSCHEDULE
         /\ P' = schedule P''.
   Proof.
     induction P as [|bl]; [now inversion 1|].
-    intros ** Hfind.
+    intros * Hfind.
     simpl in *.
     destruct (ident_eqb bl.(b_name) f); eauto.
     inv Hfind; eauto.
@@ -324,7 +323,7 @@ Module Type SBSCHEDULE
       wt_block P b ->
       wt_block (schedule P) (schedule_block b).
   Proof.
-    unfold wt_block; simpl; intros ** WT.
+    unfold wt_block; simpl; intros * WT.
     rewrite schedule_eqs_permutation.
     apply Forall_impl with (2 := WT), scheduler_wt_equation.
   Qed.
@@ -378,7 +377,7 @@ Module Type SBSCHEDULE
       wc_program P ->
       wc_program (schedule P).
   Proof.
-    induction P; intros ** WT; inv WT; simpl; constructor; auto.
+    induction P; intros * WT; inv WT; simpl; constructor; auto.
     now apply scheduler_wc_block.
   Qed.
 
@@ -391,7 +390,7 @@ Module Type SBSCHEDULE
     inversion_clear 1 as [????? Find ? Insts].
     apply scheduler_find_block in Find.
     econstructor; eauto.
-    simpl; intros ** Hin.
+    simpl; intros * Hin.
     apply Insts in Hin as (?&?&?).
     eexists; intuition; eauto.
   Qed.
@@ -406,7 +405,7 @@ Module Type SBSCHEDULE
     inversion_clear 1 as [????? Find ? Insts].
     apply scheduler_find_block in Find.
     econstructor; eauto.
-    simpl; intros ** Hin; pose proof Hin.
+    simpl; intros * Hin; pose proof Hin.
     apply Insts in Hin as (?&?&?).
     eexists; intuition; eauto.
   Qed.
@@ -477,7 +476,7 @@ Lemma scheduler_normal_args_block:
     normal_args_block P b ->
     normal_args_block (schedule P) (schedule_block b).
 Proof.
-  intros ** Normal.
+  intros * Normal.
   apply Forall_forall; simpl.
   setoid_rewrite schedule_eqs_permutation.
   intros; eapply Forall_forall in Normal; eauto.

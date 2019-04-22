@@ -26,7 +26,7 @@ Module Type SBORDERED
                   snd xb <> bl.(b_name)
                   /\ exists bl' P', find_block (snd xb) P = Some (bl', P'))
                bl.(b_blocks) ->
-        Forall (fun bl' => bl.(b_name) <> bl'.(b_name)) P ->
+        Forall (fun bl' => bl.(b_name) <> bl'.(b_name))%type P ->
         Ordered_blocks (bl :: P).
 
   Remark Ordered_blocks_split:
@@ -59,7 +59,7 @@ Module Type SBORDERED
       Ordered_blocks P'.
   Proof.
     induction P; [intuition|].
-    intros ** HnPP.
+    intros * HnPP.
     apply IHP; inversion_clear HnPP; assumption.
   Qed.
 
@@ -72,7 +72,7 @@ Module Type SBORDERED
         exists bl P'', find_block b P' = Some (bl, P'').
   Proof.
     induction P as [|block]; try now inversion 2.
-    intros ** Ord Find ?? Hin.
+    intros * Ord Find ?? Hin.
     inv Ord.
     simpl in Find.
     destruct (ident_eqb (b_name block) b) eqn: E; eauto.
@@ -88,7 +88,7 @@ Module Type SBORDERED
       Ordered_blocks P'.
   Proof.
     induction P as [|block]; try now inversion 2.
-    intros ** Ord Find.
+    intros * Ord Find.
     inv Ord.
     simpl in Find.
     destruct (ident_eqb (b_name block) b) eqn: E; eauto.
@@ -100,7 +100,7 @@ Module Type SBORDERED
       find_block f P = Some (bl', P') ->
       ~ Is_block_in bl.(b_name) bl'.(b_eqs).
   Proof.
-    intros ** Hord Hfind Hini.
+    intros * Hord Hfind Hini.
     apply find_block_app in Hfind as (?& E &?); rewrite E, app_comm_cons in Hord.
     pose proof Hord as Hord'; inversion_clear Hord' as [|??? Sub Hnin]; clear Sub.
     apply Ordered_blocks_split in Hord.
@@ -120,7 +120,7 @@ Module Type SBORDERED
       find_block f P = Some (bl, P') ->
       ~ Is_block_in bl.(b_name) bl.(b_eqs).
   Proof.
-    intros ** Hord Hfind Hini.
+    intros * Hord Hfind Hini.
     apply find_block_app in Hfind as (?& E &?); rewrite E in Hord.
     apply Ordered_blocks_split in Hord.
     apply calls_resets_of_Is_block_in in Hini.

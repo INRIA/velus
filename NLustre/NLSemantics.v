@@ -11,7 +11,7 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLOrdered.
 Require Import Velus.CoreExpr.Stream.
 Require Import Velus.CoreExpr.CESemantics.
 
@@ -31,7 +31,7 @@ Module Type NLSEMANTICS
        (Import CESyn : CESYNTAX        Op)
        (Import Syn   : NLSYNTAX    Ids Op       CESyn)
        (Import Str   : STREAM          Op OpAux)
-       (Import Ord   : ORDERED     Ids Op       CESyn Syn)
+       (Import Ord   : NLORDERED   Ids Op       CESyn Syn)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn      Str).
 
   Fixpoint hold (v0: val) (xs: stream value) (n: nat) : val :=
@@ -289,7 +289,7 @@ enough: it does not support the internal fixpoint introduced by
       xs n = absent ->
       hold c xs n = hold c xs (S n).
   Proof.
-    destruct n; intros ** E; simpl; now rewrite E.
+    destruct n; intros * E; simpl; now rewrite E.
   Qed.
 
   Lemma hold_pres:
@@ -297,7 +297,7 @@ enough: it does not support the internal fixpoint introduced by
       xs n = present v ->
       v = hold c xs (S n).
   Proof.
-    destruct n; intros ** E; simpl; now rewrite E.
+    destruct n; intros * E; simpl; now rewrite E.
   Qed.
 
   Lemma sem_node_wf:
@@ -305,7 +305,7 @@ enough: it does not support the internal fixpoint introduced by
       sem_node G f xss yss ->
       wf_streams xss /\ wf_streams yss.
   Proof.
-    intros ** Sem; split; inv Sem;
+    intros * Sem; split; inv Sem;
       assert_const_length xss; assert_const_length yss; auto.
   Qed.
 
@@ -314,8 +314,9 @@ enough: it does not support the internal fixpoint introduced by
       sem_reset G f r xss yss ->
       wf_streams xss /\ wf_streams yss.
   Proof.
-    intros ** Sem; split; inversion_clear Sem as [???? Nodes]; eapply wf_streams_mask;
-      intro k; specialize (Nodes k); apply sem_node_wf in Nodes as (); eauto.
+    intros * Sem; split; inversion_clear Sem as [???? Nodes];
+      eapply wf_streams_mask; intro k; specialize (Nodes k);
+        apply sem_node_wf in Nodes; destruct Nodes; eauto.
   Qed.
 
   (** ** Properties of the [global] environment *)
@@ -386,7 +387,7 @@ enough: it does not support the internal fixpoint introduced by
       -> node.(n_name) <> f
       -> sem_reset G f r xs ys.
   Proof.
-    intros ** Ord Rst Hnf.
+    intros * Ord Rst Hnf.
     inversion_clear Rst as [???? Nodes].
     constructor; intro k; specialize (Nodes k).
     eapply sem_node_cons; eauto.
@@ -518,7 +519,7 @@ enough: it does not support the internal fixpoint introduced by
       with signature eq_str ==> eq ==> eq ==> Basics.impl
         as sem_equation_eq_str.
   Proof.
-    intros ** E ?? Sem.
+    intros * E ?? Sem.
     induction Sem; econstructor; eauto;
       eapply lift_eq_str; eauto; reflexivity.
   Qed.
@@ -527,7 +528,7 @@ enough: it does not support the internal fixpoint introduced by
       with signature eq_str ==> eq_str ==> Basics.impl
         as sem_node_eq_str.
   Proof.
-    intros ** E1 ? ? E2 Node.
+    intros * E1 ? ? E2 Node.
     inversion_clear Node as [??????????? Heqs]; subst.
     econstructor; eauto; try intro n; try rewrite <-E1; try rewrite <-E2; eauto.
     induction Heqs; constructor; auto.
@@ -538,7 +539,7 @@ enough: it does not support the internal fixpoint introduced by
       with signature eq_str ==> eq_str ==> eq_str ==> Basics.impl
         as sem_reset_eq_str.
   Proof.
-    intros ** E1 ? ? E2 ? ? E3 Res.
+    intros * E1 ? ? E2 ? ? E3 Res.
     inversion_clear Res as [? ? ? ? Node].
     constructor; intro k.
 
@@ -554,7 +555,7 @@ Module NLSemanticsFun
        (CESyn : CESYNTAX        Op)
        (Syn   : NLSYNTAX    Ids Op       CESyn)
        (Str   : STREAM          Op OpAux)
-       (Ord   : ORDERED     Ids Op       CESyn Syn)
+       (Ord   : NLORDERED   Ids Op       CESyn Syn)
        (CESem : CESEMANTICS Ids Op OpAux CESyn      Str)
 <: NLSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
   Include NLSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.

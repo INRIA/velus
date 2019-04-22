@@ -72,7 +72,7 @@ Module Type SBMEMORYCORRES
       Memory_Corres_eqs eqs S I S' me ->
       Memory_Corres_eqs (EqDef x ck ce :: eqs) S I S' me.
   Proof.
-    intros ** (Lasts & Insts); split; [split|split; [|split]].
+    intros * (Lasts & Insts); split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|]; eauto.
       + inv Last.
       + apply Lasts; auto.
@@ -98,7 +98,7 @@ Module Type SBMEMORYCORRES
       find_val x S' = Some c ->
       Memory_Corres_eqs (EqNext x ck e :: eqs) S I S' (add_val x c me).
   Proof.
-    intros ** (Lasts & Insts); split; [split|split; [|split]].
+    intros * (Lasts & Insts); split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|?? Last]; eauto; unfold value_corres.
       + inv Last; rewrite find_val_gss; auto.
       + intros.
@@ -137,7 +137,7 @@ Module Type SBMEMORYCORRES
       find_val x S' = find_val x S ->
       Memory_Corres_eqs (EqNext x ck e :: eqs) S I S' me.
   Proof.
-    intros ** (Lasts & Insts) Eq; split; [split|split; [|split]].
+    intros * (Lasts & Insts) Eq; split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|?? Last]; eauto; unfold value_corres.
       + inv Last.
         destruct (Is_last_in_dec x eqs).
@@ -168,7 +168,7 @@ Module Type SBMEMORYCORRES
       ~ Step_in s eqs ->
       Memory_Corres_eqs (EqReset s ck b :: eqs) S I S' (add_inst s me' me).
   Proof.
-    intros ** (Lasts & Insts) ??; split; [split|split; [|split]].
+    intros * (Lasts & Insts) ??; split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|]; eauto.
       + inv Last.
       + apply Lasts; auto.
@@ -213,7 +213,7 @@ Module Type SBMEMORYCORRES
       ~ Reset_in s eqs ->
       Memory_Corres_eqs (EqReset s ck b :: eqs) S I S' me.
   Proof.
-    intros ** (Lasts & Insts) Find_I Find_S E; split; [split|split; [|split]].
+    intros * (Lasts & Insts) Find_I Find_S E; split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|]; eauto.
       + inv Last.
       + apply Lasts; auto.
@@ -228,12 +228,12 @@ Module Type SBMEMORYCORRES
       + inv Rst'.
         assert (~ Step_in s eqs) by (intro; apply Nstep; right; auto).
         split.
-        * intros ** Find.
+        * intros * Find.
           rewrite Find in Find_I; inv Find_I.
           setoid_rewrite E.
           apply (proj1 (Insts s)); auto.
         * assert (state_corres s S me) as StCorr by (apply Insts; auto).
-          intros ** Find; apply StCorr in Find as (?& Find).
+          intros * Find; apply StCorr in Find as (?& Find).
           rewrite Find in Find_S; inv Find_S.
           exists Is; eauto.
       + apply Insts; split; auto.
@@ -251,7 +251,7 @@ Module Type SBMEMORYCORRES
       me' ≋ Ss' ->
       Memory_Corres_eqs (EqCall s ys ck rst b es :: eqs) S I S' (add_inst s me' me).
   Proof.
-    intros ** (Lasts & Insts) Find_S' E;
+    intros * (Lasts & Insts) Find_S' E;
       split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|]; eauto.
       + inv Last.
@@ -297,7 +297,7 @@ Module Type SBMEMORYCORRES
       ~ Step_in s eqs /\ (if rst then Reset_in s eqs else ~ Reset_in s eqs) ->
       Memory_Corres_eqs (EqCall s ys ck rst b es :: eqs) S I S' me.
   Proof.
-    intros ** (Lasts & Insts) Find_I Find_S Find_S' E NstepRst;
+    intros * (Lasts & Insts) Find_I Find_S Find_S' E NstepRst;
       split; [split|split; [|split]].
     - inversion_clear 1 as [?? Last|]; eauto.
       + inv Last.
@@ -318,7 +318,7 @@ Module Type SBMEMORYCORRES
       + inv Step'.
         destruct rst.
         *{ apply Insts in Find_I as (me' & Sub &?); auto.
-           split; intros ** Sub'.
+           split; intros * Sub'.
            - rewrite Find_S' in Sub'; inv Sub'.
              exists me'; rewrite E; auto.
            - rewrite Sub' in Sub; inv Sub.
@@ -326,7 +326,7 @@ Module Type SBMEMORYCORRES
          }
         *{ destruct Find_S as (Ss & Find_S &?); auto.
            apply Insts in Find_S as (me' & Sub &?); auto.
-           split; intros ** Sub'.
+           split; intros * Sub'.
            - rewrite Find_S' in Sub'; inv Sub'.
              exists me'; split; auto.
              transitivity Ss; auto.

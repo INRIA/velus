@@ -33,7 +33,7 @@ Module Type NL2SBCLOCKING
   (*     Forall (wt_equation (translate G) vars' mems) (translate_eqn eq). *)
   (* Proof. *)
   (*   inversion_clear 1 as [??? Hin|????? Find|?????? Find|]; *)
-  (*     intros ** SpecVars SpecMems SpecVars'; simpl. *)
+  (*     intros * SpecVars SpecMems SpecVars'; simpl. *)
   (*   - constructor; auto. *)
   (*     constructor; try rewrite SpecVars; auto. *)
   (*   - destruct xs; auto. *)
@@ -68,23 +68,23 @@ Module Type NL2SBCLOCKING
   (*     Forall (wt_equation (translate G) vars' mems) (translate_eqns eqs). *)
   (* Proof. *)
   (*   unfold translate_eqns, concatMap. *)
-  (*   induction eqs; intros ** WT SpecVars SpecMems SpecVars'; *)
+  (*   induction eqs; intros * WT SpecVars SpecMems SpecVars'; *)
   (*     inv WT; simpl; try constructor. *)
   (*   apply Forall_app; split; auto. *)
   (*   - eapply translate_eqn_wt; eauto. *)
-  (*     + intros ** Hin Hin_mems. *)
+  (*     + intros * Hin Hin_mems. *)
   (*       apply SpecMems; auto. *)
   (*       unfold gather_mems, concatMap; simpl. *)
   (*       apply in_app; auto. *)
-  (*     + intros ** Hin IsV. *)
+  (*     + intros * Hin IsV. *)
   (*       apply SpecVars'; auto. *)
   (*       left; auto. *)
   (*   - eapply IHeqs; eauto. *)
-  (*     + intros ** Hin Hin_mems. *)
+  (*     + intros * Hin Hin_mems. *)
   (*       apply SpecMems; auto. *)
   (*       unfold gather_mems, concatMap; simpl. *)
   (*       apply in_app; auto. *)
-  (*     + intros ** Hin IsV. *)
+  (*     + intros * Hin IsV. *)
   (*       apply SpecVars'; auto. *)
   (*       right; auto. *)
   (* Qed. *)
@@ -168,7 +168,7 @@ Module Type NL2SBCLOCKING
   (*                     n.(n_vars)))) *)
   (*       (fbys n.(n_eqs)). *)
   (* Proof. *)
-  (*   unfold wt_node; intros ** WT. *)
+  (*   unfold wt_node; intros * WT. *)
   (*   rewrite fst_partition_filter. *)
   (*   apply NoDup_Permutation. *)
   (*   - apply NoDupMembers_NoDup, fst_NoDupMembers. *)
@@ -193,12 +193,12 @@ Module Type NL2SBCLOCKING
   (*       setoid_rewrite PSE.MP.Dec.F.empty_iff; intuition. *)
   (*     + inversion_clear WTeq as [| | |???? Hint]. *)
   (*       intros (x, t); split. *)
-  (*       *{ intros ** (Hin & Mem); apply in_fbys_spec; *)
+  (*       *{ intros * (Hin & Mem); apply in_fbys_spec; *)
   (*          apply In_fold_left_memory_eq in Mem as [Mem|Mem]. *)
   (*          - apply In_fold_left_memory_eq in Mem as [Mem|Mem]; *)
   (*              [|rewrite PSE.MP.Dec.F.empty_iff in Mem; contradiction]. *)
   (*            left; apply IHl; auto. *)
-  (*            intros ** Hin'; apply Spec; simpl; auto. *)
+  (*            intros * Hin'; apply Spec; simpl; auto. *)
   (*          - apply PSE.MP.Dec.F.add_iff in Mem as [E|Mem]; *)
   (*              [|rewrite PSE.MP.Dec.F.empty_iff in Mem; contradiction]. *)
   (*            inv E. *)
@@ -209,11 +209,11 @@ Module Type NL2SBCLOCKING
   (*            eapply NoDupMembers_det; eauto. *)
   (*            apply NoDupMembers_idty, n_nodup. *)
   (*        } *)
-  (*       *{ intros ** Hin; rewrite In_fold_left_memory_eq; *)
+  (*       *{ intros * Hin; rewrite In_fold_left_memory_eq; *)
   (*          apply in_fbys_spec in Hin as [Hin|Hin]. *)
   (*          - apply IHl in Hin; auto. *)
   (*            + intuition. *)
-  (*            + intros ** Hin'; apply Spec; simpl; auto. *)
+  (*            + intros * Hin'; apply Spec; simpl; auto. *)
   (*          - inversion_clear Hin as [E|]; try contradiction; inv E. *)
   (*            rewrite PSE.MP.Dec.F.add_iff; intuition. *)
   (*            simpl in Spec. *)
@@ -231,7 +231,7 @@ Module Type NL2SBCLOCKING
   (*     wt_node G n -> *)
   (*     wt_block (translate G) (translate_node n). *)
   (* Proof. *)
-  (*   unfold wt_node, wt_block; intros ** WT; simpl. *)
+  (*   unfold wt_node, wt_block; intros * WT; simpl. *)
   (*   eapply translate_eqns_wt; eauto. *)
   (*   - repeat rewrite idty_app. *)
   (*     rewrite <-app_assoc. *)
@@ -245,7 +245,7 @@ Module Type NL2SBCLOCKING
   (*     rewrite <-permutation_partition; auto. *)
   (*   - setoid_rewrite fbys_gather_eqs. *)
   (*     unfold gather_mems, concatMap, fbys. *)
-  (*     induction (n_eqs n) as [|[] eqs]; simpl; intros ** Hin Mem; try contradiction; *)
+  (*     induction (n_eqs n) as [|[] eqs]; simpl; intros * Hin Mem; try contradiction; *)
   (*       inversion_clear WT as [|?? WTeq]; auto. *)
   (*     inv WTeq. *)
   (*     apply in_fbys_spec. *)
@@ -256,7 +256,7 @@ Module Type NL2SBCLOCKING
   (*       eapply NoDupMembers_det; eauto. *)
   (*       apply NoDupMembers_idty, n_nodup. *)
   (*     + left; auto. *)
-  (*   - intros ** Hin IsV. *)
+  (*   - intros * Hin IsV. *)
   (*     rewrite 2 idty_app, 2 in_app. *)
   (*     rewrite 2 idty_app, 2 in_app in Hin; destruct Hin as [|[|]]; auto. *)
   (*     right; left. *)
@@ -300,7 +300,7 @@ Module Type NL2SBCLOCKING
                               PS.mem (fst x) (ps_from_list (map fst (fst (gather_eqs (n_eqs n))))))
                            (n_vars n)))).
   Proof.
-    intros ** WC.
+    intros * WC.
     rewrite fst_partition_filter.
     apply NoDup_Permutation.
     - apply NoDupMembers_NoDup, NoDupMembers_idck, fst_NoDupMembers.
@@ -334,7 +334,7 @@ Module Type NL2SBCLOCKING
       + inversion_clear WCeq as [| |???? Hinc].
         rewrite In_fold_left_memory_eq, PSE.MP.Dec.F.add_iff, PSE.MP.Dec.F.empty_iff.
         split.
-        *{ intros ** Hin.
+        *{ intros * Hin.
            unfold idck in Hin.
            apply in_map_iff in Hin as ((x', (c', ck')) & E & Hin); simpl in *; inv E.
            apply In_fst_fold_left_gather_eq in Hin as [Hin|Hin].
@@ -343,16 +343,16 @@ Module Type NL2SBCLOCKING
              assert (InMembers x (n_vars n)) by auto.
              pose proof (n_nodup n) as Hnodup.
              rewrite fst_NoDupMembers, 2 map_app, NoDup_swap, <- 2 map_app, <-fst_NoDupMembers in Hnodup.
-             eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (); eauto.
+             eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (? & ?); eauto.
              rewrite 2 idck_app, 2 in_app in Hinc; destruct Hinc as [Hinc|[|Hinc]]; auto;
                apply In_InMembers in Hinc; rewrite InMembers_idck in Hinc; contradiction.
            - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1)))))
                as Hin' by (apply in_map_iff; eexists; intuition; eauto; simpl; auto).
              apply IHl in Hin'; intuition.
          }
-         *{ intros ** (Hin & [Mem|Mem]).
+         *{ intros * (Hin & [Mem|Mem]).
             - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1))))) as Hin'
-                  by (apply IHl; auto; intros ** Hin';
+                  by (apply IHl; auto; intros * Hin';
                       apply Spec; simpl; auto).
               unfold idck in Hin'; apply in_map_iff in Hin' as ((x', (c', ck')) & E & Hin'); simpl in *; inv E.
               apply in_map_iff; exists (x, (c', ck)); simpl.
@@ -374,7 +374,7 @@ Module Type NL2SBCLOCKING
       Forall (wc_equation P vars) eqs ->
       Forall (wc_equation P vars') eqs.
   Proof.
-    intros ** E WC.
+    intros * E WC.
     eapply Forall_impl with (2 := WC); eauto.
     setoid_rewrite E; auto.
   Qed.
@@ -402,7 +402,7 @@ Module Type NL2SBCLOCKING
     - now rewrite E.
     - apply Permutation_sym in E.
       eapply wc_equations_permutation with (1 := E).
-      unfold translate_eqns, concatMap.
+      unfold translate_eqns.
       clear - Heqs Env; induction (n_eqs n); simpl; inv Heqs; auto.
       apply Forall_app; split; auto.
       eapply translate_eqn_wc; eauto.
@@ -413,7 +413,7 @@ Module Type NL2SBCLOCKING
       wc_global G ->
       wc_program (translate G).
   Proof.
-    intros ** WC.
+    intros * WC.
     induction G; simpl; inv WC; auto.
     constructor; auto.
     eapply translate_node_wc; eauto.

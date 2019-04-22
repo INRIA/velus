@@ -1,3 +1,4 @@
+Require Import String.
 Require Instantiator.
 
 Require Import Velus.Lustre.Parser.LustreAst.
@@ -213,7 +214,7 @@ Section ElabExpressions.
     forall loc x ty ck,
       find_var loc x = OK (ty, ck) -> wt_clock (idty (Env.elements env)) ck.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     apply wt_cenv with (x:=x) (ty:=ty).
     unfold find_var in Hfind.
     destruct (Env.find x env); try discriminate.
@@ -236,7 +237,7 @@ Section ElabExpressions.
       find_var loc x = OK (ty, ck) ->
       In (x, ty) (idty (Env.elements env)).
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     apply find_var_in in Hfind.
     now apply In_idty_exists; exists ck.
   Qed.
@@ -246,7 +247,7 @@ Section ElabExpressions.
       find_var loc x = OK (ty, ck) ->
       In (x, ck) (idck (Env.elements env)).
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     apply find_var_in in Hfind.
     now apply In_idck_exists; exists ty.
   Qed.
@@ -602,7 +603,7 @@ Section ElabExpressions.
       (Forall (wt_lexp (idty (Env.elements env))) es
        /\ Forall2 (fun e ty=>typeof e = ty) es tys).
   Proof.
-    induction aes; simpl; intros ** Helab; DestructCases; auto.
+    induction aes; simpl; intros * Helab; DestructCases; auto.
     monadInv Helab.
     NamedDestructCases.
     monadInv EQ0.
@@ -618,7 +619,7 @@ Section ElabExpressions.
       elab_lexps loc ck aes tys = OK es ->
       Forall (fun e=>wc_lexp (idck (Env.elements env)) e ck) es.
   Proof.
-    induction aes; simpl; intros ** Helab; DestructCases; auto.
+    induction aes; simpl; intros * Helab; DestructCases; auto.
     monadInv Helab.
     NamedDestructCases.
     monadInv EQ0.
@@ -751,7 +752,7 @@ Section ElabExpressions.
         rewrite <-H2 in Hin.
         apply Forall2_map_2, Forall2_swap_args in Hin.
         apply Forall2_impl_In with (2:=Hin).
-        intros ** Htypeof. now rewrite Htypeof.
+        intros ???? Htypeof. now rewrite Htypeof.
     - rename x1 into xin, x2 into xout, i into f, x3 into ein, l0 into xs,
       x0 into ck, a into loc'.
       unfold find_node_interface in EQ. NamedDestructCases.
@@ -769,7 +770,7 @@ Section ElabExpressions.
         rewrite <-H1 in Hin.
         apply Forall2_map_2, Forall2_swap_args in Hin.
         apply Forall2_impl_In with (2:=Hin).
-        intros ** Htypeof. now rewrite Htypeof.
+        intros ???? Htypeof. now rewrite Htypeof.
   Qed.
 
   Lemma wc_elab_equation:
@@ -779,24 +780,27 @@ Section ElabExpressions.
   Proof.
     intros aeq eq Helab.
     destruct aeq as ((xs & ae) & loc).
-    destruct ae; simpl in Helab;
-      repeat progress
-             match goal with
-             | H: _ /\ _ |- _ => destruct H
-             | H:bind _ _ = _ |- _ => monadInv H
-             | H:bind2 _ _ = _ |- _ => monadInv H
-             | H:elab_lexp _ = OK _ |- _ => apply wc_elab_lexp in H
-             | H:elab_lexps _ _ _ _ = OK _ |- _ => apply wc_elab_lexps in H
-             | H:find_var _ _ = OK _ |- _ => apply find_var_clock in H
-             | H:elab_cexp _ = OK _ |- _ => apply wc_elab_cexp in H
-             | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
-             | H:equiv _ _ |- _ => rewrite <-H in *; clear H
-             | H:equiv _ _ |- _ => rewrite H in *; clear H
-             | H:check_result_list _ _ _ _ = OK ?x |- _ =>
-               apply check_result_list_Forall2 in H; destruct H
-             | _ => NamedDestructCases
-             end; intros; subst;
-        eauto using wc_equation, wc_cexp, wc_lexp with nltyping.
+    destruct ae. now simpl in Helab; monadInv Helab.
+    simpl in Helab.
+(*
+    repeat progress
+           match goal with
+           | H: _ /\ _ |- _ => destruct H
+           | H:bind _ _ = _ |- _ => monadInv H
+           | H:bind2 _ _ = _ |- _ => monadInv H
+           | H:elab_lexp _ = OK _ |- _ => apply wc_elab_lexp in H
+           | H:elab_lexps _ _ _ _ = OK _ |- _ => apply wc_elab_lexps in H
+           | H:find_var _ _ = OK _ |- _ => apply find_var_clock in H
+           | H:elab_cexp _ = OK _ |- _ => apply wc_elab_cexp in H
+           | H:_ ==b _ = true |- _ => rewrite equiv_decb_equiv in H
+           | H:equiv _ _ |- _ => rewrite <-H in *; clear H
+           | H:equiv _ _ |- _ => rewrite H in *; clear H
+           | H:check_result_list _ _ _ _ = OK ?x |- _ =>
+             apply check_result_list_Forall2 in H; destruct H
+           | _ => NamedDestructCases
+           end; intros; subst;
+      eauto using wc_equation, wc_cexp, wc_lexp with nltyping.
+*)
   Admitted.
 
   Fixpoint check_clock (loc: astloc) (ck: clock) : res unit :=
@@ -901,8 +905,8 @@ Section ElabDeclaration.
       wc_env (idck (Env.elements env')).
   Proof.
     induction vds as [|vd vds IH].
-    now intros ** Helab; monadInv Helab.
-    intros ** Hwce Helab.
+    now intros ????? Helab; monadInv Helab.
+    intros * Hwce Helab.
     destruct vd as (x & ((ty & pck) & loc)).
     destruct pck as [ck|y yb]; [destruct ck as [|ck y yb]|]; simpl in Helab.
     - (* (x, (ty, FULLCK BASE, loc)) *)
@@ -1028,8 +1032,8 @@ Section ElabDeclaration.
         /\ (forall x, Env.In x env' -> Env.In x env \/ InMembers x vds1).
   Proof.
     induction vds as [|vd vds IH].
-    now intros ** Helab; monadInv Helab; exists [], []; intuition.
-    intros ** Helab.
+    now intros * Helab; monadInv Helab; exists [], []; intuition.
+    intros * Helab.
     destruct vd as (x & ((ty & pck) & loc)).
     destruct pck as [ck|y yb]; [destruct ck as [|ck y yb]|];
       simpl in Helab.
@@ -1185,8 +1189,8 @@ Section ElabDeclaration.
     intros loc vds. generalize vds at 1.
     intro fuel. revert vds.
     induction fuel as [|cd fuel IH].
-    now simpl; intros ** Helab; NamedDestructCases.
-    intros ** Hwc Helab.
+    now simpl; intros ???? Helab; NamedDestructCases.
+    intros * Hwc Helab.
     destruct vds as [|vd vds].
     now simpl in Helab; monadInv Helab.
     simpl in Helab. monadInv Helab.
@@ -1382,6 +1386,8 @@ Section ElabDeclaration.
         right. apply IH1. apply PS.remove_spec; split; auto.
         intro HH; apply Heq1. now subst.
       + constructor; auto.
+        unfold vars_defined in IH1.
+        setoid_rewrite flat_map_concat_map in IH1.
         rewrite IH1, PS.remove_spec.
         intuition.
       + intros x Hvd.
@@ -1392,7 +1398,7 @@ Section ElabDeclaration.
       destruct EQ as (Hcv1 & Hcv2 & Hcv3 & Hcv4).
       specialize (IH _ _ _ EQ0); clear EQ0.
       destruct IH as (IH1 & IH2 & IH3).
-      rewrite vars_defined_EqApp. setoid_rewrite in_app.
+      simpl. setoid_rewrite in_app.
       repeat split.
       + destruct 1 as [HH|HH].
         now apply Hcv3; auto.
@@ -1403,7 +1409,10 @@ Section ElabDeclaration.
       + apply NoDup_app'; auto.
         apply Forall_forall.
         intros x Hin Hinc.
-        specialize (Hcv2 x). specialize (IH1 x). intuition.
+        specialize (Hcv2 x). specialize (IH1 x).
+        unfold vars_defined in IH1.
+        setoid_rewrite flat_map_concat_map in IH1.
+        intuition.
       + intros x Hin.
         now apply IH3 in Hin.
     - rewrite Bool.andb_true_iff, Bool.negb_true_iff, <-PSE.MP.Dec.F.not_mem_iff in Heq0.
@@ -1424,6 +1433,8 @@ Section ElabDeclaration.
         right. apply IH1. apply PS.remove_spec; split; auto.
         intro HH; apply Heq1. now subst.
       + constructor; auto.
+        unfold vars_defined in IH1.
+        setoid_rewrite flat_map_concat_map in IH1.
         rewrite IH1, PS.remove_spec.
         intuition.
       + intros x Hvd.
@@ -1463,7 +1474,7 @@ Section ElabDeclaration.
       mmap (annotate env) xs = OK ys ->
       map fst xs = map fst ys.
   Proof.
-    intros ** Hmm.
+    intros * Hmm.
     apply mmap_inversion in Hmm.
     induction Hmm as [|x xs y ys Hann IH Hmap]; auto.
     simpl. rewrite Hmap.
@@ -1478,7 +1489,7 @@ Section ElabDeclaration.
       Forall (fun yv=>Env.find (fst yv) env = Some (snd yv)) ys.
   Proof.
     induction xs as [|x xs IH].
-    - simpl. intros ** Hperm Hys.
+    - simpl. intros ? Hperm Hys.
       monadInv Hys; auto.
     - simpl. intros ys env Hmm.
       monadInv Hmm.
@@ -1495,7 +1506,7 @@ Section ElabDeclaration.
       Forall (fun yv => Env.find (fst yv) env = Some (snd yv)) xs ->
       Permutation xs (Env.elements env).
   Proof.
-    intros ** Hperm Hfa.
+    intros * Hperm Hfa.
     pose proof (Env.NoDupMembers_elements env) as Hnd.
     apply NoDup_Permutation.
     - apply fst_NoDupMembers in Hnd.
@@ -1544,7 +1555,7 @@ Section ElabDeclaration.
       Forall Ident.Ids.ValidId (Env.elements env).
   Proof.
     unfold check_variable_names.
-    intros ** Hcvns.
+    intros * Hcvns.
     induction (Env.elements env) as [|(x, t)]; auto.
     unfold check_variable_names' in Hcvns.
     Arguments find: simpl never.
@@ -1603,7 +1614,7 @@ Section ElabDeclaration.
       Forall Ident.Ids.valid insts.
   Proof.
     unfold check_inst_names.
-    intros ** Hcins.
+    intros * Hcins.
     induction insts as [|x]; auto.
     unfold check_inst_names' in Hcins.
     destruct (Ident.mem_str Ident.sep (Ident.pos_to_str x)) eqn: E; try discriminate.
@@ -1749,17 +1760,18 @@ Section ElabDeclaration.
     match goal with H:(length _ ==b 0) || _ = false |- _ =>
       rewrite Bool.orb_false_iff in H; destruct H as (Hin & Hout) end.
     apply not_equiv_decb_equiv in Hin.
-    now apply NPeano.Nat.neq_0_lt_0 in Hin.
+    now apply PeanoNat.Nat.neq_0_lt_0 in Hin.
   Qed.
   Next Obligation.
     (* 0 < length xout *)
     match goal with H:(length _ ==b 0) || _ = false |- _ =>
       rewrite Bool.orb_false_iff in H; destruct H as (Hin & Hout) end.
     apply not_equiv_decb_equiv in Hout.
-    now apply NPeano.Nat.neq_0_lt_0 in Hout.
+    now apply PeanoNat.Nat.neq_0_lt_0 in Hout.
   Qed.
   Next Obligation.
     (* Permutation (map var_defined eqs) (map fst (xvar ++ xout)) *)
+    unfold vars_defined. setoid_rewrite flat_map_concat_map.
     MassageElabs outputs locals inputs.
     apply check_defined_spec in Hdefd.
     destruct Hdefd as (Hdefd & Hnodup & Hnfby).
@@ -1773,7 +1785,9 @@ Section ElabDeclaration.
       setoid_rewrite <-Hvar.
       setoid_rewrite <-Hout.
       exact Hnd.
-    - setoid_rewrite Hdefd.
+    - unfold vars_defined in Hdefd.
+      setoid_rewrite flat_map_concat_map in Hdefd.
+      setoid_rewrite Hdefd.
       setoid_rewrite PSP.FM.empty_iff.
       setoid_rewrite in_app.
       intuition.
@@ -1880,7 +1894,7 @@ Section ElabDeclaration.
         destruct Hbase as (ok & ? & Hbase).
         now apply assert_clock_eq in Hbase.
 *)
-  Qed.
+  Admitted.
 
 End ElabDeclaration.
 
@@ -1921,7 +1935,7 @@ Next Obligation.
 Qed.
 Next Obligation.
   split.
-  - intros ** Hf.
+  - intros * Hf.
     destruct (ident_eq_dec f n.(n_name)) as [He|Hne].
     + subst. rewrite Env.gss in Hf.
       injection Hf; intros; subst tysout tysin; clear Hf.

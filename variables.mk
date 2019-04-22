@@ -52,8 +52,8 @@ MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
 # ocamlbuild flags
 VERBOSITY=-verbose 1
 FLAGS=-use-ocamlfind -use-menhir -pkgs str,unix,menhirLib \
-	-cflags $(MENHIR_INCLUDES)$(WARNINGS) \
 	-I $(EXTRACTED) -no-hygiene $(VERBOSITY)
+	#-cflags $(MENHIR_INCLUDES)$(WARNINGS)
 TARGET=native
 BUILDDIR=_build
 
@@ -68,7 +68,8 @@ normal=$(shell tput sgr0)
 
 ifndef VERBOSE
 SILENT=-s
-WARNINGS=,-w,-3-20
+#WARNINGS=,-w,-3-20
+WARNINGS=
 VERBOSITY=
 .SILENT:
 endif

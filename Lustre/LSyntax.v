@@ -83,7 +83,7 @@ Module Type LSYNTAX
     end.
 
   Definition annots (es: list exp): list (type * nclock) :=
-    concatMap annot es.
+    flat_map annot es.
 
   Fixpoint typeof (e: exp): list type :=
     match e with
@@ -99,7 +99,7 @@ Module Type LSYNTAX
     end.
 
   Definition typesof (es: list exp): list type :=
-    concatMap typeof es.
+    flat_map typeof es.
 
   Definition ckstream {A} (ann: A * nclock): sclock := stripname (snd ann).
 
@@ -123,7 +123,7 @@ Module Type LSYNTAX
     end.
 
   Definition clocksof (es: list exp): list sclock :=
-    concatMap clockof es.
+    flat_map clockof es.
 
   Fixpoint nclockof (e: exp): list nclock :=
     match e with
@@ -139,10 +139,10 @@ Module Type LSYNTAX
     end.
 
   Definition nclocksof (es: list exp): list nclock :=
-    concatMap nclockof es.
+    flat_map nclockof es.
 
   Definition vars_defined (eqs: list equation) : idents :=
-    concatMap fst eqs.
+    flat_map fst eqs.
 
   Record node : Type :=
     mk_node {
@@ -249,27 +249,13 @@ Module Type LSYNTAX
 
   (** clocksof *)
 
-  Lemma clocksof_nil:
-    clocksof nil = nil.
-  Proof.
-    unfold clocksof. now rewrite concatMap_nil.
-  Qed.
-
-  Lemma clocksof_cons:
-    forall e es,
-      clocksof (e::es) = clockof e ++ clocksof es.
-  Proof.
-    now setoid_rewrite concatMap_cons.
-  Qed.
-
   Lemma In_clocksof:
     forall sck es,
       In sck (clocksof es) ->
       exists e, In e es /\ In sck (clockof e).
   Proof.
     induction es as [|e es IH]. now inversion 1.
-    setoid_rewrite clocksof_cons.
-    rewrite in_app.
+    simpl. rewrite in_app.
     destruct 1 as [Hin|Hin].
     now eauto with datatypes.
     apply IH in Hin. destruct Hin as (e' & Hin1 & Hin2).
@@ -277,19 +263,6 @@ Module Type LSYNTAX
   Qed.
 
   (** nclockof and nclocksof *)
-
-  Lemma nclocksof_nil:
-    nclocksof [] = [].
-  Proof.
-    unfold nclocksof. now rewrite concatMap_nil.
-  Qed.
-
-  Lemma nclocksof_cons:
-    forall e es,
-      nclocksof (e::es) = nclockof e ++ nclocksof es.
-  Proof.
-    now setoid_rewrite concatMap_cons.
-  Qed.
 
   Lemma clockof_nclockof:
     forall e,
@@ -302,8 +275,8 @@ Module Type LSYNTAX
     forall es,
       clocksof es = map stripname (nclocksof es).
   Proof.
-    induction es as [|e es IH]; auto.
-    now rewrite clocksof_cons, nclocksof_cons, map_app, IH, <-clockof_nclockof.
+    induction es as [|e es IH]; auto; simpl.
+    now rewrite map_app, IH, <-clockof_nclockof.
   Qed.
 
   Lemma Is_index_in_nclocks_Cstream:
@@ -311,12 +284,12 @@ Module Type LSYNTAX
       Is_index_in_nclocks i (map Cstream (clockof e)) ->
       Is_index_in_nclocks i (nclockof e).
   Proof.
-    intros ** Hii.
+    intros * Hii.
     rewrite clockof_nclockof, map_map in Hii.
     unfold Is_index_in_nclocks in Hii.
     induction (nclockof e) as [|nck ncks IH];
       inversion_clear Hii as [? ? Hi|].
-    2:now constructor (apply IH).
+    2:now constructor 2; apply IH.
     constructor.
     destruct nck; inversion_clear Hi;
       auto using Is_index_in_nclock.
@@ -329,7 +302,7 @@ Module Type LSYNTAX
       map stripname (nclockof e) = [sclk] ->
       Is_index_in_nclocks i (nclockof e).
   Proof.
-    intros ** Hii Hmap.
+    intros * Hii Hmap.
     inversion_clear Hii as [? ? Hii'|? ? Hii']; inv Hii'.
     destruct (nclockof e) as [|nck ncks]. discriminate.
     destruct ncks. 2:discriminate.
@@ -342,7 +315,7 @@ Module Type LSYNTAX
       map stripname (nclockof e) = [sclk] ->
       Is_index_in_nclocks i (nclockof e).
   Proof.
-    intros ** Hii Hmap.
+    intros * Hii Hmap.
     inv Hii.
     destruct (nclockof e) as [|nck ncks]. discriminate.
     destruct ncks. 2:discriminate.
@@ -355,7 +328,7 @@ Module Type LSYNTAX
       exists e, In e es /\ In nck (nclockof e).
   Proof.
     induction es as [|e es IH]. now inversion 1.
-    rewrite nclocksof_cons, in_app.
+    simpl; rewrite in_app.
     destruct 1 as [Hin|Hin]; eauto with datatypes.
     apply IH in Hin. destruct Hin as (e' & Hin1 & Hin2).
     eauto with datatypes.
@@ -381,19 +354,6 @@ Module Type LSYNTAX
     rewrite n.(n_defd).
     apply fst_NoDupMembers.
     apply (NoDupMembers_app_r _ _ n.(n_nodup)).
-  Qed.
-
-  Lemma vars_defined_nil:
-    vars_defined [] = [].
-  Proof.
-    unfold vars_defined. apply concatMap_nil.
-  Qed.
-
-  Lemma vars_defined_cons:
-    forall eq eqs,
-      vars_defined (eq::eqs) = fst eq ++ vars_defined eqs.
-  Proof.
-    intros. unfold vars_defined. now rewrite concatMap_cons.
   Qed.
 
   (** find_node *)
@@ -436,14 +396,7 @@ Module Type LSYNTAX
         G = bG ++ node :: aG.
   Proof.
     unfold find_node.
-    intros ** Hf. now apply find_split in Hf.
-  Qed.
-
-  Lemma typesof_cons:
-    forall e es,
-      typesof (e::es) = typeof e ++ typesof es.
-  Proof.
-    intros e es. unfold typesof. now rewrite concatMap_cons.
+    intros * Hf. now apply find_split in Hf.
   Qed.
 
 End LSYNTAX.

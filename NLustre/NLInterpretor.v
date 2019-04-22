@@ -131,7 +131,7 @@ Module Type NLINTERPRETOR
         sem_var_instant R x v ->
         v = interp_var_instant x.
     Proof.
-      unfold interp_var_instant; now intros ** ->.
+      unfold interp_var_instant; now intros * ->.
     Qed.
 
     Ltac rw_lexp_helper :=
@@ -278,7 +278,7 @@ Module Type NLINTERPRETOR
         sem_lexps bk H es ess ->
         Forall2 (sem_lexp bk H) es (interp_lexps' es).
     Proof.
-      induction es; intros ** Sem; simpl; auto.
+      induction es; intros * Sem; simpl; auto.
       constructor.
       - intro n; specialize (Sem n); inv Sem.
         unfold interp_lexp, lift.
@@ -305,7 +305,7 @@ Module Type NLINTERPRETOR
         CESem.lift bk H sem x xs ->
         xs ≈ lift interp x.
     Proof.
-      intros ** Instant Sem n.
+      intros * Instant Sem n.
       specialize (Sem n); unfold lift; auto.
     Qed.
 
@@ -315,7 +315,7 @@ Module Type NLINTERPRETOR
         CESem.lift' H sem x xs ->
         xs ≈ lift' interp x.
     Proof.
-      intros ** Instant Sem n.
+      intros * Instant Sem n.
       specialize (Sem n); unfold lift'; auto.
     Qed.
 

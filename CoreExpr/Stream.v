@@ -4,6 +4,7 @@ Require Import Velus.Operators.
 Require Import Setoid.
 Require Import Morphisms.
 Require Import Coq.Arith.EqNat.
+Require Import Omega.
 Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
@@ -38,21 +39,21 @@ Module Type STREAM
     forall {A} (xs: stream A),
       xs ≈ xs.
   Proof.
-    intros ** n; reflexivity.
+    intros * n; reflexivity.
   Qed.
 
   Lemma eq_str_sym:
     forall {A} (xs xs': stream A),
       xs ≈ xs' -> xs' ≈ xs.
   Proof.
-    intros ** E n; auto.
+    intros * E n; auto.
   Qed.
 
   Lemma eq_str_trans:
     forall {A} (xs ys zs: stream A),
       xs ≈ ys -> ys ≈ zs -> xs ≈ zs.
   Proof.
-    intros ** E1 E2 n; auto.
+    intros * E1 E2 n; auto.
     rewrite E1; auto.
   Qed.
 
@@ -111,7 +112,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       r n = true ->
       1 <= count r n.
   Proof.
-    induction n; simpl; intros ** E; rewrite E; auto.
+    induction n; simpl; intros * E; rewrite E; auto.
     apply Le.le_n_S; omega.
   Qed.
 
@@ -121,7 +122,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       n' < n ->
       count r n' < count r n.
   Proof.
-    intros ** Rn Lt.
+    intros * Rn Lt.
     destruct n; try omega.
     simpl; rewrite Rn.
     clear Rn.
@@ -140,7 +141,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       count r n <> k ->
       (mask opaque k r xs) n = opaque.
   Proof.
-    intros ** E.
+    intros * E.
     unfold mask.
     assert (EqNat.beq_nat k (count r n) = false) as ->
         by (apply EqNat.beq_nat_false_iff; omega); auto.
@@ -151,7 +152,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       count r n = k ->
       (mask opaque k r xs) n = xs n.
   Proof.
-    intros ** E.
+    intros * E.
     unfold mask.
     assert (EqNat.beq_nat k (count r n) = true) as ->
         by (apply EqNat.beq_nat_true_iff; omega); auto.
@@ -161,7 +162,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       with signature eq_str ==> eq ==> eq
         as count_eq_str.
   Proof.
-    intros ** E n.
+    intros * E n.
     induction n; simpl; rewrite E; auto.
     now rewrite IHn.
   Qed.
@@ -170,20 +171,9 @@ if the clocked stream is [absent] at the corresponding instant. *)
       with signature eq ==> eq ==> eq_str ==> eq_str ==> eq_str
         as mask_eq_str.
   Proof.
-    intros ** E1 ? ? E2 n; unfold mask.
+    intros * E1 ? ? E2 n; unfold mask.
     now rewrite E1, E2.
   Qed.
-
-  (* Add Parametric Morphism (A: Type) : (@masked A) *)
-  (*     with signature eq ==> eq_str ==> eq_str ==> eq_str ==> Basics.impl *)
-  (*       as masked_eq_str. *)
-  (* Proof. *)
-  (*   unfold masked. *)
-  (*   intros k r r' Err' x x' Exx' y y' Eyy' M n C. *)
-  (*   rewrite <-Exx', <-Eyy'. *)
-  (*   apply M. *)
-  (*   now rewrite Err'. *)
-  (* Qed. *)
 
   Lemma present_injection:
     forall x y, x = y <-> present x = present y.
@@ -318,11 +308,11 @@ if the clocked stream is [absent] at the corresponding instant. *)
       (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) ->
       wf_streams xss.
   Proof.
-    unfold wf_streams, mask; intros ** WF k k'.
+    unfold wf_streams, mask; intros * WF k k'.
     pose proof (WF (count r k) k' k) as WFk;
       pose proof (WF (count r k') k' k) as WFk'.
     rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
-    rewrite NPeano.Nat.eqb_sym in WFk'.
+    rewrite Nat.eqb_sym in WFk'.
     destruct (EqNat.beq_nat (count r k) (count r k')); auto.
     now rewrite WFk, <-WFk'.
   Qed.
@@ -348,7 +338,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       wf_streams xs ->
       all_absent (mask (all_absent (xs k')) k r xs n) = all_absent (xs n).
   Proof.
-    intros ** Wf; unfold mask.
+    intros * Wf; unfold mask.
     destruct (EqNat.beq_nat k (count r n)); auto.
     specialize (Wf n k').
     assert (length (all_absent (xs k')) = length (xs n)) as Length
@@ -364,8 +354,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       absent_list opaque ->
       absent_list (mask opaque k r xs n).
   Proof.
-    intros ** Abs.
-    unfold mask.
+    intros * Abs. unfold mask.
     destruct (EqNat.beq_nat k (count r n)); auto.
   Qed.
 

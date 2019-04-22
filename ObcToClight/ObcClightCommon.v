@@ -113,10 +113,10 @@ Section Mmaps.
     intros ys s s' Hf Hmm HIS.
     monadInv Hmm.
     match goal with H:f _ _ = OK (_, ?w) |- _ =>
-      rename w into y; apply Hf in H; destruct H as (HP & HR' & HIS'); auto end.
+      rename w into y; apply Hf in H; try destruct H as (HP & HR' & HIS'); auto end.
     match goal with H:mmaps _ ?s _ = OK (_, ?ws) |- _ =>
-      rename s into t, ws into ys; apply IH in H; destruct H as (Hfa & HR & HI & HIS'')
-    end; auto.
+      rename s into t, ws into ys; apply IH in H;
+        try destruct H as (Hfa & HR & HI & HIS'') end; auto.
     2: now intros; eapply Hf; eauto.
     pose proof (HTrans _ _ _ HR' HR).
     repeat split; eauto.
@@ -142,7 +142,7 @@ Section Mmaps.
           I s' /\ R y) ->
       I s' /\ Forall R ys.
   Proof.
-    induction xs as [|x xs IH]; simpl; intros ** Hmm HI Hone; monadInv Hmm.
+    induction xs as [|x xs IH]; simpl; intros * Hmm HI Hone; monadInv Hmm.
     now auto.
     match goal with Hf:f _ _ = OK _ |- _ =>
       apply Hone with (1:=HI) in Hf; auto; destruct Hf end.
@@ -159,7 +159,7 @@ Section Mmaps.
         R y) ->
     Forall R ys.
   Proof.
-    intros ** Hmm Hy.
+    intros * Hmm Hy.
     eapply mmaps_weak_spec with (I:=fun s=>True);
       eauto using Forall_forall.
   Qed.

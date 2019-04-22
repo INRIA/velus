@@ -35,19 +35,19 @@ Section finite_traces.
                           (eventval_of_val v)
                           (AST.type_of_chunk (type_chunk t)) v.
   Proof.
-    destruct v; intros ** Wt; inv Wt; simpl; try econstructor.
+    destruct v; intros * Wt; inv Wt; simpl; try econstructor.
     destruct sz; try destruct sg; econstructor.
   Qed.
 
   Definition load_event_of_val (v: val)(xt: ident * type): event
     := Event_vload (type_chunk (snd xt))
                    (glob_id (fst xt))
-                   Int.zero (eventval_of_val v).
+                   Ptrofs.zero (eventval_of_val v).
 
   Definition store_event_of_val (v: val)(xt: ident * type): event
     := Event_vstore (type_chunk (snd xt))
                     (glob_id (fst xt))
-                    Int.zero (eventval_of_val v).
+                    Ptrofs.zero (eventval_of_val v).
 
   Definition mk_event (f: val -> ident * type -> event)
              (vs: list val)(args: list (ident * type))
@@ -113,7 +113,6 @@ Section infinite_traces.
   Qed.
 
   CoFixpoint mk_trace (n: nat): traceinf'.
-  clear - mk_trace n ins outs xs ys.
   refine(
       (Econsinf' (load_events (ins n) xs)
                  (Econsinf' (store_events (outs n) ys)

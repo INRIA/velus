@@ -15,6 +15,10 @@ Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Require Import Relations.
+Require Import Morphisms.
+Require Import Setoid.
+
 Module Type FUSION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
@@ -117,7 +121,7 @@ Module Type FUSION
       find_class id p = Some (c, p') ->
       find_class id (map fuse_class p) = Some (fuse_class c, map fuse_class p').
   Proof.
-    induction p as [|c']; simpl; intros ** Find; try discriminate.
+    induction p as [|c']; simpl; intros * Find; try discriminate.
     rewrite fuse_class_name.
     destruct (ident_eqb (c_name c') id); auto.
     inv Find; auto.
@@ -129,7 +133,7 @@ Module Type FUSION
       exists m', m = fuse_method m'
                  /\ find_method id c.(c_methods) = Some m'.
   Proof.
-    intros ** Find.
+    intros * Find.
     destruct c as [? ? ? meths ? Nodup]; simpl in *.
     induction meths as [|m']; simpl in *; try discriminate.
     inv Nodup; auto.
@@ -450,10 +454,6 @@ Module Type FUSION
 
   (** fuse_eval_eq *)
 
-  Require Import Relations.
-  Require Import Morphisms.
-  Require Import Setoid.
-
   Definition fuse_eval_eq s1 s2: Prop :=
     stmt_eval_eq s1 s2 /\ (Fusible s1 /\ Fusible s2).
 
@@ -653,7 +653,7 @@ Module Type FUSION
   Proof.
     intros ?????; generalize 0%nat.
     cofix COINDHYP.
-    intros n ** Hdo.
+    intros n me HCF Hdo.
     destruct Hdo.
     econstructor; eauto using fuse_call.
   Qed.
@@ -707,7 +707,7 @@ Module Type FUSION
       wt_stmt p insts mems vars s ->
       wt_stmt p insts mems vars (fuse s).
   Proof.
-    intros ** WTs.
+    intros * WTs.
     destruct s; auto; simpl; inv WTs.
     match goal with H1:wt_stmt _ _ _ _ s1, H2:wt_stmt _ _ _ _ s2 |- _ =>
                     revert s2 s1 H1 H2 end.
@@ -723,7 +723,7 @@ Module Type FUSION
       wt_program G ->
       wt_program (map fuse_class G).
   Proof.
-    intros ** WTG.
+    intros * WTG.
     induction G as [|c p]; simpl;
       inversion_clear WTG as [|? ? Wtc Wtp Nodup]; constructor; auto.
     - inversion_clear Wtc as (Hos & Hms).
@@ -759,7 +759,7 @@ Module Type FUSION
       wt_mem me p c ->
       wt_mem me (map fuse_class p) (fuse_class c).
   Proof.
-    intros ** Hwt_mem.
+    intros * Hwt_mem.
     induction Hwt_mem
               using wt_mem_ind_mult
     with (P := fun me p cl Hwt => wt_mem me (map fuse_class p) (fuse_class cl))
@@ -805,9 +805,9 @@ Module Type FUSION
       Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m)))
                      (map fuse_class p).
   Proof.
-    intros ** HH.
-    apply Forall_forall; intros ** Hin;
-      apply Forall_forall; intros ** Hin';
+    intros * HH.
+    apply Forall_forall; intros * Hin;
+      apply Forall_forall; intros * Hin';
         apply Forall_forall; intros ? Hin''.
     apply in_map_iff in Hin as (c &?&?); subst.
     eapply Forall_forall in HH; eauto.
@@ -902,9 +902,9 @@ Module Type FUSION
       Forall_methods (fun m => No_Overwrites (m_body m)) p ->
       Forall_methods (fun m => No_Overwrites (m_body m)) (map fuse_class p).
   Proof.
-    intros ** HH.
-    apply Forall_forall; intros ** Hin;
-      apply Forall_forall; intros ** Hin'.
+    intros * HH.
+    apply Forall_forall; intros * Hin;
+      apply Forall_forall; intros * Hin'.
     apply in_map_iff in Hin as (c &?&?); subst.
     eapply Forall_forall in HH; eauto.
     destruct c; simpl in *.

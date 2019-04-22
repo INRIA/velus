@@ -225,7 +225,7 @@ Module Type TRANSLATION
         /\ cls = translate_block block.
   Proof.
     induction P as [|block P]; [now inversion 1|].
-    intros ** Hfind; simpl in Hfind.
+    intros * Hfind; simpl in Hfind.
     destruct (equiv_dec block.(b_name) b) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
       inv Hfind.
@@ -245,7 +245,7 @@ Module Type TRANSLATION
         /\ prog' = translate P'.
   Proof.
     induction P as [|block P]; [now inversion 1|].
-    intros ** Hfind; simpl in Hfind.
+    intros * Hfind; simpl in Hfind.
     destruct (equiv_dec block.(b_name) b) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
       injection Hfind; intros; subst block0 P'.

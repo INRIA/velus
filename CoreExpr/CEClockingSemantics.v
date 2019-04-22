@@ -245,7 +245,7 @@ Module Type CECLOCKINGSEMANTICS
   (*       sem_var H y ys -> *)
   (*       sem_var H' x ys. *)
   (* Proof. *)
-  (*   intros ** node H H' les isub bk lss Hsv Hles Hlss x y ys Hin Hsub Hvar n. *)
+  (*   intros * node H H' les isub bk lss Hsv Hles Hlss x y ys Hin Hsub Hvar n. *)
   (*   specialize (Hles n); specialize (Hlss n); specialize (Hvar n); simpl in *. *)
   (*   unfold sem_vars_instant in Hlss. *)
   (*   rewrite Forall2_map_1 in Hlss. *)
@@ -281,7 +281,7 @@ Module Type CECLOCKINGSEMANTICS
         sem_var_instant R' x ys ->
         sem_var_instant R y ys.
   Proof.
-    intros ** Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
+    intros * Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
     apply InMembers_app in Hin as [Hin|Hout].
     - clear Hxout Hys Hos.
       apply NoDupMembers_app_InMembers with (2:=Hin) in Hndup.
@@ -363,7 +363,7 @@ Module Type CECLOCKINGSEMANTICS
         sem_var_instant (restr_hist H' n) x ys ->
         sem_var_instant (restr_hist H  n) y ys.
   Proof.
-    intros ** Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
+    intros * Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
     apply InMembers_app in Hin.
     destruct Hin as [Hin|Hout].
     - clear Hxout Hys Hos.
@@ -421,7 +421,7 @@ Module Type CECLOCKINGSEMANTICS
           sem_var_instant R y ys) ->
       sem_clock_instant base R yck v.
   Proof.
-    intros ** Hinst Hcks Hwc Hsem Hxv.
+    intros * Hinst Hcks Hwc Hsem Hxv.
     revert xck ck yck v Hinst Hcks Hwc Hsem.
     induction xck; simpl in *.
     - inversion 1; inversion 3; now subst.
@@ -457,12 +457,13 @@ Module Type CECLOCKINGSEMANTICS
       sem_vars_instant R (map fst xcks) xs ->
       Forall (clock_match_instant base R) xcks.
   Proof.
-    intros ** Hsv Hvs. apply Forall_forall.
+    intros * Hsv Hvs. apply Forall_forall.
     intros (x, xck) Hxin; unfold clock_match_instant.
     eapply Forall_forall in Hsv; eauto.
     unfold sem_vars_instant in Hvs.
     rewrite Forall2_map_1 in Hvs.
-    apply Forall2_in_left with (2:=Hxin) in Hvs as (v & ? & Hvs).
+    apply Forall2_in_left with (2:=Hxin) in Hvs.
+    destruct Hvs as (v & ? & Hvs).
     inversion Hsv as [Ht Hf]. simpl in *.
     destruct v.
     - intuition.
@@ -477,7 +478,7 @@ Module Type CECLOCKINGSEMANTICS
       sem_vars H (map fst xcks) xss ->
       Forall (clock_match bk H) xcks.
   Proof.
-    intros ** Hsv Hvs. apply Forall_forall.
+    intros * Hsv Hvs. apply Forall_forall.
     intros (x, xck) Hxin n.
     specialize (Hsv n); specialize (Hvs n).
     eapply sem_clocked_vars_instant_clock_match_instant in Hvs; eauto.
@@ -507,7 +508,8 @@ Module Type CECLOCKINGSEMANTICS
     - inversion_clear WCenv as [|? ? ? WCx Hin].
       specialize (IHxck WCx).
       apply In_idck_exists in Hin as (xty & Hin).
-      apply Forall2_in_left with (2:=Hin) in HHn as (s & Hsin & Hv' & Hv).
+      apply Forall2_in_left with (2:=Hin) in HHn.
+      destruct HHn as (s & Hsin & Hv' & Hv).
       inversion_clear 1.
       + econstructor; eauto.
         assert (s = present c) as Hsc by (eapply sem_var_instant_det; eauto).

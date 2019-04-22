@@ -82,7 +82,7 @@ Module Type SBISDEFINED
       InMembers x b.(b_in) ->
       ~ Is_defined_in x b.(b_eqs).
   Proof.
-    intros ** Hin Hdef.
+    intros * Hin Hdef.
     pose proof (b_nodup b) as Nodup.
     eapply (NoDup_app_In x) in Nodup.
     - apply Is_defined_Is_variable_Is_last_in in Hdef as [Var|Last];
@@ -97,14 +97,14 @@ Module Type SBISDEFINED
     forall y x ck e,
       ~ Is_defined_in_eq y (EqDef x ck e) -> x <> y.
   Proof.
-    intros ** NIsDef E; subst; apply NIsDef; auto using Is_defined_in_eq.
+    intros * NIsDef E; subst; apply NIsDef; auto using Is_defined_in_eq.
   Qed.
 
   Lemma not_Is_defined_in_eq_EqNext:
     forall y x ck e,
       ~ Is_defined_in_eq y (EqNext x ck e) -> x <> y.
   Proof.
-    intros ** NIsDef E; subst; apply NIsDef; auto using Is_defined_in_eq.
+    intros * NIsDef E; subst; apply NIsDef; auto using Is_defined_in_eq.
   Qed.
 
   Lemma not_Is_defined_in_cons:
@@ -114,7 +114,7 @@ Module Type SBISDEFINED
   Proof.
     split.
     - intro Hndef; split; intro His_def;
-        eapply Hndef; constructor (assumption).
+        eapply Hndef; now constructor.
     - intros [Hdef_eq Hdef_eqs] Hdef_all.
       inv Hdef_all; eauto.
   Qed.
@@ -127,7 +127,7 @@ Module Type SBISDEFINED
     | EqReset _ _ _ => []
     end.
 
-  Definition defined := concatMap defined_eq.
+  Definition defined := flat_map defined_eq.
 
   Lemma Is_defined_in_defined_eq:
     forall x eq,
@@ -141,7 +141,7 @@ Module Type SBISDEFINED
     forall x eqs,
       Is_defined_in x eqs <-> In x (defined eqs).
   Proof.
-    unfold defined, concatMap.
+    unfold defined.
     induction eqs; simpl.
     - split; inversion 1.
     - split; rewrite in_app.
@@ -158,7 +158,7 @@ Module Type SBISDEFINED
       In x (map fst b.(b_out)) ->
       Is_defined_in x b.(b_eqs).
   Proof.
-    intros ** Ho.
+    intros * Ho.
     cut (In x (map fst b.(b_vars) ++ map fst b.(b_out))).
     - intro Hvo; apply Is_variable_in_Is_defined_in, Is_variable_in_variables.
       now rewrite <-b_vars_out_in_eqs.
@@ -181,7 +181,7 @@ Module Type SBISDEFINED
     forall b,
       Permutation.Permutation (defined (b_eqs b)) (variables (b_eqs b) ++ lasts_of (b_eqs b)).
   Proof.
-    unfold defined, variables, concatMap; intro;
+    unfold defined, variables; intro;
       induction (b_eqs b) as [|[]]; simpl; auto.
     - now apply Permutation.Permutation_cons_app.
     - now rewrite <-app_assoc; apply Permutation.Permutation_app_head.

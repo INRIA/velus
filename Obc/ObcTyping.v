@@ -131,26 +131,42 @@ Module Type OBCTYPING
                 ==> @eq stmt ==> iff) wt_stmt.
   Proof.
     intros p' p Hp xs2 xs1 Hxs ys2 ys1 Hys zs2 zs1 Hzs s' s Hs.
-    subst.
-    induction s; split; intro HH; inv HH; try econstructor;
-      repeat match goal with
-             | H:Permutation.Permutation _ _ |- _ =>
-               (erewrite H || erewrite <-H); clear H
-             | H:_ <-> _ |- _ => (try apply H); clear H
-             end;
-        eauto with obctyping.
-    - match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
+    rewrite Hp, Hs in *; clear Hp Hs.
+    induction s; split; intro HH; inv HH.
+    (* Assign *)
+    - constructor; rewrite <-Hzs; try rewrite <-Hys; auto.
+    - constructor; rewrite Hzs; try rewrite Hys; auto.
+    (* AssignSt *)
+    - constructor; try rewrite <-Hzs; rewrite <-Hys; auto.
+    - constructor; try rewrite Hzs; rewrite Hys; auto.
+    (* Ifte *)
+    - constructor; try rewrite <-IHs1; try rewrite <-IHs2; auto;
+        try rewrite <-Hzs; try rewrite <-Hys; auto.
+    - constructor; try rewrite IHs1; try rewrite IHs2; auto;
+        try rewrite Hzs; try rewrite Hys; auto.
+    (* Comp *)
+    - constructor; try rewrite <-IHs1; try rewrite <-IHs2; auto.
+    - constructor; try rewrite IHs1; try rewrite IHs2; auto.
+    (* Call *)
+    - econstructor; eauto.
+      * now rewrite <-Hxs.
+      * match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
                       apply Forall2_impl_In with (2:=H) end.
-      intros; now rewrite <-Hzs.
-    - match goal with H:Forall (wt_exp _ _) _ |- _ =>
-                      apply Forall_impl with (2:=H) end.
-      intros; now rewrite <-Hys, <-Hzs.
-    - match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
-                      apply Forall2_impl_In with (2:=H) end.
-      intros; now rewrite Hzs.
-    - match goal with H:Forall (wt_exp _ _) _ |- _ =>
-                      apply Forall_impl with (2:=H) end.
-      intros; now rewrite Hys, Hzs.
+        intros; now rewrite <-Hzs.
+      * match goal with H:Forall (wt_exp _ _) _ |- _ =>
+                        apply Forall_impl with (2:=H) end.
+        intros; now rewrite <-Hys, <-Hzs.
+    - econstructor; eauto.
+      * now rewrite Hxs.
+      * match goal with H:Forall2 _ _ fm.(m_out) |- _ =>
+                        apply Forall2_impl_In with (2:=H) end.
+        intros; now rewrite Hzs.
+      * match goal with H:Forall (wt_exp _ _) _ |- _ =>
+                        apply Forall_impl with (2:=H) end.
+        intros; now rewrite Hys, Hzs.
+    (* Skip *)
+    - constructor.
+    - constructor.
   Qed.
 
   (** Properties *)
@@ -263,7 +279,7 @@ Module Type OBCTYPING
       Env.find x ve = Some v ->
       wt_val v ty.
   Proof.
-    intros ** WTe Hin Hfind.
+    intros * WTe Hin Hfind.
     apply Forall_forall with (1:=WTe) in Hin.
     unfold wt_venv_val in Hin.
     simpl in Hin.
@@ -329,7 +345,7 @@ Module Type OBCTYPING
       exp_eval me ve e (Some v) ->
       wt_val v (typeof e).
   Proof.
-    intros ** WT_mem ? ? ?.
+    intros * WT_mem ? ? ?.
     inv WT_mem.
     eapply pres_sem_exp with (vars:=vars); eauto.
   Qed.
@@ -381,7 +397,7 @@ Module Type OBCTYPING
       (y = x /\ wt_val v ty) \/ (y <> x /\ wt_venv_val env (y, ty)) ->
       wt_venv_val (Env.add x v env) (y, ty).
   Proof.
-    intros ** Hor. unfold wt_venv_val; simpl.
+    intros * Hor. unfold wt_venv_val; simpl.
     destruct Hor as [[Heq Hwt]|[Hne Hwt]].
     - subst. now rewrite Env.gss.
     - now rewrite Env.gso with (1:=Hne).
@@ -395,7 +411,7 @@ Module Type OBCTYPING
       wt_val v t ->
       wt_env (Env.add x v env) vars.
   Proof.
-    intros ** Hndup WTenv Hin WTv.
+    intros * Hndup WTenv Hin WTv.
     unfold wt_env.
     induction vars as [|y vars]; auto.
     apply Forall_cons2 in WTenv.
@@ -430,7 +446,7 @@ Module Type OBCTYPING
       wt_venv_val (Env.remove x env) (y, ty).
   Proof.
     unfold wt_venv_val; simpl.
-    intros ** WTenv.
+    intros * WTenv.
     destruct (ident_eq_dec x y); subst.
     now rewrite Env.grs.
     now rewrite Env.gro; auto.
@@ -458,12 +474,12 @@ Module Type OBCTYPING
       Forall2 (fun vo xt => wt_valo vo (snd xt)) rvs outs ->
       wt_env (Env.adds_opt ys rvs env) vars.
   Proof.
-    intros ** NodupM Nodup WTenv Hin WTv.
+    intros * NodupM Nodup WTenv Hin WTv.
     assert (length ys = length rvs) as Length
         by (transitivity (length outs); [|symmetry];
             eapply Forall2_length; eauto).
     revert env rvs outs WTenv WTv Length Hin.
-    induction ys, rvs, outs; intros ** WTenv WTv Length Hin;
+    induction ys, rvs, outs; intros * WTenv WTv Length Hin;
       inv Length; inv Nodup; inv Hin; inv WTv; auto.
     destruct o.
     - rewrite Env.adds_opt_cons_cons'; auto.
@@ -482,12 +498,12 @@ Module Type OBCTYPING
       Forall2 (fun vo xt => wt_valo vo (snd xt)) rvs outs ->
       wt_env (Env.updates ys rvs env) vars.
   Proof.
-    intros ** NodupM Nodup WTenv Hin WTv.
+    intros * NodupM Nodup WTenv Hin WTv.
     assert (length ys = length rvs) as Length
         by (transitivity (length outs); [|symmetry];
             eapply Forall2_length; eauto).
     revert env rvs outs WTenv WTv Length Hin.
-    induction ys, rvs, outs; intros ** WTenv WTv Length Hin;
+    induction ys, rvs, outs; intros * WTenv WTv Length Hin;
       inv Length; inv Nodup; inv Hin; inv WTv; auto.
     rewrite Env.updates_cons_cons'; auto.
     destruct o; eauto.
@@ -500,7 +516,7 @@ Module Type OBCTYPING
       Forall2 (fun e (xt: ident * type) => typeof e = snd xt) es xs ->
       Forall2 (fun vo xt => wt_valo vo (snd xt)) vos xs.
   Proof.
-    induction vos, xs, es; intros ** Wt Eq; inv Wt;
+    induction vos, xs, es; intros * Wt Eq; inv Wt;
     inversion_clear Eq as [|? ? ? ? E]; auto.
     constructor; eauto.
     now rewrite <- E.
@@ -512,7 +528,7 @@ Module Type OBCTYPING
       Forall2 (fun vo xt => wt_valo vo (snd xt)) vos (m_in callee) ->
       wt_env (Env.adds_opt (map fst (m_in callee)) vos vempty) (meth_vars callee).
   Proof.
-    intros ** Wt.
+    intros * Wt.
     unfold wt_env.
     apply Forall_app.
     pose proof (m_nodupvars callee) as Nodup.
@@ -549,7 +565,7 @@ Module Type OBCTYPING
       Forall2 (fun (e : exp) (xt : ident * type) => typeof e = snd xt) es (m_in callee) ->
       wt_env (Env.adds_opt (map fst (m_in callee)) vos vempty) (meth_vars callee).
   Proof.
-    intros ** Wt Eq.
+    intros * Wt Eq.
     eapply wt_env_params, wt_params; eauto.
   Qed.
   Hint Resolve wt_env_params_exprs.
@@ -578,14 +594,14 @@ Module Type OBCTYPING
   Proof.
     apply stmt_eval_call_ind.
     - (* assign *)
-      intros ** Hexp Henv' cls vars Hndup WTp WTm WTe WTstmt.
+      intros * Hexp Henv' cls vars Hndup WTp WTm WTe WTstmt.
       split; auto.
       rewrite <-Henv'.
       inv WTstmt. inversion_clear WTm as [? ? ? WTmv WTmi].
       eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; auto.
       eapply wt_env_add; eauto.
     - (* assign state *)
-      intros ** Hexp Henv' cls vars Hndup WTp WTm WTe WTstmt.
+      intros * Hexp Henv' cls vars Hndup WTp WTm WTe WTstmt.
       split; auto.
       rewrite <-Henv'.
       inv WTstmt. inversion_clear WTm as [? ? ? WTmv WTmi].
@@ -597,7 +613,7 @@ Module Type OBCTYPING
       + apply Forall_impl_In with (2:=WTmi).
         inversion 2; now eauto using wt_mem_inst.
     - (* call *)
-      intros p ** Homenv Hevals Hcall IH Hmenv' Henv'
+      intros p * Homenv Hevals Hcall IH Hmenv' Henv'
              cls vars Hndups WTp WTm WTe WTstmt.
       inv WTstmt.
       edestruct IH; eauto; clear IH; simpl.
@@ -653,7 +669,7 @@ Module Type OBCTYPING
 
     - (* sequential composition *)
       intros p menv env s1 s2
-             ** Hstmt1 IH1 Hstmt2 IH2 cls vars Hndups WTp WTm WTe WTstmt.
+             * Hstmt1 IH1 Hstmt2 IH2 cls vars Hndups WTp WTm WTe WTstmt.
       inv WTstmt.
       match goal with WTstmt1:wt_stmt _ _ _ _ s1 |- _ =>
                       specialize (IH1 _ _ Hndups WTp WTm WTe WTstmt1) end.
@@ -662,14 +678,14 @@ Module Type OBCTYPING
                       specialize (IH2 _ _ Hndups WTp WTm1 WTe1 WTstmt2) end.
       assumption.
     - (* if/then/else *)
-      intros ** b st sf env' menv'
+      intros prog me ve cond v b st sf env' menv'
              Hexp Hvtb Hstmt IH cls vars Hndups WTp WTm WTe WTstmt.
       apply IH; auto.
       inv WTstmt. destruct b; auto.
     - (* skip *)
       intros; auto.
     - (* call eval *)
-      intros ** Hfindc Hfindm Hlvos Hstmt IH Hrvs
+      intros * Hfindc Hfindm Hlvos Hstmt IH Hrvs
              p'' cls'' fm'' WTp Hfindc' Hfindm' WTmem WTv.
       rewrite Hfindc in Hfindc';
         injection Hfindc'; intros; subst cls'' p''; clear Hfindc'.
@@ -701,7 +717,7 @@ Module Type OBCTYPING
       stmt_eval p me ve stmt (me', ve') ->
       wt_mem me' p cls /\ wt_env ve' vars.
   Proof.
-    intros ** Hndup WTp WTm WTe WTs Heval.
+    intros * Hndup WTp WTm WTe WTs Heval.
     apply ((proj1 pres_sem_stmt') _ _ _ _ (me', ve') Heval cls vars); auto.
   Qed.
 
@@ -766,7 +782,7 @@ Module Type OBCTYPING
       In (o, c'.(c_name)) c.(c_objs) ->
       c'.(c_name) <> c.(c_name).
   Proof.
-    intros ** WTp Hin Hc'.
+    intros * WTp Hin Hc'.
     rewrite Hc' in Hin; clear c' Hc'.
     inversion_clear WTp as [|? ? WTc WTp' Hnodup]; clear WTp'.
     inversion_clear Hnodup as [|? ? Hnin Hnodup'].
@@ -800,7 +816,7 @@ Module Type OBCTYPING
       sub_prog (cls :: prog') prog ->
       sub_prog prog' prog.
   Proof.
-    intros ** Hsub.
+    intros * Hsub.
     inv Hsub.
     rewrite <-app_last_app. constructor.
   Qed.
@@ -812,7 +828,7 @@ Module Type OBCTYPING
       sub_prog prog2 prog1 ->
       find_class clsid prog1 = Some (cls, prog').
   Proof.
-    intros ** Hfind WD Sub.
+    intros * Hfind WD Sub.
     inv Sub.
     induction p' as [|cls' p']; simpl; auto.
     inversion_clear WD as [|? ? WTc WTp Hnodup].
@@ -835,7 +851,7 @@ Module Type OBCTYPING
       find_class clsid prog = Some (cls, prog') ->
       sub_prog prog' prog.
   Proof.
-    intros ** Find.
+    intros * Find.
     apply find_class_app in Find.
     destruct Find as (? & ? & ?); subst.
     rewrite List_shift_first.
@@ -849,7 +865,7 @@ Module Type OBCTYPING
       sub_prog prog' prog ->
       wt_stmt prog insts mems vars s.
   Proof.
-    induction 1; intros ** Sub; econstructor; eauto.
+    induction 1; intros * Sub; econstructor; eauto.
     eapply find_class_sub_same; eauto.
   Qed.
 
@@ -874,7 +890,7 @@ Module Type OBCTYPING
       sub_prog prog' prog ->
       wt_mem mem prog c.
   Proof.
-    induction 1 as [? ? ? ? WTmem_inst]; intros ** Sub.
+    induction 1 as [? ? ? ? WTmem_inst]; intros * Sub.
     constructor; auto.
     induction (c_objs cl) as [|(o, c)]; inv WTmem_inst; auto.
     constructor; eauto.
@@ -890,7 +906,7 @@ Module Type OBCTYPING
       find_class c2 prog = Some (cls', prog'').
   Proof.
     induction prog as [|c prog IH]; [now inversion 2|].
-    intros ** WTp Hfc Hfc'.
+    intros * WTp Hfc Hfc'.
     simpl in Hfc.
     inversion_clear WTp as [|? ? WTc WTp' Hnodup].
     pose proof (find_class_In _ _ _ _ Hfc') as Hfcin.
@@ -933,8 +949,8 @@ Module Type OBCTYPING
       find_class n prog = Some (c, prog') ->
       exists prog'', find_class n (rev prog) = Some (c, prog'').
   Proof.
-   induction prog as [|c']; simpl; intros ** Find; try discriminate.
-   inversion_clear H as [|? ? Hwtc Hwtp Hndup].
+   induction prog as [|c']; simpl; intros * WTP Find; try discriminate.
+   inversion_clear WTP as [|? ? Hwtc Hwtp Hndup].
    simpl in Hndup; apply NoDup_cons' in Hndup.
    destruct Hndup as [Hnin Hndup].
    erewrite find_class_app'; eauto.

@@ -7,6 +7,7 @@ Require Import Velus.Common.
 Require Import Coq.Arith.Arith.
 Require Import Coq.Sorting.Permutation.
 Require Import Setoid.
+Require Import Omega.
 
 Section Dfs.
 
@@ -114,21 +115,15 @@ Section Dfs.
   Defined.
   Extraction Inline none_visited.
 
-  (* TODO: replace with something from Coq.Init.Specif in Coq > 8.8? *)
   Lemma sig2_of_sig:
     forall {A : Type} {P Q : A -> Prop} (s : { s : A | P s }),
       Q (proj1_sig s) ->
       { s | P s & Q s }.
   Proof.
-    intros ** (s, Ps) Qs.
+    intros ? ? ? (s, Ps) Qs.
     exact (exist2 _ _ s Ps Qs).
   Defined.
   Extraction Inline sig2_of_sig.
-
-  (* TODO: replace with Coq.Init.Specif.sig_of_sig2 in Coq > 8.8 *)
-  Definition sig_of_sig2 {A : Type} {P Q : A -> Prop} (X : sig2 P Q) : sig P
-    := exist P (let (a, _, _) := X in a)
-               (let (x, p, _) as s return (P (let (a, _, _) := s in a)) := X in p).
 
   Lemma sig2_weaken2:
     forall {A : Type} {P Q Q' : A -> Prop},
@@ -136,7 +131,7 @@ Section Dfs.
       { s : A | P s & Q s } ->
       { s | P s & Q' s }.
   Proof.
-    intros ** HQQ s.
+    intros * HQQ s.
     destruct s as (s, Ps, Qs).
     apply HQQ in Qs.
     exact (exist2 _ _ s Ps Qs).
@@ -156,7 +151,7 @@ Section Dfs.
     forall x v,
       PS.In x v <-> In_ps [x] v.
   Proof.
-    intros ** Hin. split; intro HH; [|now inv HH].
+    split; intro HH; [|now inv HH].
     now apply Forall_cons; auto.
   Qed.
 
@@ -170,7 +165,7 @@ Section Dfs.
     : option { v' | visited inp v' & (In_ps zs v' /\ PS.Subset (proj1_sig v) v') }.
   Proof.
     revert zs v.
-    fix 1.
+    fix dfs'_loop 1.
     intros zs v.
     destruct zs as [|w ws].
     - refine (Some (sig2_of_sig v _)).

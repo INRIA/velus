@@ -5,6 +5,7 @@ Require Import Coq.Sorting.Permutation.
 Require Import Setoid.
 Require Import Morphisms.
 Require Import Coq.Arith.EqNat.
+Require Import Omega.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -309,13 +310,13 @@ Module Type NLSEMANTICSCOIND
       destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) 1) eqn: E;
         rewrite count_S_nth in E.
       + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
-      + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+      + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
           rewrite E; auto.
     - rewrite IHn; unfold count.
       destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) (S (S k))) eqn: E;
         rewrite count_S_nth in E.
       + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
-      + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+      + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
           rewrite E; auto.
   Qed.
 
@@ -558,7 +559,7 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt bool ==> @EqSt value
         as const_EqSt.
   Proof.
-    cofix; intros b b' Eb.
+    cofix CoFix; intros b b' Eb.
     unfold_Stv b; unfold_Stv b';
       constructor; inv Eb; simpl in *; try discriminate; auto.
   Qed.
@@ -568,7 +569,7 @@ Module Type NLSEMANTICSCOIND
         as sem_clock_morph.
   Proof.
     revert H; cofix Cofix.
-    intros ** b b' Eb ck bk bk' Ebk Sem.
+    intros H b b' Eb ck bk bk' Ebk Sem.
     inv Sem.
     - constructor.
       now rewrite <-Ebk, <-Eb.
@@ -584,7 +585,7 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
         as sem_lexp_morph.
   Proof.
-    intros ** b b' Eb e xs xs' Exs Sem.
+    intros b b' Eb e xs xs' Exs Sem.
     revert b' xs' Eb Exs; induction Sem.
     - intros. constructor.
       rewrite <-Eb.
@@ -608,7 +609,7 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt bool ==> eq ==> @EqSt value ==> Basics.impl
         as sem_cexp_morph.
   Proof.
-    intros ** b b' Eb e xs xs' Exs Sem.
+    intros b b' Eb e xs xs' Exs Sem.
     revert b' xs' Eb Exs; induction Sem.
     - econstructor; eauto.
       + apply IHSem1; auto; reflexivity.
@@ -630,7 +631,7 @@ Module Type NLSEMANTICSCOIND
         as sem_aexp_morph.
   Proof.
     revert H sem_compat; cofix Cofix.
-    intros ** b b' Eb ck e xs xs' Exs Sem.
+    intros H HH b b' Eb ck e xs xs' Exs Sem.
     inv Sem; unfold_Stv xs'; inversion_clear Exs as [Eh Et];
       try discriminate.
     - econstructor.
@@ -704,7 +705,7 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt bool ==> eq ==> Basics.impl
         as mod_sem_equation_morph.
   Proof.
-    unfold Basics.impl; intros ** b b' Eb e Sem.
+    unfold Basics.impl; intros b b' Eb e Sem.
     induction Sem; econstructor; eauto; try now rewrite <-Eb.
     - eapply Forall2_impl_In with (P := sem_lexp H b); auto.
       intros; now rewrite <-Eb.
@@ -759,11 +760,10 @@ Module Type NLSEMANTICSCOIND
       with signature @EqSt value ==> @EqSt bool ==> Basics.impl
         as synchronized_EqSt.
   Proof.
-    cofix.
+    cofix CoFix.
     intros xs xs' Exs bs bs' Ebs Synchro.
-    unfold_Stv xs'; unfold_Stv bs'; inv Synchro;
-      inv Exs; inv Ebs; try discriminate;
-        constructor; eapply synchronized_EqSt_Proper; eauto.
+    unfold_Stv xs'; unfold_Stv bs'; inv Synchro; inv Exs; inv Ebs;
+      try discriminate; constructor; eapply CoFix; eauto.
   Qed.
 
   Lemma sem_var_det:

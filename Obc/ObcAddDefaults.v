@@ -264,13 +264,13 @@ Module Type OBCADDDEFAULTS
   Proof.
     intros. intro x.
     rewrite (PSP.union_sym _ w), <-(PSP.union_assoc _ w), PS_union_diff_same.
-    split; intro HH. now PS_split; intuition.
+    split; intro HH. now PS_split; tauto.
     destruct (PSP.In_dec x (al2 ∪ w2));
       destruct (PSP.In_dec x (al1 ∪ w1)).
-    - PS_split; intuition.
-    - PS_split; intuition.
-    - PS_split; intuition.
-    - PS_split; intuition.
+    - PS_split; tauto.
+    - PS_split; tauto.
+    - PS_split; tauto.
+    - PS_split; tauto.
   Qed.
 
   (** ** Basic lemmas around [add_defaults_class] and [add_defaults_method]. *)
@@ -401,7 +401,7 @@ Module Type OBCADDDEFAULTS
     clear Heqws HinW W.
     revert s me ve me' ve'.
     induction ws as [|w ws IH]; eauto.
-    simpl. intros ** Hfa Hnnv Heval.
+    simpl. intros * Hfa Hnnv Heval.
     inversion_clear Hfa as [|? ? Hnn Hws].
     unfold add_write in Heval, Hnnv.
     apply not_None_is_Some in Hnn; destruct Hnn as (wv & Hnn).
@@ -432,7 +432,7 @@ Module Type OBCADDDEFAULTS
     clear Heqws HinW W.
     revert me ve me' ve'.
     induction ws as [|w ws IH]. now inversion 1.
-    simpl. intros ** Heval x Hin.
+    simpl. intros * Heval x Hin.
     apply Decidable.not_or in Hin.
     destruct Hin as (Hnwx & Hnin).
     unfold add_write in Heval. destruct (tyenv w).
@@ -523,9 +523,9 @@ Module Type OBCADDDEFAULTS
           end;
           repeat match goal with
                  | H:~PS.In x w1 |- _ =>
-                   rewrite Hw1 in H; PS_negate; destruct H as [H|]; now intuition
+                   rewrite Hw1 in H; PS_negate; destruct H as [H|]; now tauto
                  | H:~PS.In x w2 |- _ =>
-                   rewrite Hw2 in H; PS_negate; destruct H as [H|]; now intuition
+                   rewrite Hw2 in H; PS_negate; destruct H as [H|]; now tauto
                  | H:PS.In x (PS.inter (PS.inter _ _) _) |- _ =>
                    repeat rewrite PS.inter_spec in H;
                      destruct H as ((HB1 & HB2) & HB3)
@@ -539,7 +539,7 @@ Module Type OBCADDDEFAULTS
                                        | H:PS.In _ w1 |- _ => apply Hw1 in H
                                        | H:PS.In _ w2 |- _ => apply Hw2 in H end;
         auto.
-        subst w; PS_split; intuition.
+        subst w; PS_split; tauto.
       + (* forall x, ~Can_write_in x s -> ~PS.In x (PS.union stimes always) *)
         intros x Hncw.
         cut (~PS.In x (PS.union (PS.union st1 al1) (PS.union st2 al2))).
@@ -548,7 +548,7 @@ Module Type OBCADDDEFAULTS
                                          | H: _ /\ _ |- _ => destruct H
                                          | H:PS.In _ w1 |- _ => apply Hw1 in H
                                          | H:PS.In _ w2 |- _ => apply Hw2 in H end;
-          auto. subst w; PS_split; intuition.
+          auto. subst w; PS_split; tauto.
         * setoid_rewrite PS.union_spec. intros [HH|HH]; auto.
       + (* No_Naked_Vars t *)
         apply No_Naked_Vars_add_writes.
@@ -646,7 +646,7 @@ Module Type OBCADDDEFAULTS
     - (* AssignSt i e *)
       now inversion_clear 1.
     - (* Ifte e s1 s2 *)
-      simpl; intros ** Hadd x.
+      simpl; intros * Hadd x.
       set (defs1 := add_defaults_stmt tyenv PS.empty s1).
       assert (add_defaults_stmt tyenv PS.empty s1 = defs1) as Hdefs1
           by now subst defs1.
@@ -681,7 +681,7 @@ Module Type OBCADDDEFAULTS
         * apply Can_write_in_add_writes in Hcw' as [Hcw|Hcw].
           now subst w2; PS_split; auto. now apply CWIIfteFalse, IHs2.
     - (* * Comp s1 s2 *)
-      simpl; intros ** Hadd x.
+      simpl; intros * Hadd x.
 
       set (defs2 := add_defaults_stmt tyenv req s2).
       assert (add_defaults_stmt tyenv req s2 = defs2) as Hdefs2 by now subst defs2.
@@ -702,7 +702,7 @@ Module Type OBCADDDEFAULTS
       + rewrite <-IHs1 in *; auto.
       + rewrite <-IHs2 in *; auto.
     - (* * Call ys clsid o f es *)
-      simpl; intros ** Hadd x.
+      simpl; intros * Hadd x.
       rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
       inv Hadd. split; inversion_clear 1; auto.
     - (* * Skip *)
@@ -803,7 +803,7 @@ Module Type OBCADDDEFAULTS
       wt_method p insts mem m ->
       wt_method (add_defaults p) insts mem m.
   Proof.
-    unfold wt_method, meth_vars. intros ** WTm.
+    unfold wt_method, meth_vars. intros * WTm.
     destruct m as [n ins vars outs s nodup good]; simpl in *.
     induction s; inv WTm; eauto using wt_stmt.
     match goal with H:find_class _ _ = Some _ |- _ =>
@@ -883,7 +883,7 @@ Module Type OBCADDDEFAULTS
         /\ PS.For_all (fun x => InMembers x vars) always
         /\ PS.For_all (fun x => PS.In x req \/ InMembers x vars) req'.
     Proof.
-      induction s; intros ** Hadd WTs;
+      induction s; intros * Hadd WTs;
         try (injection Hadd; intros; subst always stimes req' t).
       - (* * Assign i e *)
         repeat split; auto using PS_For_all_empty; intros x Hin.
@@ -1008,7 +1008,7 @@ Module Type OBCADDDEFAULTS
         (forall x, ~PS.In x (PS.union stimes always) -> Env.find x ve' = Env.find x ve)
         /\ (forall x, PS.In x always -> Env.In x ve').
     Proof.
-      intros ** Hadd Heval Hwt Hre1 Hcall.
+      intros * Hadd Heval Hwt Hre1 Hcall.
       revert t me me' ve ve' Heval req req' stimes always Hadd Hre1.
       induction s as [| | | |ys clsid o f es|];
         intros t me me' ve ve' Heval rq rq' st al Hadd Hre1.
@@ -1304,7 +1304,7 @@ Module Type OBCADDDEFAULTS
         (forall x, PS.In x Z2 -> PS.In x S2) ->
         in1_notin2 Z1 Z2 ve1 ve2.
     Proof.
-      intros ** (?, ?) ? ?; split; auto.
+      intros * (?, ?) ? ?; split; auto.
     Qed.
 
     Lemma stmt_eval_add_writes_Skip:
@@ -1393,7 +1393,7 @@ Module Type OBCADDDEFAULTS
           destruct e'; inv Heval;
             match goal with H:_ = add_valid' _ |- _ => inv H end; discriminate. }
 
-        intros ** Hfindc Hfindm Hlvos Hlvos'; split.
+        intros * Hfindc Hfindm Hlvos Hlvos'; split.
         + setoid_rewrite fst_InMembers.
           rewrite <-(map_length fst m.(m_in)) in Hlvos'.
           revert Hsome Hlvos'; clear; revert vos'.
@@ -1526,7 +1526,7 @@ Module Type OBCADDDEFAULTS
               destruct (PSP.In_dec x w) as [Hw|Hnw].
               now apply PS_In_Forall with (1:=Hin1') (2:=Hw).
               apply (Hmono1 x). apply Hpre1. intuition.
-            + intros x Hin. apply Hpre2. PS_split; intuition.
+            + intros x Hin. apply Hpre2. PS_split; tauto.
           - apply (IHHeval Hpr Hno2 Hwt2 _ _ _ _ _ Hdefs2 _ Henv2').
             destruct Hpre as (Hpre1 & Hpre2); split.
             + intros x Hrq2.
@@ -1536,7 +1536,7 @@ Module Type OBCADDDEFAULTS
               destruct (PSP.In_dec x w) as [Hw|Hnw].
               now apply PS_In_Forall with (1:=Hin1') (2:=Hw).
               apply (Hmono1 x). apply Hpre1. intuition.
-            + intros x Hin. apply Hpre2. PS_split; intuition. }
+            + intros x Hin. apply Hpre2. PS_split; tauto. }
 
         exists ve3'; split; auto.
         apply stmt_eval_add_writes_split.
@@ -1702,8 +1702,8 @@ Module Type OBCADDDEFAULTS
                Env.find x (Env.from_list (min ++ mvars ++ mout)) = Some ty) as Hinf
         by (split; [apply Env.In_find_adds'|apply Env.from_list_find_In]; auto).
 
-    apply add_defaults_stmt_wt with (1:=Hinf) (2:=Heqdefs) in WTm
-      as (WTt & HH1 & HH2 & Hreq'); clear HH1 HH2.
+    apply add_defaults_stmt_wt with (1:=Hinf) (2:=Heqdefs) in WTm.
+    destruct WTm as (WTt & HH1 & HH2 & Hreq'); clear HH1 HH2.
 
     apply add_writes_wt; auto.
     apply output_or_local_in_typing_env; auto.
@@ -1878,7 +1878,7 @@ Module Type OBCADDDEFAULTS
           Forall (fun x => x <> None) rvos) ->
       method_refines p1 p2 all_in1 (add_defaults_method m) m.
   Proof.
-    intros ** Hpr WTm Hnoo Hncwi Hcall.
+    intros * Hpr WTm Hnoo Hncwi Hcall.
     unfold method_refines.
     rewrite add_defaults_method_m_in, add_defaults_method_m_out.
     repeat split; auto.
@@ -1965,7 +1965,7 @@ Module Type OBCADDDEFAULTS
       stmt_call_eval p me f m (map Some vs) me' (map Some rvs) ->
       stmt_call_eval (add_defaults p) me f m (map Some vs) me' (map Some rvs).
   Proof.
-    intros ** Call.
+    intros * WTp NOO NCW Call.
     eapply program_refines_stmt_call_eval in Call as (rvos &?& Spec);
       eauto using add_defaults_program_refines.
     - assert (rvos = map Some rvs) as ->; eauto.
@@ -1989,7 +1989,7 @@ Module Type OBCADDDEFAULTS
   Proof.
     intros ?????; generalize 0%nat.
     cofix COINDHYP.
-    intros n ** Hdo.
+    intros n me WTp NOO NCW Hdo.
     destruct Hdo.
     econstructor; eauto using stmt_call_eval_add_defaults.
   Qed.

@@ -69,7 +69,7 @@ Module Type SBTYPING
       forall b P,
         wt_program P ->
         wt_block P b ->
-        Forall (fun b' => b.(b_name) <> b'.(b_name)) P ->
+        Forall (fun b' => b.(b_name) <> b'.(b_name))%type P ->
         wt_program (b :: P).
 
   Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_program.
@@ -84,7 +84,7 @@ Module Type SBTYPING
     2:apply IHP; now inv WTg.
     intro Hin.
     inversion_clear WTg as [|? ? ? WTn Hn].
-    change (Forall (fun b' => (fun i => a.(b_name) <> i) b'.(b_name)) P) in Hn.
+    change (Forall (fun b' => (fun i => a.(b_name) <> i :> ident) b'.(b_name)) P) in Hn.
     apply Forall_map in Hn.
     apply Forall_forall with (1:=Hn) in Hin.
     now contradiction Hin.

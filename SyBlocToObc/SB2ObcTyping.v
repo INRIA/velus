@@ -137,11 +137,11 @@ Module Type SB2OBCTYPING
                 (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (b_lasts b))
                 (step_method b).
   Proof.
-    unfold wt_block, wt_method; intros ** WT; simpl.
+    unfold wt_block, wt_method; intros * WT; simpl.
     unfold translate_eqns, meth_vars.
 
     pose proof (b_nodup_variables b) as NodupVars.
-    unfold variables, concatMap in NodupVars.
+    unfold variables in NodupVars.
     assert (incl (calls_of (b_eqs b)) (b_blocks b)) as Blocks
         by (rewrite b_blocks_calls_of; apply incl_refl).
     assert (incl (resets_of (b_eqs b)) (b_blocks b)) as Blocks'
@@ -155,10 +155,10 @@ Module Type SB2OBCTYPING
         apply NoDup_app_weaken in NodupVars.
     assert (incl (calls_of eqs) (b_blocks b))
       by (destruct eq; simpl in *; auto;
-          apply incl_cons' in Blocks as (); auto).
+          apply incl_cons' in Blocks as (? & ?); auto).
     assert (incl (resets_of eqs) (b_blocks b))
       by (destruct eq; simpl in *; auto;
-          apply incl_cons' in Blocks' as (); auto).
+          apply incl_cons' in Blocks' as (? & ?); auto).
 
     rewrite 2 idty_app in WTeq.
     set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (b_lasts b)) in *;
@@ -182,7 +182,7 @@ Module Type SB2OBCTYPING
         rewrite 3 map_app, 3 map_fst_idty, map_map; simpl.
         rewrite <-2 app_assoc. apply b_nodup.
       }
-      intros ** Hin; apply in_app in Hin as [Hin|Hin].
+      intros * Hin; apply in_app in Hin as [Hin|Hin].
       - pose proof Hin.
         eapply In_InMembers, NoDupMembers_app_InMembers in Hin; eauto.
         cases_eqn E.
@@ -199,14 +199,14 @@ Module Type SB2OBCTYPING
     - eapply Control_wt; eauto.
       constructor; eauto.
       now rewrite typeof_correct.
-    - apply incl_cons' in Blocks' as ().
+    - apply incl_cons' in Blocks' as (? & ?).
       apply find_block_translate in Find as (?&?&?&?&?); subst.
       eapply Control_wt; eauto.
       econstructor; eauto.
       + apply exists_reset_method.
       + simpl; constructor.
       + simpl; constructor.
-    - apply incl_cons' in Blocks as ().
+    - apply incl_cons' in Blocks as (? & ?).
       apply find_block_translate in Find as (?&?&?&?&?); subst.
       eapply Control_wt; eauto.
       econstructor; eauto.
@@ -224,7 +224,7 @@ Module Type SB2OBCTYPING
       (forall x c ck, In (x, (c, ck)) lasts -> In (x, type_const c) mems) ->
       wt_stmt (translate P) insts mems [] (reset_mems lasts).
   Proof.
-    unfold reset_mems; intros ** Spec.
+    unfold reset_mems; intros * Spec.
     induction lasts as [|(x, (c, ck))]; simpl; eauto using wt_stmt.
     rewrite wt_stmt_fold_left_lift; split; auto.
     - apply IHlasts.
@@ -241,8 +241,8 @@ Module Type SB2OBCTYPING
       wt_stmt prog insts mems vars (reset_insts blocks').
   Proof.
     unfold reset_insts.
-    induction 1; simpl; auto; intros ** WT.
-    - apply wt_stmt_fold_left_lift in WT as ();
+    induction 1; simpl; auto; intros * WT.
+    - apply wt_stmt_fold_left_lift in WT as (? & ?);
         rewrite wt_stmt_fold_left_lift; split; auto.
     - apply wt_stmt_fold_left_lift in WT as (?& WT');
         rewrite wt_stmt_fold_left_lift; split; auto.
@@ -255,13 +255,13 @@ Module Type SB2OBCTYPING
       incl (b_blocks b) insts ->
       wt_stmt (translate P) insts mems [] (reset_insts (b_blocks b)).
   Proof.
-    unfold wt_block; intros ** WT Spec.
+    unfold wt_block; intros * WT Spec.
     eapply reset_insts_wt_permutation; try apply b_blocks_calls_of.
     rewrite b_blocks_calls_of in Spec.
     unfold reset_insts.
     induction (b_eqs b) as [|[] eqs]; simpl in *;
       inversion_clear WT as [|?? WTeq]; eauto using wt_stmt.
-    apply incl_cons' in Spec as ().
+    apply incl_cons' in Spec as (? & ?).
     rewrite wt_stmt_fold_left_lift; split; auto.
     constructor; eauto using wt_stmt.
     inversion_clear WTeq as [| | |???????? Find].
@@ -280,12 +280,12 @@ Module Type SB2OBCTYPING
                 (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (b_lasts b))
                 (reset_method b).
   Proof.
-    unfold wt_block, wt_method; intros ** WT; simpl.
+    unfold wt_block, wt_method; intros * WT; simpl.
     unfold translate_eqns, meth_vars, translate_reset; simpl.
     constructor.
     - clear WT.
       apply reset_mems_wt.
-      intros ** Hin; induction (b_lasts b) as [|(x', (c', ck'))];
+      intros * Hin; induction (b_lasts b) as [|(x', (c', ck'))];
         simpl; inv Hin; auto.
       left; congruence.
     - apply reset_insts_wt; auto.
@@ -298,7 +298,7 @@ Module Type SB2OBCTYPING
       wt_block P b ->
       wt_class (translate P) (translate_block b).
   Proof.
-    unfold wt_block; intros ** WT.
+    unfold wt_block; intros * WT.
     constructor; simpl; eauto using Forall_cons.
     rewrite b_blocks_calls_of.
     induction (b_eqs b) as [|[]]; simpl; inversion_clear WT as [|?? WTeq]; auto;
@@ -313,7 +313,7 @@ Module Type SB2OBCTYPING
       SB.Typ.wt_program P ->
       wt_program (translate P).
   Proof.
-    intros ** WT.
+    intros * WT.
     pose proof (wt_program_NoDup _ WT) as Hnodup.
     induction P as [|b]; auto with obctyping.
     inversion_clear WT as [|? ? WT' WTb Hnr]; inv Hnodup.

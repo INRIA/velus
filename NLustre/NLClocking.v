@@ -8,7 +8,7 @@ Require Import Velus.CoreExpr.CEIsFree.
 Require Import Velus.NLustre.IsFree.
 Require Import Velus.NLustre.Memories.
 Require Import Velus.NLustre.IsDefined.
-Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLOrdered.
 Require Import Velus.CoreExpr.CEClocking.
 
 Require Import List.
@@ -29,7 +29,7 @@ Module Type NLCLOCKING
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX       Op)
        (Import Syn   : NLSYNTAX   Ids Op CESyn)
-       (Import Ord   : ORDERED    Ids Op CESyn Syn)
+       (Import Ord   : NLORDERED  Ids Op CESyn Syn)
        (Import Mem   : MEMORIES   Ids Op CESyn Syn)
        (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
        (Import CEIsF : CEISFREE   Ids Op CESyn)
@@ -140,7 +140,7 @@ Module Type NLCLOCKING
       exists G'' G',
         G = G'' ++ node :: G' /\ wc_node G' node.
   Proof.
-    intros ** WCG Hfind.
+    intros * WCG Hfind.
     apply find_node_split in Hfind as (G'' & G' & HG).
     rewrite HG in *.
     apply wc_global_app_weaken in WCG.
@@ -153,7 +153,7 @@ Module Type NLCLOCKING
       wc_equation G vars eq ->
       wc_equation (nd :: G) vars eq.
   Proof.
-    intros ** OnG WCnG.
+    intros * OnG WCnG.
     inversion_clear OnG as [|? ? OG ? HndG].
     inversion_clear WCnG; eauto using wc_equation.
     econstructor; eauto.
@@ -174,7 +174,7 @@ Module Type NLCLOCKING
       wc_equation (G' ++ G) vars eq.
   Proof.
     induction G'; auto.
-    simpl. intros ** OG WCeq.
+    simpl. intros * OG WCeq.
     eapply wc_equation_global_cons in OG; eauto.
     inv OG. auto.
   Qed.
@@ -186,7 +186,7 @@ Module Type NLCLOCKING
       find_node f G = Some node ->
       wc_node G node.
   Proof.
-    intros ** OG WCG Hfind.
+    intros * OG WCG Hfind.
     induction G as [|n' G IH]. discriminate.
     simpl in *.
     destruct (ident_eqb n'.(n_name) f) eqn:Heq.
@@ -324,7 +324,7 @@ Module NLClockingFun
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX       Op)
        (Import Syn   : NLSYNTAX   Ids Op CESyn)
-       (Import Ord   : ORDERED    Ids Op CESyn Syn)
+       (Import Ord   : NLORDERED  Ids Op CESyn Syn)
        (Import Mem   : MEMORIES   Ids Op CESyn Syn)
        (Import IsD   : ISDEFINED  Ids Op CESyn Syn Mem)
        (Import CEIsF : CEISFREE   Ids Op CESyn)

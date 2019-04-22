@@ -66,7 +66,7 @@ Lemma clock_not_in_clock:
   forall ck x b,
     ~(ck = Con ck x b).
 Proof.
-  intros ** Hck.
+  intros * Hck.
   induction ck; try discriminate.
   injection Hck; intros.
   apply IHck. now subst b x.
@@ -116,7 +116,7 @@ Lemma wc_env_add:
     wc_env env ->
     wc_env ((x, ck) :: env).
 Proof.
-  intros ** Hnm Hwc Hwce.
+  intros * Hnm Hwc Hwce.
   constructor.
   now apply wc_clock_add; auto.
   apply Forall_forall.
@@ -320,7 +320,7 @@ Lemma wc_clock_parent:
     -> wc_clock C ck.
 Proof.
   Hint Constructors wc_clock.
-  induction ck' as [|ck' IH]; destruct ck as [|ck i' ty' b'];
+  induction ck' as [|ck' IH]; destruct ck as [|ck i' ty'];
   try now (inversion 3 || auto).
   intros Hwc Hp Hck.
   inversion Hp as [j c [HR1 HR2 HR3]|ck'' j c Hp' [HR1 HR2 HR3]].
@@ -352,7 +352,7 @@ Lemma instck_subclock_not_clock_eq:
     instck ck isub xck = Some c ->
     clock_eq ck (Con c x b) = false.
 Proof.
-  intros ** Hck.
+  intros * Hck.
   apply Bool.not_true_is_false.
   intro Heq. apply clock_eq_spec in Heq.
   apply instck_parent in Hck as [Hck|Hck].

@@ -1,4 +1,5 @@
 Require Import PArith.
+Require Import Omega.
 Require Import List.
 
 Import List.ListNotations.
@@ -64,9 +65,8 @@ Module Type ISDEFINED
     forall x ys ck f le r,
       ~ Is_defined_in_eq x (EqApp ys ck f le r) -> ~ List.In x ys.
   Proof.
-    intros ** H.
-    assert (Is_defined_in_eq x (EqApp ys ck f le r)) by eauto.
-    contradiction.
+    intros * H. intro.
+    exfalso. apply H. auto.
   Qed.
 
   Lemma Is_defined_in_EqApp:
@@ -74,7 +74,7 @@ Module Type ISDEFINED
       0 < length xs ->
       Is_defined_in_eq (hd d xs) (EqApp xs ck f es r).
   Proof.
-    intros ** Length.
+    intros * Length.
     constructor.
     destruct xs; simpl in *; auto; omega.
   Qed.
@@ -97,7 +97,7 @@ Module Type ISDEFINED
     intros x eq eqs. split.
     - (* ==> *)
       intro Hndef; split; intro His_def;
-        eapply Hndef; constructor(assumption).
+        eapply Hndef. now constructor. now constructor 2.
     - (* <== *)
       intros [Hdef_eq Hdef_eqs] Hdef_all.
       inv Hdef_all; eauto.
@@ -130,7 +130,7 @@ Module Type ISDEFINED
       PS.In x (memories eqs) -> Is_defined_in_eqs x eqs.
   Proof.
     unfold memories, Is_defined_in_eqs.
-    induction eqs as [ eq | eq ].
+    induction eqs.
     - simpl; intro; not_In_empty.
     - intro HH; simpl in HH.
       apply In_fold_left_memory_eq in HH.
@@ -157,7 +157,7 @@ Module Type ISDEFINED
       In x (vars_defined eqs).
   Proof.
     induction eqs as [|eq eqs]; inversion_clear 1;
-      unfold vars_defined; rewrite concatMap_cons; apply in_app.
+      unfold vars_defined; simpl; apply in_app.
     - left. inv H0; simpl; auto.
     - intuition.
   Qed.
@@ -176,6 +176,18 @@ Module Type ISDEFINED
 
   (** ** Silly unfolding property: *)
 
+  Lemma Subset_defined_eq:
+    forall eq m1 m2,
+      PS.Subset m1 m2 ->
+      PS.Subset (defined_eq m1 eq) (defined_eq m2 eq).
+  Proof.
+    intros * Hsub.
+    destruct eq; simpl.
+    - apply PSP.subset_add_3, PSP.subset_add_2; try apply PS.add_spec; auto.
+    - now apply Subset_ps_adds.
+    - apply PSP.subset_add_3, PSP.subset_add_2; try apply PS.add_spec; auto.
+  Qed.
+  
   Lemma In_fold_left_defined_eq:
     forall x eqs m,
       PS.mem x (List.fold_left defined_eq eqs m) = true
@@ -187,45 +199,16 @@ Module Type ISDEFINED
       now apply not_In_empty in H; contradiction.
     - split.
       + intro H.
-        simpl; rewrite IHeqs.
-        simpl in H; apply IHeqs in H; destruct H; auto;
-        destruct eq;
-        (* XXX: this is Ltac p0rn *)
-        match goal with
-        | |- context[ EqApp _ _ _ _ _ ] => generalize ps_adds_spec; intro add_spec
-        | _ => generalize PS.add_spec; intro add_spec
-        end;
-        apply add_spec in H;
-        destruct H;
-        match goal with
-        | H: PS.In x ?m |- context [PS.In x ?m] => now intuition
-        | H: x = _ |- _ => subst x
-        | H: In x ?i |- context [EqApp ?i _ _ _ _] => idtac
-        end;
-        constructor(constructor(apply add_spec; intuition)).
-
-      + destruct 1 as [H|H].
-        * simpl in H; rewrite IHeqs in H; apply IHeqs; destruct H; auto.
-          right.
-          destruct eq;
-            match goal with
-            | |- context[ EqApp _ _ _ _ _ ] =>
-              generalize ps_adds_spec; intro add_spec
-            | _ =>
-              generalize PS.add_spec; intro add_spec
-            end;
-            simpl; apply add_spec;
-            apply add_spec in H; destruct H;
-            intuition;
-            apply not_In_empty in H; contradiction.
-        * apply IHeqs; right; destruct eq;
-            match goal with
-            | |- context[ EqApp _ _ _ _ _ ] =>
-              generalize ps_adds_spec; intro add_spec
-            | _ =>
-              generalize PS.add_spec; intro add_spec
-            end;
-            apply add_spec; auto.
+        simpl; rewrite IHeqs. setoid_rewrite IHeqs in H. clear IHeqs.
+        destruct H as [H|H]; auto.
+        destruct eq; simpl in *; try rewrite PS.add_spec in *;
+          try rewrite ps_adds_spec in *; destruct H; auto.
+      + simpl. setoid_rewrite IHeqs.
+        destruct 1 as [[H|H]|H]; auto.
+        rewrite <-Subset_defined_eq with (m1:=PS.empty);
+          auto using PSP.subset_empty.
+        right. destruct eq; simpl;
+                 try apply PS.add_spec; try apply ps_adds_spec; auto.
   Qed.
 
   (** ** Reflection lemmas: *)
@@ -346,20 +329,14 @@ Module Type ISDEFINED
       <-> In x (vars_defined eqs).
   Proof.
   intros; rewrite Is_defined_inP, PS.mem_spec.
-
   induction eqs as [ | eq eqs IHeqs ]; simpl.
   - now rewrite PSF.empty_iff.
-  - destruct eq;
-    rewrite <- PS.mem_spec; unfold defined; simpl;
-    match goal with
-    | |- context[ EqApp _ _ _ _ _ ] =>
-      unfold vars_defined;
-        rewrite concatMap_cons, in_app
-    | _ => idtac
-    end;
-    rewrite In_fold_left_defined_eq,
-            ?PSF.add_iff, ?ps_adds_spec,
-            PSF.empty_iff, IHeqs; intuition.
+  - destruct eq; rewrite <- PS.mem_spec; unfold defined; simpl.
+    + rewrite In_fold_left_defined_eq, PSF.add_iff, PSF.empty_iff, IHeqs; tauto.
+    + unfold vars_defined; simpl;
+        rewrite in_app, In_fold_left_defined_eq, ps_adds_spec,
+        PSF.empty_iff, IHeqs; tauto.
+    + rewrite In_fold_left_defined_eq, PSF.add_iff, PSF.empty_iff, IHeqs; tauto.
   Qed.
 
   Lemma Is_defined_in_cons:
@@ -414,16 +391,7 @@ Module Type ISDEFINED
       ~Exists (fun ni=>Is_defined_in_eqs ni n.(n_eqs)) (map fst n.(n_in)).
   Proof.
     intros n HH.
-    assert (forall {B} eqs (xs:list (ident*B)),
-      Exists (fun ni=> Is_defined_in_eqs ni eqs) (map fst xs)
-      <-> Exists (fun x=> Is_defined_in_eqs (fst x) eqs) xs) as Hexfst.
-    { intros B eqs. induction xs as [|x xs].
-      - simpl. now rewrite 2 Exists_nil.
-      - simpl. split;
-                 inversion_clear 1;
-                 try (now constructor);
-                 try (constructor (now apply IHxs)). }
-    rewrite Hexfst in HH; clear Hexfst.
+    rewrite Exists_map in HH.
     apply decidable_Exists_not_Forall in HH.
     2:(intros; apply decidable_Is_defined_in_eqs).
     apply HH. clear HH.

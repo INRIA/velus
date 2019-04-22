@@ -68,7 +68,7 @@ Module Type MEMORIES
   Instance List_fold_left_memory_eq_Proper (eqs: list equation) :
     Proper (PS.eq ==> PS.eq) (fold_left memory_eq eqs).
   Proof.
-    induction eqs as [|[]]; intros ** ?? E; simpl; auto.
+    induction eqs as [|[]]; intros * ?? E; simpl; auto.
     apply IHeqs; rewrite E; reflexivity.
   Qed.
 
@@ -77,8 +77,8 @@ Module Type MEMORIES
       PS.In x (memories eqs) ->
       In x (vars_defined eqs).
   Proof.
-    unfold memories, vars_defined, concatMap.
-    intros ** Hin.
+    unfold memories.
+    intros * Hin.
     induction eqs as [|eq]; simpl in *.
     - now apply PSF.empty_iff in Hin.
     - apply In_fold_left_memory_eq in Hin as [Hin|Hin].
@@ -97,7 +97,7 @@ Module Type MEMORIES
       forall x, In x (var_defined eq) ->
       PS.mem x (memories eqs) = is_fby eq.
   Proof.
-    unfold vars_defined, memories, concatMap.
+    unfold memories.
     induction eqs as [|eq eqs]; simpl; try now intuition.
     intros eq' Hin Hndup ? Hin'.
     apply NoDup_app'_iff in Hndup as (Hndup_eq & Hndup_eqs & Hndup_def).
@@ -118,6 +118,7 @@ Module Type MEMORIES
       { intro; subst x.
         eapply Forall_forall in Hndup_def; [|simpl; eauto].
         apply Hndup_def; simpl; eauto.
+        unfold vars_defined. rewrite flat_map_concat_map.
         eapply in_concat'; eauto.
         now apply in_map.
       }
@@ -185,7 +186,7 @@ Module Type MEMORIES
     match goal with |- Permutation (map fst (fst (partition ?p ?l))) _ =>
       assert (Permutation (map fst (fst (partition p l)))
                           (map fst (filter p n.(n_vars))))
-        as Hperm by (apply Permutation_map_aux; apply fst_partition_filter)
+                      as Hperm by now rewrite fst_partition_filter
     end.
     rewrite Hperm; clear Hperm.
     match goal with |- context[filter ?p ?l] =>
@@ -238,7 +239,7 @@ Module Type MEMORIES
     clear Heqmems.
     induction n.(n_eqs) as [|eq eqs]; auto.
     assert (forall eq, P eqs eq) as Peq'
-        by (intros e Hin; apply Peq; constructor (assumption)).
+        by (intros e Hin; apply Peq; now constructor 2).
     specialize (IHeqs Peq'). clear Peq'.
     destruct eq eqn:Heq; simpl;
       specialize (Peq eq); red in Peq; subst eq;
@@ -258,21 +259,18 @@ Module Type MEMORIES
           induction i as [ | a i IHi] ; auto; simpl.
           rewrite Hmem_in; try now constructor.
           apply IHi. intros.
-          apply Hmem_in. constructor(assumption).
+          apply Hmem_in. now constructor 2.
         }
 
         now rewrite Hfilter.
       }
 
-      unfold vars_defined;
-        rewrite concatMap_cons;
-        unfold var_defined.
+      unfold vars_defined; unfold var_defined; simpl.
       now rewrite <- filter_app, IHeqs, Pfilter.
 
     + (* Case: EqFby *)
       unfold vars_defined;
-        rewrite concatMap_cons;
-        unfold var_defined; simpl.
+        simpl; unfold var_defined; simpl.
       rewrite Peq; eauto.
   Qed.
 
@@ -288,8 +286,7 @@ Module Type MEMORIES
     match goal with |- Permutation (map fst (snd (partition ?p ?l) ++ _)) _ =>
       assert (Permutation (map fst (snd (partition p l)))
                           (map fst (filter (notb p) n.(n_vars))))
-                      as Hperm
-                        by (apply Permutation_map_aux, snd_partition_filter)
+                      as Hperm by (now rewrite snd_partition_filter)
     end.
     rewrite map_app, Hperm, <-map_app; clear Hperm.
 
@@ -325,10 +322,10 @@ Module Type MEMORIES
       now apply NoDupMembers_app_r in Hnodup.
     }
     clear Heqmems.
-    unfold notb, vars_defined, concatMap.
+    unfold notb, vars_defined.
     induction n.(n_eqs) as [|eq eqs]; auto.
     assert (forall eq, P eqs eq) as Peq'
-        by (intros e Hin; apply Peq; constructor (assumption)).
+        by (intros e Hin; apply Peq; now constructor 2).
     specialize (IHeqs Peq'). clear Peq'.
     destruct eq eqn:Heq; simpl;
       specialize (Peq eq); red in Peq; subst eq;
@@ -346,7 +343,7 @@ Module Type MEMORIES
         rewrite Hmem_in; simpl; try now constructor.
         rewrite IHi; auto.
         intros.
-        apply Hmem_in. constructor(assumption).
+        apply Hmem_in. now constructor 2.
       }
 
       rewrite <-filter_app; setoid_rewrite Hfilter.

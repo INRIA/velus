@@ -14,6 +14,7 @@ Require Import List.
 Require Import ZArith.BinInt.
 
 Require Import Program.Tactics.
+Require Coq.Sorting.Permutation.
 
 Open Scope list.
 Open Scope sep_scope.
@@ -29,7 +30,7 @@ Lemma sepconj_eqv:
     massert_eqv Q Q' ->
     massert_eqv (P ** Q) (P' ** Q').
 Proof.
-  intros ** HP HQ.
+  intros * HP HQ.
   rewrite HP. rewrite HQ.
   reflexivity.
 Qed.
@@ -356,7 +357,7 @@ Lemma unchanged_on_imp:
     (forall b ofs, Q b ofs -> P b ofs) ->
     Mem.unchanged_on Q m m'.
 Proof.
-  intros ** Hun Hpq.
+  intros * Hun Hpq.
   inversion_clear Hun.
   constructor; auto.
 Qed.
@@ -377,10 +378,10 @@ Proof.
         apply m_invar with (1:=Hq).
         apply unchanged_on_imp with (1:=Hun).
         apply pure_wand_footprint.
-      * intros ** Hwf.
+      * intros * Hwf.
         apply pure_wand_footprint in Hwf.
         eauto using m_valid.
-    + simpl. intros ** Hf.
+    + simpl. intros * Hf.
       now apply pure_wand_footprint in Hf.
 Qed.
   
@@ -797,8 +798,6 @@ Section Sepall.
     | x::xs => p x ** sepall p xs
     end.
 
-  Require Coq.Sorting.Permutation.
-
   Lemma sepall_permutation:
     forall p xs ys,
       Permutation.Permutation xs ys ->
@@ -843,7 +842,7 @@ Section Sepall.
       ys = ws ++ x :: xs ->
       sepall p ys <-*-> p x ** sepall p (ws ++ xs).
   Proof.
-    intros ** Hys.
+    intros * Hys.
     rewrite sepall_app.
     rewrite sep_swap.
     rewrite <-sepall_cons.
@@ -910,7 +909,7 @@ Section Sepall.
     repeat rewrite sepall_cons.
     rewrite Hin; [|now apply in_eq].
     rewrite IH; [reflexivity|assumption|].
-    intros; apply Hin. constructor (assumption).
+    intros; apply Hin. now constructor 2.
   Qed.
 
   Lemma sepall_weakenp:
@@ -976,7 +975,7 @@ Section Sepall.
     (forall x, decidable_footprint (P x)) ->
     (sepall P xs ** sepall (fun x => P x -* Q x) xs) -*> sepall Q xs.
   Proof.
-    induction xs; simpl; intros ** Hdec.
+    induction xs; simpl; intros * Hdec.
     - now rewrite sepemp_left.
     - rewrite sep_assoc, sep_swap23, <-sep_assoc.
       apply sep_imp'.
@@ -1242,7 +1241,7 @@ Section Galloc.
         * omega.
         * unfold Int.modulus, Int.wordsize, Wordsize_32.wordsize.
           rewrite Z.one_succ; apply Zlt_le_succ, Z.gt_lt, two_power_nat_pos.
-        * intros ** HH. assert (i = 0) by omega.
+        * intros * HH. assert (i = 0) by omega.
           subst. now apply Mem.perm_cur.
       + (* g = Gvar v *)
         apply Genv.find_var_info_iff in Hfd.

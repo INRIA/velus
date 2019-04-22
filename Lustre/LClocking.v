@@ -8,6 +8,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Require Import Morphisms.
+Import Permutation.
 
 (** * Lustre typing *)
 
@@ -265,7 +266,7 @@ Module Type LCLOCKING
   | wcg_cons: forall n ns,
       wc_global ns ->
       wc_node ns n ->
-      Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
+      Forall (fun n'=> n.(n_name) <> n'.(n_name) :> ident) ns ->
       wc_global (n::ns).
 
   (** ** Basic properties of clocking *)
@@ -419,7 +420,7 @@ Module Type LCLOCKING
       (forall x, f x = g x) ->
       sinst bck f ck = sinst bck g ck.
   Proof.
-    intros ** Hext.
+    intros * Hext.
     induction ck; auto.
     simpl. now rewrite IHck, Hext.
   Qed.
@@ -466,7 +467,7 @@ Module Type LCLOCKING
       In i (indexes (nclockof e)) ->
       Is_index_in_nclocks i (nclockof e).
   Proof.
-    intros ** Hin. destruct e; simpl in *.
+    intros * Hin. destruct e; simpl in *.
     - contradiction.
     - destruct a as (ty, nck). destruct nck; simpl in *.
       contradiction. destruct c; inversion_clear Hin; subst.
@@ -509,9 +510,6 @@ Module Type LCLOCKING
       inv Hin. now repeat constructor. now constructor 2; apply IH.
   Qed.
 
-  Require Import Morphisms.
-  Import Permutation.
-
   Instance wc_exp_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * clock)
                 ==> @eq exp ==> iff)
@@ -543,7 +541,7 @@ Module Type LCLOCKING
       (Forall2 (wc_patvar env1 pvars ncks) xs cs
        <-> Forall2 (wc_patvar env2 pvars ncks) xs cs).
   Proof.
-    intros ** Hperm.
+    intros * Hperm.
     split; apply Forall2_impl_In; intros; rewrite Hperm in *; auto.
   Qed.
 

@@ -88,7 +88,7 @@ Module Type OBCSYNTAX
       In x reserved ->
       ~InMembers x (meth_vars m).
   Proof.
-    intros ** Hin Hinm.
+    intros * Hin Hinm.
     pose proof m.(m_good) as Good.
     unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
@@ -124,7 +124,7 @@ Module Type OBCSYNTAX
       prefixed x ->
       ~InMembers x (meth_vars m).
   Proof.
-    intros ** Hin Hinm.
+    intros * Hin Hinm.
     pose proof m.(m_good) as Good.
     unfold meth_vars in Hinm.
     induction (m.(m_in) ++ m.(m_vars) ++ m.(m_out)) as [|(x', t)];
@@ -190,7 +190,7 @@ Module Type OBCSYNTAX
       find_method fid ms = Some f ->
       In f ms.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction ms; inversion Hfind as [H].
     destruct (ident_eqb (m_name a) fid) eqn: E.
     - inversion H; subst.
@@ -203,7 +203,7 @@ Module Type OBCSYNTAX
       find_method fid fs = Some f ->
       f.(m_name) = fid.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction fs; inversion Hfind as [H].
     destruct (ident_eqb (m_name a) fid) eqn: E.
     - inversion H; subst.
@@ -245,7 +245,7 @@ Module Type OBCSYNTAX
         cls = cls'' ++ c :: cls'
         /\ find_class id cls'' = None.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction cls; inversion Hfind as [H].
     destruct (ident_eqb (c_name a) id) eqn: E.
     - inversion H; subst.
@@ -262,7 +262,7 @@ Module Type OBCSYNTAX
       find_class id cls = Some (c, cls') ->
       c.(c_name) = id.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction cls; inversion Hfind as [H].
     destruct (ident_eqb (c_name a) id) eqn: E.
     - inversion H; subst.
@@ -275,7 +275,7 @@ Module Type OBCSYNTAX
       find_class id cls = Some (c, cls') ->
       In c cls.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction cls; inversion Hfind as [H].
     destruct (ident_eqb (c_name a) id) eqn: E.
     - inversion H; subst.
@@ -527,7 +527,7 @@ Module Type OBCSYNTAX
       analyze_obc s = (na, mw) ->
       forall x, PS.In x na -> Is_naked_arg_in x s.
   Proof.
-    intros ** Ha x Hin.
+    intros * Ha x Hin.
     eapply analyze_obc'_spec_na in Ha; eauto.
     destruct Ha as [Ha|]; auto.
     now apply not_In_empty in Ha.
@@ -538,7 +538,7 @@ Module Type OBCSYNTAX
       analyze_obc s = (na, mw) ->
       forall x, PS.In x mw -> Must_write_in x s.
   Proof.
-    intros ** Ha x Hin.
+    intros * Ha x Hin.
     eapply analyze_obc'_spec_mw in Ha; eauto.
     destruct Ha as [Ha|]; auto.
     now apply not_In_empty in Ha.

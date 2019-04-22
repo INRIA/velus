@@ -72,7 +72,7 @@ Module Type ISVARIABLE
     induction eqs as [|eq eqs IH]; [now inversion 1|].
     inversion_clear 1 as [Hin ? Hivi|]; [|constructor 2; intuition].
     apply Is_variable_in_eq_Is_defined_in_eq in Hivi.
-    constructor (assumption).
+    now constructor.
   Qed.
 
   Lemma not_Is_defined_in_eq_not_Is_variable_in_eq:
@@ -92,11 +92,11 @@ Module Type ISVARIABLE
     - intros Hndef Hvar.
       inv Hvar;
       eapply Hndef.
-      + constructor(now apply Is_variable_in_eq_Is_defined_in_eq).
-      + constructor(
+      + constructor; now apply Is_variable_in_eq_Is_defined_in_eq.
+      + constructor 2;
             now apply Exists_exists in H0 as (eq' & ? & ?);
                 apply Exists_exists; exists eq'; split; auto;
-                apply Is_variable_in_eq_Is_defined_in_eq).
+                apply Is_variable_in_eq_Is_defined_in_eq.
   Qed.
 
   Lemma Is_variable_in_var_defined:
@@ -112,18 +112,16 @@ Module Type ISVARIABLE
       + inversion_clear Hdef; simpl; try apply in_app; auto.
       + apply IHeqs in Hdef. simpl;
         destruct eq; simpl; intuition.
-        unfold vars_defined; rewrite concatMap_cons;
-          eapply in_app; intuition.
     - destruct eq; simpl in *.
       + destruct HH as [HH|HH].
         * subst; repeat constructor.
-        * apply IHeqs in HH. constructor (assumption).
-      + unfold vars_defined in HH; rewrite concatMap_cons in HH;
+        * apply IHeqs in HH. now constructor 2.
+      + unfold vars_defined in HH;
         apply in_app in HH.
         destruct HH as [HH|HH].
         * subst; constructor; auto using Is_variable_in_eq.
-        * apply IHeqs in HH. constructor (assumption).
-      + apply IHeqs in HH. constructor (assumption).
+        * apply IHeqs in HH. now constructor 2.
+      + apply IHeqs in HH. now constructor 2.
   Qed.
 
   Lemma In_EqDef_Is_variable_in_eqs:
@@ -144,7 +142,7 @@ Module Type ISVARIABLE
   Proof.
     induction eqs; inversion_clear 2.
     - now subst; repeat constructor.
-    - constructor (eapply IHeqs; eauto).
+    - constructor; eapply IHeqs; eauto.
   Qed.
 
   Lemma n_out_variable_in_eqs:
@@ -155,9 +153,11 @@ Module Type ISVARIABLE
     intros.
     apply Is_variable_in_var_defined.
     eapply not_In_app; eauto using n.(n_vout).
-    unfold vars_defined, concatMap.
-    rewrite <- concat_app, <-map_app, Permutation_app_comm,
-            filter_notb_app, n.(n_defd), map_app.
+    unfold vars_defined; simpl; setoid_rewrite flat_map_concat_map.
+    rewrite <- concat_app, <-map_app, Permutation_app_comm, filter_notb_app.
+    pose proof n.(n_defd) as HH.
+    unfold vars_defined in HH; rewrite flat_map_concat_map in HH.
+    rewrite HH, map_app.
     now intuition.
   Qed.
 
@@ -175,46 +175,38 @@ Module Type ISVARIABLE
 
   (** ** Properties *)
 
+  Lemma Subset_variable_eq:
+    forall eq m1 m2,
+      PS.Subset m1 m2 ->
+      PS.Subset (variable_eq m1 eq) (variable_eq m2 eq).
+  Proof.
+    intros * Hsub.
+    destruct eq; simpl; auto.
+    - apply PSP.subset_add_3, PSP.subset_add_2; try apply PS.add_spec; auto.
+    - now apply Subset_ps_adds.
+  Qed.
+
+  Lemma In_variable_eq:
+    forall x eq m,
+      PS.In x (variable_eq m eq) <-> PS.In x m \/ PS.In x (variable_eq PS.empty eq).
+  Proof.
+    destruct eq; simpl;
+      try setoid_rewrite PS.add_spec; try setoid_rewrite ps_adds_spec; intuition.
+  Qed.
+
   Lemma In_fold_left_variable_eq:
     forall x eqs m,
       PS.In x (List.fold_left variable_eq eqs m)
       <-> PS.In x (List.fold_left variable_eq eqs PS.empty) \/ PS.In x m.
-  Proof. (* TODO: There must be a way to get auto to do all of this? *)
-    induction eqs as [|eq].
-    - split; auto.
-      destruct 1 as [H|].
-      apply not_In_empty in H; contradiction.
-      auto.
-    - split; [ intro H; simpl; rewrite IHeqs
-             | destruct 1 as [H|H]; apply IHeqs];
-      first [
-          simpl in H; apply IHeqs in H; destruct H;
-          [ intuition
-          | destruct eq;
-            match goal with
-            | |- context[ EqApp _ _ _ _ _ ] =>
-              generalize ps_adds_spec; intro add_spec
-            | _ =>
-              generalize PS.add_spec; intro add_spec
-            end;
-            try (apply add_spec in H; destruct H);
-            match goal with
-            | H:x=_ |- _ => rewrite H; simpl; rewrite add_spec; intuition
-            | H: In x ?i |- context [EqApp ?i _ _ _ _] => simpl; rewrite add_spec; intuition
-            | _ => apply not_In_empty in H; contradiction
-            | _ => intuition
-            end ]
-        | now
-            right; destruct eq;
-            match goal with
-            | |- context[ EqApp _ _ _ _ _ ] =>
-              generalize ps_adds_spec; intro add_spec
-            | _ =>
-              generalize PS.add_spec; intro add_spec
-            end; try apply add_spec; intuition
-        ].
+  Proof.
+    induction eqs as [|eq eqs IH]; simpl.
+    now split; intro HH; auto; destruct HH as [HH|]; auto;
+      apply not_In_empty in HH.
+    setoid_rewrite IH; clear IH.
+    setoid_rewrite In_variable_eq.
+    split; intros [HH|HH]; auto; repeat (destruct HH as [HH|HH]; auto).
+    now apply not_In_empty in HH.
   Qed.
-
 
   (* tactic definition needed in signature *)
   Ltac not_Is_variable x y :=
@@ -229,23 +221,13 @@ Module Type ISVARIABLE
     forall x eq, {Is_variable_in_eq x eq}+{~Is_variable_in_eq x eq}.
   Proof.
     intros x eq.
-    destruct eq as [y cae|y f lae|y v0 lae];
-      try match goal with
-      | |- context Is_variable_in_eq [EqFby _ _ _ _] =>
-        right; inversion 1
-      | |- context Is_variable_in_eq [EqApp _ _ _ _ _] =>
-        edestruct in_dec as [ Hin_xy | Hnin_xy ];
-          [ now apply ident_eq_dec
-          | now constructor(constructor(eauto))
-          | now right; intro; inversion 0; eauto]
-      | _ =>
-        destruct (ident_eq_dec x y) as [xeqy|xneqy];
-          [ rewrite xeqy; left; constructor
-          | right; inversion 1; auto]
-      end.
+    destruct eq as [y cae|ys f lae|y v0 lae].
+    - destruct (ident_eq_dec x y); subst; auto.
+      right. inversion 1; subst; auto.
+    - destruct (in_dec ident_eq_dec x ys); auto.
+      right. inversion 1; subst; auto.
+    - right. inversion 1; subst; auto.
   Qed.
-
-
 
   Lemma Is_variable_in_cons:
     forall x eq eqs,
@@ -268,16 +250,13 @@ Module Type ISVARIABLE
     destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
   Qed.
 
-
-
-
   Lemma Is_variable_in_variables:
     forall x eqs,
       PS.In x (variables eqs)
       <-> Is_variable_in_eqs x eqs.
   Proof.
     unfold variables, Is_variable_in_eqs.
-    induction eqs as [ eq | eq ].
+    induction eqs as [ | eq ].
     - rewrite List.Exists_nil; split; intro H;
       try apply not_In_empty in H; contradiction.
     - simpl.

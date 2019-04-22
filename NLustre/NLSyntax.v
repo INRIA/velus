@@ -3,6 +3,7 @@ Require Import Velus.Operators.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.Clocks.
 Require Import PArith.
+Require Import Omega.
 Require Import Coq.Sorting.Permutation.
 
 Require Import List.
@@ -37,7 +38,7 @@ Module Type NLSYNTAX
     end.
 
   Definition vars_defined (eqs: list equation) : idents :=
-    concatMap var_defined eqs.
+    flat_map var_defined eqs.
 
   Definition is_fby (eq: equation) : bool :=
     match eq with
@@ -139,7 +140,7 @@ Module Type NLSYNTAX
         (vars_defined (filter is_def eqs) ++ vars_defined (filter is_app eqs) ++ vars_defined (filter is_fby eqs))
         (vars_defined eqs).
   Proof.
-    unfold vars_defined, concatMap.
+    simpl.
     induction eqs as [|[] eqs]; simpl; auto.
     - rewrite Permutation_app_comm, 2 Permutation_app_assoc.
       apply Permutation_app_head.
@@ -161,15 +162,6 @@ Module Type NLSYNTAX
     apply (NoDupMembers_app_r _ _ n.(n_nodup)).
   Qed.
 
-  Lemma vars_defined_EqApp:
-    forall xs ck f es r eqs,
-      vars_defined (EqApp xs ck f es r :: eqs) = xs ++ vars_defined eqs.
-  Proof.
-    unfold vars_defined.
-    intros. rewrite concatMap_cons.
-    reflexivity.
-  Qed.
-
   Lemma n_eqsgt0:
     forall n, 0 < length n.(n_eqs).
   Proof.
@@ -178,7 +170,7 @@ Module Type NLSYNTAX
     pose proof (n_outgt0 n) as Out.
     unfold vars_defined in Defd.
     apply Permutation_length in Defd.
-    rewrite concatMap_length, map_length, app_length in Defd.
+    rewrite flat_map_length, map_length, app_length in Defd.
     destruct (n_eqs n); simpl in *; omega.
   Qed.
 
@@ -210,21 +202,9 @@ Module Type NLSYNTAX
     | EqApp xs _ _ _ _ => tl xs
     end.
 
-  Definition gather_mems := concatMap gather_mem_eq.
-  Definition gather_insts := concatMap gather_inst_eq.
-  Definition gather_app_vars := concatMap gather_app_vars_eq.
-
- (*  Lemma find_node_In:
-    forall f G n,
-      find_node f G = Some n ->
-      In n G.
-  Proof.
-    intros ** Hfind.
-    apply find_node_split in Hfind.
-    destruct Hfind as (bG & aG & Hge).
-    rewrite Hge. auto using in_app with datatypes.
-  Qed.
-*)
+  Definition gather_mems := flat_map gather_mem_eq.
+  Definition gather_insts := flat_map gather_inst_eq.
+  Definition gather_app_vars := flat_map gather_app_vars_eq.
 
 End NLSYNTAX.
 

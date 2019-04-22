@@ -32,7 +32,7 @@ Module Type NL2SBTYPING
       Forall (wt_equation (translate G) vars' mems) (translate_eqn eq).
   Proof.
     inversion_clear 1 as [??? Hin|????? Find|?????? Find|];
-      intros ** SpecVars SpecMems SpecVars'; simpl.
+      intros * SpecVars SpecMems SpecVars'; simpl.
     - constructor; auto.
       constructor; try rewrite SpecVars; auto.
     - destruct xs; auto.
@@ -40,7 +40,7 @@ Module Type NL2SBTYPING
       apply find_node_translate in Find as (?&?&?&?); subst.
       econstructor; try rewrite SpecVars; eauto.
       simpl; eapply Forall2_impl_In; eauto.
-      intros ? () ** Hin.
+      intros ? (? & ?) ? ? Hin.
       apply SpecVars' in Hin; auto.
     - destruct xs; auto.
       apply find_node_translate in Find as (?&?&?&?); subst.
@@ -50,7 +50,7 @@ Module Type NL2SBTYPING
       + constructor; auto.
         econstructor; try rewrite SpecVars; eauto.
         simpl; eapply Forall2_impl_In; eauto.
-        intros ? () ** Hin.
+        intros ? (? & ?) ? ? Hin.
         apply SpecVars' in Hin; auto.
     - constructor; auto.
       constructor; try rewrite SpecVars; auto.
@@ -66,24 +66,24 @@ Module Type NL2SBTYPING
       (forall x ty, In (x, ty) vars -> Is_variable_in_eqs x eqs -> In (x, ty) vars') ->
       Forall (wt_equation (translate G) vars' mems) (translate_eqns eqs).
   Proof.
-    unfold translate_eqns, concatMap.
-    induction eqs; intros ** WT SpecVars SpecMems SpecVars';
+    unfold translate_eqns.
+    induction eqs; intros * WT SpecVars SpecMems SpecVars';
       inv WT; simpl; try constructor.
     apply Forall_app; split; auto.
     - eapply translate_eqn_wt; eauto.
-      + intros ** Hin Hin_mems.
+      + intros * Hin Hin_mems.
         apply SpecMems; auto.
-        unfold gather_mems, concatMap; simpl.
+        unfold gather_mems; simpl.
         apply in_app; auto.
-      + intros ** Hin IsV.
+      + intros * Hin IsV.
         apply SpecVars'; auto.
         left; auto.
     - eapply IHeqs; eauto.
-      + intros ** Hin Hin_mems.
+      + intros * Hin Hin_mems.
         apply SpecMems; auto.
-        unfold gather_mems, concatMap; simpl.
+        unfold gather_mems; simpl.
         apply in_app; auto.
-      + intros ** Hin IsV.
+      + intros * Hin IsV.
         apply SpecVars'; auto.
         right; auto.
   Qed.
@@ -119,7 +119,7 @@ Module Type NL2SBTYPING
     assert (NoDup (@nil (ident * type))) as Hnodup_acc by constructor.
     assert (forall x, In x (vars_defined (n_eqs n)) -> ~ InMembers x (@nil (ident * type)))
       as Spec by (inversion 2).
-    unfold fbys, vars_defined, concatMap in *.
+    unfold fbys, vars_defined in *.
     revert Hnodup_acc Spec; generalize (@nil (ident * type)).
     induction (n_eqs n) as [|[]]; simpl in *; intros; auto.
     - inv Hnodup; auto.
@@ -174,7 +174,7 @@ Module Type NL2SBTYPING
                       n.(n_vars))))
         (fbys n.(n_eqs)).
   Proof.
-    unfold wt_node; intros ** WT.
+    unfold wt_node; intros * WT.
     rewrite fst_partition_filter.
     apply NoDup_Permutation.
     - apply NoDupMembers_NoDup, fst_NoDupMembers.
@@ -199,12 +199,12 @@ Module Type NL2SBTYPING
         setoid_rewrite PSE.MP.Dec.F.empty_iff; intuition.
       + inversion_clear WTeq as [| | |???? Hint].
         intros (x, t); split.
-        *{ intros ** (Hin & Mem); apply in_fbys_spec;
+        *{ intros * (Hin & Mem); apply in_fbys_spec;
            apply In_fold_left_memory_eq in Mem as [Mem|Mem].
            - apply In_fold_left_memory_eq in Mem as [Mem|Mem];
                [|rewrite PSE.MP.Dec.F.empty_iff in Mem; contradiction].
              left; apply IHl; auto.
-             intros ** Hin'; apply Spec; simpl; auto.
+             intros * Hin'; apply Spec; simpl; auto.
            - apply PSE.MP.Dec.F.add_iff in Mem as [E|Mem];
                [|rewrite PSE.MP.Dec.F.empty_iff in Mem; contradiction].
              inv E.
@@ -215,18 +215,18 @@ Module Type NL2SBTYPING
              eapply NoDupMembers_det; eauto.
              apply NoDupMembers_idty, n_nodup.
          }
-        *{ intros ** Hin; rewrite In_fold_left_memory_eq;
+        *{ intros * Hin; rewrite In_fold_left_memory_eq;
            apply in_fbys_spec in Hin as [Hin|Hin].
            - apply IHl in Hin; auto.
              + intuition.
-             + intros ** Hin'; apply Spec; simpl; auto.
+             + intros * Hin'; apply Spec; simpl; auto.
            - inversion_clear Hin as [E|]; try contradiction; inv E.
              rewrite PSE.MP.Dec.F.add_iff; intuition.
              simpl in Spec.
              assert (InMembers x (n_vars n)) as Hin by auto.
              pose proof (n_nodup n) as Hnodup.
              rewrite fst_NoDupMembers, 2 map_app, NoDup_swap, <- 2 map_app, <-fst_NoDupMembers in Hnodup.
-             eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (); eauto.
+             eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (? & ?); eauto.
              rewrite 2 idty_app, 2 in_app in Hint; destruct Hint as [Hint|[|Hint]]; auto;
                apply In_InMembers in Hint; rewrite InMembers_idty in Hint; contradiction.
          }
@@ -237,7 +237,7 @@ Module Type NL2SBTYPING
       wt_node G n ->
       wt_block (translate G) (translate_node n).
   Proof.
-    unfold wt_node, wt_block; intros ** WT; simpl.
+    unfold wt_node, wt_block; intros * WT; simpl.
     eapply translate_eqns_wt; eauto.
     - repeat rewrite idty_app.
       rewrite <-app_assoc.
@@ -250,8 +250,8 @@ Module Type NL2SBTYPING
       apply Permutation_map.
       rewrite <-permutation_partition; auto.
     - setoid_rewrite fbys_gather_eqs.
-      unfold gather_mems, concatMap, fbys.
-      induction (n_eqs n) as [|[] eqs]; simpl; intros ** Hin Mem; try contradiction;
+      unfold gather_mems, fbys.
+      induction (n_eqs n) as [|[] eqs]; simpl; intros * Hin Mem; try contradiction;
         inversion_clear WT as [|?? WTeq]; auto.
       inv WTeq.
       apply in_fbys_spec.
@@ -262,7 +262,7 @@ Module Type NL2SBTYPING
         eapply NoDupMembers_det; eauto.
         apply NoDupMembers_idty, n_nodup.
       + left; auto.
-    - intros ** Hin IsV.
+    - intros * Hin IsV.
       rewrite 2 idty_app, 2 in_app.
       rewrite 2 idty_app, 2 in_app in Hin; destruct Hin as [|[|]]; auto.
       right; left.
@@ -283,7 +283,7 @@ Module Type NL2SBTYPING
       wt_global G ->
       wt_program (translate G).
   Proof.
-    intros ** WT.
+    intros * WT.
     induction G; simpl; auto.
     inversion_clear WT as [|???? Hn].
     constructor; auto; simpl.

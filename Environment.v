@@ -145,7 +145,7 @@ Module Env.
           \/ (~ InMembers x xvs /\ find x m = Some a).
       Proof.
         induction xvs as [|(x', v') xs IH]; simpl. now intuition.
-        intros ** Hfind. apply IH in Hfind as [(?&?&?)|(Hnim & Hfind)]; eauto.
+        intros * Hfind. apply IH in Hfind as [(?&?&?)|(Hnim & Hfind)]; eauto.
         destruct (Pos.eq_dec x' x).
         - subst. rewrite gss in Hfind.
           injection Hfind. intro; subst; eauto.
@@ -191,8 +191,8 @@ Module Env.
           adds_with f ((x, b) :: xvs) m = add x (f b) (adds_with f xvs m).
       Proof.
         unfold adds_with.
-        induction xvs as [|(y, b')]; intros ** NotIn; simpl; auto.
-        apply NotInMembers_cons in NotIn as ().
+        induction xvs as [|(y, b')]; intros * NotIn; simpl; auto.
+        rewrite NotInMembers_cons in NotIn. destruct NotIn.
         rewrite <-IHxvs; auto. simpl.
         rewrite add_comm; auto.
       Qed.
@@ -224,7 +224,7 @@ Module Env.
     Proof.
       intros; unfold adds.
       apply gsso'.
-      intros ** Hin; apply InMembers_In_combine in Hin; auto.
+      intros * Hin; apply InMembers_In_combine in Hin; auto.
     Qed.
 
     Lemma from_list_find_In:
@@ -233,7 +233,7 @@ Module Env.
         List.In (x, a) xvs.
     Proof.
       unfold from_list. setoid_rewrite adds'_is_adds_with_identity.
-      intros ** Find; apply find_adds_with_spec_Some in Find as [(?&?&?)|(?& Find)]; subst; auto.
+      intros * Find; apply find_adds_with_spec_Some in Find as [(?&?&?)|(?& Find)]; subst; auto.
       rewrite gempty in Find; discriminate.
     Qed.
 
@@ -251,7 +251,7 @@ Module Env.
         x <> y ->
         find x (adds (y :: xs) vs m) = find x (adds xs (tl vs) m).
     Proof.
-      intros ** Hneq.
+      intros * Hneq.
       unfold adds.
       destruct vs.
       - destruct xs; reflexivity.
@@ -357,7 +357,7 @@ Module Env.
     (* Proof. *)
     (*   induction xvs as [|(y, b)]. *)
     (*   - simpl; congruence. *)
-    (*   - inversion_clear 1; intros ** Find. *)
+    (*   - inversion_clear 1; intros * Find. *)
     (*     destruct (Pos.eq_dec x y). *)
     (*     + subst; simpl in *; rewrite gsso', gss in Find; auto; inv Find; auto. *)
     (*     + rewrite find_gsso' in Find; auto. *)
@@ -374,7 +374,7 @@ Module Env.
     (*   unfold adds. *)
     (*   intros; eapply find_adds_In'. *)
     (*   induction xs as [|x'], vs as [|v']; simpl; try congruence. *)
-    (*   inversion_clear 1; intros ** Find. *)
+    (*   inversion_clear 1; intros * Find. *)
     (*   destruct (Pos.eq_dec x x'). *)
     (*   - subst; rewrite gss in Find; inversion Find; auto. *)
     (*   - rewrite gso in Find; auto. *)
@@ -391,7 +391,7 @@ Module Env.
     (* Proof. *)
     (*   unfold adds. *)
     (*   induction xs as [|x'], vs as [|v']; simpl; auto. *)
-    (*   inversion_clear 1; intros ** Find. *)
+    (*   inversion_clear 1; intros * Find. *)
     (*   destruct (Pos.eq_dec x x'). *)
     (*   - subst; rewrite gss in Find; inversion Find; auto. *)
     (*   - rewrite gso in Find; auto. *)
@@ -416,7 +416,7 @@ Module Env.
     Proof.
       unfold adds; intros.
       simpl combine; eapply adds'_cons.
-      intros ** Hin; apply InMembers_In_combine in Hin; auto.
+      intros * Hin; apply InMembers_In_combine in Hin; auto.
     Qed.
 
     (* Lemma adds_comm': *)
@@ -426,7 +426,7 @@ Module Env.
     (*     x <> y -> *)
     (*     adds' ((x, a) :: (y, b) :: xvs) m = adds' ((y, b) :: (x, a) :: xvs) m. *)
     (* Proof. *)
-    (*   intros ** NotInx NotIny ?. *)
+    (*   intros * NotInx NotIny ?. *)
     (*   repeat rewrite adds_cons_cons'; auto. *)
     (*   - rewrite add_comm; auto. *)
     (*   - intros ? [E|?]; try inversion E; try contradiction. *)
@@ -455,11 +455,11 @@ Module Env.
     (*     add x a (adds' xvs m) = adds' xvs (add x a m). *)
     (* Proof. *)
     (*   induction xvs as [|(y, b)]; simpl; auto. *)
-    (*   intros ** Nin; rewrite <-IHxvs. *)
+    (*   intros * Nin; rewrite <-IHxvs. *)
     (*   - apply add_comm. *)
     (*     intro; subst. *)
     (*     eapply Nin; left; eauto. *)
-    (*   - intros ** Hin. *)
+    (*   - intros * Hin. *)
     (*     eapply Nin; eauto. *)
     (* Qed. *)
 
@@ -482,7 +482,7 @@ Module Env.
       forall x (a: A) m,
         List.In (x, a) (elements m) -> In x m.
     Proof.
-      intros ** Hin.
+      intros * Hin.
       apply elements_complete in Hin.
       apply In_find; eauto.
     Qed.
@@ -519,9 +519,9 @@ Module Env.
     Proof.
       induction xs as [|(i, a) xs IH]; simpl; split; try (now inversion 1).
       - inversion 1 as [|? ? HH]; subst. now constructor.
-        apply (IH y) in HH. inv H; constructor (assumption).
+        apply (IH y) in HH. inv H; now constructor 2.
       - inversion 1 as [|? ? HH]; subst. now constructor.
-        apply IH in HH. inv H; constructor (assumption).
+        apply IH in HH. inv H; now constructor 2.
     Qed.
 
     Lemma NoDupA_map_fst:
@@ -551,7 +551,7 @@ Module Env.
         ~ In x m ->
         Permutation.Permutation (elements (add x v m)) ((x,v) :: elements m).
     Proof.
-      intros ** Hin.
+      intros * Hin.
       apply Permutation.NoDup_Permutation.
       - apply NoDupMembers_NoDup, NoDupMembers_elements.
       - constructor.
@@ -565,7 +565,7 @@ Module Env.
       * subst.
         rewrite gss in HH.
         injection HH; intro; subst.
-        constructor (auto).
+        now constructor.
       * rewrite gso in HH; auto.
         constructor 2.
         apply elements_correct with (1:=HH).
@@ -601,7 +601,7 @@ Module Env.
         (forall x, find x m = None) ->
         Equiv eq m (empty A).
     Proof.
-      intros ** Spec.
+      intros * Spec.
       constructor.
       - setoid_rewrite Props.P.F.empty_in_iff; setoid_rewrite In_find.
         split; try contradiction.
@@ -618,7 +618,7 @@ Module Env.
     Proof.
       unfold adds_opt.
       induction xs as [|x'], vs as [|v']; simpl; auto; try discriminate.
-      intros ** Length Find; inv Length.
+      intros * Length Find; inv Length.
       destruct v'.
       - destruct (Pos.eq_dec x x') as [|].
         + subst; rewrite gss in Find; inv Find; auto.
@@ -632,7 +632,7 @@ Module Env.
         x <> x' ->
         find x (adds_opt (x' :: xs) vs S) = find x (adds_opt xs (tl vs) S).
     Proof.
-      intros ** Hneq.
+      intros * Hneq.
       unfold adds_opt.
       destruct vs. now destruct xs; auto.
       destruct o; simpl; auto.
@@ -671,7 +671,7 @@ Module Env.
       adds_opt (x :: xs) (Some v :: vs) e = adds_opt xs vs (add x v e).
   Proof.
     unfold adds_opt.
-    induction xs as [|x']; intros ** NotIn; simpl; auto.
+    induction xs as [|x']; intros * NotIn; simpl; auto.
     destruct vs as [|v']; simpl; auto.
     rewrite <-IHxs; auto.
     - simpl. destruct v'; auto.
@@ -713,7 +713,7 @@ Module Env.
       NoDup xs ->
       updates xs (List.map (@Some A) vs) m = adds xs vs m.
   Proof.
-    unfold updates, adds; intros ** Hndp.
+    unfold updates, adds; intros * Hndp.
     revert vs.
     induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
     rewrite IHxs, <-adds'_cons; simpl; auto.
@@ -725,7 +725,7 @@ Module Env.
       NoDup xs ->
       adds_opt xs (List.map (@Some A) vs) m = adds xs vs m.
   Proof.
-    unfold adds_opt, adds; intros ** Hndp.
+    unfold adds_opt, adds; intros * Hndp.
     revert vs.
     induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
     rewrite IHxs, <-adds'_cons; simpl; auto.
@@ -737,7 +737,7 @@ Module Env.
         x <> x' ->
         find x (updates (x' :: xs) vs m) = find x (updates xs (tl vs) m).
     Proof.
-      intros ** Hneq.
+      intros * Hneq.
       unfold updates.
       destruct vs. now destruct xs; auto.
       destruct o; simpl.
@@ -850,7 +850,7 @@ Module Env.
     Proof.
       unfold updates.
       destruct vo as [v|].
-      - induction xs as [|x']; intros ** NotIn; simpl; auto.
+      - induction xs as [|x']; intros * NotIn; simpl; auto.
         destruct vs as [|v']; simpl; auto.
         rewrite <-IHxs; auto.
         + simpl. destruct v'.
@@ -859,7 +859,7 @@ Module Env.
           * rewrite add_remove_comm; auto.
             intro; subst; apply NotIn; constructor; auto.
         + intro; apply NotIn; right; auto.
-      - induction xs as [|x']; intros ** NotIn; simpl; auto.
+      - induction xs as [|x']; intros * NotIn; simpl; auto.
         destruct vs as [|v']; simpl; auto.
         rewrite <-IHxs; auto.
         + simpl. destruct v'.

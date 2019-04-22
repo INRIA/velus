@@ -78,8 +78,7 @@ Module Type SBISFREE
       PS.In x (free_in_eq eq PS.empty)
       <-> Is_free_in_eq x eq.
   Proof.
-    intros; rewrite free_in_eq_spec.
-    intuition not_In_empty.
+    intros; rewrite free_in_eq_spec. intuition.
   Qed.
 
 

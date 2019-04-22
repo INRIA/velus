@@ -191,7 +191,7 @@ Module Type OBCINVARIANTS
         forall x, Env.In x ve -> Env.In x ve'.
   Proof.
     intros p Hcall.
-    induction s; intros ** Hnnv Heval x Hin; inv Heval; inv Hnnv; eauto.
+    induction s; intros * Hnnv Heval x Hin; inv Heval; inv Hnnv; eauto.
     - apply Env.Props.P.F.add_in_iff; auto.
     - destruct b; eauto.
     - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.

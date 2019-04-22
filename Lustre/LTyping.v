@@ -257,7 +257,7 @@ Module Type LTYPING
   | wtg_cons: forall n ns,
       wt_global ns ->
       wt_node ns n ->
-      Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
+      Forall (fun n'=> n.(n_name) <> n'.(n_name) :> ident) ns ->
       wt_global (n::ns).
 
   Hint Constructors wt_clock wt_sclock wt_nclock wt_exp wt_global : ltyping.
@@ -273,7 +273,7 @@ Module Type LTYPING
     2:apply IHg; now inv WTg.
     intro Hin.
     inversion_clear WTg as [|? ? ? WTn Hn].
-    change (Forall (fun n' => (fun i=> a.(n_name) <> i) n'.(n_name)) g) in Hn.
+    change (Forall (fun n' => (fun i=> a.(n_name) <> i) n'.(n_name)) g)%type in Hn.
     apply Forall_map in Hn.
     apply Forall_forall with (1:=Hn) in Hin.
     now contradiction Hin.
@@ -417,13 +417,13 @@ Module Type LTYPING
     - apply Forall2_forall; split;
         eauto using Forall2_length.
       apply Forall2_combine in WTeq2.
-      intros ** Hin.
+      intros * Hin.
       apply Forall_forall with (1:=WTeq2) in Hin.
       now rewrite Henv in Hin.
     - apply Forall2_forall; split;
         eauto using Forall2_length.
       apply Forall2_combine in WTeq2.
-      intros ** Hin.
+      intros * Hin.
       apply Forall_forall with (1:=WTeq2) in Hin.
       now rewrite <-Henv in Hin.
   Qed.
@@ -433,7 +433,7 @@ Module Type LTYPING
       wt_exp G env e ->
       Forall (wt_sclock env) (clockof e).
   Proof.
-    intros ** Hwt.
+    intros * Hwt.
     apply Forall_forall. intros ck Hin.
     inv Hwt; simpl in *.
     - destruct Hin as [Hin|]; [|contradiction].

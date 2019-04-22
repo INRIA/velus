@@ -56,6 +56,9 @@ Extract Constant Compiler.print => "fun (f: 'a -> unit) (x: 'a) -> f x; x".
 
 (* Inlining *)
 Extract Inlined Constant Inlining.should_inline => "Inliningaux.should_inline".
+Extract Inlined Constant Inlining.inlining_info => "Inliningaux.inlining_info".
+Extract Inlined Constant Inlining.inlining_analysis => "Inliningaux.inlining_analysis".
+Extraction Inline Inlining.ret Inlining.bind.
 
 (* Allocation *)
 Extract Constant Allocation.regalloc => "Regalloc.regalloc".
@@ -99,14 +102,12 @@ Extract Constant cabs_floatinfo =>
 Extract Constant elab_const_int =>
   "fun loc str ->
     let (v, k) = Elab.elab_int_constant loc str in
-    match k with
-    | C.ILongLong ->
-        Interface.Op.Clong (Camlcoq.coqint_of_camlint64 v, Ctypes.Signed)
-    | C.IULongLong ->
-        Interface.Op.Clong (Camlcoq.coqint_of_camlint64 v, Ctypes.Unsigned)
-    | _ ->
-        let (sg, sz) = C2C.convertIkind k in
-        Interface.Op.Cint (C2C.convertInt v, sz, sg)".
+    match C2C.convertIkind k Ctypes.noattr with
+    | Ctypes.Tint (sz, sg, _) ->
+        Interface.Op.Cint (C2C.convertInt32 v, sz, sg)
+    | Ctypes.Tlong (sg, _) ->
+        Interface.Op.Clong (C2C.convertInt64 v, sg)
+    | _ -> assert false".
 
 Extract Constant elab_const_float =>
   "fun fi ->
@@ -123,8 +124,10 @@ Extract Constant elab_const_float =>
 Extract Constant elab_const_char =>
   "fun loc wide chars ->
     let (v, k) = Elab.elab_char_constant loc wide chars in
-    let (sg, sz) = C2C.convertIkind k in
-    Interface.Op.Cint (C2C.convertInt v, sz, sg)".
+    match C2C.convertIkind k Ctypes.noattr with
+    | Ctypes.Tint (sz, sg, _) ->
+	Interface.Op.Cint (C2C.convertInt32 v, sz, sg)
+    | _ -> assert false".
 
 (* XXX *)
 Extract Constant NLustreElab.elab_const_int    => "LustreElab.elab_const_int".
@@ -164,6 +167,11 @@ Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".
 
 Separate Extraction
          ZArith.BinIntDef
+	 Floats.Float.of_bits Floats.Float.to_bits
+	 Floats.Float32.of_bits Floats.Float32.to_bits
+	 Floats.Float32.from_parsed Floats.Float.from_parsed
+	 FMapPositive.PositiveMap.add FMapPositive.PositiveMap.empty
+	 FMapPositive.PositiveMap.find
          Compiler.transf_clight_program Cabs
          AST.signature_main
          VelusCorrectness.compile elab_declarations translation_unit_file
@@ -171,6 +179,12 @@ Separate Extraction
          Initializers.transl_init
          Ctyping.typecheck_program Ctyping.epostincr Ctyping.epostdecr Ctyping.epreincr Ctyping.epredecr
          Machregs.two_address_op Machregs.mregs_for_operation Machregs.mregs_for_builtin Machregs.is_stack_reg
+	 Machregs.destroyed_at_indirect_call
+	 Conventions1.is_float_reg Conventions1.callee_save_type
          Conventions1.dummy_int_reg Conventions1.dummy_float_reg
          Conventions1.int_callee_save_regs Conventions1.int_caller_save_regs
-         Conventions1.float_callee_save_regs Conventions1.float_caller_save_regs.
+         Conventions1.float_callee_save_regs Conventions1.float_caller_save_regs
+	 Clight.type_of_function.
+
+Extraction Library Ordered.
+

@@ -69,7 +69,7 @@ Module Type SBCLOCKINGSEMANTICS
             Forall (clock_match_instant base R) (idck b.(b_in)) ->
             Forall (clock_match_instant base R) (idck b.(b_out))).
   Proof.
-    intros ** Hord WCP; apply sem_equation_block_ind;
+    intros * Hord WCP; apply sem_equation_block_ind;
       [intros ????????? Hexp Hvar|
        intros ?????????? Find Hvar Hexp Find'|
        intros ?????????? Clock Find Init|
@@ -150,7 +150,7 @@ Module Type SBCLOCKINGSEMANTICS
           now setoid_rewrite InMembers_idck; eauto.
 
     - (* blocks *)
-      intros ** Find' ? Hin' Hout' Hcm'.
+      intros * Find' ? Hin' Hout' Hcm'.
       rewrite Find' in Find; inv Find.
       apply Forall_forall; unfold idck.
       intros (x, xck) Hxin.
@@ -246,7 +246,7 @@ Module Type SBCLOCKINGSEMANTICS
         In (x, xck) vars ->
         clock_match_instant base R (x, xck).
   Proof.
-    intros ** OP WCP Hndup Hsem Hwc Hdef x xck Hin.
+    intros * OP WCP Hndup Hsem Hwc Hdef x xck Hin.
     assert (In x (defined eqs)) as Hxin
         by (now rewrite Hdef; apply in_map with (f:=fst) in Hin).
     apply Is_defined_in_defined, Is_defined_in_In in Hxin

@@ -30,7 +30,7 @@ Module Type SBISVARIABLE
     forall eqs x,
       Is_variable_in x eqs <-> In x (variables eqs).
   Proof.
-    unfold variables, concatMap.
+    unfold variables.
     induction eqs as [|[]]; simpl.
     - split; try contradiction; inversion 1.
     - split.

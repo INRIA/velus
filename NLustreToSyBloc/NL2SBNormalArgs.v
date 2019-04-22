@@ -35,7 +35,7 @@ Module Type NL2SBNORMALARGS
       normal_args_block (translate G) (translate_node n).
   Proof.
     unfold normal_args_node, normal_args_block.
-    simpl; unfold translate_eqns, concatMap; induction 1; simpl; auto.
+    simpl; unfold translate_eqns; induction 1; simpl; auto.
     apply Forall_app; split; auto.
     apply translate_eqn_normal_args; auto.
   Qed.

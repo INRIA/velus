@@ -21,7 +21,7 @@ Remark: [Ordered_nodes] is implied by [Welldef_global].
 
  *)
 
-Module Type ORDERED
+Module Type NLORDERED
        (Ids            : IDS)
        (Op             : OPERATORS)
        (Import CESyn   : CESYNTAX Op)
@@ -42,7 +42,7 @@ Module Type ORDERED
         -> (forall f, Is_node_in f nd.(n_eqs) ->
                 f <> nd.(n_name)
                 /\ List.Exists (fun n=> f = n.(n_name)) nds)
-        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name)) nds
+        -> List.Forall (fun nd'=> nd.(n_name) <> nd'.(n_name))%type nds
         -> Ordered_nodes (nd::nds).
 
   (** ** Properties of [Is_node_in] *)
@@ -236,13 +236,13 @@ Module Type ORDERED
 
   End Ordered_nodes_Properties.
 
-End ORDERED.
+End NLORDERED.
 
-Module OrderedFun
+Module NLOrderedFun
        (Ids    : IDS)
        (Op     : OPERATORS)
        (CESyn  : CESYNTAX Op)
        (Syn    : NLSYNTAX Ids Op CESyn)
-       <: ORDERED Ids Op CESyn Syn.
-  Include ORDERED Ids Op CESyn Syn.
-End OrderedFun.
+       <: NLORDERED Ids Op CESyn Syn.
+  Include NLORDERED Ids Op CESyn Syn.
+End NLOrderedFun.

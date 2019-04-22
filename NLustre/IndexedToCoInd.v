@@ -6,6 +6,7 @@ Require Import Setoid.
 Require Import Morphisms.
 Require Import Coq.Program.Tactics.
 Require Import NPeano.
+Require Import Omega.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
@@ -13,7 +14,7 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLOrdered.
 Require Import Velus.CoreExpr.Stream.
 Require Import Velus.NLustre.Streams.
 
@@ -30,7 +31,7 @@ Module Type INDEXEDTOCOIND
        (Import CESyn  : CESYNTAX             Op)
        (Import Syn    : NLSYNTAX         Ids Op       CESyn)
        (Import Str    : STREAM               Op OpAux)
-       (Import Ord    : ORDERED          Ids Op       CESyn Syn)
+       (Import Ord    : NLORDERED        Ids Op       CESyn Syn)
        (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Interp : NLINTERPRETOR    Ids Op OpAux CESyn Str         CESem)
@@ -107,7 +108,7 @@ Module Type INDEXEDTOCOIND
         with signature eq ==> eq_str ==> @EqSt A
           as init_from_morph.
     Proof.
-      cofix Cofix; intros ** xs xs' E.
+      cofix Cofix. intros x xs xs' E.
       rewrite init_from_n; rewrite (init_from_n xs').
       constructor; simpl; auto.
     Qed.
@@ -178,11 +179,11 @@ Module Type INDEXEDTOCOIND
         wf_streams xss ->
         List.map (@tl value) (tr_streams_from n xss) = tr_streams_from (S n) xss.
     Proof.
-      intros ** Len.
+      intros * Len.
       apply Forall2_eq, Forall2_forall2.
       split; unfold_tr_streams; rewrite map_length.
       - now rewrite 2 seq_streams_length, Len.
-      - intros ** Hlen E1 E2; rewrite <-E1, <-E2.
+      - intros * Hlen E1 E2; rewrite <-E1, <-E2.
         rewrite map_nth' with (d':=a); auto.
         rewrite seq_streams_length in Hlen.
         rewrite 2 nth_seq_streams; try omega.
@@ -215,7 +216,7 @@ Module Type INDEXEDTOCOIND
         In x (tr_streams_from n xss) ->
         P (hd x).
     Proof.
-      unfold_tr_streams; intros ** Ps Hin.
+      unfold_tr_streams; intros * Ps Hin.
       apply In_ex_nth with (d:=x) in Hin as (k & Len & Nth).
       rewrite seq_streams_length, Nat.sub_0_r in Len.
       rewrite nth_seq_streams in Nth; auto.
@@ -236,7 +237,7 @@ Module Type INDEXEDTOCOIND
         List.Exists P (xss n) ->
         List.Exists (fun v => P (hd v)) (tr_streams_from n xss).
     Proof.
-      intros ** Hin.
+      intros * Hin.
       apply Exists_exists in Hin as (v & Hin & Hv).
       apply In_ex_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
       apply Exists_exists.
@@ -261,7 +262,7 @@ Module Type INDEXEDTOCOIND
           /\ xs ≈ xs'.
     Proof.
       unfold CESem.sem_var, CESem.lift'.
-      intros ** Sem.
+      intros * Sem.
       destruct (Env.find x H) as [xs'|] eqn: E; simpl in *.
       - exists xs'; intuition.
         intro n; specialize (Sem n).
@@ -278,7 +279,7 @@ Module Type INDEXEDTOCOIND
         CESem.sem_var H x xs ->
         CoInd.sem_var (tr_history_from n H) x (tr_stream_from n xs).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       apply sem_var_inv in Sem as (? & Find & E).
       econstructor.
       - unfold tr_history_from.
@@ -302,7 +303,7 @@ Module Type INDEXEDTOCOIND
                   (skipn n xs) (seq n (length xs - n)).
     Proof.
       unfold CESem.sem_vars, CESem.lift.
-      intros ** Sem n.
+      intros * Sem n.
       apply Forall2_forall2; split.
       - now rewrite skipn_length, seq_length.
       - intros x_d k_d n' x k Length Hskipn Hseq.
@@ -322,7 +323,7 @@ Module Type INDEXEDTOCOIND
         Forall2 (fun x k => CESem.sem_var H x (streams_nth k xss))
                 xs (seq 0 (length xs)).
     Proof.
-      intros ** Sem; apply sem_vars_inv_from with (n:=0) in Sem.
+      intros * Sem; apply sem_vars_inv_from with (n:=0) in Sem.
       now rewrite Nat.sub_0_r in Sem.
     Qed.
 
@@ -331,7 +332,7 @@ Module Type INDEXEDTOCOIND
       CESem.sem_vars H xs xss ->
       Forall2 (CoInd.sem_var (tr_history_from n H)) xs (tr_streams_from n xss).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       assert (length xs = length (xss n)) as Length by
             (unfold CESem.sem_vars, CESem.lift in Sem; specialize (Sem n);
              now apply Forall2_length in Sem).
@@ -380,23 +381,52 @@ Module Type INDEXEDTOCOIND
             exists ys, CESem.lift b sem H x ys.
         Proof.
           unfold CESem.lift.
-          intros ** Sem.
+          intros * Sem.
           apply choice in Sem; auto.
         Qed.
     *)
+
+    (*
+CESem.sem_lexp b H (Ewhen e x k) es
+     *)
+
+    (*
+    Lemma blah:
+      forall e es b H,
+        CESem.sem_lexp b H e es ->
+        CESem.sem_lexp b H e (interp_lexp b H e).
+    Proof.
+      intros * Sem n.
+      specialize (Sem n).
+      unfold interp_lexp, lift.
+      inv Sem; erewrite <-interp_lexp_instant_sound; eauto.
+
+      
+            interp_str b H e Sem.
+
+       sol sem            interp      sound
+       sol CESem.sem_lexp interp_lexp interp_lexp_instant_sound
+
+      unfold interp_lexp_instant_sound, lift;
+        inv Sem; erewrite <-sound; eauto.
+
+      | lexp => sol CESem.sem_lexp interp_lexp interp_lexp_instant_sound
+
+          Proof.
+     *)
 
     (** This tactic automatically uses the interpretor to give a witness stream. *)
     Ltac interp_str b H x Sem :=
       let Sem_x := fresh "Sem_" x in
       let sol sem interp sound :=
-          assert (sem b H x (interp b H x)) as Sem_x by
-                (intro n; specialize (Sem n); unfold interp, lift;
-                 inv Sem; erewrite <-sound; eauto)
+          assert (sem b H x (interp b H x)) as Sem_x
+              by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
+                  unfold interp, lift; inv Sem; erewrite <-sound; eauto)
       in
       let sol' sem interp sound :=
-          assert (sem H x (interp H x)) as Sem_x by
-                (intro n; specialize (Sem n); unfold interp, lift';
-                 inv Sem; erewrite <-sound; eauto)
+          assert (sem H x (interp H x)) as Sem_x
+              by (intro; match goal with n:nat |- _ => specialize (Sem n) end;
+                  unfold interp, lift'; inv Sem; erewrite <-sound; eauto)
       in
       match type of x with
       | lexp => sol CESem.sem_lexp interp_lexp interp_lexp_instant_sound
@@ -404,7 +434,7 @@ Module Type INDEXEDTOCOIND
       | ident => sol' CESem.sem_var interp_var interp_var_instant_sound
       | clock => sol CESem.sem_clock interp_clock interp_clock_instant_sound
       end.
-
+    
     Lemma when_inv:
       forall H b e x k es,
         CESem.sem_lexp b H (Ewhen e x k) es ->
@@ -429,15 +459,16 @@ Module Type INDEXEDTOCOIND
                /\ xs n = absent
                /\ es n = absent)).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       interp_str b H e Sem.
       interp_str b H x Sem.
       do 2 eexists; intuition; eauto.
       specialize (Sem_e n); specialize (Sem_x n); specialize (Sem n); inv Sem.
-      - left; exists sc, xc; intuition CESem.sem_det.
+      - left. exists sc, xc. repeat split; auto;
+                               intuition CESem.sem_det.
       - right; left; exists sc, xc; intuition; try CESem.sem_det.
         now rewrite Bool.negb_involutive.
-      - right; right; intuition CESem.sem_det.
+      - right; right; repeat split; auto; intuition CESem.sem_det.
     Qed.
 
     Lemma unop_inv:
@@ -455,12 +486,12 @@ Module Type INDEXEDTOCOIND
               (ys n = absent
                /\ es n = absent)).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       interp_str b H e Sem.
       eexists; intuition; eauto.
       specialize (Sem_e n); specialize (Sem n); inv Sem.
-      - left; exists c, c'; intuition CESem.sem_det.
-      - right; intuition CESem.sem_det.
+      - left; exists c, c'; repeat split; auto; intuition CESem.sem_det.
+      - right; repeat split; intuition CESem.sem_det.
     Qed.
 
     Lemma binop_inv:
@@ -481,19 +512,14 @@ Module Type INDEXEDTOCOIND
                /\ zs n = absent
                /\ es n = absent)).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       interp_str b H e1 Sem.
       interp_str b H e2 Sem.
       do 2 eexists; intuition; eauto.
       specialize (Sem_e1 n); specialize (Sem_e2 n); specialize (Sem n); inv Sem.
-      - left; exists c1, c2, c'; intuition CESem.sem_det.
-      - right; intuition CESem.sem_det.
+      - left; exists c1, c2, c'; repeat split; auto; intuition CESem.sem_det.
+      - right; repeat split; auto; intuition CESem.sem_det.
     Qed.
-
-    Ltac rewrite_strs :=
-      repeat match goal with
-               H: (_: stream value) (_: nat) = (_: value) |- _ => rewrite H in *
-             end.
 
     (** An inversion principle for [sem_clock] which also uses the interpretor. *)
     Lemma sem_clock_inv:
@@ -521,13 +547,13 @@ Module Type INDEXEDTOCOIND
                   /\ bs n = false)
           ).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       interp_str b H ck Sem.
       interp_str b H x Sem.
       do 2 eexists; intuition; eauto.
       specialize (Sem_ck n); specialize (Sem_x n); specialize (Sem n); inv Sem.
-      - left; exists c; intuition CESem.sem_det.
-      - right; left; intuition CESem.sem_det.
+      - left; exists c; repeat split; auto; intuition CESem.sem_det.
+      - right; left; repeat split; auto; intuition CESem.sem_det.
       - right; right; exists c; intuition; try CESem.sem_det.
         now rewrite Bool.negb_involutive.
     Qed.
@@ -541,20 +567,21 @@ Module Type INDEXEDTOCOIND
         forall n, CoInd.sem_clock (tr_history_from n H) (tr_stream_from n b) ck
                              (tr_stream_from n bs).
     Proof.
-      induction ck; intros ** Sem n.
+      induction ck; intros * Sem n.
       - constructor.
-        revert Sem n; cofix; intros.
+        revert Sem n; cofix CoFix; intros.
         rewrite init_from_n; rewrite (init_from_n bs).
         constructor; simpl; auto.
         specialize (Sem n); now inv Sem.
       - apply sem_clock_inv in Sem as (bs' & xs & Sem_bs' & Sem_xs & Spec).
-        revert Spec n; cofix; intros.
+        revert Spec n; cofix CoFix; intros.
         rewrite (init_from_n bs).
         apply IHck with (n:=n) in Sem_bs';
           rewrite (init_from_n bs') in Sem_bs'.
         apply (sem_var_impl_from n) in Sem_xs;
           rewrite (init_from_n xs) in Sem_xs.
-        destruct (Spec n) as [|[]]; destruct_conjs; rewrite_strs.
+        destruct (Spec n) as [|[]]; destruct_conjs;
+        repeat match goal with H:_ n = _ |- _ => rewrite H in *; clear H end.
         + econstructor; eauto.
           rewrite init_from_tl, tr_history_from_tl; auto.
         + econstructor; eauto.
@@ -582,7 +609,9 @@ Module Type INDEXEDTOCOIND
         repeat match goal with
                  H: _ \/ _ |- _ => destruct H
                end;
-        destruct_conjs; rewrite_strs; auto
+        destruct_conjs;
+        repeat match goal with H:_ n = _ |- _ => rewrite H in *; clear H end;
+        auto
       end.
 
     (** State the correspondence for [lexp].
@@ -594,13 +623,13 @@ Module Type INDEXEDTOCOIND
         CoInd.sem_lexp (tr_history_from n H) (tr_stream_from n b) e
                        (tr_stream_from n es).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros ** Sem; unfold CESem.sem_lexp, CESem.lift in Sem.
+      induction e; intros * Sem; unfold CESem.sem_lexp, CESem.lift in Sem.
 
       - constructor.
         revert dependent es; revert b; revert n.
-        cofix; intros.
+        cofix CoFix; intros.
         rewrite init_from_n; rewrite (init_from_n b).
         constructor; simpl.
         + specialize (Sem n);
@@ -615,7 +644,7 @@ Module Type INDEXEDTOCOIND
 
       - apply when_inv in Sem as (ys & xs & ? & ? & Spec).
         econstructor; eauto using sem_var_impl_from.
-        revert dependent n; revert Spec; cofix; intros.
+        revert dependent n; revert Spec; cofix CoFix; intros.
         rewrite init_from_n;
           rewrite (init_from_n xs);
           rewrite (init_from_n es).
@@ -623,13 +652,13 @@ Module Type INDEXEDTOCOIND
 
       - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix; intros.
+        revert dependent n; revert Spec; cofix CoFix; intros.
         rewrite init_from_n; rewrite (init_from_n es).
         use_spec Spec.
 
       - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix; intros.
+        revert dependent n; revert Spec; cofix CoFix; intros.
         rewrite init_from_n;
           rewrite (init_from_n zs);
           rewrite (init_from_n es).
@@ -651,7 +680,7 @@ Module Type INDEXEDTOCOIND
           Forall2 (CESem.sem_lexp b H) es ess'
           /\ forall n, ess n = List.map (fun es => es n) ess'.
     Proof.
-      intros ** Sem.
+      intros * Sem.
       exists (interp_lexps' b H es); split.
       - eapply interp_lexps'_sound; eauto.
       - intro n; specialize (Sem n); induction Sem; simpl; auto.
@@ -666,13 +695,13 @@ Module Type INDEXEDTOCOIND
         Forall2 (CoInd.sem_lexp (tr_history_from n H) (tr_stream_from n b)) es
                 (tr_streams_from n ess).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       apply sem_lexps_inv in Sem as (ess' & Sem & Eess').
       assert (length es = length (ess n)) as Length by
           (rewrite Eess', map_length; simpl; eapply Forall2_length; eauto).
       apply Forall2_forall2; split.
       - unfold_tr_streams; rewrite seq_streams_length; simpl; omega.
-      - intros ** Nth; subst.
+      - intros; subst.
         rewrite nth_tr_streams_from_nth; try omega.
         apply sem_lexp_impl_from.
         eapply (Forall2_forall2_eq _ _ (@eq_refl lexp) (eq_str_refl))
@@ -707,7 +736,7 @@ Module Type INDEXEDTOCOIND
                      | absent => false
                      end.
     Proof.
-      intros ** Sem; split.
+      intros * Sem; split.
       - intro n; specialize (Sem n); inv Sem; auto.
       - exists (fun n => match es n with
                  | present _ => true
@@ -723,7 +752,7 @@ Module Type INDEXEDTOCOIND
         CoInd.sem_laexp (tr_history_from n H) (tr_stream_from n b) ck e
                         (tr_stream_from n es).
     Proof.
-      cofix Cofix; intros ** Sem.
+      cofix Cofix; intros * Sem.
       pose proof Sem as Sem';
         apply sem_laexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
         apply (sem_lexp_impl_from n) in Sem';
@@ -770,16 +799,16 @@ Module Type INDEXEDTOCOIND
                /\ fs n = absent
                /\ es n = absent)).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       interp_str b H x Sem.
       interp_str b H t Sem.
       interp_str b H f Sem.
       do 3 eexists; intuition; eauto.
       specialize (Sem_x n); specialize (Sem_t n); specialize (Sem_f n);
         specialize (Sem n); inv Sem.
-      - left; exists c; intuition CESem.sem_det.
-      - right; left; exists c; intuition CESem.sem_det.
-      - right; right; intuition CESem.sem_det.
+      - left; exists c; repeat split; auto; intuition CESem.sem_det.
+      - right; left; exists c; repeat split; auto; intuition CESem.sem_det.
+      - right; right; repeat split; auto; intuition CESem.sem_det.
     Qed.
 
     Lemma ite_inv:
@@ -803,15 +832,15 @@ Module Type INDEXEDTOCOIND
                /\ fs n = absent
                /\ es n = absent)).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       interp_str b H le Sem.
       interp_str b H t Sem.
       interp_str b H f Sem.
       do 3 eexists; intuition; eauto.
       specialize (Sem_le n); specialize (Sem_t n); specialize (Sem_f n);
         specialize (Sem n); inv Sem.
-      - left; exists c, b0, ct, cf; intuition CESem.sem_det.
-      - right; intuition CESem.sem_det.
+      - left; exists c, b0, ct, cf; repeat split; auto; intuition CESem.sem_det.
+      - right; repeat split; auto; intuition CESem.sem_det.
     Qed.
 
     Lemma lexp_inv:
@@ -819,7 +848,7 @@ Module Type INDEXEDTOCOIND
         CESem.sem_cexp b H (Eexp le) es ->
         CESem.sem_lexp b H le es.
     Proof.
-      intros ** Sem n.
+      intros * Sem n.
       now specialize (Sem n); inv Sem.
     Qed.
 
@@ -858,13 +887,13 @@ Module Type INDEXEDTOCOIND
         CoInd.sem_cexp (tr_history_from n H) (tr_stream_from n b) e
                        (tr_stream_from n es).
     Proof.
-      intros ** Sem.
+      intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros ** Sem; unfold CESem.sem_cexp, CESem.lift in Sem.
+      induction e; intros * Sem; unfold CESem.sem_cexp, CESem.lift in Sem.
 
       - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix; intros.
+        revert dependent n; revert Spec; cofix CoFix; intros.
         rewrite init_from_n;
           rewrite (init_from_n ts);
           rewrite (init_from_n fs);
@@ -873,7 +902,7 @@ Module Type INDEXEDTOCOIND
 
       - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix; intros.
+        revert dependent n; revert Spec; cofix CoFix; intros.
         rewrite init_from_n;
           rewrite (init_from_n ts);
           rewrite (init_from_n fs);
@@ -905,7 +934,7 @@ Module Type INDEXEDTOCOIND
                            | absent => false
                            end).
     Proof.
-      intros ** Sem; split.
+      intros * Sem; split.
       - intro n; specialize (Sem n); inv Sem; auto.
       - exists (fun n => match es n with
                  | present _ => true
@@ -921,7 +950,7 @@ Module Type INDEXEDTOCOIND
         CoInd.sem_caexp (tr_history_from n H) (tr_stream_from n b) ck e
                         (tr_stream_from n es).
     Proof.
-      cofix Cofix; intros ** Sem.
+      cofix Cofix; intros * Sem.
       pose proof Sem as Sem';
         apply sem_caexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
         apply (sem_cexp_impl_from n) in Sem';
@@ -948,7 +977,7 @@ Module Type INDEXEDTOCOIND
         CESem.reset_of xs rs ->
         CoInd.reset_of (tr_stream_from n xs) (tr_stream_from n rs).
     Proof.
-      cofix Cofix; intros ** Rst.
+      cofix Cofix; intros * Rst.
       pose proof Rst.
       specialize (Rst n).
       rewrite (init_from_n xs), (init_from_n rs).
@@ -989,7 +1018,7 @@ Module Type INDEXEDTOCOIND
               (tr_streams (mask (all_absent (xss k')) k r xss))
               (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
     Proof.
-      intros ** Const; unfold tr_streams, tr_stream.
+      intros * Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
       - rewrite map_length, 2 tr_streams_from_length, mask_length; auto.
       - intros d1 d2 n' xs1 xs2 Len Nth1 Nth2.
@@ -1036,7 +1065,7 @@ Module Type INDEXEDTOCOIND
         + unfold nequiv_decb in *.
           apply existsb_Forall_neg, forallb_Forall in E.
           apply existsb_Forall_neg, forallb_Forall, Forall_forall.
-          intros ** Hin.
+          intros * Hin.
           eapply Forall_In_tr_streams_from_hd in E; eauto.
       - rewrite tr_streams_from_tl; auto.
     Qed.
@@ -1055,7 +1084,7 @@ Module Type INDEXEDTOCOIND
           CESem.sem_clock b H ck bs
           /\ (forall n, bs n = true <-> xs n <> absent).
     Proof.
-      intros ** Var Sem.
+      intros * Var Sem.
       assert (CESem.sem_clock b H ck (interp_clock b H ck)) as SemCk.
       { intro n; specialize (Sem n); specialize (Var n); destruct Sem as (Sem & Sem').
         unfold interp_clock, lift.
@@ -1084,11 +1113,11 @@ Module Type INDEXEDTOCOIND
         CESem.sem_clocked_var b H x ck ->
         CoInd.sem_clocked_var (tr_history_from n H) (tr_stream_from n b) x ck.
     Proof.
-      intros ** Var Sem; eapply sem_clocked_var_inv in Sem as (bs & Clock & Spec); eauto.
+      intros * Var Sem; eapply sem_clocked_var_inv in Sem as (bs & Clock & Spec); eauto.
       apply sem_var_impl_from with (n := n) in Var;
         apply sem_clock_impl_from with (n := n) in Clock.
       split; eauto.
-      intros ** Var'.
+      intros * Var'.
       eapply CoInd.sem_var_det in Var; eauto.
       eexists; split; eauto.
       rewrite Var.
@@ -1118,7 +1147,7 @@ Module Type INDEXEDTOCOIND
         CESem.sem_clocked_vars b H xs ->
         CoInd.sem_clocked_vars (tr_history H) (tr_stream b) xs.
     Proof.
-      unfold CESem.sem_clocked_vars; intros ** Vars Sem.
+      unfold CESem.sem_clocked_vars; intros * Vars Sem.
       apply Forall_forall; intros (x, ck) Hin.
       apply sem_vars_inv in Vars.
       pose proof Hin as Hin'.
@@ -1173,7 +1202,7 @@ Module Type INDEXEDTOCOIND
         + rewrite tr_clocks_of; eauto.
           eapply sem_clocked_vars_impl; eauto.
           rewrite map_fst_idck; eauto.
-        + apply Forall_forall; intros ** Hin.
+        + apply Forall_forall; intros * Hin.
           rewrite tr_clocks_of; auto.
           eapply Forall_forall in Heqs; eapply Forall_forall in IH; eauto.
     Qed.

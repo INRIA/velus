@@ -30,7 +30,7 @@ Module Type SBSYNTAX
     | _ => []
     end.
 
-  Definition variables := concatMap variables_eq.
+  Definition variables := flat_map variables_eq.
 
   Inductive Is_state_in_eq: ident -> nat -> equation -> Prop :=
   | StateEqReset:
@@ -162,7 +162,7 @@ Module Type SBSYNTAX
         P = P'' ++ bl :: P'
         /\ find_block b P'' = None.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction P; inversion Hfind as [H].
     destruct (ident_eqb (b_name a) b) eqn: E.
     - inversion H; subst.
@@ -179,7 +179,7 @@ Module Type SBSYNTAX
       find_block b P = Some (bl, P') ->
       bl.(b_name) = b.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction P; inversion Hfind as [H].
     destruct (ident_eqb (b_name a) b) eqn: E.
     - inversion H; subst.
@@ -192,7 +192,7 @@ Module Type SBSYNTAX
       bl.(b_name) <> b ->
       find_block b (bl :: P) = find_block b P.
   Proof.
-    intros ** Hnb.
+    intros * Hnb.
     apply ident_eqb_neq in Hnb.
     simpl; rewrite Hnb; reflexivity.
   Qed.
@@ -202,7 +202,7 @@ Module Type SBSYNTAX
       find_block b P = Some (bl, P') ->
       In bl P.
   Proof.
-    intros ** Hfind.
+    intros * Hfind.
     induction P; inversion Hfind as [H].
     destruct (ident_eqb (b_name a) b) eqn: E.
     - inversion H; subst.
@@ -237,7 +237,7 @@ Module Type SBSYNTAX
       (forall s ys ck rst f es, eq <> EqCall s ys ck rst f es) ->
       (Step_with_reset_in s rst (eq :: eqs) <-> Step_with_reset_in s rst eqs).
   Proof.
-    intros ** Neq; split.
+    intros * Neq; split.
     - inversion_clear 1 as [?? Step|]; auto.
       inv Step; exfalso; eapply Neq; eauto.
     - right; auto.
@@ -248,7 +248,7 @@ Module Type SBSYNTAX
       s <> s' ->
       (Step_with_reset_in s rst (EqCall s' ys ck rst' f es :: eqs) <-> Step_with_reset_in s rst eqs).
   Proof.
-    intros ** Neq; split.
+    intros * Neq; split.
     - inversion_clear 1 as [?? Step|]; auto.
       inv Step; congruence.
     - right; auto.
@@ -259,7 +259,7 @@ Module Type SBSYNTAX
       In (s, b) (calls_of eqs) ->
       exists xs ck rst es, In (EqCall s xs ck rst b es) eqs.
   Proof.
-    induction eqs as [|[]]; simpl; try contradiction; intros ** Hin;
+    induction eqs as [|[]]; simpl; try contradiction; intros * Hin;
       try now edestruct IHeqs as (?&?&?&?&?); eauto 6.
     destruct Hin as [E|].
     - inv E; eauto 6.
@@ -270,7 +270,7 @@ Module Type SBSYNTAX
     forall eqs s,
       InMembers s (calls_of eqs) -> exists k, Is_state_in s k eqs.
   Proof.
-    intros ** Hin; exists 1.
+    intros * Hin; exists 1.
     induction eqs as [|[]]; simpl in *; try contradiction;
       try (now right; apply IHeqs; auto).
     destruct Hin as [E|].
@@ -359,7 +359,7 @@ Module Type SBSYNTAX
     forall eqs eqs',
       variables (eqs ++ eqs') = variables eqs ++ variables eqs'.
   Proof.
-    unfold variables, concatMap.
+    unfold variables.
     induction eqs as [|[]]; simpl; intros; auto.
     - f_equal; auto.
     - rewrite <-app_assoc; f_equal; auto.

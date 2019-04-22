@@ -12,6 +12,8 @@ Require Import Velus.RMemory.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.CoreExpr.Stream.
 
+(* Used in Lift Determinism *)
+Require Import Logic.FunctionalExtensionality.
 
 Module Type CESEMANTICS
        (Import Ids   : IDS)
@@ -284,7 +286,7 @@ environment.
       with signature @eq_str B ==> Basics.impl
         as lift'_eq_str.
   Proof.
-    intros ** E Lift n.
+    intros * E Lift n.
     rewrite <-E; auto.
   Qed.
 
@@ -293,7 +295,7 @@ environment.
       with signature eq_str ==> eq_str
         as clock_of_eq_str.
   Proof.
-    unfold clock_of. intros ** E n.
+    unfold clock_of. intros * E n.
     rewrite E; auto.
   Qed.
 
@@ -301,7 +303,7 @@ environment.
       with signature eq_str ==> eq ==> eq ==> eq ==> Basics.impl
         as sem_clocked_var_eq_str.
   Proof.
-    intros ** E ??? Sem n.
+    intros * E ??? Sem n.
     rewrite <-E; auto.
   Qed.
 
@@ -309,40 +311,15 @@ environment.
       with signature eq_str ==> eq ==> eq ==> Basics.impl
         as sem_clocked_vars_eq_str.
   Proof.
-    intros ** E ?? Sem n.
+    intros * E ?? Sem n.
     rewrite <-E; auto.
   Qed.
-
-
-  (* Add Parametric Morphism : reset_of *)
-  (*     with signature eq_str ==> eq_str *)
-  (*       as reset_of_eq_str. *)
-  (* Proof. *)
-  (*   unfold reset_of. intros ** E n. *)
-  (*   now rewrite E. *)
-  (* Qed. *)
-
-  (* Add Parametric Morphism : reset_regs *)
-  (*     with signature eq_str ==> eq ==> Basics.impl *)
-  (*       as reset_regs_eq_str. *)
-  (* Proof. *)
-  (*   intros ** E M Rst. *)
-  (*   induction Rst; constructor; eauto. *)
-  (* Qed. *)
-
-  (* Add Parametric Morphism : sem_vars_instant *)
-  (*     with signature eq_str ==> Basics.impl *)
-  (*       as same_clock_eq_str. *)
-  (* Proof. *)
-  (*   unfold same_clock; intros ** E ? ?; rewrite <-E; auto. *)
-  (* Qed. *)
-  (** ** Clocking property *)
 
   Lemma not_subrate_clock:
     forall R ck,
       ~ sem_clock_instant false R ck true.
   Proof.
-    intros ** Sem; induction ck; inv Sem.
+    intros * Sem; induction ck; inv Sem.
     now apply IHck.
   Qed.
 
@@ -351,7 +328,7 @@ environment.
       sem_clock_instant false R ck b ->
       b = false.
   Proof.
-    intros ** Sem.
+    intros * Sem.
     destruct b; auto.
     contradict Sem; apply not_subrate_clock.
   Qed.
@@ -362,7 +339,7 @@ environment.
       sem_vars H (map fst xs) ls ->
       forall n, 0 < length (ls n).
   Proof.
-    intros ** Hgt0 Hsem n.
+    intros * Hgt0 Hsem n.
     specialize (Hsem n).
     apply Forall2_length in Hsem.
     rewrite map_length in Hsem.
@@ -590,15 +567,13 @@ environment.
     Variable bk : stream bool.
     Variable H : history.
 
-    Require Import Logic.FunctionalExtensionality.
-
     Lemma lift_det:
       forall {A B} (P: bool -> env -> A -> B -> Prop) (bk: stream bool)
         x (xs1 xs2 : stream B),
         (forall b R v1 v2, P b R x v1 -> P b R x v2 -> v1 = v2) ->
         lift bk H P x xs1 -> lift bk H P x xs2 -> xs1 = xs2.
     Proof.
-      intros ** Hpoint H1 H2.
+      intros * Hpoint H1 H2.
       extensionality n. specialize (H1 n). specialize (H2 n).
       eapply Hpoint; eassumption.
     Qed.
@@ -609,7 +584,7 @@ environment.
         (forall R v1 v2, P R x v1 -> P R x v2 -> v1 = v2) ->
         lift' H P x xs1 -> lift' H P x xs2 -> xs1 = xs2.
     Proof.
-      intros ** Hpoint H1 H2.
+      intros * Hpoint H1 H2.
       extensionality n. specialize (H1 n). specialize (H2 n).
       eapply Hpoint; eassumption.
     Qed.
@@ -686,7 +661,7 @@ clock to [sem_var_instant] too. *)
   (*     clock_of xss ck2 -> *)
   (*     ck2 ≈ ck1. *)
   (* Proof. *)
-  (*   intros ** Hck1 Hck2 n. *)
+  (*   intros * Hck1 Hck2 n. *)
   (*   specialize (Hck1 n); specialize (Hck2 n). *)
   (*   congruence. *)
   (* Qed. *)

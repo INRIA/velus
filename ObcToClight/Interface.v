@@ -9,6 +9,7 @@ Require cfrontend.Ctypes.
 Require cfrontend.Ctyping.
 Require common.Memory.
 Require lib.Maps.
+Require Import String.
 
 Open Scope bool_scope.
 (* Interface avec CompCert *)
@@ -28,7 +29,7 @@ Module Export Op <: OPERATORS.
   Definition cltype (ty: type) : Ctypes.type :=
     match ty with
     | Tint sz sg => Ctypes.Tint sz sg Ctypes.noattr
-    | Tlong sg   => Ctypes.Tlong sg (Ctypes.mk_attr false (Some 3%N))
+    | Tlong sg   => Ctypes.Tlong sg (Ctypes.mk_attr false (Some (Npos 3)))
     | Tfloat sz  => Ctypes.Tfloat sz Ctypes.noattr
     end.
 
@@ -282,7 +283,7 @@ Module Export Op <: OPERATORS.
       wt_val v ty ->
       good_bool v (cltype ty).
   Proof.
-    intros ** WTv. unfold good_bool.
+    intros * WTv. unfold good_bool.
     inv WTv; simpl; auto.
     match goal with H:sz = Ctypes.IBool -> _ |- _ =>
                     destruct sz; auto; destruct H; subst; auto
@@ -371,7 +372,7 @@ Module Export Op <: OPERATORS.
       sz = Ctypes.IBool ->
       i = Int.zero \/ i = Int.one.
   Proof.
-    intros ** Hgb Hsz; subst; inversion_clear Hgb; auto.
+    intros * Hgb Hsz; subst; inversion_clear Hgb; auto.
   Qed.
 
   Local Hint Resolve good_bool_zero_or_one.
@@ -408,13 +409,15 @@ Module Export Op <: OPERATORS.
       good_bool v cty ->
       wt_val v ty.
   Proof.
-    intros ** Htcl Hcty Hnun Hnptr Hgb.
+    intros * Htcl Hcty Hnun Hnptr Hgb.
     destruct cty;
       simpl in *;
       destruct v;
       DestructCases;
       inversion Hcty;
+      subst;
       eauto.
+    exfalso; now eapply Hnptr.
     exfalso; now eapply Hnptr.
   Qed.
 
@@ -423,7 +426,7 @@ Module Export Op <: OPERATORS.
       wt_val v ty ->
       v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs).
   Proof.
-    intros ** Hwt.
+    intros * Hwt.
     destruct ty; inversion Hwt; subst;
       split; discriminate.
   Qed.
@@ -433,7 +436,7 @@ Module Export Op <: OPERATORS.
       wt_val v ty ->
       Ctyping.wt_val v (cltype ty).
   Proof.
-    intros ** Hwt.
+    intros * Hwt.
     destruct ty; inversion_clear Hwt;
     eauto using Ctyping.wt_val.
   Qed.
@@ -480,17 +483,17 @@ Module Export Op <: OPERATORS.
       wt_val v1 ty1 ->
       wt_val v ty.
   Proof.
-    intros ** Htop Hsop Hv1.
+    intros * Htop Hsop Hv1.
     pose proof (wt_val_not_vundef_nor_vptr _ _ Hv1) as [Hnun Hnptr].
     unfold type_unop, sem_unop in *.
     destruct op as [uop|].
     - (* UnaryOp *)
       destruct (unop_always_returns_bool uop) eqn:Huop.
       + destruct uop; try discriminate Huop.
-        injection Htop; intros; subst.
+        inv Htop; intros; subst.
         simpl in Hsop.
-        unfold Cop.sem_notbool, Cop.classify_bool in Hsop;
-        DestructCases; auto.
+        unfold Cop.sem_notbool, Cop.classify_bool, Coqlib.option_map in Hsop;
+          DestructCases; auto.
       + apply wt_val_wt_val_cltype in Hv1.
         destruct (Ctyping.type_unop uop (cltype ty1)) as [cty|] eqn:Hok;
           [|discriminate].
@@ -540,13 +543,13 @@ Module Export Op <: OPERATORS.
       wt_val v t ->
       Cop.sem_cast v (cltype t) (cltype t) m = Some v.
   Proof.
-    intros ** WTv.
+    intros * WTv.
     apply Cop.cast_val_casted.
     destruct (wt_val_not_vundef_nor_vptr _ _ WTv) as (Hnun & Hnptr).
     pose proof (wt_value_good_bool _ _ WTv) as Hgb.
     apply wt_val_wt_val_cltype in WTv.
     destruct v.
-    - intuition.
+    - tauto.
     - inv WTv; try match goal with H:_ = cltype t |- _ =>
                                    destruct t; now inv H end.
       constructor.
@@ -555,7 +558,9 @@ Module Export Op <: OPERATORS.
       end; destruct (good_bool_zero_or_one _ _ _ _ Hgb);
         try subst; auto.
     - inv WTv. apply Cop.val_casted_long.
-      match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
+      * match goal with H:Ctypes.Tpointer _ _ = cltype t |- _
+                        => destruct t; inv H end.
+      * match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
     - inv WTv. apply Cop.val_casted_float.
       match goal with H:Ctypes.Tvoid = cltype t |- _ => destruct t; inv H end.
     - inv WTv. apply Cop.val_casted_single.
@@ -568,7 +573,7 @@ Module Export Op <: OPERATORS.
   Ltac ContradictNotVptr :=
       match goal with
       | H: context [Values.Vptr ?b ?i <> Values.Vptr _ _] |- _ =>
-        now contradiction (H b i)
+        contradiction (H b i)
       end.
 
   Lemma cases_of_bool:
@@ -597,7 +602,7 @@ Module Export Op <: OPERATORS.
       Cop.sem_cmp cop v1 ty1 v2 ty2 m = Some v ->
       v <> Values.Vundef /\ (forall b ofs, v <> Values.Vptr b ofs).
   Proof.
-    intros ** H.
+    intros * H.
     unfold Cop.sem_cmp in H;
       DestructCases; split; try discriminate;
         try (apply option_map_of_bool_true_false in H;
@@ -634,8 +639,8 @@ Module Export Op <: OPERATORS.
       Cop.sem_cmp cop v1 ty1 v2 ty2 m = Some v ->
       v = Values.Vtrue \/ v = Values.Vfalse.
   Proof.
-    intros ** Hsem.
-    unfold Cop.sem_cmp, Cop.sem_binarith in Hsem.
+    intros * Hsem.
+    unfold Cop.sem_cmp, Cop.sem_binarith, Cop.cmp_ptr in Hsem.
     DestructCases;
       try repeat match goal with
                  | H:Coqlib.option_map Values.Val.of_bool ?r = Some _ |- _ =>
@@ -667,7 +672,7 @@ Module Export Op <: OPERATORS.
       wt_val v ty.
   Proof.
     unfold type_binop, sem_binop.
-    intros ** Hty Hsem Hwt1 Hwt2.
+    intros * Hty Hsem Hwt1 Hwt2.
     destruct (binop_always_returns_bool op) eqn:Heq1; simpl in Hty;
       [|destruct
           (is_bool_binop op && (is_bool_type ty1 && is_bool_type ty2)) eqn:Heq2];
@@ -780,13 +785,15 @@ Module Export Op <: OPERATORS.
       Cop.sem_unary_operation op v ty M1
       = Cop.sem_unary_operation op v ty M2.
   Proof.
-    intros ** Hnptr.
+    intros * Hnptr.
     destruct op, v; simpl;
       unfold Cop.sem_notbool, Cop.sem_notint, Cop.sem_neg, Cop.sem_absfloat;
       repeat match goal with
              | |- (match ?x with _ => _ end) = _ => destruct x; auto
              | _ => ContradictNotVptr
-             end.
+             end;
+      try (now destruct ty; auto).
+    specialize (Hnptr b i); contradiction.
   Qed.
   
   Lemma sem_cast_any_mem:
@@ -794,11 +801,11 @@ Module Export Op <: OPERATORS.
       (forall b ofs, v <> Values.Vptr b ofs) ->
       Cop.sem_cast v ty1 ty2 M1 = Cop.sem_cast v ty1 ty2 M2.
   Proof.
-    intros ** Hnptr.
+    intros * Hnptr.
     unfold Cop.sem_cast.
     destruct (Cop.classify_cast ty1 ty2); auto.
     destruct v; auto.
-    ContradictNotVptr.
+    specialize (Hnptr b i); contradiction.
   Qed.
 
   Lemma sem_binary_operation_any_cenv_mem:
@@ -808,7 +815,7 @@ Module Export Op <: OPERATORS.
       Cop.sem_binary_operation cenv1 op v1 (cltype ty1) v2 (cltype ty2) M1
       = Cop.sem_binary_operation cenv2 op v1 (cltype ty1) v2 (cltype ty2) M2.
   Proof.
-    intros ** Hnptr1 Hnptr2.
+    intros * Hnptr1 Hnptr2.
     destruct op; simpl;
       unfold Cop.sem_add, Cop.sem_sub, Cop.sem_mul, Cop.sem_div, Cop.sem_mod,
              Cop.sem_and, Cop.sem_or, Cop.sem_xor, Cop.sem_shl, Cop.sem_shr,
@@ -836,7 +843,7 @@ Module Export Op <: OPERATORS.
       wt_val v ty ->
       v = Values.Val.load_result (type_chunk ty) v.
   Proof.
-    intros ** Hwt.
+    intros * Hwt.
     destruct ty as [sz sg|sz|sz].
     - destruct sz, sg; simpl;
         inv Hwt; auto;
@@ -1012,7 +1019,6 @@ Module Export Op <: OPERATORS.
        try destruct f0; auto);
         (destruct Heq2 as [Heq2|[Heq2|Heq2]]; discriminate).
   Qed.
-
 
   Open Scope string_scope.
 

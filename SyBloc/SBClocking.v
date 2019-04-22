@@ -12,6 +12,8 @@ Require Import Velus.SyBloc.SBIsBlock.
 Require Import Velus.SyBloc.SBOrdered.
 
 Require Import List.
+Require Import Morphisms.
+Import Permutation.
 
 (** * Well clocked programs *)
 
@@ -100,9 +102,6 @@ Module Type SBCLOCKING
   Hint Unfold wc_env wc_block.
   Hint Resolve Forall_nil.
 
-  Require Import Morphisms.
-  Import Permutation.
-
   Instance wc_equation_Proper:
     Proper (@eq program ==> @Permutation (ident * clock) ==> @eq equation ==> iff)
            wc_equation.
@@ -148,7 +147,7 @@ Module Type SBCLOCKING
       find_block f P = Some (b, P') ->
       wc_block P' b.
   Proof.
-    intros ** WCG Hfind.
+    intros * WCG Hfind.
     apply find_block_app in Hfind as (?&?&?); subst.
     apply wc_program_app_weaken in WCG.
     inversion_clear WCG; auto.
@@ -160,7 +159,7 @@ Module Type SBCLOCKING
       wc_equation P vars eq ->
       wc_equation (b :: P) vars eq.
   Proof.
-    intros ** OnG WCnG.
+    intros * OnG WCnG.
     inversion_clear OnG as [|? ? OG ? HndG].
     inversion_clear WCnG as [| | |???????? Find]; eauto using wc_equation.
     econstructor; eauto.
@@ -178,7 +177,7 @@ Module Type SBCLOCKING
       wc_equation (P' ++ P) vars eq.
   Proof.
     induction P'; auto.
-    simpl. intros ** OG WCeq.
+    simpl. intros * OG WCeq.
     eapply wc_equation_program_cons in OG; eauto.
     inv OG. auto.
   Qed.
@@ -190,7 +189,7 @@ Module Type SBCLOCKING
       find_block f P = Some (b, P') ->
       wc_block P b.
   Proof.
-    intros ** OG WCG Hfind.
+    intros * OG WCG Hfind.
     induction P as [|b' P IH]; try discriminate.
     simpl in *.
     destruct (ident_eqb b'.(b_name) f) eqn:Heq.

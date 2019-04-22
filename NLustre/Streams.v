@@ -88,7 +88,7 @@ Section EqSts.
 
   Theorem EqSts_sym: forall xss yss, EqSts xss yss -> EqSts yss xss.
   Proof.
-    induction xss, yss; intros ** H; auto; try inv H.
+    induction xss, yss; intros * H; auto; try inv H.
     constructor.
     - now symmetry.
     - now apply IHxss.
@@ -96,7 +96,7 @@ Section EqSts.
 
   Theorem EqSts_trans: forall xss yss zss, EqSts xss yss -> EqSts yss zss -> EqSts xss zss.
   Proof.
-    induction xss, yss, zss; intros ** Hx Hy; auto; try inv Hx; try inv Hy.
+    induction xss, yss, zss; intros * Hx Hy; auto; try inv Hx; try inv Hy.
     constructor.
     - now transitivity s.
     - eapply IHxss; eauto.
@@ -165,7 +165,7 @@ Add Parametric Morphism
       as map_st_EqSt.
 Proof.
   intros f f' Ef xs xs' Exs.
-  revert xs xs' Exs; induction xs, xs'; intros ** H; inv H; constructor.
+  revert xs xs' Exs; induction xs, xs'; intros * H; inv H; constructor.
   - now apply Ef.
   - now apply IHxs.
 Qed.
@@ -177,7 +177,7 @@ Add Parametric Morphism
       as map_EqSt.
 Proof.
   intros f f' Ef xs xs' Exs.
-  revert xs xs' Exs; induction xs, xs'; intros ** H; inv H; auto.
+  revert xs xs' Exs; induction xs, xs'; intros * H; inv H; auto.
   simpl; f_equal.
   - now apply Ef.
   - now apply IHxs.
@@ -190,7 +190,7 @@ Add Parametric Morphism
     with signature @EqSts A ==> Basics.impl
       as Forall_EqSt.
 Proof.
-  induction x; intros ** E H; inversion E; subst; auto.
+  induction x; intros * E H; inversion E; subst; auto.
   constructor; inv H.
   - eapply P_compat; eauto.
   - apply IHx; auto.

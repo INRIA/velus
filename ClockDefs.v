@@ -47,7 +47,7 @@ Fixpoint sclk (ck: clock) : sclock :=
 Require Import List.
 Import ListNotations.
 
-Function indexes (ncks: list nclock) : list positive :=
+Fixpoint indexes (ncks: list nclock) : list positive :=
   match ncks with
   | [] => []
   | Cnamed (Vidx i) _ :: ncks => i :: indexes ncks

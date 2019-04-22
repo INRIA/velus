@@ -247,7 +247,7 @@ Module Type EQUIV
   Qed.
 
   Instance env_refines_Proper:
-    Proper (inverse env_refines ==> env_refines ==> Basics.impl) env_refines.
+    Proper (Basics.flip env_refines ==> env_refines ==> Basics.impl) env_refines.
   Proof.
     intros m1 m1' Henv1 m2 m2' Henv2.
     intros Henv x v Hfind.
@@ -798,7 +798,7 @@ Module Type EQUIV
         stmt_call_eval p1 omenv clsid f vos' omenv' rvos'
         /\ Forall2 (fun vo' vo => forall v, vo = Some v -> vo' = Some v) rvos' rvos.
   Proof.
-    intros ** Hpr HP Hcall Hvos.
+    intros * Hpr HP Hcall Hvos.
     inversion_clear Hcall as [? ? ? ? ? ? ? ? ? ? ? Hfindc Hfindm Hlvos Heval Hrvos].
     rewrite program_refines_def in Hpr.
     assert (Hfindc2:=Hfindc). assert (Hfindm2:=Hfindm).
@@ -830,7 +830,7 @@ Module Type EQUIV
       wt_stmt p2 insts mems vars s ->
       wt_stmt p1 insts mems vars s.
   Proof.
-    intros ** Hpr WTs.
+    intros * Hpr WTs.
     induction s; inv WTs; eauto using wt_stmt.
     rewrite program_refines_def in Hpr.
     match goal with H:find_class _ _ = _ |- _ =>
@@ -847,7 +847,7 @@ Module Type EQUIV
       wt_method p2 insts mem m ->
       wt_method p1 insts mem m.
   Proof.
-    unfold wt_method, meth_vars. intros ** Hpr WTm.
+    unfold wt_method, meth_vars. intros * Hpr WTm.
     destruct m as [n ins vars outs s nodup good]; simpl in *.
     apply wt_stmt_program_refines with (1:=Hpr) (2:=WTm).
   Qed.
@@ -859,7 +859,7 @@ Module Type EQUIV
                 Env.In x env1.
   Proof.
     setoid_rewrite Env.In_find.
-    intros ** Henv x (v & Hin); eauto.
+    intros * Henv x (v & Hin); eauto.
   Qed.
 
   Lemma env_refines_not_In:
@@ -869,7 +869,7 @@ Module Type EQUIV
                 ~Env.In x env2.
   Proof.
     setoid_rewrite Env.In_find.
-    intros ** Henv x (v & Hin); eauto.
+    intros env1 env2 Henv x H (v & Hin); eauto.
   Qed.
 
   (* TODO: Move earlier *)

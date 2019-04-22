@@ -3,7 +3,7 @@ Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLOrdered.
 Require Import Velus.CoreExpr.CETyping.
 
 Require Import List.
@@ -24,10 +24,10 @@ Require Import Morphisms.
 Module Type NLTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : NLSYNTAX Ids Op CESyn)
-       (Import Ord   : ORDERED  Ids Op CESyn Syn)
-       (Import CETyp : CETYPING Ids Op CESyn).
+       (Import CESyn : CESYNTAX      Op)
+       (Import Syn   : NLSYNTAX  Ids Op CESyn)
+       (Import Ord   : NLORDERED Ids Op CESyn Syn)
+       (Import CETyp : CETYPING  Ids Op CESyn).
 
   Inductive wt_equation (G: global) (vars: list (ident * type)): equation -> Prop :=
   | wt_EqDef: forall x ck e,
@@ -73,7 +73,7 @@ Module Type NLTYPING
   | wtg_cons: forall n ns,
       wt_global ns ->
       wt_node ns n ->
-      Forall (fun n'=> n.(n_name) <> n'.(n_name)) ns ->
+      Forall (fun n'=> n.(n_name) <> n'.(n_name))%type ns ->
       wt_global (n::ns).
 
   Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : nltyping.
@@ -88,7 +88,8 @@ Module Type NLTYPING
     2:apply IHg; now inv WTg.
     intro Hin.
     inversion_clear WTg as [|? ? ? WTn Hn].
-    change (Forall (fun n' => (fun i=> a.(n_name) <> i) n'.(n_name)) g) in Hn.
+    change (Forall (fun n' => (fun i=> a.(n_name) <> i :> ident) n'.(n_name)) g)
+      in Hn.
     apply Forall_map in Hn.
     apply Forall_forall with (1:=Hn) in Hin.
     now contradiction Hin.
@@ -119,10 +120,10 @@ Module Type NLTYPING
       wt_global G ->
       Ordered_nodes G.
   Proof.
-    induction G as [|n G]; intros ** WT; auto using Ordered_nodes.
+    induction G as [|n G]; intros * WT; auto using Ordered_nodes.
     inv WT.
     constructor; auto.
-    intros **  Hni.
+    intros *  Hni.
     eapply Forall_Exists, Exists_exists in Hni as (eq & Hin & WTeq & Hni); eauto.
     inv Hni; inv WTeq;
       assert (Exists (fun n' => f = n_name n') G) as Hn
@@ -137,10 +138,10 @@ End NLTYPING.
 Module NLTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : NLSYNTAX Ids Op CESyn)
-       (Ord   : ORDERED  Ids Op CESyn Syn)
-       (CETyp : CETYPING Ids Op CESyn)
+       (CESyn : CESYNTAX       Op)
+       (Syn   : NLSYNTAX   Ids Op CESyn)
+       (Ord   : NLORDERED  Ids Op CESyn Syn)
+       (CETyp : CETYPING   Ids Op CESyn)
        <: NLTYPING Ids Op CESyn Syn Ord CETyp.
   Include NLTYPING Ids Op CESyn Syn Ord CETyp.
 End NLTypingFun.

@@ -45,7 +45,7 @@ Lemma match_value_add:
     x <> x' ->
     match_value (Env.add x' v e) x = match_value e x.
 Proof.
-  intros ** Hneq.
+  intros * Hneq.
   unfold match_value. simpl.
   rewrite Env.gso with (1:=Hneq).
   reflexivity.
@@ -58,7 +58,7 @@ Remark match_find_var_det:
     v1 = v2.
 Proof.
   unfold match_value; simpl.
-  intros ** Hm Hf.
+  intros * Hm Hf.
   now rewrite Hf in Hm.
 Qed.
 
@@ -91,8 +91,8 @@ Proof.
   - discriminate.
   - destruct (AST.ident_eq x i); intros.
     + inv H. apply align_le. apply alignof_pos.
-    + specialize (IHflds _ _ _ H). eapply Zle_trans; eauto.
-      apply Zle_trans with (align pos (alignof gcenv t)).
+    + specialize (IHflds _ _ _ H). eapply Z.le_trans; eauto.
+      apply Z.le_trans with (align pos (alignof gcenv t)).
       * apply align_le. apply alignof_pos.
       * generalize (sizeof_pos gcenv t). omega.
 Qed.
@@ -149,7 +149,7 @@ Section Staterep.
       clsnm <> cls.(c_name) ->
       staterep (cls :: prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
-    intros ** Hnm.
+    intros * Hnm.
     apply ident_eqb_neq in Hnm.
     simpl; rewrite Hnm; reflexivity.
   Qed.
@@ -159,7 +159,7 @@ Section Staterep.
       find_class clsnm oprog = None ->
       staterep (oprog ++ prog) clsnm me b ofs <-*-> staterep prog clsnm me b ofs.
   Proof.
-    intros ** Hnin.
+    intros * Hnin.
     induction oprog as [|cls oprog IH].
     - rewrite app_nil_l. reflexivity.
     - apply find_class_none in Hnin; destruct Hnin.
@@ -173,7 +173,7 @@ Section Staterep.
       staterep prog c.(c_name) me b ofs <-*->
       staterep (c :: prog') c.(c_name) me b ofs.
   Proof.
-    intros ** Find.
+    intros * Find.
     pose proof (find_class_name _ _ _ _ Find); subst.
     pose proof (find_class_app _ _ _ _ Find) as (? & Hprog & FindNone).
     rewrite Hprog.
@@ -326,7 +326,7 @@ Lemma in_translate_param_chunked:
       access_mode (cltype ty) = By_value chunk
       /\ (Memdata.align_chunk chunk | alignof ge (cltype ty)).
 Proof.
-  intros ** ? Hin.
+  intros * ? Hin.
   exists (type_chunk ty).
   split; auto.
   now apply align_chunk_divides_alignof_type.
@@ -388,7 +388,7 @@ Section StructInBounds.
       min <= ofs + d <= max.
   Proof.
     unfold struct_in_bounds.
-    intros ** (Hmin & Hmax) Hfo.
+    intros * (Hmin & Hmax) Hfo.
     destruct (field_offset_type _ _ _ Hfo) as (ty & Hft).
     destruct (field_offset_in_range _ _ _ _ _ Hfo Hft) as (H0d & Hsize).
     split; auto with zarith.
@@ -409,7 +409,7 @@ Section StructInBounds.
       struct_in_bounds min max (ofs + d) (co_members co).
   Proof.
     unfold struct_in_bounds.
-    intros ** (Hmin & Hmax) Hfo Hft Henv Hsu.
+    intros * (Hmin & Hmax) Hfo Hft Henv Hsu.
     apply field_offset_in_range with (1:=Hfo) in Hft.
     destruct Hft as (Hd0 & Hsizeof).
     split; auto with zarith.
@@ -447,14 +447,14 @@ Section StateRepProperties.
              /\ co_members co = make_members cls
              /\ attr_alignas (co_attr co) = None
              /\ NoDupMembers (co_members co)
-             /\ co.(co_sizeof) <= Int.max_unsigned).
+             /\ co.(co_sizeof) <= Ptrofs.max_unsigned).
 
   Lemma c_objs_field_offset:
     forall o c cls,
       In (o, c) cls.(c_objs) ->
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d.
   Proof.
-    intros ** Hin.
+    intros * Hin.
     unfold field_offset.
     cut (forall ofs, exists d,
          field_offset_rec gcenv o (make_members cls) ofs = Errors.OK d); auto.
@@ -506,7 +506,7 @@ Section StateRepProperties.
       exists d, field_offset gcenv o (make_members cls) = Errors.OK d
            /\ struct_in_bounds gcenv min max (ofs + d) (make_members cls').
   Proof.
-    intros ** WTp Hfc Hsb Hin Hfc'.
+    intros * WTp Hfc Hsb Hin Hfc'.
     destruct (c_objs_field_offset _ _ _ Hin) as (d & Hfo).
     exists d; split; auto.
     destruct (make_members_co _ _ _ Hfc)
@@ -557,7 +557,7 @@ Section StateRepProperties.
         In (x, ty) cls.(c_mems) ->
         field_type x (make_members cls) = Errors.OK (cltype ty).
   Proof.
-    intros ** Hfind Hndup ? ? Hin.
+    intros * Hfind Hndup ? ? Hin.
     apply in_field_type with (1:=Hndup).
     unfold make_members, translate_param. apply in_app_iff.
     left. rewrite in_map_iff.
@@ -572,13 +572,13 @@ Section StateRepProperties.
         In (o, c) cls.(c_objs) ->
         field_type o (make_members cls) = Errors.OK (type_of_inst c).
   Proof.
-    intros ** Hfind Hndup ? ? Hin.
+    intros * Hfind Hndup ? ? Hin.
     apply in_field_type with (1:=Hndup).
     unfold make_members. apply in_app_iff. right.
     apply in_map_iff. exists (o, c); auto.
   Qed.
 
-  Hint Resolve Zdivide_trans
+  Hint Resolve Z.divide_trans
                align_chunk_divides_alignof_type
                access_mode_cltype : clalign.
 
@@ -589,7 +589,7 @@ Section StateRepProperties.
       range_w b 0 (sizeof gcenv (type_of_inst clsnm)) -*>
       staterep gcenv prog clsnm mempty b 0.
   Proof.
-    intros ** WTp Hfind.
+    intros * WTp Hfind.
     (* Weaken the goal for proof by induction. *)
     cut (forall lo,
            (alignof gcenv (type_of_inst clsnm) | lo) ->
@@ -686,7 +686,7 @@ Section StateRepProperties.
         apply IH.
         apply Z.divide_add_r; eauto with clalign.
         eapply field_offset_aligned in Hfo; eauto.
-        apply Zdivide_trans with (2:=Hfo).
+        apply Z.divide_trans with (2:=Hfo).
         simpl. rewrite Hg', align_noattr.
         apply Z.divide_refl.
     - simpl in Hfind.
@@ -705,9 +705,9 @@ Section StateRepProperties.
       In (x, ty) cls.(c_mems) ->
       find_val x me = Some v ->
       field_offset gcenv x (make_members cls) = Errors.OK d ->
-      Clight.deref_loc (cltype ty) m b (Int.repr (ofs + d)) v.
+      Clight.deref_loc (cltype ty) m b (Ptrofs.repr (ofs + d)) v.
   Proof.
-    intros ** Hty Hm Hin Hv Hoff.
+    intros * Hty Hm Hin Hv Hoff.
     apply sep_proj1 in Hm.
     simpl in Hm. rewrite ident_eqb_refl in Hm.
     apply sep_proj1 in Hm.
@@ -736,11 +736,11 @@ Section StateRepProperties.
       In (x, ty) cls.(c_mems) ->
       field_offset gcenv x (make_members cls) = Errors.OK d ->
       v = Values.Val.load_result (type_chunk ty) v ->
-      Clight.assign_loc gcenv (cltype ty) m b (Int.repr (ofs + d)) v m' ->
+      Clight.assign_loc gcenv (cltype ty) m b (Ptrofs.repr (ofs + d)) v m' ->
       m' |= staterep gcenv (cls::prog') cls.(c_name) (add_val x v me) b ofs
                ** P (add_val x v me).
   Proof.
-    intros ** HPimp Hty Hcls Hmem Hm Hin Hoff Hlr Hal.
+    intros * HPimp Hty Hcls Hmem Hm Hin Hoff Hlr Hal.
     rewrite <-HPimp; clear HPimp.
     Opaque sepconj. simpl in *. Transparent sepconj.
     rewrite ident_eqb_refl in *.
@@ -787,9 +787,9 @@ Section StateRepProperties.
       m |= staterep gcenv (cls :: prog) cls.(c_name) me b ofs ** P ->
       In (x, ty) (c_mems cls) ->
       exists d, field_offset gcenv x (make_members cls) = Errors.OK d
-           /\ 0 <= ofs + d <= Int.max_unsigned.
+           /\ 0 <= ofs + d <= Ptrofs.max_unsigned.
   Proof.
-    intros ** Hm Hin.
+    intros * Hm Hin.
     Opaque sepconj. simpl in Hm. Transparent sepconj.
     rewrite ident_eqb_refl in Hm.
     do 2 apply sep_proj1 in Hm.
@@ -826,9 +826,9 @@ Section BlockRep.
       In (x, ty) (co_members co) ->
       Env.find x ve = Some v ->
       field_offset ge x (co_members co) = Errors.OK d ->
-      Clight.deref_loc ty m b (Int.repr d) v.
+      Clight.deref_loc ty m b (Ptrofs.repr d) v.
   Proof.
-    intros ** Hm Hin Hv Hoff.
+    intros * Hm Hin Hv Hoff.
     unfold blockrep in Hm.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].
@@ -852,12 +852,12 @@ Section BlockRep.
       field_offset ge x (co_members co) = Errors.OK d ->
       access_mode ty = By_value chunk ->
       v = Val.load_result chunk v ->
-      Clight.assign_loc ge ty m b (Integers.Int.repr d) v m' ->
+      Clight.assign_loc ge ty m b (Integers.Ptrofs.repr d) v m' ->
       massert_imp (P ve) (P (Env.add x v ve)) ->
       m' |= blockrep (Env.add x v ve) (co_members co) b ** P (Env.add x v ve).
   Proof.
     Opaque sepconj.
-    intros ** Hndup Hm Hin Hoff Haccess Hlr Hal HP.
+    intros * Hndup Hm Hin Hoff Haccess Hlr Hal HP.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].
     unfold blockrep in *.
@@ -929,7 +929,7 @@ Section BlockRep.
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
       sepall (field_range ge flds b 0) flds <-*-> blockrep vempty flds b.
   Proof.
-    intros ** Hndups Hchunk.
+    intros * Hndups Hchunk.
     unfold blockrep.
     apply sepall_swapp.
     intros fld Hin.
@@ -965,7 +965,7 @@ Section BlockRep.
                               /\ (Memdata.align_chunk chunk | alignof ge ty)) ->
       range b 0 (co_sizeof co) -*> blockrep vempty (co_members co) b.
   Proof.
-    intros ** Hco Hstruct Hndups Hchunk.
+    intros * Hco Hstruct Hndups Hchunk.
     rewrite split_range_fields
     with (1:=ge_consistent) (2:=Hco) (3:=Hstruct) (4:=Hndups).
     rewrite blockrep_empty' with (1:=Hndups) (2:=Hchunk).
@@ -1029,7 +1029,7 @@ Section BlockRep.
       NoDupMembers (xs ++ flds) ->
       blockrep ve flds ob <-*-> blockrep (Env.adds (map fst xs) vs ve) flds ob.
   Proof.
-    intros ** Nodup.
+    intros * Nodup.
     unfold blockrep.
     apply sepall_swapp.
     intros (x, t) Hin.
@@ -1051,7 +1051,7 @@ Section BlockRep.
       blockrep ve xs b -*> blockrep (Env.adds_opt (map fst xs) vs vempty) xs b.
     Proof.
       unfold Env.adds_opt; simpl.
-      intros ** Findvars.
+      intros * Findvars.
       unfold blockrep.
       apply sepall_weakenp.
       intros (x, t) Hin.
@@ -1095,9 +1095,9 @@ Section BlockRep.
       forall x ty,
         In (x, ty) flds ->
         exists d, field_offset ge x flds = Errors.OK d
-             /\ 0 <= d <= Int.max_unsigned.
+             /\ 0 <= d <= Ptrofs.max_unsigned.
   Proof.
-    intros ** Hm ? ? Hin.
+    intros * Hm ? ? Hin.
     unfold blockrep in Hm.
     apply sepall_in in Hin.
     destruct Hin as [ws [xs [Hsplit Hin]]].

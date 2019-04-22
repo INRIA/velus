@@ -171,7 +171,7 @@ Module Type OBCSEMANTICS
         loop_call prog clsid f ins outs n me.
     Proof.
       cofix COINDHYP.
-      intros ** HR.
+      intros * HR.
       destruct LoopCase with (1 := HR) as (?&?&?).
       econstructor; eauto.
     Qed.
@@ -184,7 +184,7 @@ Module Type OBCSEMANTICS
           as loop_call_eq_str.
   Proof.
     cofix COFIX.
-    intros ** E ?? E' ?? Loop.
+    intros * E ?? E' ?? Loop.
     inv Loop; econstructor.
     - rewrite <-E, <-E'; eauto.
     - eapply COFIX; eauto.
@@ -220,7 +220,7 @@ Module Type OBCSEMANTICS
       Forall2 (exp_eval me ve) es vs2 ->
       vs1 = vs2.
   Proof.
-    intros ** Sem1 Sem2; revert dependent vs2; induction Sem1;
+    intros * Sem1 Sem2; revert dependent vs2; induction Sem1;
       inversion_clear 1; auto.
     f_equal; auto.
     eapply exp_eval_det; eauto.
@@ -239,30 +239,53 @@ Module Type OBCSEMANTICS
           stmt_call_eval prog me clsid f vs me2 rvs2 ->
           me1 = me2 /\ rvs1 = rvs2).
   Proof.
-    apply stmt_eval_call_ind; intros ** Sem; inv Sem;
-      try match goal with
-            H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
-            eapply exp_eval_det in H; eauto; subst
-          end; auto; try congruence.
-    - match goal with
+    apply stmt_eval_call_ind; intros.
+    - (* Assign *)
+      match goal with H:stmt_eval _ _ _ _ _ |- _ => inv H end;
+        match goal with
+          H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
+          eapply exp_eval_det in H; eauto; subst
+        end; congruence.
+    - (* AssignSt *)
+      match goal with H:stmt_eval _ _ _ _ _ |- _ => inv H end;
+        try match goal with
+              H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
+              eapply exp_eval_det in H; eauto; subst
+            end; congruence.
+    - (* Call *)
+      match goal with H:stmt_eval _ _ _ (Call _ _ _ _ _) _ |- _ => inv H end.
+      match goal with
         H: Forall2 _ _ _, H': Forall2 _ _ _ |- _ =>
         eapply exps_eval_det with (2 := H') in H; eauto; inv H
       end.
       match goal with
-        H: stmt_call_eval _ _ _ _ _ ?me' ?rvs', H': stmt_call_eval _ _ _ _ _ ?ome' ?rvs |- _ =>
+        H: stmt_call_eval _ _ _ _ _ ?me' ?rvs',
+           H': stmt_call_eval _ _ _ _ _ ?ome' ?rvs |- _ =>
         assert (ome' = me' /\ rvs = rvs') as E; eauto; inv E
       end; auto.
-    - match goal with
+    - (* Comp *)
+      match goal with H:stmt_eval _ _ _ (Comp _ _) _ |- _ => inv H end.
+      match goal with
         H: stmt_eval _ ?me ?ve ?s ?mv1, H': stmt_eval _ ?me ?ve ?s ?mv2 |- _ =>
         let E := fresh in assert (mv1 = mv2) as E; eauto; inv E
       end; eauto.
-    - match goal with H: _ = _ |- _ => inv H end.
+    - (* Ifte *)
+      match goal with H:stmt_eval _ _ _ (Ifte _ _ _) _ |- _ => inv H end.
+      match goal with
+        H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
+        eapply exp_eval_det in H; eauto; subst
+      end.
+      match goal with H: _ = _ |- _ => inv H end.   
       match goal with
         H: val_to_bool ?v = _, H': val_to_bool ?v = _ |- _ =>
         rewrite H in H'; inv H'
       end.
       cases; eauto.
-    - match goal with
+    - (* Skip *)
+      now match goal with H:stmt_eval _ _ _ _ _ |- _ => inv H end.
+    - (* stmt_call_eval *)
+      match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => inv H end.
+      match goal with
         H: find_class ?c ?p = _, H': find_class ?c ?p = _ |- _ =>
         rewrite H in H'; inv H'
       end;
@@ -288,7 +311,7 @@ Module Type OBCSEMANTICS
       stmt_eval prog me ve s (me2, ve2) ->
       me1 = me2 /\ ve1 = ve2.
   Proof.
-    intros ** Sem1 Sem2; apply (proj1 stmt_eval_call_eval_det) with (2 := Sem2) in Sem1; auto.
+    intros * Sem1 Sem2; apply (proj1 stmt_eval_call_eval_det) with (2 := Sem2) in Sem1; auto.
     intuition; congruence.
   Qed.
 
@@ -507,7 +530,7 @@ Proof.
         stmt_eval p me ve s (me', ve') ->
         forall x, Env.In x ve -> Env.In x ve'.
   Proof.
-    induction s; intros ** Heval x Hin; inv Heval; eauto.
+    induction s; intros * Heval x Hin; inv Heval; eauto.
     - apply Env.Props.P.F.add_in_iff; auto.
     - destruct b; eauto.
     - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.
@@ -520,7 +543,7 @@ Proof.
       (stmt_call_eval (c :: prog) me c' f vs me' rvs
        <-> stmt_call_eval prog me c' f vs me' rvs).
   Proof.
-    intros ** Neq; rewrite <-ident_eqb_neq in Neq; split; intros Sem.
+    intros * Neq; rewrite <-ident_eqb_neq in Neq; split; intros Sem.
     - inversion_clear Sem as [??????????? Find].
       simpl in Find; rewrite Neq in Find; eauto using stmt_call_eval.
     - inv Sem; econstructor; eauto.

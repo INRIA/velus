@@ -60,7 +60,7 @@ Module Type TRANSLATION
   (*      [Is_well_sch]. *) *)
 
   Definition translate_eqns (eqns: list equation) : list SynSB.equation :=
-    concatMap translate_eqn eqns.
+    flat_map translate_eqn eqns.
 
   (** Properties of translation functions *)
 
@@ -94,18 +94,12 @@ Module Type TRANSLATION
     {
       induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
       - now rewrite app_nil_r.
-      - destruct eq as [ | i | i ck v0 le ]; simpl;
-          match goal with
-          | |- context[ EqApp _ _ _ _ _ ] => destruct i
-          | _ => idtac
-          end; rewrite IHeqs; auto.
-        assert (Hmem: gather_mems (EqFby i ck v0 le :: eqs)
-                      = i :: gather_mems eqs)
-          by now unfold gather_mems; rewrite concatMap_cons.
-
-        now rewrite Hmem, <- Permutation_middle, app_comm_cons.
+      - destruct eq.
+        + simpl; rewrite IHeqs; auto.
+        + destruct i; simpl; rewrite IHeqs; auto.
+        + simpl. rewrite IHeqs.
+          simpl. now rewrite <-Permutation_middle.
     }
-
     now apply Hgen.
   Qed.
 
@@ -120,7 +114,7 @@ Module Type TRANSLATION
       induction eqs as [ | eq eqs IHeqs ]; intros F S; simpl.
       - now rewrite app_nil_r.
       - destruct eq as [ | is ck f les | ]; simpl; try rewrite IHeqs; auto.
-        unfold gather_insts; rewrite concatMap_cons.
+        unfold gather_insts.
         destruct is; rewrite IHeqs; auto;
           rewrite <-app_comm_cons, Permutation_middle; auto.
     }
@@ -141,20 +135,16 @@ Module Type TRANSLATION
       destruct i as [ | x xs ]; auto.
       assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
                     = xs ++ gather_app_vars eqs)
-        by now unfold gather_app_vars; rewrite concatMap_cons.
+        by now unfold gather_app_vars.
 
       assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l o :: eqs))
                      = x :: map fst (gather_insts eqs))
-        by now unfold gather_insts; rewrite concatMap_cons.
+        by now unfold gather_insts.
 
-      rewrite Happ, Hinst.
-      simpl;
-        unfold vars_defined;
-        rewrite concatMap_cons, <- IHeqs.
-      unfold var_defined; simpl.
-      apply Permutation_cons.
-      do 2rewrite <- Permutation_app_assoc.
-      now apply Permutation_app_tail, Permutation_app_comm.
+      simpl.
+      apply Permutation_cons; auto.
+      rewrite Permutation_swap.
+      apply Permutation_app; auto.
     }
 
     rewrite <- Hperm.
@@ -173,11 +163,6 @@ Module Type TRANSLATION
     {
       induction eqs as [|eq eqs]; auto.
       destruct eq; try (now simpl; auto).
-      simpl.
-      unfold gather_mems, vars_defined; simpl.
-      rewrite 2 concatMap_cons.
-      apply Permutation_cons.
-      auto.
     }
 
     rewrite <- Hperm.
@@ -265,15 +250,18 @@ Module Type TRANSLATION
     rewrite Permutation_app_comm.
     eapply (NoDup_app_weaken _ (vars_defined (filter is_def n.(n_eqs)))).
     rewrite Permutation_app_comm.
-    unfold vars_defined, concatMap.
+    unfold vars_defined.
+    setoid_rewrite flat_map_concat_map.
     rewrite <- 2 concat_app.
     rewrite <- 2 map_app.
     rewrite is_filtered_eqs.
-    apply NoDup_var_defined_n_eqs.
+    pose proof (NoDup_var_defined_n_eqs) as HH.
+    unfold vars_defined in HH. setoid_rewrite flat_map_concat_map in HH.
+    apply HH.
   Qed.
   Next Obligation.
     setoid_rewrite gather_eqs_snd_spec.
-    unfold gather_insts, translate_eqns, concatMap.
+    unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto; try reflexivity.
     destruct i; simpl; auto.
     destruct o; simpl.
@@ -283,14 +271,14 @@ Module Type TRANSLATION
   Qed.
   Next Obligation.
     rewrite gather_eqs_snd_spec.
-    unfold gather_insts, translate_eqns, concatMap.
+    unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
     destruct o; simpl; auto.
   Qed.
   Next Obligation.
     rewrite gather_eqs_fst_spec.
-    unfold gather_mems, translate_eqns, concatMap.
+    unfold gather_mems, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
     destruct o; simpl; auto.
@@ -314,13 +302,13 @@ Module Type TRANSLATION
     }
     rewrite E; clear E.
     rewrite snd_partition_memories_var_defined.
-    unfold SynSB.variables, translate_eqns, vars_defined, concatMap.
+    unfold SynSB.variables, translate_eqns, vars_defined.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
     destruct o; simpl; rewrite IHl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns, concatMap in *.
+    unfold translate_eqns in *.
     induction (n_eqs n) as [|[]]; simpl in *.
     - inv H.
     - inversion_clear H as [?? Rst|?]; try inv Rst.
@@ -337,7 +325,7 @@ Module Type TRANSLATION
       right; apply IHl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns, concatMap in *.
+    unfold translate_eqns in *.
     destruct rst.
     - induction (n_eqs n) as [|[]]; simpl in *.
       + inv H.
@@ -358,8 +346,8 @@ Module Type TRANSLATION
       pose proof (translate_node_obligation_8 n) as ResetSpec;
       eapply NoDup_comm, NoDup_app_weaken in Nodup;
       rewrite Eq in Nodup; clear Eq; simpl in ResetSpec.
-      unfold translate_eqns, concatMap in *.
-      intros ** Reset.
+      unfold translate_eqns in *.
+      intros * Reset.
       apply ResetSpec in Reset; clear ResetSpec.
       induction (n_eqs n) as [|[]]; simpl in *.
       + inv H.
@@ -386,7 +374,7 @@ Module Type TRANSLATION
         apply IHl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns, concatMap.
+    unfold translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     - inversion 1.
     - destruct i; simpl; auto.
@@ -410,7 +398,7 @@ Module Type TRANSLATION
     - pose proof (n_defd n) as Perm.
       unfold ValidId, NotReserved in *.
       apply Forall_forall; rewrite Forall_forall in ValidApp.
-      intros ** Hin.
+      intros * Hin.
       apply in_map with (f := fst) in Hin.
       rewrite fst_fst_gather_eqs_var_defined in Hin.
       rewrite <-is_filtered_vars_defined in Perm.
@@ -425,7 +413,7 @@ Module Type TRANSLATION
     - pose proof (n_defd n) as Perm.
       unfold ValidId, NotReserved in *.
       apply Forall_forall; rewrite Forall_forall in ValidApp.
-      intros ** Hin.
+      intros * Hin.
       apply in_map with (f := fst) in Hin.
       assert (In (fst x) (map fst (snd (gather_eqs (n_eqs n))) ++ gather_app_vars (n_eqs n))) as Hin'
           by (apply in_app; auto).
@@ -451,7 +439,7 @@ Module Type TRANSLATION
               /\ bl = translate_node node.
   Proof.
     induction G as [|node G]; [now inversion 1|].
-    intros ** Hfind.
+    intros * Hfind.
     simpl in Hfind.
     destruct (EquivDec.equiv_dec node.(n_name) n) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
@@ -471,7 +459,7 @@ Module Type TRANSLATION
         /\ bl = translate_node node.
   Proof.
     induction g as [|node g]; [now inversion 1|].
-    intros ** Hfind.
+    intros * Hfind.
     simpl in Hfind.
     destruct (EquivDec.equiv_dec node.(n_name) n) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.

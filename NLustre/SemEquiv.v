@@ -9,7 +9,7 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLOrdered.
 Require Import Velus.CoreExpr.Stream.
 Require Import Velus.NLustre.Streams.
 Require Import Velus.NLustre.NLSemanticsCoInd.
@@ -22,13 +22,13 @@ Require Import Velus.NLustre.NLInterpretor.
 Module Type SEMEQUIV
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX Op)
-       (Import    : CLOCKS           Ids)
+       (Import OpAux   : OPERATORS_AUX    Op)
+       (Import         : CLOCKS           Ids)
        (Import Syn     : NLSYNTAX         Ids Op      )
        (Import Str     : STREAM               Op OpAux)
-       (Import Ord     : ORDERED          Ids Op       Syn)
-       (Indexed : NLSEMANTICS      Ids Op OpAux Syn Str Ord)
-       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux Syn     Ord)
+       (Import Ord     : NLORDERED        Ids Op       Syn)
+       (Indexed        : NLSEMANTICS      Ids Op OpAux Syn Str Ord)
+       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux Syn     Ord)
        (Import Interp  : NLINTERPRETOR    Ids Op OpAux Syn Str Ord Indexed)
        (Import C2I     : COINDTOINDEXED   Ids Op OpAux Syn Str Ord Indexed        CoInd)
        (Import I2C     : INDEXEDTOCOIND   Ids Op OpAux Syn Str Ord Indexed Interp CoInd).
@@ -126,8 +126,5 @@ Record unified_stream_assert A :=
   Proof.
     eapply (Build_unified_stream _ xs), tr_Stream_sound.
   Defined.
-
-
-
 
 End SEMEQUIV.

@@ -76,7 +76,7 @@ Section MemoryInd.
     unfold find_inst in MemCase.
     destruct m as [? xms].
     apply MemCase; simpl.
-    induction xms; intros ** Find.
+    induction xms; intros * Find.
     - rewrite Env.gleaf in Find; discriminate.
     - destruct x; simpl in Find.
       + eapply IHxms2; eauto.
@@ -108,7 +108,7 @@ Section EqualMemory.
   Proof.
     split.
     - reflexivity.
-    - intros ** Find ?.
+    - intros * Find ?.
       eapply Env.Props.P.F.MapsTo_fun in Find; eauto.
       rewrite <-Find; eauto.
   Qed.
@@ -137,9 +137,9 @@ Section EqualMemory.
       Env.Equiv equal_memory xms xms' ->
       Env.Equiv equal_memory xms' xms.
   Proof.
-    intros ** (? & HMapsTo); split.
+    intros ? ? ? (? & HMapsTo); split.
     + now symmetry.
-    + intros ** Find ?.
+    + intros * Find ?.
       eapply HMapsTo in Find; eauto.
   Qed.
 
@@ -172,9 +172,9 @@ Section EqualMemory.
       Env.Equiv equal_memory xms2 xms3 ->
       Env.Equiv equal_memory xms1 xms3.
   Proof.
-    intros ** (In12 & HMapsTo12) (?& HMapsTo23); split.
+    intros ? ? ? ? (In12 & HMapsTo12) (?& HMapsTo23); split.
     - now setoid_rewrite In12.
-    - intros ** Find1 Find3.
+    - intros * Find1 Find3.
       assert (exists e'', Env.MapsTo k e'' xms2) as (e'' &?).
       { setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         rewrite <-Env.In_find, <-In12, Env.In_find.
@@ -225,7 +225,7 @@ Add Parametric Morphism V: (@values V)
     with signature equal_memory ==> Env.Equal
       as values_equal_memory.
 Proof.
-  intros ** E x.
+  intros * E x.
   inversion_clear E as [?? Vals]; now rewrite Vals.
 Qed.
 
@@ -233,7 +233,7 @@ Add Parametric Morphism V: (@instances V)
     with signature equal_memory ==> Env.Equiv equal_memory
       as instances_equal_memory.
 Proof.
-  intros ** E.
+  intros * E.
   inversion_clear E as [??? Insts]; auto.
 Qed.
 
@@ -241,19 +241,19 @@ Add Parametric Morphism V x: (Env.add x)
     with signature @equal_memory V ==> Env.Equiv equal_memory ==> Env.Equiv equal_memory
       as add_equiv_memory.
 Proof.
-  intros ** E ?? (HIn & HMaps).
+  intros * E ?? (HIn & HMaps).
   split.
   - setoid_rewrite Env.Props.P.F.add_in_iff;
       setoid_rewrite HIn; reflexivity.
   - setoid_rewrite Env.Props.P.F.add_mapsto_iff.
-    intros ** [(?&?)|(?&?)] [(?&?)|(?&?)]; subst; eauto; try congruence.
+    intros ? ? ? [(?&?)|(?&?)] [(?&?)|(?&?)]; subst; eauto; try congruence.
 Qed.
 
 Add Parametric Morphism V x: (@add_inst V x)
     with signature equal_memory ==> equal_memory ==> equal_memory
       as add_inst_equal_memory.
 Proof.
-  intros ** E1 ?? E2.
+  intros ? ?  E1  ? ? E2.
   constructor; simpl; rewrite E2.
   + reflexivity.
   + now rewrite E1.
@@ -263,7 +263,7 @@ Add Parametric Morphism V x: (@add_val V x)
     with signature eq ==> equal_memory ==> equal_memory
       as add_val_equal_memory.
 Proof.
-  intros ** E.
+  intros * E.
   constructor; simpl; rewrite E; reflexivity.
 Qed.
 
@@ -275,7 +275,7 @@ Add Parametric Morphism V x: (Env.find x)
                                                      end
                                               as find_equiv_memory.
 Proof.
-  intros I1 I2 ** (Hin & HMapsTo).
+  intros I1 I2 * (Hin & HMapsTo).
   destruct (Env.find x I1) eqn: Find1, (Env.find x I2) eqn: Find2; auto.
   - eapply HMapsTo; apply Env.find_2; eauto.
   - apply Env.Props.P.F.not_find_in_iff in Find2.
@@ -294,7 +294,7 @@ Add Parametric Morphism V x : (@find_inst V x)
                                             end
                                      as find_inst_equal_memory.
 Proof.
-  intros ** E.
+  intros * E.
   unfold find_inst.
   inversion E.
   apply find_equiv_memory; auto.
@@ -305,7 +305,7 @@ Qed.
 (*     with signature Env.Equiv equal_memory ==> @equal_memory V ==> Basics.impl *)
 (*       as find_Some_equiv_memory. *)
 (* Proof. *)
-(*   intros ** E ??? Find. *)
+(*   intros * E ??? Find. *)
 (*   pose proof (find_equiv_memory x E) as E'. *)
 (*   rewrite Find in E'. *)
 (*   destruct (Env.find x y); try contradiction.  *)
@@ -314,7 +314,7 @@ Qed.
 (*     with signature equal_memory ==> equal_memory ==> equal_memory *)
 (*       as add_inst_equal_memory. *)
 (* Proof. *)
-(*   intros ** E1 ?? E2. *)
+(*   intros * E1 ?? E2. *)
 (*   constructor; simpl; rewrite E2. *)
 (*   + reflexivity. *)
 (*   + now rewrite E1. *)
@@ -324,7 +324,7 @@ Add Parametric Morphism V x: (@find_val V x)
     with signature equal_memory ==> eq
       as find_val_equal_memory.
 Proof.
-  intros ** E.
+  intros * E.
   inversion_clear E as [?? Vals].
   apply Vals.
 Qed.
@@ -404,17 +404,17 @@ Section Properties.
     find_inst x m = Some m' ->
     m ≋ add_inst x m' (remove_inst x m).
   Proof.
-    unfold add_inst, find_inst; intros ** Find.
+    unfold add_inst, find_inst; intros * Find.
     constructor; simpl.
     - reflexivity.
     - split.
       + setoid_rewrite Env.Props.P.F.add_in_iff;
           setoid_rewrite Env.Props.P.F.remove_in_iff.
-        split; intros ** Hin.
+        split; intros * Hin.
         * destruct (ident_eq_dec x k); auto.
         * destruct Hin; try tauto.
           subst; apply Env.In_find; eauto.
-      + intros ** HMapsTo Hremove.
+      + intros * HMapsTo Hremove.
         rewrite Env.Props.P.F.add_mapsto_iff, Env.Props.P.F.remove_mapsto_iff in Hremove.
         destruct Hremove as [(?&?)|(?&?& HMapsTo')].
         * subst.
@@ -441,7 +441,7 @@ Section Properties.
     find_val x m = Some v ->
     m ≋ add_val x v (remove_val x m).
   Proof.
-    unfold add_val, find_val; intros ** Find.
+    unfold add_val, find_val; intros * Find.
     constructor; simpl.
     - intro z.
       destruct (ident_eq_dec z x).

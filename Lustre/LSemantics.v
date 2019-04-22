@@ -128,14 +128,14 @@ Module Type LSEMANTICS
         ite (present false_val ::: s)
               (present t ::: ts) (present f ::: fs) (present f ::: rs).
 
-  Definition sclockof := map (fun x => x <> absent).
+  Definition sclockof xs := map (fun x => x <> absent) xs.
 
   CoFixpoint sclocksof (ss: list (Stream value)) : Stream bool :=
     existsb (fun s=> hd s <>b absent) ss ::: sclocksof (List.map (@tl value) ss).
 
   (* TODO: Use everywhere, esp. in LustreElab.v *)
   (* TODO: replace idents with (list ident) *)
-  Definition idents := List.map (@fst ident (type * clock)).
+  Definition idents xs := List.map (@fst ident (type * clock)) xs.
 
   Notation sem_var H := (fun (x: ident) (s: Stream value) => Env.MapsTo x s H).
 

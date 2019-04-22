@@ -3,7 +3,7 @@ Require Import Velus.Common.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.CoreExpr.Stream.
-Require Import Velus.NLustre.Ordered.
+Require Import Velus.NLustre.NLOrdered.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 Require Import Velus.CoreExpr.CEIsFree.
@@ -35,7 +35,7 @@ Module Type NLCLOCKINGSEMANTICS
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : NLSYNTAX            Ids Op       CESyn)
        (Import Str      : STREAM                  Op OpAux)
-       (Import Ord      : ORDERED             Ids Op       CESyn Syn)
+       (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
        (Import Sem      : NLSEMANTICS         Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
@@ -79,7 +79,7 @@ Module Type NLCLOCKINGSEMANTICS
             Forall (clock_match bk H) (idck node.(n_in)) ->
             Forall (clock_match bk H) (idck node.(n_out))).
   Proof.
-    intros ** Hord WCG; apply sem_node_equation_reset_ind;
+    intros * Hord WCG; apply sem_node_equation_reset_ind;
       [intros ?????? Hvar Hexp|
        intros ???????? Hexps Hvars Hck Hsem|
        intros ??????????? Hexps Hvars Hck ?? Hsem|
@@ -362,7 +362,7 @@ Module NLClockingSemanticsFun
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : NLSYNTAX            Ids Op       CESyn)
        (Import Str      : STREAM                  Op OpAux)
-       (Import Ord      : ORDERED             Ids Op       CESyn Syn)
+       (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
        (Import Sem      : NLSEMANTICS         Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)

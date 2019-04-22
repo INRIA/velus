@@ -69,8 +69,9 @@ Module Type OPERATORS.
 
 End OPERATORS.
 
+Require Export Coq.Classes.EquivDec.
+
 Module Type OPERATORS_AUX (Import Ops : OPERATORS).
-  Require Export Coq.Classes.EquivDec.
   Close Scope equiv_scope.
 
   Instance: EqDec val   eq := { equiv_dec := val_dec   }.

@@ -104,7 +104,7 @@ Section Extra.
       In x (l1 ++ l2) ->
       In x l1.
   Proof.
-    intros ** HnIn Hin.
+    intros * HnIn Hin.
     induction l1.
     - contradiction.
     - rewrite <-app_comm_cons in Hin.
@@ -118,7 +118,7 @@ Section Extra.
       (forall x:A, f x = g x) ->
       forall xs, partition f xs = partition g xs.
   Proof.
-    intros ** Hfg xs.
+    intros * Hfg xs.
     induction xs as [|x xs]; auto. simpl.
     specialize (Hfg x). symmetry in Hfg. rewrite Hfg, IHxs.
     reflexivity.
@@ -137,9 +137,10 @@ Section Extra.
       split (map (fun x => (f x, f' x)) xs) = (l, l') ->
       l = map f xs /\ l' = map f' xs.
   Proof.
-    induction xs; simpl; intros ** Split.
-    - inv Split; auto.
-    - destruct (split (map (fun x : C => (f x, f' x)) xs)) as (g, d) eqn: E.
+    induction xs; simpl.
+    - inversion_clear 3; auto.
+    - intros ws ys f f' Split.
+      destruct (split (map (fun x : C => (f x, f' x)) xs)) as (g, d) eqn: E.
       inv Split.
       edestruct IHxs as [G D]; eauto; rewrite <-G, <-D; auto.
   Qed.
@@ -160,7 +161,7 @@ Section Extra.
       x <> y ->
       In x xs.
   Proof.
-    intros ** Hin Hnxy.
+    intros * Hin Hnxy.
     inv Hin; congruence.
   Qed.
 
@@ -220,10 +221,10 @@ Section Extra.
       m < k ->
       seq m (k - m) = m :: seq (S m) (k - S m).
   Proof.
-    induction k; intros ** E; simpl.
+    induction k; intros * E; simpl.
     - omega.
     - destruct m; simpl.
-      + now rewrite NPeano.Nat.sub_0_r.
+      + now rewrite Nat.sub_0_r.
       + rewrite <- 2 seq_shift.
         rewrite IHk; auto.
         omega.
@@ -234,7 +235,7 @@ Section Extra.
       0 < length l ->
       exists x, hd_error l = Some x.
   Proof.
-    induction l; simpl; intros ** L; try omega.
+    induction l; simpl; intros * L; try omega.
     econstructor; eauto.
   Qed.
 
@@ -316,7 +317,7 @@ Section Map.
       map f l = y :: ys ->
       exists x xs, y = f x /\ ys = map f xs.
   Proof.
-    destruct l; simpl; intros ** H.
+    destruct l; simpl; intros * H.
     - contradict H. apply nil_cons.
     - exists a, l. inversion H; auto.
   Qed.
@@ -326,7 +327,7 @@ Section Map.
       map f l = l1 ++ l2 ->
       exists k1 k2, l1 = map f k1 /\ l2 = map f k2.
   Proof.
-    induction l1; simpl; intros ** H.
+    induction l1; simpl; intros * H.
     - exists [], l; auto.
     - apply map_cons' in H.
       destruct H as (x & xs & Ha & Happ).
@@ -357,7 +358,7 @@ Section Map.
       n < length l ->
       nth n (List.map f l) d = f (nth n l d').
   Proof.
-    induction l, n; simpl; intros ** H; try omega; auto.
+    induction l, n; simpl; intros * H; try omega; auto.
     apply IHl; omega.
   Qed.
 
@@ -391,8 +392,8 @@ Section Incl.
       incl l' l ->
       Forall P l'.
   Proof.
-    intros ** H Incl.
-    apply Forall_forall; intros ** Hin.
+    intros * H Incl.
+    apply Forall_forall; intros * Hin.
     apply Incl in Hin.
     eapply Forall_forall in H; eauto.
   Qed.
@@ -424,7 +425,7 @@ Section Nodup.
       NoDup xs.
   Proof.
     Hint Constructors NoDup.
-    intros ** Hndup.
+    intros * Hndup.
     induction xs as [|x xs]; auto.
     inversion_clear Hndup as [|? ? Hnin Hndup'].
     apply IHxs in Hndup'.
@@ -455,7 +456,7 @@ Section Nodup.
       NoDup (ws ++ x :: xs)
       <-> ~In x (ws ++ xs) /\ NoDup (ws ++ xs).
   Proof.
-    induction ws; simpl; split; intros ** Nodup.
+    induction ws; simpl; split; intros * Nodup.
     - inv Nodup; auto.
     - destruct Nodup; auto.
     - inversion Nodup as [|? ? Notin Nodup']; clear Nodup; subst.
@@ -506,7 +507,7 @@ Section Nodup.
       NoDup (xs ++ ws).
   Proof.
     induction xs as [|x]; auto.
-    intros ** Nodupxs Nodupws Hin.
+    intros * Nodupxs Nodupws Hin.
     inv Hin; inv Nodupxs.
     rewrite <-app_comm_cons.
     constructor; auto.
@@ -541,7 +542,7 @@ Section Nodup.
       NoDup (y ++ x ++ z).
   Proof.
     induction x; simpl; try reflexivity.
-    split; intros ** Nodup.
+    split; intros * Nodup.
     - inversion_clear Nodup as [|?? Notin]; apply NoDup_app_cons; split.
       + intro Hin; apply Notin; rewrite 2 in_app.
         apply in_app in Hin as [?|Hin]; [|apply in_app in Hin as [|]]; auto.
@@ -566,100 +567,99 @@ Section Nodup.
 
 End Nodup.
 
+Lemma concat_length:
+  forall {A} (l: list (list A)),
+    length (concat l) = fold_left (fun s x => s + length x) l 0.
+Proof.
+  induction l; simpl; auto.
+  rewrite app_length.
+  rewrite IHl.
+  clear.
+  replace (length a) with (length a + 0) at 2; try omega.
+  generalize 0 as n; generalize (length a) as k.
+  induction l; simpl; intros; auto.
+  rewrite IHl, plus_assoc; auto.
+Qed.
+
 Section ConcatMap.
 
   Context {A B: Type}.
 
-  Fixpoint concat (l : list (list A)) : list A :=
-    match l with
-    | [] => []
-    | x :: l => x ++ concat l
-    end.
-
-  Lemma concat_nil : concat nil = nil.
-  Proof eq_refl.
-
-  Lemma concat_cons : forall x l, concat (x :: l) = x ++ concat l.
-  Proof. simpl; reflexivity. Qed.
-
-  Lemma concat_app : forall l1 l2, concat (l1 ++ l2) = concat l1 ++ concat l2.
+  Lemma flat_map_length:
+    forall l (f : A -> list B),
+      length (flat_map f l) = fold_left (fun s x => s + length (f x)) l 0.
   Proof.
-    induction l1; auto.
-    intro.
-    rewrite <-app_comm_cons.
-    repeat rewrite concat_cons.
-    rewrite <-app_assoc.
-    f_equal; auto.
-  Qed.
-
-  Lemma concat_length:
-    forall (l: list (list A)),
-      length (concat l) = fold_left (fun s x => s + length x) l 0.
-  Proof.
-    induction l; simpl; auto.
-    rewrite app_length.
-    rewrite IHl.
-    clear.
-    replace (length a) with (length a + 0) at 2; try omega.
-    generalize 0 as n; generalize (length a) as k.
-    induction l; simpl; intros; auto.
-    rewrite IHl, plus_assoc; auto.
-  Qed.
-
-  Definition concatMap (f: B -> list A)(xs : list B) : list A :=
-    concat (map f xs).
-
-  Lemma concatMap_cons: forall (f: B -> list A) (x: B) xs,
-      concatMap f (x :: xs) = f x ++ concatMap f xs.
-  Proof. reflexivity. Qed.
-
-  Lemma concatMap_nil: forall (f: B -> list A),
-      concatMap f [] = [].
-  Proof. reflexivity. Qed.
-
-  Lemma concatMap_length:
-    forall l f,
-      length (concatMap f l) = fold_left (fun s x => s + length (f x)) l 0.
-  Proof.
-    intros; unfold concatMap.
+    intros. rewrite flat_map_concat_map.
     rewrite concat_length, fold_left_map; auto.
   Qed.
 
-  Lemma length_concatMap:
+  Lemma length_flat_map:
     forall (f: B -> list A) x xs,
-      length (concatMap f (x :: xs)) = length (f x) + length (concatMap f xs).
+      length (flat_map f (x :: xs)) = length (f x) + length (flat_map f xs).
   Proof.
-    intros. unfold concatMap.
+    intros. setoid_rewrite flat_map_concat_map.
     simpl. now rewrite app_length.
   Qed.
 
-  Lemma concatMap_ExistsIn:
-    forall f xs y ys,
-      concatMap f xs = y :: ys ->
+  Lemma flat_map_app:
+    forall (f : A -> list B) xs ys,
+      flat_map f xs ++ flat_map f ys = flat_map f (xs ++ ys).
+  Proof.
+    induction xs; auto.
+    simpl. intros; now rewrite <-app_assoc, IHxs.
+  Qed.
+
+  Lemma Permutation_cons_1:
+    forall {A} (x : A) xs ys,
+      Permutation (x::xs) ys
+      <-> exists zs, Permutation xs zs /\ Permutation ys (x::zs).
+  Proof.
+    destruct xs as [|x' xs], ys as [|y' ys].
+    - split; intro HH.
+      + symmetry in HH; apply Permutation_nil in HH; discriminate.
+      + destruct HH as (zs & Hzs & Hxzs).
+        apply Permutation_nil in Hxzs; discriminate.
+    - split; intro HH.
+      + apply Permutation_length_1_inv in HH. inv HH; eauto.
+      + destruct HH as (zs & Hzs & Hxzs).
+        apply Permutation_nil in Hzs; subst.
+        symmetry in Hxzs; apply Permutation_length_1_inv in Hxzs.
+        now inv Hxzs.
+    - split; intro HH.
+      + symmetry in HH; apply Permutation_nil in HH; discriminate.
+      + destruct HH as (zs & Hzs & Hxzs).
+        apply Permutation_nil in Hxzs; discriminate.
+    - split; intro HH.
+      + setoid_rewrite <-HH. eauto.
+      + destruct HH as (zs & Hzs & Hxzs).
+        rewrite <-Hzs in Hxzs. clear Hzs.
+        now rewrite <-Hxzs.
+  Qed.
+
+  Lemma flat_map_ExistsIn:
+    forall (f : A -> list B) xs y ys,
+      flat_map f xs = y :: ys ->
       exists x ys', In x xs /\ f x = y :: ys'.
   Proof.
     induction xs as [|x xs IH]; [now inversion 1|].
-    intros ** Hcm.
-    rewrite concatMap_cons in Hcm.
+    simpl; intros * Hcm.
     destruct (f x) as [|x' ys'] eqn:Hfx; simpl in Hcm.
     - apply IH in Hcm.
       destruct Hcm as (x' & ys' & Hin & Hfx').
       repeat eexists; eauto.
-      constructor 2; auto.
     - exists x. exists ys'.
       split; auto with datatypes.
       rewrite Hfx. now inv Hcm.
   Qed.
 
-  Lemma In_concatMap:
-    forall f xss v,
-      In v (concatMap f xss) ->
+  Lemma In_flat_map:
+    forall (f : A -> list B) xss v,
+      In v (flat_map f xss) ->
       exists xs,
         In xs xss /\ In v (f xs).
   Proof.
     induction xss as [|xs xss IH]. now inversion 1.
-    intros v Hin.
-    rewrite concatMap_cons in Hin.
+    simpl; intros v Hin.
     apply in_app in Hin.
     destruct Hin as [Hin|Hin].
     now eauto with datatypes.
@@ -674,7 +674,7 @@ Section ConcatMap.
       In (xs :: l) l' ->
       In x (concat l').
   Proof.
-    induction l' as [|y]; simpl; intros ** Hin Hin'.
+    induction l' as [|y]; simpl; intros * Hin Hin'.
     - contradiction.
     - destruct Hin' as [E|Hin'].
       + subst y.
@@ -689,7 +689,7 @@ Section ConcatMap.
       In l l' ->
       In x (concat l').
   Proof.
-    induction l' as [|y]; simpl; intros ** Hin Hin'.
+    induction l' as [|y]; simpl; intros * Hin Hin'.
     - contradiction.
     - destruct Hin' as [E|Hin'].
       + subst y.
@@ -733,7 +733,7 @@ Section Permutation.
       Permutation xs ys ->
       (incl xs ws <-> incl ys ws).
   Proof.
-    intros ** Hperm.
+    intros * Hperm.
     induction Hperm.
     - reflexivity.
     - split; intro HH.
@@ -771,13 +771,13 @@ Section Permutation.
         inversion_clear Hin as [|Hin'].
         now subst; constructor.
         rewrite Hperm' in Hin'.
-        constructor (assumption).
+        constructor 2; auto.
       + intros y Hin.
         apply HH in Hin.
         inversion_clear Hin as [|Hin'].
         now subst; constructor.
         rewrite <-Hperm' in Hin'.
-        constructor (assumption).
+        constructor 2; auto.
     - split; intro HH.
       + intros z Hin. apply HH in Hin. now rewrite perm_swap.
       + intros z Hin. apply HH in Hin. now rewrite perm_swap.
@@ -800,10 +800,10 @@ Section Permutation.
           apply Hnin.
       + inversion Hnin3; [|contradiction].
         subst. now constructor.
-      + constructor (assumption).
+      + now constructor 2.
       + inversion Hnin3; [|contradiction].
         subst. now constructor.
-      + constructor (assumption).
+      + now constructor 2.
     - now rewrite IHHperm1, IHHperm2.
   Qed.
 
@@ -837,7 +837,7 @@ Section Permutation.
 
   Global Instance Permutation_concat_Proper:
     Proper (Permutation (A:=list A) ==> Permutation (A:=A))
-           (concat).
+           (@concat A).
   Proof.
   intros xs ys Hperm. induction Hperm.
   - reflexivity.
@@ -916,7 +916,7 @@ Section Permutation.
            (@map A B).
   Proof.
     intros f g Heq xs ys Hperm.
-    subst. now apply Permutation_map_aux.
+    subst. now rewrite Hperm.
   Qed.
 
   Lemma Permutation_swap:
@@ -954,7 +954,7 @@ Section Pointwise.
   Qed.
 
   Global Instance Forall_Permutation_Proper:
-    Proper (pointwise_relation A iff ==> Permutation (A:=A) ==> iff) Forall.
+    Proper (pointwise_relation A iff ==> Permutation (A:=A) ==> iff) (@Forall A).
   Proof.
     intros P Q HPQ xs ys Hperm.
     assert (forall ws, Forall P ws <-> Forall Q ws) as Hsame
@@ -974,7 +974,7 @@ Section Pointwise.
   Qed.
 
   Global Instance Exists_Permutation_Proper:
-    Proper (pointwise_relation A iff ==> Permutation (A:=A) ==> iff) Exists.
+    Proper (pointwise_relation A iff ==> Permutation (A:=A) ==> iff) (@Exists A).
   Proof.
     intros P Q HPQ xs ys Hperm.
   assert (forall ws, Exists P ws <-> Exists Q ws) as Hsame.
@@ -1045,7 +1045,7 @@ Section ForallExists.
       Exists P rr ->
       Exists P (ll ++ rr).
   Proof.
-    intros ** Hex.
+    intros * Hex.
     induction ll as [|x ll IH]; [intuition|].
     rewrite <-List.app_comm_cons.
     constructor 2.
@@ -1092,7 +1092,7 @@ Section ForallExists.
       (forall x, In x xs -> decidable (P x)) ->
       decidable (Exists P xs).
   Proof.
-    intros ** Hdec.
+    intros * Hdec.
     induction xs as [|x xs].
     - right. now intro HH; apply Exists_nil in HH.
     - destruct (Hdec x) as [Hx|Hx].
@@ -1100,11 +1100,11 @@ Section ForallExists.
       + destruct IHxs as [Hxs|Hxs];
           try (now left; constructor).
         intros y Hin.
-        apply Hdec. constructor (assumption).
+        apply Hdec. now constructor 2.
       + destruct IHxs as [Hxs|Hxs].
         * intros y Hin.
-          apply Hdec. constructor (assumption).
-        * left. constructor (assumption).
+          apply Hdec. now constructor 2.
+        * left. now constructor 2.
         * right. intro HH.
           apply Exists_cons in HH.
           intuition.
@@ -1128,6 +1128,14 @@ Section ForallExists.
         right. apply IHxs; intuition.
   Qed.
 
+  Lemma Exists_map:
+    forall {B} P (f : A -> B) xs,
+      Exists P (map f xs) <-> Exists (fun x => P (f x)) xs.
+  Proof.
+    induction xs as [|x xs IH]; simpl; split; intro HH; inv HH; auto;
+      now constructor 2; apply IH.
+  Qed.
+
   Lemma Permutation_Forall:
     forall l l',
       Permutation l l' ->
@@ -1144,7 +1152,7 @@ Section ForallExists.
       Forall P (xs ++ ys) ->
       Forall P ys.
   Proof.
-    intros ** HH. apply Forall_app in HH. intuition.
+    intros * HH. apply Forall_app in HH. intuition.
   Qed.
 
   Lemma Forall_impl_In :
@@ -1174,7 +1182,7 @@ Section ForallExists.
       Forall (fun z => ~ In z ys) zs ->
       Forall (fun z => ~ In z (xs ++ ys)) zs.
   Proof.
-    induction zs; auto; intros ** Hxs Hys; inv Hxs; inv Hys.
+    induction zs; auto; intros * Hxs Hys; inv Hxs; inv Hys.
     constructor; auto.
     intro H; apply not_In_app in H; auto.
   Qed.
@@ -1191,7 +1199,7 @@ Section ForallExistsB.
       (forall x, P x <-> p x = true) ->
       (Exists P xs <-> existsb p xs = true).
   Proof.
-    intros ** Spec.
+    intros * Spec.
     induction xs as [|x xs IH]; simpl.
     - split; inversion 1.
     - rewrite Bool.orb_true_iff, <-IH, <-Spec; split.
@@ -1386,7 +1394,7 @@ Section SkipnDropn.
       n = length xs ->
       skipn n (xs ++ ys) = ys.
   Proof.
-    induction xs as [|x xs IH]; intros ** Hn; subst; simpl; auto.
+    induction xs as [|x xs IH]; intros * Hn; subst; simpl; auto.
   Qed.
 
   Lemma skipn_nil:
@@ -1419,7 +1427,7 @@ Section SkipnDropn.
   Proof.
     induction xs; try setoid_rewrite skipn_nil.
     now inversion 1.
-    intros ** Hin.
+    intros * Hin.
     destruct n; auto.
     apply IHxs in Hin.
     auto with datatypes.
@@ -1432,7 +1440,7 @@ Section SkipnDropn.
   Proof.
     induction xs; try setoid_rewrite firstn_nil.
     now inversion 1.
-    intros ** Hin.
+    intros * Hin.
     destruct n; inversion Hin; subst; eauto with datatypes.
   Qed.
 
@@ -1454,9 +1462,9 @@ Section SkipnDropn.
       n > 0 ->
       skipn n (x :: xs) = skipn(n - 1) xs.
   Proof.
-    induction n; simpl; intros ** H.
+    induction n; simpl; intros * H.
     - omega.
-    - now rewrite NPeano.Nat.sub_0_r.
+    - now rewrite Nat.sub_0_r.
   Qed.
 
   Lemma skipn_length:
@@ -1638,7 +1646,7 @@ Section Forall2.
       In (x, z) (combine xs zs) ->
       exists y, P x y /\ Q y z.
   Proof.
-    intros ** HP HQ Hin.
+    intros * HP HQ Hin.
     destruct (Forall2_chain_In' _ _ _ _ _ _ _ HP HQ Hin)
       as (y & Hp & Hq & Hin1 & Hin2).
     eauto.
@@ -1664,7 +1672,7 @@ Section Forall2.
       Forall2 P l1 l2 ->
       Forall2 Q l1 l2.
   Proof.
-    intros ** HPQ HfaP.
+    intros * HPQ HfaP.
     induction HfaP; auto.
     apply Forall2_cons;
       auto using in_eq, in_cons.
@@ -1683,7 +1691,7 @@ Section Forall2.
       Forall2 P2 xs ys ->
       Forall2 (fun x y => P1 x y /\ P2 x y) xs ys.
   Proof.
-    intros ** Hfa1 Hfa2.
+    intros * Hfa1 Hfa2.
     induction Hfa1 as [|x y xs ys H1 Hfa1 IH]; auto.
     inversion_clear Hfa2. auto.
   Qed.
@@ -1692,7 +1700,7 @@ Section Forall2.
     forall (P : A -> B -> Prop) l1 l2,
       Forall2 P l1 l2 -> length l1 = length l2.
   Proof.
-    induction l1, l2; intros ** Hall; inversion Hall; clear Hall; subst; simpl; auto.
+    induction l1, l2; intros * Hall; inversion Hall; clear Hall; subst; simpl; auto.
   Qed.
 
   Lemma Forall2_forall:
@@ -1703,7 +1711,7 @@ Section Forall2.
       Forall2 P xs ys.
   Proof.
     split.
-    - intros ** (Hin & Hlen).
+    - intros * (Hin & Hlen).
       apply Forall2_forall2.
       split; auto.
       intros x y n x' y' Hnl Hn1 Hn2.
@@ -1712,7 +1720,7 @@ Section Forall2.
       apply nth_In.
       now rewrite combine_length, <-Hlen, Min.min_idempotent.
     - intros H; split.
-      + intros ** Hin.
+      + intros * Hin.
         apply Forall2_combine in H.
         eapply Forall_forall in Hin; eauto.
         auto.
@@ -1761,7 +1769,7 @@ Section Forall2.
       Forall2 (fun x y=> exists z, P x z /\ Q y z) xs ys ->
       exists (zs: list C), Forall2 P xs zs /\ Forall2 Q ys zs.
   Proof.
-    intros ** Hfa.
+    intros * Hfa.
     induction Hfa; eauto.
     destruct IHHfa as (zs & HPs & HQs).
     destruct H as (z & HP & HQ).
@@ -1803,14 +1811,14 @@ Lemma Forall2_trans_ex:
     Forall2 Q ys zs ->
     Forall2 (fun x z => exists y, In y ys /\ P x y /\ Q y z) xs zs.
 Proof.
-  intros ** HPs HQs'.
+  intros * HPs HQs'.
   revert zs HQs'.
   induction HPs. now inversion 1; auto.
   inversion_clear 1 as [|? ? ? zs' HQ HQs].
   apply IHHPs in HQs.
   constructor; eauto with datatypes.
   eapply Forall2_impl_In  with (2:=HQs).
-  intros ** (? & ? & ? & ?).
+  intros ? ? ? ? (? & ? & ? & ?).
   eauto with datatypes.
 Qed.
 
@@ -1885,7 +1893,7 @@ Section InMembers.
     forall a b xs,
       In (a, b) xs -> InMembers a xs.
   Proof.
-    intros ** Hin.
+    intros * Hin.
     induction xs as [|x xs IH]; inversion_clear Hin; subst.
     - simpl. left. reflexivity.
     - simpl. destruct x. right. intuition.
@@ -1895,12 +1903,12 @@ Section InMembers.
     forall a xs,
       InMembers a xs -> exists b, In (a, b) xs.
   Proof.
-    intros ** Hin.
+    intros * Hin.
     induction xs as [|x xs IH]; simpl in Hin.
     - contradiction.
     - simpl. destruct x. destruct Hin; subst.
       + exists b; now left.
-      + destruct IH as (b'); auto.
+      + destruct (IH H) as (b' & HH); auto.
         exists b'; now right.
   Qed.
 
@@ -1918,7 +1926,7 @@ Section InMembers.
   Lemma NotInMembers_NotIn:
     forall a b xs, ~ InMembers a xs -> ~ In (a, b) xs.
   Proof.
-    intros ** Hnim Hin.
+    intros * Hnim Hin.
     apply In_InMembers in Hin.
     intuition.
   Qed.
@@ -1926,7 +1934,7 @@ Section InMembers.
   Lemma NotIn_NotInMembers:
     forall a xs, (forall b, ~ In (a, b) xs) -> ~ InMembers a xs.
   Proof.
-    intros ** Notin Hin.
+    intros * Notin Hin.
     apply InMembers_In in Hin as (?&?).
     eapply Notin; eauto.
   Qed.
@@ -2029,7 +2037,7 @@ Section InMembers.
       (forall (x y: A), {x = y} + {x <> y}) ->
       { InMembers x xs } + { ~InMembers x xs }.
   Proof.
-    intros ** Hdec.
+    intros * Hdec.
     induction xs as [|(y, yv) xs]; auto.
     simpl.
     destruct IHxs.
@@ -2069,7 +2077,7 @@ Section InMembers.
       NoDupMembers xs ->
       ~InMembers x (firstn n xs).
   Proof.
-    induction xs as [|y xs IH]; intros ** Hs Hnd Hf.
+    induction xs as [|y xs IH]; intros * Hs Hnd Hf.
     now rewrite skipn_nil in Hs; inversion Hs.
     destruct n; simpl; auto.
     destruct y as (ya, yb).
@@ -2159,7 +2167,7 @@ Section InMembers.
     forall ws x xs,
       NoDupMembers (ws ++ x :: xs) -> NoDupMembers (ws ++ xs).
   Proof.
-    intros ** HH.
+    intros * HH.
     destruct x. apply NoDupMembers_app_cons in HH. intuition.
   Qed.
 
@@ -2201,7 +2209,7 @@ Section InMembers.
     forall ws xs,
       NoDupMembers (ws ++ xs) -> NoDupMembers ws.
   Proof.
-    intros ** Hndup.
+    intros * Hndup.
     apply NoDupMembers_app_comm in Hndup.
     apply NoDupMembers_app_r with (1:=Hndup).
   Qed.
@@ -2266,7 +2274,7 @@ Section InMembers.
           inversion_clear Hinm; subst; auto.
           exfalso; apply Hninm. now constructor.
         * constructor; auto. intro Hinm.
-          apply Hninm. constructor (assumption).
+          apply Hninm. now constructor 2.
       + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
         destruct y as [x y].
         inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
@@ -2275,7 +2283,7 @@ Section InMembers.
           inversion_clear Hinm; subst; auto.
           exfalso; apply Hninm. now constructor.
         * constructor; auto. intro Hinm.
-          apply Hninm. constructor (assumption).
+          apply Hninm. now constructor 2.
     - now rewrite IHHperm1.
   Qed.
 
@@ -2298,8 +2306,8 @@ Section InMembers.
       ~ InMembers y xs ->
       x <> y.
   Proof.
-    intros ** Hx Hy; subst.
-    now apply Hx.
+    intros * Hx Hy; intro xy. subst.
+    now apply Hy.
   Qed.
 
   Remark fst_InMembers:
@@ -2334,7 +2342,7 @@ Section InMembers.
     destruct ys; [contradiction|].
     destruct 1 as [Heq|Hin].
     now subst; constructor.
-    constructor (apply IHxs with (1:=Hin)).
+    constructor 2; apply IHxs with (1:=Hin).
   Qed.
 
   Lemma In_InMembers_combine:
@@ -2382,7 +2390,7 @@ Section InMembers.
       InMembers y (map (@snd C (A * B)) l) ->
       exists x z, In (x, (y, z)) l.
   Proof.
-    induction l as [|(x', (y', z'))]; simpl; intros ** Hin.
+    induction l as [|(x', (y', z'))]; simpl; intros * Hin.
     - contradiction.
     - destruct Hin as [|Hin].
       + subst y'; exists x', z'; now left.
@@ -2395,7 +2403,7 @@ Section InMembers.
       In (x, (y, z)) l ->
       InMembers y (map (@snd C (A * B)) l).
   Proof.
-    induction l as [|(x', (y', z'))]; simpl; intros ** Hin; auto.
+    induction l as [|(x', (y', z'))]; simpl; intros * Hin; auto.
     destruct Hin as [Eq|Hin].
     - inv Eq; now left.
     - right; auto.
@@ -2408,7 +2416,7 @@ Section InMembers.
       (forall x, InMembers x ws -> ~InMembers x xs) ->
       NoDupMembers (ws ++ xs).
   Proof.
-    intros ** Hndws Hndxs Hnin.
+    intros * Hndws Hndxs Hnin.
     induction ws as [|w ws IH]; auto.
     destruct w as (wn & wv).
     inv Hndws.
@@ -2463,7 +2471,7 @@ Section InMembers.
       InMembers x xs ->
       P x.
   Proof.
-    intros ** Hfa Him.
+    intros * Hfa Him.
     apply fst_InMembers in Him.
     apply Forall_forall with (1:=Hfa) (2:=Him).
   Qed.

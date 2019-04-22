@@ -105,7 +105,7 @@ Lemma mem_assoc_ident_true:
     mem_assoc_ident x xs = true ->
     exists t: A, In (x, t) xs.
 Proof.
-  intros ** Hin.
+  intros * Hin.
   unfold mem_assoc_ident in Hin; rewrite existsb_exists in Hin.
   destruct Hin as ((x', t) & ? & E).
   simpl in E; rewrite ident_eqb_eq in E; subst x'.
@@ -160,7 +160,7 @@ Lemma equiv_decb_equiv:
   forall `{EqDec A} (x y : A),
     equiv_decb x y = true <-> equiv x y.
 Proof.
-  intros ** x y.
+  intros. 
   split; intro; unfold equiv_decb in *;
     destruct (equiv_dec x y); intuition.
 Qed.
@@ -237,8 +237,8 @@ Corollary not_None_is_Some_Forall:
 Proof.
   induction 1 as [|?? E].
     - exists []; simpl; eauto.
-    - apply not_None_is_Some in E as (v);
-        destruct IHForall as (vs); subst.
+    - rewrite not_None_is_Some in E. destruct E as (v, E).
+      destruct IHForall as (vs & ?); subst.
       exists (v :: vs); simpl; eauto.
 Qed.
 
@@ -505,7 +505,7 @@ Lemma Permutation_elements_add:
     ~PS.In x s ->
     Permutation (PS.elements (PS.add x s)) (x::xs).
 Proof.
-  intros ** Hperm Hnin.
+  intros * Hperm Hnin.
   setoid_rewrite <- Hperm; clear Hperm.
   apply NoDup_Permutation.
   - apply NoDup_NoDupA, PS.elements_spec2w.
@@ -589,7 +589,7 @@ Lemma ps_from_list_In:
 Proof.
   induction xs; simpl.
   - split; try contradiction; apply not_In_empty.
-  - split; intros ** Hin.
+  - split; intros * Hin.
     + rewrite <-IHxs.
       rewrite <-add_ps_from_list_cons in Hin.
       apply PSE.MP.Dec.F.add_iff in Hin as []; auto.
@@ -600,7 +600,7 @@ Instance ps_from_list_Permutation:
   Proper (@Permutation.Permutation ident ==> fun xs xs' => forall x, PS.In x xs -> PS.In x xs')
          ps_from_list.
 Proof.
-  intros ** ?? E ? Hin.
+  intros * ?? E ? Hin.
   apply ps_from_list_In; apply ps_from_list_In in Hin.
   now rewrite <-E.
 Qed.

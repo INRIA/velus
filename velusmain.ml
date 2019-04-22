@@ -76,7 +76,7 @@ let reparse toks =
 (** Parser *)
 
 let parse toks =
-  Cerrors.reset();
+  Diagnostics.reset();
   let rec inf = Datatypes.S inf in
   match LustreParser.translation_unit_file inf toks with
   | LustreParser.Parser.Inter.Fail_pr -> (reparse toks; exit 1)
@@ -122,13 +122,13 @@ let compile source_name filename =
   let p =
     match LustreElab.elab_declarations ast with
     | Errors.OK p -> p
-    | Errors.Error msg -> (Driveraux.print_error stderr msg; exit 1) in
+    | Errors.Error msg -> (Driveraux.print_error Format.err_formatter msg; exit 1) in
   Format.printf "%a@." Interfacelib.PrintLustre.print_global p;
   (* XXX *)
   match Compiler.apply_partial
           (hacked_compile p main_node)
           Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error stderr errmsg; exit 1
+  | Error errmsg -> Driveraux.print_error Format.err_formatter errmsg; exit 1
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;
@@ -180,21 +180,38 @@ let speclist = [
   "-lib", Arg.Set Veluslib.expose, " Expose all nodes in generated code";
 ]
 
-let usage_msg = "Usage: velus [options] <source>"
+let usage_msg =
+  Format.sprintf "Usage: velus [options] <source>\n(arch=%s system=%s abi=%s)\n"
+    Configuration.arch Configuration.system Configuration.abi
 
 let _ =
-  Machine.config :=
+  Machine.config:=
     begin match Configuration.arch with
-      | "powerpc" -> if Configuration.system = "linux"
-        then Machine.ppc_32_bigendian
-        else Machine.ppc_32_diab_bigendian
-      | "arm"     -> Machine.arm_littleendian
-      | "ia32"    -> if Configuration.abi = "macosx"
-        then Machine.x86_32_macosx
-        else Machine.x86_32
-      | _         -> assert false
-    end;
+    | "powerpc" -> if Configuration.model = "e5500" || Configuration.model = "ppc64"
+                   then if Configuration.abi = "linux" then Machine.ppc_32_r64_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_r64_bigendian
+                   else Machine.ppc_32_r64_diab_bigendian
+                   else if Configuration.abi = "linux" then Machine.ppc_32_linux_bigendian
+                   else if Configuration.gnu_toolchain then Machine.ppc_32_bigendian
+                   else Machine.ppc_32_diab_bigendian
+    | "arm"     -> if Configuration.is_big_endian
+                   then Machine.arm_bigendian
+                   else Machine.arm_littleendian
+    | "x86"     -> if Configuration.model = "64" then
+                     Machine.x86_64
+                   else
+                     if Configuration.abi = "macosx"
+                     then Machine.x86_32_macosx
+                     else if Configuration.system = "bsd"
+                     then Machine.x86_32_bsd
+                     else Machine.x86_32
+    | "riscV"   -> if Configuration.model = "64"
+                   then Machine.rv64
+                   else Machine.rv32
+    | _         -> assert false
+  end;
   Builtins.set C2C.builtins;
+  (* Cutil.declare_attributes C2C.attributes; *)
   CPragmas.initialize()
 
 let _ =

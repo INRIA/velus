@@ -29,7 +29,7 @@ Module Type SB2OBCINVARIANTS
     forall x mems e y,
       x <> y -> ~ Can_write_in y (translate_cexp mems x e).
   Proof.
-    induction e; intros ** Hcw; inv Hcw; intuition eauto.
+    induction e; intros ?? Hcw; inv Hcw; intuition eauto.
   Qed.
 
   Lemma Is_free_in_tovar:
@@ -58,17 +58,17 @@ Module Type SB2OBCINVARIANTS
       (forall y, Is_free_in_cexp y e -> x <> y) ->
       Fusible (translate_cexp mems x e).
   Proof.
-    intros ** Hfree.
+    intros * Hfree.
     induction e; eauto using Fusible.
     - simpl; constructor;
         [apply IHe1; now auto|apply IHe2; now auto|].
-      intros ** Hfree'; split;
+      intros * Hfree'; split;
         (apply not_Can_write_in_translate_cexp;
          apply Is_free_in_tovar in Hfree';
          subst; apply Hfree; constructor).
     - simpl; constructor;
         [apply IHe1; now auto|apply IHe2; now auto|].
-      intros ** Hfree'; split;
+      intros * Hfree'; split;
         apply not_Can_write_in_translate_cexp;
         apply Hfree;
         now constructor; apply Is_free_translate_lexp with mems.
@@ -81,7 +81,7 @@ Module Type SB2OBCINVARIANTS
       Fusible (Control mems ck (f e)).
   Proof.
     induction ck as [|ck IH i b]; [now intuition|].
-    intros ** Hxni Hfce; simpl.
+    intros * Hxni Hfce; simpl.
     cases.
     - apply IH with (f := fun ce => Ifte (tovar mems (i, bool_type)) (f ce) Skip).
       + intros j Hfree Hcw.
@@ -116,7 +116,7 @@ Module Type SB2OBCINVARIANTS
       Fusible (Control mems ck s).
   Proof.
     induction ck as [|ck IH i b]; [now intuition|].
-    intros ** Hxni Hfce; simpl.
+    intros * Hxni Hfce; simpl.
     cases; apply IH.
     - intros j Hfree Hcw.
       apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
@@ -148,7 +148,7 @@ Module Type SB2OBCINVARIANTS
       (forall input, In input inputs -> ~ Is_defined_in input eqs) ->
       Fusible (translate_eqns mems clkvars eqs).
   Proof.
-    intros ** Hwk Hnd Hwks Hwsch Hnvi Hnin.
+    intros * Hwk Hnd Hwks Hwsch Hnvi Hnin.
     induction eqs as [|eq eqs IH]; [now constructor|].
     inversion_clear Hwks as [|?? Hwkeq];
       inversion_clear Hwsch as [|??? HH Hndef].
@@ -162,7 +162,7 @@ Module Type SB2OBCINVARIANTS
         intro; apply Hin; right; auto.
     - clear IH.
       repeat constructor.
-      destruct eq as [x ck e|x ck e|x ck v0 e|s xs ck ? f es]; simpl.
+      destruct eq as [x ck e|x ck|x ck v0|s xs ck ? f es]; simpl.
       + assert (~PS.In x mems) as Hnxm
             by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
         assert (forall i, Is_free_in_caexp i ck e -> x <> i) as Hfni.
@@ -189,7 +189,7 @@ Module Type SB2OBCINVARIANTS
       + apply Fusible_Control_laexp; auto.
         inversion 2; contradiction.
       + apply Fusible_Control_laexp; auto.
-        intros ** Hwrite.
+        intros ?? Hwrite.
         assert (In x xs) by now inv Hwrite.
         now eapply wc_EqCall_not_Is_free_in_clock; eauto.
   Qed.
@@ -222,7 +222,7 @@ Module Type SB2OBCINVARIANTS
       Well_scheduled P ->
       Forall ClassFusible (translate P).
   Proof.
-    induction P as [|b]; intros ** WC Wsch;
+    induction P as [|b]; intros * WC Wsch;
       inversion_clear WC as [|??? WCb];
       inversion_clear Wsch as [|??? Wsch'];
       simpl; constructor; auto.
@@ -303,7 +303,7 @@ Module Type SB2OBCINVARIANTS
     now split; intro HH; auto; destruct HH as [HH|HH]; auto; inv HH.
     rewrite IH, Can_write_in_Comp, Can_write_in_translate_eqn_Is_defined_in_eq.
     split.
-    - intros [HH|[HH|HH]]; auto; left; constructor (assumption).
+    - intros [HH|[HH|HH]]; auto; left; now constructor.
     - intros [HH|HH]; [inv HH|]; auto.
   Qed.
 
@@ -312,7 +312,7 @@ Module Type SB2OBCINVARIANTS
       In m (translate_block b).(c_methods) ->
       Forall (fun x => ~Can_write_in x m.(m_body)) (map fst m.(m_in)).
   Proof.
-    intros ** Hin.
+    intros * Hin.
     destruct Hin as [|[|]]; simpl in *; subst; simpl;
       auto; try contradiction.
     apply Forall_forall; intros x Hin.
@@ -326,7 +326,7 @@ Module Type SB2OBCINVARIANTS
       Forall_methods (fun m => Forall (fun x => ~ Can_write_in x (m_body m)) (map fst (m_in m)))
                      (translate P).
   Proof.
-    intros; apply Forall_forall; intros ** HinP; apply Forall_forall; intros.
+    intros; apply Forall_forall; intros * HinP; apply Forall_forall; intros.
     unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
     eapply translate_node_cannot_write_inputs; eauto.
   Qed.
@@ -402,7 +402,7 @@ Module Type SB2OBCINVARIANTS
       NoDupMembers lasts ->
       No_Overwrites (reset_mems lasts).
   Proof.
-    unfold reset_mems; intros ** Nodup.
+    unfold reset_mems; intros * Nodup.
     assert (No_Overwrites Skip) as NOS by constructor.
     assert (forall x, InMembers x lasts -> ~ Can_write_in x Skip) as CWIS by inversion 2.
     revert NOS CWIS; generalize Skip.
@@ -423,7 +423,7 @@ Module Type SB2OBCINVARIANTS
     intro; unfold translate_reset.
     constructor.
     - intros; apply not_Can_write_in_reset_insts.
-    - intros ** CWI ?; eapply not_Can_write_in_reset_insts; eauto.
+    - intros * CWI ?; eapply not_Can_write_in_reset_insts; eauto.
     - apply No_Overwrites_reset_mems, b_nodup_lasts.
     - apply No_Overwrites_reset_inst.
   Qed.
@@ -434,7 +434,7 @@ Module Type SB2OBCINVARIANTS
       In m (translate_block b).(c_methods) ->
       No_Overwrites m.(m_body).
   Proof.
-    intros ** Hin.
+    intros ??? Hin.
     destruct Hin as [|[|]]; simpl in *; subst; simpl;
       try contradiction.
     - eapply translate_eqns_No_Overwrites; eauto.
@@ -446,7 +446,7 @@ Module Type SB2OBCINVARIANTS
       Well_scheduled P ->
       Forall_methods (fun m => No_Overwrites m.(m_body)) (translate P).
   Proof.
-    intros ** Wsch; apply Forall_forall; intros ** HinP; apply Forall_forall; intros.
+    intros * Wsch; apply Forall_forall; intros * HinP; apply Forall_forall; intros.
     unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
     eapply Forall_forall in Wsch; eauto.
     eapply translate_node_No_Overwrites; eauto.

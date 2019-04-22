@@ -6,7 +6,7 @@ Require Export NLustre.IsDefined.
 Require Export NLustre.Memories.
 Require Export NLustre.NLSemantics.
 Require Export NLustre.MemSemantics.
-Require Export NLustre.Ordered.
+Require Export NLustre.NLOrdered.
 Require Export NLustre.NoDup.
 Require Export NLustre.NLClocking.
 Require Export NLustre.NLClockingSemantics.
@@ -22,7 +22,7 @@ Module Type NLUSTRE
        (Str   : STREAM        Op OpAux)
        (CE    : COREEXPR Ids  Op OpAux Str).
   Declare Module Export Syn    : NLSYNTAX        Ids Op       CE.Syn.
-  Declare Module Export Ord    : ORDERED         Ids Op       CE.Syn Syn.
+  Declare Module Export Ord    : NLORDERED       Ids Op       CE.Syn Syn.
   Declare Module Export Norm   : NLNORMALARGS    Ids Op       CE.Syn Syn.
   Declare Module Export IsF    : ISFREE          Ids Op       CE.Syn Syn CE.IsF.
   Declare Module Export Sem    : NLSEMANTICS     Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.
@@ -45,7 +45,7 @@ Module NLustreFun
        (CE    : COREEXPR Ids  Op OpAux Str)
 <: NLUSTRE Ids Op OpAux Str CE.
   Module Export Syn    := NLSyntaxFun        Ids Op       CE.Syn.
-  Module Export Ord    := OrderedFun         Ids Op       CE.Syn Syn.
+  Module Export Ord    := NLOrderedFun       Ids Op       CE.Syn Syn.
   Module Export Norm   := NLNormalArgsFun    Ids Op       CE.Syn Syn.
   Module Export IsF    := IsFreeFun          Ids Op       CE.Syn Syn CE.IsF.
   Module Export Sem    := NLSemanticsFun     Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.

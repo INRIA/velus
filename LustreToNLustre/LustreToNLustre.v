@@ -5,6 +5,8 @@ Require Import Velus.Lustre.
 Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.NLustre.NLSyntax.
 
+Require Import String.
+
 Require Import List.
 Import List.ListNotations.
 Import Permutation.
@@ -97,7 +99,7 @@ Module Type LUSTRE_TO_NLUSTRE
       xs = zs ->
       xs ++ ys = zs ++ ys.
   Proof.
-    intros ** Heq. induction ys.
+    intros * Heq. induction ys.
     now setoid_rewrite app_nil_r.
     now subst xs.
   Qed.
@@ -239,16 +241,16 @@ Module Type LUSTRE_TO_NLUSTRE
   Qed.
   Next Obligation.
     admit (* L.vars_defined = NL.vars_defined *).
-  Qed.
+  Admitted.
   Next Obligation.
     admit.
-  Qed.
+  Admitted.
   Next Obligation.
     exact (L.n_nodup n).
   Qed.
   Next Obligation.
     admit.
-  Qed.
+  Admitted.
 
   Definition to_global (g : L.global) : res NL.global :=
     mmap to_node g.

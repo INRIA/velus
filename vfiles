@@ -33,7 +33,7 @@ NLustre/NLNormalArgs.v
 NLustre/CoIndToIndexed.v
 NLustre/NLInterpretor.v
 NLustre/IsFree.v
-NLustre/Ordered.v
+NLustre/NLOrdered.v
 NLustre/Memories.v
 NLustre/NLTyping.v
 NLustre/IsVariable.v

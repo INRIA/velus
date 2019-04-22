@@ -133,9 +133,8 @@ Module Type NODUP
   Proof.
     unfold vars_defined.
     induction eqs as [|eq eqs].
-    - rewrite concatMap_nil; auto using NoDup_defs.
-    - rewrite concatMap_cons.
-      intro Hnodup.
+    - auto using NoDup_defs.
+    - simpl. intro Hnodup.
       apply NoDup_app'_iff in Hnodup.
       destruct Hnodup as (Hnd1 & Hnd2 & Hni).
       apply IHeqs in Hnd2.

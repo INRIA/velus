@@ -146,7 +146,7 @@ Lemma append_same_last:
     exists post1',
       (post1 = post1' ++ String x "")%string.
 Proof.
-  induction pre1; simpl; intros ** E H; eauto.
+  induction pre1; simpl; intros * E H; eauto.
   destruct pre2; simpl in *.
   - inv E; apply append_eq_empty in H2; destruct H2; contradiction.
   - inv E; eauto.
@@ -164,7 +164,7 @@ Lemma append_injectivity_left:
     (pre1 ++ post = pre2 ++ post)%string ->
     pre1 = pre2.
 Proof.
-  induction pre1, pre2; simpl; intros ** E; auto.
+  induction pre1, pre2; simpl; intros * E; auto.
   - exfalso.
     revert dependent pre2; revert a.
     induction post; intros; try discriminate.
@@ -268,7 +268,7 @@ Module Export Ids <: IDS.
   Lemma valid_not_prefixed:
     forall x, valid x -> ~prefixed x.
   Proof.
-    intros ** V H.
+    intros * V H.
     inv H.
     apply V, In_sep_prefix.
   Qed.
@@ -286,7 +286,7 @@ Module Export Ids <: IDS.
       pref = pref' /\ id = id'.
   Proof.
     unfold prefix.
-    intros ** H.
+    intros ? ? ? ? ? ? H.
     apply pos_of_str_injective in H.
     apply append_sep_injectivity in H; auto.
     destruct H as [E1 E2].
@@ -311,7 +311,7 @@ Module Export Ids <: IDS.
       c = c' /\ f = f'.
   Proof.
     unfold prefix_fun.
-    intros ** Eq.
+    intros ? ? ? ? ? ? Eq.
     pose proof fun_id_valid.
     apply prefix_injective in Eq; auto; destruct Eq as [E Eq]; clear E.
     now apply prefix_injective.
@@ -334,7 +334,7 @@ Module Export Ids <: IDS.
       c = c' /\ f = f'.
   Proof.
     unfold prefix_out.
-    intros ** Eq.
+    intros ? ? ? ? ? ? Eq.
     pose proof out_valid.
     apply prefix_injective in Eq; auto; destruct Eq as [E Eq]; clear E.
     now apply prefix_injective.
@@ -354,7 +354,7 @@ Module Export Ids <: IDS.
     forall c f c' f', prefix_fun c f <> prefix_out c' f'.
   Proof.
     unfold prefix_fun, prefix_out.
-    intros ** E.
+    intros * E.
     pose proof fun_id_valid; pose proof out_valid.
     apply prefix_injective in E; auto; destruct E as [E]; contradict E.
     apply fun_not_out.
@@ -430,7 +430,7 @@ Module Export Ids <: IDS.
       x = x'.
   Proof.
     unfold glob_id.
-    intros ** H.
+    intros ? ? ? ? * H.
     apply pos_of_str_injective in H.
     apply append_sep_injectivity in H; auto; destruct H.
     now apply pos_to_str_injective.
@@ -441,7 +441,7 @@ Module Export Ids <: IDS.
       valid x ->
       ~ prefixed (glob_id x).
   Proof.
-    intros ** V H.
+    intros * V H.
     inversion H as [? ? E].
     unfold prefix, glob_id in E.
     apply pos_of_str_injective in E.
