@@ -88,7 +88,6 @@ src/SyBlocToObc/Translation.v
 src/Instantiator.v
 src/ObcToClight/LustreElab.v
 src/ObcToClight/SepInvariant.v
-src/ObcToClight/NLustreElab.v
 src/ObcToClight/Correctness.v
 src/ObcToClight/Interface.v
 src/ObcToClight/Generation.v

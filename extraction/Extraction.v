@@ -129,15 +129,6 @@ Extract Constant elab_const_char =>
 	Interface.Op.Cint (C2C.convertInt32 v, sz, sg)
     | _ -> assert false".
 
-(* XXX *)
-Extract Constant NLustreElab.elab_const_int    => "LustreElab.elab_const_int".
-Extract Constant NLustreElab.elab_const_float  => "LustreElab.elab_const_float".
-Extract Constant NLustreElab.elab_const_char   => "LustreElab.elab_const_char".
-Extract Constant NLustreElab.string_of_astloc  => "LustreElab.string_of_astloc".
-Extract Constant NLustreElab.cabsloc_of_astloc => "LustreElab.cabsloc_of_astloc".
-Extract Constant NLustreElab.cabs_floatinfo    => "LustreElab.cabs_floatinfo".
-(* XXX *)
-
 (* Cabs *)
 Extract Constant Cabs.cabsloc =>
 "{ lineno : int;
@@ -153,8 +144,8 @@ Extract Constant LustreElab.do_add_when_to_constants =>
 
 (* Extract Constant VelusCorrectness.print_lustre => *)
 (*   "Veluslib.print_lustre_if". *)
-Extract Constant VelusCorrectness.print_snlustre =>
-  "Veluslib.print_snlustre_if".
+Extract Constant VelusCorrectness.print_nlustre =>
+  "Veluslib.print_nlustre_if".
 Extract Constant VelusCorrectness.print_sybloc => "Veluslib.print_sybloc_if".
 Extract Constant VelusCorrectness.print_obc    => "Veluslib.print_obc_if".
 Extract Constant VelusCorrectness.do_fusion    => "Veluslib.do_fusion".

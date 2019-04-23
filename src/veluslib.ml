@@ -2,7 +2,7 @@
 (* Functions called from within the proof, e.g., VelusCorrectness *)
 
 let lustre_destination = ref (None : string option)
-let snlustre_destination = ref (None : string option)
+let nlustre_destination = ref (None : string option)
 let sybloc_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
 let sync_destination = ref (None : string option)
@@ -50,8 +50,8 @@ let print_if flag print prog =
 (* let print_lustre_if =
  *   print_if lustre_destination Interfacelib.PrintLustre.print_global *)
 
-let print_snlustre_if =
-  print_if snlustre_destination Interfacelib.PrintNLustre.print_global
+let print_nlustre_if =
+  print_if nlustre_destination Interfacelib.PrintNLustre.print_global
 
 let print_sybloc_if =
   print_if sybloc_destination Interfacelib.PrintSyBloc.print_program
