@@ -7,6 +7,7 @@ Require Export CoreExpr.CESemantics.
 Require Export CoreExpr.CEClocking.
 Require Export CoreExpr.CEClockingSemantics.
 Require Export CoreExpr.CETyping.
+Require Export CoreExpr.CEInterpreter.
 
 Require Import Velus.Common.
 
@@ -15,14 +16,13 @@ Module Type COREEXPR
        (Op     : OPERATORS)
        (OpAux  : OPERATORS_AUX Op)
        (Str    : STREAM        Op OpAux).
-
   Declare Module Export Syn    : CESYNTAX                Op.
   Declare Module Export IsF    : CEISFREE            Ids Op       Syn.
   Declare Module Export Sem    : CESEMANTICS         Ids Op OpAux Syn Str.
   Declare Module Export Typ    : CETYPING            Ids Op       Syn.
   Declare Module Export Clo    : CECLOCKING          Ids Op       Syn.
   Declare Module Export CloSem : CECLOCKINGSEMANTICS Ids Op OpAux Syn Str Sem Clo.
-
+  Declare Module Export Interp : CEINTERPRETER       Ids Op OpAux Syn Str Sem.
 End COREEXPR.
 
 Module CoreExprFun
@@ -37,4 +37,5 @@ Module CoreExprFun
   Module Export Typ    := CETypingFun            Ids Op       Syn.
   Module Export Clo    := CEClockingFun          Ids Op       Syn.
   Module Export CloSem := CEClockingSemanticsFun Ids Op OpAux Syn Str Sem Clo.
+  Module Export Interp := CEInterpreterFun       Ids Op OpAux Syn Str Sem.
 End CoreExprFun.

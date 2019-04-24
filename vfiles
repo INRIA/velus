@@ -25,13 +25,13 @@ CoreExpr/CEClocking.v
 CoreExpr/CETyping.v
 CoreExpr/CEIsFree.v
 CoreExpr/CEClockingSemantics.v
+CoreExpr/CEInterpreter.v
 CoreExpr.v
 
 NLustre/NLSemanticsCoInd.v
 NLustre/NLClocking.v
 NLustre/NLNormalArgs.v
 NLustre/CoIndToIndexed.v
-NLustre/NLInterpretor.v
 NLustre/IsFree.v
 NLustre/NLOrdered.v
 NLustre/Memories.v

@@ -11,15 +11,9 @@ Require Import Velus.CoreExpr.CESyntax.
 Require Import Velus.CoreExpr.Stream.
 Require Import Velus.CoreExpr.CESemantics.
 
-(** * The NLustre semantics *)
+(** * Interpreter for Core Expresssions *)
 
-(**
-
-  We provide an interpretor for the semantics of NLustre.
-
- *)
-
-Module Type NLINTERPRETOR
+Module Type CEINTERPRETER
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
@@ -31,7 +25,7 @@ Module Type NLINTERPRETOR
 
   (** ** Instantaneous semantics *)
 
-  Section InstantInterpretor.
+  Section InstantInterpreter.
 
     Variable base : bool.
     Variable R: env.
@@ -240,11 +234,11 @@ Module Type NLINTERPRETOR
       apply interp_lexp_instant_sound; auto.
     Qed.
 
-  End InstantInterpretor.
+  End InstantInterpreter.
 
   (** ** Liftings of instantaneous semantics *)
 
-  Section LiftInterpretor.
+  Section LiftInterpreter.
 
     Variable bk : stream bool.
     Variable H: history.
@@ -393,18 +387,18 @@ Module Type NLINTERPRETOR
     (* Definition interp_annotated {A} (interp_instant: bool -> env -> A -> value) (ck: clock) (a: A): stream value := *)
     (*   lift (fun base R => interp_annotated_instant base R interp_instant ck) a. *)
 
-  End LiftInterpretor.
+  End LiftInterpreter.
 
-End NLINTERPRETOR.
+End CEINTERPRETER.
 
-(* Module NLSemanticsFun *)
-(*        (Ids   : IDS) *)
-(*        (Op    : OPERATORS) *)
-(*        (OpAux : OPERATORS_AUX Op) *)
-(*        (Clks  : CLOCKS    Ids) *)
-(*        (Syn   : NLSYNTAX  Ids Op) *)
-(*        (Str   : STREAM        Op OpAux) *)
-(*        (Ord   : ORDERED   Ids Op Syn) *)
-(*        <: NLSEMANTICS Ids Op OpAux Syn Str Ord. *)
-(*   Include NLSEMANTICS Ids Op OpAux Syn Str Ord. *)
-(* End NLSemanticsFun. *)
+Module CEInterpreterFun
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX   Op)
+       (Import CESyn : CESYNTAX        Op)
+       (Import Str   : STREAM          Op OpAux)
+       (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str)
+       <: CEINTERPRETER Ids Op OpAux CESyn Str CESem.
+  Include CEINTERPRETER Ids Op OpAux CESyn Str CESem.
+End CEInterpreterFun.
+
