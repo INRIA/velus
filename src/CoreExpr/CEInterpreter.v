@@ -918,6 +918,28 @@ Module Type CEINTERPRETER
       eauto.
     Qed.
 
+    Lemma sem_lexps_instant_wt_val:
+      forall es vs,
+        sem_lexps_instant base R es vs ->
+        Forall (wt_lexp (idty vars)) es ->
+        var_inv (fun x => Exists (Is_free_in_lexp x) es) ->
+        Forall2 (fun e v => match v with
+                            | present v => wt_val v (typeof e)
+                            | absent => True
+                            end) es vs.
+    Proof.
+      induction es as [|e es IH]. now inversion 1; subst; auto.
+      intros vs Ses WTs Invs.
+      inversion Ses as [|? v ?? Se Ses'].
+      inversion_clear WTs as [|?? WT WTs']. subst.
+      assert (var_inv (fun x => Is_free_in_lexp x e)) as Inv
+          by (eapply var_inv_weaken; [eauto|now intuition]).
+      assert (var_inv (fun x => Exists (Is_free_in_lexp x) es)) as Invs'
+          by (eapply (var_inv_weaken _ _ Invs); eauto).
+      constructor; auto. destruct v; auto.
+      apply sem_lexp_instant_wt_val; auto.
+    Qed.
+
   End InstantInterpreter.
 
 End CEINTERPRETER.
