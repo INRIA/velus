@@ -30,8 +30,11 @@ Module Type CEINTERPRETER
 
   (** ** Instantaneous semantics *)
 
+  (** ** Instantaneous semantics *)
+
   Section InstantInterpreter.
 
+    Variable base : bool.
     Variable R: env.
 
     Definition interp_var_instant (x: ident): option value :=
@@ -50,7 +53,7 @@ Module Type CEINTERPRETER
 
     Fixpoint interp_clock_instant (c: clock) : option bool :=
       match c with
-      | Cbase => Some true
+      | Cbase => Some base
       | Con c x b =>
         match interp_clock_instant c with
         | Some true => match interp_var_instant x with
@@ -71,7 +74,7 @@ Module Type CEINTERPRETER
 
      Fixpoint interp_lexp_instant (e: lexp) : option value :=
        match e with
-       | Econst c => Some (present (sem_const c))
+       | Econst c => Some (if base then present (sem_const c) else absent)
        | Evar x _ => interp_var_instant x
        | Ewhen e x b =>
            match interp_var_instant x, interp_lexp_instant e with
@@ -162,7 +165,7 @@ Module Type CEINTERPRETER
 
     Lemma interp_clock_instant_correct:
       forall c b,
-        sem_clock_instant true R c b <-> interp_clock_instant c = Some b.
+        sem_clock_instant base R c b <-> interp_clock_instant c = Some b.
     Proof.
       induction c as [|c IH].
       now simpl; split; inversion 1; eauto using sem_clock_instant.
@@ -188,7 +191,7 @@ Module Type CEINTERPRETER
           * assert (false = negb true) as Hf by auto.
             rewrite Hf at 1. eapply Son_abs2; eauto; now apply IH.
           * assert (true = negb false) as Hf by auto.
-            rewrite Hf at 2. eapply Son_abs2; eauto. now apply IH.
+            rewrite Hf at 1. eapply Son_abs2; eauto; now apply IH.
           * eapply Son; eauto; now apply IH.
         + destruct v as [|vc]; [|discriminate].
           match goal with H:Some _ = Some _ |- _ => inv H end.
@@ -197,7 +200,7 @@ Module Type CEINTERPRETER
 
     Lemma interp_lexp_instant_correct:
       forall e v,
-        sem_lexp_instant true R e v <-> interp_lexp_instant e = Some v.
+        sem_lexp_instant base R e v <-> interp_lexp_instant e = Some v.
     Proof.
       induction e; simpl.
       - (* Econst *)
@@ -286,7 +289,7 @@ Module Type CEINTERPRETER
 
     Lemma interp_lexps_instant_correct:
       forall es vs,
-        sem_lexps_instant true R es vs <-> interp_lexps_instant es = Some vs.
+        sem_lexps_instant base R es vs <-> interp_lexps_instant es = Some vs.
     Proof.
       apply omap_interp_correct.
       apply interp_lexp_instant_correct.
@@ -294,7 +297,7 @@ Module Type CEINTERPRETER
 
     Lemma interp_cexp_instant_correct:
       forall e v,
-        sem_cexp_instant true R e v <-> interp_cexp_instant e = Some v.
+        sem_cexp_instant base R e v <-> interp_cexp_instant e = Some v.
     Proof.
       induction e.
       - (* Emerge *)
@@ -373,7 +376,7 @@ Module Type CEINTERPRETER
 
     Lemma interp_laexp_instant_correct:
       forall ck e v,
-        sem_laexp_instant true R ck e v <-> interp_laexp_instant ck e = Some v.
+        sem_laexp_instant base R ck e v <-> interp_laexp_instant ck e = Some v.
     Proof.
       unfold interp_laexp_instant, interp_annotated_instant.
       split; intro HH.
@@ -392,7 +395,7 @@ Module Type CEINTERPRETER
 
     Lemma interp_caexp_instant_correct:
       forall ck e v,
-        sem_caexp_instant true R ck e v <-> interp_caexp_instant ck e = Some v.
+        sem_caexp_instant base R ck e v <-> interp_caexp_instant ck e = Some v.
     Proof.
       unfold interp_caexp_instant, interp_annotated_instant.
       split; intro HH.
@@ -424,15 +427,15 @@ Module Type CEINTERPRETER
         Ops_defined_in_lexp (Ewhen e x b)
     | ODunop : forall op e ty,
         Ops_defined_in_lexp e ->
-        (forall v, sem_lexp_instant true R e (present v) ->
+        (forall v, sem_lexp_instant base R e (present v) ->
                    sem_unop op v (typeof e) <> None) ->        
         Ops_defined_in_lexp (Eunop op e ty)
     | ODbinop: forall op e1 e2 ty,
         Ops_defined_in_lexp e1 ->
         Ops_defined_in_lexp e2 ->
         (forall v1 v2,
-            sem_lexp_instant true R e1 (present v1) ->
-            sem_lexp_instant true R e2 (present v2) ->
+            sem_lexp_instant base R e1 (present v1) ->
+            sem_lexp_instant base R e2 (present v2) ->
             sem_binop op v1 (typeof e1) v2 (typeof e2) <> None) ->
         Ops_defined_in_lexp (Ebinop op e1 e2 ty).
 
@@ -455,7 +458,7 @@ Module Type CEINTERPRETER
                 exists xv, sem_var_instant R x xv
                            /\ (exists xt xc cs,
                                   In (x, (xt, xc)) vars
-                                  /\ sem_clock_instant true R xc cs
+                                  /\ sem_clock_instant base R xc cs
                                   /\ match xv with
                                      | absent => cs = false
                                      | present v => cs = true /\ wt_val v xt
@@ -536,7 +539,7 @@ Module Type CEINTERPRETER
         wt_clock (idty vars) ck ->
         wc_clock (idck vars) ck ->
         var_inv (fun x => Is_free_in_clock x ck) ->
-        exists v, sem_clock_instant true R ck v.
+        exists v, sem_clock_instant base R ck v.
     Proof.
       setoid_rewrite interp_clock_instant_correct.
       auto using interp_clock_instant_good.
@@ -546,15 +549,15 @@ Module Type CEINTERPRETER
       forall e ck v,
         wc_lexp (idck vars) e ck ->
         var_inv (fun x => Is_free_in_lexp x e) ->
-        sem_lexp_instant true R e v ->
-        exists cks, sem_clock_instant true R ck cks
+        sem_lexp_instant base R e v ->
+        exists cks, sem_clock_instant base R ck cks
                     /\ (v = absent <-> cks = false).
     Proof.
       induction e; simpl; intros ck v WC Inv Se; inv WC.
       - (* Econst *)
-        inv Se. exists true.
+        inv Se. exists base.
         split; eauto using sem_clock_instant.
-        intuition; discriminate.
+        destruct base; intuition; discriminate.
       - (* Evar *)
         specialize (Inv i (FreeEvar i _))
           as (iv & Si & (it & ic & ics & I1 & I2 & I3)).
@@ -660,7 +663,7 @@ Module Type CEINTERPRETER
         wc_lexp (idck vars) e ck ->
         Ops_defined_in_lexp e ->
         var_inv (fun x => Is_free_in_lexp x e) ->
-        exists v, sem_lexp_instant true R e v.
+        exists v, sem_lexp_instant base R e v.
     Proof.
       setoid_rewrite interp_lexp_instant_correct.
       eauto using interp_lexp_instant_good.
@@ -670,8 +673,8 @@ Module Type CEINTERPRETER
       forall e ck v,
         wc_cexp (idck vars) e ck ->
         var_inv (fun x => Is_free_in_cexp x e) ->
-        sem_cexp_instant true R e v ->
-        exists cks, sem_clock_instant true R ck cks
+        sem_cexp_instant base R e v ->
+        exists cks, sem_clock_instant base R ck cks
                     /\ (v = absent <-> cks = false).
     Proof.
       induction e; simpl; intros ck v WC Inv Se;
@@ -713,14 +716,15 @@ Module Type CEINTERPRETER
 
     Lemma sem_lexp_instant_wt_val:
       forall e v,
-        sem_lexp_instant true R e (present v) ->
+        sem_lexp_instant base R e (present v) ->
         wt_lexp (idty vars) e ->
         var_inv (fun x => Is_free_in_lexp x e) ->
         wt_val v (typeof e).
     Proof.
       induction e; intros v Sv WT Inv.
       - (* Econst *)
-        inv Sv. match goal with H:present _ = present _ |- _ => inv H end.
+        inv Sv. destruct base; [|discriminate].
+        match goal with H:present _ = present _ |- _ => inv H end.
         apply wt_val_const.
       - (* Evar *)
         specialize (Inv i (FreeEvar i _))
@@ -819,7 +823,7 @@ Module Type CEINTERPRETER
         wc_cexp (idck vars) e ck ->
         Ops_defined_in_cexp e ->
         var_inv (fun x => Is_free_in_cexp x e) ->
-        exists v, sem_cexp_instant true R e v.
+        exists v, sem_cexp_instant base R e v.
     Proof.
       setoid_rewrite interp_cexp_instant_correct.
       eauto using interp_cexp_instant_good.
@@ -827,7 +831,7 @@ Module Type CEINTERPRETER
 
     Lemma sem_cexp_instant_wt_val:
       forall e v,
-        sem_cexp_instant true R e (present v) ->
+        sem_cexp_instant base R e (present v) ->
         wt_cexp (idty vars) e ->
         var_inv (fun x => Is_free_in_cexp x e) ->
         wt_val v (typeofc e).
@@ -916,7 +920,7 @@ Module Type CEINTERPRETER
 
     Lemma sem_lexps_instant_wt_val:
       forall es vs,
-        sem_lexps_instant true R es vs ->
+        sem_lexps_instant base R es vs ->
         Forall (wt_lexp (idty vars)) es ->
         var_inv (fun x => Exists (Is_free_in_lexp x) es) ->
         Forall2 (fun e v => match v with
