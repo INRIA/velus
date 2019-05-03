@@ -19,8 +19,8 @@ Require Import Velus.CoreExpr.Stream.
 Require Import Velus.NLustre.Streams.
 
 Require Import Velus.CoreExpr.CESemantics.
+Require Import Velus.CoreExpr.CEInterpreter.
 Require Import Velus.NLustre.NLSemantics.
-Require Import Velus.NLustre.NLInterpretor.
 Require Import Velus.NLustre.NLSemanticsCoInd.
 
 Require Import Setoid.
@@ -34,7 +34,7 @@ Module Type INDEXEDTOCOIND
        (Import Ord    : NLORDERED        Ids Op       CESyn Syn)
        (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Interp : NLINTERPRETOR    Ids Op OpAux CESyn Str         CESem)
+       (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
        (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
 
   Section Global.
