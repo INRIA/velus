@@ -3,6 +3,7 @@ Require Instantiator.
 
 Require Import Velus.Lustre.Parser.LustreAst.
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Operators.
 Require Import Clocks.
 

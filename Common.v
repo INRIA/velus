@@ -2,9 +2,11 @@ Require Import Coq.FSets.FMapPositive.
 Require Import Coq.FSets.FMapFacts.
 Require Import List.
 Require Import Coq.Sorting.Permutation.
-(* Require Import Setoid. *)
-(* Require Import Relations. *)
-(* Require Import Morphisms. *)
+
+Require Import Setoid.
+Require Import Relations.
+Require Import Morphisms.
+
 Import ListNotations.
 Require Coq.MSets.MSets.
 Require Export PArith.
@@ -13,7 +15,6 @@ Require Import Coq.Classes.EquivDec.
 
 Require Export Velus.Common.CommonTactics.
 Require Export Velus.Common.CommonList.
-Require Export Velus.Environment.
 Require Export Velus.ClockDefs.
 
 Open Scope list.
@@ -46,6 +47,21 @@ Lemma not_or':
   forall A B, ~(A \/ B) <-> ~A /\ ~B.
 Proof.
   split; intuition.
+Qed.
+
+Lemma flip_impl:
+  forall {P Q : Prop},
+    (P -> Q) ->
+    ~Q ->
+    ~P.
+Proof. intros P Q HPQ HnQ HP. auto. Qed.
+
+Lemma None_eq_dne:
+  forall {A} (v : option A),
+    ~(v <> None) <-> (v = None).
+Proof.
+  destruct v; intuition.
+  exfalso. apply H; discriminate.
 Qed.
 
 (** *** About identifiers **)
@@ -902,3 +918,74 @@ Proof.
   - apply PSP.of_list_1, SetoidList.InA_alt.
     apply fst_InMembers in Hin. eauto.
 Qed.
+
+(** Useful functions on lists of options *)
+
+Section OptionLists.
+
+  Context {A B : Type}.
+
+  Definition omap (f : A -> option B) (xs : list A) : option (list B) :=
+    List.fold_right (fun x ys => match f x, ys with
+                              | Some y, Some ys => Some (y :: ys)
+                              | _, _ => None
+                              end) (Some []) xs.
+
+  Definition ofold_right (f : A -> B -> option B) (acc : option B) (xs : list A)
+    : option B :=
+    fold_right (fun x acc => match acc with
+                          | Some acc => f x acc
+                          | None => None
+                          end) acc xs.
+
+End OptionLists.
+
+(** Lift relations into the option type *)
+
+Section ORel.
+
+  Context {A : Type}
+          (R : relation A).
+
+  Definition orel: relation (option A) :=
+    fun sx sy => (sx = None /\ sy = None)
+              \/ (exists x y, sx = Some x /\ sy = Some y /\ R x y).
+
+  Global Instance orel_refl `{RR : Reflexive A R} : Reflexive orel.
+  Proof.
+    intro sx.
+    unfold orel.
+    destruct sx; auto.
+    right; eauto.
+  Qed.
+  
+  Global Instance orel_trans `{RT : Transitive A R} : Transitive orel.
+  Proof.
+    unfold orel.
+    intros sx sy sz [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]
+           [(YZ1, YZ2)|(w & z & YZ1 & YZ2 & YZ3)]; subst; auto;
+      try discriminate.
+    inv YZ1. eapply RT in XY3. eapply XY3 in YZ3.
+    right; eauto.
+  Qed.
+
+  Global Instance orel_sym `{RS : Symmetric A R} : Symmetric orel.
+  Proof.
+    unfold orel.
+    intros sx sy [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]; subst; auto.
+    symmetry in XY3. right; eauto.
+  Qed.
+  
+  Global Instance orel_equiv `{Equivalence A R} : Equivalence orel.
+  Proof (Build_Equivalence orel orel_refl orel_sym orel_trans).
+
+  Global Instance orel_preord `{PreOrder A R} : PreOrder orel.
+  Proof (Build_PreOrder orel orel_refl orel_trans).
+
+  Global Instance orel_Some_Proper: Proper (R ==> orel) Some.
+  Proof.
+    intros x y Rxy. right. eauto.
+  Qed.
+
+End ORel.
+

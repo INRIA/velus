@@ -7,6 +7,7 @@ Require Import lib.Coqlib.
 Require Import lib.Integers.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.RMemory.
 
 Require Import List.
@@ -1037,12 +1038,12 @@ Section BlockRep.
     destruct (access_mode t); auto.
     revert vs ve.
     assert (~InMembers x xs) as Hnxs
-      by (eapply NoDupMembers_app_comm, NoDupMembers_app_InMembers in Nodup;
+        by (rewrite Permutation.Permutation_app_comm in Nodup;
+            eapply NoDupMembers_app_InMembers in Nodup;
           eauto using In_InMembers).
     rewrite fst_InMembers in Hnxs.
     intros; erewrite match_value_adds_gso; auto.
     eapply fst_NoDupMembers, NoDupMembers_app_l; eauto.
-    (* now setoid_rewrite match_value_updates_gso with (1:=Hnxs). *)
   Qed.
 
   Lemma blockrep_findvars:

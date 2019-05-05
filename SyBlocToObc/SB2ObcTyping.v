@@ -151,7 +151,9 @@ Module Type SB2OBCTYPING
       simpl; eauto using wt_stmt.
 
     simpl in NodupVars;
-      pose proof NodupVars as NodupVars'; apply NoDup_comm, NoDup_app_weaken in NodupVars';
+      pose proof NodupVars as NodupVars';
+      rewrite Permutation_app_comm in NodupVars';
+      apply NoDup_app_weaken in NodupVars';
         apply NoDup_app_weaken in NodupVars.
     assert (incl (calls_of eqs) (b_blocks b))
       by (destruct eq; simpl in *; auto;
@@ -189,7 +191,7 @@ Module Type SB2OBCTYPING
         apply PSE.MP.Dec.F.mem_iff, ps_from_list_In, fst_InMembers in E.
         contradiction.
       - pose proof Hin.
-        apply NoDupMembers_app_comm in Nodup.
+        rewrite Permutation_app_comm in Nodup.
         apply in_map with (f := fst) in Hin; simpl in Hin.
         apply ps_from_list_In in Hin; rewrite PSE.MP.Dec.F.mem_iff in Hin.
         rewrite Hin; auto.

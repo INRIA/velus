@@ -6,6 +6,7 @@ Require Import Setoid.
 Require Import Morphisms.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.RMemory.

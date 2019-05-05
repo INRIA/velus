@@ -8,6 +8,7 @@ Require Import common.Errors.
 Require Import lib.Maps.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.ObcToClight.Interface.
 Require Import Velus.Ident.
 

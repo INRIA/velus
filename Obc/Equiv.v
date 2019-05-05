@@ -1,6 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.Operators.
 Require Import Velus.Obc.ObcSyntax.
 Require Import Velus.Obc.ObcSemantics.

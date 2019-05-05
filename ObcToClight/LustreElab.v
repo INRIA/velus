@@ -7,6 +7,7 @@ Require Instantiator.
 
 Require Import Velus.Lustre.Parser.LustreAst.
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Operators.
 Require Import Clocks.
 
@@ -3817,7 +3818,8 @@ Section ElabExpressions.
       rewrite nclockof_lnannot.
       simpl in Hnd. rewrite indexes_app in Hnd.
       revert xs s Hniy.
-      assert (Hnd':=Hnd). apply NoDup_comm, NoDup_app_weaken in Hnd'.
+      assert (Hnd':=Hnd). rewrite Permutation_app_comm in Hnd'.
+      apply NoDup_app_weaken in Hnd'.
       specialize (IHe Hnd'). clear Hnd'.
       rewrite nclockof_lnannot in Hnd. revert Hnd.
       induction (lnannot els) as [|ann anns IHa].

@@ -234,12 +234,9 @@ Module Type TRANSLATION
   Next Obligation.
     rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
     setoid_rewrite ps_from_list_gather_eqs_memories.
-    apply NoDup_comm.
-    rewrite <-app_assoc.
-    apply NoDup_swap.
-    rewrite <-app_assoc, (app_assoc _ _ (map fst (n_in n))), <-map_app, <-permutation_partition.
-    apply NoDup_comm.
-    rewrite <-app_assoc.
+    rewrite Permutation_app_comm, <-app_assoc, NoDup_swap,
+    <-app_assoc, (app_assoc _ _ (map fst (n_in n))),
+    <-map_app, <-permutation_partition, Permutation_app_comm, <-app_assoc.
     apply NoDup_swap; rewrite <-2 map_app; apply fst_NoDupMembers, n_nodup.
   Qed.
   Next Obligation.
@@ -344,7 +341,8 @@ Module Type TRANSLATION
     - pose proof (translate_node_obligation_5 n) as Eq;
       pose proof (translate_node_obligation_3 n) as Nodup;
       pose proof (translate_node_obligation_8 n) as ResetSpec;
-      eapply NoDup_comm, NoDup_app_weaken in Nodup;
+      unfold gather_eqs in Nodup; rewrite Permutation_app_comm in Nodup;
+      eapply NoDup_app_weaken in Nodup;
       rewrite Eq in Nodup; clear Eq; simpl in ResetSpec.
       unfold translate_eqns in *.
       intros * Reset.

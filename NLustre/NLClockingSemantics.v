@@ -345,7 +345,7 @@ Module Type NLCLOCKINGSEMANTICS
     intros G bk H inputs vars eqs OG WCG Hndup Hsem Hwc Hdef x xck Hin.
     assert (In x (vars_defined eqs)) as Hxin
         by (now rewrite Hdef; apply in_map with (f:=fst) in Hin).
-    apply Is_defined_in_var_defined, Is_defined_in_eqs_In in Hxin
+    apply Is_defined_in_vars_defined, Is_defined_in_eqs_In in Hxin
       as (eq & Hieq & Hdeq).
     eapply Forall_forall in Hsem; eauto.
     eapply Forall_forall in Hwc; eauto.

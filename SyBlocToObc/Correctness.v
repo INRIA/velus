@@ -6,6 +6,7 @@ Require Import Velus.SyBlocToObc.SBMemoryCorres.
 
 Require Import Velus.RMemory.
 Require Import Velus.Common.
+Require Import Velus.Environment.
 
 Require Import List.
 Import List.ListNotations.
@@ -1239,8 +1240,9 @@ Module Type CORRECTNESS
       + now apply Memory_Corres_eqs_empty_equal_memory.
       + inversion 1.
     - pose proof Wsch as Wsch'; apply Is_well_sch_app in Wsch'.
-      pose proof Vars as Vars'; rewrite variables_app in Vars';
-        apply NoDup_swap, NoDup_comm, NoDup_app_weaken in Vars'.
+      pose proof Vars as Vars'; rewrite variables_app in Vars'.
+      rewrite NoDup_swap, Permutation.Permutation_app_comm in Vars';
+        apply NoDup_app_weaken in Vars'.
       pose proof StepReset as StepReset'; apply Step_with_reset_spec_app in StepReset'.
       pose proof Heqs as Heqs'; apply Forall_app_weaken in Heqs'; inv Heqs'.
       pose proof Hwc as Hwc'; apply Forall_app_weaken in Hwc'; inv Hwc'.
@@ -1474,7 +1476,8 @@ Module Type CORRECTNESS
              + intros Hin; apply Nodup; rewrite 2 in_app; right; left; apply fst_InMembers; auto.
            - apply in_map_iff; eexists; (intuition eauto); auto.
          }
-        *{ apply NoDup_comm, NoDup_app_weaken, (NoDup_app_In x) in Nodup.
+        *{ rewrite Permutation.Permutation_app_comm in Nodup.
+           apply NoDup_app_weaken, (NoDup_app_In x) in Nodup.
            - rewrite Env.gsso_with.
              + erewrite Env.In_find_adds_with; eauto; simpl; auto.
                eapply NoDupMembers_app_l; eapply NoDupMembers_app_r; apply b_nodup_vars.

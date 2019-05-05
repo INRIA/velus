@@ -1,6 +1,7 @@
 Require Import Coq.FSets.FMapPositive.
 Require Import PArith.
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.Operators.
 Require Import Velus.Obc.ObcSyntax.
 Require Import Velus.Obc.ObcSemantics.
@@ -1891,7 +1892,7 @@ Module Type OBCADDDEFAULTS
     intros x Hin.
     rewrite Permutation.Permutation_app_comm in Hin.
     apply NoDupMembers_app_InMembers with (ws:=m.(m_in)) in Hin; auto.
-    apply NoDupMembers_app_comm, m_nodupvars.
+    rewrite Permutation.Permutation_app_comm. apply m_nodupvars.
   Qed.
 
   Lemma add_defaults_class_refines:

@@ -114,14 +114,16 @@ Module Type SBSYNTAX
     intro; pose proof (b_nodup b) as Nodup.
     apply fst_NoDupMembers.
     rewrite 2 app_assoc in Nodup.
-    apply NoDup_comm, NoDup_app_weaken in Nodup; auto.
+    rewrite Permutation_app_comm in Nodup.
+    apply NoDup_app_weaken in Nodup; auto.
   Qed.
 
   Lemma b_nodup_blocks:
     forall b, NoDupMembers b.(b_blocks).
   Proof.
     intro; pose proof (b_nodup_lasts_blocks b) as Nodup.
-    apply NoDup_comm, NoDup_app_weaken in Nodup.
+    rewrite Permutation_app_comm in Nodup.
+    apply NoDup_app_weaken in Nodup.
     apply fst_NoDupMembers; auto.
   Qed.
 

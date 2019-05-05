@@ -1,4 +1,5 @@
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import LSyntax.

@@ -123,7 +123,7 @@ Module Type NL2SBTYPING
     revert Hnodup_acc Spec; generalize (@nil (ident * type)).
     induction (n_eqs n) as [|[]]; simpl in *; intros; auto.
     - inv Hnodup; auto.
-    - apply NoDup_comm, NoDup_app_weaken in Hnodup; auto.
+    - rewrite Permutation_app_comm in Hnodup; apply NoDup_app_weaken in Hnodup; auto.
       apply IHl; auto.
       intros; apply Spec, in_app; auto.
     - inv Hnodup; apply IHl; auto.

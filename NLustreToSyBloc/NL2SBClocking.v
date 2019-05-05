@@ -307,7 +307,9 @@ Module Type NL2SBCLOCKING
       rewrite fst_fst_gather_eqs_var_defined.
       pose proof (NoDup_var_defined_n_eqs n) as Hnodup;
         rewrite <-is_filtered_vars_defined in Hnodup.
-      apply NoDup_comm, NoDup_app_weaken, NoDup_comm, NoDup_app_weaken in Hnodup; auto.
+      rewrite Permutation_app_comm in Hnodup; apply NoDup_app_weaken in Hnodup.
+      rewrite Permutation_app_comm in Hnodup; apply NoDup_app_weaken in Hnodup.
+      auto.
     - apply NoDupMembers_NoDup, fst_NoDupMembers.
       rewrite map_fst_idck, filter_mem_fst.
       apply nodup_filter.

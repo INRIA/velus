@@ -10,6 +10,7 @@ Require Import Omega.
 
 Require Import Coq.FSets.FMapPositive.
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.Operators.
 Require Import Velus.Clocks.
 Require Import Velus.CoreExpr.CESyntax.

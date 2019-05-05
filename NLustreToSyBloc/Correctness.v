@@ -8,6 +8,7 @@ Require Import Velus.SyBloc.
 Require Import Velus.NLustreToSyBloc.Translation.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.RMemory.
 
 Require Import Omega.

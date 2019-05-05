@@ -1,4 +1,5 @@
 Require Import Velus.Common.
+Require Import Velus.Environment.
 
 Require Import Setoid.
 Require Import List.
@@ -96,6 +97,7 @@ Inductive equal_memory {V: Type} : memory V -> memory V -> Prop :=
       equal_memory m m'.
 Infix "≋" := equal_memory (at level 70, no associativity).
 
+Infix "⌈≋⌉" := (orel equal_memory) (at level 70, no associativity).
 
 Section EqualMemory.
 
@@ -486,6 +488,28 @@ Section Properties.
   Proof.
     intros; unfold add_val; simpl.
     now rewrite Env.add_comm.
+  Qed.
+
+  Lemma In_find_inst:
+    forall x (m : memory V),
+      Env.In x (instances m) -> exists v, find_inst x m = Some v.
+  Proof.
+    unfold find_inst. setoid_rewrite Env.In_find; auto.
+  Qed.
+
+  Lemma find_inst_In:
+    forall x (m : memory V) v,
+      find_inst x m = Some v -> Env.In x (instances m).
+  Proof.
+    unfold find_inst. intros * HH.
+    now apply Env.find_In in HH.
+  Qed.
+
+  Lemma MapsTo_find_inst:
+    forall i (m mi : memory V),  
+      Env.MapsTo i mi (instances m) <-> find_inst i m = Some mi.
+  Proof.
+    unfold find_inst. split; intro HH; now apply Env.find_1.
   Qed.
 
 End Properties.

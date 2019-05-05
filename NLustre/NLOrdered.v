@@ -191,6 +191,15 @@ Module Type NLORDERED
     (*   discriminate. *)
     (* Qed. *)
 
+    Lemma Not_Is_node_in_self:
+      forall n G,
+        Ordered_nodes (n :: G) ->
+        ~Is_node_in n.(n_name) n.(n_eqs).
+    Proof.
+      intros n G. inversion_clear 1 as [|??? HH].
+      intro Ini. apply HH in Ini. intuition.
+    Qed.
+
     Lemma find_node_later_not_Is_node_in:
       forall f nd G nd',
         Ordered_nodes (nd::G)

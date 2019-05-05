@@ -5,6 +5,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.Operators.
 Require Import Velus.RMemory.
 Require Import Velus.Obc.ObcSyntax.

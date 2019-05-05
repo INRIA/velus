@@ -13,6 +13,7 @@ Require Import common.Globalenvs.
 Require Import common.Behaviors.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 Require Import Velus.RMemory.
 Require Import Velus.Ident.
 Require Import Velus.Traces.
@@ -398,8 +399,7 @@ Proof.
   - inversion_clear Wt as [|? ? ? ? Nodup]; simpl in Nodup;
       inversion_clear Nodup as [|? ? Notinc].
     rewrite map_app, concat_app, map_app. simpl.
-    rewrite app_nil_r, map_map.
-    apply NoDup_comm.
+    rewrite app_nil_r, map_map, Permutation_app_comm.
     apply NoDup_app'; auto.
     + simpl.
       pose proof (c_nodupm c) as Nodup.
@@ -812,8 +812,8 @@ Section PRESERVATION.
                      (map (fun xt => glob_id (fst xt)) (m_out m))) as Hout_not_in.
       { apply NoDupMembers_glob.
         - pose proof (m_nodupvars m) as Nodup.
-          rewrite NoDupMembers_app_comm, <-app_assoc in Nodup.
-          now apply NoDupMembers_app_r, NoDupMembers_app_comm in Nodup.
+          rewrite Permutation_app_comm, <-app_assoc in Nodup.
+          now apply NoDupMembers_app_r in Nodup; rewrite Permutation_app_comm in Nodup.
         - rewrite Forall_app; split; auto.
       }
       destruct do_sync; simpl;
@@ -2020,8 +2020,7 @@ Section PRESERVATION.
     intro Hforall.
     assert (~InMembers x (f.(m_in) ++ f.(m_vars))) as Notin.
     { pose proof (m_nodupvars f) as Nodup.
-      rewrite app_assoc in Nodup.
-      rewrite NoDupMembers_app_comm in Nodup.
+      rewrite app_assoc, Permutation_app_comm in Nodup.
       apply In_InMembers in Hin.
       eapply NoDupMembers_app_InMembers; eauto.
     }
@@ -3441,12 +3440,12 @@ Section PRESERVATION.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
     }
     assert (~ InMembers self (map translate_param (m_vars callee))).
-    { unfold meth_vars in Notin_s; rewrite NotInMembers_app_comm, <-app_assoc in Notin_s;
+    { unfold meth_vars in Notin_s; rewrite Permutation_app_comm, <-app_assoc in Notin_s;
         apply NotInMembers_app in Notin_s.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
     }
     assert (~ InMembers out (map translate_param (m_vars callee))).
-    { unfold meth_vars in Notin_o; rewrite NotInMembers_app_comm, <-app_assoc in Notin_o;
+    { unfold meth_vars in Notin_o; rewrite Permutation_app_comm, <-app_assoc in Notin_o;
         apply NotInMembers_app in Notin_o.
       rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
     }
@@ -4819,12 +4818,12 @@ Section PRESERVATION.
         rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
       }
       assert (~ InMembers self (map translate_param (m_vars callee))).
-      { unfold meth_vars in Notin_s; rewrite NotInMembers_app_comm, <-app_assoc in Notin_s;
+      { unfold meth_vars in Notin_s; rewrite Permutation_app_comm, <-app_assoc in Notin_s;
           apply NotInMembers_app in Notin_s.
         rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
       }
       assert (~ InMembers out (map translate_param (m_vars callee))).
-      { unfold meth_vars in Notin_o; rewrite NotInMembers_app_comm, <-app_assoc in Notin_o;
+      { unfold meth_vars in Notin_o; rewrite Permutation_app_comm, <-app_assoc in Notin_o;
           apply NotInMembers_app in Notin_o.
         rewrite fst_InMembers, translate_param_fst, <-fst_InMembers; tauto.
       }

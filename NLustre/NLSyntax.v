@@ -206,6 +206,57 @@ Module Type NLSYNTAX
   Definition gather_insts := flat_map gather_inst_eq.
   Definition gather_app_vars := flat_map gather_app_vars_eq.
 
+  (** Basic syntactical properties *)
+
+  Lemma In_gather_mems_cons:
+    forall eq eqs x,
+      In x (gather_mems (eq :: eqs))
+      <-> (In x (gather_mem_eq eq) \/ In x (gather_mems eqs)).
+  Proof.
+    destruct eq; simpl; split; intuition.
+  Qed.
+
+  Lemma In_gather_insts_cons:
+    forall eq eqs x,
+      InMembers x (gather_insts (eq :: eqs))
+      <-> (InMembers x (gather_inst_eq eq) \/ InMembers x (gather_insts eqs)).
+  Proof.
+    destruct eq; simpl; try now intuition.
+    destruct i.
+    - setoid_rewrite app_nil_l. intuition.
+    - now setoid_rewrite InMembers_app.
+  Qed.
+
+  Lemma In_gather_mems_dec:
+    forall x eqs,
+      { In x (gather_mems eqs) } + { ~In x (gather_mems eqs) }.
+  Proof.
+    induction eqs as [|eq eqs IH].
+    now right; inversion 1.
+    destruct eq; simpl; auto.
+    destruct (ident_eq_dec x i).
+    now subst; auto.
+    destruct IH. auto.
+    right. inversion 1; auto.
+  Qed.
+
+  Lemma In_gather_insts_dec:
+    forall i eqs,
+      { InMembers i (gather_insts eqs) } + { ~InMembers i (gather_insts eqs) }.
+  Proof.
+    induction eqs as [|eq eqs IH].
+    now right; inversion 1.
+    destruct eq; simpl; auto.
+    destruct i0 as [|i'].
+    now destruct IH; auto.
+    destruct (ident_eq_dec i' i).
+    subst; simpl; auto.
+    destruct IH.
+    now left; rewrite InMembers_app; auto.
+    right; rewrite NotInMembers_app.
+    split; auto. inversion 1; auto.
+  Qed.
+  
 End NLSYNTAX.
 
 Module NLSyntaxFun

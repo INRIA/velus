@@ -434,23 +434,6 @@ Section Nodup.
     apply in_or_app; now left.
   Qed.
 
-  Lemma NoDup_comm:
-    forall (xs: list A) ys,
-      NoDup (ys ++ xs) ->
-      NoDup (xs ++ ys).
-  Proof.
-    induction xs; simpl; intros.
-    - rewrite app_nil_r in H; auto.
-    - pose proof H as H'.
-      apply NoDup_remove_1 in H.
-      apply NoDup_remove_2 in H'.
-      constructor; auto.
-      intro Hin; apply H'.
-      apply in_app_iff in Hin.
-      apply in_app_iff.
-      tauto.
-  Qed.
-
   Lemma NoDup_app_cons:
     forall ws (x: A) xs,
       NoDup (ws ++ x :: xs)
@@ -1999,15 +1982,6 @@ Section InMembers.
       apply In_InMembers with (1:=Hperm).
   Qed.
 
-  (*
-  Global Instance InMembers_Permutation_Proper' x:
-    Proper ((@Permutation (A*B)) ==> iff) (InMembers x).
-  Proof.
-    intros xs ys Hperm.
-    now rewrite Hperm.
-  Qed.
-  *)
-
   Lemma NotInMembers_app:
     forall y ws xs,
       ~InMembers y (ws ++ xs) <-> (~InMembers y xs /\ ~InMembers y ws).
@@ -2022,14 +1996,6 @@ Section InMembers.
       apply InMembers_app. auto.
     - destruct 1 as [H1 H2].
       intro H. apply InMembers_app in H. intuition.
-  Qed.
-
-  Lemma NotInMembers_app_comm:
-    forall y ws xs,
-      ~InMembers y (ws ++ xs) <-> ~InMembers y (xs ++ ws).
-  Proof.
-    split; intro HH; apply NotInMembers_app in HH;
-    apply NotInMembers_app; intuition.
   Qed.
 
   Lemma InMembers_dec:
@@ -2171,29 +2137,6 @@ Section InMembers.
     destruct x. apply NoDupMembers_app_cons in HH. intuition.
   Qed.
 
-   Lemma NoDupMembers_app_comm:
-    forall ws xs,
-      NoDupMembers (ws ++ xs) <-> NoDupMembers (xs ++ ws).
-  Proof.
-    induction ws as [|w ws IH]; split; intro HH.
-    - rewrite app_nil_r. assumption.
-    - rewrite app_nil_r in HH. assumption.
-    - destruct w as [w ww].
-      simpl in HH; apply nodupmembers_cons in HH.
-      destruct HH as [HH1 HH2].
-      apply NoDupMembers_app_cons.
-      apply NotInMembers_app_comm in HH1.
-      split; [assumption|].
-      apply IH. assumption.
-    - destruct w as [w ww].
-      apply NoDupMembers_app_cons in HH.
-      destruct HH as [HH1 HH2].
-      apply IH in HH2.
-      simpl; apply NoDupMembers_cons.
-      now apply NotInMembers_app_comm.
-      assumption.
-  Qed.
-
   Lemma NoDupMembers_app_r:
     forall ws xs,
       NoDupMembers (ws ++ xs) -> NoDupMembers xs.
@@ -2205,12 +2148,43 @@ Section InMembers.
     destruct w; rewrite nodupmembers_cons in H; tauto.
   Qed.
 
+  Global Instance NoDupMembers_Permutation_Proper:
+    Proper (Permutation (A:=A * B) ==> iff) NoDupMembers.
+  Proof.
+    intros xs ys Hperm.
+    induction Hperm.
+    - now intuition.
+    - destruct x as [x y].
+      rewrite 2 nodupmembers_cons, IHHperm, Hperm.
+      reflexivity.
+    - split; intro HH.
+      + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
+        destruct x as [x y].
+        inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
+        econstructor.
+        * intro Hinm. apply Hinm'.
+          inversion_clear Hinm; subst; auto.
+          exfalso; apply Hninm. now constructor.
+        * constructor; auto. intro Hinm.
+          apply Hninm. now constructor 2.
+      + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
+        destruct y as [x y].
+        inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
+        econstructor.
+        * intro Hinm. apply Hinm'.
+          inversion_clear Hinm; subst; auto.
+          exfalso; apply Hninm. now constructor.
+        * constructor; auto. intro Hinm.
+          apply Hninm. now constructor 2.
+    - now rewrite IHHperm1.
+  Qed.
+  
   Lemma NoDupMembers_app_l:
     forall ws xs,
       NoDupMembers (ws ++ xs) -> NoDupMembers ws.
   Proof.
     intros * Hndup.
-    apply NoDupMembers_app_comm in Hndup.
+    rewrite Permutation_app_comm in Hndup.
     apply NoDupMembers_app_r with (1:=Hndup).
   Qed.
 
@@ -2254,37 +2228,6 @@ Section InMembers.
         * exfalso. apply H3. eapply In_InMembers; eauto.
       + apply IHxs; auto.
         destruct a; rewrite nodupmembers_cons in H; tauto.
-  Qed.
-
-  Global Instance NoDupMembers_Permutation_Proper:
-    Proper (Permutation (A:=A * B) ==> iff) NoDupMembers.
-  Proof.
-    intros xs ys Hperm.
-    induction Hperm.
-    - now intuition.
-    - destruct x as [x y].
-      rewrite 2 nodupmembers_cons, IHHperm, Hperm.
-      reflexivity.
-    - split; intro HH.
-      + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
-        destruct x as [x y].
-        inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
-        econstructor.
-        * intro Hinm. apply Hinm'.
-          inversion_clear Hinm; subst; auto.
-          exfalso; apply Hninm. now constructor.
-        * constructor; auto. intro Hinm.
-          apply Hninm. now constructor 2.
-      + inversion HH as [|a b l' Hninm Hndup]. clear HH. subst.
-        destruct y as [x y].
-        inversion Hndup as [|c d l' Hinm' Hndup']. clear Hndup. subst.
-        econstructor.
-        * intro Hinm. apply Hinm'.
-          inversion_clear Hinm; subst; auto.
-          exfalso; apply Hninm. now constructor.
-        * constructor; auto. intro Hinm.
-          apply Hninm. now constructor 2.
-    - now rewrite IHHperm1.
   Qed.
 
   Lemma NoDupMembers_firstn:

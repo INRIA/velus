@@ -3,6 +3,7 @@ Import List.ListNotations.
 Open Scope list_scope.
 
 Require Import Velus.Common.
+Require Import Velus.Environment.
 
 Require Import Coq.Arith.Arith.
 Require Import Coq.Sorting.Permutation.
