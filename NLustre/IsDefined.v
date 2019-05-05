@@ -43,7 +43,7 @@ Module Type ISDEFINED
         Is_defined_in_eq x (EqFby x ck v e).
 
   (* definition is needed in signature *)
-  Definition Is_defined_in_eqs (x: ident) (eqs: list equation) : Prop :=
+  Definition Is_defined_in (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_defined_in_eq x) eqs.
 
 
@@ -91,8 +91,8 @@ Module Type ISDEFINED
 
   Lemma not_Is_defined_in_cons:
     forall x eq eqs,
-      ~Is_defined_in_eqs x (eq :: eqs)
-      <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in_eqs x eqs.
+      ~Is_defined_in x (eq :: eqs)
+      <-> ~Is_defined_in_eq x eq /\ ~Is_defined_in x eqs.
   Proof.
     intros x eq eqs. split.
     - (* ==> *)
@@ -127,9 +127,9 @@ Module Type ISDEFINED
 
   Lemma Is_defined_in_memories:
     forall x eqs,
-      PS.In x (memories eqs) -> Is_defined_in_eqs x eqs.
+      PS.In x (memories eqs) -> Is_defined_in x eqs.
   Proof.
-    unfold memories, Is_defined_in_eqs.
+    unfold memories, Is_defined_in.
     induction eqs.
     - simpl; intro; not_In_empty.
     - intro HH; simpl in HH.
@@ -141,10 +141,10 @@ Module Type ISDEFINED
         apply In_memory_eq_Is_defined_eq in HH; auto.
   Qed.
 
-  Lemma In_EqFby_Is_defined_in_eqs:
+  Lemma In_EqFby_Is_defined_in:
     forall x ck c0 e eqs,
       In (EqFby x ck c0 e) eqs ->
-      Is_defined_in_eqs x eqs.
+      Is_defined_in x eqs.
   Proof.
     induction eqs; inversion_clear 1; subst.
     now repeat constructor.
@@ -234,9 +234,9 @@ Module Type ISDEFINED
 
   Lemma Is_defined_inP:
     forall x eqs,
-      Is_defined_in_eqs x eqs <-> PS.mem x (defined eqs) = true.
+      Is_defined_in x eqs <-> PS.mem x (defined eqs) = true.
   Proof.
-    unfold defined, Is_defined_in_eqs.
+    unfold defined, Is_defined_in.
     induction eqs as [ | eq ].
     - rewrite List.Exists_nil; split; intro H;
       try apply not_In_empty in H; contradiction.
@@ -273,7 +273,7 @@ Module Type ISDEFINED
   
   Lemma Is_defined_in_vars_defined:
     forall x eqs,
-      Is_defined_in_eqs x eqs
+      Is_defined_in x eqs
       <-> In x (vars_defined eqs).
   Proof.
     intros; rewrite Is_defined_inP, PS.mem_spec.
@@ -297,7 +297,7 @@ Module Type ISDEFINED
   Qed.
 
   Lemma Is_defined_in_dec:
-    forall x eqs, {Is_defined_in_eqs x eqs}+{~Is_defined_in_eqs x eqs}.
+    forall x eqs, {Is_defined_in x eqs}+{~Is_defined_in x eqs}.
   Proof.
     intros;
       eapply Bool.reflect_dec,
@@ -306,9 +306,9 @@ Module Type ISDEFINED
   Qed.
 
 
-  Lemma decidable_Is_defined_in_eqs:
+  Lemma decidable_Is_defined_in:
     forall x eqs,
-      Decidable.decidable (Is_defined_in_eqs x eqs).
+      Decidable.decidable (Is_defined_in x eqs).
   Proof.
     intros. apply decidable_Exists.
     intros eq Hin.
@@ -317,7 +317,7 @@ Module Type ISDEFINED
 
   (** ** Properties *)
 
-  Lemma Is_defined_in_eqs_var_defined:
+  Lemma Is_defined_in_var_defined:
     forall x eq,
       Is_defined_in_eq x eq <-> List.In x (var_defined eq).
   Proof.
@@ -330,10 +330,10 @@ Module Type ISDEFINED
 
   Lemma Is_defined_in_cons:
     forall x eq eqs,
-      Is_defined_in_eqs x (eq :: eqs) ->
+      Is_defined_in x (eq :: eqs) ->
 
       Is_defined_in_eq x eq
-      \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
+      \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
   Proof.
     intros x eq eqs Hdef.
     apply List.Exists_cons in Hdef.
@@ -376,13 +376,13 @@ Module Type ISDEFINED
     - right; now apply In_memory_eq_In_defined_eq with (1:=HH).
   Qed.
 
-  Lemma not_Exists_Is_defined_in_eqs_n_in:
-    forall n, ~Exists (fun ni=>Is_defined_in_eqs ni n.(n_eqs)) (map fst n.(n_in)).
+  Lemma not_Exists_Is_defined_in_n_in:
+    forall n, ~Exists (fun ni=>Is_defined_in ni n.(n_eqs)) (map fst n.(n_in)).
   Proof.
     intros n HH.
     rewrite Exists_map in HH.
     apply decidable_Exists_not_Forall in HH.
-    2:(intros; apply decidable_Is_defined_in_eqs).
+    2:(intros; apply decidable_Is_defined_in).
     apply HH. clear HH.
     apply Forall_forall.
     intros x Hin.
@@ -394,9 +394,9 @@ Module Type ISDEFINED
     apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup) Hin).
   Qed.
 
-  Lemma Is_defined_in_eqs_In:
+  Lemma Is_defined_in_In:
     forall x eqs,
-      Is_defined_in_eqs x eqs ->
+      Is_defined_in x eqs ->
       exists eq, In eq eqs /\ Is_defined_in_eq x eq.
   Proof.
     induction eqs as [|eq]. now inversion 1.
@@ -409,7 +409,7 @@ Module Type ISDEFINED
   Lemma node_output_defined_in_eqs:
     forall n x,
       In x (map fst n.(n_out)) ->
-      Is_defined_in_eqs x n.(n_eqs).
+      Is_defined_in x n.(n_eqs).
   Proof.
     intros n x Ho.
     cut (In x (map fst (n.(n_vars) ++ n.(n_out)))).
@@ -421,7 +421,7 @@ Module Type ISDEFINED
   Lemma node_variable_defined_in_eqs:
     forall n x,
       In x (map fst n.(n_vars)) ->
-      Is_defined_in_eqs x n.(n_eqs).
+      Is_defined_in x n.(n_eqs).
   Proof.
     intros n x Ho.
     cut (In x (map fst (n.(n_vars) ++ n.(n_out)))).
@@ -464,12 +464,12 @@ Module Type ISDEFINED
     simpl. setoid_rewrite NoDup_app'_iff. intuition.
   Qed.
   
-  Lemma NoDup_Is_defined_in_eqs:
+  Lemma NoDup_Is_defined_in:
     forall eq eqs x,
       NoDup (vars_defined (eq :: eqs)) ->
-      Is_defined_in_eqs x (eq :: eqs) ->
-      (Is_defined_in_eq x eq /\ ~Is_defined_in_eqs x eqs)
-      \/ (~Is_defined_in_eq x eq /\ Is_defined_in_eqs x eqs).
+      Is_defined_in x (eq :: eqs) ->
+      (Is_defined_in_eq x eq /\ ~Is_defined_in x eqs)
+      \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
   Proof.
     intros eq eqs x ND Def.
     apply Is_defined_in_cons in Def as [Def|]; auto.
@@ -482,10 +482,10 @@ Module Type ISDEFINED
     - inv ND; rewrite <-Is_defined_in_vars_defined in *; auto.
   Qed.
 
-  Lemma gather_mems_Is_defined_in_eqs:
+  Lemma gather_mems_Is_defined_in:
     forall x eqs,
       In x (gather_mems eqs) ->
-      Is_defined_in_eqs x eqs.
+      Is_defined_in x eqs.
   Proof.
     induction eqs as [|eq eqs IH]. now inversion 1.
     intro Hin. destruct eq; [| |destruct Hin as [Hin|Hin]]; simpl in *;
@@ -493,10 +493,10 @@ Module Type ISDEFINED
     subst. now constructor.
   Qed.
 
-  Lemma gather_insts_Is_defined_in_eqs:
+  Lemma gather_insts_Is_defined_in:
     forall x eqs,
       InMembers x (gather_insts eqs) ->
-      Is_defined_in_eqs x eqs.
+      Is_defined_in x eqs.
   Proof.
     induction eqs as [|eq eqs IH]. now inversion 1.
     intro Hin.
@@ -533,18 +533,18 @@ Module Type ISDEFINED
   Proof.
     intros eq eqs x ND Def.
     simpl in *. apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3).
-    assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in_eqs x eqs) as ND4.
-    { intros y Dy. apply Is_defined_in_eqs_var_defined in Dy.
+    assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) as ND4.
+    { intros y Dy. apply Is_defined_in_var_defined in Dy.
       rewrite Forall_forall in ND3. apply ND3 in Dy.
       now rewrite Is_defined_in_vars_defined. }
     apply in_app_or in Def as [Def|Def].
     - left; split; auto.
       apply gather_mem_eq_Is_defined_in_eq, ND4 in Def.
-      now apply (flip_impl (gather_mems_Is_defined_in_eqs _ _)).
+      now apply (flip_impl (gather_mems_Is_defined_in _ _)).
     - right; split; auto.
       apply (flip_impl (gather_mem_eq_Is_defined_in_eq _ _)).
       intro D. apply ND4 in D.
-      apply gather_mems_Is_defined_in_eqs in Def; auto.
+      apply gather_mems_Is_defined_in in Def; auto.
   Qed.
 
   Lemma NoDup_In_gather_insts:
@@ -556,18 +556,18 @@ Module Type ISDEFINED
   Proof.
     intros eq eqs x ND Def.
     simpl in *. apply NoDup_app'_iff in ND as (ND1 & ND2 & ND3).
-    assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in_eqs x eqs) as ND4.
-    { intros y Dy. apply Is_defined_in_eqs_var_defined in Dy.
+    assert (forall x, Is_defined_in_eq x eq -> ~Is_defined_in x eqs) as ND4.
+    { intros y Dy. apply Is_defined_in_var_defined in Dy.
       rewrite Forall_forall in ND3. apply ND3 in Dy.
       now rewrite Is_defined_in_vars_defined. }
     apply InMembers_app in Def as [Def|Def].
     - left; split; auto.
       apply gather_inst_eq_Is_defined_in_eq, ND4 in Def.
-      now apply (flip_impl (gather_insts_Is_defined_in_eqs _ _)).
+      now apply (flip_impl (gather_insts_Is_defined_in _ _)).
     - right; split; auto.
       apply (flip_impl (gather_inst_eq_Is_defined_in_eq _ _)).
       intro D. apply ND4 in D.
-      apply gather_insts_Is_defined_in_eqs in Def; auto.
+      apply gather_insts_Is_defined_in in Def; auto.
   Qed.
   
 End ISDEFINED.

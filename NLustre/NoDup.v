@@ -45,17 +45,17 @@ Module Type NODUP
   | NDDEqDef:
       forall x ck e eqs,
         NoDup_defs eqs ->
-        ~Is_defined_in_eqs x eqs ->
+        ~Is_defined_in x eqs ->
         NoDup_defs (EqDef x ck e :: eqs)
   | NDDEqApp:
       forall xs ck f e r eqs,
         NoDup_defs eqs ->
-        (forall x, In x xs -> ~Is_defined_in_eqs x eqs) ->
+        (forall x, In x xs -> ~Is_defined_in x eqs) ->
         NoDup_defs (EqApp xs ck f e r :: eqs)
   | NDDEqFby:
       forall x ck v e eqs,
         NoDup_defs eqs ->
-        ~Is_defined_in_eqs x eqs ->
+        ~Is_defined_in x eqs ->
         NoDup_defs (EqFby x ck v e :: eqs).
 
   (** ** Properties *)
@@ -72,7 +72,7 @@ Module Type NODUP
     forall x eqs,
       PS.In x (memories eqs)
       -> NoDup_defs eqs
-      -> ~Is_variable_in_eqs x eqs.
+      -> ~Is_variable_in x eqs.
   Proof.
     intros x eqs Hinm Hndd Hvar.
 
@@ -88,9 +88,9 @@ Module Type NODUP
         idtac
       | _ =>
         (* Case: eq ~ EqApp or eq ~ EqDef *)
-        (assert (Is_defined_in_eqs x eqs)
+        (assert (Is_defined_in x eqs)
           by now apply Is_defined_in_memories);
-        (assert (Is_variable_in_eqs x eqs)
+        (assert (Is_variable_in x eqs)
           by now inv Hvar; auto; exfalso; inv Hndd;
             match goal with
             | H: Is_variable_in_eq ?x (EqDef ?i _ _) |- _ => inv H
@@ -101,9 +101,9 @@ Module Type NODUP
       (* Case: eq ~ EqFby *)
       rewrite In_fold_left_memory_eq in Hinm.
       destruct Hinm.
-      * assert (Is_defined_in_eqs x eqs)
+      * assert (Is_defined_in x eqs)
           by now apply Is_defined_in_memories.
-        assert (Is_variable_in_eqs x eqs)
+        assert (Is_variable_in x eqs)
           by now inv Hvar; auto; exfalso; inv Hndd;
             match goal with
             | H: Is_variable_in_eq ?x (EqFby ?i _ _ _) |- _ => inv H
@@ -116,7 +116,7 @@ Module Type NODUP
           exfalso; eapply not_In_empty; eauto.
         }
 
-        assert (~ Is_variable_in_eqs i eqs)
+        assert (~ Is_variable_in i eqs)
           by now apply not_Is_defined_in_not_Is_variable_in;
           inv Hndd.
 

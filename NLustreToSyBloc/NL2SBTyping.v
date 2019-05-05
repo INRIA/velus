@@ -63,7 +63,7 @@ Module Type NL2SBTYPING
       Forall (NL.Typ.wt_equation G vars) eqs ->
       Permutation (vars' ++ mems) vars ->
       (forall x ty, In (x, ty) vars -> In x (gather_mems eqs) -> In (x, ty) mems) ->
-      (forall x ty, In (x, ty) vars -> Is_variable_in_eqs x eqs -> In (x, ty) vars') ->
+      (forall x ty, In (x, ty) vars -> NL.IsV.Is_variable_in x eqs -> In (x, ty) vars') ->
       Forall (wt_equation (translate G) vars' mems) (translate_eqns eqs).
   Proof.
     unfold translate_eqns.

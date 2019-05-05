@@ -539,7 +539,7 @@ Module Type CORRECTNESS
 
   Lemma not_Is_defined_not_Is_state_in_eqs:
     forall x eqs,
-      ~ Is_defined_in_eqs x eqs ->
+      ~ NL.IsD.Is_defined_in x eqs ->
       (forall k, ~ Is_state_in x k (translate_eqns eqs)).
   Proof.
     unfold translate_eqns.

@@ -526,7 +526,7 @@ enough: it does not support the internal fixpoint introduced by
 
   Lemma msem_equation_madd_val:
     forall G bk H M M' x ms ms' eqs,
-      ~Is_defined_in_eqs x eqs ->
+      ~Is_defined_in x eqs ->
       Forall (msem_equation G bk H M M') eqs ->
       Forall (msem_equation G bk H (add_val_n x ms M) (add_val_n x ms' M')) eqs.
   Proof.
@@ -545,7 +545,7 @@ enough: it does not support the internal fixpoint introduced by
 
   Lemma msem_equation_madd_inst:
     forall G bk H M M' Mx Mx' x eqs,
-      ~Is_defined_in_eqs x eqs ->
+      ~Is_defined_in x eqs ->
       Forall (msem_equation G bk H M M') eqs ->
       Forall (msem_equation G bk H (add_inst_n x Mx M) (add_inst_n x Mx' M')) eqs.
   Proof.
@@ -918,7 +918,7 @@ dataflow memory for which the non-standard semantics holds true.
 
   Lemma msem_equation_remove_inst:
     forall G bk eqs H M M' x,
-      ~Is_defined_in_eqs x eqs ->
+      ~Is_defined_in x eqs ->
       Forall (msem_equation G bk H M M') eqs ->
       Forall (msem_equation G bk H (remove_inst_n x M) (remove_inst_n x M')) eqs.
   Proof.
@@ -936,7 +936,7 @@ dataflow memory for which the non-standard semantics holds true.
 
   Lemma msem_equation_remove_val:
     forall G bk eqs H M M' x,
-      ~Is_defined_in_eqs x eqs ->
+      ~Is_defined_in x eqs ->
       Forall (msem_equation G bk H M M') eqs ->
       Forall (msem_equation G bk H (remove_val_n x M) (remove_val_n x M')) eqs.
   Proof.
@@ -1024,7 +1024,7 @@ dataflow memory for which the non-standard semantics holds true.
       reflexivity.
 
     - rewrite Hd2 in Hd1; inv Hd1.
-      assert (~ Is_defined_in_eqs x eqs)
+      assert (~ Is_defined_in x eqs)
         by (apply hd_error_Some_In in Hd2; auto).
       apply msem_equation_remove_inst with (x := x) in Sems1;
         apply msem_equation_remove_inst with (x := x) in Sems2; auto.
@@ -1037,7 +1037,7 @@ dataflow memory for which the non-standard semantics holds true.
 
     - match goal with H: Some _ = Some _ |- _ => inv H end.
       rewrite Hd2 in Hd1; inv Hd1.
-      assert (~ Is_defined_in_eqs x eqs)
+      assert (~ Is_defined_in x eqs)
         by (apply hd_error_Some_In in Hd2; auto).
       apply msem_equation_remove_inst with (x := x) in Sems1;
         apply msem_equation_remove_inst with (x := x) in Sems2; auto.
@@ -1539,7 +1539,7 @@ dataflow memory for which the non-standard semantics holds true.
       intros (x, xck) Hxin.
       apply In_idck_exists in Hxin as (xty & Hxin). assert (Hxin' := Hxin).
       apply in_map with (f:=fst), node_output_defined_in_eqs in Hxin.
-      apply Is_defined_in_eqs_In in Hxin as (eq & Heqin & Hxeq).
+      apply Is_defined_in_In in Hxin as (eq & Heqin & Hxeq).
       eapply Forall_forall in IH; eauto.
       apply wc_find_node with (1:=WCG) in Hf
         as (G'' & G' & HG & (WCi & WCo & WCv & WCeqs)).
@@ -1623,7 +1623,7 @@ dataflow memory for which the non-standard semantics holds true.
     intros G bk H M M' inputs vars eqs OG WCG Hndup Hsem Hwc Hdef x xck Hin.
     assert (In x (vars_defined eqs)) as Hxin
         by (now rewrite Hdef; apply in_map with (f:=fst) in Hin).
-    apply Is_defined_in_vars_defined, Is_defined_in_eqs_In in Hxin
+    apply Is_defined_in_vars_defined, Is_defined_in_In in Hxin
       as (eq & Hieq & Hdeq).
     eapply Forall_forall in Hsem; eauto.
     eapply Forall_forall in Hwc; eauto.

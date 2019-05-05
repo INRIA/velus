@@ -290,7 +290,7 @@ Module Type SB2OBCINVARIANTS
     contradiction.
   Qed.
 
-  Lemma Can_write_in_translate_eqns_Is_defined_in_eqs:
+  Lemma Can_write_in_translate_eqns_Is_defined_in:
     forall mems clkvars eqs x,
       Can_write_in x (translate_eqns mems clkvars eqs) <-> Is_defined_in x eqs.
   Proof.
@@ -317,7 +317,7 @@ Module Type SB2OBCINVARIANTS
       auto; try contradiction.
     apply Forall_forall; intros x Hin.
     apply fst_InMembers, InMembers_idty in Hin.
-    rewrite Can_write_in_translate_eqns_Is_defined_in_eqs.
+    rewrite Can_write_in_translate_eqns_Is_defined_in.
     now apply b_ins_not_def.
   Qed.
 

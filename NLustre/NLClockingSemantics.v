@@ -254,7 +254,7 @@ Module Type NLCLOCKINGSEMANTICS
       intros (x, xck) Hxin.
       apply In_idck_exists in Hxin as (xty & Hxin). assert (Hxin' := Hxin).
       apply in_map with (f:=fst), node_output_defined_in_eqs in Hxin.
-      apply Is_defined_in_eqs_In in Hxin as (eq & Heqin & Hxeq).
+      apply Is_defined_in_In in Hxin as (eq & Heqin & Hxeq).
       eapply Forall_forall in IH; eauto.
         (* as (Hsem & IH). *)
       apply wc_find_node with (1:=WCG) in Hf
@@ -345,7 +345,7 @@ Module Type NLCLOCKINGSEMANTICS
     intros G bk H inputs vars eqs OG WCG Hndup Hsem Hwc Hdef x xck Hin.
     assert (In x (vars_defined eqs)) as Hxin
         by (now rewrite Hdef; apply in_map with (f:=fst) in Hin).
-    apply Is_defined_in_vars_defined, Is_defined_in_eqs_In in Hxin
+    apply Is_defined_in_vars_defined, Is_defined_in_In in Hxin
       as (eq & Hieq & Hdeq).
     eapply Forall_forall in Hsem; eauto.
     eapply Forall_forall in Hwc; eauto.

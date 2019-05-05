@@ -37,7 +37,7 @@ Module Type ISVARIABLE
   | VarEqApp: forall x xs ck f e r, In x xs -> Is_variable_in_eq x (EqApp xs ck f e r).
 
   (* definition is needed in signature *)
-  Definition Is_variable_in_eqs (x: ident) (eqs: list equation) : Prop :=
+  Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
     List.Exists (Is_variable_in_eq x) eqs.
 
   (** ** Properties *)
@@ -64,10 +64,10 @@ Module Type ISVARIABLE
     destruct eq; inversion_clear 1; auto using Is_defined_in_eq.
   Qed.
 
-  Lemma Is_variable_in_eqs_Is_defined_in_eqs:
+  Lemma Is_variable_in_Is_defined_in:
     forall x eqs,
-      Is_variable_in_eqs x eqs
-      -> Is_defined_in_eqs x eqs.
+      Is_variable_in x eqs
+      -> Is_defined_in x eqs.
   Proof.
     induction eqs as [|eq eqs IH]; [now inversion 1|].
     inversion_clear 1 as [Hin ? Hivi|]; [|constructor 2; intuition].
@@ -84,7 +84,7 @@ Module Type ISVARIABLE
   Qed.
 
   Lemma not_Is_defined_in_not_Is_variable_in:
-    forall x eqs, ~Is_defined_in_eqs x eqs -> ~Is_variable_in_eqs x eqs.
+    forall x eqs, ~Is_defined_in x eqs -> ~Is_variable_in x eqs.
   Proof.
     Hint Constructors Is_defined_in_eq.
     induction eqs as [|eq].
@@ -101,7 +101,7 @@ Module Type ISVARIABLE
 
   Lemma Is_variable_in_var_defined:
     forall x eqs,
-      Is_variable_in_eqs x eqs
+      Is_variable_in x eqs
       <-> In x (vars_defined (filter (notb is_fby) eqs)).
   Proof.
     unfold notb.
@@ -124,21 +124,21 @@ Module Type ISVARIABLE
       + apply IHeqs in HH. now constructor 2.
   Qed.
 
-  Lemma In_EqDef_Is_variable_in_eqs:
+  Lemma In_EqDef_Is_variable_in:
     forall x ck e eqs,
       In (EqDef x ck e) eqs ->
-      Is_variable_in_eqs x eqs.
+      Is_variable_in x eqs.
   Proof.
     induction eqs; inversion_clear 1; subst.
     now repeat constructor.
     constructor 2; intuition.
   Qed.
 
-  Lemma In_EqApp_Is_variable_in_eqs:
+  Lemma In_EqApp_Is_variable_in:
     forall x xs ck f es eqs r,
       List.In x xs ->
       In (EqApp xs ck f es r) eqs ->
-      Is_variable_in_eqs x eqs.
+      Is_variable_in x eqs.
   Proof.
     induction eqs; inversion_clear 2.
     - now subst; repeat constructor.
@@ -148,7 +148,7 @@ Module Type ISVARIABLE
   Lemma n_out_variable_in_eqs:
     forall n x,
       In x (map fst n.(n_out)) ->
-      Is_variable_in_eqs x n.(n_eqs).
+      Is_variable_in x n.(n_eqs).
   Proof.
     intros.
     apply Is_variable_in_var_defined.
@@ -231,9 +231,9 @@ Module Type ISVARIABLE
 
   Lemma Is_variable_in_cons:
     forall x eq eqs,
-      Is_variable_in_eqs x (eq :: eqs) ->
+      Is_variable_in x (eq :: eqs) ->
       Is_variable_in_eq x eq
-      \/ (~Is_variable_in_eq x eq /\ Is_variable_in_eqs x eqs).
+      \/ (~Is_variable_in_eq x eq /\ Is_variable_in x eqs).
   Proof.
     intros x eq eqs Hdef.
     apply List.Exists_cons in Hdef.
@@ -242,20 +242,20 @@ Module Type ISVARIABLE
 
   Lemma not_Is_variable_in_cons:
     forall x eq eqs,
-      ~Is_variable_in_eqs x (eq :: eqs)
-      <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in_eqs x eqs.
+      ~Is_variable_in x (eq :: eqs)
+      <-> ~Is_variable_in_eq x eq /\ ~Is_variable_in x eqs.
   Proof.
     intros x eq eqs. split.
-    intro H0; unfold Is_variable_in_eqs in H0; auto.
+    intro H0; unfold Is_variable_in in H0; auto.
     destruct 1 as [H0 H1]; intro H; apply Is_variable_in_cons in H; intuition.
   Qed.
 
   Lemma Is_variable_in_variables:
     forall x eqs,
       PS.In x (variables eqs)
-      <-> Is_variable_in_eqs x eqs.
+      <-> Is_variable_in x eqs.
   Proof.
-    unfold variables, Is_variable_in_eqs.
+    unfold variables, Is_variable_in.
     induction eqs as [ | eq ].
     - rewrite List.Exists_nil; split; intro H;
       try apply not_In_empty in H; contradiction.
@@ -288,7 +288,7 @@ Module Type ISVARIABLE
   Qed.
 
   Lemma Is_variable_in_dec:
-    forall x eqs, {Is_variable_in_eqs x eqs}+{~Is_variable_in_eqs x eqs}.
+    forall x eqs, {Is_variable_in x eqs}+{~Is_variable_in x eqs}.
   Proof.
     intros x eqs.
     apply Bool.reflect_dec with (b := PS.mem x (variables eqs)).
