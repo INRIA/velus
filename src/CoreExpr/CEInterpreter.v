@@ -40,14 +40,6 @@ Module Type CEINTERPRETER
     Definition interp_var_instant (x: ident): option value :=
       Env.find x R.
 
-    (* TODO: Move elsewhere? *)
-
-    Definition omap {A B : Type} (f : A -> option B) (xs : list A) : option (list B) :=
-      List.fold_right (fun x ys => match f x, ys with
-                                   | Some y, Some ys => Some (y :: ys)
-                                   | _, _ => None
-                                   end) (Some []) xs.
-
     Definition interp_vars_instant (xs: list ident): option (list value) :=
       omap interp_var_instant xs.
 
