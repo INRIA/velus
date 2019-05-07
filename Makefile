@@ -28,7 +28,7 @@ proof: compcert parser $(MAKEFILEAUTO) $(MAKEFILECONFIG)
 	@echo "${bold}OK.${normal}"
 
 $(MAKEFILEAUTO): automake $(COQPROJECT)
-	./$< -e $(EXTRACTION)/Extraction.v -f $(EXTRACTED) -o $@ $(COQPROJECT)
+	./$< -e ./$(EXTRACTION)/Extraction.v -f $(EXTRACTED) -o $@ $(COQPROJECT)
 
 # EXTRACTION
 extraction: proof
@@ -38,22 +38,22 @@ extraction: proof
 		$(PARSERDIR)/Relexer.ml\
 		$(PARSERDIR)/LustreParser2.ml\
 		$(PARSERDIR)/LustreParser2.mli\
-		CoreExpr/coreexprlib.ml\
-		Lustre/lustrelib.ml\
-		NLustre/nlustrelib.ml\
-		SyBloc/sybloclib.ml\
-		Obc/obclib.ml\
-		ObcToClight/interfacelib.ml\
+		$(SRC_DIR)/CoreExpr/coreexprlib.ml\
+		$(SRC_DIR)/Lustre/lustrelib.ml\
+		$(SRC_DIR)/NLustre/nlustrelib.ml\
+		$(SRC_DIR)/SyBloc/sybloclib.ml\
+		$(SRC_DIR)/Obc/obclib.ml\
+		$(SRC_DIR)/ObcToClight/interfacelib.ml\
 		$(COMPCERT_INCLUDES:%=$(COMPCERTDIR)/%/*.ml*)\
 		$(EXTRACTED)
 	@echo "${bold}OK.${normal}"
 
 # VELUS
-$(VELUS): extraction $(VELUSMAIN).ml veluslib.ml
+$(VELUS): extraction $(SRC_DIR)/$(VELUSMAIN).ml $(SRC_DIR)/veluslib.ml
 	@echo "${bold}Building Velus...${normal}"
 	ocamlbuild $(FLAGS) $(VELUSMAIN).$(TARGET)
 	mv $(VELUSMAIN).$(TARGET) $@
-	cp $(COMPCERTDIR)/compcert.ini $(BUILDDIR)/compcert.ini
+	cp $(COMPCERTDIR)/compcert.ini $(BUILDDIR)/$(SRC_DIR)/compcert.ini
 	@echo "${bold}Done.${normal}"
 
 # TOOLS

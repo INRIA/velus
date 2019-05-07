@@ -1,0 +1,17 @@
+OK add absence in instant semantics to constrain the semantics
+
+OK add clocks constraint in equation definition in Coind semantics
+
+OK clocks_of as a forall in Coind (comment the former definition)
+
+OK add x = absent in sem_clock
+
+OK tidy up tactics
+
+OK COMMENTS !!!
+
+OK opaque = List.map (fun _ => absent) : this is Sem.all_absent
+
+do when the other way around
+
+OK change names: Mod, Sem, to_map, etc.

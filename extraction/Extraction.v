@@ -4,7 +4,7 @@ Require Import Velus.VelusCorrectness.
 Require Import Coq.ZArith.BinInt.
 Require Import Velus.ObcToClight.Generation.
 Require Import Velus.ObcToClight.LustreElab.
-Require Import Lustre.Parser.LustreParser.
+Require Import Velus.Lustre.Parser.LustreParser.
 
 Require cfrontend.Initializers cfrontend.Ctyping
         backend.Selection backend.RTLgen
@@ -187,4 +187,3 @@ Separate Extraction
 	 Clight.type_of_function.
 
 Extraction Library Ordered.
-

@@ -83,12 +83,12 @@ rule scan = parse
     let extracted = if !extracted = "" then extr_dir else !extracted in
     let rm_mls = "rm -f " ^ Filename.concat extracted "*.ml*" in
     let rules = [
-      [".PHONY"], ["all"; "clean"; "archclean"; "depend"], [];
+      [".PHONY"], ["all"; "clean"; "depend"], [];
       ["all"], ["$(VOFILES)"], [];
       ["clean"], [], "rm -f $(VOFILES) $(DOCDIR)/*.glob .depend" :: if !extraction <> "" then
                        [rm_mls; "rm -f " ^ stamp] else [];
       ["depend"], ["$(VFILES)"], ["@echo \"Analyzing Coq dependencies\"";
-                                  "$(COQDEP) -slash $(COQLIBS) $^ > .depend"];
+                                  "$(COQDEP) $(COQLIBS) $^ > .depend"];
       ["%.vo"; "%.glob"], ["%.v"], ["@echo \"COQC $*.v\"";
                                     "$(COQC) -dump-glob $(DOCDIR)/$(*F).glob $(COQFLAGS) $*"]
     ]

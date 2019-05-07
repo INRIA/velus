@@ -6,6 +6,7 @@ a="/$0"; a=${a%/*}; a=${a#/}; a=${a:-.}; BASEDIR=$(cd "$a" && pwd)
 # Absolute directories to allow use from subdirectories
 coqproject="$BASEDIR/_CoqProject"
 compcertdir="$BASEDIR/CompCert"
+srcdir="$BASEDIR/src"
 
 # Parse command-line arguments
 
@@ -45,29 +46,15 @@ fi
 
 printf "COMPCERTDIR=%s\\nARCH=%s\\n" "$compcertdir" "$ARCH" > Makefile.config
 
-# Exclude "the other" architecture directories
-case $ARCH in
-    ia32)
-        EXCLUDES="arm powerpc";;
-    arm)
-        EXCLUDES="ia32 powerpc";;
-    powerpc)
-        EXCLUDES="ia32 arm";;
-    *)
-esac
-
 # Generate the _CoqProject file
 {
-    for dir in $EXCLUDES; do
-	      printf -- "-exclude-dir \"%s\"\\n" "$dir"
-    done;
-    printf -- "-R \"%s\" Velus\\n" "$BASEDIR";
+    printf -- "-R \"%s\" Velus\\n" "$srcdir";
     while read -r subdir; do
       printf -- "-R \"%s/%s\" compcert.%s\\n" "$compcertdir" "$subdir" "$subdir"
     done <includes;
     if [ "$ARCH" = x86 ]; then
-	printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/${ARCH}_${BITSIZE}"\
-	    "${ARCH}_${BITSIZE}";
+	      printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/${ARCH}_${BITSIZE}"\
+	             "${ARCH}_${BITSIZE}";
     fi;
     printf -- "-R \"%s\" compcert.%s\\n" "$compcertdir/$ARCH" "$ARCH";
     cat vfiles

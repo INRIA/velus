@@ -4,6 +4,8 @@
 MKFILE_PATH := $(abspath $(lastword $(MAKEFILE_LIST)))
 MKFILE_DIR := $(patsubst %/,%,$(dir $(MKFILE_PATH)))
 
+SRC_DIR=src
+
 VELUSMAIN=velusmain
 VELUS=velus
 
@@ -26,7 +28,7 @@ COMPCERTFLAGS=$(SILENT) -C $(COMPCERTDIR)
 endif
 COMPCERT_INCLUDES=lib cfrontend backend common driver cparser debug $(ARCH)
 
-PARSERDIR=Lustre/Parser
+PARSERDIR=$(SRC_DIR)/Lustre/Parser
 PARSERFLAGS=$(SILENT) -C $(PARSERDIR)
 
 TOOLSDIR=tools
@@ -51,8 +53,8 @@ MENHIR_INCLUDES:= $(subst $(space),$(comma),$(MENHIR_INCLUDES))
 
 # ocamlbuild flags
 VERBOSITY=-verbose 1
-FLAGS=-use-ocamlfind -use-menhir -pkgs str,unix,menhirLib \
-	-I $(EXTRACTED) -no-hygiene $(VERBOSITY)
+FLAGS=-Is $(SRC_DIR),$(EXTRACTED) -use-ocamlfind -use-menhir \
+      -pkgs str,unix,menhirLib -no-hygiene $(VERBOSITY)
 	#-cflags $(MENHIR_INCLUDES)$(WARNINGS)
 TARGET=native
 BUILDDIR=_build
