@@ -11,7 +11,7 @@
 (*                                                                     *)
 (* *********************************************************************)
 
-Require Coq.Numbers.BinNums.
+From Coq Require Numbers.BinNums.
 
 Definition ident := Coq.Numbers.BinNums.positive.
 
@@ -119,7 +119,7 @@ Definition declaration_loc (d: declaration) : astloc :=
 
 (** Custom induction schemes *)
 
-Require Import List.
+From Coq Require Import List.
 
 Section expression_ind2.
   Variable P : expression -> Prop.

@@ -1,19 +1,19 @@
-Require Import PArith.
-Require Import Velus.Nelist.
-Require Import List.
+From Coq Require Import PArith.
+From Velus Require Import Nelist.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope positive.
 Open Scope list.
 
-Require Import Velus.Common.Common.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.Obc.ObcSyntax.
-Require Import Velus.Translation.
-Require Import Velus.Obc.FuseIfte.
+From Velus Require Import Common.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import Obc.ObcSyntax.
+From Velus Require Import Translation.
+From Velus Require Import Obc.FuseIfte.
 
-Require Import Velus.NLustre.Memories.
-Require Import Velus.NLustre.WellFormed.
-Require Import Velus.NLustre.WellFormed.Decide.
+From Velus Require Import NLustre.Memories.
+From Velus Require Import NLustre.WellFormed.
+From Velus Require Import NLustre.WellFormed.Decide.
 
 
 (* Common notations *)

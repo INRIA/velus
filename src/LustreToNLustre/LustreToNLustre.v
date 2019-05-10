@@ -1,23 +1,23 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.Lustre.Lustre.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.NLustre.NLSyntax.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import Lustre.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import NLustre.NLSyntax.
 
-Require Import String.
+From Coq Require Import String.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
-Import Permutation.
+From Coq Require Import Permutation.
 
 Open Scope list.
 
-Require Import common.Errors.
+From compcert Require Import common.Errors.
 Open Scope error_monad_scope.
 
-Require Import Coq.Classes.EquivDec.
+From Coq Require Import Classes.EquivDec.
 
 (** * Turn a normalized Lustre program into an NLustre program *)
 

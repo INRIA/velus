@@ -1,14 +1,14 @@
-Require Import Velus.SyBloc.SyBloc.
-Require Import Velus.Obc.Obc.
+From Velus Require Import SyBloc.
+From Velus Require Import Obc.
 
-Require Import Velus.SyBlocToObc.Translation.
+From Velus Require Import SyBlocToObc.Translation.
 
-Require Import Velus.RMemory.
-Require Import Velus.Common.Common.
+From Velus Require Import RMemory.
+From Velus Require Import Common.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
-Require Import Permutation.
+From Coq Require Import Permutation.
 
 Open Scope nat.
 Open Scope list.

@@ -1,30 +1,30 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Coq.Sorting.Permutation.
-Require Import Coq.Sorting.Mergesort.
-Require Import Morphisms.
-Require Import Setoid.
+From Coq Require Import Sorting.Permutation.
+From Coq Require Import Sorting.Mergesort.
+From Coq Require Import Morphisms.
+From Coq Require Import Setoid.
 
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CoreExpr.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.SyBloc.SBIsBlock.
-Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.SyBloc.SBSemantics.
-Require Import Velus.SyBloc.SBTyping.
-Require Import Velus.SyBloc.SBIsVariable.
-Require Import Velus.SyBloc.SBIsLast.
-Require Import Velus.SyBloc.SBIsDefined.
-Require Import Velus.SyBloc.SBClocking.
-Require Import Velus.SyBloc.SBIsFree.
-Require Import Velus.SyBloc.SBWellDefined.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.
+From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import SyBloc.SBIsBlock.
+From Velus Require Import SyBloc.SBOrdered.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import SyBloc.SBSemantics.
+From Velus Require Import SyBloc.SBTyping.
+From Velus Require Import SyBloc.SBIsVariable.
+From Velus Require Import SyBloc.SBIsLast.
+From Velus Require Import SyBloc.SBIsDefined.
+From Velus Require Import SyBloc.SBClocking.
+From Velus Require Import SyBloc.SBIsFree.
+From Velus Require Import SyBloc.SBWellDefined.
 
-Require Import RMemory.
+From Velus Require Import RMemory.
 
 (** * Scheduling of N-Lustre equations *)
 

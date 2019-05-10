@@ -1,22 +1,22 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Coq.Sorting.Permutation.
-Require Import Morphisms.
+From Coq Require Import Sorting.Permutation.
+From Coq Require Import Morphisms.
 
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.NLOrdered.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.NLustre.Streams.
-Require Import Velus.NLustre.NLSemanticsCoInd.
-Require Import Velus.NLustre.NLSemantics.
-Require Import Velus.NLustre.CoIndToIndexed.
-Require Import Velus.NLustre.IndexedToCoInd.
-Require Import Velus.NLustre.NLInterpretor.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.NLOrdered.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import NLustre.Streams.
+From Velus Require Import NLustre.NLSemanticsCoInd.
+From Velus Require Import NLustre.NLSemantics.
+From Velus Require Import NLustre.CoIndToIndexed.
+From Velus Require Import NLustre.IndexedToCoInd.
+From Velus Require Import NLustre.NLInterpretor.
 
 (* Require Import Setoid. *)
 Module Type SEMEQUIV

@@ -1,10 +1,10 @@
 
-Require Coq.PArith.BinPos.
+From Coq Require PArith.BinPos.
 Definition ident := Coq.PArith.BinPos.positive.
-Require Import ZArith.
-Require Import List.
+From Coq Require Import ZArith.
+From Coq Require Import List.
 
-Require Import Velus.ClockDefs.
+From Velus Require Import ClockDefs.
 
 (* Types *)
 

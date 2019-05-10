@@ -1,10 +1,10 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.CoreExpr.CEIsFree.
-Require Import List.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import CoreExpr.CEIsFree.
+From Coq Require Import List.
 
 (** * Free variables *)
 

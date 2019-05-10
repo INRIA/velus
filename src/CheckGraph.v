@@ -1,14 +1,14 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
+From Velus Require Import Common.
+From Velus Require Import Environment.
 
-Require Import Coq.Arith.Arith.
-Require Import Coq.Sorting.Permutation.
-Require Import Setoid.
-Require Import Omega.
+From Coq Require Import Arith.Arith.
+From Coq Require Import Sorting.Permutation.
+From Coq Require Import Setoid.
+From Coq Require Import Omega.
 
 Section Dfs.
 

@@ -1,11 +1,11 @@
-Require Import Operators.
-Require Import Clocks.
-Require Export Lustre.LSyntax.
-Require Export Lustre.LClocking.
-Require Export Lustre.LTyping.
-Require Export Lustre.LSemantics.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Export Lustre.LSyntax.
+From Velus Require Export Lustre.LClocking.
+From Velus Require Export Lustre.LTyping.
+From Velus Require Export Lustre.LSemantics.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Module Type LUSTRE
        (Ids   : IDS)

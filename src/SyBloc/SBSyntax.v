@@ -1,10 +1,10 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.Clocks.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import Clocks.
 
-Require Import Permutation.
-Require Import List.
+From Coq Require Import Permutation.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

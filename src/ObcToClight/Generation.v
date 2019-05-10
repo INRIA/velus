@@ -1,18 +1,18 @@
-Require Import ZArith.BinInt.
-Require Import String.
-Require Import List.
+From Coq Require Import ZArith.BinInt.
+From Coq Require Import String.
+From Coq Require Import List.
 
-Require cfrontend.Clight.
-Require Import lib.Integers.
-Require Import common.Errors.
-Require Import lib.Maps.
+From compcert Require cfrontend.Clight.
+From compcert Require Import lib.Integers.
+From compcert Require Import common.Errors.
+From compcert Require Import lib.Maps.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.ObcToClight.Interface.
-Require Import Velus.Ident.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import ObcToClight.Interface.
+From Velus Require Import Ident.
 
-Require Import Instantiator.
+From Velus Require Import Instantiator.
 Import Obc.Syn.
 
 Open Scope error_monad_scope.
@@ -179,8 +179,8 @@ Definition fundef
   let f := Clight.mkfunction ty AST.cc_default ins vars temps body in
   @AST.Gfun Clight.fundef Ctypes.type (Ctypes.Internal f).
 
-Require Import FMapAVL.
-Require Export Coq.Structures.OrderedTypeEx.
+From Coq Require Import FMapAVL.
+From Coq Require Export Structures.OrderedTypeEx.
 
 Module IdentPair := PairOrderedType Positive_as_OT Positive_as_OT.
 Module M := FMapAVL.Make(IdentPair).

@@ -1,15 +1,15 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.Clocks.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Clocks.
 
-Require Import Velus.RMemory.
+From Velus Require Import RMemory.
 
-Require Import Velus.SyBloc.SBIsLast.
+From Velus Require Import SyBloc.SBIsLast.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

@@ -1,18 +1,18 @@
-Require Velus.Frustre.FSyntax.
-Require Velus.Frustre.FTransform.
-Require Velus.Frustre.Parser.FrustreAst.
-Require Velus.Frustre.Parser.FrustreParser.
+From Velus Require Frustre.FSyntax.
+From Velus Require Frustre.FTransform.
+From Velus Require Frustre.Parser.FrustreAst.
+From Velus Require Frustre.Parser.FrustreParser.
 
-Require ZArith.BinIntDef.
-Require lib.Floats.
-Require cfrontend.Ctypes.
-Require cfrontend.Ctyping.
-Require cparser.Cabs.
-Require common.Errors.
-Require ia32.SelectOp. (* Arch-specific *)
+From Coq Require ZArith.BinIntDef.
+From compcert Require lib.Floats.
+From compcert Require cfrontend.Ctypes.
+From compcert Require cfrontend.Ctyping.
+From compcert Require cparser.Cabs.
+From compcert Require common.Errors.
+From compcert Require ia32.SelectOp. (* Arch-specific *)
 
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlString.
+From Coq Require Import ExtrOcamlBasic.
+From Coq Require Import ExtrOcamlString.
 
 Extraction Blacklist Int String List.
 

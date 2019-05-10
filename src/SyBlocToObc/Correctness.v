@@ -1,16 +1,16 @@
-Require Import Velus.SyBloc.SyBloc.
-Require Import Velus.Obc.Obc.
+From Velus Require Import SyBloc.
+From Velus Require Import Obc.
 
-Require Import Velus.SyBlocToObc.Translation.
-Require Import Velus.SyBlocToObc.SBMemoryCorres.
+From Velus Require Import SyBlocToObc.Translation.
+From Velus Require Import SyBlocToObc.SBMemoryCorres.
 
-Require Import Velus.RMemory.
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
+From Velus Require Import RMemory.
+From Velus Require Import Common.
+From Velus Require Import Environment.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
-Require Import Setoid.
+From Coq Require Import Setoid.
 
 Open Scope nat.
 Open Scope list.

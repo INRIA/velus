@@ -1,20 +1,20 @@
-Require Import common.Separation.
-Require Import common.Values.
-Require common.Errors.
-Require Import cfrontend.Ctypes.
-Require Import lib.Maps.
-Require Import lib.Coqlib.
-Require Import lib.Integers.
+From compcert Require Import common.Separation.
+From compcert Require Import common.Values.
+From compcert Require common.Errors.
+From compcert Require Import cfrontend.Ctypes.
+From compcert Require Import lib.Maps.
+From compcert Require Import lib.Coqlib.
+From compcert Require Import lib.Integers.
 
-Require Import Velus.Common.Common.
-Require Import Velus.RMemory.
-Require Import Velus.ObcToClight.ObcClightCommon.
+From Velus Require Import Common.
+From Velus Require Import RMemory.
+From Velus Require Import ObcToClight.ObcClightCommon.
 
-Require Import List.
-Require Import ZArith.BinInt.
+From Coq Require Import List.
+From Coq Require Import ZArith.BinInt.
 
-Require Import Program.Tactics.
-Require Coq.Sorting.Permutation.
+From Coq Require Import Program.Tactics.
+From Coq Require Sorting.Permutation.
 
 Open Scope list.
 Open Scope sep_scope.
@@ -76,8 +76,8 @@ Qed.
 
 (* * * * * * * * Separating Wand * * * * * * * * * * * * * * *)
 
-Require Import common.Memory.
-Require Import Morphisms.
+From compcert Require Import common.Memory.
+From Coq Require Import Morphisms.
 
 Definition wand_footprint (P Q: massert) (b: block) (ofs: Z) : Prop :=
   ~m_footprint P b ofs /\ m_footprint Q b ofs.

@@ -1,15 +1,15 @@
-Require Import String.
-Require Import Omega.
+From Coq Require Import String.
+From Coq Require Import Omega.
 
-Require Import ObcToClight.ObcClightCommon.
+From Velus Require Import ObcToClight.ObcClightCommon.
 Import DoNotation.
-Require Instantiator.
+From Velus Require Instantiator.
 
-Require Import Velus.Lustre.Parser.LustreAst.
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Operators.
-Require Import Clocks.
+From Velus Require Import Lustre.Parser.LustreAst.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
 
 Module Import Syn := Instantiator.L.Syn.
 (* Module Import Defs := Instantiator.NL.IsD. *)
@@ -19,16 +19,16 @@ Import Instantiator.OpAux.
 Import Instantiator.L.Typ.
 Import Instantiator.L.Clo.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require cfrontend.Cop.
-Require cparser.Cabs.
+From compcert Require cfrontend.Cop.
+From compcert Require cparser.Cabs.
 
-Import Permutation.
+From Coq Require Import Permutation.
 
-Require Import common.Errors.
+From compcert Require Import common.Errors.
 Open Scope error_monad_scope.
 
 (* Elaborate an AST into a well-typed and well-clocked Lustre program. *)

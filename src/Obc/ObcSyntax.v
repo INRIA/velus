@@ -1,8 +1,8 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
+From Velus Require Import Common.
+From Velus Require Import Operators.
 
 Open Scope bool_scope.
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

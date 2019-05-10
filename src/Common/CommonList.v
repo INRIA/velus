@@ -1,12 +1,12 @@
-Require Import List.
-Require Import Lists.SetoidList.
-Require Import Permutation.
-Require Import Decidable.
-Require Import Relations.
-Require Import Morphisms.
-Require Import Omega.
+From Coq Require Import List.
+From Coq Require Import Lists.SetoidList.
+From Coq Require Import Permutation.
+From Coq Require Import Decidable.
+From Coq Require Import Relations.
+From Coq Require Import Morphisms.
+From Coq Require Import Omega.
 
-Require Import CommonTactics.
+From Velus Require Import CommonTactics.
 
 Import List.ListNotations.
 Open Scope list_scope.

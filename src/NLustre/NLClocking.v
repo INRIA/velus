@@ -1,19 +1,19 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.CoreExpr.CEIsFree.
-Require Import Velus.NLustre.IsFree.
-Require Import Velus.NLustre.Memories.
-Require Import Velus.NLustre.IsDefined.
-Require Import Velus.NLustre.NLOrdered.
-Require Import Velus.CoreExpr.CEClocking.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import CoreExpr.CEIsFree.
+From Velus Require Import NLustre.IsFree.
+From Velus Require Import NLustre.Memories.
+From Velus Require Import NLustre.IsDefined.
+From Velus Require Import NLustre.NLOrdered.
+From Velus Require Import CoreExpr.CEClocking.
 
-Require Import List.
-Require Import Morphisms.
-Import Permutation.
+From Coq Require Import List.
+From Coq Require Import Morphisms.
+From Coq Require Import Permutation.
 
 (** * Well clocked programs *)
 

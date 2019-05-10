@@ -1,24 +1,24 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.Clocks.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Clocks.
 
-Require Import Velus.SyBloc.SBIsBlock.
-Require Import Velus.SyBloc.SBOrdered.
+From Velus Require Import SyBloc.SBIsBlock.
+From Velus Require Import SyBloc.SBOrdered.
 
-Require Import Velus.SyBloc.SBIsVariable.
-Require Import Velus.SyBloc.SBIsLast.
-Require Import Velus.SyBloc.SBIsDefined.
+From Velus Require Import SyBloc.SBIsVariable.
+From Velus Require Import SyBloc.SBIsLast.
+From Velus Require Import SyBloc.SBIsDefined.
 
-Require Import Velus.CoreExpr.CEIsFree.
-Require Import Velus.SyBloc.SBIsFree.
+From Velus Require Import CoreExpr.CEIsFree.
+From Velus Require Import SyBloc.SBIsFree.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Omega.
+From Coq Require Import Omega.
 
 Module Type SBWELLDEFINED
        (Import Ids   : IDS)

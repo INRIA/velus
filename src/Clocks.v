@@ -1,10 +1,10 @@
-Require Import Velus.Common.Common.
-Require Import List.
+From Velus Require Import Common.
+From Coq Require Import List.
 
-Require Import Morphisms.
-Import Permutation.
+From Coq Require Import Morphisms.
+From Coq Require Import Permutation.
 
-Require Export ClockDefs.
+From Velus Require Export ClockDefs.
 
 (** ** Clocks *)
 
@@ -17,7 +17,7 @@ Inductive Is_free_in_clock : ident -> clock -> Prop :=
       Is_free_in_clock x ck'
       -> Is_free_in_clock x (Con ck' y xc).
 
-Require Import Coq.Classes.EquivDec.
+From Coq Require Import Classes.EquivDec.
 Open Scope bool.
 
 Fixpoint clock_eq (ck1 ck2: clock) : bool :=

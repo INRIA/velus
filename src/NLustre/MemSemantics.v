@@ -1,39 +1,39 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Omega.
-Require Import Coq.Sorting.Permutation.
-Require Import Coq.Arith.Compare_dec.
+From Coq Require Import Omega.
+From Coq Require Import Sorting.Permutation.
+From Coq Require Import Arith.Compare_dec.
 
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.RMemory.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.IsVariable.
-Require Import Velus.NLustre.IsDefined.
-Require Import Velus.CoreExpr.CESemantics.
-Require Import Velus.NLustre.NLSemantics.
-Require Import Velus.NLustre.NLOrdered.
-Require Import Velus.NLustre.Memories.
-Require Import Velus.CoreExpr.CEIsFree.
-Require Import Velus.NLustre.IsFree.
-Require Import Velus.NLustre.NoDup.
-Require Import CoreExpr.CEClocking.
-Require Import NLustre.NLClocking.
-Require Import Velus.CoreExpr.CEClockingSemantics.
-Require Import NLustre.NLClockingSemantics.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import RMemory.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.IsVariable.
+From Velus Require Import NLustre.IsDefined.
+From Velus Require Import CoreExpr.CESemantics.
+From Velus Require Import NLustre.NLSemantics.
+From Velus Require Import NLustre.NLOrdered.
+From Velus Require Import NLustre.Memories.
+From Velus Require Import CoreExpr.CEIsFree.
+From Velus Require Import NLustre.IsFree.
+From Velus Require Import NLustre.NoDup.
+From Velus Require Import CoreExpr.CEClocking.
+From Velus Require Import NLustre.NLClocking.
+From Velus Require Import CoreExpr.CEClockingSemantics.
+From Velus Require Import NLustre.NLClockingSemantics.
 
 (* for Theorem sem_msem_reset *)
 (* TODO: Are these really necessary? *)
-Require Import Coq.Logic.ClassicalChoice.
-Require Import Coq.Logic.ConstructiveEpsilon.
-Require Import Coq.Logic.Epsilon.
-Require Import Coq.Logic.IndefiniteDescription.
+From Coq Require Import Logic.ClassicalChoice.
+From Coq Require Import Logic.ConstructiveEpsilon.
+From Coq Require Import Logic.Epsilon.
+From Coq Require Import Logic.IndefiniteDescription.
 
 Set Implicit Arguments.
 

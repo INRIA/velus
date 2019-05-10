@@ -1,16 +1,16 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
-Require Import Coq.Sorting.Permutation.
+From Coq Require Import Sorting.Permutation.
 
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.CoreExpr.CESemantics.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import CoreExpr.CESemantics.
 
 (** * Interpreter for Core Expresssions *)
 

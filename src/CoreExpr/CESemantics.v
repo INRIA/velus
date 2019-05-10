@@ -1,20 +1,20 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Setoid.
-Require Import Morphisms.
+From Coq Require Import Setoid.
+From Coq Require Import Morphisms.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.RMemory.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.CoreExpr.Stream.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import RMemory.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import CoreExpr.Stream.
 
 (* Used in Lift Determinism *)
-Require Import Logic.FunctionalExtensionality.
+From Coq Require Import Logic.FunctionalExtensionality.
 
 Module Type CESEMANTICS
        (Import Ids   : IDS)

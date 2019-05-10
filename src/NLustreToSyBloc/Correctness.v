@@ -1,19 +1,19 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import PArith.
-Require Import Logic.FunctionalExtensionality.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import PArith.
+From Coq Require Import Logic.FunctionalExtensionality.
 
-Require Import Velus.NLustre.NLustre.
-Require Import Velus.SyBloc.SyBloc.
+From Velus Require Import NLustre.
+From Velus Require Import SyBloc.
 
-Require Import Velus.NLustreToSyBloc.Translation.
+From Velus Require Import NLustreToSyBloc.Translation.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.RMemory.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import RMemory.
 
-Require Import Omega.
+From Coq Require Import Omega.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 
 Open Scope list.

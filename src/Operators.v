@@ -1,4 +1,4 @@
-Require Import Common.
+From Velus Require Import Common.
 
 Module Type OPERATORS.
 
@@ -69,7 +69,7 @@ Module Type OPERATORS.
 
 End OPERATORS.
 
-Require Export Coq.Classes.EquivDec.
+From Coq Require Export Classes.EquivDec.
 
 Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Close Scope equiv_scope.

@@ -1,18 +1,18 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import PArith.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Memories.
-Require Import Velus.SyBloc.SBSyntax.
-Require Velus.Environment.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import PArith.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.Memories.
+From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Environment.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
-Require Import Coq.Sorting.Permutation.
-Require Import Morphisms.
+From Coq Require Import Sorting.Permutation.
+From Coq Require Import Morphisms.
 
 (* Open Scope positive. *)
 Open Scope list.

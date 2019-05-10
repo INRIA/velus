@@ -1,13 +1,13 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Morphisms.
+From Coq Require Import Morphisms.
 
 Module Type CETYPING
        (Import Ids  : IDS)

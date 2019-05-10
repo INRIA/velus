@@ -1,13 +1,13 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.RMemory.
-Require Import Velus.Obc.ObcSyntax.
-Require Import Velus.Obc.ObcSemantics.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import RMemory.
+From Velus Require Import Obc.ObcSyntax.
+From Velus Require Import Obc.ObcSemantics.
 
-Require Import Morphisms.
+From Coq Require Import Morphisms.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

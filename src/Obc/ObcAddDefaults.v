@@ -1,21 +1,21 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import PArith.
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Obc.ObcSyntax.
-Require Import Velus.Obc.ObcSemantics.
-Require Import Velus.Obc.ObcInvariants.
-Require Import Velus.Obc.ObcTyping.
-Require Import Velus.Obc.Equiv.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import PArith.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Obc.ObcSyntax.
+From Velus Require Import Obc.ObcSemantics.
+From Velus Require Import Obc.ObcInvariants.
+From Velus Require Import Obc.ObcTyping.
+From Velus Require Import Obc.Equiv.
 
-Require Import Velus.RMemory.
+From Velus Require Import RMemory.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Morphisms.
+From Coq Require Import Morphisms.
 
 Module Type OBCADDDEFAULTS
        (Import Ids   : IDS)

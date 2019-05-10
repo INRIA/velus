@@ -1,13 +1,13 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import PArith.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import PArith.
 
-Require Import Velus.SyBloc.SyBloc.
-Require Import Velus.Obc.Obc.
-Require Import Velus.SyBlocToObc.Translation.
+From Velus Require Import SyBloc.
+From Velus Require Import Obc.
+From Velus Require Import SyBlocToObc.Translation.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

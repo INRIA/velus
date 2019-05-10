@@ -1,15 +1,17 @@
-Require Import lib.Coqlib.
-Require Import common.Errors.
-Require Import common.AST.
-Require Import common.Linking.
-Require Import common.Smallstep.
-Require Import common.Behaviors.
+From compcert Require Import lib.Coqlib.
+From compcert Require Import common.Errors.
+From compcert Require Import common.AST.
+From compcert Require Import common.Linking.
+From compcert Require Import common.Smallstep.
+From compcert Require Import common.Behaviors.
 
-Require cfrontend.Clight.
-Require Import driver.Compopts driver.Complements driver.Compiler.
+From compcert Require cfrontend.Clight.
+From compcert Require Import driver.Compopts.
+From compcert Require Import driver.Complements.
+From compcert Require Import driver.Compiler.
 
 (* we omit the prefix to be target-parametric *)
-Require Asm.
+From compcert Require Asm.
 
 (** Compilation from Clight to Asm *)
 

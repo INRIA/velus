@@ -1,36 +1,36 @@
-Require Import ObcToClight.Interface.
-Require Import Ident.
-Require Import Operators.
-Require Import Clocks.
-Require Import Stream.
+From Velus Require Import ObcToClight.Interface.
+From Velus Require Import Ident.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import Stream.
 
 Module OpAux := OperatorsAux Op.
 Module Str   := StreamFun Op OpAux.
 
-Require Import CoreExpr.
+From Velus Require Import CoreExpr.
 
 Module CE := CoreExprFun Ids Op OpAux Str.
 
-Require Import Lustre.
-Require Import NLustre.
+From Velus Require Import Lustre.
+From Velus Require Import NLustre.
 
 Module L := LustreFun Ids Op OpAux.
 Module NL := NLustreFun Ids Op OpAux Str CE.
 
-Require Import LustreToNLustre.
+From Velus Require Import LustreToNLustre.
 
 Module L2NL := LustreToNLustreFun Ids Op L.Syn CE.Syn NL.Syn.
 
-Require Import SyBloc.
+From Velus Require Import SyBloc.
 
 Module SB := SyBlocFun  Ids Op OpAux Str CE.
 
-Require Import Coq.ZArith.BinInt.
-Require Import NLustreToSyBloc.Translation.
-Require Import NLustreToSyBloc.Correctness.
-Require Import NLustreToSyBloc.NL2SBTyping.
-Require Import NLustreToSyBloc.NL2SBClocking.
-Require Import NLustreToSyBloc.NL2SBNormalArgs.
+From Coq Require Import ZArith.BinInt.
+From Velus Require Import NLustreToSyBloc.Translation.
+From Velus Require Import NLustreToSyBloc.Correctness.
+From Velus Require Import NLustreToSyBloc.NL2SBTyping.
+From Velus Require Import NLustreToSyBloc.NL2SBClocking.
+From Velus Require Import NLustreToSyBloc.NL2SBNormalArgs.
 
 Module NL2SB           := TranslationFun     Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem.
 Module NL2SBCorr       := CorrectnessFun     Ids Op OpAux Str CE NL SB NL2SB.
@@ -38,15 +38,15 @@ Module NL2SBTyping     := NL2SBTypingFun     Ids Op OpAux Str CE NL SB NL2SB.
 Module NL2SBClocking   := NL2SBClockingFun   Ids Op OpAux Str CE NL SB NL2SB.
 Module NL2SBNormalArgs := NL2SBNormalArgsFun Ids Op OpAux Str CE NL SB NL2SB.
 
-Require Import Obc.
+From Velus Require Import Obc.
 
 Module Obc := ObcFun Ids Op OpAux.
 
-Require Import SyBlocToObc.Translation.
-Require Import SyBlocToObc.SBMemoryCorres.
-Require Import SyBlocToObc.Correctness.
-Require Import SyBlocToObc.SB2ObcInvariants.
-Require Import SyBlocToObc.SB2ObcTyping.
+From Velus Require Import SyBlocToObc.Translation.
+From Velus Require Import SyBlocToObc.SBMemoryCorres.
+From Velus Require Import SyBlocToObc.Correctness.
+From Velus Require Import SyBlocToObc.SB2ObcInvariants.
+From Velus Require Import SyBlocToObc.SB2ObcTyping.
 
 Module SB2Obc     := TranslationFun    Ids Op OpAux CE.Syn SB.Syn Obc.Syn.
 Module MemCorres  := SBMemoryCorresFun Ids Op       CE.Syn SB.Syn SB.Last.

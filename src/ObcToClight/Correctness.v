@@ -1,37 +1,37 @@
-Require Import cfrontend.ClightBigstep.
-Require Import cfrontend.Clight.
-Require Import cfrontend.Ctypes.
-Require Import lib.Integers.
-Require Import lib.Maps.
-Require Import lib.Coqlib.
-Require Errors.
-Require Import common.Separation.
-Require Import common.Values.
-Require Import common.Memory.
-Require Import common.Events.
-Require Import common.Globalenvs.
-Require Import common.Behaviors.
+From compcert Require Import cfrontend.ClightBigstep.
+From compcert Require Import cfrontend.Clight.
+From compcert Require Import cfrontend.Ctypes.
+From compcert Require Import lib.Integers.
+From compcert Require Import lib.Maps.
+From compcert Require Import lib.Coqlib.
+From compcert Require Errors.
+From compcert Require Import common.Separation.
+From compcert Require Import common.Values.
+From compcert Require Import common.Memory.
+From compcert Require Import common.Events.
+From compcert Require Import common.Globalenvs.
+From compcert Require Import common.Behaviors.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.RMemory.
-Require Import Velus.Ident.
-Require Import Velus.Traces.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import RMemory.
+From Velus Require Import Ident.
+From Velus Require Import Traces.
 
-Require Import Velus.ObcToClight.ObcClightCommon.
-Require Import Velus.ObcToClight.MoreSeparation.
-Require Import Velus.ObcToClight.SepInvariant.
-Require Import Velus.ObcToClight.Generation.
-Require Import Velus.ObcToClight.Interface.
+From Velus Require Import ObcToClight.ObcClightCommon.
+From Velus Require Import ObcToClight.MoreSeparation.
+From Velus Require Import ObcToClight.SepInvariant.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import ObcToClight.Interface.
 
-Require Import Program.Tactics.
-Require Import List.
+From Coq Require Import Program.Tactics.
+From Coq Require Import List.
 Import List.ListNotations.
-Require Import Coq.ZArith.BinInt.
-Require Import Omega.
-Require Import Coq.Sorting.Permutation.
+From Coq Require Import ZArith.BinInt.
+From Coq Require Import Omega.
+From Coq Require Import Sorting.Permutation.
 
-Require Import Instantiator.
+From Velus Require Import Instantiator.
 Import Obc.Typ.
 Import Obc.Syn.
 Import Obc.Sem.

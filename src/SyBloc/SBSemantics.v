@@ -1,22 +1,22 @@
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Permutation.
-Require Import Setoid.
-Require Import Morphisms.
+From Coq Require Import Permutation.
+From Coq Require Import Setoid.
+From Coq Require Import Morphisms.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.RMemory.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.SyBloc.SBIsBlock.
-Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.CoreExpr.CESemantics.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import RMemory.
+From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import SyBloc.SBIsBlock.
+From Velus Require Import SyBloc.SBOrdered.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import CoreExpr.CESemantics.
 
 Module Type SBSEMANTICS
        (Import Ids   : IDS)

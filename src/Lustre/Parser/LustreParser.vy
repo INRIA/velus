@@ -20,12 +20,12 @@
  	  ((x land y) = 0) and not (x land (y = 0)) */
 
 %{
-Require Velus.Lustre.Parser.LustreAst.
+From Velus Require Lustre.Parser.LustreAst.
 
 (* Ensure correct Syntax module is loaded later (and not Obc.Syntax). *)
-Require Import Coq.Program.Syntax.
+From Coq Require Import Program.Syntax.
 
-Require Import List.
+From Coq Require Import List.
 Import ListNotations.
 %}
 

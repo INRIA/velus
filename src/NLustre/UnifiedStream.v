@@ -1,14 +1,14 @@
-Require Import List.
+From Coq Require Import List.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.NLustre.NLSyntax.
-Require Import Velus.NLustre.Ordered.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.NLustre.Streams.
-Require Import Velus.NLustre.NLSemanticsCoInd.
-Require Import Velus.NLustre.NLSemantics.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.Ordered.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import NLustre.Streams.
+From Velus Require Import NLustre.NLSemanticsCoInd.
+From Velus Require Import NLustre.NLSemantics.
 
 Module Type UNIFIEDSTREAM
        (Import Ids     : IDS)

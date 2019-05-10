@@ -1,5 +1,5 @@
 
-Require Import BinNums.
+From Coq Require Import BinNums.
 
 Definition ident := positive.
 
@@ -44,7 +44,7 @@ Fixpoint sclk (ck: clock) : sclock :=
   | Con ck x b => Son (sclk ck) (Vnm x) b
   end.
 
-Require Import List.
+From Coq Require Import List.
 Import ListNotations.
 
 Fixpoint indexes (ncks: list nclock) : list positive :=

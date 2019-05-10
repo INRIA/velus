@@ -1,13 +1,13 @@
-Require Import Operators.
-Require Export Obc.ObcSyntax.
-Require Export Obc.ObcSemantics.
-Require Export Obc.ObcInvariants.
-Require Export Obc.ObcTyping.
-Require Export Obc.Equiv.
-Require Export Obc.ObcAddDefaults.
-Require Export Obc.Fusion.
+From Velus Require Import Operators.
+From Velus Require Export Obc.ObcSyntax.
+From Velus Require Export Obc.ObcSemantics.
+From Velus Require Export Obc.ObcInvariants.
+From Velus Require Export Obc.ObcTyping.
+From Velus Require Export Obc.Equiv.
+From Velus Require Export Obc.ObcAddDefaults.
+From Velus Require Export Obc.Fusion.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Module Type OBC (Ids: IDS) (Op: OPERATORS) (OpAux: OPERATORS_AUX Op).
   Declare Module Export Syn: OBCSYNTAX      Ids Op OpAux.

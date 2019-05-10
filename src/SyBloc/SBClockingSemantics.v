@@ -1,21 +1,21 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.Stream.
-Require Import Velus.SyBloc.SBIsLast.
-Require Import Velus.SyBloc.SBIsVariable.
-Require Import Velus.SyBloc.SBIsDefined.
-Require Import Velus.SyBloc.SBIsBlock.
-Require Import Velus.SyBloc.SBOrdered.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.SyBloc.SBSyntax.
-Require Import Velus.CoreExpr.CEClocking.
-Require Import Velus.SyBloc.SBClocking.
-Require Import Velus.CoreExpr.CESemantics.
-Require Import Velus.SyBloc.SBSemantics.
-Require Import Velus.CoreExpr.CEClockingSemantics.
-Require Import List.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.Stream.
+From Velus Require Import SyBloc.SBIsLast.
+From Velus Require Import SyBloc.SBIsVariable.
+From Velus Require Import SyBloc.SBIsDefined.
+From Velus Require Import SyBloc.SBIsBlock.
+From Velus Require Import SyBloc.SBOrdered.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import CoreExpr.CEClocking.
+From Velus Require Import SyBloc.SBClocking.
+From Velus Require Import CoreExpr.CESemantics.
+From Velus Require Import SyBloc.SBSemantics.
+From Velus Require Import CoreExpr.CEClockingSemantics.
+From Coq Require Import List.
 
 (** * Link (static) clocking predicates to (dynamic) semantic model *)
 

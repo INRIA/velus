@@ -1,12 +1,12 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import Velus.CoreExpr.CESyntax.
+From Coq Require Import FSets.FMapPositive.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import CoreExpr.CESyntax.
 
-Require Import List.
-Require Import Morphisms.
-Import Permutation.
+From Coq Require Import List.
+From Coq Require Import Morphisms.
+From Coq Require Import Permutation.
 
 (** * Well clocked expressions *)
 

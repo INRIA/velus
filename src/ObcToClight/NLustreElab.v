@@ -1,11 +1,11 @@
-Require Import String.
-Require Instantiator.
+From Coq Require Import String.
+From Velus Require Instantiator.
 
-Require Import Velus.Lustre.Parser.LustreAst.
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Operators.
-Require Import Clocks.
+From Velus Require Import Lustre.Parser.LustreAst.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
 
 Module Import CESyn := Instantiator.CE.Syn.
 Module Import Syn := Instantiator.NL.Syn.
@@ -18,16 +18,16 @@ Import Instantiator.NL.Typ.
 Import Instantiator.CE.Clo.
 Import Instantiator.NL.Clo.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require cfrontend.Cop.
-Require cparser.Cabs.
+From compcert Require cfrontend.Cop.
+From compcert Require cparser.Cabs.
 
-Import Permutation.
+From Coq Require Import Permutation.
 
-Require Import common.Errors.
+From compcert Require Import common.Errors.
 Local Open Scope error_monad_scope.
 
 (* Elaborate an AST into a well-typed and well-clocked NLustre program. *)

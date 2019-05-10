@@ -1,21 +1,21 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import Coq.FSets.FMapFacts.
-Require Import List.
-Require Import Coq.Sorting.Permutation.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import FSets.FMapFacts.
+From Coq Require Import List.
+From Coq Require Import Sorting.Permutation.
 
-Require Import Setoid.
-Require Import Relations.
-Require Import Morphisms.
+From Coq Require Import Setoid.
+From Coq Require Import Relations.
+From Coq Require Import Morphisms.
 
 Import ListNotations.
-Require Coq.MSets.MSets.
-Require Export PArith.
+From Coq Require MSets.MSets.
+From Coq Require Export PArith.
 (* Require Import Omega. *)
-Require Import Coq.Classes.EquivDec.
+From Coq Require Import Classes.EquivDec.
 
-Require Export Velus.Common.CommonTactics.
-Require Export Velus.Common.CommonList.
-Require Export Velus.ClockDefs.
+From Velus Require Export Common.CommonTactics.
+From Velus Require Export Common.CommonList.
+From Velus Require Export ClockDefs.
 
 Open Scope list.
 

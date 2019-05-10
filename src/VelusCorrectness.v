@@ -1,18 +1,18 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Ident.
-Require Import Velus.ObcToClight.Generation.
-Require Import Velus.Traces.
-Require Import Velus.ClightToAsm.
+From Velus Require Import Common.
+From Velus Require Import Ident.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import Traces.
+From Velus Require Import ClightToAsm.
 
-Require Import common.Errors.
-Require Import common.Events.
-Require Import common.Behaviors.
-Require Import cfrontend.Clight.
-Require Import cfrontend.ClightBigstep.
-Require Import lib.Integers.
-Require Import driver.Compiler.
+From compcert Require Import common.Errors.
+From compcert Require Import common.Events.
+From compcert Require Import common.Behaviors.
+From compcert Require Import cfrontend.Clight.
+From compcert Require Import cfrontend.ClightBigstep.
+From compcert Require Import lib.Integers.
+From compcert Require Import driver.Compiler.
 
-Require Import Velus.Instantiator.
+From Velus Require Import Instantiator.
 Import SB.Syn.
 Import NL.
 Import Obc.Syn.
@@ -25,13 +25,13 @@ Import SB2ObcInvariants.
 Import Str.
 Import OpAux.
 Import Interface.Op.
-Require Import ObcToClight.Correctness.
-Require Import NLustreElab.
+From Velus Require Import ObcToClight.Correctness.
+From Velus Require Import ObcToClight.NLustreElab.
 
-Require Import String.
-Require Import List.
+From Coq Require Import String.
+From Coq Require Import List.
 Import List.ListNotations.
-Require Import Omega.
+From Coq Require Import Omega.
 
 Open Scope error_monad_scope.
 

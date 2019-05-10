@@ -1,15 +1,15 @@
 
-Require Import Common.
+From Velus Require Import Common.
 
-Require Import lib.Coqlib.
-Require Import cfrontend.Clight.
+From compcert Require Import lib.Coqlib.
+From compcert Require Import cfrontend.Clight.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import common.Errors.
-Require Import Coq.Classes.RelationClasses.
+From compcert Require Import common.Errors.
+From Coq Require Import Classes.RelationClasses.
 
 Open Scope error_monad_scope.
 

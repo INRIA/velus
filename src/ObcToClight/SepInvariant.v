@@ -1,25 +1,25 @@
-Require Import common.Separation.
-Require Import common.Values.
-Require common.Errors.
-Require Import cfrontend.Ctypes.
-Require Import lib.Maps.
-Require Import lib.Coqlib.
-Require Import lib.Integers.
+From compcert Require Import common.Separation.
+From compcert Require Import common.Values.
+From compcert Require common.Errors.
+From compcert Require Import cfrontend.Ctypes.
+From compcert Require Import lib.Maps.
+From compcert Require Import lib.Coqlib.
+From compcert Require Import lib.Integers.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.RMemory.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import RMemory.
 
-Require Import List.
-Require Import ZArith.BinInt.
+From Coq Require Import List.
+From Coq Require Import ZArith.BinInt.
 
-Require Import Program.Tactics.
+From Coq Require Import Program.Tactics.
 
-Require Import Velus.ObcToClight.MoreSeparation.
-Require Import Velus.ObcToClight.Generation.
-Require Import Velus.ObcToClight.Interface.
+From Velus Require Import ObcToClight.MoreSeparation.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import ObcToClight.Interface.
 
-Require Import Instantiator.
+From Velus Require Import Instantiator.
 Import Obc.Syn.
 Import Obc.Sem.
 Import Obc.Typ.

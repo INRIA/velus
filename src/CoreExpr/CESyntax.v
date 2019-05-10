@@ -1,5 +1,5 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
+From Velus Require Import Common.
+From Velus Require Import Operators.
 
 (** * The core dataflow expresion syntax *)
 

@@ -1,8 +1,8 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import Coq.FSets.FMapFacts.
-Require Import Coq.ZArith.ZArith.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import FSets.FMapFacts.
+From Coq Require Import ZArith.ZArith.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Module Env.
 

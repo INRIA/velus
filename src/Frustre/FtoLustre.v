@@ -1,9 +1,9 @@
-Require Import Ident.
+From Velus Require Import Ident.
 
-Require Import ClockDefs.
-Require Velus.Frustre.FSyntax.
-Require Import Velus.Lustre.LSyntax.
-Require Import Velus.ObcToClight.Interface.
+From Velus Require Import ClockDefs.
+From Velus Require Frustre.FSyntax.
+From Velus Require Import Lustre.LSyntax.
+From Velus Require Import ObcToClight.Interface.
 
 Definition ident := Common.ident.
 

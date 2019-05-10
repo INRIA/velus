@@ -1,16 +1,16 @@
-Require Import common.Events.
-Require Import common.Values.
-Require Import common.Globalenvs.
-Require Import cfrontend.Clight.
-Require Import lib.Integers.
+From compcert Require Import common.Events.
+From compcert Require Import common.Values.
+From compcert Require Import common.Globalenvs.
+From compcert Require Import cfrontend.Clight.
+From compcert Require Import lib.Integers.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Ident.
-Require Import Velus.ObcToClight.Interface.
+From Velus Require Import Common.
+From Velus Require Import Ident.
+From Velus Require Import ObcToClight.Interface.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
-Require Import Instantiator.
+From Velus Require Import Instantiator.
 Import Obc.Syn.
 Import Str.
 Import OpAux.

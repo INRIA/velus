@@ -1,15 +1,15 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.Clocks.
-Require Import LSyntax.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import Clocks.
+From Velus Require Import Lustre.LSyntax.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Morphisms.
-Import Permutation.
+From Coq Require Import Morphisms.
+From Coq Require Import Permutation.
 
 (** * Lustre typing *)
 

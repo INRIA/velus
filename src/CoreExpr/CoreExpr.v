@@ -1,15 +1,15 @@
-Require Export Operators.
-Require Export Clocks.
-Require Export CoreExpr.Stream.
-Require Export CoreExpr.CESyntax.
-Require Export CoreExpr.CEIsFree.
-Require Export CoreExpr.CESemantics.
-Require Export CoreExpr.CEClocking.
-Require Export CoreExpr.CEClockingSemantics.
-Require Export CoreExpr.CETyping.
-Require Export CoreExpr.CEInterpreter.
+From Velus Require Export Operators.
+From Velus Require Export Clocks.
+From Velus Require Export CoreExpr.Stream.
+From Velus Require Export CoreExpr.CESyntax.
+From Velus Require Export CoreExpr.CEIsFree.
+From Velus Require Export CoreExpr.CESemantics.
+From Velus Require Export CoreExpr.CEClocking.
+From Velus Require Export CoreExpr.CEClockingSemantics.
+From Velus Require Export CoreExpr.CETyping.
+From Velus Require Export CoreExpr.CEInterpreter.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Module Type COREEXPR
        (Ids    : IDS)

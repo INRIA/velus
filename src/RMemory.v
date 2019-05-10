@@ -1,8 +1,8 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
+From Velus Require Import Common.
+From Velus Require Import Environment.
 
-Require Import Setoid.
-Require Import List.
+From Coq Require Import Setoid.
+From Coq Require Import List.
 Import List.ListNotations.
 
 Set Implicit Arguments.

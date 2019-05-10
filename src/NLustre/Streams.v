@@ -1,9 +1,9 @@
-Require Import List.
-Require Export Coq.Lists.Streams.
-Require Import Setoid.
-Require Import Morphisms.
+From Coq Require Import List.
+From Coq Require Export Lists.Streams.
+From Coq Require Import Setoid.
+From Coq Require Import Morphisms.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Infix ":::" := Cons (at level 60, right associativity) : stream_scope.
 Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.

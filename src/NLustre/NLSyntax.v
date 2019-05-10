@@ -1,12 +1,12 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
-Require Import Velus.CoreExpr.CESyntax.
-Require Import Velus.Clocks.
-Require Import PArith.
-Require Import Omega.
-Require Import Coq.Sorting.Permutation.
+From Velus Require Import Common.
+From Velus Require Import Operators.
+From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import Clocks.
+From Coq Require Import PArith.
+From Coq Require Import Omega.
+From Coq Require Import Sorting.Permutation.
 
-Require Import List.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

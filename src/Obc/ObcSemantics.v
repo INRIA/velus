@@ -1,14 +1,14 @@
-Require Import Coq.FSets.FMapPositive.
-Require Import Setoid.
-Require Import List.
+From Coq Require Import FSets.FMapPositive.
+From Coq Require Import Setoid.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Require Import Velus.Common.Common.
-Require Import Velus.Environment.
-Require Import Velus.Operators.
-Require Import Velus.RMemory.
-Require Import Velus.Obc.ObcSyntax.
+From Velus Require Import Common.
+From Velus Require Import Environment.
+From Velus Require Import Operators.
+From Velus Require Import RMemory.
+From Velus Require Import Obc.ObcSyntax.
 
 (** * Obc semantics *)
 

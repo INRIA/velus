@@ -1,8 +1,8 @@
-Require Velus.Frustre.Parser.Ast.
-Require Velus.Frustre.Parser.Parser.
+From Velus Require Frustre.Parser.Ast.
+From Velus Require Frustre.Parser.Parser.
 
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlString.
+From Coq Require Import ExtrOcamlBasic.
+From Coq Require Import ExtrOcamlString.
 
 Extraction Blacklist List.
 

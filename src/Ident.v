@@ -1,7 +1,7 @@
-Require Import Velus.Common.Common.
-Require Import String.
-Require Import Ascii.
-Require Import List.
+From Velus Require Import Common.
+From Coq Require Import String.
+From Coq Require Import Ascii.
+From Coq Require Import List.
 Import List.ListNotations.
 
 Open Scope bool_scope.

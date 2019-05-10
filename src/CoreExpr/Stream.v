@@ -1,11 +1,11 @@
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
+From Velus Require Import Common.
+From Velus Require Import Operators.
 
-Require Import Setoid.
-Require Import Morphisms.
-Require Import Coq.Arith.EqNat.
-Require Import Omega.
-Require Import List.
+From Coq Require Import Setoid.
+From Coq Require Import Morphisms.
+From Coq Require Import Arith.EqNat.
+From Coq Require Import Omega.
+From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 

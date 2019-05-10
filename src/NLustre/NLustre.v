@@ -1,19 +1,19 @@
-Require Export Velus.CoreExpr.CoreExpr.
-Require Export NLustre.NLSyntax.
-Require Export NLustre.IsFree.
-Require Export NLustre.IsVariable.
-Require Export NLustre.IsDefined.
-Require Export NLustre.Memories.
-Require Export NLustre.NLSemantics.
-Require Export NLustre.MemSemantics.
-Require Export NLustre.NLOrdered.
-Require Export NLustre.NoDup.
-Require Export NLustre.NLClocking.
-Require Export NLustre.NLClockingSemantics.
-Require Export NLustre.NLTyping.
-Require Export NLustre.NLNormalArgs.
+From Velus Require Export CoreExpr.
+From Velus Require Export NLustre.NLSyntax.
+From Velus Require Export NLustre.IsFree.
+From Velus Require Export NLustre.IsVariable.
+From Velus Require Export NLustre.IsDefined.
+From Velus Require Export NLustre.Memories.
+From Velus Require Export NLustre.NLSemantics.
+From Velus Require Export NLustre.MemSemantics.
+From Velus Require Export NLustre.NLOrdered.
+From Velus Require Export NLustre.NoDup.
+From Velus Require Export NLustre.NLClocking.
+From Velus Require Export NLustre.NLClockingSemantics.
+From Velus Require Export NLustre.NLTyping.
+From Velus Require Export NLustre.NLNormalArgs.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Module Type NLUSTRE
        (Ids   : IDS)

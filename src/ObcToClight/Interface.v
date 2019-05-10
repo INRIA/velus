@@ -1,15 +1,15 @@
-Require Import lib.Integers.
-Require Import lib.Floats.
-Require Import Velus.Common.Common.
-Require Import Velus.Operators.
+From compcert Require Import lib.Integers.
+From compcert Require Import lib.Floats.
+From Velus Require Import Common.
+From Velus Require Import Operators.
 
-Require common.Values.
-Require cfrontend.Cop.
-Require cfrontend.Ctypes.
-Require cfrontend.Ctyping.
-Require common.Memory.
-Require lib.Maps.
-Require Import String.
+From compcert Require common.Values.
+From compcert Require cfrontend.Cop.
+From compcert Require cfrontend.Ctypes.
+From compcert Require cfrontend.Ctyping.
+From compcert Require common.Memory.
+From compcert Require lib.Maps.
+From Coq Require Import String.
 
 Open Scope bool_scope.
 (* Interface avec CompCert *)

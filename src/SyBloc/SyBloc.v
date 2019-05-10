@@ -1,19 +1,19 @@
-Require Export Velus.CoreExpr.CoreExpr.
-Require Export Velus.SyBloc.SBSyntax.
-Require Export Velus.SyBloc.SBIsBlock.
-Require Export Velus.SyBloc.SBOrdered.
-Require Export Velus.SyBloc.SBSemantics.
-Require Export Velus.SyBloc.SBIsLast.
-Require Export Velus.SyBloc.SBIsVariable.
-Require Export Velus.SyBloc.SBIsDefined.
-Require Export Velus.SyBloc.SBIsFree.
-Require Export Velus.SyBloc.SBWellDefined.
-Require Export Velus.SyBloc.SBSchedule.
-Require Export Velus.SyBloc.SBTyping.
-Require Export Velus.SyBloc.SBClocking.
-Require Export Velus.SyBloc.SBClockingSemantics.
+From Velus Require Export CoreExpr.
+From Velus Require Export SyBloc.SBSyntax.
+From Velus Require Export SyBloc.SBIsBlock.
+From Velus Require Export SyBloc.SBOrdered.
+From Velus Require Export SyBloc.SBSemantics.
+From Velus Require Export SyBloc.SBIsLast.
+From Velus Require Export SyBloc.SBIsVariable.
+From Velus Require Export SyBloc.SBIsDefined.
+From Velus Require Export SyBloc.SBIsFree.
+From Velus Require Export SyBloc.SBWellDefined.
+From Velus Require Export SyBloc.SBSchedule.
+From Velus Require Export SyBloc.SBTyping.
+From Velus Require Export SyBloc.SBClocking.
+From Velus Require Export SyBloc.SBClockingSemantics.
 
-Require Import Velus.Common.Common.
+From Velus Require Import Common.
 
 Module Type SYBLOC
        (Ids   : IDS)
