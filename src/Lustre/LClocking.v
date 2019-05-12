@@ -28,6 +28,7 @@ Module Type LCLOCKING
        (Import Op   : OPERATORS)
        (Import Syn  : LSYNTAX Ids Op).
 
+  (* TODO: Update this comment after recent changes *)
   (** Substitutions and conversion between clock types.
 
       The clocking of function applications is complicated by the possibility
@@ -187,10 +188,6 @@ Module Type LCLOCKING
             /\ Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns)) ->
         wc_exp (Eapp f es anns).
 
-    (* TODO: after experiment, maybe put in Common *)
-    Definition LiftO {A} (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
-      match x with None => d | Some x => P x end.
-    
     Inductive Is_fresh_in : ident -> exp -> Prop :=
     | IFEunop: forall x op e ann,
         Is_fresh_in x e ->
@@ -220,18 +217,6 @@ Module Type LCLOCKING
         Exists (Is_fresh_in x) es
         \/ Exists (fun y => LiftO True (eq x) (snd (snd y))) anns ->
         Is_fresh_in x (Eapp f es anns).
-
-    (* TODO: Move to Common *)
-    Fixpoint Ino {A} (a : A) (l : list (option A)) : Prop :=
-      match l with
-      | [] => False
-      | b :: m => LiftO False (eq a) b \/ Ino a m
-      end.
-
-    (* TODO: Move to Common *)
-    Inductive NoDupo {A} : list (option A) -> Prop :=
-      NoDupo_nil : NoDupo []
-    | NoDupo_cons : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l).
 
     Inductive DisjointFreshList : list exp -> Prop :=
     | DWnil:
@@ -294,9 +279,7 @@ Module Type LCLOCKING
 
     Definition WellFormedAnon (e : exp) : Prop :=
       match e with
-      | Eapp f es anns =>
-        Forall (fun x => ~Is_AnonStream x) (map (snd ∘ snd) anns)
-        /\ DisjointFreshList es
+      | Eapp f es anns => DisjointFreshList es
       | _ => DisjointFresh e
       end.
 

@@ -2421,6 +2421,25 @@ Section InMembers.
 
 End InMembers.
 
+Section OptionLists.
+
+  Context {A : Type}.
+
+  Definition LiftO (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
+    match x with None => d | Some x => P x end.
+
+  Fixpoint Ino (a : A) (l : list (option A)) : Prop :=
+    match l with
+    | [] => False
+    | b :: m => LiftO False (eq a) b \/ Ino a m
+    end.
+
+  Inductive NoDupo : list (option A) -> Prop :=
+    NoDupo_nil : NoDupo []
+  | NoDupo_cons : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l).
+
+End OptionLists.
+
 Ltac app_NoDupMembers_det :=
   match goal with
   | H: NoDupMembers ?xs,
