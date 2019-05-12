@@ -11,6 +11,9 @@ Open Scope list_scope.
 From Coq Require Import Morphisms.
 From Coq Require Import Permutation.
 
+From Coq Require Import Program.Basics.
+Open Scope program_scope.
+
 (** * Lustre typing *)
 
 (**
@@ -98,79 +101,24 @@ Module Type LCLOCKING
           "[(u:ck); ck on u]", and the required substitution is "[ u / 2 ]".
    *)
 
-  (* input substitution (universal elimination):
-     parameter names may be replaced by either fresh or named clocks.  *)
-  Definition imap := ident -> option ckid.
-
-  (* output substituition (existential introduction):
-     parameter names may only be replaced by fresh clocks. *)
-  Definition omap := ident -> option positive.
-
-  (* pattern substitution: unify fresh clocks with variables. *)
-  Definition pmap := positive -> option ident.
-
-  (* instantiate the parameter names in a clock, giving a stream clock *)
-  Fixpoint sinst (base: sclock) (subst: imap) (ck: clock) : option sclock :=
-    match ck with
-    | Cbase => Some base
-    | Con ck x b =>
-      match sinst base subst ck, subst x with
-      | Some ck', Some x' => Some (Son ck' x' b)
-      | _, _ => None
-      end
-    end.
+  (* substitution of identifiers *)
+  Definition ident_map := ident -> option ident.
 
   (* instantiate a parameter, giving a named clock *)
-  Definition inst (b: sclock) (sub: imap)
-                  (xtc: ident * (type * clock)) : option nclock :=
-    let '(x, (ty, ck)) := xtc in
-    match sinst b sub ck with
-    | None => None
-    | Some ck' => match sub x with
-                  | None => Some (Cstream ck')
-                  | Some ni => Some (Cnamed ni ck')
-                  end
+  Fixpoint inst (bck: clock) (sub: ident_map) (ick : clock) : option clock :=
+    match ick with
+    | Cbase => Some bck
+    | Con ick' x b => match inst bck sub ick' with
+                     | None => None
+                     | Some ck' => option_map (fun y => Con ck' y b) (sub x)
+                     end
     end.
 
-  (* instantiate an input parameter, giving a named clock *)
-  Definition inst_in (b: sclock) (isub: Env.t ckid)
-                     : (ident * (type * clock)) -> option nclock :=
-    inst b (fun x => Env.find x isub).
-
-  (* instantiate an output parameter, giving a named clock *)
-  Definition inst_out (b: sclock) (osub: Env.t positive) (isub: Env.t ckid)
-                      : (ident * (type * clock)) -> option nclock :=
-    inst b (fun x=>match Env.find x osub with
-                   | Some i => Some (Vidx i)
-                   | None   => Env.find x isub
-                   end).
-
-  (* Instantiate the fresh clocks in a stream clock, giving a clock or None
-     if fresh clocks would 'escape'. *)
-
-  Definition pninst (sub: pmap) (ni: ckid) : option ident :=
-    match ni with
-    | Vnm x => Some x
-    | Vidx i => sub i
-    end.
-
-  Fixpoint pinst (sub: pmap) (sck: sclock) : option clock :=
-    match sck with
-    | Sbase => Some Cbase
-    | Son sck' ni b =>
-      match pinst sub sck', pninst sub ni with
-      | Some ck', Some x => Some (Con ck' x b)
-      | _, _ => None
-      end
-    end.
-
-  Definition patsub (ncs: list nclock) (xs: list ident)
-                    (i: positive) : option ident :=
-    option_map snd (find (fun nx=> match fst nx with
-                                   | Cnamed (Vidx j) _ => Pos.eqb i j
-                                   | _ => false
-                                   end) (combine ncs xs)).
-
+  Definition WellInstantiated (bck : clock) (sub : ident_map)
+                              (xc : ident * clock) (nc : nclock) : Prop :=
+    sub (fst xc) = snd nc
+    /\ inst bck sub (snd xc) = Some (fst nc).
+            
   Section WellClocked.
 
     Variable G    : global.
@@ -179,44 +127,46 @@ Module Type LCLOCKING
     Inductive wc_exp : exp -> Prop :=
     | wc_Econst: forall c,
         wc_exp (Econst c)
-
+ 
     | wc_Evar: forall x ty ck,
         In (x, ck) vars ->
-        wc_exp (Evar x (ty, Cnamed (Vnm x) (sclk ck)))
+        wc_exp (Evar x (ty, (ck, Some x)))
 
     | wc_Eunop: forall op e ty ck,
         wc_exp e ->
         clockof e = [ck] ->
-        wc_exp (Eunop op e (ty, Cstream ck))
+        wc_exp (Eunop op e (ty, (ck, None)))
 
     | wc_Ebinop: forall op e1 e2 ty ck,
         wc_exp e1 ->
         wc_exp e2 ->
         clockof e1 = [ck] ->
         clockof e2 = [ck] ->
-        wc_exp (Ebinop op e1 e2 (ty, Cstream ck))
+        wc_exp (Ebinop op e1 e2 (ty, (ck, None)))
 
     | wc_Efby: forall e0s es anns,
         Forall wc_exp e0s ->
         Forall wc_exp es ->
         Forall2 eq (map ckstream anns) (clocksof e0s) ->
         Forall2 eq (map ckstream anns) (clocksof es) ->
-        Forall is_ckstream anns ->
+        Forall unnamed_stream anns ->
         wc_exp (Efby e0s es anns)
 
     | wc_Ewhen: forall es x b tys ck,
         Forall wc_exp es ->
         In (x, ck) vars ->
-        Forall (eq (sclk ck)) (clocksof es) ->
-        wc_exp (Ewhen es x b (tys, Cstream (Son (sclk ck) (Vnm x) b)))
+        Forall (eq ck) (clocksof es) ->
+        wc_exp (Ewhen es x b (tys, (Con ck x b, None)))
 
     | wc_Emerge: forall x ets efs tys ck,
         Forall wc_exp ets ->
         Forall wc_exp efs ->
         In (x, ck) vars ->
-        Forall (eq (Son (sclk ck) (Vnm x) true))  (clocksof ets) ->
-        Forall (eq (Son (sclk ck) (Vnm x) false)) (clocksof efs) ->
-        wc_exp (Emerge x ets efs (tys, Cstream (sclk ck)))
+        Forall (eq (Con ck x true))  (clocksof ets) ->
+        Forall (eq (Con ck x false)) (clocksof efs) ->
+        length tys = length (clocksof ets) ->
+        length tys = length (clocksof efs) ->
+        wc_exp (Emerge x ets efs (tys, (ck, None)))
 
     | wc_Eifte: forall e ets efs tys ck,
         wc_exp e ->
@@ -225,32 +175,137 @@ Module Type LCLOCKING
         clockof e = [ck] ->
         Forall (eq ck) (clocksof ets) ->
         Forall (eq ck) (clocksof efs) ->
-        wc_exp (Eite e ets efs (tys, Cstream ck))
+        length tys = length (clocksof ets) ->
+        length tys = length (clocksof efs) ->
+        wc_exp (Eite e ets efs (tys, (ck, None)))
 
     | wc_Eapp: forall f es anns n,
         Forall wc_exp es ->
-        DisjointIndexes (map nclockof es) ->
-        NoDup (indexes (map snd anns)) ->
         find_node f G = Some n ->
-        (exists b isub osub,
-            Forall2 (fun xtc cke => inst_in b isub xtc = Some cke)
-                    n.(n_in) (nclocksof es)
-            /\ Forall2 (fun xtc a => inst_out b osub isub xtc = Some (snd a))
-                       n.(n_out) anns) ->
+        (exists bck sub,
+            Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es)
+            /\ Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns)) ->
         wc_exp (Eapp f es anns).
 
-    Definition wc_patvar (pvars: list ident) (ncks: list nclock)
-                         (x: ident) (sck: sclock) : Prop :=
-      match pinst (patsub ncks pvars) sck with
-      | Some ck => In (x, ck) vars
-      | None => False
+    (* TODO: after experiment, maybe put in Common *)
+    Definition LiftO {A} (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
+      match x with None => d | Some x => P x end.
+    
+    Inductive Is_fresh_in : ident -> exp -> Prop :=
+    | IFEunop: forall x op e ann,
+        Is_fresh_in x e ->
+        Is_fresh_in x (Eunop op e ann)
+
+    | IFEbinop: forall x op e1 e2 ann,
+        Is_fresh_in x e1 \/ Is_fresh_in x e2 ->
+        Is_fresh_in x (Ebinop op e1 e2 ann)
+
+    | IFEfby: forall x e0s es anns,
+        Exists (Is_fresh_in x) (e0s ++ es) ->
+        Is_fresh_in x (Efby e0s es anns)
+
+    | IFEwhen: forall x es y b anns,
+        Exists (Is_fresh_in x) es ->
+        Is_fresh_in x (Ewhen es y b anns)
+
+    | IFEmerge: forall x ets efs anns,
+        Exists (Is_fresh_in x) (ets ++ efs) ->
+        Is_fresh_in x (Emerge x ets efs anns)
+
+    | IFEifte: forall x e ets efs anns,
+        Exists (Is_fresh_in x) (e :: (ets ++ efs)) ->
+        Is_fresh_in x (Eite e ets efs anns)
+
+    | IFEapp: forall x f es anns,
+        Exists (Is_fresh_in x) es
+        \/ Exists (fun y => LiftO True (eq x) (snd (snd y))) anns ->
+        Is_fresh_in x (Eapp f es anns).
+
+    (* TODO: Move to Common *)
+    Fixpoint Ino {A} (a : A) (l : list (option A)) : Prop :=
+      match l with
+      | [] => False
+      | b :: m => LiftO False (eq a) b \/ Ino a m
       end.
 
-    Definition wc_equation (eq : equation) : Prop :=
-      let (xs, es) := eq in
+    (* TODO: Move to Common *)
+    Inductive NoDupo {A} : list (option A) -> Prop :=
+      NoDupo_nil : NoDupo []
+    | NoDupo_cons : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l).
+
+    Inductive DisjointFreshList : list exp -> Prop :=
+    | DWnil:
+        DisjointFreshList []
+
+    | DWcons: forall e es,
+        DisjointFreshList es ->
+        (forall x, Is_fresh_in x e -> ~Exists (Is_fresh_in x) es) ->
+        DisjointFreshList (e::es).
+
+    Definition Is_AnonStream (x : option ident) : Prop :=
+      match x with
+      | None => True
+      | Some x => InMembers x vars
+      end.
+
+    Inductive DisjointFresh : exp -> Prop :=
+    | DFEconst: forall c,
+        DisjointFresh (Econst c)
+
+    | DFEvar: forall x ann,
+        DisjointFresh (Evar x ann)
+
+    | DFEunop: forall op e ann,
+        DisjointFresh e ->
+        DisjointFresh (Eunop op e ann)
+
+    | DFEbinop: forall op e1 e2 ann,
+        DisjointFresh e1 ->
+        DisjointFresh e2 ->
+        (forall x, Is_fresh_in x e1 -> ~Is_fresh_in x e2) ->
+        DisjointFresh (Ebinop op e1 e2 ann)
+
+    | DFEfby: forall e0s es anns,
+        DisjointFreshList (e0s ++ es) ->
+        Forall DisjointFresh (e0s ++ es) ->
+        DisjointFresh (Efby e0s es anns)
+
+    | DFEwhen: forall es x b anns,
+        DisjointFreshList es ->
+        Forall DisjointFresh es ->
+        DisjointFresh (Ewhen es x b anns)
+
+    | DFEmerge: forall x ets efs anns,
+        DisjointFreshList (ets ++ efs) ->
+        Forall DisjointFresh (ets ++ efs) ->
+        DisjointFresh (Emerge x ets efs anns)
+
+    | DFEifte: forall e ets efs anns,
+        DisjointFreshList (e :: (ets ++ efs)) ->
+        Forall DisjointFresh (e :: (ets ++ efs)) ->
+        DisjointFresh (Eite e ets efs anns)
+
+    | DFEapp: forall f es anns,
+        DisjointFreshList es ->
+        Forall DisjointFresh es ->
+        NoDupo (map snd (map snd anns)) ->
+        Forall Is_AnonStream (map (snd ∘ snd) anns) ->
+        DisjointFresh (Eapp f es anns).
+
+    Definition WellFormedAnon (e : exp) : Prop :=
+      match e with
+      | Eapp f es anns =>
+        Forall (fun x => ~Is_AnonStream x) (map (snd ∘ snd) anns)
+        /\ DisjointFreshList es
+      | _ => DisjointFresh e
+      end.
+
+    Definition wc_equation (xses : equation) : Prop :=
+      let (xs, es) := xses in
       Forall wc_exp es
-      /\ DisjointIndexes (map nclockof es)
-      /\ Forall2 (wc_patvar xs (nclocksof es)) xs (clocksof es).
+      /\ Forall WellFormedAnon es
+      /\ Forall2 (fun x nc => LiftO True (eq x) (snd nc)) xs (nclocksof es)
+      /\ Forall2 (fun x ck => In (x, ck) vars) xs (clocksof es).
 
   End WellClocked.
 
@@ -288,14 +343,14 @@ Module Type LCLOCKING
     Hypothesis EvarCase:
       forall x ty ck,
         In (x, ck) vars ->
-        P (Evar x (ty, Cnamed (Vnm x) (sclk ck))).
+        P (Evar x (ty, (ck, Some x))).
 
     Hypothesis EunopCase:
       forall op e ty ck,
         wc_exp G vars e ->
         P e ->
         clockof e = [ck] ->
-        P (Eunop op e (ty, Cstream ck)).
+        P (Eunop op e (ty, (ck, None))).
 
     Hypothesis EbinopCase:
       forall op e1 e2 ty ck,
@@ -305,7 +360,7 @@ Module Type LCLOCKING
         P e2 ->
         clockof e1 = [ck] ->
         clockof e2 = [ck] ->
-        P (Ebinop op e1 e2 (ty, Cstream ck)).
+        P (Ebinop op e1 e2 (ty, (ck, None))).
 
     Hypothesis EfbyCase:
       forall e0s es anns,
@@ -315,7 +370,7 @@ Module Type LCLOCKING
         Forall P e0s ->
         Forall2 eq (map ckstream anns) (clocksof e0s) ->
         Forall2 eq (map ckstream anns) (clocksof es) ->
-        Forall is_ckstream anns ->
+        Forall unnamed_stream anns ->
         P (Efby e0s es anns).
 
     Hypothesis EwhenCase:
@@ -323,8 +378,8 @@ Module Type LCLOCKING
         Forall (wc_exp G vars) es ->
         Forall P es ->
         In (x, ck) vars ->
-        Forall (eq (sclk ck)) (clocksof es) ->
-        P (Ewhen es x b (tys, Cstream (Son (sclk ck) (Vnm x) b))).
+        Forall (eq ck) (clocksof es) ->
+        P (Ewhen es x b (tys, (Con ck x b, None))).
 
     Hypothesis EmergeCase:
       forall x ets efs tys ck,
@@ -333,9 +388,11 @@ Module Type LCLOCKING
         Forall (wc_exp G vars) efs ->
         Forall P efs ->
         In (x, ck) vars ->
-        Forall (eq (Son (sclk ck) (Vnm x) true))  (clocksof ets) ->
-        Forall (eq (Son (sclk ck) (Vnm x) false)) (clocksof efs) ->
-        P (Emerge x ets efs (tys, Cstream (sclk ck))).
+        Forall (eq (Con ck x true))  (clocksof ets) ->
+        Forall (eq (Con ck x false)) (clocksof efs) ->
+        length tys = length (clocksof ets) ->
+        length tys = length (clocksof efs) ->
+        P (Emerge x ets efs (tys, (ck, None))).
 
     Hypothesis EiteCase:
       forall e ets efs tys ck,
@@ -348,20 +405,18 @@ Module Type LCLOCKING
         clockof e = [ck] ->
         Forall (eq ck)  (clocksof ets) ->
         Forall (eq ck) (clocksof efs) ->
-        P (Eite e ets efs (tys, Cstream ck)).
+        length tys = length (clocksof ets) ->
+        length tys = length (clocksof efs) ->
+        P (Eite e ets efs (tys, (ck, None))).
 
     Hypothesis EappCase:
       forall f es anns n,
         Forall (wc_exp G vars) es ->
-        DisjointIndexes (map nclockof es) ->
-        NoDup (indexes (map snd anns)) ->
         Forall P es ->
         find_node f G = Some n ->
-        (exists b isub osub,
-            Forall2 (fun xtc cke => inst_in b isub xtc = Some cke)
-                    n.(n_in) (nclocksof es)
-            /\ Forall2 (fun xtc a => inst_out b osub isub xtc = Some (snd a))
-                       n.(n_out) anns) ->
+        (exists bck sub,
+            Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es)
+            /\ Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns)) ->
         P (Eapp f es anns).
 
     Fixpoint wc_exp_ind2 (e: exp) (H: wc_exp G vars e) {struct H} : P e.
@@ -373,25 +428,16 @@ Module Type LCLOCKING
       - apply EwhenCase; auto.
         clear H1. induction H; auto.
       - apply EmergeCase; auto.
-        clear H2. induction H; auto.
-        clear H3. induction H0; auto.
+        clear H2 H4. induction H; auto.
+        clear H3 H5. induction H0; auto.
       - apply EiteCase; auto.
-        clear H3. induction H0; auto.
-        clear H4. induction H1; auto.
+        clear H3 H5. induction H0; auto.
+        clear H4 H6. induction H1; auto.
       - eapply EappCase; eauto.
-        clear H0 H1 H2 H3. induction H; eauto.
+        clear H0 H1. induction H; eauto.
     Qed.
 
   End wc_exp_ind2.
-
-  Lemma wc_sclk:
-    forall env ck,
-      wc_clock env ck ->
-      wc_sclock env (sclk ck).
-  Proof.
-    induction ck. now auto with lclocking.
-    inversion_clear 1. simpl; eauto with lclocking.
-  Qed.
 
   Lemma wc_global_app:
     forall G G',
@@ -416,53 +462,17 @@ Module Type LCLOCKING
     inversion Hwc. eauto.
   Qed.
 
-  Lemma sinst_extarg:
-    forall f g bck ck,
-      (forall x, f x = g x) ->
-      sinst bck f ck = sinst bck g ck.
-  Proof.
-    intros * Hext.
-    induction ck; auto.
-    simpl. now rewrite IHck, Hext.
-  Qed.
-
-  Lemma wc_NoDup_indexes:
-    forall G env e,
-      wc_exp G env e ->
-      NoDup (indexes (nclockof e)).
-  Proof.
-    induction e; simpl.
-    - auto using NoDup.
-    - destruct a as (ty, nck); destruct nck.
-      simpl; auto using NoDup.
-      destruct c; simpl; auto using NoDup.
-    - destruct a as (ty, nck); destruct nck.
-      simpl; auto using NoDup.
-      destruct c; simpl; auto using NoDup.
-    - destruct a as (ty, nck); destruct nck.
-      simpl; auto using NoDup.
-      destruct c; simpl; auto using NoDup.
-    - inversion_clear 1.
-      rewrite is_ckstream_NoDup_indexes; auto using NoDup.
-    - inversion_clear 1.
-      induction tys; simpl; auto using NoDup.
-    - inversion_clear 1.
-      induction tys; simpl; auto using NoDup.
-    - inversion_clear 1.
-      induction tys; simpl; auto using NoDup.
-    - now inversion_clear 1.
-  Qed.
-
   Lemma indexes_app:
     forall xs ys,
       indexes (xs ++ ys) = indexes xs ++ indexes ys.
   Proof.
     induction xs as [|x xs IH]. reflexivity.
     destruct x; simpl; auto.
-    destruct c; simpl; auto.
+    destruct o; simpl; auto.
     now setoid_rewrite IH.
   Qed.
 
+  (*
   Lemma indexes_Is_index_in_nclocks:
     forall i e,
       In i (indexes (nclockof e)) ->
@@ -510,7 +520,8 @@ Module Type LCLOCKING
       destruct c. 2:now constructor 2; apply IH.
       inv Hin. now repeat constructor. now constructor 2; apply IH.
   Qed.
-
+   *)
+  
   Instance wc_exp_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * clock)
                 ==> @eq exp ==> iff)
@@ -524,28 +535,7 @@ Module Type LCLOCKING
       eauto with lclocking.
   Qed.
 
-  Instance wc_patvar_Proper:
-    Proper (@Permutation.Permutation (ident * clock)
-               ==> @eq (list ident) ==> @eq (list nclock)
-               ==> @eq ident ==> @eq sclock ==> iff) wc_patvar.
-  Proof.
-    intros env1 env2 Henv p1 p2 Hp nc1 nc2 Hncs x1 x2 Hx sck1 sck2 Hsck.
-    subst. unfold wc_patvar.
-    destruct (pinst (patsub nc2 p2) sck2);
-      try rewrite Henv; reflexivity.
-  Qed.
-
-  (* Is there a double pointwise ? *)
-  Lemma wc_patvar_Forall2_perm:
-    forall env1 env2 pvars ncks xs cs,
-      Permutation.Permutation env1 env2 ->
-      (Forall2 (wc_patvar env1 pvars ncks) xs cs
-       <-> Forall2 (wc_patvar env2 pvars ncks) xs cs).
-  Proof.
-    intros * Hperm.
-    split; apply Forall2_impl_In; intros; rewrite Hperm in *; auto.
-  Qed.
-
+  (*
   Instance wc_equation_Proper:
     Proper (@eq global ==> @Permutation.Permutation (ident * clock)
                 ==> @eq equation ==> iff)
@@ -559,6 +549,7 @@ Module Type LCLOCKING
       apply Forall_impl_In with (2:=WCeq1); intros;
         rewrite Henv in *; auto.
   Qed.
+   *)
 
 End LCLOCKING.
 
