@@ -105,21 +105,13 @@ Module Type LCLOCKING
   (* substitution of identifiers *)
   Definition ident_map := ident -> option ident.
 
-  (* instantiate a parameter, giving a named clock *)
-  Fixpoint inst (bck: clock) (sub: ident_map) (ick : clock) : option clock :=
-    match ick with
-    | Cbase => Some bck
-    | Con ick' x b => match inst bck sub ick' with
-                     | None => None
-                     | Some ck' => option_map (fun y => Con ck' y b) (sub x)
-                     end
-    end.
-
+  (* xc : name and clock from the node interface
+     nc : named clock from the annotated expression *)
   Definition WellInstantiated (bck : clock) (sub : ident_map)
                               (xc : ident * clock) (nc : nclock) : Prop :=
     sub (fst xc) = snd nc
-    /\ inst bck sub (snd xc) = Some (fst nc).
-            
+    /\ instck bck sub (snd xc) = Some (fst nc).
+
   Section WellClocked.
 
     Variable G    : global.
