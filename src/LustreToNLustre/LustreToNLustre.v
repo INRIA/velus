@@ -177,27 +177,12 @@ Module Type LUSTRE_TO_NLUSTRE
     | _ => Error (msg "not a constant")
     end.
 
-  Fixpoint clock_of_sclock (sck : sclock) : option clock :=
-    match sck with
-    | Sbase => Some Cbase
-    | Son sck' (Vnm x) b =>
-      option_map (fun ck' => Con ck' x b) (clock_of_sclock sck')
-    | Son _ (Vidx _) _ =>
-      None
-    end.
-
-  Definition get_exp_clock (acc : list clock) (sck : sclock) : list clock :=
-    match clock_of_sclock sck with
-    | None => acc
-    | Some ck => ck :: acc
-    end.
-
   Definition to_equation (env : Env.t (type * clock)) (eq : L.equation)
                                                           : res NL.equation :=
     match eq with
     | (xs, [L.Eapp f es _]) =>
         do xcks1 <- mmap (find_clock env) xs;
-        do xcks2 <- OK (fold_left get_exp_clock (concat (map L.clockof es)) []);
+        do xcks2 <- OK (L.clocksof es);
         do les <- mmap to_lexp es;
         OK (NL.EqApp xs (find_base_clock (xcks1 ++ xcks2)) f les None)
 
