@@ -149,6 +149,7 @@ Module Type LCLOCKING
         Forall wc_exp es ->
         In (x, ck) vars ->
         Forall (eq ck) (clocksof es) ->
+        length tys = length (clocksof es) ->
         wc_exp (Ewhen es x b (tys, (Con ck x b, None)))
 
     | wc_Emerge: forall x ets efs tys ck,
@@ -354,6 +355,7 @@ Module Type LCLOCKING
         Forall P es ->
         In (x, ck) vars ->
         Forall (eq ck) (clocksof es) ->
+        length tys = length (clocksof es) ->
         P (Ewhen es x b (tys, (Con ck x b, None))).
 
     Hypothesis EmergeCase:
@@ -401,7 +403,7 @@ Module Type LCLOCKING
         + clear H2. induction H0; auto.
         + clear H1. induction H; auto.
       - apply EwhenCase; auto.
-        clear H1. induction H; auto.
+        clear H1 H2. induction H; auto.
       - apply EmergeCase; auto.
         clear H2 H4. induction H; auto.
         clear H3 H5. induction H0; auto.
