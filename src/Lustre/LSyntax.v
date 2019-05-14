@@ -169,8 +169,6 @@ Module Type LSYNTAX
 
   (** Structural properties *)
 
-  (* TODO: custom induction scheme for expression... *)
-
   Section exp_ind2.
 
     Variable P : exp -> Prop.
@@ -185,14 +183,18 @@ Module Type LSYNTAX
 
     Hypothesis EunopCase:
       forall op e a,
+        P e ->
         P (Eunop op e a).
 
     Hypothesis EbinopCase:
       forall op e1 e2 a,
+        P e1 ->
+        P e2 ->
         P (Ebinop op e1 e2 a).
 
     Hypothesis EfbyCase:
       forall e0s es a,
+        Forall P e0s ->
         Forall P es ->
         P (Efby e0s es a).
 

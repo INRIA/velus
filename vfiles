@@ -16,6 +16,7 @@ src/Lustre/Parser/LustreParser.v
 src/Lustre/Parser/LustreAst.v
 src/Lustre/LTyping.v
 src/Lustre/LClocking.v
+src/Lustre/LOrdered.v
 src/Lustre/Lustre.v
 
 src/CoreExpr/CESyntax.v

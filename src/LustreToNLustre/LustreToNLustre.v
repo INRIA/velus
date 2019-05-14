@@ -5,6 +5,9 @@ From Velus Require Import Clocks.
 From Velus Require Import Lustre.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.Streams.
+From Velus Require Import NLustre.NLOrdered.
+From Velus Require Import NLustre.NLSemanticsCoInd.
 
 From Coq Require Import String.
 
@@ -24,9 +27,16 @@ From Coq Require Import Classes.EquivDec.
 Module Type LUSTRE_TO_NLUSTRE
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
+       (Import OpAux: OPERATORS_AUX Op)
        (L           : LSYNTAX  Ids Op)
-       (CE          : CESYNTAX     Op)
-       (NL          : NLSYNTAX Ids Op CE).
+       (Import CE   : CESYNTAX     Op)
+       (NL          : NLSYNTAX Ids Op CE)
+       (LT          : LTYPING  Ids Op L)
+       (LC          : LCLOCKING Ids Op L)
+       (Ord         : NLORDERED Ids Op CE     NL)
+       (Lord        : LORDERED   Ids Op       L)
+       (LS          : LSEMANTICS Ids Op OpAux L Lord)
+       (NLSC        : NLSEMANTICSCOIND Ids Op OpAux CE NL).
 
   Fixpoint to_lexp (e : L.exp) : res CE.lexp :=
     match e with
@@ -248,9 +258,16 @@ End LUSTRE_TO_NLUSTRE.
 Module LustreToNLustreFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (LSyn  : LSYNTAX  Ids Op)
-       (CESyn : CESYNTAX     Op)
-       (NLSyn : NLSYNTAX Ids Op CESyn)
-       <: LUSTRE_TO_NLUSTRE Ids Op LSyn CESyn NLSyn.
-  Include LUSTRE_TO_NLUSTRE Ids Op LSyn CESyn NLSyn.
+       (OpAux : OPERATORS_AUX Op)
+       (L     : LSYNTAX  Ids Op)
+       (CE    : CESYNTAX     Op)
+       (NL    : NLSYNTAX Ids Op CE)
+       (LT    : LTYPING  Ids Op L)
+       (LC    : LCLOCKING Ids Op L)
+       (Ord   : NLORDERED Ids Op CE     NL)
+       (Lord  : LORDERED   Ids Op       L)
+       (LS    : LSEMANTICS Ids Op OpAux L Lord)
+       (NLSC  : NLSEMANTICSCOIND Ids Op OpAux CE NL)
+       <: LUSTRE_TO_NLUSTRE Ids Op OpAux L CE NL LT LC Ord Lord LS NLSC.
+  Include LUSTRE_TO_NLUSTRE Ids Op OpAux L CE NL LT LC Ord Lord LS NLSC.
 End LustreToNLustreFun.

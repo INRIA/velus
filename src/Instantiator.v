@@ -19,7 +19,7 @@ Module NL := NLustreFun Ids Op OpAux Str CE.
 
 From Velus Require Import LustreToNLustre.
 
-Module L2NL := LustreToNLustreFun Ids Op L.Syn CE.Syn NL.Syn.
+Module L2NL := LustreToNLustreFun Ids Op OpAux L.Syn CE.Syn NL.Syn.
 
 From Velus Require Import SyBloc.
 
