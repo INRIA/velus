@@ -176,7 +176,7 @@ Lemma equiv_decb_equiv:
   forall `{EqDec A} (x y : A),
     equiv_decb x y = true <-> equiv x y.
 Proof.
-  intros. 
+  intros.
   split; intro; unfold equiv_decb in *;
     destruct (equiv_dec x y); intuition.
 Qed.
@@ -958,7 +958,7 @@ Section ORel.
     destruct sx; auto.
     right; eauto.
   Qed.
-  
+
   Global Instance orel_trans `{RT : Transitive A R} : Transitive orel.
   Proof.
     unfold orel.
@@ -975,7 +975,7 @@ Section ORel.
     intros sx sy [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]; subst; auto.
     symmetry in XY3. right; eauto.
   Qed.
-  
+
   Global Instance orel_equiv `{Equivalence A R} : Equivalence orel.
   Proof (Build_Equivalence orel orel_refl orel_sym orel_trans).
 
@@ -987,5 +987,45 @@ Section ORel.
     intros x y Rxy. right. eauto.
   Qed.
 
+  Instance orel_some_Proper `{Symmetric A R} `{Transitive A R} :
+    Proper (orel ==> orel ==> iff) orel.
+  Proof.
+    intros ox1 ox2 ORx oy1 oy2 ORy.
+    split; intro HH.
+    - symmetry in ORx. transitivity ox1; auto. transitivity oy1; auto.
+    - symmetry in ORy. transitivity ox2; auto. transitivity oy2; auto.
+  Qed.
+
+  Lemma orel_discriminate1:
+    forall x, ~(orel (Some x) None).
+  Proof.
+    intros x [(SN1 & SN2)|(? & ? & SN1 & SN2 & ?)]; discriminate.
+  Qed.
+
+  Lemma orel_discriminate2:
+    forall x, ~(orel None (Some x)).
+  Proof.
+    intros x [(SN1 & SN2)|(? & ? & SN1 & SN2 & ?)]; discriminate.
+  Qed.
+
+  Lemma orel_inversion:
+    forall x y, orel (Some x) (Some y) -> R x y.
+  Proof.
+    inversion 1; subst. now take (_ /\ _) and destruct it; discriminate.
+    take (exists x y, _ /\ _ /\ _) and destruct it as (x' & y' & Hx & Hy & E).
+    now repeat take (Some _ = Some _) and inversion_clear it.
+  Qed.
+
 End ORel.
+
+Lemma orel_eq {A : Type} :
+  forall x y, orel (@eq A) x y <-> x = y.
+Proof.
+  intros x y. destruct x, y; split; intro HH; try discriminate; auto.
+  - apply orel_inversion in HH; now subst.
+  - inversion HH; reflexivity.
+  - now apply orel_discriminate1 in HH.
+  - now apply orel_discriminate2 in HH.
+  - reflexivity.
+Qed.
 
