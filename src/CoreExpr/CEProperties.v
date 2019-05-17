@@ -26,7 +26,7 @@ Module Type CEPROPERTIES
     intros; split; unfold sem_var_instant;
       take (Env.find x R = _) and rewrite it; auto.
   Qed.
-  
+
   Lemma sem_lexp_instant_switch_env:
     forall b R R' e v,
       (forall x, Is_free_in_lexp x e -> Env.find x R = Env.find x R') ->
@@ -110,8 +110,50 @@ Module Type CEPROPERTIES
         symmetry; auto.
   Qed.
 
+  Lemma sem_laexp_instant_switch_env:
+    forall b R R' ck e v,
+      (forall x, Is_free_in_clock x ck \/ Is_free_in_lexp x e ->
+            Env.find x R = Env.find x R') ->
+      sem_laexp_instant b R ck e v <-> sem_laexp_instant b R' ck e v.
+  Proof.
+    intros * RRx. split.
+    - inversion_clear 1;
+        take (sem_lexp_instant _ _ _ _)
+             and apply sem_lexp_instant_switch_env with (R':=R') in it; auto;
+          take (sem_clock_instant _ _ _ _)
+               and apply sem_clock_instant_switch_env with (R':=R') in it; eauto;
+            constructor; auto.
+    - inversion_clear 1;
+        take (sem_lexp_instant _ _ _ _)
+             and apply sem_lexp_instant_switch_env with (R:=R) in it; auto;
+          take (sem_clock_instant _ _ _ _)
+               and apply sem_clock_instant_switch_env with (R:=R) in it; eauto;
+            constructor; auto.
+  Qed.
+
+  Lemma sem_caexp_instant_switch_env:
+    forall b R R' ck e v,
+      (forall x, Is_free_in_clock x ck \/ Is_free_in_cexp x e ->
+            Env.find x R = Env.find x R') ->
+      sem_caexp_instant b R ck e v <-> sem_caexp_instant b R' ck e v.
+  Proof.
+    intros * RRx. split.
+    - inversion_clear 1;
+        take (sem_cexp_instant _ _ _ _)
+             and apply sem_cexp_instant_switch_env with (R':=R') in it; auto;
+          take (sem_clock_instant _ _ _ _)
+               and apply sem_clock_instant_switch_env with (R':=R') in it; eauto;
+            constructor; auto.
+    - inversion_clear 1;
+        take (sem_cexp_instant _ _ _ _)
+             and apply sem_cexp_instant_switch_env with (R:=R) in it; auto;
+          take (sem_clock_instant _ _ _ _)
+               and apply sem_clock_instant_switch_env with (R:=R) in it; eauto;
+            constructor; auto.
+  Qed.
+
 End CEPROPERTIES.
-  
+
 Module CEProperties
        (Ids          : IDS)
        (Op           : OPERATORS)
