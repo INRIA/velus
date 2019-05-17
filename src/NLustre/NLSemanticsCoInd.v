@@ -14,6 +14,7 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
+From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.Streams.
 
 (** * The NLustre semantics *)
@@ -30,7 +31,8 @@ Module Type NLSEMANTICSCOIND
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX Op)
        (Import CESyn   : CESYNTAX      Op)
-       (Import Syn     : NLSYNTAX  Ids Op CESyn).
+       (Import Syn     : NLSYNTAX  Ids Op CESyn)
+       (Import Ord     : NLORDERED Ids Op CESyn Syn).
 
   Definition idents := List.map (@fst ident (type * clock)).
 
@@ -468,6 +470,96 @@ Module Type NLSEMANTICSCOIND
              sem_equation_mult, sem_node_mult, sem_reset_mult.
 
   End SemInd.
+
+  (** ** Properties of the [global] environment *)
+
+  (* TODO: move to NLSyntax? *)
+  Lemma find_node_In:
+    forall f G n,
+      find_node f G = Some n ->
+      In n G.
+  Proof.
+    intros * Hfind.
+    apply find_node_split in Hfind.
+    destruct Hfind as (bG & aG & Hge).
+    rewrite Hge. auto using in_app with datatypes.
+  Qed.
+
+  Lemma sem_node_cons2:
+    forall nd G f xs ys,
+      Ordered_nodes G
+      -> sem_node G f xs ys
+      -> Forall (fun nd' : node => n_name nd <> n_name nd') G
+      -> sem_node (nd::G) f xs ys.
+  Proof.
+    intros nd G f xs ys Hord Hsem Hnin.
+    assert (Hnin':=Hnin).
+    revert Hnin'.
+    induction Hsem as [| | | | |bk f xs ys n Hfind Hinp Hout Hscvs Heqs IH]
+      using sem_node_mult
+      with (P_equation := fun bk H eq =>
+                   ~Is_node_in_eq nd.(n_name) eq
+                   -> sem_equation (nd::G) bk H eq)
+           (P_reset := fun f rs ess oss =>
+                   (nd.(n_name) <> f)
+                   -> sem_reset (nd::G) f rs ess oss);
+      try eauto using sem_equation; try intro HH.
+    econstructor; eauto. apply IHHsem.
+    intro Hnf. rewrite Hnf in *. inv H4. specialize (H6 0).
+    inversion_clear H6 as [ ? ? ? ? ? Hfind].
+    apply In_Forall with (2:=find_node_In _ _ _ Hfind) in Hnin.
+    apply find_node_name in Hfind. auto.
+    econstructor; eauto. intro k. specialize (H k) as [? Hsemn].
+    now apply Hsemn.
+    clear HH.
+    assert (nd.(n_name) <> f) as Hnf.
+    { intro Hnf. rewrite Hnf in *.
+      apply In_Forall with (2:=find_node_In _ _ _ Hfind) in Hnin.
+      apply find_node_name in Hfind. auto. }
+    econstructor; eauto.
+    now apply find_node_other; auto.
+    apply Forall_impl_In with (2:=IH).
+    intros eq Hin HH. apply HH; clear HH.
+    destruct eq; try inversion 1; subst.
+    assert (Hsem := Heqs).
+    eapply In_Forall in Hsem; try eapply Hin.
+    inversion_clear Hsem as [| ? ? ? ? ? ? ? ? ? ? Hsemn| |].
+    inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
+    pose proof (find_node_name _ _ _ Hfind').
+    apply find_node_In in Hfind'.
+    apply In_Forall with (1:=Hnin) in Hfind'. auto.
+    inversion_clear H5. specialize (H0 0).
+    inversion_clear H0 as [ ? ? ? ? ? Hfind'].
+    pose proof (find_node_name _ _ _ Hfind').
+    apply find_node_In in Hfind'.
+    apply In_Forall with (1:=Hnin) in Hfind'. auto.
+  Qed.
+
+  Lemma sem_equation_cons2:
+    forall G b H eqs nd,
+      Ordered_nodes (nd::G)
+      -> Forall (sem_equation G H b) eqs
+      -> ~Is_node_in nd.(n_name) eqs
+      -> Forall (sem_equation (nd::G) H b) eqs.
+  Proof.
+    intros G b H eqs nd Hord Hsem Hnini.
+    induction eqs as [|eq eqs IH]; [now constructor|].
+    apply Forall_cons2 in Hsem.
+    destruct Hsem as [Heq Heqs].
+    apply not_Is_node_in_cons in Hnini.
+    destruct Hnini as [Hnini Hninis].
+    apply IH with (2:=Hninis) in Heqs.
+    constructor; [|now apply Heqs].
+    destruct Heq (* as [|? ? ? ? ? ? ? ? ? ? ? ? ? Hsem|] *);
+      try now eauto using sem_equation.
+    econstructor; eauto using sem_equation.
+    inversion_clear Hord as [|? ? Hord' Hnn Hnns].
+    auto using sem_node_cons2.
+    econstructor; eauto. econstructor; eauto. inv H4.
+    inversion_clear Hord as [|? ? Hord' Hnn Hnns].
+    auto using sem_node_cons2.
+  Qed.
+
 
   Add Parametric Morphism H : (sem_var H)
       with signature eq ==> @EqSt value ==> Basics.impl

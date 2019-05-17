@@ -110,6 +110,16 @@ Section Extra.
     intros * HF. inv HF. auto.
   Qed.
 
+  Remark In_Forall:
+    forall (x: A) xs P,
+      Forall P xs ->
+      In x xs ->
+      P x.
+  Proof.
+    intros * Hforall Hin.
+    induction xs; inversion Hin; inversion Hforall; subst; auto.
+  Qed.
+
   (* should be in standard lib... *)
   Lemma not_in_cons (x a : A) (l : list A):
     ~ In x (a :: l) <-> x <> a /\ ~ In x l.

@@ -14,6 +14,7 @@ From Coq Require Import String.
 From Coq Require Import List.
 Import List.ListNotations.
 From Coq Require Import Permutation.
+From Coq Require Import Omega.
 
 Open Scope list.
 
@@ -36,7 +37,7 @@ Module Type LUSTRE_TO_NLUSTRE
        (Ord         : NLORDERED Ids Op CE     NL)
        (Lord        : LORDERED   Ids Op       L)
        (LS          : LSEMANTICS Ids Op OpAux L Lord)
-       (NLSC        : NLSEMANTICSCOIND Ids Op OpAux CE NL).
+       (NLSC        : NLSEMANTICSCOIND Ids Op OpAux CE NL Ord).
 
   Fixpoint to_lexp (e : L.exp) : res CE.lexp :=
     match e with
@@ -481,6 +482,17 @@ Module Type LUSTRE_TO_NLUSTRE
     eapply env_maps_tl; eauto. now inv H2.
   Qed.
 
+  Lemma sem_var_step_nl :
+    forall H x v s,
+      NLSC.sem_var H x (v ::: s) -> NLSC.sem_var (NLSC.History_tl H) x s.
+  Proof.
+    intros * Hsem.
+    inv Hsem.
+    destruct xs'.
+    econstructor.
+    eapply env_maps_tl; eauto. now inv H2.
+  Qed.
+
   Lemma sem_clock_step :
     forall H b ck s ss,
       NLSC.sem_clock H b ck (s ::: ss) ->
@@ -629,19 +641,6 @@ Module Type LUSTRE_TO_NLUSTRE
       now apply H3.
   Qed.
 
-  Lemma sem_lexp_single :
-    forall e e' G H b ss,
-      to_lexp e = OK e' ->
-      LS.sem_exp G H b e ss ->
-      exists s, ss = [s].
-  Proof.
-    induction e using L.exp_ind2; intros * Htr Hsem; inv Htr;
-      try (inv Hsem; eexists; now eauto).
-    cases_eqn H2. subst. monadInv H2. inv Hsem. inv H9. inv H5. inv H. inv H5.
-    eapply H4 in EQ; [|eauto]. inv EQ. simpl in H11. inv H11. inv H6.
-    eauto.
-  Qed.
-
   Lemma sem_exp_lexp :
     forall G G' env H b e e' s,
       LT.wt_exp G' env e ->
@@ -661,6 +660,36 @@ Module Type LUSTRE_TO_NLUSTRE
       inv H9. inv H5. inv H11. inv H6. rewrite app_nil_r in H0. inv H0. inv H14.
       econstructor. eapply H3; eauto. eapply sem_var_var. eassumption.
       now eapply when_id.
+  Qed.
+
+  Lemma sem_lexp_single :
+    forall e e' G H b ss,
+      to_lexp e = OK e' ->
+      LS.sem_exp G H b e ss ->
+      exists s, ss = [s].
+  Proof.
+    induction e using L.exp_ind2; intros * Htr Hsem; inv Htr;
+      try (inv Hsem; eexists; now eauto).
+    cases_eqn H2. subst. monadInv H2. inv Hsem. inv H9. inv H5. inv H. inv H5.
+    eapply H4 in EQ; [|eauto]. inv EQ. simpl in H11. inv H11. inv H6.
+    eauto.
+  Qed.
+
+  Lemma sem_exps_lexps :
+    forall G H b tenv es les ss,
+      mmap to_lexp es = OK les ->
+      Forall (LT.wt_exp G tenv) es ->
+      Forall2 (LS.sem_exp G H b) es ss ->
+      Forall2 (NLSC.sem_lexp H b) les (concat ss).
+  Proof.
+    intros * Hmmap Hwt Hsem. revert dependent les.
+    induction Hsem; intros. inv Hmmap. simpl. auto.
+    apply mmap_cons in Hmmap.
+    destruct Hmmap as [ x' [le' [Hle [Htolexp  Hmmap]]]]. inv Hwt.
+    apply IHHsem in Hmmap; eauto.
+    assert (Htolexp' := Htolexp).
+    eapply sem_lexp_single in Htolexp'; eauto. inv Htolexp'.
+    eapply sem_exp_lexp in Htolexp; eauto. now constructor.
   Qed.
 
   Lemma sem_exp_cexp :
@@ -820,7 +849,7 @@ Module Type LUSTRE_TO_NLUSTRE
       unfold_Stv cs; constructor; simpl; eauto; inv H.
   Qed.
 
-  Lemma ac_fby :
+  Lemma ac_fby1 :
     forall xs ys rs,
       LS.fby xs ys rs -> abstract_clock xs ≡ abstract_clock rs.
   Proof.
@@ -831,6 +860,17 @@ Module Type LUSTRE_TO_NLUSTRE
     cofix Cofix.
     intros * Hfby1.
     unfold_Stv xs; inv Hfby1; econstructor; simpl; eauto.
+  Qed.
+
+  Lemma ac_fby2 :
+    forall xs ys rs,
+      LS.fby xs ys rs -> abstract_clock ys ≡ abstract_clock rs.
+  Proof.
+    cofix Cofix. intros * Hfby.
+    unfold_Stv ys; inv Hfby; econstructor; simpl; eauto.
+    clear - H3. revert H3. revert c ys xs0 rs0.
+    cofix Cofix. intros * Hfby1.
+    unfold_Stv ys; inv Hfby1; econstructor; simpl; eauto.
   Qed.
 
   Lemma ac_ite :
@@ -922,6 +962,614 @@ Module Type LUSTRE_TO_NLUSTRE
     now apply H12, I1 in D2x.
   Qed.
 
+  Definition envs_eq (env : Env.t (type * clock))
+             (cenv : list (ident * clock)) :=
+    forall (x : ident) (ck : clock),
+      In (x,ck) cenv <-> exists ty, Env.find x env = Some (ty,ck).
+
+  Lemma envs_eq_find :
+    forall env cenv x ck,
+      envs_eq env cenv ->
+      In (x, ck) cenv ->
+      find_clock env x = OK ck.
+  Proof.
+    unfold find_clock, envs_eq. intros * Heq Hin.
+    rewrite Heq in Hin. destruct Hin as [? Hfind].
+    now rewrite Hfind.
+  Qed.
+
+  Lemma l_sem_eq_clock :
+   forall G H b x cenv env ck eq ss (* cs *),
+     LC.wc_equation G cenv eq ->
+     LS.sem_equation G H b eq ->
+     envs_eq env cenv ->
+     In x (fst eq) ->
+     (* TODO: var_inv *)
+     LS.sem_var H x ss ->
+     (* abstract_clock ss ≡ cs -> *)
+     find_clock env x = OK ck ->
+     NLSC.sem_clock H b ck (abstract_clock ss).
+  Proof.
+  Admitted.
+
+  Lemma sem_lexp_step2: forall H b e v s,
+      NLSC.sem_lexp H b e (v ::: s) ->
+      NLSC.sem_lexp (NLSC.History_tl H) (Streams.tl b) e s.
+  Proof.
+    induction e; intros * Hsem; inv Hsem.
+    - econstructor; eauto. unfold_St b. inv H4. simpl in *. eauto.
+    - econstructor; eauto using sem_var_step_nl.
+    - inv H9; econstructor; eauto using sem_var_step_nl.
+    - inv H8; econstructor; eauto using sem_var_step_nl.
+    - inv H10; econstructor; eauto using sem_var_step_nl.
+  Qed.
+
+  Lemma sem_cexp_step2: forall H b e v s,
+      NLSC.sem_cexp H b e (v ::: s) ->
+      NLSC.sem_cexp (NLSC.History_tl H) (Streams.tl b) e s.
+  Proof.
+    induction e; intros * Hsem; inv Hsem.
+    - inv H10; econstructor; eauto using sem_var_step_nl.
+    - inv H10; econstructor; eauto using sem_lexp_step2.
+    - econstructor; eauto using sem_lexp_step2.
+  Qed.
+
+  Lemma fby_const:
+    forall b c xs ys rs,
+      LS.fby xs ys rs ->
+      xs ≡ LS.const c b ->
+      b  ≡ abstract_clock rs ->
+      rs ≡ NLSC.fby (sem_const c) ys.
+  Proof.
+    cofix Cofix; intros * Hfby Hconst Hac.
+    unfold_Stv ys; inv Hfby; rewrite unfold_Stream in Hac;
+      simpl in Hac; rewrite unfold_Stream; simpl; symmetry in Hconst.
+    - apply const_inv1 in Hconst.
+      destruct Hconst as (?& Hc & Hb). rewrite Hb in Hac.
+      inv Hac; simpl in *. econstructor; simpl; eauto.
+    - apply const_inv2 in Hconst.
+      destruct Hconst as (?& Hc & Hb & Hx). rewrite Hb in Hac.
+      inv Hac; simpl in *. econstructor; simpl; eauto.
+      clear H Cofix. revert H0 H3 Hb Hc. revert rs0 x0 ys xs0 c0 c b.
+      cofix Cofix; intros * Hac Hfby1 Hb Hconst.
+      unfold_Stv ys; inv Hfby1; rewrite unfold_Stream in Hac;
+        simpl in Hac; rewrite unfold_Stream; simpl; symmetry in Hconst.
+      + apply const_inv1 in Hconst.
+        destruct Hconst as (?& Hc & Hbb). rewrite Hbb in Hac.
+        inv Hac; simpl in *. econstructor; simpl; eauto.
+        eapply Cofix; eauto. reflexivity.
+      + apply const_inv2 in Hconst.
+        destruct Hconst as (?& Hc & Hbb & Hx). rewrite Hbb in Hac.
+        inv Hac; simpl in *. econstructor; simpl; eauto.
+  Qed.
+
+  Lemma sem_const_exp:
+    forall G H b e c c' xs,
+      to_constant e = OK c ->
+      LS.sem_exp G H b e [present c' ::: xs] ->
+      c' = sem_const c.
+  Proof.
+    induction e using L.exp_ind2; intros * Htoc Hsem;
+      inv Htoc; inv Hsem.
+    - symmetry in H5. apply const_inv2 in H5. inv H5. tauto.
+    - cases. inv H0. inv H5.
+      inv H10. inv H6. inv H12. inv H7. rewrite app_nil_r in H0.
+      subst. inv H6.
+      eapply H4; eauto.
+  Qed.
+
+  Lemma fby_const_when :
+    forall G H bk x i ck e b c s cs css xs ys,
+      LS.sem_var H x xs ->
+      NLSC.sem_clock H bk (Con ck i b) (abstract_clock xs) ->
+      LS.fby css ys xs ->
+      to_constant e = OK c ->
+      LS.sem_exp G H bk e [cs] ->
+      LS.when b s cs css ->
+      xs ≡ NLSC.fby (sem_const c) ys.
+  Proof.
+    cofix Cofix; intros * Hsemv Hsc Hfby Htoc Hse Hwhen.
+    unfold_Stv xs; inv Hfby; rewrite unfold_Stream; simpl;
+      rewrite unfold_Stream in Hsc; simpl in Hsc.
+    - econstructor; simpl; eauto. destruct cs.
+      eapply sem_var_step in Hsemv; eauto.
+      assert (Htoc' := Htoc).
+      eapply sem_const_step in Htoc; eauto.
+      eapply sem_clock_step in Hsc.
+      inv Hwhen; eapply Cofix; eauto.
+    - econstructor; simpl; eauto. inv Hwhen. f_equal.
+      eapply sem_const_exp; eauto. clear Cofix.
+      eapply sem_clock_step in Hsc.
+      eapply sem_var_step in Hsemv.
+      assert (Htoc' := Htoc).
+      inv Hwhen. eapply sem_const_step in Htoc'; eauto. clear Hse.
+      revert dependent H. revert H3 H5 H6. revert bk xs xs0 xs1 xs0 cs0 ys0 y.
+      cofix Cofix; intros.
+      unfold_Stv xs; inv H3; rewrite unfold_Stream; simpl;
+        rewrite unfold_Stream in Hsc; simpl in Hsc;
+          eapply sem_clock_step in Hsc;
+          eapply sem_var_step in Hsemv;
+          econstructor; simpl; eauto;
+            inv H5; eapply Cofix; eauto using sem_const_step.
+  Qed.
+
+  Lemma var_fby_const :
+    forall G H b c a env cenv ck ckx x e0 e1 cs xs ys,
+      LS.sem_exp G H b e0 [cs] ->
+      LS.sem_var H x xs ->
+      LS.fby cs ys xs ->
+      find_clock env x = OK ck ->
+      LC.wc_exp G cenv (L.Efby [e0] [e1] a) ->
+      [ckx] = map L.ckstream a ->
+      In (x, ckx) cenv ->
+      envs_eq env cenv ->
+      to_constant e0 = OK c ->
+      NLSC.sem_clock H b ck (abstract_clock xs) ->
+      NLSC.sem_var H x (NLSC.fby (sem_const c) ys).
+  Proof.
+    destruct ck; intros * Hse Hxs Hfby Hfind Hwc Hckx Hin Henv Htoc Hsc.
+    - (* ck = Base. Show that e0 is not EWhen *)
+      inv Hsc. destruct e0; inv Htoc.
+      + inv Hse. eapply fby_const in Hfby; eauto.
+        now rewrite <- Hfby, <- sem_var_var.
+      + cases. inv Hwc. inv H5. inv H4. rewrite <- Hckx in H7.
+        inv H7. inv H11. destruct tys; inv H4.
+        unfold L.ckstream, stripname in Hin. simpl in Hin.
+        eapply envs_eq_find with (x := x) in Henv; eauto.
+        rewrite Henv in Hfind. discriminate.
+    - destruct e0; inv Htoc.
+      + inv Hse. eapply fby_const in Hfby; eauto.
+        now rewrite <- Hfby, <- sem_var_var.
+        apply ac_fby1 in Hfby. symmetry in H5. apply ac_const in H5.
+        now rewrite H5, Hfby.
+      + cases. eapply envs_eq_find with (x := x) in Henv; eauto.
+        rewrite Henv in Hfind. inv Hfind. destruct a; inv Hckx.
+        destruct a0; inv H3.
+        inv Hwc. inv H5. inv H4. simpl in *.
+        rewrite app_nil_r in H7. destruct tys; inv H7.
+        destruct tys; inv H16. rewrite <- H2 in H5.
+        unfold L.ckstream, stripname in H5. simpl in H5. inv H5.
+        (* now (i,b0) = (i0,b1) *)
+        inv Hse. inv H18. inv H7. simpl in H20. rewrite app_nil_r in H20.
+        inv H20. inv H11.
+        assert (Hxs' := Hxs).
+        eapply fby_const_when in Hxs; eauto.
+        now rewrite <- Hxs, <- sem_var_var.
+  Qed.
+
+  Lemma sem_toeq :
+    forall tenv cenv G H P env envo eq eq' b,
+      LT.wt_equation G tenv eq ->
+      LC.wc_equation G cenv eq ->
+      envs_eq env cenv ->
+      (forall f xs ys,
+          LS.sem_node G f xs ys ->
+          NLSC.sem_node P f xs ys) ->
+      to_equation env envo eq = OK eq' ->
+      LS.sem_equation G H b eq ->
+      NLSC.sem_equation P H b eq'.
+  Proof.
+    intros * Hwt Hwc Henv Hsemnode Htoeq Hsem.
+    destruct eq as [ xs es ].
+    destruct xs as [ | ? [] ].
+    - (* no left-hand side *)
+      destruct es; inv Htoeq. cases.
+      inversion_clear Hsem as [ ????? Hseme Hsemv].
+      inversion Hsemv as [Hsv Hss |]. inversion Hseme as [| ???? Hsem [|]].
+      rewrite <- concat_nil in Hss. simpl in Hss.
+      rewrite app_nil_r in Hss. subst.
+      inversion Hsem as [| | | | | | | |???????? Hsemn]. subst.
+      inversion Hsemn as [???????? Hf2]. inversion Hf2 as [Hlen|].
+      apply (f_equal (@length ident)) in Hlen; simpl in Hlen.
+      unfold LS.idents in Hlen. rewrite Coqlib.list_length_map in Hlen.
+      pose proof (L.n_outgt0 n). omega.
+    - (* single ident *)
+      destruct es. inv Htoeq. destruct es; [ idtac | inv Htoeq; cases ].
+      revert dependent H.
+      revert dependent b.
+      einduction e using L.exp_ind2; intros bb HH Hsem.
+      (* TODO: all cases except Fby and App are the same *)
+      + (* Econst *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* Evar *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* Eunop *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* EBinop *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* EFby *)
+        inversion Htoeq as [Heq']. cases; monadInv Heq'. rename x1 into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ???? Hsef Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        inversion_clear Hwt as [Hwte ?]. inversion Hwte as [|?? Hwt].
+        inversion Hwt as [| | | | ? ? ? ? Hwte1 | | | |]. inv Hwte1.
+        inversion Hsef as [| | | |???????? Hse0 Hse1 Hwfby | | | |].
+        inversion Hse1 as [|????? Hf2]. inv Hf2.
+        inversion Hwfby as [|?????? Hlsf Hf Hcat]. inv Hf. rewrite app_nil_r in *.
+        subst. eapply sem_exp_lexp in EQ2; eauto.
+        econstructor; eauto. instantiate (1 := y1).
+        apply ac_fby2 in Hlsf. rewrite <- Hlsf in Hsc.
+        clear - Hsc EQ2. revert dependent HH. revert bb y1. cofix Cofix; intros.
+        unfold_Stv y1; rewrite unfold_Stream in Hsc; simpl in Hsc; auto;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_lexp_step2.
+        (* we show how to erase Whens in constants using var_fby_const *)
+        inversion Hse0 as [| ????? Hf2]. inv Hf2.
+        inversion Hcat as [Hx1]. rewrite app_nil_r in Hx1. subst.
+        destruct H1 as (Hwf & HliftO & HFin).
+        inversion HFin as [|?????  Hf2 Huseless Hnil].
+        inv Hf2. rewrite app_nil_r in Hnil.
+        eapply var_fby_const; eauto.
+      + (* EWhen *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* EMerge *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* Eite *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ????? Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). eapply l_sem_eq_clock in Hsc; simpl; eauto.
+        inversion_clear Hwt as [Hwte ?]. inv Hwte.
+        inversion_clear Hwc as [Hwce ?]. inv Hwce.
+        eapply sem_exp_cexp in EQ1; eauto.
+        apply sem_var_var in Hsvar. econstructor; eauto.
+        clear - Hsc EQ1. revert dependent HH. revert bb y0. cofix Cofix; intros.
+        unfold_Stv y0; rewrite unfold_Stream in Hsc; simpl in Hsc;
+          econstructor; eauto; eapply Cofix;
+            eauto using sem_clock_step, sem_cexp_step2.
+      + (* EApp *)
+        unfold to_equation in Htoeq. monadInv Htoeq. rename x into ck.
+        assert (Hsem' := Hsem).
+        inversion_clear Hsem as [ ????? Hseme Hsemv].
+        inversion Hseme as [| ???? Hsea Hse]. inv Hse. simpl in Hsemv.
+        rewrite app_nil_r in Hsemv.
+        inversion Hsemv as [|???? Hsvar Hf2]. inv Hf2.
+        assert (Hsc := Hwc). inversion EQ as [Hf]. monadInv Hf.
+        rename x into ck.
+        eapply l_sem_eq_clock in Hsc; eauto; [| simpl; now left].
+        inversion_clear Hwt as [Hwte ?]. inversion Hwte as [| ?? Hwt]. inv Hwt.
+        inv Hsea. apply sem_var_var in Hsvar.
+        econstructor; eauto using  sem_exps_lexps.
+        admit.
+  Admitted.
+
+  Lemma sem_toeqs :
+    forall tenv cenv G H P env envo eqs eqs' b,
+      Forall (LT.wt_equation G tenv) eqs ->
+      Forall (LC.wc_equation G cenv) eqs ->
+      envs_eq env cenv ->
+      (forall f xs ys,
+          LS.sem_node G f xs ys ->
+          NLSC.sem_node P f xs ys) ->
+      mmap (to_equation env envo) eqs = OK eqs' ->
+      Forall (LS.sem_equation G H b) eqs ->
+      Forall (NLSC.sem_equation P H b) eqs'.
+  Proof.
+
+    intros * Hwt Hwc Henv Hnode Hmmap Hsem. revert dependent eqs'.
+    induction Hsem; intros. now inv Hmmap. apply mmap_cons in Hmmap.
+    destruct Hmmap as (eq' & leq' & Heqs' & Htoeq & Hmmap). subst.
+    inv Hwt. inv Hwc.
+    constructor. eapply sem_toeq; eauto.
+    apply IHHsem; auto.
+  Qed.
+
+
+  (* TODO: move to CommonList *)
+  Lemma in_app_comm :
+    forall  {A : Type} (a : A) (l1 l2 : list A), In a (l1 ++ l2) <-> In a (l2 ++ l1).
+  Proof.
+    intros; split; intro Hin; apply in_app_or in Hin;
+      apply in_or_app; tauto.
+  Qed.
+
+  Lemma envs_eq_app_comm :
+    forall env (xs ys : list (ident * (type * clock))),
+      envs_eq env (idck (xs ++ ys))
+      <-> envs_eq env (idck (ys ++ xs)).
+  Proof.
+    split; unfold envs_eq; intros Heq x ck; split; intro Hin;
+      try (rewrite idck_app in Hin;
+           apply in_app_comm in Hin; apply Heq; now rewrite idck_app);
+      try (rewrite idck_app; rewrite in_app_comm; rewrite <- idck_app;
+           now apply Heq).
+  Qed.
+
+  (* TODO: move to Environment *)
+  Lemma env_find_env_from_list':
+    forall {A} x (v: A) xs s,
+      Env.find x (Env.adds' xs s) = Some v
+      -> In (x, v) xs \/ (~InMembers x xs /\ Env.find x s = Some v).
+  Proof.
+    induction xs as [|(x', v') xs IH]; simpl. now intuition.
+    intros s Hfind. apply IH in Hfind as [|(Hnim & Hfind)]; auto.
+    destruct (ident_eq_dec x' x).
+    + subst. rewrite Env.gss in Hfind.
+      injection Hfind. intro; subst; auto.
+    + rewrite Env.gso in Hfind; intuition.
+  Qed.
+
+  Lemma env_eq_env_from_list:
+    forall xs,
+      NoDupMembers xs ->
+      envs_eq (Env.from_list xs) (idck xs).
+  Proof.
+    intros xs Hnodup x ck. split.
+    - unfold idck. rewrite in_map_iff.
+      intro Hxs. destruct Hxs as (y & Hx & Hin). inv Hx.
+      exists (fst (snd y)).
+      apply Env.In_find_adds'; auto.
+      destruct y as [? [? ?]]. auto.
+    - intro Hfind. destruct Hfind as [ty Hfind].
+      apply Env.from_list_find_In in Hfind.
+      unfold idck. rewrite in_map_iff. exists (x,(ty,ck)). simpl. tauto.
+  Qed.
+
+  Lemma env_eq_env_adds':
+    forall s xs ys,
+      NoDupMembers (xs ++ ys) ->
+      envs_eq s (idck ys) ->
+      envs_eq (Env.adds' xs s) (idck (xs ++ ys)).
+  Proof.
+    intros s xs ys Hnodup Heq x ck. split.
+    - rewrite idck_app. rewrite in_app_iff. destruct 1 as [Hin | Hin].
+      unfold idck in Hin. rewrite in_map_iff in Hin.
+      destruct Hin as (y & Hx & Hin). inv Hx. exists (fst (snd y)).
+      apply Env.In_find_adds'; auto.
+      now apply NoDupMembers_app_l in Hnodup.
+      destruct y as (? & ? & ?). now simpl.
+      assert (Hin' := Hin).
+      apply Heq in Hin. destruct Hin as [ty Hin].
+      exists ty. rewrite <- Hin. apply Env.gsso'.
+      apply In_InMembers in Hin'. rewrite InMembers_idck in Hin'.
+      eapply NoDupMembers_app_InMembers; eauto.
+      now rewrite Permutation_app_comm.
+    - destruct 1 as [ty Hfind].
+      apply env_find_env_from_list' in Hfind.
+      destruct Hfind as [Hin | [Hin Hfind]];
+        rewrite idck_app; apply in_app_iff.
+      left. rewrite In_idck_exists. eauto.
+      right. unfold envs_eq in Heq. rewrite Heq. eauto.
+  Qed.
+
+  Lemma envs_eq_node (n : L.node) :
+    envs_eq
+      (Env.adds' (L.n_vars n)
+                 (Env.adds' (L.n_in n)
+                            (Env.from_list (L.n_out n))))
+      (idck (L.n_in n ++ L.n_vars n ++ L.n_out n)).
+  Proof.
+    rewrite envs_eq_app_comm.
+    rewrite <- app_assoc.
+    apply env_eq_env_adds'. rewrite app_assoc.
+    rewrite Permutation_app_comm. exact (L.n_nodup n).
+    rewrite envs_eq_app_comm.
+    apply env_eq_env_adds'. assert (Hnodup := L.n_nodup n).
+    rewrite Permutation_app_comm in Hnodup.
+    rewrite <- app_assoc in Hnodup. apply NoDupMembers_app_r in Hnodup.
+    now rewrite Permutation_app_comm.
+    apply env_eq_env_from_list. assert (Hnodup := L.n_nodup n).
+    now apply NoDupMembers_app_r, NoDupMembers_app_r in Hnodup.
+  Qed.
+
+  Lemma inin_l_nl :
+    forall f n n',
+      to_node n = OK n' ->
+      Ord.Is_node_in f (NL.n_eqs n') ->
+      Lord.Is_node_in f (L.n_eqs n).
+  Proof.
+    intros * Htr Hord.
+    destruct n'. simpl in Hord.
+    tonodeInv Htr.
+    clear - Hord Hmmap. revert dependent n_eqs.
+    induction (L.n_eqs n); intros. inv Hmmap. inv Hord.
+    apply mmap_cons in Hmmap.
+    destruct Hmmap as (eq' & l' & Hneqs & Hteq & Hmmap); subst.
+    inversion_clear Hord as [ ? ? Hord' |].
+    - econstructor.
+      destruct eq' as [| i ck x le |]; inv Hord'.
+      destruct a as [ xs [|]]. inv Hteq. cases.
+      destruct l0; [ idtac | inv Hteq; cases ].
+      destruct e; inv Hteq; cases; monadInv H0;
+        econstructor; apply Lord.INEapp2.
+    - apply Exists_cons_tl. eapply IHl; eauto.
+  Qed.
+
+  Lemma ord_l_nl :
+    forall G P,
+      to_global G = OK P ->
+      Lord.Ordered_nodes G ->
+      Ord.Ordered_nodes P.
+  Proof.
+    intros * Htr Hord.
+    revert dependent P.
+    induction Hord; intros. inv Htr. constructor.
+    apply mmap_cons in Htr.
+    destruct Htr as (n' & P' & HP & Hton & Hmmap). subst.
+    constructor; auto.
+    - intros f Hin.
+      assert (Lord.Is_node_in f (L.n_eqs nd)) as Hfin.
+      eapply inin_l_nl; eauto.
+      apply H in Hfin. destruct Hfin as [ Hf Hnds ].
+      split.
+      apply to_node_name in Hton. now rewrite <- Hton.
+      clear - Hnds Hmmap. revert dependent P'.
+      induction nds; intros; inv Hnds;
+        apply mmap_cons in Hmmap;
+        destruct Hmmap as (n'' & P'' & HP & Hton' & Hmmap); subst.
+      constructor. now apply to_node_name.
+      apply Exists_cons_tl. apply IHnds; auto.
+    - apply to_node_name in Hton. rewrite <- Hton.
+      monadInv Hmmap. clear - H0 H1.
+      induction H1; eauto. inv H0.
+      constructor. apply to_node_name in H. now rewrite <- H.
+      now apply IHlist_forall2.
+  Qed.
+
+  Lemma clocks_of_sclocksof :
+    forall ins, NLSC.clocks_of ins = LS.sclocksof ins.
+  Proof.
+    reflexivity.
+  Qed.
+
+
+  Theorem sem_l_nl :
+    forall G P f ins outs,
+      Lord.Ordered_nodes G ->
+      LT.wt_global G ->
+      LC.wc_global G ->
+      to_global G = OK P ->
+      (LS.sem_node G f ins outs -> NLSC.sem_node P f ins outs).
+  Proof.
+    induction G as [|node]. now inversion 5.
+    intros * Hord Hwt Hwc Htr Hsem.
+    assert (Hsem' := Hsem).
+    inversion_clear Hsem' as [? ? ? ? ? ? Hfind Hins Houts Heqs Hbk].
+    pose proof (Lord.find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
+    inv Hwt. inv Hwc.
+    simpl in Hfind. destruct (ident_eqb (L.n_name node) f) eqn:Hnf.
+    - assert (Hord':=Hord).
+      inversion_clear Hord as [|? ? Hord'' Hnneqs Hnn].
+      injection Hfind; intro HR; rewrite HR in *; clear HR; simpl in *.
+      eapply LS.Forall_sem_equation_global_tl in Heqs; eauto.
+      assert (Htr' := Htr). apply mmap_cons in Htr'.
+      destruct Htr' as (n' & P' & Hp & Htrn & Hmmap). subst.
+      assert (forall f ins outs,
+                 LS.sem_node G f ins outs
+                 -> NLSC.sem_node P' f ins outs) as IHG'
+          by auto.
+      apply ident_eqb_eq in Hnf. rewrite <- Hnf.
+      inversion H3 as (Hwt1 & Hwt2 & Hwt3 & Hwt4).
+      inversion H6 as (Hwc1 & Hwc2 & Hwc3 & Hwc4).
+      econstructor; simpl.
+      + tonodeInv Htrn. rewrite ident_eqb_refl; eauto.
+      + tonodeInv Htrn. simpl.
+        eapply Forall2_impl_In in Hins; eauto.
+        intros * Hina Hinb0 Hsemv.
+        eapply sem_var_var. eauto.
+      + tonodeInv Htrn. simpl. eapply Forall2_impl_In in Houts; eauto.
+        intros * Hina Hinb0 Hsemv. eapply sem_var_var. eauto.
+      + assert (b ≡ NLSC.clocks_of ins) as Hb
+            by (now rewrite clocks_of_sclocksof).
+        rewrite <- Hb.
+        admit. (* same_clock *)
+      + rewrite clocks_of_sclocksof.
+        apply NLSC.sem_equation_cons2; auto.
+        eapply ord_l_nl; eauto.
+        assert (Hton := Htrn).
+        tonodeInv Htrn.
+        eapply sem_toeqs; eauto.
+        apply envs_eq_node.
+        apply to_node_name in Hton. auto.
+        rewrite <- Hbk.
+        rewrite <- Hton.
+        eapply ninin_l_nl; eauto.
+  - apply ident_eqb_neq in Hnf.
+    eapply LS.sem_node_cons in Hsem; auto.
+    assert (Htr' := Htr).
+    apply mmap_cons in Htr.
+    destruct Htr as (n' & P' & Hp & Htn & Hmmap). subst.
+    rewrite cons_is_app in Hord.
+    apply Lord.Ordered_nodes_append in Hord.
+    eapply NLSC.sem_node_cons2; eauto.
+    eapply ord_l_nl; eauto. apply to_node_name in Htn. rewrite <- Htn.
+    monadInv Hmmap. clear - H0 H7.
+    induction H0; eauto. inv H7.
+    constructor. apply to_node_name in H. now rewrite <- H.
+    now apply IHlist_forall2.
+  Qed.
 
 End LUSTRE_TO_NLUSTRE.
 
@@ -937,7 +1585,7 @@ Module LustreToNLustreFun
        (Ord   : NLORDERED Ids Op CE     NL)
        (Lord  : LORDERED   Ids Op       L)
        (LS    : LSEMANTICS Ids Op OpAux L Lord)
-       (NLSC  : NLSEMANTICSCOIND Ids Op OpAux CE NL)
+       (NLSC  : NLSEMANTICSCOIND Ids Op OpAux CE NL Ord)
        <: LUSTRE_TO_NLUSTRE Ids Op OpAux L CE NL LT LC Ord Lord LS NLSC.
   Include LUSTRE_TO_NLUSTRE Ids Op OpAux L CE NL LT LC Ord Lord LS NLSC.
 End LustreToNLustreFun.

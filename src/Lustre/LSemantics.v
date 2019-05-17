@@ -390,18 +390,6 @@ Module Type LSEMANTICS
 
   (** ** Properties of the [global] environment *)
 
-
-  (* TODO: move to CommonList *)
-  Remark In_Forall:
-    forall {A} (x: A) xs P,
-      Forall P xs ->
-      In x xs ->
-      P x.
-  Proof.
-    intros * Hforall Hin.
-    induction xs; inversion Hin; inversion Hforall; subst; auto.
-  Qed.
-
   Lemma sem_node_cons:
     forall node G f xs ys,
       Ordered_nodes (node::G)
@@ -562,7 +550,6 @@ Module Type LSEMANTICS
     apply Is_node_in_Forall in Hnini.
     apply In_Forall with (1:=Hnini) (2:=Hin).
   Qed.
-
 
 
 

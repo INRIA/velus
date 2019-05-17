@@ -37,7 +37,7 @@ Module Type INDEXEDTOCOIND
        (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
-       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
+       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Ord).
 
   Section Global.
 
