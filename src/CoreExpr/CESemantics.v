@@ -166,6 +166,8 @@ environment.
 
   End InstantSemantics.
 
+  Hint Extern 4 (sem_lexps_instant _ _ nil nil) => apply Forall2_nil.
+
   Section InstantAnnotatedSemantics.
 
     Variable base : bool.
@@ -369,6 +371,14 @@ environment.
             apply Forall2_length in H; apply Forall2_length in H';
             now rewrite H in H')
     end.
+
+  Lemma sem_lexps_instant_cons:
+    forall b R e es v vs,
+      sem_lexps_instant b R (e :: es) (v :: vs)
+      <-> (sem_lexp_instant b R e v /\ sem_lexps_instant b R es vs).
+  Proof.
+    intros. unfold sem_lexps_instant. now setoid_rewrite Forall2_cons'.
+  Qed.
 
   (** ** Determinism of the semantics *)
 

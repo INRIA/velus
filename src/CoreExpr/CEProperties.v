@@ -7,6 +7,8 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEIsFree.
 
+Import List.
+
 (** * Properties of Core Expressions *)
 
 Module Type CEPROPERTIES
@@ -59,6 +61,18 @@ Module Type CEPROPERTIES
         take (sem_lexp_instant _ _ e2 _)
              and (erewrite IHe2 in it || rewrite <-IHe2 in it);
         eauto using sem_lexp_instant.
+  Qed.
+
+  Lemma sem_lexps_instant_switch_env:
+    forall b R R' es vs,
+      (forall x, Exists (Is_free_in_lexp x) es -> Env.find x R = Env.find x R') ->
+      sem_lexps_instant b R es vs <-> sem_lexps_instant b R' es vs.
+  Proof.
+    induction es as [|e es IH]. now split; inversion 1; subst; auto.
+    intros vs HH. destruct vs. now split; inversion 1.
+    repeat rewrite sem_lexps_instant_cons.
+    rewrite IH; auto.
+    now rewrite sem_lexp_instant_switch_env with (R':=R'); auto.
   Qed.
 
   Lemma sem_cexp_instant_switch_env:
