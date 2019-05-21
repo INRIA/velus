@@ -770,6 +770,16 @@ Module Type LSEMANTICS
     - split.
   Qed.
 
+  Add Parametric Morphism G H : (sem_equation G H)
+      with signature @EqSt bool ==> eq ==> Basics.impl
+        as sem_equation_morph.
+  Proof.
+    unfold Basics.impl; intros xs xs' Exss eq Hsem.
+    inversion_clear Hsem as [????? Hseme Hsemv]. econstructor; eauto.
+    clear Hsemv. induction Hseme; constructor; auto.
+    now rewrite <- Exss.
+  Qed.
+
 End LSEMANTICS.
 
 Module LSemanticsFun

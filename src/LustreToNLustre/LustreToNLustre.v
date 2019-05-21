@@ -246,86 +246,77 @@ Module Type LUSTRE_TO_NLUSTRE
     right. auto.
   Defined.
 
-  Definition to_node (n : L.node) : res NL.node.
-    refine (
-        let envo := Env.from_list n.(L.n_out) in
-        let env := Env.adds' n.(L.n_vars) (Env.adds' n.(L.n_in) envo) in
-        let is_not_out :=
-            fun x => if Env.mem x envo
-                  then Error (msg "output variable defined as a fby")
-                  else OK tt in
-        match mmap_to_equation env is_not_out n with
-        | OK (exist neqs P) =>
-          OK {|
-              NL.n_name     := n.(L.n_name);
-              NL.n_in       := n.(L.n_in);
-              NL.n_out      := n.(L.n_out);
-              NL.n_vars     := n.(L.n_vars);
-              NL.n_eqs      := neqs;
+  Unset Program Cases.
+  Program Definition to_node (n : L.node) : res NL.node :=
+    let envo := Env.from_list n.(L.n_out) in
+    let env := Env.adds' n.(L.n_vars) (Env.adds' n.(L.n_in) envo) in
+    let is_not_out :=
+        fun x => if Env.mem x envo
+              then Error (msg "output variable defined as a fby")
+              else OK tt in
+    match mmap_to_equation env is_not_out n (* return _ *) with
+    | OK (exist neqs P) =>
+      OK {|
+          NL.n_name     := n.(L.n_name);
+          NL.n_in       := n.(L.n_in);
+          NL.n_out      := n.(L.n_out);
+          NL.n_vars     := n.(L.n_vars);
+          NL.n_eqs      := neqs;
 
-              NL.n_ingt0    := L.n_ingt0 n;
-              NL.n_outgt0   := L.n_outgt0 n;
-              NL.n_defd     := _;
-              NL.n_vout     := _;
-              NL.n_nodup    := L.n_nodup n;
-              NL.n_good     := _
-            |}
-        | Error e => Error e
-        end).
+          NL.n_ingt0    := L.n_ingt0 n;
+          NL.n_outgt0   := L.n_outgt0 n;
+          NL.n_defd     := _;
+          NL.n_vout     := _;
+          NL.n_nodup    := L.n_nodup n;
+          NL.n_good     := _
+        |}
+    | Error e => Error e
+    end.
 
   (* NL.n_defd obligation *)
-  {
-    assert (NL.vars_defined neqs = L.vars_defined (L.n_eqs n)).
-    { revert neqs P. induction (L.n_eqs n); simpl.
+  Next Obligation.
+    clear H0 H.
+    monadInv P.
+    assert (NL.vars_defined neqs = L.vars_defined (L.n_eqs n)). clear P.
+    { revert H. revert neqs. induction (L.n_eqs n); simpl.
     - intros neqs Htr. inv Htr. auto.
-    - intros neqs Htoeq. monadInv Htoeq.
-      apply IHl in EQ1. simpl.
-      apply ok_fst_defined in EQ. rewrite EQ1. now rewrite <- EQ.
-      eauto.
+    - intros neqs Htoeq. inv Htoeq.
+      apply IHl in H3. simpl.
+      apply ok_fst_defined in H1. rewrite H3. now rewrite <- H1.
     }
-    rewrite H.
+    rewrite H0.
     exact (L.n_defd n).
-  }
+  Qed.
 
   (* NL.n_vout obligation *)
-  {
-    intros xo Hin.
-    monadInv P. induction H as [| eq leq eq' leq' Htoeq ].
+  Next Obligation.
+    clear H H1. rename H0 into Hin. rename P into Heqr.
+
+    monadInv Heqr. induction H as [| eq leq eq' leq' Htoeq ].
     intro Hbad. inv Hbad.
-    assert (Hmmap := P).
-    apply mmap_cons2 in P.
-    destruct P as (eq'' & leq'' & Heqs' & Htoeq' & Hmmap').
+    assert (Hmmap := Heqr).
+    apply mmap_cons2 in Heqr.
+    destruct Heqr as (eq'' & leq'' & Heqs' & Htoeq' & Hmmap').
     inv Heqs'.
     simpl. destruct (NL.is_fby eq') eqn:?.
     - unfold NL.vars_defined, flat_map. simpl. rewrite in_app.
       intro Hi. destruct Hi.
       + unfold to_equation in Htoeq. destruct eq''.
-        cases; monadInv Htoeq; inv Heqb. simpl in H0. destruct H0; auto. subst.
-        unfold is_not_out in EQ. cases_eqn EQ. inv EQ.
-        apply Env.Props.P.F.not_mem_in_iff in EQ3. unfold envo in EQ3.
-        apply EQ3.
+        cases_eqn E; monadInv1 Htoeq; inv Heqb.
+        simpl in H0. destruct H0; auto. subst. inv EQ.
+        apply Env.Props.P.F.not_mem_in_iff in E8. apply E8.
         rewrite in_map_iff in Hin.
         destruct Hin as ((x & ?) & Hfst & Hin). inv Hfst.
         eapply Env.find_In. eapply Env.In_find_adds'; simpl; eauto.
         destruct n. simpl. assert (Hnodup := n_nodup).
         now repeat apply NoDupMembers_app_r in Hnodup.
-      + apply IHlist_forall2; auto. exists leq'; auto.
-    - apply IHlist_forall2. exists leq'; auto. assumption.
-  }
+      + apply IHlist_forall2; auto.
+    - apply IHlist_forall2; eauto.
+  Qed.
 
   (* NL.n_good obligation *)
-  {
-    Axiom AXIOM_VALID_TODO_REMOVE_ME :
-      forall id, valid id.
-    repeat split.
-    - apply Forall_Forall. exact n.(L.n_good).
-      (* TODO: valid in, vars, vars *)
-      apply Forall_forall; intros; apply AXIOM_VALID_TODO_REMOVE_ME.
-    - (* TODO: valid n_name *)
-      apply AXIOM_VALID_TODO_REMOVE_ME.
-  }
-
-  Defined. (* to_node *)
+  Next Obligation.
+  Admitted.
 
   Definition to_global (g : L.global) : res NL.global :=
     mmap to_node g.
@@ -374,23 +365,20 @@ Module Type LUSTRE_TO_NLUSTRE
   Lemma to_node_name n n' :
     to_node n = OK n' -> L.n_name n = NL.n_name n'.
   Proof.
-    (* intro Htr. tonodeInv Htr. auto. *)
-    (* Qed. *)
-  Admitted.
+    intro Htr. tonodeInv Htr. now simpl.
+  Qed.
 
   Lemma to_node_in n n' :
     to_node n = OK n' -> (LS.idents (L.n_in n)) = (NLSC.idents (NL.n_in n')).
   Proof.
-    (* intro Htr. tonodeInv Htr. auto. *)
-    (* Qed. *)
-  Admitted.
+    intro Htr. tonodeInv Htr. now simpl.
+  Qed.
 
   Lemma to_node_out n n' :
     to_node n = OK n' -> (LS.idents (L.n_out n)) = (NLSC.idents (NL.n_out n')).
   Proof.
-    (* intro Htr. tonodeInv Htr. auto. *)
-    (* Qed. *)
-  Admitted.
+    intro Htr. tonodeInv Htr. now simpl.
+  Qed.
 
 
   Lemma find_node_global (G: L.global) (P: NL.global) (f: ident) (n: L.node) :
@@ -1467,6 +1455,15 @@ Module Type LUSTRE_TO_NLUSTRE
     - apply Exists_cons_tl. eapply IHl; eauto.
   Qed.
 
+  Lemma ninin_l_nl :
+    forall f n n',
+      to_node n = OK n' ->
+      ~ Lord.Is_node_in f (L.n_eqs n) ->
+      ~ Ord.Is_node_in f (NL.n_eqs n').
+  Proof.
+    intros. intro. destruct H0. eapply inin_l_nl; eauto.
+  Qed.
+
   Lemma ord_l_nl :
     forall G P,
       to_global G = OK P ->
@@ -1548,13 +1545,14 @@ Module Type LUSTRE_TO_NLUSTRE
       + rewrite clocks_of_sclocksof.
         apply NLSC.sem_equation_cons2; auto.
         eapply ord_l_nl; eauto.
-        assert (Hton := Htrn).
-        tonodeInv Htrn.
+        assert (Hton := Htrn). tonodeInv Htrn. simpl in *.
         eapply sem_toeqs; eauto.
         apply envs_eq_node.
-        apply to_node_name in Hton. auto.
-        rewrite <- Hbk.
-        rewrite <- Hton.
+        apply Forall_forall; intros.
+        eapply Forall_forall in Heqs; eauto.
+        now rewrite <- Hbk.
+        assert (Htrn' := Htrn).
+        apply to_node_name in Htrn. rewrite <- Htrn.
         eapply ninin_l_nl; eauto.
   - apply ident_eqb_neq in Hnf.
     eapply LS.sem_node_cons in Hsem; auto.
@@ -1569,7 +1567,7 @@ Module Type LUSTRE_TO_NLUSTRE
     induction H0; eauto. inv H7.
     constructor. apply to_node_name in H. now rewrite <- H.
     now apply IHlist_forall2.
-  Qed.
+  Admitted.
 
 End LUSTRE_TO_NLUSTRE.
 
