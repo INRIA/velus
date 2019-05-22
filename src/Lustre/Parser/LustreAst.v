@@ -20,11 +20,11 @@ Definition ident := Coq.Numbers.BinNums.positive.
 
 (* OCaml's string type. *)
 Parameter string : Type.
-(* OCaml's int64 type, used to represent individual characters in literals. *)
 
 Parameter string_zero : string.
 Parameter string_one : string.
 
+(* OCaml's int64 type, used to represent individual characters in literals. *)
 Parameter char_code : Type.
 (* Context information. *)
 Parameter astloc : Type.
@@ -182,7 +182,7 @@ Section expression_ind2.
     | |- Forall ?P ?l => induction l; auto
     | _ => idtac
     end.
-  
+
   Fixpoint expression_ind2 (e: expression) : P e.
   Proof.
     destruct e.
