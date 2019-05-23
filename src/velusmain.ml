@@ -112,7 +112,7 @@ let compile source_name filename =
   match Compiler.apply_partial
           (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error stderr errmsg; exit 1
+  | Error errmsg -> Driveraux.print_error Format.err_formatter errmsg; exit 1
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;

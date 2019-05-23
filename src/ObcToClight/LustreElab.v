@@ -1859,7 +1859,7 @@ Section ElabExpressions.
                auto using NoDupMembers_skipn, mmap_skipn.
              intros; eapply Hnsa; eauto using In_skipn.
          }
-        * simpl. rewrite firstn_app.
+        * simpl. rewrite CommonList.firstn_app.
           2:now rewrite Coqlib.list_length_map; auto.
           apply Forall_forall.
           intros ((zty, zck), zloc) Hzin.
@@ -1902,7 +1902,7 @@ Section ElabExpressions.
                auto using NoDupMembers_skipn, mmap_skipn.
              intros; eapply Hnsa; eauto using In_skipn.
          }
-        * simpl. rewrite firstn_app.
+        * simpl. rewrite CommonList.firstn_app.
           2:now rewrite Coqlib.list_length_map; auto.
           apply Forall_forall.
           intros ((zty, zck), zloc) Hzin.
@@ -2354,7 +2354,7 @@ Section ElabExpressions.
       match goal with x:(Env.t ident)%type |- _ => rename x into aimap end.
       setoid_rewrite surjective_pairing in EQ3.
       NamedDestructCases. simpl in *.
-      inv Heq0. monadInv EQ3.
+      monadInv EQ3.
       match goal with |- context [Eapp f (map fst ?x1) _ ?x2] =>
         rename x1 into els, x2 into oann end.
       match goal with H:check_inputs _ ?x _ = OK ?any |- _ =>
@@ -2502,7 +2502,7 @@ Section ElabExpressions.
       match goal with x:(Env.t ident)%type |- _ => rename x into aimap end.
       setoid_rewrite surjective_pairing in EQ3.
       NamedDestructCases. simpl in *.
-      inv Heq0. monadInv EQ3.
+      monadInv EQ3.
       match goal with |- context [Eapp f (map fst ?x1) _ ?x2] =>
                       rename x1 into els, x2 into oann end.
       match goal with H:check_inputs _ ?x _ = OK ?any |- _ =>

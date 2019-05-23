@@ -755,7 +755,7 @@ Module Type COINDTOINDEXED
       - unfold CoInd.mask_v; rewrite tr_Stream_nth, mask_nth.
         unfold mask in *.
         rewrite IHxss.
-        rewrite <-count_impl, NPeano.Nat.eqb_sym.
+        rewrite <-count_impl, Nat.eqb_sym.
         unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (Streams.count r))); auto.
     Qed.
 

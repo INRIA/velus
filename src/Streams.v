@@ -3,6 +3,7 @@ From Coq Require Export Lists.Streams.
 From Coq Require Import Setoid.
 From Coq Require Import Morphisms.
 From Coq Require Import Arith.EqNat.
+From Coq Require Import Omega.
 
 From Velus Require Import Common.
 
@@ -256,13 +257,13 @@ Proof.
     destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) 1) eqn: E;
       rewrite count_S_nth in E.
     + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
-    + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+    + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
         rewrite E; auto.
   - rewrite IHn; unfold count.
     destruct (beq_nat (hd (Str_nth_tl n (count_acc 1 rs))) (S (S k))) eqn: E;
       rewrite count_S_nth in E.
     + apply beq_nat_true_iff, eq_add_S, beq_nat_true_iff in E; rewrite E; auto.
-    + rewrite beq_nat_false_iff, NPeano.Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
+    + rewrite beq_nat_false_iff, Nat.succ_inj_wd_neg, <-beq_nat_false_iff in E;
         rewrite E; auto.
 Qed.
 
