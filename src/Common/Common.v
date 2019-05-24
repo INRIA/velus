@@ -996,6 +996,56 @@ Section ORel.
     - symmetry in ORy. transitivity ox2; auto. transitivity oy2; auto.
   Qed.
 
+  Lemma orel_inversion:
+    forall x y, orel (Some x) (Some y) <-> R x y.
+  Proof.
+    split.
+    - inversion 1; subst. now take (_ /\ _) and destruct it; discriminate.
+      take (exists x y, _ /\ _ /\ _) and destruct it as (x' & y' & Hx & Hy & E).
+      now repeat take (Some _ = Some _) and inversion_clear it.
+    - intro Rxy. right; eauto.
+  Qed.
+
+  Lemma orel_inversion_None1:
+    forall ox, orel ox None <-> ox = None.
+  Proof.
+    split; intro HH.
+    - destruct HH; intuition.
+      destruct H as (? & ? & ? & ? & ?); discriminate.
+    - subst. left; auto.
+  Qed.
+
+  Lemma orel_inversion_None2:
+    forall oy, orel None oy <-> oy = None.
+  Proof.
+    split; intro HH.
+    - destruct HH; intuition.
+      destruct H as (? & ? & ? & ? & ?); discriminate.
+    - subst. left; auto.
+  Qed.
+
+  Lemma orel_inversion1:
+    forall ox y, orel ox (Some y) <-> (exists x, ox = Some x /\ R x y).
+  Proof.
+    split; intro HH.
+    - destruct HH as [HH|HH].
+      + destruct HH; discriminate.
+      + destruct HH as (x & y' & Hox & Hy & Rxy); inv Hy; subst; eauto.
+    - destruct HH as (x & Hox & Rxy); subst.
+      now apply orel_inversion.
+  Qed.
+
+  Lemma orel_inversion2:
+    forall x oy, orel (Some x) oy <-> (exists y, oy = Some y /\ R x y).
+  Proof.
+    split; intro HH.
+    - destruct HH as [HH|HH].
+      + destruct HH; discriminate.
+      + destruct HH as (y & x' & Hy & Hox & Rxy); inv Hy; subst; eauto.
+    - destruct HH as (y & Hoy & Rxy); subst.
+      now apply orel_inversion.
+  Qed.
+
   Lemma orel_discriminate1:
     forall x, ~(orel (Some x) None).
   Proof.
@@ -1008,24 +1058,72 @@ Section ORel.
     intros x [(SN1 & SN2)|(? & ? & SN1 & SN2 & ?)]; discriminate.
   Qed.
 
-  Lemma orel_inversion:
-    forall x y, orel (Some x) (Some y) -> R x y.
+  Lemma orel_None_None:
+    orel None None.
   Proof.
-    inversion 1; subst. now take (_ /\ _) and destruct it; discriminate.
-    take (exists x y, _ /\ _ /\ _) and destruct it as (x' & y' & Hx & Hy & E).
-    now repeat take (Some _ = Some _) and inversion_clear it.
+    unfold orel; auto.
   Qed.
 
 End ORel.
+
+Arguments orel {A}%type R%signature.
+Hint Immediate orel_None_None.
 
 Lemma orel_eq {A : Type} :
   forall x y, orel (@eq A) x y <-> x = y.
 Proof.
   intros x y. destruct x, y; split; intro HH; try discriminate; auto.
-  - apply orel_inversion in HH; now subst.
+  - rewrite orel_inversion in HH; now subst.
   - inversion HH; reflexivity.
   - now apply orel_discriminate1 in HH.
   - now apply orel_discriminate2 in HH.
+Qed.
+
+Instance orel_option_map_Proper
+         {A B} (RA : relation A) (RB : relation B) (f : A -> B)
+         `{Equivalence B RB} `{Proper _ (RA ==> RB) f}:
+  Proper (orel RA ==> orel RB) (@option_map A B f).
+Proof.
+  intros oa' oa Eoa.
+  destruct oa'; destruct oa; simpl.
+  - rewrite orel_inversion in Eoa. rewrite Eoa. reflexivity.
+  - now apply orel_discriminate1 in Eoa.
+  - now apply orel_discriminate2 in Eoa.
   - reflexivity.
+Qed.
+
+Instance orel_option_map_pointwise_Proper
+         {A B} (RA : relation A) (RB : relation B)
+         `{Equivalence B RB}:
+  Proper (pointwise_relation A RB ==> eq ==> orel RB) (@option_map A B).
+Proof.
+  intros f' f Hf oa' oa Eoa; subst.
+  destruct oa; simpl; [|reflexivity].
+  apply orel_inversion.
+  rewrite Hf. reflexivity.
+Qed.
+
+Instance orel_subrelation {A} (R1 R2 : relation A) `(subrelation A R1 R2):
+  subrelation (orel R1) (orel R2).
+Proof.
+  intros xo yo Ro.
+  destruct xo, yo.
+  - rewrite orel_inversion in Ro. apply orel_inversion. auto.
+  - now apply orel_discriminate1 in Ro.
+  - now apply orel_discriminate2 in Ro.
+  - auto.
+Qed.
+
+(* Should not be necessary, but rewriting through RelProd is often
+   very slow or fails. *)
+Lemma orel_pair:
+  forall {A B} (RA: relation A) (RB: relation B)
+    a1 a2 b1 b2,
+    RA a1 a2 ->
+    RB b1 b2 ->
+    orel (RelationPairs.RelProd RA RB) (Some (a1, b1)) (Some (a2, b2)).
+Proof.
+  intros until b2. intros Ea Eb.
+  right. do 2 eexists. repeat split; eauto.
 Qed.
 
