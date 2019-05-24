@@ -2,6 +2,7 @@ From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 From Coq Require Import Sorting.Permutation.
+From Coq Require Import Morphisms.
 
 From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
@@ -122,6 +123,8 @@ Module Type CEINTERPRETER
       | Eexp e => interp_lexp_instant e
       end.
 
+    (** Correctness *)
+
     Lemma interp_var_instant_correct:
       forall x v,
         sem_var_instant R x v <-> interp_var_instant x = Some v.
@@ -148,12 +151,7 @@ Module Type CEINTERPRETER
           destruct (omap interp_var_instant xs) eqn:Hxs; [|discriminate].
           inv HH. constructor; auto.
           now apply IH.
-    Qed.          
-
-    (* TODO: move me *)
-    Lemma equiv_decb_negb:
-      forall x, (x ==b negb x) = false.
-    Proof. destruct x; simpl; auto. Qed.
+    Qed.
 
     Lemma interp_clock_instant_correct:
       forall c b,
@@ -405,7 +403,7 @@ Module Type CEINTERPRETER
     Qed.
 
     (** Existence proofs *)
-    
+
     Variable vars : list (ident * (type * clock)).
     Hypothesis NDvars : NoDupMembers vars.
 
@@ -420,7 +418,7 @@ Module Type CEINTERPRETER
     | ODunop : forall op e ty,
         Ops_defined_in_lexp e ->
         (forall v, sem_lexp_instant base R e (present v) ->
-                   sem_unop op v (typeof e) <> None) ->        
+                   sem_unop op v (typeof e) <> None) ->
         Ops_defined_in_lexp (Eunop op e ty)
     | ODbinop: forall op e1 e2 ty,
         Ops_defined_in_lexp e1 ->
@@ -489,7 +487,7 @@ Module Type CEINTERPRETER
              end.
 
     (* Exploit hypotheses of the forms: absent = absent <-> cks = false,
-       present c = absent <-> cks = false, etc. *)      
+       present c = absent <-> cks = false, etc. *)
     Local Ltac break_status_cks_iffs :=
       assert (forall v, present v <> absent) as Hpa by discriminate;
       repeat match goal with
@@ -585,7 +583,7 @@ Module Type CEINTERPRETER
         break_status_cks_iffs;
         eexists; (split; [eauto using sem_clock_instant|now intuition]).
     Qed.
-      
+
     Lemma interp_lexp_instant_good:
       forall e ck,
         wt_lexp (idty vars) e ->
@@ -934,6 +932,72 @@ Module Type CEINTERPRETER
 
   End InstantInterpreter.
 
+  (** Congruences *)
+
+  Instance interp_var_instant_Proper:
+    Proper (Env.Equal ==> eq ==> eq) interp_var_instant.
+  Proof.
+    intros E' E EE x' x Ex; subst.
+    unfold interp_var_instant. now rewrite EE.
+  Qed.
+
+  Instance interp_clock_instant_Proper:
+    Proper (eq ==> Env.Equal ==> eq ==> eq) interp_clock_instant.
+  Proof.
+    intros b' b Eb E' E EE ck' ck Eck; subst.
+    induction ck; auto.
+    simpl. rewrite IHck.
+    destruct (interp_clock_instant b E ck); auto.
+    destruct b1; auto; rewrite EE; intuition.
+  Qed.
+
+  Instance interp_lexp_instant_Proper:
+    Proper (eq ==> Env.Equal ==> eq ==> eq) interp_lexp_instant.
+  Proof.
+    intros b' b Eb E' E EE e' e Ee; subst.
+    induction e; simpl; repeat rewrite EE; auto.
+    - repeat rewrite IHe; intuition.
+    - repeat rewrite IHe; intuition.
+    - repeat rewrite IHe1; repeat rewrite IHe2; intuition.
+  Qed.
+
+  Instance interp_laexp_instant_Proper:
+    Proper (eq ==> Env.Equal ==> eq ==> eq ==> eq) interp_laexp_instant.
+  Proof.
+    intros b' b Eb E' E EE ck' ck Eck e' e Ee; subst.
+    unfold interp_laexp_instant, interp_annotated_instant.
+    repeat rewrite EE.
+    destruct (interp_clock_instant b E ck); auto.
+    repeat rewrite EE; intuition.
+  Qed.
+
+  Instance interp_cexp_instant_Proper:
+    Proper (eq ==> Env.Equal ==> eq ==> eq) interp_cexp_instant.
+  Proof.
+    intros b' b Eb E' E EE e' e Ee; subst.
+    induction e; simpl; repeat rewrite EE; auto.
+    - repeat rewrite IHe1; repeat rewrite IHe2; intuition.
+    - repeat rewrite IHe1; repeat rewrite IHe2; intuition.
+  Qed.
+
+  Instance interp_caexp_instant_Proper:
+    Proper (eq ==> Env.Equal ==> eq ==> eq ==> eq) interp_caexp_instant.
+  Proof.
+    intros b' b Eb E' E EE ck' ck Eck e' e Ee; subst.
+    unfold interp_caexp_instant, interp_annotated_instant.
+    repeat rewrite EE.
+    destruct (interp_clock_instant b E ck); auto.
+    repeat rewrite EE; intuition.
+  Qed.
+
+  Instance interp_lexps_instant_Proper:
+    Proper (eq ==> Env.Equal ==> eq ==> eq) interp_lexps_instant.
+  Proof.
+    intros b' b Eb E' E EE l' l El; subst.
+    induction l; auto.
+    simpl. now rewrite EE, IHl.
+  Qed.
+
 End CEINTERPRETER.
 
 Module CEInterpreterFun
@@ -949,4 +1013,3 @@ Module CEInterpreterFun
        <: CEINTERPRETER Ids Op OpAux CESyn Str CESem CETyp CEClk CEFree.
   Include CEINTERPRETER Ids Op OpAux CESyn Str CESem CETyp CEClk CEFree.
 End CEInterpreterFun.
-

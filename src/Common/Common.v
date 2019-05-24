@@ -100,6 +100,10 @@ Proof.
   destruct (ident_eqb f g); auto.
 Qed.
 
+Lemma equiv_decb_negb:
+  forall x, (x ==b negb x) = false.
+Proof. destruct x; simpl; auto. Qed.
+
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
 
