@@ -1,7 +1,7 @@
 From Coq Require Import String.
 From Coq Require Import Omega.
 
-From Velus Require Import ObcToClight.ObcClightCommon.
+From Velus Require Import Common.CompCertLib.
 Import DoNotation.
 From Velus Require Instantiator.
 
@@ -87,6 +87,7 @@ Open Scope error_monad_scope.
   dependent on inputs or other outputs. This requirement is not yet needed as
   an invariant; possibly because we do not currently support clocked inputs
   and outputs.
+TODO: it is required by typing and clocking.
  *)
 
 Parameter do_add_when_to_constants : unit -> bool.
@@ -102,7 +103,7 @@ Parameter elab_const_char : Cabs.cabsloc -> bool -> list char_code -> constant.
    TODO: In the long run, we should try to use OCaml strings everywhere. *)
 Parameter string_of_astloc : astloc -> String.string.
 Parameter cabsloc_of_astloc : astloc -> Cabs.cabsloc.
-Parameter cabs_floatinfo : LustreAst.floatInfo -> Cabs.floatInfo.
+Parameter cabs_floatinfo : floatInfo -> Cabs.floatInfo.
 
 Definition err_loc {A} (loc: astloc) (m: errmsg) : res A :=
   Error (MSG (string_of_astloc loc) :: MSG ":" :: m).
@@ -115,17 +116,6 @@ Local Ltac NamedDestructCases :=
            destruct e eqn:Heq; try discriminate
          | H:OK _ = OK _ |- _ => injection H; clear H; intro; subst
          end.
-
-Definition cast_constant (loc: astloc) (c: constant) (ty: type')
-                                                             : res constant :=
-  match Cop.sem_cast (sem_const c) (cltype (type_const c))
-                     (cltype ty) Memory.Mem.empty, ty with
-  | Some (Values.Vint v),    Tint sz sg        => OK (Cint v sz sg)
-  | Some (Values.Vlong v),   Tlong sg          => OK (Clong v sg)
-  | Some (Values.Vfloat f),  Tfloat Ctypes.F64 => OK (Cfloat f)
-  | Some (Values.Vsingle f), Tfloat Ctypes.F32 => OK (Csingle f)
-  | _, _ => err_loc loc (msg "failed cast of constant")
-  end.
 
 Definition elab_constant (loc: astloc) (c: LustreAst.constant) : constant :=
   match c with
@@ -301,14 +291,14 @@ Section ElabExpressions.
     now apply In_idck_exists; exists ty.
   Qed.
 
-  Definition elab_unop (op: LustreAst.unary_operator) : unop :=
+  Definition elab_unop (op: unary_operator) : unop :=
     match op with
     | MINUS => UnaryOp Cop.Oneg
     | NOT   => UnaryOp Cop.Onotint
     | BNOT  => UnaryOp Cop.Onotbool
     end.
 
-  Definition elab_binop (op: LustreAst.binary_operator) : binop :=
+  Definition elab_binop (op: binary_operator) : binop :=
     match op with
     | ADD  => Cop.Oadd
     | SUB  => Cop.Osub
@@ -343,7 +333,7 @@ Section ElabExpressions.
     | Some ty' => OK ty'
     end.
 
-  Definition elab_type (ty: LustreAst.type_name) : type' :=
+  Definition elab_type (ty: type_name) : type' :=
     match ty with
     | Tint8    => Tint Ctypes.I8  Ctypes.Signed
     | Tuint8   => Tint Ctypes.I8  Ctypes.Unsigned
@@ -429,7 +419,7 @@ Section ElabExpressions.
     | [] => OK tt
     | an::ans' =>
       let '((ty, ck), loc) := an in
-      do ok <- assert_sclock loc ck lck;
+      do _ <- assert_sclock loc ck lck;
       assert_same_clock lck ans'
     end.
 
@@ -440,8 +430,8 @@ Section ElabExpressions.
     | ant::ants', anf::anfs' =>
       let '((tty, tck), tloc) := ant in
       let '((fty, fck), floc) := anf in
-      do ok <- assert_sclock tloc tck ck1;
-      do ok <- assert_sclock floc fck ck2;
+      do _ <- assert_sclock tloc tck ck1;
+      do _ <- assert_sclock floc fck ck2;
       if tty ==b fty then assert_paired_types gloc ck1 ck2 ants' anfs'
       else err_loc gloc (MSG "expression at "
                              :: MSG (string_of_astloc tloc)
@@ -542,8 +532,8 @@ Section ElabExpressions.
     | _, nil => err_loc gloc (msg "not enough arguments")
 
     | (ty, nck)::iface', ((ty', nck'), loc)::args' =>
-      do ok <- assert_type loc ty' ty;
-      do ok <- assert_sclock loc (stripname nck') (stripname nck);
+      do _ <- assert_type loc ty' ty;
+      do _ <- assert_sclock loc (stripname nck') (stripname nck);
       check_inputs gloc iface' args'
     end.
 
@@ -770,7 +760,7 @@ Section ElabExpressions.
       do (fidx2, (e2, loc2)) <- elab_exp' lcks fidx1 ae2;
       do (ty2, sck2) <- single_annot loc2 e2;
       do ty' <- find_type_binop loc op ty1 ty2;
-      do ok <- assert_sclock loc sck1 sck2;
+      do _ <- assert_sclock loc sck1 sck2;
       OK (fidx2, (Ebinop op e1 e2 (ty', Cstream sck1), loc))
     | BINARY _ _ _ loc => err_not_singleton loc
 
@@ -778,7 +768,7 @@ Section ElabExpressions.
       do (fidx0, e0as) <- mmaps (elab_exp' lcks) fidx ae0s;
       let ans0 := lnannots e0as in
       do (fidx', eas) <- mmaps (elab_exp' lcks) fidx0 aes;
-      do ok <- assert_paired_clock_types loc ans0 (lnannots eas);
+      do _ <- assert_paired_clock_types loc ans0 (lnannots eas);
 
       OK (fidx', (Efby (map fst e0as) (map fst eas)
                        (map discardname ans0), loc))
@@ -786,10 +776,10 @@ Section ElabExpressions.
     | WHEN aes' x b loc =>
       do (xty, xck) <- find_var loc x;
       let sck := sclk xck in
-      do ok <- assert_id_type loc x xty bool_type;
+      do _ <- assert_id_type loc x xty bool_type;
       do (fidx', eas') <- mmaps (elab_exp' [sck]) fidx aes';
       let ans' := lannots eas' in
-      do ok <- assert_same_clock sck ans';
+      do _ <- assert_same_clock sck ans';
       OK (fidx, (Ewhen (map fst eas') x b
                    (lannots_ty ans', Cstream (Son sck (Vnm x) b)), loc))
 
@@ -798,22 +788,22 @@ Section ElabExpressions.
       let sck := sclk xck in
       let tck := Son sck (Vnm x) true in
       let fck := Son sck (Vnm x) false in
-      do ok <- assert_id_type loc x xty bool_type;
+      do _ <- assert_id_type loc x xty bool_type;
       do (fidx1, eats) <- mmaps (elab_exp' [tck]) fidx aets;
       let ants := lannots eats in
       do (fidx', eafs) <- mmaps (elab_exp' [fck]) fidx1 aefs;
-      do ok <- assert_paired_types loc tck fck ants (lannots eafs);
+      do _ <- assert_paired_types loc tck fck ants (lannots eafs);
       OK (fidx', (Emerge x (map fst eats) (map fst eafs)
                            (lannots_ty ants, Cstream sck), loc))
 
     | IFTE [ae] aets aefs loc =>
       do (fidx0, (e, eloc)) <- elab_exp' lcks fidx ae;
       do (ety, eck) <- single_annot eloc e;
-      do ok <- assert_type eloc ety bool_type;
+      do _ <- assert_type eloc ety bool_type;
       do (fidx1, eats) <- mmaps (elab_exp' lcks) fidx0 aets;
       let ants := lannots eats in
       do (fidx', eafs) <- mmaps (elab_exp' lcks) fidx1 aefs;
-      do ok <- assert_paired_types loc eck eck ants (lannots eafs);
+      do _ <- assert_paired_types loc eck eck ants (lannots eafs);
       OK (fidx', (Eite e (map fst eats) (map fst eafs)
                        (lannots_ty ants, Cstream eck), loc))
     | IFTE _ _ _ loc => err_not_singleton loc
@@ -833,7 +823,7 @@ Section ElabExpressions.
       let (fidx2, osubst) := fold_left make_omap tyck_out (fidx1, isubst) in
       do ianns <- mmap (inst_annot loc bck isubst) tyck_in;
       do oanns <- mmap (inst_annot loc bck osubst) tyck_out;
-      do ok <- check_inputs loc ianns anns;
+      do _ <- check_inputs loc ianns anns;
       OK (fidx2, (Eapp f (map fst eas) None oanns, loc))
 
     | APP f aes (Some r) loc =>
@@ -851,9 +841,9 @@ Section ElabExpressions.
       let (fidx2, osubst) := fold_left make_omap tyck_out (fidx1, isubst) in
       do ianns <- mmap (inst_annot loc bck isubst) tyck_in;
       do oanns <- mmap (inst_annot loc bck osubst) tyck_out;
-      do ok <- check_inputs loc ianns anns;
+      do _ <- check_inputs loc ianns anns;
       do (rty, rck) <- find_var loc r;
-      do ok <- assert_id_type loc r rty bool_type;
+      do _ <- assert_id_type loc r rty bool_type;
       OK (fidx2, (Eapp f (map fst eas) (Some (Evar r (rty, Cnamed (Vnm r) (sclk rck)))) oanns, loc))
     end.
 
@@ -866,8 +856,8 @@ Section ElabExpressions.
     | x::xs', ((ty, nck), loc)::anns' =>
       do ck <- unify_clock loc psubst (stripname nck);
       do (xty, xck) <- find_var loc x;
-      do ok <- assert_id_type loc x xty ty;
-      do ok <- assert_id_clock loc x xck ck;
+      do _ <- assert_id_type loc x xty ty;
+      do _ <- assert_id_clock loc x xck ck;
       check_pat gloc psubst xs' anns'
     | nil, _ => err_loc gloc (msg "too few variables on lhs of equation.")
     | _, nil => err_loc gloc (msg "too many variables on lhs of equation.")
@@ -887,7 +877,7 @@ Section ElabExpressions.
     do lcks <- var_clocks loc xs;
     do (_, els) <- mmaps (elab_arg elab_exp') (lcks, 1%positive) aes;
     let anns := lnannots els in
-    do ok <- check_pat loc (make_pmap (Env.empty ident) xs anns) xs anns;
+    do _ <- check_pat loc (make_pmap (Env.empty ident) xs anns) xs anns;
     OK (xs, map fst els).
 
   (** Properties *)
@@ -4462,15 +4452,14 @@ Section ElabDeclaration.
 
   Fixpoint elab_var_decls_pass
            (acc: Env.t (type * clock)
-                 * list (ident * (type_name * LustreAst.preclock * astloc)))
-           (vds: list (ident * (type_name * LustreAst.preclock * astloc)))
+                 * list (ident * (type_name * preclock * astloc)))
+           (vds: list (ident * (type_name * preclock * astloc)))
     : res (Env.t (type * clock)
-           * list (ident * (type_name * LustreAst.preclock * astloc))) :=
+           * list (ident * (type_name * preclock * astloc))) :=
     match vds with
     | [] => OK acc
-    | vd::vds =>
+    | (x, (sty, pck, loc)) as vd :: vds =>
       let (env, notdone) := acc in
-      let '(x, (sty, pck, loc)) := vd in
         match pck with
         | FULLCK BASE =>
           if Env.mem x env
@@ -4480,24 +4469,24 @@ Section ElabDeclaration.
 
         | FULLCK (ON cy' y b) =>
           match Env.find y env with
-          | None => elab_var_decls_pass (env, vd::notdone) vds
+          | None => elab_var_decls_pass (env, vd :: notdone) vds
           | Some (yt, cy) =>
             if Env.mem x env
             then err_loc loc (CTX x :: msg " is declared more than once")
-            else do ok <- assert_id_type loc y yt bool_type;
-                 do ok <- assert_preclock loc x cy' cy;
+            else do _ <- assert_id_type loc y yt bool_type;
+                 do _ <- assert_preclock loc x cy' cy;
                  elab_var_decls_pass
                    (Env.add x (elab_type sty, Con cy y b) env, notdone) vds
           end
 
         | WHENCK y b =>
           match Env.find y env with
-          | None => elab_var_decls_pass (env, vd::notdone) vds
+          | None => elab_var_decls_pass (env, vd :: notdone) vds
           | Some (yt, cy) =>
-            do ok <- assert_id_type loc y yt bool_type;
             if Env.mem x env
             then err_loc loc (CTX x :: msg " is declared more than once")
-            else elab_var_decls_pass
+            else do _ <- assert_id_type loc y yt bool_type;
+                 elab_var_decls_pass
                    (Env.add x (elab_type sty, Con cy y b) env, notdone) vds
           end
         end
@@ -4769,18 +4758,18 @@ Section ElabDeclaration.
   Opaque elab_var_decls_pass.
 
   Fixpoint elab_var_decls' {A: Type}
-           (loc: astloc)
-           (fuel : list A)
-           (env: Env.t (type * clock))
-           (vds: list (ident * (type_name * LustreAst.preclock * astloc)))
+           (loc : astloc)
+           (fuel: list A)
+           (env : Env.t (type * clock))
+           (vds : list (ident * (type_name * preclock * astloc)))
     : res (Env.t (type * clock)) :=
       match vds with
       | [] => OK env
       | _ =>
         match fuel with
         | [] => err_loc loc (MSG "incoherent or cyclic clocks: "
-                                 :: msg_ident_list (map fst vds))
-        | _::fuel' =>
+                                :: msg_ident_list (map fst vds))
+        | _ :: fuel' =>
           do (env', notdone) <- elab_var_decls_pass (env, []) vds;
           elab_var_decls' loc fuel' env' notdone
         end
@@ -4789,7 +4778,7 @@ Section ElabDeclaration.
   Definition elab_var_decls
              (loc: astloc)
              (env: Env.t (type * clock))
-             (vds: list (ident * (type_name * LustreAst.preclock * astloc)))
+             (vds: list (ident * (type_name * preclock * astloc)))
     : res (Env.t (type * clock)) :=
     elab_var_decls' loc vds env vds.
 
@@ -5195,7 +5184,7 @@ Section ElabDeclaration.
   Local Open Scope nat.
 
   Program Definition elab_declaration (wf_G : wt_global G /\ wc_global G)
-                                      (decl: LustreAst.declaration)
+                                      (decl: declaration)
     : res {n | wt_node G n /\ wc_node G n} :=
     match decl with
     | NODE name b inputs outputs locals equations loc =>
@@ -5206,7 +5195,7 @@ Section ElabDeclaration.
              do xout    <- mmap (annotate env_out) outputs;
              do xvar    <- mmap (annotate env) locals;
              do eqs     <- mmap (elab_equation env nenv) equations;
-             do ok      <- check_defined loc
+             do _       <- check_defined loc
                              (nameset (nameset PS.empty xvar) xout) eqs;
              if existsb (fun x=>Env.mem x env) Ident.Ids.reserved
              then err_loc loc (msg "illegal variable name")
@@ -5409,7 +5398,7 @@ Program Fixpoint elab_declarations'
         (G: global) (nenv: Env.t (list (ident * (type * clock))
                                  * list (ident * (type * clock))))
         (WTG: wt_global G /\ wc_global G) (Hnenv: Is_interface_map G nenv)
-        (decls: list LustreAst.declaration)
+        (decls: list declaration)
   : res {G' | wt_global G' /\ wc_global G'} :=
   match decls with
   | nil => OK (exist _ G WTG)
@@ -5460,7 +5449,7 @@ Next Obligation.
       apply Hnenv; auto.
 Qed.
 
-Definition elab_declarations (decls: list LustreAst.declaration)
+Definition elab_declarations (decls: list declaration)
   : res {G | wt_global G /\ wc_global G} :=
   elab_declarations' [] (Env.empty (list (ident * (type * clock))
                                    * list (ident * (type * clock))))

@@ -9,6 +9,7 @@ src/Streams.v
 src/Common/CommonList.v
 src/Common/CommonTactics.v
 src/Common/Common.v
+src/Common/CompCertLib.v
 src/CheckGraph.v
 
 src/Lustre/LSemantics.v
@@ -17,6 +18,7 @@ src/Lustre/Parser/LustreParser.v
 src/Lustre/Parser/LustreAst.v
 src/Lustre/LTyping.v
 src/Lustre/LClocking.v
+src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
 src/CoreExpr/CESyntax.v
@@ -86,12 +88,10 @@ src/SyBlocToObc/SBMemoryCorres.v
 src/SyBlocToObc/Translation.v
 
 src/Instantiator.v
-src/ObcToClight/LustreElab.v
 src/ObcToClight/SepInvariant.v
 src/ObcToClight/Correctness.v
 src/ObcToClight/Interface.v
 src/ObcToClight/Generation.v
-src/ObcToClight/ObcClightCommon.v
 src/ObcToClight/MoreSeparation.v
 
 src/Traces.v

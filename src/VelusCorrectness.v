@@ -26,7 +26,7 @@ Import Str.
 Import OpAux.
 Import Interface.Op.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import ObcToClight.LustreElab.
+From Velus Require Import Lustre.LustreElab.
 
 From Coq Require Import String.
 From Coq Require Import List.

@@ -1,15 +1,17 @@
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlString.
-Require Import Velus.VelusCorrectness.
-Require Import Coq.ZArith.BinInt.
-Require Import Velus.ObcToClight.Generation.
-Require Import Velus.ObcToClight.LustreElab.
-Require Import Velus.Lustre.Parser.LustreParser.
+From Coq Require Import ExtrOcamlBasic.
+From Coq Require Import ExtrOcamlString.
+From Coq Require Import ZArith.BinInt.
+From Coq Require ZArith.BinIntDef.
 
-Require cfrontend.Initializers cfrontend.Ctyping
-        backend.Selection backend.RTLgen
-        driver.Compiler cparser.Cabs.
-Require ZArith.BinIntDef.
+From Velus Require Import VelusCorrectness.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import Lustre.LustreElab.
+From Velus Require Import Lustre.Parser.LustreParser.
+
+From compcert Require
+     cfrontend.Initializers cfrontend.Ctyping
+     backend.Selection backend.RTLgen
+     driver.Compiler cparser.Cabs.
 
 (* Processor-specific extraction directives *)
 Load extractionMachdep.
