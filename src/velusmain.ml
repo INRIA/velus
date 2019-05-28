@@ -85,7 +85,6 @@ let parse toks =
     (Obj.magic ast : LustreAst.declaration list)
 
 let compile source_name filename =
-  Format.printf "compile@."; (* XXX *)
   if !write_lustre
     then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
   if !write_nlustre
@@ -107,12 +106,13 @@ let compile source_name filename =
   let p =
     match LustreElab.elab_declarations ast with
     | Errors.OK p -> p
-    | Errors.Error msg -> (Driveraux.print_error Format.err_formatter msg; exit 1) in
+    | Errors.Error msg ->
+        Format.eprintf "%a@." Driveraux.print_error msg; exit 1 in
   Format.printf "%a@." Interfacelib.PrintLustre.print_global p;
   match Compiler.apply_partial
           (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error Format.err_formatter errmsg; exit 1
+  | Error errmsg -> Format.eprintf "%a@." Driveraux.print_error errmsg; exit 1
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;
