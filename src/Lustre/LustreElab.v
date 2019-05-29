@@ -567,12 +567,13 @@ Section ElabExpressions.
     | IFTE _ ets _ _  => mmapacc plus ast_expression_length 0 ets
     | APP f _ _ loc =>
       do (tyck_in, tyck_out) <- find_node_interface loc f;
-        OK (length tyck_out)
+      OK (length tyck_out)
     end.
 
   Fixpoint approx_imap (s: Env.t ident)
                        (iface: list (ident * (type * clock)))
-                       (args: list expression) {struct args} : res (Env.t ident) :=
+                       (args: list expression) {struct args}
+    : res (Env.t ident) :=
     match iface, args with
     | (x, _)::xs, VARIABLE vx _::es =>
       approx_imap (Env.add x vx s) xs es
@@ -721,7 +722,8 @@ Section ElabExpressions.
   Definition elab_arg
              (elab: list sclock -> positive -> expression
                       -> res (positive * (exp * astloc)))
-             (lcks_s: list sclock * positive) (ae: expression) :=
+             (lcks_s: list sclock * positive) (ae: expression)
+    : res ((list sclock * positive) * (exp * astloc)) :=
     let (lcks, s) := lcks_s in
     do (fidx', (e, loc)) <- elab lcks s ae;
     OK ((skipn (numstreams e) lcks, fidx'), (e, loc)).
@@ -729,7 +731,7 @@ Section ElabExpressions.
   Fixpoint elab_exp' (lcks: list sclock)
                      (fidx: positive)
                      (ae: expression) {struct ae}
-                                         : res (positive * (exp * astloc)) :=
+    : res (positive * (exp * astloc)) :=
     match ae with
     | CONSTANT ac loc =>
       OK (fidx, (add_whens loc lcks (elab_constant loc ac), loc))
@@ -769,7 +771,6 @@ Section ElabExpressions.
       let ans0 := lnannots e0as in
       do (fidx', eas) <- mmaps (elab_exp' lcks) fidx0 aes;
       do _ <- assert_paired_clock_types loc ans0 (lnannots eas);
-
       OK (fidx', (Efby (map fst e0as) (map fst eas)
                        (map discardname ans0), loc))
 
@@ -811,9 +812,9 @@ Section ElabExpressions.
     | APP f aes None loc =>
       do (tyck_in, tyck_out) <- find_node_interface loc f;
       (* approximate lcks list to infer whens *)
-      do aimap <- approx_imap (Env.empty ident) tyck_in aes;
       let abck := approx_base_clock lcks tyck_out in
-      let alcks := map (fun xtc=>approx_clock abck aimap (dck xtc)) tyck_in in
+      do aimap <- approx_imap (Env.empty ident) tyck_in aes;
+      let alcks := map (fun xtc => approx_clock abck aimap (dck xtc)) tyck_in in
       (* elaborate and check arguments *)
       do (lfidx', eas) <- mmaps (elab_arg elab_exp') (alcks, fidx) aes;
       let fidx1 := snd lfidx' in
@@ -829,9 +830,9 @@ Section ElabExpressions.
     | APP f aes (Some r) loc =>
       do (tyck_in, tyck_out) <- find_node_interface loc f;
       (* approximate lcks list to infer whens *)
-      do aimap <- approx_imap (Env.empty ident) tyck_in aes;
       let abck := approx_base_clock lcks tyck_out in
-      let alcks := map (fun xtc=>approx_clock abck aimap (dck xtc)) tyck_in in
+      do aimap <- approx_imap (Env.empty ident) tyck_in aes;
+      let alcks := map (fun xtc => approx_clock abck aimap (dck xtc)) tyck_in in
       (* elaborate and check arguments *)
       do (lfidx', eas) <- mmaps (elab_arg elab_exp') (alcks, fidx) aes;
       let fidx1 := snd lfidx' in
