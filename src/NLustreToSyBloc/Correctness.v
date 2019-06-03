@@ -470,7 +470,7 @@ Module Type CORRECTNESS
           as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0);
         specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky;
           pose proof Node_n as Node_n'; apply IHnode in Node_n; specialize (Node_n n);
-            rewrite 2 mask_transparent, <-Mmask'_n in Node_n; auto.
+            unfold mask_v in *; rewrite 2 mask_transparent, <-Mmask'_n in Node_n; auto.
       + destruct (rs n) eqn: Hrst.
         *{ assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
              by apply Env.gss.

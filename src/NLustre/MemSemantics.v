@@ -169,9 +169,7 @@ Module Type MEMSEMANTICS
            SReset:
              forall f r xss M M' yss,
                (forall k, exists Mk Mk',
-                     msem_node f (mask (all_absent (xss 0)) k r xss)
-                               Mk Mk'
-                               (mask (all_absent (yss 0)) k r yss)
+                     msem_node f (mask_v k r xss) Mk Mk' (mask_v k r yss)
                      /\ memory_masked k r M Mk
                      /\ memory_masked' k r M' Mk') ->
                msem_reset f r xss M M' yss
@@ -248,14 +246,10 @@ enough: it does not support the internal fixpoint introduced by
     Hypothesis ResetCase:
       forall f r xss M M' yss,
         (forall k, exists Mk Mk',
-              msem_node G f (mask (all_absent (xss 0)) k r xss)
-                        Mk Mk'
-                        (mask (all_absent (yss 0)) k r yss)
+              msem_node G f (mask_v k r xss) Mk Mk' (mask_v k r yss)
               /\ memory_masked k r M Mk
               /\ memory_masked' k r M' Mk'
-              /\ P_node f (mask (all_absent (xss 0)) k r xss)
-                       Mk Mk'
-                       (mask (all_absent (yss 0)) k r yss)) ->
+              /\ P_node f (mask_v k r xss) Mk Mk' (mask_v k r yss)) ->
         P_reset f r xss M M' yss.
 
     Hypothesis NodeCase:
@@ -728,7 +722,7 @@ dataflow memory for which the non-standard semantics holds true.
             exists n; split; auto.
             - unfold sem_vars, lift in Hout; specialize (Hout 0).
               apply Forall2_length in Hout; rewrite Hout.
-              rewrite mask_length; auto.
+              unfold mask_v; rewrite mask_length; auto.
               inversion_clear Hsem' as [???? Hsem].
               eapply wf_streams_mask.
               intro n'; specialize (Hsem n');
@@ -811,13 +805,13 @@ dataflow memory for which the non-standard semantics holds true.
   Proof.
     intros * IH Sem.
     inversion_clear Sem as [???? Sem'].
-    assert (forall k, exists Mk Mk', msem_node G f (mask (all_absent (xs 0)) k r xs)
+    assert (forall k, exists Mk Mk', msem_node G f (mask_v k r xs)
                                      Mk Mk'
-                                     (mask (all_absent (ys 0)) k r ys)) as Msem'
+                                     (mask_v k r ys)) as Msem'
         by (intro; specialize (Sem' k); apply IH in Sem'; auto).
-    assert (exists F F', forall k, msem_node G f (mask (all_absent (xs 0)) k r xs)
+    assert (exists F F', forall k, msem_node G f (mask_v k r xs)
                                    (F k) (F' k)
-                                   (mask (all_absent (ys 0)) k r ys))
+                                   (mask_v k r ys))
       as (F & F' & Msem).
     {
       (** Infinite Description  *)
@@ -1356,9 +1350,9 @@ dataflow memory for which the non-standard semantics holds true.
           msem_reset G f rs xss M M' yss ->
           forall k bk H node,
             find_node f G = Some node ->
-            bk = clock_of (mask (all_absent (xss 0)) k rs xss) ->
-            sem_vars H (map fst node.(n_in)) (mask (all_absent (xss 0)) k rs xss) ->
-            sem_vars H (map fst node.(n_out)) (mask (all_absent (yss 0)) k rs yss) ->
+            bk = clock_of (mask_v k rs xss) ->
+            sem_vars H (map fst node.(n_in)) (mask_v k rs xss) ->
+            sem_vars H (map fst node.(n_out)) (mask_v k rs yss) ->
             Forall (clock_match bk H) (idck node.(n_in)) ->
             Forall (clock_match bk H) (idck node.(n_out))).
   Proof.
@@ -1458,6 +1452,7 @@ dataflow memory for which the non-standard semantics holds true.
       inversion_clear Hwc
         as [|????? node' Hfind' (isub & osub & Hfai & Hfao & Hfno)|].
       rewrite Hfind in Hfind'. inv Hfind'.
+      unfold mask_v in *.
 
       assert (forall x y ys,
                  InMembers x (node'.(n_in) ++ node'.(n_out)) ->

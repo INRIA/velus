@@ -880,7 +880,7 @@ Module Type COINDTOINDEXED
 
       - constructor; intro k.
         specialize (IHNode k).
-        rewrite 2 all_absent_tr_Streams.
+        unfold CESem.mask_v; rewrite 2 all_absent_tr_Streams.
         now rewrite <- 2 mask_impl.
 
       - econstructor; eauto.

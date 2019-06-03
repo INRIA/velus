@@ -707,6 +707,9 @@ clock to [sem_var_instant] too. *)
       eapply sem_var_det; eexact H1 || eexact H2
     end.
 
+  Definition mask_v (k: nat) (r: stream bool) (xss: stream (list value)): stream (list value) :=
+    mask (all_absent (xss 0)) k r xss.
+
 End CESEMANTICS.
 
 Module CESemanticsFun
