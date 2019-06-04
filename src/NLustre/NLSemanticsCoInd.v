@@ -30,7 +30,8 @@ Module Type NLSEMANTICSCOIND
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX Op)
        (Import CESyn   : CESYNTAX      Op)
-       (Import Syn     : NLSYNTAX  Ids Op CESyn).
+       (Import Syn     : NLSYNTAX  Ids Op       CESyn)
+       (Import Str     : STREAMS       Op OpAux).
 
   Definition idents := List.map (@fst ident (type * clock)).
 
@@ -252,8 +253,6 @@ Module Type NLSEMANTICSCOIND
     | present x ::: xs => present c ::: fby x xs
     end.
 
-  Definition mask_v := mask absent.
-
   Section NodeSemantics.
 
     Variable G: global.
@@ -292,7 +291,7 @@ Module Type NLSEMANTICSCOIND
     : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
       SReset:
         forall f r xss yss,
-          (forall k, sem_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
+          (forall k, sem_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
           sem_reset f r xss yss
 
     with
@@ -351,8 +350,8 @@ Module Type NLSEMANTICSCOIND
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall k, sem_node G f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)
-              /\ P_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
+        (forall k, sem_node G f (List.map (mask k r) xss) (List.map (mask k r) yss)
+              /\ P_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
@@ -602,8 +601,8 @@ Module Type NLSEMANTICSCOIND
       + now apply IHxs.
   Qed.
 
-  Add Parametric Morphism A opaque k : (mask opaque k)
-      with signature @EqSt bool ==> @EqSt A ==> @EqSt A
+  Add Parametric Morphism k : (mask k)
+      with signature @EqSt bool ==> @EqSt value ==> @EqSt value
         as mask_EqSt.
   Proof.
     revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.

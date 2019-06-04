@@ -19,6 +19,7 @@ Module Type LSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
+       (Import Str   : STREAMS       Op OpAux)
        (Import Syn   : LSYNTAX   Ids Op).
 
   Definition history := Env.t (Stream value).
@@ -145,8 +146,6 @@ Module Type LSEMANTICS
         value_to_bool v = Some b ->
         reset_of (v ::: vs) (b ::: bs).
 
-  Definition mask_v := mask absent.
-
   Section NodeSemantics.
 
     Variable G : global.
@@ -242,7 +241,7 @@ Module Type LSEMANTICS
     with sem_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
            SReset:
              forall f r xss yss,
-               (forall k, sem_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
+               (forall k, sem_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
                sem_reset f r xss yss.
 
 
@@ -367,8 +366,8 @@ Module Type LSEMANTICS
 
     Hypothesis Reset:
       forall f r xss yss,
-        (forall k, sem_node G f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)
-              /\ P_node f (List.map (mask_v k r) xss) (List.map (mask_v k r) yss)) ->
+        (forall k, sem_node G f (List.map (mask k r) xss) (List.map (mask k r) yss)
+              /\ P_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
         P_reset f r xss yss.
 
     Local Ltac SolveForall :=
@@ -422,10 +421,11 @@ Module Type LSEMANTICS
 End LSEMANTICS.
 
 Module LSemanticsFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : LSYNTAX   Ids Op)
-<: LSEMANTICS Ids Op OpAux Syn.
-  Include LSEMANTICS Ids Op OpAux Syn.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Str   : STREAMS       Op OpAux)
+       (Syn   : LSYNTAX   Ids Op)
+<: LSEMANTICS Ids Op OpAux Str Syn.
+  Include LSEMANTICS Ids Op OpAux Str Syn.
 End LSemanticsFun.

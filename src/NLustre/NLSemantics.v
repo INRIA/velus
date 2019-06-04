@@ -86,7 +86,7 @@ Module Type NLSEMANTICS
     with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
          | SReset:
              forall f r xss yss,
-               (forall k, sem_node f (mask_v k r xss) (mask_v k r yss)) ->
+               (forall k, sem_node f (mask k r xss) (mask k r yss)) ->
                sem_reset f r xss yss
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
@@ -237,8 +237,8 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis ResetCase:
       forall f r xss yss,
-        (forall k, sem_node G f (mask_v k r xss) (mask_v k r yss)
-              /\ P_node f (mask_v k r xss) (mask_v k r yss)) ->
+        (forall k, sem_node G f (mask k r xss) (mask k r yss)
+              /\ P_node f (mask k r xss) (mask k r yss)) ->
         P_reset f r xss yss.
 
     Hypothesis NodeCase:
@@ -537,8 +537,7 @@ enough: it does not support the internal fixpoint introduced by
     inversion_clear Res as [? ? ? ? Node].
     constructor; intro k.
     specialize (Node k).
-    unfold mask_v in *.
-    now rewrite <-E1, <-2 E2, <-2 E3.
+    now rewrite <-E1, <-E2, <-E3.
   Qed.
 
 End NLSEMANTICS.

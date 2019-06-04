@@ -33,11 +33,12 @@ Module Type INDEXEDTOCOIND
        (Import CESyn  : CESYNTAX             Op)
        (Import Syn    : NLSYNTAX         Ids Op       CESyn)
        (Import Str    : STREAM               Op OpAux)
+       (Import Strs   : STREAMS              Op OpAux)
        (Import Ord    : NLORDERED        Ids Op       CESyn Syn)
        (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
-       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
+       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs).
 
   Section Global.
 
@@ -997,9 +998,9 @@ CESem.sem_lexp b H (Ewhen e x k) es
     (** State the correspondance for [count].  *)
     Lemma count_impl_from:
       forall n (r: stream bool),
-        count_acc (if r n then count r n - 1 else count r n)
+        count_acc (if r n then Str.count r n - 1 else Str.count r n)
                   (tr_stream_from n r)
-        ≡ tr_stream_from n (count r).
+        ≡ tr_stream_from n (Str.count r).
     Proof.
       (* cofix-based proof encounter the guardness criterion (Why ??)  *)
       intros; apply ntheq_eqst; intro m.
@@ -1014,11 +1015,11 @@ CESem.sem_lexp b H (Ewhen e x k) es
     (** Generalizing is too intricate: we can use the generalized lemma above to
         deduce this one which states the correspondence for [mask]. *)
     Corollary mask_impl:
-      forall k k' (r: stream bool) xss,
+      forall k (r: stream bool) xss,
         wf_streams xss ->
         EqSts value
-              (tr_streams (mask (all_absent (xss k')) k r xss))
-              (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
+              (tr_streams (Str.mask k r xss))
+              (List.map (Strs.mask k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros * Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
@@ -1032,16 +1033,16 @@ CESem.sem_lexp b H (Ewhen e x k) es
         rewrite map_nth' with (d':=d2), nth_tr_streams_from_nth; auto.
         rewrite mask_length in Len; auto.
         rewrite nth_tr_streams_from_nth; auto.
-        unfold CoInd.mask_v, mask.
+        unfold Strs.mask, Str.mask.
         apply ntheq_eqst; intro m.
         unfold nth_tr_streams_from.
         rewrite init_from_nth, mask_nth, init_from_nth.
-        unfold Streams.count, streams_nth.
+        unfold Strs.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
-        assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E
+        assert ((if r 0 then Str.count r 0 - 1 else Str.count r 0) = 0) as E
             by (simpl; destruct (r 0); auto).
         rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
-        destruct (EqNat.beq_nat (count r (m + 0)) k); auto.
+        destruct (Str.count r (m + 0) =? k); auto.
         apply nth_all_absent.
     Qed.
 

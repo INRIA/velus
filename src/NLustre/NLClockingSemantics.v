@@ -73,9 +73,9 @@ Module Type NLCLOCKINGSEMANTICS
           sem_reset G f rs xss yss ->
           forall k bk H node,
             find_node f G = Some node ->
-            bk = clock_of (mask_v k rs xss) ->
-            sem_vars H (map fst node.(n_in)) (mask_v k rs xss) ->
-            sem_vars H (map fst node.(n_out)) (mask_v k rs yss) ->
+            bk = clock_of (mask k rs xss) ->
+            sem_vars H (map fst node.(n_in)) (mask k rs xss) ->
+            sem_vars H (map fst node.(n_out)) (mask k rs yss) ->
             Forall (clock_match bk H) (idck node.(n_in)) ->
             Forall (clock_match bk H) (idck node.(n_out))).
   Proof.
@@ -175,7 +175,6 @@ Module Type NLCLOCKINGSEMANTICS
       inversion_clear Hwc
         as [|????? node' Hfind' (isub & osub & Hfai & Hfao & Hfno)|].
       rewrite Hfind in Hfind'. inv Hfind'.
-      unfold mask_v in *.
 
       assert (forall x y ys,
                  InMembers x (node'.(n_in) ++ node'.(n_out)) ->

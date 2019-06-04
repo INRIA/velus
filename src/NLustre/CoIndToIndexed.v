@@ -30,10 +30,11 @@ Module Type COINDTOINDEXED
        (Import CESyn   : CESYNTAX             Op)
        (Import Syn     : NLSYNTAX         Ids Op       CESyn)
        (Import Str     : STREAM               Op OpAux)
+       (Import Strs    : STREAMS              Op OpAux)
        (Import Ord     : NLORDERED        Ids Op       CESyn Syn)
        (CESem          : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed        : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
+       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs).
 
   Section Global.
 
@@ -686,10 +687,10 @@ Module Type COINDTOINDEXED
         shifting. *)
     Lemma count_true_shift:
       forall n r,
-        count (tr_Stream (true ::: r)) n
+        Str.count (tr_Stream (true ::: r)) n
         = if tr_Stream r n
-          then count (tr_Stream r) n
-          else S (count (tr_Stream r) n).
+          then Str.count (tr_Stream r) n
+          else S (Str.count (tr_Stream r) n).
     Proof.
       induction n; simpl; intros.
       - destruct (tr_Stream r 0); auto.
@@ -704,10 +705,10 @@ Module Type COINDTOINDEXED
         shifting. *)
     Lemma count_false_shift:
       forall n r,
-        count (tr_Stream (false ::: r)) n
+        Str.count (tr_Stream (false ::: r)) n
         = if tr_Stream r n
-          then count (tr_Stream r) n - 1
-          else count (tr_Stream r) n.
+          then Str.count (tr_Stream r) n - 1
+          else Str.count (tr_Stream r) n.
     Proof.
       induction n; simpl; intros.
       - destruct (tr_Stream r 0); auto.
@@ -723,10 +724,10 @@ Module Type COINDTOINDEXED
     (** State the correspondence for [count]. *)
     Lemma count_impl:
       forall r,
-        tr_Stream (Streams.count r) ≈ count (tr_Stream r).
+        tr_Stream (Strs.count r) ≈ Str.count (tr_Stream r).
     Proof.
       intros ** n.
-      unfold Streams.count.
+      unfold Strs.count.
       revert r; induction n; intros; simpl.
       - rewrite (unfold_Stream (count_acc 0 r)); simpl.
         rewrite tr_Stream_0; auto.
@@ -745,30 +746,21 @@ Module Type COINDTOINDEXED
     (** State the correspondence for [mask]. *)
     Lemma mask_impl:
       forall k r xss,
-        tr_Streams (List.map (CoInd.mask_v k r) xss)
-        ≈ mask (all_absent xss) k (tr_Stream r) (tr_Streams xss).
+        tr_Streams (List.map (Strs.mask k r) xss)
+        ≈ Str.mask k (tr_Stream r) (tr_Streams xss).
     Proof.
       induction xss as [|xs];
-        simpl; intros * n.
-      - unfold mask.
-        destruct (EqNat.beq_nat k (count (tr_Stream r) n)); auto.
-      - unfold CoInd.mask_v; rewrite tr_Stream_nth, mask_nth.
-        unfold mask in *.
+        simpl; intros * n; unfold Str.mask in *.
+      - destruct (k =? Str.count (tr_Stream r) n); auto.
+      - rewrite tr_Stream_nth, mask_nth.
         rewrite IHxss.
         rewrite <-count_impl, Nat.eqb_sym.
-        unfold tr_Stream; destruct (EqNat.beq_nat k (Str_nth n (Streams.count r))); auto.
+        unfold tr_Stream; destruct (k =? Str_nth n (Strs.count r)); auto.
     Qed.
 
 
     (** * FINAL LEMMAS *)
 
-
-    Remark all_absent_tr_Streams:
-      forall A n (xss: list (Stream A)),
-        all_absent (tr_Streams xss n) = all_absent xss.
-    Proof.
-      induction xss; simpl; auto; now f_equal.
-    Qed.
 
     (** Correspondence for [clocks_of], used to give a base clock for node
         applications. *)
@@ -880,7 +872,6 @@ Module Type COINDTOINDEXED
 
       - constructor; intro k.
         specialize (IHNode k).
-        unfold CESem.mask_v; rewrite 2 all_absent_tr_Streams.
         now rewrite <- 2 mask_impl.
 
       - econstructor; eauto.
