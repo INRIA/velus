@@ -488,6 +488,42 @@ Module Env.
       apply In_find; eauto.
     Qed.
 
+    Lemma Env_equiv_orel {R : relation A} :
+      forall S T, Env.Equiv R S T <-> (forall x, (orel R) (Env.find x S) (Env.find x T)).
+    Proof.
+      split; [intros (I & M)|intros LR].
+      - intros x.
+        destruct (Env.find x S) as [v|] eqn:FS.
+        + pose proof (Env.find_2 _ _ FS) as MS.
+          apply find_In, I in FS.
+          rewrite In_find in FS; destruct FS as (v' & FT).
+          pose proof (Env.find_2 _ _ FT) as MT.
+          specialize (M _ _ _ MS MT).
+          rewrite FT. constructor; auto.
+        + apply Env.Props.P.F.not_find_in_iff in FS.
+          assert (~Env.In x T) as FT
+              by (intro HH; apply I in HH; auto).
+          apply Env.Props.P.F.not_find_in_iff in FT as ->.
+          now left.
+      - split.
+        + intro x. specialize (LR x).
+          inversion LR as [LR1 LR2|??? LR1 LR2]; symmetry in LR1, LR2.
+          * apply Env.Props.P.F.not_find_in_iff in LR1.
+            apply Env.Props.P.F.not_find_in_iff in LR2.
+            intuition.
+          * apply find_In in LR1.
+            apply find_In in LR2.
+            intuition.
+        + intros x v v' MS MT.
+          apply find_1 in MS.
+          apply find_1 in MT.
+          specialize (LR x).
+          inversion LR as [LR1 LR2|??? LR1 LR2]; symmetry in LR1, LR2.
+          * rewrite MS in LR1; discriminate.
+          * rewrite MS in LR1. rewrite MT in LR2.
+            now inv LR1; inv LR2.
+    Qed.
+
     Lemma NoDupMembers_NoDupA:
       forall {A} (xs: list (positive * A)),
         NoDupMembers xs <-> SetoidList.NoDupA (@eq_key A) xs.
@@ -881,40 +917,6 @@ Module Env.
       unfold updates; destruct o; simpl.
       - apply Props.P.F.add_in_iff; eauto.
       - congruence.
-    Qed.
-
-    Lemma Env_equiv_orel {R : relation A} :
-      forall S T, Env.Equiv R S T <-> (forall x, (orel R) (Env.find x S) (Env.find x T)).
-    Proof.
-      split; [intros (I & M)|intros LR].
-      - intros x.
-        destruct (Env.find x S) as [v|] eqn:FS.
-        + pose proof (Env.find_2 _ _ FS) as MS.
-          apply find_In, I in FS.
-          rewrite In_find in FS; destruct FS as (v' & FT).
-          pose proof (Env.find_2 _ _ FT) as MT.
-          specialize (M _ _ _ MS MT).
-          right; eauto.
-        + apply Env.Props.P.F.not_find_in_iff in FS.
-          assert (~Env.In x T) as FT
-              by (intro HH; apply I in HH; auto).
-          apply Env.Props.P.F.not_find_in_iff in FT as ->.
-          now left.
-      - split.
-        + intro x. specialize (LR x) as [(LR1 & LR2)|(v1 & v2 & LR1 & LR2 & LR3)].
-          * apply Env.Props.P.F.not_find_in_iff in LR1.
-            apply Env.Props.P.F.not_find_in_iff in LR2.
-            intuition.
-          * apply find_In in LR1.
-            apply find_In in LR2.
-            intuition.
-        + intros x v v' MS MT.
-          apply find_1 in MS.
-          apply find_1 in MT.
-          specialize (LR x) as [(LR1 & LR2)|(v1 & v2 & LR1 & LR2 & LR3)].
-          * rewrite MS in LR1; discriminate.
-          * rewrite MS in LR1. rewrite MT in LR2.
-            now inv LR1; inv LR2.
     Qed.
 
     Global Instance Env_find_Proper (R : relation A) `{Equivalence A R}:

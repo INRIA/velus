@@ -951,33 +951,26 @@ Section ORel.
   Context {A : Type}
           (R : relation A).
 
-  Definition orel: relation (option A) :=
-    fun sx sy => (sx = None /\ sy = None)
-              \/ (exists x y, sx = Some x /\ sy = Some y /\ R x y).
+  Inductive orel : relation (option A) :=
+  | Oreln : orel None None
+  | Orels : forall sx sy, R sx sy -> orel (Some sx) (Some sy).
 
   Global Instance orel_refl `{RR : Reflexive A R} : Reflexive orel.
   Proof.
     intro sx.
-    unfold orel.
-    destruct sx; auto.
-    right; eauto.
+    destruct sx; constructor; auto.
   Qed.
 
   Global Instance orel_trans `{RT : Transitive A R} : Transitive orel.
   Proof.
-    unfold orel.
-    intros sx sy sz [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]
-           [(YZ1, YZ2)|(w & z & YZ1 & YZ2 & YZ3)]; subst; auto;
-      try discriminate.
-    inv YZ1. eapply RT in XY3. eapply XY3 in YZ3.
-    right; eauto.
+    intros sx sy sz XY YZ.
+    inv XY; inv YZ; try discriminate; constructor.
+    transitivity sy0; auto.
   Qed.
 
   Global Instance orel_sym `{RS : Symmetric A R} : Symmetric orel.
   Proof.
-    unfold orel.
-    intros sx sy [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]; subst; auto.
-    symmetry in XY3. right; eauto.
+    intros sx sy XY. inv XY; constructor; symmetry; auto.
   Qed.
 
   Global Instance orel_equiv `{Equivalence A R} : Equivalence orel.
@@ -1004,83 +997,19 @@ Section ORel.
     forall x y, orel (Some x) (Some y) <-> R x y.
   Proof.
     split.
-    - inversion 1; subst. now take (_ /\ _) and destruct it; discriminate.
-      take (exists x y, _ /\ _ /\ _) and destruct it as (x' & y' & Hx & Hy & E).
-      now repeat take (Some _ = Some _) and inversion_clear it.
-    - intro Rxy. right; eauto.
-  Qed.
-
-  Lemma orel_inversion_None1:
-    forall ox, orel ox None <-> ox = None.
-  Proof.
-    split; intro HH.
-    - destruct HH; intuition.
-      destruct H as (? & ? & ? & ? & ?); discriminate.
-    - subst. left; auto.
-  Qed.
-
-  Lemma orel_inversion_None2:
-    forall oy, orel None oy <-> oy = None.
-  Proof.
-    split; intro HH.
-    - destruct HH; intuition.
-      destruct H as (? & ? & ? & ? & ?); discriminate.
-    - subst. left; auto.
-  Qed.
-
-  Lemma orel_inversion1:
-    forall ox y, orel ox (Some y) <-> (exists x, ox = Some x /\ R x y).
-  Proof.
-    split; intro HH.
-    - destruct HH as [HH|HH].
-      + destruct HH; discriminate.
-      + destruct HH as (x & y' & Hox & Hy & Rxy); inv Hy; subst; eauto.
-    - destruct HH as (x & Hox & Rxy); subst.
-      now apply orel_inversion.
-  Qed.
-
-  Lemma orel_inversion2:
-    forall x oy, orel (Some x) oy <-> (exists y, oy = Some y /\ R x y).
-  Proof.
-    split; intro HH.
-    - destruct HH as [HH|HH].
-      + destruct HH; discriminate.
-      + destruct HH as (y & x' & Hy & Hox & Rxy); inv Hy; subst; eauto.
-    - destruct HH as (y & Hoy & Rxy); subst.
-      now apply orel_inversion.
-  Qed.
-
-  Lemma orel_discriminate1:
-    forall x, ~(orel (Some x) None).
-  Proof.
-    intros x [(SN1 & SN2)|(? & ? & SN1 & SN2 & ?)]; discriminate.
-  Qed.
-
-  Lemma orel_discriminate2:
-    forall x, ~(orel None (Some x)).
-  Proof.
-    intros x [(SN1 & SN2)|(? & ? & SN1 & SN2 & ?)]; discriminate.
-  Qed.
-
-  Lemma orel_None_None:
-    orel None None.
-  Proof.
-    unfold orel; auto.
+    - now inversion 1.
+    - intro Rxy. eauto using orel.
   Qed.
 
 End ORel.
 
 Arguments orel {A}%type R%signature.
-Hint Immediate orel_None_None.
+Hint Extern 4 (orel _ ?x ?x) => reflexivity.
 
 Lemma orel_eq {A : Type} :
   forall x y, orel (@eq A) x y <-> x = y.
 Proof.
-  intros x y. destruct x, y; split; intro HH; try discriminate; auto.
-  - rewrite orel_inversion in HH; now subst.
-  - inversion HH; reflexivity.
-  - now apply orel_discriminate1 in HH.
-  - now apply orel_discriminate2 in HH.
+  intros x y. destruct x, y; split; intro HH; try discriminate; inv HH; auto.
 Qed.
 
 Instance orel_option_map_Proper
@@ -1089,11 +1018,8 @@ Instance orel_option_map_Proper
   Proper (orel RA ==> orel RB) (@option_map A B f).
 Proof.
   intros oa' oa Eoa.
-  destruct oa'; destruct oa; simpl.
-  - rewrite orel_inversion in Eoa. rewrite Eoa. reflexivity.
-  - now apply orel_discriminate1 in Eoa.
-  - now apply orel_discriminate2 in Eoa.
-  - reflexivity.
+  destruct oa'; destruct oa; simpl; inv Eoa; auto.
+  now take (RA _ _) and rewrite it.
 Qed.
 
 Instance orel_option_map_pointwise_Proper
@@ -1107,15 +1033,11 @@ Proof.
   rewrite Hf. reflexivity.
 Qed.
 
-Instance orel_subrelation {A} (R1 R2 : relation A) `(subrelation A R1 R2):
+Instance orel_subrelation {A} (R1 R2 : relation A) `{subrelation A R1 R2}:
   subrelation (orel R1) (orel R2).
 Proof.
   intros xo yo Ro.
-  destruct xo, yo.
-  - rewrite orel_inversion in Ro. apply orel_inversion. auto.
-  - now apply orel_discriminate1 in Ro.
-  - now apply orel_discriminate2 in Ro.
-  - auto.
+  destruct xo, yo; inv Ro; constructor; auto.
 Qed.
 
 (* Should not be necessary, but rewriting through RelProd is often
@@ -1128,6 +1050,6 @@ Lemma orel_pair:
     orel (RelationPairs.RelProd RA RB) (Some (a1, b1)) (Some (a2, b2)).
 Proof.
   intros until b2. intros Ea Eb.
-  right. do 2 eexists. repeat split; eauto.
+  constructor; auto.
 Qed.
 

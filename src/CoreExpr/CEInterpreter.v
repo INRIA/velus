@@ -677,7 +677,7 @@ Module Type CEINTERPRETER
         inv Se;
         repeat match goal with Se:sem_cexp_instant _ _ _ _ |- _ =>
           specialize (IHe1 _ _ WC1 Inv1 Se) as (cks1 & Sck1 & HH1)
-                                               || specialize (IHe2 _ _ WC2 Inv2 Se) as (cks2 & Sck2 & HH2) end;
+          || specialize (IHe2 _ _ WC2 Inv2 Se) as (cks2 & Sck2 & HH2) end;
         break_status_cks_iffs.
         + inv Sck1. eexists; split; [eauto|now intuition].
           match goal with H1:negb _ = true, H2:false = negb _ |- _ =>
