@@ -147,7 +147,7 @@ Module Type LUSTRE_TO_NLUSTRE
     | [],  _ => []
     | _ , [] => []
     | (x1, b1)::sfx1', (x2, b2)::sfx2' =>
-      if Pos.eqb x1 x2 && b1 ==b b2 then (x1, b1) :: common_suffix sfx1' sfx2'
+      if (Pos.eqb x1 x2) && (b1 ==b b2) then (x1, b1) :: common_suffix sfx1' sfx2'
       else []
     end.
 
