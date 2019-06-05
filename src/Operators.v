@@ -37,8 +37,9 @@ Module Type OPERATORS.
 
   Parameter wt_val : val -> type -> Prop.
 
-  Axiom wt_val_true  : wt_val true_val bool_type.
-  Axiom wt_val_false : wt_val false_val bool_type.
+  Axiom wt_val_bool :
+    forall v, (v = true_val \/ v = false_val) <-> wt_val v bool_type.
+  
   Axiom wt_val_const : forall c, wt_val (sem_const c) (type_const c).
 
   Axiom wt_init_type : forall ty, wt_val (sem_const (init_type ty)) ty.
@@ -80,6 +81,18 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
   Instance: EqDec unop  eq := { equiv_dec := unop_dec  }.
   Instance: EqDec binop eq := { equiv_dec := binop_dec }.
 
+  Lemma wt_val_true:
+    wt_val true_val bool_type.
+  Proof.
+    apply wt_val_bool; auto.
+  Qed.
+
+  Lemma wt_val_false:
+    wt_val false_val bool_type.
+  Proof.
+    apply wt_val_bool; auto.
+  Qed.
+  
   Definition val_to_bool (v: val) : option bool :=
     if equiv_decb v true_val then Some true
     else if equiv_decb v false_val then Some false
@@ -125,6 +138,16 @@ Module Type OPERATORS_AUX (Import Ops : OPERATORS).
     now destruct (equiv_decb v true_val).
   Qed.
 
+  Lemma wt_val_to_bool:
+    forall v,
+      wt_val v bool_type ->
+      exists b, val_to_bool v = Some b.
+  Proof.
+    intros v WT.
+    apply wt_val_bool in WT as [WT|WT]; subst;
+      eauto using val_to_bool_true, val_to_bool_false.
+  Qed.
+  
   Definition wt_vals vs (xts: list (ident * type))
     := List.Forall2 (fun v xt => wt_val v (snd xt)) vs xts.
 

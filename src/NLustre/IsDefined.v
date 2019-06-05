@@ -331,7 +331,6 @@ Module Type ISDEFINED
   Lemma Is_defined_in_cons:
     forall x eq eqs,
       Is_defined_in x (eq :: eqs) ->
-
       Is_defined_in_eq x eq
       \/ (~Is_defined_in_eq x eq /\ Is_defined_in x eqs).
   Proof.

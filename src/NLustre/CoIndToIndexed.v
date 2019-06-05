@@ -1,6 +1,7 @@
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
+
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Morphisms.
 From Coq Require Import Program.Tactics.
@@ -22,6 +23,7 @@ From Velus Require Import NLustre.NLSemantics.
 From Velus Require Import NLustre.NLSemanticsCoInd.
 
 From Coq Require Import Setoid.
+
 Module Type COINDTOINDEXED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)

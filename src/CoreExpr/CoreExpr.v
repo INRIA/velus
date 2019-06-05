@@ -21,8 +21,8 @@ Module Type COREEXPR
   Declare Module Export Sem    : CESEMANTICS         Ids Op OpAux Syn Str.
   Declare Module Export Typ    : CETYPING            Ids Op       Syn.
   Declare Module Export Clo    : CECLOCKING          Ids Op       Syn.
-  Declare Module Export CloSem : CECLOCKINGSEMANTICS Ids Op OpAux Syn Str Sem Clo.
-  Declare Module Export Interp : CEINTERPRETER       Ids Op OpAux Syn Str Sem.
+  Declare Module Export CloSem : CECLOCKINGSEMANTICS Ids Op OpAux Syn Str Sem     Clo.
+  Declare Module Export Interp : CEINTERPRETER       Ids Op OpAux Syn Str Sem Typ Clo IsF.
 End COREEXPR.
 
 Module CoreExprFun
@@ -36,6 +36,6 @@ Module CoreExprFun
   Module Export Sem    := CESemanticsFun         Ids Op OpAux Syn Str.
   Module Export Typ    := CETypingFun            Ids Op       Syn.
   Module Export Clo    := CEClockingFun          Ids Op       Syn.
-  Module Export CloSem := CEClockingSemanticsFun Ids Op OpAux Syn Str Sem Clo.
-  Module Export Interp := CEInterpreterFun       Ids Op OpAux Syn Str Sem.
+  Module Export CloSem := CEClockingSemanticsFun Ids Op OpAux Syn Str Sem     Clo.
+  Module Export Interp := CEInterpreterFun       Ids Op OpAux Syn Str Sem Typ Clo IsF.
 End CoreExprFun.
