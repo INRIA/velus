@@ -848,14 +848,11 @@ Module Type COINDTOINDEXED
         CoInd.sem_node G f xss oss ->
         Indexed.sem_node G f (tr_Streams xss) (tr_Streams oss).
     Proof.
-      induction 1 as [| | | |???? IHNode|???????? Same Heqs IH]
+      induction 1 as [| |??????????????? IH| |???????? Same Heqs IH]
                        using CoInd.sem_node_mult with
           (P_equation := fun H b e =>
                            CoInd.sem_equation G H b e ->
-                           Indexed.sem_equation G (tr_Stream b) (tr_History H) e)
-          (P_reset := fun f r xss oss =>
-                        CoInd.sem_reset G f r xss oss ->
-                        Indexed.sem_reset G f (tr_Stream r) (tr_Streams xss) (tr_Streams oss));
+                           Indexed.sem_equation G (tr_Stream b) (tr_History H) e);
         eauto.
 
       - econstructor; eauto.
@@ -865,14 +862,12 @@ Module Type COINDTOINDEXED
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.
           apply sem_clock_impl; auto.
-        + apply reset_of_impl; auto.
+        + apply reset_of_impl; eauto.
+        + intro k; destruct (IH k).
+          now rewrite <- 2 mask_impl.
 
       - econstructor; auto; subst; eauto.
         rewrite <-fby_impl; reflexivity.
-
-      - constructor; intro k.
-        specialize (IHNode k).
-        now rewrite <- 2 mask_impl.
 
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.

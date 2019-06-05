@@ -276,7 +276,7 @@ Module Type NLSEMANTICSCOIND
           sem_clock H b ck (clocks_of ess) ->
           sem_var H y ys ->
           reset_of ys rs ->
-          sem_reset f rs ess oss ->
+          (forall k, sem_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
           Forall2 (sem_var H) xs oss ->
           sem_equation H b (EqApp xs ck f es (Some y))
     | SeqFby:
@@ -285,14 +285,6 @@ Module Type NLSEMANTICSCOIND
           os = fby (sem_const c0) es ->
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e)
-
-    with
-    sem_reset
-    : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
-      SReset:
-        forall f r xss yss,
-          (forall k, sem_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
-          sem_reset f r xss yss
 
     with
     sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
@@ -312,7 +304,6 @@ Module Type NLSEMANTICSCOIND
     Variable G: global.
 
     Variable P_equation: History -> Stream bool -> equation -> Prop.
-    Variable P_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop.
     Variable P_node: ident -> list (Stream value) -> list (Stream value) -> Prop.
 
     Hypothesis EqDefCase:
@@ -336,9 +327,9 @@ Module Type NLSEMANTICSCOIND
         sem_clock H b ck (clocks_of ess) ->
         sem_var H y ys ->
         reset_of ys rs ->
-        sem_reset G f rs ess oss ->
+        (forall k, sem_node G f (List.map (mask k rs) ess) (List.map (mask k rs) oss)
+              /\ P_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
         Forall2 (sem_var H) xs oss ->
-        P_reset f rs ess oss ->
         P_equation H b (EqApp xs ck f es (Some y)).
 
     Hypothesis EqFbyCase:
@@ -347,12 +338,6 @@ Module Type NLSEMANTICSCOIND
         os = fby (sem_const c0) es ->
         sem_var H x os ->
         P_equation H b (EqFby x ck c0 e).
-
-    Hypothesis ResetCase:
-      forall f r xss yss,
-        (forall k, sem_node G f (List.map (mask k r) xss) (List.map (mask k r) yss)
-              /\ P_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
-        P_reset f r xss yss.
 
     Hypothesis NodeCase:
       forall H f n xss oss,
@@ -368,24 +353,19 @@ Module Type NLSEMANTICSCOIND
              (H: History) (b: Stream bool) (e: equation)
              (Sem: sem_equation G H b e) {struct Sem}
       : P_equation H b e
-    with sem_reset_mult
-           (f: ident) (r: Stream bool) (xss oss: list (Stream value))
-           (Sem: sem_reset G f r xss oss) {struct Sem}
-         : P_reset f r xss oss
     with sem_node_mult
            (f: ident) (xss oss: list (Stream value))
            (Sem: sem_node G f xss oss) {struct Sem}
          : P_node f xss oss.
     Proof.
       - destruct Sem; eauto.
-      - destruct Sem as [???? Sem]; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         match goal with H: Forall _ _ |- _ => induction H; auto end.
     Qed.
 
     Combined Scheme sem_equation_node_ind from
-             sem_equation_mult, sem_node_mult, sem_reset_mult.
+             sem_equation_mult, sem_node_mult.
 
   End SemInd.
 
@@ -663,18 +643,6 @@ Module Type NLSEMANTICSCOIND
     + now rewrite <-Exss.
     + apply Forall_impl with (P:=sem_equation G H (clocks_of xss)); auto.
       intro; now rewrite Exss.
-  Qed.
-
-  Add Parametric Morphism G : (sem_reset G)
-      with signature eq ==> @EqSt bool ==> @EqSts value ==> @EqSts value ==> Basics.impl
-        as mod_sem_reset_morph.
-  Proof.
-    unfold Basics.impl; intros f r r' Er xss xss' Exss yss yss' Eyss Sem.
-    induction Sem as [? ? ? ? Sem].
-    constructor.
-    intro k; specialize (Sem k).
-    eapply mod_sem_node_morph; eauto;
-     apply map_st_EqSt; auto; apply mask_EqSt; auto.
   Qed.
 
   Add Parametric Morphism : (synchronized)

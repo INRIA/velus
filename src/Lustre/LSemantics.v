@@ -218,7 +218,7 @@ Module Type LSEMANTICS
           Forall2 (sem_exp H b) es ss ->
           sem_exp H b r [rs] ->
           reset_of rs bs ->
-          sem_reset f bs (concat ss) os ->
+          (forall k, sem_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
           sem_exp H b (Eapp f es (Some r) lann) os
 
     with sem_equation: history -> Stream bool -> equation -> Prop :=
@@ -236,14 +236,7 @@ Module Type LSEMANTICS
                Forall2 (sem_var H) (idents n.(n_out)) os ->
                Forall (sem_equation H b) n.(n_eqs) ->
                b = sclocksof ss ->
-               sem_node f ss os
-
-    with sem_reset: ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop :=
-           SReset:
-             forall f r xss yss,
-               (forall k, sem_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
-               sem_reset f r xss yss.
-
+               sem_node f ss os.
 
   End NodeSemantics.
 
@@ -260,7 +253,6 @@ Module Type LSEMANTICS
     Variable P_exp : history -> Stream bool -> exp -> list (Stream value) -> Prop.
     Variable P_equation : history -> Stream bool -> equation -> Prop.
     Variable P_node : ident -> list (Stream value) -> list (Stream value) -> Prop.
-    Variable P_reset : ident -> Stream bool -> list (Stream value) -> list (Stream value) -> Prop.
 
     Hypothesis ConstCase:
       forall H b c,
@@ -343,8 +335,8 @@ Module Type LSEMANTICS
         sem_exp G H b r [rs] ->
         P_exp H b r [rs] ->
         reset_of rs bs ->
-        sem_reset G f bs (concat ss) os ->
-        P_reset f bs (concat ss) os ->
+        (forall k, sem_node G f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)
+              /\ P_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
         P_exp H b (Eapp f es (Some r) lann) os.
 
     Hypothesis Equation:
@@ -363,12 +355,6 @@ Module Type LSEMANTICS
         Forall (P_equation H b) n.(n_eqs) ->
         b = sclocksof ss ->
         P_node f ss os.
-
-    Hypothesis Reset:
-      forall f r xss yss,
-        (forall k, sem_node G f (List.map (mask k r) xss) (List.map (mask k r) yss)
-              /\ P_node f (List.map (mask k r) xss) (List.map (mask k r) yss)) ->
-        P_reset f r xss yss.
 
     Local Ltac SolveForall :=
       match goal with
@@ -393,12 +379,7 @@ Module Type LSEMANTICS
            (f: ident) (ss os: list (Stream value))
            (Sem: sem_node G f ss os)
            {struct Sem}
-         : P_node f ss os
-    with sem_reset_ind2
-           (f: ident) (rs: Stream bool) (ss os: list (Stream value))
-           (Sem: sem_reset G f rs ss os)
-           {struct Sem}
-         : P_reset f rs ss os.
+         : P_node f ss os.
     Proof.
       - destruct Sem; eauto.
         + eapply FbyCase; eauto; clear H2; SolveForall.
@@ -412,8 +393,6 @@ Module Type LSEMANTICS
       - destruct Sem.
         eapply Node; eauto.
         SolveForall.
-      - destruct Sem as [???? Sem].
-        eapply Reset; eauto.
     Qed.
 
   End sem_exp_ind2.

@@ -67,24 +67,13 @@ Module Type NLCLOCKINGSEMANTICS
             wc_equation G iface eq ->
             Is_defined_in_eq x eq ->
             In (x, ck) iface ->
-            clock_match bk H (x, ck))
-      /\
-      (forall f rs xss yss,
-          sem_reset G f rs xss yss ->
-          forall k bk H node,
-            find_node f G = Some node ->
-            bk = clock_of (mask k rs xss) ->
-            sem_vars H (map fst node.(n_in)) (mask k rs xss) ->
-            sem_vars H (map fst node.(n_out)) (mask k rs yss) ->
-            Forall (clock_match bk H) (idck node.(n_in)) ->
-            Forall (clock_match bk H) (idck node.(n_out))).
+            clock_match bk H (x, ck)).
   Proof.
     intros * Hord WCG; apply sem_node_equation_reset_ind;
       [intros ?????? Hvar Hexp|
        intros ???????? Hexps Hvars Hck Hsem|
        intros ??????????? Hexps Hvars Hck ?? Hsem|
        intros ???????? Hexp Hvar Hfby|
-       intros ???? IH|
        intros ?????? Hck Hf Hin Hout ?? IH].
 
     - (* EqDef *)
@@ -161,13 +150,12 @@ Module Type NLCLOCKINGSEMANTICS
           now setoid_rewrite InMembers_idck; eauto.
 
     - (* EqReset *)
-      intros IHHsem iface z zck Hndup Hwc Hdef Hiface n.
-      inversion_clear Hdef as [|? ? ? ? ? Hyys|].
-      inversion_clear Hsem as [???? Hsems].
-      specialize (Hsems (count rs n)).
+      intros iface z zck Hndup Hwc Hdef Hiface n.
+      inversion_clear Hdef as [|????? Hyys|].
+      specialize (Hsem (count rs n)); destruct Hsem as (Hsems & IHHsem).
 
       inversion_clear Hsems as [cks' H' ??? node Hco' Hfind Hvi Hvo].
-      specialize (IHHsem _ _ _ _ Hfind Hco' Hvi Hvo).
+      specialize (IHHsem _ _ _ Hfind Hco' Hvi Hvo).
       assert (Hvi' := Hvi).
       rewrite <-map_fst_idck in Hvi'.
       eapply sem_clocked_vars_clock_match in Hvi'; eauto.
@@ -243,9 +231,6 @@ Module Type NLCLOCKINGSEMANTICS
       unfold fby in Hvar.
       unfold clock_match_instant.
       inv Hexp; match goal with H:_ = ls n |- _ => rewrite <-H in * end; eauto.
-
-    - (* reset *)
-      intro k; destruct (IH k); auto.
 
     - (* nodes *)
       intros bk' H' n' Hf' Hck' Hin' Hout' Hcm'.
@@ -327,7 +312,7 @@ Module Type NLCLOCKINGSEMANTICS
       clock_match bk H (x, ck).
   Proof.
     intros ??????? Ord WCG; intros.
-    eapply (proj1 (proj2 (clock_match_node_eqs_reset G Ord WCG))); eauto.
+    eapply (proj2 (clock_match_node_eqs_reset G Ord WCG)); eauto.
   Qed.
 
   Corollary clock_match_eqs:

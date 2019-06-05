@@ -1170,14 +1170,11 @@ CESem.sem_lexp b H (Ewhen e x k) es
         Indexed.sem_node G f xss oss ->
         CoInd.sem_node G f (tr_streams xss) (tr_streams oss).
     Proof.
-      induction 1 as [| | | |???? IHNode|??????????? Heqs IH]
+      induction 1 as [| |???????????????? IH| |??????????? Heqs IH]
                        using Indexed.sem_node_mult with
           (P_equation := fun b H e =>
                            Indexed.sem_equation G b H e ->
-                           CoInd.sem_equation G (tr_history H) (tr_stream b) e)
-          (P_reset := fun f r xss oss =>
-                        Indexed.sem_reset G f r xss oss ->
-                        CoInd.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss));
+                           CoInd.sem_equation G (tr_history H) (tr_stream b) e);
         eauto.
 
       - econstructor; eauto.
@@ -1186,18 +1183,18 @@ CESem.sem_lexp b H (Ewhen e x k) es
 
       - econstructor; eauto.
         + rewrite tr_clocks_of; eauto.
-          edestruct Indexed.sem_reset_wf; eauto.
-        + apply reset_of_impl; auto.
+          eapply wf_streams_mask.
+          intro k; destruct (IH k) as (Sem &?).
+          apply Indexed.sem_node_wf in Sem as (?&?); eauto.
+        + apply reset_of_impl; eauto.
+        + intro k; destruct (IH k) as (?&?).
+          rewrite <- 2 mask_impl; eauto;
+            eapply wf_streams_mask; intro n'; destruct (IH n') as (Sem &?);
+              apply Indexed.sem_node_wf in Sem as (?&?); eauto.
 
       - econstructor; eauto; subst.
         rewrite <-fby_impl; eauto.
         apply sem_var_impl; congruence.
-
-      - constructor; intro k; specialize (IHNode k); destruct IHNode.
-        inversion_clear H as [???? HNode].
-        rewrite <- 2 mask_impl; eauto;
-          eapply wf_streams_mask; intro n'; specialize (HNode n');
-            apply Indexed.sem_node_wf in HNode as (? & ?); eauto.
 
       - subst.
         CESem.assert_const_length xss.

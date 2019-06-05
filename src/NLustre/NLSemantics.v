@@ -74,7 +74,7 @@ Module Type NLSEMANTICS
           sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
           reset_of ys rs ->
-          sem_reset f rs ls xs ->
+          (forall k, sem_node f (mask k rs ls) (mask k rs xs)) ->
           sem_equation bk H (EqApp x ck f arg (Some y))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
@@ -82,12 +82,6 @@ Module Type NLSEMANTICS
           sem_var H x xs ->
           xs ≈ fby (sem_const c0) ls ->
           sem_equation bk H (EqFby x ck c0 le)
-
-    with sem_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop :=
-         | SReset:
-             forall f r xss yss,
-               (forall k, sem_node f (mask k r xss) (mask k r yss)) ->
-               sem_reset f r xss yss
 
     with sem_node: ident -> stream (list value) -> stream (list value) -> Prop :=
          | SNode:
@@ -199,7 +193,6 @@ enough: it does not support the internal fixpoint introduced by
     Variable G: global.
 
     Variable P_equation: stream bool -> history -> equation -> Prop.
-    Variable P_reset: ident -> stream bool -> stream (list value) -> stream (list value) -> Prop.
     Variable P_node: ident -> stream (list value) -> stream (list value) -> Prop.
 
     Hypothesis EqDefCase:
@@ -224,8 +217,8 @@ enough: it does not support the internal fixpoint introduced by
         sem_clock bk H ck (clock_of ls) ->
         sem_var H y ys ->
         reset_of ys rs ->
-        sem_reset G f rs ls xs ->
-        P_reset f rs ls xs ->
+        (forall k, sem_node G f (mask k rs ls) (mask k rs xs)
+              /\ P_node f (mask k rs ls) (mask k rs xs)) ->
         P_equation bk H (EqApp x ck f arg (Some y)).
 
     Hypothesis EqFbyCase:
@@ -234,12 +227,6 @@ enough: it does not support the internal fixpoint introduced by
         sem_var H x xs ->
         xs ≈ fby (sem_const c0) ls ->
         P_equation bk H (EqFby x ck c0 le).
-
-    Hypothesis ResetCase:
-      forall f r xss yss,
-        (forall k, sem_node G f (mask k r xss) (mask k r yss)
-              /\ P_node f (mask k r xss) (mask k r yss)) ->
-        P_reset f r xss yss.
 
     Hypothesis NodeCase:
       forall bk H f xss yss n,
@@ -256,25 +243,19 @@ enough: it does not support the internal fixpoint introduced by
             (b: stream bool) (H: history) (e: equation)
             (Sem: sem_equation G b H e) {struct Sem}
       : P_equation b H e
-    with sem_reset_mult
-           (f: ident) (r: stream bool)
-           (xss oss: stream (list value))
-           (Sem: sem_reset G f r xss oss) {struct Sem}
-         : P_reset f r xss oss
     with sem_node_mult
            (f: ident) (xss oss: stream (list value))
            (Sem: sem_node G f xss oss) {struct Sem}
          : P_node f xss oss.
     Proof.
       - destruct Sem; eauto.
-      - destruct Sem as [???? Sem]; eauto.
       - destruct Sem; eauto.
         eapply NodeCase; eauto.
         match goal with H: Forall _ (n_eqs _) |- _ => induction H; auto end.
     Qed.
 
     Combined Scheme sem_node_equation_reset_ind from
-             sem_node_mult, sem_equation_mult, sem_reset_mult.
+             sem_node_mult, sem_equation_mult.
 
   End sem_node_mult.
 
@@ -303,16 +284,6 @@ enough: it does not support the internal fixpoint introduced by
       assert_const_length xss; assert_const_length yss; auto.
   Qed.
 
-  Lemma sem_reset_wf:
-    forall G f r xss yss,
-      sem_reset G f r xss yss ->
-      wf_streams xss /\ wf_streams yss.
-  Proof.
-    intros * Sem; split; inversion_clear Sem as [???? Nodes];
-      eapply wf_streams_mask; intro k; specialize (Nodes k);
-        apply sem_node_wf in Nodes; destruct Nodes; eauto.
-  Qed.
-
   (** ** Properties of the [global] environment *)
 
   Lemma sem_node_cons:
@@ -326,25 +297,21 @@ enough: it does not support the internal fixpoint introduced by
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnode IH
-                     |
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
                      |
                      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq => ~Is_node_in_eq node.(n_name) eq
-                                      -> sem_equation G bk H eq)
-           (P_reset := fun f r xss yss => node.(n_name) <> f ->
-                                       sem_reset G f r xss yss).
+                                      -> sem_equation G bk H eq).
     - econstructor; eassumption.
     - intro Hnin.
       econstructor; eauto.
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro Hnin.
       eapply SEqReset; eauto.
+      intro k; specialize (Hnodes k); destruct Hnodes as (?&IH).
       apply IH. intro Hnf. apply Hnin. rewrite Hnf. constructor.
     - intro; eapply SEqFby; eassumption.
-    - constructor; intro k.
-      specialize (H k); destruct H; auto.
     - intro.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       eapply SNode; eauto.
@@ -374,19 +341,6 @@ enough: it does not support the internal fixpoint introduced by
     intuition.
   Qed.
 
-  Lemma sem_reset_cons:
-    forall node G r f xs ys,
-      Ordered_nodes (node::G)
-      -> sem_reset (node::G) f r xs ys
-      -> node.(n_name) <> f
-      -> sem_reset G f r xs ys.
-  Proof.
-    intros * Ord Rst Hnf.
-    inversion_clear Rst as [???? Nodes].
-    constructor; intro k; specialize (Nodes k).
-    eapply sem_node_cons; eauto.
-  Qed.
-
   Lemma sem_equation_global_tl:
     forall bk nd G H eq,
       Ordered_nodes (nd::G) ->
@@ -400,7 +354,7 @@ enough: it does not support the internal fixpoint introduced by
       eapply sem_node_cons; eauto.
       intro HH; rewrite HH in *; auto using Is_node_in_eq.
     - econstructor; eauto.
-      eapply sem_reset_cons; eauto.
+      intro k; eapply sem_node_cons; eauto.
       intro HH; rewrite HH in *; auto using Is_node_in_eq.
   Qed.
 
@@ -432,17 +386,16 @@ enough: it does not support the internal fixpoint introduced by
     revert Hnin'.
     induction Hsem as [
                      | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnode IH
-                     |
+                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
                      |
                      | bk H f xs ys n Hbk Hfind Hxs Hys ? Heqs IH]
                         using sem_node_mult
       with (P_equation := fun bk H eq =>
                             ~Is_node_in_eq nd.(n_name) eq
-                            -> sem_equation (nd::G) bk H eq)
-           (P_reset := fun f r xss yss => sem_reset (nd::G) f r xss yss);
+                            -> sem_equation (nd::G) bk H eq);
       try eauto; try intro HH.
-    - constructor; intro k; specialize (H k); destruct H; auto.
+    - econstructor; eauto.
+      intro k; specialize (Hnodes k); destruct Hnodes; auto.
     - clear HH.
       assert (nd.(n_name) <> f) as Hnf.
       { intro Hnf.
@@ -527,17 +480,6 @@ enough: it does not support the internal fixpoint introduced by
     econstructor; eauto; try intro n; try rewrite <-E1; try rewrite <-E2; eauto.
     induction Heqs; constructor; auto.
     rewrite <-E1; auto.
-  Qed.
-
-  Add Parametric Morphism G f: (sem_reset G f)
-      with signature eq_str ==> eq_str ==> eq_str ==> Basics.impl
-        as sem_reset_eq_str.
-  Proof.
-    intros * E1 ? ? E2 ? ? E3 Res.
-    inversion_clear Res as [? ? ? ? Node].
-    constructor; intro k.
-    specialize (Node k).
-    now rewrite <-E1, <-E2, <-E3.
   Qed.
 
 End NLSEMANTICS.
