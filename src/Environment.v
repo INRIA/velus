@@ -499,14 +499,15 @@ Module Env.
           rewrite In_find in FS; destruct FS as (v' & FT).
           pose proof (Env.find_2 _ _ FT) as MT.
           specialize (M _ _ _ MS MT).
-          right; eauto.
+          rewrite FT. constructor; auto.
         + apply Env.Props.P.F.not_find_in_iff in FS.
           assert (~Env.In x T) as FT
               by (intro HH; apply I in HH; auto).
           apply Env.Props.P.F.not_find_in_iff in FT as ->.
           now left.
       - split.
-        + intro x. specialize (LR x) as [(LR1 & LR2)|(v1 & v2 & LR1 & LR2 & LR3)].
+        + intro x. specialize (LR x).
+          inversion LR as [LR1 LR2|??? LR1 LR2]; symmetry in LR1, LR2.
           * apply Env.Props.P.F.not_find_in_iff in LR1.
             apply Env.Props.P.F.not_find_in_iff in LR2.
             intuition.
@@ -516,7 +517,8 @@ Module Env.
         + intros x v v' MS MT.
           apply find_1 in MS.
           apply find_1 in MT.
-          specialize (LR x) as [(LR1 & LR2)|(v1 & v2 & LR1 & LR2 & LR3)].
+          specialize (LR x).
+          inversion LR as [LR1 LR2|??? LR1 LR2]; symmetry in LR1, LR2.
           * rewrite MS in LR1; discriminate.
           * rewrite MS in LR1. rewrite MT in LR2.
             now inv LR1; inv LR2.

@@ -947,35 +947,28 @@ Section ORel.
   Context {A : Type}
           (R : relation A).
 
-  Definition orel: relation (option A) :=
-    fun sx sy => (sx = None /\ sy = None)
-              \/ (exists x y, sx = Some x /\ sy = Some y /\ R x y).
+  Inductive orel : relation (option A) :=
+  | Oreln : orel None None
+  | Orels : forall sx sy, R sx sy -> orel (Some sx) (Some sy).
 
   Global Instance orel_refl `{RR : Reflexive A R} : Reflexive orel.
   Proof.
     intro sx.
-    unfold orel.
-    destruct sx; auto.
-    right; eauto.
+    destruct sx; constructor; auto.
   Qed.
-  
+
   Global Instance orel_trans `{RT : Transitive A R} : Transitive orel.
   Proof.
-    unfold orel.
-    intros sx sy sz [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]
-           [(YZ1, YZ2)|(w & z & YZ1 & YZ2 & YZ3)]; subst; auto;
-      try discriminate.
-    inv YZ1. eapply RT in XY3. eapply XY3 in YZ3.
-    right; eauto.
+    intros sx sy sz XY YZ.
+    inv XY; inv YZ; try discriminate; constructor.
+    transitivity sy0; auto.
   Qed.
 
   Global Instance orel_sym `{RS : Symmetric A R} : Symmetric orel.
   Proof.
-    unfold orel.
-    intros sx sy [(XY1, XY2)|(x & y & XY1 & XY2 & XY3)]; subst; auto.
-    symmetry in XY3. right; eauto.
+    intros sx sy XY. inv XY; constructor; symmetry; auto.
   Qed.
-  
+
   Global Instance orel_equiv `{Equivalence A R} : Equivalence orel.
   Proof (Build_Equivalence orel orel_refl orel_sym orel_trans).
 
