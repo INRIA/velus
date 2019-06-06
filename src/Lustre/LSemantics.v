@@ -24,7 +24,7 @@ Module Type LSEMANTICS
 
   Definition history := Env.t (Stream value).
 
-  CoFixpoint const (c: const) (b: Stream bool): Stream value :=
+  CoFixpoint const (b: Stream bool) (c: const): Stream value :=
     (if hd b then present (sem_const c) else absent) ::: const c (tl b).
 
   CoInductive lift1 (op: unop) (ty: type)
@@ -154,7 +154,7 @@ Module Type LSEMANTICS
       : history -> Stream bool -> exp -> list (Stream value) -> Prop :=
     | Sconst:
         forall H b c,
-          sem_exp H b (Econst c) [const c b]
+          sem_exp H b (Econst c) [const b c]
 
     | Svar:
         forall H b x s ann,
@@ -256,7 +256,7 @@ Module Type LSEMANTICS
 
     Hypothesis ConstCase:
       forall H b c,
-        P_exp H b (Econst c) [const c b].
+        P_exp H b (Econst c) [const b c].
 
     Hypothesis VarCase:
       forall H b x s ann,
