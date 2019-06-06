@@ -158,6 +158,41 @@ if the clocked stream is [absent] at the corresponding instant. *)
         by (apply EqNat.beq_nat_true_iff; omega); auto.
   Qed.
 
+  (* [memory_masked k rs] applies iff [n = k = 0] or [k = count rs (n - 1)]. *)
+  Lemma memory_masked_alt_cond:
+    forall rs k n,
+      count rs n = (if rs n then S k else k)
+      <->
+      k = (match n with 0 => 0 | S m => count rs m end).
+  Proof.
+    induction n; simpl.
+    - destruct (rs 0); intuition.
+    - destruct (rs (S n)); [|now intuition].
+      split; inversion 1; subst; auto.
+  Qed.
+
+  Lemma count_reset_now:
+    forall rs i,
+      rs i = true ->
+      count rs i = S (match i with 0 => 0 | S m => count rs m end).
+  Proof.
+    destruct i; intro Hr; simpl; now rewrite Hr.
+  Qed.
+
+  Lemma count_reset_gt:
+    forall rs i n,
+      rs i = true ->
+      n < i ->
+      count rs n < count rs i.
+  Proof.
+    intros * Hrs Hn.
+    rewrite count_reset_now with (1:=Hrs).
+    destruct i; [now inv Hn|].
+    inv Hn; auto.
+    take (S n <= i) and rewrite PeanoNat.Nat.le_succ_l in it.
+    now apply Lt.le_lt_n_Sm, count_le'.
+  Qed.
+
   Add Parametric Morphism : count
       with signature eq_str ==> eq ==> eq
         as count_eq_str.

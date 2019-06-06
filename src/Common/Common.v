@@ -100,6 +100,10 @@ Proof.
   destruct (ident_eqb f g); auto.
 Qed.
 
+Lemma equiv_decb_negb:
+  forall x, (x ==b negb x) = false.
+Proof. destruct x; simpl; auto. Qed.
+
 Definition mem_assoc_ident {A} (x: ident): list (ident * A) -> bool :=
   existsb (fun y => ident_eqb (fst y) x).
 
@@ -176,7 +180,7 @@ Lemma equiv_decb_equiv:
   forall `{EqDec A} (x y : A),
     equiv_decb x y = true <-> equiv x y.
 Proof.
-  intros. 
+  intros.
   split; intro; unfold equiv_decb in *;
     destruct (equiv_dec x y); intuition.
 Qed.
@@ -980,5 +984,72 @@ Section ORel.
     intros x y Rxy. right. eauto.
   Qed.
 
+  Instance orel_some_Proper `{Symmetric A R} `{Transitive A R} :
+    Proper (orel ==> orel ==> iff) orel.
+  Proof.
+    intros ox1 ox2 ORx oy1 oy2 ORy.
+    split; intro HH.
+    - symmetry in ORx. transitivity ox1; auto. transitivity oy1; auto.
+    - symmetry in ORy. transitivity ox2; auto. transitivity oy2; auto.
+  Qed.
+
+  Lemma orel_inversion:
+    forall x y, orel (Some x) (Some y) <-> R x y.
+  Proof.
+    split.
+    - now inversion 1.
+    - intro Rxy. eauto using orel.
+  Qed.
+
 End ORel.
+
+Arguments orel {A}%type R%signature.
+Hint Extern 4 (orel _ ?x ?x) => reflexivity.
+
+Lemma orel_eq {A : Type} :
+  forall x y, orel (@eq A) x y <-> x = y.
+Proof.
+  intros x y. destruct x, y; split; intro HH; try discriminate; inv HH; auto.
+Qed.
+
+Instance orel_option_map_Proper
+         {A B} (RA : relation A) (RB : relation B) (f : A -> B)
+         `{Equivalence B RB} `{Proper _ (RA ==> RB) f}:
+  Proper (orel RA ==> orel RB) (@option_map A B f).
+Proof.
+  intros oa' oa Eoa.
+  destruct oa'; destruct oa; simpl; inv Eoa; auto.
+  now take (RA _ _) and rewrite it.
+Qed.
+
+Instance orel_option_map_pointwise_Proper
+         {A B} (RA : relation A) (RB : relation B)
+         `{Equivalence B RB}:
+  Proper (pointwise_relation A RB ==> eq ==> orel RB) (@option_map A B).
+Proof.
+  intros f' f Hf oa' oa Eoa; subst.
+  destruct oa; simpl; [|reflexivity].
+  apply orel_inversion.
+  rewrite Hf. reflexivity.
+Qed.
+
+Instance orel_subrelation {A} (R1 R2 : relation A) `{subrelation A R1 R2}:
+  subrelation (orel R1) (orel R2).
+Proof.
+  intros xo yo Ro.
+  destruct xo, yo; inv Ro; constructor; auto.
+Qed.
+
+(* Should not be necessary, but rewriting through RelProd is often
+   very slow or fails. *)
+Lemma orel_pair:
+  forall {A B} (RA: relation A) (RB: relation B)
+    a1 a2 b1 b2,
+    RA a1 a2 ->
+    RB b1 b2 ->
+    orel (RelationPairs.RelProd RA RB) (Some (a1, b1)) (Some (a2, b2)).
+Proof.
+  intros until b2. intros Ea Eb.
+  constructor; auto.
+Qed.
 

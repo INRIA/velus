@@ -25,6 +25,7 @@ src/CoreExpr/CESemantics.v
 src/CoreExpr/CEClocking.v
 src/CoreExpr/CETyping.v
 src/CoreExpr/CEIsFree.v
+src/CoreExpr/CEProperties.v
 src/CoreExpr/CEClockingSemantics.v
 src/CoreExpr/CEInterpreter.v
 src/CoreExpr/CoreExpr.v

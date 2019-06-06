@@ -693,7 +693,7 @@ Module Env.
       rewrite find_gsso_opt.
       - apply IHys. intuition.
       - intro. apply Hin. now left.
-  Qed.
+    Qed.
 
     Lemma adds_opt_cons_cons:
       forall xs x (v: A) vs e,
@@ -702,74 +702,74 @@ Module Env.
       induction xs as [|x']; intros; simpl; auto.
     Qed.
 
-  Lemma adds_opt_cons_cons':
-    forall xs x (v: A) vs e,
-      ~ List.In x xs ->
-      adds_opt (x :: xs) (Some v :: vs) e = adds_opt xs vs (add x v e).
-  Proof.
-    unfold adds_opt.
-    induction xs as [|x']; intros * NotIn; simpl; auto.
-    destruct vs as [|v']; simpl; auto.
-    rewrite <-IHxs; auto.
-    - simpl. destruct v'; auto.
-      rewrite add_comm; auto.
-      intro; subst; apply NotIn; constructor; auto.
-    - intro; apply NotIn; right; auto.
-  Qed.
+    Lemma adds_opt_cons_cons':
+      forall xs x (v: A) vs e,
+        ~ List.In x xs ->
+        adds_opt (x :: xs) (Some v :: vs) e = adds_opt xs vs (add x v e).
+    Proof.
+      unfold adds_opt.
+      induction xs as [|x']; intros * NotIn; simpl; auto.
+      destruct vs as [|v']; simpl; auto.
+      rewrite <-IHxs; auto.
+      - simpl. destruct v'; auto.
+        rewrite add_comm; auto.
+        intro; subst; apply NotIn; constructor; auto.
+      - intro; apply NotIn; right; auto.
+    Qed.
 
-  Lemma adds_opt_cons_cons_None:
-    forall xs x (vs: list (option A)) e,
-      adds_opt (x :: xs) (None :: vs) e = adds_opt xs vs e.
-  Proof. auto. Qed.
+    Lemma adds_opt_cons_cons_None:
+      forall xs x (vs: list (option A)) e,
+        adds_opt (x :: xs) (None :: vs) e = adds_opt xs vs e.
+    Proof. auto. Qed.
 
-  Lemma In_adds_opt_In:
-    forall xs vos x,
-      In x (adds_opt xs vos (empty _)) ->
-      List.In x xs.
-  Proof.
-    intros xs.
-    setoid_rewrite Props.P.F.in_find_iff.
-    induction xs as [|y xs' IH].
-    - intros vos x; unfold adds_opt.
-      destruct vos; simpl; rewrite gempty; intuition.
-    - intros vos x.
-      destruct vos as [|vo vos].
-      + now unfold adds_opt; simpl; rewrite gempty; intuition.
-      + destruct (Pos.eq_dec x y).
-        *{ subst; destruct vo.
-           - now rewrite find_gsss_opt; intuition.
-           - now rewrite adds_opt_cons_cons_None; intro HH; apply IH in HH; constructor 2.
-         }
-        * rewrite find_gsso_opt; auto.
-          intro HH; apply IH in HH.
-          now constructor 2.
-  Qed.
+    Lemma In_adds_opt_In:
+      forall xs vos x,
+        In x (adds_opt xs vos (empty _)) ->
+        List.In x xs.
+    Proof.
+      intros xs.
+      setoid_rewrite Props.P.F.in_find_iff.
+      induction xs as [|y xs' IH].
+      - intros vos x; unfold adds_opt.
+        destruct vos; simpl; rewrite gempty; intuition.
+      - intros vos x.
+        destruct vos as [|vo vos].
+        + now unfold adds_opt; simpl; rewrite gempty; intuition.
+        + destruct (Pos.eq_dec x y).
+          *{ subst; destruct vo.
+             - now rewrite find_gsss_opt; intuition.
+             - now rewrite adds_opt_cons_cons_None; intro HH; apply IH in HH; constructor 2.
+           }
+          * rewrite find_gsso_opt; auto.
+            intro HH; apply IH in HH.
+            now constructor 2.
+    Qed.
 
-  Lemma updates_is_adds:
-    forall xs vs (m: t A),
-      NoDup xs ->
-      updates xs (List.map (@Some A) vs) m = adds xs vs m.
-  Proof.
-    unfold updates, adds; intros * Hndp.
-    revert vs.
-    induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
-    rewrite IHxs, <-adds'_cons; simpl; auto.
-    intro; eapply Notin, InMembers_In_combine; eauto.
-  Qed.
+    Lemma updates_is_adds:
+      forall xs vs (m: t A),
+        NoDup xs ->
+        updates xs (List.map (@Some A) vs) m = adds xs vs m.
+    Proof.
+      unfold updates, adds; intros * Hndp.
+      revert vs.
+      induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
+      rewrite IHxs, <-adds'_cons; simpl; auto.
+      intro; eapply Notin, InMembers_In_combine; eauto.
+    Qed.
 
-  Lemma adds_opt_is_adds:
-    forall xs vs (m: t A),
-      NoDup xs ->
-      adds_opt xs (List.map (@Some A) vs) m = adds xs vs m.
-  Proof.
-    unfold adds_opt, adds; intros * Hndp.
-    revert vs.
-    induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
-    rewrite IHxs, <-adds'_cons; simpl; auto.
-    intro; eapply Notin, InMembers_In_combine; eauto.
-  Qed.
+    Lemma adds_opt_is_adds:
+      forall xs vs (m: t A),
+        NoDup xs ->
+        adds_opt xs (List.map (@Some A) vs) m = adds xs vs m.
+    Proof.
+      unfold adds_opt, adds; intros * Hndp.
+      revert vs.
+      induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
+      rewrite IHxs, <-adds'_cons; simpl; auto.
+      intro; eapply Notin, InMembers_In_combine; eauto.
+    Qed.
 
-  Lemma find_guso:
+    Lemma find_guso:
       forall x x' xs (vs: list (option A)) m,
         x <> x' ->
         find x (updates (x' :: xs) vs m) = find x (updates xs (tl vs) m).
@@ -862,28 +862,28 @@ Module Env.
         destruct m1, o, m2; simpl;
           try rewrite IHx; try rewrite rleaf;
             repeat progress
-           match goal with
-           | H1:remove ?x1 ?n = Leaf A
-             |- context[remove ?x1 (remove ?x2 ?n)]
-             => (rewrite IHx || rewrite <-IHx); rewrite H1, rleaf
-           | H1:remove ?x1 ?n = Node ?l1 ?o1 ?r1,
-                H2:remove ?x2 ?n = Node ?l2 ?o2 ?r2
-             |- context[remove ?x1 (remove ?x2 ?n)]
-             => (rewrite IHx || rewrite <-IHx); rewrite H1; clear H1
-           | H1: remove ?x1 ?n1 = Node ?l ?o ?r
-             |- context[Node ?l ?o ?r] => rewrite <-H1
-           | |- context[match remove ?x (Node ?l ?o ?r) with _ => _ end]
-             => let Heq := fresh "Heq" in
-                destruct (remove x (Node l o r)) eqn:Heq
-           end; f_equal; try rewrite rleaf; auto.
+                   match goal with
+                   | H1:remove ?x1 ?n = Leaf A
+                     |- context[remove ?x1 (remove ?x2 ?n)]
+                     => (rewrite IHx || rewrite <-IHx); rewrite H1, rleaf
+                   | H1:remove ?x1 ?n = Node ?l1 ?o1 ?r1,
+                        H2:remove ?x2 ?n = Node ?l2 ?o2 ?r2
+                     |- context[remove ?x1 (remove ?x2 ?n)]
+                     => (rewrite IHx || rewrite <-IHx); rewrite H1; clear H1
+                   | H1: remove ?x1 ?n1 = Node ?l ?o ?r
+                     |- context[Node ?l ?o ?r] => rewrite <-H1
+                   | |- context[match remove ?x (Node ?l ?o ?r) with _ => _ end]
+                     => let Heq := fresh "Heq" in
+                       destruct (remove x (Node l o r)) eqn:Heq
+                   end; f_equal; try rewrite rleaf; auto.
     Qed.
 
     Lemma updates_cons_cons':
-    forall xs x (vo: option A) vs e,
-      ~ List.In x xs ->
-      updates (x :: xs) (vo :: vs) e =
-      updates xs vs
-              (match vo with None => remove x | Some v => add x v end e).
+      forall xs x (vo: option A) vs e,
+        ~ List.In x xs ->
+        updates (x :: xs) (vo :: vs) e =
+        updates xs vs
+                (match vo with None => remove x | Some v => add x v end e).
     Proof.
       unfold updates.
       destruct vo as [v|].
@@ -917,6 +917,29 @@ Module Env.
       unfold updates; destruct o; simpl.
       - apply Props.P.F.add_in_iff; eauto.
       - congruence.
+    Qed.
+
+    Global Instance Env_find_Proper (R : relation A) `{Equivalence A R}:
+      Proper (eq ==> Env.Equiv R ==> orel R) (@Env.find A).
+    Proof.
+      intros x y Hxy E1 E2 (EE1 & EE2); subst.
+      destruct (Env.find y E1) eqn:Hx1; destruct (Env.find y E2) eqn:Hx2.
+      - repeat (match goal with [ H:Env.find _ _ = Some _ |- _ ] =>
+                                apply Env.find_2 in H end).
+        specialize (EE2 _ _ _ Hx1 Hx2).
+        setoid_rewrite EE2; reflexivity.
+      - apply find_In in Hx1. apply Env.Props.P.F.not_find_in_iff in Hx2.
+        exfalso; apply Hx2. now apply EE1.
+      - apply Env.Props.P.F.not_find_in_iff in Hx1. apply find_In in Hx2.
+        exfalso; apply Hx1. now apply EE1.
+      - reflexivity.
+    Qed.
+
+    Global Instance Env_find_eq_Proper:
+      Proper (eq ==> Env.Equiv eq ==> eq) (@Env.find A).
+    Proof.
+      intros x y Hxy E1 E2 EE; subst.
+      apply orel_eq. rewrite EE. reflexivity.
     Qed.
 
   End Extra.

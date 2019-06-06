@@ -1616,6 +1616,14 @@ Section Forall2.
       intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
   Qed.
 
+  Lemma Forall2_cons':
+    forall P (x : A) (y : B) l l',
+      (P x y /\ Forall2 P l l') <-> Forall2 P (x::l) (y::l').
+  Proof.
+    split. now intuition.
+    inversion 1; auto.
+  Qed.
+
   Lemma Forall2_det : forall (R : A -> B -> Prop),
       (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
       forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
