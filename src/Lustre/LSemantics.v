@@ -72,22 +72,21 @@ Module Type LSEMANTICS
         fby1 y xs ys rs ->
         fby (present x ::: xs) (present y ::: ys) (present x ::: rs).
 
-  CoInductive when (k: bool)
-    : Stream value -> Stream value -> Stream value -> Prop :=
+  CoInductive when (b: bool) : Stream value -> Stream value -> Stream value -> Prop :=
   | WhenA:
-      forall xs cs rs,
-        when k cs xs rs ->
-        when k (absent ::: cs) (absent ::: xs) (absent ::: rs)
+      forall xs cs vs,
+        when b cs xs vs ->
+        when b (absent ::: cs) (absent ::: xs) (absent ::: vs)
   | WhenPA:
-      forall x c xs cs rs,
-        when k cs xs rs ->
-        val_to_bool c = Some (negb k) ->
-        when k (present c ::: cs) (present x ::: xs) (absent ::: rs)
+      forall x c xs cs vs,
+        when b cs xs vs ->
+        val_to_bool c = Some (negb b) ->
+        when b (present c ::: cs) (present x ::: xs) (absent ::: vs)
   | WhenPP:
-      forall x c xs cs rs,
-        when k cs xs rs ->
-        val_to_bool c = Some k ->
-        when k (present c ::: cs) (present x ::: xs) (present x ::: rs).
+      forall x c xs cs vs,
+        when b cs xs vs ->
+        val_to_bool c = Some b ->
+        when b (present c ::: cs) (present x ::: xs) (present x ::: vs).
 
   CoInductive merge
     : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
