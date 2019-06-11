@@ -984,7 +984,7 @@ Section ORel.
     intros x y Rxy. right. eauto.
   Qed.
 
-  Instance orel_some_Proper `{Symmetric A R} `{Transitive A R} :
+  Global Instance orel_Proper `{Symmetric A R} `{Transitive A R} :
     Proper (orel ==> orel ==> iff) orel.
   Proof.
     intros ox1 ox2 ORx oy1 oy2 ORy.
@@ -1004,7 +1004,8 @@ Section ORel.
 End ORel.
 
 Arguments orel {A}%type R%signature.
-Hint Extern 4 (orel _ ?x ?x) => reflexivity.
+Hint Extern 4 (orel _ None None) => now constructor.
+Hint Extern 5 (orel _ ?x ?x) => reflexivity.
 
 Lemma orel_eq {A : Type} :
   forall x y, orel (@eq A) x y <-> x = y.
@@ -1013,13 +1014,13 @@ Proof.
 Qed.
 
 Instance orel_option_map_Proper
-         {A B} (RA : relation A) (RB : relation B) (f : A -> B)
-         `{Equivalence B RB} `{Proper _ (RA ==> RB) f}:
-  Proper (orel RA ==> orel RB) (@option_map A B f).
+         {A B} (RA : relation A) (RB : relation B) `{Equivalence B RB}:
+  Proper ((RA ==> RB) ==> orel RA ==> orel RB) (@option_map A B).
 Proof.
-  intros oa' oa Eoa.
+  intros f' f Ef oa' oa Eoa.
   destruct oa'; destruct oa; simpl; inv Eoa; auto.
-  now take (RA _ _) and rewrite it.
+  take (RA _ _) and specialize (Ef _ _ it).
+  now rewrite Ef.
 Qed.
 
 Instance orel_option_map_pointwise_Proper
