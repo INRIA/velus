@@ -942,6 +942,551 @@ Module Env.
       apply orel_eq. rewrite EE. reflexivity.
     Qed.
 
+    Lemma omap_find:
+      forall xs (env : Env.t A),
+        Forall (fun x => Env.In x env) xs ->
+        exists vs, omap (fun x => Env.find x env) xs = Some vs
+              /\ Forall2 (fun x v => Env.find x env = Some v) xs vs.
+    Proof.
+      induction xs as [|x xs IH]; simpl; eauto.
+      inversion_clear 1 as [|?? Dx Dxs].
+      rewrite In_find in Dx. destruct Dx as (v & Fx).
+      rewrite Fx. apply IH in Dxs as (vs & -> & HH). eauto.
+    Qed.
+
   End Extra.
 
+  Section Equiv.
+
+    Context {A} (R : relation A).
+
+    Lemma find_Some_orel `{Reflexive _ R} :
+      forall env x v,
+        find x env = Some v ->
+        orel R (find x env) (Some v).
+    Proof.
+      now intros * ->.
+    Qed.
+
+    Lemma orel_find_Some:
+      forall env x v,
+        orel R (find x env) (Some v) ->
+        exists v', R v' v /\ find x env = Some v'.
+    Proof.
+      intros * Fx. inv Fx; eauto.
+    Qed.
+
+    Global Add Parametric Morphism `{Equivalence _ R} : (@In A)
+        with signature (eq ==> Equiv R ==> iff)
+          as In_Equiv.
+    Proof.
+      intros x env1 env2 EE. setoid_rewrite In_find.
+      split; intros (v, Fx); apply find_Some_orel in Fx; auto.
+      - rewrite EE in Fx. apply orel_find_Some in Fx as (? & ? & ?); eauto.
+      - rewrite <-EE in Fx. apply orel_find_Some in Fx as (? & ? & ?); eauto.
+    Qed.
+
+    Global Instance Equiv_Reflexive `{Reflexive A R} : Reflexive (Equiv R).
+    Proof.
+      intro env. apply Equiv_orel. reflexivity.
+    Qed.
+
+    Global Instance Equiv_Transitive `{Transitive A R} :
+      Transitive (Equiv R).
+    Proof.
+      intros env1 env2 env3.
+      setoid_rewrite Equiv_orel.
+      intros E12 E23 x. specialize (E12 x); specialize (E23 x).
+      inv E12; inv E23; auto; try match goal with H1:_ = find x ?env,
+                      H2:_ = find x ?env |- _ => rewrite <- H1 in H2 end;
+      try discriminate.
+      take (Some _ = Some _) and inversion it; subst.
+      constructor. transitivity sy; auto.
+    Qed.
+
+    Global Instance Equiv_Symmetric `{Symmetric _ R} : Symmetric (Equiv R).
+    Proof.
+      intros env1 env2. setoid_rewrite Equiv_orel.
+      intros E x. specialize (E x). inv E; auto.
+      constructor; auto.
+    Qed.
+
+    Global Add Parametric Relation `{Equivalence _ R} : (t A) (Equiv R)
+        reflexivity proved by Equiv_Reflexive
+        symmetry proved by Equiv_Symmetric
+        transitivity proved by Equiv_Transitive
+      as Equivalence_Equiv.
+
+    Global Add Parametric Morphism `{Equivalence _ R} : (Equiv R)
+        with signature (Equiv R ==> Equiv R ==> iff)
+          as Equiv_Equiv.
+    Proof.
+      intros env1 env2 E12 env3 env4 E34.
+      repeat rewrite Env.Equiv_orel in *.
+      setoid_rewrite E12. setoid_rewrite E34.
+      reflexivity.
+    Qed.
+
+  End Equiv.
+
+  Existing Instance Equivalence_Equiv.
+
+  (* TODO: shift to Environment and update Obc/Equiv.v.
+           note: argument order changed. *)
+  Section EnvRefines.
+
+    Import Relation_Definitions Basics.
+
+    Context {A : Type}
+            (R : relation A).
+
+    Definition refines (env1 env2 : Env.t A) : Prop :=
+      forall x v, Env.find x env1 = Some v ->
+             exists v', R v v' /\ Env.find x env2 = Some v'.
+
+    Global Typeclasses Opaque refines.
+
+    Lemma refines_empty:
+      forall env, refines (empty A) env.
+    Proof.
+      intros env x v Hfind. now rewrite gempty in Hfind.
+    Qed.
+
+    Lemma refines_refl `{Reflexive _ R} : reflexive _ refines.
+    Proof.
+      intros env x v ->; eauto.
+    Qed.
+
+    Lemma refines_trans `{Transitive _ R} : transitive _ refines.
+    Proof.
+      intros env1 env2 env3 H1 H2 x v Hfind.
+      apply H1 in Hfind as (? & ? & Hfind).
+      apply H2 in Hfind as (? & ? & ->).
+      eauto.
+    Qed.
+
+    (* [env_refines] is a [PreOrder] *)
+    Global Add Parametric Relation `{Reflexive _ R} `{Transitive _ R}
+      : _ refines
+        reflexivity proved by refines_refl
+        transitivity proved by refines_trans
+          as env_refines_preorder.
+
+    Global Add Parametric Morphism `{Reflexive _ R} `{Transitive _ R} : refines
+        with signature (refines --> refines ++> impl)
+          as refines_refines1.
+    Proof.
+      intros env2 env1 ER12 env3 env4 ER34 ER13.
+      transitivity env2; auto.
+      transitivity env3; auto.
+    Qed.
+
+    Global Add Parametric Morphism `{Reflexive _ R} `{Transitive _ R} : refines
+        with signature (refines ++> refines --> flip impl)
+          as refines_refines2.
+    Proof.
+      intros env1 env2 ER12 env4 env3 ER34 ER23.
+      transitivity env2; auto. transitivity env3; auto.
+    Qed.
+
+    Lemma refines_add `{Reflexive _ R} :
+      forall env x v,
+        ~ In x env ->
+        refines env (add x v env).
+    Proof.
+      intros env x v nI x' v' Fx'.
+      destruct (ident_eq_dec x x').
+      - subst. apply find_In in Fx'. exfalso; auto.
+      - rewrite gso; eauto.
+    Qed.
+
+    Lemma refines_add_both:
+      forall env1 env2 x v1 v2,
+        refines env1 env2 ->
+        R v1 v2 ->
+        refines (add x v1 env1) (add x v2 env2).
+    Proof.
+      intros env1 env2 x v1 v2 Henv Rv y yv Hfind.
+      destruct (ident_eq_dec x y).
+      - subst; rewrite gss in *; inv Hfind; eauto.
+      - rewrite gso in *; auto.
+    Qed.
+
+    Global Add Morphism (@In A)
+        with signature (eq ==> refines ++> impl)
+          as In_refines.
+    Proof.
+      setoid_rewrite In_find.
+      intros x E1 E2 ER12 (v & Fx).
+      apply ER12 in Fx as (v' & ? & ?); eauto.
+    Qed.
+
+    Global Add Morphism (@In A)
+        with signature (eq ==> refines --> flip impl)
+          as In_refines_flip.
+    Proof.
+      setoid_rewrite In_find.
+      intros x E1 E2 ER12 (v & Fx).
+      apply ER12 in Fx as (v' & ? & ?); eauto.
+    Qed.
+
+    Global Instance refines_Proper `{Reflexive _ R} `{Transitive _ R} :
+      Proper (flip refines ==> refines ==> impl) refines.
+    Proof.
+      intros m1 m1' Henv1 m2 m2' Henv2.
+      intros Henv x v Hfind.
+      apply Henv1 in Hfind as (? & ? & Hfind).
+      apply Henv in Hfind as (? & ? & Hfind).
+      apply Henv2 in Hfind as (? & ? & Hfind).
+      eauto.
+    Qed.
+
+    Global Instance add_refines_Proper `{Reflexive _ R}:
+      Proper (@eq ident ==> @eq A ==> refines ==> refines) (@add A).
+    Proof.
+      intros x y Hxy vx vy Hv m1 m2 Henv.
+      subst. now apply refines_add_both.
+    Qed.
+
+    Lemma Equiv_refines' `{Symmetric _ R}:
+      forall env1 env2,
+        Equiv R env1 env2 ->
+        refines env1 env2.
+    Proof.
+      intros env1 env2 E x v Fx.
+      rewrite Equiv_orel in E. specialize (E x).
+      rewrite Fx in E. symmetry in E.
+      apply orel_find_Some in E as (v' & Rvv & ->).
+      symmetry in Rvv. eauto.
+    Qed.
+
+    Lemma Equiv_refines `{Equivalence _ R}:
+      forall env1 env2,
+        Equiv R env1 env2 <-> (refines env1 env2 /\ refines env2 env1).
+    Proof.
+      split; intro E.
+      - split; apply Equiv_refines'; auto.
+        now symmetry in E.
+      - destruct E as (E1 & E2). split.
+        + split; intro Ik.
+          * now rewrite E1 in Ik.
+          * now rewrite E2 in Ik.
+        + intros * M1 M2.
+          apply Env.find_1 in M1. apply Env.find_1 in M2.
+          apply E1 in M1 as (v & Rv & F2).
+          rewrite F2 in M2. now inv M2.
+    Qed.
+
+    (* TODO: Use to simplify Env.Equal lemmas... *)
+    Global Add Parametric Morphism `{Equivalence _ R} : refines
+        with signature (Equiv R ==> Equiv R ==> iff)
+          as refines_Equiv.
+    Proof.
+      intros mA mA' EA mB mB' EB.
+      apply Equiv_refines in EA as (EA1 & EA2).
+      apply Equiv_refines in EB as (EB1 & EB2).
+      split; intro ER.
+      - transitivity mA; auto. transitivity mB; auto.
+      - transitivity mA'; auto. transitivity mB'; auto.
+    Qed.
+
+    Global Add Parametric Morphism `{Equivalence _ R} : refines
+        with signature (Equiv R ==> Equiv R ==> flip impl)
+          as refines_Equiv_flip_impl.
+    Proof.
+      intros mA mA' EA mB mB' EB EAB.
+      apply Equiv_refines in EA as (EA1 & EA2).
+      apply Equiv_refines in EB as (EB1 & EB2).
+      transitivity mA'; auto. transitivity mB'; auto.
+    Qed.
+
+    Global Instance equiv_refines `{Equivalence _ R} :
+      PartialOrder (Equiv R) refines.
+    Proof.
+      intros env1 env2.
+      constructor.
+      - intro E. red; unfold predicate_intersection; simpl.
+        setoid_rewrite E. split; reflexivity.
+      - intros (E1 & E2). apply Equiv_refines. auto.
+    Qed.
+
+    Lemma refines_add_right `{Reflexive _ R} `{Transitive _ R}:
+      forall env1 env2 x v,
+        refines env1 env2 ->
+        ~ In x env1 ->
+        refines env1 (add x v env2).
+    Proof.
+      intros. setoid_rewrite refines_add at 1; eauto.
+      apply refines_add_both; auto.
+    Qed.
+
+    Lemma refines_remove `{Reflexive _ R}:
+      forall env x,
+        refines (remove x env) env.
+    Proof.
+      intros env x y v Fx.
+      destruct (ident_eq_dec x y).
+      - now subst; rewrite grs in *.
+      - rewrite gro in *; eauto.
+    Qed.
+
+    Lemma refines_remove_both:
+      forall env1 env2 x,
+        refines env1 env2 ->
+        refines (remove x env1) (remove x env2).
+    Proof.
+      intros env1 env2 x Henv y v Hfind.
+      destruct (ident_eq_dec x y).
+      - now subst; rewrite grs in *.
+      - rewrite gro in *; auto.
+    Qed.
+
+    Lemma refines_add_remove:
+      forall env1 env2 x v,
+        refines env1 env2 ->
+        refines (remove x env1) (add x v env2).
+    Proof.
+      intros env1 env2 x v Henv y vy Hfind.
+      destruct (ident_eq_dec x y).
+      - now subst; rewrite grs in Hfind.
+      - rewrite gro in Hfind; auto.
+        rewrite gso; auto.
+    Qed.
+
+    Lemma find_add:
+      forall {x v} {env : t A},
+        find x env = Some v ->
+        Equal env (add x v env).
+    Proof.
+      intros x v env Fx.
+      rewrite Props.P.F.Equal_Equiv, Equiv_orel.
+      intro y. destruct (ident_eq_dec y x) as [|Nyx]; subst.
+      - now rewrite gss, Fx.
+      - rewrite gso; eauto.
+    Qed.
+
+    Lemma refines_orel_find `{Reflexive _ R} `{Transitive _ R}:
+      forall env1 env2 x,
+        refines env1 env2 ->
+        In x env1 ->
+        orel R (find x env1) (find x env2).
+    Proof.
+      intros * ER Ix.
+      rewrite In_find in Ix. destruct Ix as (v & Fx1).
+      specialize (ER _ _ Fx1) as (v' & Rvv & Fx2).
+      now rewrite Fx1, Fx2, Rvv.
+    Qed.
+
+    Lemma refines_find_add_left `{Reflexive _ R}:
+      forall x v env,
+        find x env = Some v ->
+        refines (add x v env) env.
+    Proof.
+      intros * Fx.
+      intros y v' Fy.
+      destruct (ident_eq_dec y x) as [|Nyx].
+      - subst. rewrite gss in Fy. inv Fy; eauto.
+      - rewrite gso in Fy; eauto.
+    Qed.
+
+    Lemma refines_find_add_right `{Reflexive _ R}:
+      forall x v env,
+        find x env = Some v ->
+        refines env (add x v env).
+    Proof.
+      intros * Fx. intros y v' Fy.
+      destruct (ident_eq_dec y x) as [|Nyx].
+      - subst. rewrite gss. rewrite Fx in Fy. inv Fy; eauto.
+      - rewrite gso; eauto.
+    Qed.
+
+    Lemma refines_add_left `{Reflexive _ R} `{Transitive _ R}:
+      forall x v1 v2 env1 env2,
+        refines env1 env2 ->
+        find x env2 = Some v2 ->
+        R v1 v2 ->
+        refines (add x v1 env1) env2.
+    Proof.
+      intros * R12 MT Rvv.
+      apply refines_find_add_left in MT. setoid_rewrite <-MT.
+      auto using refines_add_both.
+    Qed.
+
+  End EnvRefines.
+
+  Existing Instance env_refines_preorder.
+  Existing Instance Equivalence_Equiv.
+
+  Hint Immediate refines_empty.
+  Hint Extern 4 (refines _ (add ?x _ _) (add ?x _ _)) => apply refines_add.
+
+  Lemma Equal_Equiv {A}:
+    relation_equivalence Equal (Equiv (@eq A)).
+  Proof.
+    split; intro HH; now apply Props.P.F.Equal_Equiv in HH.
+  Qed.
+
+  Add Parametric Morphism {A}: (@Equiv A)
+      with signature (subrelation ==> eq ==> eq ==> impl)
+        as Equiv_subrelation.
+  Proof.
+    intros R1 R2 SR env1 env2 ER.
+    split. now apply ER.
+    destruct ER as (? & ?); eauto.
+  Qed.
+
+  Global Instance subrelation_Equiv {A} (R1 R2 : relation A):
+    subrelation R1 R2 ->
+    subrelation (Equiv R1) (Equiv R2).
+  Proof.
+    intros SR env1 env2 EE.
+    now rewrite SR in EE.
+  Qed.
+
+  Global Instance Equal_subrelation_Equiv {A} (R : relation A) `{Reflexive _ R}:
+    subrelation Equal (Equiv R).
+  Proof.
+    rewrite Equal_Equiv.
+    apply eq_subrelation in H.
+    typeclasses eauto.
+  Qed.
+
+  Global Instance Equiv_subrelation_Equal {A}:
+    subrelation (Equiv (@eq A)) Equal.
+  Proof.
+    now rewrite Equal_Equiv.
+  Qed.
+
+  Global Instance refines_Equal_Proper {A}:
+    Proper (@Equal A ==> @Equal A ==> iff) (refines eq).
+  Proof.
+    rewrite Equal_Equiv.
+    typeclasses eauto.
+  Qed.
+
+  Lemma In_add1 {A : Type}:
+    forall x (v : A) env,
+      In x (add x v env).
+  Proof.
+    setoid_rewrite In_find. setoid_rewrite gss. eauto.
+  Qed.
+
+  Lemma In_add2 {A : Type}:
+    forall x y (v : A) env,
+      In y env ->
+      In y (add x v env).
+  Proof.
+    intros x y v env0 Iy.
+    destruct (ident_eq_dec y x); [subst; auto using In_add1|].
+    apply In_find. rewrite gso; auto.
+  Qed.
+
+  Hint Immediate In_add1.
+  Hint Extern 4 (In ?x (add ?y ?v ?env)) => apply In_add2.
+  Hint Extern 4 (refines _ ?x ?x) => reflexivity.
+  Hint Immediate eq_Transitive.
+
+  Section EnvDom.
+
+    Context { V : Type }.
+
+    Definition dom (env : Env.t V) (dom : list ident) :=
+      forall x, Env.In x env <-> List.In x dom.
+
+    Lemma dom_use:
+      forall {env xs},
+        dom env xs ->
+        forall x, Env.In x env <-> List.In x xs.
+    Proof. auto. Qed.
+
+    Lemma dom_intro:
+      forall env xs,
+        (forall x, Env.In x env <-> List.In x xs) ->
+        dom env xs.
+    Proof. auto. Qed.
+
+    Lemma dom_add_cons:
+      forall env xs x v,
+        dom env xs ->
+        dom (add x v env) (x :: xs).
+    Proof.
+      intros evn xs x v ED y.
+      split; intro HH.
+      - apply Props.P.F.add_in_iff in HH as [HH|HH]; subst.
+        now constructor. apply ED in HH. now constructor 2.
+      - inv HH; auto. take (List.In _ xs) and apply ED in it; auto.
+    Qed.
+
+    Lemma dom_empty:
+      dom (empty V) List.nil.
+    Proof.
+      intro. split; inversion 1.
+      now apply Props.P.F.empty_in_iff in H.
+    Qed.
+
+    Import Permutation.
+
+    Global Add Parametric Morphism (E : relation V) `{Equivalence _ E} : dom
+        with signature (Equiv E ==> @Permutation ident ==> iff)
+          as dom_Equiv_Permutation.
+    Proof.
+      intros env1 env2 EE xs1 xs2 Pxs. unfold dom.
+      setoid_rewrite EE.
+      induction Pxs; split; intro HH;
+        try (setoid_rewrite <-HH || setoid_rewrite HH);
+        try setoid_rewrite Pxs; try reflexivity.
+      - now setoid_rewrite (perm_swap x).
+      - now setoid_rewrite (perm_swap x).
+      - now setoid_rewrite Pxs1; setoid_rewrite Pxs2.
+      - now setoid_rewrite Pxs1; setoid_rewrite Pxs2.
+    Qed.
+
+    Lemma dom_equal_empty:
+      forall M, dom M List.nil <-> Equal M (empty V).
+    Proof.
+      intros. unfold dom. split; intro HH.
+      - intro x. rewrite gempty.
+        apply Props.P.F.not_find_in_iff.
+        rewrite HH. auto.
+      - intros x. setoid_rewrite HH.
+        split; [intro Ix|now inversion 1].
+        now apply Props.P.F.empty_in_iff in Ix.
+    Qed.
+
+    Global Opaque dom.
+  End EnvDom.
+
+  Hint Extern 4 (dom ?env (?xs ++ nil)) => rewrite app_nil_r.
+  Hint Immediate dom_empty.
+
+  Add Parametric Morphism {A} (R: relation A) `{Equivalence _ R} : (@add A)
+      with signature (eq ==> R ==> Equiv R ==> Equiv R)
+        as add_Equiv.
+  Proof.
+    setoid_rewrite Equiv_orel.
+    intros x v1 v2 Rvv env1 env2 EE y.
+    destruct (ident_eq_dec x y).
+    - subst. setoid_rewrite gss. now constructor.
+    - setoid_rewrite gso; auto.
+  Qed.
+
+  Module Notations.
+    Notation "e1 ≈ e2" :=  (Equal e1 e2)
+                             (at level 70, no associativity) : env_scope.
+
+    Notation "e1 ≈⟨ R ⟩ e2" :=  (Equiv R e1 e2)
+                                  (at level 70, no associativity,
+                                   format "e1  '[' ≈⟨ R ⟩ ']'  e2") : env_scope.
+
+    Notation "e1 ⊑⟨ ee ⟩ e2" := (refines ee e1 e2)
+                                  (at level 70, no associativity,
+                                   format "e1  '[' ⊑⟨ ee ⟩ ']'  e2") : env_scope.
+    Notation "e1 ⊑ e2" := (refines eq e1 e2)
+                            (at level 70, no associativity) : env_scope.
+
+  End Notations.
+
 End Env.
+
+Open Scope env_scope.
+

@@ -135,59 +135,38 @@ Module Type EQUIV
   (** A refinement relation for Obc.
       Refining programs are allowed to replace [None] by any value. *)
 
-    (* If an environment env1 <refines> env2, it should be possible to use
-     env1 instead of env2. *)
-
-  Definition env_refines (env1 env2 : Env.t val) : Prop :=
-    forall x v, Env.find x env2 = Some v -> Env.find x env1 = Some v.
-
-  Lemma env_refines_empty:
-    forall env, env_refines env vempty.
-  Proof.
-    intros env x v Hfind. now rewrite Env.gempty in Hfind.
-  Qed.
-
-  Lemma env_refines_refl:
-    reflexive _ env_refines.
-  Proof. now intros env x v. Qed.
-
-  Lemma env_refines_trans:
-    transitive _ env_refines.
-  Proof.
-    intros env1 env2 env3 H1 H2 x v Hfind.
-    now apply H2, H1 in Hfind.
-  Qed.
-
-  Add Relation _ env_refines
-      reflexivity proved by env_refines_refl
-      transitivity proved by env_refines_trans
-        as env_refines_preorder.
+  Import Env.Notations.
 
   Lemma exp_eval_refines:
     forall menv' env1 env2 e v,
-      env_refines env1 env2 ->
+      env2 ⊑ env1 ->
       exp_eval menv' env2 e (Some v) ->
       exp_eval menv' env1 e (Some v).
   Proof.
     intros menv' env1 env2.
     induction e; intros v Henv; inversion 1; subst; eauto using exp_eval.
+    take (Env.find _ _ = Some _) and apply Henv in it as (v' & -> & ?).
+    eauto using exp_eval.
   Qed.
 
   Lemma exp_eval_refines':
     forall menv env1 env2 e vo,
-      env_refines env1 env2 ->
+      env2 ⊑ env1 ->
       exp_eval menv env2 e vo ->
-      exists vo',
-        exp_eval menv env1 e vo' /\ (forall v, vo = Some v -> vo' = Some v).
+      exists vo', exp_eval menv env1 e vo' /\ (forall v, vo = Some v -> vo' = Some v).
   Proof.
     intros menv env1 env2.
     induction e; intros vo Henv; inversion 1; subst;
       eauto using exp_eval, exp_eval_refines.
+    destruct (Env.find i env2).
+    - eauto using exp_eval_refines.
+    - destruct (Env.find i env1) eqn:Hf; eauto using exp_eval.
+      exists (Some v); split; eauto using exp_eval. discriminate.
   Qed.
 
   Lemma Forall2_exp_eval_refines':
     forall menv env1 env2 es vos,
-      env_refines env1 env2 ->
+      env2 ⊑ env1 ->
       Forall2 (exp_eval menv env2) es vos ->
       exists vos',
         Forall2 (exp_eval menv env1) es vos'
@@ -201,83 +180,11 @@ Module Type EQUIV
     eauto using Forall2_cons.
   Qed.
 
-  Lemma env_refines_add:
-    forall env1 env2 x v,
-      env_refines env1 env2 ->
-      env_refines (Env.add x v env1) (Env.add x v env2).
-  Proof.
-    intros env1 env2 x v Henv y vy Hfind.
-    destruct (ident_eq_dec x y).
-    - now subst; rewrite Env.gss in *.
-    - rewrite Env.gso in *; auto.
-  Qed.
-
-  Lemma env_refines_add_left:
-    forall env1 env2 x v,
-      env_refines env1 env2 ->
-      ~ Env.In x env2 ->
-      env_refines (Env.add x v env1) env2.
-  Proof.
-    intros env1 env2 x vx Henv Hnin y vy Hfind.
-    destruct (ident_eq_dec x y); subst.
-    rewrite Env.In_find in Hnin; exfalso; apply Hnin; eauto.
-    rewrite Env.gso; auto.
-  Qed.
-
-  Lemma env_refines_remove:
-    forall env1 env2 x,
-      env_refines env1 env2 ->
-      env_refines (Env.remove x env1) (Env.remove x env2).
-  Proof.
-    intros env1 env2 x Henv y v Hfind.
-    destruct (ident_eq_dec x y).
-    - now subst; rewrite Env.grs in *.
-    - rewrite Env.gro in *; auto.
-  Qed.
-
-  Lemma env_refines_add_remove:
-    forall env1 env2 x v,
-      env_refines env1 env2 ->
-      env_refines (Env.add x v env1) (Env.remove x env2).
-  Proof.
-    intros env1 env2 x v Henv y vy Hfind.
-    destruct (ident_eq_dec x y).
-    - now subst; rewrite Env.grs in Hfind.
-    - rewrite Env.gro in Hfind; auto.
-      rewrite Env.gso; auto.
-  Qed.
-
-  Instance env_refines_Proper:
-    Proper (Basics.flip env_refines ==> env_refines ==> Basics.impl) env_refines.
-  Proof.
-    intros m1 m1' Henv1 m2 m2' Henv2.
-    intros Henv x v Hfind.
-    now apply Henv2, Henv, Henv1 in Hfind.
-  Qed.
-
-  Instance env_refines_Equal_Proper:
-    Proper (@Env.Equal _ ==> @Env.Equal _ ==> iff) env_refines.
-  Proof.
-    intros m1 m1' Heq1 m2 m2' Heq2.
-    split; intros Henv x v Hfind.
-    - rewrite <-Heq2 in Hfind. apply Henv in Hfind.
-      now rewrite Heq1 in Hfind.
-    - rewrite Heq2 in Hfind. apply Henv in Hfind.
-      now rewrite <-Heq1 in Hfind.
-  Qed.
-
-  Instance add_env_refines_Proper:
-    Proper (@eq ident ==> @eq val ==> env_refines ==> env_refines) (@Env.add val).
-  Proof.
-    intros x y Hxy vx vy Hv m1 m2 Henv.
-    subst. now apply env_refines_add.
-  Qed.
-
   Lemma updates_refines:
-    forall ys env' env rvos' rvos,
-      env_refines env' env ->
+    forall {A} ys env' env (rvos' rvos : list (option A)),
+      env ⊑ env' ->
       Forall2 (fun vo1 vo2 => forall v, vo2 = Some v -> vo1 = Some v) rvos' rvos ->
-      env_refines (Env.updates ys rvos' env') (Env.updates ys rvos env).
+      (Env.updates ys rvos env) ⊑ (Env.updates ys rvos' env').
   Proof.
     induction ys as [|y ys]. now auto.
     intros env' env rvos' rvos Henv Hrvos.
@@ -285,35 +192,35 @@ Module Type EQUIV
     setoid_rewrite Env.updates_cons_cons.
     destruct rv' as [rv'|], rv as [rv|].
     - specialize (Hv rv eq_refl); inv Hv.
-      apply env_refines_add. now apply IHys.
-    - apply env_refines_add_remove. now apply IHys.
+      apply Env.refines_add_both; auto.
+    - apply Env.refines_add_remove; auto.
     - now specialize (Hv rv eq_refl).
-    - apply env_refines_remove. now apply IHys.
+    - apply Env.refines_remove_both; auto.
   Qed.
 
   Lemma env_refines_adds_opt:
-    forall xs m1 m2 vos1 vos2,
-      env_refines m1 m2 ->
+    forall {A} xs m1 m2 (vos1 vos2 : list (option A)),
+      m2 ⊑ m1 ->
       Forall2 (fun vo1 vo2 => forall v, vo2 = Some v -> vo1 = Some v) vos1 vos2 ->
       NoDup xs ->
       Forall (fun x => ~Env.In x m1 /\ ~Env.In x m2) xs ->
-      env_refines (Env.adds_opt xs vos1 m1) (Env.adds_opt xs vos2 m2).
+      (Env.adds_opt xs vos2 m2) ⊑ (Env.adds_opt xs vos1 m1).
   Proof.
     induction xs as [|x xs]; induction 2 as [|vo1 vo2 vos1 vos2 Hvo Hvos]; auto.
     inversion_clear 1 as [|? ? Hnxs Hndup].
     rewrite Forall_cons2. destruct 1 as ((Hnin1 & Hnin2) & Hnin).
     destruct vo1, vo2.
-    - specialize (Hvo v0 eq_refl); inv Hvo.
+    - specialize (Hvo a0 eq_refl); inv Hvo.
       setoid_rewrite Env.adds_opt_cons_cons.
-      auto using env_refines_add.
+      auto using Env.refines_add_both.
     - setoid_rewrite Env.adds_opt_cons_cons'; auto.
       setoid_rewrite Env.adds_opt_cons_cons_None.
       apply IHxs; auto.
-      now apply env_refines_add_left.
+      now apply Env.refines_add_right; auto.
       apply Forall_impl_In with (2:=Hnin).
       intros y Hyin (Hyn1 & Hyn2). split; auto.
       rewrite Env.Props.P.F.add_in_iff. destruct 1 as [HH|HH]; subst; auto.
-    - now specialize (Hvo v eq_refl).
+    - now specialize (Hvo a eq_refl).
     - setoid_rewrite Env.adds_opt_cons_cons_None; auto.
   Qed.
 
@@ -323,10 +230,10 @@ Module Type EQUIV
   Definition stmt_refines prog1 prog2 P s1 s2 : Prop :=
     forall menv env1 env2 menv' env2',
       P env1 env2 ->
-      env_refines env1 env2 ->
+      env2 ⊑ env1 ->
       stmt_eval prog2 menv env2 s2 (menv', env2') ->
       (exists env1',
-          env_refines env1' env2'
+          env2' ⊑ env1'
           /\ stmt_eval prog1 menv env1 s1 (menv', env1')).
 
   Definition method_refines prog1 prog2 P m1 m2 : Prop :=
@@ -490,7 +397,7 @@ Module Type EQUIV
 
   Theorem stmt_refines_refl:
     forall (P : Env.t val -> Env.t val -> Prop) p1 p2,
-      (forall env1 env2, env_refines env1 env2 -> P env1 env2) ->
+      (forall env1 env2, env2 ⊑ env1 -> P env1 env2) ->
       program_refines (fun c m mins => P) p1 p2 ->
       reflexive _ (stmt_refines p1 p2 P).
   Proof.
@@ -512,7 +419,7 @@ Module Type EQUIV
       intros prog1; eauto using stmt_eval.
     - (* Assign x e *)
       intros Hpr env1 Henv. exists (Env.add x v env1).
-      subst; eauto using env_refines_add, stmt_eval, exp_eval_refines.
+      subst; eauto using Env.refines_add_both, stmt_eval, exp_eval_refines.
     - (* AssignSt x e *)
       intros Hpr env1 Henv. subst; eauto using exp_eval_refines, stmt_eval.
     - (* Call ys clsid o f es *)
@@ -552,24 +459,25 @@ Module Type EQUIV
           match goal with H:Forall2 _ _ rvos |- _ =>
                           apply Forall2_map_1, Forall2_impl_In with (2:=H) end.
           intros; subst; auto.
+          now take (Env.find _ ve' = Some _) and apply Henv in it as (? & -> & ?).
       + (* P (adds ...) (adds ...) *)
         rewrite Hm1in. apply HPref.
         pose proof (m_nodupvars fm) as Hnodup.
-        unfold vempty. apply env_refines_adds_opt; auto using env_refines_empty.
+        unfold vempty. apply env_refines_adds_opt; auto.
         * now apply Forall2_swap_args.
         * now apply NoDupMembers_app_l, fst_NoDupMembers in Hnodup.
         * apply Forall_forall; split; rewrite Env.Props.P.F.empty_in_iff; auto.
       + (* env_refines (adds ...) (adds ...) *)
         rewrite Hm1in.
         apply Forall2_swap_args in Hvos'.
-        apply env_refines_adds_opt; auto using (env_refines_empty vempty).
+        apply env_refines_adds_opt; auto.
         * apply fst_NoDupMembers, m_nodupin.
         * apply Forall_forall; split;  rewrite Env.Props.P.F.empty_in_iff; auto.
   Qed.
 
   Lemma method_refines_refl:
     forall (P : list (ident * type) -> Env.t val -> Env.t val -> Prop) p1 p2,
-      (forall xs env1 env2, env_refines env1 env2 -> P xs env1 env2) ->
+      (forall xs env1 env2, env2 ⊑ env1 -> P xs env1 env2) ->
       program_refines (fun c m min env1 env2 => exists xs, P xs env1 env2) p1 p2 ->
       reflexive _ (method_refines p1 p2 P).
   Proof.
@@ -581,7 +489,7 @@ Module Type EQUIV
 
   Lemma class_refines_refl:
     forall (P : ident -> list (ident * type) -> Env.t val -> Env.t val -> Prop) p1 p2,
-      (forall m xs env1 env2, env_refines env1 env2 -> P m xs env1 env2) ->
+      (forall m xs env1 env2, env2 ⊑ env1 -> P m xs env1 env2) ->
       program_refines (fun c m min env1 env2 => exists m xs, P m xs env1 env2) p1 p2 ->
       reflexive _ (class_refines p1 p2 P).
   Proof.
@@ -593,7 +501,7 @@ Module Type EQUIV
 
   Lemma program_refines_refl:
     forall (P : ident -> ident -> list (ident * type) -> Env.t val -> Env.t val -> Prop),
-      (forall c m xs env1 env2, env_refines env1 env2 -> P c m xs env1 env2) ->
+      (forall c m xs env1 env2, env2 ⊑ env1 -> P c m xs env1 env2) ->
       (forall n env1 env2 m xs, P n m xs env1 env2 ->
                                 forall n' m' xs', P n' m' xs' env1 env2) ->
       reflexive _ (program_refines P).
@@ -626,9 +534,9 @@ Module Type EQUIV
     unfold stmt_refines in *.
     apply Hs23 with (1:=P13) (2:=Henv13) in Heval3 as (env2' & Henv23' & Heval2).
     eapply Hs12 in Heval2. 3:reflexivity.
-    destruct Heval2 as (env1' & Henv12' & Heval1);
-      eauto using env_refines_trans.
-    apply HP with (1:=P13).
+    destruct Heval2 as (env1' & Henv12' & Heval1).
+    - setoid_rewrite Henv23'; eauto.
+    - apply HP with (1:=P13).
   Qed.
 
   Lemma method_refines_trans:
@@ -713,7 +621,7 @@ Module Type EQUIV
     Variable P : ident -> ident -> list (ident * type) -> Env.t val -> Env.t val -> Prop.
 
     Hypothesis HP1:
-      forall c m xs env1 env2, env_refines env1 env2 -> P c m xs env1 env2.
+      forall c m xs env1 env2, env2 ⊑ env1 -> P c m xs env1 env2.
 
     Hypothesis HP2:
       forall n env1 env2 m xs, P n m xs env1 env2 ->
@@ -805,8 +713,8 @@ Module Type EQUIV
     assert (Hfindc2:=Hfindc). assert (Hfindm2:=Hfindm).
     apply Hpr in Hfindc as (c & p & Hfindc & Hcr & Hpr').
     apply Hcr in Hfindm as (m & Hfindm & (Hm1 & Hm2 & Hsr)).
-    assert (env_refines (Env.adds_opt (map fst m.(m_in)) vos' vempty)
-                        (Env.adds_opt (map fst fm.(m_in)) vos vempty)) as Henv.
+    assert ((Env.adds_opt (map fst fm.(m_in)) vos vempty)
+              ⊑ (Env.adds_opt (map fst m.(m_in)) vos' vempty)) as Henv.
     { rewrite <-Hm1. apply env_refines_adds_opt.
       - reflexivity.
       - now apply Forall2_swap_args in Hvos.
@@ -820,7 +728,8 @@ Module Type EQUIV
       + apply Forall2_length in Hvos. now rewrite <-Hvos, Hm1.
       + rewrite Forall2_map_2, <-Hm2. apply Forall2_same. apply Forall_forall; auto.
       + rewrite Forall2_map_1. apply Forall2_impl_In with (2:=Hrvos).
-        intros x vo Hxin Hvoin Hfind v Hv. subst. now apply Henv1' in Hv.
+        intros x vo Hxin Hvoin Hfind v Hv. subst.
+        now apply Henv1' in Hv as (? & -> & ?).
     - rewrite Hm1. apply Forall2_length in Hvos.
       eapply HP; eauto. now rewrite <-Hvos, Hlvos.
   Qed.
@@ -851,26 +760,6 @@ Module Type EQUIV
     unfold wt_method, meth_vars. intros * Hpr WTm.
     destruct m as [n ins vars outs s nodup good]; simpl in *.
     apply wt_stmt_program_refines with (1:=Hpr) (2:=WTm).
-  Qed.
-
-  Lemma env_refines_In:
-    forall env1 env2,
-      env_refines env1 env2 ->
-      forall x, Env.In x env2 ->
-                Env.In x env1.
-  Proof.
-    setoid_rewrite Env.In_find.
-    intros * Henv x (v & Hin); eauto.
-  Qed.
-
-  Lemma env_refines_not_In:
-    forall env1 env2,
-      env_refines env1 env2 ->
-      forall x, ~Env.In x env1 ->
-                ~Env.In x env2.
-  Proof.
-    setoid_rewrite Env.In_find.
-    intros env1 env2 Henv x H (v & Hin); eauto.
   Qed.
 
   (* TODO: Move earlier *)
@@ -914,21 +803,21 @@ Module Type EQUIV
   Qed.
 
   Lemma env_refines_updates:
-    forall ws vos env1 env2,
-      env_refines env1 env2 ->
+    forall {A} ws (vos : list (option A)) env1 env2,
+      env2 ⊑ env1 ->
       (forall x, In x ws -> ~Env.In x env2) ->
-      env_refines (Env.updates ws vos env1) env2.
+      env2 ⊑ (Env.updates ws vos env1).
   Proof.
     induction ws as [|w ws IH]; auto.
     intros vos env1 env2 Henv Hin.
     destruct vos. now unfold Env.updates; simpl.
     rewrite Env.updates_cons_cons.
     destruct o; simpl.
-    - apply env_refines_add_left; auto using in_eq.
+    - apply Env.refines_add_right; auto using in_eq.
       now apply IH; auto using in_cons.
     - cut (Env.Equal env2 (Env.remove w env2)).
       + intro Henv2. setoid_rewrite Henv2.
-        apply env_refines_remove.
+        apply Env.refines_remove_both.
         now apply IH; auto using in_cons.
       + intro x.
         destruct (ident_eq_dec x w); [|now rewrite Env.gro].
