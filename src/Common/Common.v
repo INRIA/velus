@@ -804,6 +804,17 @@ Section TypesAndClocks.
         * constructor 2; apply IHxs; eauto.
   Qed.
 
+  Lemma idty_InMembers:
+    forall x ty (xs : list (ident * (type * clock))),
+      In (x, ty) (idty xs) ->
+      InMembers x xs.
+  Proof.
+    intros * Ix.
+    unfold idty in Ix.
+    apply in_map_iff in Ix as ((y, (yt, yc)) & Dy & Iy). inv Dy.
+    apply In_InMembers with (1:=Iy).
+  Qed.
+
   Global Instance idty_Permutation_Proper:
     Proper (@Permutation (ident * (type * clock))
             ==> @Permutation (ident * type)) idty.

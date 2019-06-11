@@ -4,6 +4,7 @@ From Velus Require Import Environment.
 From Velus Require Import Clocks.
 From Velus Require Export CoreExpr.Stream.
 From Velus Require Import CoreExpr.CESyntax.
+From Velus Require Import CoreExpr.CETyping.
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEIsFree.
 
@@ -18,6 +19,7 @@ Module Type CEPROPERTIES
        (Import Syn   : CESYNTAX        Op)
        (       Str   : STREAM          Op OpAux)
        (Import Sem   : CESEMANTICS Ids Op OpAux Syn Str)
+       (Import Typ   : CETYPING    Ids Op       Syn)
        (Import IsF   : CEISFREE    Ids Op       Syn).
 
   Lemma sem_var_instant_switch_env:
@@ -166,6 +168,87 @@ Module Type CEPROPERTIES
             constructor; auto.
   Qed.
 
+  Local Ltac solve_switch_env_obligation :=
+    match goal with
+    | [Henv: Env.refines ?R ?env1 ?env2 |- forall x, ?P -> Env.find x ?env2 = Env.find x ?Env1] =>
+      let y := fresh "y" in
+      let H := fresh "H" in
+      intros y H; try match type of H with _ \/ _ => destruct H end;
+      (apply Env.refines_orel_find with (x0:=y) in Henv; auto;
+       symmetry; apply orel_eq, Henv)
+    | [Henv: Env.refines ?R ?env1 ?env2 |- Env.find ?x ?env2 = Env.find ?x ?Env1] =>
+      apply Env.refines_orel_find with (x0:=x) in Henv; auto;
+      symmetry; apply orel_eq, Henv
+    end.
+
+  (** Well-typed expressions and free variables *)
+
+  Lemma Is_free_in_wt_lexp:
+    forall (xs : list (ident * (Op.type * clock))) x e,
+      Is_free_in_lexp x e ->
+      wt_lexp (idty xs) e ->
+      InMembers x xs.
+  Proof.
+    induction e; inversion_clear 1; inversion_clear 1; eauto using idty_InMembers.
+    take (_ \/ _) and destruct it; auto.
+  Qed.
+
+  Lemma Is_free_in_wt_clock:
+    forall (xs : list (ident * (Op.type * clock))) x ck,
+      Is_free_in_clock x ck ->
+      wt_clock (idty xs) ck ->
+      InMembers x xs.
+  Proof.
+    induction ck; inversion_clear 1; inversion_clear 1;
+      eauto using idty_InMembers.
+  Qed.
+
+  Lemma Is_free_in_wt_laexps:
+    forall (xs : list (ident * (Op.type * clock))) x ck es,
+      Is_free_in_laexps x ck es ->
+      Forall (wt_lexp (idty xs)) es ->
+      wt_clock (idty xs) ck ->
+      InMembers x xs.
+  Proof.
+    intros * Fs WT WC.
+    inv Fs; eauto using Is_free_in_wt_clock.
+    take (Exists (Is_free_in_lexp _) _) and
+         apply Exists_exists in it as (? & Ix & ?).
+    eapply Forall_forall in WT; eauto using Is_free_in_wt_lexp.
+  Qed.
+
+  Lemma Is_free_in_wt_cexp:
+    forall (xs : list (ident * (Op.type * clock))) x e,
+      Is_free_in_cexp x e ->
+      wt_cexp (idty xs) e ->
+      InMembers x xs.
+  Proof.
+    induction e; inversion_clear 1; inversion_clear 1; auto;
+      eauto using Is_free_in_wt_lexp, idty_InMembers.
+  Qed.
+
+  Lemma Is_free_in_wt_laexp:
+    forall (xs : list (ident * (Op.type * clock))) x ck e,
+      Is_free_in_laexp x ck e ->
+      wt_lexp (idty xs) e ->
+      wt_clock (idty xs) ck ->
+      InMembers x xs.
+  Proof.
+    intros * Fx WTe WTc.
+    inv Fx; eauto using Is_free_in_wt_lexp, Is_free_in_wt_clock.
+  Qed.
+
+  Lemma Is_free_in_wt_caexp:
+    forall (xs : list (ident * (Op.type * clock))) x ck e,
+      Is_free_in_caexp x ck e ->
+      wt_cexp (idty xs) e ->
+      wt_clock (idty xs) ck ->
+      InMembers x xs.
+  Proof.
+    intros * Fx WTe WTc.
+    inv Fx; eauto using Is_free_in_wt_cexp, Is_free_in_wt_clock.
+  Qed.
+
 End CEPROPERTIES.
 
 Module CEProperties
@@ -175,7 +258,8 @@ Module CEProperties
        (Import Syn   : CESYNTAX        Op)
        (       Str   : STREAM          Op OpAux)
        (Import Sem   : CESEMANTICS Ids Op OpAux Syn Str)
+       (Import Typ   : CETYPING    Ids Op       Syn)
        (Import IsF   : CEISFREE    Ids Op       Syn)
-       <: CEPROPERTIES Ids Op OpAux Syn Str Sem IsF.
-  Include CEPROPERTIES Ids Op OpAux Syn Str Sem IsF.
+       <: CEPROPERTIES Ids Op OpAux Syn Str Sem Typ IsF.
+  Include CEPROPERTIES Ids Op OpAux Syn Str Sem Typ IsF.
 End CEProperties.
