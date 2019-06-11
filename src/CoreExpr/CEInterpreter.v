@@ -255,6 +255,19 @@ Module Type CEINTERPRETER
           inv HH; eauto using sem_lexp_instant.
     Qed.
 
+    Lemma omap_interp_correct':
+      forall {E V} (sem : E -> V -> Prop) interp,
+        (forall (e : E) (v : V), sem e v -> interp e = Some v) ->
+        forall es vs,
+          Forall2 sem es vs -> omap interp es = Some vs.
+    Proof.
+      intros E V sem interp Hcor.
+      induction es as [|e es IH]; simpl; inversion_clear 1; auto.
+      take (sem _ _) and apply Hcor in it as ->.
+      take (Forall2 sem _ _) and apply IH in it as ->.
+      reflexivity.
+    Qed.
+
     Lemma omap_interp_correct:
       forall {E V} sem interp,
         (forall (e : E) (v : V), sem e v <-> interp e = Some v) ->
@@ -262,19 +275,16 @@ Module Type CEINTERPRETER
           Forall2 sem es vs <-> omap interp es = Some vs.
     Proof.
       intros E V sem interp Hcor.
-      induction es as [|e es IH]; simpl.
-      now split; inversion_clear 1; [auto|constructor].
       split; intro HH.
-      - inv HH.
-        repeat match goal with
-               | H:Forall2 _ _ _ |- _ => apply IH in H; rewrite H
-               | H:sem _ _ |- _ => apply Hcor in H; rewrite H
-               end; auto.
-      - destruct (interp e) as [ev|] eqn:He; [|discriminate].
-        apply Hcor in He.
-        destruct (omap interp es) as [evs|]; [|discriminate].
-        edestruct IH as (N & IH'); clear IH N; specialize (IH' eq_refl).
-        inv HH; auto.
+      eapply omap_interp_correct' in HH; eauto.
+      now intros e v; destruct (Hcor e v).
+      revert vs HH.
+      induction es as [|e es IH]; simpl in *. now inversion_clear 1.
+      intros vs HH.
+      destruct (interp e) eqn:Ie; try discriminate.
+      apply Hcor in Ie.
+      destruct (omap interp es) eqn:Ies; try discriminate.
+      inv HH; auto.
     Qed.
 
     Lemma interp_lexps_instant_correct:
