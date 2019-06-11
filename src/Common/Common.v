@@ -4,7 +4,7 @@ From Coq Require Import List.
 From Coq Require Import Sorting.Permutation.
 
 From Coq Require Import Setoid.
-From Coq Require Import Relations.
+From Coq Require Import Relations RelationPairs.
 From Coq Require Import Morphisms.
 
 Import ListNotations.
@@ -708,6 +708,17 @@ Proof.
   - intro Hin. apply SetoidList.InA_alt in Hin as (y & Hy & Hin); subst; auto.
 Qed.
 
+(** Miscellaneous *)
+
+Lemma relation_equivalence_subrelation:
+  forall {A} (R1 R2 : relation A),
+    relation_equivalence R1 R2 <-> (subrelation R1 R2 /\ subrelation R2 R1).
+Proof.
+  intros.
+  unfold relation_equivalence, predicate_equivalence,
+  pointwise_lifting, subrelation. firstorder.
+Qed.
+
 (** types and clocks *)
 
 Section TypesAndClocks.
@@ -1053,4 +1064,402 @@ Proof.
   intros until b2. intros Ea Eb.
   constructor; auto.
 Qed.
+
+Instance orel_subrelation_Proper {A}:
+  Proper (@subrelation A ==> eq ==> eq ==> Basics.impl) orel.
+Proof.
+  intros R2 R1 HR ox2 ox1 ORx oy2 oy1 ORy HH; subst.
+  destruct ox1, oy1; inv HH; auto.
+  take (R2 _ _) and apply HR in it. now constructor.
+Qed.
+
+Instance orel_equivalence_Proper {A}:
+  Proper (@relation_equivalence A ==> eq ==> eq ==> iff) orel.
+Proof.
+  intros R2 R1 HR ox2 ox1 ORx oy2 oy1 ORy; subst.
+  apply relation_equivalence_subrelation in HR as (HR1 & HR2).
+  split; intro HH. now setoid_rewrite <-HR1. now setoid_rewrite <-HR2.
+Qed.
+
+(** The option monad *)
+
+(* Do notation, lemmas and tactis for the option monad taken directly
+     from CompCert's error_monad_scope (X. Leroy).
+
+     We introduce several operators to facilitate Proper lemmas around the
+     orel relation and a notation for improved readability. *)
+
+Definition obind {A B: Type} (f: option A) (g: A -> option B) : option B :=
+  match f with
+  | Some x => g x
+  | None => None
+  end.
+
+Definition obind2 {A B C: Type} (f: option (A * B)) (g: A -> B -> option C) : option C :=
+  match f with
+  | Some (x, y) => g x y
+  | None => None
+  end.
+
+Notation "'do' X <- A ; B" := (obind A (fun X => B))
+                                (at level 200, X ident, A at level 100, B at level 200)
+                              : option_monad_scope.
+
+Notation "'do' ( X , Y ) <- A ; B" := (obind2 A (fun X Y => B))
+                                        (at level 200, X ident, Y ident, A at level 100, B at level 200)
+                                      : option_monad_scope.
+
+Remark obind_inversion:
+  forall (A B: Type) (f: option A) (g: A -> option B) (y: B),
+    obind f g = Some y ->
+    exists x, f = Some x /\ g x = Some y.
+Proof.
+  intros until y. destruct f; simpl; intros.
+  exists a; auto. discriminate.
+Qed.
+
+Remark obind2_inversion:
+  forall {A B C: Type} (f: option (A*B)) (g: A -> B -> option C) (z: C),
+    obind2 f g = Some z ->
+    exists x, exists y, f = Some (x, y) /\ g x y = Some z.
+Proof.
+  intros until z. destruct f; simpl.
+  destruct p; simpl; intros. exists a; exists b; auto.
+  intros; discriminate.
+Qed.
+
+Local Open Scope option_monad_scope.
+
+(* TODO: rename to ommap ? *)
+
+Remark omap_inversion:
+  forall (A B: Type) (f: A -> option B) (l: list A) (l': list B),
+    omap f l = Some l' ->
+    Forall2 (fun x y => f x = Some y) l l'.
+Proof.
+  induction l; simpl; intros.
+  inversion_clear H. constructor.
+  destruct (f a) eqn:Hfa; [|discriminate].
+  destruct (omap f l); inversion_clear H.
+  constructor; auto.
+Qed.
+
+(** The [omonadInv H] tactic below simplifies hypotheses of the form
+<<
+        H: (do x <- a; b) = OK res
+>>
+       By definition of the obind operation, both computations [a] and
+       [b] must succeed for their composition to succeed.  The tactic
+       therefore generates the following hypotheses:
+
+         x: ...
+        H1: a = OK x
+        H2: b x = OK res
+ *)
+
+Ltac omonadInv1 H :=
+  match type of H with
+  | (Some _ = Some _) =>
+    inversion H; clear H; try subst
+  | (None = Some _) =>
+    discriminate
+  | (obind ?F ?G = Some ?X) =>
+    let x := fresh "x" in (
+      let EQ1 := fresh "EQ" in (
+        let EQ2 := fresh "EQ" in (
+          destruct (obind_inversion F G H) as (x & EQ1 & EQ2);
+          clear H; try (omonadInv1 EQ2))))
+  | (obind2 ?F ?G = Some ?X) =>
+    let x1 := fresh "x" in (
+      let x2 := fresh "x" in (
+        let EQ1 := fresh "EQ" in (
+          let EQ2 := fresh "EQ" in (
+            destruct (obind2_inversion F G H) as (x1 & x2 & EQ1 & EQ2);
+            clear H; try (omonadInv1 EQ2)))))
+  | (match ?X with left _ => _ | right _ => None end = Some _) =>
+    destruct X; [try (omonadInv1 H) | discriminate]
+  | (match (negb ?X) with true => _ | false => None end = Some _) =>
+    destruct X as [] eqn:?; [discriminate | try (omonadInv1 H)]
+  | (match ?X with true => _ | false => None end = Some _) =>
+    destruct X as [] eqn:?; [try (omonadInv1 H) | discriminate]
+  | (omap ?F ?L = Some ?M) =>
+    generalize (omap_inversion F L H); intro
+  end.
+
+Ltac omonadInv H :=
+  omonadInv1 H ||
+             match type of H with
+             | (?F _ _ _ _ _ _ _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ _ _ _ _ _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ _ _ _ _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ _ _ _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ _ _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             | (?F _ = Some _) =>
+               ((progress simpl in H) || unfold F in H); omonadInv1 H
+             end.
+
+(* Reasoning about the option monad *)
+
+Section OptionReasoning.
+
+  Context {A B C : Type}.
+
+  (* Rewriting the first argument (in [orel RA]) induces a reflexivity/Proper
+     requirement on the second (higher-order) argument. The simplest
+     solution is to declare it [Proper (RA ==> orel RB)]. *)
+  Global Add Parametric Morphism
+         {RA : relation A} {RB : relation (option B)} `{Reflexive _ RB} : obind
+      with signature (orel RA ==> (RA ==> RB) ==> RB)
+        as obind_orel_ho.
+  Proof.
+    intros oa1 oa2 Eoa f1 f2 Ef.
+    destruct oa1 as [a1|]; inv Eoa; auto.
+    now take (RA _ _) and specialize (Ef _ _ it).
+  Qed.
+
+  Global Add Parametric Morphism (RB : relation (option B)) `{Reflexive _ RB} : obind
+      with signature (@eq (option A) ==> (pointwise_relation A RB) ==> RB)
+        as obind_pointwise.
+  Proof.
+    intros f g1 g2 PW.
+    destruct f; simpl; auto.
+  Qed.
+
+  Global Add Parametric Morphism
+         (RA : relation A) (RB : relation B) (RC : relation (option C))
+         `{Reflexive _ RC} : obind2
+      with signature (orel (RA * RB) ==> (RA ==> RB ==> RC) ==> RC)
+        as obind2_orel_ho.
+  Proof.
+    intros oa1 oa2 Eoa f1 f2 Ef.
+    destruct oa1 as [(a1, b1)|]; inv Eoa; auto.
+    take (A * B)%type and destruct it.
+    take ((RA * RB)%signature _ _) and destruct it as (HA & HB).
+    specialize (Ef _ _ HA _ _ HB). auto.
+  Qed.
+
+  Lemma orel_obind_intro:
+    forall (RA: relation A) {RB: relation B}
+      {oa1 oa2 : option A} {f1 f2 : A -> option B},
+      orel RA oa1 oa2 ->
+      (forall a1 a2, oa1 = Some a1 ->
+                oa2 = Some a2 ->
+                RA a1 a2 ->
+                orel RB (f1 a1) (f2 a2)) ->
+      orel RB (obind oa1 f1) (obind oa2 f2).
+  Proof.
+    intros * Ha Hf.
+    destruct oa1 as [a1|]; inv Ha; simpl; auto.
+  Qed.
+
+  Lemma orel_obind_intro_eq:
+    forall {RB: relation B} {oa1 oa2 : option A} {f1 f2 : A -> option B},
+      oa1 = oa2 ->
+      (forall a, oa1 = Some a ->
+            oa2 = Some a ->
+            orel RB (f1 a) (f2 a)) ->
+      orel RB (obind oa1 f1) (obind oa2 f2).
+  Proof.
+    intros * Ha Hf.
+    apply orel_obind_intro with (RA:=eq); subst; [reflexivity|].
+    intros a1 a2 Ha H2.
+    destruct oa2; try discriminate.
+    repeat match goal with H:Some _ = Some _ |- _ => inv H end; auto.
+  Qed.
+
+  Lemma orel_obind_intro_same:
+    forall {RB: relation B} {oa : option A} {f1 f2 : A -> option B},
+      (forall a, oa = Some a ->
+            orel RB (f1 a) (f2 a)) ->
+      orel RB (obind oa f1) (obind oa f2).
+  Proof.
+    intros * Hf.
+    apply (orel_obind_intro eq); [reflexivity|].
+    intros * a Haa; subst; inversion Haa; subst. auto.
+  Qed.
+
+  Lemma ofold_right_altdef:
+    forall (f : A -> B -> option B) xs acc,
+      ofold_right f acc xs = fold_right (fun x acc => obind acc (f x)) acc xs.
+  Proof. reflexivity. Qed.
+
+  Lemma ofold_right_cons:
+    forall (f : A -> B -> option B) x xs acc,
+      ofold_right f acc (x::xs) = obind (ofold_right f acc xs) (f x).
+  Proof. reflexivity. Qed.
+
+  Global Instance ofold_right_Proper (RA: relation A) (RB: relation B):
+    Proper ((RA ==> RB ==> orel RB)
+              ==> orel RB ==> SetoidList.eqlistA RA ==> orel RB) ofold_right.
+  Proof.
+    intros f1 f2 Ef a1 a2 RBa xs1 xs2 RAxs.
+    revert xs2 RAxs; induction xs1; intros xs2; inversion 1; subst; auto.
+    inv RAxs. simpl.
+    take (SetoidList.eqlistA _ _ _) and specialize (IHxs1 _ it).
+    destruct (ofold_right f1 a1 xs1); inv IHxs1; auto.
+    now apply Ef.
+  Qed.
+
+  Global Instance omap_Proper (RA: relation A):
+    Proper ((RA ==> orel RA) ==> SetoidList.eqlistA RA
+                           ==> orel (SetoidList.eqlistA RA)) omap.
+  Proof.
+    intros f' f Ef xs' xs Exs.
+    induction Exs; simpl. now constructor.
+    take (RA x x') and pose proof (Ef _ _ it) as Efx.
+    destruct (f' x); inv Efx; auto.
+    destruct (omap f' l); inv IHExs; auto.
+    constructor; auto.
+  Qed.
+
+  Global Instance omap_Proper_pointwise (RA: relation A):
+    Proper (pointwise_relation A (orel RA) ==> eq
+                               ==> orel (SetoidList.eqlistA RA)) omap.
+  Proof.
+    intros f' f Ef xs' xs Exs; subst.
+    induction xs. now constructor.
+    simpl. specialize (Ef a). destruct (f' a); inv Ef; auto.
+    destruct (omap f' xs); inv IHxs; auto.
+    constructor. auto.
+  Qed.
+
+  Lemma orel_omap:
+    forall (f g : A -> option B) xs,
+      (forall x, orel eq (f x) (g x)) ->
+      orel eq (omap f xs) (omap g xs).
+  Proof.
+    intros f g xs HH.
+    induction xs; simpl. now rewrite orel_inversion.
+    specialize (HH a).
+    destruct (f a); inv HH; auto.
+    destruct (omap f xs); inv IHxs; auto.
+  Qed.
+
+  Lemma orel_omap_eqlistA (RB : relation B) :
+    forall f g (xs : list A),
+      (forall x, orel RB (f x) (g x)) ->
+      orel (SetoidList.eqlistA RB) (omap f xs) (omap g xs).
+  Proof.
+    intros f g xs HH.
+    induction xs; simpl. now rewrite orel_inversion.
+    specialize (HH a).
+    destruct (f a); inv HH; auto.
+    destruct (omap f xs); inv IHxs; auto.
+    constructor. auto.
+  Qed.
+
+  Lemma orel_option_map (RB :relation B):
+    forall (f g : A -> B) x,
+      (forall x, RB (f x) (g x)) ->
+      orel RB (option_map f x) (option_map g x).
+  Proof.
+    intros f g x HH.
+    destruct x; simpl; auto.
+    constructor. auto.
+  Qed.
+
+  (* Helper lemma for rewriting modulo an equivalence at the head of an [obind]
+     on the left-hand side of an [orel].
+     Usage [setoid_rewrite (orel_obind_head EQ)].
+
+     Rewriting with [orel RA f f'] in a goal like
+     [forall z, orel RB (do x <- f; g x) (Some z)]
+     requires showing that [g] is [Reflexive] or [Proper] modulo [RA], where
+     [g] may be an abstraction over the non-[None] result of [f] or a
+     sequence of [obind]s with nested abstractions. In any case, the
+     automatically generated proof obligations often cause [typeclasses eauto]
+     to fail or even loop. When the tactic does fail, it is difficult to
+     translate the error message and debug trace into the required (often
+     adhoc) [Proper] terms. This lemma is a lightweight attempt to solve
+     the problem by generating and exposing the required term for interactive
+     solution. Note that when rewriting under binders (e.g., [z]), only the
+     right-hand side of the [orel] may depend on them (not [f], [f'] or [g]).
+
+     Note: successive rewriting over a nesting of [obind]s modulo the same
+     relation requires repeatedly solving the same obligations. E.g., in
+     [do x <- f; do y <- g x; do z <- h x y; Some (x, y, z)],
+     [Proper (RA ==> orel RA) (fun x => do y <- g x; do z <- h x y; Some (x, y, z))]
+     contains an obligation that also appears for a second rewrite
+     [Proper (RA ==> orel RA) (fun y => do z <- h x y; Some (x, y, z))]. Is
+     this inevitable? *)
+  Lemma orel_obind_head
+        {RA : relation A} {RB : relation B} `{Equivalence _ RB} {f f'}:
+    orel RA f f' ->
+    forall g, Proper (RA ==> orel RB) g ->
+         forall h, orel RB (obind f g) h <-> orel RB (obind f' g) h.
+  Proof.
+    intros Eff g h Pg. setoid_rewrite Eff. reflexivity.
+  Qed.
+
+  Lemma orel_obind2_head
+        {RA : relation A} {RB : relation B} {RC : relation C}
+        `{Equivalence _ RC} {f f'}:
+    orel (RA * RB) f f' ->
+    forall g, Proper (RA ==> RB ==> orel RC) g ->
+         forall h, orel RC (obind2 f g) h <-> orel RC (obind2 f' g) h.
+  Proof.
+    intros Eff g h Pg. setoid_rewrite Eff. reflexivity.
+  Qed.
+
+End OptionReasoning.
+
+Definition orel_obind_intro_endo {A} {R: relation A}
+  := @orel_obind_intro A A R R.
+
+Lemma orel_obind2_intro:
+  forall {A B C} (RA: relation A) (RB: relation B) {RC: relation C}
+    {oab1 oab2 : option (A * B)} {f1 f2 : A -> B -> option C},
+    orel (RA * RB) oab1 oab2 ->
+    (forall a1 b1 a2 b2, oab1 = Some (a1, b1) ->
+                    oab2 = Some (a2, b2) ->
+                    RA a1 a2 ->
+                    RB b1 b2 ->
+                    orel RC (f1 a1 b1) (f2 a2 b2)) ->
+    orel RC (obind2 oab1 f1) (obind2 oab2 f2).
+Proof.
+  intros * Ha Hf.
+  apply (orel_obind_intro (RelProd RA RB)); auto.
+  intros (a1, b1) (a2, b2) H1 H2; subst.
+  rewrite orel_inversion in Ha. destruct Ha; auto.
+Qed.
+
+Ltac split_orel_obinds :=
+  repeat intro;
+  repeat progress
+         (subst*; match goal with
+                  | |- orel ?RB (match ?e with _ => _ end) (match ?e with _ => _ end) =>
+                    destruct e; split_orel_obinds
+                  | H: ?equive ?e1 ?e2
+                    |- orel ?RA (match ?e1 with _ => _ end)
+                           (match ?e2 with _ => _ end) =>
+                    setoid_rewrite H
+                  | |- orel ?RB (obind ?oa ?f1) (obind ?oa ?f2) =>
+                    eapply orel_obind_intro_same; split_orel_obinds
+                  | |- orel ?RB (obind ?oa1 ?f1) (obind ?oa2 ?f2) =>
+                    eapply orel_obind_intro; split_orel_obinds
+                  | |- orel ?RB (obind2 ?oa1 ?f1) (obind2 ?oa2 ?f2) =>
+                    eapply orel_obind2_intro; split_orel_obinds
+                  | |- orel ?RB (Some _) (Some _) =>
+                    eapply orel_inversion
+                  | |- RelProd _ _ _ _ =>
+                    eapply pair_compat; split_orel_obinds
+                  end; (reflexivity || eassumption || idtac)).
+
+Ltac rewrite_orel_obinds :=
+  repeat progress
+         (subst; match goal with
+                 | [ H:?equiv ?L ?R |- context [ ?L ] ] => setoid_rewrite H
+                 end; try reflexivity).
+
+Ltac solve_orel_obinds := split_orel_obinds; repeat rewrite_orel_obinds.
+
 

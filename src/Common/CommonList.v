@@ -98,7 +98,7 @@ Section Extra.
     simpl. now setoid_rewrite IHxs.
   Qed.
 
-  Remark not_In_app:
+  Remark not_In2_app:
     forall (x: A) l1 l2,
       ~ In x l2 ->
       In x (l1 ++ l2) ->
@@ -111,6 +111,14 @@ Section Extra.
       inversion Hin; subst.
       + apply in_eq.
       + right; now apply IHl1.
+  Qed.
+
+  Lemma not_In_app:
+    forall xs ys (x : A),
+      ~In x (xs ++ ys) <-> (~In x xs /\ ~In x ys).
+  Proof.
+    setoid_rewrite in_app.
+    split; [intro HH|intros (HH1 & HH2) [HH3|HH4]]; auto using Decidable.not_or.
   Qed.
 
   Lemma partition_switch:
@@ -255,6 +263,13 @@ Section Extra.
   Proof.
     destruct xs; simpl; intros; try discriminate.
     now inv H.
+  Qed.
+
+  Lemma hd_error_In:
+    forall xs (x : A),
+      hd_error xs = Some x -> In x xs.
+  Proof.
+    intros * Hxs. destruct xs; inv Hxs. now constructor.
   Qed.
 
 End Extra.
@@ -2186,7 +2201,7 @@ Section InMembers.
           apply Hninm. now constructor 2.
     - now rewrite IHHperm1.
   Qed.
-  
+
   Lemma NoDupMembers_app_l:
     forall ws xs,
       NoDupMembers (ws ++ xs) -> NoDupMembers ws.
@@ -2565,6 +2580,12 @@ Section Well_founded_FixPoint.
 End Well_founded_FixPoint.
 
 Unset Implicit Arguments.
+
+Lemma eqlistA_eq_eq {A}:
+  relation_equivalence (SetoidList.eqlistA (@eq A)) (eq).
+Proof.
+  intros xs1 xs2. now split; rewrite SetoidList.eqlistA_altdef, Forall2_eq.
+Qed.
 
 (** Tactics for inductions on lists *)
 
