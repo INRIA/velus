@@ -488,7 +488,7 @@ Module Env.
       apply In_find; eauto.
     Qed.
 
-    Lemma Env_equiv_orel {R : relation A} :
+    Lemma Equiv_orel {R : relation A} :
       forall S T, Env.Equiv R S T <-> (forall x, (orel R) (Env.find x S) (Env.find x T)).
     Proof.
       split; [intros (I & M)|intros LR].
