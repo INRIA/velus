@@ -168,7 +168,7 @@ Module Type CEPROPERTIES
             constructor; auto.
   Qed.
 
-  Local Ltac solve_switch_env_obligation :=
+  Ltac solve_switch_env_obligation :=
     match goal with
     | [Henv: Env.refines ?R ?env1 ?env2 |- forall x, ?P -> Env.find x ?env2 = Env.find x ?Env1] =>
       let y := fresh "y" in
