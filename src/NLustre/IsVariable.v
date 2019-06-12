@@ -152,7 +152,7 @@ Module Type ISVARIABLE
   Proof.
     intros.
     apply Is_variable_in_var_defined.
-    eapply not_In_app; eauto using n.(n_vout).
+    eapply not_In2_app; eauto using n.(n_vout).
     unfold vars_defined; simpl; setoid_rewrite flat_map_concat_map.
     rewrite <- concat_app, <-map_app, Permutation_app_comm, filter_notb_app.
     pose proof n.(n_defd) as HH.

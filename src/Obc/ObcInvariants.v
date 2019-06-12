@@ -193,7 +193,6 @@ Module Type OBCINVARIANTS
   Proof.
     intros p Hcall.
     induction s; intros * Hnnv Heval x Hin; inv Heval; inv Hnnv; eauto.
-    - apply Env.Props.P.F.add_in_iff; auto.
     - destruct b; eauto.
     - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.
       apply Hcall in He; eauto using Env.updates_mono, Forall2_exp_eval_not_None.
