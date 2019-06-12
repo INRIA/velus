@@ -310,7 +310,7 @@ Module Type NLINTERPRETER
       destruct eq; [contradiction| |contradiction].
       simpl in *. destruct i0; inv D; try contradiction.
       simpl. rewrite Env.gss. inversion_clear OnG as [|?? OnG'].
-      inv Meq.
+      inversion_clear Meq as [| |???????????????????????? Msr|].
       + (* without reset *)
         take (hd_error _ = Some _) and inv it.
         take (msem_node G _ _ _ _ _) and specialize (IH _ _ _ _ _ OnG' it).
@@ -321,8 +321,7 @@ Module Type NLINTERPRETER
         take (hd_error _ = Some _) and inv it.
         take (sub_inst_n x M Mx) and rename it into M_Mx.
         specialize (M_Mx 0). unfold find_inst in M_Mx; rewrite M_Mx.
-        take (msem_reset _ _ _ _ _ _ _) and inversion_clear it as [?????? Insts].
-        specialize (Insts 0) as (Mk & Mk' & Msem & MM1 & MM2).
+        specialize (Msr 0) as (Mk & Mk' & Msem & MM1 & MMk2).
         specialize (IH _ _ _ _ _ OnG' Msem) as ->.
         now specialize (MM1 0 eq_refl) as ->.
   Qed.
@@ -431,7 +430,7 @@ Module Type NLINTERPRETER
       sub_inst_n x M Mx ->
       memory_masked (count rs i) rs Mx Mk ->
       reset_of ys rs ->
-      msem_node G f (mask (all_absent (ls 0)) (count rs i) rs ls) Mk Mk' xss ->
+      msem_node G f (mask (count rs i) rs ls) Mk Mk' xss ->
       maybe_reset (init_memory G) f (M i) x (Some (ys i)) ⌈≋⌉ Some (Mk i).
   Proof.
     intros * OG M_Mx Mx_Mk Ryr MSN.
@@ -497,7 +496,7 @@ Module Type NLINTERPRETER
         take (forall x, Is_required_by_eq x equ -> _) and apply it in Rx as [|Ix];
           rewrite (Env.dom_use Inx); apply in_or_app; auto.
         take (Is_defined_in x eqs) and apply Is_defined_in_vars_defined in it; auto. }
-      inv Meq; simpl.
+      inversion Meq as [| |???????????????????????? MSr|]; subst; simpl.
       + (* EqDef *)
         take (sem_caexp _ _ _ _ _) and specialize (it i); pose (Sce:=it).
         apply sem_caexp_instant_switch_env with (R':=env') in Sce;
@@ -548,7 +547,6 @@ Module Type NLINTERPRETER
         apply sem_var_instant_switch_env with (R':=env') in Sy;
           [|now solve_switch_env_obligation].
         apply interp_var_instant_correct in Sy as ->.
-        take (msem_reset _ _ _ _ _ _ _) and inversion_clear it as [?????? MSr].
         specialize (MSr (count rs i)) as (Mk & Mk' & Snr & SMk & SMk').
         take (sub_inst_n x M Mx) and rename it into Msub.
         take (reset_of ys rs) and rename it into Ryr.
@@ -560,7 +558,7 @@ Module Type NLINTERPRETER
           [|now solve_switch_env_obligation].
         apply interp_lexps_instant_correct in Se as ->.
         take (msem_node _ _ _ _ _ _) and apply Hf__node in it.
-        repeat rewrite (mask_transparent _ _ _ _ _ eq_refl) in it.
+        repeat rewrite (mask_transparent _ _ _ _ eq_refl) in it.
         simpl; setoid_rewrite (orel_obind2_head it);
           [clear it; simpl|solve_orel_obinds].
         take (sem_vars H xs xss) and specialize (it i).
