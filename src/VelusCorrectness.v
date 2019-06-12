@@ -26,7 +26,7 @@ Import Str.
 Import OpAux.
 Import Interface.Op.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import ObcToClight.NLustreElab.
+From Velus Require Import Lustre.LustreElab.
 
 From Coq Require Import String.
 From Coq Require Import List.
@@ -36,7 +36,7 @@ From Coq Require Import Omega.
 Open Scope error_monad_scope.
 
 Parameter schedule      : ident -> list SB.Syn.equation -> list positive.
-Parameter print_snlustre: global -> unit.
+Parameter print_nlustre : global -> unit.
 Parameter print_sybloc  : SB.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
 Parameter do_fusion     : unit -> bool.
@@ -88,7 +88,7 @@ Definition schedule_program (P: SB.Syn.program) : res SB.Syn.program :=
 
 Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
   OK g
-     @@ print print_snlustre
+     @@ print print_nlustre
      @@ NL2SB.translate
      @@ print print_sybloc
      @@@ schedule_program
@@ -106,27 +106,28 @@ Axiom add_builtins_spec:
 
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
   elab_declarations D
-                    @@@ (fun g => nl_to_cl main_node (proj1_sig g))
+                    @@@ (fun G => L2NL.to_global (proj1_sig G))
+                    @@@ nl_to_cl main_node
                     @@ print print_Clight
                     @@ add_builtins
                     @@@ transf_clight2_program.
 
 Section WtStream.
 
-Variable G: global.
-Variable main: ident.
-Variable ins: stream (list val).
-Variable outs: stream (list val).
+  Variable G: global.
+  Variable main: ident.
+  Variable ins: stream (list val).
+  Variable outs: stream (list val).
 
-Definition wt_ins :=
-  forall n node,
-    find_node main G = Some node ->
-    wt_vals (ins n) (idty node.(n_in)).
+  Definition wt_ins :=
+    forall n node,
+      find_node main G = Some node ->
+      wt_vals (ins n) (idty node.(n_in)).
 
-Definition wt_outs :=
-  forall n node,
-    find_node main G = Some node ->
-    wt_vals (outs n) (idty node.(n_out)).
+  Definition wt_outs :=
+    forall n node,
+      find_node main G = Some node ->
+      wt_vals (outs n) (idty node.(n_out)).
 
 End WtStream.
 
@@ -448,24 +449,24 @@ Qed.
     then the assembler program generates an infinite sequence of volatile
     reads and writes that correspond to the successive values on the
     input and output streams. *)
-Theorem behavior_asm:
-  forall D G Gp P main ins outs,
-    elab_declarations D = OK (exist _ G Gp) ->
-    wt_ins G main ins ->
-    wt_outs G main outs ->
-    sem_node G main (pstr ins) (pstr outs) ->
-    compile D main = OK P ->
-    exists T, program_behaves (Asm.semantics P) (Reacts T)
-         /\ bisim_io G main ins outs T.
-Proof.
-  intros D G (WT & WC) P main ins outs Elab ??? Comp.
-  simpl in *. unfold compile, print in Comp.
-  rewrite Elab in Comp; simpl in Comp.
-  destruct (nl_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
-  assert (normal_args G) by admit.
-  edestruct behavior_clight as (T & Beh & Bisim); eauto.
-  eapply reacts_trace_preservation in Comp; eauto.
-  apply add_builtins_spec; auto.
-  intros ? ?; discriminate.
-Admitted.
 
+(* Theorem behavior_asm: *)
+(*   forall D G Gp P main ins outs, *)
+(*     elab_declarations D = OK (exist _ G Gp) -> *)
+(*     wt_ins G main ins -> *)
+(*     wt_outs G main outs -> *)
+(*     sem_node G main (pstr ins) (pstr outs) -> *)
+(*     compile D main = OK P -> *)
+(*     exists T, program_behaves (Asm.semantics P) (Reacts T) *)
+(*          /\ bisim_io G main ins outs T. *)
+(* Proof. *)
+(*   intros D G (WT & WC) P main ins outs Elab ** Comp. *)
+(*   simpl in *. unfold compile, print in Comp. *)
+(*   rewrite Elab in Comp; simpl in Comp. *)
+(*   destruct (nl_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate. *)
+(*   assert (normal_args G) by admit. *)
+(*   edestruct behavior_clight as (T & Beh & Bisim); eauto. *)
+(*   eapply reacts_trace_preservation in Comp; eauto. *)
+(*   apply add_builtins_spec; auto. *)
+(*   intros ? ?; discriminate. *)
+(* Qed. *)

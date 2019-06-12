@@ -1,0 +1,25 @@
+node euler(x0, xp: real) returns (x: real);
+var i : bool; xt : real;
+let
+  i = true fby false;
+  xt = 0.0 fby (x + 0.5 * xp);
+  x = if i then x0 else xt;
+tel
+
+node INS(g, xp: real) returns (x: real);
+  var k: int;
+let
+  k = 0 fby (k + 1);
+  x = euler(g, xp);
+tel
+
+node NAV(g, xp: real; s: bool) returns (x: real);
+  var r, c, cm: bool; insr : real when not c;
+let
+  insr = INS(g when not c, xp when not c) every r;
+  x = merge c (g when c) insr;
+  cm = merge c (not s when c) (s when not c);
+  c = true fby cm;
+  r = false fby (s and c);
+tel
+

@@ -18,7 +18,7 @@ From Velus Require Import RMemory.
 From Velus Require Import Ident.
 From Velus Require Import Traces.
 
-From Velus Require Import ObcToClight.ObcClightCommon.
+From Velus Require Import Common.CompCertLib.
 From Velus Require Import ObcToClight.MoreSeparation.
 From Velus Require Import ObcToClight.SepInvariant.
 From Velus Require Import ObcToClight.Generation.

@@ -3,9 +3,11 @@ From Velus Require Import Ident.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Stream.
+From Velus Require Import Streams.
 
 Module OpAux := OperatorsAux Op.
 Module Str   := StreamFun Op OpAux.
+Module Strs  := StreamsFun Op OpAux.
 
 From Velus Require Import CoreExpr.
 
@@ -14,7 +16,7 @@ Module CE := CoreExprFun Ids Op OpAux Str.
 From Velus Require Import Lustre.
 From Velus Require Import NLustre.
 
-Module L := LustreFun Ids Op OpAux.
+Module L := LustreFun Ids Op OpAux Strs.
 Module NL := NLustreFun Ids Op OpAux Str CE.
 
 From Velus Require Import LustreToNLustre.

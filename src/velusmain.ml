@@ -8,7 +8,7 @@ open Ctypes
 
 let print_c = ref false
 let write_lustre = ref false
-let write_snlustre = ref false
+let write_nlustre = ref false
 let write_sybloc = ref false
 let write_obc = ref false
 let write_cl = ref false
@@ -84,27 +84,11 @@ let parse toks =
   | LustreParser.Parser.Inter.Parsed_pr (ast, _) ->
     (Obj.magic ast : LustreAst.declaration list)
 
-(* XXX *)
-let hacked_compile d main_node =
-  let open Compiler in
-  let open VelusCorrectness in
-  apply_partial
-    (apply_total
-      (apply_total
-         (apply_partial
-            (Instantiator.L2NL.to_global d)
-            (nl_to_cl main_node))
-         (print print_Clight))
-      add_builtins)
-    ClightToAsm.transf_clight2_program
-(* XXX *)
-
 let compile source_name filename =
-  Format.printf "compile@."; (* XXX *)
   if !write_lustre
     then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
-  if !write_snlustre
-    then Veluslib.snlustre_destination := Some (filename ^ ".sn.lus");
+  if !write_nlustre
+    then Veluslib.nlustre_destination := Some (filename ^ ".n.lus");
     if !write_sybloc
     then Veluslib.sybloc_destination := Some (filename ^ ".syb");
   if !write_obc
@@ -122,28 +106,17 @@ let compile source_name filename =
   let p =
     match LustreElab.elab_declarations ast with
     | Errors.OK p -> p
-    | Errors.Error msg -> (Driveraux.print_error Format.err_formatter msg; exit 1) in
+    | Errors.Error msg ->
+        Format.eprintf "%a@." Driveraux.print_error msg; exit 1 in
   Format.printf "%a@." Interfacelib.PrintLustre.print_global p;
-  (* XXX *)
-  match Compiler.apply_partial
-          (hacked_compile p main_node)
-          Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error Format.err_formatter errmsg; exit 1
-  | OK asm ->
-    let oc = open_out (filename ^ ".s") in
-    PrintAsm.print_program oc asm;
-    close_out oc
-  (* XXX *)
-(*
   match Compiler.apply_partial
           (VelusCorrectness.compile ast main_node)
           Asmexpand.expand_program with
-  | Error errmsg -> Driveraux.print_error stderr errmsg; exit 1
+  | Error errmsg -> Format.eprintf "%a@." Driveraux.print_error errmsg; exit 1
   | OK asm ->
     let oc = open_out (filename ^ ".s") in
     PrintAsm.print_program oc asm;
     close_out oc
- *)
 
 let process file =
   if Filename.check_suffix file ".ept"
@@ -164,8 +137,8 @@ let speclist = [
   (* "-p", Arg.Set print_c, " Print generated Clight on standard output"; *)
   "-dlustre",Arg.Set write_lustre,
                             " Save the parsed Lustre in <source>.parsed.lus";
-  "-dsnlustre",Arg.Set write_snlustre,
-                            " Save the parsed SN-Lustre in <source>.sn.lus";
+  "-dnlustre",Arg.Set write_nlustre,
+                            " Save generated N-Lustre in <source>.n.lus";
   "-dsybloc", Arg.Set write_sybloc, " Save generated SyBloc in <source>.syb";
   "-dobc",    Arg.Set write_obc, " Save generated Obc in <source>.obc";
   "-dclight", Arg.Set write_cl,  " Save generated Clight in <source>.light.c";

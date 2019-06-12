@@ -17,7 +17,7 @@ From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import CoreExpr.Stream.
-From Velus Require Import NLustre.Streams.
+From Velus Require Import Streams.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
@@ -33,11 +33,12 @@ Module Type INDEXEDTOCOIND
        (Import CESyn  : CESYNTAX             Op)
        (Import Syn    : NLSYNTAX         Ids Op       CESyn)
        (Import Str    : STREAM               Op OpAux)
+       (Import Strs   : STREAMS              Op OpAux)
        (Import Ord    : NLORDERED        Ids Op       CESyn Syn)
        (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
-       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn).
+       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs).
 
   Section Global.
 
@@ -997,9 +998,9 @@ CESem.sem_lexp b H (Ewhen e x k) es
     (** State the correspondance for [count].  *)
     Lemma count_impl_from:
       forall n (r: stream bool),
-        CoInd.count_acc (if r n then count r n - 1 else count r n)
-                        (tr_stream_from n r)
-        ≡ tr_stream_from n (count r).
+        count_acc (if r n then Str.count r n - 1 else Str.count r n)
+                  (tr_stream_from n r)
+        ≡ tr_stream_from n (Str.count r).
     Proof.
       (* cofix-based proof encounter the guardness criterion (Why ??)  *)
       intros; apply ntheq_eqst; intro m.
@@ -1014,11 +1015,11 @@ CESem.sem_lexp b H (Ewhen e x k) es
     (** Generalizing is too intricate: we can use the generalized lemma above to
         deduce this one which states the correspondence for [mask]. *)
     Corollary mask_impl:
-      forall k k' (r: stream bool) xss,
+      forall k (r: stream bool) xss,
         wf_streams xss ->
         EqSts value
-              (tr_streams (mask (all_absent (xss k')) k r xss))
-              (List.map (CoInd.mask_v k (tr_stream r)) (tr_streams xss)).
+              (tr_streams (Str.mask k r xss))
+              (List.map (Strs.mask k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros * Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
@@ -1032,16 +1033,16 @@ CESem.sem_lexp b H (Ewhen e x k) es
         rewrite map_nth' with (d':=d2), nth_tr_streams_from_nth; auto.
         rewrite mask_length in Len; auto.
         rewrite nth_tr_streams_from_nth; auto.
-        unfold CoInd.mask_v, mask.
+        unfold Strs.mask, Str.mask.
         apply ntheq_eqst; intro m.
         unfold nth_tr_streams_from.
-        rewrite init_from_nth, CoInd.mask_nth, init_from_nth.
-        unfold CoInd.count, streams_nth.
+        rewrite init_from_nth, mask_nth, init_from_nth.
+        unfold Strs.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
-        assert ((if r 0 then count r 0 - 1 else count r 0) = 0) as E
+        assert ((if r 0 then Str.count r 0 - 1 else Str.count r 0) = 0) as E
             by (simpl; destruct (r 0); auto).
         rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
-        destruct (EqNat.beq_nat (count r (m + 0)) k); auto.
+        destruct (Str.count r (m + 0) =? k); auto.
         apply nth_all_absent.
     Qed.
 
@@ -1169,14 +1170,11 @@ CESem.sem_lexp b H (Ewhen e x k) es
         Indexed.sem_node G f xss oss ->
         CoInd.sem_node G f (tr_streams xss) (tr_streams oss).
     Proof.
-      induction 1 as [| | | |???? IHNode|??????????? Heqs IH]
+      induction 1 as [| |???????????????? IH| |??????????? Heqs IH]
                        using Indexed.sem_node_mult with
           (P_equation := fun b H e =>
                            Indexed.sem_equation G b H e ->
-                           CoInd.sem_equation G (tr_history H) (tr_stream b) e)
-          (P_reset := fun f r xss oss =>
-                        Indexed.sem_reset G f r xss oss ->
-                        CoInd.sem_reset G f (tr_stream r) (tr_streams xss) (tr_streams oss));
+                           CoInd.sem_equation G (tr_history H) (tr_stream b) e);
         eauto.
 
       - econstructor; eauto.
@@ -1185,18 +1183,18 @@ CESem.sem_lexp b H (Ewhen e x k) es
 
       - econstructor; eauto.
         + rewrite tr_clocks_of; eauto.
-          edestruct Indexed.sem_reset_wf; eauto.
-        + apply reset_of_impl; auto.
+          eapply wf_streams_mask.
+          intro k; destruct (IH k) as (Sem &?).
+          apply Indexed.sem_node_wf in Sem as (?&?); eauto.
+        + apply reset_of_impl; eauto.
+        + intro k; destruct (IH k) as (?&?).
+          rewrite <- 2 mask_impl; eauto;
+            eapply wf_streams_mask; intro n'; destruct (IH n') as (Sem &?);
+              apply Indexed.sem_node_wf in Sem as (?&?); eauto.
 
       - econstructor; eauto; subst.
         rewrite <-fby_impl; eauto.
         apply sem_var_impl; congruence.
-
-      - constructor; intro k; specialize (IHNode k); destruct IHNode.
-        inversion_clear H as [???? HNode].
-        rewrite <- 2 mask_impl; eauto;
-          eapply wf_streams_mask; intro n'; specialize (HNode n');
-            apply Indexed.sem_node_wf in HNode as (? & ?); eauto.
 
       - subst.
         CESem.assert_const_length xss.

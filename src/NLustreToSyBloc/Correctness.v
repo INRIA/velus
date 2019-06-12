@@ -95,14 +95,16 @@ Module Type CORRECTNESS
       In (x, f) (snd (gather_eqs eqs)) ->
       exists xss Mx Mx' yss,
         (msem_node G f xss Mx Mx' yss
-         \/ exists r, msem_reset G f r xss Mx Mx' yss)
+         \/ exists r, forall k, exists Mk Mk', msem_node G f (mask k r xss) Mk Mk' (mask k r yss)
+                               /\ memory_masked k r Mx Mk)
         /\ sub_inst_n x M Mx.
   Proof.
     unfold gather_eqs.
     intro; generalize (@nil (ident * (const * clock))).
     induction eqs as [|[]]; simpl; intros ? ? ? ? ? ? ? ? Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
-      try inversion_clear Heq as [|????????????? Hd|???????????????? Hd|];
+      try inversion_clear Heq as [|????????????? Hd|
+                                  ???????????????? Hd ??????? Rst|];
       try contradiction; eauto.
     - destruct i; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
@@ -111,7 +113,9 @@ Module Type CORRECTNESS
     - destruct i; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E; inv Hd.
-      do 4 eexists; split; eauto.
+      exists ls, Mx, Mx', xss.
+      split; auto.
+      right; eexists; intro k; destruct (Rst k) as (?&?&?&?&?); eauto.
   Qed.
 
   Lemma msem_node_initial_state:
@@ -142,9 +146,8 @@ Module Type CORRECTNESS
         destruct node; simpl in *.
         edestruct msem_eqs_In_snd_gather_eqs_spec
           as (?& Mx &?&?& [Node|(rs & Reset)] & Sub); eauto.
-        inversion_clear Reset as [?????? Nodes].
-        destruct (Nodes (if rs 0 then pred (count rs 0) else count rs 0))
-          as (M0 &?& Node & Mmask &?).
+        destruct (Reset (if rs 0 then pred (count rs 0) else count rs 0))
+          as (M0 &?& Node & Mmask).
         apply IH in Node; auto.
         specialize (Mmask 0); specialize (Sub 0).
         rewrite Mmask in Sub.
@@ -278,9 +281,8 @@ Module Type CORRECTNESS
                             ???????????????? Hd Sub ?????? Rst|];
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
-    - inversion_clear Rst as [?????? Nodes].
-      specialize (Nodes (if rs n then pred (count rs n) else count rs n));
-        destruct Nodes as (?&?& Node & Mask &?).
+    - specialize (Rst (if rs n then pred (count rs n) else count rs n));
+        destruct Rst as (?&?& Node & Mask &?).
       apply IH in Node.
       rewrite Mask; auto.
       cases_eqn Hr; apply count_true_ge_1 in Hr.
@@ -308,8 +310,7 @@ Module Type CORRECTNESS
                             ???????????????? Hd ? Sub ????? Rst|];
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
-    - inversion_clear Rst as [?????? Nodes].
-      specialize (Nodes (count rs n)); destruct Nodes as (?&?& Node &?& Mask).
+    - specialize (Rst (count rs n)); destruct Rst as (?&?& Node &?& Mask).
       apply IH in Node.
       rewrite Mask; auto.
   Qed.
@@ -463,10 +464,9 @@ Module Type CORRECTNESS
           by (eapply Forall_forall; eauto; inv WC; eauto).
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split;
         intro;
-        inversion_clear Reset as [?????? Nodes];
-        destruct (Nodes (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
+        destruct (Reset (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
         specialize (Mmask_n n);
-        destruct (Nodes (if rs 0 then pred (count rs 0) else count rs 0))
+        destruct (Reset (if rs 0 then pred (count rs 0) else count rs 0))
           as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0);
         specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky;
           pose proof Node_n as Node_n'; apply IHnode in Node_n; specialize (Node_n n);

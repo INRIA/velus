@@ -77,139 +77,6 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
   (** ** Synchronous functions *)
 
-  (** Count the number of resets ticks seen at [n] so far. *)
-  Fixpoint count (rs: cstream) (n: nat) : nat :=
-    let c := match n with 0 => 0 | S n => count rs n end in
-    if rs n then S c else c.
-
-  (** [mask o k rs xs] is the stream which clips the stream [xs] between
-      the [k]th and the [(k+1)]th reset, outputting [o] everywhere else. *)
-  Definition mask {A} (opaque: A) (k: nat) (rs: cstream) (xs: stream A) : stream A :=
-    fun n => if beq_nat k (count rs n) then xs n else opaque.
-
-  (** ** Properties *)
-
-  Lemma count_le:
-    forall r n,
-      count r n <= count r (S n).
-  Proof.
-    intros; simpl.
-    destruct (r (S n)); omega.
-  Qed.
-
-  Lemma count_le':
-    forall r n' n,
-      n' < n ->
-      count r n' <= count r n.
-  Proof.
-    induction 1.
-    - apply count_le.
-    - simpl; destruct (r (S m)); omega.
-  Qed.
-
-  Lemma count_true_ge_1:
-    forall n r,
-      r n = true ->
-      1 <= count r n.
-  Proof.
-    induction n; simpl; intros * E; rewrite E; auto.
-    apply Le.le_n_S; omega.
-  Qed.
-
-  Lemma count_positive:
-    forall r n' n,
-      r n = true ->
-      n' < n ->
-      count r n' < count r n.
-  Proof.
-    intros * Rn Lt.
-    destruct n; try omega.
-    simpl; rewrite Rn.
-    clear Rn.
-    apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in Lt; destruct Lt.
-    - induction n; try omega.
-      apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in H; destruct H.
-      + eapply Lt.lt_le_trans; eauto.
-        apply Le.le_n_S, count_le.
-      + subst.
-        apply Lt.le_lt_n_Sm, count_le.
-    - subst; omega.
-  Qed.
-
-  Lemma mask_opaque:
-    forall {A} (xs: stream A) k r (opaque: A) n,
-      count r n <> k ->
-      (mask opaque k r xs) n = opaque.
-  Proof.
-    intros * E.
-    unfold mask.
-    assert (EqNat.beq_nat k (count r n) = false) as ->
-        by (apply EqNat.beq_nat_false_iff; omega); auto.
-  Qed.
-
-  Lemma mask_transparent:
-    forall {A} (xs: stream A) k r (opaque: A) n,
-      count r n = k ->
-      (mask opaque k r xs) n = xs n.
-  Proof.
-    intros * E.
-    unfold mask.
-    assert (EqNat.beq_nat k (count r n) = true) as ->
-        by (apply EqNat.beq_nat_true_iff; omega); auto.
-  Qed.
-
-  (* [memory_masked k rs] applies iff [n = k = 0] or [k = count rs (n - 1)]. *)
-  Lemma memory_masked_alt_cond:
-    forall rs k n,
-      count rs n = (if rs n then S k else k)
-      <->
-      k = (match n with 0 => 0 | S m => count rs m end).
-  Proof.
-    induction n; simpl.
-    - destruct (rs 0); intuition.
-    - destruct (rs (S n)); [|now intuition].
-      split; inversion 1; subst; auto.
-  Qed.
-
-  Lemma count_reset_now:
-    forall rs i,
-      rs i = true ->
-      count rs i = S (match i with 0 => 0 | S m => count rs m end).
-  Proof.
-    destruct i; intro Hr; simpl; now rewrite Hr.
-  Qed.
-
-  Lemma count_reset_gt:
-    forall rs i n,
-      rs i = true ->
-      n < i ->
-      count rs n < count rs i.
-  Proof.
-    intros * Hrs Hn.
-    rewrite count_reset_now with (1:=Hrs).
-    destruct i; [now inv Hn|].
-    inv Hn; auto.
-    take (S n <= i) and rewrite PeanoNat.Nat.le_succ_l in it.
-    now apply Lt.le_lt_n_Sm, count_le'.
-  Qed.
-
-  Add Parametric Morphism : count
-      with signature eq_str ==> eq ==> eq
-        as count_eq_str.
-  Proof.
-    intros * E n.
-    induction n; simpl; rewrite E; auto.
-    now rewrite IHn.
-  Qed.
-
-  Add Parametric Morphism (A: Type) : (@mask A)
-      with signature eq ==> eq ==> eq_str ==> eq_str ==> eq_str
-        as mask_eq_str.
-  Proof.
-    intros * E1 ? ? E2 n; unfold mask.
-    now rewrite E1, E2.
-  Qed.
-
   Lemma present_injection:
     forall x y, x = y <-> present x = present y.
   Proof.
@@ -325,22 +192,157 @@ if the clocked stream is [absent] at the corresponding instant. *)
       apply IHxs; auto.
   Qed.
 
+  (** Count the number of resets ticks seen at [n] so far. *)
+  Fixpoint count (rs: cstream) (n: nat) : nat :=
+    let c := match n with 0 => 0 | S n => count rs n end in
+    if rs n then S c else c.
+
+  (** [mask k rs xss] is the list of streams which clips the list of streams
+      [xss] between the [k]th and the [(k+1)]th reset, outputting absent
+      everywhere else. *)
+  Definition mask (k: nat) (rs: cstream) (xss: stream (list value))
+    : stream (list value) :=
+    fun n => if k =? (count rs n) then xss n else all_absent (xss 0).
+
+  (** ** Properties *)
+
+  Lemma count_le:
+    forall r n,
+      count r n <= count r (S n).
+  Proof.
+    intros; simpl.
+    destruct (r (S n)); omega.
+  Qed.
+
+  Lemma count_le':
+    forall r n' n,
+      n' < n ->
+      count r n' <= count r n.
+  Proof.
+    induction 1.
+    - apply count_le.
+    - simpl; destruct (r (S m)); omega.
+  Qed.
+
+  Lemma count_true_ge_1:
+    forall n r,
+      r n = true ->
+      1 <= count r n.
+  Proof.
+    induction n; simpl; intros * E; rewrite E; auto.
+    apply Le.le_n_S; omega.
+  Qed.
+
+  Lemma count_positive:
+    forall r n' n,
+      r n = true ->
+      n' < n ->
+      count r n' < count r n.
+  Proof.
+    intros * Rn Lt.
+    destruct n; try omega.
+    simpl; rewrite Rn.
+    clear Rn.
+    apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in Lt; destruct Lt.
+    - induction n; try omega.
+      apply Lt.lt_n_Sm_le, Lt.le_lt_or_eq in H; destruct H.
+      + eapply Lt.lt_le_trans; eauto.
+        apply Le.le_n_S, count_le.
+      + subst.
+        apply Lt.le_lt_n_Sm, count_le.
+    - subst; omega.
+  Qed.
+
+  Lemma mask_opaque:
+    forall xss k r n,
+      count r n <> k ->
+      mask k r xss n = all_absent (xss 0).
+  Proof.
+    intros * E.
+    unfold mask.
+    assert ((k =? count r n) = false) as ->
+        by (apply EqNat.beq_nat_false_iff; omega); auto.
+  Qed.
+
+  Lemma mask_transparent:
+    forall xss k r n,
+      count r n = k ->
+      mask k r xss n = xss n.
+  Proof.
+    intros * E.
+    unfold mask.
+    assert ((k =? count r n) = true) as ->
+        by (apply EqNat.beq_nat_true_iff; omega); auto.
+  Qed.
+
+  (* [memory_masked k rs] applies iff [n = k = 0] or [k = count rs (n - 1)]. *)
+  Lemma memory_masked_alt_cond:
+    forall rs k n,
+      count rs n = (if rs n then S k else k)
+      <->
+      k = (match n with 0 => 0 | S m => count rs m end).
+  Proof.
+    induction n; simpl.
+    - destruct (rs 0); intuition.
+    - destruct (rs (S n)); [|now intuition].
+      split; inversion 1; subst; auto.
+  Qed.
+
+  Lemma count_reset_now:
+    forall rs i,
+      rs i = true ->
+      count rs i = S (match i with 0 => 0 | S m => count rs m end).
+  Proof.
+    destruct i; intro Hr; simpl; now rewrite Hr.
+  Qed.
+
+  Lemma count_reset_gt:
+    forall rs i n,
+      rs i = true ->
+      n < i ->
+      count rs n < count rs i.
+  Proof.
+    intros * Hrs Hn.
+    rewrite count_reset_now with (1:=Hrs).
+    destruct i; [now inv Hn|].
+    inv Hn; auto.
+    take (S n <= i) and rewrite PeanoNat.Nat.le_succ_l in it.
+    now apply Lt.le_lt_n_Sm, count_le'.
+  Qed.
+
+  Add Parametric Morphism : count
+      with signature eq_str ==> eq ==> eq
+        as count_eq_str.
+  Proof.
+    intros * E n.
+    induction n; simpl; rewrite E; auto.
+    now rewrite IHn.
+  Qed.
+
+  Add Parametric Morphism k : (mask k) 
+      with signature eq_str ==> eq_str ==> eq_str
+        as mask_eq_str.
+  Proof.
+    intros * E1 ? ? E2 n; unfold mask.
+    now rewrite E1, 2 E2.
+  Qed.
+ 
   Lemma mask_length:
-    forall k k' xss r n,
+    forall k xss r n,
       wf_streams xss ->
-      length (mask (all_absent (xss k')) k r xss n) = length (xss n).
+      length (mask k r xss n) = length (xss n).
   Proof.
     intros; unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
+    destruct (k =? count r n); auto.
     unfold all_absent; rewrite map_length.
-    induction k'; induction n; auto.
+    induction n; auto.
   Qed.
 
   (** If all masks ar well-formed then the underlying stream of lists
       is well-formed. *)
   Lemma wf_streams_mask:
-    forall xss r m,
-      (forall n, wf_streams (mask (all_absent (xss m)) n r xss)) ->
+    forall xss r,
+      (forall n, wf_streams (mask n r xss)) ->
       wf_streams xss.
   Proof.
     unfold wf_streams, mask; intros * WF k k'.
@@ -348,7 +350,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
       pose proof (WF (count r k') k' k) as WFk'.
     rewrite <-EqNat.beq_nat_refl in WFk, WFk'.
     rewrite Nat.eqb_sym in WFk'.
-    destruct (EqNat.beq_nat (count r k) (count r k')); auto.
+    destruct (count r k =? count r k'); auto.
     now rewrite WFk, <-WFk'.
   Qed.
 
@@ -369,28 +371,27 @@ if the clocked stream is [absent] at the corresponding instant. *)
 
 
   Lemma all_absent_mask:
-    forall xs k k' r n,
-      wf_streams xs ->
-      all_absent (mask (all_absent (xs k')) k r xs n) = all_absent (xs n).
+    forall xss k r n,
+      wf_streams xss ->
+      all_absent (mask k r xss n) = all_absent (xss n).
   Proof.
     intros * Wf; unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
-    specialize (Wf n k').
-    assert (length (all_absent (xs k')) = length (xs n)) as Length
+    destruct (k =? count r n); auto.
+    specialize (Wf n).
+    assert (length (all_absent (xss 0)) = length (xss n)) as Length
         by now (unfold all_absent; rewrite map_length).
-    clear Wf; revert Length; generalize (xs n) as l, (all_absent (xs k')) as l'.
+    clear Wf; revert Length; generalize (xss n) as l, (all_absent (xss 0)) as l'.
     induction l, l'; inversion 1; simpl; auto.
     f_equal; auto.
   Qed.
 
   Lemma absent_list_mask:
-    forall xs opaque k r n,
-      absent_list (xs n) ->
-      absent_list opaque ->
-      absent_list (mask opaque k r xs n).
+    forall xss k r n,
+      absent_list (xss n) ->
+      absent_list (mask k r xss n).
   Proof.
-    intros * Abs. unfold mask.
-    destruct (EqNat.beq_nat k (count r n)); auto.
+    intros; unfold mask.
+    destruct (k =? count r n); auto using all_absent_spec.
   Qed.
 
   Definition vstr (xss: stream (list const)): stream (list value) :=
@@ -399,7 +400,7 @@ if the clocked stream is [absent] at the corresponding instant. *)
 End STREAM.
 
 Module StreamFun
-       (Import Op : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op) <: STREAM Op OpAux.
+       (Op : OPERATORS)
+       (OpAux : OPERATORS_AUX Op) <: STREAM Op OpAux.
   Include STREAM Op OpAux.
 End StreamFun.

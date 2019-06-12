@@ -39,11 +39,7 @@ Module Type LUSTRE_TO_NLUSTRE
                                     OK (CE.Ebinop op le1 le2 ty)
     | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
                                     OK (CE.Ewhen le x b)
-    | L.Efby _ _ _
-    | L.Ewhen _ _ _ _
-    | L.Emerge _ _ _ _
-    | L.Eite _ _ _ _
-    | L.Eapp _ _ _     => Error (msg "expression not normalized")
+    | _  => Error (msg "expression not normalized")
     end.
 
   (*
@@ -75,10 +71,7 @@ Module Type LUSTRE_TO_NLUSTRE
                                          do cef <- to_cexp ef;
                                          OK (CE.Eite le cet cef)
 
-    | L.Emerge _ _ _ _
-    | L.Eite _ _ _ _
-    | L.Efby _ _ _
-    | L.Eapp _ _ _     => Error (msg "control expression not normalized")
+    | _ => Error (msg "control expression not normalized")
     end.
 
   Fixpoint suffix_of_clock (ck : clock) (acc : list (ident * bool))
@@ -192,14 +185,27 @@ Module Type LUSTRE_TO_NLUSTRE
     | Some ck => ck :: acc
     end.
 
+  Fixpoint to_var (e : L.exp) : res ident :=
+    match e with
+    | L.Evar x _ => OK x
+    | _ => Error (msg "expression not normalized")
+    end.
+
   Definition to_equation (env : Env.t (type * clock)) (eq : L.equation)
                                                           : res NL.equation :=
     match eq with
-    | (xs, [L.Eapp f es _]) =>
+    | (xs, [L.Eapp f es None _]) =>
         do xcks1 <- mmap (find_clock env) xs;
         do xcks2 <- OK (fold_left get_exp_clock (concat (map L.clockof es)) []);
         do les <- mmap to_lexp es;
         OK (NL.EqApp xs (find_base_clock (xcks1 ++ xcks2)) f les None)
+
+    | (xs, [L.Eapp f es (Some r) _]) =>
+        do xcks1 <- mmap (find_clock env) xs;
+        do xcks2 <- OK (fold_left get_exp_clock (concat (map L.clockof es)) []);
+        do les <- mmap to_lexp es;
+        do r <- to_var r;
+        OK (NL.EqApp xs (find_base_clock (xcks1 ++ xcks2)) f les (Some r))
 
     | ([x], [L.Efby [e0] [e] _]) =>
         do c0 <- to_constant e0;

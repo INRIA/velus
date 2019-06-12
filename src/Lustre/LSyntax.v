@@ -42,7 +42,7 @@ Module Type LSYNTAX
   | Emerge : ident -> list exp -> list exp -> lann -> exp
   | Eite   : exp -> list exp -> list exp -> lann -> exp
 
-  | Eapp   : ident -> list exp -> list ann -> exp.
+  | Eapp   : ident -> list exp -> option exp -> list ann -> exp.
 
   Implicit Type e: exp.
 
@@ -58,7 +58,7 @@ Module Type LSYNTAX
     match e with
     | Econst c => 1
     | Efby _ _ anns
-    | Eapp _ _ anns => length anns
+    | Eapp _ _ _ anns => length anns
     | Evar _ _
     | Eunop _ _ _
     | Ebinop _ _ _ _ => 1
@@ -73,7 +73,7 @@ Module Type LSYNTAX
     match e with
     | Econst c => [(type_const c, Cstream Sbase)]
     | Efby _ _ anns
-    | Eapp _ _ anns => anns
+    | Eapp _ _ _ anns => anns
     | Evar _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [ann]
@@ -89,7 +89,7 @@ Module Type LSYNTAX
     match e with
     | Econst c => [type_const c]
     | Efby _ _ anns
-    | Eapp _ _ anns => map fst anns
+    | Eapp _ _ _ anns => map fst anns
     | Evar _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [fst ann]
@@ -113,7 +113,7 @@ Module Type LSYNTAX
     match e with
     | Econst c => [Sbase]
     | Efby _ _ anns
-    | Eapp _ _ anns => map ckstream anns
+    | Eapp _ _ _ anns => map ckstream anns
     | Evar _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [ckstream ann]
@@ -129,7 +129,7 @@ Module Type LSYNTAX
     match e with
     | Econst c => [Cstream Sbase]
     | Efby _ _ anns
-    | Eapp _ _ anns => map snd anns
+    | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
     | Eunop _ _ ann
     | Ebinop _ _ _ ann => [snd ann]
@@ -221,9 +221,9 @@ Module Type LSYNTAX
         P (Eite e ets efs a).
 
     Hypothesis EappCase:
-      forall f es a,
+      forall f es r a,
         Forall P es ->
-        P (Eapp f es a).
+        P (Eapp f es r a).
 
     Local Ltac SolveForall :=
       match goal with

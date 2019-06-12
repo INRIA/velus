@@ -1,4 +1,3 @@
-
 From Coq Require Import BinNums.
 
 Definition ident := positive.
@@ -27,16 +26,16 @@ Fixpoint instck (bk: clock) (sub: ident -> option ident) (ck: clock)
    interdependencies in clock annotations internal to expressions. *)
 
 Inductive ckid : Type :=
-| Vidx : positive -> ckid     (* fresh clock *)
-| Vnm  : ident    -> ckid.    (* named clock *)
+| Vidx : positive -> ckid                   (* fresh clock *)
+| Vnm  : ident    -> ckid.                  (* named clock *)
 
 Inductive sclock : Type :=
 | Sbase : sclock                            (* base clock *)
 | Son   : sclock -> ckid -> bool -> sclock. (* subclock *)
 
 Inductive nclock : Type :=
-| Cstream : sclock -> nclock             (* (unnamed) stream clock *)
-| Cnamed  : ckid -> sclock -> nclock.    (* named clock: (c : s) or (i : s) *)
+| Cstream : sclock -> nclock                (* (unnamed) stream clock *)
+| Cnamed  : ckid -> sclock -> nclock.       (* named clock: (c : s) or (i : s) *)
 
 Fixpoint sclk (ck: clock) : sclock :=
   match ck with
