@@ -115,6 +115,18 @@ Module Type NLSYNTAX
     reflexivity.
   Qed.
 
+  Lemma find_node_In:
+    forall G f n,
+      find_node f G = Some n ->
+      n.(n_name) = f /\ In n G.
+  Proof.
+    induction G as [|n G IH]. now inversion 1.
+    simpl. intros f n' Fn'.
+    destruct (ident_eqb n.(n_name) f) eqn:Efn.
+    - inv Fn'. apply ident_eqb_eq in Efn; auto.
+    - apply IH in Fn'; tauto.
+  Qed.
+
   Lemma is_filtered_eqs:
     forall eqs,
       Permutation

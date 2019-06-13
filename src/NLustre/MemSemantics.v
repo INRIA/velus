@@ -316,14 +316,13 @@ enough: it does not support the internal fixpoint introduced by
       eauto.
     - intro Hnin.
       econstructor; eauto.
-      apply IHHsem. intro Hnf; apply Hnin; rewrite Hnf. constructor.
+      apply IHHsem. intro; apply Hnin; subst. constructor.
     - intro Hnin.
       econstructor; eauto.
       intro k; destruct (Hsems k) as (?&?&?&?&?& IH).
       do 2 eexists; split; eauto.
-      apply IH; intro Hnf; apply Hnin; rewrite Hnf. constructor.
+      apply IH; intro; apply Hnin; subst. constructor.
     - intro.
-      pose proof Hf.
       rewrite find_node_tl with (1:=Hnf) in Hf.
       econstructor; eauto.
       apply find_node_later_not_Is_node_in with (2:=Hf) in Hord.
@@ -333,70 +332,63 @@ enough: it does not support the internal fixpoint introduced by
       intuition.
   Qed.
 
+  Lemma find_node_other_name:
+    forall G f n n',
+      find_node f G = Some n' ->
+      Forall (fun n' => n.(n_name) <> n'.(n_name)) G ->
+      n.(n_name) <> f.
+  Proof.
+    intros G f n n' Hfind Hnin Hnf.
+    rewrite Hnf in Hnin.
+    pose proof (find_node_name _ _ _ Hfind).
+    apply find_node_split in Hfind.
+    destruct Hfind as [bG [aG Hge]].
+    rewrite Hge in Hnin.
+    apply Forall_app in Hnin.
+    destruct Hnin as [H' Hfg]; clear H'.
+    inversion_clear Hfg.
+    now take (f<>_) and apply it.
+  Qed.
+
+  Lemma msem_cons2:
+    forall n G,
+      Ordered_nodes G ->
+      Forall (fun n' => n.(n_name) <> n'.(n_name)) G ->
+      (forall f xv M M' yv,
+          msem_node G f xv M M' yv ->
+          msem_node (n :: G) f xv M M' yv)
+      /\
+      (forall bk R M M' eq,
+          msem_equation G bk R M M' eq ->
+          ~Is_node_in_eq n.(n_name) eq ->
+          msem_equation (n::G) bk R M M' eq).
+  Proof.
+    intros n G OG Fn.
+    apply msem_node_equation_reset_ind; try (now intros; econstructor; eauto).
+    - intros. econstructor; eauto. intro k.
+      take (forall k, exists Mr, _) and specialize (it k);
+        destruct it as (Mk & Mk' & ? & ? & ? & ?).
+      exists Mk, Mk'. split; auto.
+    - intros.
+      take (find_node f G = Some _) and rename it into Ff.
+      econstructor; eauto.
+      + rewrite <-find_node_other in Ff; eauto.
+        apply find_node_In in Ff as (? & Ff).
+        rewrite Forall_forall in Fn. specialize (Fn _ Ff). now subst.
+      + apply find_node_not_Is_node_in_eq with (g:=n.(n_name)) in Ff; auto.
+        take (Forall _ n0.(n_eqs)) and rename it into Feqs.
+        apply Forall_Forall with (1:=Ff) in Feqs.
+        apply Forall_impl_In with (2:=Feqs).
+        intros eq Ineq (? & ?); auto.
+  Qed.
+
   Lemma msem_node_cons2:
     forall n G f xs M M' ys,
       Ordered_nodes G ->
       msem_node G f xs M M' ys ->
       Forall (fun n' => n_name n <> n_name n') G ->
       msem_node (n :: G) f xs M M' ys.
-  Proof.
-    Hint Constructors msem_equation.
-    intros * Hord Hsem Hnin.
-    assert (Hnin':=Hnin).
-    revert Hnin'.
-    induction Hsem as [| |???????????????????????? Hsems|
-                       |??????? n' ? Hfind ??? Heqs WF WF' IH]
-        using msem_node_mult
-      with (P_equation := fun bk H M M' eq =>
-                            ~Is_node_in_eq n.(n_name) eq ->
-                            msem_equation (n :: G) bk H M M' eq);
-      eauto.
-    - intro; econstructor; eauto.
-      intro k; destruct (Hsems k) as (?&?&?&?&?&?); eauto 6.
-    - intro HH; clear HH.
-      assert (n.(n_name) <> f) as Hnf.
-      { intro Hnf.
-        rewrite Hnf in *.
-        pose proof (find_node_name _ _ _ Hfind).
-        apply find_node_split in Hfind.
-        destruct Hfind as [bG [aG Hge]].
-        rewrite Hge in Hnin.
-        apply Forall_app in Hnin.
-        destruct Hnin as [H' Hfg]; clear H'.
-        inversion_clear Hfg.
-        match goal with H:f<>_ |- False => now apply H end.
-      }
-      apply find_node_other with (2:=Hfind) in Hnf.
-      econstructor; eauto.
-      + assert (forall g, Is_node_in g n'.(n_eqs) -> Exists (fun nd=> g = nd.(n_name)) G)
-          as Hniex by (intros g Hini;
-                       apply find_node_find_again with (1:=Hord) (2:=Hfind) in Hini;
-                       exact Hini).
-        assert (Forall (fun eq => forall g,
-                            Is_node_in_eq g eq -> Exists (fun nd=> g = nd.(n_name)) G)
-                       n'.(n_eqs)) as HH.
-        {
-          clear Heqs IH WF WF'.
-          induction n'.(n_eqs) as [|eq eqs]; [now constructor|].
-          constructor.
-          - intros g Hini.
-            apply Hniex.
-            constructor 1; apply Hini.
-          - apply IHeqs.
-            intros g Hini; apply Hniex.
-            constructor 2; apply Hini.
-        }
-        apply Forall_Forall with (1:=HH) in IH.
-        apply Forall_impl with (2:=IH).
-        intros eq (Hsem & IH1).
-        apply IH1.
-        intro Hini.
-        apply Hsem in Hini.
-        apply Forall_Exists with (1:=Hnin) in Hini.
-        apply Exists_exists in Hini.
-        destruct Hini as [nd' [Hin [Hneq Heq]]].
-        intuition.
-  Qed.
+  Proof. intros; apply msem_cons2; auto. Qed.
 
   Lemma msem_equations_cons:
     forall G bk H M M' eqs n,
