@@ -85,7 +85,7 @@ Module Type CORRECTNESS
 
   Ltac split_env_assumption :=
     match goal with
-    | Equiv: context Is_free_in_lexp [_],
+    | Equiv: context Is_free_in_exp [_],
              Hvar: sem_var_instant _ _ _ |- _ =>
       apply Equiv in Hvar; [|solve [constructor; auto]]
     | Equiv: context Is_free_in_clock [_],
@@ -188,11 +188,11 @@ Module Type CORRECTNESS
     Variable R: env.
     Variable (me: menv) (ve: venv).
 
-    Lemma lexp_correct:
+    Lemma exp_correct:
       forall e c,
-        sem_lexp_instant true R e (present c) ->
-        equiv_env (fun x => Is_free_in_lexp x e) R inputs mems me ve ->
-        exp_eval me ve (translate_lexp mems e) (Some c).
+        sem_exp_instant true R e (present c) ->
+        equiv_env (fun x => CE.IsF.Is_free_in_exp x e) R inputs mems me ve ->
+        exp_eval me ve (translate_exp mems e) (Some c).
     Proof.
       induction e; inversion_clear 1; simpl; intros; auto.
       - match goal with H: _ = _ |- _ => inv H end.
@@ -202,11 +202,11 @@ Module Type CORRECTNESS
       - econstructor; eauto; now rewrite typeof_correct.
       - econstructor; eauto; now rewrite 2 typeof_correct.
     Qed.
-    Hint Resolve lexp_correct.
+    Hint Resolve exp_correct.
 
     Lemma arg_correct:
       forall me ve mems cvars ck e c,
-        exp_eval me ve (translate_lexp mems e) (Some c) ->
+        exp_eval me ve (translate_exp mems e) (Some c) ->
         exp_eval me ve (translate_arg mems cvars ck e) (Some c).
     Proof.
       intros * Heval.
@@ -780,18 +780,18 @@ Module Type CORRECTNESS
   Definition correct_program (P: SB.Syn.program) : Prop :=
     forall b, correct_block P b.
 
-  Lemma noops_lexp_exp_eval:
+  Lemma noops_exp_exp_eval:
     forall isub R inputs mems me ve vars e v xck bck lck,
       Forall (clock_match_instant true R) vars ->
-      equiv_env (fun x => Is_free_in_lexp x e) R inputs mems me ve ->
-      noops_lexp xck e ->
-      wc_lexp vars e lck ->
+      equiv_env (fun x => CE.IsF.Is_free_in_exp x e) R inputs mems me ve ->
+      noops_exp xck e ->
+      wc_exp vars e lck ->
       instck bck isub xck = Some lck ->
       sem_clock_instant true R bck true ->
-      sem_lexp_instant true R e v ->
+      sem_exp_instant true R e v ->
       sem_clock_instant true R lck false ->
       (forall x, PS.In x mems -> find_val x me <> None) ->
-      exists v, exp_eval me ve (translate_lexp mems e) v.
+      exists v, exp_eval me ve (translate_exp mems e) v.
   Proof.
     induction e; simpl;
       intros v nck ck lck Hcm EqEnv Hnoo Hwc Hinst Hbck He Hlck Hmems; eauto.
@@ -814,7 +814,7 @@ Module Type CORRECTNESS
            (since e can only be absent if its clock is a (strict)
             subclock of the instantiated clock, and in this case
             it cannot contain a unary or binary operator thanks to
-            noops_lexp; it cannot contain Valid by construction; and
+            noops_exp; it cannot contain Valid by construction; and
             variables always evalute to something).
            Or e is present with a value and its translation calculates
            the same value. *)
@@ -829,18 +829,18 @@ Module Type CORRECTNESS
              The sampled expression e must thus be present, in which
              case we know that the translation calculates the same value. *)
           inv He; try match goal with
-                        H:sem_lexp_instant _ _ e (present _) |- _ =>
-                        eapply lexp_correct with (inputs := inputs) in H; eauto end.
+                        H:sem_exp_instant _ _ e (present _) |- _ =>
+                        eapply exp_correct with (inputs := inputs) in H; eauto end.
           (* an absent value would contradict the fact that clock lck = true *)
-          match goal with Hle:sem_lexp_instant _ _ e absent,
+          match goal with Hle:sem_exp_instant _ _ e absent,
                               Hck:sem_clock_instant _ _ lck true |- _ =>
-            apply clock_match_instant_lexp_contradiction with (1:=Hcm) (3:=Hle) in Hck; auto
+            apply clock_match_instant_exp_contradiction with (1:=Hcm) (3:=Hle) in Hck; auto
           end. intuition.
     - (* Unary operators: cannot be slower than the node base clock *)
       destruct nck.
       + (* lck = ck; one can't be true and the other false. *)
         inv Hinst. now apply sem_clock_instant_det with (1:=Hbck) in Hlck.
-      + (* lck is a subclock of ck and ops are thus precluded by noops_lexp. *)
+      + (* lck is a subclock of ck and ops are thus precluded by noops_exp. *)
         inv Hnoo.
     - (* Binary operators: reasoning as for unary operators. *)
       destruct nck.
@@ -852,11 +852,11 @@ Module Type CORRECTNESS
     forall P R inputs mems clkvars me ve icks s ys ck rst f es ess,
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
       Forall (clock_match_instant true R) icks ->
-      equiv_env (fun x => Is_free_in_laexps x ck es) R inputs mems me ve ->
+      equiv_env (fun x => CE.IsF.Is_free_in_aexps x ck es) R inputs mems me ve ->
       (forall x, PS.In x mems -> find_val x me <> None) ->
       wc_equation P icks (EqCall s ys ck rst f es) ->
       normal_args_eq P (EqCall s ys ck rst f es) ->
-      sem_lexps_instant true R es ess ->
+      sem_exps_instant true R es ess ->
       sem_clock_instant true R ck true ->
       exists vos,
         Forall2 eq_if_present ess vos
@@ -876,13 +876,13 @@ Module Type CORRECTNESS
       as ((x, (xty, xck)) & Hin & Hnorm & Hsubv & (lck & WClck & Hinst)).
     unfold dck in *; simpl in *.
     assert (WClck':=WClck).
-    assert (equiv_env (fun x => Is_free_in_lexp x le) R inputs mems me ve)
+    assert (equiv_env (fun x => CE.IsF.Is_free_in_exp x le) R inputs mems me ve)
       by (weaken_equiv_env with constructor;
           apply Exists_exists; eauto).
-    eapply clock_match_instant_lexp in WClck'
+    eapply clock_match_instant_exp in WClck'
       as [(Hsem' & Hcksem')|((c & Hsem') & Hcksem')]; eauto;
-      apply sem_lexp_instant_det with (1:=Hsem) in Hsem'; subst v.
-    - eapply noops_lexp_exp_eval in Hnorm as (v' & Hv'); eauto.
+      apply sem_exp_instant_det with (1:=Hsem) in Hsem'; subst v.
+    - eapply noops_exp_exp_eval in Hnorm as (v' & Hv'); eauto.
       simpl; exists v'; eauto.
       split; destruct le; eauto using exp_eval.
       destruct xck.
@@ -900,7 +900,7 @@ Module Type CORRECTNESS
              now rewrite instck_subclock_not_clock_eq with (1:=Hck).
            - apply PSE.MP.Dec.F.not_mem_iff; auto.
          }
-    - exists (Some c); simpl; split; eauto using arg_correct, lexp_correct.
+    - exists (Some c); simpl; split; eauto using arg_correct, exp_correct.
   Qed.
 
   Lemma equation_cons_correct:
@@ -959,7 +959,7 @@ Module Type CORRECTNESS
     - inv Hexp; eexists; exists ve; split;
         try solve [eapply (stmt_eval_Control_absent' inputs); eauto; auto].
       + eapply (stmt_eval_Control_present' inputs);
-          eauto using stmt_eval, (lexp_correct inputs); auto.
+          eauto using stmt_eval, (exp_correct inputs); auto.
       + split; try inversion 1.
         apply Memory_Corres_eqs_Next_present; auto.
       + split; try inversion 1.

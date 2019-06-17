@@ -37,7 +37,7 @@ Module Type SBTYPING
       forall x ck e,
         In (x, typeof e) lasts ->
         wt_clock (vars ++ lasts) ck ->
-        wt_lexp (vars ++ lasts) e ->
+        wt_exp (vars ++ lasts) e ->
         wt_equation P vars lasts (EqNext x ck e)
   | wt_EqReset:
       forall s ck f b P',
@@ -50,7 +50,7 @@ Module Type SBTYPING
         Forall2 (fun x xt => In (x, dty xt) vars) xs b.(b_out) ->
         Forall2 (fun e xt => typeof e = dty xt) es b.(b_in) ->
         wt_clock (vars ++ lasts) ck ->
-        Forall (wt_lexp (vars ++ lasts)) es ->
+        Forall (wt_exp (vars ++ lasts)) es ->
         wt_equation P vars lasts (EqCall s xs ck rst f es).
 
   Definition wt_block (P: program) (b: block) : Prop :=
@@ -72,7 +72,7 @@ Module Type SBTYPING
         Forall (fun b' => b.(b_name) <> b'.(b_name))%type P ->
         wt_program (b :: P).
 
-  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_program.
+  Hint Constructors wt_clock wt_exp wt_cexp wt_equation wt_program.
 
   Lemma wt_program_NoDup:
     forall P,

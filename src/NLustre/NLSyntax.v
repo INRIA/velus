@@ -21,8 +21,8 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : idents -> clock -> ident -> lexps -> option ident -> equation
-  | EqFby : ident -> clock -> const -> lexp -> equation.
+  | EqApp : idents -> clock -> ident -> exps -> option ident -> equation
+  | EqFby : ident -> clock -> const -> exp -> equation.
 
   Implicit Type eqn: equation.
 
@@ -256,7 +256,7 @@ Module Type NLSYNTAX
     right; rewrite NotInMembers_app.
     split; auto. inversion 1; auto.
   Qed.
-  
+
 End NLSYNTAX.
 
 Module NLSyntaxFun

@@ -42,13 +42,13 @@ Module Type TRANSLATION
       | Con ck x false => Control ck (Ifte (bool_var x) Skip s)
       end.
 
-    Fixpoint translate_lexp (e: lexp) : exp :=
+    Fixpoint translate_exp (e: CESyn.exp) : exp :=
       match e with
       | Econst c           => Const c
       | Evar x ty          => tovar (x, ty)
-      | Ewhen e c x        => translate_lexp e
-      | Eunop op e ty      => Unop op (translate_lexp e) ty
-      | Ebinop op e1 e2 ty => Binop op (translate_lexp e1) (translate_lexp e2) ty
+      | Ewhen e c x        => translate_exp e
+      | Eunop op e ty      => Unop op (translate_exp e) ty
+      | Ebinop op e1 e2 ty => Binop op (translate_exp e1) (translate_exp e2) ty
       end.
 
     Fixpoint translate_cexp (x: ident) (e: cexp) : stmt :=
@@ -56,12 +56,12 @@ Module Type TRANSLATION
       | Emerge y t f =>
         Ifte (bool_var y) (translate_cexp x t) (translate_cexp x f)
       | Eite b t f =>
-        Ifte (translate_lexp b) (translate_cexp x t) (translate_cexp x f)
+        Ifte (translate_exp b) (translate_cexp x t) (translate_cexp x f)
       | Eexp l =>
-        Assign x (translate_lexp l)
+        Assign x (translate_exp l)
       end.
 
-    Definition var_on_base_clock (ck: clock) (e: lexp) : bool :=
+    Definition var_on_base_clock (ck: clock) (e: CESyn.exp) : bool :=
       match e with
       | Evar x _ =>
         negb (PS.mem x memories)
@@ -72,17 +72,17 @@ Module Type TRANSLATION
       | _ => false
       end.
 
-    Definition translate_arg (ck: clock) (e : lexp) : exp :=
+    Definition translate_arg (ck: clock) (e : CESyn.exp) : exp :=
       if var_on_base_clock ck e
-      then Valid (translate_lexp e)
-      else translate_lexp e.
+      then Valid (translate_exp e)
+      else translate_exp e.
 
     Definition translate_eqn (eqn: equation) : stmt :=
       match eqn with
       | EqDef x ck ce =>
         Control ck (translate_cexp x ce)
       | EqNext x ck le =>
-        Control ck (AssignSt x (translate_lexp le))
+        Control ck (AssignSt x (translate_exp le))
       | EqCall s xs ck rst f es =>
         Control ck (Call xs f s step (map (translate_arg ck) es))
       | EqReset s ck f =>
@@ -260,7 +260,7 @@ Module Type TRANSLATION
 
   Lemma typeof_correct:
     forall mems e,
-      typeof (translate_lexp mems e) = CESyn.typeof e.
+      typeof (translate_exp mems e) = CESyn.typeof e.
   Proof.
     induction e; intros; simpl; auto; cases.
   Qed.

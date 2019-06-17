@@ -70,21 +70,21 @@ Module Type SB2OBCTYPING
         apply NvarsSpec in H; cases
       end.
 
-    Lemma translate_lexp_wt:
+    Lemma translate_exp_wt:
       forall e,
-        wt_lexp nvars e ->
-        wt_exp mems vars (translate_lexp memset e).
+        CE.Typ.wt_exp nvars e ->
+        wt_exp mems vars (translate_exp memset e).
     Proof.
       induction e; simpl; intro WTle; inv WTle; auto using wt_exp.
       - FromMemset; eauto using wt_exp.
       - constructor; auto; now rewrite typeof_correct.
       - constructor; auto; now rewrite 2 typeof_correct.
     Qed.
-    Hint Resolve translate_lexp_wt.
+    Hint Resolve translate_exp_wt.
 
     Corollary translate_arg_wt:
       forall e clkvars ck,
-        wt_lexp nvars e ->
+        CE.Typ.wt_exp nvars e ->
         wt_exp mems vars (translate_arg memset clkvars ck e).
     Proof.
       unfold translate_arg; intros; cases; auto using wt_exp.
@@ -109,7 +109,7 @@ Module Type SB2OBCTYPING
       - match goal with H:typeofc e1 = typeofc e2 |- _ => rewrite <-H in * end.
         FromMemset; eauto using wt_stmt, wt_exp.
       - assert (Hv' := Hv).
-        match goal with H:typeofc e1 = typeofc e2 |- _ => rewrite H in Hv' end.
+        match goal with H:typeofc _ = typeofc _ |- _ => rewrite H in Hv' end.
         constructor; auto.
         now rewrite typeof_correct.
       - constructor; auto.
@@ -128,7 +128,7 @@ Module Type SB2OBCTYPING
     Qed.
 
   End Expressions.
-  Hint Resolve translate_lexp_wt translate_cexp_wt Control_wt.
+  Hint Resolve translate_exp_wt translate_cexp_wt Control_wt.
 
   Lemma step_wt:
     forall P b,

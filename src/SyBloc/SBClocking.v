@@ -46,7 +46,7 @@ Module Type SBCLOCKING
   | CEqFby:
       forall x ck e,
         In (x, ck) vars ->
-        wc_lexp vars e ck ->
+        wc_exp vars e ck ->
         wc_equation P vars (EqNext x ck e)
   | CEqReset:
       forall s ck f,
@@ -57,7 +57,7 @@ Module Type SBCLOCKING
           find_block f P = Some (b, P') ->
           (exists isub osub,
               Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
-                                  /\ (exists lck, wc_lexp vars le lck
+                                  /\ (exists lck, wc_exp vars le lck
                                             /\ instck ck isub (dck xtc) = Some lck))
                       b.(b_in) es
               /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
@@ -98,7 +98,7 @@ Module Type SBCLOCKING
       forall s xs ck rst f es,
       Has_clock_eq ck (EqCall s xs ck rst f es).
 
-  Hint Constructors wc_clock wc_lexp wc_cexp wc_equation wc_program.
+  Hint Constructors wc_clock wc_exp wc_cexp wc_equation wc_program.
   Hint Unfold wc_env wc_block.
   Hint Resolve Forall_nil.
 

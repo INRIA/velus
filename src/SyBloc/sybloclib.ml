@@ -27,15 +27,15 @@ module type SYNTAX =
     type clock
     type typ
     type const
-    type lexp
+    type exp
     type cexp
-    type lexps
+    type exps
 
     type equation =
     | EqDef of ident * clock * cexp
-    | EqNext of ident * clock * lexp
+    | EqNext of ident * clock * exp
     | EqReset of ident * clock * ident
-    | EqCall of ident * idents * clock * bool * ident * lexps
+    | EqCall of ident * idents * clock * bool * ident * exps
 
     type block = {
       b_name   : ident;
@@ -54,9 +54,9 @@ module PrintFun
     (SB: SYNTAX with type clock = CE.clock
                  and type typ   = CE.typ
                  and type const = CE.const
-                 and type lexp  = CE.lexp
+                 and type exp  = CE.exp
                  and type cexp  = CE.cexp
-                 and type lexps = CE.lexps)
+                 and type exps = CE.exps)
     (PrintOps: PRINT_OPS with type typ   = CE.typ
                           and type const = CE.const
                           and type unop  = CE.unop
@@ -92,7 +92,7 @@ module PrintFun
       | SB.EqNext (x, ck, e) ->
         fprintf p "@[<hov 2>next@ %a =@ %a@]"
           print_ident x
-          print_lexp e
+          print_exp e
       | SB.EqReset (s, ck, f) ->
         fprintf p "@[<hov 2>reset(%a<%a>)@ every@ (%a)@]"
             print_ident f
@@ -103,7 +103,7 @@ module PrintFun
           print_pattern xs
           print_ident f
           print_ident s
-          (print_comma_list print_lexp) es
+          (print_comma_list print_exp) es
 
     let print_equations p =
       pp_print_list ~pp_sep:pp_force_newline print_equation p
@@ -142,9 +142,9 @@ module SchedulerFun
     (SB: SYNTAX with type clock = CE.clock
                  and type typ   = CE.typ
                  and type const = CE.const
-                 and type lexp  = CE.lexp
+                 and type exp  = CE.exp
                  and type cexp  = CE.cexp
-                 and type lexps = CE.lexps) :
+                 and type exps = CE.exps) :
   sig
     val schedule : ident -> SB.equation list -> BinNums.positive list
   end

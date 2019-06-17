@@ -77,55 +77,55 @@ environment.
     Definition sem_clocked_vars_instant (xs: list (ident * clock)) : Prop :=
       Forall (fun xc => sem_clocked_var_instant (fst xc) (snd xc)) xs.
 
-    Inductive sem_lexp_instant: lexp -> value -> Prop:=
+    Inductive sem_exp_instant: exp -> value -> Prop:=
     | Sconst:
         forall c v,
           v = (if base then present (sem_const c) else absent) ->
-          sem_lexp_instant (Econst c) v
+          sem_exp_instant (Econst c) v
     | Svar:
         forall x v ty,
           sem_var_instant x v ->
-          sem_lexp_instant (Evar x ty) v
+          sem_exp_instant (Evar x ty) v
     | Swhen_eq:
         forall s x sc xc b,
           sem_var_instant x (present xc) ->
-          sem_lexp_instant s (present sc) ->
+          sem_exp_instant s (present sc) ->
           val_to_bool xc = Some b ->
-          sem_lexp_instant (Ewhen s x b) (present sc)
+          sem_exp_instant (Ewhen s x b) (present sc)
     | Swhen_abs1:
         forall s x sc xc b,
           sem_var_instant x (present xc) ->
           val_to_bool xc = Some b ->
-          sem_lexp_instant s (present sc) ->
-          sem_lexp_instant (Ewhen s x (negb b)) absent
+          sem_exp_instant s (present sc) ->
+          sem_exp_instant (Ewhen s x (negb b)) absent
     | Swhen_abs:
         forall s x b,
           sem_var_instant x absent ->
-          sem_lexp_instant s absent ->
-          sem_lexp_instant (Ewhen s x b) absent
+          sem_exp_instant s absent ->
+          sem_exp_instant (Ewhen s x b) absent
     | Sunop_eq:
         forall le op c c' ty,
-          sem_lexp_instant le (present c) ->
+          sem_exp_instant le (present c) ->
           sem_unop op c (typeof le) = Some c' ->
-          sem_lexp_instant (Eunop op le ty) (present c')
+          sem_exp_instant (Eunop op le ty) (present c')
     | Sunop_abs:
         forall le op ty,
-          sem_lexp_instant le absent ->
-          sem_lexp_instant (Eunop op le ty) absent
+          sem_exp_instant le absent ->
+          sem_exp_instant (Eunop op le ty) absent
     | Sbinop_eq:
         forall le1 le2 op c1 c2 c' ty,
-          sem_lexp_instant le1 (present c1) ->
-          sem_lexp_instant le2 (present c2) ->
+          sem_exp_instant le1 (present c1) ->
+          sem_exp_instant le2 (present c2) ->
           sem_binop op c1 (typeof le1) c2 (typeof le2) = Some c' ->
-          sem_lexp_instant (Ebinop op le1 le2 ty) (present c')
+          sem_exp_instant (Ebinop op le1 le2 ty) (present c')
     | Sbinop_abs:
         forall le1 le2 op ty,
-          sem_lexp_instant le1 absent ->
-          sem_lexp_instant le2 absent ->
-          sem_lexp_instant (Ebinop op le1 le2 ty) absent.
+          sem_exp_instant le1 absent ->
+          sem_exp_instant le2 absent ->
+          sem_exp_instant (Ebinop op le1 le2 ty) absent.
 
-    Definition sem_lexps_instant (les: list lexp) (vs: list value) :=
-      Forall2 sem_lexp_instant les vs.
+    Definition sem_exps_instant (les: list exp) (vs: list value) :=
+      Forall2 sem_exp_instant les vs.
 
     Inductive sem_cexp_instant: cexp -> value -> Prop :=
     | Smerge_true:
@@ -148,20 +148,20 @@ environment.
           sem_cexp_instant (Emerge x t f) absent
     | Site_eq:
         forall x t f c b ct cf,
-          sem_lexp_instant x (present c) ->
+          sem_exp_instant x (present c) ->
           sem_cexp_instant t (present ct) ->
           sem_cexp_instant f (present cf) ->
           val_to_bool c = Some b ->
           sem_cexp_instant (Eite x t f) (if b then present ct else present cf)
     | Site_abs:
         forall b t f,
-          sem_lexp_instant b absent ->
+          sem_exp_instant b absent ->
           sem_cexp_instant t absent ->
           sem_cexp_instant f absent ->
           sem_cexp_instant (Eite b t f) absent
     | Sexp:
         forall e v,
-          sem_lexp_instant e v ->
+          sem_exp_instant e v ->
           sem_cexp_instant (Eexp e) v.
 
   End InstantSemantics.
@@ -185,7 +185,7 @@ environment.
           sem_clock_instant base R ck false ->
           sem_annotated_instant sem_instant ck a absent.
 
-    Definition sem_laexp_instant := sem_annotated_instant sem_lexp_instant.
+    Definition sem_aexp_instant := sem_annotated_instant sem_exp_instant.
     Definition sem_caexp_instant := sem_annotated_instant sem_cexp_instant.
 
   End InstantAnnotatedSemantics.
@@ -225,14 +225,14 @@ environment.
     Definition sem_clocked_vars (xs: list (ident * clock)) : Prop :=
       forall n, sem_clocked_vars_instant (bk n) (restr_hist n) xs.
 
-    Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
-      lift (fun base R => sem_laexp_instant base R ck) e xs.
+    Definition sem_aexp ck (e: exp) (xs: stream value): Prop :=
+      lift (fun base R => sem_aexp_instant base R ck) e xs.
 
-    Definition sem_lexp (e: lexp) (xs: stream value): Prop :=
-      lift sem_lexp_instant e xs.
+    Definition sem_exp (e: exp) (xs: stream value): Prop :=
+      lift sem_exp_instant e xs.
 
-    Definition sem_lexps (e: list lexp) (xs: stream (list value)): Prop :=
-      lift sem_lexps_instant e xs.
+    Definition sem_exps (e: list exp) (xs: stream (list value)): Prop :=
+      lift sem_exps_instant e xs.
 
     Definition sem_caexp ck (c: cexp) (xs: stream value): Prop :=
       lift (fun base R => sem_caexp_instant base R ck) c xs.
@@ -291,7 +291,7 @@ environment.
     rewrite <-E; auto.
   Qed.
 
-  (* Add Parametric Morphism : (sem_laexp) *)
+  (* Add Parametric Morphism : (sem_aexp) *)
   Add Parametric Morphism : clock_of
       with signature eq_str ==> eq_str
         as clock_of_eq_str.
@@ -408,13 +408,13 @@ environment.
                             end.
     Qed.
 
-    Lemma sem_lexp_instant_det:
+    Lemma sem_exp_instant_det:
       forall e v1 v2,
-        sem_lexp_instant base R e v1
-        -> sem_lexp_instant base R e v2
+        sem_exp_instant base R e v1
+        -> sem_exp_instant base R e v2
         -> v1 = v2.
     Proof.
-      induction e (* using lexp_ind2 *);
+      induction e (* using exp_ind2 *);
         try now (do 2 inversion_clear 1);
         match goal with
         | H1:sem_var_instant ?R ?e (present ?b1),
@@ -438,8 +438,8 @@ environment.
         intros v1 v2 Hsem1 Hsem2.
         inversion Hsem1; inversion Hsem2; subst;
           repeat progress match goal with
-                          | H1:sem_lexp_instant ?b ?R ?e ?v1,
-                               H2:sem_lexp_instant ?b ?R ?e ?v2 |- _ =>
+                          | H1:sem_exp_instant ?b ?R ?e ?v1,
+                               H2:sem_exp_instant ?b ?R ?e ?v2 |- _ =>
                             apply IHe with (1:=H1) in H2
                           | H1:sem_var_instant ?R ?i ?v1,
                                H2:sem_var_instant ?R ?i ?v2 |- _ =>
@@ -458,21 +458,21 @@ environment.
         intros v1 v2 Hsem1 Hsem2.
         inversion_clear Hsem1; inversion_clear Hsem2;
           repeat progress match goal with
-                          | H1:sem_lexp_instant _ _ e _, H2:sem_lexp_instant _ _ e _ |- _ =>
+                          | H1:sem_exp_instant _ _ e _, H2:sem_exp_instant _ _ e _ |- _ =>
                             apply IHe with (1:=H1) in H2; inversion H2; subst
                           | H1:sem_unop _ _ _ = _, H2:sem_unop _ _ _ = _ |- _ =>
                             rewrite H1 in H2; injection H2; intro; subst
-                          | H1:sem_lexp_instant _ _ _ (present _),
-                               H2:sem_lexp_instant _ _ _ absent |- _ =>
+                          | H1:sem_exp_instant _ _ _ (present _),
+                               H2:sem_exp_instant _ _ _ absent |- _ =>
                             apply IHe with (1:=H1) in H2
                           end; try easy.
       - (* Ebinop *)
         intros v1 v2 Hsem1 Hsem2.
         inversion_clear Hsem1; inversion_clear Hsem2;
           repeat progress match goal with
-                          | H1:sem_lexp_instant _ _ e1 _, H2:sem_lexp_instant _ _ e1 _ |- _ =>
+                          | H1:sem_exp_instant _ _ e1 _, H2:sem_exp_instant _ _ e1 _ |- _ =>
                             apply IHe1 with (1:=H1) in H2
-                          | H1:sem_lexp_instant _ _ e2 _, H2:sem_lexp_instant _ _ e2 _ |- _ =>
+                          | H1:sem_exp_instant _ _ e2 _, H2:sem_exp_instant _ _ e2 _ |- _ =>
                             apply IHe2 with (1:=H1) in H2
                           | H1:sem_binop _ _ _ _ _ = Some ?v1,
                                H2:sem_binop _ _ _ _ _ = Some ?v2 |- _ =>
@@ -481,30 +481,30 @@ environment.
                           end; subst; try easy.
     Qed.
 
-    Lemma sem_laexp_instant_det:
+    Lemma sem_aexp_instant_det:
       forall ck e v1 v2,
-        sem_laexp_instant base R ck e v1
-        -> sem_laexp_instant base R ck e v2
+        sem_aexp_instant base R ck e v1
+        -> sem_aexp_instant base R ck e v2
         -> v1 = v2.
     Proof.
       intros ck e v1 v2.
       do 2 inversion_clear 1;
         match goal with
-        | H1:sem_lexp_instant _ _ _ _, H2:sem_lexp_instant _ _ _ _ |- _ =>
-          eapply sem_lexp_instant_det; eassumption
+        | H1:sem_exp_instant _ _ _ _, H2:sem_exp_instant _ _ _ _ |- _ =>
+          eapply sem_exp_instant_det; eassumption
         | H1:sem_clock_instant _ _ _ ?T, H2:sem_clock_instant _ _ _ ?F |- _ =>
           assert (T = F) by (eapply sem_clock_instant_det; eassumption);
             try discriminate
         end; auto.
     Qed.
 
-    Lemma sem_lexps_instant_det:
+    Lemma sem_exps_instant_det:
       forall les cs1 cs2,
-        sem_lexps_instant base R les cs1 ->
-        sem_lexps_instant base R les cs2 ->
+        sem_exps_instant base R les cs1 ->
+        sem_exps_instant base R les cs2 ->
         cs1 = cs2.
     Proof.
-      intros les cs1 cs2. apply Forall2_det. apply sem_lexp_instant_det.
+      intros les cs1 cs2. apply Forall2_det. apply sem_exp_instant_det.
     Qed.
 
     Lemma sem_cexp_instant_det:
@@ -525,9 +525,9 @@ environment.
                                   H2: sem_var_instant ?R ?i (present false_val) |- _ =>
                               apply sem_var_instant_det with (1:=H1) in H2;
                                 exfalso; injection H2; now apply true_not_false_val
-                            | H1: sem_lexp_instant ?bk ?R ?l ?v1,
-                                  H2: sem_lexp_instant ?bk ?R ?l ?v2 |- _ =>
-                              apply sem_lexp_instant_det with (1:=H1) in H2;
+                            | H1: sem_exp_instant ?bk ?R ?l ?v1,
+                                  H2: sem_exp_instant ?bk ?R ?l ?v2 |- _ =>
+                              apply sem_exp_instant_det with (1:=H1) in H2;
                                 discriminate || injection H2; intro; subst
                             | H1: sem_var_instant ?R ?i (present _),
                                   H2: sem_var_instant ?R ?i absent |- _ =>
@@ -536,7 +536,7 @@ environment.
                                   H2:val_to_bool _ = Some _ |- _ =>
                               rewrite H1 in H2; injection H2; intro; subst
                             end; auto.
-      eapply sem_lexp_instant_det; eassumption.
+      eapply sem_exp_instant_det; eassumption.
     Qed.
 
     Lemma sem_caexp_instant_det:
@@ -612,27 +612,27 @@ environment.
       apply_lift sem_clock_instant_det.
     Qed.
 
-    Lemma sem_lexp_det:
+    Lemma sem_exp_det:
       forall e xs1 xs2,
-        sem_lexp bk H e xs1 -> sem_lexp bk H e xs2 -> xs1 = xs2.
+        sem_exp bk H e xs1 -> sem_exp bk H e xs2 -> xs1 = xs2.
     Proof.
-      apply_lift sem_lexp_instant_det.
+      apply_lift sem_exp_instant_det.
     Qed.
 
-    Lemma sem_lexps_det:
+    Lemma sem_exps_det:
       forall les cs1 cs2,
-        sem_lexps bk H les cs1 ->
-        sem_lexps bk H les cs2 ->
+        sem_exps bk H les cs1 ->
+        sem_exps bk H les cs2 ->
         cs1 = cs2.
     Proof.
-      apply_lift sem_lexps_instant_det.
+      apply_lift sem_exps_instant_det.
     Qed.
 
-    Lemma sem_laexp_det:
+    Lemma sem_aexp_det:
       forall ck e xs1 xs2,
-        sem_laexp bk H ck e xs1 -> sem_laexp bk H ck e xs2 -> xs1 = xs2.
+        sem_aexp bk H ck e xs1 -> sem_aexp bk H ck e xs2 -> xs1 = xs2.
     Proof.
-      apply_lift sem_laexp_instant_det.
+      apply_lift sem_aexp_instant_det.
     Qed.
 
     Lemma sem_cexp_det:
@@ -681,24 +681,24 @@ clock to [sem_var_instant] too. *)
     | H1: sem_cexp ?bk ?H ?C ?X,
           H2: sem_cexp ?bk ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_cexp_det; eexact H1 || eexact H2
-    | H1: sem_lexps_instant ?bk ?H ?C ?X,
-          H2: sem_lexps_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexps_instant_det; eexact H1 || eexact H2
-    | H1: sem_lexps ?bk ?H ?C ?X,
-          H2: sem_lexps ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexps_det; eexact H1 || eexact H2
-    | H1: sem_lexp_instant ?bk ?H ?C ?X,
-          H2: sem_lexp_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_lexp ?bk ?H ?C ?X,
-          H2: sem_lexp ?bk ?H ?C ?Y |- ?X = ?Y =>
-      eapply sem_lexp_det; eexact H1 || eexact H2
-    | H1: sem_laexp_instant ?bk ?H ?CK ?C ?X,
-          H2: sem_laexp_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexp_instant_det; eexact H1 || eexact H2
-    | H1: sem_laexp ?bk ?H ?CK ?C ?X,
-          H2: sem_laexp ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
-      eapply sem_laexp_det; eexact H1 || eexact H2
+    | H1: sem_exps_instant ?bk ?H ?C ?X,
+          H2: sem_exps_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_exps_instant_det; eexact H1 || eexact H2
+    | H1: sem_exps ?bk ?H ?C ?X,
+          H2: sem_exps ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_exps_det; eexact H1 || eexact H2
+    | H1: sem_exp_instant ?bk ?H ?C ?X,
+          H2: sem_exp_instant ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_exp_instant_det; eexact H1 || eexact H2
+    | H1: sem_exp ?bk ?H ?C ?X,
+          H2: sem_exp ?bk ?H ?C ?Y |- ?X = ?Y =>
+      eapply sem_exp_det; eexact H1 || eexact H2
+    | H1: sem_aexp_instant ?bk ?H ?CK ?C ?X,
+          H2: sem_aexp_instant ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
+      eapply sem_aexp_instant_det; eexact H1 || eexact H2
+    | H1: sem_aexp ?bk ?H ?CK ?C ?X,
+          H2: sem_aexp ?bk ?H ?CK ?C ?Y |- ?X = ?Y =>
+      eapply sem_aexp_det; eexact H1 || eexact H2
     | H1: sem_var_instant ?H ?C ?X,
           H2: sem_var_instant ?H ?C ?Y |- ?X = ?Y =>
       eapply sem_var_instant_det; eexact H1 || eexact H2

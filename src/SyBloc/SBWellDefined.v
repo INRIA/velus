@@ -161,7 +161,7 @@ Module Type SBWELLDEFINED
   | CEqCall:
       forall s xs ck rst f es b P',
         find_block f P = Some (b, P') ->
-        Forall2 noops_lexp (map dck b.(b_in)) es ->
+        Forall2 noops_exp (map dck b.(b_in)) es ->
         normal_args_eq P (EqCall s xs ck rst f es).
 
   Definition normal_args_block (P: program) (b: block) : Prop :=

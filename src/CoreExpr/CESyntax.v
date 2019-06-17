@@ -7,23 +7,23 @@ Module Type CESYNTAX (Import Op: OPERATORS).
 
   (** ** Expressions *)
 
-  Inductive lexp : Type :=
-  | Econst : const -> lexp
-  | Evar   : ident -> type -> lexp
-  | Ewhen  : lexp -> ident -> bool -> lexp
-  | Eunop  : unop -> lexp -> type -> lexp
-  | Ebinop : binop -> lexp -> lexp -> type -> lexp.
+  Inductive exp : Type :=
+  | Econst : const -> exp
+  | Evar   : ident -> type -> exp
+  | Ewhen  : exp -> ident -> bool -> exp
+  | Eunop  : unop -> exp -> type -> exp
+  | Ebinop : binop -> exp -> exp -> type -> exp.
 
-  Definition lexps := list lexp.
+  Definition exps := list exp.
 
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
   | Emerge : ident -> cexp -> cexp -> cexp
-  | Eite   : lexp -> cexp -> cexp -> cexp
-  | Eexp   : lexp -> cexp.
+  | Eite   : exp -> cexp -> cexp -> cexp
+  | Eexp   : exp -> cexp.
 
-  Fixpoint typeof (le: lexp): type :=
+  Fixpoint typeof (le: exp): type :=
     match le with
     | Econst c => type_const c
     | Evar _ ty
@@ -33,13 +33,13 @@ Module Type CESYNTAX (Import Op: OPERATORS).
     end.
 
   (** Predicate used in [normal_args] in NLustre and SyBloc. *)
-  Fixpoint noops_lexp (ck: clock) (le : lexp) : Prop :=
+  Fixpoint noops_exp (ck: clock) (le : exp) : Prop :=
     match ck with
     | Cbase => True
     | Con ck' _ _ =>
       match le with
       | Econst _ | Evar _ _ => True
-      | Ewhen le' _ _ => noops_lexp ck' le'
+      | Ewhen le' _ _ => noops_exp ck' le'
       | _ => False
       end
     end.

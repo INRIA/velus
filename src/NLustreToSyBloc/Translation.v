@@ -133,11 +133,11 @@ Module Type TRANSLATION
     {
       induction eqs as [|[] eqs]; simpl; auto.
       destruct i as [ | x xs ]; auto.
-      assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
+      assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 e o :: eqs)
                     = xs ++ gather_app_vars eqs)
         by now unfold gather_app_vars.
 
-      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l o :: eqs))
+      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 e o :: eqs))
                      = x :: map fst (gather_insts eqs))
         by now unfold gather_insts.
 

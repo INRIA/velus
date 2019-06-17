@@ -47,7 +47,7 @@ Module Type NLCLOCKING
         find_node f G = Some n ->
         (exists isub osub,
             Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
-                                /\ (exists lck, wc_lexp vars le lck
+                                /\ (exists lck, wc_exp vars le lck
                                           /\ instck ck isub (dck xtc) = Some lck))
                     n.(n_in) les
             /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
@@ -61,7 +61,7 @@ Module Type NLCLOCKING
   | CEqFby:
       forall x ck v0 le,
         In (x, ck) vars ->
-        wc_lexp vars le ck ->
+        wc_exp vars le ck ->
         wc_equation G vars (EqFby x ck v0 le).
 
   Definition wc_node (G: global) (n: node) : Prop :=
@@ -87,7 +87,7 @@ Module Type NLCLOCKING
   | HcEqFby: forall x v0 ck le,
       Has_clock_eq ck (EqFby x ck v0 le).
 
-  Hint Constructors wc_clock wc_lexp wc_cexp wc_equation wc_global : nlclocking.
+  Hint Constructors wc_clock wc_exp wc_cexp wc_equation wc_global : nlclocking.
   Hint Unfold wc_env wc_node : nlclocking.
   Hint Resolve Forall_nil : nlclocking.
 

@@ -62,14 +62,14 @@ Module Type NLSEMANTICS
           sem_equation bk H (EqDef x ck ce)
     | SEqApp:
         forall bk H x ck f arg ls xs,
-          sem_lexps bk H arg ls ->
+          sem_exps bk H arg ls ->
           sem_vars H x xs ->
           sem_clock bk H ck (clock_of ls) ->
           sem_node f ls xs ->
           sem_equation bk H (EqApp x ck f arg None)
     | SEqReset:
         forall bk H x ck f arg y ys rs ls xs,
-          sem_lexps bk H arg ls ->
+          sem_exps bk H arg ls ->
           sem_vars H x xs ->
           sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
@@ -78,7 +78,7 @@ Module Type NLSEMANTICS
           sem_equation bk H (EqApp x ck f arg (Some y))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
-          sem_laexp bk H ck le ls ->
+          sem_aexp bk H ck le ls ->
           sem_var H x xs ->
           xs ≈ fby (sem_const c0) ls ->
           sem_equation bk H (EqFby x ck c0 le)
@@ -101,8 +101,8 @@ Module Type NLSEMANTICS
 
   (* The integration of (static) clocks into the (dynamic) semantics:
 
-     1. Without a clocking constraint on [x = c fby e] (sem_laexp =
-        sem_lexp with clocking constraint) the semantics is
+     1. Without a clocking constraint on [x = c fby e] (sem_aexp =
+        sem_exp with clocking constraint) the semantics is
         non-deterministic.
 
         e.g., [x = true fby x] is satisfied by very many streams:
@@ -203,7 +203,7 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqAppCase:
       forall bk H x ck f arg ls xs,
-        sem_lexps bk H arg ls ->
+        sem_exps bk H arg ls ->
         sem_vars H x xs ->
         sem_clock bk H ck (clock_of ls) ->
         sem_node G f ls xs ->
@@ -212,7 +212,7 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqResetCase:
       forall bk H x ck f arg y ys rs ls xs,
-        sem_lexps bk H arg ls ->
+        sem_exps bk H arg ls ->
         sem_vars H x xs ->
         sem_clock bk H ck (clock_of ls) ->
         sem_var H y ys ->
@@ -223,7 +223,7 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqFbyCase:
       forall bk H x ls xs c0 ck le,
-        sem_laexp bk H ck le ls ->
+        sem_aexp bk H ck le ls ->
         sem_var H x xs ->
         xs ≈ fby (sem_const c0) ls ->
         P_equation bk H (EqFby x ck c0 le).

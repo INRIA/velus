@@ -44,74 +44,74 @@ Module Type CECLOCKINGSEMANTICS
       (R: env)
       (Hcm: Forall (clock_match_instant base R) vars).
 
-    Lemma clock_match_instant_lexp:
+    Lemma clock_match_instant_exp:
       forall le ck,
-        wc_lexp vars le ck ->
+        wc_exp vars le ck ->
         forall v,
-          sem_lexp_instant base R le v ->
-          (sem_lexp_instant base R le absent
+          sem_exp_instant base R le v ->
+          (sem_exp_instant base R le absent
            /\ sem_clock_instant base R ck false)
           \/
-          ((exists c, sem_lexp_instant base R le (present c))
+          ((exists c, sem_exp_instant base R le (present c))
            /\ sem_clock_instant base R ck true).
     Proof.
       induction le.
       - inversion_clear 1. intros.
-        destruct base; [right|left]; eauto using sem_lexp_instant, sem_clock_instant.
+        destruct base; [right|left]; eauto using sem_exp_instant, sem_clock_instant.
       - inversion_clear 1. intros.
         eapply Forall_forall in Hcm; eauto.
         destruct Hcm as [(Hv & Hc)|((c & Hv) & Hc)]; [left|right];
-          eauto using sem_lexp_instant.
+          eauto using sem_exp_instant.
       - repeat inversion_clear 1;
           repeat match goal with
-                 | WC: wc_lexp _ _ _, SL: sem_lexp_instant _ _ _ _ |- _ =>
+                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
                    destruct (IHle _ WC _  SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_lexp_instant _ _ _ absent,
-                   HP: sem_lexp_instant _ _ _ (present ?cv) |- _ =>
+                 | HA: sem_exp_instant _ _ _ absent,
+                   HP: sem_exp_instant _ _ _ (present ?cv) |- _ =>
                    now assert (present cv = absent) by sem_det
                  end.
-        + right; eauto using sem_lexp_instant, sem_clock_instant.
-        + left; eauto using sem_lexp_instant, sem_clock_instant.
-        + left; eauto using sem_lexp_instant, sem_clock_instant.
+        + right; eauto using sem_exp_instant, sem_clock_instant.
+        + left; eauto using sem_exp_instant, sem_clock_instant.
+        + left; eauto using sem_exp_instant, sem_clock_instant.
       - repeat inversion_clear 1;
           repeat match goal with
-                 | WC: wc_lexp _ _ _, SL: sem_lexp_instant _ _ _ _ |- _ =>
+                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
                    destruct (IHle _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_lexp_instant _ _ _ absent,
-                   HP: sem_lexp_instant _ _ _ (present ?cv) |- _ =>
+                 | HA: sem_exp_instant _ _ _ absent,
+                   HP: sem_exp_instant _ _ _ (present ?cv) |- _ =>
                    now assert (present cv = absent) by sem_det
                  end.
-        + right; eauto using sem_lexp_instant.
-        + left; eauto using sem_lexp_instant.
+        + right; eauto using sem_exp_instant.
+        + left; eauto using sem_exp_instant.
       - repeat inversion_clear 1;
           repeat match goal with
-                 | WC: wc_lexp _ _ _, SL: sem_lexp_instant _ _ _ _ |- _ =>
+                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
                    destruct (IHle1 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | WC: wc_lexp _ _ _, SL: sem_lexp_instant _ _ _ _ |- _ =>
+                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
                    destruct (IHle2 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_lexp_instant _ _ _ absent,
-                   HP: sem_lexp_instant _ _ _ (present ?cv) |- _ =>
+                 | HA: sem_exp_instant _ _ _ absent,
+                   HP: sem_exp_instant _ _ _ (present ?cv) |- _ =>
                    now assert (present cv = absent) by sem_det
                  end.
-        + right; eauto using sem_lexp_instant.
-        + left; eauto using sem_lexp_instant.
+        + right; eauto using sem_exp_instant.
+        + left; eauto using sem_exp_instant.
     Qed.
 
-    Corollary clock_match_instant_lexp_contradiction:
+    Corollary clock_match_instant_exp_contradiction:
       forall le ck b v,
-        wc_lexp vars le ck ->
-        sem_lexp_instant base R le v ->
+        wc_exp vars le ck ->
+        sem_exp_instant base R le v ->
         sem_clock_instant base R ck b ->
         (b = true <-> v <> absent).
     Proof.
       intros le ck b v WC Hle Hck.
-      eapply clock_match_instant_lexp in WC as [(Hle' & Hck')|((v' & Hle') & Hck')];
+      eapply clock_match_instant_exp in WC as [(Hle' & Hck')|((v' & Hle') & Hck')];
         eauto.
       - apply sem_clock_instant_det with (1:=Hck) in Hck'.
-        apply sem_lexp_instant_det with (1:=Hle) in Hle'.
+        apply sem_exp_instant_det with (1:=Hle) in Hle'.
         subst; intuition.
       - apply sem_clock_instant_det with (1:=Hck) in Hck'.
-        apply sem_lexp_instant_det with (1:=Hle) in Hle'.
+        apply sem_exp_instant_det with (1:=Hle) in Hle'.
         subst; intuition; discriminate.
     Qed.
 
@@ -162,7 +162,7 @@ Module Type CECLOCKINGSEMANTICS
                  | HA: sem_cexp_instant _ _ _ absent,
                    HP: sem_cexp_instant _ _ _ (present ?cv) |- _ =>
                    now assert (present cv = absent) by sem_det
-                 | Hc: sem_lexp_instant _ _ _ (present ?c),
+                 | Hc: sem_exp_instant _ _ _ (present ?c),
                    Ht: sem_cexp_instant _ _ _ (present ?ct),
                    Hf: sem_cexp_instant _ _ _ (present ?cf),
                    Hv: val_to_bool ?c = Some ?b |- _ =>
@@ -171,7 +171,7 @@ Module Type CECLOCKINGSEMANTICS
                  end; eauto using sem_cexp_instant.
       - inversion_clear 1 as [| |? ? Hwc].
         inversion_clear 1.
-        eapply clock_match_instant_lexp in Hwc; eauto.
+        eapply clock_match_instant_exp in Hwc; eauto.
         destruct Hwc as [(Hv & Hc)|((?c & Hv) & Hc)]; [left|right];
           eauto using sem_cexp_instant.
     Qed.
@@ -189,31 +189,31 @@ Module Type CECLOCKINGSEMANTICS
       (H: history)
       (Hcm: Forall (clock_match bk H) vars).
 
-    Lemma clock_match_lexp:
+    Lemma clock_match_exp:
       forall le ck,
-        wc_lexp vars le ck ->
+        wc_exp vars le ck ->
         forall n v,
-          sem_lexp_instant (bk n) (restr_hist H n) le v ->
-          (sem_lexp_instant (bk n) (restr_hist H n) le absent
+          sem_exp_instant (bk n) (restr_hist H n) le v ->
+          (sem_exp_instant (bk n) (restr_hist H n) le absent
            /\ sem_clock_instant (bk n) (restr_hist H n) ck false)
           \/
-          ((exists c, sem_lexp_instant (bk n) (restr_hist H n) le (present c))
+          ((exists c, sem_exp_instant (bk n) (restr_hist H n) le (present c))
            /\ sem_clock_instant (bk n) (restr_hist H n) ck true).
     Proof.
-      intros; eapply clock_match_instant_lexp with (vars := vars); eauto.
+      intros; eapply clock_match_instant_exp with (vars := vars); eauto.
       clear - Hcm; induction vars; inv Hcm; constructor; auto.
     Qed.
 
-    Corollary clock_match_lexp_contradiction:
+    Corollary clock_match_exp_contradiction:
       forall le ck b v,
-        wc_lexp vars le ck ->
+        wc_exp vars le ck ->
         forall n,
-          sem_lexp_instant (bk n) (restr_hist H n) le v ->
+          sem_exp_instant (bk n) (restr_hist H n) le v ->
           sem_clock_instant (bk n) (restr_hist H n) ck b ->
           (b = true <-> v <> absent).
     Proof.
       intros.
-      eapply clock_match_instant_lexp_contradiction with (vars := vars); eauto.
+      eapply clock_match_instant_exp_contradiction with (vars := vars); eauto.
       clear - Hcm; induction vars; inv Hcm; constructor; auto.
     Qed.
 
@@ -237,7 +237,7 @@ Module Type CECLOCKINGSEMANTICS
   (* Lemma sem_var_transfer_in: *)
   (*   forall (xin : list (ident * (type * clock))) H H' les isub bk lss, *)
   (*     Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les -> *)
-  (*     sem_lexps bk H les lss -> *)
+  (*     sem_exps bk H les lss -> *)
   (*     sem_vars H' (map fst xin) lss -> *)
   (*     forall x y ys, *)
   (*       InMembers x xin -> *)
@@ -273,7 +273,7 @@ Module Type CECLOCKINGSEMANTICS
       (forall x, ~InMembers x xout -> osub x = None) ->
       sem_vars_instant R' (map fst xin) lss ->
       sem_vars_instant R' (map fst xout) yss ->
-      sem_lexps_instant base R les lss ->
+      sem_exps_instant base R les lss ->
       sem_vars_instant R ys yss ->
       forall x y ys,
         InMembers x (xin ++ xout) ->
@@ -287,7 +287,7 @@ Module Type CECLOCKINGSEMANTICS
       apply NoDupMembers_app_InMembers with (2:=Hin) in Hndup.
       apply Hnos in Hndup.
       apply InMembers_In in Hin as ((xty & xck) & Hin).
-      unfold sem_lexps_instant in Hles.
+      unfold sem_exps_instant in Hles.
       unfold sem_vars_instant in Hxin.
       rewrite Forall2_map_1 in Hxin.
       rewrite Forall2_swap_args in Hles.
@@ -333,7 +333,7 @@ Module Type CECLOCKINGSEMANTICS
       (forall x, ~InMembers x xout -> osub x = None) ->
       sem_vars H' (map fst xin) lss ->
       sem_vars H' (map fst xout) yss ->
-      sem_lexps bk H les lss ->
+      sem_exps bk H les lss ->
       sem_vars H ys yss ->
       forall x y ys,
         InMembers x (xin ++ xout) ->
@@ -355,7 +355,7 @@ Module Type CECLOCKINGSEMANTICS
       (forall x, ~InMembers x xout -> osub x = None) ->
       sem_vars_instant (restr_hist H' n) (map fst xin) (lss n) ->
       sem_vars_instant (restr_hist H' n) (map fst xout) (yss n) ->
-      sem_lexps_instant (bk n) (restr_hist H n) les (lss n) ->
+      sem_exps_instant (bk n) (restr_hist H n) les (lss n) ->
       sem_vars_instant (restr_hist H n) ys (yss n) ->
       forall x y ys,
         InMembers x (xin ++ xout) ->
@@ -370,7 +370,7 @@ Module Type CECLOCKINGSEMANTICS
       apply NoDupMembers_app_InMembers with (2:=Hin) in Hndup.
       apply Hnos in Hndup.
       apply InMembers_In in Hin as ((xty & xck) & Hin).
-      unfold sem_lexps_instant in Hles.
+      unfold sem_exps_instant in Hles.
       unfold sem_vars_instant in Hxin.
       rewrite Forall2_map_1 in Hxin.
       rewrite Forall2_swap_args in Hles.

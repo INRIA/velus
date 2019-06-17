@@ -140,7 +140,7 @@ Module Type MEMSEMANTICS
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
-          sem_lexps bk H arg ls ->
+          sem_exps bk H arg ls ->
           sem_vars H xs xss ->
 	        sem_clock bk H ck (clock_of ls) ->
           msem_node f ls Mx Mx' xss ->
@@ -150,7 +150,7 @@ Module Type MEMSEMANTICS
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sub_inst_n x M' Mx' ->
-          sem_lexps bk H arg ls ->
+          sem_exps bk H arg ls ->
           sem_vars H xs xss ->
           sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
@@ -162,7 +162,7 @@ Module Type MEMSEMANTICS
           msem_equation bk H M M' (EqApp xs ck f arg (Some y))
     | SEqFby:
         forall bk H M M' x ck ls xs c0 le,
-          sem_laexp bk H ck le ls ->
+          sem_aexp bk H ck le ls ->
           sem_var H x xs ->
           mfby x (sem_const c0) ls M M' xs ->
           msem_equation bk H M M' (EqFby x ck c0 le)
@@ -207,7 +207,7 @@ enough: it does not support the internal fixpoint introduced by
         Some x = hd_error xs ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
-        sem_lexps bk H arg ls ->
+        sem_exps bk H arg ls ->
         sem_vars H xs xss ->
         sem_clock bk H ck (clock_of ls) ->
         msem_node G f ls Mx Mx' xss ->
@@ -219,7 +219,7 @@ enough: it does not support the internal fixpoint introduced by
         Some x = hd_error xs ->
         sub_inst_n x M Mx ->
         sub_inst_n x M' Mx' ->
-        sem_lexps bk H arg ls ->
+        sem_exps bk H arg ls ->
         sem_vars H xs xss ->
         sem_clock bk H ck (clock_of ls) ->
         sem_var H y ys ->
@@ -233,7 +233,7 @@ enough: it does not support the internal fixpoint introduced by
 
     Hypothesis EqFbyCase:
       forall bk H M M' x ck ls xs c0 le,
-        sem_laexp bk H ck le ls ->
+        sem_aexp bk H ck le ls ->
         sem_var H x xs ->
         mfby x (sem_const c0) ls M M' xs ->
         P_equation bk H M M' (EqFby x ck c0 le).

@@ -41,9 +41,9 @@ Module Type SB2OBCINVARIANTS
       (inversion_clear HH; reflexivity || subst; now constructor).
   Qed.
 
-  Lemma Is_free_translate_lexp:
+  Lemma Is_free_translate_exp:
     forall x mems e,
-      Is_free_in_exp x (translate_lexp mems e) -> Is_free_in_lexp x e.
+      Is_free_in_exp x (translate_exp mems e) -> CE.IsF.Is_free_in_exp x e.
   Proof.
     induction e; simpl; intro H; auto.
     - inversion H.
@@ -71,7 +71,7 @@ Module Type SB2OBCINVARIANTS
       intros * Hfree'; split;
         apply not_Can_write_in_translate_cexp;
         apply Hfree;
-        now constructor; apply Is_free_translate_lexp with mems.
+        now constructor; apply Is_free_translate_exp with mems.
   Qed.
 
   Lemma Fusible_Control_caexp:
@@ -109,7 +109,7 @@ Module Type SB2OBCINVARIANTS
         destruct (PS.mem i mems); inversion Hfree; subst; eauto.
   Qed.
 
-  Lemma Fusible_Control_laexp:
+  Lemma Fusible_Control_aexp:
     forall mems ck s,
       (forall x, Is_free_in_clock x ck -> ~ Can_write_in x s) ->
       Fusible s ->
@@ -182,13 +182,13 @@ Module Type SB2OBCINVARIANTS
           eapply Hfni; auto.
         * apply Fusible_translate_cexp.
           intros; apply Hfni; intuition.
-      + apply Fusible_Control_laexp; auto.
+      + apply Fusible_Control_aexp; auto.
         assert (~Is_free_in_clock x ck) as Hnfree
             by (eapply wc_EqNext_not_Is_free_in_clock; eauto).
         inversion 2; subst;  contradiction.
-      + apply Fusible_Control_laexp; auto.
+      + apply Fusible_Control_aexp; auto.
         inversion 2; contradiction.
-      + apply Fusible_Control_laexp; auto.
+      + apply Fusible_Control_aexp; auto.
         intros ?? Hwrite.
         assert (In x xs) by now inv Hwrite.
         now eapply wc_EqCall_not_Is_free_in_clock; eauto.

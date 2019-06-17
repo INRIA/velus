@@ -33,19 +33,19 @@ sig
     | Cbase
     | Con of clock * ident * bool
 
-  type lexp =
+  type exp =
     | Econst of const
     | Evar of ident * typ
-    | Ewhen of lexp * ident * bool
-    | Eunop of unop * lexp * typ
-    | Ebinop of binop * lexp * lexp * typ
+    | Ewhen of exp * ident * bool
+    | Eunop of unop * exp * typ
+    | Ebinop of binop * exp * exp * typ
 
-  type lexps = lexp list
+  type exps = exp list
 
   type cexp =
     | Emerge of ident * cexp * cexp
-    | Eite of lexp * cexp * cexp
-    | Eexp of lexp
+    | Eite of exp * cexp * cexp
+    | Eexp of exp
 
 end
 
@@ -56,7 +56,7 @@ module PrintFun (CE: SYNTAX)
                            and type binop = CE.binop) :
 sig
   val print_ident         : formatter -> ident -> unit
-  val print_lexp          : formatter -> CE.lexp -> unit
+  val print_exp          : formatter -> CE.exp -> unit
   val print_cexp          : formatter -> CE.cexp -> unit
   val print_fullclocks    : bool ref
   val print_clock         : formatter -> CE.clock -> unit
@@ -84,7 +84,7 @@ struct
 
   let print_ident p i = pp_print_string p (extern_atom i)
 
-  let rec lexp prec p e =
+  let rec exp prec p e =
     let (prec', assoc) = lprecedence e in
     let (prec1, prec2) =
       if assoc = LtoR
@@ -100,17 +100,17 @@ struct
         print_ident p id
       | CE.Ewhen (e, x, v) ->
         fprintf p "%a when%s %a"
-          (lexp prec') e
+          (exp prec') e
           (if v then "" else " not")
           print_ident x
       | CE.Eunop  (op, e, ty) ->
-        PrintOps.print_unop p op ty (lexp prec') e
+        PrintOps.print_unop p op ty (exp prec') e
       | CE.Ebinop (op, e1, e2, ty) ->
-        PrintOps.print_binop p op ty (lexp prec1) e1 (lexp prec2) e2
+        PrintOps.print_binop p op ty (exp prec1) e1 (exp prec2) e2
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 
-  let print_lexp = lexp 0
+  let print_exp = exp 0
 
   let rec cexp prec p e =
     let (prec', assoc) = cprecedence e in
@@ -125,11 +125,11 @@ struct
           (cexp 16) ce2
       | CE.Eite (e, ce1, ce2) ->
         fprintf p "@[<hv 0>if %a@ then %a@ else %a@]"
-          (lexp prec') e
+          (exp prec') e
           (cexp prec') ce1
           (cexp prec') ce2
       | CE.Eexp e ->
-        lexp (prec' + 1) p e
+        exp (prec' + 1) p e
     end;
     if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

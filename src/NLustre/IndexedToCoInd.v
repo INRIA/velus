@@ -361,12 +361,12 @@ Module Type INDEXEDTOCOIND
     Proof. apply sem_vars_impl_from. Qed.
     Hint Resolve sem_vars_impl_from sem_vars_impl.
 
-    (** ** lexp level synchronous operators inversion principles
+    (** ** exp level synchronous operators inversion principles
 
         The indexed semantics is inductive only instant-speaking, therefore we
         can't use usual tactics like inversion nor induction.
         We prove some lemmas to provide inversion-like tactics on the semantics
-        of lexps.
+        of exps.
         These lemmas could be proven using the classical axiom of choice which
         gives, from an instant semantics entailment true at every instant,
         the existence of a stream verifying the general entailment.
@@ -390,30 +390,30 @@ Module Type INDEXEDTOCOIND
     *)
 
     (*
-CESem.sem_lexp b H (Ewhen e x k) es
+CESem.sem_exp b H (Ewhen e x k) es
      *)
 
     (*
     Lemma blah:
       forall e es b H,
-        CESem.sem_lexp b H e es ->
-        CESem.sem_lexp b H e (interp_lexp b H e).
+        CESem.sem_exp b H e es ->
+        CESem.sem_exp b H e (interp_exp b H e).
     Proof.
       intros * Sem n.
       specialize (Sem n).
-      unfold interp_lexp, lift.
-      inv Sem; erewrite <-interp_lexp_instant_sound; eauto.
+      unfold interp_exp, lift.
+      inv Sem; erewrite <-interp_exp_instant_sound; eauto.
 
       
             interp_str b H e Sem.
 
        sol sem            interp      sound
-       sol CESem.sem_lexp interp_lexp interp_lexp_instant_sound
+       sol CESem.sem_exp interp_exp interp_exp_instant_sound
 
-      unfold interp_lexp_instant_sound, lift;
+      unfold interp_exp_instant_sound, lift;
         inv Sem; erewrite <-sound; eauto.
 
-      | lexp => sol CESem.sem_lexp interp_lexp interp_lexp_instant_sound
+      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_sound
 
           Proof.
      *)
@@ -432,7 +432,7 @@ CESem.sem_lexp b H (Ewhen e x k) es
                   unfold interp, lift'; inv Sem; erewrite <-sound; eauto)
       in
       match type of x with
-      | lexp => sol CESem.sem_lexp interp_lexp interp_lexp_instant_sound
+      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_sound
       | cexp => sol CESem.sem_cexp interp_cexp interp_cexp_instant_sound
       | ident => sol' CESem.sem_var interp_var interp_var_instant_sound
       | clock => sol CESem.sem_clock interp_clock interp_clock_instant_sound
@@ -440,9 +440,9 @@ CESem.sem_lexp b H (Ewhen e x k) es
     
     Lemma when_inv:
       forall H b e x k es,
-        CESem.sem_lexp b H (Ewhen e x k) es ->
+        CESem.sem_exp b H (Ewhen e x k) es ->
         exists ys xs,
-          CESem.sem_lexp b H e ys
+          CESem.sem_exp b H e ys
           /\ CESem.sem_var H x xs
           /\
           (forall n,
@@ -476,9 +476,9 @@ CESem.sem_lexp b H (Ewhen e x k) es
 
     Lemma unop_inv:
       forall H b op e ty es,
-        CESem.sem_lexp b H (Eunop op e ty) es ->
+        CESem.sem_exp b H (Eunop op e ty) es ->
         exists ys,
-          CESem.sem_lexp b H e ys
+          CESem.sem_exp b H e ys
           /\
           (forall n,
               (exists c c',
@@ -499,10 +499,10 @@ CESem.sem_lexp b H (Ewhen e x k) es
 
     Lemma binop_inv:
       forall H b op e1 e2 ty es,
-        CESem.sem_lexp b H (Ebinop op e1 e2 ty) es ->
+        CESem.sem_exp b H (Ebinop op e1 e2 ty) es ->
         exists ys zs,
-          CESem.sem_lexp b H e1 ys
-          /\ CESem.sem_lexp b H e2 zs
+          CESem.sem_exp b H e1 ys
+          /\ CESem.sem_exp b H e2 zs
           /\
           (forall n,
               (exists c1 c2 c',
@@ -603,7 +603,7 @@ CESem.sem_lexp b H (Ewhen e x k) es
     Proof. intros; apply sem_clock_impl_from; auto. Qed.
     Hint Resolve sem_clock_impl.
 
-    (** ** Semantics of lexps *)
+    (** ** Semantics of exps *)
 
     Ltac use_spec Spec :=
       match goal with
@@ -617,18 +617,18 @@ CESem.sem_lexp b H (Ewhen e x k) es
         auto
       end.
 
-    (** State the correspondence for [lexp].
-        Goes by induction on [lexp] and uses the previous inversion lemmas. *)
+    (** State the correspondence for [exp].
+        Goes by induction on [exp] and uses the previous inversion lemmas. *)
     Hint Constructors CoInd.when CoInd.lift1 CoInd.lift2.
-    Lemma sem_lexp_impl_from:
+    Lemma sem_exp_impl_from:
       forall n H b e es,
-        CESem.sem_lexp b H e es ->
-        CoInd.sem_lexp (tr_history_from n H) (tr_stream_from n b) e
+        CESem.sem_exp b H e es ->
+        CoInd.sem_exp (tr_history_from n H) (tr_stream_from n b) e
                        (tr_stream_from n es).
     Proof.
       intros * Sem.
       revert dependent H; revert b es n.
-      induction e; intros * Sem; unfold CESem.sem_lexp, CESem.lift in Sem.
+      induction e; intros * Sem; unfold CESem.sem_exp, CESem.lift in Sem.
 
       - constructor.
         revert dependent es; revert b; revert n.
@@ -668,69 +668,69 @@ CESem.sem_lexp b H (Ewhen e x k) es
         use_spec Spec.
     Qed.
 
-    Corollary sem_lexp_impl:
+    Corollary sem_exp_impl:
       forall H b e es,
-        CESem.sem_lexp b H e es ->
-        CoInd.sem_lexp (tr_history H) (tr_stream b) e (tr_stream es).
-    Proof. apply sem_lexp_impl_from. Qed.
-    Hint Resolve sem_lexp_impl_from sem_lexp_impl.
+        CESem.sem_exp b H e es ->
+        CoInd.sem_exp (tr_history H) (tr_stream b) e (tr_stream es).
+    Proof. apply sem_exp_impl_from. Qed.
+    Hint Resolve sem_exp_impl_from sem_exp_impl.
 
-    (** An inversion principle for lists of [lexp]. *)
-    Lemma sem_lexps_inv:
+    (** An inversion principle for lists of [exp]. *)
+    Lemma sem_exps_inv:
       forall H b es ess,
-        CESem.sem_lexps b H es ess ->
+        CESem.sem_exps b H es ess ->
         exists ess',
-          Forall2 (CESem.sem_lexp b H) es ess'
+          Forall2 (CESem.sem_exp b H) es ess'
           /\ forall n, ess n = List.map (fun es => es n) ess'.
     Proof.
       intros * Sem.
-      exists (interp_lexps' b H es); split.
-      - eapply interp_lexps'_sound; eauto.
+      exists (interp_exps' b H es); split.
+      - eapply interp_exps'_sound; eauto.
       - intro n; specialize (Sem n); induction Sem; simpl; auto.
         f_equal; auto.
-        unfold interp_lexp; now apply interp_lexp_instant_sound.
+        unfold interp_exp; now apply interp_exp_instant_sound.
     Qed.
 
-    (** Generalization for lists of [lexp]. *)
-    Corollary sem_lexps_impl_from:
+    (** Generalization for lists of [exp]. *)
+    Corollary sem_exps_impl_from:
       forall n H b es ess,
-        CESem.sem_lexps b H es ess ->
-        Forall2 (CoInd.sem_lexp (tr_history_from n H) (tr_stream_from n b)) es
+        CESem.sem_exps b H es ess ->
+        Forall2 (CoInd.sem_exp (tr_history_from n H) (tr_stream_from n b)) es
                 (tr_streams_from n ess).
     Proof.
       intros * Sem.
-      apply sem_lexps_inv in Sem as (ess' & Sem & Eess').
+      apply sem_exps_inv in Sem as (ess' & Sem & Eess').
       assert (length es = length (ess n)) as Length by
           (rewrite Eess', map_length; simpl; eapply Forall2_length; eauto).
       apply Forall2_forall2; split.
       - unfold_tr_streams; rewrite seq_streams_length; simpl; omega.
       - intros; subst.
         rewrite nth_tr_streams_from_nth; try omega.
-        apply sem_lexp_impl_from.
-        eapply (Forall2_forall2_eq _ _ (@eq_refl lexp) (eq_str_refl))
+        apply sem_exp_impl_from.
+        eapply (Forall2_forall2_eq _ _ (@eq_refl exp) (eq_str_refl))
           in Sem as (? & Sem).
         + eapply Sem; eauto.
           unfold streams_nth.
           intros k; rewrite Eess'.
           change absent with ((fun es => es k) (fun _ => absent)).
           rewrite map_nth; eauto.
-        + unfold CESem.sem_lexp; clear.
+        + unfold CESem.sem_exp; clear.
           intros ?? E ?? E' Sem; subst.
           eapply CESem.lift_eq_str; eauto; reflexivity.
     Qed.
 
-    Corollary sem_lexps_impl:
+    Corollary sem_exps_impl:
       forall H b es ess,
-        CESem.sem_lexps b H es ess ->
-        Forall2 (CoInd.sem_lexp (tr_history H) (tr_stream b)) es (tr_streams ess).
-    Proof. apply sem_lexps_impl_from. Qed.
-    Hint Resolve sem_lexps_impl_from sem_lexps_impl.
+        CESem.sem_exps b H es ess ->
+        Forall2 (CoInd.sem_exp (tr_history H) (tr_stream b)) es (tr_streams ess).
+    Proof. apply sem_exps_impl_from. Qed.
+    Hint Resolve sem_exps_impl_from sem_exps_impl.
 
-    (** An inversion principle for annotated [lexp]. *)
-    Lemma sem_laexp_inv:
+    (** An inversion principle for annotated [exp]. *)
+    Lemma sem_aexp_inv:
       forall H b e es ck,
-        CESem.sem_laexp b H ck e es ->
-        CESem.sem_lexp b H e es
+        CESem.sem_aexp b H ck e es ->
+        CESem.sem_exp b H e es
         /\ exists bs,
             CESem.sem_clock b H ck bs
             /\ forall n,
@@ -748,17 +748,17 @@ CESem.sem_lexp b H (Ewhen e x k) es
     Qed.
 
     (** We deduce from the previous lemmas the correspondence for annotated
-        [lexp]. *)
-    Corollary sem_laexp_impl_from:
+        [exp]. *)
+    Corollary sem_aexp_impl_from:
       forall n H b e es ck,
-        CESem.sem_laexp b H ck e es ->
-        CoInd.sem_laexp (tr_history_from n H) (tr_stream_from n b) ck e
+        CESem.sem_aexp b H ck e es ->
+        CoInd.sem_aexp (tr_history_from n H) (tr_stream_from n b) ck e
                         (tr_stream_from n es).
     Proof.
       cofix Cofix; intros * Sem.
       pose proof Sem as Sem';
-        apply sem_laexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
-        apply (sem_lexp_impl_from n) in Sem';
+        apply sem_aexp_inv in Sem' as (Sem' & bs & Sem_ck & Ebs);
+        apply (sem_exp_impl_from n) in Sem';
         apply sem_clock_impl_from with (n:=n) in Sem_ck.
       rewrite (init_from_n es) in *.
       rewrite (init_from_n bs), Ebs in Sem_ck.
@@ -767,12 +767,12 @@ CESem.sem_lexp b H (Ewhen e x k) es
         apply Cofix; auto.
     Qed.
 
-    Corollary sem_laexp_impl:
+    Corollary sem_aexp_impl:
       forall H b e es ck,
-        CESem.sem_laexp b H ck e es ->
-        CoInd.sem_laexp (tr_history H) (tr_stream b) ck e (tr_stream es).
-    Proof. apply sem_laexp_impl_from. Qed.
-    Hint Resolve sem_laexp_impl_from sem_laexp_impl.
+        CESem.sem_aexp b H ck e es ->
+        CoInd.sem_aexp (tr_history H) (tr_stream b) ck e (tr_stream es).
+    Proof. apply sem_aexp_impl_from. Qed.
+    Hint Resolve sem_aexp_impl_from sem_aexp_impl.
 
     (** ** cexp level synchronous operators inversion principles *)
 
@@ -818,7 +818,7 @@ CESem.sem_lexp b H (Ewhen e x k) es
       forall H b le t f es,
         CESem.sem_cexp b H (Eite le t f) es ->
         exists les ts fs,
-          CESem.sem_lexp b H le les
+          CESem.sem_exp b H le les
           /\ CESem.sem_cexp b H t ts
           /\ CESem.sem_cexp b H f fs
           /\
@@ -846,10 +846,10 @@ CESem.sem_lexp b H (Ewhen e x k) es
       - right; repeat split; auto; intuition CESem.sem_det.
     Qed.
 
-    Lemma lexp_inv:
+    Lemma exp_inv:
       forall H b le es,
         CESem.sem_cexp b H (Eexp le) es ->
-        CESem.sem_lexp b H le es.
+        CESem.sem_exp b H le es.
     Proof.
       intros * Sem n.
       now specialize (Sem n); inv Sem.
@@ -915,7 +915,7 @@ CESem.sem_lexp b H (Ewhen e x k) es
         + apply val_to_bool_true' in H8; subst; auto.
         + apply val_to_bool_false' in H8; subst; auto.
 
-      - apply lexp_inv in Sem; constructor; auto.
+      - apply exp_inv in Sem; constructor; auto.
     Qed.
 
     Corollary sem_cexp_impl:

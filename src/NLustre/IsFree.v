@@ -31,15 +31,15 @@ Module Type ISFREE
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
       forall x f ck les i r,
-        Is_free_in_laexps i ck les \/ (r = Some i) ->
+        Is_free_in_aexps i ck les \/ (r = Some i) ->
         Is_free_in_eq i (EqApp x ck f les r)
   | FreeEqFby:
       forall x v ck le i,
-        Is_free_in_laexp i ck le ->
+        Is_free_in_aexp i ck le ->
         Is_free_in_eq i (EqFby x ck v le).
 
-  Hint Constructors Is_free_in_clock Is_free_in_lexp
-       Is_free_in_laexp Is_free_in_laexps Is_free_in_cexp
+  Hint Constructors Is_free_in_clock Is_free_in_exp
+       Is_free_in_aexp Is_free_in_aexps Is_free_in_cexp
        Is_free_in_caexp Is_free_in_eq.
 
   (** * Decision procedure *)
@@ -49,12 +49,12 @@ Module Type ISFREE
     match eq with
     | EqDef _ ck cae      => free_in_caexp ck cae fvs
     | EqApp _ ck f laes r =>
-      let fvs := free_in_laexps ck laes fvs in
+      let fvs := free_in_aexps ck laes fvs in
       match r with
       | Some x => PS.add x fvs
       | None => fvs
       end
-    | EqFby _ ck v lae    => free_in_laexp ck lae fvs
+    | EqFby _ ck v lae    => free_in_aexp ck lae fvs
     end.
 
   (** * Specification lemmas *)
@@ -68,12 +68,12 @@ Module Type ISFREE
               | H:Is_free_in_eq _ _ |- _ => inversion_clear H
               | H:PS.In _ (free_in_equation _ _) |- _ =>
                 apply free_in_caexp_spec in H
-                || apply free_in_laexp_spec in H
-                || apply free_in_laexps_spec in H
+                || apply free_in_aexp_spec in H
+                || apply free_in_aexps_spec in H
               | |- PS.In _ (free_in_equation _ _) =>
                 apply free_in_caexp_spec
-                || apply free_in_laexp_spec
-                || apply free_in_laexps_spec
+                || apply free_in_aexp_spec
+                || apply free_in_aexps_spec
               | _ => intuition; eauto
               end).
 
@@ -82,17 +82,17 @@ Module Type ISFREE
       simpl in H.
       apply PS.add_spec in H as [|].
       + subst; left; eauto.
-      + apply free_in_laexps_spec in H as [|]; aux.
+      + apply free_in_aexps_spec in H as [|]; aux.
     - destruct o; aux.
       simpl.
       apply PS.add_spec.
-      rewrite free_in_laexps_spec; intuition.
+      rewrite free_in_aexps_spec; intuition.
     - subst; simpl. now apply PSF.add_1.
     - destruct o; aux.
       simpl.
       apply PS.add_spec.
       right.
-      rewrite free_in_laexps_spec; intuition.
+      rewrite free_in_aexps_spec; intuition.
   Qed.
 
   Lemma free_in_equation_spec':

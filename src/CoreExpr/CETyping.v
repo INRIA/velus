@@ -28,25 +28,25 @@ Module Type CETYPING
         wt_clock ck ->
         wt_clock (Con ck x b).
 
-    Inductive wt_lexp : lexp -> Prop :=
+    Inductive wt_exp : exp -> Prop :=
     | wt_Econst: forall c,
-        wt_lexp (Econst c)
+        wt_exp (Econst c)
     | wt_Evar: forall x ty,
         In (x, ty) vars ->
-        wt_lexp (Evar x ty)
+        wt_exp (Evar x ty)
     | wt_Ewhen: forall e x b,
         In (x, bool_type) vars ->
-        wt_lexp e ->
-        wt_lexp (Ewhen e x b)
+        wt_exp e ->
+        wt_exp (Ewhen e x b)
     | wt_Eunop: forall op e ty,
         type_unop op (typeof e) = Some ty ->
-        wt_lexp e ->
-        wt_lexp (Eunop op e ty)
+        wt_exp e ->
+        wt_exp (Eunop op e ty)
     | wt_Ebinop: forall op e1 e2 ty,
         type_binop op (typeof e1) (typeof e2) = Some ty ->
-        wt_lexp e1 ->
-        wt_lexp e2 ->
-        wt_lexp (Ebinop op e1 e2 ty).
+        wt_exp e1 ->
+        wt_exp e2 ->
+        wt_exp (Ebinop op e1 e2 ty).
 
     Fixpoint typeofc (ce: cexp): type :=
       match ce with
@@ -64,18 +64,18 @@ Module Type CETYPING
         wt_cexp (Emerge x t f)
     | wt_Eite: forall e t f,
         typeof e = bool_type ->
-        wt_lexp e ->
+        wt_exp e ->
         wt_cexp t ->
         wt_cexp f ->
         typeofc t = typeofc f ->
         wt_cexp (Eite e t f)
     | wt_Eexp: forall e,
-        wt_lexp e ->
+        wt_exp e ->
         wt_cexp (Eexp e).
 
   End WellTyped.
 
-  Hint Constructors wt_clock wt_lexp wt_cexp.
+  Hint Constructors wt_clock wt_exp wt_cexp.
 
   Lemma wt_clock_add:
     forall x v env ck,
@@ -102,9 +102,9 @@ Module Type CETYPING
         auto.
   Qed.
 
-  Instance wt_lexp_Proper:
-    Proper (@Permutation.Permutation (ident * type) ==> @eq lexp ==> iff)
-           wt_lexp.
+  Instance wt_exp_Proper:
+    Proper (@Permutation.Permutation (ident * type) ==> @eq exp ==> iff)
+           wt_exp.
   Proof.
     intros env' env Henv e' e He.
     rewrite He; clear He.
@@ -116,9 +116,9 @@ Module Type CETYPING
         auto.
   Qed.
 
-  Instance wt_lexp_pointwise_Proper:
+  Instance wt_exp_pointwise_Proper:
     Proper (@Permutation.Permutation (ident * type)
-                                     ==> pointwise_relation lexp iff) wt_lexp.
+                                     ==> pointwise_relation exp iff) wt_exp.
   Proof.
     intros env' env Henv e.
     now rewrite Henv.

@@ -94,7 +94,7 @@ Module Type SBSEMANTICS
         forall base R S I S' x ck e c v',
           find_val x S = Some c ->
           sem_var_instant R x (match v' with present _ => present c | absent => absent end) ->
-          sem_laexp_instant base R ck e v' ->
+          sem_aexp_instant base R ck e v' ->
           find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
           sem_equation base R S I S' (EqNext x ck e)
     | SEqReset:
@@ -107,7 +107,7 @@ Module Type SBSEMANTICS
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
         forall base R S I S' ys rst ck b s es xs Is os Ss',
-          sem_lexps_instant base R es xs ->
+          sem_exps_instant base R es xs ->
           sem_clock_instant base R ck (clock_of_instant xs) ->
           (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
           Env.find s I = Some Is ->
@@ -147,7 +147,7 @@ Module Type SBSEMANTICS
       forall base R S I S' x ck e c v',
         find_val x S = Some c ->
         sem_var_instant R x (match v' with present _ => present c | absent => absent end) ->
-        sem_laexp_instant base R ck e v' ->
+        sem_aexp_instant base R ck e v' ->
         find_val x S' = Some (match v' with present c' => c' | absent => c end) ->
         P_equation base R S I S' (EqNext x ck e).
 
@@ -162,7 +162,7 @@ Module Type SBSEMANTICS
 
     Hypothesis EqCallCase:
       forall base R S I S' s ys ck rst b es xs Is os Ss',
-        sem_lexps_instant base R es xs ->
+        sem_exps_instant base R es xs ->
         sem_clock_instant base R ck (clock_of_instant xs) ->
         (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
         Env.find s I = Some Is ->

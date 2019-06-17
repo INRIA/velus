@@ -28,29 +28,29 @@ Module Type LUSTRE_TO_NLUSTRE
        (CE          : CESYNTAX     Op)
        (NL          : NLSYNTAX Ids Op CE).
 
-  Fixpoint to_lexp (e : L.exp) : res CE.lexp :=
+  Fixpoint to_exp (e : L.exp) : res CE.exp :=
     match e with
     | L.Econst c                 => OK (CE.Econst c)
     | L.Evar x (ty, ck)          => OK (CE.Evar x ty)
-    | L.Eunop op e (ty, ck)      => do le <- to_lexp e;
+    | L.Eunop op e (ty, ck)      => do le <- to_exp e;
                                     OK (CE.Eunop op le ty)
-    | L.Ebinop op e1 e2 (ty, ck) => do le1 <- to_lexp e1;
-                                    do le2 <- to_lexp e2;
+    | L.Ebinop op e1 e2 (ty, ck) => do le1 <- to_exp e1;
+                                    do le2 <- to_exp e2;
                                     OK (CE.Ebinop op le1 le2 ty)
-    | L.Ewhen [e] x b ([ty], ck) => do le <- to_lexp e;
+    | L.Ewhen [e] x b ([ty], ck) => do le <- to_exp e;
                                     OK (CE.Ewhen le x b)
     | _  => Error (msg "expression not normalized")
     end.
 
   (*
-  Definition to_lexp' (les : option (list NL.lexp)) (e : L.exp) : option (list NL.lexp) :=
-    match les, to_lexp e with
+  Definition to_exp' (les : option (list NL.exp)) (e : L.exp) : option (list NL.exp) :=
+    match les, to_exp e with
     | Some les', Some le => Some (le :: les')
     | _, _ => None
     end.
 
-  Fixpoint to_lexps (es : list L.exp) : option (list NL.lexp) :=
-    fold_left to_lexp' es (Some []).
+  Fixpoint to_exps (es : list L.exp) : option (list NL.exp) :=
+    fold_left to_exp' es (Some []).
    *)
 
   Fixpoint to_cexp (e : L.exp) : res CE.cexp :=
@@ -59,14 +59,14 @@ Module Type LUSTRE_TO_NLUSTRE
     | L.Evar _ _
     | L.Eunop _ _ _
     | L.Ebinop _ _ _ _
-    | L.Ewhen _ _ _ _                 => do le <- to_lexp e;
+    | L.Ewhen _ _ _ _                 => do le <- to_exp e;
                                          OK (CE.Eexp le)
 
     | L.Emerge x [et] [ef] ([ty], ck) => do cet <- to_cexp et;
                                          do cef <- to_cexp ef;
                                          OK (CE.Emerge x cet cef)
 
-    | L.Eite e [et] [ef] ([ty], ck)   => do le <- to_lexp e;
+    | L.Eite e [et] [ef] ([ty], ck)   => do le <- to_exp e;
                                          do cet <- to_cexp et;
                                          do cef <- to_cexp ef;
                                          OK (CE.Eite le cet cef)
@@ -197,20 +197,20 @@ Module Type LUSTRE_TO_NLUSTRE
     | (xs, [L.Eapp f es None _]) =>
         do xcks1 <- mmap (find_clock env) xs;
         do xcks2 <- OK (fold_left get_exp_clock (concat (map L.clockof es)) []);
-        do les <- mmap to_lexp es;
+        do les <- mmap to_exp es;
         OK (NL.EqApp xs (find_base_clock (xcks1 ++ xcks2)) f les None)
 
     | (xs, [L.Eapp f es (Some r) _]) =>
         do xcks1 <- mmap (find_clock env) xs;
         do xcks2 <- OK (fold_left get_exp_clock (concat (map L.clockof es)) []);
-        do les <- mmap to_lexp es;
+        do les <- mmap to_exp es;
         do r <- to_var r;
         OK (NL.EqApp xs (find_base_clock (xcks1 ++ xcks2)) f les (Some r))
 
     | ([x], [L.Efby [e0] [e] _]) =>
         do c0 <- to_constant e0;
         do ck <- find_clock env x;
-        do le <- to_lexp e;
+        do le <- to_exp e;
         OK (NL.EqFby x ck c0 le)
 
     | ([x], [e]) =>

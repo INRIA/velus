@@ -120,7 +120,7 @@ Module Type NODUP
           by now apply not_Is_defined_in_not_Is_variable_in;
           inv Hndd.
 
-        assert (~ Is_variable_in_eq i (EqFby i c c0 l))
+        assert (~ Is_variable_in_eq i (EqFby i c c0 e))
           by now intro His_var; inv His_var.
 
         now inv Hvar.

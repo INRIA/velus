@@ -184,7 +184,7 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve sem_vars_impl.
 
-    (** ** lexp level synchronous operators specifications
+    (** ** exp level synchronous operators specifications
 
         To ease the use of coinductive hypotheses to prove non-coinductive
         goals, we give for each coinductive predicate an indexed specification,
@@ -399,15 +399,15 @@ Module Type COINDTOINDEXED
     (* Qed. *)
     (* Hint Resolve sem_avar_impl. *)
 
-    (** ** Semantics of lexps *)
+    (** ** Semantics of exps *)
 
-    (** State the correspondence for [lexp].
-        Goes by induction on the coinductive semantics of [lexp]. *)
-    Hint Constructors CESem.sem_lexp_instant.
-    Lemma sem_lexp_impl:
+    (** State the correspondence for [exp].
+        Goes by induction on the coinductive semantics of [exp]. *)
+    Hint Constructors CESem.sem_exp_instant.
+    Lemma sem_exp_impl:
       forall H b e es,
-        CoInd.sem_lexp H b e es ->
-        CESem.sem_lexp (tr_Stream b) (tr_History H) e (tr_Stream es).
+        CoInd.sem_exp H b e es ->
+        CESem.sem_exp (tr_Stream b) (tr_History H) e (tr_Stream es).
     Proof.
       induction 1 as [? ? ? ? Hconst
                             |? ? ? ? ? Hvar
@@ -417,7 +417,7 @@ Module Type COINDTOINDEXED
       - apply (const_index n) in Hconst; rewrite Hconst.
         destruct (tr_Stream b n); eauto.
       - apply sem_var_impl in Hvar; eauto.
-      - specialize (IHsem_lexp n).
+      - specialize (IHsem_exp n).
         apply sem_var_impl in Hvar.
         unfold CESem.sem_var, CESem.lift in Hvar.
         specialize (Hvar n).
@@ -425,78 +425,78 @@ Module Type COINDTOINDEXED
           as [(Hes & Hxs & Hos)
              |[(? & ? & Hes & Hxs & ? & Hos)
               |(? & ? & Hes & Hxs & ? & Hos)]];
-          rewrite Hos; rewrite Hes in IHsem_lexp; rewrite Hxs in Hvar;
+          rewrite Hos; rewrite Hes in IHsem_exp; rewrite Hxs in Hvar;
             eauto.
         rewrite <-(Bool.negb_involutive k); eauto.
-      - specialize (IHsem_lexp n).
+      - specialize (IHsem_exp n).
         apply (lift1_index n) in Hlift1; destruct Hlift1
           as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
-          rewrite Hos; rewrite Hes in IHsem_lexp; eauto.
-      - specialize (IHsem_lexp1 n).
-        specialize (IHsem_lexp2 n).
+          rewrite Hos; rewrite Hes in IHsem_exp; eauto.
+      - specialize (IHsem_exp1 n).
+        specialize (IHsem_exp2 n).
         apply (lift2_index n) in Hlift2; destruct Hlift2
           as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
-          rewrite Hos; rewrite Hes1 in IHsem_lexp1; rewrite Hes2 in IHsem_lexp2;
+          rewrite Hos; rewrite Hes1 in IHsem_exp1; rewrite Hes2 in IHsem_exp2;
             eauto.
     Qed.
-    Hint Resolve sem_lexp_impl.
+    Hint Resolve sem_exp_impl.
 
-    Corollary sem_lexps_impl:
+    Corollary sem_exps_impl:
       forall H b es ess,
-        Forall2 (CoInd.sem_lexp H b) es ess ->
-        CESem.sem_lexps (tr_Stream b) (tr_History H) es (tr_Streams ess).
+        Forall2 (CoInd.sem_exp H b) es ess ->
+        CESem.sem_exps (tr_Stream b) (tr_History H) es (tr_Streams ess).
     Proof.
       induction 1; simpl; constructor.
-      - apply sem_lexp_impl; auto.
+      - apply sem_exp_impl; auto.
       - apply IHForall2.
     Qed.
-    Hint Resolve sem_lexps_impl.
+    Hint Resolve sem_exps_impl.
 
-    (** Give an indexed specification for annotated [lexp], using the previous
+    (** Give an indexed specification for annotated [exp], using the previous
         lemma. *)
-    Lemma sem_laexp_index:
+    Lemma sem_aexp_index:
       forall n H b ck le es,
-        CoInd.sem_laexp H b ck le es ->
+        CoInd.sem_aexp H b ck le es ->
         (CESem.sem_clock_instant (tr_Stream b n)
                                    (CESem.restr_hist (tr_History H) n) ck false
-         /\ CESem.sem_lexp_instant
+         /\ CESem.sem_exp_instant
              (tr_Stream b n) (CESem.restr_hist (tr_History H) n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
             CESem.sem_clock_instant (tr_Stream b n)
                                       (CESem.restr_hist (tr_History H) n) ck true
-            /\ CESem.sem_lexp_instant
+            /\ CESem.sem_exp_instant
                 (tr_Stream b n) (CESem.restr_hist (tr_History H) n) le (present e)
             /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck
                                       |? ? ? ? ? ? Indexed' Hck];
-          apply sem_lexp_impl in Indexed'; specialize (Indexed' 0);
+          apply sem_exp_impl in Indexed'; specialize (Indexed' 0);
             repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed';
               eapply (sem_clock_impl) in Hck; specialize (Hck 0); rewrite tr_Stream_0 in Hck.
         + right. eexists; intuition; auto.
         + left; intuition.
       - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed'];
-          apply sem_lexp_impl in Indexed';
+          apply sem_exp_impl in Indexed';
           rewrite tr_Stream_S, tr_History_tl; eauto.
     Qed.
 
     (** We deduce from the previous lemma the correspondence for annotated
-        [lexp]. *)
-    (* Hint Constructors CESem.sem_laexp_instant. *)
-    Corollary sem_laexp_impl:
+        [exp]. *)
+    (* Hint Constructors CESem.sem_aexp_instant. *)
+    Corollary sem_aexp_impl:
       forall H b e es ck,
-        CoInd.sem_laexp H b ck e es ->
-        CESem.sem_laexp (tr_Stream b) (tr_History H) ck e (tr_Stream es).
+        CoInd.sem_aexp H b ck e es ->
+        CESem.sem_aexp (tr_Stream b) (tr_History H) ck e (tr_Stream es).
     Proof.
       intros * Indexed n.
-      apply (sem_laexp_index n) in Indexed;
+      apply (sem_aexp_index n) in Indexed;
         destruct Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)];
         rewrite Hes; constructor; auto.
     Qed.
-    Hint Resolve sem_laexp_impl.
+    Hint Resolve sem_aexp_impl.
 
     (** ** cexp level synchronous operators specifications *)
 
@@ -600,7 +600,7 @@ Module Type COINDTOINDEXED
 
       - specialize (IHsem_cexp1 n).
         specialize (IHsem_cexp2 n).
-        eapply sem_lexp_impl in He.
+        eapply sem_exp_impl in He.
         specialize (He n).
         apply (ite_index n) in Hite
           as [(Hes & Hts & Hfs & Hos)
@@ -615,7 +615,7 @@ Module Type COINDTOINDEXED
           eapply CESem.Site_eq; eauto.
           apply val_to_bool_false.
 
-      - apply sem_lexp_impl in He; auto.
+      - apply sem_exp_impl in He; auto.
     Qed.
     Hint Resolve sem_cexp_impl.
 

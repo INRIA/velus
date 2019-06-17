@@ -348,12 +348,12 @@ Module Type NL2SBCLOCKING
              eapply NoDupMembers_app_InMembers, NotInMembers_app in Hnodup as (? & ?); eauto.
              rewrite 2 idck_app, 2 in_app in Hinc; destruct Hinc as [Hinc|[|Hinc]]; auto;
                apply In_InMembers in Hinc; rewrite InMembers_idck in Hinc; contradiction.
-           - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1)))))
+           - assert (In (x, ck) (idck (fst (fold_left gather_eq l ([], l0)))))
                as Hin' by (apply in_map_iff; eexists; intuition; eauto; simpl; auto).
              apply IHl in Hin'; intuition.
          }
          *{ intros * (Hin & [Mem|Mem]).
-            - assert (In (x, ck) (idck (fst (fold_left gather_eq l0 ([], l1))))) as Hin'
+            - assert (In (x, ck) (idck (fst (fold_left gather_eq l ([], l0))))) as Hin'
                   by (apply IHl; auto; intros * Hin';
                       apply Spec; simpl; auto).
               unfold idck in Hin'; apply in_map_iff in Hin' as ((x', (c', ck')) & E & Hin'); simpl in *; inv E.

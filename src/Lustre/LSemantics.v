@@ -25,7 +25,7 @@ Module Type LSEMANTICS
   Definition history := Env.t (Stream value).
 
   CoFixpoint const (b: Stream bool) (c: const): Stream value :=
-    (if hd b then present (sem_const c) else absent) ::: const c (tl b).
+    (if hd b then present (sem_const c) else absent) ::: const (tl b) c.
 
   CoInductive lift1 (op: unop) (ty: type)
     : Stream value -> Stream value -> Prop :=
