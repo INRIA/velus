@@ -82,7 +82,7 @@ Inductive expression :=
 | IFTE     : list expression -> list expression -> list expression -> astloc
              -> expression
 | CAST     : type_name -> list expression -> astloc -> expression
-| APP      : ident -> list expression -> option ident -> astloc -> expression
+| APP      : ident -> list expression -> list expression -> astloc -> expression
 | CONSTANT : constant -> astloc -> expression
 | VARIABLE : ident -> astloc -> expression
 | FBY      : list expression -> list expression -> astloc -> expression

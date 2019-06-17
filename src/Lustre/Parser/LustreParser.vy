@@ -45,7 +45,7 @@ Import ListNotations.
 %token<LustreAst.astloc> WHEN WHENOT MERGE ON ONOT DOT
 %token<LustreAst.astloc> ASSERT
 
-%token<LustreAst.astloc> EVERY
+%token<LustreAst.astloc> RESET EVERY
 
 %token<LustreAst.astloc> EOF
 
@@ -139,10 +139,10 @@ postfix_expression:
 | expr=primary_expression
     { expr }
 | fn=VAR_NAME LPAREN args=expression_list RPAREN
-    { [LustreAst.APP (fst fn) (rev args) None (snd fn)] }
-| fn=VAR_NAME LPAREN args=expression_list RPAREN
-  EVERY r=VAR_NAME
-    { [LustreAst.APP (fst fn) (rev args) (Some (fst r)) (snd fn)] }
+    { [LustreAst.APP (fst fn) (rev args) [] (snd fn)] }
+| LPAREN RESET fn=VAR_NAME EVERY e=expression RPAREN
+  LPAREN args=expression_list RPAREN
+    { [LustreAst.APP (fst fn) (rev args) e (snd fn)] }
 
 (* Semantic value is in reverse order. *)
 expression_list:

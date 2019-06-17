@@ -810,7 +810,7 @@ Section ElabExpressions.
                        (lannots_ty ants, Cstream eck), loc))
     | IFTE _ _ _ loc => err_not_singleton loc
 
-    | APP f aes None loc =>
+    | APP f aes [] loc =>
       do (tyck_in, tyck_out) <- find_node_interface loc f;
       (* approximate lcks list to infer whens *)
       let abck := approx_base_clock lcks tyck_out in
@@ -828,7 +828,7 @@ Section ElabExpressions.
       do _ <- check_inputs loc ianns anns;
       OK (fidx2, (Eapp f (map fst eas) None oanns, loc))
 
-    | APP f aes (Some r) loc =>
+    | APP f aes [aer] loc =>
       do (tyck_in, tyck_out) <- find_node_interface loc f;
       (* approximate lcks list to infer whens *)
       let abck := approx_base_clock lcks tyck_out in
@@ -844,9 +844,11 @@ Section ElabExpressions.
       do ianns <- mmap (inst_annot loc bck isubst) tyck_in;
       do oanns <- mmap (inst_annot loc bck osubst) tyck_out;
       do _ <- check_inputs loc ianns anns;
-      do (rty, rck) <- find_var loc r;
-      do _ <- assert_id_type loc r rty bool_type;
-      OK (fidx2, (Eapp f (map fst eas) (Some (Evar r (rty, Cnamed (Vnm r) (sclk rck)))) oanns, loc))
+      do (fidx', (er, locr)) <- elab_exp' lcks fidx2 aer;
+      do (erty, erck) <- single_annot locr er;
+      do _ <- assert_type locr erty bool_type;
+      OK (fidx', (Eapp f (map fst eas) (Some er) oanns, loc))
+    | APP _ _ _ loc => err_not_singleton loc
     end.
 
   Fixpoint check_pat (gloc: astloc)
@@ -1173,7 +1175,7 @@ Section ElabExpressions.
       destruct es. 2:now inversion Helab. simpl in Helab.
       now monadInv2 Helab.
     - (* APP *)
-      destruct r.
+      destruct r as [|? []].
       + monadInv Hlen. monadInv Helab.
         setoid_rewrite surjective_pairing in EQ4.
         simpl in EQ4. monadInv2 EQ4.
@@ -1188,6 +1190,7 @@ Section ElabExpressions.
         simpl. rewrite Coqlib.list_length_map.
         monadInv EQ4. symmetry.
         eauto using Coqlib.list_forall2_length.
+      + inversion Helab.
     - (* CONSTANT *)
       monadInv Hlen.
       inversion_clear Helab.
@@ -1445,7 +1448,7 @@ Section ElabExpressions.
       auto using inmembers_cons.
     - (* APP *)
       monadInv Hmm. monadInv2 EQ. monadInv2 EQ1.
-      destruct o.
+      destruct l0 as [|? []].
       + monadInv2 EQ.
         setoid_rewrite surjective_pairing in EQ6. simpl in EQ6.
         monadInv2 EQ6.
@@ -1500,6 +1503,7 @@ Section ElabExpressions.
           match goal with H:mmap _ ?xtc = OK ?ann |- length ?xtc = length ?ann =>
                           monadInv H end.
           eauto using Coqlib.list_forall2_length.
+      + inversion EQ.
     - (* CONSTANT *)
       monadInv Hmm.
       match goal with H:context [add_whens ?loc _ ?const] |- _ =>
@@ -1826,7 +1830,7 @@ Section ElabExpressions.
         eauto with datatypes.
     - (* APP *)
       simpl in Helab.
-      destruct o.
+      destruct l0 as [|? []].
       + monadInv Helab.
         setoid_rewrite surjective_pairing in EQ3.
         simpl in EQ3. monadInv EQ3.
@@ -1870,49 +1874,8 @@ Section ElabExpressions.
           destruct Hzin2 as [idx Hzin2].
           match goal with H:_ = OK (zty, zck) |- _ =>
                           now rewrite Hzin2 in H; monadInv H end.
-      + monadInv Helab.
-        setoid_rewrite surjective_pairing in EQ3.
-        simpl in EQ3. monadInv EQ3.
-        rewrite lnannots_cons in *.
-        simpl in Helabs.
-        match goal with H:context [ skipn (length ?x) _ ] |- _ =>
-                        remember (length x) as len eqn:Hlen end.
-        rewrite <-firstn_skipn with (n:=len) in Hin.
-        apply in_app in Hin.
-        apply make_imap_notvnm_skipn with (n:=len) in Hfind.
-        *{ rewrite skipn_app in Hfind.
-           2:now rewrite Hlen; unfold lannots_ty; simpl;
-             repeat rewrite Coqlib.list_length_map.
-           destruct Hin as [Hin|Hin].
-           - rewrite find_make_imap_not_in_members in Hfind.
-             2:now eauto using InMembers_firstn_skipn, In_InMembers.
-             eapply Hnsa; eauto using In_firstn.
-           - apply check_inputs_app with (n:=len) in Hchk.
-             rewrite skipn_app with (n:=len) in Hchk.
-             2:rewrite Hlen; now unfold lannots_ty; simpl;
-               repeat rewrite Coqlib.list_length_map.
-             apply IH with (3:=Helabs) (5:=Hchk) (6:=Hfind) (7:=Hin);
-               auto using NoDupMembers_skipn, mmap_skipn.
-             intros; eapply Hnsa; eauto using In_skipn.
-         }
-        * simpl. rewrite CommonList.firstn_app.
-          2:now rewrite Coqlib.list_length_map; auto.
-          apply Forall_forall.
-          intros ((zty, zck), zloc) Hzin.
-          apply in_map_iff in Hzin.
-          destruct Hzin as (zann & Hzeq & Hzin).
-          destruct zann. inversion Hzeq; subst; clear Hzeq.
-          match goal with H: context [fold_left make_omap ?xs ?s] |- _ =>
-                          apply mmap_inversion in H end.
-          match goal with H: Coqlib.list_forall2 _ _ _ |- _ =>
-                          apply Coqlib.list_forall2_in_right with (2:=Hzin) in H;
-                            destruct EQ3 as ((y, (t, c)) & Hzin2 & Hann) end.
-          simpl in Hann. monadInv Hann.
-          apply In_InMembers in Hzin2.
-          eapply find_make_omap_vidx in Hzin2.
-          destruct Hzin2 as [idx Hzin2].
-          match goal with H:_ = OK (zty, zck) |- _ =>
-                          now rewrite Hzin2 in H; monadInv H end.
+      + admit.
+      + inversion Helab.
     - (* CONSTANT *)
       monadInv Helab.
       match goal with H:context [add_whens ?loc _ ?const] |- _ =>
@@ -2043,7 +2006,7 @@ Section ElabExpressions.
         unfold lannots_ty.
         repeat rewrite Forall_map.
         apply Forall_forall; intros; simpl; eauto.
-  Qed.
+  Admitted.
 
   Lemma wt_exp_lannot_all_sclock:
     forall G env e a,
@@ -2326,9 +2289,7 @@ Section ElabExpressions.
       apply assert_paired_types_spec_types in H;
       setoid_rewrite lannots_ty_lannots_spec in H
     | H:Forall _ [] |- _ => clear H
-    end.
-    - (* Eunop *)  eauto with ltyping.
-    - (* Ebinop *) eauto with ltyping.
+    end; eauto with ltyping.
     - (* Eite *)
       econstructor; try rewrite lannots_ty_lannots_spec; eauto with ltyping;
         rewrite Forall_map;
@@ -2341,154 +2302,6 @@ Section ElabExpressions.
           apply Forall_forall with (1:=Hfa) (2:=Hin) in Helab; now auto
         end.
     - (* Eunop (CastOp) *) eauto using type_castop with ltyping.
-    - (* EappReset *)
-      match goal with x:(list sclock * positive)%type |- _ =>
-                      destruct x as (sclks & fidx'') end.
-      match goal with x:(Env.t ident)%type |- _ => rename x into aimap end.
-      setoid_rewrite surjective_pairing in EQ3.
-      NamedDestructCases. simpl in *.
-      monadInv EQ3.
-      match goal with |- context [Eapp f (map fst ?x1) _ ?x2] =>
-        rename x1 into els, x2 into oann end.
-      match goal with H:check_inputs _ ?x _ = OK ?any |- _ =>
-                      rename x into iann; destruct any end.
-      unfold find_node_interface in *. NamedDestructCases.
-      apply wt_nenv in Heq. destruct Heq as (n & Hfind & Hnin & Hnout).
-      apply Forall2_eq in Hnin. apply Forall2_eq in Hnout. subst.
-      destruct wf_G as (wt_G & wc_G).
-      destruct (wt_find_node _ _ _ wt_G Hfind) as (G' & Hfind').
-      match goal with EQ0:approx_imap _ _ _ = OK _,
-                      EQ1:mmaps (elab_arg elab_exp') _ _ = OK _,
-                      EQ2:mmap _ _ = OK iann,
-                      EQ3:check_inputs _ _ _ = OK _,
-                      EQ4:mmap _ _ = OK oann
-                      |- _ =>
-        rename EQ0 into Hai, EQ1 into Hearg, EQ2 into Hiann, EQ3 into Hchk,
-               EQ4 into Hoann
-      end.
-      assert (Forall (wt_sclock tvars)
-                     (map (fun xtc =>
-                             approx_clock (approx_base_clock lcks n.(n_out))
-                                          aimap (dck xtc)) n.(n_in))) as Hwtac.
-      { apply Forall_forall.
-        setoid_rewrite in_map_iff.
-        intros ? ((z, (zty, zck)) & Hz & Hzin).
-        pose proof (approx_imap_to_make_imap _ _ _ _ _ _ _
-          (NoDupMembers_app_l _ _ n.(n_nodup)) Hai Hearg) as Haim.
-        pose proof (make_imap_var_type _ _ _ _ _ _ _ _ _ _ _ _
-          (NoDupMembers_app_l _ _ n.(n_nodup)) Hearg Hiann Hchk) as Him.
-        subst. unfold dck. simpl.
-        inversion Hfind' as (Hwtin & Hother). clear Hother.
-        apply Forall_forall with (2:=Hzin) in Hwtin.
-        unfold dck in Hwtin. simpl in Hwtin. clear Hzin.
-        induction zck.
-        - apply wt_approx_base_clock. now inversion Hlcks; auto.
-        - simpl.
-          destruct (Env.find i0 aimap) eqn:Hia.
-          2:now inversion Hwtin; intuition.
-          apply Haim in Hia.
-          inversion_clear Hwtin as [|? ? ? Hiin Hwtzck].
-          unfold idty in Hiin. apply in_map_iff in Hiin.
-          destruct Hiin as ((w, (wty, wck)) & Hwe & Hin).
-          inv Hwe. pose proof Hia as Hia'; apply Env.find_In in Hia'.
-          apply map_imap_InMembers in Hia'.
-          destruct Hia' as [Hia'|Hia'].
-          2:now apply Env.Props.P.F.empty_in_iff in Hia'.
-          eapply Him in Hia; eauto.
-          destruct Hia as [? Hia].
-          rewrite Hia.
-          constructor; eauto using wt_sclk.
-          apply Env.elements_correct in Hia.
-          apply in_map_iff.
-          exists (i1, (bool_type, x)); eauto using wt_sclk. }
-      econstructor; eauto.
-      + apply Forall_map.
-        eapply mmaps_weak_spec with (1:=Hearg)
-          (I:=fun s=>Forall (wt_sclock tvars) (fst s)).
-        now auto.
-        intros ae (lcks1, fidx1) (e, loc0) (lcks2, fidx2) Hwt Hin Helab.
-        simpl. simpl in Helab. monadInv2 Helab.
-        eapply Forall_forall in Hin; eauto.
-        eauto using Forall_skipn.
-      + apply check_inputs_spec_types in Hchk.
-        rewrite lnannots_typesof in Hchk.
-        rewrite <-Hchk.
-        apply mmap_inversion, list_forall2_Forall2 in Hiann.
-        apply Forall2_map_1, Forall2_swap_args.
-        apply Forall2_impl_In with (2:=Hiann).
-        intros (w, (wty, wck)) (ty, nck) Hin1 Hin2 Hann.
-        simpl in Hann; monadInv Hann.
-        unfold dty. simpl.
-        repeat match goal with
-               | H: context [Env.find ?x (make_imap ?s ?n ?xs)] |- _ =>
-                 destruct (Env.find x (make_imap s n xs))
-               | H: OK _ = OK _ |- _ => now inversion H
-               end.
-      + apply mmap_inversion, list_forall2_Forall2, Forall2_swap_args in Hoann.
-        apply Forall2_impl_In with (2:=Hoann).
-        intros (ty, nck) (w, (wty, wck)) Hin1 Hin2 Hann.
-        simpl in Hann; monadInv Hann.
-        unfold dty. simpl.
-        repeat match goal with
-               | H: context [Env.find ?x ?xs] |- _ => destruct (Env.find x xs)
-               | H: OK _ = OK _ |- _ => now inversion H end.
-      + pose proof (make_imap_var_type _ _ _ _ _ _ _ _ _ _ _ _
-          (NoDupMembers_app_l _ _ n.(n_nodup)) Hearg Hiann Hchk) as Him.
-        apply Forall_forall.
-        intros (x, nck) Hin.
-        apply mmap_inversion, list_forall2_Forall2, Forall2_swap_args in Hoann.
-        apply Forall2_in_left with (2:=Hin) in Hoann.
-        destruct Hoann as ((o, (oty, ock)) & Hyin & Hinst).
-        simpl in Hinst. monadInv Hinst.
-        destruct Hfind' as (Hwtci & Hwtco & Hwtcv & HH).
-        clear Hwtci Hwtcv HH.
-        apply Forall_forall with (2:=Hyin) in Hwtco.
-        unfold dck in Hwtco; simpl in Hwtco.
-        eapply wt_inst_clock in EQ; eauto.
-        * simpl; NamedDestructCases; intro; subst; eauto with ltyping.
-        * unfold calculate_base_clock.
-          destruct n.(n_in) as [|(w, (wty, wck)) ws]; auto with ltyping.
-          clear Hchk Hfind Hai Hiann Hyin wt_G wc_G Hwtco Him Hin EQ EQ0.
-                (* loc x nck o oty ock G' x0 iann oann. *)
-          revert es els fidx'' sclks fidx H Hearg.
-          induction es as [|e es IH].
-          now simpl; intros; monadInv Hearg; auto with ltyping.
-          intros. inversion_clear H as [|? ? Hwtes1 Hwtes2].
-          simpl in Hearg. monadInv2 Hearg. monadInv2 EQ.
-          rewrite lnannots_cons.
-          destruct (numstreams x8) eqn:Hns.
-          now eapply IH in Hwtes2; try rewrite lnannot_0; eauto.
-          apply Hwtes1 in EQ0; auto.
-          eapply lnannot_Sn in Hns.
-          destruct Hns as (((rty, rck), rloc) & anns & Hns).
-          rewrite Hns. simpl.
-          apply wt_find_base.
-          match goal with H:lnannot ?e = ?ann :: _ |- _ =>
-            assert (In ann (lnannot e)) as Hain end.
-          rewrite Hns; auto with datatypes.
-          eapply wt_lnannot in Hain; try inv Hain; eauto.
-        * intros w y wty Hfw Hwin.
-          unfold idty in Hwin.
-          rewrite map_app, in_app in Hwin.
-          setoid_rewrite in_map_iff in Hwin.
-          destruct Hwin as [((w', (wty', wck)) & Heq & Hwin)
-                           |((w', (wty', wck)) & Heq & Hwin)]; inv Heq.
-          { rewrite find_make_omap_not_in_members in Hfw.
-            - apply Him with (2:=Hwin) in Hfw.
-              destruct Hfw as (wck' & Hfw).
-              apply Env.elements_correct in Hfw.
-              unfold idty. apply in_map_iff.
-              exists (y, (wty, wck')); auto.
-            - intro Hwin'.
-              apply In_InMembers in Hwin.
-              apply (NoDupMembers_app_InMembers _ _ _ n.(n_nodup) Hwin).
-              apply InMembers_app; auto. }
-          apply In_InMembers in Hwin.
-          eapply find_make_omap_vidx in Hwin.
-          destruct Hwin as (i' & Hwin).
-          now rewrite Hwin in Hfw.
-      + constructor; eauto using find_var_type, wt_nclock, wt_sclk, find_var_wt_clock.
-      + simpl; f_equal; eapply assert_id_type_eq; eauto.
     - (* Eapp *)
       match goal with x:(list sclock * positive)%type |- _ =>
                       destruct x as (sclks & fidx'') end.
@@ -2497,7 +2310,7 @@ Section ElabExpressions.
       NamedDestructCases. simpl in *.
       monadInv EQ3.
       match goal with |- context [Eapp f (map fst ?x1) _ ?x2] =>
-                      rename x1 into els, x2 into oann end.
+        rename x1 into els, x2 into oann end.
       match goal with H:check_inputs _ ?x _ = OK ?any |- _ =>
                       rename x into iann; destruct any end.
       unfold find_node_interface in *. NamedDestructCases.
@@ -2596,15 +2409,15 @@ Section ElabExpressions.
         * simpl; NamedDestructCases; intro; subst; eauto with ltyping.
         * unfold calculate_base_clock.
           destruct n.(n_in) as [|(w, (wty, wck)) ws]; auto with ltyping.
-          clear Hchk Hfind Hai Hiann Hyin wt_G wc_G Hwtco Him Hin EQ EQ0
-                loc x nck o oty ock G' x0 iann oann.
+          clear Hchk Hfind Hai Hiann Hyin wt_G wc_G Hwtco Him Hin EQ EQ0.
+                (* loc x nck o oty ock G' x0 iann oann. *)
           revert es els fidx'' sclks fidx H Hearg.
           induction es as [|e es IH].
           now simpl; intros; monadInv Hearg; auto with ltyping.
           intros. inversion_clear H as [|? ? Hwtes1 Hwtes2].
           simpl in Hearg. monadInv2 Hearg. monadInv2 EQ.
           rewrite lnannots_cons.
-          destruct (numstreams x3) eqn:Hns.
+          destruct (numstreams x5) eqn:Hns.
           now eapply IH in Hwtes2; try rewrite lnannot_0; eauto.
           apply Hwtes1 in EQ0; auto.
           eapply lnannot_Sn in Hns.
@@ -2633,8 +2446,19 @@ Section ElabExpressions.
               apply InMembers_app; auto. }
           apply In_InMembers in Hwin.
           eapply find_make_omap_vidx in Hwin.
-          destruct Hwin as (i & Hwin).
+          destruct Hwin as (i' & Hwin).
           now rewrite Hwin in Hfw.
+    (* - admit. *)
+    (*   + constructor; eauto using find_var_type, wt_nclock, wt_sclk, find_var_wt_clock. *)
+    (*   + simpl; f_equal; eapply assert_id_type_eq; eauto. *)
+    - (* Reset *)
+      match goal with x:(list sclock * positive)%type |- _ =>
+                      destruct x as (sclks & fidx'') end.
+      match goal with x:(Env.t ident)%type |- _ => rename x into aimap end.
+      setoid_rewrite surjective_pairing in EQ3.
+      NamedDestructCases. simpl in *.
+      monadInv EQ3.
+      admit.
     - (* Econst *)
       unfold add_whens.
       case (do_add_when_to_constants tt); auto with ltyping.
@@ -2720,7 +2544,7 @@ Section ElabExpressions.
         | H:In _ efs, Ha:Forall _ efs |- _ => apply Forall_forall with (1:=Ha) in H
         end; subst;
           eauto using wt_sclk with ltyping.
-  Qed.
+  Admitted.
 
   Lemma lannots_clocksof:
     forall els,
@@ -3255,7 +3079,7 @@ Section ElabExpressions.
              end; auto.
       apply Is_index_in_nclocks_Cstream.
       now rewrite Hclockof.
-    - (* EappReset *)
+    - (* Eapp *)
       setoid_rewrite surjective_pairing in EQ3.
       simpl in EQ3. monadInv EQ3.
       apply mmaps_spec
@@ -3341,92 +3165,10 @@ Section ElabExpressions.
           apply Forall_forall with (1:=H) (2:=Hin) in Helab; destruct Helab end; auto.
         repeat (split; auto).
         now apply Forall_skipn.
-    - (* Eapp *)
+    - (* Reset *)
       setoid_rewrite surjective_pairing in EQ3.
       simpl in EQ3. monadInv EQ3.
-      apply mmaps_spec
-      with (P:=fun s s' el =>
-                 forall i, Is_index_in_nclocks i (nclockof (fst el)) ->
-                           snd s <= i < snd s')
-           (R:=fun s s'=> snd s <= snd s')
-           (I:=fun _ => True) (IS:=fun s => Forall Name_only_core_sclock (fst s))
-        in EQ0; auto.
-      + simpl in *.
-        destruct EQ0 as (Hfa & Hle & ? & ?).
-        split.
-        2:now apply Pos.le_trans with (1:=Hle) (2:=fst_fold_left_make_omap1 _ _ _).
-        match goal with H: s <= snd ?t |- _ => destruct t as (sclk, fidx) end.
-        match goal with H:mmap (inst_annot _ _ (snd _)) _ = OK _ |- _ =>
-          rename H into Hfao end.
-        apply mmap_inversion in Hfao.
-        apply list_forall2_Forall2 in Hfao.
-        unfold find_node_interface in *. NamedDestructCases.
-        apply wt_nenv in Heq. destruct Heq as (n & Hfind & Hnin & Hnout).
-        apply Forall2_eq in Hnin. apply Forall2_eq in Hnout. subst.
-        pose proof (find_make_imap_Is_index_in_nclocks
-                      _ _ _ (NoDupMembers_app_l _ _ (n.(n_nodup))) Hfa) as Himap.
-        pose proof (Is_index_in_calculate_base_clock _ _ n.(n_in) Hfa) as Hcalcb.
-        intros i Hii.
-        apply Exists_exists in Hii.
-        destruct Hii as (nck' & Hin & Hii).
-        apply in_map_iff in Hin.
-        destruct Hin as ((ty, nck) & Hnck & Hin).
-        simpl in Hnck; subst.
-        apply Forall2_in_right with (2:=Hin) in Hfao.
-        destruct Hfao as ((z, (zty, zck)) & Hzin & Hinst).
-        simpl in Hinst; monadInv Hinst.
-        assert (forall i, Is_index_in_sclock i x -> s <= i < fidx + Pos.of_nat (length n.(n_out))).
-        { clear i Hii Hzin EQ0.
-          intros i Hii. revert x i Hii EQ.
-          induction zck; simpl.
-          - intros. monadInv EQ.
-            apply Hcalcb in Hii. simpl in Hii; destruct Hii.
-            split; auto; intros.
-            match goal with H:i<fidx |- _ => apply Pos.lt_trans with (1:=H) end.
-            apply Pos.lt_add_r.
-          - intros sck j Hij Hm.
-            monadInv Hm. NamedDestructCases. inv Hij.
-            2:now eapply IHzck in EQ; eauto.
-            apply find_fold_left_make_omap in Heq.
-            destruct Heq as [Heq|Heq].
-            + destruct Heq as (Heq1 & Heq2).
-              split. now apply Pos.le_trans with (1:=Hle) (2:=Heq1).
-              rewrite fst_fold_left_make_omap in Heq2.
-              destruct n.(n_out); auto.
-              apply Pos.lt_trans with (1:=Heq2). apply Pos.lt_add_r.
-            + apply Himap in Heq. destruct Heq as (Heq1 & Heq2).
-              split; auto.
-              apply Pos.lt_trans with (1:=Heq2). apply Pos.lt_add_r.
-        }
-        NamedDestructCases; intros; subst; inv Hii.
-        * rewrite fst_fold_left_make_omap.
-          apply find_fold_left_make_omap in Heq.
-          rewrite fst_fold_left_make_omap in Heq.
-          destruct Heq as [Heq|Heq].
-          now destruct Heq as (Heq1 & Heq2); auto using (Pos.le_trans _ _ _ Hle Heq1).
-          apply Himap in Heq; destruct Heq as (Heq1 & Heq2).
-          split; auto. destruct n.(n_out); auto.
-          apply (Pos.lt_trans _ _ _ Heq2). apply Pos.lt_add_r.
-        * rewrite fst_fold_left_make_omap.
-          destruct n.(n_out); [now inv Hzin|now auto].
-        * rewrite fst_fold_left_make_omap.
-          destruct n.(n_out); [now inv Hzin|now auto].
-      + intuition.
-      + intros a b c Hab Hbc.
-        apply Pos.le_trans with (1:=Hab) (2:=Hbc).
-      + apply Forall_forall.
-        simpl. intros sck Hin.
-        apply in_map_iff in Hin.
-        destruct Hin as ((z, (zty, zck)) & Hac & Hin).
-        subst. apply Name_only_core_approx_clock.
-        now apply Name_only_core_approx_base_clock.
-      + intros; apply Is_index_in_nclocks_trans; auto.
-      + intros ae (e, eloc) (?, fidx) (?, fidx') Hin Hfa Helab.
-        simpl in Helab. monadInv2 Helab.
-        match goal with Helab:elab_exp' _ _ _ = OK _ |- _ =>
-          apply Forall_forall with (1:=H) (2:=Hin) in Helab; destruct Helab end; auto.
-        repeat (split; auto).
-        now apply Forall_skipn.
+      admit.
     - (* Econst *)
       intros Hw Hss. subst.
       split; auto using Pos.le_refl.
@@ -3516,7 +3258,7 @@ Section ElabExpressions.
       subst.
       inversion_clear Hii as [? Hiis| |].
       now apply not_Is_index_in_sclk in Hiis.
-  Qed.
+  Admitted.
 
   Lemma mmaps_elab_arg_DisjointIndexes:
     forall aes els lcks fidx lcks' fidx',
@@ -3854,7 +3596,7 @@ Section ElabExpressions.
           apply Forall_forall with (1:=Hfa) (2:=Hin) in Helab; now auto
         end.
     - (* Eunop (CastOp) *) eauto with lclocking.
-    - (* EappReset *)
+    - (* Eapp *)
       setoid_rewrite surjective_pairing in EQ3.
       simpl in EQ3. monadInv2 EQ3.
       repeat match goal with
@@ -3893,8 +3635,8 @@ Section ElabExpressions.
         simpl in Hwcin; clear Hzin.
         induction zck; auto.
         inv Hwcin. simpl.
-        destruct (Env.find i0 aimap) eqn:Hia. 2:now auto with lclocking.
-        match goal with H:Env.find i0 aimap = Some ?i1 |- _ =>
+        destruct (Env.find i aimap) eqn:Hia. 2:now auto with lclocking.
+        match goal with H:Env.find i aimap = Some ?i1 |- _ =>
           rename i1 into i';
             destruct (Env.find i' env) eqn:Hia'; [|now auto with lclocking] end.
         match goal with H:Env.find i' env = Some ?p |- _ =>
@@ -3967,8 +3709,7 @@ Section ElabExpressions.
           intros (x, (xty, xck)) (ty, nck) Hin.
           apply Forall2_In with (1:=Hin) in Hoann.
           eapply inst_annot_inst_out with (1:=Hoann).
-      + constructor; eauto using find_var_clock.
-    - (* Eapp *)
+    - (* Reset *)
       setoid_rewrite surjective_pairing in EQ3.
       simpl in EQ3. monadInv2 EQ3.
       repeat match goal with
@@ -4081,6 +3822,7 @@ Section ElabExpressions.
           intros (x, (xty, xck)) (ty, nck) Hin.
           apply Forall2_In with (1:=Hin) in Hoann.
           eapply inst_annot_inst_out with (1:=Hoann).
+      + admit.
     - (* Econst *)
       unfold add_whens.
       case (do_add_when_to_constants tt); auto with lclocking.
@@ -4150,7 +3892,7 @@ Section ElabExpressions.
             setoid_rewrite lannots_clocksof in H;
             destruct H
         end; eauto using find_var_clock with datatypes name_only_sclock.
-  Qed.
+  Admitted.
 
   Lemma var_clocks_wt:
     forall loc xs lcks,
@@ -5326,6 +5068,7 @@ Section ElabDeclaration.
         destruct Hein as (aeq & Hein & Helab).
         rewrite Hf.
         apply wt_elab_equation with (G:=G) in Helab; auto.
+        admit.
     - (* wc_node G n *)
       repeat constructor; simpl;
         repeat match goal with H:OK _ = _ |- _ =>
@@ -5378,7 +5121,7 @@ Section ElabDeclaration.
         apply In_idck_exists in Hidck.
         apply wc_env_var with (2:=Hidck).
         now rewrite Hf.
-  Qed.
+  Admitted.
 
 End ElabDeclaration.
 
