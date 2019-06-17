@@ -24,33 +24,6 @@ Module Type LSEMANTICS
 
   Definition history := Env.t (Stream value).
 
-  CoFixpoint const (b: Stream bool) (c: const): Stream value :=
-    (if hd b then present (sem_const c) else absent) ::: const (tl b) c.
-
-  CoInductive lift1 (op: unop) (ty: type)
-    : Stream value -> Stream value -> Prop :=
-  | Lift1A:
-      forall xs rs,
-        lift1 op ty xs rs ->
-        lift1 op ty (absent ::: xs) (absent ::: rs)
-  | Lift1P:
-      forall x r xs rs,
-        sem_unop op x ty = Some r ->
-        lift1 op ty xs rs ->
-        lift1 op ty (present x ::: xs) (present r ::: rs).
-
-  CoInductive lift2 (op: binop) (ty1 ty2: type)
-    : Stream value -> Stream value -> Stream value -> Prop :=
-  | Lift2A:
-      forall xs ys rs,
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (absent ::: xs) (absent ::: ys) (absent ::: rs)
-  | Lift2P:
-      forall x y r xs ys rs,
-        sem_binop op x ty1 y ty2 = Some r ->
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (present x ::: xs) (present y ::: ys) (present r ::: rs).
-
   CoInductive fby1
     : val -> Stream value -> Stream value -> Stream value -> Prop :=
   | Fby1A:
@@ -72,57 +45,6 @@ Module Type LSEMANTICS
         fby1 y xs ys rs ->
         fby (present x ::: xs) (present y ::: ys) (present x ::: rs).
 
-  CoInductive when (b: bool) : Stream value -> Stream value -> Stream value -> Prop :=
-  | WhenA:
-      forall xs cs vs,
-        when b cs xs vs ->
-        when b (absent ::: cs) (absent ::: xs) (absent ::: vs)
-  | WhenPA:
-      forall x c xs cs vs,
-        when b cs xs vs ->
-        val_to_bool c = Some (negb b) ->
-        when b (present c ::: cs) (present x ::: xs) (absent ::: vs)
-  | WhenPP:
-      forall x c xs cs vs,
-        when b cs xs vs ->
-        val_to_bool c = Some b ->
-        when b (present c ::: cs) (present x ::: xs) (present x ::: vs).
-
-  CoInductive merge
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | MergeA:
-      forall xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (absent ::: xs) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | MergeT:
-      forall t xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present true_val ::: xs)
-              (present t ::: ts) (absent ::: fs) (present t ::: rs)
-  | MergeF:
-      forall f xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present false_val ::: xs)
-              (absent ::: ts) (present f ::: fs) (present f ::: rs).
-
-  CoInductive ite
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | IteA:
-      forall s ts fs rs,
-        ite s ts fs rs ->
-        ite (absent ::: s) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | IteT:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present true_val ::: s)
-            (present t ::: ts) (present f ::: fs) (present t ::: rs)
-  | IteF:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present false_val ::: s)
-            (present t ::: ts) (present f ::: fs) (present f ::: rs).
-
-  Definition sclockof xs := map (fun x => x <> absent) xs.
 
   CoFixpoint sclocksof (ss: list (Stream value)) : Stream bool :=
     existsb (fun s=> hd s <>b absent) ss ::: sclocksof (List.map (@tl value) ss).

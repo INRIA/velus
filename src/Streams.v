@@ -203,6 +203,86 @@ Module Type STREAMS
     - apply IHx; auto.
   Qed.
 
+  (** Synchronous operators *)
+
+  CoFixpoint const (b: Stream bool) (c: const): Stream value :=
+    (if hd b then present (sem_const c) else absent) ::: const (tl b) c.
+
+  CoInductive lift1 (op: unop) (ty: type)
+    : Stream value -> Stream value -> Prop :=
+  | Lift1A:
+      forall xs rs,
+        lift1 op ty xs rs ->
+        lift1 op ty (absent ::: xs) (absent ::: rs)
+  | Lift1P:
+      forall x r xs rs,
+        sem_unop op x ty = Some r ->
+        lift1 op ty xs rs ->
+        lift1 op ty (present x ::: xs) (present r ::: rs).
+
+  CoInductive lift2 (op: binop) (ty1 ty2: type)
+    : Stream value -> Stream value -> Stream value -> Prop :=
+  | Lift2A:
+      forall xs ys rs,
+        lift2 op ty1 ty2 xs ys rs ->
+        lift2 op ty1 ty2 (absent ::: xs) (absent ::: ys) (absent ::: rs)
+  | Lift2P:
+      forall x y r xs ys rs,
+        sem_binop op x ty1 y ty2 = Some r ->
+        lift2 op ty1 ty2 xs ys rs ->
+        lift2 op ty1 ty2 (present x ::: xs) (present y ::: ys) (present r ::: rs).
+
+  CoInductive when (b: bool)
+    : Stream value -> Stream value -> Stream value -> Prop :=
+  | WhenA:
+      forall xs cs vs,
+        when b cs xs vs ->
+        when b (absent ::: cs) (absent ::: xs) (absent ::: vs)
+  | WhenPA:
+      forall x c xs cs vs,
+        when b cs xs vs ->
+        val_to_bool c = Some (negb b) ->
+        when b (present c ::: cs) (present x ::: xs) (absent ::: vs)
+  | WhenPP:
+      forall x c xs cs vs,
+        when b cs xs vs ->
+        val_to_bool c = Some b ->
+        when b (present c ::: cs) (present x ::: xs) (present x ::: vs).
+
+  CoInductive merge
+    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
+  | MergeA:
+      forall xs ts fs rs,
+        merge xs ts fs rs ->
+        merge (absent ::: xs) (absent ::: ts) (absent ::: fs) (absent ::: rs)
+  | MergeT:
+      forall t xs ts fs rs,
+        merge xs ts fs rs ->
+        merge (present true_val ::: xs)
+              (present t ::: ts) (absent ::: fs) (present t ::: rs)
+  | MergeF:
+      forall f xs ts fs rs,
+        merge xs ts fs rs ->
+        merge (present false_val ::: xs)
+              (absent ::: ts) (present f ::: fs) (present f ::: rs).
+
+  CoInductive ite
+    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
+  | IteA:
+      forall s ts fs rs,
+        ite s ts fs rs ->
+        ite (absent ::: s) (absent ::: ts) (absent ::: fs) (absent ::: rs)
+  | IteT:
+      forall t f s ts fs rs,
+        ite s ts fs rs ->
+        ite (present true_val ::: s)
+            (present t ::: ts) (present f ::: fs) (present t ::: rs)
+  | IteF:
+      forall t f s ts fs rs,
+        ite s ts fs rs ->
+        ite (present false_val ::: s)
+            (present t ::: ts) (present f ::: fs) (present f ::: rs).
+
   CoFixpoint mask (k: nat) (rs: Stream bool) (xs: Stream value) : Stream value :=
     let mask' k' := mask k' (tl rs) (tl xs) in
     match k, hd rs with

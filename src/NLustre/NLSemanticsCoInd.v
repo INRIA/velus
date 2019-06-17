@@ -39,88 +39,12 @@ Module Type NLSEMANTICSCOIND
 
   Definition History_tl (H: History) : History := Env.map (@tl value) H.
 
-  CoFixpoint const (c: const) (b: Stream bool): Stream value :=
-    (if hd b then present (sem_const c) else absent) ::: const c (tl b).
-
-  Inductive sem_var: History -> ident -> Stream value -> Prop :=
+   Inductive sem_var: History -> ident -> Stream value -> Prop :=
     sem_var_intro:
       forall H x xs xs',
         Env.find x H = Some xs' ->
         xs ≡ xs' ->
         sem_var H x xs.
-
-  CoInductive when (k: bool): Stream value -> Stream value -> Stream value -> Prop :=
-  | WhenA:
-      forall xs cs rs,
-        when k xs cs rs ->
-        when k (absent ::: xs) (absent ::: cs) (absent ::: rs)
-  | WhenPA:
-      forall x c xs cs rs,
-        when k xs cs rs ->
-        val_to_bool c = Some (negb k) ->
-        when k (present x ::: xs) (present c ::: cs) (absent ::: rs)
-  | WhenPP:
-      forall x c xs cs rs,
-        when k xs cs rs ->
-        val_to_bool c = Some k ->
-        when k (present x ::: xs) (present c ::: cs) (present x ::: rs).
-
-  CoInductive lift1 (op: unop) (ty: type): Stream value -> Stream value -> Prop :=
-  | Lift1A:
-      forall xs rs,
-        lift1 op ty xs rs ->
-        lift1 op ty (absent ::: xs) (absent ::: rs)
-  | Lift1P:
-      forall x r xs rs,
-        sem_unop op x ty = Some r ->
-        lift1 op ty xs rs ->
-        lift1 op ty (present x ::: xs) (present r ::: rs).
-
-  CoInductive lift2 (op: binop) (ty1 ty2: type)
-    : Stream value -> Stream value -> Stream value -> Prop :=
-  | Lift2A:
-      forall xs ys rs,
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (absent ::: xs) (absent ::: ys) (absent ::: rs)
-  | Lift2P:
-      forall x y r xs ys rs,
-        sem_binop op x ty1 y ty2 = Some r ->
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (present x ::: xs) (present y ::: ys) (present r ::: rs).
-
-  CoInductive merge
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | MergeA:
-      forall xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (absent ::: xs) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | MergeT:
-      forall t xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present true_val ::: xs)
-              (present t ::: ts) (absent ::: fs) (present t ::: rs)
-  | MergeF:
-      forall f xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present false_val ::: xs)
-              (absent ::: ts) (present f ::: fs) (present f ::: rs).
-
-  CoInductive ite
-    : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | IteA:
-      forall s ts fs rs,
-        ite s ts fs rs ->
-        ite (absent ::: s) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | IteT:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present true_val ::: s)
-              (present t ::: ts) (present f ::: fs) (present t ::: rs)
-  | IteF:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present false_val ::: s)
-              (present t ::: ts) (present f ::: fs) (present f ::: rs).
 
   CoInductive sem_clock: History -> Stream bool -> clock -> Stream bool -> Prop :=
   | Sbase:
@@ -175,7 +99,7 @@ Module Type NLSEMANTICSCOIND
   Inductive sem_exp: History -> Stream bool -> exp -> Stream value -> Prop :=
   | Sconst:
       forall H b c cs,
-        cs ≡ const c b ->
+        cs ≡ const b c ->
         sem_exp H b (Econst c) cs
   | Svar:
       forall H b x ty xs,
