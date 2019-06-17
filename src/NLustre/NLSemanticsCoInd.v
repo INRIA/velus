@@ -380,8 +380,8 @@ Module Type NLSEMANTICSCOIND
       + now inv H1; inv H3; inv H5.
       + eapply Cofix; eauto.
   Qed.
- Add Parametric Morphism c : (const c)
-      with signature @EqSt bool ==> @EqSt value
+ Add Parametric Morphism : (const)
+      with signature @EqSt bool ==> eq ==> @EqSt value
         as const_EqSt.
   Proof.
     cofix CoFix; intros b b' Eb.

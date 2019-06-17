@@ -109,7 +109,7 @@ Module Type LSEMANTICS
         forall H b x s k es lann ss os,
           Forall2 (sem_exp H b) es ss ->
           sem_var H x s ->
-          Forall2 (when k s) (concat ss) os ->
+          Forall2 (fun s' => when k s' s) (concat ss) os ->
           sem_exp H b (Ewhen es x k lann) os
 
     | Smerge:
@@ -217,7 +217,7 @@ Module Type LSEMANTICS
         Forall2 (sem_exp G H b) es ss ->
         Forall2 (P_exp H b) es ss ->
         sem_var H x s ->
-        Forall2 (when k s) (concat ss) os ->
+        Forall2 (fun s' => when k s' s) (concat ss) os ->
         P_exp H b (Ewhen es x k lann) os.
 
     Hypothesis MergeCase:

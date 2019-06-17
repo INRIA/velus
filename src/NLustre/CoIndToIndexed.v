@@ -197,7 +197,7 @@ Module Type COINDTOINDEXED
 
     Lemma const_index:
       forall n xs c b,
-        xs ≡ CoInd.const c b ->
+        xs ≡ const b c ->
         tr_Stream xs n = if tr_Stream b n then present (sem_const c) else absent.
     Proof.
       induction n; intros * E;
@@ -207,7 +207,7 @@ Module Type COINDTOINDEXED
 
     Lemma when_index:
       forall n k xs cs rs,
-        CoInd.when k xs cs rs ->
+        when k xs cs rs ->
         (tr_Stream xs n = absent
          /\ tr_Stream cs n = absent
          /\ tr_Stream rs n = absent)
@@ -233,7 +233,7 @@ Module Type COINDTOINDEXED
 
     Lemma lift1_index:
       forall n op t xs ys,
-        CoInd.lift1 op t xs ys ->
+        lift1 op t xs ys ->
         (tr_Stream xs n = absent /\ tr_Stream ys n = absent)
         \/
         (exists x y,
@@ -249,7 +249,7 @@ Module Type COINDTOINDEXED
 
     Lemma lift2_index:
       forall n op t1 t2 xs ys zs,
-        CoInd.lift2 op t1 t2 xs ys zs ->
+        lift2 op t1 t2 xs ys zs ->
         (tr_Stream xs n = absent
          /\ tr_Stream ys n = absent
          /\ tr_Stream zs n = absent)
@@ -502,7 +502,7 @@ Module Type COINDTOINDEXED
 
     Lemma merge_index:
       forall n xs ts fs rs,
-        CoInd.merge xs ts fs rs ->
+        merge xs ts fs rs ->
         (tr_Stream xs n = absent
          /\ tr_Stream ts n = absent
          /\ tr_Stream fs n = absent
@@ -529,7 +529,7 @@ Module Type COINDTOINDEXED
 
     Lemma ite_index:
       forall n xs ts fs rs,
-        CoInd.ite xs ts fs rs ->
+        ite xs ts fs rs ->
         (tr_Stream xs n = absent
          /\ tr_Stream ts n = absent
          /\ tr_Stream fs n = absent

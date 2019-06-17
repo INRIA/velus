@@ -619,7 +619,7 @@ CESem.sem_exp b H (Ewhen e x k) es
 
     (** State the correspondence for [exp].
         Goes by induction on [exp] and uses the previous inversion lemmas. *)
-    Hint Constructors CoInd.when CoInd.lift1 CoInd.lift2.
+    Hint Constructors when lift1 lift2.
     Lemma sem_exp_impl_from:
       forall n H b e es,
         CESem.sem_exp b H e es ->
@@ -883,7 +883,7 @@ CESem.sem_exp b H (Ewhen e x k) es
 
     (** State the correspondence for [cexp].
         Goes by induction on [cexp] and uses the previous inversion lemmas. *)
-    Hint Constructors CoInd.merge CoInd.ite.
+    Hint Constructors merge ite.
     Lemma sem_cexp_impl_from:
       forall n H b e es,
         CESem.sem_cexp b H e es ->

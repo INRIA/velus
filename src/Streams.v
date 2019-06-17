@@ -235,19 +235,19 @@ Module Type STREAMS
   CoInductive when (b: bool)
     : Stream value -> Stream value -> Stream value -> Prop :=
   | WhenA:
-      forall xs cs vs,
-        when b cs xs vs ->
-        when b (absent ::: cs) (absent ::: xs) (absent ::: vs)
+      forall xs cs rs,
+        when b xs cs rs ->
+        when b (absent ::: xs) (absent ::: cs) (absent ::: rs)
   | WhenPA:
-      forall x c xs cs vs,
-        when b cs xs vs ->
+      forall x c xs cs rs,
+        when b xs cs rs ->
         val_to_bool c = Some (negb b) ->
-        when b (present c ::: cs) (present x ::: xs) (absent ::: vs)
+        when b (present x ::: xs) (present c ::: cs) (absent ::: rs)
   | WhenPP:
-      forall x c xs cs vs,
-        when b cs xs vs ->
+      forall x c xs cs rs,
+        when b xs cs rs ->
         val_to_bool c = Some b ->
-        when b (present c ::: cs) (present x ::: xs) (present x ::: vs).
+        when b (present x ::: xs) (present c ::: cs) (present x ::: rs).
 
   CoInductive merge
     : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
