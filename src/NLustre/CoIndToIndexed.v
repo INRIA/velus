@@ -666,11 +666,11 @@ Module Type COINDTOINDEXED
 
     (** * RESET CORRESPONDENCE  *)
 
-    (** We state the correspondence for [reset_of]. *)
-    Lemma reset_of_impl:
+    (** We state the correspondence for [bools_of]. *)
+    Lemma bools_of_impl:
       forall xs rs,
-        CoInd.reset_of xs rs ->
-        CESem.reset_of (tr_Stream xs) (tr_Stream rs).
+        Strs.bools_of xs rs ->
+        CESem.bools_of (tr_Stream xs) (tr_Stream rs).
     Proof.
       intros ** n; revert dependent xs; revert rs.
       induction n; intros * Rst.
@@ -862,7 +862,7 @@ Module Type COINDTOINDEXED
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.
           apply sem_clock_impl; auto.
-        + apply reset_of_impl; eauto.
+        + apply bools_of_impl; eauto.
         + intro k; destruct (IH k).
           now rewrite <- 2 mask_impl.
 

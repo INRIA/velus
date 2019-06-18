@@ -73,7 +73,7 @@ Module Type NLSEMANTICS
           sem_vars H x xs ->
           sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
-          reset_of ys rs ->
+          bools_of ys rs ->
           (forall k, sem_node f (mask k rs ls) (mask k rs xs)) ->
           sem_equation bk H (EqApp x ck f arg (Some y))
     | SEqFby:
@@ -216,7 +216,7 @@ enough: it does not support the internal fixpoint introduced by
         sem_vars H x xs ->
         sem_clock bk H ck (clock_of ls) ->
         sem_var H y ys ->
-        reset_of ys rs ->
+        bools_of ys rs ->
         (forall k, sem_node G f (mask k rs ls) (mask k rs xs)
               /\ P_node f (mask k rs ls) (mask k rs xs)) ->
         P_equation bk H (EqApp x ck f arg (Some y)).

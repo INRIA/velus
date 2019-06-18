@@ -154,7 +154,7 @@ Module Type MEMSEMANTICS
           sem_vars H xs xss ->
           sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
-          reset_of ys rs ->
+          bools_of ys rs ->
           (forall k, exists Mk Mk',
                 msem_node f (mask k rs ls) Mk Mk' (mask k rs xss)
                 /\ memory_masked k rs Mx Mk
@@ -223,7 +223,7 @@ enough: it does not support the internal fixpoint introduced by
         sem_vars H xs xss ->
         sem_clock bk H ck (clock_of ls) ->
         sem_var H y ys ->
-        reset_of ys rs ->
+        bools_of ys rs ->
         (forall k, exists Mk Mk',
               msem_node G f (mask k rs ls) Mk Mk' (mask k rs xss)
               /\ memory_masked k rs Mx Mk

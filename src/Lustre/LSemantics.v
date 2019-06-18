@@ -60,13 +60,6 @@ Module Type LSEMANTICS
         xs ≡ xs' ->
         sem_var H x xs.
 
-  CoInductive reset_of: Stream value -> Stream bool -> Prop :=
-    reset_of_intro:
-      forall v vs b bs,
-        reset_of vs bs ->
-        value_to_bool v = Some b ->
-        reset_of (v ::: vs) (b ::: bs).
-
   Section NodeSemantics.
 
     Variable G : global.
@@ -138,7 +131,7 @@ Module Type LSEMANTICS
         forall H b f es r lann ss os rs bs,
           Forall2 (sem_exp H b) es ss ->
           sem_exp H b r [rs] ->
-          reset_of rs bs ->
+          bools_of rs bs ->
           (forall k, sem_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
           sem_exp H b (Eapp f es (Some r) lann) os
 
@@ -255,7 +248,7 @@ Module Type LSEMANTICS
         Forall2 (P_exp H b) es ss ->
         sem_exp G H b r [rs] ->
         P_exp H b r [rs] ->
-        reset_of rs bs ->
+        bools_of rs bs ->
         (forall k, sem_node G f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)
               /\ P_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
         P_exp H b (Eapp f es (Some r) lann) os.

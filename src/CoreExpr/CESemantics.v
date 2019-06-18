@@ -270,7 +270,7 @@ environment.
   Definition clock_of (xss: stream (list value)): stream bool :=
     fun n => clock_of_instant (xss n).
 
-  Definition reset_of (vs: stream value) (rs: stream bool) :=
+  Definition bools_of (vs: stream value) (rs: stream bool) :=
     forall n, value_to_bool (vs n) = Some (rs n).
 
   (** Morphisms properties *)

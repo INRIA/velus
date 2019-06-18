@@ -974,11 +974,11 @@ CESem.sem_exp b H (Ewhen e x k) es
 
     (** * RESET CORRESPONDENCE  *)
 
-    (** We state the correspondence for [reset_of]. *)
-    Lemma reset_of_impl_from:
+    (** We state the correspondence for [bools_of]. *)
+    Lemma bools_of_impl_from:
       forall n xs rs,
-        CESem.reset_of xs rs ->
-        CoInd.reset_of (tr_stream_from n xs) (tr_stream_from n rs).
+        CESem.bools_of xs rs ->
+        Strs.bools_of (tr_stream_from n xs) (tr_stream_from n rs).
     Proof.
       cofix Cofix; intros * Rst.
       pose proof Rst.
@@ -987,11 +987,11 @@ CESem.sem_exp b H (Ewhen e x k) es
       destruct (xs n); constructor; auto.
     Qed.
 
-    Corollary reset_of_impl:
+    Corollary bools_of_impl:
       forall xs rs,
-        CESem.reset_of xs rs ->
-        CoInd.reset_of (tr_stream xs) (tr_stream rs).
-    Proof. apply reset_of_impl_from. Qed.
+        CESem.bools_of xs rs ->
+        Strs.bools_of (tr_stream xs) (tr_stream rs).
+    Proof. apply bools_of_impl_from. Qed.
 
     (** ** Properties about [count] and [mask] *)
 
@@ -1186,7 +1186,7 @@ CESem.sem_exp b H (Ewhen e x k) es
           eapply wf_streams_mask.
           intro k; destruct (IH k) as (Sem &?).
           apply Indexed.sem_node_wf in Sem as (?&?); eauto.
-        + apply reset_of_impl; eauto.
+        + apply bools_of_impl; eauto.
         + intro k; destruct (IH k) as (?&?).
           rewrite <- 2 mask_impl; eauto;
             eapply wf_streams_mask; intro n'; destruct (IH n') as (Sem &?);

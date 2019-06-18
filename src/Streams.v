@@ -283,6 +283,13 @@ Module Type STREAMS
         ite (present false_val ::: s)
             (present t ::: ts) (present f ::: fs) (present f ::: rs).
 
+  CoInductive bools_of: Stream value -> Stream bool -> Prop :=
+    bools_of_intro:
+      forall v vs b bs,
+        bools_of vs bs ->
+        value_to_bool v = Some b ->
+        bools_of (v ::: vs) (b ::: bs).
+
   CoFixpoint mask (k: nat) (rs: Stream bool) (xs: Stream value) : Stream value :=
     let mask' k' := mask k' (tl rs) (tl xs) in
     match k, hd rs with

@@ -164,13 +164,6 @@ Module Type NLSEMANTICSCOIND
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
-  CoInductive reset_of: Stream value -> Stream bool -> Prop :=
-    reset_of_intro:
-      forall v vs b bs,
-        reset_of vs bs ->
-        value_to_bool v = Some b ->
-        reset_of (v ::: vs) (b ::: bs).
-
   CoFixpoint fby (c: val) (xs: Stream value) : Stream value :=
     match xs with
     | absent    ::: xs => absent    ::: fby c xs
@@ -199,7 +192,7 @@ Module Type NLSEMANTICSCOIND
           Forall2 (sem_exp H b) es ess ->
           sem_clock H b ck (clocks_of ess) ->
           sem_var H y ys ->
-          reset_of ys rs ->
+          bools_of ys rs ->
           (forall k, sem_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
           Forall2 (sem_var H) xs oss ->
           sem_equation H b (EqApp xs ck f es (Some y))
@@ -250,7 +243,7 @@ Module Type NLSEMANTICSCOIND
         Forall2 (sem_exp H b) es ess ->
         sem_clock H b ck (clocks_of ess) ->
         sem_var H y ys ->
-        reset_of ys rs ->
+        bools_of ys rs ->
         (forall k, sem_node G f (List.map (mask k rs) ess) (List.map (mask k rs) oss)
               /\ P_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
         Forall2 (sem_var H) xs oss ->
