@@ -200,6 +200,13 @@ Proof.
   intros. now apply equiv_decb_equiv.
 Qed.
 
+Lemma nequiv_decb_refl:
+  forall x, (x <>b x) = false.
+Proof.
+  intro x. unfold nequiv_decb.
+  apply Bool.negb_false_iff, equiv_decb_refl.
+Qed.
+
 Lemma not_equiv_decb_equiv:
   forall `{EqDec A} (x y: A),
     equiv_decb x y = false <-> ~(equiv x y).
@@ -210,6 +217,27 @@ Proof.
   - unfold equiv_decb.
     destruct (equiv_dec x y); [|reflexivity].
     exfalso; now apply Hne.
+Qed.
+
+Lemma value_neqb_neq:
+  forall x y, x <> y <-> (x <>b y) = true.
+Proof.
+  intros x y. unfold nequiv_decb. split; intro HH.
+  - now apply Bool.negb_true_iff, not_equiv_decb_equiv.
+  - intro; subst.
+    apply Bool.negb_true_iff in HH.
+    now rewrite equiv_decb_refl in HH.
+Qed.
+
+Lemma not_in_filter_nequiv_decb:
+  forall y xs,
+    ~In y xs ->
+    filter (nequiv_decb y) xs = xs.
+Proof.
+  induction xs as [|x xs IH]; auto.
+  intro Ny. apply not_in_cons in Ny as (Ny1 & Ny2). simpl.
+  apply value_neqb_neq in Ny1 as ->.
+  now apply IH in Ny2 as ->.
 Qed.
 
 (** *** About Coq stdlib *)
@@ -1035,6 +1063,13 @@ Proof.
   intros x y. destruct x, y; split; intro HH; try discriminate; inv HH; auto.
 Qed.
 
+Lemma orel_eq_weaken:
+  forall {A} R `{Reflexive A R} (x y : option A),
+    x = y -> orel R x y.
+Proof.
+  now intros A R RR x y Exy; subst.
+Qed.
+
 Instance orel_option_map_Proper
          {A B} (RA : relation A) (RB : relation B) `{Equivalence B RB}:
   Proper ((RA ==> RB) ==> orel RA ==> orel RB) (@option_map A B).
@@ -1297,6 +1332,23 @@ Section OptionReasoning.
     apply (orel_obind_intro eq); [reflexivity|].
     intros * a Haa; subst; inversion Haa; subst. auto.
   Qed.
+
+  Lemma orel_obind_inversion
+        (RA : relation A) `{Reflexive A RA}
+        {RB : relation B} `{Equivalence B RB}
+        {g} `{Proper _ (RA ==> orel RB) g} :
+    forall f q,
+      orel RB (obind f g) (Some q)
+      <-> (exists p, orel RA f (Some p) /\ orel RB (g p) (Some q)).
+  Proof.
+    intros f q; split; [intro HH|intros (p & Hf & Hg)].
+    2:now setoid_rewrite Hf.
+    inversion HH as [|q' q'' Rq Ms]; subst; clear HH.
+    symmetry in Ms. apply obind_inversion in Ms as (p & -> & Hg).
+    apply (orel_eq_weaken RB) in Hg.
+    setoid_rewrite Rq in Hg. exists p; split; auto.
+  Qed.
+  Global Arguments orel_obind_inversion RA%signature {_} {RB}%signature {_ _ _}.
 
   Lemma ofold_right_altdef:
     forall (f : A -> B -> option B) xs acc,

@@ -33,9 +33,6 @@ environment.
 
    *)
 
-  Definition env := Env.t value.
-  Definition history := Env.t (stream value).
-
   (** ** Instantaneous semantics *)
 
   Section InstantSemantics.
@@ -199,17 +196,13 @@ environment.
     Variable bk : stream bool.
     Variable H : history.
 
-    Definition restr_hist (n: nat): env :=
-      Env.map (fun xs => xs n) H.
-    Hint Unfold restr_hist.
-
     Definition lift {A B} (sem: bool -> env -> A -> B -> Prop)
                x (ys: stream B): Prop :=
-      forall n, sem (bk n) (restr_hist n) x (ys n).
+      forall n, sem (bk n) (restr_hist H n) x (ys n).
     Hint Unfold lift.
 
     Definition lift' {A B} (sem: env -> A -> B -> Prop) x (ys: stream B): Prop :=
-      forall n, sem (restr_hist n) x (ys n).
+      forall n, sem (restr_hist H n) x (ys n).
     Hint Unfold lift'.
 
     Definition sem_clock (ck: clock) (xs: stream bool): Prop :=
@@ -222,10 +215,10 @@ environment.
       lift' sem_vars_instant x xs.
 
     Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
-      forall n, sem_clocked_var_instant (bk n) (restr_hist n) x ck.
+      forall n, sem_clocked_var_instant (bk n) (restr_hist H n) x ck.
 
     Definition sem_clocked_vars (xs: list (ident * clock)) : Prop :=
-      forall n, sem_clocked_vars_instant (bk n) (restr_hist n) xs.
+      forall n, sem_clocked_vars_instant (bk n) (restr_hist H n) xs.
 
     Definition sem_laexp ck (e: lexp) (xs: stream value): Prop :=
       lift (fun base R => sem_laexp_instant base R ck) e xs.
@@ -728,3 +721,4 @@ Module CESemanticsFun
   <: CESEMANTICS Ids Op OpAux Syn Str.
   Include CESEMANTICS Ids Op OpAux Syn Str.
 End CESemanticsFun.
+

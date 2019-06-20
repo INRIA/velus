@@ -1,6 +1,7 @@
 From Coq Require Import FSets.FMapPositive.
 From Coq Require Import FSets.FMapFacts.
 From Coq Require Import ZArith.ZArith.
+From Coq Require Import Classes.EquivDec.
 
 From Velus Require Import Common.CommonTactics.
 From Velus Require Import Common.CommonList.
@@ -418,6 +419,31 @@ Module Env.
       unfold adds; intros.
       simpl combine; eapply adds'_cons.
       intros * Hin; apply InMembers_In_combine in Hin; auto.
+    Qed.
+
+    Lemma find_In_from_list:
+      forall x (v : A) xs,
+        List.In (x, v) xs ->
+        NoDupMembers xs ->
+        find x (from_list xs) = Some v.
+    Proof.
+      induction xs as [|(x', v') xs IH]. now inversion 1.
+      intros Ix ND. unfold from_list. inv Ix; inv ND.
+      - take ((_, _) = (_, _)) and inv it.
+        rewrite adds'_cons, Env.gss; auto.
+      - rewrite find_gsso'. now apply IH; auto.
+        take (List.In _ _) and apply In_InMembers in it.
+        intro; subst; auto.
+    Qed.
+
+    Lemma In_from_list:
+      forall x (xs : list (ident * A)),
+        In x (from_list xs) <-> InMembers x xs.
+    Proof.
+      unfold from_list. setoid_rewrite In_adds_spec'.
+      split; intro HH; auto.
+      destruct HH as [|HH]; auto.
+      now apply Props.P.F.empty_in_iff in HH.
     Qed.
 
     (* Lemma adds_comm': *)
@@ -919,7 +945,7 @@ Module Env.
       - congruence.
     Qed.
 
-    Global Instance Env_find_Proper (R : relation A) `{Equivalence A R}:
+    Global Instance find_Proper (R : relation A) `{Equivalence A R}:
       Proper (eq ==> Env.Equiv R ==> orel R) (@Env.find A).
     Proof.
       intros x y Hxy E1 E2 (EE1 & EE2); subst.
@@ -935,7 +961,7 @@ Module Env.
       - reflexivity.
     Qed.
 
-    Global Instance Env_find_eq_Proper:
+    Global Instance find_eq_Proper:
       Proper (eq ==> Env.Equiv eq ==> eq) (@Env.find A).
     Proof.
       intros x y Hxy E1 E2 EE; subst.
@@ -955,6 +981,8 @@ Module Env.
     Qed.
 
   End Extra.
+
+  (** Equivalence of Environments *)
 
   Section Equiv.
 
@@ -1027,9 +1055,32 @@ Module Env.
       reflexivity.
     Qed.
 
+    Lemma add_remove:
+      forall env x (v : A),
+        Env.find x env = Some v ->
+        Env.Equal env (Env.add x v (Env.remove x env)).
+    Proof.
+      intros env x v Fx. intro y.
+      destruct (ident_eq_dec y x); subst.
+      now rewrite Fx, Env.gss.
+      rewrite Env.gso, Env.gro; auto.
+    Qed.
+
+    Lemma Equal_add_both:
+      forall x (v : A) env1 env2,
+        Env.Equal env1 env2 ->
+        Env.Equal (Env.add x v env1) (Env.add x v env2).
+    Proof.
+      intros * EE y. rewrite EE.
+      destruct (ident_eq_dec y x); auto.
+    Qed.
+
   End Equiv.
 
+
   Existing Instance Equivalence_Equiv.
+
+  (** Refinement of Environments *)
 
   (* TODO: shift to Environment and update Obc/Equiv.v.
            note: argument order changed. *)
@@ -1453,6 +1504,25 @@ Module Env.
         now apply Props.P.F.empty_in_iff in Ix.
     Qed.
 
+    Lemma dom_from_list_map_fst:
+      forall (xs : list (ident * V)) ys,
+        NoDupMembers xs ->
+        ys = List.map fst xs ->
+        dom (from_list xs) ys.
+    Proof.
+      intros * ND HH; subst.
+      induction xs as [|(x, v) xs IH].
+      now apply dom_empty.
+      inv ND; take (NoDupMembers _) and specialize (IH it).
+      unfold dom in *. simpl.
+      setoid_rewrite In_from_list.
+      setoid_rewrite In_from_list in IH.
+      intro y; split; intro HH.
+      - inv HH; auto. take (InMembers _ _) and apply IH in it; auto.
+      - destruct HH as [HH|HH]; subst. now constructor.
+        apply fst_InMembers in HH. now constructor 2.
+    Qed.
+
     Global Opaque dom.
   End EnvDom.
 
@@ -1469,6 +1539,58 @@ Module Env.
     - subst. setoid_rewrite gss. now constructor.
     - setoid_rewrite gso; auto.
   Qed.
+
+  Add Parametric Morphism {A} : (@dom A)
+      with signature (eq ==> same_elements ==> iff)
+        as dom_same_elements.
+  Proof.
+    intros env xs ys S.
+    split; intro HH; apply Env.dom_intro; intro y;
+      apply Env.dom_use with (x:=y) in HH; rewrite HH.
+    now apply S. now symmetry; apply S.
+  Qed.
+
+  Lemma uniquify_dom:
+    forall {A} (env : Env.t A) xs,
+      dom env xs ->
+      exists ys, dom env ys /\ NoDup ys.
+  Proof.
+    intros * Dxs.
+    exists (nub ident_eq_dec xs).
+    split; [|now apply NoDup_nub].
+    now setoid_rewrite nub_same_elements.
+  Qed.
+
+  Lemma find_not_In_dom:
+    forall {A} (H : Env.t A) xs x,
+      dom H xs ->
+      ~List.In x xs ->
+      find x H = None.
+  Proof.
+    intros * DH NI.
+    apply dom_use with (x0:=x) in DH.
+    rewrite <-DH in NI.
+    rewrite Props.P.F.in_find_iff in NI.
+    now apply None_eq_dne in NI.
+  Qed.
+
+  Lemma dom_cons_remove:
+    forall {A} (env : @t A) x xs,
+      dom env xs ->
+      dom (remove x env) (filter (nequiv_decb x) xs).
+  Proof.
+    intros * D. apply dom_intro. intros y.
+    apply dom_use with (x0:=y) in D.
+    destruct (ident_eq_dec y x); subst.
+    - setoid_rewrite In_find. rewrite grs, filter_In.
+      split; [intros (? & ?); discriminate|intros (? & HH)].
+      now rewrite nequiv_decb_refl in HH.
+    - rewrite Props.P.F.remove_in_iff, D, filter_In.
+      split; intros (H1 & H2); split; auto.
+      now apply value_neqb_neq.
+  Qed.
+
+  (** Notations *)
 
   Module Notations.
     Notation "e1 ≈ e2" :=  (Equal e1 e2)
@@ -1489,4 +1611,5 @@ Module Env.
 End Env.
 
 Open Scope env_scope.
+
 
