@@ -270,11 +270,13 @@ Module Type INDEXEDTOCOIND
       - exists xs'; intuition.
         intro n; specialize (Sem n).
         unfold CESem.sem_var_instant, CESem.restr_hist in Sem.
-        rewrite Env.Props.P.F.map_o, E in Sem.
+        rewrite Env.Props.P.F.map_o in Sem.
+        setoid_rewrite E in Sem.
         now inv Sem.
       - specialize (Sem 0).
         unfold CESem.sem_var_instant, CESem.restr_hist in Sem.
-        now rewrite Env.Props.P.F.map_o, E in Sem.
+        rewrite Env.Props.P.F.map_o in Sem.
+        now setoid_rewrite E in Sem.
     Qed.
 
     Lemma sem_var_impl_from:

@@ -25,7 +25,7 @@ Module Type STREAM
 
   (** A stream is represented by its characteristic function: *)
 
-  Notation stream A := (nat -> A).
+  Definition stream A := (nat -> A).
 
   (** An indexed stream of lists is well-formed when the length of the lists
       is uniform over time. *)
