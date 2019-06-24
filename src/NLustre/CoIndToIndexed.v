@@ -67,7 +67,7 @@ Module Type COINDTOINDEXED
         Every element of the history is translated.
      *)
     Definition tr_History (H: CoInd.History) : CESem.history :=
-      Env.map tr_Stream H.
+      fun n => Env.map (fun xs => tr_Stream xs n) H.
 
     (** ** Properties  *)
 
@@ -147,8 +147,7 @@ Module Type COINDTOINDEXED
     (** The counterpart of [tr_Stream_tl] for histories. *)
     Lemma tr_History_tl:
       forall n H,
-        CESem.restr_hist (tr_History H) (S n)
-        = CESem.restr_hist (tr_History (CoInd.History_tl H)) n.
+        tr_History H (S n) = tr_History (CoInd.History_tl H) n.
     Proof.
       now repeat setoid_rewrite Env.map_map.
     Qed.
@@ -165,9 +164,8 @@ Module Type COINDTOINDEXED
       intros * Find n.
       unfold CESem.sem_var_instant.
       inversion_clear Find as [???? Find' E].
-      unfold CESem.restr_hist, tr_History.
-      unfold Env.map.
-      rewrite 2 Env.gmapi, Find', E; simpl; auto.
+      unfold tr_History, Env.map.
+      rewrite Env.gmapi, Find', E; simpl; auto.
     Qed.
     Hint Resolve sem_var_impl.
 
@@ -282,8 +280,8 @@ Module Type COINDTOINDEXED
         (exists ck' x k c,
             ck = Con ck' x k
             /\ CESem.sem_clock_instant
-                (tr_Stream b n) (CESem.restr_hist (tr_History H) n) ck' true
-            /\ CESem.sem_var_instant (CESem.restr_hist (tr_History H) n) x
+                (tr_Stream b n) (tr_History H n) ck' true
+            /\ CESem.sem_var_instant (tr_History H n) x
                                       (present c)
             /\ val_to_bool c = Some k
             /\ tr_Stream bs n = true)
@@ -291,15 +289,15 @@ Module Type COINDTOINDEXED
         (exists ck' x k,
             ck = Con ck' x k
             /\ CESem.sem_clock_instant
-                (tr_Stream b n) (CESem.restr_hist (tr_History H) n) ck' false
-            /\ CESem.sem_var_instant (CESem.restr_hist (tr_History H) n) x absent
+                (tr_Stream b n) (tr_History H n) ck' false
+            /\ CESem.sem_var_instant (tr_History H n) x absent
             /\ tr_Stream bs n = false)
         \/
         (exists ck' x k c,
             ck = Con ck' x (negb k)
             /\ CESem.sem_clock_instant
-                (tr_Stream b n) (CESem.restr_hist (tr_History H) n) ck' true
-            /\ CESem.sem_var_instant (CESem.restr_hist (tr_History H) n) x
+                (tr_Stream b n) (tr_History H n) ck' true
+            /\ CESem.sem_var_instant (tr_History H n) x
                                       (present c)
             /\ val_to_bool c = Some k
             /\ tr_Stream bs n = false).
@@ -362,14 +360,14 @@ Module Type COINDTOINDEXED
     (*   forall n H b ck x vs, *)
     (*     CoInd.sem_avar H b ck x vs -> *)
     (*     (CESem.sem_clock_instant (tr_Stream b n) *)
-    (*                                (CESem.restr_hist (tr_History H) n) ck false *)
-    (*      /\ CESem.sem_var_instant (CESem.restr_hist (tr_History H) n) x absent *)
+    (*                                (tr_History H n) ck false *)
+    (*      /\ CESem.sem_var_instant (tr_History H n) x absent *)
     (*      /\ tr_Stream vs n = absent) *)
     (*     \/ *)
     (*     (exists v, *)
     (*         CESem.sem_clock_instant (tr_Stream b n) *)
-    (*                                   (CESem.restr_hist (tr_History H) n) ck true *)
-    (*         /\ CESem.sem_var_instant (CESem.restr_hist (tr_History H) n) x (present v) *)
+    (*                                   (tr_History H n) ck true *)
+    (*         /\ CESem.sem_var_instant (tr_History H n) x (present v) *)
     (*         /\ tr_Stream vs n = present v). *)
     (* Proof. *)
     (*   induction n; intros * Indexed. *)
@@ -458,16 +456,16 @@ Module Type COINDTOINDEXED
       forall n H b ck le es,
         CoInd.sem_aexp H b ck le es ->
         (CESem.sem_clock_instant (tr_Stream b n)
-                                   (CESem.restr_hist (tr_History H) n) ck false
+                                   (tr_History H n) ck false
          /\ CESem.sem_exp_instant
-             (tr_Stream b n) (CESem.restr_hist (tr_History H) n) le absent
+             (tr_Stream b n) (tr_History H n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
             CESem.sem_clock_instant (tr_Stream b n)
-                                      (CESem.restr_hist (tr_History H) n) ck true
+                                      (tr_History H n) ck true
             /\ CESem.sem_exp_instant
-                (tr_Stream b n) (CESem.restr_hist (tr_History H) n) le (present e)
+                (tr_Stream b n) (tr_History H n) le (present e)
             /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.
@@ -625,16 +623,16 @@ Module Type COINDTOINDEXED
       forall n H b ck le es,
         CoInd.sem_caexp H b ck le es ->
         (CESem.sem_clock_instant (tr_Stream b n)
-                                   (CESem.restr_hist (tr_History H) n) ck false
+                                   (tr_History H n) ck false
          /\ CESem.sem_cexp_instant
-             (tr_Stream b n) (CESem.restr_hist (tr_History H) n) le absent
+             (tr_Stream b n) (tr_History H n) le absent
          /\ tr_Stream es n = absent)
         \/
         (exists e,
             CESem.sem_clock_instant (tr_Stream b n)
-                                      (CESem.restr_hist (tr_History H) n) ck true
+                                      (tr_History H n) ck true
             /\ CESem.sem_cexp_instant
-                (tr_Stream b n) (CESem.restr_hist (tr_History H) n) le (present e)
+                (tr_Stream b n) (tr_History H n) le (present e)
             /\ tr_Stream es n = present e).
     Proof.
       induction n; intros * Indexed.

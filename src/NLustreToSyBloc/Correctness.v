@@ -162,7 +162,7 @@ Module Type CORRECTNESS
              (P: program) (bk: stream bool) (H: history)
              (E: stream state) (T: stream transient_states) (E': stream state)
              (eqs: list equation) :=
-    forall n, Forall (sem_equation P (bk n) (restr_hist H n) (E n) (T n) (E' n)) eqs.
+    forall n, Forall (sem_equation P (bk n) (H n) (E n) (T n) (E' n)) eqs.
 
   Definition sem_block_n
              (P: program) (f: ident)

@@ -45,7 +45,6 @@ src/NLustre/IsDefined.v
 src/NLustre/MemSemantics.v
 src/NLustre/NLSyntax.v
 src/NLustre/NoDup.v
-src/NLustre/IndexedToCoInd.v
 src/NLustre/NLClockingSemantics.v
 src/NLustre/NLustre.v
 

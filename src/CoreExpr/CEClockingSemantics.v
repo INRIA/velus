@@ -179,7 +179,7 @@ Module Type CECLOCKINGSEMANTICS
   End ClockMatchInstant.
 
   Definition clock_match (bk: stream bool) (H: history) (xc : ident * clock) : Prop :=
-    forall n, clock_match_instant (bk n) (restr_hist H n) xc.
+    forall n, clock_match_instant (bk n) (H n) xc.
 
   Section ClockMatch.
 
@@ -193,12 +193,12 @@ Module Type CECLOCKINGSEMANTICS
       forall le ck,
         wc_exp vars le ck ->
         forall n v,
-          sem_exp_instant (bk n) (restr_hist H n) le v ->
-          (sem_exp_instant (bk n) (restr_hist H n) le absent
-           /\ sem_clock_instant (bk n) (restr_hist H n) ck false)
+          sem_exp_instant (bk n) (H n) le v ->
+          (sem_exp_instant (bk n) (H n) le absent
+           /\ sem_clock_instant (bk n) (H n) ck false)
           \/
-          ((exists c, sem_exp_instant (bk n) (restr_hist H n) le (present c))
-           /\ sem_clock_instant (bk n) (restr_hist H n) ck true).
+          ((exists c, sem_exp_instant (bk n) (H n) le (present c))
+           /\ sem_clock_instant (bk n) (H n) ck true).
     Proof.
       intros; eapply clock_match_instant_exp with (vars := vars); eauto.
       clear - Hcm; induction vars; inv Hcm; constructor; auto.
@@ -208,8 +208,8 @@ Module Type CECLOCKINGSEMANTICS
       forall le ck b v,
         wc_exp vars le ck ->
         forall n,
-          sem_exp_instant (bk n) (restr_hist H n) le v ->
-          sem_clock_instant (bk n) (restr_hist H n) ck b ->
+          sem_exp_instant (bk n) (H n) le v ->
+          sem_clock_instant (bk n) (H n) ck b ->
           (b = true <-> v <> absent).
     Proof.
       intros.
@@ -221,12 +221,12 @@ Module Type CECLOCKINGSEMANTICS
       forall ce ck,
         wc_cexp vars ce ck ->
         forall n v,
-          sem_cexp_instant (bk n) (restr_hist H n) ce v ->
-          (sem_cexp_instant (bk n) (restr_hist H n) ce absent
-           /\ sem_clock_instant (bk n) (restr_hist H n) ck false)
+          sem_cexp_instant (bk n) (H n) ce v ->
+          (sem_cexp_instant (bk n) (H n) ce absent
+           /\ sem_clock_instant (bk n) (H n) ck false)
           \/
-          ((exists c, sem_cexp_instant (bk n) (restr_hist H n) ce (present c))
-           /\ sem_clock_instant (bk n) (restr_hist H n) ck true).
+          ((exists c, sem_cexp_instant (bk n) (H n) ce (present c))
+           /\ sem_clock_instant (bk n) (H n) ck true).
     Proof.
       intros; eapply clock_match_instant_cexp with (vars := vars); eauto.
       clear - Hcm; induction vars; inv Hcm; constructor; auto.
@@ -339,8 +339,8 @@ Module Type CECLOCKINGSEMANTICS
         InMembers x (xin ++ xout) ->
         orelse isub osub x = Some y ->
         forall n,
-          sem_var_instant (restr_hist H' n) x ys ->
-          sem_var_instant (restr_hist H  n) y ys.
+          sem_var_instant (H' n) x ys ->
+          sem_var_instant (H  n) y ys.
   Proof.
     intros; eapply sem_var_instant_transfer_out_instant; eauto.
   Qed.
@@ -348,20 +348,20 @@ Module Type CECLOCKINGSEMANTICS
   Lemma sem_var_instant_transfer_out':
     forall n (xin : list (ident * (type * clock)))
            (xout : list (ident * (type * clock)))
-           H H' les ys isub osub bk lss yss,
+           H H' les ys isub osub (bk: stream bool) lss yss,
       NoDupMembers (xin ++ xout) ->
       Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
       Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
       (forall x, ~InMembers x xout -> osub x = None) ->
-      sem_vars_instant (restr_hist H' n) (map fst xin) (lss n) ->
-      sem_vars_instant (restr_hist H' n) (map fst xout) (yss n) ->
-      sem_exps_instant (bk n) (restr_hist H n) les (lss n) ->
-      sem_vars_instant (restr_hist H n) ys (yss n) ->
+      sem_vars_instant (H' n) (map fst xin) (lss n) ->
+      sem_vars_instant (H' n) (map fst xout) (yss n) ->
+      sem_exps_instant (bk n) (H n) les (lss n) ->
+      sem_vars_instant (H n) ys (yss n) ->
       forall x y ys,
         InMembers x (xin ++ xout) ->
         orelse isub osub x = Some y ->
-        sem_var_instant (restr_hist H' n) x ys ->
-        sem_var_instant (restr_hist H  n) y ys.
+        sem_var_instant (H' n) x ys ->
+        sem_var_instant (H  n) y ys.
   Proof.
     intros * Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
     apply InMembers_app in Hin.
@@ -434,17 +434,17 @@ Module Type CECLOCKINGSEMANTICS
   Qed.
 
   Corollary sem_clock_instant_transfer_out:
-    forall vars ck sub bk bk' H H' xck yck v n,
+    forall vars ck sub bk bk' (H: history) H' xck yck v n,
       instck ck sub xck = Some yck ->
-      sem_clock_instant (bk n) (restr_hist H n) ck (bk' n) ->
+      sem_clock_instant (bk n) (H n) ck (bk' n) ->
       wc_clock vars xck ->
-      sem_clock_instant (bk' n) (restr_hist H' n) xck v ->
+      sem_clock_instant (bk' n) (H' n) xck v ->
       (forall x y ys,
           InMembers x vars ->
           sub x = Some y ->
-          sem_var_instant (restr_hist H' n) x ys ->
-          sem_var_instant (restr_hist H  n) y ys) ->
-      sem_clock_instant (bk n) (restr_hist H n) yck v.
+          sem_var_instant (H' n) x ys ->
+          sem_var_instant (H  n) y ys) ->
+      sem_clock_instant (bk n) (H n) yck v.
   Proof.
     intros; eapply sem_clock_instant_transfer_out_instant; eauto.
   Qed.

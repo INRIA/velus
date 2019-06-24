@@ -1323,8 +1323,8 @@ dataflow memory for which the non-standard semantics holds true.
                  InMembers x (node'.(n_in) ++ node'.(n_out)) ->
                  orelse isub osub x = Some y ->
                  forall n,
-                   sem_var_instant (restr_hist H' n) x ys ->
-                   sem_var_instant (restr_hist H  n) y ys) as Htranso.
+                   sem_var_instant (H' n) x ys ->
+                   sem_var_instant (H  n) y ys) as Htranso.
       { eapply sem_var_instant_transfer_out; eauto.
         - pose proof node'.(n_nodup) as Hnd.
           rewrite <-Permutation_app_assoc,
@@ -1388,8 +1388,8 @@ dataflow memory for which the non-standard semantics holds true.
       assert (forall x y ys,
                  InMembers x (node'.(n_in) ++ node'.(n_out)) ->
                  orelse isub osub x = Some y ->
-                 sem_var_instant (restr_hist H' n) x ys ->
-                 sem_var_instant (restr_hist H  n) y ys) as Htranso.
+                 sem_var_instant (H' n) x ys ->
+                 sem_var_instant (H  n) y ys) as Htranso.
       { eapply sem_var_instant_transfer_out'; eauto.
         - pose proof node'.(n_nodup) as Hnd.
           rewrite <-Permutation_app_assoc,

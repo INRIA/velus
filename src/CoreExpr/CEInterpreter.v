@@ -245,10 +245,10 @@ Module Type CEINTERPRETER
     Variable H: history.
 
     Definition lift {A B} (interp: bool -> env -> A -> B) x: stream B :=
-      fun n => interp (bk n) (restr_hist H n) x.
+      fun n => interp (bk n) (H n) x.
 
     Definition lift' {A B} (interp: env -> A -> B) x: stream B :=
-      fun n => interp (restr_hist H n) x.
+      fun n => interp (H n) x.
 
     Definition interp_clock (ck: clock): stream bool :=
       lift interp_clock_instant ck.
