@@ -227,7 +227,7 @@ Module Type NLCLOCKINGSEMANTICS
       inv Hdef; inv Hwc.
       match goal with H1:In (?y, _) iface, H2:In (?y, _) iface |- _ =>
         apply NoDupMembers_det with (1:=Hnd) (2:=H1) in H2; subst end.
-      specialize (Hexp n); specialize (Hvar n); specialize (Hfby n); rewrite Hfby in *.
+      specialize (Hexp n); specialize (Hvar n).
       unfold fby in Hvar.
       unfold clock_match_instant.
       inv Hexp; match goal with H:_ = ls n |- _ => rewrite <-H in * end; eauto.

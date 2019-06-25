@@ -865,7 +865,7 @@ Module Type COINDTOINDEXED
           now rewrite <- 2 mask_impl.
 
       - econstructor; auto; subst; eauto.
-        rewrite <-fby_impl; reflexivity.
+        rewrite <-fby_impl; auto.
 
       - econstructor; eauto.
         + intro; rewrite tr_clocks_of; auto.
