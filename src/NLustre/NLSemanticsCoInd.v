@@ -164,10 +164,10 @@ Module Type NLSEMANTICSCOIND
   CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
     existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
 
-  CoFixpoint fby (c: val) (xs: Stream value) : Stream value :=
+  CoFixpoint fby (v0: val) (xs: Stream value) : Stream value :=
     match xs with
-    | absent    ::: xs => absent    ::: fby c xs
-    | present x ::: xs => present c ::: fby x xs
+    | absent    ::: xs => absent     ::: fby v0 xs
+    | present x ::: xs => present v0 ::: fby x xs
     end.
 
   Section NodeSemantics.
