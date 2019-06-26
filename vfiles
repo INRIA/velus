@@ -35,6 +35,7 @@ src/NLustre/NLSemanticsCoInd.v
 src/NLustre/NLClocking.v
 src/NLustre/NLNormalArgs.v
 src/NLustre/CoIndToIndexed.v
+src/NLustre/IndexedToCoInd.v
 src/NLustre/IsFree.v
 src/NLustre/NLOrdered.v
 src/NLustre/Memories.v

@@ -36,13 +36,21 @@ Module Env.
     Proof. now destruct o. Qed.
 
     Lemma xmapi_xmapi:
-      forall {B C} (f: A -> B) (g: B -> C) (m: t A) x,
-        xmapi (fun _ => g) (xmapi (fun _ => f) m x) x =
-        xmapi (fun _ (x : A) => g (f x)) m x.
+      forall {B C} (f: ident -> A -> B) (g: ident -> B -> C) (m: t A) x,
+        xmapi g (xmapi f m x) x =
+        xmapi (fun x (v : A) => g x (f x v)) m x.
     Proof.
       induction m; intro; simpl; auto.
       f_equal; auto.
       apply option_map_map.
+    Qed.
+
+    Lemma mapi_mapi:
+      forall {B C} (f: positive -> A -> B) (g: positive -> B -> C) (m: t A),
+        mapi g (mapi f m) = mapi (fun x v => g x (f x v)) m.
+    Proof.
+      unfold mapi; intros.
+      apply xmapi_xmapi.
     Qed.
 
     Lemma map_map:

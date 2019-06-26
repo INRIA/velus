@@ -91,7 +91,10 @@ Module Type INDEXEDTOCOIND
     (** Translate an history from indexed to coinductive world.
         Every element of the history is translated. *)
     Definition tr_history_from (n: nat) (H: CESem.history) : CoInd.History :=
-      Env.map (tr_stream_from n) H.
+      Env.mapi (fun x _ => init_from n (fun n => match Env.find x (H n) with
+                                           | Some v => v
+                                           | None => absent
+                                           end)) (H 0).
 
     Definition tr_history : CESem.history -> CoInd.History :=
       tr_history_from 0.
@@ -207,7 +210,7 @@ Module Type INDEXEDTOCOIND
       forall n H,
         CoInd.History_tl (tr_history_from n H) = tr_history_from (S n) H.
     Proof.
-      now repeat setoid_rewrite Env.map_map.
+      now setoid_rewrite Env.mapi_mapi.
     Qed.
 
     (** If at instant [n], a property is true for all elements of the list
@@ -256,40 +259,42 @@ Module Type INDEXEDTOCOIND
 
     (** ** Variables *)
 
-    (** An inversion principle for [sem_var]. *)
-    Lemma sem_var_inv:
-      forall H x xs,
-        CESem.sem_var H x xs ->
-        exists xs',
-          Env.find x H = Some xs'
-          /\ xs ≈ xs'.
-    Proof.
-      unfold CESem.sem_var, CESem.lift'.
-      intros * Sem.
-      destruct (Env.find x H) as [xs'|] eqn: E; simpl in *.
-      - exists xs'; intuition.
-        intro n; specialize (Sem n).
-        unfold CESem.sem_var_instant, CESem.restr_hist in Sem.
-        rewrite Env.Props.P.F.map_o in Sem.
-        setoid_rewrite E in Sem.
-        now inv Sem.
-      - specialize (Sem 0).
-        unfold CESem.sem_var_instant, CESem.restr_hist in Sem.
-        rewrite Env.Props.P.F.map_o in Sem.
-        now setoid_rewrite E in Sem.
-    Qed.
+    (* (** An inversion principle for [sem_var]. *) *)
+    (* Lemma sem_var_inv: *)
+    (*   forall H x xs, *)
+    (*     CESem.sem_var H x xs -> *)
+    (*     exists xs', *)
+    (*       Env.find x H = Some xs' *)
+    (*       /\ xs ≈ xs'. *)
+    (* Proof. *)
+    (*   unfold CESem.sem_var, CESem.lift'. *)
+    (*   intros * Sem. *)
+    (*   destruct (Env.find x H) as [xs'|] eqn: E; simpl in *. *)
+    (*   - exists xs'; intuition. *)
+    (*     intro n; specialize (Sem n). *)
+    (*     unfold CESem.sem_var_instant, CESem.restr_hist in Sem. *)
+    (*     rewrite Env.Props.P.F.map_o in Sem. *)
+    (*     setoid_rewrite E in Sem. *)
+    (*     now inv Sem. *)
+    (*   - specialize (Sem 0). *)
+    (*     unfold CESem.sem_var_instant, CESem.restr_hist in Sem. *)
+    (*     rewrite Env.Props.P.F.map_o in Sem. *)
+    (*     now setoid_rewrite E in Sem. *)
+    (* Qed. *)
 
     Lemma sem_var_impl_from:
       forall n H x xs,
         CESem.sem_var H x xs ->
         CoInd.sem_var (tr_history_from n H) x (tr_stream_from n xs).
     Proof.
+      unfold CESem.sem_var, CESem.lift', CESem.sem_var_instant.
       intros * Sem.
-      apply sem_var_inv in Sem as (? & Find & E).
       econstructor.
-      - unfold tr_history_from.
-        rewrite Env.Props.P.F.map_o, Find; simpl; eauto.
-      - now rewrite E.
+      - setoid_rewrite Env.gmapi.
+        rewrite Sem; simpl; eauto.
+      - unfold tr_stream_from.
+        apply ntheq_eqst; intro.
+        now rewrite 2 init_from_nth, Sem.
     Qed.
 
     Corollary sem_var_impl:
@@ -439,7 +444,7 @@ CESem.sem_exp b H (Ewhen e x k) es
       | ident => sol' CESem.sem_var interp_var interp_var_instant_sound
       | clock => sol CESem.sem_clock interp_clock interp_clock_instant_sound
       end.
-    
+
     Lemma when_inv:
       forall H b e x k es,
         CESem.sem_exp b H (Ewhen e x k) es ->
@@ -1107,7 +1112,7 @@ CESem.sem_exp b H (Ewhen e x k) es
         eapply CESem.sem_var_instant_det in Var; eauto; discriminate.
       - intro E; apply not_absent_present in E as (?& E).
         rewrite E in Var.
-        assert (CESem.sem_clock_instant (b n) (CESem.restr_hist H n) ck true)
+        assert (CESem.sem_clock_instant (b n) (H n) ck true)
           by (apply Sem; eauto).
         eapply CESem.sem_clock_instant_det; eauto.
     Qed.
@@ -1196,7 +1201,6 @@ CESem.sem_exp b H (Ewhen e x k) es
 
       - econstructor; eauto; subst.
         rewrite <-fby_impl; eauto.
-        apply sem_var_impl; congruence.
 
       - subst.
         CESem.assert_const_length xss.
