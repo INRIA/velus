@@ -59,7 +59,7 @@ Module Type COINDTOINDEXED
      *)
     Fixpoint tr_Streams {A} (xss: list (Stream A)) : stream (list A) :=
       match xss with
-      | [] => fun n => []
+      | []        => fun n => []
       | xs :: xss => fun n => tr_Stream xs n :: tr_Streams xss n
       end.
 
@@ -842,9 +842,9 @@ Module Type COINDTOINDEXED
         We have to use a custom mutually recursive induction scheme [sem_node_mult]. *)
     Hint Constructors Indexed.sem_equation.
     Theorem implies:
-      forall f xss oss,
-        CoInd.sem_node G f xss oss ->
-        Indexed.sem_node G f (tr_Streams xss) (tr_Streams oss).
+      forall f xss yss,
+        CoInd.sem_node G f xss yss ->
+        Indexed.sem_node G f (tr_Streams xss) (tr_Streams yss).
     Proof.
       induction 1 as [| |??????????????? IH| |???????? Same Heqs IH]
                        using CoInd.sem_node_mult with
