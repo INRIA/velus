@@ -223,7 +223,7 @@ Module Type INDEXEDTOCOIND
         P (hd x).
     Proof.
       unfold_tr_streams; intros * Ps Hin.
-      apply In_ex_nth with (d:=x) in Hin as (k & Len & Nth).
+      apply In_nth with (d:=x) in Hin as (k & Len & Nth).
       rewrite seq_streams_length, Nat.sub_0_r in Len.
       rewrite nth_seq_streams in Nth; auto.
       apply eq_EqSt in Nth.
@@ -245,7 +245,7 @@ Module Type INDEXEDTOCOIND
     Proof.
       intros * Hin.
       apply Exists_exists in Hin as (v & Hin & Hv).
-      apply In_ex_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
+      apply In_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
       apply Exists_exists.
       exists (nth k (tr_streams_from n xss) absent_ever).
       split.
@@ -1024,8 +1024,7 @@ CESem.sem_exp b H (Ewhen e x k) es
     Corollary mask_impl:
       forall k (r: stream bool) xss,
         wf_streams xss ->
-        EqSts value
-              (tr_streams (Str.mask k r xss))
+        EqSts (tr_streams (Str.mask k r xss))
               (List.map (Strs.mask k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros * Const; unfold tr_streams, tr_stream.

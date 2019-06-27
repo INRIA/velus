@@ -82,7 +82,7 @@ Module Type STREAMS
   Qed.
 
   Section EqSts.
-    Variable A: Type.
+    Context {A: Type}.
 
     Definition EqSts (xss yss: list (Stream A)) :=
       Forall2 (@EqSt A) xss yss.

@@ -25,21 +25,6 @@ Section Extra.
     now do 2 rewrite app_comm_cons.
   Qed.
 
-  Lemma In_ex_nth:
-    forall (x: A) xs d,
-      In x xs ->
-      exists n, n < length xs /\ nth n xs d = x.
-  Proof.
-    induction xs.
-    now inversion 1.
-    intros d Hin.
-    inversion_clear Hin as [Heq|Hin'].
-    - subst. exists 0. split; simpl; auto with arith.
-    - specialize (IHxs d Hin').
-      destruct IHxs as (n & Hlen & Hnth).
-      exists (S n); split; simpl; auto with arith.
-  Qed.
-
   Lemma in_app:
     forall (x: A) (l1 l2: list A), In x (l1 ++ l2) <-> In x l1 \/ In x l2.
   Proof.
@@ -189,12 +174,6 @@ Section Extra.
     intros. now apply Permutation.Permutation_length.
   Qed.
 
-  Lemma length_nil:
-    forall (l: list A), length l = 0 -> l = [].
-  Proof.
-    destruct l; simpl; intro H; auto; discriminate.
-  Qed.
-
   Lemma split_last:
     forall {B} (x: A * B) xs,
       split (xs ++ [x]) =
@@ -306,11 +285,6 @@ Section Map.
 
   Context {A B: Type}.
   Variable f: A -> B.
-
-  Lemma map_cons (x:A)(l:list A) : map f (x::l) = (f x) :: (map f l).
-  Proof.
-    reflexivity.
-  Qed.
 
   Remark map_cons':
     forall l y ys,
@@ -2470,8 +2444,8 @@ Section ListSuffix.
     apply Wf_nat.well_founded_lt_compat with (f:=@length A).
     destruct 1 as (x' & H1 & H2).
     subst y. rewrite app_length.
-    assert (length x' <> 0) as H3 by auto using length_nil.
-    omega.
+    assert (length x' <> 0) as H3; try omega.
+    now rewrite length_zero_iff_nil.
   Qed.
 
 End ListSuffix.

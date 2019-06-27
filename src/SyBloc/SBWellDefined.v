@@ -492,7 +492,7 @@ Module Type SBWELLDEFINED
     Proof.
       intros * DefSpec E Hdef Hdefs.
       apply DefSpec in Hdefs; apply Is_defined_in_defined_eq in Hdef.
-      apply In_ex_nth with (d := Ids.default) in Hdef as (?&?&?); subst.
+      apply In_nth with (d := Ids.default) in Hdef as (?&?&?); subst.
       eapply existsb_nth with (d := Ids.default) in E; eauto.
       apply PSE.MP.Dec.F.not_mem_iff in E; auto.
     Qed.
