@@ -60,27 +60,26 @@ Module Type INDEXEDTOCOIND
 
     Definition tr_stream {A} : stream A -> Stream A := tr_stream_from 0.
 
-    (** Build a list of indexed streams from an integer range. *)
-    Definition seq_streams {A} (str_i: nat -> Stream A) (last_i first_i: nat)
-      : list (Stream A) :=
-      List.map str_i (seq first_i (last_i - first_i)).
+    (** Build a list of coinductive streams from an the integer range [0..m]. *)
+    Definition seq_streams {A} (f: nat -> Stream A) (m: nat) : list (Stream A) :=
+      List.map f (seq 0 m).
 
     (** Build the indexed stream corresponding to the [i]th elements of
         the input stream of lists. *)
-    Definition streams_nth (i: nat) (xss: stream (list value)): stream value :=
-      fun n => nth i (xss n) absent.
+    Definition streams_nth (k: nat) (xss: stream (list value)): stream value :=
+      fun n => nth k (xss n) absent.
 
     (** Build a coinductive Stream extracting the [i]th element of the list
         obtained at each instant [n]. *)
-    Definition nth_tr_streams_from (n: nat) (xss: stream (list value)) (i: nat)
+    Definition nth_tr_streams_from (n: nat) (xss: stream (list value)) (k: nat)
       : Stream value :=
-      init_from n (streams_nth i xss).
+      tr_stream_from n (streams_nth k xss).
 
     (** Translate an indexed stream of list into a list of coinductive Streams
         using the two previous functions. *)
     Definition tr_streams_from (n: nat) (xss: stream (list value))
       : list (Stream value) :=
-      seq_streams (nth_tr_streams_from n xss) (length (xss n)) 0.
+      seq_streams (nth_tr_streams_from n xss) (length (xss n)).
 
     Definition tr_streams: stream (list value) -> list (Stream value) :=
       tr_streams_from 0.
@@ -92,9 +91,9 @@ Module Type INDEXEDTOCOIND
         Every element of the history is translated. *)
     Definition tr_history_from (n: nat) (H: CESem.history) : CoInd.History :=
       Env.mapi (fun x _ => init_from n (fun n => match Env.find x (H n) with
-                                           | Some v => v
-                                           | None => absent
-                                           end)) (H 0).
+                                                 | Some v => v
+                                                 | None => absent
+                                                 end)) (H 0).
 
     Definition tr_history : CESem.history -> CoInd.History :=
       tr_history_from 0.
@@ -149,8 +148,8 @@ Module Type INDEXEDTOCOIND
     (** The length of the range-built list of Streams is simply the difference
         between the bounds of the range.  *)
     Lemma seq_streams_length:
-      forall {A} k (str: nat -> Stream A) m,
-        length (seq_streams str k m) = k - m.
+      forall {A} m (str: nat -> Stream A),
+        length (seq_streams str m) = m.
     Proof.
       intros; unfold seq_streams.
       now rewrite map_length, seq_length.
@@ -159,9 +158,9 @@ Module Type INDEXEDTOCOIND
     (** The [n]th element of the range-built list of Streams starting at 0 is
         the result of the function at [n]. *)
     Lemma nth_seq_streams:
-      forall {A} k str n (xs_d: Stream A),
-        n < k ->
-        nth n (seq_streams str k 0) xs_d = str n.
+      forall {A} m str n (xs_d: Stream A),
+        n < m ->
+        nth n (seq_streams str m) xs_d = str n.
     Proof.
       unfold seq_streams; intros.
       rewrite map_nth' with (d':=0); simpl.
@@ -188,7 +187,7 @@ Module Type INDEXEDTOCOIND
       intros * Len.
       apply Forall2_eq, Forall2_forall2.
       split; unfold_tr_streams; rewrite map_length.
-      - now rewrite 2 seq_streams_length, Len.
+      - now rewrite 2 seq_streams_length.
       - intros * Hlen E1 E2; rewrite <-E1, <-E2.
         rewrite map_nth' with (d':=a); auto.
         rewrite seq_streams_length in Hlen.
@@ -224,7 +223,7 @@ Module Type INDEXEDTOCOIND
     Proof.
       unfold_tr_streams; intros * Ps Hin.
       apply In_nth with (d:=x) in Hin as (k & Len & Nth).
-      rewrite seq_streams_length, Nat.sub_0_r in Len.
+      rewrite seq_streams_length in Len.
       rewrite nth_seq_streams in Nth; auto.
       apply eq_EqSt in Nth.
       unfold nth_tr_streams_from in Nth.

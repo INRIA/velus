@@ -358,6 +358,33 @@ Module Type STREAMS
           rewrite E; auto.
   Qed.
 
+  Lemma Str_nth_0:
+    forall {A} (xs: Stream A) x,
+      Str_nth 0 (x ::: xs) = x.
+  Proof. reflexivity. Qed.
+  
+  Lemma Str_nth_S:
+    forall {A} (xs: Stream A) x n,
+      Str_nth (S n) (x ::: xs) = Str_nth n xs.
+  Proof. reflexivity. Qed.
+
+  Lemma const_iff:
+    forall xs c b,
+      xs ≡ const b c <->
+      forall n, Str_nth n xs = if Str_nth n b then present (sem_const c) else absent.
+  Proof.
+    split.
+    - intros E n; revert dependent xs; revert c b; induction n; intros;
+        unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
+          repeat rewrite Str_nth_0; repeat rewrite Str_nth_S; auto.
+    - revert xs c b.
+      cofix COFIX.
+      intros * E.
+      unfold_Stv b; unfold_Stv xs; constructor; simpl; auto;
+        try (specialize (E 0); now inv E);
+        apply COFIX; intro n; specialize (E (S n)); rewrite 2 Str_nth_S in E; auto.
+  Qed.
+
   (* Remark mask_const_absent: *)
   (*   forall n rs, *)
   (*     mask n rs (Streams.const absent) ≡ Streams.const absent. *)
