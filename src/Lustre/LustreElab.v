@@ -4392,8 +4392,8 @@ Section ElabDeclaration.
         2:match goal with H:InMembers ?x vds1 |- _ =>
                           now apply Hvds1 in H; destruct H; auto end.
         apply Henv, Env.Props.P.F.add_in_iff; auto.
-      + intros x' Hfind.
-        apply Henv, Env.Props.P.F.add_in_iff; auto.
+      (* + intros x' Hfind. *)
+      (*   apply Henv, Env.Props.P.F.add_in_iff; auto. *)
       + intros x' Hfind.
         apply Henv' in Hfind.
         destruct Hfind as [Hfind|]; simpl; auto.
@@ -4426,8 +4426,8 @@ Section ElabDeclaration.
           2:match goal with H:InMembers ?x vds1 |- _ =>
                             now apply Hvds1 in H; destruct H; auto end.
           apply Henv, Env.Props.P.F.add_in_iff; auto.
-        * intros x' Hfind.
-          apply Henv, Env.Props.P.F.add_in_iff; auto.
+        (* * intros x' Hfind. *)
+        (*   apply Henv, Env.Props.P.F.add_in_iff; auto. *)
         * intros x' Hfind.
           apply Henv' in Hfind.
           rewrite Env.Props.P.F.add_in_iff in Hfind.
@@ -4473,8 +4473,8 @@ Section ElabDeclaration.
           2:match goal with H:InMembers ?x vds1 |- _ =>
                             now apply Hvds1 in H; destruct H; auto end.
           apply Henv, Env.Props.P.F.add_in_iff; auto.
-        * intros x' Hfind.
-          apply Henv, Env.Props.P.F.add_in_iff; auto.
+        (* * intros x' Hfind. *)
+        (*   apply Henv, Env.Props.P.F.add_in_iff; auto. *)
         * intros x' Hfind.
           apply Henv' in Hfind.
           rewrite Env.Props.P.F.add_in_iff in Hfind.

@@ -244,6 +244,24 @@ Module Type SBSEMANTICS
     rewrite <-E; apply Rst in Hin; auto.
   Qed.
 
+  (* TODO: move to RMemory *)
+  Lemma orel_find_inst_Some {V} (R : relation (memory V)):
+    forall insts x m,
+      orel R (find_inst x insts) (Some m) ->
+      exists m', R m' m /\ find_inst x insts = Some m'.
+  Proof.
+    unfold find_inst. eauto using Env.orel_find_Some.
+  Qed.
+
+  (* TODO: move to RMemory *)
+  Lemma orel_find_val_Some {V} (R : relation V):
+    forall vals x m,
+      orel R (find_val x vals) (Some m) ->
+      exists m', R m' m /\ find_val x vals = Some m'.
+  Proof.
+    unfold find_val. eauto using Env.orel_find_Some.
+  Qed.
+
   Add Parametric Morphism P f : (initial_state P f)
       with signature equal_memory ==> Basics.impl
         as initial_state_equal_memory.
@@ -256,10 +274,12 @@ Module Type SBSEMANTICS
     - now rewrite <-E.
     - intros * Hin.
       apply Spec in Hin as (?& Sub &?).
-      pose proof (find_inst_equal_memory x0 E) as Eq;
-        rewrite Sub in Eq; simpl in Eq.
-      destruct (find_inst x0 y); try contradiction.
-      eexists; split; eauto.
+      pose (Sub' := Sub).
+      apply orel_eq in Sub'.
+      setoid_rewrite (@eq_subrelation _ equal_memory) in Sub'; auto.
+      setoid_rewrite E in Sub'.
+      apply orel_find_inst_Some in Sub' as (v' & Hv' & ->).
+      symmetry in Hv'. eauto.
   Qed.
 
   Add Parametric Morphism lasts : (state_closed_lasts lasts)
@@ -281,12 +301,11 @@ Module Type SBSEMANTICS
     econstructor; eauto.
     - now setoid_rewrite <-E.
     - intros * Sub.
-      pose proof (find_inst_equal_memory x E) as Eq.
-      rewrite Sub in Eq.
-      destruct (find_inst x m) eqn: Find; try contradiction.
-      pose proof Find as Find'.
-      apply Insts in Find' as (?&?&?).
-      eexists; intuition; eauto.
+      apply orel_eq in Sub.
+      setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto.
+      setoid_rewrite <-E in Sub.
+      apply orel_find_inst_Some in Sub as (S & HS & Sub').
+      specialize (Insts _ _ Sub') as (b' & ? & ?). eauto.
   Qed.
 
   Add Parametric Morphism P : (transient_states_closed P)
@@ -329,35 +348,39 @@ Module Type SBSEMANTICS
       + now rewrite <-E.
       + now rewrite <-E'.
     - intros * E EI E'.
-      pose proof (find_equiv_memory s EI) as Eq;
-        setoid_rewrite Find in Eq; simpl in Eq.
-      destruct (Env.find s I2) eqn: Find'; try contradiction.
+      apply orel_eq in Find;
+        setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto.
+      rewrite EI in Find.
+      apply Env.orel_find_Some in Find as (Is' & Eq & Find').
       destruct r.
-      + econstructor; eauto; simpl.
-        now rewrite <-Eq.
+      + econstructor; eauto; simpl. now rewrite Eq.
       + destruct Init as (?& Sub &?).
-        pose proof (find_inst_equal_memory s E) as Eq'.
-        rewrite Sub in Eq'.
-        destruct (find_inst s S2) eqn: Init'; try contradiction.
+        apply orel_eq in Sub;
+          setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto.
+        rewrite E in Sub.
+        apply orel_find_inst_Some in Sub as (? & Eq' & ?).
         econstructor; eauto; simpl.
         eexists; split; eauto.
-        now rewrite <-Eq, <-Eq'.
+        now rewrite Eq, Eq'.
     - intros * E EI E'.
-      pose proof (find_equiv_memory s EI) as Eq.
-      rewrite Find in Eq.
-      destruct (Env.find s I2) eqn: Find'; try contradiction.
-      pose proof (find_inst_equal_memory s E') as Eq'.
-      rewrite Sub in Eq'.
-      destruct (find_inst s S2') eqn: Sub'; try contradiction.
+      apply orel_eq in Find;
+        setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto.
+      rewrite EI in Find.
+      apply Env.orel_find_Some in Find as (? & Eq & ?).
+      apply orel_eq in Sub;
+        setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto.
+      rewrite E' in Sub.
+      apply orel_find_inst_Some in Sub as (? & Eq' & ?).
+      symmetry in Eq, Eq'.
       destruct rst.
-      + econstructor; eauto.
-        discriminate.
-      + pose proof (find_inst_equal_memory s E) as Eq''.
-        destruct Spec as (?& Sub_i &?); auto.
-        rewrite Sub_i in Eq''.
-        destruct (find_inst s S2) eqn: FInd; try contradiction.
-        eapply SEqCall with (Is := m); eauto.
-        eexists; split; eauto. now rewrite <-Eq, <-Eq''.
+      + econstructor; eauto. discriminate.
+      + specialize (Spec eq_refl) as (?& Sub_i &?).
+        apply orel_eq in Sub_i;
+          setoid_rewrite (@eq_subrelation _ equal_memory) in Sub_i; auto.
+        rewrite E in Sub_i.
+        apply orel_find_inst_Some in Sub_i as (? & Eq'' & ?).
+        eapply SEqCall; eauto.
+        intro; eexists. split; eauto. now rewrite <-Eq, Eq''.
     - intros ? E ? E'.
       econstructor; eauto.
       + induction (b_eqs bl); auto;

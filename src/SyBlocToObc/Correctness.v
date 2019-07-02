@@ -10,7 +10,7 @@ From Velus Require Import Environment.
 
 From Coq Require Import List.
 Import List.ListNotations.
-From Coq Require Import Setoid.
+From Coq Require Import Setoid Morphisms.
 
 Open Scope nat.
 Open Scope list.
@@ -1142,12 +1142,12 @@ Module Type CORRECTNESS
       state_corres s S me.
   Proof.
     intros * E; split; intros * Find;
-      pose proof (find_inst_equal_memory s E) as E';
-      rewrite Find in E'.
-    - destruct (find_inst s me); try contradiction.
-      exists m; intuition.
-    - destruct (find_inst s S); try contradiction.
-      exists m; intuition.
+      apply orel_eq in Find;
+      setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto.
+    - setoid_rewrite E in Find.
+      apply orel_find_inst_Some in Find as (? & ? & ->); eauto.
+    - setoid_rewrite <-E in Find.
+      apply orel_find_inst_Some in Find as (? & ? & ->); eauto.
   Qed.
 
   Lemma Memory_Corres_eqs_empty_equal_memory:

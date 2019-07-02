@@ -4,6 +4,7 @@ From Coq Require Import Permutation.
 From Coq Require Import Decidable.
 From Coq Require Import Relations.
 From Coq Require Import Morphisms.
+From Coq Require Import Classes.EquivDec.
 From Coq Require Import Omega.
 
 From Velus Require Import CommonTactics.
@@ -83,7 +84,7 @@ Section Extra.
     simpl. now setoid_rewrite IHxs.
   Qed.
 
-  Remark not_In_app:
+  Remark not_In2_app:
     forall (x: A) l1 l2,
       ~ In x l2 ->
       In x (l1 ++ l2) ->
@@ -96,6 +97,14 @@ Section Extra.
       inversion Hin; subst.
       + apply in_eq.
       + right; now apply IHl1.
+  Qed.
+
+  Lemma not_In_app:
+    forall xs ys (x : A),
+      ~In x (xs ++ ys) <-> (~In x xs /\ ~In x ys).
+  Proof.
+    setoid_rewrite in_app.
+    split; [intro HH|intros (HH1 & HH2) [HH3|HH4]]; auto using Decidable.not_or.
   Qed.
 
   Lemma partition_switch:
@@ -234,6 +243,13 @@ Section Extra.
   Proof.
     destruct xs; simpl; intros; try discriminate.
     now inv H.
+  Qed.
+
+  Lemma hd_error_In:
+    forall xs (x : A),
+      hd_error xs = Some x -> In x xs.
+  Proof.
+    intros * Hxs. destruct xs; inv Hxs. now constructor.
   Qed.
 
 End Extra.
@@ -675,15 +691,6 @@ End ConcatMap.
 Section Permutation.
 
   Context {A: Type}.
-
-  Global Instance In_Permutation_Proper:
-    Proper (eq ==> Permutation (A:=A) ==> iff) (@In A).
-  Proof.
-    intros x y Hxy xs ys Hperm.
-    subst y.
-    split; intro HH; [|symmetry in Hperm];
-      now apply Permutation_in with (1:=Hperm) in HH.
-  Qed.
 
   Lemma Permutation_incl1:
     forall (ws: list A) xs ys,
@@ -1519,6 +1526,14 @@ Section Forall2.
       intros. eapply (H a0 b0 (S n)); simpl; eauto. simpl; omega.
   Qed.
 
+  Lemma Forall2_cons':
+    forall P (x : A) (y : B) l l',
+      (P x y /\ Forall2 P l l') <-> Forall2 P (x::l) (y::l').
+  Proof.
+    split. now intuition.
+    inversion 1; auto.
+  Qed.
+
   Lemma Forall2_det : forall (R : A -> B -> Prop),
       (forall x y1 y2, R x y1 -> R x y2 -> y1 = y2) ->
       forall xs ys1 ys2, Forall2 R xs ys1 -> Forall2 R xs ys2 -> ys1 = ys2.
@@ -2152,7 +2167,7 @@ Section InMembers.
           apply Hninm. now constructor 2.
     - now rewrite IHHperm1.
   Qed.
-  
+
   Lemma NoDupMembers_app_l:
     forall ws xs,
       NoDupMembers (ws ++ xs) -> NoDupMembers ws.
@@ -2403,6 +2418,76 @@ Ltac app_NoDupMembers_det :=
       assert (t1 = t2) by (eapply NoDupMembers_det; eauto); subst t2; clear H2
     end.
 
+(* List equality modulo duplicates *)
+
+Definition same_elements {A} : relation (list A) :=
+  fun xs ys => forall x, In x xs <-> In x ys.
+
+Lemma same_elements_refl {A} : reflexive _ (@same_elements A).
+Proof. now intros xs x. Qed.
+
+Lemma same_elements_sym {A} : symmetric _ (@same_elements A).
+Proof. now intro. Qed.
+
+Lemma same_elements_trans {A} : transitive _ (@same_elements A).
+Proof. firstorder. Qed.
+
+Add Parametric Relation {A} : (list A) same_elements
+    reflexivity proved by same_elements_refl
+    symmetry proved by same_elements_sym
+    transitivity proved by same_elements_trans
+      as same_relation_rel.
+
+Section Nub.
+  Context {A : Type} (DA : forall x y : A, {x = y} + {x <> y}).
+
+  Fixpoint nub (xs : list A) : list A :=
+    match xs with
+    | [] => []
+    | x::xs => if in_dec DA x xs then nub xs else x :: nub xs end.
+
+  Lemma In_nub:
+    forall xs x,
+      In x xs <-> In x (nub xs).
+  Proof.
+    induction xs as [|x xs IH]. now intuition.
+    simpl. intro y. destruct (in_dec DA x xs); split; intro HH.
+    - now destruct HH as [|HH]; subst; apply IH.
+    - apply IH in HH; auto.
+    - destruct HH as [|HH]; subst. now constructor.
+      apply IH in HH. now constructor 2.
+    - inv HH; auto. take (In y (nub xs)) and apply IH in it; auto.
+  Qed.
+
+  Lemma nub_same_elements:
+    forall xs, same_elements (nub xs) xs.
+  Proof. intros xs x; symmetry. now apply In_nub. Qed.
+
+  Lemma NoDup_nub:
+    forall xs, NoDup (nub xs).
+  Proof.
+    induction xs as [|x xs IH]; simpl; auto using NoDup_nil.
+    destruct (in_dec DA x xs) as [HH|HH]; auto.
+    rewrite In_nub in HH. now constructor.
+  Qed.
+
+  Lemma uniquify_list:
+    forall (xs : list A), exists ys, (forall x, In x xs <-> In x ys) /\ NoDup ys.
+  Proof.
+    intro xs. exists (nub xs).
+    split; [|now apply NoDup_nub].
+    now setoid_rewrite <-In_nub.
+  Qed.
+
+End Nub.
+
+Add Parametric Morphism {A} : (@List.In A)
+    with signature (eq ==> same_elements ==> iff)
+      as In_same_elements.
+Proof.
+  intros x xs ys S. now split; intro HH; apply S in HH.
+Qed.
+
 (** Tactics wellfoundedness and termination *)
 
 Section LL.
@@ -2420,7 +2505,6 @@ Section LL.
     intro len; revert ls.
     unfold ll. induction len; intros ls Hlen; constructor;
                  try apply Le.le_n_0_eq in Hlen; intuition.
-    omega.
   Defined.
 
   Theorem ll_wf:
@@ -2531,6 +2615,12 @@ Section Well_founded_FixPoint.
 End Well_founded_FixPoint.
 
 Unset Implicit Arguments.
+
+Lemma eqlistA_eq_eq {A}:
+  relation_equivalence (SetoidList.eqlistA (@eq A)) (eq).
+Proof.
+  intros xs1 xs2. now split; rewrite SetoidList.eqlistA_altdef, Forall2_eq.
+Qed.
 
 (** Tactics for inductions on lists *)
 

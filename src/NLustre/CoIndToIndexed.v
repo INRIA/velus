@@ -1,6 +1,7 @@
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
+
 From Coq Require Import Sorting.Permutation.
 From Coq Require Import Morphisms.
 From Coq Require Import Program.Tactics.

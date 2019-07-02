@@ -15,6 +15,8 @@ From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
+Import Env.Notations.
+
 From Coq Require Import Morphisms.
 
 Module Type OBCADDDEFAULTS
@@ -313,7 +315,7 @@ Module Type OBCADDDEFAULTS
 
   Lemma Forall2_exp_eval_refines_with_valid:
     forall me ve1 ve2 es vos,
-      env_refines ve1 ve2 ->
+      ve2 ⊑ ve1 ->
       Forall (fun e => match e with Var x _ => Env.In x ve1 | _ => True end) es ->
       Forall2 (exp_eval me ve2) es vos ->
       exists vos',
@@ -1252,16 +1254,18 @@ Module Type OBCADDDEFAULTS
       (forall x, PS.In x xs1 -> Env.In x ve1)
       /\ (forall x, PS.In x xs2 -> ~Env.In x ve2).
 
+    Import Basics.
+
     Instance in1_notin2_Proper1:
-      Proper (PS.Equal ==> PS.Equal ==> Basics.flip env_refines ==> env_refines ==> Basics.impl)
+      Proper (PS.Equal ==> PS.Equal ==> Env.refines eq ==> Env.refines eq --> impl)
              in1_notin2.
     Proof.
       intros S1 S2 HS12 T1 T2 HT12 ve0 ve0' Henv0 ve1 ve1' Henv1'.
       intros (HH1 & HH2); split.
       - intros x HS2. rewrite <-HS12 in HS2.
-        eauto using env_refines_In.
+        setoid_rewrite Henv0 in HH1; auto.
       - intros x HT2. rewrite <-HT12 in HT2.
-        eauto using env_refines_not_In.
+        setoid_rewrite Henv1' in HH2; auto.
     Qed.
 
     Instance in1_notin2_Proper2:
@@ -1310,11 +1314,11 @@ Module Type OBCADDDEFAULTS
 
     Lemma stmt_eval_add_writes_Skip:
       forall me w ve0' ve0,
-        env_refines ve0' ve0 ->
+        ve0 ⊑ ve0' ->
         PS.For_all (fun x => ~Env.In x ve0) w ->
         PS.For_all (fun x => InMembers x vars) w ->
         exists ve1',
-          env_refines ve1' ve0
+          ve0 ⊑ ve1'
           /\ stmt_eval p me ve0' (add_writes tyenv w Skip) (me, ve1')
           /\ (forall x, Env.In x ve0' -> Env.In x ve1')
           /\ PS.For_all (fun x => Env.In x ve1') w.
@@ -1332,7 +1336,7 @@ Module Type OBCADDDEFAULTS
       inversion_clear Hm as [|? ? Hmw Hmws].
       apply wf_vars_tyenv', not_None_is_Some in Hmw as (wty & Hwty).
       simpl. unfold add_write at 1. rewrite Hwty.
-      apply (env_refines_add_left _ _ w (sem_const (init_type wty)))
+      apply (Env.refines_add_right _ _ _ w (sem_const (init_type wty)))
         with (2:=Hniw) in Henv.
       apply IH with (1:=Henv) (2:=Hniws) in Hmws
         as (ve1' & Henv'' & Heval' & Hinin' & Hfa').
@@ -1367,8 +1371,8 @@ Module Type OBCADDDEFAULTS
       induction Heval; simpl.
       - (* Assign x e *)
         intros t rq rq' st al Hadd ve1 Henv Hpre; inv Hadd.
-        exists (Env.add x v ve1). eauto using env_refines_add, exp_eval_refines, stmt_eval.
-
+        exists (Env.add x v ve1).
+        eauto using Env.refines_add_both, exp_eval_refines, stmt_eval.
       - (* AssignSt x e *)
         intros t rq rq' st al Hadd ve1 Henv Hpre; inv Hadd.
         eauto using exp_eval_refines, stmt_eval.
@@ -1514,7 +1518,7 @@ Module Type OBCADDDEFAULTS
           as (ve2' & Henv2' & Heval2' & Hmono2 & Hin2').
 
         assert (exists ve3',
-          env_refines ve3' ve3
+          ve3 ⊑ ve3'
           /\ stmt_eval p me ve2' (if b then t1 else t2) (me', ve3'))
           as (ve3' & Henv3' & Heval3').
         { destruct b.
