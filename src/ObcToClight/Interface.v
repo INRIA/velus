@@ -220,16 +220,13 @@ Module Export Op <: OPERATORS.
   Hint Unfold wt_val.
   Hint Constructors wt_val'.
 
-  Lemma wt_val_true:
-    wt_val true_val bool_type.
+  Lemma wt_val_bool:
+    forall v, (v = true_val \/ v = false_val) <-> wt_val v bool_type.
   Proof.
-    apply wt_val_int; intuition.
-  Qed.
-
-  Lemma wt_val_false:
-    wt_val false_val bool_type.
-  Proof.
-    apply wt_val_int; intuition.
+    split; intro HH.
+    - destruct HH as [HH|HH]; subst; apply wt_val_int; intuition.
+    -  inversion_clear HH as [??? WT Hbool Hv| | |].
+       specialize (Hbool eq_refl) as [Hbool|Hbool]; subst; auto.
   Qed.
 
   Lemma wt_val_const:

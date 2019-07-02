@@ -27,3 +27,23 @@ Ltac cases_eqn E :=
            let E := fresh E in
            destruct x eqn: E
          end; auto.
+
+(* Tactics for manipulating hypotheses without renaming them.
+   Lighter-weight (but less expressive) than match goal with.
+
+   https://stackoverflow.com/a/55998007/
+
+   E.g.,
+      take (_ /\ _) and destruct it as (P1 & P2).
+      take (sem _ _ _) and inversion it.
+      take (_ \/ _) and rename it into HD.
+ *)
+Tactic Notation "summon" uconstr(ty) "as" ident(id) :=
+  match goal with H : _ |- _ => pose (id := H : ty); clear id; rename H into id end.
+
+Tactic Notation "take" uconstr(ty) "and" tactic(tac) :=
+  let new_it := fresh "it"
+  in try (rename it into new_it);
+     summon ty as it; tac;
+     try (rename new_it into it).
+

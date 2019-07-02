@@ -1,25 +1,38 @@
-node euler(x0, xp: real) returns (x: real);
-var i : bool; xt : real;
+node euler(x0, dx: float64) returns (x: float64);
+var i: bool; px: float64;
 let
+  x = if i then x0 else (px + 0.1 * dx);
   i = true fby false;
-  xt = 0.0 fby (x + 0.5 * xp);
-  x = if i then x0 else xt;
+  px = 0.0 fby x;
 tel
 
-node INS(g, xp: real) returns (x: real);
-  var k: int;
+node ins(gps, dx: float64) returns (x: float64; alarm : bool);
+var k: int; px: float64; xe: float64 when not alarm;
 let
   k = 0 fby (k + 1);
-  x = euler(g, xp);
+  alarm = (k >= 50);
+  xe = euler(gps when not alarm, dx when not alarm);
+  x = merge alarm (px when alarm) xe;
+  px = 0. fby x;
 tel
 
-node NAV(g, xp: real; s: bool) returns (x: real);
-  var r, c, cm: bool; insr : real when not c;
+node driver(gps, dx, dy : float64; r : bool)
+returns (x, y : float64);
+var alarm, alarmy : bool;
 let
-  insr = INS(g when not c, xp when not c) every r;
-  x = merge c (g when c) insr;
+  x, alarm = (restart ins every r)(gps, dx);
+  y, alarmy = (restart ins every r)(gps, dy);
+tel
+
+(*
+node nav(gps, dx: float64; s: bool) returns (x: float64; alarm: bool);
+  var r, c, cm: bool; insr : float64 when not c;
+let
+  insr, alarm = (restart ins every r) (gps when not c, dx when not c);
+  x = merge c (gps when c) insr;
   cm = merge c (not s when c) (s when not c);
   c = true fby cm;
   r = false fby (s and c);
 tel
+*)
 

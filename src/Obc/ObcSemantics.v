@@ -532,7 +532,6 @@ Proof.
         forall x, Env.In x ve -> Env.In x ve'.
   Proof.
     induction s; intros * Heval x Hin; inv Heval; eauto.
-    - apply Env.Props.P.F.add_in_iff; auto.
     - destruct b; eauto.
     - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.
       apply H in He. auto using Env.updates_mono.

@@ -1751,7 +1751,7 @@ Section PRESERVATION.
       apply mem_assoc_ident_false with (t:=ty) in E.
       unfold meth_vars in Hvars.
       rewrite app_assoc in Hvars.
-      eapply not_In_app in E; eauto.
+      eapply not_In2_app in E; eauto.
       apply in_map with (f:=translate_param) in E.
       eapply Forall_forall in Hrep; eauto.
       simpl in Hrep.

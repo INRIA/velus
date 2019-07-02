@@ -10,7 +10,7 @@ From Velus Require Import Environment.
 
 From Coq Require Import List.
 Import List.ListNotations.
-From Coq Require Import Setoid.
+From Coq Require Import Setoid Morphisms.
 
 Open Scope nat.
 Open Scope list.
@@ -981,21 +981,18 @@ Module Type CORRECTNESS
                    - eapply Reset_not_Step_in; eauto.
                    - eapply Reset_not_Reset_in; eauto.
                  }
-                 pose proof E as E'.
-                 apply Scorres in E as (Ss & E).
-                 pose proof E as Sub.
-                 apply Scorres in E as (?& E & Eq).
-                 rewrite E in E'; inv E'; rewrite Eq.
-                 eapply Closed; eauto.
-                 simpl; auto.
+                 unfold state_corres in Scorres.
+                 rewrite E in Scorres.
+                 apply orel_find_inst_Some in Scorres as (?&<-&?).
+                 eapply Closed; simpl; eauto.
                * eapply state_closed_empty; eauto.
              + inv TransClosed; auto.
            - eapply Reset_not_Step_in; eauto.
          }
       + exists me, ve; split; try eapply (stmt_eval_Control_absent' inputs); eauto; auto.
         split; try inversion 1.
-        destruct Init as (?&?&?).
-        eapply Memory_Corres_eqs_Reset_absent; eauto.
+        apply orel_find_inst_Some in Init as (?&?&?).
+        eapply Memory_Corres_eqs_Reset_absent; try symmetry; eauto.
         eapply Reset_not_Reset_in; eauto.
 
     - pose proof Wsch as Wsch'.
@@ -1017,10 +1014,11 @@ Module Type CORRECTNESS
              + inversion_clear 1; intros Hvar.
                eapply value_to_option_updates; eauto.
          }
-        *{ destruct rst; apply Corres in Wsch as (Inst & ?).
-           - apply Inst in Find_I as (?& -> &?); auto.
-           - destruct Find_S as (?& Find_S & E'); auto.
-             apply Inst in Find_S as (?& -> &?); rewrite E'; auto.
+        *{ destruct rst; apply Corres in Wsch.
+           - unfold transient_state_corres in Wsch; rewrite Find_I in Wsch.
+             symmetry in Wsch; apply orel_find_inst_Some in Wsch as (?&?& ->); auto.
+           - unfold state_corres in Wsch; rewrite Find_S in Wsch; auto.
+             symmetry in Wsch; apply orel_find_inst_Some in Wsch as (?&?& ->); auto.
          }
       + assert (absent_list xs) by (apply clock_of_instant_false; auto).
         apply sem_block_absent in Hblock as (? & ?); auto.
@@ -1141,13 +1139,7 @@ Module Type CORRECTNESS
       S ≋ me ->
       state_corres s S me.
   Proof.
-    intros * E; split; intros * Find;
-      pose proof (find_inst_equal_memory s E) as E';
-      rewrite Find in E'.
-    - destruct (find_inst s me); try contradiction.
-      exists m; intuition.
-    - destruct (find_inst s S); try contradiction.
-      exists m; intuition.
+    intros * E; unfold state_corres; now rewrite E.
   Qed.
 
   Lemma Memory_Corres_eqs_empty_equal_memory:
@@ -1362,19 +1354,21 @@ Module Type CORRECTNESS
     - split.
       + setoid_rewrite Env.In_find; intro s.
         destruct (Step_in_dec s eqs) as [Step|Nstep].
-        * apply Insts in Step as (Inst & Inst').
-          unfold find_inst in *; split; intros (?&?); eauto.
-          edestruct Inst as (?&?&?); eauto.
-        *{ destruct (Reset_in_dec s eqs) as [Rst|Nrst].
-           - apply WSCH in Rst; contradiction.
-           - assert (~ exists k, Is_state_in s k eqs) as Nstate.
+        * apply Insts in Step.
+          unfold state_corres, find_inst in Step.
+          split; intros (?& Find); rewrite Find in Step.
+          -- apply orel_find_inst_Some in Step as (?&?&?); eauto.
+          -- symmetry in Step; apply orel_find_inst_Some in Step as (?&?&?); eauto.
+        * destruct (Reset_in_dec s eqs) as [Rst|Nrst].
+          -- apply WSCH in Rst; contradiction.
+          -- assert (~ exists k, Is_state_in s k eqs) as Nstate.
              { intros (?& State).
                apply Exists_exists in State as (?&?& State).
                inv State.
                - apply Nrst, Exists_exists; eauto using Is_state_in_eq.
                - apply Nstep, Exists_exists; eauto using Is_state_in_eq.
              }
-             assert (state_corres s S me) as (?& Inst') by (apply Insts; auto).
+             assert (state_corres s S me) as Corres by (apply Insts; auto).
              assert (find_inst s S = None).
              { apply not_Some_is_None; intros * Find;
                  apply Nstate, SpecInst.
@@ -1386,22 +1380,22 @@ Module Type CORRECTNESS
                eapply state_closed_insts_InMembers in InstsClosed'; eauto.
              }
              assert (find_inst s me = None) as E.
-             { apply not_Some_is_None; intros * Find;
-                 apply Inst' in Find as (?&?).
+             { apply not_Some_is_None; intros * Find.
+               unfold state_corres in Corres; rewrite Find in Corres.
+               apply orel_find_inst_Some in Corres as (?&?&?).
                congruence.
              }
              setoid_rewrite E'; setoid_rewrite E; reflexivity.
-         }
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros s me_s Ss' Find Find'.
         destruct (Step_in_dec s eqs) as [Step|Nstep].
-        * apply Insts in Step as (Inst & ?).
-          unfold find_inst in *.
-          apply Inst in Find' as (?& Find' &?).
-          rewrite Find' in Find; inv Find; auto.
-        *{ destruct (Reset_in_dec s eqs) as [Rst|Nrst].
-           - apply WSCH in Rst; contradiction.
-           - assert (~ (Step_in s eqs \/ Reset_in s eqs)) as NstpRst by tauto.
+        * apply Insts in Step.
+          unfold state_corres, find_inst in Step.
+          rewrite Find, Find' in Step.
+          inv Step; symmetry; auto.
+        * destruct (Reset_in_dec s eqs) as [Rst|Nrst].
+          -- apply WSCH in Rst; contradiction.
+          -- assert (~ (Step_in s eqs \/ Reset_in s eqs)) as NstpRst by tauto.
              assert (~ exists k, Is_state_in s k eqs) as Nstate.
              { intros (?& State).
                apply Exists_exists in State as (?&?& State).
@@ -1412,7 +1406,6 @@ Module Type CORRECTNESS
              exfalso.
              apply Nstate, SpecInst.
              eapply state_closed_insts_InMembers in InstsClosed'; eauto.
-         }
   Qed.
 
   Theorem correctness:

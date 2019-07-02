@@ -1,7 +1,7 @@
 From Velus Require Import Common.
 From Velus Require Import Environment.
 
-From Coq Require Import Setoid.
+From Coq Require Import Setoid Morphisms.
 From Coq Require Import List.
 Import List.ListNotations.
 
@@ -95,57 +95,29 @@ Inductive equal_memory {V: Type} : memory V -> memory V -> Prop :=
       Env.Equal (values m) (values m') ->
       Env.Equiv equal_memory (instances m) (instances m') ->
       equal_memory m m'.
-Infix "≋" := equal_memory (at level 70, no associativity).
 
+Infix "≋" := equal_memory (at level 70, no associativity).
 Infix "⌈≋⌉" := (orel equal_memory) (at level 70, no associativity).
 
 Section EqualMemory.
 
   Context {V: Type}.
 
-  Lemma equiv_memory_refl_ind:
-    forall (xms: Env.t (memory V)),
-    (forall m' x, Env.find x xms = Some m' -> m' ≋ m') ->
-    Env.Equiv equal_memory xms xms.
-  Proof.
-    split.
-    - reflexivity.
-    - intros * Find ?.
-      eapply Env.Props.P.F.MapsTo_fun in Find; eauto.
-      rewrite <-Find; eauto.
-  Qed.
-
-  Corollary equal_memory_refl:
+  Lemma equal_memory_refl:
     forall (m: memory V),
       m ≋ m.
   Proof.
     induction m as [? IH] using memory_ind'.
     constructor.
     - reflexivity.
-    - now apply equiv_memory_refl_ind.
+    - split.
+      + reflexivity.
+      + intros * Find ?.
+        eapply Env.Props.P.F.MapsTo_fun in Find; eauto.
+        rewrite <-Find; eauto.
   Qed.
 
-  Corollary equiv_memory_refl:
-    forall (xms: Env.t (memory V)),
-      Env.Equiv equal_memory xms xms.
-  Proof.
-    intros; apply equiv_memory_refl_ind; intros;
-      apply equal_memory_refl.
-  Qed.
-
-  Lemma equiv_memory_sym_ind:
-    forall (xms xms': Env.t (memory V)),
-      (forall mx x, Env.find x xms = Some mx -> forall mx', mx ≋ mx' -> mx' ≋ mx) ->
-      Env.Equiv equal_memory xms xms' ->
-      Env.Equiv equal_memory xms' xms.
-  Proof.
-    intros ? ? ? (? & HMapsTo); split.
-    + now symmetry.
-    + intros * Find ?.
-      eapply HMapsTo in Find; eauto.
-  Qed.
-
-  Corollary equal_memory_sym:
+  Lemma equal_memory_sym:
   forall (m m': memory V),
     m ≋ m' -> m' ≋ m.
   Proof.
@@ -153,41 +125,13 @@ Section EqualMemory.
     inversion_clear 1 as [?? Vals Insts].
     constructor.
     - now symmetry.
-    - now apply equiv_memory_sym_ind.
+    - destruct Insts as (Insts1 & Insts2); split.
+      now symmetry; auto.
+      intros k e1 e2 M1 M2.
+      eapply Insts2 in M1; eauto.
   Qed.
 
-  Corollary equiv_memory_sym:
-    forall (xms xms': Env.t (memory V)),
-      Env.Equiv equal_memory xms xms' ->
-      Env.Equiv equal_memory xms' xms.
-  Proof.
-    intros; apply equiv_memory_sym_ind; auto; intros;
-      apply equal_memory_sym; auto.
-  Qed.
-
-  Lemma equiv_memory_trans_ind:
-    forall (xms1 xms2 xms3: Env.t (memory V)),
-      (forall mx x,
-          Env.find x xms1 = Some mx ->
-          forall mx2 mx3, mx ≋ mx2 -> mx2 ≋ mx3 -> mx ≋ mx3) ->
-      Env.Equiv equal_memory xms1 xms2 ->
-      Env.Equiv equal_memory xms2 xms3 ->
-      Env.Equiv equal_memory xms1 xms3.
-  Proof.
-    intros ? ? ? ? (In12 & HMapsTo12) (?& HMapsTo23); split.
-    - now setoid_rewrite In12.
-    - intros * Find1 Find3.
-      assert (exists e'', Env.MapsTo k e'' xms2) as (e'' &?).
-      { setoid_rewrite Env.Props.P.F.find_mapsto_iff.
-        rewrite <-Env.In_find, <-In12, Env.In_find.
-        setoid_rewrite <-Env.Props.P.F.find_mapsto_iff; eauto.
-      }
-      pose proof Find1.
-      apply (HMapsTo12 _ _ e'') in Find1; auto.
-      apply (HMapsTo23 _ e'') in Find3; eauto.
-  Qed.
-
-  Corollary equal_memory_trans:
+  Lemma equal_memory_trans:
     forall (m1 m2 m3: memory V),
       m1 ≋ m2 -> m2 ≋ m3 -> m1 ≋ m3.
   Proof.
@@ -196,32 +140,32 @@ Section EqualMemory.
       inversion_clear 1 as [?? Vals23 Insts23].
     constructor.
     - now rewrite Vals12.
-    - eapply equiv_memory_trans_ind; eauto.
+    - destruct Insts12 as (In12 & HMapsTo12).
+      destruct Insts23 as (?& HMapsTo23).
+      split.
+      + now setoid_rewrite In12.
+      + intros * Find1 Find3.
+        assert (exists e'', Env.MapsTo k e'' (instances m2)) as (e'' &?).
+        { setoid_rewrite Env.Props.P.F.find_mapsto_iff.
+          rewrite <-Env.In_find, <-In12, Env.In_find.
+          setoid_rewrite <-Env.Props.P.F.find_mapsto_iff; eauto.
+        }
+      pose proof Find1.
+      apply (HMapsTo12 _ _ e'') in Find1; auto.
+      apply (HMapsTo23 _ e'') in Find3; eauto.
   Qed.
 
-  Corollary equiv_memory_trans:
-    forall (xms1 xms2 xms3: Env.t (memory V)),
-      Env.Equiv equal_memory  xms1 xms2 ->
-      Env.Equiv equal_memory xms2 xms3 ->
-      Env.Equiv equal_memory xms1 xms3.
-  Proof.
-    intros; eapply equiv_memory_trans_ind; eauto; intros;
-      eapply equal_memory_trans; eauto.
-  Qed.
+  Add Relation (memory V) equal_memory
+    reflexivity proved by equal_memory_refl
+    symmetry proved by equal_memory_sym
+    transitivity proved by equal_memory_trans
+      as equal_memory_rel.
 
 End EqualMemory.
 
-Add Parametric Relation V : (memory V) (equal_memory)
-    reflexivity proved by (@equal_memory_refl V)
-    symmetry proved by (@equal_memory_sym V)
-    transitivity proved by (@equal_memory_trans V)
-      as equal_memory_rel.
-
-Add Parametric Relation V : (Env.t (memory V)) (Env.Equiv equal_memory)
-    reflexivity proved by equiv_memory_refl
-    symmetry proved by equiv_memory_sym
-    transitivity proved by equiv_memory_trans
-      as equiv_memory_rel.
+Existing Instance equal_memory_rel.
+Hint Immediate equal_memory_rel_Reflexive.
+Hint Immediate equal_memory_rel_Transitive.
 
 Add Parametric Morphism V: (@values V)
     with signature equal_memory ==> Env.Equal
@@ -237,18 +181,6 @@ Add Parametric Morphism V: (@instances V)
 Proof.
   intros * E.
   inversion_clear E as [??? Insts]; auto.
-Qed.
-
-Add Parametric Morphism V x: (Env.add x)
-    with signature @equal_memory V ==> Env.Equiv equal_memory ==> Env.Equiv equal_memory
-      as add_equiv_memory.
-Proof.
-  intros * E ?? (HIn & HMaps).
-  split.
-  - setoid_rewrite Env.Props.P.F.add_in_iff;
-      setoid_rewrite HIn; reflexivity.
-  - setoid_rewrite Env.Props.P.F.add_mapsto_iff.
-    intros ? ? ? [(?&?)|(?&?)] [(?&?)|(?&?)]; subst; eauto; try congruence.
 Qed.
 
 Add Parametric Morphism V x: (@add_inst V x)
@@ -268,59 +200,6 @@ Proof.
   intros * E.
   constructor; simpl; rewrite E; reflexivity.
 Qed.
-
-Add Parametric Morphism V x: (Env.find x)
-    with signature Env.Equiv equal_memory ==> fun o o' => match o, o' with
-                                                     | None, None => True
-                                                     | Some m, Some m' => @equal_memory V m m'
-                                                     | _, _ => False
-                                                     end
-                                              as find_equiv_memory.
-Proof.
-  intros I1 I2 * (Hin & HMapsTo).
-  destruct (Env.find x I1) eqn: Find1, (Env.find x I2) eqn: Find2; auto.
-  - eapply HMapsTo; apply Env.find_2; eauto.
-  - apply Env.Props.P.F.not_find_in_iff in Find2.
-    rewrite <-Hin in Find2.
-    apply Find2, Env.In_find; eauto.
-  - apply Env.Props.P.F.not_find_in_iff in Find1.
-    rewrite Hin in Find1.
-    apply Find1, Env.In_find; eauto.
-Qed.
-
-Add Parametric Morphism V x : (@find_inst V x)
-    with signature equal_memory ==>  fun o o' => match o, o' with
-                                            | None, None => True
-                                            | Some m, Some m' => @equal_memory V m m'
-                                            | _, _ => False
-                                            end
-                                     as find_inst_equal_memory.
-Proof.
-  intros * E.
-  unfold find_inst.
-  inversion E.
-  apply find_equiv_memory; auto.
-Qed.
-
-
-(* Add Parametric Morphism V x: (fun m m' => Env.find x m = Some m') *)
-(*     with signature Env.Equiv equal_memory ==> @equal_memory V ==> Basics.impl *)
-(*       as find_Some_equiv_memory. *)
-(* Proof. *)
-(*   intros * E ??? Find. *)
-(*   pose proof (find_equiv_memory x E) as E'. *)
-(*   rewrite Find in E'. *)
-(*   destruct (Env.find x y); try contradiction.  *)
-
-(* Add Parametric Morphism V x: (@add_inst V x) *)
-(*     with signature equal_memory ==> equal_memory ==> equal_memory *)
-(*       as add_inst_equal_memory. *)
-(* Proof. *)
-(*   intros * E1 ?? E2. *)
-(*   constructor; simpl; rewrite E2. *)
-(*   + reflexivity. *)
-(*   + now rewrite E1. *)
-(* Qed. *)
 
 Add Parametric Morphism V x: (@find_val V x)
     with signature equal_memory ==> eq
@@ -506,10 +385,64 @@ Section Properties.
   Qed.
 
   Lemma MapsTo_find_inst:
-    forall i (m mi : memory V),  
+    forall i (m mi : memory V),
       Env.MapsTo i mi (instances m) <-> find_inst i m = Some mi.
   Proof.
     unfold find_inst. split; intro HH; now apply Env.find_1.
+  Qed.
+
+  (** Combined with [orel] *)
+
+  Global Instance find_inst_Proper {A : Type}:
+    Proper (eq ==> equal_memory ==> orel equal_memory) (@find_inst A).
+  Proof.
+    intros s t Exy mm mn Emn; subst.
+    apply instances_equal_memory in Emn.
+    rewrite Env.Equiv_orel in Emn.
+    apply Emn.
+  Qed.
+
+  Lemma memory_equiv_orel_inst:
+    forall (S T : memory V),
+      S ≋ T ->
+      forall x, find_inst x S ⌈≋⌉ find_inst x T.
+  Proof.
+    intros * EM. now setoid_rewrite EM.
+  Qed.
+
+  Lemma memory_equiv_orel_val:
+    forall (S T : memory V),
+      S ≋ T ->
+      forall x, orel eq (find_val x S) (find_val x T).
+  Proof.
+    intros * EM. now setoid_rewrite EM.
+  Qed.
+
+  Lemma equal_memory_find_inst:
+    forall (M : memory V) N x Mx,
+      N ≋ M ->
+      find_inst x M = Some Mx ->
+      exists Nx, find_inst x N = Some Nx /\ Nx ≋ Mx.
+  Proof.
+    intros * NM Fx.
+    apply memory_equiv_orel_inst with (x:=x0) in NM.
+    rewrite Fx in NM. inv NM; eauto.
+  Qed.
+
+  Lemma orel_find_inst_Some (R : relation (memory V)):
+    forall insts x m,
+      orel R (find_inst x insts) (Some m) ->
+      exists m', R m' m /\ find_inst x insts = Some m'.
+  Proof.
+    unfold find_inst. eauto using Env.orel_find_Some.
+  Qed.
+
+  Lemma orel_find_val_Some (R : relation V):
+    forall vals x m,
+      orel R (find_val x vals) (Some m) ->
+      exists m', R m' m /\ find_val x vals = Some m'.
+  Proof.
+    unfold find_val. eauto using Env.orel_find_Some.
   Qed.
 
 End Properties.
