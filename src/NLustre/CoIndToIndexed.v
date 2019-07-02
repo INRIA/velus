@@ -182,88 +182,7 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve sem_vars_impl.
 
-    (** ** exp level synchronous operators specifications
-
-        To ease the use of coinductive hypotheses to prove non-coinductive
-        goals, we give for each coinductive predicate an indexed specification,
-        reflecting the shapes of the involved streams pointwise speaking.
-        In general this specification is a disjunction with a factor for each
-        case of the predicate.
-        The corresponding lemmas simply go by induction on [n] and by inversion
-        of the coinductive hypothesis.
-     *)
-
-    Lemma const_index:
-      forall n xs c b,
-        xs ≡ const b c ->
-        tr_Stream xs n = if tr_Stream b n then present (sem_const c) else absent.
-    Proof.
-      induction n; intros * E;
-        unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
-          repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_S; auto.
-    Qed.
-
-    Lemma when_index:
-      forall n k xs cs rs,
-        when k xs cs rs ->
-        (tr_Stream xs n = absent
-         /\ tr_Stream cs n = absent
-         /\ tr_Stream rs n = absent)
-        \/
-        (exists x c,
-            tr_Stream xs n = present x
-            /\ tr_Stream cs n = present c
-            /\ val_to_bool c = Some (negb k)
-            /\ tr_Stream rs n = absent)
-        \/
-        (exists x c,
-            tr_Stream xs n = present x
-            /\ tr_Stream cs n = present c
-            /\ val_to_bool c = Some k
-            /\ tr_Stream rs n = present x).
-    Proof.
-      induction n; intros * When.
-      - inv When; repeat rewrite tr_Stream_0; intuition.
-        + right; left. do 2 eexists; intuition.
-        + right; right. do 2 eexists; intuition.
-      - inv When; repeat rewrite tr_Stream_S; auto.
-    Qed.
-
-    Lemma lift1_index:
-      forall n op t xs ys,
-        lift1 op t xs ys ->
-        (tr_Stream xs n = absent /\ tr_Stream ys n = absent)
-        \/
-        (exists x y,
-            tr_Stream xs n = present x
-            /\ sem_unop op x t = Some y
-            /\ tr_Stream ys n = present y).
-    Proof.
-      induction n; intros * Lift1.
-      - inv Lift1; repeat rewrite tr_Stream_0; intuition.
-        right. do 2 eexists; intuition; auto.
-      - inv Lift1; repeat rewrite tr_Stream_S; auto.
-    Qed.
-
-    Lemma lift2_index:
-      forall n op t1 t2 xs ys zs,
-        lift2 op t1 t2 xs ys zs ->
-        (tr_Stream xs n = absent
-         /\ tr_Stream ys n = absent
-         /\ tr_Stream zs n = absent)
-        \/
-        (exists x y z,
-            tr_Stream xs n = present x
-            /\ tr_Stream ys n = present y
-            /\ sem_binop op x t1 y t2 = Some z
-            /\ tr_Stream zs n = present z).
-    Proof.
-      induction n; intros * Lift2.
-      - inv Lift2; repeat rewrite tr_Stream_0; intuition.
-        right. do 3 eexists; intuition; auto.
-      - inv Lift2; repeat rewrite tr_Stream_S; auto.
-    Qed.
-
+ 
     (** ** Semantics of clocks *)
 
     (** Give an indexed specification for [sem_clock] in the previous style,
@@ -355,48 +274,6 @@ Module Type COINDTOINDEXED
     Qed.
     Hint Resolve sem_clock_impl.
 
-    (* (** Give an indexed specification for annotated [var]. *) *)
-    (* Lemma sem_avar_index: *)
-    (*   forall n H b ck x vs, *)
-    (*     CoInd.sem_avar H b ck x vs -> *)
-    (*     (CESem.sem_clock_instant (tr_Stream b n) *)
-    (*                                (tr_History H n) ck false *)
-    (*      /\ CESem.sem_var_instant (tr_History H n) x absent *)
-    (*      /\ tr_Stream vs n = absent) *)
-    (*     \/ *)
-    (*     (exists v, *)
-    (*         CESem.sem_clock_instant (tr_Stream b n) *)
-    (*                                   (tr_History H n) ck true *)
-    (*         /\ CESem.sem_var_instant (tr_History H n) x (present v) *)
-    (*         /\ tr_Stream vs n = present v). *)
-    (* Proof. *)
-    (*   induction n; intros * Indexed. *)
-    (*   - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed' Hck *)
-    (*                                   |? ? ? ? ? ? Indexed' Hck]; *)
-    (*       apply sem_var_impl with (b:=tr_Stream b) in Indexed'; specialize (Indexed' 0); *)
-    (*         repeat rewrite tr_Stream_0; repeat rewrite tr_Stream_0 in Indexed'; *)
-    (*           apply (sem_clock_impl 0) in Hck; rewrite tr_Stream_0 in Hck. *)
-    (*     + right. eexists; intuition; auto. *)
-    (*     + left; intuition. *)
-    (*   - inversion_clear Indexed as [? ? ? ? ? ? ? Indexed'|? ? ? ? ? ? Indexed']; *)
-    (*       apply sem_var_impl with (b:=tr_Stream b) in Indexed'; *)
-    (*       rewrite tr_Stream_S, tr_History_tl; eauto. *)
-    (* Qed. *)
-
-    (* (** We deduce from the previous lemma the correspondence for annotated *)
-    (*     [var]. *) *)
-    (* Hint Constructors Indexed.sem_avar_instant. *)
-    (* Corollary sem_avar_impl: *)
-    (*   forall H b x vs ck, *)
-    (*     CoInd.sem_avar H b ck x vs -> *)
-    (*     Indexed.sem_avar (tr_Stream b) (tr_History H) ck x (tr_Stream vs). *)
-    (* Proof. *)
-    (*   intros * Indexed n. *)
-    (*   apply (sem_avar_index n) in Indexed as [(? & ? & Hes)|(? & ? & ? & Hes)]; *)
-    (*     rewrite Hes; auto. *)
-    (* Qed. *)
-    (* Hint Resolve sem_avar_impl. *)
-
     (** ** Semantics of exps *)
 
     (** State the correspondence for [exp].
@@ -407,32 +284,33 @@ Module Type COINDTOINDEXED
         CoInd.sem_exp H b e es ->
         CESem.sem_exp (tr_Stream b) (tr_History H) e (tr_Stream es).
     Proof.
+      unfold tr_Stream.
       induction 1 as [? ? ? ? Hconst
                             |? ? ? ? ? Hvar
                             |? ? ? ? ? ? ? ? ? ? Hvar Hwhen
                             |? ? ? ? ? ? ? ? ? Hlift1
                             |? ? ? ? ? ? ? ? ? ? ? ? ? Hlift2]; intro n.
-      - apply (const_index n) in Hconst; rewrite Hconst.
+      - rewrite const_spec in Hconst; rewrite Hconst.
         destruct (tr_Stream b n); eauto.
       - apply sem_var_impl in Hvar; eauto.
       - specialize (IHsem_exp n).
-        apply sem_var_impl in Hvar.
-        unfold CESem.sem_var, CESem.lift in Hvar.
-        specialize (Hvar n).
-        apply (when_index n) in Hwhen
+        apply sem_var_impl in Hvar;
+          unfold tr_Stream, CESem.sem_var, CESem.lift in Hvar.
+        specialize (Hvar n); simpl in *.
+        rewrite when_spec in Hwhen.
+        destruct (Hwhen n)
           as [(Hes & Hxs & Hos)
              |[(? & ? & Hes & Hxs & ? & Hos)
-              |(? & ? & Hes & Hxs & ? & Hos)]];
+              |(? & ? & Hes & Hxs & ? & Hos)]]; 
           rewrite Hos; rewrite Hes in IHsem_exp; rewrite Hxs in Hvar;
             eauto.
         rewrite <-(Bool.negb_involutive k); eauto.
-      - specialize (IHsem_exp n).
-        apply (lift1_index n) in Hlift1; destruct Hlift1
+      - specialize (IHsem_exp n); simpl in IHsem_exp.
+        rewrite lift1_spec in Hlift1; destruct (Hlift1 n)
           as [(Hes & Hos)|(? & ? & Hes & ? & Hos)];
           rewrite Hos; rewrite Hes in IHsem_exp; eauto.
-      - specialize (IHsem_exp1 n).
-        specialize (IHsem_exp2 n).
-        apply (lift2_index n) in Hlift2; destruct Hlift2
+      - specialize (IHsem_exp1 n); specialize (IHsem_exp2 n); simpl in *.
+        rewrite lift2_spec in Hlift2; destruct (Hlift2 n)
           as [(Hes1 & Hes2 & Hos)|(? & ? & ? & Hes1 & Hes2 & ? & Hos)];
           rewrite Hos; rewrite Hes1 in IHsem_exp1; rewrite Hes2 in IHsem_exp2;
             eauto.
@@ -495,63 +373,7 @@ Module Type COINDTOINDEXED
         rewrite Hes; constructor; auto.
     Qed.
     Hint Resolve sem_aexp_impl.
-
-    (** ** cexp level synchronous operators specifications *)
-
-    Lemma merge_index:
-      forall n xs ts fs rs,
-        merge xs ts fs rs ->
-        (tr_Stream xs n = absent
-         /\ tr_Stream ts n = absent
-         /\ tr_Stream fs n = absent
-         /\ tr_Stream rs n = absent)
-        \/
-        (exists t,
-            tr_Stream xs n = present true_val
-            /\ tr_Stream ts n = present t
-            /\ tr_Stream fs n = absent
-            /\ tr_Stream rs n = present t)
-        \/
-        (exists f,
-            tr_Stream xs n = present false_val
-            /\ tr_Stream ts n = absent
-            /\ tr_Stream fs n = present f
-            /\ tr_Stream rs n = present f).
-    Proof.
-      induction n; intros * Merge.
-      - inv Merge; repeat rewrite tr_Stream_0; intuition.
-        + right; left. eexists; intuition.
-        + right; right. eexists; intuition.
-      - inv Merge; repeat rewrite tr_Stream_S; auto.
-    Qed.
-
-    Lemma ite_index:
-      forall n xs ts fs rs,
-        ite xs ts fs rs ->
-        (tr_Stream xs n = absent
-         /\ tr_Stream ts n = absent
-         /\ tr_Stream fs n = absent
-         /\ tr_Stream rs n = absent)
-        \/
-        (exists t f,
-            tr_Stream xs n = present true_val
-            /\ tr_Stream ts n = present t
-            /\ tr_Stream fs n = present f
-            /\ tr_Stream rs n = present t)
-        \/
-        (exists t f,
-            tr_Stream xs n = present false_val
-            /\ tr_Stream ts n = present t
-            /\ tr_Stream fs n = present f
-            /\ tr_Stream rs n = present f).
-    Proof.
-      induction n; intros * Ite.
-      - inv Ite; repeat rewrite tr_Stream_0; intuition.
-        + right; left. do 2 eexists; now intuition.
-        + right; right. do 2 eexists; now intuition.
-      - inv Ite; repeat rewrite tr_Stream_S; auto.
-    Qed.
-
+ 
     (** [fby] is not a predicate but a function, so we directly state the
         correspondence.  *)
     Lemma fby_impl:
@@ -580,27 +402,26 @@ Module Type COINDTOINDEXED
         CoInd.sem_cexp H b e es ->
         CESem.sem_cexp (tr_Stream b) (tr_History H) e (tr_Stream es).
     Proof.
+      unfold tr_Stream.
       induction 1 as [? ? ? ? ? ? ? ? ? Hvar Ht ? ? ? Hmerge
                     |? ? ? ? ? ? ? ? ? He Ht ? ? ? Hite
                     |? ? ? ? He]; intro n.
-      - specialize (IHsem_cexp1 n).
-        specialize (IHsem_cexp2 n).
+      - specialize (IHsem_cexp1 n); specialize (IHsem_cexp2 n).
         apply sem_var_impl in Hvar; eauto.
-        unfold CESem.sem_var, CESem.lift in Hvar.
-        specialize (Hvar n).
+        unfold tr_Stream, CESem.sem_var, CESem.lift in Hvar.
+        specialize (Hvar n); simpl in *.
         rename H0_ into Hf.
-        apply (merge_index n) in Hmerge
+        rewrite merge_spec in Hmerge; destruct (Hmerge n)
           as [(Hxs & Hts & Hfs & Hos)
              |[(? & Hxs & Hts & Hfs & Hos)
               |(? & Hxs & Hts & Hfs & Hos)]];
           rewrite Hos; rewrite Hts in IHsem_cexp1; rewrite Hfs in IHsem_cexp2;
             rewrite Hxs in Hvar; auto.
 
-      - specialize (IHsem_cexp1 n).
-        specialize (IHsem_cexp2 n).
-        eapply sem_exp_impl in He.
-        specialize (He n).
-        apply (ite_index n) in Hite
+      - specialize (IHsem_cexp1 n); specialize (IHsem_cexp2 n).
+        eapply sem_exp_impl in He; unfold tr_Stream in He.
+        specialize (He n); simpl in *.
+        rewrite ite_spec in Hite; destruct (Hite n)
           as [(Hes & Hts & Hfs & Hos)
              |[(ct & cf & Hes & Hts & Hfs & Hos)
               |(ct & cf & Hes & Hts & Hfs & Hos)]];
@@ -613,7 +434,7 @@ Module Type COINDTOINDEXED
           eapply CESem.Site_eq; eauto.
           apply val_to_bool_false.
 
-      - apply sem_exp_impl in He; auto.
+      - apply sem_exp_impl in He; unfold tr_Stream in *; auto.
     Qed.
     Hint Resolve sem_cexp_impl.
 

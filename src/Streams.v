@@ -14,13 +14,14 @@ Module Type STREAMS
 
   Infix ":::" := Cons (at level 60, right associativity) : stream_scope.
   Infix "≡" := EqSt (at level 70, no associativity) : stream_scope.
+  Notation "s # n " := (Str_nth n s) (at level 9) : stream_scope.
 
   Delimit Scope stream_scope with Stream.
   Open Scope stream_scope.
 
   Lemma const_nth:
     forall {A} n (c: A),
-      Str_nth n (Streams.const c) = c.
+      (Streams.const c) # n = c.
   Proof.
     induction n; simpl; auto.
   Qed.
@@ -333,8 +334,7 @@ Module Type STREAMS
 
   Lemma mask_nth:
     forall n k rs xs,
-      Str_nth n (mask k rs xs) =
-      if Str_nth n (count rs) =? k then Str_nth n xs else absent.
+      (mask k rs xs) # n = if (count rs) # n  =? k then xs # n else absent.
   Proof.
     unfold Str_nth.
     induction n, k as [|[|k]]; intros;
@@ -358,31 +358,247 @@ Module Type STREAMS
           rewrite E; auto.
   Qed.
 
-  Lemma Str_nth_0:
+  (** ** exp level synchronous operators specifications
+
+        To ease the use of coinductive hypotheses to prove non-coinductive
+        goals, we give for each coinductive predicate an indexed specification,
+        reflecting the shapes of the involved streams pointwise speaking.
+        In general this specification is a disjunction with a factor for each
+        case of the predicate.
+        The corresponding lemmas simply go by induction on [n] and by inversion
+        of the coinductive hypothesis for the direct direction, and by coinduction
+        on the converse.
+   *)
+
+  Fact Str_nth_0:
     forall {A} (xs: Stream A) x,
-      Str_nth 0 (x ::: xs) = x.
+      (x ::: xs) # 0 = x.
   Proof. reflexivity. Qed.
   
-  Lemma Str_nth_S:
+  Fact Str_nth_S:
     forall {A} (xs: Stream A) x n,
-      Str_nth (S n) (x ::: xs) = Str_nth n xs.
+      (x ::: xs) # (S n) = xs # n.
   Proof. reflexivity. Qed.
 
-  Lemma const_iff:
+  Lemma const_spec:
     forall xs c b,
       xs ≡ const b c <->
-      forall n, Str_nth n xs = if Str_nth n b then present (sem_const c) else absent.
+      forall n, xs # n = if b # n then present (sem_const c) else absent.
   Proof.
     split.
     - intros E n; revert dependent xs; revert c b; induction n; intros;
         unfold_Stv b; unfold_Stv xs; inv E; simpl in *; try discriminate;
-          repeat rewrite Str_nth_0; repeat rewrite Str_nth_S; auto.
+          repeat rewrite Str_nth_S; auto.
     - revert xs c b.
       cofix COFIX.
       intros * E.
       unfold_Stv b; unfold_Stv xs; constructor; simpl; auto;
         try (specialize (E 0); now inv E);
         apply COFIX; intro n; specialize (E (S n)); rewrite 2 Str_nth_S in E; auto.
+  Qed.
+
+  Ltac cofix_step CoFix H :=
+    let n := fresh "n" in
+    apply CoFix; intro n; specialize (H (S n));
+    repeat rewrite Str_nth_S in H; auto.
+
+  Lemma when_spec:
+    forall k xs cs rs,
+      when k xs cs rs <->
+      (forall n,
+          (xs # n = absent
+           /\ cs # n = absent
+           /\ rs # n = absent)
+          \/
+          (exists x c,
+              xs # n = present x
+              /\ cs # n = present c
+              /\ val_to_bool c = Some (negb k)
+              /\ rs # n = absent)
+          \/
+          (exists x c,
+              xs # n = present x
+              /\ cs # n = present c
+              /\ val_to_bool c = Some k
+              /\ rs # n = present x)).
+  Proof.
+    split.
+    - intros H n; revert dependent xs; revert cs rs k.
+      induction n; intros.
+      + inv H; intuition.
+        * right; left. do 2 eexists; intuition.
+        * right; right. do 2 eexists; intuition.
+      + inv H; repeat rewrite Str_nth_S; auto.
+    - revert xs cs rs k.
+      cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv cs; unfold_Stv rs;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?&?)|[(?&?&?&?&?)|(?&?&?&?&?)]];
+             discriminate).
+      + constructor; cofix_step CoFix H.
+      + constructor.
+        * cofix_step CoFix H.
+        * specialize (H 0); repeat rewrite Str_nth_0 in H;
+            destruct H as [(?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?&?&?)]];
+            try discriminate.
+          congruence.
+      + destruct (H 0) as [(?&?&?)|[(?&?&?&?&?&?)|(?&?& E & E' &?& E'')]];
+          try discriminate.
+        rewrite Str_nth_0 in E, E', E''.
+        rewrite E, E''.
+        constructor; try congruence.
+        cofix_step CoFix H.
+  Qed.
+
+  Lemma lift1_spec:
+    forall op t xs ys,
+      lift1 op t xs ys <->
+      (forall n,
+          (xs # n = absent /\ ys # n = absent)
+          \/
+          (exists x y,
+              xs # n = present x
+              /\ sem_unop op x t = Some y
+              /\ ys # n = present y)).
+  Proof.
+    split.
+    - intros H n; revert dependent xs; revert ys t op.
+      induction n; intros.
+      + inv H; intuition.
+        right. do 2 eexists; intuition; auto.
+      + inv H; repeat rewrite Str_nth_S;auto.
+    - revert xs ys t op.
+      cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv ys;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?)|(?&?&?&?&?)]; discriminate).
+      + constructor; cofix_step CoFix H.
+      + constructor.
+        * destruct (H 0) as [(?&?)|(?&?& E &?& E')]; try discriminate.
+          rewrite Str_nth_0 in E, E'.
+          inv E; inv E'; auto.
+        * cofix_step CoFix H.
+  Qed.
+
+  Lemma lift2_spec:
+    forall op t1 t2 xs ys zs,
+      lift2 op t1 t2 xs ys zs <->
+      (forall n,
+          (xs # n = absent
+           /\ ys # n = absent
+           /\ zs # n = absent)
+          \/
+          (exists x y z,
+              xs # n = present x
+              /\ ys # n = present y
+              /\ sem_binop op x t1 y t2 = Some z
+              /\ zs # n = present z)).
+  Proof.
+    split.
+    - intros H n; revert dependent xs; revert ys zs t1 t2 op.
+      induction n; intros.
+      + inv H; intuition.
+        right. do 3 eexists; intuition; auto.
+      + inv H; repeat rewrite Str_nth_S; auto.
+    - revert xs ys zs t1 t2 op.
+      cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv ys; unfold_Stv zs;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?&?)|(?&?&?&?&?&?&?)]; discriminate).
+      + constructor; cofix_step CoFix H.
+      + constructor.
+        * destruct (H 0) as [(?&?&?)|(?&?&?& E & E' &?& E'')]; try discriminate.
+          rewrite Str_nth_0 in E, E', E''.
+          inv E; inv E'; inv E''; auto.
+        * cofix_step CoFix H.
+  Qed.
+
+  (** ** cexp level synchronous operators specifications *)
+
+  Lemma merge_spec:
+    forall xs ts fs rs,
+      merge xs ts fs rs <->
+      (forall n,
+          (xs # n = absent
+           /\ ts # n = absent
+           /\ fs # n = absent
+           /\ rs # n = absent)
+          \/
+          (exists t,
+              xs # n = present true_val
+              /\ ts # n = present t
+              /\ fs # n = absent
+              /\ rs # n = present t)
+          \/
+          (exists f,
+              xs # n = present false_val
+              /\ ts # n = absent
+              /\ fs # n = present f
+              /\ rs # n = present f)).
+  Proof.
+    split.
+    - intros * H n.
+      revert dependent xs; revert ts fs rs. 
+      induction n; intros.
+      + inv H; intuition.
+        * right; left. eexists; intuition.
+        * right; right. eexists; intuition.
+      + inv H; repeat rewrite Str_nth_S; auto.
+    - revert xs ts fs rs; cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv ts; unfold_Stv fs; unfold_Stv rs;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?&?&?)|[(?&?&?&?&?)|(?&?&?&?&?)]];
+             discriminate).
+      + constructor; cofix_step CoFix H.
+      + destruct (H 0) as [(?&?&?&?)|[(?&?&?&?&?)|(?& E &?& E' & E'')]];
+          try discriminate.
+        rewrite Str_nth_0 in E, E', E''; inv E; inv E'; inv E''.
+        constructor; cofix_step CoFix H.
+      + destruct (H 0) as [(?&?&?&?)|[(?& E & E' &?& E'')|(?&?&?&?&?)]];
+          try discriminate.
+        rewrite Str_nth_0 in E, E', E''; inv E; inv E'; inv E''.
+        constructor; cofix_step CoFix H.
+  Qed.
+
+  Lemma ite_spec:
+    forall xs ts fs rs,
+      ite xs ts fs rs <->
+      (forall n,
+          (xs # n = absent
+           /\ ts # n = absent
+           /\ fs # n = absent
+           /\ rs # n = absent)
+          \/
+          (exists t f,
+              xs # n = present true_val
+              /\ ts # n = present t
+              /\ fs # n = present f
+              /\ rs # n = present t)
+          \/
+          (exists t f,
+              xs # n = present false_val
+              /\ ts # n = present t
+              /\ fs # n = present f
+              /\ rs # n = present f)).
+  Proof.
+    split.
+    - intros * H n.
+      revert dependent xs; revert ts fs rs. 
+      induction n; intros.
+      + inv H; intuition.
+        * right; left. do 2 eexists; now intuition.
+        * right; right. do 2 eexists; now intuition.
+      + inv H; repeat rewrite Str_nth_S; auto.
+    - revert xs ts fs rs; cofix CoFix; intros * H.
+      unfold_Stv xs; unfold_Stv ts; unfold_Stv fs; unfold_Stv rs;
+        try (specialize (H 0); repeat rewrite Str_nth_0 in H;
+             destruct H as [(?&?&?&?)|[(?&?&?&?&?&?)|(?&?&?&?&?&?)]];
+             discriminate).
+      + constructor; cofix_step CoFix H.
+      + destruct (H 0) as [(?&?&?&?)|[(?&?& E1 & E2 & E3 & E4)|(?&?& E1 & E2 & E3 & E4)]];
+          try discriminate;
+          rewrite Str_nth_0 in E1, E2, E3, E4; inv E1; inv E2; inv E3; inv E4;
+            constructor; cofix_step CoFix H.
   Qed.
 
   (* Remark mask_const_absent: *)
