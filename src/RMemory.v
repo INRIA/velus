@@ -405,7 +405,7 @@ Section Properties.
   Lemma memory_equiv_orel_inst:
     forall (S T : memory V),
       S ≋ T ->
-      forall x, orel equal_memory (find_inst x S) (find_inst x T).
+      forall x, find_inst x S ⌈≋⌉ find_inst x T.
   Proof.
     intros * EM. now setoid_rewrite EM.
   Qed.
@@ -427,6 +427,22 @@ Section Properties.
     intros * NM Fx.
     apply memory_equiv_orel_inst with (x:=x0) in NM.
     rewrite Fx in NM. inv NM; eauto.
+  Qed.
+
+  Lemma orel_find_inst_Some (R : relation (memory V)):
+    forall insts x m,
+      orel R (find_inst x insts) (Some m) ->
+      exists m', R m' m /\ find_inst x insts = Some m'.
+  Proof.
+    unfold find_inst. eauto using Env.orel_find_Some.
+  Qed.
+
+  Lemma orel_find_val_Some (R : relation V):
+    forall vals x m,
+      orel R (find_val x vals) (Some m) ->
+      exists m', R m' m /\ find_val x vals = Some m'.
+  Proof.
+    unfold find_val. eauto using Env.orel_find_Some.
   Qed.
 
 End Properties.

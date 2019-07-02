@@ -442,7 +442,7 @@ Module Type CORRECTNESS
       exists (add_n x Mx Is); split.
       + constructor; auto.
         *{ econstructor; eauto.
-           - eexists; split; eauto; reflexivity.
+           - intro; apply orel_eq_weaken; auto.
            - apply Env.gss.
            - now apply IHnode.
          }
@@ -505,7 +505,7 @@ Module Type CORRECTNESS
              + apply Son_abs1; auto.
                destruct Cky as [[]|((c &?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
-             + simpl; eexists; split; eauto; reflexivity.
+             + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
                discriminate.
            - do 2 (econstructor; eauto using sem_equation).
@@ -513,7 +513,7 @@ Module Type CORRECTNESS
                eapply Son_abs2; eauto.
                destruct Cky as [[]|((?&?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
-             + simpl; eexists; split; eauto; reflexivity.
+             + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
                discriminate.
          }

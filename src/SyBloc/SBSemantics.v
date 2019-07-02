@@ -103,13 +103,13 @@ Module Type SBSEMANTICS
           Env.find s I = Some Is ->
           (if r
            then initial_state P b Is
-           else exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
+           else find_inst s S ⌈≋⌉ Some Is) ->
           sem_equation base R S I S' (EqReset s ck b)
     | SEqCall:
         forall base R S I S' ys rst ck b s es xs Is os Ss',
           sem_exps_instant base R es xs ->
           sem_clock_instant base R ck (clock_of_instant xs) ->
-          (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
+          (rst = false -> find_inst s S ⌈≋⌉ Some Is) ->
           Env.find s I = Some Is ->
           sem_block b Is xs os Ss' ->
           sem_vars_instant R ys os ->
@@ -157,14 +157,14 @@ Module Type SBSEMANTICS
         Env.find s I = Some Is ->
         (if r
          then initial_state P b Is
-         else exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
+         else find_inst s S ⌈≋⌉ Some Is) ->
         P_equation base R S I S' (EqReset s ck b).
 
     Hypothesis EqCallCase:
       forall base R S I S' s ys ck rst b es xs Is os Ss',
         sem_exps_instant base R es xs ->
         sem_clock_instant base R ck (clock_of_instant xs) ->
-        (rst = false -> exists Ss, find_inst s S = Some Ss /\ Is ≋ Ss) ->
+        (rst = false -> find_inst s S ⌈≋⌉ Some Is) ->
         Env.find s I = Some Is ->
         sem_block P b Is xs os Ss' ->
         sem_vars_instant R ys os ->
@@ -242,24 +242,6 @@ Module Type SBSEMANTICS
   Proof.
     intros * E Rst ??? Hin.
     rewrite <-E; apply Rst in Hin; auto.
-  Qed.
-
-  (* TODO: move to RMemory *)
-  Lemma orel_find_inst_Some {V} (R : relation (memory V)):
-    forall insts x m,
-      orel R (find_inst x insts) (Some m) ->
-      exists m', R m' m /\ find_inst x insts = Some m'.
-  Proof.
-    unfold find_inst. eauto using Env.orel_find_Some.
-  Qed.
-
-  (* TODO: move to RMemory *)
-  Lemma orel_find_val_Some {V} (R : relation V):
-    forall vals x m,
-      orel R (find_val x vals) (Some m) ->
-      exists m', R m' m /\ find_val x vals = Some m'.
-  Proof.
-    unfold find_val. eauto using Env.orel_find_Some.
   Qed.
 
   Add Parametric Morphism P f : (initial_state P f)
@@ -354,14 +336,8 @@ Module Type SBSEMANTICS
       apply Env.orel_find_Some in Find as (Is' & Eq & Find').
       destruct r.
       + econstructor; eauto; simpl. now rewrite Eq.
-      + destruct Init as (?& Sub &?).
-        apply orel_eq in Sub;
-          setoid_rewrite (@eq_subrelation _ equal_memory) in Sub; auto.
-        rewrite E in Sub.
-        apply orel_find_inst_Some in Sub as (? & Eq' & ?).
-        econstructor; eauto; simpl.
-        eexists; split; eauto.
-        now rewrite Eq, Eq'.
+      + econstructor; eauto; simpl.
+        now rewrite <-E, Eq.
     - intros * E EI E'.
       apply orel_eq in Find;
         setoid_rewrite (@eq_subrelation _ equal_memory) in Find; auto.
@@ -374,13 +350,9 @@ Module Type SBSEMANTICS
       symmetry in Eq, Eq'.
       destruct rst.
       + econstructor; eauto. discriminate.
-      + specialize (Spec eq_refl) as (?& Sub_i &?).
-        apply orel_eq in Sub_i;
-          setoid_rewrite (@eq_subrelation _ equal_memory) in Sub_i; auto.
-        rewrite E in Sub_i.
-        apply orel_find_inst_Some in Sub_i as (? & Eq'' & ?).
+      + specialize (Spec eq_refl).
         eapply SEqCall; eauto.
-        intro; eexists. split; eauto. now rewrite <-Eq, Eq''.
+        now rewrite <-Eq, <-E.
     - intros ? E ? E'.
       econstructor; eauto.
       + induction (b_eqs bl); auto;
@@ -763,9 +735,9 @@ Module Type SBSEMANTICS
              assert (r = false)
                by (rewrite <-Bool.not_true_iff_false;
                    intro E; subst; contradict Clock; apply not_subrate_clock); subst.
-             destruct Init as (?&?&?); eauto.
+             apply orel_find_inst_Some in Init as (?&?&?); eauto.
            - inversion_clear Heqs as [| | |????????????????? Rst].
-             destruct Rst as (?&?&?); eauto.
+             apply orel_find_inst_Some in Rst as (?&?&?); eauto.
          }
         * apply Insts in Find as (b & Hin &?).
           apply calls_of_In in Hin as (?&?&?&?& Hin).
@@ -794,10 +766,8 @@ Module Type SBSEMANTICS
           assert (r = false)
             by (rewrite <-Bool.not_true_iff_false;
                 intro E; subst; contradict Clock; apply not_subrate_clock); subst.
-          destruct Init as (?& Find1 &?); eauto.
-          unfold find_inst in *; rewrite Find1 in Find; inv Find; auto.
-        * destruct Rst' as (?& Find1 &?); auto.
-          rewrite Find1 in Find; inv Find; auto.
+          unfold find_inst in Init; rewrite Find in Init; inv Init; symmetry; auto.
+        * rewrite Find in Rst'; specialize (Rst' eq_refl); inv Rst'; symmetry; auto.
   Qed.
 
   Lemma sem_equations_absent_vars:
