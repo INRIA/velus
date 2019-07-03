@@ -50,7 +50,7 @@ Module Type COINDTOINDEXED
         the input Stream to each [n].
      *)
     Definition tr_Stream {A} (xs: Stream A) : stream A :=
-      fun n => Str_nth n xs.
+      fun n => xs # n.
 
     (** Translate a list of Streams into a stream of list.
         - if the input list is void, the result is the constantly void stream
@@ -90,12 +90,6 @@ Module Type COINDTOINDEXED
     Lemma tr_Stream_tl:
       forall {A} (xs: Stream A) n,
         tr_Stream (tl xs) n = tr_Stream xs (S n).
-    Proof. reflexivity. Qed.
-
-    (** A generalized version *)
-    Lemma tr_Stream_nth:
-      forall {A} n (xs: Stream A),
-        tr_Stream xs n = Str_nth n xs.
     Proof. reflexivity. Qed.
 
     Lemma tr_Stream_const:
@@ -572,10 +566,10 @@ Module Type COINDTOINDEXED
       induction xss as [|xs];
         simpl; intros * n; unfold Str.mask in *.
       - destruct (k =? Str.count (tr_Stream r) n); auto.
-      - rewrite tr_Stream_nth, mask_nth.
-        rewrite IHxss.
+      - unfold tr_Stream at 1; rewrite mask_nth.
+        rewrite IHxss; simpl.
         rewrite <-count_impl, Nat.eqb_sym.
-        unfold tr_Stream; destruct (k =? Str_nth n (Strs.count r)); auto.
+        unfold tr_Stream; cases.
     Qed.
 
 
