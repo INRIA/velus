@@ -32,7 +32,7 @@ Module Type CESYNTAX (Import Op: OPERATORS).
     | Ewhen e _ _ => typeof e
     end.
 
-  (** Predicate used in [normal_args] in NLustre and SyBloc. *)
+  (** Predicate used in [normal_args] in NLustre and Stc. *)
   Fixpoint noops_exp (ck: clock) (le : exp) : Prop :=
     match ck with
     | Cbase => True

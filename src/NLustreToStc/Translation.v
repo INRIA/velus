@@ -6,7 +6,7 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.Memories.
-From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Stc.StcSyntax.
 From Velus Require Environment.
 
 From Coq Require Import List.
@@ -22,10 +22,10 @@ Open Scope list.
 Module Type TRANSLATION
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import SynNL : NLSYNTAX Ids Op CESyn)
-       (SynSB        : SBSYNTAX Ids Op CESyn)
-       (Import Mem   : MEMORIES Ids Op CESyn SynNL).
+       (Import CESyn : CESYNTAX      Op)
+       (Import SynNL : NLSYNTAX  Ids Op CESyn)
+       (SynStc       : STCSYNTAX Ids Op CESyn)
+       (Import Mem   : MEMORIES  Ids Op CESyn SynNL).
 
   Definition gather_eq (acc: list (ident * (const * clock)) * list (ident * ident)) (eq: equation):
     list (ident * (const * clock)) * list (ident * ident) :=
@@ -41,25 +41,25 @@ Module Type TRANSLATION
 
   (** ** Translation *)
 
-  Definition translate_eqn (eqn: equation) : list SynSB.equation :=
+  Definition translate_eqn (eqn: equation) : list SynStc.trconstr :=
     match eqn with
     | EqDef x ck e =>
-      [ SynSB.EqDef x ck e ]
+      [ SynStc.TcDef x ck e ]
     | EqApp [] _ _ _ _ =>
       []                        (* This way we can ensure b_blocks_in_eqs *)
     | EqApp (x :: xs) ck f les None =>
-      [ SynSB.EqCall x (x :: xs) ck false f les ]
+      [ SynStc.TcCall x (x :: xs) ck false f les ]
     | EqApp (x :: xs) ck f les (Some r) =>
-      [ SynSB.EqReset x (Con ck r true) f;
-          SynSB.EqCall x (x :: xs) ck true f les ]
+      [ SynStc.TcReset x (Con ck r true) f;
+          SynStc.TcCall x (x :: xs) ck true f les ]
     | EqFby x ck _ e =>
-      [ SynSB.EqNext x ck e ]
+      [ SynStc.TcNext x ck e ]
     end.
 
   (*   (** Remark: eqns ordered in reverse order of execution for coherence with *)
   (*      [Is_well_sch]. *) *)
 
-  Definition translate_eqns (eqns: list equation) : list SynSB.equation :=
+  Definition translate_eqns (eqns: list equation) : list SynStc.trconstr :=
     flat_map translate_eqn eqns.
 
   (** Properties of translation functions *)
@@ -214,22 +214,22 @@ Module Type TRANSLATION
   Hint Resolve n_ingt0.
 
   (* =translate_node= *)
-  Program Definition translate_node (n: node) : SynSB.block :=
+  Program Definition translate_node (n: node) : SynStc.system :=
     (* TODO: fst (gather_eqs) should be a PS.t
                (i.e., do ps_from_list directly) *)
     let gathered := gather_eqs n.(n_eqs) in
     let lasts := fst gathered in
     let lasts_ids := ps_from_list (map fst (fst gathered)) in
-    let blocks := snd gathered in
+    let subs := snd gathered in
     let partitioned := partition (fun x => PS.mem (fst x) lasts_ids) n.(n_vars) in
     let vars := snd partitioned in
-    {| SynSB.b_name  := n.(n_name);
-       SynSB.b_blocks := blocks;
-       SynSB.b_in   := n.(n_in);
-       SynSB.b_vars := vars;
-       SynSB.b_lasts := lasts;
-       SynSB.b_out  := n.(n_out);
-       SynSB.b_eqs  := translate_eqns n.(n_eqs)
+    {| SynStc.s_name  := n.(n_name);
+       SynStc.s_subs  := subs;
+       SynStc.s_in    := n.(n_in);
+       SynStc.s_vars  := vars;
+       SynStc.s_lasts := lasts;
+       SynStc.s_out   := n.(n_out);
+       SynStc.s_tcs   := translate_eqns n.(n_eqs)
     |}.
   Next Obligation.
     rewrite fst_fst_gather_eqs_var_defined, <-fst_partition_memories_var_defined.
@@ -299,7 +299,7 @@ Module Type TRANSLATION
     }
     rewrite E; clear E.
     rewrite snd_partition_memories_var_defined.
-    unfold SynSB.variables, translate_eqns, vars_defined.
+    unfold SynStc.variables, translate_eqns, vars_defined.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
     destruct o; simpl; rewrite IHl; auto.
@@ -427,57 +427,57 @@ Module Type TRANSLATION
       apply in_app; auto.
   Qed.
 
-  Definition translate (G: global) : SynSB.program :=
+  Definition translate (G: global) : SynStc.program :=
     map translate_node G.
 
-  Lemma find_block_translate:
-    forall n G bl prog',
-      SynSB.find_block n (translate G) = Some (bl, prog') ->
-      exists node, find_node n G = Some node
-              /\ bl = translate_node node.
+  Lemma find_system_translate:
+    forall f G s prog',
+      SynStc.find_system f (translate G) = Some (s, prog') ->
+      exists n, find_node f G = Some n
+           /\ s = translate_node n.
   Proof.
-    induction G as [|node G]; [now inversion 1|].
+    induction G as [|n G]; [now inversion 1|].
     intros * Hfind.
     simpl in Hfind.
-    destruct (EquivDec.equiv_dec node.(n_name) n) as [Heq|Hneq].
+    destruct (EquivDec.equiv_dec n.(n_name) f) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
       injection Hfind; intros; subst.
-      exists node. split; auto.
+      exists n. split; auto.
       simpl. now rewrite Heq, ident_eqb_refl.
     - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
-      apply IHG in Hfind. destruct Hfind as (node' & Hfind & Hcls).
-      exists node'. simpl. rewrite Hneq. auto.
+      apply IHG in Hfind. destruct Hfind as (n' & Hfind & Hcls).
+      exists n'. simpl. rewrite Hneq. auto.
   Qed.
 
   Lemma find_node_translate:
-    forall n g node,
-      find_node n g = Some node ->
-      exists bl prog',
-        SynSB.find_block n (translate g) = Some (bl, prog')
-        /\ bl = translate_node node.
+    forall f G n,
+      find_node f G = Some n ->
+      exists s P,
+        SynStc.find_system f (translate G) = Some (s, P)
+        /\ s = translate_node n.
   Proof.
-    induction g as [|node g]; [now inversion 1|].
+    induction G as [|node g]; [now inversion 1|].
     intros * Hfind.
     simpl in Hfind.
-    destruct (EquivDec.equiv_dec node.(n_name) n) as [Heq|Hneq].
+    destruct (EquivDec.equiv_dec node.(n_name) f) as [Heq|Hneq].
     - rewrite Heq, ident_eqb_refl in Hfind.
-      injection Hfind; intros; subst node0.
-      exists (translate_node node), (translate g). split; auto.
+      injection Hfind; intros; subst node.
+      exists (translate_node n), (translate g). split; auto.
       simpl. now rewrite Heq, ident_eqb_refl.
     - apply ident_eqb_neq in Hneq. rewrite Hneq in Hfind.
-      apply IHg in Hfind. destruct Hfind as (bl & prog' & Hfind & Hbl).
-      exists bl, prog'. split; auto. simpl. now rewrite Hneq.
+      apply IHg in Hfind. destruct Hfind as (s & P & Hfind & Hbl).
+      exists s, P. split; auto. simpl. now rewrite Hneq.
   Qed.
 
 End TRANSLATION.
 
 Module TranslationFun
-       (Ids   : IDS)
-       (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (SynNL : NLSYNTAX Ids Op CESyn)
-       (SynSB : SBSYNTAX Ids Op CESyn)
-       (Mem   : MEMORIES Ids Op CESyn SynNL)
-<: TRANSLATION Ids Op CESyn SynNL SynSB Mem.
-  Include TRANSLATION Ids Op CESyn SynNL SynSB Mem.
+       (Ids    : IDS)
+       (Op     : OPERATORS)
+       (CESyn  : CESYNTAX      Op)
+       (SynNL  : NLSYNTAX  Ids Op CESyn)
+       (SynStc : STCSYNTAX Ids Op CESyn)
+       (Mem    : MEMORIES  Ids Op CESyn SynNL)
+<: TRANSLATION Ids Op CESyn SynNL SynStc Mem.
+  Include TRANSLATION Ids Op CESyn SynNL SynStc Mem.
 End TranslationFun.

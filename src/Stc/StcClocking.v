@@ -3,13 +3,13 @@ From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Stc.StcSyntax.
 From Velus Require Import CoreExpr.CEClocking.
-From Velus Require Import SyBloc.SBIsLast.
-From Velus Require Import SyBloc.SBIsVariable.
-From Velus Require Import SyBloc.SBIsDefined.
-From Velus Require Import SyBloc.SBIsBlock.
-From Velus Require Import SyBloc.SBOrdered.
+From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsVariable.
+From Velus Require Import Stc.StcIsDefined.
+From Velus Require Import Stc.StcIsSystem.
+From Velus Require Import Stc.StcOrdered.
 
 From Coq Require Import List.
 From Coq Require Import Morphisms.
@@ -24,56 +24,55 @@ wrt. its clock annotations.
 
  *)
 
-Module Type SBCLOCKING
+Module Type STCCLOCKING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX         Op)
-       (Import Syn   : SBSYNTAX     Ids Op CESyn)
-       (Import Last  : SBISLAST     Ids Op CESyn Syn)
-       (Import Var   : SBISVARIABLE Ids Op CESyn Syn)
-       (Import Def   : SBISDEFINED  Ids Op CESyn Syn Var Last)
-       (Import Block : SBISBLOCK    Ids Op CESyn Syn)
-       (Import Ord   : SBORDERED    Ids Op CESyn Syn Block)
-       (Import CEClo : CECLOCKING   Ids Op CESyn).
+       (Import CESyn : CESYNTAX          Op)
+       (Import Syn   : STCSYNTAX     Ids Op CESyn)
+       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
+       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
+       (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
+       (Import CEClo : CECLOCKING    Ids Op CESyn).
 
-
-  Inductive wc_equation (P: program) (vars: list (ident * clock)): equation -> Prop :=
-  | CEqDef:
+  Inductive wc_trconstr (P: program) (vars: list (ident * clock)): trconstr -> Prop :=
+  | CTcDef:
       forall x ck e,
         In (x, ck) vars ->
         wc_cexp vars e ck ->
-        wc_equation P vars (EqDef x ck e)
-  | CEqFby:
+        wc_trconstr P vars (TcDef x ck e)
+  | CTcFby:
       forall x ck e,
         In (x, ck) vars ->
         wc_exp vars e ck ->
-        wc_equation P vars (EqNext x ck e)
-  | CEqReset:
-      forall s ck f,
+        wc_trconstr P vars (TcNext x ck e)
+  | CTcReset:
+      forall i ck f,
         wc_clock vars ck ->
-        wc_equation P vars (EqReset s ck f)
-  | CEqApp:
-      forall s xs ck rst f es b P',
-          find_block f P = Some (b, P') ->
+        wc_trconstr P vars (TcReset i ck f)
+  | CTcApp:
+      forall i xs ck rst f es s P',
+          find_system f P = Some (s, P') ->
           (exists isub osub,
               Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
                                   /\ (exists lck, wc_exp vars le lck
                                             /\ instck ck isub (dck xtc) = Some lck))
-                      b.(b_in) es
+                      s.(s_in) es
               /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
                                    /\ (exists xck, In (x, xck) vars
                                              /\ instck ck (orelse isub osub)
                                                       (dck xtc) = Some xck))
-                        b.(b_out) xs
-              /\ (forall x, ~InMembers x b.(b_out) -> osub x = None)) ->
-        wc_equation P vars (EqCall s xs ck rst f es).
+                        s.(s_out) xs
+              /\ (forall x, ~InMembers x s.(s_out) -> osub x = None)) ->
+        wc_trconstr P vars (TcCall i xs ck rst f es).
 
-  Definition wc_block (P: program) (b: block) : Prop :=
-    wc_env (idck (b.(b_in))) /\
-    wc_env (idck (b.(b_in) ++ b.(b_out))) /\
-    wc_env (idck (b.(b_in) ++ b.(b_vars) ++ b.(b_out)) ++ idck b.(b_lasts)) /\
-    Forall (wc_equation P (idck (b.(b_in) ++ b.(b_vars) ++ b.(b_out)) ++ idck b.(b_lasts)))
-           b.(b_eqs).
+  Definition wc_system (P: program) (s: system) : Prop :=
+    wc_env (idck (s.(s_in))) /\
+    wc_env (idck (s.(s_in) ++ s.(s_out))) /\
+    wc_env (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_lasts)) /\
+    Forall (wc_trconstr P (idck (s.(s_in) ++ s.(s_vars) ++ s.(s_out)) ++ idck s.(s_lasts)))
+           s.(s_tcs).
 
   Inductive wc_program : program -> Prop :=
   | wc_global_nil:
@@ -81,34 +80,34 @@ Module Type SBCLOCKING
   | wc_global_cons:
       forall b P,
       wc_program P ->
-      wc_block P b ->
+      wc_system P b ->
       wc_program (b :: P).
 
-  Inductive Has_clock_eq: clock -> equation -> Prop :=
-  | HcEqDef:
+  Inductive Has_clock_tc: clock -> trconstr -> Prop :=
+  | HcTcDef:
       forall x ck e,
-        Has_clock_eq ck (EqDef x ck e)
-  | HcEqNext:
+        Has_clock_tc ck (TcDef x ck e)
+  | HcTcNext:
       forall x ck e,
-        Has_clock_eq ck (EqNext x ck e)
-  | HcEqReset:
+        Has_clock_tc ck (TcNext x ck e)
+  | HcTcReset:
       forall s ck f,
-      Has_clock_eq ck (EqReset s ck f)
-  | HcEqCall:
+      Has_clock_tc ck (TcReset s ck f)
+  | HcTcCall:
       forall s xs ck rst f es,
-      Has_clock_eq ck (EqCall s xs ck rst f es).
+      Has_clock_tc ck (TcCall s xs ck rst f es).
 
-  Hint Constructors wc_clock wc_exp wc_cexp wc_equation wc_program.
-  Hint Unfold wc_env wc_block.
+  Hint Constructors wc_clock wc_exp wc_cexp wc_trconstr wc_program.
+  Hint Unfold wc_env wc_system.
   Hint Resolve Forall_nil.
 
-  Instance wc_equation_Proper:
-    Proper (@eq program ==> @Permutation (ident * clock) ==> @eq equation ==> iff)
-           wc_equation.
+  Instance wc_trconstr_Proper:
+    Proper (@eq program ==> @Permutation (ident * clock) ==> @eq trconstr ==> iff)
+           wc_trconstr.
   Proof.
-    intros ??? env1 env2 Henv eq1 eq2 Heq; subst.
-    split; intro WTeq.
-    - inv WTeq; try rewrite Henv in *; eauto.
+    intros ??? env1 env2 Henv eq1 eq2 Htc; subst.
+    split; intro WTtc.
+    - inv WTtc; try rewrite Henv in *; eauto.
       match goal with H: exists isub osub, _ |- _ =>
         destruct H as (isub & osub & Hin & Hout & Hnos) end.
       econstructor; eauto.
@@ -119,7 +118,7 @@ Module Type SBCLOCKING
         * apply Forall2_impl_In with (2:=Hout).
           destruct 3 as (lck & Hwc & Hi).
           rewrite Henv in *. eauto.
-    - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
+    - inv WTtc; try rewrite <-Henv in *; eauto with nlclocking.
       match goal with H: exists isub osub, _ |- _ =>
         destruct H as (isub & osub & Hin & Hout & Hnos) end.
       econstructor; eauto.
@@ -141,70 +140,70 @@ Module Type SBCLOCKING
     inversion_clear 1; auto.
   Qed.
 
-  Lemma wc_find_block:
+  Lemma wc_find_system:
     forall P f b P',
       wc_program P ->
-      find_block f P = Some (b, P') ->
-      wc_block P' b.
+      find_system f P = Some (b, P') ->
+      wc_system P' b.
   Proof.
     intros * WCG Hfind.
-    apply find_block_app in Hfind as (?&?&?); subst.
+    apply find_system_app in Hfind as (?&?&?); subst.
     apply wc_program_app_weaken in WCG.
     inversion_clear WCG; auto.
   Qed.
 
-  Lemma wc_equation_program_cons:
-    forall vars b P eq,
-      Ordered_blocks (b :: P) ->
-      wc_equation P vars eq ->
-      wc_equation (b :: P) vars eq.
+  Lemma wc_trconstr_program_cons:
+    forall vars b P tc,
+      Ordered_systems (b :: P) ->
+      wc_trconstr P vars tc ->
+      wc_trconstr (b :: P) vars tc.
   Proof.
     intros * OnG WCnG.
     inversion_clear OnG as [|? ? OG ? HndG].
-    inversion_clear WCnG as [| | |???????? Find]; eauto using wc_equation.
+    inversion_clear WCnG as [| | |???????? Find]; eauto using wc_trconstr.
     econstructor; eauto.
-    rewrite find_block_other; eauto.
+    rewrite find_system_other; eauto.
     intro; subst.
-    pose proof Find as Find'; apply find_block_name in Find'.
-    eapply find_block_In, Forall_forall in Find; eauto.
+    pose proof Find as Find'; apply find_system_name in Find'.
+    eapply find_system_In, Forall_forall in Find; eauto.
     congruence.
   Qed.
 
-  Lemma wc_equation_program_app:
-    forall vars P' P eq,
-      Ordered_blocks (P' ++ P) ->
-      wc_equation P vars eq ->
-      wc_equation (P' ++ P) vars eq.
+  Lemma wc_trconstr_program_app:
+    forall vars P' P tc,
+      Ordered_systems (P' ++ P) ->
+      wc_trconstr P vars tc ->
+      wc_trconstr (P' ++ P) vars tc.
   Proof.
     induction P'; auto.
-    simpl. intros * OG WCeq.
-    eapply wc_equation_program_cons in OG; eauto.
+    simpl. intros * OG WCtc.
+    eapply wc_trconstr_program_cons in OG; eauto.
     inv OG. auto.
   Qed.
 
-  Lemma wc_find_block':
+  Lemma wc_find_system':
     forall P f b P',
-      Ordered_blocks P ->
+      Ordered_systems P ->
       wc_program P ->
-      find_block f P = Some (b, P') ->
-      wc_block P b.
+      find_system f P = Some (b, P') ->
+      wc_system P b.
   Proof.
     intros * OG WCG Hfind.
     induction P as [|b' P IH]; try discriminate.
     simpl in *.
-    destruct (ident_eqb b'.(b_name) f) eqn:Heq.
-    - inv Hfind. inversion_clear WCG as [|? ? WCG' (WCi & WCo & WCv & WCeqs)].
+    destruct (ident_eqb b'.(s_name) f) eqn:Heq.
+    - inv Hfind. inversion_clear WCG as [|? ? WCG' (WCi & WCo & WCv & WCtcs)].
       constructor; repeat (try split; auto).
-      apply Forall_impl_In with (2:=WCeqs).
-      intros. apply wc_equation_program_cons; auto.
+      apply Forall_impl_In with (2:=WCtcs).
+      intros. apply wc_trconstr_program_cons; auto.
     - assert (OG' := OG).
       inversion_clear OG as [|? ? OG'' ? ?].
       inversion_clear WCG as [|? ? WCG'].
       specialize (IH OG'' WCG' Hfind).
-      destruct IH as (WCi & WCo & WCv & WCeqs).
+      destruct IH as (WCi & WCo & WCv & WCtcs).
       repeat (try split; auto).
-      apply Forall_impl_In with (2:=WCeqs).
-      intros. apply wc_equation_program_cons; auto.
+      apply Forall_impl_In with (2:=WCtcs).
+      intros. apply wc_trconstr_program_cons; auto.
   Qed.
 
   (** Properties *)
@@ -217,14 +216,14 @@ Module Type SBCLOCKING
     Variable Hnd : NoDupMembers vars.
     Variable Hwc : wc_env vars.
 
-    Lemma wc_equation_not_Is_free_in_clock:
-      forall eq x ck,
-        wc_equation P vars eq ->
-        Is_defined_in_eq x eq ->
-        Has_clock_eq ck eq ->
+    Lemma wc_trconstr_not_Is_free_in_clock:
+      forall tc x ck,
+        wc_trconstr P vars tc ->
+        Is_defined_in_tc x tc ->
+        Has_clock_tc ck tc ->
         ~ Is_free_in_clock x ck.
     Proof.
-      intros eq x' ck' Hwce Hdef Hhasck Hfree.
+      intros tc x' ck' Hwce Hdef Hhasck Hfree.
       inversion Hwce as [??? Hin|??? Hin| |?????? b P' Hfind
                                                   (isub & osub & Hisub & Hosub & Hnos)];
         clear Hwce; subst; inv Hdef; inv Hhasck.
@@ -253,7 +252,7 @@ Module Type SBCLOCKING
       - rename x' into x.
         match goal with H:List.In x xs |- _ => rename H into Hin end.
         destruct (Forall2_in_right _ _ _ _ Hosub Hin)
-          as (o & Ho & (Hxeq & xck & Hxck & Hxi)).
+          as (o & Ho & (Hxtc & xck & Hxck & Hxi)).
         pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
         apply Is_free_in_clock_self_or_parent in Hfree.
         apply instck_parent in Hxi.
@@ -282,48 +281,48 @@ Module Type SBCLOCKING
           apply clock_parent_trans with (1:=Hck) in Hxi.
           apply clock_parent_not_refl with (1:=Hxi).    Qed.
 
-    Corollary wc_EqDef_not_Is_free_in_clock:
+    Corollary wc_TcDef_not_Is_free_in_clock:
       forall x ce ck,
-        wc_equation P vars (EqDef x ck ce) ->
+        wc_trconstr P vars (TcDef x ck ce) ->
         ~ Is_free_in_clock x ck.
     Proof.
-      intros; eapply wc_equation_not_Is_free_in_clock;
-        eauto using Has_clock_eq, Is_defined_in_eq.
+      intros; eapply wc_trconstr_not_Is_free_in_clock;
+        eauto using Has_clock_tc, Is_defined_in_tc.
     Qed.
 
-    Corollary wc_EqNext_not_Is_free_in_clock:
+    Corollary wc_TcNext_not_Is_free_in_clock:
       forall x le ck,
-        wc_equation P vars (EqNext x ck le) ->
+        wc_trconstr P vars (TcNext x ck le) ->
         ~ Is_free_in_clock x ck.
     Proof.
-      intros; eapply wc_equation_not_Is_free_in_clock;
-        eauto using Has_clock_eq, Is_defined_in_eq.
+      intros; eapply wc_trconstr_not_Is_free_in_clock;
+        eauto using Has_clock_tc, Is_defined_in_tc.
     Qed.
 
-    Corollary wc_EqCall_not_Is_free_in_clock:
+    Corollary wc_TcCall_not_Is_free_in_clock:
       forall s xs rst f es ck,
-        wc_equation P vars (EqCall s xs ck rst f es) ->
+        wc_trconstr P vars (TcCall s xs ck rst f es) ->
         forall x, In x xs -> ~ Is_free_in_clock x ck.
     Proof.
-      intros; eapply wc_equation_not_Is_free_in_clock;
-        eauto using Is_defined_in_eq, Has_clock_eq.
+      intros; eapply wc_trconstr_not_Is_free_in_clock;
+        eauto using Is_defined_in_tc, Has_clock_tc.
     Qed.
 
   End Well_clocked.
 
-End SBCLOCKING.
+End STCCLOCKING.
 
-Module SBClockingFun
+Module StcClockingFun
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX         Op)
-       (Import Syn   : SBSYNTAX     Ids Op CESyn)
-       (Import Last  : SBISLAST     Ids Op CESyn Syn)
-       (Import Var   : SBISVARIABLE Ids Op CESyn Syn)
-       (Import Def   : SBISDEFINED  Ids Op CESyn Syn Var Last)
-       (Import Block : SBISBLOCK    Ids Op CESyn Syn)
-       (Import Ord   : SBORDERED    Ids Op CESyn Syn Block)
+       (Import Syn   : STCSYNTAX     Ids Op CESyn)
+       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
+       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import Syst : STCISSYSTEM    Ids Op CESyn Syn)
+       (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
        (Import CEClo : CECLOCKING   Ids Op CESyn)
-  <: SBCLOCKING Ids Op CESyn Syn Last Var Def Block Ord CEClo.
-  Include SBCLOCKING Ids Op CESyn Syn Last Var Def Block Ord CEClo.
-End SBClockingFun.
+  <: STCCLOCKING Ids Op CESyn Syn Last Var Def Syst Ord CEClo.
+  Include STCCLOCKING Ids Op CESyn Syn Last Var Def Syst Ord CEClo.
+End StcClockingFun.

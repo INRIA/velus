@@ -186,11 +186,11 @@ module PrintNLustre = Nlustrelib.PrintFun
     end)
     (PrintOps)
 
-module PrintSyBloc = Sybloclib.PrintFun
+module PrintStc = Stclib.PrintFun
     (CE)
     (struct
       include CE
-      include Instantiator.SB.Syn
+      include Instantiator.Stc.Syn
     end)
     (PrintOps)
 
@@ -208,9 +208,9 @@ module SyncFun = Obclib.SyncFun
    end)
   (ClightTypeFormats)
 
-module Scheduler = Sybloclib.SchedulerFun
+module Scheduler = Stclib.SchedulerFun
     (CE)
     (struct
       include CE
-      include Instantiator.SB.Syn
+      include Instantiator.Stc.Syn
     end)

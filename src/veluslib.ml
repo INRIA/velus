@@ -3,7 +3,7 @@
 
 let lustre_destination = ref (None : string option)
 let nlustre_destination = ref (None : string option)
-let sybloc_destination = ref (None : string option)
+let stc_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
 let sync_destination = ref (None : string option)
 let main_node = ref (None : string option)
@@ -53,8 +53,8 @@ let print_if flag print prog =
 let print_nlustre_if =
   print_if nlustre_destination Interfacelib.PrintNLustre.print_global
 
-let print_sybloc_if =
-  print_if sybloc_destination Interfacelib.PrintSyBloc.print_program
+let print_stc_if =
+  print_if stc_destination Interfacelib.PrintStc.print_program
 
 let print_sync_if prog =
   match !sync_destination with

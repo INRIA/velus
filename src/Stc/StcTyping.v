@@ -2,7 +2,7 @@ From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Stc.StcSyntax.
 From Velus Require Import CoreExpr.CETyping.
 
 From Coq Require Import List.
@@ -11,52 +11,52 @@ Open Scope list_scope.
 
 From Coq Require Import Morphisms.
 
-(** * SyBloc typing *)
+(** * Stc typing *)
 
 (**
 
-  Typing judgements for SyBloc and resulting properties.
+  Typing judgements for Stc and resulting properties.
 
  *)
 
-Module Type SBTYPING
+Module Type STCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : SBSYNTAX Ids Op CESyn)
-       (Import CETyp : CETYPING Ids Op CESyn).
+       (Import CESyn : CESYNTAX      Op)
+       (Import Syn   : STCSYNTAX Ids Op CESyn)
+       (Import CETyp : CETYPING  Ids Op CESyn).
 
-  Inductive wt_equation (P: program) (vars: list (ident * type)) (lasts: list (ident * type)): equation -> Prop :=
-  | wt_EqDef:
+  Inductive wt_trconstr (P: program) (vars: list (ident * type)) (lasts: list (ident * type)): trconstr -> Prop :=
+  | wt_TcDef:
       forall x ck e,
         In (x, typeofc e) vars ->
         wt_clock (vars ++ lasts) ck ->
         wt_cexp (vars ++ lasts) e ->
-        wt_equation P vars lasts (EqDef x ck e)
-  | wt_EqNext:
+        wt_trconstr P vars lasts (TcDef x ck e)
+  | wt_TcNext:
       forall x ck e,
         In (x, typeof e) lasts ->
         wt_clock (vars ++ lasts) ck ->
         wt_exp (vars ++ lasts) e ->
-        wt_equation P vars lasts (EqNext x ck e)
-  | wt_EqReset:
-      forall s ck f b P',
-        find_block f P = Some (b, P') ->
+        wt_trconstr P vars lasts (TcNext x ck e)
+  | wt_TcReset:
+      forall s ck f i P',
+        find_system f P = Some (s, P') ->
         wt_clock (vars ++ lasts) ck ->
-        wt_equation P vars lasts (EqReset s ck f)
-  | wt_EqCall:
-      forall s xs ck rst f es b P',
-        find_block f P = Some (b, P') ->
-        Forall2 (fun x xt => In (x, dty xt) vars) xs b.(b_out) ->
-        Forall2 (fun e xt => typeof e = dty xt) es b.(b_in) ->
+        wt_trconstr P vars lasts (TcReset i ck f)
+  | wt_TcCall:
+      forall s xs ck rst f es i P',
+        find_system f P = Some (s, P') ->
+        Forall2 (fun x xt => In (x, dty xt) vars) xs s.(s_out) ->
+        Forall2 (fun e xt => typeof e = dty xt) es s.(s_in) ->
         wt_clock (vars ++ lasts) ck ->
         Forall (wt_exp (vars ++ lasts)) es ->
-        wt_equation P vars lasts (EqCall s xs ck rst f es).
+        wt_trconstr P vars lasts (TcCall i xs ck rst f es).
 
-  Definition wt_block (P: program) (b: block) : Prop :=
-    Forall (wt_equation P (idty (b.(b_in) ++ b.(b_vars) ++ b.(b_out)))
-                        (map (fun x => (fst x, type_const (fst (snd x)))) b.(b_lasts)))
-           b.(b_eqs).
+  Definition wt_system (P: program) (s: system) : Prop :=
+    Forall (wt_trconstr P (idty (s.(s_in) ++ s.(s_vars) ++ s.(s_out)))
+                        (map (fun x => (fst x, type_const (fst (snd x)))) s.(s_lasts)))
+           s.(s_tcs).
 
   (* TODO: replace Welldef_global; except for the Is_well_sch component.
            Notably, typing arguments replace the ~Is_node_in and
@@ -66,57 +66,57 @@ Module Type SBTYPING
   | wtg_nil:
       wt_program []
   | wtg_cons:
-      forall b P,
+      forall s P,
         wt_program P ->
-        wt_block P b ->
-        Forall (fun b' => b.(b_name) <> b'.(b_name))%type P ->
-        wt_program (b :: P).
+        wt_system P s ->
+        Forall (fun s' => s.(s_name) <> s'.(s_name))%type P ->
+        wt_program (s :: P).
 
-  Hint Constructors wt_clock wt_exp wt_cexp wt_equation wt_program.
+  Hint Constructors wt_clock wt_exp wt_cexp wt_trconstr wt_program.
 
   Lemma wt_program_NoDup:
     forall P,
       wt_program P ->
-      NoDup (map b_name P).
+      NoDup (map s_name P).
   Proof.
     induction P; eauto using NoDup.
     intro WTg. simpl. constructor.
     2:apply IHP; now inv WTg.
     intro Hin.
     inversion_clear WTg as [|? ? ? WTn Hn].
-    change (Forall (fun b' => (fun i => a.(b_name) <> i :> ident) b'.(b_name)) P) in Hn.
+    change (Forall (fun b' => (fun i => a.(s_name) <> i :> ident) b'.(s_name)) P) in Hn.
     apply Forall_map in Hn.
     apply Forall_forall with (1:=Hn) in Hin.
     now contradiction Hin.
   Qed.
 
-  Instance wt_equation_Proper:
+  Instance wt_trconstr_Proper:
     Proper (@eq program ==> @Permutation.Permutation (ident * type)
                 ==> @Permutation.Permutation (ident * type)
-                ==> @eq equation ==> iff)
-           wt_equation.
+                ==> @eq trconstr ==> iff)
+           wt_trconstr.
   Proof.
     intros G1 G2 HG env1 env2 Henv lasts1 lasts2 Hlasts eq1 eq2 Heq.
     subst.
-    split; intro WTeq.
-    - inv WTeq; rewrite Henv, Hlasts in *; econstructor; eauto;
+    split; intro WTtc.
+    - inv WTtc; rewrite Henv, Hlasts in *; econstructor; eauto;
         match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                         apply Forall2_impl_In with (2:=H) end;
         intros; rewrite Henv in *; auto.
-    - inv WTeq; rewrite <-Henv, <-Hlasts in *; econstructor; eauto;
+    - inv WTtc; rewrite <-Henv, <-Hlasts in *; econstructor; eauto;
           match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                           apply Forall2_impl_In with (2:=H) end;
           intros; rewrite Henv in *; auto.
   Qed.
 
-End SBTYPING.
+End STCTYPING.
 
-Module SBTypingFun
+Module StcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (CESyn : CESYNTAX     Op)
-       (Syn   : SBSYNTAX Ids Op CESyn)
+       (Syn   : STCSYNTAX Ids Op CESyn)
        (CETyp : CETYPING Ids Op CESyn)
-       <: SBTYPING Ids Op CESyn Syn CETyp.
-  Include SBTYPING Ids Op CESyn Syn CETyp.
-End SBTypingFun.
+       <: STCTYPING Ids Op CESyn Syn CETyp.
+  Include STCTYPING Ids Op CESyn Syn CETyp.
+End StcTypingFun.

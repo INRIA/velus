@@ -1,18 +1,18 @@
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Clocks.
 
-From Velus Require Import SyBloc.SBIsBlock.
-From Velus Require Import SyBloc.SBOrdered.
+From Velus Require Import Stc.StcIsSystem.
+From Velus Require Import Stc.StcOrdered.
 
-From Velus Require Import SyBloc.SBIsVariable.
-From Velus Require Import SyBloc.SBIsLast.
-From Velus Require Import SyBloc.SBIsDefined.
+From Velus Require Import Stc.StcIsVariable.
+From Velus Require Import Stc.StcIsLast.
+From Velus Require Import Stc.StcIsDefined.
 
 From Velus Require Import CoreExpr.CEIsFree.
-From Velus Require Import SyBloc.SBIsFree.
+From Velus Require Import Stc.StcIsFree.
 
 From Coq Require Import List.
 Import List.ListNotations.
@@ -20,55 +20,55 @@ Open Scope list_scope.
 
 From Coq Require Import Omega.
 
-Module Type SBWELLDEFINED
+Module Type STCWELLDEFINED
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : SBSYNTAX     Ids Op CESyn)
-       (Import Block : SBISBLOCK    Ids Op CESyn Syn)
-       (Import Ord   : SBORDERED    Ids Op CESyn Syn Block)
-       (Import Var   : SBISVARIABLE Ids Op CESyn Syn)
-       (Import Last  : SBISLAST     Ids Op CESyn Syn)
-       (Import Def   : SBISDEFINED  Ids Op CESyn Syn Var Last)
-       (Import CEIsF : CEISFREE   Ids Op CESyn)
-       (Import Free  : SBISFREE     Ids Op CESyn Syn CEIsF).
+       (Import CESyn : CESYNTAX          Op)
+       (Import Syn   : STCSYNTAX     Ids Op CESyn)
+       (Import Syst  : STCISSYSTEM   Ids Op CESyn Syn)
+       (Import Ord   : STCORDERED    Ids Op CESyn Syn Syst)
+       (Import Var   : STCISVARIABLE Ids Op CESyn Syn)
+       (Import Last  : STCISLAST     Ids Op CESyn Syn)
+       (Import Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (Import CEIsF : CEISFREE      Ids Op CESyn)
+       (Import Free  : STCISFREE     Ids Op CESyn Syn CEIsF).
 
-  Inductive Is_well_sch (inputs: list ident) (mems: PS.t): list equation -> Prop :=
+  Inductive Is_well_sch (inputs: list ident) (mems: PS.t): list trconstr -> Prop :=
   | WSchNil:
       Is_well_sch inputs mems []
-  | WSchEq:
-      forall eq eqs,
-        Is_well_sch inputs mems eqs ->
+  | WSchTc:
+      forall tc tcs,
+        Is_well_sch inputs mems tcs ->
         (forall x,
-            Is_free_in_eq x eq ->
+            Is_free_in_tc x tc ->
             if PS.mem x mems
-            then ~ Is_defined_in x eqs
-            else Is_variable_in x eqs \/ In x inputs) ->
-        (forall x, Is_defined_in_eq x eq -> ~ Is_defined_in x eqs) ->
+            then ~ Is_defined_in x tcs
+            else Is_variable_in x tcs \/ In x inputs) ->
+        (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs) ->
         (forall s k,
-            Is_state_in_eq s k eq ->
-            Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < k) eqs) ->
-        Is_well_sch inputs mems (eq :: eqs).
+            Is_sub_in_tc s k tc ->
+            Forall (fun tc => forall k', Is_sub_in_tc s k' tc -> k' < k) tcs) ->
+        Is_well_sch inputs mems (tc :: tcs).
 
   Definition Well_scheduled: program -> Prop :=
-    Forall (fun bl => Is_well_sch (map fst (b_in bl)) (ps_from_list (map fst (b_lasts bl))) (b_eqs bl)).
+    Forall (fun s => Is_well_sch (map fst (s_in s)) (ps_from_list (map fst (s_lasts s))) (s_tcs s)).
 
   Lemma Is_well_sch_app:
-    forall inputs mems eqs eqs',
-      Is_well_sch inputs mems (eqs ++ eqs') ->
-      Is_well_sch inputs mems eqs'.
+    forall inputs mems tcs tcs',
+      Is_well_sch inputs mems (tcs ++ tcs') ->
+      Is_well_sch inputs mems tcs'.
   Proof.
-    induction eqs; auto; simpl.
+    induction tcs; auto; simpl.
     inversion 1; auto.
   Qed.
 
   Lemma Is_last_in_not_Is_variable_in:
-    forall eqs inputs mems x,
-      Is_well_sch inputs mems eqs ->
-      Is_last_in x eqs ->
-      ~ Is_variable_in x eqs.
+    forall tcs inputs mems x,
+      Is_well_sch inputs mems tcs ->
+      Is_last_in x tcs ->
+      ~ Is_variable_in x tcs.
   Proof.
-    induction eqs; intros * Wsch Last Var;
+    induction tcs; intros * Wsch Last Var;
       inversion_clear Last as [?? IsLast|];
       inversion_clear Var as [?? IsVar|?? IsVar_in];
       inversion_clear Wsch as [|???? Defs].
@@ -76,39 +76,39 @@ Module Type SBWELLDEFINED
     - apply Is_variable_in_Is_defined_in in IsVar_in.
       eapply Defs; eauto.
       inv IsLast; constructor.
-    - apply Is_variable_in_eq_Is_defined_in_eq in IsVar.
+    - apply Is_variable_in_tc_Is_defined_in_tc in IsVar.
       eapply Defs; eauto.
       apply Is_defined_Is_variable_Is_last_in; auto.
-    - eapply IHeqs; eauto.
+    - eapply IHtcs; eauto.
   Qed.
 
   Lemma Reset_not_Step_in:
-    forall eqs inputs mems s ck b,
-      Is_well_sch inputs mems (EqReset s ck b :: eqs) ->
-      ~ Step_in s eqs.
+    forall tcs inputs mems i ck f,
+      Is_well_sch inputs mems (TcReset i ck f :: tcs) ->
+      ~ Step_in i tcs.
   Proof.
-    inversion_clear 1 as [|????? States].
-    unfold Step_in, Is_state_in.
+    inversion_clear 1 as [|????? Subs].
+    unfold Step_in, Is_sub_in.
     rewrite Exists_exists.
-    intros (eq' & Hin & IsStin).
-    assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 0) eqs)
-      by (apply States; auto using Is_state_in_eq).
+    intros (tc' & Hin & IsStin).
+    assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 0) tcs)
+      by (apply Subs; auto using Is_sub_in_tc).
     eapply Forall_forall in Hin; eauto.
     apply Hin in IsStin.
     omega.
   Qed.
 
   Lemma Reset_not_Reset_in:
-    forall eqs inputs mems s ck b,
-      Is_well_sch inputs mems (EqReset s ck b :: eqs) ->
-      ~ Reset_in s eqs.
+    forall tcs inputs mems i ck f,
+      Is_well_sch inputs mems (TcReset i ck f :: tcs) ->
+      ~ Reset_in i tcs.
   Proof.
-    inversion_clear 1 as [|????? States].
-    unfold Reset_in, Is_state_in.
+    inversion_clear 1 as [|????? Subs].
+    unfold Reset_in, Is_sub_in.
     rewrite Exists_exists.
-    intros (eq' & Hin & IsStin).
-    assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 0) eqs)
-      by (apply States; auto using Is_state_in_eq).
+    intros (tc' & Hin & IsStin).
+    assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 0) tcs)
+      by (apply Subs; auto using Is_sub_in_tc).
     eapply Forall_forall in Hin; eauto.
     apply Hin in IsStin.
     omega.
@@ -119,7 +119,7 @@ Module Type SBWELLDEFINED
       be instantiated with constants or variables -- that is necessary
       for correct generation of Obc/Clight.
 
-      To see why this is necessary. Consider the NLustre equation: y =
+      To see why this is necessary. Consider the NLustre trconstr: y =
             f(1, 3 when ck / x)
 
       with x on the clock ck, and y on the base clock. The generated
@@ -148,114 +148,114 @@ Module Type SBWELLDEFINED
  *)
 
 
-  Inductive normal_args_eq (P: program) : equation -> Prop :=
-  | CEqDef:
+  Inductive normal_args_tc (P: program) : trconstr -> Prop :=
+  | CTcDef:
       forall x ck e,
-        normal_args_eq P (EqDef x ck e)
-  | CEqNext:
+        normal_args_tc P (TcDef x ck e)
+  | CTcNext:
       forall x ck e,
-        normal_args_eq P (EqNext x ck e)
-  | CEqReset:
+        normal_args_tc P (TcNext x ck e)
+  | CTcReset:
       forall s ck f,
-        normal_args_eq P (EqReset s ck f)
-  | CEqCall:
+        normal_args_tc P (TcReset s ck f)
+  | CTcCall:
       forall s xs ck rst f es b P',
-        find_block f P = Some (b, P') ->
-        Forall2 noops_exp (map dck b.(b_in)) es ->
-        normal_args_eq P (EqCall s xs ck rst f es).
+        find_system f P = Some (b, P') ->
+        Forall2 noops_exp (map dck b.(s_in)) es ->
+        normal_args_tc P (TcCall s xs ck rst f es).
 
-  Definition normal_args_block (P: program) (b: block) : Prop :=
-    Forall (normal_args_eq P) b.(b_eqs).
+  Definition normal_args_system (P: program) (s: system) : Prop :=
+    Forall (normal_args_tc P) s.(s_tcs).
 
-  Fixpoint normal_args (P: list block) : Prop :=
+  Fixpoint normal_args (P: list system) : Prop :=
     match P with
     | [] => True
-    | b :: P' => normal_args_block P b /\ normal_args P'
+    | b :: P' => normal_args_system P b /\ normal_args P'
     end.
 
-  Lemma normal_args_block_cons:
-    forall block P,
-      normal_args_block (block :: P) block ->
-      ~ Is_block_in block.(b_name) block.(b_eqs) ->
-      normal_args_block P block.
+  Lemma normal_args_system_cons:
+    forall system P,
+      normal_args_system (system :: P) system ->
+      ~ Is_system_in system.(s_name) system.(s_tcs) ->
+      normal_args_system P system.
   Proof.
-    intros block P Hnarg Hord.
+    intros system P Hnarg Hord.
     apply Forall_forall.
-    intros eq Hin.
-    destruct eq; eauto using normal_args_eq.
+    intros tc Hin.
+    destruct tc; eauto using normal_args_tc.
     apply Forall_forall with (2:=Hin) in Hnarg.
     inversion_clear Hnarg as [| | |???????? Hfind Hnargs].
-    rewrite find_block_other in Hfind;
-      eauto using normal_args_eq.
+    rewrite find_system_other in Hfind;
+      eauto using normal_args_tc.
     intro; subst; apply Hord.
     apply Exists_exists.
-    eexists; intuition eauto using Is_block_in_eq.
+    eexists; intuition eauto using Is_system_in_tc.
   Qed.
 
   Definition Well_defined (P: program) : Prop :=
-    Ordered_blocks P /\ Well_scheduled P /\ normal_args P.
+    Ordered_systems P /\ Well_scheduled P /\ normal_args P.
 
-  Inductive Step_with_reset_spec: list equation -> Prop :=
+  Inductive Step_with_reset_spec: list trconstr -> Prop :=
   | Step_with_reset_nil:
       Step_with_reset_spec []
-  | Step_with_reset_EqDef:
-      forall x ck e eqs,
-        Step_with_reset_spec eqs ->
-        Step_with_reset_spec (EqDef x ck e :: eqs)
-  | Step_with_reset_EqNext:
-      forall x ck e eqs,
-        Step_with_reset_spec eqs ->
-        Step_with_reset_spec (EqNext x ck e :: eqs)
-  | Step_with_reset_EqReset:
-      forall s ck b eqs,
-        Step_with_reset_spec eqs ->
-        Step_with_reset_spec (EqReset s ck b :: eqs)
-  | Step_with_reset_EqCall:
-      forall s xs ck (rst: bool) b es eqs,
-        Step_with_reset_spec eqs ->
-        (if rst then Reset_in s eqs else ~ Reset_in s eqs) ->
-        Step_with_reset_spec (EqCall s xs ck rst b es :: eqs).
+  | Step_with_reset_TcDef:
+      forall x ck e tcs,
+        Step_with_reset_spec tcs ->
+        Step_with_reset_spec (TcDef x ck e :: tcs)
+  | Step_with_reset_TcNext:
+      forall x ck e tcs,
+        Step_with_reset_spec tcs ->
+        Step_with_reset_spec (TcNext x ck e :: tcs)
+  | Step_with_reset_TcReset:
+      forall i ck f tcs,
+        Step_with_reset_spec tcs ->
+        Step_with_reset_spec (TcReset i ck f :: tcs)
+  | Step_with_reset_TcCall:
+      forall i xs ck (rst: bool) f es tcs,
+        Step_with_reset_spec tcs ->
+        (if rst then Reset_in i tcs else ~ Reset_in i tcs) ->
+        Step_with_reset_spec (TcCall i xs ck rst f es :: tcs).
 
   Lemma Step_with_reset_spec_app:
-    forall eqs eqs',
-      Step_with_reset_spec (eqs ++ eqs') ->
-      Step_with_reset_spec eqs'.
+    forall tcs tcs',
+      Step_with_reset_spec (tcs ++ tcs') ->
+      Step_with_reset_spec tcs'.
   Proof.
-    induction eqs; auto; simpl.
+    induction tcs; auto; simpl.
     inversion 1; auto.
   Qed.
 
   Lemma Step_not_Step_Reset_in:
-    forall eqs inputs mems s ys ck rst b es,
-      Is_well_sch inputs mems (EqCall s ys ck rst b es :: eqs) ->
-      Step_with_reset_spec (EqCall s ys ck rst b es :: eqs) ->
-      ~ Step_in s eqs
-      /\ if rst then Reset_in s eqs else ~ Reset_in s eqs.
+    forall tcs inputs mems i ys ck rst f es,
+      Is_well_sch inputs mems (TcCall i ys ck rst f es :: tcs) ->
+      Step_with_reset_spec (TcCall i ys ck rst f es :: tcs) ->
+      ~ Step_in i tcs
+      /\ if rst then Reset_in i tcs else ~ Reset_in i tcs.
   Proof.
-    inversion_clear 1 as [|????? States].
+    inversion_clear 1 as [|????? Subs].
     inversion_clear 1.
     split; auto.
     setoid_rewrite Exists_exists.
-    intros (eq' & Hin & IsStin).
-    assert (Forall (fun eq => forall k', Is_state_in_eq s k' eq -> k' < 1) eqs)
-        by (apply States; auto using Is_state_in_eq).
+    intros (tc' & Hin & IsStin).
+    assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 1) tcs)
+        by (apply Subs; auto using Is_sub_in_tc).
     eapply Forall_forall in Hin; eauto.
     apply Hin in IsStin.
     omega.
   Qed.
 
   Lemma Is_well_sch_Step_with_reset_spec:
-    forall eqs inputs mems,
-      (forall s rst, Step_with_reset_in s rst eqs ->
-                if rst then Reset_in s eqs else ~ Reset_in s eqs) ->
-      Is_well_sch inputs mems eqs ->
-      Step_with_reset_spec eqs.
+    forall tcs inputs mems,
+      (forall j rst, Step_with_reset_in j rst tcs ->
+                if rst then Reset_in j tcs else ~ Reset_in j tcs) ->
+      Is_well_sch inputs mems tcs ->
+      Step_with_reset_spec tcs.
   Proof.
-    induction eqs as [|[]]; intros * Spec WSCH;
-      inversion_clear WSCH as [|??? Free Def States];
+    induction tcs as [|[]]; intros * Spec WSCH;
+      inversion_clear WSCH as [|??? Free Def Subs];
       constructor;
       clear Free Def;
-      try (eapply IHeqs; eauto; intros * Step; specialize (Spec s rst));
+      try (eapply IHtcs; eauto; intros * Step; specialize (Spec j rst));
       try (setoid_rewrite Step_with_reset_in_cons_not_call in Spec; [|discriminate]).
     - apply Spec in Step.
       destruct rst.
@@ -265,12 +265,12 @@ Module Type SBWELLDEFINED
       destruct rst.
       + inversion_clear Step as [?? Step'|]; auto; inv Step'.
       + intro; apply Step; right; auto.
-    - assert (s <> i).
-      { assert (Is_state_in_eq i 0 (EqReset i c i0)) as State by constructor.
-        apply States in State.
-        eapply Forall_Exists, Exists_exists in State as (?&?& StateSpec & Step_eq); eauto.
-        inv Step_eq; intro; subst.
-        assert (1 < 0) by (apply StateSpec; constructor).
+    - assert (j <> i).
+      { assert (Is_sub_in_tc i 0 (TcReset i c i0)) as Sub by constructor.
+        apply Subs in Sub.
+        eapply Forall_Exists, Exists_exists in Sub as (?&?& SubSpec & Step_tc); eauto.
+        inv Step_tc; intro; subst.
+        assert (1 < 0) by (apply SubSpec; constructor).
         omega.
       }
       apply Spec in Step.
@@ -278,12 +278,12 @@ Module Type SBWELLDEFINED
       + inversion_clear Step as [?? Step'|]; auto; inv Step'.
         congruence.
       + intro; apply Step; right; auto.
-    - assert (s <> i).
-      { assert (Is_state_in_eq i 1 (EqCall i i0 c b i1 l)) as State by constructor.
-        apply States in State.
-        eapply Forall_Exists, Exists_exists in State as (?&?& StateSpec & Step_eq); eauto.
-        inv Step_eq; intro; subst.
-        assert (1 < 1) by (apply StateSpec; constructor).
+    - assert (j <> i).
+      { assert (Is_sub_in_tc i 1 (TcCall i i0 c b i1 l)) as Sub by constructor.
+        apply Subs in Sub.
+        eapply Forall_Exists, Exists_exists in Sub as (?&?& SubSpec & Step_tc); eauto.
+        inv Step_tc; intro; subst.
+        assert (1 < 1) by (apply SubSpec; constructor).
         omega.
       }
       rewrite Step_with_reset_in_cons_call in Spec; auto.
@@ -291,7 +291,7 @@ Module Type SBWELLDEFINED
       destruct rst.
       + inversion_clear Step as [?? Step'|]; auto; inv Step'.
       + intro; apply Step; right; auto.
-    - assert (Step_with_reset_in i b (EqCall i i0 c b i1 l :: eqs)) as Step
+    - assert (Step_with_reset_in i b (TcCall i i0 c b i1 l :: tcs)) as Step
           by (left; constructor).
       apply Spec in Step.
       destruct b.
@@ -343,62 +343,62 @@ Module Type SBWELLDEFINED
           now apply Hnin with (1:=H).
     Qed.
 
-    Definition state_eq (eq: equation) : option (ident * nat) :=
-      match eq with
-      | EqReset s _ _ => Some (s, 0)
-      | EqCall s _ _ _ _ _ => Some (s, 1)
+    Definition sub_tc (tc: trconstr) : option (ident * nat) :=
+      match tc with
+      | TcReset s _ _ => Some (s, 0)
+      | TcCall s _ _ _ _ _ => Some (s, 1)
       | _ => None
       end.
 
-    Lemma Is_state_in_state_eq:
-      forall eq s k,
-        Is_state_in_eq s k eq <-> state_eq eq = Some (s, k).
+    Lemma Is_sub_in_sub_tc:
+      forall tc i k,
+        Is_sub_in_tc i k tc <-> sub_tc tc = Some (i, k).
     Proof.
-      destruct eq; simpl; split; try inversion_clear 1; auto using Is_state_in_eq.
+      destruct tc; simpl; split; try inversion_clear 1; auto using Is_sub_in_tc.
     Qed.
 
-    Definition check_state (s: ident) (k: nat) (sk: ident * nat) : bool :=
-      if ident_eqb (fst sk) s then Nat.ltb (snd sk) k else true.
+    Definition check_sub (i: ident) (k: nat) (sk: ident * nat) : bool :=
+      if ident_eqb (fst sk) i then Nat.ltb (snd sk) k else true.
 
-    Lemma check_state_spec:
-      forall s k s' k',
-        check_state s k (s', k') = true
+    Lemma check_sub_spec:
+      forall i k i' k',
+        check_sub i k (i', k') = true
         <->
-        (s = s' -> k' < k).
+        (i = i' -> k' < k).
     Proof.
-      intros; unfold check_state; simpl.
+      intros; unfold check_sub; simpl.
       split.
-      - intros * E Eq; subst.
+      - intros * E Tc; subst.
         rewrite ident_eqb_refl in E.
         apply Nat.ltb_lt; auto.
       - intros Spec.
-        destruct (ident_eqb s' s) eqn: E; auto.
+        destruct (ident_eqb i' i) eqn: E; auto.
         apply Nat.ltb_lt, Spec.
         symmetry; apply ident_eqb_eq; auto.
     Qed.
 
-    Definition check_eq (eq: equation) (acc: bool * PS.t * PS.t * PNS.t) : bool * PS.t * PS.t * PNS.t :=
+    Definition check_tc (tc: trconstr) (acc: bool * PS.t * PS.t * PNS.t) : bool * PS.t * PS.t * PNS.t :=
       match acc with
-      | (true, defs, vars, states) =>
-        let xs := defined_eq eq in
-        let b := PS.for_all (check_var defs vars) (free_in_eq eq PS.empty)
+      | (true, defs, vars, subs) =>
+        let xs := defined_tc tc in
+        let b := PS.for_all (check_var defs vars) (free_in_tc tc PS.empty)
                             && negb (existsb (fun x => PS.mem x defs) xs) in
         let defs := ps_adds xs defs in
-        let vars := variables_eq vars eq in
-        match state_eq eq with
-        | Some (s, k) =>
-          (PNS.for_all (check_state s k) states && b,
-           defs, vars, PNS.add (s, k) states)
-        | None => (b, defs, vars, states)
+        let vars := variables_tc vars tc in
+        match sub_tc tc with
+        | Some (i, k) =>
+          (PNS.for_all (check_sub i k) subs && b,
+           defs, vars, PNS.add (i, k) subs)
+        | None => (b, defs, vars, subs)
         end
       | (false, _, _, _) => (false, PS.empty, PS.empty, PNS.empty)
       end.
 
-    Definition well_sch (args: idents) (eqs: list equation) : bool :=
-      fst (fst (fst (fold_right check_eq (true,
+    Definition well_sch (args: idents) (tcs: list trconstr) : bool :=
+      fst (fst (fst (fold_right check_tc (true,
                                           PS.empty,
                                           ps_from_list args,
-                                          PNS.empty) eqs))).
+                                          PNS.empty) tcs))).
 
     Lemma PS_not_for_all_spec:
       forall (s : PS.t) (f : BinNums.positive -> bool),
@@ -418,7 +418,7 @@ Module Type SBWELLDEFINED
         assumption.
     Qed.
 
-    Lemma pair_eq:
+    Lemma pair_tc:
       forall A B (x y: A * B),
         RelationPairs.RelProd Logic.eq Logic.eq x y <-> x = y.
     Proof.
@@ -432,7 +432,7 @@ Module Type SBWELLDEFINED
         Morphisms.Proper (Morphisms.respectful (RelationPairs.RelProd Logic.eq Logic.eq) Logic.eq) f.
     Proof.
       intros * x y E.
-      apply pair_eq in E; subst; auto.
+      apply pair_tc in E; subst; auto.
     Qed.
     Hint Resolve PNS_compat.
 
@@ -469,29 +469,29 @@ Module Type SBWELLDEFINED
     (* Qed. *)
 
     Lemma free_spec:
-      forall eqs args defs vars eq x,
-        (forall x, PS.In x defs <-> Is_defined_in x eqs) ->
-        (forall x, PS.In x vars <-> Is_variable_in x eqs \/ In x args) ->
-        PS.For_all (fun x => check_var defs vars x = true) (free_in_eq eq PS.empty) ->
-        Is_free_in_eq x eq ->
-        if PS.mem x mems then ~ Is_defined_in x eqs else Is_variable_in x eqs \/ In x args.
+      forall tcs args defs vars tc x,
+        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+        (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
+        PS.For_all (fun x => check_var defs vars x = true) (free_in_tc tc PS.empty) ->
+        Is_free_in_tc x tc ->
+        if PS.mem x mems then ~ Is_defined_in x tcs else Is_variable_in x tcs \/ In x args.
     Proof.
       intros * DefSpec VarSpec E Hfree.
-      apply free_in_eq_spec', E, check_var_spec in Hfree as (Hin & Hnin).
+      apply free_in_tc_spec', E, check_var_spec in Hfree as (Hin & Hnin).
       destruct (PS.mem x mems) eqn: Mem.
       - rewrite <-DefSpec; apply PSE.MP.Dec.F.mem_iff, Hin in Mem; auto.
       - rewrite <-VarSpec; apply PSE.MP.Dec.F.not_mem_iff, Hnin in Mem; auto.
     Qed.
 
     Lemma def_spec:
-      forall eqs defs eq x,
-        (forall x, PS.In x defs <-> Is_defined_in x eqs) ->
-        existsb (fun x => PS.mem x defs) (defined_eq eq) = false ->
-        Is_defined_in_eq x eq ->
-        ~ Is_defined_in x eqs.
+      forall tcs defs tc x,
+        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+        existsb (fun x => PS.mem x defs) (defined_tc tc) = false ->
+        Is_defined_in_tc x tc ->
+        ~ Is_defined_in x tcs.
     Proof.
       intros * DefSpec E Hdef Hdefs.
-      apply DefSpec in Hdefs; apply Is_defined_in_defined_eq in Hdef.
+      apply DefSpec in Hdefs; apply Is_defined_in_defined_tc in Hdef.
       apply In_nth with (d := Ids.default) in Hdef as (?&?&?); subst.
       eapply existsb_nth with (d := Ids.default) in E; eauto.
       apply PSE.MP.Dec.F.not_mem_iff in E; auto.
@@ -501,26 +501,26 @@ Module Type SBWELLDEFINED
       forall defined variables,
         SetoidList.compat_bool PS.E.eq (check_var defined variables).
     Proof.
-      intros defined variables x y Heq.
-      unfold PS.E.eq in Heq.
-      rewrite Heq.
+      intros defined variables x y Htc.
+      unfold PS.E.eq in Htc.
+      rewrite Htc.
       reflexivity.
     Qed.
     Hint Resolve check_var_compat.
 
     Lemma not_well_sch_vars_defs_spec:
-      forall eqs args defs vars eq,
-         (forall x, PS.In x defs <-> Is_defined_in x eqs) ->
-         (forall x, PS.In x vars <-> Is_variable_in x eqs \/ In x args) ->
-         PS.for_all (check_var defs vars) (free_in_eq eq PS.empty) &&
-                 negb (existsb (fun x => PS.mem x defs) (defined_eq eq)) = false ->
-        ~ Is_well_sch args mems (eq :: eqs).
+      forall tcs args defs vars tc,
+         (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+         (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
+         PS.for_all (check_var defs vars) (free_in_tc tc PS.empty) &&
+                 negb (existsb (fun x => PS.mem x defs) (defined_tc tc)) = false ->
+        ~ Is_well_sch args mems (tc :: tcs).
     Proof.
       intros * DefSpec VarSpec E Wsch.
       inversion_clear Wsch as [|??? Hfree Hdefs].
       apply Bool.andb_false_iff in E as [E|E].
       - apply PS_not_for_all_spec in E; auto.
-        apply E; intros x Hin; apply free_in_eq_spec' in Hin.
+        apply E; intros x Hin; apply free_in_tc_spec' in Hin.
         apply Hfree in Hin.
         apply check_var_spec; split.
         + rewrite PSE.MP.Dec.F.mem_iff; intro Hin'; rewrite Hin' in Hin.
@@ -528,30 +528,30 @@ Module Type SBWELLDEFINED
         + rewrite PSE.MP.Dec.F.not_mem_iff; intro Hin'; rewrite Hin' in Hin.
           now rewrite VarSpec.
       - apply Bool.negb_false_iff, existsb_exists in E as (?& Hin & Hin').
-        apply Is_defined_in_defined_eq in Hin.
+        apply Is_defined_in_defined_tc in Hin.
         apply PSE.MP.Dec.F.mem_iff, DefSpec in Hin'.
         eapply Hdefs; eauto.
     Qed.
 
-    Lemma Is_defined_in_adds_defined_eq:
-      forall eqs defs eq x,
-        (forall x, PS.In x defs <-> Is_defined_in x eqs) ->
-        (PS.In x (ps_adds (defined_eq eq) defs) <-> Is_defined_in x (eq :: eqs)).
+    Lemma Is_defined_in_adds_defined_tc:
+      forall tcs defs tc x,
+        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+        (PS.In x (ps_adds (defined_tc tc) defs) <-> Is_defined_in x (tc :: tcs)).
     Proof.
       intros * DefSpec; split; intro Hin;
         [apply ps_adds_spec in Hin as [|]|apply ps_adds_spec; inv Hin];
-        try (now left; apply Is_defined_in_defined_eq; auto);
+        try (now left; apply Is_defined_in_defined_tc; auto);
         try (now right; apply DefSpec; auto); auto.
     Qed.
 
-    Lemma Is_variable_in_variables_eq:
-      forall eqs args vars eq x,
-        (forall x, PS.In x vars <-> Is_variable_in x eqs \/ In x args) ->
-        (PS.In x (variables_eq vars eq) <-> Is_variable_in x (eq :: eqs) \/ In x args).
+    Lemma Is_variable_in_variables_tc:
+      forall tcs args vars tc x,
+        (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
+        (PS.In x (variables_tc vars tc) <-> Is_variable_in x (tc :: tcs) \/ In x args).
     Proof.
       intros * VarSpec; split; intro Hin.
-      - apply variables_eq_empty in Hin as [Hin|Hin].
-        + destruct eq; simpl in *; try (contradict Hin; apply not_In_empty).
+      - apply variables_tc_empty in Hin as [Hin|Hin].
+        + destruct tc; simpl in *; try (contradict Hin; apply not_In_empty).
           *{ apply PSE.MP.Dec.F.add_iff in Hin as [|Hin]; subst.
              - left; left; constructor.
              - contradict Hin; apply not_In_empty.
@@ -562,9 +562,9 @@ Module Type SBWELLDEFINED
            }
         + apply VarSpec in Hin as [|]; intuition.
           left; right; auto.
-      - apply variables_eq_empty; destruct Hin as [Hin|].
+      - apply variables_tc_empty; destruct Hin as [Hin|].
         + inversion_clear Hin as [?? Hin'|].
-          *{ destruct eq; simpl; inv Hin'.
+          *{ destruct tc; simpl; inv Hin'.
              - rewrite PSE.MP.Dec.F.add_iff; auto.
              - rewrite ps_adds_spec; auto.
            }
@@ -574,45 +574,45 @@ Module Type SBWELLDEFINED
 
 
     Lemma well_sch_pre_spec:
-      forall args eqs ok defs vars states,
-        fold_right check_eq (true,
+      forall args tcs ok defs vars subs,
+        fold_right check_tc (true,
                              PS.empty,
                              ps_from_list args,
-                             PNS.empty) eqs = (ok, defs, vars, states) ->
+                             PNS.empty) tcs = (ok, defs, vars, subs) ->
         if ok
         then
-          Is_well_sch args mems eqs
-          /\ (forall x, PS.In x defs <-> Is_defined_in x eqs)
-          /\ (forall x, PS.In x vars <-> Is_variable_in x eqs \/ In x args)
-          /\ (forall s k, PNS.In (s, k) states <-> Is_state_in s k eqs)
+          Is_well_sch args mems tcs
+          /\ (forall x, PS.In x defs <-> Is_defined_in x tcs)
+          /\ (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args)
+          /\ (forall i k, PNS.In (i, k) subs <-> Is_sub_in i k tcs)
         else
-          ~Is_well_sch args mems eqs.
+          ~Is_well_sch args mems tcs.
     Proof.
-      induction eqs as [|eq].
+      induction tcs as [|tc].
       - simpl; inversion_clear 1; intuition; try (now constructor);
           repeat match goal with
                  | H:PS.In _ PS.empty |- _ => apply PS.empty_spec in H; contradiction
                  | H:PNS.In _ PNS.empty |- _ => apply PNS.empty_spec in H; contradiction
                  | H:Is_defined_in _ nil |- _ => inversion H
                  | H:Is_variable_in _ nil |- _ => inversion H
-                 | H:Is_state_in _ _ nil |- _ => inversion H
+                 | H:Is_sub_in _ _ nil |- _ => inversion H
                  | H: context[ps_from_list _] |- _ =>
                    apply ps_from_list_In in H
                  | _ => intuition
                  end.
         apply ps_from_list_In; auto.
       - simpl; intros * HH.
-        destruct (fold_right check_eq (true, PS.empty, ps_from_list args, PNS.empty) eqs)
-          as [[[ok' defs'] vars'] states'].
-        specialize (IHeqs ok' defs'  vars' states' eq_refl).
+        destruct (fold_right check_tc (true, PS.empty, ps_from_list args, PNS.empty) tcs)
+          as [[[ok' defs'] vars'] subs'].
+        specialize (IHtcs ok' defs'  vars' subs' eq_refl).
         simpl in HH.
         destruct ok'.
-        + destruct IHeqs as (Wsch & DefSpec & VarSpec & StateSpec).
-          assert (forall x, PS.In x (ps_adds (defined_eq eq) defs') <-> Is_defined_in x (eq :: eqs))
-            by (intros; eapply Is_defined_in_adds_defined_eq; eauto).
-          assert (forall x, PS.In x (variables_eq vars' eq) <-> Is_variable_in x (eq :: eqs) \/ In x args)
-            by (intros; eapply Is_variable_in_variables_eq; eauto).
-          destruct (state_eq eq) as [(s, k)|] eqn: St.
+        + destruct IHtcs as (Wsch & DefSpec & VarSpec & SubSpec).
+          assert (forall x, PS.In x (ps_adds (defined_tc tc) defs') <-> Is_defined_in x (tc :: tcs))
+            by (intros; eapply Is_defined_in_adds_defined_tc; eauto).
+          assert (forall x, PS.In x (variables_tc vars' tc) <-> Is_variable_in x (tc :: tcs) \/ In x args)
+            by (intros; eapply Is_variable_in_variables_tc; eauto).
+          destruct (sub_tc tc) as [(i, k)|] eqn: St.
           *{ destruct ok; inversion HH as [E]; clear HH.
              - apply Bool.andb_true_iff in E as (E & E');
                  apply Bool.andb_true_iff in E' as (E' & E'').
@@ -623,32 +623,32 @@ Module Type SBWELLDEFINED
                + constructor; auto.
                  * intros; eapply free_spec; eauto.
                  * intros; eapply def_spec; eauto.
-                 * intros * Hin; apply Is_state_in_state_eq in Hin; rewrite Hin in St; inv St.
+                 * intros * Hin; apply Is_sub_in_sub_tc in Hin; rewrite Hin in St; inv St.
                    apply Forall_forall; intros.
-                   assert (Is_state_in s k' eqs) as Hst
+                   assert (Is_sub_in i k' tcs) as Hst
                        by (apply Exists_exists; eexists; intuition; eauto).
-                   apply StateSpec in Hst; apply E in Hst.
-                   apply check_state_spec in Hst; auto.
-               + rewrite <-Is_state_in_state_eq in St.
-                 intros s' k'; split; rewrite PNS.add_spec.
-                 *{ intros [Eq|Hin].
-                    - apply pair_eq in Eq; inv Eq; left; auto.
-                    - apply StateSpec in Hin; right; auto.
+                   apply SubSpec in Hst; apply E in Hst.
+                   apply check_sub_spec in Hst; auto.
+               + rewrite <-Is_sub_in_sub_tc in St.
+                 intros i' k'; split; rewrite PNS.add_spec.
+                 *{ intros [Tc|Hin].
+                    - apply pair_tc in Tc; inv Tc; left; auto.
+                    - apply SubSpec in Hin; right; auto.
                   }
-                 *{ rewrite pair_eq; inversion_clear 1 as [?? St'|].
+                 *{ rewrite pair_tc; inversion_clear 1 as [?? St'|].
                     - inv St; inv St'; auto.
-                    - right; apply StateSpec; auto.
+                    - right; apply SubSpec; auto.
                   }
 
              - apply Bool.andb_false_iff in E as [E|];
                  [|eapply not_well_sch_vars_defs_spec; eauto].
-               inversion_clear 1 as [|????? Hstates].
-               rewrite <-Is_state_in_state_eq in St.
-               apply Hstates in St.
+               inversion_clear 1 as [|????? Hsubs].
+               rewrite <-Is_sub_in_sub_tc in St.
+               apply Hsubs in St.
                apply PNS_not_for_all_spec in E; apply E; clear E.
-               intros (s', k') Hin.
-               apply check_state_spec; intros; subst.
-               apply StateSpec in Hin.
+               intros (i', k') Hin.
+               apply check_sub_spec; intros; subst.
+               apply SubSpec in Hin.
                eapply Forall_Exists, Exists_exists in Hin as (?&?& Spec & St'); eauto; auto.
            }
           *{ destruct ok; inversion HH as [E].
@@ -659,13 +659,13 @@ Module Type SBWELLDEFINED
                + constructor; auto.
                  * intros; eapply free_spec; eauto.
                  * intros; eapply def_spec; eauto.
-                 * intros * Hin; apply Is_state_in_state_eq in Hin; rewrite Hin in St; inv St.
-               + subst; setoid_rewrite StateSpec.
+                 * intros * Hin; apply Is_sub_in_sub_tc in Hin; rewrite Hin in St; inv St.
+               + subst; setoid_rewrite SubSpec.
                  split.
                  * right; auto.
                  * rewrite <-not_Some_is_None in St.
-                   specialize (St (s, k)).
-                   rewrite <-Is_state_in_state_eq in St.
+                   specialize (St (i, k)).
+                   rewrite <-Is_sub_in_sub_tc in St.
                    inversion 1; auto; contradiction.
              - eapply not_well_sch_vars_defs_spec; eauto.
            }
@@ -682,10 +682,10 @@ Module Type SBWELLDEFINED
       intros args eqns.
       pose proof (well_sch_pre_spec args eqns) as Spec.
       unfold well_sch.
-      destruct (fold_right check_eq
+      destruct (fold_right check_tc
                   (true, PS.empty, ps_from_list args, PNS.empty) eqns)
-        as [[[ok defs] vars] states]; simpl.
-      specialize (Spec ok defs vars states eq_refl).
+        as [[[ok defs] vars] subs]; simpl.
+      specialize (Spec ok defs vars subs eq_refl).
       destruct ok; intuition.
     Qed.
 
@@ -712,20 +712,20 @@ Module Type SBWELLDEFINED
 
   End Decide.
 
-End SBWELLDEFINED.
+End STCWELLDEFINED.
 
-Module SBWellDefinedFun
+Module StcWellDefinedFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (CESyn : CESYNTAX     Op)
-       (Syn   : SBSYNTAX     Ids Op CESyn)
-       (Block : SBISBLOCK    Ids Op CESyn Syn)
-       (Ord   : SBORDERED    Ids Op CESyn Syn Block)
-       (Var   : SBISVARIABLE Ids Op CESyn Syn)
-       (Last  : SBISLAST     Ids Op CESyn Syn)
-       (Def   : SBISDEFINED  Ids Op CESyn Syn Var Last)
-       (CEIsF : CEISFREE   Ids Op CESyn)
-       (Free  : SBISFREE     Ids Op CESyn Syn CEIsF)
-<: SBWELLDEFINED Ids Op CESyn Syn Block Ord Var Last Def CEIsF Free.
-  Include SBWELLDEFINED Ids Op CESyn Syn Block Ord Var Last Def CEIsF Free.
-End SBWellDefinedFun.
+       (CESyn : CESYNTAX          Op)
+       (Syn   : STCSYNTAX     Ids Op CESyn)
+       (Syst  : STCISSYSTEM   Ids Op CESyn Syn)
+       (Ord   : STCORDERED    Ids Op CESyn Syn Syst)
+       (Var   : STCISVARIABLE Ids Op CESyn Syn)
+       (Last  : STCISLAST     Ids Op CESyn Syn)
+       (Def   : STCISDEFINED  Ids Op CESyn Syn Var Last)
+       (CEIsF : CEISFREE      Ids Op CESyn)
+       (Free  : STCISFREE     Ids Op CESyn Syn CEIsF)
+<: STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free.
+  Include STCWELLDEFINED Ids Op CESyn Syn Syst Ord Var Last Def CEIsF Free.
+End StcWellDefinedFun.

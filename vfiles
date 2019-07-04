@@ -51,20 +51,20 @@ src/NLustre/NoDup.v
 src/NLustre/NLClockingSemantics.v
 src/NLustre/NLustre.v
 
-src/SyBloc/SBOrdered.v
-src/SyBloc/SBIsLast.v
-src/SyBloc/SBSemantics.v
-src/SyBloc/SBIsBlock.v
-src/SyBloc/SBIsVariable.v
-src/SyBloc/SBClockingSemantics.v
-src/SyBloc/SBTyping.v
-src/SyBloc/SBSchedule.v
-src/SyBloc/SBIsDefined.v
-src/SyBloc/SBClocking.v
-src/SyBloc/SBIsFree.v
-src/SyBloc/SBSyntax.v
-src/SyBloc/SBWellDefined.v
-src/SyBloc/SyBloc.v
+src/Stc/StcOrdered.v
+src/Stc/StcIsLast.v
+src/Stc/StcSemantics.v
+src/Stc/StcIsSystem.v
+src/Stc/StcIsVariable.v
+src/Stc/StcClockingSemantics.v
+src/Stc/StcTyping.v
+src/Stc/StcSchedule.v
+src/Stc/StcIsDefined.v
+src/Stc/StcClocking.v
+src/Stc/StcIsFree.v
+src/Stc/StcSyntax.v
+src/Stc/StcWellDefined.v
+src/Stc/Stc.v
 
 src/Obc/ObcSyntax.v
 src/Obc/ObcTyping.v
@@ -77,17 +77,17 @@ src/Obc/Obc.v
 
 src/LustreToNLustre/LustreToNLustre.v
 
-src/NLustreToSyBloc/NL2SBTyping.v
-src/NLustreToSyBloc/NL2SBClocking.v
-src/NLustreToSyBloc/Correctness.v
-src/NLustreToSyBloc/NL2SBNormalArgs.v
-src/NLustreToSyBloc/Translation.v
+src/NLustreToStc/NL2StcTyping.v
+src/NLustreToStc/NL2StcClocking.v
+src/NLustreToStc/Correctness.v
+src/NLustreToStc/NL2StcNormalArgs.v
+src/NLustreToStc/Translation.v
 
-src/SyBlocToObc/SB2ObcTyping.v
-src/SyBlocToObc/Correctness.v
-src/SyBlocToObc/SB2ObcInvariants.v
-src/SyBlocToObc/SBMemoryCorres.v
-src/SyBlocToObc/Translation.v
+src/StcToObc/Stc2ObcTyping.v
+src/StcToObc/Correctness.v
+src/StcToObc/Stc2ObcInvariants.v
+src/StcToObc/StcMemoryCorres.v
+src/StcToObc/Translation.v
 
 src/Instantiator.v
 src/ObcToClight/SepInvariant.v

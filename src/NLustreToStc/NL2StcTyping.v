@@ -1,7 +1,7 @@
 From Velus Require Import NLustre.
-From Velus Require Import SyBloc.
+From Velus Require Import Stc.
 
-From Velus Require Import NLustreToSyBloc.Translation.
+From Velus Require Import NLustreToStc.Translation.
 
 From Velus Require Import RMemory.
 From Velus Require Import Common.
@@ -13,15 +13,15 @@ From Coq Require Import Permutation.
 Open Scope nat.
 Open Scope list.
 
-Module Type NL2SBTYPING
+Module Type NL2STCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import Str   : STREAM          Op OpAux)
        (Import CE    : COREEXPR    Ids Op OpAux Str)
        (Import NL    : NLUSTRE     Ids Op OpAux Str CE)
-       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
-       (Import Trans : TRANSLATION Ids Op       CE.Syn NL.Syn SB.Syn NL.Mem).
+       (Import Stc   : STC         Ids Op OpAux Str CE)
+       (Import Trans : TRANSLATION Ids Op       CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma translate_eqn_wt:
     forall G vars vars' mems eq,
@@ -29,7 +29,7 @@ Module Type NL2SBTYPING
       Permutation (vars' ++ mems) vars ->
       (forall x ty, In (x, ty) vars -> In x (gather_mem_eq eq) -> In (x, ty) mems) ->
       (forall x ty, In (x, ty) vars -> NL.IsV.Is_variable_in_eq x eq -> In (x, ty) vars') ->
-      Forall (wt_equation (translate G) vars' mems) (translate_eqn eq).
+      Forall (wt_trconstr (translate G) vars' mems) (translate_eqn eq).
   Proof.
     inversion_clear 1 as [??? Hin|????? Find|?????? Find|];
       intros * SpecVars SpecMems SpecVars'; simpl.
@@ -64,7 +64,7 @@ Module Type NL2SBTYPING
       Permutation (vars' ++ mems) vars ->
       (forall x ty, In (x, ty) vars -> In x (gather_mems eqs) -> In (x, ty) mems) ->
       (forall x ty, In (x, ty) vars -> NL.IsV.Is_variable_in x eqs -> In (x, ty) vars') ->
-      Forall (wt_equation (translate G) vars' mems) (translate_eqns eqs).
+      Forall (wt_trconstr (translate G) vars' mems) (translate_eqns eqs).
   Proof.
     unfold translate_eqns.
     induction eqs; intros * WT SpecVars SpecMems SpecVars';
@@ -235,9 +235,9 @@ Module Type NL2SBTYPING
   Lemma translate_node_wt:
     forall G n,
       wt_node G n ->
-      wt_block (translate G) (translate_node n).
+      wt_system (translate G) (translate_node n).
   Proof.
-    unfold wt_node, wt_block; intros * WT; simpl.
+    unfold wt_node, wt_system; intros * WT; simpl.
     eapply translate_eqns_wt; eauto.
     - repeat rewrite idty_app.
       rewrite <-app_assoc.
@@ -291,17 +291,17 @@ Module Type NL2SBTYPING
     induction G; constructor; inv Hn; simpl; auto.
   Qed.
 
-End NL2SBTYPING.
+End NL2STCTYPING.
 
-Module NL2SBTypingFun
+Module NL2StcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
        (Str   : STREAM          Op OpAux)
        (CE    : COREEXPR    Ids Op OpAux Str)
        (NL    : NLUSTRE     Ids Op OpAux Str CE)
-       (SB    : SYBLOC      Ids Op OpAux Str CE)
-       (Trans : TRANSLATION Ids Op       CE.Syn NL.Syn SB.Syn NL.Mem)
-<: NL2SBTYPING Ids Op OpAux Str CE NL SB Trans.
-  Include NL2SBTYPING Ids Op OpAux Str CE NL SB Trans.
-End NL2SBTypingFun.
+       (Stc   : STC         Ids Op OpAux Str CE)
+       (Trans : TRANSLATION Ids Op       CE.Syn NL.Syn Stc.Syn NL.Mem)
+<: NL2STCTYPING Ids Op OpAux Str CE NL Stc Trans.
+  Include NL2STCTYPING Ids Op OpAux Str CE NL Stc Trans.
+End NL2StcTypingFun.

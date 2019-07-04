@@ -148,12 +148,12 @@ Extract Constant LustreElab.do_add_when_to_constants =>
 (*   "Veluslib.print_lustre_if". *)
 Extract Constant VelusCorrectness.print_nlustre =>
   "Veluslib.print_nlustre_if".
-Extract Constant VelusCorrectness.print_sybloc => "Veluslib.print_sybloc_if".
-Extract Constant VelusCorrectness.print_obc    => "Veluslib.print_obc_if".
-Extract Constant VelusCorrectness.do_fusion    => "Veluslib.do_fusion".
-Extract Constant VelusCorrectness.do_sync      => "Veluslib.do_sync".
-Extract Constant VelusCorrectness.do_expose    => "Veluslib.do_expose".
-Extract Constant VelusCorrectness.schedule     => "Interfacelib.Scheduler.schedule".
+Extract Constant VelusCorrectness.print_stc => "Veluslib.print_stc_if".
+Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
+Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
+Extract Constant VelusCorrectness.do_sync   => "Veluslib.do_sync".
+Extract Constant VelusCorrectness.do_expose => "Veluslib.do_expose".
+Extract Constant VelusCorrectness.schedule  => "Interfacelib.Scheduler.schedule".
 
 (* builtins *)
 Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".

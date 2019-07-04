@@ -3,9 +3,9 @@ From Coq Require Import PArith.
 From Coq Require Import Logic.FunctionalExtensionality.
 
 From Velus Require Import NLustre.
-From Velus Require Import SyBloc.
+From Velus Require Import Stc.
 
-From Velus Require Import NLustreToSyBloc.Translation.
+From Velus Require Import NLustreToStc.Translation.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
@@ -26,8 +26,8 @@ Module Type CORRECTNESS
        (Import Str   : STREAM          Op OpAux)
        (Import CE    : COREEXPR    Ids Op OpAux Str)
        (Import NL    : NLUSTRE     Ids Op OpAux Str CE)
-       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
-       (Import Trans : TRANSLATION Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem).
+       (Import Stc   : STC         Ids Op OpAux Str CE)
+       (Import Trans : TRANSLATION Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -48,10 +48,10 @@ Module Type CORRECTNESS
     - right; eapply IHeqs; eauto.
   Qed.
 
-  Lemma Ordered_nodes_blocks:
+  Lemma Ordered_nodes_systems:
     forall G,
       Ordered_nodes G ->
-      Ordered_blocks (translate G).
+      Ordered_systems (translate G).
   Proof.
     induction 1 as [|??? IH NodeIn Nodup]; simpl; constructor; auto.
     - destruct nd; simpl in *; clear - NodeIn.
@@ -158,52 +158,52 @@ Module Type CORRECTNESS
       simpl; rewrite <-initial_state_other; eauto.
   Qed.
 
-  Definition sem_equations_n
+  Definition sem_trconstrs_n
              (P: program) (bk: stream bool) (H: history)
              (E: stream state) (T: stream transient_states) (E': stream state)
-             (eqs: list equation) :=
-    forall n, Forall (sem_equation P (bk n) (H n) (E n) (T n) (E' n)) eqs.
+             (tcs: list trconstr) :=
+    forall n, Forall (sem_trconstr P (bk n) (H n) (E n) (T n) (E' n)) tcs.
 
-  Definition sem_block_n
+  Definition sem_system_n
              (P: program) (f: ident)
              (E: stream state) (xss yss: stream (list value)) (E': stream state) :=
-    forall n, sem_block P f (E n) (xss n) (yss n) (E' n).
+    forall n, sem_system P f (E n) (xss n) (yss n) (E' n).
 
   Definition add_n (x: ident) (Mx: stream state) (I: stream transient_states) :=
     fun n => Env.add x (Mx n) (I n).
 
-  Lemma sem_equations_n_add_n:
-    forall P eqs bk H S S' Is x Sx,
-      sem_equations_n P bk H S Is S' eqs ->
-      (forall k, ~ Is_state_in x k eqs) ->
-      sem_equations_n P bk H S (add_n x Sx Is) S' eqs.
+  Lemma sem_trconstrs_n_add_n:
+    forall P tcs bk H S S' Is x Sx,
+      sem_trconstrs_n P bk H S Is S' tcs ->
+      (forall k, ~ Is_sub_in x k tcs) ->
+      sem_trconstrs_n P bk H S (add_n x Sx Is) S' tcs.
   Proof.
-    induction eqs as [|eq eqs]; intros * Sem Notin n; constructor.
+    induction tcs as [|tc tcs]; intros * Sem Notin n; constructor.
     - specialize (Sem n); inversion_clear Sem as [|?? Sem'].
-      inv Sem'; eauto using sem_equation.
+      inv Sem'; eauto using sem_trconstr.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
         intro E; eapply Notin; rewrite E; do 2 constructor.
       + econstructor; eauto.
         unfold add_n; rewrite Env.gso; auto.
         intro E; eapply Notin; rewrite E; do 2 constructor.
-    - apply IHeqs.
+    - apply IHtcs.
       + intro n'; specialize (Sem n'); inv Sem; auto.
-      + apply not_Is_state_in_cons in Notin as []; auto.
+      + apply not_Is_sub_in_cons in Notin as []; auto.
   Qed.
 
-  Inductive translate_eqn_nodup_states: NL.Syn.equation -> list equation -> Prop :=
+  Inductive translate_eqn_nodup_subs: NL.Syn.equation -> list trconstr -> Prop :=
     | TrNodupEqDef:
         forall x ck e eqs,
-          translate_eqn_nodup_states (NL.Syn.EqDef x ck e) eqs
+          translate_eqn_nodup_subs (NL.Syn.EqDef x ck e) eqs
     | TrNodupEqApp:
         forall xs ck f es r eqs x,
           hd_error xs = Some x ->
-          (forall k, ~ Is_state_in x k eqs) ->
-          translate_eqn_nodup_states (EqApp xs ck f es r) eqs
+          (forall k, ~ Is_sub_in x k eqs) ->
+          translate_eqn_nodup_subs (EqApp xs ck f es r) eqs
     | TrNodupEqFby:
         forall x ck c e eqs,
-          translate_eqn_nodup_states (EqFby x ck c e) eqs.
+          translate_eqn_nodup_subs (EqFby x ck c e) eqs.
 
   Inductive memory_closed_rec: global -> ident -> memory val -> Prop :=
     memory_closed_rec_intro:
@@ -386,8 +386,8 @@ Module Type CORRECTNESS
       rewrite <-gather_eqs_snd_spec in Hin.
       eexists; split; eauto.
       eapply IH in Closed; eauto.
-      apply Ordered_nodes_blocks in Ord.
-      eapply state_closed_find_block_other; eauto.
+      apply Ordered_nodes_systems in Ord.
+      eapply state_closed_find_system_other; eauto.
   Qed.
 
   Lemma transient_states_closed_add:
@@ -408,23 +408,23 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma equation_correctness:
-    forall G eq eqs bk H M M' Is vars insts,
+    forall G eq tcs bk H M M' Is vars insts,
       (forall f xss M M' yss,
           msem_node G f xss M M' yss ->
-          sem_block_n (translate G) f M xss yss M') ->
+          sem_system_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
       NL.Clo.wc_equation G vars eq ->
       Forall (clock_match bk H) vars ->
-      translate_eqn_nodup_states eq eqs ->
+      translate_eqn_nodup_subs eq tcs ->
       (forall n, transient_states_closed (translate G) insts (Is n)) ->
-      (forall x, InMembers x insts -> exists k, Is_state_in x k eqs) ->
+      (forall x, InMembers x insts -> exists k, Is_sub_in x k tcs) ->
       msem_equation G bk H M M' eq ->
-      sem_equations_n (translate G) bk H M Is M' eqs ->
+      sem_trconstrs_n (translate G) bk H M Is M' tcs ->
       exists Is',
-        sem_equations_n (translate G) bk H M Is' M' (translate_eqn eq ++ eqs)
+        sem_trconstrs_n (translate G) bk H M Is' M' (translate_eqn eq ++ tcs)
         /\ forall n, transient_states_closed (translate G) (gather_inst_eq eq ++ insts) (Is' n).
   Proof.
-    intros * IHnode Hord WC ClkM TrNodup Closed SpecInsts Heq Heqs.
+    intros * IHnode Hord WC ClkM TrNodup Closed SpecInsts Heq Htcs.
     destruct Heq as [|??????????????????? Node|
                      ?????????????????????? Var Hr Reset|
                      ?????????? Arg Var Mfby];
@@ -446,7 +446,7 @@ Module Type CORRECTNESS
            - apply Env.gss.
            - now apply IHnode.
          }
-        * apply sem_equations_n_add_n; auto.
+        * apply sem_trconstrs_n_add_n; auto.
       + intro; apply transient_states_closed_add; auto.
         * eapply memory_closed_rec_state_closed; eauto;
             apply msem_node_memory_closed_rec_n in Node as (? & ?); eauto.
@@ -458,8 +458,8 @@ Module Type CORRECTNESS
            H': hd_error ?l = _ |- _ =>
         rewrite H' in H; inv H; simpl in H'; inv H'
       end.
-      assert (forall Mx, sem_equations_n (translate G) bk H M (add_n x Mx Is) M' eqs) as Heqs'
-          by now intro; apply sem_equations_n_add_n.
+      assert (forall Mx, sem_trconstrs_n (translate G) bk H M (add_n x Mx Is) M' tcs) as Htcs'
+          by now intro; apply sem_trconstrs_n_add_n.
       assert (clock_match bk H (y, ck)) as Cky
           by (eapply Forall_forall; eauto; inv WC; eauto).
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split;
@@ -474,9 +474,9 @@ Module Type CORRECTNESS
       + destruct (rs n) eqn: Hrst.
         *{ assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
              by apply Env.gss.
-           specialize (Heqs' (fun n => Mx 0) n).
+           specialize (Htcs' (fun n => Mx 0) n).
            destruct (ys n) eqn: E'; try discriminate.
-           do 2 (econstructor; eauto using sem_equation).
+           do 2 (econstructor; eauto using sem_trconstr).
            - eapply Son; eauto.
              destruct Cky as [[]|((?&?)&?)]; auto.
              assert (present c = absent) by sem_det; discriminate.
@@ -499,16 +499,16 @@ Module Type CORRECTNESS
         *{ rewrite <-Mmask_n in Node_n; auto.
            assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
              by apply Env.gss.
-           specialize (Heqs' Mx n).
+           specialize (Htcs' Mx n).
            destruct (ys n) eqn: E'.
-           - do 2 (econstructor; eauto using sem_equation).
+           - do 2 (econstructor; eauto using sem_trconstr).
              + apply Son_abs1; auto.
                destruct Cky as [[]|((c &?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
                discriminate.
-           - do 2 (econstructor; eauto using sem_equation).
+           - do 2 (econstructor; eauto using sem_trconstr).
              + change true with (negb false).
                eapply Son_abs2; eauto.
                destruct Cky as [[]|((?&?)&?)]; auto.
@@ -537,10 +537,10 @@ Module Type CORRECTNESS
         econstructor; eauto; simpl; auto.
   Qed.
 
-  Lemma not_Is_defined_not_Is_state_in_eqs:
+  Lemma not_Is_defined_not_Is_sub_in_eqs:
     forall x eqs,
       ~ NL.IsD.Is_defined_in x eqs ->
-      (forall k, ~ Is_state_in x k (translate_eqns eqs)).
+      (forall k, ~ Is_sub_in x k (translate_eqns eqs)).
   Proof.
     unfold translate_eqns.
     induction eqs as [|eq]; simpl; intros Notin k Hin.
@@ -564,19 +564,19 @@ Module Type CORRECTNESS
     forall eq eqs G bk H M M',
       msem_equation G bk H M M' eq ->
       NoDup_defs (eq :: eqs) ->
-      translate_eqn_nodup_states eq (translate_eqns eqs).
+      translate_eqn_nodup_subs eq (translate_eqns eqs).
   Proof.
     destruct eq; inversion_clear 1; inversion_clear 1; econstructor; eauto.
-    - apply not_Is_defined_not_Is_state_in_eqs.
+    - apply not_Is_defined_not_Is_sub_in_eqs.
       assert (In x i) by (now apply hd_error_Some_In); auto.
-    - apply not_Is_defined_not_Is_state_in_eqs.
+    - apply not_Is_defined_not_Is_sub_in_eqs.
       assert (In x i) by (now apply hd_error_Some_In); auto.
   Qed.
 
-  Lemma gather_insts_Is_state_in_translate_eqns:
+  Lemma gather_insts_Is_sub_in_translate_eqns:
     forall eqs x,
       InMembers x (gather_insts eqs) ->
-      exists k, Is_state_in x k (translate_eqns eqs).
+      exists k, Is_sub_in x k (translate_eqns eqs).
   Proof.
     unfold gather_insts, translate_eqns.
     induction eqs as [|[]]; simpl; try contradiction; intros * Hin.
@@ -596,13 +596,13 @@ Module Type CORRECTNESS
     forall G bk H M M' eqs vars,
       (forall f xss M M' yss,
           msem_node G f xss M M' yss ->
-          sem_block_n (translate G) f M xss yss M') ->
+          sem_system_n (translate G) f M xss yss M') ->
       Ordered_nodes G ->
       Forall (NL.Clo.wc_equation G vars) eqs ->
       Forall (clock_match bk H) vars ->
       NoDup_defs eqs ->
       Forall (msem_equation G bk H M M') eqs ->
-      exists Is, sem_equations_n (translate G) bk H M Is M' (translate_eqns eqs)
+      exists Is, sem_trconstrs_n (translate G) bk H M Is M' (translate_eqns eqs)
             /\ forall n, transient_states_closed (translate G) (gather_insts eqs) (Is n).
   Proof.
     intros ? ? ? ? ? ? ? ? ? WC ?? Heqs.
@@ -614,14 +614,14 @@ Module Type CORRECTNESS
       + unfold gather_insts; simpl.
         eapply equation_correctness; eauto.
         * eapply Nodup_defs_translate_eqns; eauto.
-        * apply gather_insts_Is_state_in_translate_eqns.
+        * apply gather_insts_Is_sub_in_translate_eqns.
       + eapply NoDup_defs_cons; eauto.
   Qed.
 
-  Lemma not_Is_node_in_not_Is_block_in:
+  Lemma not_Is_node_in_not_Is_system_in:
     forall eqs f,
       ~ Is_node_in f eqs ->
-      ~ Is_block_in f (translate_eqns eqs).
+      ~ Is_system_in f (translate_eqns eqs).
   Proof.
     unfold translate_eqns.
     induction eqs as [|eq]; simpl; intros * Hnin Hin.
@@ -644,7 +644,7 @@ Module Type CORRECTNESS
       Ordered_nodes G ->
       wc_global G ->
       msem_node G f xss M M' yss ->
-      sem_block_n (translate G) f M xss yss M'.
+      sem_system_n (translate G) f M xss yss M'.
   Proof.
     induction G as [|node ? IH].
     inversion 3;
@@ -656,9 +656,9 @@ Module Type CORRECTNESS
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
     simpl in Hfind.
-    assert (Ordered_blocks (translate_node node :: translate G))
+    assert (Ordered_systems (translate_node node :: translate G))
       by (change (translate_node node :: translate G) with (translate (node :: G));
-          apply Ordered_nodes_blocks; auto).
+          apply Ordered_nodes_systems; auto).
     inversion WC as [|??? (?&?&?& WCeqs)]; subst.
     destruct (ident_eqb node.(n_name) f) eqn:Hnf.
     - inversion Hfind; subst n0.
@@ -668,10 +668,10 @@ Module Type CORRECTNESS
       apply msem_node_memory_closed_rec_n in Hsem as (? & ?); auto.
       eapply equations_correctness in Heqs as (I & Heqs &?); eauto.
       + econstructor; eauto.
-        * apply sem_equations_cons; eauto.
-          apply not_Is_node_in_not_Is_block_in; auto.
+        * apply sem_trconstrs_cons; eauto.
+          apply not_Is_node_in_not_Is_system_in; auto.
         * apply memory_closed_rec_state_closed; auto.
-        * eapply transient_states_closed_find_block_other, transient_states_closed_cons; eauto.
+        * eapply transient_states_closed_find_system_other, transient_states_closed_cons; eauto.
           simpl; rewrite gather_eqs_snd_spec; auto.
         * apply memory_closed_rec_state_closed; auto.
       + rewrite idck_app, Forall_app; split.
@@ -687,7 +687,7 @@ Module Type CORRECTNESS
          }
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons, IH in Hsem; eauto.
-      apply sem_block_cons2; auto using Ordered_blocks.
+      apply sem_system_cons2; auto using Ordered_systems.
   Qed.
 
   Corollary correctness_loop:
@@ -720,8 +720,8 @@ Module CorrectnessFun
        (Str   : STREAM          Op OpAux)
        (CE    : COREEXPR    Ids Op OpAux Str)
        (NL    : NLUSTRE     Ids Op OpAux Str CE)
-       (SB    : SYBLOC      Ids Op OpAux Str CE)
-       (Trans : TRANSLATION Ids Op           CE.Syn NL.Syn SB.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux Str CE NL SB Trans.
-  Include CORRECTNESS Ids Op OpAux Str CE NL SB Trans.
+       (Stc   : STC         Ids Op OpAux Str CE)
+       (Trans : TRANSLATION Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem)
+<: CORRECTNESS Ids Op OpAux Str CE NL Stc Trans.
+  Include CORRECTNESS Ids Op OpAux Str CE NL Stc Trans.
 End CorrectnessFun.

@@ -1,9 +1,9 @@
 From Coq Require Import FSets.FMapPositive.
 From Coq Require Import PArith.
 
-From Velus Require Import SyBloc.
+From Velus Require Import Stc.
 From Velus Require Import Obc.
-From Velus Require Import SyBlocToObc.Translation.
+From Velus Require Import StcToObc.Translation.
 
 From Velus Require Import Common.
 
@@ -11,17 +11,17 @@ From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Module Type SB2OBCINVARIANTS
+Module Type STC2OBCINVARIANTS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX       Op)
        (Import Str   : STREAM              Op OpAux)
        (Import CE    : COREEXPR    Ids Op OpAux Str)
-       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Import Stc    : STC      Ids Op OpAux Str CE)
        (Import Obc   : OBC         Ids Op OpAux)
-       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn).
+       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn).
 
-  (** ** Show that the Obc code that results from translating a SyBloc
+  (** ** Show that the Obc code that results from translating a Stc
          program satisfies the [Fusible] invariant, and thus that fusion
          preserves its semantics. *)
 
@@ -138,21 +138,21 @@ Module Type SB2OBCINVARIANTS
       cases; inversion Hfree; subst; eauto.
   Qed.
 
-  Lemma translate_eqns_Fusible:
-    forall P vars mems clkvars inputs eqs,
+  Lemma translate_tcs_Fusible:
+    forall P vars mems clkvars inputs tcs,
       wc_env vars ->
       NoDupMembers vars ->
-      Forall (wc_equation P vars) eqs ->
-      Is_well_sch inputs mems eqs ->
-      (forall x, PS.In x mems -> ~ Is_variable_in x eqs) ->
-      (forall input, In input inputs -> ~ Is_defined_in input eqs) ->
-      Fusible (translate_eqns mems clkvars eqs).
+      Forall (wc_trconstr P vars) tcs ->
+      Is_well_sch inputs mems tcs ->
+      (forall x, PS.In x mems -> ~ Is_variable_in x tcs) ->
+      (forall input, In input inputs -> ~ Is_defined_in input tcs) ->
+      Fusible (translate_tcs mems clkvars tcs).
   Proof.
     intros * Hwk Hnd Hwks Hwsch Hnvi Hnin.
-    induction eqs as [|eq eqs IH]; [now constructor|].
-    inversion_clear Hwks as [|?? Hwkeq];
+    induction tcs as [|tc tcs IH]; [now constructor|].
+    inversion_clear Hwks as [|?? Hwktc];
       inversion_clear Hwsch as [|??? HH Hndef].
-    unfold translate_eqns.
+    unfold translate_tcs.
     simpl; apply Fusible_fold_left_shift.
     split.
     - apply IH; auto.
@@ -162,17 +162,17 @@ Module Type SB2OBCINVARIANTS
         intro; apply Hin; right; auto.
     - clear IH.
       repeat constructor.
-      destruct eq as [x ck e|x ck|x ck v0|s xs ck ? f es]; simpl.
+      destruct tc as [x ck e|x ck|x ck v0|s xs ck ? f es]; simpl.
       + assert (~PS.In x mems) as Hnxm
             by (intro Hin; apply Hnvi with (1:=Hin); repeat constructor).
         assert (forall i, Is_free_in_caexp i ck e -> x <> i) as Hfni.
         { intros i Hfree.
-          assert (Hfree': Is_free_in_eq i (EqDef x ck e)) by auto.
+          assert (Hfree': Is_free_in_tc i (TcDef x ck e)) by auto.
           eapply HH in Hfree'.
           intro; subst.
           apply PSE.MP.Dec.F.not_mem_iff in Hnxm; rewrite Hnxm in Hfree'.
           destruct Hfree' as [Hvar|Hin].
-          - eapply Hndef; eauto using Is_defined_in_eq.
+          - eapply Hndef; eauto using Is_defined_in_tc.
             apply Is_variable_in_Is_defined_in; auto.
           - eapply Hnin; eauto.
             left; constructor.
@@ -184,14 +184,14 @@ Module Type SB2OBCINVARIANTS
           intros; apply Hfni; intuition.
       + apply Fusible_Control_aexp; auto.
         assert (~Is_free_in_clock x ck) as Hnfree
-            by (eapply wc_EqNext_not_Is_free_in_clock; eauto).
+            by (eapply wc_TcNext_not_Is_free_in_clock; eauto).
         inversion 2; subst;  contradiction.
       + apply Fusible_Control_aexp; auto.
         inversion 2; contradiction.
       + apply Fusible_Control_aexp; auto.
         intros ?? Hwrite.
         assert (In x xs) by now inv Hwrite.
-        now eapply wc_EqCall_not_Is_free_in_clock; eauto.
+        now eapply wc_TcCall_not_Is_free_in_clock; eauto.
   Qed.
 
   Lemma reset_mems_Fusible:
@@ -226,16 +226,16 @@ Module Type SB2OBCINVARIANTS
       inversion_clear WC as [|??? WCb];
       inversion_clear Wsch as [|??? Wsch'];
       simpl; constructor; auto.
-    unfold translate_block, ClassFusible; simpl.
+    unfold translate_system, ClassFusible; simpl.
     repeat constructor; simpl; auto.
     inversion_clear WCb as [? (?&?&?)].
-    eapply translate_eqns_Fusible; eauto.
+    eapply translate_tcs_Fusible; eauto.
     - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
       rewrite 2 map_app, <-2 app_assoc.
-      apply b_nodup.
+      apply s_nodup.
     - intros; eapply Is_last_in_not_Is_variable_in; eauto.
-      rewrite lasts_of_In, <-ps_from_list_In, <-b_lasts_in_eqs; auto.
-    - intros; apply b_ins_not_def, fst_InMembers; auto.
+      rewrite lasts_of_In, <-ps_from_list_In, <-s_lasts_in_tcs; auto.
+    - intros; apply s_ins_not_def, fst_InMembers; auto.
   Qed.
 
   (** Translating gives [No_Overwrites] Obc. *)
@@ -279,37 +279,37 @@ Module Type SB2OBCINVARIANTS
     induction e; simpl; auto.
   Qed.
 
-  Lemma Can_write_in_translate_eqn_Is_defined_in_eq:
-    forall mems clkvars eq x,
-      Can_write_in x (translate_eqn mems clkvars eq) <-> Is_defined_in_eq x eq.
+  Lemma Can_write_in_translate_tc_Is_defined_in_tc:
+    forall mems clkvars tc x,
+      Can_write_in x (translate_tc mems clkvars tc) <-> Is_defined_in_tc x tc.
   Proof.
-    destruct eq; simpl; split; intro HH;
+    destruct tc; simpl; split; intro HH;
       rewrite Can_write_in_Control in *;
       try rewrite Can_write_in_translate_cexp in *;
-      subst; try inversion_clear HH; auto using Is_defined_in_eq.
+      subst; try inversion_clear HH; auto using Is_defined_in_tc.
     contradiction.
   Qed.
 
-  Lemma Can_write_in_translate_eqns_Is_defined_in:
-    forall mems clkvars eqs x,
-      Can_write_in x (translate_eqns mems clkvars eqs) <-> Is_defined_in x eqs.
+  Lemma Can_write_in_translate_tcs_Is_defined_in:
+    forall mems clkvars tcs x,
+      Can_write_in x (translate_tcs mems clkvars tcs) <-> Is_defined_in x tcs.
   Proof.
-    unfold translate_eqns.
-    intros mems clkvars eqs x.
+    unfold translate_tcs.
+    intros mems clkvars tcs x.
     match goal with |- ?P <-> ?Q => cut (P <-> (Q \/ Can_write_in x Skip)) end.
     now intro HH; setoid_rewrite HH; split; auto; intros [|H]; [intuition| inv H].
     generalize Skip.
-    induction eqs as [|eq eqs IH]; simpl; intro s.
+    induction tcs as [|tc tcs IH]; simpl; intro s.
     now split; intro HH; auto; destruct HH as [HH|HH]; auto; inv HH.
-    rewrite IH, Can_write_in_Comp, Can_write_in_translate_eqn_Is_defined_in_eq.
+    rewrite IH, Can_write_in_Comp, Can_write_in_translate_tc_Is_defined_in_tc.
     split.
     - intros [HH|[HH|HH]]; auto; left; now constructor.
     - intros [HH|HH]; [inv HH|]; auto.
   Qed.
 
-  Lemma translate_node_cannot_write_inputs:
-    forall b m,
-      In m (translate_block b).(c_methods) ->
+  Lemma translate_system_cannot_write_inputs:
+    forall s m,
+      In m (translate_system s).(c_methods) ->
       Forall (fun x => ~Can_write_in x m.(m_body)) (map fst m.(m_in)).
   Proof.
     intros * Hin.
@@ -317,8 +317,8 @@ Module Type SB2OBCINVARIANTS
       auto; try contradiction.
     apply Forall_forall; intros x Hin.
     apply fst_InMembers, InMembers_idty in Hin.
-    rewrite Can_write_in_translate_eqns_Is_defined_in.
-    now apply b_ins_not_def.
+    rewrite Can_write_in_translate_tcs_Is_defined_in.
+    now apply s_ins_not_def.
   Qed.
 
   Corollary translate_cannot_write_inputs:
@@ -328,70 +328,70 @@ Module Type SB2OBCINVARIANTS
   Proof.
     intros; apply Forall_forall; intros * HinP; apply Forall_forall; intros.
     unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
-    eapply translate_node_cannot_write_inputs; eauto.
+    eapply translate_system_cannot_write_inputs; eauto.
   Qed.
 
   (* Here, we use [Is_well_sch] because it simplifies the inductive proof
      (many of the required lemmas already exist), but in fact, the weaker
-     property that no two equations define the same variable is sufficient. *)
+     property that no two trconstrs define the same variable is sufficient. *)
 
-  Lemma translate_eqns_No_Overwrites:
-    forall clkvars mems inputs eqs,
-      Is_well_sch inputs mems eqs ->
-      No_Overwrites (translate_eqns mems clkvars eqs).
+  Lemma translate_tcs_No_Overwrites:
+    forall clkvars mems inputs tcs,
+      Is_well_sch inputs mems tcs ->
+      No_Overwrites (translate_tcs mems clkvars tcs).
   Proof.
-    unfold translate_eqns.
-    intros clkvars mems inputs eqs.
+    unfold translate_tcs.
+    intros clkvars mems inputs tcs.
     pose proof NoOSkip as Hs; revert Hs.
-    assert (forall x, Is_defined_in x eqs -> ~Can_write_in x Skip) as Hdcw
+    assert (forall x, Is_defined_in x tcs -> ~Can_write_in x Skip) as Hdcw
         by inversion 2; revert Hdcw.
-    assert (forall x, Can_write_in x Skip -> ~Is_defined_in x eqs) as Hcwd
+    assert (forall x, Can_write_in x Skip -> ~Is_defined_in x tcs) as Hcwd
         by inversion 1; revert Hcwd.
     generalize Skip.
-    induction eqs as [|eq eqs IH]; auto.
+    induction tcs as [|tc tcs IH]; auto.
     intros s Hcwd Hdcw Hno Hwsch.
     inversion_clear Hwsch as [|? ? Hwsch' Hfree Hddef Hstates];
       clear Hfree Hstates.
     simpl. apply IH; auto.
     - setoid_rewrite Can_write_in_Comp.
-      setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+      setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
       intros x [Hdef|Hcw]; auto.
       apply Hcwd, not_Is_defined_in_cons in Hcw as (? & ?); auto.
     - setoid_rewrite cannot_write_in_Comp.
-      setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+      setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
       intros H Hdefs. split.
       + intro Hdef; apply Hddef in Hdef. contradiction.
       + apply Hdcw. now constructor 2.
     - constructor; auto.
-      + setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+      + setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
         intros x Hdef. apply Hdcw. now constructor.
-      + setoid_rewrite Can_write_in_translate_eqn_Is_defined_in_eq.
+      + setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
         intros x Hcw. apply Hcwd, not_Is_defined_in_cons in Hcw as (? & ?); auto.
-      + destruct eq; simpl; setoid_rewrite No_Overwrites_Control;
+      + destruct tc; simpl; setoid_rewrite No_Overwrites_Control;
           auto using No_Overwrites_translate_cexp.
   Qed.
 
   Lemma not_Can_write_in_reset_insts:
-    forall x blocks,
-      ~ Can_write_in x (reset_insts blocks).
+    forall x subs,
+      ~ Can_write_in x (reset_insts subs).
   Proof.
     unfold reset_insts; intros.
     assert (~ Can_write_in x Skip) as CWIS by inversion 1.
     revert CWIS; generalize Skip.
-    induction blocks; simpl; auto.
-    intros; apply IHblocks.
+    induction subs; simpl; auto.
+    intros; apply IHsubs.
     inversion_clear 1 as [| | | | | |??? CWI]; try inv CWI; contradiction.
   Qed.
 
   Lemma No_Overwrites_reset_inst:
-    forall blocks,
-      No_Overwrites (reset_insts blocks).
+    forall subs,
+      No_Overwrites (reset_insts subs).
   Proof.
     unfold reset_insts; intros.
     assert (No_Overwrites Skip) as NOS by constructor.
     revert NOS; generalize Skip.
-    induction blocks; simpl; auto.
-    intros; apply IHblocks.
+    induction subs; simpl; auto.
+    intros; apply IHsubs.
     constructor; auto.
     - inversion 2; contradiction.
     - inversion 1; contradiction.
@@ -424,20 +424,20 @@ Module Type SB2OBCINVARIANTS
     constructor.
     - intros; apply not_Can_write_in_reset_insts.
     - intros * CWI ?; eapply not_Can_write_in_reset_insts; eauto.
-    - apply No_Overwrites_reset_mems, b_nodup_lasts.
+    - apply No_Overwrites_reset_mems, s_nodup_lasts.
     - apply No_Overwrites_reset_inst.
   Qed.
 
-  Lemma translate_node_No_Overwrites:
+  Lemma translate_system_No_Overwrites:
     forall b m,
-      Is_well_sch (map fst (b_in b)) (ps_from_list (map fst (b_lasts b))) (b_eqs b) ->
-      In m (translate_block b).(c_methods) ->
+      Is_well_sch (map fst (s_in b)) (ps_from_list (map fst (s_lasts b))) (s_tcs b) ->
+      In m (translate_system b).(c_methods) ->
       No_Overwrites m.(m_body).
   Proof.
     intros ??? Hin.
     destruct Hin as [|[|]]; simpl in *; subst; simpl;
       try contradiction.
-    - eapply translate_eqns_No_Overwrites; eauto.
+    - eapply translate_tcs_No_Overwrites; eauto.
     - apply translate_reset_No_Overwrites.
   Qed.
 
@@ -449,20 +449,20 @@ Module Type SB2OBCINVARIANTS
     intros * Wsch; apply Forall_forall; intros * HinP; apply Forall_forall; intros.
     unfold translate in HinP; apply in_map_iff in HinP as (?&?&?); subst; eauto.
     eapply Forall_forall in Wsch; eauto.
-    eapply translate_node_No_Overwrites; eauto.
+    eapply translate_system_No_Overwrites; eauto.
   Qed.
 
-End SB2OBCINVARIANTS.
+End STC2OBCINVARIANTS.
 
-Module SB2ObcInvariantsFun
+Module Stc2ObcInvariantsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
        (Str   : STREAM          Op OpAux)
        (CE    : COREEXPR    Ids Op OpAux Str)
-       (SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Stc    : STC      Ids Op OpAux Str CE)
        (Obc   : OBC         Ids Op OpAux)
-       (Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn)
-  <: SB2OBCINVARIANTS Ids Op OpAux Str CE SB Obc Trans.
-  Include SB2OBCINVARIANTS Ids Op OpAux Str CE SB Obc Trans.
-End SB2ObcInvariantsFun.
+       (Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
+  <: STC2OBCINVARIANTS Ids Op OpAux Str CE Stc Obc Trans.
+  Include STC2OBCINVARIANTS Ids Op OpAux Str CE Stc Obc Trans.
+End Stc2ObcInvariantsFun.

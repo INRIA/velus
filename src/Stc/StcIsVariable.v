@@ -1,71 +1,71 @@
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import SyBloc.SBSyntax.
+From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Clocks.
 
 From Coq Require Import List.
 Import List.ListNotations.
 Open Scope list_scope.
 
-Module Type SBISVARIABLE
+Module Type STCISVARIABLE
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import CESyn : CESYNTAX     Op)
-       (Import Syn   : SBSYNTAX Ids Op CESyn).
+       (Import Syn   : STCSYNTAX Ids Op CESyn).
 
-  Inductive Is_variable_in_eq: ident -> equation -> Prop :=
-  | VarEqDef:
+  Inductive Is_variable_in_tc: ident -> trconstr -> Prop :=
+  | VarTcDef:
       forall x ck e,
-        Is_variable_in_eq x (EqDef x ck e)
-  | VarEqCall:
-      forall x s xs ck rst b es,
+        Is_variable_in_tc x (TcDef x ck e)
+  | VarTcCall:
+      forall x i xs ck rst f es,
         In x xs ->
-        Is_variable_in_eq x (EqCall s xs ck rst b es).
+        Is_variable_in_tc x (TcCall i xs ck rst f es).
 
-  Definition Is_variable_in (x: ident) (eqs: list equation) : Prop :=
-    Exists (Is_variable_in_eq x) eqs.
+  Definition Is_variable_in (x: ident) (tcs: list trconstr) : Prop :=
+    Exists (Is_variable_in_tc x) tcs.
 
   Lemma Is_variable_in_variables:
-    forall eqs x,
-      Is_variable_in x eqs <-> In x (variables eqs).
+    forall tcs x,
+      Is_variable_in x tcs <-> In x (variables tcs).
   Proof.
     unfold variables.
-    induction eqs as [|[]]; simpl.
+    induction tcs as [|[]]; simpl.
     - split; try contradiction; inversion 1.
     - split.
       + inversion_clear 1 as [?? Var|]; try inv Var; auto.
-        right; apply IHeqs; auto.
+        right; apply IHtcs; auto.
       + intros [E|].
         * subst; left; constructor.
-        * right; apply IHeqs; auto.
-    - setoid_rewrite <-IHeqs; split.
+        * right; apply IHtcs; auto.
+    - setoid_rewrite <-IHtcs; split.
       + inversion_clear 1 as [?? Var|]; auto; inv Var.
       + right; auto.
-    - setoid_rewrite <-IHeqs; split.
+    - setoid_rewrite <-IHtcs; split.
       + inversion_clear 1 as [?? Var|]; auto; inv Var.
       + right; auto.
     - split.
       + inversion_clear 1 as [?? Var|]; try inv Var.
         * apply in_app; auto.
-        * apply in_app; right; apply IHeqs; auto.
+        * apply in_app; right; apply IHtcs; auto.
       + rewrite in_app; intros [?|?].
         * left; constructor; auto.
-        * right; apply IHeqs; auto.
+        * right; apply IHtcs; auto.
   Qed.
 
-  Definition is_variable_in_eq_b (x: ident) (eq: equation) : bool :=
-    match eq with
-    | EqDef x' _ _ => ident_eqb x x'
-    | EqCall _ xs _ _ _ _ => existsb (ident_eqb x) xs
+  Definition is_variable_in_tc_b (x: ident) (tc: trconstr) : bool :=
+    match tc with
+    | TcDef x' _ _ => ident_eqb x x'
+    | TcCall _ xs _ _ _ _ => existsb (ident_eqb x) xs
     | _ => false
     end.
 
-  Fact Is_variable_in_eq_reflect:
-    forall x eq,
-      Is_variable_in_eq x eq <-> is_variable_in_eq_b x eq = true.
+  Fact Is_variable_in_tc_reflect:
+    forall x tc,
+      Is_variable_in_tc x tc <-> is_variable_in_tc_b x tc = true.
   Proof.
-    destruct eq; simpl; split;
+    destruct tc; simpl; split;
       try discriminate; try now inversion 1.
     - inversion_clear 1; apply ident_eqb_refl.
     - rewrite ident_eqb_eq; intro; subst; constructor.
@@ -77,31 +77,31 @@ Module Type SBISVARIABLE
       constructor; auto.
   Qed.
 
-  Lemma Is_variable_in_eq_dec:
-    forall x eq,
-      { Is_variable_in_eq x eq } + { ~ Is_variable_in_eq x eq }.
+  Lemma Is_variable_in_tc_dec:
+    forall x tc,
+      { Is_variable_in_tc x tc } + { ~ Is_variable_in_tc x tc }.
   Proof.
     intros;
-      eapply Bool.reflect_dec, Bool.iff_reflect, Is_variable_in_eq_reflect.
+      eapply Bool.reflect_dec, Bool.iff_reflect, Is_variable_in_tc_reflect.
   Qed.
 
-  Definition variables_eq (vars: PS.t) (eq: equation) : PS.t :=
-    match eq with
-    | EqDef x _ _ => PS.add x vars
-    | EqCall _ xs _ _ _ _ => ps_adds xs vars
+  Definition variables_tc (vars: PS.t) (tc: trconstr) : PS.t :=
+    match tc with
+    | TcDef x _ _ => PS.add x vars
+    | TcCall _ xs _ _ _ _ => ps_adds xs vars
     | _ => vars
     end.
 
-  Lemma variables_eq_empty:
-    forall x eq vars,
-      PS.In x (variables_eq vars eq)
-      <-> PS.In x (variables_eq PS.empty eq) \/ PS.In x vars.
+  Lemma variables_tc_empty:
+    forall x tc vars,
+      PS.In x (variables_tc vars tc)
+      <-> PS.In x (variables_tc PS.empty tc) \/ PS.In x vars.
   Proof.
     split; intro Hin.
-    - destruct eq; simpl in *; auto.
+    - destruct tc; simpl in *; auto.
       + apply PSE.MP.Dec.F.add_iff in Hin as [|]; subst; intuition.
       + rewrite ps_adds_spec in *; tauto.
-    - destruct eq; simpl in *; destruct Hin as [Hin|Hin]; auto.
+    - destruct tc; simpl in *; destruct Hin as [Hin|Hin]; auto.
       + rewrite PSE.MP.Dec.F.add_iff in *; intuition; pose proof (not_In_empty x); contradiction.
       + rewrite PSE.MP.Dec.F.add_iff; auto.
       + pose proof (not_In_empty x); contradiction.
@@ -110,13 +110,13 @@ Module Type SBISVARIABLE
       + rewrite ps_adds_spec; tauto.
   Qed.
 
-End SBISVARIABLE.
+End STCISVARIABLE.
 
-Module SBIsVariableFun
+Module StcIsVariableFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (CESyn : CESYNTAX     Op)
-       (Syn   : SBSYNTAX Ids Op CESyn)
-<: SBISVARIABLE Ids Op CESyn Syn.
-  Include SBISVARIABLE Ids Op CESyn Syn.
-End SBIsVariableFun.
+       (Syn   : STCSYNTAX Ids Op CESyn)
+<: STCISVARIABLE Ids Op CESyn Syn.
+  Include STCISVARIABLE Ids Op CESyn Syn.
+End StcIsVariableFun.

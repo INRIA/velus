@@ -13,7 +13,7 @@ From compcert Require Import lib.Integers.
 From compcert Require Import driver.Compiler.
 
 From Velus Require Import Instantiator.
-Import SB.Syn.
+Import Stc.Syn.
 Import NL.
 Import Obc.Syn.
 Import Obc.Sem.
@@ -21,7 +21,7 @@ Import Obc.Typ.
 Import Obc.Equ.
 Import Obc.Def.
 Import Fusion.
-Import SB2ObcInvariants.
+Import Stc2ObcInvariants.
 Import Str.
 Import OpAux.
 Import Interface.Op.
@@ -35,9 +35,9 @@ From Coq Require Import Omega.
 
 Open Scope error_monad_scope.
 
-Parameter schedule      : ident -> list SB.Syn.equation -> list positive.
+Parameter schedule      : ident -> list trconstr -> list positive.
 Parameter print_nlustre : global -> unit.
-Parameter print_sybloc  : SB.Syn.program -> unit.
+Parameter print_stc     : Stc.Syn.program -> unit.
 Parameter print_obc     : Obc.Syn.program -> unit.
 Parameter do_fusion     : unit -> bool.
 Parameter do_sync       : unit -> bool.
@@ -47,52 +47,52 @@ Module ExternalSchedule.
   Definition schedule := schedule.
 End ExternalSchedule.
 
-Module Scheduler := SB.Scheduler ExternalSchedule.
+Module Scheduler := Stc.Scheduler ExternalSchedule.
 
-Definition is_well_sch_block (r: res unit) (b: block) : res unit :=
+Definition is_well_sch_system (r: res unit) (s: system) : res unit :=
   do _ <- r;
-    let args := map fst b.(b_in) in
-    let mems := ps_from_list (map fst b.(b_lasts)) in
-    if SB.Wdef.well_sch mems args b.(b_eqs)
+    let args := map fst s.(s_in) in
+    let mems := ps_from_list (map fst s.(s_lasts)) in
+    if Stc.Wdef.well_sch mems args s.(s_tcs)
     then OK tt
-    else Error (Errors.msg ("block " ++ pos_to_str b.(b_name) ++ " is not well scheduled.")).
+    else Error (Errors.msg ("system " ++ pos_to_str s.(s_name) ++ " is not well scheduled.")).
 
-Definition is_well_sch (P: SB.Syn.program) : res SB.Syn.program :=
-  do _ <- fold_left is_well_sch_block P (OK tt);
+Definition is_well_sch (P: Stc.Syn.program) : res Stc.Syn.program :=
+  do _ <- fold_left is_well_sch_system P (OK tt);
     OK P.
 
 Lemma is_well_sch_error:
   forall G e,
-    fold_left is_well_sch_block G (Error e) = Error e.
+    fold_left is_well_sch_system G (Error e) = Error e.
 Proof.
   induction G as [|n G]; simpl; auto.
 Qed.
 
 Lemma is_well_sch_program:
   forall P,
-    fold_left is_well_sch_block P (OK tt) = OK tt ->
-    SB.Wdef.Well_scheduled P.
+    fold_left is_well_sch_system P (OK tt) = OK tt ->
+    Stc.Wdef.Well_scheduled P.
 Proof.
-  unfold SB.Wdef.Well_scheduled.
-  induction P as [|bl]; simpl.
+  unfold Stc.Wdef.Well_scheduled.
+  induction P as [|s]; simpl.
   - constructor.
   - intro Fold.
-    destruct (SB.Wdef.well_sch (ps_from_list (map fst (SB.Syn.b_lasts bl)))
-                               (map fst (SB.Syn.b_in bl)) (SB.Syn.b_eqs bl)) eqn: E.
-    + apply SB.Wdef.Is_well_sch_by_refl in E; constructor; auto.
+    destruct (Stc.Wdef.well_sch (ps_from_list (map fst (Stc.Syn.s_lasts s)))
+                               (map fst (Stc.Syn.s_in s)) (Stc.Syn.s_tcs s)) eqn: E.
+    + apply Stc.Wdef.Is_well_sch_by_refl in E; constructor; auto.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 
-Definition schedule_program (P: SB.Syn.program) : res SB.Syn.program :=
+Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
 
 Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
   OK g
      @@ print print_nlustre
-     @@ NL2SB.translate
-     @@ print print_sybloc
+     @@ NL2Stc.translate
+     @@ print print_stc
      @@@ schedule_program
-     @@ SB2Obc.translate
+     @@ Stc2Obc.translate
      @@ total_if do_fusion (map Obc.Fus.fuse_class)
      @@ add_defaults
      @@ print print_obc
@@ -232,16 +232,16 @@ Hint Resolve
      Obc.Fus.fuse_call
      Obc.Fus.fuse_wt_mem
      Obc.Fus.fuse_loop_call
-(*      NL2SBTyping.translate_wt *)
+(*      NL2StcTyping.translate_wt *)
 (*      Scheduler.scheduler_wt_program *)
-     (*      SB2ObcTyping.translate_wt *)
+     (*      Stc2ObcTyping.translate_wt *)
      wt_add_defaults_class
      wt_mem_add_defaults
      stmt_call_eval_add_defaults
      loop_call_add_defaults
      ClassFusible_translate
      Scheduler.scheduler_wc_program
-     NL2SBClocking.translate_wc
+     NL2StcClocking.translate_wc
      No_Naked_Vars_add_defaults_class
      stmt_call_eval_add_defaults
      Obc.Fus.fuse_No_Overwrites
@@ -282,9 +282,9 @@ Definition pstr (xss: stream (list val)) : stream (list value) :=
 
 Lemma value_to_option_pstr:
   forall xs,
-    (fun n => map SB2ObcCorr.value_to_option (pstr xs n)) ≈ (fun n => map Some (xs n)).
+    (fun n => map Stc2ObcCorr.value_to_option (pstr xs n)) ≈ (fun n => map Some (xs n)).
 Proof.
-  intros; unfold SB2ObcCorr.value_to_option, pstr; intro.
+  intros; unfold Stc2ObcCorr.value_to_option, pstr; intro.
   rewrite map_map; auto.
 Qed.
 
@@ -303,10 +303,10 @@ Proof.
   intros * Hwc Hwt Hwti Hwto Hnorm Hsem COMP.
   unfold nl_to_cl in COMP.
   simpl in COMP; repeat rewrite print_identity in COMP.
-  destruct (schedule_program (NL2SB.translate G)) eqn: Sch;
+  destruct (schedule_program (NL2Stc.translate G)) eqn: Sch;
     simpl in COMP; try discriminate.
   unfold schedule_program, is_well_sch in Sch; simpl in Sch.
-  destruct (fold_left is_well_sch_block (Scheduler.schedule (NL2SB.translate G))
+  destruct (fold_left is_well_sch_system (Scheduler.schedule (NL2Stc.translate G))
                       (OK tt)) eqn: Wsch; simpl in *; try discriminate; destruct u.
   inv Sch.
   apply is_well_sch_program in Wsch.
@@ -315,9 +315,9 @@ Proof.
   assert (exists n, find_node main G = Some n) as (main_node & Find)
       by (inv Hsem; eauto).
   pose proof Find as Find_node.
-  apply NL2SB.find_node_translate in Find as (bl & P' & Find& ?); subst.
-  apply Scheduler.scheduler_find_block in Find.
-  apply SB2Obc.find_block_translate in Find as (c_main &?& Find &?&?); subst.
+  apply NL2Stc.find_node_translate in Find as (bl & P' & Find& ?); subst.
+  apply Scheduler.scheduler_find_system in Find.
+  apply Stc2Obc.find_system_translate in Find as (c_main &?& Find &?&?); subst.
   assert (Ordered_nodes G) by (eapply wt_global_Ordered_nodes; eauto).
   assert (forall n, 0 < length (ins n)) as Length.
   { inversion_clear Hsem as [???????? Ins].
@@ -327,53 +327,53 @@ Proof.
     apply n_ingt0.
   }
   apply sem_msem_node in Hsem as (M & M' & Hsem); auto.
-  assert (SB.Wdef.Well_defined (Scheduler.schedule (NL2SB.translate G))).
+  assert (Stc.Wdef.Well_defined (Scheduler.schedule (NL2Stc.translate G))).
   { split; [|split]; auto.
-    - apply Scheduler.scheduler_ordered, NL2SBCorr.Ordered_nodes_blocks; auto.
-    - apply Scheduler.scheduler_normal_args, NL2SBNormalArgs.translate_normal_args; auto.
+    - apply Scheduler.scheduler_ordered, NL2StcCorr.Ordered_nodes_systems; auto.
+    - apply Scheduler.scheduler_normal_args, NL2StcNormalArgs.translate_normal_args; auto.
   }
-  apply NL2SBCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
-  assert (forall n, Forall2 SB2ObcCorr.eq_if_present (pstr ins n) (map Some (ins n)))
+  apply NL2StcCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
+  assert (forall n, Forall2 Stc2ObcCorr.eq_if_present (pstr ins n) (map Some (ins n)))
     by (unfold pstr; intros; clear; induction (ins n); constructor; simpl; auto).
   assert (forall n, Exists (fun v => v <> absent) (pstr ins n))
          by (unfold pstr; intros; specialize (Length n);
              destruct (ins n); simpl in *; try omega;
              constructor; discriminate).
-  apply SB2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins n))
+  apply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins n))
     in Hsem as (me0 & Rst & Hsem &?); auto.
   setoid_rewrite value_to_option_pstr in Hsem.
-  set (tr_G := NL2SB.translate G) in *;
+  set (tr_G := NL2Stc.translate G) in *;
     set (sch_tr_G := Scheduler.schedule tr_G) in *;
-    set (tr_sch_tr_G := SB2Obc.translate sch_tr_G) in *;
-    set (tr_main_node := NL2SB.translate_node main_node) in *;
-    set (sch_tr_main_node := Scheduler.schedule_block tr_main_node) in *.
-  pose proof (SB2Obc.exists_reset_method sch_tr_main_node) as Find_reset.
-  pose proof (SB2Obc.exists_step_method sch_tr_main_node) as Find_step.
-  set (m_step := SB2Obc.step_method sch_tr_main_node) in *;
-    set (m_reset := SB2Obc.reset_method sch_tr_main_node) in *.
+    set (tr_sch_tr_G := Stc2Obc.translate sch_tr_G) in *;
+    set (tr_main_node := NL2Stc.translate_node main_node) in *;
+    set (sch_tr_main_node := Scheduler.schedule_system tr_main_node) in *.
+  pose proof (Stc2Obc.exists_reset_method sch_tr_main_node) as Find_reset.
+  pose proof (Stc2Obc.exists_step_method sch_tr_main_node) as Find_step.
+  set (m_step := Stc2Obc.step_method sch_tr_main_node) in *;
+    set (m_reset := Stc2Obc.reset_method sch_tr_main_node) in *.
   assert (wt_program tr_sch_tr_G)
-    by (apply SB2ObcTyping.translate_wt, Scheduler.scheduler_wt_program,
-        NL2SBTyping.translate_wt; auto).
-  assert (wt_mem me0 (SB2Obc.translate (Scheduler.schedule P'))
-                 (SB2Obc.translate_block sch_tr_main_node))
+    by (apply Stc2ObcTyping.translate_wt, Scheduler.scheduler_wt_program,
+        NL2StcTyping.translate_wt; auto).
+  assert (wt_mem me0 (Stc2Obc.translate (Scheduler.schedule P'))
+                 (Stc2Obc.translate_system sch_tr_main_node))
     by (eapply pres_sem_stmt_call with (f := reset) in Find as (? & ?);
         eauto; simpl; constructor).
   assert (m_in m_step <> nil) as Step_in_spec.
-  { apply SB2Obc.find_method_stepm_in in Find_step.
+  { apply Stc2Obc.find_method_stepm_in in Find_step.
     rewrite Find_step; simpl.
     pose proof (n_ingt0 main_node) as Hin.
     intro E; rewrite <-length_idty, E in Hin; simpl in Hin; omega.
   }
   assert (m_out m_step <> nil) as Step_out_spec.
-  { apply SB2Obc.find_method_stepm_out in Find_step.
+  { apply Stc2Obc.find_method_stepm_out in Find_step.
     rewrite Find_step; simpl.
     pose proof (n_outgt0 main_node) as Hout.
     intro E; rewrite <-length_idty, E in Hout; simpl in Hout; omega.
   }
   assert (forall n, wt_vals (ins n) (m_in m_step)) as Hwt_in
-      by (erewrite SB2Obc.find_method_stepm_in; eauto; simpl; eauto).
+      by (erewrite Stc2Obc.find_method_stepm_in; eauto; simpl; eauto).
   assert (forall n, wt_vals (outs n) (m_out m_step)) as Hwt_out
-      by (erewrite SB2Obc.find_method_stepm_out; eauto; simpl; eauto).
+      by (erewrite Stc2Obc.find_method_stepm_out; eauto; simpl; eauto).
   pose proof (find_method_name _ _ _ Find_step) as Eq';
     pose proof (find_method_name _ _ _ Find_reset) as Eq'';
     rewrite <-Eq'' in Rst.
@@ -405,7 +405,7 @@ Proof.
     + assert (Forall Obc.Fus.ClassFusible tr_sch_tr_G)
         by (apply ClassFusible_translate; auto;
             apply Scheduler.scheduler_wc_program; eauto;
-            apply NL2SBClocking.translate_wc; auto).
+            apply NL2StcClocking.translate_wc; auto).
       eapply reacts'
         with (1:=COMP') (8:=Find) (9:=Find_reset) (10:=Find_step) (me0:=me0)
              (Step_in_spec:=Step_in_spec) (Step_out_spec:=Step_out_spec)

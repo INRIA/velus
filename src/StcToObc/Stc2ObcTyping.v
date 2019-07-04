@@ -1,7 +1,7 @@
-From Velus Require Import SyBloc.
+From Velus Require Import Stc.
 From Velus Require Import Obc.
 
-From Velus Require Import SyBlocToObc.Translation.
+From Velus Require Import StcToObc.Translation.
 
 From Velus Require Import RMemory.
 From Velus Require Import Common.
@@ -13,15 +13,15 @@ From Coq Require Import Permutation.
 Open Scope nat.
 Open Scope list.
 
-Module Type SB2OBCTYPING
+Module Type STC2OBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import Str   : STREAM          Op OpAux)
        (Import CE    : COREEXPR    Ids Op OpAux Str)
-       (Import SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Import Stc    : STC      Ids Op OpAux Str CE)
        (Import Obc   : OBC         Ids Op OpAux)
-       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn).
+       (Import Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn).
 
   Lemma wt_stmt_fold_left_shift:
     forall A xs P insts mems vars (f: A -> stmt) acc,
@@ -131,23 +131,23 @@ Module Type SB2OBCTYPING
   Hint Resolve translate_exp_wt translate_cexp_wt Control_wt.
 
   Lemma step_wt:
-    forall P b,
-      wt_block P b ->
-      wt_method (translate P) (b_blocks b)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (b_lasts b))
-                (step_method b).
+    forall P s,
+      wt_system P s ->
+      wt_method (translate P) (s_subs s)
+                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s))
+                (step_method s).
   Proof.
-    unfold wt_block, wt_method; intros * WT; simpl.
-    unfold translate_eqns, meth_vars.
+    unfold wt_system, wt_method; intros * WT; simpl.
+    unfold translate_tcs, meth_vars.
 
-    pose proof (b_nodup_variables b) as NodupVars.
+    pose proof (s_nodup_variables s) as NodupVars.
     unfold variables in NodupVars.
-    assert (incl (calls_of (b_eqs b)) (b_blocks b)) as Blocks
-        by (rewrite b_blocks_calls_of; apply incl_refl).
-    assert (incl (resets_of (b_eqs b)) (b_blocks b)) as Blocks'
-        by (eapply incl_tran; eauto; apply b_reset_incl; auto).
+    assert (incl (calls_of (s_tcs s)) (s_subs s)) as Subs
+        by (rewrite s_subs_calls_of; apply incl_refl).
+    assert (incl (resets_of (s_tcs s)) (s_subs s)) as Subs'
+        by (eapply incl_tran; eauto; apply s_reset_incl; auto).
 
-    induction (b_eqs b) as [|eq eqs]; inversion_clear WT as [|?? WTeq];
+    induction (s_tcs s) as [|tc tcs]; inversion_clear WT as [|?? WTtc];
       simpl; eauto using wt_stmt.
 
     simpl in NodupVars;
@@ -155,34 +155,34 @@ Module Type SB2OBCTYPING
       rewrite Permutation_app_comm in NodupVars';
       apply NoDup_app_weaken in NodupVars';
         apply NoDup_app_weaken in NodupVars.
-    assert (incl (calls_of eqs) (b_blocks b))
-      by (destruct eq; simpl in *; auto;
-          apply incl_cons' in Blocks as (? & ?); auto).
-    assert (incl (resets_of eqs) (b_blocks b))
-      by (destruct eq; simpl in *; auto;
-          apply incl_cons' in Blocks' as (? & ?); auto).
+    assert (incl (calls_of tcs) (s_subs s))
+      by (destruct tc; simpl in *; auto;
+          apply incl_cons' in Subs as (? & ?); auto).
+    assert (incl (resets_of tcs) (s_subs s))
+      by (destruct tc; simpl in *; auto;
+          apply incl_cons' in Subs' as (? & ?); auto).
 
-    rewrite 2 idty_app in WTeq.
-    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (b_lasts b)) in *;
-      set (vars := idty (b_in b) ++ idty (b_vars b) ++ idty (b_out b)) in *;
+    rewrite 2 idty_app in WTtc.
+    set (mems := map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s)) in *;
+      set (vars := idty (s_in s) ++ idty (s_vars s) ++ idty (s_out s)) in *;
       set (nvars := vars ++ mems) in *.
     apply wt_stmt_fold_left_shift; intuition.
     constructor; eauto using wt_stmt.
     assert (forall x ty,
                In (x, ty) nvars ->
-               if PS.mem x (ps_from_list (map fst (b_lasts b)))
+               if PS.mem x (ps_from_list (map fst (s_lasts s)))
                then In (x, ty) mems
                else In (x, ty) vars)
     as NvarsSpec.
     { clear.
-      assert (map fst (b_lasts b) = map fst mems) as ->
+      assert (map fst (s_lasts s) = map fst mems) as ->
           by (subst mems; rewrite map_map; simpl; auto).
       subst nvars.
       assert (NoDupMembers (vars ++ mems)) as Nodup.
       { subst vars mems.
         apply fst_NoDupMembers.
         rewrite 3 map_app, 3 map_fst_idty, map_map; simpl.
-        rewrite <-2 app_assoc. apply b_nodup.
+        rewrite <-2 app_assoc. apply s_nodup.
       }
       intros * Hin; apply in_app in Hin as [Hin|Hin].
       - pose proof Hin.
@@ -196,20 +196,20 @@ Module Type SB2OBCTYPING
         apply ps_from_list_In in Hin; rewrite PSE.MP.Dec.F.mem_iff in Hin.
         rewrite Hin; auto.
     }
-    destruct eq; inversion_clear WTeq as [| |????? Find|???????? Find Outs Ins ? Exps];
+    destruct tc; inversion_clear WTtc as [| |????? Find|???????? Find Outs Ins ? Exps];
       simpl in *; eauto.
     - eapply Control_wt; eauto.
       constructor; eauto.
       now rewrite typeof_correct.
-    - apply incl_cons' in Blocks' as (? & ?).
-      apply find_block_translate in Find as (?&?&?&?&?); subst.
+    - apply incl_cons' in Subs' as (? & ?).
+      apply find_system_translate in Find as (?&?&?&?&?); subst.
       eapply Control_wt; eauto.
       econstructor; eauto.
       + apply exists_reset_method.
       + simpl; constructor.
       + simpl; constructor.
-    - apply incl_cons' in Blocks as (? & ?).
-      apply find_block_translate in Find as (?&?&?&?&?); subst.
+    - apply incl_cons' in Subs as (? & ?).
+      apply find_system_translate in Find as (?&?&?&?&?); subst.
       eapply Control_wt; eauto.
       econstructor; eauto.
       + apply exists_step_method.
@@ -237,10 +237,10 @@ Module Type SB2OBCTYPING
   Qed.
 
   Lemma reset_insts_wt_permutation:
-    forall blocks blocks' prog insts mems vars,
-      Permutation blocks' blocks ->
-      wt_stmt prog insts mems vars (reset_insts blocks) ->
-      wt_stmt prog insts mems vars (reset_insts blocks').
+    forall subs subs' prog insts mems vars,
+      Permutation subs' subs ->
+      wt_stmt prog insts mems vars (reset_insts subs) ->
+      wt_stmt prog insts mems vars (reset_insts subs').
   Proof.
     unfold reset_insts.
     induction 1; simpl; auto; intros * WT.
@@ -252,22 +252,22 @@ Module Type SB2OBCTYPING
   Qed.
 
   Lemma reset_insts_wt:
-    forall P insts mems b,
-      wt_block P b ->
-      incl (b_blocks b) insts ->
-      wt_stmt (translate P) insts mems [] (reset_insts (b_blocks b)).
+    forall P insts mems s,
+      wt_system P s ->
+      incl (s_subs s) insts ->
+      wt_stmt (translate P) insts mems [] (reset_insts (s_subs s)).
   Proof.
-    unfold wt_block; intros * WT Spec.
-    eapply reset_insts_wt_permutation; try apply b_blocks_calls_of.
-    rewrite b_blocks_calls_of in Spec.
+    unfold wt_system; intros * WT Spec.
+    eapply reset_insts_wt_permutation; try apply s_subs_calls_of.
+    rewrite s_subs_calls_of in Spec.
     unfold reset_insts.
-    induction (b_eqs b) as [|[] eqs]; simpl in *;
-      inversion_clear WT as [|?? WTeq]; eauto using wt_stmt.
+    induction (s_tcs s) as [|[] tcs]; simpl in *;
+      inversion_clear WT as [|?? WTtc]; eauto using wt_stmt.
     apply incl_cons' in Spec as (? & ?).
     rewrite wt_stmt_fold_left_lift; split; auto.
     constructor; eauto using wt_stmt.
-    inversion_clear WTeq as [| | |???????? Find].
-    apply find_block_translate in Find as (?&?&?&?&?); subst.
+    inversion_clear WTtc as [| | |???????? Find].
+    apply find_system_translate in Find as (?&?&?&?&?); subst.
     econstructor; eauto.
     - apply exists_reset_method.
     - constructor.
@@ -276,18 +276,18 @@ Module Type SB2OBCTYPING
   Qed.
 
   Lemma reset_wt:
-    forall P b,
-      wt_block P b ->
-      wt_method (translate P) (b_blocks b)
-                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (b_lasts b))
-                (reset_method b).
+    forall P s,
+      wt_system P s ->
+      wt_method (translate P) (s_subs s)
+                (map (fun xc : ident * (const * clock) => (fst xc, type_const (fst (snd xc)))) (s_lasts s))
+                (reset_method s).
   Proof.
-    unfold wt_block, wt_method; intros * WT; simpl.
-    unfold translate_eqns, meth_vars, translate_reset; simpl.
+    unfold wt_system, wt_method; intros * WT; simpl.
+    unfold translate_tcs, meth_vars, translate_reset; simpl.
     constructor.
     - clear WT.
       apply reset_mems_wt.
-      intros * Hin; induction (b_lasts b) as [|(x', (c', ck'))];
+      intros * Hin; induction (s_lasts s) as [|(x', (c', ck'))];
         simpl; inv Hin; auto.
       left; congruence.
     - apply reset_insts_wt; auto.
@@ -295,24 +295,24 @@ Module Type SB2OBCTYPING
   Qed.
   Hint Resolve reset_wt.
 
-  Lemma translate_block_wt:
-    forall P b,
-      wt_block P b ->
-      wt_class (translate P) (translate_block b).
+  Lemma translate_system_wt:
+    forall P s,
+      wt_system P s ->
+      wt_class (translate P) (translate_system s).
   Proof.
-    unfold wt_block; intros * WT.
+    unfold wt_system; intros * WT.
     constructor; simpl; eauto using Forall_cons.
-    rewrite b_blocks_calls_of.
-    induction (b_eqs b) as [|[]]; simpl; inversion_clear WT as [|?? WTeq]; auto;
+    rewrite s_subs_calls_of.
+    induction (s_tcs s) as [|[]]; simpl; inversion_clear WT as [|?? WTtc]; auto;
       constructor; simpl; auto.
-    inversion_clear WTeq as [| | |???????? Find].
-    apply find_block_translate in Find as (?&?& -> &?); discriminate.
+    inversion_clear WTtc as [| | |???????? Find].
+    apply find_system_translate in Find as (?&?& -> &?); discriminate.
   Qed.
-  Hint Resolve translate_block_wt.
+  Hint Resolve translate_system_wt.
 
   Lemma translate_wt:
     forall P,
-      SB.Typ.wt_program P ->
+      Stc.Typ.wt_program P ->
       wt_program (translate P).
   Proof.
     intros * WT.
@@ -324,17 +324,17 @@ Module Type SB2OBCTYPING
       auto using NoDup_cons.
   Qed.
 
-End SB2OBCTYPING.
+End STC2OBCTYPING.
 
-Module SB2ObcTypingFun
+Module Stc2ObcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
        (Str   : STREAM          Op OpAux)
        (CE    : COREEXPR    Ids Op OpAux Str)
-       (SB    : SYBLOC      Ids Op OpAux Str CE)
+       (Stc    : STC      Ids Op OpAux Str CE)
        (Obc   : OBC         Ids Op OpAux)
-       (Trans : TRANSLATION Ids Op OpAux CE.Syn SB.Syn Obc.Syn)
-<: SB2OBCTYPING Ids Op OpAux Str CE SB Obc Trans.
-  Include SB2OBCTYPING Ids Op OpAux Str CE SB Obc Trans.
-End SB2ObcTypingFun.
+       (Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
+<: STC2OBCTYPING Ids Op OpAux Str CE Stc Obc Trans.
+  Include STC2OBCTYPING Ids Op OpAux Str CE Stc Obc Trans.
+End Stc2ObcTypingFun.
