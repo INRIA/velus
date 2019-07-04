@@ -122,7 +122,7 @@ Module Type INDEXEDTOCOIND
         is the result of the application of [f] at [(m+n)]. *)
     Lemma init_from_nth:
       forall {A} m n (f: nat -> A),
-        Str_nth m (init_from n f) = f (m + n).
+        (init_from n f) # m = f (m + n).
     Proof.
       unfold Str_nth; induction m; intros; simpl; auto.
       now rewrite IHm, <-plus_n_Sm.
@@ -614,15 +614,15 @@ CESem.sem_exp b H (Ewhen e x k) es
     Ltac use_spec Spec :=
       match goal with
         n: nat |- _ =>
-        pose proof (Spec n);
+        let m := fresh "m" in
+        intro m; repeat rewrite init_from_nth;
+        specialize (Spec (m + n));
         repeat match goal with
                  H: _ \/ _ |- _ => destruct H
                end;
-        destruct_conjs;
-        repeat match goal with H:_ n = _ |- _ => rewrite H in *; clear H end;
-        auto
+        destruct_conjs; firstorder
       end.
-
+  
     (** State the correspondence for [exp].
         Goes by induction on [exp] and uses the previous inversion lemmas. *)
     Hint Constructors when lift1 lift2.
@@ -637,14 +637,7 @@ CESem.sem_exp b H (Ewhen e x k) es
       induction e; intros * Sem; unfold CESem.sem_exp, CESem.lift in Sem.
 
       - constructor.
-        revert dependent es; revert b; revert n.
-        cofix CoFix; intros.
-        rewrite init_from_n; rewrite (init_from_n b).
-        constructor; simpl.
-        + specialize (Sem n);
-            inversion_clear Sem as [? ? Hes| | | | | | | |];
-            destruct (b n); auto.
-        + destruct (b n); auto.
+        apply const_spec; use_spec Sem; inv Sem; auto.
 
       - constructor.
         apply sem_var_impl_from.
@@ -653,25 +646,15 @@ CESem.sem_exp b H (Ewhen e x k) es
 
       - apply when_inv in Sem as (ys & xs & ? & ? & Spec).
         econstructor; eauto using sem_var_impl_from.
-        revert dependent n; revert Spec; cofix CoFix; intros.
-        rewrite init_from_n;
-          rewrite (init_from_n xs);
-          rewrite (init_from_n es).
-        use_spec Spec.
-
+        apply when_spec; use_spec Spec.
+        
       - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix CoFix; intros.
-        rewrite init_from_n; rewrite (init_from_n es).
-        use_spec Spec.
+        apply lift1_spec; use_spec Spec.
 
       - apply binop_inv in Sem as (ys & zs & ? & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix CoFix; intros.
-        rewrite init_from_n;
-          rewrite (init_from_n zs);
-          rewrite (init_from_n es).
-        use_spec Spec.
+        apply lift2_spec; use_spec Spec.
     Qed.
 
     Corollary sem_exp_impl:
@@ -902,24 +885,14 @@ CESem.sem_exp b H (Ewhen e x k) es
 
       - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix CoFix; intros.
-        rewrite init_from_n;
-          rewrite (init_from_n ts);
-          rewrite (init_from_n fs);
-          rewrite (init_from_n es).
-        use_spec Spec.
+        apply merge_spec; use_spec Spec. 
 
       - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
-        revert dependent n; revert Spec; cofix CoFix; intros.
-        rewrite init_from_n;
-          rewrite (init_from_n ts);
-          rewrite (init_from_n fs);
-          rewrite (init_from_n es).
-        use_spec Spec.
+        apply ite_spec; use_spec Spec.
         destruct H4.
-        + apply val_to_bool_true' in H8; subst; auto.
-        + apply val_to_bool_false' in H8; subst; auto.
+        + apply val_to_bool_true' in H8; subst; firstorder.
+        + apply val_to_bool_false' in H8; subst; firstorder.
 
       - apply exp_inv in Sem; constructor; auto.
     Qed.

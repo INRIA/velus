@@ -64,7 +64,7 @@ Module Type NLSEMEQUIV
   (* Qed. *)
   
   Definition streams_equivalence {A} (xss: list (Stream A)) (xss': stream (list A)) :=
-    forall n, Forall2 (fun xs x => Str_nth n xs = x) xss (xss' n).
+    forall n, Forall2 (fun xs x => xs # n = x) xss (xss' n).
 
   Record unified_streams A :=
     {
@@ -81,7 +81,6 @@ Module Type NLSEMEQUIV
     destruct xss as (coind, idx, E); simpl.
     specialize (E n).
     induction E; simpl; auto.
-    rewrite CoindToIdx.tr_Stream_nth.
     f_equal; auto.
   Qed.
 
