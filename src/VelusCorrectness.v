@@ -86,7 +86,7 @@ Qed.
 Definition schedule_program (P: Stc.Syn.program) : res Stc.Syn.program :=
   is_well_sch (Scheduler.schedule P).
 
-Definition nl_to_cl (main_node: ident) (g: global): res Clight.program :=
+Definition nl_to_cl (main_node: ident) (g: global) : res Clight.program :=
   OK g
      @@ print print_nlustre
      @@ NL2Stc.translate
@@ -104,13 +104,17 @@ Axiom add_builtins_spec:
     (forall t, B <> Goes_wrong t) ->
     program_behaves (semantics2 p) B -> program_behaves (semantics2 (add_builtins p)) B.
 
+Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
+  OK g
+     @@@ nl_to_cl main_node
+     @@ print print_Clight
+     @@ add_builtins
+     @@@ transf_clight2_program.
+
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
   elab_declarations D
                     @@@ (fun G => L2NL.to_global (proj1_sig G))
-                    @@@ nl_to_cl main_node
-                    @@ print print_Clight
-                    @@ add_builtins
-                    @@@ transf_clight2_program.
+                    @@@ nl_to_asm main_node.
 
 Section WtStream.
 
@@ -288,7 +292,7 @@ Proof.
   rewrite map_map; auto.
 Qed.
 
-Lemma behavior_clight:
+Lemma behavior_nl_to_cl:
   forall G P main ins outs,
     wc_global G ->
     wt_global G ->
@@ -435,6 +439,27 @@ Proof.
       * intros ??????? Call; eapply stmt_call_eval_add_defaults_class_not_None with (3 := Call); eauto.
       * change [] with (map Some (@nil val)); eauto.
     + eapply find_node_trace_spec; eauto.
+Qed.
+
+Lemma behavior_nl_to_asm:
+  forall G P main ins outs,
+    wc_global G ->
+    wt_global G ->
+    wt_ins G main ins ->
+    wt_outs G main outs ->
+    normal_args G ->
+    sem_node G main (pstr ins) (pstr outs) ->
+    nl_to_asm main G = OK P ->
+    exists T, program_behaves (Asm.semantics P) (Reacts T)
+         /\ bisim_io G main ins outs T.
+Proof.
+  unfold nl_to_asm; simpl.
+  intros * ?????? Comp.
+  destruct (nl_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate.
+  eapply  behavior_nl_to_cl in Comp' as (T & Beh & Bisim); eauto.
+  eapply reacts_trace_preservation in Comp; eauto.
+  apply add_builtins_spec; auto.
+  intros ? ?; discriminate.
 Qed.
 
 (** The ultimate lemma states that, if
