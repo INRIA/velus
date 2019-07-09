@@ -1,7 +1,7 @@
-node euler(x0, dx: float64) returns (x: float64);
+node euler(x0, xv: float64) returns (x: float64);
 var i: bool; px: float64;
 let
-  x = if i then x0 else (px + 0.1 * dx);
+  x = if i then x0 else (px + 0.1 * xv);
   i = true fby false;
   px = 0.0 fby x;
 tel
