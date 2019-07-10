@@ -24,8 +24,6 @@ Module Type CEINTERPRETER
 
   (** ** Instantaneous semantics *)
 
-  (** ** Instantaneous semantics *)
-
   Section InstantInterpreter.
 
     Variable base : bool.

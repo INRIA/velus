@@ -383,47 +383,6 @@ Module Type INDEXEDTOCOIND
            justified since it would raise some logical contradictions in Coq
      *)
 
-    (** Require Import ClassicalChoice.
-        Lemma lift_choice:
-          forall {A B} (sem: bool -> Indexed.R -> A -> B -> Prop) b H x,
-            (forall n, exists v, sem (b n) (CESem.restr_hist H n) x v) ->
-            exists ys, CESem.lift b sem H x ys.
-        Proof.
-          unfold CESem.lift.
-          intros * Sem.
-          apply choice in Sem; auto.
-        Qed.
-    *)
-
-    (*
-CESem.sem_exp b H (Ewhen e x k) es
-     *)
-
-    (*
-    Lemma blah:
-      forall e es b H,
-        CESem.sem_exp b H e es ->
-        CESem.sem_exp b H e (interp_exp b H e).
-    Proof.
-      intros * Sem n.
-      specialize (Sem n).
-      unfold interp_exp, lift.
-      inv Sem; erewrite <-interp_exp_instant_sound; eauto.
-
-      
-            interp_str b H e Sem.
-
-       sol sem            interp      sound
-       sol CESem.sem_exp interp_exp interp_exp_instant_sound
-
-      unfold interp_exp_instant_sound, lift;
-        inv Sem; erewrite <-sound; eauto.
-
-      | exp => sol CESem.sem_exp interp_exp interp_exp_instant_sound
-
-          Proof.
-     *)
-
     (** This tactic automatically uses the interpretor to give a witness stream. *)
     Ltac interp_str b H x Sem :=
       let Sem_x := fresh "Sem_" x in

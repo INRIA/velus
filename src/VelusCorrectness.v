@@ -330,7 +330,7 @@ Proof.
     rewrite <-Ins.
     apply n_ingt0.
   }
-  apply sem_msem_node in Hsem as (M & M' & Hsem); auto.
+  apply sem_msem_node in Hsem as (M & Hsem); auto.
   assert (Stc.Wdef.Well_defined (Scheduler.schedule (NL2Stc.translate G))).
   { split; [|split]; auto.
     - apply Scheduler.scheduler_ordered, NL2StcCorr.Ordered_nodes_systems; auto.

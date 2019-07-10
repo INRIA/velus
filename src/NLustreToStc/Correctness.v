@@ -70,9 +70,9 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma msem_eqs_reset_lasts:
-    forall G bk H M M' n,
+    forall G bk H M n,
       memory_closed_n M (n_eqs n) ->
-      Forall (msem_equation G bk H M M') (n_eqs n) ->
+      Forall (msem_equation G bk H M) (n_eqs n) ->
       reset_lasts (translate_node n) (M 0).
   Proof.
     intros * Closed Heqs ??? Hin.
@@ -86,42 +86,42 @@ Module Type CORRECTNESS
     - destruct i; try discriminate; eauto.
     - apply In_fst_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E.
-      match goal with H: mfby _ _ _ _ _ _ |- _ => destruct H as (?&?) end; auto.
+      match goal with H: mfby _ _ _ _ _ |- _ => destruct H as (?&?) end; auto.
   Qed.
 
   Lemma msem_eqs_In_snd_gather_eqs_spec:
-    forall eqs G bk H M M' x f,
-      Forall (msem_equation G bk H M M') eqs ->
+    forall eqs G bk H M x f,
+      Forall (msem_equation G bk H M) eqs ->
       In (x, f) (snd (gather_eqs eqs)) ->
-      exists xss Mx Mx' yss,
-        (msem_node G f xss Mx Mx' yss
-         \/ exists r, forall k, exists Mk Mk', msem_node G f (mask k r xss) Mk Mk' (mask k r yss)
-                               /\ memory_masked k r Mx Mk)
+      exists xss Mx yss,
+        (msem_node G f xss Mx yss
+         \/ exists r, forall k, exists Mk, msem_node G f (mask k r xss) Mk (mask k r yss)
+                           /\ memory_masked k r Mx Mk)
         /\ sub_inst_n x M Mx.
   Proof.
     unfold gather_eqs.
     intro; generalize (@nil (ident * (const * clock))).
-    induction eqs as [|[]]; simpl; intros ? ? ? ? ? ? ? ? Heqs Hin;
+    induction eqs as [|[]]; simpl; intros ??????? Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
-      try inversion_clear Heq as [|????????????? Hd|
-                                  ???????????????? Hd ??????? Rst|];
+      try inversion_clear Heq as [|??????????? Hd|
+                                  ?????????????? Hd ?????? Rst|];
       try contradiction; eauto.
     - destruct i; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E; inv Hd.
-      do 4 eexists; split; eauto.
+      do 3 eexists; split; eauto.
     - destruct i; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E; inv Hd.
-      exists ls, Mx, Mx', xss.
+      exists ls, Mx, xss.
       split; auto.
-      right; eexists; intro k; destruct (Rst k) as (?&?&?&?&?); eauto.
+      right; eexists; intro k; destruct (Rst k) as (?&?&?); eauto.
   Qed.
 
   Lemma msem_node_initial_state:
-    forall G f xss M M' yss,
+    forall G f xss M yss,
       Ordered_nodes G ->
-      msem_node G f xss M M' yss ->
+      msem_node G f xss M yss ->
       initial_state (translate G) f (M 0).
   Proof.
     induction G as [|node ? IH].
@@ -129,7 +129,7 @@ Module Type CORRECTNESS
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros * Hord Hsem.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins ?? Heqs Closed].
+    inversion_clear Hsem' as [??????? Clock Hfind Ins ?? Heqs Closed].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
@@ -145,9 +145,9 @@ Module Type CORRECTNESS
       + intros * Hin.
         destruct node; simpl in *.
         edestruct msem_eqs_In_snd_gather_eqs_spec
-          as (?& Mx &?&?& [Node|(rs & Reset)] & Sub); eauto.
+          as (?& Mx &?& [Node|(rs & Reset)] & Sub); eauto.
         destruct (Reset (if rs 0 then pred (count rs 0) else count rs 0))
-          as (M0 &?& Node & Mmask).
+          as (M0 & Node & Mmask).
         apply IH in Node; auto.
         specialize (Mmask 0); specialize (Sub 0).
         rewrite Mmask in Sub.
@@ -210,10 +210,10 @@ Module Type CORRECTNESS
       forall G f M n,
         find_node f G = Some n ->
         (forall x, find_val x M <> None -> In x (gather_mems n.(n_eqs))) ->
-        (forall i M', find_inst i M = Some M' ->
+        (forall i Mi, find_inst i M = Some Mi ->
               exists f',
                 In (i, f') (gather_insts n.(n_eqs))
-                /\ memory_closed_rec G f' M') ->
+                /\ memory_closed_rec G f' Mi) ->
         memory_closed_rec G f M.
 
   Definition memory_closed_rec_n (G: global) (f: ident) (M: memories) : Prop :=
@@ -261,11 +261,11 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma msem_equations_memory_closed_rec:
-    forall eqs G bk H M M' n x f Mx,
-      (forall f xss M M' yss,
-          msem_node G f xss M M' yss ->
+    forall eqs G bk H M n x f Mx,
+      (forall f xss M yss,
+          msem_node G f xss M yss ->
           memory_closed_rec_n G f M) ->
-      Forall (msem_equation G bk H M M') eqs ->
+      Forall (msem_equation G bk H M) eqs ->
       find_inst x (M n) = Some Mx ->
       In (x, f) (gather_insts eqs) ->
       memory_closed_rec G f Mx.
@@ -277,57 +277,57 @@ Module Type CORRECTNESS
     destruct eq; simpl in Hin; try contradiction.
     destruct i; try contradiction.
     inversion_clear Hin as [E|]; try contradiction; inv E.
-    inversion_clear Heq as [|????????????? Hd Sub|
-                            ???????????????? Hd Sub ?????? Rst|];
+    inversion_clear Heq as [|??????????? Hd Sub|
+                            ?????????????? Hd Sub ????? Rst|];
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
     - specialize (Rst (if rs n then pred (count rs n) else count rs n));
-        destruct Rst as (?&?& Node & Mask &?).
+        destruct Rst as (?& Node & Mask).
       apply IH in Node.
       rewrite Mask; auto.
       cases_eqn Hr; apply count_true_ge_1 in Hr.
       erewrite <-Lt.S_pred; eauto.
   Qed.
 
-  Lemma msem_equations_memory_closed_rec':
-    forall eqs G bk H M M' n x f Mx,
-      (forall f xss M M' yss,
-          msem_node G f xss M M' yss ->
-          memory_closed_rec_n G f M') ->
-      Forall (msem_equation G bk H M M') eqs ->
-      find_inst x (M' n) = Some Mx ->
-      In (x, f) (gather_insts eqs) ->
-      memory_closed_rec G f Mx.
-  Proof.
-    unfold gather_insts.
-    induction eqs as [|eq]; simpl; intros * IH Heqs Find Hin;
-      inversion_clear Heqs as [|?? Heq]; try contradiction.
-    apply in_app in Hin as [Hin|]; eauto.
-    destruct eq; simpl in Hin; try contradiction.
-    destruct i; try contradiction.
-    inversion_clear Hin as [E|]; try contradiction; inv E.
-    inversion_clear Heq as [|????????????? Hd ? Sub|
-                            ???????????????? Hd ? Sub ????? Rst|];
-      inv Hd; rewrite Sub in Find; inv Find.
-    - eapply IH; eauto.
-    - specialize (Rst (count rs n)); destruct Rst as (?&?& Node &?& Mask).
-      apply IH in Node.
-      rewrite Mask; auto.
-  Qed.
+  (* Lemma msem_equations_memory_closed_rec': *)
+  (*   forall eqs G bk H M n x f Mx, *)
+  (*     (forall f xss M yss, *)
+  (*         msem_node G f xss M yss -> *)
+  (*         memory_closed_rec_n G f M) -> *)
+  (*     Forall (msem_equation G bk H M) eqs -> *)
+  (*     find_inst x (M n) = Some Mx -> *)
+  (*     In (x, f) (gather_insts eqs) -> *)
+  (*     memory_closed_rec G f Mx. *)
+  (* Proof. *)
+  (*   unfold gather_insts. *)
+  (*   induction eqs as [|eq]; simpl; intros * IH Heqs Find Hin; *)
+  (*     inversion_clear Heqs as [|?? Heq]; try contradiction. *)
+  (*   apply in_app in Hin as [Hin|]; eauto. *)
+  (*   destruct eq; simpl in Hin; try contradiction. *)
+  (*   destruct i; try contradiction. *)
+  (*   inversion_clear Hin as [E|]; try contradiction; inv E. *)
+  (*   inversion_clear Heq as [|??????????? Hd Sub| *)
+  (*                           ?????????????? Hd Sub ????? Rst|]; *)
+  (*     inv Hd; rewrite Sub in Find; inv Find. *)
+  (*   - eapply IH; eauto. *)
+  (*   - specialize (Rst (count rs n)); destruct Rst as (?& Node & Mask). *)
+  (*     apply IH in Node. *)
+  (*     rewrite Mask; auto. reflexivity.  *)
+  (* Qed. *)
 
   Lemma msem_node_memory_closed_rec_n:
-    forall G f xss M M' yss,
+    forall G f xss M yss,
       Ordered_nodes G ->
-      msem_node G f xss M M' yss ->
-      memory_closed_rec_n G f M /\ memory_closed_rec_n G f M'.
+      msem_node G f xss M yss ->
+      memory_closed_rec_n G f M.
   Proof.
-    induction G as [|node]; intros ????? Ord;
-      inversion_clear 1 as [????????? Find ??? Heqs Closed Closed'];
+    induction G as [|node]; intros ???? Ord;
+      inversion_clear 1 as [???????? Find ??? Heqs Closed];
       try now inv Find.
     pose proof Find; simpl in Find.
     destruct (ident_eqb node.(n_name) f) eqn:Eq.
     - inv Find.
-      split; econstructor; eauto.
+      econstructor; eauto.
       + apply Closed.
       + intros * Find_i.
         assert (exists f', In (i, f') (gather_insts (n_eqs n))) as (f' & Hin)
@@ -344,30 +344,11 @@ Module Type CORRECTNESS
         apply msem_equations_cons in Heqs; auto.
         inv Ord.
         eapply msem_equations_memory_closed_rec; eauto.
-        intros; edestruct IHG; eauto.
-      + apply Closed'.
-      + intros * Find_i.
-        assert (exists f', In (i, f') (gather_insts (n_eqs n))) as (f' & Hin)
-            by (eapply InMembers_In, Closed', not_None_is_Some; eauto).
-        eexists; split; eauto.
-        assert (f' <> n.(n_name)).
-        { rewrite <-gather_eqs_snd_spec in Hin.
-          apply In_snd_gather_eqs_Is_node_in in Hin.
-          intro; subst; contradict Hin; eapply find_node_not_Is_node_in; eauto.
-        }
-        apply memory_closed_rec_other; auto.
-        assert (~ Is_node_in (n_name n) (n_eqs n))
-          by (eapply find_node_not_Is_node_in; eauto).
-        apply msem_equations_cons in Heqs; auto.
-        inv Ord.
-        eapply msem_equations_memory_closed_rec'; eauto.
-        intros; edestruct IHG; eauto.
     - apply ident_eqb_neq in Eq.
       assert (~ Is_node_in (n_name node) (n_eqs n))
         by (eapply find_node_later_not_Is_node_in; eauto).
       apply msem_equations_cons in Heqs; auto.
-      split; apply memory_closed_rec_n_other; auto; inv Ord;
-        edestruct IHG; eauto.
+      apply memory_closed_rec_n_other; auto; inv Ord; eauto.
   Qed.
 
   Lemma memory_closed_rec_state_closed:
@@ -407,27 +388,29 @@ Module Type CORRECTNESS
       rewrite Env.gso in Find; auto.
   Qed.
 
+  Definition next (M: memories) : memories := fun n => M (S n).
+
   Lemma equation_correctness:
-    forall G eq tcs bk H M M' Is vars insts,
-      (forall f xss M M' yss,
-          msem_node G f xss M M' yss ->
-          sem_system_n (translate G) f M xss yss M') ->
+    forall G eq tcs bk H M Is vars insts,
+      (forall f xss M yss,
+          msem_node G f xss M yss ->
+          sem_system_n (translate G) f M xss yss (next M)) ->
       Ordered_nodes G ->
       NL.Clo.wc_equation G vars eq ->
       Forall (clock_match bk H) vars ->
       translate_eqn_nodup_subs eq tcs ->
       (forall n, transient_states_closed (translate G) insts (Is n)) ->
       (forall x, InMembers x insts -> exists k, Is_sub_in x k tcs) ->
-      msem_equation G bk H M M' eq ->
-      sem_trconstrs_n (translate G) bk H M Is M' tcs ->
+      msem_equation G bk H M eq ->
+      sem_trconstrs_n (translate G) bk H M Is (next M) tcs ->
       exists Is',
-        sem_trconstrs_n (translate G) bk H M Is' M' (translate_eqn eq ++ tcs)
+        sem_trconstrs_n (translate G) bk H M Is' (next M) (translate_eqn eq ++ tcs)
         /\ forall n, transient_states_closed (translate G) (gather_inst_eq eq ++ insts) (Is' n).
   Proof.
     intros * IHnode Hord WC ClkM TrNodup Closed SpecInsts Heq Htcs.
-    destruct Heq as [|??????????????????? Node|
-                     ?????????????????????? Var Hr Reset|
-                     ?????????? Arg Var Mfby];
+    destruct Heq as [|???????????????? Node|
+                     ??????????????????? Var Hr Reset|
+                     ????????? Arg Var Mfby];
       inversion_clear TrNodup as [|???????? Notin|]; simpl.
 
     - eexists; split; eauto.
@@ -449,7 +432,7 @@ Module Type CORRECTNESS
         * apply sem_trconstrs_n_add_n; auto.
       + intro; apply transient_states_closed_add; auto.
         * eapply memory_closed_rec_state_closed; eauto;
-            apply msem_node_memory_closed_rec_n in Node as (? & ?); eauto.
+            apply msem_node_memory_closed_rec_n in Node; eauto.
         * intro Hin; apply SpecInsts in Hin as (? & ?); eapply Notin; eauto.
 
     - destruct xs; try discriminate.
@@ -458,19 +441,19 @@ Module Type CORRECTNESS
            H': hd_error ?l = _ |- _ =>
         rewrite H' in H; inv H; simpl in H'; inv H'
       end.
-      assert (forall Mx, sem_trconstrs_n (translate G) bk H M (add_n x Mx Is) M' tcs) as Htcs'
+      assert (forall Mx, sem_trconstrs_n (translate G) bk H M (add_n x Mx Is) (next M) tcs) as Htcs'
           by now intro; apply sem_trconstrs_n_add_n.
       assert (clock_match bk H (y, ck)) as Cky
           by (eapply Forall_forall; eauto; inv WC; eauto).
       exists (fun n => Env.add x (if rs n then Mx 0 else Mx n) (Is n)); split;
         intro;
-        destruct (Reset (count rs n)) as (Mn & Mn' & Node_n & Mmask_n & Mmask'_n);
-        specialize (Mmask_n n);
+        destruct (Reset (count rs n)) as (Mn & Node_n & Mmask_n);
+        (* specialize (Mmask_n n); *)
         destruct (Reset (if rs 0 then pred (count rs 0) else count rs 0))
-          as (M0 & M0' & Node_0 & Mmask_0 & Mmask'_0);
+          as (M0 & Node_0 & Mmask_0);
         specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky;
           pose proof Node_n as Node_n'; apply IHnode in Node_n; specialize (Node_n n);
-            rewrite 2 mask_transparent, <-Mmask'_n in Node_n; auto.
+            rewrite 2 mask_transparent in Node_n; auto.
       + destruct (rs n) eqn: Hrst.
         *{ assert (Env.find x (Env.add x (Mx 0) (Is n)) = Some (Mx 0))
              by apply Env.gss.
@@ -493,10 +476,12 @@ Module Type CORRECTNESS
                  - eapply count_positive in Spec; eauto; omega.
                }
                eapply same_initial_memory with (2 := Node_n') in Node_0; eauto.
-               rewrite Mmask_0, <-Node_0, <-Eq; auto.
+               unfold next in Node_n; simpl in Node_n.
+               specialize (Mmask_n (S n)).
+               rewrite Mmask_n, Mmask_0, <-Node_0, <-Eq; auto.
                simpl; cases.
          }
-        *{ rewrite <-Mmask_n in Node_n; auto.
+        *{ rewrite <-Mmask_n in Node_n; try rewrite Hrst; auto.
            assert (Env.find x (Env.add x (Mx n) (Is n)) = Some (Mx n))
              by apply Env.gss.
            specialize (Htcs' Mx n).
@@ -507,7 +492,9 @@ Module Type CORRECTNESS
                assert (present c = absent) by sem_det; discriminate.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
-               discriminate.
+               * discriminate.
+               * unfold next; simpl.
+                 rewrite <-Mmask_n; auto. 
            - do 2 (econstructor; eauto using sem_trconstr).
              + change true with (negb false).
                eapply Son_abs2; eauto.
@@ -515,7 +502,9 @@ Module Type CORRECTNESS
                assert (present c = absent) by sem_det; discriminate.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
-               discriminate.
+               * discriminate.
+               * unfold next; simpl.
+                 rewrite <-Mmask_n; auto. 
          }
       + apply transient_states_closed_add; auto.
         *{ apply memory_closed_rec_state_closed; auto.
@@ -523,13 +512,13 @@ Module Type CORRECTNESS
            - rewrite Mmask_0.
              + apply msem_node_memory_closed_rec_n in Node_0; intuition.
              + simpl; cases.
-           - rewrite Mmask_n; auto.
+           - rewrite Mmask_n; try rewrite Hrst; auto.
              apply msem_node_memory_closed_rec_n in Node_n'; intuition.
          }
         * intro Hin; apply SpecInsts in Hin as (? & ?); eapply Notin; eauto.
 
     - do 3 (econstructor; auto).
-      destruct Mfby as (?&?& Spec).
+      destruct Mfby as (?& Spec).
       specialize (Spec n); destruct (find_val x (M n)) eqn: E; try contradiction.
       specialize (Var n); specialize (Arg n).
       pose proof Arg as Arg'.
@@ -561,8 +550,8 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma Nodup_defs_translate_eqns:
-    forall eq eqs G bk H M M',
-      msem_equation G bk H M M' eq ->
+    forall eq eqs G bk H M,
+      msem_equation G bk H M eq ->
       NoDup_defs (eq :: eqs) ->
       translate_eqn_nodup_subs eq (translate_eqns eqs).
   Proof.
@@ -593,19 +582,19 @@ Module Type CORRECTNESS
   Qed.
 
   Corollary equations_correctness:
-    forall G bk H M M' eqs vars,
-      (forall f xss M M' yss,
-          msem_node G f xss M M' yss ->
-          sem_system_n (translate G) f M xss yss M') ->
+    forall G bk H M eqs vars,
+      (forall f xss M yss,
+          msem_node G f xss M yss ->
+          sem_system_n (translate G) f M xss yss (next M)) ->
       Ordered_nodes G ->
       Forall (NL.Clo.wc_equation G vars) eqs ->
       Forall (clock_match bk H) vars ->
       NoDup_defs eqs ->
-      Forall (msem_equation G bk H M M') eqs ->
-      exists Is, sem_trconstrs_n (translate G) bk H M Is M' (translate_eqns eqs)
+      Forall (msem_equation G bk H M) eqs ->
+      exists Is, sem_trconstrs_n (translate G) bk H M Is (next M) (translate_eqns eqs)
             /\ forall n, transient_states_closed (translate G) (gather_insts eqs) (Is n).
   Proof.
-    intros ? ? ? ? ? ? ? ? ? WC ?? Heqs.
+    intros ???????? WC ?? Heqs.
     unfold translate_eqns.
     induction eqs as [|eq eqs IHeqs]; simpl; inv WC.
     - exists (fun n => Env.empty state); split; constructor.
@@ -640,18 +629,18 @@ Module Type CORRECTNESS
   Qed.
 
   Theorem correctness:
-    forall G f xss M M' yss,
+    forall G f xss M yss,
       Ordered_nodes G ->
       wc_global G ->
-      msem_node G f xss M M' yss ->
-      sem_system_n (translate G) f M xss yss M'.
+      msem_node G f xss M yss ->
+      sem_system_n (translate G) f M xss yss (next M).
   Proof.
     induction G as [|node ? IH].
     inversion 3;
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros * Hord WC Hsem n.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [???????? Clock Hfind Ins Outs ? Heqs Closed Closed'].
+    inversion_clear Hsem' as [??????? Clock Hfind Ins Outs ? Heqs Closed].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
@@ -665,7 +654,7 @@ Module Type CORRECTNESS
       apply find_node_translate in Hfind' as (?&?&?&?); subst.
       eapply msem_equations_cons in Heqs; eauto.
       pose proof (NoDup_defs_node node).
-      apply msem_node_memory_closed_rec_n in Hsem as (? & ?); auto.
+      apply msem_node_memory_closed_rec_n in Hsem; auto.
       eapply equations_correctness in Heqs as (I & Heqs &?); eauto.
       + econstructor; eauto.
         * apply sem_trconstrs_cons; eauto.
@@ -674,6 +663,7 @@ Module Type CORRECTNESS
         * eapply transient_states_closed_find_system_other, transient_states_closed_cons; eauto.
           simpl; rewrite gather_eqs_snd_spec; auto.
         * apply memory_closed_rec_state_closed; auto.
+          unfold next; simpl; auto.
       + rewrite idck_app, Forall_app; split.
         * eapply sem_clocked_vars_clock_match; eauto.
           rewrite map_fst_idck; eauto.
@@ -691,24 +681,24 @@ Module Type CORRECTNESS
   Qed.
 
   Corollary correctness_loop:
-    forall G f xss M M' yss,
+    forall G f xss M yss,
       Ordered_nodes G ->
       wc_global G ->
-      msem_node G f xss M M' yss ->
+      msem_node G f xss M yss ->
       loop (translate G) f xss yss (M 0) 0.
   Proof.
     intros; apply loop_coind with (R := fun P b xss yss S n =>
                                           P = translate G
                                           /\ S ≋ M n
-                                          /\ msem_node G b xss M M' yss);
+                                          /\ msem_node G b xss M yss);
     try now intuition.
     intros * (?& E & Sem); subst; split.
     - intro; subst; rewrite E.
       eapply msem_node_initial_state; eauto.
     - pose proof Sem; apply correctness in Sem; auto.
-      exists (M' n); intuition eauto.
+      exists (next M n); intuition eauto.
       + rewrite E; auto.
-      + rewrite msem_node_relooper; eauto; reflexivity.
+      + unfold next; simpl; reflexivity.
   Qed.
 
 End CORRECTNESS.
