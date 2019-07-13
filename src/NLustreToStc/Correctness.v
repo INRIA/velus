@@ -23,11 +23,12 @@ Module Type CORRECTNESS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
+       (Import Strs  : STREAMS         Op OpAux)
        (Import Str   : STREAM          Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux Str)
-       (Import NL    : NLUSTRE     Ids Op OpAux Str CE)
-       (Import Stc   : STC         Ids Op OpAux Str CE)
-       (Import Trans : TRANSLATION Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem).
+       (Import CE    : COREEXPR    Ids Op OpAux      Str)
+       (Import NL    : NLUSTRE     Ids Op OpAux Strs Str CE)
+       (Import Stc   : STC         Ids Op OpAux      Str CE)
+       (Import Trans : TRANSLATION Ids Op                CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma In_snd_gather_eqs_Is_node_in:
     forall eqs i f,
@@ -36,7 +37,7 @@ Module Type CORRECTNESS
   Proof.
     unfold gather_eqs.
     intro.
-    generalize (@nil (ident * (const * clock))).
+    generalize (@nil (ident * (Op.const * clock))).
     induction eqs as [|[]]; simpl; try contradiction; intros * Hin; auto.
     - right; eapply IHeqs; eauto.
     - destruct i.
@@ -100,7 +101,7 @@ Module Type CORRECTNESS
         /\ sub_inst_n x M Mx.
   Proof.
     unfold gather_eqs.
-    intro; generalize (@nil (ident * (const * clock))).
+    intro; generalize (@nil (ident * (Op.const * clock))).
     induction eqs as [|[]]; simpl; intros ??????? Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
       try inversion_clear Heq as [|??????????? Hd|
@@ -460,7 +461,7 @@ Module Type CORRECTNESS
            specialize (Htcs' (fun n => Mx 0) n).
            destruct (ys n) eqn: E'; try discriminate.
            do 2 (econstructor; eauto using sem_trconstr).
-           - eapply Son; eauto.
+           - eapply Sem.Son; eauto.
              destruct Cky as [[]|((?&?)&?)]; auto.
              assert (present c = absent) by sem_det; discriminate.
            - simpl; rewrite Mmask_0.
@@ -487,7 +488,7 @@ Module Type CORRECTNESS
            specialize (Htcs' Mx n).
            destruct (ys n) eqn: E'.
            - do 2 (econstructor; eauto using sem_trconstr).
-             + apply Son_abs1; auto.
+             + apply Sem.Son_abs1; auto.
                destruct Cky as [[]|((c &?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
              + simpl; apply orel_eq_weaken; auto.
@@ -497,7 +498,7 @@ Module Type CORRECTNESS
                  rewrite <-Mmask_n; auto. 
            - do 2 (econstructor; eauto using sem_trconstr).
              + change true with (negb false).
-               eapply Son_abs2; eauto.
+               eapply Sem.Son_abs2; eauto.
                destruct Cky as [[]|((?&?)&?)]; auto.
                assert (present c = absent) by sem_det; discriminate.
              + simpl; apply orel_eq_weaken; auto.
@@ -707,11 +708,12 @@ Module CorrectnessFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
+       (Strs  : STREAMS         Op OpAux)
        (Str   : STREAM          Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux Str)
-       (NL    : NLUSTRE     Ids Op OpAux Str CE)
-       (Stc   : STC         Ids Op OpAux Str CE)
-       (Trans : TRANSLATION Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem)
-<: CORRECTNESS Ids Op OpAux Str CE NL Stc Trans.
-  Include CORRECTNESS Ids Op OpAux Str CE NL Stc Trans.
+       (CE    : COREEXPR    Ids Op OpAux      Str)
+       (NL    : NLUSTRE     Ids Op OpAux Strs Str CE)
+       (Stc   : STC         Ids Op OpAux      Str CE)
+       (Trans : TRANSLATION Ids Op                CE.Syn NL.Syn Stc.Syn NL.Mem)
+<: CORRECTNESS Ids Op OpAux Strs Str CE NL Stc Trans.
+  Include CORRECTNESS Ids Op OpAux Strs Str CE NL Stc Trans.
 End CorrectnessFun.

@@ -24,7 +24,7 @@ From Velus Require Import NLustre.NLSemanticsCoInd.
 
 From Coq Require Import Setoid.
 
-Module Type COINDTOINDEXED
+Module Type NLCOINDTOINDEXED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
        (Import OpAux   : OPERATORS_AUX        Op)
@@ -52,17 +52,9 @@ Module Type COINDTOINDEXED
     Definition tr_Stream {A} (xs: Stream A) : stream A :=
       fun n => xs # n.
 
-    (** Translate a list of Streams into a stream of list.
-        - if the input list is void, the result is the constantly void stream
-        - else, the result is the function associating to each [n] the list
-          built by the translated stream of the head of the input list indexed
-          at [n] consed to the result of the recursive call, also indexed at [n].
-     *)
-    Fixpoint tr_Streams {A} (xss: list (Stream A)) : stream (list A) :=
-      match xss with
-      | []        => fun n => []
-      | xs :: xss => fun n => tr_Stream xs n :: tr_Streams xss n
-      end.
+    (** Translate a list of Streams into a stream of list. *)
+    Definition tr_Streams {A} (xss: list (Stream A)) : stream (list A) :=
+      fun n => List.map (fun xs => tr_Stream xs n) xss.
 
     (** Translate an history from coinductive to indexed world.
         Every element of the history is translated.
@@ -116,27 +108,22 @@ Module Type COINDTOINDEXED
       forall A (xss yss: list (Stream A)) n,
         tr_Streams (xss ++ yss) n = tr_Streams xss n ++ tr_Streams yss n.
     Proof.
-      intros; induction xss; simpl; auto.
-      f_equal; auto.
+      unfold tr_Streams; intros; rewrite map_app; auto.
     Qed.
 
     (** The counterpart of [tr_Stream_tl] for lists of Streams. *)
     Lemma tr_Streams_tl:
-      forall xss n,
-        tr_Streams (List.map (tl (A:=value)) xss) n = tr_Streams xss (S n).
+      forall A (xss: list (Stream A)) n,
+        tr_Streams (List.map (tl (A:=A)) xss) n = tr_Streams xss (S n).
     Proof.
-      intros; induction xss; simpl; auto.
-      f_equal; auto.
+      intros; unfold tr_Streams; rewrite map_map; auto.
     Qed.
 
     Lemma tr_Streams_hd:
-      forall xss,
-        tr_Streams xss 0 = List.map (hd (A:=value)) xss.
+      forall A (xss: list (Stream A)),
+        tr_Streams xss 0 = List.map (hd (A:=A)) xss.
     Proof.
-      intros; induction xss; simpl; auto.
-      destruct a; simpl.
-      rewrite tr_Stream_0.
-      f_equal; auto.
+      reflexivity. 
     Qed.
 
     (** The counterpart of [tr_Stream_tl] for histories. *)
@@ -566,7 +553,7 @@ Module Type COINDTOINDEXED
       induction xss as [|xs];
         simpl; intros * n; unfold Str.mask in *.
       - destruct (k =? Str.count (tr_Stream r) n); auto.
-      - unfold tr_Stream at 1; rewrite mask_nth.
+      - simpl; unfold tr_Stream at 1; rewrite mask_nth.
         rewrite IHxss; simpl.
         rewrite <-count_impl, Nat.eqb_sym.
         unfold tr_Stream; cases.
@@ -694,4 +681,20 @@ Module Type COINDTOINDEXED
 
   End Global.
 
-End COINDTOINDEXED.
+End NLCOINDTOINDEXED.
+
+Module NLCoindToIndexedFun
+       (Ids     : IDS)
+       (Op      : OPERATORS)
+       (OpAux   : OPERATORS_AUX        Op)
+       (CESyn   : CESYNTAX             Op)
+       (Syn     : NLSYNTAX         Ids Op       CESyn)
+       (Str     : STREAM               Op OpAux)
+       (Strs    : STREAMS              Op OpAux)
+       (Ord     : NLORDERED        Ids Op       CESyn Syn)
+       (CESem   : CESEMANTICS      Ids Op OpAux CESyn     Str)
+       (Indexed : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
+       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs)
+<: NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed CoInd.
+  Include NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed CoInd.
+End NLCoindToIndexedFun.

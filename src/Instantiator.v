@@ -17,7 +17,7 @@ From Velus Require Import Lustre.
 From Velus Require Import NLustre.
 
 Module L := LustreFun Ids Op OpAux Strs.
-Module NL := NLustreFun Ids Op OpAux Str CE.
+Module NL := NLustreFun Ids Op OpAux Strs Str CE.
 
 From Velus Require Import LustreToNLustre.
 
@@ -34,11 +34,11 @@ From Velus Require Import NLustreToStc.NL2StcTyping.
 From Velus Require Import NLustreToStc.NL2StcClocking.
 From Velus Require Import NLustreToStc.NL2StcNormalArgs.
 
-Module NL2Stc           := TranslationFun     Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem.
-Module NL2StcCorr       := CorrectnessFun     Ids Op OpAux Str CE NL Stc NL2Stc.
-Module NL2StcTyping     := NL2StcTypingFun     Ids Op OpAux Str CE NL Stc NL2Stc.
-Module NL2StcClocking   := NL2StcClockingFun   Ids Op OpAux Str CE NL Stc NL2Stc.
-Module NL2StcNormalArgs := NL2StcNormalArgsFun Ids Op OpAux Str CE NL Stc NL2Stc.
+Module NL2Stc           := TranslationFun      Ids Op           CE.Syn NL.Syn Stc.Syn NL.Mem.
+Module NL2StcCorr       := CorrectnessFun      Ids Op OpAux Strs Str CE NL Stc NL2Stc.
+Module NL2StcTyping     := NL2StcTypingFun     Ids Op OpAux Strs Str CE NL Stc NL2Stc.
+Module NL2StcClocking   := NL2StcClockingFun   Ids Op OpAux Strs Str CE NL Stc NL2Stc.
+Module NL2StcNormalArgs := NL2StcNormalArgsFun Ids Op OpAux Strs Str CE NL Stc NL2Stc.
 
 From Velus Require Import Obc.
 

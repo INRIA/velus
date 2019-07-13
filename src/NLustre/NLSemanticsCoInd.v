@@ -26,14 +26,12 @@ From Velus Require Import Streams.
  *)
 
 Module Type NLSEMANTICSCOIND
-       (Import Ids     : IDS)
-       (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX Op)
-       (Import CESyn   : CESYNTAX      Op)
-       (Import Syn     : NLSYNTAX  Ids Op       CESyn)
-       (Import Str     : STREAMS       Op OpAux).
-
-  Definition idents := List.map (@fst ident (type * clock)).
+       (Import Ids   : IDS)
+       (Import Op    : OPERATORS)
+       (Import OpAux : OPERATORS_AUX Op)
+       (Import CESyn : CESYNTAX      Op)
+       (Import Syn   : NLSYNTAX  Ids Op       CESyn)
+       (Import Str   : STREAMS       Op OpAux).
 
   Definition History := Env.t (Stream value).
 
@@ -208,8 +206,8 @@ Module Type NLSEMANTICSCOIND
       SNode:
         forall H f n xss oss,
           find_node f G = Some n ->
-          Forall2 (sem_var H) (idents n.(n_in)) xss ->
-          Forall2 (sem_var H) (idents n.(n_out)) oss ->
+          Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
+          Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
           sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
           Forall (sem_equation H (clocks_of xss)) n.(n_eqs) ->
           sem_node f xss oss.
@@ -259,8 +257,8 @@ Module Type NLSEMANTICSCOIND
     Hypothesis NodeCase:
       forall H f n xss oss,
         find_node f G = Some n ->
-        Forall2 (sem_var H) (idents n.(n_in)) xss ->
-        Forall2 (sem_var H) (idents n.(n_out)) oss ->
+        Forall2 (sem_var H) (List.map fst n.(n_in)) xss ->
+        Forall2 (sem_var H) (List.map fst n.(n_out)) oss ->
         sem_clocked_vars H (clocks_of xss) (idck n.(n_in)) ->
         Forall (sem_equation G H (clocks_of xss)) n.(n_eqs) ->
         Forall (P_equation H (clocks_of xss)) n.(n_eqs) ->
@@ -586,13 +584,14 @@ Module Type NLSEMANTICSCOIND
 
 End NLSEMANTICSCOIND.
 
-(* Module NLSemanticsCoIndRecFun *)
-(*        (Ids   : IDS) *)
-(*        (Op    : OPERATORS) *)
-(*        (OpAux : OPERATORS_AUX Op) *)
-(*        (Clks  : CLOCKS    Ids) *)
-(*        (Syn   : NLSYNTAX  Ids Op) *)
-(*        (Ord   : ORDERED   Ids Op Syn) *)
-(*        <: NLSEMANTICSCOINDREC Ids Op OpAux Syn Ord. *)
-(*   Include NLSEMANTICSCOINDREC Ids Op OpAux Syn Ord. *)
-(* End NLSemanticsCoIndRecFun. *)
+Module NLSemanticsCoindFun
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (CESyn : CESYNTAX      Op)
+       (Syn   : NLSYNTAX  Ids Op       CESyn)
+       (Str   : STREAMS       Op OpAux)
+<: NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str.
+  Include NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str.
+End NLSemanticsCoindFun.
+

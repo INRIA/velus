@@ -1,5 +1,6 @@
 From Velus Require Import Common.
 From Velus Require Import Ident.
+From Velus Require Import Streams.
 From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
@@ -23,6 +24,7 @@ Import Obc.Def.
 Import Fusion.
 Import Stc2ObcInvariants.
 Import Str.
+Import Strs.
 Import OpAux.
 Import Interface.Op.
 From Velus Require Import ObcToClight.Correctness.
@@ -34,6 +36,7 @@ Import List.ListNotations.
 From Coq Require Import Omega.
 
 Open Scope error_monad_scope.
+Open Scope stream_scope.
 
 Parameter schedule      : ident -> list trconstr -> list positive.
 Parameter print_nlustre : global -> unit.
@@ -116,22 +119,73 @@ Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.
                     @@@ (fun G => L2NL.to_global (proj1_sig G))
                     @@@ nl_to_asm main_node.
 
+(* Section WtStream. *)
+
+(*   Variable G: global. *)
+(*   Variable main: ident. *)
+(*   Variable ins: stream (list val). *)
+(*   Variable outs: stream (list val). *)
+
+(*   Definition wt_ins := *)
+(*     forall n node, *)
+(*       find_node main G = Some node -> *)
+(*       wt_vals (ins n) (idty node.(n_in)). *)
+
+(*   Definition wt_outs := *)
+(*     forall n node, *)
+(*       find_node main G = Some node -> *)
+(*       wt_vals (outs n) (idty node.(n_out)). *)
+
+(* End WtStream. *)
+
+Section ForallStr.
+  Context {A: Type}.
+  Variable P: A -> Prop.
+  CoInductive Forall_Str: Stream A -> Prop :=
+  Always:
+    forall x xs,
+      P x ->
+      Forall_Str xs ->
+      Forall_Str (x ::: xs).
+End ForallStr.
+
+Definition wt_streams: list (Stream val) -> list (ident * type) -> Prop :=
+  Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s).
+
+Lemma wt_streams_spec:
+  forall vss xts,
+    wt_streams vss xts ->
+    forall n, wt_vals (tr_Streams vss n) xts.
+Proof.
+  unfold wt_vals.
+  intros * WTs n; revert dependent vss; induction n; intros.
+  - rewrite tr_Streams_hd.
+    induction WTs as [|???? WT]; simpl; auto.
+    constructor; auto.
+    inv WT; auto.
+  - rewrite <-tr_Streams_tl.
+    apply IHn.
+    clear - WTs; induction WTs as [|???? WT]; simpl;
+      constructor; auto.
+    inv WT; auto.
+Qed.
+
 Section WtStream.
 
   Variable G: global.
   Variable main: ident.
-  Variable ins: stream (list val).
-  Variable outs: stream (list val).
+  Variable ins: list (Stream val).
+  Variable outs: list (Stream val).
 
   Definition wt_ins :=
-    forall n node,
+    forall node,
       find_node main G = Some node ->
-      wt_vals (ins n) (idty node.(n_in)).
+      Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s) ins (idty node.(n_in)).
 
   Definition wt_outs :=
-    forall n node,
+    forall node,
       find_node main G = Some node ->
-      wt_vals (outs n) (idty node.(n_out)).
+      Forall2 (fun s xt => Forall_Str (fun v => wt_val v (snd xt)) s) outs (idty node.(n_out)).
 
 End WtStream.
 
@@ -139,10 +193,10 @@ Section Bisim.
 
   Variable G: global.
   Variable main: ident.
-  Variable ins: stream (list val).
-  Variable outs: stream (list val).
+  Variable ins: list (Stream val).
+  Variable outs: list (Stream val).
 
-  Inductive eventval_match: eventval -> AST.typ -> Values.val -> Prop :=
+  Inductive eventval_match: eventval -> AST.typ -> val -> Prop :=
   | ev_match_int: forall i,
       eventval_match (EVint i) AST.Tint (Values.Vint i)
   | ev_match_long: forall i,
@@ -152,8 +206,8 @@ Section Bisim.
   | ev_match_single: forall f,
       eventval_match (EVsingle f) AST.Tsingle (Values.Vsingle f).
 
+  (** All well-typed, dataflow values can be turned into event values. *)
   Lemma eventval_match_of_val:
-    (** All well-typed, dataflow values can be turned into event values. *)
     forall v t,
       wt_val v t ->
       eventval_match (eventval_of_val v)
@@ -165,65 +219,63 @@ Section Bisim.
     destruct sz; destruct sg; try constructor.
   Qed.
 
+  (** [eventval_match] is a stripped-down version of CompCert's [Events.eventval_match] *)
   Remark eventval_match_compat:
-    (** [eventval_match] is a stripped-down version of CompCert's [Events.eventval_match] *)
     forall ge ev t v,
       eventval_match ev t v -> Events.eventval_match ge ev t v.
   Proof. inversion 1; constructor. Qed.
 
-
-  Inductive mask (f: eventval -> ident * type -> event):
-    list Values.val -> list (ident * type) -> trace -> Prop :=
-  | MaskNil:
-      mask f [] [] []
-  | MaskCons:
+  Inductive match_trace (f: eventval -> ident * type -> event):
+    list val -> list (ident * type) -> trace -> Prop :=
+  | MTNil:
+      match_trace f [] [] []
+  | MTCons:
       forall v vs x t xts ev evtval T,
         eventval_match evtval (AST.type_of_chunk (type_chunk t)) v ->
         f evtval (x, t) = ev ->
-        mask f vs xts T ->
-        mask f (v :: vs) ((x, t) :: xts) (ev :: T).
+        match_trace f vs xts T ->
+        match_trace f (v :: vs) ((x, t) :: xts) (ev :: T).
 
-  Definition mask_load :=
-    (** Match a list of events loading values from the suitable, global
-  volatile variables *)
-    mask (fun ev xt => Event_vload (type_chunk (snd xt))
-                                (glob_id (fst xt))
-                                Ptrofs.zero ev).
+  (** Match a list of events loading values from the suitable, global
+      volatile variables *)
+  Definition match_trace_load: list val -> list (ident * type) -> trace -> Prop :=
+    match_trace (fun ev xt => Event_vload (type_chunk (snd xt))
+                                       (glob_id (fst xt))
+                                       Ptrofs.zero ev).
 
-  Definition mask_store :=
-    (** Match a list of events storing values to the suitable, global
-  volatile variables *)
-    mask (fun ev xt => Event_vstore (type_chunk (snd xt))
+  (** Match a list of events storing values to the suitable, global
+      volatile variables *)
+  Definition match_trace_store: list val -> list (ident * type) -> trace -> Prop :=
+    match_trace (fun ev xt => Event_vstore (type_chunk (snd xt))
                                  (glob_id (fst xt))
                                  Ptrofs.zero ev).
 
+  (** The trace generated by [mk_event] is characterized by [mask] *)
   Lemma mk_event_spec:
-    (** The trace generated by [mk_event] is characterized by [mask] *)
     forall (f: eventval -> ident * type -> event) vs xts,
       wt_vals vs xts ->
-      mask f vs xts (mk_event (fun v => f (eventval_of_val v)) vs xts).
+      match_trace f vs xts (mk_event (fun v => f (eventval_of_val v)) vs xts).
   Proof.
     intros * Hwt. generalize dependent xts.
     induction vs as [|v vs IHvs];
       intros xts Hwt; destruct xts as [|[x t] xts];
         inv Hwt; try constructor.
     rewrite Traces.mk_event_cons.
-    apply MaskCons with (evtval := eventval_of_val v);
+    apply MTCons with (evtval := eventval_of_val v);
       eauto using eventval_match_of_val.
   Qed.
 
 
   (** The trace of events induced by the execution of the Clight program
-corresponds to an infinite stream that alternates between loads and
-stores of the values passed and, respectively, retrieved from the
-dataflow node at each instant. *)
-
+      corresponds to an infinite stream that alternates between loads and
+      stores of the values passed and, respectively, retrieved from the
+      dataflow node at each instant. *)
   CoInductive bisim_io': nat -> traceinf -> Prop :=
     Step:
-      forall n node t t' T,
+      forall node n t t' T,
         find_node main G = Some node ->
-        mask_load (ins n) (idty node.(n_in)) t ->
-        mask_store (outs n) (idty node.(n_out)) t' ->
+        match_trace_load (map (Str_nth n) ins) (idty node.(n_in)) t ->
+        match_trace_store (map (Str_nth n) outs) (idty node.(n_out)) t' ->
         bisim_io' (S n) T ->
         bisim_io' n (t *** t' *** T).
 
@@ -258,14 +310,15 @@ Lemma find_node_trace_spec:
   forall G f node ins outs m
     (Step_in_spec : m_in m <> [])
     (Step_out_spec : m_out m <> [])
-    (Hwt_in : forall n, wt_vals (ins n) (m_in m))
-    (Hwt_out : forall n, wt_vals (outs n) (m_out m)),
+    (Hwt_in : forall n, wt_vals (tr_Streams ins n) (m_in m))
+    (Hwt_out : forall n, wt_vals (tr_Streams outs n) (m_out m)),
     find_node f G = Some node ->
     m_in m = idty (n_in node) ->
     m_out m = idty (n_out node) ->
     bisim_io G f ins outs
              (traceinf_of_traceinf'
-                (transl_trace m Step_in_spec Step_out_spec ins outs Hwt_in Hwt_out 0)).
+                (transl_trace m Step_in_spec Step_out_spec
+                              (tr_Streams ins) (tr_Streams outs) Hwt_in Hwt_out 0)).
 Proof.
   intros ??????????? Hstep_in Hstep_out.
   unfold bisim_io.
@@ -283,6 +336,18 @@ Qed.
 
 Definition pstr (xss: stream (list val)) : stream (list value) :=
   fun n => map present (xss n).
+Definition pStr: list (Stream val) -> list (Stream value) := map (Streams.map present).
+
+Lemma tr_Streams_pStr:
+  forall xss,
+    tr_Streams (pStr xss) ≈ pstr (tr_Streams xss).
+Proof.
+  intros ? n; unfold pstr, pStr.
+  revert xss; induction n; intros.
+  - rewrite 2 tr_Streams_hd, 2 map_map; induction xss; simpl; auto.
+  - rewrite <-2 tr_Streams_tl.
+    rewrite <-IHn, 2 map_map; auto.
+Qed.
 
 Lemma value_to_option_pstr:
   forall xs,
@@ -299,7 +364,7 @@ Lemma behavior_nl_to_cl:
     wt_ins G main ins ->
     wt_outs G main outs ->
     normal_args G ->
-    sem_node G main (pstr ins) (pstr outs) ->
+    CoindSem.sem_node G main (pStr ins) (pStr outs) ->
     nl_to_cl main G = OK P ->
     exists T, program_behaves (semantics2 P) (Reacts T)
          /\ bisim_io G main ins outs T.
@@ -323,7 +388,11 @@ Proof.
   apply Scheduler.scheduler_find_system in Find.
   apply Stc2Obc.find_system_translate in Find as (c_main &?& Find &?&?); subst.
   assert (Ordered_nodes G) by (eapply wt_global_Ordered_nodes; eauto).
-  assert (forall n, 0 < length (ins n)) as Length.
+  apply implies in Hsem.
+  rewrite 2 tr_Streams_pStr in Hsem.
+  set (ins' := tr_Streams ins) in *;
+    set (outs' := tr_Streams outs) in *. 
+  assert (forall n, 0 < length (ins' n)) as Length.
   { inversion_clear Hsem as [???????? Ins].
     intro k; specialize (Ins k); apply Forall2_length in Ins.
     unfold pstr in Ins; rewrite 2 map_length in Ins.
@@ -337,13 +406,13 @@ Proof.
     - apply Scheduler.scheduler_normal_args, NL2StcNormalArgs.translate_normal_args; auto.
   }
   apply NL2StcCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
-  assert (forall n, Forall2 Stc2ObcCorr.eq_if_present (pstr ins n) (map Some (ins n)))
-    by (unfold pstr; intros; clear; induction (ins n); constructor; simpl; auto).
-  assert (forall n, Exists (fun v => v <> absent) (pstr ins n))
+  assert (forall n, Forall2 Stc2ObcCorr.eq_if_present (pstr ins' n) (map Some (ins' n)))
+    by (unfold pstr; intros; clear; induction (ins' n); constructor; simpl; auto).
+  assert (forall n, Exists (fun v => v <> absent) (pstr ins' n))
          by (unfold pstr; intros; specialize (Length n);
-             destruct (ins n); simpl in *; try omega;
+             destruct (ins' n); simpl in *; try omega;
              constructor; discriminate).
-  apply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins n))
+  apply Stc2ObcCorr.correctness_loop_call with (ins := fun n => map Some (ins' n))
     in Hsem as (me0 & Rst & Hsem &?); auto.
   setoid_rewrite value_to_option_pstr in Hsem.
   set (tr_G := NL2Stc.translate G) in *;
@@ -374,10 +443,12 @@ Proof.
     pose proof (n_outgt0 main_node) as Hout.
     intro E; rewrite <-length_idty, E in Hout; simpl in Hout; omega.
   }
-  assert (forall n, wt_vals (ins n) (m_in m_step)) as Hwt_in
-      by (erewrite Stc2Obc.find_method_stepm_in; eauto; simpl; eauto).
-  assert (forall n, wt_vals (outs n) (m_out m_step)) as Hwt_out
-      by (erewrite Stc2Obc.find_method_stepm_out; eauto; simpl; eauto).
+  assert (forall n, wt_vals (ins' n) (m_in m_step)) as Hwt_in
+      by (erewrite Stc2Obc.find_method_stepm_in; eauto;
+          apply wt_streams_spec, Hwti; auto).
+  assert (forall n, wt_vals (outs' n) (m_out m_step)) as Hwt_out
+      by (erewrite Stc2Obc.find_method_stepm_out; eauto;
+          apply wt_streams_spec, Hwto; auto).
   pose proof (find_method_name _ _ _ Find_step) as Eq';
     pose proof (find_method_name _ _ _ Find_reset) as Eq'';
     rewrite <-Eq'' in Rst.
@@ -448,7 +519,7 @@ Lemma behavior_nl_to_asm:
     wt_ins G main ins ->
     wt_outs G main outs ->
     normal_args G ->
-    sem_node G main (pstr ins) (pstr outs) ->
+    CoindSem.sem_node G main (pStr ins) (pStr outs) ->
     nl_to_asm main G = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_io G main ins outs T.

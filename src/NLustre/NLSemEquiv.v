@@ -23,8 +23,8 @@ From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
 From Velus Require Import NLustre.NLSemantics.
 From Velus Require Import NLustre.NLSemanticsCoInd.
-From Velus Require Import NLustre.IndexedToCoInd.
-From Velus Require Import NLustre.CoIndToIndexed.
+From Velus Require Import NLustre.NLIndexedToCoInd.
+From Velus Require Import NLustre.NLCoIndToIndexed.
 
 (* From Coq Require Import Setoid. *)
 
@@ -41,8 +41,8 @@ Module Type NLSEMEQUIV
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
        (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs)
-       (IdxToCoind    : INDEXEDTOCOIND   Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed Interp CoInd)
-       (CoindToIdx    : COINDTOINDEXED   Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed        CoInd).
+       (IdxToCoind    : NLINDEXEDTOCOIND Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed Interp CoInd)
+       (CoindToIdx    : NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed        CoInd).
 
   (* Lemma inverse_1: *)
   (*   forall A (s: Stream A), *)

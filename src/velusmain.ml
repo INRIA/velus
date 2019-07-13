@@ -90,7 +90,7 @@ let compile source_name filename =
   if !write_nlustre
     then Veluslib.nlustre_destination := Some (filename ^ ".n.lus");
     if !write_stc
-    then Veluslib.stc_destination := Some (filename ^ ".syb");
+    then Veluslib.stc_destination := Some (filename ^ ".stc");
   if !write_obc
     then Veluslib.obc_destination := Some (filename ^ ".obc");
   if !write_sync
@@ -141,7 +141,7 @@ let speclist = [
                                " Save the parsed Lustre in <source>.parsed.lus";
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <source>.n.lus";
-  "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.syb";
+  "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";
   "-dobc", Arg.Set write_obc, " Save generated Obc in <source>.obc";
   "-dclight", Arg.Set write_cl, " Save generated Clight in <source>.light.c";
   "-dcminor", Arg.Set write_cm, " Save generated Cminor in <source>.minor.c";

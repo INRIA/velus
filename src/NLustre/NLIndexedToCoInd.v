@@ -26,7 +26,7 @@ From Velus Require Import NLustre.NLSemanticsCoInd.
 
 From Coq Require Import Setoid.
 
-Module Type INDEXEDTOCOIND
+Module Type NLINDEXEDTOCOIND
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX        Op)
@@ -1145,4 +1145,4 @@ Module Type INDEXEDTOCOIND
 
   End Global.
 
-End INDEXEDTOCOIND.
+End NLINDEXEDTOCOIND.

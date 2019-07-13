@@ -473,7 +473,7 @@ enough: it does not support the internal fixpoint introduced by
     apply Forall_cons2 in Hsem.
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
-    destruct Hsem as [| |???????????????????????? Hsem|]; eauto.
+    destruct Hsem; eauto.
     apply not_Is_defined_in_eq_EqFby in Hnd.
     eapply SEqFby; eauto.
   Qed.

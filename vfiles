@@ -35,8 +35,8 @@ src/CoreExpr/CoreExpr.v
 src/NLustre/NLSemanticsCoInd.v
 src/NLustre/NLClocking.v
 src/NLustre/NLNormalArgs.v
-src/NLustre/CoIndToIndexed.v
-src/NLustre/IndexedToCoInd.v
+src/NLustre/NLCoIndToIndexed.v
+src/NLustre/NLIndexedToCoInd.v
 src/NLustre/NLSemEquiv.v
 src/NLustre/IsFree.v
 src/NLustre/NLOrdered.v
