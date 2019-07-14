@@ -14,8 +14,6 @@ Module Type CESYNTAX (Import Op: OPERATORS).
   | Eunop  : unop -> exp -> type -> exp
   | Ebinop : binop -> exp -> exp -> type -> exp.
 
-  Definition exps := list exp.
-
   (** ** Control expressions *)
 
   Inductive cexp : Type :=
@@ -33,13 +31,13 @@ Module Type CESYNTAX (Import Op: OPERATORS).
     end.
 
   (** Predicate used in [normal_args] in NLustre and Stc. *)
-  Fixpoint noops_exp (ck: clock) (le : exp) : Prop :=
+  Fixpoint noops_exp (ck: clock) (e : exp) : Prop :=
     match ck with
     | Cbase => True
     | Con ck' _ _ =>
-      match le with
+      match e with
       | Econst _ | Evar _ _ => True
-      | Ewhen le' _ _ => noops_exp ck' le'
+      | Ewhen e' _ _ => noops_exp ck' e'
       | _ => False
       end
     end.

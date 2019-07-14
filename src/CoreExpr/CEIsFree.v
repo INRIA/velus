@@ -38,7 +38,7 @@ Module Type CEISFREE
       Is_free_in_clock x ck ->
       Is_free_in_aexp x ck e.
 
-  Inductive Is_free_in_aexps : ident -> clock -> exps -> Prop :=
+  Inductive Is_free_in_aexps : ident -> clock -> list exp -> Prop :=
   | freeAexps1: forall ck les x,
       Exists (Is_free_in_exp x) les ->
       Is_free_in_aexps x ck les
@@ -151,8 +151,8 @@ Module Type CEISFREE
   Definition free_in_aexp (ck: clock)(le : exp) (fvs : PS.t) : PS.t :=
     free_in_exp le (free_in_clock ck fvs).
 
-  Definition free_in_aexps (ck: clock)(les : exps) (fvs : PS.t) : PS.t :=
-    fold_left (fun fvs e => free_in_exp e fvs) les (free_in_clock ck fvs).
+  Definition free_in_aexps (ck: clock) (es : list exp) (fvs : PS.t) : PS.t :=
+    fold_left (fun fvs e => free_in_exp e fvs) es (free_in_clock ck fvs).
 
   Fixpoint free_in_cexp (ce: cexp) (fvs: PS.t) : PS.t :=
     match ce with

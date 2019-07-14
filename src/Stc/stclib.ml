@@ -29,13 +29,12 @@ module type SYNTAX =
     type const
     type exp
     type cexp
-    type exps
 
     type trconstr =
     | TcDef   of ident * clock * cexp
     | TcNext  of ident * clock * exp
     | TcReset of ident * clock * ident
-    | TcCall  of ident * idents * clock * bool * ident * exps
+    | TcCall  of ident * idents * clock * bool * ident * exp list
 
     type system = {
       s_name : ident;
@@ -54,9 +53,8 @@ module PrintFun
     (Stc: SYNTAX with type clock = CE.clock
                   and type typ   = CE.typ
                   and type const = CE.const
-                  and type exp  = CE.exp
-                  and type cexp  = CE.cexp
-                  and type exps = CE.exps)
+                  and type exp   = CE.exp
+                  and type cexp  = CE.cexp)
     (PrintOps: PRINT_OPS with type typ   = CE.typ
                           and type const = CE.const
                           and type unop  = CE.unop
@@ -143,8 +141,7 @@ module SchedulerFun
                  and type typ   = CE.typ
                  and type const = CE.const
                  and type exp  = CE.exp
-                 and type cexp  = CE.cexp
-                 and type exps = CE.exps) :
+                 and type cexp  = CE.cexp) :
   sig
     val schedule : ident -> Stc.trconstr list -> BinNums.positive list
   end

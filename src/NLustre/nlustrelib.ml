@@ -27,11 +27,10 @@ module type SYNTAX =
     type const
     type exp
     type cexp
-    type exps
 
     type equation =
     | EqDef of ident * clock * cexp
-    | EqApp of idents * clock * ident * exps * ident option
+    | EqApp of idents * clock * ident * exp list * ident option
     | EqFby of ident * clock * const * exp
 
     type node = {
@@ -49,9 +48,8 @@ module PrintFun
     (NL: SYNTAX with type clock = CE.clock
                  and type typ   = CE.typ
                  and type const = CE.const
-                 and type exp  = CE.exp
-                 and type cexp  = CE.cexp
-                 and type exps = CE.exps)
+                 and type exp   = CE.exp
+                 and type cexp  = CE.cexp)
     (PrintOps: PRINT_OPS with type typ   = CE.typ
                           and type const = CE.const
                           and type unop  = CE.unop

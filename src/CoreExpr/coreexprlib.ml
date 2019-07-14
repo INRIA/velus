@@ -40,8 +40,6 @@ sig
     | Eunop of unop * exp * typ
     | Ebinop of binop * exp * exp * typ
 
-  type exps = exp list
-
   type cexp =
     | Emerge of ident * cexp * cexp
     | Eite of exp * cexp * cexp
@@ -56,7 +54,7 @@ module PrintFun (CE: SYNTAX)
                            and type binop = CE.binop) :
 sig
   val print_ident         : formatter -> ident -> unit
-  val print_exp          : formatter -> CE.exp -> unit
+  val print_exp           : formatter -> CE.exp -> unit
   val print_cexp          : formatter -> CE.cexp -> unit
   val print_fullclocks    : bool ref
   val print_clock         : formatter -> CE.clock -> unit
