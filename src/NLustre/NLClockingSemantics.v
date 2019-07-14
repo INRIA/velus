@@ -283,21 +283,21 @@ Module Type NLCLOCKINGSEMANTICS
      This is a consequence (by induction throughout the node hierarchy) of
      the constraints relating streams to their clocks for each case of
      [sem_equation]. *)
-  Corollary clock_match_node:
-    forall G f xss yss bk H n,
-      Ordered_nodes G ->
-      wc_global G ->
-      sem_node G f xss yss ->
-      find_node f G = Some n ->
-      bk = clock_of xss ->
-      sem_vars H (map fst n.(n_in)) xss ->
-      sem_vars H (map fst n.(n_out)) yss ->
-      Forall (clock_match bk H) (idck n.(n_in)) ->
-      Forall (clock_match bk H) (idck n.(n_out)).
-  Proof.
-    intros ??????? Ord WCG; intros.
-    eapply (proj1 (clock_match_node_eqs_reset G Ord WCG)); eauto.
-  Qed.
+  (* Corollary clock_match_node: *)
+  (*   forall G f xss yss bk H n, *)
+  (*     Ordered_nodes G -> *)
+  (*     wc_global G -> *)
+  (*     sem_node G f xss yss -> *)
+  (*     find_node f G = Some n -> *)
+  (*     bk = clock_of xss -> *)
+  (*     sem_vars H (map fst n.(n_in)) xss -> *)
+  (*     sem_vars H (map fst n.(n_out)) yss -> *)
+  (*     Forall (clock_match bk H) (idck n.(n_in)) -> *)
+  (*     Forall (clock_match bk H) (idck n.(n_out)). *)
+  (* Proof. *)
+  (*   intros ??????? Ord WCG; intros. *)
+  (*   eapply (proj1 (clock_match_node_eqs_reset G Ord WCG)); eauto. *)
+  (* Qed. *)
 
   (* A "version" of [clock_match_node] for "within" a node. *)
   Corollary clock_match_eq:

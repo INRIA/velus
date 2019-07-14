@@ -670,9 +670,10 @@ Module Type CORRECTNESS
           rewrite map_fst_idck; eauto.
         *{ apply Forall_forall; intros (x, ck) ?.
            rewrite idck_app in WCeqs.
-           eapply clock_match_msem_eqs with (eqs := node.(n_eqs)); eauto.
+           eapply clock_match_eqs with (eqs := node.(n_eqs)); eauto.
            - rewrite <-idck_app, NoDupMembers_idck.
              apply n_nodup.
+           - eapply msem_sem_equations; eauto.
            - rewrite map_fst_idck.
              apply n_defd.
          }
