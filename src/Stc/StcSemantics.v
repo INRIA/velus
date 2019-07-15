@@ -30,7 +30,6 @@ Module Type STCSEMANTICS
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
 
   Definition state := memory val.
-  Definition transient_states := Env.t state.
 
   Definition state_closed_lasts (lasts: list ident) (S: state) : Prop :=
     forall x, find_val x S <> None -> In x lasts.
@@ -53,13 +52,6 @@ Module Type STCSEMANTICS
       exists g, In (i, g) subs
            /\ state_closed P g Si.
 
-  Definition transient_states_closed (P: program) (subs: list (ident * ident)) (I: transient_states) : Prop :=
-    Forall (fun '(i, g) =>
-              forall Ii,
-                Env.find i I = Some Ii ->
-                state_closed P g Ii)
-           subs.
-
   Definition reset_lasts (s: system) (S0: state) : Prop :=
     forall x c ck,
       In (x, (c, ck)) s.(s_lasts) ->
@@ -81,7 +73,7 @@ Module Type STCSEMANTICS
 
     Variable P: program.
 
-    Inductive sem_trconstr: bool -> env -> state -> transient_states -> state -> trconstr -> Prop :=
+    Inductive sem_trconstr: bool -> env -> state -> state -> state -> trconstr -> Prop :=
     | STcDef:
         forall base R S I S' x v ck ce,
           sem_caexp_instant base R ck ce v ->
@@ -97,7 +89,7 @@ Module Type STCSEMANTICS
     | STcReset:
         forall base R S I S' ck f i r Ii,
           sem_clock_instant base R ck r ->
-          Env.find i I = Some Ii ->
+          find_inst i I = Some Ii ->
           (if r
            then initial_state P f Ii
            else find_inst i S ⌈≋⌉ Some Ii) ->
@@ -107,7 +99,7 @@ Module Type STCSEMANTICS
           sem_exps_instant base R es xs ->
           sem_clock_instant base R ck (clock_of_instant xs) ->
           (rst = false -> find_inst i S ⌈≋⌉ Some Ii) ->
-          Env.find i I = Some Ii ->
+          find_inst i I = Some Ii ->
           sem_system f Ii xs os Si' ->
           sem_vars_instant R ys os ->
           find_inst i S' = Some Si' ->
@@ -122,7 +114,7 @@ Module Type STCSEMANTICS
                sem_clocked_vars_instant (clock_of_instant xs) R (idck s.(s_in)) ->
                Forall (sem_trconstr (clock_of_instant xs) R S I S') s.(s_tcs) ->
                state_closed P f S ->
-               transient_states_closed P' s.(s_subs) I ->
+               state_closed P f I ->
                state_closed P f S' ->
                sem_system f S xs ys S'.
 
@@ -131,7 +123,7 @@ Module Type STCSEMANTICS
   Section sem_system_mult.
     Variable P: program.
 
-    Variable P_trconstr: bool -> env -> state -> transient_states -> state -> trconstr -> Prop.
+    Variable P_trconstr: bool -> env -> state -> state -> state -> trconstr -> Prop.
     Variable P_system: ident -> state -> list value -> list value -> state -> Prop.
 
     Hypothesis TcDefCase:
@@ -151,7 +143,7 @@ Module Type STCSEMANTICS
     Hypothesis TcResetCase:
       forall base R S I S' ck f i r Ii,
         sem_clock_instant base R ck r ->
-        Env.find i I = Some Ii ->
+        find_inst i I = Some Ii ->
         (if r
          then initial_state P f Ii
          else find_inst i S ⌈≋⌉ Some Ii) ->
@@ -162,7 +154,7 @@ Module Type STCSEMANTICS
         sem_exps_instant base R es xs ->
         sem_clock_instant base R ck (clock_of_instant xs) ->
         (rst = false -> find_inst i S ⌈≋⌉ Some Ii) ->
-        Env.find i I = Some Ii ->
+        find_inst i I = Some Ii ->
         sem_system P f Ii xs os Si' ->
         sem_vars_instant R ys os ->
         find_inst i S' = Some Si' ->
@@ -177,13 +169,13 @@ Module Type STCSEMANTICS
         sem_clocked_vars_instant (clock_of_instant xs) R (idck s.(s_in)) ->
         Forall (sem_trconstr P (clock_of_instant xs) R S I S') s.(s_tcs) ->
         state_closed P f S ->
-        transient_states_closed P' s.(s_subs) I ->
+        state_closed P f I ->
         state_closed P f S' ->
         Forall (P_trconstr (clock_of_instant xs) R S I S') s.(s_tcs) ->
         P_system f S xs ys S'.
 
     Fixpoint sem_trconstr_mult
-             (base: bool) (R: env) (S: state) (I: transient_states) (S': state) (e: trconstr)
+             (base: bool) (R: env) (S: state) (I: state) (S': state) (e: trconstr)
              (Sem: sem_trconstr P base R S I S' e) {struct Sem}
       : P_trconstr base R S I S' e
     with sem_system_mult
@@ -287,24 +279,13 @@ Module Type STCSEMANTICS
       specialize (Insts _ _ Sub') as (b' & ? & ?). eauto.
   Qed.
 
-  Add Parametric Morphism P : (transient_states_closed P)
-      with signature (fun xs xs' => forall x, In x xs <-> In x xs') ==> eq ==> Basics.impl
-        as transient_states_closed_In.
-  Proof.
-    intros * E ? Closed.
-    apply Forall_forall; intros (?&?) Hin ? Find.
-    eapply E, Forall_forall in Hin; eauto.
-    auto.
-  Qed.
-
-  Add Parametric Morphism P : (transient_states_closed P)
+  Add Parametric Morphism P : (state_closed_insts P)
       with signature @Permutation (ident * ident) ==> eq ==> Basics.impl
-        as transient_states_closed_Permutation.
+        as state_closed_insts_Permutation.
   Proof.
-    intros * E ? Closed.
-    apply Forall_forall; intros (?&?) Hin ? Find.
-    rewrite <-E in Hin; eapply Forall_forall in Hin; eauto.
-    auto.
+    intros * E ? Closed ?? Find; apply Closed in Find as (g&?&?).
+    exists g; split; auto.
+    now rewrite <-E.
   Qed.
 
   Add Parametric Morphism P f: (sem_system P f)
@@ -318,7 +299,7 @@ Module Type STCSEMANTICS
                    (P_trconstr := fun base R S1 I1 S1' tc =>
                                     forall S2 S2' I2,
                                       S1 ≋ S2 ->
-                                      Env.Equiv equal_memory I1 I2 ->
+                                      I1 ≋ I2 ->
                                       S1' ≋ S2' ->
                                       sem_trconstr P base R S2 I2 S2' tc);
       eauto using sem_trconstr.
@@ -351,11 +332,11 @@ Module Type STCSEMANTICS
         eapply STcCall; eauto.
         now rewrite <-Eq, <-E.
     - intros ? E ? E'.
-      econstructor; eauto.
+      eapply SSystem with (I := I); eauto.
       + induction (s_tcs s); auto;
           repeat match goal with H: Forall ?P (_ :: _) |- _ => inv H end.
         constructor; auto.
-        assert (Env.Equiv equal_memory I I) by reflexivity;
+        assert (I ≋ I) by reflexivity;
           auto.
       + now rewrite <-E'.
       + now rewrite <-E.
@@ -441,30 +422,30 @@ Module Type STCSEMANTICS
     apply ident_eqb_eq in Eq; congruence.
   Qed.
 
-  Lemma transient_states_closed_find_system_other:
+  Lemma state_closed_insts_find_system_other:
     forall I s P P' f,
       Ordered_systems P ->
       find_system f P = Some (s, P') ->
-      transient_states_closed P s.(s_subs) I ->
-      transient_states_closed P' s.(s_subs) I.
+      state_closed_insts P s.(s_subs) I ->
+      state_closed_insts P' s.(s_subs) I.
   Proof.
-    intros * Ord Find Closed.
-    apply Forall_forall; intros. destruct x.
-    eapply Forall_forall in Closed; eauto; simpl in *.
-    intros; eapply state_closed_find_system_other; eauto.
+    intros * Ord ? Closed.
+    intros ?? Find; apply Closed in Find as (g &?&?).
+    exists g; split; auto.
+    eapply state_closed_find_system_other; eauto.
   Qed.
 
-  Lemma transient_states_closed_cons:
+  Lemma state_closed_insts_cons:
     forall I s P,
       Ordered_systems (s :: P) ->
-      transient_states_closed P s.(s_subs) I ->
-      transient_states_closed (s :: P) s.(s_subs) I.
+      state_closed_insts P s.(s_subs) I ->
+      state_closed_insts (s :: P) s.(s_subs) I.
   Proof.
     intros * Ord Closed; inversion_clear Ord as [|??? Systems].
-    apply Forall_forall. intros. destruct x.
-    eapply Forall_forall in Closed; eauto.
-    eapply Forall_forall in Systems as (?&?); eauto.
-    intros; apply state_closed_other; auto.
+    intros ?? Find; apply Closed in Find as (g &?&?).
+    exists g; split; auto.
+    apply state_closed_other; auto.
+    eapply Forall_forall in Systems as (?&?); eauto; auto.
   Qed.
 
   Lemma sem_system_cons:
@@ -477,7 +458,7 @@ Module Type STCSEMANTICS
     intros * Hord Hsem Hnf.
     revert Hnf.
     induction Hsem as [| | |?????????????????????? IH|
-                       ????????? Hf ???? Closed ? Closed' IH]
+                       ????????? Hf ???? Closed ClosedI Closed' IH]
                         using sem_system_mult
       with (P_trconstr := fun bk H S I S' tc =>
                             ~Is_system_in_tc s.(s_name) tc ->
@@ -492,8 +473,8 @@ Module Type STCSEMANTICS
     - intros.
       pose proof Hf.
       rewrite find_system_other in Hf; auto.
-      rewrite <-state_closed_other in Closed, Closed'; auto.
-      econstructor; eauto.
+      rewrite <-state_closed_other in Closed, ClosedI, Closed'; auto.
+      eapply SSystem with (I := I); eauto.
       eapply find_system_later_not_Is_system_in in Hord; eauto.
       apply Forall_forall; intros.
       eapply Forall_forall in IH; eauto.
@@ -510,7 +491,7 @@ Module Type STCSEMANTICS
   Proof.
     intros * Hord Hsem.
     induction Hsem as [| | | |
-                       ????????? Hfind ???? Closed ? Closed' IHtcs] using sem_system_mult
+                       ????????? Hfind ???? Closed ClosedI Closed' IHtcs] using sem_system_mult
       with (P_trconstr := fun bk H S I S' tc =>
                             ~Is_system_in_tc s.(s_name) tc ->
                             sem_trconstr (s :: P) bk H S I S' tc);
@@ -532,8 +513,8 @@ Module Type STCSEMANTICS
         destruct Hnin as [H' Hfg]; clear H'.
         inv Hfg; congruence.
       }
-      rewrite state_closed_other in Closed, Closed'; eauto.
-      econstructor; eauto.
+      rewrite state_closed_other in Closed, ClosedI, Closed'; eauto.
+      eapply SSystem with (I := I); eauto.
       + rewrite find_system_other; eauto.
       + apply Forall_forall.
         rewrite Forall_forall in IHtcs.
@@ -785,7 +766,7 @@ Module Type STCSEMANTICS
     intros * Ord Sem Abs.
     revert dependent xs; revert f S S' ys.
     induction P as [|system]; intros;
-      inversion_clear Sem as [????????? Find Ins ?? Htcs Closed ? Closed'];
+      inversion_clear Sem as [????????? Find Ins ?? Htcs Closed ClosedI Closed'];
       try now inv Find.
     pose proof Find; simpl in Find.
     destruct (ident_eqb (s_name system) f) eqn: Eq.
@@ -818,8 +799,8 @@ Module Type STCSEMANTICS
         * apply s_reset_in.
     - inv Ord; eapply IHP; eauto.
       apply ident_eqb_neq in Eq.
-      rewrite <-state_closed_other in Closed, Closed'; eauto.
-      econstructor; eauto.
+      rewrite <-state_closed_other in Closed, ClosedI, Closed'; eauto.
+      eapply SSystem with (I := I); eauto.
       apply sem_trconstrs_cons in Htcs; eauto using Ordered_systems.
       eapply find_system_later_not_Is_system_in; eauto using Ordered_systems.
   Qed.

@@ -35,7 +35,7 @@ Module Type STCMEMORYCORRES
 
   Definition Memory_Corres_tcs
              (tcs: list trconstr)
-             (S: state) (I: transient_states) (S': state)
+             (S I S': state)
              (me: menv) : Prop :=
     (forall x,
         (Is_last_in x tcs -> value_corres x S' me)
@@ -47,7 +47,7 @@ Module Type STCMEMORYCORRES
          state_corres s S me)
         /\
         (~ Step_in s tcs /\ Reset_in s tcs ->
-         transient_state_corres s I me)
+         state_corres s I me)
         /\
         (Step_in s tcs ->
          state_corres s S' me)).
@@ -107,7 +107,6 @@ Module Type STCMEMORYCORRES
       assert (~ Step_in s tcs) by (intro; apply Nstep; right; auto).
       assert (Reset_in s tcs)
         by (inversion_clear Rst as [?? IsSt|]; auto; inv IsSt).
-      unfold transient_state_corres; setoid_rewrite find_inst_add_val;
         apply Insts; auto.
     - intros Step.
       assert (Step_in s tcs)
@@ -148,7 +147,7 @@ Module Type STCMEMORYCORRES
   Lemma Memory_Corres_tcs_Reset_present:
     forall s ck b S I S' Is me tcs me',
       Memory_Corres_tcs tcs S I S' me ->
-      Env.find s I = Some Is ->
+      find_inst s I = Some Is ->
       me' ≋ Is ->
       ~ Step_in s tcs ->
       Memory_Corres_tcs (TcReset s ck b :: tcs) S I S' (add_inst s me' me).
@@ -167,7 +166,7 @@ Module Type STCMEMORYCORRES
       unfold state_corres; rewrite find_inst_gso; auto;
         apply Insts; auto.
     - intros (Nstep & Rst).
-      unfold transient_state_corres.
+      unfold state_corres.
       inversion_clear Rst as [?? Rst'|].
       + inv Rst'.
         setoid_rewrite find_inst_gss.
@@ -190,7 +189,7 @@ Module Type STCMEMORYCORRES
   Lemma Memory_Corres_tcs_Reset_absent:
     forall s ck b S I S' Is Ss me tcs,
       Memory_Corres_tcs tcs S I S' me ->
-      Env.find s I = Some Is ->
+      find_inst s I = Some Is ->
       find_inst s S = Some Ss ->
       Is ≋ Ss ->
       ~ Reset_in s tcs ->
@@ -210,7 +209,7 @@ Module Type STCMEMORYCORRES
       inversion_clear Rst as [?? Rst'|].
       + inv Rst'.
         assert (~ Step_in s tcs) by (intro; apply Nstep; right; auto).
-        unfold transient_state_corres.
+        unfold state_corres.
         rewrite Find_I, E, <-Find_S.
         apply (proj1 (Insts s)); auto.
       + apply Insts; split; auto.
@@ -247,7 +246,7 @@ Module Type STCMEMORYCORRES
           by (intro; subst; apply Nstep; left; constructor).
       assert (~ Step_in s0 tcs) by (intro; apply Nstep; right; auto).
       inversion_clear Rst as [?? Rst'|]; try inv Rst'.
-      unfold transient_state_corres; rewrite find_inst_gso; auto;
+      unfold state_corres; rewrite find_inst_gso; auto;
         apply Insts; auto.
     - intros Step.
       unfold state_corres.
@@ -264,7 +263,7 @@ Module Type STCMEMORYCORRES
   Lemma Memory_Corres_tcs_Call_absent:
     forall s ys ck (rst: bool) b es S I S' Is Ss' tcs me,
       Memory_Corres_tcs tcs S I S' me ->
-      Env.find s I = Some Is ->
+      find_inst s I = Some Is ->
       (rst = false -> find_inst s S ⌈≋⌉ Some Is) ->
       find_inst s S' = Some Ss' ->
       Ss' ≋ Is ->
@@ -291,7 +290,7 @@ Module Type STCMEMORYCORRES
       inversion_clear Step as [?? Step'|].
       + inv Step'.
         destruct rst; apply Insts in NstepRst.
-        * unfold transient_state_corres in NstepRst; unfold state_corres.
+        * unfold state_corres in NstepRst; unfold state_corres.
           rewrite <-NstepRst, Find_I, <-E.
           apply orel_eq_weaken; auto.
         * unfold state_corres in *.

@@ -914,7 +914,7 @@ Module Type CORRECTNESS
       NoDup (inputs ++ variables (tc :: tcs)) ->
       Step_with_reset_spec (tc :: tcs) ->
       (forall i f Si, In (i, f) (resets_of (tc :: tcs)) -> find_inst i S = Some Si -> state_closed P f Si) ->
-      transient_states_closed P (resets_of (tc :: tcs)) I ->
+      (forall i f Ii, In (i, f) (resets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
       Memory_Corres_tcs tcs S I S' me ->
       equiv_env (fun x => Is_free_in_tc x tc) R inputs mems me ve ->
       Forall (clock_match_instant true R) icks ->
@@ -933,7 +933,7 @@ Module Type CORRECTNESS
            Closed TransClosed Corres Equiv Hcm Hcvars Hmems Hve;
       inversion Sem as [????????? Hexp Hvar|
                         ??????????? Hvar Hexp|
-                        ???????????? Init|
+                        ??????????? FindI Init|
                         ??????????????? Hexps Hck Find_S Find_I Hsystem Hvars];
       subst; simpl.
 
@@ -986,7 +986,7 @@ Module Type CORRECTNESS
                  apply orel_find_inst_Some in Scorres as (?&<-&?).
                  eapply Closed; simpl; eauto.
                * eapply state_closed_empty; eauto.
-             + inv TransClosed; auto.
+             + eapply TransClosed; eauto; simpl; auto.
            - eapply Reset_not_Step_in; eauto.
          }
       + exists me, ve; split; try eapply (stmt_eval_Control_absent' inputs); eauto; auto.
@@ -1015,7 +1015,7 @@ Module Type CORRECTNESS
                eapply value_to_option_updates; eauto.
          }
         *{ destruct rst; apply Corres in Wsch.
-           - unfold transient_state_corres in Wsch; rewrite Find_I in Wsch.
+           - unfold state_corres in Wsch; rewrite Find_I in Wsch.
              symmetry in Wsch; apply orel_find_inst_Some in Wsch as (?&?& ->); auto.
            - unfold state_corres in Wsch; rewrite Find_S in Wsch; auto.
              symmetry in Wsch; apply orel_find_inst_Some in Wsch as (?&?& ->); auto.
@@ -1207,7 +1207,7 @@ Module Type CORRECTNESS
       NoDup (inputs ++ variables alltcs) ->
       Step_with_reset_spec alltcs ->
       (forall i f Si, In (i, f) (resets_of alltcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
-      transient_states_closed P (resets_of alltcs) I ->
+      (forall i f Ii, In (i, f) (resets_of alltcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
       (forall x, PS.In x mems -> Is_last_in x alltcs) ->
       (forall x, In x inputs -> ~ Is_defined_in x alltcs) ->
       (forall x c,
@@ -1246,8 +1246,8 @@ Module Type CORRECTNESS
         eauto using Is_well_sch.
       + intros; eapply Closed; eauto.
         rewrite <-List_shift_first, resets_of_app, in_app; auto.
-      + unfold transient_states_closed in *.
-        rewrite <-List_shift_first, resets_of_app, Forall_app in TransClosed; tauto.
+      + intros; eapply TransClosed; eauto.
+        rewrite <-List_shift_first, resets_of_app, in_app; auto.
       + intros x v Free Hvar.
         inversion_clear Wsch' as [|??? FreeSpec].
         apply FreeSpec in Free.
@@ -1287,7 +1287,7 @@ Module Type CORRECTNESS
       (forall x, PS.In x mems -> find_val x me <> None) ->
       Ordered_systems P ->
       (forall i f Si, In (i, f) (resets_of tcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
-      transient_states_closed P (resets_of tcs) I ->
+      (forall i f Ii, In (i, f) (resets_of tcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
       Is_well_sch inputs mems tcs ->
       NoDup (inputs ++ variables tcs) ->
       Step_with_reset_spec tcs ->
@@ -1490,10 +1490,14 @@ Module Type CORRECTNESS
         assert (b' = b'') as ->; auto.
         eapply NoDupMembers_det in Hin; eauto.
         apply s_nodup_subs.
-      + eapply Forall_incl.
-        * eapply transient_states_closed_In; eauto.
-          intros (? & ?); now setoid_rewrite s_subs_calls_of.
-        * apply s_reset_incl.
+      + inversion_clear TransClosed as [????? Find ? Insts]; rewrite Find in Find'; inv Find'.
+        intros ? b' ? Hin Sub.
+        apply Insts in Sub as (b'' &?&?).
+        apply s_reset_incl in Hin.
+        rewrite <-s_subs_calls_of in Hin.
+        assert (b' = b'') as ->; auto.
+        eapply NoDupMembers_det in Hin; eauto.
+        apply s_nodup_subs.
       + rewrite <-s_vars_out_in_tcs, <-2 map_app, <-fst_NoDupMembers.
         apply s_nodup_vars.
       + eapply Is_well_sch_Step_with_reset_spec; eauto.
@@ -1537,6 +1541,7 @@ Module Type CORRECTNESS
     - apply sem_trconstrs_cons in Htcs; auto.
       + apply ident_eqb_neq in Eq.
         apply state_closed_other in Closed;
+          apply state_closed_other in TransClosed;
           apply state_closed_other in Closed'; auto.
         edestruct IHP as (me' &?&?); eauto using sem_system.
         exists me'; split; auto.

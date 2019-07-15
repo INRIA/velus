@@ -411,16 +411,6 @@ Module Type STCSCHEDULE
   Qed.
   Hint Resolve scheduler_state_closed.
 
-  Lemma scheduler_transient_states_closed:
-    forall subs P I,
-      transient_states_closed P subs I ->
-      transient_states_closed (schedule P) subs I.
-  Proof.
-    induction 1; constructor; auto.
-    destruct x; auto.
-  Qed.
-  Hint Resolve scheduler_transient_states_closed.
-
   Theorem scheduler_sem_system:
     forall P f xs S S' ys,
       sem_system P f xs S S' ys ->
@@ -434,7 +424,7 @@ Module Type STCSCHEDULE
     - econstructor; eauto.
       cases; eauto.
     - match goal with H: find_system _ _ = _ |- _ => apply scheduler_find_system in H end.
-      econstructor; eauto; simpl.
+      eapply SSystem with (I := I); eauto; simpl.
       rewrite schedule_tcs_permutation; eauto.
   Qed.
 
