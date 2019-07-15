@@ -19,9 +19,7 @@ Module Type STCSYNTAX
   | TcDef  : ident -> clock -> cexp -> trconstr
   | TcNext : ident -> clock -> exp -> trconstr
   | TcReset: ident -> clock -> ident -> trconstr
-  (* <trans s> =ck reset system<last s> *)
   | TcCall : ident -> idents -> clock -> bool -> ident -> list exp -> trconstr.
-  (* <next s> y1, ..., yn =ck system<if b then trans s else last s>(e1, ..., em) *)
 
   Definition variables_tc (tc: trconstr): idents :=
     match tc with

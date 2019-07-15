@@ -1114,7 +1114,7 @@ dataflow memory for which the non-standard semantics holds true.
     apply IHn; congruence.
   Qed.
 
-  Theorem msem_sem_node_equation_reset:
+  Theorem msem_sem_node_equation:
     forall G,
       (forall f xss M yss,
           msem_node G f xss M yss ->
@@ -1138,7 +1138,7 @@ dataflow memory for which the non-standard semantics holds true.
       msem_node G f xss M yss ->
       sem_node G f xss yss.
   Proof.
-    intros; eapply (proj1 (msem_sem_node_equation_reset G)); eauto.
+    intros; eapply (proj1 (msem_sem_node_equation G)); eauto.
   Qed.
 
   Corollary msem_sem_equation:
@@ -1146,7 +1146,7 @@ dataflow memory for which the non-standard semantics holds true.
       msem_equation G bk H M eq ->
       sem_equation G bk H eq.
   Proof.
-    intros; eapply (proj2 (msem_sem_node_equation_reset G)); eauto.
+    intros; eapply (proj2 (msem_sem_node_equation G)); eauto.
   Qed.
 
   Corollary msem_sem_equations:
