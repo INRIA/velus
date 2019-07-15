@@ -7,7 +7,7 @@ Open Scope list_scope.
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Obc.ObcSyntax.
 
 (** * Obc semantics *)
@@ -15,7 +15,7 @@ From Velus Require Import Obc.ObcSyntax.
 (**
 
   The semantics of Obc relies on a tree-structure [memory], based
-  on [Velus.RMemory], to store object instances and a [venv] to keep
+  on [Velus.Memory], to store object instances and a [venv] to keep
   track of local variables during method calls.
 
  *)

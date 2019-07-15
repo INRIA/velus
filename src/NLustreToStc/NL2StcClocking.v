@@ -3,7 +3,7 @@ From Velus Require Import Stc.
 
 From Velus Require Import NLustreToStc.Translation.
 
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Common.
 
 From Coq Require Import List.

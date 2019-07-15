@@ -9,7 +9,7 @@ From Velus Require Import Obc.ObcInvariants.
 From Velus Require Import Obc.ObcTyping.
 From Velus Require Import Obc.Equiv.
 
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 
 From Coq Require Import List.
 Import List.ListNotations.

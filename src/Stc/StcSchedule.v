@@ -24,7 +24,7 @@ From Velus Require Import Stc.StcClocking.
 From Velus Require Import Stc.StcIsFree.
 From Velus Require Import Stc.StcWellDefined.
 
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 
 (** * Scheduling of N-Lustre equations *)
 

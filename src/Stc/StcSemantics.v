@@ -11,7 +11,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.

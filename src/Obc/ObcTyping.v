@@ -1,7 +1,7 @@
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Obc.ObcSyntax.
 From Velus Require Import Obc.ObcSemantics.
 

@@ -7,7 +7,7 @@ From compcert Require Import lib.Coqlib.
 From compcert Require Import lib.Integers.
 
 From Velus Require Import Common.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Common.CompCertLib.
 
 From Coq Require Import List.

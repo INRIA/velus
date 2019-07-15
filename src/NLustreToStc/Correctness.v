@@ -9,7 +9,7 @@ From Velus Require Import NLustreToStc.Translation.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 
 From Coq Require Import Omega.
 
