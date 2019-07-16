@@ -197,7 +197,6 @@ Module Type STCSEMANTICS
   CoInductive loop: program -> ident -> stream (list value) -> stream (list value) -> state -> nat -> Prop :=
     loop_intro:
       forall P f xss yss Sn Sn' n,
-        (n = 0 -> initial_state P f Sn) ->
         sem_system P f Sn (xss n) (yss n) Sn' ->
         loop P f xss yss Sn' (S n) ->
         loop P f xss yss Sn n.
@@ -209,9 +208,8 @@ Module Type STCSEMANTICS
     Hypothesis Loop:
       forall P f xss yss Sn n,
         R P f xss yss Sn n ->
-        (n = 0 -> initial_state P f Sn)
-        /\ exists Sn', sem_system P f Sn (xss n) (yss n) Sn'
-                 /\ R P f xss yss Sn' (S n).
+        exists Sn', sem_system P f Sn (xss n) (yss n) Sn'
+               /\ R P f xss yss Sn' (S n).
 
     Lemma loop_coind:
       forall P f xss yss S n,
@@ -219,7 +217,7 @@ Module Type STCSEMANTICS
         loop P f xss yss S n.
     Proof.
       cofix COFIX; intros * HR.
-      apply Loop in HR as (?&?&?&?).
+      apply Loop in HR as (?&?&?).
       econstructor; eauto.
     Qed.
 
@@ -359,9 +357,7 @@ Module Type STCSEMANTICS
     intros * E n Loop.
     inv Loop.
     econstructor; eauto.
-    - intros; rewrite <-E; auto.
-    - eapply sem_system_equal_memory; eauto.
-      reflexivity.
+    intros; rewrite <-E; auto.
   Qed.
 
   Lemma initial_state_other:

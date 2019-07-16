@@ -1553,6 +1553,7 @@ Module Type CORRECTNESS
     forall P f xss yss ins S0,
       Well_defined P ->
       wc_program P ->
+      initial_state P f S0 ->
       loop P f xss yss S0 0 ->
       (forall n, Forall2 eq_if_present (xss n) (ins n)) ->
       (forall n, Exists (fun v => v <> absent) (xss n)) ->
@@ -1561,8 +1562,8 @@ Module Type CORRECTNESS
         /\ loop_call (translate P) f step ins (fun n => map value_to_option (yss n)) 0 me0
         /\ me0 ≋ S0.
   Proof.
-    intros * Wdef WC Loop Spec Clock.
-    pose proof Loop as Loop'; inversion_clear Loop' as [???????? Sem].
+    intros * Wdef WC Init Loop Spec Clock.
+    pose proof Loop as Loop'; inversion_clear Loop' as [??????? Sem].
     inv Sem.
     assert (Ordered_systems P) as Ord by apply Wdef.
     eapply reset_spec with (me := mempty) in Ord as (me' &?&?& Closed); eauto.
@@ -1574,7 +1575,7 @@ Module Type CORRECTNESS
     revert Loop Eq; revert me' S0.
     generalize 0.
     cofix COFIX; intros.
-    inversion_clear Loop as [???????? Sem].
+    inversion_clear Loop as [??????? Sem].
     eapply correctness in Sem as (?&?&?); eauto.
     econstructor; eauto.
   Qed.

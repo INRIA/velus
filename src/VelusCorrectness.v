@@ -391,7 +391,7 @@ Proof.
   apply implies in Hsem.
   rewrite 2 tr_Streams_pStr in Hsem.
   set (ins' := tr_Streams ins) in *;
-    set (outs' := tr_Streams outs) in *. 
+    set (outs' := tr_Streams outs) in *.
   assert (forall n, 0 < length (ins' n)) as Length.
   { inversion_clear Hsem as [???????? Ins].
     intro k; specialize (Ins k); apply Forall2_length in Ins.
@@ -405,7 +405,8 @@ Proof.
     - apply Scheduler.scheduler_ordered, NL2StcCorr.Ordered_nodes_systems; auto.
     - apply Scheduler.scheduler_normal_args, NL2StcNormalArgs.translate_normal_args; auto.
   }
-  apply NL2StcCorr.correctness_loop, Scheduler.scheduler_loop in Hsem; auto.
+  apply NL2StcCorr.correctness_loop in Hsem as (?& Hsem); auto.
+  apply Scheduler.scheduler_loop in Hsem; auto.
   assert (forall n, Forall2 Stc2ObcCorr.eq_if_present (pstr ins' n) (map Some (ins' n)))
     by (unfold pstr; intros; clear; induction (ins' n); constructor; simpl; auto).
   assert (forall n, Exists (fun v => v <> absent) (pstr ins' n))

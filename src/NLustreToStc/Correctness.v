@@ -694,17 +694,18 @@ Module Type CORRECTNESS
       Ordered_nodes G ->
       wc_global G ->
       msem_node G f xss M yss ->
-      loop (translate G) f xss yss (M 0) 0.
+      initial_state (translate G) f (M 0)
+      /\ loop (translate G) f xss yss (M 0) 0.
   Proof.
-    intros; apply loop_coind with (R := fun P b xss yss S n =>
-                                          P = translate G
-                                          /\ S ≋ M n
-                                          /\ msem_node G b xss M yss);
-    try now intuition.
-    intros * (?& E & Sem); subst; split.
-    - intro; subst; rewrite E.
-      eapply msem_node_initial_state; eauto.
-    - pose proof Sem; apply correctness in Sem; auto.
+    intros; split.
+    - eapply msem_node_initial_state; eauto.
+    - apply loop_coind with (R := fun P b xss yss S n =>
+                                    P = translate G
+                                    /\ S ≋ M n
+                                    /\ msem_node G b xss M yss);
+        try now intuition.
+      intros * (?& E & Sem); subst.
+      pose proof Sem; apply correctness in Sem; auto.
       exists (next M n); intuition eauto.
       + rewrite E; auto.
       + unfold next; simpl; reflexivity.
