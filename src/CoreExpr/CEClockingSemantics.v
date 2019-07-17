@@ -28,21 +28,13 @@ Module Type CECLOCKINGSEMANTICS
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn     Str)
        (Import CEClo : CECLOCKING  Ids Op       CESyn).
 
-
-  Definition clock_match_instant (base: bool) (R: env) (xc : ident * clock) : Prop :=
-    (sem_var_instant R (fst xc) absent
-     /\ sem_clock_instant base R (snd xc) false)
-    \/
-    ((exists c, sem_var_instant R (fst xc) (present c))
-     /\ sem_clock_instant base R (snd xc) true).
-
   Section ClockMatchInstant.
 
     Variables
       (vars: list (ident * clock))
       (base: bool)
       (R: env)
-      (Hcm: Forall (clock_match_instant base R) vars).
+      (Hcm: sem_clocked_vars_instant base R vars).
 
     Lemma clock_match_instant_exp:
       forall le ck,
@@ -55,46 +47,40 @@ Module Type CECLOCKINGSEMANTICS
           ((exists c, sem_exp_instant base R le (present c))
            /\ sem_clock_instant base R ck true).
     Proof.
-      induction le.
-      - inversion_clear 1. intros.
+      induction le; inversion_clear 1.
+      - intros.
         destruct base; [right|left]; eauto using sem_exp_instant, sem_clock_instant.
-      - inversion_clear 1. intros.
+      - inversion_clear 1.
         eapply Forall_forall in Hcm; eauto.
-        destruct Hcm as [(Hv & Hc)|((c & Hv) & Hc)]; [left|right];
-          eauto using sem_exp_instant.
-      - repeat inversion_clear 1;
-          repeat match goal with
-                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
-                   destruct (IHle _ WC _  SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_exp_instant _ _ _ absent,
-                   HP: sem_exp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 end.
-        + right; eauto using sem_exp_instant, sem_clock_instant.
-        + left; eauto using sem_exp_instant, sem_clock_instant.
-        + left; eauto using sem_exp_instant, sem_clock_instant.
-      - repeat inversion_clear 1;
-          repeat match goal with
-                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
-                   destruct (IHle _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_exp_instant _ _ _ absent,
-                   HP: sem_exp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 end.
-        + right; eauto using sem_exp_instant.
-        + left; eauto using sem_exp_instant.
-      - repeat inversion_clear 1;
-          repeat match goal with
-                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
-                   destruct (IHle1 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | WC: wc_exp _ _ _, SL: sem_exp_instant _ _ _ _ |- _ =>
-                   destruct (IHle2 _ WC _ SL) as [(Hv & Hc)|((?c & Hv) & Hc)]
-                 | HA: sem_exp_instant _ _ _ absent,
-                   HP: sem_exp_instant _ _ _ (present ?cv) |- _ =>
-                   now assert (present cv = absent) by sem_det
-                 end.
-        + right; eauto using sem_exp_instant.
-        + left; eauto using sem_exp_instant.
+        destruct v.
+        + left; split; eauto using sem_exp_instant.
+          apply Hcm; auto.
+        + right; split; eauto using sem_exp_instant.
+          apply Hcm; eauto.
+      - inversion_clear 1; eapply Forall_forall in Hcm; eauto.
+        + right; split; eauto using sem_exp_instant.
+          econstructor; eauto.
+          apply Hcm; eauto.
+        + left; split; eauto using sem_exp_instant.
+          eapply Son_abs2; eauto.
+          apply Hcm; eauto.
+        + left; split; eauto using sem_exp_instant.
+          econstructor; eauto.
+          apply Hcm; auto.
+      - inversion_clear 1.
+        + right; split; eauto using sem_exp_instant.
+          edestruct IHle as [(?&?)|(?&?)]; eauto.
+          now assert (present c = absent) by sem_det.
+        + left; split; eauto using sem_exp_instant.
+          edestruct IHle as [(?&?)|((c&?)&?)]; eauto.
+          now assert (present c = absent) by sem_det.
+      - inversion_clear 1.
+        + right; split; eauto using sem_exp_instant.
+          edestruct IHle1 as [(?&?)|(?&?)]; eauto.
+          now assert (present c1 = absent) by sem_det.
+        + left; split; eauto using sem_exp_instant.
+          edestruct IHle1 as [(?&?)|((c&?)&?)]; eauto.
+          now assert (present c = absent) by sem_det.
     Qed.
 
     Corollary clock_match_instant_exp_contradiction:
@@ -178,16 +164,13 @@ Module Type CECLOCKINGSEMANTICS
 
   End ClockMatchInstant.
 
-  Definition clock_match (bk: stream bool) (H: history) (xc : ident * clock) : Prop :=
-    forall n, clock_match_instant (bk n) (H n) xc.
-
   Section ClockMatch.
 
     Variables
       (vars: list (ident * clock))
       (bk: stream bool)
       (H: history)
-      (Hcm: Forall (clock_match bk H) vars).
+      (Hcm: sem_clocked_vars bk H vars).
 
     Lemma clock_match_exp:
       forall le ck,
@@ -201,7 +184,6 @@ Module Type CECLOCKINGSEMANTICS
            /\ sem_clock_instant (bk n) (H n) ck true).
     Proof.
       intros; eapply clock_match_instant_exp with (vars := vars); eauto.
-      clear - Hcm; induction vars; inv Hcm; constructor; auto.
     Qed.
 
     Corollary clock_match_exp_contradiction:
@@ -214,7 +196,6 @@ Module Type CECLOCKINGSEMANTICS
     Proof.
       intros.
       eapply clock_match_instant_exp_contradiction with (vars := vars); eauto.
-      clear - Hcm; induction vars; inv Hcm; constructor; auto.
     Qed.
 
     Lemma clock_match_cexp:
@@ -229,37 +210,9 @@ Module Type CECLOCKINGSEMANTICS
            /\ sem_clock_instant (bk n) (H n) ck true).
     Proof.
       intros; eapply clock_match_instant_cexp with (vars := vars); eauto.
-      clear - Hcm; induction vars; inv Hcm; constructor; auto.
     Qed.
 
   End ClockMatch.
-
-  (* Lemma sem_var_transfer_in: *)
-  (*   forall (xin : list (ident * (type * clock))) H H' les isub bk lss, *)
-  (*     Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les -> *)
-  (*     sem_exps bk H les lss -> *)
-  (*     sem_vars H' (map fst xin) lss -> *)
-  (*     forall x y ys, *)
-  (*       InMembers x xin -> *)
-  (*       isub x = Some y -> *)
-  (*       sem_var H y ys -> *)
-  (*       sem_var H' x ys. *)
-  (* Proof. *)
-  (*   intros * node H H' les isub bk lss Hsv Hles Hlss x y ys Hin Hsub Hvar n. *)
-  (*   specialize (Hles n); specialize (Hlss n); specialize (Hvar n); simpl in *. *)
-  (*   unfold sem_vars_instant in Hlss. *)
-  (*   rewrite Forall2_map_1 in Hlss. *)
-  (*   apply InMembers_In in Hin as ((xty, xck) & Hxin). *)
-  (*   apply Forall2_trans_ex with (1:=Hsv) in Hles. clear Hsv. *)
-  (*   apply Forall2_Forall2 with (1:=Hles) in Hlss. clear Hles. *)
-  (*   apply Forall2_in_left with (2:=Hxin) in Hlss *)
-  (*     as (ls & Hinls & (le & Hinle & Hsveq & Hsls) & Hvls). *)
-  (*   simpl in *. rewrite Hsub in Hsveq. *)
-  (*   destruct le; try contradiction. simpl in *; subst. *)
-  (*   inversion_clear Hsls. *)
-  (*   assert (ys n = ls) as Hys by sem_det. *)
-  (*   now rewrite Hys in *. *)
-  (* Qed. *)
 
  (* Transfer named streams defined within the body of a node ([R']) out into
      the environment where the node is instantiated ([R]). *)
@@ -449,41 +402,41 @@ Module Type CECLOCKINGSEMANTICS
     intros; eapply sem_clock_instant_transfer_out_instant; eauto.
   Qed.
 
-  (* For variables defined in an environment [H], the semantic constraint
-     ([sem_clocked_vars]) forces the [clock_match] property. *)
-  Lemma sem_clocked_vars_instant_clock_match_instant:
-    forall base R xcks xs,
-      sem_clocked_vars_instant base R xcks ->
-      sem_vars_instant R (map fst xcks) xs ->
-      Forall (clock_match_instant base R) xcks.
-  Proof.
-    intros * Hsv Hvs. apply Forall_forall.
-    intros (x, xck) Hxin; unfold clock_match_instant.
-    eapply Forall_forall in Hsv; eauto.
-    unfold sem_vars_instant in Hvs.
-    rewrite Forall2_map_1 in Hvs.
-    apply Forall2_in_left with (2:=Hxin) in Hvs.
-    destruct Hvs as (v & ? & Hvs).
-    inversion Hsv as [Ht Hf]. simpl in *.
-    destruct v.
-    - intuition.
-    - right.
-      pose proof (ex_intro (fun c=>sem_var_instant _ _ (present c)) _ Hvs) as Hevs.
-      apply Ht in Hevs; eauto.
-  Qed.
+  (* (* For variables defined in an environment [H], the semantic constraint *)
+  (*    ([sem_clocked_vars]) forces the [clock_match] property. *) *)
+  (* Lemma sem_clocked_vars_instant_clock_match_instant: *)
+  (*   forall base R xcks xs, *)
+  (*     sem_clocked_vars_instant base R xcks -> *)
+  (*     sem_vars_instant R (map fst xcks) xs -> *)
+  (*     Forall (clock_match_instant base R) xcks. *)
+  (* Proof. *)
+  (*   intros * Hsv Hvs. apply Forall_forall. *)
+  (*   intros (x, xck) Hxin; unfold clock_match_instant. *)
+  (*   eapply Forall_forall in Hsv; eauto. *)
+  (*   unfold sem_vars_instant in Hvs. *)
+  (*   rewrite Forall2_map_1 in Hvs. *)
+  (*   apply Forall2_in_left with (2:=Hxin) in Hvs. *)
+  (*   destruct Hvs as (v & ? & Hvs). *)
+  (*   inversion Hsv as [Ht Hf]. simpl in *. *)
+  (*   destruct v. *)
+  (*   - intuition. *)
+  (*   - right. *)
+  (*     pose proof (ex_intro (fun c=>sem_var_instant _ _ (present c)) _ Hvs) as Hevs. *)
+  (*     apply Ht in Hevs; eauto. *)
+  (* Qed. *)
 
-  Corollary sem_clocked_vars_clock_match:
-    forall bk H xcks xss,
-      sem_clocked_vars bk H xcks ->
-      sem_vars H (map fst xcks) xss ->
-      Forall (clock_match bk H) xcks.
-  Proof.
-    intros * Hsv Hvs. apply Forall_forall.
-    intros (x, xck) Hxin n.
-    specialize (Hsv n); specialize (Hvs n).
-    eapply sem_clocked_vars_instant_clock_match_instant in Hvs; eauto.
-    eapply Forall_forall in Hvs; eauto.
-  Qed.
+  (* Corollary sem_clocked_vars_clock_match: *)
+  (*   forall bk H xcks xss, *)
+  (*     sem_clocked_vars bk H xcks -> *)
+  (*     sem_vars H (map fst xcks) xss -> *)
+  (*     Forall (clock_match bk H) xcks. *)
+  (* Proof. *)
+  (*   intros * Hsv Hvs. apply Forall_forall. *)
+  (*   intros (x, xck) Hxin n. *)
+  (*   specialize (Hsv n); specialize (Hvs n). *)
+  (*   eapply sem_clocked_vars_instant_clock_match_instant in Hvs; eauto. *)
+  (*   eapply Forall_forall in Hvs; eauto. *)
+  (* Qed. *)
 
   (* Transfer interface variable values onto interface clocks between
      an external environment ([Hn]) and an internal one ([Hn']). *)

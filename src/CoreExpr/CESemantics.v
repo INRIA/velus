@@ -713,6 +713,31 @@ clock to [sem_var_instant] too. *)
       eapply sem_var_det; eexact H1 || eexact H2
     end.
 
+  Ltac by_sem_det :=
+    repeat match goal with
+           | H: exists _, _ |- _ => destruct H
+           end;
+    match goal with
+    | H1: sem_clock_instant ?bk ?H ?C ?X,
+          H2: sem_clock_instant ?bk ?H ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_clock_instant_det; eexact H1 || eexact H2)
+    | H1: sem_cexp_instant ?bk ?H ?C ?X,
+          H2: sem_cexp_instant ?bk ?H ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_cexp_instant_det; eexact H1 || eexact H2)
+    | H1: sem_exps_instant ?bk ?H ?C ?X,
+          H2: sem_exps_instant ?bk ?H ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_exps_instant_det; eexact H1 || eexact H2)
+    | H1: sem_exp_instant ?bk ?H ?C ?X,
+          H2: sem_exp_instant ?bk ?H ?C ?Y |- _ =>
+     assert (X = Y) by (eapply sem_exp_instant_det; eexact H1 || eexact H2)
+    | H1: sem_aexp_instant ?bk ?H ?CK ?C ?X,
+          H2: sem_aexp_instant ?bk ?H ?CK ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_aexp_instant_det; eexact H1 || eexact H2)
+    | H1: sem_var_instant ?H ?C ?X,
+          H2: sem_var_instant ?H ?C ?Y |- _ =>
+      assert (X = Y) by (eapply sem_var_instant_det; eexact H1 || eexact H2)
+    end; discriminate.
+
 End CESEMANTICS.
 
 Module CESemanticsFun
@@ -724,4 +749,3 @@ Module CESemanticsFun
   <: CESEMANTICS Ids Op OpAux Syn Str.
   Include CESEMANTICS Ids Op OpAux Syn Str.
 End CESemanticsFun.
-

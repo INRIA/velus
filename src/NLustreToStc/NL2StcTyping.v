@@ -279,7 +279,7 @@ Module Type NL2STCTYPING
   Qed.
   Hint Resolve translate_node_wt.
 
-  Lemma translate_wt:
+  Theorem translate_wt:
     forall G,
       wt_global G ->
       wt_program (translate G).

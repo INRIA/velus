@@ -162,7 +162,7 @@ Module Type NL2STCCLOCKING
       eapply translate_eqn_wc; eauto.
   Qed.
 
-  Lemma translate_wc:
+  Theorem translate_wc:
     forall G,
       wc_global G ->
       wc_program (translate G).

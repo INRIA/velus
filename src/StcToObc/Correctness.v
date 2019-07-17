@@ -782,7 +782,7 @@ Module Type CORRECTNESS
 
   Lemma noops_exp_exp_eval:
     forall isub R inputs mems me ve vars e v xck bck lck,
-      Forall (clock_match_instant true R) vars ->
+      sem_clocked_vars_instant true R vars ->
       equiv_env (fun x => CE.IsF.Is_free_in_exp x e) R inputs mems me ve ->
       noops_exp xck e ->
       wc_exp vars e lck ->
@@ -851,7 +851,7 @@ Module Type CORRECTNESS
   Lemma TcCall_check_args_translate_arg:
     forall P R inputs mems clkvars me ve icks i ys ck rst f es ess,
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
-      Forall (clock_match_instant true R) icks ->
+      sem_clocked_vars_instant true R icks ->
       equiv_env (fun x => CE.IsF.Is_free_in_aexps x ck es) R inputs mems me ve ->
       (forall x, PS.In x mems -> find_val x me <> None) ->
       wc_trconstr P icks (TcCall i ys ck rst f es) ->
@@ -917,7 +917,7 @@ Module Type CORRECTNESS
       (forall i f Ii, In (i, f) (resets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
       Memory_Corres_tcs tcs S I S' me ->
       equiv_env (fun x => Is_free_in_tc x tc) R inputs mems me ve ->
-      Forall (clock_match_instant true R) icks ->
+      sem_clocked_vars_instant true R icks ->
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
       (forall x, PS.In x mems -> find_val x me <> None) ->
       (forall x, ~ In x inputs -> ~ Is_defined_in x tcs -> Env.find x ve = None) ->
@@ -1199,7 +1199,7 @@ Module Type CORRECTNESS
       Forall (sem_trconstr P true R S I S') alltcs ->
       Forall (wc_trconstr P icks) alltcs ->
       Forall (normal_args_tc P) alltcs ->
-      Forall (clock_match_instant true R) icks ->
+      sem_clocked_vars_instant true R icks ->
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
       (forall x, PS.In x mems -> find_val x me <> None) ->
       Ordered_systems P ->
@@ -1282,7 +1282,7 @@ Module Type CORRECTNESS
       Forall (sem_trconstr P true R S I S') tcs ->
       Forall (wc_trconstr P icks) tcs ->
       Forall (normal_args_tc P) tcs ->
-      Forall (clock_match_instant true R) icks ->
+      sem_clocked_vars_instant true R icks ->
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
       (forall x, PS.In x mems -> find_val x me <> None) ->
       Ordered_systems P ->
@@ -1444,12 +1444,8 @@ Module Type CORRECTNESS
       + apply Forall_forall.
         intros (x, ck) Hxin.
         apply in_app in Hxin as [Hxin|Hxin].
-        *{ eapply sem_clocked_vars_instant_clock_match_instant in Hscv; eauto.
-           - eapply Forall_forall in Hscv; eauto.
-             rewrite <-Clock; auto.
-           - rewrite map_fst_idck; eauto.
-         }
-        *{ eapply clock_match_instant_tcs with (P := P') (tcs := s_tcs s); eauto.
+        * rewrite <-Clock; eapply Forall_forall in Hscv; eauto.
+        *{ eapply sem_clocked_var_instant_tcs with (P := P') (tcs := s_tcs s); eauto.
            - apply fst_NoDupMembers; rewrite 3 map_app, 4 map_fst_idck.
              apply s_nodup.
            - rewrite s_defined, <-s_vars_out_in_tcs, <-s_lasts_in_tcs,

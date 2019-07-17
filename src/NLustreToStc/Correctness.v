@@ -287,32 +287,6 @@ Module Type CORRECTNESS
       erewrite <-Lt.S_pred; eauto.
   Qed.
 
-  (* Lemma msem_equations_memory_closed_rec': *)
-  (*   forall eqs G bk H M n x f Mx, *)
-  (*     (forall f xss M yss, *)
-  (*         msem_node G f xss M yss -> *)
-  (*         memory_closed_rec_n G f M) -> *)
-  (*     Forall (msem_equation G bk H M) eqs -> *)
-  (*     find_inst x (M n) = Some Mx -> *)
-  (*     In (x, f) (gather_insts eqs) -> *)
-  (*     memory_closed_rec G f Mx. *)
-  (* Proof. *)
-  (*   unfold gather_insts. *)
-  (*   induction eqs as [|eq]; simpl; intros * IH Heqs Find Hin; *)
-  (*     inversion_clear Heqs as [|?? Heq]; try contradiction. *)
-  (*   apply in_app in Hin as [Hin|]; eauto. *)
-  (*   destruct eq; simpl in Hin; try contradiction. *)
-  (*   destruct i; try contradiction. *)
-  (*   inversion_clear Hin as [E|]; try contradiction; inv E. *)
-  (*   inversion_clear Heq as [|??????????? Hd Sub| *)
-  (*                           ?????????????? Hd Sub ????? Rst|]; *)
-  (*     inv Hd; rewrite Sub in Find; inv Find. *)
-  (*   - eapply IH; eauto. *)
-  (*   - specialize (Rst (count rs n)); destruct Rst as (?& Node & Mask). *)
-  (*     apply IH in Node. *)
-  (*     rewrite Mask; auto. reflexivity.  *)
-  (* Qed. *)
-
   Lemma msem_node_memory_closed_rec_n:
     forall G f xss M yss,
       Ordered_nodes G ->
@@ -396,7 +370,7 @@ Module Type CORRECTNESS
           sem_system_n (translate G) f M xss yss (next M)) ->
       Ordered_nodes G ->
       NL.Clo.wc_equation G vars eq ->
-      Forall (clock_match bk H) vars ->
+      CE.Sem.sem_clocked_vars bk H vars ->
       translate_eqn_nodup_subs eq tcs ->
       (forall n, state_closed_insts (translate G) insts (Is n)) ->
       (forall n, forall x, find_val x (Is n) = None) ->
@@ -442,8 +416,10 @@ Module Type CORRECTNESS
       end.
       assert (forall Mx, sem_trconstrs_n (translate G) bk H M (add_inst_n x Mx Is) (next M) tcs) as Htcs'
           by now intro; apply sem_trconstrs_n_add_n.
-      assert (clock_match bk H (y, ck)) as Cky
-          by (eapply Forall_forall; eauto; inv WC; eauto).
+      assert (CE.Sem.sem_clocked_var bk H y ck) as Cky.
+      { intro n; specialize (ClkM n).
+        eapply Forall_forall in ClkM; eauto; inv WC; eauto; auto.
+      }
       exists (fun n => add_inst x (if rs n then Mx 0 else Mx n) (Is n)); split; [|split]; auto;
         intro;
         destruct (Reset (count rs n)) as (Mn & Node_n & Mmask_n);
@@ -460,8 +436,7 @@ Module Type CORRECTNESS
            destruct (ys n) eqn: E'; try discriminate.
            do 2 (econstructor; eauto using sem_trconstr).
            - eapply Sem.Son; eauto.
-             destruct Cky as [[]|((?&?)&?)]; auto.
-             assert (present c = absent) by sem_det; discriminate.
+             apply Cky; eauto.
            - simpl; rewrite Mmask_0.
              + eapply msem_node_initial_state; eauto.
              + simpl; cases.
@@ -487,8 +462,7 @@ Module Type CORRECTNESS
            destruct (ys n) eqn: E'.
            - do 2 (econstructor; eauto using sem_trconstr).
              + apply Sem.Son_abs1; auto.
-               destruct Cky as [[]|((c &?)&?)]; auto.
-               assert (present c = absent) by sem_det; discriminate.
+               apply Cky; auto.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
                * discriminate.
@@ -497,8 +471,7 @@ Module Type CORRECTNESS
            - do 2 (econstructor; eauto using sem_trconstr).
              + change true with (negb false).
                eapply Sem.Son_abs2; eauto.
-               destruct Cky as [[]|((?&?)&?)]; auto.
-               assert (present c = absent) by sem_det; discriminate.
+               apply Cky; eauto.
              + simpl; apply orel_eq_weaken; auto.
              + econstructor; eauto.
                * discriminate.
@@ -593,7 +566,7 @@ Module Type CORRECTNESS
           sem_system_n (translate G) f M xss yss (next M)) ->
       Ordered_nodes G ->
       Forall (NL.Clo.wc_equation G vars) eqs ->
-      Forall (clock_match bk H) vars ->
+      CE.Sem.sem_clocked_vars bk H vars ->
       NoDup_defs eqs ->
       Forall (msem_equation G bk H M) eqs ->
       exists Is, sem_trconstrs_n (translate G) bk H M Is (next M) (translate_eqns eqs)
@@ -647,7 +620,7 @@ Module Type CORRECTNESS
       match goal with Hf: find_node _ [] = _ |- _ => inversion Hf end.
     intros * Hord WC Hsem n.
     assert (Hsem' := Hsem).
-    inversion_clear Hsem' as [??????? Clock Hfind Ins Outs ? Heqs Closed].
+    inversion_clear Hsem' as [??????? Clock Hfind Ins Outs Ck Heqs Closed].
     pose proof (find_node_not_Is_node_in _ _ _ Hord Hfind) as Hnini.
     pose proof Hord; inversion_clear Hord as [|??? NodeIn].
     pose proof Hfind as Hfind'.
@@ -672,18 +645,16 @@ Module Type CORRECTNESS
           simpl; rewrite gather_eqs_snd_spec; auto.
         * apply memory_closed_rec_state_closed; auto.
           unfold next; simpl; auto.
-      + rewrite idck_app, Forall_app; split.
-        * eapply sem_clocked_vars_clock_match; eauto.
-          rewrite map_fst_idck; eauto.
-        *{ apply Forall_forall; intros (x, ck) ?.
-           rewrite idck_app in WCeqs.
-           eapply clock_match_eqs with (eqs := node.(n_eqs)); eauto.
-           - rewrite <-idck_app, NoDupMembers_idck.
-             apply n_nodup.
-           - eapply msem_sem_equations; eauto.
-           - rewrite map_fst_idck.
-             apply n_defd.
-         }
+      + rewrite idck_app.
+        intro k; specialize (Ck k); setoid_rewrite Forall_app; split; auto.
+        apply Forall_forall; intros (x, ck) ?.
+        rewrite idck_app in WCeqs.
+        eapply sem_clocked_var_eqs with (eqs := node.(n_eqs)); eauto.
+        * rewrite <-idck_app, NoDupMembers_idck.
+          apply n_nodup.
+        * eapply msem_sem_equations; eauto.
+        * rewrite map_fst_idck.
+          apply n_defd.
     - assert (n_name node <> f) by now apply ident_eqb_neq.
       eapply msem_node_cons, IH in Hsem; eauto.
       apply sem_system_cons2; auto using Ordered_systems.
