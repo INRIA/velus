@@ -422,10 +422,8 @@ Module Type CORRECTNESS
       }
       exists (fun n => add_inst x (if rs n then Mx 0 else Mx n) (Is n)); split; [|split]; auto;
         intro;
-        destruct (Reset (count rs n)) as (Mn & Node_n & Mmask_n);
-        (* specialize (Mmask_n n); *)
-        destruct (Reset (if rs 0 then pred (count rs 0) else count rs 0))
-          as (M0 & Node_0 & Mmask_0);
+        destruct (Reset (count rs n)) as (Mn & Node_n & Mmask_n),
+                                         (Reset 0) as (M0 & Node_0 & Mmask_0);
         specialize (Var n); specialize (Hr n); specialize (Cky n); simpl in Cky;
           pose proof Node_n as Node_n'; apply IHnode in Node_n; specialize (Node_n n);
             rewrite 2 mask_transparent in Node_n; auto.
@@ -437,9 +435,8 @@ Module Type CORRECTNESS
            do 2 (econstructor; eauto using sem_trconstr).
            - eapply Sem.Son; eauto.
              apply Cky; eauto.
-           - simpl; rewrite Mmask_0.
-             + eapply msem_node_initial_state; eauto.
-             + simpl; cases.
+           - simpl; rewrite Mmask_0; auto.
+             eapply msem_node_initial_state; eauto.
            - econstructor; eauto.
              + discriminate.
              + assert (Mn n ≋ Mn 0) as Eq.
@@ -453,7 +450,6 @@ Module Type CORRECTNESS
                unfold next in Node_n; simpl in Node_n.
                specialize (Mmask_n (S n)).
                rewrite Mmask_n, Mmask_0, <-Node_0, <-Eq; auto.
-               simpl; cases.
          }
         *{ rewrite <-Mmask_n in Node_n; try rewrite Hrst; auto.
            assert (find_inst x (add_inst x (Mx n) (Is n)) = Some (Mx n))
