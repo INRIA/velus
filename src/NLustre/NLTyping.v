@@ -41,7 +41,6 @@ Module Type NLTYPING
       Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
-      NoDup xs ->
       wt_equation G vars (EqApp xs ck f es None)
   | wt_EqReset: forall n xs ck f es r,
       find_node f G = Some n ->
@@ -49,7 +48,6 @@ Module Type NLTYPING
       Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
-      NoDup xs ->
       In (r, bool_type) vars ->
       wt_equation G vars (EqApp xs ck f es (Some r))
   | wt_EqFby: forall x ck c0 e,
