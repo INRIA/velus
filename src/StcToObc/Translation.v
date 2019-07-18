@@ -61,21 +61,21 @@ Module Type TRANSLATION
         Assign x (translate_exp l)
       end.
 
-    Definition var_on_base_clock (ck: clock) (e: CESyn.exp) : bool :=
-      match e with
-      | Evar x _ =>
-        negb (PS.mem x memories)
-             && match Env.find x clkvars with
-                | Some ck' => clock_eq ck ck'
-                | None => false
-                end
-      | _ => false
-      end.
+    Definition var_on_base_clock (ck: clock) (x: ident) : bool :=
+      negb (PS.mem x memories)
+           && match Env.find x clkvars with
+              | Some ck' => clock_eq ck ck'
+              | None => false
+              end.
 
     Definition translate_arg (ck: clock) (e : CESyn.exp) : exp :=
-      if var_on_base_clock ck e
-      then Valid (translate_exp e)
-      else translate_exp e.
+      match e with
+      | Evar x ty =>
+        if var_on_base_clock ck x
+        then Valid x ty
+        else translate_exp e
+      | _ => translate_exp e
+      end.
 
     Definition translate_tc (tc: trconstr) : stmt :=
       match tc with
@@ -270,7 +270,8 @@ Module Type TRANSLATION
       typeof (translate_arg mems clkvars ck e) = CESyn.typeof e.
   Proof.
     unfold translate_arg; intros.
-    cases; simpl; apply typeof_correct.
+    cases; simpl; cases.
+    apply typeof_correct.
   Qed.
 
 End TRANSLATION.

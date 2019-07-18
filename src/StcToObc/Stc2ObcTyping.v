@@ -87,7 +87,10 @@ Module Type STC2OBCTYPING
         CE.Typ.wt_exp nvars e ->
         wt_exp mems vars (translate_arg memset clkvars ck e).
     Proof.
-      unfold translate_arg; intros; cases; auto using wt_exp.
+      unfold translate_arg, var_on_base_clock; intros * WT.
+      inv WT; auto; simpl.
+      apply NvarsSpec in H; destruct (PS.mem x memset); simpl; auto using wt_exp.
+      cases; auto using wt_exp.
     Qed.
     Hint Resolve translate_arg_wt.
 

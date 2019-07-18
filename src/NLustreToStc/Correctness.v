@@ -343,6 +343,16 @@ Module Type CORRECTNESS
       eapply state_closed_find_system_other; eauto.
   Qed.
 
+  Corollary msem_node_state_closed:
+     forall G f xss M yss,
+      Ordered_nodes G ->
+      msem_node G f xss M yss ->
+      forall n, state_closed (translate G) f (M n).
+  Proof.
+    intros; apply memory_closed_rec_state_closed; auto.
+    eapply msem_node_memory_closed_rec_n; eauto.
+  Qed.
+
   Lemma state_closed_insts_add:
     forall P insts I x f M,
       state_closed_insts P insts I ->
@@ -405,8 +415,7 @@ Module Type CORRECTNESS
          }
         * apply sem_trconstrs_n_add_n; auto.
       + intro; apply state_closed_insts_add; auto.
-        eapply memory_closed_rec_state_closed; eauto;
-          apply msem_node_memory_closed_rec_n in Node; eauto.
+        eapply msem_node_state_closed; eauto.
 
     - destruct xs; try discriminate.
       match goal with
@@ -475,13 +484,12 @@ Module Type CORRECTNESS
                  rewrite <-Mmask_n; auto.
          }
       + apply state_closed_insts_add; auto.
-        apply memory_closed_rec_state_closed; auto.
         destruct (rs n) eqn: Hrst.
         * rewrite Mmask_0.
-          -- apply msem_node_memory_closed_rec_n in Node_0; intuition.
+          -- eapply msem_node_state_closed; eauto.
           -- simpl; cases.
         * rewrite Mmask_n; try rewrite Hrst; auto.
-          apply msem_node_memory_closed_rec_n in Node_n'; intuition.
+          eapply msem_node_state_closed; eauto.
 
     - do 3 (econstructor; auto).
       destruct Mfby as (?& Spec).
@@ -630,17 +638,15 @@ Module Type CORRECTNESS
       apply find_node_translate in Hfind' as (?&?& Hfind' &?); subst.
       eapply msem_equations_cons in Heqs; eauto.
       pose proof (NoDup_defs_node node).
-      apply msem_node_memory_closed_rec_n in Hsem; auto.
       eapply equations_correctness in Heqs as (I & Heqs &?&?); eauto.
       + econstructor; eauto.
         * apply sem_trconstrs_cons; eauto.
           apply not_Is_node_in_not_Is_system_in; auto.
-        * apply memory_closed_rec_state_closed; auto.
+        * eapply msem_node_state_closed; eauto.
         * econstructor; eauto; try congruence.
           eapply state_closed_insts_find_system_other, state_closed_insts_cons; eauto.
           simpl; rewrite gather_eqs_snd_spec; auto.
-        * apply memory_closed_rec_state_closed; auto.
-          unfold next; simpl; auto.
+        * unfold next; eapply msem_node_state_closed; eauto.
       + rewrite idck_app.
         intro k; specialize (Ck k); setoid_rewrite Forall_app; split; auto.
         apply Forall_forall; intros (x, ck) ?.

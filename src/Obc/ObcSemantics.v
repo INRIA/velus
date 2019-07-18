@@ -83,9 +83,9 @@ Module Type OBCSEMANTICS
         sem_binop op c1 (typeof e1) c2 (typeof e2) = Some v ->
         exp_eval me ve (Binop op e1 e2 ty) (Some v)
   | evalid:
-      forall e v,
-        exp_eval me ve e (Some v) ->
-        exp_eval me ve (Valid e) (Some v).
+      forall x v ty,
+        Env.find x ve = Some v ->
+        exp_eval me ve (Valid x ty) (Some v).
 
   Inductive stmt_eval :
     program -> menv -> venv -> stmt -> menv * venv -> Prop :=
@@ -203,10 +203,10 @@ Module Type OBCSEMANTICS
     intros v1 v2 H1 H2;
     inversion H1 as [xa va tya Hv1|xa va tya Hv1|xa va Hv1
                      |opa ea ca va tya IHa Hv1
-                     |opa e1a e2a c1a c2a va tya IH1a IH2a Hv1|? va ? Hva];
+                     |opa e1a e2a c1a c2a va tya IH1a IH2a Hv1|? va ? Hv1];
     inversion H2 as [xb vb tyb Hv2|xb vb tyb Hv2|xb vb Hv2
                      |opb eb cb vb tyb IHb Hv2
-                     |opb e1b e2b c1b c2b vb tyb IH1b IH2b Hv2|? vb ? Hvb];
+                     |opb e1b e2b c1b c2b vb tyb IH1b IH2b Hv2|? vb ? Hv2];
     try (rewrite Hv1 in Hv2; (injection Hv2; trivial) || apply Hv2); subst; auto.
     - assert (Some ca = Some cb) as HH by (apply IHe; auto).
       inv HH. now rewrite Hv1 in Hv2.
@@ -276,7 +276,7 @@ Module Type OBCSEMANTICS
         H: exp_eval ?me ?ve ?e _, H': exp_eval ?me ?ve ?e _ |- _ =>
         eapply exp_eval_det in H; eauto; subst
       end.
-      match goal with H: _ = _ |- _ => inv H end.   
+      match goal with H: _ = _ |- _ => inv H end.
       match goal with
         H: val_to_bool ?v = _, H': val_to_bool ?v = _ |- _ =>
         rewrite H in H'; inv H'
@@ -412,14 +412,13 @@ Proof.
     split; intro Heval.
     - revert v Hfree Heval.
       induction e; intros v Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval.
-      now constructor; rewrite Env.gso.
-      now constructor; apply IHe; auto using Is_free_in_exp.
+        try not_free; eauto using exp_eval;
+          now constructor; rewrite Env.gso.
     - revert v Hfree Heval.
       induction e; intros v Hfree Heval; inv Heval;
         try not_free; eauto using exp_eval.
       now constructor; rewrite Env.gso.
-      now constructor; apply IHe; auto using Is_free_in_exp.
+      constructor; erewrite <-Env.gso; eauto.
   Qed.
 
   Lemma exp_eval_reduce_venv : forall me ve x e v,
@@ -430,14 +429,13 @@ Proof.
     split; intro Heval.
     - revert v Hfree Heval.
       induction e; intros v Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval.
-      now constructor; rewrite Env.gro.
-      now constructor; apply IHe; auto using Is_free_in_exp.
+        try not_free; eauto using exp_eval;
+          now constructor; rewrite Env.gro.
     - revert v Hfree Heval.
       induction e; intros v Hfree Heval; inv Heval;
         try not_free; eauto using exp_eval.
       now constructor; rewrite Env.gro.
-      now constructor; apply IHe; auto using Is_free_in_exp.
+      constructor; erewrite <-Env.gro; eauto.
   Qed.
 
   Lemma exp_eval_adds_extend_venv:
@@ -474,12 +472,10 @@ Proof.
     - revert v Hfree.
       induction e; intros v1 Hfree Heval; inv Heval;
         try not_free; try rewrite find_val_gso in *; eauto using exp_eval.
-      now constructor; apply IHe; auto using Is_free_in_exp.
     - revert v Hfree.
       induction e; intros v1 Hfree Heval; inv Heval;
         try not_free; eauto using exp_eval.
       now constructor; rewrite find_val_gso.
-      now constructor; apply IHe; auto using Is_free_in_exp.
   Qed.
 
   (** If we add objects to [me], evaluation does not change. *)

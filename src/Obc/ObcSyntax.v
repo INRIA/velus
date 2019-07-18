@@ -23,7 +23,7 @@ Module Type OBCSYNTAX
   | Const : const-> exp                         (* constant *)
   | Unop  : unop -> exp -> type -> exp          (* unary operator *)
   | Binop : binop -> exp -> exp -> type -> exp  (* binary operator *)
-  | Valid : exp -> exp.                         (* valid value assertion *)
+  | Valid : ident -> type -> exp.                         (* valid value assertion *)
 
   Fixpoint typeof (e: exp): type :=
     match e with
@@ -31,8 +31,8 @@ Module Type OBCSYNTAX
     | Var _ ty
     | State _ ty
     | Unop _ _ ty
-    | Binop _ _ _ ty => ty
-    | Valid e => typeof e
+    | Binop _ _ _ ty
+    | Valid _ ty => ty
     end.
 
   Inductive stmt : Type :=
@@ -345,9 +345,8 @@ Module Type OBCSYNTAX
   | FreeBinop: forall i op e1 e2 ty,
       Is_free_in_exp i e1 \/ Is_free_in_exp i e2 ->
       Is_free_in_exp i (Binop op e1 e2 ty)
-  | FreeValid: forall i e,
-      Is_free_in_exp i e ->
-      Is_free_in_exp i (Valid e).
+  | FreeValid: forall i t,
+      Is_free_in_exp i (Valid i t).
 
   Lemma not_free_aux1 : forall i op e ty,
       ~Is_free_in_exp i (Unop op e ty) ->
@@ -364,13 +363,6 @@ Module Type OBCSYNTAX
       constructor; [now left | now right].
   Qed.
 
-  Lemma not_free_aux3 : forall i e,
-      ~Is_free_in_exp i (Valid e) ->
-      ~Is_free_in_exp i e.
-  Proof.
-    auto using Is_free_in_exp.
-  Qed.
-
   Ltac not_free :=
     lazymatch goal with
     | H : ~Is_free_in_exp ?x (Var ?i ?ty) |- _ =>
@@ -381,12 +373,14 @@ Module Type OBCSYNTAX
         let HH := fresh in
         assert (HH : i <> x) by (intro; subst; apply H; constructor);
         clear H; rename HH into H
+    | H : ~Is_free_in_exp ?x (Valid ?i ?ty) |- _ =>
+        let HH := fresh in
+        assert (HH : i <> x) by (intro; subst; apply H; constructor);
+        clear H; rename HH into H
     | H : ~Is_free_in_exp ?x (Unop ?op ?e ?ty) |- _ =>
         apply not_free_aux1 in H
     | H : ~Is_free_in_exp ?x (Binop ?op ?e1 ?e2 ?ty) |- _ =>
         destruct (not_free_aux2 x op e1 e2 ty H)
-    | H : ~Is_free_in_exp ?x (Valid ?e ?ty) |- _ =>
-        apply not_free_aux3 in H
     end.
 
   (** Misc. properties *)

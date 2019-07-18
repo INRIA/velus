@@ -45,7 +45,7 @@ Module Type OBCADDDEFAULTS
 
     Definition add_valid (e : exp) (esreq : list exp * PS.t) :=
       match e with
-      | Var x ty => (Valid e :: fst esreq, PS.add x (snd esreq))
+      | Var x ty => (Valid x ty :: fst esreq, PS.add x (snd esreq))
       | _ => (e :: fst esreq, snd esreq)
       end.
 
@@ -302,7 +302,7 @@ Module Type OBCADDDEFAULTS
     edestruct (equiv_dec x); [now left; eauto|auto].
   Qed.
 
-  Definition add_valid' e := match e with Var x ty => Valid e | _ => e end.
+  Definition add_valid' e := match e with Var x ty => Valid x ty | _ => e end.
 
   Lemma add_valid_add_valid':
     forall es S es',
@@ -332,6 +332,7 @@ Module Type OBCADDDEFAULTS
     assert (exists v', vo' = Some v') as (v' & Hv')
         by now inv Heval; rewrite Env.In_find in Hvar.
     exists (vo'::vos'). subst vo'; split; auto.
+    inv Heval; constructor; eauto using exp_eval.
   Qed.
 
   Lemma stmt_eval_add_writes_split:
@@ -975,7 +976,7 @@ Module Type OBCADDDEFAULTS
           * apply Forall_map.
             match goal with H:Forall _ _ |- _ =>
                             apply Forall_impl_In with (2:=H) end.
-            intros e Hin WTe. destruct e; simpl; auto using wt_exp.
+            intros e Hin WTe. destruct e; simpl; inv WTe; auto using wt_exp.
         + apply PS_For_all_ps_adds; split; auto using PS_For_all_empty.
           apply Forall_forall.
           intros x Hin.

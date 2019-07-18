@@ -211,7 +211,10 @@ Module Type CORRECTNESS
     Proof.
       intros * Heval.
       unfold translate_arg.
-      destruct (var_on_base_clock mems0 cvars ck e); auto.
+      unfold var_on_base_clock.
+      destruct e; auto; simpl in *.
+      destruct (PS.mem i mems0); simpl; auto.
+      inv Heval; cases.
     Qed.
     Hint Resolve arg_correct.
 
@@ -894,9 +897,9 @@ Module Type CORRECTNESS
         injection Hinst; intro; subst lck.
         inversion_clear WClck as [|? ? ? Hicks| | |].
         simpl in Hv'; destruct (PS.mem i1 mems) eqn: E.
-        * unfold translate_arg; simpl; rewrite E; simpl; auto.
+        * unfold translate_arg, var_on_base_clock; simpl; rewrite E; simpl; auto.
         *{ apply Hcvars in Hicks.
-           - unfold translate_arg; simpl; rewrite Hicks, E; simpl.
+           - unfold translate_arg, var_on_base_clock; simpl; rewrite Hicks, E; simpl.
              now rewrite instck_subclock_not_clock_eq with (1:=Hck).
            - apply PSE.MP.Dec.F.not_mem_iff; auto.
          }
