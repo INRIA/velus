@@ -141,14 +141,9 @@ Module Type OBCSEMANTICS
   with stmt_call_eval_ind_2 := Minimality for stmt_call_eval Sort Prop.
   Combined Scheme stmt_eval_call_ind from stmt_eval_ind_2, stmt_call_eval_ind_2.
 
-  (* Definition present_consts: list const -> list (option val) := *)
-  (*   map (fun c => Some (sem_const c)). *)
-
   CoInductive loop_call (prog: program) (clsid f: ident) (ins outs: nat -> list (option val)): nat -> menv -> Prop :=
     Step:
       forall n me me',
-      (* let cins := present_consts (ins n) in *)
-      (* let couts := present_consts (outs n) in *)
       stmt_call_eval prog me clsid f (ins n) me' (outs n) ->
       loop_call prog clsid f ins outs (S n) me' ->
       loop_call prog clsid f ins outs n me.
@@ -161,8 +156,6 @@ Module Type OBCSEMANTICS
       forall prog clsid f ins outs n me,
         R prog clsid f ins outs n me ->
         exists me',
-          (* let cins := present_consts (ins n) in *)
-        (* let couts := present_consts (outs n) in *)
           stmt_call_eval prog me clsid f (ins n) me' (outs n)
           /\ R prog clsid f ins outs (S n) me'.
 
