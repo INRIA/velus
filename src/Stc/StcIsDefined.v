@@ -187,6 +187,52 @@ Module Type STCISDEFINED
     - now rewrite <-app_assoc; apply Permutation.Permutation_app_head.
   Qed.
 
+  Lemma s_nodup_defined:
+    forall s, NoDup (defined (s_tcs s)).
+  Proof.
+    intros; eapply Permutation.Permutation_NoDup.
+    - apply Permutation.Permutation_sym, s_defined.
+    - rewrite <-s_lasts_in_tcs, <-s_vars_out_in_tcs.
+      rewrite <-app_assoc.
+      eapply NoDup_app_weaken.
+      rewrite Permutation.Permutation_app_comm.
+      apply s_nodup.
+  Qed.
+
+  Lemma Is_last_in_not_Is_variable_in:
+    forall tcs x,
+      NoDup (defined tcs) ->
+      Is_last_in x tcs ->
+      ~ Is_variable_in x tcs.
+  Proof.
+    induction tcs; intros * Nodup Last Var;
+      inversion_clear Last as [?? IsLast|];
+      inversion_clear Var as [?? IsVar|?? IsVar_in].
+    - inv IsLast; inv IsVar.
+    - apply Is_variable_in_Is_defined_in in IsVar_in.
+      inv IsLast.
+      simpl in Nodup; inv Nodup.
+      now apply Is_defined_in_defined in IsVar_in.
+    - apply Is_variable_in_tc_Is_defined_in_tc in IsVar.
+      assert (Is_defined_in x tcs) as Hins by (apply Is_defined_Is_variable_Is_last_in; auto).
+      apply Is_defined_in_defined in Hins; apply Is_defined_in_defined_tc in IsVar.
+      simpl in Nodup; eapply NoDup_app_In in Nodup; eauto.
+    - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
+        apply NoDup_app_weaken in Nodup.
+      eapply IHtcs; eauto.
+  Qed.
+
+  Lemma defined_app:
+    forall tcs tcs',
+      defined (tcs ++ tcs') = defined tcs ++ defined tcs'.
+  Proof.
+    unfold defined.
+    induction tcs as [|[]]; simpl; intros; auto.
+    - f_equal; auto.
+    - f_equal; auto.
+    - rewrite <-app_assoc; f_equal; auto.
+  Qed.
+
 End STCISDEFINED.
 
 Module StcIsDefinedFun

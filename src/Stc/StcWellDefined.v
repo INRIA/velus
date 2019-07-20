@@ -44,7 +44,6 @@ Module Type STCWELLDEFINED
             if PS.mem x mems
             then ~ Is_defined_in x tcs
             else Is_variable_in x tcs \/ In x inputs) ->
-        (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs) ->
         (forall s k,
             Is_sub_in_tc s k tc ->
             Forall (fun tc => forall k', Is_sub_in_tc s k' tc -> k' < k) tcs) ->
@@ -62,32 +61,12 @@ Module Type STCWELLDEFINED
     inversion 1; auto.
   Qed.
 
-  Lemma Is_last_in_not_Is_variable_in:
-    forall tcs inputs mems x,
-      Is_well_sch inputs mems tcs ->
-      Is_last_in x tcs ->
-      ~ Is_variable_in x tcs.
-  Proof.
-    induction tcs; intros * Wsch Last Var;
-      inversion_clear Last as [?? IsLast|];
-      inversion_clear Var as [?? IsVar|?? IsVar_in];
-      inversion_clear Wsch as [|???? Defs].
-    - inv IsLast; inv IsVar.
-    - apply Is_variable_in_Is_defined_in in IsVar_in.
-      eapply Defs; eauto.
-      inv IsLast; constructor.
-    - apply Is_variable_in_tc_Is_defined_in_tc in IsVar.
-      eapply Defs; eauto.
-      apply Is_defined_Is_variable_Is_last_in; auto.
-    - eapply IHtcs; eauto.
-  Qed.
-
   Lemma Reset_not_Step_in:
     forall tcs inputs mems i ck f,
       Is_well_sch inputs mems (TcReset i ck f :: tcs) ->
       ~ Step_in i tcs.
   Proof.
-    inversion_clear 1 as [|????? Subs].
+    inversion_clear 1 as [|???? Subs].
     unfold Step_in, Is_sub_in.
     rewrite Exists_exists.
     intros (tc' & Hin & IsStin).
@@ -103,7 +82,7 @@ Module Type STCWELLDEFINED
       Is_well_sch inputs mems (TcReset i ck f :: tcs) ->
       ~ Reset_in i tcs.
   Proof.
-    inversion_clear 1 as [|????? Subs].
+    inversion_clear 1 as [|???? Subs].
     unfold Reset_in, Is_sub_in.
     rewrite Exists_exists.
     intros (tc' & Hin & IsStin).
@@ -232,7 +211,7 @@ Module Type STCWELLDEFINED
       ~ Step_in i tcs
       /\ if rst then Reset_in i tcs else ~ Reset_in i tcs.
   Proof.
-    inversion_clear 1 as [|????? Subs].
+    inversion_clear 1 as [|???? Subs].
     inversion_clear 1.
     split; auto.
     setoid_rewrite Exists_exists.
@@ -252,9 +231,9 @@ Module Type STCWELLDEFINED
       Step_with_reset_spec tcs.
   Proof.
     induction tcs as [|[]]; intros * Spec WSCH;
-      inversion_clear WSCH as [|??? Free Def Subs];
+      inversion_clear WSCH as [|??? Free Subs];
       constructor;
-      clear Free Def;
+      clear Free;
       try (eapply IHtcs; eauto; intros * Step; specialize (Spec j rst));
       try (setoid_rewrite Step_with_reset_in_cons_not_call in Spec; [|discriminate]).
     - apply Spec in Step.
@@ -510,13 +489,14 @@ Module Type STCWELLDEFINED
 
     Lemma not_well_sch_vars_defs_spec:
       forall tcs args defs vars tc,
-         (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
-         (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
-         PS.for_all (check_var defs vars) (free_in_tc tc PS.empty) &&
-                 negb (existsb (fun x => PS.mem x defs) (defined_tc tc)) = false ->
+        NoDup (defined (tc :: tcs)) ->
+        (forall x, PS.In x defs <-> Is_defined_in x tcs) ->
+        (forall x, PS.In x vars <-> Is_variable_in x tcs \/ In x args) ->
+        PS.for_all (check_var defs vars) (free_in_tc tc PS.empty) &&
+                   negb (existsb (fun x => PS.mem x defs) (defined_tc tc)) = false ->
         ~ Is_well_sch args mems (tc :: tcs).
     Proof.
-      intros * DefSpec VarSpec E Wsch.
+      intros * Nodup DefSpec VarSpec E Wsch.
       inversion_clear Wsch as [|??? Hfree Hdefs].
       apply Bool.andb_false_iff in E as [E|E].
       - apply PS_not_for_all_spec in E; auto.
@@ -528,9 +508,8 @@ Module Type STCWELLDEFINED
         + rewrite PSE.MP.Dec.F.not_mem_iff; intro Hin'; rewrite Hin' in Hin.
           now rewrite VarSpec.
       - apply Bool.negb_false_iff, existsb_exists in E as (?& Hin & Hin').
-        apply Is_defined_in_defined_tc in Hin.
-        apply PSE.MP.Dec.F.mem_iff, DefSpec in Hin'.
-        eapply Hdefs; eauto.
+        apply PSE.MP.Dec.F.mem_iff, DefSpec, Is_defined_in_defined in Hin'.
+        simpl in Nodup; eapply NoDup_app_In in Nodup; eauto.
     Qed.
 
     Lemma Is_defined_in_adds_defined_tc:
@@ -575,6 +554,7 @@ Module Type STCWELLDEFINED
 
     Lemma well_sch_pre_spec:
       forall args tcs ok defs vars subs,
+        NoDup (defined tcs) ->
         fold_right check_tc (true,
                              PS.empty,
                              ps_from_list args,
@@ -589,7 +569,7 @@ Module Type STCWELLDEFINED
           ~Is_well_sch args mems tcs.
     Proof.
       induction tcs as [|tc].
-      - simpl; inversion_clear 1; intuition; try (now constructor);
+      - simpl; inversion_clear 2; intuition; try (now constructor);
           repeat match goal with
                  | H:PS.In _ PS.empty |- _ => apply PS.empty_spec in H; contradiction
                  | H:PNS.In _ PNS.empty |- _ => apply PNS.empty_spec in H; contradiction
@@ -601,10 +581,12 @@ Module Type STCWELLDEFINED
                  | _ => intuition
                  end.
         apply ps_from_list_In; auto.
-      - simpl; intros * HH.
+      - simpl; intros * Nodup HH.
+        assert (NoDup (defined tcs)) as Nodup'
+            by (eapply NoDup_app_weaken; rewrite Permutation.Permutation_app_comm; eauto).
         destruct (fold_right check_tc (true, PS.empty, ps_from_list args, PNS.empty) tcs)
           as [[[ok' defs'] vars'] subs'].
-        specialize (IHtcs ok' defs'  vars' subs' eq_refl).
+        specialize (IHtcs ok' defs'  vars' subs' Nodup' eq_refl).
         simpl in HH.
         destruct ok'.
         + destruct IHtcs as (Wsch & DefSpec & VarSpec & SubSpec).
@@ -622,7 +604,6 @@ Module Type STCWELLDEFINED
                split; [|split; [|split]]; auto.
                + constructor; auto.
                  * intros; eapply free_spec; eauto.
-                 * intros; eapply def_spec; eauto.
                  * intros * Hin; apply Is_sub_in_sub_tc in Hin; rewrite Hin in St; inv St.
                    apply Forall_forall; intros.
                    assert (Is_sub_in i k' tcs) as Hst
@@ -642,7 +623,7 @@ Module Type STCWELLDEFINED
 
              - apply Bool.andb_false_iff in E as [E|];
                  [|eapply not_well_sch_vars_defs_spec; eauto].
-               inversion_clear 1 as [|????? Hsubs].
+               inversion_clear 1 as [|???? Hsubs].
                rewrite <-Is_sub_in_sub_tc in St.
                apply Hsubs in St.
                apply PNS_not_for_all_spec in E; apply E; clear E.
@@ -658,7 +639,6 @@ Module Type STCWELLDEFINED
                split; [|split; [|split]]; auto.
                + constructor; auto.
                  * intros; eapply free_spec; eauto.
-                 * intros; eapply def_spec; eauto.
                  * intros * Hin; apply Is_sub_in_sub_tc in Hin; rewrite Hin in St; inv St.
                + subst; setoid_rewrite SubSpec.
                  split.
@@ -674,40 +654,43 @@ Module Type STCWELLDEFINED
     Qed.
 
     Lemma well_sch_spec:
-      forall args eqns,
-        if well_sch args eqns
-        then Is_well_sch args mems eqns
-        else ~ Is_well_sch args mems eqns.
+      forall args tcs,
+        NoDup (defined tcs) ->
+        if well_sch args tcs
+        then Is_well_sch args mems tcs
+        else ~ Is_well_sch args mems tcs.
     Proof.
-      intros args eqns.
-      pose proof (well_sch_pre_spec args eqns) as Spec.
+      intros * Nodup.
+      pose proof (well_sch_pre_spec args tcs) as Spec.
       unfold well_sch.
       destruct (fold_right check_tc
-                  (true, PS.empty, ps_from_list args, PNS.empty) eqns)
+                  (true, PS.empty, ps_from_list args, PNS.empty) tcs)
         as [[[ok defs] vars] subs]; simpl.
-      specialize (Spec ok defs vars subs eq_refl).
+      specialize (Spec ok defs vars subs Nodup eq_refl).
       destruct ok; intuition.
     Qed.
 
     Lemma Is_well_sch_by_refl:
-      forall args eqns,
-        well_sch args eqns = true <-> Is_well_sch args mems eqns.
+      forall args tcs,
+        NoDup (defined tcs) ->
+        well_sch args tcs = true <-> Is_well_sch args mems tcs.
     Proof.
-      intros args eqns.
-      pose proof (well_sch_spec args eqns) as Hwss.
+      intros * Nodup.
+      pose proof (well_sch_spec args tcs Nodup) as Hwss.
       split; intro H.
       rewrite H in Hwss; assumption.
-      destruct (well_sch args eqns); [reflexivity|].
+      destruct (well_sch args tcs); [reflexivity|].
       exfalso; apply Hwss; apply H.
     Qed.
 
     Lemma well_sch_dec:
-      forall args eqns,
-        {Is_well_sch args mems eqns} + {~ Is_well_sch args mems eqns}.
+      forall args tcs,
+        NoDup (defined tcs) ->
+        {Is_well_sch args mems tcs} + {~ Is_well_sch args mems tcs}.
     Proof.
-      intros args eqns.
-      pose proof (well_sch_spec args eqns) as Hwss.
-      destruct (well_sch args eqns); [left|right]; assumption.
+      intros * Nodup.
+      pose proof (well_sch_spec args tcs Nodup) as Hwss.
+      destruct (well_sch args tcs); [left|right]; assumption.
     Qed.
 
   End Decide.

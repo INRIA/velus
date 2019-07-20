@@ -143,15 +143,19 @@ Module Type STC2OBCINVARIANTS
       wc_env vars ->
       NoDupMembers vars ->
       Forall (wc_trconstr P vars) tcs ->
+      NoDup (defined tcs) ->
       Is_well_sch inputs mems tcs ->
       (forall x, PS.In x mems -> ~ Is_variable_in x tcs) ->
       (forall input, In input inputs -> ~ Is_defined_in input tcs) ->
       Fusible (translate_tcs mems clkvars tcs).
   Proof.
-    intros * Hwk Hnd Hwks Hwsch Hnvi Hnin.
+    intros * Hwk Hnd Hwks Defs Hwsch Hnvi Hnin.
     induction tcs as [|tc tcs IH]; [now constructor|].
+    assert (NoDup (defined tcs))
+      by (simpl in Defs; rewrite Permutation.Permutation_app_comm in Defs;
+          apply NoDup_app_weaken in Defs; auto).
     inversion_clear Hwks as [|?? Hwktc];
-      inversion_clear Hwsch as [|??? HH Hndef].
+      inversion_clear Hwsch as [|??? HH].
     unfold translate_tcs.
     simpl; apply Fusible_fold_left_shift.
     split.
@@ -172,7 +176,8 @@ Module Type STC2OBCINVARIANTS
           intro; subst.
           apply PSE.MP.Dec.F.not_mem_iff in Hnxm; rewrite Hnxm in Hfree'.
           destruct Hfree' as [Hvar|Hin].
-          - eapply Hndef; eauto using Is_defined_in_tc.
+          - simpl in Defs.
+            inversion_clear Defs as [|?? Hin]; apply Hin, Is_defined_in_defined.
             apply Is_variable_in_Is_defined_in; auto.
           - eapply Hnin; eauto.
             left; constructor.
@@ -222,13 +227,14 @@ Module Type STC2OBCINVARIANTS
       Well_scheduled P ->
       Forall ClassFusible (translate P).
   Proof.
-    induction P as [|b]; intros * WC Wsch;
+    induction P as [|s]; intros * WC Wsch;
       inversion_clear WC as [|??? WCb];
       inversion_clear Wsch as [|??? Wsch'];
       simpl; constructor; auto.
     unfold translate_system, ClassFusible; simpl.
     repeat constructor; simpl; auto.
     inversion_clear WCb as [? (?&?&?)].
+    assert (NoDup (defined (s_tcs s))) by apply s_nodup_defined.
     eapply translate_tcs_Fusible; eauto.
     - rewrite fst_NoDupMembers, map_app, 2 map_fst_idck.
       rewrite 2 map_app, <-2 app_assoc.
@@ -337,6 +343,7 @@ Module Type STC2OBCINVARIANTS
 
   Lemma translate_tcs_No_Overwrites:
     forall clkvars mems inputs tcs,
+      NoDup (defined tcs) ->
       Is_well_sch inputs mems tcs ->
       No_Overwrites (translate_tcs mems clkvars tcs).
   Proof.
@@ -349,9 +356,12 @@ Module Type STC2OBCINVARIANTS
         by inversion 1; revert Hcwd.
     generalize Skip.
     induction tcs as [|tc tcs IH]; auto.
-    intros s Hcwd Hdcw Hno Hwsch.
-    inversion_clear Hwsch as [|? ? Hwsch' Hfree Hddef Hstates];
+    intros s Hcwd Hdcw Hno Nodup Hwsch.
+    inversion_clear Hwsch as [|? ? Hwsch' Hfree Hstates];
       clear Hfree Hstates.
+    assert (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs) as Defs
+      by (intro; rewrite Is_defined_in_defined, Is_defined_in_defined_tc;
+          simpl in Nodup; intros; eapply NoDup_app_In in Nodup; eauto).
     simpl. apply IH; auto.
     - setoid_rewrite Can_write_in_Comp.
       setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
@@ -360,7 +370,7 @@ Module Type STC2OBCINVARIANTS
     - setoid_rewrite cannot_write_in_Comp.
       setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
       intros H Hdefs. split.
-      + intro Hdef; apply Hddef in Hdef. contradiction.
+      + intro Hdef; apply Defs in Hdef. contradiction.
       + apply Hdcw. now constructor 2.
     - constructor; auto.
       + setoid_rewrite Can_write_in_translate_tc_Is_defined_in_tc.
@@ -369,6 +379,8 @@ Module Type STC2OBCINVARIANTS
         intros x Hcw. apply Hcwd, not_Is_defined_in_cons in Hcw as (? & ?); auto.
       + destruct tc; simpl; setoid_rewrite No_Overwrites_Control;
           auto using No_Overwrites_translate_cexp.
+    - simpl in Nodup; rewrite Permutation.Permutation_app_comm in Nodup;
+        apply NoDup_app_weaken in Nodup; auto.
   Qed.
 
   Lemma not_Can_write_in_reset_insts:
@@ -438,6 +450,7 @@ Module Type STC2OBCINVARIANTS
     destruct Hin as [|[|]]; simpl in *; subst; simpl;
       try contradiction.
     - eapply translate_tcs_No_Overwrites; eauto.
+      apply s_nodup_defined.
     - apply translate_reset_No_Overwrites.
   Qed.
 

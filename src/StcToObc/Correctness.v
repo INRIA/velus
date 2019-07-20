@@ -915,6 +915,7 @@ Module Type CORRECTNESS
       Ordered_systems P ->
       Is_well_sch inputs mems (tc :: tcs) ->
       NoDup (inputs ++ variables (tc :: tcs)) ->
+      NoDup (defined (tc :: tcs)) ->
       Step_with_reset_spec (tc :: tcs) ->
       (forall i f Si, In (i, f) (resets_of (tc :: tcs)) -> find_inst i S = Some Si -> state_closed P f Si) ->
       (forall i f Ii, In (i, f) (resets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
@@ -932,12 +933,15 @@ Module Type CORRECTNESS
             sem_var_instant R x v ->
             Env.find x ve' = value_to_option v.
   Proof.
-    intros * IH Sem Hwc Hnormal Ord Wsch Vars StepReset
-           Closed TransClosed Corres Equiv Hcm Hcvars Hmems Hve;
-      inversion Sem as [????????? Hexp Hvar|
-                        ??????????? Hvar Hexp|
-                        ??????????? FindI Init|
-                        ??????????????? Hexps Hck Find_S Find_I Hsystem Hvars];
+    intros * IH Sem Hwc Hnormal Ord Wsch Vars Defs StepReset
+                Closed TransClosed Corres Equiv Hcm Hcvars Hmems Hve.
+    assert (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs)
+      by (intro; rewrite Is_defined_in_defined, Is_defined_in_defined_tc;
+          simpl in Defs; intros; eapply NoDup_app_In in Defs; eauto).
+    inversion Sem as [????????? Hexp Hvar|
+                      ??????????? Hvar Hexp|
+                      ??????????? FindI Init|
+                      ??????????????? Hexps Hck Find_S Find_I Hsystem Hvars];
       subst; simpl.
 
     - inv Hexp; exists me; eexists; split;
@@ -1208,6 +1212,7 @@ Module Type CORRECTNESS
       Ordered_systems P ->
       Is_well_sch inputs mems alltcs ->
       NoDup (inputs ++ variables alltcs) ->
+      NoDup (defined alltcs) ->
       Step_with_reset_spec alltcs ->
       (forall i f Si, In (i, f) (resets_of alltcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
       (forall i f Ii, In (i, f) (resets_of alltcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
@@ -1229,20 +1234,23 @@ Module Type CORRECTNESS
   Proof.
     induction tcs' as [|tc]; simpl;
       intros ? ? ? ? ? ? ? ? ? ? ? ? ?
-             Htcs Hwc Hnormal Hcm Hcvars Hmems Ord Wsch Vars StepReset
+             Htcs Hwc Hnormal Hcm Hcvars Hmems Ord Wsch Vars Defs StepReset
              Closed TransClosed SpecLast SpecInput EquivInput EquivInput' Corres.
     - exists me, ve. split; eauto using stmt_eval; split; auto.
       + now apply Memory_Corres_tcs_empty_equal_memory.
       + inversion 1.
     - pose proof Wsch as Wsch'; apply Is_well_sch_app in Wsch'.
       pose proof Vars as Vars'; rewrite variables_app in Vars'.
+      pose proof Defs as Defs'; rewrite defined_app in Defs'.
       rewrite NoDup_swap, Permutation.Permutation_app_comm in Vars';
         apply NoDup_app_weaken in Vars'.
+      rewrite Permutation.Permutation_app_comm in Defs';
+        apply NoDup_app_weaken in Defs'.
       pose proof StepReset as StepReset'; apply Step_with_reset_spec_app in StepReset'.
       pose proof Htcs as Htcs'; apply Forall_app_weaken in Htcs'; inv Htcs'.
       pose proof Hwc as Hwc'; apply Forall_app_weaken in Hwc'; inv Hwc'.
       pose proof Hnormal as Hnormal'; apply Forall_app_weaken in Hnormal'; inv Hnormal'.
-      rewrite List_shift_first in Wsch, Vars, StepReset, Htcs, SpecLast, SpecInput,
+      rewrite List_shift_first in Wsch, Vars, Defs, StepReset, Htcs, SpecLast, SpecInput,
                                   Closed, TransClosed, Hwc, Hnormal.
       edestruct IHtcs' with (ve := ve) (me := me) as (me' & ve' &?&?&?); eauto.
       edestruct trconstr_cons_correct with (ve := ve') (me := me') as (me'' & ve'' &?&?&?);
@@ -1293,6 +1301,7 @@ Module Type CORRECTNESS
       (forall i f Ii, In (i, f) (resets_of tcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
       Is_well_sch inputs mems tcs ->
       NoDup (inputs ++ variables tcs) ->
+      NoDup (defined tcs) ->
       Step_with_reset_spec tcs ->
       (forall x, PS.In x mems -> Is_last_in x tcs) ->
       (forall x, In x inputs -> ~ Is_defined_in x tcs) ->
@@ -1499,6 +1508,7 @@ Module Type CORRECTNESS
         apply s_nodup_subs.
       + rewrite <-s_vars_out_in_tcs, <-2 map_app, <-fst_NoDupMembers.
         apply s_nodup_vars.
+      + apply s_nodup_defined.
       + eapply Is_well_sch_Step_with_reset_spec; eauto.
         apply s_reset_in.
       + intros; apply lasts_of_In, ps_from_list_In; auto.
