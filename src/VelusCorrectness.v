@@ -83,8 +83,7 @@ Proof.
     destruct (Stc.Wdef.well_sch (ps_from_list (map fst (Stc.Syn.s_lasts s)))
                                (map fst (Stc.Syn.s_in s)) (Stc.Syn.s_tcs s)) eqn: E.
     + apply Stc.Wdef.Is_well_sch_by_refl in E.
-      * constructor; auto.
-      * apply Stc.Def.s_nodup_defined.
+      constructor; auto.
     + rewrite is_well_sch_error in Fold; discriminate.
 Qed.
 

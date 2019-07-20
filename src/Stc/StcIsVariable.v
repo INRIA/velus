@@ -85,30 +85,30 @@ Module Type STCISVARIABLE
       eapply Bool.reflect_dec, Bool.iff_reflect, Is_variable_in_tc_reflect.
   Qed.
 
-  Definition variables_tc (vars: PS.t) (tc: trconstr) : PS.t :=
-    match tc with
-    | TcDef x _ _ => PS.add x vars
-    | TcCall _ xs _ _ _ _ => ps_adds xs vars
-    | _ => vars
-    end.
+  (* Definition variables_tc (vars: PS.t) (tc: trconstr) : PS.t := *)
+  (*   match tc with *)
+  (*   | TcDef x _ _         => PS.add x vars *)
+  (*   | TcCall _ xs _ _ _ _ => ps_adds xs vars *)
+  (*   | _ => vars *)
+  (*   end. *)
 
-  Lemma variables_tc_empty:
-    forall x tc vars,
-      PS.In x (variables_tc vars tc)
-      <-> PS.In x (variables_tc PS.empty tc) \/ PS.In x vars.
-  Proof.
-    split; intro Hin.
-    - destruct tc; simpl in *; auto.
-      + apply PSE.MP.Dec.F.add_iff in Hin as [|]; subst; intuition.
-      + rewrite ps_adds_spec in *; tauto.
-    - destruct tc; simpl in *; destruct Hin as [Hin|Hin]; auto.
-      + rewrite PSE.MP.Dec.F.add_iff in *; intuition; pose proof (not_In_empty x); contradiction.
-      + rewrite PSE.MP.Dec.F.add_iff; auto.
-      + pose proof (not_In_empty x); contradiction.
-      + pose proof (not_In_empty x); contradiction.
-      + rewrite ps_adds_spec in *; intuition; pose proof (not_In_empty x); contradiction.
-      + rewrite ps_adds_spec; tauto.
-  Qed.
+  (* Lemma variables_tc_empty: *)
+  (*   forall x tc vars, *)
+  (*     PS.In x (variables_tc vars tc) *)
+  (*     <-> PS.In x (variables_tc PS.empty tc) \/ PS.In x vars. *)
+  (* Proof. *)
+  (*   split; intro Hin. *)
+  (*   - destruct tc; simpl in *; auto. *)
+  (*     + apply PSE.MP.Dec.F.add_iff in Hin as [|]; subst; intuition. *)
+  (*     + rewrite ps_adds_spec in *; tauto. *)
+  (*   - destruct tc; simpl in *; destruct Hin as [Hin|Hin]; auto. *)
+  (*     + rewrite PSE.MP.Dec.F.add_iff in *; intuition; pose proof (not_In_empty x); contradiction. *)
+  (*     + rewrite PSE.MP.Dec.F.add_iff; auto. *)
+  (*     + pose proof (not_In_empty x); contradiction. *)
+  (*     + pose proof (not_In_empty x); contradiction. *)
+  (*     + rewrite ps_adds_spec in *; intuition; pose proof (not_In_empty x); contradiction. *)
+  (*     + rewrite ps_adds_spec; tauto. *)
+  (* Qed. *)
 
 End STCISVARIABLE.
 
