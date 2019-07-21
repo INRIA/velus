@@ -137,12 +137,11 @@ Module Type STCSCHEDULE
 
   Module SchSort := Sort SchTcOrder.
 
-  Definition schedule_tcs (f : ident) (tcs : list trconstr) : list trconstr :=
+  Definition schedule_tcs (f: ident) (tcs: list trconstr) : list trconstr :=
     let sch := Sch.schedule f tcs in
     match ocombine sch tcs with
-    | None => tcs
-    | Some schtcs =>
-      map snd (SchSort.sort schtcs)
+    | None        => tcs
+    | Some schtcs => map snd (SchSort.sort schtcs)
     end.
 
   Lemma schedule_tcs_permutation:
@@ -429,11 +428,10 @@ Module Type STCSCHEDULE
   Qed.
 
   Corollary scheduler_loop:
-    forall P f xss yss S0,
-      loop P f xss yss S0 0 ->
-      loop (schedule P) f xss yss S0 0.
+    forall n P f xss yss S,
+      loop P f xss yss S n ->
+      loop (schedule P) f xss yss S n.
   Proof.
-    generalize 0%nat.
     cofix COFIX; inversion_clear 1.
     econstructor; eauto.
     apply scheduler_sem_system; eauto.
