@@ -26,12 +26,14 @@ Module Type CORRECTNESS
        (Import Trans  : TRANSLATION     Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
        (Import Corres : STCMEMORYCORRES Ids Op       CE.Syn Stc.Syn Stc.Last).
 
-  Definition eq_if_present (x: value) (oy: option val) : Prop :=
-    match x, oy with
-    | present xv, Some yv => xv = yv
-    | absent, _ => True
-    | _, _ => False
-    end.
+  Inductive eq_if_present: value -> option val -> Prop :=
+  | EqP:
+      forall v,
+        eq_if_present (present v) (Some v)
+  | EqA:
+      forall v,
+        eq_if_present absent v.
+  Hint Constructors eq_if_present.
 
   Definition value_to_option (v: value) : option val :=
     match v with
@@ -75,7 +77,7 @@ Module Type CORRECTNESS
       eq_if_present (present c) vo <-> vo = Some c.
   Proof.
     simpl; split.
-    - cases; inversion 1; auto.
+    - now inversion 1.
     - intros ->; auto.
   Qed.
 
@@ -409,18 +411,6 @@ Module Type CORRECTNESS
     apply Closed, not_None_is_Some; eauto.
   Qed.
 
-  Lemma add_mems_state_closed:
-    forall P f s P' me,
-      state_closed P f me ->
-      find_system f P = Some (s, P') ->
-      state_closed P f (add_mems s.(s_lasts) me).
-  Proof.
-    inversion_clear 1 as [????? Find]; intros * Find';
-      rewrite Find in Find'; inv Find'.
-    econstructor; eauto.
-    now apply add_mems_state_closed_lasts.
-  Qed.
-
   Lemma reset_insts_reset_lasts:
     forall subs prog me ve me' ve' s,
       stmt_eval prog me ve (reset_insts subs) (me', ve') ->
@@ -684,7 +674,7 @@ Module Type CORRECTNESS
       apply ident_eqb_neq in E; auto.
   Qed.
 
- Lemma reset_spec:
+ Theorem reset_spec:
     forall P me f s P',
       Ordered_systems P ->
       find_system f P = Some (s, P') ->
@@ -700,21 +690,6 @@ Module Type CORRECTNESS
   Qed.
 
   (** Step correctness *)
-
-  Lemma eq_if_present_value_to_option:
-    forall v,
-      eq_if_present v (value_to_option v).
-  Proof.
-    destruct v; simpl; auto.
-  Qed.
-
-  Corollary eq_if_present_value_to_option_Forall2:
-    forall vs,
-      Forall2 eq_if_present vs (map value_to_option vs).
-  Proof.
-    induction vs; constructor; auto.
-    apply eq_if_present_value_to_option.
-  Qed.
 
   Lemma value_to_option_updates:
     forall R ve x xs v vs,
@@ -753,8 +728,8 @@ Module Type CORRECTNESS
       apply Forall2_left_cons in Hovals
         as (ov & ovals' & Hovals & Heqp & ?).
       pose proof (sem_var_instant_det _ _ _ _ Hvs Hxsem) as Hpvc.
-      subst. destruct ov; try contradiction.
-      now simpl in Heqp; subst; rewrite Env.find_gsss_opt.
+      subst; inv Heqp.
+      now rewrite Env.find_gsss_opt.
     + pose proof (Forall2_length _ _ _ Hvar) as Hlenyss.
       pose proof (Forall2_length _ _ _ Hovals) as Hlenovals.
       destruct vs; try discriminate.
@@ -773,7 +748,6 @@ Module Type CORRECTNESS
       exists me',
         stmt_call_eval (translate P) me f step ins me' (map value_to_option ys)
         /\ me' ≋ S'.
-        (* /\ Forall2 eq_if_present ys outs. *)
 
   Definition correct_program (P: Stc.Syn.program) : Prop :=
     forall f, correct_system P f.
@@ -933,6 +907,7 @@ Module Type CORRECTNESS
     assert (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs)
       by (intro; rewrite Is_defined_in_defined, Is_defined_in_defined_tc;
           simpl in Defs; intros; eapply NoDup_app_In in Defs; eauto).
+    clear Defs.
     inversion Sem as [????????? Hexp Hvar|
                       ??????????? Hvar Hexp|
                       ??????????? FindI Init|
@@ -954,7 +929,6 @@ Module Type CORRECTNESS
           eapply sem_var_instant_det in Hvar; eauto.
           unfold variables in Vars.
           subst; simpl in *; apply NoDup_app_cons in Vars as (Hnin & ?).
-          inv Wsch.
           apply Hve; auto using Is_defined_in_tc.
           intro; apply Hnin, in_app; auto.
 

@@ -22,16 +22,12 @@ Module Type STCMEMORYCORRES
 
   Definition state := memory val.
   Definition menv := memory val.
-  Definition transient_states := Env.t (memory val).
 
   Definition value_corres (x: ident) (S: state) (me: menv) : Prop :=
     find_val x S = find_val x me.
 
   Definition state_corres (s: ident) (S: state) (me: menv) : Prop :=
     find_inst s S ⌈≋⌉ find_inst s me.
-
-  Definition transient_state_corres (s: ident) (I: transient_states) (me: menv) : Prop :=
-    Env.find s I ⌈≋⌉ find_inst s me.
 
   Definition Memory_Corres_tcs
              (tcs: list trconstr)
