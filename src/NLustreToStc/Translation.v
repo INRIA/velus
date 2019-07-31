@@ -322,7 +322,8 @@ Module Type TRANSLATION
       right; apply IHl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns in *.
+    unfold SynStc.reset_consistency.
+    unfold translate_eqns in *; intros.
     destruct rst.
     - induction (n_eqs n) as [|[]]; simpl in *.
       + inv H.

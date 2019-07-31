@@ -174,76 +174,24 @@ Module Type STCWELLDEFINED
   Definition Well_defined (P: program) : Prop :=
     Ordered_systems P /\ Well_scheduled P /\ normal_args P.
 
-  Inductive Step_with_reset_spec: list trconstr -> Prop :=
-  | Step_with_reset_nil:
-      Step_with_reset_spec []
-  | Step_with_reset_TcDef:
-      forall x ck e tcs,
-        Step_with_reset_spec tcs ->
-        Step_with_reset_spec (TcDef x ck e :: tcs)
-  | Step_with_reset_TcNext:
-      forall x ck e tcs,
-        Step_with_reset_spec tcs ->
-        Step_with_reset_spec (TcNext x ck e :: tcs)
-  | Step_with_reset_TcReset:
-      forall i ck f tcs,
-        Step_with_reset_spec tcs ->
-        Step_with_reset_spec (TcReset i ck f :: tcs)
-  | Step_with_reset_TcCall:
-      forall i xs ck (rst: bool) f es tcs,
-        Step_with_reset_spec tcs ->
-        (if rst then Reset_in i tcs else ~ Reset_in i tcs) ->
-        Step_with_reset_spec (TcCall i xs ck rst f es :: tcs).
-
-  Lemma Step_with_reset_spec_app:
-    forall tcs tcs',
-      Step_with_reset_spec (tcs ++ tcs') ->
-      Step_with_reset_spec tcs'.
+  Lemma reset_consistency_app:
+    forall tcs tcs' inputs mems,
+      Is_well_sch inputs mems (tcs ++ tcs') ->
+      reset_consistency (tcs ++ tcs') ->
+      reset_consistency tcs'.
   Proof.
-    induction tcs; auto; simpl.
-    inversion 1; auto.
-  Qed.
-
-  Lemma Step_not_Step_Reset_in:
-    forall tcs inputs mems i ys ck rst f es,
-      Is_well_sch inputs mems (TcCall i ys ck rst f es :: tcs) ->
-      Step_with_reset_spec (TcCall i ys ck rst f es :: tcs) ->
-      ~ Step_in i tcs
-      /\ if rst then Reset_in i tcs else ~ Reset_in i tcs.
-  Proof.
-    inversion_clear 1 as [|???? Subs].
-    inversion_clear 1.
-    split; auto.
-    setoid_rewrite Exists_exists.
-    intros (tc' & Hin & IsStin).
-    assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 1) tcs)
-        by (apply Subs; auto using Is_sub_in_tc).
-    eapply Forall_forall in Hin; eauto.
-    apply Hin in IsStin.
-    omega.
-  Qed.
-
-  Lemma Is_well_sch_Step_with_reset_spec:
-    forall tcs inputs mems,
-      (forall j rst, Step_with_reset_in j rst tcs ->
-                if rst then Reset_in j tcs else ~ Reset_in j tcs) ->
-      Is_well_sch inputs mems tcs ->
-      Step_with_reset_spec tcs.
-  Proof.
-    induction tcs as [|[]]; intros * Spec WSCH;
-      inversion_clear WSCH as [|??? Free Subs];
-      constructor;
-      clear Free;
-      try (eapply IHtcs; eauto; intros * Step; specialize (Spec j rst));
-      try (setoid_rewrite Step_with_reset_in_cons_not_call in Spec; [|discriminate]).
-    - apply Spec in Step.
-      destruct rst.
-      + inversion_clear Step as [?? Step'|]; auto; inv Step'.
-      + intro; apply Step; right; auto.
-    - apply Spec in Step.
-      destruct rst.
-      + inversion_clear Step as [?? Step'|]; auto; inv Step'.
-      + intro; apply Step; right; auto.
+    unfold reset_consistency.
+    induction tcs as [|[]]; simpl; auto; intros * Wsch Spec ?? Step;
+      inversion_clear Wsch as [|??? Free Subs]; clear Free;
+        try (eapply IHtcs; eauto; intros j r Step';
+             specialize (Spec j r); rewrite Step_with_reset_in_cons_not_call in Spec;
+             [|now discriminate]).
+    - apply Spec in Step'; destruct r.
+      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
+      + intro; apply Step'; right; auto.
+    - apply Spec in Step'; destruct r.
+      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
+      + intro; apply Step'; right; auto.
     - assert (j <> i).
       { assert (Is_sub_in_tc i 0 (TcReset i c i0)) as Sub by constructor.
         apply Subs in Sub.
@@ -252,30 +200,43 @@ Module Type STCWELLDEFINED
         assert (1 < 0) by (apply SubSpec; constructor).
         omega.
       }
-      apply Spec in Step.
-      destruct rst.
-      + inversion_clear Step as [?? Step'|]; auto; inv Step'.
+      apply Spec in Step'; destruct r.
+      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
         congruence.
-      + intro; apply Step; right; auto.
-    - assert (j <> i).
-      { assert (Is_sub_in_tc i 1 (TcCall i i0 c b i1 l)) as Sub by constructor.
-        apply Subs in Sub.
-        eapply Forall_Exists, Exists_exists in Sub as (?&?& SubSpec & Step_tc); eauto.
-        inv Step_tc; intro; subst.
-        assert (1 < 1) by (apply SubSpec; constructor).
-        omega.
-      }
-      rewrite Step_with_reset_in_cons_call in Spec; auto.
+      + intro; apply Step'; right; auto.
+    - eapply IHtcs; eauto; intros j r ?.
+      assert (Step_with_reset_in j r (TcCall i i0 c b i1 l :: tcs ++ tcs')) as Step'
+          by (right; auto).
+      apply Spec in Step'.
+      destruct r.
+      + inversion_clear Step' as [?? Rst|]; auto; inv Rst.
+      + intro; apply Step'; right; auto.
+  Qed.
+
+  Lemma Step_not_Step_Reset_in:
+    forall tcs inputs mems i ys ck rst f es,
+      let tcs' := TcCall i ys ck rst f es :: tcs in
+      Is_well_sch inputs mems tcs' ->
+      reset_consistency tcs' ->
+      ~ Step_in i tcs
+      /\ if rst then Reset_in i tcs else ~ Reset_in i tcs.
+  Proof.
+    inversion_clear 1 as [|??? Free Subs]; clear Free.
+    intros * Spec.
+    split.
+    - setoid_rewrite Exists_exists.
+      intros (tc' & Hin & IsStin).
+      assert (Forall (fun tc => forall k', Is_sub_in_tc i k' tc -> k' < 1) tcs)
+        by (apply Subs; auto using Is_sub_in_tc).
+      eapply Forall_forall in Hin; eauto.
+      apply Hin in IsStin.
+      omega.
+    - assert (Step_with_reset_in i rst tcs') as Step by do 2 constructor.
       apply Spec in Step.
       destruct rst.
       + inversion_clear Step as [?? Step'|]; auto; inv Step'.
-      + intro; apply Step; right; auto.
-    - assert (Step_with_reset_in i b (TcCall i i0 c b i1 l :: tcs)) as Step
-          by (left; constructor).
-      apply Spec in Step.
-      destruct b.
-      + inversion_clear Step as [?? Step'|]; auto; inv Step'.
-      + intro; apply Step; right; auto.
+      + intro; apply Step.
+        right; auto.
   Qed.
 
   Module PN_as_OT := OrdersEx.PairOrderedType OrdersEx.Positive_as_OT OrdersEx.Nat_as_OT.

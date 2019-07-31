@@ -253,8 +253,8 @@ Module Type STCSCHEDULE
       now apply s_no_single_reset.
   Qed.
   Next Obligation.
-    unfold Step_with_reset_in in H; rewrite schedule_tcs_permutation in H.
-    apply s_reset_in in H.
+    intros ?? Spec; unfold Step_with_reset_in in Spec; rewrite schedule_tcs_permutation in Spec.
+    apply s_reset_consistency in Spec.
     cases; rewrite schedule_tcs_permutation; auto.
   Qed.
   Next Obligation.

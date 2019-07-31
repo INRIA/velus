@@ -885,10 +885,10 @@ Module Type CORRECTNESS
       Is_well_sch inputs mems (tc :: tcs) ->
       NoDup (inputs ++ variables (tc :: tcs)) ->
       NoDup (defined (tc :: tcs)) ->
-      Step_with_reset_spec (tc :: tcs) ->
+      reset_consistency (tc :: tcs) ->
       (forall i f Si, In (i, f) (resets_of (tc :: tcs)) -> find_inst i S = Some Si -> state_closed P f Si) ->
       (forall i f Ii, In (i, f) (resets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
-      Memory_Corres_tcs tcs S I S' me ->
+      Memory_Corres tcs S I S' me ->
       equiv_env (fun x => Is_free_in_tc x tc) R mems me ve ->
       sem_clocked_vars_instant true R icks ->
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
@@ -896,7 +896,7 @@ Module Type CORRECTNESS
       (forall x, ~ In x inputs -> ~ Is_defined_in x tcs -> Env.find x ve = None) ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve')
-        /\ Memory_Corres_tcs (tc :: tcs) S I S' me'
+        /\ Memory_Corres (tc :: tcs) S I S' me'
         /\ forall x v,
             Is_variable_in_tc x tc ->
             sem_var_instant R x v ->
@@ -919,12 +919,12 @@ Module Type CORRECTNESS
       + eapply stmt_eval_Control_present'; eauto; auto.
         eapply cexp_correct; eauto.
       + split.
-        * apply Memory_Corres_tcs_Def; auto.
+        * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
           eapply sem_var_instant_det in Hvar; eauto.
           inv Hvar; apply Env.gss.
       + split.
-        * apply Memory_Corres_tcs_Def; auto.
+        * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
           eapply sem_var_instant_det in Hvar; eauto.
           unfold variables in Vars.
@@ -937,9 +937,9 @@ Module Type CORRECTNESS
       + eapply stmt_eval_Control_present';
           eauto using stmt_eval, exp_correct; auto.
       + split; try inversion 1.
-        apply Memory_Corres_tcs_Next_present; auto.
+        apply Memory_Corres_Next_present; auto.
       + split; try inversion 1.
-        apply Memory_Corres_tcs_Next_absent; auto; congruence.
+        apply Memory_Corres_Next_absent; auto; congruence.
 
     - destruct r.
       + pose proof Init.
@@ -948,7 +948,7 @@ Module Type CORRECTNESS
         do 2 eexists; split.
         * eapply stmt_eval_Control_present'; eauto; auto.
         *{ split; try inversion 1.
-           eapply Memory_Corres_tcs_Reset_present; eauto.
+           eapply Memory_Corres_Reset_present; eauto.
            - eapply initial_state_det; eauto.
              + apply SpecInit.
                destruct (find_inst i me) eqn: E.
@@ -968,11 +968,10 @@ Module Type CORRECTNESS
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
         split; try inversion 1.
         apply orel_find_inst_Some in Init as (?&?&?).
-        eapply Memory_Corres_tcs_Reset_absent; try symmetry; eauto.
+        eapply Memory_Corres_Reset_absent; try symmetry; eauto.
         eapply Reset_not_Reset_in; eauto.
 
-    - pose proof Wsch as Wsch'.
-      apply Step_not_Step_Reset_in in Wsch; auto.
+    - apply Step_not_Step_Reset_in in Wsch; auto.
       destruct (clock_of_instant xs) eqn: E.
       + assert (Exists (fun v => v <> absent) xs) by (apply clock_of_instant_true; auto).
         assert (exists vos,
@@ -986,7 +985,7 @@ Module Type CORRECTNESS
         *{ do 2 eexists; split.
            - eapply stmt_eval_Control_present'; eauto; auto.
            - split.
-             + eapply Memory_Corres_tcs_Call_present; eauto.
+             + eapply Memory_Corres_Call_present; eauto.
              + inversion_clear 1; intros Hvar.
                eapply value_to_option_updates; eauto.
          }
@@ -999,7 +998,7 @@ Module Type CORRECTNESS
       + assert (absent_list xs) by (apply clock_of_instant_false; auto).
         apply sem_system_absent in Hsystem as (? & ?); auto.
         exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
-        split; eauto using Memory_Corres_tcs_Call_absent.
+        split; eauto using Memory_Corres_Call_absent.
         inversion_clear 1; intros Hvar.
         eapply Forall2_in_left in Hvars as (v' & Hin &?); eauto.
         eapply sem_var_instant_det in Hvar; eauto; subst v'.
@@ -1007,7 +1006,6 @@ Module Type CORRECTNESS
         simpl in Hin; subst; simpl.
         unfold variables in Vars.
         simpl in *.
-        inv Wsch'.
         apply Hve; auto using Is_defined_in_tc.
         eapply NoDup_swap, NoDup_app_In in Vars; eauto.
         intro; apply Vars, in_app; auto.
@@ -1118,10 +1116,10 @@ Module Type CORRECTNESS
     intros * E; unfold state_corres; now rewrite E.
   Qed.
 
-  Lemma Memory_Corres_tcs_empty_equal_memory:
+  Lemma Memory_Corres_empty_equal_memory:
     forall S I S' me,
       S ≋ me ->
-      Memory_Corres_tcs [] S I S' me.
+      Memory_Corres [] S I S' me.
   Proof.
     split.
     - split; intros Last.
@@ -1182,7 +1180,7 @@ Module Type CORRECTNESS
       Is_well_sch inputs mems alltcs ->
       NoDup (inputs ++ variables alltcs) ->
       NoDup (defined alltcs) ->
-      Step_with_reset_spec alltcs ->
+      reset_consistency alltcs ->
       (forall i f Si, In (i, f) (resets_of alltcs) -> find_inst i S = Some Si -> state_closed P f Si) ->
       (forall i f Ii, In (i, f) (resets_of alltcs) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
       (forall x, PS.In x mems -> Is_last_in x alltcs) ->
@@ -1195,7 +1193,7 @@ Module Type CORRECTNESS
       me ≋ S ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs') (me', ve')
-        /\ Memory_Corres_tcs tcs' S I S' me'
+        /\ Memory_Corres tcs' S I S' me'
         /\ forall x v,
             Is_variable_in x tcs' ->
             sem_var_instant R x v ->
@@ -1206,7 +1204,7 @@ Module Type CORRECTNESS
              Htcs Hwc Hnormal Hcm Hcvars Hmems Ord Wsch Vars Defs StepReset
              Closed TransClosed SpecLast SpecInput EquivInput EquivInput' Corres.
     - exists me, ve. split; eauto using stmt_eval; split; auto.
-      + now apply Memory_Corres_tcs_empty_equal_memory.
+      + now apply Memory_Corres_empty_equal_memory.
       + inversion 1.
     - pose proof Wsch as Wsch'; apply Is_well_sch_app in Wsch'.
       pose proof Vars as Vars'; rewrite variables_app in Vars'.
@@ -1215,7 +1213,7 @@ Module Type CORRECTNESS
         apply NoDup_app_weaken in Vars'.
       rewrite Permutation.Permutation_app_comm in Defs';
         apply NoDup_app_weaken in Defs'.
-      pose proof StepReset as StepReset'; apply Step_with_reset_spec_app in StepReset'.
+      pose proof StepReset as StepReset'; eapply reset_consistency_app in StepReset'; eauto.
       pose proof Htcs as Htcs'; apply Forall_app_weaken in Htcs'; inv Htcs'.
       pose proof Hwc as Hwc'; apply Forall_app_weaken in Hwc'; inv Hwc'.
       pose proof Hnormal as Hnormal'; apply Forall_app_weaken in Hnormal'; inv Hnormal'.
@@ -1274,7 +1272,7 @@ Module Type CORRECTNESS
       Is_well_sch inputs mems tcs ->
       NoDup (inputs ++ variables tcs) ->
       NoDup (defined tcs) ->
-      Step_with_reset_spec tcs ->
+      reset_consistency tcs ->
       (forall x, PS.In x mems -> Is_last_in x tcs) ->
       (forall x, In x inputs -> ~ Is_defined_in x tcs) ->
       (forall x c,
@@ -1285,7 +1283,7 @@ Module Type CORRECTNESS
       me ≋ S ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve')
-        /\ Memory_Corres_tcs tcs S I S' me'
+        /\ Memory_Corres tcs S I S' me'
         /\ forall x v,
             Is_variable_in x tcs ->
             sem_var_instant R x v ->
@@ -1304,9 +1302,9 @@ Module Type CORRECTNESS
     eapply In_InMembers; eauto.
   Qed.
 
- Lemma Memory_Corres_tcs_equal_memory:
+ Lemma Memory_Corres_equal_memory:
     forall P R tcs S I S' me lasts subs,
-      Memory_Corres_tcs tcs S I S' me ->
+      Memory_Corres tcs S I S' me ->
       Forall (sem_trconstr P true R S I S') tcs ->
       state_closed_lasts lasts S ->
       state_closed_insts P subs S ->
@@ -1481,8 +1479,7 @@ Module Type CORRECTNESS
       + rewrite <-s_vars_out_in_tcs, <-2 map_app, <-fst_NoDupMembers.
         apply s_nodup_vars.
       + apply s_nodup_defined.
-      + eapply Is_well_sch_Step_with_reset_spec; eauto.
-        apply s_reset_in.
+      + apply s_reset_consistency.
       + intros; apply lasts_of_In, ps_from_list_In; auto.
         rewrite <-s_lasts_in_tcs; auto.
       + intros; apply s_ins_not_def, fst_InMembers; auto.
@@ -1514,7 +1511,7 @@ Module Type CORRECTNESS
                      H: find_system ?b ?P = _, H': find_system ?b ?P = _ |- _ =>
                      rewrite H in H'; inv H'
                    end.
-            eapply Memory_Corres_tcs_equal_memory; eauto.
+            eapply Memory_Corres_equal_memory; eauto.
             - intro; now rewrite s_lasts_in_tcs, lasts_of_In.
             - setoid_rewrite s_subs_calls_of; apply calls_of_Is_sub_in.
             - intros * Rst; apply s_no_single_reset, Step_with_reset_in_Step_in in Rst; auto.

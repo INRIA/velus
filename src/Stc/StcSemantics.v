@@ -792,7 +792,7 @@ Module Type STCSEMANTICS
           setoid_rewrite s_subs_calls_of in Insts'.
         eapply sem_trconstrs_absent_states; eauto.
         * intros; eapply IHP; eauto.
-        * apply s_reset_in.
+        * apply s_reset_consistency.
     - inv Ord; eapply IHP; eauto.
       apply ident_eqb_neq in Eq.
       rewrite <-state_closed_other in Closed, ClosedI, Closed'; eauto.

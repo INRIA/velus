@@ -53,6 +53,11 @@ Module Type STCSYNTAX
   Definition Step_with_reset_in (s: ident) (rst: bool) (tcs: list trconstr) : Prop :=
     Exists (Step_with_reset_in_tc s rst) tcs.
 
+  Definition reset_consistency (tcs: list trconstr) : Prop :=
+    forall s rst,
+      Step_with_reset_in s rst tcs ->
+      if rst then Reset_in s tcs else ~ Reset_in s tcs.
+
   Fixpoint lasts_of (tcs: list trconstr) : list ident :=
     match tcs with
     | [] => []
@@ -84,28 +89,27 @@ Module Type STCSYNTAX
         s_out  : list (ident * (type * clock));
         s_tcs  : list trconstr;
 
-        s_ingt0           : 0 < length s_in;
+        s_ingt0            : 0 < length s_in;
 
-        s_nodup           : NoDup (map fst s_in ++ map fst s_vars ++
-                                       map fst s_out ++ map fst s_lasts);
-        s_nodup_lasts_subs: NoDup (map fst s_lasts ++ map fst s_subs);
+        s_nodup            : NoDup (map fst s_in ++ map fst s_vars ++
+                                        map fst s_out ++ map fst s_lasts);
+        s_nodup_lasts_subs : NoDup (map fst s_lasts ++ map fst s_subs);
 
-        s_subs_in_tcs     : forall f, In f (map snd s_subs)
-                                      <-> In f (map snd (calls_of s_tcs ++ resets_of s_tcs));
-        s_subs_calls_of   : Permutation s_subs (calls_of s_tcs);
+        s_subs_in_tcs      : forall f, In f (map snd s_subs)
+                                       <-> In f (map snd (calls_of s_tcs ++ resets_of s_tcs));
+        s_subs_calls_of    : Permutation s_subs (calls_of s_tcs);
 
-        s_lasts_in_tcs    : Permutation (map fst s_lasts) (lasts_of s_tcs);
-        s_vars_out_in_tcs : Permutation (map fst s_vars ++ map fst s_out) (variables s_tcs);
+        s_lasts_in_tcs     : Permutation (map fst s_lasts) (lasts_of s_tcs);
+        s_vars_out_in_tcs  : Permutation (map fst s_vars ++ map fst s_out) (variables s_tcs);
 
-        s_no_single_reset : forall s, Reset_in s s_tcs -> Step_with_reset_in s true s_tcs;
-        s_reset_in        : forall s rst, Step_with_reset_in s rst s_tcs ->
-                                          if rst then Reset_in s s_tcs else ~ Reset_in s s_tcs;
-        s_reset_incl      : incl (resets_of s_tcs) (calls_of s_tcs);
+        s_no_single_reset  : forall s, Reset_in s s_tcs -> Step_with_reset_in s true s_tcs;
+        s_reset_consistency: reset_consistency s_tcs;
+        s_reset_incl       : incl (resets_of s_tcs) (calls_of s_tcs);
 
-        s_good            : Forall ValidId (s_in ++ s_vars ++ s_out)
-                            /\ Forall ValidId s_lasts
-                            /\ Forall ValidId s_subs
-                            /\ valid s_name
+        s_good             : Forall ValidId (s_in ++ s_vars ++ s_out)
+                             /\ Forall ValidId s_lasts
+                             /\ Forall ValidId s_subs
+                             /\ valid s_name
       }.
 
   Lemma s_nodup_lasts:
