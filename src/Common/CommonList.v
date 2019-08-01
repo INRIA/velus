@@ -46,6 +46,13 @@ Section Extra.
     intros. split; intro. apply in_app_or. auto. apply in_or_app. auto.
   Qed.
 
+  Lemma in_app_comm :
+    forall (a : A) (l1 l2 : list A), In a (l1 ++ l2) <-> In a (l2 ++ l1).
+  Proof.
+    intros; split; intro Hin; apply in_app_or in Hin;
+      apply in_or_app; tauto.
+  Qed.
+
   Lemma app_last_app:
     forall xs xs' (x: A),
       (xs ++ [x]) ++ xs' = xs ++ x :: xs'.
@@ -1896,6 +1903,16 @@ Section Forall2.
       eexists; intuition; eauto.
   Qed.
 
+  Lemma Forall2_app_split :
+    forall (P : A -> B -> Prop)  l1 l1' l2 l2',
+      Forall2 P (l1 ++ l2) (l1' ++ l2') ->
+      length l1 = length l1' ->
+      Forall2 P l1 l1' /\ Forall2 P l2 l2'.
+  Proof.
+    induction l1, l1'; simpl; intros * Hf Hzero; eauto; inv Hzero.
+    inv Hf. apply IHl1 in H5; eauto. split; try econstructor; tauto.
+  Qed.
+
 End Forall2.
 
 Lemma Forall2_trans_ex:
@@ -2347,6 +2364,17 @@ Section InMembers.
       apply IH; auto.
   Qed.
 
+  Lemma NoDupMembers_app_InMembers_l:
+    forall x xs ws,
+      NoDupMembers (xs ++ ws) ->
+      InMembers x ws ->
+      ~InMembers x xs.
+  Proof.
+    intros * Hdup Hin.
+    eapply NoDupMembers_app_InMembers; eauto.
+    now rewrite (Permutation_app_comm _ xs).
+  Qed.
+
   Lemma NoDupMembers_det:
     forall x t t' xs,
       NoDupMembers xs ->
@@ -2576,7 +2604,8 @@ Section OptionLists.
 
   Inductive NoDupo : list (option A) -> Prop :=
     NoDupo_nil : NoDupo []
-  | NoDupo_cons : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l).
+  | NoDupo_conss : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l)
+  | NoDupo_consn : forall l, NoDupo l -> NoDupo (None :: l).
 
 End OptionLists.
 
