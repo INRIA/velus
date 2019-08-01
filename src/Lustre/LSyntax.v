@@ -154,7 +154,8 @@ Module Type LSYNTAX
         n_defd     : Permutation (vars_defined n_eqs)
                                  (map fst (n_vars ++ n_out));
         n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out);
-        n_good     : Forall NotReserved (n_in ++ n_vars ++ n_out)
+        n_good     :  Forall ValidId (n_in ++ n_vars ++ n_out)
+                      /\ valid n_name
       }.
 
   (** ** Program *)
