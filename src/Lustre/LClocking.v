@@ -171,6 +171,7 @@ Module Type LCLOCKING
         Forall (eq ck) (clocksof efs) ->
         length tys = length (clocksof ets) ->
         length tys = length (clocksof efs) ->
+        0 < length tys ->
         wc_exp (Eite e ets efs (tys, (ck, None)))
 
     | wc_Eapp: forall f es anns n,
@@ -198,9 +199,9 @@ Module Type LCLOCKING
         Exists (Is_fresh_in x) es ->
         Is_fresh_in x (Ewhen es y b anns)
 
-    | IFEmerge: forall x ets efs anns,
+    | IFEmerge: forall x ets efs y anns,
         Exists (Is_fresh_in x) (ets ++ efs) ->
-        Is_fresh_in x (Emerge x ets efs anns)
+        Is_fresh_in x (Emerge y ets efs anns)
 
     | IFEifte: forall x e ets efs anns,
         Exists (Is_fresh_in x) (e :: (ets ++ efs)) ->
@@ -208,7 +209,7 @@ Module Type LCLOCKING
 
     | IFEapp: forall x f es anns,
         Exists (Is_fresh_in x) es
-        \/ Exists (fun y => LiftO True (eq x) (snd (snd y))) anns ->
+        \/ Ino x (map snd (map snd anns)) ->
         Is_fresh_in x (Eapp f es anns).
 
     Inductive DisjointFreshList : list exp -> Prop :=
@@ -223,7 +224,7 @@ Module Type LCLOCKING
     Definition Is_AnonStream (x : option ident) : Prop :=
       match x with
       | None => True
-      | Some x => InMembers x vars
+      | Some x => ~ InMembers x vars
       end.
 
     Inductive DisjointFresh : exp -> Prop :=
@@ -267,12 +268,13 @@ Module Type LCLOCKING
         DisjointFreshList es ->
         Forall DisjointFresh es ->
         NoDupo (map snd (map snd anns)) ->
-        Forall Is_AnonStream (map (snd ∘ snd) anns) ->
+        Forall Is_AnonStream (map snd (map snd anns)) ->
+        (forall x, Ino x (map snd (map snd anns)) -> ~Exists (Is_fresh_in x) es) ->
         DisjointFresh (Eapp f es anns).
 
     Definition WellFormedAnon (e : exp) : Prop :=
       match e with
-      | Eapp f es anns => DisjointFreshList es
+      | Eapp f es anns => Forall DisjointFresh es /\ DisjointFreshList es
       | _ => DisjointFresh e
       end.
 
@@ -384,6 +386,7 @@ Module Type LCLOCKING
         Forall (eq ck) (clocksof efs) ->
         length tys = length (clocksof ets) ->
         length tys = length (clocksof efs) ->
+        0 < length tys ->
         P (Eite e ets efs (tys, (ck, None))).
 
     Hypothesis EappCase:
