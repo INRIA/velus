@@ -1303,9 +1303,8 @@ Module Type CORRECTNESS
   Qed.
 
  Lemma Memory_Corres_equal_memory:
-    forall P R tcs S I S' me lasts subs,
+    forall P tcs S I S' me lasts subs,
       Memory_Corres tcs S I S' me ->
-      Forall (sem_trconstr P true R S I S') tcs ->
       state_closed_lasts lasts S ->
       state_closed_insts P subs S ->
       state_closed_lasts lasts S' ->
@@ -1315,7 +1314,7 @@ Module Type CORRECTNESS
       (forall i, Reset_in i tcs -> Step_in i tcs) ->
       me ≋ S'.
   Proof.
-    intros * (Lasts & Insts) Htcs LastClosed InstsClosed LastClosed' InstsClosed'
+    intros * (Lasts & Insts) LastClosed InstsClosed LastClosed' InstsClosed'
            SpecLast SpecInst WSCH.
     split.
     - intro x; destruct (Is_last_in_dec x tcs) as [Last|Nlast].
