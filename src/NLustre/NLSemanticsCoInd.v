@@ -594,4 +594,3 @@ Module NLSemanticsCoindFun
 <: NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str.
   Include NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str.
 End NLSemanticsCoindFun.
-

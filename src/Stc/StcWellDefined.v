@@ -570,7 +570,7 @@ Module Type STCWELLDEFINED
         + inv HH; inversion 1; auto.
     Qed.
 
-    Lemma well_sch_spec:
+    Theorem well_sch_spec:
       forall args tcs,
         if well_sch args tcs
         then Is_well_sch args mems tcs
