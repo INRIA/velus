@@ -41,7 +41,7 @@ extraction: proof
 		$(SRC_DIR)/CoreExpr/coreexprlib.ml\
 		$(SRC_DIR)/Lustre/lustrelib.ml\
 		$(SRC_DIR)/NLustre/nlustrelib.ml\
-		$(SRC_DIR)/SyBloc/sybloclib.ml\
+		$(SRC_DIR)/Stc/stclib.ml\
 		$(SRC_DIR)/Obc/obclib.ml\
 		$(SRC_DIR)/ObcToClight/interfacelib.ml\
 		$(COMPCERT_INCLUDES:%=$(COMPCERTDIR)/%/*.ml*)\

@@ -52,17 +52,22 @@ Definition translate_binop (op: binop): Clight.expr -> Clight.expr -> Ctypes.typ
 
 (** Straightforward expression translation *)
 Fixpoint translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
+  let translate_var (x: ident) (ty: type): Clight.expr :=
+      let ty := cltype ty in
+      match m.(m_out) with
+      | [] | [_] => Clight.Etempvar x ty
+      | xs =>
+        if mem_assoc_ident x xs then
+          deref_field out (prefix_fun c.(c_name) m.(m_name)) x ty
+        else
+          Clight.Etempvar x ty
+      end
+  in
   match e with
   | Var x ty =>
-    let ty := cltype ty in
-    match m.(m_out) with
-    | [] | [_] => Clight.Etempvar x ty
-    | xs =>
-      if mem_assoc_ident x xs then
-        deref_field out (prefix_fun c.(c_name) m.(m_name)) x ty
-      else
-        Clight.Etempvar x ty
-    end
+    translate_var x ty
+  | Valid x ty =>
+    translate_var x ty
   | State x ty =>
     deref_field self c.(c_name) x (cltype ty)
   | Const c =>
@@ -71,8 +76,6 @@ Fixpoint translate_exp (c: class) (m: method) (e: exp): Clight.expr :=
     translate_unop op (translate_exp c m e) (cltype ty)
   | Binop op e1 e2 ty =>
     translate_binop op (translate_exp c m e1) (translate_exp c m e2) (cltype ty)
-  | Valid e =>
-    translate_exp c m e
   end.
 
 Fixpoint list_type_to_typelist (tys: list Ctypes.type): Ctypes.typelist :=

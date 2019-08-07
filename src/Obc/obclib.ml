@@ -29,7 +29,7 @@ module type SYNTAX =
     | Const of const
     | Unop  of unop  * exp * typ
     | Binop of binop * exp * exp * typ
-    | Valid of exp
+    | Valid of ident * typ
 
     type stmt =
     | Assign   of ident * exp
@@ -197,8 +197,8 @@ module PrintFun (Obc: SYNTAX)
           PrintOps.print_unop p op ty (expr prec') e
       | Obc.Binop (op, e1, e2, ty) ->
           PrintOps.print_binop p op ty (expr prec1) e1 (expr prec2) e2
-      | Obc.Valid e ->
-          fprintf p "{%a}" (expr 0) e
+      | Obc.Valid (id, _) ->
+          fprintf p "[%s]" (extern_atom id)
       end;
       if prec' < prec then fprintf p ")@]" else fprintf p "@]"
 

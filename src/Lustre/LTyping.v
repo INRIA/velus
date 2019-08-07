@@ -106,7 +106,17 @@ Module Type LTYPING
         Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
         Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
         Forall (fun a => wt_nclock (snd a)) anns ->
-        wt_exp (Eapp f es anns).
+        wt_exp (Eapp f es None anns)
+
+    | wt_EappReset: forall f es r anns n,
+        Forall wt_exp es ->
+        find_node f G = Some n ->
+        Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
+        Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
+        Forall (fun a => wt_nclock (snd a)) anns ->
+        wt_exp r ->
+        typeof r = [bool_type] ->
+        wt_exp (Eapp f es (Some r) anns).
 
     Section wt_exp_ind2.
 
@@ -197,7 +207,20 @@ Module Type LTYPING
           Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
           Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
           Forall (fun a => wt_nclock (snd a)) anns ->
-          P (Eapp f es anns).
+          P (Eapp f es None anns).
+
+      Hypothesis EappResetCase:
+        forall f es r anns n,
+          Forall wt_exp es ->
+          Forall P es ->
+          find_node f G = Some n ->
+          Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
+          Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
+          Forall (fun a => wt_nclock (snd a)) anns ->
+          wt_exp r ->
+          P r ->
+          typeof r = [bool_type] ->
+          P (Eapp f es (Some r) anns).
 
       Fixpoint wt_exp_ind2 (e: exp) (H: wt_exp e) {struct H} : P e.
       Proof.
@@ -214,6 +237,8 @@ Module Type LTYPING
           clear H3. induction H0; auto.
           clear H4. induction H1; auto.
         - eapply EappCase; eauto.
+          clear H1. induction H; eauto.
+        - eapply EappResetCase; eauto.
           clear H1. induction H; eauto.
       Qed.
 
@@ -349,7 +374,8 @@ Module Type LTYPING
           | H:Forall (fun a => wt_nclock env (snd a)) _ |- _ =>
             setoid_rewrite <-Henv in H
           end;
-      eauto with ltyping.
+      eauto with ltyping;
+      econstructor; eauto.
   Qed.
 
   Instance wt_exp_pointwise_Proper:
@@ -421,6 +447,13 @@ Module Type LTYPING
     - destruct nck; unfold ckstream in *; simpl in *;
         apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
           match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
+    - apply in_map_iff in Hin.
+      destruct Hin as (x & Hs & Hin).
+      match goal with H:Forall _ anns |- _ =>
+                      apply Forall_forall with (1:=H) in Hin end.
+      destruct x as (ty, nck).
+      destruct nck; unfold ckstream in *; simpl in *;
+        subst; match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
     - apply in_map_iff in Hin.
       destruct Hin as (x & Hs & Hin).
       match goal with H:Forall _ anns |- _ =>

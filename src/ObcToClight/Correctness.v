@@ -14,11 +14,11 @@ From compcert Require Import common.Behaviors.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Ident.
 From Velus Require Import Traces.
 
-From Velus Require Import ObcToClight.ObcClightCommon.
+From Velus Require Import Common.CompCertLib.
 From Velus Require Import ObcToClight.MoreSeparation.
 From Velus Require Import ObcToClight.SepInvariant.
 From Velus Require Import ObcToClight.Generation.
@@ -1306,6 +1306,7 @@ Section PRESERVATION.
         intro H; rewrite H; auto.
     - destruct cst; simpl; reflexivity.
     - destruct u; auto.
+    - cases.
   Qed.
 
   Lemma acces_cltype:
@@ -1751,7 +1752,7 @@ Section PRESERVATION.
       apply mem_assoc_ident_false with (t:=ty) in E.
       unfold meth_vars in Hvars.
       rewrite app_assoc in Hvars.
-      eapply not_In_app in E; eauto.
+      eapply not_In2_app in E; eauto.
       apply in_map with (f:=translate_param) in E.
       eapply Forall_forall in Hrep; eauto.
       simpl in Hrep.
@@ -1893,7 +1894,7 @@ Section PRESERVATION.
         Clight.eval_expr tge e le m (translate_exp owner caller ex) v.
     Proof.
       intros * Hrep ? ? ? ? WF EV;
-        revert v EV; induction ex as [x| |cst|op| |]; intros v EV;
+        revert v EV; induction ex as [x| |cst|op| |x]; intros v EV;
           inv EV; inv WF.
 
       (* Var x ty : "x" *)
@@ -1942,8 +1943,25 @@ Section PRESERVATION.
         erewrite sem_binary_operation_any_cenv_mem; eauto;
           eapply wt_val_not_vundef_nor_vptr; eauto.
 
-      (* Valid ex *)
-      - auto.
+      (* Valid x ty *)
+      - simpl; destruct (mem_assoc_ident x caller.(m_out)) eqn:E.
+        + rewrite sep_swap in Hrep.
+          destruct_list caller.(m_out) as (?, ?) (?, ?) ? : Out.
+          * simpl in E; discriminate.
+          * simpl in E; apply orb_true_iff in E; destruct E as [E|]; try discriminate.
+            apply ident_eqb_eq in E; subst x.
+            econstructor.
+            rewrite match_out_singleton in Hrep; eauto.
+            destruct Hrep as (? & Eq); destruct (Env.find i ve); contr;
+              rewrite Eq; auto.
+          * simpl in *; rewrite E.
+            assert (1 < length caller.(m_out))%nat by (rewrite Out; simpl; omega).
+            rewrite match_out_notnil in Hrep; auto; destruct Hrep as (? & ? & ? & ? & ? & ?).
+            eapply eval_out_field; eauto;
+            rewrite Out; auto.
+        + rewrite sep_swap4 in Hrep.
+          destruct_list caller.(m_out) : Out; simpl in E; try rewrite E;
+            eapply eval_temp_var; eauto; now rewrite Out.
     Qed.
 
     Lemma exp_eval_valid_s:

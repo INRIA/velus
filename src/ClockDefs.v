@@ -1,4 +1,3 @@
-
 From Coq Require Import BinNums.
 From Coq Require Import List.
 
@@ -24,8 +23,8 @@ Fixpoint instck (bk: clock) (sub: ident -> option ident) (ck: clock)
 
 (* Named clocks *)
 
-(* Named clocks, as opposed to (stream) clocks, are used to track
-   interdependencies in clock annotations internal to expressions. *)
+(* Named clocks are used to track  interdependencies in clock
+   annotations internal to expressions. *)
 
 Definition nclock : Type := clock * option ident.
 

@@ -243,6 +243,26 @@ Module Type NLORDERED
       apply HH; reflexivity.
     Qed.
 
+    Lemma find_node_not_Is_node_in_eq:
+      forall G f g n,
+        Ordered_nodes G ->
+        Forall (fun n' => ~(g = n'.(n_name))) G ->
+        find_node f G = Some n ->
+        Forall (fun eq => ~ Is_node_in_eq g eq) n.(n_eqs).
+    Proof.
+      induction G as [|n' G IH]. now inversion 2.
+      intros f g n OG NG Ff.
+      inv OG. apply Forall_cons2 in NG as (nG & NG).
+      simpl in Ff.
+      destruct (ident_eqb n'.(n_name) f); [|now eapply IH; eauto].
+      inv Ff. apply Forall_forall.
+      intros eq Ie Inie. destruct eq; [inv Inie| |inv Inie].
+      assert (Is_node_in g n.(n_eqs)) as Ini by (apply Exists_exists; eauto).
+      take (forall f, Is_node_in f n.(n_eqs) -> _) and apply it in Ini as (? & NNG).
+      apply Forall_Exists with (1:=NG) in NNG.
+      now apply Exists_exists in NNG as (? & ? & ? & ?).
+    Qed.
+
   End Ordered_nodes_Properties.
 
 End NLORDERED.

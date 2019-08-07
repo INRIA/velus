@@ -15,7 +15,7 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LOrdered.
-From Velus Require Import NLustre.Streams.
+From Velus Require Import Streams.
 
 (** * Lustre semantics *)
 
@@ -24,47 +24,13 @@ Module Type LSEMANTICS
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import Syn   : LSYNTAX   Ids Op)
-       (Import Lord  : LORDERED   Ids Op Syn).
-
-  (* TODO: put this somewhere else *)
-  Infix ":::" := Cons (at level 60, right associativity) : stream_scope.
-  Delimit Scope stream_scope with Stream.
-  Open Scope stream_scope.
+       (Import Lord  : LORDERED   Ids Op Syn)
+       (Import Str   : STREAMS        Op OpAux).
 
   Definition history := Env.t (Stream value).
 
-  CoFixpoint const (c: const) (b: Stream bool) : Stream value :=
-    match b with
-    | true  ::: b' => present (sem_const c) ::: const c b'
-    | false ::: b' => absent ::: const c b'
-    end.
-
-  CoInductive lift1 (op: unop) (ty: type)
-                                     : Stream value -> Stream value -> Prop :=
-  | Lift1A:
-      forall xs rs,
-        lift1 op ty xs rs ->
-        lift1 op ty (absent ::: xs) (absent ::: rs)
-  | Lift1P:
-      forall x r xs rs,
-        sem_unop op x ty = Some r ->
-        lift1 op ty xs rs ->
-        lift1 op ty (present x ::: xs) (present r ::: rs).
-
-  CoInductive lift2 (op: binop) (ty1 ty2: type)
-                      : Stream value -> Stream value -> Stream value -> Prop :=
-  | Lift2A:
-      forall xs ys rs,
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (absent ::: xs) (absent ::: ys) (absent ::: rs)
-  | Lift2P:
-      forall x y r xs ys rs,
-        sem_binop op x ty1 y ty2 = Some r ->
-        lift2 op ty1 ty2 xs ys rs ->
-        lift2 op ty1 ty2 (present x ::: xs) (present y ::: ys) (present r ::: rs).
-
   CoInductive fby1
-               : val -> Stream value -> Stream value -> Stream value -> Prop :=
+    : val -> Stream value -> Stream value -> Stream value -> Prop :=
   | Fby1A:
       forall v xs ys rs,
         fby1 v xs ys rs ->
@@ -83,59 +49,6 @@ Module Type LSEMANTICS
       forall x y xs ys rs,
         fby1 y xs ys rs ->
         fby (present x ::: xs) (present y ::: ys) (present x ::: rs).
-
-  CoInductive when (k: bool)
-                       : Stream value -> Stream value -> Stream value -> Prop :=
-  | WhenA:
-      forall cs xs rs,
-        when k cs xs rs ->
-        when k (absent ::: cs) (absent ::: xs) (absent ::: rs)
-  | WhenPA:
-      forall c x cs xs rs,
-        when k cs xs rs ->
-        val_to_bool c = Some (negb k) ->
-        when k (present c ::: cs) (present x ::: xs) (absent ::: rs)
-  | WhenPP:
-      forall c x cs xs rs,
-        when k cs xs rs ->
-        val_to_bool c = Some k ->
-        when k (present c ::: cs) (present x ::: xs) (present x ::: rs).
-
-  CoInductive merge
-       : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | MergeA:
-      forall xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (absent ::: xs) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | MergeT:
-      forall t xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present true_val ::: xs)
-              (present t ::: ts) (absent ::: fs) (present t ::: rs)
-  | MergeF:
-      forall f xs ts fs rs,
-        merge xs ts fs rs ->
-        merge (present false_val ::: xs)
-              (absent ::: ts) (present f ::: fs) (present f ::: rs).
-
-  CoInductive ite
-       : Stream value -> Stream value -> Stream value -> Stream value -> Prop :=
-  | IteA:
-      forall s ts fs rs,
-        ite s ts fs rs ->
-        ite (absent ::: s) (absent ::: ts) (absent ::: fs) (absent ::: rs)
-  | IteT:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present true_val ::: s)
-              (present t ::: ts) (present f ::: fs) (present t ::: rs)
-  | IteF:
-      forall t f s ts fs rs,
-        ite s ts fs rs ->
-        ite (present false_val ::: s)
-              (present t ::: ts) (present f ::: fs) (present f ::: rs).
-
-  Definition sclockof xs := map (fun x => x <> absent) xs.
 
   CoFixpoint sclocksof (ss: list (Stream value)) : Stream bool :=
     existsb (fun s=> hd s <>b absent) ss ::: sclocksof (List.map (@tl value) ss).
@@ -156,7 +69,7 @@ Module Type LSEMANTICS
     Variable G : global.
 
     Inductive sem_exp
-               : history -> Stream bool -> exp -> list (Stream value) -> Prop :=
+      : history -> Stream bool -> exp -> list (Stream value) -> Prop :=
     | Sconst:
         forall H b c cs,
           cs ≡ const c b ->
@@ -194,7 +107,7 @@ Module Type LSEMANTICS
         forall H b x s k es lann ss os,
           Forall2 (sem_exp H b) es ss ->
           sem_var H x s ->
-          Forall2 (when k s) (concat ss) os ->
+          Forall2 (fun s' => when k s' s) (concat ss) os ->
           sem_exp H b (Ewhen es x k lann) os
 
     | Smerge:
@@ -217,14 +130,22 @@ Module Type LSEMANTICS
         forall H b f es lann ss os,
           Forall2 (sem_exp H b) es ss ->
           sem_node f (concat ss) os ->
-          sem_exp H b (Eapp f es lann) os
+          sem_exp H b (Eapp f es None lann) os
+
+    | Sreset:
+        forall H b f es r lann ss os rs bs,
+          Forall2 (sem_exp H b) es ss ->
+          sem_exp H b r [rs] ->
+          bools_of rs bs ->
+          (forall k, sem_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
+          sem_exp H b (Eapp f es (Some r) lann) os
 
     with sem_equation: history -> Stream bool -> equation -> Prop :=
-    | Seq:
-        forall H b xs es ss,
-          Forall2 (sem_exp H b) es ss ->
-          Forall2 (sem_var H) xs (concat ss) ->
-          sem_equation H b (xs, es)
+           Seq:
+             forall H b xs es ss,
+               Forall2 (sem_exp H b) es ss ->
+               Forall2 (sem_var H) xs (concat ss) ->
+               sem_equation H b (xs, es)
 
     with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
     | Snode:
@@ -295,7 +216,7 @@ Module Type LSEMANTICS
         Forall2 (sem_exp G H b) es ss ->
         Forall2 (P_exp H b) es ss ->
         sem_var H x s ->
-        Forall2 (when k s) (concat ss) os ->
+        Forall2 (fun s' => when k s' s) (concat ss) os ->
         P_exp H b (Ewhen es x k lann) os.
 
     Hypothesis MergeCase:
@@ -325,7 +246,18 @@ Module Type LSEMANTICS
         Forall2 (P_exp H b) es ss ->
         sem_node G f (concat ss) os ->
         P_node f (concat ss) os ->
-        P_exp H b (Eapp f es lann) os.
+        P_exp H b (Eapp f es None lann) os.
+
+    Hypothesis ResetCase:
+      forall H b f es r lann ss os rs bs,
+        Forall2 (sem_exp G H b) es ss ->
+        Forall2 (P_exp H b) es ss ->
+        sem_exp G H b r [rs] ->
+        P_exp H b r [rs] ->
+        bools_of rs bs ->
+        (forall k, sem_node G f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)
+              /\ P_node f (List.map (mask k bs) (concat ss)) (List.map (mask k bs) os)) ->
+        P_exp H b (Eapp f es (Some r) lann) os.
 
     Hypothesis Equation:
       forall H b xs es ss,
@@ -379,6 +311,7 @@ Module Type LSEMANTICS
         + eapply MergeCase; eauto; clear H3; SolveForall.
         + eapply IteCase; eauto; clear H2; SolveForall.
         + eapply AppCase; eauto; clear H1; SolveForall.
+        + eapply ResetCase; eauto; clear H2; SolveForall.
       - destruct Sem.
         eapply Equation with (ss:=ss); eauto; clear H1; SolveForall.
       - destruct Sem.
@@ -783,11 +716,12 @@ Module Type LSEMANTICS
 End LSEMANTICS.
 
 Module LSemanticsFun
-       (Import Ids   : IDS)
-       (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : LSYNTAX   Ids Op)
-       (Import Lord  : LORDERED  Ids Op Syn)
-       <: LSEMANTICS Ids Op OpAux Syn Lord.
-  Include LSEMANTICS Ids Op OpAux Syn Lord.
+       (Ids   : IDS)
+       (Op    : OPERATORS)
+       (OpAux : OPERATORS_AUX Op)
+       (Syn   : LSYNTAX   Ids Op)
+       (Lord  : LORDERED  Ids Op Syn)
+       (Str   : STREAMS       Op OpAux)
+<: LSEMANTICS Ids Op OpAux Syn Lord Str.
+  Include LSEMANTICS Ids Op OpAux Syn Lord Str.
 End LSemanticsFun.

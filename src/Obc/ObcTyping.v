@@ -1,7 +1,7 @@
 From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 From Velus Require Import Obc.ObcSyntax.
 From Velus Require Import Obc.ObcSemantics.
 
@@ -52,9 +52,9 @@ Module Type OBCTYPING
         wt_exp e1 ->
         wt_exp e2 ->
         wt_exp (Binop op e1 e2 ty)
-    | wt_Valid: forall e,
-        wt_exp e ->
-        wt_exp (Valid e).
+    | wt_Valid: forall x ty,
+        In (x, ty) vars ->
+        wt_exp (Valid x ty).
 
     (* TODO: eliminate the result types in Call (and EqApp). *)
     Inductive wt_stmt : stmt -> Prop :=
@@ -335,7 +335,8 @@ Module Type OBCTYPING
     - inv Hexp. apply wt_val_const.
     - inv WTe. inv Hexp. eauto using pres_sem_unop.
     - inv WTe. inv Hexp. eauto using pres_sem_binop.
-    - inv WTe. inv Hexp. eauto.
+    - inv WTe. inv Hexp.
+      eapply venv_find_wt_val with (1:=WTv); eauto.
   Qed.
 
   Lemma pres_sem_exp':

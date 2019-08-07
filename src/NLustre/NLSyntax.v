@@ -21,8 +21,8 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : idents -> clock -> ident -> lexps -> option ident -> equation
-  | EqFby : ident -> clock -> const -> lexp -> equation.
+  | EqApp : idents -> clock -> ident -> list exp -> option ident -> equation
+  | EqFby : ident -> clock -> const -> exp -> equation.
 
   Implicit Type eqn: equation.
 
@@ -60,22 +60,20 @@ Module Type NLSYNTAX
 
   Record node : Type :=
     mk_node {
-        n_name : ident;
-        n_in   : list (ident * (type * clock));
-        n_out  : list (ident * (type * clock));
-        n_vars : list (ident * (type * clock));
-        n_eqs  : list equation;
+        n_name   : ident;
+        n_in     : list (ident * (type * clock));
+        n_out    : list (ident * (type * clock));
+        n_vars   : list (ident * (type * clock));
+        n_eqs    : list equation;
 
-        n_ingt0 : 0 < length n_in;
+        n_ingt0  : 0 < length n_in;
         n_outgt0 : 0 < length n_out;
-        n_defd  : Permutation (vars_defined n_eqs)
-                              (map fst (n_vars ++ n_out));
-        n_vout  : forall out, In out (map fst n_out) ->
-                         ~ In out (vars_defined (filter is_fby n_eqs));
-        n_nodup : NoDupMembers (n_in ++ n_vars ++ n_out);
-        n_good  : Forall ValidId (n_in ++ n_vars ++ n_out)
-                  (* /\ Forall valid (vars_defined (filter is_app n_eqs)) *)
-                  /\ valid n_name
+        n_defd   : Permutation (vars_defined n_eqs)
+                               (map fst (n_vars ++ n_out));
+        n_vout   : forall out, In out (map fst n_out) ->
+                          ~ In out (vars_defined (filter is_fby n_eqs));
+        n_nodup  : NoDupMembers (n_in ++ n_vars ++ n_out);
+        n_good   : Forall ValidId (n_in ++ n_vars ++ n_out) /\ valid n_name
       }.
 
   (** ** Program *)
@@ -113,6 +111,18 @@ Module Type NLSYNTAX
     unfold ident_eqb.
     rewrite Hnf.
     reflexivity.
+  Qed.
+
+  Lemma find_node_In:
+    forall G f n,
+      find_node f G = Some n ->
+      n.(n_name) = f /\ In n G.
+  Proof.
+    induction G as [|n G IH]. now inversion 1.
+    simpl. intros f n' Fn'.
+    destruct (ident_eqb n.(n_name) f) eqn:Efn.
+    - inv Fn'. apply ident_eqb_eq in Efn; auto.
+    - apply IH in Fn'; tauto.
   Qed.
 
   Lemma is_filtered_eqs:
@@ -256,7 +266,7 @@ Module Type NLSYNTAX
     right; rewrite NotInMembers_app.
     split; auto. inversion 1; auto.
   Qed.
-  
+
 End NLSYNTAX.
 
 Module NLSyntaxFun

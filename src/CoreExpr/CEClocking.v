@@ -23,7 +23,7 @@ Module Type CECLOCKING
     | r => r
     end.
 
-  Definition subvar_eq (vo : option ident) (le : lexp) : Prop :=
+  Definition subvar_eq (vo : option ident) (le : exp) : Prop :=
     match vo with
     | Some v => match le with
                | Evar x _ => v = x
@@ -36,28 +36,28 @@ Module Type CECLOCKING
 
     Variable vars : list (ident * clock).
 
-    Inductive wc_lexp : lexp -> clock -> Prop :=
+    Inductive wc_exp : exp -> clock -> Prop :=
     | Cconst:
         forall c,
-          wc_lexp (Econst c) Cbase
+          wc_exp (Econst c) Cbase
     | Cvar:
         forall x ck ty,
           In (x, ck) vars ->
-          wc_lexp (Evar x ty) ck
+          wc_exp (Evar x ty) ck
     | Cwhen:
         forall e x b ck,
-          wc_lexp e ck ->
+          wc_exp e ck ->
           In (x, ck) vars ->
-          wc_lexp (Ewhen e x b) (Con ck x b)
+          wc_exp (Ewhen e x b) (Con ck x b)
     | Cunop:
         forall op e ck ty,
-          wc_lexp e ck ->
-          wc_lexp (Eunop op e ty) ck
+          wc_exp e ck ->
+          wc_exp (Eunop op e ty) ck
     | Cbinop:
         forall op e1 e2 ck ty,
-          wc_lexp e1 ck ->
-          wc_lexp e2 ck ->
-          wc_lexp (Ebinop op e1 e2 ty) ck.
+          wc_exp e1 ck ->
+          wc_exp e2 ck ->
+          wc_exp (Ebinop op e1 e2 ty) ck.
 
     Inductive wc_cexp : cexp -> clock -> Prop :=
     | Cmerge:
@@ -68,26 +68,26 @@ Module Type CECLOCKING
           wc_cexp (Emerge x t f) ck
     | Cite:
         forall b t f ck,
-          wc_lexp b ck ->
+          wc_exp b ck ->
           wc_cexp t ck ->
           wc_cexp f ck ->
           wc_cexp (Eite b t f) ck
     | Cexp:
         forall e ck,
-          wc_lexp e ck ->
+          wc_exp e ck ->
           wc_cexp (Eexp e) ck.
 
   End WellClocked.
 
   (** ** Basic properties of clocking *)
 
-  Lemma wc_clock_lexp:
+  Lemma wc_clock_exp:
     forall vars le ck,
       wc_env vars ->
-      wc_lexp vars le ck ->
+      wc_exp vars le ck ->
       wc_clock vars ck.
   Proof.
-    induction le as [| |le IH | |] (* using lexp_ind2 *).
+    induction le as [| |le IH | |] (* using exp_ind2 *).
     - inversion_clear 2; now constructor.
     - intros ck Hwc; inversion_clear 1 as [|? ? ? Hcv| | |].
       apply wc_env_var with (1:=Hwc) (2:=Hcv).
@@ -112,15 +112,15 @@ Module Type CECLOCKING
     - intros ck Hwc; inversion_clear 1 as [|? ? ? ? Hl H1 H2|].
       now apply IHce1.
     - intros ck Hwc; inversion_clear 1 as [| |? ? Hck].
-      apply wc_clock_lexp with (1:=Hwc) (2:=Hck).
+      apply wc_clock_exp with (1:=Hwc) (2:=Hck).
   Qed.
 
-  Hint Constructors wc_clock wc_lexp wc_cexp : nlclocking.
+  Hint Constructors wc_clock wc_exp wc_cexp : nlclocking.
   Hint Resolve Forall_nil : nlclocking.
 
-  Instance wc_lexp_Proper:
-    Proper (@Permutation (ident * clock) ==> @eq lexp ==> @eq clock ==> iff)
-           wc_lexp.
+  Instance wc_exp_Proper:
+    Proper (@Permutation (ident * clock) ==> @eq exp ==> @eq clock ==> iff)
+           wc_exp.
   Proof.
     intros env' env Henv e' e He ck' ck Hck.
     rewrite He, Hck; clear He Hck e' ck'.

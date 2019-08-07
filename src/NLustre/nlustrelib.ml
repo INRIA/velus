@@ -25,14 +25,13 @@ module type SYNTAX =
     type clock
     type typ
     type const
-    type lexp
+    type exp
     type cexp
-    type lexps
 
     type equation =
     | EqDef of ident * clock * cexp
-    | EqApp of idents * clock * ident * lexps * ident option
-    | EqFby of ident * clock * const * lexp
+    | EqApp of idents * clock * ident * exp list * ident option
+    | EqFby of ident * clock * const * exp
 
     type node = {
       n_name : ident;
@@ -49,9 +48,8 @@ module PrintFun
     (NL: SYNTAX with type clock = CE.clock
                  and type typ   = CE.typ
                  and type const = CE.const
-                 and type lexp  = CE.lexp
-                 and type cexp  = CE.cexp
-                 and type lexps = CE.lexps)
+                 and type exp   = CE.exp
+                 and type cexp  = CE.cexp)
     (PrintOps: PRINT_OPS with type typ   = CE.typ
                           and type const = CE.const
                           and type unop  = CE.unop
@@ -77,18 +75,18 @@ module PrintFun
           fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@]);@]"
             print_pattern xs
             print_ident f
-            (print_comma_list print_lexp) es
+            (print_comma_list print_exp) es
       | NL.EqApp (xs, ck, f, es, Some r) ->
         fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@])@ every@ %a;@]"
           print_pattern xs
           print_ident f
-          (print_comma_list print_lexp) es
+          (print_comma_list print_exp) es
           print_ident r
       | NL.EqFby (x, ck, v0, e) ->
           fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
             print_ident x
             PrintOps.print_const v0
-            print_lexp e
+            print_exp e
 
     let print_equations p =
       pp_print_list ~pp_sep:pp_force_newline print_equation p

@@ -1,15 +1,17 @@
-Require Import ExtrOcamlBasic.
-Require Import ExtrOcamlString.
-Require Import Velus.VelusCorrectness.
-Require Import Coq.ZArith.BinInt.
-Require Import Velus.ObcToClight.Generation.
-Require Import Velus.ObcToClight.LustreElab.
-Require Import Velus.Lustre.Parser.LustreParser.
+From Coq Require Import ExtrOcamlBasic.
+From Coq Require Import ExtrOcamlString.
+From Coq Require Import ZArith.BinInt.
+From Coq Require ZArith.BinIntDef.
 
-Require cfrontend.Initializers cfrontend.Ctyping
-        backend.Selection backend.RTLgen
-        driver.Compiler cparser.Cabs.
-Require ZArith.BinIntDef.
+From Velus Require Import VelusCorrectness.
+From Velus Require Import ObcToClight.Generation.
+From Velus Require Import Lustre.LustreElab.
+From Velus Require Import Lustre.Parser.LustreParser.
+
+From compcert Require
+     cfrontend.Initializers cfrontend.Ctyping
+     backend.Selection backend.RTLgen
+     driver.Compiler cparser.Cabs.
 
 (* Processor-specific extraction directives *)
 Load extractionMachdep.
@@ -129,15 +131,6 @@ Extract Constant elab_const_char =>
 	Interface.Op.Cint (C2C.convertInt32 v, sz, sg)
     | _ -> assert false".
 
-(* XXX *)
-Extract Constant NLustreElab.elab_const_int    => "LustreElab.elab_const_int".
-Extract Constant NLustreElab.elab_const_float  => "LustreElab.elab_const_float".
-Extract Constant NLustreElab.elab_const_char   => "LustreElab.elab_const_char".
-Extract Constant NLustreElab.string_of_astloc  => "LustreElab.string_of_astloc".
-Extract Constant NLustreElab.cabsloc_of_astloc => "LustreElab.cabsloc_of_astloc".
-Extract Constant NLustreElab.cabs_floatinfo    => "LustreElab.cabs_floatinfo".
-(* XXX *)
-
 (* Cabs *)
 Extract Constant Cabs.cabsloc =>
 "{ lineno : int;
@@ -153,14 +146,14 @@ Extract Constant LustreElab.do_add_when_to_constants =>
 
 (* Extract Constant VelusCorrectness.print_lustre => *)
 (*   "Veluslib.print_lustre_if". *)
-Extract Constant VelusCorrectness.print_snlustre =>
-  "Veluslib.print_snlustre_if".
-Extract Constant VelusCorrectness.print_sybloc => "Veluslib.print_sybloc_if".
-Extract Constant VelusCorrectness.print_obc    => "Veluslib.print_obc_if".
-Extract Constant VelusCorrectness.do_fusion    => "Veluslib.do_fusion".
-Extract Constant VelusCorrectness.do_sync      => "Veluslib.do_sync".
-Extract Constant VelusCorrectness.do_expose    => "Veluslib.do_expose".
-Extract Constant VelusCorrectness.schedule     => "Interfacelib.Scheduler.schedule".
+Extract Constant VelusCorrectness.print_nlustre =>
+  "Veluslib.print_nlustre_if".
+Extract Constant VelusCorrectness.print_stc => "Veluslib.print_stc_if".
+Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
+Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
+Extract Constant VelusCorrectness.do_sync   => "Veluslib.do_sync".
+Extract Constant VelusCorrectness.do_expose => "Veluslib.do_expose".
+Extract Constant VelusCorrectness.schedule  => "Interfacelib.Scheduler.schedule".
 
 (* builtins *)
 Extract Constant VelusCorrectness.add_builtins => "Veluslib.add_builtins".

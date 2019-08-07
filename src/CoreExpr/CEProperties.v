@@ -31,50 +31,50 @@ Module Type CEPROPERTIES
       take (Env.find x R = _) and rewrite it; auto.
   Qed.
 
-  Lemma sem_lexp_instant_switch_env:
+  Lemma sem_exp_instant_switch_env:
     forall b R R' e v,
-      (forall x, Is_free_in_lexp x e -> Env.find x R = Env.find x R') ->
-      sem_lexp_instant b R e v <-> sem_lexp_instant b R' e v.
+      (forall x, Is_free_in_exp x e -> Env.find x R = Env.find x R') ->
+      sem_exp_instant b R e v <-> sem_exp_instant b R' e v.
   Proof.
     induction e; intros v RRx.
     - (* Econst *)
-      split; inversion 1; destruct b; eauto using sem_lexp_instant.
+      split; inversion 1; destruct b; eauto using sem_exp_instant.
     - (* Evar *)
       split; inversion_clear 1;
         take (sem_var_instant _ _ _) and eapply sem_var_instant_switch_env in it;
-        eauto using sem_lexp_instant.
+        eauto using sem_exp_instant.
       symmetry; auto.
     - (* Ewhen *)
       split; inversion_clear 1;
         take (sem_var_instant _ _ _) and eapply sem_var_instant_switch_env in it;
-        take (sem_lexp_instant _ _ _ _)
+        take (sem_exp_instant _ _ _ _)
              and (erewrite IHe in it || rewrite <-IHe in it);
-        eauto using sem_lexp_instant;
+        eauto using sem_exp_instant;
         symmetry; auto.
     - (* Eunop *)
       split; inversion_clear 1;
-        take (sem_lexp_instant _ _ _ _)
+        take (sem_exp_instant _ _ _ _)
              and (erewrite IHe in it || rewrite <-IHe in it);
-        eauto using sem_lexp_instant.
+        eauto using sem_exp_instant.
     - (* Ebinop *)
       split; inversion_clear 1;
-        take (sem_lexp_instant _ _ e1 _)
+        take (sem_exp_instant _ _ e1 _)
              and (erewrite IHe1 in it || rewrite <-IHe1 in it);
-        take (sem_lexp_instant _ _ e2 _)
+        take (sem_exp_instant _ _ e2 _)
              and (erewrite IHe2 in it || rewrite <-IHe2 in it);
-        eauto using sem_lexp_instant.
+        eauto using sem_exp_instant.
   Qed.
 
-  Lemma sem_lexps_instant_switch_env:
+  Lemma sem_exps_instant_switch_env:
     forall b R R' es vs,
-      (forall x, Exists (Is_free_in_lexp x) es -> Env.find x R = Env.find x R') ->
-      sem_lexps_instant b R es vs <-> sem_lexps_instant b R' es vs.
+      (forall x, Exists (Is_free_in_exp x) es -> Env.find x R = Env.find x R') ->
+      sem_exps_instant b R es vs <-> sem_exps_instant b R' es vs.
   Proof.
     induction es as [|e es IH]. now split; inversion 1; subst; auto.
     intros vs HH. destruct vs. now split; inversion 1.
-    repeat rewrite sem_lexps_instant_cons.
+    repeat rewrite sem_exps_instant_cons.
     rewrite IH; auto.
-    now rewrite sem_lexp_instant_switch_env with (R':=R'); auto.
+    now rewrite sem_exp_instant_switch_env with (R':=R'); auto.
   Qed.
 
   Lemma sem_cexp_instant_switch_env:
@@ -94,18 +94,18 @@ Module Type CEPROPERTIES
         symmetry; auto.
     - (* Eite *)
       split; inversion_clear 1;
-        take (sem_cexp_instant _ _ e1 _)
-           and (erewrite IHe1 in it || rewrite <-IHe1 in it);
         take (sem_cexp_instant _ _ e2 _)
+           and (erewrite IHe1 in it || rewrite <-IHe1 in it);
+        take (sem_cexp_instant _ _ e3 _)
              and (erewrite IHe2 in it || rewrite <-IHe2 in it);
-        take (sem_lexp_instant _ _ _ _) and
-             eapply sem_lexp_instant_switch_env in it;
+        take (sem_exp_instant _ _ _ _) and
+             eapply sem_exp_instant_switch_env in it;
         eauto using sem_cexp_instant;
         symmetry; auto.
     - (* Eexp *)
       split; inversion_clear 1;
-        take (sem_lexp_instant _ _ _ _) and
-             eapply sem_lexp_instant_switch_env in it;
+        take (sem_exp_instant _ _ _ _) and
+             eapply sem_exp_instant_switch_env in it;
         eauto using sem_cexp_instant;
         symmetry; auto.
   Qed.
@@ -126,22 +126,22 @@ Module Type CEPROPERTIES
         symmetry; auto.
   Qed.
 
-  Lemma sem_laexp_instant_switch_env:
+  Lemma sem_aexp_instant_switch_env:
     forall b R R' ck e v,
-      (forall x, Is_free_in_clock x ck \/ Is_free_in_lexp x e ->
+      (forall x, Is_free_in_clock x ck \/ Is_free_in_exp x e ->
             Env.find x R = Env.find x R') ->
-      sem_laexp_instant b R ck e v <-> sem_laexp_instant b R' ck e v.
+      sem_aexp_instant b R ck e v <-> sem_aexp_instant b R' ck e v.
   Proof.
     intros * RRx. split.
     - inversion_clear 1;
-        take (sem_lexp_instant _ _ _ _)
-             and apply sem_lexp_instant_switch_env with (R':=R') in it; auto;
+        take (sem_exp_instant _ _ _ _)
+             and apply sem_exp_instant_switch_env with (R':=R') in it; auto;
           take (sem_clock_instant _ _ _ _)
                and apply sem_clock_instant_switch_env with (R':=R') in it; eauto;
             constructor; auto.
     - inversion_clear 1;
-        take (sem_lexp_instant _ _ _ _)
-             and apply sem_lexp_instant_switch_env with (R:=R) in it; auto;
+        take (sem_exp_instant _ _ _ _)
+             and apply sem_exp_instant_switch_env with (R:=R) in it; auto;
           take (sem_clock_instant _ _ _ _)
                and apply sem_clock_instant_switch_env with (R:=R) in it; eauto;
             constructor; auto.
@@ -183,10 +183,10 @@ Module Type CEPROPERTIES
 
   (** Well-typed expressions and free variables *)
 
-  Lemma Is_free_in_wt_lexp:
+  Lemma Is_free_in_wt_exp:
     forall (xs : list (ident * (Op.type * clock))) x e,
-      Is_free_in_lexp x e ->
-      wt_lexp (idty xs) e ->
+      Is_free_in_exp x e ->
+      wt_exp (idty xs) e ->
       InMembers x xs.
   Proof.
     induction e; inversion_clear 1; inversion_clear 1; eauto using idty_InMembers.
@@ -203,18 +203,18 @@ Module Type CEPROPERTIES
       eauto using idty_InMembers.
   Qed.
 
-  Lemma Is_free_in_wt_laexps:
+  Lemma Is_free_in_wt_aexps:
     forall (xs : list (ident * (Op.type * clock))) x ck es,
-      Is_free_in_laexps x ck es ->
-      Forall (wt_lexp (idty xs)) es ->
+      Is_free_in_aexps x ck es ->
+      Forall (wt_exp (idty xs)) es ->
       wt_clock (idty xs) ck ->
       InMembers x xs.
   Proof.
     intros * Fs WT WC.
     inv Fs; eauto using Is_free_in_wt_clock.
-    take (Exists (Is_free_in_lexp _) _) and
+    take (Exists (Is_free_in_exp _) _) and
          apply Exists_exists in it as (? & Ix & ?).
-    eapply Forall_forall in WT; eauto using Is_free_in_wt_lexp.
+    eapply Forall_forall in WT; eauto using Is_free_in_wt_exp.
   Qed.
 
   Lemma Is_free_in_wt_cexp:
@@ -224,18 +224,18 @@ Module Type CEPROPERTIES
       InMembers x xs.
   Proof.
     induction e; inversion_clear 1; inversion_clear 1; auto;
-      eauto using Is_free_in_wt_lexp, idty_InMembers.
+      eauto using Is_free_in_wt_exp, idty_InMembers.
   Qed.
 
-  Lemma Is_free_in_wt_laexp:
+  Lemma Is_free_in_wt_aexp:
     forall (xs : list (ident * (Op.type * clock))) x ck e,
-      Is_free_in_laexp x ck e ->
-      wt_lexp (idty xs) e ->
+      Is_free_in_aexp x ck e ->
+      wt_exp (idty xs) e ->
       wt_clock (idty xs) ck ->
       InMembers x xs.
   Proof.
     intros * Fx WTe WTc.
-    inv Fx; eauto using Is_free_in_wt_lexp, Is_free_in_wt_clock.
+    inv Fx; eauto using Is_free_in_wt_exp, Is_free_in_wt_clock.
   Qed.
 
   Lemma Is_free_in_wt_caexp:

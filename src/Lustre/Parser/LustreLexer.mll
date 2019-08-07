@@ -63,6 +63,7 @@ let () =
       ("onot",     fun loc -> tok ONOT't     loc);
       ("or",       fun loc -> tok OR't       loc);
       ("real",     fun loc -> tok FLOAT64't  loc); (* LEGACY *)
+      ("restart",  fun loc -> tok RESTART't  loc);
       ("returns",  fun loc -> tok RETURNS't  loc);
       ("tel",      fun loc -> tok TEL't      loc);
       ("then",     fun loc -> tok THEN't     loc);
@@ -223,7 +224,7 @@ let hexadecimal_floating_constant =
   | hexadecimal_prefix (hexadecimal_digit_sequence as intpart)
         binary_exponent_part floating_suffix?
 
-(* Character and string constants *)
+(* Character constants *)
 let simple_escape_sequence =
   '\\' ( ['\''  '\"'  '?'  '\\'  'a'  'b'  'e'  'f'  'n'  'r'  't'  'v'] as c)
 let octal_escape_sequence =
@@ -231,6 +232,7 @@ let octal_escape_sequence =
          | octal_digit octal_digit
          | octal_digit octal_digit octal_digit) as n)
 let hexadecimal_escape_sequence = "\\x" (hexadecimal_digit+ as n)
+(* not used, only for reference: *)
 let escape_sequence =
     simple_escape_sequence
   | octal_escape_sequence
@@ -244,7 +246,6 @@ rule initial = parse
   | "/*"                          { multiline_comment2 lexbuf; initial lexbuf }
   | "--"                          { singleline_comment lexbuf; initial lexbuf }
   | "//"                          { singleline_comment lexbuf; initial lexbuf }
-  | "--"                          { singleline_comment lexbuf; initial lexbuf }
   | integer_constant as s         { tok CONSTANT't (LustreAst.CONST_INT s,
                                                     currentLoc lexbuf) }
   | decimal_floating_constant     { tok CONSTANT't (LustreAst.CONST_FLOAT

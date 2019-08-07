@@ -8,7 +8,7 @@ From compcert Require Import lib.Integers.
 
 From Velus Require Import Common.
 From Velus Require Import Environment.
-From Velus Require Import RMemory.
+From Velus Require Import Memory.
 
 From Coq Require Import List.
 From Coq Require Import ZArith.BinInt.

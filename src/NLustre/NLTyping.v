@@ -40,23 +40,21 @@ Module Type NLTYPING
       Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
       Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
       wt_clock vars ck ->
-      Forall (wt_lexp vars) es ->
-      NoDup xs ->
+      Forall (wt_exp vars) es ->
       wt_equation G vars (EqApp xs ck f es None)
   | wt_EqReset: forall n xs ck f es r,
       find_node f G = Some n ->
       Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
       Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
       wt_clock vars ck ->
-      Forall (wt_lexp vars) es ->
-      NoDup xs ->
+      Forall (wt_exp vars) es ->
       In (r, bool_type) vars ->
       wt_equation G vars (EqApp xs ck f es (Some r))
   | wt_EqFby: forall x ck c0 e,
       In (x, type_const c0) vars ->
       typeof e = type_const c0 ->
       wt_clock vars ck ->
-      wt_lexp vars e ->
+      wt_exp vars e ->
       wt_equation G vars (EqFby x ck c0 e).
 
   Definition wt_node (G: global) (n: node) : Prop
@@ -76,7 +74,7 @@ Module Type NLTYPING
       Forall (fun n'=> n.(n_name) <> n'.(n_name))%type ns ->
       wt_global (n::ns).
 
-  Hint Constructors wt_clock wt_lexp wt_cexp wt_equation wt_global : nltyping.
+  Hint Constructors wt_clock wt_exp wt_cexp wt_equation wt_global : nltyping.
 
   Lemma wt_global_NoDup:
     forall g,
