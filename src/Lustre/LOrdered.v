@@ -45,8 +45,11 @@ Module Type LORDERED
       Is_node_in_exp f (Eite e le1 le2 la)
   | INEapp1: forall f g le a,
       Exists (Is_node_in_exp f) le ->
-      Is_node_in_exp f (Eapp g le a)
-  | INEapp2: forall f le a, Is_node_in_exp f (Eapp f le a).
+      Is_node_in_exp f (Eapp g le None a)
+  | INEapp2: forall f le r a, Is_node_in_exp f (Eapp f le r a)
+  | INEapp3: forall f g le e a,
+      Exists (Is_node_in_exp f) (e :: le) ->
+      Is_node_in_exp f (Eapp g le (Some e) a).
 
   Definition Is_node_in_eq (f: ident) (eq: equation) : Prop :=
     List.Exists (Is_node_in_exp f) (snd eq).

@@ -72,7 +72,7 @@ Module Type LSEMANTICS
       : history -> Stream bool -> exp -> list (Stream value) -> Prop :=
     | Sconst:
         forall H b c cs,
-          cs ≡ const c b ->
+          cs ≡ const b c ->
           sem_exp H b (Econst c) [cs]
 
     | Svar:
@@ -175,7 +175,7 @@ Module Type LSEMANTICS
 
     Hypothesis ConstCase:
       forall H b c cs,
-        cs ≡ const c b ->
+        cs ≡ const b c ->
         P_exp H b (Econst c) [cs].
 
     Hypothesis VarCase:
@@ -382,6 +382,13 @@ Module Type LSEMANTICS
       apply IHForall2. intro. destruct H2. inv H3. constructor. auto.
       apply INEapp2.
       intro. apply H2. rewrite H3. apply INEapp2.
+    - inv Hord.
+      econstructor; eauto.
+      + eapply Forall2_impl_In in H1; eauto. intros * ?? Hi. apply Hi. intro.
+        take (~ _) and apply it. constructor. right. eapply Exists_exists; eauto.
+      + apply IHHsem. intro. take (~ _) and apply it. constructor; eauto.
+      + intro k. take (forall k, _ /\ _) and specialize (it k) as (? & Hk).
+        apply Hk. intro Hn. subst. take (~ _) and apply it. constructor.
     - econstructor; eauto.
       clear H0 H2. induction H1; eauto.
       constructor. apply H0. intro. destruct H3. now constructor.
@@ -422,7 +429,7 @@ Module Type LSEMANTICS
       [ econstructor; econstructor; auto
       | unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto];
       inversion_clear Hn2 as
-          [ | | ? ? ? ? Hn3 | | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | | ]; auto;
+          [ | | ? ? ? ? Hn3 | | ? ? ? ? ? Hn3 | ? ? ? ? ? Hn3 | | |]; auto;
       try (destruct Hn3 as [| Hn4 ]; eauto; destruct Hn4; eauto).
 
     induction x using exp_ind2; intros * Hsem; inv Hsem;
@@ -456,15 +463,21 @@ Module Type LSEMANTICS
       clear H5 H0 H10 H12 H14. induction H13; auto. constructor.
       inv H1. apply H4; auto. SolveNin Hnin.
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
+    - econstructor.
+      + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
+        eapply In_Forall in Hin as Hs; eauto. apply Hs; auto.
+        intro Ini. apply Hnin. inv Ini. repeat constructor.
+        apply Exists_exists; eauto. now constructor 2.
+      + eapply sem_node_cons; eauto. intro. subst. apply Hnin.
+        constructor. apply INEapp2.
     - econstructor; eauto.
-      clear H5 H10. induction H9; eauto. constructor.
-      inv H0. apply H4; eauto. SolveNin Hnin.
-      inv H0. apply IHForall2; eauto.
-      intro. destruct Hnin. inv H0.
-      inv H3; econstructor. econstructor; eauto. apply INEapp2.
-      unfold Is_node_in_eq; simpl; rewrite Exists_cons; right; auto.
-      eapply sem_node_cons; eauto. intro. destruct Hnin. rewrite H1.
-      econstructor. apply INEapp2.
+      + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
+        eapply In_Forall in Hin as Hs; eauto. apply Hs; auto.
+        intro Ini. apply Hnin. inv Ini. constructor. constructor. right.
+        apply Exists_exists; eauto. now constructor 2.
+      + apply IHx; auto. SolveNin Hnin.
+      + intro k. eapply sem_node_cons; eauto. intro. subst.
+        apply Hnin. constructor. constructor.
     - apply IHForall2. intro. destruct Hnin. unfold Is_node_in_eq. simpl.
       rewrite Exists_cons. right. auto.
   Qed.
@@ -526,8 +539,8 @@ Module Type LSEMANTICS
       inv H; inv Ecs; inv Exs; inv Eys; simpl in *;
         try discriminate.
     + constructor; eapply Cofix; eauto.
-    + constructor. eapply Cofix; eauto. now inv H.
-    + inv H3. inv H5. econstructor. eapply Cofix; eauto. now inv H.
+    + constructor. eapply Cofix; eauto. congruence.
+    + inv H3. inv H5. inv H. econstructor. eapply Cofix; eauto. congruence.
   Qed.
 
   Add Parametric Morphism : merge
@@ -588,8 +601,8 @@ Module Type LSEMANTICS
       + eapply Cofix; eauto.
   Qed.
 
-  Add Parametric Morphism c : (const c)
-      with signature @EqSt bool ==> @EqSt value
+  Add Parametric Morphism : const
+      with signature @EqSt bool ==> eq ==> @EqSt value
         as const_EqSt.
   Proof.
     cofix Cofix; intros b b' Eb.
@@ -645,7 +658,7 @@ Module Type LSEMANTICS
     intros b b' Eb e xs xs' Exs Sem.
     revert b' xs' Eb Exs; induction Sem using sem_exp_ind2 with
                               (P_equation := fun H b e => True)
-                              (P_node := fun i ls xs => True).
+                              (P_node := fun i ls xs => True); auto.
     - intros. inv Exs. inv H5.
       constructor.
       rewrite <-Eb.
@@ -699,8 +712,15 @@ Module Type LSEMANTICS
         eapply Forall2_impl_In; [ idtac | apply H1 ].
         intros. simpl. apply H5; auto. reflexivity.
       + now rewrite <- Exs.
-    - split.
-    - split.
+    - intros. econstructor; eauto.
+      + instantiate (1 := ss).
+        eapply Forall2_impl_In; [ idtac | apply H1 ].
+        intros. apply H6; auto. reflexivity.
+      + apply IHSem; auto. reflexivity.
+      + intro k. specialize (H3 k) as [].
+        (* now rewrite <- Exs ?? *)
+        setoid_rewrite <- map_st_EqSt_Proper at 2; eauto. intros * Heq.
+        now rewrite Heq.
   Qed.
 
   Add Parametric Morphism G H : (sem_equation G H)

@@ -630,6 +630,17 @@ Module Type STREAMS
             constructor; cofix_step CoFix H.
   Qed.
 
+  Add Parametric Morphism k : (mask k)
+      with signature @EqSt bool ==> @EqSt value ==> @EqSt value
+        as mask_EqSt.
+  Proof.
+    revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
+    unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
+      constructor; inv Ers; inv Exs;
+        simpl in *; try discriminate;
+          destruct k as [|[]]; auto; try reflexivity.
+  Qed.
+
   (* Remark mask_const_absent: *)
   (*   forall n rs, *)
   (*     mask n rs (Streams.const absent) ≡ Streams.const absent. *)

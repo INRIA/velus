@@ -24,7 +24,7 @@ Module Type TRANSCRIPTION
        (Import CE   : CESYNTAX     Op)
        (NL          : NLSYNTAX Ids Op CE).
 
-  Fixpoint to_lexp (e : L.exp) : res CE.lexp :=
+  Fixpoint to_lexp (e : L.exp) : res CE.exp :=
     match e with
     | L.Econst c                 => OK (CE.Econst c)
     | L.Evar x (ty, ck)          => OK (CE.Evar x ty)
@@ -39,7 +39,7 @@ Module Type TRANSCRIPTION
     | L.Ewhen _ _ _ _
     | L.Emerge _ _ _ _
     | L.Eite _ _ _ _
-    | L.Eapp _ _ _     => Error (msg "expression not normalized")
+    | L.Eapp _ _ _ _    => Error (msg "expression not normalized")
     end.
 
   Fixpoint to_cexp (e : L.exp) : res CE.cexp :=
@@ -63,7 +63,7 @@ Module Type TRANSCRIPTION
     | L.Emerge _ _ _ _
     | L.Eite _ _ _ _
     | L.Efby _ _ _
-    | L.Eapp _ _ _     => Error (msg "control expression not normalized")
+    | L.Eapp _ _ _ _    => Error (msg "control expression not normalized")
     end.
 
   Fixpoint suffix_of_clock (ck : clock) (acc : list (ident * bool))
@@ -151,7 +151,7 @@ Module Type TRANSCRIPTION
   Definition to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
                          (eq : L.equation) : res NL.equation :=
     match eq with
-    | (xs, [L.Eapp f es _]) =>
+    | (xs, [L.Eapp f es None _]) =>
         do les <- mmap to_lexp es;
         OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les None)
 

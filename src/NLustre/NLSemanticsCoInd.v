@@ -310,44 +310,38 @@ Module Type NLSEMANTICSCOIND
     intros nd G f xs ys Hord Hsem Hnin.
     assert (Hnin':=Hnin).
     revert Hnin'.
-    induction Hsem as [| | | | |bk f xs ys n Hfind Hinp Hout Hscvs Heqs IH]
+    induction Hsem as [
+                     |
+                     | |
+                     | bk f n xs ys Hfind Hinp Hout Hscvs Heqs IH]
       using sem_node_mult
       with (P_equation := fun bk H eq =>
                    ~Is_node_in_eq nd.(n_name) eq
-                   -> sem_equation (nd::G) bk H eq)
-           (P_reset := fun f rs ess oss =>
-                   (nd.(n_name) <> f)
-                   -> sem_reset (nd::G) f rs ess oss);
-      try eauto using sem_equation; try intro HH.
-    econstructor; eauto. apply IHHsem.
-    intro Hnf. rewrite Hnf in *. inv H4. specialize (H6 0).
-    inversion_clear H6 as [ ? ? ? ? ? Hfind].
-    apply In_Forall with (2:=find_node_In _ _ _ Hfind) in Hnin.
-    apply find_node_name in Hfind. auto.
-    econstructor; eauto. intro k. specialize (H k) as [? Hsemn].
-    now apply Hsemn.
-    clear HH.
-    assert (nd.(n_name) <> f) as Hnf.
-    { intro Hnf. rewrite Hnf in *.
-      apply In_Forall with (2:=find_node_In _ _ _ Hfind) in Hnin.
-      apply find_node_name in Hfind. auto. }
-    econstructor; eauto.
-    now apply find_node_other; auto.
-    apply Forall_impl_In with (2:=IH).
-    intros eq Hin HH. apply HH; clear HH.
-    destruct eq; try inversion 1; subst.
-    assert (Hsem := Heqs).
-    eapply In_Forall in Hsem; try eapply Hin.
-    inversion_clear Hsem as [| ? ? ? ? ? ? ? ? ? ? Hsemn| |].
-    inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
-    pose proof (find_node_name _ _ _ Hfind').
-    apply find_node_In in Hfind'.
-    apply In_Forall with (1:=Hnin) in Hfind'. auto.
-    inversion_clear H5. specialize (H0 0).
-    inversion_clear H0 as [ ? ? ? ? ? Hfind'].
-    pose proof (find_node_name _ _ _ Hfind').
-    apply find_node_In in Hfind'.
-    apply In_Forall with (1:=Hnin) in Hfind'. auto.
+                   -> sem_equation (nd::G) bk H eq);
+      try eauto using sem_equation; try intro Hb.
+    - econstructor; eauto. intro k.
+      take (forall k, _ /\ _) and specialize (it k) as []. auto.
+    -
+      assert (nd.(n_name) <> f) as Hnf.
+      { intro Hnf. rewrite Hnf in *.
+        apply In_Forall with (2:=find_node_In _ _ _ Hfind) in Hnin.
+        apply find_node_name in Hfind. auto. }
+      econstructor; eauto.
+      now apply find_node_other; auto.
+      apply Forall_impl_In with (2:=IH).
+      intros eq Hin HH. apply HH; clear HH.
+      destruct eq; try inversion 1; subst.
+      pose proof (In_Forall _ _ _ Heqs Hin) as Hsem.
+      inversion_clear Hsem as [| ? ? ? ? ? ? ? ? ? ? Hsemn| |].
+      inversion_clear Hsemn as [ ? ? ? ? ? Hfind'].
+      pose proof (find_node_name _ _ _ Hfind').
+      apply find_node_In in Hfind'.
+      apply In_Forall with (1:=Hnin) in Hfind'. auto.
+      take (forall k, _) and specialize (it 0) as Hsem.
+      inversion_clear Hsem as [ ? ? ? ? ? Hfind'].
+      pose proof (find_node_name _ _ _ Hfind').
+      apply find_node_In in Hfind'.
+      apply In_Forall with (1:=Hnin) in Hfind'. auto.
   Qed.
 
   Lemma sem_equation_cons2:
@@ -370,9 +364,8 @@ Module Type NLSEMANTICSCOIND
     econstructor; eauto using sem_equation.
     inversion_clear Hord as [|? ? Hord' Hnn Hnns].
     auto using sem_node_cons2.
-    econstructor; eauto. econstructor; eauto. inv H4.
-    inversion_clear Hord as [|? ? Hord' Hnn Hnns].
-    auto using sem_node_cons2.
+    econstructor; eauto. intro k.
+    inv Hord. apply sem_node_cons2; eauto.
   Qed.
 
 
@@ -588,17 +581,6 @@ Module Type NLSEMANTICSCOIND
       + now apply IHxs.
   Qed.
 
-  Add Parametric Morphism k : (mask k)
-      with signature @EqSt bool ==> @EqSt value ==> @EqSt value
-        as mask_EqSt.
-  Proof.
-    revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
-    unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
-      constructor; inv Ers; inv Exs;
-        simpl in *; try discriminate;
-          destruct k as [|[]]; auto; try reflexivity.
-  Qed.
-
   Add Parametric Morphism : count
       with signature @EqSt bool ==> @EqSt nat
         as count_EqSt.
@@ -683,6 +665,7 @@ Module NLSemanticsCoindFun
        (CESyn : CESYNTAX      Op)
        (Syn   : NLSYNTAX  Ids Op       CESyn)
        (Str   : STREAMS       Op OpAux)
-<: NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str.
-  Include NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str.
+       (Ord   : NLORDERED Ids Op CESyn Syn)
+<: NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str Ord.
+  Include NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str Ord.
 End NLSemanticsCoindFun.

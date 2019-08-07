@@ -218,9 +218,15 @@ Module Type LSYNTAX
         P (Eite e ets efs a).
 
     Hypothesis EappCase:
-      forall f es r a,
+      forall f es a,
         Forall P es ->
-        P (Eapp f es r a).
+        P (Eapp f es None a).
+
+    Hypothesis EresetCase:
+      forall f es r a,
+        P r ->
+        Forall P es ->
+        P (Eapp f es (Some r) a).
 
     Local Ltac SolveForall :=
       match goal with
@@ -239,7 +245,9 @@ Module Type LSYNTAX
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
       - apply EiteCase; SolveForall; auto.
-      - apply EappCase; SolveForall.
+      - destruct o.
+        apply EresetCase; SolveForall; auto.
+        apply EappCase; SolveForall.
     Qed.
 
   End exp_ind2.

@@ -11,9 +11,10 @@ From Velus Require Import Lustre.LTyping.
 From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics.
-From Velus Require Import NLustre.Streams.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.NLSemanticsCoInd.
+
+From Velus Require Import Streams.
 
 From Coq Require Import String.
 
@@ -46,7 +47,8 @@ Module Type CORRECTNESS
        (Ord         : NLORDERED Ids Op CE     NL)
        (Lord        : LORDERED   Ids Op       L)
        (LS          : LSEMANTICS Ids Op OpAux L Lord)
-       (NLSC        : NLSEMANTICSCOIND Ids Op OpAux CE NL Ord).
+       (Str         : STREAMS        Op OpAux)
+       (NLSC        : NLSEMANTICSCOIND Ids Op OpAux CE NL Str Ord).
 
   Lemma const_eq :
     forall c b, NLSC.const c b ≡ LS.const c b.
