@@ -180,19 +180,14 @@ Module Type LCLOCKING
         (exists bck sub,
             Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es)
             /\ Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns)) ->
-        wc_exp (Eapp f es None anns).
+        wc_exp (Eapp f es None anns)
 
-    (* TODO : same as wc_Eapp?? *)
     | wc_EappReset: forall f es r anns n,
         Forall wc_exp es ->
-        DisjointIndexes (map nclockof es) ->
-        NoDup (indexes (map snd anns)) ->
         find_node f G = Some n ->
-        (exists b isub osub,
-            Forall2 (fun xtc cke => inst_in b isub xtc = Some cke)
-                    n.(n_in) (nclocksof es)
-            /\ Forall2 (fun xtc a => inst_out b osub isub xtc = Some (snd a))
-                       n.(n_out) anns) ->
+        (exists bck sub,
+            Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es)
+            /\ Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns)) ->
         wc_exp r ->
         (* TODO: clock of r *)
         wc_exp (Eapp f es (Some r) anns).
@@ -225,7 +220,13 @@ Module Type LCLOCKING
     | IFEapp: forall x f es anns,
         Exists (Is_fresh_in x) es
         \/ Ino x (map snd (map snd anns)) ->
-        Is_fresh_in x (Eapp f es anns).
+        Is_fresh_in x (Eapp f es None anns)
+
+    | IFEreset: forall x f es e anns,
+        Exists (Is_fresh_in x) (e :: es)
+        \/ Ino x (map snd (map snd anns)) ->
+        Is_fresh_in x (Eapp f es (Some e) anns).
+
 
     Inductive DisjointFreshList : list exp -> Prop :=
     | DWnil:
@@ -285,11 +286,23 @@ Module Type LCLOCKING
         NoDupo (map snd (map snd anns)) ->
         Forall Is_AnonStream (map snd (map snd anns)) ->
         (forall x, Ino x (map snd (map snd anns)) -> ~Exists (Is_fresh_in x) es) ->
-        DisjointFresh (Eapp f es anns).
+        DisjointFresh (Eapp f es None anns)
+
+    (* TODO: check *)
+    | DFEreset: forall f es e anns,
+        DisjointFreshList (e :: es) ->
+        Forall DisjointFresh (e :: es) ->
+        NoDupo (map snd (map snd anns)) ->
+        Forall Is_AnonStream (map snd (map snd anns)) ->
+        (forall x, Ino x (map snd (map snd anns)) -> ~Exists (Is_fresh_in x) (e :: es)) ->
+        DisjointFresh (Eapp f es (Some e) anns).
+
 
     Definition WellFormedAnon (e : exp) : Prop :=
       match e with
-      | Eapp f es anns => Forall DisjointFresh es /\ DisjointFreshList es
+      | Eapp f es None anns => Forall DisjointFresh es /\ DisjointFreshList es
+      | Eapp f es (Some r) anns =>
+        Forall DisjointFresh (r :: es) /\ DisjointFreshList (r :: es)
       | _ => DisjointFresh e
       end.
 
@@ -417,15 +430,11 @@ Module Type LCLOCKING
     Hypothesis EappResetCase:
       forall f es r anns n,
         Forall (wc_exp G vars) es ->
-        DisjointIndexes (map nclockof es) ->
-        NoDup (indexes (map snd anns)) ->
         Forall P es ->
         find_node f G = Some n ->
-        (exists b isub osub,
-            Forall2 (fun xtc cke => inst_in b isub xtc = Some cke)
-                    n.(n_in) (nclocksof es)
-            /\ Forall2 (fun xtc a => inst_out b osub isub xtc = Some (snd a))
-                       n.(n_out) anns) ->
+        (exists bck sub,
+            Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es)
+            /\ Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns)) ->
         wc_exp G vars r ->
         P r ->
         P (Eapp f es (Some r) anns).
@@ -445,9 +454,9 @@ Module Type LCLOCKING
         clear H3 H5. induction H0; auto.
         clear H4 H6. induction H1; auto.
       - eapply EappCase; eauto.
-        clear H0 H1 H2 H3. induction H; eauto.
+        clear H0 H1. induction H; eauto.
       - eapply EappResetCase; eauto.
-        clear H0 H1 H2 H3. induction H; eauto.
+        clear H0 H1 H2. induction H; eauto.
     Qed.
 
   End wc_exp_ind2.
