@@ -152,6 +152,21 @@ Module Type STREAMS
   Qed.
 
   Add Parametric Morphism
+      A B (P: A -> Stream B -> Prop) xs
+      (P_compat: Proper (eq ==> @EqSt B ==> iff) P)
+    : (@Forall2 A (Stream B) P xs)
+      with signature @EqSts B ==> iff
+        as Forall2_EqSt_iff.
+  Proof.
+    intros ys ys' Eys.
+    split; revert xs ys ys' Eys;
+      induction xs, ys; intros * Eys H; inv H; inv Eys; auto;
+        constructor; eauto.
+    now take (_ ≡ _) and rewrite <- it.
+    now take (_ ≡ _) and rewrite it.
+  Qed.
+
+  Add Parametric Morphism
       A B (P: Stream A -> B -> Prop)
       (P_compat: Proper (@EqSt A ==> eq ==> Basics.impl) P)
     : (@Forall2 (Stream A) B P)
@@ -164,6 +179,20 @@ Module Type STREAMS
     constructor; eauto.
     - eapply P_compat; eauto.
     - eapply IHxs; eauto.
+  Qed.
+
+  Add Parametric Morphism
+      A B C (P: A -> B -> Stream C -> Prop) xs ys
+      (P_compat: Proper (eq ==> eq ==> @EqSt C ==> Basics.impl) P)
+    : (@Forall3 A B (Stream C) P xs ys)
+      with signature @EqSts C ==> Basics.impl
+        as Forall3_EqSt.
+  Proof.
+    intros x y Exy Hxy.
+    revert xs ys x y Exy Hxy;
+      induction xs, ys; intros * Exy H; inv H; inv Exy; auto;
+        constructor; eauto.
+    now take (_ ≡ _) and rewrite <- it.
   Qed.
 
   Add Parametric Morphism
