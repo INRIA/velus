@@ -256,22 +256,6 @@ Module Type FUSION
   Definition ClassFusible (c: class) : Prop :=
     Forall (fun m=> Fusible m.(m_body)) c.(c_methods).
 
-  Lemma lift_Fusible:
-    forall e s1 s2 t1 t2,
-      Fusible (Comp (Ifte e s1 s2) (Ifte e t1 t2))
-      <->
-      Fusible (Ifte e (Comp s1 t1) (Comp s2 t2)).
-  Proof.
-    Hint Constructors Fusible.
-    intros e s1 s2 t1 t2.
-    split; intro Hifw.
-    - inversion_clear Hifw as [| | | |? ? Hs Ht|].
-      constructor; inversion_clear Hs; inversion_clear Ht; now cannot_write.
-    - inversion_clear Hifw as [| |? ? ? Hfree1 Hfree2 Hcw| | | ].
-      inversion_clear Hfree1; inversion_clear Hfree2.
-      repeat constructor; cannot_write.
-  Qed.
-
   Lemma Fusible_fold_left_shift:
     forall A f (xs : list A) iacc,
       Fusible (fold_left (fun i x => Comp (f x) i) xs iacc)
@@ -413,8 +397,8 @@ Module Type FUSION
 
   Lemma zip_Comp':
     forall s1 s2,
-      Fusible s1
-      -> (stmt_eval_eq (zip s1 s2) (Comp s1 s2)).
+      Fusible s1 ->
+      stmt_eval_eq (zip s1 s2) (Comp s1 s2).
   Proof.
     induction s1, s2;
       try rewrite stmt_eval_eq_Comp_Skip1;
@@ -438,127 +422,11 @@ Module Type FUSION
       reflexivity.
   Qed.
 
-  Lemma fuse'_free_write:
-    forall s2 s1,
-      Fusible s1
-      -> Fusible s2
-      -> Fusible (fuse' s1 s2).
-  Proof.
-    induction s2;
-      try (intros; apply zip_free_write; assumption).
-    intros s1 Hfree1 Hfree2.
-    inversion_clear Hfree2.
-    apply IHs2_2; [|assumption].
-    apply zip_free_write; assumption.
-  Qed.
-
-  (** fuse_eval_eq *)
-
-  Definition fuse_eval_eq s1 s2: Prop :=
-    stmt_eval_eq s1 s2 /\ (Fusible s1 /\ Fusible s2).
-
-  (*
-     Print relation.
-     Check (fuse_eval_eq : relation stmt).
-   *)
-
-  Lemma fuse_eval_eq_refl:
-    forall s,
-      Fusible s
-      -> Proper fuse_eval_eq s.
-  Proof.
-    intros s Hfree; unfold Proper, fuse_eval_eq; intuition.
-  Qed.
-
-  Lemma fuse_eval_eq_trans:
-    transitive stmt fuse_eval_eq.
-  Proof.
-    intros s1 s2 s3 Heq1 Heq2.
-    unfold fuse_eval_eq in *.
-    split; [|now intuition].
-    destruct Heq1 as [Heq1 ?].
-    destruct Heq2 as [Heq2 ?].
-    rewrite Heq1, Heq2; reflexivity.
-  Qed.
-
-  Lemma fuse_eval_eq_sym:
-    symmetric stmt fuse_eval_eq.
-  Proof.
-    intros s1 s2 Heq.
-    unfold fuse_eval_eq in *.
-    split; [|now intuition].
-    destruct Heq as [Heq ?].
-    rewrite Heq; reflexivity.
-  Qed.
-
-  Add Relation stmt (fuse_eval_eq)
-      symmetry proved by fuse_eval_eq_sym
-      transitivity proved by fuse_eval_eq_trans
-        as fuse_eval_equiv.
-
-  Instance subrelation_stmt_fuse_eval_eq:
-    subrelation fuse_eval_eq stmt_eval_eq.
-  Proof.
-    intros s1 s2 Heq x menv env menv' env'.
-    now apply Heq.
-  Qed.
-
-  Lemma zip_Comp:
-    forall s1 s2,
-      Fusible s1
-      -> Fusible s2
-      -> fuse_eval_eq (zip s1 s2) (Comp s1 s2).
-  Proof.
-    intros s1 s2 Hfree1 Hfree2.
-    unfold fuse_eval_eq.
-    split; [|split].
-    - rewrite zip_Comp' with (1:=Hfree1); reflexivity.
-    - apply zip_free_write with (1:=Hfree1) (2:=Hfree2).
-    - intuition.
-  Qed.
-
-  (* TODO: Why don't we get this automatically via the subrelation? *)
-  Instance fuse_eval_eq_Proper:
-    Proper (eq ==> eq ==> eq ==> fuse_eval_eq ==> eq ==> iff) stmt_eval.
-  Proof.
-    intros prog' prog HR1 menv' menv HR2 env' env HR3 s1 s2 Heq r' r HR4;
-      subst; destruct r as [menv' env'].
-    unfold fuse_eval_eq in Heq.
-    destruct Heq as [Heq ?].
-    rewrite Heq; reflexivity.
-  Qed.
-
-  Instance fuse_eval_eq_Comp_Proper:
-    Proper (fuse_eval_eq ==> fuse_eval_eq ==> fuse_eval_eq) Comp.
-  Proof.
-    Hint Constructors Fusible.
-    intros s s' Hseq t t' Hteq.
-    unfold fuse_eval_eq in *.
-    destruct Hseq as [Hseq [Hfrees Hfrees']].
-    destruct Hteq as [Hteq [Hfreet Hfreet']].
-    split; [|intuition].
-    rewrite Hseq, Hteq; reflexivity.
-  Qed.
-
-  Instance zip_fuse_eval_eq_Proper:
-    Proper (fuse_eval_eq ==> fuse_eval_eq ==> fuse_eval_eq) zip.
-  Proof.
-    intros s s' Hseq t t' Hteq.
-    unfold fuse_eval_eq in *.
-    destruct Hseq as [Hseq [Hfrees Hfrees']].
-    destruct Hteq as [Hteq [Hfreet Hfreet']].
-    split; [|split]; [|apply zip_free_write with (1:=Hfrees) (2:=Hfreet)
-                      |apply zip_free_write with (1:=Hfrees') (2:=Hfreet')].
-    rewrite zip_Comp' with (1:=Hfrees).
-    rewrite zip_Comp' with (1:=Hfrees').
-    rewrite Hseq, Hteq; reflexivity.
-  Qed.
-
   Lemma fuse'_Comp:
     forall s2 s1,
-      Fusible s1
-      -> Fusible s2
-      -> stmt_eval_eq (fuse' s1 s2) (Comp s1 s2).
+      Fusible s1 ->
+      Fusible s2 ->
+      stmt_eval_eq (fuse' s1 s2) (Comp s1 s2).
   Proof.
     Hint Constructors Fusible.
     induction s2;
@@ -566,46 +434,22 @@ Module Type FUSION
         try now (rewrite zip_Comp'; intuition).
     rewrite Comp_assoc.
     inversion_clear Hifte2.
-    rewrite IHs2_2;
-      match goal with
-      | H1:Fusible ?s1,
-      H2:Fusible ?s2 |- Fusible (zip ?s1 ?s2)
-        => apply zip_free_write with (1:=H1) (2:=H2)
-      | |- Fusible ?s => assumption
-      | H:Fusible s2_2 |- _ => pose proof (fuse_eval_eq_refl _ H)
-      end.
-    intros prog menv env menv' env'.
-    rewrite zip_Comp; [now apply iff_refl|assumption|assumption].
+    rewrite IHs2_2; auto.
+    - intros prog menv env menv' env'.
+      rewrite zip_Comp'; auto.
+      reflexivity.
+    - apply zip_free_write; auto.
   Qed.
 
-  Instance fuse'_fuse_eval_eq_Proper:
-    Proper (fuse_eval_eq ==> fuse_eval_eq ==> fuse_eval_eq) fuse'.
-  Proof.
-    intros s s' Hseq t t' Hteq.
-    unfold fuse_eval_eq in *.
-    destruct Hseq as [Hseq [Hfrees Hfrees']].
-    destruct Hteq as [Hteq [Hfreet Hfreet']].
-    split; [|split]; [|apply fuse'_free_write with (1:=Hfrees) (2:=Hfreet)
-                      |apply fuse'_free_write with (1:=Hfrees') (2:=Hfreet')].
-    repeat rewrite fuse'_Comp; try assumption.
-    rewrite Hseq, Hteq.
-    reflexivity.
-  Qed.
-
-  Lemma fuse_Comp:
+  Corollary fuse_Comp:
     forall s,
-      Fusible s
-      -> stmt_eval_eq (fuse s) s.
+      Fusible s ->
+      stmt_eval_eq (fuse s) s.
   Proof.
     intros s Hfree prog menv env menv' env'.
     destruct s; simpl; try reflexivity.
     inversion_clear Hfree.
-    destruct s2;
-      match goal with
-      | H: Fusible ?s2 |- context [fuse' _ ?s2]
-        => pose proof (fuse_eval_eq_refl _ H)
-      end;
-      rewrite fuse'_Comp; auto; reflexivity.
+    now apply fuse'_Comp.
   Qed.
 
   Lemma fuse_call:
