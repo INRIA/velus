@@ -4072,7 +4072,7 @@ Section PRESERVATION.
                  apply type_pres'; auto.
              - rewrite sep_swap3, Out, <-sepemp_left in Hm2.
                rewrite match_states_conj; split; [|repeat (split; auto)].
-               subst; rewrite Env.updates_nil_l.
+               subst; rewrite Env.adds_opt_nil_l.
                rewrite sep_swap.
                rewrite Out in Heq; rewrite <-Heq in Hm2; auto.
            }
@@ -4314,8 +4314,8 @@ Section PRESERVATION.
                       rewrite Hparams, Hreturn, Hcc; simpl; repeat f_equal.
                     apply type_pres'; auto.
                   * simpl; rewrite <-Out; auto.
-                + rewrite Env.updates_is_adds; auto.
-                  rewrite Env.updates_is_adds in WT_env'; auto.
+                + rewrite Env.adds_opt_is_adds; auto.
+                  rewrite Env.adds_opt_is_adds in WT_env'; auto.
                   rewrite match_states_conj; split; [|repeat (split; auto)].
                   rewrite sep_swap34.
                   rewrite Out, Hys, sep_swap4 in Hm3.

@@ -108,7 +108,7 @@ Module Type OBCSEMANTICS
         Forall2 (exp_eval me ve) es vos ->
         stmt_call_eval prog ome clsid f vos ome' rvos ->
         add_inst o ome' me = me' ->
-        Env.updates ys rvos ve = ve' ->
+        Env.adds_opt ys rvos ve = ve' ->
         stmt_eval prog me ve (Call ys clsid o f es) (me', ve')
   | Icomp:
       forall prog me ve a1 a2 ve1 me1 ve2 me2,
@@ -134,7 +134,7 @@ Module Type OBCSEMANTICS
         length vos = length fm.(m_in) ->
         stmt_eval prog' me (Env.adds_opt (map fst fm.(m_in)) vos vempty)
                   fm.(m_body) (me', ve') ->
-        Forall2 (fun x vo => Env.find x ve' = vo) (map fst fm.(m_out)) rvos ->
+        Forall2 (fun x => eq (Env.find x ve')) (map fst fm.(m_out)) rvos ->
         stmt_call_eval prog me clsid f vos me' rvos.
 
   Scheme stmt_eval_ind_2 := Minimality for stmt_eval Sort Prop
@@ -443,17 +443,16 @@ Proof.
     rewrite Env.adds_opt_cons_cons, <-exp_eval_extend_venv; auto with datatypes.
   Qed.
 
-  Lemma exp_eval_updates_extend_venv:
+  Lemma exp_eval_adds_opt_extend_venv:
     forall me e xs rvs ve v,
       (forall x, In x xs -> ~Is_free_in_exp x e) ->
-      (exp_eval me (Env.updates xs rvs ve) e v <-> exp_eval me ve e v).
+      (exp_eval me (Env.adds_opt xs rvs ve) e v <-> exp_eval me ve e v).
   Proof.
     induction xs as [|x xs IH]; destruct rvs as [|rv rvs]; auto; try reflexivity.
     intros ve v' Hnfree.
-    rewrite Env.updates_cons_cons.
     destruct rv.
-    - rewrite <-exp_eval_extend_venv; auto with datatypes.
-    - rewrite <-exp_eval_reduce_venv; auto with datatypes.
+    - rewrite Env.adds_opt_cons_cons, <-exp_eval_extend_venv; auto with datatypes.
+    - rewrite Env.adds_opt_cons_cons_None; auto with datatypes.
   Qed.
 
   (** If we add irrelevent values to [me], evaluation does not change. *)
@@ -509,21 +508,6 @@ Proof.
       auto.
     - match goal with H:stmt_eval _ _ _ s1 _ |- _ => eapply IHs1 in H end;
       match goal with H:stmt_eval _ _ _ s2 _ |- _ => eapply IHs2 in H end; eauto.
-  Qed.
-
-  Lemma stmt_eval_mono:
-    forall p,
-      (forall ome ome' clsid f vos rvos,
-          stmt_call_eval p ome clsid f vos ome' rvos ->
-          Forall (fun x => x <> None) rvos) ->
-      forall s me ve me' ve',
-        stmt_eval p me ve s (me', ve') ->
-        forall x, Env.In x ve -> Env.In x ve'.
-  Proof.
-    induction s; intros * Heval x Hin; inv Heval; eauto.
-    - destruct b; eauto.
-    - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.
-      apply H in He. auto using Env.updates_mono.
   Qed.
 
   Lemma stmt_call_eval_cons:

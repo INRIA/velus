@@ -455,7 +455,7 @@ Module Type CORRECTNESS
       apply stmt_eval_fold_left_lift in StEval as (?&?& StEval & StEvals).
       eapply IHsubs in StEvals; eauto.
       rewrite stmt_eval_eq_Comp_Skip1 in StEval; inv StEval.
-      apply Env.updates_nil_l.
+      apply Env.adds_opt_nil_l.
   Qed.
 
   Lemma call_reset_inv:
@@ -691,24 +691,26 @@ Module Type CORRECTNESS
 
   (** Step correctness *)
 
-  Lemma value_to_option_updates:
+  Lemma value_to_option_adds_opt:
     forall R ve x xs v vs,
       In x xs ->
+      NoDup xs ->
+      Forall (fun x => Env.find x ve = None) xs ->
       Forall2 (sem_var_instant R) xs vs ->
       sem_var_instant R x v ->
-      Env.find x (Env.updates xs (map value_to_option vs) ve) = value_to_option v.
+      Env.find x (Env.adds_opt xs (map value_to_option vs) ve) = value_to_option v.
   Proof.
     induction xs as [|x']; try now inversion 1.
-    intros * Hin Hvar Hxsem.
+    intros * Hin Hnodup Hnin Hvar Hxsem; inv Hnodup; inv Hnin.
     apply Forall2_left_cons in Hvar as (v' & vs' & Hyss & Hvs & ?); subst.
     destruct (ident_eq_dec x x') as [Heq|Hneq]; simpl.
     + subst.
       assert (v' = v) by (eapply sem_var_instant_det; eauto); subst.
       destruct v; simpl.
-      * apply Env.find_gurs.
-      * apply Env.find_guss.
+      * rewrite Env.adds_opt_cons_cons_None, Env.find_In_gsso_opt; auto.
+      * apply Env.find_gsss_opt.
     + inv Hin; try congruence.
-      rewrite Env.find_guso; simpl; auto.
+      rewrite Env.find_gsso_opt; simpl; auto.
   Qed.
 
   Lemma eq_if_present_adds_opt:
@@ -904,7 +906,7 @@ Module Type CORRECTNESS
   Proof.
     intros * IH Sem Hwc Hnormal Ord Wsch Vars Defs StepReset
                 Closed TransClosed Corres Equiv Hcm Hcvars Hmems Hve.
-    assert (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs)
+    assert (forall x, Is_defined_in_tc x tc -> ~ Is_defined_in x tcs) as Defs'
       by (intro; rewrite Is_defined_in_defined, Is_defined_in_defined_tc;
           simpl in Defs; intros; eapply NoDup_app_In in Defs; eauto).
     clear Defs.
@@ -922,7 +924,7 @@ Module Type CORRECTNESS
         * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
           eapply sem_var_instant_det in Hvar; eauto.
-          inv Hvar; apply Env.gss.
+          inv Hvar; rewrite Env.gss; auto.
       + split.
         * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
@@ -987,7 +989,14 @@ Module Type CORRECTNESS
            - split.
              + eapply Memory_Corres_Call_present; eauto.
              + inversion_clear 1; intros Hvar.
-               eapply value_to_option_updates; eauto.
+               simpl in Vars; apply NoDup_swap in Vars.
+               eapply value_to_option_adds_opt; eauto.
+               * apply NoDup_app_weaken in Vars; auto.
+               * apply Forall_forall; intros y Hin.
+                 assert (~ In y inputs) by
+                     (rewrite app_assoc in Vars; apply NoDup_app_weaken in Vars;
+                      eapply NoDup_app_In; eauto).
+                 apply Hve; auto using Is_defined_in_tc.
          }
         *{ destruct rst; apply Corres in Wsch.
            - unfold state_corres in Wsch; rewrite Find_I in Wsch.
@@ -1077,9 +1086,9 @@ Module Type CORRECTNESS
       rewrite Env.gso; auto.
     - inv Heval; auto.
     - inv Heval.
-      rewrite Env.updates_nil_l; auto.
+      rewrite Env.adds_opt_nil_l; auto.
     - inv Heval.
-      apply Env.find_In_guso.
+      apply Env.find_In_gsso_opt.
       intro; apply Hnd; constructor; auto.
   Qed.
 
@@ -1160,9 +1169,9 @@ Module Type CORRECTNESS
       intro; subst; apply Hnd; constructor.
     - inv Heval; auto.
     - inv Heval.
-      rewrite Env.updates_nil_l; auto.
+      rewrite Env.adds_opt_nil_l; auto.
     - inv Heval.
-      rewrite Env.find_In_guso; auto.
+      rewrite Env.find_In_gsso_opt; auto.
       intro; apply Hnd; constructor; auto.
   Qed.
 

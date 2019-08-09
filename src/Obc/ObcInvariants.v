@@ -107,7 +107,7 @@ Module Type OBCINVARIANTS
       end.
     - inv Hstmt.
       apply exp_eval_extend_menv_by_obj.
-      rewrite exp_eval_updates_extend_venv; auto.
+      rewrite exp_eval_adds_opt_extend_venv; auto.
       intros x Hin Hfree'. apply Hfree in Hfree'.
       auto.
     - now inv Hstmt.
@@ -195,7 +195,7 @@ Module Type OBCINVARIANTS
     induction s; intros * Hnnv Heval x Hin; inv Heval; inv Hnnv; eauto.
     - destruct b; eauto.
     - match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ => rename H into He end.
-      apply Hcall in He; eauto using Env.updates_mono, Forall2_exp_eval_not_None.
+      apply Hcall in He; eauto using Env.adds_opt_mono, Forall2_exp_eval_not_None.
   Qed.
 
   Lemma no_vars_in_args_spec:

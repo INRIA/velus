@@ -491,27 +491,6 @@ Module Type OBCTYPING
   Qed.
   Hint Resolve wt_env_adds_opt.
 
-  Lemma wt_env_updates:
-    forall vars env ys outs rvs,
-      NoDupMembers vars ->
-      NoDup ys ->
-      wt_env env vars ->
-      Forall2 (fun y (xt: ident * type) => In (y, snd xt) vars) ys outs ->
-      Forall2 (fun vo xt => wt_valo vo (snd xt)) rvs outs ->
-      wt_env (Env.updates ys rvs env) vars.
-  Proof.
-    intros * NodupM Nodup WTenv Hin WTv.
-    assert (length ys = length rvs) as Length
-        by (transitivity (length outs); [|symmetry];
-            eapply Forall2_length; eauto).
-    revert env rvs outs WTenv WTv Length Hin.
-    induction ys, rvs, outs; intros * WTenv WTv Length Hin;
-      inv Length; inv Nodup; inv Hin; inv WTv; auto.
-    rewrite Env.updates_cons_cons'; auto.
-    destruct o; eauto.
-  Qed.
-  Hint Resolve wt_env_updates.
-
   Lemma wt_params:
     forall vos xs es,
       Forall2 (fun e vo => wt_valo vo (typeof e)) es vos ->
@@ -643,7 +622,7 @@ Module Type OBCTYPING
           apply Forall_forall with (1:=H) in Hxy end.
         eapply pres_sem_expo'; eauto.
       + (* Instance memory is well-typed after execution. *)
-        inv WTm. split; [|now eapply wt_env_updates; eauto]. constructor; auto.
+        inv WTm. split; [|now eapply wt_env_adds_opt; eauto]. constructor; auto.
         apply Forall_forall.
         destruct x as (o', clsid'). intros Hin.
         destruct (ident_eq_dec o o').
@@ -944,8 +923,6 @@ Module Type OBCTYPING
   Proof.
    induction prog as [|c']; simpl; intros * WTP Find; try discriminate.
    inversion_clear WTP as [|? ? Hwtc Hwtp Hndup].
-   (* simpl in Hndup; apply NoDup_cons' in Hndup. *)
-   (* destruct Hndup as [Hnin Hndup]. *)
    erewrite find_class_app'; eauto.
    destruct (ident_eqb c'.(c_name) n) eqn:Heq.
    - inv Find.

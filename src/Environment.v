@@ -88,13 +88,6 @@ Module Env.
                     | (x, Some v) => add x v env
                     | _ => env end) e (combine xs vos).
 
-    Definition updates (xs: list positive) (vos : list (option A)) (m : t A) : t A :=
-      fold_right (fun (xvo: positive * option A) env =>
-                    match xvo with
-                    | (x, Some v) => add x v env
-                    | (x, None) => remove x env
-                    end) m (combine xs vos).
-
     Definition adds (xs: list positive) (vs : list A) (m : t A) : t A :=
       adds' (combine xs vs) m.
 
@@ -326,14 +319,14 @@ Module Env.
       rewrite In_adds_spec', <-In_InMembers_combine; auto; intuition.
     Qed.
 
-    (* Lemma adds_nil_nil': *)
-    (*   forall e, *)
-    (*     adds' List.nil e = e. *)
-    (* Proof. simpl; auto. Qed. *)
-
     Lemma adds_opt_nil_nil:
       forall e,
         adds_opt List.nil List.nil e = e.
+    Proof. simpl; auto. Qed.
+
+    Lemma adds_opt_nil_l:
+      forall e vs,
+        adds_opt List.nil vs e = e.
     Proof. simpl; auto. Qed.
 
     Lemma adds_nil_nil:
@@ -345,70 +338,6 @@ Module Env.
       forall e vs,
         adds List.nil vs e = e.
     Proof. simpl; auto. Qed.
-
-    Lemma updates_nil_l:
-      forall e vs,
-        updates List.nil vs e = e.
-    Proof. simpl; auto. Qed.
-
-    (* Lemma adds_nil_r: *)
-    (*   forall e xs, *)
-    (*     adds xs List.nil e = e. *)
-    (* Proof. *)
-    (*   unfold adds; destruct xs; simpl; auto. *)
-    (* Qed. *)
-
-    (* Lemma find_adds_In': *)
-    (*   forall x a xvs m, *)
-    (*     NoDupMembers xvs -> *)
-    (*     find x m = None -> *)
-    (*     find x (adds' xvs m) = Some a -> *)
-    (*     List.In (x, a) xvs. *)
-    (* Proof. *)
-    (*   induction xvs as [|(y, b)]. *)
-    (*   - simpl; congruence. *)
-    (*   - inversion_clear 1; intros * Find. *)
-    (*     destruct (Pos.eq_dec x y). *)
-    (*     + subst; simpl in *; rewrite gsso', gss in Find; auto; inv Find; auto. *)
-    (*     + rewrite find_gsso' in Find; auto. *)
-    (*       simpl; eauto. *)
-    (* Qed. *)
-
-    (* Lemma find_adds_In: *)
-    (*   forall x v xs vs m, *)
-    (*     NoDup xs -> *)
-    (*     find x m = None -> *)
-    (*     find x (adds xs vs m) = Some v -> *)
-    (*     List.In (x, v) (combine xs vs). *)
-    (* Proof. *)
-    (*   unfold adds. *)
-    (*   intros; eapply find_adds_In'. *)
-    (*   induction xs as [|x'], vs as [|v']; simpl; try congruence. *)
-    (*   inversion_clear 1; intros * Find. *)
-    (*   destruct (Pos.eq_dec x x'). *)
-    (*   - subst; rewrite gss in Find; inversion Find; auto. *)
-    (*   - rewrite gso in Find; auto. *)
-    (*     right; eauto. *)
-    (* Qed. *)
-
-    (* Lemma find_adds_In_spec: *)
-    (*   forall x v xs vs m, *)
-    (*     NoDup xs -> *)
-    (*     find x (adds xs vs m) = Some v -> *)
-    (*     List.In (x, v) (combine xs vs) *)
-    (*     \/ ((forall v, ~ List.In (x, v) (combine xs vs)) *)
-    (*        /\ find x m = Some v). *)
-    (* Proof. *)
-    (*   unfold adds. *)
-    (*   induction xs as [|x'], vs as [|v']; simpl; auto. *)
-    (*   inversion_clear 1; intros * Find. *)
-    (*   destruct (Pos.eq_dec x x'). *)
-    (*   - subst; rewrite gss in Find; inversion Find; auto. *)
-    (*   - rewrite gso in Find; auto. *)
-    (*     edestruct IHxs; eauto. *)
-    (*     right; intuition; eauto. *)
-    (*     congruence. *)
-    (* Qed. *)
 
     Lemma adds'_cons:
       forall xvs x (a: A) m,
@@ -453,50 +382,6 @@ Module Env.
       destruct HH as [|HH]; auto.
       now apply Props.P.F.empty_in_iff in HH.
     Qed.
-
-    (* Lemma adds_comm': *)
-    (*   forall xvs x y (a b: A) m, *)
-    (*     (forall a, ~ List.In (x, a) xvs) -> *)
-    (*     (forall b, ~ List.In (y, b) xvs) -> *)
-    (*     x <> y -> *)
-    (*     adds' ((x, a) :: (y, b) :: xvs) m = adds' ((y, b) :: (x, a) :: xvs) m. *)
-    (* Proof. *)
-    (*   intros * NotInx NotIny ?. *)
-    (*   repeat rewrite adds_cons_cons'; auto. *)
-    (*   - rewrite add_comm; auto. *)
-    (*   - intros ? [E|?]; try inversion E; try contradiction. *)
-    (*     eapply NotIny; eauto. *)
-    (*   - intros ? [|?]; try congruence. *)
-    (*     eapply NotInx; eauto. *)
-    (* Qed. *)
-
-    (* Lemma adds_comm: *)
-    (*   forall xs x y (a b: A) vs m, *)
-    (*     ~ List.In x xs -> *)
-    (*     ~ List.In y xs -> *)
-    (*     x <> y -> *)
-    (*     adds (x :: y :: xs) (a :: b :: vs) m = adds (y :: x :: xs) (b :: a :: vs) m. *)
-    (* Proof. *)
-    (*   intros. *)
-    (*   repeat rewrite adds_cons_cons; auto. *)
-    (*   - rewrite add_comm; auto. *)
-    (*   - intros []; contradiction. *)
-    (*   - intros [|]; congruence. *)
-    (* Qed. *)
-
-    (* Lemma adds_add_comm': *)
-    (*   forall xvs x (a: A) m, *)
-    (*     (forall a, ~ List.In (x, a) xvs) -> *)
-    (*     add x a (adds' xvs m) = adds' xvs (add x a m). *)
-    (* Proof. *)
-    (*   induction xvs as [|(y, b)]; simpl; auto. *)
-    (*   intros * Nin; rewrite <-IHxvs. *)
-    (*   - apply add_comm. *)
-    (*     intro; subst. *)
-    (*     eapply Nin; left; eauto. *)
-    (*   - intros * Hin. *)
-    (*     eapply Nin; eauto. *)
-    (* Qed. *)
 
     Lemma In_find:
       forall x (s: t A),
@@ -779,18 +664,6 @@ Module Env.
             now constructor 2.
     Qed.
 
-    Lemma updates_is_adds:
-      forall xs vs (m: t A),
-        NoDup xs ->
-        updates xs (List.map (@Some A) vs) m = adds xs vs m.
-    Proof.
-      unfold updates, adds; intros * Hndp.
-      revert vs.
-      induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
-      rewrite IHxs, <-adds'_cons; simpl; auto.
-      intro; eapply Notin, InMembers_In_combine; eauto.
-    Qed.
-
     Lemma adds_opt_is_adds:
       forall xs vs (m: t A),
         NoDup xs ->
@@ -801,59 +674,6 @@ Module Env.
       induction xs, vs; simpl; inversion_clear Hndp as [|?? Notin]; auto.
       rewrite IHxs, <-adds'_cons; simpl; auto.
       intro; eapply Notin, InMembers_In_combine; eauto.
-    Qed.
-
-    Lemma find_guso:
-      forall x x' xs (vs: list (option A)) m,
-        x <> x' ->
-        find x (updates (x' :: xs) vs m) = find x (updates xs (tl vs) m).
-    Proof.
-      intros * Hneq.
-      unfold updates.
-      destruct vs. now destruct xs; auto.
-      destruct o; simpl.
-      + now rewrite gso; auto.
-      + now rewrite gro; auto.
-    Qed.
-
-    Lemma find_guss:
-      forall x v xs (vs: list (option A)) m,
-        find x (updates (x :: xs) (Some v :: vs) m) = Some v.
-    Proof.
-      intros; unfold updates; apply gss.
-    Qed.
-
-    Lemma find_gurs:
-      forall x xs (vs: list (option A)) m,
-        find x (updates (x :: xs) (None :: vs) m) = None.
-    Proof.
-      intros; unfold updates; apply grs.
-    Qed.
-
-    Lemma updates_cons_cons_None:
-      forall x xs (vos : list (option A)) m,
-        updates (x :: xs) (None :: vos) m = remove x (updates xs vos m).
-    Proof. now unfold updates. Qed.
-
-    Lemma find_In_guso:
-      forall x ys (vs: list (option A)) env,
-        ~ List.In x ys ->
-        find x (updates ys vs env) = find x env.
-    Proof.
-      intros x ys vs env Hin.
-      revert vs; induction ys; intro vs; simpl; auto.
-      rewrite find_guso.
-      - apply IHys. intuition.
-      - intro. apply Hin. now left.
-    Qed.
-
-    Lemma updates_cons_cons:
-      forall xs x (vo: option A) vs e,
-        updates (x :: xs) (vo :: vs) e =
-        (match vo with None => remove x | Some v => add x v end)
-          (updates xs vs e).
-    Proof.
-      induction xs as [|x']; intros; destruct vo; simpl; auto.
     Qed.
 
     Lemma add_not_Leaf:
@@ -912,43 +732,15 @@ Module Env.
                    end; f_equal; try rewrite rleaf; auto.
     Qed.
 
-    Lemma updates_cons_cons':
-      forall xs x (vo: option A) vs e,
-        ~ List.In x xs ->
-        updates (x :: xs) (vo :: vs) e =
-        updates xs vs
-                (match vo with None => remove x | Some v => add x v end e).
-    Proof.
-      unfold updates.
-      destruct vo as [v|].
-      - induction xs as [|x']; intros * NotIn; simpl; auto.
-        destruct vs as [|v']; simpl; auto.
-        rewrite <-IHxs; auto.
-        + simpl. destruct v'.
-          * rewrite add_comm; auto.
-            intro; subst; apply NotIn; constructor; auto.
-          * rewrite add_remove_comm; auto.
-            intro; subst; apply NotIn; constructor; auto.
-        + intro; apply NotIn; right; auto.
-      - induction xs as [|x']; intros * NotIn; simpl; auto.
-        destruct vs as [|v']; simpl; auto.
-        rewrite <-IHxs; auto.
-        + simpl. destruct v'.
-          * rewrite add_remove_comm; auto.
-            intro; subst; apply NotIn; constructor; auto.
-          * rewrite remove_comm; auto.
-        + intro; apply NotIn; right; auto.
-    Qed.
-
-    Lemma updates_mono:
+    Lemma adds_opt_mono:
       forall x (env: t A) ys rvos,
         In x env ->
         Forall (fun x => ~(x = None)) rvos ->
-        In x (updates ys rvos env).
+        In x (adds_opt ys rvos env).
     Proof.
       induction ys; destruct rvos; auto.
       intros Hin Hnone; inversion_clear Hnone.
-      unfold updates; destruct o; simpl.
+      destruct o; simpl.
       - apply Props.P.F.add_in_iff; eauto.
       - congruence.
     Qed.
@@ -1619,5 +1411,3 @@ Module Env.
 End Env.
 
 Open Scope env_scope.
-
-

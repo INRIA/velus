@@ -775,7 +775,8 @@ Module Type OBCADDDEFAULTS
     - (* * Call ys clsid o f es *)
       simpl in Hadd.
       rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
-      inv Hadd. inv Heval. apply Env.find_In_guso.
+      inv Hadd. inv Heval.
+      apply Env.find_In_gsso_opt.
       intro Hin; apply Hnin. setoid_rewrite ps_adds_spec; auto.
     - (* * Skip *)
       now inv Heval.
@@ -1205,7 +1206,8 @@ Module Type OBCADDDEFAULTS
         rewrite (surjective_pairing (fold_right _ _ _)) in Hadd.
         inv Hadd. inv Heval. split.
         + (* forall x, ~x ∈ (st ∪ al) -> Env.find x env' = Env.find x env *)
-          intros x Hnin. apply Env.find_In_guso.
+          intros x Hnin.
+          apply Env.find_In_gsso_opt.
           rewrite PSP.empty_union_1, ps_adds_spec in Hnin; auto.
         + (* forall x, x ∈ al -> Env.In x env' *)
           assert (length ys = length rvos) as Hlys.
@@ -1234,10 +1236,11 @@ Module Type OBCADDDEFAULTS
              induction Hlys'; inv Hinadds.
              - inversion_clear Hnn as [|? ? Hrvo Hrvos].
                apply not_None_is_Some in Hrvo. destruct Hrvo as (rv & Hrvo).
-               rewrite Hrvo. unfold Env.updates; simpl. apply Env.Props.P.F.add_in_iff; auto.
+               rewrite Hrvo; simpl. apply Env.Props.P.F.add_in_iff; auto.
              - inversion_clear Hnn as [|? ? Hrvo Hrvos].
                apply not_None_is_Some in Hrvo. destruct Hrvo as (rv & Hrvo).
-               rewrite Hrvo. unfold Env.updates; simpl.
+               rewrite Hrvo.
+               rewrite Env.adds_opt_cons_cons.
                rewrite Env.Props.P.F.add_in_iff; auto using IHHlys'.
            }
           * match goal with H:Forall2 (exp_eval _ _) (fst _) vos |- _ =>
@@ -1301,6 +1304,16 @@ Module Type OBCADDDEFAULTS
       destruct e; simpl in *; try (now apply IH in HH; auto).
       apply in1_notin2_add1 in HH as (HH & Hin).
       apply IH in HH; auto.
+    Qed.
+
+    Lemma in1_notin2_Var_Not_In:
+      forall ys s1 s2 ve' ve,
+        in1_notin2 s1 (ps_adds ys s2) ve' ve ->
+        Forall (fun x => ~ Env.In x ve) ys.
+    Proof.
+      intros * (?& Hnin).
+      apply Forall_forall; intros * Hin.
+      apply Hnin, ps_adds_spec; auto.
     Qed.
 
     Lemma in1_notin2_infer:
@@ -1390,7 +1403,12 @@ Module Type OBCADDDEFAULTS
         match goal with H:stmt_call_eval _ _ _ _ _ _ _ |- _ =>
           apply program_refines_stmt_call_eval with (1:=Hpr) (4:=Hvos) in H
                           as (rvos' & Hcall' & Hrvos') end.
-        now exists (Env.updates ys rvos' ve1); eauto using updates_refines, stmt_eval.
+        { inv Hwt.
+          exists (Env.adds_opt ys rvos' ve1); split; eauto using stmt_eval.
+          apply env_refines_adds_opt; auto.
+          simpl in *.
+          eapply in1_notin2_Var_Not_In; eauto.
+        }
 
         assert (Forall (fun vo => vo <> None) vos') as Hsome.
         { apply Forall_forall. intros x Hin.

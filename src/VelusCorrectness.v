@@ -300,7 +300,6 @@ Hint Resolve
      Scheduler.scheduler_wc_program
      NL2StcClocking.translate_wc
      No_Naked_Vars_add_defaults_class
-     stmt_call_eval_add_defaults
      Obc.Fus.fuse_No_Overwrites
      translate_No_Overwrites
      Obc.Fus.fuse_cannot_write_inputs
