@@ -313,7 +313,7 @@ Module Type STC2OBCTYPING
   Qed.
   Hint Resolve translate_system_wt.
 
-  Lemma translate_wt:
+  Theorem translate_wt:
     forall P,
       Stc.Typ.wt_program P ->
       wt_program (translate P).
