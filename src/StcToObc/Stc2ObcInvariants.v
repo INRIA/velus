@@ -55,7 +55,7 @@ Module Type STC2OBCINVARIANTS
 
   Lemma Fusible_translate_cexp:
     forall mems x e,
-      (forall y, Is_free_in_cexp y e -> x <> y) ->
+      ~ Is_free_in_cexp x e ->
       Fusible (translate_cexp mems x e).
   Proof.
     intros * Hfree.
@@ -63,53 +63,20 @@ Module Type STC2OBCINVARIANTS
     - simpl; constructor;
         [apply IHe1; now auto|apply IHe2; now auto|].
       intros * Hfree'; split;
-        (apply not_Can_write_in_translate_cexp;
-         apply Is_free_in_tovar in Hfree';
-         subst; apply Hfree; constructor).
+        apply not_Can_write_in_translate_cexp;
+        apply Is_free_in_tovar in Hfree';
+        intro; subst;
+          apply Hfree; constructor.
     - simpl; constructor;
         [apply IHe1; now auto|apply IHe2; now auto|].
       intros * Hfree'; split;
         apply not_Can_write_in_translate_cexp;
-        apply Hfree;
-        now constructor; apply Is_free_translate_exp with mems.
+        apply Is_free_translate_exp in Hfree';
+        intro; subst;
+          apply Hfree; constructor; auto.
   Qed.
 
-  Lemma Fusible_Control_caexp:
-    forall mems ck f e,
-      (forall x, Is_free_in_caexp x ck e -> ~ Can_write_in x (f e)) ->
-      Fusible (f e) ->
-      Fusible (Control mems ck (f e)).
-  Proof.
-    induction ck as [|ck IH i b]; [now intuition|].
-    intros * Hxni Hfce; simpl.
-    cases.
-    - apply IH with (f := fun ce => Ifte (tovar mems (i, bool_type)) (f ce) Skip).
-      + intros j Hfree Hcw.
-        apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
-        inversion_clear Hcw as [| | |? ? ? ? Hskip| | |];
-          [assumption|inversion Hskip].
-      + repeat constructor; [assumption| |now inversion 1].
-        apply Hxni.
-        match goal with
-        | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-        end.
-        unfold tovar in Hfree.
-        destruct (PS.mem i mems); inversion Hfree; subst; eauto.
-    - apply IH with (f := fun ce => Ifte (tovar mems (i, bool_type)) Skip (f ce)).
-      + intros j Hfree Hcw.
-        apply Hxni with (x := j); [inversion_clear Hfree; eauto|].
-        inversion_clear Hcw as [| |? ? ? ? Hskip| | | |];
-          [inversion Hskip|assumption].
-      + repeat constructor; [assumption|now inversion 1|].
-        apply Hxni.
-        match goal with
-        | H:Is_free_in_exp _ (tovar mems _) |- _ => rename H into Hfree
-        end.
-        unfold tovar in Hfree.
-        destruct (PS.mem i mems); inversion Hfree; subst; eauto.
-  Qed.
-
-  Lemma Fusible_Control_aexp:
+  Lemma Fusible_Control:
     forall mems ck s,
       (forall x, Is_free_in_clock x ck -> ~ Can_write_in x s) ->
       Fusible s ->
@@ -182,18 +149,18 @@ Module Type STC2OBCINVARIANTS
           - eapply Hnin; eauto.
             left; constructor.
         }
-        apply Fusible_Control_caexp.
+        apply Fusible_Control.
         * intros; apply not_Can_write_in_translate_cexp.
           eapply Hfni; auto.
         * apply Fusible_translate_cexp.
-          intros; apply Hfni; intuition.
-      + apply Fusible_Control_aexp; auto.
+          intro; eapply Hfni; eauto.
+      + apply Fusible_Control; auto.
         assert (~Is_free_in_clock x ck) as Hnfree
             by (eapply wc_TcNext_not_Is_free_in_clock; eauto).
         inversion 2; subst;  contradiction.
-      + apply Fusible_Control_aexp; auto.
+      + apply Fusible_Control; auto.
         inversion 2; contradiction.
-      + apply Fusible_Control_aexp; auto.
+      + apply Fusible_Control; auto.
         intros ?? Hwrite.
         assert (In x xs) by now inv Hwrite.
         now eapply wc_TcCall_not_Is_free_in_clock; eauto.
@@ -221,7 +188,7 @@ Module Type STC2OBCINVARIANTS
   Qed.
   Hint Resolve reset_insts_Fusible.
 
-  Lemma ClassFusible_translate:
+  Theorem ClassFusible_translate:
     forall P,
       wc_program P ->
       Well_scheduled P ->
