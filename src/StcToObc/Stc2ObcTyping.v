@@ -319,12 +319,11 @@ Module Type STC2OBCTYPING
       wt_program (translate P).
   Proof.
     intros * WT.
-    pose proof (wt_program_NoDup _ WT) as Hnodup.
-    induction P as [|b]; auto with obctyping.
-    inversion_clear WT as [|? ? WT' WTb Hnr]; inv Hnodup.
-    simpl; constructor; eauto.
-    simpl; rewrite map_c_name_translate;
-      auto using NoDup_cons.
+    induction P as [|b]; simpl; auto with obctyping.
+    inv WT.
+    constructor; auto.
+    unfold translate.
+    now apply Forall_map.
   Qed.
 
 End STC2OBCTYPING.

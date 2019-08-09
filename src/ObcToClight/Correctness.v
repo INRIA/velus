@@ -396,15 +396,14 @@ Proof.
   unfold program in *.
   induction prog as [|c]; simpl.
   - constructor.
-  - inversion_clear Wt as [|? ? ? ? Nodup]; simpl in Nodup;
-      inversion_clear Nodup as [|? ? Notinc].
+  - inversion_clear Wt as [|? ? ? ? Nodup].
     rewrite map_app, concat_app, map_app. simpl.
     rewrite app_nil_r, map_map, Permutation_app_comm.
     apply NoDup_app'; auto.
     + simpl.
-      pose proof (c_nodupm c) as Nodup.
+      pose proof (c_nodupm c) as Nodup'.
       induction (c_methods c) as [|m]; simpl;
-        inversion_clear Nodup as [|? ? Notin]; constructor; auto.
+        inversion_clear Nodup' as [|? ? Notin]; constructor; auto.
       rewrite in_map_iff; intros (m' & E & Hin); apply Notin.
       pose proof (c_good c).
       apply prefix_fun_injective in E; try tauto; destruct E as [? E]; rewrite <-E.
@@ -420,9 +419,8 @@ Proof.
       pose proof (c_good c); pose proof (c_good c').
       apply prefix_fun_injective in Eq; try tauto.
       destruct Eq as [Eq].
-      apply Notinc.
-      rewrite <- Eq.
-      now apply in_map, in_rev.
+      eapply in_rev, Forall_forall in Hin; eauto.
+      congruence.
 Qed.
 
 Lemma prefixed_funs:

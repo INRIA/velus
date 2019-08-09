@@ -171,14 +171,6 @@ Module Type TRANSLATION
   Definition translate (P: SynStc.program) : program :=
     map translate_system P.
 
-  Lemma map_c_name_translate:
-    forall P,
-      map c_name (translate P) = map s_name P.
-  Proof.
-    induction P; auto.
-    simpl; rewrite IHP; auto.
-  Qed.
-
   Lemma exists_step_method:
     forall s,
       find_method step (translate_system s).(c_methods) = Some (step_method s).

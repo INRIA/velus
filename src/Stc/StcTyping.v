@@ -74,22 +74,6 @@ Module Type STCTYPING
 
   Hint Constructors wt_clock wt_exp wt_cexp wt_trconstr wt_program.
 
-  Lemma wt_program_NoDup:
-    forall P,
-      wt_program P ->
-      NoDup (map s_name P).
-  Proof.
-    induction P; eauto using NoDup.
-    intro WTg. simpl. constructor.
-    2:apply IHP; now inv WTg.
-    intro Hin.
-    inversion_clear WTg as [|? ? ? WTn Hn].
-    change (Forall (fun b' => (fun i => a.(s_name) <> i :> ident) b'.(s_name)) P) in Hn.
-    apply Forall_map in Hn.
-    apply Forall_forall with (1:=Hn) in Hin.
-    now contradiction Hin.
-  Qed.
-
   Instance wt_trconstr_Proper:
     Proper (@eq program ==> @Permutation.Permutation (ident * type)
                 ==> @Permutation.Permutation (ident * type)

@@ -106,7 +106,7 @@ Module Type OBCTYPING
   | wtp_cons: forall cls p,
       wt_class p cls ->
       wt_program p ->
-      NoDup (map c_name (cls::p)) ->
+      Forall (fun cls' => cls.(c_name) <> cls'.(c_name)) p ->
       wt_program (cls::p).
 
   Hint Constructors wt_exp wt_stmt wt_program : obctyping.
@@ -753,13 +753,8 @@ Module Type OBCTYPING
   Proof.
     induction pre as [|k]; intros post o c c' WT Hin; auto.
     simpl in WT. inv WT.
-    match goal with H:NoDup _ |- _ =>
-      rewrite map_cons in H; apply NoDup_cons' in H;
-        destruct H as (Hnin & Hndup) end.
-    rewrite map_app, in_app, map_cons in Hnin.
-    apply Decidable.not_or in Hnin.
-    rewrite not_in_cons in Hnin.
-    destruct Hnin as (Hnpre & Hneq & Hnpost).
+    simpl.
+    match goal with H: Forall _ _ |- _ => apply Forall_app_weaken, Forall_cons2 in H as (Hneq &?) end.
     apply ident_eqb_neq in Hneq.
     simpl.
     match goal with H:wt_program _ |- _ =>
@@ -774,7 +769,8 @@ Module Type OBCTYPING
     simpl in Hin.
     rewrite <-(find_class_name _ _ _ _ Hin) in *.
     apply find_class_In in Hin.
-    apply in_map with (f:=c_name) in Hin.
+    clear Hnodup.
+    eapply Forall_forall in Hin; eauto.
     contradiction.
   Qed.
 
@@ -787,15 +783,14 @@ Module Type OBCTYPING
     intros * WTp Hin Hc'.
     rewrite Hc' in Hin; clear c' Hc'.
     inversion_clear WTp as [|? ? WTc WTp' Hnodup]; clear WTp'.
-    inversion_clear Hnodup as [|? ? Hnin Hnodup'].
-    apply Hnin.
-    inversion_clear WTc as [Ho Hm]; clear Hm.
+    inversion_clear WTc as [Ho Hm].
     apply Forall_forall with (1:=Ho) in Hin.
     apply not_None_is_Some in Hin.
     destruct Hin as ((cls, p') & Hin).
     simpl in Hin. rewrite <-(find_class_name _ _ _ _ Hin) in *.
     apply find_class_In in Hin.
-    now apply in_map.
+    eapply Forall_forall in Hin; eauto.
+    now apply Hin.
   Qed.
 
   Inductive sub_prog: program -> program -> Prop :=
@@ -836,14 +831,10 @@ Module Type OBCTYPING
     inversion_clear WD as [|? ? WTc WTp Hnodup].
     specialize (IHp' WTp).
     destruct (ident_eq_dec cls'.(c_name) clsid) as [He|Hne].
-    - rewrite map_cons in Hnodup.
-      apply NoDup_cons' in Hnodup.
-      destruct Hnodup as (Hnin & Hnodup).
-      rewrite He in *; clear He.
-      contradiction Hnin.
-      rewrite <-(find_class_name _ _ _ _ IHp').
+    - rewrite He in *; clear He.
+      rewrite <-(find_class_name _ _ _ _ IHp') in *.
       apply find_class_In in IHp'.
-      now apply in_map.
+      eapply Forall_forall in IHp'; eauto; contradiction.
     - apply ident_eqb_neq in Hne.
       now rewrite Hne, IHp'.
   Qed.
@@ -916,31 +907,31 @@ Module Type OBCTYPING
     destruct (ident_eq_dec c.(c_name) c1) as [He|Hne].
     - rewrite He, ident_eqb_refl in Hfc.
       injection Hfc; intros R1 R2; rewrite <-R1, <-R2 in *; clear Hfc R1 R2.
-      inversion_clear Hnodup as [|? ? Hnin Hnodup'].
       assert (c.(c_name) <> cls'.(c_name)) as Hne.
-      + intro Hn. apply Hnin.
+      + intro Hn.
         apply in_split in Hfcin.
         destruct Hfcin as (ws & xs & Hfcin).
-        rewrite Hfcin, map_app, map_cons.
-        apply in_or_app; right. now constructor.
+        rewrite Hfcin in Hnodup.
+        apply Forall_app_weaken in Hnodup; inv Hnodup.
+        contradiction.
       + simpl. apply ident_eqb_neq in Hne.
         rewrite Hc2 in Hne. now rewrite Hne.
     - apply ident_eqb_neq in Hne.
       rewrite Hne in Hfc. clear Hne.
       rewrite <- (IH _ _ _ _ _ _ WTp' Hfc Hfc').
-      inversion_clear Hnodup as [|? ? Hnin Hnodup'].
+      (* inversion_clear Hnodup as [|? ? Hnin Hnodup']. *)
       apply find_class_app in Hfc.
       destruct Hfc as (cls'' & Hprog & Hfc).
-      rewrite Hprog in Hnin.
+      rewrite Hprog in Hnodup.
       assert (c.(c_name) <> cls'.(c_name)) as Hne.
-      + intro Hn. apply Hnin.
+      + intro Hn.
         apply in_split in Hfcin.
         destruct Hfcin as (ws & xs & Hfcin).
-        rewrite Hfcin, map_app, map_cons, map_app, map_cons.
-        apply in_or_app; right.
-        constructor 2.
-        apply in_or_app; right.
-        now constructor.
+        rewrite Hfcin in Hnodup.
+        apply Forall_app_weaken in Hnodup.
+        rewrite app_comm_cons in Hnodup.
+        apply Forall_app_weaken in Hnodup; inv Hnodup.
+        contradiction.
       + simpl. rewrite <-Hc2. apply ident_eqb_neq in Hne.
         now rewrite Hne.
   Qed.
@@ -953,8 +944,8 @@ Module Type OBCTYPING
   Proof.
    induction prog as [|c']; simpl; intros * WTP Find; try discriminate.
    inversion_clear WTP as [|? ? Hwtc Hwtp Hndup].
-   simpl in Hndup; apply NoDup_cons' in Hndup.
-   destruct Hndup as [Hnin Hndup].
+   (* simpl in Hndup; apply NoDup_cons' in Hndup. *)
+   (* destruct Hndup as [Hnin Hndup]. *)
    erewrite find_class_app'; eauto.
    destruct (ident_eqb c'.(c_name) n) eqn:Heq.
    - inv Find.
@@ -964,8 +955,9 @@ Module Type OBCTYPING
       + simpl. apply ident_eqb_eq in Heq.
         rewrite Heq; econstructor; eauto.
       + rewrite map_rev.
-        intro Hin; apply Hnin.
-        apply in_rev; auto.
+        intro Hin.
+        apply in_rev, in_map_iff in Hin as (?&?& Hin).
+        eapply Forall_forall in Hin; eauto; congruence.
    - apply ident_eqb_neq in Heq.
      edestruct IHprog as (? & Find'); eauto.
      rewrite Find'.

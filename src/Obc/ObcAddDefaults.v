@@ -1744,8 +1744,6 @@ Module Type OBCADDDEFAULTS
     inversion_clear 1 as [|? ? WTc WTp Hpnd].
     specialize (IH WTp).
     inversion_clear WTc as [Hfobs WTms].
-    simpl in Hpnd.
-    apply NoDup_cons' in Hpnd as (Hnin & Hpnd).
     simpl. constructor; auto.
     - constructor.
       + rewrite add_defaults_class_c_objs.
@@ -1756,10 +1754,9 @@ Module Type OBCADDDEFAULTS
         apply Forall_map, Forall_impl_In with (2:=WTms).
         intros m Him WTm. apply wt_method_add_defaults.
         now apply wt_add_defaults_method.
-    - simpl; constructor; unfold add_defaults.
-      + destruct c; simpl in *. rewrite map_map.
-        now setoid_rewrite add_defaults_class_c_name.
-      + rewrite map_map. now setoid_rewrite add_defaults_class_c_name.
+    - unfold add_defaults.
+      apply Forall_map.
+      now setoid_rewrite add_defaults_class_c_name.
   Qed.
 
   Lemma add_defaults_stmt_refines:

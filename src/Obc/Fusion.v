@@ -595,7 +595,7 @@ Module Type FUSION
         intros s1 WT1. inv H2.
         eauto using wt_stmt_zip.
     - simpl.
-      now rewrite fuse_class_c_name, map_map, map_fuse_class_c_name.
+      now rewrite Forall_map; setoid_rewrite fuse_class_c_name.
   Qed.
 
   Lemma fuse_wt_mem:
