@@ -201,8 +201,7 @@ Module Type NLSEMANTICSCOIND
           sem_var H x os ->
           sem_equation H b (EqFby x ck c0 e)
 
-    with
-    sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
+    with sem_node: ident -> list (Stream value) -> list (Stream value) -> Prop :=
       SNode:
         forall H f n xss oss,
           find_node f G = Some n ->

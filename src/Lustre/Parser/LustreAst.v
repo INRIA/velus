@@ -59,9 +59,9 @@ Inductive binary_operator :=
 | LAND | LOR | XOR | LSL | LSR
 | EQ | NE | LT | GT | LE | GE.
 
-Inductive constant :=
 (* The string is the textual representation of the constant in
    the source code. *)
+Inductive constant :=
 | CONST_BOOL  : bool -> constant
 | CONST_INT   : string -> constant
 | CONST_FLOAT : floatInfo -> constant
@@ -199,4 +199,3 @@ Section expression_ind2.
   Qed.
 
 End expression_ind2.
-
