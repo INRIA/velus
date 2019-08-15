@@ -84,6 +84,10 @@ Proof.
   unfold ident_eqb; apply Pos.eqb_refl.
 Qed.
 
+Lemma ident_eqb_sym:
+  forall x y, ident_eqb x y = ident_eqb y x.
+Proof Pos.eqb_sym.
+
 Lemma ident_eq_sym:
   forall (x y: ident), x = y <-> y = x.
 Proof.
@@ -1524,5 +1528,3 @@ Ltac rewrite_orel_obinds :=
                  end; try reflexivity).
 
 Ltac solve_orel_obinds := split_orel_obinds; repeat rewrite_orel_obinds.
-
-

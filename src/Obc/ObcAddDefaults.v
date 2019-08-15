@@ -1977,7 +1977,7 @@ Module Type OBCADDDEFAULTS
     apply No_Naked_Vars_add_defaults_method.
   Qed.
 
-  Lemma stmt_call_eval_add_defaults:
+  Theorem stmt_call_eval_add_defaults:
     forall p me f m vs me' rvs,
       wt_program p ->
       Forall_methods (fun m => No_Overwrites m.(m_body)) p ->

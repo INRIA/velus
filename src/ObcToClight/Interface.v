@@ -1,18 +1,24 @@
 From compcert Require Import lib.Integers.
 From compcert Require Import lib.Floats.
 From Velus Require Import Common.
+From Velus Require Import Common.CompCertLib.
 From Velus Require Import Operators.
+From Velus Require Import Ident.
 
 From compcert Require common.Values.
 From compcert Require cfrontend.Cop.
 From compcert Require cfrontend.Ctypes.
 From compcert Require cfrontend.Ctyping.
 From compcert Require common.Memory.
+From compcert Require common.Memdata.
 From compcert Require lib.Maps.
 From Coq Require Import String.
+From Coq Require Import ZArith.BinInt.
 
 Open Scope bool_scope.
 (* Interface avec CompCert *)
+
+Hint Resolve Z.divide_refl.
 
 Definition empty_composite_env : Ctypes.composite_env := (Maps.PTree.empty _).
 
@@ -53,6 +59,27 @@ Module Export Op <: OPERATORS.
     | Tfloat Ctypes.F32               => AST.Mfloat32
     | Tfloat Ctypes.F64               => AST.Mfloat64
     end.
+
+  Lemma cltype_align:
+    forall gcenv ty,
+      (Memdata.align_chunk (type_chunk ty) | Ctypes.alignof gcenv (cltype ty))%Z.
+  Proof.
+    destruct ty; simpl; cases.
+  Qed.
+
+  Lemma cltype_access_by_value:
+  forall ty,
+    Ctypes.access_mode (cltype ty) = Ctypes.By_value (type_chunk ty).
+  Proof.
+    destruct ty; simpl; cases.
+  Qed.
+
+  Lemma sizeof_translate_chunk:
+    forall gcenv t,
+      Ctypes.sizeof gcenv (cltype t) = Memdata.size_chunk (type_chunk t).
+  Proof.
+    intros; apply sizeof_by_value, cltype_access_by_value.
+  Qed.
 
   Definition true_val := Values.Vtrue.
   Definition false_val := Values.Vfalse.
@@ -792,7 +819,7 @@ Module Export Op <: OPERATORS.
       try (now destruct ty; auto).
     specialize (Hnptr b i); contradiction.
   Qed.
-  
+
   Lemma sem_cast_any_mem:
     forall v ty1 ty2 M1 M2,
       (forall b ofs, v <> Values.Vptr b ofs) ->
@@ -1035,3 +1062,15 @@ Module Export Op <: OPERATORS.
     end.
 
 End Op.
+
+Hint Resolve cltype_access_by_value cltype_align wt_val_load_result sem_cast_same.
+
+Module OpAux := OperatorsAux Op.
+
+From Velus Require Import Stream.
+From Velus Require Import Streams.
+From Velus Require Import Obc.
+
+Module Str  := StreamFun  Op OpAux.
+Module Strs := StreamsFun Op OpAux.
+Module Obc  := ObcFun Ids Op OpAux.

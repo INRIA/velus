@@ -10,7 +10,7 @@ From Velus Require Import ObcToClight.Interface.
 
 From Coq Require Import List.
 Import List.ListNotations.
-From Velus Require Import Instantiator.
+
 Import Obc.Syn.
 Import Str.
 Import OpAux.

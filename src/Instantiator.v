@@ -2,12 +2,6 @@ From Velus Require Import ObcToClight.Interface.
 From Velus Require Import Ident.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import Stream.
-From Velus Require Import Streams.
-
-Module OpAux := OperatorsAux Op.
-Module Str   := StreamFun Op OpAux.
-Module Strs  := StreamsFun Op OpAux.
 
 From Velus Require Import CoreExpr.
 
@@ -40,19 +34,15 @@ Module NL2StcTyping     := NL2StcTypingFun     Ids Op OpAux Strs Str CE NL Stc N
 Module NL2StcClocking   := NL2StcClockingFun   Ids Op OpAux Strs Str CE NL Stc NL2Stc.
 Module NL2StcNormalArgs := NL2StcNormalArgsFun Ids Op OpAux Strs Str CE NL Stc NL2Stc.
 
-From Velus Require Import Obc.
-
-Module Obc := ObcFun Ids Op OpAux.
-
 From Velus Require Import StcToObc.Translation.
 From Velus Require Import StcToObc.StcMemoryCorres.
 From Velus Require Import StcToObc.Correctness.
 From Velus Require Import StcToObc.Stc2ObcInvariants.
 From Velus Require Import StcToObc.Stc2ObcTyping.
 
-Module Stc2Obc     := TranslationFun    Ids Op OpAux CE.Syn Stc.Syn Obc.Syn.
-Module MemCorres  := StcMemoryCorresFun Ids Op       CE.Syn Stc.Syn Stc.Last.
-Module Stc2ObcCorr := CorrectnessFun    Ids Op OpAux Str CE Stc Obc Stc2Obc MemCorres.
+Module Stc2Obc     := TranslationFun     Ids Op OpAux CE.Syn Stc.Syn Obc.Syn.
+Module MemCorres   := StcMemoryCorresFun Ids Op       CE.Syn Stc.Syn Stc.Last.
+Module Stc2ObcCorr := CorrectnessFun     Ids Op OpAux Str CE Stc Obc Stc2Obc MemCorres.
 
 Module Stc2ObcInvariants := Stc2ObcInvariantsFun Ids Op OpAux Str CE Stc Obc Stc2Obc.
 Module Stc2ObcTyping     := Stc2ObcTypingFun     Ids Op OpAux Str CE Stc Obc Stc2Obc.

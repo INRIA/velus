@@ -89,14 +89,15 @@ src/StcToObc/Stc2ObcInvariants.v
 src/StcToObc/StcMemoryCorres.v
 src/StcToObc/Translation.v
 
-src/Instantiator.v
 src/ObcToClight/SepInvariant.v
 src/ObcToClight/Correctness.v
 src/ObcToClight/Interface.v
 src/ObcToClight/Generation.v
+src/ObcToClight/GenerationProperties.v
 src/ObcToClight/MoreSeparation.v
 
 src/Traces.v
 src/ClightToAsm.v
 
+src/Instantiator.v
 src/VelusCorrectness.v

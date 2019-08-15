@@ -198,6 +198,9 @@ Module Type OBCTYPING
       wt_mem mo p' cls ->
       wt_mem_inst me p (o, c).
 
+  Definition wt_state (p: program) (me: menv) (ve: venv) (c: class) (vars: list (ident * type)) : Prop :=
+    wt_mem me p c /\ wt_env ve vars.
+
   (* XXX: why does this fail? *)
   (*
   Scheme wt_mem_ind_2 := Minimality for wt_mem Sort Prop
@@ -341,13 +344,12 @@ Module Type OBCTYPING
 
   Lemma pres_sem_exp':
     forall prog c vars me ve e v,
-      wt_mem me prog c ->
-      wt_env ve vars ->
+      wt_state prog me ve c vars ->
       wt_exp c.(c_mems) vars e ->
       exp_eval me ve e (Some v) ->
       wt_val v (typeof e).
   Proof.
-    intros * WT_mem ? ? ?.
+    intros * (WT_mem&?) ? ?.
     inv WT_mem.
     eapply pres_sem_exp with (vars:=vars); eauto.
   Qed.
@@ -367,8 +369,7 @@ Module Type OBCTYPING
 
   Lemma pres_sem_expo':
     forall prog c vars me ve e vo,
-      wt_mem me prog c ->
-      wt_env ve vars ->
+      wt_state prog me ve c vars ->
       wt_exp c.(c_mems) vars e ->
       exp_eval me ve e vo ->
       wt_valo vo (typeof e).
@@ -379,10 +380,8 @@ Module Type OBCTYPING
 
   Lemma pres_sem_exps:
     forall prog c vars me ve es vos,
-      wt_mem me prog c ->
-      wt_env ve vars ->
+      wt_state prog me ve c vars ->
       Forall (wt_exp c.(c_mems) vars) es ->
-      length es = length vos ->
       Forall2 (exp_eval me ve) es vos ->
       Forall2 (fun e vo => wt_valo vo (typeof e)) es vos.
   Proof.
@@ -441,6 +440,56 @@ Module Type OBCTYPING
       + apply IHvars; auto.
   Qed.
   Hint Resolve wt_env_add.
+
+  Lemma wt_mem_inst_add:
+    forall p o c x v me,
+      wt_mem_inst me p (o, c) ->
+      wt_mem_inst (add_val x v me) p (o, c).
+  Proof.
+    inversion_clear 1.
+    - left; auto.
+    - eright; eauto.
+  Qed.
+
+  Lemma wt_mem_add:
+    forall p c x t v me,
+      wt_mem me p c ->
+      In (x, t) (c_mems c) ->
+      wt_val v t ->
+      wt_mem (add_val x v me) p c.
+  Proof.
+    inversion_clear 1; intros.
+    constructor; simpl.
+    - eapply wt_env_add; eauto.
+      apply c_nodupmems.
+    - apply Forall_forall; intros (?&?) Hin.
+      eapply wt_mem_inst_add.
+      eapply Forall_forall in Hin; eauto.
+  Qed.
+  Hint Resolve wt_mem_add.
+
+  Corollary wt_state_add:
+    forall prog me ve c vars x v t,
+      wt_state prog me ve c vars ->
+      NoDupMembers vars ->
+      In (x, t) vars ->
+      wt_val v t ->
+      wt_state prog me (Env.add x v ve) c vars.
+  Proof.
+    intros * (?&?) ???; split; eauto.
+  Qed.
+  Hint Resolve wt_state_add.
+
+  Corollary wt_state_add_val:
+     forall prog me ve c vars x v t,
+      wt_state prog me ve c vars ->
+      In (x, t) (c_mems c) ->
+      wt_val v t ->
+      wt_state prog (add_val x v me) ve c vars.
+  Proof.
+    intros * (?&?) ??; split; eauto.
+  Qed.
+  Hint Resolve wt_state_add_val.
 
   Lemma wt_venv_val_remove:
     forall env x y ty,
@@ -558,8 +607,7 @@ Module Type OBCTYPING
           let (me', ve') := e' in
           NoDupMembers vars ->
           wt_program p ->
-          wt_mem me p cls ->
-          wt_env ve vars ->
+          wt_state p me ve cls vars ->
           wt_stmt p cls.(c_objs) cls.(c_mems) vars stmt ->
           wt_mem me' p cls /\ wt_env ve' vars)
     /\ (forall p me clsid f vs me' rvs,
@@ -575,14 +623,14 @@ Module Type OBCTYPING
   Proof.
     apply stmt_eval_call_ind.
     - (* assign *)
-      intros * Hexp Henv' cls vars Hndup WTp WTm WTe WTstmt.
+      intros * Hexp Henv' cls vars Hndup WTp (WTm & WTe) WTstmt.
       split; auto.
       rewrite <-Henv'.
       inv WTstmt. inversion_clear WTm as [? ? ? WTmv WTmi].
       eapply pres_sem_exp with (1:=WTmv) (2:=WTe) in Hexp; auto.
       eapply wt_env_add; eauto.
     - (* assign state *)
-      intros * Hexp Henv' cls vars Hndup WTp WTm WTe WTstmt.
+      intros * Hexp Henv' cls vars Hndup WTp (WTm & WTe) WTstmt.
       split; auto.
       rewrite <-Henv'.
       inv WTstmt. inversion_clear WTm as [? ? ? WTmv WTmi].
@@ -595,7 +643,7 @@ Module Type OBCTYPING
         inversion 2; now eauto using wt_mem_inst.
     - (* call *)
       intros p * Homenv Hevals Hcall IH Hmenv' Henv'
-             cls vars Hndups WTp WTm WTe WTstmt.
+             cls vars Hndups WTp (WTm & WTe) WTstmt.
       inv WTstmt.
       edestruct IH; eauto; clear IH; simpl.
       + (* Instance memory is well-typed before execution. *)
@@ -620,7 +668,7 @@ Module Type OBCTYPING
         apply in_combine_r in Hxy.
         match goal with H:Forall _ es |- _ =>
           apply Forall_forall with (1:=H) in Hxy end.
-        eapply pres_sem_expo'; eauto.
+        eapply pres_sem_expo'; eauto; split; eauto.
       + (* Instance memory is well-typed after execution. *)
         inv WTm. split; [|now eapply wt_env_adds_opt; eauto]. constructor; auto.
         apply Forall_forall.
@@ -650,17 +698,15 @@ Module Type OBCTYPING
 
     - (* sequential composition *)
       intros p menv env s1 s2
-             * Hstmt1 IH1 Hstmt2 IH2 cls vars Hndups WTp WTm WTe WTstmt.
+             * Hstmt1 IH1 Hstmt2 IH2 cls vars Hndups WTp WTs WTstmt.
       inv WTstmt.
-      match goal with WTstmt1:wt_stmt _ _ _ _ s1 |- _ =>
-                      specialize (IH1 _ _ Hndups WTp WTm WTe WTstmt1) end.
-      destruct IH1 as (WTm1 & WTe1).
-      match goal with WTstmt2:wt_stmt _ _ _ _ s2 |- _ =>
-                      specialize (IH2 _ _ Hndups WTp WTm1 WTe1 WTstmt2) end.
-      assumption.
+      (* match goal with WTstmt1:wt_stmt _ _ _ _ s1 |- _ => *)
+      (*                 specialize (IH1 _ _ Hndups WTp WTs WTstmt1) end. *)
+      edestruct IH1 as (WTm1 & WTe1); eauto.
+      assert (wt_state p me1 ve1 cls vars) as WTs1; auto; split; auto.
     - (* if/then/else *)
       intros prog me ve cond v b st sf env' menv'
-             Hexp Hvtb Hstmt IH cls vars Hndups WTp WTm WTe WTstmt.
+             Hexp Hvtb Hstmt IH cls vars Hndups WTp WTs WTstmt.
       apply IH; auto.
       inv WTstmt. destruct b; auto.
     - (* skip *)
@@ -673,7 +719,9 @@ Module Type OBCTYPING
       rewrite Hfindm in Hfindm';
         injection Hfindm'; intros; subst fm''; clear Hfindm'.
       destruct (wt_program_find_class _ _ _ _ WTp Hfindc) as (WTc & WTp').
-      edestruct IH; eauto.
+      edestruct IH with (vars := meth_vars fm); eauto.
+      + apply m_nodupvars.
+      + split; eauto.
       + (* In a well-typed class, method bodies are well-typed. *)
         apply wt_class_find_method with (1:=WTc) (2:=Hfindm).
       + split; auto.
@@ -692,14 +740,13 @@ Module Type OBCTYPING
     forall p cls vars stmt me ve me' ve',
       NoDupMembers vars ->
       wt_program p ->
-      wt_mem me p cls ->
-      wt_env ve vars ->
+      wt_state p me ve cls vars ->
       wt_stmt p cls.(c_objs) cls.(c_mems) vars stmt ->
       stmt_eval p me ve stmt (me', ve') ->
       wt_mem me' p cls /\ wt_env ve' vars.
   Proof.
-    intros * Hndup WTp WTm WTe WTs Heval.
-    apply ((proj1 pres_sem_stmt') _ _ _ _ (me', ve') Heval cls vars); auto.
+    intros.
+    eapply ((proj1 pres_sem_stmt') _ _ _ _ (me', ve')); eauto.
   Qed.
 
   Lemma pres_sem_stmt_call:

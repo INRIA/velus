@@ -57,10 +57,7 @@ Module Type OBCSYNTAX
       }.
 
   Definition meth_vars m := m.(m_in) ++ m.(m_vars) ++ m.(m_out).
-  Lemma NoDupMembers_meth_vars:
-    forall f, NoDupMembers (meth_vars f).
-  Proof. intro; apply (m_nodupvars f). Qed.
-  Hint Resolve NoDupMembers_meth_vars.
+  Hint Resolve m_nodupvars.
 
   Lemma m_nodupout:
     forall f, NoDupMembers (m_out f).
@@ -81,6 +78,20 @@ Module Type OBCSYNTAX
   Proof.
     intro; pose proof (m_nodupvars f) as Nodup;
     now apply NoDupMembers_app_r, NoDupMembers_app_l in Nodup.
+  Qed.
+
+  Remark In_meth_vars_out:
+    forall f x ty,
+      InMembers x f.(m_out) ->
+      In (x, ty) (meth_vars f) ->
+      In (x, ty) f.(m_out).
+  Proof.
+    intros * E ?.
+    pose proof (m_nodupvars f) as Nodup.
+    apply InMembers_In in E as (ty' &?).
+    assert (In (x, ty') (meth_vars f))
+      by (now apply in_or_app; right; apply in_or_app; right).
+    now app_NoDupMembers_det.
   Qed.
 
   Lemma m_notreserved:

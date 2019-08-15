@@ -212,6 +212,16 @@ Module Export Ids <: IDS.
     - repeat constructor; auto.
   Qed.
 
+  Lemma self_not_out: self <> out.
+  Proof.
+    intro Eq.
+    pose proof reserved_nodup as Nodup.
+    unfold reserved in Nodup.
+    inversion Nodup as [|? ? Notin]; subst; clear Nodup.
+    rewrite Eq in Notin.
+    contradict Notin; apply in_eq.
+  Qed.
+
   Lemma methods_nodup: NoDup methods.
   Proof.
     constructor.
