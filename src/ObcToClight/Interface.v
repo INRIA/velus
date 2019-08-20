@@ -1067,6 +1067,21 @@ Hint Resolve cltype_access_by_value cltype_align wt_val_load_result sem_cast_sam
 
 Module OpAux := OperatorsAux Op.
 
+Lemma val_to_bool_bool_val:
+  forall v b m,
+    OpAux.val_to_bool v = Some b ->
+    Cop.bool_val v (cltype bool_type) m = Some b.
+Proof.
+  intros * Vtb.
+  unfold Cop.bool_val; simpl.
+  destruct b.
+  - apply OpAux.val_to_bool_true' in Vtb; subst; simpl.
+    rewrite Int.eq_false; auto; discriminate.
+  - apply OpAux.val_to_bool_false' in Vtb; subst; simpl.
+    rewrite Int.eq_true; auto.
+Qed.
+Hint Resolve val_to_bool_bool_val.
+
 From Velus Require Import Stream.
 From Velus Require Import Streams.
 From Velus Require Import Obc.

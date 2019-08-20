@@ -425,7 +425,7 @@ Qed.
 Lemma NoDup_funs:
   forall prog,
     wt_program prog ->
-    NoDup (map fst (concat (map (make_methods (rev prog)) (rev prog)))).
+    NoDup (map fst (concat (map (make_methods prog) prog))).
 Proof.
   unfold make_methods.
   intros * Wt.
@@ -438,8 +438,7 @@ Proof.
   induction prog as [|c]; simpl.
   - constructor.
   - inversion_clear Wt as [|? ? ? ? Nodup].
-    rewrite map_app, concat_app, map_app. simpl.
-    rewrite app_nil_r, map_map, Permutation.Permutation_app_comm.
+    rewrite map_app, map_map; simpl.
     apply NoDup_app'; auto.
     + simpl.
       pose proof (c_nodupm c) as Nodup'.
@@ -460,7 +459,7 @@ Proof.
       pose proof (c_good c); pose proof (c_good c').
       apply prefix_fun_injective in Eq; try tauto.
       destruct Eq as [Eq].
-      eapply in_rev, Forall_forall in Hin; eauto.
+      eapply Forall_forall in Hin; eauto.
       congruence.
 Qed.
 
@@ -571,19 +570,31 @@ Proof.
 Qed.
 Hint Resolve type_pres.
 
-Remark type_pres':
-  forall f c caller es,
-    Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
+Remark types_pres':
+  forall f es,
+    Forall2 (fun e x => Clight.typeof e = cltype (snd x)) es f.(m_in) ->
     type_of_params (map translate_param f.(m_in)) =
-    list_type_to_typelist (map Clight.typeof (map (translate_exp c caller) es)).
+    list_type_to_typelist (map Clight.typeof es).
 Proof.
   intro f.
   induction (m_in f) as [|(x, t)]; intros * Heq;
     inversion_clear Heq as [|? ? ? ? Ht]; simpl; auto.
   f_equal.
-  - simpl in Ht; rewrite <-Ht.
-    now rewrite type_pres.
-    - now apply IHl.
+  - simpl in Ht; rewrite <-Ht; auto.
+  - now apply IHl.
+Qed.
+
+Corollary types_pres:
+  forall f c caller es,
+    Forall2 (fun e x => typeof e = snd x) es f.(m_in) ->
+    type_of_params (map translate_param f.(m_in)) =
+    list_type_to_typelist (map Clight.typeof (map (translate_exp c caller) es)).
+Proof.
+  intros * Hes.
+  apply types_pres'.
+  rewrite Forall2_map_1.
+  induction Hes as [|? (?&?)]; constructor;
+    simpl in *; subst; auto.
 Qed.
 
 Lemma c_objs_field_offset:
@@ -675,6 +686,108 @@ Definition case_out {A} (m: method) (anil: A) (asing: ident -> type -> A) (a: li
   | outs => a outs
   end.
 
+Section MethodSpec.
+
+  Variable (c: class) (f: method).
+
+  Definition method_spec (prog: program) (fd: function) : Prop :=
+    let f_out_param := case_out f
+                                []
+                                (fun _ _ => [])
+                                (fun _ => [(out, type_of_inst_p (prefix_fun c.(c_name) f.(m_name)))]) in
+    let f_return := case_out f
+                             Tvoid
+                             (fun _ t => cltype t)
+                             (fun _ => Tvoid) in
+    let f_temp_out := case_out f
+                               []
+                               (fun x t => [translate_param (x, t)])
+                               (fun _ => []) in
+    let f_body := return_with (translate_stmt prog c f f.(m_body))
+                              (case_out f
+                                        None
+                                        (fun x t => Some (make_in_arg (x, t)))
+                                        (fun _ => None)) in
+    fd.(fn_params) = (self, type_of_inst_p c.(c_name))
+                       :: f_out_param
+                       ++ map translate_param f.(m_in)
+    /\ fd.(fn_return) = f_return
+    /\ fd.(fn_callconv) = AST.cc_default
+    /\ fd.(fn_vars) = make_out_vars (instance_methods f)
+    /\ fd.(fn_temps) = f_temp_out
+                        ++ make_out_temps (instance_methods_temp prog f)
+                        ++ map translate_param f.(m_vars)
+    /\ list_norepet (var_names fd.(fn_params))
+    /\ list_norepet (var_names fd.(fn_vars))
+    /\ list_disjoint (var_names fd.(fn_params)) (var_names fd.(fn_temps))
+    /\ fd.(fn_body) = f_body.
+
+  Lemma method_spec_eq:
+    forall prog fd1 fd2,
+      method_spec prog fd1 ->
+      method_spec prog fd2 ->
+      fd1 = fd2.
+  Proof.
+    unfold method_spec; destruct fd1, fd2; simpl;
+      intros; intuition; f_equal; congruence.
+  Qed.
+
+  Variable (ownerid cid: ident) (owner: class) (prog prog' prog'': program) (fid: ident).
+  Hypothesis (Findowner : find_class ownerid prog = Some (owner, prog'))
+             (Findcl    : find_class cid prog' = Some (c, prog''))
+             (Findmth   : find_method fid c.(c_methods) = Some f)
+             (WTp       : wt_program prog).
+
+  Lemma instance_methods_temp_find_class:
+    instance_methods_temp prog' f = instance_methods_temp prog f.
+  Proof.
+    assert (wt_method prog'' c.(c_objs) c.(c_mems) f) as WT.
+    { eapply wt_class_find_method; eauto.
+      eapply wt_program_find_class; eauto.
+      eapply find_class_chained; eauto.
+    }
+    unfold instance_methods_temp.
+    unfold wt_method in WT.
+    generalize (Env.empty type).
+    induction f.(m_body);
+      inversion_clear WT as [| | | |????????? Findcl' Findmth'|]; intro; simpl; auto.
+    - rewrite IHs1; auto.
+    - rewrite IHs1; auto.
+    - assert (wt_program prog') by (eapply wt_program_find_class; eauto).
+      do 2 (erewrite find_class_chained, Findmth'; eauto).
+      erewrite find_class_chained; eauto.
+  Qed.
+
+  Lemma translate_stmt_find_class:
+    translate_stmt prog' c f (m_body f) = translate_stmt prog c f (m_body f).
+  Proof.
+     assert (wt_method prog'' c.(c_objs) c.(c_mems) f) as WT.
+    { eapply wt_class_find_method; eauto.
+      eapply wt_program_find_class; eauto.
+      eapply find_class_chained; eauto.
+    }
+    unfold wt_method in WT.
+    induction (m_body f);
+     inversion_clear WT as [| | | |????????? Findcl' Findmth'|]; simpl; auto.
+    - now rewrite IHs1, IHs2.
+    - now rewrite IHs1, IHs2.
+    - assert (wt_program prog') by (eapply wt_program_find_class; eauto).
+      unfold binded_funcall.
+      do 2 (erewrite find_class_chained, Findmth'; eauto).
+      erewrite find_class_chained; eauto.
+  Qed.
+
+  Lemma method_spec_find_class:
+    forall fd,
+      method_spec prog' fd <-> method_spec prog fd.
+  Proof.
+    intros; unfold method_spec.
+    rewrite instance_methods_temp_find_class, translate_stmt_find_class;
+      reflexivity.
+  Qed.
+
+End MethodSpec.
+
 Ltac inv_trans_tac H En Estep Ereset s f E :=
   match type of H with
     translate ?b ?a ?n ?p = Errors.OK ?tp =>
@@ -682,7 +795,7 @@ Ltac inv_trans_tac H En Estep Ereset s f E :=
     destruct (find_class n p) as [(c, cls)|] eqn: En; try discriminate;
     destruct (find_method step c.(c_methods)) eqn: Estep; try discriminate;
     destruct (find_method reset c.(c_methods)) eqn: Ereset; try discriminate;
-    destruct (split (map (translate_class (rev p)) (rev p))) as (s, f) eqn: E
+    destruct (split (map (translate_class p) p)) as (s, f) eqn: E
   end.
 
 Tactic Notation "inv_trans" ident(H) "as" ident(En) ident(Estep) ident(Ereset) "with" ident(s) ident(f) ident(E) :=
@@ -880,7 +993,7 @@ Section TranslateOk.
         apply split_map in E.
         destruct E as [Structs].
         unfold make_struct in Structs.
-        apply find_class_In, in_rev in Findcl.
+        apply find_class_In in Findcl.
         apply in_map with (f:=fun c => Composite (c_name c) Struct (make_members c) noattr :: make_out c)
           in Findcl.
         apply in_concat' with (Composite (c_name owner) Struct (make_members owner) noattr :: make_out owner).
@@ -924,7 +1037,7 @@ Section TranslateOk.
             apply split_map in E.
             destruct E as [Structs].
             unfold make_out in Structs.
-            apply find_class_In, in_rev in Findcl.
+            apply find_class_In in Findcl.
             apply in_map with (f:=fun c => make_struct c :: filter_out (map (translate_out c) (c_methods c)))
               in Findcl.
             apply find_method_In in Findmth.
@@ -1006,57 +1119,28 @@ Section TranslateOk.
             * apply M.add_3, M.find_1 in Hin; simpl; auto; discriminate.
       Qed.
 
-      Let f_out_param := case_out caller
-                                  []
-                                  (fun _ _ => [])
-                                  (fun _ => [(out, type_of_inst_p (prefix_fun owner.(c_name) caller.(m_name)))]).
-      Let f_return := case_out caller
-                               Tvoid
-                               (fun _ t => cltype t)
-                               (fun _ => Tvoid).
-      Let f_temp_out := case_out caller
-                                 []
-                                 (fun x t => [translate_param (x, t)])
-                                 (fun _ => []).
-      Let f_body := return_with (translate_stmt (rev prog) owner caller caller.(m_body))
-                                (case_out caller
-                                          None
-                                          (fun x t => Some (make_in_arg (x, t)))
-                                          (fun _ => None)).
-
       Lemma methods_corres:
         exists loc_f f,
           Genv.find_symbol tge (prefix_fun ownerid callerid) = Some loc_f
           /\ Genv.find_funct_ptr tge loc_f = Some (Internal f)
-          /\ f.(fn_params) = (self, type_of_inst_p owner.(c_name))
-                              :: f_out_param
-                              ++ map translate_param caller.(m_in)
-          /\ f.(fn_return) = f_return
-          /\ f.(fn_callconv) = AST.cc_default
-          /\ f.(fn_vars) = make_out_vars (instance_methods caller)
-          /\ f.(fn_temps) = f_temp_out
-                             ++ make_out_temps (instance_methods_temp (rev prog) caller)
-                             ++ map translate_param caller.(m_vars)
-          /\ list_norepet (var_names f.(fn_params))
-          /\ list_norepet (var_names f.(fn_vars))
-          /\ list_disjoint (var_names f.(fn_params)) (var_names f.(fn_temps))
-          /\ f.(fn_body) = f_body.
+          /\ method_spec owner caller prog f.
       Proof.
+        unfold method_spec.
         pose proof prog_defs_norepet as Norepet.
         inv_trans TRANSL with structs funs E.
         pose proof (find_class_name _ _ _ _ Findcl);
           pose proof (find_method_name _ _ _ Findmth); subst.
         assert ((AST.prog_defmap tprog) ! (prefix_fun owner.(c_name) caller.(m_name)) =
-                Some (snd (translate_method (rev prog) owner caller))) as Hget.
+                Some (snd (translate_method prog owner caller))) as Hget.
         { unfold translate_class in E.
           apply split_map in E.
           destruct E as [? Funs].
           unfold make_methods in Funs.
           apply find_class_In in Findcl.
-          apply in_rev, in_map with (f:=fun c => map (translate_method (rev prog) c) (c_methods c))
+          apply in_map with (f:=fun c => map (translate_method prog c) (c_methods c))
             in Findcl.
           apply find_method_In in Findmth.
-          apply in_map with (f:=translate_method (rev prog) owner) in Findmth.
+          apply in_map with (f:=translate_method prog owner) in Findmth.
           eapply in_concat' in Findmth; eauto.
           rewrite <-Funs in Findmth.
           unfold make_program' in TRANSL.
@@ -1110,7 +1194,8 @@ Section TranslateOk.
           eapply NoDupMembers_make_out_vars; eauto.
           eapply wt_program_find_class; eauto.
         }
-        assert (NoDupMembers (m_in caller ++ Env.elements (instance_methods_temp (rev prog) caller) ++ m_vars caller)) as Nodup'.
+        assert (NoDupMembers (m_in caller ++ Env.elements (instance_methods_temp prog caller)
+                                   ++ m_vars caller)) as Nodup'.
         { pose proof (m_nodupvars caller) as Nodup.
           apply NoDupMembers_app.
           - apply NoDupMembers_app_l in Nodup; auto.
@@ -1118,7 +1203,7 @@ Section TranslateOk.
             + apply Env.NoDupMembers_elements.
             + apply NoDupMembers_app_r, NoDupMembers_app_l in Nodup; auto.
             + intros x Hin.
-              pose proof (make_out_temps_prefixed x (rev prog) caller) as Pref.
+              pose proof (make_out_temps_prefixed x prog caller) as Pref.
               unfold make_out_temps in Pref;
                 rewrite InMembers_translate_param_idem in Pref.
               apply Pref, (m_notprefixed x caller) in Hin.
@@ -1127,7 +1212,7 @@ Section TranslateOk.
             rewrite NotInMembers_app; split.
             * apply (NoDupMembers_app_InMembers x) in Nodup; auto.
               apply NotInMembers_app in Nodup; tauto.
-            * pose proof (make_out_temps_prefixed x (rev prog) caller) as Pref.
+            * pose proof (make_out_temps_prefixed x prog caller) as Pref.
               unfold make_out_temps in Pref;
                 rewrite InMembers_translate_param_idem in Pref.
               intro Hin'; apply Pref, (m_notprefixed x caller) in Hin'.
@@ -1135,7 +1220,8 @@ Section TranslateOk.
               contradict Hin; tauto.
         }
 
-        assert (~In self (var_names (make_out_temps (instance_methods_temp (rev prog) caller) ++ map translate_param (m_vars caller)))).
+        assert (~In self (var_names (make_out_temps (instance_methods_temp prog caller)
+                                                    ++ map translate_param (m_vars caller)))).
         { unfold var_names; rewrite <-fst_InMembers, NotInMembers_app; split; simpl.
           - rewrite InMembers_translate_param_idem.
             intro Hin.
@@ -1149,7 +1235,7 @@ Section TranslateOk.
         assert (list_disjoint (var_names ((self, type_of_inst_p owner.(c_name))
                                            :: (out, type_of_inst_p (prefix_fun owner.(c_name) caller.(m_name)))
                                            :: (map translate_param caller.(m_in))))
-                              (var_names (make_out_temps (instance_methods_temp (rev prog) caller)
+                              (var_names (make_out_temps (instance_methods_temp prog caller)
                                                          ++ map translate_param caller.(m_vars)))).
         { repeat apply list_disjoint_cons_l; auto.
           - apply NoDupMembers_disjoint.
@@ -1168,7 +1254,7 @@ Section TranslateOk.
         }
         assert (list_disjoint (var_names ((self, type_of_inst_p owner.(c_name))
                                             :: (map translate_param caller.(m_in))))
-                              (var_names (make_out_temps (instance_methods_temp (rev prog) caller)
+                              (var_names (make_out_temps (instance_methods_temp prog caller)
                                                          ++ map translate_param caller.(m_vars)))).
          { repeat apply list_disjoint_cons_l; auto.
            apply NoDupMembers_disjoint.
@@ -1185,9 +1271,9 @@ Section TranslateOk.
                     fn_callconv := AST.cc_default;
                     fn_params := (self, type_of_inst_p (c_name owner)) :: map translate_param (m_in caller);
                     fn_vars := make_out_vars (instance_methods caller);
-                    fn_temps := make_out_temps (instance_methods_temp (rev prog) caller)
+                    fn_temps := make_out_temps (instance_methods_temp prog caller)
                                 ++ map translate_param (m_vars caller);
-                    fn_body := return_with (translate_stmt (rev prog) owner caller (m_body caller)) None |})
+                    fn_body := return_with (translate_stmt prog owner caller (m_body caller)) None |})
             in Finddef.
           exists loc_f, f.
           try repeat split; auto.
@@ -1201,9 +1287,9 @@ Section TranslateOk.
                                    :: map translate_param (m_in caller);
                     fn_vars := make_out_vars (instance_methods caller);
                     fn_temps := translate_param (y, t)
-                                :: make_out_temps (instance_methods_temp (rev prog) caller) ++
+                                :: make_out_temps (instance_methods_temp prog caller) ++
                                    map translate_param (m_vars caller);
-                    fn_body := return_with (translate_stmt (rev prog) owner caller (m_body caller))
+                    fn_body := return_with (translate_stmt prog owner caller (m_body caller))
                                            (Some (make_in_arg (y, t))) |})
             in Finddef.
           exists loc_f, f.
@@ -1230,9 +1316,9 @@ Section TranslateOk.
                                    :: (out, type_of_inst_p (prefix_fun (c_name owner) (m_name caller)))
                                    :: map translate_param (m_in caller);
                     fn_vars := make_out_vars (instance_methods caller);
-                    fn_temps := make_out_temps (instance_methods_temp (rev prog) caller) ++
+                    fn_temps := make_out_temps (instance_methods_temp prog caller) ++
                                 map translate_param (m_vars caller);
-                    fn_body := return_with (translate_stmt (rev prog) owner caller (m_body caller)) None |})
+                    fn_body := return_with (translate_stmt prog owner caller (m_body caller)) None |})
             in Finddef.
           exists loc_f, f.
           try repeat split; auto.

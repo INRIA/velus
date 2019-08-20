@@ -76,19 +76,6 @@ Ltac app_match_find_var_det :=
     assert (v2 = v1) by (apply (match_find_var_det _ _ _ _ H2 H1)); subst v1; clear H2
   end.
 
-Definition instance_match (me: menv) (i: ident): menv :=
-  match find_inst i me with
-  | None => mempty
-  | Some i => i
-  end.
-
-Lemma instance_match_empty:
-  forall x, instance_match mempty x = mempty.
-Proof.
-  intros. unfold instance_match, find_inst; simpl.
-  now rewrite Env.gempty.
-Qed.
-
 Section Staterep.
   Variable ge : composite_env.
 
@@ -111,7 +98,7 @@ Section Staterep.
         sepall (fun '((i, c): ident * ident) =>
                   match field_offset ge i (make_members cls) with
                   | Errors.OK d =>
-                    staterep p' c (instance_match me i) b (ofs + d)
+                    staterep p' c (instance_match i me) b (ofs + d)
                   | Errors.Error _ => sepfalse
                   end) cls.(c_objs)
       else staterep p' clsnm me b ofs
@@ -120,9 +107,34 @@ Section Staterep.
   Definition staterep_objs (p: program) (cls: class) (me: menv) (b: block) (ofs: Z) '((i, c): ident * ident) : massert :=
     match field_offset ge i (make_members cls) with
     | Errors.OK d =>
-      staterep p c (instance_match me i) b (ofs + d)
+      staterep p c (instance_match i me) b (ofs + d)
     | Errors.Error _ => sepfalse
     end.
+
+  Lemma staterep_objs_not_in:
+    forall objs p cls me i me_i b ofs,
+      ~ InMembers i objs ->
+      sepall (staterep_objs p cls me b ofs) objs <-*->
+      sepall (staterep_objs p cls (add_inst i me_i me) b ofs) objs.
+  Proof.
+    induction objs as [|(o, c)]; intros * Hnin; simpl; auto.
+    apply NotInMembers_cons in Hnin as (?&?).
+    apply sepconj_morph_2; auto.
+    cases.
+    unfold instance_match; rewrite find_inst_gso; auto.
+  Qed.
+
+  Lemma staterep_cons:
+    forall cls prog clsnm me b ofs,
+      clsnm = cls.(c_name) ->
+      staterep (cls :: prog) clsnm me b ofs <-*->
+      sepall (staterep_mems cls me b ofs) cls.(c_mems)
+      ** sepall (staterep_objs prog cls me b ofs) cls.(c_objs).
+  Proof.
+    intros * Hnm.
+    apply ident_eqb_eq in Hnm.
+    simpl; rewrite Hnm; reflexivity.
+  Qed.
 
   Lemma staterep_skip_cons:
     forall cls prog clsnm me b ofs,
@@ -360,7 +372,7 @@ Section StateRepProperties.
     remember prog as prog1.
     assert (WTp' := WTp).
     rewrite Heqprog1 in make_members_co, WTp.
-    assert (sub_prog prog1 prog) as Hsub
+    assert (suffix prog1 prog) as Hsub
         by now rewrite Heqprog1.
     clear (* TRANSL *) Heqprog1.
     induction prog1 as [|cls prog' IH]; intros clsnm Hfind lo Halign.
@@ -432,12 +444,12 @@ Section StateRepProperties.
         simpl in *.
         destruct (field_offset gcenv o (co_members co)) eqn:Hfo; auto.
         rewrite instance_match_empty.
-        specialize (IH WTp'' (sub_prog_cons _ _ _ Hsub) c Ho (lo + z)%Z).
+        specialize (IH WTp'' (suffix_cons _ _ _ Hsub) c Ho (lo + z)%Z).
         apply not_None_is_Some in Ho.
         destruct Ho as ((c' & prog''') & Ho).
         assert (find_class c prog = Some (c', prog''')) as Hcin'
             by apply find_class_sub_same with (1:=Ho) (2:=WTp)
-                                              (3:=sub_prog_cons _ _ _ Hsub).
+                                              (3:=suffix_cons _ _ _ Hsub).
         destruct (make_members_co _ _ _ Hcin')
           as (co' & Hg' & Hsu' & Hmem' & Hattr' & Hnodup').
         rewrite Hg', align_noattr in *.
@@ -449,7 +461,7 @@ Section StateRepProperties.
         apply Z.divide_refl.
     - simpl in Hfind.
       rewrite Hclsnm in Hfind.
-      specialize (IH WTp'' (sub_prog_cons _ _ _ Hsub) clsnm Hfind lo Halign).
+      specialize (IH WTp'' (suffix_cons _ _ _ Hsub) clsnm Hfind lo Halign).
       rewrite ident_eqb_sym in Hclsnm.
       apply ident_eqb_neq in Hclsnm.
       rewrite staterep_skip_cons with (1:=Hclsnm).
@@ -503,6 +515,38 @@ Section StateRepProperties.
     + exists z; split; auto.
       eapply contains_no_overflow; eauto.
     + contradict Hm.
+  Qed.
+
+  Lemma staterep_extract:
+    forall cid c prog' me b ofs m i c' P,
+      find_class cid prog = Some (c, prog') ->
+      (In (i, c') c.(c_objs)
+       /\ m |= staterep gcenv prog cid me b ofs ** P)
+      <-> exists objs objs' d,
+          c.(c_objs) = objs ++ (i, c') :: objs'
+          /\ field_offset gcenv i (make_members c) = Errors.OK d
+          /\ m |= staterep gcenv prog' c' (instance_match i me) b (ofs + d)
+                  ** sepall (staterep_mems gcenv c me b ofs) c.(c_mems)
+                  ** sepall (staterep_objs gcenv prog' c me b ofs) (objs ++ objs')
+                  ** P.
+  Proof.
+    intros * Find.
+    pose proof Find as Fcid; apply find_class_name in Fcid; subst.
+    rewrite staterep_skip, staterep_cons, sep_assoc; eauto.
+    split.
+    - intros (Hin & Hmem).
+      apply sepall_in in Hin as (objs & objs' & E & Hp).
+      rewrite Hp, sep_assoc, sep_swap in Hmem.
+      unfold staterep_objs at 1 in Hmem.
+      destruct (field_offset gcenv i (make_members c)) as [d|].
+      + exists objs, objs', d; intuition.
+      + destruct Hmem; contradiction.
+    - intros (objs & objs' & d & E & Hofs & Hmem).
+      split.
+      + rewrite E; apply in_app; right; left; auto.
+      + rewrite (sepall_breakout (c_objs c)), sep_assoc, sep_swap; eauto.
+        unfold staterep_objs at 1.
+        rewrite Hofs; auto.
   Qed.
 
 End StateRepProperties.
@@ -937,6 +981,50 @@ Section SubRep.
         reflexivity.
   Qed.
 
+  Lemma subrep_extract:
+    forall f f' e m o c' P,
+      M.MapsTo (o, f') c' (instance_methods f) ->
+      m |= subrep f e ** P <->
+      exists b co ws xs,
+        e ! (prefix_out o f') = Some (b, type_of_inst (prefix_fun c' f'))
+        /\ ge ! (prefix_fun c' f') = Some co
+        /\ make_out_vars (instance_methods f) = ws ++ (prefix_out o f', type_of_inst (prefix_fun c' f')) :: xs
+        /\ m |= blockrep ge vempty (co_members co) b
+              ** sepall (subrep_inst_env e) (ws ++ xs)
+              ** P.
+  Proof.
+    intros * Hin.
+    unfold subrep.
+    assert (In (prefix_out o f', type_of_inst (prefix_fun c' f'))
+               (make_out_vars (instance_methods f))) as Hin'.
+    { apply M.elements_1, setoid_in_key_elt in Hin.
+      apply in_map with
+      (f:=fun x => let '(o0, f0, cid) := x in (prefix_out o0 f0, type_of_inst (prefix_fun cid f0))) in Hin.
+      unfold make_out_vars; auto.
+    }
+    clear Hin.
+    split.
+    - apply sepall_in in Hin'; destruct Hin' as (ws & xs & Hin & Heq).
+      rewrite Heq, sep_assoc.
+      intro Hmem.
+      unfold subrep_inst_env at 1 in Hmem.
+      destruct e ! (prefix_out o f') as [(oblk, t)|]; [|destruct Hmem; contradiction].
+      destruct t; try (destruct Hmem; contradiction).
+      destruct (type_eq (type_of_inst (prefix_fun c' f')) (Tstruct i a)) as [Eq|]; [|destruct Hmem; contradiction].
+      unfold type_of_inst in Eq.
+      inv Eq.
+      unfold blockrep_of in *.
+      destruct ge ! (prefix_fun c' f'); [|destruct Hmem; contradiction].
+      exists oblk, c, ws, xs; intuition.
+    - intros (oblk & c & ws' & xs' & He & Hge & Eq &?).
+      (* rewrite Eq. *)
+      rewrite sepall_breakout, sep_assoc; eauto.
+      eapply sep_imp; eauto.
+      unfold subrep_inst_env.
+      rewrite He; unfold type_of_inst; rewrite type_eq_refl.
+      unfold blockrep_of; rewrite Hge; auto.
+  Qed.
+
 End SubRep.
 
 Definition varsrep (f: method) (ve: venv) (le: temp_env) : massert :=
@@ -1085,6 +1173,23 @@ Section MatchStates.
                     | None => sepfalse
                     end).
 
+  Lemma match_out_add_prefix:
+    forall c f ve le outb_co f' x v,
+      match_out c f ve le outb_co <-*-> match_out c f ve (PTree.set (prefix f' x) v le) outb_co.
+  Proof.
+    intros.
+    unfold match_out, case_out.
+    destruct_list (m_out f) as (?,?) (?,?) ? : Hout; auto.
+    - rewrite PTree.gso; auto.
+      intro; subst.
+      eapply (m_notprefixed (prefix f' x)); auto using prefixed.
+      unfold meth_vars; rewrite Hout.
+      rewrite 2 InMembers_app; right; right; constructor; auto.
+    - cases.
+      rewrite PTree.gso; auto.
+      intro E; apply out_not_prefixed; rewrite E; auto using prefixed.
+  Qed.
+
   Lemma match_out_nil:
     forall c f ve le m outb_co P,
       f.(m_out) = [] ->
@@ -1185,7 +1290,7 @@ Section MatchStates.
       /\ bounded_struct_of_class c sofs
       /\ wt_state p me ve c (meth_vars f)
       /\ le ! self = Some (Vptr sb sofs)
-      /\ (forall x b t, e ! x = Some (b, t) -> exists o f, x = prefix_out o f)
+      /\ prefix_out_env e
       /\ 0 <= Ptrofs.unsigned sofs.
   Proof.
     unfold match_states, match_self, match_outs; split; intros * H.
@@ -1193,6 +1298,14 @@ Section MatchStates.
       rewrite sep_swap3, sep_pure, sep_swap in H; tauto.
     - repeat rewrite sep_assoc; repeat rewrite sep_pure.
       rewrite sep_swap3, sep_pure, sep_swap; tauto.
+  Qed.
+
+  Lemma match_states_wt_state:
+    forall p c f me ve e le m sb sofs outb_co P,
+      m |= match_states p c f (me, ve) (e, le) sb sofs outb_co ** P ->
+      wt_state p me ve c (meth_vars f).
+  Proof.
+    setoid_rewrite match_states_conj; tauto.
   Qed.
 
   Section MatchStatesPreservation.
@@ -1234,74 +1347,79 @@ Section MatchStates.
 
       Variable (v : val) (x : ident) (ty : type).
 
-      Hypothesis (WTv : wt_val v ty)
-                 (Hin : In (x, ty) caller.(m_out))
-                 (Len : (1 < length (m_out caller))%nat).
+      Hypothesis (WTv : wt_val v ty).
 
-      Lemma match_out_assign_gt1_mem:
-        forall m1 P1,
-          m1 |= match_out owner caller ve le outb_co ** P1 ->
-          exists m2 b co d,
-            outb_co = Some (b, co)
-            /\ field_offset ge x (co_members co) = Errors.OK d
-            /\ Clight.assign_loc ge (cltype ty) m1 b (Ptrofs.repr d) v m2
-            /\ m2 |= match_out owner caller (Env.add x v ve) le outb_co ** P1.
-      Proof.
-        clear Hmem; intros * Hmem.
-        apply match_out_notnil in Hmem as (b & co & Hout & Hrep &?& Hco); auto.
-        apply in_map with (f:=translate_param) in Hin.
-        erewrite OutputMatch in Hin; eauto.
-        pose proof (m_nodupvars caller) as Nodup.
-        edestruct blockrep_field_offset as (d & Hofs & ?); eauto.
+      Section AssignOutGt1.
 
-        (* get the updated memory *)
-        apply sepall_in in Hin as [ws [ys [Hys Heq]]].
-        unfold blockrep in Hrep.
-        Local Opaque sepconj match_states.
-        rewrite Heq in Hrep; simpl in *.
-        rewrite Hofs, cltype_access_by_value, sep_assoc in Hrep.
-        eapply Separation.storev_rule' with (v:=v) in Hrep as (m' & ? & Hrep); eauto with mem.
-        exists m', b, co, d; intuition; eauto using assign_loc.
-        rewrite match_out_notnil; auto.
-        exists b, co; split; intuition.
-        unfold blockrep.
-        rewrite Heq, Hofs, cltype_access_by_value, sep_assoc.
-        eapply sep_imp; eauto.
-        - unfold hasvalue, match_value; simpl.
-          rewrite Env.gss.
-          now rewrite <-wt_val_load_result.
-        - apply sep_imp'; auto.
-          do 2 apply NoDupMembers_app_r in Nodup.
-          rewrite fst_NoDupMembers, <-translate_param_fst, <-fst_NoDupMembers in Nodup; auto.
-          erewrite OutputMatch, Hys in Nodup; auto.
-          apply NoDupMembers_app_cons in Nodup.
-          destruct Nodup as (Notin & Nodup).
-          rewrite sepall_swapp; eauto.
-          intros (x' & t') Hin.
-          rewrite match_value_add; auto.
-          intro; subst x'.
-          apply Notin.
-          eapply In_InMembers; eauto.
-      Qed.
+        Hypothesis (Hin : In (x, ty) caller.(m_out))
+                   (Len : (1 < length (m_out caller))%nat).
 
-      Corollary match_states_assign_gt1_mem:
-        exists m' b co d,
-          outb_co = Some (b, co)
-          /\ field_offset ge x (co_members co) = Errors.OK d
-          /\ Clight.assign_loc ge (cltype ty) m b (Ptrofs.repr d) v m'
-          /\ m' |= match_states prog owner caller (me, Env.add x v ve) (e, le) sb sofs outb_co
-                   ** P.
-      Proof.
-        assert (In (x, ty) (meth_vars caller)) by (do 2 setoid_rewrite in_app; auto).
-        apply match_states_conj in Hmem as (Hmem & ?&?&?); rewrite sep_swap in Hmem.
-        apply match_out_assign_gt1_mem in Hmem as (m' & b & co & d & ? & ? & ? & ?).
-        exists m', b, co, d; intuition.
-        apply match_states_conj; intuition; eauto using m_nodupvars.
-        rewrite sep_swap.
-        eapply sep_imp; eauto.
-        repeat apply sep_imp'; auto.
-        eapply varsrep_corres_out; eauto.
-      Qed.
+        Lemma match_out_assign_gt1_mem:
+          forall m1 P1,
+            m1 |= match_out owner caller ve le outb_co ** P1 ->
+            exists m2 b co d,
+              outb_co = Some (b, co)
+              /\ field_offset ge x (co_members co) = Errors.OK d
+              /\ Clight.assign_loc ge (cltype ty) m1 b (Ptrofs.repr d) v m2
+              /\ m2 |= match_out owner caller (Env.add x v ve) le outb_co ** P1.
+        Proof.
+          clear Hmem; intros * Hmem.
+          apply match_out_notnil in Hmem as (b & co & Hout & Hrep &?& Hco); auto.
+          apply in_map with (f:=translate_param) in Hin.
+          erewrite OutputMatch in Hin; eauto.
+          pose proof (m_nodupvars caller) as Nodup.
+          edestruct blockrep_field_offset as (d & Hofs & ?); eauto.
+
+          (* get the updated memory *)
+          apply sepall_in in Hin as [ws [ys [Hys Heq]]].
+          unfold blockrep in Hrep.
+          Local Opaque sepconj match_states.
+          rewrite Heq in Hrep; simpl in *.
+          rewrite Hofs, cltype_access_by_value, sep_assoc in Hrep.
+          eapply Separation.storev_rule' with (v:=v) in Hrep as (m' & ? & Hrep); eauto with mem.
+          exists m', b, co, d; intuition; eauto using assign_loc.
+          rewrite match_out_notnil; auto.
+          exists b, co; split; intuition.
+          unfold blockrep.
+          rewrite Heq, Hofs, cltype_access_by_value, sep_assoc.
+          eapply sep_imp; eauto.
+          - unfold hasvalue, match_value; simpl.
+            rewrite Env.gss.
+            now rewrite <-wt_val_load_result.
+          - apply sep_imp'; auto.
+            do 2 apply NoDupMembers_app_r in Nodup.
+            rewrite fst_NoDupMembers, <-translate_param_fst, <-fst_NoDupMembers in Nodup; auto.
+            erewrite OutputMatch, Hys in Nodup; auto.
+            apply NoDupMembers_app_cons in Nodup.
+            destruct Nodup as (Notin & Nodup).
+            rewrite sepall_swapp; eauto.
+            intros (x' & t') Hin.
+            rewrite match_value_add; auto.
+            intro; subst x'.
+            apply Notin.
+            eapply In_InMembers; eauto.
+        Qed.
+
+        (* Corollary match_states_assign_gt1_mem: *)
+        (*   exists m' b co d, *)
+        (*     outb_co = Some (b, co) *)
+        (*     /\ field_offset ge x (co_members co) = Errors.OK d *)
+        (*     /\ Clight.assign_loc ge (cltype ty) m b (Ptrofs.repr d) v m' *)
+        (*     /\ m' |= match_states prog owner caller (me, Env.add x v ve) (e, le) sb sofs outb_co *)
+        (*          ** P. *)
+        (* Proof. *)
+        (*   assert (In (x, ty) (meth_vars caller)) by (do 2 setoid_rewrite in_app; auto). *)
+        (*   apply match_states_conj in Hmem as (Hmem & ?&?&?); rewrite sep_swap in Hmem. *)
+        (*   apply match_out_assign_gt1_mem in Hmem as (m' & b & co & d & ? & ? & ? & ?). *)
+        (*   exists m', b, co, d; intuition. *)
+        (*   apply match_states_conj; intuition; eauto using m_nodupvars. *)
+        (*   rewrite sep_swap. *)
+        (*   eapply sep_imp; eauto. *)
+        (*   repeat apply sep_imp'; auto. *)
+        (*   eapply varsrep_corres_out; eauto. *)
+        (* Qed. *)
+
+      End AssignOutGt1.
 
       Section AssignOutSingleton.
 
@@ -1315,26 +1433,26 @@ Section MatchStates.
           unfold find_or_vundef; now rewrite PTree.gss, Env.gss.
         Qed.
 
-        Lemma match_states_assign_singleton_mem:
-          m |= match_states prog owner caller (me, Env.add x v ve) (e, PTree.set x v le) sb sofs outb_co
-               ** P.
-        Proof.
-          assert (In (x, ty) (meth_vars caller)) by
-              (do 2 setoid_rewrite in_app; rewrite Eq; right; right; constructor; auto).
-          eapply sep_imp; eauto.
-          Transparent match_states.
-          unfold match_states.
-          repeat apply sep_imp'; auto.
-          - apply pure_imp; eauto using m_nodupvars.
-          - apply pure_imp.
-            rewrite PTree.gso; auto.
-            intro; subst; apply (m_notreserved self caller).
-            + left; auto.
-            + do 2 setoid_rewrite InMembers_app; rewrite Eq.
-              right; right; constructor; auto.
-          - apply match_out_assign_singleton_mem.
-          - apply varsrep_add.
-        Qed.
+        (* Lemma match_states_assign_singleton_mem: *)
+        (*   m |= match_states prog owner caller (me, Env.add x v ve) (e, PTree.set x v le) sb sofs outb_co *)
+        (*        ** P. *)
+        (* Proof. *)
+        (*   assert (In (x, ty) (meth_vars caller)) by *)
+        (*       (do 2 setoid_rewrite in_app; rewrite Eq; right; right; constructor; auto). *)
+        (*   eapply sep_imp; eauto. *)
+        (*   Transparent match_states. *)
+        (*   unfold match_states. *)
+        (*   repeat apply sep_imp'; auto. *)
+        (*   - apply pure_imp; eauto using m_nodupvars. *)
+        (*   - apply pure_imp. *)
+        (*     rewrite PTree.gso; auto. *)
+        (*     intro; subst; apply (m_notreserved self caller). *)
+        (*     + left; auto. *)
+        (*     + do 2 setoid_rewrite InMembers_app; rewrite Eq. *)
+        (*       right; right; constructor; auto. *)
+        (*   - apply match_out_assign_singleton_mem. *)
+        (*   - apply varsrep_add. *)
+        (* Qed. *)
 
       End AssignOutSingleton.
 
@@ -1344,9 +1462,12 @@ Section MatchStates.
                    (Hin  : In (x, ty) (meth_vars caller)).
 
         Lemma match_out_assign_var_mem:
-          match_out owner caller ve le outb_co -*>
-          match_out owner caller (Env.add x v ve) (PTree.set x v le) outb_co.
+          forall m1 P1,
+            m1 |= match_out owner caller ve le outb_co ** P1 ->
+            match_out owner caller ve le outb_co -*>
+            match_out owner caller (Env.add x v ve) (PTree.set x v le) outb_co.
         Proof.
+          clear Hmem; intros * Hmem.
           unfold match_out, case_out in *; destruct_list (m_out caller) as (?, ?) (?, ?) ? : Hout; auto.
           - apply pure_imp.
             unfold find_or_vundef.
@@ -1359,30 +1480,30 @@ Section MatchStates.
               intro; subst; apply (m_notreserved out caller).
               * right; constructor; auto.
               * eapply In_InMembers; eauto.
-            + apply match_states_conj in Hmem as (Hmem &?); rewrite sep_swap in Hmem.
-              unfold match_out, case_out in Hmem; rewrite Hout, 2 sep_assoc, 2 sep_pure in Hmem.
+            + rewrite 2 sep_assoc, 2 sep_pure in Hmem.
               destruct Hmem as (?&?&?).
               eapply blockrep_add; eauto.
               apply OutputMatch; auto; simpl; omega.
         Qed.
 
-        Lemma match_states_assign_var_mem:
-          m |= match_states prog owner caller (me, Env.add x v ve) (e, PTree.set x v le) sb sofs outb_co
-            ** P.
-        Proof.
-          eapply sep_imp; eauto.
-          Transparent match_states.
-          unfold match_states; intros.
-          repeat apply sep_imp'; auto.
-          - apply pure_imp; eauto using m_nodupvars.
-          - apply pure_imp.
-            rewrite PTree.gso; auto.
-            intro; subst; apply (m_notreserved self caller).
-            + left; auto.
-            + eapply In_InMembers; eauto.
-          - apply match_out_assign_var_mem.
-          - apply varsrep_add.
-        Qed.
+        (* Lemma match_states_assign_var_mem: *)
+        (*   m |= match_states prog owner caller (me, Env.add x v ve) (e, PTree.set x v le) sb sofs outb_co *)
+        (*     ** P. *)
+        (* Proof. *)
+        (*   eapply sep_imp; eauto. *)
+        (*   Transparent match_states. *)
+        (*   unfold match_states; intros. *)
+        (*   repeat apply sep_imp'; auto. *)
+        (*   - apply pure_imp; eauto using m_nodupvars. *)
+        (*   - apply pure_imp. *)
+        (*     rewrite PTree.gso; auto. *)
+        (*     intro; subst; apply (m_notreserved self caller). *)
+        (*     + left; auto. *)
+        (*     + eapply In_InMembers; eauto. *)
+        (*   - apply match_states_conj in Hmem as (Hmem &?); rewrite sep_swap in Hmem. *)
+        (*     eapply match_out_assign_var_mem; eauto. *)
+        (*   - apply varsrep_add. *)
+        (* Qed. *)
 
       End AssignVar.
 
@@ -1437,3 +1558,5 @@ Section MatchStates.
   End MatchStatesPreservation.
 
 End MatchStates.
+
+Hint Resolve match_states_wt_state.

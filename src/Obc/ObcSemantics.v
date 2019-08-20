@@ -32,6 +32,19 @@ Module Type OBCSEMANTICS
   Definition mempty: menv := empty_memory _.
   Definition vempty: venv := Env.empty val.
 
+  Definition instance_match (i: ident) (me: menv) : menv :=
+    match find_inst i me with
+    | None => mempty
+    | Some i => i
+    end.
+
+  Lemma instance_match_empty:
+    forall x, instance_match x mempty = mempty.
+  Proof.
+    intros. unfold instance_match, find_inst; simpl.
+    now rewrite Env.gempty.
+  Qed.
+
   Hint Unfold vempty.
 
   (* Function call arguments either evaluate fully (i.e., to Some value), or
@@ -61,9 +74,8 @@ Module Type OBCSEMANTICS
 
   Inductive exp_eval (me: menv) (ve: venv): exp -> option val -> Prop :=
   | evar:
-      forall x v ty,
-        Env.find x ve = v ->
-        exp_eval me ve (Var x ty) v
+      forall x ty,
+        exp_eval me ve (Var x ty) (Env.find x ve)
   | estate:
       forall x v ty,
         find_val x me = Some v ->
@@ -90,26 +102,18 @@ Module Type OBCSEMANTICS
   Inductive stmt_eval :
     program -> menv -> venv -> stmt -> menv * venv -> Prop :=
   | Iassign:
-      forall prog me ve x e v ve',
+      forall prog me ve x e v,
         exp_eval me ve e (Some v) ->
-        Env.add x v ve = ve' ->
-        stmt_eval prog me ve (Assign x e) (me, ve')
+        stmt_eval prog me ve (Assign x e) (me, Env.add x v ve)
   | Iassignst:
-    forall prog me ve x e v me',
+    forall prog me ve x e v,
       exp_eval me ve e (Some v) ->
-      add_val x v me = me' ->
-      stmt_eval prog me ve (AssignSt x e) (me', ve)
+      stmt_eval prog me ve (AssignSt x e) (add_val x v me, ve)
   | Icall:
-      forall prog me ve es vos clsid o f ys me' ve' ome ome' rvos,
-        ome = match find_inst o me with
-              | None => mempty
-              | Some om => om
-              end ->
+      forall prog me ve es vos clsid o f ys ome' rvos,
         Forall2 (exp_eval me ve) es vos ->
-        stmt_call_eval prog ome clsid f vos ome' rvos ->
-        add_inst o ome' me = me' ->
-        Env.adds_opt ys rvos ve = ve' ->
-        stmt_eval prog me ve (Call ys clsid o f es) (me', ve')
+        stmt_call_eval prog (instance_match o me) clsid f vos ome' rvos ->
+        stmt_eval prog me ve (Call ys clsid o f es) (add_inst o ome' me, Env.adds_opt ys rvos ve)
   | Icomp:
       forall prog me ve a1 a2 ve1 me1 ve2 me2,
         stmt_eval prog me ve a1 (me1, ve1) ->
@@ -405,30 +409,14 @@ Proof.
     split; intro Heval.
     - revert v Hfree Heval.
       induction e; intros v Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval;
-          now constructor; rewrite Env.gso.
+        try not_free; eauto using exp_eval.
+      + erewrite <-Env.gso; eauto; constructor.
+      + now constructor; rewrite Env.gso.
     - revert v Hfree Heval.
       induction e; intros v Hfree Heval; inv Heval;
         try not_free; eauto using exp_eval.
-      now constructor; rewrite Env.gso.
-      constructor; erewrite <-Env.gso; eauto.
-  Qed.
-
-  Lemma exp_eval_reduce_venv : forall me ve x e v,
-      ~Is_free_in_exp x e ->
-      (exp_eval me ve e v <-> exp_eval me (Env.remove x ve) e v).
-  Proof.
-    intros me ve x e v Hfree.
-    split; intro Heval.
-    - revert v Hfree Heval.
-      induction e; intros v Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval;
-          now constructor; rewrite Env.gro.
-    - revert v Hfree Heval.
-      induction e; intros v Hfree Heval; inv Heval;
-        try not_free; eauto using exp_eval.
-      now constructor; rewrite Env.gro.
-      constructor; erewrite <-Env.gro; eauto.
+      + rewrite Env.gso; auto; constructor.
+      + constructor; erewrite <-Env.gso; eauto.
   Qed.
 
   Lemma exp_eval_adds_extend_venv:

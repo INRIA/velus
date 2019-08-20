@@ -115,8 +115,7 @@ Section Translate.
 
   Definition funcall_assign (ys: idents) (obj: ident) (tyout: Ctypes.type) (outs: list (ident * type)) : Clight.statement :=
     fold_right
-      (fun y s =>
-         let '(y, (y', ty)) := y in
+      (fun '(y, (y', ty)) s =>
          let ty := cltype ty in
          let assign_out := assign y ty (Clight.Efield (Clight.Evar obj tyout) y' ty) in
          Clight.Ssequence assign_out s
@@ -464,7 +463,7 @@ Definition translate (do_sync: bool) (all_public: bool)
         let f_gvar := (f, type_of_inst main_node) in
         let ins := map glob_bind m.(m_in) in
         let outs := map glob_bind m.(m_out) in
-        let prog := rev prog in
+        (* let prog := rev prog in *)
         let cs := map (translate_class prog) prog in
         let (structs, funs) := split cs in
         let main := (main_id, make_main false main_node m) in

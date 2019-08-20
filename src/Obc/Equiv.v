@@ -144,9 +144,11 @@ Module Type EQUIV
       exp_eval menv' env1 e (Some v).
   Proof.
     intros menv' env1 env2.
-    induction e; intros v Henv; inversion 1; subst; eauto using exp_eval;
-      take (Env.find _ _ = Some _) and apply Henv in it as (v' & -> & ?);
-      eauto using exp_eval.
+    induction e; intros v Henv; inversion 1; subst; eauto using exp_eval.
+    - take (Env.find _ _ = Some _) and (rewrite it; apply Henv in it as (v' & -> & <-));
+        eauto using exp_eval.
+    - take (Env.find _ _ = Some _) and apply Henv in it as (v' & -> & ?);
+        eauto using exp_eval.
   Qed.
 
   Lemma exp_eval_refines':
@@ -160,8 +162,8 @@ Module Type EQUIV
       eauto using exp_eval, exp_eval_refines.
     destruct (Env.find i env2).
     - eauto using exp_eval_refines.
-    - destruct (Env.find i env1) eqn:Hf; eauto using exp_eval.
-      exists (Some v); split; eauto using exp_eval. discriminate.
+    - exists (Env.find i env1); split; eauto using exp_eval.
+      discriminate.
   Qed.
 
   Lemma Forall2_exp_eval_refines':

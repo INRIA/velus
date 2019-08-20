@@ -1264,3 +1264,21 @@ Section Galloc.
   Qed.
 
 End Galloc.
+
+Lemma sep_swap56:
+  forall P Q R S T U V, (P ** Q ** R ** S ** T ** U ** V) <-*-> (P ** Q ** R ** S ** U ** T ** V).
+Proof.
+  intros. rewrite (sep_swap T). reflexivity.
+Qed.
+
+Lemma sep_swap67:
+  forall P Q R S T U V W, (P ** Q ** R ** S ** T ** U ** V ** W) <-*-> (P ** Q ** R ** S ** T ** V ** U ** W).
+Proof.
+  intros. rewrite (sep_swap U). reflexivity.
+Qed.
+
+Lemma sep_swap78:
+  forall P Q R S T U V W X, (P ** Q ** R ** S ** T ** U ** V ** W ** X) <-*-> (P ** Q ** R ** S ** T ** U ** W ** V ** X).
+Proof.
+  intros. rewrite (sep_swap V). reflexivity.
+Qed.

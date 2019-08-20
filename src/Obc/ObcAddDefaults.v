@@ -333,6 +333,7 @@ Module Type OBCADDDEFAULTS
         by now inv Heval; rewrite Env.In_find in Hvar.
     exists (vo'::vos'). subst vo'; split; auto.
     inv Heval; constructor; eauto using exp_eval.
+    take (Env.find _ _ = _) and rewrite it; eauto using exp_eval.
   Qed.
 
   Lemma stmt_eval_add_writes_split:
