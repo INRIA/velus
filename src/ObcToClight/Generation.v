@@ -149,9 +149,7 @@ Section Translate.
     | None => Clight.Sskip
     end.
 
-  Definition translate_param (yt: ident * type): ident * Ctypes.type :=
-    let (y, t) := yt in
-    (y, cltype t).
+  Definition translate_param '((y, t): ident * type): ident * Ctypes.type := (y, cltype t).
 
   Fixpoint translate_stmt (s: stmt) : Clight.statement :=
     match s with

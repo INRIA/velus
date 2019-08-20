@@ -343,6 +343,19 @@ Module Type OBCSYNTAX
     split; eauto using find_class_ltsuffix.
   Qed.
 
+  Lemma Forall_methods_find:
+    forall prog P cid c prog' fid f,
+      Forall_methods P prog ->
+      find_class cid prog = Some (c, prog') ->
+      find_method fid c.(c_methods) = Some f ->
+      P f.
+  Proof.
+    unfold Forall_methods; intros * Spec Findc Findf.
+    apply find_class_In in Findc.
+    apply find_method_In in Findf.
+    do 2 eapply Forall_forall in Spec; eauto.
+  Qed.
+
   (** Syntactic predicates *)
 
   Inductive Is_free_in_exp : ident -> exp -> Prop :=

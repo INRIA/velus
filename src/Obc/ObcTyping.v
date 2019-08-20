@@ -830,10 +830,10 @@ Module Type OBCTYPING
   Qed.
 
   Remark wt_program_not_class_in:
-    forall pre post o c c',
+    forall pre post o c cid,
       wt_program (pre ++ c :: post) ->
-      In (o, c'.(c_name)) c.(c_objs) ->
-      find_class c'.(c_name) pre = None.
+      In (o, cid) c.(c_objs) ->
+      find_class cid pre = None.
   Proof.
     induction pre as [|k]; intros post o c c' WT Hin; auto.
     simpl in WT. inv WT.
@@ -844,7 +844,7 @@ Module Type OBCTYPING
     match goal with H:wt_program _ |- _ =>
       specialize (IHpre _ _ _ _ H Hin); apply wt_program_app in H;
         inversion_clear H as [|? ? WTc WTp Hnodup] end.
-    destruct (ident_eqb k.(c_name) c'.(c_name)) eqn: Heq; auto.
+    destruct (ident_eqb k.(c_name) c') eqn: Heq; auto.
     apply ident_eqb_eq in Heq; rewrite Heq in *; clear Heq.
     inversion_clear WTc as [Ho Hm].
     apply Forall_forall with (1:=Ho) in Hin.
@@ -859,13 +859,13 @@ Module Type OBCTYPING
   Qed.
 
   Remark wt_program_not_same_name:
-    forall post o c c',
+    forall post o c cid,
       wt_program (c :: post) ->
-      In (o, c'.(c_name)) c.(c_objs) ->
-      c'.(c_name) <> c.(c_name).
+      In (o, cid) c.(c_objs) ->
+      cid <> c.(c_name).
   Proof.
     intros * WTp Hin Hc'.
-    rewrite Hc' in Hin; clear c' Hc'.
+    rewrite Hc' in Hin; clear Hc'.
     inversion_clear WTp as [|? ? WTc WTp' Hnodup]; clear WTp'.
     inversion_clear WTc as [Ho Hm].
     apply Forall_forall with (1:=Ho) in Hin.
@@ -1045,6 +1045,44 @@ Module Type OBCTYPING
       + simpl. rewrite <-Hc2. apply ident_eqb_neq in Hne.
         now rewrite Hne.
   Qed.
+
+  Lemma wt_mem_chained:
+    forall prog prog' c  mem ownerid owner,
+      wt_program prog ->
+      find_class ownerid prog = Some (owner, prog') ->
+      wt_mem mem prog' c ->
+      wt_mem mem prog c.
+  Proof.
+    intros.
+    eapply wt_mem_sub; eauto.
+    eapply find_class_sub; eauto.
+  Qed.
+  Hint Resolve wt_mem_chained.
+
+  Lemma wt_mem_skip:
+    forall prog prog' cid c mem,
+      wt_program prog ->
+      find_class cid prog = Some (c, prog') ->
+      wt_mem mem prog c ->
+      wt_mem mem prog' c.
+  Proof.
+    intros * WT Find WTm.
+    inversion_clear WTm as [???? WTinsts]; constructor; auto.
+    apply Forall_forall; intros (?&?) Hin.
+    eapply Forall_forall in WTinsts; eauto.
+    apply find_class_app in Find as (prog'' & ? &?); subst.
+    pose proof WT as WT'.
+    eapply wt_program_not_class_in in WT; eauto.
+    inversion_clear WTinsts as [|???????? Find].
+    * left; auto.
+    * eright; eauto.
+      rewrite find_class_app', WT in Find.
+      apply wt_program_app in WT'.
+      eapply wt_program_not_same_name in Hin; eauto.
+      simpl in Find; cases_eqn E.
+      apply ident_eqb_eq in E; congruence.
+  Qed.
+  Hint Resolve wt_mem_skip.
 
   Lemma find_class_rev:
     forall prog n c prog',

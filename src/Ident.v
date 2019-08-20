@@ -201,6 +201,20 @@ Module Export Ids <: IDS.
   (* The following identifier is (provably) never used in practice. *)
   Definition default : ident := pos_of_str "$$$$".
 
+  Lemma self_reserved:
+    In self reserved.
+  Proof.
+    left; auto.
+  Qed.
+  Hint Resolve self_reserved.
+
+  Lemma out_reserved:
+    In out reserved.
+  Proof.
+    right; constructor; auto.
+  Qed.
+  Hint Resolve out_reserved.
+
   Lemma reserved_nodup: NoDup reserved.
   Proof.
     constructor.
@@ -221,6 +235,7 @@ Module Export Ids <: IDS.
     rewrite Eq in Notin.
     contradict Notin; apply in_eq.
   Qed.
+  Hint Resolve self_not_out.
 
   Lemma methods_nodup: NoDup methods.
   Proof.
@@ -242,6 +257,7 @@ Module Export Ids <: IDS.
     intro Hrs. rewrite Hrs in *.
     intuition.
   Qed.
+  Hint Resolve reset_not_step.
 
   Lemma fun_not_out: fun_id <> out.
   Proof.
@@ -249,6 +265,7 @@ Module Export Ids <: IDS.
     apply pos_of_str_injective in E.
     discriminate.
   Qed.
+  Hint Resolve fun_not_out.
 
   Definition NotReserved {typ: Type} (xty: ident * typ) : Prop :=
     ~In (fst xty) reserved.
@@ -488,6 +505,7 @@ Module Export Ids <: IDS.
     apply self_valid; unfold self; rewrite pos_to_str_equiv.
     rewrite <- E, In_str_app; right; apply In_str_eq.
   Qed.
+  Hint Resolve self_not_prefixed.
 
   Lemma out_not_prefixed: ~ prefixed out.
   Proof.
@@ -498,6 +516,7 @@ Module Export Ids <: IDS.
     apply out_valid; unfold out; rewrite pos_to_str_equiv.
     rewrite <- E, In_str_app; right; apply In_str_eq.
   Qed.
+  Hint Resolve out_not_prefixed.
 
   Remark sync_id_valid: valid sync_id.
   Proof.
@@ -518,4 +537,39 @@ Module Export Ids <: IDS.
     rewrite <- E, In_str_app; right; apply In_str_eq.
   Qed.
 
- End Ids.
+  Lemma glob_not_in_prefixed:
+    forall {A} (xs: list (ident * A)) ps,
+      Forall prefixed ps ->
+      Forall (fun x => valid (fst x)) xs ->
+      Forall (fun z => ~ In z ps) (map (fun xt => glob_id (fst xt)) xs).
+  Proof.
+    induction xs as [|(x, t)]; simpl; intros * Pref Valid; auto.
+    inv Valid. constructor; auto.
+    intro Hin.
+    eapply Forall_forall in Hin; eauto.
+    contradict Hin; apply glob_id_not_prefixed; auto.
+  Qed.
+
+  Lemma NoDupMembers_glob:
+    forall {A} (ys xs: list (ident * A)),
+      NoDupMembers (xs ++ ys) ->
+      Forall (fun x => valid (fst x)) (xs ++ ys) ->
+      Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) xs))
+             (map (fun xt => glob_id (fst xt)) ys).
+  Proof.
+    induction ys as [|(y, t)]; simpl; intros * Nodup Valid; auto.
+    rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup];
+      rewrite Forall_app in Valid; destruct Valid as [Validxs Validys];
+        rewrite Forall_cons2 in Validys; destruct Validys as [Validy Validys].
+    constructor; auto.
+    - rewrite in_map_iff; intros ((x, t') & E & Hin).
+      simpl in E; apply glob_id_injective in E; auto.
+      + subst y.
+        apply Notin.
+        apply InMembers_app; left; eapply In_InMembers; eauto.
+      + eapply Forall_forall in Hin; eauto; now simpl in Hin.
+    - apply IHys; auto.
+      rewrite Forall_app; split; auto.
+  Qed.
+
+End Ids.

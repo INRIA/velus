@@ -199,41 +199,6 @@ Proof.
   - apply in_map with (f:=fst) in Hin; auto.
 Qed.
 
-Lemma glob_not_in_prefixed:
-  forall (xs: list (ident * type)) ps,
-    Forall prefixed ps ->
-    Forall (fun x => valid (fst x)) xs ->
-    Forall (fun z => ~ In z ps) (map (fun xt => glob_id (fst xt)) xs).
-Proof.
-  induction xs as [|(x, t)]; simpl; intros * Pref Valid; auto.
-  inv Valid. constructor; auto.
-  intro Hin.
-  eapply Forall_forall in Pref; eauto.
-  contradict Pref; apply glob_id_not_prefixed; auto.
-Qed.
-
-Lemma NoDupMembers_glob:
-  forall (ys xs: list (ident * type)),
-    NoDupMembers (xs ++ ys) ->
-    Forall (fun x => valid (fst x)) (xs ++ ys) ->
-    Forall (fun z => ~ In z (map (fun xt => glob_id (fst xt)) xs))
-           (map (fun xt => glob_id (fst xt)) ys).
-Proof.
-  induction ys as [|(y, t)]; simpl; intros * Nodup Valid; auto.
-  rewrite NoDupMembers_app_cons in Nodup; destruct Nodup as [Notin Nodup];
-    rewrite Forall_app in Valid; destruct Valid as [Validxs Validys];
-      rewrite Forall_cons2 in Validys; destruct Validys as [Validy Validys].
-  constructor; auto.
-  - rewrite in_map_iff; intros ((x, t') & E & Hin).
-    simpl in E; apply glob_id_injective in E; auto.
-    + subst y.
-      apply Notin.
-      apply InMembers_app; left; eapply In_InMembers; eauto.
-    + eapply Forall_forall in Hin; eauto; now simpl in Hin.
-  - apply IHys; auto.
-    rewrite Forall_app; split; auto.
-Qed.
-
 Ltac destruct_list_tac l x y xs :=
   let l' := fresh "l" in
   destruct l as [|x l']; [|destruct l' as [|y xs]].
@@ -596,6 +561,96 @@ Proof.
   induction Hes as [|? (?&?)]; constructor;
     simpl in *; subst; auto.
 Qed.
+
+Lemma NoDupMembers_translate_param:
+  forall f,
+    NoDupMembers (map translate_param (m_in f)).
+Proof.
+  intro.
+  unfold translate_param.
+  pose proof (m_nodupin f) as Nodup.
+  induction Nodup as [|??? Notin]; simpl; constructor; auto.
+  intro Hin; apply Notin.
+  apply InMembers_In in Hin as (?& Hin).
+  apply in_map_iff in Hin as ((?&?) & E &?); inv E.
+  eapply In_InMembers; eauto.
+Qed.
+Hint Resolve NoDupMembers_translate_param.
+
+Lemma reserved_not_in_translate_param_meth_vars:
+  forall f x,
+    In x reserved ->
+    ~ InMembers x (map translate_param (meth_vars f)).
+Proof.
+  intros ?? ? Hin.
+  apply InMembers_In in Hin as (?&Hin).
+  apply in_map_iff in Hin as ((?&?)&E&?); inv E.
+  eapply (m_notreserved x); auto.
+  eapply In_InMembers; eauto.
+Qed.
+Hint Resolve reserved_not_in_translate_param_meth_vars.
+
+Corollary self_not_in_translate_param_in:
+  forall f,
+    ~ InMembers self (map translate_param (m_in f)).
+Proof.
+  intros.
+  eapply NotInMembers_app; eauto; rewrite <-map_app.
+  eapply reserved_not_in_translate_param_meth_vars; auto.
+Qed.
+Hint Resolve self_not_in_translate_param_in.
+
+Corollary out_not_in_translate_param_in:
+  forall f,
+    ~ InMembers out (map translate_param (m_in f)).
+Proof.
+  intros.
+  eapply NotInMembers_app; eauto; rewrite <-map_app.
+  eapply reserved_not_in_translate_param_meth_vars; auto.
+Qed.
+Hint Resolve out_not_in_translate_param_in.
+
+Corollary self_not_in_translate_param_vars:
+  forall f,
+    ~ InMembers self (map translate_param (m_vars f)).
+Proof.
+  intros.
+  pose proof (reserved_not_in_translate_param_meth_vars f self) as Nin.
+  intro Hin; apply Nin; auto.
+  do 2  setoid_rewrite map_app.
+  rewrite 2 InMembers_app; auto.
+Qed.
+Hint Resolve self_not_in_translate_param_vars.
+
+Corollary out_not_in_translate_param_vars:
+  forall f,
+    ~ InMembers out (map translate_param (m_vars f)).
+Proof.
+  intros.
+  pose proof (reserved_not_in_translate_param_meth_vars f out) as Nin.
+  intro Hin; apply Nin; auto.
+  do 2  setoid_rewrite map_app.
+  rewrite 2 InMembers_app; auto.
+Qed.
+Hint Resolve out_not_in_translate_param_vars.
+
+Lemma self_not_in_temps:
+  forall prog f,
+    ~ InMembers self (make_out_temps (instance_methods_temp prog f) ++ map translate_param (m_vars f)).
+Proof.
+  intros; apply NotInMembers_app; split; auto.
+  intro Hin; apply make_out_temps_prefixed in Hin; auto.
+Qed.
+Hint Resolve self_not_in_temps.
+
+Lemma out_not_in_temps:
+  forall prog f,
+    ~ InMembers out (make_out_temps (instance_methods_temp prog f) ++ map translate_param (m_vars f)).
+Proof.
+  intros; apply NotInMembers_app; split; auto.
+  intro Hin; apply make_out_temps_prefixed in Hin; auto.
+Qed.
+Hint Resolve out_not_in_temps.
 
 Lemma c_objs_field_offset:
   forall ge o c cls,

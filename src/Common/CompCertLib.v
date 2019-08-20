@@ -535,7 +535,22 @@ Proof.
     rewrite PTree.gso; auto.
 Qed.
 
-Remark bind_parameter_temps_implies':
+Remark bind_parameter_temps_cons:
+  forall xs vs x ty v le le',
+    ~ InMembers x xs ->
+    bind_parameter_temps xs vs le = Some le' ->
+    bind_parameter_temps ((x, ty) :: xs) (v :: vs) le = Some (PTree.set x v le').
+Proof.
+  induction xs as [|(x', t')], vs; simpl;
+    intros ????? Notin Bind; try discriminate.
+  - now inversion Bind.
+  - simpl in IHxs.
+    rewrite set_comm.
+    + apply IHxs; auto.
+    + intro; apply Notin; now left.
+Qed.
+
+Remark bind_parameter_temps_implies_two:
   forall xs vs s ts vself o to vout le le',
     s <> o ->
     ~ InMembers s xs ->
@@ -567,7 +582,7 @@ Proof.
       subst s. apply inmembers_eq.
 Qed.
 
-Remark bind_parameter_temps_implies'_noout:
+Remark bind_parameter_temps_implies:
   forall xs vs s ts vself le le',
     ~ InMembers s xs ->
     bind_parameter_temps ((s, ts) :: xs)
@@ -592,20 +607,6 @@ Proof.
       subst s. apply inmembers_eq.
 Qed.
 
-Remark bind_parameter_temps_cons':
-  forall xs vs x ty v le le',
-    ~ InMembers x xs ->
-    bind_parameter_temps xs vs le = Some le' ->
-    bind_parameter_temps ((x, ty) :: xs) (v :: vs) le = Some (PTree.set x v le').
-Proof.
-  induction xs as [|(x', t')], vs; simpl;
-    intros ????? Notin Bind; try discriminate.
-  - now inversion Bind.
-  - simpl in IHxs.
-    rewrite set_comm.
-    + apply IHxs; auto.
-    + intro; apply Notin; now left.
-Qed.
 
 Remark alloc_implies:
   forall tge vars x b t e m e' m',
