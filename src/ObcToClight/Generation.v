@@ -310,29 +310,33 @@ Definition load_in (ins: list (ident * type)): Clight.statement :=
                            [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr] in
        Clight.Ssequence load s) Clight.Sskip ins.
 
+Definition write_multiple_outs (node: ident) (outs: list (ident * type))
+  : Clight.statement :=
+  let out_struct := prefix out step in
+  let t_struct := type_of_inst (prefix_fun node step) in
+  fold_right
+    (fun (xt: ident * type) s =>
+       let (x, t) := xt in
+       let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
+       let write :=
+           Clight.Sbuiltin None (AST.EF_vstore (type_chunk t))
+                           (Ctypes.Tcons typtr (Ctypes.Tcons (cltype t) Ctypes.Tnil))
+                           [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr;
+                              Clight.Efield (Clight.Evar out_struct t_struct) x (cltype t)] in
+       Clight.Ssequence write s
+    ) Clight.Sskip outs.
+
 Definition write_out (node: ident) (outs: list (ident * type))
   : Clight.statement :=
   match outs with
+  | [] => Clight.Sskip
   | [(x, t)] =>
     let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
     Clight.Sbuiltin None (AST.EF_vstore (type_chunk t))
                     (Ctypes.Tcons typtr (Ctypes.Tcons (cltype t) Ctypes.Tnil))
                     [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr;
                        (Clight.Etempvar x (cltype t))]
-  | outs =>
-    let out_struct := prefix out step in
-    let t_struct := type_of_inst (prefix_fun node step) in
-    fold_right
-      (fun (xt: ident * type) s =>
-         let (x, t) := xt in
-         let typtr := Ctypes.Tpointer (cltype t) Ctypes.noattr in
-         let write :=
-             Clight.Sbuiltin None (AST.EF_vstore (type_chunk t))
-                             (Ctypes.Tcons typtr (Ctypes.Tcons (cltype t) Ctypes.Tnil))
-                             [Clight.Eaddrof (Clight.Evar (glob_id x) (cltype t)) typtr;
-                                Clight.Efield (Clight.Evar out_struct t_struct) x (cltype t)] in
-         Clight.Ssequence write s
-      ) Clight.Sskip outs
+  | outs => write_multiple_outs node outs
   end.
 
 Definition reset_call (node: ident): Clight.statement :=

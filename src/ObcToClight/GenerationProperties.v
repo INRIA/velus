@@ -562,6 +562,16 @@ Proof.
     simpl in *; subst; auto.
 Qed.
 
+Lemma type_of_params_make_in_arg:
+  forall xs,
+    type_of_params (map translate_param xs) =
+    list_type_to_typelist (map Clight.typeof (map make_in_arg xs)).
+Proof.
+  unfold translate_param, make_in_arg.
+  induction xs as [|(x, t)]; simpl; auto.
+  f_equal; auto.
+Qed.
+
 Lemma NoDupMembers_translate_param:
   forall f,
     NoDupMembers (map translate_param (m_in f)).
@@ -1416,7 +1426,255 @@ Section TranslateOk.
       apply in_map_iff in Hinxt;
         destruct Hinxt as ((x, t) & Eq & Hinxt); inv Eq; eauto.
   Qed.
+  Lemma find_main_class_sig: {c_prog_main | find_class main_node prog = Some c_prog_main}.
+  Proof.
+    pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E; eauto.
+  Qed.
+
+  Definition c_main   : class := fst (proj1_sig find_main_class_sig).
+  Definition prog_main: program := snd (proj1_sig find_main_class_sig).
+
+  Definition find_main_class: find_class main_node prog = Some (c_main, prog_main).
+  Proof.
+    unfold c_main, prog_main; destruct find_main_class_sig as ((?&?)&?); simpl; auto.
+  Qed.
+
+  Lemma find_main_step_sig: {m_step | find_method step c_main.(c_methods) = Some m_step}.
+  Proof.
+    pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E.
+    rewrite find_main_class in En; inv En; eauto.
+  Qed.
+
+  Lemma find_main_reset_sig: {m_reset | find_method reset c_main.(c_methods) = Some m_reset}.
+  Proof.
+    pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E.
+    rewrite find_main_class in En; inv En; eauto.
+  Qed.
+
+  Definition main_step : method := proj1_sig find_main_step_sig.
+  Definition main_reset: method := proj1_sig find_main_reset_sig.
+
+  Definition find_main_step : find_method step c_main.(c_methods) = Some main_step := proj2_sig find_main_step_sig.
+  Definition find_main_reset: find_method reset c_main.(c_methods) = Some main_reset := proj2_sig find_main_reset_sig.
+
+  Lemma TranslateClasses: {structs_funs | split (map (translate_class prog) prog) = structs_funs}.
+  Proof.
+    pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E; eauto.
+  Qed.
+
+  Definition structs: list (list composite_definition) := fst (proj1_sig TranslateClasses).
+  Definition funs   : list (list (ident * AST.globdef _ _)) := snd (proj1_sig TranslateClasses).
+
+  Lemma tprog_defs:
+    let ce := globalenv tprog in
+    tprog.(prog_defs) = map (vardef ce false) [(glob_id self, type_of_inst main_node)] ++
+                            map (vardef ce true) (map glob_bind (m_out main_step) ++
+                                                      map glob_bind (m_in main_step)) ++
+                            concat funs ++
+                            (if do_sync
+                             then [(sync_id, make_sync);
+                                     (main_sync_id, make_main do_sync main_node main_step)]
+                             else []) ++
+                            [(main_id, make_main false main_node main_step)].
+  Proof.
+    pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E.
+    intro; subst ce tge.
+    unfold TranslateOk.funs; rewrite (proj2_sig TranslateClasses) in E.
+    destruct (proj1_sig TranslateClasses); inv E; simpl snd.
+    rewrite find_main_class in En; inv En.
+    rewrite find_main_step in Estep; inv Estep.
+    unfold make_program' in Trans.
+    destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
+    destruct (check_size_env ce (concat structs)); try discriminate.
+    inversion Trans; eauto.
+  Qed.
+
+  Definition is_volatile (xt: ident * type) :=
+    let (x, t) := xt in
+    exists b, Genv.find_symbol (globalenv tprog) (glob_id x) = Some b
+         /\ Genv.block_is_volatile (globalenv tprog) b = true.
+
+  Lemma in_vardef_is_volatile:
+    forall x t,
+      In ((vardef (globalenv tprog) true) (glob_bind (x, t))) tprog.(prog_defs) ->
+      is_volatile (x, t).
+  Proof.
+    intros * Hin.
+    set (ty := merge_attributes (cltype t) (mk_attr true None)).
+    assert ((AST.prog_defmap tprog) ! (glob_id x) =
+            Some (@AST.Gvar Clight.fundef _
+                            (AST.mkglobvar ty [AST.Init_space (Ctypes.sizeof (globalenv tprog) ty)] false true)))
+        as Hget.
+    { subst ty.
+      unfold AST.prog_defmap; simpl.
+      apply PTree_Properties.of_list_norepet; eauto using prog_defs_norepet.
+    }
+    apply Genv.find_def_symbol in Hget as (b & Findsym & Finddef).
+    unfold is_volatile.
+    exists b; split; auto.
+    unfold Genv.block_is_volatile, Genv.find_var_info.
+    setoid_rewrite Finddef; auto.
+  Qed.
+
+  Lemma volatile_step_in:
+    Forall is_volatile main_step.(m_in).
+  Proof.
+    apply Forall_forall; intros (x, t) Hin.
+    eapply in_vardef_is_volatile; rewrite tprog_defs; simpl.
+    rewrite map_app.
+    apply in_cons, in_app; left; apply in_app; right.
+    apply in_map_iff.
+    exists (glob_id x, cltype t); split; auto.
+    apply in_map_iff.
+    exists (x, t); split; auto.
+  Qed.
+
+  Lemma volatile_step_out:
+    Forall is_volatile main_step.(m_out).
+  Proof.
+    apply Forall_forall; intros (x, t) Hin.
+    apply in_vardef_is_volatile; rewrite tprog_defs; simpl.
+    rewrite map_app.
+    apply in_cons, in_app; left; apply in_app; left.
+    apply in_map_iff.
+    exists (glob_id x, cltype t); split; auto.
+    apply in_map_iff.
+    exists (x, t); split; auto.
+  Qed.
+
+  Lemma tprog_main_id:
+    Ctypes.prog_main tprog = main_id.
+  Proof.
+    pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E.
+    unfold make_program' in Trans.
+    destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
+    destruct (check_size_env ce (concat structs)); try discriminate.
+    inv Trans; auto.
+  Qed.
+
+  Let out_step   := prefix out step.
+  Let t_out_step := type_of_inst (prefix_fun main_node step).
+
+  Definition main_f: function :=
+    {|
+      fn_return := type_int32s;
+      fn_callconv := AST.cc_default;
+      fn_params := [];
+      fn_vars := case_out main_step
+                          []
+                          (fun _ _ => [])
+                          (fun _ => [(out_step, t_out_step)]);
+      fn_temps := map translate_param
+                      (case_out main_step
+                                []
+                                (fun y t => [(y, t)])
+                                (fun _ => [])  ++ m_in main_step);
+      fn_body := main_body false main_node main_step;
+    |}.
+
+  Remark norepet_vars_main:
+    list_norepet (var_names (fn_vars main_f)).
+  Proof.
+    simpl; unfold case_out; cases; simpl; auto using list_norepet.
+  Qed.
+
+  Remark norepet_params_main:
+    list_norepet (var_names (fn_params main_f)).
+  Proof.
+    simpl; constructor.
+  Qed.
+
+  Remark disjoint_params_temps_main:
+    list_disjoint (var_names (fn_params main_f)) (var_names (fn_temps main_f)).
+  Proof.
+    apply NoDupMembers_disjoint; simpl; unfold case_out.
+    destruct_list (m_out main_step) as (?,?) (?,?) ? : Hout; simpl app;
+      rewrite fst_NoDupMembers, translate_param_fst, <-fst_NoDupMembers;
+      auto using m_nodupin.
+    constructor; auto using m_nodupin.
+    pose proof (m_nodupvars main_step) as Nodup.
+    rewrite Permutation.Permutation_app_comm in Nodup.
+    eapply NoDupMembers_app_InMembers; eauto.
+    apply InMembers_app; right; rewrite Hout; constructor; auto.
+  Qed.
+
+  Lemma well_initialized:
+    forall id v,
+      In (id, AST.Gvar v) (AST.prog_defs tprog) ->
+      Genv.init_data_list_aligned 0 (AST.gvar_init v)
+      /\ (forall i ofs,
+            In (AST.Init_addrof i ofs) (AST.gvar_init v) ->
+            exists b, Genv.find_symbol (Genv.globalenv tprog) i = Some b).
+  Proof.
+    inv_trans TRANSL as En Estep Ereset with structs funs E.
+    pose proof (build_ok _ _ _ _ _ _ _ TRANSL) as Hbuild.
+    apply make_program_defs in TRANSL; destruct TRANSL as (gce & Hbuild' & Eq); clear TRANSL.
+    rewrite Hbuild in Hbuild'; inv Hbuild'.
+    rewrite Eq; clear Eq.
+    simpl; intros * [Hinv|Hinv].
+    - inv Hinv; simpl; split.
+      + split; auto; apply Z.divide_0_r.
+      + intros * Hinio; simpl in Hinio;
+          destruct Hinio; [discriminate|contradiction].
+    - repeat rewrite in_app in Hinv;
+        destruct Hinv as [Hinv|[Hinv|[Hinv|Hinv]]]; try now inv Hinv.
+      + induction (map glob_bind (m_out m) ++ map glob_bind (m_in m)) as [|(x, t)].
+        * contradict Hinv.
+        * destruct Hinv as [Hinv|]; auto.
+          inv Hinv; simpl; split.
+          -- split; auto; apply Z.divide_0_r.
+          -- intros * Hinio; simpl in Hinio;
+               destruct Hinio; [discriminate|contradiction].
+      + clear En Hbuild WT.
+        remember prog as prog1.
+        replace (translate_class prog1) with (translate_class prog) in E
+          by now rewrite <-Heqprog1.
+        clear Heqprog1.
+        revert structs funs E Hinv.
+        induction prog1 as [|c' prog']; intros * E Hinv; simpl in E.
+        * inv E; simpl in Hinv; contradiction.
+        * destruct (split (map (translate_class prog) prog')) as (g, d) eqn: Egd; inv E.
+          simpl in Hinv.
+          apply in_app in Hinv; destruct Hinv as [Hinv|]; eauto.
+          unfold make_methods in Hinv.
+          induction (c_methods c'); simpl in Hinv; try contradiction.
+          destruct Hinv as [Hinv|]; auto.
+          unfold translate_method in Hinv.
+          destruct_list (m_out a) as (?, ?) ? ?; inv Hinv.
+           (* - rewrite map_app in E; simpl in E; rewrite split_last in E. *)
+           (*   destruct (split (map (translate_class (rev prog)) (rev prog'))) as (g, d) eqn: Egd; inv E. *)
+           (*   rewrite concat_app in Hinv; simpl in Hinv; rewrite app_nil_r in Hinv; *)
+           (*     apply in_app in Hinv; destruct Hinv as [|Hinv]; eauto. *)
+           (*   unfold make_methods in Hinv. *)
+           (*   induction (c_methods c'); simpl in Hinv; try contradiction. *)
+           (*   destruct Hinv as [Hinv|]; auto. *)
+           (*   unfold translate_method in Hinv. *)
+           (*   destruct_list (m_out a) as (?, ?) ? ?; inv Hinv. *)
+
+    + destruct do_sync; try now inv Hinv.
+          rewrite cons_is_app, in_app in Hinv.
+          destruct Hinv as [[Hinv|Hinv]|[Hinv|Hinv]]; try inv Hinv.
+  Qed.
+
+  Lemma find_main_ptr:
+    exists b,
+      Genv.find_symbol tge main_id = Some b
+      /\ Genv.find_funct_ptr tge b = Some (Ctypes.Internal main_f).
+  Proof.
+    assert ((AST.prog_defmap tprog) ! main_id = Some (make_main false main_node main_step)) as Hget.
+    { unfold AST.prog_defmap; apply PTree_Properties.of_list_norepet.
+      - eapply prog_defs_norepet; eauto.
+      - setoid_rewrite tprog_defs; eauto.
+        apply in_cons, in_app; right; apply in_app; right.
+        generalize do_sync; intro; cases; [do 2 apply in_cons|]; apply in_eq.
+    }
+    apply Genv.find_def_symbol in Hget as (b & Findsym & Finddef).
+    exists b; split; auto.
+    unfold Genv.find_funct_ptr; subst tge; setoid_rewrite Finddef.
+    unfold main_f; unfold case_out; simpl; repeat f_equal; cases.
+  Qed.
 
 End TranslateOk.
 
 Hint Resolve Consistent prog_defs_norepet make_members_co.
+Hint Resolve norepet_vars_main norepet_params_main disjoint_params_temps_main.

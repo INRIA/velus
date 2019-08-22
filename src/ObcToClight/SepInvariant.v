@@ -2,6 +2,7 @@ From compcert Require Import common.Separation.
 From compcert Require Import common.Values.
 From compcert Require Import common.Memdata.
 From compcert Require Import common.Memory.
+From compcert Require Import common.Globalenvs.
 From compcert Require common.Errors.
 From compcert Require Import cfrontend.Ctypes.
 From compcert Require Import cfrontend.Clight.
@@ -1821,7 +1822,8 @@ Section FunctionEntry.
                    gcenv ! (prefix_fun cid fid) = Some instco ->
                    exists e_f le_f m_f,
                      function_entry2 tge fd (Vptr sb sofs :: var_ptr instb :: vs) m e_f le_f m_f
-                     /\ m_f |= match_states gcenv prog c f (me, Env.adds (map fst f.(m_in)) vs vempty) (e_f, le_f) sb sofs (Some (instb, instco))
+                     /\ m_f |= match_states gcenv prog c f (me, Env.adds (map fst f.(m_in)) vs vempty) (e_f, le_f) sb sofs
+                                (Some (instb, instco))
                               ** P).
   Proof.
     intros * Spec Findcl Findmth Len WTmem WTvs.
@@ -1958,5 +1960,118 @@ Section FunctionEntry.
   Qed.
 
 End FunctionEntry.
+
+Section MainProgram.
+
+  Variable (main_node  : ident)
+           (prog       : program)
+           (tprog      : Clight.program)
+           (do_sync    : bool)
+           (all_public : bool).
+  Let tge              := Clight.globalenv tprog.
+  Let gcenv            := Clight.genv_cenv tge.
+
+  Hypothesis (TRANSL : translate do_sync all_public main_node prog = Errors.OK tprog)
+             (WT     : wt_program prog).
+
+  Let out_step   := prefix out step.
+  Let t_out_step := type_of_inst (prefix_fun main_node step).
+
+  Let main_step := main_step _ _ _ _ _ TRANSL.
+  Let main_f    := main_f _ _ _ _ _ TRANSL.
+
+  Lemma main_with_output_structure:
+    forall m P,
+      (1 < length (m_out main_step))%nat ->
+      m |= P ->
+      exists m' step_b step_co,
+        alloc_variables tge empty_env m (fn_vars main_f)
+                        (PTree.set out_step (step_b, t_out_step) empty_env) m'
+        /\ gcenv ! (prefix_fun main_node step) = Some step_co
+        /\ m' |= blockrep gcenv vempty step_co.(co_members) step_b ** P.
+  Proof.
+    intros * Len Hm.
+    subst main_step main_f.
+    simpl; unfold case_out.
+    destruct_list (m_out (GenerationProperties.main_step _ _ _ _ _ TRANSL)) as (?,?) (?,?) ? : Out;
+      try (simpl in Len; omega).
+
+    (* get the allocated memory *)
+    destruct (Mem.alloc m 0 (sizeof tge (type_of_inst (prefix_fun main_node step))))
+      as (m', step_b) eqn: AllocStep.
+
+    (* get the out struct *)
+    pose proof (find_main_class _ _ _ _ _ TRANSL) as Find_main.
+    pose proof (find_main_step _ _ _ _ _ TRANSL) as Find_step.
+    rewrite <-Out in Len.
+    edestruct global_out_struct as (step_co & Hsco & ? & Hms & ? & ? & ?); eauto.
+
+    erewrite find_class_name in *; eauto.
+    erewrite find_method_name in *; eauto.
+
+    exists m', step_b, step_co; intuition.
+    - repeat (econstructor; eauto).
+    - assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
+        by (simpl; setoid_rewrite Hsco; transitivity Int.max_unsigned;
+            auto; unfold Int.max_unsigned; omega).
+      eapply alloc_rule in AllocStep; eauto; try omega.
+      eapply sep_imp; eauto.
+      simpl; setoid_rewrite Hsco; eapply blockrep_empty; eauto.
+      + eapply Consistent; eauto.
+      + rewrite Hms; eauto.
+        intros * Hin; apply in_map_iff in Hin as ((?&?)& E' &?); inversion E'; eauto.
+  Qed.
+
+  Lemma init_mem:
+    exists m sb,
+      Genv.init_mem tprog = Some m
+      /\ Genv.find_symbol tge (glob_id self) = Some sb
+      /\ m |= staterep gcenv prog main_node mempty sb Z0.
+  Proof.
+    destruct Genv.init_mem_exists with (p:=tprog) as (m' & Initmem);
+      eauto using well_initialized.
+
+    pose proof TRANSL as Trans.
+    inv_trans Trans as En Estep Ereset with structs funs E.
+
+    exists m'.
+    edestruct find_self as (sb & find_step); eauto.
+    exists sb; split; [|split]; auto.
+    assert (NoDupMembers tprog.(AST.prog_defs)) as Nodup
+        by (rewrite fst_NoDupMembers, NoDup_norepet; eapply prog_defs_norepet; eauto).
+    pose proof (init_grange _ _ Nodup Initmem) as Hgrange.
+    unfold make_program' in Trans.
+    destruct (build_composite_env' (concat structs)) as [(ce, ?)|]; try discriminate.
+    destruct (check_size_env ce (concat structs)) eqn: Check_size; try discriminate.
+    unfold translate_class in E.
+    apply split_map in E; destruct E as [? Funs].
+    inversion Trans as [Htprog].
+    rewrite <-Htprog in Hgrange at 2.
+    simpl in Hgrange.
+    setoid_rewrite find_step in Hgrange.
+    rewrite <-Zplus_0_r_reverse in Hgrange.
+    rewrite Zmax_left in Hgrange;
+      [|destruct (ce ! main_node); try omega; apply co_sizeof_pos].
+    apply sep_proj1 in Hgrange.
+    rewrite sepemp_right in *.
+    eapply sep_imp; eauto.
+    rewrite pure_sepwand.
+    - unfold Genv.perm_globvar; simpl.
+      transitivity (range_w sb 0 (sizeof gcenv (type_of_inst main_node))).
+      + unfold sizeof; simpl.
+        subst gcenv tge.
+        setoid_rewrite <-Htprog; auto.
+      + apply range_staterep; eauto.
+        * eapply Consistent; eauto.
+        * eapply make_members_co; eauto.
+        * intro En'; rewrite En' in En; discriminate.
+    - edestruct make_members_co as (co & Find_main & ? & ? & ? & ? & ?); eauto.
+      subst gcenv tge.
+      rewrite <-Htprog in Find_main; simpl in Find_main.
+      rewrite Find_main.
+      transitivity Int.max_unsigned; auto; unfold Int.max_unsigned; omega.
+  Qed.
+
+End MainProgram.
 
 Hint Resolve match_states_wt_state bounded_struct_of_class_ge0.
