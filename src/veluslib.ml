@@ -23,7 +23,7 @@ let do_expose () = !expose
 
 let get_main_class decls =
   try
-    let open Instantiator.Obc.Syn in
+    let open Interface.Obc.Syn in
     match !main_node with
     | Some s ->
         let nm = Camlcoq.intern_string s in
@@ -34,7 +34,7 @@ let get_main_class decls =
 
 let get_first_method cl =
   try
-    let open Instantiator.Obc.Syn in
+    let open Interface.Obc.Syn in
     List.hd cl.c_methods
   with _ ->
     (Printf.eprintf "class has no methods"; exit 1)
@@ -60,7 +60,7 @@ let print_sync_if prog =
   match !sync_destination with
   | None -> ()
   | Some f ->
-      let open Instantiator.Obc.Syn in
+      let open Interface.Obc.Syn in
       let cl = get_main_class prog in
       let cl_m = get_first_method cl in
       let oc = open_out f in

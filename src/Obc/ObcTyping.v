@@ -821,6 +821,43 @@ Module Type OBCTYPING
     intros; eapply (proj2 pres_sem_stmt'); eauto.
   Qed.
 
+  Lemma pres_loop_call_spec:
+    forall n prog cid c prog' fid f ins outs me,
+      wt_program prog ->
+      find_class cid prog = Some (c, prog') ->
+      find_method fid c.(c_methods) = Some f ->
+      (forall n, Forall2 (fun vo xt => wt_valo vo (snd xt)) (ins n) f.(m_in)) ->
+      wt_mem me prog' c ->
+      loop_call prog cid fid ins outs 0 me ->
+      exists me_n,
+        loop_call prog cid fid ins outs n me_n
+        /\ wt_mem me_n prog' c
+        /\ Forall2 (fun vo xt => wt_valo vo (snd xt)) (outs n) f.(m_out).
+  Proof.
+    induction n; intros * ????? Loop.
+    - exists me; split; auto; split; auto.
+      inv Loop; eapply pres_sem_stmt_call; eauto.
+    - edestruct IHn as (me_n & Loop_n & ? & ?); eauto.
+      inversion_clear Loop_n as [???? Loop_Sn].
+      assert (wt_mem me' prog' c) by (eapply pres_sem_stmt_call; eauto).
+      eexists; split; eauto; split; auto.
+      inv Loop_Sn.
+      eapply pres_sem_stmt_call; eauto.
+  Qed.
+
+  Corollary pres_loop_call:
+    forall prog cid c prog' fid f ins outs me,
+      wt_program prog ->
+      find_class cid prog = Some (c, prog') ->
+      find_method fid c.(c_methods) = Some f ->
+      (forall n, Forall2 (fun vo xt => wt_valo vo (snd xt)) (ins n) f.(m_in)) ->
+      wt_mem me prog' c ->
+      loop_call prog cid fid ins outs 0 me ->
+      forall n, Forall2 (fun vo xt => wt_valo vo (snd xt)) (outs n) f.(m_out).
+  Proof.
+    intros; edestruct pres_loop_call_spec as (?&?&?&?); eauto.
+  Qed.
+
   Lemma wt_program_app:
     forall cls cls',
       wt_program (cls ++ cls') ->

@@ -781,7 +781,7 @@ Section PRESERVATION.
         wt_mem me_o' prog'' c ->
         exists m' le',
           exec_stmt_fe function_entry2 tge e le m
-                    (binded_funcall prog owner caller ys cid o fid es)
+                    (binded_funcall (rev prog) owner caller ys cid o fid es)
                     E0 le' m' Out_normal /\
           m' |= match_states gcenv prog owner caller
                   (add_inst o me_o' me, Env.adds_opt ys (map Some rvs) ve)
@@ -867,11 +867,13 @@ Section PRESERVATION.
 
 
       unfold binded_funcall.
+      pose proof Findchild';
+        apply find_class_rev in Findchild' as (cls & Findchild'); auto.
       rewrite Findchild', Findcallee.
       unfold call_spec in CallSpec.
       unfold case_out in Type_f, CallSpec.
       destruct_list callee.(m_out) as (a, ta) (b, tb) ? : Hout;
-        inversion Hins as [|x B C D F Hins']; try inv Hins';
+        inversion Hins as [|x ???? Hins']; try inv Hins';
           inversion WTrvs as [|????? WTrvs']; try inv WTrvs'.
 
       (* no output *)
@@ -1041,7 +1043,7 @@ Section PRESERVATION.
              ** P ->
         exists m' le',
           exec_stmt_fe function_entry2 tge e le m
-                    (translate_stmt prog owner caller s)
+                    (translate_stmt (rev prog) owner caller s)
                     E0 le' m' Out_normal
           /\ m' |= match_states gcenv prog owner caller (me', ve') (e, le') sb sofs outb_co
                   ** P)
@@ -1069,7 +1071,7 @@ Section PRESERVATION.
                  (WTs        : wt_stmt prog' owner.(c_objs) owner.(c_mems) (meth_vars caller) s),
                exists m' le',
                  exec_stmt_fe function_entry2 tge e le m
-                           (translate_stmt prog owner caller s) E0 le' m' Out_normal
+                           (translate_stmt (rev prog) owner caller s) E0 le' m' Out_normal
                  /\ m' |= match_states gcenv prog owner caller (me', ve') (e, le') sb sofs outb_co ** P)
          /\
          (forall p me cid fid vos me' rvos,
@@ -1204,7 +1206,7 @@ Section PRESERVATION.
       rewrite map_length in Len.
       pose proof Mspec as Entry;
         eapply function_entry_match_states with (me := me) in Entry; eauto.
-      assert (fn_body fd = return_with (translate_stmt prog cls fm (m_body fm))
+      assert (fn_body fd = return_with (translate_stmt (rev prog) cls fm (m_body fm))
                                        (case_out fm
                                                  None
                                                  (fun x t => Some (make_in_arg (x, t)))
@@ -1296,7 +1298,7 @@ Section PRESERVATION.
            ** P ->
       exists m' le',
         exec_stmt_fe function_entry2 tge e le m
-                  (translate_stmt prog owner caller s)
+                  (translate_stmt (rev prog) owner caller s)
                   E0 le' m' Out_normal
         /\ m' |= match_states gcenv prog owner caller (me', ve') (e, le') sb sofs outb_co
                 ** P.

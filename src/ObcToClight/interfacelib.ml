@@ -197,14 +197,14 @@ module PrintStc = Stclib.PrintFun
 module PrintObc = Obclib.PrintFun
   (struct
     include Basics
-    include Instantiator.Obc.Syn
+    include Interface.Obc.Syn
    end)
   (PrintOps)
 
 module SyncFun = Obclib.SyncFun
   (struct
     include Basics
-    include Instantiator.Obc.Syn
+    include Interface.Obc.Syn
    end)
   (ClightTypeFormats)
 

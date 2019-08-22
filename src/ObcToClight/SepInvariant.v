@@ -1853,7 +1853,7 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
                                            self (type_of_inst_p (c_name c))
-                                           (make_out_temps (instance_methods_temp prog f)
+                                           (make_out_temps (instance_methods_temp (rev prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars); eauto.
       assert (le_f ! self = Some (Vptr sb sofs))
@@ -1884,7 +1884,7 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists_noout (map translate_param f.(m_in))
                                            self (type_of_inst_p (c_name c))
-                                           ((a, cltype ta) :: make_out_temps (instance_methods_temp prog f)
+                                           ((a, cltype ta) :: make_out_temps (instance_methods_temp (rev prog) f)
                                                            ++ map translate_param (m_vars f))
                                            vs (Vptr sb sofs)) as (le_f & Bind & Vars);
         eauto; try eapply NotInMembers_cons; eauto.
@@ -1928,7 +1928,7 @@ Section FunctionEntry.
       edestruct
         (bind_parameter_temps_exists (map translate_param f.(m_in)) self (type_of_inst_p (c_name c))
                                      out (type_of_inst_p (prefix_fun (c_name c) (m_name f)))
-                                     (make_out_temps (instance_methods_temp prog f)
+                                     (make_out_temps (instance_methods_temp (rev prog) f)
                                                      ++ map translate_param f.(m_vars))
                                      vs (Vptr sb sofs) (var_ptr instb)) as (le_f & Bind & Vars); eauto.
       assert (le_f ! self = Some (Vptr sb sofs) /\ le_f ! out = Some (var_ptr instb)) as (?&?)
