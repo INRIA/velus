@@ -3,7 +3,7 @@ src/Clocks.v
 src/Environment.v
 src/Ident.v
 src/Operators.v
-src/Memory.v
+src/VelusMemory.v
 src/Streams.v
 
 src/Common/CommonList.v

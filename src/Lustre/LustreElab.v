@@ -15,7 +15,7 @@ Module Import Syn := Instantiator.L.Syn.
 (* Module Import Defs := Instantiator.NL.IsD. *)
 
 Import Interface.Op.
-Import Instantiator.OpAux.
+Import Interface.OpAux.
 Import Instantiator.L.Typ.
 Import Instantiator.L.Clo.
 
@@ -189,7 +189,7 @@ Section ElabExpressions.
   Variable env : Env.t (type * clock).
   Let tvars := idty (Env.elements env).
   Let cvars := idck (Env.elements env).
-  
+
   (* Preceding dataflow program. *)
   Variable G : global.
 

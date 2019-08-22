@@ -30,59 +30,59 @@ Section finite_traces.
     end.
 
   Lemma eventval_of_val_match:
-    forall v t, wt_val v t ->
-           eventval_match (globalenv p)
-                          (eventval_of_val v)
-                          (AST.type_of_chunk (type_chunk t)) v.
+    forall v t,
+      wt_val v t ->
+      eventval_match (globalenv p)
+                     (eventval_of_val v)
+                     (AST.type_of_chunk (type_chunk t)) v.
   Proof.
     destruct v; intros * Wt; inv Wt; simpl; try econstructor.
     destruct sz; try destruct sg; econstructor.
   Qed.
 
-  Definition load_event_of_val (v: val)(xt: ident * type): event
-    := Event_vload (type_chunk (snd xt))
-                   (glob_id (fst xt))
-                   Ptrofs.zero (eventval_of_val v).
+  Definition load_event_of_val (v: val) (xt: ident * type): event :=
+    Event_vload (type_chunk (snd xt))
+                (glob_id (fst xt))
+                Ptrofs.zero (eventval_of_val v).
 
-  Definition store_event_of_val (v: val)(xt: ident * type): event
-    := Event_vstore (type_chunk (snd xt))
-                    (glob_id (fst xt))
-                    Ptrofs.zero (eventval_of_val v).
+  Definition store_event_of_val (v: val) (xt: ident * type): event :=
+    Event_vstore (type_chunk (snd xt))
+                 (glob_id (fst xt))
+                 Ptrofs.zero (eventval_of_val v).
 
-  Definition mk_event (f: val -> ident * type -> event)
-             (vs: list val)(args: list (ident * type))
-    := map (fun vxt => f (fst vxt) (snd vxt)) (combine vs args).
+  Definition mk_events (f: val -> ident * type -> event) (vs: list val) (args: list (ident * type)) : trace :=
+    map (fun vxt => f (fst vxt) (snd vxt)) (combine vs args).
 
-  Definition load_events := mk_event load_event_of_val.
-  Definition store_events := mk_event store_event_of_val.
+  Definition load_events  : list val -> list (ident * type) -> trace := mk_events load_event_of_val.
+  Definition store_events : list val -> list (ident * type) -> trace := mk_events store_event_of_val.
 
-  Lemma mk_event_nil: forall f vs, mk_event f vs [] = [].
+  Lemma mk_events_nil: forall f vs, mk_events f vs [] = [].
   Proof. intros; destruct vs; simpl; auto. Qed.
 
-  Lemma mk_event_cons:
+  Lemma mk_events_cons:
     forall f v vs xt xts,
-      mk_event f (v :: vs) (xt :: xts) = f v xt :: mk_event f vs xts.
+      mk_events f (v :: vs) (xt :: xts) = f v xt :: mk_events f vs xts.
   Proof. auto. Qed.
 
   Corollary load_events_nil : forall vs, load_events vs [] = [].
-  Proof. apply mk_event_nil. Qed.
+  Proof. apply mk_events_nil. Qed.
 
   Corollary load_events_cons : forall v vs xt xts,
       load_events (v :: vs) (xt :: xts) = [load_event_of_val v xt] ++ load_events vs xts.
-  Proof. apply mk_event_cons. Qed.
+  Proof. apply mk_events_cons. Qed.
 
   Corollary store_events_nil : forall vs, store_events vs [] = [].
-  Proof. apply mk_event_nil. Qed.
+  Proof. apply mk_events_nil. Qed.
 
   Corollary store_events_cons : forall v vs xt xts,
       store_events (v :: vs) (xt :: xts) = [store_event_of_val v xt] ++ store_events vs xts.
-  Proof. apply mk_event_cons. Qed.
+  Proof. apply mk_events_cons. Qed.
 
 End finite_traces.
 
 Section infinite_traces.
 
-  Variable ins : stream (list val).
+  Variable ins  : stream (list val).
   Variable outs : stream (list val).
 
   Variable xs : list (ident * type).
@@ -91,7 +91,7 @@ Section infinite_traces.
   Hypothesis xs_spec: xs <> [].
   Hypothesis ys_spec: ys <> [].
 
-  Hypothesis Hwt_ins: forall n, wt_vals (ins n) xs.
+  Hypothesis Hwt_ins : forall n, wt_vals (ins n) xs.
   Hypothesis Hwt_outs: forall n, wt_vals (outs n) ys.
 
   Lemma load_events_not_E0: forall n,
@@ -123,9 +123,7 @@ Section infinite_traces.
 
   Lemma unfold_mk_trace: forall n,
       traceinf_of_traceinf' (mk_trace n) =
-      (load_events (ins n) xs
-                   ++ E0
-                   ++ store_events (outs n) ys)
+      (load_events (ins n) xs ** E0 ** store_events (outs n) ys)
         *** E0
         *** traceinf_of_traceinf' (mk_trace (S n)).
   Proof.
@@ -140,10 +138,10 @@ End infinite_traces.
 Section Obc.
   Variable (m_step: method) (ins outs: stream (list val)).
 
-  Hypothesis in_spec: m_step.(m_in) <> [].
+  Hypothesis in_spec : m_step.(m_in) <> [].
   Hypothesis out_spec: m_step.(m_out) <> [].
 
-  Hypothesis Hwt_ins: forall n, wt_vals (ins n) m_step.(m_in).
+  Hypothesis Hwt_ins : forall n, wt_vals (ins n) m_step.(m_in).
   Hypothesis Hwt_outs: forall n, wt_vals (outs n) m_step.(m_out).
 
   Definition trace_step (n: nat): traceinf' :=

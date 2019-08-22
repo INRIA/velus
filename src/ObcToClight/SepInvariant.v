@@ -14,7 +14,7 @@ From Velus Require Import Common.
 From Velus Require Import Common.CompCertLib.
 From Velus Require Import Ident.
 From Velus Require Import Environment.
-From Velus Require Import Memory.
+From Velus Require Import VelusMemory.
 
 From Coq Require Import List.
 Import List.ListNotations.

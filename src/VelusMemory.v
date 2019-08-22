@@ -7,7 +7,7 @@ Import List.ListNotations.
 
 Set Implicit Arguments.
 
-(** * Memory *)
+(** * VelusMemory *)
 
 (**
 
@@ -62,7 +62,7 @@ End Operations.
 
 (** ** Induction Scheme *)
 
-Section MemoryInd.
+Section VelusMemoryInd.
 
   Variable V: Type.
   Variable P: memory V -> Prop.
@@ -87,7 +87,7 @@ Section MemoryInd.
         * discriminate.
   Qed.
 
-End MemoryInd.
+End VelusMemoryInd.
 
 Inductive equal_memory {V: Type} : memory V -> memory V -> Prop :=
   equal_memory_intro:
@@ -99,7 +99,7 @@ Inductive equal_memory {V: Type} : memory V -> memory V -> Prop :=
 Infix "≋" := equal_memory (at level 70, no associativity).
 Infix "⌈≋⌉" := (orel equal_memory) (at level 70, no associativity).
 
-Section EqualMemory.
+Section EqualVelusMemory.
 
   Context {V: Type}.
 
@@ -161,7 +161,7 @@ Section EqualMemory.
     transitivity proved by equal_memory_trans
       as equal_memory_rel.
 
-End EqualMemory.
+End EqualVelusMemory.
 
 Existing Instance equal_memory_rel.
 Hint Immediate equal_memory_rel_Reflexive.

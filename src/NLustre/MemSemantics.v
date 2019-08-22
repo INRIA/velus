@@ -10,7 +10,7 @@ From Velus Require Import Common.
 From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import Memory.
+From Velus Require Import VelusMemory.
 From Velus Require Import CoreExpr.Stream.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
@@ -37,7 +37,7 @@ From Coq Require Import Logic.IndefiniteDescription.
 
 Set Implicit Arguments.
 
-(** * The NLustre+Memory semantics *)
+(** * The NLustre+VelusMemory semantics *)
 
 (**
 
@@ -425,7 +425,7 @@ enough: it does not support the internal fixpoint introduced by
     exact Hmsem.
   Qed.
 
-  (** *** Memory management *)
+  (** *** VelusMemory management *)
 
   Definition add_val_n (y: ident) (ms: stream val) (M: memories): memories :=
     fun n => add_val y (ms n) (M n).
