@@ -362,6 +362,12 @@ Module Type TRANSCRIPTION
     intro Htr. tonodeInv Htr. now simpl.
   Qed.
 
+  Lemma to_node_vars n n' :
+    to_node n = OK n' -> L.n_vars n = NL.n_vars n'.
+  Proof.
+    intro Htr. tonodeInv Htr. now simpl.
+  Qed.
+
   Lemma find_node_global (G: L.global) (P: NL.global) (f: ident) (n: L.node) :
     to_global G = OK P ->
     L.find_node f G = Some n ->

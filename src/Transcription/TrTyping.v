@@ -109,7 +109,7 @@ Module Type TRTYPING
     forall G vars e e',
       to_lexp e = OK e' ->
       LT.wt_exp G vars e ->
-      CET.wt_lexp vars e'.
+      CET.wt_exp vars e'.
   Proof.
     intros * Htr Hwt. revert dependent e'.
     induction e using L.exp_ind2; intros; try (now inv Htr); inv Hwt.
@@ -299,6 +299,8 @@ Module Type TRTYPING
       induction (L.typesof ets); simpl; auto. inv Hn. constructor; auto.
     - eapply Forall_map, Forall_impl_In; eauto. simpl. intros * ? Hn.
       unfold L.ckstream, stripname. now inv Hn.
+    - eapply Forall_map, Forall_impl_In; eauto. simpl. intros * ? Hn.
+      unfold L.ckstream, stripname. now inv Hn.
   Qed.
 
   Lemma wt_equation :
@@ -363,6 +365,7 @@ Module Type TRTYPING
         rewrite app_nil_r in *.
         erewrite 2 typeofc_cexp; eauto.
     - simpl_Foralls. take (LT.wt_exp _ _ _) and inv it.
+      2: cases; monadInv Htr.
       eapply find_node_global in Hg as (?&?&?); eauto.
       rewrite app_nil_r in Hf2.
       cases; monadInv Htr.
@@ -376,50 +379,50 @@ Module Type TRTYPING
         econstructor; eauto.
         ++ rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
            apply Forall2_forall. split.
-           2:{ apply Forall2_length in Hf2. apply Forall2_length in H5.
+           2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
                congruence. }
            intros * Hin.
            eapply Forall2_chain_In in Hin; eauto.
            now destruct Hin as (?&?& <-).
         ++ rewrite <- (to_node_in n); auto.
-           clear - H2 H4 EQ.
+           clear - H3 H5 EQ.
            remember (L.n_in n). clear Heql0. revert dependent l0.
            revert dependent x0.
            induction l; intros; inv EQ; auto.
-           inv H4; auto.
+           inv H5; auto.
            simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
-           rewrite H1 in H4. inv H4.
+           rewrite H1 in H5. inv H5.
            constructor; eauto.
         ++ apply wt_clock_l_ce, wc_find_base_clock.
-           clear - H2.
-           induction l; simpl; auto. inv H2. apply Forall_app.
+           take (Forall (LT.wt_exp _ _) _) and clear - it.
+           induction l; simpl; auto. inv it. apply Forall_app.
            eauto using wt_clockof.
-        ++ clear H4. revert dependent l. induction x0; intros; auto.
+        ++ clear H5. revert dependent l. induction x0; intros; auto.
            inv EQ. simpl_Foralls.
            constructor; eauto using wt_lexp.
       + apply mmap_inversion in EQ.
         econstructor; eauto.
         ++ rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
            apply Forall2_forall. split.
-           2:{ apply Forall2_length in Hf2. apply Forall2_length in H5.
+           2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
                congruence. }
            intros * Hin.
            eapply Forall2_chain_In in Hin; eauto.
            now destruct Hin as (?&?& <-).
         ++ rewrite <- (to_node_in n); auto.
-           clear - H2 H4 EQ.
+           clear - H3 H5 EQ.
            remember (L.n_in n). clear Heql0. revert dependent l0.
            revert dependent x0.
            induction l; intros; inv EQ; auto.
-           inv H4; auto.
+           inv H5; auto.
            simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
-           rewrite H1 in H4. inv H4.
+           rewrite H1 in H5. inv H5.
            constructor; eauto.
         ++ apply wt_clock_l_ce, wc_find_base_clock.
-           clear - H2.
-           induction l; simpl; auto. inv H2. apply Forall_app.
+           take (Forall (LT.wt_exp _ _) _) and clear - it.
+           induction l; simpl; auto. inv it. apply Forall_app.
            eauto using wt_clockof.
-        ++ clear H4. revert dependent l. induction x0; intros; auto.
+        ++ clear H5. revert dependent l. induction x0; intros; auto.
            inv EQ. simpl_Foralls.
            constructor; eauto using wt_lexp.
   Qed.
