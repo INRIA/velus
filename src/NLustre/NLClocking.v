@@ -45,17 +45,15 @@ Module Type NLCLOCKING
   | CEqApp:
       forall xs ck f les r n,
         find_node f G = Some n ->
-        (exists isub osub,
-            Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
+        (exists sub,
+            Forall2 (fun xtc le =>  LiftO True (Is_var le) (sub (fst xtc))
                                 /\ (exists lck, wc_exp vars le lck
-                                          /\ instck ck isub (dck xtc) = Some lck))
+                                          /\ instck ck sub (dck xtc) = Some lck))
                     n.(n_in) les
-            /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
+            /\ Forall2 (fun xtc x => sub (fst xtc) = Some x
                                  /\ (exists xck, In (x, xck) vars
-                                           /\ instck ck (orelse isub osub)
-                                                    (dck xtc) = Some xck))
-                      n.(n_out) xs
-            /\ (forall x, ~InMembers x n.(n_out) -> osub x = None)) ->
+                                           /\ instck ck sub (dck xtc) = Some xck))
+                      n.(n_out) xs) ->
         (forall y, r = Some y -> In (y, ck) vars) ->
         wc_equation G vars (EqApp xs ck f les r)
   | CEqFby:

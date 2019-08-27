@@ -23,6 +23,7 @@ Module Type CECLOCKING
     | r => r
     end.
 
+  (* TODO: replace [subvar_eq] with [LiftO True (Is_var _)] *)
   Definition subvar_eq (vo : option ident) (le : exp) : Prop :=
     match vo with
     | Some v => match le with
@@ -30,6 +31,12 @@ Module Type CECLOCKING
                | _ => False
                end
     | None => True
+    end.
+
+  Definition Is_var (e : exp) (v : ident) :=
+    match e with
+    | Evar x _ => v = x
+    | _ => False
     end.
 
   Section WellClocked.
