@@ -97,10 +97,10 @@ Module Type NLCLOCKING
     rewrite Heq, Hg; clear Heq Hg.
     split; intro WTeq.
     - inv WTeq; try rewrite Henv in *; eauto with nlclocking.
-      match goal with H: exists isub osub, _ |- _ =>
-        destruct H as (isub & osub & Hin & Hout & Hnos) end.
+      match goal with H: exists sub, _ |- _ =>
+        destruct H  as (sub & Hin & Hout) end.
       econstructor; eauto.
-      + exists isub, osub; repeat split; auto.
+      + exists sub; repeat split; auto.
         * apply Forall2_impl_In with (2:=Hin).
           destruct 3 as (lck & Hwc & Hi).
           rewrite Henv in *. eauto.
@@ -109,10 +109,10 @@ Module Type NLCLOCKING
           rewrite Henv in *. eauto.
       + now setoid_rewrite <-Henv.
     - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
-      match goal with H: exists isub osub, _ |- _ =>
-        destruct H as (isub & osub & Hin & Hout & Hnos) end.
+      match goal with H: exists sub, _ |- _ =>
+        destruct H as (sub & Hin & Hout) end.
       econstructor; eauto.
-      + exists isub, osub; repeat split; auto.
+      + exists sub; repeat split; auto.
         * apply Forall2_impl_In with (2:=Hin).
           destruct 3 as (lck & Hwc & Hi).
           rewrite <-Henv in *. eauto.
@@ -238,7 +238,7 @@ Module Type NLCLOCKING
           apply clock_parent_not_refl with (1:=Hck).
       - subst eq. rename x' into x. inv Hdef. inv Hhasck.
         match goal with H:List.In x xs |- _ => rename H into Hin end.
-        destruct HH as (isub & osub & Hisub & Hosub & Hnos).
+        destruct HH as (sub & Hisub & Hosub).
         destruct (Forall2_in_right _ _ _ _ Hosub Hin)
           as (o & Ho & (Hxeq & xck & Hxck & Hxi)).
         pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
