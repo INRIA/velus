@@ -151,7 +151,7 @@ Qed.
 (**      the sub-state, and we get an updated staterep after    **)
 (**      the call, with only one return value                   **)
 (**   n: 'out' pointer parameter, we need both staterep for     **)
-(**      the sub-state and blockrep for the output structure,   **)
+(**      the sub-state and fieldsrep for the output structure,   **)
 (**      we get an updated staterep and a the output structure  **)
 (**      filled with the return values                          **)
 (*****************************************************************)
@@ -182,7 +182,7 @@ Definition call_spec (prog: program) (ge: genv) (c: class) (f: method) (vs rvs: 
                 forall instb instco,
                   gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some instco ->
                   m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs)
-                       ** blockrep gcenv vempty instco.(co_members) instb
+                       ** fieldsrep gcenv vempty instco.(co_members) instb
                        ** P ->
                   exists ve_f m' fd,
                     method_spec c f prog fd
@@ -190,7 +190,7 @@ Definition call_spec (prog: program) (ge: genv) (c: class) (f: method) (vs rvs: 
                                    (Vptr sb sofs :: var_ptr instb :: vs) E0 m' Vundef
                     /\ Forall2 (fun xt v => Env.find (fst xt) ve_f = Some v) outs rvs
                     /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs)
-                            ** blockrep gcenv ve_f instco.(co_members) instb
+                            ** fieldsrep gcenv ve_f instco.(co_members) instb
                             ** P
              ).
 
@@ -298,17 +298,17 @@ Section PRESERVATION.
 
         Lemma evall_out_field:
           forall ve1 le1 m1 P1,
-            m1 |= match_out gcenv owner caller ve1 le1 outb_co ** P1 ->
+            m1 |= outputrep gcenv owner caller ve1 le1 outb_co ** P1 ->
             exists outb outco d,
               eval_lvalue tge e le1 m1 out_ind_field outb (Ptrofs.repr d)
               /\ outb_co = Some (outb, outco)
               /\ field_offset gcenv x (co_members outco) = Errors.OK d.
         Proof.
           clear Hmem; intros * Hmem.
-          apply match_out_notnil in Hmem as (outb & outco & E &?&?&?); auto.
+          apply outputrep_notnil in Hmem as (outb & outco & E &?&?&?); auto.
           apply in_map with (f:=translate_param) in Hin.
           erewrite output_match in Hin; eauto.
-          edestruct blockrep_field_offset as (d & Hoffset & ?); eauto.
+          edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
           exists outb, outco, d; split; auto.
           rewrite <- Ptrofs.add_zero_l.
           eapply eval_Efield_struct; eauto.
@@ -326,9 +326,9 @@ Section PRESERVATION.
           apply match_states_conj in Hmem as (Hmem &?); rewrite sep_swap in Hmem.
           edestruct evall_out_field as (?&?&?&?& E &?); eauto.
           eapply eval_Elvalue; eauto.
-          apply match_out_notnil in Hmem as (?&?& E' &?&?&?); auto.
+          apply outputrep_notnil in Hmem as (?&?& E' &?&?&?); auto.
           rewrite E in E'; inv E'.
-          eapply blockrep_deref_mem; eauto.
+          eapply fieldsrep_deref_mem; eauto.
           erewrite <-output_match; eauto.
           rewrite in_map_iff.
           exists (x, ty); split; auto.
@@ -344,7 +344,7 @@ Section PRESERVATION.
           Env.find x ve = Some v ->
           eval_expr tge e le m (Etempvar x (cltype ty)) v.
       Proof.
-        intros * Hvars E ?.
+        intros * Hvars E Find.
         apply match_states_conj in Hmem as (Hmem &?).
         rewrite sep_swap5 in Hmem.
         apply sep_proj1, sep_pure' in Hmem.
@@ -353,15 +353,15 @@ Section PRESERVATION.
         unfold meth_vars in Hvars.
         rewrite app_assoc in Hvars.
         eapply not_In2_app in E; eauto.
-        apply in_map with (f:=translate_param) in E.
+        apply in_map with (f:=fst) in E.
         eapply Forall_forall in Hmem; eauto.
-        simpl in Hmem.
-        destruct (le ! x);
-          [now app_match_find_var_det | contradiction].
+        unfold match_var in Hmem; simpl in Hmem.
+        cases; try contradiction.
+        rewrite Find in Hmem; simpl in Hmem; congruence.
       Qed.
 
       (** x *)
-      Lemma eval_var:
+      Corollary eval_var:
         forall x ty v,
           Env.find x ve = Some v ->
           In (x, ty) (meth_vars caller) ->
@@ -379,10 +379,9 @@ Section PRESERVATION.
             apply ident_eqb_eq in E; subst x.
             econstructor.
             apply match_states_conj in Hmem as (Hmem &?); rewrite sep_swap in Hmem.
-            rewrite match_out_singleton in Hmem; eauto.
-            unfold find_or_vundef in Hmem;
-              destruct Hmem as (? & Eq); destruct (Env.find i ve); contr;
-                rewrite Eq; auto.
+            rewrite outputrep_singleton in Hmem; eauto.
+            destruct Hmem as (? & Eq).
+            unfold match_var in Eq; cases; rewrite Hx in Eq; congruence.
           + simpl; simpl in E; rewrite E.
             assert (1 < length caller.(m_out))%nat by (rewrite Out; simpl; omega).
             eapply eval_out_field; eauto; rewrite Out; auto.
@@ -411,7 +410,6 @@ Section PRESERVATION.
           intros.
           pose proof (find_class_name _ _ _ _ Findowner); subst.
           edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto.
-          rewrite staterep_skip in Hmem; eauto.
           edestruct staterep_field_offset as (d & ? & ?); eauto.
           exists d; split; [|split]; auto.
           - eapply eval_Efield_struct; eauto.
@@ -433,7 +431,7 @@ Section PRESERVATION.
           edestruct evall_self_field as (?&?&?&?); eauto.
           apply match_states_conj in Hmem as (Hmem &?).
           eapply eval_Elvalue; eauto.
-          rewrite staterep_skip in Hmem; eauto.
+          erewrite find_class_name in Hmem; eauto.
           eapply staterep_deref_mem; eauto.
           rewrite Ptrofs.unsigned_repr; auto.
         Qed.
@@ -447,11 +445,10 @@ Section PRESERVATION.
               /\ field_offset gcenv o (make_members owner) = Errors.OK d
               /\ 0 <= Ptrofs.unsigned sofs + d <= Ptrofs.max_unsigned.
         Proof.
-          apply match_states_conj in Hmem as (Hmem &?&?&?&?).
+          apply match_states_conj in Hmem as (Hmem &?&?&?&?); clear Hmem.
           intros * Hin.
           pose proof (find_class_name _ _ _ _ Findowner); subst.
           edestruct make_members_co as (? & Hco & ? & Eq & ? & ?); eauto.
-          rewrite staterep_skip in Hmem; eauto.
           destruct (struct_in_bounds_sizeof _ _ _ Hco).
           edestruct wt_program_find_class as [[Find]]; eauto.
           eapply Forall_forall in Find; eauto; simpl in Find.
@@ -473,7 +470,7 @@ Section PRESERVATION.
 
       End SelfField.
 
-      Lemma expr_correct:
+      Theorem expr_correct:
         forall ex v,
           wt_exp owner.(c_mems) (meth_vars caller) ex ->
           exp_eval me ve ex (Some v) ->
@@ -549,7 +546,7 @@ Section PRESERVATION.
       (** x = ae : x can be a temp or an indirect access field (output variable) *)
       Lemma exec_assign:
         forall m1 le1 ve1 P1,
-          m1 |= match_out gcenv owner caller ve1 le1 outb_co
+          m1 |= outputrep gcenv owner caller ve1 le1 outb_co
                 ** varsrep caller ve1 le1
                 ** P1 ->
           eval_expr tge e le1 m1 ae v ->
@@ -557,7 +554,7 @@ Section PRESERVATION.
             exec_stmt_fe function_entry2 tge e le1 m1
                       (assign owner caller x (cltype ty) ae)
                       E0 le' m' Out_normal
-            /\ m' |= match_out gcenv owner caller (Env.add x v ve1) le' outb_co
+            /\ m' |= outputrep gcenv owner caller (Env.add x v ve1) le' outb_co
                      ** varsrep caller (Env.add x v ve1) le'
                      ** P1
             /\ forall v, le1 ! self = Some v -> le' ! self = Some v.
@@ -581,14 +578,14 @@ Section PRESERVATION.
           + inversion_clear Hin' as [Eq|Eq]; inv Eq.
             exists m1, (PTree.set x v le1); rewrite PTree.gso; intuition; unfold exec_stmt_fe; eauto using exec_stmt.
             eapply sep_imp; eauto.
-            * eapply match_out_assign_singleton_mem; eauto.
+            * eapply outputrep_assign_singleton_mem; eauto.
             * rewrite varsrep_add; eauto.
 
           (* several outputs: x is an indirect access out->x *)
           + assert (1 < Datatypes.length (m_out caller))%nat by (rewrite Houts; simpl; omega).
             assert (In (x, ty) caller.(m_out)) by now rewrite Houts.
             rewrite E.
-            edestruct match_out_assign_gt1_mem as (m' & ?&?&?& Hco & Hofs &?&?); eauto using output_match.
+            edestruct outputrep_assign_gt1_mem as (m' & ?&?&?& Hco & Hofs &?&?); eauto using output_match.
             exists m', le1; intuition; auto.
             * edestruct evall_out_field with (m1 := m1) as (?&?&?&?& Hco' & Hofs'); eauto.
               rewrite Hco in Hco'; inv Hco'. simpl in Hofs.
@@ -605,9 +602,8 @@ Section PRESERVATION.
           + unfold assign.
             destruct_list caller.(m_out) : Houts; try rewrite E;
               unfold exec_stmt_fe; eauto using exec_stmt.
-          + eapply sep_imp; eauto.
-            * eapply match_out_assign_var_mem; eauto using output_match.
-            * rewrite varsrep_add; eauto.
+          + rewrite varsrep_add in Hmem.
+            eapply outputrep_assign_var_mem; eauto using output_match.
       Qed.
 
       Corollary exec_assign_match_states:
@@ -663,7 +659,7 @@ Section PRESERVATION.
       Lemma eval_inst_field:
         forall x ty v le2 m1 P1,
           let inst_field := Efield (Evar o (type_of_inst (prefix_fun cid fid))) x (cltype ty) in
-          m1 |= blockrep gcenv ve_callee (co_members instco) instb ** P1 ->
+          m1 |= fieldsrep gcenv ve_callee (co_members instco) instb ** P1 ->
           In (x, ty) callee.(m_out) ->
           Env.find x ve_callee = Some v ->
           eval_expr tge e le2 m1 inst_field v.
@@ -671,13 +667,13 @@ Section PRESERVATION.
         clear Hmem Findcaller Findowner; intros * Hmem Hin ?.
         apply in_map with (f:=translate_param) in Hin.
         erewrite output_match in Hin; eauto.
-        - edestruct blockrep_field_offset as (d & Hoffset & ?); eauto.
+        - edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
           eapply eval_Elvalue; eauto.
           + eapply eval_Efield_struct; eauto.
             * eapply eval_Elvalue; eauto.
               now apply deref_loc_copy.
             * simpl; unfold type_of_inst; eauto.
-          + eapply blockrep_deref_mem; eauto.
+          + eapply fieldsrep_deref_mem; eauto.
             rewrite Ptrofs.unsigned_zero, Ptrofs.unsigned_repr; auto.
         - erewrite find_class_name, find_method_name; eauto.
       Qed.
@@ -696,8 +692,8 @@ Section PRESERVATION.
         (** frame *)
         (P1 : massert).
 
-      Hypothesis (Hmem1 : m1 |= blockrep gcenv ve_callee (co_members instco) instb
-                                ** match_out gcenv owner caller ve le outb_co
+      Hypothesis (Hmem1 : m1 |= fieldsrep gcenv ve_callee (co_members instco) instb
+                                ** outputrep gcenv owner caller ve le outb_co
                                 ** varsrep caller ve le
                                 ** P1).
 
@@ -712,10 +708,10 @@ Section PRESERVATION.
             exec_stmt_fe function_entry2 tge e le m1
                       (funcall_assign owner caller xs o tyo outs)
                       E0 le' m' Out_normal
-            /\ m' |= blockrep gcenv ve_callee (co_members instco) instb
-                 ** match_out gcenv owner caller (Env.adds xs vs ve) le' outb_co
-                 ** varsrep caller (Env.adds xs vs ve) le'
-                 ** P1
+            /\ m' |= fieldsrep gcenv ve_callee (co_members instco) instb
+                    ** outputrep gcenv owner caller (Env.adds xs vs ve) le' outb_co
+                    ** varsrep caller (Env.adds xs vs ve) le'
+                    ** P1
             /\ forall v, le ! self = Some v -> le' ! self = Some v.
       Proof.
         clear Hmem.
@@ -748,10 +744,10 @@ Section PRESERVATION.
             exec_stmt_fe function_entry2 tge e le m1
                       (funcall_assign owner caller xs o tyo callee.(m_out))
                       E0 le' m' Out_normal
-            /\ m' |= blockrep gcenv ve_callee (co_members instco) instb
-                 ** match_out gcenv owner caller (Env.adds xs vs ve) le' outb_co
-                 ** varsrep caller (Env.adds xs vs ve) le'
-                 ** P1
+            /\ m' |= fieldsrep gcenv ve_callee (co_members instco) instb
+                    ** outputrep gcenv owner caller (Env.adds xs vs ve) le' outb_co
+                    ** varsrep caller (Env.adds xs vs ve) le'
+                    ** P1
             /\ forall v, le ! self = Some v -> le' ! self = Some v.
       Proof.
         intros; eapply exec_funcall_assign_outs; eauto.
@@ -919,7 +915,7 @@ Section PRESERVATION.
           as (m'' & le' & ? & Hmem'' & Hself);
           eauto using eval_expr, PTree.gss.
         { eapply sep_imp; eauto.
-          - apply match_out_add_prefix.
+          - apply outputrep_add_prefix.
           - repeat apply sep_imp'; auto.
             apply varsrep_add'''.
             intro; eapply (m_notprefixed (prefix fid a)); auto using prefixed.
@@ -1005,7 +1001,7 @@ Section PRESERVATION.
           rewrite sep_swap56, sep_swap45, sep_swap34, sep_swap23,
           sep_swap78, sep_swap67, sep_swap56, sep_swap45, sep_swap34,
           sep_swap45.
-          eapply sep_imp; eauto using blockrep_any_empty.
+          eapply sep_imp; eauto using fieldsrep_any_empty.
           repeat apply sep_imp'; eauto.
           * unfold instance_match; rewrite find_inst_gss.
             rewrite Ptrofs.unsigned_repr; auto.
@@ -1251,12 +1247,13 @@ Section PRESERVATION.
       (* one output *)
       + (* get the return value *)
         rewrite sep_swap in Hm''.
-        rewrite match_out_singleton in Hm''; eauto.
+        rewrite outputrep_singleton in Hm''; eauto.
         rewrite Forall2_map_1, Forall2_map_2 in Hrvos.
         inversion Hrvos as [|? rv ?? Hrv Hrvos']; inv Hrvos'.
         inv WTrvs.
-        unfold find_or_vundef in Hm''; simpl in Hrv; rewrite Hrv in Hm''.
-        destruct Hm'' as (Hm'' &?).
+        unfold match_var in Hm''; simpl in Hrv; rewrite Hrv in Hm''.
+        destruct Hm'' as (Hm'' & Eq).
+        cases_eqn E; inv Eq.
 
         exists m'', fd, rv; intuition; eauto.
         * econstructor; eauto.
@@ -1282,7 +1279,7 @@ Section PRESERVATION.
         * erewrite find_class_name in Hm''; eauto.
           rewrite sep_swap in Hm''.
           assert (1 < Datatypes.length (m_out fm))%nat by (rewrite Hout; simpl; omega).
-          apply match_out_notnil in Hm'' as (?&?& E & Hm'' &?); auto; inv E.
+          apply outputrep_notnil in Hm'' as (?&?& E & Hm'' &?); auto; inv E.
           rewrite sep_swap, <-sep_assoc in Hm''.
           apply sep_drop2 in Hm''.
           now rewrite sep_assoc in Hm''.
@@ -1389,7 +1386,7 @@ Section PRESERVATION.
                           (PTree.set out_step (step_b, t_out_step) empty_env) le_main m1
           /\ gcenv ! (prefix_fun main_node step) = Some step_co
           /\ m1 |= staterep gcenv prog main_node mempty sb Z0
-                  ** blockrep gcenv vempty step_co.(co_members) step_b
+                  ** fieldsrep gcenv vempty step_co.(co_members) step_b
       else function_entry2 tge main_f [] m0 empty_env le_main m0.
   Proof.
     intros * Hmem.
@@ -1508,7 +1505,7 @@ Section PRESERVATION.
         gcenv ! (prefix_fun main_node step) = Some step_co ->
         e ! out_step = Some (step_b, t_out_step) ->
         Forall2 (fun xt v => Env.find (fst xt) ve = Some v) outs rvs ->
-        m |= blockrep gcenv ve (co_members step_co) step_b ->
+        m |= fieldsrep gcenv ve (co_members step_co) step_b ->
         exec_stmt_fe function_entry2 tge e le m
                   (write_multiple_outs main_node outs)
                   (store_events rvs outs)
@@ -1564,7 +1561,7 @@ Section PRESERVATION.
                     gcenv ! (prefix_fun main_node step) = Some step_co
                     /\ e ! out_step = Some (step_b, t_out_step)
                     /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) outs rvs
-                    /\ m |= blockrep gcenv ve (co_members step_co) step_b) ->
+                    /\ m |= fieldsrep gcenv ve (co_members step_co) step_b) ->
       exec_stmt_fe function_entry2 tge e le m
                 (write_out main_node main_step.(m_out))
                 (store_events rvs main_step.(m_out))
@@ -1658,7 +1655,7 @@ Section PRESERVATION.
                           /\ gcenv ! (prefix_fun main_node step) = Some step_co
                         /\ e ! out_step = Some (step_b, t_out_step)
                         /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) ys (outs n)
-                        /\ m' |= blockrep gcenv ve (co_members step_co) step_b) ->
+                        /\ m' |= fieldsrep gcenv ve (co_members step_co) step_b) ->
           out_step_env e ->
           dostep e (S n) m' ->
           dostep e n m.
@@ -1689,7 +1686,7 @@ Section PRESERVATION.
                           /\ gcenv ! (prefix_fun main_node step) = Some step_co
                           /\ e ! out_step = Some (step_b, t_out_step)
                           /\ Forall2 (fun xt v => Env.find (fst xt) ve = Some v) ys (outs n)
-                          /\ m' |= blockrep gcenv ve (co_members step_co) step_b)
+                          /\ m' |= fieldsrep gcenv ve (co_members step_co) step_b)
             /\ R (S n) m'.
 
       Lemma dostep_coind:
@@ -1870,7 +1867,7 @@ Section PRESERVATION.
                                   gcenv ! (prefix_fun main_node step) = Some step_co
                                   /\ e ! out_step = Some (step_b, t_out_step)
                                   /\ m_main |= staterep gcenv prog main_node mempty sb Z0
-                                           ** blockrep gcenv vempty step_co.(co_members) step_b
+                                           ** fieldsrep gcenv vempty step_co.(co_members) step_b
                               else m_main |= staterep gcenv prog main_node mempty sb Z0).
 
       Lemma reset_no_output:
@@ -1930,7 +1927,7 @@ Section PRESERVATION.
                                         /\ gcenv ! (prefix_fun main_node step) = Some step_co
                                         /\ e ! out_step = Some (step_b, t_out_step)
                                         /\ m |= staterep gcenv prog main_node me sb 0
-                                            ** blockrep gcenv vempty (co_members step_co) step_b)).
+                                            ** fieldsrep gcenv vempty (co_members step_co) step_b)).
 
         assert (dostepCase R e).
         { unfold R; unfold dostepCase, case_out.
@@ -1967,7 +1964,7 @@ Section PRESERVATION.
             + exists me_Sn, step_b', step_co'; intuition.
               rewrite <-sepemp_right, Ptrofs.unsigned_zero in Hm_Sn.
               eapply sep_imp; eauto.
-              apply blockrep_any_empty.
+              apply fieldsrep_any_empty.
         }
 
         cases;

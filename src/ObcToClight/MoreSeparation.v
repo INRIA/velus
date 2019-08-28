@@ -723,18 +723,13 @@ Proof.
   - inversion 1.
 Qed.
 
-Program Definition sepfalse: massert :=
-  {| m_pred := fun m => False;
-     m_footprint := fun b ofs => True |}.
-Next Obligation.
-  contradiction.
-Defined.
+Definition sepfalse := pure False.
 
 Lemma decidable_footprint_sepfalse:
   decidable_footprint sepfalse.
 Proof.
   unfold decidable_footprint. simpl.
-  intros; apply Decidable.dec_True.
+  intros; apply Decidable.dec_False.
 Qed.
 
 Lemma footprint_perm_sepfalse:
