@@ -140,88 +140,6 @@ Proof.
     + apply M.add_1; auto.
 Qed.
 
-
-(*****************************************************************)
-(** the expected execution and memory state after a funcall,    **)
-(** depending on the numbers of outputs:                        **)
-(**   0: no 'out' pointer parameter, we only need staterep for  **)
-(**      the sub-state, and we get an updated staterep after    **)
-(**      the call, with no return value                         **)
-(**   1: no 'out' pointer parameter, we only need staterep for  **)
-(**      the sub-state, and we get an updated staterep after    **)
-(**      the call, with only one return value                   **)
-(**   n: 'out' pointer parameter, we need both staterep for     **)
-(**      the sub-state and fieldsrep for the output structure,   **)
-(**      we get an updated staterep and a the output structure  **)
-(**      filled with the return values                          **)
-(*****************************************************************)
-
-Definition call_spec (prog: program) (ge: genv) (c: class) (f: method) (vs rvs: list val) (me me': menv) : Prop :=
-  forall sb sofs m P,
-    let gcenv := Clight.genv_cenv ge in
-    bounded_struct_of_class ge c sofs ->
-    case_out f
-             (
-               m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs) ** P ->
-               exists m' fd,
-                 method_spec c f prog fd
-                 /\ eval_funcall_fe function_entry2 ge m (Internal fd)
-                                (Vptr sb sofs :: vs) E0 m' Vundef
-                 /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs) ** P
-             )
-             (fun _ _ =>
-                m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs) ** P ->
-                exists m' fd rv,
-                  method_spec c f prog fd
-                  /\ eval_funcall_fe function_entry2 ge m (Internal fd)
-                                 (Vptr sb sofs :: vs) E0 m' rv
-                  /\ rvs = [rv]
-                  /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs) ** P
-             )
-             (fun outs =>
-                forall instb instco,
-                  gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some instco ->
-                  m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs)
-                       ** fieldsrep gcenv vempty instco.(co_members) instb
-                       ** P ->
-                  exists ve_f m' fd,
-                    method_spec c f prog fd
-                    /\ eval_funcall_fe function_entry2 ge m (Internal fd)
-                                   (Vptr sb sofs :: var_ptr instb :: vs) E0 m' Vundef
-                    /\ Forall2 (fun xt v => Env.find (fst xt) ve_f = Some v) outs rvs
-                    /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs)
-                            ** fieldsrep gcenv ve_f instco.(co_members) instb
-                            ** P
-             ).
-
-Lemma call_spec_chained:
-  forall prog ge prog' cid c fid f vs rvs me me' ownerid owner prog'',
-    wt_program prog ->
-    find_class ownerid prog = Some (owner, prog') ->
-    find_class cid prog' = Some (c, prog'') ->
-    find_method fid (c_methods c) = Some f ->
-    call_spec prog ge c f vs rvs me me' ->
-    call_spec prog' ge c f vs rvs me me'.
-Proof.
-  unfold call_spec, case_out.
-  intros * WT Findowner Findcl Findmth Spec * ?.
-  erewrite find_class_name in Spec; eauto.
-  erewrite find_class_name; eauto.
-  destruct_list (m_out f) as (?,?) (?,?) ?; [intros * Hmem|intros * Hmem|intros * ? Hmem];
-    setoid_rewrite staterep_chained in Hmem; eauto;
-      eapply Spec in Hmem; eauto;
-        setoid_rewrite staterep_chained; eauto.
-  - destruct Hmem as (m' & fd & ? & ? & ?).
-    exists m', fd; intuition.
-    eapply method_spec_find_class; eauto.
-  - destruct Hmem as (m' & fd & rv & ? & ? & ?).
-    exists m', fd, rv; intuition.
-    eapply method_spec_find_class; eauto.
-  - destruct Hmem as (ve_f & m' & fd & ? & ? & ?).
-    exists ve_f, m', fd; intuition.
-    eapply method_spec_find_class; eauto.
-Qed.
-
 Section PRESERVATION.
 
   (*****************************************************************)
@@ -307,6 +225,7 @@ Section PRESERVATION.
           clear Hmem; intros * Hmem.
           apply outputrep_notnil in Hmem as (outb & outco & E &?&?&?); auto.
           apply in_map with (f:=translate_param) in Hin.
+          subst out_ind_field; erewrite find_class_name, find_method_name in *; eauto.
           erewrite output_match in Hin; eauto.
           edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
           exists outb, outco, d; split; auto.
@@ -327,6 +246,7 @@ Section PRESERVATION.
           edestruct evall_out_field as (?&?&?&?& E &?); eauto.
           eapply eval_Elvalue; eauto.
           apply outputrep_notnil in Hmem as (?&?& E' &?&?&?); auto.
+          erewrite find_class_name, find_method_name in *; eauto.
           rewrite E in E'; inv E'.
           eapply fieldsrep_deref_mem; eauto.
           erewrite <-output_match; eauto.
@@ -667,15 +587,14 @@ Section PRESERVATION.
         clear Hmem Findcaller Findowner; intros * Hmem Hin ?.
         apply in_map with (f:=translate_param) in Hin.
         erewrite output_match in Hin; eauto.
-        - edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
-          eapply eval_Elvalue; eauto.
-          + eapply eval_Efield_struct; eauto.
-            * eapply eval_Elvalue; eauto.
-              now apply deref_loc_copy.
-            * simpl; unfold type_of_inst; eauto.
-          + eapply fieldsrep_deref_mem; eauto.
-            rewrite Ptrofs.unsigned_zero, Ptrofs.unsigned_repr; auto.
-        - erewrite find_class_name, find_method_name; eauto.
+        edestruct fieldsrep_field_offset as (d & Hoffset & ?); eauto.
+        eapply eval_Elvalue; eauto.
+        - eapply eval_Efield_struct; eauto.
+          + eapply eval_Elvalue; eauto.
+            now apply deref_loc_copy.
+          + simpl; unfold type_of_inst; eauto.
+        - eapply fieldsrep_deref_mem; eauto.
+          rewrite Ptrofs.unsigned_zero, Ptrofs.unsigned_repr; auto.
       Qed.
 
 
@@ -756,6 +675,57 @@ Section PRESERVATION.
 
     End FuncallAssignCorrectness.
 
+    (*****************************************************************)
+    (** the expected execution and memory state after a funcall,    **)
+    (** depending on the numbers of outputs:                        **)
+    (**   0: no 'out' pointer parameter, we only need staterep for  **)
+    (**      the sub-state, and we get an updated staterep after    **)
+    (**      the call, with no return value                         **)
+    (**   1: no 'out' pointer parameter, we only need staterep for  **)
+    (**      the sub-state, and we get an updated staterep after    **)
+    (**      the call, with only one return value                   **)
+    (**   n: 'out' pointer parameter, we need both staterep for     **)
+    (**      the sub-state and fieldsrep for the output structure,  **)
+    (**      we get an updated staterep and a the output structure  **)
+    (**      filled with the return values                          **)
+    (*****************************************************************)
+
+    Definition call_spec (c: class) (f: method) (vs rvs: list val) (me me': menv) : Prop :=
+      forall sb sofs m P,
+        bounded_struct_of_class tge c sofs ->
+        case_out f
+                 (
+                   m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs) ** P ->
+                   exists m' fd,
+                     method_spec c f prog fd
+                     /\ eval_funcall_fe function_entry2 tge m (Internal fd)
+                                       (Vptr sb sofs :: vs) E0 m' Vundef
+                     /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs) ** P
+                 )
+                 (fun _ _ =>
+                    m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs) ** P ->
+                    exists m' fd rv,
+                      method_spec c f prog fd
+                      /\ eval_funcall_fe function_entry2 tge m (Internal fd)
+                                        (Vptr sb sofs :: vs) E0 m' rv
+                      /\ rvs = [rv]
+                      /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs) ** P
+                 )
+                 (fun outs =>
+                    forall instb instco,
+                      gcenv ! (prefix_fun c.(c_name) f.(m_name)) = Some instco ->
+                      m |= staterep gcenv prog c.(c_name) me sb (Ptrofs.unsigned sofs)
+                           ** fieldsrep gcenv vempty instco.(co_members) instb
+                           ** P ->
+                      exists ve_f m' fd,
+                        method_spec c f prog fd
+                        /\ eval_funcall_fe function_entry2 tge m (Internal fd)
+                                          (Vptr sb sofs :: var_ptr instb :: vs) E0 m' Vundef
+                        /\ Forall2 (fun xt v => Env.find (fst xt) ve_f = Some v) outs rvs
+                        /\ m' |= staterep gcenv prog c.(c_name) me' sb (Ptrofs.unsigned sofs)
+                                ** fieldsrep gcenv ve_f instco.(co_members) instb
+                                ** P
+                 ).
 
     (*****************************************************************)
     (** 'Hoare triple' for funcalls, assuming call_spec for the     **)
@@ -766,7 +736,7 @@ Section PRESERVATION.
       forall ys o es me_o' vs rvs cid c prog'' fid callee,
         find_class cid prog' = Some (c, prog'') ->
         find_method fid c.(c_methods) = Some callee ->
-        call_spec prog' tge c callee vs rvs (instance_match o me) me_o' ->
+        call_spec c callee vs rvs (instance_match o me) me_o' ->
         Forall2 (fun y xt => In (y, snd xt) (meth_vars caller)) ys callee.(m_out) ->
         wt_vals rvs callee.(m_out) ->
         ((1 < Datatypes.length callee.(m_out))%nat -> M.MapsTo (o, fid) cid (instance_methods caller)) ->
@@ -877,7 +847,6 @@ Section PRESERVATION.
         edestruct CallSpec as (m' & ? & Spec_f' & EvalF & Hmem'); eauto.
         clear Hmem.
         erewrite find_class_name in Hmem'; eauto.
-        rewrite method_spec_find_class in Spec_f'; eauto.
         eapply method_spec_eq with (2 := Spec_f) in Spec_f'; eauto; subst.
         rewrite <- (Ptrofs.unsigned_repr d), <- Ptrofs.add_unsigned in EvalF; eauto.
 
@@ -902,7 +871,6 @@ Section PRESERVATION.
         clear Hmem.
         erewrite find_class_name in Hmem'; eauto.
         inv Erv.
-        rewrite method_spec_find_class in Spec_f'; eauto.
         eapply method_spec_eq with (2 := Spec_f) in Spec_f'; eauto; subst.
         rewrite <- (Ptrofs.unsigned_repr d), <- Ptrofs.add_unsigned in EvalF; eauto.
 
@@ -971,7 +939,6 @@ Section PRESERVATION.
         edestruct CallSpec as (ve_f & m' & ? & Spec_f' & EvalF & ? & Hmem'); eauto.
         erewrite find_class_name in Hmem'; eauto.
         clear Hmem.
-        rewrite method_spec_find_class in Spec_f'; eauto.
         eapply method_spec_eq with (2 := Spec_f) in Spec_f'; eauto; subst.
         rewrite <- (Ptrofs.unsigned_repr d), <- Ptrofs.add_unsigned in EvalF; eauto.
 
@@ -1051,7 +1018,7 @@ Section PRESERVATION.
         find_method fid c.(c_methods) = Some f ->
         wt_vals vs f.(m_in) ->
         wt_mem me prog c ->
-        call_spec prog tge c f vs rvs me me').
+        call_spec c f vs rvs me me').
   Proof.
     (* get the result in mutual induction form using a cut *)
     cut ((forall p me ve s (me_ve': menv * venv),
@@ -1080,7 +1047,7 @@ Section PRESERVATION.
                wt_mem me prog' c ->
                vos = map Some vs ->
                rvos = map Some rvs ->
-               call_spec prog tge c f vs rvs me me')).
+               call_spec c f vs rvs me me')).
     { intros (Hstmt & Hcall); split; eauto.
       intros * ???? Occurs ?.
       eapply (Hstmt p me ve s (me', ve')); eauto.
@@ -1142,7 +1109,7 @@ Section PRESERVATION.
       inversion_clear Ev as [??????????? Findcl' Findmth' ?? Hrvs].
       rewrite Findcl in Findcl'; inv Findcl'; rewrite Findmth in Findmth'; inv Findmth'.
       rewrite Forall2_map_1, Forall2_map_2 in Hrvs.
-      eapply exec_binded_funcall; eauto using exprs_correct, call_spec_chained.
+      eapply exec_binded_funcall; eauto using exprs_correct.
       + intro; eapply occurs_in_instance_methods; eauto.
         * eapply wt_class_find_method; eauto.
           eapply wt_program_find_class; eauto.
@@ -1310,7 +1277,7 @@ Section PRESERVATION.
       find_method fid c.(c_methods) = Some f ->
       wt_vals vs f.(m_in) ->
       wt_mem me prog' c ->
-      call_spec prog tge c f vs rvs me me'.
+      call_spec c f vs rvs me me'.
   Proof.
     intros; eapply mutual_correctness; eauto.
   Qed.
@@ -1351,7 +1318,7 @@ Section PRESERVATION.
   Lemma reset_correct:
     forall me0,
       stmt_call_eval prog mempty main_node reset [] me0 [] ->
-      call_spec prog tge c_main main_reset [] [] mempty me0.
+      call_spec c_main main_reset [] [] mempty me0.
   Proof.
     intros * Sem; eapply stmt_call_correctness; eauto.
     inversion_clear Sem as [??????????? Findcl Findmth Len].
@@ -1366,7 +1333,7 @@ Section PRESERVATION.
       stmt_call_eval prog me main_node step (map Some vs) me' (map Some rvs) ->
       wt_vals vs (m_in main_step) ->
       wt_mem me prog_main c_main ->
-      call_spec prog tge c_main main_step vs rvs me me'.
+      call_spec c_main main_step vs rvs me me'.
   Proof.
     intros * Sem; eapply stmt_call_correctness; eauto.
   Qed.

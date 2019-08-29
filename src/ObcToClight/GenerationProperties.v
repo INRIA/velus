@@ -1092,7 +1092,7 @@ Section TranslateOk.
 
         Lemma global_out_struct:
           exists co,
-            gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some co
+            gcenv ! (prefix_fun ownerid callerid) = Some co
             /\ co.(co_su) = Struct
             /\ co.(co_members) = map translate_param caller.(m_out)
             /\ co.(co_attr) = noattr
@@ -1102,7 +1102,7 @@ Section TranslateOk.
           inv_trans TRANSL with structs funs E.
           apply build_check_size_env_ok in TRANSL; destruct TRANSL as [? SIZE].
           assert (In (Composite
-                        (prefix_fun (c_name owner) (m_name caller))
+                        (prefix_fun ownerid callerid)
                         Struct
                         (map translate_param caller.(m_out))
                         noattr) (concat structs)).
@@ -1110,9 +1110,11 @@ Section TranslateOk.
             apply split_map in E.
             destruct E as [Structs].
             unfold make_out in Structs.
+            pose proof Findcl.
             apply find_class_In, in_rev in Findcl.
             apply in_map with (f:=fun c => make_struct c :: filter_out (map (translate_out c) (c_methods c)))
               in Findcl.
+            pose proof Findmth.
             apply find_method_In in Findmth.
             assert (In (translate_out owner caller) (filter_out (map (translate_out owner) (c_methods owner))))
               as Hin.
@@ -1124,7 +1126,7 @@ Section TranslateOk.
                 + apply lt_n_0.
                 + apply lt_irrefl.
             }
-            unfold translate_out at 1 in Hin.
+            unfold translate_out at 1 in Hin; erewrite find_class_name, find_method_name in Hin; eauto.
             eapply in_concat_cons; eauto.
             rewrite Structs; eauto.
           }
@@ -1140,7 +1142,7 @@ Section TranslateOk.
 
         Remark output_match:
           forall outco,
-            gcenv ! (prefix_fun (c_name owner) (m_name caller)) = Some outco ->
+            gcenv ! (prefix_fun ownerid callerid) = Some outco ->
             map translate_param caller.(m_out) = outco.(co_members).
         Proof.
           intros * Houtco.
