@@ -49,11 +49,6 @@ Module Type TRTYPING
       | H: Forall2 _ _ [] |- _ => inv H
       end.
 
-  Definition envs_eq (env : Env.t (type * clock))
-             (tenv : list (ident * type)) :=
-    forall (x : ident) (ty : type),
-      In (x,ty) tenv <-> exists ck, Env.find x env = Some (ty,ck).
-
   Lemma wt_clock_l_ce :
     forall vars ck,
       LT.wt_clock vars ck -> CET.wt_clock vars ck.
@@ -258,7 +253,7 @@ Module Type TRTYPING
       eapply Exists_exists; eauto using free_suffix_of_clock.
   Qed.
 
-  Lemma wc_find_base_clock :
+  Lemma wt_find_base_clock :
     forall vars lck,
     Forall (LT.wt_clock vars) lck ->
     LT.wt_clock vars (find_base_clock lck).
@@ -393,7 +388,7 @@ Module Type TRTYPING
            simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
            rewrite H1 in H5. inv H5.
            constructor; eauto.
-        ++ apply wt_clock_l_ce, wc_find_base_clock.
+        ++ apply wt_clock_l_ce, wt_find_base_clock.
            take (Forall (LT.wt_exp _ _) _) and clear - it.
            induction l; simpl; auto. inv it. apply Forall_app.
            eauto using wt_clockof.
@@ -418,7 +413,7 @@ Module Type TRTYPING
            simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
            rewrite H1 in H5. inv H5.
            constructor; eauto.
-        ++ apply wt_clock_l_ce, wc_find_base_clock.
+        ++ apply wt_clock_l_ce, wt_find_base_clock.
            take (Forall (LT.wt_exp _ _) _) and clear - it.
            induction l; simpl; auto. inv it. apply Forall_app.
            eauto using wt_clockof.
