@@ -15,7 +15,7 @@ Module Type CECLOCKING
        (Import Op   : OPERATORS)
        (Import Syn  : CESYNTAX Op).
 
-  (* TODO: move to Common *)
+  (* TODO: move to Common, or update NLClockingSemantics and remove it *)
   Definition orelse {A B: Type}
              (f: A -> option B) (g: A -> option B) (x: A) : option B :=
     match f x with
@@ -23,21 +23,11 @@ Module Type CECLOCKING
     | r => r
     end.
 
-  (* TODO: replace [subvar_eq] with [LiftO True (Is_var _)] *)
-  Definition subvar_eq (vo : option ident) (le : exp) : Prop :=
-    match vo with
-    | Some v => match le with
-               | Evar x _ => v = x
-               | _ => False
-               end
-    | None => True
-    end.
-
-  Definition Is_var (e : exp) (v : ident) :=
-    match e with
-    | Evar x _ => v = x
-    | _ => False
-    end.
+  Inductive SameVar : option ident -> exp -> Prop :=
+  | SVNone: forall e,
+      SameVar None e
+  | SVSome: forall x ty,
+      SameVar (Some x) (Evar x ty).
 
   Section WellClocked.
 

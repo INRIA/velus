@@ -55,7 +55,7 @@ Module Type STCCLOCKING
       forall i xs ck rst f es s P',
           find_system f P = Some (s, P') ->
           (exists isub osub,
-              Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
+              Forall2 (fun xtc le => SameVar (isub (fst xtc)) le
                                   /\ (exists lck, wc_exp vars le lck
                                             /\ instck ck isub (dck xtc) = Some lck))
                       s.(s_in) es

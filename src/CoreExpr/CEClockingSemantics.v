@@ -221,7 +221,7 @@ Module Type CECLOCKINGSEMANTICS
            (xout : list (ident * (type * clock)))
            R R' les ys isub osub base lss yss,
       NoDupMembers (xin ++ xout) ->
-      Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
+      Forall2 (fun xtc le => SameVar (isub (fst xtc)) le) xin les ->
       Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
       (forall x, ~InMembers x xout -> osub x = None) ->
       sem_vars_instant R' (map fst xin) lss ->
@@ -252,10 +252,8 @@ Module Type CECLOCKINGSEMANTICS
         as (le & Hle & (ls & Hlsin & Hxls & Hlels) & Hsveq); eauto.
       simpl in *.
       unfold orelse in Hsub.
-      unfold subvar_eq in Hsveq.
       destruct (isub x); [|congruence].
-      inv Hsub. destruct le; try contradiction.
-      simpl in Hsveq. subst.
+      inv Hsub. inv Hsveq.
       inversion_clear Hlels.
       apply sem_var_instant_det with (1:=Hxv) in Hxls.
       now rewrite Hxls in *.
@@ -281,7 +279,7 @@ Module Type CECLOCKINGSEMANTICS
            (xout : list (ident * (type * clock)))
            H H' les ys isub osub bk lss yss,
       NoDupMembers (xin ++ xout) ->
-      Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
+      Forall2 (fun xtc le => SameVar (isub (fst xtc)) le) xin les ->
       Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
       (forall x, ~InMembers x xout -> osub x = None) ->
       sem_vars H' (map fst xin) lss ->
@@ -303,7 +301,7 @@ Module Type CECLOCKINGSEMANTICS
            (xout : list (ident * (type * clock)))
            H H' les ys isub osub (bk: stream bool) lss yss,
       NoDupMembers (xin ++ xout) ->
-      Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
+      Forall2 (fun xtc le => SameVar (isub (fst xtc)) le) xin les ->
       Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
       (forall x, ~InMembers x xout -> osub x = None) ->
       sem_vars_instant (H' n) (map fst xin) (lss n) ->
@@ -335,10 +333,8 @@ Module Type CECLOCKINGSEMANTICS
         as (le & Hle & (ls & Hlsin & Hxls & Hlels) & Hsveq); eauto.
       simpl in *.
       unfold orelse in Hsub.
-      unfold subvar_eq in Hsveq.
       destruct (isub x); [|congruence].
-      inv Hsub. destruct le; try contradiction.
-      simpl in Hsveq. subst.
+      inv Hsub. inv Hsveq.
       inversion_clear Hlels.
       apply sem_var_instant_det with (1:=Hxv) in Hxls.
       now rewrite Hxls in *.

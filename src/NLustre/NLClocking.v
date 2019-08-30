@@ -46,7 +46,7 @@ Module Type NLCLOCKING
       forall xs ck f les r n,
         find_node f G = Some n ->
         (exists sub,
-            Forall2 (fun xtc le =>  LiftO True (Is_var le) (sub (fst xtc))
+            Forall2 (fun xtc le => SameVar (sub (fst xtc)) le
                                 /\ (exists lck, wc_exp vars le lck
                                           /\ instck ck sub (dck xtc) = Some lck))
                     n.(n_in) les
