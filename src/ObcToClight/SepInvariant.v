@@ -952,7 +952,6 @@ Section SubRep.
         apply sep_imp'; auto.
         rewrite sep_comm, sep_assoc, sep_swap.
         apply sep_imp'; auto.
-        simpl range_inst.
         rewrite <-range_imp_with_wand; auto.
         simpl.
         rewrite Hco.
@@ -1752,7 +1751,6 @@ Section FunctionEntry.
       method_spec c f prog fd ->
       find_class cid prog = Some (c, prog') ->
       find_method fid c.(c_methods) = Some f ->
-      Datatypes.length (m_in f) = Datatypes.length vs ->
       wt_mem me prog c ->
       Forall2 (fun v xt => wt_val v (snd xt)) vs (m_in f) ->
       case_out f
@@ -1784,7 +1782,7 @@ Section FunctionEntry.
                                 (Some (instb, instco))
                               ** P).
   Proof.
-    intros * Spec Findcl Findmth Len WTmem WTvs.
+    intros * Spec Findcl Findmth WTmem WTvs.
 
     assert (NoDupMembers (make_out_vars (instance_methods f)))
       by (eapply NoDupMembers_make_out_vars; eauto; eapply wt_program_find_class; eauto).
@@ -1792,7 +1790,7 @@ Section FunctionEntry.
                    (make_out_vars (instance_methods f)))
       by (eapply instance_methods_caract; eauto).
     assert (Datatypes.length (map translate_param (m_in f)) = Datatypes.length vs)
-      by (rewrite map_length; auto).
+      by (symmetry; rewrite map_length; eapply Forall2_length; eauto).
     assert (wt_state prog me vempty c (meth_vars f)) by (split; eauto).
     assert (NoDup (map fst (m_in f))) by (apply fst_NoDupMembers, m_nodupin).
     assert (Forall2 (fun y xt => In (y, snd xt) (meth_vars f)) (map fst (m_in f)) (m_in f))

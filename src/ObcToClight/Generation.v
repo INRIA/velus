@@ -172,8 +172,6 @@ Definition return_with (s: Clight.statement) (e: option Clight.expr): Clight.sta
   Clight.Ssequence s (Clight.Sreturn e).
 Definition cl_zero: Clight.expr :=
   Clight.Econst_int Int.zero Ctypes.type_int32s.
-Definition return_zero (s: Clight.statement): Clight.statement :=
-  return_with s (Some cl_zero).
 
 Definition fundef
            (ins vars temps: list (ident * Ctypes.type))
@@ -345,9 +343,6 @@ Definition reset_call (node: ident): Clight.statement :=
 
 Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident * type)): Clight.statement :=
   let p_self := Clight.Eaddrof (Clight.Evar (glob_id self) (type_of_inst node)) (type_of_inst_p node) in
-  let out_struct := prefix out step in
-  let t_struct := type_of_inst (prefix_fun node step) in
-  let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
   match m_out with
   | [] =>
     let args := p_self :: args in
@@ -356,6 +351,9 @@ Definition step_call (node: ident) (args: list Clight.expr) (m_out: list (ident 
     let args := p_self :: args in
     funcall (Some y) (prefix_fun node step) (Some (cltype t)) args
   | _ =>
+    let out_struct := prefix out step in
+    let t_struct := type_of_inst (prefix_fun node step) in
+    let p_out := Clight.Eaddrof (Clight.Evar out_struct t_struct) (pointer_of t_struct) in
     let args := p_self :: p_out :: args in
     funcall None (prefix_fun node step) None args
   end.
@@ -376,7 +374,7 @@ Definition main_loop (do_sync: bool) (node: ident) (m: method): Clight.statement
   Clight.Sloop (main_loop_body do_sync node m) Clight.Sskip.
 
 Definition main_body (do_sync: bool) (node: ident) (m: method): Clight.statement :=
-  return_zero (Clight.Ssequence (reset_call node) (main_loop do_sync node m)).
+  Clight.Ssequence (reset_call node) (main_loop do_sync node m).
 
 Definition make_main (do_sync: bool) (node: ident) (m: method): AST.globdef Clight.fundef Ctypes.type :=
   let vars :=  match m.(m_out) with

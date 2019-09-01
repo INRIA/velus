@@ -11,9 +11,10 @@ From Velus Require Import ObcToClight.Interface.
 From Coq Require Import List.
 Import List.ListNotations.
 
-Import Obc.Syn.
 Import Str.
 Import OpAux.
+
+Import Obc.Syn.
 
 Section finite_traces.
 
@@ -88,38 +89,29 @@ Section infinite_traces.
   Variable xs : list (ident * type).
   Variable ys : list (ident * type).
 
-  Hypothesis xs_spec: xs <> [].
-  Hypothesis ys_spec: ys <> [].
+  Hypothesis xs_ys_spec: xs <> [] \/ ys <> [].
 
-  Hypothesis Hwt_ins : forall n, wt_vals (ins n) xs.
-  Hypothesis Hwt_outs: forall n, wt_vals (outs n) ys.
+  Hypothesis Len_ins: forall n, length (ins n) = length xs.
+  Hypothesis Len_outs: forall n, length (outs n) = length ys.
 
-  Lemma load_events_not_E0: forall n,
-      load_events (ins n) xs <> E0.
+  Lemma load_store_events_not_E0:
+    forall n,
+      load_events (ins n) xs <> E0 \/ store_events (outs n) ys <> E0.
   Proof.
-    clear - Hwt_ins xs_spec.
-    intros n; specialize Hwt_ins with n.
-    destruct xs; auto.
-    inv Hwt_ins; rewrite load_events_cons; discriminate.
+    intro n; specialize (Len_ins n); specialize (Len_outs n).
+    destruct xs_ys_spec.
+    - left; destruct xs, (ins n); auto; simpl in Len_ins; discriminate.
+    - right; destruct ys, (outs n); auto; simpl in Len_outs; discriminate.
   Qed.
 
-  Lemma store_events_not_E0: forall n,
-      store_events (outs n) ys <> E0.
-  Proof.
-    clear - Hwt_outs ys_spec.
-    intros n; specialize Hwt_outs with n.
-    destruct ys; auto.
-    inv Hwt_outs; simpl; rewrite store_events_cons; discriminate.
+  Program CoFixpoint mk_trace (n: nat): traceinf' :=
+    Econsinf' (load_events (ins n) xs ** store_events (outs n) ys)
+              (mk_trace (S n)) _.
+  Next Obligation.
+    intro E; apply Eapp_E0_inv in E.
+    pose proof (load_store_events_not_E0 n).
+    intuition.
   Qed.
-
-  CoFixpoint mk_trace (n: nat): traceinf'.
-  refine(
-      (Econsinf' (load_events (ins n) xs)
-                 (Econsinf' (store_events (outs n) ys)
-                            (mk_trace (S n)) _) _));
-    [ apply store_events_not_E0
-    | apply load_events_not_E0 ].
-  Defined.
 
   Lemma unfold_mk_trace: forall n,
       traceinf_of_traceinf' (mk_trace n) =
@@ -129,22 +121,22 @@ Section infinite_traces.
   Proof.
     intro.
     rewrite E0_left, E0_left_inf, (unroll_traceinf' (mk_trace n)).
-    unfold mk_trace at 1.
-    now rewrite 2!traceinf_traceinf'_app, Eappinf_assoc.
+    simpl.
+    now rewrite traceinf_traceinf'_app.
   Qed.
 
 End infinite_traces.
 
+(** The trace of an Obc method *)
 Section Obc.
-  Variable (m_step: method) (ins outs: stream (list val)).
+  Variable (m: method) (ins outs: stream (list val)).
 
-  Hypothesis in_spec : m_step.(m_in) <> [].
-  Hypothesis out_spec: m_step.(m_out) <> [].
+  Hypothesis in_out_spec : m.(m_in) <> [] \/ m.(m_out) <> [].
 
-  Hypothesis Hwt_ins : forall n, wt_vals (ins n) m_step.(m_in).
-  Hypothesis Hwt_outs: forall n, wt_vals (outs n) m_step.(m_out).
+  Hypothesis Len_ins : forall n, length (ins n) = length m.(m_in).
+  Hypothesis Len_outs: forall n, length (outs n) = length m.(m_out).
 
-  Definition trace_step (n: nat): traceinf' :=
-    mk_trace ins outs m_step.(m_in) m_step.(m_out) in_spec out_spec Hwt_ins Hwt_outs n.
+  Program Definition trace_step (n: nat): traceinf :=
+    traceinf_of_traceinf' (mk_trace ins outs m.(m_in) m.(m_out) _ _ _ n).
 
 End Obc.

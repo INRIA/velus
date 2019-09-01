@@ -1062,7 +1062,7 @@ Section PRESERVATION.
     apply stmt_eval_call_ind; [| |
                                |intros ?????????? IH1 ? IH2
                                |intros ????????????? IH|
-                               |intros * Findcl Findmth Len ? IH Hrvos ? * Findcl' Findmth']; intros;
+                               |intros * Findcl Findmth ?? IH Hrvos ? * Findcl' Findmth']; intros;
       try inversion_clear WTs as [| | | |????????? Findcl Findmth|];
       try inv NoNaked; simpl.
 
@@ -1166,7 +1166,6 @@ Section PRESERVATION.
       edestruct methods_corres as (fun_b & fd & ?&?& Mspec); eauto.
 
       (* prepare the entry state *)
-      rewrite map_length in Len.
       pose proof Mspec as Entry;
         eapply function_entry_match_states with (me := me) in Entry; eauto.
       assert (fn_body fd = return_with (translate_stmt (rev prog) cls fm (m_body fm))
@@ -1250,24 +1249,6 @@ Section PRESERVATION.
           rewrite sep_swap, <-sep_assoc in Hm''.
           apply sep_drop2 in Hm''.
           now rewrite sep_assoc in Hm''.
-  Qed.
-
-  Corollary stmt_correctness:
-    forall me ve s me' ve' ownerid owner prog' callerid caller m e le outb_co sb sofs P,
-      stmt_eval prog me ve s (me', ve') ->
-      find_class ownerid prog = Some (owner, prog') ->
-      find_method callerid owner.(c_methods) = Some caller ->
-      occurs_in s caller.(m_body) ->
-      m |= match_states gcenv prog owner caller (me, ve) (e, le) sb sofs outb_co
-           ** P ->
-      exists m' le',
-        exec_stmt_fe function_entry2 tge e le m
-                  (translate_stmt (rev prog) owner caller s)
-                  E0 le' m' Out_normal
-        /\ m' |= match_states gcenv prog owner caller (me', ve') (e, le') sb sofs outb_co
-                ** P.
-  Proof.
-    intros; eapply mutual_correctness; eauto.
   Qed.
 
   Corollary stmt_call_correctness:
@@ -1996,37 +1977,30 @@ Section PRESERVATION.
 
       Section TraceInf.
 
-        Hypothesis Step_in_spec  : main_step.(m_in) <> [].
-        Hypothesis Step_out_spec : main_step.(m_out) <> [].
+        Hypothesis Step_in_out_spec: main_step.(m_in) <> [] \/ main_step.(m_out) <> [].
 
-        Definition transl_trace (n: nat): traceinf :=
-          traceinf_of_traceinf'
-            (trace_step main_step ins outs Step_in_spec Step_out_spec Hwt_ins Hwt_outs n).
-
-        Lemma dostep_loop:
-          forall e n le m,
-            dostep e n m ->
-            execinf_stmt tge (function_entry2 tge) e le m
-                         (main_loop false main_node main_step)
-                         (transl_trace n).
+        Fact Len_ins:
+          forall n : nat, Datatypes.length (ins n) = Datatypes.length (m_in main_step).
         Proof.
-          cofix COINDHYP.
-          intros * Hdostep.
-          destruct exec_body with (1:=Hdostep) (le_n := le) as (? & ? & ? & ?).
-          unfold transl_trace, trace_step; rewrite unfold_mk_trace.
-          eapply execinf_Sloop_loop with (out1 := Out_normal);
-            eauto using out_normal_or_continue, exec_stmt.
+          intro n; specialize (Hwt_ins n); eapply Forall2_length; eauto.
         Qed.
 
-        Let after_loop := Kseq (Sreturn (Some cl_zero)) Kstop.
-        Let main_state := Clight.State main_f (main_loop false main_node main_step) after_loop e.
+        Fact Len_outs:
+          forall n : nat, Datatypes.length (outs n) = Datatypes.length (m_out main_step).
+        Proof.
+          intro n; specialize (Hwt_outs n); eapply Forall2_length; eauto.
+        Qed.
+
+        Definition trace_main_step (n: nat): traceinf := trace_step main_step ins outs Step_in_out_spec Len_ins Len_outs n.
+
+        Let main_state k := Clight.State main_f (main_loop false main_node main_step) k e.
 
         Lemma reactive_loop:
-          forall n m le,
+          forall n m le k,
             dostep e n m ->
-            Forever_reactive (semantics2 tprog) (main_state le m) (transl_trace n).
+            Forever_reactive (semantics2 tprog) (main_state k le m) (trace_main_step n).
         Proof.
-          unfold transl_trace, trace_step.
+          unfold trace_main_step, trace_step.
           cofix COINDHYP.
           intros * Hdostep'.
           edestruct exec_body with (1:=Hdostep') as (? & ? & Exec_body & ?).
@@ -2044,9 +2018,13 @@ Section PRESERVATION.
                    apply step_skip_or_continue_loop1; auto.
               * apply step_skip_loop2.
             + simpl; rewrite 2 E0_right; auto.
-          - intro Evts.
-            apply app_eq_nil in Evts; destruct Evts.
-            apply (load_events_not_E0 ins (m_in main_step) Step_in_spec Hwt_ins n); auto.
+          - intro Evts; apply Eapp_E0_inv in Evts.
+            assert (forall n, Datatypes.length (ins n) = Datatypes.length (m_in main_step)) as Len_ins
+              by (intro n'; pose proof (Hwt_ins n'); eapply Forall2_length; eauto).
+            assert (forall n, Datatypes.length (outs n) = Datatypes.length (m_out main_step)) as Len_outs
+                by (intro n'; pose proof (Hwt_outs n'); eapply Forall2_length; eauto).
+            pose proof (load_store_events_not_E0 _ _ _ _ Step_in_out_spec Len_ins Len_outs n).
+            intuition.
           - apply COINDHYP; auto.
         Qed.
 
@@ -2073,7 +2051,7 @@ Section PRESERVATION.
 
           Lemma reacts:
             function_entry2 tge main_f [] m0 e le_main m_main ->
-            program_behaves (semantics2 tprog) (Reacts (transl_trace 0)).
+            program_behaves (semantics2 tprog) (Reacts (trace_main_step 0)).
           Proof.
             intros.
             econstructor.
@@ -2087,12 +2065,10 @@ Section PRESERVATION.
                 * eapply step_internal_function; eauto.
                 * eapply star_step with (t1:=E0) (t2:=E0); auto.
                   -- apply step_seq.
-                  -- eapply star_step with (t1:=E0) (t2:=E0); auto.
-                     ++ apply step_seq.
-                     ++ eapply star_right with (t1:=E0) (t2:=E0); auto.
-                        ** eapply Star_reset.
-                        ** inversion_clear Out_reset.
-                           apply step_skip_seq.
+                  -- eapply star_right with (t1:=E0) (t2:=E0); auto.
+                     ++ eapply Star_reset.
+                     ++ inversion_clear Out_reset.
+                        apply step_skip_seq.
               + apply reactive_loop; auto.
           Qed.
 
@@ -2120,14 +2096,13 @@ Section PRESERVATION.
 
   Program Theorem correctness:
     forall ins outs me0
-      (WTins        : forall n, wt_vals (ins n) (m_in main_step))
-      (WTouts       : forall n, wt_vals (outs n) (m_out main_step))
-      (Step_in_spec : m_in main_step <> [])
-      (Step_out_spec: m_out main_step <> []),
+      (WTins            : forall n, wt_vals (ins n) (m_in main_step))
+      (WTouts           : forall n, wt_vals (outs n) (m_out main_step))
+      (Step_in_out_spec : m_in main_step <> [] \/  m_out main_step <> []),
       stmt_call_eval prog mempty main_node reset [] me0 [] ->
       loop_call prog main_node step (fun n => map Some (ins n)) (fun n => map Some (outs n)) 0 me0 ->
       wt_mem me0 prog_main c_main ->
-      program_behaves (semantics2 tprog) (Reacts (transl_trace ins outs _ _ _ _ 0)).
+      program_behaves (semantics2 tprog) (Reacts (trace_main_step ins outs _ _ _ 0)).
   Proof.
     intros.
     (* get the reset and step functions *)
