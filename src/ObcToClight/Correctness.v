@@ -1325,15 +1325,15 @@ Section PRESERVATION.
 
   (* !!!: do not use case_out or match on outputs directly because of further dependent destruction failure *)
   Lemma main_entry:
-    forall m0 sb,
-      m0 |= staterep gcenv prog main_node mempty sb Z0 ->
+    forall m0 P,
+      m0 |= P ->
       if lt_dec 1 (length (m_out main_step))
       then
         exists m1 step_b step_co,
           function_entry2 tge main_f [] m0
                           (PTree.set out_step (step_b, t_out_step) empty_env) le_main m1
           /\ gcenv ! (prefix_fun main_node step) = Some step_co
-          /\ m1 |= staterep gcenv prog main_node mempty sb Z0
+          /\ m1 |= P
                   ** fieldsrep gcenv vempty step_co.(co_members) step_b
       else function_entry2 tge main_f [] m0 empty_env le_main m0.
   Proof.
@@ -1568,18 +1568,9 @@ Section PRESERVATION.
   Section dostep.
 
     Variables (sb     : block)
-              (step_f : function)
-              (P      : massert).
+              (step_f : function).
 
     Variables ins outs: Str.stream (list val).
-    (* Variables xs ys   : list (ident * type). *)
-
-    Hypothesis Hwt_ins : forall n, wt_vals (ins n) main_step.(m_in).
-
-    Hypothesis StepSpec: method_spec c_main main_step prog step_f.
-    Hypothesis Find_self : Genv.find_symbol tge (glob_id self) = Some sb.
-    (* Hypothesis Hwt_outs: forall n, wt_vals (outs n) m_step.(m_out). *)
-
 
     (** This coinductive predicate describes the logical behavior of
         the [while] loop. *)
@@ -1657,8 +1648,6 @@ Section PRESERVATION.
     (** dostep implies a step of the body loop                      **)
     (*****************************************************************)
 
-    Hypothesis Hwt_outs : forall n, wt_vals (outs n) main_step.(m_out).
-
     Remark out_step_env_no_prefix_fun:
       forall e x f,
         out_step_env e ->
@@ -1677,6 +1666,8 @@ Section PRESERVATION.
     Let self_addr := Eaddrof (Evar (glob_id self) (type_of_inst main_node))
                                (type_of_inst_p main_node).
 
+    Hypothesis Find_self : Genv.find_symbol tge (glob_id self) = Some sb.
+
     (** evaluate the self parameter *)
     Lemma eval_expr_self:
       forall e le m,
@@ -1688,6 +1679,10 @@ Section PRESERVATION.
       apply out_step_env_no_glob_id; auto; apply self_valid.
     Qed.
     Hint Resolve eval_expr_self.
+
+    Hypothesis Hwt_ins  : forall n, wt_vals (ins n) main_step.(m_in).
+    Hypothesis Hwt_outs : forall n, wt_vals (outs n) main_step.(m_out).
+    Hypothesis StepSpec : method_spec c_main main_step prog step_f.
 
     Lemma exec_body:
       forall e n m_n le_n,
@@ -1993,12 +1988,12 @@ Section PRESERVATION.
 
         Definition trace_main_step (n: nat): traceinf := trace_step main_step ins outs Step_in_out_spec Len_ins Len_outs n.
 
-        Let main_state k := Clight.State main_f (main_loop false main_node main_step) k e.
+        Let main_state F := Clight.State F (main_loop false main_node main_step).
 
         Lemma reactive_loop:
-          forall n m le k,
+          forall n F e m le k,
             dostep e n m ->
-            Forever_reactive (semantics2 tprog) (main_state k le m) (trace_main_step n).
+            Forever_reactive (semantics2 tprog) (main_state F k e le m) (trace_main_step n).
         Proof.
           unfold trace_main_step, trace_step.
           cofix COINDHYP.
