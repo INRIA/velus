@@ -415,7 +415,7 @@ Defined.
 Definition check_size (env: Ctypes.composite_env) (id: AST.ident) :=
   match env ! id with
   | Some co =>
-      if (Ctypes.co_sizeof co) <=? Int.max_unsigned
+      if (Ctypes.co_sizeof co) <=? Ptrofs.max_unsigned
       then OK tt
       else Error [MSG "ObcToClight: structure is too big: '"; CTX id; MSG "'." ]
   | None =>

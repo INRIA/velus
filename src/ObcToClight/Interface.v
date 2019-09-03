@@ -64,7 +64,8 @@ Module Export Op <: OPERATORS.
     forall gcenv ty,
       (Memdata.align_chunk (type_chunk ty) | Ctypes.alignof gcenv (cltype ty))%Z.
   Proof.
-    destruct ty; simpl; cases.
+    intros; destruct ty; simpl; try rewrite align_noattr; cases;
+      try (simpl; replace Archi.align_float64 with (2 * 4)%Z; auto; apply Z.divide_factor_r).
   Qed.
 
   Lemma cltype_access_by_value:

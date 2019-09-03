@@ -712,7 +712,7 @@ Lemma empty_range:
   forall {f} b lo hi,
     hi <= lo ->
     0 <= lo ->
-    hi <= Integers.Int.modulus ->
+    hi <= Ptrofs.modulus ->
     sepemp <-*-> (range' f b lo hi).
 Proof.
   intros b lo hi Hgt.
@@ -1172,7 +1172,7 @@ Section Galloc.
       match g with
       | Gfun f => range' Nonempty b 0 1
       | Gvar v =>
-        pure (init_data_list_size (gvar_init v) <= Int.modulus)
+        pure (init_data_list_size (gvar_init v) <= Ptrofs.modulus)
              -* range' (Genv.perm_globvar v) b 0
                        (init_data_list_size v.(gvar_init))
       end
@@ -1214,8 +1214,7 @@ Section Galloc.
         destruct Hfd as (Hperm & Hperm').
         repeat constructor.
         * omega.
-        * unfold Int.modulus, Int.wordsize, Wordsize_32.wordsize.
-          rewrite Z.one_succ; apply Zlt_le_succ, Z.gt_lt, two_power_nat_pos.
+        * rewrite Z.one_succ; apply Zlt_le_succ, Z.gt_lt, two_power_nat_pos.
         * intros * HH. assert (i = 0) by omega.
           subst. now apply Mem.perm_cur.
       + (* g = Gvar v *)

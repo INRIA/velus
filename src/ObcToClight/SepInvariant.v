@@ -396,7 +396,7 @@ Section StateRepProperties.
         rewrite sizeof_translate_chunk; eauto.
         apply range_contains'; auto with mem.
         apply field_offset_aligned with (ty:=cltype t) in Hfo.
-        now apply Z.divide_add_r; eauto.
+        apply Z.divide_add_r; eauto.
         rewrite <-Hmem in Htype. apply Htype; auto with datatypes.
 
       + (* Divide up the memory sub-block for cls.(c_objs). *)
@@ -1667,9 +1667,8 @@ Section FunctionEntry.
       rewrite sep_assoc, sep_swap.
       eapply IHvars; eauto.
       eapply alloc_rule; eauto; try omega.
-      transitivity Ptrofs.max_unsigned; auto.
-      unfold Ptrofs.max_unsigned.
-      omega.
+      etransitivity; eauto.
+      unfold Ptrofs.max_unsigned; omega.
   Qed.
 
   Lemma alloc_result:
@@ -1730,7 +1729,7 @@ Section FunctionEntry.
   (**            staterep for the sub-state, and we get           **)
   (**            match_states in the callee                       **)
   (**   1 < n  : 'out' pointer parameter, we need both            **)
-  (**            staterep for the sub-state and fieldsrep for the  **)
+  (**            staterep for the sub-state and fieldsrep for the **)
   (**            output structure, we get match_states in the     **)
   (**            callee                                           **)
   (*****************************************************************)
@@ -1951,10 +1950,10 @@ Section MainProgram.
 
     exists m', step_b, step_co; intuition.
     - repeat (econstructor; eauto).
-    - assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Int.modulus)
-        by (simpl; setoid_rewrite Hsco; transitivity Int.max_unsigned;
-            auto; unfold Int.max_unsigned; omega).
-      eapply alloc_rule in AllocStep; eauto; try omega.
+    - assert (sizeof tge (type_of_inst (prefix_fun main_node step)) <= Ptrofs.modulus)
+        by (simpl; setoid_rewrite Hsco; transitivity Ptrofs.max_unsigned;
+            auto; unfold Ptrofs.max_unsigned; omega).
+      eapply alloc_rule in AllocStep; eauto; try reflexivity.
       eapply sep_imp; eauto.
       simpl; setoid_rewrite Hsco; eapply fieldsrep_empty; eauto.
       + eapply Consistent; eauto.
@@ -2009,7 +2008,7 @@ Section MainProgram.
       subst gcenv tge.
       rewrite <-Htprog in Find_main; simpl in Find_main.
       rewrite Find_main.
-      transitivity Int.max_unsigned; auto; unfold Int.max_unsigned; omega.
+      transitivity Ptrofs.max_unsigned; auto; unfold Ptrofs.max_unsigned; omega.
   Qed.
 
 End MainProgram.

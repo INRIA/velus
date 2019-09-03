@@ -1056,7 +1056,7 @@ Section TranslateOk.
         /\ co_members co = make_members owner
         /\ attr_alignas (co_attr co) = None
         /\ NoDupMembers (co_members co)
-        /\ co.(co_sizeof) <= Int.max_unsigned.
+        /\ co.(co_sizeof) <= Ptrofs.max_unsigned.
     Proof.
       inv_trans TRANSL with structs funs E.
       pose proof (find_class_name _ _ _ _ Findcl); subst.
@@ -1079,7 +1079,7 @@ Section TranslateOk.
       - rewrite Hmembers. apply NoDupMembers_make_members.
       - eapply check_size_ok, Forall_forall in SIZE; eauto; simpl in SIZE.
         unfold check_size in SIZE; rewrite Hco in SIZE.
-        destruct (co_sizeof co <=? Int.max_unsigned) eqn: Le; contr.
+        cases_eqn Le.
         rewrite Zle_is_le_bool; auto.
     Qed.
 
@@ -1097,7 +1097,7 @@ Section TranslateOk.
             /\ co.(co_members) = map translate_param caller.(m_out)
             /\ co.(co_attr) = noattr
             /\ NoDupMembers (co_members co)
-            /\ co.(co_sizeof) <= Int.max_unsigned.
+            /\ co.(co_sizeof) <= Ptrofs.max_unsigned.
         Proof.
           inv_trans TRANSL with structs funs E.
           apply build_check_size_env_ok in TRANSL; destruct TRANSL as [? SIZE].
@@ -1136,7 +1136,7 @@ Section TranslateOk.
             apply (m_nodupout caller).
           - eapply check_size_ok, Forall_forall in SIZE; eauto; simpl in SIZE.
             unfold check_size in SIZE; rewrite Hco in SIZE.
-            destruct (co_sizeof co <=? Int.max_unsigned) eqn: Le; contr.
+            cases_eqn Le.
             rewrite Zle_is_le_bool; auto.
         Qed.
 
@@ -1354,10 +1354,8 @@ Section TranslateOk.
           try repeat split; auto.
           change (Genv.find_funct_ptr tge loc_f) with (Genv.find_funct_ptr (Genv.globalenv tprog) loc_f).
           unfold Genv.find_funct_ptr.
-          change (Genv.find_def (Genv.globalenv tprog) loc_f)
-          with ((@Genv.find_def Clight.fundef Ctypes.type
-                                (@Genv.globalenv Clight.fundef Ctypes.type (@program_of_program function tprog)) loc_f)).
-          now rewrite Finddef.
+          now setoid_rewrite Finddef.
+
         - set (f:= {|
                     fn_return := cltype t;
                     fn_callconv := AST.cc_default;
@@ -1374,10 +1372,7 @@ Section TranslateOk.
           try repeat split; auto.
           change (Genv.find_funct_ptr tge loc_f) with (Genv.find_funct_ptr (Genv.globalenv tprog) loc_f).
           unfold Genv.find_funct_ptr.
-          change (Genv.find_def (Genv.globalenv tprog) loc_f)
-          with ((@Genv.find_def Clight.fundef Ctypes.type
-                                (@Genv.globalenv Clight.fundef Ctypes.type (@program_of_program function tprog)) loc_f)).
-          now rewrite Finddef.
+          now setoid_rewrite Finddef.
           simpl in *.
           apply list_disjoint_cons_r; auto.
           intros [Eq|Hin].
@@ -1405,10 +1400,7 @@ Section TranslateOk.
           try repeat split; auto.
           change (Genv.find_funct_ptr tge loc_f) with (Genv.find_funct_ptr (Genv.globalenv tprog) loc_f).
           unfold Genv.find_funct_ptr.
-          change (Genv.find_def (Genv.globalenv tprog) loc_f)
-          with ((@Genv.find_def Clight.fundef Ctypes.type
-                                (@Genv.globalenv Clight.fundef Ctypes.type (@program_of_program function tprog)) loc_f)).
-          now rewrite Finddef.
+          now setoid_rewrite Finddef.
       Qed.
 
     End MethodProperties.
@@ -1418,7 +1410,7 @@ Section TranslateOk.
     forall ownerid owner prog' callerid caller,
       find_class ownerid prog = Some (owner, prog') ->
       find_method callerid owner.(c_methods) = Some caller ->
-      Forall (fun xt => sizeof tge (snd xt) <= Int.max_unsigned /\ wf_struct gcenv xt)
+      Forall (fun xt => sizeof tge (snd xt) <= Ptrofs.max_unsigned /\ wf_struct gcenv xt)
              (make_out_vars (instance_methods caller)).
   Proof.
     intros * Findcl Findmth.
@@ -1445,6 +1437,7 @@ Section TranslateOk.
       apply in_map_iff in Hinxt;
         destruct Hinxt as ((x, t) & Eq & Hinxt); inv Eq; eauto.
   Qed.
+
   Lemma find_main_class_sig: {c_prog_main | find_class main_node prog = Some c_prog_main}.
   Proof.
     pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E; eauto.
