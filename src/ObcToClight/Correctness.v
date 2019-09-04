@@ -2040,7 +2040,7 @@ Section PRESERVATION.
           Proof.
             intros.
             edestruct find_main_ptr with (tprog := tprog) (TRANSL := TRANSL) as (?& Find_main &?); eauto.
-            erewrite <- tprog_main_id in Find_main; eauto.
+            erewrite <- tprog_main_proved_id in Find_main; eauto.
             econstructor; eauto.
           Qed.
 

@@ -5,4 +5,4 @@ NODE=${2:-main}
 NAME=${SRCFILE%.*}
 
 ./velus -dnlustre -dstc -dobc -dclight -sync -main $NODE $SRCFILE && \
-CompCert/ccomp -Wl,-emain_sync -stdlib CompCert/runtime -o $NAME.exe $NAME.sync.c $NAME.s
+CompCert/ccomp -stdlib CompCert/runtime -o $NAME.exe $NAME.sync.c $NAME.s

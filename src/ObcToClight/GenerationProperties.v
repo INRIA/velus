@@ -940,9 +940,10 @@ Section TranslateOk.
                 map fst (concat funs) ++
                 map fst
                 ((if do_sync
-                  then [(sync_id, make_sync); (main_sync_id, make_main do_sync main_node m)]
+                  then [(sync_id, make_sync); (main_sync_id, make_main true main_node m)]
                   else [])
-                   ++ [(main_id, make_main false main_node m)]))) as Notin_self.
+                   ++ [(main_proved_id, make_main false main_node m);
+                       (main_id, make_entry_point do_sync)]))) as Notin_self.
     { pose proof (m_notreserved self m (in_eq self _)) as Res; unfold meth_vars in Res.
       repeat rewrite in_app_iff, in_map_iff; simpl;
         intros [((x, t) & E & Hin)
@@ -968,12 +969,12 @@ Section TranslateOk.
         contradict Hin; apply glob_id_not_prefixed.
         apply self_valid.
       - destruct do_sync; simpl in Hin.
-        + destruct Hin as [Hin|[Hin|[Hin|]]]; contr;
+        + destruct Hin as [Hin|[Hin|[Hin|[Hin|]]]]; contr;
             try (apply pos_of_str_injective in Hin;
                  unfold self in Hin; rewrite pos_to_str_equiv in Hin;
                  inv Hin).
-        + destruct Hin as [Hin|]; contr.
-          apply pos_of_str_injective in Hin;
+        + destruct Hin as [Hin|[Hin|]]; contr;
+            apply pos_of_str_injective in Hin;
             unfold self in Hin; rewrite pos_to_str_equiv in Hin;
               inv Hin.
     }
@@ -982,9 +983,10 @@ Section TranslateOk.
                    map fst (concat funs) ++
                    map fst
                    ((if do_sync
-                     then [(sync_id, make_sync); (main_sync_id, make_main do_sync main_node m)]
+                     then [(sync_id, make_sync); (main_sync_id, make_main true main_node m)]
                      else [])
-                      ++ [(main_id, make_main false main_node m)]))) as Nodup.
+                      ++ [(main_proved_id, make_main false main_node m);
+                          (main_id, make_entry_point do_sync)]))) as Nodup.
     { assert (Forall (fun x : ident * type => valid (fst x)) (m_out m)) as Valid_out
         by (rewrite Forall_forall; intros (x, t) ?; apply (m_good_out m (x, t)); auto).
       assert (Forall (fun x : ident * type => valid (fst x)) (m_in m)) as Valid_in
@@ -1017,9 +1019,9 @@ Section TranslateOk.
         - rewrite Forall_app; split; auto.
       }
       destruct do_sync; simpl;
-        try change [sync_id; main_sync_id; main_id] with ([sync_id]++[main_sync_id]++[main_id]);
+        repeat match goal with |- context [?x :: _ :: _] => rewrite (cons_is_app x) end;
         repeat apply NoDup_app'; repeat apply Forall_not_In_app;
-          repeat apply Forall_not_In_singleton;
+          repeat apply Forall_not_In_singleton; auto; try now repeat constructor; auto;
           ((repeat constructor; auto)
            || (intros [E|]; contr;
               apply pos_of_str_injective in E; inv E)
@@ -1035,6 +1037,7 @@ Section TranslateOk.
                 intros [Hin|Hin]; contr
               end)
            || auto);
+          try (eapply main_proved_not_glob; now eauto);
           try (eapply main_not_glob; now eauto);
           try (eapply sync_not_glob; now eauto);
           try (eapply main_sync_not_glob; now eauto);
@@ -1485,9 +1488,10 @@ Section TranslateOk.
                             concat funs ++
                             (if do_sync
                              then [(sync_id, make_sync);
-                                     (main_sync_id, make_main do_sync main_node main_step)]
+                                     (main_sync_id, make_main true main_node main_step)]
                              else []) ++
-                            [(main_id, make_main false main_node main_step)].
+                            [(main_proved_id, make_main false main_node main_step);
+                            (main_id, make_entry_point do_sync)].
   Proof.
     pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E.
     intro; subst ce tge.
@@ -1554,8 +1558,8 @@ Section TranslateOk.
     exists (x, t); split; auto.
   Qed.
 
-  Lemma tprog_main_id:
-    Ctypes.prog_main tprog = main_id.
+  Lemma tprog_main_proved_id:
+    Ctypes.prog_main tprog = main_proved_id.
   Proof.
     pose proof TRANSL as Trans; inv_trans Trans as En Estep Ereset with structs funs E.
     unfold make_program' in Trans.
@@ -1629,7 +1633,7 @@ Section TranslateOk.
       + intros * Hinio; simpl in Hinio;
           destruct Hinio; [discriminate|contradiction].
     - repeat rewrite in_app in Hinv;
-        destruct Hinv as [Hinv|[Hinv|[Hinv|Hinv]]]; try now inv Hinv.
+        destruct Hinv as [Hinv|[Hinv|[Hinv|[Hinv|Hinv]]]]; try now inv Hinv.
       + induction (map glob_bind (m_out m) ++ map glob_bind (m_in m)) as [|(x, t)].
         * contradict Hinv.
         * destruct Hinv as [Hinv|]; auto.
@@ -1654,18 +1658,17 @@ Section TranslateOk.
           destruct Hinv as [Hinv|]; auto.
           unfold translate_method in Hinv.
           destruct_list (m_out a) as (?, ?) ? ?; inv Hinv.
-
     + destruct do_sync; try now inv Hinv.
-          rewrite cons_is_app, in_app in Hinv.
-          destruct Hinv as [[Hinv|Hinv]|[Hinv|Hinv]]; try inv Hinv.
+      rewrite cons_is_app, in_app in Hinv.
+      destruct Hinv as [[Hinv|Hinv]|[Hinv|Hinv]]; try inv Hinv.
   Qed.
 
   Lemma find_main_ptr:
     exists b,
-      Genv.find_symbol tge main_id = Some b
+      Genv.find_symbol tge main_proved_id = Some b
       /\ Genv.find_funct_ptr tge b = Some (Ctypes.Internal main_f).
   Proof.
-    assert ((AST.prog_defmap tprog) ! main_id = Some (make_main false main_node main_step)) as Hget.
+    assert ((AST.prog_defmap tprog) ! main_proved_id = Some (make_main false main_node main_step)) as Hget.
     { unfold AST.prog_defmap; apply PTree_Properties.of_list_norepet.
       - eapply prog_defs_norepet; eauto.
       - setoid_rewrite tprog_defs; eauto.

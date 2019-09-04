@@ -389,6 +389,12 @@ Definition make_main (do_sync: bool) (node: ident) (m: method): AST.globdef Clig
   in
   fundef [] vars (map translate_param (temp ++ m.(m_in))) Ctypes.type_int32s (main_body do_sync node m).
 
+Definition make_entry_point (do_sync: bool): AST.globdef Clight.fundef Ctypes.type :=
+  let sig := Ctypes.Tfunction Ctypes.Tnil Ctypes.Tvoid AST.cc_default in
+  let main := Clight.Evar (if do_sync then main_sync_id else main_proved_id) sig in
+  let body := Clight.Scall None main [] in
+  fundef [] [] [] Ctypes.type_int32s body.
+
 Definition ef_sync: Clight.fundef :=
   let sg := AST.mksignature [] None AST.cc_default in
   let ef := AST.EF_external "sync" sg in
@@ -467,21 +473,23 @@ Definition translate (do_sync: bool) (all_public: bool)
         let prog := rev prog in
         let cs := map (translate_class prog) prog in
         let (structs, funs) := split cs in
-        let main := (main_id, make_main false main_node m) in
+        let main_proved := (main_proved_id, make_main false main_node m) in
+        let entry_point := (main_id, make_entry_point do_sync) in
         let gdefs := concat funs
                             ++ (if do_sync
                                 then [(sync_id, make_sync);
-                                      (main_sync_id, make_main do_sync main_node m)]
+                                      (main_sync_id, make_main true main_node m)]
                                 else [])
-                            ++ [main]
+                            ++ [main_proved; entry_point]
         in
         make_program' (concat structs)
                       [f_gvar]
                       (outs ++ ins)
                       gdefs
-                      ((if do_sync then [main_sync_id] else [])
-                       ++ (if all_public then map fst (concat funs) else []))
-                      main_id
+                      (main_id ::
+                               (if do_sync then [main_sync_id] else [])
+                               ++ (if all_public then map fst (concat funs) else []))
+                      main_proved_id
       | None => Error (msg "ObcToClight: reset function not found")
       end
     | None => Error (msg "ObcToClight: step function not found")

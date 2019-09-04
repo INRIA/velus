@@ -186,9 +186,10 @@ Qed.
 Module Export Ids <: IDS.
   Definition self := pos_of_str "self".
   Definition out := pos_of_str "out".
-  Definition main_id: ident := pos_of_str "main".
   Definition fun_id: ident  := pos_of_str "fun".
   Definition sync_id: ident := pos_of_str "sync".
+  Definition main_id: ident := pos_of_str "main".
+  Definition main_proved_id: ident := pos_of_str "main_proved".
   Definition main_sync_id: ident := pos_of_str "main_sync".
 
   Definition step := pos_of_str "step".
@@ -412,6 +413,17 @@ Module Export Ids <: IDS.
     intros * H.
     apply pos_of_str_injective in H.
     change "main"%string with ("mai" ++ "n")%string in H.
+    apply last_det in H.
+    inv H.
+  Qed.
+
+  Lemma main_proved_not_glob:
+    forall x, glob_id x <> main_proved_id.
+  Proof.
+    unfold glob_id, main_proved_id.
+    intros * H.
+    apply pos_of_str_injective in H.
+    change "main_proved"%string with ("main_prove" ++ "d")%string in H.
     apply last_det in H.
     inv H.
   Qed.
