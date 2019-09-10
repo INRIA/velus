@@ -4946,7 +4946,7 @@ Section ElabDeclaration.
                   then err_loc loc (msg "not enough inputs or outputs")
                   else OK (xin, xout, xvar, eqs)) with
       | Error e => Error e
-      | OK (xin, xout, xvar, eqs) => OK {| n_name      := name;
+      | OK (xin, xout, xvar, eqs) => OK {| n_name     := name;
                                            n_hasstate := hasstate;
                                            n_in       := xin;
                                            n_out      := xout;

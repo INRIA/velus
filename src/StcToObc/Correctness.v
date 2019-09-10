@@ -900,7 +900,7 @@ Module Type CORRECTNESS
       reset_consistency (tc :: tcs) ->
       (forall i f Si, In (i, f) (resets_of (tc :: tcs)) -> find_inst i S = Some Si -> state_closed P f Si) ->
       (forall i f Ii, In (i, f) (resets_of (tc :: tcs)) -> find_inst i I = Some Ii -> state_closed P f Ii) ->
-      VelusMemory_Corres tcs S I S' me ->
+      Memory_Corres tcs S I S' me ->
       equiv_env (fun x => Is_free_in_tc x tc) R mems me ve ->
       sem_clocked_vars_instant true R icks ->
       (forall x ck, In (x, ck) icks -> ~ PS.In x mems -> Env.find x clkvars = Some ck) ->
@@ -908,7 +908,7 @@ Module Type CORRECTNESS
       (forall x, ~ In x inputs -> ~ Is_defined_in x tcs -> Env.find x ve = None) ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_tc mems clkvars tc) (me', ve')
-        /\ VelusMemory_Corres (tc :: tcs) S I S' me'
+        /\ Memory_Corres (tc :: tcs) S I S' me'
         /\ forall x v,
             Is_variable_in_tc x tc ->
             sem_var_instant R x v ->
@@ -931,12 +931,12 @@ Module Type CORRECTNESS
       + eapply stmt_eval_Control_present'; eauto; auto.
         eapply cexp_correct; eauto.
       + split.
-        * apply VelusMemory_Corres_Def; auto.
+        * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
           eapply sem_var_instant_det in Hvar; eauto.
           inv Hvar; rewrite Env.gss; auto.
       + split.
-        * apply VelusMemory_Corres_Def; auto.
+        * apply Memory_Corres_Def; auto.
         * inversion_clear 1; intros Hvar'.
           eapply sem_var_instant_det in Hvar; eauto.
           unfold variables in Vars.
@@ -949,9 +949,9 @@ Module Type CORRECTNESS
       + eapply stmt_eval_Control_present';
           eauto using stmt_eval, exp_correct; auto.
       + split; try inversion 1.
-        apply VelusMemory_Corres_Next_present; auto.
+        apply Memory_Corres_Next_present; auto.
       + split; try inversion 1.
-        apply VelusMemory_Corres_Next_absent; auto; congruence.
+        apply Memory_Corres_Next_absent; auto; congruence.
 
     - destruct r.
       + pose proof Init.
@@ -961,7 +961,7 @@ Module Type CORRECTNESS
         * eapply stmt_eval_Control_present'; eauto; auto.
           econstructor; eauto.
         *{ split; try inversion 1.
-           eapply VelusMemory_Corres_Reset_present; eauto.
+           eapply Memory_Corres_Reset_present; eauto.
            - eapply initial_state_det; eauto.
              + apply SpecInit.
                unfold instance_match in *.
@@ -982,7 +982,7 @@ Module Type CORRECTNESS
       + exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
         split; try inversion 1.
         apply orel_find_inst_Some in Init as (?&?&?).
-        eapply VelusMemory_Corres_Reset_absent; try symmetry; eauto.
+        eapply Memory_Corres_Reset_absent; try symmetry; eauto.
         eapply Reset_not_Reset_in; eauto.
 
     - apply Step_not_Step_Reset_in in Wsch; auto.
@@ -1000,7 +1000,7 @@ Module Type CORRECTNESS
            - eapply stmt_eval_Control_present'; eauto; auto.
              econstructor; eauto.
            - split.
-             + eapply VelusMemory_Corres_Call_present; eauto.
+             + eapply Memory_Corres_Call_present; eauto.
              + inversion_clear 1; intros Hvar.
                simpl in Vars; apply NoDup_swap in Vars.
                eapply value_to_option_adds_opt; eauto.
@@ -1020,7 +1020,7 @@ Module Type CORRECTNESS
       + assert (absent_list xs) by (apply clock_of_instant_false; auto).
         apply sem_system_absent in Hsystem as (? & ?); auto.
         exists me, ve; split; try eapply stmt_eval_Control_absent'; eauto; auto.
-        split; eauto using VelusMemory_Corres_Call_absent.
+        split; eauto using Memory_Corres_Call_absent.
         inversion_clear 1; intros Hvar.
         eapply Forall2_in_left in Hvars as (v' & Hin &?); eauto.
         eapply sem_var_instant_det in Hvar; eauto; subst v'.
@@ -1138,10 +1138,10 @@ Module Type CORRECTNESS
     intros * E; unfold state_corres; now rewrite E.
   Qed.
 
-  Lemma VelusMemory_Corres_empty_equal_memory:
+  Lemma Memory_Corres_empty_equal_memory:
     forall S I S' me,
       S ≋ me ->
-      VelusMemory_Corres [] S I S' me.
+      Memory_Corres [] S I S' me.
   Proof.
     split.
     - split; intros Last.
@@ -1215,7 +1215,7 @@ Module Type CORRECTNESS
       me ≋ S ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs') (me', ve')
-        /\ VelusMemory_Corres tcs' S I S' me'
+        /\ Memory_Corres tcs' S I S' me'
         /\ forall x v,
             Is_variable_in x tcs' ->
             sem_var_instant R x v ->
@@ -1226,7 +1226,7 @@ Module Type CORRECTNESS
              Htcs Hwc Hnormal Hcm Hcvars Hmems Ord Wsch Vars Defs StepReset
              Closed TransClosed SpecLast SpecInput EquivInput EquivInput' Corres.
     - exists me, ve. split; eauto using stmt_eval; split; auto.
-      + now apply VelusMemory_Corres_empty_equal_memory.
+      + now apply Memory_Corres_empty_equal_memory.
       + inversion 1.
     - pose proof Wsch as Wsch'; apply Is_well_sch_app in Wsch'.
       pose proof Vars as Vars'; rewrite variables_app in Vars'.
@@ -1305,7 +1305,7 @@ Module Type CORRECTNESS
       me ≋ S ->
       exists me' ve',
         stmt_eval (translate P) me ve (translate_tcs mems clkvars tcs) (me', ve')
-        /\ VelusMemory_Corres tcs S I S' me'
+        /\ Memory_Corres tcs S I S' me'
         /\ forall x v,
             Is_variable_in x tcs ->
             sem_var_instant R x v ->
@@ -1324,9 +1324,9 @@ Module Type CORRECTNESS
     eapply In_InMembers; eauto.
   Qed.
 
- Lemma VelusMemory_Corres_equal_memory:
+ Lemma Memory_Corres_equal_memory:
     forall P tcs S I S' me lasts subs,
-      VelusMemory_Corres tcs S I S' me ->
+      Memory_Corres tcs S I S' me ->
       state_closed_lasts lasts S ->
       state_closed_insts P subs S ->
       state_closed_lasts lasts S' ->
@@ -1532,7 +1532,7 @@ Module Type CORRECTNESS
                      H: find_system ?b ?P = _, H': find_system ?b ?P = _ |- _ =>
                      rewrite H in H'; inv H'
                    end.
-            eapply VelusMemory_Corres_equal_memory; eauto.
+            eapply Memory_Corres_equal_memory; eauto.
             - intro; now rewrite s_lasts_in_tcs, lasts_of_In.
             - setoid_rewrite s_subs_calls_of; apply calls_of_Is_sub_in.
             - intros * Rst; apply s_no_single_reset, Step_with_reset_in_Step_in in Rst; auto.

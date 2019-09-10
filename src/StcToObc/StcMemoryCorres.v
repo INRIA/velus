@@ -29,7 +29,7 @@ Module Type STCMEMORYCORRES
   Definition state_corres (s: ident) (S: state) (me: menv) : Prop :=
     find_inst s S ⌈≋⌉ find_inst s me.
 
-  Definition VelusMemory_Corres
+  Definition Memory_Corres
              (tcs: list trconstr)
              (S I S': state)
              (me: menv) : Prop :=
@@ -51,11 +51,11 @@ Module Type STCMEMORYCORRES
   Section Preservation.
 
     Variables (tcs: list trconstr) (S I S': state) (me: menv).
-    Hypothesis MemCorres:  VelusMemory_Corres tcs S I S' me.
+    Hypothesis MemCorres:  Memory_Corres tcs S I S' me.
 
-    Lemma VelusMemory_Corres_Def:
+    Lemma Memory_Corres_Def:
       forall x ck ce,
-        VelusMemory_Corres (TcDef x ck ce :: tcs) S I S' me.
+        Memory_Corres (TcDef x ck ce :: tcs) S I S' me.
     Proof.
       destruct MemCorres as (Lasts & Insts); intros; split; [split|split; [|split]].
       - inversion_clear 1 as [?? Last|]; eauto.
@@ -77,10 +77,10 @@ Module Type STCMEMORYCORRES
         inv IsSt.
     Qed.
 
-    Lemma VelusMemory_Corres_Next_present:
+    Lemma Memory_Corres_Next_present:
       forall x ck e c,
         find_val x S' = Some c ->
-        VelusMemory_Corres (TcNext x ck e :: tcs) S I S' (add_val x c me).
+        Memory_Corres (TcNext x ck e :: tcs) S I S' (add_val x c me).
     Proof.
       destruct MemCorres as (Lasts & Insts); intros; split; [split|split; [|split]].
       - inversion_clear 1 as [?? Last|?? Last]; eauto; unfold value_corres.
@@ -114,10 +114,10 @@ Module Type STCMEMORYCORRES
           apply Insts; auto.
     Qed.
 
-    Lemma VelusMemory_Corres_Next_absent:
+    Lemma Memory_Corres_Next_absent:
       forall x ck e,
         find_val x S' = find_val x S ->
-        VelusMemory_Corres (TcNext x ck e :: tcs) S I S' me.
+        Memory_Corres (TcNext x ck e :: tcs) S I S' me.
     Proof.
       destruct MemCorres as (Lasts & Insts); intros * Eq; split; [split|split; [|split]].
       - inversion_clear 1 as [?? Last|?? Last]; eauto; unfold value_corres.
@@ -142,12 +142,12 @@ Module Type STCMEMORYCORRES
         inv IsSt.
     Qed.
 
-    Lemma VelusMemory_Corres_Reset_present:
+    Lemma Memory_Corres_Reset_present:
       forall s ck b Is me',
         find_inst s I = Some Is ->
         me' ≋ Is ->
         ~ Step_in s tcs ->
-        VelusMemory_Corres (TcReset s ck b :: tcs) S I S' (add_inst s me' me).
+        Memory_Corres (TcReset s ck b :: tcs) S I S' (add_inst s me' me).
     Proof.
       destruct MemCorres as (Lasts & Insts); intros ?????? E; split; [split|split; [|split]].
       - inversion_clear 1 as [?? Last|]; eauto.
@@ -183,13 +183,13 @@ Module Type STCMEMORYCORRES
           * rewrite find_inst_gso; auto; apply Insts; auto.
     Qed.
 
-    Lemma VelusMemory_Corres_Reset_absent:
+    Lemma Memory_Corres_Reset_absent:
       forall s ck b Is Ss,
         find_inst s I = Some Is ->
         find_inst s S = Some Ss ->
         Is ≋ Ss ->
         ~ Reset_in s tcs ->
-        VelusMemory_Corres (TcReset s ck b :: tcs) S I S' me.
+        Memory_Corres (TcReset s ck b :: tcs) S I S' me.
     Proof.
       destruct MemCorres as (Lasts & Insts); intros ????? Find_I Find_S E; split; [split|split; [|split]].
       - inversion_clear 1 as [?? Last|]; eauto.
@@ -216,11 +216,11 @@ Module Type STCMEMORYCORRES
         + apply Insts; eauto.
     Qed.
 
-    Lemma VelusMemory_Corres_Call_present:
+    Lemma Memory_Corres_Call_present:
       forall s ys ck (rst: bool) b es Ss' me',
         find_inst s S' = Some Ss' ->
         me' ≋ Ss' ->
-        VelusMemory_Corres (TcCall s ys ck rst b es :: tcs) S I S' (add_inst s me' me).
+        Memory_Corres (TcCall s ys ck rst b es :: tcs) S I S' (add_inst s me' me).
     Proof.
       destruct MemCorres as (Lasts & Insts); intros ???????? Find_S' E;
         split; [split|split; [|split]].
@@ -255,14 +255,14 @@ Module Type STCMEMORYCORRES
           * rewrite find_inst_gso; auto; apply Insts; auto.
     Qed.
 
-    Lemma VelusMemory_Corres_Call_absent:
+    Lemma Memory_Corres_Call_absent:
       forall s ys ck (rst: bool) b es Is Ss',
         find_inst s I = Some Is ->
         (rst = false -> find_inst s S ⌈≋⌉ Some Is) ->
         find_inst s S' = Some Ss' ->
         Ss' ≋ Is ->
         ~ Step_in s tcs /\ (if rst then Reset_in s tcs else ~ Reset_in s tcs) ->
-        VelusMemory_Corres (TcCall s ys ck rst b es :: tcs) S I S' me.
+        Memory_Corres (TcCall s ys ck rst b es :: tcs) S I S' me.
     Proof.
       destruct MemCorres as (Lasts & Insts); intros ???????? Find_I Find_S Find_S' E NstepRst;
         split; [split|split; [|split]].
