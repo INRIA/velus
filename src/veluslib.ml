@@ -4,6 +4,7 @@
 let lustre_destination = ref (None : string option)
 let nlustre_destination = ref (None : string option)
 let stc_destination = ref (None : string option)
+let sch_destination = ref (None : string option)
 let obc_destination = ref (None : string option)
 let sync_destination = ref (None : string option)
 let main_node = ref (None : string option)
@@ -55,6 +56,9 @@ let print_nlustre_if =
 
 let print_stc_if =
   print_if stc_destination Interfacelib.PrintStc.print_program
+
+let print_sch_if =
+  print_if sch_destination Interfacelib.PrintStc.print_program
 
 let print_sync_if prog =
   match !sync_destination with

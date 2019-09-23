@@ -10,6 +10,7 @@ let print_c = ref false
 let write_lustre = ref false
 let write_nlustre = ref false
 let write_stc = ref false
+let write_sch = ref false
 let write_obc = ref false
 let write_cl = ref false
 let write_cm = ref false
@@ -86,19 +87,21 @@ let parse toks =
 
 let compile source_name filename =
   if !write_lustre
-    then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
+  then Veluslib.lustre_destination := Some (filename ^ ".parsed.lus");
   if !write_nlustre
-    then Veluslib.nlustre_destination := Some (filename ^ ".n.lus");
-    if !write_stc
-    then Veluslib.stc_destination := Some (filename ^ ".stc");
+  then Veluslib.nlustre_destination := Some (filename ^ ".n.lus");
+  if !write_stc
+  then Veluslib.stc_destination := Some (filename ^ ".stc");
+  if !write_sch
+  then Veluslib.sch_destination := Some (filename ^ ".sch.stc");
   if !write_obc
-    then Veluslib.obc_destination := Some (filename ^ ".obc");
+  then Veluslib.obc_destination := Some (filename ^ ".obc");
   if !write_sync
-    then Veluslib.sync_destination := Some (filename ^ ".sync.c");
+  then Veluslib.sync_destination := Some (filename ^ ".sync.c");
   if !write_cl
-    then PrintClight.destination := Some (filename ^ ".light.c");
+  then PrintClight.destination := Some (filename ^ ".light.c");
   if !write_cm
-    then PrintCminor.destination := Some (filename ^ ".cm");
+  then PrintCminor.destination := Some (filename ^ ".cm");
   let toks = LustreLexer.tokens_stream source_name in
   let ast = parse toks in
   let main_node = get_main_node ast in
@@ -142,6 +145,7 @@ let speclist = [
   "-dnlustre", Arg.Set write_nlustre,
                                    " Save generated N-Lustre in <source>.n.lus";
   "-dstc", Arg.Set write_stc, " Save generated Stc in <source>.stc";
+  "-dsch", Arg.Set write_sch, " Save re-scheduled Stc in <source>.sch.stc";
   "-dobc", Arg.Set write_obc, " Save generated Obc in <source>.obc";
   "-dclight", Arg.Set write_cl, " Save generated Clight in <source>.light.c";
   "-dcminor", Arg.Set write_cm, " Save generated Cminor in <source>.minor.c";

@@ -1,37 +1,37 @@
-node euler(x0, xv: float64) returns (x: float64);
+node euler(x0, u: float64) returns (x: float64);
 var i: bool; px: float64;
 let
-  x = if i then x0 else (px + 0.1 * xv);
   i = true fby false;
+  x = if i then x0 else (px + 0.1 * u);
   px = 0.0 fby x;
 tel
 
-node ins(gps, dx: float64) returns (x: float64; alarm : bool);
+node ins(gps, xv: float64) returns (x: float64; alarm: bool);
 var k: int; px: float64; xe: float64 when not alarm;
 let
   k = 0 fby (k + 1);
   alarm = (k >= 50);
-  xe = euler(gps when not alarm, dx when not alarm);
+  xe = euler(gps when not alarm, xv when not alarm);
   x = merge alarm (px when alarm) xe;
   px = 0. fby x;
 tel
 
-node driver(gps, dx, dy : float64; r : bool)
+node driver(gps, xv, dy : float64; r : bool)
 returns (x, y : float64);
 var alarm, alarmy : bool;
 let
-  x, alarm = (restart ins every r)(gps, dx);
+  x, alarm = (restart ins every r)(gps, xv);
   y, alarmy = (restart ins every r)(gps, dy);
 tel
 
-(*
-node nav(gps, dx: float64; s: bool) returns (x: float64; alarm: bool);
-  var r, c, cm: bool; insr : float64 when not c;
+node nav(gps, xv: float64; s: bool) returns (x: float64; alarm: bool);
+  var r, c, cm: bool; insr: float64 when not c; rnc, alr: bool when not c;
 let
-  insr, alarm = (restart ins every r) (gps when not c, dx when not c);
+  insr, alr = (restart ins every rnc) (gps when not c, xv when not c);
   x = merge c (gps when c) insr;
+  alarm = merge c false alr;
   cm = merge c (not s when c) (s when not c);
   c = true fby cm;
   r = false fby (s and c);
+  rnc = r when not c;
 tel
-*)

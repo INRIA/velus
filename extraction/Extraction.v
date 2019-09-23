@@ -149,6 +149,7 @@ Extract Constant LustreElab.do_add_when_to_constants =>
 Extract Constant VelusCorrectness.print_nlustre =>
   "Veluslib.print_nlustre_if".
 Extract Constant VelusCorrectness.print_stc => "Veluslib.print_stc_if".
+Extract Constant VelusCorrectness.print_sch => "Veluslib.print_sch_if".
 Extract Constant VelusCorrectness.print_obc => "Veluslib.print_obc_if".
 Extract Constant VelusCorrectness.do_fusion => "Veluslib.do_fusion".
 Extract Constant VelusCorrectness.do_sync   => "Veluslib.do_sync".

@@ -77,11 +77,11 @@ module PrintFun
             print_ident f
             (print_comma_list print_exp) es
       | NL.EqApp (xs, ck, f, es, Some r) ->
-        fprintf p "@[<hov 2>%a =@ %a(@[<hv 0>%a@])@ every@ %a;@]"
+        fprintf p "@[<hov 2>%a =@ (restart@ %a@ every@ %a)(@[<hv 0>%a@]);@]"
           print_pattern xs
           print_ident f
-          (print_comma_list print_exp) es
           print_ident r
+          (print_comma_list print_exp) es
       | NL.EqFby (x, ck, v0, e) ->
           fprintf p "@[<hov 2>%a =@ %a fby@ %a;@]"
             print_ident x

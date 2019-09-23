@@ -71,12 +71,12 @@ module PrintFun
     include Coreexprlib.PrintFun (CE) (PrintOps)
 
     let print_last p (id, (c0, ck)) =
-      fprintf p "%a@ = %a:%a"
+      fprintf p "%a@ = %a%a"
         print_ident id
         PrintOps.print_const c0
         print_clock_decl ck
 
-    let print_system p (id, f) =
+    let print_subsystem p (id, f) =
       fprintf p "<%a>@ : %a"
         print_ident id
         print_ident f
@@ -114,19 +114,22 @@ module PrintFun
                          Stc.s_subs   = subs;
                          Stc.s_tcs    = tcs } =
       fprintf p "@[<v>\
+                 @[<v 2>system %a {@;\
+                 @[<v>\
+                 %a%a\
                  @[<hov 0>\
-                 @[<h>system %a (%a)@]@;\
-                 @[<h>returns (%a)@]@;\
+                 @[<h>transition(%a)@]@;\
+                 @[<h>returns (%a)@]\
                  @]@;\
-                 %a%a%a\
-                 @[<v 2>let@;%a@;<0 -2>@]\
-                 tel@]"
+                 %a\
+                 @[<v 2>{@;%a@;<0 -2>@]\
+                 }@]@]@]@;}"
         print_ident name
+        (print_comma_list_as "init" print_last) lasts
+        (print_comma_list_as "sub" print_subsystem) subs
         print_decl_list inputs
         print_decl_list outputs
         (print_comma_list_as "var" print_decl) locals
-        (print_comma_list_as "init" print_last) lasts
-        (print_comma_list_as "sub" print_system) subs
         print_trconstrs (List.rev tcs)
 
     let print_program p prog =

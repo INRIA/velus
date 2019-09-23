@@ -4,5 +4,5 @@ SRCFILE=${1:?"Source file not given"}
 NODE=${2:-main}
 NAME=${SRCFILE%.*}
 
-./velus -dnlustre -dstc -dobc -dclight -sync -main $NODE $SRCFILE && \
+./velus -dnlustre -dstc -dsch -dobc -dclight -sync -main $NODE $SRCFILE && \
 CompCert/ccomp -stdlib CompCert/runtime -o $NAME.exe $NAME.sync.c $NAME.s
