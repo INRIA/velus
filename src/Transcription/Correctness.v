@@ -605,110 +605,6 @@ Module Type CORRECTNESS
     destruct Hin; inv Hf; try inv H; eauto.
   Qed.
 
-  Definition envs_eq (env : Env.t (type * clock))
-             (cenv : list (ident * clock)) :=
-    forall (x : ident) (ck : clock),
-      In (x,ck) cenv <-> exists ty, Env.find x env = Some (ty,ck).
-
-  Lemma envs_eq_find :
-    forall env cenv x ck,
-      envs_eq env cenv ->
-      In (x, ck) cenv ->
-      find_clock env x = OK ck.
-  Proof.
-    unfold find_clock, envs_eq. intros * Heq Hin.
-    rewrite Heq in Hin. destruct Hin as [? Hfind].
-    now rewrite Hfind.
-  Qed.
-
-  Lemma envs_eq_app_comm :
-    forall env (xs ys : list (ident * (type * clock))),
-      envs_eq env (idck (xs ++ ys))
-      <-> envs_eq env (idck (ys ++ xs)).
-  Proof.
-    split; unfold envs_eq; intros Heq x ck; split; intro Hin;
-      try (rewrite idck_app in Hin;
-           apply in_app_comm in Hin; apply Heq; now rewrite idck_app);
-      try (rewrite idck_app; rewrite in_app_comm; rewrite <- idck_app;
-           now apply Heq).
-  Qed.
-
-  (* TODO: move to Environment *)
-  Lemma env_find_env_from_list':
-    forall {A} x (v: A) xs s,
-      Env.find x (Env.adds' xs s) = Some v
-      -> In (x, v) xs \/ (~InMembers x xs /\ Env.find x s = Some v).
-  Proof.
-    induction xs as [|(x', v') xs IH]; simpl. now intuition.
-    intros s Hfind. apply IH in Hfind as [|(Hnim & Hfind)]; auto.
-    destruct (ident_eq_dec x' x).
-    + subst. rewrite Env.gss in Hfind.
-      injection Hfind. intro; subst; auto.
-    + rewrite Env.gso in Hfind; intuition.
-  Qed.
-
-  Lemma env_eq_env_from_list:
-    forall xs,
-      NoDupMembers xs ->
-      envs_eq (Env.from_list xs) (idck xs).
-  Proof.
-    intros xs Hnodup x ck. split.
-    - unfold idck. rewrite in_map_iff.
-      intro Hxs. destruct Hxs as (y & Hx & Hin). inv Hx.
-      exists (fst (snd y)).
-      apply Env.In_find_adds'; auto.
-      destruct y as [? [? ?]]. auto.
-    - intro Hfind. destruct Hfind as [ty Hfind].
-      apply Env.from_list_find_In in Hfind.
-      unfold idck. rewrite in_map_iff. exists (x,(ty,ck)). simpl. tauto.
-  Qed.
-
-  Lemma env_eq_env_adds':
-    forall s xs ys,
-      NoDupMembers (xs ++ ys) ->
-      envs_eq s (idck ys) ->
-      envs_eq (Env.adds' xs s) (idck (xs ++ ys)).
-  Proof.
-    intros s xs ys Hnodup Heq x ck. split.
-    - rewrite idck_app. rewrite in_app_iff. destruct 1 as [Hin | Hin].
-      unfold idck in Hin. rewrite in_map_iff in Hin.
-      destruct Hin as (y & Hx & Hin). inv Hx. exists (fst (snd y)).
-      apply Env.In_find_adds'; auto.
-      now apply NoDupMembers_app_l in Hnodup.
-      destruct y as (? & ? & ?). now simpl.
-      assert (Hin' := Hin).
-      apply Heq in Hin. destruct Hin as [ty Hin].
-      exists ty. rewrite <- Hin. apply Env.gsso'.
-      apply In_InMembers in Hin'. rewrite InMembers_idck in Hin'.
-      eapply NoDupMembers_app_InMembers; eauto.
-      now rewrite Permutation_app_comm.
-    - destruct 1 as [ty Hfind].
-      apply env_find_env_from_list' in Hfind.
-      destruct Hfind as [Hin | [Hin Hfind]];
-        rewrite idck_app; apply in_app_iff.
-      left. rewrite In_idck_exists. eauto.
-      right. unfold envs_eq in Heq. rewrite Heq. eauto.
-  Qed.
-
-  Lemma envs_eq_node (n : L.node) :
-    envs_eq
-      (Env.adds' (L.n_vars n)
-                 (Env.adds' (L.n_in n)
-                            (Env.from_list (L.n_out n))))
-      (idck (L.n_in n ++ L.n_vars n ++ L.n_out n)).
-  Proof.
-    rewrite envs_eq_app_comm.
-    rewrite <- app_assoc.
-    apply env_eq_env_adds'. rewrite app_assoc.
-    rewrite Permutation_app_comm. exact (L.n_nodup n).
-    rewrite envs_eq_app_comm.
-    apply env_eq_env_adds'. assert (Hnodup := L.n_nodup n).
-    rewrite Permutation_app_comm in Hnodup.
-    rewrite <- app_assoc in Hnodup. apply NoDupMembers_app_r in Hnodup.
-    now rewrite Permutation_app_comm.
-    apply env_eq_env_from_list. assert (Hnodup := L.n_nodup n).
-    now apply NoDupMembers_app_r, NoDupMembers_app_r in Hnodup.
-  Qed.
 
   (* TODO: move to LSyntax *)
   Lemma nclockof_length :
@@ -1160,28 +1056,6 @@ Module Type CORRECTNESS
       eapply sub_clock_parent; eauto.
     }
     apply sub_clock_sclocksof in Hf; auto. now rewrite Hf.
-  Qed.
-
-  Lemma wc_env_has_Cbase':
-    forall vars x xck,
-      wc_env vars ->
-      In (x, xck) vars ->
-      exists y, In (y, Cbase) vars.
-  Proof.
-    intros vars x xck WC Ix.
-    revert x Ix. induction xck; eauto.
-    intros; eapply Forall_forall in WC; eauto.
-    inv WC; eauto.
-  Qed.
-
-  Lemma wc_env_has_Cbase:
-    forall vars,
-      wc_env vars ->
-      0 < length vars ->
-      exists y, In (y, Cbase) vars.
-  Proof.
-    intros * Hwc Hl. destruct vars. now inv Hl.
-    destruct p. eapply wc_env_has_Cbase'; eauto. now left.
   Qed.
 
   Lemma wc_env_free_in_clock :
@@ -2776,30 +2650,6 @@ Module Type CORRECTNESS
       assumption.
   Qed.
 
-  Lemma WellInstantiated_parent :
-    forall bck sub cks lck,
-      Forall2 (LC.WellInstantiated bck sub) cks lck ->
-      Forall (fun ck => fst ck = bck \/ clock_parent bck (fst ck)) lck.
-  Proof.
-    intros. apply Forall_forall. intros * Hin.
-    pose proof (Forall2_in_right _ _ _ _ H Hin) as (?&?&?&?).
-    eauto using instck_parent.
-  Qed.
-
-  Lemma WellInstantiated_bck :
-    forall vars bck sub lck,
-      wc_env vars ->
-      0 < length vars ->
-      Forall2 (LC.WellInstantiated bck sub) vars lck ->
-      In bck (map stripname lck).
-  Proof.
-    intros * Henv Hlen Wi.
-    apply wc_env_has_Cbase in Henv as [x Hin]; auto.
-    pose proof (Forall2_in_left _ _ _ _ Wi Hin) as (nc &?&?& He).
-    simpl in *. apply in_map_iff. exists nc. destruct nc. simpl in *.
-    now inv He.
-  Qed.
-
   Lemma inst_in_eqst:
     forall G env H Hi b n es ss0 i ck bck sub,
       In (i, ck) (idck (L.n_in n)) ->
@@ -2953,9 +2803,9 @@ Module Type CORRECTNESS
     intros (x & ck) xs  Hxin ? ((yck & ny) & Hyin & (Hsub & Hinst) & Hsc).
     simpl in *. unfold LC.WellInstantiated in WIi.
     eapply sc_inst'; eauto.
-    - pose proof (wc_env_has_Cbase _ WCin) as [i Hin];
+    - pose proof (LC.wc_env_has_Cbase _ WCin) as [i Hin];
         [ unfold idck; rewrite map_length; exact (L.n_ingt0 n) |].
-      apply WellInstantiated_parent in WIi as Hp.
+      apply LC.WellInstantiated_parent in WIi as Hp.
       change (Forall (fun ck => (fun x => x = bck \/ clock_parent bck x) (fst ck))
                      (L.nclocksof es)) in Hp.
       rewrite <- Forall_map in Hp.
@@ -3280,9 +3130,9 @@ Module Type CORRECTNESS
         pose proof (LC.wc_find_node G f n Hwcg) as [?(WCin&(WCio&?))]; eauto.
         unfold LC.WellInstantiated in WIi.
         eapply sc_inst; eauto.
-        - pose proof (wc_env_has_Cbase _ WCin) as [i Hin];
+        - pose proof (LC.wc_env_has_Cbase _ WCin) as [i Hin];
             [ unfold idck; rewrite map_length; exact (L.n_ingt0 n) |].
-          apply WellInstantiated_parent in WIi as Hp.
+          apply LC.WellInstantiated_parent in WIi as Hp.
           change (Forall (fun ck => (fun x => x = bck \/ clock_parent bck x) (fst ck))
                          (L.nclocksof es)) in Hp.
           rewrite <- Forall_map in Hp.
@@ -3452,9 +3302,9 @@ Module Type CORRECTNESS
         simpl in *.
         pose proof (LC.wc_find_node G f n Hwcg) as [?(WCin&(WCio&?))]; eauto.
         eapply sc_inst; eauto.
-        - pose proof (wc_env_has_Cbase _ WCin) as [i Hin];
+        - pose proof (LC.wc_env_has_Cbase _ WCin) as [i Hin];
             [ unfold idck; rewrite map_length; exact (L.n_ingt0 n) |].
-          apply WellInstantiated_parent in WIi as Hp.
+          apply LC.WellInstantiated_parent in WIi as Hp.
           change (Forall (fun ck => (fun x => x = bck \/ clock_parent bck x) (fst ck))
                          (L.nclocksof es)) in Hp.
           rewrite <- Forall_map in Hp. eapply sc_parent in Hp.
@@ -3896,246 +3746,12 @@ Module Type CORRECTNESS
     reflexivity.
   Qed.
 
-  Lemma common_suffix_app :
-    forall l l1 l2,
-      common_suffix (l ++ l1) (l ++ l2) = l ++ common_suffix l1 l2.
-  Proof.
-    induction l; simpl; auto.
-    intros. cases_eqn HH. now f_equal.
-    now rewrite equiv_decb_refl, Pos.eqb_refl in HH0.
-  Qed.
-
-  Lemma common_suffix_app_l :
-    forall l l1 l2,
-      length l2 < length l1 ->
-      common_suffix l1 l2 = common_suffix (l1 ++ l) l2.
-  Proof.
-    induction l1; simpl; intros * Hlen.
-    - inv Hlen.
-    - cases_eqn HH. f_equal. apply IHl1. simpl in Hlen. omega.
-  Qed.
-
-  Lemma clock_parent_length :
-    forall ck ck',
-      clock_parent ck ck' ->
-      length (suffix_of_clock ck []) < length (suffix_of_clock ck' []).
-  Proof.
-    induction 1; simpl;
-      setoid_rewrite <- app_nil_l at 4;
-      setoid_rewrite suffix_of_clock_app;
-      rewrite app_length; simpl; omega.
-  Qed.
-
-  Lemma parent_common_suffix :
-    forall ck ck',
-      clock_parent ck ck' ->
-      common_suffix (suffix_of_clock ck' []) (suffix_of_clock ck []) =
-      suffix_of_clock ck [].
-  Proof.
-    induction 1; simpl; setoid_rewrite <- app_nil_l at 3.
-    - setoid_rewrite <- app_nil_r at 7.
-      rewrite suffix_of_clock_app.
-      rewrite common_suffix_app. simpl. now rewrite app_nil_r.
-    - rewrite suffix_of_clock_app, <- common_suffix_app_l; auto.
-      now apply clock_parent_length.
-  Qed.
-
-  Lemma common_suffix_id :
-    forall sfx, common_suffix sfx sfx = sfx.
-  Proof.
-    induction sfx as [| []]; simpl. auto. rewrite IHsfx.
-    rewrite equiv_decb_refl, Pos.eqb_refl. now simpl.
-  Qed.
-
-  Lemma common_suffix_comm :
-    forall sfx1 sfx2, common_suffix sfx1 sfx2 = common_suffix sfx2 sfx1.
-  Proof.
-    induction sfx1 as [| [i1 b1]], sfx2 as [| [i2 b2]]; simpl; auto.
-    cases_eqn EQ.
-    - apply andb_prop in EQ as [H].
-      apply Peqb_true_eq in H. subst.
-      Coq.Bool.Bool.destr_bool; f_equal; auto; f_equal.
-    -  apply andb_prop in EQ as [H].
-       apply Peqb_true_eq in H. subst.
-       apply Bool.andb_false_iff in EQ0 as [];
-         Coq.Bool.Bool.destr_bool; now rewrite Pos.eqb_refl in H.
-    -  apply andb_prop in EQ0 as [H].
-       apply Peqb_true_eq in H. subst.
-       apply Bool.andb_false_iff in EQ as [];
-         Coq.Bool.Bool.destr_bool; now rewrite Pos.eqb_refl in H.
-  Qed.
-
-  Inductive prefix {A} : list A -> list A -> Prop :=
-  | prefixNil: forall (l: list A), prefix nil l
-  | prefixCons: forall (a: A)(l m:list A), prefix l m -> prefix (a::l) (a::m).
-  Hint Constructors prefix.
-
-  Lemma prefix_app:
-    forall {A} (l l' : list A), prefix l (l ++ l').
-  Proof.
-    induction l; simpl; auto.
-  Qed.
-
-  Lemma prefix_app':
-    forall {A} (l l1 l2 : list A), prefix l l1 -> prefix l (l1 ++ l2).
-  Proof.
-    induction 1; simpl; auto.
-  Qed.
-
-  Lemma prefix_refl :
-    forall {A} (l : list A), prefix l l.
-  Proof. induction l; auto. Qed.
-
-  Lemma prefix_app3 :
-    forall {A} (l1 l2 : list A) e,
-      prefix l1 (l2 ++ [e]) ->
-      prefix l1 l2 \/ l1 = (l2 ++ [e]).
-  Proof.
-    intros * Hp. revert dependent l1.
-    induction l2; simpl; intros.
-    - inv Hp; auto. inv H1; auto.
-    - inv Hp; auto. specialize (IHl2 _ H1) as []; auto.
-      right. now f_equal.
-  Qed.
-
-  Lemma suffix_of_clock_Con:
-    forall ck i b,
-      suffix_of_clock (Con ck i b) [] =
-      suffix_of_clock ck [(i, b)].
-  Proof. auto. Qed.
-
-  Lemma suffix_of_clock_inj :
-    forall ck ck',
-      suffix_of_clock ck [] = suffix_of_clock ck' [] ->
-      ck = ck'.
-  Proof.
-    induction ck, ck'; simpl; auto; intros * Hs.
-    - setoid_rewrite <- app_nil_l in Hs at 3.
-      rewrite suffix_of_clock_app in Hs.
-      now apply app_cons_not_nil in Hs.
-    - setoid_rewrite <- app_nil_l in Hs at 2.
-      rewrite suffix_of_clock_app in Hs.
-      symmetry in Hs. now apply app_cons_not_nil in Hs.
-    - setoid_rewrite <- app_nil_l in Hs at 2 4.
-      rewrite 2 suffix_of_clock_app in Hs.
-      apply app_inj_tail in Hs as [He Hp]. inv Hp.
-      specialize (IHck _ He). now subst.
-  Qed.
-
-  Lemma prefix_parent :
-    forall bk ck,
-      ck = bk \/ clock_parent bk ck <->
-      prefix (suffix_of_clock bk []) (suffix_of_clock ck []).
-  Proof.
-    split.
-    - destruct 1 as [|H]. subst. apply prefix_refl.
-      induction H; simpl.
-      + setoid_rewrite <- app_nil_l at 4.
-        rewrite suffix_of_clock_app. apply prefix_app.
-      + setoid_rewrite <- app_nil_l at 4.
-        rewrite suffix_of_clock_app. now apply prefix_app'.
-    - intro Hp. revert dependent bk.
-      induction ck; intros.
-      + simpl in *. inv Hp. destruct bk; simpl in *; auto.
-        setoid_rewrite <- app_nil_l in H0 at 3.
-        rewrite suffix_of_clock_app in H0.
-        now apply app_cons_not_nil in H0.
-      + simpl in *.
-        setoid_rewrite <- app_nil_l in Hp at 4.
-        rewrite suffix_of_clock_app in Hp.
-        apply prefix_app3 in Hp as [Hp|Heq].
-        specialize (IHck _ Hp) as []; subst; auto.
-        rewrite <- suffix_of_clock_app in Heq.
-        rewrite app_nil_l, <- suffix_of_clock_Con in Heq.
-        apply suffix_of_clock_inj in Heq. subst. auto.
-  Qed.
-
-  Lemma prefix_common_suffix :
-    forall sfx1 sfx2 p,
-      prefix p sfx1 ->
-      prefix p sfx2 ->
-      prefix p (common_suffix sfx1 sfx2).
-  Proof.
-    intros. revert dependent sfx2.
-    induction H as [|a]. auto. intros * Hp. simpl. destruct a.
-    destruct sfx2. inv Hp. destruct p. inv Hp.
-    rewrite equiv_decb_refl, Pos.eqb_refl. simpl. constructor. auto.
-  Qed.
-
-  Lemma suffix_of_clock_of_suffix :
-    forall sfx, sfx = suffix_of_clock (clock_of_suffix sfx Cbase) [].
-  Proof.
-    intro sfx.
-    assert (suffix_of_clock Cbase [] = []) by auto.
-    rewrite <- app_nil_l, <- H at 1.
-    generalize Cbase.
-    induction sfx as [|[i b]]. simpl in *; auto. now setoid_rewrite app_nil_r.
-    simpl in *. setoid_rewrite <- IHsfx.
-    setoid_rewrite <- suffix_of_clock_app. setoid_rewrite app_nil_l at 2.
-    now simpl.
-  Qed.
-
-  Lemma Tim :
-    forall bk ck ck',
-      clock_parent bk ck ->
-      clock_parent bk ck' ->
-      exists d, (d = bk \/ clock_parent bk d) /\
-           suffix_of_clock d [] =
-           common_suffix (suffix_of_clock ck []) (suffix_of_clock ck' []).
-  Proof.
-    intros * Hp Hp'.
-    eapply or_intror in Hp. apply prefix_parent in Hp.
-    eapply or_intror in Hp'. apply prefix_parent in Hp'.
-    pose proof (prefix_common_suffix _ _ _ Hp Hp') as Hc.
-    rewrite suffix_of_clock_of_suffix in Hc.
-    apply prefix_parent in Hc.
-    esplit. split; eauto using suffix_of_clock_of_suffix.
-  Qed.
-
-  Lemma find_base_clock_bck:
-    forall lck bk,
-      In bk lck ->
-      Forall (fun ck => ck = bk \/ clock_parent bk ck) lck ->
-      find_base_clock lck = bk.
-  Proof.
-    destruct lck. inversion 1.
-    simpl. intros * Hin Hf. rewrite <- fold_left_map.
-    apply Forall_cons2 in Hf as [Hf1 Hf2].
-    revert dependent c. induction lck. simpl. intros.
-    inv Hin; try tauto.
-    now rewrite clock_of_suffix_of_clock.
-    simpl. apply Forall_cons2 in Hf2 as [? Hf]. specialize (IHlck Hf).
-    intros. destruct H, Hf1; subst.
-    - rewrite common_suffix_id. eauto.
-    - rewrite parent_common_suffix; eauto.
-    - rewrite common_suffix_comm, parent_common_suffix; eauto.
-    - pose proof (Tim _ _ _ H H0) as (?&?& H2).
-      rewrite common_suffix_comm, <- H2.
-      eapply IHlck; eauto.
-      destruct Hin as [|[]]; auto; subst; exfalso;
-        eapply clock_parent_not_refl; eauto.
-  Qed.
-
-
   Definition sem_clock_inputs (G : L.global) (f : ident) (xs : list (Stream value)): Prop :=
     exists H n,
       L.find_node f G = Some n /\
       Forall2 (LS.sem_var H) (LS.idents (L.n_in n)) xs /\
       Forall2 (fun xc => NLSC.sem_clock H (LS.sclocksof xs) (snd xc))
               (idck (L.n_in n)) (map abstract_clock xs).
-
-  (* TODO: common? *)
-  Ltac simpl_Foralls :=
-    repeat
-      match goal with
-      | H: Forall _ [] |- _ => inv H
-      | H: Forall _ [_] |- _ => inv H
-      | H: Forall _ (_::_) |- _ => inv H
-      | H: Forall2 _ [_] _ |- _ => inv H
-      | H: Forall2 _ [] _ |- _ => inv H
-      | H: Forall2 _ _ [_] |- _ => inv H
-      | H: Forall2 _ _ [] |- _ => inv H
-      end.
 
   Lemma sem_toeq :
     forall tenv cenv G H P env envo eq eq' b,
@@ -4277,16 +3893,16 @@ Module Type CORRECTNESS
       assert (find_base_clock (L.clocksof l) = bck) as ->.
       {
         apply find_base_clock_bck.
-        + rewrite L.clocksof_nclocksof. eapply WellInstantiated_bck; eauto.
+        + rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
           unfold idck. rewrite map_length. exact (L.n_ingt0 n0).
-        + apply WellInstantiated_parent in WIi.
+        + apply LC.WellInstantiated_parent in WIi.
           rewrite L.clocksof_nclocksof, Forall_map.
           eapply Forall_impl; eauto. now simpl.
       }
       eapply sc_parent with (ck := bck) in Hsc.
-      2:{ rewrite L.clocksof_nclocksof. eapply WellInstantiated_bck; eauto.
+      2:{ rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
           unfold idck. rewrite map_length. exact (L.n_ingt0 n0). }
-      2:{ apply WellInstantiated_parent in WIi.
+      2:{ apply LC.WellInstantiated_parent in WIi.
           rewrite L.clocksof_nclocksof, Forall_map.
           eapply Forall_impl; eauto. now simpl. }
       assert (forall x, Is_free_in_clock x bck -> InMembers x cenv). {

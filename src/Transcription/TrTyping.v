@@ -36,18 +36,6 @@ Module Type TRTYPING
        (CET         : CETYPING Ids Op CE)
        (NLT         : NLTYPING  Ids Op CE NL Ord CET).
 
-  (* TODO: common? *)
-  Ltac simpl_Foralls :=
-    repeat
-      match goal with
-      | H: Forall _ [] |- _ => inv H
-      | H: Forall _ [_] |- _ => inv H
-      | H: Forall _ (_::_) |- _ => inv H
-      | H: Forall2 _ [_] _ |- _ => inv H
-      | H: Forall2 _ [] _ |- _ => inv H
-      | H: Forall2 _ _ [_] |- _ => inv H
-      | H: Forall2 _ _ [] |- _ => inv H
-      end.
 
   Lemma wt_clock_l_ce :
     forall vars ck,

@@ -573,6 +573,52 @@ Module Type LCLOCKING
   Qed.
    *)
 
+  Lemma wc_env_has_Cbase':
+    forall vars x xck,
+      wc_env vars ->
+      In (x, xck) vars ->
+      exists y, In (y, Cbase) vars.
+  Proof.
+    intros vars x xck WC Ix.
+    revert x Ix. induction xck; eauto.
+    intros; eapply Forall_forall in WC; eauto.
+    inv WC; eauto.
+  Qed.
+
+  Lemma wc_env_has_Cbase:
+    forall vars,
+      wc_env vars ->
+      0 < length vars ->
+      exists y, In (y, Cbase) vars.
+  Proof.
+    intros * Hwc Hl. destruct vars. now inv Hl.
+    destruct p. eapply wc_env_has_Cbase'; eauto. now left.
+  Qed.
+
+  Lemma WellInstantiated_parent :
+    forall bck sub cks lck,
+      Forall2 (WellInstantiated bck sub) cks lck ->
+      Forall (fun ck => fst ck = bck \/ clock_parent bck (fst ck)) lck.
+  Proof.
+    intros. apply Forall_forall. intros * Hin.
+    pose proof (Forall2_in_right _ _ _ _ H Hin) as (?&?&?&?).
+    eauto using instck_parent.
+  Qed.
+
+  Lemma WellInstantiated_bck :
+    forall vars bck sub lck,
+      wc_env vars ->
+      0 < length vars ->
+      Forall2 (WellInstantiated bck sub) vars lck ->
+      In bck (map stripname lck).
+  Proof.
+    intros * Henv Hlen Wi.
+    apply wc_env_has_Cbase in Henv as [x Hin]; auto.
+    pose proof (Forall2_in_left _ _ _ _ Wi Hin) as (nc &?&?& He).
+    simpl in *. apply in_map_iff. exists nc. destruct nc. simpl in *.
+    now inv He.
+  Qed.
+
 End LCLOCKING.
 
 Module LClockingFun
