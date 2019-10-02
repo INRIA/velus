@@ -159,9 +159,6 @@ Module Type NLSEMANTICSCOIND
   Definition sem_aexp := sem_annot sem_exp.
   Definition sem_caexp := sem_annot sem_cexp.
 
-  CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
-    existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
-
   CoFixpoint fby (v0: val) (xs: Stream value) : Stream value :=
     match xs with
     | absent    ::: xs => absent     ::: fby v0 xs

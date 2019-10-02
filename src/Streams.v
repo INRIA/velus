@@ -284,6 +284,9 @@ Module Type STREAMS
         ite (present false_val ::: s)
             (present t ::: ts) (present f ::: fs) (present f ::: rs).
 
+  CoFixpoint clocks_of (ss: list (Stream value)) : Stream bool :=
+    existsb (fun s => hd s <>b absent) ss ::: clocks_of (List.map (@tl value) ss).
+
   CoInductive bools_of: Stream value -> Stream bool -> Prop :=
     bools_of_intro:
       forall v vs b bs,
@@ -374,7 +377,7 @@ Module Type STREAMS
     forall {A} (xs: Stream A) x,
       (x ::: xs) # 0 = x.
   Proof. reflexivity. Qed.
-  
+
   Fact Str_nth_S:
     forall {A} (xs: Stream A) x n,
       (x ::: xs) # (S n) = xs # n.
@@ -538,7 +541,7 @@ Module Type STREAMS
   Proof.
     split.
     - intros * H n.
-      revert dependent xs; revert ts fs rs. 
+      revert dependent xs; revert ts fs rs.
       induction n; intros.
       + inv H; intuition.
         * right; left. eexists; intuition.
@@ -583,7 +586,7 @@ Module Type STREAMS
   Proof.
     split.
     - intros * H n.
-      revert dependent xs; revert ts fs rs. 
+      revert dependent xs; revert ts fs rs.
       induction n; intros.
       + inv H; intuition.
         * right; left. do 2 eexists; now intuition.

@@ -46,9 +46,6 @@ Module Type LSEMANTICS
         fby (present x ::: xs) (present y ::: ys) (present x ::: rs).
 
 
-  CoFixpoint sclocksof (ss: list (Stream value)) : Stream bool :=
-    existsb (fun s=> hd s <>b absent) ss ::: sclocksof (List.map (@tl value) ss).
-
   (* TODO: Use everywhere, esp. in LustreElab.v *)
   (* TODO: replace idents with (list ident) *)
   Definition idents xs := List.map (@fst ident (type * clock)) xs.
@@ -149,7 +146,7 @@ Module Type LSEMANTICS
                Forall2 (sem_var H) (idents n.(n_in)) ss ->
                Forall2 (sem_var H) (idents n.(n_out)) os ->
                Forall (sem_equation H b) n.(n_eqs) ->
-               b = sclocksof ss ->
+               b = clocks_of ss ->
                sem_node f ss os.
 
   End NodeSemantics.
@@ -267,7 +264,7 @@ Module Type LSEMANTICS
         Forall2 (sem_var H) (idents n.(n_out)) os ->
         Forall (sem_equation G H b) n.(n_eqs) ->
         Forall (P_equation H b) n.(n_eqs) ->
-        b = sclocksof ss ->
+        b = clocks_of ss ->
         P_node f ss os.
 
     Local Ltac SolveForall :=

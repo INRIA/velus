@@ -581,7 +581,7 @@ Module Type NLINDEXEDTOCOIND
                end;
         destruct_conjs; firstorder
       end.
-  
+
     (** State the correspondence for [exp].
         Goes by induction on [exp] and uses the previous inversion lemmas. *)
     Hint Constructors when lift1 lift2.
@@ -606,7 +606,7 @@ Module Type NLINDEXEDTOCOIND
       - apply when_inv in Sem as (ys & xs & ? & ? & Spec).
         econstructor; eauto using sem_var_impl_from.
         apply when_spec; use_spec Spec.
-        
+
       - apply unop_inv in Sem as (ys & ? & Spec).
         econstructor; eauto.
         apply lift1_spec; use_spec Spec.
@@ -844,7 +844,7 @@ Module Type NLINDEXEDTOCOIND
 
       - apply merge_inv in Sem as (xs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
-        apply merge_spec; use_spec Spec. 
+        apply merge_spec; use_spec Spec.
 
       - apply ite_inv in Sem as (bs & ts & fs & ? & ? & ? & Spec).
         econstructor; eauto.
@@ -990,7 +990,7 @@ Module Type NLINDEXEDTOCOIND
     Lemma tr_clocks_of_from:
       forall n xss,
         wf_streams xss ->
-        CoInd.clocks_of (tr_streams_from n xss) ≡ tr_stream_from n (CESem.clock_of xss).
+        Strs.clocks_of (tr_streams_from n xss) ≡ tr_stream_from n (CESem.clock_of xss).
     Proof.
       cofix Cofix; intros.
       constructor; simpl.
@@ -1013,7 +1013,7 @@ Module Type NLINDEXEDTOCOIND
     Corollary tr_clocks_of:
       forall xss,
         wf_streams xss ->
-        CoInd.clocks_of (tr_streams xss) ≡ tr_stream (CESem.clock_of xss).
+        Strs.clocks_of (tr_streams xss) ≡ tr_stream (CESem.clock_of xss).
     Proof. apply tr_clocks_of_from. Qed.
 
     Lemma sem_clocked_var_inv:

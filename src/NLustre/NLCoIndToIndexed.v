@@ -123,7 +123,7 @@ Module Type NLCOINDTOINDEXED
       forall A (xss: list (Stream A)),
         tr_Streams xss 0 = List.map (hd (A:=A)) xss.
     Proof.
-      reflexivity. 
+      reflexivity.
     Qed.
 
     (** The counterpart of [tr_Stream_tl] for histories. *)
@@ -164,7 +164,7 @@ Module Type NLCOINDTOINDEXED
     Qed.
     Hint Resolve sem_vars_impl.
 
- 
+
     (** ** Semantics of clocks *)
 
     (** Give an indexed specification for [sem_clock] in the previous style,
@@ -283,7 +283,7 @@ Module Type NLCOINDTOINDEXED
         destruct (Hwhen n)
           as [(Hes & Hxs & Hos)
              |[(? & ? & Hes & Hxs & ? & Hos)
-              |(? & ? & Hes & Hxs & ? & Hos)]]; 
+              |(? & ? & Hes & Hxs & ? & Hos)]];
           rewrite Hos; rewrite Hes in IHsem_exp; rewrite Hxs in Hvar;
             eauto.
         rewrite <-(Bool.negb_involutive k); eauto.
@@ -355,7 +355,7 @@ Module Type NLCOINDTOINDEXED
         rewrite Hes; constructor; auto.
     Qed.
     Hint Resolve sem_aexp_impl.
- 
+
     (** [fby] is not a predicate but a function, so we directly state the
         correspondence.  *)
     Lemma fby_impl:
@@ -567,7 +567,7 @@ Module Type NLCOINDTOINDEXED
         applications. *)
     Lemma tr_clocks_of:
       forall xss,
-        CESem.clock_of (tr_Streams xss) ≈ tr_Stream (CoInd.clocks_of xss).
+        CESem.clock_of (tr_Streams xss) ≈ tr_Stream (Strs.clocks_of xss).
     Proof.
       unfold CESem.clock_of.
       intros xss n; revert dependent xss; induction n; intros.

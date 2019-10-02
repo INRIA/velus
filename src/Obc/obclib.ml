@@ -222,7 +222,7 @@ module PrintFun (Obc: SYNTAX)
                                                            print_expr e
       | Obc.Ifte (e, s1, s2) ->
           fprintf p
-            "@[<v 2>if (%a) {@ %a@;<0 -2>} else {@ %a@;<0 -2>}@]"
+            "@[<v 2>if %a {@ %a@;<0 -2>} else {@ %a@;<0 -2>}@]"
             print_expr e
             print_stmt s1
             print_stmt s2
@@ -261,9 +261,10 @@ module PrintFun (Obc: SYNTAX)
      fprintf p "@[<h>%a@,(@[<hov 0>%a@])@]@ " print_ident name print_decls inputs;
      if outputs <> [] then
        fprintf p "@[<h>returns (@[<hov 0>%a@])@]@ " print_decls outputs;
-    if locals <> [] then
-       fprintf p "@[<h>var @[<hov 0>%a@] in@]@ " print_decls locals;
-     fprintf p "@]@;{@[<v 1>@;";
+     fprintf p "@]";
+     if locals <> [] then
+       fprintf p "@;@[<h>var @[<hov 0>%a@]@]@;" print_decls locals;
+     fprintf p "{@;<0 2>@[<v>";
      print_stmt p body;
      fprintf p "@;<0 -2>}@]@]"
 
@@ -287,7 +288,7 @@ module PrintFun (Obc: SYNTAX)
         p objs;
       print_decl_list
         (fun p (id, ty) ->
-          fprintf p "@[<h>memory %a@ : %a@]" print_ident id PrintOps.print_typ ty)
+          fprintf p "@[<h>register %a@ : %a@]" print_ident id PrintOps.print_typ ty)
         p mems;
       fprintf p "@;";
       print_methods p true meths;

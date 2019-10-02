@@ -16,11 +16,11 @@ let
   px = 0. fby x;
 tel
 
-node driver(gps, xv, dy : float64; r : bool)
+node driver(gps, xv, yv : float64; r : bool)
 returns (x, y : float64);
-var alarm, alarmy : bool;
+var alarmx, alarmy : bool;
 let
-  x, alarm = (restart ins every r)(gps, xv);
+  x, alarmx = (restart ins every r)(gps, xv);
   y, alarmy = (restart ins every r)(gps, dy);
 tel
 
