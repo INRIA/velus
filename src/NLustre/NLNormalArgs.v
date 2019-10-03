@@ -55,7 +55,7 @@ Module Type NLNORMALARGS
   | CEqApp:
       forall xs ck f les r n,
         find_node f G = Some n ->
-        Forall2 noops_exp (map dck n.(n_in)) les ->
+        Forall2 noops_exp (map (fun '(_, (_, ck)) => ck) n.(n_in)) les ->
         normal_args_eq G (EqApp xs ck f les r)
   | CEqFby:
       forall x ck v0 le,

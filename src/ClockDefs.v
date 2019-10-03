@@ -1,4 +1,5 @@
 From Coq Require Import BinNums.
+From Coq Require Import List.
 
 Definition ident := positive.
 
@@ -22,40 +23,14 @@ Fixpoint instck (bk: clock) (sub: ident -> option ident) (ck: clock)
 
 (* Named clocks *)
 
-(* Named clocks, as opposed to (stream) clocks, are used to track
-   interdependencies in clock annotations internal to expressions. *)
+(* Named clocks are used to track  interdependencies in clock
+   annotations internal to expressions. *)
 
-Inductive ckid : Type :=
-| Vidx : positive -> ckid                   (* fresh clock *)
-| Vnm  : ident    -> ckid.                  (* named clock *)
+Definition nclock : Type := clock * option ident.
 
-Inductive sclock : Type :=
-| Sbase : sclock                            (* base clock *)
-| Son   : sclock -> ckid -> bool -> sclock. (* subclock *)
+Definition stripname : nclock -> clock := fst.
 
-Inductive nclock : Type :=
-| Cstream : sclock -> nclock                (* (unnamed) stream clock *)
-| Cnamed  : ckid -> sclock -> nclock.       (* named clock: (c : s) or (i : s) *)
-
-Fixpoint sclk (ck: clock) : sclock :=
-  match ck with
-  | Cbase => Sbase
-  | Con ck x b => Son (sclk ck) (Vnm x) b
-  end.
-
-From Coq Require Import List.
-Import ListNotations.
-
-Fixpoint indexes (ncks: list nclock) : list positive :=
-  match ncks with
-  | [] => []
-  | Cnamed (Vidx i) _ :: ncks => i :: indexes ncks
-  | _ :: ncks => indexes ncks
-  end.
-
-Definition stripname (ck: nclock) : sclock :=
-  match ck with
-  | Cstream sck => sck
-  | Cnamed _ sck => sck
-  end.
+Definition indexes (ncks : list nclock) : list positive :=
+  fold_right (fun nck acc => match snd nck with None => acc | Some nm => nm::acc end)
+             nil ncks.
 

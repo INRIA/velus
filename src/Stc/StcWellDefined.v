@@ -140,7 +140,7 @@ Module Type STCWELLDEFINED
   | CTcCall:
       forall s xs ck rst f es b P',
         find_system f P = Some (b, P') ->
-        Forall2 noops_exp (map dck b.(s_in)) es ->
+        Forall2 noops_exp (map (fun '(_,(_, ck)) => ck) b.(s_in)) es ->
         normal_args_tc P (TcCall s xs ck rst f es).
 
   Definition normal_args_system (P: program) (s: system) : Prop :=

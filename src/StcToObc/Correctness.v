@@ -848,7 +848,7 @@ Module Type CORRECTNESS
   Proof.
     intros * Hcvars Hcm EqEnv Himems Hwc Hnorm Hles Hcksem.
     apply Forall2_Forall2_exists, Forall2_map_2, Forall2_swap_args.
-    inversion_clear Hwc as [| | |???????? Hfind (isub & osub & Hwci & Hwco)].
+    inversion_clear Hwc as [| | |???????? sub Hfind Hwci Hwco].
     inversion_clear Hnorm as [| | |???????? Hfind' Hnorm'].
     rewrite Hfind in Hfind'; inv Hfind'.
     rewrite Forall2_map_1, Forall2_swap_args in Hnorm'.
@@ -858,7 +858,7 @@ Module Type CORRECTNESS
     intros le v Hlein Hvin Hsem.
     apply Forall_forall with (2:=Hlein) in Hwci
       as ((x, (xty, xck)) & Hin & Hnorm & Hsubv & (lck & WClck & Hinst)).
-    unfold dck in *; simpl in *.
+    simpl in *.
     assert (WClck':=WClck).
     assert (equiv_env (fun x => CE.IsF.Is_free_in_exp x le) R mems me ve)
       by (weaken_equiv_env with constructor;
@@ -872,12 +872,12 @@ Module Type CORRECTNESS
       destruct xck.
       + inv Hinst. now apply sem_clock_instant_det with (1:=Hcksem) in Hcksem'.
       + simpl in Hinst.
-        destruct (instck ck isub xck) eqn:Hck; try discriminate.
-        match goal with H:context [isub ?i] |- _ =>
-                        destruct (isub i) eqn:Hisub; try discriminate end.
+        destruct (instck ck sub xck) eqn:Hck; try discriminate.
+        match goal with H:context [sub ?i] |- _ =>
+                        destruct (sub i) eqn:Hisub; try discriminate end.
         injection Hinst; intro; subst lck.
         inversion_clear WClck as [|? ? ? Hicks| | |].
-        simpl in Hv'; destruct (PS.mem i1 mems) eqn: E.
+        simpl in Hv'; destruct (PS.mem i0 mems) eqn: E.
         * unfold translate_arg, var_on_base_clock; simpl; rewrite E; simpl; auto.
         *{ apply Hcvars in Hicks.
            - unfold translate_arg, var_on_base_clock; simpl; rewrite Hicks, E; simpl.

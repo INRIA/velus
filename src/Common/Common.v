@@ -765,8 +765,8 @@ Section TypesAndClocks.
      The following definitions and lemmas facilitate working with such
      values. *)
 
-  Definition dty (x : ident * (type * clock)) : type := fst (snd x).
-  Definition dck (x : ident * (type * clock)) : clock := snd (snd x).
+  (* Definition dty (x : ident * (type * clock)) : type := fst (snd x). *)
+  (* Definition dck (x : ident * (type * clock)) : clock := snd (snd x). *)
 
   Definition idty : list (ident * (type * clock)) -> list (ident * type) :=
     map (fun xtc => (fst xtc, fst (snd xtc))).

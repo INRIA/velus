@@ -47,8 +47,8 @@ Module Type STCTYPING
   | wt_TcCall:
       forall s xs ck rst f es i P',
         find_system f P = Some (s, P') ->
-        Forall2 (fun x xt => In (x, dty xt) vars) xs s.(s_out) ->
-        Forall2 (fun e xt => typeof e = dty xt) es s.(s_in) ->
+        Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs s.(s_out) ->
+        Forall2 (fun e '(_, (t, _)) => typeof e = t) es s.(s_in) ->
         wt_clock (vars ++ lasts) ck ->
         Forall (wt_exp (vars ++ lasts)) es ->
         wt_trconstr P vars lasts (TcCall i xs ck rst f es).
@@ -86,11 +86,11 @@ Module Type STCTYPING
     - inv WTtc; rewrite Henv, Hlasts in *; econstructor; eauto;
         match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                         apply Forall2_impl_In with (2:=H) end;
-        intros; rewrite Henv in *; auto.
+        intros ? (?&(?&?)); rewrite Henv in *; auto.
     - inv WTtc; rewrite <-Henv, <-Hlasts in *; econstructor; eauto;
           match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                           apply Forall2_impl_In with (2:=H) end;
-          intros; rewrite Henv in *; auto.
+          intros ? (?&(?&?)); rewrite Henv in *; auto.
   Qed.
 
 End STCTYPING.

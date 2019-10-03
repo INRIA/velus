@@ -352,10 +352,8 @@ Module Type STCSCHEDULE
     destruct tc; inv Hwc; eauto using wc_trconstr.
     econstructor; auto.
     - now apply scheduler_find_system; eauto.
-    - match goal with H:exists _, _ |- _ =>
-                      destruct H as (isub & osub & Hn_in & Hn_out) end.
-      exists isub, osub.
-      match goal with H:find_system _ _ = Some (?b, _) |- _ => destruct b end; auto.
+    - eauto.
+    - eauto.
   Qed.
 
   Lemma scheduler_wc_system:

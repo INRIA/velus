@@ -41,7 +41,7 @@ Module Type NL2STCTYPING
       apply find_node_translate in Find as (?&?&?&?); subst.
       econstructor; try rewrite SpecVars; eauto.
       simpl; eapply Forall2_impl_In; eauto.
-      intros ? (? & ?) ? ? Hin.
+      intros ? (? & (? & ?)) ? ? Hin.
       apply SpecVars' in Hin; auto.
     - destruct xs; auto.
       apply find_node_translate in Find as (?&?&?&?); subst.
@@ -51,7 +51,7 @@ Module Type NL2STCTYPING
       + constructor; auto.
         econstructor; try rewrite SpecVars; eauto.
         simpl; eapply Forall2_impl_In; eauto.
-        intros ? (? & ?) ? ? Hin.
+        intros ? (? & (?&?)) ? ? Hin.
         apply SpecVars' in Hin; auto.
     - constructor; auto.
       constructor; try rewrite SpecVars; auto.

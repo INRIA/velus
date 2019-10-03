@@ -218,27 +218,25 @@ Module Type CECLOCKINGSEMANTICS
      the environment where the node is instantiated ([R]). *)
   Lemma sem_var_instant_transfer_out_instant:
     forall (xin : list (ident * (type * clock)))
-           (xout : list (ident * (type * clock)))
-           R R' les ys isub osub base lss yss,
+      (xout : list (ident * (type * clock)))
+      R R' les ys sub base lss yss,
       NoDupMembers (xin ++ xout) ->
-      Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
-      Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
-      (forall x, ~InMembers x xout -> osub x = None) ->
+      Forall2 (fun xtc le => SameVar (sub (fst xtc)) le) xin les ->
+      Forall2 (fun xtc  y => sub (fst xtc) = Some y) xout ys ->
       sem_vars_instant R' (map fst xin) lss ->
       sem_vars_instant R' (map fst xout) yss ->
       sem_exps_instant base R les lss ->
       sem_vars_instant R ys yss ->
       forall x y ys,
         InMembers x (xin ++ xout) ->
-        orelse isub osub x = Some y ->
+        sub x = Some y ->
         sem_var_instant R' x ys ->
         sem_var_instant R y ys.
   Proof.
-    intros * Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
+    intros * Hndup Hsv Hos Hxin Hxout Hles Hys * Hin Hsub Hxv.
     apply InMembers_app in Hin as [Hin|Hout].
     - clear Hxout Hys Hos.
       apply NoDupMembers_app_InMembers with (2:=Hin) in Hndup.
-      apply Hnos in Hndup.
       apply InMembers_In in Hin as ((xty & xck) & Hin).
       unfold sem_exps_instant in Hles.
       unfold sem_vars_instant in Hxin.
@@ -251,11 +249,7 @@ Module Type CECLOCKINGSEMANTICS
       eapply Forall_forall in Hsv
         as (le & Hle & (ls & Hlsin & Hxls & Hlels) & Hsveq); eauto.
       simpl in *.
-      unfold orelse in Hsub.
-      unfold subvar_eq in Hsveq.
-      destruct (isub x); [|congruence].
-      inv Hsub. destruct le; try contradiction.
-      simpl in Hsveq. subst.
+      rewrite Hsub in Hsveq; inv Hsveq.
       inversion_clear Hlels.
       apply sem_var_instant_det with (1:=Hxv) in Hxls.
       now rewrite Hxls in *.
@@ -278,19 +272,18 @@ Module Type CECLOCKINGSEMANTICS
 
   Corollary sem_var_instant_transfer_out:
     forall (xin : list (ident * (type * clock)))
-           (xout : list (ident * (type * clock)))
-           H H' les ys isub osub bk lss yss,
+      (xout : list (ident * (type * clock)))
+      H H' les ys sub bk lss yss,
       NoDupMembers (xin ++ xout) ->
-      Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
-      Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
-      (forall x, ~InMembers x xout -> osub x = None) ->
+      Forall2 (fun xtc le => SameVar (sub (fst xtc)) le) xin les ->
+      Forall2 (fun xtc  y => sub (fst xtc) = Some y) xout ys ->
       sem_vars H' (map fst xin) lss ->
       sem_vars H' (map fst xout) yss ->
       sem_exps bk H les lss ->
       sem_vars H ys yss ->
       forall x y ys,
         InMembers x (xin ++ xout) ->
-        orelse isub osub x = Some y ->
+        sub x = Some y ->
         forall n,
           sem_var_instant (H' n) x ys ->
           sem_var_instant (H  n) y ys.
@@ -298,66 +291,64 @@ Module Type CECLOCKINGSEMANTICS
     intros; eapply sem_var_instant_transfer_out_instant; eauto.
   Qed.
 
-  Lemma sem_var_instant_transfer_out':
-    forall n (xin : list (ident * (type * clock)))
-           (xout : list (ident * (type * clock)))
-           H H' les ys isub osub (bk: stream bool) lss yss,
-      NoDupMembers (xin ++ xout) ->
-      Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le) xin les ->
-      Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys ->
-      (forall x, ~InMembers x xout -> osub x = None) ->
-      sem_vars_instant (H' n) (map fst xin) (lss n) ->
-      sem_vars_instant (H' n) (map fst xout) (yss n) ->
-      sem_exps_instant (bk n) (H n) les (lss n) ->
-      sem_vars_instant (H n) ys (yss n) ->
-      forall x y ys,
-        InMembers x (xin ++ xout) ->
-        orelse isub osub x = Some y ->
-        sem_var_instant (H' n) x ys ->
-        sem_var_instant (H  n) y ys.
-  Proof.
-    intros * Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv.
-    apply InMembers_app in Hin.
-    destruct Hin as [Hin|Hout].
-    - clear Hxout Hys Hos.
-      apply NoDupMembers_app_InMembers with (2:=Hin) in Hndup.
-      apply Hnos in Hndup.
-      apply InMembers_In in Hin as ((xty & xck) & Hin).
-      unfold sem_exps_instant in Hles.
-      unfold sem_vars_instant in Hxin.
-      rewrite Forall2_map_1 in Hxin.
-      rewrite Forall2_swap_args in Hles.
-      apply Forall2_trans_ex with (1:=Hxin) in Hles. clear Hxin.
-      rewrite Forall2_swap_args in Hsv.
-      apply Forall2_trans_ex with (1:=Hles) in Hsv. clear Hles.
-      apply Forall2_same in Hsv.
-      eapply Forall_forall in Hsv
-        as (le & Hle & (ls & Hlsin & Hxls & Hlels) & Hsveq); eauto.
-      simpl in *.
-      unfold orelse in Hsub.
-      unfold subvar_eq in Hsveq.
-      destruct (isub x); [|congruence].
-      inv Hsub. destruct le; try contradiction.
-      simpl in Hsveq. subst.
-      inversion_clear Hlels.
-      apply sem_var_instant_det with (1:=Hxv) in Hxls.
-      now rewrite Hxls in *.
-    - clear Hsv Hxin Hles.
-      apply InMembers_In in Hout as ((xty & xck) & Hout).
-      unfold sem_vars_instant in Hxout, Hys.
-      rewrite Forall2_map_1 in Hxout.
-      rewrite Forall2_swap_args in Hys.
-      apply Forall2_trans_ex with (1:=Hxout) in Hys. clear Hxout.
-      rewrite Forall2_swap_args in Hos.
-      apply Forall2_trans_ex with (1:=Hys) in Hos. clear Hys.
-      apply Forall2_same in Hos.
-      eapply Forall_forall in Hos
-        as (z & Hz & (v & Hvin & Hv & Hzv) & Hsub'); eauto.
-      simpl in *.
-      rewrite Hsub in Hsub'; inversion_clear Hsub'.
-      apply sem_var_instant_det with (1:=Hxv) in Hv.
-      now rewrite Hv in *.
-  Qed.
+  (* Lemma sem_var_instant_transfer_out': *)
+  (*   forall n (xin : list (ident * (type * clock))) *)
+  (*     (xout : list (ident * (type * clock))) *)
+  (*     H H' les ys isub osub (bk: stream bool) lss yss, *)
+  (*     NoDupMembers (xin ++ xout) -> *)
+  (*     Forall2 (fun xtc le => SameVar (isub (fst xtc)) le) xin les -> *)
+  (*     Forall2 (fun xtc  y => orelse isub osub (fst xtc) = Some y) xout ys -> *)
+  (*     (forall x, ~InMembers x xout -> osub x = None) -> *)
+  (*     sem_vars_instant (H' n) (map fst xin) (lss n) -> *)
+  (*     sem_vars_instant (H' n) (map fst xout) (yss n) -> *)
+  (*     sem_exps_instant (bk n) (H n) les (lss n) -> *)
+  (*     sem_vars_instant (H n) ys (yss n) -> *)
+  (*     forall x y ys, *)
+  (*       InMembers x (xin ++ xout) -> *)
+  (*       orelse isub osub x = Some y -> *)
+  (*       sem_var_instant (H' n) x ys -> *)
+  (*       sem_var_instant (H  n) y ys. *)
+  (* Proof. *)
+  (*   intros * Hndup Hsv Hos Hnos Hxin Hxout Hles Hys x y s Hin Hsub Hxv. *)
+  (*   apply InMembers_app in Hin. *)
+  (*   destruct Hin as [Hin|Hout]. *)
+  (*   - clear Hxout Hys Hos. *)
+  (*     apply NoDupMembers_app_InMembers with (2:=Hin) in Hndup. *)
+  (*     apply Hnos in Hndup. *)
+  (*     apply InMembers_In in Hin as ((xty & xck) & Hin). *)
+  (*     unfold sem_exps_instant in Hles. *)
+  (*     unfold sem_vars_instant in Hxin. *)
+  (*     rewrite Forall2_map_1 in Hxin. *)
+  (*     rewrite Forall2_swap_args in Hles. *)
+  (*     apply Forall2_trans_ex with (1:=Hxin) in Hles. clear Hxin. *)
+  (*     rewrite Forall2_swap_args in Hsv. *)
+  (*     apply Forall2_trans_ex with (1:=Hles) in Hsv. clear Hles. *)
+  (*     apply Forall2_same in Hsv. *)
+  (*     eapply Forall_forall in Hsv *)
+  (*       as (le & Hle & (ls & Hlsin & Hxls & Hlels) & Hsveq); eauto. *)
+  (*     simpl in *. *)
+  (*     unfold orelse in Hsub. *)
+  (*     destruct (isub x); [|congruence]. *)
+  (*     inv Hsub. inv Hsveq. *)
+  (*     inversion_clear Hlels. *)
+  (*     apply sem_var_instant_det with (1:=Hxv) in Hxls. *)
+  (*     now rewrite Hxls in *. *)
+  (*   - clear Hsv Hxin Hles. *)
+  (*     apply InMembers_In in Hout as ((xty & xck) & Hout). *)
+  (*     unfold sem_vars_instant in Hxout, Hys. *)
+  (*     rewrite Forall2_map_1 in Hxout. *)
+  (*     rewrite Forall2_swap_args in Hys. *)
+  (*     apply Forall2_trans_ex with (1:=Hxout) in Hys. clear Hxout. *)
+  (*     rewrite Forall2_swap_args in Hos. *)
+  (*     apply Forall2_trans_ex with (1:=Hys) in Hos. clear Hys. *)
+  (*     apply Forall2_same in Hos. *)
+  (*     eapply Forall_forall in Hos *)
+  (*       as (z & Hz & (v & Hvin & Hv & Hzv) & Hsub'); eauto. *)
+  (*     simpl in *. *)
+  (*     rewrite Hsub in Hsub'; inversion_clear Hsub'. *)
+  (*     apply sem_var_instant_det with (1:=Hxv) in Hv. *)
+  (*     now rewrite Hv in *. *)
+  (* Qed. *)
 
   (* Using the transfer of named streams, also transfer clocks from
      the interface. *)
@@ -401,42 +392,6 @@ Module Type CECLOCKINGSEMANTICS
   Proof.
     intros; eapply sem_clock_instant_transfer_out_instant; eauto.
   Qed.
-
-  (* (* For variables defined in an environment [H], the semantic constraint *)
-  (*    ([sem_clocked_vars]) forces the [clock_match] property. *) *)
-  (* Lemma sem_clocked_vars_instant_clock_match_instant: *)
-  (*   forall base R xcks xs, *)
-  (*     sem_clocked_vars_instant base R xcks -> *)
-  (*     sem_vars_instant R (map fst xcks) xs -> *)
-  (*     Forall (clock_match_instant base R) xcks. *)
-  (* Proof. *)
-  (*   intros * Hsv Hvs. apply Forall_forall. *)
-  (*   intros (x, xck) Hxin; unfold clock_match_instant. *)
-  (*   eapply Forall_forall in Hsv; eauto. *)
-  (*   unfold sem_vars_instant in Hvs. *)
-  (*   rewrite Forall2_map_1 in Hvs. *)
-  (*   apply Forall2_in_left with (2:=Hxin) in Hvs. *)
-  (*   destruct Hvs as (v & ? & Hvs). *)
-  (*   inversion Hsv as [Ht Hf]. simpl in *. *)
-  (*   destruct v. *)
-  (*   - intuition. *)
-  (*   - right. *)
-  (*     pose proof (ex_intro (fun c=>sem_var_instant _ _ (present c)) _ Hvs) as Hevs. *)
-  (*     apply Ht in Hevs; eauto. *)
-  (* Qed. *)
-
-  (* Corollary sem_clocked_vars_clock_match: *)
-  (*   forall bk H xcks xss, *)
-  (*     sem_clocked_vars bk H xcks -> *)
-  (*     sem_vars H (map fst xcks) xss -> *)
-  (*     Forall (clock_match bk H) xcks. *)
-  (* Proof. *)
-  (*   intros * Hsv Hvs. apply Forall_forall. *)
-  (*   intros (x, xck) Hxin n. *)
-  (*   specialize (Hsv n); specialize (Hvs n). *)
-  (*   eapply sem_clocked_vars_instant_clock_match_instant in Hvs; eauto. *)
-  (*   eapply Forall_forall in Hvs; eauto. *)
-  (* Qed. *)
 
   (* Transfer interface variable values onto interface clocks between
      an external environment ([Hn]) and an internal one ([Hn']). *)

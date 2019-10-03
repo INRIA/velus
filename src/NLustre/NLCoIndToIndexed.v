@@ -35,7 +35,7 @@ Module Type NLCOINDTOINDEXED
        (Import Ord     : NLORDERED        Ids Op       CESyn Syn)
        (CESem          : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed        : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs).
+       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs Ord).
 
   Section Global.
 
@@ -694,7 +694,7 @@ Module NLCoindToIndexedFun
        (Ord     : NLORDERED        Ids Op       CESyn Syn)
        (CESem   : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs)
+       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs Ord)
 <: NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed CoInd.
   Include NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed CoInd.
 End NLCoindToIndexedFun.

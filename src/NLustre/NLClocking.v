@@ -43,19 +43,18 @@ Module Type NLCLOCKING
         wc_cexp vars ce ck ->
         wc_equation G vars (EqDef x ck ce)
   | CEqApp:
-      forall xs ck f les r n,
+      forall xs ck f les r n sub,
         find_node f G = Some n ->
-        (exists isub osub,
-            Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
-                                /\ (exists lck, wc_exp vars le lck
-                                          /\ instck ck isub (dck xtc) = Some lck))
-                    n.(n_in) les
-            /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
-                                 /\ (exists xck, In (x, xck) vars
-                                           /\ instck ck (orelse isub osub)
-                                                    (dck xtc) = Some xck))
-                      n.(n_out) xs
-            /\ (forall x, ~InMembers x n.(n_out) -> osub x = None)) ->
+        Forall2 (fun '(x, (_, xck)) le =>
+                   SameVar (sub x) le
+                   /\ exists lck, wc_exp vars le lck
+                            /\ instck ck sub xck = Some lck)
+                n.(n_in) les ->
+        Forall2 (fun '(y, (_, yck)) x =>
+                   sub y = Some x
+                   /\ exists xck, In (x, xck) vars
+                            /\ instck ck sub yck = Some xck)
+                n.(n_out) xs ->
         (forall y, r = Some y -> In (y, ck) vars) ->
         wc_equation G vars (EqApp xs ck f les r)
   | CEqFby:
@@ -99,28 +98,22 @@ Module Type NLCLOCKING
     rewrite Heq, Hg; clear Heq Hg.
     split; intro WTeq.
     - inv WTeq; try rewrite Henv in *; eauto with nlclocking.
-      match goal with H: exists isub osub, _ |- _ =>
-        destruct H as (isub & osub & Hin & Hout & Hnos) end.
       econstructor; eauto.
-      + exists isub, osub; repeat split; auto.
-        * apply Forall2_impl_In with (2:=Hin).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite Henv in *. eauto.
-        * apply Forall2_impl_In with (2:=Hout).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite Henv in *. eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?); simpl.
+        rewrite Henv in *; eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?); simpl.
+        rewrite Henv in *; eauto.
       + now setoid_rewrite <-Henv.
     - inv WTeq; try rewrite <-Henv in *; eauto with nlclocking.
-      match goal with H: exists isub osub, _ |- _ =>
-        destruct H as (isub & osub & Hin & Hout & Hnos) end.
       econstructor; eauto.
-      + exists isub, osub; repeat split; auto.
-        * apply Forall2_impl_In with (2:=Hin).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite <-Henv in *. eauto.
-        * apply Forall2_impl_In with (2:=Hout).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite <-Henv in *. eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?); simpl.
+        rewrite <-Henv in *; eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?); simpl.
+        rewrite <-Henv in *; eauto.
       + now setoid_rewrite Henv.
   Qed.
 
@@ -223,7 +216,7 @@ Module Type NLCLOCKING
     Proof.
       intros eq x' ck' Hwce Hdef Hhasck Hfree.
       inversion Hwce as [x ck e Hcv Hexp Heq
-                        |xs ck f e r n Hfind HH Heq
+                        |xs ck f e r n sub Hfind Hisub Hosub Heq
                         |x ck v' e Hcv Hexp].
       - subst eq. inv Hdef. inv Hhasck.
         pose proof (wc_env_var _ _ _ Hwc Hcv) as Hclock.
@@ -240,9 +233,8 @@ Module Type NLCLOCKING
           apply clock_parent_not_refl with (1:=Hck).
       - subst eq. rename x' into x. inv Hdef. inv Hhasck.
         match goal with H:List.In x xs |- _ => rename H into Hin end.
-        destruct HH as (isub & osub & Hisub & Hosub & Hnos).
         destruct (Forall2_in_right _ _ _ _ Hosub Hin)
-          as (o & Ho & (Hxeq & xck & Hxck & Hxi)).
+          as ((?&?&?) & Ho & (Hxeq & xck & Hxck & Hxi)).
         pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
         apply Is_free_in_clock_self_or_parent in Hfree.
         apply instck_parent in Hxi.

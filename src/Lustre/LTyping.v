@@ -36,24 +36,10 @@ Module Type LTYPING
         wt_clock ck ->
         wt_clock (Con ck x b).
 
-    Inductive wt_sclock : sclock -> Prop :=
-    | wt_Sbase:
-        wt_sclock Sbase
-    | wt_SonNm: forall ck x b,
-        In (x, bool_type) vars ->
-        wt_sclock ck ->
-        wt_sclock (Son ck (Vnm x) b)
-    | wt_SonIdx: forall ck i b,
-        wt_sclock ck ->
-        wt_sclock (Son ck (Vidx i) b).
-
     Inductive wt_nclock : nclock -> Prop :=
-    | wt_Cstream: forall ck,
-        wt_sclock ck ->
-        wt_nclock (Cstream ck)
     | wt_Cnamed: forall id ck,
-        wt_sclock ck ->
-        wt_nclock (Cnamed id ck).
+        wt_clock ck ->
+        wt_nclock (ck, id).
 
     Inductive wt_exp : exp -> Prop :=
     | wt_Econst: forall c,
@@ -117,16 +103,16 @@ Module Type LTYPING
     | wt_Eapp: forall f es anns n,
         Forall wt_exp es ->
         find_node f G = Some n ->
-        Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
-        Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
+        Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in) ->
+        Forall2 (fun a '(_, (t, _)) => fst a = t) anns n.(n_out) ->
         Forall (fun a => wt_nclock (snd a)) anns ->
         wt_exp (Eapp f es None anns)
 
     | wt_EappReset: forall f es r anns n,
         Forall wt_exp es ->
         find_node f G = Some n ->
-        Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
-        Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
+        Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in) ->
+        Forall2 (fun a '(_, (t, _)) => fst a = t) anns n.(n_out) ->
         Forall (fun a => wt_nclock (snd a)) anns ->
         wt_exp r ->
         typeof r = [bool_type] ->
@@ -218,8 +204,8 @@ Module Type LTYPING
           Forall wt_exp es ->
           Forall P es ->
           find_node f G = Some n ->
-          Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
-          Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
+          Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in) ->
+          Forall2 (fun a '(_, (t, _)) => fst a = t) anns n.(n_out) ->
           Forall (fun a => wt_nclock (snd a)) anns ->
           P (Eapp f es None anns).
 
@@ -228,8 +214,8 @@ Module Type LTYPING
           Forall wt_exp es ->
           Forall P es ->
           find_node f G = Some n ->
-          Forall2 (fun et xtc => et = dty xtc) (typesof es) n.(n_in) ->
-          Forall2 (fun a xtc => fst a = dty xtc) anns n.(n_out) ->
+          Forall2 (fun et '(_, (t, _)) => et = t) (typesof es) n.(n_in) ->
+          Forall2 (fun a '(_, (t, _)) => fst a = t) anns n.(n_out) ->
           Forall (fun a => wt_nclock (snd a)) anns ->
           wt_exp r ->
           P r ->
@@ -267,7 +253,7 @@ Module Type LTYPING
 
   Definition wt_clocks (vars: list (ident * (type * clock)))
                            : list (ident * (type * clock)) -> Prop :=
-    Forall (fun xtc => wt_clock (idty vars) (dck xtc)).
+    Forall (fun '(_, (_, ck)) => wt_clock (idty vars) ck).
 
   Definition wt_node (G: global) (n: node) : Prop
     :=    wt_clocks n.(n_in) n.(n_in)
@@ -285,7 +271,7 @@ Module Type LTYPING
       Forall (fun n'=> n.(n_name) <> n'.(n_name) :> ident) ns ->
       wt_global (n::ns).
 
-  Hint Constructors wt_clock wt_sclock wt_nclock wt_exp wt_global : ltyping.
+  Hint Constructors wt_clock wt_nclock wt_exp wt_global : ltyping.
   Hint Unfold wt_equation : ltyping.
 
   Lemma wt_global_NoDup:
@@ -338,40 +324,9 @@ Module Type LTYPING
     auto with ltyping datatypes.
   Qed.
 
-  Lemma wt_sclk:
-    forall env ck,
-      wt_clock env ck ->
-      wt_sclock env (sclk ck).
-  Proof.
-    induction ck; simpl; auto with ltyping.
-    inversion_clear 1. auto with ltyping.
-  Qed.
-
-  Lemma wt_nclock_sclock:
-    forall env nck,
-      wt_nclock env nck ->
-      wt_sclock env (stripname nck).
-  Proof.
-    inversion 1; auto.
-  Qed.
-
   Instance wt_clock_Proper:
     Proper (@Permutation.Permutation (ident * type) ==> @eq clock ==> iff)
            wt_clock.
-  Proof.
-    intros env' env Henv ck' ck Hck.
-    rewrite Hck; clear Hck ck'.
-    induction ck.
-    - split; auto with ltyping.
-    - destruct IHck.
-      split; inversion_clear 1; constructor;
-        try rewrite Henv in *;
-        auto with ltyping.
-  Qed.
-
-  Instance wt_sclock_Proper:
-    Proper (@Permutation.Permutation (ident * type) ==> @eq sclock ==> iff)
-           wt_sclock.
   Proof.
     intros env' env Henv ck' ck Hck.
     rewrite Hck; clear Hck ck'.
@@ -457,7 +412,7 @@ Module Type LTYPING
   Lemma wt_exp_clockof:
     forall G env e,
       wt_exp G env e ->
-      Forall (wt_sclock env) (clockof e).
+      Forall (wt_clock env) (clockof e).
   Proof.
     intros * Hwt.
     apply Forall_forall. intros ck Hin.

@@ -13,9 +13,9 @@ From Velus Require Import NLustre.
 Module L := LustreFun Ids Op OpAux Strs.
 Module NL := NLustreFun Ids Op OpAux Strs Str CE.
 
-From Velus Require Import LustreToNLustre.
+From Velus Require Import Transcription.
 
-Module L2NL := LustreToNLustreFun Ids Op L.Syn CE.Syn NL.Syn.
+Module TR := TranscriptionFun Ids Op OpAux L.Syn CE.Syn NL.Syn.
 
 From Velus Require Import Stc.
 

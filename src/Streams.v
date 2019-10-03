@@ -152,6 +152,21 @@ Module Type STREAMS
   Qed.
 
   Add Parametric Morphism
+      A B (P: A -> Stream B -> Prop) xs
+      (P_compat: Proper (eq ==> @EqSt B ==> iff) P)
+    : (@Forall2 A (Stream B) P xs)
+      with signature @EqSts B ==> iff
+        as Forall2_EqSt_iff.
+  Proof.
+    intros ys ys' Eys.
+    split; revert xs ys ys' Eys;
+      induction xs, ys; intros * Eys H; inv H; inv Eys; auto;
+        constructor; eauto.
+    now take (_ ≡ _) and rewrite <- it.
+    now take (_ ≡ _) and rewrite it.
+  Qed.
+
+  Add Parametric Morphism
       A B (P: Stream A -> B -> Prop)
       (P_compat: Proper (@EqSt A ==> eq ==> Basics.impl) P)
     : (@Forall2 (Stream A) B P)
@@ -164,6 +179,20 @@ Module Type STREAMS
     constructor; eauto.
     - eapply P_compat; eauto.
     - eapply IHxs; eauto.
+  Qed.
+
+  Add Parametric Morphism
+      A B C (P: A -> B -> Stream C -> Prop) xs ys
+      (P_compat: Proper (eq ==> eq ==> @EqSt C ==> Basics.impl) P)
+    : (@Forall3 A B (Stream C) P xs ys)
+      with signature @EqSts C ==> Basics.impl
+        as Forall3_EqSt.
+  Proof.
+    intros x y Exy Hxy.
+    revert xs ys x y Exy Hxy;
+      induction xs, ys; intros * Exy H; inv H; inv Exy; auto;
+        constructor; eauto.
+    now take (_ ≡ _) and rewrite <- it.
   Qed.
 
   Add Parametric Morphism
@@ -604,6 +633,17 @@ Module Type STREAMS
             constructor; cofix_step CoFix H.
   Qed.
 
+  Add Parametric Morphism k : (mask k)
+      with signature @EqSt bool ==> @EqSt value ==> @EqSt value
+        as mask_EqSt.
+  Proof.
+    revert k; cofix Cofix; intros k rs rs' Ers xs xs' Exs.
+    unfold_Stv rs; unfold_Stv rs'; unfold_St xs; unfold_St xs';
+      constructor; inv Ers; inv Exs;
+        simpl in *; try discriminate;
+          destruct k as [|[]]; auto; try reflexivity.
+  Qed.
+
   (* Remark mask_const_absent: *)
   (*   forall n rs, *)
   (*     mask n rs (Streams.const absent) ≡ Streams.const absent. *)
@@ -613,6 +653,26 @@ Module Type STREAMS
   (*     constructor; destruct n as [|[]]; simpl; auto; try apply Cofix. *)
   (*   reflexivity. *)
   (* Qed. *)
+
+  Add Parametric Morphism : clocks_of
+      with signature @EqSts value ==> @EqSt bool
+        as clocks_of_EqSt.
+  Proof.
+    cofix Cofix.
+    intros xs xs' Exs.
+    constructor; simpl.
+    - clear Cofix.
+      revert dependent xs'.
+      induction xs; intros; try inv Exs; simpl; auto.
+      f_equal; auto.
+      now rewrite H1.
+    - apply Cofix.
+      clear Cofix.
+      revert dependent xs'.
+      induction xs; intros; try inv Exs; simpl; constructor.
+      + now rewrite H1.
+      + now apply IHxs.
+  Qed.
 
 End STREAMS.
 

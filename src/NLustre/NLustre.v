@@ -29,7 +29,7 @@ Module Type NLUSTRE
   Declare Module Export Ord        : NLORDERED            Ids Op       CE.Syn Syn.
   Declare Module Export Norm       : NLNORMALARGS         Ids Op       CE.Syn Syn.
   Declare Module Export IsF        : ISFREE               Ids Op       CE.Syn Syn CE.IsF.
-  Declare Module Export CoindSem   : NLSEMANTICSCOIND     Ids Op OpAux CE.Syn Syn Strs.
+  Declare Module Export CoindSem   : NLSEMANTICSCOIND     Ids Op OpAux CE.Syn Syn Strs Ord.
   Declare Module Export Sem        : NLSEMANTICS          Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.
   Declare Module Export CoindToIdx : NLCOINDTOINDEXED     Ids Op OpAux CE.Syn Syn Str Strs Ord CE.Sem Sem CoindSem.
   Declare Module Export Typ        : NLTYPING             Ids Op       CE.Syn Syn     Ord CE.Typ.
@@ -54,7 +54,7 @@ Module NLustreFun
   Module Export Ord        := NLOrderedFun            Ids Op       CE.Syn Syn.
   Module Export Norm       := NLNormalArgsFun         Ids Op       CE.Syn Syn.
   Module Export IsF        := IsFreeFun               Ids Op       CE.Syn Syn CE.IsF.
-  Module Export CoindSem   := NLSemanticsCoindFun Ids Op OpAux CE.Syn Syn Strs.
+  Module Export CoindSem   := NLSemanticsCoindFun Ids Op OpAux CE.Syn Syn Strs Ord.
   Module Export Sem        := NLSemanticsFun          Ids Op OpAux CE.Syn Syn Str Ord CE.Sem.
   Module Export CoindToIdx := NLCoindToIndexedFun Ids Op OpAux CE.Syn Syn Str Strs Ord CE.Sem Sem CoindSem.
   Module Export Typ        := NLTypingFun             Ids Op       CE.Syn Syn     Ord CE.Typ.

@@ -37,15 +37,15 @@ Module Type NLTYPING
       wt_equation G vars (EqDef x ck e)
   | wt_EqApp: forall n xs ck f es,
       find_node f G = Some n ->
-      Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
-      Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
+      Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs n.(n_out) ->
+      Forall2 (fun e '(_, (t, _)) => typeof e = t) es n.(n_in) ->
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
       wt_equation G vars (EqApp xs ck f es None)
   | wt_EqReset: forall n xs ck f es r,
       find_node f G = Some n ->
-      Forall2 (fun x xt => In (x, dty xt) vars) xs n.(n_out) ->
-      Forall2 (fun e xt => typeof e = dty xt) es n.(n_in) ->
+      Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs n.(n_out) ->
+      Forall2 (fun e '(_, (t, _)) => typeof e = t) es n.(n_in) ->
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
       In (r, bool_type) vars ->
@@ -105,12 +105,12 @@ Module Type NLTYPING
         econstructor; eauto;
           match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                           apply Forall2_impl_In with (2:=H) end;
-          intros; rewrite Henv in *; auto.
+          intros ? (?&(?&?)); rewrite Henv in *; auto.
     - inv WTeq; rewrite <-Henv in *; eauto;
         econstructor; eauto;
           match goal with H:Forall2 _ ?x ?y |- Forall2 _ ?x ?y =>
                           apply Forall2_impl_In with (2:=H) end;
-          intros; rewrite Henv in *; auto.
+          intros ? (?&(?&?)); rewrite Henv in *; auto.
   Qed.
 
   Lemma wt_global_Ordered_nodes:

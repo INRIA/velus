@@ -71,7 +71,7 @@ Module Type LSYNTAX
 
   Fixpoint annot (e: exp): list (type * nclock) :=
     match e with
-    | Econst c => [(type_const c, Cstream Sbase)]
+    | Econst c => [(type_const c, (Cbase, None))]
     | Efby _ _ anns
     | Eapp _ _ _ anns => anns
     | Evar _ ann
@@ -101,17 +101,13 @@ Module Type LSYNTAX
   Definition typesof (es: list exp): list type :=
     flat_map typeof es.
 
-  Definition ckstream {A} (ann: A * nclock): sclock := stripname (snd ann).
+  Definition ckstream {A} (ann: A * nclock): clock := stripname (snd ann).
 
-  Definition is_ckstream {A} (ann: A * nclock): Prop :=
-    match snd ann with
-    | Cstream _ => True
-    | Cnamed _ _ => False
-    end.
+  Definition unnamed_stream {A} (ann: A * nclock): Prop := snd (snd ann) = None.
 
-  Fixpoint clockof (e: exp): list sclock :=
+  Fixpoint clockof (e: exp): list clock :=
     match e with
-    | Econst c => [Sbase]
+    | Econst c => [Cbase]
     | Efby _ _ anns
     | Eapp _ _ _ anns => map ckstream anns
     | Evar _ ann
@@ -121,13 +117,13 @@ Module Type LSYNTAX
     | Emerge _ _ _ anns
     | Eite _ _ _ anns => map (fun _ => ckstream anns) (fst anns)
     end.
-
-  Definition clocksof (es: list exp): list sclock :=
+       
+  Definition clocksof (es: list exp): list clock :=
     flat_map clockof es.
 
   Fixpoint nclockof (e: exp): list nclock :=
     match e with
-    | Econst c => [Cstream Sbase]
+    | Econst c => [(Cbase, None)]
     | Efby _ _ anns
     | Eapp _ _ _ anns => map snd anns
     | Evar _ ann
@@ -158,7 +154,8 @@ Module Type LSYNTAX
         n_defd     : Permutation (vars_defined n_eqs)
                                  (map fst (n_vars ++ n_out));
         n_nodup    : NoDupMembers (n_in ++ n_vars ++ n_out);
-        n_good     : Forall NotReserved (n_in ++ n_vars ++ n_out)
+        n_good     :  Forall ValidId (n_in ++ n_vars ++ n_out)
+                      /\ valid n_name
       }.
 
   (** ** Program *)
@@ -171,11 +168,7 @@ Module Type LSYNTAX
   Definition find_node (f : ident) : global -> option node :=
     List.find (fun n=> ident_eqb n.(n_name) f).
 
-  Hint Unfold is_ckstream : lclocking.
-
   (** Structural properties *)
-
-  (* TODO: custom induction scheme for expression... *)
 
   Section exp_ind2.
 
@@ -191,14 +184,18 @@ Module Type LSYNTAX
 
     Hypothesis EunopCase:
       forall op e a,
+        P e ->
         P (Eunop op e a).
 
     Hypothesis EbinopCase:
       forall op e1 e2 a,
+        P e1 ->
+        P e2 ->
         P (Ebinop op e1 e2 a).
 
     Hypothesis EfbyCase:
       forall e0s es a,
+        Forall P e0s ->
         Forall P es ->
         P (Efby e0s es a).
 
@@ -221,9 +218,15 @@ Module Type LSYNTAX
         P (Eite e ets efs a).
 
     Hypothesis EappCase:
-      forall f es r a,
+      forall f es a,
         Forall P es ->
-        P (Eapp f es r a).
+        P (Eapp f es None a).
+
+    Hypothesis EresetCase:
+      forall f es r a,
+        P r ->
+        Forall P es ->
+        P (Eapp f es (Some r) a).
 
     Local Ltac SolveForall :=
       match goal with
@@ -242,7 +245,9 @@ Module Type LSYNTAX
       - apply EwhenCase; SolveForall.
       - apply EmergeCase; SolveForall.
       - apply EiteCase; SolveForall; auto.
-      - apply EappCase; SolveForall.
+      - destruct o.
+        apply EresetCase; SolveForall; auto.
+        apply EappCase; SolveForall.
     Qed.
 
   End exp_ind2.
@@ -279,6 +284,7 @@ Module Type LSYNTAX
     now rewrite map_app, IH, <-clockof_nclockof.
   Qed.
 
+  (*
   Lemma Is_index_in_nclocks_Cstream:
     forall i e,
       Is_index_in_nclocks i (map Cstream (clockof e)) ->
@@ -321,7 +327,8 @@ Module Type LSYNTAX
     destruct ncks. 2:discriminate.
     constructor. destruct nck; inv Hmap; now constructor.
   Qed.
-
+   *)
+  
   Lemma In_nclocksof:
     forall nck es,
       In nck (nclocksof es) ->
@@ -332,16 +339,6 @@ Module Type LSYNTAX
     destruct 1 as [Hin|Hin]; eauto with datatypes.
     apply IH in Hin. destruct Hin as (e' & Hin1 & Hin2).
     eauto with datatypes.
-  Qed.
-
-  Lemma is_ckstream_NoDup_indexes:
-    forall {A} anns,
-      Forall (@is_ckstream A) anns ->
-      indexes (map snd anns) = [].
-  Proof.
-    induction anns as [|(?, nck) anns IH]; auto.
-    inversion_clear 1. destruct nck; auto.
-    match goal with H:is_ckstream _ |- _ => inv H end.
   Qed.
 
   (** vars_defined *)

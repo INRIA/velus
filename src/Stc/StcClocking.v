@@ -52,19 +52,18 @@ Module Type STCCLOCKING
         wc_clock vars ck ->
         wc_trconstr P vars (TcReset i ck f)
   | CTcApp:
-      forall i xs ck rst f es s P',
-          find_system f P = Some (s, P') ->
-          (exists isub osub,
-              Forall2 (fun xtc le => subvar_eq (isub (fst xtc)) le
-                                  /\ (exists lck, wc_exp vars le lck
-                                            /\ instck ck isub (dck xtc) = Some lck))
-                      s.(s_in) es
-              /\ Forall2 (fun xtc x => orelse isub osub (fst xtc) = Some x
-                                   /\ (exists xck, In (x, xck) vars
-                                             /\ instck ck (orelse isub osub)
-                                                      (dck xtc) = Some xck))
-                        s.(s_out) xs
-              /\ (forall x, ~InMembers x s.(s_out) -> osub x = None)) ->
+      forall i xs ck rst f es s P' sub,
+        find_system f P = Some (s, P') ->
+        Forall2 (fun '(x, (_, xck)) le =>
+                   SameVar (sub x) le
+                   /\ exists lck, wc_exp vars le lck
+                            /\ instck ck sub xck = Some lck)
+                s.(s_in) es ->
+        Forall2 (fun '(y, (_, yck)) x =>
+                   sub y = Some x
+                   /\ exists xck, In (x, xck) vars
+                            /\ instck ck sub yck = Some xck)
+                s.(s_out) xs ->
         wc_trconstr P vars (TcCall i xs ck rst f es).
 
   Definition wc_system (P: program) (s: system) : Prop :=
@@ -108,27 +107,21 @@ Module Type STCCLOCKING
     intros ??? env1 env2 Henv eq1 eq2 Htc; subst.
     split; intro WTtc.
     - inv WTtc; try rewrite Henv in *; eauto.
-      match goal with H: exists isub osub, _ |- _ =>
-        destruct H as (isub & osub & Hin & Hout & Hnos) end.
       econstructor; eauto.
-      + exists isub, osub; repeat split; auto.
-        * apply Forall2_impl_In with (2:=Hin).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite Henv in *. eauto.
-        * apply Forall2_impl_In with (2:=Hout).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite Henv in *. eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?).
+        rewrite Henv in *; eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?).
+        rewrite Henv in *; eauto.
     - inv WTtc; try rewrite <-Henv in *; eauto with nlclocking.
-      match goal with H: exists isub osub, _ |- _ =>
-        destruct H as (isub & osub & Hin & Hout & Hnos) end.
       econstructor; eauto.
-      + exists isub, osub; repeat split; auto.
-        * apply Forall2_impl_In with (2:=Hin).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite <-Henv in *. eauto.
-        * apply Forall2_impl_In with (2:=Hout).
-          destruct 3 as (lck & Hwc & Hi).
-          rewrite <-Henv in *. eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?).
+        rewrite <-Henv in *; eauto.
+      + eapply Forall2_impl_In; eauto.
+        intros (?&(?&?)) ??? (?&?&?).
+        rewrite <-Henv in *; eauto.
   Qed.
 
   Lemma wc_program_app_weaken:
@@ -160,7 +153,7 @@ Module Type STCCLOCKING
   Proof.
     intros * OnG WCnG.
     inversion_clear OnG as [|? ? OG ? HndG].
-    inversion_clear WCnG as [| | |???????? Find]; eauto using wc_trconstr.
+    inversion_clear WCnG as [| | |????????? Find]; eauto using wc_trconstr.
     econstructor; eauto.
     rewrite find_system_other; eauto.
     intro; subst.
@@ -224,8 +217,7 @@ Module Type STCCLOCKING
         ~ Is_free_in_clock x ck.
     Proof.
       intros tc x' ck' Hwce Hdef Hhasck Hfree.
-      inversion Hwce as [??? Hin|??? Hin| |?????? b P' Hfind
-                                                  (isub & osub & Hisub & Hosub & Hnos)];
+      inversion Hwce as [??? Hin|??? Hin| |?????? b P' sub Hfind Hisub Hosub];
         clear Hwce; subst; inv Hdef; inv Hhasck.
       - pose proof (wc_env_var _ _ _ Hwc Hin) as Hclock.
         apply Is_free_in_clock_self_or_parent in Hfree as (ck' & b & [Hck|Hck]).
@@ -251,8 +243,7 @@ Module Type STCCLOCKING
           eapply clock_parent_not_refl; eauto.
       - rename x' into x.
         match goal with H:List.In x xs |- _ => rename H into Hin end.
-        destruct (Forall2_in_right _ _ _ _ Hosub Hin)
-          as (o & Ho & (Hxtc & xck & Hxck & Hxi)).
+        destruct (Forall2_in_right _ _ _ _ Hosub Hin) as ((?&(?&?)) & Ho & Hxtc & xck & Hxck & Hxi).
         pose proof (wc_env_var _ _ _ Hwc Hxck) as Hclock.
         apply Is_free_in_clock_self_or_parent in Hfree.
         apply instck_parent in Hxi.

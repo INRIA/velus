@@ -40,7 +40,7 @@ Module Type NLSEMEQUIV
        (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
        (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
-       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs)
+       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn     Strs Ord)
        (IdxToCoind    : NLINDEXEDTOCOIND Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed Interp CoInd)
        (CoindToIdx    : NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed        CoInd).
 
@@ -62,7 +62,7 @@ Module Type NLSEMEQUIV
   (*   unfold IdxToCoind.tr_stream, IdxToCoind.tr_stream_from. *)
   (*   now rewrite CoindToIdx.tr_Stream_nth, IdxToCoind.init_from_nth, <-plus_n_O. *)
   (* Qed. *)
-  
+
   Definition streams_equivalence {A} (xss: list (Stream A)) (xss': stream (list A)) :=
     forall n, Forall2 (fun xs x => xs # n = x) xss (xss' n).
 

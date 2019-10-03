@@ -30,7 +30,7 @@ Module Type NL2STCCLOCKING
       NL.Clo.wc_equation G vars eq ->
       Forall (wc_trconstr (translate G) vars) (translate_eqn eq).
   Proof.
-    inversion_clear 2 as [|?????? Find (?&?& Ins & Outs &?)|];
+    inversion_clear 2 as [|??????? Find Ins Outs|];
       simpl; auto using Forall_cons.
     apply find_node_translate in Find as (?&?&?&?); subst.
     cases.

@@ -32,6 +32,13 @@ Section Extra.
     intros. split; intro. apply in_app_or. auto. apply in_or_app. auto.
   Qed.
 
+  Lemma in_app_comm :
+    forall (a : A) (l1 l2 : list A), In a (l1 ++ l2) <-> In a (l2 ++ l1).
+  Proof.
+    intros; split; intro Hin; apply in_app_or in Hin;
+      apply in_or_app; tauto.
+  Qed.
+
   Lemma app_last_app:
     forall xs xs' (x: A),
       (xs ++ [x]) ++ xs' = xs ++ x :: xs'.
@@ -45,6 +52,65 @@ Section Extra.
       x :: xs = [x] ++ xs.
   Proof.
     destruct xs; simpl; auto.
+  Qed.
+
+  Lemma app_length_impl :
+    forall {A B} (l1 l'1 : list A) (l2 l'2 : list B),
+      length l'1 = length l'2 ->
+      length (l'1 ++ l1) = length (l'2 ++ l2) ->
+      length l1 = length l2.
+  Proof.
+    intros * Hl Hlapp.
+    rewrite 2 app_length in Hlapp.
+    omega.
+  Qed.
+
+  Lemma length_app :
+    forall {A B} (l : list A) (l1 l2 : list B),
+      (length l = length (l1 ++ l2)) ->
+      (exists l1' l2', l = l1' ++ l2'
+                  /\ length l1' = length l1
+                  /\ length l2' = length l2).
+  Proof.
+    intros.
+    rewrite app_length in H.
+    exists (firstn (length l1) l),(skipn (length l1) l). split; [|split].
+    - symmetry. apply firstn_skipn.
+    - rewrite firstn_length. apply Min.min_l. omega.
+    - apply app_length_impl with (l'1 := firstn (length l1) l) (l'2 := l1).
+      rewrite firstn_length. apply Min.min_l. omega.
+      rewrite firstn_skipn. now rewrite app_length.
+  Qed.
+
+  Remark Forall_hd:
+    forall (A : Type) (P : A -> Prop) (x : A) (l : list A),
+      Forall P (x :: l) -> P x.
+  Proof.
+    intros * HF. inv HF. auto.
+  Qed.
+
+  Remark Forall_tl:
+    forall (A : Type) (P : A -> Prop) (x : A) (l : list A),
+      Forall P (x :: l) -> Forall P l.
+  Proof.
+    intros * HF. inv HF. auto.
+  Qed.
+
+  Remark Forall_hd_tl:
+    forall (A : Type) (P : A -> Prop) (x : A) (l : list A),
+      Forall P (x :: l) -> P x /\ Forall P l.
+  Proof.
+    intros * HF. inv HF. auto.
+  Qed.
+
+  Remark In_Forall:
+    forall (x: A) xs P,
+      Forall P xs ->
+      In x xs ->
+      P x.
+  Proof.
+    intros * Hforall Hin.
+    induction xs; inversion Hin; inversion Hforall; subst; auto.
   Qed.
 
   (* should be in standard lib... *)
@@ -684,6 +750,18 @@ Section ConcatMap.
       firstorder.
   - intro H; decompose record H;
       eapply in_concat'; eauto.
+  Qed.
+
+  Lemma concat_Forall :
+    forall (l' : list (list A)) (l : list A) (P : A -> Prop),
+      Forall P (concat l') ->
+      In l l' ->
+      Forall P l.
+  Proof.
+    intros * Hp Hinl.
+    apply Forall_forall. intros x Hinx.
+    eapply Forall_forall; eauto.
+    apply in_concat. eauto.
   Qed.
 
 End ConcatMap.
@@ -1543,6 +1621,22 @@ Section Forall2.
     - inversion Hall1. inversion Hall2. f_equal; eauto.
   Qed.
 
+  Remark Forall2_hd:
+    forall (A B : Type) (P : A -> B -> Prop)
+      (x : A) (l : list A) (x' : B) (l' : list B),
+      Forall2 P (x :: l) (x' :: l') -> P x x'.
+  Proof.
+    intros * HF. inv HF. auto.
+  Qed.
+
+  Remark Forall2_tl:
+    forall (A B : Type) (P : A -> B -> Prop)
+      (x : A) (l : list A) (x' : B) (l' : list B),
+      Forall2 P (x :: l) (x' :: l') -> Forall2 P l l'.
+  Proof.
+    intros * HF. inv HF. auto.
+  Qed.
+
   Lemma Forall2_combine:
     forall P (xs: list A) (ys: list B),
       Forall2 P xs ys -> Forall (fun x => P (fst x) (snd x)) (combine xs ys).
@@ -1775,6 +1869,16 @@ Section Forall2.
       eexists; intuition; eauto.
   Qed.
 
+  Lemma Forall2_app_split :
+    forall (P : A -> B -> Prop)  l1 l1' l2 l2',
+      Forall2 P (l1 ++ l2) (l1' ++ l2') ->
+      length l1 = length l1' ->
+      Forall2 P l1 l1' /\ Forall2 P l2 l2'.
+  Proof.
+    induction l1, l1'; simpl; intros * Hf Hzero; eauto; inv Hzero.
+    inv Hf. apply IHl1 in H5; eauto. split; try econstructor; tauto.
+  Qed.
+
 End Forall2.
 
 Lemma Forall2_trans_ex:
@@ -1829,6 +1933,36 @@ Section Forall3.
       R x y z ->
       Forall3 l0 l1 l2 ->
       Forall3 (x :: l0) (y :: l1) (z :: l2).
+
+  Lemma Forall3_length :
+    forall (l1 : list A) (l2 : list B) (l3 : list C),
+      Forall3 l1 l2 l3 ->
+      length l1 = length l2
+      /\ length l2 = length l3.
+  Proof.
+    induction 1. tauto. simpl. omega.
+  Qed.
+
+  Lemma Forall3_in_right:
+    forall (xs : list A)
+      (ys : list B) (zs : list C) (z : C),
+      Forall3 xs ys zs ->
+      In z zs -> exists (x : A) (y : B), In x xs /\ In y ys /\ R x y z.
+  Proof.
+    induction 1; simpl. contradiction.
+    destruct 1 as [Heq|Hin].
+    now subst; exists x, y; auto.
+    apply IHForall3 in Hin. destruct Hin as (x' & y' & Hin & Hin' & HP).
+    exists x', y'. eauto.
+  Qed.
+
+  Remark Forall3_tl:
+    forall (x : A)
+      (y : B) (z : C) (l0 : list A) (l1 : list B) (l2 : list C),
+      Forall3 (x :: l0) (y :: l1) (z :: l2) -> Forall3 l0 l1 l2.
+  Proof.
+    intros * HF. inv HF. auto.
+  Qed.
 
 End Forall3.
 
@@ -2196,6 +2330,17 @@ Section InMembers.
       apply IH; auto.
   Qed.
 
+  Lemma NoDupMembers_app_InMembers_l:
+    forall x xs ws,
+      NoDupMembers (xs ++ ws) ->
+      InMembers x ws ->
+      ~InMembers x xs.
+  Proof.
+    intros * Hdup Hin.
+    eapply NoDupMembers_app_InMembers; eauto.
+    now rewrite (Permutation_app_comm _ xs).
+  Qed.
+
   Lemma NoDupMembers_det:
     forall x t t' xs,
       NoDupMembers xs ->
@@ -2409,6 +2554,26 @@ Section InMembers.
   Qed.
 
 End InMembers.
+
+Section OptionLists.
+
+  Context {A : Type}.
+
+  Definition LiftO (d : Prop) (P : A -> Prop) (x : option A) : Prop :=
+    match x with None => d | Some x => P x end.
+
+  Fixpoint Ino (a : A) (l : list (option A)) : Prop :=
+    match l with
+    | [] => False
+    | b :: m => LiftO False (eq a) b \/ Ino a m
+    end.
+
+  Inductive NoDupo : list (option A) -> Prop :=
+    NoDupo_nil : NoDupo []
+  | NoDupo_conss : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l)
+  | NoDupo_consn : forall l, NoDupo l -> NoDupo (None :: l).
+
+End OptionLists.
 
 Ltac app_NoDupMembers_det :=
   match goal with

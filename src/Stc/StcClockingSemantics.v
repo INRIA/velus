@@ -46,67 +46,57 @@ Module Type STCCLOCKINGSEMANTICS
        (Import Clkg     : STCCLOCKING         Ids Op       CESyn Syn Last Var Def Syst Ord CEClo)
        (Import CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem                  CEClo).
 
-  Lemma sem_clocked_var_instant_system_tc:
-    forall P,
+  Lemma sem_clocked_var_instant_tc:
+    forall P base R S I S' vars x ck tc,
       Ordered_systems P ->
       wc_program P ->
-      (forall base R S I S' tc,
-          sem_trconstr P base R S I S' tc ->
-          forall iface x ck,
-            NoDupMembers iface ->
-            wc_trconstr P iface tc ->
-            Is_defined_in_tc x tc ->
-            In (x, ck) iface ->
-            sem_clocked_var_instant base R x ck)
-      /\
-      (forall f S xs ys S',
-          sem_system P f S xs ys S' ->
-          forall base R s P',
-            find_system f P = Some (s, P') ->
-            base = clock_of_instant xs ->
-            sem_vars_instant R (map fst s.(s_in)) xs ->
-            sem_vars_instant R (map fst s.(s_out)) ys ->
-            sem_clocked_vars_instant base R (idck s.(s_in)) ->
-            sem_clocked_vars_instant base R (idck s.(s_out))).
+      NoDupMembers vars ->
+      sem_trconstr P base R S I S' tc ->
+      wc_trconstr P vars tc ->
+      Is_defined_in_tc x tc ->
+      In (x, ck) vars ->
+      sem_clocked_var_instant base R x ck.
   Proof.
-    intros * Hord WCP; apply sem_trconstr_system_ind;
-      [intros ????????? Hexp Hvar|
-       intros ?????????? Find Hvar Hexp Find'|
-       intros ?????????? Clock Find Init|
-       intros ??????????????? Hexps Clock Rst Find System Vars Sub IH|
-       intros ????????? Find Ins Outs CkVars Htcs Closed Trans Closed' IH].
+    intros ?????????? Ord WCP Nodup Sem WC Def Hin.
+    revert dependent ck; revert dependent x; revert dependent vars.
+    induction Sem as [????????? Hexp Hvar|
+                      ?????????? Find Hvar Hexp Find'|
+                      ?????????? Clock Find Init|
+                      ??????????????? Hexps Clock Rst Find System Vars Sub IH|
+                      ????????? Find Hins Houts Hvars Htcs ??? IH]
+                       using sem_trconstr_mult with
+        (P_system := fun f S xs ys S' =>
+                       forall base R s P',
+                         find_system f P = Some (s, P') ->
+                         base = clock_of_instant xs ->
+                         sem_vars_instant R (map fst s.(s_in)) xs ->
+                         sem_vars_instant R (map fst s.(s_out)) ys ->
+                         sem_clocked_vars_instant base R (idck s.(s_in)) ->
+                         sem_clocked_vars_instant base R (idck s.(s_out)));
+      intros; try inversion Def as [| |??????? Hyys];
+      try inversion WC
+        as [| | |?????? bl' ? sub Hfind' Hfai Hfao]; subst.
 
-    - intros iface y yck Hnd Hwc Hdef Hin.
-      inv Hdef; inv Hwc.
-      match goal with H1:In (x, _) iface, H2:In (x, _) iface |- _ =>
-                      apply NoDupMembers_det with (1:=Hnd) (2:=H1) in H2; subst end.
+    - match goal with H1:In (x, _) vars, H2:In (x, _) vars |- _ =>
+                      eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       unfold sem_clocked_var_instant.
       inv Hexp; eauto; intuition; eauto; by_sem_det.
 
-    - intros iface y yck Hnd Hwc Hdef Hin.
-      inv Hdef; inv Hwc.
-      match goal with H1:In (x, _) iface, H2:In (x, _) iface |- _ =>
-        apply NoDupMembers_det with (1:=Hnd) (2:=H1) in H2; subst end.
+    - match goal with H1:In (x, _) vars, H2:In (x, _) vars |- _ =>
+        eapply NoDupMembers_det with (2:=H1) in H2; eauto; subst end.
       unfold sem_clocked_var_instant.
       inv Hexp; eauto; intuition; eauto; by_sem_det.
 
-    - intros iface y yck Hnd Hwc Hdef Hin.
-      inv Hdef; inv Hwc.
-
-    - intros iface z zck Hndup Hwc Hdef Hiface.
-      inversion_clear Hdef as [| |??????? Hyys].
-      inversion_clear System as [?????? R' ?? Hfind Hvi Hvo Hsck].
+    - inversion_clear System as [?????? R' ?? Hfind Hvi Hvo Hsck].
       specialize (IH _ _ _ _ Hfind eq_refl Hvi Hvo).
       assert (Hvi' := Hvi).
       rewrite <-map_fst_idck in Hvi'.
       specialize (IH Hsck).
-      inversion_clear Hwc
-        as [| | |?????? bl' ? Hfind' (isub & osub & Hfai & Hfao & Hfno)].
       rewrite Hfind in Hfind'; inv Hfind'.
 
       assert (forall x y ys,
                  InMembers x (idck (bl'.(s_in) ++ bl'.(s_out))) ->
-                 orelse isub osub x = Some y ->
+                 sub x = Some y ->
                  sem_var_instant R' x ys ->
                  sem_var_instant R y ys) as Htranso.
       { setoid_rewrite InMembers_idck.
@@ -129,11 +119,10 @@ Module Type STCCLOCKINGSEMANTICS
       apply Forall2_trans_ex with (1:=Hvo) in Vars.
       apply Forall2_same in Vars.
       eapply Forall_forall in Vars
-        as (? & Hin & ((x', (xty, xck)) & Hxin &
-                       (Hotc & yck' & Hiface' & Hinst) & Hsvx) & Hsvy); eauto.
-      unfold dck in Hinst. simpl in *.
-      apply NoDupMembers_det with (1:=Hndup) (2:=Hiface) in Hiface'.
-      rewrite <-Hiface' in *.
+        as (s & Hins & ((x', (xty, xck)) & Hxin &
+                       (Hotc & yck' & Hin' & Hinst) & Hsvx) & Hsvy); eauto.
+      simpl in *.
+      eapply NoDupMembers_det with (2:=Hin) in Hin'; eauto; subst yck'.
       unfold idck in *. setoid_rewrite Forall_map in IH.
       eapply Forall_forall in IH; eauto; simpl in IH.
       apply wc_find_system with (1:=WCP) in Hfind as (WCi & WCo & WCv & WCtcs).
@@ -141,7 +130,7 @@ Module Type STCCLOCKINGSEMANTICS
         by (rewrite idck_app, in_app; right;
             apply In_idck_exists; eauto).
       apply wc_env_var with (1:=WCo) in Hxin'.
-      destruct x.
+      destruct s.
       + split; intuition; eauto; try by_sem_det;
           eapply IH, sem_clock_instant_transfer_out_instant in Hsvx; eauto; by_sem_det.
       + split; intuition; eauto; try by_sem_det.
@@ -150,7 +139,7 @@ Module Type STCCLOCKINGSEMANTICS
           eapply IH, sem_clock_instant_transfer_out_instant in Hsvx'; eauto; by_sem_det.
 
     - (* systems *)
-      intros * Find' ? Hin' Hout' Hcm'.
+      rename H2 into Find'; rename H4 into Hins'; rename H5 into Houts'.
       rewrite Find' in Find; inv Find.
       apply Forall_forall; unfold idck.
       intros (x, xck) Hxin.
@@ -169,64 +158,36 @@ Module Type STCCLOCKINGSEMANTICS
       }
       apply IH with (x:=x) (ck:=xck) in Hnd; eauto.
       + simpl in *.
-        unfold sem_vars_instant in Ins, Outs, Hin', Hout'.
-        rewrite Forall2_map_1 in Hin', Hout'.
-        apply Forall2_app with (2:=Hout') in Hin'.
-        rewrite Forall2_map_1 in Ins, Outs.
-        assert (Hout2:=Outs).
-        apply Forall2_app with (1:=Ins) in Hout2.
-        apply Forall2_Forall2 with (1:=Outs) in Hout'.
-        apply Forall2_in_left with (2:=Hxin') in Hout' as (? & Hsin & Hvs & Hvs').
+        unfold sem_vars_instant in Hins, Houts, Hins', Houts'.
+        rewrite Forall2_map_1 in Hins', Houts'.
+        apply Forall2_app with (2:=Houts') in Hins'.
+        rewrite Forall2_map_1 in Hins, Houts.
+        assert (Houts2:=Houts).
+        apply Forall2_app with (1:=Hins) in Houts2.
+        apply Forall2_Forall2 with (1:=Houts) in Houts'.
+        apply Forall2_in_left with (2:=Hxin') in Houts' as (? & Hsin & Hvs & Hvs').
         destruct x1.
+      (* * split; intuition; eauto; try by_sem_det. *)
+        * split; intuition; eauto; try by_sem_det.
+          -- eapply Hnd in Hvs.
+             eapply clock_vars_to_sem_clock_instant with (Hn' := R) in H2; eauto; try by_sem_det.
+             eapply in_app; eauto.
+          -- eapply clock_vars_to_sem_clock_instant; eauto.
+             ++ eapply in_app; eauto.
+             ++ apply Hnd; auto.
         * split; intuition; eauto; try by_sem_det;
-            eapply Hnd, clock_vars_to_sem_clock_instant with (1:=Hout2) (2:=Hin') in Hvs; eauto; try by_sem_det;
-              eapply in_app; eauto.
-        * split; intuition; eauto; try by_sem_det;
-            assert (exists c, sem_var_instant R x (present c)) as Hvs'' by eauto;
-            eapply Hnd, clock_vars_to_sem_clock_instant with (1:=Hout2) (2:=Hin') in Hvs'' ; eauto; try by_sem_det;
-              eapply in_app; eauto.
+          assert (exists c, sem_var_instant R x (present c)) as Hvs'' by eauto.
+          -- eapply clock_vars_to_sem_clock_instant; eauto.
+             ++ eapply in_app; eauto.
+             ++ apply Hnd; auto.
+          -- eapply Hnd in Hvs''.
+             eapply clock_vars_to_sem_clock_instant with (Hn' := R0) in Hvs''; eauto; try by_sem_det.
+             eapply in_app; eauto.
       + apply wc_trconstr_program_app; auto.
         apply wc_trconstr_program_cons; auto.
-        apply Ordered_systems_append in Hord; auto.
+        apply Ordered_systems_append in Ord; auto.
       + rewrite in_app; left; apply In_idck_exists.
         exists xty; rewrite 2 in_app; auto.
-  Qed.
-
-
-  (* When a system's inputs match their clocks, then so do its outputs.
-     This is a consequence (by induction throughout the node hierarchy) of
-     the constraints relating streams to their clocks for each case of
-     [sem_trconstr]. *)
-  (* Corollary clock_match_instant_system: *)
-  (*   forall P f S xs ys S' base R s P', *)
-  (*     Ordered_systems P -> *)
-  (*     wc_program P -> *)
-  (*     sem_system P f S xs ys S' -> *)
-  (*     find_system f P = Some (s, P') -> *)
-  (*     base = clock_of_instant xs -> *)
-  (*     sem_vars_instant R (map fst s.(s_in)) xs -> *)
-  (*     sem_vars_instant R (map fst s.(s_out)) ys -> *)
-  (*     Forall (clock_match_instant base R) (idck s.(s_in)) -> *)
-  (*     Forall (clock_match_instant base R) (idck s.(s_out)). *)
-  (* Proof. *)
-  (*   intros ?????????? Ord WCP; intros. *)
-  (*   eapply (proj2 (clock_match_instant_system_tcs P Ord WCP)); eauto. *)
-  (* Qed. *)
-
-  (* A "version" of [clock_match_node] for "within" a node. *)
-  Corollary sem_clocked_var_instant_tc:
-    forall P base R S I S' iface x ck tc,
-      Ordered_systems P ->
-      wc_program P ->
-      NoDupMembers iface ->
-      sem_trconstr P base R S I S' tc ->
-      wc_trconstr P iface tc ->
-      Is_defined_in_tc x tc ->
-      In (x, ck) iface ->
-      sem_clocked_var_instant base R x ck.
-  Proof.
-    intros ?????????? Ord WCP; intros.
-    eapply (proj1 (sem_clocked_var_instant_system_tc P Ord WCP)); eauto.
   Qed.
 
   Corollary sem_clocked_var_instant_tcs:

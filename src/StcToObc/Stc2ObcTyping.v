@@ -216,8 +216,8 @@ Module Type STC2OBCTYPING
       eapply Control_wt; eauto.
       econstructor; eauto.
       + apply exists_step_method.
-      + simpl; clear - Outs; induction Outs; simpl; constructor; auto.
-      + simpl; clear - Ins; induction Ins; simpl; constructor; auto.
+      + simpl; clear - Outs; induction Outs as [|? (?&(?&?))]; simpl; constructor; auto.
+      + simpl; clear - Ins; induction Ins as [|? (?&(?&?))]; simpl; constructor; auto.
         now rewrite typeof_arg_correct.
       + clear - Exps NvarsSpec; induction Exps; simpl; constructor; eauto.
         eapply translate_arg_wt; eauto.

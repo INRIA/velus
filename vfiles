@@ -18,6 +18,7 @@ src/Lustre/Parser/LustreParser.v
 src/Lustre/Parser/LustreAst.v
 src/Lustre/LTyping.v
 src/Lustre/LClocking.v
+src/Lustre/LOrdered.v
 src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
@@ -75,7 +76,10 @@ src/Obc/Equiv.v
 src/Obc/ObcInvariants.v
 src/Obc/Obc.v
 
-src/LustreToNLustre/LustreToNLustre.v
+src/Transcription/Transcription.v
+src/Transcription/Correctness.v
+src/Transcription/TrTyping.v
+src/Transcription/TrClocking.v
 
 src/NLustreToStc/NL2StcTyping.v
 src/NLustreToStc/NL2StcClocking.v
