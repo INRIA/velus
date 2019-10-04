@@ -141,7 +141,7 @@ Module Type MEMSEMANTICS
           msem_node f ls Mx xss ->
           msem_equation bk H M (EqApp xs ck f arg None)
     | SEqReset:
-        forall bk H M x xs ck f Mx arg y ys rs ls xss,
+        forall bk H M x xs ck f Mx arg y cky ys rs ls xss,
           hd_error xs = Some x ->
           sub_inst_n x M Mx ->
           sem_exps bk H arg ls ->
@@ -152,7 +152,7 @@ Module Type MEMSEMANTICS
           (forall k, exists Mk,
                 msem_node f (mask k rs ls) Mk (mask k rs xss)
                 /\ memory_masked k rs Mx Mk) ->
-          msem_equation bk H M (EqApp xs ck f arg (Some y))
+          msem_equation bk H M (EqApp xs ck f arg (Some (y, cky)))
     | SEqFby:
         forall bk H M x ck ls xs c0 le,
           sem_aexp bk H ck le ls ->
@@ -206,7 +206,7 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H M (EqApp xs ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H M x xs ck f Mx arg y ys rs ls xss,
+      forall bk H M x xs ck f Mx arg y cky ys rs ls xss,
         Some x = hd_error xs ->
         sub_inst_n x M Mx ->
         sem_exps bk H arg ls ->
@@ -218,7 +218,7 @@ enough: it does not support the internal fixpoint introduced by
               msem_node G f (mask k rs ls) Mk (mask k rs xss)
               /\ memory_masked k rs Mx Mk
               /\ P_node f (mask k rs ls) Mk (mask k rs xss)) ->
-        P_equation bk H M (EqApp xs ck f arg (Some y)).
+        P_equation bk H M (EqApp xs ck f arg (Some (y, cky))).
 
     Hypothesis EqFbyCase:
       forall bk H M x ck ls xs c0 le,
@@ -295,7 +295,7 @@ enough: it does not support the internal fixpoint introduced by
     Hint Constructors msem_node msem_equation.
     intros * Hord Hsem Hnf.
     revert Hnf.
-    induction Hsem as [| |????????????????????? Hsems|
+    induction Hsem as [| |?????????????????????? Hsems|
                        |???????? Hf ????? IH]
         using msem_node_mult
       with (P_equation := fun bk H M eq =>
@@ -391,12 +391,12 @@ enough: it does not support the internal fixpoint introduced by
     split; intros Hsem; apply Forall_cons2 in Hsem as [Heq Heqs];
       apply IH in Heqs; auto; constructor; auto.
     - inv Hord.
-      destruct Heq as [| |????????????????????? Hsems|]; eauto.
+      destruct Heq as [| |?????????????????????? Hsems|]; eauto.
       + eauto using msem_node_cons2.
       + econstructor; eauto.
         intro k; destruct (Hsems k) as (?&?&?).
         eexists; split; eauto using msem_node_cons2.
-    - inversion Heq as [| |????????????????????? Hsems|]; subst; eauto;
+    - inversion Heq as [| |?????????????????????? Hsems|]; subst; eauto;
         assert (n.(n_name) <> f)
         by (intro HH; apply Hnini; rewrite HH; constructor).
       + eauto using msem_node_cons.
@@ -490,7 +490,7 @@ enough: it does not support the internal fixpoint introduced by
     destruct Hsem as [Hsem Hsems].
     constructor; [|now apply IH with (1:=Hnds) (2:=Hsems)].
     destruct Hsem as [|??? x' ??????? Hsome
-                         |??? x' ?????????? Hsome|];
+                         |??? x' ??????????? Hsome|];
       eauto;
       assert (sub_inst_n x' (add_inst_n x Mx M) Mx0)
         by (apply not_Is_defined_in_eq_EqApp in Hnd;
@@ -638,7 +638,7 @@ dataflow memory for which the non-standard semantics holds true.
     intros * IH Heq NoDup Hmeqs WF.
     inversion Heq as [|
                       ???????? Hls Hxs ? Hsem|
-                      ??????????? Hls Hxs ? Hy Hr Hsem|
+                      ???????????? Hls Hxs ? Hy Hr Hsem|
                       ???????? Hle Hvar Hfby];
       match goal with H:_=eq |- _ => rewrite <-H in * end.
 
@@ -864,7 +864,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs2 as [|?? Heq2]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq2 as [|??????????? Hd|?????????????? Hd|];
+          inversion_clear Heq2 as [|??????????? Hd|??????????????? Hd|];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
         * apply Insts2 in Find.
           clear Insts1 Insts2.
@@ -874,7 +874,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs2 as [|?? Heq2]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq1 as [|??????????? Hd|?????????????? Hd|];
+          inversion_clear Heq1 as [|??????????? Hd|??????????????? Hd|];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros i e e' Find1 Find2.
@@ -886,8 +886,8 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs2 as [|?? Heq2]; auto.
         apply InMembers_app in Hin; destruct Hin as [Hin|]; auto.
         cases; inv Hin; try contradiction.
-        inversion Heq1 as [|??????????? Hd1 Find1'|?????????????? Hd1 Find1' ????? Reset1|]; subst;
-          inversion_clear Heq2 as [|??????????? Hd2 Find2'|?????????????? Hd2 Find2' ????? Reset2|];
+        inversion Heq1 as [|??????????? Hd1 Find1'|??????????????? Hd1 Find1' ????? Reset1|]; subst;
+          inversion_clear Heq2 as [|??????????? Hd2 Find2'|??????????????? Hd2 Find2' ????? Reset2|];
           inv Hd1; inv Hd2; unfold sub_inst_n, find_inst in *;
             rewrite Find1' in Find1; inv Find1;
               rewrite Find2' in Find2; inv Find2; eauto.
@@ -1015,7 +1015,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs as [|?? Heq]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq as [|??????????? Hd|?????????????? Hd|];
+          inversion_clear Heq as [|??????????? Hd|??????????????? Hd|];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
         * apply Insts0 in Find.
           clear Insts Insts0.
@@ -1024,7 +1024,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs as [|?? Heq]; auto.
           apply InMembers_app in Find; destruct Find as [Find|]; auto.
           cases; inv Find; try contradiction.
-          inversion_clear Heq as [|??????????? Hd|?????????????? Hd|];
+          inversion_clear Heq as [|??????????? Hd|??????????????? Hd|];
             inv Hd; unfold sub_inst_n, find_inst in *; congruence.
       + setoid_rewrite Env.Props.P.F.find_mapsto_iff.
         intros i e e' Find Find0.
@@ -1035,7 +1035,7 @@ dataflow memory for which the non-standard semantics holds true.
           inversion_clear Heqs as [|?? Heq]; auto.
         apply InMembers_app in Hin; destruct Hin as [Hin|]; auto.
         cases; inv Hin; try contradiction.
-        inversion_clear Heq as [|??????????? Hd Find' ?? Hck|?????????????? Hd Find' ?? Hck ?? Reset|];
+        inversion_clear Heq as [|??????????? Hd Find' ?? Hck|??????????????? Hd Find' ?? Hck ?? Reset|];
           inv Hd; unfold sub_inst_n, find_inst in *;
             rewrite Find' in Find; inv Find; rewrite Find' in Find0; inv Find0; eauto.
         * eapply IH; eauto.
@@ -1125,7 +1125,7 @@ dataflow memory for which the non-standard semantics holds true.
           sem_equation G bk H eq).
   Proof.
     intros; apply msem_node_equation_ind;
-      [intros|intros|intros ????????????????????? Rst|intros|intros];
+      [intros|intros|intros ?????????????????????? Rst|intros|intros];
       eauto using sem_equation, mfby_fby, sem_node.
     - econstructor; eauto; intro k; destruct (Rst k) as (?&?&?); intuition.
     - econstructor; auto.

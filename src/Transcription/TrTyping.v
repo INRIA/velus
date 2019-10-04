@@ -347,67 +347,67 @@ Module Type TRTYPING
         erewrite typeof_lexp; eauto.
         rewrite app_nil_r in *.
         erewrite 2 typeofc_cexp; eauto.
-    - simpl_Foralls. take (LT.wt_exp _ _ _) and inv it.
-      2: cases; monadInv Htr.
-      eapply find_node_global in Hg as (?&?&?); eauto.
-      rewrite app_nil_r in Hf2.
-      cases; monadInv Htr.
-      (* TODO: ici cases génère trois sous-buts alors que deux suffiraient...
-         les deux denières puces sont identiques *)
-      + inv Hf2. symmetry in H1. apply map_eq_nil in H1. subst.
-        simpl_Foralls. pose proof (L.n_outgt0 n).
-        symmetry in H1. apply length_zero_iff_nil in H1.
-        intuition.
-      + apply mmap_inversion in EQ.
+    - rewrite app_nil_r in Hf2.
+      simpl_Foralls.
+      take (LT.wt_exp _ _ _) and inv it;
+        eapply find_node_global in Hg as (?&?&?); eauto.
+      + monadInv Htr.
+        apply mmap_inversion in EQ.
         econstructor; eauto.
-        ++ rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
-           apply Forall2_forall. split.
-           2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
-               congruence. }
-           intros ? (?&(?&?)) Hin.
-           eapply Forall2_chain_In in Hin; eauto.
-           now destruct Hin as (?&?& <-).
-        ++ rewrite <- (to_node_in n); auto.
-           clear - H3 H5 EQ.
-           remember (L.n_in n). clear Heql0. revert dependent l0.
-           revert dependent x0.
-           induction l; intros; inv EQ; auto.
-           inv H5; auto.
-           simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
-           rewrite H1 in H5. inv H5.
-           constructor; eauto.
-        ++ apply wt_clock_l_ce, wt_find_base_clock.
-           take (Forall (LT.wt_exp _ _) _) and clear - it.
-           induction l; simpl; auto. inv it. apply Forall_app.
-           eauto using wt_clockof.
-        ++ clear H5. revert dependent l. induction x0; intros; auto.
-           inv EQ. simpl_Foralls.
-           constructor; eauto using wt_lexp.
-      + apply mmap_inversion in EQ.
+        * rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
+          apply Forall2_forall. split.
+          2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
+              congruence. }
+          intros ? (?&(?&?)) Hin.
+          eapply Forall2_chain_In in Hin; eauto.
+          now destruct Hin as (?&?& <-).
+        * rewrite <- (to_node_in n); auto.
+          clear - H3 H5 EQ.
+          remember (L.n_in n). clear Heql0. revert dependent l0.
+          revert dependent x0.
+          induction l; intros; inv EQ; auto.
+          inv H5; auto.
+          simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
+          rewrite H1 in H5. inv H5.
+          constructor; eauto.
+        * apply wt_clock_l_ce, wt_find_base_clock.
+          take (Forall (LT.wt_exp _ _) _) and clear - it.
+          induction l; simpl; auto. inv it. apply Forall_app.
+          eauto using wt_clockof.
+        * clear H5. revert dependent l. induction x0; intros; auto.
+          inv EQ. simpl_Foralls.
+          constructor; eauto using wt_lexp.
+      + cases; monadInv Htr.
+        apply mmap_inversion in EQ.
         econstructor; eauto.
-        ++ rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
-           apply Forall2_forall. split.
-           2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
-               congruence. }
-           intros ? (?&(?&?)) Hin.
-           eapply Forall2_chain_In in Hin; eauto.
-           now destruct Hin as (?&?& <-).
-        ++ rewrite <- (to_node_in n); auto.
-           clear - H3 H5 EQ.
-           remember (L.n_in n). clear Heql0. revert dependent l0.
-           revert dependent x0.
-           induction l; intros; inv EQ; auto.
-           inv H5; auto.
-           simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
-           rewrite H1 in H5. inv H5.
-           constructor; eauto.
-        ++ apply wt_clock_l_ce, wt_find_base_clock.
-           take (Forall (LT.wt_exp _ _) _) and clear - it.
-           induction l; simpl; auto. inv it. apply Forall_app.
-           eauto using wt_clockof.
-        ++ clear H5. revert dependent l. induction x0; intros; auto.
-           inv EQ. simpl_Foralls.
-           constructor; eauto using wt_lexp.
+        * rewrite <- (to_node_out n); auto. rewrite Forall2_map_2 in Hf2.
+          apply Forall2_forall. split.
+          2:{ repeat take (Forall2 _ _ _) and apply Forall2_length in it.
+              congruence. }
+          intros ? (?&(?&?)) Hin.
+          eapply Forall2_chain_In in Hin; eauto.
+          now destruct Hin as (?&?& <-).
+        * rewrite <- (to_node_in n); auto.
+          clear - H3 H5 EQ.
+          remember (L.n_in n). clear Heql0. revert dependent l0.
+          revert dependent x0.
+          induction l; intros; inv EQ; auto.
+          inv H5; auto.
+          simpl_Foralls. eapply ty_lexp in H1; eauto. simpl in *.
+          rewrite H1 in H5. inv H5.
+          constructor; eauto.
+        * apply wt_clock_l_ce, wt_find_base_clock.
+          take (Forall (LT.wt_exp _ _) _) and clear - it.
+          induction l; simpl; auto. inv it. apply Forall_app.
+          eauto using wt_clockof.
+        * clear H5. revert dependent l. induction x0; intros; auto.
+          inv EQ. simpl_Foralls.
+          constructor; eauto using wt_lexp.
+        * take (LT.wt_exp _ _ _) and inv it;
+            take (L.typeof _ = _) and inv it; auto.
+        * take (LT.wt_exp _ _ _) and inv it;
+            take (LT.wt_nclock _ _) and inv it.
+          apply wt_clock_l_ce; auto.
   Qed.
 
   (* TODO: move to Environment, duplicated from Correctness *)

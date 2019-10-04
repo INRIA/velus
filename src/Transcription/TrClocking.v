@@ -292,108 +292,188 @@ Module Type TRCLOCKING
         rewrite Heq in *. now simpl_Foralls.
       + eapply wc_cexp in EQ2 as (?& Heq &?); eauto.
         rewrite Heq in *. now simpl_Foralls.
-    - destruct o. cases; monadInv Htr.
-      (* si quelqu'un a une meilleure solution... *)
-      assert ((do les <- mmap to_lexp l;
-               OK (NL.EqApp xs (find_base_clock (L.clocksof l)) i les None))
-              = OK e') as Htr' by cases; auto. clear Htr.
-      monadInv Htr'. take (LC.wc_exp _ _ _) and inversion_clear it
-        as [| | | | | | | |???? bck sub Wce ? WIi WIo|].
-      eapply find_node_global in Hg as (n' & Hfind & Hton); eauto.
-      assert (find_base_clock (L.clocksof l) = bck) as ->.
-      {
-        take (L.find_node _ _ = Some n) and
-             pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?)).
-        apply find_base_clock_bck.
-        + rewrite L.clocksof_nclocksof. eapply LC.WellInstantiated_bck; eauto.
-          unfold idck. rewrite map_length. exact (L.n_ingt0 n).
-        + apply LC.WellInstantiated_parent in WIi.
-          rewrite L.clocksof_nclocksof, Forall_map.
-          eapply Forall_impl; eauto. now simpl.
-      }
-      econstructor; eauto; try discriminate;
-        rewrite app_nil_r in *.
-      (* We can't use [sub] directly because some variables
+    - cases; monadInv Htr;
+        take (LC.wc_exp _ _ _) and inversion_clear it
+        as [| | | | | | | |???? bck sub Wce ? WIi WIo|????? bck sub Wce ? WIi WIo];
+        eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
+          assert (find_base_clock (L.clocksof l) = bck) as ->
+            by (take (L.find_node _ _ = Some n) and
+                     pose proof (LC.wc_find_node _ _ n Hwcg it) as (?& (Wcin &?));
+                apply find_base_clock_bck;
+                [rewrite L.clocksof_nclocksof; eapply LC.WellInstantiated_bck; eauto;
+                 unfold idck; rewrite map_length; exact (L.n_ingt0 n)
+                | apply LC.WellInstantiated_parent in WIi;
+                  rewrite L.clocksof_nclocksof, Forall_map;
+                  eapply Forall_impl; eauto; now simpl]).
+      + econstructor; eauto; try discriminate;
+          rewrite app_nil_r in *.
+        (* We can't use [sub] directly because some variables
            in the left side of the equation may have no image bu [sub].
            -> see LClocking.wc_equation *)
-      + instantiate (1 := fun x => match sub x with
-                                | None => assoc_ident x (combine (idents (L.n_out n)) xs)
-                                | s => s
-                                end).
-        (* inputs *)
-        rewrite <- (to_node_in n n'); auto.
-        apply mmap_inversion in EQ.
-        pose proof (L.n_nodup n) as Hdup.
-        remember (L.n_in n) as ins. clear Heqins.
-        revert dependent ins.
-        take (LC.WellFormedAnon _ _) and clear it.
-        revert dependent x.
-        induction l as [| e].
-        { intros. inv EQ. simpl in WIi. inv WIi.
-          take ([] = _) and apply symmetry, map_eq_nil in it.
-          now subst. }
-        intros le Htr ins WIi.
-        inv Htr. simpl in WIi.
-        take (Forall _ (e::_)) and inv it.
-        take (to_lexp e = _) and pose proof it as Tolexp; eapply wc_lexp in it as (ck & Hck & Wce);
-          eauto.
-        rewrite L.clockof_nclockof in Hck.
-        destruct (L.nclockof e) as [|nc []] eqn:Hcke; simpl in *; inv Hck.
-        inversion WIi as [|???? Wi ? Hmap]. subst.
-        unfold idck in Hmap.
-        apply symmetry, map_cons'' in Hmap as ((?&(?&?))&?&?&?&?). subst.
-        unfold LC.WellInstantiated in Wi. destruct Wi; simpl in *.
-        constructor; eauto.
-        2:{ eapply IHl; eauto. now apply nodupmembers_cons in Hdup. }
-        split; simpl; eauto.
-        2:{ exists (stripname nc). split. apply Wce. auto using instck_sub_ext. }
-        simpl in *. take (sub _ = _) and rewrite it. destruct nc as (ck & []).
-        2:{ simpl.
-            rewrite assoc_ident_false. constructor.
-            apply nodupmembers_cons in Hdup as [Hin].
-            rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
-            apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
-            eapply Hin, In_InMembers.
-            repeat (apply in_or_app; right; eauto).
-            apply Forall2_length in Hf2. apply Forall2_length in WIo.
-            unfold idents, idck in *. repeat rewrite map_length in *.
-            congruence.
-        }
-        simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
-                 inv Hcke; inv Tolexp.
-        * constructor.
-        * destruct tys; take (map _ _ = [_]) and inv it.
-      + (* outputs *)
-        unfold idck in *.
-        rewrite <- (to_node_out n n'); auto.
-        clear - Hlift Hf2 WIo.
-        apply Forall2_forall. split.
-        2:{ apply Forall2_length in Hlift. apply Forall2_length in WIo.
-            repeat rewrite map_length in *. congruence. }
-        intros (?&(?&?)) ? Hin. split.
-        * destruct (sub i) eqn:Hsub.
-          apply Forall2_swap_args in Hlift.
-          pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hlift) as Ho.
-          rewrite Forall2_map_1 in Ho.
-          eapply Forall2_In in Hin; eauto.
-          destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
-          rewrite Hsub in Heq. rewrite <- Heq in Hl. simpl in Hl.
-          now subst.
-          unfold idents. apply assoc_ident_true.
-          2:{ rewrite combine_map_fst, in_map_iff.
-              esplit; split; eauto. now simpl. }
-          apply NoDup_NoDupMembers_combine.
+        * instantiate (1 := fun x => match sub x with
+                                  | None => assoc_ident x (combine (idents (L.n_out n)) xs)
+                                  | s => s
+                                  end).
+          (* inputs *)
+          rewrite <- (to_node_in n n'); auto.
+          apply mmap_inversion in EQ.
           pose proof (L.n_nodup n) as Hdup.
-          rewrite fst_NoDupMembers, app_assoc, map_app in Hdup.
-          eauto using  NoDup_app_weaken'.
-        * rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
-          apply Forall2_swap_args in Hf2.
-          pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hf2) as Ho.
-          rewrite Forall2_map_1 in Ho.
-          eapply Forall2_In in Hin; eauto.
-          destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
-          esplit; split; eauto.
-          eauto using instck_sub_ext.
+          remember (L.n_in n) as ins. clear Heqins.
+          revert dependent ins.
+          take (LC.WellFormedAnon _ _) and clear it.
+          revert dependent x.
+          induction l as [| e].
+          { intros. inv EQ. simpl in WIi. inv WIi.
+            take ([] = _) and apply symmetry, map_eq_nil in it.
+            now subst. }
+          intros le Htr ins WIi.
+          inv Htr. simpl in WIi.
+          take (Forall _ (e::_)) and inv it.
+          take (to_lexp e = _) and pose proof it as Tolexp; eapply wc_lexp in it as (ck & Hck & Wce);
+            eauto.
+          rewrite L.clockof_nclockof in Hck.
+          destruct (L.nclockof e) as [|nc []] eqn:Hcke; simpl in *; inv Hck.
+          inversion WIi as [|???? Wi ? Hmap]. subst.
+          unfold idck in Hmap.
+          apply symmetry, map_cons'' in Hmap as ((?&(?&?))&?&?&?&?). subst.
+          unfold LC.WellInstantiated in Wi. destruct Wi; simpl in *.
+          constructor; eauto.
+          2:{ eapply IHl; eauto. now apply nodupmembers_cons in Hdup. }
+          split; simpl; eauto.
+          2:{ exists (stripname nc). split. apply Wce. auto using instck_sub_ext. }
+          simpl in *. take (sub _ = _) and rewrite it. destruct nc as (ck & []).
+          2:{ simpl.
+              rewrite assoc_ident_false. constructor.
+              apply nodupmembers_cons in Hdup as [Hin].
+              rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
+              apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
+              eapply Hin, In_InMembers.
+              repeat (apply in_or_app; right; eauto).
+              apply Forall2_length in Hf2. apply Forall2_length in WIo.
+              unfold idents, idck in *. repeat rewrite map_length in *.
+              congruence.
+          }
+          simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
+                   inv Hcke; inv Tolexp.
+          -- constructor.
+          -- destruct tys; take (map _ _ = [_]) and inv it.
+        * (* outputs *)
+          unfold idck in *.
+          rewrite <- (to_node_out n n'); auto.
+          clear - Hlift Hf2 WIo.
+          apply Forall2_forall. split.
+          2:{ apply Forall2_length in Hlift. apply Forall2_length in WIo.
+              repeat rewrite map_length in *. congruence. }
+          intros (?&(?&?)) ? Hin. split.
+          -- destruct (sub i) eqn:Hsub.
+             apply Forall2_swap_args in Hlift.
+             pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hlift) as Ho.
+             rewrite Forall2_map_1 in Ho.
+             eapply Forall2_In in Hin; eauto.
+             destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
+             rewrite Hsub in Heq. rewrite <- Heq in Hl. simpl in Hl.
+             now subst.
+             unfold idents. apply assoc_ident_true.
+             2:{ rewrite combine_map_fst, in_map_iff.
+                 esplit; split; eauto. now simpl. }
+             apply NoDup_NoDupMembers_combine.
+             pose proof (L.n_nodup n) as Hdup.
+             rewrite fst_NoDupMembers, app_assoc, map_app in Hdup.
+             eauto using  NoDup_app_weaken'.
+          -- rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
+             apply Forall2_swap_args in Hf2.
+             pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hf2) as Ho.
+             rewrite Forall2_map_1 in Ho.
+             eapply Forall2_In in Hin; eauto.
+             destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
+             esplit; split; eauto.
+             eauto using instck_sub_ext.
+        * intros (y, cky) E; inv E.
+          take (LC.wc_exp _ _ _) and inv it; auto.
+
+      + econstructor; eauto; try discriminate;
+          rewrite app_nil_r in *.
+        (* We can't use [sub] directly because some variables
+           in the left side of the equation may have no image bu [sub].
+           -> see LClocking.wc_equation *)
+        * instantiate (1 := fun x => match sub x with
+                                  | None => assoc_ident x (combine (idents (L.n_out n)) xs)
+                                  | s => s
+                                  end).
+          (* inputs *)
+          rewrite <- (to_node_in n n'); auto.
+          apply mmap_inversion in EQ.
+          pose proof (L.n_nodup n) as Hdup.
+          remember (L.n_in n) as ins. clear Heqins.
+          revert dependent ins.
+          take (LC.WellFormedAnon _ _) and clear it.
+          revert dependent x.
+          induction l as [| e].
+          { intros. inv EQ. simpl in WIi. inv WIi.
+            take ([] = _) and apply symmetry, map_eq_nil in it.
+            now subst. }
+          intros le Htr ins WIi.
+          inv Htr. simpl in WIi.
+          take (Forall _ (e::_)) and inv it.
+          take (to_lexp e = _) and pose proof it as Tolexp; eapply wc_lexp in it as (ck & Hck & Wce);
+            eauto.
+          rewrite L.clockof_nclockof in Hck.
+          destruct (L.nclockof e) as [|nc []] eqn:Hcke; simpl in *; inv Hck.
+          inversion WIi as [|???? Wi ? Hmap]. subst.
+          unfold idck in Hmap.
+          apply symmetry, map_cons'' in Hmap as ((?&(?&?))&?&?&?&?). subst.
+          unfold LC.WellInstantiated in Wi. destruct Wi; simpl in *.
+          constructor; eauto.
+          2:{ eapply IHl; eauto. now apply nodupmembers_cons in Hdup. }
+          split; simpl; eauto.
+          2:{ exists (stripname nc). split. apply Wce. auto using instck_sub_ext. }
+          simpl in *. take (sub _ = _) and rewrite it. destruct nc as (ck & []).
+          2:{ simpl.
+              rewrite assoc_ident_false. constructor.
+              apply nodupmembers_cons in Hdup as [Hin].
+              rewrite <- In_InMembers_combine. unfold idents. intro Hin'.
+              apply in_map_iff in Hin' as ((?&?)&?&?). simpl in *. subst.
+              eapply Hin, In_InMembers.
+              repeat (apply in_or_app; right; eauto).
+              apply Forall2_length in Hf2. apply Forall2_length in WIo.
+              unfold idents, idck in *. repeat rewrite map_length in *.
+              congruence.
+          }
+          simpl. destruct e; take (LC.wc_exp G vars _) and inv it;
+                   inv Hcke; inv Tolexp.
+          -- constructor.
+          -- destruct tys; take (map _ _ = [_]) and inv it.
+        * (* outputs *)
+          unfold idck in *.
+          rewrite <- (to_node_out n n'); auto.
+          clear - Hlift Hf2 WIo.
+          apply Forall2_forall. split.
+          2:{ apply Forall2_length in Hlift. apply Forall2_length in WIo.
+              repeat rewrite map_length in *. congruence. }
+          intros (?&(?&?)) ? Hin. split.
+          -- destruct (sub i) eqn:Hsub.
+             apply Forall2_swap_args in Hlift.
+             pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hlift) as Ho.
+             rewrite Forall2_map_1 in Ho.
+             eapply Forall2_In in Hin; eauto.
+             destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
+             rewrite Hsub in Heq. rewrite <- Heq in Hl. simpl in Hl.
+             now subst.
+             unfold idents. apply assoc_ident_true.
+             2:{ rewrite combine_map_fst, in_map_iff.
+                 esplit; split; eauto. now simpl. }
+             apply NoDup_NoDupMembers_combine.
+             pose proof (L.n_nodup n) as Hdup.
+             rewrite fst_NoDupMembers, app_assoc, map_app in Hdup.
+             eauto using  NoDup_app_weaken'.
+          -- rewrite Forall2_map_2 in Hf2. rewrite Forall2_map_2 in WIo.
+             apply Forall2_swap_args in Hf2.
+             pose proof (Forall2_trans_ex _ _ _ _ _ WIo Hf2) as Ho.
+             rewrite Forall2_map_1 in Ho.
+             eapply Forall2_In in Hin; eauto.
+             destruct Hin as (?&?&(Heq&?)&Hl). simpl in *.
+             esplit; split; eauto.
+             eauto using instck_sub_ext.
   Qed.
 
   Lemma wc_node :

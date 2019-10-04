@@ -68,14 +68,14 @@ Module Type NLSEMANTICS
           sem_node f ls xs ->
           sem_equation bk H (EqApp x ck f arg None)
     | SEqReset:
-        forall bk H x ck f arg y ys rs ls xs,
+        forall bk H x ck f arg y cky ys rs ls xs,
           sem_exps bk H arg ls ->
           sem_vars H x xs ->
           sem_clock bk H ck (clock_of ls) ->
           sem_var H y ys ->
           bools_of ys rs ->
           (forall k, sem_node f (mask k rs ls) (mask k rs xs)) ->
-          sem_equation bk H (EqApp x ck f arg (Some y))
+          sem_equation bk H (EqApp x ck f arg (Some (y, cky)))
     | SEqFby:
         forall bk H x ls xs c0 ck le,
           sem_aexp bk H ck le ls ->
@@ -211,7 +211,7 @@ enough: it does not support the internal fixpoint introduced by
         P_equation bk H (EqApp x ck f arg None).
 
     Hypothesis EqResetCase:
-      forall bk H x ck f arg y ys rs ls xs,
+      forall bk H x ck f arg y cky ys rs ls xs,
         sem_exps bk H arg ls ->
         sem_vars H x xs ->
         sem_clock bk H ck (clock_of ls) ->
@@ -219,7 +219,7 @@ enough: it does not support the internal fixpoint introduced by
         bools_of ys rs ->
         (forall k, sem_node G f (mask k rs ls) (mask k rs xs)
               /\ P_node f (mask k rs ls) (mask k rs xs)) ->
-        P_equation bk H (EqApp x ck f arg (Some y)).
+        P_equation bk H (EqApp x ck f arg (Some (y, cky))).
 
     Hypothesis EqFbyCase:
       forall bk H x ls xs c0 ck le,
@@ -297,7 +297,7 @@ enough: it does not support the internal fixpoint introduced by
     revert Hnf.
     induction Hsem as [
                      | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+                     | bk H x ck f le y cky ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
                      |
                      | bk H f xs ys n Hbk Hf ??? Heqs IH]
                         using sem_node_mult
@@ -386,7 +386,7 @@ enough: it does not support the internal fixpoint introduced by
     revert Hnin'.
     induction Hsem as [
                      | bk H x ck f le ls xs Hles Hvars Hck Hnode IH
-                     | bk H x ck f le y ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
+                     | bk H x ck f le y cky ys rs ls xs Hles Hvars Hck Hvar ? Hnodes
                      |
                      | bk H f xs ys n Hbk Hfind Hxs Hys ? Heqs IH]
                         using sem_node_mult

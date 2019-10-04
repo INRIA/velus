@@ -2568,6 +2568,13 @@ Section OptionLists.
     | b :: m => LiftO False (eq a) b \/ Ino a m
     end.
 
+  (* Fixpoint Ino (a : A) (l : list (option A)) : Prop := *)
+  (*   match l with *)
+  (*   | [] => False *)
+  (*   | Some b :: m => b = a \/ Ino a m *)
+  (*   | None :: m => Ino a m *)
+  (*   end. *)
+
   Inductive NoDupo : list (option A) -> Prop :=
     NoDupo_nil : NoDupo []
   | NoDupo_conss : forall x l, ~ Ino x l -> NoDupo l -> NoDupo (Some x :: l)

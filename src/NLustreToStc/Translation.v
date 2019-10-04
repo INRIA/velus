@@ -49,8 +49,8 @@ Module Type TRANSLATION
       []                        (* This way we can ensure b_blocks_in_eqs *)
     | EqApp (x :: xs) ck f les None =>
       [ SynStc.TcCall x (x :: xs) ck false f les ]
-    | EqApp (x :: xs) ck f les (Some r) =>
-      [ SynStc.TcReset x (Con ck r true) f;
+    | EqApp (x :: xs) ck f les (Some (r, ckr)) =>
+      [ SynStc.TcReset x (Con ckr r true) f;
           SynStc.TcCall x (x :: xs) ck true f les ]
     | EqFby x ck _ e =>
       [ SynStc.TcNext x ck e ]
@@ -261,7 +261,7 @@ Module Type TRANSLATION
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto; try reflexivity.
     destruct i; simpl; auto.
-    destruct o; simpl.
+    destruct o as [(?&?)|]; simpl.
     - rewrite IHl, 2 map_app, 2 in_app; simpl;
         tauto.
     - rewrite IHl; reflexivity.
@@ -271,14 +271,14 @@ Module Type TRANSLATION
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
-    destruct o; simpl; auto.
+    destruct o as [(?&?)|]; simpl; auto.
   Qed.
   Next Obligation.
     rewrite gather_eqs_fst_spec.
     unfold gather_mems, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
-    destruct o; simpl; auto.
+    destruct o as [(?&?)|]; simpl; auto.
   Qed.
   Next Obligation.
     rewrite <-map_app.
@@ -302,7 +302,7 @@ Module Type TRANSLATION
     unfold SynStc.variables, translate_eqns, vars_defined.
     induction (n_eqs n) as [|[]]; simpl; auto.
     destruct i; simpl; auto.
-    destruct o; simpl; rewrite IHl; auto.
+    destruct o as [(?&?)|]; simpl; rewrite IHl; auto.
   Qed.
   Next Obligation.
     unfold translate_eqns in *.
@@ -311,7 +311,7 @@ Module Type TRANSLATION
     - inversion_clear H as [?? Rst|?]; try inv Rst.
       right; apply IHl; auto.
     - destruct i; simpl in *; auto.
-      destruct o.
+      destruct o as [(?&?)|].
       + inversion_clear H as [?? Rst|?? Rst];
           inversion_clear Rst as [?? Rst'|]; try inv Rst'.
         * right; left; constructor.
@@ -330,7 +330,7 @@ Module Type TRANSLATION
       + inversion_clear H as [?? Step|]; try inv Step.
         right; apply IHl; auto.
       + destruct i; simpl in *; auto.
-        destruct o; simpl in *;
+        destruct o as [(?&?)|]; simpl in *;
           inversion_clear H as [?? Step|?? Step']; try inv Step.
         *{ inversion_clear Step' as [?? Step|]; try inv Step.
            - left; constructor.
@@ -354,7 +354,7 @@ Module Type TRANSLATION
         inversion_clear Reset as [?? Rst|]; try inv Rst.
         apply IHl; auto.
       + destruct i; simpl in *; auto.
-        destruct o; simpl in *; inversion_clear Nodup as [|?? Notin];
+        destruct o as [(?&?)|]; simpl in *; inversion_clear Nodup as [|?? Notin];
           inversion_clear Reset as [?? Rst|?? Rst']; try inv Rst;
             inversion_clear H as [?? Step|?? Step']; try inv Step.
         *{ inversion_clear Step' as [?? Step|?? Hin]; try inv Step.
@@ -377,7 +377,7 @@ Module Type TRANSLATION
     induction (n_eqs n) as [|[]]; simpl; auto.
     - inversion 1.
     - destruct i; simpl; auto.
-      destruct o; simpl.
+      destruct o as [(?&?)|]; simpl.
       + apply incl_cons.
         * constructor; auto.
         * apply incl_tl; auto.

@@ -181,12 +181,13 @@ Module Type LCLOCKING
         Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
         wc_exp (Eapp f es None anns)
 
-    | wc_EappReset: forall f es r anns n bck sub,
+    | wc_EappReset: forall f es r ckr anns n bck sub,
         Forall wc_exp es ->
         find_node f G = Some n ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es) ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
         wc_exp r ->
+        clockof r = [ckr] ->
         (* TODO: clock of r *)
         wc_exp (Eapp f es (Some r) anns).
 
@@ -425,13 +426,14 @@ Module Type LCLOCKING
         P (Eapp f es None anns).
 
     Hypothesis EappResetCase:
-      forall f es r anns n bck sub,
+      forall f es r ckr anns n bck sub,
         Forall (wc_exp G vars) es ->
         Forall P es ->
         find_node f G = Some n ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_in)) (nclocksof es) ->
         Forall2 (WellInstantiated bck sub) (idck n.(n_out)) (map snd anns) ->
         wc_exp G vars r ->
+        clockof r = [ckr] ->
         P r ->
         P (Eapp f es (Some r) anns).
 

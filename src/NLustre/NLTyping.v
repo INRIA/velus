@@ -42,14 +42,15 @@ Module Type NLTYPING
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
       wt_equation G vars (EqApp xs ck f es None)
-  | wt_EqReset: forall n xs ck f es r,
+  | wt_EqReset: forall n xs ck f es y cky,
       find_node f G = Some n ->
       Forall2 (fun x '(_, (t, _)) => In (x, t) vars) xs n.(n_out) ->
       Forall2 (fun e '(_, (t, _)) => typeof e = t) es n.(n_in) ->
       wt_clock vars ck ->
       Forall (wt_exp vars) es ->
-      In (r, bool_type) vars ->
-      wt_equation G vars (EqApp xs ck f es (Some r))
+      In (y, bool_type) vars ->
+      wt_clock vars cky ->
+      wt_equation G vars (EqApp xs ck f es (Some (y, cky)))
   | wt_EqFby: forall x ck c0 e,
       In (x, type_const c0) vars ->
       typeof e = type_const c0 ->

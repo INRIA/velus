@@ -55,7 +55,7 @@ Module Type NLCLOCKING
                    /\ exists xck, In (x, xck) vars
                             /\ instck ck sub yck = Some xck)
                 n.(n_out) xs ->
-        (forall y, r = Some y -> In (y, ck) vars) ->
+        (forall yck, r = Some yck -> In yck vars) ->
         wc_equation G vars (EqApp xs ck f les r)
   | CEqFby:
       forall x ck v0 le,

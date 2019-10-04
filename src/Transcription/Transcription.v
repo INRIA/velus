@@ -120,25 +120,62 @@ Module Type TRANSCRIPTION
 
   Definition to_equation (env : Env.t (type * clock)) (envo : ident -> res unit)
                          (eq : L.equation) : res NL.equation :=
-    match eq with
-    | (xs, [L.Eapp f es None _]) =>
+    let (xs, es) := eq in
+    match es with
+    | [e] =>
+      match e with
+      | L.Eapp f es None _ =>
         do les <- mmap to_lexp es;
         OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les None)
-
-    | ([x], [L.Efby [e0] [e] _]) =>
-        do _  <- envo x;
-        do c0 <- to_constant e0;
-        do ck <- find_clock env x;
-        do le <- to_lexp e;
-        OK (NL.EqFby x ck c0 le)
-
-    | ([x], [e]) =>
-        do ck <- find_clock env x;
-        do ce <- to_cexp e;
-        OK (NL.EqDef x ck ce)
-
+      | L.Eapp f es (Some (L.Evar x (_, (ckx, _)))) _ => (* use clock annot or lookup? *)
+        do les <- mmap to_lexp es;
+        OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les (Some (x, ckx)))
+      | L.Eapp f es (Some _) _ => Error (msg "reset equation not normalized")
+      | L.Efby [e0] [e] _ =>
+        match xs with
+          | [x] =>
+            do _  <- envo x;
+            do c0 <- to_constant e0;
+            do ck <- find_clock env x;
+            do le <- to_lexp e;
+            OK (NL.EqFby x ck c0 le)
+          | _ => Error (msg "fby equation not normalized")
+        end
+      | _ =>
+        match xs with
+        | [x] =>
+          do ck <- find_clock env x;
+          do ce <- to_cexp e;
+          OK (NL.EqDef x ck ce)
+        | _ => Error (msg "basic equation not normalized")
+        end
+      end
     | _ => Error (msg "equation not normalized")
     end.
+
+    (* match eq with *)
+    (* | (xs, [L.Eapp f es None _]) => *)
+    (*     do les <- mmap to_lexp es; *)
+    (*     OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les None) *)
+
+    (* | (xs, [L.Eapp f es (Some (L.Evar x _)) _]) => *)
+    (*     do les <- mmap to_lexp es; *)
+    (*     OK (NL.EqApp xs (find_base_clock (L.clocksof es)) f les (Some x)) *)
+
+    (* | ([x], [L.Efby [e0] [e] _]) => *)
+    (*     do _  <- envo x; *)
+    (*     do c0 <- to_constant e0; *)
+    (*     do ck <- find_clock env x; *)
+    (*     do le <- to_lexp e; *)
+    (*     OK (NL.EqFby x ck c0 le) *)
+
+    (* | ([x], [e]) => *)
+    (*     do ck <- find_clock env x; *)
+    (*     do ce <- to_cexp e; *)
+    (*     OK (NL.EqDef x ck ce) *)
+
+    (* | _ => Error (msg "equation not normalized") *)
+    (* end. *)
 
   Lemma find_clock_in :
     forall x env ty ck,

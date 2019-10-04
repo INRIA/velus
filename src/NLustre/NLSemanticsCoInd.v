@@ -185,14 +185,14 @@ Module Type NLSEMANTICSCOIND
           Forall2 (sem_var H) ys oss ->
           sem_equation H b (EqApp ys ck f es None)
     | SeqReset:
-        forall H b xs ck f es y ys rs ess oss,
+        forall H b xs ck f es y cky ys rs ess oss,
           Forall2 (sem_exp H b) es ess ->
           sem_clock H b ck (clocks_of ess) ->
           sem_var H y ys ->
           bools_of ys rs ->
           (forall k, sem_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
           Forall2 (sem_var H) xs oss ->
-          sem_equation H b (EqApp xs ck f es (Some y))
+          sem_equation H b (EqApp xs ck f es (Some (y, cky)))
     | SeqFby:
         forall H b x ck c0 e es os,
           sem_aexp H b ck e es ->
@@ -235,7 +235,7 @@ Module Type NLSEMANTICSCOIND
         P_equation H b (EqApp ys ck f es None).
 
     Hypothesis EqResetCase:
-      forall H b xs ck f es y ys rs ess oss,
+      forall H b xs ck f es y cky ys rs ess oss,
         Forall2 (sem_exp H b) es ess ->
         sem_clock H b ck (clocks_of ess) ->
         sem_var H y ys ->
@@ -243,7 +243,7 @@ Module Type NLSEMANTICSCOIND
         (forall k, sem_node G f (List.map (mask k rs) ess) (List.map (mask k rs) oss)
               /\ P_node f (List.map (mask k rs) ess) (List.map (mask k rs) oss)) ->
         Forall2 (sem_var H) xs oss ->
-        P_equation H b (EqApp xs ck f es (Some y)).
+        P_equation H b (EqApp xs ck f es (Some (y, cky))).
 
     Hypothesis EqFbyCase:
       forall H b x ck c0 e es os,

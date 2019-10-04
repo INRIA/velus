@@ -1363,7 +1363,7 @@ Module Type CORRECTNESS
         rewrite Ino_In, in_map_iff. exists nc. split; auto. congruence.
     - (* Ereset *)
       inversion_clear Hwc as [| | | | | | | |
-                              | ????? bck sub Wces ? WIi WIo Wce ].
+                              | ?????? bck sub Wces ? WIi WIo Wce ].
       destruct Hfree as [Hino| Hfree']. right. constructor; auto.
       apply Exists_exists in Hfree' as (?&Hin&?).
       assert (WIo' := WIo). assert (Hwcg' := Hwcg).
@@ -1454,7 +1454,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma free_clockof_eapp :
-    forall G f es r a,
+    forall G f es a r,
       LC.wc_exp G vars (L.Eapp f es r a) ->
       LC.wc_global G ->
       wc_env vars ->
@@ -1494,19 +1494,19 @@ Module Type CORRECTNESS
            x is Fresh_In some es, which is a contradiction with Hino.
        *)
       destruct a as [| (?&(?&?))] eqn:Heqa; simpl in *.
-      subst. inversion WIo as [Hlen|].
-      unfold idck in Hlen. symmetry in Hlen. apply map_eq_nil in Hlen.
-      apply (f_equal (@length ((ident * (type * clock))))) in Hlen;
-        simpl in Hlen. pose proof (L.n_outgt0 n). omega.
-      inversion_clear Hvars as [|?? Hvar].
-      inversion_clear WIo as [|(?&?)??? (?&?) ].
-      unfold L.ckstream, stripname in *; simpl in *.
-      eapply instck_free_bck in Hbck as Hfr; eauto.
-      eapply Hvar in Hfr as [| Hf]; auto. apply Hino in Hf.
-      pose proof (In_Forall _ _ _ Hwces Hin) as Hwc.
-      eapply var_clock_defined in Hwc as []; eauto.
-      2:{ right. eapply Exists_exists; eauto. }
-      contradiction Hf; eapply Exists_exists; eauto.
+      + subst. inversion WIo as [Hlen|].
+        unfold idck in Hlen. symmetry in Hlen. apply map_eq_nil in Hlen.
+        apply (f_equal (@length ((ident * (type * clock))))) in Hlen;
+          simpl in Hlen. pose proof (L.n_outgt0 n). omega.
+      + inversion_clear Hvars as [|?? Hvar].
+        inversion_clear WIo as [|(?&?)??? (?&?) ].
+        unfold L.ckstream, stripname in *; simpl in *.
+        eapply instck_free_bck in Hbck as Hfr; eauto.
+        eapply Hvar in Hfr as [| Hf]; auto. apply Hino in Hf.
+        pose proof (In_Forall _ _ _ Hwces Hin) as Hwc.
+        eapply var_clock_defined in Hwc as []; eauto.
+        2:{ right. eapply Exists_exists; eauto. }
+        contradiction Hf; eapply Exists_exists; eauto.
     - eapply wc_env_free_in_clock in Hin' as [yck]; eauto.
       2:{ eapply LC.wc_find_node in Hwcg as [? []]; eauto. }
       eapply Forall2_in_left in WIi' as (nc&Hnc&[]); eauto. simpl in *.
@@ -1541,7 +1541,7 @@ Module Type CORRECTNESS
         eapply Hf; eauto. eapply Exists_exists; eauto.
   Qed.
 
-  Ltac simpl_Foralls :=
+   Ltac simpl_Foralls :=
     repeat
       match goal with
       | H: Forall _ [] |- _ => inv H
@@ -1567,7 +1567,7 @@ Module Type CORRECTNESS
       ClosedAnons e.
   Proof.
     induction e using L.exp_ind2;
-      intros * Hwc Hwcg Hdf Henv Hvars; simpl in Hvars.
+      intros * Hwc Hwcg Hdf Henv Hvars; simpl in *.
     - constructor.
     - inv Hwc. constructor. eapply In_InMembers; eauto.
     - inversion_clear Hvars as [|?? Hv []].
@@ -1680,8 +1680,7 @@ Module Type CORRECTNESS
     - (* Eapp *)
       assert (Hwc' := Hwc). econstructor; eauto.
       2:{
-        unfold L.clockof in Hvars.
-        simpl in Hvars. intros ? HH. apply Exists_exists in HH as (?&?&?).
+        intros ? HH. apply Exists_exists in HH as (?&?&?).
         eapply In_Forall in Hvars; eauto.
       } inv Hwc'.
       eapply Forall_impl_In in H; eauto; intros e Hin HH. inv Hdf.
@@ -1692,13 +1691,18 @@ Module Type CORRECTNESS
     - (* Ereset *)
       assert (Hwc' := Hwc). econstructor; eauto.
       2:{
-        unfold L.clockof in Hvars.
-        simpl in Hvars. intros ? HH. apply Exists_exists in HH as (?&?&?).
+        intros ? HH. apply Exists_exists in HH as (?&?&?).
         eapply In_Forall in Hvars; eauto.
       } inv Hwc'. constructor.
       + inv Hdf. simpl_Foralls. apply IHe; auto.
-        admit.
-        (* eapply free_clockof_eapp in Hvars; eauto. *)
+        take (L.clockof e = _) and rename it into E; rewrite E.
+        constructor; auto; intros * Hfree.
+        wc_env_free_in_clock.
+        take (LC.wc_exp _ _ _) and eapply free_clock_defined in it as []; eauto.
+        * inv H10. Search LC.Is_fresh_in.
+          [|rewrite E; right; apply Exists_exists; setoid_rewrite In_singleton; eauto].
+        auto.
+        eapply free_clockof_eapp in Hvars; eauto.
         (* TODO: free_clock_eapp n'est pas assez fort -> voir s'il y a besoin
            de l'étendre. Ou bien si on a une clause d'égalité dans LTyping
          *)
@@ -1960,11 +1964,11 @@ Module Type CORRECTNESS
   Qed.
 
   (* TODO: dead lemma? *)
-  Lemma Ino_Exists_LiftO :
-    forall {A : Type} (e : A) l, Ino e l <-> Exists (LiftO False (eq e)) l.
-  Proof.
-    split; intro H; (induction l; inv H; [left|right]; auto).
-  Qed.
+  (* Lemma Ino_Exists_LiftO : *)
+  (*   forall {A : Type} (e : A) l, Ino e l <-> Exists (LiftO False (eq e)) l. *)
+  (* Proof. *)
+  (*   split; intro H; (induction l; inv H; [left|right]; auto). *)
+  (* Qed. *)
 
   Lemma in_app_weak :
     forall {A} (x : A) l l',
@@ -3831,16 +3835,12 @@ Module Type CORRECTNESS
       inv Hwt. simpl_Foralls. eapply sem_exp_caexp; eauto.
       simpl in *. rewrite app_nil_r in *. now subst.
     - (* Eapp *)
-      unfold to_equation in Htoeq.
-      assert
-        ((do les <- mmap to_lexp l;
-          OK (NL.EqApp xs (find_base_clock (L.clocksof l)) i les None)) = OK eq')
-        as Hto by
-            (destruct xs as [|?[]]; simpl in *; cases; monadInv Htoeq; auto).
-      monadInv Hto.
+      simpl in Htoeq.
+      cases; monadInv Htoeq. admit.
       pose proof (anon_ck_eq _ _ _ Hwc Hwcg Henv) as Hca.
       inversion Hsem. subst. inv Hwt. simpl_Foralls. simpl in *. rewrite app_nil_r in *.
-      take (LS.sem_exp _ _ _ _ _) and inv it. 2: cases; monadInv Htoeq.
+      take (LS.sem_exp _ _ _ _ _) and inv it.
+      (* 2: cases; monadInv Htoeq. *)
       take (LT.wt_exp _ _ _) and inv it.
       econstructor; eauto using sem_exps_lexps.
       2:{ eapply Hsemnode; eauto. take (LS.sem_node _ _ _ _) and inv it.
@@ -3915,7 +3915,7 @@ Module Type CORRECTNESS
         eapply fresh_is_anon in Hf; try now eapply In_Forall; eauto.
         eauto.
       }
-  Qed.
+  Admitted.
 
   Lemma sem_var_env_eq :
     forall H H' xs ss,
@@ -4149,9 +4149,7 @@ Module Type CORRECTNESS
         eapply sem_var_var. eauto.
       + tonodeInv Htrn. simpl. eapply Forall2_impl_In in Houts; eauto.
         intros * Hina Hinb0 Hsemv. eapply sem_var_var. eauto.
-      + (* assert (b ≡ clocks_of ins) as Hb *)
-        (*     by (now rewrite clocks_of_sclocksof). *)
-        erewrite <- to_node_in; eauto.
+      + erewrite <- to_node_in; eauto.
         eapply inputs_clocked_vars; eauto.
       + apply NLSC.sem_equation_cons2; auto.
         * eapply ord_l_nl; eauto.

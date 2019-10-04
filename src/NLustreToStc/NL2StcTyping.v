@@ -32,7 +32,7 @@ Module Type NL2STCTYPING
       (forall x ty, In (x, ty) vars -> NL.IsV.Is_variable_in_eq x eq -> In (x, ty) vars') ->
       Forall (wt_trconstr (translate G) vars' mems) (translate_eqn eq).
   Proof.
-    inversion_clear 1 as [??? Hin|????? Find|?????? Find|];
+    inversion_clear 1 as [??? Hin|????? Find|??????? Find|];
       intros * SpecVars SpecMems SpecVars'; simpl.
     - constructor; auto.
       constructor; try rewrite SpecVars; auto.

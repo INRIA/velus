@@ -30,9 +30,13 @@ Module Type ISFREE
         Is_free_in_caexp i ck ce ->
         Is_free_in_eq i (EqDef x ck ce)
   | FreeEqApp:
-      forall x f ck les i r,
-        Is_free_in_aexps i ck les \/ (r = Some i) ->
-        Is_free_in_eq i (EqApp x ck f les r)
+      forall x f ck les i,
+        Is_free_in_aexps i ck les ->
+        Is_free_in_eq i (EqApp x ck f les None)
+  | FreeEqReset:
+      forall x f ck les i r ck_r,
+        Is_free_in_aexps i ck les \/ r = i \/ Is_free_in_clock i ck_r ->
+        Is_free_in_eq i (EqApp x ck f les (Some (r, ck_r)))
   | FreeEqFby:
       forall x v ck le i,
         Is_free_in_aexp i ck le ->
@@ -51,7 +55,7 @@ Module Type ISFREE
     | EqApp _ ck f laes r =>
       let fvs := free_in_aexps ck laes fvs in
       match r with
-      | Some x => PS.add x fvs
+      | Some (x, ck_r) => PS.add x (free_in_clock ck_r fvs)
       | None => fvs
       end
     | EqFby _ ck v lae    => free_in_aexp ck lae fvs
@@ -78,21 +82,20 @@ Module Type ISFREE
               end).
 
     destruct eq; split; intro H; aux.
-    - destruct o as [|]; aux.
+    - destruct o as [(?&?)|]; aux.
       simpl in H.
       apply PS.add_spec in H as [|].
       + subst; left; eauto.
-      + apply free_in_aexps_spec in H as [|]; aux.
-    - destruct o; aux.
-      simpl.
-      apply PS.add_spec.
-      rewrite free_in_aexps_spec; intuition.
+      + apply free_in_clock_spec in H as [|]; eauto.
+        apply free_in_aexps_spec in H as [|]; aux.
+    - destruct o; aux; simpl; apply PS.add_spec;
+        rewrite free_in_clock_spec, free_in_aexps_spec; intuition.
     - subst; simpl. now apply PSF.add_1.
-    - destruct o; aux.
-      simpl.
-      apply PS.add_spec.
-      right.
-      rewrite free_in_aexps_spec; intuition.
+    - destruct o; aux; simpl; apply PS.add_spec;
+        rewrite free_in_clock_spec, free_in_aexps_spec; intuition.
+    - simpl; destruct o as [(?&?)|];
+        try apply PS.add_spec; try rewrite free_in_clock_spec; try rewrite free_in_aexps_spec;
+          auto.
   Qed.
 
   Lemma free_in_equation_spec':

@@ -105,7 +105,7 @@ Module Type CORRECTNESS
     induction eqs as [|[]]; simpl; intros ??????? Heqs Hin;
       inversion_clear Heqs as [|?? Heq];
       try inversion_clear Heq as [|??????????? Hd|
-                                  ?????????????? Hd ?????? Rst|];
+                                  ??????????????? Hd ?????? Rst|];
       try contradiction; eauto.
     - destruct i; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
@@ -276,7 +276,7 @@ Module Type CORRECTNESS
     destruct i; try contradiction.
     inversion_clear Hin as [E|]; try contradiction; inv E.
     inversion_clear Heq as [|??????????? Hd Sub|
-                            ?????????????? Hd Sub ????? Rst|];
+                            ??????????????? Hd Sub ????? Rst|];
       inv Hd; rewrite Sub in Find; inv Find.
     - eapply IH; eauto.
     - specialize (Rst (if rs n then pred (count rs n) else count rs n));
@@ -393,7 +393,7 @@ Module Type CORRECTNESS
   Proof.
     intros * IHnode Hord WC ClkM TrNodup Closed SpecLasts Heq Htcs.
     destruct Heq as [|???????????????? Node|
-                     ??????????????????? Var Hr Reset|
+                     ???????????????????? Var Hr Reset|
                      ????????? Arg Var Mfby];
       inversion_clear TrNodup as [|???????? Notin|]; simpl.
 
@@ -425,7 +425,7 @@ Module Type CORRECTNESS
       end.
       assert (forall Mx, sem_trconstrs_n (translate G) bk H M (add_inst_n x Mx Is) (next M) tcs) as Htcs'
           by now intro; apply sem_trconstrs_n_add_n.
-      assert (CE.Sem.sem_clocked_var bk H y ck) as Cky.
+      assert (CE.Sem.sem_clocked_var bk H y cky) as Cky.
       { intro n; specialize (ClkM n).
         eapply Forall_forall in ClkM; eauto; inv WC; eauto; auto.
       }
@@ -511,7 +511,7 @@ Module Type CORRECTNESS
     - apply Exists_app' in Hin as [Hin|].
       + destruct eq; simpl in Hin.
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
-        *{ destruct i; try destruct o; inversion_clear Hin as [?? Hin'|?? Hin'].
+        *{ destruct i; try destruct o as [(?&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
            - inv Hin'; apply Notin; do 3 constructor; auto.
            - inversion_clear Hin' as [?? Hin|?? Hin]; inv Hin;
                apply Notin; do 3 constructor; auto.
@@ -545,7 +545,7 @@ Module Type CORRECTNESS
     induction eqs as [|[]]; simpl; try contradiction; intros * Hin.
     - edestruct IHeqs; eauto; eexists; right; eauto.
     - destruct i; simpl in *; auto.
-      destruct o.
+      destruct o as [(?&?)|].
       + destruct Hin; subst.
         * exists 1; apply Exists_app'; left; right; left; constructor.
         * edestruct IHeqs; eauto; eexists; apply Exists_app; eauto.
@@ -604,7 +604,7 @@ Module Type CORRECTNESS
       destruct eq; simpl in *.
       + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
       + destruct i; auto.
-        destruct o as [|]; inversion_clear Hin as [?? E|?? Hins]; auto.
+        destruct o as [(?&?)|]; inversion_clear Hin as [?? E|?? Hins]; auto.
         * inv E; apply Hnineq; constructor.
         * inversion_clear Hins as [?? E|?? Hins']; auto.
           inv E; apply Hnineq; constructor.
