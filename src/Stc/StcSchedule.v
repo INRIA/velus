@@ -14,7 +14,7 @@ From Velus Require Import CoreExpr.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import Stc.StcSemantics.
 From Velus Require Import Stc.StcTyping.
 From Velus Require Import Stc.StcIsVariable.
@@ -58,7 +58,7 @@ Module Type STCSCHEDULE
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX        Op)
-       (Import Str    : STREAM               Op OpAux)
+       (Import Str    : INDEXEDSTREAMS       Op OpAux)
        (Import CE     : COREEXPR         Ids Op OpAux Str)
        (Import StcSyn : STCSYNTAX        Ids Op       CE.Syn)
        (Import Syst   : STCISSYSTEM      Ids Op       CE.Syn StcSyn)
@@ -486,11 +486,11 @@ End STCSCHEDULE.
 Module StcScheduleFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX       Op)
-       (Str   : STREAM              Op OpAux)
-       (CE    : COREEXPR        Ids Op OpAux Str)
+       (OpAux : OPERATORS_AUX        Op)
+       (Str   : INDEXEDSTREAMS       Op OpAux)
+       (CE    : COREEXPR         Ids Op OpAux Str)
        (Syn   : STCSYNTAX        Ids Op       CE.Syn)
-       (Syst  : STCISSYSTEM       Ids Op       CE.Syn Syn)
+       (Syst  : STCISSYSTEM      Ids Op       CE.Syn Syn)
        (Ord   : STCORDERED       Ids Op       CE.Syn Syn Syst)
        (Sem   : STCSEMANTICS     Ids Op OpAux CE.Syn Syn Syst Ord Str CE.Sem)
        (Typ   : STCTYPING        Ids Op       CE.Syn Syn CE.Typ)

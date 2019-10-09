@@ -1083,10 +1083,10 @@ Proof.
 Qed.
 Hint Resolve val_to_bool_bool_val.
 
-From Velus Require Import Stream.
-From Velus Require Import Streams.
+From Velus Require Import IndexedStreams.
+From Velus Require Import CoindStreams.
 From Velus Require Import Obc.
 
-Module Str  := StreamFun  Op OpAux.
-Module Strs := StreamsFun Op OpAux.
-Module Obc  := ObcFun Ids Op OpAux.
+Module IStr := IndexedStreamsFun Op OpAux.
+Module CStr := CoindStreamsFun   Op OpAux.
+Module Obc  := ObcFun        Ids Op OpAux.

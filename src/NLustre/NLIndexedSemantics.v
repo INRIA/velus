@@ -12,7 +12,7 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESemantics.
 
 (** * The NLustre semantics *)
@@ -24,13 +24,13 @@ From Velus Require Import CoreExpr.CESemantics.
 
  *)
 
-Module Type NLSEMANTICS
+Module Type NLINDEXEDSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CESyn : CESYNTAX        Op)
        (Import Syn   : NLSYNTAX    Ids Op       CESyn)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import Ord   : NLORDERED   Ids Op       CESyn Syn)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn      Str).
 
@@ -482,17 +482,17 @@ enough: it does not support the internal fixpoint introduced by
     rewrite <-E1; auto.
   Qed.
 
-End NLSEMANTICS.
+End NLINDEXEDSEMANTICS.
 
-Module NLSemanticsFun
+Module NLIndexedSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
        (CESyn : CESYNTAX        Op)
        (Syn   : NLSYNTAX    Ids Op       CESyn)
-       (Str   : STREAM          Op OpAux)
+       (Str   : INDEXEDSTREAMS  Op OpAux)
        (Ord   : NLORDERED   Ids Op       CESyn Syn)
        (CESem : CESEMANTICS Ids Op OpAux CESyn      Str)
-<: NLSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
-  Include NLSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
-End NLSemanticsFun.
+<: NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
+  Include NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem.
+End NLIndexedSemanticsFun.

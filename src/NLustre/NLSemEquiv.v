@@ -16,33 +16,33 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import CoreExpr.Stream.
-From Velus Require Import Streams.
+From Velus Require Import IndexedStreams.
+From Velus Require Import CoindStreams.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
-From Velus Require Import NLustre.NLSemantics.
-From Velus Require Import NLustre.NLSemanticsCoInd.
-From Velus Require Import NLustre.NLIndexedToCoInd.
-From Velus Require Import NLustre.NLCoIndToIndexed.
+From Velus Require Import NLustre.NLIndexedSemantics.
+From Velus Require Import NLustre.NLCoindSemantics.
+From Velus Require Import NLustre.NLIndexedToCoind.
+From Velus Require Import NLustre.NLCoindToIndexed.
 
 (* From Coq Require Import Setoid. *)
 
 Module Type NLSEMEQUIV
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX        Op)
-       (Import CESyn  : CESYNTAX             Op)
-       (Import Syn    : NLSYNTAX         Ids Op       CESyn)
-       (Import Str    : STREAM               Op OpAux)
-       (Import Strs   : STREAMS              Op OpAux)
-       (Import Ord    : NLORDERED        Ids Op       CESyn Syn)
-       (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
-       (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
-       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn     Strs Ord)
-       (IdxToCoind    : NLINDEXEDTOCOIND Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed Interp CoInd)
-       (CoindToIdx    : NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed        CoInd).
+       (Import OpAux  : OPERATORS_AUX          Op)
+       (Import CESyn  : CESYNTAX               Op)
+       (Import Syn    : NLSYNTAX           Ids Op       CESyn)
+       (Import IStr   : INDEXEDSTREAMS         Op OpAux)
+       (Import CStr   : COINDSTREAMS           Op OpAux)
+       (Import Ord    : NLORDERED          Ids Op       CESyn Syn)
+       (CESem         : CESEMANTICS        Ids Op OpAux CESyn     IStr)
+       (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr      Ord CESem)
+       (Import Interp : CEINTERPRETER      Ids Op OpAux CESyn     IStr          CESem)
+       (CoInd         : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn      CStr Ord)
+       (IdxToCoind    : NLINDEXEDTOCOIND   Ids Op OpAux CESyn Syn IStr CStr Ord CESem Indexed Interp CoInd)
+       (CoindToIdx    : NLCOINDTOINDEXED   Ids Op OpAux CESyn Syn IStr CStr Ord CESem Indexed        CoInd).
 
   (* Lemma inverse_1: *)
   (*   forall A (s: Stream A), *)

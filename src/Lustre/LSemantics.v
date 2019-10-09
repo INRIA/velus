@@ -15,7 +15,7 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import Lustre.LSyntax.
 From Velus Require Import Lustre.LOrdered.
-From Velus Require Import Streams.
+From Velus Require Import CoindStreams.
 
 (** * Lustre semantics *)
 
@@ -25,7 +25,7 @@ Module Type LSEMANTICS
        (Import OpAux : OPERATORS_AUX Op)
        (Import Syn   : LSYNTAX   Ids Op)
        (Import Lord  : LORDERED   Ids Op Syn)
-       (Import Str   : STREAMS        Op OpAux).
+       (Import Str   : COINDSTREAMS   Op OpAux).
 
   Definition history := Env.t (Stream value).
 
@@ -34,21 +34,21 @@ Module Type LSEMANTICS
   | Fby1A:
       forall v xs ys rs,
         fby1 v xs ys rs ->
-        fby1 v (absent ::: xs) (absent ::: ys) (absent ::: rs)
+        fby1 v (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
   | Fby1P:
       forall v w s xs ys rs,
         fby1 s xs ys rs ->
-        fby1 v (present w ::: xs) (present s ::: ys) (present v ::: rs).
+        fby1 v (present w ⋅ xs) (present s ⋅ ys) (present v ⋅ rs).
 
   CoInductive fby: Stream value -> Stream value -> Stream value -> Prop :=
   | FbyA:
       forall xs ys rs,
         fby xs ys rs ->
-        fby (absent ::: xs) (absent ::: ys) (absent ::: rs)
+        fby (absent ⋅ xs) (absent ⋅ ys) (absent ⋅ rs)
   | FbyP:
       forall x y xs ys rs,
         fby1 y xs ys rs ->
-        fby (present x ::: xs) (present y ::: ys) (present x ::: rs).
+        fby (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
   (* TODO: Use everywhere, esp. in LustreElab.v *)
   (* TODO: replace idents with (list ident) *)
@@ -710,7 +710,7 @@ Module LSemanticsFun
        (OpAux : OPERATORS_AUX Op)
        (Syn   : LSYNTAX   Ids Op)
        (Lord  : LORDERED  Ids Op Syn)
-       (Str   : STREAMS       Op OpAux)
+       (Str   : COINDSTREAMS  Op OpAux)
 <: LSEMANTICS Ids Op OpAux Syn Lord Str.
   Include LSEMANTICS Ids Op OpAux Syn Lord Str.
 End LSemanticsFun.

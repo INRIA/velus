@@ -15,27 +15,27 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import CoreExpr.Stream.
-From Velus Require Import Streams.
+From Velus Require Import IndexedStreams.
+From Velus Require Import CoindStreams.
 
 From Velus Require Import CoreExpr.CESemantics.
-From Velus Require Import NLustre.NLSemantics.
-From Velus Require Import NLustre.NLSemanticsCoInd.
+From Velus Require Import NLustre.NLIndexedSemantics.
+From Velus Require Import NLustre.NLCoindSemantics.
 
 From Coq Require Import Setoid.
 
 Module Type NLCOINDTOINDEXED
        (Import Ids     : IDS)
        (Import Op      : OPERATORS)
-       (Import OpAux   : OPERATORS_AUX        Op)
-       (Import CESyn   : CESYNTAX             Op)
-       (Import Syn     : NLSYNTAX         Ids Op       CESyn)
-       (Import Str     : STREAM               Op OpAux)
-       (Import Strs    : STREAMS              Op OpAux)
-       (Import Ord     : NLORDERED        Ids Op       CESyn Syn)
-       (CESem          : CESEMANTICS      Ids Op OpAux CESyn     Str)
-       (Indexed        : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (CoInd          : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs Ord).
+       (Import OpAux   : OPERATORS_AUX          Op)
+       (Import CESyn   : CESYNTAX               Op)
+       (Import Syn     : NLSYNTAX           Ids Op       CESyn)
+       (Import IStr    : INDEXEDSTREAMS         Op OpAux)
+       (Import CStr    : COINDSTREAMS           Op OpAux)
+       (Import Ord     : NLORDERED          Ids Op       CESyn Syn)
+       (CESem          : CESEMANTICS        Ids Op OpAux CESyn     IStr)
+       (Indexed        : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
+       (CoInd          : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord).
 
   Section Global.
 
@@ -68,14 +68,14 @@ Module Type NLCOINDTOINDEXED
         Stream. *)
     Lemma tr_Stream_0:
       forall {A} (xs: Stream A) x,
-        tr_Stream (x ::: xs) 0 = x.
+        tr_Stream (x ⋅ xs) 0 = x.
     Proof. reflexivity. Qed.
 
     (** Indexing a translated Stream at [S n] is indexing the tail of the source
         Stream at [n]. *)
     Lemma tr_Stream_S:
       forall {A} (xs: Stream A) x n,
-        tr_Stream (x ::: xs) (S n) = tr_Stream xs n.
+        tr_Stream (x ⋅ xs) (S n) = tr_Stream xs n.
     Proof. reflexivity. Qed.
 
     (** Another version of the previous lemma.  *)
@@ -470,7 +470,7 @@ Module Type NLCOINDTOINDEXED
     (** We state the correspondence for [bools_of]. *)
     Lemma bools_of_impl:
       forall xs rs,
-        Strs.bools_of xs rs ->
+        CStr.bools_of xs rs ->
         CESem.bools_of (tr_Stream xs) (tr_Stream rs).
     Proof.
       intros ** n; revert dependent xs; revert rs.
@@ -488,10 +488,10 @@ Module Type NLCOINDTOINDEXED
         shifting. *)
     Lemma count_true_shift:
       forall n r,
-        Str.count (tr_Stream (true ::: r)) n
+        IStr.count (tr_Stream (true ⋅ r)) n
         = if tr_Stream r n
-          then Str.count (tr_Stream r) n
-          else S (Str.count (tr_Stream r) n).
+          then IStr.count (tr_Stream r) n
+          else S (IStr.count (tr_Stream r) n).
     Proof.
       induction n; simpl; intros.
       - destruct (tr_Stream r 0); auto.
@@ -506,10 +506,10 @@ Module Type NLCOINDTOINDEXED
         shifting. *)
     Lemma count_false_shift:
       forall n r,
-        Str.count (tr_Stream (false ::: r)) n
+        IStr.count (tr_Stream (false ⋅ r)) n
         = if tr_Stream r n
-          then Str.count (tr_Stream r) n - 1
-          else Str.count (tr_Stream r) n.
+          then IStr.count (tr_Stream r) n - 1
+          else IStr.count (tr_Stream r) n.
     Proof.
       induction n; simpl; intros.
       - destruct (tr_Stream r 0); auto.
@@ -525,10 +525,10 @@ Module Type NLCOINDTOINDEXED
     (** State the correspondence for [count]. *)
     Lemma count_impl:
       forall r,
-        tr_Stream (Strs.count r) ≈ Str.count (tr_Stream r).
+        tr_Stream (CStr.count r) ≈ IStr.count (tr_Stream r).
     Proof.
       intros ** n.
-      unfold Strs.count.
+      unfold CStr.count.
       revert r; induction n; intros; simpl.
       - rewrite (unfold_Stream (count_acc 0 r)); simpl.
         rewrite tr_Stream_0; auto.
@@ -547,12 +547,12 @@ Module Type NLCOINDTOINDEXED
     (** State the correspondence for [mask]. *)
     Lemma mask_impl:
       forall k r xss,
-        tr_Streams (List.map (Strs.mask k r) xss)
-        ≈ Str.mask k (tr_Stream r) (tr_Streams xss).
+        tr_Streams (List.map (CStr.mask k r) xss)
+        ≈ IStr.mask k (tr_Stream r) (tr_Streams xss).
     Proof.
       induction xss as [|xs];
-        simpl; intros * n; unfold Str.mask in *.
-      - destruct (k =? Str.count (tr_Stream r) n); auto.
+        simpl; intros * n; unfold IStr.mask in *.
+      - destruct (k =? IStr.count (tr_Stream r) n); auto.
       - simpl; unfold tr_Stream at 1; rewrite mask_nth.
         rewrite IHxss; simpl.
         rewrite <-count_impl, Nat.eqb_sym.
@@ -567,7 +567,7 @@ Module Type NLCOINDTOINDEXED
         applications. *)
     Lemma tr_clocks_of:
       forall xss,
-        CESem.clock_of (tr_Streams xss) ≈ tr_Stream (Strs.clocks_of xss).
+        CESem.clock_of (tr_Streams xss) ≈ tr_Stream (CStr.clocks_of xss).
     Proof.
       unfold CESem.clock_of.
       intros xss n; revert dependent xss; induction n; intros.
@@ -686,15 +686,15 @@ End NLCOINDTOINDEXED.
 Module NLCoindToIndexedFun
        (Ids     : IDS)
        (Op      : OPERATORS)
-       (OpAux   : OPERATORS_AUX        Op)
-       (CESyn   : CESYNTAX             Op)
-       (Syn     : NLSYNTAX         Ids Op       CESyn)
-       (Str     : STREAM               Op OpAux)
-       (Strs    : STREAMS              Op OpAux)
-       (Ord     : NLORDERED        Ids Op       CESyn Syn)
-       (CESem   : CESEMANTICS      Ids Op OpAux CESyn     Str)
-       (Indexed : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (CoInd   : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs Ord)
-<: NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed CoInd.
-  Include NLCOINDTOINDEXED Ids Op OpAux CESyn Syn Str Strs Ord CESem Indexed CoInd.
+       (OpAux   : OPERATORS_AUX          Op)
+       (CESyn   : CESYNTAX               Op)
+       (Syn     : NLSYNTAX           Ids Op       CESyn)
+       (IStr    : INDEXEDSTREAMS         Op OpAux)
+       (CStr    : COINDSTREAMS           Op OpAux)
+       (Ord     : NLORDERED          Ids Op       CESyn Syn)
+       (CESem   : CESEMANTICS        Ids Op OpAux CESyn     IStr)
+       (Indexed : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
+       (CoInd   : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord)
+<: NLCOINDTOINDEXED Ids Op OpAux CESyn Syn IStr CStr Ord CESem Indexed CoInd.
+  Include NLCOINDTOINDEXED Ids Op OpAux CESyn Syn IStr CStr Ord CESem Indexed CoInd.
 End NLCoindToIndexedFun.

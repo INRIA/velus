@@ -17,9 +17,9 @@ Module Type STC2OBCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import CE    : COREEXPR    Ids Op OpAux Str)
-       (Import Stc    : STC      Ids Op OpAux Str CE)
+       (Import Stc   : STC         Ids Op OpAux Str CE)
        (Import Obc   : OBC         Ids Op OpAux)
        (Import Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn).
 
@@ -332,9 +332,9 @@ Module Stc2ObcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Str   : STREAM          Op OpAux)
+       (Str   : INDEXEDSTREAMS  Op OpAux)
        (CE    : COREEXPR    Ids Op OpAux Str)
-       (Stc    : STC      Ids Op OpAux Str CE)
+       (Stc   : STC         Ids Op OpAux Str CE)
        (Obc   : OBC         Ids Op OpAux)
        (Trans : TRANSLATION Ids Op OpAux CE.Syn Stc.Syn Obc.Syn)
 <: STC2OBCTYPING Ids Op OpAux Str CE Stc Obc Trans.

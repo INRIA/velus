@@ -1570,7 +1570,7 @@ Section PRESERVATION.
     Variables (sb     : block)
               (step_f : function).
 
-    Variables ins outs: Str.stream (list val).
+    Variables ins outs: IStr.stream (list val).
 
     (** This coinductive predicate describes the logical behavior of
         the [while] loop. *)

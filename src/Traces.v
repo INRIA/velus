@@ -11,7 +11,7 @@ From Velus Require Import ObcToClight.Interface.
 From Coq Require Import List.
 Import List.ListNotations.
 
-Import Str.
+Import IStr.
 Import OpAux.
 
 Import Obc.Syn.

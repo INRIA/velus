@@ -2,7 +2,7 @@ From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import CoreExpr.CEClocking.
 From Velus Require Import CoreExpr.CESemantics.
@@ -24,7 +24,7 @@ Module Type CECLOCKINGSEMANTICS
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CESyn : CESYNTAX        Op)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn     Str)
        (Import CEClo : CECLOCKING  Ids Op       CESyn).
 
@@ -437,7 +437,7 @@ Module CEClockingSemanticsFun
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CESyn : CESYNTAX        Op)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn     Str)
        (Import CEClo : CECLOCKING  Ids Op       CESyn)
 <: CECLOCKINGSEMANTICS Ids Op OpAux CESyn Str CESem CEClo.

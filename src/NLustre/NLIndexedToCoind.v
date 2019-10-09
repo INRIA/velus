@@ -16,29 +16,29 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import CoreExpr.Stream.
-From Velus Require Import Streams.
+From Velus Require Import IndexedStreams.
+From Velus Require Import CoindStreams.
 
 From Velus Require Import CoreExpr.CESemantics.
 From Velus Require Import CoreExpr.CEInterpreter.
-From Velus Require Import NLustre.NLSemantics.
-From Velus Require Import NLustre.NLSemanticsCoInd.
+From Velus Require Import NLustre.NLIndexedSemantics.
+From Velus Require Import NLustre.NLCoindSemantics.
 
 From Coq Require Import Setoid.
 
 Module Type NLINDEXEDTOCOIND
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
-       (Import OpAux  : OPERATORS_AUX        Op)
-       (Import CESyn  : CESYNTAX             Op)
-       (Import Syn    : NLSYNTAX         Ids Op       CESyn)
-       (Import Str    : STREAM               Op OpAux)
-       (Import Strs   : STREAMS              Op OpAux)
-       (Import Ord    : NLORDERED        Ids Op       CESyn Syn)
-       (CESem         : CESEMANTICS      Ids Op OpAux CESyn     Str)
-       (Indexed       : NLSEMANTICS      Ids Op OpAux CESyn Syn Str Ord CESem)
-       (Import Interp : CEINTERPRETER    Ids Op OpAux CESyn Str         CESem)
-       (CoInd         : NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Strs Ord).
+       (Import OpAux  : OPERATORS_AUX          Op)
+       (Import CESyn  : CESYNTAX               Op)
+       (Import Syn    : NLSYNTAX           Ids Op       CESyn)
+       (Import IStr   : INDEXEDSTREAMS         Op OpAux)
+       (Import CStr   : COINDSTREAMS           Op OpAux)
+       (Import Ord    : NLORDERED          Ids Op       CESyn Syn)
+       (CESem         : CESEMANTICS        Ids Op OpAux CESyn     IStr)
+       (Indexed       : NLINDEXEDSEMANTICS Ids Op OpAux CESyn Syn IStr Ord CESem)
+       (Import Interp : CEINTERPRETER      Ids Op OpAux CESyn     IStr     CESem)
+       (CoInd         : NLCOINDSEMANTICS   Ids Op OpAux CESyn Syn CStr Ord).
 
   Section Global.
 
@@ -50,7 +50,7 @@ Module Type NLINDEXEDTOCOIND
 
     (** A generic function to build a coinductive Stream. *)
     CoFixpoint init_from {A} (n: nat) (f: nat -> A) : Stream A :=
-      f n ::: init_from (S n) f.
+      f n ⋅ init_from (S n) f.
 
     (** Translate an indexed stream into a coinductive Stream.
         The [n]th element of the result Stream is the result of the application
@@ -103,7 +103,7 @@ Module Type NLINDEXEDTOCOIND
     (** A basic definition-rewriting lemma.  *)
     Lemma init_from_n:
       forall {A} (f: nat -> A) n,
-        init_from n f = f n ::: init_from (S n) f.
+        init_from n f = f n ⋅ init_from (S n) f.
     Proof.
       intros; now rewrite unfold_Stream at 1.
     Qed.
@@ -235,8 +235,6 @@ Module Type NLINDEXEDTOCOIND
       apply nth_In; auto.
     Qed.
 
-    CoFixpoint absent_ever : Stream value := absent ::: absent_ever.
-
     Lemma Exists_In_tr_streams_from_hd:
       forall n P xss,
         List.Exists P (xss n) ->
@@ -246,7 +244,7 @@ Module Type NLINDEXEDTOCOIND
       apply Exists_exists in Hin as (v & Hin & Hv).
       apply In_nth with (d:=absent) in Hin as (k & Len & Nth); subst.
       apply Exists_exists.
-      exists (nth k (tr_streams_from n xss) absent_ever).
+      exists (nth k (tr_streams_from n xss) (Streams.const absent)).
       split.
       - apply nth_In.
         rewrite tr_streams_from_length; auto.
@@ -817,7 +815,7 @@ Module Type NLINDEXEDTOCOIND
       - constructor; simpl; auto.
         rewrite Indexed.hold_abs; auto.
       - constructor; simpl; auto.
-        erewrite (Indexed.hold_pres c0); eauto.
+        erewrite (Indexed.hold_pres v); eauto.
     Qed.
 
     Corollary fby_impl:
@@ -916,7 +914,7 @@ Module Type NLINDEXEDTOCOIND
     Lemma bools_of_impl_from:
       forall n xs rs,
         CESem.bools_of xs rs ->
-        Strs.bools_of (tr_stream_from n xs) (tr_stream_from n rs).
+        CStr.bools_of (tr_stream_from n xs) (tr_stream_from n rs).
     Proof.
       cofix Cofix; intros * Rst.
       pose proof Rst.
@@ -928,7 +926,7 @@ Module Type NLINDEXEDTOCOIND
     Corollary bools_of_impl:
       forall xs rs,
         CESem.bools_of xs rs ->
-        Strs.bools_of (tr_stream xs) (tr_stream rs).
+        CStr.bools_of (tr_stream xs) (tr_stream rs).
     Proof. apply bools_of_impl_from. Qed.
 
     (** ** Properties about [count] and [mask] *)
@@ -936,9 +934,9 @@ Module Type NLINDEXEDTOCOIND
     (** State the correspondance for [count].  *)
     Lemma count_impl_from:
       forall n (r: stream bool),
-        count_acc (if r n then Str.count r n - 1 else Str.count r n)
+        count_acc (if r n then IStr.count r n - 1 else IStr.count r n)
                   (tr_stream_from n r)
-        ≡ tr_stream_from n (Str.count r).
+        ≡ tr_stream_from n (IStr.count r).
     Proof.
       (* cofix-based proof encounter the guardness criterion (Why ??)  *)
       intros; apply ntheq_eqst; intro m.
@@ -955,8 +953,8 @@ Module Type NLINDEXEDTOCOIND
     Corollary mask_impl:
       forall k (r: stream bool) xss,
         wf_streams xss ->
-        EqSts (tr_streams (Str.mask k r xss))
-              (List.map (Strs.mask k (tr_stream r)) (tr_streams xss)).
+        EqSts (tr_streams (IStr.mask k r xss))
+              (List.map (CStr.mask k (tr_stream r)) (tr_streams xss)).
     Proof.
       intros * Const; unfold tr_streams, tr_stream.
       apply Forall2_forall2; split.
@@ -970,16 +968,16 @@ Module Type NLINDEXEDTOCOIND
         rewrite map_nth' with (d':=d2), nth_tr_streams_from_nth; auto.
         rewrite mask_length in Len; auto.
         rewrite nth_tr_streams_from_nth; auto.
-        unfold Strs.mask, Str.mask.
+        unfold CStr.mask, IStr.mask.
         apply ntheq_eqst; intro m.
         unfold nth_tr_streams_from.
         rewrite init_from_nth, mask_nth, init_from_nth.
-        unfold Strs.count, streams_nth.
+        unfold CStr.count, streams_nth.
         pose proof (count_impl_from 0 r) as Count.
-        assert ((if r 0 then Str.count r 0 - 1 else Str.count r 0) = 0) as E
+        assert ((if r 0 then IStr.count r 0 - 1 else IStr.count r 0) = 0) as E
             by (simpl; destruct (r 0); auto).
         rewrite E in Count; rewrite Count, init_from_nth, Nat.eqb_sym.
-        destruct (Str.count r (m + 0) =? k); auto.
+        destruct (IStr.count r (m + 0) =? k); auto.
         apply nth_all_absent.
     Qed.
 
@@ -990,7 +988,7 @@ Module Type NLINDEXEDTOCOIND
     Lemma tr_clocks_of_from:
       forall n xss,
         wf_streams xss ->
-        Strs.clocks_of (tr_streams_from n xss) ≡ tr_stream_from n (CESem.clock_of xss).
+        CStr.clocks_of (tr_streams_from n xss) ≡ tr_stream_from n (CESem.clock_of xss).
     Proof.
       cofix Cofix; intros.
       constructor; simpl.
@@ -1013,7 +1011,7 @@ Module Type NLINDEXEDTOCOIND
     Corollary tr_clocks_of:
       forall xss,
         wf_streams xss ->
-        Strs.clocks_of (tr_streams xss) ≡ tr_stream (CESem.clock_of xss).
+        CStr.clocks_of (tr_streams xss) ≡ tr_stream (CESem.clock_of xss).
     Proof. apply tr_clocks_of_from. Qed.
 
     Lemma sem_clocked_var_inv:
@@ -1107,7 +1105,7 @@ Module Type NLINDEXEDTOCOIND
         Indexed.sem_node G f xss oss ->
         CoInd.sem_node G f (tr_streams xss) (tr_streams oss).
     Proof.
-      induction 1 as [| |???????????????? IH| |??????????? Heqs IH]
+      induction 1 as [| |????????????????? IH| |??????????? Heqs IH]
                        using Indexed.sem_node_mult with
           (P_equation := fun b H e =>
                            Indexed.sem_equation G b H e ->

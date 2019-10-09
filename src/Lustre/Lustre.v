@@ -1,6 +1,6 @@
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import Streams.
+From Velus Require Import CoindStreams.
 From Velus Require Export Lustre.LSyntax.
 From Velus Require Export Lustre.LClocking.
 From Velus Require Export Lustre.LTyping.
@@ -13,7 +13,7 @@ Module Type LUSTRE
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Str   : STREAMS       Op OpAux).
+       (Str   : COINDSTREAMS  Op OpAux).
   Declare Module Export Syn: LSYNTAX    Ids Op.
   Declare Module Export Typ: LTYPING    Ids Op       Syn.
   Declare Module Export Clo: LCLOCKING  Ids Op       Syn.
@@ -25,7 +25,7 @@ Module LustreFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
-       (Str   : STREAMS       Op OpAux)
+       (Str   : COINDSTREAMS  Op OpAux)
        <: LUSTRE Ids Op OpAux Str.
   Module Export Syn := LSyntaxFun     Ids Op.
   Module Export Typ := LTypingFun     Ids Op       Syn.

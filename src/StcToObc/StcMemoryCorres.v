@@ -295,7 +295,7 @@ Module Type STCMEMORYCORRES
 
 End STCMEMORYCORRES.
 
-Module StcVelusMemoryCorresFun
+Module StcMemoryCorresFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (CESyn : CESYNTAX      Op)
@@ -303,4 +303,4 @@ Module StcVelusMemoryCorresFun
        (Last  : STCISLAST Ids Op CESyn Syn)
 <: STCMEMORYCORRES Ids Op CESyn Syn Last.
   Include STCMEMORYCORRES Ids Op CESyn Syn Last.
-End StcVelusMemoryCorresFun.
+End StcMemoryCorresFun.

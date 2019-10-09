@@ -2,7 +2,7 @@ From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Environment.
 From Velus Require Import Clocks.
-From Velus Require Export CoreExpr.Stream.
+From Velus Require Export IndexedStreams.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import CoreExpr.CETyping.
 From Velus Require Import CoreExpr.CESemantics.
@@ -17,7 +17,7 @@ Module Type CEPROPERTIES
        (Op           : OPERATORS)
        (       OpAux : OPERATORS_AUX   Op)
        (Import Syn   : CESYNTAX        Op)
-       (       Str   : STREAM          Op OpAux)
+       (       Str   : INDEXEDSTREAMS  Op OpAux)
        (Import Sem   : CESEMANTICS Ids Op OpAux Syn Str)
        (Import Typ   : CETYPING    Ids Op       Syn)
        (Import IsF   : CEISFREE    Ids Op       Syn).
@@ -256,7 +256,7 @@ Module CEProperties
        (Op           : OPERATORS)
        (       OpAux : OPERATORS_AUX   Op)
        (Import Syn   : CESYNTAX        Op)
-       (       Str   : STREAM          Op OpAux)
+       (       Str   : INDEXEDSTREAMS  Op OpAux)
        (Import Sem   : CESEMANTICS Ids Op OpAux Syn Str)
        (Import Typ   : CETYPING    Ids Op       Syn)
        (Import IsF   : CEISFREE    Ids Op       Syn)

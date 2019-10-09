@@ -2,7 +2,7 @@ From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import Stc.StcIsLast.
 From Velus Require Import Stc.StcIsVariable.
 From Velus Require Import Stc.StcIsDefined.
@@ -34,7 +34,7 @@ Module Type STCCLOCKINGSEMANTICS
        (Import OpAux    : OPERATORS_AUX           Op)
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : STCSYNTAX           Ids Op       CESyn)
-       (Import Str      : STREAM                  Op OpAux)
+       (Import Str      : INDEXEDSTREAMS          Op OpAux)
        (Import Last     : STCISLAST           Ids Op       CESyn Syn)
        (Import Var      : STCISVARIABLE       Ids Op       CESyn Syn)
        (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Last)
@@ -221,7 +221,7 @@ Module StcClockingSemanticsFun
        (Import OpAux    : OPERATORS_AUX           Op)
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : STCSYNTAX           Ids Op       CESyn)
-       (Import Str      : STREAM                  Op OpAux)
+       (Import Str      : INDEXEDSTREAMS          Op OpAux)
        (Import Last     : STCISLAST           Ids Op       CESyn Syn)
        (Import Var      : STCISVARIABLE       Ids Op       CESyn Syn)
        (Import Def      : STCISDEFINED        Ids Op       CESyn Syn Var Last)

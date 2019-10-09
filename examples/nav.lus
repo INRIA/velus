@@ -21,17 +21,16 @@ returns (x, y : float64);
 var alarmx, alarmy : bool;
 let
   x, alarmx = (restart ins every r)(gps, xv);
-  y, alarmy = (restart ins every r)(gps, dy);
+  y, alarmy = (restart ins every r)(gps, yv);
 tel
 
 node nav(gps, xv: float64; s: bool) returns (x: float64; alarm: bool);
-  var r, c, cm: bool; insr: float64 when not c; rnc, alr: bool when not c;
+  var r, c, cm: bool; insr: float64 when not c; alr: bool when not c;
 let
-  insr, alr = (restart ins every rnc) (gps when not c, xv when not c);
+  insr, alr = (restart ins every r) (gps when not c, xv when not c);
   x = merge c (gps when c) insr;
   alarm = merge c false alr;
   cm = merge c (not s when c) (s when not c);
   c = true fby cm;
   r = false fby (s and c);
-  rnc = r when not c;
 tel

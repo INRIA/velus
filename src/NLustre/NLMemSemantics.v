@@ -11,13 +11,13 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import VelusMemory.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.IsVariable.
 From Velus Require Import NLustre.IsDefined.
 From Velus Require Import CoreExpr.CESemantics.
-From Velus Require Import NLustre.NLSemantics.
+From Velus Require Import NLustre.NLIndexedSemantics.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import NLustre.Memories.
 From Velus Require Import CoreExpr.CEIsFree.
@@ -68,16 +68,16 @@ Set Implicit Arguments.
        with sem_node: too much work for too little gain.
  *)
 
-Module Type MEMSEMANTICS
+Module Type NLMEMSEMANTICS
        (Import Ids      : IDS)
        (Import Op       : OPERATORS)
        (Import OpAux    : OPERATORS_AUX           Op)
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : NLSYNTAX            Ids Op       CESyn)
-       (Import Str      : STREAM                  Op OpAux)
+       (Import Str      : INDEXEDSTREAMS          Op OpAux)
        (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Import Sem      : NLSEMANTICS         Ids Op OpAux CESyn Syn Str Ord CESem)
+       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
        (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
        (Import IsV      : ISVARIABLE          Ids Op       CESyn Syn                 Mem IsD)
@@ -1157,18 +1157,18 @@ dataflow memory for which the non-standard semantics holds true.
     induction 1; constructor; eauto using msem_sem_equation.
   Qed.
 
-End MEMSEMANTICS.
+End NLMEMSEMANTICS.
 
-Module MemSemanticsFun
+Module NLMemSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX           Op)
        (CESyn : CESYNTAX                Op)
        (Syn   : NLSYNTAX            Ids Op       CESyn)
-       (Str   : STREAM                  Op OpAux)
+       (Str   : INDEXEDSTREAMS          Op OpAux)
        (Ord   : NLORDERED           Ids Op       CESyn Syn)
        (CESem : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Sem   : NLSEMANTICS         Ids Op OpAux CESyn Syn Str Ord CESem)
+       (Sem   : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
        (Mem   : MEMORIES            Ids Op       CESyn Syn)
        (IsD   : ISDEFINED           Ids Op       CESyn Syn                 Mem)
        (IsV   : ISVARIABLE          Ids Op       CESyn Syn                 Mem IsD)
@@ -1179,6 +1179,6 @@ Module MemSemanticsFun
        (Clo   : NLCLOCKING          Ids Op       CESyn Syn     Ord         Mem IsD CEIsF IsF CEClo)
        (CECloSem : CECLOCKINGSEMANTICS Ids Op OpAux CESyn     Str     CESem                     CEClo)
        (CloSem   : NLCLOCKINGSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD CEIsF IsF CEClo Clo CECloSem)
-<: MEMSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD IsV CEIsF IsF NoD CEClo Clo CECloSem CloSem.
-  Include MEMSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD IsV CEIsF IsF NoD CEClo Clo CECloSem CloSem.
-End MemSemanticsFun.
+<: NLMEMSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD IsV CEIsF IsF NoD CEClo Clo CECloSem CloSem.
+  Include NLMEMSEMANTICS Ids Op OpAux CESyn Syn Str Ord CESem Sem Mem IsD IsV CEIsF IsF NoD CEClo Clo CECloSem CloSem.
+End NLMemSemanticsFun.

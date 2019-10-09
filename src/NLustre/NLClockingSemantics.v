@@ -2,7 +2,7 @@ From Coq Require Import FSets.FMapPositive.
 From Velus Require Import Common.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import NLustre.NLOrdered.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
@@ -13,7 +13,7 @@ From Velus Require Import NLustre.IsDefined.
 From Velus Require Import CoreExpr.CEClocking.
 From Velus Require Import NLustre.NLClocking.
 From Velus Require Import CoreExpr.CESemantics.
-From Velus Require Import NLustre.NLSemantics.
+From Velus Require Import NLustre.NLIndexedSemantics.
 From Velus Require Import CoreExpr.CEClockingSemantics.
 From Coq Require Import List.
 
@@ -34,10 +34,10 @@ Module Type NLCLOCKINGSEMANTICS
        (Import OpAux    : OPERATORS_AUX           Op)
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : NLSYNTAX            Ids Op       CESyn)
-       (Import Str      : STREAM                  Op OpAux)
+       (Import Str      : INDEXEDSTREAMS          Op OpAux)
        (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Import Sem      : NLSEMANTICS         Ids Op OpAux CESyn Syn Str Ord CESem)
+       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
        (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
        (Import CEIsF    : CEISFREE            Ids Op       CESyn)
@@ -291,10 +291,10 @@ Module NLClockingSemanticsFun
        (Import OpAux    : OPERATORS_AUX           Op)
        (Import CESyn    : CESYNTAX                Op)
        (Import Syn      : NLSYNTAX            Ids Op       CESyn)
-       (Import Str      : STREAM                  Op OpAux)
+       (Import Str      : INDEXEDSTREAMS          Op OpAux)
        (Import Ord      : NLORDERED           Ids Op       CESyn Syn)
        (Import CESem    : CESEMANTICS         Ids Op OpAux CESyn     Str)
-       (Import Sem      : NLSEMANTICS         Ids Op OpAux CESyn Syn Str Ord CESem)
+       (Import Sem      : NLINDEXEDSEMANTICS  Ids Op OpAux CESyn Syn Str Ord CESem)
        (Import Mem      : MEMORIES            Ids Op       CESyn Syn)
        (Import IsD      : ISDEFINED           Ids Op       CESyn Syn                 Mem)
        (Import CEIsF    : CEISFREE            Ids Op       CESyn)

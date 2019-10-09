@@ -12,9 +12,9 @@ From Velus Require Import Lustre.LClocking.
 From Velus Require Import Lustre.LOrdered.
 From Velus Require Import Lustre.LSemantics.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import NLustre.NLSemanticsCoInd.
+From Velus Require Import NLustre.NLCoindSemantics.
 
-From Velus Require Import Streams.
+From Velus Require Import CoindStreams.
 
 From Coq Require Import String.
 
@@ -37,23 +37,23 @@ From Coq Require Import Classes.EquivDec.
 Module Type CORRECTNESS
        (Import Ids  : IDS)
        (Import Op   : OPERATORS)
-       (Import OpAux: OPERATORS_AUX Op)
-       (L           : LSYNTAX  Ids Op)
-       (Import CE   : CESYNTAX     Op)
-       (NL          : NLSYNTAX Ids Op CE)
-       (Import TR   : TRANSCRIPTION Ids Op OpAux L CE NL)
-       (LT          : LTYPING  Ids Op L)
-       (LC          : LCLOCKING Ids Op L)
-       (Ord         : NLORDERED Ids Op CE     NL)
-       (Lord        : LORDERED   Ids Op       L)
-       (Import Str  : STREAMS        Op OpAux)
-       (LS          : LSEMANTICS Ids Op OpAux L Lord Str)
-       (NLSC        : NLSEMANTICSCOIND Ids Op OpAux CE NL Str Ord).
+       (Import OpAux: OPERATORS_AUX        Op)
+       (L           : LSYNTAX          Ids Op)
+       (Import CE   : CESYNTAX             Op)
+       (NL          : NLSYNTAX         Ids Op              CE)
+       (Import TR   : TRANSCRIPTION    Ids Op OpAux L      CE NL)
+       (LT          : LTYPING          Ids Op       L)
+       (LC          : LCLOCKING        Ids Op       L)
+       (Ord         : NLORDERED        Ids Op              CE NL)
+       (Lord        : LORDERED         Ids Op       L)
+       (Import Str  : COINDSTREAMS         Op OpAux)
+       (LS          : LSEMANTICS       Ids Op OpAux L Lord       Str)
+       (NLSC        : NLCOINDSEMANTICS Ids Op OpAux        CE NL Str Ord).
 
   Lemma const_inv1 :
     forall c b s,
-      const b c ≡ absent ::: s ->
-      exists b', s ≡ const b' c /\ b ≡ false ::: b'.
+      const b c ≡ absent ⋅ s ->
+      exists b', s ≡ const b' c /\ b ≡ false ⋅ b'.
   Proof.
     intros * H.
     unfold_Stv b; inv H; simpl in *; inv H0.
@@ -62,9 +62,9 @@ Module Type CORRECTNESS
 
   Lemma const_inv2 :
     forall c c' b s,
-      const b c ≡ present c' ::: s ->
+      const b c ≡ present c' ⋅ s ->
       exists b', s ≡ const b' c
-            /\ b ≡ true ::: b'
+            /\ b ≡ true ⋅ b'
             /\ c' = sem_const c.
   Proof.
     intros * H.
@@ -74,7 +74,7 @@ Module Type CORRECTNESS
 
   Lemma const_tl :
     forall c b v tl,
-      const b c ≡ v ::: tl ->
+      const b c ≡ v ⋅ tl ->
       const (Streams.tl b) c ≡ tl.
   Proof.
     intros * H.
@@ -91,17 +91,17 @@ Module Type CORRECTNESS
 
   Lemma env_maps_tl :
     forall i v s H,
-      Env.MapsTo i (v ::: s) H -> Env.MapsTo i s (NLSC.History_tl H).
+      Env.MapsTo i (v ⋅ s) H -> Env.MapsTo i s (NLSC.History_tl H).
   Proof.
     intros * Hmap.
     unfold NLSC.History_tl.
-    assert (s = Streams.tl (v ::: s)) as Hs by auto.
+    assert (s = Streams.tl (v ⋅ s)) as Hs by auto.
     rewrite Hs. eapply Env.map_1. assumption.
   Qed.
 
   Lemma sem_var_step :
     forall H x v s,
-      LS.sem_var H x (v ::: s) -> LS.sem_var (NLSC.History_tl H) x s.
+      LS.sem_var H x (v ⋅ s) -> LS.sem_var (NLSC.History_tl H) x s.
   Proof.
     intros * Hsem.
     inv Hsem.
@@ -112,7 +112,7 @@ Module Type CORRECTNESS
 
   Lemma sem_var_step_nl :
     forall H x v s,
-      NLSC.sem_var H x (v ::: s) -> NLSC.sem_var (NLSC.History_tl H) x s.
+      NLSC.sem_var H x (v ⋅ s) -> NLSC.sem_var (NLSC.History_tl H) x s.
   Proof.
     intros * Hsem.
     inv Hsem.
@@ -123,7 +123,7 @@ Module Type CORRECTNESS
 
   Lemma sc_step :
     forall H b ck s ss,
-      NLSC.sem_clock H b ck (s ::: ss) ->
+      NLSC.sem_clock H b ck (s ⋅ ss) ->
       NLSC.sem_clock (NLSC.History_tl H) (Streams.tl b) ck ss.
   Proof.
     intros * Hsem.
@@ -133,7 +133,7 @@ Module Type CORRECTNESS
   Lemma sem_const_step :
     forall G H b e e' v s,
       to_constant e = OK e' ->
-      LS.sem_exp G H b e [v ::: s] ->
+      LS.sem_exp G H b e [v ⋅ s] ->
       LS.sem_exp G (NLSC.History_tl H) (Streams.tl b) e [s].
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem; inv Htr.
@@ -155,7 +155,7 @@ Module Type CORRECTNESS
     Lemma sem_lexp_step :
     forall G H b e e' v s,
       to_lexp e = OK e' ->
-      LS.sem_exp G H b e [v ::: s] ->
+      LS.sem_exp G H b e [v ⋅ s] ->
       LS.sem_exp G (NLSC.History_tl H) (Streams.tl b) e [s].
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem; inv Htr.
@@ -188,7 +188,7 @@ Module Type CORRECTNESS
   Lemma sem_cexp_step :
     forall G H b e e' v s,
       to_cexp e = OK e' ->
-      LS.sem_exp G H b e [v ::: s] ->
+      LS.sem_exp G H b e [v ⋅ s] ->
       LS.sem_exp G (NLSC.History_tl H) (Streams.tl b) e [s].
   Proof.
     einduction e using L.exp_ind2; intros * Htr Hsem;
@@ -300,8 +300,8 @@ Module Type CORRECTNESS
 
   CoFixpoint abstract_clock (xs: Stream value) : Stream bool:=
     match xs with
-    | absent ::: xs => false ::: abstract_clock xs
-    | present _ ::: xs => true ::: abstract_clock xs
+    | absent ⋅ xs => false ⋅ abstract_clock xs
+    | present _ ⋅ xs => true ⋅ abstract_clock xs
     end.
 
   Add Parametric Morphism : (abstract_clock)
@@ -473,7 +473,7 @@ Module Type CORRECTNESS
   Proof.
     cofix Cofix. intros * Hfby.
     unfold_Stv ys; inv Hfby; econstructor; simpl; eauto.
-    clear - H3. revert H3. revert c ys xs0 rs0.
+    clear - H3. revert H3. revert v ys xs0 rs0.
     cofix Cofix. intros * Hfby1.
     unfold_Stv ys; inv Hfby1; econstructor; simpl; eauto.
   Qed.
@@ -668,8 +668,8 @@ Module Type CORRECTNESS
            | H: LS.sem_var _ _ _ |- _ => apply sem_var_var in H
            end;
     match goal with
-    | H1: NLSC.sem_var ?H ?x (present _ ::: _),
-          H2 : NLSC.sem_var ?H ?x (absent ::: _)
+    | H1: NLSC.sem_var ?H ?x (present _ ⋅ _),
+          H2 : NLSC.sem_var ?H ?x (absent ⋅ _)
       |- _ => eapply NLSC.sem_var_det with (2 := H2) in H1;
             inv H1; simpl in *; discriminate
     end.
@@ -801,7 +801,7 @@ Module Type CORRECTNESS
   Ltac discriminate_stream :=
     let H := fresh in
     match goal with
-    | H1: ?b ≡ true ::: _, H2 : ?b ≡ false ::: _ |- _ =>
+    | H1: ?b ≡ true ⋅ _, H2 : ?b ≡ false ⋅ _ |- _ =>
       rewrite H1 in H2; inversion H2 as [? H]; simpl in H; discriminate
     end.
 
@@ -820,13 +820,13 @@ Module Type CORRECTNESS
       constructor; simpl; auto. eapply Cofix; eauto.
     - inv Hsc; inv Hsc'; try discriminate_stream;
         try discriminate_var.
-      take (NLSC.sem_var _ x (present c ::: _)) and
+      take (NLSC.sem_var _ x (present c ⋅ _)) and
            eapply NLSC.sem_var_det in it; eauto.
       inversion it as [Hit]. simpl in Hit. inv Hit.
       destruct k0; simpl in *; congruence.
     - inv Hsc; inv Hsc'; try discriminate_stream;
         try discriminate_var.
-      take (NLSC.sem_var _ x (present c ::: _)) and
+      take (NLSC.sem_var _ x (present c ⋅ _)) and
            eapply NLSC.sem_var_det in it; eauto.
       inversion it as [Hit]. simpl in Hit. inv Hit.
       destruct k; simpl in *; congruence.
@@ -839,8 +839,8 @@ Module Type CORRECTNESS
   Ltac discriminate_clock :=
     let HH := fresh in
     match goal with
-    | H1: NLSC.sem_clock ?H ?b ?ck (true ::: _),
-          H2 : NLSC.sem_clock ?H ?b ?ck (false ::: _) |- _ =>
+    | H1: NLSC.sem_clock ?H ?b ?ck (true ⋅ _),
+          H2 : NLSC.sem_clock ?H ?b ?ck (false ⋅ _) |- _ =>
       eapply sem_clock_det with (2 := H2) in H1; eauto;
       inversion H1 as [HH ?]; simpl in HH; discriminate
     end.
@@ -931,11 +931,11 @@ Module Type CORRECTNESS
 
   CoInductive sub_clock : relation (Stream bool) :=
   | SubP1 : forall s s',
-      sub_clock s s' -> sub_clock (true ::: s) (true ::: s')
+      sub_clock s s' -> sub_clock (true ⋅ s) (true ⋅ s')
   | SubP2 : forall s s',
-      sub_clock s s' -> sub_clock (true ::: s) (false ::: s')
+      sub_clock s s' -> sub_clock (true ⋅ s) (false ⋅ s')
   | SubA : forall s s',
-      sub_clock s s' -> sub_clock (false ::: s) (false ::: s').
+      sub_clock s s' -> sub_clock (false ⋅ s) (false ⋅ s').
 
   Global Instance sub_clock_trans : Transitive sub_clock.
   Proof.
@@ -3569,7 +3569,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma sem_lexp_step2: forall H b e v s,
-      NLSC.sem_exp H b e (v ::: s) ->
+      NLSC.sem_exp H b e (v ⋅ s) ->
       NLSC.sem_exp (NLSC.History_tl H) (Streams.tl b) e s.
   Proof.
     induction e; intros * Hsem; inv Hsem.
@@ -3581,7 +3581,7 @@ Module Type CORRECTNESS
   Qed.
 
   Lemma sem_cexp_step2: forall H b e v s,
-      NLSC.sem_cexp H b e (v ::: s) ->
+      NLSC.sem_cexp H b e (v ⋅ s) ->
       NLSC.sem_cexp (NLSC.History_tl H) (Streams.tl b) e s.
   Proof.
     induction e; intros * Hsem; inv Hsem.
@@ -3622,7 +3622,7 @@ Module Type CORRECTNESS
   Lemma sem_const_exp:
     forall G H b e c c' xs,
       to_constant e = OK c ->
-      LS.sem_exp G H b e [present c' ::: xs] ->
+      LS.sem_exp G H b e [present c' ⋅ xs] ->
       c' = sem_const c.
   Proof.
     induction e using L.exp_ind2; intros * Htoc Hsem;
@@ -4183,18 +4183,18 @@ End CORRECTNESS.
 Module CorrectnessFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (L     : LSYNTAX  Ids Op)
-       (CE    : CESYNTAX     Op)
-       (NL    : NLSYNTAX Ids Op CE)
-       (TR   :  TRANSCRIPTION Ids Op OpAux L CE NL)
-       (LT    : LTYPING  Ids Op L)
-       (LC    : LCLOCKING Ids Op L)
-       (Ord   : NLORDERED Ids Op CE     NL)
-       (Lord  : LORDERED   Ids Op       L)
-       (Str   : STREAMS        Op OpAux)
-       (LS    : LSEMANTICS Ids Op OpAux L Lord Str)
-       (NLSC  : NLSEMANTICSCOIND Ids Op OpAux CE NL Str Ord)
+       (OpAux : OPERATORS_AUX        Op)
+       (L     : LSYNTAX          Ids Op)
+       (CE    : CESYNTAX             Op)
+       (NL    : NLSYNTAX         Ids Op              CE)
+       (TR    : TRANSCRIPTION    Ids Op OpAux L      CE NL)
+       (LT    : LTYPING          Ids Op       L)
+       (LC    : LCLOCKING        Ids Op       L)
+       (Ord   : NLORDERED        Ids Op              CE NL)
+       (Lord  : LORDERED         Ids Op       L)
+       (Str   : COINDSTREAMS         Op OpAux)
+       (LS    : LSEMANTICS       Ids Op OpAux L Lord       Str)
+       (NLSC  : NLCOINDSEMANTICS Ids Op OpAux        CE NL Str Ord)
 <: CORRECTNESS Ids Op OpAux L CE NL TR LT LC Ord Lord Str LS NLSC.
   Include CORRECTNESS Ids Op OpAux L CE NL TR LT LC Ord Lord Str LS NLSC.
 End CorrectnessFun.

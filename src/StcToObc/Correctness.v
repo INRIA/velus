@@ -19,7 +19,7 @@ Module Type CORRECTNESS
        (Import Ids    : IDS)
        (Import Op     : OPERATORS)
        (Import OpAux  : OPERATORS_AUX       Op)
-       (Import Str    : STREAM              Op OpAux)
+       (Import Str    : INDEXEDSTREAMS      Op OpAux)
        (Import CE     : COREEXPR        Ids Op OpAux Str)
        (Import Stc    : STC             Ids Op OpAux Str CE)
        (Import Obc    : OBC             Ids Op OpAux)
@@ -1264,7 +1264,7 @@ Module Type CORRECTNESS
               by (intro; eapply SpecInput, Exists_app; eauto).
              erewrite not_Is_defined_in_stmt_eval_venv_inv; eauto.
              destruct v; simpl; auto.
-             assert (Env.find x ve = Some c) as ->; auto.
+             assert (Env.find x ve = Some v) as ->; auto.
       + intros; eapply stmt_eval_find_val_mono; eauto.
       + intros * Hnin ?; erewrite not_Is_defined_in_stmt_eval_venv_inv; eauto.
         apply not_Some_is_None; intros * E.
@@ -1585,7 +1585,7 @@ Module CorrectnessFun
        (Ids    : IDS)
        (Op     : OPERATORS)
        (OpAux  : OPERATORS_AUX       Op)
-       (Str    : STREAM              Op OpAux)
+       (Str    : INDEXEDSTREAMS      Op OpAux)
        (CE     : COREEXPR        Ids Op OpAux Str)
        (Stc    : STC             Ids Op OpAux Str CE)
        (Obc    : OBC             Ids Op OpAux)

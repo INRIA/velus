@@ -18,9 +18,9 @@ From Velus Require Import Common.
 Module Type STC
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Str   : STREAM        Op OpAux)
-       (CE    : COREEXPR Ids  Op OpAux Str).
+       (OpAux : OPERATORS_AUX  Op)
+       (Str   : INDEXEDSTREAMS Op OpAux)
+       (CE    : COREEXPR Ids   Op OpAux Str).
 
   Declare Module Export Syn  : STCSYNTAX      Ids Op       CE.Syn.
   Declare Module Export Syst : STCISSYSTEM    Ids Op       CE.Syn Syn.
@@ -43,9 +43,9 @@ End STC.
 Module StcFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Str   : STREAM        Op OpAux)
-       (CE    : COREEXPR Ids  Op OpAux Str)
+       (OpAux : OPERATORS_AUX  Op)
+       (Str   : INDEXEDSTREAMS Op OpAux)
+       (CE    : COREEXPR Ids   Op OpAux Str)
 <: STC Ids Op OpAux Str CE.
 
   Module Export Syn   := StcSyntaxFun      Ids Op       CE.Syn.

@@ -1,6 +1,6 @@
 From Velus Require Import Common.
 From Velus Require Import Ident.
-From Velus Require Import Streams.
+From Velus Require Import CoindStreams.
 From Velus Require Import ObcToClight.Generation.
 From Velus Require Import Traces.
 From Velus Require Import ClightToAsm.
@@ -24,8 +24,8 @@ Import Obc.Equ.
 Import Obc.Def.
 Import Fusion.
 Import Stc2ObcInvariants.
-Import Str.
-Import Strs.
+Import IStr.
+Import CStr.
 Import OpAux.
 Import Op.
 From Velus Require Import ObcToClight.Correctness.

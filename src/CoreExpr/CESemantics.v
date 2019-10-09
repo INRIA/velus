@@ -11,7 +11,7 @@ From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import VelusMemory.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 
 (* Used in Lift Determinism *)
 From Coq Require Import Logic.FunctionalExtensionality.
@@ -19,9 +19,9 @@ From Coq Require Import Logic.FunctionalExtensionality.
 Module Type CESEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
-       (Import OpAux : OPERATORS_AUX Op)
-       (Import Syn   : CESYNTAX      Op)
-       (Import Str   : STREAM        Op OpAux).
+       (Import OpAux : OPERATORS_AUX  Op)
+       (Import Syn   : CESYNTAX       Op)
+       (Import Str   : INDEXEDSTREAMS Op OpAux).
 
   (** ** Environment and history *)
 
@@ -743,9 +743,9 @@ End CESEMANTICS.
 Module CESemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
-       (OpAux : OPERATORS_AUX Op)
-       (Syn   : CESYNTAX      Op)
-       (Str   : STREAM        Op OpAux)
+       (OpAux : OPERATORS_AUX  Op)
+       (Syn   : CESYNTAX       Op)
+       (Str   : INDEXEDSTREAMS Op OpAux)
   <: CESEMANTICS Ids Op OpAux Syn Str.
   Include CESEMANTICS Ids Op OpAux Syn Str.
 End CESemanticsFun.

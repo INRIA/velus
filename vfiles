@@ -4,7 +4,8 @@ src/Environment.v
 src/Ident.v
 src/Operators.v
 src/VelusMemory.v
-src/Streams.v
+src/IndexedStreams.v
+src/CoindStreams.v
 
 src/Common/CommonList.v
 src/Common/CommonTactics.v
@@ -23,7 +24,6 @@ src/Lustre/LustreElab.v
 src/Lustre/Lustre.v
 
 src/CoreExpr/CESyntax.v
-src/CoreExpr/Stream.v
 src/CoreExpr/CESemantics.v
 src/CoreExpr/CEClocking.v
 src/CoreExpr/CETyping.v
@@ -33,20 +33,20 @@ src/CoreExpr/CEClockingSemantics.v
 src/CoreExpr/CEInterpreter.v
 src/CoreExpr/CoreExpr.v
 
-src/NLustre/NLSemanticsCoInd.v
+src/NLustre/NLCoindSemantics.v
 src/NLustre/NLClocking.v
 src/NLustre/NLNormalArgs.v
-src/NLustre/NLCoIndToIndexed.v
-src/NLustre/NLIndexedToCoInd.v
+src/NLustre/NLCoindToIndexed.v
+src/NLustre/NLIndexedToCoind.v
 src/NLustre/NLSemEquiv.v
 src/NLustre/IsFree.v
 src/NLustre/NLOrdered.v
 src/NLustre/Memories.v
 src/NLustre/NLTyping.v
 src/NLustre/IsVariable.v
-src/NLustre/NLSemantics.v
+src/NLustre/NLIndexedSemantics.v
 src/NLustre/IsDefined.v
-src/NLustre/MemSemantics.v
+src/NLustre/NLMemSemantics.v
 src/NLustre/NLSyntax.v
 src/NLustre/NoDup.v
 src/NLustre/NLClockingSemantics.v

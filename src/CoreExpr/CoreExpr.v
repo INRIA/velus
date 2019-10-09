@@ -1,6 +1,6 @@
 From Velus Require Export Operators.
 From Velus Require Export Clocks.
-From Velus Require Export CoreExpr.Stream.
+From Velus Require Export IndexedStreams.
 From Velus Require Export CoreExpr.CESyntax.
 From Velus Require Export CoreExpr.CEIsFree.
 From Velus Require Export CoreExpr.CESemantics.
@@ -15,8 +15,8 @@ From Velus Require Import Common.
 Module Type COREEXPR
        (Ids    : IDS)
        (Op     : OPERATORS)
-       (OpAux  : OPERATORS_AUX Op)
-       (Str    : STREAM        Op OpAux).
+       (OpAux  : OPERATORS_AUX  Op)
+       (Str    : INDEXEDSTREAMS Op OpAux).
   Declare Module Export Syn    : CESYNTAX                Op.
   Declare Module Export IsF    : CEISFREE            Ids Op       Syn.
   Declare Module Export Sem    : CESEMANTICS         Ids Op OpAux Syn Str.
@@ -30,8 +30,8 @@ End COREEXPR.
 Module CoreExprFun
        (Ids    : IDS)
        (Op     : OPERATORS)
-       (OpAux  : OPERATORS_AUX Op)
-       (Str    : STREAM        Op OpAux)
+       (OpAux  : OPERATORS_AUX  Op)
+       (Str    : INDEXEDSTREAMS Op OpAux)
 <: COREEXPR Ids Op OpAux Str.
   Module Export Syn    := CESyntaxFun                Op.
   Module Export IsF    := CEIsFreeFun            Ids Op       Syn.

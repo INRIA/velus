@@ -9,7 +9,7 @@ From Velus Require Import Environment.
 From Velus Require Import Operators.
 From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESemantics.
 
 (** * Interpreter for Core Expresssions *)
@@ -19,7 +19,7 @@ Module Type CEINTERPRETER
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CESyn : CESYNTAX        Op)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
 
   (** ** Instantaneous semantics *)
@@ -395,9 +395,8 @@ Module CEInterpreterFun
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
        (Import CESyn : CESYNTAX        Op)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str)
        <: CEINTERPRETER Ids Op OpAux CESyn Str CESem.
   Include CEINTERPRETER Ids Op OpAux CESyn Str CESem.
 End CEInterpreterFun.
-

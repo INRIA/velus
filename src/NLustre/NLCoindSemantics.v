@@ -15,7 +15,7 @@ From Velus Require Import Clocks.
 From Velus Require Import CoreExpr.CESyntax.
 From Velus Require Import NLustre.NLSyntax.
 From Velus Require Import NLustre.NLOrdered.
-From Velus Require Import Streams.
+From Velus Require Import CoindStreams.
 
 (** * The NLustre semantics *)
 
@@ -26,13 +26,13 @@ From Velus Require Import Streams.
 
  *)
 
-Module Type NLSEMANTICSCOIND
+Module Type NLCOINDSEMANTICS
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX Op)
        (Import CESyn : CESYNTAX      Op)
        (Import Syn   : NLSYNTAX  Ids Op       CESyn)
-       (Import Str   : STREAMS       Op OpAux)
+       (Import Str   : COINDSTREAMS  Op OpAux)
        (Import Ord   : NLORDERED Ids Op CESyn Syn).
 
   Definition History := Env.t (Stream value).
@@ -53,34 +53,34 @@ Module Type NLSEMANTICSCOIND
         sem_clock H b Cbase b'
   | Son:
       forall H b bk bs ck x k xs c,
-        sem_clock H b ck (true ::: bk) ->
-        sem_var H x (present c ::: xs) ->
+        sem_clock H b ck (true ⋅ bk) ->
+        sem_var H x (present c ⋅ xs) ->
         val_to_bool c = Some k ->
         sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (true ::: bs)
+        sem_clock H b (Con ck x k) (true ⋅ bs)
   | Son_abs1:
       forall H b bk bs ck x k xs,
-        sem_clock H b ck (false ::: bk) ->
-        sem_var H x (absent ::: xs) ->
+        sem_clock H b ck (false ⋅ bk) ->
+        sem_var H x (absent ⋅ xs) ->
         sem_clock (History_tl H) (tl b) (Con ck x k) bs ->
-        sem_clock H b (Con ck x k) (false ::: bs)
+        sem_clock H b (Con ck x k) (false ⋅ bs)
   | Son_abs2:
       forall H b bk bs ck x k c xs,
-        sem_clock H b ck (true ::: bk) ->
-        sem_var H x (present c ::: xs) ->
+        sem_clock H b ck (true ⋅ bk) ->
+        sem_var H x (present c ⋅ xs) ->
         val_to_bool c = Some k ->
         sem_clock (History_tl H) (tl b) (Con ck x (negb k)) bs ->
-        sem_clock H b (Con ck x (negb k)) (false ::: bs).
+        sem_clock H b (Con ck x (negb k)) (false ⋅ bs).
 
   CoInductive synchronized: Stream value -> Stream bool -> Prop :=
   | synchro_present:
       forall v vs bs,
         synchronized vs bs ->
-        synchronized (present v ::: vs) (true ::: bs)
+        synchronized (present v ⋅ vs) (true ⋅ bs)
   | synchro_absent:
       forall vs bs,
         synchronized vs bs ->
-        synchronized (absent ::: vs) (false ::: bs).
+        synchronized (absent ⋅ vs) (false ⋅ bs).
 
   Definition sem_clocked_var (H: History) (b: Stream bool) (x: ident) (ck: clock) : Prop :=
     (forall xs,
@@ -147,24 +147,24 @@ Module Type NLSEMANTICSCOIND
     History -> Stream bool -> clock -> A -> Stream value -> Prop :=
   | Stick:
       forall H b ck a e es bs,
-        sem H b a (present e ::: es) ->
-        sem_clock H b ck (true ::: bs) ->
+        sem H b a (present e ⋅ es) ->
+        sem_clock H b ck (true ⋅ bs) ->
         sem_annot sem (History_tl H) (tl b) ck a es ->
-        sem_annot sem H b ck a (present e ::: es)
+        sem_annot sem H b ck a (present e ⋅ es)
   | Sabs:
       forall H b ck a es bs,
-        sem H b a (absent ::: es) ->
-        sem_clock H b ck (false ::: bs) ->
+        sem H b a (absent ⋅ es) ->
+        sem_clock H b ck (false ⋅ bs) ->
         sem_annot sem (History_tl H) (tl b) ck a es ->
-        sem_annot sem H b ck a (absent ::: es).
+        sem_annot sem H b ck a (absent ⋅ es).
 
   Definition sem_aexp := sem_annot sem_exp.
   Definition sem_caexp := sem_annot sem_cexp.
 
   CoFixpoint fby (v0: val) (xs: Stream value) : Stream value :=
     match xs with
-    | absent    ::: xs => absent     ::: fby v0 xs
-    | present x ::: xs => present v0 ::: fby x xs
+    | absent    ⋅ xs => absent     ⋅ fby v0 xs
+    | present x ⋅ xs => present v0 ⋅ fby x xs
     end.
 
   Section NodeSemantics.
@@ -632,16 +632,16 @@ Module Type NLSEMANTICSCOIND
     etransitivity; eauto; symmetry; auto.
   Qed.
 
-End NLSEMANTICSCOIND.
+End NLCOINDSEMANTICS.
 
-Module NLSemanticsCoindFun
+Module NLCoindSemanticsFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX Op)
        (CESyn : CESYNTAX      Op)
        (Syn   : NLSYNTAX  Ids Op       CESyn)
-       (Str   : STREAMS       Op OpAux)
+       (Str   : COINDSTREAMS  Op OpAux)
        (Ord   : NLORDERED Ids Op CESyn Syn)
-<: NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str Ord.
-  Include NLSEMANTICSCOIND Ids Op OpAux CESyn Syn Str Ord.
-End NLSemanticsCoindFun.
+<: NLCOINDSEMANTICS Ids Op OpAux CESyn Syn Str Ord.
+  Include NLCOINDSEMANTICS Ids Op OpAux CESyn Syn Str Ord.
+End NLCoindSemanticsFun.

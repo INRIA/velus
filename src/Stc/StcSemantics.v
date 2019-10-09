@@ -15,7 +15,7 @@ From Velus Require Import VelusMemory.
 From Velus Require Import Stc.StcSyntax.
 From Velus Require Import Stc.StcIsSystem.
 From Velus Require Import Stc.StcOrdered.
-From Velus Require Import CoreExpr.Stream.
+From Velus Require Import IndexedStreams.
 From Velus Require Import CoreExpr.CESemantics.
 
 Module Type STCSEMANTICS
@@ -26,7 +26,7 @@ Module Type STCSEMANTICS
        (Import Syn   : STCSYNTAX   Ids Op       CESyn)
        (Import Syst  : STCISSYSTEM Ids Op       CESyn Syn)
        (Import Ord   : STCORDERED  Ids Op       CESyn Syn Syst)
-       (Import Str   : STREAM          Op OpAux)
+       (Import Str   : INDEXEDSTREAMS  Op OpAux)
        (Import CESem : CESEMANTICS Ids Op OpAux CESyn Str).
 
   Definition state := memory val.
@@ -844,7 +844,7 @@ Module StcSemanticsFun
        (Syn   : STCSYNTAX   Ids Op       CESyn)
        (Syst  : STCISSYSTEM Ids Op       CESyn Syn)
        (Ord   : STCORDERED  Ids Op       CESyn Syn Syst)
-       (Str   : STREAM          Op OpAux)
+       (Str   : INDEXEDSTREAMS  Op OpAux)
        (CESem : CESEMANTICS Ids Op OpAux CESyn Str)
 <: STCSEMANTICS Ids Op OpAux CESyn Syn Syst Ord Str CESem.
   Include STCSEMANTICS Ids Op OpAux CESyn Syn Syst Ord Str CESem.

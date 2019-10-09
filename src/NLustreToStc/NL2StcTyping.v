@@ -17,12 +17,12 @@ Module Type NL2STCTYPING
        (Import Ids   : IDS)
        (Import Op    : OPERATORS)
        (Import OpAux : OPERATORS_AUX   Op)
-       (Import Strs  : STREAMS         Op OpAux)
-       (Import Str   : STREAM          Op OpAux)
-       (Import CE    : COREEXPR    Ids Op OpAux      Str)
-       (Import NL    : NLUSTRE     Ids Op OpAux Strs Str CE)
-       (Import Stc   : STC         Ids Op OpAux      Str CE)
-       (Import Trans : TRANSLATION Ids Op                CE.Syn NL.Syn Stc.Syn NL.Mem).
+       (Import CStr  : COINDSTREAMS    Op OpAux)
+       (Import IStr  : INDEXEDSTREAMS  Op OpAux)
+       (Import CE    : COREEXPR    Ids Op OpAux      IStr)
+       (Import NL    : NLUSTRE     Ids Op OpAux CStr IStr CE)
+       (Import Stc   : STC         Ids Op OpAux      IStr CE)
+       (Import Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem).
 
   Lemma translate_eqn_wt:
     forall G vars vars' mems eq,
@@ -298,12 +298,12 @@ Module NL2StcTypingFun
        (Ids   : IDS)
        (Op    : OPERATORS)
        (OpAux : OPERATORS_AUX   Op)
-       (Strs  : STREAMS         Op OpAux)
-       (Str   : STREAM          Op OpAux)
-       (CE    : COREEXPR    Ids Op OpAux      Str)
-       (NL    : NLUSTRE     Ids Op OpAux Strs Str CE)
-       (Stc   : STC         Ids Op OpAux      Str CE)
-       (Trans : TRANSLATION Ids Op                CE.Syn NL.Syn Stc.Syn NL.Mem)
-<: NL2STCTYPING Ids Op OpAux Strs Str CE NL Stc Trans.
-  Include NL2STCTYPING Ids Op OpAux Strs Str CE NL Stc Trans.
+       (CStr  : COINDSTREAMS    Op OpAux)
+       (IStr  : INDEXEDSTREAMS  Op OpAux)
+       (CE    : COREEXPR    Ids Op OpAux      IStr)
+       (NL    : NLUSTRE     Ids Op OpAux CStr IStr CE)
+       (Stc   : STC         Ids Op OpAux      IStr CE)
+       (Trans : TRANSLATION Ids Op                 CE.Syn NL.Syn Stc.Syn NL.Mem)
+<: NL2STCTYPING Ids Op OpAux CStr IStr CE NL Stc Trans.
+  Include NL2STCTYPING Ids Op OpAux CStr IStr CE NL Stc Trans.
 End NL2StcTypingFun.

@@ -294,7 +294,7 @@ Module Type TRCLOCKING
         rewrite Heq in *. now simpl_Foralls.
     - cases; monadInv Htr;
         take (LC.wc_exp _ _ _) and inversion_clear it
-        as [| | | | | | | |???? bck sub Wce ? WIi WIo|????? bck sub Wce ? WIi WIo];
+        as [| | | | | | | |???? bck sub Wce ? WIi WIo|?????? bck sub Wce ? WIi WIo];
         eapply find_node_global in Hg as (n' & Hfind & Hton); eauto;
           assert (find_base_clock (L.clocksof l) = bck) as ->
             by (take (L.find_node _ _ = Some n) and

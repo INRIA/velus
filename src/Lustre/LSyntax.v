@@ -16,10 +16,6 @@ Module Type LSYNTAX
 
   (** ** Expressions *)
 
-  (* Type and clock annotations *)
-  Definition ann : Type := (type * nclock)%type.
-  Definition lann : Type := (list type * nclock)%type.
-
   (*
     Annotated AST.
 
@@ -30,6 +26,10 @@ Module Type LSYNTAX
     - lann:       multiple synchronized flows (fby, when, merge, ifte)
     - list ann:   multiple flows (app)
    *)
+
+  (* Type and clock annotations *)
+  Definition ann : Type := (type * nclock)%type.
+  Definition lann : Type := (list type * nclock)%type.
 
   Inductive exp : Type :=
   | Econst : const -> exp
@@ -48,7 +48,7 @@ Module Type LSYNTAX
 
   (** ** Equations *)
 
-  Definition equation : Type := (idents * list exp)%type.
+  Definition equation : Type := (list ident * list exp)%type.
 
   Implicit Type eqn: equation.
 
@@ -117,7 +117,7 @@ Module Type LSYNTAX
     | Emerge _ _ _ anns
     | Eite _ _ _ anns => map (fun _ => ckstream anns) (fst anns)
     end.
-       
+
   Definition clocksof (es: list exp): list clock :=
     flat_map clockof es.
 
@@ -328,7 +328,7 @@ Module Type LSYNTAX
     constructor. destruct nck; inv Hmap; now constructor.
   Qed.
    *)
-  
+
   Lemma In_nclocksof:
     forall nck es,
       In nck (nclocksof es) ->
