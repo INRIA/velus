@@ -248,15 +248,15 @@ Module Type MEMORIES
     + (* Case: EqDef *)
       rewrite Peq; eauto.
     + (* Case: EqApp *)
-      assert (Pfilter: Permutation (filter (fun x => PS.mem x mems) i) []).
+      assert (Pfilter: Permutation (filter (fun x => PS.mem x mems) l) []).
       {
-        assert (Hmem_in: forall x, In x i -> PS.mem x mems = false)
+        assert (Hmem_in: forall x, In x l -> PS.mem x mems = false)
           by now apply Peq; eauto.
 
-        assert (Hfilter: filter (fun x => PS.mem x mems) i = []).
+        assert (Hfilter: filter (fun x => PS.mem x mems) l = []).
         {
           clear - Hmem_in.
-          induction i as [ | a i IHi] ; auto; simpl.
+          induction l as [ | a i IHi] ; auto; simpl.
           rewrite Hmem_in; try now constructor.
           apply IHi. intros.
           apply Hmem_in. now constructor 2.
@@ -334,12 +334,12 @@ Module Type MEMORIES
     + rewrite Peq; eauto.
       simpl; auto.
 
-    + assert (Hmem_in: forall x, In x i -> PS.mem x mems = false)
+    + assert (Hmem_in: forall x, In x l -> PS.mem x mems = false)
         by now apply Peq; eauto.
 
-      assert (Hfilter: filter (fun x => negb (PS.mem x mems)) i = i).
+      assert (Hfilter: filter (fun x => negb (PS.mem x mems)) l = l).
       { clear - Hmem_in.
-        induction i as [ | a i IHi] ; auto; simpl.
+        induction l as [ | a i IHi] ; auto; simpl.
         rewrite Hmem_in; simpl; try now constructor.
         rewrite IHi; auto.
         intros.

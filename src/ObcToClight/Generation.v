@@ -113,7 +113,7 @@ Section Translate.
   Definition ptr_obj (cls obj: ident): Clight.expr :=
     Clight.Eaddrof (deref_field self owner.(c_name) obj (type_of_inst cls)) (type_of_inst_p cls).
 
-  Definition funcall_assign (ys: idents) (obj: ident) (tyout: Ctypes.type) (outs: list (ident * type)) : Clight.statement :=
+  Definition funcall_assign (ys: list ident) (obj: ident) (tyout: Ctypes.type) (outs: list (ident * type)) : Clight.statement :=
     fold_right
       (fun '(y, (y', ty)) s =>
          let ty := cltype ty in
@@ -121,7 +121,7 @@ Section Translate.
          Clight.Ssequence assign_out s
       ) Clight.Sskip (combine ys outs).
 
-  Definition binded_funcall (ys: idents) (cls obj f: ident) (args: list Clight.expr) : Clight.statement :=
+  Definition binded_funcall (ys: list ident) (cls obj f: ident) (args: list Clight.expr) : Clight.statement :=
     match find_class cls prog with
     | Some (c, _) =>
       match find_method f c.(c_methods) with
@@ -441,7 +441,7 @@ Definition make_program'
            (types: list Ctypes.composite_definition)
            (gvars gvars_vol: list (ident * Ctypes.type))
            (defs: list (ident * AST.globdef Clight.fundef Ctypes.type))
-           (public: idents)
+           (public: list ident)
            (main: ident) : res (Ctypes.program Clight.function) :=
   match build_composite_env' types with
   | OK (exist ce P) =>

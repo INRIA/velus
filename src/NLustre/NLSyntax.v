@@ -21,7 +21,7 @@ Module Type NLSYNTAX
 
   Inductive equation : Type :=
   | EqDef : ident -> clock -> cexp -> equation
-  | EqApp : idents -> clock -> ident -> list exp -> option (ident * clock) -> equation
+  | EqApp : list ident -> clock -> ident -> list exp -> option (ident * clock) -> equation
   | EqFby : ident -> clock -> const -> exp -> equation.
 
   Implicit Type eqn: equation.
@@ -30,14 +30,14 @@ Module Type NLSYNTAX
 
   (* XXX: [var_defined] is redundant with [defined_eq], except that it
   works on lists rather than finite sets. *)
-  Definition var_defined (eq: equation) : idents :=
+  Definition var_defined (eq: equation) : list ident :=
     match eq with
     | EqDef x _ _ => [x]
     | EqApp x _ _ _ _ => x
     | EqFby x _ _ _ => [x]
     end.
 
-  Definition vars_defined (eqs: list equation) : idents :=
+  Definition vars_defined (eqs: list equation) : list ident :=
     flat_map var_defined eqs.
 
   Definition is_fby (eq: equation) : bool :=
@@ -187,7 +187,7 @@ Module Type NLSYNTAX
   (* XXX: computationally, the following [gather_*] are useless: they
      are only used to simplify the proofs. See [gather_eqs_fst_spec]
      and [gather_eqs_snd_spec]. *)
-  Definition gather_mem_eq (eq: equation): idents :=
+  Definition gather_mem_eq (eq: equation): list ident :=
     match eq with
     | EqDef _ _ _
     | EqApp _ _ _ _ _ => []
@@ -205,7 +205,7 @@ Module Type NLSYNTAX
       end
     end.
 
-  Definition gather_app_vars_eq (eq: equation): idents :=
+  Definition gather_app_vars_eq (eq: equation): list ident :=
     match eq with
     | EqDef _ _ _
     | EqFby _ _ _ _ => []
@@ -232,7 +232,7 @@ Module Type NLSYNTAX
       <-> (InMembers x (gather_inst_eq eq) \/ InMembers x (gather_insts eqs)).
   Proof.
     destruct eq; simpl; try now intuition.
-    destruct i.
+    destruct l.
     - setoid_rewrite app_nil_l. intuition.
     - now setoid_rewrite InMembers_app.
   Qed.
@@ -257,7 +257,7 @@ Module Type NLSYNTAX
     induction eqs as [|eq eqs IH].
     now right; inversion 1.
     destruct eq; simpl; auto.
-    destruct i0 as [|i'].
+    destruct l as [|i'].
     now destruct IH; auto.
     destruct (ident_eq_dec i' i).
     subst; simpl; auto.

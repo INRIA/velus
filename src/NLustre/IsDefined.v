@@ -176,7 +176,7 @@ Module Type ISDEFINED
     - now apply Subset_ps_adds.
     - apply PSP.subset_add_3, PSP.subset_add_2; try apply PS.add_spec; auto.
   Qed.
-  
+
   Lemma In_fold_left_defined_eq:
     forall x eqs m,
       PS.mem x (List.fold_left defined_eq eqs m) = true
@@ -270,7 +270,7 @@ Module Type ISDEFINED
            | apply not_In_empty in H; contradiction]).
 
   Qed.
-  
+
   Lemma Is_defined_in_vars_defined:
     forall x eqs,
       Is_defined_in x eqs
@@ -286,7 +286,7 @@ Module Type ISDEFINED
           PSF.empty_iff, IHeqs; tauto.
       + rewrite In_fold_left_defined_eq, PSF.add_iff, PSF.empty_iff, IHeqs; tauto.
   Qed.
-  
+
   Lemma Is_defined_in_eq_dec:
     forall x eq, {Is_defined_in_eq x eq}+{~Is_defined_in_eq x eq}.
   Proof.
@@ -462,7 +462,7 @@ Module Type ISDEFINED
     destruct eq; [inversion 1| |inversion 1]; auto.
     simpl. setoid_rewrite NoDup_app'_iff. intuition.
   Qed.
-  
+
   Lemma NoDup_Is_defined_in:
     forall eq eqs x,
       NoDup (vars_defined (eq :: eqs)) ->
@@ -499,7 +499,7 @@ Module Type ISDEFINED
   Proof.
     induction eqs as [|eq eqs IH]. now inversion 1.
     intro Hin.
-    destruct eq; [|destruct i; try destruct Hin as [Hin|Hin]|]; simpl in *;
+    destruct eq; [|destruct l; try destruct Hin as [Hin|Hin]|]; simpl in *;
       try (now constructor 2; apply IH).
     subst. now repeat constructor.
   Qed.
@@ -518,7 +518,7 @@ Module Type ISDEFINED
       InMembers x (gather_inst_eq eq) -> Is_defined_in_eq x eq.
   Proof.
     destruct eq; simpl; try contradiction.
-    destruct i. now intuition.
+    destruct l. now intuition.
     inversion 1; subst. now repeat constructor.
     match goal with [ H: InMembers _ [] |- _ ] => inversion H end.
   Qed.
@@ -568,7 +568,7 @@ Module Type ISDEFINED
       intro D. apply ND4 in D.
       apply gather_insts_Is_defined_in in Def; auto.
   Qed.
-  
+
 End ISDEFINED.
 
 Module IsDefinedFun

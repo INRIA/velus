@@ -234,26 +234,26 @@ Proof.
   - rewrite IHs2, IHs1 in *; tauto.
   - rewrite IHs2, IHs1 in *; tauto.
   - rewrite IHs2, IHs1 in *; tauto.
-  - destruct (find_class i0 prog) as [(?, ?)|]; auto.
-    destruct (find_method i2 (c_methods c)); simpl in Hin; auto.
-    destruct_list i; simpl in Hin; auto.
+  - destruct (find_class i prog) as [(?, ?)|]; auto.
+    destruct (find_method i1 (c_methods c)); simpl in Hin; auto.
+    destruct_list l; simpl in Hin; auto.
     destruct_list (m_out m) as (?, ?) ? ?; simpl in Hin; auto.
     rewrite <-Env.In_Members, Env.Props.P.F.add_in_iff in Hin.
     rewrite <-Env.In_Members, Env.Props.P.F.add_in_iff.
     destruct Hin; try tauto.
     right; rewrite <-Env.In_Members; auto.
   - destruct Hin as [Hin|Hin].
-    + destruct (find_class i0 prog) as [(?, ?)|]; simpl in Hin; try contradiction.
-      destruct (find_method i2 (c_methods c)); simpl in Hin; try contradiction.
-      destruct_list i; simpl in Hin; try contradiction.
+    + destruct (find_class i prog) as [(?, ?)|]; simpl in Hin; try contradiction.
+      destruct (find_method i1 (c_methods c)); simpl in Hin; try contradiction.
+      destruct_list l; simpl in Hin; try contradiction.
       destruct_list (m_out m) as (?, ?) ? ?; simpl in Hin; try contradiction.
       rewrite <-Env.In_Members, Env.Props.P.F.add_in_iff in Hin.
       rewrite <-Env.In_Members, Env.Props.P.F.add_in_iff.
       destruct Hin as [|Hin]; try tauto.
       rewrite Env.In_Members in Hin; try contradiction.
-    + destruct (find_class i0 prog) as [(?, ?)|]; auto.
-      destruct (find_method i2 (c_methods c)); auto.
-      destruct_list i; auto.
+    + destruct (find_class i prog) as [(?, ?)|]; auto.
+      destruct (find_method i1 (c_methods c)); auto.
+      destruct_list l; auto.
       destruct_list (m_out m) as (?, ?) ? ?; auto.
       rewrite <-Env.In_Members in Hin.
       rewrite <-Env.In_Members, Env.Props.P.F.add_in_iff.
@@ -268,8 +268,8 @@ Lemma In_rec_instance_methods_In_insts:
     In (o, cid) insts.
 Proof.
   induction s; intros * Wt Hin H; inv Wt; simpl in *; eauto.
-  destruct_list i; eauto.
-  destruct (M.E.eq_dec (i1, i2) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+  destruct_list l; eauto.
+  destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
   - subst.
     apply MapsTo_add_same in Hin; subst; assumption.
   - apply M.add_3 in Hin; eauto.
@@ -313,13 +313,13 @@ Proof.
   - rewrite IHs2 in Hin; eauto.
     rewrite IHs2, IHs1; eauto.
     destruct Hin as [[|]|]; auto.
-  - destruct_list i; eauto.
-    destruct (M.E.eq_dec (i1, i2) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+  - destruct_list l; eauto.
+    destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
     + subst.
       apply MapsTo_add_same in Hin; subst.
       left; apply M.add_1; auto.
     + right; eapply M.add_3; eauto; simpl; auto.
-  - destruct_list i; eauto.
+  - destruct_list l; eauto.
     + destruct Hin as [Hin|Hin]; eauto.
       apply M.find_1 in Hin; discriminate.
     + destruct Hin as [Hin|Hin]; auto.
@@ -327,7 +327,7 @@ Proof.
     + destruct Hin as [Hin|Hin].
       * apply MapsTo_add_empty in Hin; destruct Hin as (? & ? & ?); subst.
         apply M.add_1; auto.
-      *{ destruct (M.E.eq_dec (i1, i2) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+      *{ destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
          - subst.
            app_NoDupMembers_det.
            apply M.add_1; auto.
@@ -344,9 +344,9 @@ Lemma valid_rec_instance_methods:
     Forall (fun xt => valid (fst (fst xt))) (M.elements (rec_instance_methods s m)).
 Proof.
   induction s; simpl; inversion 1; intros * Valid_insts ?; eauto.
-  destruct_list i; auto.
+  destruct_list l; auto.
   apply Forall_add; auto.
-  eapply Forall_forall with (x := (i1, i0)) in Valid_insts; eauto.
+  eapply Forall_forall with (x := (i0, i)) in Valid_insts; eauto.
 Qed.
 
 Lemma valid_instance_methods:
@@ -453,9 +453,9 @@ Proof.
   - rewrite InMembers_translate_param_idem in *.
     rewrite InMembers_rec_instance_methods_temp in Hin.
     destruct Hin; auto.
-  - destruct (find_class i0 prog) as [(?, ?)|]; simpl in Hin; try contradiction.
-    destruct (find_method i2 (c_methods c)); simpl in Hin; try contradiction.
-    destruct_list i; simpl in Hin; try contradiction.
+  - destruct (find_class i prog) as [(?, ?)|]; simpl in Hin; try contradiction.
+    destruct (find_method i1 (c_methods c)); simpl in Hin; try contradiction.
+    destruct_list l; simpl in Hin; try contradiction.
     destruct_list (m_out m0) as (?, ?) ? ?; simpl in Hin; try contradiction.
     rewrite InMembers_translate_param_idem, <-Env.In_Members, Env.Props.P.F.add_in_iff in Hin.
     destruct Hin as [|Hin].
@@ -823,8 +823,8 @@ Section MethodSpec.
     - rewrite IHs1; auto.
     - assert (wt_program prog') by (eapply wt_program_find_class; eauto).
       assert (wt_program prog'') by (eapply wt_program_find_class; eauto).
-      assert (find_class i0 prog' = Some (cls, p')) as Find1 by (eapply find_class_chained; eauto).
-      assert (find_class i0 prog = Some (cls, p')) as Find2 by (eapply find_class_chained; eauto).
+      assert (find_class i prog' = Some (cls, p')) as Find1 by (eapply find_class_chained; eauto).
+      assert (find_class i prog = Some (cls, p')) as Find2 by (eapply find_class_chained; eauto).
       apply find_class_rev in Find1 as (?& ->); eauto.
       apply find_class_rev in Find2 as (?& ->); eauto.
   Qed.
@@ -844,8 +844,8 @@ Section MethodSpec.
     - now rewrite IHs1, IHs2.
     - assert (wt_program prog') by (eapply wt_program_find_class; eauto).
       unfold binded_funcall.
-      assert (find_class i0 prog' = Some (cls, p')) as Find1 by (eapply find_class_chained; eauto).
-      assert (find_class i0 prog = Some (cls, p')) as Find2 by (eapply find_class_chained; eauto).
+      assert (find_class i prog' = Some (cls, p')) as Find1 by (eapply find_class_chained; eauto).
+      assert (find_class i prog = Some (cls, p')) as Find2 by (eapply find_class_chained; eauto).
       apply find_class_rev in Find1 as (?& ->); eauto.
       apply find_class_rev in Find2 as (?& ->); eauto.
   Qed.
@@ -1180,10 +1180,10 @@ Section TranslateOk.
         - rewrite In_rec_instance_methods in Hin; eauto. destruct Hin.
           + apply IHs2; auto.
           + apply IHs1; auto.
-        - destruct_list i.
+        - destruct_list l.
           + apply M.find_1 in Hin; contr.
           + apply M.find_1 in Hin; contr.
-          + destruct (M.E.eq_dec (i1, i2) (o, fid)) as [[E1 E2]|E1]; simpl in *.
+          + destruct (M.E.eq_dec (i0, i1) (o, fid)) as [[E1 E2]|E1]; simpl in *.
             *{ subst.
                apply MapsTo_add_same in Hin; subst.
                exists cls, p', fm; repeat split; auto.

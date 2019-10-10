@@ -35,8 +35,6 @@ Module PSdec := Coq.MSets.MSetDecide.WDecide PS.
 Definition ident_eq_dec := Pos.eq_dec.
 Definition ident_eqb := Pos.eqb.
 
-Definition idents := list ident.
-
 Instance: EqDec ident eq := { equiv_dec := ident_eq_dec }.
 
 Implicit Type i j: ident.
@@ -151,9 +149,9 @@ Module Type IDS.
 
   Parameter default : ident.
 
-  Definition reserved : idents := [ self; out ].
+  Definition reserved : list ident := [ self; out ].
 
-  Definition methods  : idents := [ step; reset ].
+  Definition methods  : list ident := [ step; reset ].
 
   Axiom reserved_nodup: NoDup reserved.
   Axiom methods_nodup: NoDup methods.
@@ -615,7 +613,7 @@ Qed.
 Instance eq_equiv : Equivalence PS.eq.
 Proof. firstorder. Qed.
 
-Instance ps_adds_Proper (xs: idents) :
+Instance ps_adds_Proper (xs: list ident) :
   Proper (PS.eq ==> PS.eq) (ps_adds xs).
 Proof.
   induction xs as [|x xs IH]; intros S S' Heq; [exact Heq|].

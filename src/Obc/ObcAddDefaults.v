@@ -987,7 +987,7 @@ Module Type OBCADDDEFAULTS
           eauto using In_InMembers.
         + unfold PS.For_all.
           match goal with H:Forall (wt_exp _ _) ?xs |- _ =>
-            revert H; clear; induction l as [|e es IH] end; simpl; intros WT x Hin.
+            revert H; clear; induction l0 as [|e es IH] end; simpl; intros WT x Hin.
           now apply ps_removes_spec in Hin as (? & ?); auto.
           apply Forall_cons2 in WT as (WTe & WTes).
           destruct e; auto. simpl in Hin.

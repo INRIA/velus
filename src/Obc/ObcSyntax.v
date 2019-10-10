@@ -40,7 +40,7 @@ Module Type OBCSYNTAX
   | AssignSt : ident -> exp -> stmt                  (* self.x = e *)
   | Ifte : exp -> stmt -> stmt -> stmt               (* if e then s1 else s2 *)
   | Comp : stmt -> stmt -> stmt                      (* s1; s2 *)
-  | Call : idents -> ident -> ident -> ident -> list exp -> stmt
+  | Call : list ident -> ident -> ident -> ident -> list exp -> stmt
   (* y1, ..., yn := class instance method (e1, ..., em) *)
   | Skip.
 

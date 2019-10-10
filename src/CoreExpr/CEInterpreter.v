@@ -254,7 +254,7 @@ Module Type CEINTERPRETER
     Definition interp_var (x: ident): stream value :=
       lift' interp_var_instant x.
 
-    Definition interp_vars (xs: idents): stream (list value) :=
+    Definition interp_vars (xs: list ident): stream (list value) :=
       lift' interp_vars_instant xs.
 
     Definition interp_exp (e: exp): stream value :=

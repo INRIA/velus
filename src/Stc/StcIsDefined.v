@@ -119,7 +119,7 @@ Module Type STCISDEFINED
       inv Hdef_all; eauto.
   Qed.
 
-  Definition defined_tc (tc: trconstr): idents :=
+  Definition defined_tc (tc: trconstr): list ident :=
     match tc with
     | TcNext x _ _
     | TcDef x _ _ => [x]

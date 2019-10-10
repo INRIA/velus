@@ -40,7 +40,7 @@ Module Type CORRECTNESS
     generalize (@nil (ident * (Op.const * clock))).
     induction eqs as [|[]]; simpl; try contradiction; intros * Hin; auto.
     - right; eapply IHeqs; eauto.
-    - destruct i.
+    - destruct l.
       + right; eapply IHeqs; eauto.
       + apply In_snd_fold_left_gather_eq in Hin as [Hin|Hin].
         * destruct Hin as [E|]; try contradiction; inv E.
@@ -83,8 +83,8 @@ Module Type CORRECTNESS
     revert Hin; generalize (@nil (ident * ident)).
     induction n_eqs0 as [|[] ? IH]; simpl in *; intros; try contradiction;
       inversion_clear Heqs as [|?? Heq]; inv Heq; eauto.
-    - destruct i; try discriminate; eauto.
-    - destruct i; try discriminate; eauto.
+    - destruct l; try discriminate; eauto.
+    - destruct l; try discriminate; eauto.
     - apply In_fst_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E.
       match goal with H: mfby _ _ _ _ _ |- _ => destruct H as (?&?) end; auto.
@@ -107,11 +107,11 @@ Module Type CORRECTNESS
       try inversion_clear Heq as [|??????????? Hd|
                                   ??????????????? Hd ?????? Rst|];
       try contradiction; eauto.
-    - destruct i; try discriminate.
+    - destruct l; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E; inv Hd.
       do 3 eexists; split; eauto.
-    - destruct i; try discriminate.
+    - destruct l; try discriminate.
       apply In_snd_fold_left_gather_eq in Hin as [Hin|]; eauto.
       destruct Hin as [E|]; try contradiction; inv E; inv Hd.
       exists ls, Mx, xss.
@@ -273,7 +273,7 @@ Module Type CORRECTNESS
       inversion_clear Heqs as [|?? Heq]; try contradiction.
     apply in_app in Hin as [Hin|]; eauto.
     destruct eq; simpl in Hin; try contradiction.
-    destruct i; try contradiction.
+    destruct l; try contradiction.
     inversion_clear Hin as [E|]; try contradiction; inv E.
     inversion_clear Heq as [|??????????? Hd Sub|
                             ??????????????? Hd Sub ????? Rst|];
@@ -511,7 +511,7 @@ Module Type CORRECTNESS
     - apply Exists_app' in Hin as [Hin|].
       + destruct eq; simpl in Hin.
         * inversion_clear Hin as [?? Hin'|?? Hin']; inv Hin'.
-        *{ destruct i; try destruct o as [(?&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
+        *{ destruct l; try destruct o as [(?&?)|]; inversion_clear Hin as [?? Hin'|?? Hin'].
            - inv Hin'; apply Notin; do 3 constructor; auto.
            - inversion_clear Hin' as [?? Hin|?? Hin]; inv Hin;
                apply Notin; do 3 constructor; auto.
@@ -531,9 +531,9 @@ Module Type CORRECTNESS
   Proof.
     destruct eq; inversion_clear 1; inversion_clear 1; econstructor; eauto.
     - apply not_Is_defined_not_Is_sub_in_eqs.
-      assert (In x i) by (now apply hd_error_Some_In); auto.
+      assert (In x l) by (now apply hd_error_Some_In); auto.
     - apply not_Is_defined_not_Is_sub_in_eqs.
-      assert (In x i) by (now apply hd_error_Some_In); auto.
+      assert (In x l) by (now apply hd_error_Some_In); auto.
   Qed.
 
   Lemma gather_insts_Is_sub_in_translate_eqns:
@@ -544,7 +544,7 @@ Module Type CORRECTNESS
     unfold gather_insts, translate_eqns.
     induction eqs as [|[]]; simpl; try contradiction; intros * Hin.
     - edestruct IHeqs; eauto; eexists; right; eauto.
-    - destruct i; simpl in *; auto.
+    - destruct l; simpl in *; auto.
       destruct o as [(?&?)|].
       + destruct Hin; subst.
         * exists 1; apply Exists_app'; left; right; left; constructor.
@@ -603,7 +603,7 @@ Module Type CORRECTNESS
       apply IHeqs in Hnin.
       destruct eq; simpl in *.
       + inversion_clear Hin as [?? E|?? Hins]; try inv E; auto.
-      + destruct i; auto.
+      + destruct l; auto.
         destruct o as [(?&?)|]; inversion_clear Hin as [?? E|?? Hins]; auto.
         * inv E; apply Hnineq; constructor.
         * inversion_clear Hins as [?? E|?? Hins']; auto.

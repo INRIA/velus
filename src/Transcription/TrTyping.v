@@ -250,9 +250,9 @@ Module Type TRTYPING
     apply wt_clock_free. intros ? Hfr.
     apply free_find_base_clock in Hfr.
     apply Exists_exists in Hfr as (?& Hin & Hfr).
-    pose proof (In_Forall _ _ _ Hwt Hin) as Wt.
-    eapply wt_clock_free in Wt; eauto.
-  Qed.
+    eapply Forall_forall in Hin; eauto.
+    eapply wt_clock_free in Hin; eauto.
+ Qed.
 
   Lemma wt_clockof :
     forall G vars e,
@@ -269,7 +269,7 @@ Module Type TRTYPING
       now take (LT.wt_nclock _ _) and inv it.
     - rewrite Forall_map. rewrite Forall_map in H8.
       eapply Forall_impl_In; eauto. intros * Hin ?.
-      eapply In_Forall in Hin; eauto. simpl in Hin.
+      eapply Forall_forall in Hin; eauto. simpl in Hin.
       unfold L.ckstream, stripname. simpl in *. now inv Hin.
     - unfold L.ckstream, stripname. simpl in *.
       take (LT.wt_nclock _ _) and rename it into Hn. clear - Hn.
@@ -463,14 +463,14 @@ Module Type TRTYPING
       unfold find_clock in Hfind.
       cases_eqn Hfind. inv Hfind.
       apply env_find_env_from_list' in Hfind0 as [Hin|[? Hfind]].
-      pose proof (In_Forall _ _ _ Wtv Hin) as Wt.
+      pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
       simpl in Wt. now setoid_rewrite Permutation_app_comm in Wt at 2.
       apply env_find_env_from_list' in Hfind as [Hin|[? Hfind]].
-      pose proof (In_Forall _ _ _ Wti Hin) as Wt.
+      pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
       simpl in Wt. unfold idty. rewrite map_app.
       eapply wt_clock_app in Wt; eauto.
       apply Env.from_list_find_In in Hfind as Hin.
-      pose proof (In_Forall _ _ _ Wto Hin) as Wt.
+      pose proof Hin as Wt; eapply Forall_forall in Wt; eauto.
       simpl in Wt. setoid_rewrite Permutation_app_comm at 2.
       eapply wt_clock_app in Wt; eauto. unfold idty.
       rewrite app_assoc, map_app. eauto.

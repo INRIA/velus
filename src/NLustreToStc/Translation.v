@@ -77,7 +77,7 @@ Module Type TRANSLATION
       intros F S.
       destruct eq;
         [ now apply IH
-        | now destruct i; apply IH
+        | now destruct l; apply IH
         | ].
       simpl; rewrite IH; rewrite add_ps_from_list_cons; reflexivity.
     }
@@ -96,7 +96,7 @@ Module Type TRANSLATION
       - now rewrite app_nil_r.
       - destruct eq.
         + simpl; rewrite IHeqs; auto.
-        + destruct i; simpl; rewrite IHeqs; auto.
+        + destruct l; simpl; rewrite IHeqs; auto.
         + simpl. rewrite IHeqs.
           simpl. now rewrite <-Permutation_middle.
     }
@@ -132,12 +132,12 @@ Module Type TRANSLATION
                                (vars_defined (filter is_app eqs))).
     {
       induction eqs as [|[] eqs]; simpl; auto.
-      destruct i as [ | x xs ]; auto.
-      assert (Happ: gather_app_vars (EqApp (x :: xs) c i0 l o :: eqs)
+      destruct l as [ | x xs ]; auto.
+      assert (Happ: gather_app_vars (EqApp (x :: xs) c i l0 o :: eqs)
                     = xs ++ gather_app_vars eqs)
         by now unfold gather_app_vars.
 
-      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i0 l o :: eqs))
+      assert (Hinst: map fst (gather_insts (EqApp (x :: xs) c i l0 o :: eqs))
                      = x :: map fst (gather_insts eqs))
         by now unfold gather_insts.
 
@@ -176,7 +176,7 @@ Module Type TRANSLATION
   Proof.
     induction eqs as [|[]]; simpl; intros; auto.
     - split; auto; intros [|]; auto; contradiction.
-    - destruct i; simpl in *; auto.
+    - destruct l; simpl in *; auto.
     - rewrite IHeqs; symmetry; rewrite IHeqs.
       split; intros [Hin|Hin']; auto.
       + now left; right.
@@ -193,7 +193,7 @@ Module Type TRANSLATION
   Proof.
     induction eqs as [|[]]; simpl; intros; auto.
     - split; auto; intros [|]; auto; contradiction.
-    - destruct i; simpl in *; auto.
+    - destruct l; simpl in *; auto.
       rewrite IHeqs; symmetry; rewrite IHeqs.
       split; intros [Hin|Hin']; auto.
       + now left; right.
@@ -260,7 +260,7 @@ Module Type TRANSLATION
     setoid_rewrite gather_eqs_snd_spec.
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto; try reflexivity.
-    destruct i; simpl; auto.
+    destruct l; simpl; auto.
     destruct o as [(?&?)|]; simpl.
     - rewrite IHl, 2 map_app, 2 in_app; simpl;
         tauto.
@@ -270,14 +270,14 @@ Module Type TRANSLATION
     rewrite gather_eqs_snd_spec.
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
-    destruct i; simpl; auto.
+    destruct l; simpl; auto.
     destruct o as [(?&?)|]; simpl; auto.
   Qed.
   Next Obligation.
     rewrite gather_eqs_fst_spec.
     unfold gather_mems, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
-    destruct i; simpl; auto.
+    destruct l; simpl; auto.
     destruct o as [(?&?)|]; simpl; auto.
   Qed.
   Next Obligation.
@@ -301,7 +301,7 @@ Module Type TRANSLATION
     rewrite snd_partition_memories_var_defined.
     unfold SynStc.variables, translate_eqns, vars_defined.
     induction (n_eqs n) as [|[]]; simpl; auto.
-    destruct i; simpl; auto.
+    destruct l; simpl; auto.
     destruct o as [(?&?)|]; simpl; rewrite IHl; auto.
   Qed.
   Next Obligation.
@@ -310,7 +310,7 @@ Module Type TRANSLATION
     - inv H.
     - inversion_clear H as [?? Rst|?]; try inv Rst.
       right; apply IHl; auto.
-    - destruct i; simpl in *; auto.
+    - destruct l; simpl in *; auto.
       destruct o as [(?&?)|].
       + inversion_clear H as [?? Rst|?? Rst];
           inversion_clear Rst as [?? Rst'|]; try inv Rst'.
@@ -329,7 +329,7 @@ Module Type TRANSLATION
       + inv H.
       + inversion_clear H as [?? Step|]; try inv Step.
         right; apply IHl; auto.
-      + destruct i; simpl in *; auto.
+      + destruct l; simpl in *; auto.
         destruct o as [(?&?)|]; simpl in *;
           inversion_clear H as [?? Step|?? Step']; try inv Step.
         *{ inversion_clear Step' as [?? Step|]; try inv Step.
@@ -353,7 +353,7 @@ Module Type TRANSLATION
       + inversion_clear H as [?? Step|]; try inv Step.
         inversion_clear Reset as [?? Rst|]; try inv Rst.
         apply IHl; auto.
-      + destruct i; simpl in *; auto.
+      + destruct l; simpl in *; auto.
         destruct o as [(?&?)|]; simpl in *; inversion_clear Nodup as [|?? Notin];
           inversion_clear Reset as [?? Rst|?? Rst']; try inv Rst;
             inversion_clear H as [?? Step|?? Step']; try inv Step.
@@ -376,7 +376,7 @@ Module Type TRANSLATION
     unfold translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
     - inversion 1.
-    - destruct i; simpl; auto.
+    - destruct l; simpl; auto.
       destruct o as [(?&?)|]; simpl.
       + apply incl_cons.
         * constructor; auto.

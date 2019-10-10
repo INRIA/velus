@@ -205,7 +205,7 @@ Module Type STCWELLDEFINED
         congruence.
       + intro; apply Step'; right; auto.
     - eapply IHtcs; eauto; intros j r ?.
-      assert (Step_with_reset_in j r (TcCall i i0 c b i1 l :: tcs ++ tcs')) as Step'
+      assert (Step_with_reset_in j r (TcCall i l c b i0 l0 :: tcs ++ tcs')) as Step'
           by (right; auto).
       apply Spec in Step'.
       destruct r.
@@ -278,7 +278,7 @@ Module Type STCWELLDEFINED
       | acc => acc
       end.
 
-    Definition well_sch (args: idents) (tcs: list trconstr) : bool :=
+    Definition well_sch (args: list ident) (tcs: list trconstr) : bool :=
       fst (fst (fst (fold_right check_tc
                                 (true, PS.empty, ps_from_list args, PNS.empty)
                                 tcs))).

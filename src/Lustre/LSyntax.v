@@ -137,7 +137,7 @@ Module Type LSYNTAX
   Definition nclocksof (es: list exp): list nclock :=
     flat_map nclockof es.
 
-  Definition vars_defined (eqs: list equation) : idents :=
+  Definition vars_defined (eqs: list equation) : list ident :=
     flat_map fst eqs.
 
   Record node : Type :=

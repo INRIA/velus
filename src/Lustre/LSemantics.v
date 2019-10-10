@@ -51,7 +51,6 @@ Module Type LSEMANTICS
         fby (present x ⋅ xs) (present y ⋅ ys) (present x ⋅ rs).
 
   (* TODO: Use everywhere, esp. in LustreElab.v *)
-  (* TODO: replace idents with (list ident) *)
   Definition idents xs := List.map (@fst ident (type * clock)) xs.
 
   Inductive sem_var: history -> ident -> Stream value -> Prop :=
@@ -399,7 +398,7 @@ Module Type LSEMANTICS
       apply find_node_later_not_Is_node_in with (1:=Hord) in H0.
       intros eq Hin. intro Hini.
       rewrite Is_node_in_Forall in H0.
-      apply In_Forall with (1:=H0) in Hin.
+      apply Forall_forall with (1:=H0) in Hin.
       auto.
   Qed.
 
@@ -462,14 +461,14 @@ Module Type LSEMANTICS
       inv H1. apply IHForall2; eauto. SolveNin Hnin.
     - econstructor.
       + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
-        eapply In_Forall in Hin as Hs; eauto. apply Hs; auto.
+        eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
         intro Ini. apply Hnin. inv Ini. repeat constructor.
         apply Exists_exists; eauto. now constructor 2.
       + eapply sem_node_cons; eauto. intro. subst. apply Hnin.
         constructor. apply INEapp2.
     - econstructor; eauto.
       + eapply Forall2_impl_In; [| eauto]; intros * Hin ? Hsem.
-        eapply In_Forall in Hin as Hs; eauto. apply Hs; auto.
+        eapply Forall_forall in Hin as Hs; eauto. apply Hs; auto.
         intro Ini. apply Hnin. inv Ini. constructor. constructor. right.
         apply Exists_exists; eauto. now constructor 2.
       + apply IHx; auto. SolveNin Hnin.
@@ -491,11 +490,8 @@ Module Type LSEMANTICS
     intros eq Hin Hsem.
     eapply sem_equation_global_tl; eauto.
     apply Is_node_in_Forall in Hnini.
-    apply In_Forall with (1:=Hnini) (2:=Hin).
+    apply Forall_forall with (1:=Hnini) (2:=Hin).
   Qed.
-
-
-
 
   Add Parametric Morphism v : (fby1 v)
       with signature @EqSt value ==> @EqSt value ==> @EqSt value ==> Basics.impl

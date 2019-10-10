@@ -134,7 +134,7 @@ Proof.
   - rewrite In_rec_instance_methods; eauto.
     eapply occurs_in_wt in Hs2; eauto.
     inv Hs2; assumption.
-  - destruct i as [|i is]; try destruct is.
+  - destruct l as [|l is]; try destruct is.
     + contradict Length; apply lt_n_0.
     + contradict Length; simpl; apply lt_irrefl.
     + apply M.add_1; auto.

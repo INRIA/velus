@@ -214,7 +214,7 @@ environment.
     Definition sem_var (x: ident) (xs: stream value): Prop :=
       lift' sem_var_instant x xs.
 
-    Definition sem_vars (x: idents) (xs: stream (list value)): Prop :=
+    Definition sem_vars (x: list ident) (xs: stream (list value)): Prop :=
       lift' sem_vars_instant x xs.
 
     Definition sem_clocked_var (x: ident) (ck: clock): Prop :=
