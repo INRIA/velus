@@ -101,7 +101,7 @@ Module Type LSYNTAX
   Definition typesof (es: list exp): list type :=
     flat_map typeof es.
 
-  Definition ckstream {A} (ann: A * nclock): clock := stripname (snd ann).
+  Definition clock_of_nclock {A} (ann: A * nclock): clock := stripname (snd ann).
 
   Definition unnamed_stream {A} (ann: A * nclock): Prop := snd (snd ann) = None.
 
@@ -109,13 +109,13 @@ Module Type LSYNTAX
     match e with
     | Econst c => [Cbase]
     | Efby _ _ anns
-    | Eapp _ _ _ anns => map ckstream anns
+    | Eapp _ _ _ anns => map clock_of_nclock anns
     | Evar _ ann
     | Eunop _ _ ann
-    | Ebinop _ _ _ ann => [ckstream ann]
+    | Ebinop _ _ _ ann => [clock_of_nclock ann]
     | Ewhen _ _ _ anns
     | Emerge _ _ _ anns
-    | Eite _ _ _ anns => map (fun _ => ckstream anns) (fst anns)
+    | Eite _ _ _ anns => map (fun _ => clock_of_nclock anns) (fst anns)
     end.
 
   Definition clocksof (es: list exp): list clock :=
@@ -273,7 +273,7 @@ Module Type LSYNTAX
     forall e,
       clockof e = map stripname (nclockof e).
   Proof.
-    destruct e; simpl; unfold ckstream; try rewrite map_map; auto.
+    destruct e; simpl; unfold clock_of_nclock; try rewrite map_map; auto.
   Qed.
 
   Lemma clocksof_nclocksof:

@@ -421,30 +421,30 @@ Module Type LTYPING
       rewrite <-Hin; auto with ltyping.
     - destruct Hin as [Hin|]; [|contradiction].
       rewrite <-Hin.
-      destruct nck; unfold ckstream; simpl in *;
+      destruct nck; unfold clock_of_nclock; simpl in *;
         match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
     - destruct Hin as [Hin|]; [|contradiction].
       rewrite <-Hin.
-      destruct nck; unfold ckstream; simpl in *;
+      destruct nck; unfold clock_of_nclock; simpl in *;
         match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
     - destruct Hin as [Hin|]; [|contradiction].
       rewrite <-Hin.
-      destruct nck; unfold ckstream; simpl in *;
+      destruct nck; unfold clock_of_nclock; simpl in *;
         match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
     - match goal with H:Forall (wt_nclock _) _ |- _ =>
                       rewrite Forall_map in H end.
       apply in_map_iff in Hin.
       destruct Hin as ((ty & nck) & Hck & Hin).
       apply Forall_forall with (1:=H3) in Hin.
-      destruct nck; unfold ckstream in *; simpl in *; subst;
+      destruct nck; unfold clock_of_nclock in *; simpl in *; subst;
         match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
-    - destruct nck; unfold ckstream in *; simpl in *;
+    - destruct nck; unfold clock_of_nclock in *; simpl in *;
         apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
           match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
-    - destruct nck; unfold ckstream in *; simpl in *;
+    - destruct nck; unfold clock_of_nclock in *; simpl in *;
         apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
           match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
-    - destruct nck; unfold ckstream in *; simpl in *;
+    - destruct nck; unfold clock_of_nclock in *; simpl in *;
         apply in_map_iff in Hin; destruct Hin as (? & Hs & Hin); subst;
           match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
     - apply in_map_iff in Hin.
@@ -452,14 +452,14 @@ Module Type LTYPING
       match goal with H:Forall _ anns |- _ =>
                       apply Forall_forall with (1:=H) in Hin end.
       destruct x as (ty, nck).
-      destruct nck; unfold ckstream in *; simpl in *;
+      destruct nck; unfold clock_of_nclock in *; simpl in *;
         subst; match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
     - apply in_map_iff in Hin.
       destruct Hin as (x & Hs & Hin).
       match goal with H:Forall _ anns |- _ =>
                       apply Forall_forall with (1:=H) in Hin end.
       destruct x as (ty, nck).
-      destruct nck; unfold ckstream in *; simpl in *;
+      destruct nck; unfold clock_of_nclock in *; simpl in *;
         subst; match goal with H:wt_nclock _ _ |- _ => inv H end; auto.
   Qed.
 

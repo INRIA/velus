@@ -140,8 +140,8 @@ Module Type LCLOCKING
     | wc_Efby: forall e0s es anns,
         Forall wc_exp e0s ->
         Forall wc_exp es ->
-        Forall2 eq (map ckstream anns) (clocksof e0s) ->
-        Forall2 eq (map ckstream anns) (clocksof es) ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
         Forall unnamed_stream anns ->
         wc_exp (Efby e0s es anns)
 
@@ -373,8 +373,8 @@ Module Type LCLOCKING
         Forall (wc_exp G vars) es ->
         Forall P es ->
         Forall P e0s ->
-        Forall2 eq (map ckstream anns) (clocksof e0s) ->
-        Forall2 eq (map ckstream anns) (clocksof es) ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof e0s) ->
+        Forall2 eq (map clock_of_nclock anns) (clocksof es) ->
         Forall unnamed_stream anns ->
         P (Efby e0s es anns).
 
