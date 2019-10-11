@@ -218,14 +218,13 @@ Module Type LCLOCKING
 
     | IFEapp: forall x f es anns,
         Exists (Is_fresh_in x) es
-        \/ Ino x (map snd (map snd anns)) ->
+        \/ Ino x (map stream_name anns) ->
         Is_fresh_in x (Eapp f es None anns)
 
     | IFEreset: forall x f es e anns,
         Exists (Is_fresh_in x) (e :: es)
-        \/ Ino x (map snd (map snd anns)) ->
+        \/ Ino x (map stream_name anns) ->
         Is_fresh_in x (Eapp f es (Some e) anns).
-
 
     Inductive DisjointFreshList : list exp -> Prop :=
     | DWnil:
@@ -282,18 +281,18 @@ Module Type LCLOCKING
     | DFEapp: forall f es anns,
         DisjointFreshList es ->
         Forall DisjointFresh es ->
-        NoDupo (map snd (map snd anns)) ->
-        Forall Is_AnonStream (map snd (map snd anns)) ->
-        (forall x, Ino x (map snd (map snd anns)) -> ~Exists (Is_fresh_in x) es) ->
+        NoDupo (map stream_name anns) ->
+        Forall Is_AnonStream (map stream_name anns) ->
+        (forall x, Ino x (map stream_name anns) -> ~Exists (Is_fresh_in x) es) ->
         DisjointFresh (Eapp f es None anns)
 
     (* TODO: check *)
     | DFEreset: forall f es e anns,
         DisjointFreshList (e :: es) ->
         Forall DisjointFresh (e :: es) ->
-        NoDupo (map snd (map snd anns)) ->
-        Forall Is_AnonStream (map snd (map snd anns)) ->
-        (forall x, Ino x (map snd (map snd anns)) -> ~Exists (Is_fresh_in x) (e :: es)) ->
+        NoDupo (map stream_name anns) ->
+        Forall Is_AnonStream (map stream_name anns) ->
+        (forall x, Ino x (map stream_name anns) -> ~Exists (Is_fresh_in x) (e :: es)) ->
         DisjointFresh (Eapp f es (Some e) anns).
 
 

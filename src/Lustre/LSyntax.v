@@ -102,6 +102,7 @@ Module Type LSYNTAX
     flat_map typeof es.
 
   Definition clock_of_nclock {A} (ann: A * nclock): clock := stripname (snd ann).
+  Definition stream_name {A} (ann: A * nclock) : option ident := snd (snd ann).
 
   Definition unnamed_stream {A} (ann: A * nclock): Prop := snd (snd ann) = None.
 
