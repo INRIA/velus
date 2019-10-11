@@ -749,17 +749,15 @@ Section ElabExpressions.
       + apply Forall2_map_1 in Hout.
         apply Forall2_eq in Hout.
         rewrite <-Hout in Hele.
-        (* now apply Forall2_map_2 in Hele. *)
-        admit.
-      + admit.
-        (*
-        apply Forall2_map_1 with (f0:=typeof) in H2.
-        apply Forall2_eq in H2.
-        rewrite <-H2 in Hin.
+        apply Forall2_map_2 in Hele.
+        apply Forall2_impl_In with (2:=Hele).
+        intros y (z, (zt, zc)) Iy Iz Iyz; auto.
+      + apply Forall2_map_1 with (f0:=typeof) in H1.
+        apply Forall2_eq in H1.
+        rewrite <-H1 in Hin.
         apply Forall2_map_2, Forall2_swap_args in Hin.
         apply Forall2_impl_In with (2:=Hin).
-        intros ???? Htypeof. now rewrite Htypeof.
-         *)
+        intros y (z, (zt, zc)) Iy Iz Iyz; auto.
     - rename x1 into xin, x2 into xout, i into f, x3 into ein, l1 into xs,
       x0 into ck, a into loc'.
       unfold find_node_interface in EQ. NamedDestructCases.
@@ -771,18 +769,17 @@ Section ElabExpressions.
       + apply Forall2_map_1 in Hout.
         apply Forall2_eq in Hout.
         rewrite <-Hout in Hele.
-        (* now apply Forall2_map_2 in Hele. *)
-        admit.
-      + admit.
-        (*
-        apply Forall2_map_1 with (f0:=typeof) in H1.
-        apply Forall2_eq in H1.
-        rewrite <-H1 in Hin.
+        apply Forall2_map_2 in Hele.
+        apply Forall2_impl_In with (2:=Hele).
+        intros y (z, (zt, zc)) Iy Iz Iyz; auto.
+      +
+        apply Forall2_map_1 with (f0:=typeof) in H2.
+        apply Forall2_eq in H2.
+        rewrite <-H2 in Hin.
         apply Forall2_map_2, Forall2_swap_args in Hin.
         apply Forall2_impl_In with (2:=Hin).
-        intros ???? Htypeof. now rewrite Htypeof.
-         *)
-  Admitted.
+        intros y (z, (zt, zc)) Iy Iz Iyz; auto.
+  Qed.
 
   Lemma wc_elab_equation:
     forall aeq eq,
