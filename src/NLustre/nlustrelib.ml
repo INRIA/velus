@@ -30,7 +30,7 @@ module type SYNTAX =
 
     type equation =
     | EqDef of ident * clock * cexp
-    | EqApp of idents * clock * ident * exp list * ident option
+    | EqApp of idents * clock * ident * exp list * (ident * clock) option
     | EqFby of ident * clock * const * exp
 
     type node = {
@@ -76,7 +76,7 @@ module PrintFun
             print_pattern xs
             print_ident f
             (print_comma_list print_exp) es
-      | NL.EqApp (xs, ck, f, es, Some r) ->
+      | NL.EqApp (xs, ck, f, es, Some (r, ck_r)) ->
         fprintf p "@[<hov 2>%a =@ (restart@ %a@ every@ %a)(@[<hv 0>%a@]);@]"
           print_pattern xs
           print_ident f

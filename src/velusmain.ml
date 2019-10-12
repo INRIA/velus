@@ -132,7 +132,7 @@ let process file =
     raise (Arg.Bad ("don't know what to do with " ^ file))
 
 let set_fullclocks () =
-  Interfacelib.PrintLustre.print_fullclocks := true;
+  (* Interfacelib.PrintLustre.print_fullclocks := true; *)
   Interfacelib.PrintNLustre.print_fullclocks := true;
   Interfacelib.PrintStc.print_fullclocks := true
 
@@ -151,8 +151,8 @@ let speclist = [
   "-dcminor", Arg.Set write_cm, " Save generated Cminor in <source>.minor.c";
   "-fullclocks", Arg.Unit set_fullclocks,
                                          " Print 'full' clocks in declarations";
-  "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
-                                   " Show result clocks of nested applications";
+  (* "-appclocks", Arg.Set Interfacelib.PrintLustre.print_appclocks,
+   *                                  " Show result clocks of nested applications"; *)
   "-nofusion", Arg.Clear Veluslib.fuse_obc, " Skip Obc fusion optimization";
   "-noaddwhens", Arg.Clear Veluslib.add_when_to_constants,
                                 " Do not automatically add 'when' to constants";

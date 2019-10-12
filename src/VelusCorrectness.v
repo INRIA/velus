@@ -29,7 +29,7 @@ Import CStr.
 Import OpAux.
 Import Op.
 From Velus Require Import ObcToClight.Correctness.
-From Velus Require Import Lustre.LustreElab.
+From Velus Require Import NLustre.NLElaboration.
 
 From Coq Require Import String.
 From Coq Require Import List.
@@ -120,8 +120,8 @@ Definition nl_to_asm (main_node: ident) (g: global) : res Asm.program :=
 
 Definition compile (D: list LustreAst.declaration) (main_node: ident) : res Asm.program :=
   elab_declarations D
-                    @@@ (fun G => L2NL.to_global (proj1_sig G))
-                    @@@ nl_to_asm main_node.
+                    (* @@@ (fun G => L2NL.to_global (proj1_sig G)) *)
+                    @@@ (fun G => nl_to_asm main_node (proj1_sig G)).
 
 Section ForallStr.
   Context {A: Type}.
@@ -131,7 +131,7 @@ Section ForallStr.
     forall x xs,
       P x ->
       Forall_Str xs ->
-      Forall_Str (x ::: xs).
+      Forall_Str (x ⋅ xs).
 
   Lemma Forall_Str_nth:
     forall s,
@@ -554,23 +554,19 @@ Qed.
     reads and writes that correspond to the successive values on the
     input and output streams. *)
 
-(* Theorem behavior_asm: *)
-(*   forall D G Gp P main ins outs, *)
-(*     elab_declarations D = OK (exist _ G Gp) -> *)
-(*     wt_ins G main ins -> *)
-(*     wt_outs G main outs -> *)
-(*     sem_node G main (pstr ins) (pstr outs) -> *)
-(*     compile D main = OK P -> *)
-(*     exists T, program_behaves (Asm.semantics P) (Reacts T) *)
-(*          /\ bisim_io G main ins outs T. *)
-(* Proof. *)
-(*   intros D G (WT & WC) P main ins outs Elab ** Comp. *)
-(*   simpl in *. unfold compile, print in Comp. *)
-(*   rewrite Elab in Comp; simpl in Comp. *)
-(*   destruct (nl_to_cl main G) as [p|] eqn: Comp'; simpl in Comp; try discriminate. *)
-(*   assert (normal_args G) by admit. *)
-(*   edestruct behavior_clight as (T & Beh & Bisim); eauto. *)
-(*   eapply reacts_trace_preservation in Comp; eauto. *)
-(*   apply add_builtins_spec; auto. *)
-(*   intros ? ?; discriminate. *)
-(* Qed. *)
+Theorem correctness:
+  forall D G Gp P main ins outs,
+    elab_declarations D = OK (exist _ G Gp) ->
+    wt_ins G main ins ->
+    (* wt_outs G main outs -> *)
+    CoindSem.sem_node G main (pStr ins) (pStr outs) ->
+    compile D main = OK P ->
+    exists T, program_behaves (Asm.semantics P) (Reacts T)
+         /\ bisim_IO G main ins outs T.
+Proof.
+  intros D G (WT & WC) P main ins outs Elab ?? Comp.
+  unfold compile in Comp.
+  rewrite Elab in Comp; simpl in Comp.
+  apply behavior_nl_to_asm; eauto.
+  admit.
+Admitted.

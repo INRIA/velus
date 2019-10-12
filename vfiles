@@ -11,17 +11,9 @@ src/Common/CommonList.v
 src/Common/CommonTactics.v
 src/Common/Common.v
 src/Common/CompCertLib.v
-src/CheckGraph.v
 
-src/Lustre/LSemantics.v
-src/Lustre/LSyntax.v
 src/Lustre/Parser/LustreParser.v
 src/Lustre/Parser/LustreAst.v
-src/Lustre/LTyping.v
-src/Lustre/LClocking.v
-src/Lustre/LOrdered.v
-src/Lustre/LustreElab.v
-src/Lustre/Lustre.v
 
 src/CoreExpr/CESyntax.v
 src/CoreExpr/CESemantics.v
@@ -50,6 +42,7 @@ src/NLustre/NLMemSemantics.v
 src/NLustre/NLSyntax.v
 src/NLustre/NoDup.v
 src/NLustre/NLClockingSemantics.v
+src/NLustre/NLElaboration.v
 src/NLustre/NLustre.v
 
 src/Stc/StcOrdered.v
@@ -75,11 +68,6 @@ src/Obc/Fusion.v
 src/Obc/Equiv.v
 src/Obc/ObcInvariants.v
 src/Obc/Obc.v
-
-src/Transcription/Transcription.v
-src/Transcription/Correctness.v
-src/Transcription/TrTyping.v
-src/Transcription/TrClocking.v
 
 src/NLustreToStc/NL2StcTyping.v
 src/NLustreToStc/NL2StcClocking.v

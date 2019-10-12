@@ -164,13 +164,13 @@ end
 
 module PrintOps = PrintClightOpsFun (LustreOpNames)
 
-module PrintLustre = Lustrelib.PrintFun
-    (struct
-      include ClockDefs
-      include Instantiator.L.Syn
-      include Basics
-    end)
-    (PrintOps)
+(* module PrintLustre = Lustrelib.PrintFun
+ *     (struct
+ *       include ClockDefs
+ *       include Instantiator.L.Syn
+ *       include Basics
+ *     end)
+ *     (PrintOps) *)
 
 module CE = struct
   include Basics

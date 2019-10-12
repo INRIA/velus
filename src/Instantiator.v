@@ -7,15 +7,15 @@ From Velus Require Import CoreExpr.
 
 Module CE := CoreExprFun Ids Op OpAux IStr.
 
-From Velus Require Import Lustre.
+(* From Velus Require Import Lustre. *)
 From Velus Require Import NLustre.
 
-Module L := LustreFun Ids Op OpAux CStr.
+(* Module L := LustreFun Ids Op OpAux CStr. *)
 Module NL := NLustreFun Ids Op OpAux CStr IStr CE.
 
-From Velus Require Import Transcription.
+(* From Velus Require Import Transcription. *)
 
-Module TR := TranscriptionFun Ids Op OpAux L.Syn CE.Syn NL.Syn.
+(* Module TR := TranscriptionFun Ids Op OpAux L.Syn CE.Syn NL.Syn. *)
 
 From Velus Require Import Stc.
 
