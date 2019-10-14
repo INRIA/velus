@@ -257,16 +257,6 @@ Module Type TRANSLATION
     apply HH.
   Qed.
   Next Obligation.
-    setoid_rewrite gather_eqs_snd_spec.
-    unfold gather_insts, translate_eqns.
-    induction (n_eqs n) as [|[]]; simpl; auto; try reflexivity.
-    destruct l; simpl; auto.
-    destruct o as [(?&?)|]; simpl.
-    - rewrite IHl, 2 map_app, 2 in_app; simpl;
-        tauto.
-    - rewrite IHl; reflexivity.
-  Qed.
-  Next Obligation.
     rewrite gather_eqs_snd_spec.
     unfold gather_insts, translate_eqns.
     induction (n_eqs n) as [|[]]; simpl; auto.
@@ -305,21 +295,15 @@ Module Type TRANSLATION
     destruct o as [(?&?)|]; simpl; rewrite IHl; auto.
   Qed.
   Next Obligation.
-    unfold translate_eqns in *.
-    induction (n_eqs n) as [|[]]; simpl in *.
-    - inv H.
-    - inversion_clear H as [?? Rst|?]; try inv Rst.
-      right; apply IHl; auto.
-    - destruct l; simpl in *; auto.
-      destruct o as [(?&?)|].
-      + inversion_clear H as [?? Rst|?? Rst];
-          inversion_clear Rst as [?? Rst'|]; try inv Rst'.
-        * right; left; constructor.
-        * apply Exists_app; apply IHl; auto.
-      + inversion_clear H as [?? Rst|]; try inv Rst.
-        apply Exists_app; apply IHl; auto.
-    - inversion_clear H as [?? Rst|?]; try inv Rst.
-      right; apply IHl; auto.
+    unfold translate_eqns.
+    induction (n_eqs n) as [|[]]; simpl; auto.
+    - inversion 1.
+    - destruct l; simpl; auto.
+      destruct o as [(?&?)|]; simpl.
+      + apply incl_cons.
+        * constructor; auto.
+        * apply incl_tl; auto.
+      + apply incl_tl; auto.
   Qed.
   Next Obligation.
     unfold SynStc.reset_consistency.
@@ -339,9 +323,28 @@ Module Type TRANSLATION
         * right; apply IHl; auto.
       + inversion_clear H as [?? Step|]; try inv Step.
         right; apply IHl; auto.
-    - pose proof (translate_node_obligation_5 n) as Eq;
-      pose proof (translate_node_obligation_3 n) as Nodup;
-      pose proof (translate_node_obligation_8 n) as ResetSpec;
+    - pose proof (translate_node_obligation_4 n) as Eq;
+        pose proof (translate_node_obligation_3 n) as Nodup.
+      assert (forall s, SynStc.Reset_in s (translate_eqns (n_eqs n)) ->
+                   SynStc.Step_with_reset_in s true (translate_eqns (n_eqs n)))
+        as ResetSpec.
+      { unfold translate_eqns in *.
+        clear; intros.
+        induction (n_eqs n) as [|[]]; simpl in *.
+        - inv H.
+        - inversion_clear H as [?? Rst|?]; try inv Rst.
+          right; apply IHl; auto.
+        - destruct l; simpl in *; auto.
+          destruct o as [(?&?)|].
+          + inversion_clear H as [?? Rst|?? Rst];
+              inversion_clear Rst as [?? Rst'|]; try inv Rst'.
+            * right; left; constructor.
+            * apply Exists_app; apply IHl; auto.
+          + inversion_clear H as [?? Rst|]; try inv Rst.
+            apply Exists_app; apply IHl; auto.
+        - inversion_clear H as [?? Rst|?]; try inv Rst.
+          right; apply IHl; auto.
+      }
       unfold gather_eqs in Nodup; rewrite Permutation_app_comm in Nodup;
       eapply NoDup_app_weaken in Nodup;
       rewrite Eq in Nodup; clear Eq; simpl in ResetSpec.
@@ -371,17 +374,6 @@ Module Type TRANSLATION
       + inversion_clear H as [?? Step|]; try inv Step.
         inversion_clear Reset as [?? Rst|]; try inv Rst.
         apply IHl; auto.
-  Qed.
-  Next Obligation.
-    unfold translate_eqns.
-    induction (n_eqs n) as [|[]]; simpl; auto.
-    - inversion 1.
-    - destruct l; simpl; auto.
-      destruct o as [(?&?)|]; simpl.
-      + apply incl_cons.
-        * constructor; auto.
-        * apply incl_tl; auto.
-      + apply incl_tl; auto.
   Qed.
   Next Obligation.
     pose proof n.(n_good) as [ValidApp].

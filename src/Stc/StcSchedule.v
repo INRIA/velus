@@ -236,10 +236,6 @@ Module Type STCSCHEDULE
        s_good             := b.(s_good)
     |}.
   Next Obligation.
-    do 2 setoid_rewrite schedule_tcs_permutation at 1;
-      apply s_subs_in_tcs.
-  Qed.
-  Next Obligation.
     rewrite schedule_tcs_permutation; apply s_subs_calls_of.
   Qed.
   Next Obligation.
@@ -249,16 +245,12 @@ Module Type STCSCHEDULE
     rewrite schedule_tcs_permutation; apply s_vars_out_in_tcs.
   Qed.
   Next Obligation.
-    unfold Step_with_reset_in; rewrite schedule_tcs_permutation in *;
-      now apply s_no_single_reset.
+    rewrite schedule_tcs_permutation; apply s_reset_incl.
   Qed.
   Next Obligation.
     intros ?? Spec; unfold Step_with_reset_in in Spec; rewrite schedule_tcs_permutation in Spec.
     apply s_reset_consistency in Spec.
     cases; rewrite schedule_tcs_permutation; auto.
-  Qed.
-  Next Obligation.
-    rewrite schedule_tcs_permutation; apply s_reset_incl.
   Qed.
 
   Definition schedule (P: program) : program :=

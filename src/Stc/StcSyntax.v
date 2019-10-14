@@ -95,22 +95,86 @@ Module Type STCSYNTAX
                                         map fst s_out ++ map fst s_lasts);
         s_nodup_lasts_subs : NoDup (map fst s_lasts ++ map fst s_subs);
 
-        s_subs_in_tcs      : forall f, In f (map snd s_subs)
-                                       <-> In f (map snd (calls_of s_tcs ++ resets_of s_tcs));
         s_subs_calls_of    : Permutation s_subs (calls_of s_tcs);
 
         s_lasts_in_tcs     : Permutation (map fst s_lasts) (lasts_of s_tcs);
         s_vars_out_in_tcs  : Permutation (map fst s_vars ++ map fst s_out) (variables s_tcs);
 
-        s_no_single_reset  : forall s, Reset_in s s_tcs -> Step_with_reset_in s true s_tcs;
-        s_reset_consistency: reset_consistency s_tcs;
         s_reset_incl       : incl (resets_of s_tcs) (calls_of s_tcs);
+        s_reset_consistency: reset_consistency s_tcs;
 
         s_good             : Forall ValidId (s_in ++ s_vars ++ s_out)
                              /\ Forall ValidId s_lasts
                              /\ Forall ValidId s_subs
                              /\ valid s_name
       }.
+
+  Lemma Step_in_Step_with_reset_in:
+    forall tcs s,
+      Step_in s tcs ->
+      exists rst, Step_with_reset_in s rst tcs.
+  Proof.
+    induction 1 as [?? Step|].
+    - inv Step; exists rst; left; constructor.
+    - destruct IHExists.
+      eexists; right; eauto.
+  Qed.
+
+  Lemma Step_in_calls_of:
+    forall tcs s,
+      Step_in s tcs <-> InMembers s (calls_of tcs).
+  Proof.
+    induction tcs as [|tc]; simpl.
+    - split; inversion 1.
+    - intros.
+      unfold Step_in, Is_sub_in in *.
+      rewrite Exists_cons, IHtcs.
+      destruct tc; intuition; try take (Is_sub_in_tc _ _ _) and inv it.
+      + constructor; auto.
+      + now right.
+      + take (InMembers _ _) and inv it; auto.
+        left; constructor.
+  Qed.
+
+  Lemma Reset_in_resets_of:
+    forall tcs s,
+      Reset_in s tcs <-> InMembers s (resets_of tcs).
+  Proof.
+    induction tcs as [|tc]; simpl.
+    - split; inversion 1.
+    - intros.
+      unfold Reset_in, Is_sub_in in *.
+      rewrite Exists_cons, IHtcs.
+      destruct tc; intuition; try take (Is_sub_in_tc _ _ _) and inv it.
+      + constructor; auto.
+      + now right.
+      + take (InMembers _ _) and inv it; auto.
+        left; constructor.
+  Qed.
+
+  Lemma s_no_single_reset:
+    forall s s', Reset_in s' s.(s_tcs) -> Step_with_reset_in s' true s.(s_tcs).
+  Proof.
+    intros * Rst.
+    pose proof Rst.
+    apply Reset_in_resets_of, fst_InMembers, in_map_iff in Rst
+      as ((s'', ?)&?&Hin); simpl in *; subst s''.
+    apply s_reset_incl, In_InMembers, Step_in_calls_of, Step_in_Step_with_reset_in in Hin as (?&Hin).
+    pose proof Hin.
+    apply s_reset_consistency in Hin; cases; contradiction.
+  Qed.
+
+  Lemma s_subs_in_tcs:
+    forall s f,
+      In f (map snd s.(s_subs)) <-> In f (map snd (calls_of s.(s_tcs) ++ resets_of s.(s_tcs))).
+  Proof.
+    intros.
+    rewrite s_subs_calls_of, map_app, in_app.
+    split; intuition.
+    take (In _ _) and apply in_map_iff in it as ((i, f')&?& Hin); simpl in *; subst f'.
+    apply s_reset_incl in Hin.
+    change f with (snd (i, f)); apply in_map; auto.
+  Qed.
 
   Lemma s_nodup_lasts:
     forall b, NoDupMembers b.(s_lasts).
@@ -260,30 +324,6 @@ Module Type STCSYNTAX
     - right; auto.
   Qed.
 
-  Lemma calls_of_In:
-    forall tcs s b,
-      In (s, b) (calls_of tcs) ->
-      exists xs ck rst es, In (TcCall s xs ck rst b es) tcs.
-  Proof.
-    induction tcs as [|[]]; simpl; try contradiction; intros * Hin;
-      try now edestruct IHtcs as (?&?&?&?&?); eauto 6.
-    destruct Hin as [E|].
-    - inv E; eauto 6.
-    - edestruct IHtcs as (?&?&?&?&?); eauto 6.
-  Qed.
-
-  Lemma calls_of_Is_sub_in:
-    forall tcs s,
-      InMembers s (calls_of tcs) -> exists k, Is_sub_in s k tcs.
-  Proof.
-    intros * Hin; exists 1.
-    induction tcs as [|[]]; simpl in *; try contradiction;
-      try (now right; apply IHtcs; auto).
-    destruct Hin as [E|].
-    - subst; left; constructor.
-    - right; apply IHtcs; auto.
-  Qed.
-
   Lemma resets_of_app:
     forall tcs tcs',
       resets_of (tcs ++ tcs') = resets_of tcs ++ resets_of tcs'.
@@ -378,6 +418,30 @@ Module Type STCSYNTAX
     split; intros HH.
     - split; intros ? ?; eapply HH; unfold Is_sub_in; eauto.
     - intro; destruct HH; inversion_clear 1; intuition; eauto.
+  Qed.
+
+  Lemma calls_of_In:
+    forall tcs s b,
+      In (s, b) (calls_of tcs) ->
+      exists xs ck rst es, In (TcCall s xs ck rst b es) tcs.
+  Proof.
+    induction tcs as [|[]]; simpl; try contradiction; intros * Hin;
+      try now edestruct IHtcs as (?&?&?&?&?); eauto 6.
+    destruct Hin as [E|].
+    - inv E; eauto 6.
+    - edestruct IHtcs as (?&?&?&?&?); eauto 6.
+  Qed.
+
+  Lemma calls_of_Is_sub_in:
+    forall tcs s,
+      InMembers s (calls_of tcs) -> exists k, Is_sub_in s k tcs.
+  Proof.
+    intros * Hin; exists 1.
+    induction tcs as [|[]]; simpl in *; try contradiction;
+      try (now right; apply IHtcs; auto).
+    destruct Hin as [E|].
+    - subst; left; constructor.
+    - right; apply IHtcs; auto.
   Qed.
 
 End STCSYNTAX.

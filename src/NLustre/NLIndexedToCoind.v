@@ -60,7 +60,7 @@ Module Type NLINDEXEDTOCOIND
 
     Definition tr_stream {A} : stream A -> Stream A := tr_stream_from 0.
 
-    (** Build a list of coinductive streams from an the integer range [0..m]. *)
+    (** Build a list of coinductive streams from an the integer range [0..m[. *)
     Definition seq_streams {A} (f: nat -> Stream A) (m: nat) : list (Stream A) :=
       List.map f (seq 0 m).
 
