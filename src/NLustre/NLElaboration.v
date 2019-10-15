@@ -1454,7 +1454,8 @@ Section ElabDeclaration.
         /\ NoDupMembers vds1
         /\ (forall x, InMembers x vds1 -> ~Env.In x env /\ Env.In x env')
         /\ (forall x, Env.In x env -> Env.In x env')
-        /\ (forall x, Env.In x env' -> Env.In x env \/ InMembers x vds1).
+        /\ (forall x, Env.In x env' -> Env.In x env \/ InMembers x vds1)
+        /\ (forall x v, Env.find x env = Some v -> Env.find x env' = Some v).
   Proof.
     induction vds as [|vd vds IH].
     now intros * Helab; monadInv Helab; exists [], []; intuition.
@@ -1483,11 +1484,17 @@ Section ElabDeclaration.
         2:match goal with H:InMembers ?x vds1 |- _ =>
                           now apply Hvds1 in H; destruct H; auto end.
         apply Henv, Env.Props.P.F.add_in_iff; auto.
+      (* + intros x' Hfind. *)
+      (*   apply Henv, Env.Props.P.F.add_in_iff; auto. *)
       + intros x' Hfind.
         apply Henv' in Hfind.
         destruct Hfind as [Hfind|]; simpl; auto.
         apply Env.Props.P.F.add_in_iff in Hfind.
         destruct Hfind as [Hfind|Hfind]; auto.
+      + intros x' v' Hfind.
+        apply Henv'. rewrite Env.gso; auto.
+        intro Hx; subst.
+        apply Heq. apply Env.In_find; eauto.
     - (* (x, (ty, FULLCK (ON ck y yb))) *)
       NamedDestructCases.
       + (* Env.find y env = Some (yt, cy) *)
@@ -1511,14 +1518,20 @@ Section ElabDeclaration.
           2:match goal with H:InMembers ?x vds1 |- _ =>
                             now apply Hvds1 in H; destruct H; auto end.
           apply Henv, Env.Props.P.F.add_in_iff; auto.
+        (* * intros x' Hfind. *)
+        (*   apply Henv, Env.Props.P.F.add_in_iff; auto. *)
         * intros x' Hfind.
           apply Henv' in Hfind.
           rewrite Env.Props.P.F.add_in_iff in Hfind.
           simpl; intuition.
+        * intros x' v' Hfind.
+          apply Henv'. rewrite Env.gso; auto.
+          intro Hx; subst.
+          apply Heq1. apply Env.In_find; eauto.
       + (* Env.find y env = None *)
         apply IH in Helab; clear IH; auto.
         destruct Helab as (vds1 & vds2 & Hvds' & Hperm & Hnd
-                           & Hvds1 & Henv & Henv').
+                           & Hvds1 & Henv & Henv' & Hfind).
         exists vds1, (vds2 ++ [(x, (ty, FULLCK (ON ck y yb), loc))]).
         repeat split; auto.
         * rewrite <-List_shift_first; auto.
@@ -1552,14 +1565,20 @@ Section ElabDeclaration.
           2:match goal with H:InMembers ?x vds1 |- _ =>
                             now apply Hvds1 in H; destruct H; auto end.
           apply Henv, Env.Props.P.F.add_in_iff; auto.
+        (* * intros x' Hfind. *)
+        (*   apply Henv, Env.Props.P.F.add_in_iff; auto. *)
         * intros x' Hfind.
           apply Henv' in Hfind.
           rewrite Env.Props.P.F.add_in_iff in Hfind.
           simpl; intuition.
+        * intros x' v' Hfind.
+          apply Henv'. rewrite Env.gso; auto.
+          intro Hx; subst.
+          apply Heq1. apply Env.In_find; eauto.
       + (* Env.find y env = None *)
         apply IH in Helab; clear IH; auto.
         destruct Helab as (vds1 & vds2 & Hvds' & Hperm & Hnd
-                           & Hvds1 & Henv & Henv').
+                           & Hvds1 & Henv & Henv' & Hfind).
         exists vds1, (vds2 ++ [(x, (ty, WHENCK y yb, loc))]).
         repeat split; auto.
         * rewrite <-List_shift_first; auto.
@@ -1597,6 +1616,27 @@ Section ElabDeclaration.
              (vds: list (ident * (type_name * LustreAst.preclock * astloc)))
     : res (Env.t (type * clock)) :=
     elab_var_decls' loc vds env vds.
+
+  Lemma elab_var_decls_refine:
+    forall loc vds env env',
+      elab_var_decls loc env vds = OK env' ->
+      env ⊑ env'.
+  Proof.
+    unfold elab_var_decls.
+    intros loc vds. generalize vds at 1.
+    intro fuel. revert vds.
+    induction fuel as [|cd fuel IH].
+    now simpl; intros ??? Helab; NamedDestructCases.
+    intros * Helab.
+    destruct vds as [|vd vds].
+    now simpl in Helab; monadInv Helab.
+    simpl in Helab. monadInv Helab.
+    rename x into env'', x0 into vds'.
+    apply elab_var_decls_pass_spec in EQ; auto.
+    apply IH in EQ0; auto.
+    rewrite <-EQ0. destruct EQ as (? & ? & ? & ? & ? & ? & ? & ? & RR).
+    intros y (yt, yc) Fy; eauto.
+  Qed.
 
   Lemma elab_var_decls_wc_env:
     forall loc vds env env',
@@ -2063,6 +2103,8 @@ Section ElabDeclaration.
     let Hwt_in := fresh "Hwt_in" in
     let Hwt_out := fresh "Hwt_out" in
     let Hwt_var := fresh "Hwt_var" in
+    let Hr_out := fresh "Hr_out" in
+    let Hr_var := fresh "Hr_var" in
     let env_in := fresh "env_in" in
     let env_out := fresh "env_out" in
     let env := fresh "env" in
@@ -2108,6 +2150,8 @@ Section ElabDeclaration.
                     (assert (Hwc_out := H);
                      apply elab_var_decls_wc_env in Hwc_out;
                      simpl; auto with nlclocking);
+                    (assert (Hr_out := H);
+                     apply elab_var_decls_refine in Hr_out);
                     (assert (Hwt_out := H);
                      apply elab_var_decls_all_wt_clock in Hwt_out;
                      simpl; auto with nlclocking);
@@ -2118,6 +2162,8 @@ Section ElabDeclaration.
                     (assert (Hwc_var := H);
                      apply elab_var_decls_wc_env in Hwc_var;
                      simpl; auto with nlclocking);
+                    (assert (Hr_var := H);
+                     apply elab_var_decls_refine in Hr_var);
                     (assert (Hwt_var := H);
                      apply elab_var_decls_all_wt_clock in Hwt_var;
                      simpl; auto with nlclocking);
@@ -2135,7 +2181,7 @@ Section ElabDeclaration.
     match goal with H:check_inst_names _ _ = OK ?x |- _ =>
                     rename H into Hcins; destruct x end.
 
-    Local Hint Resolve NoDupMembers_nil NoDup_nil.
+  Local Hint Resolve NoDupMembers_nil NoDup_nil.
 
   Program Definition elab_declaration (decl: LustreAst.declaration)
     : res {n | wt_node G n /\ wc_node G n /\ normal_args_node G n } :=
@@ -2144,16 +2190,12 @@ Section ElabDeclaration.
       match (do env_in  <- elab_var_decls loc (Env.empty (type * clock)) inputs;
              do env_out <- elab_var_decls loc env_in outputs;
              do env     <- elab_var_decls loc env_out locals;
-             do xin     <- mmap (annotate env) inputs;
-             do xout    <- mmap (annotate env) outputs;
+             do xin     <- mmap (annotate env_in) inputs;
+             do xout    <- mmap (annotate env_out) outputs;
              do xvar    <- mmap (annotate env) locals;
              do eqs     <- mmap (elab_equation env nenv) equations;
              do ok      <- check_defined loc (nameset PS.empty xout)
                              (nameset (nameset PS.empty xvar) xout) eqs;
-             do ok <- mmap (fun xtc=>
-                              assert_clock loc (fst xtc) (snd (snd xtc)) Cbase) xin;
-             do ok <- mmap (fun xtc=>
-                              assert_clock loc (fst xtc) (snd (snd xtc)) Cbase) xout;
              do ok <- check_variable_names loc env;
              do ok <- check_node_name loc name;
              do ok <- check_inst_names loc (vars_defined (filter is_app eqs));
@@ -2254,8 +2296,13 @@ Section ElabDeclaration.
       NamedDestructCases. intros; subst.
       MassageElabs outputs locals inputs.
       assert (Forall (fun yv=>Env.find (fst yv) env = Some (snd yv))
-                     (xin ++ xvar ++ xout)) as Hf
-          by repeat (apply Forall_app; split; auto).
+                     (xin ++ xvar ++ xout)) as Hf.
+      { repeat (apply Forall_app; split; auto).
+        rewrite Hr_var in Hr_out.
+        - apply Forall_impl_In with (2:=Hf_in).
+          intros (z, ?) Iz Fz; apply Hr_out in Fz as (? & ? & ?); subst; auto.
+        - apply Forall_impl_In with (2:=Hf_out).
+          intros (z, ?) Iz Fz; apply Hr_var in Fz as (? & ? & ?); subst; auto. }
       clear Hf_in Hf_var Hf_out.
       rewrite Hin, Hout, Hvar in Helab_var.
       apply permutation_forall_elements in Hf.
@@ -2275,10 +2322,49 @@ Section ElabDeclaration.
         NamedDestructCases; intros; subst;
         MassageElabs outputs locals inputs.
       + (* wc_env (idck xin) *)
-        admit.
-      + admit.
-      + admit.
-      + admit.
+        rewrite Hin in Helab_in.
+        apply permutation_forall_elements in Hf_in; auto.
+        now rewrite Hf_in.
+      + (* wc_env (idck (xin ++ xout)) *)
+        assert (Forall (fun yv=>Env.find (fst yv) env_out = Some (snd yv))
+                       (xin ++ xout)) as Hf.
+        { repeat (apply Forall_app; split; auto).
+          apply Forall_impl_In with (2:=Hf_in).
+          intros (z, ?) Iz Fz; apply Hr_out in Fz as (? & ? & ?); subst; auto. }
+        apply permutation_forall_elements in Hf.
+        now rewrite Hf.
+        now rewrite <-Helab_out, map_app, Permutation_app_comm, Hin, Hout.
+      + (* wc_env (idck (xin ++ xout ++ xvar)) *)
+        assert (Forall (fun yv=>Env.find (fst yv) env = Some (snd yv))
+                       (xin ++ xvar ++ xout)) as Hf.
+        { rewrite Hr_var in Hr_out.
+          repeat (apply Forall_app; split; auto).
+          - apply Forall_impl_In with (2:=Hf_in).
+            intros (z, ?) Iz Fz; apply Hr_out in Fz as (? & ? & ?); subst; auto.
+          - apply Forall_impl_In with (2:=Hf_out).
+            intros (z, ?) Iz Fz; apply Hr_var in Fz as (? & ? & ?); subst; auto. }
+        apply permutation_forall_elements in Hf as ->; auto.
+        now rewrite <-Helab_var, map_app, map_app, Hin, Hout, Hvar,
+            Permutation_app_comm, Permutation_app_assoc.
+      + (* Forall (wc_equation G (idck (xin ++ xvar ++ xout))) eqs' *)
+        assert (Forall (fun yv=>Env.find (fst yv) env = Some (snd yv))
+                       (xin ++ xvar ++ xout)) as Hf.
+        { repeat (apply Forall_app; split; auto).
+          - rewrite Hr_var in Hr_out.
+            apply Forall_impl_In with (2:=Hf_in).
+            intros (z, ?) Iz Fz; apply Hr_out in Fz as (? & ? & ?); subst; auto.
+          - apply Forall_impl_In with (2:=Hf_out).
+            intros (z, ?) Iz Fz; apply Hr_var in Fz as (? & ? & ?); subst; auto. }
+        apply permutation_forall_elements in Hf.
+        2:now rewrite <-Helab_var, map_app, map_app,
+          Permutation_app_comm, Permutation_app_assoc, Hin, Hout, Hvar.
+        apply Forall_forall.
+        intros y Hxin.
+        rewrite Hf.
+        apply mmap_inversion in Helabs.
+        apply Coqlib.list_forall2_in_right with (1:=Helabs) in Hxin.
+        destruct Hxin as (aeq & Hxin & Helab).
+        apply (wc_elab_equation _ G) in Helab; auto.
     - (* normal_args_node G  n *)
       unfold normal_args_node; simpl.
       repeat match goal with H:OK _ = _ |- _ =>
@@ -2288,7 +2374,7 @@ Section ElabDeclaration.
       apply Forall_forall; intros eq Hin.
       eapply Coqlib.list_forall2_in_right in EQ5 as (? & ? & EE); eauto.
       eapply elab_normal_args_eq in EE; eauto.
-  Admitted.
+  Qed.
 
 End ElabDeclaration.
 
