@@ -558,15 +558,13 @@ Theorem correctness:
   forall D G Gp P main ins outs,
     elab_declarations D = OK (exist _ G Gp) ->
     wt_ins G main ins ->
-    (* wt_outs G main outs -> *)
     CoindSem.sem_node G main (pStr ins) (pStr outs) ->
     compile D main = OK P ->
     exists T, program_behaves (Asm.semantics P) (Reacts T)
          /\ bisim_IO G main ins outs T.
 Proof.
-  intros D G (WT & WC) P main ins outs Elab ?? Comp.
+  intros D G (WT & WC & NormalArgs) P main ins outs Elab ?? Comp.
   unfold compile in Comp.
   rewrite Elab in Comp; simpl in Comp.
   apply behavior_nl_to_asm; eauto.
-  admit.
-Admitted.
+Qed.

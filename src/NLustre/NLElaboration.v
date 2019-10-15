@@ -699,7 +699,7 @@ Section ElabExpressions.
     monadInv Hm. NamedDestructCases.
     inversion_clear Hck as [|? ? ? ? Hwtck].
     specialize (IHck _ EQ Hwtck).
-    eapply Hf in Heq; eauto with ltyping.
+    eapply Hf in Heq; eauto with nltyping.
   Qed.
 
   Lemma inst_clock_instck:
@@ -2358,4 +2358,3 @@ Definition elab_declarations (decls: list LustreAst.declaration)
                                     * list (ident * (type * clock))))
                      (conj wtg_nil (conj wc_global_nil I))
                      Is_interface_map_empty decls.
-
