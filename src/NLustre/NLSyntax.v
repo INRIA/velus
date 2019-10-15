@@ -125,6 +125,19 @@ Module Type NLSYNTAX
     - apply IH in Fn'; tauto.
   Qed.
 
+  Lemma Forall_not_find_node_None:
+    forall G f,
+      Forall (fun n => ~(f = n.(n_name))) G <-> find_node f G = None.
+  Proof.
+    induction G as [|n G IHG]. now split; auto.
+    split; simpl; intros HH; destruct (ident_eqb n.(n_name) f) eqn:Nf.
+    - apply ident_eqb_eq in Nf; subst. now inv HH.
+    - apply IHG; now inv HH.
+    - discriminate.
+    - apply ident_eqb_neq in Nf.
+      constructor; auto. now apply IHG.
+  Qed.
+
   Lemma is_filtered_eqs:
     forall eqs,
       Permutation
@@ -171,6 +184,31 @@ Module Type NLSYNTAX
     apply fst_NoDupMembers.
     apply (NoDupMembers_app_r _ _ n.(n_nodup)).
   Qed.
+
+  Lemma NoDupMembers_n_out:
+    forall n, NoDupMembers n.(n_out).
+  Proof.
+    intro n. pose proof n.(n_nodup) as ND.
+    now repeat apply NoDupMembers_app_r in ND.
+  Qed.
+
+  Lemma NoDupMembers_n_in:
+    forall n, NoDupMembers n.(n_in).
+  Proof.
+    intro n. pose proof n.(n_nodup) as ND.
+    now apply NoDupMembers_app_l in ND.
+  Qed.
+
+  Lemma NoDupMembers_n_vars:
+    forall n, NoDupMembers n.(n_vars).
+  Proof.
+    intro n. pose proof n.(n_nodup) as ND.
+    now apply NoDupMembers_app_r, NoDupMembers_app_l in ND.
+  Qed.
+
+  Hint Extern 1 (NoDupMembers (n_in _)) => apply NoDupMembers_n_in : core.
+  Hint Extern 1 (NoDupMembers (n_out _)) => apply NoDupMembers_n_out : core.
+  Hint Extern 1 (NoDupMembers (n_vars _)) => apply NoDupMembers_n_vars : core.
 
   Lemma n_eqsgt0:
     forall n, 0 < length n.(n_eqs).
