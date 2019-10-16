@@ -60,7 +60,7 @@ TARGET=native
 BUILDDIR=_build
 
 # flag to prevent coqc from taking CompCert directories into account (see Makefile.auto)
-export OTHERFLAGS=-exclude-dir CompCert
+export OTHERFLAGS=-exclude-dir CompCert -w -extraction
 
 bold=$(shell tput bold)
 blue=$(shell tput setaf 4)
